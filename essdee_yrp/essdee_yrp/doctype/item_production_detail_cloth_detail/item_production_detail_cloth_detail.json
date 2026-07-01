@@ -1,0 +1,50 @@
+{
+ "actions": [],
+ "creation": "2026-06-27 16:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "name1",
+  "cloth",
+  "required_gsm",
+  "is_bom_item"
+ ],
+ "fields": [
+  {
+   "fieldname": "name1",
+   "fieldtype": "Data",
+   "label": "Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "cloth",
+   "fieldtype": "Link",
+   "label": "Cloth",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "is_bom_item",
+   "fieldtype": "Check",
+   "label": "Is BOM Item",
+   "default": "0"
+  },
+  {
+   "fieldname": "required_gsm",
+   "fieldtype": "Float",
+   "label": "Required GSM"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-06-27 16:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Essdee YRP",
+ "name": "Item Production Detail Cloth Detail",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

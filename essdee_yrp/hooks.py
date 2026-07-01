@@ -4,11 +4,30 @@ app_publisher = "anas@essdee.fit"
 app_description = "Essdee customization layer on the yrp app"
 app_email = "anas@essdee.fit"
 app_license = "mit"
+required_apps = ["yrp"]
+
+fixtures = [
+	{
+		"dt": "Custom Field",
+		"or_filters": [
+			[
+				"name",
+				"in",
+				[
+					"Item-product_category",
+					"Supplier-apply_sewing_plan",
+					"Process-additional_allowance",
+					"Process-includes_packing",
+					"Process-item",
+				],
+			],
+			["dt", "=", "Item Production Detail"],
+		],
+	},
+]
 
 # Apps
 # ------------------
-
-# required_apps = []
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
@@ -26,7 +45,7 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/essdee_yrp/css/essdee_yrp.css"
-# app_include_js = "/assets/essdee_yrp/js/essdee_yrp.js"
+app_include_js = ["essdee_yrp.bundle.js"]
 
 # include js, css files in header of web template
 # web_include_css = "/assets/essdee_yrp/css/essdee_yrp.css"
@@ -43,8 +62,8 @@ app_license = "mit"
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
-# doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
+doctype_js = {"Item Production Detail": "public/js/item_production_detail.js"}
+doctype_list_js = {"Item Production Detail": "public/js/item_production_detail_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
@@ -138,13 +157,15 @@ app_license = "mit"
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	"Item Production Detail": {
+		"onload": "essdee_yrp.ipd_ui.onload",
+		"before_validate": "essdee_yrp.ipd_validations.before_validate",
+		"validate": "essdee_yrp.ipd_validations.validate",
+		"on_update": "essdee_yrp.ipd_validations.on_update",
+		"on_trash": "essdee_yrp.ipd_validations.on_trash",
+	}
+}
 
 # Scheduled Tasks
 # ---------------
@@ -255,4 +276,3 @@ app_license = "mit"
 # ------------
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
-

@@ -1,0 +1,23 @@
+{
+ "actions": [],
+ "creation": "2026-07-02 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": ["dia"],
+ "fields": [
+  {"fieldname": "dia", "fieldtype": "Link", "in_list_view": 1, "label": "Dia", "options": "Item Attribute Value", "reqd": 1}
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-02 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Essdee YRP",
+ "name": "IPD Knitting Dia Detail",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

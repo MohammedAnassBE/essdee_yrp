@@ -3,6 +3,11 @@
 frappe.ui.form.on("Item Production Detail", {
 	setup:function(frm) {
 		frm.trigger("declarations")
+		frm.set_query("dia", "knitting_dia_details", () => ({ filters: { attribute_name: "Dia" } }));
+		frm.set_query("from_colour", "dyeing_colour_details", () => ({ filters: { attribute_name: "Colour" } }));
+		frm.set_query("to_colour", "dyeing_colour_details", () => ({ filters: { attribute_name: "Colour" } }));
+		frm.set_query("from_dia", "compacting_dia_details", () => ({ filters: { attribute_name: "Dia" } }));
+		frm.set_query("to_dia", "compacting_dia_details", () => ({ filters: { attribute_name: "Dia" } }));
 		const setAttributeQuery = (doc)=>{
 			const attributes = (doc.item_attributes || []).map(attr => attr.attribute)
 			return { filters: { name: ["in", attributes] } };

@@ -7,7 +7,18 @@ from yrp.yrp.doctype.item_dependent_attribute_mapping.item_dependent_attribute_m
 )
 
 
+def is_cloth_ipd(doc):
+	"""Cloth-item IPDs skip every garment validation/mutation in this module."""
+	if doc.get("is_cloth_item"):
+		return True
+	if not doc.get("item"):
+		return False
+	return bool(frappe.db.get_value("Item", doc.item, "is_cloth_item"))
+
+
 def before_validate(doc, method=None):
+	if is_cloth_ipd(doc):
+		return
 	apply_ipd_settings_defaults(doc)
 	validate_duplicate_bom_items(doc)
 	save_combination_detail_fields(doc)
@@ -19,6 +30,8 @@ def before_validate(doc, method=None):
 
 
 def validate(doc, method=None):
+	if is_cloth_ipd(doc):
+		return
 	if doc.is_new():
 		create_new_mapping_values(doc)
 
@@ -31,6 +44,8 @@ def validate(doc, method=None):
 
 
 def on_update(doc, method=None):
+	if is_cloth_ipd(doc):
+		return
 	for mapping in getattr(frappe.flags, "delete_bom_mapping", []) or []:
 		frappe.delete_doc(
 			"Item BOM Attribute Mapping",
@@ -43,6 +58,8 @@ def on_update(doc, method=None):
 
 
 def on_trash(doc, method=None):
+	if is_cloth_ipd(doc):
+		return
 	documents = {
 		"Item Item Attribute Mapping": [],
 		"Item Dependent Attribute Mapping": [],

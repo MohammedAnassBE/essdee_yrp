@@ -18,6 +18,13 @@ frappe.ui.form.on("Lot", {
 				}
 			}
 		})
+		frm.set_query("cloth_item", "lot_fabric_details", function () {
+			return { filters: { is_cloth_item: 1 } };
+		});
+		frm.set_query("production_detail", "lot_fabric_details", function (doc, cdt, cdn) {
+			const row = locals[cdt][cdn];
+			return { filters: { item: row.cloth_item || "" } };
+		});
 	},
 	refresh(frm) {
 		$(".layout-side-section").css("display", "none");

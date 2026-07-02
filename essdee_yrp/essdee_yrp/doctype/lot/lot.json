@@ -33,6 +33,8 @@
   "dependent_attribute_mapping",
   "packing_combo",
   "lot_hash_value",
+  "fabric_details_section",
+  "lot_fabric_details",
   "section_break_ry89l",
   "column_break_njmh",
   "planned_qty",
@@ -97,6 +99,17 @@
    "hidden": 1,
    "label": "Lot Template",
    "options": "Lot Template"
+  },
+  {
+   "fieldname": "fabric_details_section",
+   "fieldtype": "Section Break",
+   "label": "Fabric Details"
+  },
+  {
+   "fieldname": "lot_fabric_details",
+   "fieldtype": "Table",
+   "label": "Fabric Details",
+   "options": "Lot Fabric Detail"
   },
   {
    "fieldname": "section_break_ry89l",
@@ -406,7 +419,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-01 19:26:26.848025",
+ "modified": "2026-07-02 15:00:28.516295",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "Lot",

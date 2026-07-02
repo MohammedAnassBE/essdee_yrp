@@ -15,6 +15,7 @@ fixtures = [
 				"in",
 				[
 					"Item-product_category",
+					"Item-is_cloth_item",
 					"Supplier-apply_sewing_plan",
 					"Process-additional_allowance",
 					"Process-includes_packing",
@@ -66,6 +67,7 @@ app_include_js = ["essdee_yrp.bundle.js"]
 doctype_js = {
 	"Item Production Detail": "public/js/item_production_detail.js",
 	"Production Order": "public/js/production_order.js",
+	"Work Order": "public/js/work_order.js",
 }
 doctype_list_js = {"Item Production Detail": "public/js/item_production_detail_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
@@ -164,9 +166,15 @@ doctype_list_js = {"Item Production Detail": "public/js/item_production_detail_l
 doc_events = {
 	"Item Production Detail": {
 		"onload": "essdee_yrp.ipd_ui.onload",
-		"before_validate": "essdee_yrp.ipd_validations.before_validate",
+		"before_validate": [
+			"essdee_yrp.ipd_validations.before_validate",
+			"essdee_yrp.fabric_ipd.ensure_cloth_item_attributes",
+		],
 		"validate": "essdee_yrp.ipd_validations.validate",
-		"on_update": "essdee_yrp.ipd_validations.on_update",
+		"on_update": [
+			"essdee_yrp.ipd_validations.on_update",
+			"essdee_yrp.fabric_ipd.sync_fabric_process_matrices",
+		],
 		"on_trash": "essdee_yrp.ipd_validations.on_trash",
 	}
 }

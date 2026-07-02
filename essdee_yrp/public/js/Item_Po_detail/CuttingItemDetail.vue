@@ -89,11 +89,18 @@ function createInput(attr, index, value, is_header){
     }
 
     let el = root.value
+    // Read-only attribute cells are display-only — render them as Data so the stored
+    // value shows directly. A read-only Link renders blank here because it can't
+    // async-resolve a link title for the value on this site.
+    let is_readonly = (cur_frm.cutting_attrs || []).includes(attr)
+    if (is_readonly && fieldtype == 'Link'){
+        fieldtype = 'Data'
+    }
     let df = {
         fieldtype: fieldtype,
         fieldname: attr+"_"+index,
         default: value,
-        read_only: (cur_frm.cutting_attrs || []).includes(attr)
+        read_only: is_readonly
     }
     if (fieldtype == 'Link' && attr != 'Dia'){
         df['options'] = 'Item Attribute Value'
@@ -127,12 +134,15 @@ function createInput(attr, index, value, is_header){
         render_input: true,
     });
     if(!is_header){
-        input.set_value(value)
-        input['df']['onchange'] = ()=>{
-        if(input.get_value() != input.df.default){
-            cur_frm.dirty()
+        // Wire the dirty-tracker only AFTER the initial (async, for Link) set settles,
+        // so loading pre-existing values never marks the form dirty ("Not Saved" on open).
+        Promise.resolve(input.set_value(value)).then(()=>{
+            input['df']['onchange'] = ()=>{
+                if(input.get_value() != input.df.default){
+                    cur_frm.dirty()
+                }
             }
-        }
+        })
     }
     return input
 }

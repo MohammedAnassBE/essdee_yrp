@@ -66,7 +66,11 @@ function createInput(attr, index, value){
 
     if (attr == cur_frm.doc.stiching_major_attribute_value){
         df['read_only'] = true
-    }   
+        // display-only -> Data so the value renders (a read-only Link shows blank here)
+        if (df['fieldtype'] == 'Link'){
+            df['fieldtype'] = 'Data'
+        }
+    }
     let input =  frappe.ui.form.make_control({
         parent: $(el).find(parent_class),
         df:df ,
@@ -74,13 +78,15 @@ function createInput(attr, index, value){
         render_input: true,
     });
 
-    input.set_value(value)
-    
-    input['df']['onchange'] = ()=>{
-       if(input.get_value() != input.df.default){
-           cur_frm.dirty()
+    // wire the dirty-tracker only after the async (Link) set settles, so loading
+    // pre-existing values never marks the form dirty ("Not Saved" on open)
+    Promise.resolve(input.set_value(value)).then(()=>{
+        input['df']['onchange'] = ()=>{
+           if(input.get_value() != input.df.default){
+               cur_frm.dirty()
+            }
         }
-    }
+    })
     return input
 }
 function get_input_class(attribute, index){

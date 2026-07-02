@@ -1,0 +1,365 @@
+{
+ "actions": [],
+ "creation": "2023-03-27 20:28:56.386132",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "enable_price_validation",
+  "shortned_url_domain",
+  "link_expiry_days",
+  "grn_cancellation_in_days",
+  "purchase_order_section",
+  "allow_grn_cancellation",
+  "enable_purchase_invoice_sync",
+  "erp_site_url",
+  "erp_api_key",
+  "erp_api_secret",
+  "column_break_d1dky",
+  "dc_grn_letter_head",
+  "printer_list",
+  "work_order_section",
+  "received_type_list",
+  "enable_tuple_attribute",
+  "time_and_action_tracking_order_report_days",
+  "additional_grn_submit_role",
+  "cut_bundle_cancelled_lot",
+  "sales_settings_section",
+  "sales_site_url",
+  "sales_api_key",
+  "sales_api_secret",
+  "finishing_inward_process",
+  "purchase_invoice_section",
+  "pi_minimum_grn_date",
+  "vendor_bill_tracking_section",
+  "enable_vendor_bill_no_unique_restriction",
+  "enable_grn_document_no_unique_restriction",
+  "fiscal_year_start_date",
+  "fiscal_year_end_date",
+  "senior_merch_role",
+  "merchandising_manager_role",
+  "merch_user_role",
+  "cutting_plan_section",
+  "cloth_allowance_percentage",
+  "allow_excess_grn",
+  "column_break_ywpk",
+  "override_pi_approve",
+  "column_break_nrkc",
+  "enable_production_order",
+  "partial_received_percentage",
+  "partially_dispatched_percentage",
+  "previous_day_entries",
+  "piece_weight_min",
+  "piece_weight_max",
+  "piece_weight_tolerance",
+  "finishing_plan_ironing_process"
+ ],
+ "fields": [
+  {
+   "default": "0",
+   "description": "If enabled, PO cannot be submitted without a valid Item Price",
+   "fieldname": "enable_price_validation",
+   "fieldtype": "Check",
+   "label": "Enable Price Validation"
+  },
+  {
+   "fieldname": "shortned_url_domain",
+   "fieldtype": "Data",
+   "label": "Shortned URL domain"
+  },
+  {
+   "fieldname": "link_expiry_days",
+   "fieldtype": "Int",
+   "label": "Shortened Link Expires(In Days) "
+  },
+  {
+   "description": "Allow GRN Cancellation after creation for these days",
+   "fieldname": "grn_cancellation_in_days",
+   "fieldtype": "Int",
+   "label": "GRN Cancellation (In Days)"
+  },
+  {
+   "fieldname": "purchase_order_section",
+   "fieldtype": "Section Break",
+   "label": "Purchase Settings"
+  },
+  {
+   "default": "0",
+   "fieldname": "allow_grn_cancellation",
+   "fieldtype": "Check",
+   "label": "Allow GRN Cancellation"
+  },
+  {
+   "default": "0",
+   "description": "Enable Purchase Invoice Sync with ERP",
+   "fieldname": "enable_purchase_invoice_sync",
+   "fieldtype": "Check",
+   "label": "Enable Purchase Invoice Sync"
+  },
+  {
+   "fieldname": "erp_site_url",
+   "fieldtype": "Data",
+   "label": "ERP Site URL",
+   "mandatory_depends_on": "eval:doc.enable_purchase_invoice_sync",
+   "read_only_depends_on": "eval:!doc.enable_purchase_invoice_sync"
+  },
+  {
+   "fieldname": "erp_api_key",
+   "fieldtype": "Data",
+   "label": "ERP API Key",
+   "mandatory_depends_on": "eval:doc.enable_purchase_invoice_sync",
+   "read_only_depends_on": "eval:!doc.enable_purchase_invoice_sync"
+  },
+  {
+   "fieldname": "erp_api_secret",
+   "fieldtype": "Password",
+   "label": "ERP API Secret",
+   "mandatory_depends_on": "eval:doc.enable_purchase_invoice_sync",
+   "read_only_depends_on": "eval:!doc.enable_purchase_invoice_sync"
+  },
+  {
+   "fieldname": "column_break_d1dky",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "dc_grn_letter_head",
+   "fieldtype": "Link",
+   "label": "DC GRN Letter Head",
+   "options": "Letter Head"
+  },
+  {
+   "fieldname": "printer_list",
+   "fieldtype": "Small Text",
+   "label": "Printer List"
+  },
+  {
+   "fieldname": "work_order_section",
+   "fieldtype": "Section Break",
+   "label": "Work Order"
+  },
+  {
+   "fieldname": "received_type_list",
+   "fieldtype": "Small Text",
+   "label": "Received Type List"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_tuple_attribute",
+   "fieldtype": "Check",
+   "label": "Enable Tuple Attribute"
+  },
+  {
+   "default": "7",
+   "fieldname": "time_and_action_tracking_order_report_days",
+   "fieldtype": "Int",
+   "label": "Time and Action Tracking Order Report Days"
+  },
+  {
+   "fieldname": "additional_grn_submit_role",
+   "fieldtype": "Link",
+   "label": "Additional GRN Submit Role",
+   "options": "Role"
+  },
+  {
+   "fieldname": "cut_bundle_cancelled_lot",
+   "fieldtype": "Text",
+   "label": "Cut Bundle Cancelled Lot"
+  },
+  {
+   "fieldname": "sales_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Sales Settings"
+  },
+  {
+   "fieldname": "sales_site_url",
+   "fieldtype": "Data",
+   "label": "Sales Site URL"
+  },
+  {
+   "fieldname": "sales_api_key",
+   "fieldtype": "Data",
+   "label": "Sales API Key"
+  },
+  {
+   "fieldname": "sales_api_secret",
+   "fieldtype": "Password",
+   "label": "Sales API Secret"
+  },
+  {
+   "fieldname": "finishing_inward_process",
+   "fieldtype": "Link",
+   "label": "Finishing Inward Process",
+   "options": "Process"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "purchase_invoice_section",
+   "fieldtype": "Section Break",
+   "label": "Purchase Invoice"
+  },
+  {
+   "fieldname": "pi_minimum_grn_date",
+   "fieldtype": "Date",
+   "label": "PI Minimum GRN Date"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "vendor_bill_tracking_section",
+   "fieldtype": "Section Break",
+   "label": "Vendor Bill Tracking"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_vendor_bill_no_unique_restriction",
+   "fieldtype": "Check",
+   "label": "Enable Vendor Bill No Unique Restriction"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_grn_document_no_unique_restriction",
+   "fieldtype": "Check",
+   "label": "Enable GRN Document No Unique Restriction"
+  },
+  {
+   "fieldname": "fiscal_year_start_date",
+   "fieldtype": "Date",
+   "label": "Fiscal Year Start Date",
+   "mandatory_depends_on": "eval: doc.enable_vendor_bill_no_unique_restriction || doc.enable_grn_document_no_unique_restriction"
+  },
+  {
+   "fieldname": "fiscal_year_end_date",
+   "fieldtype": "Date",
+   "label": "Fiscal Year End Date",
+   "mandatory_depends_on": "eval: doc.enable_vendor_bill_no_unique_restriction || doc.enable_grn_document_no_unique_restriction"
+  },
+  {
+   "fieldname": "senior_merch_role",
+   "fieldtype": "Link",
+   "label": "Senior Merch Role",
+   "options": "Role"
+  },
+  {
+   "fieldname": "merchandising_manager_role",
+   "fieldtype": "Link",
+   "label": "Merchandising Manager Role",
+   "options": "Role"
+  },
+  {
+   "fieldname": "merch_user_role",
+   "fieldtype": "Link",
+   "label": "Merch User Role",
+   "options": "Role"
+  },
+  {
+   "fieldname": "cutting_plan_section",
+   "fieldtype": "Section Break",
+   "label": "Cutting Plan"
+  },
+  {
+   "fieldname": "cloth_allowance_percentage",
+   "fieldtype": "Float",
+   "label": "Cloth Allowance Percentage"
+  },
+  {
+   "default": "0",
+   "fieldname": "allow_excess_grn",
+   "fieldtype": "Check",
+   "label": "Allow Excess GRN"
+  },
+  {
+   "fieldname": "column_break_ywpk",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "override_pi_approve",
+   "fieldtype": "Check",
+   "label": "Override PI Approve"
+  },
+  {
+   "fieldname": "column_break_nrkc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_production_order",
+   "fieldtype": "Check",
+   "label": "Enable Production Order"
+  },
+  {
+   "default": "50",
+   "description": "Finishing Plan moves from Partially Received to Ready to Pack once (received / cutting) qty reaches this percentage.",
+   "fieldname": "partial_received_percentage",
+   "fieldtype": "Percent",
+   "label": "Partial Received Percentage",
+   "non_negative": 1
+  },
+  {
+   "default": "90",
+   "description": "Finishing Plan moves from Partially Dispatched to Dispatched once (dispatched pieces / cutting) reaches this percentage. Dispatched boxes are converted using Pieces Per Box.",
+   "fieldname": "partially_dispatched_percentage",
+   "fieldtype": "Percent",
+   "label": "Partially Dispatched Percentage",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "previous_day_entries",
+   "fieldtype": "Int",
+   "label": "Previous Day Entries"
+  },
+  {
+   "default": "0.01",
+   "description": "Minimum allowed piece weight in kg for Cutting LaySheet validation",
+   "fieldname": "piece_weight_min",
+   "fieldtype": "Float",
+   "label": "Piece Weight Min (kg)"
+  },
+  {
+   "default": "0.5",
+   "description": "Maximum allowed piece weight in kg for Cutting LaySheet validation",
+   "fieldname": "piece_weight_max",
+   "fieldtype": "Float",
+   "label": "Piece Weight Max (kg)"
+  },
+  {
+   "default": "0.003",
+   "description": "Maximum allowed difference between actual and required piece weight (in kg) before approval is needed",
+   "fieldname": "piece_weight_tolerance",
+   "fieldtype": "Float",
+   "label": "Piece Weight Tolerance (kg)"
+  },
+  {
+   "fieldname": "finishing_plan_ironing_process",
+   "fieldtype": "Link",
+   "label": "Finishing Plan Ironing Process",
+   "options": "Process"
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-07-01 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Essdee YRP",
+ "name": "MRP Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "All"
+  }
+ ],
+ "quick_entry": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

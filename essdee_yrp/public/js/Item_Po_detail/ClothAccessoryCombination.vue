@@ -130,12 +130,15 @@ function createInput(major_colour, index, value, type, is_header){
     });
     $(el).find(".control-label").remove();
     if(!is_header){
-        input.set_value(value)
-        input['df']['onchange'] = ()=>{
-        if(input.get_value() != input.df.default){
-            cur_frm.dirty()
+        // Wire the dirty-tracker only AFTER the initial (async, for Link) set settles,
+        // so loading pre-existing values never marks the form dirty ("Not Saved" on open).
+        Promise.resolve(input.set_value(value)).then(()=>{
+            input['df']['onchange'] = ()=>{
+                if(input.get_value() != input.df.default){
+                    cur_frm.dirty()
+                }
             }
-        }
+        })
     }
     return input
 }

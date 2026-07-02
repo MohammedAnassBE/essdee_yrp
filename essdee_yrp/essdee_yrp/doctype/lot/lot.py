@@ -795,6 +795,19 @@ def get_ocr_details(lot):
 		"docstatus": 1,
 	}, pluck="name", order_by="creation")
 
+	if not wo_list:
+		# No Work Orders for this lot (e.g. synced lots on a master-data site — the
+		# transaction doctypes WO/GRN are not replicated). Return an empty, well-formed
+		# structure instead of computing over — and crashing on — absent transaction data.
+		lot_dict.update({
+			"sizes": [],
+			"processes": {},
+			"dispatch_detail": {},
+			"total_dispatch": 0,
+			"finishing_plan_list": [],
+		})
+		return lot_dict
+
 	ipd, item = frappe.get_value("Lot", lot, ["production_detail", "item"])
 	sewing, primary, pcs_per_box = frappe.get_value("Item Production Detail", ipd, ["stiching_process", "primary_item_attribute", "packing_combo"])
 	lot_dict['sizes'] = []
@@ -834,14 +847,20 @@ def get_ocr_details(lot):
 				lot_dict['processes'][wo_doc.process_name]['data'][size]['received'] += row.received_qty
 				lot_dict['processes'][wo_doc.process_name]['total_received'] += row.received_qty
 
-	grn_list = frappe.get_all("Goods Received Note", filters={
+	grn_filters = {
 		"against": "Work Order",
 		"docstatus": 1,
-		"includes_packing": 1,
 		"process_name": includes_packing_process,
-		"is_return": 0,
 		"lot": lot,
-	}, pluck="name")
+	}
+	# The yrp/essdee GRN may not carry production_api's includes_packing / is_return
+	# columns — only add those filters when the field actually exists.
+	_grn_meta = frappe.get_meta("Goods Received Note")
+	if _grn_meta.has_field("includes_packing"):
+		grn_filters["includes_packing"] = 1
+	if _grn_meta.has_field("is_return"):
+		grn_filters["is_return"] = 0
+	grn_list = frappe.get_all("Goods Received Note", filters=grn_filters, pluck="name")
 
 	grn_item_dict = {}
 	for grn in grn_list:

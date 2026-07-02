@@ -10,3 +10,4 @@ essdee_yrp.patches.setup_sd_yrp_item_custom_fields
 essdee_yrp.patches.setup_sd_yrp_process_custom_fields
 essdee_yrp.patches.setup_sd_yrp_ipd_custom_fields
 essdee_yrp.patches.sync_sd_yrp_ipd_custom_field_metadata
+essdee_yrp.patches.setup_sd_yrp_mrp_settings

@@ -601,61 +601,47 @@ frappe.ui.form.on("Item Production Detail", {
 				frm.set_value('accessory_attributes',cloth_accessories_list)
 			}
 
+			// Only overwrite each tab's stored JSON when its widget actually rendered
+			// and returned rows. When get_data()/get_items() is null (tab never opened,
+			// e.g. on a freshly-synced doc) PRESERVE the stored value — wiping it to {}
+			// here was destroying synced Cutting / Cloth-Accessory data on the first save.
 			if(frm.cutting_item){
 				let item_details = frm.cutting_item.get_data()
-				if(item_details == null){
-					frm.doc.cutting_items_json = {}
-				}
-				else if(item_details.items.length > 0){
+				if(item_details && item_details.items && item_details.items.length > 0){
 					frm.doc.cutting_items_json = item_details
 				}
 			}
 
 			if(frm.cloth_item){
 				let item_details = frm.cloth_item.get_data()
-				if(item_details == null){
-					frm.doc.cutting_cloths_json = {}
-				}
-				else if(item_details.items.length > 0){
+				if(item_details && item_details.items && item_details.items.length > 0){
 					frm.doc.cutting_cloths_json = item_details
 				}
 			}
 
 			if(frm.cloth_accessories){
 				let item_details = frm.cloth_accessories.get_data()
-				if(item_details == null){
-					frm.doc.cloth_accessory_json = {}
-				}
-				else if(item_details.items.length > 0){
+				if(item_details && item_details.items && item_details.items.length > 0){
 					frm.doc.cloth_accessory_json = item_details
 				}
 			}
 
 			if(frm.stiching_accessory){
 				let item_details = frm.stiching_accessory.get_data()
-				if(item_details == null){
-					frm.doc.stiching_accessory_json = {}
-				}
-				else if(item_details.items.length > 0){
+				if(item_details && item_details.items && item_details.items.length > 0){
 					frm.doc.stiching_accessory_json = item_details
 				}
 			}
 
 			if(frm.accessory_clothtype){
 				let item_details = frm.accessory_clothtype.get_data()
-				if(item_details == null){
-					frm.doc.accessory_clothtype_json = {}
-				}
-				else {
+				if(item_details != null){
 					frm.doc.accessory_clothtype_json = item_details
 				}
 			}
 			if(frm.emblishment){
 				let items = frm.emblishment.get_items()
-				if(items == null || !items ){
-					frm.doc.emblishment_details_json = {}
-				}
-				else{
+				if(items){
 					frm.doc.emblishment_details_json = items
 				}
 			}

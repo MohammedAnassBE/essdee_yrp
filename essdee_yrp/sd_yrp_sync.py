@@ -41,6 +41,7 @@ CUSTOM_MAPPER_DOCTYPES = (
 	"Item Production Detail",
 	"Production Order",
 	"Lot",
+	"MRP Settings",
 )
 
 SYNC_DOCTYPES = EXACT_MATCH_DOCTYPES + CUSTOM_MAPPER_DOCTYPES
@@ -58,11 +59,10 @@ PRODUCTION_ORDER_GRID_ATTRIBUTE = "Size"
 PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE = "Stage"
 PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE = "Pack"
 
+# creation/modified/modified_by/owner are intentionally KEPT in the payload — the
+# consumer re-applies the SOURCE timestamps after each upsert (_apply_source_timestamps)
+# so F16 records reflect the source's created/modified, not the sync time.
 TRANSIENT_DOC_KEYS = (
-	"creation",
-	"modified",
-	"modified_by",
-	"owner",
 	"idx",
 	"__onload",
 	"_doc_before_save",
@@ -127,13 +127,41 @@ def upsert_doc(payload, event=None):
 		return upsert_lot(data, event=event)
 	if doctype == "Item Dependent Attribute Mapping":
 		return upsert_item_dependent_attribute_mapping(data)
+	if doctype == "MRP Settings":
+		return upsert_mrp_settings(data)
 
 	return upsert_filtered_doc(data)
+
+
+def upsert_mrp_settings(data):
+	# MRP Settings is a Single — write each replicated field straight to tabSingles
+	# (DB-level, bypassing validation like the other upserts). Fields the source has
+	# but this site's MRP Settings doesn't define are dropped by filter_doc_fields.
+	data = filter_doc_fields(data)
+	skip = {"doctype", "name", "creation", "owner", "idx", "docstatus", "parent", "parenttype", "parentfield"}
+	for fieldname, value in data.items():
+		if fieldname in skip:
+			continue
+		frappe.db.set_single_value("MRP Settings", fieldname, value)
+	frappe.clear_document_cache("MRP Settings", "MRP Settings")
+	return frappe.get_single("MRP Settings")
 
 
 _SYNC_SKIP_PARENT_FIELDS = {
 	"doctype", "name", "creation", "owner", "idx", "parent", "parenttype", "parentfield", "docstatus",
 }
+
+
+_SOURCE_TIMESTAMP_FIELDS = ("creation", "modified", "owner", "modified_by")
+
+
+def _apply_source_timestamps(doctype, docname, source):
+	# Re-stamp with the SOURCE's creation/modified/owner/modified_by so F16 reflects the
+	# source times, not the sync time. update_modified=False keeps `modified` at the
+	# source value instead of "now".
+	ts = {f: source.get(f) for f in _SOURCE_TIMESTAMP_FIELDS if source.get(f)}
+	if ts:
+		frappe.db.set_value(doctype, docname, ts, update_modified=False)
 
 
 def upsert_filtered_doc(data, replace_children=None):
@@ -146,6 +174,7 @@ def upsert_filtered_doc(data, replace_children=None):
 	time. `replace_children` is accepted for signature compatibility — every child
 	table present in the payload is rebuilt. See docs/claude/conventions.md (2026-06-30).
 	"""
+	source_ts = {f: data.get(f) for f in _SOURCE_TIMESTAMP_FIELDS if data.get(f)}
 	data = filter_doc_fields(data)
 	doctype = data.get("doctype")
 	docname = data.get("name")
@@ -165,6 +194,7 @@ def upsert_filtered_doc(data, replace_children=None):
 				continue
 			frappe.db.delete(field.options, {"parenttype": doctype, "parent": docname, "parentfield": field.fieldname})
 			_db_insert_child_rows(field.options, doctype, docname, field.fieldname, data.get(field.fieldname))
+		_apply_source_timestamps(doctype, docname, source_ts)
 		return frappe.get_doc(doctype, docname)
 
 	doc = frappe.get_doc(data)
@@ -175,6 +205,7 @@ def upsert_filtered_doc(data, replace_children=None):
 		if field.fieldname not in data:
 			continue
 		_db_insert_child_rows(field.options, doctype, docname, field.fieldname, data.get(field.fieldname))
+	_apply_source_timestamps(doctype, docname, source_ts)
 	return doc
 
 
@@ -318,12 +349,14 @@ def upsert_user(data):
 		doc.flags.no_welcome_mail = True
 		doc.flags.last_updated_by_sd_yrp_sync = True
 		doc.save(ignore_permissions=True)
+		_apply_source_timestamps("User", user, data)
 		return doc
 
 	doc = frappe.get_doc(user_data)
 	doc.flags.no_welcome_mail = True
 	doc.flags.last_updated_by_sd_yrp_sync = True
 	doc.insert(ignore_permissions=True, set_name=user, set_child_names=False)
+	_apply_source_timestamps("User", user, data)
 	return doc
 
 
@@ -455,6 +488,7 @@ def upsert_production_order(data, event=None):
 
 	item_rows = map_production_order_item_rows(data)
 	data["production_order_details"] = item_rows
+	data["production_ordered_details"] = map_production_ordered_rows(data)
 	data["item_details"] = get_production_order_item_details_json(data.get("item"), item_rows)
 
 	return upsert_filtered_doc(
@@ -507,6 +541,37 @@ def map_production_order_item_rows(data):
 			"item": item,
 			"item_variant": item_variant,
 			"attributes_json": get_variant_attributes_json(item_variant),
+			"quantity": row.get("quantity") or 0,
+			# Business fields replicated onto essdee_yrp custom fields
+			# (fixtures/custom_field.json — synced on every migrate; must be
+			# migrated before these columns are written).
+			"ratio": row.get("ratio") or 0,
+			"mrp": row.get("mrp") or 0,
+			"production_order_mrp": row.get("production_order_mrp") or 0,
+			"retail_price": row.get("retail_price") or 0,
+			"wholesale_price": row.get("wholesale_price") or 0,
+		})
+
+	return rows
+
+
+def map_production_ordered_rows(data):
+	source_context = get_source_context(data)
+	rows = []
+
+	for row in data.get("production_ordered_details") or []:
+		item_variant = row.get("item_variant")
+		validate_required_link("Item Variant", item_variant, f"{source_context} Production Ordered Detail row")
+		lot = row.get("lot")
+		# F15's `lot` Link maps onto base yrp's generic dynamic reference.
+		# Lot syncs AFTER Production Order in the initial order, so the lot
+		# record may not exist yet — stamp the reference without validating
+		# (DB-level sync, source is authoritative).
+		rows.append({
+			"doctype": "Production Ordered Detail",
+			"reference_doctype": "Lot" if lot else None,
+			"reference_name": lot,
+			"item_variant": item_variant,
 			"quantity": row.get("quantity") or 0,
 		})
 

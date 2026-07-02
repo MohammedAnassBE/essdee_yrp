@@ -7,6 +7,7 @@ import ClothAccessoryCombination from "./Item_Po_detail/ClothAccessoryCombinatio
 import CombinationItemDetail from "./Item_Po_detail/CombinationItemDetail.vue";
 import CuttingItemDetail from "./Item_Po_detail/CuttingItemDetail.vue";
 import EmblishmentDetails from "./Item_Po_detail/EmblishmentDetails.vue";
+import LotOrderedDetail from "./ProductionOrder/LotOrderedDetail.vue";
 
 frappe.provide("frappe.production.ui");
 
@@ -156,5 +157,20 @@ frappe.production.ui.EmblishmentDetails = class {
 	}
 	get_items() {
 		return JSON.parse(JSON.stringify(this.vue.get_items()));
+	}
+};
+
+frappe.production.ui.LotOrderedDetail = class {
+	constructor(wrapper) {
+		this.$wrapper = $(wrapper);
+		this.make_body();
+	}
+	make_body() {
+		const mounted = mount_component(LotOrderedDetail, this.$wrapper);
+		this.app = mounted.app;
+		this.vue = mounted.vue;
+	}
+	load_data(context) {
+		this.vue.load_data(JSON.parse(JSON.stringify(context || {})));
 	}
 };

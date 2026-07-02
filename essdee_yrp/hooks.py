@@ -22,6 +22,7 @@ fixtures = [
 				],
 			],
 			["dt", "=", "Item Production Detail"],
+			["dt", "in", ["Production Order", "Production Order Detail"]],
 		],
 	},
 ]
@@ -62,7 +63,10 @@ app_include_js = ["essdee_yrp.bundle.js"]
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-doctype_js = {"Item Production Detail": "public/js/item_production_detail.js"}
+doctype_js = {
+	"Item Production Detail": "public/js/item_production_detail.js",
+	"Production Order": "public/js/production_order.js",
+}
 doctype_list_js = {"Item Production Detail": "public/js/item_production_detail_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}

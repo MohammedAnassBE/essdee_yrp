@@ -130,9 +130,10 @@ class Lot(Document):
 def delete_ppo_lot_qty(ppo, lot):
 	frappe.db.sql(
 		f"""
-			DELETE FROM `tabProduction Ordered Detail` 
-			WHERE parent = {frappe.db.escape(ppo)} 
-			AND lot = {frappe.db.escape(lot)}
+			DELETE FROM `tabProduction Ordered Detail`
+			WHERE parent = {frappe.db.escape(ppo)}
+			AND reference_doctype = {frappe.db.escape("Lot")}
+			AND reference_name = {frappe.db.escape(lot)}
 		"""
 	)
 
@@ -142,7 +143,8 @@ def add_ppo_lot_qty(ppo, lot, items):
 		doc.parent = ppo
 		doc.item_variant = item.item_variant
 		doc.quantity = item.qty
-		doc.lot = lot
+		doc.reference_doctype = "Lot"
+		doc.reference_name = lot
 		doc.parenttype = "Production Order"
 		doc.parentfield = "production_ordered_details"
 		doc.save(ignore_permissions=True)

@@ -19,6 +19,7 @@ fixtures = [
 					"Supplier-apply_sewing_plan",
 					"Process-additional_allowance",
 					"Process-includes_packing",
+					"Process-is_cloth_process",
 					"Process-item",
 				],
 			],
@@ -26,21 +27,52 @@ fixtures = [
 			["dt", "in", ["Production Order", "Production Order Detail"]],
 		],
 	},
+	# Field-order override: keeps `ipd_processes` on the Item Details tab
+	# (production_api parity) — the custom garment tabs would otherwise pull
+	# it into the hidden-for-cloth Advance Settings tab.
+	{
+		"dt": "Property Setter",
+		"filters": [
+			["doc_type", "=", "Item Production Detail"],
+			["property", "=", "field_order"],
+		],
+	},
+	# /web role grants: base yrp leaves IPD System-Manager-only and Terms and
+	# Condition without floor-role write — the /web UI needs both usable by the
+	# floor roles, granted as Custom DocPerm (base yrp stays untouched).
+	{
+		"dt": "Custom DocPerm",
+		"filters": [["parent", "in", ["Item Production Detail", "Terms and Condition"]]],
+	},
 ]
 
 # Apps
 # ------------------
 
 # Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "essdee_yrp",
-# 		"logo": "/assets/essdee_yrp/logo.png",
-# 		"title": "Essdee YRP",
-# 		"route": "/essdee_yrp",
-# 		"has_permission": "essdee_yrp.api.permission.has_app_permission"
-# 	}
-# ]
+add_to_apps_screen = [
+	{
+		"name": "essdee_yrp",
+		"logo": "/assets/essdee_yrp/frontend/favicon.png",
+		"title": "Essdee YRP",
+		"route": "/web",
+	}
+]
+
+# /web SPA catch-all: deep links under /web (the Vue router runs in history mode
+# with base "/web") all resolve to the web.html template, which boots the SPA.
+website_route_rules = [
+	{"from_route": "/web/<path:app_path>", "to_route": "web"},
+]
+
+# Post-login landing: ordinary users land on the custom /web work hub;
+# System Manager / Administrator keep the Desk default (function returns None
+# for them, so Frappe falls through). See essdee_yrp/www_home.py.
+get_website_user_home_page = "essdee_yrp.www_home.get_website_user_home_page"
+
+# Desk gate: non-(System Manager/Administrator) users are 302'd from
+# /app|/apps|/desk|/ to /web. See essdee_yrp/auth.py.
+before_request = ["essdee_yrp.auth.block_desk_for_non_managers"]
 
 # Includes in <head>
 # ------------------
@@ -176,7 +208,10 @@ doc_events = {
 			"essdee_yrp.fabric_ipd.sync_fabric_process_matrices",
 		],
 		"on_trash": "essdee_yrp.ipd_validations.on_trash",
-	}
+	},
+	"Work Order": {
+		"validate": "essdee_yrp.work_order_hooks.validate",
+	},
 }
 
 # Scheduled Tasks

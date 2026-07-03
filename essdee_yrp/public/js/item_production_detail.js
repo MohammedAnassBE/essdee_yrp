@@ -12,23 +12,23 @@ frappe.ui.form.on("Item Production Detail", {
 			const attributes = (doc.item_attributes || []).map(attr => attr.attribute)
 			return { filters: { name: ["in", attributes] } };
 		};
-		frm.set_query("item", ()=> {
-			frappe.call({
-				method: "essdee_yrp.ipd_ui.get_ipd_item_group",
-				callback: function(r) {
-					if (r.message) {
-						let item_groups = r.message;
-						frm.set_query("item", () => {
-							return {
-								filters: {
-									item_group: ["in", item_groups]
-								}
-							};
-						});
-					}
-				}
-			});
-		})
+		// frm.set_query("item", ()=> {
+		// 	frappe.call({
+		// 		method: "essdee_yrp.ipd_ui.get_ipd_item_group",
+		// 		callback: function(r) {
+		// 			if (r.message) {
+		// 				let item_groups = r.message;
+		// 				frm.set_query("item", () => {
+		// 					return {
+		// 						filters: {
+		// 							item_group: ["in", item_groups]
+		// 						}
+		// 					};
+		// 				});
+		// 			}
+		// 		}
+		// 	});
+		// })
 		frm.set_query('set_item_attribute', setAttributeQuery);
 		frm.set_query('packing_attribute', setAttributeQuery);
 		frm.set_query('stiching_attribute', setAttributeQuery);
@@ -1074,4 +1074,114 @@ function make_select_attributes(frm, html_field, html_class, name, attrs, json_f
 		render_input: true,
 	});
 	frm[name].refresh_input();
+}
+
+// ---------------------------------------------------------------------------
+// Fabric swap-mapping widgets (dia-wise dyeing / colour-wise compacting).
+// The checkbox picks the entry mode; the widget is just a faster editor for
+// the SAME child table — rows carry dia/colour when entered dia-/colour-wise.
+// ---------------------------------------------------------------------------
+
+const FABRIC_SWAP_WIDGETS = {
+	dyeing: {
+		html_field: "dyeing_colour_matrix_html",
+		checkbox_field: "dia_wise_colour_change",
+		table_field: "dyeing_colour_details",
+		pin_field: "dia", pin_attribute: "Dia", pin_label: "Dia",
+		from_field: "from_colour", to_field: "to_colour",
+		value_attribute: "Colour", value_label: "Colour",
+	},
+	compacting: {
+		html_field: "compacting_dia_matrix_html",
+		checkbox_field: "colour_wise_dia_change",
+		table_field: "compacting_dia_details",
+		pin_field: "colour", pin_attribute: "Colour", pin_label: "Colour",
+		from_field: "from_dia", to_field: "to_dia",
+		value_attribute: "Dia", value_label: "Dia",
+	},
+};
+
+frappe.ui.form.on("Item Production Detail", {
+	setup(frm) {
+		frm.set_query("dia", "dyeing_colour_details", () => ({ filters: { attribute_name: "Dia" } }));
+		frm.set_query("colour", "compacting_dia_details", () => ({ filters: { attribute_name: "Colour" } }));
+	},
+	refresh(frm) {
+		frm.trigger("render_fabric_swap_widgets");
+		frm.trigger("apply_cloth_layout");
+	},
+	apply_cloth_layout(frm) {
+		if (!frm.doc.is_cloth_item) return;
+		// Cloth IPDs have no Item BOM (standing rule): hide the empty BOM grid
+		// and relabel the section — it holds only the processes table, where
+		// identity processes (Washing etc.) are declared with their Process Item.
+		frm.toggle_display("item_bom", false);
+		frm.toggle_display("bom_attribute_mapping_html", false);
+		// set_df_property doesn't repaint an already-rendered section head.
+		const section = frm.fields_dict.bill_of_materials_section;
+		if (section && section.head) section.head.text(__("Processes"));
+	},
+	dia_wise_colour_change(frm) {
+		frm.trigger("render_fabric_swap_widgets");
+	},
+	colour_wise_dia_change(frm) {
+		frm.trigger("render_fabric_swap_widgets");
+	},
+	render_fabric_swap_widgets(frm) {
+		if (!frm.doc.is_cloth_item) return;
+		Object.values(FABRIC_SWAP_WIDGETS).forEach((cfg) => {
+			const field = frm.fields_dict[cfg.html_field];
+			if (!field) return;
+			$(field.wrapper).empty();
+			if (!frm.doc[cfg.checkbox_field]) return;
+			const widget = new frappe.production.ui.FabricSwapDetail(field.wrapper, {
+				on_change: (rows) => fabric_swap_write_back(frm, cfg, rows),
+			});
+			widget.load_data(fabric_swap_widget_data(frm, cfg));
+			frm.fabric_swap_widgets = frm.fabric_swap_widgets || {};
+			frm.fabric_swap_widgets[cfg.html_field] = widget;
+		});
+	},
+});
+
+function fabric_swap_widget_data(frm, cfg) {
+	// Group existing rows by pin value; pre-seed cards for fast entry —
+	// dyeing: every knitting dia; compacting: every dyeing to-colour.
+	const groups = new Map();
+	(frm.doc[cfg.table_field] || []).forEach((row) => {
+		const pin = row[cfg.pin_field] || "";
+		if (!groups.has(pin)) groups.set(pin, []);
+		groups.get(pin).push({ from: row[cfg.from_field] || "", to: row[cfg.to_field] || "" });
+	});
+	// Seed suggestion cards ONLY on first entry (empty table). Once rows are
+	// saved, the widget mirrors the stored rows exactly — otherwise a removed
+	// empty card would reappear on every save/refresh.
+	if (!groups.size) {
+		const seeds = cfg.table_field === "dyeing_colour_details"
+			? (frm.doc.knitting_dia_details || []).map((r) => r.dia)
+			: (frm.doc.dyeing_colour_details || []).map((r) => r.to_colour);
+		[...new Set(seeds)].filter(Boolean).forEach((pin) => {
+			groups.set(pin, [{ from: "", to: "" }]);
+		});
+	}
+	return {
+		pin_label: cfg.pin_label,
+		value_label: cfg.value_label,
+		pin_attribute: cfg.pin_attribute,
+		value_attribute: cfg.value_attribute,
+		locked: !frm.is_new() && frm.doc.approval_status === "Approved",
+		groups: [...groups.entries()].map(([pin, pairs]) => ({ pin, pairs })),
+	};
+}
+
+function fabric_swap_write_back(frm, cfg, rows) {
+	frm.clear_table(cfg.table_field);
+	rows.forEach((r) => {
+		const row = frm.add_child(cfg.table_field);
+		row[cfg.pin_field] = r.pin;
+		row[cfg.from_field] = r.from;
+		row[cfg.to_field] = r.to;
+	});
+	frm.refresh_field(cfg.table_field);
+	frm.dirty();
 }

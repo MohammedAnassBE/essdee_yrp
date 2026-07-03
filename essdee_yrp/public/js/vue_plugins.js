@@ -7,6 +7,7 @@ import ClothAccessoryCombination from "./Item_Po_detail/ClothAccessoryCombinatio
 import CombinationItemDetail from "./Item_Po_detail/CombinationItemDetail.vue";
 import CuttingItemDetail from "./Item_Po_detail/CuttingItemDetail.vue";
 import EmblishmentDetails from "./Item_Po_detail/EmblishmentDetails.vue";
+import FabricSwapDetail from "./Item_Po_detail/FabricSwapDetail.vue";
 import LotOrderedDetail from "./ProductionOrder/LotOrderedDetail.vue";
 
 frappe.provide("frappe.production.ui");
@@ -157,6 +158,27 @@ frappe.production.ui.EmblishmentDetails = class {
 	}
 	get_items() {
 		return JSON.parse(JSON.stringify(this.vue.get_items()));
+	}
+};
+
+frappe.production.ui.FabricSwapDetail = class {
+	constructor(wrapper, opts = {}) {
+		this.$wrapper = $(wrapper);
+		this.opts = opts;
+		this.make_body();
+	}
+	make_body() {
+		const mounted = mount_component(FabricSwapDetail, this.$wrapper);
+		this.app = mounted.app;
+		this.vue = mounted.vue;
+	}
+	load_data(data) {
+		// on_change is passed alongside (not inside) the data so the JSON
+		// round-trip cannot strip the callback.
+		this.vue.load_data(JSON.parse(JSON.stringify(data || {})), this.opts.on_change);
+	}
+	get_data() {
+		return JSON.parse(JSON.stringify(this.vue.get_data()));
 	}
 };
 

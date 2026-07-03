@@ -30,12 +30,22 @@ def before_validate(doc, method=None):
 
 
 def validate(doc, method=None):
+	validate_common(doc)
 	if is_cloth_ipd(doc):
-		return
+		validate_cloth_ipd(doc)
+	else:
+		validate_garment_ipd(doc)
+
+
+def validate_common(doc):
+	"""Runs for every IPD kind: the IPD must own its attribute mappings."""
 	if doc.is_new():
 		create_new_mapping_values(doc)
-
+	ensure_ipd_owned_mappings(doc)
 	update_mapping_values(doc)
+
+
+def validate_garment_ipd(doc):
 	validate_packing_fields(doc)
 	validate_stiching_fields(doc)
 	validate_cutting_fields(doc)
@@ -43,9 +53,59 @@ def validate(doc, method=None):
 	sync_emblishment_processes(doc)
 
 
+def validate_cloth_ipd(doc):
+	"""Cloth IPDs skip every garment validation (packing/stitching/cutting).
+	Fabric tabs: each mapping must be complete, and a (dia, from_colour) /
+	(colour, from_dia) pair may appear only once — a blank dia/colour means
+	"applies to every value" and counts as its own key."""
+	# The engine resolves matrices per process_name with subset attr matching —
+	# two fabric tabs sharing one Process master would cross-match groups.
+	fabric_processes = [p for p in (doc.knitting_process, doc.dyeing_process, doc.compacting_process) if p]
+	if len(fabric_processes) != len(set(fabric_processes)):
+		frappe.throw("Knitting, Dyeing and Compacting must each use a DIFFERENT Process master.")
+
+	# Identity-process rows may only treat this IPD's cloth or its yarn.
+	allowed_items = {doc.item, doc.get("yarn_item")}
+	for row in doc.get("ipd_processes") or []:
+		if row.get("process_item") and row.process_item not in allowed_items:
+			frappe.throw(
+				f"Row {row.idx} of IPD Processes: Process Item {row.process_item} must be "
+				f"this IPD's item ({doc.item}) or its yarn ({doc.get('yarn_item') or 'not set'})."
+			)
+
+	if doc.knitting_process and flt(doc.get("cloth_per_kg_yarn")) <= 0:
+		frappe.throw(
+			"Enter 'Cloth Kgs per 1 Kg Yarn' on the Knitting tab — the Work Order "
+			"needs the yarn to cloth quantity relationship."
+		)
+	if doc.dyeing_process:
+		validate_swap_rows(
+			doc.get("dyeing_colour_details") or [],
+			"Dyeing Colour Detail", "dia", "from_colour", "to_colour",
+		)
+	if doc.compacting_process:
+		validate_swap_rows(
+			doc.get("compacting_dia_details") or [],
+			"Compacting Dia Detail", "colour", "from_dia", "to_dia",
+		)
+
+
+def validate_swap_rows(rows, table_label, pin_field, from_field, to_field):
+	seen = set()
+	for row in rows:
+		if not row.get(from_field) or not row.get(to_field):
+			frappe.throw(f"Row {row.idx} of {table_label}: enter both the from and to values.")
+		key = (row.get(pin_field) or "", row.get(from_field))
+		if key in seen:
+			pin = row.get(pin_field) or "all"
+			frappe.throw(
+				f"Row {row.idx} of {table_label}: duplicate mapping for "
+				f"{from_field.replace('_', ' ')} {row.get(from_field)} ({pin_field}: {pin})."
+			)
+		seen.add(key)
+
+
 def on_update(doc, method=None):
-	if is_cloth_ipd(doc):
-		return
 	for mapping in getattr(frappe.flags, "delete_bom_mapping", []) or []:
 		frappe.delete_doc(
 			"Item BOM Attribute Mapping",
@@ -58,8 +118,8 @@ def on_update(doc, method=None):
 
 
 def on_trash(doc, method=None):
-	if is_cloth_ipd(doc):
-		return
+	# Never delete a mapping still referenced outside this IPD — by an Item or
+	# another IPD (legacy cloth IPDs shared docs before ensure_ipd_owned_mappings).
 	documents = {
 		"Item Item Attribute Mapping": [],
 		"Item Dependent Attribute Mapping": [],
@@ -67,16 +127,19 @@ def on_trash(doc, method=None):
 	}
 	for attribute in doc.get("item_attributes") or []:
 		if attribute.mapping:
-			documents["Item Item Attribute Mapping"].append(attribute.mapping)
+			if not is_mapping_shared("Item Item Attribute Mapping", attribute.mapping, doc.name):
+				documents["Item Item Attribute Mapping"].append(attribute.mapping)
 			attribute.mapping = None
 
 	if doc.dependent_attribute_mapping:
-		documents["Item Dependent Attribute Mapping"].append(doc.dependent_attribute_mapping)
+		if not is_mapping_shared("Item Dependent Attribute Mapping", doc.dependent_attribute_mapping, doc.name):
+			documents["Item Dependent Attribute Mapping"].append(doc.dependent_attribute_mapping)
 		doc.dependent_attribute_mapping = None
 
 	for bom in doc.get("item_bom") or []:
 		if bom.attribute_mapping:
-			documents["Item BOM Attribute Mapping"].append(bom.attribute_mapping)
+			if not is_mapping_shared("Item BOM Attribute Mapping", bom.attribute_mapping, doc.name):
+				documents["Item BOM Attribute Mapping"].append(bom.attribute_mapping)
 			bom.attribute_mapping = None
 
 	delete_docs(documents)
@@ -212,6 +275,59 @@ def create_new_mapping_values(doc):
 			bom.attribute_mapping = copy.name
 		else:
 			bom.attribute_mapping = None
+
+
+def ensure_ipd_owned_mappings(doc):
+	"""An IPD must never share mapping documents with an Item or another IPD —
+	it keeps its own copies so they can diverge. Replaces any shared mapping
+	(legacy cloth IPDs, duplicated IPDs, re-selecting the item on a saved IPD)
+	with a fresh copy."""
+	for attribute in doc.get("item_attributes") or []:
+		if attribute.mapping and is_mapping_shared("Item Item Attribute Mapping", attribute.mapping, doc.name):
+			source = frappe.get_cached_doc("Item Item Attribute Mapping", attribute.mapping)
+			copy = frappe.copy_doc(source)
+			copy.insert(ignore_permissions=True)
+			attribute.mapping = copy.name
+
+	if doc.dependent_attribute_mapping and is_mapping_shared(
+		"Item Dependent Attribute Mapping", doc.dependent_attribute_mapping, doc.name
+	):
+		source = frappe.get_cached_doc("Item Dependent Attribute Mapping", doc.dependent_attribute_mapping)
+		copy = frappe.copy_doc(source)
+		copy.insert(ignore_permissions=True)
+		doc.dependent_attribute_mapping = copy.name
+
+	for bom in doc.get("item_bom") or []:
+		if bom.attribute_mapping and is_mapping_shared("Item BOM Attribute Mapping", bom.attribute_mapping, doc.name):
+			source = frappe.get_doc("Item BOM Attribute Mapping", bom.attribute_mapping)
+			copy = frappe.copy_doc(source)
+			set_if_has_field(copy, "item", doc.item)
+			set_if_has_field(copy, "bom_item", bom.item)
+			copy.insert(ignore_permissions=True)
+			bom.attribute_mapping = copy.name
+
+
+def is_mapping_shared(doctype, name, ipd_name):
+	"""True when a mapping doc is referenced outside this IPD — by an Item's
+	attribute rows / dependent mapping, or by another IPD. Shared docs must
+	never be deleted and get replaced by an owned copy on save. The current
+	item alone is not enough to check: a legacy duplicate can carry mappings
+	belonging to a DIFFERENT item than doc.item."""
+	if doctype == "Item Item Attribute Mapping":
+		return bool(
+			frappe.db.exists("Item Item Attribute", {"mapping": name})
+			or frappe.db.exists("IPD Item Attribute", {"mapping": name, "parent": ["!=", ipd_name]})
+		)
+	if doctype == "Item Dependent Attribute Mapping":
+		return bool(
+			frappe.db.exists("Item", {"dependent_attribute_mapping": name})
+			or frappe.db.exists(
+				"Item Production Detail", {"dependent_attribute_mapping": name, "name": ["!=", ipd_name]}
+			)
+		)
+	if doctype == "Item BOM Attribute Mapping":
+		return bool(frappe.db.exists("Item BOM", {"attribute_mapping": name, "parent": ["!=", ipd_name]}))
+	return False
 
 
 def update_mapping_values(doc):

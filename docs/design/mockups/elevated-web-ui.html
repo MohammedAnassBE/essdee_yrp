@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Essdee /web — elevated direction</title>
+<style>
+:root {
+  /* neutrals — picked, faint teal bias, not pure grey/white */
+  --bg: #F1F5F3;
+  --surface: #FFFFFF;
+  --surface-2: #F7FAF9;
+  --line: #E4EAE8;
+  --line-strong: #D3DBD8;
+  --ink: #0F1613;
+  --ink-2: #37433E;
+  --muted: #6A7772;
+  --faint: #9AA6A1;
+  /* accent — deepened teal + depth */
+  --accent: #0E8C7F;
+  --accent-deep: #0A5F58;
+  --accent-tint: #E7F3F1;
+  --accent-tint-2: #D5EBE7;
+  /* semantic (separate from accent) */
+  --good: #1F9D57; --good-tint:#E4F4EB;
+  --warn: #B7770A; --warn-tint:#FBF0DC;
+  --danger:#D64545; --danger-tint:#FBE7E7;
+  --info:#3E6DB5; --info-tint:#E7EEF9;
+  /* elevation */
+  --sh-1: 0 1px 2px rgba(16,32,28,.05), 0 1px 1px rgba(16,32,28,.04);
+  --sh-2: 0 4px 14px -4px rgba(16,32,28,.12), 0 2px 6px -3px rgba(16,32,28,.08);
+  --sh-pop: 0 12px 34px -10px rgba(16,32,28,.22);
+  --r: 12px; --r-sm: 9px; --r-lg: 16px;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+:root[data-theme="dark"], html.dark {
+  --bg: #0C1310;
+  --surface: #141D19;
+  --surface-2: #101814;
+  --line: #223029;
+  --line-strong: #2C3C34;
+  --ink: #ECF3F0;
+  --ink-2: #C2CEC9;
+  --muted: #8797901;
+  --muted: #879790;
+  --faint: #5E6E67;
+  --accent: #2FB8A6;
+  --accent-deep: #46C7B7;
+  --accent-tint: #12201D;
+  --accent-tint-2: #163029;
+  --good:#3FBE76; --good-tint:#12241A;
+  --warn:#D69A2E; --warn-tint:#2A2113;
+  --danger:#E86A6A; --danger-tint:#2A1717;
+  --info:#6F9BE0; --info-tint:#141E2C;
+  --sh-1: 0 1px 2px rgba(0,0,0,.4);
+  --sh-2: 0 6px 18px -6px rgba(0,0,0,.5);
+  --sh-pop: 0 14px 40px -12px rgba(0,0,0,.6);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.tnum { font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+h1,h2,h3,h4 { margin: 0; text-wrap: balance; }
+
+/* ---------- shell ---------- */
+.shell { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+.side {
+  background: var(--surface); border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; padding: 14px 12px; gap: 4px;
+}
+.brand { display:flex; align-items:center; gap:10px; padding: 8px 10px 16px; }
+.brand__mark { width: 30px; height: 30px; border-radius: 9px; background:
+  linear-gradient(145deg, var(--accent), var(--accent-deep));
+  display:grid; place-items:center; color:#fff; font-weight:800; box-shadow: var(--sh-1); }
+.brand__name { font-weight: 700; letter-spacing:-.01em; }
+.nav-group { margin-top: 10px; }
+.nav-group__label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); padding: 6px 10px; font-weight:600; }
+.nav-item { display:flex; align-items:center; gap:11px; padding: 8px 10px; border-radius: 9px; color: var(--ink-2); cursor:pointer; font-weight:500; transition: background .15s, color .15s; }
+.nav-item:hover { background: var(--surface-2); color: var(--ink); }
+.nav-item.active { background: var(--accent-tint); color: var(--accent-deep); font-weight:600; }
+.nav-item .dot { width:16px; height:16px; border-radius:5px; border:1.5px solid currentColor; opacity:.55; }
+.nav-item.active .dot { opacity:1; background: currentColor; border-color: transparent; }
+
+.main { display:flex; flex-direction: column; min-width: 0; }
+.topbar { height: 58px; border-bottom:1px solid var(--line); background: var(--surface);
+  display:flex; align-items:center; gap: 16px; padding: 0 24px; position: sticky; top:0; z-index: 5; }
+.search { flex: 0 1 380px; height: 36px; border:1px solid var(--line-strong); border-radius: 9px;
+  background: var(--surface-2); display:flex; align-items:center; gap:8px; padding: 0 12px; color: var(--faint); font-size: 13px; }
+.kbd { margin-left:auto; font-size:11px; border:1px solid var(--line-strong); border-radius:5px; padding: 1px 5px; color: var(--muted); }
+.spacer { flex: 1; }
+.iconbtn { width:34px; height:34px; border-radius:9px; border:1px solid var(--line); background: var(--surface); display:grid; place-items:center; color: var(--muted); cursor:pointer; }
+.avatar { display:flex; align-items:center; gap:10px; }
+.avatar__badge { width:32px;height:32px;border-radius:50%; background: linear-gradient(145deg,var(--accent),var(--accent-deep)); color:#fff; display:grid;place-items:center; font-weight:700; font-size:12px; }
+.avatar__meta { line-height:1.15; }
+.avatar__meta b { font-size:13px; } .avatar__meta span { font-size:11px; color: var(--muted); }
+
+.page { padding: 26px 28px 40px; display:flex; flex-direction:column; gap: 26px; max-width: 1180px; }
+.section-tag { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color: var(--accent-deep); font-weight:700; }
+
+/* ---------- home ---------- */
+.hello h1 { font-size: 24px; letter-spacing:-.02em; font-weight:750; }
+.hello p { margin: 4px 0 0; color: var(--muted); }
+.kpis { display:grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.kpi { background: var(--surface); border:1px solid var(--line); border-radius: var(--r); padding: 16px 16px 14px;
+  box-shadow: var(--sh-1); position: relative; overflow:hidden; transition: box-shadow .18s, transform .18s; cursor:pointer; }
+.kpi:hover { box-shadow: var(--sh-2); transform: translateY(-2px); }
+.kpi__row { display:flex; align-items:center; justify-content:space-between; }
+.kpi__ic { width:30px;height:30px;border-radius:8px; display:grid;place-items:center; }
+.kpi__val { font-size: 30px; font-weight: 760; letter-spacing:-.03em; margin-top: 10px; }
+.kpi__label { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.kpi__spark { position:absolute; right:0; bottom:0; left:0; height: 34px; opacity:.5; }
+.tint-accent{background:var(--accent-tint);color:var(--accent-deep);} .tint-good{background:var(--good-tint);color:var(--good);} .tint-info{background:var(--info-tint);color:var(--info);} .tint-warn{background:var(--warn-tint);color:var(--warn);}
+
+.recents { background: var(--surface); border:1px solid var(--line); border-radius: var(--r); box-shadow: var(--sh-1); overflow:hidden; }
+.recents__head { display:flex; align-items:center; gap: 6px; padding: 14px 18px; border-bottom:1px solid var(--line); }
+.tabs { display:flex; gap: 2px; }
+.tab { padding: 7px 12px; border-radius: 8px; color: var(--muted); font-weight:600; font-size:13px; cursor:pointer; position:relative; }
+.tab.active { color: var(--ink); }
+.tab.active::after { content:""; position:absolute; left:12px; right:12px; bottom:-14px; height:2px; background: var(--accent); border-radius:2px; }
+
+/* ---------- list ---------- */
+.panel { background: var(--surface); border:1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--sh-1); overflow:hidden; }
+.panel__bar { display:flex; align-items:center; gap:12px; padding: 14px 18px; border-bottom:1px solid var(--line); }
+.panel__title { font-size:16px; font-weight:700; letter-spacing:-.01em; }
+.btn { height:34px; padding: 0 13px; border-radius: 9px; border:1px solid var(--line-strong); background: var(--surface); color: var(--ink-2); font-weight:600; font-size:13px; display:inline-flex; align-items:center; gap:7px; cursor:pointer; transition: background .15s, border-color .15s; }
+.btn:hover { background: var(--surface-2); }
+.btn--primary { background: linear-gradient(180deg, var(--accent), var(--accent-deep)); border-color: transparent; color:#fff; box-shadow: 0 1px 0 rgba(255,255,255,.15) inset, var(--sh-1); }
+.btn--primary:hover { filter: brightness(1.05); }
+.statustabs { display:flex; gap:2px; padding: 8px 12px; border-bottom:1px solid var(--line); overflow-x:auto; }
+.stab { padding:6px 11px; border-radius:8px; font-size:13px; font-weight:600; color:var(--muted); white-space:nowrap; cursor:pointer; display:flex; align-items:center; gap:7px; }
+.stab.active { background: var(--accent-tint); color: var(--accent-deep); }
+.stab .cnt { font-size:11px; background: var(--surface-2); border:1px solid var(--line); border-radius: 20px; padding: 0 6px; color: var(--muted); }
+.stab.active .cnt { background: #fff3; border-color: transparent; color: var(--accent-deep); }
+table { width:100%; border-collapse: collapse; }
+thead th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color: var(--faint); font-weight:700; padding: 12px 18px; background: var(--surface-2); border-bottom:1px solid var(--line); position:sticky; top:0; }
+tbody td { padding: 13px 18px; border-bottom:1px solid var(--line); }
+tbody tr { transition: background .12s; cursor:pointer; }
+tbody tr:hover { background: var(--accent-tint); }
+tbody tr:last-child td { border-bottom: none; }
+.code { font-family: var(--mono); font-weight:600; color: var(--accent-deep); font-size: 13px; }
+.pill { display:inline-flex; align-items:center; gap:6px; padding: 3px 9px; border-radius:20px; font-size:12px; font-weight:600; }
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;}
+.pill--draft{background:var(--warn-tint); color:var(--warn);} .pill--good{background:var(--good-tint); color:var(--good);} .pill--info{background:var(--info-tint); color:var(--info);}
+
+/* ---------- detail ---------- */
+.record { display:grid; grid-template-columns: 1fr 300px; gap: 20px; align-items:start; }
+.rec-head { display:flex; flex-direction:column; gap:14px; }
+.crumbs { color: var(--muted); font-size: 12.5px; display:flex; gap:8px; align-items:center; }
+.crumbs a { color: var(--muted); text-decoration:none; } .crumbs b { color: var(--accent-deep); }
+.rec-title { display:flex; align-items:center; gap: 14px; flex-wrap:wrap; }
+.rec-title h1 { font-size: 22px; letter-spacing:-.02em; font-weight:750; }
+.rec-sub { color: var(--muted); font-size: 13px; }
+.hero-facts { display:grid; grid-template-columns: repeat(4,1fr); gap: 1px; background: var(--line); border:1px solid var(--line); border-radius: var(--r); overflow:hidden; }
+.fact { background: var(--surface); padding: 14px 16px; }
+.fact__l { font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--faint); font-weight:700; }
+.fact__v { font-size:16px; font-weight:700; margin-top:5px; letter-spacing:-.01em; }
+.fact__v.small { font-size:14px; font-weight:600; }
+.detailtabs { display:flex; gap:4px; border-bottom:1px solid var(--line); margin-top: 4px; }
+.dtab { padding: 10px 4px; margin-right: 14px; color: var(--muted); font-weight:600; font-size:13.5px; cursor:pointer; position:relative; display:flex; gap:7px; align-items:center; }
+.dtab.active { color: var(--ink); }
+.dtab.active::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--accent);border-radius:2px;}
+.dtab .badge { font-size:11px; background: var(--accent-tint); color: var(--accent-deep); border-radius:20px; padding: 0 6px; font-weight:700; }
+.pivot { border:1px solid var(--line); border-radius: var(--r); overflow:hidden; margin-top: 16px; }
+.pivot__head { padding: 12px 16px; background: var(--surface-2); border-bottom:1px solid var(--line); display:flex; align-items:center; gap:8px; }
+.pivot__head .section-tag{ color: var(--accent-deep); }
+.side-cards { display:flex; flex-direction:column; gap: 16px; }
+.card { background: var(--surface); border:1px solid var(--line); border-radius: var(--r); box-shadow: var(--sh-1); overflow:hidden; }
+.card__head { padding: 11px 15px; background: var(--accent-tint); border-bottom:1px solid var(--line); font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color: var(--accent-deep); }
+.card__body { padding: 6px 15px 12px; }
+.mrow { display:flex; justify-content:space-between; align-items:center; padding: 9px 0; border-bottom:1px solid var(--line); }
+.mrow:last-child { border-bottom:none; }
+.mrow .k { color: var(--muted); font-size:12.5px; } .mrow .v { font-weight:600; font-size:13px; }
+.conn { display:flex; justify-content:space-between; align-items:center; padding: 9px 0; }
+.conn .cnt { background: var(--surface-2); border:1px solid var(--line); border-radius:20px; padding: 1px 9px; font-weight:700; font-size:12px; color: var(--muted); }
+
+.head-actions { display:flex; gap:8px; margin-left:auto; }
+.wrap { display:flex; align-items:center; justify-content:space-between; gap: 14px; }
+
+/* screen separators for the mock */
+.screen { scroll-margin-top: 70px; }
+.screen__tag { font-size:11px; text-transform:uppercase; letter-spacing:.14em; color:var(--faint); font-weight:700; margin: 6px 0 -8px; padding-left:2px; }
+.theme-toggle { position: fixed; right: 18px; bottom: 18px; z-index: 20; height:40px; padding: 0 16px; border-radius: 22px; border:1px solid var(--line-strong); background: var(--surface); color: var(--ink); box-shadow: var(--sh-pop); cursor:pointer; font-weight:600; }
+@media (prefers-reduced-motion: reduce){ * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><div class="brand__mark">E</div><div class="brand__name">Essdee YRP</div></div>
+    <div class="nav-item"><span class="dot"></span> Home</div>
+    <div class="nav-group"><div class="nav-group__label">Production</div>
+      <div class="nav-item"><span class="dot"></span> Lot</div>
+      <div class="nav-item active"><span class="dot"></span> Work Order</div>
+      <div class="nav-item"><span class="dot"></span> Delivery Challan</div>
+      <div class="nav-item"><span class="dot"></span> Goods Received Note</div>
+    </div>
+    <div class="nav-group"><div class="nav-group__label">Stock</div>
+      <div class="nav-item"><span class="dot"></span> Stock Entry</div>
+    </div>
+    <div class="nav-group"><div class="nav-group__label">Item Masters</div>
+      <div class="nav-item"><span class="dot"></span> Item</div>
+      <div class="nav-item"><span class="dot"></span> Item Production Detail</div>
+    </div>
+    <div class="nav-group"><div class="nav-group__label">Setup</div>
+      <div class="nav-item"><span class="dot"></span> Terms and Condition</div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="search">🔍 Search anything… <span class="kbd">⌘K</span></div>
+      <div class="spacer"></div>
+      <div class="iconbtn">◐</div>
+      <div class="avatar"><div class="avatar__badge">AD</div><div class="avatar__meta"><b>Administrator</b><br><span>System Manager</span></div></div>
+    </div>
+
+    <div class="page">
+      <!-- ===== HOME ===== -->
+      <div class="screen" id="home">
+        <div class="screen__tag">Home</div>
+        <div class="wrap" style="margin-top:14px">
+          <div class="hello"><h1>Good morning, Administrator</h1><p>Here's the floor at a glance — 5 active work orders across 3 fabric processes.</p></div>
+          <button class="btn btn--primary">＋ New Lot ▾</button>
+        </div>
+        <div class="kpis" style="margin-top:18px">
+          <div class="kpi"><div class="kpi__row"><div class="kpi__ic tint-accent">◱</div></div><div class="kpi__val tnum">521</div><div class="kpi__label">Open Lots</div>
+            <svg class="kpi__spark" viewBox="0 0 200 34" preserveAspectRatio="none"><path d="M0 26 L30 22 L60 24 L90 15 L120 18 L150 9 L180 12 L200 6" fill="none" stroke="var(--accent)" stroke-width="2"/><path d="M0 26 L30 22 L60 24 L90 15 L120 18 L150 9 L180 12 L200 6 L200 34 L0 34 Z" fill="var(--accent)" opacity=".08"/></svg>
+          </div>
+          <div class="kpi"><div class="kpi__row"><div class="kpi__ic tint-info">≣</div></div><div class="kpi__val tnum">5</div><div class="kpi__label">Open Work Orders</div></div>
+          <div class="kpi"><div class="kpi__row"><div class="kpi__ic tint-warn">➤</div></div><div class="kpi__val tnum">0</div><div class="kpi__label">Draft Delivery Challans</div></div>
+          <div class="kpi"><div class="kpi__row"><div class="kpi__ic tint-good">＋</div></div><div class="kpi__val tnum">0</div><div class="kpi__label">Draft GRNs</div></div>
+        </div>
+        <div class="recents" style="margin-top:18px">
+          <div class="recents__head"><div class="tabs"><span class="tab active">Recent Work Orders</span><span class="tab">Delivery Challans</span><span class="tab">Goods Received</span><span class="tab">Stock Entries</span></div><span style="margin-left:auto;color:var(--accent-deep);font-weight:600;font-size:13px;">View all →</span></div>
+          <table><thead><tr><th>Code</th><th>Job-worker</th><th>Process</th><th>Status</th><th>Updated</th></tr></thead>
+          <tbody>
+            <tr><td class="code">WO-00004</td><td>M.R.Tapes</td><td>Dyeing</td><td><span class="pill pill--draft">Draft</span></td><td class="mono" style="color:var(--muted)">02 Jul</td></tr>
+            <tr><td class="code">WO-00003</td><td>M.R.Tapes</td><td>Knitting</td><td><span class="pill pill--draft">Draft</span></td><td class="mono" style="color:var(--muted)">02 Jul</td></tr>
+            <tr><td class="code">WO-00005</td><td>M.R.Tapes</td><td>Compacting</td><td><span class="pill pill--draft">Draft</span></td><td class="mono" style="color:var(--muted)">02 Jul</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+
+      <!-- ===== LIST ===== -->
+      <div class="screen" id="list">
+        <div class="screen__tag">List view</div>
+        <div class="panel">
+          <div class="panel__bar"><div class="panel__title">Work Order</div><div class="search" style="flex:0 1 260px;margin-left:12px">🔍 Search…</div><div class="head-actions"><button class="btn">⚙ Columns</button><button class="btn">⛃ Filter</button><button class="btn btn--primary">＋ New</button></div></div>
+          <div class="statustabs">
+            <span class="stab active">All <span class="cnt">5</span></span>
+            <span class="stab">Draft <span class="cnt">5</span></span>
+            <span class="stab">Submitted <span class="cnt">0</span></span>
+            <span class="stab">Partially Delivered <span class="cnt">0</span></span>
+            <span class="stab">Fully Delivered <span class="cnt">0</span></span>
+            <span class="stab">Closed <span class="cnt">0</span></span>
+          </div>
+          <table><thead><tr><th style="width:32px"></th><th>Name</th><th>WO Series</th><th>Job-worker</th><th>Item</th><th>Process</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>☐</td><td class="code">WO-00004</td><td class="mono" style="color:var(--muted)">WO-</td><td>M.R.Tapes</td><td>FT-CLOTH</td><td>Dyeing</td><td><span class="pill pill--draft">Draft</span></td></tr>
+            <tr><td>☐</td><td class="code">WO-00003</td><td class="mono" style="color:var(--muted)">WO-</td><td>M.R.Tapes</td><td>FT-CLOTH</td><td>Knitting</td><td><span class="pill pill--draft">Draft</span></td></tr>
+            <tr><td>☐</td><td class="code">WO-00005</td><td class="mono" style="color:var(--muted)">WO-</td><td>M.R.Tapes</td><td>FT-CLOTH</td><td>Compacting</td><td><span class="pill pill--draft">Draft</span></td></tr>
+            <tr><td>☐</td><td class="code">WO-00002</td><td class="mono" style="color:var(--muted)">WO-</td><td>M.R.Tapes</td><td>FT-CLOTH</td><td>Dyeing</td><td><span class="pill pill--draft">Draft</span></td></tr>
+            <tr><td>☐</td><td class="code">WO-00001</td><td class="mono" style="color:var(--muted)">WO-</td><td>M.R.Tapes</td><td>FT-CLOTH</td><td>Knitting</td><td><span class="pill pill--draft">Draft</span></td></tr>
+          </tbody></table>
+        </div>
+      </div>
+
+      <!-- ===== DETAIL ===== -->
+      <div class="screen" id="detail">
+        <div class="screen__tag">Detail view — record-led</div>
+        <div class="rec-head">
+          <div class="wrap">
+            <div class="crumbs"><a>Home</a> ／ <a>Work Order</a> ／ <b>WO-00004</b></div>
+            <div class="head-actions">
+              <button class="btn">‹</button><button class="btn">›</button>
+              <button class="btn">✎ Edit</button>
+              <button class="btn">🖩 Calculate Deliverables</button>
+              <button class="btn btn--primary">Submit →</button>
+            </div>
+          </div>
+          <div class="rec-title"><h1 class="mono">WO-00004</h1><span class="pill pill--draft">Draft</span><span class="rec-sub">FT-CLOTH · Dyeing · job-worker M.R.Tapes</span></div>
+        </div>
+        <div class="record" style="margin-top:18px">
+          <div>
+            <div class="hero-facts">
+              <div class="fact"><div class="fact__l">Process</div><div class="fact__v">Dyeing</div></div>
+              <div class="fact"><div class="fact__l">Item</div><div class="fact__v small">FT-CLOTH</div></div>
+              <div class="fact"><div class="fact__l">Planned Qty</div><div class="fact__v tnum">50 <span style="font-size:12px;color:var(--muted)">Kg</span></div></div>
+              <div class="fact"><div class="fact__l">WO Date</div><div class="fact__v small tnum">02 Jul 2026</div></div>
+            </div>
+            <div class="detailtabs">
+              <span class="dtab active">Details</span>
+              <span class="dtab">Deliverables <span class="badge">1</span></span>
+              <span class="dtab">Receivables <span class="badge">1</span></span>
+              <span class="dtab">Linked</span>
+              <span class="dtab">Activity</span>
+            </div>
+            <div class="pivot">
+              <div class="pivot__head"><span class="section-tag">Deliverables</span><span style="color:var(--muted);font-size:12px;margin-left:6px">size-pivot · server resolves variants on save</span></div>
+              <table><thead><tr><th>#</th><th>Item</th><th>Received Type</th><th>Dia</th><th>Colour</th><th>Qty</th><th>UOM</th></tr></thead>
+              <tbody><tr><td class="mono">1</td><td class="code">FT-CLOTH</td><td><span class="pill pill--good">Accepted</span></td><td>FT-D30</td><td>FT-White</td><td class="tnum" style="font-weight:700">5</td><td>Kg</td></tr></tbody></table>
+            </div>
+          </div>
+          <div class="side-cards">
+            <div class="card"><div class="card__head">Quick Info</div><div class="card__body">
+              <div class="mrow"><span class="k">Process</span><span class="v">Dyeing</span></div>
+              <div class="mrow"><span class="k">Job-worker</span><span class="v">M.R.Tapes</span></div>
+              <div class="mrow"><span class="k">Qty</span><span class="v tnum">5 Kg</span></div>
+              <div class="mrow"><span class="k">WO Date</span><span class="v tnum">02-07-2026</span></div>
+            </div></div>
+            <div class="card"><div class="card__head">Connections</div><div class="card__body">
+              <div class="conn"><span class="k" style="color:var(--ink-2);font-weight:600">Delivery Challan</span><span class="cnt tnum">0</span></div>
+              <div class="conn"><span class="k" style="color:var(--ink-2);font-weight:600">Goods Received Note</span><span class="cnt tnum">0</span></div>
+            </div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<button class="theme-toggle" onclick="document.documentElement.setAttribute('data-theme', document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark')">◐ Toggle theme</button>
+</body>
+</html>

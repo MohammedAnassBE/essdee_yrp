@@ -1,0 +1,527 @@
+/* Essdee YRP — global base + shared layout tokens.
+   PrimeVue components are themed via the preset (theme.js); this file only
+   holds the page reset, shell layout variables, and a few app-level helpers. */
+
+:root {
+	/* ── Base tokens (partners_api system): 4 colours → opacity-derived neutrals.
+	   New components use rgb(var(--c-*)/<alpha>); the --esd-* layer below aliases
+	   onto these, so every existing screen is unchanged. ── */
+	--c-primary: 14 140 127;   /* #0E8C7F deep teal — actions / CTAs / active nav / links */
+	--c-accent:  37 99 235;    /* #2563EB royal blue — secondary accent + input focus */
+	--c-ink:     15 22 19;     /* #0F1613 — green-biased ink, text / borders via opacity */
+	--c-surface: 242 246 244;  /* #F2F6F4 — picked teal-biased page ground */
+
+	/* ── Surfaces ── */
+	--esd-bg:        #F2F6F4;   /* picked teal-biased near-white (= --c-surface) */
+	--esd-card:      #FFFFFF;   /* white panels/cards */
+	--esd-slate-50:  #E9EFEC;   /* secondary surface (table headers, hover rows) */
+
+	/* ── Text ── */
+	--esd-ink:       #0F1613;   /* primary value text — ~17:1 on white */
+	--esd-ink-2:     #33413B;   /* secondary headings — ~10:1 */
+	--esd-muted:     #5F6E68;   /* labels/hints — AA on white (~4.9:1) */
+	--esd-muted-2:   #98A5A0;   /* disabled/subtle/empty placeholder */
+
+	/* ── Lines ── */
+	--esd-line:      #DFE8E4;   /* teal-biased crisp hairline */
+
+	/* ── Accent: brighter modern teal, same family ── */
+	--esd-accent:    #0E8C7F;   /* deep refined teal — fills, header band, icons */
+	--esd-accent-50: #E7F3F1;   /* light teal wash — badges, focus tint, row hover */
+	--esd-accent-600:#0C7A6F;   /* mid teal — header-band gradient stop */
+	--esd-accent-700:#0A5F58;   /* dark teal — link text, hover (AA ~6.9:1 on white) */
+	--esd-accent-ink:var(--esd-accent-700);  /* teal title/icon ON the light (accent-50) header band */
+
+	/* ── Secondary accent: royal blue (input focus + accent CTAs/highlights).
+	   Derived from --c-accent so dark only has to flip that one base token. ── */
+	--esd-accent2:     rgb(var(--c-accent));
+	--esd-accent2-50:  rgb(var(--c-accent) / 0.12);
+
+	/* ── Elevation (cool, not warm) ── */
+	--esd-shadow:    rgba(16, 32, 28, 0.06);   /* ink-based, softer */
+	--esd-shadow-md: rgba(16, 32, 28, 0.10);
+
+	/* ── Sizing ── */
+	--sidebar-width: 232px;
+	--sidebar-collapsed-width: 68px;   /* slim rail rest width (partners_api) */
+	--topbar-height: 56px;
+	--radius-sm: 9px;    /* controls (buttons/inputs) — partners_api */
+	--radius: 12px;      /* cards / dialogs */
+	--radius-lg: 14px;
+
+	/* ── Spacing scale (replaces 14 ad-hoc gap values) ── */
+	--space-1: 4px;
+	--space-2: 8px;
+	--space-3: 12px;
+	--space-4: 16px;
+	--space-5: 20px;
+	--space-6: 24px;
+
+	/* ── Shadow scale (replaces inline shadow + the unused -md token) ── */
+	--esd-shadow-sm: 0 1px 2px rgba(16,32,28,.05), 0 1px 1px rgba(16,32,28,.04);
+	--esd-shadow-card: 0 1px 2px rgba(16,32,28,.05), 0 10px 28px rgba(16,32,28,.07);  /* airy card lift */
+	--esd-shadow-pop: 0 12px 34px rgba(16,32,28,.18);   /* dropdowns / dialogs / toasts */
+
+	/* ── Status colors (single source for all badges/pills) ── */
+	--esd-success:    #147A48;   /* AA on white ~4.7:1 */
+	--esd-success-50: #E4F4EB;
+	--esd-warn:       #B45309;   /* amber-ink, AA 4.5:1 — replaces bare orange text */
+	--esd-warn-50:    #FBF0DA;
+	--esd-danger:     #BE123C;   /* matches existing #be123c already in code */
+	--esd-danger-50:  #FBE7E7;
+
+	/* ── Form control geometry (single source) ── */
+	--ctrl-h: 38px;              /* touch target floor — meets ~40px principle */
+	--ctrl-pad: 8px 11px;
+	--ctrl-radius: var(--radius-sm);
+
+	/* ── Type scale (single source — replaces scattered 11/12.5/13/14.5/16/20px) ── */
+	--fs-2xs: 11px;   /* uppercase micro-labels */
+	--fs-xs:  12px;   /* sub-captions, chips */
+	--fs-sm:  13px;   /* secondary body, table cells */
+	--fs-base:14px;   /* body default */
+	--fs-md:  15px;
+	--fs-lg:  16px;   /* value-as-hero */
+	--fs-xl:  20px;   /* doc hero title */
+	--fs-2xl: 24px;   /* page title */
+
+	color-scheme: light;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Dark "Bright Workshop" — activated by `.dark` on <html> (useTheme).
+   Overriding the --esd-* token layer flips every bespoke surface (sidebar,
+   topbar, home cards, detail/.esd-card, panels, empty-states) at once; PrimeVue
+   components flip via theme.js colorScheme.dark. Status/teal Tag tints adapt
+   through the --esd-accent-50 / --esd-success-50 / … overrides below.
+   ───────────────────────────────────────────────────────────────────────── */
+.dark {
+	/* Surfaces — soft dark slate, lifted OFF near-black to cut halation / eye
+	   strain (was #0B1220 near-black). Page < card < bands = gentle elevation. */
+	--esd-bg:        #0E1512;   /* page — green-biased charcoal */
+	--esd-card:      #17211C;   /* panels / cards (elevated above the page) */
+	--esd-slate-50:  #1E2B25;   /* secondary surface (header bands, hover rows) */
+
+	/* Text — soft off-white, NOT pure white (pure white on dark = halation). */
+	--esd-ink:       #E9F1ED;   /* primary value text */
+	--esd-ink-2:     #C0CDC7;   /* secondary headings */
+	--esd-muted:     #8C9A93;   /* labels / hints */
+	--esd-muted-2:   #63736C;   /* disabled / subtle */
+
+	/* Lines — soft, low-contrast against the lifted surfaces */
+	--esd-line:      #2A3A33;
+
+	/* Accent — brighter teal for dark contrast */
+	--esd-accent:    #2FB8A6;
+	--esd-accent-50: rgba(47, 184, 166, 0.15);  /* teal wash on dark (bands, badges) */
+	--esd-accent-600:#2FB8A6;
+	--esd-accent-700:#5ACCBC;   /* link / hover — light teal on dark */
+	--esd-accent-ink:#5ACCBC;   /* title / icon on the dark teal-wash band */
+
+	/* Base-token overrides for dark — --esd-accent2 derives from --c-accent */
+	--c-ink:     233 241 237;   /* #E9F1ED */
+	--c-surface: 14 21 18;      /* #0E1512 */
+	--c-accent:  96 165 250;    /* #60A5FA lighter royal blue reads on dark */
+
+	/* Elevation — deeper shadows on dark */
+	--esd-shadow:    rgba(0, 0, 0, 0.40);
+	--esd-shadow-md: rgba(0, 0, 0, 0.55);
+
+	/* Status — lighter inks + translucent tints for dark bg */
+	--esd-success:    #34D399;
+	--esd-success-50: rgba(52, 211, 153, 0.16);
+	--esd-warn:       #FBBF24;
+	--esd-warn-50:    rgba(251, 191, 36, 0.16);
+	--esd-danger:     #FB7185;
+	--esd-danger-50:  rgba(251, 113, 133, 0.16);
+
+	color-scheme: dark;
+}
+
+/* ── Dark-mode surfaces for PrimeVue form fields + overlay panels ──
+   Aura's dark component tokens reference high surface levels that our
+   chrome-oriented dark ramp renders LIGHT (white inputs / dropdowns / menus in
+   dark). PrimeVue v4 ships its component CSS inside `@layer primevue`, so these
+   UNLAYERED rules win without !important. Force them to the card surface. */
+.dark .p-inputtext,
+.dark .p-textarea,
+.dark .p-select,
+.dark .p-multiselect,
+.dark .p-autocomplete-input,
+.dark .p-datepicker-input,
+.dark .p-inputnumber-input {
+	background: var(--esd-card);
+	color: var(--esd-ink);
+}
+/* Checkbox: unchecked box bg also rides a light surface in dark — pin it dark
+   (the checked/teal state keeps its accent fill from the preset). */
+.dark .p-checkbox-box {
+	background: var(--esd-card);
+	border-color: var(--esd-line);
+}
+/* Tabs: the tab strip (.p-tablist) and the tab content panel (.p-tabpanels)
+   default to {surface.900} = light in our dark ramp — that was the white band
+   under the list's status tabs and the white panel the detail cards floated on.
+   Make them transparent so they sit on the dark page (cards keep their own bg). */
+.dark .p-tablist,
+.dark .p-tabpanels {
+	background: transparent;
+}
+/* Inner TEXT of menus / selects / options keeps a dark color (it's a child of
+   the box, so the box's color override doesn't reach it) — force it light, but
+   keep placeholders muted. This fixes dark-on-dark menu items + the chosen
+   Select value ("Orange") in dark. */
+.dark .p-menu-item-link,
+.dark .p-menu-item-label,
+.dark .p-tieredmenu .p-menu-item-label,
+.dark .p-select-label,
+.dark .p-multiselect-label,
+.dark .p-select-option,
+.dark .p-multiselect-option,
+.dark .p-autocomplete-option {
+	color: var(--esd-ink);
+}
+.dark .p-select-label.p-placeholder,
+.dark .p-multiselect-label.p-placeholder {
+	color: var(--esd-muted-2);
+}
+.dark .p-select-overlay,
+.dark .p-multiselect-overlay,
+.dark .p-autocomplete-overlay,
+.dark .p-datepicker-panel,
+.dark .p-menu,
+.dark .p-popover,
+.dark .p-popover-content,
+.dark .p-tieredmenu,
+.dark .p-dialog,
+.dark .p-card {
+	background: var(--esd-card);
+	color: var(--esd-ink);
+	border-color: var(--esd-line);
+}
+.dark .p-paginator {
+	background: transparent;
+	color: var(--esd-ink);
+}
+
+/* DataTable: pin the row dividers + table frame to the line token. Aura leaves
+   these at a default mid-grey (#808080) that reads as harsh white-ish gridlines
+   on the dark theme; cells already use --esd-line via theme.js. Both schemes. */
+.p-datatable-table,
+.p-datatable-table > tbody > tr,
+.p-datatable-tbody > tr,
+.p-datatable-thead > tr,
+.p-datatable-tbody > tr > td,
+.p-datatable-thead > tr > th {
+	border-color: var(--esd-line);
+}
+
+/* Dark: Aura's dark DataTable ROW background is {surface.900}, which our
+   chrome-oriented dark ramp renders LIGHT (#EDF1F6) — so rows showed as pale
+   strips with dark text (the "white listview"). Make rows transparent over the
+   dark table surface + light text; light mode is unaffected (rows use surface.0). */
+.dark .p-datatable-tbody > tr {
+	background: transparent;
+	color: var(--esd-ink);
+}
+.dark .p-datatable-tbody > tr > td {
+	color: var(--esd-ink);
+}
+.dark .p-datatable-tbody > tr:hover {
+	background: var(--esd-slate-50);
+}
+
+/* ── Input focus: royal-blue (secondary accent), uniform across PrimeVue inputs.
+   `.p-inputtext:focus` also covers autocomplete / datepicker / number inner
+   inputs (they all carry .p-inputtext). Unlayered → wins over @layer primevue
+   without !important; --esd-accent2 flips per scheme. ── */
+.p-inputtext:enabled:focus,
+.p-inputtext:focus,
+.p-textarea:enabled:focus,
+.p-autocomplete-input:enabled:focus,
+.p-datepicker-input:enabled:focus,
+.p-inputnumber-input:enabled:focus,
+.p-select.p-focus,
+.p-multiselect.p-focus {
+	border-color: var(--esd-accent2) !important;
+	box-shadow: 0 0 0 3px var(--esd-accent2-50) !important;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	height: 100%;
+	margin: 0;
+}
+
+body {
+	font-family: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system,
+		"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	font-size: 14px;
+	line-height: 1.5;
+	color: var(--esd-ink);
+	background: var(--esd-bg);
+	-webkit-font-smoothing: antialiased;
+}
+
+#app {
+	height: 100vh;
+}
+
+a {
+	color: inherit;
+	text-decoration: none;
+}
+
+/* mono helper for document ids */
+.esd-mono {
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--esd-accent-700);
+}
+
+/* ── Bright Workshop card system (canonical). .esd-card, DocDetail
+   .detail-card/.side-card, and the HomePage stat/recent cards all use the airy
+   --esd-shadow-card (the Phase-1-review card-shadow divergence is resolved). ── */
+.esd-card {
+	background: var(--esd-card);
+	border: 1px solid var(--esd-line);
+	border-radius: var(--radius);
+	box-shadow: var(--esd-shadow-card);
+	overflow: hidden;
+}
+.esd-card__head {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	padding: 10px 16px;
+	/* Light band: pale tint + teal title (AA ~4.6:1), header recedes so data leads. */
+	background: var(--esd-accent-50); border-bottom: 1px solid var(--esd-line);
+}
+.esd-card__head::before {            /* leading dot glyph */
+	content: "";
+	width: 6px; height: 6px;
+	border-radius: 999px;
+	background: var(--esd-accent-ink);
+	opacity: 0.85;
+	flex: 0 0 auto;
+}
+.esd-card__title {
+	font-size: 13px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	color: var(--esd-accent-ink);
+}
+.esd-card__count {                   /* optional right-aligned count pill */
+	margin-left: auto;
+	background: #fff;
+	color: var(--esd-accent-ink);
+	font-size: 11px; font-weight: 600;
+	padding: 1px 8px; border-radius: 999px;
+}
+.esd-card__body { padding: var(--space-4); }
+
+/* Lightweight panel-head variant for editors that can't use the full band */
+.esd-panel-head {
+	border-left: 4px solid var(--esd-accent);
+	padding: 8px 14px;
+	background: var(--esd-slate-50);
+	font-size: 13px; font-weight: 700; letter-spacing: 0.01em;
+	color: var(--esd-ink-2);
+	border-bottom: 1px solid var(--esd-line);
+}
+
+/* Value-as-hero field (Details pattern, reusable in editors' read rows) */
+.esd-field { display: flex; flex-direction: column; gap: 2px; padding: 9px 0; min-width: 0; border-bottom: 1px solid var(--esd-line); }
+.esd-field__value { order: 1; font-size: 16px; line-height: 1.35; font-weight: 600; color: var(--esd-ink); word-break: break-word; }
+.esd-field__label { order: 2; font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--esd-muted); font-weight: 600; }
+
+/* Section header for editors (when a full band is overkill) */
+.esd-section-title {
+	display: flex; align-items: center; gap: var(--space-2);
+	font-size: 14px; font-weight: 700; color: var(--esd-ink-2);
+	padding-left: 10px; border-left: 3px solid var(--esd-accent);
+	letter-spacing: 0.01em;
+}
+
+/* Empty-state (replaces every bare grey "No rows" text) */
+.esd-empty {
+	display: flex; flex-direction: column; align-items: center; gap: var(--space-3);
+	padding: 28px 16px; text-align: center;
+	color: var(--esd-muted);
+	border: 1px dashed var(--esd-line); border-radius: var(--radius);
+	background: var(--esd-bg);
+}
+.esd-empty .pi { font-size: 26px; color: var(--esd-accent); opacity: 0.85; }
+.esd-empty__text { font-size: 13px; }
+
+/* ── Shared loading skeleton (detail cards, editors) — shimmer placeholders
+   instead of a blank flash. ── */
+.esd-detail-skel {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--space-3);
+	margin-top: var(--space-3);
+}
+@media (max-width: 768px) {
+	.esd-detail-skel { grid-template-columns: 1fr; }
+}
+.esd-detail-skel__card {
+	background: var(--esd-card);
+	border: 1px solid var(--esd-line);
+	border-radius: var(--radius);
+	box-shadow: var(--esd-shadow-card);
+	overflow: hidden;
+}
+.esd-skel-band {
+	height: 38px;
+	background: var(--esd-accent-50);
+	border-bottom: 1px solid var(--esd-line);
+}
+.esd-skel-body {
+	padding: var(--space-4);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+}
+.esd-skel-line {
+	height: 14px;
+	border-radius: 6px;
+	background: linear-gradient(90deg, var(--esd-slate-50), var(--esd-line), var(--esd-slate-50));
+	background-size: 200% 100%;
+	animation: esd-shimmer 1.2s infinite;
+}
+.esd-skel-line:nth-child(odd) { width: 72%; }
+@keyframes esd-shimmer {
+	from { background-position: 200% 0; }
+	to { background-position: -200% 0; }
+}
+
+/* Respect reduced-motion: hold the skeleton shimmer still. */
+@media (prefers-reduced-motion: reduce) {
+	.esd-skel-line,
+	.recent-skel { animation: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Premium motion & depth layer (2026-07-03) — presentational only, palette
+   unchanged. Adds the "alive/responsive" feel: smooth interaction transitions,
+   subtle hover elevation, and pressed feedback. All gated by prefers-reduced-
+   motion below. No colours, no layout, no functional bindings touched.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: no-preference) {
+	/* Interactive surfaces ease their state changes instead of snapping. */
+	.esd-card,
+	.detail-card,
+	.side-card,
+	.p-button,
+	.p-tab,
+	.nav-item,
+	.stat-card,
+	.kpi,
+	.p-datatable-tbody > tr,
+	.esd-field,
+	.p-tag {
+		transition: background-color .16s ease, border-color .16s ease,
+			box-shadow .2s ease, transform .18s cubic-bezier(.2,.7,.3,1), color .16s ease;
+	}
+	/* Cards / stat tiles lift a touch on hover — signals "this is a surface". */
+	.stat-card:hover,
+	.kpi:hover,
+	.esd-card.is-hoverable:hover {
+		transform: translateY(-2px);
+		box-shadow: var(--esd-shadow-pop);
+	}
+	/* List rows: the existing tint hover gains a smooth ease + a hairline shift
+	   so a row reads as a pressable target (Frappe-desk parity, elevated). */
+	.p-datatable-tbody > tr:hover {
+		box-shadow: inset 3px 0 0 var(--esd-accent);
+	}
+	/* Primary/solid buttons give tactile press feedback. */
+	.p-button:not(:disabled):active { transform: translateY(1px); }
+	/* Tab underline + text glide rather than jump. */
+	.p-tab { transition: color .16s ease; }
+	/* Dialog / overlay entrance — calm scale-in, not a hard pop. */
+	.p-dialog-enter-active, .p-overlay-enter-active { transition: transform .18s ease, opacity .18s ease; }
+}
+
+/* Empty-state: calmer, more branded — softer ground, breathing room, a quiet
+   accent ring on the glyph so "nothing here" feels intentional, not broken. */
+.esd-empty {
+	padding: 34px 18px;
+	gap: var(--space-2);
+	background: linear-gradient(180deg, var(--esd-card), var(--esd-bg));
+}
+.esd-empty .pi {
+	display: grid; place-items: center;
+	width: 46px; height: 46px; border-radius: 50%;
+	background: var(--esd-accent-50);
+	font-size: 20px; opacity: 1;
+}
+.esd-empty__text { font-size: 13px; color: var(--esd-muted); max-width: 32ch; }
+
+/* ── Status pills: dot + tint (premium read-at-a-glance state) ── */
+.p-tag {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+.p-tag::before {
+	content: "";
+	width: 6px;
+	height: 6px;
+	border-radius: 999px;
+	background: currentColor;
+	flex: 0 0 auto;
+}
+.p-tag.p-tag-secondary::before { opacity: .55; }
+
+/* ── Table craft: quiet uppercase micro-headers + tabular figures + tinted
+   hover (light). Data leads; chrome recedes. ── */
+.p-datatable-thead > tr > th {
+	text-transform: uppercase;
+	font-size: 11px;
+	letter-spacing: .06em;
+	color: var(--esd-muted);
+}
+.p-datatable-tbody > tr > td { font-variant-numeric: tabular-nums; }
+.p-datatable-tbody > tr:hover { background: var(--esd-accent-50); }
+.dark .p-datatable-tbody > tr:hover { background: var(--esd-slate-50); }
+
+/* ── Record-led detail: hero-facts strip (the doc's 3-4 load-bearing values
+   surfaced above the tabs — hairline-joined cells, value-forward type). ── */
+.hero-facts {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+	gap: 1px;
+	background: var(--esd-line);
+	border: 1px solid var(--esd-line);
+	border-radius: var(--radius);
+	overflow: hidden;
+	box-shadow: var(--esd-shadow-sm);
+	margin-bottom: var(--space-4);
+}
+.hero-fact { background: var(--esd-card); padding: 13px 16px; min-width: 0; }
+.hero-fact__l {
+	font-size: 10.5px;
+	text-transform: uppercase;
+	letter-spacing: .07em;
+	color: var(--esd-muted);
+	font-weight: 700;
+}
+.hero-fact__v {
+	font-size: 16px;
+	font-weight: 700;
+	letter-spacing: -.01em;
+	margin-top: 4px;
+	color: var(--esd-ink);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}

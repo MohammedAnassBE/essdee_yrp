@@ -1,4 +1,4 @@
-import{n as a}from"./useToast-Dre_KkuI.js";import{c as s,a1 as r,aj as c,z as g,w as d,aa as l,ar as h}from"./essdee-BM_TwoZv.js";var u=`
+import{n as a}from"./useToast-DSMv_rpW.js";import{c as s,a1 as r,aj as c,z as g,w as d,aa as l,ar as h}from"./essdee-BHX2yvus.js";var u=`
     .p-toggleswitch {
         display: inline-block;
         width: dt('toggleswitch.width');

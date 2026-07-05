@@ -203,6 +203,18 @@
 						outlined
 						@click="sendSmsOpen = true"
 					/>
+					<!-- Send WhatsApp — gated on the doctype being WhatsApp-enabled
+					     (server-configured) AND having a supplier to message, same
+					     docstatus/supplier shape as Send SMS. -->
+					<Button
+						v-if="isWhatsAppEnabled && docstatus === 1 && doc[whatsAppSupplierKey]"
+						label="Send WhatsApp"
+						icon="pi pi-whatsapp"
+						size="small"
+						severity="secondary"
+						outlined
+						@click="sendWhatsAppOpen = true"
+					/>
 
 					<!-- Destructive, set apart from the forward CTA. -->
 					<Button
@@ -407,6 +419,14 @@
 			:docname="props.id"
 			:doc="doc"
 			@sent="onSmsSent"
+		/>
+		<SendWhatsAppModal
+			v-model:visible="sendWhatsAppOpen"
+			:doctype="doctype"
+			:docname="props.id"
+			:doc="doc"
+			:supplier-key="whatsAppSupplierKey"
+			@sent="onWhatsAppSent"
 		/>
 
 		<!-- Loading (doc load, or create-mode meta load) — skeleton mimics the
@@ -1324,6 +1344,7 @@ import EWaybillFetchModal from "./EWaybillFetchModal.vue"
 import EWaybillCancelModal from "./EWaybillCancelModal.vue"
 import EWaybillVehicleModal from "./EWaybillVehicleModal.vue"
 import SendSmsModal from "./SendSmsModal.vue"
+import SendWhatsAppModal from "./SendWhatsAppModal.vue"
 
 const props = defineProps({
 	docRoute: { type: String, required: true },
@@ -1618,6 +1639,30 @@ const ewbVehicleOpen = ref(false)
 const sendSmsOpen = ref(false)
 const ewbMenu = ref(null)
 
+// ── WhatsApp — yrp.whatsapp_notification (any WhatsApp-enabled doctype) ──
+// Which doctypes have WhatsApp wired up is server-configured, so the header
+// button is gated on a small map fetched once (name -> supplier_key), NOT
+// hardcoded to a single doctype the way isDeliveryChallan gates Send SMS today.
+const sendWhatsAppOpen = ref(false)
+const whatsAppEnabledDoctypes = ref({}) // { DocType: supplier_key }
+
+async function loadWhatsAppEnabledDoctypes() {
+	try {
+		const r = await callMethod("yrp.whatsapp_notification.get_enabled_whatsapp_doctypes", {})
+		whatsAppEnabledDoctypes.value = r?.doctypes || {}
+	} catch (_) {
+		// Non-fatal: the Send WhatsApp button just stays hidden for every doctype.
+	}
+}
+
+const isWhatsAppEnabled = computed(() =>
+	Object.prototype.hasOwnProperty.call(whatsAppEnabledDoctypes.value, doctype.value),
+)
+// Which link field on THIS doctype names the supplier to message (DC/GRN/PO
+// use "supplier"; Stock Entry passes "to_supplier"/"from_supplier") — mirrors
+// SendSmsModal's supplierKey convention, server-declared per doctype.
+const whatsAppSupplierKey = computed(() => whatsAppEnabledDoctypes.value[doctype.value] || "supplier")
+
 const ewbMenuModel = computed(() => {
 	if (!doc.value) return []
 	if (!doc.value.ewaybill) {
@@ -1677,6 +1722,9 @@ async function onEwbUpdated() {
 	await reloadView()
 }
 async function onSmsSent() {
+	await reloadView()
+}
+async function onWhatsAppSent() {
 	await reloadView()
 }
 
@@ -2232,6 +2280,7 @@ function onShortcut(e) {
 onMounted(() => {
 	window.addEventListener("keydown", onShortcut)
 	window.addEventListener("beforeunload", beforeUnloadGuard)
+	loadWhatsAppEnabledDoctypes()
 })
 onBeforeUnmount(() => {
 	window.removeEventListener("keydown", onShortcut)

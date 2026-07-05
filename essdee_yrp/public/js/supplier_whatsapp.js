@@ -4,12 +4,13 @@
 frappe.provide("essdee_yrp");
 
 // Send-WhatsApp-to-supplier dialog. Mirrors the Send-SMS dialog
-// (supplier_notification.js) for the WhatsApp hub-spoke: the user picks an
-// APPROVED mirror template configured for this doctype, fills each positional
-// {{n}} variable (body + text-header) EITHER from a document field OR a manual
-// value, optionally attaches a media header (the document's print PDF for a
-// DOCUMENT header, or a doc attachment/photo for an IMAGE header), previews the
-// rendered body, then sends via yrp.whatsapp_notification.send_whatsapp_notification.
+// (supplier_notification.js) for the WhatsApp hub-spoke's template-centric
+// contract: the user picks an APPROVED template that yrp.whatsapp_notification
+// has ALREADY filtered server-side to this doctype (via the template's own
+// Applicable DocTypes), fills each positional {{n}} variable (body + text
+// header) EITHER from a document field OR a manual value, optionally attaches
+// a media header file when the template needs one, previews the rendered
+// body, then sends via yrp.whatsapp_notification.send_whatsapp_notification.
 // Shared by the supplier-linked doctypes wired in essdee_yrp/hooks.py.
 essdee_yrp.open_send_whatsapp_dialog = function (frm, supplier_key) {
 	frappe.call({
@@ -28,7 +29,14 @@ essdee_yrp.open_send_whatsapp_dialog = function (frm, supplier_key) {
 			}
 			const by_name = {};
 			ctx.templates.forEach((t) => (by_name[t.name] = t));
-			const template_options = ctx.templates.map((t) => t.name);
+			// Select options carry {value, label} so the Meta template_name
+			// (the human-readable label) can differ from the mirror's own
+			// autoname (the value) — see control_select.js's parse_option.
+			const template_options = ctx.templates.map((t) => ({
+				value: t.name,
+				label: t.template_name,
+			}));
+			const default_template = template_options[0].value;
 			const number_options = ctx.numbers && ctx.numbers.length ? ctx.numbers : [ctx.mobile];
 			const default_number = number_options[0];
 
@@ -61,45 +69,55 @@ essdee_yrp.open_send_whatsapp_dialog = function (frm, supplier_key) {
 						fieldname: "template",
 						label: __("Template"),
 						options: template_options,
-						default: template_options[0],
+						default: default_template,
 						reqd: 1,
 						onchange() {
-							essdee_yrp._on_template_change(d, by_name[d.get_value("template")], ctx, frm);
+							essdee_yrp._on_whatsapp_template_change(
+								d,
+								by_name[d.get_value("template")],
+								ctx,
+								frm
+							);
 						},
 					},
 					{ fieldtype: "Section Break", label: __("Template Inputs") },
 					{ fieldtype: "HTML", fieldname: "vars_area" },
-					{ fieldtype: "Section Break", label: __("Media Header") },
-					{ fieldtype: "HTML", fieldname: "header_area" },
 					{ fieldtype: "Section Break", label: __("Preview") },
 					{ fieldtype: "HTML", fieldname: "preview_area" },
+					{
+						fieldtype: "Section Break",
+						fieldname: "media_section",
+						label: __("Media Header"),
+					},
+					{
+						fieldtype: "Attach",
+						fieldname: "header_file",
+						label: __("Header image/document"),
+					},
 				],
 				primary_action_label: __("Send"),
 				primary_action(values) {
 					const template = by_name[values.template];
 					const params = d._collect_params ? d._collect_params() : {};
-					const header = d._collect_header
-						? d._collect_header()
-						: { header_source: null, print_format: null };
 					d.hide();
 					frappe.call({
 						method: "yrp.whatsapp_notification.send_whatsapp_notification",
-						// The hub round-trip + print-render/upload is slower than SMS.
+						// The hub round-trip + (for media templates) the file
+						// upload is slower than SMS.
 						freeze: true,
 						freeze_message: __("Sending WhatsApp…"),
 						args: {
 							doctype: frm.doc.doctype,
 							docname: frm.doc.name,
 							supplier_key: supplier_key,
-							// The Select option value is t.name (the mirror autoname
-							// "{template_name}-{language_code}", e.g. "yrp_wa_send-en"),
-							// but the hub needs the BARE Meta template name — send the field.
+							// The Select's value is t.name (the mirror autoname
+							// "{template_name}-{language_code}"), but the hub
+							// needs the BARE Meta template name + language.
 							template_name: template.template_name,
 							language_code: template.language_code,
 							mobile_no: values.mobile_no,
 							params: params,
-							header_source: header.header_source,
-							print_format: header.print_format,
+							header_file: values.header_file || null,
 						},
 					});
 				},
@@ -108,26 +126,27 @@ essdee_yrp.open_send_whatsapp_dialog = function (frm, supplier_key) {
 				<div class="mb-2 text-muted small">${__("Supplier")}: ${frappe.utils.escape_html(ctx.supplier)}</div>
 			`);
 			d.show();
-			essdee_yrp._on_template_change(d, by_name[template_options[0]], ctx, frm);
+			essdee_yrp._on_whatsapp_template_change(d, by_name[default_template], ctx, frm);
 		},
 	});
 };
 
 // Re-render the three template-dependent sections when the template changes.
-// Order matters: vars first (sets d._collect_params, which the preview reads),
-// then the media-header control, then the preview.
-essdee_yrp._on_template_change = function (d, template, ctx, frm) {
+// Order matters: vars first (sets d._collect_params, which the preview
+// reads), then the media-attach control, then the preview.
+essdee_yrp._on_whatsapp_template_change = function (d, template, ctx, frm) {
 	essdee_yrp._render_whatsapp_vars(d, template, ctx.doc_fields, frm);
-	essdee_yrp._render_header_control(d, template, ctx);
-	essdee_yrp._render_preview(d, template);
+	essdee_yrp._render_whatsapp_media_control(d, template);
+	essdee_yrp._render_whatsapp_preview(d, template);
 };
 
-// Render the positional-variable table for the selected template — one row per
-// {{n}} placeholder (body + text header): Template Input | Map to Field |
+// Render the positional-variable table for the selected template — one row
+// per {{n}} placeholder (body + text header): Template Input | Map to Field |
 // Manual Value. Each row's value comes from a chosen document field OR the
-// manual box (pre-filled with the server-resolved value from variable_mapping).
-// A body {{1}} and a header {{1}} are DISTINCT variables, so params are keyed
-// "<type>:<n>" (e.g. "body:1", "header:1") to avoid collision.
+// manual box (pre-filled with the server-resolved value from the template's
+// own Sample Values). A body {{1}} and a header {{1}} are DISTINCT variables,
+// so params are keyed "<type>:<n>" (e.g. "body:1", "header:1") to avoid
+// collision — this is the exact flat shape send_whatsapp_notification expects.
 essdee_yrp._render_whatsapp_vars = function (d, template, doc_fields, frm) {
 	const esc = frappe.utils.escape_html;
 	const wrapper = d.fields_dict.vars_area.$wrapper;
@@ -138,21 +157,17 @@ essdee_yrp._render_whatsapp_vars = function (d, template, doc_fields, frm) {
 	if (!vars.length) {
 		wrapper.html(`<div class="text-muted small">${__("This template has no inputs.")}</div>`);
 		d._collect_params = () => ({});
-		if (d._refresh_preview) d._refresh_preview();
+		if (d._refresh_whatsapp_preview) d._refresh_whatsapp_preview();
 		return;
 	}
 
 	const rows = vars
 		.map((v) => {
 			const opts = [`<option value="">${__("— manual —")}</option>`]
-				.concat(
-					fields.map(
-						(f) => `<option value="${esc(f.value)}">${esc(f.label)}</option>`
-					)
-				)
+				.concat(fields.map((f) => `<option value="${esc(f.value)}">${esc(f.label)}</option>`))
 				.join("");
 			return `<tr>
-				<td class="align-middle"><code>${esc(v.token)}</code> <span class="text-muted small">(${esc(v.type)})</span></td>
+				<td class="align-middle"><code>${esc(v.name)}</code> <span class="text-muted small">(${esc(v.type)})</span></td>
 				<td><select class="form-control ph-field">${opts}</select></td>
 				<td><input type="text" class="form-control ph-manual" value="${esc(v.value || "")}"></td>
 			</tr>`;
@@ -184,84 +199,65 @@ essdee_yrp._render_whatsapp_vars = function (d, template, doc_fields, frm) {
 			} else {
 				value = manual || "";
 			}
-			params[`${v.type}:${num(v.token)}`] = value;
+			params[`${v.type}:${num(v.name)}`] = value;
 		});
 		return params;
 	};
 
 	// Live-refresh the preview as the user edits any mapping/manual input.
 	wrapper.find(".ph-field, .ph-manual").on("change keyup", () => {
-		if (d._refresh_preview) d._refresh_preview();
+		if (d._refresh_whatsapp_preview) d._refresh_whatsapp_preview();
 	});
-	if (d._refresh_preview) d._refresh_preview();
+	if (d._refresh_whatsapp_preview) d._refresh_whatsapp_preview();
 };
 
-// Render the media-header control. Only IMAGE / DOCUMENT header templates get a
-// control: DOCUMENT attaches the document's print PDF (pick a Print Format),
-// IMAGE attaches a file already on the document (pick an attachment / photo).
-// Anything else (no header, TEXT header) sends no media. Exposes d._collect_header().
-essdee_yrp._render_header_control = function (d, template, ctx) {
-	const esc = frappe.utils.escape_html;
-	const wrapper = d.fields_dict.header_area.$wrapper;
+// Toggle the Attach field for the template's media header. Only templates
+// whose header needs a file (needs_media: IMAGE/DOCUMENT/VIDEO) show it — a
+// headerless or TEXT-header template hides + clears it. Marked reqd only
+// while shown, so frappe.ui.Dialog's built-in get_values() validation (which
+// does not consult `hidden`) blocks Send on a missing attachment only when
+// one is actually required.
+essdee_yrp._render_whatsapp_media_control = function (d, template) {
+	const needs_media = !!(template && template.needs_media);
 	const header_type = (template && template.header_type) || "";
 
-	if (header_type === "DOCUMENT") {
-		const formats = ctx.print_formats || [];
-		const opts = formats
-			.map((p) => `<option value="${esc(p)}">${esc(p)}</option>`)
-			.join("");
-		wrapper.html(`
-			<div class="text-muted small mb-2">${__("The document's print PDF will be attached as the header.")}</div>
-			<label class="control-label">${__("Print Format")}</label>
-			<select class="form-control wa-print-format">${opts}</select>
-		`);
-		d._collect_header = () => ({
-			header_source: "print",
-			print_format: wrapper.find(".wa-print-format").val() || null,
-		});
-	} else if (header_type === "IMAGE") {
-		const atts = ctx.attachments || [];
-		const opts = [`<option value="">${__("— none —")}</option>`]
-			.concat(
-				atts.map(
-					(a) => `<option value="${esc(a.file_url)}">${esc(a.file_name || a.file_url)}</option>`
-				)
-			)
-			.join("");
-		wrapper.html(`
-			<div class="text-muted small mb-2">${__("Pick a photo attached to this document to send as the header.")}</div>
-			<label class="control-label">${__("Image Attachment")}</label>
-			<select class="form-control wa-image-file">${opts}</select>
-		`);
-		d._collect_header = () => ({
-			header_source: wrapper.find(".wa-image-file").val() || null,
-			print_format: null,
-		});
-	} else {
-		wrapper.html(`<div class="text-muted small">${__("This template has no media header.")}</div>`);
-		d._collect_header = () => ({ header_source: null, print_format: null });
+	d.set_df_property("media_section", "hidden", !needs_media);
+	d.set_df_property("header_file", "hidden", !needs_media);
+	d.set_df_property("header_file", "reqd", needs_media ? 1 : 0);
+	d.set_df_property(
+		"header_file",
+		"description",
+		needs_media
+			? __("This template requires a {0} attachment for its header.", [header_type])
+			: ""
+	);
+	if (!needs_media && d.get_value("header_file")) {
+		d.set_value("header_file", "");
 	}
 };
 
-// Render a read-only WhatsApp-style preview bubble: the TEXT header (if any) and
-// the body with each {{n}} substituted by the currently chosen value.
-// Unfilled placeholders stay as {{n}}. Refreshes live via d._refresh_preview().
-essdee_yrp._render_preview = function (d, template) {
+// Render a read-only WhatsApp-style preview bubble: the body with each {{n}}
+// substituted by the currently chosen value (unfilled placeholders stay as
+// {{n}}), plus the static footer if the template has one. Only the body is
+// substituted — the hub contract has no separate header-preview text.
+// Refreshes live via d._refresh_whatsapp_preview().
+essdee_yrp._render_whatsapp_preview = function (d, template) {
 	const esc = frappe.utils.escape_html;
 	const wrapper = d.fields_dict.preview_area.$wrapper;
 
 	const render = () => {
 		const params = d._collect_params ? d._collect_params() : {};
-		const sub = (text, type) =>
-			(text || "").replace(/\{\{\s*(\d+)\s*\}\}/g, (m, n) => {
-				const val = params[`${type}:${n}`];
-				return val === undefined || val === null || val === "" ? m : String(val);
-			});
-		const parts = [];
-		if (template && template.header_type === "TEXT" && template.header_content) {
-			parts.push(`<div style="font-weight:600">${esc(sub(template.header_content, "header"))}</div>`);
+		const body = (template && template.body_text) || "";
+		const sub = body.replace(/\{\{\s*(\d+)\s*\}\}/g, (m, n) => {
+			const val = params[`body:${n}`];
+			return val === undefined || val === null || val === "" ? m : String(val);
+		});
+		const parts = [`<div>${esc(sub).replace(/\n/g, "<br>")}</div>`];
+		if (template && template.footer_text) {
+			parts.push(
+				`<div class="text-muted small" style="margin-top:6px">${esc(template.footer_text)}</div>`
+			);
 		}
-		parts.push(`<div>${esc(sub((template && template.body_text) || "", "body")).replace(/\n/g, "<br>")}</div>`);
 		wrapper.html(`
 			<div style="background:#dcf8c6;color:#000;border-radius:8px;padding:10px 12px;max-width:80%">
 				${parts.join("")}
@@ -269,8 +265,20 @@ essdee_yrp._render_preview = function (d, template) {
 		`);
 	};
 
-	d._refresh_preview = render;
+	d._refresh_whatsapp_preview = render;
 	render();
+};
+
+// Every doctype enabled to send WhatsApp (+ its configured supplier_key),
+// fetched once per page load and cached as a promise on essdee_yrp itself so
+// every add_send_whatsapp_button call shares the same round-trip.
+essdee_yrp._get_enabled_whatsapp_doctypes = function () {
+	if (!essdee_yrp._wa_enabled_doctypes) {
+		essdee_yrp._wa_enabled_doctypes = frappe
+			.xcall("yrp.whatsapp_notification.get_enabled_whatsapp_doctypes")
+			.catch(() => ({ doctypes: {} }));
+	}
+	return essdee_yrp._wa_enabled_doctypes;
 };
 
 essdee_yrp.add_send_whatsapp_button = function (
@@ -279,10 +287,19 @@ essdee_yrp.add_send_whatsapp_button = function (
 ) {
 	if (frm.is_new()) return;
 	if (hidden_statuses.includes(frm.doc.status)) return;
-	if (!frm.doc[supplier_key]) return;
-	frm.add_custom_button(
-		__("Send WhatsApp"),
-		() => essdee_yrp.open_send_whatsapp_dialog(frm, supplier_key),
-		__("Send Notification")
-	);
+
+	essdee_yrp._get_enabled_whatsapp_doctypes().then((r) => {
+		const enabled = (r && r.doctypes) || {};
+		if (!(frm.doc.doctype in enabled)) return;
+		// The hub settings row may configure a different supplier_key for
+		// this doctype (e.g. Stock Entry's to_supplier/from_supplier split)
+		// — prefer it over the caller's default when given.
+		const key = enabled[frm.doc.doctype] || supplier_key;
+		if (!frm.doc[key]) return;
+		frm.add_custom_button(
+			__("Send WhatsApp"),
+			() => essdee_yrp.open_send_whatsapp_dialog(frm, key),
+			__("Send Notification")
+		);
+	});
 };

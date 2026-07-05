@@ -136,6 +136,9 @@ frappe.ui.form.on("Lot", {
 		if (frm.doc.is_transferred) {
 			frm.order_detail.update_status()
 		}
+		$(frm.fields_dict['fabric_program_html'].wrapper).html("")
+		frm.fabric_program = new frappe.production.ui.FabricProgram(frm.fields_dict['fabric_program_html'].wrapper)
+		frm.fabric_program.load_data((frm.doc.__onload && frm.doc.__onload.fabric_program_details) || [])
 		// if(!frm.is_new()){
 		// 	frm.cad_detail = new frappe.production.ui.CadDetail(frm.fields_dict['cad_detail_html'].wrapper)
 		// 	if(frm.doc.__onload && frm.doc.__onload.cad_item_details) {
@@ -180,6 +183,12 @@ frappe.ui.form.on("Lot", {
 		}
 		let order_items = frm.order_detail.get_items()
 		frm.doc['order_item_details'] = JSON.stringify(order_items)
+		// Guarded: an unmounted island must leave the transient fields absent so
+		// the server keeps the stored program/requirement rows untouched.
+		if (frm.fabric_program) {
+			frm.doc['fabric_program_details'] = JSON.stringify(frm.fabric_program.get_data())
+			frm.doc['fabric_requirement_details'] = JSON.stringify(frm.fabric_program.get_requirement())
+		}
 		// if(frm.cad_detail){
 		// 	let cad_data = frm.cad_detail.get_data()
 		// 	frm.doc['cad_details'] = JSON.stringify(cad_data)

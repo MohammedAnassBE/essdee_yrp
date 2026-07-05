@@ -64,6 +64,15 @@ def validate_cloth_ipd(doc):
 	if len(fabric_processes) != len(set(fabric_processes)):
 		frappe.throw("Knitting, Dyeing and Compacting must each use a DIFFERENT Process master.")
 
+	# The Process master should declare each tab's transformation shape
+	# (is_item_conversion / value_change_attributes) — warn when unmaintained.
+	from essdee_yrp.fabric_ipd import validate_fabric_process_shapes
+	validate_fabric_process_shapes(doc)
+
+	# Extra chain steps (Re-Compacting etc.): distinct masters + complete mappings.
+	from essdee_yrp.fabric_chain import validate_fabric_chain
+	validate_fabric_chain(doc)
+
 	# Identity-process rows may only treat this IPD's cloth or its yarn.
 	allowed_items = {doc.item, doc.get("yarn_item")}
 	for row in doc.get("ipd_processes") or []:

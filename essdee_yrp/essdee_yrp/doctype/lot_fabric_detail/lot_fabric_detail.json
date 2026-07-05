@@ -6,7 +6,10 @@
  "engine": "InnoDB",
  "field_order": [
   "cloth_item",
-  "production_detail"
+  "production_detail",
+  "plan_status",
+  "plan_built_on",
+  "plan_error"
  ],
  "fields": [
   {
@@ -23,12 +26,34 @@
    "in_list_view": 1,
    "label": "Item Production Detail",
    "options": "Item Production Detail"
+  },
+  {
+   "fieldname": "plan_status",
+   "fieldtype": "Select",
+   "label": "Plan Status",
+   "no_copy": 1,
+   "options": "\nBuilt\nPending Approval\nStale\nError",
+   "read_only": 1
+  },
+  {
+   "fieldname": "plan_built_on",
+   "fieldtype": "Datetime",
+   "label": "Plan Built On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "plan_error",
+   "fieldtype": "Small Text",
+   "label": "Plan Error",
+   "no_copy": 1,
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-07-03 12:00:00.000000",
+ "modified": "2026-07-04 16:05:00.000000",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "Lot Fabric Detail",

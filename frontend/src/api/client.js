@@ -273,6 +273,51 @@ export async function callMethod(method, args = {}) {
   return json.message
 }
 
+/**
+ * Upload a file to Frappe's file storage.
+ * Wraps `/api/method/upload_file` directly (NOT the JSON `request()` helper —
+ * the endpoint expects multipart form fields, not a JSON body; the browser
+ * sets the multipart boundary itself, so Content-Type is left unset). CSRF is
+ * still required as a header, same as every other write.
+ * @param {File} file
+ * @param {{ isPrivate?: boolean, folder?: string }} [options]
+ * @returns {Promise<string>} the uploaded file's `file_url`
+ */
+export async function uploadFile(file, { isPrivate = true, folder = null } = {}) {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('is_private', isPrivate ? '1' : '0')
+  if (folder) formData.append('folder', folder)
+
+  const response = await fetch('/api/method/upload_file', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'X-Frappe-CSRF-Token': getCsrfToken(),
+    },
+    body: formData,
+  })
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}))
+    const serverMessages = body._server_messages
+      ? JSON.parse(body._server_messages).map((m) => {
+          try { return JSON.parse(m).message || m } catch { return m }
+        }).join('\n')
+      : null
+    throw makeApiError(
+      serverMessages || body.message || `Upload failed with status ${response.status}`,
+      response.status,
+      body.exc_type,
+    )
+  }
+
+  const json = await response.json()
+  const fileUrl = json.message?.file_url || json.file_url
+  if (!fileUrl) throw new Error('Upload succeeded but no file_url was returned')
+  return fileUrl
+}
+
 
 export async function getBulkEditFields(doctype) {
   const result = await callMethod(

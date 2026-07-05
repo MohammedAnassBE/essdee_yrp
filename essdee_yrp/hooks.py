@@ -100,6 +100,10 @@ doctype_js = {
 	"Item Production Detail": "public/js/item_production_detail.js",
 	"Production Order": "public/js/production_order.js",
 	"Work Order": "public/js/work_order.js",
+	"Purchase Order": "public/js/purchase_order.js",
+	"Delivery Challan": "public/js/delivery_challan.js",
+	"Goods Received Note": "public/js/goods_received_note.js",
+	"Stock Entry": "public/js/stock_entry.js",
 }
 doctype_list_js = {"Item Production Detail": "public/js/item_production_detail_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
@@ -206,11 +210,17 @@ doc_events = {
 		"on_update": [
 			"essdee_yrp.ipd_validations.on_update",
 			"essdee_yrp.fabric_ipd.sync_fabric_process_matrices",
+			# order matters: the plan solver reads the matrices rebuilt above
+			"essdee_yrp.fabric_plan.on_ipd_update",
 		],
 		"on_trash": "essdee_yrp.ipd_validations.on_trash",
 	},
 	"Work Order": {
 		"validate": "essdee_yrp.work_order_hooks.validate",
+	},
+	"Goods Received Note": {
+		"on_submit": "essdee_yrp.fabric_tracking.on_grn_submit",
+		"on_cancel": "essdee_yrp.fabric_tracking.on_grn_cancel",
 	},
 }
 

@@ -16,6 +16,17 @@ FABRIC_PROCESS_FIELDS = (
 )
 
 
+# The transformation SHAPE each fabric tab expects from its Process master
+# (2026-06-25 design: the Process owns the reusable shape, the IPD supplies
+# the values). conversion -> Process.is_item_conversion; swap -> the attribute
+# in Process.value_change_attributes.
+FABRIC_KIND_SHAPES = {
+	"knitting": {"is_item_conversion": 1},
+	"dyeing": {"swap_attribute": FABRIC_COLOUR_ATTRIBUTE},
+	"compacting": {"swap_attribute": FABRIC_DIA_ATTRIBUTE},
+}
+
+
 def get_fabric_process_kind(ipd_doc, process_name):
 	"""Which fabric process (knitting/dyeing/compacting) `process_name` is on this IPD, or None."""
 	if not process_name:
@@ -24,6 +35,52 @@ def get_fabric_process_kind(ipd_doc, process_name):
 		if ipd_doc.get(fieldname) == process_name:
 			return kind
 	return None
+
+
+def get_process_shape(process_name):
+	"""The transformation shape the Process MASTER declares:
+	("conversion", None) | ("swap", <attribute>) | ("multi_swap", [attrs]) |
+	(None, None) when nothing is maintained (identity, or metadata unfilled).
+	multi_swap = one process changing SEVERAL attributes at once (Dye-Compact:
+	colour AND dia change in the same trip)."""
+	if not process_name:
+		return (None, None)
+	doc = frappe.get_cached_doc("Process", process_name)
+	if doc.get("is_item_conversion"):
+		return ("conversion", None)
+	swaps = [r.attribute for r in doc.get("value_change_attributes") or []]
+	if len(swaps) > 1:
+		return ("multi_swap", swaps)
+	if swaps:
+		return ("swap", swaps[0])
+	return (None, None)
+
+
+def validate_fabric_process_shapes(doc):
+	"""Non-blocking: each fabric tab's process should DECLARE the matching shape
+	on its Process master — the master is the reusable template, the IPD only
+	supplies values. Warns (never blocks) so unmaintained masters keep working."""
+	problems = []
+	for fieldname, kind in FABRIC_PROCESS_FIELDS:
+		process_name = doc.get(fieldname)
+		if not process_name:
+			continue
+		shape, attribute = get_process_shape(process_name)
+		expected = FABRIC_KIND_SHAPES[kind]
+		if expected.get("is_item_conversion") and shape != "conversion":
+			problems.append(frappe._(
+				"{0}: tick Item Conversion on the Process master (yarn → cloth)."
+			).format(frappe.utils.escape_html(process_name)))
+		elif expected.get("swap_attribute") and (shape, attribute) != ("swap", expected["swap_attribute"]):
+			problems.append(frappe._(
+				"{0}: add {1} to Value Change Attributes on the Process master."
+			).format(frappe.utils.escape_html(process_name), expected["swap_attribute"]))
+	if problems:
+		frappe.msgprint(
+			"<br>".join(problems),
+			title=frappe._("Process master metadata incomplete"),
+			indicator="orange",
+		)
 
 
 def get_identity_process_row(ipd_doc, process_name):
@@ -148,7 +205,7 @@ def _build_knitting_matrix(doc, process, uom):
 	return matrix
 
 
-def _build_value_swap_matrix(doc, process, uom, rows, attribute, from_field, to_field, passthrough_attribute, passthrough_field):
+def _build_value_swap_matrix(doc, process, uom, rows, attribute, from_field, to_field, passthrough_attribute, passthrough_field, passthrough_values=None):
 	"""Shared shape for dyeing (Colour swap) and compacting (Dia swap):
 	one group per mapping row; Input combo carries the from-value,
 	Output combo the to-value. Quantities 1:1 (v1).
@@ -164,7 +221,7 @@ def _build_value_swap_matrix(doc, process, uom, rows, attribute, from_field, to_
 	specific mapping always wins over an applies-to-all one."""
 	if not rows:
 		return None
-	rows = _expand_wildcard_rows(doc, rows, passthrough_field, from_field)
+	rows = _expand_wildcard_rows(doc, rows, passthrough_field, from_field, passthrough_values)
 	matrix = _new_matrix(doc, process)
 	matrix.input_item = doc.item
 	matrix.append("input_attributes", {"attribute": attribute})
@@ -194,15 +251,17 @@ def _build_value_swap_matrix(doc, process, uom, rows, attribute, from_field, to_
 	return matrix
 
 
-def _expand_wildcard_rows(doc, rows, passthrough_field, from_field):
+def _expand_wildcard_rows(doc, rows, passthrough_field, from_field, passthrough_values=None):
 	"""Pinned rows first, then each wildcard row cloned per derived passthrough
 	value (skipping keys a pinned row already covers). If no values can be
-	derived, the wildcard rows pass through unchanged."""
+	derived, the wildcard rows pass through unchanged. `passthrough_values`
+	overrides the tab-bound derivation (chain steps pass the walked state)."""
 	pinned = [r for r in rows if r.get(passthrough_field)]
 	wildcards = [r for r in rows if not r.get(passthrough_field)]
 	if not wildcards:
 		return pinned
-	values = derive_passthrough_values(doc, passthrough_field)
+	values = passthrough_values if passthrough_values is not None \
+		else derive_passthrough_values(doc, passthrough_field)
 	if not values:
 		return pinned + wildcards
 	covered = {(r.get(passthrough_field), r.get(from_field)) for r in pinned}
@@ -211,7 +270,9 @@ def _expand_wildcard_rows(doc, rows, passthrough_field, from_field):
 		for value in values:
 			if (value, row.get(from_field)) in covered:
 				continue
-			clone = frappe._dict(row.as_dict() if hasattr(row, "as_dict") else dict(row))
+			# NB: on a frappe._dict, `row.as_dict` is a MISSING KEY (None), so
+			# hasattr() lies — branch on the real type instead
+			clone = frappe._dict(dict(row) if isinstance(row, dict) else row.as_dict())
 			clone[passthrough_field] = value
 			expanded.append(clone)
 	return pinned + expanded

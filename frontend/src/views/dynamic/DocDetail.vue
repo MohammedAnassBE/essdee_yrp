@@ -87,6 +87,15 @@
 				rounded
 			/>
 
+			<!-- Delivery Challan e-Waybill number + status, once the EWB exists. -->
+			<Tag
+				v-if="!loading && doc && mode === 'view' && isDeliveryChallan && doc.ewaybill"
+				class="head-status"
+				:value="ewbStatusTag"
+				severity="info"
+				rounded
+			/>
+
 			<div class="head-actions">
 				<!-- ── VIEW mode ── -->
 				<template v-if="mode === 'view' && doc">
@@ -169,6 +178,43 @@
 						@click="(e) => moreMenu.toggle(e)"
 					/>
 					<Menu ref="moreMenu" id="dd_more_menu" :model="moreMenuModel" :popup="true" />
+					<!-- Delivery Challan e-Waybill (GST e-Way Bill) lifecycle — context-gated
+					     Menu: generate/fetch when none exists; print/update/cancel once it does. -->
+					<Button
+						v-if="isDeliveryChallan && docstatus === 1"
+						type="button"
+						label="e-Waybill"
+						icon="pi pi-truck"
+						size="small"
+						severity="secondary"
+						outlined
+						aria-haspopup="true"
+						aria-controls="dd_ewb_menu"
+						@click="(e) => ewbMenu.toggle(e)"
+					/>
+					<Menu ref="ewbMenu" id="dd_ewb_menu" :model="ewbMenuModel" :popup="true" />
+					<!-- Send SMS — only when the DC has a supplier to text. -->
+					<Button
+						v-if="isDeliveryChallan && docstatus === 1 && doc.supplier"
+						label="Send SMS"
+						icon="pi pi-comment"
+						size="small"
+						severity="secondary"
+						outlined
+						@click="sendSmsOpen = true"
+					/>
+					<!-- Send WhatsApp — gated on the doctype being WhatsApp-enabled
+					     (server-configured) AND having a supplier to message, same
+					     docstatus/supplier shape as Send SMS. -->
+					<Button
+						v-if="isWhatsAppEnabled && docstatus === 1 && doc[whatsAppSupplierKey]"
+						label="Send WhatsApp"
+						icon="pi pi-whatsapp"
+						size="small"
+						severity="secondary"
+						outlined
+						@click="sendWhatsAppOpen = true"
+					/>
 
 					<!-- Destructive, set apart from the forward CTA. -->
 					<Button
@@ -335,6 +381,52 @@
 			v-model:visible="calcDeliverablesOpen"
 			:work-order="doc.name"
 			@calculated="onDeliverablesCalculated"
+		/>
+
+		<!-- Delivery Challan e-Waybill lifecycle + SMS modals (yrp_ewaybill_api).
+		     Each posts its own whitelisted action and reloads the view on success. -->
+		<EWaybillGenerateModal
+			v-model:visible="ewbGenerateOpen"
+			:doctype="doctype"
+			:docname="props.id"
+			:doc="doc"
+			@generated="onEwbGenerated"
+		/>
+		<EWaybillFetchModal
+			v-model:visible="ewbFetchOpen"
+			:doctype="doctype"
+			:docname="props.id"
+			:doc="doc"
+			@fetched="onEwbFetched"
+		/>
+		<EWaybillCancelModal
+			v-model:visible="ewbCancelOpen"
+			:doctype="doctype"
+			:docname="props.id"
+			:doc="doc"
+			@cancelled="onEwbCancelled"
+		/>
+		<EWaybillVehicleModal
+			v-model:visible="ewbVehicleOpen"
+			:doctype="doctype"
+			:docname="props.id"
+			:doc="doc"
+			@updated="onEwbUpdated"
+		/>
+		<SendSmsModal
+			v-model:visible="sendSmsOpen"
+			:doctype="doctype"
+			:docname="props.id"
+			:doc="doc"
+			@sent="onSmsSent"
+		/>
+		<SendWhatsAppModal
+			v-model:visible="sendWhatsAppOpen"
+			:doctype="doctype"
+			:docname="props.id"
+			:doc="doc"
+			:supplier-key="whatsAppSupplierKey"
+			@sent="onWhatsAppSent"
 		/>
 
 		<!-- Loading (doc load, or create-mode meta load) — skeleton mimics the
@@ -1247,6 +1339,12 @@ import ItemDependentAttributeEditor from "./ItemDependentAttributeEditor.vue"
 import ItemAttributeListView from "./ItemAttributeListView.vue"
 import LinkField from "@/components/LinkField.vue"
 import GRNReceivedTypeEditor from "./GRNReceivedTypeEditor.vue"
+import EWaybillGenerateModal from "./EWaybillGenerateModal.vue"
+import EWaybillFetchModal from "./EWaybillFetchModal.vue"
+import EWaybillCancelModal from "./EWaybillCancelModal.vue"
+import EWaybillVehicleModal from "./EWaybillVehicleModal.vue"
+import SendSmsModal from "./SendSmsModal.vue"
+import SendWhatsAppModal from "./SendWhatsAppModal.vue"
 
 const props = defineProps({
 	docRoute: { type: String, required: true },
@@ -1527,6 +1625,107 @@ function submitPrintDialog() {
 		return
 	}
 	printDialogOpen.value = false
+}
+
+// ── Delivery Challan e-Waybill (GST e-Way Bill) + SMS — yrp_ewaybill_api ──
+// Header actions for a submitted DC. The overflow-style Menu is context-gated
+// on doc.ewaybill: generate/fetch when none exists, print/update/cancel once it
+// does. Each modal posts its own whitelisted action and we reloadView() on
+// success so the ewaybill / e_waybill_status header fields refresh.
+const ewbGenerateOpen = ref(false)
+const ewbFetchOpen = ref(false)
+const ewbCancelOpen = ref(false)
+const ewbVehicleOpen = ref(false)
+const sendSmsOpen = ref(false)
+const ewbMenu = ref(null)
+
+// ── WhatsApp — yrp.whatsapp_notification (any WhatsApp-enabled doctype) ──
+// Which doctypes have WhatsApp wired up is server-configured, so the header
+// button is gated on a small map fetched once (name -> supplier_key), NOT
+// hardcoded to a single doctype the way isDeliveryChallan gates Send SMS today.
+const sendWhatsAppOpen = ref(false)
+const whatsAppEnabledDoctypes = ref({}) // { DocType: supplier_key }
+
+async function loadWhatsAppEnabledDoctypes() {
+	try {
+		const r = await callMethod("yrp.whatsapp_notification.get_enabled_whatsapp_doctypes", {})
+		whatsAppEnabledDoctypes.value = r?.doctypes || {}
+	} catch (_) {
+		// Non-fatal: the Send WhatsApp button just stays hidden for every doctype.
+	}
+}
+
+const isWhatsAppEnabled = computed(() =>
+	Object.prototype.hasOwnProperty.call(whatsAppEnabledDoctypes.value, doctype.value),
+)
+// Which link field on THIS doctype names the supplier to message (DC/GRN/PO
+// use "supplier"; Stock Entry passes "to_supplier"/"from_supplier") — mirrors
+// SendSmsModal's supplierKey convention, server-declared per doctype.
+const whatsAppSupplierKey = computed(() => whatsAppEnabledDoctypes.value[doctype.value] || "supplier")
+
+const ewbMenuModel = computed(() => {
+	if (!doc.value) return []
+	if (!doc.value.ewaybill) {
+		return [
+			{ label: "Generate e-Waybill", icon: "pi pi-plus", command: () => (ewbGenerateOpen.value = true) },
+			{ label: "Fetch existing", icon: "pi pi-download", command: () => (ewbFetchOpen.value = true) },
+		]
+	}
+	return [
+		{ label: "Print e-Waybill", icon: "pi pi-print", command: () => printEwaybill() },
+		{ label: "Update Vehicle", icon: "pi pi-truck", command: () => (ewbVehicleOpen.value = true) },
+		{ label: "Cancel e-Waybill", icon: "pi pi-ban", command: () => (ewbCancelOpen.value = true) },
+	]
+})
+
+// Refresh the stored EWB payload, then open the print view in a new tab (same
+// pop-up-blocked fallback as submitPrintDialog). Prints the YRP E-Waybill Log
+// record named by doc.ewaybill via the "YRP e-Waybill" print format.
+async function printEwaybill() {
+	if (!doc.value?.ewaybill) return
+	// Refresh the stored payload, but never block the print if it errors (e.g. a
+	// transient GST-resolve issue) — open the print with possibly-stale data.
+	try {
+		await callMethod("yrp_ewaybill_api.ewaybill.actions.fetch_ewaybill_data", {
+			doctype: doctype.value,
+			docname: props.id,
+		})
+	} catch (e) {
+		toast.warn("Couldn't refresh e-Waybill", e.message)
+	}
+	const url =
+		"/printview?doctype=YRP E-Waybill Log&name=" +
+		encodeURIComponent(doc.value.ewaybill) +
+		"&format=YRP e-Waybill&no_letterhead=1&trigger_print=1"
+	const opened = window.open(url, "_blank", "noopener")
+	if (!opened) {
+		toast.warn("Pop-up blocked", "Allow pop-ups for this site to open the print page.")
+	}
+}
+
+// "<ewaybill> · <status>" chip shown beside the title once the EWB exists.
+const ewbStatusTag = computed(() =>
+	doc.value?.ewaybill ? `${doc.value.ewaybill} · ${doc.value.e_waybill_status || "Generated"}` : "",
+)
+
+// Modal success handlers — each reloads the doc so the header EWB fields refresh.
+async function onEwbGenerated() {
+	await reloadView()
+}
+async function onEwbFetched() {
+	await reloadView()
+}
+async function onEwbCancelled() {
+	await reloadView()
+}
+async function onEwbUpdated() {
+	await reloadView()
+}
+async function onSmsSent() {
+	await reloadView()
+}
+async function onWhatsAppSent() {
+	await reloadView()
 }
 
 // System fields we never surface in the Details grid / Quick Info / form.
@@ -2081,6 +2280,7 @@ function onShortcut(e) {
 onMounted(() => {
 	window.addEventListener("keydown", onShortcut)
 	window.addEventListener("beforeunload", beforeUnloadGuard)
+	loadWhatsAppEnabledDoctypes()
 })
 onBeforeUnmount(() => {
 	window.removeEventListener("keydown", onShortcut)

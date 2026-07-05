@@ -9,6 +9,7 @@ import CuttingItemDetail from "./Item_Po_detail/CuttingItemDetail.vue";
 import EmblishmentDetails from "./Item_Po_detail/EmblishmentDetails.vue";
 import FabricSwapDetail from "./Item_Po_detail/FabricSwapDetail.vue";
 import LotOrderedDetail from "./ProductionOrder/LotOrderedDetail.vue";
+import FabricProgram from "./Lot/FabricProgram.vue";
 
 frappe.provide("frappe.production.ui");
 
@@ -194,5 +195,26 @@ frappe.production.ui.LotOrderedDetail = class {
 	}
 	load_data(context) {
 		this.vue.load_data(JSON.parse(JSON.stringify(context || {})));
+	}
+};
+
+frappe.production.ui.FabricProgram = class {
+	constructor(wrapper) {
+		this.$wrapper = $(wrapper);
+		this.make_body();
+	}
+	make_body() {
+		const mounted = mount_component(FabricProgram, this.$wrapper);
+		this.app = mounted.app;
+		this.vue = mounted.vue;
+	}
+	load_data(entries) {
+		this.vue.load_data(JSON.parse(JSON.stringify(entries || [])));
+	}
+	get_data() {
+		return JSON.parse(JSON.stringify(this.vue.get_data()));
+	}
+	get_requirement() {
+		return JSON.parse(JSON.stringify(this.vue.get_requirement()));
 	}
 };

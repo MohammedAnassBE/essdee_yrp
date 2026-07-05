@@ -1,0 +1,60 @@
+{
+ "actions": [],
+ "creation": "2026-07-04 10:30:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "cloth_item",
+  "dia",
+  "weight",
+  "received_weight"
+ ],
+ "fields": [
+  {
+   "fieldname": "cloth_item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Cloth Item",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "dia",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Dia",
+   "options": "Item Attribute Value",
+   "reqd": 1
+  },
+  {
+   "fieldname": "weight",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Weight (Kg)",
+   "precision": "3",
+   "reqd": 1
+  },
+  {
+   "fieldname": "received_weight",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Received (Kg)",
+   "no_copy": 1,
+   "precision": "3",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-04 10:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Essdee YRP",
+ "name": "Lot Fabric Program",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

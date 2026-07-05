@@ -35,6 +35,11 @@
   "lot_hash_value",
   "fabric_details_section",
   "lot_fabric_details",
+  "fabric_program_html",
+  "lot_fabric_programs",
+  "lot_colour_programs",
+  "lot_fabric_requirements",
+  "lot_fabric_step_ledger",
   "section_break_ry89l",
   "column_break_njmh",
   "planned_qty",
@@ -415,11 +420,44 @@
    "fieldname": "alternative_html",
    "fieldtype": "HTML",
    "label": "Alternative HTML"
+  },
+  {
+   "fieldname": "fabric_program_html",
+   "fieldtype": "HTML",
+   "label": "Fabric Program"
+  },
+  {
+   "fieldname": "lot_fabric_programs",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Fabric Program Details",
+   "options": "Lot Fabric Program"
+  },
+  {
+   "fieldname": "lot_colour_programs",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Fabric Colour Program Details",
+   "options": "Lot Fabric Colour Program"
+  },
+  {
+   "fieldname": "lot_fabric_requirements",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Fabric Requirements",
+   "options": "Lot Fabric Requirement"
+  },
+  {
+   "fieldname": "lot_fabric_step_ledger",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Fabric Step Ledger",
+   "options": "Lot Fabric Step Ledger"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-02 15:00:28.516295",
+ "modified": "2026-07-04 16:05:00.000000",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "Lot",

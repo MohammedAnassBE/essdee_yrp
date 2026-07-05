@@ -11,6 +11,14 @@ from yrp.yrp.doctype.purchase_order.purchase_order import get_item_group_index
 from yrp.yrp.doctype.item.item import get_attribute_details, get_or_create_variant
 from yrp.utils import update_if_string_instance, get_panel_colour_combination, get_variant_attr_details
 from yrp.yrp.doctype.item_dependent_attribute_mapping.item_dependent_attribute_mapping import get_dependent_attribute_details
+from essdee_yrp.fabric_program import (
+	fetch_fabric_program_details,
+	rebuild_plans_after_save,
+	refresh_server_owned_tables,
+	save_fabric_program_details,
+	save_fabric_requirement_details,
+	validate_unique_fabric_cloths,
+)
 
 class Lot(Document):
 	def before_submit(self):
@@ -18,6 +26,12 @@ class Lot(Document):
 			frappe.throw("BOM is not calculated")
 
 	def before_validate(self):
+		refresh_server_owned_tables(self)
+		validate_unique_fabric_cloths(self)
+		if self.get('fabric_program_details'):
+			save_fabric_program_details(self)
+		save_fabric_requirement_details(self)
+
 		if self.get('item_details'):
 			items = save_item_details(self.item_details)
 			self.set("items",items)
@@ -113,7 +127,12 @@ class Lot(Document):
 			self.set('lot_order_details',items)
 			self.set('total_order_quantity', qty)
 
+	def on_update(self):
+		rebuild_plans_after_save(self)
+
 	def onload(self):
+		if self.get("lot_fabric_details"):
+			self.set_onload('fabric_program_details', fetch_fabric_program_details(self))
 		if self.production_detail:
 			item_details = fetch_item_details(self.get('items'), self.production_detail)
 			self.set_onload('item_details', item_details)

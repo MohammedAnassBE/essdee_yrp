@@ -147,7 +147,10 @@ doctype_list_js = {"Item Production Detail": "public/js/item_production_detail_l
 # ------------
 
 # before_install = "essdee_yrp.install.before_install"
-# after_install = "essdee_yrp.install.after_install"
+after_install = "essdee_yrp.setup.after_install"
+
+# Consumer-site setup (recreate records ERPNext's setup wizard would install).
+after_migrate = "essdee_yrp.setup.after_migrate"
 
 # Uninstallation
 # ------------

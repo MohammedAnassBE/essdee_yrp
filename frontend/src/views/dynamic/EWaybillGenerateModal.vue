@@ -41,6 +41,19 @@
 				<label class="field-label">GST Transporter ID</label>
 				<InputText v-model="form.gst_transporter_id" fluid placeholder="GST Transporter ID" />
 			</div>
+
+			<!-- The form field is read-only (popup-driven, 2026-07-10) — this
+			     dialog is the only writer. Drives the CGST/SGST vs IGST split
+			     server-side (SEZ / Overseas / Unregistered parties). -->
+			<div class="ewb-field">
+				<label class="field-label">GST Category</label>
+				<Select
+					v-model="form.gst_category"
+					:options="GST_CATEGORY_OPTIONS"
+					fluid
+					placeholder="Select GST Category"
+				/>
+			</div>
 		</section>
 
 		<!-- Part B ---------------------------------------------------------->
@@ -152,6 +165,7 @@ const generating = ref(false)
 // Option lists mirror the Desk dialog exactly.
 const MODE_OPTIONS = ["Road", "Air", "Rail", "Ship"]
 const VEHICLE_TYPE_OPTIONS = ["Regular", "Over Dimensional Cargo (ODC)"]
+const GST_CATEGORY_OPTIONS = ["Registered Regular", "Unregistered", "SEZ", "Overseas"]
 
 const form = reactive({
 	transporter: "",
@@ -162,6 +176,7 @@ const form = reactive({
 	lr_date: null,
 	mode_of_transport: "Road",
 	gst_vehicle_type: "Regular",
+	gst_category: "Registered Regular",
 })
 
 const dialogVisible = computed({
@@ -181,6 +196,7 @@ function initForm() {
 	form.lr_date = doc.lr_date ? new Date(doc.lr_date) : new Date()
 	form.mode_of_transport = doc.mode_of_transport || "Road"
 	form.gst_vehicle_type = doc.gst_vehicle_type || "Regular"
+	form.gst_category = doc.gst_category || "Registered Regular"
 }
 
 // GST Vehicle Type shows only for Road / Ship (Desk: depends_on Road|Ship).
@@ -263,6 +279,7 @@ async function onGenerate() {
 		lr_date: toDateStr(form.lr_date),
 		mode_of_transport: form.mode_of_transport || "",
 		gst_vehicle_type: form.gst_vehicle_type || "",
+		gst_category: form.gst_category || "",
 	}
 
 	generating.value = true

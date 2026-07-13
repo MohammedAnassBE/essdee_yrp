@@ -147,7 +147,10 @@ doctype_list_js = {"Item Production Detail": "public/js/item_production_detail_l
 # ------------
 
 # before_install = "essdee_yrp.install.before_install"
-# after_install = "essdee_yrp.install.after_install"
+after_install = "essdee_yrp.setup.after_install"
+
+# Consumer-site setup (recreate records ERPNext's setup wizard would install).
+after_migrate = "essdee_yrp.setup.after_migrate"
 
 # Uninstallation
 # ------------
@@ -217,6 +220,9 @@ doc_events = {
 	},
 	"Work Order": {
 		"validate": "essdee_yrp.work_order_hooks.validate",
+	},
+	"Work Order Correction": {
+		"before_submit": "essdee_yrp.work_order_correction_hooks.validate_correction_ipd_items"
 	},
 	"Goods Received Note": {
 		"on_submit": "essdee_yrp.fabric_tracking.on_grn_submit",

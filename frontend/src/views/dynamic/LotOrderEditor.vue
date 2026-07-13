@@ -69,6 +69,7 @@
 							v-model="entry.attributes[attr]"
 							:suggestions="attrSuggestions[attr] || []"
 							dropdown
+							completeOnFocus
 							fluid
 							@complete="(e) => searchAttrValues(attr, e.query)"
 						/>

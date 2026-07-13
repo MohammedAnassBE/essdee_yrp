@@ -10,6 +10,7 @@ import EmblishmentDetails from "./Item_Po_detail/EmblishmentDetails.vue";
 import FabricSwapDetail from "./Item_Po_detail/FabricSwapDetail.vue";
 import LotOrderedDetail from "./ProductionOrder/LotOrderedDetail.vue";
 import FabricProgram from "./Lot/FabricProgram.vue";
+import FabricProcesses from "./Fabric/FabricProcesses.vue";
 
 frappe.provide("frappe.production.ui");
 
@@ -216,5 +217,26 @@ frappe.production.ui.FabricProgram = class {
 	}
 	get_requirement() {
 		return JSON.parse(JSON.stringify(this.vue.get_requirement()));
+	}
+};
+
+frappe.production.ui.FabricProcesses = class {
+	constructor(wrapper, opts = {}) {
+		this.$wrapper = $(wrapper);
+		this.opts = opts;
+		this.make_body();
+	}
+	make_body() {
+		const mounted = mount_component(FabricProcesses, this.$wrapper);
+		this.app = mounted.app;
+		this.vue = mounted.vue;
+	}
+	load_data(payload) {
+		// on_change is passed alongside (not inside) the payload so the JSON
+		// round-trip cannot strip the callback (same as FabricSwapDetail).
+		this.vue.load_data(JSON.parse(JSON.stringify(payload || {})), this.opts.on_change);
+	}
+	get_steps() {
+		return this.vue.get_steps();
 	}
 };

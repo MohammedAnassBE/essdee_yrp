@@ -116,11 +116,40 @@ def _ipd_target_colours(ipd):
 
 
 def get_greige_colour(ipd):
-	"""The knitted (undyed) colour = the dyeing tab's single distinct from-colour.
-	Multiple distinct from-colours -> ambiguous -> None (user picks in the popup)."""
-	from_colours = {r.from_colour for r in ipd.get("dyeing_colour_details") or [] if r.from_colour}
-	if len(from_colours) == 1:
-		return next(iter(from_colours))
+	"""The knitted (undyed) colour. Generic-aware: the distinct Colour value(s)
+	flowing INTO the first Colour-swap (dyeing) step — a single value is the greige,
+	several are ambiguous (None -> user picks in the popup). Works for BOTH generic
+	fabric_processes IPDs and legacy tab IPDs (the adapter feeds get_fabric_steps /
+	values_entering the same rows). No dyeing step -> None."""
+	colours = _greige_colour_options(ipd)
+	if len(colours) == 1:
+		return colours[0]
+	return None
+
+
+def _greige_colour_options(ipd):
+	"""Distinct greige (pre-dye) Colour values the chain can knit — the colours
+	entering the first Colour-swap step. Empty when the IPD has no dyeing step."""
+	from essdee_yrp.fabric_chain import get_fabric_steps
+	from essdee_yrp.fabric_ipd import values_entering
+
+	dye_pos = _first_colour_swap_position(get_fabric_steps(ipd))
+	if dye_pos is None:
+		return []
+	# dye_pos is a filtered-step index (identity steps excluded); values_entering
+	# slices the FULL row list [:dye_pos]. Safe because every step before the first
+	# Colour swap is a Colour no-op in the walk (identity/knitting/dia-swap all pass
+	# Colour through unchanged), so the short slice yields the same seed set.
+	return list(dict.fromkeys(values_entering(ipd, dye_pos, FABRIC_COLOUR_ATTRIBUTE)))
+
+
+def _first_colour_swap_position(steps):
+	for step in steps:
+		if step["shape"] in ("swap", "multi_swap"):
+			attrs = step["attribute"]
+			attrs = attrs if isinstance(attrs, (list, tuple)) else [attrs]
+			if FABRIC_COLOUR_ATTRIBUTE in attrs:
+				return step["position"]
 	return None
 
 

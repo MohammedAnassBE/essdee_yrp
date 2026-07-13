@@ -3,8 +3,8 @@
 		:visible="visible"
 		modal
 		class="fabric-calc-dialog"
-		:style="{ width: 'min(640px, calc(100vw - 32px))' }"
-		:header="`Calculate Fabric Deliverables`"
+		:style="{ width: 'min(880px, calc(100vw - 32px))' }"
+		:header="dialogHeader"
 		@update:visible="(v) => emit('update:visible', v)"
 		@show="loadContext"
 	>
@@ -35,17 +35,34 @@
 				>
 					Item: <b>{{ row.treated_item }}</b>
 				</div>
+				<!-- Rule-based conversion (Consume/Introduce): say what gets consumed —
+				     each qty row below is one "consumed combo → produced combo" rule. -->
+				<div v-if="row.kind === 'conversion' && row.input_item" class="fc-note">
+					Consumes: <b>{{ row.input_item }}</b> → produces <b>{{ row.cloth_item }}</b>
+				</div>
 				<template v-if="row.kind === 'knitting'">
 					<div class="fc-note">
 						Yarn: <b>{{ row.yarn_item }}</b> · 1 kg yarn → {{ row.ratio }} kg cloth
 					</div>
 					<div v-if="row.has_colour && !isMultiColour(row)" class="fc-field">
 						<label class="field-label">Cloth Colour *</label>
+						<!-- too many colour choices for columns — single-colour fallback.
+						     No greige colour_options at all: the SAME link query the Desk
+						     falls back to (IPD colour mapping, else any Colour value). -->
 						<Select
+							v-if="(row.colour_options || []).length"
 							v-model="entries[i].colour"
-							:options="row.colour_options || []"
+							:options="row.colour_options"
 							filter
 							fluid
+							placeholder="Select Colour"
+						/>
+						<LinkField
+							v-else
+							:modelValue="entries[i].colour || ''"
+							@update:modelValue="(v) => (entries[i].colour = v || null)"
+							target-doctype="Item Attribute Value"
+							:search-handler="(q) => searchColourValues(row, q)"
 							placeholder="Select Colour"
 						/>
 					</div>
@@ -67,6 +84,36 @@
 							/>
 							<small v-if="colour === row.colour_options[0] && planningLine(row.kind, qr)" class="fc-note-inline">
 								{{ planningLine(row.kind, qr) }}
+							</small>
+						</div>
+					</div>
+				</div>
+
+				<!-- colour-section layout (2026-07-08): big multi-row popups group by
+				     the server's `section` (the Colour part of each rule) with the
+				     short `row_label` (the Dia part) on each input. ≤6 sections →
+				     one column per section; more → stacked section blocks. -->
+				<div
+					v-else-if="layouts[i]"
+					:class="layouts[i].asColumns ? 'fc-colour-grid' : 'fc-section-stack'"
+				>
+					<div
+						v-for="sec in layouts[i].sections"
+						:key="String(sec.name)"
+						:class="layouts[i].asColumns ? 'fc-colour-col' : 'fc-section-block'"
+					>
+						<div class="fc-colour-head">{{ sec.name }}</div>
+						<div v-for="it in sec.items" :key="it.qr.key" class="fc-field fc-field--tight">
+							<label class="field-label">{{ it.qr.row_label || it.qr.label }}</label>
+							<InputNumber
+								v-model="entries[i].qtys[it.j]"
+								:min="0"
+								:maxFractionDigits="3"
+								fluid
+								placeholder="0"
+							/>
+							<small v-if="planningLine(row.kind, it.qr)" class="fc-note-inline">
+								{{ planningLine(row.kind, it.qr) }}
 							</small>
 						</div>
 					</div>
@@ -121,32 +168,62 @@
 <script setup>
 /**
  * Calculate Fabric Deliverables — /web port of the Desk dialog in
- * essdee_yrp/public/js/work_order.js (qty-rows contract, 2026-07-03).
+ * essdee_yrp/public/js/work_order.js (render_fabric_dialog, qty-rows
+ * contract 2026-07-08).
  *
- * One quantity input per IPD Process Matrix group; every entry posts its
- * matrix-group `key` so the server resolves the exact group (never by attrs).
- * Knitting: derived Colour select (when the cloth declares Colour) + an
- * auto-computed, editable yarn deliverable (total ÷ cloth_per_kg_yarn).
+ * Byte-faithful to the Desk reference (data contracts + branching):
+ * - One quantity input per IPD Process Matrix group; every entry posts its
+ *   matrix-group `key` so the server resolves the exact group (never by attrs).
+ * - Knitting: one COLUMN per greige colour (≤ MAX_COLOUR_COLUMNS) with an
+ *   input per dia, else a single-colour picker fallback (restricted Select
+ *   when the server sent colour_options; otherwise the same link query the
+ *   Desk uses — IPD colour mapping, else any Colour attribute value) + an
+ *   auto-computed, editable yarn deliverable (total ÷ cloth_per_kg_yarn).
+ * - Conversion: "Consumes: X → produces Y" note; no colour picker, no yarn.
+ * - Colour-section layout for conversion/dyeing/compacting/identity when
+ *   qty_rows > 6 AND >1 server `section` (all non-null): ≤6 sections → one
+ *   column per section (bold heading, row_label per input), else stacked
+ *   section blocks; small/flat lists keep the flat label list. `section` /
+ *   `row_label` come verbatim from the server — no client re-derivation.
+ * - planning line per input = Desk's planning_description (null figures
+ *   hidden, e.g. `available` on conversion / bought-greige lots).
+ * - Non-blocking over-balance warning (production_api stance): knitting /
+ *   dyeing per-dia sums vs balance / greige available, compacting per row.
+ * Adapted (widgets only): frappe.ui.Dialog → PrimeVue Dialog, Float →
+ * InputNumber, Link → Select/LinkField, HTML notes → styled divs.
  */
-import { ref } from "vue"
+import { ref, computed } from "vue"
 import Dialog from "primevue/dialog"
 import Select from "primevue/select"
 import InputNumber from "primevue/inputnumber"
 import Button from "primevue/button"
-import { callMethod } from "@/api/client"
+import LinkField from "@/components/LinkField.vue"
+import { callMethod, searchLink } from "@/api/client"
 import { useAppToast } from "@/composables/useToast"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
 	workOrder: { type: String, required: true },
+	// The WO's process name — Desk parity: the dialog title is
+	// "Calculate Fabric Deliverables — <process>" (work_order.js).
+	processName: { type: String, default: "" },
+	// Loaded `modified` timestamp — forwarded to calculate_fabric_deliverables so
+	// the backend's stale-write guard (_guard_not_modified) rejects a concurrent edit.
+	modified: { type: String, default: null },
 })
 const emit = defineEmits(["update:visible", "calculated"])
+
+const dialogHeader = computed(() =>
+	props.processName
+		? `Calculate Fabric Deliverables — ${props.processName}`
+		: "Calculate Fabric Deliverables",
+)
 
 const toast = useAppToast()
 const loading = ref(false)
 const applying = ref(false)
 const ctx = ref(null)
-// One entry per context row: { colour, yarnQty, qtys: [per qty_row] }
+// One entry per context row: { colour, yarnQty, qtys: [per qty_row], colourQtys }
 const entries = ref([])
 
 async function loadContext() {
@@ -160,12 +237,15 @@ async function loadContext() {
 		)
 		ctx.value = r || { is_fabric_process: false, rows: [] }
 		;(ctx.value.warnings || []).forEach((w) => toast.warn("Fabric row skipped", w))
-		// Pre-fill the Lot program balances (server-computed) + the greige colour.
-		// Multi-colour knitting: a qty slot per (colour × dia); the greige
-		// colour's column gets the balance prefills.
+		// Pre-fill the Lot program/plan balances (server-computed) + the greige
+		// colour. Multi-colour knitting: a qty slot per (colour × dia); the
+		// greige colour's column gets the balance prefills.
 		entries.value = (ctx.value.rows || []).map((row) => {
 			const entry = {
-				colour: row.greige_colour || null,
+				// Row-level colour is the SINGLE-COLOUR fallback only. Multi-colour
+				// rows carry a line-level colour per column — the Desk renders no
+				// colour_${i} field there, so fallback_colour posts as null.
+				colour: isMultiColour(row) ? null : row.greige_colour || null,
 				yarnQty: null,
 				qtys: (row.qty_rows || []).map((qr) => qr.prefill || null),
 				colourQtys: {},
@@ -191,61 +271,40 @@ async function loadContext() {
 	}
 }
 
+// Desk fallback colour query when the server sent no greige colour_options:
+// the IPD's Colour attribute-mapping values, else any Item Attribute Value of
+// the Colour attribute (same order as work_order.js's get_query).
+async function searchColourValues(row, q) {
+	if (row.colour_mapping) {
+		const res = await callMethod("frappe.desk.search.search_link", {
+			doctype: "Item Attribute Value",
+			txt: q || "",
+			query: "essdee_yrp.ipd_ui.get_attribute_detail_values",
+			filters: { mapping: row.colour_mapping },
+		})
+		const rows = Array.isArray(res) ? res : res?.results || []
+		return rows.map((r) => ({ name: r.value ?? r.name ?? r }))
+	}
+	return searchLink("Item Attribute Value", q, { attribute_name: "Colour" })
+}
+
 // One planning line per qty row (mirrors the Desk dialog's field description).
-// null "available" is hidden — e.g. bought-greige lots where knitting isn't managed.
+// null figures are hidden — e.g. "available" on conversion steps (previous
+// stage not tracked item-aware) or bought-greige lots where knitting isn't
+// managed. `kg` rounds to 3 decimals like the Desk's flt(v, 3).
 function planningLine(kind, qr) {
-	const kg = (v) => `${Number(v) || 0} kg`
+	const kg = (v) => `${Math.round((Number(v) || 0) * 1000) / 1000} kg`
 	const parts = []
 	if (kind === "knitting") {
 		parts.push(`Program ${kg(qr.program)}`)
 		if (Number(qr.received)) parts.push(`Received ${kg(qr.received)}`)
 		parts.push(`Ordered ${kg(qr.ordered)}`, `Balance ${kg(qr.balance)}`)
-	} else if (kind === "dyeing" || kind === "compacting") {
+	} else if (kind === "dyeing" || kind === "compacting" || kind === "conversion") {
 		if (Number(qr.plan)) parts.push(`Plan ${kg(qr.plan)}`)
 		parts.push(`Ordered ${kg(qr.ordered)}`)
 		if (qr.available != null) parts.push(`Previous stage available ${kg(qr.available)}`)
 	}
 	return parts.join(" · ")
-}
-
-// Non-blocking over-balance warning (production_api stance): dyeing checks the
-// per-dia SUM of this dialog's rows against the greige balance.
-function warnBalanceOvershoot() {
-	const overs = []
-	;(ctx.value?.rows || []).forEach((row, i) => {
-		const qty_at = (j) => Number(entries.value[i].qtys[j]) || 0
-		if (row.kind === "knitting") {
-			// balance is per dia — sum across colour columns before comparing
-			;(row.qty_rows || []).forEach((qr, j) => {
-				let sum = qty_at(j)
-				for (const qtys of Object.values(entries.value[i].colourQtys || {})) {
-					sum += Number(qtys[j]) || 0
-				}
-				if (sum && qr.balance != null && sum > qr.balance + 0.001) {
-					overs.push(`${row.cloth_item} · ${qr.label}: ${sum} > balance ${qr.balance}`)
-				}
-			})
-		} else if (row.kind === "dyeing") {
-			const perDia = {}
-			;(row.qty_rows || []).forEach((qr, j) => {
-				const dia = (qr.out_attrs || {}).Dia || ""
-				if (!perDia[dia]) perDia[dia] = { sum: 0, available: qr.available }
-				perDia[dia].sum += qty_at(j)
-			})
-			Object.entries(perDia).forEach(([dia, d]) => {
-				if (d.available != null && d.sum > d.available + 0.001) {
-					overs.push(`${row.cloth_item} · ${dia}: ${d.sum} > greige available ${d.available}`)
-				}
-			})
-		} else if (row.kind === "compacting") {
-			;(row.qty_rows || []).forEach((qr, j) => {
-				if (qty_at(j) && qr.available != null && qty_at(j) > qr.available + 0.001) {
-					overs.push(`${row.cloth_item} · ${qr.label}: ${qty_at(j)} > dyed available ${qr.available}`)
-				}
-			})
-		}
-	})
-	if (overs.length) toast.warn("Exceeds balance", overs.join(" — "))
 }
 
 const MAX_COLOUR_COLUMNS = 6
@@ -256,18 +315,89 @@ function isMultiColour(row) {
 		&& row.colour_options.length <= MAX_COLOUR_COLUMNS
 }
 
-function rowQtyTotal(i) {
+// Colour-section layout descriptor (mirrors the Desk's `sectionable` branch):
+// null = flat list. Sections keep server encounter order; each item keeps its
+// ORIGINAL qty_rows index j, so entry collection / payload are layout-blind.
+const SECTIONABLE_KINDS = ["conversion", "dyeing", "compacting", "identity"]
+
+function sectionLayout(row) {
+	const qtyRows = row.qty_rows || []
+	const sections = []
+	const bySection = {}
+	qtyRows.forEach((qr, j) => {
+		const key = qr.section == null ? " null" : String(qr.section)
+		if (!bySection[key]) {
+			bySection[key] = { name: qr.section, items: [] }
+			sections.push(bySection[key])
+		}
+		bySection[key].items.push({ qr, j })
+	})
+	const sectionable = SECTIONABLE_KINDS.includes(row.kind)
+		&& qtyRows.length > 6
+		&& sections.length > 1
+		&& qtyRows.every((qr) => qr.section != null)
+	if (!sectionable) return null
+	return { sections, asColumns: sections.length <= MAX_COLOUR_COLUMNS }
+}
+
+const layouts = computed(() => (ctx.value?.rows || []).map(sectionLayout))
+
+// Every rendered qty input of context row i, with its qty_row — one place that
+// knows both layouts, shared by the yarn total and the overshoot check.
+function collectInputs(i) {
+	const row = ctx.value.rows[i]
 	const entry = entries.value[i]
-	let total = (entry.qtys || []).reduce((sum, q) => sum + (Number(q) || 0), 0)
-	for (const qtys of Object.values(entry.colourQtys || {})) {
-		total += qtys.reduce((sum, q) => sum + (Number(q) || 0), 0)
+	const inputs = []
+	if (isMultiColour(row)) {
+		for (const colour of row.colour_options) {
+			;(row.qty_rows || []).forEach((qr, j) => {
+				inputs.push({ qty: Number(entry.colourQtys[colour][j]) || 0, qr, colour })
+			})
+		}
+	} else {
+		;(row.qty_rows || []).forEach((qr, j) => {
+			inputs.push({ qty: Number(entry.qtys[j]) || 0, qr, colour: null })
+		})
 	}
-	return total
+	return inputs
+}
+
+// Non-blocking over-balance warning (production_api stance — knitting can
+// legitimately over-deliver). Knitting and dyeing check the per-dia SUM of
+// the dialog's own inputs (colours share one dia's balance); compacting is
+// per row. Mirrors the Desk's warn_balance_overshoot.
+function warnBalanceOvershoot() {
+	const overs = []
+	;(ctx.value?.rows || []).forEach((row, i) => {
+		const inputs = collectInputs(i)
+		if (row.kind === "knitting" || row.kind === "dyeing") {
+			const perDia = {}
+			const limitLabel = row.kind === "knitting" ? "balance" : "greige available"
+			inputs.forEach(({ qty, qr }) => {
+				const dia = (qr.out_attrs || {}).Dia || qr.label
+				const limit = row.kind === "knitting" ? qr.balance : qr.available
+				if (!perDia[dia]) perDia[dia] = { sum: 0, limit }
+				perDia[dia].sum += qty
+			})
+			Object.entries(perDia).forEach(([dia, agg]) => {
+				if (agg.limit != null && agg.sum > agg.limit + 0.001) {
+					overs.push(`${row.cloth_item} · ${dia}: ${agg.sum} > ${limitLabel} ${agg.limit}`)
+				}
+			})
+		} else if (row.kind === "compacting") {
+			inputs.forEach(({ qty, qr }) => {
+				if (qty && qr.available != null && qty > qr.available + 0.001) {
+					overs.push(`${row.cloth_item} · ${qr.label}: ${qty} > dyed available ${qr.available}`)
+				}
+			})
+		}
+	})
+	if (overs.length) toast.warn("Exceeds balance", overs.join(" — "))
 }
 
 function recomputeYarn(i) {
 	const row = ctx.value.rows[i]
-	const total = rowQtyTotal(i)
+	const total = collectInputs(i).reduce((sum, { qty }) => sum + qty, 0)
 	const yarn = row.ratio ? total / row.ratio : total
 	entries.value[i].yarnQty = Math.round(yarn * 1000) / 1000
 }
@@ -278,27 +408,24 @@ async function onApply() {
 		const row = ctx.value.rows[i]
 		const entry = entries.value[i]
 		const lines = []
-		if (isMultiColour(row)) {
-			for (const colour of row.colour_options) {
-				;(row.qty_rows || []).forEach((qr, j) => {
-					const qty = Number(entry.colourQtys[colour][j]) || 0
-					if (qty > 0) lines.push({ key: qr.key, out_attrs: qr.out_attrs, qty, colour })
-				})
+		for (const { qty, qr, colour } of collectInputs(i)) {
+			if (qty > 0) {
+				const line = { key: qr.key, out_attrs: qr.out_attrs, qty }
+				if (colour) line.colour = colour
+				lines.push(line)
 			}
-		} else {
-			;(row.qty_rows || []).forEach((qr, j) => {
-				const qty = Number(entry.qtys[j]) || 0
-				if (qty > 0) lines.push({ key: qr.key, out_attrs: qr.out_attrs, qty })
-			})
 		}
 		if (!lines.length) continue
-		if (row.kind === "knitting" && row.has_colour && !isMultiColour(row) && !entry.colour) {
+		if (row.kind === "knitting" && row.has_colour
+			&& lines.some((line) => !line.colour) && !entry.colour) {
 			toast.warn("Colour required", `Select the cloth Colour for ${row.cloth_item}.`)
 			return
 		}
 		rows.push({
 			fabric_row: row.fabric_row,
-			colour: entry.colour || null,
+			// Desk parity (work_order.js fallback_colour): multi-colour rows post
+			// null — each line already carries its own line-level colour.
+			colour: isMultiColour(row) ? null : entry.colour || null,
 			yarn_qty: entry.yarnQty || null,
 			entries: lines,
 		})
@@ -312,7 +439,7 @@ async function onApply() {
 	try {
 		const res = await callMethod(
 			"essdee_yrp.api.work_order.calculate_fabric_deliverables",
-			{ work_order: props.workOrder, rows: JSON.stringify(rows) },
+			{ work_order: props.workOrder, rows: JSON.stringify(rows), modified: props.modified },
 		)
 		emit("update:visible", false)
 		emit("calculated", res || {})
@@ -371,14 +498,16 @@ async function onApply() {
 .fc-field:last-child {
 	padding-bottom: 14px;
 }
+/* one column per greige colour / per server section — wraps on small screens */
 .fc-colour-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 	gap: 4px;
 	padding: 4px 0;
 }
 .fc-colour-col {
 	border-left: 1px solid var(--esd-line);
+	min-width: 0;
 }
 .fc-colour-col:first-child {
 	border-left: none;
@@ -387,6 +516,17 @@ async function onApply() {
 	font-weight: 600;
 	font-size: 12.5px;
 	padding: 6px 14px 0;
+}
+/* > MAX_COLOUR_COLUMNS sections: stacked full-width section blocks */
+.fc-section-stack {
+	display: flex;
+	flex-direction: column;
+	padding: 4px 0;
+}
+.fc-section-block + .fc-section-block {
+	border-top: 1px solid var(--esd-line);
+	margin-top: 6px;
+	padding-top: 2px;
 }
 .fc-field--tight {
 	padding: 6px 14px;

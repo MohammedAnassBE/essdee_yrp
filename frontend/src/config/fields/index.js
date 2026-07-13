@@ -71,6 +71,16 @@ export function getHiddenFormFields(doctype) {
 }
 
 /**
+ * Set of fieldnames to hide from the VIEW Details tab for the given DocType.
+ * For fields that are rendered elsewhere as dedicated UI (e.g. the DC/GRN
+ * transfer indicators shown as badges at the top of the Details tab) so they
+ * must not ALSO appear as ordinary detail-card fields. Empty Set when none.
+ */
+export function getHiddenViewFields(doctype) {
+	return new Set(FIELD_CONFIGS[doctype]?.hideViewFields || [])
+}
+
+/**
  * Custom Link search handler for one field on `doctype`. The factory closes
  * over the live `form` so calling code re-evaluates on each render — when the
  * controlling field changes (e.g. supplier), the returned handler refreshes.

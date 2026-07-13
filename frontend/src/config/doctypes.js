@@ -1,10 +1,11 @@
 /**
  * Essdee YRP — static DocType registry.
  *
- * The /web UI manages EXACTLY these 8 DocTypes (user scope, 2026-07-03):
- * Lot, Work Order, Delivery Challan, Goods Received Note, Stock Entry,
- * Item, Item Production Detail, Terms and Condition. Nothing else appears
- * in the sidebar / routes / command palette.
+ * The /web UI manages EXACTLY these 9 DocTypes (user scope, 2026-07-03;
+ * Work Order Correction added 2026-07-09): Lot, Work Order, Work Order
+ * Correction, Delivery Challan, Goods Received Note, Stock Entry, Item,
+ * Item Production Detail, Terms and Condition. Nothing else appears in the
+ * sidebar / routes / command palette.
  *
  * Used for: sidebar rendering, route → DocType resolution, submittable flags
  * (drives the All/Draft/Submitted/Cancelled tab strip) and per-doctype tab
@@ -24,6 +25,7 @@
 // Terms and Condition are NOT submittable.
 const SUBMITTABLE = new Set([
 	"Work Order",
+	"Work Order Correction",
 	"Delivery Challan",
 	"Goods Received Note",
 	"Stock Entry",
@@ -72,6 +74,15 @@ const GROUPS = [
 				{ field: "supplier", label: "Job-worker" },
 				{ field: "process_name", label: "Process" },
 				{ field: "wo_date", label: "WO Date", type: "Date" },
+			] },
+			// Work Order Correction: extra deliverables/receivables against a
+			// submitted WO (user, 2026-07-09: must be in the /web left panel).
+			// Submittable with a many-valued status Select — status tabs like WO.
+			{ doctype: "Work Order Correction", icon: "pi pi-pencil", dateTabs: "correction_date", tabMode: "status", listFields: [
+				{ field: "work_order", label: "Work Order" },
+				{ field: "supplier", label: "Job-worker" },
+				{ field: "process_name", label: "Process" },
+				{ field: "correction_date", label: "Correction Date", type: "Date" },
 			] },
 			{ doctype: "Delivery Challan", icon: "pi pi-send", dateTabs: "posting_date", listFields: [
 				{ field: "work_order", label: "Work Order" },

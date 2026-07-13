@@ -3,14 +3,19 @@
 
 """The ordered fabric process chain of a cloth IPD.
 
-One normalizer feeds every consumer (matrix sync, WO popup, tracking, the
-backward planner): the three fabric processes (knitting -> dyeing -> compacting)
-are synthesized into ordered steps from their tabs. Shapes are fixed:
-knitting = item conversion (yarn -> cloth), dyeing = Colour swap, compacting =
-Dia swap. Each process's template (is_item_conversion / value_change_attributes
-on its Process master) is validated by validate_fabric_process_shapes.
+One normalizer (get_fabric_steps) feeds every consumer (matrix sync, WO popup,
+tracking, the backward planner). It reads the GENERIC fabric-process rows
+(get_fabric_process_rows) — persisted `fabric_processes`, or the legacy tabs
+synthesized into the same rows by the adapter — so tab and generic IPDs share one
+path. Each step's shape is the Process master's declared shape
+(get_process_shape): item conversion (yarn -> cloth), attribute swap (Colour /
+Dia), or multi_swap (several attrs at once); the row's own mapping roles are the
+fallback when a master is unmaintained. Identity steps (no transition, e.g.
+in-chain Washing) are excluded from the chain and handled by the WO popup's
+identity path.
 
-Spec: docs/design/2026-07-04-fabric-chain-plan.md
+Spec: docs/design/2026-07-04-fabric-chain-plan.md;
+generic model: docs/superpowers/specs/2026-07-07-fabric-process-commonization-design.md
 """
 
 import frappe
@@ -24,28 +29,59 @@ from essdee_yrp.fabric_ipd import (
 
 def get_fabric_steps(ipd_doc):
 	"""Ordered chain steps, first -> last. Each step:
-	{position, process_name, shape ("conversion"|"swap"),
-	 attribute (swap attr or None)}."""
+	{position, process_name, shape ("conversion"|"swap"|"multi_swap"),
+	 attribute (swap attr, list of attrs for multi_swap, or None)}.
+
+	Built from the GENERIC fabric_processes rows (get_fabric_process_rows) so one
+	entry point serves BOTH persisted-generic and legacy-tab IPDs: the adapter
+	synthesizes the 3 tab processes into the same rows, giving byte-identical steps
+	(knitting=conversion, dyeing=Colour swap, compacting=Dia swap). Identity steps
+	(no conversion/swap — e.g. in-chain Washing) carry no attribute transition and
+	are excluded here; the WO popup handles them via get_identity_process_row."""
+	from essdee_yrp.fabric_ipd import get_fabric_process_rows
+
 	steps = []
-	if ipd_doc.get("knitting_process"):
-		steps.append({
-			"process_name": ipd_doc.knitting_process, "shape": "conversion",
-			"attribute": None,
-		})
-	if ipd_doc.get("dyeing_process"):
-		steps.append({
-			"process_name": ipd_doc.dyeing_process, "shape": "swap",
-			"attribute": FABRIC_COLOUR_ATTRIBUTE,
-		})
-	if ipd_doc.get("compacting_process"):
-		steps.append({
-			"process_name": ipd_doc.compacting_process, "shape": "swap",
-			"attribute": FABRIC_DIA_ATTRIBUTE,
-		})
+	for row in get_fabric_process_rows(ipd_doc):
+		process_name = row.get("fabric_process")
+		if not process_name:
+			continue
+		shape, attribute = _step_shape(row)
+		if shape is None:
+			continue
+		steps.append({"process_name": process_name, "shape": shape, "attribute": attribute})
 
 	for position, step in enumerate(steps):
 		step["position"] = position
 	return steps
+
+
+def _step_shape(row):
+	"""(shape, attribute) for a generic fabric-process row. Prefer the Process
+	master's declared shape (the reusable template owns it — 2026-06-25 rule); fall
+	back to the row's own value-mapping roles so an unmaintained master still
+	resolves. Returns (None, None) for an identity step (no conversion/swap)."""
+	from essdee_yrp.fabric_ipd import get_process_shape
+
+	shape, attribute = get_process_shape(row.get("fabric_process"))
+	if shape:
+		return shape, attribute
+	# Fallback (master metadata unfilled): a Change entry => swap; an item-changing
+	# row with no Change => conversion; anything else => identity.
+	changed = list(dict.fromkeys(
+		m.get("attribute") for m in (row.get("value_mappings") or [])
+		if m.get("role") == "Change"
+	))
+	if len(changed) > 1:
+		return "multi_swap", changed
+	if changed:
+		return "swap", changed[0]
+	in_item, out_item = row.get("input_item"), row.get("output_item")
+	# Consume(+Introduce) rows resolve here too: differing items -> conversion;
+	# a same-item Consume/Introduce row can never slip through to identity because
+	# validate_consume_mappings blocks it at save time.
+	if in_item and out_item and in_item != out_item:
+		return "conversion", None
+	return None, None
 
 
 def get_fabric_step(ipd_doc, process_name):

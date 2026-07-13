@@ -1,0 +1,306 @@
+/*
+  ipd-sections.css — ONE design for every IPD tab section (imported once by
+  IPDConfigView, unscoped on purpose: the sections share these class names so
+  Packing / Set Item / Stiching / Emblishment / Cutting / Cloth Accessory /
+  Advance Settings render as a single system instead of seven ad-hoc looks).
+
+  Tokens only (--esd-*, --radius-*) — dark mode inherits automatically.
+*/
+
+/* ── layout rhythm inside a .panel ─────────────────────────────────────── */
+.ipd-tabpanel .panel .spacer { flex: 1; }
+.ipd-tabpanel .req { color: var(--esd-danger); }
+
+/* section panels match IPDConfigView's own panels (its scoped styles can't
+   reach child components — this unscoped copy is the single band design) */
+.ipd-tabpanel .panel {
+	background: var(--esd-card);
+	border: 1px solid var(--esd-line);
+	border-radius: var(--radius);
+	overflow: hidden;
+}
+.ipd-tabpanel .panel-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 16px;
+	background: var(--esd-accent-50);
+	border-bottom: 1px solid var(--esd-line);
+}
+.ipd-tabpanel .panel-head::before {
+	content: "";
+	width: 6px;
+	height: 6px;
+	border-radius: 999px;
+	background: var(--esd-accent-ink);
+	opacity: 0.85;
+	flex: 0 0 auto;
+}
+.ipd-tabpanel .panel-head h3 {
+	margin: 0;
+	font-size: 13px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	color: var(--esd-accent-ink);
+}
+.ipd-tabpanel .panel-meta {
+	margin-left: auto;
+	background: var(--esd-card);
+	color: var(--esd-accent-ink);
+	font-size: 11px;
+	font-weight: 600;
+	padding: 1px 8px;
+	border-radius: 999px;
+}
+
+/* facts strip: label ABOVE value, aligned grid (was a cramped inline row) */
+.pk-facts, .si-facts, .st-facts, .hdr-facts {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(150px, max-content));
+	gap: 14px 34px;
+	padding: 14px 16px 6px;
+}
+.pk-facts .pf, .si-facts .pf, .st-facts .pf, .hdr-facts .pf {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 4px;
+	min-width: 0;
+}
+.ipd-tabpanel .pl {
+	font-size: 10.5px;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--esd-muted);
+	font-weight: 600;
+	white-space: nowrap;
+}
+.ipd-tabpanel .pv {
+	font-weight: 600;
+	font-size: 13.5px;
+	color: var(--esd-ink);
+	line-height: 1.35;
+}
+/* checkboxes sit under their label like any other value */
+.ipd-tabpanel .pf > input[type="checkbox"] {
+	width: 17px;
+	height: 17px;
+	margin: 2px 0;
+	accent-color: var(--esd-accent);
+}
+
+/* content blocks: consistent side padding, quiet block titles */
+.pk-block, .si-block, .st-block, .ct-block, .ca-block, .cp-block {
+	margin: 2px 16px 14px;
+	padding: 0;
+}
+.em-table, .em-empty, .em-add, .as-groups, .yarn-field {
+	margin-left: 16px;
+	margin-right: 16px;
+}
+.em-table, .as-groups { margin-top: 12px; }
+.em-empty { margin-top: 10px; }
+.em-add { margin-bottom: 14px; }
+.as-groups { margin-bottom: 16px; }
+.panel > .pk-empty { margin: 10px 16px 14px; }
+.pk-block-head, .cp-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 0 0 7px;
+}
+.pk-bt, .cp-title, .as-gt {
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--esd-ink-2);
+}
+
+/* ── tables: slate header band, zebra rows, hairline borders ───────────── */
+.pk-table, .em-table, .cp-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 13px;
+	background: var(--esd-card);
+}
+.pk-table th, .pk-table td,
+.em-table th, .em-table td,
+.cp-table th, .cp-table td {
+	border: 1px solid var(--esd-line);
+	padding: 7px 10px;
+	text-align: left;
+	vertical-align: middle;
+}
+.pk-table thead th, .em-table thead th, .cp-table thead th {
+	background: var(--esd-slate-50);
+	font-size: 10.5px;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--esd-muted);
+	font-weight: 700;
+	white-space: nowrap;
+}
+.pk-table tbody tr:nth-child(even) td,
+.cp-table tbody tr:nth-child(even) td {
+	background: color-mix(in srgb, var(--esd-slate-50) 38%, transparent);
+}
+.pk-table .num { width: 96px; text-align: right; }
+.pk-table .act, .em-table .act { width: 36px; text-align: center; }
+.pk-empty, .cp-empty, .em-empty {
+	color: var(--esd-muted);
+	font-size: 12.5px;
+	padding: 8px 2px;
+}
+
+/* tall grids scroll with a sticky header */
+.cp-scroll, .ca-scroll {
+	overflow: auto;
+	max-height: 460px;
+	border-radius: var(--radius-sm);
+}
+.cp-scroll thead th, .ca-scroll thead th {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+}
+
+/* ── inputs: one control look everywhere ───────────────────────────────── */
+.pk-num, .st-num, .ct-num, .cp-num,
+.ct-text, .ca-text, .hdr-text {
+	padding: 5px 8px;
+	border: 1px solid var(--esd-line);
+	border-radius: var(--radius-sm);
+	background: var(--esd-card);
+	color: var(--esd-ink);
+	font-size: 13px;
+	transition: border-color 0.12s, box-shadow 0.12s;
+}
+.pk-num:focus, .st-num:focus, .ct-num:focus, .cp-num:focus,
+.ct-text:focus, .ca-text:focus, .hdr-text:focus {
+	outline: none;
+	border-color: var(--esd-accent);
+	box-shadow: 0 0 0 3px var(--esd-accent-50);
+}
+.pk-num, .st-num, .ct-num, .cp-num { width: 86px; }
+.ct-text { width: 170px; }
+.ca-text { width: 210px; }
+.hdr-text { width: 190px; }
+
+/* row-remove: quiet circle that turns danger on hover */
+.pk-rm, .st-rm, .ct-rm, .ca-rm, .em-rm {
+	border: none;
+	background: none;
+	color: var(--esd-muted-2);
+	font-size: 15px;
+	cursor: pointer;
+	line-height: 1;
+	width: 24px;
+	height: 24px;
+	border-radius: 999px;
+}
+.pk-rm:hover, .st-rm:hover, .ct-rm:hover, .ca-rm:hover, .em-rm:hover {
+	color: var(--esd-card);
+	background: var(--esd-danger);
+}
+
+/* link pickers: consistent width */
+.pk-link, .st-link, .ct-link, .ca-link, .si-link, .as-link, .em-link, .cp-link {
+	min-width: 150px;
+}
+.ct-link { min-width: 190px; }
+.em-link { min-width: 210px; }
+.as-link { min-width: 195px; }
+
+/* checkbox chips (combination attribute pickers, emblishment panels) */
+.cp-checks, .em-checks {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 10px;
+	padding: 2px 0 10px;
+}
+.cp-check, .em-check {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	font-size: 12.5px;
+	font-weight: 500;
+	cursor: pointer;
+	border: 1px solid var(--esd-line);
+	border-radius: 999px;
+	padding: 4px 12px;
+	background: var(--esd-card);
+	transition: background 0.12s, border-color 0.12s;
+	user-select: none;
+}
+.cp-check:has(input:checked), .em-check:has(input:checked) {
+	background: var(--esd-accent-50);
+	border-color: var(--esd-accent);
+	color: var(--esd-accent-ink);
+}
+.cp-check input, .em-check input { accent-color: var(--esd-accent); }
+.cp-check:has(input:disabled) { cursor: default; opacity: 0.85; }
+
+/* fill-down controls in grid headers */
+.cp-fill, .ca-fill {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-top: 5px;
+	font-weight: 400;
+	text-transform: none;
+	letter-spacing: normal;
+}
+.cp-fillbtn, .ca-fillbtn {
+	border: 1px solid var(--esd-line);
+	background: var(--esd-card);
+	color: var(--esd-accent-ink);
+	border-radius: var(--radius-sm);
+	font-size: 11.5px;
+	font-weight: 600;
+	padding: 4px 10px;
+	cursor: pointer;
+}
+.cp-fillbtn:hover, .ca-fillbtn:hover {
+	background: var(--esd-accent-50);
+	border-color: var(--esd-accent);
+}
+
+/* advance settings groups */
+.as-groups { display: flex; flex-direction: column; gap: 16px; padding-top: 8px; }
+.as-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, max-content)); gap: 12px 30px; }
+.as-field { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.as-field .al {
+	font-size: 10.5px;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--esd-muted);
+	font-weight: 600;
+	min-width: 0;
+}
+.as-field .av { font-weight: 600; font-size: 13.5px; color: var(--esd-ink); }
+
+/* emblishment chips */
+.em-chip {
+	display: inline-block;
+	padding: 2px 9px;
+	margin: 1px 4px 1px 0;
+	border-radius: 999px;
+	background: var(--esd-accent-50);
+	color: var(--esd-accent-ink);
+	font-size: 12px;
+	font-weight: 500;
+}
+.em-add { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+/* select controls used in grids */
+.st-cat { min-width: 140px; }
+.ca-select, .cp-select { min-width: 140px; }
+.st-ms { min-width: 250px; }
+.ca-list { max-width: 620px; }
+.ca-add { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.ca-muted { color: var(--esd-muted); font-size: 12px; }
+.pk-mode { min-width: 190px; }
+.pk-boxes { display: flex; flex-direction: column; gap: 14px; }
+.pk-box-name { font-weight: 700; font-size: 12.5px; margin-bottom: 5px; color: var(--esd-ink-2); }

@@ -40,8 +40,11 @@
 				</div>
 			</template>
 		</AutoComplete>
+		<!-- The "open linked doc" arrow shows ONLY when the target doctype has a
+		     /web route. A target with no /web view (e.g. Production Order) must not
+		     offer a link that bounces the user into the Desk UI (2026-07-07). -->
 		<Button
-			v-if="modelValue && targetDoctype"
+			v-if="modelValue && targetHasWebRoute"
 			icon="pi pi-arrow-up-right"
 			text
 			rounded
@@ -54,7 +57,7 @@
 </template>
 
 <script setup>
-import { ref } from "vue"
+import { ref, computed } from "vue"
 import AutoComplete from "primevue/autocomplete"
 import Button from "primevue/button"
 import Tooltip from "primevue/tooltip"
@@ -82,6 +85,11 @@ const props = defineProps({
 	searchHandler: { type: Function, default: null },
 })
 const emit = defineEmits(["update:modelValue", "item-select", "change"])
+
+// True only when the target doctype is a /web-managed doctype (in the registry).
+const targetHasWebRoute = computed(
+	() => !!props.targetDoctype && !!getRegistryByDoctype(props.targetDoctype),
+)
 
 // Suggestions are objects { name, label } — `label` (title/search-field text) is
 // shown via optionLabel, while `name` is the value stored on select. A search
@@ -143,14 +151,14 @@ function onModelUpdate(v) {
 	emit("update:modelValue", v && typeof v === "object" ? v.name : v)
 }
 
-// Open the linked record (new tab): /web detail if the doctype is in the registry,
-// else the Desk form. New tab keeps the current form/edit intact.
+// Open the linked record's /web detail in a NEW TAB (keeps the current form/edit
+// intact). The button only renders for targets WITH a /web route, so we never
+// redirect to Desk for a doctype that has no /web view.
 function openLinked() {
-	if (!props.modelValue || !props.targetDoctype) return
+	if (!props.modelValue) return
 	const reg = getRegistryByDoctype(props.targetDoctype)
-	const path = reg
-		? `/web/${reg.route}/${encodeURIComponent(props.modelValue)}`
-		: `/app/${encodeURIComponent(props.targetDoctype.toLowerCase().replace(/ /g, "-"))}/${encodeURIComponent(props.modelValue)}`
+	if (!reg) return
+	const path = `/web/${reg.route}/${encodeURIComponent(props.modelValue)}`
 	window.open(window.location.origin + path, "_blank", "noopener")
 }
 </script>

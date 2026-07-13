@@ -14,6 +14,10 @@
 import { searchLink } from "@/api/client"
 
 const linkSearchHandlers = {
+	// Desk parity (delivery_challan.js set_query): only submitted, not-closed
+	// Work Orders are valid DC targets — a draft WO fails server-side on save.
+	work_order: () =>
+		(q) => searchLink("Work Order", q, { docstatus: 1, open_status: ["!=", "Close"] }),
 	from_warehouse: (form) =>
 		form.from_location
 			? (q) => searchLink("Warehouse", q, { supplier: form.from_location })
@@ -30,7 +34,22 @@ const labels = {
 	supplier_name: "Job-worker Name",
 }
 
+// Transfer status (2026-07-10): `is_internal_unit` is recomputed server-side
+// from the from_location + supplier company-location flags (the DC controller's
+// compute_internal_unit), and `transfer_complete`/STE figures merely indicate
+// its progress — the user never edits any of them. DocDetail renders them as
+// read-only indicator badges at the TOP of the Details tab instead of an
+// editable/ordinary section.
+const transferFields = [
+	"is_internal_unit",
+	"transfer_complete",
+	"ste_transferred",
+	"ste_transferred_percent",
+]
+
 export default {
 	linkSearchHandlers,
 	labels,
+	hideFormFields: transferFields,
+	hideViewFields: transferFields,
 }

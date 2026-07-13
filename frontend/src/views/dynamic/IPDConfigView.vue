@@ -51,16 +51,41 @@
 				rounded
 			/>
 			<div class="head-actions">
+				<!-- DOCUMENT-level edit mode (2026-07-10, user mandate): ONE Edit
+				     puts every tab into edit mode; ONE Save persists all tabs in a
+				     single request; ONE Cancel reverts everything. Never a separate
+				     Edit button per tab. -->
+				<template v-if="doc && editableDoc">
+					<Button
+						v-if="!editing"
+						label="Edit"
+						icon="pi pi-pencil"
+						size="small"
+						data-testid="ipd-edit"
+						@click="enterEditAll"
+					/>
+					<template v-else>
+						<Button
+							label="Save"
+							icon="pi pi-check"
+							size="small"
+							:loading="savingAll"
+							data-testid="ipd-save"
+							@click="saveAll"
+						/>
+						<Button
+							label="Cancel"
+							size="small"
+							text
+							severity="secondary"
+							:disabled="savingAll"
+							data-testid="ipd-cancel"
+							@click="cancelAll"
+						/>
+					</template>
+				</template>
 				<Button
-					label="Edit fields"
-					icon="pi pi-pencil"
-					size="small"
-					severity="secondary"
-					outlined
-					@click="openGenericEdit"
-				/>
-				<Button
-					v-if="doc && canDelete('Item Production Detail')"
+					v-if="doc && !editing && canDelete('Item Production Detail')"
 					label="Delete"
 					icon="pi pi-trash"
 					size="small"
@@ -116,6 +141,79 @@
 				</div>
 			</div>
 
+			<!-- Tabbed shell (2026-07-09). Cloth IPD = Item Details + Fabric
+			     Processes only — the Knitting/Dyeing/Compacting tabs were removed
+			     from the form; the generic Fabric Processes tab supersedes them.
+			     Garment IPD = the full Desk tab set in Desk order: Item Details,
+			     Packing, Set Item, Stiching, Emblishment, Cutting, Cloth
+			     Accessory, Advance Settings (phases 1+2, 2026-07-10). The Set
+			     Item tab additionally needs packing_attribute (Desk depends_on). -->
+			<Tabs v-model:value="activeTab" class="ipd-tabs">
+				<TabList>
+					<Tab value="details">Item Details</Tab>
+					<Tab v-if="doc.is_cloth_item" value="fabric">Fabric Processes</Tab>
+					<Tab v-if="!doc.is_cloth_item" value="packing">Packing</Tab>
+					<Tab v-if="!doc.is_cloth_item && doc.packing_attribute" value="setitem">Set Item</Tab>
+					<Tab v-if="!doc.is_cloth_item" value="stiching">Stiching</Tab>
+					<Tab v-if="!doc.is_cloth_item" value="emblishment">Emblishment</Tab>
+					<Tab v-if="!doc.is_cloth_item" value="cutting">Cutting</Tab>
+					<Tab v-if="!doc.is_cloth_item" value="accessory">Cloth Accessory</Tab>
+					<Tab v-if="!doc.is_cloth_item" value="advanced">Advance Settings</Tab>
+				</TabList>
+				<TabPanels class="ipd-tabpanels">
+					<TabPanel value="details" class="ipd-tabpanel">
+
+			<!-- Yarn Item (cloth IPDs only) — relocated here from the removed
+			     Knitting tab; it feeds the knitting conversion input_item and is
+			     required for cloth IPDs. -->
+			<section v-if="doc.is_cloth_item" class="panel">
+				<div class="panel-head">
+					<h3>Yarn Item <span class="req">*</span></h3>
+					<span class="panel-meta">Input yarn for knitting</span>
+				</div>
+				<div class="yarn-field">
+					<!-- Gated like the header Edit: read-only users and Approved IPDs
+					     must not get a live edit affordance (instant-save picker). -->
+					<LinkField
+						v-if="editableDoc"
+						:modelValue="yarnDraft"
+						target-doctype="Item"
+						placeholder="Search yarn Item…"
+						:disabled="yarnSaving"
+						@update:modelValue="(v) => (yarnDraft = v)"
+						@item-select="(e) => saveYarnItem(e.value)"
+					/>
+					<span v-else class="pv">{{ doc.yarn_item || "—" }}</span>
+					<span v-if="yarnSaving" class="yarn-saving"><i class="pi pi-spin pi-spinner" /> Saving…</span>
+				</div>
+			</section>
+
+			<!-- ── Details (Desk Item Details tab plain fields, Desk order:
+			     tech_pack_version, pattern_version, approved_by; item/primary/
+			     dependent live in the header facts; entry stays IN the tab —
+			     the flat "Edit fields" list is no longer the IPD entry path). ── -->
+			<section class="panel">
+				<div class="panel-head">
+					<h3>Details</h3>
+				</div>
+				<div class="hdr-facts">
+					<div class="pf">
+						<span class="pl">Tech pack version</span>
+						<input v-if="editing" v-model="hdrForm.tech_pack_version" class="hdr-text" data-testid="hdr-techpack" />
+						<span v-else class="pv">{{ doc.tech_pack_version || "—" }}</span>
+					</div>
+					<div class="pf">
+						<span class="pl">Pattern version</span>
+						<input v-if="editing" v-model="hdrForm.pattern_version" class="hdr-text" data-testid="hdr-pattern" />
+						<span v-else class="pv">{{ doc.pattern_version || "—" }}</span>
+					</div>
+					<div class="pf">
+						<span class="pl">Approved by</span>
+						<span class="pv">{{ doc.approved_by || "—" }}</span>
+					</div>
+				</div>
+			</section>
+
 			<!-- ── Item Attributes (mirrors the Desk AttributeList) ── -->
 			<section class="panel">
 				<div class="panel-head">
@@ -138,7 +236,7 @@
 						<div class="ipd-attr-head">
 							<span class="ipd-attr-title">{{ card.attr_name }}</span>
 							<Button
-								v-if="editingAttrIdx !== idx && card.mapping"
+								v-if="editableDoc && editingAttrIdx !== idx && card.mapping"
 								icon="pi pi-pencil"
 								text
 								rounded
@@ -229,8 +327,11 @@
 				<div class="panel-head">
 					<h3>Item BOM</h3>
 					<span class="panel-meta">{{ (doc.item_bom || []).length }} row(s)</span>
+					<!-- Instant-CRUD editors (attribute pencil, BOM rows, process rows)
+					     save immediately and sit OUTSIDE the global edit transaction;
+					     their affordances still respect the same Approved/canWrite gate. -->
 					<Button
-						v-if="bomFormMode === 'off'"
+						v-if="editableDoc && bomFormMode === 'off'"
 						label="Add row"
 						icon="pi pi-plus"
 						size="small"
@@ -285,6 +386,7 @@
 									@click="openMapping(data)"
 								/>
 								<Button
+									v-if="editableDoc"
 									icon="pi pi-pencil"
 									size="small"
 									text
@@ -294,6 +396,7 @@
 									@click="openEditBom(index)"
 								/>
 								<Button
+									v-if="editableDoc"
 									icon="pi pi-trash"
 									size="small"
 									text
@@ -421,7 +524,7 @@
 					<h3>IPD Processes</h3>
 					<span class="panel-meta">{{ (doc.ipd_processes || []).length }} process(es)</span>
 					<Button
-						v-if="processFormMode === 'off'"
+						v-if="editableDoc && processFormMode === 'off'"
 						label="Add row"
 						icon="pi pi-plus"
 						size="small"
@@ -455,6 +558,7 @@
 									@click="configureCombinations(data)"
 								/>
 								<Button
+									v-if="editableDoc"
 									icon="pi pi-pencil"
 									size="small"
 									text
@@ -464,6 +568,7 @@
 									@click="openEditProcess(index)"
 								/>
 								<Button
+									v-if="editableDoc"
 									icon="pi pi-trash"
 									size="small"
 									text
@@ -583,13 +688,51 @@
 					</template>
 				</DataTable>
 			</section>
+					</TabPanel>
+
+					<!-- Fabric Processes tab (cloth IPDs only). Master-detail entry
+					     over the fabric_processes + fabric_value_mappings sibling
+					     tables; matrices regenerate server-side on save, so a save
+					     reloads this whole view. -->
+					<TabPanel v-if="doc.is_cloth_item" value="fabric" class="ipd-tabpanel">
+						<FabricProcessesSection :doc="doc" @saved="load" />
+					</TabPanel>
+
+					<!-- Garment tabs (phases 1+2, 2026-07-10): Desk-parity sections.
+					     `editing` is the DOCUMENT-level edit mode owned by this view;
+					     each section exposes validate()/apply(ipd) and the header's
+					     single Save persists every tab in one request. -->
+					<TabPanel v-if="!doc.is_cloth_item" value="packing" class="ipd-tabpanel">
+						<PackingSection ref="packingRef" :doc="doc" :editing="editing" />
+					</TabPanel>
+					<TabPanel v-if="!doc.is_cloth_item && doc.packing_attribute" value="setitem" class="ipd-tabpanel">
+						<SetItemSection ref="setItemRef" :doc="doc" :editing="editing" />
+					</TabPanel>
+					<TabPanel v-if="!doc.is_cloth_item" value="stiching" class="ipd-tabpanel">
+						<StichingSection ref="stichingRef" :doc="doc" :editing="editing" />
+					</TabPanel>
+					<TabPanel v-if="!doc.is_cloth_item" value="emblishment" class="ipd-tabpanel">
+						<EmblishmentSection ref="emblishmentRef" :doc="doc" :editing="editing" />
+					</TabPanel>
+					<TabPanel v-if="!doc.is_cloth_item" value="cutting" class="ipd-tabpanel">
+						<CuttingSection ref="cuttingRef" :doc="doc" :editing="editing" />
+					</TabPanel>
+					<TabPanel v-if="!doc.is_cloth_item" value="accessory" class="ipd-tabpanel">
+						<ClothAccessorySection ref="accessoryRef" :doc="doc" :editing="editing" />
+					</TabPanel>
+					<TabPanel v-if="!doc.is_cloth_item" value="advanced" class="ipd-tabpanel">
+						<AdvanceSettingsSection ref="advanceRef" :doc="doc" :editing="editing" />
+					</TabPanel>
+				</TabPanels>
+			</Tabs>
 		</template>
 	</div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue"
-import { useRouter } from "vue-router"
+import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue"
+import { useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from "vue-router"
+import "../ipd/ipd-sections.css"
 import DataTable from "primevue/datatable"
 import Column from "primevue/column"
 import Button from "primevue/button"
@@ -600,6 +743,20 @@ import ToggleSwitch from "primevue/toggleswitch"
 import Tag from "primevue/tag"
 import Message from "primevue/message"
 import Tooltip from "primevue/tooltip"
+import Tabs from "primevue/tabs"
+import TabList from "primevue/tablist"
+import Tab from "primevue/tab"
+import TabPanels from "primevue/tabpanels"
+import TabPanel from "primevue/tabpanel"
+import LinkField from "@/components/LinkField.vue"
+import FabricProcessesSection from "@/views/fabric/FabricProcessesSection.vue"
+import PackingSection from "@/views/ipd/PackingSection.vue"
+import SetItemSection from "@/views/ipd/SetItemSection.vue"
+import StichingSection from "@/views/ipd/StichingSection.vue"
+import EmblishmentSection from "@/views/ipd/EmblishmentSection.vue"
+import CuttingSection from "@/views/ipd/CuttingSection.vue"
+import ClothAccessorySection from "@/views/ipd/ClothAccessorySection.vue"
+import AdvanceSettingsSection from "@/views/ipd/AdvanceSettingsSection.vue"
 import { getDoc, getList, deleteDoc, callMethod, searchLink } from "@/api/client"
 import { useAppToast } from "@/composables/useToast"
 import { useAppConfirm } from "@/composables/useConfirm"
@@ -616,7 +773,7 @@ const props = defineProps({
 const router = useRouter()
 const toast = useAppToast()
 const confirm = useAppConfirm()
-const { canDelete, isAdmin, hasRole } = usePermissions()
+const { canDelete, canWrite, isAdmin, hasRole } = usePermissions()
 const deleting = ref(false)
 
 const doc = ref(null)
@@ -624,6 +781,143 @@ const loading = ref(false)
 const error = ref(null)
 const matrices = ref([])
 const matricesLoading = ref(false)
+// Tabbed shell (2026-07-09). "details" is always present; "fabric" only for
+// cloth IPDs. Reset to "details" on every (re)load so a cloth→garment switch
+// never strands the user on a now-absent Fabric Processes tab.
+const activeTab = ref("details")
+const yarnSaving = ref(false)
+// Local draft for the Yarn Item picker. LinkField emits update:modelValue on
+// every keystroke (raw text), so binding the doc field directly would persist
+// partial/invalid values; we mirror the doc value here and only persist on a
+// concrete item-select (valid Item chosen).
+const yarnDraft = ref("")
+// ── DOCUMENT-level edit mode (2026-07-10, user mandate) ─────────────────────
+// ONE Edit puts every tab into edit mode, ONE Save collects every section's
+// payload into a single frappe.client.save (one staleness guard, one server
+// validate), ONE Cancel reverts all sections. The garment sections expose
+// validate() + apply(ipd); the Details panel's two plain fields live here.
+// The Fabric Processes section (cloth) keeps its own step editor — its save
+// regenerates matrices server-side and was approved as-is; the global mode
+// still governs the Details panel for cloth IPDs.
+const editing = ref(false)
+const savingAll = ref(false)
+const hdrForm = ref({ tech_pack_version: "", pattern_version: "" })
+const editableDoc = computed(
+	() => doc.value?.approval_status !== "Approved" && canWrite("Item Production Detail"),
+)
+const packingRef = ref(null)
+const setItemRef = ref(null)
+const stichingRef = ref(null)
+const emblishmentRef = ref(null)
+const cuttingRef = ref(null)
+const accessoryRef = ref(null)
+const advanceRef = ref(null)
+
+function hdrHydrate() {
+	hdrForm.value = {
+		tech_pack_version: doc.value?.tech_pack_version || "",
+		pattern_version: doc.value?.pattern_version || "",
+	}
+}
+function hdrApply(ipd) {
+	ipd.tech_pack_version = hdrForm.value.tech_pack_version || ""
+	ipd.pattern_version = hdrForm.value.pattern_version || ""
+}
+watch(
+	() => editing.value,
+	() => hdrHydrate(),
+)
+
+function enterEditAll() {
+	hdrHydrate()
+	editing.value = true
+}
+function cancelAll() {
+	editing.value = false // sections rehydrate via their editing-prop watchers
+	hdrHydrate()
+}
+
+// A validation failure names the TAB and jumps to it so the user can find the
+// offending row from anywhere.
+const TAB_VALUE = {
+	Details: "details",
+	Packing: "packing",
+	"Set Item": "setitem",
+	Stiching: "stiching",
+	Emblishment: "emblishment",
+	Cutting: "cutting",
+	"Cloth Accessory": "accessory",
+	"Advance Settings": "advanced",
+}
+async function saveAll() {
+	const parts = [
+		["Details", { validate: () => null, apply: hdrApply }],
+		["Packing", packingRef.value],
+		["Set Item", setItemRef.value],
+		["Stiching", stichingRef.value],
+		["Emblishment", emblishmentRef.value],
+		["Cutting", cuttingRef.value],
+		["Cloth Accessory", accessoryRef.value],
+		["Advance Settings", advanceRef.value],
+	].filter(([, s]) => s)
+	for (const [tab, s] of parts) {
+		const err = s.validate ? s.validate() : null
+		if (err) {
+			toast.error(tab, err)
+			if (TAB_VALUE[tab]) activeTab.value = TAB_VALUE[tab]
+			return
+		}
+	}
+	savingAll.value = true
+	try {
+		const ipd = await callMethod("frappe.client.get", {
+			doctype: "Item Production Detail",
+			name: props.id,
+		})
+		if (doc.value?.modified && ipd.modified !== doc.value.modified) {
+			toast.error("Save blocked", "This IPD changed since you opened it — reload and retry.")
+			return
+		}
+		for (const [, s] of parts) s.apply(ipd)
+		await callMethod("frappe.client.save", { doc: ipd })
+		toast.success("Saved", "IPD updated")
+		editing.value = false
+		await load()
+	} catch (e) {
+		toast.error("Save failed", e.message)
+	} finally {
+		savingAll.value = false
+	}
+}
+
+// Route-leave / reload guards while editing (DocDetail convention).
+function beforeUnloadGuard(e) {
+	if (editing.value) {
+		e.preventDefault()
+		e.returnValue = ""
+	}
+}
+// Shared by route-LEAVE and route-UPDATE: onBeforeRouteLeave does NOT fire
+// for param-only changes (IPD -> IPD via Back/Forward or a link), so without
+// the update guard those navigations would silently drop an in-progress edit.
+function guardEditingNavigation(next) {
+	if (!editing.value) return next()
+	confirm.require({
+		header: "Discard unsaved changes?",
+		message: "You are editing this IPD. Leave without saving?",
+		icon: "pi pi-exclamation-triangle",
+		acceptLabel: "Leave",
+		acceptClass: "p-button-danger",
+		rejectLabel: "Stay",
+		accept: () => {
+			editing.value = false
+			next()
+		},
+		reject: () => next(false),
+	})
+}
+onBeforeRouteLeave((to, from, next) => guardEditingNavigation(next))
+onBeforeRouteUpdate((to, from, next) => guardEditingNavigation(next))
 // Item Attributes cards: one per row in doc.item_attributes — { attr_name, mapping, values: [...] }
 const itemAttrCards = ref([])
 const itemAttrLoading = ref(false)
@@ -950,6 +1244,20 @@ async function load() {
 	error.value = null
 	try {
 		doc.value = await getDoc("Item Production Detail", props.id)
+		yarnDraft.value = doc.value?.yarn_item || ""
+		// A reload after an id change must not leave the user on a tab that no
+		// longer exists for this IPD kind (fabric is cloth-only; the garment
+		// tab set is garment-only; Set Item additionally needs packing_attribute).
+		if (activeTab.value === "fabric" && !doc.value?.is_cloth_item) {
+			activeTab.value = "details"
+		}
+		const garmentTabs = ["packing", "setitem", "stiching", "emblishment", "cutting", "accessory", "advanced"]
+		if (garmentTabs.includes(activeTab.value) && doc.value?.is_cloth_item) {
+			activeTab.value = "details"
+		}
+		if (activeTab.value === "setitem" && !doc.value?.packing_attribute) {
+			activeTab.value = "details"
+		}
 		loadMatrices()
 		loadItemAttributes()
 	} catch (e) {
@@ -1026,7 +1334,53 @@ async function loadMatrices() {
 	}
 }
 
-onMounted(load)
+onMounted(() => {
+	window.addEventListener("beforeunload", beforeUnloadGuard)
+	load()
+})
+onBeforeUnmount(() => {
+	window.removeEventListener("beforeunload", beforeUnloadGuard)
+})
+
+// Load trigger for SPA navigation. vue-router REUSES this component instance
+// when only the :id param changes (IPD → IPD), so onMounted does NOT re-fire —
+// without this watch the view would keep showing the previous doc. By the time
+// this watcher runs, onBeforeRouteUpdate has ALREADY confirmed any in-progress
+// edit with the user (route-leave alone never fires for param-only changes),
+// so dropping edit mode here is safe. Reset the tab and reload.
+watch(
+	() => props.id,
+	() => {
+		editing.value = false
+		activeTab.value = "details"
+		load()
+	},
+)
+
+// Persist yarn_item (cloth Item Details tab). Reuses the get→mutate→save path
+// the BOM/process editors use, so server-side cloth validation still runs; a
+// reload refreshes the field and any dependent state.
+async function saveYarnItem(value) {
+	if (!doc.value) return
+	const next = value || null
+	if ((doc.value.yarn_item || null) === next) return
+	yarnSaving.value = true
+	try {
+		const ipd = await callMethod("frappe.client.get", {
+			doctype: "Item Production Detail",
+			name: props.id,
+		})
+		ipd.yarn_item = next
+		await callMethod("frappe.client.save", { doc: ipd })
+		toast.success("Saved", "Yarn Item updated")
+		await load()
+	} catch (e) {
+		yarnDraft.value = doc.value?.yarn_item || ""
+		toast.error("Save failed", e.message || "Could not update Yarn Item")
+	} finally {
+		yarnSaving.value = false
+	}
+}
 
 // ── Item BOM mapping link (R1b target) ──
 async function openMapping(row) {
@@ -1170,12 +1524,6 @@ function goHome() {
 function goList() {
 	router.push("/item-production-detail")
 }
-function openGenericEdit() {
-	// Field/child editing of the IPD itself goes through DocDetail at the
-	// `/fields` sub-route — see router (declared BEFORE the IPDConfigView
-	// catch-all). The rich BOM/matrix surface stays here.
-	router.push(`/item-production-detail/${encodeURIComponent(props.id)}/fields`)
-}
 function navigateDoc(dt, name) {
 	if (!name) return
 	const reg = getRegistryByDoctype(dt)
@@ -1226,6 +1574,45 @@ function fmtNum(v) {
 	display: flex;
 	flex-direction: column;
 	gap: 14px;
+}
+
+/* Tabbed shell (2026-07-09). The panels used to be direct flex children of
+   .ipd-config (14px gap); now they live inside a TabPanel, so re-establish the
+   same column/gap rhythm there. */
+.ipd-tabs {
+	--p-tabs-tab-padding: 9px 16px;
+}
+.ipd-tabpanels {
+	background: transparent;
+}
+.ipd-tabpanel {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	padding: 16px 0 0;
+}
+.req {
+	color: var(--esd-danger, #d92d20);
+}
+/* .hdr-facts / .pf / .pl / .pv / .hdr-text come from the shared
+   ipd-sections.css so the Details panel matches every other tab. */
+.panel-head .spacer {
+	flex: 1;
+}
+.yarn-field {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 12px 16px;
+}
+.yarn-field :deep(.fld-link) {
+	max-width: 420px;
+	flex: 1 1 auto;
+}
+.yarn-saving {
+	font-size: 12px;
+	color: var(--esd-muted);
+	white-space: nowrap;
 }
 
 /* Breadcrumb (mirrors DocDetail) */

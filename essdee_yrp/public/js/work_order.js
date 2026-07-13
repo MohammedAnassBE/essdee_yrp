@@ -85,7 +85,7 @@ function planning_description(kind, qr) {
 		if (flt(qr.received)) parts.push(`${__("Received")} ${kg(qr.received)}`);
 		parts.push(`${__("Ordered")} ${kg(qr.ordered)}`);
 		parts.push(`${__("Balance")} ${kg(qr.balance)}`);
-	} else if (kind === "dyeing" || kind === "compacting") {
+	} else if (kind === "dyeing" || kind === "compacting" || kind === "conversion") {
 		if (flt(qr.plan)) parts.push(`${__("Plan")} ${kg(qr.plan)}`);
 		parts.push(`${__("Ordered")} ${kg(qr.ordered)}`);
 		if (qr.available != null) parts.push(`${__("Previous stage available")} ${kg(qr.available)}`);
@@ -162,6 +162,14 @@ function render_fabric_dialog(frm, ctx) {
 				options: `<div class="text-muted small">${__("Item")}: <b>${frappe.utils.escape_html(row.treated_item)}</b></div>`,
 			});
 		}
+		if (row.kind === "conversion" && row.input_item) {
+			// Rule-based conversion (Consume/Introduce): say what gets consumed —
+			// each qty row below is one "consumed combo → produced combo" rule.
+			fields.push({
+				fieldtype: "HTML",
+				options: `<div class="text-muted small">${__("Consumes")}: <b>${frappe.utils.escape_html(row.input_item)}</b> &rarr; ${__("produces")} <b>${frappe.utils.escape_html(row.cloth_item)}</b></div>`,
+			});
+		}
 
 		const colour_options = row.colour_options || [];
 		const multi_colour = row.kind === "knitting" && row.has_colour
@@ -220,10 +228,14 @@ function render_fabric_dialog(frm, ctx) {
 			});
 			fields.push({ fieldtype: "Section Break" });
 		} else {
-			(row.qty_rows || []).forEach((qr, j) => {
+			const qty_rows = row.qty_rows || [];
+			// The manifest entry is IDENTICAL in both layouts (fieldname keeps the
+			// original qty_rows index j) — only the visual arrangement differs, so
+			// the primary_action payload is unchanged.
+			const push_qty_field = (qr, j, label) => {
 				const fieldname = `qty_${i}_${j}`;
 				fields.push({
-					fieldtype: "Float", label: qr.label, fieldname,
+					fieldtype: "Float", label, fieldname,
 					default: qr.prefill || undefined,
 					description: planning_description(row.kind, qr),
 					onchange: row.kind === "knitting" ? () => recompute_yarn(i) : undefined,
@@ -232,7 +244,43 @@ function render_fabric_dialog(frm, ctx) {
 					fieldname, row: i, key: qr.key, out_attrs: qr.out_attrs,
 					colour: null, label: qr.label, balance: qr.balance, available: qr.available,
 				});
+			};
+
+			// Colour-section layout (2026-07-08): big multi-row popups group by the
+			// server's `section` (the Colour part of each rule) with the short
+			// `row_label` (the Dia part) on each input. Never for the knitting
+			// branch above, never for small/flat lists.
+			const sections = [];
+			const by_section = {};
+			qty_rows.forEach((qr, j) => {
+				const key = qr.section == null ? " null" : String(qr.section);
+				if (!by_section[key]) {
+					by_section[key] = { name: qr.section, items: [] };
+					sections.push(by_section[key]);
+				}
+				by_section[key].items.push([qr, j]);
 			});
+			const sectionable = ["conversion", "dyeing", "compacting", "identity"].includes(row.kind)
+				&& qty_rows.length > 6
+				&& sections.length > 1
+				&& qty_rows.every((qr) => qr.section != null);
+
+			if (sectionable) {
+				const as_columns = sections.length <= MAX_COLOUR_COLUMNS;
+				if (as_columns) fields.push({ fieldtype: "Section Break" });
+				sections.forEach((sec, si) => {
+					if (as_columns && si > 0) fields.push({ fieldtype: "Column Break" });
+					if (!as_columns) fields.push({ fieldtype: "Section Break" });
+					fields.push({
+						fieldtype: "HTML",
+						options: `<div style="font-weight:600;margin-bottom:4px;">${frappe.utils.escape_html(sec.name)}</div>`,
+					});
+					sec.items.forEach(([qr, j]) => push_qty_field(qr, j, qr.row_label || qr.label));
+				});
+				if (as_columns) fields.push({ fieldtype: "Section Break" });
+			} else {
+				qty_rows.forEach((qr, j) => push_qty_field(qr, j, qr.label));
+			}
 		}
 
 		if (row.kind === "knitting") {

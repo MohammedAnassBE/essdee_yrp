@@ -221,6 +221,9 @@ doc_events = {
 	"Work Order": {
 		"validate": "essdee_yrp.work_order_hooks.validate",
 	},
+	"Work Order Correction": {
+		"before_submit": "essdee_yrp.work_order_correction_hooks.validate_correction_ipd_items"
+	},
 	"Goods Received Note": {
 		"on_submit": "essdee_yrp.fabric_tracking.on_grn_submit",
 		"on_cancel": "essdee_yrp.fabric_tracking.on_grn_cancel",

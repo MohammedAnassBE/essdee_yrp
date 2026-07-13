@@ -20,6 +20,20 @@ def after_install():
 
 def after_migrate():
 	ensure_default_address_template()
+	ensure_sd_yrp_consumer_config()
+
+
+def ensure_sd_yrp_consumer_config():
+	"""Keep the Spine consumer handler mappings in step with SYNC_DOCTYPES.
+
+	Spine treats an unmapped doctype as success — the message is marked
+	Processed and silently discarded — so a SYNC_DOCTYPES addition without its
+	mapping row drops data with no error. Running the (idempotent)
+	ensure_consumer_config on every migrate closes that class permanently.
+	"""
+	from essdee_yrp.sd_yrp_sync import ensure_consumer_config
+
+	ensure_consumer_config()
 
 
 def ensure_default_address_template():

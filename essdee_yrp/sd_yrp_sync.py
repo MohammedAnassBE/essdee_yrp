@@ -42,6 +42,7 @@ CUSTOM_MAPPER_DOCTYPES = (
 	"Production Order",
 	"Lot",
 	"MRP Settings",
+	"IPD Settings",
 )
 
 SYNC_DOCTYPES = EXACT_MATCH_DOCTYPES + CUSTOM_MAPPER_DOCTYPES
@@ -127,24 +128,26 @@ def upsert_doc(payload, event=None):
 		return upsert_lot(data, event=event)
 	if doctype == "Item Dependent Attribute Mapping":
 		return upsert_item_dependent_attribute_mapping(data)
-	if doctype == "MRP Settings":
-		return upsert_mrp_settings(data)
+	if doctype in ("MRP Settings", "IPD Settings"):
+		return upsert_single_doctype(data)
 
 	return upsert_filtered_doc(data)
 
 
-def upsert_mrp_settings(data):
-	# MRP Settings is a Single — write each replicated field straight to tabSingles
-	# (DB-level, bypassing validation like the other upserts). Fields the source has
-	# but this site's MRP Settings doesn't define are dropped by filter_doc_fields.
+def upsert_single_doctype(data):
+	# MRP Settings / IPD Settings are Singles — write each replicated field straight
+	# to tabSingles (DB-level, bypassing validation like the other upserts). Fields
+	# the source has but this site's doctype doesn't define are dropped by
+	# filter_doc_fields.
+	doctype = data.get("doctype")
 	data = filter_doc_fields(data)
 	skip = {"doctype", "name", "creation", "owner", "idx", "docstatus", "parent", "parenttype", "parentfield"}
 	for fieldname, value in data.items():
 		if fieldname in skip:
 			continue
-		frappe.db.set_single_value("MRP Settings", fieldname, value)
-	frappe.clear_document_cache("MRP Settings", "MRP Settings")
-	return frappe.get_single("MRP Settings")
+		frappe.db.set_single_value(doctype, fieldname, value)
+	frappe.clear_document_cache(doctype, doctype)
+	return frappe.get_single(doctype)
 
 
 _SYNC_SKIP_PARENT_FIELDS = {
@@ -209,8 +212,8 @@ def upsert_filtered_doc(data, replace_children=None):
 	return doc
 
 
-def _db_insert_child_rows(child_doctype, parenttype, parent, parentfield, rows):
-	idx = 0
+def _db_insert_child_rows(child_doctype, parenttype, parent, parentfield, rows, idx_offset=0):
+	idx = idx_offset
 	for row in rows or []:
 		idx += 1
 		row_data = dict(row)
@@ -620,7 +623,70 @@ def upsert_lot(data, event=None):
 	validate_required_link("Lot Template", data.get("lot_template"), source_context)
 	validate_lot_item_variants(data, source_context)
 
-	return upsert_filtered_doc(data)
+	doc = upsert_filtered_doc(data)
+	sync_production_ordered_rows_for_lot(data)
+	return doc
+
+
+def sync_production_ordered_rows_for_lot(data):
+	"""Rebuild this Lot's rows on its Production Order (the PO<->Lot cycle back-fill).
+
+	On F15 a Lot maintains the PO's `production_ordered_details` rows DIRECTLY
+	(lot.py add_ppo_lot_qty / delete_ppo_lot_qty run from the Lot's own hooks
+	without saving the PO), so no Production Order event fires and those rows
+	never reach this site through the PO's own messages. Mirror that maintenance
+	here at DB level whenever a Lot message applies: delete the Lot's existing
+	rows, then re-insert from the Lot's `items` — same delete-then-add shape as
+	F15, idempotent on republish, and it converges with the PO's wholesale
+	child-replace (an F15 PO payload already carries every lot's rows).
+	Deliberately db-level (no PO save, PO `modified` untouched) like the
+	Item<->IDAM back-fill above.
+	"""
+	lot = data.get("name")
+	frappe.db.delete("Production Ordered Detail", {
+		"parenttype": "Production Order",
+		"parentfield": "production_ordered_details",
+		"reference_doctype": "Lot",
+		"reference_name": lot,
+	})
+
+	production_order = data.get("production_order")
+	if not (production_order and frappe.db.exists("Production Order", production_order)):
+		return
+
+	rows = [
+		{
+			"doctype": "Production Ordered Detail",
+			"reference_doctype": "Lot",
+			"reference_name": lot,
+			"item_variant": row.get("item_variant"),
+			"quantity": row.get("qty") or 0,
+		}
+		for row in data.get("items") or []
+		if row.get("item_variant")
+	]
+	if not rows:
+		return
+
+	# Existing rows (other lots') keep their idx; continue after the highest to
+	# keep idx ordering sane. (No uniqueness constraint exists on (parent, idx);
+	# a PO republish renumbers the whole table anyway.)
+	start_idx = frappe.db.sql(
+		"""
+		select coalesce(max(idx), 0)
+		from `tabProduction Ordered Detail`
+		where parenttype = %s and parent = %s and parentfield = %s
+		""",
+		("Production Order", production_order, "production_ordered_details"),
+	)[0][0] or 0
+	_db_insert_child_rows(
+		"Production Ordered Detail",
+		"Production Order",
+		production_order,
+		"production_ordered_details",
+		rows,
+		idx_offset=start_idx,
+	)
 
 
 def validate_lot_item_variants(data, source_context):
@@ -760,6 +826,16 @@ def delete_synced_doc(payload):
 		if warehouse:
 			frappe.db.set_value("Warehouse", warehouse, "disabled", 1)
 		return
+
+	if doctype == "Lot":
+		# Mirror F15 delete_ppo_lot_qty: the Lot owns its rows on the PO. Remove
+		# them first so the Lot delete isn't blocked by the dynamic-link check.
+		frappe.db.delete("Production Ordered Detail", {
+			"parenttype": "Production Order",
+			"parentfield": "production_ordered_details",
+			"reference_doctype": "Lot",
+			"reference_name": docname,
+		})
 
 	if frappe.db.exists(doctype, docname):
 		try:

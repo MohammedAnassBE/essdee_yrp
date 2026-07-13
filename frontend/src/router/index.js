@@ -29,14 +29,14 @@ const routes = [
 				component: () => import("@/views/dynamic/DocDetail.vue"),
 				props: { docRoute: "item-production-detail", id: "new" },
 			},
-			// /web edit-fields path. IPDConfigView is the rich BOM/matrix surface;
-			// editing the IPD's scalar fields + child rows happens via DocDetail
-			// here. Must be declared BEFORE the IPDConfigView catch-all.
+			// (2026-07-10) The old /:id/fields DocDetail route is GONE: IPD entry
+			// lives in the tabbed IPDConfigView (document-level edit mode), and the
+			// flat form was reachable by URL, bypassing the Approved lock. Old
+			// bookmarks redirect to the tabbed view. Generic DocDetail routes for
+			// other doctypes are unaffected.
 			{
 				path: "item-production-detail/:id/fields",
-				name: "IPDEditFields",
-				component: () => import("@/views/dynamic/DocDetail.vue"),
-				props: (route) => ({ docRoute: "item-production-detail", id: route.params.id }),
+				redirect: (to) => `/item-production-detail/${encodeURIComponent(to.params.id)}`,
 			},
 			{
 				path: "item-production-detail/:id",

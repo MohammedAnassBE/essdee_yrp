@@ -27,6 +27,37 @@ no_cache = 1
 
 ASSET_BASE = "/assets/essdee_yrp/frontend/"
 
+# The exact DocTypes the /web SPA exposes (mirror of frontend/src/config/doctypes.js
+# GROUPS). The SPA gates sidebar / command palette / home visibility on
+# frappe.boot.user.can_read, but Frappe's load_user()/build_permissions() emits a
+# can_read list that is a SUPERSET of real access — it stops at "a role grants a read
+# rule" and never runs the full has_permission() check (user permissions, permlevel,
+# if_owner). Result: doctypes the user genuinely cannot read (e.g. Stock Entry for a
+# Merchandiser) still appear in can_read and leak into the UI. We recompute the
+# permission lists for exactly these candidates using the authoritative
+# frappe.has_permission() so every SPA gate hides what the user truly can't access.
+WEB_DOCTYPES = (
+	"Lot",
+	"Work Order",
+	"Work Order Correction",
+	"Delivery Challan",
+	"Goods Received Note",
+	"Stock Entry",
+	"Item",
+	"Item Production Detail",
+	"Terms and Condition",
+)
+
+# boot.user key -> has_permission ptype used by the SPA's usePermissions composable.
+_PTYPE_KEYS = {
+	"can_read": "read",
+	"can_create": "create",
+	"can_write": "write",
+	"can_submit": "submit",
+	"can_cancel": "cancel",
+	"can_delete": "delete",
+}
+
 
 def _website_asset(field, fallback):
 	"""Logo / favicon are sourced from Website Settings so an admin controls them
@@ -85,7 +116,25 @@ def _resolve_frontend_assets():
 	return js_file, css_file
 
 
+def _apply_accurate_web_perms(user):
+	"""Overwrite the SPA's candidate DocTypes in each boot permission list with the
+	authoritative has_permission() verdict for the current session user, so the UI
+	never shows a DocType the user cannot actually access. Administrator/System
+	Manager naturally pass has_permission for all, so they keep full visibility."""
+	for key, ptype in _PTYPE_KEYS.items():
+		allowed = set(user.get(key) or [])
+		for dt in WEB_DOCTYPES:
+			if frappe.has_permission(dt, ptype):
+				allowed.add(dt)
+			else:
+				allowed.discard(dt)
+		user[key] = sorted(allowed)
+	return user
+
+
 def get_boot():
+	user = json.loads(frappe.as_json(frappe.get_user().load_user()))
+	_apply_accurate_web_perms(user)
 	return {
 		"site_name": frappe.local.site,
 		# Realtime: the /web SPA opens its own socket.io connection to Frappe's
@@ -94,5 +143,5 @@ def get_boot():
 		# this port + "/" + site_name), avoiding the :8003:9000 double-port.
 		"socketio_port": frappe.conf.socketio_port or 9000,
 		"app_logo": _website_asset("app_logo", "essdee-logo.png"),
-		"user": json.loads(frappe.as_json(frappe.get_user().load_user())),
+		"user": user,
 	}

@@ -99,6 +99,14 @@
 			<div class="head-actions">
 				<!-- ── VIEW mode ── -->
 				<template v-if="mode === 'view' && doc">
+					<WorkflowActions
+						v-if="isWorkflow"
+						ref="workflowRef"
+						:doc="doc"
+						:doctype="doctype"
+						@changed="reloadView"
+					/>
+
 					<!-- Draft (docstatus 0): Edit (secondary) + Submit (primary forward). -->
 					<Button
 						v-if="docstatus === 0 && canWrite(doctype)"
@@ -380,6 +388,8 @@
 			v-if="isWorkOrder && doc"
 			v-model:visible="calcDeliverablesOpen"
 			:work-order="doc.name"
+			:process-name="doc.process_name || ''"
+			:modified="doc.modified"
 			@calculated="onDeliverablesCalculated"
 		/>
 
@@ -700,10 +710,34 @@
 					/>
 				</div>
 
-				<!-- Child-table editors (flat grid) -->
+				<!-- Correction items (DC): grouped per Work Order Correction —
+				     Desk CorrectionItemEditor parity. Rows derive from the WO's
+				     corrections; the user only enters quantities. -->
+				<div v-if="hasCorrectionSection" class="child-editor">
+					<div class="child-editor-head">
+						<h4>Correction Items</h4>
+						<span class="child-cols-note pivot-note">from Work Order Corrections — enter qty per row</span>
+					</div>
+					<CorrectionItemsSection
+						ref="correctionGrid"
+						:editable="true"
+						:value-fields="correctionConfig.valueFields"
+						:entry-fields="correctionConfig.entryFields"
+						:cell-fields="correctionConfig.cellFields"
+						:show-secondary-toggle="true"
+						@change="onGridChange"
+					/>
+				</div>
+
+				<!-- Child-table editors (flat grid) — plus the Lot's custom editors,
+				     interleaved in the user-mandated order (2026-07-10): Fabric
+				     Details → Fabric Program → Order Items → Order Details → … →
+				     BOM Additional Items last → read-only BOM Summary. One ordered
+				     list drives both kinds so the grid template isn't duplicated;
+				     non-Lot doctypes yield only {kind:'grid'} entries (unchanged). -->
+				<template v-for="{ kind, ct, key } in editRenderList" :key="key">
 				<div
-					v-for="ct in editableChildTables"
-					:key="ct.fieldname"
+					v-if="kind === 'grid'"
 					class="child-editor"
 				>
 					<div class="child-editor-head">
@@ -862,37 +896,89 @@
 					</DataTable>
 				</div>
 
+				<!-- Lot fabric views (Desk FabricProgram island parity — the 2
+				     approved views only): final requirement (finished cloth) +
+				     dia-wise program with inline weight entry. Emits the transient
+				     fabric_program_details / fabric_requirement_details JSON on
+				     save (see buildPayload); the hidden lot_fabric_programs /
+				     lot_fabric_requirements children are rebuilt server-side.
+				     Editable only while the Lot is Open (Desk rule). -->
+				<div v-else-if="kind === 'lot-fabric'" class="child-editor">
+					<div class="child-editor-head">
+						<h4>Fabric Program</h4>
+						<span class="child-cols-note pivot-note">final requirement (finished cloth) + dia-wise knitting program — the chain plan rebuilds on save</span>
+					</div>
+					<LotFabricViews
+						ref="lotFabricGrid"
+						:readonly="(form.status || 'Open') !== 'Open'"
+						:lot-name="doc?.name || ''"
+						@change="onGridChange"
+					/>
+				</div>
+
 				<!-- Lot: the two custom order editors (Desk parity — LotOrder /
 				     CutPlanItems islands). `items` and `lot_order_details` are hidden
 				     child tables rebuilt server-side from the item_details /
 				     order_item_details JSON these editors emit (see buildPayload). -->
-				<template v-if="isLot">
-					<div class="child-editor">
-						<div class="child-editor-head">
-							<h4>Order Items</h4>
-							<span class="child-cols-note pivot-note">qty · ratio · MRP per size — server explodes the order matrix on save</span>
-						</div>
-						<p v-if="isLotTransferred" class="child-cols-note lot-locked-note">
-							This Lot has been transferred — its order items are locked (edit in Desk if needed).
-						</p>
-						<LotOrderEditor
-							ref="lotItemsGrid"
-							:readonly="isLotTransferred"
-							:production-detail="form.production_detail || ''"
-							@change="onGridChange"
-						/>
+				<div v-else-if="kind === 'lot-items'" class="child-editor">
+					<div class="child-editor-head">
+						<h4>Order Items</h4>
+						<span class="child-cols-note pivot-note">qty · ratio · MRP per size — server explodes the order matrix on save</span>
 					</div>
-					<div class="child-editor">
-						<div class="child-editor-head">
-							<h4>Order Details</h4>
-							<span class="child-cols-note pivot-note">size × colour matrix — cut/stitch/pack progress is preserved on save</span>
-						</div>
-						<LotOrderDetailGrid
-							ref="lotOrderGrid"
-							:readonly="isLotTransferred"
-							@change="onGridChange"
-						/>
+					<p v-if="isLotTransferred" class="child-cols-note lot-locked-note">
+						This Lot has been transferred — its order items are locked (edit in Desk if needed).
+					</p>
+					<LotOrderEditor
+						ref="lotItemsGrid"
+						:readonly="isLotTransferred"
+						:production-detail="form.production_detail || ''"
+						@change="onGridChange"
+					/>
+				</div>
+				<div v-else-if="kind === 'lot-order-details'" class="child-editor">
+					<div class="child-editor-head">
+						<h4>Order Details</h4>
+						<span class="child-cols-note pivot-note">size × colour matrix — cut/stitch/pack progress is preserved on save</span>
 					</div>
+					<LotOrderDetailGrid
+						ref="lotOrderGrid"
+						:readonly="isLotTransferred"
+						@change="onGridChange"
+					/>
+				</div>
+
+				<!-- Lot: BOM Summary — calculated by the engine (Desk locks add/delete),
+				     shown read-only in the form so the numbers stay visible while
+				     editing (user 2026-07-10: "BOM summary was not shown in the UI"). -->
+				<div v-else-if="kind === 'lot-bom-summary'" class="child-editor">
+					<div class="child-editor-head">
+						<h4>BOM Summary</h4>
+						<span class="child-cols-note">calculated — read-only</span>
+					</div>
+					<DataTable
+						v-if="(doc?.bom_summary || []).length"
+						:value="doc.bom_summary"
+						class="esd-table child-dt"
+						:rowHover="false"
+					>
+						<Column
+							v-for="col in bomSummaryColumns"
+							:key="col.fieldname"
+							:field="col.fieldname"
+							:header="col.label"
+						>
+							<template #body="{ data, field }">
+								<span :class="{ 'esd-mono': col.input === 'link' }">
+									{{ childCellDisplay(data[field], col) }}
+								</span>
+							</template>
+						</Column>
+					</DataTable>
+					<div v-else class="esd-empty">
+						<i class="pi pi-table" />
+						<p class="esd-empty__text">No BOM summary rows yet.</p>
+					</div>
+				</div>
 				</template>
 
 				<!-- Work Order: `comments` rendered as the VERY LAST element of the
@@ -975,12 +1061,22 @@
 					<TabList>
 						<Tab value="details">Details</Tab>
 						<Tab v-if="hasAttributeValuesEditor" value="attribute-values">Attribute Values</Tab>
-						<Tab v-if="isLot" value="lot-items">Order Items</Tab>
-						<Tab v-if="isLot" value="lot-order-details">Order Details</Tab>
-						<Tab v-for="ct in childTables" :key="ct.fieldname" :value="ct.fieldname">
-							{{ ct.label }}
-							<span v-if="tabBadge(ct)" class="tab-badge">{{ tabBadge(ct) }}</span>
-						</Tab>
+						<!-- Lot: DETERMINISTIC tab order (user 2026-07-10) — Fabric Details →
+						     Fabric Program → Order Items → Order Details → … → BOM
+						     Additional Items LAST. Custom panels + child tables interleave,
+						     so the whole strip comes from one ordered computed. -->
+						<template v-if="isLot">
+							<Tab v-for="t in lotViewTabs" :key="'lt-' + t.value" :value="t.value">
+								{{ t.label }}
+								<span v-if="t.badge" class="tab-badge">{{ t.badge }}</span>
+							</Tab>
+						</template>
+						<template v-else>
+							<Tab v-for="ct in childTables" :key="ct.fieldname" :value="ct.fieldname">
+								{{ ct.label }}
+								<span v-if="tabBadge(ct)" class="tab-badge">{{ tabBadge(ct) }}</span>
+							</Tab>
+						</template>
 						<Tab v-if="isItem && doc.dependent_attribute" value="dependent-attribute">
 							Dependent Attribute
 						</Tab>
@@ -994,6 +1090,17 @@
 					<TabPanels>
 						<!-- DETAILS -->
 						<TabPanel value="details">
+							<!-- DC/GRN transfer status — read-only indicators at the very top
+							     of the Details tab (fields hidden from the cards/form;
+							     conventions 2026-07-10). -->
+							<div v-if="transferBadges.length" class="transfer-badges" data-testid="transfer-badges">
+								<span
+									v-for="b in transferBadges"
+									:key="b.label"
+									class="transfer-badge"
+									:class="'transfer-badge--' + b.kind"
+								>{{ b.label }}</span>
+							</div>
 							<div v-if="detailSections.length" class="details-stack">
 								<section
 									v-for="s in detailSections"
@@ -1010,13 +1117,14 @@
 												<div
 													class="field-value"
 													:class="{
-														link: f.isLink && !isEmptyValue(doc[f.fieldname]),
+														link: f.isLink && !isEmptyValue(doc[f.fieldname]) && linkHasWebRoute(f),
 														'is-empty': isEmptyValue(doc[f.fieldname]),
 													}"
-													@click="f.isLink && navigateLink(f, doc[f.fieldname])"
+													@click="f.isLink && linkHasWebRoute(f) && navigateLink(f, doc[f.fieldname])"
 												>
 													<!-- Q1: Link shows the human name + muted code; plain fields show the
-													     formatted value (Q20 bool words via fieldname). -->
+													     formatted value (Q20 bool words via fieldname). A link whose target
+													     has no /web route renders as plain text (no click / no Desk redirect). -->
 													<template v-if="f.isLink && !isEmptyValue(doc[f.fieldname])">
 														<span class="lv-name">{{ linkPartsFor(f, doc[f.fieldname]).primary }}</span>
 														<span
@@ -1047,6 +1155,16 @@
 								:entry-fields="pivotFor(ct.fieldname)?.entryFields || []"
 								:cell-fields="pivotFor(ct.fieldname)?.cellFields || []"
 								:initial-data="viewGrouped[ct.fieldname] || []"
+							/>
+							<!-- Correction items: read-only per-WOC grouped blocks
+							     (same surface as edit mode). -->
+							<CorrectionItemsSection
+								v-else-if="hasCorrectionSection && ct.fieldname === 'correction_items'"
+								:editable="false"
+								:value-fields="correctionConfig.valueFields"
+								:entry-fields="correctionConfig.entryFields"
+								:cell-fields="correctionConfig.cellFields"
+								:initial-blocks="viewCorrectionBlocks"
 							/>
 							<div v-else>
 								<div class="child-view-toolbar">
@@ -1136,6 +1254,20 @@
 							<LotOrderDetailGrid
 								:readonly="true"
 								:initial-data="lotOnload.order_item_details ?? []"
+							/>
+						</TabPanel>
+
+						<!-- LOT: Fabric Program — the 2 approved fabric views (final
+						     requirement + dia-wise program), read-only mirror of the
+						     Desk FabricProgram island. "Recalculate Received" lives
+						     here (saved doc — the Desk's is_dirty guard holds). -->
+						<TabPanel v-if="isLot" value="lot-fabric">
+							<LotFabricViews
+								:readonly="true"
+								:initial-data="lotOnload.fabric_program_details ?? []"
+								:can-rebuild="canWrite('Lot')"
+								:lot-name="doc?.name || ''"
+								@rebuilt="onFabricRebuilt"
 							/>
 						</TabPanel>
 
@@ -1274,7 +1406,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from "vue"
-import { useRouter, onBeforeRouteLeave } from "vue-router"
+import { useRouter, useRoute, onBeforeRouteLeave } from "vue-router"
 import Tabs from "primevue/tabs"
 import TabList from "primevue/tablist"
 import Tab from "primevue/tab"
@@ -1313,6 +1445,7 @@ import {
 	getDetailGroups,
 	getFormFieldOrder,
 	getHiddenFormFields,
+	getHiddenViewFields,
 	getLinkSearchHandler,
 	getReadOnlyChildFields,
 	getFieldLabel,
@@ -1333,12 +1466,15 @@ import {
 const vTooltip = Tooltip
 import FabricDeliverablesModal from "./FabricDeliverablesModal.vue"
 import StockItemGridEditor from "./StockItemGridEditor.vue"
+import WorkflowActions from "./WorkflowActions.vue"
 import LotOrderEditor from "./LotOrderEditor.vue"
 import LotOrderDetailGrid from "./LotOrderDetailGrid.vue"
+import LotFabricViews from "../fabric/LotFabricViews.vue"
 import ItemDependentAttributeEditor from "./ItemDependentAttributeEditor.vue"
 import ItemAttributeListView from "./ItemAttributeListView.vue"
 import LinkField from "@/components/LinkField.vue"
 import GRNReceivedTypeEditor from "./GRNReceivedTypeEditor.vue"
+import CorrectionItemsSection from "./CorrectionItemsSection.vue"
 import EWaybillGenerateModal from "./EWaybillGenerateModal.vue"
 import EWaybillFetchModal from "./EWaybillFetchModal.vue"
 import EWaybillCancelModal from "./EWaybillCancelModal.vue"
@@ -1352,6 +1488,7 @@ const props = defineProps({
 })
 
 const router = useRouter()
+const route = useRoute()
 const { canWrite, canCreate, canDelete, canSubmit, canCancel, canAmend, isAdmin, hasRole } = usePermissions()
 const confirm = useAppConfirm()
 const toast = useAppToast()
@@ -1414,6 +1551,7 @@ const isLotTransferred = computed(() => isLot.value && !!(form.is_transferred ||
 const hasAttributeValuesEditor = computed(() => isItem.value)
 const isSubmittable = computed(() => registry.value?.isSubmittable || false)
 const isWorkflow = computed(() => registry.value?.isWorkflow || false)
+const workflowRef = ref(null)
 const DUPLICATE_DRAFT_STORAGE_PREFIX = "essdee_yrp:duplicate_draft:"
 
 // ── doc state ──
@@ -1744,7 +1882,7 @@ const META_HIDDEN_FIELDTYPES = new Set([
 ])
 // Hidden grouped-JSON fields — NEVER editable / sent (the flat-rows contract).
 const GROUPED_JSON_FIELDS = new Set([
-	"item_details", "deliverable_details", "receivable_details",
+	"item_details", "deliverable_details", "receivable_details", "correction_item_details",
 ])
 // Child tables with a dedicated surface elsewhere → kept out of the generic
 // per-child-table tabs AND the edit grids. Work Order's tracking_logs and
@@ -1829,11 +1967,73 @@ const STOCK_GROUPED_MAP = {
 			],
 		},
 	],
+	// Work Order Correction shares the WO child doctypes (Work Order
+	// Deliverables / Receivables) and its controller runs the same
+	// onload/sync_vue_item_details contract — reuse the WO pivot configs so
+	// /web edits flow the grouped path (a flat-grid edit would be clobbered by
+	// the stored details JSON on the next validate).
+	"Work Order Correction": [
+		{
+			childField: "deliverables", groupedField: "deliverable_details",
+			ungroupKey: "Work Order Deliverables", label: "Deliverables",
+			cellFields: [{ name: "pending_quantity", label: "Pending" }],
+			valueFields: ["pending_quantity", "stock_update", "valuation_rate"],
+			entryFields: [
+				"comments", "secondary_qty", "secondary_uom", "cancelled_quantity",
+				"additional_parameters", "set_combination", "grn_detail_no", "item_type",
+				"is_calculated", "source_grn", "source_grn_item", "source_inspection_entry_item",
+			],
+		},
+		{
+			childField: "receivables", groupedField: "receivable_details",
+			ungroupKey: "Work Order Receivables", label: "Receivables",
+			cellFields: [{ name: "cost", label: "Cost" }, { name: "pending_quantity", label: "Pending" }],
+			valueFields: ["cost", "pending_quantity", "total_cost"],
+			entryFields: [
+				"comments", "secondary_qty", "secondary_uom", "process_cost",
+				"additional_parameters", "set_combination",
+			],
+		},
+	],
 }
 
 // The pivot sections to render for the current doctype (empty ⇒ flat path).
 const stockPivots = computed(() => STOCK_GROUPED_MAP[doctype.value] || [])
 const useStockPivot = computed(() => isFormMode.value && stockPivots.value.length > 0)
+
+// ── Correction items (DC / GRN against a WO with Work Order Corrections) ────
+// Both vouchers store corrections in ONE flat child table (`correction_items`)
+// but display them GROUPED per Work Order Correction (Desk CorrectionItemEditor
+// parity — preference 2026-07-07). The server round-trips the grouped
+// `correction_item_details` blocks (each voucher's sync_vue_correction_item_details
+// rebuilds the flat rows); the flat grid is never edited directly. Value/entry
+// fields mirror each voucher's own pivot mapping (deliverables vs receivables).
+const CORRECTION_CONFIG = {
+	"Delivery Challan": {
+		valueFields: STOCK_GROUPED_MAP["Delivery Challan"][0].valueFields,
+		entryFields: STOCK_GROUPED_MAP["Delivery Challan"][0].entryFields,
+		cellFields: [{ name: "pending_quantity", label: "Pending" }],
+	},
+	"Goods Received Note": {
+		valueFields: STOCK_GROUPED_MAP["Goods Received Note"][0].valueFields,
+		entryFields: STOCK_GROUPED_MAP["Goods Received Note"][0].entryFields,
+		cellFields: [
+			{ name: "pending_quantity", label: "Pending" },
+			{ name: "max_receivable_quantity", label: "Allowed" },
+		],
+	},
+}
+const correctionConfig = computed(() => CORRECTION_CONFIG[doctype.value] || null)
+const hasCorrectionSection = computed(() => Boolean(correctionConfig.value))
+const correctionGrid = ref(null)
+// True once the correction grid's state is AUTHORITATIVE (hydrated from onload,
+// autofilled from the selected WO, or intentionally reset). Edit-mode saves then
+// send the blocks even when EMPTY — switching to a WO without corrections must
+// clear the stored rows — while a never-loaded grid (hydration failure) still
+// omits the keys so existing rows aren't wiped.
+const correctionLoaded = ref(false)
+// View mode: correction blocks from the doc's onload (read-only render).
+const viewCorrectionBlocks = ref([])
 
 // ── Connections (Desk's `links` panel equivalent — preference 2026-05-29) ──
 // Each entry: { doctype, route, label?, filters(name) → [[field, op, value], …] }.
@@ -1858,6 +2058,13 @@ const CONNECTIONS_MAP = {
 				["against_id", "=", name],
 			],
 		},
+		// Extra deliverables/receivables raised against the WO (2026-07-10):
+		// surfaced beside DC/GRN so corrections are one click from the WO.
+		{
+			doctype: "Work Order Correction",
+			route: "/work-order-correction",
+			filters: (name) => [["work_order", "=", name]],
+		},
 	],
 	// Q9: a Delivery Challan's downstream GRNs (GRN.delivery_challan Link → DC),
 	// so the chain no longer dead-ends at the DC.
@@ -1871,6 +2078,29 @@ const CONNECTIONS_MAP = {
 }
 
 const connections = ref([])
+
+// ── Transfer indicators (DC/GRN, 2026-07-10) ────────────────────────────────
+// `is_internal_unit` is fetched from the Work Order; `transfer_complete` and
+// the STE figures indicate its progress. The user never edits them, so the
+// transfer section is hidden from the Details cards + form (hideViewFields /
+// hideFormFields in the DC/GRN field configs) and rendered instead as compact
+// status badges at the TOP of the Details tab.
+const TRANSFER_BADGE_DOCTYPES = new Set(["Delivery Challan", "Goods Received Note"])
+const transferBadges = computed(() => {
+	if (!doc.value || !TRANSFER_BADGE_DOCTYPES.has(doctype.value)) return []
+	if (!Number(doc.value.is_internal_unit)) return []
+	const out = [{ label: "Internal Unit", kind: "info" }]
+	out.push(
+		Number(doc.value.transfer_complete)
+			? { label: "Transfer Complete", kind: "ok" }
+			: { label: "Transfer Pending", kind: "warn" },
+	)
+	const pct = Number(doc.value.ste_transferred_percent)
+	if (pct || Number(doc.value.ste_transferred)) {
+		out.push({ label: `STE ${Number(doc.value.ste_transferred) || 0} · ${pct || 0}%`, kind: "info" })
+	}
+	return out
+})
 
 // Live counts for the Connections card. Renders only when CONNECTIONS_MAP
 // has an entry for this doctype and we have a doc loaded.
@@ -1989,8 +2219,14 @@ async function hydratePivotsForView() {
 				.filter((grp) => (grp.items || []).length)
 		}
 		viewGrouped.value = next
+		// Correction blocks render as-is (locked rows; zero-qty draft state is
+		// intentional, same reasoning as the lockedItems keepAll above).
+		if (hasCorrectionSection.value) {
+			viewCorrectionBlocks.value = onload.correction_item_details || []
+		}
 	} catch (_) {
 		viewGrouped.value = {}
+		viewCorrectionBlocks.value = []
 	}
 }
 
@@ -2005,6 +2241,11 @@ async function hydratePivotsForView() {
 // so the children themselves are NEVER blanked here (Desk contract).
 const lotItemsGrid = ref(null)
 const lotOrderGrid = ref(null)
+// Fabric Program island (LotFabricViews) — hydrated from the same onload;
+// its two transient JSON payloads are added in buildPayload ONLY when this
+// hydration succeeded (else omit both keys → server keeps the stored rows).
+const lotFabricGrid = ref(null)
+const lotFabricHydrated = ref(false)
 // null = unknown (fall through to meta); true/false = check_enabled_po result.
 const lotPoEnabled = ref(null)
 async function loadLotPoEnabled() {
@@ -2031,6 +2272,7 @@ async function hydrateLotForView() {
 async function hydrateLotForEdit() {
 	lotItemsHydrated.value = false
 	lotOrderHydrated.value = false
+	lotFabricHydrated.value = false
 	try {
 		const loaded = await getDocWithOnload(doctype.value, props.id)
 		const onload = loaded?.__onload || {}
@@ -2044,9 +2286,23 @@ async function hydrateLotForEdit() {
 			lotOrderGrid.value.loadData(onload.order_item_details || [])
 			lotOrderHydrated.value = true
 		}
+		// Fabric island: `|| []` mirrors lot.js (the onload key is absent when the
+		// Lot has no fabric rows — an empty island then legitimately emits "[]").
+		if (lotFabricGrid.value?.loadData) {
+			lotFabricGrid.value.loadData(onload.fabric_program_details || [])
+			lotFabricHydrated.value = true
+		}
 	} catch (_) {
 		toast.warn("Could not load the Lot's order items", "Re-open the page before saving, or edit in Desk.")
 	}
+}
+
+// Fabric "Recalculate Received" (view tab): the island already ran the
+// whitelisted rebuild_fabric_tracking — refresh the doc AND the onload payload
+// the island renders from (Desk: cur_frm.reload_doc()).
+async function onFabricRebuilt() {
+	await reloadView()
+	await hydrateLotForView()
 }
 
 // Create/edit: (re)load the items editor from get_item_details after the IPD
@@ -2189,6 +2445,15 @@ async function loadAll() {
 	// Resolve prev/next neighbours for the header arrows, stepping through the
 	// list the user came from (captured list context) — fire-and-forget.
 	resolveDocNav()
+	// One-click edit: callers (e.g. the IPD "Edit fields" button) can pass
+	// `?edit=1` to land straight in edit mode instead of view→click-Edit.
+	// Honour it only under the SAME gate as the view-mode Edit button
+	// (draft + write permission), so read-only users and submitted docs are
+	// never auto-editable. Opt-in via query — no other flow is affected.
+	if (route.query.edit === "1" && docstatus.value === 0 && canWrite(doctype.value)) {
+		router.replace({ query: { ...route.query, edit: undefined } })
+		enterEdit()
+	}
 }
 
 // The getdoctype bundle is [parentMeta, ...childMetas] keyed by DocType name.
@@ -2419,6 +2684,40 @@ const formFields = computed(() => {
 	for (const mf of meta.value.fields) pushByFieldname(mf.fieldname)
 	return out
 })
+
+// The edit-form render list: flat child grids for every doctype, plus the Lot's
+// custom editors + read-only BOM Summary interleaved in the user-mandated order
+// (2026-07-10): Fabric Details → Fabric Program → Order Items → Order Details →
+// (other grids) → BOM Additional Items LAST → BOM Summary. Non-Lot doctypes get
+// their grids in the existing order — behaviour unchanged.
+const editRenderList = computed(() => {
+	const grids = editableChildTables.value
+	if (!isLot.value) return grids.map((ct) => ({ kind: "grid", ct, key: "g-" + ct.fieldname }))
+	const by = (fn) => grids.find((t) => t.fieldname === fn) || null
+	const used = new Set()
+	const out = []
+	const pushGrid = (fn) => {
+		const ct = by(fn)
+		if (!ct || used.has(fn)) return
+		used.add(fn)
+		out.push({ kind: "grid", ct, key: "g-" + fn })
+	}
+	pushGrid("lot_fabric_details")
+	out.push({ kind: "lot-fabric", ct: null, key: "lot-fabric" })
+	out.push({ kind: "lot-items", ct: null, key: "lot-items" })
+	out.push({ kind: "lot-order-details", ct: null, key: "lot-order-details" })
+	for (const g of grids) {
+		if (g.fieldname === "bom_additional_items") continue
+		pushGrid(g.fieldname)
+	}
+	pushGrid("bom_additional_items")
+	out.push({ kind: "lot-bom-summary", ct: null, key: "lot-bom-summary" })
+	return out
+})
+
+// Columns for the read-only BOM Summary form card — meta-driven (Lot BOM child
+// doctype), same chooser universe as the view tab.
+const bomSummaryColumns = computed(() => (isLot.value ? childColumns([], "Lot BOM") : []))
 
 // Evaluate a Frappe depends_on / mandatory_depends_on expression against a parent
 // state object (`parent`, default the live `form` model). `eval:<js>` runs the JS
@@ -2713,6 +3012,7 @@ async function enterEdit() {
 // failure leaves the grids empty (the user can re-enter), but we keep the flat
 // rows on the doc untouched until an actual save.
 async function hydratePivotsForEdit() {
+	correctionLoaded.value = false
 	try {
 		const loaded = await getDocWithOnload(doctype.value, props.id)
 		const onload = loaded?.__onload || {}
@@ -2721,6 +3021,10 @@ async function hydratePivotsForEdit() {
 			const grid = gridRefs[pv.childField]
 			const grouped = onload[pv.groupedField]
 			if (grid?.loadData && grouped != null) grid.loadData(grouped)
+		}
+		if (hasCorrectionSection.value && correctionGrid.value?.loadData) {
+			correctionGrid.value.loadData(onload.correction_item_details || [])
+			correctionLoaded.value = true
 		}
 	} catch (e) {
 		toast.warn("Could not load existing items", "Re-enter the items before saving, or edit in Desk.")
@@ -2751,7 +3055,10 @@ const editableChildTables = computed(() => {
 			!(isLot.value && f.fieldname === "bom_summary") &&
 			// R3a: stock-pivot doctypes edit these child tables through the grouped
 			// pivot editor, not the flat grid — drop them here for those doctypes only.
-			!pivotFields.has(f.fieldname),
+			!pivotFields.has(f.fieldname) &&
+			// Correction items edit through the per-WOC grouped section, not the
+			// flat grid (drop it only for doctypes with the correction section).
+			!(hasCorrectionSection.value && f.fieldname === "correction_items"),
 	)
 	const out = []
 	for (const tf of metaTables) {
@@ -3272,6 +3579,7 @@ async function runDocAutofill(fieldname) {
 		const skip = AUTOFILL_SKIP[dt] || new Set()
 		for (const [k, v] of Object.entries(r)) {
 			if (k === "items" || k === "item_details") continue
+			if (k === "correction_items" || k === "correction_item_details") continue
 			if (skip.has(k)) continue
 			if (k in form) form[k] = v // apply returned header fields
 		}
@@ -3282,6 +3590,13 @@ async function runDocAutofill(fieldname) {
 		for (const pv of stockPivots.value) {
 			const grid = gridRefs[pv.childField]
 			if (grid?.loadData && r.item_details != null) grid.loadData(r.item_details)
+		}
+		// DC/GRN: (re)load the per-WOC correction blocks for the selected Work
+		// Order — always, so switching WO clears a previous WO's corrections
+		// (and marks the grid state authoritative for buildPayload).
+		if (hasCorrectionSection.value && correctionGrid.value?.loadData) {
+			correctionGrid.value.loadData(r.correction_item_details || [])
+			correctionLoaded.value = true
 		}
 	} catch (e) {
 		toast.error("Auto-fill failed", e.message)
@@ -3295,6 +3610,12 @@ function resetGrnSource() {
 		if (k in form) form[k] = k === "is_rework" ? 0 : ""
 	}
 	for (const pv of stockPivots.value) gridRefs[pv.childField]?.loadData?.([])
+	// Corrections are WO-scoped: flipping the source invalidates them. An
+	// intentional reset is authoritative — the save must clear stored rows.
+	if (hasCorrectionSection.value && correctionGrid.value?.loadData) {
+		correctionGrid.value.loadData([])
+		correctionLoaded.value = true
+	}
 }
 
 // Per-field custom Link search (e.g. Work Order's address fields filter by the
@@ -3410,6 +3731,20 @@ function buildPayload() {
 		// Empty flat child → before_validate clears + rebuilds it from grouped.
 		payload[pv.childField] = []
 	}
+	// DC/GRN correction blocks: same grouped contract (each voucher's
+	// sync_vue_correction_item_details rebuilds the flat correction_items).
+	// EDIT mode sends even EMPTY blocks once the grid state is authoritative
+	// (correctionLoaded) — switching to a WO without corrections must CLEAR the
+	// stored rows, else the old WO's corrections survive and can draw down
+	// another WO's pendings on submit. A never-loaded grid (hydration failure)
+	// still omits both keys so existing rows aren't wiped.
+	if (hasCorrectionSection.value && correctionGrid.value?.getItems) {
+		const blocks = correctionGrid.value.getItems()
+		if (mode.value !== "edit" || correctionLoaded.value || blocks.length > 0) {
+			payload.correction_item_details = JSON.stringify(blocks)
+			payload.correction_items = []
+		}
+	}
 	// Lot: add the two editor payloads ONLY when the matching editor hydrated
 	// (omit the key entirely otherwise — a "[]" string would wipe the items and
 	// their Production Ordered Detail links server-side). The `items` /
@@ -3425,6 +3760,17 @@ function buildPayload() {
 			const blocks = lotOrderGrid.value.getItems()
 			if (blocks.length) payload.order_item_details = JSON.stringify(blocks)
 		}
+	}
+	// Lot fabric island (Desk lot.js validate parity): send BOTH transient JSONs
+	// whenever the island hydrated — even "[]" (an intentional clear; the server
+	// resurrects received-bearing program rows at weight 0). When hydration
+	// failed or never ran (create mode — a new Lot has no fabric entries yet),
+	// OMIT both keys so before_validate keeps the stored program/requirement
+	// rows untouched. NOT gated on is_transferred: the Desk island's only edit
+	// lock is Lot status (the `readonly` prop) and lot.js always sends the JSON.
+	if (isLot.value && mode.value === "edit" && lotFabricHydrated.value && lotFabricGrid.value?.getData) {
+		payload.fabric_program_details = JSON.stringify(lotFabricGrid.value.getData())
+		payload.fabric_requirement_details = JSON.stringify(lotFabricGrid.value.getRequirement())
 	}
 	// Prompt-named create: include the user-supplied name in the insert body.
 	// createDoc POSTs JSON.stringify(payload) to /api/resource/<doctype>, and
@@ -3568,6 +3914,11 @@ async function onSave() {
 			// rows until the user reloaded the page (reported 2026-05-29 for
 			// WO-00010-1).
 			if (stockPivots.value.length) hydratePivotsForView()
+			// Lot: the save's before_validate rebuilt the order/fabric data
+			// server-side (items explosion, fabric plan + plan_status badge) —
+			// refresh the onload payload the view tabs render from, same reason
+			// as the pivot re-hydration above.
+			if (isLot.value) hydrateLotForView()
 			docState.loadLinked(props.id)
 			docState.loadActivity(props.id)
 			loadConnections()
@@ -3860,6 +4211,7 @@ async function reloadView() {
 	docState.loadLinked(props.id)
 	docState.loadActivity(props.id)
 	loadConnections()
+	if (isWorkflow.value && workflowRef.value) workflowRef.value.reload?.()
 	// A submit/cancel/amend changes `modified` (and may move the doc within the
 	// list's sort), so re-resolve the prev/next neighbours.
 	resolveDocNav()
@@ -3901,9 +4253,11 @@ const detailFields = computed(() => {
 
 	// 2) meta-driven (preferred fallback)
 	if (meta.value?.fields?.length) {
+		const hiddenView = getHiddenViewFields(doctype.value)
 		for (const mf of meta.value.fields) {
 			if (META_HIDDEN_FIELDTYPES.has(mf.fieldtype)) continue
 			if (SYSTEM_FIELDS.has(mf.fieldname)) continue
+			if (hiddenView.has(mf.fieldname)) continue
 			if (mf.hidden) continue
 			if (!(mf.fieldname in doc.value)) continue
 			// Hide read-only empty/zero fields (any type; numeric 0 counts as empty).
@@ -3994,6 +4348,7 @@ const detailSections = computed(() => {
 
 	// 2) meta-driven → partition on Section Break
 	if (meta.value?.fields?.length) {
+		const hiddenView = getHiddenViewFields(doctype.value)
 		const sections = []
 		let cur = { key: "details", label: null, fields: [] }
 		const flush = () => {
@@ -4008,6 +4363,7 @@ const detailSections = computed(() => {
 			}
 			if (META_HIDDEN_FIELDTYPES.has(mf.fieldtype)) continue
 			if (SYSTEM_FIELDS.has(mf.fieldname)) continue
+			if (hiddenView.has(mf.fieldname)) continue
 			if (mf.hidden) continue
 			if (!(mf.fieldname in doc.value)) continue
 			if (mf.read_only && isEmptyForHide(doc.value[mf.fieldname], mf.fieldtype)) continue
@@ -4152,6 +4508,36 @@ function tabBadge(ct) {
 	}
 	return rowsFor(ct).length
 }
+
+// Lot view-tab strip in the user's mandated order (2026-07-10): Fabric Details
+// → Fabric Program → Order Items → Order Details → (other tables, e.g. BOM
+// Summary / Planned Qty, in meta order) → BOM Additional Items LAST. Custom
+// panels (Fabric Program / Order Items / Order Details) interleave with child
+// tables, so the strip is produced as ONE ordered list. Panels are looked up
+// by `value`, so only TabList order matters — the TabPanel DOM order doesn't.
+const lotViewTabs = computed(() => {
+	if (!isLot.value) return []
+	const tables = childTables.value
+	const byName = (fn) => tables.find((t) => t.fieldname === fn) || null
+	const used = new Set()
+	const out = []
+	const pushTable = (fn) => {
+		const ct = byName(fn)
+		if (!ct || used.has(fn)) return
+		used.add(fn)
+		out.push({ value: ct.fieldname, label: ct.label, badge: tabBadge(ct) })
+	}
+	pushTable("lot_fabric_details")
+	out.push({ value: "lot-fabric", label: "Fabric Program", badge: 0 })
+	out.push({ value: "lot-items", label: "Order Items", badge: 0 })
+	out.push({ value: "lot-order-details", label: "Order Details", badge: 0 })
+	for (const ct of tables) {
+		if (ct.fieldname === "bom_additional_items") continue
+		pushTable(ct.fieldname)
+	}
+	pushTable("bom_additional_items")
+	return out
+})
 
 // ── Linked documents ──
 const linkedGroups = computed(() => {
@@ -4356,6 +4742,14 @@ function linkTargetFor(field) {
 	const mf = metaFieldMap.value[field.fieldname]
 	if (!mf) return ""
 	return mf.fieldtype === "Dynamic Link" ? (doc.value?.[mf.options] || "") : (mf.options || "")
+}
+// A Link value is only rendered as a clickable link when its target doctype has
+// a /web route (is in the registry). Targets with no /web view (e.g. Production
+// Order, Product Season, UOM, User, stage Attribute Values) render as PLAIN TEXT
+// instead of bouncing the user into the Desk UI (2026-07-07).
+function linkHasWebRoute(field) {
+	const target = linkTargetFor(field)
+	return !!target && !!getRegistryByDoctype(target)
 }
 // { primary, code } for a Link value: sibling `<field>_name` → resolved title →
 // raw code. `code` is "" when the primary already IS the code (no duplication).
@@ -4860,6 +5254,36 @@ function stripHtml(s) {
 	font-weight: 600;
 	padding: 1px 7px;
 	border-radius: 999px;
+}
+
+/* DC/GRN transfer indicators — read-only status chips at the top of the
+   Details tab (conventions 2026-07-10). Token-only colours so dark mode works. */
+.transfer-badges {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-bottom: 14px;
+}
+.transfer-badge {
+	font-size: 12px;
+	font-weight: 600;
+	padding: 3px 10px;
+	border-radius: 999px;
+	border: 1px solid var(--esd-line);
+	color: var(--esd-muted);
+	background: transparent;
+}
+.transfer-badge--ok {
+	color: var(--esd-accent-700);
+	background: var(--esd-accent-50);
+	border-color: transparent;
+}
+.transfer-badge--warn {
+	color: var(--esd-danger);
+	border-color: var(--esd-danger);
+}
+.transfer-badge--info {
+	color: var(--esd-muted);
 }
 
 /* Details tab — grouped accent-header cards */

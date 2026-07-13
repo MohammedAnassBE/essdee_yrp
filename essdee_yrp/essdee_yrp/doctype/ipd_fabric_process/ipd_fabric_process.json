@@ -1,0 +1,76 @@
+{
+ "actions": [],
+ "creation": "2026-07-07 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "sequence",
+  "fabric_process",
+  "input_item",
+  "output_item",
+  "quantity_ratio"
+ ],
+ "fields": [
+  {
+   "columns": 1,
+   "description": "Display order + tiebreaker for the item-linkage chain walk. Seeded 10/20/30.",
+   "fieldname": "sequence",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Sequence",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "description": "The Process master. Owns the reusable transform shape (is_item_conversion / value_change_attributes).",
+   "fieldname": "fabric_process",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Process",
+   "options": "Process",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "description": "The consumed item. Blank is normalized to the IPD item at read time. Swap: = output item = cloth. Conversion: yarn / grey-yarn / greige-cloth.",
+   "fieldname": "input_item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Input Item",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "description": "The produced item. The LAST step's output item must equal the IPD item.",
+   "fieldname": "output_item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Output Item",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "columns": 1,
+   "default": "1",
+   "description": "Output qty per 1 input unit. Knitting = cloth per kg yarn; swaps = 1.",
+   "fieldname": "quantity_ratio",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Quantity Ratio"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-07 13:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Essdee YRP",
+ "name": "IPD Fabric Process",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1185,3 +1185,110 @@ function fabric_swap_write_back(frm, cfg, rows) {
 	frm.refresh_field(cfg.table_field);
 	frm.dirty();
 }
+
+// ===========================================================================
+// Generic Fabric Processes — view-integrated Vue entry (2026-07-07 UI rebuild).
+//
+// Replaces the two raw child-table grids (fabric_processes + the sibling
+// fabric_value_mappings) with ONE comprehension-first Vue app (a card per
+// process: shape badge, in -> out, and a labelled "what changes" area) plus a
+// shape-driven add panel. The Vue OWNS entry; on every add/remove it writes BOTH
+// sibling child tables back through frm so a normal Ctrl/Cmd+S persists them and
+// sync_fabric_process_matrices regenerates the matrices. The grids stay in the
+// doctype as the storage (hidden) -- the data model is unchanged.
+// ===========================================================================
+
+frappe.ui.form.on("Item Production Detail", {
+	refresh(frm) {
+		fabric_processes_toggle_grids(frm);
+		fabric_processes_mount(frm);
+	},
+	is_cloth_item(frm) {
+		fabric_processes_toggle_grids(frm);
+		fabric_processes_mount(frm);
+	},
+});
+
+function fabric_processes_toggle_grids(frm) {
+	// The Vue app is the UI; the two sibling grids + their section heads are the
+	// hidden storage behind it. Hide them with CSS (NOT set_df_property hidden):
+	// a Tab Break auto-hides when ALL its fields are df-hidden, which would hide
+	// the whole Fabric Processes tab. CSS-hiding keeps df.hidden=0 so the tab (and
+	// its HTML mount) stay visible while the raw grids disappear.
+	if (!frm.doc.is_cloth_item) return;
+	// Hide ONLY the two raw grids (their wrapper), never the section wrappers — the
+	// HTML mount shares the first storage section, and hiding a section wrapper
+	// collapses the mount. The two storage sections' labels + descriptions are
+	// blanked on the Custom Fields, so with the grids gone only the Vue card view
+	// reads as the UI.
+	["fabric_processes", "fabric_value_mappings"].forEach((f) => {
+		const fld = frm.fields_dict[f];
+		if (fld && fld.wrapper) $(fld.wrapper).hide();
+	});
+}
+
+async function fabric_processes_mount(frm) {
+	const field = frm.fields_dict.fabric_processes_html;
+	if (!field) return;
+	const $w = $(field.wrapper);
+	if (!frm.doc.is_cloth_item) {
+		$w.empty();
+		frm.__fabric_app = null;
+		return;
+	}
+	// Rebuilt fresh each refresh (cur_frm reads aren't reactive -- same pattern as
+	// the Lot fabric island).
+	$w.empty();
+	const all_processes = await fabric_processes_catalog();
+	const app = new frappe.production.ui.FabricProcesses(field.wrapper, {
+		on_change: (payload) => fabric_processes_write_back(frm, payload),
+	});
+	frm.__fabric_app = app;
+	app.load_data(fabric_processes_payload(frm, all_processes));
+}
+
+let _fabric_process_catalog = null;
+async function fabric_processes_catalog() {
+	if (_fabric_process_catalog) return _fabric_process_catalog;
+	const rows = await frappe.db.get_list("Process", { fields: ["name"], limit: 0, order_by: "name asc" });
+	_fabric_process_catalog = rows.map((r) => r.name);
+	return _fabric_process_catalog;
+}
+
+function fabric_processes_payload(frm, all_processes) {
+	const editable = frm.is_new() || frm.doc.approval_status !== "Approved";
+	return {
+		editable,
+		item: frm.doc.item || null,
+		// Conversion input defaults to the IPD's yarn (yarn → cloth); NEVER the
+		// cloth item — a conversion's input and output must be distinct.
+		default_input: frm.doc.yarn_item || null,
+		attributes: [...new Set((frm.doc.item_attributes || []).map((a) => a.attribute).filter(Boolean))],
+		all_processes: all_processes || [],
+		processes: (frm.doc.fabric_processes || []).map((r) => ({
+			sequence: r.sequence,
+			fabric_process: r.fabric_process,
+			input_item: r.input_item,
+			output_item: r.output_item,
+			quantity_ratio: r.quantity_ratio,
+		})),
+		mappings: (frm.doc.fabric_value_mappings || []).map((m) => ({
+			sequence: m.sequence,
+			mapping_index: m.mapping_index,
+			attribute: m.attribute,
+			role: m.role,
+			from_value: m.from_value,
+			to_value: m.to_value,
+		})),
+	};
+}
+
+function fabric_processes_write_back(frm, payload) {
+	frm.clear_table("fabric_processes");
+	(payload.processes || []).forEach((p) => Object.assign(frm.add_child("fabric_processes"), p));
+	frm.clear_table("fabric_value_mappings");
+	(payload.mappings || []).forEach((m) => Object.assign(frm.add_child("fabric_value_mappings"), m));
+	frm.refresh_field("fabric_processes");
+	frm.refresh_field("fabric_value_mappings");
+	frm.dirty();
+}

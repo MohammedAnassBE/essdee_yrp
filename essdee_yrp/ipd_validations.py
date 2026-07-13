@@ -66,12 +66,17 @@ def validate_cloth_ipd(doc):
 
 	# The Process master should declare each tab's transformation shape
 	# (is_item_conversion / value_change_attributes) — warn when unmaintained.
-	from essdee_yrp.fabric_ipd import validate_fabric_process_shapes
+	from essdee_yrp.fabric_ipd import validate_consume_mappings, validate_fabric_process_shapes
 	validate_fabric_process_shapes(doc)
 
 	# Extra chain steps (Re-Compacting etc.): distinct masters + complete mappings.
 	from essdee_yrp.fabric_chain import validate_fabric_chain
 	validate_fabric_chain(doc)
+
+	# Consume-role shape rules on the generic fabric value mappings (2026-07-08):
+	# from_value required, no Consume+Change on one attribute in a group, and
+	# Consume/Introduce only across differing input/output items.
+	validate_consume_mappings(doc)
 
 	# Identity-process rows may only treat this IPD's cloth or its yarn.
 	allowed_items = {doc.item, doc.get("yarn_item")}

@@ -74,12 +74,21 @@
 							<option value="">{{ __("Dia…") }}</option>
 							<option v-for="d in entry.final_options?.dias || []" :key="d" :value="d">{{ d }}</option>
 						</select>
+						<input
+							v-model.number="entry._new_r_weight"
+							type="number"
+							min="0"
+							step="0.001"
+							class="fp-add-weight"
+							:placeholder="__('Weight (Kg)')"
+							@keyup.enter="add_requirement(entry)"
+						/>
 						<button
 							class="btn btn-xs btn-default"
 							:disabled="!entry._new_r_dia || ((entry.final_options?.colours || []).length && !entry._new_r_colour)"
 							@click="add_requirement(entry)"
 						>
-							{{ __("Add Row") }}
+							{{ __("Add") }}
 						</button>
 					</div>
 					<div v-if="!entry.ipd_approved" class="fp-hint">
@@ -133,45 +142,27 @@
 							<option value="">{{ __("Dia…") }}</option>
 							<option v-for="d in remaining_dias(entry)" :key="d" :value="d">{{ d }}</option>
 						</select>
+						<input
+							v-model.number="entry._new_weight"
+							type="number"
+							min="0"
+							step="0.001"
+							class="fp-add-weight"
+							:placeholder="__('Weight (Kg)')"
+							@keyup.enter="add_program(entry)"
+						/>
 						<button class="btn btn-xs btn-default" :disabled="!entry._new_dia" @click="add_program(entry)">
-							{{ __("Add Dia") }}
+							{{ __("Add") }}
 						</button>
 					</div>
 				</section>
 			</div>
-
-			<!-- per-step plan vs actual, server-owned -->
-			<div v-if="(entry.steps || []).some(s => s.rows.length)" class="fp-ledger">
-				<h6>{{ __("Chain plan & receipts — from the IPD matrices and GRNs") }}</h6>
-				<div class="fp-steps">
-					<section v-for="step in entry.steps" :key="step.process_name" class="fp-step">
-						<div class="fp-step-title">{{ step.process_name }}</div>
-						<table v-if="step.rows.length" class="fp-table">
-							<thead>
-								<tr>
-									<th></th>
-									<th>{{ __("Dia") }}</th>
-									<th>{{ __("Colour") }}</th>
-									<th class="fp-num">{{ __("Planned") }}</th>
-									<th class="fp-num">{{ __("Received") }}</th>
-									<th class="fp-num">{{ __("Balance") }}</th>
-								</tr>
-							</thead>
-							<tbody>
-								<tr v-for="row in step.rows" :key="row.side + (row.dia || '') + '::' + (row.colour || '')">
-									<td class="fp-side">{{ row.side === "Input" ? __("In") : "" }}</td>
-									<td>{{ row.dia || "—" }}</td>
-									<td>{{ row.colour || "—" }}</td>
-									<td class="fp-num">{{ row.planned_weight || 0 }}</td>
-									<td class="fp-num fp-received">{{ row.received_weight || 0 }}</td>
-									<td class="fp-num" :class="{ 'fp-neg': balance(row) < 0 }">{{ balance(row) }}</td>
-								</tr>
-							</tbody>
-						</table>
-						<div v-else class="fp-none fp-step-none">{{ __("no plan / receipts") }}</div>
-					</section>
-				</div>
-			</div>
+			<!-- The per-process (knitting/dyeing/compacting) chain plan-vs-received
+			     view was intentionally removed from the Lot display (2026-07-07):
+			     only the two fabric views above — Final Requirement (finished cloth)
+			     and Program (dia-wise / dyed) — are shown. The chain is still fully
+			     tracked in the backend (`lot_fabric_step_ledger` + the IPD matrices);
+			     this is a display-hiding change only, not a data-model change. -->
 		</div>
 	</div>
 </template>
@@ -202,8 +193,10 @@ function load_data(data) {
 		requirement: entry.requirement || [],
 		steps: entry.steps || [],
 		_new_dia: "",
+		_new_weight: null,
 		_new_r_dia: "",
 		_new_r_colour: "",
+		_new_r_weight: null,
 	}));
 }
 
@@ -239,10 +232,6 @@ function requirement_total(entry) {
 	return Math.round(entry.requirement.reduce((sum, r) => sum + (Number(r.weight) || 0), 0) * 1000) / 1000;
 }
 
-function balance(row) {
-	return Math.round(((row.planned_weight || 0) - (row.received_weight || 0)) * 1000) / 1000;
-}
-
 function remaining_dias(entry) {
 	const used = new Set(entry.program.map((r) => r.dia));
 	return (entry.dias || []).filter((d) => !used.has(d));
@@ -250,8 +239,9 @@ function remaining_dias(entry) {
 
 function add_program(entry) {
 	if (!entry._new_dia) return;
-	entry.program.push({ dia: entry._new_dia, weight: 0, received_weight: 0 });
+	entry.program.push({ dia: entry._new_dia, weight: Number(entry._new_weight) || 0, received_weight: 0 });
 	entry._new_dia = "";
+	entry._new_weight = null;
 	mark_dirty();
 }
 
@@ -263,9 +253,10 @@ function add_requirement(entry) {
 		frappe.show_alert({ message: __("{0} / {1} already exists", [colour || "", dia]), indicator: "orange" });
 		return;
 	}
-	entry.requirement.push({ dia, colour, weight: 0 });
+	entry.requirement.push({ dia, colour, weight: Number(entry._new_r_weight) || 0 });
 	entry._new_r_dia = "";
 	entry._new_r_colour = "";
+	entry._new_r_weight = null;
 	mark_dirty();
 }
 
@@ -387,17 +378,9 @@ defineExpose({ load_data, get_data, get_requirement });
 .fp-received {
 	color: var(--text-muted);
 }
-.fp-neg {
-	color: var(--red-600, #d92d20);
-}
 .fp-x {
 	width: 28px;
 	text-align: center !important;
-}
-.fp-side {
-	width: 26px;
-	color: var(--text-muted);
-	font-size: 11px;
 }
 .fp-total td {
 	font-weight: 600;
@@ -446,22 +429,14 @@ defineExpose({ load_data, get_data, get_requirement });
 	padding: 3px 6px;
 	min-width: 90px;
 }
-.fp-ledger {
-	border-top: 1px solid var(--border-color);
-	padding: 10px 12px;
-}
-.fp-steps {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-	gap: 10px;
-}
-.fp-step-title {
-	font-weight: 600;
+.fp-add-weight {
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	background: var(--control-bg, transparent);
+	color: inherit;
 	font-size: 12px;
-	margin-bottom: 4px;
-}
-.fp-step-none {
-	padding: 6px 0;
-	text-align: left;
+	padding: 3px 6px;
+	width: 100px;
+	text-align: right;
 }
 </style>

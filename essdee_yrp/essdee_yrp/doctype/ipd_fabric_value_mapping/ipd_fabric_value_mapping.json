@@ -1,0 +1,85 @@
+{
+ "actions": [],
+ "creation": "2026-07-07 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "sequence",
+  "mapping_index",
+  "attribute",
+  "role",
+  "from_value",
+  "to_value"
+ ],
+ "fields": [
+  {
+   "columns": 1,
+   "description": "The process step this mapping belongs to — matches IPD Fabric Process.sequence. Keys the mapping to its sibling process row.",
+   "fieldname": "sequence",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Sequence",
+   "reqd": 1
+  },
+  {
+   "columns": 1,
+   "description": "Groups attribute entries into one logical mapping (a combination transition). Enables multi-attribute (multi_swap) rows.",
+   "fieldname": "mapping_index",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Mapping Index",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "description": "Which attribute this entry concerns (Dia, Colour, ...).",
+   "fieldname": "attribute",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Attribute",
+   "options": "Item Attribute",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "description": "Change = value swap (from set, to set). Introduce = new attribute (to set, from blank; output side only). Pin = passthrough (from set narrows; blank = wildcard, expand to all). Consume = consumed attribute (from set, to blank; input side only — the mirror of Introduce).",
+   "fieldname": "role",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Role",
+   "options": "Change\nIntroduce\nPin\nConsume",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "description": "Change: pre-value. Pin: the pinned value (blank = wildcard). Consume: the consumed value (required, never wildcard). Introduce: blank.",
+   "fieldname": "from_value",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "From Value",
+   "options": "Item Attribute Value"
+  },
+  {
+   "columns": 2,
+   "description": "Change/Introduce: post-value. Pin: equals from_value (builder mirrors from). Consume: blank.",
+   "fieldname": "to_value",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "To Value",
+   "options": "Item Attribute Value"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-08 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Essdee YRP",
+ "name": "IPD Fabric Value Mapping",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

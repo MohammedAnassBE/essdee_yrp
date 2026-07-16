@@ -1,4 +1,4 @@
-import { defineConfig } from "vite"
+import { defineConfig, searchForWorkspaceRoot } from "vite"
 import vue from "@vitejs/plugin-vue"
 import path from "path"
 import fs from "fs"
@@ -7,12 +7,24 @@ export default defineConfig({
 	server: {
 		port: 8082,
 		proxy: getProxyOptions(),
+		fs: {
+			// Absolute paths only — a bare relative fs.allow replaces Vite's
+			// default allow-list and can 403 src/ itself in dev (spec §6.2).
+			allow: [
+				searchForWorkspaceRoot(process.cwd()), // keep default root
+				path.resolve(__dirname, "../../yrp/frontend"), // @yrp/web-engine source
+				path.resolve(__dirname, "../essdee_yrp/fixtures"), // fixture JSON import (spec §12.3)
+			],
+		},
 	},
 	plugins: [vue()],
 	resolve: {
 		alias: {
 			"@": path.resolve(__dirname, "src"),
 		},
+		// dedupe is THE fix for bare-import resolution through the file: link —
+		// there is no node_modules on the walk-up path from apps/yrp/ (spec §6.2).
+		dedupe: ["vue", "pinia"],
 	},
 	build: {
 		outDir: "../essdee_yrp/public/frontend",

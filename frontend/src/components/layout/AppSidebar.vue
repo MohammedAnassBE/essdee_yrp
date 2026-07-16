@@ -14,26 +14,28 @@
 				<span class="nav-label">Home</span>
 			</router-link>
 
-			<!-- Perm-gated DocType groups -->
+			<!-- Perm-gated DocType groups (arrangement from store.navGroups) -->
 			<div
 				v-for="grp in sidebarGroups"
-				:key="grp.group"
+				:key="grp.id"
 				class="nav-group"
-				:class="{ 'section-collapsed': isCollapsed(grp.group) }"
+				:class="{ 'section-collapsed': isCollapsed(grp.id) }"
 			>
 				<!-- Section header: a toggle button (shown only when the rail is
 				     expanded). Collapse state is per-user, persisted server-side via
-				     useSidebarCollapse — independent of the rail's expand state. -->
+				     useSidebarCollapse — independent of the rail's expand state.
+				     Keyed on the group's stable `id` (spec §19 nit 4); Default seeds
+				     ids == today's labels so existing persisted state survives. -->
 				<button
 					type="button"
 					class="nav-group-label"
-					:aria-expanded="!isCollapsed(grp.group)"
-					@click="toggleSection(grp.group)"
+					:aria-expanded="!isCollapsed(grp.id)"
+					@click="toggleSection(grp.id)"
 				>
-					<span class="nav-group-text">{{ grp.group }}</span>
+					<span class="nav-group-text">{{ grp.label }}</span>
 					<i
 						class="pi pi-chevron-down nav-group-chevron"
-						:class="{ 'is-collapsed': isCollapsed(grp.group) }"
+						:class="{ 'is-collapsed': isCollapsed(grp.id) }"
 					/>
 				</button>
 				<router-link
@@ -75,8 +77,9 @@
 <script setup>
 import { computed } from "vue"
 import { useRouter } from "vue-router"
+import { useUiConfigStore } from "@yrp/web-engine"
 import { usePermissions } from "@/composables/usePermissions"
-import { getSidebarGroups } from "@/config/doctypes"
+import { getRegistryByDoctype } from "@/config/doctypes"
 import { useSidebarCollapse } from "@/composables/useSidebarCollapse"
 
 defineProps({ pinned: Boolean, drawerOpen: Boolean })
@@ -84,14 +87,38 @@ const emit = defineEmits(["toggle-pin", "navigate"])
 
 const router = useRouter()
 const { canRead, isAdmin, hasRole } = usePermissions()
+const ui = useUiConfigStore()
 
 // Logo comes from Website Settings via frappe.boot (admin-controlled); falls back
 // to the bundled Essdee logo when the field is unset.
 const logoUrl = window.frappe?.boot?.app_logo || "/assets/essdee_yrp/frontend/essdee-logo.png"
 
-// Live-perm gate: only show items the user can read. Admin sees everything;
-// DocTypes not installed (e.g. Workstation) resolve canRead → false and drop.
-const sidebarGroups = computed(() => getSidebarGroups((dt) => canRead(dt)))
+// Arrangement from the layout (store.navGroups — layout-hidden items already
+// filtered), mapped onto the catalog: getRegistryByDoctype supplies route/label/
+// flags; unknown doctypes (layout typo, §14 row 12) drop with a console.warn.
+// The layout item's icon wins when set (arrangement), else the catalog's.
+// Live-perm gate PRESERVED: only items the user canRead render — no read
+// permission means not rendered. Admin sees everything; DocTypes not installed
+// (e.g. Workstation) resolve canRead → false and drop. Empty groups drop.
+const sidebarGroups = computed(() =>
+	ui.navGroups
+		.map((g) => ({
+			id: g.id || g.label,
+			label: g.label || g.id,
+			items: (g.items || [])
+				.map((item) => {
+					const reg = getRegistryByDoctype(item.doctype)
+					if (!reg) {
+						console.warn(`[essdee sidebar] unknown doctype in layout nav: "${item.doctype}" — dropped`)
+						return null
+					}
+					return { ...reg, icon: item.icon || reg.icon }
+				})
+				.filter(Boolean)
+				.filter((d) => canRead(d.doctype)),
+		}))
+		.filter((g) => g.items.length > 0)
+)
 
 // Per-user, server-persisted collapse state for each sidebar SECTION.
 const { isCollapsed, toggleSection } = useSidebarCollapse()

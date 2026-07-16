@@ -44,6 +44,13 @@ fixtures = [
 		"dt": "Custom DocPerm",
 		"filters": [["parent", "in", ["Item Production Detail", "Terms and Condition"]]],
 	},
+	# /web per-user UI (spec §12.2): the code-owned Default layout. THE FILTER IS
+	# LOAD-BEARING — sync_fixtures force-imports on every `bench migrate`, so an
+	# unfiltered fixture would silently revert every same-named prod-edited layout
+	# and ship stray dev test layouts. Fixtured names (Default) are code-owned:
+	# never edit them live, duplicate instead; every other layout is prod-owned
+	# and never exported without deliberately extending this filter.
+	{"dt": "UI Layout", "filters": [["name", "in", ["Default"]]]},
 ]
 
 # Apps

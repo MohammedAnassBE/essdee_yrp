@@ -193,8 +193,37 @@
 			</div>
 		</div>
 
-		<!-- Table -->
+		<!-- dcEntry.variant "inline-grid" (demo-5, Delivery Challan only): a
+		     collapsible embedded create-mode DocDetail ABOVE the list — no
+		     overlay, no navigation. "+ New" expands it; save/discard collapse
+		     it (save also refreshes rows + tab counts). Knob absent or other
+		     doctypes → this block never renders (parity law). -->
+		<section
+			v-if="inlineEntryOpen && dcEntryVariant === 'inline-grid'"
+			class="dc-inline-entry"
+			aria-label="Inline entry panel"
+		>
+			<DcEntryChips
+				v-if="dcInlineSupplierChips"
+				show-supplier-chips
+				:active-supplier="inlinePickedSupplier"
+				@pick-supplier="onInlinePickSupplier"
+			/>
+			<DocDetail
+				ref="inlineEntryRef"
+				key="dc-inline-new"
+				:doc-route="props.docRoute"
+				id="new"
+				embedded
+				@close="onInlineEntryClose"
+				@saved="onInlineEntrySaved"
+			/>
+		</section>
+
+		<!-- Table (the DEFAULT presentation — layouts without a variant knob render
+		     EXACTLY this, byte-identical to today; parity law) -->
 		<DataTable
+			v-if="listVariant === 'table'"
 			:value="rows"
 			v-model:selection="selectedRows"
 			:loading="loading"
@@ -269,6 +298,49 @@
 			</template>
 		</DataTable>
 
+		<!-- Cards / Kanban (layout knob listViews[dt].variant — demo _template §7).
+		     Pure presentation over the SAME fetch layer: search, filters, tabs and
+		     the paginator above/below all keep operating on listState unchanged. -->
+		<ListCards
+			v-else-if="listVariant === 'cards'"
+			:rows="rows"
+			:columns="variantColumns"
+			:title-field="variantTitleField"
+			:title-of="variantTitleOf"
+			:status-of="variantStatusOf"
+			:cell-value="variantCellValue"
+			:loading="loading"
+			@open="onCardOpen"
+		/>
+		<ListKanban
+			v-else
+			:rows="rows"
+			:columns="variantColumns"
+			:title-field="variantTitleField"
+			:title-of="variantTitleOf"
+			:status-of="variantStatusOf"
+			:cell-value="variantCellValue"
+			:group-of="kanbanGroupOf"
+			:group-field="kanbanGroupField"
+			:loading="loading"
+			@open="onCardOpen"
+		/>
+		<!-- Shared empty state for the card/kanban variants (mirrors the table's
+		     #empty slot, incl. the Q14 first-create offer on a truly empty list). -->
+		<div v-if="listVariant !== 'table' && !loading && !rows.length" class="esd-empty variant-empty">
+			<i class="pi pi-inbox" />
+			<p class="esd-empty__text">
+				{{ hasAnyFilter ? "No records match the current filters" : "No records found" }}
+			</p>
+			<Button
+				v-if="doctype && canCreate(doctype) && !hasAnyFilter"
+				:label="`Create the first ${registry?.label || doctype}`"
+				icon="pi pi-plus"
+				size="small"
+				@click="onNew"
+			/>
+		</div>
+
 		<!-- Paginator -->
 		<Paginator
 			v-if="totalCount > pageSize"
@@ -276,6 +348,15 @@
 			:totalRecords="totalCount"
 			:first="(page - 1) * pageSize"
 			@page="onPage"
+		/>
+
+		<!-- Detail / entry overlays (layout structural knobs). Renders nothing
+		     unless a knob is active AND the ?detail=/?new= query is present —
+		     the parity-law default (no knob) leaves this completely inert. -->
+		<DocOverlayHost
+			v-if="doctype && (overlayDetailActive || overlayEntryActive)"
+			:doc-route="props.docRoute"
+			@saved="onOverlaySaved"
 		/>
 
 		<ColumnCustomizerModal
@@ -458,12 +539,18 @@ import { usePermissions } from "@/composables/usePermissions"
 import { useLinkTitles } from "@/composables/useLinkTitles"
 import { useAppConfirm } from "@/composables/useConfirm"
 import { useAppToast } from "@/composables/useToast"
+import { useUiConfigStore } from "@yrp/web-engine"
 import { getRegistryByRoute, WORKFLOW_SEVERITY } from "@/config/doctypes"
 import { getFieldLabel } from "@/config/fields"
 import { getMeta, getCount, callMethod, submitDoc, cancelDoc, getBulkEditFields, bulkUpdateField, errorLines } from "@/api/client"
 import ColumnCustomizerModal from "@/components/ColumnCustomizerModal.vue"
 import FilterPanel from "@/components/FilterPanel.vue"
 import LinkField from "@/components/LinkField.vue"
+import ListCards from "@/components/list/ListCards.vue"
+import ListKanban from "@/components/list/ListKanban.vue"
+import DcEntryChips from "@/views/dynamic/DcEntryChips.vue"
+import DocDetail from "@/views/dynamic/DocDetail.vue"
+import DocOverlayHost from "@/views/dynamic/DocOverlayHost.vue"
 
 const props = defineProps({
 	docRoute: { type: String, required: true },
@@ -624,8 +711,29 @@ const eligibleColumns = computed(() => {
 	return out
 })
 
-// Columns rendered in the table: per-user saved (enabled, in saved order) → meta
-// `in_list_view` defaults → none (only the always-present Name column).
+// Layout-tier default columns from the active UI layout (spec §7.3):
+// resolved `listViews[doctype].columns` mapped onto the meta-eligible fields
+// (unknown fields drop silently; the layout's label wins when it names one).
+// The Default layout seeds `listViews: {}` so this tier resolves null and
+// today's rendering is untouched.
+const uiStore = useUiConfigStore()
+const layoutColumns = computed(() => {
+	const cols = uiStore.listColumns(doctype.value)
+	if (!Array.isArray(cols) || !cols.length) return null
+	const byField = new Map(eligibleColumns.value.map((c) => [c.field, c]))
+	const out = []
+	for (const lc of cols) {
+		if (!lc || !lc.field || lc.field === "name") continue
+		const e = byField.get(lc.field)
+		if (e) out.push(lc.label ? { ...e, label: lc.label } : e)
+	}
+	return out.length ? out : null
+})
+
+// Columns rendered in the table (spec §7.3 precedence, highest wins):
+// per-user saved User Listview (enabled, in saved order) → layout-tier
+// listViews columns → meta `in_list_view` defaults → none (only the
+// always-present Name column).
 const listColumns = computed(() => {
 	const byField = new Map(eligibleColumns.value.map((c) => [c.field, c]))
 	if (Array.isArray(userColumns.value) && userColumns.value.length) {
@@ -637,11 +745,208 @@ const listColumns = computed(() => {
 		}
 		return cols
 	}
+	if (layoutColumns.value) return layoutColumns.value
 	return eligibleColumns.value.filter((c) => c.in_list_view)
 })
 
+// ── List presentation variant (layout knob — spec §6.4, demo _template §7) ──
+// listViews[dt].variant: "table" (DEFAULT — byte-identical to today) | "cards"
+// | "kanban"; kanban groups by listViews[dt].groupBy. Variants are PURE
+// presentation over the same fetch layer: search, filters, tabs, paginator and
+// permissions all keep operating on listState unchanged.
+const listViewCfg = computed(() => uiStore.active.listViews?.[doctype.value] || {})
+const metaFieldSet = computed(() => new Set((meta.value?.fields || []).map((f) => f.fieldname)))
+const hasStatusSignal = computed(
+	() => isSubmittable.value || isWorkflow.value || metaFieldSet.value.has("status"),
+)
+
+// Kanban's group source: the layout's groupBy when it's a real meta field.
+const kanbanGroupField = computed(() => {
+	const g = listViewCfg.value.groupBy
+	return typeof g === "string" && g && metaFieldSet.value.has(g) ? g : ""
+})
+
+const listVariant = computed(() => {
+	const v = listViewCfg.value.variant
+	if (v === "cards") return "cards"
+	// Kanban with neither a valid groupBy nor any status signal has nothing to
+	// group by → table (demo renderKanban parity). A missing/invalid groupBy
+	// WITH a status signal falls back to status-grouping.
+	if (v === "kanban") return kanbanGroupField.value || hasStatusSignal.value ? "kanban" : "table"
+	return "table"
+})
+
+// ── Detail / entry overlays (layout structural knobs — spec §6.4) ───────────
+// detail.position right|center|bottom-sheet → row/card clicks open the record
+// as ?detail=<name> on THIS route and DocOverlayHost renders the embedded
+// DocDetail in a Drawer/Dialog. entry.mode "popup" → the New buttons open
+// ?new=1 (create Dialog) instead of routing to /:docRoute/new. Knob absent or
+// "page" → today's router.push EXACTLY (parity law).
+//
+// BOUNDARY: these knobs only ever intercept LIST-PAGE interactions (row/card
+// clicks + the New buttons on this page). Direct path navigation —
+// /web/:docRoute/:id from home tiles, the palette, deep links, and
+// forward-action pushes like /delivery-challan/new?work_order=… — keeps
+// rendering full-page regardless of the knobs.
+//
+// EXCLUDED routes: doctypes whose /:id (or /new) paths are pre-empted by
+// EXPLICIT rich routes (router/index.js: IPDConfig, ProcessMatrix, BOMMapping,
+// IPDCreate). Their clicks must keep reaching those rich views — the generic
+// DocDetail overlay would silently bypass them.
+const OVERLAY_EXCLUDED_ROUTES = new Set([
+	"item-production-detail",
+	"ipd-process-matrix",
+	"item-bom-attribute-mapping",
+])
+const overlayDetailActive = computed(() => {
+	if (OVERLAY_EXCLUDED_ROUTES.has(props.docRoute)) return false
+	const p = uiStore.detailKnob?.position
+	return p === "right" || p === "center" || p === "bottom-sheet"
+})
+const overlayEntryActive = computed(
+	() =>
+		!OVERLAY_EXCLUDED_ROUTES.has(props.docRoute) &&
+		(uiStore.entryKnob?.mode === "popup" || dcEntryVariant.value === "size-matrix"),
+)
+
+// ── DC entry variants (dcEntry knob — Delivery Challan ONLY, spec §6.4) ────
+// "size-matrix" (demo-7): + New opens the bottom-sheet entry hosted by
+// DocOverlayHost — same pushed ?new=1 protocol as the entry popup; the host
+// picks the sheet over the popup for DC. "inline-grid" (demo-5): + New
+// expands an embedded create-mode DocDetail ABOVE the list — no overlay, no
+// navigation. Knob absent, other variants (form-grid…), or other doctypes →
+// + New behaves exactly as today (parity law). qtyControl: only "input" (the
+// existing size-pivot grid inputs) is implemented — other values are ignored
+// client-side; the server already soft-warns on them.
+const dcEntryVariant = computed(() => {
+	if (props.docRoute !== "delivery-challan") return null
+	const v = uiStore.dcEntryKnob?.variant
+	return v === "size-matrix" || v === "inline-grid" ? v : null
+})
+// supplierPicker "chips" in the INLINE panel (the sheet's chips live in
+// DocOverlayHost); "select"/absent → the form's untouched Link field only.
+const dcInlineSupplierChips = computed(
+	() => dcEntryVariant.value === "inline-grid" && uiStore.dcEntryKnob?.supplierPicker === "chips",
+)
+
+// Inline-grid entry panel state. A live knob change (or a route change — the
+// variant computed flips to null) closes a stale panel so it never hosts a
+// form the layout no longer asks for.
+const inlineEntryOpen = ref(false)
+const inlineEntryRef = ref(null)
+const inlinePickedSupplier = ref("") // active-chip highlight only
+watch(dcEntryVariant, (v) => {
+	if (v !== "inline-grid") inlineEntryOpen.value = false
+})
+watch(inlineEntryOpen, (v) => {
+	if (!v) inlinePickedSupplier.value = ""
+})
+
+function onInlineEntryClose() {
+	inlineEntryOpen.value = false
+}
+// Save inside the panel: collapse + refresh rows and tab counts (the success
+// toast already fired inside DocDetail — same as the overlay host).
+function onInlineEntrySaved() {
+	inlineEntryOpen.value = false
+	refreshListNow()
+}
+// Cancel = the embedded form's own Discard button (it runs DocDetail's
+// internal dirty confirm, then emits `close` → collapse). The panel adds no
+// chrome of its own: the form's "New <label>" header + Discard/Save ARE the
+// panel head — a second title/✕ here would just duplicate them.
+// Chip pick → the embedded DocDetail's setFormField: the SAME assign +
+// onFieldChanged path a LinkField pick runs (see DocOverlayHost). It returns
+// false while the create form is still building (form = {} until the meta
+// round-trip finishes) — highlight only a pick that actually landed.
+async function onInlinePickSupplier(name) {
+	if (await inlineEntryRef.value?.setFormField("supplier", name)) inlinePickedSupplier.value = name
+	else toast.info("Form is still loading", "Tap the Job-worker again in a moment.")
+}
+
+// The overlay reported a successful create/save: refresh rows + tab counts
+// (the overlay itself closed already; the success toast fired in DocDetail).
+function onOverlaySaved() {
+	refreshListNow()
+}
+
+// Cards/kanban follow the SAME §7.3 column precedence the table uses (enabled
+// per-user User Listview columns in saved order → layout listViews columns →
+// meta `in_list_view` defaults), so rendering, search and the Columns modal
+// agree on every variant — the user's column management sits on top of
+// whatever presentation the layout chose.
+const variantColumns = computed(() => listColumns.value)
+
+// Bold card title: layout-named field (listViews[dt].titleField) > meta
+// title_field > the first non-status key column; docname as the row fallback.
+const variantTitleField = computed(() => {
+	const t = listViewCfg.value.titleField
+	if (typeof t === "string" && t && metaFieldSet.value.has(t)) return t
+	const mt = meta.value?.title_field
+	if (mt && mt !== "name" && metaFieldSet.value.has(mt)) return mt
+	const c = variantColumns.value.find((col) => col.field !== "status")
+	return c ? c.field : ""
+})
+const titleColDesc = computed(
+	() => eligibleColumns.value.find((c) => c.field === variantTitleField.value) || null,
+)
+const groupColDesc = computed(
+	() => eligibleColumns.value.find((c) => c.field === kanbanGroupField.value) || null,
+)
+
+function variantTitleOf(row) {
+	const f = variantTitleField.value
+	if (!f) return row.name
+	const v = titleColDesc.value ? variantCellValue(titleColDesc.value, row) : row[f]
+	return v === null || v === undefined || v === "" || v === "—" ? row.name : String(v)
+}
+
+// Status chip text for a card: same source order as the table's Status tag
+// (workflow_state > status > docstatus); "" (no signal) = no chip, no tint.
+function variantStatusOf(row) {
+	if (isWorkflow.value && row.workflow_state) return row.workflow_state
+	if (typeof row.status === "string" && row.status) return row.status
+	if (isSubmittable.value) return DOCSTATUS_LABELS[row.docstatus] || ""
+	return ""
+}
+
+// Mirror of the table's cell body: dates dd-mm-yyyy, Indian-grouped numbers,
+// Link codes resolved to human names.
+function variantCellValue(col, row) {
+	if (col.type === "Date" || col.type === "Datetime") return formatDate(row[col.field])
+	if (col.type === "Currency") return formatNumber(row[col.field])
+	if (col.isLink && row[col.field]) return linkName(col, row)
+	return row[col.field] ?? "—"
+}
+
+// Kanban column label for a row: the groupBy field's formatted value (blank →
+// "—"), else the synthesized status when grouping fell back to it.
+function kanbanGroupOf(row) {
+	if (!kanbanGroupField.value) return variantStatusOf(row) || "—"
+	const raw = row[kanbanGroupField.value]
+	if (raw === null || raw === undefined || raw === "") return "—"
+	return groupColDesc.value ? String(variantCellValue(groupColDesc.value, row)) : String(raw)
+}
+
+// Card/kanban click → detail, exactly like a table row click (same nav-context
+// capture so the detail page's prev/next arrows step through this list, and
+// the same detail-overlay knob interception — ALL list variants behave alike).
+function onCardOpen(row) {
+	const name = row?.name
+	if (!name) return
+	captureNavContext()
+	if (overlayDetailActive.value) {
+		router.push({ query: { ...route.query, detail: name } })
+		return
+	}
+	router.push(`/${props.docRoute}/${encodeURIComponent(name)}`)
+}
+
 // Fields offered in the Customize Columns modal: every eligible field, marked
-// enabled + ordered per the saved config (else meta `in_list_view` defaults).
+// enabled + ordered per the saved config (else the layout-tier columns when
+// the active layout sets them — so the modal opens showing what is actually
+// rendered — else meta `in_list_view` defaults). Saving still writes User
+// Listview, which then outranks the layout tier (§7.3).
 const modalColumns = computed(() => {
 	const eligible = eligibleColumns.value
 	if (Array.isArray(userColumns.value) && userColumns.value.length) {
@@ -653,6 +958,20 @@ const modalColumns = computed(() => {
 			if (!e) continue
 			ordered.push({ fieldname: e.field, label: e.label, fieldtype: e.fieldtype, enabled: !!uc.enabled })
 			seen.add(e.field)
+		}
+		for (const e of eligible) {
+			if (!seen.has(e.field)) {
+				ordered.push({ fieldname: e.field, label: e.label, fieldtype: e.fieldtype, enabled: false })
+			}
+		}
+		return ordered
+	}
+	if (layoutColumns.value) {
+		const ordered = []
+		const seen = new Set()
+		for (const c of layoutColumns.value) {
+			ordered.push({ fieldname: c.field, label: c.label, fieldtype: c.fieldtype, enabled: true })
+			seen.add(c.field)
 		}
 		for (const e of eligible) {
 			if (!seen.has(e.field)) {
@@ -695,6 +1014,7 @@ async function onColumnsSaved() {
 	if (prev.orFilters.value) next.setOrFilters(prev.orFilters.value)
 	next.page.value = prev.page.value
 	listState.value = next
+	appliedQuerySig = variantQuerySig.value // rebuilt with the new columns — no double fetch
 	next.fetch()
 }
 
@@ -702,6 +1022,21 @@ const fetchFields = computed(() => {
 	const fields = ["name"]
 	for (const c of listColumns.value) {
 		if (!fields.includes(c.field)) fields.push(c.field)
+	}
+	// Card/kanban variants need their own key columns + title + group + status
+	// sources. Guarded by the variant so the table's query stays IDENTICAL.
+	if (listVariant.value !== "table") {
+		for (const c of variantColumns.value) {
+			if (!fields.includes(c.field)) fields.push(c.field)
+		}
+		if (variantTitleField.value && !fields.includes(variantTitleField.value)) {
+			fields.push(variantTitleField.value)
+		}
+		if (kanbanGroupField.value && !fields.includes(kanbanGroupField.value)) {
+			fields.push(kanbanGroupField.value)
+		}
+		if (metaFieldSet.value.has("status") && !fields.includes("status")) fields.push("status")
+		if (!fields.includes("docstatus")) fields.push("docstatus")
 	}
 	if (isSubmittable.value && !fields.includes("docstatus")) fields.push("docstatus")
 	if (isWorkflow.value && !fields.includes("workflow_state")) fields.push("workflow_state")
@@ -822,6 +1157,52 @@ function getDateRange(tab) {
 const pageSize = 20
 const listState = shallowRef(null)
 
+// Live knob changes while the list is mounted (a knob / store refresh —
+// HomeRecent's recentStyle watch precedent): the variant, its resolved column
+// set, the kanban group field and the card title field all shape the row
+// QUERY (fetchFields), so a change to ANY of them re-creates the list with the
+// new fields while preserving filters/tabs/search/sort — same recipe as
+// onColumnsSaved. Watching the joined signature (not just listVariant) means a
+// layout edit that only changes groupBy/columns/titleField refetches too — a
+// kanban whose groupBy moved would otherwise collapse to one "—" column
+// because the new group field was never fetched. Never fires on layouts
+// without the knobs (the signature only moves when a resolved input changes).
+// `variantSyncDepth` guards the initList window: a route change resets +
+// reloads meta, which can transiently flip the resolved inputs — initList
+// builds the fresh listState itself, so the watcher must not recreate it from
+// the OUTGOING doctype's state mid-flight. `appliedQuerySig` records the
+// signature the current listState was built under, so a rebuild that already
+// used the new inputs (initList, onColumnsSaved) doesn't refetch twice.
+let variantSyncDepth = 0 // >0 → an initList pass is in flight (counter: passes overlap)
+let appliedQuerySig = null // signature the current listState was created under
+const variantQuerySig = computed(() =>
+	[
+		listVariant.value,
+		fetchFields.value.join(","),
+		kanbanGroupField.value,
+		variantTitleField.value,
+	].join("|"),
+)
+watch(variantQuerySig, (sig) => {
+	if (variantSyncDepth > 0) return
+	if (!doctype.value || !listState.value) return
+	if (sig === appliedQuerySig) return // listState already carries these inputs
+	appliedQuerySig = sig
+	const prev = listState.value
+	const next = useDocList(doctype.value, {
+		fields: fetchFields.value,
+		defaultFilters: { ...prev.filters },
+		orderBy: prev.currentOrderBy.value,
+		pageSize,
+		immediate: false,
+	})
+	if (prev.orFilters.value) next.setOrFilters(prev.orFilters.value)
+	if (prev.advancedFilters.value?.length) next.setAdvancedFilters(prev.advancedFilters.value)
+	next.page.value = prev.page.value
+	listState.value = next
+	next.fetch()
+})
+
 // ── Realtime: live list updates (no popup) via Frappe `list_update` ──
 const realtime = useRealtime()
 let listRtDispose = null // disposer for the current doctype subscription
@@ -887,9 +1268,19 @@ function baseFilters() {
 }
 
 async function initList() {
+	variantSyncDepth++
+	try {
+		await runInitList()
+	} finally {
+		variantSyncDepth--
+	}
+}
+
+async function runInitList() {
 	if (!doctype.value) {
 		if (listRtDispose) { listRtDispose(); listRtDispose = null }
 		listState.value = null
+		appliedQuerySig = null
 		meta.value = null
 		statusOptions.value = []
 		tabMode.value = null
@@ -934,6 +1325,7 @@ async function initList() {
 		pageSize,
 		immediate: true,
 	})
+	appliedQuerySig = variantQuerySig.value // this listState already carries the current inputs
 	subscribeListRealtime()
 	await loadTabCounts(dt)
 }
@@ -1322,6 +1714,12 @@ function onRowClick(e) {
 	const name = e?.data?.name
 	if (!name) return
 	captureNavContext()
+	// detail knob active → open the record as an overlay on THIS route (pushed,
+	// so browser Back closes it). Knob absent → today's full-page push exactly.
+	if (overlayDetailActive.value) {
+		router.push({ query: { ...route.query, detail: name } })
+		return
+	}
 	router.push(`/${props.docRoute}/${encodeURIComponent(name)}`)
 }
 
@@ -1340,6 +1738,19 @@ function captureNavContext() {
 }
 
 function onNew() {
+	// dcEntry "inline-grid" (DC only): expand the embedded create panel above
+	// the list — no overlay, no navigation. Already open → it just stays open.
+	if (dcEntryVariant.value === "inline-grid") {
+		inlineEntryOpen.value = true
+		return
+	}
+	// entry knob "popup" (or dcEntry "size-matrix" → the host renders a bottom
+	// sheet) → open the create form as an overlay on THIS route (?new=1;
+	// pushed, so Back closes it). Knob absent/"page" → today's push.
+	if (overlayEntryActive.value) {
+		router.push({ query: { ...route.query, new: "1" } })
+		return
+	}
 	router.push(`/${props.docRoute}/new`)
 }
 
@@ -1590,8 +2001,17 @@ function linkName(col, row) {
 	return linkTitles.linkParts(col.linkTarget, val, sibling).primary
 }
 // Batch-resolve the loaded rows' Link columns (skips already-cached values).
+// The card/kanban variants resolve THEIR columns (+ title/group fields) —
+// the table path primes listColumns exactly as before.
 function primeListLinks() {
-	const cols = listColumns.value.filter((c) => c.isLink && c.linkTarget)
+	let colsSrc = listColumns.value
+	if (listVariant.value !== "table") {
+		colsSrc = [...variantColumns.value]
+		for (const extra of [titleColDesc.value, groupColDesc.value]) {
+			if (extra && !colsSrc.some((c) => c.field === extra.field)) colsSrc.push(extra)
+		}
+	}
+	const cols = colsSrc.filter((c) => c.isLink && c.linkTarget)
 	if (!cols.length || !rows.value.length) return
 	const pairs = []
 	for (const row of rows.value) {
@@ -1691,6 +2111,13 @@ const hasAnyFilter = computed(
 	border: 1px solid var(--esd-line);
 	border-radius: var(--radius);
 	overflow: hidden;
+	background: var(--esd-card);
+}
+
+/* Card/kanban variants: give the shared empty state the table's card frame. */
+.variant-empty {
+	border: 1px solid var(--esd-line);
+	border-radius: var(--radius);
 	background: var(--esd-card);
 }
 
@@ -1928,6 +2355,15 @@ const hasAnyFilter = computed(
 	transform: translateX(2px);
 }
 
+/* dcEntry "inline-grid": collapsible embedded create panel above the list */
+.dc-inline-entry {
+	margin: 2px 0 14px;
+	padding: 12px 16px 16px;
+	background: var(--esd-card);
+	border: 1px solid var(--esd-line);
+	border-radius: 12px;
+	box-shadow: var(--esd-shadow-sm);
+}
 /* Realtime "new updates" pill (only while a bulk selection blocks auto-refresh) */
 .rt-pending {
 	display: inline-flex;

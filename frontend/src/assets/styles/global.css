@@ -8,22 +8,25 @@
 	   onto these, so every existing screen is unchanged. ── */
 	--c-primary: 14 140 127;   /* #0E8C7F deep teal — actions / CTAs / active nav / links */
 	--c-accent:  37 99 235;    /* #2563EB royal blue — secondary accent + input focus */
-	--c-ink:     15 22 19;     /* #0F1613 — green-biased ink, text / borders via opacity */
-	--c-surface: 242 246 244;  /* #F2F6F4 — picked teal-biased page ground */
+	--c-ink:     var(--yrp-text-rgb, 15 22 19);     /* #0F1613 — green-biased ink, text / borders via opacity */
+	--c-surface: var(--yrp-bg-rgb, 242 246 244);    /* #F2F6F4 — picked teal-biased page ground */
 
-	/* ── Surfaces ── */
-	--esd-bg:        #F2F6F4;   /* picked teal-biased near-white (= --c-surface) */
-	--esd-card:      #FFFFFF;   /* white panels/cards */
-	--esd-slate-50:  #E9EFEC;   /* secondary surface (table headers, hover rows) */
+	/* ── Surfaces — value side reads the engine's layout-theme tokens (--yrp-*,
+	   written by @yrp/web-engine applyTheme ONLY for keys present in the layout
+	   theme); the fallback is the exact shipped value, so a layout without theme
+	   knobs renders pixel-identical (parity law). ── */
+	--esd-bg:        var(--yrp-bg, #F2F6F4);        /* picked teal-biased near-white (= --c-surface) */
+	--esd-card:      var(--yrp-surface, #FFFFFF);   /* white panels/cards */
+	--esd-slate-50:  var(--yrp-surface-2, #E9EFEC); /* secondary surface (table headers, hover rows) */
 
 	/* ── Text ── */
-	--esd-ink:       #0F1613;   /* primary value text — ~17:1 on white */
-	--esd-ink-2:     #33413B;   /* secondary headings — ~10:1 */
-	--esd-muted:     #5F6E68;   /* labels/hints — AA on white (~4.9:1) */
-	--esd-muted-2:   #98A5A0;   /* disabled/subtle/empty placeholder */
+	--esd-ink:       var(--yrp-text, #0F1613);      /* primary value text — ~17:1 on white */
+	--esd-ink-2:     var(--yrp-text-2, #33413B);    /* secondary headings — ~10:1 */
+	--esd-muted:     var(--yrp-muted, #5F6E68);     /* labels/hints — AA on white (~4.9:1) */
+	--esd-muted-2:   var(--yrp-muted-2, #98A5A0);   /* disabled/subtle/empty placeholder */
 
 	/* ── Lines ── */
-	--esd-line:      #DFE8E4;   /* teal-biased crisp hairline */
+	--esd-line:      var(--yrp-line, #DFE8E4);      /* teal-biased crisp hairline */
 
 	/* ── Accent: brighter modern teal, same family ── */
 	--esd-accent:    #0E8C7F;   /* deep refined teal — fills, header band, icons */
@@ -45,9 +48,9 @@
 	--sidebar-width: 232px;
 	--sidebar-collapsed-width: 68px;   /* slim rail rest width (partners_api) */
 	--topbar-height: 56px;
-	--radius-sm: 9px;    /* controls (buttons/inputs) — partners_api */
-	--radius: 12px;      /* cards / dialogs */
-	--radius-lg: 14px;
+	--radius-sm: var(--yrp-radius-sm, 9px);    /* controls (buttons/inputs) — partners_api */
+	--radius: var(--yrp-radius, 12px);         /* cards / dialogs — layout `radius` knob */
+	--radius-lg: var(--yrp-radius-lg, 14px);
 
 	/* ── Spacing scale (replaces 14 ad-hoc gap values) ── */
 	--space-1: 4px;
@@ -97,19 +100,22 @@
    ───────────────────────────────────────────────────────────────────────── */
 .dark {
 	/* Surfaces — soft dark slate, lifted OFF near-black to cut halation / eye
-	   strain (was #0B1220 near-black). Page < card < bands = gentle elevation. */
-	--esd-bg:        #0E1512;   /* page — green-biased charcoal */
-	--esd-card:      #17211C;   /* panels / cards (elevated above the page) */
-	--esd-slate-50:  #1E2B25;   /* secondary surface (header bands, hover rows) */
+	   strain (was #0B1220 near-black). Page < card < bands = gentle elevation.
+	   Value side reads the engine's `.dark`-scoped --yrp-* tokens (written from
+	   the layout theme's dark{} overlay); fallbacks are the exact shipped dark
+	   values — no layout dark palette ⇒ pixel-identical dark mode. */
+	--esd-bg:        var(--yrp-bg, #0E1512);        /* page — green-biased charcoal */
+	--esd-card:      var(--yrp-surface, #17211C);   /* panels / cards (elevated above the page) */
+	--esd-slate-50:  var(--yrp-surface-2, #1E2B25); /* secondary surface (header bands, hover rows) */
 
 	/* Text — soft off-white, NOT pure white (pure white on dark = halation). */
-	--esd-ink:       #E9F1ED;   /* primary value text */
-	--esd-ink-2:     #C0CDC7;   /* secondary headings */
-	--esd-muted:     #8C9A93;   /* labels / hints */
-	--esd-muted-2:   #63736C;   /* disabled / subtle */
+	--esd-ink:       var(--yrp-text, #E9F1ED);      /* primary value text */
+	--esd-ink-2:     var(--yrp-text-2, #C0CDC7);    /* secondary headings */
+	--esd-muted:     var(--yrp-muted, #8C9A93);     /* labels / hints */
+	--esd-muted-2:   var(--yrp-muted-2, #63736C);   /* disabled / subtle */
 
 	/* Lines — soft, low-contrast against the lifted surfaces */
-	--esd-line:      #2A3A33;
+	--esd-line:      var(--yrp-line, #2A3A33);
 
 	/* Accent — brighter teal for dark contrast */
 	--esd-accent:    #2FB8A6;
@@ -119,8 +125,8 @@
 	--esd-accent-ink:#5ACCBC;   /* title / icon on the dark teal-wash band */
 
 	/* Base-token overrides for dark — --esd-accent2 derives from --c-accent */
-	--c-ink:     233 241 237;   /* #E9F1ED */
-	--c-surface: 14 21 18;      /* #0E1512 */
+	--c-ink:     var(--yrp-text-rgb, 233 241 237);   /* #E9F1ED */
+	--c-surface: var(--yrp-bg-rgb, 14 21 18);        /* #0E1512 */
 	--c-accent:  96 165 250;    /* #60A5FA lighter royal blue reads on dark */
 
 	/* Elevation — deeper shadows on dark */
@@ -258,9 +264,11 @@ body {
 }
 
 body {
-	font-family: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system,
-		"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-	font-size: 14px;
+	/* Layout `font` / `fontScale` knobs — fallbacks are the exact shipped
+	   stack/size, so no knob ⇒ identical type. */
+	font-family: var(--yrp-font, "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system,
+		"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+	font-size: calc(14px * var(--yrp-font-scale, 1));
 	line-height: 1.5;
 	color: var(--esd-ink);
 	background: var(--esd-bg);

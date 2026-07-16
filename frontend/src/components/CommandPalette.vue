@@ -61,7 +61,8 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue"
 import { useRouter } from "vue-router"
 import Dialog from "primevue/dialog"
-import { DOCTYPES } from "@/config/doctypes"
+import { useUiConfigStore } from "@yrp/web-engine"
+import { getRegistryByDoctype } from "@/config/doctypes"
 import { usePermissions } from "@/composables/usePermissions"
 import { useTheme } from "@/composables/useTheme"
 import { useCommandPalette } from "@/composables/useCommandPalette"
@@ -70,11 +71,31 @@ const router = useRouter()
 const { canRead, canCreate } = usePermissions()
 const { isDark, toggleTheme } = useTheme()
 const { open, openPalette, closePalette, togglePalette } = useCommandPalette()
+const ui = useUiConfigStore()
 
 const query = ref("")
 const activeIndex = ref(0)
 const inputEl = ref(null)
 const listEl = ref(null)
+
+// The palette advertises the SAME arrangement as the sidebar (spec §8.3):
+// doctypes present in store.navGroups (layout-hidden ones already filtered),
+// in layout order, mapped onto the catalog for route/icon/flags. A doctype
+// hidden by the layout stays URL-reachable (arrangement, not capability) —
+// it just isn't advertised here.
+const navDoctypes = computed(() => {
+	const out = []
+	const seen = new Set()
+	for (const g of ui.navGroups) {
+		for (const item of g.items || []) {
+			if (seen.has(item.doctype)) continue
+			seen.add(item.doctype)
+			const reg = getRegistryByDoctype(item.doctype)
+			if (reg) out.push(reg)
+		}
+	}
+	return out
+})
 
 // Command pool: Home + every readable DocType (open list) + every creatable
 // DocType (new) + the theme toggle. Permission-gated, so users only see what
@@ -83,7 +104,7 @@ const pool = computed(() => {
 	const out = [
 		{ id: "nav:home", label: "Home", sub: "Dashboard", icon: "pi pi-th-large", keywords: "home dashboard", run: () => router.push("/home") },
 	]
-	for (const d of DOCTYPES) {
+	for (const d of navDoctypes.value) {
 		if (canRead(d.doctype))
 			out.push({ id: "list:" + d.route, label: d.label, sub: "Open list", icon: d.icon, keywords: d.label + " " + d.group, run: () => router.push("/" + d.route) })
 		if (canCreate(d.doctype))

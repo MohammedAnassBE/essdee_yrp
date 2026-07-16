@@ -163,17 +163,4 @@ export function getRegistryByDoctype(name) {
 	return DOCTYPES.find((d) => d.doctype === name) || null
 }
 
-/**
- * Sidebar groups in declared order. The `filterFn(doctype)` lets the sidebar
- * drop items the user can't read (live perms). Home is injected separately.
- */
-export function getSidebarGroups(filterFn = () => true) {
-	return GROUPS.map((g) => ({
-		group: g.group,
-		items: DOCTYPES.filter(
-			(d) => d.group === g.group && filterFn(d.doctype)
-		),
-	})).filter((g) => g.items.length > 0)
-}
-
 export { DOCTYPES, SUBMITTABLE, WORKFLOW }

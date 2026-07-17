@@ -30,6 +30,8 @@
 				<span class="cmdk-trigger__label">Search…</span>
 				<span class="cmdk-trigger__kbd">⌘K</span>
 			</button>
+			<!-- SM-only §10 View-as trigger (renders nothing for everyone else). -->
+			<ViewAsControl />
 			<!-- Real role(s), read-only — NO switcher (plan: the user's real
 			     role drives the UI). -->
 			<div class="role-chip" :title="roleTitle">
@@ -65,6 +67,7 @@
 import { computed } from "vue"
 import { useRoute } from "vue-router"
 import Button from "primevue/button"
+import ViewAsControl from "./ViewAsControl.vue"
 import { useAuth } from "@/composables/useAuth"
 import { useTheme } from "@/composables/useTheme"
 import { useCommandPalette } from "@/composables/useCommandPalette"

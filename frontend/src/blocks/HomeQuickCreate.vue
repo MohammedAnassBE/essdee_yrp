@@ -31,7 +31,7 @@
 import { computed } from "vue"
 import { useRouter } from "vue-router"
 import { useUiConfigStore } from "@yrp/web-engine"
-import { usePermissions } from "@/composables/usePermissions"
+import { usePreviewGate } from "@/composables/usePreviewGate"
 import { getRegistryByDoctype } from "@/config/doctypes"
 
 defineOptions({ inheritAttrs: false })
@@ -42,12 +42,13 @@ const props = defineProps({
 })
 
 const router = useRouter()
-const { canCreate } = usePermissions()
+// Preview-aware create gate (§10) — canCreate outside a View-as preview.
+const { gateCreate } = usePreviewGate()
 const ui = useUiConfigStore()
 
 const creates = computed(() =>
 	(props.doctypes || ui.quickCreate)
-		.filter((dt) => typeof dt === "string" && canCreate(dt))
+		.filter((dt) => typeof dt === "string" && gateCreate(dt))
 		.map((dt) => {
 			const reg = getRegistryByDoctype(dt)
 			return { doctype: dt, label: dt, icon: reg?.icon || "pi pi-plus", route: reg?.route || "" }

@@ -63,12 +63,15 @@ import { useRouter } from "vue-router"
 import Dialog from "primevue/dialog"
 import { useUiConfigStore } from "@yrp/web-engine"
 import { getRegistryByDoctype } from "@/config/doctypes"
-import { usePermissions } from "@/composables/usePermissions"
+import { usePreviewGate } from "@/composables/usePreviewGate"
 import { useTheme } from "@/composables/useTheme"
 import { useCommandPalette } from "@/composables/useCommandPalette"
 
 const router = useRouter()
-const { canRead, canCreate } = usePermissions()
+// Preview-aware gates (§10): identical to canRead/canCreate outside a View-as
+// preview; during one they consult the server-computed target perm hints so the
+// palette advertises the previewed user's true reach, not the SM's superset.
+const { gateRead, gateCreate } = usePreviewGate()
 const { isDark, toggleTheme } = useTheme()
 const { open, openPalette, closePalette, togglePalette } = useCommandPalette()
 const ui = useUiConfigStore()
@@ -105,9 +108,9 @@ const pool = computed(() => {
 		{ id: "nav:home", label: "Home", sub: "Dashboard", icon: "pi pi-th-large", keywords: "home dashboard", run: () => router.push("/home") },
 	]
 	for (const d of navDoctypes.value) {
-		if (canRead(d.doctype))
+		if (gateRead(d.doctype))
 			out.push({ id: "list:" + d.route, label: d.label, sub: "Open list", icon: d.icon, keywords: d.label + " " + d.group, run: () => router.push("/" + d.route) })
-		if (canCreate(d.doctype))
+		if (gateCreate(d.doctype))
 			out.push({ id: "new:" + d.route, label: "New " + d.label, sub: "Create", icon: "pi pi-plus", keywords: "new create add " + d.label, run: () => router.push("/" + d.route + "/new") })
 	}
 	out.push({

@@ -79,6 +79,7 @@ import { computed } from "vue"
 import { useRouter } from "vue-router"
 import { useUiConfigStore } from "@yrp/web-engine"
 import { usePermissions } from "@/composables/usePermissions"
+import { usePreviewGate } from "@/composables/usePreviewGate"
 import { getRegistryByDoctype } from "@/config/doctypes"
 import { useSidebarCollapse } from "@/composables/useSidebarCollapse"
 
@@ -86,7 +87,10 @@ defineProps({ pinned: Boolean, drawerOpen: Boolean })
 const emit = defineEmits(["toggle-pin", "navigate"])
 
 const router = useRouter()
-const { canRead, isAdmin, hasRole } = usePermissions()
+const { isAdmin, hasRole } = usePermissions()
+// Preview-aware read gate: identical to canRead outside a §10 View-as preview;
+// during one it consults the server-computed target hints (perm-accurate view).
+const { gateRead } = usePreviewGate()
 const ui = useUiConfigStore()
 
 // Logo comes from Website Settings via frappe.boot (admin-controlled); falls back
@@ -115,7 +119,7 @@ const sidebarGroups = computed(() =>
 					return { ...reg, icon: item.icon || reg.icon }
 				})
 				.filter(Boolean)
-				.filter((d) => canRead(d.doctype)),
+				.filter((d) => gateRead(d.doctype)),
 		}))
 		.filter((g) => g.items.length > 0)
 )

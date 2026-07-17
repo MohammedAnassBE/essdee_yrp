@@ -32,15 +32,17 @@
 import { computed } from "vue"
 import { useRoute } from "vue-router"
 import { useUiConfigStore } from "@yrp/web-engine"
-import { usePermissions } from "@/composables/usePermissions"
+import { usePreviewGate } from "@/composables/usePreviewGate"
 import { getRegistryByDoctype } from "@/config/doctypes"
 
 const route = useRoute()
 const ui = useUiConfigStore()
-const { canRead } = usePermissions()
+// Preview-aware read gate — canRead outside a §10 preview, target hints during.
+const { gateRead } = usePreviewGate()
 
 // Flatten the layout's nav groups (hidden items already filtered by the store)
-// into one ordered pill list. Registry supplies route/label; canRead gates.
+// into one ordered pill list. Registry supplies route/label; gateRead gates
+// (= canRead, preview-aware during §10 View-as).
 const pillItems = computed(() => {
 	const items = []
 	for (const grp of ui.navGroups) {
@@ -50,7 +52,7 @@ const pillItems = computed(() => {
 				console.warn(`[essdee topnav] unknown doctype in layout nav: "${item.doctype}" — dropped`)
 				continue
 			}
-			if (!canRead(reg.doctype)) continue
+			if (!gateRead(reg.doctype)) continue
 			items.push({ doctype: reg.doctype, route: reg.route, label: reg.label })
 		}
 	}

@@ -21,6 +21,8 @@
 		<!-- Self-service knobs (locked 2026-07-15): shown to every user in every
 		     layout; renders nothing visually different until a knob is touched. -->
 		<KnobsPanel />
+		<!-- §10 View-as strip: renders only while an SM preview is active. -->
+		<PreviewBanner />
 	</div>
 
 	<!-- Default shell — today's sidebar + topbar grid, unchanged (parity law).
@@ -58,6 +60,8 @@
 		<div class="esd-scrim" @click="drawerOpen = false" />
 		<CommandPalette />
 		<KnobsPanel />
+		<!-- §10 View-as strip: renders only while an SM preview is active. -->
+		<PreviewBanner />
 	</div>
 </template>
 
@@ -68,6 +72,7 @@ import AppSidebar from "./AppSidebar.vue"
 import AppTopbar from "./AppTopbar.vue"
 import ChromeBar from "./ChromeBar.vue"
 import NavTopbar from "./NavTopbar.vue"
+import PreviewBanner from "./PreviewBanner.vue"
 import CommandPalette from "@/components/CommandPalette.vue"
 import { useAuth } from "@/composables/useAuth"
 

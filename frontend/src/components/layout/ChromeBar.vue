@@ -62,6 +62,9 @@
 				Search… <span class="chrome-kbd">⌘K</span>
 			</button>
 
+			<!-- SM-only §10 View-as trigger (renders nothing for everyone else). -->
+			<ViewAsControl chrome />
+
 			<!-- REAL session user: first name + primary role (read-only, from boot). -->
 			<span class="chrome-user" :title="roleTitle">
 				<span class="chrome-av">{{ initials }}</span>
@@ -96,6 +99,7 @@
 <script setup>
 import { computed, onMounted } from "vue"
 import { useUiConfigStore } from "@yrp/web-engine"
+import ViewAsControl from "./ViewAsControl.vue"
 import { useAuth } from "@/composables/useAuth"
 import { useTheme } from "@/composables/useTheme"
 import { useCommandPalette } from "@/composables/useCommandPalette"

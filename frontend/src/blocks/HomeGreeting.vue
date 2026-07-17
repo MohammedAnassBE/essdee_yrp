@@ -62,7 +62,7 @@ import { computed, ref, watch } from "vue"
 import { useRouter, useRoute } from "vue-router"
 import { useUiConfigStore } from "@yrp/web-engine"
 import { useAuth } from "@/composables/useAuth"
-import { usePermissions } from "@/composables/usePermissions"
+import { usePreviewGate } from "@/composables/usePreviewGate"
 import { getRegistryByDoctype } from "@/config/doctypes"
 
 defineOptions({ inheritAttrs: false })
@@ -78,7 +78,9 @@ const props = defineProps({
 const router = useRouter()
 const route = useRoute()
 const { fullName } = useAuth()
-const { canCreate } = usePermissions()
+// Preview-aware create gate (§10): canCreate normally; the server-computed
+// target hints while an SM View-as preview is active.
+const { gateCreate } = usePreviewGate()
 const ui = useUiConfigStore()
 
 const greeting = computed(() => {
@@ -102,7 +104,7 @@ const ctaDoctypes = computed(() => {
 
 const quickCreates = computed(() =>
 	ctaDoctypes.value
-		.filter((dt) => canCreate(dt))
+		.filter((dt) => gateCreate(dt))
 		.map((dt) => {
 			const reg = getRegistryByDoctype(dt)
 			return { doctype: dt, label: dt, icon: reg?.icon || "pi pi-plus", route: reg?.route || "" }

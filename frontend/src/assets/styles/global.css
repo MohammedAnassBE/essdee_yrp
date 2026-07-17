@@ -533,3 +533,126 @@ a {
 	white-space: nowrap;
 	font-variant-numeric: tabular-nums;
 }
+
+/* ══ Opt-in presentation modes (DESIGN_PREMIUM.md §4(i), 2026-07-17) ══════════
+   The engine's applyTheme writes html[data-yrp-arrows="quiet"] /
+   html[data-yrp-section-headers="plain"] ONLY while a layout authors the
+   non-default theme.arrows / theme.sectionHeaders value — so every rule below
+   matches NOTHING for knob-absent layouts and the Default stays byte-identical
+   (parity law by construction).
+   Quiet ≠ invisible: reveals are hover-OR-focus (:hover, :focus-visible,
+   :focus-within), and under @media (hover: none) — floor tablets — the
+   affordances stay at muted ~40% opacity, never 0. Functional arrows
+   (prev/next record .doc-nav__btn, the "+ New" dropdown caret) are untouched.
+   !important is deliberate: these gates must beat component-scoped rules
+   (including their :hover states) regardless of bundle order/specificity. */
+
+/* arrows §1 #1 — home queue-card corner arrow: quieted, not removed */
+html[data-yrp-arrows="quiet"] .stat-arrow {
+	color: var(--esd-muted-2) !important;
+	font-size: 12px !important;
+}
+/* (§1 #2, the KPI-tile ↗, ships in the engine: SummaryTiles.vue un-scoped gate) */
+
+/* arrows §1 #3/#4 — "View all →" arrow glyphs: the accent text link remains */
+html[data-yrp-arrows="quiet"] .recent-viewall .pi,
+html[data-yrp-arrows="quiet"] .rl-viewall .pi {
+	display: none !important;
+}
+
+/* arrows §1 #9 — Submit / bulk-submit trailing →: the label carries all the
+   meaning (Save's check and Amend's clone icons are NOT arrows — untouched) */
+html[data-yrp-arrows="quiet"] .forward-cta .p-button-icon.pi-arrow-right,
+html[data-yrp-arrows="quiet"] .bulk-bar__actions .p-button-icon.pi-arrow-right {
+	display: none !important;
+}
+
+/* arrows §1 #6 — list row-end chevron: stays muted (no accent flip/slide on
+   row hover) */
+html[data-yrp-arrows="quiet"] .row-chevron {
+	color: var(--esd-muted-2) !important;
+	transform: none !important;
+}
+
+/* arrows §1 #10 — linked-docs from→to arrow: same quiet treatment */
+html[data-yrp-arrows="quiet"] .lr-arrow {
+	color: var(--esd-muted-2) !important;
+	transform: none !important;
+}
+
+/* arrows §1 #5 — LinkField "open linked doc" ↗: hover-OR-focus revealed */
+html[data-yrp-arrows="quiet"] .link-field .link-goto {
+	opacity: 0;
+	transition: opacity 0.14s;
+}
+html[data-yrp-arrows="quiet"] .link-field:hover .link-goto,
+html[data-yrp-arrows="quiet"] .link-field:focus-within .link-goto,
+html[data-yrp-arrows="quiet"] .link-goto:focus-visible {
+	opacity: 1;
+}
+
+/* arrows §1 #7 — sort ↑↓ pairs: hidden until column hover/focus; the ACTIVE
+   sort column keeps its indicator (sort state must stay readable) */
+html[data-yrp-arrows="quiet"] .p-datatable-sort-icon {
+	opacity: 0;
+	transition: opacity 0.14s;
+}
+html[data-yrp-arrows="quiet"] .p-datatable-sortable-column:hover .p-datatable-sort-icon,
+html[data-yrp-arrows="quiet"] .p-datatable-sortable-column:focus-visible .p-datatable-sort-icon {
+	opacity: 1;
+}
+html[data-yrp-arrows="quiet"] .p-datatable-column-sorted .p-datatable-sort-icon {
+	opacity: 0.7;
+}
+
+/* arrows §1 #5b — read-mode detail link ↗ (DocDetail .field-value.link::after,
+   "Q8 persistent affordance"): the dotted underline stays the affordance;
+   the accent ↗ becomes hover-OR-focus revealed, same as the LinkField goto */
+html[data-yrp-arrows="quiet"] .field-value.link::after {
+	opacity: 0 !important;
+	transition: opacity 0.14s;
+}
+html[data-yrp-arrows="quiet"] .field-value.link:hover::after,
+html[data-yrp-arrows="quiet"] .field-value.link:focus-within::after {
+	opacity: 0.85 !important;
+	color: var(--esd-muted-2) !important;
+}
+
+/* floor tablets / touch (no hover): quieted to ~40%, never removed */
+@media (hover: none) {
+	html[data-yrp-arrows="quiet"] .link-field .link-goto,
+	html[data-yrp-arrows="quiet"] .p-datatable-sort-icon {
+		opacity: 0.4;
+	}
+	html[data-yrp-arrows="quiet"] .field-value.link::after {
+		opacity: 0.4 !important;
+		color: var(--esd-muted-2) !important;
+	}
+	html[data-yrp-arrows="quiet"] .p-datatable-column-sorted .p-datatable-sort-icon {
+		opacity: 0.7;
+	}
+}
+
+/* sectionHeaders "plain" — §4(i) item 2: retire the tinted band + leading dot
+   + accent shout on the banded-head family; the hairline border-bottom stays.
+   The family is ONE design (the Bright Workshop band) under three spellings:
+   .esd-card__head (global, ::before dot), DocDetail's .detail-card__head
+   (explicit .detail-card__dot span), and the bespoke editors' .panel-head
+   (ProcessMatrixEditor / IPDConfigView, ::before dot — their own comments say
+   "mirrors .esd-card__head"). */
+html[data-yrp-section-headers="plain"] .esd-card__head,
+html[data-yrp-section-headers="plain"] .detail-card__head,
+html[data-yrp-section-headers="plain"] .panel-head {
+	background: transparent !important;
+}
+html[data-yrp-section-headers="plain"] .esd-card__head::before,
+html[data-yrp-section-headers="plain"] .panel-head::before,
+html[data-yrp-section-headers="plain"] .detail-card__dot {
+	display: none !important;
+}
+html[data-yrp-section-headers="plain"] .esd-card__title,
+html[data-yrp-section-headers="plain"] .detail-card__title,
+html[data-yrp-section-headers="plain"] .panel-head > h3 {
+	color: var(--esd-muted) !important;
+	font-weight: 600 !important;
+}

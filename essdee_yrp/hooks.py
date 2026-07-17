@@ -72,6 +72,23 @@ website_route_rules = [
 	{"from_route": "/web/<path:app_path>", "to_route": "web"},
 ]
 
+# /web DocType catalog for base yrp's UI-config validation (USE_CASE §4 item
+# 17): ui_config.validate_config reads this hook to warn at save/lint time on
+# nav / quickCreate / newCta / listViews doctypes the SPA cannot route.
+# CHECKLIST RULE (same as www/web.py WEB_DOCTYPES, which mirrors
+# frontend/src/config/doctypes.js GROUPS): all three lists change together.
+yrp_web_doctype_catalog = [
+	"Lot",
+	"Work Order",
+	"Work Order Correction",
+	"Delivery Challan",
+	"Goods Received Note",
+	"Stock Entry",
+	"Item",
+	"Item Production Detail",
+	"Terms and Condition",
+]
+
 # Post-login landing: ordinary users land on the custom /web work hub;
 # System Manager / Administrator keep the Desk default (function returns None
 # for them, so Frappe falls through). See essdee_yrp/www_home.py.

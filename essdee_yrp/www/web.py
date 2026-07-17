@@ -31,7 +31,8 @@ ASSET_BASE = "/assets/essdee_yrp/frontend/"
 # GROUPS). CHECKLIST RULE (spec §8.1): whenever a doctype is added to the frontend
 # catalog (doctypes.js GROUPS), add it HERE too so _apply_accurate_web_perms keeps
 # correcting boot's leaky perm superset — catalog and perms list are code-owned
-# together. The SPA gates sidebar / command palette / home visibility on
+# together. Third copy: hooks.py `yrp_web_doctype_catalog` (base yrp's
+# ui_config validation reads it) — all three lists change together. The SPA gates sidebar / command palette / home visibility on
 # frappe.boot.user.can_read, but Frappe's load_user()/build_permissions() emits a
 # can_read list that is a SUPERSET of real access — it stops at "a role grants a read
 # rule" and never runs the full has_permission() check (user permissions, permlevel,

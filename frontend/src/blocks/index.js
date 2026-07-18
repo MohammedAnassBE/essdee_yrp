@@ -14,6 +14,7 @@ import HomeQueues from "./HomeQueues.vue" // "My Work Today" stat cards (wraps u
 import HomeRecent from "./HomeRecent.vue" // tabbed recent table (or "tiles" variant)
 import HomeQuickCreate from "./HomeQuickCreate.vue" // OPTIONAL standalone card — NOT in Default
 import RecordList from "./RecordList.vue" // bounded doctype list embed (table/cards/kanban)
+import Composite from "./Composite.vue" // bounded primitive-tree composition (Track 1 item 1)
 
 registerBlock("home-greeting", { component: HomeGreeting, label: "Greeting bar" })
 registerBlock("home-queues", { component: HomeQueues, label: "Work queues" })
@@ -22,3 +23,4 @@ registerBlock("home-quick-create", { component: HomeQuickCreate, label: "Quick c
 registerBlock("record-list", { component: RecordList, label: "Record list" })
 registerBlock("summary-tiles", { component: SummaryTiles, label: "KPI summary tiles" })
 registerBlock("calculator-panel", { component: CalculatorPanel, label: "Calculator" })
+registerBlock("composite", { component: Composite, label: "Composite" })

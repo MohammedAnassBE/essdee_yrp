@@ -310,6 +310,7 @@
 			:status-of="variantStatusOf"
 			:cell-value="variantCellValue"
 			:loading="loading"
+			:card-template="listCardTemplate"
 			@open="onCardOpen"
 		/>
 		<ListKanban
@@ -323,6 +324,7 @@
 			:group-of="kanbanGroupOf"
 			:group-field="kanbanGroupField"
 			:loading="loading"
+			:card-template="listCardTemplate"
 			@open="onCardOpen"
 		/>
 		<!-- Shared empty state for the card/kanban variants (mirrors the table's
@@ -539,7 +541,7 @@ import { usePermissions } from "@/composables/usePermissions"
 import { useLinkTitles } from "@/composables/useLinkTitles"
 import { useAppConfirm } from "@/composables/useConfirm"
 import { useAppToast } from "@/composables/useToast"
-import { useUiConfigStore } from "@yrp/web-engine"
+import { collectBindPaths, useUiConfigStore } from "@yrp/web-engine"
 import { getRegistryByRoute, WORKFLOW_SEVERITY } from "@/config/doctypes"
 import { getFieldLabel } from "@/config/fields"
 import { getMeta, getCount, callMethod, submitDoc, cancelDoc, getBulkEditFields, bulkUpdateField, errorLines } from "@/api/client"
@@ -774,6 +776,31 @@ const listVariant = computed(() => {
 	// WITH a status signal falls back to status-grouping.
 	if (v === "kanban") return kanbanGroupField.value || hasStatusSignal.value ? "kanban" : "table"
 	return "table"
+})
+
+// Per-row cardTemplate (layout knob listViews[dt].cardTemplate — USE_CASE
+// Track 1 item 2): an optional composite tree ListCards/ListKanban render as
+// each card's interior, scope = the ROW record. Knob absent (or not a plain
+// object) → null → the shipped card markup, byte-identical (parity law).
+// Table variant ignores it entirely.
+const listCardTemplate = computed(() => {
+	const t = listViewCfg.value.cardTemplate
+	return t && typeof t === "object" && !Array.isArray(t) ? t : null
+})
+
+// Fields the template binds beyond the key columns: first segment of every
+// bind path, meta-checked so a typo'd path can't 500 the row query (the
+// composite block's boundRowFields posture — the JSON names fields, never a
+// query). Feeds fetchFields below, cards/kanban only.
+const TEMPLATE_FIELDNAME_RE = /^[a-z0-9_]+$/
+const templateBoundFields = computed(() => {
+	if (!listCardTemplate.value || listVariant.value === "table") return []
+	const fields = new Set()
+	for (const path of collectBindPaths(listCardTemplate.value)) {
+		const f = path.split(".")[0]
+		if (TEMPLATE_FIELDNAME_RE.test(f) && metaFieldSet.value.has(f)) fields.add(f)
+	}
+	return [...fields]
 })
 
 // ── Detail / entry overlays (layout structural knobs — spec §6.4) ───────────
@@ -1024,7 +1051,8 @@ const fetchFields = computed(() => {
 		if (!fields.includes(c.field)) fields.push(c.field)
 	}
 	// Card/kanban variants need their own key columns + title + group + status
-	// sources. Guarded by the variant so the table's query stays IDENTICAL.
+	// sources (+ any cardTemplate-bound fields). Guarded by the variant so the
+	// table's query stays IDENTICAL.
 	if (listVariant.value !== "table") {
 		for (const c of variantColumns.value) {
 			if (!fields.includes(c.field)) fields.push(c.field)
@@ -1035,6 +1063,7 @@ const fetchFields = computed(() => {
 		if (kanbanGroupField.value && !fields.includes(kanbanGroupField.value)) {
 			fields.push(kanbanGroupField.value)
 		}
+		for (const f of templateBoundFields.value) if (!fields.includes(f)) fields.push(f)
 		if (metaFieldSet.value.has("status") && !fields.includes("status")) fields.push("status")
 		if (!fields.includes("docstatus")) fields.push("docstatus")
 	}

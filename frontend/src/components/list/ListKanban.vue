@@ -20,6 +20,14 @@
        groupField : String — the grouped fieldname, excluded from kv rows
                     ("" when grouping by the synthesized status)
        loading    : Boolean — render skeleton columns instead of rows
+       cardTemplate : Object|null — OPTIONAL composite tree (Track 1 item 2)
+                    rendering EACH kanban card's interior; scope = the ROW
+                    record, same grammar/binding resolver as the `composite`
+                    block (see ListCards.vue — identical seam). ABSENT → the
+                    default interior renders BYTE-IDENTICAL to today. Lane
+                    grouping, count headers, tint and click → open(row) stay
+                    host-owned either way — the template shapes ONLY the
+                    card interior.
      Emits: open(row) — card click → detail (host owns navigation). -->
 <template>
 	<div class="lv-kanban">
@@ -47,17 +55,29 @@
 					@click="$emit('open', r)"
 					@keydown.enter="$emit('open', r)"
 				>
-					<div class="lv-kcard__top">
-						<span class="lv-kcard__id">{{ r.name }}</span>
-						<span v-if="statusOf(r)" class="lv-kcard__chip" :style="chipStyle(r)">
-							<i class="lv-kcard__chip-dot" />{{ statusOf(r) }}
-						</span>
-					</div>
-					<div class="lv-kcard__title">{{ titleOf(r) }}</div>
-					<div v-for="c in kvColumns" :key="c.field" class="lv-kcard__kv">
-						<span class="lv-kcard__k">{{ c.label }}</span>
-						<span class="lv-kcard__v">{{ cellValue(c, r) }}</span>
-					</div>
+					<!-- cardTemplate seam (Track 1 item 2): composite tree interior,
+					     scope = the row. Knob absent → the v-else branch IS the
+					     pre-existing default markup, untouched (parity law). -->
+					<CompositeTree
+						v-if="hasCardTemplate"
+						:tree="cardTemplate"
+						:scope="r"
+						:date-format="templateDateFormat"
+						:dark="isDark"
+					/>
+					<template v-else>
+						<div class="lv-kcard__top">
+							<span class="lv-kcard__id">{{ r.name }}</span>
+							<span v-if="statusOf(r)" class="lv-kcard__chip" :style="chipStyle(r)">
+								<i class="lv-kcard__chip-dot" />{{ statusOf(r) }}
+							</span>
+						</div>
+						<div class="lv-kcard__title">{{ titleOf(r) }}</div>
+						<div v-for="c in kvColumns" :key="c.field" class="lv-kcard__kv">
+							<span class="lv-kcard__k">{{ c.label }}</span>
+							<span class="lv-kcard__v">{{ cellValue(c, r) }}</span>
+						</div>
+					</template>
 				</article>
 			</div>
 		</template>
@@ -66,7 +86,7 @@
 
 <script setup>
 import { computed } from "vue"
-import { statusChipStyle, statusColor, statusTint } from "@yrp/web-engine"
+import { CompositeTree, statusChipStyle, statusColor, statusTint, useUiConfigStore } from "@yrp/web-engine"
 import { useTheme } from "@/composables/useTheme"
 
 const props = defineProps({
@@ -79,11 +99,21 @@ const props = defineProps({
 	groupOf: { type: Function, required: true },
 	groupField: { type: String, default: "" },
 	loading: { type: Boolean, default: false },
+	cardTemplate: { type: Object, default: null },
 })
 
 defineEmits(["open"])
 
 const { isDark } = useTheme()
+
+// cardTemplate seam — same activation rule + dateFormat wiring as ListCards
+// (plain object → template branch; anything else → the untouched default).
+const hasCardTemplate = computed(
+	() =>
+		!!props.cardTemplate && typeof props.cardTemplate === "object" && !Array.isArray(props.cardTemplate)
+)
+const uiStore = useUiConfigStore()
+const templateDateFormat = computed(() => uiStore.active.dateFormat || "")
 
 // One column per DISTINCT group value, in fetched-row order (demo parity —
 // the fetch layer's order_by decides which group appears first).

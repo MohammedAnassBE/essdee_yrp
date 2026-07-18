@@ -19,6 +19,18 @@
        cellValue  : (col, row) => String — the host's cell formatter (dates,
                     currency, resolved Link names)
        loading    : Boolean — render skeleton cards instead of rows
+       cardTemplate : Object|null — OPTIONAL composite tree (USE_CASE §3(c),
+                    Track 1 item 2) rendering EACH card's interior; binding
+                    scope = the ROW record (bind paths are fieldnames, e.g.
+                    {bind:"planned_quantity", format:"qty"}), same engine
+                    grammar/binding resolver as the `composite` block. ABSENT
+                    (null / not a plain object) → the default interior below
+                    renders BYTE-IDENTICAL to today (parity law). The template
+                    shapes ONLY the interior: the card shell — grid cell,
+                    status tint, click → open(row), focus ring — stays host-
+                    owned either way. The layout's dateFormat knob feeds the
+                    tree's `date` formatter (composite-block parity; the
+                    DEFAULT interior keeps the host cellValue's dd-mm-yyyy).
      Emits: open(row) — card click → detail (host owns navigation). -->
 <template>
 	<div class="lv-cards" role="list">
@@ -41,17 +53,29 @@
 				@click="$emit('open', r)"
 				@keydown.enter="$emit('open', r)"
 			>
-				<div class="lv-card__top">
-					<span class="lv-card__id">{{ r.name }}</span>
-					<span v-if="statusOf(r)" class="lv-card__chip" :style="chipStyle(r)">
-						<i class="lv-card__chip-dot" />{{ statusOf(r) }}
-					</span>
-				</div>
-				<div class="lv-card__title">{{ titleOf(r) }}</div>
-				<div v-for="c in kvColumns" :key="c.field" class="lv-card__kv">
-					<span class="lv-card__k">{{ c.label }}</span>
-					<span class="lv-card__v">{{ cellValue(c, r) }}</span>
-				</div>
+				<!-- cardTemplate seam (Track 1 item 2): a composite tree shapes the
+				     interior, scope = the row. Knob absent → the v-else branch IS
+				     the pre-existing default markup, untouched (parity law). -->
+				<CompositeTree
+					v-if="hasCardTemplate"
+					:tree="cardTemplate"
+					:scope="r"
+					:date-format="templateDateFormat"
+					:dark="isDark"
+				/>
+				<template v-else>
+					<div class="lv-card__top">
+						<span class="lv-card__id">{{ r.name }}</span>
+						<span v-if="statusOf(r)" class="lv-card__chip" :style="chipStyle(r)">
+							<i class="lv-card__chip-dot" />{{ statusOf(r) }}
+						</span>
+					</div>
+					<div class="lv-card__title">{{ titleOf(r) }}</div>
+					<div v-for="c in kvColumns" :key="c.field" class="lv-card__kv">
+						<span class="lv-card__k">{{ c.label }}</span>
+						<span class="lv-card__v">{{ cellValue(c, r) }}</span>
+					</div>
+				</template>
 			</article>
 		</template>
 	</div>
@@ -59,7 +83,7 @@
 
 <script setup>
 import { computed } from "vue"
-import { statusChipStyle, statusColor, statusTint } from "@yrp/web-engine"
+import { CompositeTree, statusChipStyle, statusColor, statusTint, useUiConfigStore } from "@yrp/web-engine"
 import { useTheme } from "@/composables/useTheme"
 
 const props = defineProps({
@@ -70,11 +94,26 @@ const props = defineProps({
 	statusOf: { type: Function, required: true },
 	cellValue: { type: Function, required: true },
 	loading: { type: Boolean, default: false },
+	cardTemplate: { type: Object, default: null },
 })
 
 defineEmits(["open"])
 
 const { isDark } = useTheme()
+
+// cardTemplate seam: a plain-object tree activates the template branch; any
+// other shape (absent, null, array) keeps the default interior — the engine's
+// CompositeTree still owns malformed-TREE honesty (shapeless root → the
+// path-labelled fallback card, never a silent fall-back to the default look).
+const hasCardTemplate = computed(
+	() =>
+		!!props.cardTemplate && typeof props.cardTemplate === "object" && !Array.isArray(props.cardTemplate)
+)
+// The layout's dateFormat knob feeds the tree's `date` formatter — the same
+// wiring the composite home block uses (store read is template-branch-only:
+// the default interior formats via the host's cellValue, untouched).
+const uiStore = useUiConfigStore()
+const templateDateFormat = computed(() => uiStore.active.dateFormat || "")
 
 // kv rows = the key columns minus the two spots already occupied on the card:
 // the bold title line and the status chip (the `status` column is the chip).

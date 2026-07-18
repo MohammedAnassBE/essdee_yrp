@@ -8,7 +8,16 @@
            "columns": ["item", "planned_quantity"],   // or [{field,label}]
            "groupBy": "process_name",                 // kanban only
            "titleField": "item",                      // optional bold title
-           "pageSize": 8, "title": "Open Work Orders" } }
+           "pageSize": 8, "title": "Open Work Orders",
+           "cardTemplate": { "type": "stack", ... } } }  // optional (below)
+
+     cardTemplate (Track 1 item 2, cards/kanban only): an OPTIONAL composite
+     tree rendered as each card's interior — scope = the ROW record (bind
+     paths are fieldnames), same grammar as the `composite` block. Absent →
+     the shipped card look, byte-identical. Extra fields the template binds
+     are DERIVED from its bind paths and added to the fetch (meta-checked,
+     exactly like the composite block) — the JSON names fields, never a
+     query. Fetch/permissions/realtime/navigation stay host-owned unchanged.
 
      Bounded: one page (pageSize, default 8), no tabs/search/paginator — the
      "View all" link goes to the full list page (only when a /web route
@@ -80,6 +89,7 @@
 				:status-of="statusOf"
 				:cell-value="cellValue"
 				:loading="loading"
+				:card-template="cardTemplate"
 				@open="openRecord"
 			/>
 			<ListKanban
@@ -93,6 +103,7 @@
 				:group-of="groupOf"
 				:group-field="resolvedGroupField"
 				:loading="loading"
+				:card-template="cardTemplate"
 				@open="openRecord"
 			/>
 			<div v-if="!loading && !rowsData.length" class="rl-empty">No records yet</div>
@@ -103,7 +114,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from "vue"
 import { useRouter } from "vue-router"
-import { formatDate, statusChipStyle } from "@yrp/web-engine"
+import { collectBindPaths, formatDate, statusChipStyle } from "@yrp/web-engine"
 import { usePermissions } from "@/composables/usePermissions"
 import { useRealtime } from "@/composables/useRealtime"
 import { useTheme } from "@/composables/useTheme"
@@ -130,6 +141,8 @@ const props = defineProps({
 	titleField: { type: String, default: "" }, // bold card title override
 	pageSize: { type: Number, default: 8 },
 	title: { type: String, default: "" }, // block heading override
+	// Optional per-row composite tree (cards/kanban interiors — see header).
+	cardTemplate: { type: Object, default: null },
 })
 
 const router = useRouter()
@@ -267,6 +280,20 @@ function groupOf(row) {
 	return groupColDesc.value ? String(cellValue(groupColDesc.value, row)) : String(raw)
 }
 
+// cardTemplate-bound row fields (cards/kanban only): first segment of every
+// bind path, meta-checked so a typo'd path can't 500 the list call — the
+// composite block's boundRowFields posture, scope = the row itself here.
+const TEMPLATE_FIELDNAME_RE = /^[a-z0-9_]+$/
+const templateBoundFields = computed(() => {
+	if (!props.cardTemplate || effectiveVariant.value === "table") return []
+	const fields = new Set()
+	for (const path of collectBindPaths(props.cardTemplate)) {
+		const f = path.split(".")[0]
+		if (TEMPLATE_FIELDNAME_RE.test(f) && metaFieldSet.value.has(f)) fields.add(f)
+	}
+	return [...fields]
+})
+
 // ── fetch (existing list API — server re-checks permission regardless) ──
 const fetchFields = computed(() => {
 	const fields = ["name", "docstatus", "modified"]
@@ -277,6 +304,7 @@ const fetchFields = computed(() => {
 	if (resolvedGroupField.value && !fields.includes(resolvedGroupField.value)) {
 		fields.push(resolvedGroupField.value)
 	}
+	for (const f of templateBoundFields.value) if (!fields.includes(f)) fields.push(f)
 	if (metaFieldSet.value.has("status") && !fields.includes("status")) fields.push("status")
 	if (isWorkflow.value && !fields.includes("workflow_state")) fields.push("workflow_state")
 	return fields
@@ -378,10 +406,11 @@ onMounted(init)
 // doctype patched in place (config refresh / knob edit) → full re-init.
 watch(() => props.doctype, () => init())
 
-// Row-shaping knobs (columns/groupBy/titleField/pageSize) only change WHAT is
-// fetched/rendered for the SAME doctype → refetch rows; meta and the realtime
-// subscription stay. JSON keys the columns array by VALUE so an in-place
-// replacement with equal content doesn't refetch.
+// Row-shaping knobs (columns/groupBy/titleField/pageSize/cardTemplate) only
+// change WHAT is fetched/rendered for the SAME doctype → refetch rows; meta
+// and the realtime subscription stay. JSON keys the columns array (and the
+// cardTemplate tree — its bind paths feed templateBoundFields) by VALUE so an
+// in-place replacement with equal content doesn't refetch.
 watch(
 	() =>
 		[
@@ -389,6 +418,7 @@ watch(
 			props.groupBy,
 			props.titleField,
 			props.pageSize,
+			JSON.stringify(props.cardTemplate ?? null),
 		].join("|"),
 	() => {
 		if (!meta.value) return // init in flight — its fetch reads the latest props

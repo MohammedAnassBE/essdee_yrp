@@ -61,8 +61,15 @@
 			<button type="button" class="rt-pending__btn" @click="refreshListNow">Refresh</button>
 		</div>
 
-		<!-- Tab strip (meta-derived: status mode / docstatus mode / none — see CUSTOM_UI §6.3) -->
-		<Tabs v-if="tabMode" :value="activeTab" @update:value="onTabChange">
+		<!-- Tab strip (meta-derived: status mode / docstatus mode / none — see CUSTOM_UI §6.3).
+		     listViews chipStyle:"tabs" (table variant only, item 6) swaps the shipped
+		     tab strip for a segmented tab-strip look; absent/"chip" → today, untouched. -->
+		<Tabs
+			v-if="tabMode"
+			:value="activeTab"
+			:class="chipStyleTabs ? 'esd-tabs-strip' : null"
+			@update:value="onTabChange"
+		>
 			<TabList>
 				<Tab
 					v-for="t in statusTabs"
@@ -229,6 +236,7 @@
 			:loading="loading"
 			dataKey="name"
 			class="esd-table"
+			:class="tableModifierClasses"
 			:rowHover="true"
 			:rowClass="rowClass"
 			@row-click="onRowClick"
@@ -788,6 +796,51 @@ const listCardTemplate = computed(() => {
 	return t && typeof t === "object" && !Array.isArray(t) ? t : null
 })
 
+// ── List TABLE-renderer density / look flags (USE_CASE §4 Track 1 item 6) ────
+// Opt-in presentation on the DEFAULT table variant ONLY. EVERY flag absent (or
+// off-vocabulary) resolves to the empty/false state below → today's table,
+// byte-identical (parity law). cards/kanban ignore these entirely (they absorb
+// the same looks via cardTemplate), so each computed short-circuits to inert
+// unless the resolved variant is the table.
+const isTableVariant = computed(() => listVariant.value === "table")
+
+// rowSize: "compact" | "comfortable" tighten / loosen the row height. "cozy"
+// (== today), absent and any off-vocab value → "" → the shipped row height.
+const tableRowSize = computed(() => {
+	if (!isTableVariant.value) return ""
+	const v = listViewCfg.value.rowSize
+	return v === "compact" || v === "comfortable" ? v : ""
+})
+
+// colourBy: the "status" keyword (tint by the engine status→severity registry)
+// or a real meta field (tint by a stable hash of the field value). A typo'd /
+// non-meta field, a non-string, or absence → "" → no row tint.
+const colourByField = computed(() => {
+	if (!isTableVariant.value) return ""
+	const c = listViewCfg.value.colourBy
+	if (typeof c !== "string" || !c.trim()) return ""
+	if (c === "status") return "status"
+	return metaFieldSet.value.has(c) ? c : ""
+})
+
+const monoIdOn = computed(() => isTableVariant.value && listViewCfg.value.monoId === true)
+const headerBandOn = computed(() => isTableVariant.value && listViewCfg.value.headerBand === true)
+const edgeStatusOn = computed(() => isTableVariant.value && listViewCfg.value.edgeStatus === true)
+// chipStyle: only "tabs" opts the status strip into the segmented tab-strip
+// look; "chip", absent and off-vocab → today's tab strip, untouched.
+const chipStyleTabs = computed(() => isTableVariant.value && listViewCfg.value.chipStyle === "tabs")
+
+// Root modifier classes for the DataTable — all opt-in. Empty when every flag
+// is absent, so the element keeps only its static `esd-table` class → today's
+// table (parity law).
+const tableModifierClasses = computed(() => {
+	const c = []
+	if (tableRowSize.value) c.push(`esd-rows-${tableRowSize.value}`)
+	if (monoIdOn.value) c.push("esd-mono-id")
+	if (headerBandOn.value) c.push("esd-header-band")
+	return c
+})
+
 // Fields the template binds beyond the key columns: first segment of every
 // bind path, meta-checked so a typo'd path can't 500 the row query (the
 // composite block's boundRowFields posture — the JSON names fields, never a
@@ -1069,6 +1122,20 @@ const fetchFields = computed(() => {
 	}
 	if (isSubmittable.value && !fields.includes("docstatus")) fields.push("docstatus")
 	if (isWorkflow.value && !fields.includes("workflow_state")) fields.push("workflow_state")
+	// Table density flags (item 6) may need extra source fields: the colourBy
+	// field, and `status` when a plain status field drives colourBy:"status" or
+	// the edgeStatus stripe. Guarded on the resolved flags (each ""/false off the
+	// table variant or when absent), so the flag-absent row query is byte-identical.
+	if (colourByField.value && colourByField.value !== "status" && !fields.includes(colourByField.value)) {
+		fields.push(colourByField.value)
+	}
+	if (
+		(colourByField.value === "status" || edgeStatusOn.value) &&
+		metaFieldSet.value.has("status") &&
+		!fields.includes("status")
+	) {
+		fields.push("status")
+	}
 	return fields
 })
 
@@ -2014,12 +2081,69 @@ function rowSeverity(row) {
 	return statusSeverity(row.docstatus)
 }
 
+// Generic status → severity for the opt-in colourBy:"status" tint and the
+// edgeStatus stripe (item 6). Reuses the app's status-colour registry:
+// workflow_state via WORKFLOW_SEVERITY, submittable docs via docstatus, and a
+// small keyword map for a plain `status` Select field. Colours live in CSS (the
+// --esd-success / -warn / -danger tokens) — the layout JSON never names one.
+const STATUS_GOOD_RE = /(complete|success|approved|paid|active|closed|delivered|received|done|finished|ready|fulfilled)/
+const STATUS_BAD_RE = /(cancel|reject|fail|overdue|error|expired|return|stopped|on hold)/
+function genericStatusSeverity(row) {
+	if (isWorkflow.value && row.workflow_state) return WORKFLOW_SEVERITY[row.workflow_state] || "warn"
+	if (isSubmittable.value) return statusSeverity(row.docstatus)
+	const s = String(row.status || "").toLowerCase()
+	if (!s) return "warn"
+	if (STATUS_BAD_RE.test(s)) return "danger"
+	if (STATUS_GOOD_RE.test(s)) return "success"
+	return "warn"
+}
+
+// A stable, non-cryptographic hash so the same field value always lands on the
+// same category tint across rows/renders (colourBy:"<field>").
+const ROW_TINT_PALETTE = 6
+function tintHash(str) {
+	let h = 0
+	for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0
+	return Math.abs(h)
+}
+
+// Per-row tint class for colourBy (item 6). "" when the knob is absent → no
+// tint (parity). "status" → a severity tint; a field → a hashed category tint.
+function rowTintClass(row) {
+	const cb = colourByField.value
+	if (!cb) return ""
+	if (cb === "status") {
+		const sev = genericStatusSeverity(row)
+		return sev === "success" ? "tint-good" : sev === "danger" ? "tint-danger" : "tint-warn"
+	}
+	const val = row[cb]
+	if (val === null || val === undefined || val === "") return ""
+	return `tint-cat-${tintHash(String(val)) % ROW_TINT_PALETTE}`
+}
+
+// Per-row leading-edge stripe class for edgeStatus (item 6), coloured by the
+// same status registry. "" when the knob is absent → no stripe (parity).
+function edgeStatusClass(row) {
+	if (!edgeStatusOn.value) return ""
+	const sev = genericStatusSeverity(row)
+	return sev === "success" ? "edge-good" : sev === "danger" ? "edge-danger" : "edge-warn"
+}
+
 // Q4: a 4px coloured left bar per row (green submitted / red cancelled pop above
-// a neutral draft) so the lifecycle stage reads at a glance.
+// a neutral draft) so the lifecycle stage reads at a glance. The opt-in item-6
+// tint / edge classes are ADDED on top — each helper returns "" when its knob is
+// absent, so a flag-free list keeps EXACTLY today's class string (parity law).
 function rowClass(row) {
-	if (!isSubmittable.value && !isWorkflow.value) return ""
-	const sev = rowSeverity(row)
-	return sev === "success" ? "row-good" : sev === "danger" ? "row-danger" : "row-warn"
+	const tokens = []
+	if (isSubmittable.value || isWorkflow.value) {
+		const sev = rowSeverity(row)
+		tokens.push(sev === "success" ? "row-good" : sev === "danger" ? "row-danger" : "row-warn")
+	}
+	const tint = rowTintClass(row)
+	if (tint) tokens.push(tint)
+	const edge = edgeStatusClass(row)
+	if (edge) tokens.push(edge)
+	return tokens.join(" ")
 }
 
 // ── Q1: resolve Link cells to human names ──
@@ -2371,6 +2495,109 @@ const hasAnyFilter = computed(
 }
 :deep(.esd-table .p-datatable-tbody > tr.row-warn > td:first-child) {
 	box-shadow: inset 4px 0 0 0 var(--esd-muted-2);
+}
+
+/* ════════════ List table density / look flags (Track 1 item 6) ════════════
+   Every rule below is scoped to an OPT-IN modifier class (esd-rows-*, esd-mono-id,
+   esd-header-band, tint-*, edge-*). A layout without the flag adds no class, so
+   the table renders byte-identical to today (parity law). Table variant only. */
+
+/* rowSize — the default (cozy) row keeps 11px/13px from the base rule above. */
+:deep(.esd-table.esd-rows-compact .p-datatable-tbody > tr > td) {
+	padding-top: 6px;
+	padding-bottom: 6px;
+	font-size: 12.5px;
+}
+:deep(.esd-table.esd-rows-comfortable .p-datatable-tbody > tr > td) {
+	padding-top: 16px;
+	padding-bottom: 16px;
+	font-size: 13.5px;
+}
+
+/* monoId — box the already-monospace id column into a subtle code chip so the
+   record id reads as a distinct token (tabular numerals align the digits). */
+:deep(.esd-table.esd-mono-id .p-datatable-tbody .esd-mono) {
+	display: inline-block;
+	padding: 1px 6px;
+	border-radius: 5px;
+	background: var(--esd-slate-50);
+	color: var(--esd-ink-2);
+	font-variant-numeric: tabular-nums;
+}
+
+/* headerBand — a tinted accent band across the column header row. */
+:deep(.esd-table.esd-header-band .p-datatable-thead > tr > th) {
+	background: var(--esd-accent-50);
+	color: var(--esd-accent-700);
+}
+
+/* colourBy row tints — a subtle full-row wash. "status" maps to the severity
+   tokens; a field value maps to one of six stable category tints (translucent
+   so they read on both the light and dark row surfaces). */
+:deep(.esd-table .p-datatable-tbody > tr.tint-good > td) {
+	background: var(--esd-success-50);
+}
+:deep(.esd-table .p-datatable-tbody > tr.tint-warn > td) {
+	background: var(--esd-warn-50);
+}
+:deep(.esd-table .p-datatable-tbody > tr.tint-danger > td) {
+	background: var(--esd-danger-50);
+}
+:deep(.esd-table .p-datatable-tbody > tr.tint-cat-0 > td) {
+	background: rgba(20, 122, 72, 0.08);
+}
+:deep(.esd-table .p-datatable-tbody > tr.tint-cat-1 > td) {
+	background: rgba(180, 83, 9, 0.09);
+}
+:deep(.esd-table .p-datatable-tbody > tr.tint-cat-2 > td) {
+	background: rgba(190, 18, 60, 0.08);
+}
+:deep(.esd-table .p-datatable-tbody > tr.tint-cat-3 > td) {
+	background: rgba(124, 58, 237, 0.10);
+}
+:deep(.esd-table .p-datatable-tbody > tr.tint-cat-4 > td) {
+	background: rgba(2, 132, 199, 0.10);
+}
+:deep(.esd-table .p-datatable-tbody > tr.tint-cat-5 > td) {
+	background: rgba(101, 113, 108, 0.12);
+}
+
+/* edgeStatus — a status-coloured leading-edge stripe. Placed AFTER the Q4
+   row-* rules so, when both apply, the edge colour wins for the first cell. */
+:deep(.esd-table .p-datatable-tbody > tr.edge-good > td:first-child) {
+	box-shadow: inset 4px 0 0 0 var(--esd-success);
+}
+:deep(.esd-table .p-datatable-tbody > tr.edge-warn > td:first-child) {
+	box-shadow: inset 4px 0 0 0 var(--esd-warn);
+}
+:deep(.esd-table .p-datatable-tbody > tr.edge-danger > td:first-child) {
+	box-shadow: inset 4px 0 0 0 var(--esd-danger);
+}
+
+/* chipStyle:"tabs" — swap the underline status tabs for a segmented tab strip
+   (a bordered pill group). Absent/"chip" → the shipped PrimeVue tab bar. The
+   segment chrome sits on the container (.p-tablist) and the sliding underline
+   indicator (.p-tablist-active-bar) is hidden so the active pill is the signal. */
+:deep(.esd-tabs-strip .p-tablist) {
+	border: 1px solid var(--esd-line);
+	border-radius: 10px;
+	background: var(--esd-slate-50);
+	padding: 3px;
+}
+:deep(.esd-tabs-strip .p-tablist-active-bar) {
+	display: none;
+}
+:deep(.esd-tabs-strip .p-tab) {
+	border: none;
+	border-radius: 7px;
+	margin: 0;
+	padding: 6px 14px;
+	color: var(--esd-muted);
+}
+:deep(.esd-tabs-strip .p-tab-active) {
+	background: var(--esd-card);
+	color: var(--esd-accent-700);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 /* Q8: trailing chevron affordance, brightening on row hover. */

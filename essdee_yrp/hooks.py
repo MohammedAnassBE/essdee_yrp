@@ -51,26 +51,10 @@ fixtures = [
 	# here are therefore CODE-OWNED: never edit them live on prod (a migrate
 	# reverts the change) — duplicate to a new name instead. Per-user assignment
 	# (YRP UI Preference) is NOT fixtured, so who-gets-which stays prod-owned.
-	# 2026-07-20 (owner): ship all currently-enabled layouts, not just Default.
-	{
-		"dt": "UI Layout",
-		"filters": [
-			[
-				"name",
-				"in",
-				[
-					"Default",
-					"Demo 5",
-					"Demo 7",
-					"Cutting Supervisor",
-					"Premium White",
-					"Trial Loomline",
-					"Trial Dispatch Ops",
-					"Trial StitchFloor",
-				],
-			]
-		],
-	},
+	# 2026-07-20 (owner): ship ALL enabled layouts (status = Enabled), not a name
+	# list. `disabled = 0` — so any enabled layout on the exporting site is
+	# captured; disabled layouts (dev drills, unfinished templates) stay out.
+	{"dt": "UI Layout", "filters": [["disabled", "=", 0]]},
 ]
 
 # Apps

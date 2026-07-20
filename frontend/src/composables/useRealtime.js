@@ -74,9 +74,18 @@ function ensureSocket() {
     return null
   }
   try {
-    // Build host-only (NOT location.origin — origin already carries :8003 and
-    // would double-port to :8003:9000). The namespace is the site name.
-    const url = `${window.location.protocol}//${window.location.hostname}:${port}/${site}`
+    // Namespace is the site name. HOW we reach the socketio server differs by env:
+    //  - Dev (site served on a custom port like :8003, socketio on its own port,
+    //    NO nginx): connect straight to hostname:socketio_port.
+    //  - Prod (behind nginx on 80/443): the socketio PORT is not exposed to the
+    //    internet — only /socket.io is proxied — so connect via location.origin
+    //    (default /socket.io path), exactly like Frappe Desk. Using the explicit
+    //    port here fails (port firewalled) and leaves realtime permanently "off".
+    const loc = window.location
+    const onProxiedStandardPort = !loc.port || loc.port === '80' || loc.port === '443'
+    const url = onProxiedStandardPort
+      ? `${loc.origin}/${site}` // nginx proxies /socket.io (default path)
+      : `${loc.protocol}//${loc.hostname}:${port}/${site}` // dev: direct socketio port
     socket = io(url, {
       withCredentials: true, // send the `sid` session cookie for auth
       // Keep retrying forever (default backoff, capped at 30s) so a bench/

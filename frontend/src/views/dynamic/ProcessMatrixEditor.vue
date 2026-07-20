@@ -61,7 +61,13 @@
 				</div>
 				<div v-if="!isCreate" class="doc-id esd-mono">{{ id }}</div>
 			</div>
-			<Tag v-if="readonly" class="head-status" value="Read-only (submitted)" severity="secondary" rounded />
+			<Tag
+				v-if="readonly"
+				class="head-status"
+				:value="isSubmitted ? 'Read-only (submitted)' : 'Read-only'"
+				severity="secondary"
+				rounded
+			/>
 			<div class="head-actions">
 				<Button
 					v-if="!readonly"
@@ -478,7 +484,15 @@ const loadError = ref(null)
 const saving = computed(() => docState.saving.value)
 const generating = ref(false)
 
-const readonly = computed(() => docstatus.value === 1 || docstatus.value === 2)
+// B2: editing the matrix is System-Manager-only. Every other user gets a
+// READ-ONLY view (fields disabled, no Add Input/Output, no delete/edit, no Save).
+// This gate is scoped to matrix EDITING only — viewing the IPD and saving/creating
+// Item Production Detail records is unaffected (that lives in IPDConfigView /
+// DocDetail, not here; IPDs are auto-created and every user must still save them).
+const canEditMatrix = computed(() => isAdmin.value || hasRole("System Manager"))
+// Submitted/cancelled matrices are engine-owned → read-only regardless of role.
+const isSubmitted = computed(() => docstatus.value === 1 || docstatus.value === 2)
+const readonly = computed(() => isSubmitted.value || !canEditMatrix.value)
 
 // Q6: unsaved-changes guard. A deep watch flags the editable model dirty once
 // armed (after load + any create-mode auto-generate settle, so programmatic
@@ -639,24 +653,34 @@ function rebuildGroups(combos, attrs) {
 	groups.value = Object.values(grouped).sort((a, b) => a.group_index - b.group_index)
 }
 
-// Fetch the legal attribute values for the current attribute lists + items.
+// B1: load the FULL value list for every attribute, UNFILTERED by the item's
+// variants. The matrix is now auto-generated from the IPD, so the old
+// item-variant constraint (yrp.yrp.api.matrix.get_matrix_attribute_values, which
+// resolved values off the IPD item's attribute mappings and rendered empty "—"
+// selects) is obsolete. "Item Attribute Value" is a standalone doctype keyed by
+// `attribute_name`; we list every value of each attribute in play, both sides.
 async function reloadAttributeValues() {
 	// Clear existing keys.
 	for (const k of Object.keys(attributeValuesInput)) delete attributeValuesInput[k]
 	for (const k of Object.keys(attributeValuesOutput)) delete attributeValuesOutput[k]
-	if (!header.ipd) return
-	if (!inputAttributes.value.length && !outputAttributes.value.length) return
+	const attrs = Array.from(new Set([...inputAttributes.value, ...outputAttributes.value]))
+	if (!attrs.length) return
 	try {
-		const r = await callMethod("yrp.yrp.api.matrix.get_matrix_attribute_values", {
-			ipd: header.ipd,
-			input_attributes: inputAttributes.value,
-			output_attributes: outputAttributes.value,
-			input_item: header.input_item || null,
+		const rows = await callMethod("frappe.client.get_list", {
+			doctype: "Item Attribute Value",
+			filters: { attribute_name: ["in", attrs] },
+			fields: ["attribute_name", "attribute_value"],
+			limit_page_length: 0,
+			order_by: "attribute_value asc",
 		})
-		const inp = r?.input || {}
-		const out = r?.output || {}
-		for (const [k, v] of Object.entries(inp)) attributeValuesInput[k] = v
-		for (const [k, v] of Object.entries(out)) attributeValuesOutput[k] = v
+		const byAttr = {}
+		for (const row of rows || []) {
+			if (!row?.attribute_name) continue
+			if (!byAttr[row.attribute_name]) byAttr[row.attribute_name] = []
+			byAttr[row.attribute_name].push(row.attribute_value)
+		}
+		for (const a of inputAttributes.value) attributeValuesInput[a] = byAttr[a] || []
+		for (const a of outputAttributes.value) attributeValuesOutput[a] = byAttr[a] || []
 	} catch (e) {
 		toast.warn("Attribute values", e.message)
 	}

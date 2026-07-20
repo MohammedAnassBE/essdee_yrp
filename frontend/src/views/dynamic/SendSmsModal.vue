@@ -21,7 +21,6 @@
 			<!-- who we're texting -->
 			<div class="sms-recipient">
 				<span>Supplier: <b>{{ ctx.supplier }}</b></span>
-				<span v-if="ctx.contact"> · Contact: {{ ctx.contact }}</span>
 			</div>
 
 			<!-- (1) mobile: pick a contact number OR type one (editable) -->
@@ -34,7 +33,6 @@
 					fluid
 					placeholder="Pick or type a number"
 				/>
-				<small class="sms-hint">Pick a number above or type/edit one.</small>
 			</div>
 
 			<!-- (2) template: MSG91 Flow template configured in YRP SMS Settings -->
@@ -80,9 +78,6 @@
 						placeholder="Manual value"
 					/>
 				</div>
-			</div>
-			<div v-else-if="selectedTemplate" class="sms-hint sms-novars">
-				This template has no inputs.
 			</div>
 		</div>
 

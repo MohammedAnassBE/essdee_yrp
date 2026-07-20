@@ -1,0 +1,12 @@
+[
+ {
+  "config": "{\n \"schema_version\": 1,\n \"nav\": {\n  \"groups\": [\n   {\n    \"id\": \"Production\",\n    \"label\": \"Production\",\n    \"items\": [\n     {\n      \"doctype\": \"Lot\",\n      \"icon\": \"pi pi-inbox\"\n     },\n     {\n      \"doctype\": \"Work Order\",\n      \"icon\": \"pi pi-bars\"\n     },\n     {\n      \"doctype\": \"Work Order Correction\",\n      \"icon\": \"pi pi-pencil\"\n     },\n     {\n      \"doctype\": \"Delivery Challan\",\n      \"icon\": \"pi pi-send\"\n     },\n     {\n      \"doctype\": \"Goods Received Note\",\n      \"icon\": \"pi pi-plus-circle\"\n     }\n    ]\n   },\n   {\n    \"id\": \"Stock\",\n    \"label\": \"Stock\",\n    \"items\": [\n     {\n      \"doctype\": \"Stock Entry\",\n      \"icon\": \"pi pi-sync\"\n     }\n    ]\n   },\n   {\n    \"id\": \"Item Masters\",\n    \"label\": \"Item Masters\",\n    \"items\": [\n     {\n      \"doctype\": \"Item\",\n      \"icon\": \"pi pi-box\"\n     },\n     {\n      \"doctype\": \"Item Production Detail\",\n      \"icon\": \"pi pi-table\"\n     }\n    ]\n   },\n   {\n    \"id\": \"Setup\",\n    \"label\": \"Setup\",\n    \"items\": [\n     {\n      \"doctype\": \"Terms and Condition\",\n      \"icon\": \"pi pi-book\"\n     }\n    ]\n   }\n  ],\n  \"hidden\": {}\n },\n \"screens\": {\n  \"home\": {\n   \"blocks\": [\n    {\n     \"id\": \"greet\",\n     \"type\": \"home-greeting\",\n     \"size\": \"full\",\n     \"props\": {}\n    },\n    {\n     \"id\": \"queues\",\n     \"type\": \"home-queues\",\n     \"size\": \"full\",\n     \"props\": {}\n    },\n    {\n     \"id\": \"recent\",\n     \"type\": \"home-recent\",\n     \"size\": \"full\",\n     \"props\": {\n      \"doctypes\": [\n       \"Work Order\",\n       \"Delivery Challan\",\n       \"Goods Received Note\",\n       \"Stock Entry\"\n      ]\n     }\n    }\n   ],\n   \"hidden\": {}\n  }\n },\n \"listViews\": {},\n \"quickCreate\": [\n  \"Lot\",\n  \"Work Order\",\n  \"Delivery Challan\"\n ],\n \"theme\": {\n  \"mode\": \"user\",\n  \"accent\": null\n }\n}",
+  "description": "Transcription of the live /web UI as of 2026-07-15 — ships today's UI unchanged. Code-owned: never edit this record live; duplicate it to create variants.",
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "UI Layout",
+  "layout_name": "Default",
+  "modified": "2026-07-15 11:22:40.745183",
+  "name": "Default"
+ }
+]

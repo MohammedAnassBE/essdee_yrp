@@ -8,22 +8,25 @@
 	   onto these, so every existing screen is unchanged. ── */
 	--c-primary: 14 140 127;   /* #0E8C7F deep teal — actions / CTAs / active nav / links */
 	--c-accent:  37 99 235;    /* #2563EB royal blue — secondary accent + input focus */
-	--c-ink:     15 22 19;     /* #0F1613 — green-biased ink, text / borders via opacity */
-	--c-surface: 242 246 244;  /* #F2F6F4 — picked teal-biased page ground */
+	--c-ink:     var(--yrp-text-rgb, 15 22 19);     /* #0F1613 — green-biased ink, text / borders via opacity */
+	--c-surface: var(--yrp-bg-rgb, 242 246 244);    /* #F2F6F4 — picked teal-biased page ground */
 
-	/* ── Surfaces ── */
-	--esd-bg:        #F2F6F4;   /* picked teal-biased near-white (= --c-surface) */
-	--esd-card:      #FFFFFF;   /* white panels/cards */
-	--esd-slate-50:  #E9EFEC;   /* secondary surface (table headers, hover rows) */
+	/* ── Surfaces — value side reads the engine's layout-theme tokens (--yrp-*,
+	   written by @yrp/web-engine applyTheme ONLY for keys present in the layout
+	   theme); the fallback is the exact shipped value, so a layout without theme
+	   knobs renders pixel-identical (parity law). ── */
+	--esd-bg:        var(--yrp-bg, #F2F6F4);        /* picked teal-biased near-white (= --c-surface) */
+	--esd-card:      var(--yrp-surface, #FFFFFF);   /* white panels/cards */
+	--esd-slate-50:  var(--yrp-surface-2, #E9EFEC); /* secondary surface (table headers, hover rows) */
 
 	/* ── Text ── */
-	--esd-ink:       #0F1613;   /* primary value text — ~17:1 on white */
-	--esd-ink-2:     #33413B;   /* secondary headings — ~10:1 */
-	--esd-muted:     #5F6E68;   /* labels/hints — AA on white (~4.9:1) */
-	--esd-muted-2:   #98A5A0;   /* disabled/subtle/empty placeholder */
+	--esd-ink:       var(--yrp-text, #0F1613);      /* primary value text — ~17:1 on white */
+	--esd-ink-2:     var(--yrp-text-2, #33413B);    /* secondary headings — ~10:1 */
+	--esd-muted:     var(--yrp-muted, #5F6E68);     /* labels/hints — AA on white (~4.9:1) */
+	--esd-muted-2:   var(--yrp-muted-2, #98A5A0);   /* disabled/subtle/empty placeholder */
 
 	/* ── Lines ── */
-	--esd-line:      #DFE8E4;   /* teal-biased crisp hairline */
+	--esd-line:      var(--yrp-line, #DFE8E4);      /* teal-biased crisp hairline */
 
 	/* ── Accent: brighter modern teal, same family ── */
 	--esd-accent:    #0E8C7F;   /* deep refined teal — fills, header band, icons */
@@ -45,9 +48,9 @@
 	--sidebar-width: 232px;
 	--sidebar-collapsed-width: 68px;   /* slim rail rest width (partners_api) */
 	--topbar-height: 56px;
-	--radius-sm: 9px;    /* controls (buttons/inputs) — partners_api */
-	--radius: 12px;      /* cards / dialogs */
-	--radius-lg: 14px;
+	--radius-sm: var(--yrp-radius-sm, 9px);    /* controls (buttons/inputs) — partners_api */
+	--radius: var(--yrp-radius, 12px);         /* cards / dialogs — layout `radius` knob */
+	--radius-lg: var(--yrp-radius-lg, 14px);
 
 	/* ── Spacing scale (replaces 14 ad-hoc gap values) ── */
 	--space-1: 4px;
@@ -97,19 +100,22 @@
    ───────────────────────────────────────────────────────────────────────── */
 .dark {
 	/* Surfaces — soft dark slate, lifted OFF near-black to cut halation / eye
-	   strain (was #0B1220 near-black). Page < card < bands = gentle elevation. */
-	--esd-bg:        #0E1512;   /* page — green-biased charcoal */
-	--esd-card:      #17211C;   /* panels / cards (elevated above the page) */
-	--esd-slate-50:  #1E2B25;   /* secondary surface (header bands, hover rows) */
+	   strain (was #0B1220 near-black). Page < card < bands = gentle elevation.
+	   Value side reads the engine's `.dark`-scoped --yrp-* tokens (written from
+	   the layout theme's dark{} overlay); fallbacks are the exact shipped dark
+	   values — no layout dark palette ⇒ pixel-identical dark mode. */
+	--esd-bg:        var(--yrp-bg, #0E1512);        /* page — green-biased charcoal */
+	--esd-card:      var(--yrp-surface, #17211C);   /* panels / cards (elevated above the page) */
+	--esd-slate-50:  var(--yrp-surface-2, #1E2B25); /* secondary surface (header bands, hover rows) */
 
 	/* Text — soft off-white, NOT pure white (pure white on dark = halation). */
-	--esd-ink:       #E9F1ED;   /* primary value text */
-	--esd-ink-2:     #C0CDC7;   /* secondary headings */
-	--esd-muted:     #8C9A93;   /* labels / hints */
-	--esd-muted-2:   #63736C;   /* disabled / subtle */
+	--esd-ink:       var(--yrp-text, #E9F1ED);      /* primary value text */
+	--esd-ink-2:     var(--yrp-text-2, #C0CDC7);    /* secondary headings */
+	--esd-muted:     var(--yrp-muted, #8C9A93);     /* labels / hints */
+	--esd-muted-2:   var(--yrp-muted-2, #63736C);   /* disabled / subtle */
 
 	/* Lines — soft, low-contrast against the lifted surfaces */
-	--esd-line:      #2A3A33;
+	--esd-line:      var(--yrp-line, #2A3A33);
 
 	/* Accent — brighter teal for dark contrast */
 	--esd-accent:    #2FB8A6;
@@ -119,8 +125,8 @@
 	--esd-accent-ink:#5ACCBC;   /* title / icon on the dark teal-wash band */
 
 	/* Base-token overrides for dark — --esd-accent2 derives from --c-accent */
-	--c-ink:     233 241 237;   /* #E9F1ED */
-	--c-surface: 14 21 18;      /* #0E1512 */
+	--c-ink:     var(--yrp-text-rgb, 233 241 237);   /* #E9F1ED */
+	--c-surface: var(--yrp-bg-rgb, 14 21 18);        /* #0E1512 */
 	--c-accent:  96 165 250;    /* #60A5FA lighter royal blue reads on dark */
 
 	/* Elevation — deeper shadows on dark */
@@ -234,7 +240,10 @@
 /* ── Input focus: royal-blue (secondary accent), uniform across PrimeVue inputs.
    `.p-inputtext:focus` also covers autocomplete / datepicker / number inner
    inputs (they all carry .p-inputtext). Unlayered → wins over @layer primevue
-   without !important; --esd-accent2 flips per scheme. ── */
+   without !important; --esd-accent2 flips per scheme.
+   theme.focus (USE_CASE §4 item 10) recolours the ring via the --yrp-focus /
+   --yrp-focus-soft fallbacks: the layout knob absent ⇒ the exact shipped royal-
+   blue pair, byte-identical (parity law); present ⇒ the authored focus colour. ── */
 .p-inputtext:enabled:focus,
 .p-inputtext:focus,
 .p-textarea:enabled:focus,
@@ -243,8 +252,20 @@
 .p-inputnumber-input:enabled:focus,
 .p-select.p-focus,
 .p-multiselect.p-focus {
-	border-color: var(--esd-accent2) !important;
-	box-shadow: 0 0 0 3px var(--esd-accent2-50) !important;
+	border-color: var(--yrp-focus, var(--esd-accent2)) !important;
+	box-shadow: 0 0 0 3px var(--yrp-focus-soft, var(--esd-accent2-50)) !important;
+}
+
+/* theme.focus — opt-in custom focus-ring colour for keyboard focus on every
+   interactive surface (buttons, tabs, links, rows…), mirroring the demo's
+   :focus-visible{outline:2px solid var(--focus)}. The engine sets
+   html[data-yrp-focus] + emits --yrp-focus ONLY while a layout authors
+   theme.focus, so this rule matches NOTHING for focus-absent layouts → today's
+   focus behaviour (UA + component rings) is byte-identical (parity law). Inputs
+   already recolour above; the outline layers a same-colour keyboard ring. */
+html[data-yrp-focus] :focus-visible {
+	outline: 2px solid var(--yrp-focus);
+	outline-offset: 2px;
 }
 
 * {
@@ -258,9 +279,11 @@ body {
 }
 
 body {
-	font-family: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system,
-		"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-	font-size: 14px;
+	/* Layout `font` / `fontScale` knobs — fallbacks are the exact shipped
+	   stack/size, so no knob ⇒ identical type. */
+	font-family: var(--yrp-font, "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system,
+		"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+	font-size: calc(14px * var(--yrp-font-scale, 1));
 	line-height: 1.5;
 	color: var(--esd-ink);
 	background: var(--esd-bg);
@@ -324,7 +347,10 @@ a {
 	font-size: 11px; font-weight: 600;
 	padding: 1px 8px; border-radius: 999px;
 }
-.esd-card__body { padding: var(--space-4); }
+/* theme.density (USE_CASE §4 item 10) drives the card interior padding via
+   --yrp-pad (compact 10 / comfortable 14 / spacious 18). Knob absent ⇒ the
+   shipped 16px, byte-identical (parity law). */
+.esd-card__body { padding: var(--yrp-pad, var(--space-4)); }
 
 /* Lightweight panel-head variant for editors that can't use the full band */
 .esd-panel-head {
@@ -489,7 +515,12 @@ a {
 	letter-spacing: .06em;
 	color: var(--esd-muted);
 }
-.p-datatable-tbody > tr > td { font-variant-numeric: tabular-nums; }
+/* theme.density (USE_CASE §4 item 10) drives the row height via --yrp-row
+   (compact 38 / comfortable 46 / spacious 58), mirroring the demo's
+   td{height:var(--row)}. Knob absent ⇒ height:auto (= not setting it at all),
+   so the shipped rows are byte-identical (parity law); the per-list `rowSize`
+   flag keeps riding its own td padding on top. */
+.p-datatable-tbody > tr > td { font-variant-numeric: tabular-nums; height: var(--yrp-row, auto); }
 .p-datatable-tbody > tr:hover { background: var(--esd-accent-50); }
 .dark .p-datatable-tbody > tr:hover { background: var(--esd-slate-50); }
 
@@ -524,4 +555,127 @@ a {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	font-variant-numeric: tabular-nums;
+}
+
+/* ══ Opt-in presentation modes (DESIGN_PREMIUM.md §4(i), 2026-07-17) ══════════
+   The engine's applyTheme writes html[data-yrp-arrows="quiet"] /
+   html[data-yrp-section-headers="plain"] ONLY while a layout authors the
+   non-default theme.arrows / theme.sectionHeaders value — so every rule below
+   matches NOTHING for knob-absent layouts and the Default stays byte-identical
+   (parity law by construction).
+   Quiet ≠ invisible: reveals are hover-OR-focus (:hover, :focus-visible,
+   :focus-within), and under @media (hover: none) — floor tablets — the
+   affordances stay at muted ~40% opacity, never 0. Functional arrows
+   (prev/next record .doc-nav__btn, the "+ New" dropdown caret) are untouched.
+   !important is deliberate: these gates must beat component-scoped rules
+   (including their :hover states) regardless of bundle order/specificity. */
+
+/* arrows §1 #1 — home queue-card corner arrow: quieted, not removed */
+html[data-yrp-arrows="quiet"] .stat-arrow {
+	color: var(--esd-muted-2) !important;
+	font-size: 12px !important;
+}
+/* (§1 #2, the KPI-tile ↗, ships in the engine: SummaryTiles.vue un-scoped gate) */
+
+/* arrows §1 #3/#4 — "View all →" arrow glyphs: the accent text link remains */
+html[data-yrp-arrows="quiet"] .recent-viewall .pi,
+html[data-yrp-arrows="quiet"] .rl-viewall .pi {
+	display: none !important;
+}
+
+/* arrows §1 #9 — Submit / bulk-submit trailing →: the label carries all the
+   meaning (Save's check and Amend's clone icons are NOT arrows — untouched) */
+html[data-yrp-arrows="quiet"] .forward-cta .p-button-icon.pi-arrow-right,
+html[data-yrp-arrows="quiet"] .bulk-bar__actions .p-button-icon.pi-arrow-right {
+	display: none !important;
+}
+
+/* arrows §1 #6 — list row-end chevron: stays muted (no accent flip/slide on
+   row hover) */
+html[data-yrp-arrows="quiet"] .row-chevron {
+	color: var(--esd-muted-2) !important;
+	transform: none !important;
+}
+
+/* arrows §1 #10 — linked-docs from→to arrow: same quiet treatment */
+html[data-yrp-arrows="quiet"] .lr-arrow {
+	color: var(--esd-muted-2) !important;
+	transform: none !important;
+}
+
+/* arrows §1 #5 — LinkField "open linked doc" ↗: hover-OR-focus revealed */
+html[data-yrp-arrows="quiet"] .link-field .link-goto {
+	opacity: 0;
+	transition: opacity 0.14s;
+}
+html[data-yrp-arrows="quiet"] .link-field:hover .link-goto,
+html[data-yrp-arrows="quiet"] .link-field:focus-within .link-goto,
+html[data-yrp-arrows="quiet"] .link-goto:focus-visible {
+	opacity: 1;
+}
+
+/* arrows §1 #7 — sort ↑↓ pairs: hidden until column hover/focus; the ACTIVE
+   sort column keeps its indicator (sort state must stay readable) */
+html[data-yrp-arrows="quiet"] .p-datatable-sort-icon {
+	opacity: 0;
+	transition: opacity 0.14s;
+}
+html[data-yrp-arrows="quiet"] .p-datatable-sortable-column:hover .p-datatable-sort-icon,
+html[data-yrp-arrows="quiet"] .p-datatable-sortable-column:focus-visible .p-datatable-sort-icon {
+	opacity: 1;
+}
+html[data-yrp-arrows="quiet"] .p-datatable-column-sorted .p-datatable-sort-icon {
+	opacity: 0.7;
+}
+
+/* arrows §1 #5b — read-mode detail link ↗ (DocDetail .field-value.link::after,
+   "Q8 persistent affordance"): the dotted underline stays the affordance;
+   the accent ↗ becomes hover-OR-focus revealed, same as the LinkField goto */
+html[data-yrp-arrows="quiet"] .field-value.link::after {
+	opacity: 0 !important;
+	transition: opacity 0.14s;
+}
+html[data-yrp-arrows="quiet"] .field-value.link:hover::after,
+html[data-yrp-arrows="quiet"] .field-value.link:focus-within::after {
+	opacity: 0.85 !important;
+	color: var(--esd-muted-2) !important;
+}
+
+/* floor tablets / touch (no hover): quieted to ~40%, never removed */
+@media (hover: none) {
+	html[data-yrp-arrows="quiet"] .link-field .link-goto,
+	html[data-yrp-arrows="quiet"] .p-datatable-sort-icon {
+		opacity: 0.4;
+	}
+	html[data-yrp-arrows="quiet"] .field-value.link::after {
+		opacity: 0.4 !important;
+		color: var(--esd-muted-2) !important;
+	}
+	html[data-yrp-arrows="quiet"] .p-datatable-column-sorted .p-datatable-sort-icon {
+		opacity: 0.7;
+	}
+}
+
+/* sectionHeaders "plain" — §4(i) item 2: retire the tinted band + leading dot
+   + accent shout on the banded-head family; the hairline border-bottom stays.
+   The family is ONE design (the Bright Workshop band) under three spellings:
+   .esd-card__head (global, ::before dot), DocDetail's .detail-card__head
+   (explicit .detail-card__dot span), and the bespoke editors' .panel-head
+   (ProcessMatrixEditor / IPDConfigView, ::before dot — their own comments say
+   "mirrors .esd-card__head"). */
+html[data-yrp-section-headers="plain"] .esd-card__head,
+html[data-yrp-section-headers="plain"] .detail-card__head,
+html[data-yrp-section-headers="plain"] .panel-head {
+	background: transparent !important;
+}
+html[data-yrp-section-headers="plain"] .esd-card__head::before,
+html[data-yrp-section-headers="plain"] .panel-head::before,
+html[data-yrp-section-headers="plain"] .detail-card__dot {
+	display: none !important;
+}
+html[data-yrp-section-headers="plain"] .esd-card__title,
+html[data-yrp-section-headers="plain"] .detail-card__title,
+html[data-yrp-section-headers="plain"] .panel-head > h3 {
+	color: var(--esd-muted) !important;
+	font-weight: 600 !important;
 }

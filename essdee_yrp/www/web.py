@@ -28,7 +28,11 @@ no_cache = 1
 ASSET_BASE = "/assets/essdee_yrp/frontend/"
 
 # The exact DocTypes the /web SPA exposes (mirror of frontend/src/config/doctypes.js
-# GROUPS). The SPA gates sidebar / command palette / home visibility on
+# GROUPS). CHECKLIST RULE (spec §8.1): whenever a doctype is added to the frontend
+# catalog (doctypes.js GROUPS), add it HERE too so _apply_accurate_web_perms keeps
+# correcting boot's leaky perm superset — catalog and perms list are code-owned
+# together. Third copy: hooks.py `yrp_web_doctype_catalog` (base yrp's
+# ui_config validation reads it) — all three lists change together. The SPA gates sidebar / command palette / home visibility on
 # frappe.boot.user.can_read, but Frappe's load_user()/build_permissions() emits a
 # can_read list that is a SUPERSET of real access — it stops at "a role grants a read
 # rule" and never runs the full has_permission() check (user permissions, permlevel,
@@ -144,4 +148,29 @@ def get_boot():
 		"socketio_port": frappe.conf.socketio_port or 9000,
 		"app_logo": _website_asset("app_logo", "essdee-logo.png"),
 		"user": user,
+		# Per-user UI config (spec §8.1): resolved server-side by base yrp and
+		# injected synchronously — no async race, no loading flash. None on any
+		# failure; the SPA then renders its compiled-in Default (= today's UI).
+		"ui_config": _safe_ui_config(),
 	}
+
+
+def _safe_ui_config():
+	"""Boot must survive ui_config raising ANYTHING (spec §8.1, §14 row 16).
+
+	``get_config_for_boot`` already catches its own exceptions and returns
+	``{"config": ..., "meta": ...}`` or ``None`` — this wrapper additionally
+	survives the import itself failing (e.g. a base-yrp deploy mid-flight), so
+	the /web page can never 500 because of UI config."""
+	try:
+		from yrp.yrp.api.ui_config import get_config_for_boot
+
+		return get_config_for_boot()
+	except Exception:
+		# The log write itself must also be guarded — if Error Log insertion
+		# raises (DB trouble, log table locked), boot still must not 500.
+		try:
+			frappe.log_error(title="/web: ui_config boot failure")
+		except Exception:
+			pass
+		return None

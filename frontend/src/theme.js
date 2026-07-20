@@ -2,7 +2,7 @@
  * Essdee YRP PrimeVue preset — teal identity / cool slate surfaces.
  *
  * Built on Aura. The `primary` ramp is the Bright Workshop teal anchored on
- * #0D9488 (--esd-accent), so every Button CTA, status Tag, and highlight
+ * #0E8C7F (--esd-accent), so every Button CTA, status Tag, and highlight
  * inherits the teal identity. Surfaces are the cool slate ramp (#F6F8FA page
  * + white cards) — no warm/cream tints. Components (Button, DataTable, Tabs,
  * Paginator…) inherit these tokens automatically.
@@ -12,7 +12,11 @@ import Aura from "@primeuix/themes/aura"
 
 const EssdeePreset = definePreset(Aura, {
 	semantic: {
-		// Bright Workshop teal primary ramp, anchored on #0D9488.
+		// Bright Workshop teal primary ramp, anchored on #0E8C7F. The hand-tuned
+		// stops stay LITERAL (spec §9: the documented residual — a few deep Aura
+		// internals referencing mid-ramp stops retain teal tints under a custom
+		// accent); only the colorScheme primary/highlight values below are pinned
+		// to the --esd-accent* vars so the §9 accent knob reaches PrimeVue.
 		primary: {
 			50:  "#E7F3F1",
 			100: "#D5EBE7",
@@ -41,62 +45,77 @@ const EssdeePreset = definePreset(Aura, {
 		list: { option: { color: "var(--esd-ink)", focusBackground: "var(--esd-slate-50)" } },
 		colorScheme: {
 			light: {
+				// Pinned to the --esd-accent* tokens (spec §9): global.css always
+				// defines them (light and .dark), so with no layout accent these
+				// resolve to today's exact hexes — pixel-identical by itself — and a
+				// custom accent (the engine's #yrp-theme-tokens element) re-themes
+				// buttons/tabs/toggles instead of yielding a two-tone UI. Values with
+				// no exact token equivalent stay literal (documented residual).
 				primary: {
-					color: "#0E8C7F",
+					color: "var(--esd-accent)", // #0E8C7F
 					inverseColor: "#ffffff",
-					hoverColor: "#0C7A6F",
-					activeColor: "#0A5F58",
+					hoverColor: "var(--esd-accent-600)", // #0C7A6F
+					activeColor: "var(--esd-accent-700)", // #0A5F58
 				},
 				highlight: {
-					background: "#E7F3F1",
-					focusBackground: "#D5EBE7",
-					color: "#0A5F58",
-					focusColor: "#0A5F58",
+					background: "var(--esd-accent-50)", // #E7F3F1
+					focusBackground: "#D5EBE7", // no token equivalent — stays literal
+					color: "var(--esd-accent-700)", // #0A5F58
+					focusColor: "var(--esd-accent-700)", // #0A5F58
 				},
 				// Cool slate surfaces (Bright Workshop) — no warm/cream tints.
+				// Stops with an exact layout-theme token equivalent read the engine's
+				// --yrp-* custom properties (fallback = the exact shipped hex, so the
+				// Default stays pixel-identical); stops with no token equivalent stay
+				// literal (documented residual, same rule as the §9 accent pinning).
 				surface: {
-					0:   "#ffffff",
-					50:  "#F2F6F4",   // --esd-bg
-					100: "#E9EFEC",   // --esd-slate-50
-					200: "#DFE8E4",   // --esd-line
+					0:   "var(--yrp-surface, #ffffff)",
+					50:  "var(--yrp-bg, #F2F6F4)",          // --esd-bg
+					100: "var(--yrp-surface-2, #E9EFEC)",   // --esd-slate-50
+					200: "var(--yrp-line, #DFE8E4)",        // --esd-line
 					300: "#C8D4CF",
-					400: "#98A5A0",   // --esd-muted-2
-					500: "#5F6E68",   // --esd-muted
+					400: "var(--yrp-muted-2, #98A5A0)",     // --esd-muted-2
+					500: "var(--yrp-muted, #5F6E68)",       // --esd-muted
 					600: "#57655F",
 					700: "#45524C",
-					800: "#33413B",   // --esd-ink-2
+					800: "var(--yrp-text-2, #33413B)",      // --esd-ink-2
 					900: "#1B2620",
-					950: "#0F1613",   // --esd-ink
+					950: "var(--yrp-text, #0F1613)",        // --esd-ink
 				},
 			},
 			// Dark Bright Workshop — activated by `.dark` on <html> (darkModeSelector).
 			// Brighter teal primary for contrast; deep cool-slate surfaces (0 = card
 			// ground, low numbers = backgrounds, high numbers = light text).
 			dark: {
+				// Same §9 var-pinning as light — the vars resolve per scheme via the
+				// .dark overrides in global.css, so these are today's exact dark hexes.
 				primary: {
-					color: "#2FB8A6",        // brighter teal reads on dark
+					color: "var(--esd-accent)", // #2FB8A6 — brighter teal reads on dark
 					inverseColor: "#04241F",
-					hoverColor: "#5ACCBC",
-					activeColor: "#9ADFD3",
+					hoverColor: "var(--esd-accent-700)", // #5ACCBC
+					activeColor: "#9ADFD3", // no token equivalent — stays literal
 				},
 				highlight: {
-					background: "rgba(47, 184, 166, 0.16)",
+					background: "rgba(47, 184, 166, 0.16)", // ≠ token alpha .15 — stays literal
 					focusBackground: "rgba(47, 184, 166, 0.24)",
-					color: "#5ACCBC",
-					focusColor: "#9ADFD3",
+					color: "var(--esd-accent-700)", // #5ACCBC
+					focusColor: "#9ADFD3", // no token equivalent — stays literal
 				},
+				// Same var()-pinning rule as the light ramp: the --yrp-* tokens are
+				// .dark-scoped here (engine writes them from the layout's dark{}
+				// overlay), fallbacks are the exact shipped dark hexes.
 				surface: {
-					0:   "#17211C",   // component ground (cards, table, dialog)
-					50:  "#1E2B25",   // row hover
+					0:   "var(--yrp-surface, #17211C)",     // component ground (cards, table, dialog)
+					50:  "var(--yrp-surface-2, #1E2B25)",   // row hover
 					100: "#223129",   // header band / secondary surface
-					200: "#2A3A33",   // borders / lines
+					200: "var(--yrp-line, #2A3A33)",        // borders / lines
 					300: "#3A4C44",   // toggle OFF-track
 					400: "#5F6E68",
-					500: "#8C9A93",   // muted text
+					500: "var(--yrp-muted, #8C9A93)",       // muted text
 					600: "#A5B2AB",
-					700: "#C0CDC7",
+					700: "var(--yrp-text-2, #C0CDC7)",
 					800: "#D9E3DE",
-					900: "#E9F1ED",
+					900: "var(--yrp-text, #E9F1ED)",
 					950: "#F4F9F6",   // brightest text
 				},
 			},

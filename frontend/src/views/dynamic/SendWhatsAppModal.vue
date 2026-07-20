@@ -4,6 +4,7 @@
 		modal
 		class="wa-dialog"
 		:header="header"
+		:position="dialogPosition"
 		:style="{ width: 'min(520px, calc(100vw - 32px))' }"
 		@show="loadContext"
 	>
@@ -158,6 +159,9 @@ const props = defineProps({
 	// Which link field on the doc names the supplier to message. DC/GRN/PO use
 	// the default "supplier"; Stock Entry passes "to_supplier"/"from_supplier".
 	supplierKey: { type: String, default: "supplier" },
+	// actions.dialogPosition (item 9) — PrimeVue Dialog `position`. Default
+	// "center" = PrimeVue's own default, so absent-knob renders identically.
+	dialogPosition: { type: String, default: "center" },
 })
 const emit = defineEmits(["update:visible", "sent"])
 

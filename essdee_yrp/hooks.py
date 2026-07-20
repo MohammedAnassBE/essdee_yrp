@@ -44,6 +44,13 @@ fixtures = [
 		"dt": "Custom DocPerm",
 		"filters": [["parent", "in", ["Item Production Detail", "Terms and Condition"]]],
 	},
+	# /web per-user UI (spec §12.2): the code-owned Default layout. THE FILTER IS
+	# LOAD-BEARING — sync_fixtures force-imports on every `bench migrate`, so an
+	# unfiltered fixture would silently revert every same-named prod-edited layout
+	# and ship stray dev test layouts. Fixtured names (Default) are code-owned:
+	# never edit them live, duplicate instead; every other layout is prod-owned
+	# and never exported without deliberately extending this filter.
+	{"dt": "UI Layout", "filters": [["name", "in", ["Default"]]]},
 ]
 
 # Apps
@@ -63,6 +70,23 @@ add_to_apps_screen = [
 # with base "/web") all resolve to the web.html template, which boots the SPA.
 website_route_rules = [
 	{"from_route": "/web/<path:app_path>", "to_route": "web"},
+]
+
+# /web DocType catalog for base yrp's UI-config validation (USE_CASE §4 item
+# 17): ui_config.validate_config reads this hook to warn at save/lint time on
+# nav / quickCreate / newCta / listViews doctypes the SPA cannot route.
+# CHECKLIST RULE (same as www/web.py WEB_DOCTYPES, which mirrors
+# frontend/src/config/doctypes.js GROUPS): all three lists change together.
+yrp_web_doctype_catalog = [
+	"Lot",
+	"Work Order",
+	"Work Order Correction",
+	"Delivery Challan",
+	"Goods Received Note",
+	"Stock Entry",
+	"Item",
+	"Item Production Detail",
+	"Terms and Condition",
 ]
 
 # Post-login landing: ordinary users land on the custom /web work hub;

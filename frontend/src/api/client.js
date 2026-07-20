@@ -40,6 +40,23 @@ export function isConflictError(err) {
   return err?.exc_type === 'TimestampMismatchError'
 }
 
+// MariaDB resolves a lock cycle by killing one transaction and rolling it back
+// COMPLETELY, with the explicit remedy "try restarting transaction" (error
+// 1213). Frappe surfaces that as an HTTP 500 with exc_type
+// "QueryDeadlockError" and commits nothing, so replaying the request is safe
+// and is the prescribed fix. Retry a bounded number of times with a short
+// backoff before surfacing the error to the caller.
+const DEADLOCK_EXC_TYPE = 'QueryDeadlockError'
+const DEADLOCK_RETRIES = 2
+const DEADLOCK_RETRY_BASE_DELAY_MS = 500
+
+async function isDeadlockResponse(response) {
+  if (response.status < 500) return false
+  // clone() so the real handlers below can still read the body.
+  const body = await response.clone().json().catch(() => ({}))
+  return body.exc_type === DEADLOCK_EXC_TYPE
+}
+
 async function request(url, options = {}) {
   const headers = {
     Accept: 'application/json',
@@ -54,7 +71,11 @@ async function request(url, options = {}) {
     headers,
   }
 
-  const response = await fetch(url, config)
+  let response = await fetch(url, config)
+  for (let attempt = 1; attempt <= DEADLOCK_RETRIES && (await isDeadlockResponse(response)); attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, DEADLOCK_RETRY_BASE_DELAY_MS * attempt))
+    response = await fetch(url, config)
+  }
 
   if (response.status === 401) {
     window.location.href = '/login'
@@ -116,8 +137,13 @@ async function request(url, options = {}) {
           try { return JSON.parse(m).message || m } catch { return m }
         }).join('\n')
       : null
+    const fallback = body.exc_type === DEADLOCK_EXC_TYPE
+      // Retries exhausted: name the real (transient) failure instead of an
+      // opaque "status 500" — nothing was saved, a later retry can succeed.
+      ? 'The database was busy and the change was NOT saved (deadlock). Please try again.'
+      : `Request failed with status ${response.status}`
     throw makeApiError(
-      serverMessages || body.message || `Request failed with status ${response.status}`,
+      serverMessages || body.message || fallback,
       response.status,
       body.exc_type,
     )

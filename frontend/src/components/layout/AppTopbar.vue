@@ -1,7 +1,11 @@
 <template>
 	<header class="esd-topbar">
 		<div class="topbar-left">
+			<!-- Drawer hamburger: only where a drawer exists to open. The topnav
+			     shell (nav.position "topbar" without chrome) has no sidebar/drawer
+			     — it passes show-hamburger=false so no dead control renders. -->
 			<button
+				v-if="showHamburger"
 				class="topbar-hamburger"
 				type="button"
 				aria-label="Open navigation menu"
@@ -26,6 +30,8 @@
 				<span class="cmdk-trigger__label">Search…</span>
 				<span class="cmdk-trigger__kbd">⌘K</span>
 			</button>
+			<!-- SM-only §10 View-as trigger (renders nothing for everyone else). -->
+			<ViewAsControl />
 			<!-- Real role(s), read-only — NO switcher (plan: the user's real
 			     role drives the UI). -->
 			<div class="role-chip" :title="roleTitle">
@@ -61,12 +67,17 @@
 import { computed } from "vue"
 import { useRoute } from "vue-router"
 import Button from "primevue/button"
+import ViewAsControl from "./ViewAsControl.vue"
 import { useAuth } from "@/composables/useAuth"
 import { useTheme } from "@/composables/useTheme"
 import { useCommandPalette } from "@/composables/useCommandPalette"
 import { getRegistryByRoute } from "@/config/doctypes"
 
-defineProps({ drawerOpen: Boolean })
+defineProps({
+	drawerOpen: Boolean,
+	// Default true: the sidebar shell relies on it under 768px.
+	showHamburger: { type: Boolean, default: true },
+})
 defineEmits(["toggle-drawer"])
 
 const route = useRoute()

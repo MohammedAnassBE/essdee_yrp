@@ -27,9 +27,10 @@
   linked_with.get (Linked Documents), get_docinfo (Activity).
 -->
 <template>
-	<div class="doc-detail">
-		<!-- Breadcrumb -->
-		<nav class="crumbs">
+	<div class="doc-detail" :class="{ 'doc-detail--embedded': embedded }">
+		<!-- Breadcrumb — hidden when embedded in an overlay (the host list page
+		     already provides the context; the overlay closes back to it). -->
+		<nav v-if="!embedded" class="crumbs">
 			<a @click="goHome">Home</a>
 			<span class="sep">/</span>
 			<a @click="goList">{{ registry?.label || docRoute }}</a>
@@ -140,26 +141,6 @@
 						@click="onCalculateDeliverables"
 					/>
 
-					<!-- Submitted (docstatus 1): ONE primary forward CTA; the remaining
-					     create-next actions collapse into a "More" overflow menu so the
-					     submitted header stops being a wall of equal buttons. forwardActions
-					     keeps the exact per-doctype gating (Create DC · Create GRN). -->
-					<span
-						v-if="primaryForward"
-						v-tooltip.bottom="primaryForward.tooltip"
-						class="cta-wrap"
-					>
-						<Button
-							:label="primaryForward.label"
-							:icon="primaryForward.icon"
-							size="small"
-							class="forward-cta"
-							:disabled="primaryForward.disabled"
-							:loading="primaryForward.loadingKey && acting === primaryForward.loadingKey"
-							@click="primaryForward.handler"
-						/>
-					</span>
-
 					<!-- Cancelled (docstatus 2): Amend (primary forward). -->
 					<Button
 						v-if="docstatus === 2 && isSubmittable && canAmend(doctype)"
@@ -171,70 +152,52 @@
 						@click="onAmend"
 					/>
 
-					<!-- Overflow: secondary create-next actions + Print + Open in Desk. -->
+					<!-- MOVABLE actions (`actions` knob, spec §6.4) — placement "header"
+					     (the default / knob absent) renders them right HERE exactly as
+					     before: primary forward CTA (Create DC · Create GRN, submitted
+					     docstatus 1), More overflow, e-Waybill menu, Send SMS/WhatsApp,
+					     Cancel. "inline"/"floating" re-host the SAME component under the
+					     tabs / as a FAB cluster; core lifecycle (Edit/Submit/Amend/
+					     Delete/Workflow/Save) is not movable and stays above. NOTE: the
+					     primary CTA (ds 1) and Amend (ds 2) are mutually exclusive, so
+					     hosting the CTA after Amend is render-identical to before. -->
+					<DocMovableActions
+						v-if="actionsPlacement === 'header'"
+						:primary-forward="primaryForward"
+						:acting="acting"
+						:show-more="showMoreAction"
+						:show-ewb="showEwbAction"
+						:show-sms="showSmsAction"
+						:show-whats-app="showWhatsAppAction"
+						:show-cancel="showCancelAction"
+						@toggle-more="(e) => moreMenu.toggle(e)"
+						@toggle-ewb="(e) => ewbMenu.toggle(e)"
+						@open-sms="sendSmsOpen = true"
+						@open-whatsapp="sendWhatsAppOpen = true"
+						@cancel="onCancel"
+					/>
+					<!-- placement "action-sheet": the header shows a single "Actions"
+					     trigger; the movable set is re-hosted in a bottom Drawer (below,
+					     near the modals). Re-placement ONLY — no new capability. -->
 					<Button
-						v-if="moreMenuModel.length"
+						v-if="showActionSheetTrigger"
 						type="button"
-						label="More"
-						icon="pi pi-ellipsis-h"
-						iconPos="right"
+						label="Actions"
+						icon="pi pi-bars"
 						size="small"
 						severity="secondary"
 						outlined
-						aria-haspopup="true"
-						aria-controls="dd_more_menu"
-						@click="(e) => moreMenu.toggle(e)"
+						aria-haspopup="dialog"
+						data-testid="action-sheet-trigger"
+						@click="actionSheetOpen = true"
 					/>
+					<!-- The popup menus stay mounted HERE (once), whatever the placement —
+					     the inline strip / floating cluster toggle them via the same refs
+					     (popup Menus render nothing in place; they anchor to the click). -->
 					<Menu ref="moreMenu" id="dd_more_menu" :model="moreMenuModel" :popup="true" />
-					<!-- Delivery Challan e-Waybill (GST e-Way Bill) lifecycle — context-gated
-					     Menu: generate/fetch when none exists; print/update/cancel once it does. -->
-					<Button
-						v-if="isDeliveryChallan && docstatus === 1"
-						type="button"
-						label="e-Waybill"
-						icon="pi pi-truck"
-						size="small"
-						severity="secondary"
-						outlined
-						aria-haspopup="true"
-						aria-controls="dd_ewb_menu"
-						@click="(e) => ewbMenu.toggle(e)"
-					/>
 					<Menu ref="ewbMenu" id="dd_ewb_menu" :model="ewbMenuModel" :popup="true" />
-					<!-- Send SMS — only when the DC has a supplier to text. -->
-					<Button
-						v-if="isDeliveryChallan && docstatus === 1 && doc.supplier"
-						label="Send SMS"
-						icon="pi pi-comment"
-						size="small"
-						severity="secondary"
-						outlined
-						@click="sendSmsOpen = true"
-					/>
-					<!-- Send WhatsApp — gated on the doctype being WhatsApp-enabled
-					     (server-configured) AND having a supplier to message, same
-					     docstatus/supplier shape as Send SMS. -->
-					<Button
-						v-if="isWhatsAppEnabled && docstatus === 1 && doc[whatsAppSupplierKey]"
-						label="Send WhatsApp"
-						icon="pi pi-whatsapp"
-						size="small"
-						severity="secondary"
-						outlined
-						@click="sendWhatsAppOpen = true"
-					/>
 
-					<!-- Destructive, set apart from the forward CTA. -->
-					<Button
-						v-if="docstatus === 1 && isSubmittable && canCancel(doctype)"
-						label="Cancel"
-						icon="pi pi-ban"
-						size="small"
-						severity="danger"
-						outlined
-						:loading="acting === 'cancel'"
-						@click="onCancel"
-					/>
+					<!-- Destructive core lifecycle — never moves with the actions knob. -->
 					<Button
 						v-if="(docstatus === 0 || docstatus === 2) && canDelete(doctype)"
 						label="Delete"
@@ -354,6 +317,7 @@
 			header="Print"
 			modal
 			class="print-dialog"
+			:position="actionDialogPosition"
 			:style="{ width: 'min(420px, calc(100vw - 32px))' }"
 		>
 			<div class="print-form">
@@ -428,6 +392,7 @@
 			:doctype="doctype"
 			:docname="props.id"
 			:doc="doc"
+			:dialog-position="actionDialogPosition"
 			@sent="onSmsSent"
 		/>
 		<SendWhatsAppModal
@@ -436,8 +401,45 @@
 			:docname="props.id"
 			:doc="doc"
 			:supplier-key="whatsAppSupplierKey"
+			:dialog-position="actionDialogPosition"
 			@sent="onWhatsAppSent"
 		/>
+
+		<!-- MOVABLE actions, placement "action-sheet" (`actions` knob, item 9): a
+		     bottom Drawer (STACK_DECISION: Drawer-bottom IS the action sheet) that
+		     re-hosts the SAME DocMovableActions the header/inline/floating placements
+		     use — same gates, same handlers, same once-mounted menus/modals above.
+		     Re-placement ONLY; no config here grants a capability (§15). The popup
+		     menus (More / e-Waybill) anchor to the tapped button inside the sheet;
+		     the terminal actions (Send SMS/WhatsApp, Cancel) close the sheet as they
+		     open their own modal/confirm. -->
+		<Drawer
+			v-model:visible="actionSheetOpen"
+			position="bottom"
+			header="Actions"
+			:blockScroll="true"
+			class="esd-action-sheet"
+			data-testid="action-sheet"
+		>
+			<!-- DocMovableActions is a multi-root fragment, so it is wrapped (not
+			     class-bound) to stack the affordances as full-width sheet rows. -->
+			<div v-if="actionSheetOpen" class="esd-action-sheet-list">
+				<DocMovableActions
+					:primary-forward="primaryForward"
+					:acting="acting"
+					:show-more="showMoreAction"
+					:show-ewb="showEwbAction"
+					:show-sms="showSmsAction"
+					:show-whats-app="showWhatsAppAction"
+					:show-cancel="showCancelAction"
+					@toggle-more="(e) => moreMenu.toggle(e)"
+					@toggle-ewb="(e) => ewbMenu.toggle(e)"
+					@open-sms="() => { sendSmsOpen = true; actionSheetOpen = false }"
+					@open-whatsapp="() => { sendWhatsAppOpen = true; actionSheetOpen = false }"
+					@cancel="() => { actionSheetOpen = false; onCancel() }"
+				/>
+			</div>
+		</Drawer>
 
 		<!-- Loading (doc load, or create-mode meta load) — skeleton mimics the
 		     grouped detail cards instead of a blank flash. -->
@@ -456,7 +458,7 @@
 		</Message>
 
 		<!-- ════════════════ CREATE / EDIT FORM ════════════════ -->
-		<div v-else-if="isFormMode" class="form-layout">
+		<div v-else-if="isFormMode" class="form-layout" @focusout="onFormFocusOut">
 			<div class="detail-main form-card">
 				<!-- Prompt-named create: a REQUIRED Name input at the very top of the
 				     form. Prompt-named doctypes (Item Master Template, FG Item Master
@@ -480,7 +482,7 @@
 							<InputText
 								id="fld-__newname"
 								v-model="newName"
-								:invalid="!newName.trim()"
+								:invalid="showNameInvalid"
 								class="fld"
 							/>
 							<small class="field-help">Required — set a unique name for this document.</small>
@@ -517,7 +519,7 @@
 							:id="'fld-' + f.fieldname"
 							v-model="form[f.fieldname]"
 							:disabled="isReadOnly(f)"
-							:invalid="isMissing(f)"
+							:invalid="showInvalid(f)"
 							class="fld"
 						/>
 
@@ -527,7 +529,7 @@
 							:id="'fld-' + f.fieldname"
 							v-model="form[f.fieldname]"
 							:disabled="isReadOnly(f)"
-							:invalid="isMissing(f)"
+							:invalid="showInvalid(f)"
 							rows="3"
 							autoResize
 							class="fld"
@@ -539,7 +541,7 @@
 							:id="'fld-' + f.fieldname"
 							v-model="form[f.fieldname]"
 							:disabled="isReadOnly(f)"
-							:invalid="isMissing(f)"
+							:invalid="showInvalid(f)"
 							:minFractionDigits="f.minFraction"
 							:maxFractionDigits="f.maxFraction"
 							:suffix="f.suffix"
@@ -554,7 +556,7 @@
 							:modelValue="toDateObj(form[f.fieldname])"
 							@update:modelValue="form[f.fieldname] = fromDateObj($event, false)"
 							:disabled="isReadOnly(f)"
-							:invalid="isMissing(f)"
+							:invalid="showInvalid(f)"
 							dateFormat="dd-mm-yy"
 							showIcon
 							iconDisplay="input"
@@ -569,7 +571,7 @@
 							:modelValue="toDateObj(form[f.fieldname])"
 							@update:modelValue="form[f.fieldname] = fromDateObj($event, true)"
 							:disabled="isReadOnly(f)"
-							:invalid="isMissing(f)"
+							:invalid="showInvalid(f)"
 							dateFormat="dd-mm-yy"
 							showTime
 							hourFormat="24"
@@ -591,7 +593,7 @@
 								:id="'fld-' + f.fieldname"
 								v-model="form[f.fieldname]"
 								:disabled="isReadOnly(f)"
-								:invalid="isMissing(f)"
+								:invalid="showInvalid(f)"
 								placeholder="HH:MM:SS"
 								class="fld time-input"
 							/>
@@ -626,7 +628,7 @@
 							:options="f.options"
 							@change="onFieldChanged(f.fieldname)"
 							:disabled="isReadOnly(f)"
-							:invalid="isMissing(f)"
+							:invalid="showInvalid(f)"
 							showClear
 							placeholder="Select…"
 							class="fld"
@@ -644,7 +646,7 @@
 							:target-doctype="f.isDynamic ? form[f.dynamicField] : f.linkTarget"
 							:search-handler="linkSearchHandlerFor(f)"
 							:disabled="isReadOnly(f)"
-							:invalid="isMissing(f)"
+							:invalid="showInvalid(f)"
 							@item-select="onFieldChanged(f.fieldname)"
 							@change="onFieldChanged(f.fieldname)"
 						/>
@@ -705,6 +707,7 @@
 						:show-allow-zero-rate="!!pv.showAllowZeroRate"
 						:show-secondary-toggle="!!pv.showSecondaryToggle"
 						:locked-items="!!pv.lockedItems"
+						:qty-control="dcQtyControl"
 						:editable="true"
 						@change="onGridChange"
 					/>
@@ -1329,16 +1332,40 @@
 								</template>
 								<template #content="{ item }">
 									<div class="tl-when">{{ formatDateTime(item.when) }} · {{ item.who }}</div>
-									<div class="tl-msg" v-html="item.text" />
+									<div class="tl-msg">{{ item.text }}</div>
 								</template>
 							</Timeline>
 							<div v-else class="empty-inline">No activity recorded.</div>
 						</TabPanel>
 					</TabPanels>
 				</Tabs>
+
+				<!-- MOVABLE actions, placement "inline" (`actions` knob): the same
+				     component the header hosts by default, re-hosted as a strip at the
+				     bottom of the main detail column (demo-3/-7 "inline bar" style).
+				     Same gates, same handlers; the menus/modals stay mounted once in
+				     the header/modal area above. Hidden entirely when nothing passes
+				     the gates, so no empty bar is painted. -->
+				<div v-if="showInlineActions" class="inline-actions" data-testid="inline-actions">
+					<DocMovableActions
+						:primary-forward="primaryForward"
+						:acting="acting"
+						:show-more="showMoreAction"
+						:show-ewb="showEwbAction"
+						:show-sms="showSmsAction"
+						:show-whats-app="showWhatsAppAction"
+						:show-cancel="showCancelAction"
+						@toggle-more="(e) => moreMenu.toggle(e)"
+						@toggle-ewb="(e) => ewbMenu.toggle(e)"
+						@open-sms="sendSmsOpen = true"
+						@open-whatsapp="sendWhatsAppOpen = true"
+						@cancel="onCancel"
+					/>
+				</div>
 			</div>
 
-			<!-- SIDE PANEL -->
+			<!-- SIDE PANEL (movable-actions floating cluster is appended after this
+			     layout div — see the block at the end of the root element) -->
 			<aside class="detail-side">
 				<!-- Quick Info -->
 				<Card class="side-card">
@@ -1401,6 +1428,30 @@
 				</Card>
 			</aside>
 		</div>
+
+		<!-- MOVABLE actions, placement "floating" (`actions` knob): FAB cluster
+		     pinned bottom-RIGHT (demo-5 style) — fixed to the viewport on the
+		     full page, sticky INSIDE the overlay panel when embedded (never the
+		     page behind). Bottom-right so it can never collide with the 🎛 Knobs
+		     FAB (bottom-LEFT); view-mode only, so it never covers the edit/create
+		     Save controls. Kept the LAST child on purpose: position:sticky rides
+		     the embedded panel's scrollport bottom edge from here. -->
+		<div v-if="showFloatingActions" class="floating-actions" data-testid="floating-actions">
+			<DocMovableActions
+				:primary-forward="primaryForward"
+				:acting="acting"
+				:show-more="showMoreAction"
+				:show-ewb="showEwbAction"
+				:show-sms="showSmsAction"
+				:show-whats-app="showWhatsAppAction"
+				:show-cancel="showCancelAction"
+				@toggle-more="(e) => moreMenu.toggle(e)"
+				@toggle-ewb="(e) => ewbMenu.toggle(e)"
+				@open-sms="sendSmsOpen = true"
+				@open-whatsapp="sendWhatsAppOpen = true"
+				@cancel="onCancel"
+			/>
+		</div>
 	</div>
 </template>
 
@@ -1428,6 +1479,7 @@ import Select from "primevue/select"
 import AutoComplete from "primevue/autocomplete"
 import Tooltip from "primevue/tooltip"
 import Dialog from "primevue/dialog"
+import Drawer from "primevue/drawer"
 import Popover from "primevue/popover"
 import Checkbox from "primevue/checkbox"
 import Menu from "primevue/menu"
@@ -1481,11 +1533,26 @@ import EWaybillCancelModal from "./EWaybillCancelModal.vue"
 import EWaybillVehicleModal from "./EWaybillVehicleModal.vue"
 import SendSmsModal from "./SendSmsModal.vue"
 import SendWhatsAppModal from "./SendWhatsAppModal.vue"
+import DocMovableActions from "./DocMovableActions.vue"
+import { useUiConfigStore } from "@yrp/web-engine"
 
 const props = defineProps({
 	docRoute: { type: String, required: true },
 	id: { type: String, required: true },
+	// Overlay-host embedding (layout `detail`/`entry` knobs — spec §6.4). OPT-IN:
+	// default false renders byte-identically to today (parity law). When true
+	// (DocOverlayHost renders us inside a Drawer/Dialog): the breadcrumb nav and
+	// the prev/next doc-nav arrows hide, the aside stacks below the main column
+	// (single-column), create-save does NOT router.push to the new record (the
+	// host decides), and we emit `close`/`saved` instead of list-navigation.
+	// ALL logic (fetch, autofill, grids, save, modals) is shared — never forked.
+	embedded: { type: Boolean, default: false },
 })
+
+// Overlay-host contract (embedded only; inert full-page):
+//   close          — the host should close the overlay (discarded create, delete)
+//   saved <name>   — a successful create/save; fires with the doc name
+const emit = defineEmits(["close", "saved"])
 
 const router = useRouter()
 const route = useRoute()
@@ -1528,6 +1595,15 @@ function onDocUpdated(data) {
 // Q5: the required field that blocked the last save attempt — drives the inline
 // "missing field" banner that complements the toast and lives until resolved.
 const missingField = ref(null) // { label, fieldname } | null
+// Calm create-forms (Premium-review Track-1): a blank required field must NOT
+// paint red at first sight — invalid styling waits until the user has TOUCHED
+// the field (blur) OR has attempted a save. `touchedFields` collects blurred
+// fieldnames (via the form's delegated @focusout); `saveAttempted` flips on the
+// first onSave. Neither gate changes the real required-check (isMissing +
+// firstMissingRequired still block the save) — only WHEN the red is shown. Both
+// reset per fresh form in clearForm().
+const touchedFields = reactive(new Set())
+const saveAttempted = ref(false)
 // Q6: edit/create dirty tracking. Set true on the first real user edit; gates the
 // Discard confirm + the route-leave / beforeunload guards so 15 typed cells
 // aren't lost to a mis-tap on a tablet. `dirtyArmed` suppresses the programmatic
@@ -1610,12 +1686,68 @@ const {
 		doctype,
 		docRoute: () => props.docRoute,
 		name: () => props.id,
-		enabled: () => mode.value === "view" && !isCreate.value && !!doc.value,
+		enabled: () => !props.embedded && mode.value === "view" && !isCreate.value && !!doc.value,
 	},
 	(route, name) => router.push(`/${route}/${encodeURIComponent(name)}`),
 )
-// Arrows render only on a loaded, saved document in view mode.
-const showDocNav = computed(() => mode.value === "view" && !isCreate.value && !!doc.value)
+// Arrows render only on a loaded, saved document in view mode — and never when
+// embedded in an overlay (the host owns navigation; arrows would full-page route).
+const showDocNav = computed(() => !props.embedded && mode.value === "view" && !isCreate.value && !!doc.value)
+
+// ── Actions placement knob (layout `actions` — spec §6.4; server vocab in
+// yrp/api/ui_config.py ACTIONS_PLACEMENTS / ACTION_ITEMS) ─────────────────
+// PARITY LAW: knob absent → placement "header" and no items filter — the
+// header renders byte-identically to before this knob existed. The knob only
+// MOVES/FILTERS the movable affordances (rendered by DocMovableActions);
+// every capability gate below (docstatus, isDeliveryChallan, canCreate/
+// canCancel, WhatsApp-enabled map, doc.supplier) is untouched — arrangement
+// never grants capability (§15).
+const uiStore = useUiConfigStore()
+// dcEntry.qtyControl (item 5): the Delivery Challan ENTRY size-pivot qty inputs
+// render as a +/- stepper or a large finger-target field. Only for DC create
+// (the entry flow); every other doctype/mode passes "input" → today's plain
+// field, byte-identical. The store getter is null-safe; absent knob → "input".
+// Presentation only — the same grid, the same buildPayload/onSave save path.
+const dcQtyControl = computed(() =>
+	isDeliveryChallan.value && mode.value === "create" ? uiStore.dcEntryKnob?.qtyControl || "input" : "input",
+)
+const actionsPlacement = computed(() => {
+	const p = uiStore.actionsKnob?.placement
+	return p === "inline" || p === "floating" || p === "action-sheet" ? p : "header"
+})
+// actions.dialogPosition (item 9) — anchors the DIALOGS the movable actions open
+// (Print / Send SMS / Send WhatsApp) on the server's 9-position overlay grid,
+// exactly as entry.popupPosition anchors the create popup. Server vocab is
+// hyphenated (OVERLAY_POSITIONS: "top-left" …); PrimeVue Dialog's `position`
+// wants the unhyphenated form. Absent / off-vocabulary → "center" = PrimeVue's
+// own default, so the knob-absent path binds the SAME value it renders today
+// (parity law). This never moves the action-SHEET drawer — the sheet is the
+// Drawer-bottom pattern by identity.
+const PV_DIALOG_POSITIONS = new Set(["center", "top", "bottom", "left", "right", "topleft", "topright", "bottomleft", "bottomright"])
+const actionDialogPosition = computed(() => {
+	const p = String(uiStore.actionsKnob?.dialogPosition || "center").replace(/-/g, "")
+	return PV_DIALOG_POSITIONS.has(p) ? p : "center"
+})
+// actions.items — optional FILTER over the movable set (server ACTION_ITEMS
+// vocabulary). Absent / non-array → null = all of today's actions render.
+// Unknown names are ignored with one console.warn (the server soft-warns the
+// same way); an items list never ADDS an affordance the gates would hide.
+const MOVABLE_ACTION_ITEMS = ["create_grn", "create_dc", "more_menu", "ewaybill_menu", "send_sms", "send_whatsapp", "cancel_doc"]
+let unknownActionItemsWarned = false
+const allowedActionItems = computed(() => {
+	const items = uiStore.actionsKnob?.items
+	if (!Array.isArray(items)) return null
+	const unknown = items.filter((i) => !MOVABLE_ACTION_ITEMS.includes(i))
+	if (unknown.length && !unknownActionItemsWarned) {
+		unknownActionItemsWarned = true
+		console.warn(`[essdee-web] actions.items: unknown action name(s) ignored: ${unknown.join(", ")}`)
+	}
+	return new Set(items.filter((i) => MOVABLE_ACTION_ITEMS.includes(i)))
+})
+function actionAllowed(item) {
+	const set = allowedActionItems.value
+	return !set || set.has(item)
+}
 
 // ── Header action hierarchy ──────────────────────────────────────────────
 // Submitted-state "create next" actions, ordered. The FIRST renders as the one
@@ -1638,8 +1770,19 @@ const forwardActions = computed(() => {
 		out.push({ key: "dc-grn", label: "Create Goods Received Note", icon: "pi pi-plus-circle", handler: onCreateGrnFromDc, disabled: false, tooltip: "" })
 	return out
 })
-const primaryForward = computed(() => forwardActions.value[0] || null)
-const secondaryForwards = computed(() => forwardActions.value.slice(1))
+// The actions.items filter, applied per forward action (create_dc filters the
+// WO→DC action; create_grn the WO→GRN and DC→GRN ones). Unmapped future keys
+// stay visible — the filter only ever narrows what it knows by name. With the
+// knob absent this is forwardActions unchanged (parity).
+const FORWARD_ACTION_ITEM = { "wo-dc": "create_dc", "wo-grn": "create_grn", "dc-grn": "create_grn" }
+const visibleForwardActions = computed(() =>
+	forwardActions.value.filter((a) => {
+		const item = FORWARD_ACTION_ITEM[a.key]
+		return !item || actionAllowed(item)
+	}),
+)
+const primaryForward = computed(() => visibleForwardActions.value[0] || null)
+const secondaryForwards = computed(() => visibleForwardActions.value.slice(1))
 const moreMenu = ref(null)
 // Overflow menu: secondary forward actions + Print + (admin) Open in Desk.
 const moreMenuModel = computed(() => {
@@ -1661,6 +1804,59 @@ const moreMenuModel = computed(() => {
 	if (isAdmin.value || hasRole("System Manager"))
 		items.push({ label: "Open in Desk", icon: "pi pi-external-link", url: deskUrl.value, target: "_blank" })
 	return items
+})
+
+// ── Movable-action gates (consumed by DocMovableActions at all placements) ──
+// Each is the EXACT per-button v-if condition the header used before the
+// actions knob, AND-ed with the optional actions.items filter. Same computeds,
+// same handlers, same once-mounted menus/modals — the knob only re-hosts them.
+const showMoreAction = computed(() => moreMenuModel.value.length > 0 && actionAllowed("more_menu"))
+const showEwbAction = computed(() => isDeliveryChallan.value && docstatus.value === 1 && actionAllowed("ewaybill_menu"))
+const showSmsAction = computed(
+	() => isDeliveryChallan.value && docstatus.value === 1 && !!doc.value?.supplier && actionAllowed("send_sms"),
+)
+const showWhatsAppAction = computed(
+	() =>
+		isWhatsAppEnabled.value &&
+		docstatus.value === 1 &&
+		!!doc.value?.[whatsAppSupplierKey.value] &&
+		actionAllowed("send_whatsapp"),
+)
+const showCancelAction = computed(
+	() => docstatus.value === 1 && isSubmittable.value && canCancel(doctype.value) && actionAllowed("cancel_doc"),
+)
+// The inline strip / floating cluster render in VIEW mode on a loaded doc only
+// (matching the header's `mode === 'view' && doc` template gate — the movable
+// set is view-only, so a form's Save/Discard controls are never covered), and
+// only when at least one affordance passes its gates (no empty bar/cluster).
+const anyMovableAction = computed(
+	() =>
+		Boolean(primaryForward.value) ||
+		showMoreAction.value ||
+		showEwbAction.value ||
+		showSmsAction.value ||
+		showWhatsAppAction.value ||
+		showCancelAction.value,
+)
+const showInlineActions = computed(
+	() => actionsPlacement.value === "inline" && mode.value === "view" && !!doc.value && anyMovableAction.value,
+)
+const showFloatingActions = computed(
+	() => actionsPlacement.value === "floating" && mode.value === "view" && !!doc.value && anyMovableAction.value,
+)
+// placement "action-sheet" (item 9): the header shows ONE "Actions" trigger; the
+// same movable affordances live in a bottom Drawer opened on tap (STACK_DECISION:
+// Drawer-bottom IS the action sheet). Same view-mode/doc/anyMovableAction gate as
+// the inline strip — never an empty trigger, never a form's Save covered.
+const showActionSheetTrigger = computed(
+	() => actionsPlacement.value === "action-sheet" && mode.value === "view" && !!doc.value && anyMovableAction.value,
+)
+const actionSheetOpen = ref(false)
+// The sheet only opens from the trigger (which requires the gate above); force it
+// shut the instant the gate drops (mode leaves view, doc unloads, placement/knob
+// changes) so a stale sheet can never linger over an edit form.
+watch(showActionSheetTrigger, (ok) => {
+	if (!ok) actionSheetOpen.value = false
 })
 
 const activeTab = ref("details")
@@ -2576,6 +2772,37 @@ onBeforeRouteLeave((to, from, next) => {
 	}
 })
 
+// Overlay host support: closing an overlay is a query-only route change, so the
+// route-leave guard above never fires for it. Expose the dirty/form state so
+// DocOverlayHost can run the same "Discard unsaved changes?" confirm before it
+// removes the query. Read-only exposure — inert for full-page rendering.
+
+// dcEntry chip strips (DocOverlayHost's size-matrix bottom sheet /
+// DynamicListPage's inline-grid panel): set a header field EXACTLY as a
+// LinkField pick would — assign, then run the same onFieldChanged cascade
+// (fetch_from + runDocAutofill; DC work_order → get_work_order_defaults →
+// size-pivot grid loadData). Form-mode only and only for fields the form
+// actually carries. Returns true when the field was set + cascaded, false on
+// the no-op (form not built yet — `form` stays {} until buildCreateForm runs
+// after the awaited getdoctype round-trip — or not in form mode): the chip
+// hosts use the return to avoid highlighting a chip whose pick was dropped.
+// Inert for full-page rendering — nothing calls it there.
+async function setFormField(fieldname, value) {
+	if (!isFormMode.value || !(fieldname in form)) return false
+	form[fieldname] = value
+	await onFieldChanged(fieldname)
+	return true
+}
+
+// `save` is exposed so the dcEntry "wizard-steps" host can fire the SAME onSave
+// from its final Review step (never a new save path — it calls the identical
+// buildPayload/onSave/useDoc.save the form's own Save button runs, and the
+// embedded create still emits `saved` for the host to close on). It resolves
+// `true` on success and `false` when BLOCKED/REJECTED, so the host can reveal
+// its hidden form on a blocked save. Inert for full-page rendering — nothing
+// calls it there.
+defineExpose({ isDirty, isFormMode, setFormField, save: onSave, focusFirstInvalid })
+
 // ── meta field map ──
 const metaFieldMap = computed(() => {
 	const map = {}
@@ -2840,11 +3067,35 @@ function isEditableMetaField(mf) {
 	return true
 }
 
-// Missing-required check (used to mark inputs invalid + block save).
+// Missing-required check — the TRUTH used to block the save (firstMissingRequired).
 function isMissing(f) {
 	if (!isReqd(f)) return false
 	const v = form[f.fieldname]
 	return v === null || v === undefined || v === ""
+}
+
+// Calm create-forms: the VISIBLE invalid state. A field is only styled red once
+// the user has interacted with it (blurred it) or has tried to save — so an
+// untouched blank create form stays calm at first paint. Same truth as isMissing,
+// just gated on touch/attempt. (isMissing itself still governs the actual block.)
+function showInvalid(f) {
+	if (!isMissing(f)) return false
+	return saveAttempted.value || touchedFields.has(f.fieldname)
+}
+
+// Same touched-or-attempted gate for the prompt-named create Name input.
+const showNameInvalid = computed(
+	() => !newName.value.trim() && (saveAttempted.value || touchedFields.has("__newname")),
+)
+
+// Delegated blur: focusout bubbles (blur doesn't), so one handler on the form
+// container marks whichever field wrapper (#field-<fieldname>) the focus left as
+// touched — covering every control type, including the custom LinkField, without
+// wiring @blur on each. Once touched, showInvalid may light that field red.
+function onFormFocusOut(e) {
+	const wrap = e.target?.closest?.("[id^='field-']")
+	if (!wrap || !wrap.id) return
+	touchedFields.add(wrap.id.slice("field-".length))
 }
 
 // ── form builders ──
@@ -2870,6 +3121,10 @@ function blankValueFor(mf) {
 
 function clearForm() {
 	for (const k of Object.keys(form)) delete form[k]
+	// Fresh form ⇒ calm again: forget touched fields + any prior save attempt so
+	// a rebuilt create/edit form never opens with required fields pre-reddened.
+	touchedFields.clear()
+	saveAttempted.value = false
 }
 
 function buildCreateForm() {
@@ -3834,6 +4089,19 @@ async function focusMissingField(fieldname) {
 	if (input && typeof input.focus === "function") input.focus()
 }
 
+// Re-run the missing-field scroll+focus AFTER the caller has made this form
+// visible again. onSave's own focusMissingField fires while the wizard-steps
+// host is still on its Review step (this form is display:none), where
+// scrollIntoView/focus no-op — so a blocked wizard save would leave the reddened
+// field off-screen with only a toast. The host awaits its step switch back to
+// the form, then calls this so the first invalid field is actually brought into
+// view + focused. No-op when nothing is flagged or the target is a child cell
+// (fieldname null — the toast/banner names the row instead). Inert full-page.
+function focusFirstInvalid() {
+	const fn = missingField.value?.fieldname
+	if (fn) focusMissingField(fn)
+}
+
 // Q15: a failed high-stakes action (submit/cancel/delete/amend) both toasts and
 // pins the full server message in the closable banner so the user can read the
 // (often multi-line) validation/stock error while deciding what to do.
@@ -3867,7 +4135,16 @@ async function refreshFromConflict() {
 	await reloadView()
 }
 
+// Resolves `true` on a successful create/edit save, `false` when the save was
+// BLOCKED or REJECTED (a missing required field, or a server error) — the
+// wizard-steps host awaits this to decide whether to reveal its hidden step-2
+// form (banner + reddened field) so the block is visible, not just toasted. The
+// form's own Save button and the Ctrl+S shortcut ignore the return (unchanged).
 async function onSave() {
+	// A save attempt reveals every unfilled required field at once (calm-forms
+	// gate) — set before the guards so the invalid styling lights up even on the
+	// runs that return early below.
+	saveAttempted.value = true
 	// Prompt-named create guard: block here with a clear toast rather than letting
 	// the server return "Please set Document Name" after the round-trip. Only fires
 	// for prompt-named doctypes in create mode; non-prompt doctypes skip this.
@@ -3875,14 +4152,14 @@ async function onSave() {
 		missingField.value = { label: `${registry.value?.label || doctype.value} Name`, fieldname: "__newname" }
 		toast.warn("Name is required", "Set a unique name for this document before saving.")
 		focusMissingField("__newname")
-		return
+		return false
 	}
 	const missing = firstMissingRequired()
 	if (missing) {
 		missingField.value = missing
 		toast.warn("Missing required field", `“${missing.label}” is required.`)
 		focusMissingField(missing.fieldname)
-		return
+		return false
 	}
 	missingField.value = null
 	serverError.value = null
@@ -3895,7 +4172,11 @@ async function onSave() {
 			// Clear dirty BEFORE navigating so the route-leave guard stays silent.
 			isDirty.value = false
 			toast.success("Created", newName ? `${doctype.value} ${newName} created` : "Document created")
-			if (newName) {
+			// Embedded (overlay host): the HOST decides what happens after a
+			// create-save — never router.push to the new record from here.
+			if (props.embedded) {
+				emit("saved", newName || "")
+			} else if (newName) {
 				router.push(`/${props.docRoute}/${encodeURIComponent(newName)}`)
 			} else {
 				mode.value = "view"
@@ -3922,7 +4203,12 @@ async function onSave() {
 			docState.loadLinked(props.id)
 			docState.loadActivity(props.id)
 			loadConnections()
+			// Embedded (overlay host): report the successful save so the host can
+			// close + refresh its list. Fired AFTER the reload kicks off; inert
+			// full-page (no listener).
+			if (props.embedded) emit("saved", props.id)
 		}
+		return true
 	} catch (e) {
 		// Q15: keep the full (often multi-line) server message visible in a
 		// closable banner — the toast alone vanishes before the user can read it.
@@ -3936,13 +4222,14 @@ async function onSave() {
 				refresh: true,
 			}
 			toast.warn("Document changed", "Refresh to get the latest version.")
-			return
+			return false
 		}
 		serverError.value = {
 			title: mode.value === "create" ? "Could not create" : "Could not save",
 			lines: errorLines(e),
 		}
 		toast.error("Save failed", e.message)
+		return false
 	}
 }
 
@@ -3953,6 +4240,12 @@ function doDiscard() {
 	serverError.value = null
 	missingField.value = null
 	if (mode.value === "create") {
+		// Embedded: closing the overlay IS the discard destination — the host
+		// removes its query key; never route from inside the overlay.
+		if (props.embedded) {
+			emit("close")
+			return
+		}
 		router.push(`/${props.docRoute}`)
 		return
 	}
@@ -4032,7 +4325,10 @@ function onDelete() {
 			try {
 				await docState.remove(props.id)
 				toast.success("Deleted", `${props.id} deleted`, 6000)
-				router.push(`/${props.docRoute}`)
+				// Embedded: the record is gone — close the overlay (the list's
+				// realtime list_update refreshes the rows underneath).
+				if (props.embedded) emit("close")
+				else router.push(`/${props.docRoute}`)
 			} catch (e) {
 				showActionError("Delete failed", e)
 				acting.value = null
@@ -5021,6 +5317,78 @@ function stripHtml(s) {
 		grid-template-columns: 1fr;
 	}
 }
+/* Embedded in an overlay (DocOverlayHost): single column — the aside (Quick
+   Info / Connections / Linked Summary) stacks BELOW the main pane, since a
+   drawer/dialog is too narrow for the 288px side rail. Full-page rendering is
+   untouched (class only ever applied via the opt-in `embedded` prop). */
+.doc-detail--embedded .detail-layout {
+	grid-template-columns: 1fr;
+}
+/* Narrow overlay header: let the action buttons wrap BELOW the title instead
+   of squeezing the hero into a one-word-per-line column (720px drawer). */
+.doc-detail--embedded .detail-head {
+	flex-wrap: wrap;
+}
+.doc-detail--embedded .id-block {
+	flex: 1 1 55%;
+	min-width: 240px;
+}
+
+/* ── Movable actions — placement "inline" / "floating" (`actions` knob) ──
+   Wrappers only: the buttons inside are DocMovableActions (a scoped child, so
+   descendant rules need :deep). Placement "header" adds NO rule here — the
+   header default must stay byte-identical to the pre-knob rendering. */
+/* Strip at the bottom of the main detail column, inside .detail-main's card
+   chrome (demo-3/-7 inline action bar). */
+.inline-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	padding: 12px 16px;
+	border-top: 1px solid var(--esd-line);
+}
+/* FAB cluster fixed to the viewport bottom-RIGHT on the full page (demo-5
+   .afabs behaviour). The 🎛 Knobs FAB owns bottom-LEFT at z-index 60 — same
+   layer, opposite corner, so they can never collide. The wrapper itself is
+   click-through; only the buttons take pointer events. */
+.floating-actions {
+	position: fixed;
+	right: 18px;
+	bottom: 18px;
+	z-index: 60;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 9px;
+	pointer-events: none;
+}
+.floating-actions :deep(.p-button),
+.floating-actions :deep(.cta-wrap) {
+	pointer-events: auto;
+}
+/* The cluster floats over page content — pill radius + a pop shadow so the
+   buttons read as FABs, and a solid card backdrop under the outlined ones
+   (the filled primary CTA keeps its own background). */
+.floating-actions :deep(.p-button) {
+	border-radius: 999px;
+	box-shadow: var(--esd-shadow-pop);
+}
+.floating-actions :deep(.p-button-outlined) {
+	background: var(--esd-card);
+}
+/* Embedded in an overlay (DocOverlayHost): pin INSIDE the panel — sticky
+   rides the drawer/dialog scrollport's bottom edge (the demo _template
+   `.afabs` behaviour), never the page behind the overlay. In-flow as the last
+   child of .doc-detail, so it can never cover the panel header. */
+.doc-detail--embedded .floating-actions {
+	position: sticky;
+	right: auto;
+	bottom: 10px;
+	z-index: 5;
+	padding-top: 8px;
+}
 
 .detail-main {
 	background: var(--esd-card);
@@ -5044,7 +5412,8 @@ function stripHtml(s) {
 .form-card {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-4);
+	/* theme.density (§4 item 10) — stack rhythm rides --yrp-gap; absent ⇒ shipped 16px. */
+	gap: var(--yrp-gap, var(--space-4));
 }
 .form-section .form-grid {
 	margin: 0;
@@ -5290,7 +5659,8 @@ function stripHtml(s) {
 .details-stack {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
-	gap: 16px;
+	/* theme.density (§4 item 10) — card grid gap rides --yrp-gap; absent ⇒ shipped 16px. */
+	gap: var(--yrp-gap, 16px);
 	align-items: start;
 }
 @media (min-width: 1400px) {
@@ -5682,5 +6052,29 @@ function stripHtml(s) {
 }
 .srv-err__actions {
 	margin-top: 8px;
+}
+</style>
+
+<!-- Unscoped on purpose: the action-sheet Drawer (placement "action-sheet",
+     item 9) teleports to <body>, so scoped rules never reach it. Namespaced
+     under esd-action-sheet-*. Stacks the movable affordances — a horizontal
+     button fragment in the header — as full-width sheet rows for the floor. -->
+<style>
+.esd-action-sheet .p-drawer-content {
+	background: var(--esd-bg);
+}
+.esd-action-sheet-list {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 6px 2px 12px;
+}
+.esd-action-sheet-list .cta-wrap,
+.esd-action-sheet-list .cta-wrap > .p-button,
+.esd-action-sheet-list > .p-button {
+	width: 100%;
+}
+.esd-action-sheet-list .p-button {
+	justify-content: center;
 }
 </style>

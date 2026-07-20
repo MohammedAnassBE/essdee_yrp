@@ -1,5 +1,8 @@
 <template>
-	<aside class="esd-sidebar" :class="{ pinned, 'drawer-open': drawerOpen }">
+	<aside
+		class="esd-sidebar"
+		:class="{ pinned, 'drawer-open': drawerOpen, 'is-right': railSide === 'right', 'is-icon-rail': iconRail }"
+	>
 		<div class="sidebar-logo" @click="goHome">
 			<div class="logo-mark">
 				<img :src="logoUrl" alt="Essdee YRP" class="logo-img" />
@@ -14,26 +17,28 @@
 				<span class="nav-label">Home</span>
 			</router-link>
 
-			<!-- Perm-gated DocType groups -->
+			<!-- Perm-gated DocType groups (arrangement from store.navGroups) -->
 			<div
 				v-for="grp in sidebarGroups"
-				:key="grp.group"
+				:key="grp.id"
 				class="nav-group"
-				:class="{ 'section-collapsed': isCollapsed(grp.group) }"
+				:class="{ 'section-collapsed': isCollapsed(grp.id) }"
 			>
 				<!-- Section header: a toggle button (shown only when the rail is
 				     expanded). Collapse state is per-user, persisted server-side via
-				     useSidebarCollapse — independent of the rail's expand state. -->
+				     useSidebarCollapse — independent of the rail's expand state.
+				     Keyed on the group's stable `id` (spec §19 nit 4); Default seeds
+				     ids == today's labels so existing persisted state survives. -->
 				<button
 					type="button"
 					class="nav-group-label"
-					:aria-expanded="!isCollapsed(grp.group)"
-					@click="toggleSection(grp.group)"
+					:aria-expanded="!isCollapsed(grp.id)"
+					@click="toggleSection(grp.id)"
 				>
-					<span class="nav-group-text">{{ grp.group }}</span>
+					<span class="nav-group-text">{{ grp.label }}</span>
 					<i
 						class="pi pi-chevron-down nav-group-chevron"
-						:class="{ 'is-collapsed': isCollapsed(grp.group) }"
+						:class="{ 'is-collapsed': isCollapsed(grp.id) }"
 					/>
 				</button>
 				<router-link
@@ -49,6 +54,25 @@
 					<span class="nav-label">{{ item.label }}</span>
 				</router-link>
 			</div>
+		</nav>
+
+		<!-- nav.footer (USE_CASE §4 Track 1 item 4): a pinned footer nav region
+		     BELOW the groups, above the rail controls. Same {doctype, icon}
+		     grammar + live perm gate as the groups; unknown doctypes drop with a
+		     warn. Absent → not rendered at all (parity law). -->
+		<nav v-if="footerItems.length" class="sidebar-footer-nav" aria-label="Footer navigation">
+			<router-link
+				v-for="item in footerItems"
+				:key="item.doctype"
+				:to="`/${item.route}`"
+				class="nav-item"
+				active-class="active"
+				:title="item.label"
+				@click="$emit('navigate')"
+			>
+				<i :class="[item.icon, 'nav-icon']" />
+				<span class="nav-label">{{ item.label }}</span>
+			</router-link>
 		</nav>
 
 		<div class="sidebar-foot">
@@ -75,23 +99,78 @@
 <script setup>
 import { computed } from "vue"
 import { useRouter } from "vue-router"
+import { useUiConfigStore } from "@yrp/web-engine"
 import { usePermissions } from "@/composables/usePermissions"
-import { getSidebarGroups } from "@/config/doctypes"
+import { usePreviewGate } from "@/composables/usePreviewGate"
+import { getRegistryByDoctype } from "@/config/doctypes"
 import { useSidebarCollapse } from "@/composables/useSidebarCollapse"
 
-defineProps({ pinned: Boolean, drawerOpen: Boolean })
+defineProps({
+	pinned: Boolean,
+	drawerOpen: Boolean,
+	// nav.position variants (USE_CASE §4 Track 1 item 4). Both default to today's
+	// behaviour so a layout without the knob renders the shipped rail exactly.
+	// railSide "right" docks the rail on the right edge (sidebar-right);
+	// iconRail keeps the rail icon-only (no hover flyout) unless pinned.
+	railSide: { type: String, default: "left" },
+	iconRail: { type: Boolean, default: false },
+})
 const emit = defineEmits(["toggle-pin", "navigate"])
 
 const router = useRouter()
-const { canRead, isAdmin, hasRole } = usePermissions()
+const { isAdmin, hasRole } = usePermissions()
+// Preview-aware read gate: identical to canRead outside a §10 View-as preview;
+// during one it consults the server-computed target hints (perm-accurate view).
+const { gateRead } = usePreviewGate()
+const ui = useUiConfigStore()
 
 // Logo comes from Website Settings via frappe.boot (admin-controlled); falls back
 // to the bundled Essdee logo when the field is unset.
 const logoUrl = window.frappe?.boot?.app_logo || "/assets/essdee_yrp/frontend/essdee-logo.png"
 
-// Live-perm gate: only show items the user can read. Admin sees everything;
-// DocTypes not installed (e.g. Workstation) resolve canRead → false and drop.
-const sidebarGroups = computed(() => getSidebarGroups((dt) => canRead(dt)))
+// Arrangement from the layout (store.navGroups — layout-hidden items already
+// filtered), mapped onto the catalog: getRegistryByDoctype supplies route/label/
+// flags; unknown doctypes (layout typo, §14 row 12) drop with a console.warn.
+// The layout item's icon wins when set (arrangement), else the catalog's.
+// Live-perm gate PRESERVED: only items the user canRead render — no read
+// permission means not rendered. Admin sees everything; DocTypes not installed
+// (e.g. Workstation) resolve canRead → false and drop. Empty groups drop.
+const sidebarGroups = computed(() =>
+	ui.navGroups
+		.map((g) => ({
+			id: g.id || g.label,
+			label: g.label || g.id,
+			items: (g.items || [])
+				.map((item) => {
+					const reg = getRegistryByDoctype(item.doctype)
+					if (!reg) {
+						console.warn(`[essdee sidebar] unknown doctype in layout nav: "${item.doctype}" — dropped`)
+						return null
+					}
+					return { ...reg, icon: item.icon || reg.icon }
+				})
+				.filter(Boolean)
+				.filter((d) => gateRead(d.doctype)),
+		}))
+		.filter((g) => g.items.length > 0)
+)
+
+// nav.footer (Track 1 item 4): pinned footer nav items, mapped + gated exactly
+// like the group items — registry supplies route/label, the layout item's icon
+// wins, unknown doctypes drop with a warn, and only canRead items render.
+const footerItems = computed(() =>
+	(ui.active.nav?.footer || [])
+		.map((item) => {
+			const reg = getRegistryByDoctype(item.doctype)
+			if (!reg) {
+				console.warn(`[essdee sidebar] unknown doctype in nav.footer: "${item.doctype}" — dropped`)
+				return null
+			}
+			return { ...reg, icon: item.icon || reg.icon }
+		})
+		.filter(Boolean)
+		.filter((d) => gateRead(d.doctype))
+)
 
 // Per-user, server-persisted collapse state for each sidebar SECTION.
 const { isCollapsed, toggleSection } = useSidebarCollapse()
@@ -367,6 +446,53 @@ function goHome() {
 	}
 	.esd-sidebar.drawer-open .nav-group.section-collapsed .nav-item {
 		display: none;
+	}
+}
+
+/* ── nav.footer region (Track 1 item 4) ── pinned nav items below the groups,
+   above the rail controls; a top divider marks it as a distinct region. The
+   items reuse .nav-item, so labels fade with the rail exactly like the groups.
+   Not rendered at all when nav.footer is absent (parity law). */
+.sidebar-footer-nav {
+	border-top: 1px solid var(--esd-line);
+	padding: 6px 8px 2px;
+	flex-shrink: 0;
+}
+
+/* ── sidebar-right (nav.position: "sidebar-right") ── dock the rail on the RIGHT
+   edge; the hairline flips to the inner (left) side. AppLayout swaps the grid
+   areas so content sits to the left. Everything else (hover flyout, pin,
+   collapse) is inherited unchanged. */
+.esd-sidebar.is-right {
+	left: auto;
+	right: 0;
+	border-right: 0;
+	border-left: 1px solid var(--esd-line);
+}
+
+/* ── icon-rail (nav.position: "icon-rail") ── a permanent icon-only rail: unlike
+   the default sidebar it does NOT expand to labels on hover; only `pinned` (or
+   the keyboard focus-within escape-hatch, kept for a11y) reveals them. */
+.esd-sidebar.is-icon-rail:not(.pinned):hover {
+	width: var(--sidebar-collapsed-width);
+	box-shadow: none;
+}
+.esd-sidebar.is-icon-rail:not(.pinned):hover .nav-label,
+.esd-sidebar.is-icon-rail:not(.pinned):hover .logo-text {
+	opacity: 0;
+}
+.esd-sidebar.is-icon-rail:not(.pinned):hover .nav-group-label {
+	display: none;
+}
+
+@media (max-width: 768px) {
+	/* Right rail slides in from the right; the default left rail keeps its
+	   translateX(-100%) rule above. */
+	.esd-sidebar.is-right {
+		transform: translateX(100%);
+	}
+	.esd-sidebar.is-right.drawer-open {
+		transform: translateX(0);
 	}
 }
 </style>

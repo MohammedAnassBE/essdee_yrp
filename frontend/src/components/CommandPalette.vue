@@ -61,20 +61,44 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue"
 import { useRouter } from "vue-router"
 import Dialog from "primevue/dialog"
-import { DOCTYPES } from "@/config/doctypes"
-import { usePermissions } from "@/composables/usePermissions"
+import { useUiConfigStore } from "@yrp/web-engine"
+import { getRegistryByDoctype } from "@/config/doctypes"
+import { usePreviewGate } from "@/composables/usePreviewGate"
 import { useTheme } from "@/composables/useTheme"
 import { useCommandPalette } from "@/composables/useCommandPalette"
 
 const router = useRouter()
-const { canRead, canCreate } = usePermissions()
+// Preview-aware gates (§10): identical to canRead/canCreate outside a View-as
+// preview; during one they consult the server-computed target perm hints so the
+// palette advertises the previewed user's true reach, not the SM's superset.
+const { gateRead, gateCreate } = usePreviewGate()
 const { isDark, toggleTheme } = useTheme()
 const { open, openPalette, closePalette, togglePalette } = useCommandPalette()
+const ui = useUiConfigStore()
 
 const query = ref("")
 const activeIndex = ref(0)
 const inputEl = ref(null)
 const listEl = ref(null)
+
+// The palette advertises the SAME arrangement as the sidebar (spec §8.3):
+// doctypes present in store.navGroups (layout-hidden ones already filtered),
+// in layout order, mapped onto the catalog for route/icon/flags. A doctype
+// hidden by the layout stays URL-reachable (arrangement, not capability) —
+// it just isn't advertised here.
+const navDoctypes = computed(() => {
+	const out = []
+	const seen = new Set()
+	for (const g of ui.navGroups) {
+		for (const item of g.items || []) {
+			if (seen.has(item.doctype)) continue
+			seen.add(item.doctype)
+			const reg = getRegistryByDoctype(item.doctype)
+			if (reg) out.push(reg)
+		}
+	}
+	return out
+})
 
 // Command pool: Home + every readable DocType (open list) + every creatable
 // DocType (new) + the theme toggle. Permission-gated, so users only see what
@@ -83,10 +107,10 @@ const pool = computed(() => {
 	const out = [
 		{ id: "nav:home", label: "Home", sub: "Dashboard", icon: "pi pi-th-large", keywords: "home dashboard", run: () => router.push("/home") },
 	]
-	for (const d of DOCTYPES) {
-		if (canRead(d.doctype))
+	for (const d of navDoctypes.value) {
+		if (gateRead(d.doctype))
 			out.push({ id: "list:" + d.route, label: d.label, sub: "Open list", icon: d.icon, keywords: d.label + " " + d.group, run: () => router.push("/" + d.route) })
-		if (canCreate(d.doctype))
+		if (gateCreate(d.doctype))
 			out.push({ id: "new:" + d.route, label: "New " + d.label, sub: "Create", icon: "pi pi-plus", keywords: "new create add " + d.label, run: () => router.push("/" + d.route + "/new") })
 	}
 	out.push({

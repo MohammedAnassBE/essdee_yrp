@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router"
+import { getRegistryByRoute, noWebCreate } from "@/config/doctypes"
 
 const routes = [
 	{
@@ -66,6 +67,16 @@ const routes = [
 				name: "DocDetail",
 				component: () => import("@/views/dynamic/DocDetail.vue"),
 				props: true,
+				// Catalog-level create block: the buttons are hidden everywhere, but
+				// typing /web/lot/new (or item/terms-and-condition) must not bypass
+				// that. For a spine_consumer_config-synced doctype, redirect any
+				// /:docRoute/new (incl. ?duplicate=1) to its list — created via sync.
+				beforeEnter: (to) => {
+					if (to.params.id !== "new") return true
+					const reg = getRegistryByRoute(to.params.docRoute)
+					if (reg && noWebCreate(reg.doctype)) return `/${to.params.docRoute}`
+					return true
+				},
 			},
 			// Dynamic list (catch-all) — serves every sidebar DocType.
 			{

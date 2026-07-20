@@ -580,8 +580,15 @@ function onSaved(name) {
 <!-- Unscoped on purpose: Drawer/Dialog teleport to <body>, so scoped rules
      never reach them. Everything is namespaced under esd-doc-overlay-*. -->
 <style>
+/* Right detail drawer — a comfortable reading width, not half the screen.
+   clamp() keeps it usable from a narrow laptop up to a wide monitor; the
+   <=640px override below still takes it full-width on phones. Only the RIGHT
+   drawer is affected — the bottom-sheet (--bottom) and the full-page detail
+   route keep their own sizing. */
 .esd-doc-overlay-drawer--right {
-	width: min(720px, 92vw) !important;
+	/* Wide working drawer — the Lot/Order-Items editors need room. Starts at
+	   720px, scales up to 62vw, caps at 1180px on large monitors. */
+	width: clamp(720px, 62vw, 1180px) !important;
 }
 @media (max-width: 640px) {
 	.esd-doc-overlay-drawer--right {

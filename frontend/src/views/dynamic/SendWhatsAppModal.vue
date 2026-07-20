@@ -21,7 +21,6 @@
 			<!-- who we're messaging -->
 			<div class="wa-recipient">
 				<span>Supplier: <b>{{ ctx.supplier }}</b></span>
-				<span v-if="ctx.contact"> · Contact: {{ ctx.contact }}</span>
 			</div>
 
 			<!-- (1) mobile: pick a contact number OR type one (editable) -->
@@ -34,7 +33,6 @@
 					fluid
 					placeholder="Pick or type a number"
 				/>
-				<small class="wa-hint">Pick a number above or type/edit one.</small>
 			</div>
 
 			<!-- (2) template: APPROVED WhatsApp template configured for this doctype -->
@@ -99,9 +97,6 @@
 						placeholder="Manual value"
 					/>
 				</div>
-			</div>
-			<div v-else-if="selectedTemplate" class="wa-hint wa-novars">
-				This template has no inputs.
 			</div>
 		</div>
 

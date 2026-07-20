@@ -61,7 +61,8 @@ const GROUPS = [
 		items: [
 			// Lot: not submittable, has a status Select (Open/Closed) → status
 			// tabs + All per the finalized tab rules.
-			{ doctype: "Lot", icon: "pi pi-inbox", tabMode: "status", listFields: [
+			// noCreate: synced via spine_consumer_config — no /web create.
+			{ doctype: "Lot", icon: "pi pi-inbox", tabMode: "status", noCreate: true, listFields: [
 				{ field: "item", label: "Item" },
 				{ field: "production_detail", label: "IPD" },
 				{ field: "expected_delivery_date", label: "Delivery", type: "Date" },
@@ -107,7 +108,8 @@ const GROUPS = [
 		group: "Item Masters",
 		roles: "*",
 		items: [
-			{ doctype: "Item", icon: "pi pi-box", listFields: [
+			// noCreate: synced via spine_consumer_config — no /web create.
+			{ doctype: "Item", icon: "pi pi-box", noCreate: true, listFields: [
 				{ field: "name1", label: "Item Name" },
 				{ field: "item_group", label: "Item Group" },
 				{ field: "default_unit_of_measure", label: "UOM" },
@@ -119,7 +121,8 @@ const GROUPS = [
 		group: "Setup",
 		roles: "*",
 		items: [
-			{ doctype: "Terms and Condition", icon: "pi pi-book" },
+			// noCreate: synced via spine_consumer_config — no /web create.
+			{ doctype: "Terms and Condition", icon: "pi pi-book", noCreate: true },
 		],
 	},
 ]
@@ -145,6 +148,11 @@ for (const g of GROUPS) {
 			dateTabs: it.dateTabs || null,
 			listFields: it.listFields || null,
 			hasAddressContact: it.hasAddressContact || false,
+			// Catalog-level create block: these doctypes are populated by an
+			// external sync (spine_consumer_config) and must NEVER be created in
+			// /web. Applies to ALL layouts and ALL users — see noWebCreate() below,
+			// consumed by every create gate (list New, home CTA, palette, route).
+			noCreate: it.noCreate || false,
 			note: it.note || null,
 		})
 	}
@@ -161,6 +169,15 @@ export function getRegistryByRoute(slug) {
 
 export function getRegistryByDoctype(name) {
 	return DOCTYPES.find((d) => d.doctype === name) || null
+}
+
+// Catalog-level create block. True for doctypes flagged `noCreate` (Lot, Item,
+// Terms and Condition) — externally synced via spine_consumer_config, so /web
+// must never offer a create affordance for them. Every create gate consults
+// this (permission funnels canCreate/gateCreate + the /:doctype/new route),
+// so the rule holds for ALL layouts and ALL users, admin included.
+export function noWebCreate(name) {
+	return getRegistryByDoctype(name)?.noCreate === true
 }
 
 export { DOCTYPES, SUBMITTABLE, WORKFLOW }

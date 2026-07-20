@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import { noWebCreate } from '@/config/doctypes'
 
 // Singleton reactive state (shared across all components)
 const _canRead = ref([])
@@ -39,6 +40,11 @@ export function usePermissions() {
   }
 
   function canCreate(dt) {
+    // Catalog-level create block (spine_consumer_config-synced doctypes: Lot,
+    // Item, Terms and Condition). Checked BEFORE the admin bypass so no /web
+    // create surface — list New, home CTA, palette, Duplicate — ever appears
+    // for these, for ANY user. See config/doctypes.js noWebCreate().
+    if (noWebCreate(dt)) return false
     if (_isAdmin.value) return true
     return _canCreate.value.includes(dt)
   }

@@ -54,3 +54,13 @@ jspm_packages/
 # Aider AI Chat
 .aider*
 .superpowers/
+
+# ── Frontend (Vite /web SPA) ──
+# node_modules already ignored above. The BUILT /web bundle in
+# essdee_yrp/public/frontend is committed BY DESIGN — prod serves it directly
+# and `bench build` does NOT rebuild it, so it must stay tracked. Ignore only
+# the local dev intermediates:
+frontend/.vite/
+frontend/dist/
+frontend/stats.html
+*.local

@@ -586,7 +586,9 @@ function onSaved(name) {
    drawer is affected — the bottom-sheet (--bottom) and the full-page detail
    route keep their own sizing. */
 .esd-doc-overlay-drawer--right {
-	width: clamp(420px, 40vw, 560px) !important;
+	/* Wide working drawer — the Lot/Order-Items editors need room. Starts at
+	   720px, scales up to 62vw, caps at 1180px on large monitors. */
+	width: clamp(720px, 62vw, 1180px) !important;
 }
 @media (max-width: 640px) {
 	.esd-doc-overlay-drawer--right {

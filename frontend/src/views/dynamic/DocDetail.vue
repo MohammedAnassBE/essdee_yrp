@@ -912,7 +912,7 @@
 						<span class="child-cols-note pivot-note">final requirement (finished cloth) + dia-wise knitting program — the chain plan rebuilds on save</span>
 					</div>
 					<LotFabricViews
-						ref="lotFabricGrid"
+						:ref="setLotFabricGrid"
 						:readonly="(form.status || 'Open') !== 'Open'"
 						:lot-name="doc?.name || ''"
 						@change="onGridChange"
@@ -932,7 +932,7 @@
 						This Lot has been transferred — its order items are locked (edit in Desk if needed).
 					</p>
 					<LotOrderEditor
-						ref="lotItemsGrid"
+						:ref="setLotItemsGrid"
 						:readonly="isLotTransferred"
 						:production-detail="form.production_detail || ''"
 						@change="onGridChange"
@@ -944,7 +944,7 @@
 						<span class="child-cols-note pivot-note">size × colour matrix — cut/stitch/pack progress is preserved on save</span>
 					</div>
 					<LotOrderDetailGrid
-						ref="lotOrderGrid"
+						:ref="setLotOrderGrid"
 						:readonly="isLotTransferred"
 						@change="onGridChange"
 					/>
@@ -2441,6 +2441,19 @@ const lotOrderGrid = ref(null)
 // its two transient JSON payloads are added in buildPayload ONLY when this
 // hydration succeeded (else omit both keys → server keeps the stored rows).
 const lotFabricGrid = ref(null)
+// These three editors render INSIDE the `editRenderList` v-for (interleaved with
+// the flat child grids). A STRING template ref (`ref="lotItemsGrid"`) used inside
+// a v-for is array-wrapped by Vue 3 — `lotItemsGrid.value` would become
+// `[instance]`, so every `lotItemsGrid.value?.loadData/getItems/getData` guard
+// falls through and the editors never hydrate (they render their empty state) and
+// never contribute to buildPayload. Bind these FUNCTION refs instead: Vue calls
+// them with the single component instance (null on unmount), so `.value` is the
+// instance, not an array. (Regression from the editRenderList refactor; the
+// editors previously sat in a standalone `v-if="isLot"` block where string refs
+// resolved correctly.)
+const setLotItemsGrid = (el) => { lotItemsGrid.value = el }
+const setLotOrderGrid = (el) => { lotOrderGrid.value = el }
+const setLotFabricGrid = (el) => { lotFabricGrid.value = el }
 const lotFabricHydrated = ref(false)
 // null = unknown (fall through to meta); true/false = check_enabled_po result.
 const lotPoEnabled = ref(null)

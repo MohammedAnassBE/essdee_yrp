@@ -256,8 +256,13 @@ function goHome() {
 }
 
 .nav-group-label {
-	/* hidden in the slim rail; revealed (display:flex) when expanded */
-	display: none;
+	/* Kept in the layout at ALL times (never display:none) so its box height is
+	   RESERVED even in the slim rail. Expanding the rail toggles only the header's
+	   `visibility` — never its geometry — so no nav-item ever shifts vertically on
+	   hover. (Previously display:none here: the header's box materialised on hover
+	   and shoved every grouped icon down by its own height — the "hover-jump".) */
+	display: flex;
+	visibility: hidden;
 	align-items: center;
 	justify-content: space-between;
 	gap: 8px;
@@ -348,7 +353,8 @@ function goHome() {
 
 .esd-sidebar:hover .nav-group-label,
 .esd-sidebar.pinned .nav-group-label {
-	display: flex;
+	/* Reveal only — the box was already reserved above, so this shifts nothing. */
+	visibility: visible;
 }
 
 /* Collapsed section → hide its items, but only when the rail is expanded
@@ -373,7 +379,7 @@ function goHome() {
 	opacity: 1;
 }
 .esd-sidebar:focus-within .nav-group-label {
-	display: flex;
+	visibility: visible;
 }
 
 /* overflow:hidden on the rail would clip a default focus ring — inset it. */
@@ -442,7 +448,7 @@ function goHome() {
 		opacity: 1;
 	}
 	.esd-sidebar .nav-group-label {
-		display: flex;
+		visibility: visible;
 	}
 	.esd-sidebar.drawer-open .nav-group.section-collapsed .nav-item {
 		display: none;
@@ -481,8 +487,17 @@ function goHome() {
 .esd-sidebar.is-icon-rail:not(.pinned):hover .logo-text {
 	opacity: 0;
 }
-.esd-sidebar.is-icon-rail:not(.pinned):hover .nav-group-label {
-	display: none;
+/* icon-rail never expands on hover, so it has no hover-jump to pin against — keep
+   its slim rail TIGHT by fully collapsing the (otherwise always-reserved) header
+   box, not merely hiding it, so no blank group gaps appear. Excludes :focus-within
+   so the keyboard escape-hatch can still reveal the headers, and pinned (which
+   shows them). Desktop-scoped: the ≤768px off-canvas drawer is full-width and DOES
+   show headers (base display:flex + the drawer's visibility:visible), so the
+   collapse must not reach it. */
+@media (min-width: 769px) {
+	.esd-sidebar.is-icon-rail:not(.pinned):not(:focus-within) .nav-group-label {
+		display: none;
+	}
 }
 
 @media (max-width: 768px) {

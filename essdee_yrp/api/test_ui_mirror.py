@@ -129,6 +129,125 @@ def _parse_object_keys(src, opener_re):
 	return keys
 
 
+def _balanced(src, opener_re, open_ch="{", close_ch="}"):
+	"""The full balanced ``{...}`` block opened by ``opener_re`` (quote-aware —
+	strings may carry braces). Module-level twin of the class helper, so the
+	wizard tests below can extract a JS function body standalone."""
+	m = re.search(opener_re, src)
+	if not m:
+		return None
+	start = src.index(open_ch, m.start())
+	depth = 0
+	quote = None
+	i = start
+	while i < len(src):
+		ch = src[i]
+		if quote:
+			if ch == "\\":
+				i += 2
+				continue
+			if ch == quote:
+				quote = None
+		elif ch in "'\"`":
+			quote = ch
+		elif ch == open_ch:
+			depth += 1
+		elif ch == close_ch:
+			depth -= 1
+			if depth == 0:
+				return src[start : i + 1]
+		i += 1
+	return None
+
+
+class TestDcWizardStepsEntry(IntegrationTestCase):
+	"""dcEntry 'wizard-steps' reachability + blocked-save reveal (2026-07-18
+	review findings). Both are FRONTEND presentation seams with no standalone
+	JS module to run, so — like the block-prop mirror above — they are proven by
+	parsing the ACTUAL .vue sources (no build, no node). House rule: no
+	``frappe.db.commit()`` — read-only file parsing."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		dyn = os.path.join(_frontend_dir("essdee_yrp"), "views", "dynamic")
+		cls.host_src = _read(os.path.join(dyn, "DocOverlayHost.vue"))
+		cls.detail_src = _read(os.path.join(dyn, "DocDetail.vue"))
+
+	def test_wizard_step1_is_not_a_dead_end(self):
+		"""Finding 1: step 1 (WO quick-pick) must offer a forward path that does
+		NOT depend on tapping a chip — the strip lists only the 8 most-recent
+		submitted WOs, so the target WO may not appear (or the strip is empty),
+		and the form's own work_order Link lives in step 2. Assert the step-1
+		panel carries a control that advances to step 2 on its own (Continue),
+		scoped to the step-1 region so the step-2 '← Back' button can't satisfy
+		it."""
+		start = self.host_src.index("v-show=\"wizardStep === '1'\"")
+		end = self.host_src.index("v-show=\"wizardStep === '2'\"")
+		step1 = self.host_src[start:end]
+		self.assertIn(
+			"@click=\"wizardStep = '2'\"",
+			step1,
+			"wizard-steps step 1 has no chip-independent forward path — it is a "
+			"dead-end whenever the target Work Order isn't one of the recent-8 chips "
+			"(or the strip is empty). Restore the 'Continue to form' button so the "
+			"form's own work_order Link (step 2) stays reachable.",
+		)
+
+	def test_wizard_save_reveals_a_blocked_form(self):
+		"""Finding 2: on the Review step the form (step 2) is display:none, so a
+		blocked save's red field + banner are invisible and only a toast shows.
+		The fix is a two-part contract: onSave RESOLVES a boolean (true=success,
+		false=blocked/rejected) and onWizardSave AWAITS it and returns to step 2
+		on a false result. Assert both halves so neither can silently regress."""
+		on_save = _balanced(self.detail_src, r"async function onSave\(\)\s*\{")
+		self.assertIsNotNone(on_save, "DocDetail.vue: could not locate onSave()")
+		self.assertIn(
+			"return true",
+			on_save,
+			"onSave no longer signals a successful save — the wizard host cannot "
+			"tell success from a block",
+		)
+		self.assertIn(
+			"return false",
+			on_save,
+			"onSave no longer signals a BLOCKED save (missing required / server "
+			"reject) — the wizard host would strand the user on the Review step with "
+			"only a toast and an invisible red field",
+		)
+		# The missing-required guard specifically must return the blocked signal
+		# (not a bare early return that the host reads as success).
+		guard = on_save[
+			on_save.index("const missing = firstMissingRequired()") : on_save.index(
+				"missingField.value = null"
+			)
+		]
+		self.assertIn(
+			"return false",
+			guard,
+			"the firstMissingRequired guard must resolve false so the host reveals "
+			"the hidden form",
+		)
+		on_wizard = _balanced(self.host_src, r"async function onWizardSave\(\)\s*\{")
+		self.assertIsNotNone(
+			on_wizard,
+			"DocOverlayHost.vue: onWizardSave must be async (it awaits the exposed "
+			"save()) — a non-async handler cannot read the blocked/success result",
+		)
+		self.assertIn("createRef.value?.save", on_wizard, "onWizardSave must fire the exposed save()")
+		self.assertIn(
+			"=== false",
+			on_wizard,
+			"onWizardSave must branch on the blocked (false) result",
+		)
+		self.assertIn(
+			'wizardStep.value = "2"',
+			on_wizard,
+			"onWizardSave must return to step 2 on a blocked save so the form's "
+			"banner + reddened field become visible",
+		)
+
+
 class TestUIClientMirror(IntegrationTestCase):
 	"""BLOCK_PROP_KEYS / HOME_QUEUE_METRICS vs the real frontend sources."""
 

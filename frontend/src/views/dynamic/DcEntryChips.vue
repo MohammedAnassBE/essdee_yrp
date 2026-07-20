@@ -45,13 +45,13 @@
 		</div>
 		<div v-if="showSupplierChips && supAllowed" class="dc-chips-group">
 			<span class="dc-chips-label">Job-worker</span>
-			<div class="dc-chips-row">
+			<div class="dc-chips-row" :class="{ 'dc-chips-row--buttons': supplierStyle === 'buttons' }">
 				<button
 					v-for="s in suppliers"
 					:key="s"
 					type="button"
 					class="dc-chip"
-					:class="{ active: s === activeSupplier }"
+					:class="{ active: s === activeSupplier, 'dc-btn': supplierStyle === 'buttons' }"
 					@click="$emit('pick-supplier', s)"
 				>{{ s }}</button>
 				<span v-if="supLoaded && !suppliers.length" class="dc-chips-empty">No recent Job-workers</span>
@@ -70,6 +70,10 @@ const props = defineProps({
 	showSupplierChips: { type: Boolean, default: false },
 	activeWorkOrder: { type: String, default: "" },
 	activeSupplier: { type: String, default: "" },
+	// dcEntry.supplierPicker presentation for the Job-worker strip: "chips"
+	// (default — the pill chips) or "buttons" (a segmented button group, item 5).
+	// Same buttons, same pick-supplier relay — presentation only.
+	supplierStyle: { type: String, default: "chips" },
 })
 defineEmits(["pick-wo", "pick-supplier"])
 
@@ -200,5 +204,21 @@ async function loadSuppliers() {
 	font-size: 0.8rem;
 	color: var(--esd-muted-2);
 	padding: 2px 0;
+}
+/* supplierPicker "buttons" (item 5): a segmented button group — rectangular,
+   larger finger targets — instead of the pill chips. Same buttons/relay. */
+.dc-chips-row--buttons {
+	gap: 8px;
+}
+.dc-chip.dc-btn {
+	border-radius: 8px;
+	padding: 10px 16px;
+	font-size: 0.88rem;
+	font-weight: 600;
+}
+.dc-chip.dc-btn.active {
+	background: var(--esd-accent2);
+	border-color: var(--esd-accent2);
+	color: var(--esd-on-accent, #fff);
 }
 </style>

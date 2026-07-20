@@ -240,7 +240,10 @@
 /* ── Input focus: royal-blue (secondary accent), uniform across PrimeVue inputs.
    `.p-inputtext:focus` also covers autocomplete / datepicker / number inner
    inputs (they all carry .p-inputtext). Unlayered → wins over @layer primevue
-   without !important; --esd-accent2 flips per scheme. ── */
+   without !important; --esd-accent2 flips per scheme.
+   theme.focus (USE_CASE §4 item 10) recolours the ring via the --yrp-focus /
+   --yrp-focus-soft fallbacks: the layout knob absent ⇒ the exact shipped royal-
+   blue pair, byte-identical (parity law); present ⇒ the authored focus colour. ── */
 .p-inputtext:enabled:focus,
 .p-inputtext:focus,
 .p-textarea:enabled:focus,
@@ -249,8 +252,20 @@
 .p-inputnumber-input:enabled:focus,
 .p-select.p-focus,
 .p-multiselect.p-focus {
-	border-color: var(--esd-accent2) !important;
-	box-shadow: 0 0 0 3px var(--esd-accent2-50) !important;
+	border-color: var(--yrp-focus, var(--esd-accent2)) !important;
+	box-shadow: 0 0 0 3px var(--yrp-focus-soft, var(--esd-accent2-50)) !important;
+}
+
+/* theme.focus — opt-in custom focus-ring colour for keyboard focus on every
+   interactive surface (buttons, tabs, links, rows…), mirroring the demo's
+   :focus-visible{outline:2px solid var(--focus)}. The engine sets
+   html[data-yrp-focus] + emits --yrp-focus ONLY while a layout authors
+   theme.focus, so this rule matches NOTHING for focus-absent layouts → today's
+   focus behaviour (UA + component rings) is byte-identical (parity law). Inputs
+   already recolour above; the outline layers a same-colour keyboard ring. */
+html[data-yrp-focus] :focus-visible {
+	outline: 2px solid var(--yrp-focus);
+	outline-offset: 2px;
 }
 
 * {
@@ -332,7 +347,10 @@ a {
 	font-size: 11px; font-weight: 600;
 	padding: 1px 8px; border-radius: 999px;
 }
-.esd-card__body { padding: var(--space-4); }
+/* theme.density (USE_CASE §4 item 10) drives the card interior padding via
+   --yrp-pad (compact 10 / comfortable 14 / spacious 18). Knob absent ⇒ the
+   shipped 16px, byte-identical (parity law). */
+.esd-card__body { padding: var(--yrp-pad, var(--space-4)); }
 
 /* Lightweight panel-head variant for editors that can't use the full band */
 .esd-panel-head {
@@ -497,7 +515,12 @@ a {
 	letter-spacing: .06em;
 	color: var(--esd-muted);
 }
-.p-datatable-tbody > tr > td { font-variant-numeric: tabular-nums; }
+/* theme.density (USE_CASE §4 item 10) drives the row height via --yrp-row
+   (compact 38 / comfortable 46 / spacious 58), mirroring the demo's
+   td{height:var(--row)}. Knob absent ⇒ height:auto (= not setting it at all),
+   so the shipped rows are byte-identical (parity law); the per-list `rowSize`
+   flag keeps riding its own td padding on top. */
+.p-datatable-tbody > tr > td { font-variant-numeric: tabular-nums; height: var(--yrp-row, auto); }
 .p-datatable-tbody > tr:hover { background: var(--esd-accent-50); }
 .dark .p-datatable-tbody > tr:hover { background: var(--esd-slate-50); }
 

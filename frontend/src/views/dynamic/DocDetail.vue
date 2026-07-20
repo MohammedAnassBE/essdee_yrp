@@ -176,6 +176,21 @@
 						@open-whatsapp="sendWhatsAppOpen = true"
 						@cancel="onCancel"
 					/>
+					<!-- placement "action-sheet": the header shows a single "Actions"
+					     trigger; the movable set is re-hosted in a bottom Drawer (below,
+					     near the modals). Re-placement ONLY — no new capability. -->
+					<Button
+						v-if="showActionSheetTrigger"
+						type="button"
+						label="Actions"
+						icon="pi pi-bars"
+						size="small"
+						severity="secondary"
+						outlined
+						aria-haspopup="dialog"
+						data-testid="action-sheet-trigger"
+						@click="actionSheetOpen = true"
+					/>
 					<!-- The popup menus stay mounted HERE (once), whatever the placement —
 					     the inline strip / floating cluster toggle them via the same refs
 					     (popup Menus render nothing in place; they anchor to the click). -->
@@ -302,6 +317,7 @@
 			header="Print"
 			modal
 			class="print-dialog"
+			:position="actionDialogPosition"
 			:style="{ width: 'min(420px, calc(100vw - 32px))' }"
 		>
 			<div class="print-form">
@@ -376,6 +392,7 @@
 			:doctype="doctype"
 			:docname="props.id"
 			:doc="doc"
+			:dialog-position="actionDialogPosition"
 			@sent="onSmsSent"
 		/>
 		<SendWhatsAppModal
@@ -384,8 +401,45 @@
 			:docname="props.id"
 			:doc="doc"
 			:supplier-key="whatsAppSupplierKey"
+			:dialog-position="actionDialogPosition"
 			@sent="onWhatsAppSent"
 		/>
+
+		<!-- MOVABLE actions, placement "action-sheet" (`actions` knob, item 9): a
+		     bottom Drawer (STACK_DECISION: Drawer-bottom IS the action sheet) that
+		     re-hosts the SAME DocMovableActions the header/inline/floating placements
+		     use — same gates, same handlers, same once-mounted menus/modals above.
+		     Re-placement ONLY; no config here grants a capability (§15). The popup
+		     menus (More / e-Waybill) anchor to the tapped button inside the sheet;
+		     the terminal actions (Send SMS/WhatsApp, Cancel) close the sheet as they
+		     open their own modal/confirm. -->
+		<Drawer
+			v-model:visible="actionSheetOpen"
+			position="bottom"
+			header="Actions"
+			:blockScroll="true"
+			class="esd-action-sheet"
+			data-testid="action-sheet"
+		>
+			<!-- DocMovableActions is a multi-root fragment, so it is wrapped (not
+			     class-bound) to stack the affordances as full-width sheet rows. -->
+			<div v-if="actionSheetOpen" class="esd-action-sheet-list">
+				<DocMovableActions
+					:primary-forward="primaryForward"
+					:acting="acting"
+					:show-more="showMoreAction"
+					:show-ewb="showEwbAction"
+					:show-sms="showSmsAction"
+					:show-whats-app="showWhatsAppAction"
+					:show-cancel="showCancelAction"
+					@toggle-more="(e) => moreMenu.toggle(e)"
+					@toggle-ewb="(e) => ewbMenu.toggle(e)"
+					@open-sms="() => { sendSmsOpen = true; actionSheetOpen = false }"
+					@open-whatsapp="() => { sendWhatsAppOpen = true; actionSheetOpen = false }"
+					@cancel="() => { actionSheetOpen = false; onCancel() }"
+				/>
+			</div>
+		</Drawer>
 
 		<!-- Loading (doc load, or create-mode meta load) — skeleton mimics the
 		     grouped detail cards instead of a blank flash. -->
@@ -404,7 +458,7 @@
 		</Message>
 
 		<!-- ════════════════ CREATE / EDIT FORM ════════════════ -->
-		<div v-else-if="isFormMode" class="form-layout">
+		<div v-else-if="isFormMode" class="form-layout" @focusout="onFormFocusOut">
 			<div class="detail-main form-card">
 				<!-- Prompt-named create: a REQUIRED Name input at the very top of the
 				     form. Prompt-named doctypes (Item Master Template, FG Item Master
@@ -428,7 +482,7 @@
 							<InputText
 								id="fld-__newname"
 								v-model="newName"
-								:invalid="!newName.trim()"
+								:invalid="showNameInvalid"
 								class="fld"
 							/>
 							<small class="field-help">Required — set a unique name for this document.</small>
@@ -465,7 +519,7 @@
 							:id="'fld-' + f.fieldname"
 							v-model="form[f.fieldname]"
 							:disabled="isReadOnly(f)"
-							:invalid="isMissing(f)"
+							:invalid="showInvalid(f)"
 							class="fld"
 						/>
 
@@ -475,7 +529,7 @@
 							:id="'fld-' + f.fieldname"
 							v-model="form[f.fieldname]"
 							:disabled="isReadOnly(f)"
-							:invalid="isMissing(f)"
+							:invalid="showInvalid(f)"
 							rows="3"
 							autoResize
 							class="fld"
@@ -487,7 +541,7 @@
 							:id="'fld-' + f.fieldname"
 							v-model="form[f.fieldname]"
 							:disabled="isReadOnly(f)"
-							:invalid="isMissing(f)"
+							:invalid="showInvalid(f)"
 							:minFractionDigits="f.minFraction"
 							:maxFractionDigits="f.maxFraction"
 							:suffix="f.suffix"
@@ -502,7 +556,7 @@
 							:modelValue="toDateObj(form[f.fieldname])"
 							@update:modelValue="form[f.fieldname] = fromDateObj($event, false)"
 							:disabled="isReadOnly(f)"
-							:invalid="isMissing(f)"
+							:invalid="showInvalid(f)"
 							dateFormat="dd-mm-yy"
 							showIcon
 							iconDisplay="input"
@@ -517,7 +571,7 @@
 							:modelValue="toDateObj(form[f.fieldname])"
 							@update:modelValue="form[f.fieldname] = fromDateObj($event, true)"
 							:disabled="isReadOnly(f)"
-							:invalid="isMissing(f)"
+							:invalid="showInvalid(f)"
 							dateFormat="dd-mm-yy"
 							showTime
 							hourFormat="24"
@@ -539,7 +593,7 @@
 								:id="'fld-' + f.fieldname"
 								v-model="form[f.fieldname]"
 								:disabled="isReadOnly(f)"
-								:invalid="isMissing(f)"
+								:invalid="showInvalid(f)"
 								placeholder="HH:MM:SS"
 								class="fld time-input"
 							/>
@@ -574,7 +628,7 @@
 							:options="f.options"
 							@change="onFieldChanged(f.fieldname)"
 							:disabled="isReadOnly(f)"
-							:invalid="isMissing(f)"
+							:invalid="showInvalid(f)"
 							showClear
 							placeholder="Select…"
 							class="fld"
@@ -592,7 +646,7 @@
 							:target-doctype="f.isDynamic ? form[f.dynamicField] : f.linkTarget"
 							:search-handler="linkSearchHandlerFor(f)"
 							:disabled="isReadOnly(f)"
-							:invalid="isMissing(f)"
+							:invalid="showInvalid(f)"
 							@item-select="onFieldChanged(f.fieldname)"
 							@change="onFieldChanged(f.fieldname)"
 						/>
@@ -653,6 +707,7 @@
 						:show-allow-zero-rate="!!pv.showAllowZeroRate"
 						:show-secondary-toggle="!!pv.showSecondaryToggle"
 						:locked-items="!!pv.lockedItems"
+						:qty-control="dcQtyControl"
 						:editable="true"
 						@change="onGridChange"
 					/>
@@ -1424,6 +1479,7 @@ import Select from "primevue/select"
 import AutoComplete from "primevue/autocomplete"
 import Tooltip from "primevue/tooltip"
 import Dialog from "primevue/dialog"
+import Drawer from "primevue/drawer"
 import Popover from "primevue/popover"
 import Checkbox from "primevue/checkbox"
 import Menu from "primevue/menu"
@@ -1539,6 +1595,15 @@ function onDocUpdated(data) {
 // Q5: the required field that blocked the last save attempt — drives the inline
 // "missing field" banner that complements the toast and lives until resolved.
 const missingField = ref(null) // { label, fieldname } | null
+// Calm create-forms (Premium-review Track-1): a blank required field must NOT
+// paint red at first sight — invalid styling waits until the user has TOUCHED
+// the field (blur) OR has attempted a save. `touchedFields` collects blurred
+// fieldnames (via the form's delegated @focusout); `saveAttempted` flips on the
+// first onSave. Neither gate changes the real required-check (isMissing +
+// firstMissingRequired still block the save) — only WHEN the red is shown. Both
+// reset per fresh form in clearForm().
+const touchedFields = reactive(new Set())
+const saveAttempted = ref(false)
 // Q6: edit/create dirty tracking. Set true on the first real user edit; gates the
 // Discard confirm + the route-leave / beforeunload guards so 15 typed cells
 // aren't lost to a mis-tap on a tablet. `dirtyArmed` suppresses the programmatic
@@ -1638,9 +1703,30 @@ const showDocNav = computed(() => !props.embedded && mode.value === "view" && !i
 // canCancel, WhatsApp-enabled map, doc.supplier) is untouched — arrangement
 // never grants capability (§15).
 const uiStore = useUiConfigStore()
+// dcEntry.qtyControl (item 5): the Delivery Challan ENTRY size-pivot qty inputs
+// render as a +/- stepper or a large finger-target field. Only for DC create
+// (the entry flow); every other doctype/mode passes "input" → today's plain
+// field, byte-identical. The store getter is null-safe; absent knob → "input".
+// Presentation only — the same grid, the same buildPayload/onSave save path.
+const dcQtyControl = computed(() =>
+	isDeliveryChallan.value && mode.value === "create" ? uiStore.dcEntryKnob?.qtyControl || "input" : "input",
+)
 const actionsPlacement = computed(() => {
 	const p = uiStore.actionsKnob?.placement
-	return p === "inline" || p === "floating" ? p : "header"
+	return p === "inline" || p === "floating" || p === "action-sheet" ? p : "header"
+})
+// actions.dialogPosition (item 9) — anchors the DIALOGS the movable actions open
+// (Print / Send SMS / Send WhatsApp) on the server's 9-position overlay grid,
+// exactly as entry.popupPosition anchors the create popup. Server vocab is
+// hyphenated (OVERLAY_POSITIONS: "top-left" …); PrimeVue Dialog's `position`
+// wants the unhyphenated form. Absent / off-vocabulary → "center" = PrimeVue's
+// own default, so the knob-absent path binds the SAME value it renders today
+// (parity law). This never moves the action-SHEET drawer — the sheet is the
+// Drawer-bottom pattern by identity.
+const PV_DIALOG_POSITIONS = new Set(["center", "top", "bottom", "left", "right", "topleft", "topright", "bottomleft", "bottomright"])
+const actionDialogPosition = computed(() => {
+	const p = String(uiStore.actionsKnob?.dialogPosition || "center").replace(/-/g, "")
+	return PV_DIALOG_POSITIONS.has(p) ? p : "center"
 })
 // actions.items — optional FILTER over the movable set (server ACTION_ITEMS
 // vocabulary). Absent / non-array → null = all of today's actions render.
@@ -1758,6 +1844,20 @@ const showInlineActions = computed(
 const showFloatingActions = computed(
 	() => actionsPlacement.value === "floating" && mode.value === "view" && !!doc.value && anyMovableAction.value,
 )
+// placement "action-sheet" (item 9): the header shows ONE "Actions" trigger; the
+// same movable affordances live in a bottom Drawer opened on tap (STACK_DECISION:
+// Drawer-bottom IS the action sheet). Same view-mode/doc/anyMovableAction gate as
+// the inline strip — never an empty trigger, never a form's Save covered.
+const showActionSheetTrigger = computed(
+	() => actionsPlacement.value === "action-sheet" && mode.value === "view" && !!doc.value && anyMovableAction.value,
+)
+const actionSheetOpen = ref(false)
+// The sheet only opens from the trigger (which requires the gate above); force it
+// shut the instant the gate drops (mode leaves view, doc unloads, placement/knob
+// changes) so a stale sheet can never linger over an edit form.
+watch(showActionSheetTrigger, (ok) => {
+	if (!ok) actionSheetOpen.value = false
+})
 
 const activeTab = ref("details")
 
@@ -2694,7 +2794,14 @@ async function setFormField(fieldname, value) {
 	return true
 }
 
-defineExpose({ isDirty, isFormMode, setFormField })
+// `save` is exposed so the dcEntry "wizard-steps" host can fire the SAME onSave
+// from its final Review step (never a new save path — it calls the identical
+// buildPayload/onSave/useDoc.save the form's own Save button runs, and the
+// embedded create still emits `saved` for the host to close on). It resolves
+// `true` on success and `false` when BLOCKED/REJECTED, so the host can reveal
+// its hidden form on a blocked save. Inert for full-page rendering — nothing
+// calls it there.
+defineExpose({ isDirty, isFormMode, setFormField, save: onSave, focusFirstInvalid })
 
 // ── meta field map ──
 const metaFieldMap = computed(() => {
@@ -2960,11 +3067,35 @@ function isEditableMetaField(mf) {
 	return true
 }
 
-// Missing-required check (used to mark inputs invalid + block save).
+// Missing-required check — the TRUTH used to block the save (firstMissingRequired).
 function isMissing(f) {
 	if (!isReqd(f)) return false
 	const v = form[f.fieldname]
 	return v === null || v === undefined || v === ""
+}
+
+// Calm create-forms: the VISIBLE invalid state. A field is only styled red once
+// the user has interacted with it (blurred it) or has tried to save — so an
+// untouched blank create form stays calm at first paint. Same truth as isMissing,
+// just gated on touch/attempt. (isMissing itself still governs the actual block.)
+function showInvalid(f) {
+	if (!isMissing(f)) return false
+	return saveAttempted.value || touchedFields.has(f.fieldname)
+}
+
+// Same touched-or-attempted gate for the prompt-named create Name input.
+const showNameInvalid = computed(
+	() => !newName.value.trim() && (saveAttempted.value || touchedFields.has("__newname")),
+)
+
+// Delegated blur: focusout bubbles (blur doesn't), so one handler on the form
+// container marks whichever field wrapper (#field-<fieldname>) the focus left as
+// touched — covering every control type, including the custom LinkField, without
+// wiring @blur on each. Once touched, showInvalid may light that field red.
+function onFormFocusOut(e) {
+	const wrap = e.target?.closest?.("[id^='field-']")
+	if (!wrap || !wrap.id) return
+	touchedFields.add(wrap.id.slice("field-".length))
 }
 
 // ── form builders ──
@@ -2990,6 +3121,10 @@ function blankValueFor(mf) {
 
 function clearForm() {
 	for (const k of Object.keys(form)) delete form[k]
+	// Fresh form ⇒ calm again: forget touched fields + any prior save attempt so
+	// a rebuilt create/edit form never opens with required fields pre-reddened.
+	touchedFields.clear()
+	saveAttempted.value = false
 }
 
 function buildCreateForm() {
@@ -3954,6 +4089,19 @@ async function focusMissingField(fieldname) {
 	if (input && typeof input.focus === "function") input.focus()
 }
 
+// Re-run the missing-field scroll+focus AFTER the caller has made this form
+// visible again. onSave's own focusMissingField fires while the wizard-steps
+// host is still on its Review step (this form is display:none), where
+// scrollIntoView/focus no-op — so a blocked wizard save would leave the reddened
+// field off-screen with only a toast. The host awaits its step switch back to
+// the form, then calls this so the first invalid field is actually brought into
+// view + focused. No-op when nothing is flagged or the target is a child cell
+// (fieldname null — the toast/banner names the row instead). Inert full-page.
+function focusFirstInvalid() {
+	const fn = missingField.value?.fieldname
+	if (fn) focusMissingField(fn)
+}
+
 // Q15: a failed high-stakes action (submit/cancel/delete/amend) both toasts and
 // pins the full server message in the closable banner so the user can read the
 // (often multi-line) validation/stock error while deciding what to do.
@@ -3987,7 +4135,16 @@ async function refreshFromConflict() {
 	await reloadView()
 }
 
+// Resolves `true` on a successful create/edit save, `false` when the save was
+// BLOCKED or REJECTED (a missing required field, or a server error) — the
+// wizard-steps host awaits this to decide whether to reveal its hidden step-2
+// form (banner + reddened field) so the block is visible, not just toasted. The
+// form's own Save button and the Ctrl+S shortcut ignore the return (unchanged).
 async function onSave() {
+	// A save attempt reveals every unfilled required field at once (calm-forms
+	// gate) — set before the guards so the invalid styling lights up even on the
+	// runs that return early below.
+	saveAttempted.value = true
 	// Prompt-named create guard: block here with a clear toast rather than letting
 	// the server return "Please set Document Name" after the round-trip. Only fires
 	// for prompt-named doctypes in create mode; non-prompt doctypes skip this.
@@ -3995,14 +4152,14 @@ async function onSave() {
 		missingField.value = { label: `${registry.value?.label || doctype.value} Name`, fieldname: "__newname" }
 		toast.warn("Name is required", "Set a unique name for this document before saving.")
 		focusMissingField("__newname")
-		return
+		return false
 	}
 	const missing = firstMissingRequired()
 	if (missing) {
 		missingField.value = missing
 		toast.warn("Missing required field", `“${missing.label}” is required.`)
 		focusMissingField(missing.fieldname)
-		return
+		return false
 	}
 	missingField.value = null
 	serverError.value = null
@@ -4051,6 +4208,7 @@ async function onSave() {
 			// full-page (no listener).
 			if (props.embedded) emit("saved", props.id)
 		}
+		return true
 	} catch (e) {
 		// Q15: keep the full (often multi-line) server message visible in a
 		// closable banner — the toast alone vanishes before the user can read it.
@@ -4064,13 +4222,14 @@ async function onSave() {
 				refresh: true,
 			}
 			toast.warn("Document changed", "Refresh to get the latest version.")
-			return
+			return false
 		}
 		serverError.value = {
 			title: mode.value === "create" ? "Could not create" : "Could not save",
 			lines: errorLines(e),
 		}
 		toast.error("Save failed", e.message)
+		return false
 	}
 }
 
@@ -5253,7 +5412,8 @@ function stripHtml(s) {
 .form-card {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-4);
+	/* theme.density (§4 item 10) — stack rhythm rides --yrp-gap; absent ⇒ shipped 16px. */
+	gap: var(--yrp-gap, var(--space-4));
 }
 .form-section .form-grid {
 	margin: 0;
@@ -5499,7 +5659,8 @@ function stripHtml(s) {
 .details-stack {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
-	gap: 16px;
+	/* theme.density (§4 item 10) — card grid gap rides --yrp-gap; absent ⇒ shipped 16px. */
+	gap: var(--yrp-gap, 16px);
 	align-items: start;
 }
 @media (min-width: 1400px) {
@@ -5891,5 +6052,29 @@ function stripHtml(s) {
 }
 .srv-err__actions {
 	margin-top: 8px;
+}
+</style>
+
+<!-- Unscoped on purpose: the action-sheet Drawer (placement "action-sheet",
+     item 9) teleports to <body>, so scoped rules never reach it. Namespaced
+     under esd-action-sheet-*. Stacks the movable affordances — a horizontal
+     button fragment in the header — as full-width sheet rows for the floor. -->
+<style>
+.esd-action-sheet .p-drawer-content {
+	background: var(--esd-bg);
+}
+.esd-action-sheet-list {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 6px 2px 12px;
+}
+.esd-action-sheet-list .cta-wrap,
+.esd-action-sheet-list .cta-wrap > .p-button,
+.esd-action-sheet-list > .p-button {
+	width: 100%;
+}
+.esd-action-sheet-list .p-button {
+	justify-content: center;
 }
 </style>

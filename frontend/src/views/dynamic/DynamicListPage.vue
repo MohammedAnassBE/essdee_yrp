@@ -883,10 +883,16 @@ const overlayDetailActive = computed(() => {
 	const p = uiStore.detailKnob?.position
 	return p === "right" || p === "center" || p === "bottom-sheet"
 })
+// DC entry variants hosted as an OVERLAY by DocOverlayHost (opened via the same
+// pushed ?new=1 protocol as the entry popup): the bottom-sheet family
+// (size-matrix / sheet-tiles / touch-rows) and the centered wizard dialog
+// (wizard-steps). "inline-grid" is NOT here — it expands in-page, not as an
+// overlay. Item 5.
+const DC_OVERLAY_ENTRY_VARIANTS = new Set(["size-matrix", "sheet-tiles", "touch-rows", "wizard-steps"])
 const overlayEntryActive = computed(
 	() =>
 		!OVERLAY_EXCLUDED_ROUTES.has(props.docRoute) &&
-		(uiStore.entryKnob?.mode === "popup" || dcEntryVariant.value === "size-matrix"),
+		(uiStore.entryKnob?.mode === "popup" || DC_OVERLAY_ENTRY_VARIANTS.has(dcEntryVariant.value)),
 )
 
 // ── DC entry variants (dcEntry knob — Delivery Challan ONLY, spec §6.4) ────
@@ -898,10 +904,11 @@ const overlayEntryActive = computed(
 // + New behaves exactly as today (parity law). qtyControl: only "input" (the
 // existing size-pivot grid inputs) is implemented — other values are ignored
 // client-side; the server already soft-warns on them.
+const DC_ENTRY_KNOWN_VARIANTS = new Set(["size-matrix", "inline-grid", "wizard-steps", "sheet-tiles", "touch-rows"])
 const dcEntryVariant = computed(() => {
 	if (props.docRoute !== "delivery-challan") return null
 	const v = uiStore.dcEntryKnob?.variant
-	return v === "size-matrix" || v === "inline-grid" ? v : null
+	return DC_ENTRY_KNOWN_VARIANTS.has(v) ? v : null
 })
 // supplierPicker "chips" in the INLINE panel (the sheet's chips live in
 // DocOverlayHost); "select"/absent → the form's untouched Link field only.

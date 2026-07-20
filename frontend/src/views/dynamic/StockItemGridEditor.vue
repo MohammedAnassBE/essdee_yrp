@@ -101,7 +101,7 @@
 							v-for="pv in group.primary_attribute_values"
 							:key="'gpv-' + pv"
 							:header="pv"
-							:style="{ width: '92px' }"
+							:style="{ width: sizeColWidth }"
 						>
 							<template #body="{ data }">
 								<InputNumber
@@ -110,7 +110,12 @@
 									:min="0"
 									:minFractionDigits="0"
 									:maxFractionDigits="3"
+									:showButtons="qtyShowButtons"
+									buttonLayout="horizontal"
+									incrementButtonIcon="pi pi-plus"
+									decrementButtonIcon="pi pi-minus"
 									class="cell-num"
+									:class="qtyCellClass"
 									inputClass="cell-num-input"
 									fluid
 								/>
@@ -126,7 +131,7 @@
 						</Column>
 					</template>
 					<template v-else>
-						<Column header="Qty" :style="{ width: '110px' }">
+						<Column header="Qty" :style="{ width: singleColWidth }">
 							<template #body="{ data }">
 								<InputNumber
 									v-if="editable && data.values.default"
@@ -134,7 +139,12 @@
 									:min="0"
 									:minFractionDigits="0"
 									:maxFractionDigits="3"
+									:showButtons="qtyShowButtons"
+									buttonLayout="horizontal"
+									incrementButtonIcon="pi pi-plus"
+									decrementButtonIcon="pi pi-minus"
 									class="cell-num"
+									:class="qtyCellClass"
 									inputClass="cell-num-input"
 									fluid
 								/>
@@ -314,7 +324,12 @@
 							:min="0"
 							:minFractionDigits="0"
 							:maxFractionDigits="3"
+							:showButtons="qtyShowButtons"
+							buttonLayout="horizontal"
+							incrementButtonIcon="pi pi-plus"
+							decrementButtonIcon="pi pi-minus"
 							class="cell-num"
+							:class="qtyCellClass"
 							fluid
 						/>
 						<template v-for="cf in editableCellFields" :key="'cf-' + pv + '-' + cf.name">
@@ -349,7 +364,12 @@
 						:min="0"
 						:minFractionDigits="0"
 						:maxFractionDigits="3"
+						:showButtons="qtyShowButtons"
+						buttonLayout="horizontal"
+						incrementButtonIcon="pi pi-plus"
+						decrementButtonIcon="pi pi-minus"
 						class="cell-num qty-single-input"
+						:class="qtyCellClass"
 						fluid
 					/>
 					<template v-for="cf in editableCellFields" :key="'cfs-' + cf.name">
@@ -475,9 +495,34 @@ const props = defineProps({
 	// for vouchers whose item set is derived from a parent doc (DC's items
 	// come from the WO; the user only adjusts qtys).
 	lockedItems: { type: Boolean, default: false },
+	// dcEntry.qtyControl (Delivery Challan entry, item 5): how the primary qty
+	// inputs render. "input" (default) → today's plain field, byte-identical.
+	// "stepper" → PrimeVue InputNumber showButtons (a +/- stepper). "big-touch"
+	// → a large finger-target field for the floor. Presentation only — the same
+	// v-model, the same grouped payload. Any other doctype/context passes the
+	// default, so this leaf is inert everywhere the knob is absent (parity law).
+	qtyControl: { type: String, default: "input" },
 })
 
 const toast = useAppToast()
+
+// ── qty control presentation (dcEntry.qtyControl) ──
+// Opt-in only: default "input" leaves qtyShowButtons false + the class map empty
+// + the column widths at today's values, so the grid renders byte-identical.
+const qtyShowButtons = computed(() => props.qtyControl === "stepper")
+const qtyCellClass = computed(() => ({
+	"cell-num--stepper": props.qtyControl === "stepper",
+	"cell-num--big": props.qtyControl === "big-touch",
+}))
+// Widen the qty columns just enough for the +/- buttons / bigger font; the
+// committed-rows table already scrolls inside .dc-tablewrap so this never
+// overflows the sheet.
+const sizeColWidth = computed(() =>
+	props.qtyControl === "stepper" ? "132px" : props.qtyControl === "big-touch" ? "104px" : "92px",
+)
+const singleColWidth = computed(() =>
+	props.qtyControl === "stepper" ? "150px" : props.qtyControl === "big-touch" ? "128px" : "110px",
+)
 
 // Q6: let the parent (DocDetail) treat grid edits as "unsaved changes". The grid
 // keeps its own state (not in the parent `form`), so without this a quantity/rate
@@ -1126,6 +1171,23 @@ defineExpose({ getItems, loadData, hasItems })
 	/* fill the cell — PrimeVue's fluid sets the inner input to width:1% which
 	   collapses to ~26px on our block-display host; force full width. */
 	width: 100%;
+	text-align: center;
+}
+/* dcEntry.qtyControl "big-touch": large finger-target field for the floor.
+   Opt-in only — no rule fires unless the parent passes qtyControl="big-touch". */
+.cell-num--big :deep(.cell-num-input),
+.cell-num--big :deep(.p-inputnumber-input) {
+	font-size: 1.15rem;
+	padding-top: 10px;
+	padding-bottom: 10px;
+	font-weight: 700;
+}
+/* dcEntry.qtyControl "stepper": compact +/- buttons hug the input. */
+.cell-num--stepper :deep(.p-inputnumber-button) {
+	width: 2rem;
+}
+.cell-num--stepper :deep(.cell-num-input),
+.cell-num--stepper :deep(.p-inputnumber-input) {
 	text-align: center;
 }
 .cell-ro {

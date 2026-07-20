@@ -118,11 +118,13 @@
 		/>
 	</Dialog>
 
-	<!-- Entry: DC size-matrix bottom sheet (dcEntry.variant "size-matrix",
-	     demo-7). The real /web DC form already IS the size-pivot editor —
-	     the sheet only re-hosts the SAME embedded create-mode DocDetail
-	     (same autofill, same buildPayload/onSave save path) and adds the
-	     quick-pick chip strips above it. -->
+	<!-- Entry: DC bottom-sheet family (dcEntry.variant "size-matrix" / "sheet-tiles"
+	     / "touch-rows"). The real /web DC form already IS the size-pivot editor —
+	     the sheet only re-hosts the SAME embedded create-mode DocDetail (same
+	     autofill, same buildPayload/onSave save path) and adds the quick-pick
+	     chip strips above it. The variant/qtyControl only restyle the SAME grid
+	     (qtyControl flows through DocDetail); no bespoke deliverable render, no
+	     new save path. -->
 	<Drawer
 		:visible="dcSheetVisible"
 		position="bottom"
@@ -130,12 +132,14 @@
 		:blockScroll="true"
 		:closeOnEscape="false"
 		class="esd-doc-overlay-drawer esd-doc-overlay-drawer--bottom"
+		:class="dcVariant ? 'esd-dc-sheet--' + dcVariant : null"
 		@update:visible="onVisibleChange"
 	>
 		<DcEntryChips
 			v-if="dcSheetVisible"
 			show-wo-chips
-			:show-supplier-chips="dcSupplierChips"
+			:show-supplier-chips="dcSupplierStrip"
+			:supplier-style="dcSupplierStyle"
 			:active-work-order="dcPickedWo"
 			:active-supplier="dcPickedSupplier"
 			@pick-wo="onPickWo"
@@ -152,19 +156,140 @@
 			@saved="onSaved"
 		/>
 	</Drawer>
+
+	<!-- Entry: DC wizard-steps (dcEntry.variant "wizard-steps", demo-2). A
+	     centered Dialog. The PrimeVue Stepper is the step-header SHELL only; the
+	     step content is hand-rolled and the embedded create-mode DocDetail stays
+	     mounted (v-show) across steps so its form state — and the SAME
+	     buildPayload/onSave save path — survives the WO -> Items -> Job-worker ->
+	     Review walk. Steps 1 & 3 are quick-pick helpers that relay through the
+	     form's setFormField exactly as the size-matrix chips do; step 4 fires the
+	     form's own onSave via the exposed save(). -->
+	<Dialog
+		:visible="dcWizardVisible"
+		modal
+		:dismissableMask="true"
+		:closeOnEscape="false"
+		:header="createTitle"
+		:blockScroll="true"
+		class="esd-doc-overlay-dialog esd-dc-wizard"
+		:style="{ width: 'min(1080px, 94vw)' }"
+		@update:visible="onVisibleChange"
+	>
+		<template v-if="dcWizardVisible">
+			<Stepper :value="wizardStep" linear class="esd-dc-wizard-steps">
+				<StepList>
+					<Step value="1">Work Order</Step>
+					<Step value="2">Items</Step>
+					<Step value="3">Job-worker</Step>
+					<Step value="4">Review</Step>
+				</StepList>
+			</Stepper>
+
+			<!-- Step 1: Work Order picker.
+			     A chip tap auto-fills + auto-advances (onWizardPickWo). But the
+			     strip only lists the 8 most-recent submitted WOs, so on a busy
+			     floor the target WO may not be a chip (or the strip may be empty) —
+			     the search box below reaches ANY submitted/open Work Order through
+			     the SAME setFormField relay, so step 1 is never a dead-end. And
+			     "Continue to form" keeps the form's OWN work_order Link (step 2)
+			     as a third always-available path — step 1 is a helper, never a
+			     gate, matching every other DC entry variant. -->
+			<div v-show="wizardStep === '1'" class="esd-dc-wizard-panel">
+				<DcEntryChips
+					show-wo-chips
+					:active-work-order="dcPickedWo"
+					@pick-wo="onWizardPickWo"
+				/>
+				<div class="esd-dc-wizard-search">
+					<label class="esd-dc-wizard-search-label">Or search any Work Order</label>
+					<LinkField
+						v-model="wizardWoSearch"
+						target-doctype="Work Order"
+						:filters="WO_SEARCH_FILTERS"
+						:dropdown="false"
+						placeholder="Search Work Order by number…"
+						@item-select="onWizardWoSearchSelect"
+					/>
+				</div>
+				<p class="esd-dc-wizard-hint">Pick a recent Work Order, search for any Work Order above, or Continue and set it on the form — its deliverable items load either way.</p>
+				<div class="esd-dc-wizard-nav">
+					<button type="button" class="esd-dc-wizard-btn ghost" @click="onRequestClose">Cancel</button>
+					<button type="button" class="esd-dc-wizard-btn primary" @click="wizardStep = '2'">Continue to form →</button>
+				</div>
+			</div>
+
+			<!-- Step 2: the SAME embedded create form (kept mounted across steps) -->
+			<div v-show="wizardStep === '2'" class="esd-dc-wizard-panel esd-dc-wizard-panel--doc">
+				<DocDetail
+					v-if="dcWizardVisible"
+					ref="createRef"
+					key="ov-new"
+					:doc-route="docRoute"
+					id="new"
+					embedded
+					@close="closeOverlay"
+					@saved="onSaved"
+				/>
+				<div class="esd-dc-wizard-nav">
+					<button type="button" class="esd-dc-wizard-btn ghost" @click="wizardStep = '1'">← Back</button>
+					<button type="button" class="esd-dc-wizard-btn primary" @click="wizardStep = '3'">Continue →</button>
+				</div>
+			</div>
+
+			<!-- Step 3: Job-worker quick-pick -->
+			<div v-show="wizardStep === '3'" class="esd-dc-wizard-panel">
+				<DcEntryChips
+					show-supplier-chips
+					:supplier-style="dcSupplierStyle"
+					:active-supplier="dcPickedSupplier"
+					@pick-supplier="onWizardPickSupplier"
+				/>
+				<p class="esd-dc-wizard-hint">Choose the Job-worker (or set it on the form in the previous step).</p>
+				<div class="esd-dc-wizard-nav">
+					<button type="button" class="esd-dc-wizard-btn ghost" @click="wizardStep = '2'">← Back</button>
+					<button type="button" class="esd-dc-wizard-btn primary" @click="wizardStep = '4'">Continue →</button>
+				</div>
+			</div>
+
+			<!-- Step 4: Review + Save (fires the form's own onSave) -->
+			<div v-show="wizardStep === '4'" class="esd-dc-wizard-panel">
+				<div class="esd-dc-wizard-summary">
+					<div class="esd-dc-wizard-srow"><span>Work Order</span><strong>{{ dcPickedWo || "— set on the form" }}</strong></div>
+					<div class="esd-dc-wizard-srow"><span>Job-worker</span><strong>{{ dcPickedSupplier || "— set on the form" }}</strong></div>
+					<p class="esd-dc-wizard-hint">Review the quantities you entered in the Items step, then save. Missing required fields are flagged on the form.</p>
+				</div>
+				<div class="esd-dc-wizard-nav">
+					<button type="button" class="esd-dc-wizard-btn ghost" @click="wizardStep = '3'">← Back</button>
+					<button type="button" class="esd-dc-wizard-btn primary" @click="onWizardSave">Save Delivery Challan</button>
+				</div>
+			</div>
+		</template>
+	</Dialog>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { onBeforeRouteUpdate, useRoute, useRouter } from "vue-router"
 import Dialog from "primevue/dialog"
 import Drawer from "primevue/drawer"
+// PrimeVue Stepper (installed 4.5.5) is the wizard-steps SHELL — the step header
+// only. The step CONTENT is hand-rolled below and the embedded DocDetail stays
+// mounted across steps (v-show), so no StepPanels: StepPanels unmount the
+// inactive panel, which would drop the create form's state between steps.
+import Stepper from "primevue/stepper"
+import StepList from "primevue/steplist"
+import Step from "primevue/step"
 import { useUiConfigStore } from "@yrp/web-engine"
 import { useAppConfirm } from "@/composables/useConfirm"
 import { useAppToast } from "@/composables/useToast"
 import { getRegistryByRoute } from "@/config/doctypes"
 import DcEntryChips from "./DcEntryChips.vue"
 import DocDetail from "./DocDetail.vue"
+// The SAME Link/typeahead component the create form uses for its own work_order
+// field — reused in wizard step 1 so the user can reach ANY submitted/open Work
+// Order, not just the recent-8 quick-pick chips.
+import LinkField from "@/components/LinkField.vue"
 
 const props = defineProps({
 	docRoute: { type: String, required: true },
@@ -197,24 +322,38 @@ const detailPosition = computed(() => {
 })
 const entryPopup = computed(() => uiStore.entryKnob?.mode === "popup")
 
-// ── DC entry variant (dcEntry knob — Delivery Challan lists ONLY) ──────────
-// "size-matrix" (demo-7): the same ?new=1 opens the bottom-sheet entry
-// INSTEAD of the entry.mode popup — the doctype-specific knob wins over the
-// generic `entry` for DC. Knob absent / other variants / other doctypes →
-// this stays false and nothing changes (parity law).
-const dcSizeMatrix = computed(
-	() => props.docRoute === "delivery-challan" && uiStore.dcEntryKnob?.variant === "size-matrix",
+// ── DC entry variants (dcEntry knob — Delivery Challan lists ONLY) ─────────
+// The same ?new=1 opens a DC-specific entry overlay INSTEAD of the entry.mode
+// popup — the doctype-specific knob wins over the generic `entry` for DC. Two
+// overlay shapes, all re-hosting the SAME embedded create-mode DocDetail (same
+// autofill, same buildPayload/onSave save path — presentation only):
+//   BOTTOM-SHEET family (bottom Drawer + WO/Job-worker quick-pick chips):
+//     "size-matrix" (demo-7), "sheet-tiles" (demo-3), "touch-rows" (demo-4).
+//     They differ only by qtyControl / supplierPicker and a cosmetic body class.
+//   "wizard-steps" (demo-2): a centered Dialog with a PrimeVue Stepper shell
+//     guiding WO pick -> Items -> Job-worker -> Review + Save.
+// Knob absent / other variants / other doctypes → all stay false and nothing
+// changes (parity law).
+const dcVariant = computed(() =>
+	props.docRoute === "delivery-challan" ? uiStore.dcEntryKnob?.variant || null : null,
 )
-// supplierPicker "chips" → Job-worker quick-pick strip; "select"/absent →
-// the form's untouched Link field only.
-const dcSupplierChips = computed(() => uiStore.dcEntryKnob?.supplierPicker === "chips")
+const DC_BOTTOM_SHEET_VARIANTS = new Set(["size-matrix", "sheet-tiles", "touch-rows"])
+const dcBottomSheet = computed(() => DC_BOTTOM_SHEET_VARIANTS.has(dcVariant.value))
+const dcWizard = computed(() => dcVariant.value === "wizard-steps")
+const dcOverlayActive = computed(() => dcBottomSheet.value || dcWizard.value)
+// supplierPicker "chips"/"buttons" → Job-worker quick-pick strip (the STYLE
+// differs); "select"/absent → the form's untouched Link field only.
+const dcSupplierPicker = computed(() => uiStore.dcEntryKnob?.supplierPicker || "select")
+const dcSupplierStrip = computed(() => dcSupplierPicker.value === "chips" || dcSupplierPicker.value === "buttons")
+const dcSupplierStyle = computed(() => (dcSupplierPicker.value === "buttons" ? "buttons" : "chips"))
 
 const drawerVisible = computed(
 	() => !!detailName.value && (detailPosition.value === "right" || detailPosition.value === "bottom-sheet"),
 )
 const centerVisible = computed(() => !!detailName.value && detailPosition.value === "center")
-const entryVisible = computed(() => createOpen.value && entryPopup.value && !dcSizeMatrix.value)
-const dcSheetVisible = computed(() => createOpen.value && dcSizeMatrix.value)
+const entryVisible = computed(() => createOpen.value && entryPopup.value && !dcOverlayActive.value)
+const dcSheetVisible = computed(() => createOpen.value && dcBottomSheet.value)
+const dcWizardVisible = computed(() => createOpen.value && dcWizard.value)
 
 // entry.popupPosition uses the server's hyphenated 9-position vocabulary
 // ("top-left" …); PrimeVue Dialog's `position` prop wants the unhyphenated
@@ -241,12 +380,28 @@ const createRef = ref(null)
 // active chip; the form state stays inside DocDetail.
 const dcPickedWo = ref("")
 const dcPickedSupplier = ref("")
-watch(dcSheetVisible, (v) => {
-	if (!v) {
-		dcPickedWo.value = ""
-		dcPickedSupplier.value = ""
-	}
-})
+// wizard-steps step-1 typeahead value (transient — cleared after a pick relays).
+const wizardWoSearch = ref("")
+// Desk parity (delivery_challan.js set_query / config/fields/delivery-challan.js):
+// a DC targets ONLY submitted, not-closed Work Orders — the SAME filter the
+// form's own work_order Link search uses. LinkField's default search runs
+// searchLink("Work Order", q, filters), so step 1 reaches EVERY valid WO, not
+// just the recent-8 chips.
+const WO_SEARCH_FILTERS = { docstatus: 1, open_status: ["!=", "Close"] }
+// wizard-steps active step ("1".."4"), reset with the picks whenever the DC
+// entry overlay (sheet OR wizard) closes.
+const wizardStep = ref("1")
+watch(
+	() => dcSheetVisible.value || dcWizardVisible.value,
+	(open) => {
+		if (!open) {
+			dcPickedWo.value = ""
+			dcPickedSupplier.value = ""
+			wizardWoSearch.value = ""
+			wizardStep.value = "1"
+		}
+	},
+)
 // setFormField returns false while the embedded create form is still building
 // (its getdoctype round-trip usually outlasts the chips' small getList) — a
 // pick landing in that window would otherwise highlight the chip while the
@@ -259,6 +414,53 @@ async function onPickWo(name) {
 async function onPickSupplier(name) {
 	if (await createRef.value?.setFormField("supplier", name)) dcPickedSupplier.value = name
 	else toast.info("Form is still loading", "Tap the Job-worker again in a moment.")
+}
+
+// ── wizard-steps handlers ────────────────────────────────────────────────────
+// Same setFormField relay as the sheet chips (identical assign + autofill
+// cascade); the wizard only adds step navigation. A WO pick auto-advances to the
+// Items step (demo-2). Save fires the embedded form's own onSave via the exposed
+// save() — the SAME buildPayload/onSave/useDoc.save path, and the create still
+// emits `saved` for onSaved to close + refresh the list.
+async function onWizardPickWo(name) {
+	if (await createRef.value?.setFormField("work_order", name)) {
+		dcPickedWo.value = name
+		wizardStep.value = "2"
+	} else {
+		toast.info("Form is still loading", "Tap the Work Order again in a moment.")
+	}
+}
+async function onWizardPickSupplier(name) {
+	if (await createRef.value?.setFormField("supplier", name)) dcPickedSupplier.value = name
+	else toast.info("Form is still loading", "Tap the Job-worker again in a moment.")
+}
+// Step-1 typeahead select (any submitted/open WO, not just the recent-8 chips):
+// relay through the SAME onWizardPickWo path the chips use — identical
+// setFormField autofill + auto-advance to the Items step — then clear the
+// transient search text.
+async function onWizardWoSearchSelect(e) {
+	const name = e?.value || ""
+	if (!name) return
+	wizardWoSearch.value = ""
+	await onWizardPickWo(name)
+}
+// Save fires the embedded form's own onSave via the exposed save() — the SAME
+// buildPayload/onSave/useDoc.save path. onSave resolves `false` when it was
+// BLOCKED (a missing required field, or a server reject): its red field +
+// banner live INSIDE the step-2 form, which is display:none on the Review step.
+// Every real form field (work_order, supplier, warehouses, the size-pivot grid)
+// lives on step 2, so that IS the step containing the first invalid field —
+// return there to reveal the form (banner + reddened field). onSave's own
+// focus/scroll fired while the form was still hidden (display:none → no-op), so
+// after the step is visible we re-run focusFirstInvalid on nextTick to actually
+// bring the offending field into view + focus it — never just a toast. A
+// successful save resolves `true` and the overlay closes via onSaved.
+async function onWizardSave() {
+	if ((await createRef.value?.save?.()) === false) {
+		wizardStep.value = "2"
+		await nextTick()
+		createRef.value?.focusFirstInvalid?.()
+	}
 }
 
 // Remove our query keys (detail + new) — the ONLY state the overlay owns.
@@ -274,7 +476,7 @@ function closeOverlay() {
 // The embedded instance currently showing (create overlays own createRef;
 // the detail overlays own detailRef).
 function activeInstance() {
-	return entryVisible.value || dcSheetVisible.value ? createRef.value : detailRef.value
+	return entryVisible.value || dcSheetVisible.value || dcWizardVisible.value ? createRef.value : detailRef.value
 }
 
 // X / scrim / host-Escape all land here. Query-only route changes never fire
@@ -360,7 +562,7 @@ function hasForeignOverlayOpen() {
 }
 function onHostKeydown(e) {
 	if (e.code !== "Escape" || e.isComposing) return
-	if (!(drawerVisible.value || centerVisible.value || entryVisible.value || dcSheetVisible.value)) return
+	if (!(drawerVisible.value || centerVisible.value || entryVisible.value || dcSheetVisible.value || dcWizardVisible.value)) return
 	if (hasForeignOverlayOpen()) return
 	onRequestClose()
 }
@@ -399,5 +601,97 @@ function onSaved(name) {
 .esd-doc-overlay-dialog .p-dialog-content {
 	overflow-y: auto;
 	background: var(--esd-bg);
+}
+
+/* ── DC entry: wizard-steps (item 5) ── */
+.esd-dc-wizard-steps {
+	margin-bottom: 14px;
+}
+.esd-dc-wizard-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+.esd-dc-wizard-hint {
+	font-size: 0.82rem;
+	color: var(--esd-muted);
+	margin: 0;
+}
+/* Step-1 "search any Work Order" typeahead — the escape hatch past the recent-8
+   chips. Same LinkField the form uses, laid out as a labelled row. */
+.esd-dc-wizard-search {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.esd-dc-wizard-search-label {
+	font-size: 0.72rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--esd-muted);
+}
+.esd-dc-wizard-nav {
+	display: flex;
+	justify-content: space-between;
+	gap: 10px;
+	padding-top: 6px;
+	border-top: 1px dashed var(--esd-line);
+	margin-top: 4px;
+}
+.esd-dc-wizard-btn {
+	border: 1px solid var(--esd-line);
+	border-radius: 8px;
+	padding: 9px 18px;
+	font-size: 0.88rem;
+	font-weight: 600;
+	cursor: pointer;
+	background: var(--esd-card);
+	color: var(--esd-ink-2);
+	transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.esd-dc-wizard-btn.ghost:hover {
+	border-color: var(--esd-accent2);
+	color: var(--esd-ink);
+}
+.esd-dc-wizard-btn.primary {
+	background: var(--esd-accent2);
+	border-color: var(--esd-accent2);
+	color: var(--esd-on-accent, #fff);
+}
+.esd-dc-wizard-btn.primary:hover {
+	filter: brightness(1.05);
+}
+.esd-dc-wizard-summary {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 14px 16px;
+	background: var(--esd-card);
+	border: 1px solid var(--esd-line);
+	border-radius: 10px;
+}
+.esd-dc-wizard-srow {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	font-size: 0.9rem;
+}
+.esd-dc-wizard-srow span {
+	color: var(--esd-muted);
+}
+.esd-dc-wizard-srow strong {
+	color: var(--esd-ink);
+	font-weight: 700;
+}
+
+/* ── DC entry: sheet-tiles / touch-rows cosmetic body accents (item 5).
+   The grid itself is the SAME DocDetail size-pivot editor; qtyControl does the
+   real touch sizing. These only add a little breathing room. ── */
+.esd-dc-sheet--touch-rows .p-drawer-content {
+	font-size: 1.02rem;
+}
+.esd-dc-sheet--sheet-tiles .child-editor {
+	border-radius: 12px;
 }
 </style>

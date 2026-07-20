@@ -13,6 +13,7 @@
 // the session may do — data and real permissions stay the SM's own (§15).
 import { useUiConfigStore } from "@yrp/web-engine"
 import { usePermissions } from "./usePermissions"
+import { noWebCreate } from "@/config/doctypes"
 
 export function usePreviewGate() {
 	const ui = useUiConfigStore()
@@ -24,6 +25,10 @@ export function usePreviewGate() {
 	}
 
 	function gateCreate(doctype) {
+		// Catalog-level create block wins over everything — even the previewed
+		// user's server-computed hints must not advertise a create affordance for
+		// a spine_consumer_config-synced doctype (config/doctypes.js noWebCreate()).
+		if (noWebCreate(doctype)) return false
 		if (ui.previewPermHints) return (ui.previewPermHints.can_create || []).includes(doctype)
 		return canCreate(doctype)
 	}

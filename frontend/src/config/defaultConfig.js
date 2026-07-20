@@ -4,6 +4,8 @@
 // scenario is structurally unreachable (the fallback is inside the JS already
 // executing). The fixture is in exact `bench export-fixtures` format: an array
 // of docs whose `config` field is a JSON *string*.
+import { ENGINE_SCHEMA_VERSION } from "@yrp/web-engine"
+
 import layouts from "../../../essdee_yrp/fixtures/ui_layout.json"
 
 // Guarded end-to-end (M8, 2026-07-15 review): a missing/renamed "Default" in
@@ -29,7 +31,7 @@ function loadFallback() {
 		// Mirrors the server skeleton (ui_config.get_skeleton): every key the
 		// renderer reads exists, so nothing crashes — nav/home are just empty.
 		return {
-			schema_version: 1,
+			schema_version: ENGINE_SCHEMA_VERSION,
 			nav: { groups: [], hidden: {} },
 			screens: { home: { blocks: [], hidden: {} } },
 			listViews: {},

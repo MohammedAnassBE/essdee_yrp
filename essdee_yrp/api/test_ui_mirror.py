@@ -49,6 +49,7 @@ from yrp.yrp.api.ui_config import (
 	COMPOSITE_PRIMITIVES,
 	COMPOSITE_SHOWIF_OPS,
 	COMPOSITE_SITE_FILE_RE,
+	CURRENT_SCHEMA_VERSION,
 	HOME_QUEUE_METRICS,
 	ICON_RE,
 	LIST_VIEW_KEYS,
@@ -330,6 +331,26 @@ class TestUIClientMirror(IntegrationTestCase):
 			"server mirror — update both sides together (and regenerate LAYOUT_SCHEMA.json)",
 		)
 
+	def test_engine_schema_version_locksteps_the_server(self):
+		"""stores/uiConfig.js ENGINE_SCHEMA_VERSION is a hand-maintained mirror
+		of ui_config.CURRENT_SCHEMA_VERSION — the two MUST bump in lockstep
+		(§2.3 rule 1). A server ahead of the engine makes guardPayload reject
+		every valid layout as 'schema_version > engine' and fall back to the
+		compiled Default fleet-wide; the reverse guess-interprets a newer shape
+		the engine cannot read. Parsed with the SAME integer-const regex the
+		composite-caps mirror above uses."""
+		src = _strip_line_comments(_read(os.path.join(self.engine_src, "stores", "uiConfig.js")))
+		m = re.search(r"export\s+const\s+ENGINE_SCHEMA_VERSION\s*=\s*(\d+)", src)
+		self.assertIsNotNone(m, "stores/uiConfig.js: could not locate ENGINE_SCHEMA_VERSION")
+		self.assertEqual(
+			int(m.group(1)),
+			CURRENT_SCHEMA_VERSION,
+			"ENGINE_SCHEMA_VERSION (apps/yrp/frontend/src/stores/uiConfig.js) and "
+			"ui_config.CURRENT_SCHEMA_VERSION have drifted — they bump in LOCKSTEP "
+			"(§2.3 rule 1). A server ahead of the engine makes the store reject every "
+			"valid layout as too-new and serve the compiled Default fleet-wide.",
+		)
+
 	# ── Track 1 item 3: the DEEP grammar mirror (validator vs grammar.js) ──
 
 	def _grammar_js(self):
@@ -570,3 +591,34 @@ class TestStatusColorPrototypeSafety(IntegrationTestCase):
 			f"list. rc={proc.returncode} stdout={proc.stdout!r} stderr={proc.stderr!r}",
 		)
 		self.assertIn("OK", proc.stdout)
+
+
+class TestBootSerializationFilter(IntegrationTestCase):
+	"""web.html boot-transport escaping barrier (2026-07-20 review finding).
+
+	``frappe.boot`` carries author-controlled strings straight into an inline
+	``<script>`` (nav labels/icons, home greeting/sub, story-scroller titles,
+	every layout string). Jinja's ``| tojson`` HTML-escapes ``</script>`` and
+	the quote characters so a benign string can never break out of that script
+	element; ``| json`` / ``| safe`` would emit the value raw, re-opening the
+	exact inline-script breakout the composite/nav validators refuse at save
+	time. This pins ``| tojson`` as the SOLE transport-escaping barrier so a
+	well-meaning filter swap fails red here instead of shipping an XSS sink.
+
+	House rule: read-only file parse, no ``frappe.db.commit()``."""
+
+	def test_boot_is_serialized_with_the_html_safe_tojson_filter(self):
+		web_html = os.path.join(frappe.get_app_path("essdee_yrp"), "www", "web.html")
+		src = _read(web_html)
+		self.assertRegex(
+			src,
+			r"frappe\.boot\s*=\s*\{\{\s*boot\s*\|\s*tojson\s*\}\}",
+			"web.html must serialize frappe.boot through the HTML-safe | tojson filter "
+			"(the sole transport-escaping barrier for author-controlled layout strings)",
+		)
+		self.assertNotRegex(
+			src,
+			r"boot\s*\|\s*(?:json|safe)\b",
+			"web.html serializes frappe.boot with | json or | safe — raw output re-opens "
+			"the inline-<script> breakout that | tojson closes for author-controlled strings",
+		)

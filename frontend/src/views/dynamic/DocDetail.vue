@@ -1332,7 +1332,7 @@
 								</template>
 								<template #content="{ item }">
 									<div class="tl-when">{{ formatDateTime(item.when) }} · {{ item.who }}</div>
-									<div class="tl-msg" v-html="item.text" />
+									<div class="tl-msg">{{ item.text }}</div>
 								</template>
 							</Timeline>
 							<div v-else class="empty-inline">No activity recorded.</div>

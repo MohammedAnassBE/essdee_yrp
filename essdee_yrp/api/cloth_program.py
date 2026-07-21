@@ -46,6 +46,19 @@ def _find_or_create_cpd(cloth_item, selection, tuples):
     cpd = frappe.get_doc("Item Production Detail", name) if name \
         else frappe.new_doc("Item Production Detail")
     cpd.item = cloth_item
+    # Item Production Detail.is_cloth_item is `fetch_from: item.is_cloth_item`
+    # with fetch_if_empty=0 -> Document._validate_links() (which runs BEFORE the
+    # doctype's validate hook, see frappe/model/document.py insert()/save())
+    # unconditionally re-pulls it from the linked Item on every save, silently
+    # discarding the `cpd.is_cloth_item = 1` set below. Live data: only 3 dummy
+    # test Items (TT-CLOTH/TT-CLOTH-CC/FT-CLOTH) carry Item.is_cloth_item=1 on
+    # essdee_yrp.site — every real cloth Item (e.g. Polyester Velour Fabric) is
+    # 0, which would flip the freshly-created CPD back to a GARMENT IPD and
+    # crash in ipd_validations.validate_garment_ipd (e.g. "Enter stiching
+    # attribute details"). The Item master is the source of truth the fetch
+    # reads from, so it must be stamped here too, not just the CPD field.
+    if not frappe.db.get_value("Item", cloth_item, "is_cloth_item"):
+        frappe.db.set_value("Item", cloth_item, "is_cloth_item", 1)
     cpd.is_cloth_item = 1
     cpd.yarn_item = selection.get("yarn_item")
     cpd.cloth_per_kg_yarn = flt(selection.get("cloth_per_kg_yarn"))

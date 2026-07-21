@@ -57,9 +57,11 @@ jspm_packages/
 
 # ── Frontend (Vite /web SPA) ──
 # node_modules already ignored above. The BUILT /web bundle in
-# essdee_yrp/public/frontend is committed BY DESIGN — prod serves it directly
-# and `bench build` does NOT rebuild it, so it must stay tracked. Ignore only
-# the local dev intermediates:
+# essdee_yrp/public/frontend is NO LONGER committed — production builds it on
+# deploy (essdee_yrp.web_build.build_web_spa, wired from after_migrate/after_build).
+# Ignore the build OUTPUT dir (NOT the frontend/src source):
+essdee_yrp/public/frontend/
+# Local dev intermediates:
 frontend/.vite/
 frontend/dist/
 frontend/stats.html

@@ -206,7 +206,10 @@ after_migrate = "essdee_yrp.setup.after_migrate"
 # ------------------
 # To hook into the build process
 
-# after_build = "essdee_yrp.build.after_build"
+# Rebuild the /web Vite SPA whenever `bench build` runs. `after_migrate` is the
+# guaranteed deploy trigger (see setup.after_migrate); this covers `bench build`
+# too. Both call the same source-hash-gated, never-raises helper.
+after_build = "essdee_yrp.web_build.build_web_spa"
 
 # Desk Notifications
 # ------------------

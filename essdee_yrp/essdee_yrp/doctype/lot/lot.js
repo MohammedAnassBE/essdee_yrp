@@ -448,7 +448,7 @@ frappe.ui.form.on("Lot", {
 function build_cloth_programs_dialog(frm, cloths) {
 	const fields = [];
 	cloths.forEach((c, i) => {
-		fields.push({ fieldtype: "Section Break", label: `${c.label} — ${c.cloth_item}` });
+		fields.push({ fieldtype: "Section Break", label: __(frappe.utils.escape_html(`${c.label} — ${c.cloth_item}`)) });
 		fields.push({ fieldtype: "Data", fieldname: `cloth_item_${i}`, hidden: 1, default: c.cloth_item });
 		fields.push({
 			label: "Yarn Item", fieldname: `yarn_item_${i}`, fieldtype: "Link", options: "Item", reqd: 1,
@@ -481,7 +481,7 @@ function build_cloth_programs_dialog(frm, cloths) {
 				greige_colour: values[`greige_colour_${i}`] || null,
 			})).filter((s) => s.yarn_item && s.knitting_process && s.cloth_per_kg_yarn > 0 && s.dyeing_process && s.greige_colour);
 			if (!selections.length) {
-				frappe.msgprint(__("Fill yarn, knitting + dyeing process, cloth-per-kg and greige colour for at least one cloth."));
+				frappe.msgprint(__("Fill yarn, processes, cloth-per-kg and greige colour for every cloth."));
 				return;
 			}
 			d.hide();

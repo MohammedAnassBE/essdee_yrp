@@ -84,6 +84,24 @@ frappe.ui.form.on("Lot", {
 			})
 			d.show()
 		})
+		if (!frm.is_new() && frm.doc.production_detail && frm.doc.production_order && !frm.doc.is_transferred) {
+			frm.add_custom_button("Build Cloth Programs", () => {
+				frappe.call({
+					method: "essdee_yrp.api.cloth_program.get_cloth_program_context",
+					args: { lot: frm.doc.name },
+					freeze: true,
+					freeze_message: __("Loading cloths..."),
+					callback: function (r) {
+						const cloths = (r.message && r.message.cloths) || [];
+						if (!cloths.length) {
+							frappe.msgprint(__("This lot's garment has no cloth items to build."));
+							return;
+						}
+						build_cloth_programs_dialog(frm, cloths);
+					}
+				});
+			});
+		}
 		$(frm.fields_dict['items_html'].wrapper).html("")
 		frm.item = new frappe.production.ui.LotOrder(frm.fields_dict['items_html'].wrapper)
 		if (frm.doc.__onload && frm.doc.__onload.item_details) {
@@ -426,3 +444,77 @@ frappe.ui.form.on("Lot", {
 // 	frm.doc.total_final_qty = total_final_qty;
 // 	frm.doc.total_cutting_qty = total_cut_qty;
 // }
+
+function build_cloth_programs_dialog(frm, cloths) {
+	const fields = [];
+	cloths.forEach((c, i) => {
+		fields.push({ fieldtype: "Section Break", label: `${c.label} — ${c.cloth_item}` });
+		fields.push({ fieldtype: "Data", fieldname: `cloth_item_${i}`, hidden: 1, default: c.cloth_item });
+		fields.push({
+			label: "Yarn Item", fieldname: `yarn_item_${i}`, fieldtype: "Link", options: "Item", reqd: 1,
+			default: c.default_yarn || "",
+			onchange: function () {
+				apply_yarn_profile(d, i, d.get_value(`yarn_item_${i}`));
+			}
+		});
+		fields.push({ label: "Cloth Kgs / 1 Kg Yarn", fieldname: `cloth_per_kg_yarn_${i}`, fieldtype: "Float", reqd: 1 });
+		fields.push({ fieldtype: "Column Break" });
+		fields.push({ label: "Knitting Process", fieldname: `knitting_process_${i}`, fieldtype: "Link", options: "Process", reqd: 1 });
+		fields.push({ label: "Dyeing Process", fieldname: `dyeing_process_${i}`, fieldtype: "Link", options: "Process", reqd: 1 });
+		fields.push({ label: "Compacting Process (recorded, not auto-chained in v1)", fieldname: `compacting_process_${i}`, fieldtype: "Link", options: "Process" });
+		fields.push({ label: "Greige Colour", fieldname: `greige_colour_${i}`, fieldtype: "Link", options: "Item Attribute Value", reqd: 1, get_query: () => ({ filters: { attribute_name: "Colour" } }) });
+	});
+
+	const d = new frappe.ui.Dialog({
+		title: "Build Cloth Programs",
+		size: "large",
+		fields: fields,
+		primary_action_label: "Build",
+		primary_action(values) {
+			const selections = cloths.map((c, i) => ({
+				cloth_item: values[`cloth_item_${i}`],
+				yarn_item: values[`yarn_item_${i}`],
+				cloth_per_kg_yarn: values[`cloth_per_kg_yarn_${i}`],
+				knitting_process: values[`knitting_process_${i}`],
+				dyeing_process: values[`dyeing_process_${i}`] || null,
+				compacting_process: values[`compacting_process_${i}`] || null,
+				greige_colour: values[`greige_colour_${i}`] || null,
+			})).filter((s) => s.yarn_item && s.knitting_process && s.cloth_per_kg_yarn > 0 && s.dyeing_process && s.greige_colour);
+			if (!selections.length) {
+				frappe.msgprint(__("Fill yarn, knitting + dyeing process, cloth-per-kg and greige colour for at least one cloth."));
+				return;
+			}
+			d.hide();
+			frappe.call({
+				method: "essdee_yrp.api.cloth_program.build_cloth_programs",
+				args: { lot: frm.doc.name, selections: JSON.stringify(selections), modified: frm.doc.modified },
+				freeze: true,
+				freeze_message: __("Building cloth programs..."),
+				callback: function (r) {
+					const n = (r.message && r.message.cloths_built) || 0;
+					frappe.show_alert({ message: __("Built {0} cloth program(s)", [n]), indicator: "green" });
+					frm.reload_doc();
+				}
+			});
+		}
+	});
+	// Spec prefill: derive each cloth's profile from its default (picked) yarn.
+	cloths.forEach((c, i) => { if (c.default_yarn) apply_yarn_profile(d, i, c.default_yarn); });
+	d.show();
+}
+
+function apply_yarn_profile(dialog, i, yarn) {
+	if (!yarn) return;
+	frappe.call({
+		method: "essdee_yrp.api.cloth_program.get_yarn_profile",
+		args: { yarn_item: yarn },
+		callback: function (r) {
+			const p = r.message || {};
+			if (p.knitting_process) dialog.set_value(`knitting_process_${i}`, p.knitting_process);
+			if (p.dyeing_process) dialog.set_value(`dyeing_process_${i}`, p.dyeing_process);
+			if (p.compacting_process) dialog.set_value(`compacting_process_${i}`, p.compacting_process);
+			if (p.cloth_per_kg_yarn) dialog.set_value(`cloth_per_kg_yarn_${i}`, p.cloth_per_kg_yarn);
+			if (p.greige_colour) dialog.set_value(`greige_colour_${i}`, p.greige_colour);
+		}
+	});
+}

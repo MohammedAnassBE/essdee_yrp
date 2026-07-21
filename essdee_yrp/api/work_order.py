@@ -219,6 +219,11 @@ def _add_planning_data(qty_rows, kind, lot, wo, fabric, ipd, step):
 			produced = _lookup_attr_sum(prev_received, in_key)
 			consumed = _lookup_attr_sum(
 				{(k[0] or "", k[1] or ""): v for k, v in consumed_in.items()}, in_key)
+			# NOTE (fan-out, 2026-07-21): piece-dyed rows may SHARE in_attrs (one
+			# greige at one dia fanned into several to_colours), so this per-row
+			# figure repeats the same input balance on every sibling row — it is
+			# per-INPUT availability, not a per-row allocation. Advisory only;
+			# consumption math aggregates per variant at calculate time.
 			available = flt(produced - consumed, 3)
 		plan = flt(planned.get(out_key))
 		already = flt(ordered_out.get((out_key[0] or None, out_key[1] or None))

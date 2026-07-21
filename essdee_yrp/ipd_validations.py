@@ -58,13 +58,8 @@ def validate_cloth_ipd(doc):
 	Fabric tabs: each mapping must be complete, and an exact (dia, from_colour,
 	to_colour) / (colour, from_dia, to_dia) row may appear only once — a blank
 	dia/colour means "applies to every value" and counts as its own key.
-	FAN-OUT is allowed (2026-07-21, owner-approved): one (dia, greige) may map
-	to SEVERAL to_colours (piece-dyed demand: one grey base dyed into many
-	garment colours) — each fan-out row builds its own matrix group with a
-	DISTINCT output (dia, to_colour), so the backward planner stays
-	deterministic. Only exact duplicates are rejected: they would build two
-	identical matrix groups sharing one output projection (AMBIGUOUS at solve
-	time)."""
+	Fan-out (several to-values per (dia, from)) is allowed; see
+	validate_swap_rows for the invariant and its rationale."""
 	# The engine resolves matrices per process_name with subset attr matching —
 	# two fabric tabs sharing one Process master would cross-match groups.
 	fabric_processes = [p for p in (doc.knitting_process, doc.dyeing_process, doc.compacting_process) if p]
@@ -121,7 +116,16 @@ def validate_swap_rows(rows, table_label, pin_field, from_field, to_field):
 	two identical matrix groups whose output projections collide, which
 	fabric_plan._load_output_indexed_groups marks AMBIGUOUS and the backward
 	solver then throws on. (Fan-IN — two froms to one to — stays allowed as
-	before and is guarded at solve time by the same AMBIGUOUS marker.)"""
+	before and is guarded at solve time by the same AMBIGUOUS marker.)
+
+	Wildcard caveat (pre-existing behavior, unchanged): mixing a CONCRETE row
+	with a blank-pin WILDCARD row for the same from-value keeps the classic
+	"specific beats wildcard" expansion — the concrete row overrides the
+	wildcard for ALL to-values at that pin (fabric_ipd._expand_mapping_indexes
+	keys its covered-set on (attr, pin, change_from) only), so a wildcard
+	fan-out branch does not surface at a concretely-pinned dia/colour. Loud
+	failure mode (requirement entry blocks with "No chain path produces"), and
+	the CPD auto-builder only ever emits concrete pins."""
 	seen = set()
 	for row in rows:
 		if not row.get(from_field) or not row.get(to_field):

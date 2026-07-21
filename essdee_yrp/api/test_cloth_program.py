@@ -205,3 +205,93 @@ class TestClothProgram(IntegrationTestCase):
                 "Item Production Detail", filters={"item": self.cloth, "is_cloth_item": 1})), 1)
         self.assertGreaterEqual(
             len(frappe.get_all("IPD Process Matrix", filters={"ipd": cpd_name})), 2)
+
+    def test_default_yarn_for_cloth_absent_then_present(self):
+        from essdee_yrp.api.cloth_program import _default_yarn_for_cloth
+        self.assertEqual(_default_yarn_for_cloth(self.cloth), "")  # no CPD yet
+        _find_or_create_cpd(self.cloth, self.selection, self.tuples)
+        self.assertEqual(_default_yarn_for_cloth(self.cloth), self.yarn)
+
+    def test_yarn_profile_absent_then_present(self):
+        from essdee_yrp.api.cloth_program import _yarn_profile
+        self.assertEqual(_yarn_profile(self.yarn), {})  # yarn never used on a CPD yet
+        _find_or_create_cpd(self.cloth, self.selection, self.tuples)
+        profile = _yarn_profile(self.yarn)
+        self.assertEqual(profile["knitting_process"], self.k_proc)
+        self.assertEqual(profile["dyeing_process"], self.d_proc)
+        self.assertEqual(profile["cloth_per_kg_yarn"], 3.0)
+        self.assertEqual(profile["greige_colour"], self.greige)
+
+    def test_cloth_rows_from_ipd(self):
+        from essdee_yrp.api.cloth_program import _cloth_rows_from_ipd
+        cloth2 = _ensure_item("_Test Cloth CPD NonBom")
+        ipd = frappe._dict(cloth_detail=[
+            frappe._dict(name1="Main Fabric", cloth=self.cloth, required_gsm=150, is_bom_item=1),
+            frappe._dict(name1="Rib", cloth=None, required_gsm=0, is_bom_item=0),  # dropped: no cloth Item link
+            # same cloth Item under a second label -> MERGED into one card
+            # (live: CS-34606 Half Sleeve Polo-1, Lots F0724-96/97)
+            frappe._dict(name1="Foam Fabric", cloth=self.cloth, required_gsm=180, is_bom_item=1),
+            # is_bom_item=0 with a real cloth Item -> INCLUDED (pins the validated
+            # include-all decision: 35 live is_bom_item=0 rows carry real demand)
+            frappe._dict(name1="Collar", cloth=cloth2, required_gsm=0, is_bom_item=0),
+        ])
+        rows = _cloth_rows_from_ipd(ipd)
+        self.assertEqual(rows, [
+            {"cloth_item": self.cloth, "label": "Main Fabric / Foam Fabric", "required_gsm": 150.0},
+            {"cloth_item": cloth2, "label": "Collar", "required_gsm": 0.0},
+        ])
+
+    def test_context_filters_to_demanded_cloths(self):
+        from essdee_yrp.api import cloth_program as cp
+        cloth2 = _ensure_item("_Test Cloth CPD Undemanded")
+        garment_name = "_Test Garment Filter IPD"
+        lot = frappe.get_doc({"doctype": "Lot", "lot_name": "_Test Filter Lot"}).insert(
+            ignore_permissions=True)
+        frappe.db.set_value("Lot", lot.name, "production_detail", garment_name)
+        garment = frappe._dict(name=garment_name, cloth_detail=[
+            frappe._dict(name1="Main Fabric", cloth=self.cloth, required_gsm=150, is_bom_item=1),
+            frappe._dict(name1="Piping Fabric", cloth=cloth2, required_gsm=0, is_bom_item=1)])
+        orig = frappe.get_cached_doc
+
+        def fake_cached(dt, name=None, *a, **k):
+            if dt == "Item Production Detail" and name == garment_name:
+                return garment
+            return orig(dt, name, *a, **k)
+
+        demand = {(self.cloth, self.dia, self.red): 1.0}  # cloth2 has NO demand
+        with patch.object(frappe, "get_cached_doc", side_effect=fake_cached), \
+                patch.object(cp, "compute_cloth_demand", return_value=demand):
+            ctx = cp.get_cloth_program_context(lot.name)
+        self.assertEqual([c["cloth_item"] for c in ctx["cloths"]], [self.cloth])
+
+    def test_get_cloth_program_context_composes(self):
+        from essdee_yrp.api import cloth_program as cp
+        # Seed the cloth's own CPD so default_yarn resolves.
+        _find_or_create_cpd(self.cloth, self.selection, self.tuples)
+        # The Lot's garment IPD MUST have a name DISTINCT from the cloth's CPD, so
+        # the reverse-query's get_cached_doc(cpd_name) reaches the REAL CPD (and is
+        # not intercepted by the fake garment). Set it at DB level to skip link
+        # validation for a stub-named garment IPD.
+        garment_name = "_Test Garment Ctx IPD"
+        lot = frappe.get_doc({"doctype": "Lot", "lot_name": "_Test Ctx Lot"}).insert(
+            ignore_permissions=True)
+        frappe.db.set_value("Lot", lot.name, "production_detail", garment_name)
+        garment = frappe._dict(name=garment_name, cloth_detail=[
+            frappe._dict(name1="Main Fabric", cloth=self.cloth, required_gsm=150, is_bom_item=1)])
+        orig = frappe.get_cached_doc
+
+        def fake_cached(dt, name=None, *a, **k):
+            # Only the garment IPD is faked; the cloth's real CPD is left untouched.
+            if dt == "Item Production Detail" and name == garment_name:
+                return garment
+            return orig(dt, name, *a, **k)
+
+        # The context now filters to DEMANDED cloths — patch the demand so the
+        # fake garment's single cloth survives the filter.
+        demand = {(self.cloth, self.dia, self.red): 1.0}
+        with patch.object(frappe, "get_cached_doc", side_effect=fake_cached), \
+                patch.object(cp, "compute_cloth_demand", return_value=demand):
+            ctx = cp.get_cloth_program_context(lot.name)
+        self.assertEqual(len(ctx["cloths"]), 1)
+        self.assertEqual(ctx["cloths"][0]["cloth_item"], self.cloth)
+        self.assertEqual(ctx["cloths"][0]["default_yarn"], self.yarn)

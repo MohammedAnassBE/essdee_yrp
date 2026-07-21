@@ -28,6 +28,7 @@ from frappe import _
 from frappe.utils import flt
 
 from essdee_yrp.api.work_order import _guard_not_modified
+from essdee_yrp.fabric_program import get_greige_colour
 from essdee_yrp.fabric_requirement import compute_cloth_demand
 
 
@@ -151,3 +152,91 @@ def build_cloth_programs(lot, selections, modified=None):
     lot_doc.fabric_requirement_details = frappe.as_json(_requirement_payload(payload))
     lot_doc.save(ignore_permissions=True)
     return {"cloths_built": len(built), "programs": built}
+
+
+def _cloth_rows_from_ipd(ipd):
+    """The popup cloth list: exactly ONE row per cloth Item. Multiple cloth_detail
+    labels mapping to the same cloth Item (live: CS-34606/34605 Half Sleeve
+    Polo-1's 'Main Fabric' + 'Foam Fabric' -> one Tencel fabric; Casual Designer
+    Vest - 4-1) are MERGED into one card ('label / label', first required_gsm
+    kept) — kills sel_by_cloth's last-card-wins ambiguity. Rows without a cloth
+    Item link are dropped; is_bom_item is deliberately ignored (include-all)."""
+    by_item = {}
+    rows = []
+    for c in ipd.get("cloth_detail") or []:
+        if not c.cloth:
+            continue
+        if c.cloth in by_item:
+            by_item[c.cloth]["label"] += " / " + c.name1
+            continue
+        row = {
+            "cloth_item": c.cloth,
+            "label": c.name1,
+            "required_gsm": flt(c.get("required_gsm")),
+        }
+        by_item[c.cloth] = row
+        rows.append(row)
+    return rows
+
+
+def _default_yarn_for_cloth(cloth_item):
+    """The cloth's own existing CPD yarn, used ONLY as the popup's starting yarn
+    (re-open convenience). Returns '' when the cloth has no CPD yet. The process /
+    ratio / greige PREFILL is NOT taken from here — it is derived from the picked
+    yarn via _yarn_profile (spec: reverse-query by yarn)."""
+    return frappe.db.get_value(
+        "Item Production Detail", {"item": cloth_item, "is_cloth_item": 1}, "yarn_item") or ""
+
+
+def _yarn_profile(yarn_item):
+    """Spec prefill: reverse-query ANY existing cloth IPD whose yarn_item = the
+    picked yarn and echo its processes / cloth_per_kg_yarn / greige. Most-recent
+    wins. Empty when the yarn has never been used on a cloth CPD."""
+    if not yarn_item:
+        return {}
+    name = frappe.db.get_value(
+        "Item Production Detail",
+        {"yarn_item": yarn_item, "is_cloth_item": 1},
+        "name",
+        order_by="modified desc",
+    )
+    if not name:
+        return {}
+    cpd = frappe.get_cached_doc("Item Production Detail", name)
+    return {
+        "knitting_process": cpd.get("knitting_process"),
+        "dyeing_process": cpd.get("dyeing_process"),
+        "compacting_process": cpd.get("compacting_process"),
+        "cloth_per_kg_yarn": flt(cpd.get("cloth_per_kg_yarn")),
+        "greige_colour": get_greige_colour(cpd),
+    }
+
+
+@frappe.whitelist()
+def get_cloth_program_context(lot):
+    """Popup context: the garment's cloth list + each cloth's default (own-CPD) yarn.
+    Filtered to DEMANDED cloths only — never-mapped zero-demand cloth_detail rows
+    (22 live IPDs, incl. 437765's 'Piping Fabric') would otherwise render
+    all-required cards that block submission and are then silently discarded.
+    Calling compute_cloth_demand here also surfaces the incomplete-IPD /
+    unmapped-label errors at popup-OPEN in both UIs. The per-field profile
+    prefill is fetched by the UI via get_yarn_profile once a yarn is known (on
+    open and on every yarn change)."""
+    lot_doc = frappe.get_doc("Lot", lot)
+    lot_doc.check_permission("read")
+    if not lot_doc.production_detail:
+        return {"cloths": []}
+    ipd = frappe.get_cached_doc("Item Production Detail", lot_doc.production_detail)
+    cloths = _cloth_rows_from_ipd(ipd)
+    demanded = {cloth for (cloth, _dia, _colour) in compute_cloth_demand(lot_doc.name)}
+    cloths = [c for c in cloths if c["cloth_item"] in demanded]
+    for c in cloths:
+        c["default_yarn"] = _default_yarn_for_cloth(c["cloth_item"])
+    return {"cloths": cloths}
+
+
+@frappe.whitelist()
+def get_yarn_profile(yarn_item):
+    """Reverse-query the profile (processes / ratio / greige) for a picked yarn.
+    Called by the Desk dialog + /web modal on yarn selection to prefill fields."""
+    return _yarn_profile(yarn_item)

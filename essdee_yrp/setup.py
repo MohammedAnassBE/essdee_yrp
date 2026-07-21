@@ -13,6 +13,8 @@ from frappe.contacts.doctype.address_template.address_template import (
 	get_default_address_template,
 )
 
+from essdee_yrp.web_build import build_web_spa
+
 
 def after_install():
 	ensure_default_address_template()
@@ -21,6 +23,7 @@ def after_install():
 def after_migrate():
 	ensure_default_address_template()
 	ensure_sd_yrp_consumer_config()
+	build_web_spa()
 
 
 def ensure_sd_yrp_consumer_config():

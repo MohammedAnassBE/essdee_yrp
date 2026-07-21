@@ -357,6 +357,16 @@
 			@calculated="onDeliverablesCalculated"
 		/>
 
+		<!-- Lot: Build Cloth Programs (CPD auto-builder) -->
+		<ClothProgramModal
+			v-if="isLot && doc"
+			v-model:visible="clothProgramOpen"
+			:lot="doc.name"
+			:production-detail="doc.production_detail"
+			:modified="doc.modified"
+			@built="onClothProgramsBuilt"
+		/>
+
 		<!-- Delivery Challan e-Waybill lifecycle + SMS modals (yrp_ewaybill_api).
 		     Each posts its own whitelisted action and reloads the view on success. -->
 		<EWaybillGenerateModal
@@ -1533,6 +1543,7 @@ import {
 // Q10: tooltip directive for gated (disabled-with-reason) action buttons.
 const vTooltip = Tooltip
 import FabricDeliverablesModal from "./FabricDeliverablesModal.vue"
+import ClothProgramModal from "./ClothProgramModal.vue"
 import StockItemGridEditor from "./StockItemGridEditor.vue"
 import WorkflowActions from "./WorkflowActions.vue"
 import LotOrderEditor from "./LotOrderEditor.vue"
@@ -1824,6 +1835,9 @@ const moreMenuModel = computed(() => {
 	if (isLot.value && canWrite(doctype.value)) {
 		items.push({ label: "Calculate Order Items", icon: "pi pi-refresh", command: () => onCalculateOrderItems() })
 		items.push({ label: "Calculate BOM", icon: "pi pi-calculator", command: () => onCalculateBom() })
+		if (doc.value.production_detail && doc.value.production_order && !isLotTransferred.value) {
+			items.push({ label: "Build Cloth Programs", icon: "pi pi-th-large", command: () => onBuildClothPrograms() })
+		}
 	}
 	if (canCreate(doctype.value)) {
 		items.push({ label: "Duplicate", icon: "pi pi-copy", command: () => onDuplicate() })
@@ -4429,6 +4443,18 @@ async function onDeliverablesCalculated(res) {
 		`${res?.deliverables ?? 0} deliverable(s) and ${res?.receivables ?? 0} receivable(s).`,
 		6000,
 	)
+}
+
+const clothProgramOpen = ref(false)
+function onBuildClothPrograms() {
+	if (!doc.value) return
+	clothProgramOpen.value = true
+}
+async function onClothProgramsBuilt(res) {
+	markLocalWrite()
+	await reloadView()
+	await hydrateLotForView()
+	toast.success("Cloth programs built", `${res?.cloths_built ?? 0} cloth program(s).`, 6000)
 }
 
 async function onCreateGrnFromWo() {

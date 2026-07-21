@@ -1060,6 +1060,22 @@
 						<div class="hero-fact__v" :title="f.value">{{ f.value }}</div>
 					</div>
 				</div>
+
+				<!-- detail.related workbench (case (b), 2026-07-21): the open
+				     document's linked records of OTHER DocTypes, composed into this
+				     screen as host-styled sections directly under the hero facts —
+				     so "one Lot, everything about it" reads at a glance, above the
+				     record's own tabs. Renders ONLY when the layout declares
+				     detail.related[<doctype>] AND the user can read the linked
+				     doctype AND rows exist — absent knob ⇒ nothing (parity law).
+				     View mode only; permission-gated fetch inside DetailRelated. -->
+				<DetailRelated
+					v-if="relatedSets.length && mode === 'view'"
+					:source-doctype="doctype"
+					:source-doc="doc"
+					:related="relatedSets"
+				/>
+
 				<Tabs v-model:value="activeTab">
 					<TabList>
 						<Tab value="details">Details</Tab>
@@ -1534,6 +1550,7 @@ import EWaybillVehicleModal from "./EWaybillVehicleModal.vue"
 import SendSmsModal from "./SendSmsModal.vue"
 import SendWhatsAppModal from "./SendWhatsAppModal.vue"
 import DocMovableActions from "./DocMovableActions.vue"
+import DetailRelated from "@/components/detail/DetailRelated.vue"
 import { useUiConfigStore } from "@yrp/web-engine"
 
 const props = defineProps({
@@ -1714,6 +1731,17 @@ const dcQtyControl = computed(() =>
 const actionsPlacement = computed(() => {
 	const p = uiStore.actionsKnob?.placement
 	return p === "inline" || p === "floating" || p === "action-sheet" ? p : "header"
+})
+// detail.related (case (b), 2026-07-21): the single-record cross-DocType
+// workbench. The layout may declare, per SOURCE doctype, a list of related-record
+// sets composed into THIS document's detail screen. Absent (no
+// detail.related[<doctype>]) → empty array → the DetailRelated host renders
+// nothing, byte-identical detail (parity law). DetailRelated owns fetch +
+// permissions (permission-gated get_related — arrangement never grants capability).
+const relatedSets = computed(() => {
+	const map = uiStore.detailKnob?.related
+	const sets = map && typeof map === "object" ? map[doctype.value] : null
+	return Array.isArray(sets) ? sets : []
 })
 // actions.dialogPosition (item 9) — anchors the DIALOGS the movable actions open
 // (Print / Send SMS / Send WhatsApp) on the server's 9-position overlay grid,

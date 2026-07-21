@@ -239,4 +239,6 @@ def get_cloth_program_context(lot):
 def get_yarn_profile(yarn_item):
     """Reverse-query the profile (processes / ratio / greige) for a picked yarn.
     Called by the Desk dialog + /web modal on yarn selection to prefill fields."""
+    if not frappe.has_permission("Item Production Detail", "read"):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
     return _yarn_profile(yarn_item)

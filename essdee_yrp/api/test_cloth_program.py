@@ -202,6 +202,17 @@ class TestClothProgram(IntegrationTestCase):
         with self.assertRaisesRegex(frappe.ValidationError, "duplicate mapping"):
             cpd.save(ignore_permissions=True)
 
+    def test_find_or_create_cpd_rejects_greige_drift(self):
+        """(e) A second selection with a DIFFERENT greige on the same shared cloth
+        CPD must be rejected up front — union-merging (Grey, Red) beside
+        (Ecru, Red) rows would create same-output matrix groups, making the
+        backward solver AMBIGUOUS at plan time (task-6 final-review guard)."""
+        _find_or_create_cpd(self.cloth, self.selection, self.tuples)
+        other_greige = _ensure_iav("Colour", "_Test Other Greige CPD")
+        drift_selection = dict(self.selection, greige_colour=other_greige)
+        with self.assertRaisesRegex(frappe.ValidationError, "already dyes from"):
+            _find_or_create_cpd(self.cloth, drift_selection, self.tuples)
+
     def test_solve_chain_backward_splits_kg_per_colour(self):
         """Fan-out demand solves without ambiguity: dyeing outputs stay split per
         colour, the greige (dyeing input / knitting output) SUMS the colours, and

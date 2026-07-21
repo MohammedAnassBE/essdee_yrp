@@ -73,6 +73,15 @@ def _find_or_create_cpd(cloth_item, selection, tuples):
         if d not in have_dias:
             cpd.append("knitting_dia_details", {"dia": d})
 
+    existing_dye_rows = cpd.get("dyeing_colour_details") or []
+    if existing_dye_rows and greige:
+        existing_from = existing_dye_rows[0].from_colour
+        if existing_from and existing_from != greige:
+            frappe.throw(_(
+                "Cloth {0}'s production detail already dyes from greige {1} — select {1}, "
+                "or clean up the CPD's dyeing rows first."
+            ).format(cloth_item, existing_from))
+
     if cpd.dyeing_process:
         have_dye = {(r.dia, r.from_colour, r.to_colour)
                     for r in (cpd.get("dyeing_colour_details") or [])}
@@ -94,9 +103,12 @@ def _find_or_create_cpd(cloth_item, selection, tuples):
     # declares a Dia value-change shape, the mapping-less compacting row still
     # enters get_fabric_steps as the LAST step with no matrix, so final_combos
     # falls back to the walked-chain cross product dias x (to_colours + greige) —
-    # a SUPERSET of demand, so reachability is still safe. compacting_process is
-    # still stamped on the CPD so the intended process is recorded (surfaced to the
-    # operator in both UIs as "recorded, not auto-chained in v1").
+    # a SUPERSET of demand, so reachability is still safe. NOTE: "reachability
+    # safe" is save-time only — the Phase-5 backward planner still errors on a
+    # shape-declared-but-unmapped compacting master (task-6 Finding #2, open).
+    # compacting_process is still stamped on the CPD so the intended process is
+    # recorded (surfaced to the operator in both UIs as "recorded, not
+    # auto-chained in v1").
 
     cpd.approval_status = "Approved"  # base field is UI-read_only; set server-side
     cpd.save(ignore_permissions=True)
@@ -141,7 +153,7 @@ def build_cloth_programs(lot, selections, modified=None):
     for (cloth, dia, colour), kg in demand.items():
         by_cloth.setdefault(cloth, {})[(dia, colour)] = flt(kg)
 
-    sel_by_cloth = {s["cloth_item"]: s for s in selections or []}
+    sel_by_cloth = {s.get("cloth_item"): s for s in (selections or []) if s.get("cloth_item")}
     built, payload = [], {}
     for cloth, tuples in by_cloth.items():
         selection = sel_by_cloth.get(cloth)

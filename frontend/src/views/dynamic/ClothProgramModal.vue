@@ -138,21 +138,25 @@ async function applyYarnProfile(e) {
 }
 
 async function onApply() {
-  const rows = entries.value
-    .filter((e) => e.yarn_item && e.knitting_process && e.cloth_per_kg_yarn > 0 && e.dyeing_process && e.greige_colour)
-    .map((e) => ({
-      cloth_item: e.cloth_item,
-      yarn_item: e.yarn_item,
-      cloth_per_kg_yarn: e.cloth_per_kg_yarn,
-      knitting_process: e.knitting_process,
-      dyeing_process: e.dyeing_process || null,
-      compacting_process: e.compacting_process || null,
-      greige_colour: e.greige_colour || null,
-    }))
-  if (!rows.length) {
-    toast.warn("Nothing to build", "Fill yarn, knitting + dyeing process, cloth-per-kg and greige colour for at least one cloth.")
+  // Owner decision: builds always cover ALL demanded cloths — a partial list
+  // would silently leave some cloths without a Lot Fabric Detail / requirement,
+  // so every entry must be complete before we call the server (parity with Desk).
+  const incomplete = entries.value.some(
+    (e) => !e.yarn_item || !e.knitting_process || !e.dyeing_process || !(e.cloth_per_kg_yarn > 0) || !e.greige_colour
+  )
+  if (incomplete) {
+    toast.error("Incomplete cloth data", "Fill yarn, processes, cloth-per-kg and greige colour for every cloth.")
     return
   }
+  const rows = entries.value.map((e) => ({
+    cloth_item: e.cloth_item,
+    yarn_item: e.yarn_item,
+    cloth_per_kg_yarn: e.cloth_per_kg_yarn,
+    knitting_process: e.knitting_process,
+    dyeing_process: e.dyeing_process || null,
+    compacting_process: e.compacting_process || null,
+    greige_colour: e.greige_colour || null,
+  }))
   applying.value = true
   try {
     const res = await callMethod("essdee_yrp.api.cloth_program.build_cloth_programs", {

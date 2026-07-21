@@ -28,7 +28,6 @@ from frappe import _
 from frappe.utils import flt
 
 from essdee_yrp.api.work_order import _guard_not_modified
-from essdee_yrp.fabric_program import get_greige_colour
 from essdee_yrp.fabric_requirement import compute_cloth_demand
 
 

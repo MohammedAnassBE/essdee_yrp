@@ -55,9 +55,16 @@ def validate_garment_ipd(doc):
 
 def validate_cloth_ipd(doc):
 	"""Cloth IPDs skip every garment validation (packing/stitching/cutting).
-	Fabric tabs: each mapping must be complete, and a (dia, from_colour) /
-	(colour, from_dia) pair may appear only once — a blank dia/colour means
-	"applies to every value" and counts as its own key."""
+	Fabric tabs: each mapping must be complete, and an exact (dia, from_colour,
+	to_colour) / (colour, from_dia, to_dia) row may appear only once — a blank
+	dia/colour means "applies to every value" and counts as its own key.
+	FAN-OUT is allowed (2026-07-21, owner-approved): one (dia, greige) may map
+	to SEVERAL to_colours (piece-dyed demand: one grey base dyed into many
+	garment colours) — each fan-out row builds its own matrix group with a
+	DISTINCT output (dia, to_colour), so the backward planner stays
+	deterministic. Only exact duplicates are rejected: they would build two
+	identical matrix groups sharing one output projection (AMBIGUOUS at solve
+	time)."""
 	# The engine resolves matrices per process_name with subset attr matching —
 	# two fabric tabs sharing one Process master would cross-match groups.
 	fabric_processes = [p for p in (doc.knitting_process, doc.dyeing_process, doc.compacting_process) if p]
@@ -105,16 +112,26 @@ def validate_cloth_ipd(doc):
 
 
 def validate_swap_rows(rows, table_label, pin_field, from_field, to_field):
+	"""Reject exact duplicate swap rows; allow fan-out.
+
+	The key is the full (pin, from, to) triple: the same (pin, from) mapping to
+	SEVERAL distinct to-values is valid piece-dyed fan-out (one greige at one
+	dia dyed into many colours — each row becomes its own matrix group with a
+	distinct output combo). An EXACT duplicate row is the real hazard: it emits
+	two identical matrix groups whose output projections collide, which
+	fabric_plan._load_output_indexed_groups marks AMBIGUOUS and the backward
+	solver then throws on. (Fan-IN — two froms to one to — stays allowed as
+	before and is guarded at solve time by the same AMBIGUOUS marker.)"""
 	seen = set()
 	for row in rows:
 		if not row.get(from_field) or not row.get(to_field):
 			frappe.throw(f"Row {row.idx} of {table_label}: enter both the from and to values.")
-		key = (row.get(pin_field) or "", row.get(from_field))
+		key = (row.get(pin_field) or "", row.get(from_field), row.get(to_field))
 		if key in seen:
 			pin = row.get(pin_field) or "all"
 			frappe.throw(
-				f"Row {row.idx} of {table_label}: duplicate mapping for "
-				f"{from_field.replace('_', ' ')} {row.get(from_field)} ({pin_field}: {pin})."
+				f"Row {row.idx} of {table_label}: duplicate mapping "
+				f"{row.get(from_field)} -> {row.get(to_field)} ({pin_field}: {pin})."
 			)
 		seen.add(key)
 

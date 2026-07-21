@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
+from frappe.utils import flt
 
 from essdee_yrp.api import cloth_program
 from essdee_yrp.api.cloth_program import (
@@ -19,6 +20,7 @@ from essdee_yrp.api.cloth_program import (
     build_cloth_programs,
 )
 from essdee_yrp.fabric_chain import final_combos
+from essdee_yrp.fabric_plan import solve_chain_backward
 
 
 def _ensure_item_group(name="_Test CPD Group"):
@@ -144,6 +146,129 @@ class TestClothProgram(IntegrationTestCase):
         self.assertIn(
             (self.dia, self.greige, self.red),
             [(r.dia, r.from_colour, r.to_colour) for r in cpd.dyeing_colour_details])
+
+    # ------------------------------------------------------------------
+    # Multi-colour fan-out (piece-dyed: ONE greige at ONE dia dyed into
+    # SEVERAL colours) — the owner-approved relaxation of the old
+    # one-colour-per-(dia, greige) validate_swap_rows rule (task-6 Finding #1).
+    # ------------------------------------------------------------------
+
+    def test_multicolour_fanout_seeds_one_dyeing_row_per_colour(self):
+        """(a) A cloth CPD with dyeing rows {dia, greige->Red} + {dia, greige->Blue}
+        must VALIDATE and SAVE — one dyeing_colour_details row per demanded
+        (dia, colour), all fanned out from the same greige."""
+        blue = _ensure_iav("Colour", "_Test Blue CPD")
+        tuples = {(self.dia, self.red): 30.0, (self.dia, blue): 20.5}
+        cpd_name = _find_or_create_cpd(self.cloth, self.selection, tuples)
+        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        self.assertEqual([r.dia for r in cpd.knitting_dia_details], [self.dia])
+        self.assertEqual(
+            {(r.dia, r.from_colour, r.to_colour) for r in cpd.dyeing_colour_details},
+            {(self.dia, self.greige, self.red), (self.dia, self.greige, blue)})
+
+    def test_multicolour_fanout_matrices_and_final_combos_cover_both(self):
+        """(b) The dyeing matrix must emit ONE group per (dia, to_colour) —
+        distinct outputs — and final_combos must contain both fan-out combos."""
+        blue = _ensure_iav("Colour", "_Test Blue CPD")
+        tuples = {(self.dia, self.red): 30.0, (self.dia, blue): 20.5}
+        cpd_name = _find_or_create_cpd(self.cloth, self.selection, tuples)
+        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+
+        combos = final_combos(cpd)
+        self.assertIn(frozenset({("Dia", self.dia), ("Colour", self.red)}), combos)
+        self.assertIn(frozenset({("Dia", self.dia), ("Colour", blue)}), combos)
+
+        dye_matrix = frappe.get_doc("IPD Process Matrix", {
+            "ipd": cpd_name, "process_name": self.d_proc})
+        outputs = set()
+        for _idx, group in dye_matrix.get_combinations_grouped().items():
+            out = (group.get("output") or [{}])[0]
+            outputs.add(frozenset((out.get("attrs") or {}).items()))
+        # one group per (dia, to_colour); no duplicate output projections, so the
+        # backward solver never sees AMBIGUOUS for fan-out demand
+        self.assertEqual(outputs, {
+            frozenset({("Dia", self.dia), ("Colour", self.red)}),
+            frozenset({("Dia", self.dia), ("Colour", blue)}),
+        })
+
+    def test_duplicate_exact_dyeing_rows_still_rejected(self):
+        """(c) The relaxation keeps the REAL invariant: an exact duplicate
+        (dia, from_colour, to_colour) row is meaningless and would build two
+        identical matrix groups (AMBIGUOUS at solve time) — still rejected."""
+        cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
+        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd.append("dyeing_colour_details", {
+            "dia": self.dia, "from_colour": self.greige, "to_colour": self.red})
+        with self.assertRaisesRegex(frappe.ValidationError, "duplicate mapping"):
+            cpd.save(ignore_permissions=True)
+
+    def test_solve_chain_backward_splits_kg_per_colour(self):
+        """Fan-out demand solves without ambiguity: dyeing outputs stay split per
+        colour, the greige (dyeing input / knitting output) SUMS the colours, and
+        the yarn figure scales by cloth_per_kg_yarn."""
+        blue = _ensure_iav("Colour", "_Test Blue CPD")
+        tuples = {(self.dia, self.red): 30.0, (self.dia, blue): 20.5}
+        cpd_name = _find_or_create_cpd(self.cloth, self.selection, tuples)
+        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+
+        red_key = frozenset({("Dia", self.dia), ("Colour", self.red)})
+        blue_key = frozenset({("Dia", self.dia), ("Colour", blue)})
+        step_plans, unreachable = solve_chain_backward(
+            cpd, {red_key: 30.0, blue_key: 20.5})
+        self.assertEqual(unreachable, [])
+        self.assertEqual([p["process_name"] for p in step_plans],
+                         [self.k_proc, self.d_proc])
+        knit, dye = step_plans
+        self.assertAlmostEqual(dye["outputs"][red_key], 30.0, places=3)
+        self.assertAlmostEqual(dye["outputs"][blue_key], 20.5, places=3)
+        greige_key = frozenset({("Dia", self.dia), ("Colour", self.greige)})
+        self.assertAlmostEqual(dye["inputs"][greige_key], 50.5, places=3)
+        self.assertAlmostEqual(knit["outputs"][greige_key], 50.5, places=3)
+        # yarn (attr-less conversion input) = greige kg / cloth_per_kg_yarn (3.0)
+        self.assertAlmostEqual(knit["inputs"][frozenset()], 50.5 / 3.0, places=3)
+
+    def test_build_cloth_programs_multicolour_end_to_end(self):
+        """(d) The whitelisted orchestrator on multi-colour demand: requirements
+        SPLIT per (dia, colour) (not collapsed), plan Built, knitting program per
+        dia sums the colours, ledger carries one dyeing output per colour."""
+        blue = _ensure_iav("Colour", "_Test Blue CPD")
+        lot = frappe.get_doc({"doctype": "Lot", "lot_name": "_Test CPD Lot Multi"}).insert(
+            ignore_permissions=True)
+        demand = {
+            (self.cloth, self.dia, self.red): 30.0,
+            (self.cloth, self.dia, blue): 20.5,
+        }
+        with patch.object(cloth_program, "compute_cloth_demand", return_value=demand):
+            res = build_cloth_programs(lot.name, [self.selection])
+        self.assertEqual(res["cloths_built"], 1)
+        lot.reload()
+
+        fab = [f for f in lot.lot_fabric_details if f.cloth_item == self.cloth]
+        self.assertEqual(len(fab), 1)
+        self.assertEqual(fab[0].plan_status, "Built")
+
+        reqs = {(r.dia, r.colour): flt(r.weight)
+                for r in lot.lot_fabric_requirements if r.cloth_item == self.cloth}
+        self.assertEqual(set(reqs), {(self.dia, self.red), (self.dia, blue)})
+        self.assertAlmostEqual(reqs[(self.dia, self.red)], 30.0, places=3)
+        self.assertAlmostEqual(reqs[(self.dia, blue)], 20.5, places=3)
+
+        programs = {r.dia: flt(r.weight)
+                    for r in lot.lot_fabric_programs if r.cloth_item == self.cloth}
+        self.assertEqual(set(programs), {self.dia})
+        self.assertAlmostEqual(programs[self.dia], 50.5, places=3)
+
+        dye_out = {(r.dia, r.colour): flt(r.planned_weight)
+                   for r in lot.lot_fabric_step_ledger
+                   if r.cloth_item == self.cloth and r.process_name == self.d_proc
+                   and r.side == "Output"}
+        self.assertAlmostEqual(dye_out[(self.dia, self.red)], 30.0, places=3)
+        self.assertAlmostEqual(dye_out[(self.dia, blue)], 20.5, places=3)
+        knit_out = {(r.dia, r.colour): flt(r.planned_weight)
+                    for r in lot.lot_fabric_step_ledger
+                    if r.cloth_item == self.cloth and r.process_name == self.k_proc
+                    and r.side == "Output"}
+        self.assertAlmostEqual(knit_out[(self.dia, self.greige)], 50.5, places=3)
 
     def test_ensure_lot_fabric_detail_find_or_append(self):
         lot = frappe.new_doc("Lot")

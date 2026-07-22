@@ -159,8 +159,11 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
         DuplicateEntryError, no second variant on the yarn Item)."""
         self._calculate()
         self._calculate()
+        # Assert the exact name set — a bare len() count would be fragile
+        # against sibling tests minting OTHER variants on the same yarn in the
+        # shared class transaction (review follow-up).
         variants = frappe.get_all("Item Variant", filters={"item": self.yarn}, pluck="name")
-        self.assertEqual(len(variants), 1)
+        self.assertEqual(variants, [self.yarn])
 
     def test_resolve_variant_keeps_declared_drops_undeclared(self):
         """_resolve_variant: attrs the Item DECLARES are always kept (full-set
@@ -174,3 +177,20 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
             {r.attribute: r.attribute_value for r in doc.attributes},
             {"Colour": self.red},
         )
+
+    def test_resolve_variant_nonempty_partial_subset(self):
+        """Partial path with a NON-empty subset (cloth declares Dia+Colour,
+        only Colour provided): the variant carries just Colour, stamps the
+        base-shaped tuple hash, and a second resolve reuses it."""
+        from essdee_yrp.api.work_order import _resolve_variant
+
+        v = _resolve_variant(self.cloth, {"Colour": self.red})
+        doc = frappe.get_doc("Item Variant", v)
+        self.assertEqual(doc.item, self.cloth)
+        self.assertEqual(
+            {r.attribute: r.attribute_value for r in doc.attributes},
+            {"Colour": self.red},
+        )
+        self.assertEqual(
+            doc.item_tuple_attribute, str(tuple(sorted({"Colour": self.red}.items()))))
+        self.assertEqual(_resolve_variant(self.cloth, {"Colour": self.red}), v)

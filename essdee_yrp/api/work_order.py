@@ -834,7 +834,7 @@ def _resolve_variant(item, attrs):
 	if item_doc.get("dependent_attribute"):
 		return get_or_create_variant(item, attrs)
 
-	declared = [row.attribute for row in item_doc.get("attributes") or []]
+	declared = _item_attribute_names(item)
 	filtered = {k: v for k, v in attrs.items() if k in declared}
 	if all(a in filtered for a in declared):
 		return get_or_create_variant(item, filtered)
@@ -850,7 +850,13 @@ def _resolve_variant(item, attrs):
 	])
 	if filtered:
 		variant.item_tuple_attribute = str(tuple(sorted(filtered.items())))
-	existing = frappe.db.exists("Item Variant", variant.get_name())
+	# Dedupe scoped to THIS item: variant names are hyphen-joins (item +
+	# values) and live items are themselves hyphen-named (TT-YARN + "GREY"
+	# aliases item TT-YARN-GREY), so a name-only lookup could silently link
+	# ANOTHER item's variant. A cross-item name collision instead fails
+	# loudly at insert (review follow-up).
+	existing = frappe.db.exists(
+		"Item Variant", {"name": variant.get_name(), "item": item_doc.name})
 	if existing:
 		return existing
 	variant.insert()

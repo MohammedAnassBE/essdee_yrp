@@ -19,7 +19,7 @@ from essdee_yrp.api.cloth_program import (
     _requirement_payload,
     build_cloth_programs,
 )
-from essdee_yrp.fabric_chain import final_combos
+from essdee_yrp.fabric_chain import final_combos, get_fabric_steps
 from essdee_yrp.fabric_plan import solve_chain_backward
 
 
@@ -146,6 +146,89 @@ class TestClothProgram(IntegrationTestCase):
         self.assertIn(
             (self.dia, self.greige, self.red),
             [(r.dia, r.from_colour, r.to_colour) for r in cpd.dyeing_colour_details])
+
+    # ------------------------------------------------------------------
+    # Persisted generic Fabric Processes rows (2026-07-22 fix). The legacy
+    # Knitting/Dyeing/Compacting tabs were REMOVED from the IPD form
+    # (patches/remove_cloth_ipd_fabric_tabs.py) — the generic Fabric
+    # Processes tab is the ONLY authoring/inspection UI, and it reads the
+    # persisted `fabric_processes` + `fabric_value_mappings` child tables.
+    # An auto-built CPD that fills only the hidden tab fields renders an
+    # EMPTY tab (owner bug, lot F0426-79/3), and the first step a user adds
+    # there flips get_fabric_process_rows to persisted-only — silently
+    # DROPPING knitting/dyeing from the chain and breaking the WO popup.
+    # ------------------------------------------------------------------
+
+    def test_find_or_create_cpd_persists_generic_fabric_rows(self):
+        """The auto-built CPD must carry the SAME persisted rows manual
+        authoring writes: knitting (seq 10, yarn->cloth, ratio) then dyeing
+        (seq 20, cloth->cloth, 1) with their value mappings — Introduce Dia
+        per knitting dia; Change Colour + Pin Dia per dyeing row."""
+        cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
+        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        self.assertEqual(
+            [(r.sequence, r.fabric_process, r.input_item, r.output_item, flt(r.quantity_ratio))
+             for r in sorted(cpd.fabric_processes, key=lambda r: r.sequence)],
+            [(10, self.k_proc, self.yarn, self.cloth, 3.0),
+             (20, self.d_proc, self.cloth, self.cloth, 1.0)])
+        self.assertEqual(
+            [(r.sequence, r.mapping_index, r.attribute, r.role, r.from_value or None, r.to_value or None)
+             for r in sorted(cpd.fabric_value_mappings,
+                             key=lambda r: (r.sequence, r.mapping_index, r.role))],
+            [(10, 0, "Dia", "Introduce", None, self.dia),
+             (20, 0, "Colour", "Change", self.greige, self.red),
+             (20, 0, "Dia", "Pin", self.dia, self.dia)])
+
+    def test_persisted_generic_rows_idempotent_and_chain_equivalent(self):
+        """A re-build must NOT duplicate persisted rows, and the chain read
+        from the PERSISTED rows (adapter now bypassed) must be identical to
+        the adapter's: same steps, same reachable final combos."""
+        _find_or_create_cpd(self.cloth, self.selection, self.tuples)
+        cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
+        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        self.assertEqual(len(cpd.fabric_processes), 2)
+        self.assertEqual(len(cpd.fabric_value_mappings), 3)
+        self.assertEqual(
+            [(s["position"], s["process_name"], s["shape"]) for s in get_fabric_steps(cpd)],
+            [(0, self.k_proc, "conversion"), (1, self.d_proc, "swap")])
+        self.assertIn(frozenset({("Dia", self.dia), ("Colour", self.red)}), final_combos(cpd))
+
+    def test_rebuild_preserves_custom_fabric_steps(self):
+        """A manually-added generic step OUTSIDE the managed tab sequences
+        (10/20/30) — e.g. an in-chain Washing at seq 40 — must survive a
+        re-build; the managed rows are refreshed (new dia appears)."""
+        cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
+        wash = _ensure_process("_Test Wash CPD")
+        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd.append("fabric_processes", {
+            "sequence": 40, "fabric_process": wash,
+            "input_item": self.cloth, "output_item": self.cloth, "quantity_ratio": 1})
+        cpd.save(ignore_permissions=True)
+
+        dia2 = _ensure_iav("Dia", "_Test 70 Dia CPD")
+        _find_or_create_cpd(self.cloth, self.selection,
+                            {(self.dia, self.red): 1.0, (dia2, self.red): 1.0})
+        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        by_seq = {r.sequence: r for r in cpd.fabric_processes}
+        self.assertEqual(set(by_seq), {10, 20, 40})
+        self.assertEqual(by_seq[40].fabric_process, wash)
+        knit_dias = {r.to_value for r in cpd.fabric_value_mappings
+                     if r.sequence == 10 and r.role == "Introduce"}
+        self.assertEqual(knit_dias, {self.dia, dia2})
+
+    def test_blank_yarn_skips_persisting_but_keeps_chain(self):
+        """input_item is REQD on IPD Fabric Process, and a PARTIAL persist
+        would disable the tab adapter and drop steps from the chain. With a
+        blank yarn nothing is persisted — the CPD still saves and the chain
+        still resolves through the adapter."""
+        sel = dict(self.selection, yarn_item=None)
+        cpd_name = _find_or_create_cpd(self.cloth, sel, self.tuples)
+        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        self.assertEqual(cpd.get("fabric_processes"), [])
+        self.assertEqual(cpd.get("fabric_value_mappings"), [])
+        self.assertEqual(
+            [s["process_name"] for s in get_fabric_steps(cpd)],
+            [self.k_proc, self.d_proc])
 
     # ------------------------------------------------------------------
     # Multi-colour fan-out (piece-dyed: ONE greige at ONE dia dyed into

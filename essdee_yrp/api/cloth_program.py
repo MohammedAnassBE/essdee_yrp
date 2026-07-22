@@ -28,8 +28,15 @@ from frappe import _
 from frappe.utils import flt
 
 from essdee_yrp.api.work_order import _guard_not_modified
+from essdee_yrp.fabric_ipd import synthesize_fabric_processes_from_tabs
 from essdee_yrp.fabric_program import get_greige_colour
 from essdee_yrp.fabric_requirement import compute_cloth_demand
+
+#: The adapter's fixed sequences for the 3 tab steps (knitting / dyeing /
+#: compacting). _persist_generic_fabric_rows owns EXACTLY these persisted
+#: sequences; any other sequence (a manually-authored washing/printing step)
+#: is never touched by the auto-builder.
+TAB_SEQUENCES = (10, 20, 30)
 
 
 def _find_or_create_cpd(cloth_item, selection, tuples):
@@ -110,9 +117,61 @@ def _find_or_create_cpd(cloth_item, selection, tuples):
     # recorded (surfaced to the operator in both UIs as "recorded, not
     # auto-chained in v1").
 
+    _persist_generic_fabric_rows(cpd)
     cpd.approval_status = "Approved"  # base field is UI-read_only; set server-side
     cpd.save(ignore_permissions=True)
     return cpd.name
+
+
+def _persist_generic_fabric_rows(cpd):
+    """Materialize the generic Fabric Processes rows (`fabric_processes` +
+    `fabric_value_mappings`) from the just-seeded tab fields — the SAME rows
+    manual authoring writes.
+
+    The legacy Knitting/Dyeing/Compacting tabs were REMOVED from the IPD form
+    (patches/remove_cloth_ipd_fabric_tabs.py): the generic Fabric Processes tab
+    is the only authoring/inspection UI, and it reads the persisted tables. A
+    tabs-only CPD renders that tab EMPTY (owner bug, lot F0426-79/3) and is one
+    UI-added step away from chain corruption — get_fabric_process_rows prefers
+    the persisted table the moment it has ANY row, silently dropping the
+    synthesized knitting/dyeing steps.
+
+    Persisting the adapter's own output (synthesize_fabric_processes_from_tabs)
+    verbatim guarantees the persisted path rebuilds byte-identical matrices —
+    _attach_persisted_mappings reconstitutes exactly these rows. Idempotent:
+    the managed TAB_SEQUENCES rows are replaced wholesale on every build; rows
+    at any other sequence (manually-authored extra steps) are preserved.
+
+    All-or-nothing guard: input_item/output_item are REQD on IPD Fabric
+    Process, and the knitting input (yarn_item) may legitimately be blank. A
+    PARTIAL persist would disable the tab adapter and drop the unpersistable
+    step from the chain — so persist nothing unless every synthesized row can
+    be persisted (the adapter keeps serving the chain, exactly as before)."""
+    synthesized = synthesize_fabric_processes_from_tabs(cpd)
+    if any(not (row.get("input_item") and row.get("output_item")) for row in synthesized):
+        return
+    managed = set(TAB_SEQUENCES)
+    cpd.set("fabric_processes",
+            [r for r in cpd.get("fabric_processes") or [] if r.sequence not in managed])
+    cpd.set("fabric_value_mappings",
+            [r for r in cpd.get("fabric_value_mappings") or [] if r.sequence not in managed])
+    for row in synthesized:
+        cpd.append("fabric_processes", {
+            "sequence": row.get("sequence"),
+            "fabric_process": row.get("fabric_process"),
+            "input_item": row.get("input_item"),
+            "output_item": row.get("output_item"),
+            "quantity_ratio": row.get("quantity_ratio"),
+        })
+        for m in row.get("value_mappings") or []:
+            cpd.append("fabric_value_mappings", {
+                "sequence": row.get("sequence"),
+                "mapping_index": m.get("mapping_index"),
+                "attribute": m.get("attribute"),
+                "role": m.get("role"),
+                "from_value": m.get("from_value"),
+                "to_value": m.get("to_value"),
+            })
 
 
 def _ensure_lot_fabric_detail(lot_doc, cloth_item, cpd_name):

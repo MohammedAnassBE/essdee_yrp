@@ -84,7 +84,7 @@ frappe.ui.form.on("Lot", {
 			})
 			d.show()
 		})
-		if (!frm.is_new() && frm.doc.production_detail && frm.doc.production_order && !frm.doc.is_transferred) {
+		if (!frm.is_new() && frm.doc.production_detail && !frm.doc.is_transferred) {
 			frm.add_custom_button("Build Cloth Programs", () => {
 				frappe.call({
 					method: "essdee_yrp.api.cloth_program.get_cloth_program_context",

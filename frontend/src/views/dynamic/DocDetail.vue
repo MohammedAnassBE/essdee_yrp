@@ -1835,7 +1835,7 @@ const moreMenuModel = computed(() => {
 	if (isLot.value && canWrite(doctype.value)) {
 		items.push({ label: "Calculate Order Items", icon: "pi pi-refresh", command: () => onCalculateOrderItems() })
 		items.push({ label: "Calculate BOM", icon: "pi pi-calculator", command: () => onCalculateBom() })
-		if (doc.value.production_detail && doc.value.production_order && !isLotTransferred.value) {
+		if (doc.value.production_detail && !isLotTransferred.value) {
 			items.push({ label: "Build Cloth Programs", icon: "pi pi-th-large", command: () => onBuildClothPrograms() })
 		}
 	}

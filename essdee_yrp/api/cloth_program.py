@@ -25,7 +25,7 @@ throws a clear message rather than letting Phase 4 fail opaquely.
 
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import cint, flt
 
 from essdee_yrp.api.work_order import _guard_not_modified
 from essdee_yrp.fabric_ipd import synthesize_fabric_processes_from_tabs
@@ -145,16 +145,33 @@ def _persist_generic_fabric_rows(cpd):
     All-or-nothing guard: input_item/output_item are REQD on IPD Fabric
     Process, and the knitting input (yarn_item) may legitimately be blank. A
     PARTIAL persist would disable the tab adapter and drop the unpersistable
-    step from the chain — so persist nothing unless every synthesized row can
-    be persisted (the adapter keeps serving the chain, exactly as before)."""
+    step from the chain — so with any unpersistable row nothing NEW is
+    persisted. Previously-persisted managed rows cannot be left behind either
+    (they would serve a STALE chain: old yarn input, freshly-seeded dias
+    missing from the Introduce mappings -> opaque reachability failure), so
+    they are cleared when that empties the table (the adapter then serves the
+    fresh tabs, pre-fix behavior exactly) and the build refuses loudly when
+    custom unmanaged steps would make the leftover table partial."""
     synthesized = synthesize_fabric_processes_from_tabs(cpd)
-    if any(not (row.get("input_item") and row.get("output_item")) for row in synthesized):
-        return
     managed = set(TAB_SEQUENCES)
-    cpd.set("fabric_processes",
-            [r for r in cpd.get("fabric_processes") or [] if r.sequence not in managed])
-    cpd.set("fabric_value_mappings",
-            [r for r in cpd.get("fabric_value_mappings") or [] if r.sequence not in managed])
+    keep_fp = [r for r in cpd.get("fabric_processes") or [] if cint(r.sequence) not in managed]
+    keep_vm = [r for r in cpd.get("fabric_value_mappings") or [] if cint(r.sequence) not in managed]
+
+    if any(not (row.get("input_item") and row.get("output_item")) for row in synthesized):
+        if not (cpd.get("fabric_processes") or cpd.get("fabric_value_mappings")):
+            return  # never persisted -> the tab adapter keeps serving the chain
+        if keep_fp or keep_vm:
+            frappe.throw(_(
+                "Cloth {0}: select a Yarn — its production detail carries custom fabric "
+                "steps, so the persisted knitting/dyeing steps cannot be refreshed "
+                "without the knitting input item."
+            ).format(cpd.item))
+        cpd.set("fabric_processes", [])
+        cpd.set("fabric_value_mappings", [])
+        return
+
+    cpd.set("fabric_processes", keep_fp)
+    cpd.set("fabric_value_mappings", keep_vm)
     for row in synthesized:
         cpd.append("fabric_processes", {
             "sequence": row.get("sequence"),
@@ -172,6 +189,18 @@ def _persist_generic_fabric_rows(cpd):
                 "from_value": m.get("from_value"),
                 "to_value": m.get("to_value"),
             })
+
+    # Renumber idx sequence-ordered: kept rows RETAIN their old idx while
+    # appended rows get idx=len(table) (BaseDocument.append), so a
+    # preserve-rebuild would persist DUPLICATE idx values and the Desk grid
+    # (ordered by idx) could render the chain out of order. The sort is
+    # stable, so within one sequence the synthesized order (Change before
+    # Pin per mapping group) is untouched.
+    for table in ("fabric_processes", "fabric_value_mappings"):
+        rows = sorted(cpd.get(table) or [], key=lambda r: cint(r.sequence))
+        for i, r in enumerate(rows, 1):
+            r.idx = i
+        cpd.set(table, rows)
 
 
 def _ensure_lot_fabric_detail(lot_doc, cloth_item, cpd_name):

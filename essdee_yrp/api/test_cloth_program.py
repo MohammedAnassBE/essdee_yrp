@@ -216,6 +216,62 @@ class TestClothProgram(IntegrationTestCase):
                      if r.sequence == 10 and r.role == "Introduce"}
         self.assertEqual(knit_dias, {self.dia, dia2})
 
+    def test_blank_yarn_rebuild_clears_stale_managed_rows(self):
+        """Review follow-up (Important #1): a REBUILD with a blank yarn on a CPD
+        whose managed rows were persisted earlier must CLEAR them — leaving them
+        would serve a stale chain (old yarn input, new dias missing from the
+        Introduce mappings -> opaque reachability failure). With the table
+        emptied the adapter serves the fresh tabs, pre-fix behavior exactly."""
+        _find_or_create_cpd(self.cloth, self.selection, self.tuples)
+        dia2 = _ensure_iav("Dia", "_Test 70 Dia CPD")
+        cpd_name = _find_or_create_cpd(
+            self.cloth, dict(self.selection, yarn_item=None),
+            {(self.dia, self.red): 1.0, (dia2, self.red): 1.0})
+        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        self.assertEqual(cpd.get("fabric_processes"), [])
+        self.assertEqual(cpd.get("fabric_value_mappings"), [])
+        self.assertEqual(
+            [s["process_name"] for s in get_fabric_steps(cpd)],
+            [self.k_proc, self.d_proc])
+        self.assertIn(frozenset({("Dia", dia2), ("Colour", self.red)}), final_combos(cpd))
+
+    def test_blank_yarn_rebuild_throws_when_custom_steps_present(self):
+        """Review follow-up (Important #1): when the CPD ALSO carries custom
+        unmanaged steps, clearing only the managed rows would leave a partial
+        table that drops knitting/dyeing from the chain — refuse loudly."""
+        cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
+        wash = _ensure_process("_Test Wash CPD")
+        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd.append("fabric_processes", {
+            "sequence": 40, "fabric_process": wash,
+            "input_item": self.cloth, "output_item": self.cloth, "quantity_ratio": 1})
+        cpd.save(ignore_permissions=True)
+        with self.assertRaisesRegex(frappe.ValidationError, "[Yy]arn"):
+            _find_or_create_cpd(
+                self.cloth, dict(self.selection, yarn_item=None), self.tuples)
+
+    def test_rebuild_renumbers_child_idx(self):
+        """Review follow-up (Important #2): kept rows retain their old idx while
+        appended rows get idx=len(table) — a preserve-rebuild would persist
+        DUPLICATE idx values and the Desk grid (ordered by idx) could render
+        the chain out of order. After a rebuild the fabric_processes idx must
+        be unique, gapless and sequence-ordered."""
+        cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
+        wash = _ensure_process("_Test Wash CPD")
+        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd.append("fabric_processes", {
+            "sequence": 40, "fabric_process": wash,
+            "input_item": self.cloth, "output_item": self.cloth, "quantity_ratio": 1})
+        cpd.save(ignore_permissions=True)
+        _find_or_create_cpd(self.cloth, self.selection, self.tuples)
+        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        rows = sorted(cpd.fabric_processes, key=lambda r: r.idx)
+        self.assertEqual([r.idx for r in rows], [1, 2, 3])
+        self.assertEqual([r.sequence for r in rows], [10, 20, 40])
+        vm_rows = sorted(cpd.fabric_value_mappings, key=lambda r: r.idx)
+        self.assertEqual([r.idx for r in vm_rows],
+                         list(range(1, len(vm_rows) + 1)))
+
     def test_blank_yarn_skips_persisting_but_keeps_chain(self):
         """input_item is REQD on IPD Fabric Process, and a PARTIAL persist
         would disable the tab adapter and drop steps from the chain. With a

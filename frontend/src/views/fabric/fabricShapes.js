@@ -71,6 +71,67 @@ export function shortSummaryOf(step) {
 	return `${attrs.join(", ") || "—"}${suffix}`;
 }
 
+// ---- combination detail (view how the summary was built) -------------------
+// shortSummaryOf above AGGREGATES for readability. The expandable detail below
+// is the uncapped, unaggregated truth: one row per persisted mapping group
+// (mapping_index), straight off step.mappings — same source the summary reads,
+// just not folded together. A big fan-out (one dia per row × many colours)
+// lists every row; the card scrolls instead of hiding rows.
+// (Desk parity: FabricProcesses.vue detailRows, 2026-07-22 declutter commit.)
+export function detailRows(step) {
+	const key = shapeOf(step).key;
+	const groups = {};
+	const order = [];
+	step.mappings.forEach((m) => {
+		if (!(m.mapping_index in groups)) { groups[m.mapping_index] = []; order.push(m.mapping_index); }
+		groups[m.mapping_index].push(m);
+	});
+	order.sort((a, b) => num(a) - num(b));
+
+	if (key === "conv") {
+		return order
+			.map((k) => {
+				const rows = groups[k];
+				const cons = rows.filter((m) => m.role === "Consume");
+				const intros = rows.filter((m) => m.role === "Introduce");
+				if (!cons.length && !intros.length) return null; // nothing to show for this group
+				if (cons.length) {
+					// Rules mode — value-only sides, same as the WO popup / summary ruleText.
+					const left = cons.map((c) => esc(c.from_value || "—")).join(" · ");
+					const right = intros.length
+						? intros.map((i) => esc(i.to_value || "—")).join(" · ")
+						: `<span class="fp-mut">dropped</span>`;
+					return `${left} → ${right}`;
+				}
+				// Chips mode — one cross-product combination, attribute-labelled.
+				return "Introduces " + intros.map((i) => `<b>${esc(i.attribute)}</b> ${esc(i.to_value || "—")}`).join(" · ");
+			})
+			.filter(Boolean);
+	}
+
+	// change (swap / combination) — one row per transition group, held value inline.
+	// A group with no Change rows has nothing to show here — e.g. a foreign/
+	// API-authored Pin-only row on a step the shape classifier reads as "idle"
+	// (see the openEdit refusal guard in FabricProcessesSection for why the
+	// editor can't touch these either). Skip it rather than render an empty
+	// "<b></b>: →".
+	return order
+		.map((k) => {
+			const rows = groups[k];
+			const changes = rows.filter((m) => m.role === "Change");
+			if (!changes.length) return null;
+			const pins = rows.filter((m) => m.role === "Pin" && m.from_value);
+			const attrs = changes.map((c) => esc(c.attribute)).join(" · ");
+			const froms = changes.map((c) => esc(c.from_value || "—")).join(" · ");
+			const tos = changes.map((c) => esc(c.to_value || "—")).join(" · ");
+			const pinTxt = pins.length
+				? ` <span class="fp-mut">(held ${pins.map((p) => esc(p.attribute) + " " + esc(p.from_value)).join(", ")})</span>`
+				: "";
+			return `<b>${attrs}</b>: ${froms} → ${tos}${pinTxt}`;
+		})
+		.filter(Boolean);
+}
+
 // ---- editor draft model (Desk blankDraft / blankGroup / blankRule) ---------
 
 export function blankDraft(process, seq, shapeKey, changeAttrs, { item, defaultInput, attributes }) {

@@ -580,8 +580,6 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 	conversion (grey yarn -> dyed yarn) must receive the DYED YARN, not the cloth.
 	For knitting/dyeing/compacting the matrix output_item IS the cloth item, so
 	their behaviour is unchanged."""
-	from yrp.yrp.doctype.item.item import get_or_create_variant
-
 	rows = frappe.parse_json(rows) if isinstance(rows, str) else rows
 	wo = frappe.get_doc("Work Order", work_order)
 	wo.check_permission("write")
@@ -650,7 +648,7 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 					frappe.throw(
 						_("Combination {0} is not derived from IPD {1} — reopen the Calculate popup.").format(
 							out_attrs or treated_item, ipd.name))
-				variant = get_or_create_variant(treated_item, out_attrs)
+				variant = _resolve_variant(treated_item, out_attrs)
 				deliverables.append({
 					"item_variant": variant,
 					"qty": qty,
@@ -705,7 +703,7 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 			input_item = matrix.input_item or ipd.item
 			for inp in group.get("input") or []:
 				inp_qty = flt(inp.get("qty")) * scale * (1 + flt(inp.get("wastage_pct")) / 100.0)
-				variant = get_or_create_variant(input_item, inp.get("attrs") or {})
+				variant = _resolve_variant(input_item, inp.get("attrs") or {})
 				key = (variant, inp.get("uom"))
 				aggregated.setdefault(key, {"item": input_item, "qty": 0.0})
 				aggregated[key]["qty"] += inp_qty
@@ -719,7 +717,7 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 			recv_item = matrix.output_item or fabric.cloth_item
 			recv_qty = flt(qty * recv_factor, 3)
 			fabric_receivables.append({
-				"item_variant": get_or_create_variant(recv_item, out_attrs),
+				"item_variant": _resolve_variant(recv_item, out_attrs),
 				"qty": recv_qty,
 				"uom": _default_uom(recv_item),
 				"pending_quantity": recv_qty,
@@ -804,6 +802,59 @@ def _resolve_matrix_group(matrix_cache, key, ipd, process_name):
 	if group is None:
 		frappe.throw(_("Matrix group {0} no longer exists — reopen the Calculate popup.").format(key))
 	return matrix, group
+
+
+def _resolve_variant(item, attrs):
+	"""Resolve the Item Variant for a minted deliverable/receivable, stamping
+	ONLY the attributes the target Item actually declares.
+
+	The IPD matrix combo defines each minted row's intended attribute set; the
+	Item master may declare a DIFFERENT set. Owner ruling (WO-00029, lot
+	C0625-39/2-220): a yarn must never be forced to take a Colour — live
+	TT-YARN-GREY declares Colour while the knitting matrix consumes it
+	attr-less, and base get_or_create_variant threw "Please mention Colour
+	attribute in TT-YARN-GREY" because create_variant demands EVERY declared
+	attribute. So, relative to the base resolver:
+
+	- attrs the Item does NOT declare are dropped — create_variant would
+	  silently ignore them anyway, but they poison the tuple lookup (the args
+	  tuple never matches any stored variant tuple), which routes to a
+	  create whose autoname collides with the existing variant;
+	- attrs the Item DOES declare are always kept, never dropped;
+	- declared attributes ABSENT from attrs are simply not stamped: the
+	  variant is looked up / created with the partial set (an attr-less yarn
+	  resolves to the bare item-named variant) instead of throwing.
+
+	Items with a dependent attribute (garment stages) keep the base resolver
+	untouched — the stage machinery owns which attributes apply there."""
+	from yrp.yrp.doctype.item.item import get_or_create_variant
+
+	attrs = {k: v for k, v in (attrs or {}).items() if v}
+	item_doc = frappe.get_cached_doc("Item", item)
+	if item_doc.get("dependent_attribute"):
+		return get_or_create_variant(item, attrs)
+
+	declared = [row.attribute for row in item_doc.get("attributes") or []]
+	filtered = {k: v for k, v in attrs.items() if k in declared}
+	if all(a in filtered for a in declared):
+		return get_or_create_variant(item, filtered)
+
+	# Partial set: base create_variant would throw "Please mention <attr>".
+	# Mirror its shape (display_name = value, sorted tuple hash) so the base
+	# tuple lookup finds this variant on later full-machinery passes too.
+	variant = frappe.new_doc("Item Variant")
+	variant.item = item_doc.name
+	variant.set("attributes", [
+		{"attribute": a, "attribute_value": filtered[a], "display_name": filtered[a]}
+		for a in declared if a in filtered
+	])
+	if filtered:
+		variant.item_tuple_attribute = str(tuple(sorted(filtered.items())))
+	existing = frappe.db.exists("Item Variant", variant.get_name())
+	if existing:
+		return existing
+	variant.insert()
+	return variant.name
 
 
 def _item_has_attribute(item, attribute):

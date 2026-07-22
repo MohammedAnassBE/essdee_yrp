@@ -4439,6 +4439,11 @@ function onCalculateDeliverables() {
 async function onDeliverablesCalculated(res) {
 	markLocalWrite()
 	await docState.load(props.id)
+	// The reload above adopted the fresh `modified`, so any stale flag raised by
+	// our own write's echo (a >3s calculate outlives the suppression window) is
+	// moot — clear it like reloadView does. Without this the false banner would
+	// PERSIST after a successful calculate on slow/big fan-outs.
+	staleNotice.value = false
 	await hydratePivotsForView()
 	toast.success(
 		"Deliverables calculated",

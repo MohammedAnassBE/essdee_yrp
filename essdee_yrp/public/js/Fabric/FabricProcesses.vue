@@ -2,17 +2,8 @@
 	<div class="fabproc">
 		<!-- ══════════════ OVERVIEW ══════════════ -->
 		<template v-if="view === 'overview'">
-			<p class="fp-lede">{{ __("Each fabric step is one card: what goes in, what comes out, and a one-line summary of what changes. Click Edit to choose which attribute(s) change and enter the values.") }}</p>
-
-			<div class="fp-legend">
-				<span><span class="fp-badge b-conv">{{ __("Item conversion") }}</span> {{ __("item A → item B") }}</span>
-				<span><span class="fp-badge b-swap">{{ __("Attribute swap") }}</span> {{ __("same item, a value flips") }}</span>
-				<span><span class="fp-badge b-combo">{{ __("Combination") }}</span> {{ __("attributes change together") }}</span>
-				<span><span class="fp-badge b-idle">{{ __("Identity") }}</span> {{ __("nothing changes · no matrix") }}</span>
-			</div>
-
 			<div v-if="!steps.length" class="fp-empty">
-				{{ __("No fabric processes yet. Add the first step — yarn dyeing, knitting, dyeing, compacting, printing, washing.") }}
+				{{ __("No fabric processes yet.") }}
 			</div>
 
 			<div class="fp-cards">
@@ -38,6 +29,22 @@
 					<div class="fp-summary">
 						<span class="fp-summary-label">{{ __("What changes") }}</span>
 						<span class="fp-summary-text" v-html="summaryOf(step)"></span>
+					</div>
+
+					<button
+						v-if="detailRows(step).length"
+						class="fp-detail-toggle"
+						data-testid="fp-toggle-detail"
+						:data-process="step.fabric_process"
+						@click="toggleDetail(step.sequence)"
+					>
+						<span class="fp-chevron" :class="{ 'is-open': expandedSteps[step.sequence] }">▸</span>
+						{{ expandedSteps[step.sequence] ? __("Hide combinations") : __("View combinations") }}
+						<span class="fp-mut">({{ detailRows(step).length }})</span>
+					</button>
+
+					<div v-if="expandedSteps[step.sequence]" class="fp-detail" data-testid="fp-detail-rows">
+						<div v-for="(row, ri) in detailRows(step)" :key="ri" class="fp-detail-row" v-html="row"></div>
 					</div>
 				</div>
 			</div>
@@ -622,6 +629,71 @@ function summaryOf(step) {
 	return `<span class="fp-mut">${__("Nothing changes · no matrix")}</span>`;
 }
 
+// ---- combination detail (view how the summary was built) ------------------
+// The summary above AGGREGATES + CAPS for readability. The expandable detail
+// below is the uncapped, unaggregated truth: one row per persisted mapping
+// group (mapping_index), straight off step.mappings — same source the
+// summary reads, just not folded together. A big fan-out (one dia per row ×
+// many colours) lists every row; the card scrolls instead of hiding rows.
+const expandedSteps = reactive({});
+function toggleDetail(seq) {
+	expandedSteps[seq] = !expandedSteps[seq];
+}
+
+function detailRows(step) {
+	const key = shapeOf(step).key;
+	const groups = {};
+	const order = [];
+	step.mappings.forEach((m) => {
+		if (!(m.mapping_index in groups)) { groups[m.mapping_index] = []; order.push(m.mapping_index); }
+		groups[m.mapping_index].push(m);
+	});
+	order.sort((a, b) => num(a) - num(b));
+
+	if (key === "conv") {
+		return order
+			.map((k) => {
+				const rows = groups[k];
+				const cons = rows.filter((m) => m.role === "Consume");
+				const intros = rows.filter((m) => m.role === "Introduce");
+				if (!cons.length && !intros.length) return null; // nothing to show for this group
+				if (cons.length) {
+					// Rules mode — value-only sides, same as the WO popup / summary ruleText.
+					const left = cons.map((c) => esc(c.from_value || "—")).join(" · ");
+					const right = intros.length
+						? intros.map((i) => esc(i.to_value || "—")).join(" · ")
+						: `<span class="fp-mut">${esc(__("dropped"))}</span>`;
+					return `${left} → ${right}`;
+				}
+				// Chips mode — one cross-product combination, attribute-labelled.
+				return `${__("Introduces")} ` + intros.map((i) => `<b>${esc(i.attribute)}</b> ${esc(i.to_value || "—")}`).join(" · ");
+			})
+			.filter(Boolean);
+	}
+
+	// change (swap / combination) — one row per transition group, held value inline.
+	// A group with no Change rows has nothing to show here (mirrors summaryOf's own
+	// `if (!changes.length) return;` guard) — e.g. a foreign/API-authored Pin-only
+	// row on a step the shape classifier reads as "idle" (see the openEdit refusal
+	// guard above for why the editor can't touch these either). Skip it rather than
+	// render an empty "<b></b>: →".
+	return order
+		.map((k) => {
+			const rows = groups[k];
+			const changes = rows.filter((m) => m.role === "Change");
+			if (!changes.length) return null;
+			const pins = rows.filter((m) => m.role === "Pin" && m.from_value);
+			const attrs = changes.map((c) => esc(c.attribute)).join(" · ");
+			const froms = changes.map((c) => esc(c.from_value || "—")).join(" · ");
+			const tos = changes.map((c) => esc(c.to_value || "—")).join(" · ");
+			const pinTxt = pins.length
+				? ` <span class="fp-mut">(${__("held")} ${pins.map((p) => esc(p.attribute) + " " + esc(p.from_value)).join(", ")})</span>`
+				: "";
+			return `<b>${attrs}</b>: ${froms} → ${tos}${pinTxt}`;
+		})
+		.filter(Boolean);
+}
+
 // ---- add / edit navigation ------------------------------------------------
 
 const availableProcesses = computed(() =>
@@ -1087,9 +1159,6 @@ defineExpose({ load_data, get_steps: () => JSON.parse(JSON.stringify(steps.value
 
 <style scoped>
 .fabproc { margin-top: 4px; }
-.fp-lede { color: var(--text-muted); font-size: var(--text-md); margin: 0 0 12px; max-width: 74ch; }
-.fp-legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 0 0 14px; font-size: var(--text-sm); color: var(--text-muted); }
-.fp-legend > span { display: inline-flex; align-items: center; gap: 7px; }
 .fp-empty { color: var(--text-muted); font-size: var(--text-md); padding: 10px 0; }
 .fp-mut { color: var(--text-muted); }
 
@@ -1151,6 +1220,32 @@ defineExpose({ load_data, get_steps: () => JSON.parse(JSON.stringify(steps.value
 .fp-summary-label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); font-weight: 700; white-space: nowrap; }
 .fp-summary-text { font-size: var(--text-md); color: var(--text-color); }
 .fp-summary-text :deep(b) { font-weight: 600; }
+
+/* ---- combination detail (expand/collapse) ---- */
+.fp-detail-toggle {
+	grid-column: 2 / 4;
+	display: inline-flex; align-items: center; gap: 6px; width: fit-content;
+	border: none; background: transparent; color: var(--primary, #2490ef);
+	cursor: pointer; font: inherit; font-size: var(--text-sm); font-weight: 500;
+	padding: 2px 0; margin-top: 4px;
+}
+.fp-detail-toggle:hover { text-decoration: underline; }
+.fp-chevron { display: inline-block; font-size: 10px; transition: transform .15s ease; }
+.fp-chevron.is-open { transform: rotate(90deg); }
+.fp-detail {
+	grid-column: 2 / 4;
+	margin-top: 6px;
+	padding: 8px 10px;
+	background: var(--control-bg, var(--subtle-fg));
+	border: 1px solid var(--border-color);
+	border-radius: var(--border-radius, 6px);
+	max-height: 320px;
+	overflow-y: auto;
+	display: flex; flex-direction: column; gap: 4px;
+}
+.fp-detail-row { font-size: var(--text-sm); color: var(--text-color); padding: 2px 0; }
+.fp-detail-row:not(:last-child) { border-bottom: 1px dashed var(--border-color); padding-bottom: 4px; }
+.fp-detail-row :deep(b) { font-weight: 600; }
 
 /* ---- add bar ---- */
 .fp-addbar { margin-top: 16px; display: flex; align-items: flex-end; gap: 12px; background: var(--card-bg, var(--fg-color)); border: 1px dashed var(--border-color); border-radius: var(--border-radius-lg, 10px); padding: 14px 15px; }

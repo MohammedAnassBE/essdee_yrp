@@ -354,6 +354,7 @@
 			:work-order="doc.name"
 			:process-name="doc.process_name || ''"
 			:modified="doc.modified"
+			@applying="markLocalWrite"
 			@calculated="onDeliverablesCalculated"
 		/>
 
@@ -364,6 +365,7 @@
 			:lot="doc.name"
 			:production-detail="doc.production_detail"
 			:modified="doc.modified"
+			@applying="markLocalWrite"
 			@built="onClothProgramsBuilt"
 		/>
 

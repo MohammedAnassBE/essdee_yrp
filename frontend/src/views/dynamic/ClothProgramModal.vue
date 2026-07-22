@@ -86,7 +86,11 @@ const props = defineProps({
   productionDetail: { type: String, default: null },
   modified: { type: String, default: null },
 })
-const emit = defineEmits(["update:visible", "built"])
+// "applying" fires right BEFORE the server write so the host can open its
+// realtime local-write suppression window (markLocalWrite) in time — the
+// doc_update echo can arrive mid-request, before "built" resolves, and would
+// otherwise raise a false "modified by another user" notice.
+const emit = defineEmits(["update:visible", "built", "applying"])
 const toast = useAppToast()
 
 const loading = ref(false)
@@ -158,6 +162,7 @@ async function onApply() {
     greige_colour: e.greige_colour || null,
   }))
   applying.value = true
+  emit("applying") // before the write — see defineEmits note
   try {
     const res = await callMethod("essdee_yrp.api.cloth_program.build_cloth_programs", {
       lot: props.lot,

@@ -211,7 +211,11 @@ const props = defineProps({
 	// the backend's stale-write guard (_guard_not_modified) rejects a concurrent edit.
 	modified: { type: String, default: null },
 })
-const emit = defineEmits(["update:visible", "calculated"])
+// "applying" fires right BEFORE the server write so the host can open its
+// realtime local-write suppression window (markLocalWrite) in time — the
+// doc_update echo can arrive mid-request, before "calculated" resolves, and
+// would otherwise raise a false "modified by another user" notice.
+const emit = defineEmits(["update:visible", "calculated", "applying"])
 
 const dialogHeader = computed(() =>
 	props.processName
@@ -436,6 +440,7 @@ async function onApply() {
 	}
 	warnBalanceOvershoot()
 	applying.value = true
+	emit("applying") // before the write — see defineEmits note
 	try {
 		const res = await callMethod(
 			"essdee_yrp.api.work_order.calculate_fabric_deliverables",

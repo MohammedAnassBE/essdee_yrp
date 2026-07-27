@@ -89,9 +89,10 @@ def get_complete_item_details(item_name):
 
 @frappe.whitelist()
 def get_approval_roles():
+	roles = []
 	if frappe.db.exists("DocType", "MRP Settings"):
 		settings = frappe.get_single("MRP Settings")
-		return [
+		roles = [
 			role
 			for role in [
 				getattr(settings, "senior_merch_role", None),
@@ -99,7 +100,9 @@ def get_approval_roles():
 			]
 			if role
 		]
-	return ["System Manager"]
+	# System Managers must always be able to administer approval even when the
+	# merchandising roles are configured.
+	return list(dict.fromkeys(roles + ["System Manager"]))
 
 
 @frappe.whitelist()
@@ -120,8 +123,9 @@ def approve_ipd(doc_name, approval_type="Approved"):
 
 @frappe.whitelist()
 def revert_ipd_approval(doc_name):
-	if "System Manager" not in frappe.get_roles():
-		frappe.throw("Only System Manager can revert approval")
+	allowed_roles = get_approval_roles()
+	if not any(role in frappe.get_roles() for role in allowed_roles):
+		frappe.throw("You do not have permission to revert Item Production Detail approval")
 
 	doc = frappe.get_doc("Item Production Detail", doc_name)
 	doc.approval_status = "Not Approved"
@@ -796,64 +800,90 @@ def get_attr_mapping_details(mapping):
 	return [row.attribute_value for row in mapping_doc.get("values") or []]
 
 
+DUPLICATE_IPD_SCALAR_FIELDS = (
+	"item",
+	"tech_pack_version",
+	"pattern_version",
+	"is_cloth_item",
+	"yarn_item",
+	"knitting_process",
+	"cloth_per_kg_yarn",
+	"dyeing_process",
+	"dia_wise_colour_change",
+	"compacting_process",
+	"colour_wise_dia_change",
+	"primary_item_attribute",
+	"dependent_attribute",
+	"dependent_attribute_mapping",
+	"packing_process",
+	"packing_attribute",
+	"pack_in_stage",
+	"pack_out_stage",
+	"packing_combo",
+	"packing_attribute_no",
+	"auto_calculate",
+	"stiching_process",
+	"stiching_in_stage",
+	"stiching_attribute",
+	"stiching_out_stage",
+	"stiching_major_attribute_value",
+	"is_same_packing_attribute",
+	"cutting_process",
+	"emblishment_details_json",
+	"cutting_cloths_json",
+	"cutting_items_json",
+	"cloth_accessory_json",
+	"stiching_accessory_json",
+	"accessory_clothtype_json",
+	"based_on_other_attribute_mapping",
+	"packing_mode",
+	"packing_assortment_json",
+	"enable_panel_wise_consumption_matrix",
+	"panel_wise_consumption_matrix_json",
+)
+
+
 @frappe.whitelist()
 def duplicate_ipd(ipd, item=None):
 	ipd_doc = frappe.get_doc("Item Production Detail", ipd)
 	doc = frappe.new_doc("Item Production Detail")
-	fields = [
-		"item",
-		"tech_pack_version",
-		"pattern_version",
-		"primary_item_attribute",
-		"dependent_attribute",
-		"dependent_attribute_mapping",
-		"packing_process",
-		"packing_attribute",
-		"pack_in_stage",
-		"pack_out_stage",
-		"packing_combo",
-		"packing_attribute_no",
-		"auto_calculate",
-		"stiching_process",
-		"stiching_in_stage",
-		"stiching_attribute",
-		"stiching_out_stage",
-		"stiching_major_attribute_value",
-		"is_same_packing_attribute",
-		"cutting_process",
-		"emblishment_details_json",
-		"cutting_cloths_json",
-		"cutting_items_json",
-		"cloth_accessory_json",
-		"stiching_accessory_json",
-		"accessory_clothtype_json",
-		"based_on_other_attribute_mapping",
-		"packing_mode",
-		"packing_assortment_json",
-	]
-	for fieldname in fields:
+	for fieldname in DUPLICATE_IPD_SCALAR_FIELDS:
 		if ipd_doc.meta.get_field(fieldname) and doc.meta.get_field(fieldname):
 			doc.set(fieldname, ipd_doc.get(fieldname))
 
 	doc.item = item or ipd_doc.item
-	copy_tables(
-		ipd_doc,
-		doc,
-		[
-			"item_attributes",
-			"ipd_processes",
-			"packing_attribute_details",
-			"packing_size_details",
-			"packing_assortment_attributes",
-			"stiching_item_details",
-			"stiching_item_combination_details",
-			"cutting_attributes",
-			"cloth_detail",
-			"accessory_attributes",
-			"cloth_attributes",
-			"cutting_marker_groups",
-		],
-	)
+	table_fields = [
+		"item_attributes",
+		"ipd_processes",
+		"packing_attribute_details",
+		"packing_size_details",
+		"packing_assortment_attributes",
+		"stiching_item_details",
+		"stiching_item_combination_details",
+		"cutting_attributes",
+		"cloth_detail",
+		"accessory_attributes",
+		"cloth_attributes",
+		"cutting_marker_groups",
+	]
+	if ipd_doc.is_cloth_item:
+		# A cloth IPD's route and process-chain tables are one configuration.
+		# Copying only the colour recipe leaves the duplicate impossible to save
+		# (every recipe colour requires a route) and, more importantly, drops the
+		# exact knitting -> dyeing/compacting behaviour the user intended to
+		# duplicate.
+		table_fields.extend([
+			"yarn_ratio_details",
+			"knitting_dia_details",
+			"dyeing_colour_details",
+			"compacting_dia_details",
+			"fabric_processes",
+			"fabric_value_mappings",
+			"colour_yarn_recipes",
+			"fabric_routes",
+			"compacting_reference_details",
+		])
+	copy_tables(ipd_doc, doc, table_fields)
 
 	if ipd_doc.is_set_item:
 		doc.is_set_item = ipd_doc.is_set_item

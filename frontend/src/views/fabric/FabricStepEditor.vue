@@ -241,6 +241,12 @@
 			<section class="fp-panel fp-panel-hero">
 				<div class="fp-panel-head">② Enter each transition — from → to</div>
 				<div class="fp-panel-body">
+					<div v-if="draft.change_attrs.includes('Colour')" class="fp-route-help">
+						For the first Colour-changing process, <strong>from</strong> is the physical
+						colour received from Knitting (for example Grey or Anthracite Melange), and
+						<strong>to</strong> is the finished cloth colour. These transitions drive the
+						colour-wise knitting matrices and Work Order output variants.
+					</div>
 					<div v-for="(grp, gi) in draft.groups" :key="gi" class="fp-combo">
 						<div class="fp-combo-head">
 							{{ draft.change_attrs.length > 1 ? "Combination" : "Transition" }} {{ gi + 1 }}
@@ -568,6 +574,16 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
 .fp-help { font-size: 12.5px; color: var(--esd-muted); margin-bottom: 8px; }
 .fp-help-after { margin-top: 8px; margin-bottom: 0; }
 .fp-help-full { flex-basis: 100%; }
+.fp-route-help {
+	margin-bottom: 10px;
+	padding: 9px 11px;
+	border: 1px solid color-mix(in srgb, var(--esd-accent) 24%, var(--esd-line));
+	border-radius: 8px;
+	color: var(--esd-muted);
+	background: color-mix(in srgb, var(--esd-accent) 5%, transparent);
+	font-size: 12.5px;
+	line-height: 1.45;
+}
 .fp-preview { margin-top: 8px; font-size: 12.5px; color: var(--esd-accent-700); font-weight: 600; }
 .fp-preview.fp-mut { color: var(--esd-muted); font-weight: 400; }
 .fp-row { display: flex; flex-wrap: wrap; gap: 12px; }

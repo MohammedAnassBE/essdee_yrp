@@ -93,11 +93,12 @@ frappe.ui.form.on("Lot", {
 					freeze_message: __("Loading cloths..."),
 					callback: function (r) {
 						const cloths = (r.message && r.message.cloths) || [];
+						const defaults = (r.message && r.message.defaults) || {};
 						if (!cloths.length) {
 							frappe.msgprint(__("This lot's garment has no cloth items to build."));
 							return;
 						}
-						build_cloth_programs_dialog(frm, cloths);
+						build_cloth_programs_dialog(frm, cloths, defaults);
 					}
 				});
 			});
@@ -445,24 +446,229 @@ frappe.ui.form.on("Lot", {
 // 	frm.doc.total_cutting_qty = total_cut_qty;
 // }
 
-function build_cloth_programs_dialog(frm, cloths) {
+function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 	const fields = [];
 	cloths.forEach((c, i) => {
+		const colour_recipes = c.colour_yarn_recipes || [];
+		const fallback_yarns = (c.default_yarns && c.default_yarns.length)
+			? c.default_yarns
+			: [{ yarn_item: c.default_yarn || "", ratio: 100 }];
+		const profile = c.profile || {};
+		const required_colours = (c.required_colours || []).filter(Boolean);
+		const required_routes = c.required_routes || [];
+		const output_colours = profile.knitting_output_colours || {};
+		const stored_routes = profile.fabric_routes || [];
 		fields.push({ fieldtype: "Section Break", label: __(frappe.utils.escape_html(`${c.label} — ${c.cloth_item}`)) });
 		fields.push({ fieldtype: "Data", fieldname: `cloth_item_${i}`, hidden: 1, default: c.cloth_item });
-		fields.push({
-			label: "Yarn Item", fieldname: `yarn_item_${i}`, fieldtype: "Link", options: "Item", reqd: 1,
-			default: c.default_yarn || "",
-			onchange: function () {
-				apply_yarn_profile(d, i, d.get_value(`yarn_item_${i}`));
+		fields.push({ fieldtype: "Data", fieldname: `production_detail_${i}`, hidden: 1, default: c.production_detail || "" });
+
+		if (required_colours.length) {
+			if (i > 0) {
+				fields.push({
+					label: __("Use Main Fabric Yarn Recipes"),
+					fieldname: `use_main_yarn_recipes_${i}`,
+					fieldtype: "Check",
+					default: 0,
+					description: __(
+						"Reuse the Main Fabric recipe for each matching finished colour. Changes made to Main Fabric are used when Build is clicked."
+					),
+					onchange() {
+						if (d.get_value(`use_main_yarn_recipes_${i}`)) {
+							copy_main_fabric_recipes(d, cloths, i);
+						}
+					},
+				});
 			}
+			fields.push({
+				fieldtype: "HTML",
+				fieldname: `route_help_${i}`,
+				options: `<div class="text-muted small" style="margin-bottom:8px">${__(
+					"Maintain one grouped yarn recipe and the physical Knitting output colour for every finished-colour route. Each recipe must total exactly 100%."
+				)}</div>`,
+			});
+			required_colours.forEach((colour, colour_index) => {
+				const colour_routes = required_routes
+					.filter((route) => route.colour === colour)
+					.sort((a, b) => dia_sort_value(a.dia) - dia_sort_value(b.dia));
+				const stored = colour_recipes.filter((row) => row.colour === colour);
+				const recipe = stored.length ? stored : fallback_yarns;
+				const signature = JSON.stringify(
+					recipe.map((row) => [row.yarn_item, Number(row.ratio || 0)]).sort()
+				);
+				const recipe_source = required_colours.slice(0, colour_index).find((candidate) => {
+					const candidate_stored = colour_recipes.filter((row) => row.colour === candidate);
+					const candidate_recipe = candidate_stored.length ? candidate_stored : fallback_yarns;
+					return JSON.stringify(
+						candidate_recipe.map((row) => [row.yarn_item, Number(row.ratio || 0)]).sort()
+					) === signature;
+				}) || "";
+				const colour_total = colour_routes.reduce(
+					(total, route) => total + Number(route.weight || 0), 0);
+				fields.push({
+					fieldtype: "HTML",
+					fieldname: `route_title_${i}_${colour_index}`,
+					depends_on: i > 0
+						? `eval:!doc.use_main_yarn_recipes_${i}`
+						: undefined,
+					options: `<div style="margin:12px 0 5px;font-weight:650">${__(
+						"Finished Colour: {0}", [frappe.utils.escape_html(colour)]
+					)}</div><div class="text-muted small" style="margin-bottom:6px">${__(
+						"{0} routes · {1} kg total",
+						[colour_routes.length, colour_total]
+					)}</div>`,
+				});
+				if (colour_index) {
+					fields.push({
+						label: __("Reuse Yarn Recipe From"),
+						fieldname: `recipe_source_${i}_${colour_index}`,
+						fieldtype: "Select",
+						options: ["", ...required_colours.slice(0, colour_index)],
+						default: recipe_source,
+						depends_on: i > 0
+							? `eval:!doc.use_main_yarn_recipes_${i}`
+							: undefined,
+						description: __(
+							"Select an earlier colour to share its recipe, or leave blank to maintain a separate recipe."
+						),
+					});
+				}
+				fields.push({
+					label: __("Yarn Recipe — {0}", [colour]),
+					fieldname: `colour_yarns_${i}_${colour_index}`,
+					fieldtype: "Table",
+					cannot_add_rows: false,
+					cannot_delete_rows: false,
+					in_place_edit: true,
+					reqd: colour_index === 0,
+					depends_on: i > 0
+						? (
+							colour_index
+								? `eval:!doc.use_main_yarn_recipes_${i} && !doc.recipe_source_${i}_${colour_index}`
+								: `eval:!doc.use_main_yarn_recipes_${i}`
+						)
+						: (
+							colour_index
+								? `eval:!doc.recipe_source_${i}_${colour_index}`
+								: undefined
+						),
+					data: recipe.map((row) => ({
+						yarn_item: row.yarn_item,
+						ratio: Number(row.ratio || 0),
+					})),
+					fields: yarn_recipe_fields(),
+				});
+				const route_defaults = colour_routes.map((route) => {
+					const stored_route = stored_routes.find(
+						(row) => row.finished_colour === colour && row.finished_dia === route.dia
+					) || {};
+					return stored_route.knitting_output_colour
+						|| output_colours[colour]
+						|| profile.greige_colour
+						|| "";
+				});
+				const common_output_colours = [...new Set(route_defaults.filter(Boolean))];
+				const bulk_colour_fieldname = `bulk_knitting_output_colour_${i}_${colour_index}`;
+				fields.push({
+					label: __("Apply Knitting Output Colour to All {0} Dias", [colour]),
+					fieldname: bulk_colour_fieldname,
+					fieldtype: "Link",
+					options: "Item Attribute Value",
+					default: common_output_colours.length === 1 ? common_output_colours[0] : "",
+					description: __(
+						"Select once to fill every Dia route for this finished colour. Individual routes remain editable."
+					),
+					get_query: () => ({ filters: { attribute_name: "Colour" } }),
+					onchange() {
+						const value = d.get_value(bulk_colour_fieldname) || "";
+						colour_routes.forEach((_route, route_index) => {
+							d.set_value(
+								`knitting_output_colour_${i}_${colour_index}_${route_index}`,
+								value
+							);
+						});
+					},
+				});
+				colour_routes.forEach((route, route_index) => {
+					const stored_route = stored_routes.find(
+						(row) => row.finished_colour === colour && row.finished_dia === route.dia
+					) || {};
+					fields.push({
+						fieldtype: "HTML",
+						fieldname: `physical_route_title_${i}_${colour_index}_${route_index}`,
+						options: `<div style="margin:9px 0 4px;font-weight:600">${__(
+							"{0} · {1} kg finished",
+							[
+								frappe.utils.escape_html(route.dia || ""),
+								Number(route.weight || 0),
+							]
+						)}</div>`,
+					});
+					fields.push({
+						label: __("Knitting Output Dia"),
+						fieldname: `knitting_output_dia_${i}_${colour_index}_${route_index}`,
+						fieldtype: "Link",
+						options: "Item Attribute Value",
+						reqd: 1,
+						default: stored_route.knitting_output_dia || route.dia || "",
+						description: __("Physical Dia received from Knitting."),
+						get_query: () => ({ filters: { attribute_name: "Dia" } }),
+					});
+					fields.push({
+						label: __("Knitting Output Colour"),
+						fieldname: `knitting_output_colour_${i}_${colour_index}_${route_index}`,
+						fieldtype: "Link",
+						options: "Item Attribute Value",
+						reqd: 1,
+						default: stored_route.knitting_output_colour
+							|| output_colours[colour]
+							|| profile.greige_colour
+							|| "",
+						description: __(
+							"Select the Finished Colour itself to bypass Dyeing for this route."
+						),
+						get_query: () => ({ filters: { attribute_name: "Colour" } }),
+					});
+				});
+			});
+		} else {
+			fields.push({
+				label: __("Yarn Recipe"),
+				fieldname: `yarns_${i}`,
+				fieldtype: "Table",
+				cannot_add_rows: false,
+				cannot_delete_rows: false,
+				in_place_edit: true,
+				reqd: 1,
+				description: __("List every yarn used for this cloth. The Ratio total must be exactly 100%."),
+				data: fallback_yarns,
+				fields: yarn_recipe_fields(),
+			});
+		}
+		fields.push({ fieldtype: "Section Break", label: __("Process Settings") });
+		fields.push({
+			label: "Cloth Kgs / 1 Kg Yarn", fieldname: `cloth_per_kg_yarn_${i}`,
+			fieldtype: "Float",
+			reqd: 1,
+			default: profile.cloth_per_kg_yarn || defaults.cloth_per_kg_yarn || 1,
 		});
-		fields.push({ label: "Cloth Kgs / 1 Kg Yarn", fieldname: `cloth_per_kg_yarn_${i}`, fieldtype: "Float", reqd: 1 });
 		fields.push({ fieldtype: "Column Break" });
-		fields.push({ label: "Knitting Process", fieldname: `knitting_process_${i}`, fieldtype: "Link", options: "Process", reqd: 1 });
-		fields.push({ label: "Dyeing Process", fieldname: `dyeing_process_${i}`, fieldtype: "Link", options: "Process", reqd: 1 });
-		fields.push({ label: "Compacting Process (recorded, not auto-chained in v1)", fieldname: `compacting_process_${i}`, fieldtype: "Link", options: "Process" });
-		fields.push({ label: "Greige Colour", fieldname: `greige_colour_${i}`, fieldtype: "Link", options: "Item Attribute Value", reqd: 1, get_query: () => ({ filters: { attribute_name: "Colour" } }) });
+		fields.push({
+			label: "Knitting Process", fieldname: `knitting_process_${i}`,
+			fieldtype: "Link",
+			options: "Process",
+			reqd: 1,
+			default: profile.knitting_process || defaults.knitting_process || "",
+		});
+		fields.push({
+			label: "Dyeing Process", fieldname: `dyeing_process_${i}`,
+			fieldtype: "Link",
+			options: "Process",
+			reqd: 0,
+			default: profile.dyeing_process || defaults.dyeing_process || "",
+			description: __(
+				"Required only when at least one Knitting Output Colour differs from its Finished Colour."
+			),
+		});
 	});
 
 	const d = new frappe.ui.Dialog({
@@ -471,26 +677,116 @@ function build_cloth_programs_dialog(frm, cloths) {
 		fields: fields,
 		primary_action_label: "Build",
 		primary_action(values) {
-			const selections = cloths.map((c, i) => ({
-				cloth_item: values[`cloth_item_${i}`],
-				yarn_item: values[`yarn_item_${i}`],
-				cloth_per_kg_yarn: values[`cloth_per_kg_yarn_${i}`],
-				knitting_process: values[`knitting_process_${i}`],
-				dyeing_process: values[`dyeing_process_${i}`] || null,
-				compacting_process: values[`compacting_process_${i}`] || null,
-				greige_colour: values[`greige_colour_${i}`] || null,
-			})).filter((s) => s.yarn_item && s.knitting_process && s.cloth_per_kg_yarn > 0 && s.dyeing_process && s.greige_colour);
-			if (!selections.length) {
-				frappe.msgprint(__("Fill yarn, processes, cloth-per-kg and greige colour for every cloth."));
+			const recipes_by_cloth = [];
+			const selections = cloths.map((c, i) => {
+				const required_colours = (c.required_colours || []).filter(Boolean);
+				const colour_yarn_recipes = [];
+				const fabric_routes = [];
+				const resolved_recipes = {};
+				required_colours.forEach((colour, colour_index) => {
+					const source = values[`recipe_source_${i}_${colour_index}`];
+					const use_main = i > 0 && values[`use_main_yarn_recipes_${i}`];
+					const rows = use_main
+						? ((recipes_by_cloth[0] && recipes_by_cloth[0][colour]) || [])
+						: (
+							source
+								? (resolved_recipes[source] || [])
+								: (values[`colour_yarns_${i}_${colour_index}`] || [])
+						);
+					resolved_recipes[colour] = rows.map((row) => ({
+						yarn_item: row.yarn_item,
+						ratio: Number(row.ratio || 0),
+					}));
+					resolved_recipes[colour].forEach((row) => {
+						colour_yarn_recipes.push({
+							colour: colour,
+							yarn_item: row.yarn_item,
+							ratio: row.ratio,
+						});
+					});
+					(c.required_routes || [])
+						.filter((route) => route.colour === colour)
+						.sort((a, b) => dia_sort_value(a.dia) - dia_sort_value(b.dia))
+						.forEach((route, route_index) => {
+							fabric_routes.push({
+								finished_colour: colour,
+								finished_dia: route.dia,
+								knitting_output_dia:
+									values[`knitting_output_dia_${i}_${colour_index}_${route_index}`] || null,
+								knitting_output_colour:
+									values[`knitting_output_colour_${i}_${colour_index}_${route_index}`] || null,
+							});
+						});
+				});
+				recipes_by_cloth[i] = resolved_recipes;
+				const recipe = required_colours.length
+					? colour_yarn_recipes
+						.filter((row) => row.colour === required_colours[0])
+						.map((row) => ({ yarn_item: row.yarn_item, ratio: row.ratio }))
+					: (values[`yarns_${i}`] || []).map((row) => ({
+						yarn_item: row.yarn_item,
+						ratio: Number(row.ratio || 0),
+					}));
+				return {
+					cloth_item: values[`cloth_item_${i}`],
+					production_detail: values[`production_detail_${i}`] || null,
+					colour_yarn_recipes: colour_yarn_recipes,
+					fabric_routes: fabric_routes,
+					yarns: recipe,
+					yarn_item: recipe[0] && recipe[0].yarn_item,
+					cloth_per_kg_yarn: values[`cloth_per_kg_yarn_${i}`],
+					knitting_process: values[`knitting_process_${i}`],
+					dyeing_process: values[`dyeing_process_${i}`] || null,
+					compacting_process:
+						profile.compacting_process
+						|| defaults.compacting_process
+						|| null,
+					required_colours: required_colours,
+				};
+			});
+			const incomplete = selections.some((s) => {
+				const groups = {};
+				(s.colour_yarn_recipes.length ? s.colour_yarn_recipes : s.yarns).forEach((row) => {
+					const key = row.colour || "__uncoloured__";
+					if (!groups[key]) groups[key] = [];
+					groups[key].push(row);
+				});
+				const invalid_recipe = Object.values(groups).some((rows) =>
+					!rows.length ||
+					rows.some((row) => !row.yarn_item || !(row.ratio > 0)) ||
+					new Set(rows.map((row) => row.yarn_item)).size !== rows.length ||
+					Math.abs(rows.reduce((sum, row) => sum + row.ratio, 0) - 100) > 0.001
+				);
+				const needs_dyeing = s.fabric_routes.some(
+					(row) => row.knitting_output_colour && row.knitting_output_colour !== row.finished_colour
+				);
+				const needs_compacting = s.fabric_routes.some(
+					(row) => row.knitting_output_dia && row.knitting_output_dia !== row.finished_dia
+				);
+				return (
+					invalid_recipe ||
+					!s.knitting_process ||
+					!(s.cloth_per_kg_yarn > 0) ||
+					s.fabric_routes.some(
+						(row) => !row.knitting_output_colour || !row.knitting_output_dia
+					) ||
+					(needs_dyeing && !s.dyeing_process) ||
+					(needs_compacting && !s.compacting_process)
+				);
+			});
+			if (incomplete) {
+				frappe.msgprint(__(
+					"Complete every colour's Yarn Recipe (total 100%), Knitting Output Colour, required process, and cloth-per-kg before building. Dyeing is required for colour-changing routes. Configure the default Dia-change Process in IPD Settings when a route changes Dia."
+				));
 				return;
 			}
-			d.hide();
 			frappe.call({
 				method: "essdee_yrp.api.cloth_program.build_cloth_programs",
 				args: { lot: frm.doc.name, selections: JSON.stringify(selections), modified: frm.doc.modified },
 				freeze: true,
 				freeze_message: __("Building cloth programs..."),
 				callback: function (r) {
+					d.hide();
 					const n = (r.message && r.message.cloths_built) || 0;
 					frappe.show_alert({ message: __("Built {0} cloth program(s)", [n]), indicator: "green" });
 					frm.reload_doc();
@@ -498,23 +794,113 @@ function build_cloth_programs_dialog(frm, cloths) {
 			});
 		}
 	});
-	// Spec prefill: derive each cloth's profile from its default (picked) yarn.
-	cloths.forEach((c, i) => { if (c.default_yarn) apply_yarn_profile(d, i, c.default_yarn); });
+	// Existing cloth CPD values are already in context. Only legacy/new cloths
+	// without a direct profile need the reverse-yarn convenience prefill.
+	cloths.forEach((c, i) => {
+		const profile_yarn = c.colour_yarn_recipes?.[0]?.yarn_item || c.default_yarn;
+		if (!c.profile?.knitting_process && profile_yarn) {
+			apply_yarn_profile(d, i, profile_yarn, c);
+		}
+	});
 	d.show();
 }
 
-function apply_yarn_profile(dialog, i, yarn) {
+function yarn_recipe_fields() {
+	return [
+		{
+			label: __("Yarn Item"),
+			fieldname: "yarn_item",
+			fieldtype: "Link",
+			options: "Item",
+			in_list_view: 1,
+			columns: 7,
+			reqd: 1,
+		},
+		{
+			label: __("Ratio %"),
+			fieldname: "ratio",
+			fieldtype: "Float",
+			in_list_view: 1,
+			columns: 3,
+			reqd: 1,
+		},
+	];
+}
+
+function dialog_colour_recipes(dialog, cloth, cloth_index) {
+	const resolved = {};
+	((cloth && cloth.required_colours) || []).filter(Boolean).forEach((colour, colour_index) => {
+		const source = dialog.get_value(`recipe_source_${cloth_index}_${colour_index}`);
+		const rows = source
+			? (resolved[source] || [])
+			: (dialog.get_value(`colour_yarns_${cloth_index}_${colour_index}`) || []);
+		resolved[colour] = rows.map((row) => ({
+			yarn_item: row.yarn_item || "",
+			ratio: Number(row.ratio || 0),
+		}));
+	});
+	return resolved;
+}
+
+function copy_main_fabric_recipes(dialog, cloths, target_index) {
+	const main = cloths[0];
+	const target = cloths[target_index];
+	if (!main || !target) return;
+
+	const main_recipes = dialog_colour_recipes(dialog, main, 0);
+	(target.required_colours || []).filter(Boolean).forEach((colour, colour_index) => {
+		if (!main_recipes[colour]) return;
+		dialog.set_value(`recipe_source_${target_index}_${colour_index}`, "");
+		dialog.set_value(
+			`colour_yarns_${target_index}_${colour_index}`,
+			main_recipes[colour].map((row) => ({ ...row }))
+		);
+	});
+}
+
+function dia_sort_value(value) {
+	const match = String(value || "").match(/-?\d+(?:\.\d+)?/);
+	return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER;
+}
+
+function apply_yarn_profile(dialog, i, yarn, cloth) {
 	if (!yarn) return;
 	frappe.call({
 		method: "essdee_yrp.api.cloth_program.get_yarn_profile",
 		args: { yarn_item: yarn },
 		callback: function (r) {
 			const p = r.message || {};
-			if (p.knitting_process) dialog.set_value(`knitting_process_${i}`, p.knitting_process);
-			if (p.dyeing_process) dialog.set_value(`dyeing_process_${i}`, p.dyeing_process);
-			if (p.compacting_process) dialog.set_value(`compacting_process_${i}`, p.compacting_process);
-			if (p.cloth_per_kg_yarn) dialog.set_value(`cloth_per_kg_yarn_${i}`, p.cloth_per_kg_yarn);
-			if (p.greige_colour) dialog.set_value(`greige_colour_${i}`, p.greige_colour);
+			if (p.knitting_process && !dialog.get_value(`knitting_process_${i}`)) {
+				dialog.set_value(`knitting_process_${i}`, p.knitting_process);
+			}
+			if (p.dyeing_process && !dialog.get_value(`dyeing_process_${i}`)) {
+				dialog.set_value(`dyeing_process_${i}`, p.dyeing_process);
+			}
+			if (p.cloth_per_kg_yarn && !dialog.get_value(`cloth_per_kg_yarn_${i}`)) {
+				dialog.set_value(`cloth_per_kg_yarn_${i}`, p.cloth_per_kg_yarn);
+			}
+			const outputs = p.knitting_output_colours || {};
+			(cloth.required_colours || []).forEach((colour, colour_index) => {
+				(cloth.required_routes || [])
+					.filter((route) => route.colour === colour)
+					.sort((a, b) => dia_sort_value(a.dia) - dia_sort_value(b.dia))
+					.forEach((route, route_index) => {
+						const stored = (p.fabric_routes || []).find(
+							(row) => row.finished_colour === colour && row.finished_dia === route.dia
+						) || {};
+						const colour_field = `knitting_output_colour_${i}_${colour_index}_${route_index}`;
+						const dia_field = `knitting_output_dia_${i}_${colour_index}_${route_index}`;
+						if (!dialog.get_value(colour_field)) {
+							dialog.set_value(
+								colour_field,
+								stored.knitting_output_colour || outputs[colour] || p.greige_colour || ""
+							);
+						}
+						if (!dialog.get_value(dia_field)) {
+							dialog.set_value(dia_field, stored.knitting_output_dia || route.dia || "");
+						}
+					});
+			});
 		}
 	});
 }

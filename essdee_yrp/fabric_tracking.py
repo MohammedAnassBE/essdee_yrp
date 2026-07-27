@@ -57,7 +57,9 @@ def _apply_grn(grn, sign):
 		if not step:
 			continue
 		# every chain step's receipts land on the step ledger (dia + colour)
-		deltas = _grn_deltas_for_cloth(grn, fabric.cloth_item, with_colour=True)
+		deltas = _grn_deltas_for_cloth(
+			grn, fabric.cloth_item, with_colour=True, with_reference=True
+		)
 		if not deltas:
 			continue
 		_bump_ledger_rows(lot, fabric.cloth_item, step["process_name"], deltas, sign)
@@ -66,7 +68,9 @@ def _apply_grn(grn, sign):
 			# it is the WO driver and the knitting popup's balance source
 			per_dia = {}
 			for key, kg in deltas.items():
-				per_dia[(key[0],)] = per_dia.get((key[0],), 0) + kg
+				per_dia[(key[0], key[2] if len(key) > 2 else "")] = (
+					per_dia.get((key[0], key[2] if len(key) > 2 else ""), 0) + kg
+				)
 			_bump_program_rows(lot, "lot_fabric_programs", "Lot Fabric Program",
 				fabric.cloth_item, per_dia, sign, "received_weight")
 
@@ -80,13 +84,16 @@ def _bump_ledger_rows(lot, cloth_item, process_name, deltas, sign):
 			continue
 		if (r.side or "Output") != "Output":
 			continue
-		rows[(r.dia or "", r.colour or "")] = r
+		rows[(
+			r.dia or "", r.colour or "", r.get("reference_item_variant") or "",
+		)] = r
 
 	inserted = 0
 	for key, kg in deltas.items():
 		dia = key[0] or ""
 		colour = (key[1] if len(key) > 1 else "") or ""
-		row = rows.get((dia, colour))
+		reference_item_variant = (key[2] if len(key) > 2 else "") or ""
+		row = rows.get((dia, colour, reference_item_variant))
 		if row:
 			frappe.db.sql(
 				"UPDATE `tabLot Fabric Step Ledger` "
@@ -104,22 +111,33 @@ def _bump_ledger_rows(lot, cloth_item, process_name, deltas, sign):
 			new_row.side = "Output"
 			new_row.dia = dia or None
 			new_row.colour = colour or None
+			new_row.reference_item_variant = reference_item_variant or None
 			new_row.planned_weight = 0
 			new_row.received_weight = flt(sign * kg, 3)
 			new_row.save(ignore_permissions=True)
 			inserted += 1
 
 
-def get_step_received(lot, cloth_item, process_name):
+def get_step_received(
+	lot, cloth_item, process_name, reference_item_variant=None
+):
 	"""{(dia, colour): kg} received on a step's ledger Output rows — the popup's
-	'previous stage produced' figure."""
+	'previous stage produced' figure.
+
+	When an exact finished-route reference is supplied, only that route is
+	counted. This prevents two final routes that temporarily share the same
+	physical Dia/Colour from borrowing each other's receipts.
+	"""
+	filters = {
+		"parent": lot, "parenttype": "Lot", "cloth_item": cloth_item,
+		"process_name": process_name, "side": "Output",
+	}
+	if reference_item_variant is not None:
+		filters["reference_item_variant"] = reference_item_variant or ""
 	result = {}
 	for r in frappe.get_all(
 		"Lot Fabric Step Ledger",
-		filters={
-			"parent": lot, "parenttype": "Lot", "cloth_item": cloth_item,
-			"process_name": process_name, "side": "Output",
-		},
+		filters=filters,
 		fields=["dia", "colour", "received_weight"],
 	):
 		key = (r.dia or "", r.colour or "")
@@ -127,15 +145,20 @@ def get_step_received(lot, cloth_item, process_name):
 	return result
 
 
-def get_step_planned(lot, cloth_item, process_name):
+def get_step_planned(
+	lot, cloth_item, process_name, reference_item_variant=None
+):
 	"""{(dia, colour): kg} planned on a step's ledger Output rows."""
+	filters = {
+		"parent": lot, "parenttype": "Lot", "cloth_item": cloth_item,
+		"process_name": process_name, "side": "Output",
+	}
+	if reference_item_variant is not None:
+		filters["reference_item_variant"] = reference_item_variant or ""
 	result = {}
 	for r in frappe.get_all(
 		"Lot Fabric Step Ledger",
-		filters={
-			"parent": lot, "parenttype": "Lot", "cloth_item": cloth_item,
-			"process_name": process_name, "side": "Output",
-		},
+		filters=filters,
 		fields=["dia", "colour", "planned_weight"],
 	):
 		key = (r.dia or "", r.colour or "")
@@ -143,12 +166,30 @@ def get_step_planned(lot, cloth_item, process_name):
 	return result
 
 
-def _grn_deltas_for_cloth(grn, cloth_item, with_colour):
+def _grn_deltas_for_cloth(grn, cloth_item, with_colour, with_reference=False):
 	"""{(dia,) | (dia, colour): kg} summed over the GRN's rows of this cloth's variants."""
 	variant_names = list({r.item_variant for r in grn.get("items") or [] if r.item_variant})
 	if not variant_names:
 		return {}
 	attrs = _variant_attribute_map(variant_names, cloth_item)
+	references = {}
+	if with_reference and frappe.db.has_column(
+		"Work Order Receivables", "fabric_reference_variant"
+	):
+		ref_names = [
+			row.ref_docname for row in grn.get("items") or []
+			if row.get("ref_doctype") == "Work Order Receivables"
+				and row.get("ref_docname")
+		]
+		if ref_names:
+			references = {
+				row.name: row.fabric_reference_variant
+				for row in frappe.get_all(
+					"Work Order Receivables",
+					filters={"name": ["in", ref_names]},
+					fields=["name", "fabric_reference_variant"],
+				)
+			}
 	deltas = {}
 	for row in grn.get("items") or []:
 		info = attrs.get(row.item_variant)
@@ -160,6 +201,8 @@ def _grn_deltas_for_cloth(grn, cloth_item, with_colour):
 			key = (info[FABRIC_DIA_ATTRIBUTE], info.get(FABRIC_COLOUR_ATTRIBUTE) or "")
 		else:
 			key = (info[FABRIC_DIA_ATTRIBUTE],)
+		if with_reference:
+			key += (references.get(row.get("ref_docname")) or "",)
 		# stock_qty = quantity × conversion_factor in the stock UOM (kg for cloth).
 		deltas[key] = deltas.get(key, 0) + (flt(row.stock_qty) or flt(row.quantity))
 	return deltas
@@ -195,7 +238,11 @@ def _bump_program_rows(lot, parentfield, child_doctype, cloth_item, deltas, sign
 	for r in lot.get(parentfield) or []:
 		if r.cloth_item != cloth_item:
 			continue
-		key = (r.dia,) if child_doctype == "Lot Fabric Program" else (r.dia, r.colour)
+		key = (
+			(r.dia, r.get("reference_item_variant") or "")
+			if child_doctype == "Lot Fabric Program"
+			else (r.dia, r.colour)
+		)
 		rows[key] = r
 
 	# table + column come from the hardcoded call sites, never from user input
@@ -219,6 +266,14 @@ def _bump_program_rows(lot, parentfield, child_doctype, cloth_item, deltas, sign
 			new_row.idx = len(lot.get(parentfield) or []) + 1 + inserted
 			new_row.cloth_item = cloth_item
 			new_row.dia = key[0]
+			if child_doctype == "Lot Fabric Program":
+				new_row.reference_item_variant = key[1] or None
+				if key[1]:
+					ref = frappe.get_cached_doc("Item Variant", key[1])
+					new_row.colour = next((
+						a.attribute_value for a in ref.get("attributes") or []
+						if a.attribute == FABRIC_COLOUR_ATTRIBUTE
+					), None)
 			if child_doctype == "Lot Fabric Colour Program":
 				new_row.colour = key[1]
 			new_row.weight = 0
@@ -276,11 +331,51 @@ def get_produced_by_dia(lot, process_name, cloth_item, exclude_wo=None):
 	)
 
 
-def get_produced_by_dia_colour(lot, process_name, cloth_item, exclude_wo=None):
+def get_produced_by_reference(lot, process_name, cloth_item, exclude_wo=None):
+	"""{reference_item_variant: kg} already ordered on knitting WOs."""
+	if not (
+		frappe.db.has_column("Work Order", "lot")
+		and frappe.db.has_column("Work Order Receivables", "fabric_reference_variant")
+	):
+		return {}
+	conditions = ""
+	params = {
+		"lot": lot,
+		"process_name": process_name,
+		"cloth_item": cloth_item,
+		"exclude_wo": exclude_wo,
+	}
+	if exclude_wo:
+		conditions = " AND wo.name != %(exclude_wo)s"
+	rows = frappe.db.sql(
+		f"""
+		SELECT IFNULL(child.fabric_reference_variant, '') AS reference_item_variant,
+			SUM(child.qty) AS total
+		FROM `tabWork Order Receivables` child
+		JOIN `tabWork Order` wo ON child.parent = wo.name
+		JOIN `tabItem Variant` iv ON child.item_variant = iv.name
+		WHERE wo.docstatus < 2 AND wo.lot = %(lot)s
+			AND wo.process_name = %(process_name)s
+			AND iv.item = %(cloth_item)s
+			AND IFNULL(wo.is_rework, 0) = 0
+			{conditions}
+		GROUP BY IFNULL(child.fabric_reference_variant, '')
+		""",
+		params,
+		as_dict=True,
+	)
+	return {row.reference_item_variant: flt(row.total) for row in rows}
+
+
+def get_produced_by_dia_colour(
+	lot, process_name, cloth_item, exclude_wo=None,
+	reference_item_variant=None,
+):
 	"""{(dia, colour): kg} of RECEIVABLES — dyed output already ordered (dyeing)."""
 	return _sum_by_attributes(
 		"tabWork Order Receivables", lot, process_name, cloth_item, exclude_wo,
 		attributes=(FABRIC_DIA_ATTRIBUTE, FABRIC_COLOUR_ATTRIBUTE),
+		reference_item_variant=reference_item_variant,
 	)
 
 
@@ -292,17 +387,21 @@ def get_consumed_by_dia(lot, process_name, cloth_item, exclude_wo=None):
 	)
 
 
-def get_consumed_by_dia_colour(lot, process_name, cloth_item, exclude_wo=None):
+def get_consumed_by_dia_colour(
+	lot, process_name, cloth_item, exclude_wo=None,
+	reference_item_variant=None,
+):
 	"""{(dia, colour): kg} of calculated DELIVERABLES — dyed cloth already consumed
 	(compacting input)."""
 	return _sum_by_attributes(
 		"tabWork Order Deliverables", lot, process_name, cloth_item, exclude_wo,
 		attributes=(FABRIC_DIA_ATTRIBUTE, FABRIC_COLOUR_ATTRIBUTE), calculated_only=True,
+		reference_item_variant=reference_item_variant,
 	)
 
 
 def _sum_by_attributes(child_table, lot, process_name, cloth_item, exclude_wo,
-		attributes, calculated_only=False):
+		attributes, calculated_only=False, reference_item_variant=None):
 	# WO.lot is the site-configured stock-dimension Custom Field (created by
 	# yrp.stock.dimensions, never shipped as a fixture) — degrade gracefully
 	# on a site that hasn't configured the lot dimension yet.
@@ -324,10 +423,21 @@ def _sum_by_attributes(child_table, lot, process_name, cloth_item, exclude_wo,
 		conditions += " AND wo.name != %(exclude_wo)s"
 	if calculated_only:
 		conditions += " AND IFNULL(child.is_calculated, 0) = 1"
+	if (
+		reference_item_variant is not None
+		and frappe.db.has_column(
+			child_table.removeprefix("tab"), "fabric_reference_variant"
+		)
+	):
+		conditions += (
+			" AND IFNULL(child.fabric_reference_variant, '')"
+			" = %(reference_item_variant)s"
+		)
 
 	params = {
 		"lot": lot, "process_name": process_name, "cloth_item": cloth_item,
 		"exclude_wo": exclude_wo,
+		"reference_item_variant": reference_item_variant or "",
 	}
 	for i, attribute in enumerate(attributes):
 		params[f"attr{i}"] = attribute

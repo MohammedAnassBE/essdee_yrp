@@ -28,168 +28,112 @@
 				/>
 			</header>
 
-			<div class="lfv-grids">
-				<!-- ── View 1: Final Requirement (finished cloth) ── -->
-				<section class="lfv-grid">
-					<h6>Final Requirement — finished cloth</h6>
-					<table class="lfv-table">
+			<section class="lfv-grid">
+				<h6>Finished cloth requirement — Dia × Colour</h6>
+				<div class="lfv-table-wrap">
+					<table class="lfv-table lfv-matrix">
 						<thead>
 							<tr>
-								<th>Colour</th>
-								<th>Dia</th>
-								<th class="lfv-num">Weight (Kg)</th>
-								<th v-if="!readonly" class="lfv-x"></th>
+								<th rowspan="2" class="lfv-dia">Finished Dia</th>
+								<th :colspan="colourColumns(entry).length">Finished cloth requirement (Kg)</th>
+								<th rowspan="2" class="lfv-num">Total</th>
+							</tr>
+							<tr>
+								<th
+									v-for="colour in colourColumns(entry)"
+									:key="colour.key"
+									class="lfv-num lfv-colour"
+								>
+									{{ colour.label }}
+								</th>
 							</tr>
 						</thead>
 						<tbody>
-							<tr v-for="(row, ri) in entry.requirement" :key="(row.colour || '') + '::' + row.dia">
-								<td>{{ row.colour || "—" }}</td>
-								<td>{{ row.dia }}</td>
-								<td class="lfv-num">
+							<tr v-for="dia in requirementDias(entry)" :key="dia">
+								<td class="lfv-dia">{{ dia }}</td>
+								<td
+									v-for="colour in colourColumns(entry)"
+									:key="colour.key"
+									class="lfv-num"
+								>
 									<input
 										v-if="!readonly"
-										v-model.number="row.weight"
+										:value="requirementWeight(entry, dia, colour.key)"
 										type="number"
 										min="0"
 										step="0.001"
 										class="lfv-input"
-										@change="markDirty"
+										@change="setRequirementWeight(entry, dia, colour.key, $event.target.value)"
 									/>
-									<span v-else>{{ row.weight }}</span>
+									<span v-else>{{ requirementWeight(entry, dia, colour.key) }}</span>
 								</td>
-								<td v-if="!readonly" class="lfv-x">
-									<button class="lfv-remove" title="Remove row" @click="removeRow(entry.requirement, ri)">×</button>
+								<td class="lfv-num lfv-program">{{ requirementDiaTotal(entry, dia) }}</td>
+							</tr>
+							<tr v-if="!requirementDias(entry).length">
+								<td :colspan="colourColumns(entry).length + 2" class="lfv-none">
+									No cloth requirement yet
 								</td>
 							</tr>
-							<tr v-if="!entry.requirement.length">
-								<td :colspan="readonly ? 3 : 4" class="lfv-none">No requirement yet</td>
-							</tr>
-							<tr v-if="entry.requirement.length" class="lfv-total">
-								<td colspan="2">Total</td>
+							<tr v-else class="lfv-total">
+								<td>Total</td>
+								<td
+									v-for="colour in colourColumns(entry)"
+									:key="colour.key"
+									class="lfv-num"
+								>
+									{{ colourTotal(entry, colour.key) }}
+								</td>
 								<td class="lfv-num">{{ requirementTotal(entry) }}</td>
-								<td v-if="!readonly"></td>
 							</tr>
 						</tbody>
 					</table>
-					<div v-if="!readonly" class="lfv-add">
-						<Select
-							v-if="(entry.final_options?.colours || []).length"
-							v-model="entry._new_r_colour"
-							:options="entry.final_options.colours"
-							placeholder="Colour…"
-							size="small"
-							class="lfv-select"
-							showClear
-						/>
-						<Select
-							v-model="entry._new_r_dia"
-							:options="entry.final_options?.dias || []"
-							placeholder="Dia…"
-							size="small"
-							class="lfv-select"
-							showClear
-						/>
-						<input
-							v-model.number="entry._new_r_weight"
-							type="number"
-							min="0"
-							step="0.001"
-							class="lfv-add-weight"
-							placeholder="Weight (Kg)"
-							@keyup.enter="addRequirement(entry)"
-						/>
-						<Button
-							label="Add"
-							size="small"
-							severity="secondary"
-							outlined
-							:disabled="!entry._new_r_dia || !(Number(entry._new_r_weight) > 0) || ((entry.final_options?.colours || []).length && !entry._new_r_colour)"
-							@click="addRequirement(entry)"
-						/>
-					</div>
-					<div v-if="!entry.ipd_approved" class="lfv-hint">
-						Plan builds when the IPD is approved.
-					</div>
-				</section>
-
-				<!-- ── View 2: Program — dia-wise (greige to knit) with inline weight
-				     entry + received (dyed) kgs from GRN tracking ── -->
-				<section class="lfv-grid">
-					<h6>Program — dia-wise (greige to knit)</h6>
-					<table class="lfv-table">
+				</div>
+				<h6 class="lfv-route-heading">Knitting output plan — exact routes</h6>
+				<div class="lfv-table-wrap">
+					<table class="lfv-table lfv-route-table">
 						<thead>
 							<tr>
-								<th>Dia</th>
-								<th class="lfv-num">Weight (Kg)</th>
-								<th class="lfv-num">Received (Kg)</th>
-								<th v-if="!readonly" class="lfv-x"></th>
+								<th>Finished route</th>
+								<th>Received from knitting as</th>
+								<th class="lfv-num">Planned Kg</th>
+								<th class="lfv-num">Received Kg</th>
+								<th class="lfv-num">Balance Kg</th>
 							</tr>
 						</thead>
 						<tbody>
-							<tr v-for="(row, ri) in entry.program" :key="row.dia">
-								<td>{{ row.dia }}</td>
-								<td class="lfv-num">
-									<input
-										v-if="!readonly"
-										v-model.number="row.weight"
-										type="number"
-										min="0"
-										step="0.001"
-										class="lfv-input"
-										@change="markDirty"
-									/>
-									<span v-else>{{ row.weight }}</span>
+							<tr v-for="(route, ri) in programRoutes(entry)" :key="route.reference_item_variant || ri">
+								<td>
+									<strong>{{ route.finished_colour || "Unspecified colour" }}</strong>
+									<small>{{ route.finished_dia || "No final Dia" }}</small>
 								</td>
-								<td class="lfv-num lfv-received">{{ row.received_weight || 0 }}</td>
-								<td v-if="!readonly" class="lfv-x">
-									<button
-										v-if="!row.received_weight"
-										class="lfv-remove"
-										title="Remove row"
-										@click="removeRow(entry.program, ri)"
-									>×</button>
+								<td>
+									<strong>{{ route.knitting_output_colour || "Unspecified colour" }}</strong>
+									<small>{{ route.knitting_output_dia || "No knitting Dia" }}</small>
+								</td>
+								<td class="lfv-num">{{ roundKg(route.weight) }}</td>
+								<td class="lfv-num lfv-received">{{ roundKg(route.received_weight) }}</td>
+								<td class="lfv-num">{{ routeBalance(route) }}</td>
+							</tr>
+							<tr v-if="!programRoutes(entry).length">
+								<td colspan="5" class="lfv-none">
+									{{ entry.ipd_approved
+										? "Save requirements or rebuild the plan."
+										: "Approve the cloth IPD to build its route plan." }}
 								</td>
 							</tr>
-							<tr v-if="!entry.program.length">
-								<td :colspan="readonly ? 3 : 4" class="lfv-none">No program yet</td>
+							<tr v-else class="lfv-total">
+								<td colspan="2">Total</td>
+								<td class="lfv-num">{{ programTotal(entry) }}</td>
+								<td class="lfv-num lfv-received">{{ receivedTotal(entry) }}</td>
+								<td class="lfv-num">{{ roundKg(programTotal(entry) - receivedTotal(entry)) }}</td>
 							</tr>
 						</tbody>
 					</table>
-					<div v-if="!readonly && remainingDias(entry).length" class="lfv-add">
-						<Select
-							v-model="entry._new_dia"
-							:options="remainingDias(entry)"
-							placeholder="Dia…"
-							size="small"
-							class="lfv-select"
-							showClear
-						/>
-						<input
-							v-model.number="entry._new_weight"
-							type="number"
-							min="0"
-							step="0.001"
-							class="lfv-add-weight"
-							placeholder="Weight (Kg)"
-							@keyup.enter="addProgram(entry)"
-						/>
-						<Button
-							label="Add"
-							size="small"
-							severity="secondary"
-							outlined
-							:disabled="!entry._new_dia || !(Number(entry._new_weight) > 0)"
-							@click="addProgram(entry)"
-						/>
-					</div>
-				</section>
-			</div>
-			<!-- The per-process (knitting/dyeing/compacting) chain plan-vs-received
-			     view is intentionally NOT rendered (convention 2026-07-07): only the
-			     two fabric views above — Final Requirement (finished cloth) and
-			     Program (dia-wise / dyed) — are shown. The chain stays fully tracked
-			     in the backend (lot_fabric_step_ledger + the IPD matrices); the
-			     entries' `steps` payload is loaded but never displayed. -->
+				</div>
+				<div v-if="!entry.ipd_approved" class="lfv-hint">
+					Plan builds when the IPD is approved.
+				</div>
+			</section>
 		</div>
 	</div>
 </template>
@@ -199,12 +143,10 @@
  * Lot Fabric views — /web re-port of the Desk Vue island
  * apps/essdee_yrp/essdee_yrp/public/js/Lot/FabricProgram.vue.
  *
- * The 2 approved views ONLY (user decision 2026-07-07; the per-process chain
- * views are deliberately absent — display-hiding only, not a data change):
- *   1. Final Requirement — finished cloth (colour + dia + kg, inline entry,
- *      choices limited to what the chain can produce: entry.final_options).
- *   2. Program — dia-wise greige-to-knit kg with INLINE weight entry (no popup
- *      round-trips) + read-only Received kgs (GRN tracking, server-owned).
+ * One compact Dia × Colour matrix combines the two approved views: finished
+ * cloth requirement cells plus an exact finished-route → physical-knitting
+ * plan and read-only GRN received kg. The persisted payload remains the
+ * original two long-form lists.
  *
  * Data contract (byte-faithful to the Desk island):
  *  - loadData(entries): the __onload.fabric_program_details payload built by
@@ -223,16 +165,15 @@
  *    essdee_yrp.fabric_tracking.rebuild_fabric_tracking; emits "rebuilt" so
  *    the parent reloads the doc + onload (Desk does cur_frm.reload_doc()).
  *
- * Adapted (widgets only): PrimeVue Select/Button + esd-* tokens replace the
- *  Desk's native selects/btn-xs and frappe CSS vars; frappe.show_alert →
- *  useAppToast; editability comes from the `readonly` prop (the parent passes
+ * Adapted (widgets only): PrimeVue Button + esd-* tokens replace the Desk's
+ * native button and frappe CSS vars; feedback uses useAppToast; editability
+ * comes from the `readonly` prop (the parent passes
  *  the Desk's rule: Lot status !== "Open" → read-only) instead of cur_frm; the
  *  rebuild button renders only where the parent allows it (view mode — the
  *  Desk's is_dirty guard is structural there: a viewed doc is saved).
  */
 import { ref, watch } from "vue"
 import Button from "primevue/button"
-import Select from "primevue/select"
 import { callMethod } from "@/api/client"
 import { useAppToast } from "@/composables/useToast"
 
@@ -269,11 +210,6 @@ function loadData(data) {
 		...entry,
 		program: entry.program || [],
 		requirement: entry.requirement || [],
-		_new_dia: "",
-		_new_weight: null,
-		_new_r_dia: "",
-		_new_r_colour: "",
-		_new_r_weight: null,
 	}))
 }
 
@@ -281,7 +217,12 @@ function loadData(data) {
 function getData() {
 	return entries.value.map((entry) => ({
 		cloth_item: entry.cloth_item,
-		program: entry.program.map((r) => ({ dia: r.dia, weight: r.weight || 0 })),
+		program: entry.program.map((r) => ({
+			dia: r.dia,
+			colour: r.colour || null,
+			reference_item_variant: r.reference_item_variant || null,
+			weight: r.weight || 0,
+		})),
 	}))
 }
 
@@ -313,44 +254,104 @@ function planBadge(entry) {
 	return { text: "Plan error — open the fabric row", cls: "lfv-badge--err" }
 }
 
-function requirementTotal(entry) {
-	return Math.round(entry.requirement.reduce((sum, r) => sum + (Number(r.weight) || 0), 0) * 1000) / 1000
+function roundKg(value) {
+	return Math.round((Number(value) || 0) * 1000) / 1000
 }
 
-function remainingDias(entry) {
-	const used = new Set(entry.program.map((r) => r.dia))
-	return (entry.dias || []).filter((d) => !used.has(d))
+function diaNumber(value) {
+	const match = String(value || "").match(/-?\d+(?:\.\d+)?/)
+	return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER
 }
 
-function addProgram(entry) {
-	// Weight must be > 0 — the server silently skips 0-weight rows on save,
-	// so an empty add would just vanish (guards the Enter-key path too).
-	if (!entry._new_dia || !(Number(entry._new_weight) > 0)) return
-	entry.program.push({ dia: entry._new_dia, weight: Number(entry._new_weight) || 0, received_weight: 0 })
-	entry._new_dia = ""
-	entry._new_weight = null
-	markDirty()
+function requirementDias(entry) {
+	const values = [
+		...(entry.final_options?.dias || []),
+		...entry.requirement.map((row) => row.dia),
+	].filter(Boolean)
+	return [...new Set(values)].sort(
+		(a, b) => diaNumber(a) - diaNumber(b) || String(a).localeCompare(String(b)),
+	)
 }
 
-function addRequirement(entry) {
-	const dia = entry._new_r_dia
-	const colour = entry._new_r_colour || null
-	// Same 0-weight guard as addProgram (server skips weightless rows).
-	if (!dia || !(Number(entry._new_r_weight) > 0)) return
-	if (entry.requirement.some((r) => r.dia === dia && (r.colour || null) === colour)) {
-		toast.warn("Already exists", `${colour || ""} / ${dia} is already in the requirement.`)
-		return
+function colourColumns(entry) {
+	const values = [
+		...entry.requirement.map((row) => row.colour),
+		...(entry.colours || []),
+		...(entry.final_options?.colours || []),
+	].filter(Boolean)
+	const colours = [...new Set(values)]
+	return colours.length
+		? colours.map((colour) => ({ key: colour, label: colour }))
+		: [{ key: "", label: "Requirement" }]
+}
+
+function requirementRow(entry, dia, colour) {
+	return entry.requirement.find(
+		(row) => row.dia === dia && (row.colour || "") === colour,
+	)
+}
+
+function requirementWeight(entry, dia, colour) {
+	return roundKg(requirementRow(entry, dia, colour)?.weight)
+}
+
+function setRequirementWeight(entry, dia, colour, value) {
+	const weight = Math.max(0, Number(value) || 0)
+	const row = requirementRow(entry, dia, colour)
+	if (row) {
+		row.weight = weight
+	} else if (weight > 0) {
+		entry.requirement.push({ dia, colour: colour || null, weight })
 	}
-	entry.requirement.push({ dia, colour, weight: Number(entry._new_r_weight) || 0 })
-	entry._new_r_dia = ""
-	entry._new_r_colour = ""
-	entry._new_r_weight = null
 	markDirty()
 }
 
-function removeRow(rows, index) {
-	rows.splice(index, 1)
-	markDirty()
+function colourTotal(entry, colour) {
+	return roundKg(entry.requirement.reduce(
+		(sum, row) => sum + ((row.colour || "") === colour ? Number(row.weight) || 0 : 0),
+		0,
+	))
+}
+
+function requirementDiaTotal(entry, dia) {
+	return roundKg(entry.requirement.reduce(
+		(sum, row) => sum + (row.dia === dia ? Number(row.weight) || 0 : 0),
+		0,
+	))
+}
+
+function requirementTotal(entry) {
+	return roundKg(entry.requirement.reduce(
+		(sum, row) => sum + (Number(row.weight) || 0),
+		0,
+	))
+}
+
+function programRoutes(entry) {
+	return entry.program.slice().sort(
+		(a, b) =>
+			String(a.finished_colour || "").localeCompare(String(b.finished_colour || "")) ||
+			diaNumber(a.finished_dia) - diaNumber(b.finished_dia) ||
+			String(a.finished_dia || "").localeCompare(String(b.finished_dia || "")),
+	)
+}
+
+function routeBalance(route) {
+	return roundKg(Math.max(
+		(Number(route.weight) || 0) - (Number(route.received_weight) || 0),
+		0,
+	))
+}
+
+function programTotal(entry) {
+	return roundKg(entry.program.reduce((sum, row) => sum + (Number(row.weight) || 0), 0))
+}
+
+function receivedTotal(entry) {
+	return roundKg(entry.program.reduce(
+		(sum, row) => sum + (Number(row.received_weight) || 0),
+		0,
+	))
 }
 
 function markDirty() {
@@ -419,25 +420,9 @@ defineExpose({ loadData, getData, getRequirement, hasItems })
 .lfv-badge--wait { background: var(--esd-accent-50); color: var(--esd-accent-700); }
 .lfv-badge--warn { background: var(--esd-warn-50); color: var(--esd-warn); }
 .lfv-badge--err { background: var(--esd-danger-50); color: var(--esd-danger); }
-.lfv-grids {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-}
-@media (max-width: 900px) {
-	.lfv-grids {
-		grid-template-columns: 1fr;
-	}
-	.lfv-grid + .lfv-grid {
-		border-left: none;
-		border-top: 1px solid var(--esd-line);
-	}
-}
 .lfv-grid {
 	padding: 10px 12px;
 	min-width: 0;
-}
-.lfv-grid + .lfv-grid {
-	border-left: 1px solid var(--esd-line);
 }
 .lfv-grid h6 {
 	font-size: 11px;
@@ -450,6 +435,27 @@ defineExpose({ loadData, getData, getRequirement, hasItems })
 	width: 100%;
 	border-collapse: collapse;
 	font-size: 12.5px;
+}
+.lfv-table-wrap {
+	overflow-x: auto;
+}
+.lfv-matrix {
+	min-width: 720px;
+}
+.lfv-route-heading {
+	margin-top: 14px !important;
+}
+.lfv-route-table {
+	min-width: 650px;
+}
+.lfv-route-table td > strong,
+.lfv-route-table td > small {
+	display: block;
+}
+.lfv-route-table td > small {
+	margin-top: 2px;
+	color: var(--esd-muted);
+	font-size: 11px;
 }
 .lfv-table th,
 .lfv-table td {
@@ -470,12 +476,20 @@ defineExpose({ loadData, getData, getRequirement, hasItems })
 	text-align: right !important;
 	width: 90px;
 }
+.lfv-dia {
+	min-width: 105px;
+	white-space: nowrap;
+	font-weight: 600;
+}
+.lfv-colour {
+	min-width: 82px;
+}
+.lfv-program {
+	background: var(--esd-slate-50);
+	font-weight: 600;
+}
 .lfv-received {
 	color: var(--esd-muted);
-}
-.lfv-x {
-	width: 28px;
-	text-align: center !important;
 }
 .lfv-total td {
 	font-weight: 600;
@@ -490,17 +504,6 @@ defineExpose({ loadData, getData, getRequirement, hasItems })
 	outline: none;
 	font: inherit;
 }
-.lfv-remove {
-	border: none;
-	background: transparent;
-	color: var(--esd-muted);
-	cursor: pointer;
-	font-size: 14px;
-	line-height: 1;
-}
-.lfv-remove:hover {
-	color: var(--esd-danger);
-}
 .lfv-none {
 	color: var(--esd-muted-2);
 	text-align: center;
@@ -511,28 +514,21 @@ defineExpose({ loadData, getData, getRequirement, hasItems })
 	color: var(--esd-muted);
 	font-size: 11.5px;
 }
-.lfv-add {
-	display: flex;
-	gap: 6px;
-	margin-top: 8px;
-	align-items: center;
-	flex-wrap: wrap;
-}
-.lfv-select {
-	min-width: 110px;
-}
-.lfv-add-weight {
-	border: 1px solid var(--esd-line);
-	border-radius: 6px;
-	background: var(--esd-card);
-	color: var(--esd-ink);
-	font-size: 12px;
-	padding: 5px 8px;
-	width: 110px;
-	text-align: right;
-	outline: none;
-}
-.lfv-add-weight:focus {
-	border-color: var(--esd-accent);
+@media (max-width: 700px) {
+	.lfv-head {
+		align-items: flex-start;
+	}
+	.lfv-title {
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+	}
+	.lfv-ipd,
+	.lfv-badge {
+		margin-left: 0;
+	}
+	.lfv-grid {
+		padding: 8px;
+	}
 }
 </style>

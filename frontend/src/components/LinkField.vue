@@ -21,6 +21,7 @@
 			:invalid="invalid"
 			:placeholder="placeholder || ('Search ' + (targetDoctype || '') + '…')"
 			:dropdown="dropdown"
+			:forceSelection="forceSelection"
 			completeOnFocus
 			class="fld fld-link"
 			fluid
@@ -78,6 +79,9 @@ const props = defineProps({
 	// Pass false for a clean "Link field" look — a search/typeahead input with no
 	// select chevron (suggestions still appear on focus + as you type).
 	dropdown: { type: Boolean, default: true },
+	// Require a real suggestion. Useful where an arbitrary visible string would
+	// look filled but cannot be stored as a valid Frappe Link value.
+	forceSelection: { type: Boolean, default: false },
 	// Optional custom search: async (query) => Array<{ name }>. When provided,
 	// it replaces the default name-like search (used for Addresses where the
 	// link is via Dynamic Link rather than a direct field, so a plain filter
@@ -148,6 +152,7 @@ function onItemSelect(e) {
 // Free-text typing / clearing comes through as a string; an object can slip
 // through if PrimeVue echoes the selected suggestion — normalise to the name.
 function onModelUpdate(v) {
+	if (props.forceSelection && typeof v === "string" && v) return
 	emit("update:modelValue", v && typeof v === "object" ? v.name : v)
 }
 

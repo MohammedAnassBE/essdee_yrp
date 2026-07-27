@@ -1,61 +1,182 @@
 frappe.ui.form.on("Work Order", {
 	setup(frm) {
-		// Cloth process + lot selected -> the Item link offers ONLY the Lot's
-		// fabric cloths; otherwise the standard full Item list.
+		frm.set_df_property("production_detail", "read_only", 1);
 		frm.set_query("item", () => {
-			if (frm._fabric_cloth_items && frm._fabric_cloth_items.length) {
-				return { filters: { name: ["in", frm._fabric_cloth_items] } };
-			}
-			return {};
+			const items = frm._work_order_item_options || [];
+			return {
+				filters: {
+					name: ["in", items.length ? items : ["__no_work_order_item__"]],
+				},
+			};
 		});
 	},
 	refresh(frm) {
-		frm.trigger("apply_lot_item_behaviour");
+		frm.set_df_property("supplier", "label", __("Supplier"));
+		frm.set_df_property("supplier_address", "label", __("Supplier Address"));
+		frm.set_df_property("process_name", "label", __("Process"));
+		frm.set_df_property("production_detail", "label", __("Item Production Detail"));
+		frm.set_df_property("production_detail", "read_only", 1);
+		frm.trigger("apply_lot_process_selection");
+		// Base YRP also mounts these editors in its refresh handler. Defer one
+		// tick so the Essdee calculated-only editor is deterministically last,
+		// regardless of hook registration order.
+		setTimeout(() => {
+			arrange_work_order_header_fields(frm);
+			mount_calculated_work_order_editors(frm);
+		}, 0);
 		if (frm.is_new() || frm.doc.docstatus !== 0) return;
 		frm.add_custom_button(__("Calculate Fabric Deliverables"), () => open_fabric_calculate(frm));
 	},
 	lot(frm) {
-		frm.trigger("apply_lot_item_behaviour");
+		if (frm.doc.docstatus === 0) {
+			frm.set_value("item", "");
+			frm.set_value("production_detail", "");
+		}
+		frm.trigger("apply_lot_process_selection");
 	},
 	process_name(frm) {
-		frm.trigger("apply_lot_item_behaviour");
+		if (frm.doc.docstatus === 0) {
+			frm.set_value("item", "");
+			frm.set_value("production_detail", "");
+			if (!frm.doc.process_name) frm.set_value("lot", "");
+		}
+		frm.trigger("apply_lot_process_selection");
 	},
-	async apply_lot_item_behaviour(frm) {
-		frm._fabric_cloth_items = null;
+	item(frm) {
+		apply_selected_work_order_item(frm);
+	},
+	async apply_lot_process_selection(frm) {
+		const request_id = (frm._work_order_selection_request || 0) + 1;
+		frm._work_order_selection_request = request_id;
+		frm._work_order_selection_options = [];
+		frm._work_order_item_options = [];
+		update_work_order_header_controls(frm);
 		if (!frm.doc.lot || !frm.doc.process_name) return;
 
-		const proc = await frappe.db.get_value("Process", frm.doc.process_name, "is_cloth_process");
-		if (proc && proc.message && proc.message.is_cloth_process) {
-			// Cloth process: DON'T pre-fill — filter the Item to the Lot's fabrics.
-			// Child tables can't be queried via client get_list in v16 —
-			// dedicated whitelisted endpoint instead.
-			const r = await frappe.call({
-				method: "essdee_yrp.api.work_order.get_lot_fabric_items",
-				args: { lot: frm.doc.lot },
-			});
-			frm._fabric_cloth_items = r.message || [];
-			// mutate only drafts — a submitted WO whose item left the fabric
-			// list must never be blanked into an unsaveable dirty form
-			if (frm.doc.docstatus === 0) {
-				if (frm.doc.item && !frm._fabric_cloth_items.includes(frm.doc.item)) {
-					frm.set_value("item", "");
-				}
-				if (!frm._fabric_cloth_items.length) {
-					frappe.show_alert({
-						message: __("Lot {0} has no fabric rows — add them on the Lot first.", [frm.doc.lot]),
-						indicator: "orange",
-					});
-				}
+		const r = await frappe.call({
+			method: "essdee_yrp.api.work_order.get_work_order_selection_context",
+			args: { lot: frm.doc.lot, process_name: frm.doc.process_name },
+		});
+		if (request_id !== frm._work_order_selection_request) return;
+
+		const context = r.message || {};
+		frm._work_order_selection_options = context.options || [];
+		frm._work_order_item_options = context.item_options || [];
+
+		if (frm.doc.docstatus === 0) {
+			if (context.auto_item) {
+				await set_if_changed(frm, "item", context.auto_item);
+				await set_if_changed(
+					frm, "production_detail", context.auto_production_detail || ""
+				);
+			} else if (
+				frm.doc.item
+				&& !frm._work_order_item_options.includes(frm.doc.item)
+			) {
+				await set_if_changed(frm, "item", "");
+				await set_if_changed(frm, "production_detail", "");
+			} else {
+				await apply_selected_work_order_item(frm);
 			}
-		} else if (frm.doc.docstatus === 0) {
-			// Standard process: pre-fill the Item from the Lot (production_api behaviour).
-			const lot = await frappe.db.get_value("Lot", frm.doc.lot, "item");
-			if (lot && lot.message && lot.message.item && frm.doc.item !== lot.message.item) {
-				frm.set_value("item", lot.message.item);
+			if (!frm._work_order_item_options.length) {
+				frappe.show_alert({
+					message: context.is_cloth_process
+						? __("No Lot cloth IPD contains process {0}.", [frm.doc.process_name])
+						: __("The Lot has no garment Item Production Detail."),
+					indicator: "orange",
+				});
 			}
 		}
+		update_work_order_header_controls(frm);
 	},
 });
+
+function update_work_order_header_controls(frm) {
+	const draft = frm.doc.docstatus === 0;
+	const has_process = Boolean(frm.doc.process_name);
+	const has_context = has_process && Boolean(frm.doc.lot);
+	const items = frm._work_order_item_options || [];
+	frm.toggle_enable("lot", draft && has_process);
+	frm.toggle_enable("item", draft && has_context && items.length > 1);
+	frm.toggle_enable("production_detail", false);
+}
+
+function arrange_work_order_header_fields(frm) {
+	const process = frm.fields_dict.process_name?.$wrapper;
+	const lot = frm.fields_dict.lot?.$wrapper;
+	const item = frm.fields_dict.item?.$wrapper;
+	const production_detail = frm.fields_dict.production_detail?.$wrapper;
+	if (!process?.length || !lot?.length || !item?.length || !production_detail?.length) return;
+	lot.insertAfter(process);
+	item.insertAfter(lot);
+	production_detail.insertAfter(item);
+}
+
+async function set_if_changed(frm, fieldname, value) {
+	if ((frm.doc[fieldname] || "") === (value || "")) return;
+	await frm.set_value(fieldname, value || "");
+}
+
+async function apply_selected_work_order_item(frm) {
+	if (frm.doc.docstatus !== 0) return;
+	const matches = (frm._work_order_selection_options || []).filter(
+		(option) => option.item === frm.doc.item
+	);
+	await set_if_changed(
+		frm,
+		"production_detail",
+		matches.length === 1 ? matches[0].production_detail : ""
+	);
+}
+
+function mount_calculated_work_order_editors(frm) {
+	if (!frappe.yrp?.work_order?.ItemEditor) return;
+	[
+		{
+			fieldname: "deliverable_items",
+			editor_key: "deliverableEditor",
+			payload_field: "deliverable_details",
+			source_table: "deliverables",
+			editor_type: "work_order_deliverables",
+			title: __("Deliverables"),
+		},
+		{
+			fieldname: "receivable_items",
+			editor_key: "receivableEditor",
+			payload_field: "receivable_details",
+			source_table: "receivables",
+			editor_type: "work_order_receivables",
+			title: __("Receivables"),
+		},
+	].forEach((config) => {
+		if (!frm.fields_dict[config.fieldname]) return;
+		if (frm[config.editor_key]) frm[config.editor_key].app.unmount();
+		frm.set_df_property(config.fieldname, "hidden", 0);
+		frm.set_df_property(config.source_table, "hidden", 1);
+		$(frm.fields_dict[config.fieldname].wrapper).empty();
+		frm[config.editor_key] = new frappe.yrp.work_order.ItemEditor(
+			frm.fields_dict[config.fieldname].wrapper,
+			{
+				title: config.title,
+				editorType: config.editor_type,
+				showDimensions: false,
+				allowCreate: false,
+				allowEdit: false,
+				allowRemove: false,
+			},
+		);
+		let data = frm.doc.__onload?.[config.payload_field] || frm.doc[config.payload_field] || [];
+		if (typeof data === "string") {
+			try {
+				data = JSON.parse(data);
+			} catch (_) {
+				data = [];
+			}
+		}
+		frm[config.editor_key].load_data(data);
+		frm[config.editor_key].update_status();
+	});
+}
 
 function open_fabric_calculate(frm) {
 	frappe.call({
@@ -76,7 +197,7 @@ function open_fabric_calculate(frm) {
 }
 
 // One planning line under each qty input. null/undefined figures are hidden
-// (e.g. "available" on bought-greige lots where knitting isn't managed).
+// (e.g. "available" when the preceding fabric step is not managed in this Lot).
 function planning_description(kind, qr) {
 	const kg = (v) => `${flt(v, 3)} kg`;
 	const parts = [];
@@ -102,9 +223,9 @@ function warn_balance_overshoot(ctx, manifest, values) {
 		const fields = manifest.filter((m) => m.row === i);
 		if (row.kind === "knitting" || row.kind === "dyeing") {
 			const per_dia = {};
-			const limit_label = row.kind === "knitting" ? __("balance") : __("greige available");
+			const limit_label = row.kind === "knitting" ? __("balance") : __("previous stage available");
 			fields.forEach((m) => {
-				const dia = (m.out_attrs || {}).Dia || m.label;
+				const dia = m.reference_item_variant || (m.out_attrs || {}).Dia || m.label;
 				const limit = row.kind === "knitting" ? m.balance : m.available;
 				if (!per_dia[dia]) per_dia[dia] = { sum: 0, limit };
 				per_dia[dia].sum += flt(values[m.fieldname]) || 0;
@@ -118,7 +239,7 @@ function warn_balance_overshoot(ctx, manifest, values) {
 			fields.forEach((m) => {
 				const qty = flt(values[m.fieldname]);
 				if (qty && m.available != null && qty > m.available + 0.001) {
-					overs.push(`${row.cloth_item} · ${m.label}: ${qty} > ${__("dyed available")} ${m.available}`);
+					overs.push(`${row.cloth_item} · ${m.label}: ${qty} > ${__("previous stage available")} ${m.available}`);
 				}
 			});
 		}
@@ -134,7 +255,7 @@ function warn_balance_overshoot(ctx, manifest, values) {
 
 // The IPD derives every attribute; the user only enters quantities. Every
 // input posts its matrix-group key so the server never resolves groups by
-// attrs. Knitting renders one COLUMN PER GREIGE COLOUR (multiple colours per
+// attrs. Legacy knitting renders one column per physical output colour
 // WO, 2026-07-04) — each (dia × colour) input becomes its own entry line.
 const MAX_COLOUR_COLUMNS = 6;
 
@@ -150,8 +271,16 @@ function render_fabric_dialog(frm, ctx) {
 		manifest.forEach((m) => {
 			if (m.row === i) total += flt(d.get_value(m.fieldname)) || 0;
 		});
-		const yarn = row.ratio ? total / row.ratio : total;
-		d.set_value(`yarn_qty_${i}`, Math.round(yarn * 1000) / 1000);
+		const total_yarn = row.ratio ? total / row.ratio : total;
+		const yarns = row.yarns || [];
+		if (yarns.length > 1) {
+			yarns.forEach((yarn, yi) => {
+				const qty = total_yarn * flt(yarn.ratio) / 100;
+				d.set_value(`yarn_qty_${i}_${yi}`, Math.round(qty * 1000) / 1000);
+			});
+			return;
+		}
+		d.set_value(`yarn_qty_${i}`, Math.round(total_yarn * 1000) / 1000);
 	};
 
 	ctx.rows.forEach((row, i) => {
@@ -172,16 +301,32 @@ function render_fabric_dialog(frm, ctx) {
 		}
 
 		const colour_options = row.colour_options || [];
-		const multi_colour = row.kind === "knitting" && row.has_colour
+		const reference_routed = Boolean(row.reference_routed);
+		const multi_colour = row.kind === "knitting" && !reference_routed && row.has_colour
 			&& colour_options.length > 0 && colour_options.length <= MAX_COLOUR_COLUMNS;
+		const needs_colour_picker = row.kind === "knitting" && row.has_colour
+			&& !multi_colour
+			&& (!reference_routed || (row.qty_rows || []).some((qr) => !qr.knit_colour));
 
 		if (row.kind === "knitting") {
-			fields.push({
-				fieldtype: "HTML",
-				options: `<div class="text-muted small">${__("Yarn")}: <b>${frappe.utils.escape_html(row.yarn_item || "")}</b>
-					&nbsp;·&nbsp; 1 kg ${__("yarn")} &rarr; ${row.ratio} kg ${__("cloth")}</div>`,
-			});
-			if (row.has_colour && !multi_colour) {
+			if (reference_routed) {
+				fields.push({
+					fieldtype: "HTML",
+					options: `<div class="text-muted small">${__(
+						"Each target colour and Dia uses its own yarn recipe. The recipe is shown below its quantity."
+					)}</div>`,
+				});
+			} else {
+				const yarn_blend = (row.yarns || [])
+					.map((y) => `${frappe.utils.escape_html(y.yarn_item)} ${flt(y.ratio, 3)}%`)
+					.join(" + ");
+				fields.push({
+					fieldtype: "HTML",
+					options: `<div class="text-muted small">${__("Yarn blend")}: <b>${yarn_blend}</b>
+						&nbsp;·&nbsp; 1 kg ${__("blended yarn")} &rarr; ${row.ratio} kg ${__("cloth")}</div>`,
+				});
+			}
+			if (needs_colour_picker) {
 				// too many colour choices for columns — single-colour fallback
 				fields.push({
 					fieldtype: "Link", label: __("Cloth Colour"), fieldname: `colour_${i}`,
@@ -203,7 +348,7 @@ function render_fabric_dialog(frm, ctx) {
 		}
 
 		if (multi_colour) {
-			// one column per greige colour, one input per dia inside each
+			// Legacy route: one column per physical knitting-output colour.
 			fields.push({ fieldtype: "Section Break" });
 			colour_options.forEach((colour, ci) => {
 				if (ci > 0) fields.push({ fieldtype: "Column Break" });
@@ -213,10 +358,10 @@ function render_fabric_dialog(frm, ctx) {
 				});
 				(row.qty_rows || []).forEach((qr, j) => {
 					const fieldname = `qty_${i}_${j}_c${ci}`;
-					const is_greige = colour === row.greige_colour;
+					const is_default_output = colour === row.greige_colour;
 					fields.push({
 						fieldtype: "Float", label: qr.label, fieldname,
-						default: is_greige && qr.prefill ? qr.prefill : undefined,
+						default: is_default_output && qr.prefill ? qr.prefill : undefined,
 						description: ci === 0 ? planning_description(row.kind, qr) : undefined,
 						onchange: () => recompute_yarn(i),
 					});
@@ -234,15 +379,35 @@ function render_fabric_dialog(frm, ctx) {
 			// the primary_action payload is unchanged.
 			const push_qty_field = (qr, j, label) => {
 				const fieldname = `qty_${i}_${j}`;
+				const yarn_recipe = (qr.yarns || [])
+					.map((y) => `${frappe.utils.escape_html(y.yarn_item)} ${flt(y.ratio, 3)}%`)
+					.join(" + ");
+				const plan_description = planning_description(row.kind, qr);
+				const knitting_output = row.kind === "knitting" && reference_routed
+					? [qr.knit_colour, qr.knit_dia]
+						.filter(Boolean)
+						.map((value) => frappe.utils.escape_html(value))
+						.join(" · ")
+					: null;
 				fields.push({
 					fieldtype: "Float", label, fieldname,
 					default: qr.prefill || undefined,
-					description: planning_description(row.kind, qr),
+					description: [
+						knitting_output
+							? `<b>${__("Received from knitting as")}:</b> ${knitting_output}`
+							: null,
+						plan_description,
+						yarn_recipe ? `<b>${__("Yarn")}:</b> ${yarn_recipe}` : null,
+					].filter(Boolean).join("<br>") || undefined,
 					onchange: row.kind === "knitting" ? () => recompute_yarn(i) : undefined,
 				});
 				manifest.push({
 					fieldname, row: i, key: qr.key, out_attrs: qr.out_attrs,
-					colour: null, label: qr.label, balance: qr.balance, available: qr.available,
+					colour: qr.knit_colour || null,
+					label: qr.label,
+					balance: qr.balance,
+					available: qr.available,
+					reference_item_variant: qr.reference_item_variant || null,
 				});
 			};
 
@@ -253,15 +418,18 @@ function render_fabric_dialog(frm, ctx) {
 			const sections = [];
 			const by_section = {};
 			qty_rows.forEach((qr, j) => {
-				const key = qr.section == null ? " null" : String(qr.section);
+				const key = qr.section == null ? "null" : String(qr.section);
 				if (!by_section[key]) {
 					by_section[key] = { name: qr.section, items: [] };
 					sections.push(by_section[key]);
 				}
 				by_section[key].items.push([qr, j]);
 			});
-			const sectionable = ["conversion", "dyeing", "compacting", "identity"].includes(row.kind)
-				&& qty_rows.length > 6
+			const sectionable = (
+				["conversion", "dyeing", "compacting", "identity"].includes(row.kind)
+				|| reference_routed
+			)
+				&& (reference_routed || qty_rows.length > 6)
 				&& sections.length > 1
 				&& qty_rows.every((qr) => qr.section != null);
 
@@ -283,10 +451,24 @@ function render_fabric_dialog(frm, ctx) {
 			}
 		}
 
-		if (row.kind === "knitting") {
+		if (row.kind === "knitting" && !reference_routed && (row.yarns || []).length <= 1) {
 			fields.push({
 				fieldtype: "Float", label: __("Yarn (deliverable) Kg"), fieldname: `yarn_qty_${i}`,
 				description: __("Auto: total cloth ÷ {0}. Edit only if reality differs.", [row.ratio]),
+			});
+		} else if (row.kind === "knitting" && !reference_routed) {
+			fields.push({
+				fieldtype: "Section Break",
+				label: __("Calculated Yarn Deliverables"),
+			});
+			(row.yarns || []).forEach((yarn, yi) => {
+				fields.push({
+					fieldtype: "Float",
+					label: `${yarn.yarn_item} (${flt(yarn.ratio, 3)}%)`,
+					fieldname: `yarn_qty_${i}_${yi}`,
+					read_only: 1,
+					description: __("Calculated from total cloth, the knitting yield, and this yarn's blend ratio."),
+				});
 			});
 		}
 	});
@@ -320,7 +502,9 @@ function render_fabric_dialog(frm, ctx) {
 				rows.push({
 					fabric_row: row.fabric_row,
 					colour: fallback_colour,
-					yarn_qty: values[`yarn_qty_${i}`] || null,
+					yarn_qty: !row.reference_routed && (row.yarns || []).length <= 1
+						? values[`yarn_qty_${i}`] || null
+						: null,
 					entries,
 				});
 			});

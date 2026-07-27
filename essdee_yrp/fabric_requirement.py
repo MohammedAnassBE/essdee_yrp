@@ -26,7 +26,7 @@ import json
 
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import flt, rounded
 
 
 def _as_json(value):
@@ -120,6 +120,17 @@ def get_stitching_combination(ipd_doc):
     }
 
 
+def _uses_panel_colour_cutting(ipd_doc):
+    """Schema 2 Cutting rows are keyed by the panel's fabric colour."""
+    if not ipd_doc.get("enable_panel_wise_consumption_matrix"):
+        return False
+    matrix = _as_json(ipd_doc.get("panel_wise_consumption_matrix_json"))
+    try:
+        return int(matrix.get("schema_version") or 1) >= 2
+    except (AttributeError, TypeError, ValueError):
+        return False
+
+
 def get_accessory_colour(ipd_doc, variant_attrs, accessory):
     if ipd_doc.is_set_item:
         part = variant_attrs[ipd_doc.set_item_attribute]
@@ -191,20 +202,28 @@ def calculate_cloth(ipd_doc, variant_attrs, qty, cloth_combination, stitching_co
         for stiching_attr, attr_qty in stitching_combination["stitching_attribute_count"].items():
             attrs[ipd_doc.stiching_attribute] = stiching_attr
             cloth_key = get_key(attrs, cloth_combination["cloth_attributes"])
-            cutting_key = get_key(attrs, cloth_combination["cutting_attributes"])
             stich_key = attrs[ipd_doc.packing_attribute]
             if ipd_doc.is_set_item:
                 stich_key = (stich_key, attrs[ipd_doc.set_item_attribute])
-            if cloth_combination["cutting_combination"].get(cutting_key) \
-                    and stiching_attr in stitching_combination["stitching_combination"].get(stich_key, {}):
-                dia, weight = cloth_combination["cutting_combination"][cutting_key]
+            panel_colours = stitching_combination["stitching_combination"].get(stich_key, {})
+            if stiching_attr in panel_colours:
+                cloth_colour = panel_colours[stiching_attr]
+                cutting_attrs = attrs.copy()
+                if _uses_panel_colour_cutting(ipd_doc):
+                    cutting_attrs[ipd_doc.packing_attribute] = cloth_colour
+                cutting_key = get_key(
+                    cutting_attrs, cloth_combination["cutting_attributes"]
+                )
+                cutting_row = cloth_combination["cutting_combination"].get(cutting_key)
+                if not cutting_row:
+                    continue
+                dia, weight = cutting_row
                 cloth_type = cloth_combination["cloth_combination"].get(cloth_key)
                 if not cloth_type:
                     frappe.throw(_(
                         "No cloths row for {0} in the garment IPD's Cutting tab "
                         "cloth combination — add the missing row.").format(cloth_key))
                 weight = weight * qty * attr_qty
-                cloth_colour = stitching_combination["stitching_combination"][stich_key][stiching_attr]
                 cloth_detail.append(add_cloth_detail(weight, cloth_type, cloth_colour, dia, "cloth"))
     else:
         cutting_key = get_key(attrs, cloth_combination["cutting_attributes"])
@@ -250,6 +269,28 @@ def _aggregate_demand(item_detail, variant_rows, cloth_combination, stitching_co
             "Item) before building.").format(
             ", ".join(sorted(unmapped)), item_detail.get("name") or ""))
     return cloth_details
+
+
+def _apply_cloth_allowance(demand, allowance_percentage):
+    """Apply the configured cutting allowance to each dia/colour bucket.
+
+    The production worksheets calculate each requirement as
+    ``ROUND(raw kg * (1 + allowance%), 0)``.  Commercial rounding is explicit
+    here so a .5 kg boundary behaves like Excel instead of depending on the
+    site's general rounding preference.
+
+    A zero/blank allowance deliberately preserves the existing decimal
+    quantities for sites that have not enabled this setting.
+    """
+    allowance_percentage = flt(allowance_percentage)
+    if not allowance_percentage:
+        return demand
+
+    multiplier = 1 + (allowance_percentage / 100)
+    return {
+        key: flt(rounded(flt(kg) * multiplier, 0, "Commercial Rounding"))
+        for key, kg in demand.items()
+    }
 
 
 def _validate_garment_ipd(item_detail):
@@ -309,5 +350,9 @@ def compute_cloth_demand(lot_name):
             del attr_values[item_detail.dependent_attribute]
         variant_rows.append((attr_values, qty))
 
-    return _aggregate_demand(
+    demand = _aggregate_demand(
         item_detail, variant_rows, cloth_combination, stitching_combination, cloth_label_to_item)
+    return _apply_cloth_allowance(
+        demand,
+        frappe.db.get_single_value("MRP Settings", "cloth_allowance_percentage"),
+    )

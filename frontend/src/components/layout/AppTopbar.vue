@@ -263,4 +263,60 @@ async function onLogout() {
 	font-size: 11.5px;
 	color: var(--esd-muted);
 }
+
+@media (max-width: 768px) {
+	.esd-topbar {
+		gap: 6px;
+		min-width: 0;
+		overflow: hidden;
+		padding: 0 8px;
+	}
+
+	.topbar-left {
+		flex: 0 1 auto;
+	}
+
+	.topbar-title {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.topbar-right {
+		flex: 1 1 auto;
+		justify-content: flex-end;
+		gap: 4px;
+		min-width: 0;
+	}
+
+	.cmdk-trigger {
+		flex: 0 0 36px;
+		justify-content: center;
+		min-width: 36px;
+		padding: 0;
+	}
+
+	.cmdk-trigger__label,
+	.cmdk-trigger__kbd,
+	.role-meta {
+		display: none;
+	}
+
+	.role-chip {
+		flex: 0 0 auto;
+		padding: 2px;
+	}
+
+	.topbar-right :deep(.p-button) {
+		flex: 0 0 auto;
+		height: 36px;
+		width: 36px;
+	}
+}
+
+@media (max-width: 430px) {
+	.topbar-title {
+		max-width: 96px;
+	}
+}
 </style>

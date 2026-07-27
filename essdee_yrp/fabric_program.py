@@ -41,6 +41,8 @@ def fetch_fabric_program_details(lot_doc):
 			"dias": _ipd_dias(ipd),
 			"colours": _ipd_target_colours(ipd),
 			"greige_colour": get_greige_colour(ipd),
+			"knitting_output_colours": get_knitting_output_colour_map(ipd),
+			"fabric_routes": get_fabric_routes(ipd),
 			"plan_status": fabric.get("plan_status") or "",
 			"plan_built_on": str(fabric.get("plan_built_on") or ""),
 			"ipd_approved": (ipd.get("approval_status") == "Approved"),
@@ -51,11 +53,52 @@ def fetch_fabric_program_details(lot_doc):
 			],
 			"steps": _ledger_steps(ipd, fabric.cloth_item, ledger_rows),
 			"program": [
-				{"dia": r.dia, "weight": flt(r.weight), "received_weight": flt(r.received_weight)}
+				_program_row_payload(ipd, r)
 				for r in program_rows if r.cloth_item == fabric.cloth_item
 			],
 		})
 	return entries
+
+
+def _program_row_payload(ipd, row):
+	"""Display/persistence payload for one exact knitting route.
+
+	The child row stores the physical output Dia/Colour plus a stable final
+	reference. Resolve both sides server-side so Desk and /web never have to
+	guess that a physical 18 Dia AMEL row belongs to finished 22 Dia AMEL.
+	"""
+	reference = row.get("reference_item_variant")
+	final_attrs = {}
+	if reference:
+		variant = frappe.get_cached_doc("Item Variant", reference)
+		final_attrs = {
+			value.attribute: value.attribute_value
+			for value in variant.get("attributes") or []
+		}
+	final_dia = final_attrs.get(FABRIC_DIA_ATTRIBUTE) or row.dia
+	final_colour = final_attrs.get(FABRIC_COLOUR_ATTRIBUTE) or row.get("colour")
+	route = next((
+		candidate for candidate in get_fabric_routes(ipd)
+		if candidate["finished_dia"] == final_dia
+		and candidate["finished_colour"] == final_colour
+	), None)
+	return {
+		"dia": row.dia,
+		"colour": row.get("colour") or (
+			route and route["knitting_output_colour"]
+		),
+		"reference_item_variant": reference,
+		"finished_dia": final_dia,
+		"finished_colour": final_colour,
+		"knitting_output_dia": (
+			route and route["knitting_output_dia"]
+		) or row.dia,
+		"knitting_output_colour": (
+			route and route["knitting_output_colour"]
+		) or row.get("colour"),
+		"weight": flt(row.weight),
+		"received_weight": flt(row.received_weight),
+	}
 
 
 def _final_options(ipd):
@@ -125,6 +168,169 @@ def get_greige_colour(ipd):
 	if len(colours) == 1:
 		return colours[0]
 	return None
+
+
+def _first_colour_change_rows(ipd):
+	"""Return ``(has_colour_change, rows)`` for the first Colour-changing step.
+
+	Each row is ``{from_colour, to_colour, dia}``.  It is read from the generic
+	Fabric Process mappings, so manually-authored F16 cloth IPDs and CPDs created
+	by Build Cloth Program use the same source of truth.
+	"""
+	from essdee_yrp.fabric_ipd import get_fabric_process_rows
+
+	for process_row in get_fabric_process_rows(ipd):
+		grouped = {}
+		for mapping in process_row.get("value_mappings") or []:
+			grouped.setdefault(mapping.get("mapping_index"), []).append(mapping)
+		has_colour_change = any(
+			mapping.get("role") == "Change"
+			and mapping.get("attribute") == FABRIC_COLOUR_ATTRIBUTE
+			for mappings in grouped.values()
+			for mapping in mappings
+		)
+		if not has_colour_change:
+			continue
+
+		rows = []
+		for mappings in grouped.values():
+			change = next((
+				mapping for mapping in mappings
+				if mapping.get("role") == "Change"
+				and mapping.get("attribute") == FABRIC_COLOUR_ATTRIBUTE
+			), None)
+			if not change:
+				continue
+			dia = next((
+				mapping.get("from_value") for mapping in mappings
+				if mapping.get("role") == "Pin"
+				and mapping.get("attribute") == FABRIC_DIA_ATTRIBUTE
+				and mapping.get("from_value")
+			), None)
+			rows.append({
+				"from_colour": change.get("from_value"),
+				"to_colour": change.get("to_value"),
+				"dia": dia,
+			})
+		return True, rows
+	return False, []
+
+
+def get_knitting_output_colour_map(ipd):
+	"""``{finished_colour: knitting_output_colour}`` where unambiguous.
+
+	The first Colour-changing process owns this relationship: its ``from`` value
+	is what Knitting returns and its ``to`` value is the finished/required colour.
+	When no Colour-changing process exists, a cloth is already knitted in its
+	finished colour.
+	"""
+	exact_routes = get_fabric_routes(ipd)
+	if exact_routes:
+		sources = {}
+		for route in exact_routes:
+			sources.setdefault(route["finished_colour"], set()).add(
+				route["knitting_output_colour"]
+			)
+		return {
+			colour: next(iter(values))
+			for colour, values in sources.items()
+			if len(values) == 1
+		}
+
+	has_colour_change, rows = _first_colour_change_rows(ipd)
+	sources = {}
+	for row in rows:
+		if row["from_colour"] and row["to_colour"]:
+			sources.setdefault(row["to_colour"], set()).add(row["from_colour"])
+	result = {
+		to_colour: next(iter(from_colours))
+		for to_colour, from_colours in sources.items()
+		if len(from_colours) == 1
+	}
+	# A recipe colour with no Colour-change route is already final when it
+	# leaves knitting.  This also covers an all-direct CPD with no dyeing
+	# process.  Auto-built mixed CPDs persist explicit AMEL -> AMEL / GMEL ->
+	# GMEL rows, but the fallback keeps manually-authored profiles concise.
+	recipe_colours = {
+		row.colour for row in ipd.get("colour_yarn_recipes") or []
+		if row.cloth_item == ipd.item and row.colour
+	}
+	mapped_targets = {
+		row["to_colour"] for row in rows if row["to_colour"]
+	}
+	for colour in recipe_colours - mapped_targets:
+		result[colour] = colour
+	if result or has_colour_change:
+		return result
+	return {
+		row.colour: row.colour
+		for row in ipd.get("colour_yarn_recipes") or []
+		if row.cloth_item == ipd.item and row.colour
+	}
+
+
+def get_knitting_output_colour(ipd, finished_colour, dia=None):
+	"""Resolve the colour physically received from Knitting for one route."""
+	if dia:
+		route = next((
+			row for row in get_fabric_routes(ipd)
+			if row["finished_colour"] == finished_colour
+			and row["finished_dia"] == dia
+		), None)
+		if route:
+			return route["knitting_output_colour"]
+	has_colour_change, rows = _first_colour_change_rows(ipd)
+	target_rows = [
+		row for row in rows
+		if row["to_colour"] == finished_colour
+	]
+	if dia:
+		exact = [row for row in target_rows if row["dia"] == dia]
+		wildcard = [row for row in target_rows if not row["dia"]]
+		target_rows = exact or wildcard
+	sources = {
+		row["from_colour"] for row in target_rows if row["from_colour"]
+	}
+	if len(sources) == 1:
+		return next(iter(sources))
+	recipe_colours = {
+		row.colour for row in ipd.get("colour_yarn_recipes") or []
+		if row.cloth_item == ipd.item and row.colour
+	}
+	if not target_rows and finished_colour in recipe_colours:
+		return finished_colour
+	if not has_colour_change:
+		return finished_colour
+	# Backward compatibility for old one-greige profiles whose first swap can be
+	# represented only as one global incoming colour.
+	return get_greige_colour(ipd) if len(sources) == 0 else None
+
+
+def get_knitting_output_dia(ipd, finished_colour, finished_dia):
+	"""Physical Dia received from knitting for one exact finished route."""
+	route = next((
+		row for row in get_fabric_routes(ipd)
+		if row["finished_colour"] == finished_colour
+		and row["finished_dia"] == finished_dia
+	), None)
+	return route["knitting_output_dia"] if route else finished_dia
+
+
+def get_fabric_routes(ipd):
+	"""Serialisable exact route rows stored on a cloth IPD."""
+	return [
+		{
+			"finished_colour": row.finished_colour,
+			"finished_dia": row.finished_dia,
+			"knitting_output_colour": row.knitting_output_colour,
+			"knitting_output_dia": row.knitting_output_dia,
+		}
+		for row in ipd.get("fabric_routes") or []
+		if row.finished_colour
+		and row.finished_dia
+		and row.knitting_output_colour
+		and row.knitting_output_dia
+	]
 
 
 def _greige_colour_options(ipd):
@@ -220,13 +426,21 @@ def save_fabric_program_details(lot_doc):
 
 		for row in entry.get("program") or []:
 			dia = row.get("dia")
+			colour = row.get("colour") or None
+			reference_item_variant = row.get("reference_item_variant") or None
 			weight = flt(row.get("weight"))
 			if not dia:
 				continue
 			if weight < 0:
 				frappe.throw(_("Fabric program: negative weight for {0} / {1}.").format(cloth, dia))
 			_validate_attribute_value(attr_cache, dia, FABRIC_DIA_ATTRIBUTE)
-			key = (cloth, dia)
+			if not reference_item_variant and colour:
+				from yrp.yrp.doctype.item.item import get_or_create_variant
+				reference_item_variant = get_or_create_variant(
+					cloth,
+					{FABRIC_DIA_ATTRIBUTE: dia, FABRIC_COLOUR_ATTRIBUTE: colour},
+				)
+			key = (cloth, dia, reference_item_variant or "")
 			if key in seen_program:
 				frappe.throw(_("Fabric program: duplicate dia {0} for {1}.").format(dia, cloth))
 			seen_program.add(key)
@@ -234,15 +448,29 @@ def save_fabric_program_details(lot_doc):
 			if weight <= 0 and not received:
 				continue
 			program_rows.append({
-				"cloth_item": cloth, "dia": dia,
+				"cloth_item": cloth, "dia": dia, "colour": colour,
+				"reference_item_variant": reference_item_variant,
 				"weight": weight, "received_weight": received,
 			})
 
 	# Tracking survives row removal: resurrect received-bearing rows at weight 0.
-	for (cloth, dia), received in prev_program.items():
-		if received and (cloth, dia) not in seen_program and cloth in fabric_cloths:
+	for (cloth, dia, reference_item_variant), received in prev_program.items():
+		if (
+			received
+			and (cloth, dia, reference_item_variant) not in seen_program
+			and cloth in fabric_cloths
+		):
+			colour = None
+			if reference_item_variant:
+				ref = frappe.get_cached_doc("Item Variant", reference_item_variant)
+				colour = next((
+					a.attribute_value for a in ref.get("attributes") or []
+					if a.attribute == FABRIC_COLOUR_ATTRIBUTE
+				), None)
 			program_rows.append({
-				"cloth_item": cloth, "dia": dia, "weight": 0, "received_weight": received,
+				"cloth_item": cloth, "dia": dia, "colour": colour,
+				"reference_item_variant": reference_item_variant or None,
+				"weight": 0, "received_weight": received,
 			})
 
 	lot_doc.set("lot_fabric_programs", program_rows)
@@ -421,14 +649,19 @@ def _db_received(lot_name, child_doctype):
 	fields = ["cloth_item", "dia", "received_weight"]
 	if child_doctype == "Lot Fabric Colour Program":
 		fields.insert(2, "colour")
+	else:
+		fields.insert(2, "reference_item_variant")
 	result = {}
 	for r in frappe.get_all(
 		child_doctype,
 		filters={"parent": lot_name, "parenttype": "Lot"},
 		fields=fields,
 	):
-		key = (r.cloth_item, r.dia) if child_doctype == "Lot Fabric Program" \
+		key = (
+			(r.cloth_item, r.dia, r.get("reference_item_variant") or "")
+			if child_doctype == "Lot Fabric Program"
 			else (r.cloth_item, r.dia, r.colour)
+		)
 		result[key] = flt(r.received_weight)
 	return result
 
@@ -445,7 +678,7 @@ def _warn_program_below_ordered(lot_doc):
 	strands the over-order — surface it, don't block."""
 	if lot_doc.is_new():
 		return
-	from essdee_yrp.fabric_tracking import get_produced_by_dia
+	from essdee_yrp.fabric_tracking import get_produced_by_reference
 
 	ipd_by_cloth = {
 		f.cloth_item: f.production_detail
@@ -456,13 +689,13 @@ def _warn_program_below_ordered(lot_doc):
 		ipd = frappe.get_cached_doc("Item Production Detail", ipd_name)
 		if not ipd.get("knitting_process"):
 			continue
-		ordered = get_produced_by_dia(lot_doc.name, ipd.knitting_process, cloth)
+		ordered = get_produced_by_reference(lot_doc.name, ipd.knitting_process, cloth)
 		if not ordered:
 			continue
 		for row in lot_doc.get("lot_fabric_programs") or []:
 			if row.cloth_item != cloth:
 				continue
-			already = flt(ordered.get(row.dia))
+			already = flt(ordered.get(row.get("reference_item_variant") or ""))
 			if already and flt(row.weight) < already - 0.001:
 				warnings.append(
 					_("{0} · {1}: program {2} kg is below the {3} kg already on knitting Work Orders").format(

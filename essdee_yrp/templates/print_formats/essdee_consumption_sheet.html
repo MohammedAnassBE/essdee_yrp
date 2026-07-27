@@ -1,0 +1,73 @@
+<div class="essdee-consumption">
+	<div class="essdee-consumption__header">
+		<div>
+			<div class="essdee-consumption__title">Lot Consumption Sheet</div>
+			<div><strong>Lot:</strong> {{ doc.name }}</div>
+			<div><strong>Item:</strong> {{ doc.item or "—" }}</div>
+		</div>
+		<div>
+			<div><strong>Order quantity:</strong> {{ frappe.utils.flt(doc.total_order_quantity, 3) }}</div>
+			<div><strong>UOM:</strong> {{ doc.uom or "—" }}</div>
+			<div><strong>IPD:</strong> {{ doc.production_detail or "—" }}</div>
+		</div>
+	</div>
+
+	<h3>Fabric consumption</h3>
+	{% if doc.lot_fabric_requirements %}
+		<table>
+			<thead>
+				<tr>
+					<th style="width: 5%">S.No.</th>
+					<th>Cloth item</th>
+					<th>Finished colour</th>
+					<th>Finished Dia</th>
+					<th style="width: 18%">Required weight (Kg)</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for row in doc.lot_fabric_requirements %}
+					<tr>
+						<td>{{ loop.index }}</td>
+						<td>{{ row.cloth_item }}</td>
+						<td>{{ row.colour or "—" }}</td>
+						<td>{{ row.dia }}</td>
+						<td>{{ frappe.utils.flt(row.weight, 3) }}</td>
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	{% else %}
+		<div class="essdee-consumption__empty">No fabric program has been built for this Lot.</div>
+	{% endif %}
+
+	{% set bom = get_dict_object(doc.bom_summary_json) %}
+	<h3>Accessory and packing consumption</h3>
+	{% if bom %}
+		<table>
+			<thead>
+				<tr>
+					<th style="width: 5%">S.No.</th>
+					<th>Item</th>
+					<th>Process</th>
+					<th>Product ratio</th>
+					<th>BOM ratio</th>
+					<th>Total quantity</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for item, values in bom.items() %}
+					<tr>
+						<td>{{ loop.index }}</td>
+						<td><strong>{{ item }}</strong></td>
+						<td>{{ values[0] }}</td>
+						<td>{{ frappe.utils.flt(values[1], 3) }} {{ values[2] }}</td>
+						<td>{{ frappe.utils.flt(values[3], 3) }} {{ values[4] }}</td>
+						<td>{{ frappe.utils.flt(values[5], 3) }}</td>
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	{% else %}
+		<div class="essdee-consumption__empty">No accessory/BOM consumption is available for this Lot.</div>
+	{% endif %}
+</div>

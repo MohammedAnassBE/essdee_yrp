@@ -8,6 +8,16 @@ frappe.ui.form.on("Item Production Detail", {
 		frm.set_query("to_colour", "dyeing_colour_details", () => ({ filters: { attribute_name: "Colour" } }));
 		frm.set_query("from_dia", "compacting_dia_details", () => ({ filters: { attribute_name: "Dia" } }));
 		frm.set_query("to_dia", "compacting_dia_details", () => ({ filters: { attribute_name: "Dia" } }));
+		frm.set_query("colour", "colour_yarn_recipes", () => ({ filters: { attribute_name: "Colour" } }));
+		frm.set_query("cloth_item", "colour_yarn_recipes", () => {
+			const cloths = frm.doc.is_cloth_item
+				? [frm.doc.item]
+				: (frm.doc.cloth_detail || []).map((row) => row.cloth).filter(Boolean);
+			return cloths.length ? { filters: { name: ["in", cloths] } } : {};
+		});
+		frm.set_query("colour", "compacting_reference_details", () => ({ filters: { attribute_name: "Colour" } }));
+		frm.set_query("input_dia", "compacting_reference_details", () => ({ filters: { attribute_name: "Dia" } }));
+		frm.set_query("compacting_dia", "compacting_reference_details", () => ({ filters: { attribute_name: "Dia" } }));
 		const setAttributeQuery = (doc)=>{
 			const attributes = (doc.item_attributes || []).map(attr => attr.attribute)
 			return { filters: { name: ["in", attributes] } };
@@ -176,54 +186,51 @@ frappe.ui.form.on("Item Production Detail", {
 	refresh: async function(frm) {
 		frm.trigger('declarations')
 		frm.trigger('onload_post_render')
-		if (!frm.is_new() && frm.doc.approval_status !== "Approved") {
+		if(!frm.is_new()){
+			const approval_status = frm.doc.approval_status || "Not Approved"
+			const approval_colour = approval_status === "Approved"
+				? "green"
+				: (approval_status === "Cutting Approved" ? "blue" : "orange")
+			frm.page.set_indicator(__(approval_status), approval_colour)
+		}
+		if (!frm.is_new()) {
 			frappe.xcall("essdee_yrp.ipd_ui.get_approval_roles").then(settings => {
 				let allowed = settings || [];
 				if (allowed.some(role => frappe.user_roles.includes(role))) {
-					// if (frm.doc.approval_status === "Not Approved") {
-					// 	frm.add_custom_button(__("Approve for Cutting"), () => {
-					// 		frappe.call({
-					// 			method: "essdee_yrp.ipd_ui.approve_ipd",
-					// 			args: { doc_name: frm.doc.name, approval_type: "Cutting Approved" },
-					// 			callback: function () {
-					// 				frappe.show_alert({ message: __("Approved for Cutting"), indicator: "blue" });
-					// 				frm.reload_doc();
-					// 			}
-					// 		});
-					// 	});
-					// }
-					frm.add_custom_button(__("Approve"), () => {
-						frappe.call({
-							method: "essdee_yrp.ipd_ui.approve_ipd",
-							args: { doc_name: frm.doc.name, approval_type: "Approved" },
-							callback: function () {
-								frappe.show_alert({ message: __("Item Production Detail Approved"), indicator: "green" });
-								frm.reload_doc();
-							}
+					if (frm.doc.approval_status !== "Approved") {
+						frm.add_custom_button(__("Approve"), () => {
+							frappe.call({
+								method: "essdee_yrp.ipd_ui.approve_ipd",
+								args: { doc_name: frm.doc.name, approval_type: "Approved" },
+								callback: function () {
+									frappe.show_alert({ message: __("Item Production Detail Approved"), indicator: "green" });
+									frm.reload_doc();
+								}
+							});
 						});
-					});
-					frm.change_custom_button_type(__("Approve"), null, "success");
+						frm.change_custom_button_type(__("Approve"), null, "success");
+					}
+					if (frm.doc.approval_status && frm.doc.approval_status !== "Not Approved") {
+						frm.add_custom_button(__("Revert Approval"), () => {
+							frappe.confirm(__("Revert approval status to Not Approved?"), () => {
+								frappe.call({
+									method: "essdee_yrp.ipd_ui.revert_ipd_approval",
+									args: { doc_name: frm.doc.name },
+									callback: function () {
+										frappe.msgprint({
+											title: __("Success"),
+											message: __("IPD Reverted Successfully"),
+											indicator: "green",
+										});
+										frm.reload_doc();
+									}
+								});
+							});
+						});
+						frm.change_custom_button_type(__("Revert Approval"), null, "danger");
+					}
 				}
 			});
-		}
-		if (!frm.is_new() && frm.doc.approval_status !== "Not Approved" && frappe.user_roles.includes("System Manager")) {
-			frm.add_custom_button(__("Revert Approval"), () => {
-				frappe.confirm(__("Revert approval status to Not Approved?"), () => {
-					frappe.call({
-						method: "essdee_yrp.ipd_ui.revert_ipd_approval",
-						args: { doc_name: frm.doc.name },
-						callback: function () {
-							frappe.msgprint({
-								title: __("Success"),
-								message: __("IPD Reverted Successfully"),
-								indicator: "green",
-							});
-							frm.reload_doc();
-						}
-					});
-				});
-			});
-			frm.change_custom_button_type(__("Revert Approval"), null, "danger");
 		}
 		clear_html_fields(frm, [
 			"item_attribute_list_values_html", "dependent_attribute_details_html",
@@ -231,14 +238,17 @@ frappe.ui.form.on("Item Production Detail", {
 			"cutting_items_html", "cutting_cloths_html", "cloth_accessories_html",
 			"stiching_accessory_html", "accessory_clothtype_combination_html",
 			"emblishment_details_html", "select_cloths_attribute_html",
-			"select_attributes_html", "select_cloth_accessory_html", "bundle_group_html"
+			"select_attributes_html", "select_cloth_accessory_html", "bundle_group_html",
+			"panel_wise_consumption_matrix_html", "colour_yarn_recipe_editor"
 		])
 		if(frm.doc.stiching_in_stage && frm.doc.dependent_attribute){
 			frm.cutting_attrs = await get_stich_in_attributes(frm.doc.dependent_attribute_mapping,frm.doc.stiching_in_stage, frm.doc.item)
 			if(frm.doc.is_set_item){
 				frm.cutting_attrs.push(frm.doc.set_item_attribute)
 			}
-			make_select_attributes(frm,'select_attributes_html','select_attributes_wrapper','select_attrs_multicheck','cutting_attributes','cutting_items_json','get_cutting_combination')
+			if(!frm.doc.enable_panel_wise_consumption_matrix){
+				make_select_attributes(frm,'select_attributes_html','select_attributes_wrapper','select_attrs_multicheck','cutting_attributes','cutting_items_json','get_cutting_combination')
+			}
 			make_select_attributes(frm,'select_cloths_attribute_html','select_cloths_attributes_wrapper','select_cloth_attrs_multicheck','cloth_attributes','cutting_cloths_json', 'get_cloth_combination')
 			let accessoryClothTypeObj = parse_json_value(frm.doc.accessory_clothtype_json, {});
 			if (Object.keys(accessoryClothTypeObj).length > 0) {
@@ -320,6 +330,7 @@ frappe.ui.form.on("Item Production Detail", {
 		else{
 			frm.set_df_property('get_cutting_combination','hidden',false);
 		}
+		await frm.trigger("render_panel_wise_consumption_matrix")
 
 		// Lock form when Approved
 		if (!frm.is_new() && frm.doc.approval_status === "Approved") {
@@ -340,11 +351,16 @@ frappe.ui.form.on("Item Production Detail", {
 					});
 				}
 			});
+			// The panel matrix has its own `locked` view mode: it replaces Dia /
+			// consumption inputs with text and hides Fill/Copy actions. Do NOT
+			// disable pointer events on its wrapper — panel tabs are navigation,
+			// not editing, and approved IPDs must remain inspectable.
 
 			// Make all child tables read-only
 			let tables = [
 				"item_attributes", "item_bom", "packing_attribute_details",
-				"stiching_item_details", "cloth_detail", "cutting_marker_groups"
+				"stiching_item_details", "cloth_detail", "cutting_marker_groups",
+				"compacting_reference_details"
 			];
 			tables.forEach(t => {
 				frm.set_df_property(t, "read_only", 1);
@@ -368,7 +384,8 @@ frappe.ui.form.on("Item Production Detail", {
 				"primary_item_attribute", "dependent_attribute",
 				"stiching_major_attribute_value", "major_attribute_value",
 				"packing_attribute", "stiching_attribute", "set_item_attribute",
-				"is_set_item", "is_same_packing_attribute", "auto_calculate"
+				"is_set_item", "is_same_packing_attribute", "auto_calculate",
+				"enable_panel_wise_consumption_matrix"
 			];
 			fields.forEach(f => {
 				frm.set_df_property(f, "read_only", 1);
@@ -473,12 +490,16 @@ frappe.ui.form.on("Item Production Detail", {
 		}
 	},
 	async make_cutting_combination(frm){
-		$(frm.fields_dict['cutting_items_html'].wrapper).html("");
-		frm.cutting_item = new frappe.production.ui.CuttingItemDetail(frm.fields_dict['cutting_items_html'].wrapper);
-		if(frm.doc.cutting_items_json) {
-			await frm.cutting_item.load_data(frm.doc.cutting_items_json);
-			frm.cutting_item.set_attributes()
+		if(!frm.doc.enable_panel_wise_consumption_matrix){
+			$(frm.fields_dict['cutting_items_html'].wrapper).html("");
+			frm.cutting_item = new frappe.production.ui.CuttingItemDetail(frm.fields_dict['cutting_items_html'].wrapper);
+			if(frm.doc.cutting_items_json) {
+				await frm.cutting_item.load_data(frm.doc.cutting_items_json);
+				frm.cutting_item.set_attributes()
+			}
 		}
+		// Cloth Mapping Details is independent of the standard Cutting editor and
+		// must stay mounted while the panel-wise matrix is enabled.
 		$(frm.fields_dict['cutting_cloths_html'].wrapper).html("");
 		frm.cloth_item = new frappe.production.ui.CuttingItemDetail(frm.fields_dict['cutting_cloths_html'].wrapper);
 		if(frm.doc.cutting_cloths_json) {
@@ -567,6 +588,12 @@ frappe.ui.form.on("Item Production Detail", {
 	},
 	validate:async function(frm){
 		if(!frm.doc.__islocal){
+			if(frm.doc.enable_panel_wise_consumption_matrix && frm.panel_wise_consumption_matrix){
+				let matrix = frm.panel_wise_consumption_matrix.get_data()
+				if(matrix){
+					frm.doc.panel_wise_consumption_matrix_json = matrix
+				}
+			}
 			if(frm.set_item && frm.doc.is_set_item){
 				let item_details = frm.set_item.get_data()
 				frm.doc['set_item_detail'] = JSON.stringify(item_details);
@@ -610,7 +637,7 @@ frappe.ui.form.on("Item Production Detail", {
 			// and returned rows. When get_data()/get_items() is null (tab never opened,
 			// e.g. on a freshly-synced doc) PRESERVE the stored value — wiping it to {}
 			// here was destroying synced Cutting / Cloth-Accessory data on the first save.
-			if(frm.cutting_item){
+			if(frm.cutting_item && !frm.doc.enable_panel_wise_consumption_matrix){
 				let item_details = frm.cutting_item.get_data()
 				if(item_details && item_details.items && item_details.items.length > 0){
 					frm.doc.cutting_items_json = item_details
@@ -802,6 +829,10 @@ frappe.ui.form.on("Item Production Detail", {
 		})
 	},
 	get_cloth_combination(frm){
+		if(!frm.cloth_item){
+			$(frm.fields_dict['cutting_cloths_html'].wrapper).html("");
+			frm.cloth_item = new frappe.production.ui.CuttingItemDetail(frm.fields_dict['cutting_cloths_html'].wrapper);
+		}
 		if(frm.doc.cloth_detail.length == 0){
 			frappe.msgprint("Fill The Cloth Details")
 			return
@@ -892,6 +923,54 @@ frappe.ui.form.on("Item Production Detail", {
 		if(frm.doc.stiching_attribute){
 			frm.trigger('declarations')
 		}
+	},
+	async enable_panel_wise_consumption_matrix(frm){
+		await frm.trigger("render_panel_wise_consumption_matrix")
+		if(!frm.doc.enable_panel_wise_consumption_matrix && frm.doc.stiching_in_stage && frm.doc.dependent_attribute){
+			make_select_attributes(frm,'select_attributes_html','select_attributes_wrapper','select_attrs_multicheck','cutting_attributes','cutting_items_json','get_cutting_combination')
+			await frm.trigger("make_cutting_combination")
+		}
+	},
+	async render_panel_wise_consumption_matrix(frm){
+		const enabled = Boolean(frm.doc.enable_panel_wise_consumption_matrix)
+		const standard_fields = [
+			"select_attributes_html", "get_cutting_combination", "cutting_items_html"
+		]
+		standard_fields.forEach(fieldname => {
+			if(frm.fields_dict[fieldname]){
+				const has_cloths = (frm.doc.cloth_detail || []).length > 0
+				const visible = !enabled && (
+					fieldname !== "get_cutting_combination" || has_cloths
+				)
+				frm.toggle_display(fieldname, visible)
+			}
+		})
+
+		const field = frm.fields_dict.panel_wise_consumption_matrix_html
+		if(!field){
+			return
+		}
+		$(field.wrapper).empty()
+		frm.panel_wise_consumption_matrix = null
+		if(!enabled){
+			return
+		}
+		if(!frm.doc.stiching_in_stage || !frm.doc.dependent_attribute){
+			$(field.wrapper).html(
+				'<div class="alert alert-warning">Set the stitching input stage and dependent attribute before using the panel-wise matrix.</div>'
+			)
+			return
+		}
+
+		const payload = await frappe.xcall(
+			"essdee_yrp.panel_wise_consumption.get_panel_wise_consumption_matrix",
+			{doc: frm.doc}
+		)
+		frm.panel_wise_consumption_matrix = new frappe.production.ui.PanelWiseConsumptionMatrix(field.wrapper)
+		frm.panel_wise_consumption_matrix.load_data(
+			payload,
+			!frm.is_new() && frm.doc.approval_status === "Approved"
+		)
 	}
 });
 
@@ -1076,6 +1155,250 @@ function make_select_attributes(frm, html_field, html_class, name, attrs, json_f
 	frm[name].refresh_input();
 }
 
+function compacting_route_pairs(frm) {
+	const seen = new Set();
+	const pairs = [];
+	const add_pair = (colour, input_dia) => {
+		if (!colour || !input_dia) return;
+		const key = `${colour}\u0000${input_dia}`;
+		if (seen.has(key)) return;
+		seen.add(key);
+		pairs.push({ colour, input_dia });
+	};
+	(frm.doc.fabric_routes || []).forEach((row) => {
+		add_pair(row.finished_colour || "", row.finished_dia || "");
+	});
+	if (!pairs.length) {
+		const mappings = frm.doc.fabric_value_mappings || [];
+		const introduced_dias = [...new Set(
+			mappings
+				.filter((row) => row.attribute === "Dia" && row.role === "Introduce")
+				.map((row) => row.to_value)
+				.filter(Boolean),
+		)];
+		const groups = new Map();
+		mappings.forEach((row) => {
+			const key = `${row.sequence || 0}\u0000${row.mapping_index || 0}`;
+			if (!groups.has(key)) groups.set(key, []);
+			groups.get(key).push(row);
+		});
+		groups.forEach((rows) => {
+			const colour_entry = rows.find(
+				(row) =>
+					row.attribute === "Colour" &&
+					["Change", "Introduce"].includes(row.role),
+			);
+			const dia_entry = rows.find(
+				(row) =>
+					row.attribute === "Dia" &&
+					["Change", "Pin", "Introduce"].includes(row.role),
+			);
+			const colour = colour_entry?.to_value || colour_entry?.from_value || "";
+			const dia = dia_entry?.to_value || dia_entry?.from_value || "";
+			if (colour && dia) add_pair(colour, dia);
+			else if (colour) introduced_dias.forEach((value) => add_pair(colour, value));
+		});
+		if (!pairs.length) {
+			const recipe_colours = [...new Set(
+				(frm.doc.colour_yarn_recipes || [])
+					.map((row) => row.colour)
+					.filter(Boolean),
+			)];
+			recipe_colours.forEach((colour) => {
+				introduced_dias.forEach((dia) => add_pair(colour, dia));
+			});
+		}
+	}
+	return pairs.sort(
+		(a, b) =>
+			String(a.input_dia).localeCompare(String(b.input_dia), undefined, { numeric: true }) ||
+			String(a.colour).localeCompare(String(b.colour), undefined, { numeric: true }),
+	);
+}
+
+function compacting_targets(routes, scope, selected_colours) {
+	if (scope === "All Colours") {
+		return [...new Set(routes.map((row) => row.input_dia))].map((input_dia) => ({
+			colour: "",
+			input_dia,
+		}));
+	}
+	if (scope === "Colour Group") {
+		const selected = new Set(selected_colours || []);
+		return routes.filter((row) => selected.has(row.colour));
+	}
+	return routes;
+}
+
+function open_compacting_generation_dialog(frm) {
+	const routes = compacting_route_pairs(frm);
+	if (!routes.length) {
+		frappe.msgprint({
+			title: __("No Fabric Process Combinations"),
+			message: __(
+				"Maintain the cloth Colour + Dia combinations in Fabric Processes first, then generate Compacting combinations.",
+			),
+			indicator: "orange",
+		});
+		return;
+	}
+	const colours = [...new Set(routes.map((row) => row.colour))].sort((a, b) =>
+		String(a).localeCompare(String(b), undefined, { numeric: true }),
+	);
+	const selected_colours = new Set();
+	let dialog;
+	const render_colour_group = () => {
+		const field = dialog?.fields_dict?.colour_group_html;
+		if (!field) return;
+		const $wrapper = $(field.$wrapper || field.wrapper).empty();
+		$("<label class='control-label'></label>")
+			.text(__("Colour Group"))
+			.appendTo($wrapper);
+		const $options = $(
+			"<div class='compacting-colour-options' style='display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px 16px;margin-top:8px;'></div>",
+		).appendTo($wrapper);
+		colours.forEach((colour) => {
+			const $label = $(
+				"<label class='checkbox' style='display:flex;align-items:center;gap:8px;margin:0;'></label>",
+			).appendTo($options);
+			$("<input type='checkbox'>")
+				.prop("checked", selected_colours.has(colour))
+				.on("change", function () {
+					if (this.checked) selected_colours.add(colour);
+					else selected_colours.delete(colour);
+				})
+				.appendTo($label);
+			$("<span></span>").text(colour).appendTo($label);
+		});
+		$("<p class='text-muted small' style='margin:8px 0 0;'></p>")
+			.text(
+				__(
+					"Selected colours sharing an input Dia are generated together; use the grid to fill their common compacting Dia.",
+				),
+			)
+			.appendTo($wrapper);
+	};
+	dialog = new frappe.ui.Dialog({
+		title: __("Generate Compacting Combinations"),
+		fields: [
+			{
+				fieldname: "generation_scope",
+				fieldtype: "Select",
+				label: __("Generation Scope"),
+				options: ["All Colours", "Separate Colours", "Colour Group"],
+				default: "All Colours",
+				reqd: 1,
+				onchange() {
+					const is_group = dialog.get_value("generation_scope") === "Colour Group";
+					dialog.set_df_property("colour_group_html", "hidden", !is_group);
+					if (!is_group) selected_colours.clear();
+					else render_colour_group();
+				},
+			},
+			{
+				fieldname: "colour_group_html",
+				fieldtype: "HTML",
+				hidden: 1,
+			},
+			{
+				fieldname: "preserve_note",
+				fieldtype: "HTML",
+				options: `<div class="small text-muted">${__(
+					"Only missing combinations are added. Existing compacting Dias are never overwritten.",
+				)}</div>`,
+			},
+		],
+		primary_action_label: __("Generate Combinations"),
+		primary_action(values) {
+			const selected = [...selected_colours];
+			if (values.generation_scope === "Colour Group" && !selected.length) {
+				frappe.msgprint(__("Select at least one colour for the Compacting group."));
+				return;
+			}
+			const targets = compacting_targets(routes, values.generation_scope, selected);
+			const existing = new Set(
+				(frm.doc.compacting_reference_details || []).map(
+					(row) => `${row.colour || ""}\u0000${row.input_dia || ""}`,
+				),
+			);
+			let added = 0;
+			targets.forEach((target) => {
+				const key = `${target.colour || ""}\u0000${target.input_dia || ""}`;
+				if (existing.has(key)) return;
+				existing.add(key);
+				const row = frm.add_child("compacting_reference_details");
+				row.colour = target.colour || "";
+				row.input_dia = target.input_dia;
+				row.compacting_dia = "";
+				added += 1;
+			});
+			frm.refresh_field("compacting_reference_details");
+			if (added) frm.dirty();
+			dialog.hide();
+			frappe.show_alert({
+				message: added
+					? __("{0} compacting combination(s) added. Enter the compacting Dia.", [added])
+					: __("Every combination in this scope is already present."),
+				indicator: added ? "green" : "blue",
+			});
+		},
+	});
+	dialog.show();
+	render_colour_group();
+}
+
+function fill_selected_compacting_dia(frm) {
+	const grid = frm.fields_dict.compacting_reference_details?.grid;
+	const selected = grid?.get_selected_children() || [];
+	if (!selected.length) {
+		frappe.msgprint(
+			__("Select the Compacting Detail rows whose compacting Dia should be filled together."),
+		);
+		return;
+	}
+	const input_dias = [...new Set(selected.map((row) => row.input_dia).filter(Boolean))];
+	if (input_dias.length !== 1) {
+		frappe.msgprint(
+			__("Select rows sharing the same Knitting/Input Dia before filling a colour group."),
+		);
+		return;
+	}
+	const dialog = new frappe.ui.Dialog({
+		title: __("Fill Selected Compacting Dia"),
+		fields: [
+			{
+				fieldname: "input_dia",
+				fieldtype: "Data",
+				label: __("Knitting/Input Dia"),
+				default: input_dias[0],
+				read_only: 1,
+			},
+			{
+				fieldname: "compacting_dia",
+				fieldtype: "Link",
+				label: __("Compacting Dia"),
+				options: "Item Attribute Value",
+				reqd: 1,
+				get_query: () => ({ filters: { attribute_name: "Dia" } }),
+			},
+		],
+		primary_action_label: __("Fill Selected Rows"),
+		primary_action(values) {
+			selected.forEach((row) => {
+				row.compacting_dia = values.compacting_dia;
+			});
+			frm.refresh_field("compacting_reference_details");
+			frm.dirty();
+			dialog.hide();
+			frappe.show_alert({
+				message: __("{0} row(s) updated.", [selected.length]),
+				indicator: "green",
+			});
+		},
+	});
+	dialog.show();
+}
+
 // ---------------------------------------------------------------------------
 // Fabric swap-mapping widgets (dia-wise dyeing / colour-wise compacting).
 // The checkbox picks the entry mode; the widget is just a faster editor for
@@ -1109,6 +1432,7 @@ frappe.ui.form.on("Item Production Detail", {
 	refresh(frm) {
 		frm.trigger("render_fabric_swap_widgets");
 		frm.trigger("apply_cloth_layout");
+		frm.trigger("setup_compacting_reference_generator");
 	},
 	apply_cloth_layout(frm) {
 		if (!frm.doc.is_cloth_item) return;
@@ -1120,6 +1444,24 @@ frappe.ui.form.on("Item Production Detail", {
 		// set_df_property doesn't repaint an already-rendered section head.
 		const section = frm.fields_dict.bill_of_materials_section;
 		if (section && section.head) section.head.text(__("Processes"));
+	},
+	setup_compacting_reference_generator(frm) {
+		if (!frm.doc.is_cloth_item) return;
+		const field = frm.fields_dict.compacting_reference_details;
+		if (!field?.grid) return;
+		const button = field.grid.add_custom_button(
+			__("Generate Combinations"),
+			() => open_compacting_generation_dialog(frm),
+			"top",
+		);
+		const fill_button = field.grid.add_custom_button(
+			__("Fill Selected Compacting Dia"),
+			() => fill_selected_compacting_dia(frm),
+			"top",
+		);
+		const editable = frm.doc.approval_status !== "Approved";
+		button.toggle(editable);
+		fill_button.toggle(editable);
 	},
 	dia_wise_colour_change(frm) {
 		frm.trigger("render_fabric_swap_widgets");
@@ -1202,10 +1544,14 @@ frappe.ui.form.on("Item Production Detail", {
 	refresh(frm) {
 		fabric_processes_toggle_grids(frm);
 		fabric_processes_mount(frm);
+		colour_yarn_recipe_toggle_grid(frm);
+		colour_yarn_recipe_mount(frm);
 	},
 	is_cloth_item(frm) {
 		fabric_processes_toggle_grids(frm);
 		fabric_processes_mount(frm);
+		colour_yarn_recipe_toggle_grid(frm);
+		colour_yarn_recipe_mount(frm);
 	},
 });
 
@@ -1290,5 +1636,84 @@ function fabric_processes_write_back(frm, payload) {
 	(payload.mappings || []).forEach((m) => Object.assign(frm.add_child("fabric_value_mappings"), m));
 	frm.refresh_field("fabric_processes");
 	frm.refresh_field("fabric_value_mappings");
+	frm.dirty();
+}
+
+// ===========================================================================
+// Colour-wise Yarn Recipes — grouped Desk editor.
+//
+// `colour_yarn_recipes` remains the internal child-table storage, while this
+// Vue island is the only cloth-IPD entry surface. One card = one finished
+// colour, with all yarns and the 100% total visible together. Fabric-route data
+// is preserved in the payload for compatibility, but Dia/Colour conversions
+// are intentionally entered and shown only in the Fabric Processes tab.
+// ===========================================================================
+
+function colour_yarn_recipe_toggle_grid(frm) {
+	// Colour-wise cards are the single entry surface. The legacy global Yarn
+	// Ratio is derived server-side from the first colour recipe for old readers.
+	["yarn_ratio_details", "colour_yarn_recipes", "fabric_routes"].forEach((fieldname) => {
+		const storage = frm.fields_dict[fieldname];
+		if (storage && storage.wrapper && frm.doc.is_cloth_item) {
+			$(storage.wrapper).hide();
+		}
+	});
+}
+
+function colour_yarn_recipe_mount(frm) {
+	const field = frm.fields_dict.colour_yarn_recipe_editor;
+	if (!field) return;
+	const $wrapper = $(field.wrapper);
+	if (frm.__colour_yarn_app && frm.__colour_yarn_app.app) {
+		frm.__colour_yarn_app.app.unmount();
+	}
+	$wrapper.empty();
+	frm.__colour_yarn_app = null;
+	if (!frm.doc.is_cloth_item) return;
+
+	const app = new frappe.production.ui.ColourYarnRecipeEditor(field.wrapper, {
+		on_change: (payload) => colour_yarn_recipe_write_back(frm, payload),
+	});
+	frm.__colour_yarn_app = app;
+	const can_write = (frm.perm || []).some((permission) => permission.write);
+	app.load_data({
+		cloth_item: frm.doc.item || "",
+		locked: !can_write ||
+			(!frm.is_new() && frm.doc.approval_status === "Approved"),
+		rows: (frm.doc.colour_yarn_recipes || []).map((row) => ({
+			cloth_item: row.cloth_item,
+			colour: row.colour,
+			yarn_item: row.yarn_item,
+			ratio: row.ratio,
+		})),
+		routes: (frm.doc.fabric_routes || []).map((row) => ({
+			finished_colour: row.finished_colour,
+			finished_dia: row.finished_dia,
+			knitting_output_colour: row.knitting_output_colour,
+			knitting_output_dia: row.knitting_output_dia,
+		})),
+	});
+}
+
+function colour_yarn_recipe_write_back(frm, payload) {
+	frm.clear_table("colour_yarn_recipes");
+	(payload.rows || []).forEach((values) => {
+		const row = frm.add_child("colour_yarn_recipes");
+		row.cloth_item = frm.doc.item || values.cloth_item || "";
+		row.colour = values.colour || "";
+		row.yarn_item = values.yarn_item || "";
+		row.ratio = Number(values.ratio || 0);
+	});
+	frm.refresh_field("colour_yarn_recipes");
+	frm.clear_table("fabric_routes");
+	(payload.routes || []).forEach((values) => {
+		const row = frm.add_child("fabric_routes");
+		row.finished_colour = values.finished_colour || "";
+		row.finished_dia = values.finished_dia || "";
+		row.knitting_output_colour = values.knitting_output_colour || "";
+		row.knitting_output_dia = values.knitting_output_dia || "";
+	});
+	frm.refresh_field("fabric_routes");
+	colour_yarn_recipe_toggle_grid(frm);
 	frm.dirty();
 }

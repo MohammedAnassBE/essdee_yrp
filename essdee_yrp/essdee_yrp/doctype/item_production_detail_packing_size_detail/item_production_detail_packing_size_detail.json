@@ -12,6 +12,7 @@
   {
    "fieldname": "attribute_value",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Size",
    "options": "Item Attribute Value",
    "reqd": 1
@@ -19,6 +20,7 @@
   {
    "fieldname": "quantity",
    "fieldtype": "Int",
+   "in_list_view": 1,
    "label": "Quantity"
   }
  ],

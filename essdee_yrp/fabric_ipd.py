@@ -239,8 +239,10 @@ def ensure_cloth_item_attributes(doc, method=None):
 	"""Cloth IPDs must list every attribute their fabric tabs use in
 	`item_attributes` — base IPDProcessMatrix.validate_attributes_belong_to_ipd
 	rejects matrix attributes missing from that table (the garment UI copies
-	them via client JS; cloth mode ensures them server-side). Hooked on
-	before_validate so the rows persist with the save."""
+	them via client JS; cloth mode ensures them server-side). The linked cloth
+	Item must declare the same attributes because reference Item Variants are
+	created from it during matrix/plan generation. Hooked on before_validate so
+	both manual and Lot-built cloth IPDs use the same preparation path."""
 	if not is_cloth_ipd(doc):
 		return
 	needed = []
@@ -255,11 +257,35 @@ def ensure_cloth_item_attributes(doc, method=None):
 		row.get("colour") for row in doc.get("compacting_dia_details") or []
 	):
 		needed.append(FABRIC_COLOUR_ATTRIBUTE)
+	for process_row in get_fabric_process_rows(doc):
+		for mapping in process_row.get("value_mappings") or []:
+			if (
+				mapping.get("attribute") in (FABRIC_DIA_ATTRIBUTE, FABRIC_COLOUR_ATTRIBUTE)
+				and mapping.get("role") in ("Change", "Introduce", "Consume", "Pin")
+			):
+				needed.append(mapping.get("attribute"))
+	if doc.get("colour_yarn_recipes"):
+		needed.append(FABRIC_COLOUR_ATTRIBUTE)
+	if doc.get("fabric_routes"):
+		needed.extend((FABRIC_DIA_ATTRIBUTE, FABRIC_COLOUR_ATTRIBUTE))
 	have = {row.attribute for row in doc.get("item_attributes") or []}
-	for attribute in needed:
+	for attribute in dict.fromkeys(needed):
 		if attribute not in have:
 			doc.append("item_attributes", {"attribute": attribute})
 			have.add(attribute)
+
+	if not doc.get("item") or not needed:
+		return
+	item = frappe.get_doc("Item", doc.item)
+	item_have = {row.attribute for row in item.get("attributes") or []}
+	changed = False
+	for attribute in dict.fromkeys(needed):
+		if attribute not in item_have:
+			item.append("attributes", {"attribute": attribute})
+			item_have.add(attribute)
+			changed = True
+	if changed:
+		item.save(ignore_permissions=True)
 
 
 # ---------------------------------------------------------------------------
@@ -296,6 +322,94 @@ def get_fabric_process_rows(doc):
 	else:
 		rows = synthesize_fabric_processes_from_tabs(doc)
 	return sorted(rows, key=lambda r: flt(r.get("sequence")))
+
+
+def get_yarn_ratio_inputs(doc):
+	"""The knitting recipe as item-aware input rows.
+
+	New cloth IPDs persist one ``IPD Yarn Ratio`` row per yarn and require the
+	total to be 100.  The legacy ``yarn_item`` field remains a one-yarn fallback
+	so existing IPDs generate the same matrix until the migration/backfill runs.
+	Quantities are expressed on a one-kilogram total-blend basis.
+	"""
+	rows = [
+		frappe._dict({
+			"item": row.get("yarn_item"),
+			"ratio": flt(row.get("ratio")),
+			"quantity": flt(row.get("ratio")) / 100.0,
+		})
+		for row in (doc.get("yarn_ratio_details") or [])
+		if row.get("yarn_item")
+	]
+	if rows:
+		return rows
+	if doc.get("yarn_item"):
+		return [frappe._dict({
+			"item": doc.get("yarn_item"),
+			"ratio": 100.0,
+			"quantity": 1.0,
+		})]
+	return []
+
+
+def get_colour_yarn_inputs(doc, colour):
+	"""The knitting recipe for one final/target fabric colour.
+
+	Colour-aware rows are authoritative. The old global recipe remains a
+	backward-compatible fallback for CPDs that predate colour routing.
+	"""
+	rows = [
+		frappe._dict({
+			"item": row.get("yarn_item"),
+			"ratio": flt(row.get("ratio")),
+			"quantity": flt(row.get("ratio")) / 100.0,
+		})
+		for row in (doc.get("colour_yarn_recipes") or [])
+		if row.get("cloth_item") == doc.item
+			and row.get("colour") == colour
+			and row.get("yarn_item")
+	]
+	return rows or get_yarn_ratio_inputs(doc)
+
+
+def _is_knitting_row(doc, row):
+	"""Whether a generic/adapter process row is the yarn -> cloth conversion."""
+	if doc.get("knitting_process"):
+		return row.get("fabric_process") == doc.get("knitting_process")
+	if row.get("output_item") != doc.get("item"):
+		return False
+	# Generic cloth IPDs may no longer carry the legacy tab process.  Knitting is
+	# the attr-less-input conversion that introduces Dia onto the cloth.
+	mappings = row.get("value_mappings") or []
+	return any(
+		m.get("role") == "Introduce" and m.get("attribute") == FABRIC_DIA_ATTRIBUTE
+		for m in mappings
+	) and not any(m.get("role") == "Consume" for m in mappings)
+
+
+def _matrix_input_specs(doc, row, default_uom):
+	"""Item/quantity/UOM rows emitted on the matrix Input side."""
+	if _is_knitting_row(doc, row):
+		yarns = get_yarn_ratio_inputs(doc)
+		if yarns:
+			return [
+				frappe._dict({
+					"item": yarn.item,
+					"quantity": yarn.quantity,
+					"uom": frappe.db.get_value("Item", yarn.item, "default_unit_of_measure")
+						or default_uom,
+				})
+				for yarn in yarns
+			]
+	input_item = row.get("input_item")
+	return [frappe._dict({
+		"item": input_item,
+		"quantity": 1.0,
+		"uom": (
+			frappe.db.get_value("Item", input_item, "default_unit_of_measure")
+			if input_item else None
+		) or default_uom,
+	})]
 
 
 def _attach_persisted_mappings(doc, process_rows):
@@ -540,9 +654,60 @@ def sync_fabric_process_matrices(doc, method=None):
 	_delete_all_matrices(doc.name)
 
 	for row in get_fabric_process_rows(doc):
+		if _is_knitting_row(doc, row) and doc.get("colour_yarn_recipes"):
+			for matrix in build_colour_knitting_matrices(doc, row, uom):
+				matrix.insert(ignore_permissions=True)
+			continue
 		matrix = build_fabric_matrix(doc, row, uom)
+		if matrix and doc.get("fabric_routes"):
+			routed = build_route_fabric_matrices(doc, matrix)
+			if routed:
+				for route_matrix in routed:
+					route_matrix.insert(ignore_permissions=True)
+				continue
 		if matrix:
 			matrix.insert(ignore_permissions=True)
+	_validate_exact_route_reachability(doc)
+
+
+def _validate_exact_route_reachability(doc):
+	"""Prove every persisted final route against the matrices just generated.
+
+	This is intentionally value-agnostic: it exercises the same backward solver
+	the Lot uses, so manual IPDs cannot save a route whose Colour/Dia changes are
+	missing or incompatible. No process, colour, or Dia name is hardcoded.
+	"""
+	routes = doc.get("fabric_routes") or []
+	if not routes:
+		return
+
+	from essdee_yrp.fabric_plan import solve_chain_backward
+	from yrp.yrp.doctype.item.item import get_or_create_variant
+
+	problems = []
+	for row in routes:
+		attrs = {
+			FABRIC_DIA_ATTRIBUTE: row.finished_dia,
+			FABRIC_COLOUR_ATTRIBUTE: row.finished_colour,
+		}
+		reference = get_or_create_variant(doc.item, attrs)
+		_step_plans, unreachable = solve_chain_backward(
+			doc,
+			{(reference, frozenset(attrs.items())): 1.0},
+		)
+		if unreachable:
+			failed = unreachable[0]
+			problems.append(
+				f"{row.finished_colour} / {row.finished_dia} "
+				f"(stops at {failed['process_name']})"
+			)
+	if problems:
+		frappe.throw(
+			frappe._(
+				"These Fabric Routes do not have a complete process-matrix path: "
+				"{0}. Correct the Fabric Process mappings and save again."
+			).format(", ".join(problems))
+		)
 
 
 def _delete_all_matrices(ipd_name):
@@ -557,6 +722,280 @@ def _new_matrix(doc, process):
 		"process_name": process,
 		"output_item": doc.item,
 	})
+
+
+def _colour_knitting_targets(doc):
+	"""Distinct ``(knitting Dia, final Dia, final Colour)`` routes.
+
+	Manual cloth IPDs are authored only through the generic Fabric Processes
+	tables, so this cannot depend on the hidden legacy dyeing/knitting tabs.  The
+	first Colour-changing step is authoritative: each transition's target Colour
+	and held/output Dia identify the exact finished reference variant.  A blank
+	Dia pin expands over the Dias entering that step, matching the matrix builder.
+	"""
+	exact_routes = [
+		(
+			row.knitting_output_dia,
+			row.finished_dia,
+			row.finished_colour,
+		)
+		for row in doc.get("fabric_routes") or []
+		if row.knitting_output_dia and row.finished_dia and row.finished_colour
+	]
+	if exact_routes:
+		return list(dict.fromkeys(exact_routes))
+
+	targets = []
+
+	for position, process_row in enumerate(get_fabric_process_rows(doc)):
+		groups = _group_by_mapping_index(_entries(process_row))
+		has_colour_change = any(
+			entry.get("role") == "Change"
+			and entry.get("attribute") == FABRIC_COLOUR_ATTRIBUTE
+			for _mapping_index, entries in groups
+			for entry in entries
+		)
+		if not has_colour_change:
+			continue
+
+		entering_dias = values_entering(doc, position, FABRIC_DIA_ATTRIBUTE)
+		for _mapping_index, entries in groups:
+			colour_change = next((
+				entry for entry in entries
+				if entry.get("role") == "Change"
+				and entry.get("attribute") == FABRIC_COLOUR_ATTRIBUTE
+				and entry.get("to_value")
+			), None)
+			if not colour_change:
+				continue
+			dia_change = next((
+				entry for entry in entries
+				if entry.get("role") == "Change"
+				and entry.get("attribute") == FABRIC_DIA_ATTRIBUTE
+				and entry.get("to_value")
+			), None)
+			dia_pin = next((
+				entry.get("from_value") for entry in entries
+				if entry.get("role") == "Pin"
+				and entry.get("attribute") == FABRIC_DIA_ATTRIBUTE
+				and entry.get("from_value")
+			), None)
+			dias = (
+				[dia_change.get("to_value")]
+				if dia_change
+				else ([dia_pin] if dia_pin else entering_dias)
+			)
+			targets.extend(
+				(dia, colour_change.get("to_value"))
+				for dia in dias
+				if dia
+			)
+		break
+
+	if targets:
+		return [
+			(dia, dia, colour)
+			for dia, colour in dict.fromkeys(targets)
+		]
+
+	# Legacy tab IPDs remain supported by the same exact routes.
+	for row in doc.get("dyeing_colour_details") or []:
+		if row.get("dia") and row.get("to_colour"):
+			targets.append((row.get("dia"), row.get("to_colour")))
+	if not targets:
+		dias = [
+			entry.get("to_value")
+			for process_row in get_fabric_process_rows(doc)
+			for entry in _entries(process_row)
+			if entry.get("role") == "Introduce"
+			and entry.get("attribute") == FABRIC_DIA_ATTRIBUTE
+			and entry.get("to_value")
+		]
+		if not dias:
+			dias = [r.dia for r in doc.get("knitting_dia_details") or [] if r.dia]
+		if not dias:
+			from essdee_yrp.ipd_validations import get_ipd_attribute_values
+
+			dias = get_ipd_attribute_values(doc, FABRIC_DIA_ATTRIBUTE)
+		colours = [
+			r.colour for r in doc.get("colour_yarn_recipes") or []
+			if r.cloth_item == doc.item and r.colour
+		]
+		targets = [(dia, colour) for dia in dias for colour in colours]
+	return [
+		(dia, dia, colour)
+		for dia, colour in dict.fromkeys(targets)
+	]
+
+
+def build_colour_knitting_matrices(doc, row, uom):
+	"""One exact-reference knitting matrix per final Dia/Colour.
+
+	The physical knitting output remains Dia-only in the matrix (the Work Order
+	stamps the route-specific Colour received after knitting);
+	``reference_item_variant`` carries the intended final Dia/Colour so two target
+	colours can use different yarn recipes and different knitting-output colours.
+	"""
+	from yrp.yrp.doctype.item.item import get_or_create_variant
+
+	output_qty = flt(row.get("quantity_ratio")) or 1
+	matrices = []
+	for knitting_dia, final_dia, colour in _colour_knitting_targets(doc):
+		inputs = get_colour_yarn_inputs(doc, colour)
+		if not inputs:
+			frappe.throw(
+				frappe._("Add a Colour-wise Yarn Recipe for {0} / {1}.").format(
+					doc.item, colour
+				)
+			)
+		matrix = _new_matrix(doc, row.get("fabric_process"))
+		matrix.reference_item_variant = get_or_create_variant(
+			doc.item,
+			{
+				FABRIC_DIA_ATTRIBUTE: final_dia,
+				FABRIC_COLOUR_ATTRIBUTE: colour,
+			},
+		)
+		matrix.output_item = row.get("output_item") or doc.item
+		# The header can represent only one Item.  Showing the first yarn for a
+		# multi-yarn blend is misleading (the combination rows are authoritative),
+		# so keep it only for a genuine single-yarn recipe.
+		input_items = list(dict.fromkeys(yarn.item for yarn in inputs if yarn.item))
+		matrix.input_item = input_items[0] if len(input_items) == 1 else None
+		matrix.append("output_attributes", {"attribute": FABRIC_DIA_ATTRIBUTE})
+		for combo_index, yarn in enumerate(inputs):
+			matrix.append("combinations", {
+				"group_index": 0,
+				"group_name": f"{colour} · {final_dia}",
+				"side": "Input",
+				"item": yarn.item,
+				"combo_index": combo_index,
+				"quantity": yarn.quantity,
+				"uom": frappe.db.get_value("Item", yarn.item, "default_unit_of_measure") or uom,
+				"wastage_pct": 0,
+			})
+		matrix.append("combinations", {
+			"group_index": 0,
+			"group_name": f"{colour} · {final_dia}",
+			"side": "Output",
+			"item": matrix.output_item,
+			"combo_index": 0,
+			"quantity": output_qty,
+			"uom": uom,
+			"wastage_pct": 0,
+		})
+		matrix.append("combination_attributes", {
+			"group_index": 0,
+			"side": "Output",
+			"combo_index": 0,
+			"attribute": FABRIC_DIA_ATTRIBUTE,
+			"attribute_value": knitting_dia,
+		})
+		matrices.append(matrix)
+	return matrices
+
+
+def build_route_fabric_matrices(doc, base_matrix):
+	"""Split a dyeing/compacting matrix into exact finished-route matrices.
+
+	``reference_item_variant`` then remains the same stable final Dia/Colour on
+	every Work Order stage, while the matrix combinations continue to carry the
+	physical intermediate Dia/Colour.
+	"""
+	from yrp.yrp.doctype.item.item import get_or_create_variant
+
+	routes = [
+		{
+			"finished_colour": row.finished_colour,
+			"finished_dia": row.finished_dia,
+			"knitting_output_colour": row.knitting_output_colour,
+			"knitting_output_dia": row.knitting_output_dia,
+		}
+		for row in doc.get("fabric_routes") or []
+	]
+	matrices = []
+	for _group_index, group in base_matrix.get_combinations_grouped().items():
+		inputs = group.get("input") or []
+		outputs = group.get("output") or []
+		if not outputs:
+			continue
+		in_attrs = (inputs[0].get("attrs") or {}) if inputs else {}
+		out_attrs = outputs[0].get("attrs") or {}
+		matches = [
+			route for route in routes
+			if _route_matches_matrix_group(route, in_attrs, out_attrs)
+		]
+		for route in matches:
+			matrix = _new_matrix(doc, base_matrix.process_name)
+			matrix.input_item = base_matrix.input_item
+			matrix.output_item = base_matrix.output_item
+			matrix.reference_item_variant = get_or_create_variant(
+				doc.item,
+				{
+					FABRIC_DIA_ATTRIBUTE: route["finished_dia"],
+					FABRIC_COLOUR_ATTRIBUTE: route["finished_colour"],
+				},
+			)
+			for attribute in dict.fromkeys(
+				attribute
+				for combo in inputs
+				for attribute in (combo.get("attrs") or {})
+			):
+				matrix.append("input_attributes", {"attribute": attribute})
+			for attribute in dict.fromkeys(
+				attribute
+				for combo in outputs
+				for attribute in (combo.get("attrs") or {})
+			):
+				matrix.append("output_attributes", {"attribute": attribute})
+			for side, combos in (("Input", inputs), ("Output", outputs)):
+				for combo_index, combo in enumerate(combos):
+					matrix.append("combinations", {
+						"group_index": 0,
+						"group_name": group.get("group_name"),
+						"side": side,
+						"item": combo.get("item"),
+						"combo_index": combo_index,
+						"quantity": flt(combo.get("qty")),
+						"uom": combo.get("uom"),
+						"wastage_pct": flt(combo.get("wastage_pct")),
+					})
+					for attribute, value in (combo.get("attrs") or {}).items():
+						matrix.append("combination_attributes", {
+							"group_index": 0,
+							"side": side,
+							"combo_index": combo_index,
+							"attribute": attribute,
+							"attribute_value": value,
+						})
+			matrices.append(matrix)
+	return matrices
+
+
+def _route_matches_matrix_group(route, in_attrs, out_attrs):
+	"""Match a managed dye/compact group to its stable finished route."""
+	in_colour = in_attrs.get(FABRIC_COLOUR_ATTRIBUTE)
+	out_colour = out_attrs.get(FABRIC_COLOUR_ATTRIBUTE)
+	in_dia = in_attrs.get(FABRIC_DIA_ATTRIBUTE)
+	out_dia = out_attrs.get(FABRIC_DIA_ATTRIBUTE)
+
+	colour_changes = in_colour and out_colour and in_colour != out_colour
+	dia_changes = in_dia and out_dia and in_dia != out_dia
+	if colour_changes:
+		if (
+			route["knitting_output_colour"] != in_colour
+			or route["finished_colour"] != out_colour
+			or route["knitting_output_dia"] != in_dia
+		):
+			return False
+	if dia_changes:
+		if (
+			route["knitting_output_dia"] != in_dia
+			or route["finished_dia"] != out_dia
+			or route["finished_colour"] != (out_colour or in_colour)
+		):
+			return False
+	return bool(colour_changes or dia_changes)
 
 
 def build_fabric_matrix(doc, row, uom):
@@ -581,26 +1020,34 @@ def build_fabric_matrix(doc, row, uom):
 
 	input_item = row.get("input_item")
 	output_item = row.get("output_item") or doc.item
-	# input uom = the consumed item's uom (yarn for knitting); output uom = the
-	# IPD item's uom (= `uom`). Blank input_item -> the IPD item.
-	input_uom = frappe.db.get_value(
-		"Item", input_item, "default_unit_of_measure") if input_item else None
-	input_uom = input_uom or uom
 	output_uom = uom
 	output_qty = flt(row.get("quantity_ratio")) or 1
+	input_specs = _matrix_input_specs(doc, row, uom)
 
 	position = _row_position(doc, row)
 	groups = _group_by_mapping_index(entries)
 	groups = _add_carry_pins(doc, row, groups)
 	expanded = _expand_mapping_indexes(doc, position, groups)
+	# A route whose value is already the required finished value is routing
+	# metadata, not manufacturing work.  Example: AMEL -> AMEL at the Colour
+	# step records that knitting returns finished AMEL, but must not create a
+	# dyeing matrix/WO row.  Keep the persisted mapping so the exact
+	# (finished-colour, Dia) knitting route remains derivable, and omit only its
+	# no-op matrix group.  Mixed steps can therefore contain both real dye
+	# groups (Greige -> Red) and direct groups (AMEL -> AMEL).
+	expanded = [group for group in expanded if not _is_noop_change_group(group)]
+	if not expanded:
+		return None
 
 	matrix = _new_matrix(doc, row.get("fabric_process"))
 	matrix.output_item = output_item
 	# Only stamp input_item when the row carries one — a conversion with a blank
 	# input leaves it unset so the engine falls back to the IPD item (old
 	# knitting-with-blank-yarn behavior).
-	if input_item:
-		matrix.input_item = input_item
+	if input_specs and input_specs[0].item:
+		# Compatibility/display fallback.  Every generated combination also owns
+		# its real Item, which is authoritative when there is more than one yarn.
+		matrix.input_item = input_specs[0].item
 
 	input_attributes, output_attributes = _attribute_sets(expanded)
 	for attribute in input_attributes:
@@ -610,25 +1057,43 @@ def build_fabric_matrix(doc, row, uom):
 
 	for group_index, group in enumerate(expanded):
 		group_name = _group_name(group)
-		matrix.append("combinations", {
-			"group_index": group_index, "group_name": group_name, "side": "Input",
-			"combo_index": 0, "quantity": 1, "uom": input_uom, "wastage_pct": 0,
-		})
+		for combo_index, spec in enumerate(input_specs):
+			matrix.append("combinations", {
+				"group_index": group_index, "group_name": group_name, "side": "Input",
+				"item": spec.item, "combo_index": combo_index,
+				"quantity": spec.quantity, "uom": spec.uom, "wastage_pct": 0,
+			})
 		matrix.append("combinations", {
 			"group_index": group_index, "group_name": group_name, "side": "Output",
-			"combo_index": 0, "quantity": output_qty, "uom": output_uom, "wastage_pct": 0,
+			"item": output_item, "combo_index": 0,
+			"quantity": output_qty, "uom": output_uom, "wastage_pct": 0,
 		})
-		for attribute, value in _side_values(group, "Input"):
-			matrix.append("combination_attributes", {
-				"group_index": group_index, "side": "Input", "combo_index": 0,
-				"attribute": attribute, "attribute_value": value,
-			})
+		for combo_index, _spec in enumerate(input_specs):
+			for attribute, value in _side_values(group, "Input"):
+				matrix.append("combination_attributes", {
+					"group_index": group_index, "side": "Input", "combo_index": combo_index,
+					"attribute": attribute, "attribute_value": value,
+				})
 		for attribute, value in _side_values(group, "Output"):
 			matrix.append("combination_attributes", {
 				"group_index": group_index, "side": "Output", "combo_index": 0,
 				"attribute": attribute, "attribute_value": value,
 			})
 	return matrix
+
+
+def _is_noop_change_group(group):
+	"""Whether every value changed by this group already equals its output.
+
+	Pins merely constrain the route and do not make an otherwise no-op group
+	operational.  A multi-attribute group is skipped only when *all* Change
+	entries are no-ops; changing Dia while holding Colour remains real work.
+	"""
+	changes = [entry for entry in group if entry.get("role") == "Change"]
+	return bool(changes) and all(
+		entry.get("from_value") == entry.get("to_value")
+		for entry in changes
+	)
 
 
 def _add_carry_pins(doc, row, groups):

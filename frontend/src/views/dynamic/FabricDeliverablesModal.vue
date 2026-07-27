@@ -41,13 +41,18 @@
 					Consumes: <b>{{ row.input_item }}</b> → produces <b>{{ row.cloth_item }}</b>
 				</div>
 				<template v-if="row.kind === 'knitting'">
-					<div class="fc-note">
-						Yarn: <b>{{ row.yarn_item }}</b> · 1 kg yarn → {{ row.ratio }} kg cloth
+					<div v-if="row.reference_routed" class="fc-note">
+						Each target colour and Dia uses its own yarn recipe. The recipe is shown below its quantity.
 					</div>
-					<div v-if="row.has_colour && !isMultiColour(row)" class="fc-field">
+					<div v-else class="fc-note">
+						Yarn blend:
+						<b>{{ (row.yarns || []).map((y) => `${y.yarn_item} ${y.ratio}%`).join(" + ") }}</b>
+						· 1 kg blended yarn → {{ row.ratio }} kg cloth
+					</div>
+					<div v-if="needsColourPicker(row)" class="fc-field">
 						<label class="field-label">Cloth Colour *</label>
 						<!-- too many colour choices for columns — single-colour fallback.
-						     No greige colour_options at all: the SAME link query the Desk
+						     No physical-output colour_options at all: the SAME link query the Desk
 						     falls back to (IPD colour mapping, else any Colour value). -->
 						<Select
 							v-if="(row.colour_options || []).length"
@@ -68,7 +73,7 @@
 					</div>
 				</template>
 
-				<!-- multi-colour knitting: one column per greige colour, an input per dia -->
+				<!-- Legacy knitting: one column per physical output colour. -->
 				<div v-if="isMultiColour(row)" class="fc-colour-grid">
 					<div v-for="colour in row.colour_options" :key="colour" class="fc-colour-col">
 						<div class="fc-colour-head">{{ colour }}</div>
@@ -115,6 +120,12 @@
 							<small v-if="planningLine(row.kind, it.qr)" class="fc-note-inline">
 								{{ planningLine(row.kind, it.qr) }}
 							</small>
+							<small v-if="routeLabel(row, it.qr)" class="fc-route">
+								Received from knitting as: {{ routeLabel(row, it.qr) }}
+							</small>
+							<small v-if="recipeLabel(it.qr)" class="fc-recipe">
+								Yarn: {{ recipeLabel(it.qr) }}
+							</small>
 						</div>
 					</div>
 				</div>
@@ -133,10 +144,19 @@
 						<small v-if="planningLine(row.kind, qr)" class="fc-note-inline">
 							{{ planningLine(row.kind, qr) }}
 						</small>
+						<small v-if="routeLabel(row, qr)" class="fc-route">
+							Received from knitting as: {{ routeLabel(row, qr) }}
+						</small>
+						<small v-if="recipeLabel(qr)" class="fc-recipe">
+							Yarn: {{ recipeLabel(qr) }}
+						</small>
 					</div>
 				</template>
 
-				<div v-if="row.kind === 'knitting'" class="fc-field">
+				<div
+					v-if="row.kind === 'knitting' && !row.reference_routed && (row.yarns || []).length === 1"
+					class="fc-field"
+				>
 					<label class="field-label">Yarn (deliverable) Kg</label>
 					<InputNumber
 						v-model="entries[i].yarnQty"
@@ -148,6 +168,13 @@
 					<small class="fc-note-inline">
 						Auto: total cloth ÷ {{ row.ratio }}. Edit only if reality differs.
 					</small>
+				</div>
+				<div v-else-if="row.kind === 'knitting' && !row.reference_routed" class="fc-yarn-breakdown">
+					<div class="field-label">Calculated yarn deliverables</div>
+					<div v-for="yarn in row.yarns || []" :key="yarn.yarn_item" class="fc-yarn-line">
+						<span>{{ yarn.yarn_item }} · {{ yarn.ratio }}%</span>
+						<strong>{{ yarnQuantity(i, yarn) }} kg</strong>
+					</div>
 				</div>
 			</section>
 		</div>
@@ -174,7 +201,7 @@
  * Byte-faithful to the Desk reference (data contracts + branching):
  * - One quantity input per IPD Process Matrix group; every entry posts its
  *   matrix-group `key` so the server resolves the exact group (never by attrs).
- * - Knitting: one COLUMN per greige colour (≤ MAX_COLOUR_COLUMNS) with an
+ * - Legacy knitting: one column per physical output colour (≤ MAX_COLOUR_COLUMNS) with an
  *   input per dia, else a single-colour picker fallback (restricted Select
  *   when the server sent colour_options; otherwise the same link query the
  *   Desk uses — IPD colour mapping, else any Colour attribute value) + an
@@ -186,9 +213,9 @@
  *   section blocks; small/flat lists keep the flat label list. `section` /
  *   `row_label` come verbatim from the server — no client re-derivation.
  * - planning line per input = Desk's planning_description (null figures
- *   hidden, e.g. `available` on conversion / bought-greige lots).
+ *   hidden, e.g. `available` when a preceding fabric step is not Lot-managed).
  * - Non-blocking over-balance warning (production_api stance): knitting /
- *   dyeing per-dia sums vs balance / greige available, compacting per row.
+ *   dyeing per-dia sums vs balance / previous-stage availability, compacting per row.
  * Adapted (widgets only): frappe.ui.Dialog → PrimeVue Dialog, Float →
  * InputNumber, Link → Select/LinkField, HTML notes → styled divs.
  */
@@ -241,9 +268,9 @@ async function loadContext() {
 		)
 		ctx.value = r || { is_fabric_process: false, rows: [] }
 		;(ctx.value.warnings || []).forEach((w) => toast.warn("Fabric row skipped", w))
-		// Pre-fill the Lot program/plan balances (server-computed) + the greige
-		// colour. Multi-colour knitting: a qty slot per (colour × dia); the
-		// greige colour's column gets the balance prefills.
+		// Pre-fill the Lot program/plan balances (server-computed) and the
+		// legacy default physical output colour. Multi-colour knitting has one
+		// quantity slot per physical-output (colour × dia).
 		entries.value = (ctx.value.rows || []).map((row) => {
 			const entry = {
 				// Row-level colour is the SINGLE-COLOUR fallback only. Multi-colour
@@ -275,7 +302,7 @@ async function loadContext() {
 	}
 }
 
-// Desk fallback colour query when the server sent no greige colour_options:
+// Desk fallback colour query when the server sent no physical-output options:
 // the IPD's Colour attribute-mapping values, else any Item Attribute Value of
 // the Colour attribute (same order as work_order.js's get_query).
 async function searchColourValues(row, q) {
@@ -294,8 +321,7 @@ async function searchColourValues(row, q) {
 
 // One planning line per qty row (mirrors the Desk dialog's field description).
 // null figures are hidden — e.g. "available" on conversion steps (previous
-// stage not tracked item-aware) or bought-greige lots where knitting isn't
-// managed. `kg` rounds to 3 decimals like the Desk's flt(v, 3).
+// stage not tracked item-aware). `kg` rounds to 3 decimals like Desk's flt.
 function planningLine(kind, qr) {
 	const kg = (v) => `${Math.round((Number(v) || 0) * 1000) / 1000} kg`
 	const parts = []
@@ -314,9 +340,26 @@ function planningLine(kind, qr) {
 const MAX_COLOUR_COLUMNS = 6
 
 function isMultiColour(row) {
-	return row.kind === "knitting" && row.has_colour
+	return row.kind === "knitting" && !row.reference_routed && row.has_colour
 		&& (row.colour_options || []).length > 0
 		&& row.colour_options.length <= MAX_COLOUR_COLUMNS
+}
+
+function needsColourPicker(row) {
+	if (row.kind !== "knitting" || !row.has_colour || isMultiColour(row)) return false
+	if (!row.reference_routed) return true
+	return (row.qty_rows || []).some((qr) => !qr.knit_colour)
+}
+
+function recipeLabel(qr) {
+	return (qr.yarns || [])
+		.map((yarn) => `${yarn.yarn_item} ${Math.round((Number(yarn.ratio) || 0) * 1000) / 1000}%`)
+		.join(" + ")
+}
+
+function routeLabel(row, qr) {
+	if (row.kind !== "knitting" || !row.reference_routed) return ""
+	return [qr.knit_colour, qr.knit_dia].filter(Boolean).join(" · ")
 }
 
 // Colour-section layout descriptor (mirrors the Desk's `sectionable` branch):
@@ -336,8 +379,8 @@ function sectionLayout(row) {
 		}
 		bySection[key].items.push({ qr, j })
 	})
-	const sectionable = SECTIONABLE_KINDS.includes(row.kind)
-		&& qtyRows.length > 6
+	const sectionable = (SECTIONABLE_KINDS.includes(row.kind) || row.reference_routed)
+		&& (row.reference_routed || qtyRows.length > 6)
 		&& sections.length > 1
 		&& qtyRows.every((qr) => qr.section != null)
 	if (!sectionable) return null
@@ -360,7 +403,11 @@ function collectInputs(i) {
 		}
 	} else {
 		;(row.qty_rows || []).forEach((qr, j) => {
-			inputs.push({ qty: Number(entry.qtys[j]) || 0, qr, colour: null })
+			inputs.push({
+				qty: Number(entry.qtys[j]) || 0,
+				qr,
+				colour: qr.knit_colour || null,
+			})
 		})
 	}
 	return inputs
@@ -376,9 +423,11 @@ function warnBalanceOvershoot() {
 		const inputs = collectInputs(i)
 		if (row.kind === "knitting" || row.kind === "dyeing") {
 			const perDia = {}
-			const limitLabel = row.kind === "knitting" ? "balance" : "greige available"
+			const limitLabel = row.kind === "knitting" ? "balance" : "previous stage available"
 			inputs.forEach(({ qty, qr }) => {
-				const dia = (qr.out_attrs || {}).Dia || qr.label
+				const dia = qr.reference_item_variant
+					|| (qr.out_attrs || {}).Dia
+					|| qr.label
 				const limit = row.kind === "knitting" ? qr.balance : qr.available
 				if (!perDia[dia]) perDia[dia] = { sum: 0, limit }
 				perDia[dia].sum += qty
@@ -391,7 +440,7 @@ function warnBalanceOvershoot() {
 		} else if (row.kind === "compacting") {
 			inputs.forEach(({ qty, qr }) => {
 				if (qty && qr.available != null && qty > qr.available + 0.001) {
-					overs.push(`${row.cloth_item} · ${qr.label}: ${qty} > dyed available ${qr.available}`)
+					overs.push(`${row.cloth_item} · ${qr.label}: ${qty} > previous stage available ${qr.available}`)
 				}
 			})
 		}
@@ -404,6 +453,13 @@ function recomputeYarn(i) {
 	const total = collectInputs(i).reduce((sum, { qty }) => sum + qty, 0)
 	const yarn = row.ratio ? total / row.ratio : total
 	entries.value[i].yarnQty = Math.round(yarn * 1000) / 1000
+}
+
+function yarnQuantity(i, yarn) {
+	const row = ctx.value.rows[i]
+	const totalCloth = collectInputs(i).reduce((sum, { qty }) => sum + qty, 0)
+	const totalYarn = row.ratio ? totalCloth / row.ratio : totalCloth
+	return Math.round(totalYarn * (Number(yarn.ratio) || 0) / 100 * 1000) / 1000
 }
 
 async function onApply() {
@@ -430,7 +486,9 @@ async function onApply() {
 			// Desk parity (work_order.js fallback_colour): multi-colour rows post
 			// null — each line already carries its own line-level colour.
 			colour: isMultiColour(row) ? null : entry.colour || null,
-			yarn_qty: entry.yarnQty || null,
+			yarn_qty: !row.reference_routed && (row.yarns || []).length === 1
+				? entry.yarnQty || null
+				: null,
 			entries: lines,
 		})
 	}
@@ -494,6 +552,16 @@ async function onApply() {
 	color: var(--esd-muted);
 	font-size: 11.5px;
 }
+.fc-recipe {
+	color: var(--esd-text);
+	font-size: 11.5px;
+	font-weight: 500;
+}
+.fc-route {
+	color: var(--esd-primary);
+	font-size: 11.5px;
+	font-weight: 600;
+}
 .fc-field {
 	display: flex;
 	flex-direction: column;
@@ -503,7 +571,19 @@ async function onApply() {
 .fc-field:last-child {
 	padding-bottom: 14px;
 }
-/* one column per greige colour / per server section — wraps on small screens */
+.fc-yarn-breakdown {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	padding: 8px 14px 14px;
+}
+.fc-yarn-line {
+	display: flex;
+	justify-content: space-between;
+	gap: 16px;
+	font-size: 12.5px;
+}
+/* one column per physical output colour / server section — wraps on small screens */
 .fc-colour-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));

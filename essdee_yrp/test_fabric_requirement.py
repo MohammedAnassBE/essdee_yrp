@@ -9,6 +9,7 @@ import json
 from frappe.tests import IntegrationTestCase
 
 from essdee_yrp.fabric_requirement import (
+    _apply_cloth_allowance,
     _aggregate_demand,
     _validate_garment_ipd,
     calculate_cloth,
@@ -97,6 +98,25 @@ def _aishwarya_garment_ipd():
 
 
 class TestFabricRequirement(IntegrationTestCase):
+    def test_cloth_allowance_matches_excel_whole_kg_rounding(self):
+        demand = {
+            ("Thermal Fabric", "22 Dia", "Black"): 12.96,
+            ("Thermal Fabric", "24 Dia", "Red"): 142.0,
+            ("Thermal Fabric", "30 Dia", "A Mel"): 46.0,
+        }
+        self.assertEqual(
+            _apply_cloth_allowance(demand, 8.4),
+            {
+                ("Thermal Fabric", "22 Dia", "Black"): 14.0,
+                ("Thermal Fabric", "24 Dia", "Red"): 154.0,
+                ("Thermal Fabric", "30 Dia", "A Mel"): 50.0,
+            },
+        )
+
+    def test_blank_cloth_allowance_preserves_decimal_demand(self):
+        demand = {("Thermal Fabric", "24 Dia", "Red"): 141.6}
+        self.assertIs(_apply_cloth_allowance(demand, None), demand)
+
     def test_calculate_cloth_set_item_sums_parts(self):
         ipd = _set_item_garment_ipd()
         cc = get_cloth_combination(ipd)
@@ -184,6 +204,38 @@ class TestFabricRequirement(IntegrationTestCase):
         rows = calculate_cloth(ipd, {"Size": "75 cm", "Colour": "Navy"}, 10, cc, sc)
         self.assertEqual(len(rows), 3)
         self.assertTrue(all(r["cloth_type"] == "MAIN FABRIC" for r in rows))
+
+    def test_schema_two_cutting_uses_each_panels_fabric_colour(self):
+        ipd = _aishwarya_garment_ipd()
+        ipd.enable_panel_wise_consumption_matrix = 1
+        ipd.panel_wise_consumption_matrix_json = {"schema_version": 2}
+        ipd.cutting_attributes = [
+            frappe._dict(attribute="Size"),
+            frappe._dict(attribute="Panel"),
+            frappe._dict(attribute="Colour"),
+        ]
+        ipd.cutting_items_json = json.dumps({
+            "attributes": ["Size", "Panel", "Colour", "Dia", "Weight"],
+            "items": [
+                {"Size": "75 cm", "Panel": "Front", "Colour": "Navy",
+                 "Dia": "13 Dia", "Weight": 0.009},
+                {"Size": "75 cm", "Panel": "Back", "Colour": "Navy",
+                 "Dia": "13 Dia", "Weight": 0.008},
+                {"Size": "75 cm", "Panel": "Pouch", "Colour": "Red",
+                 "Dia": "14 Dia", "Weight": 0.005},
+            ],
+        })
+        ipd.stiching_item_combination_details[-1].attribute_value = "Red"
+
+        cc = get_cloth_combination(ipd)
+        sc = get_stitching_combination(ipd)
+        rows = calculate_cloth(
+            ipd, {"Size": "75 cm", "Colour": "Navy"}, 100, cc, sc
+        )
+
+        self.assertEqual([row["colour"] for row in rows], ["Navy", "Navy", "Red"])
+        for row, expected in zip(rows, [0.9, 0.8, 1.0]):
+            self.assertAlmostEqual(row["quantity"], expected, places=6)
 
     def test_incomplete_ipd_raises_clear_error(self):
         # 25 live empty-draft garment IPDs (10 with live Lots, e.g. 34178) must get

@@ -122,6 +122,8 @@
 					<i class="pi pi-lock" />
 					{{ doc?.approval_status === "Approved"
 						? "This IPD is approved — fabric processes are read-only."
+						: disabled
+							? "Save or cancel the IPD-wide edit before changing Fabric Processes."
 						: "You don't have write permission on IPDs — fabric processes are read-only." }}
 				</div>
 			</template>
@@ -167,6 +169,10 @@ const props = defineProps({
 	// The loaded Item Production Detail document (getDoc result). Steps rebuild
 	// whenever it changes (immediate watch — never onMounted-once).
 	doc: { type: Object, required: true },
+	// The parent owns one document-wide edit transaction for recipe/header
+	// fields. Blocking the independent process save while it is active prevents
+	// that save's reload from discarding unsaved recipe/route edits.
+	disabled: { type: Boolean, default: false },
 });
 const emit = defineEmits(["saved"]);
 
@@ -186,7 +192,10 @@ const saving = ref(false);
 // renders saved IPDs, so the is_new() half falls away. Also gated on write
 // permission — read-only users must not see Edit/Remove/Add at all.
 const editable = computed(
-	() => props.doc?.approval_status !== "Approved" && canWrite("Item Production Detail"),
+	() =>
+		!props.disabled &&
+		props.doc?.approval_status !== "Approved" &&
+		canWrite("Item Production Detail"),
 );
 const attributes = computed(() =>
 	[...new Set((props.doc?.item_attributes || []).map((a) => a.attribute).filter(Boolean))],
@@ -502,6 +511,13 @@ async function persistSteps(candidateSteps, successDetail) {
 }
 
 async function onEditorSave(step) {
+	if (!editable.value) {
+		toast.warn(
+			"Save the IPD edit first",
+			"Fabric Processes cannot be saved while another IPD-wide edit is open.",
+		);
+		return;
+	}
 	const d = draft.value;
 	if (!d) return;
 	const candidate = steps.value.slice();

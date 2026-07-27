@@ -22,6 +22,13 @@ function buildQueryString(params) {
   return str ? `?${str}` : ''
 }
 
+function cleanServerMessage(value) {
+  const stripped = String(value ?? '').replace(/<[^>]*>/g, '')
+  const decoder = document.createElement('textarea')
+  decoder.innerHTML = stripped
+  return decoder.value.trim()
+}
+
 /**
  * Build an Error carrying Frappe's `exc_type` (exception class name) and the
  * HTTP `status`, so callers can branch deterministically. Use `exc_type` —
@@ -29,7 +36,7 @@ function buildQueryString(params) {
  * `ValidationError` subclasses (incl. `TimestampMismatchError`) to 417.
  */
 function makeApiError(message, status, excType) {
-  const err = new Error(message)
+  const err = new Error(cleanServerMessage(message))
   err.status = status
   err.exc_type = excType || null
   return err
@@ -94,9 +101,7 @@ async function request(url, options = {}) {
     } else if (body.message) {
       msg = body.message
     }
-    // Strip HTML tags for clean display
-    msg = msg.replace(/<[^>]*>/g, '')
-    throw new Error(msg)
+    throw new Error(cleanServerMessage(msg))
   }
 
   if (response.status === 404 || response.status === 409 || response.status === 417) {
@@ -122,8 +127,6 @@ async function request(url, options = {}) {
         if (parts.length) msg = parts.join('\n')
       } catch { /* keep default */ }
     }
-    // Strip HTML tags for clean display.
-    msg = String(msg).replace(/<[^>]*>/g, '').trim()
     // Attach `exc_type` (Frappe's exception class name) + status so callers can
     // branch deterministically — e.g. detect the stale-write conflict via
     // `exc_type === "TimestampMismatchError"` (HTTP 417) rather than a number.

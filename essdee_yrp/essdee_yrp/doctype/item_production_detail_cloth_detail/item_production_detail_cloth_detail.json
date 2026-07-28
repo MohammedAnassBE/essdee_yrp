@@ -14,12 +14,14 @@
   {
    "fieldname": "name1",
    "fieldtype": "Data",
+   "in_list_view": 1,
    "label": "Name",
    "reqd": 1
   },
   {
    "fieldname": "cloth",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Cloth",
    "options": "Item",
    "reqd": 1
@@ -27,12 +29,14 @@
   {
    "fieldname": "is_bom_item",
    "fieldtype": "Check",
+   "in_list_view": 1,
    "label": "Is BOM Item",
    "default": "0"
   },
   {
    "fieldname": "required_gsm",
    "fieldtype": "Float",
+   "in_list_view": 1,
    "label": "Required GSM"
   }
  ],

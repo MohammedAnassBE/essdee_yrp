@@ -10,6 +10,7 @@
 
   Movable set (registry name → affordance):
     create_dc / create_grn → the primary forward CTA (Create DC / Create GRN)
+    build_cloth_programs    → Build Cloth Programs on an eligible Lot
     more_menu              → the "More" overflow toggle
     ewaybill_menu          → the e-Waybill menu toggle
     send_sms               → Send SMS
@@ -44,6 +45,16 @@
 			@click="primaryForward.handler"
 		/>
 	</span>
+
+	<Button
+		v-if="showBuildCloth"
+		label="Build Cloth Programs"
+		icon="pi pi-th-large"
+		size="small"
+		class="forward-cta"
+		data-testid="build-cloth-programs"
+		@click="emit('build-cloth')"
+	/>
 
 	<!-- Overflow: secondary create-next actions + Print + Open in Desk. -->
 	<Button
@@ -122,6 +133,7 @@ defineProps({
 	// Per-affordance visibility — DocDetail's EXACT former v-if conditions
 	// (AND the actions.items filter), computed there, consumed here.
 	showMore: { type: Boolean, default: false },
+	showBuildCloth: { type: Boolean, default: false },
 	showEwb: { type: Boolean, default: false },
 	showSms: { type: Boolean, default: false },
 	showWhatsApp: { type: Boolean, default: false },
@@ -131,7 +143,7 @@ defineProps({
 // Menu toggles relay the ORIGINAL click event — PrimeVue popup Menus anchor
 // to event.currentTarget, so the menu opens on whichever placement hosts the
 // button (emits are synchronous; currentTarget is still live).
-const emit = defineEmits(["toggle-more", "toggle-ewb", "open-sms", "open-whatsapp", "cancel"])
+const emit = defineEmits(["build-cloth", "toggle-more", "toggle-ewb", "open-sms", "open-whatsapp", "cancel"])
 </script>
 
 <style scoped>

@@ -17,9 +17,16 @@ def is_cloth_ipd(doc):
 
 
 def before_validate(doc, method=None):
-	if is_cloth_ipd(doc):
-		return
 	apply_ipd_settings_defaults(doc)
+	if is_cloth_ipd(doc):
+		sync_cloth_recipe_snapshot(doc)
+		return
+	# Yarn recipes are operational Lot inputs owned by generated cloth IPDs.
+	# Synced garment IPDs keep only the panel/process/accessory definition.
+	if doc.meta.get_field("colour_yarn_recipes"):
+		doc.set("colour_yarn_recipes", [])
+	from essdee_yrp.panel_wise_consumption import sync_panel_wise_consumption_matrix
+	sync_panel_wise_consumption_matrix(doc)
 	validate_duplicate_bom_items(doc)
 	save_combination_detail_fields(doc)
 	clear_set_item_fields_when_disabled(doc)
@@ -29,12 +36,97 @@ def before_validate(doc, method=None):
 	validate_set_item_defaults(doc)
 
 
+def sync_cloth_recipe_snapshot(doc):
+	"""Keep the old single/global yarn fields as an internal compatibility view.
+
+	Colour-wise Yarn Recipes are the only user-entered source for a cloth IPD.
+	Older calculation/reporting paths still read ``yarn_ratio_details`` and
+	``yarn_item``; derive those fields from the first finished-colour recipe so
+	the user never has to enter the same yarn blend twice.
+	"""
+	rows = doc.get("colour_yarn_recipes") or []
+	if not rows:
+		return
+
+	first = rows[0]
+	first_key = (first.get("cloth_item") or doc.get("item"), first.get("colour"))
+	recipe = [
+		row for row in rows
+		if (row.get("cloth_item") or doc.get("item"), row.get("colour")) == first_key
+	]
+	if not recipe:
+		return
+
+	doc.set("yarn_ratio_details", [
+		{
+			"yarn_item": row.get("yarn_item"),
+			"ratio": flt(row.get("ratio")),
+		}
+		for row in recipe
+		if row.get("yarn_item")
+	])
+	doc.yarn_item = doc.yarn_ratio_details[0].yarn_item if doc.yarn_ratio_details else None
+
+
 def validate(doc, method=None):
 	validate_common(doc)
+	validate_colour_yarn_recipes(doc)
 	if is_cloth_ipd(doc):
 		validate_cloth_ipd(doc)
 	else:
 		validate_garment_ipd(doc)
+
+
+def validate_colour_yarn_recipes(doc):
+	"""Validate Build Cloth Program recipe snapshots on generated cloth IPDs."""
+	rows = doc.get("colour_yarn_recipes") or []
+	if not rows:
+		return
+	cloth_ipd = is_cloth_ipd(doc)
+	if not cloth_ipd:
+		frappe.throw(
+			"Colour-wise Yarn Recipes belong only to generated cloth production details."
+		)
+	groups = {}
+	seen = set()
+	for row in rows:
+		if row.cloth_item != doc.item:
+			frappe.throw(
+				f"Row {row.idx} of Colour-wise Yarn Recipes: Cloth Item must be "
+				f"the cloth IPD item ({doc.item})."
+			)
+		if frappe.db.get_value("Item Attribute Value", row.colour, "attribute_name") != "Colour":
+			frappe.throw(
+				f"Row {row.idx} of Colour-wise Yarn Recipes: {row.colour} is not a Colour value."
+			)
+		key = (row.cloth_item, row.colour)
+		row_key = key + (row.yarn_item,)
+		if row_key in seen:
+			frappe.throw(
+				f"Row {row.idx} of Colour-wise Yarn Recipes: duplicate Yarn Item "
+				f"{row.yarn_item} for {row.cloth_item} / {row.colour}."
+			)
+		seen.add(row_key)
+		ratio = flt(row.ratio)
+		if ratio <= 0:
+			frappe.throw(
+				f"Row {row.idx} of Colour-wise Yarn Recipes: Ratio must be greater than zero."
+			)
+		if frappe.db.exists(
+			"Item Item Attribute",
+			{"parent": row.yarn_item, "parenttype": "Item"},
+		):
+			frappe.throw(
+				f"Row {row.idx} of Colour-wise Yarn Recipes: Yarn Item "
+				f"{row.yarn_item} must not have variant attributes."
+			)
+		groups[key] = groups.get(key, 0) + ratio
+	for (cloth, colour), total in groups.items():
+		if abs(total - 100.0) > 0.001:
+			frappe.throw(
+				f"Colour-wise Yarn Recipes: {cloth} / {colour} must total exactly "
+				f"100%. Current total is {flt(total, 3)}."
+			)
 
 
 def validate_common(doc):
@@ -43,6 +135,85 @@ def validate_common(doc):
 		create_new_mapping_values(doc)
 	ensure_ipd_owned_mappings(doc)
 	update_mapping_values(doc)
+	if is_cloth_ipd(doc):
+		sync_cloth_attribute_mapping_values(doc)
+
+
+def sync_cloth_attribute_mapping_values(doc):
+	"""Populate cloth IPD Dia/Colour mappings from the recipe and exact routes.
+
+	The route editor is the authoritative manual/Lot-built cloth definition.
+	The Item Attributes section is a generated, readable index of every Dia and
+	Colour used by that definition; it must not remain as two empty mapping
+	shells after automatic IPD creation.
+	"""
+	from essdee_yrp.fabric_ipd import (
+		FABRIC_COLOUR_ATTRIBUTE,
+		FABRIC_DIA_ATTRIBUTE,
+		get_fabric_process_rows,
+	)
+
+	values = {
+		FABRIC_DIA_ATTRIBUTE: [],
+		FABRIC_COLOUR_ATTRIBUTE: [],
+	}
+
+	def add(attribute, value):
+		if attribute in values and value and value not in values[attribute]:
+			values[attribute].append(value)
+
+	for row in doc.get("fabric_routes") or []:
+		add(FABRIC_DIA_ATTRIBUTE, row.get("finished_dia"))
+		add(FABRIC_DIA_ATTRIBUTE, row.get("knitting_output_dia"))
+		add(FABRIC_COLOUR_ATTRIBUTE, row.get("finished_colour"))
+		add(FABRIC_COLOUR_ATTRIBUTE, row.get("knitting_output_colour"))
+
+	for row in doc.get("colour_yarn_recipes") or []:
+		add(FABRIC_COLOUR_ATTRIBUTE, row.get("colour"))
+
+	for row in doc.get("knitting_dia_details") or []:
+		add(FABRIC_DIA_ATTRIBUTE, row.get("dia"))
+	for row in doc.get("dyeing_colour_details") or []:
+		add(FABRIC_DIA_ATTRIBUTE, row.get("dia"))
+		add(FABRIC_COLOUR_ATTRIBUTE, row.get("from_colour"))
+		add(FABRIC_COLOUR_ATTRIBUTE, row.get("to_colour"))
+	for row in doc.get("compacting_dia_details") or []:
+		add(FABRIC_COLOUR_ATTRIBUTE, row.get("colour"))
+		add(FABRIC_DIA_ATTRIBUTE, row.get("from_dia"))
+		add(FABRIC_DIA_ATTRIBUTE, row.get("to_dia"))
+	for row in doc.get("compacting_reference_details") or []:
+		add(FABRIC_COLOUR_ATTRIBUTE, row.get("colour"))
+		add(FABRIC_DIA_ATTRIBUTE, row.get("input_dia"))
+		add(FABRIC_DIA_ATTRIBUTE, row.get("compacting_dia"))
+
+	for process in get_fabric_process_rows(doc):
+		for mapping in process.get("value_mappings") or []:
+			attribute = mapping.get("attribute")
+			add(attribute, mapping.get("from_value"))
+			add(attribute, mapping.get("to_value"))
+
+	for attribute_row in doc.get("item_attributes") or []:
+		attribute = attribute_row.get("attribute")
+		expected = values.get(attribute)
+		if expected is None or not attribute_row.get("mapping"):
+			continue
+		mapping = frappe.get_doc(
+			"Item Item Attribute Mapping", attribute_row.get("mapping")
+		)
+		current = [
+			row.get("attribute_value")
+			for row in mapping.get("values") or []
+			if row.get("attribute_value")
+		]
+		if mapping.get("attribute_name") == attribute and current == expected:
+			continue
+		mapping.attribute_name = attribute
+		mapping.set("values", [
+			{"attribute_value": value}
+			for value in expected
+		])
+		mapping.save(ignore_permissions=True)
+		frappe.clear_document_cache("Item Item Attribute Mapping", mapping.name)
 
 
 def validate_garment_ipd(doc):
@@ -55,9 +226,40 @@ def validate_garment_ipd(doc):
 
 def validate_cloth_ipd(doc):
 	"""Cloth IPDs skip every garment validation (packing/stitching/cutting).
-	Fabric tabs: each mapping must be complete, and a (dia, from_colour) /
-	(colour, from_dia) pair may appear only once — a blank dia/colour means
-	"applies to every value" and counts as its own key."""
+	Fabric tabs: each mapping must be complete, and an exact (dia, from_colour,
+	to_colour) / (colour, from_dia, to_dia) row may appear only once — a blank
+	dia/colour means "applies to every value" and counts as its own key.
+	Fan-out (several to-values per (dia, from)) is allowed; see
+	validate_swap_rows for the invariant and its rationale."""
+	from essdee_yrp.fabric_ipd import get_yarn_ratio_inputs
+
+	validate_fabric_routes(doc)
+	validate_compacting_references(doc)
+
+	yarn_rows = doc.get("yarn_ratio_details") or []
+	if yarn_rows:
+		seen_yarns = set()
+		total = 0.0
+		for row in yarn_rows:
+			if not row.yarn_item:
+				frappe.throw(f"Row {row.idx} of Yarn Ratio: select a Yarn Item.")
+			if row.yarn_item in seen_yarns:
+				frappe.throw(f"Row {row.idx} of Yarn Ratio: duplicate Yarn Item {row.yarn_item}.")
+			seen_yarns.add(row.yarn_item)
+			ratio = flt(row.ratio)
+			if ratio <= 0:
+				frappe.throw(f"Row {row.idx} of Yarn Ratio: Ratio must be greater than zero.")
+			total += ratio
+		if abs(total - 100.0) > 0.001:
+			frappe.throw(f"Yarn Ratio total must be exactly 100. Current total is {flt(total, 3)}.")
+
+		# Keep old single-yarn readers harmless during the transition.  The table
+		# and combination-level matrix Item remain the source of truth.
+		doc.yarn_item = yarn_rows[0].yarn_item
+		for process_row in doc.get("fabric_processes") or []:
+			if doc.get("knitting_process") and process_row.fabric_process == doc.knitting_process:
+				process_row.input_item = doc.yarn_item
+
 	# The engine resolves matrices per process_name with subset attr matching —
 	# two fabric tabs sharing one Process master would cross-match groups.
 	fabric_processes = [p for p in (doc.knitting_process, doc.dyeing_process, doc.compacting_process) if p]
@@ -79,7 +281,8 @@ def validate_cloth_ipd(doc):
 	validate_consume_mappings(doc)
 
 	# Identity-process rows may only treat this IPD's cloth or its yarn.
-	allowed_items = {doc.item, doc.get("yarn_item")}
+	allowed_items = {doc.item}
+	allowed_items.update(row.item for row in get_yarn_ratio_inputs(doc))
 	for row in doc.get("ipd_processes") or []:
 		if row.get("process_item") and row.process_item not in allowed_items:
 			frappe.throw(
@@ -87,6 +290,10 @@ def validate_cloth_ipd(doc):
 				f"this IPD's item ({doc.item}) or its yarn ({doc.get('yarn_item') or 'not set'})."
 			)
 
+	# A populated recipe is strict (unique, positive, exactly 100). Keep the
+	# established blank-yarn draft/rebuild state valid: it deliberately records
+	# the later cloth steps while omitting the knitting matrix until yarn is
+	# selected. The IPD UI still requires a recipe before normal user save.
 	if doc.knitting_process and flt(doc.get("cloth_per_kg_yarn")) <= 0:
 		frappe.throw(
 			"Enter 'Cloth Kgs per 1 Kg Yarn' on the Knitting tab — the Work Order "
@@ -104,17 +311,155 @@ def validate_cloth_ipd(doc):
 		)
 
 
+def validate_fabric_routes(doc):
+	"""Exact final -> knitting Colour/Dia routes on manually/Lot-built CPDs."""
+	routes = doc.get("fabric_routes") or []
+	if not routes:
+		return
+	seen = set()
+	recipe_colours = {
+		row.colour for row in doc.get("colour_yarn_recipes") or []
+		if row.cloth_item == doc.item and row.colour
+	}
+	for row in routes:
+		values = (
+			(row.finished_colour, "Colour", "Finished Colour"),
+			(row.knitting_output_colour, "Colour", "Knitting Output Colour"),
+			(row.finished_dia, "Dia", "Finished Dia"),
+			(row.knitting_output_dia, "Dia", "Knitting Output Dia"),
+		)
+		for value, attribute, label in values:
+			if not value:
+				frappe.throw(f"Row {row.idx} of Fabric Routes: select {label}.")
+			if (
+				frappe.db.get_value(
+					"Item Attribute Value", value, "attribute_name"
+				)
+				!= attribute
+			):
+				frappe.throw(
+					f"Row {row.idx} of Fabric Routes: {value} is not a {attribute} value."
+				)
+		key = (row.finished_dia, row.finished_colour)
+		if key in seen:
+			frappe.throw(
+				f"Row {row.idx} of Fabric Routes duplicates "
+				f"{row.finished_colour} / {row.finished_dia}."
+			)
+		seen.add(key)
+		if recipe_colours and row.finished_colour not in recipe_colours:
+			frappe.throw(
+				f"Row {row.idx} of Fabric Routes: add a Colour-wise Yarn Recipe "
+				f"for {row.finished_colour}."
+			)
+	routed_colours = {row.finished_colour for row in routes}
+	missing_routes = sorted(recipe_colours - routed_colours)
+	if missing_routes:
+		frappe.throw(
+			"Fabric Routes: add at least one finished Dia route for "
+			+ ", ".join(missing_routes)
+			+ "."
+		)
+
+	needs_dyeing = any(
+		row.knitting_output_colour != row.finished_colour for row in routes
+	)
+	needs_compacting = any(
+		row.knitting_output_dia != row.finished_dia for row in routes
+	)
+	from essdee_yrp.fabric_chain import get_fabric_steps
+
+	change_attributes = set()
+	for step in get_fabric_steps(doc):
+		attributes = step.get("attribute")
+		if not attributes:
+			continue
+		if not isinstance(attributes, (list, tuple)):
+			attributes = [attributes]
+		change_attributes.update(attributes)
+	if needs_dyeing and "Colour" not in change_attributes:
+		frappe.throw(
+			"Fabric Routes whose knitting and finished colours differ need a "
+			"Colour-changing Fabric Process."
+		)
+	if needs_compacting and "Dia" not in change_attributes:
+		frappe.throw(
+			"Fabric Routes whose knitting and finished Dias differ need a "
+			"Dia-changing Fabric Process."
+		)
+
+
+def validate_compacting_references(doc):
+	"""Validate data-only Compacting Details without feeding matrices or WOs.
+
+	A blank Colour means the Dia mapping applies to every colour. A selected
+	Colour is the override/special-case form.
+	"""
+	seen = set()
+	for row in doc.get("compacting_reference_details") or []:
+		for fieldname, attribute, label in (
+			("input_dia", "Dia", "Knitting/Input Dia"),
+			("compacting_dia", "Dia", "Compacting Dia"),
+		):
+			value = row.get(fieldname)
+			if not value:
+				frappe.throw(
+					f"Row {row.idx} of Compacting Reference Details: select {label}."
+				)
+			if frappe.db.get_value(
+				"Item Attribute Value", value, "attribute_name"
+			) != attribute:
+				frappe.throw(
+					f"Row {row.idx} of Compacting Reference Details: "
+					f"{value} is not a {attribute} value."
+				)
+		if row.get("colour") and frappe.db.get_value(
+			"Item Attribute Value", row.get("colour"), "attribute_name"
+		) != "Colour":
+			frappe.throw(
+				f"Row {row.idx} of Compacting Details: "
+				f"{row.get('colour')} is not a Colour value."
+			)
+		key = (row.colour, row.input_dia, row.compacting_dia)
+		if key in seen:
+			frappe.throw(
+				f"Row {row.idx} of Compacting Details duplicates "
+				f"{row.colour or 'All Colours'} / "
+				f"{row.input_dia} -> {row.compacting_dia}."
+			)
+		seen.add(key)
+
+
 def validate_swap_rows(rows, table_label, pin_field, from_field, to_field):
+	"""Reject exact duplicate swap rows; allow fan-out.
+
+	The key is the full (pin, from, to) triple: the same (pin, from) mapping to
+	SEVERAL distinct to-values is valid piece-dyed fan-out (one greige at one
+	dia dyed into many colours — each row becomes its own matrix group with a
+	distinct output combo). An EXACT duplicate row is the real hazard: it emits
+	two identical matrix groups whose output projections collide, which
+	fabric_plan._load_output_indexed_groups marks AMBIGUOUS and the backward
+	solver then throws on. (Fan-IN — two froms to one to — stays allowed as
+	before and is guarded at solve time by the same AMBIGUOUS marker.)
+
+	Wildcard caveat (pre-existing behavior, unchanged): mixing a CONCRETE row
+	with a blank-pin WILDCARD row for the same from-value keeps the classic
+	"specific beats wildcard" expansion — the concrete row overrides the
+	wildcard for ALL to-values at that pin (fabric_ipd._expand_mapping_indexes
+	keys its covered-set on (attr, pin, change_from) only), so a wildcard
+	fan-out branch does not surface at a concretely-pinned dia/colour. Loud
+	failure mode (requirement entry blocks with "No chain path produces"), and
+	the CPD auto-builder only ever emits concrete pins."""
 	seen = set()
 	for row in rows:
 		if not row.get(from_field) or not row.get(to_field):
 			frappe.throw(f"Row {row.idx} of {table_label}: enter both the from and to values.")
-		key = (row.get(pin_field) or "", row.get(from_field))
+		key = (row.get(pin_field) or "", row.get(from_field), row.get(to_field))
 		if key in seen:
 			pin = row.get(pin_field) or "all"
 			frappe.throw(
-				f"Row {row.idx} of {table_label}: duplicate mapping for "
-				f"{from_field.replace('_', ' ')} {row.get(from_field)} ({pin_field}: {pin})."
+				f"Row {row.idx} of {table_label}: duplicate mapping "
+				f"{row.get(from_field)} -> {row.get(to_field)} ({pin_field}: {pin})."
 			)
 		seen.add(key)
 
@@ -132,6 +477,24 @@ def on_update(doc, method=None):
 
 
 def on_trash(doc, method=None):
+	# Process matrices are generated dependents of the IPD, not independent
+	# masters. Delete them before Frappe checks incoming links so their `ipd`
+	# Link does not block deletion of the owning production detail. `force` is
+	# required because the IPD still exists until this on_trash hook finishes.
+	# If another real document still links the IPD, the later link check raises
+	# and the request transaction rolls this cleanup back with the IPD deletion.
+	for matrix_name in frappe.get_all(
+		"IPD Process Matrix",
+		filters={"ipd": doc.name},
+		pluck="name",
+	):
+		frappe.delete_doc(
+			"IPD Process Matrix",
+			matrix_name,
+			force=True,
+			ignore_permissions=True,
+		)
+
 	# Never delete a mapping still referenced outside this IPD — by an Item or
 	# another IPD (legacy cloth IPDs shared docs before ensure_ipd_owned_mappings).
 	documents = {
@@ -169,21 +532,35 @@ def validate_duplicate_bom_items(doc):
 
 
 def apply_ipd_settings_defaults(doc):
+	if doc.flags.get("skip_ipd_settings_defaults"):
+		return
 	if not doc.is_new() or not frappe.db.exists("DocType", "IPD Settings"):
 		return
 
 	settings = frappe.get_single("IPD Settings")
-	defaults = {
-		"packing_process": "default_packing_process",
-		"pack_in_stage": "default_pack_in_stage",
-		"pack_out_stage": "default_pack_out_stage",
-		"packing_attribute": "default_packing_attribute",
-		"stiching_process": "default_stitching_process",
-		"stiching_attribute": "default_stitching_attribute",
-		"stiching_in_stage": "default_stitching_in_stage",
-		"stiching_out_stage": "default_stitching_out_stage",
-		"cutting_process": "default_cutting_process",
-	}
+	if is_cloth_ipd(doc):
+		# A manually authored generic Fabric Processes chain is authoritative.
+		# Filling hidden legacy process fields beside it changes how the builder
+		# recognises Knitting/Dyeing and can collapse exact route matrices.
+		defaults = {"cloth_per_kg_yarn": "default_cloth_per_kg_yarn"}
+		if not doc.get("fabric_processes"):
+			defaults.update({
+				"knitting_process": "default_knitting_process",
+				"dyeing_process": "default_dyeing_process",
+				"compacting_process": "default_compacting_process",
+			})
+	else:
+		defaults = {
+			"packing_process": "default_packing_process",
+			"pack_in_stage": "default_pack_in_stage",
+			"pack_out_stage": "default_pack_out_stage",
+			"packing_attribute": "default_packing_attribute",
+			"stiching_process": "default_stitching_process",
+			"stiching_attribute": "default_stitching_attribute",
+			"stiching_in_stage": "default_stitching_in_stage",
+			"stiching_out_stage": "default_stitching_out_stage",
+			"cutting_process": "default_cutting_process",
+		}
 	for fieldname, setting_fieldname in defaults.items():
 		if doc.meta.get_field(fieldname) and not doc.get(fieldname):
 			doc.set(fieldname, settings.get(setting_fieldname))
@@ -484,6 +861,12 @@ def validate_packing_assortment(doc):
 
 
 def validate_stiching_fields(doc):
+	# Packing, Stitching, and Cutting tabs are intentionally hidden until the
+	# garment IPD has been inserted once.  Allow that initial draft save; from
+	# the second save onward the downstream configuration stays strict.
+	if doc.is_new():
+		return
+
 	if not doc.stiching_process:
 		return
 

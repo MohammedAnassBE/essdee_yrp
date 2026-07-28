@@ -30,6 +30,85 @@ class FabricPlanError(frappe.ValidationError):
 	pass
 
 
+def _plan_key(reference_item_variant, attrs):
+	attrs = frozenset(attrs)
+	# Preserve the long-standing public solver shape for generic routes. Exact
+	# colour routes add the reference as a tuple only where it is needed.
+	return (reference_item_variant, attrs) if reference_item_variant else attrs
+
+
+def _split_plan_key(key):
+	if (
+		isinstance(key, tuple)
+		and len(key) == 2
+		and isinstance(key[1], frozenset)
+	):
+		return key[0] or "", key[1]
+	return "", key
+
+
+def _reference_attrs(reference_item_variant):
+	if not reference_item_variant:
+		return {}
+	variant = frappe.get_cached_doc("Item Variant", reference_item_variant)
+	return {
+		row.attribute: row.attribute_value
+		for row in variant.get("attributes") or []
+	}
+
+
+def _route_bypasses_step(ipd_doc, step, reference_item_variant, combo):
+	"""Whether this finished route deliberately skips the current process.
+
+	Only a Colour-changing step can currently be route-optional.  When the
+	physical knitting-output colour already equals the finished colour, an
+	AMEL/GMEL route must flow straight from knitting to the next real stage
+	instead of creating an artificial dyeing plan.
+	"""
+	if step.get("shape") not in ("swap", "multi_swap"):
+		return False
+	attributes = step.get("attribute")
+	attributes = (
+		attributes
+		if isinstance(attributes, (list, tuple))
+		else [attributes]
+	)
+	if (
+		FABRIC_COLOUR_ATTRIBUTE in attributes
+		and FABRIC_DIA_ATTRIBUTE in attributes
+	):
+		# A same-colour multi-swap may still perform required Dia work.
+		return False
+
+	attrs = _reference_attrs(reference_item_variant) or dict(combo)
+	if FABRIC_DIA_ATTRIBUTE in attributes:
+		finished_dia = attrs.get(FABRIC_DIA_ATTRIBUTE)
+		finished_colour = attrs.get(FABRIC_COLOUR_ATTRIBUTE)
+		if not finished_dia:
+			return False
+		from essdee_yrp.fabric_program import get_knitting_output_dia
+
+		return (
+			get_knitting_output_dia(
+				ipd_doc, finished_colour, finished_dia
+			)
+			== finished_dia
+		)
+	if FABRIC_COLOUR_ATTRIBUTE not in attributes:
+		return False
+	finished_colour = attrs.get(FABRIC_COLOUR_ATTRIBUTE)
+	if not finished_colour:
+		return False
+	from essdee_yrp.fabric_program import get_knitting_output_colour
+
+	knitting_output = get_knitting_output_colour(
+		ipd_doc,
+		finished_colour,
+		attrs.get(FABRIC_DIA_ATTRIBUTE),
+	)
+	return bool(knitting_output and knitting_output == finished_colour)
+
+
 def solve_chain_backward(ipd_doc, requirement):
 	"""requirement: {frozenset({(attr, value), ...}): kg} keyed by finished-cloth
 	attrs. Returns (step_plans FIRST->LAST, unreachable list).
@@ -48,14 +127,17 @@ def solve_chain_backward(ipd_doc, requirement):
 	for step in reversed(steps):
 		groups, declared_attrs = _load_output_indexed_groups(ipd_doc.name, step["process_name"])
 		outputs, inputs, next_demand = {}, {}, {}
-		for combo, kg in demand.items():
+		for demand_key, kg in demand.items():
+			reference_item_variant, combo = _split_plan_key(demand_key)
 			# project onto the attrs this matrix declares; attrs the matrix
 			# does not know (e.g. Dia through an unpinned colour swap) are
 			# CARRIED unchanged to the next demand — dropping them would
 			# merge per-dia demand and report false unreachables.
 			projected = frozenset((a, v) for a, v in combo if a in declared_attrs)
 			carried = frozenset((a, v) for a, v in combo if a not in declared_attrs)
-			matched = groups.get(projected)
+			matched = groups.get((reference_item_variant, projected))
+			if not matched:
+				matched = groups.get(("", projected))
 			if matched == "AMBIGUOUS":
 				frappe.throw(
 					_("IPD {0} / {1}: two matrix groups produce the same output {2} — "
@@ -63,6 +145,13 @@ def solve_chain_backward(ipd_doc, requirement):
 					"deterministic.").format(ipd_doc.name, step["process_name"], dict(projected)),
 					FabricPlanError,
 				)
+			if not matched and _route_bypasses_step(
+				ipd_doc, step, reference_item_variant, combo
+			):
+				# Transparent branch: the route stays demanded by the preceding
+				# stage, but this process receives no plan/ledger row.
+				next_demand[demand_key] = next_demand.get(demand_key, 0) + kg
+				continue
 			if not matched:
 				unreachable.append({
 					"position": step["position"], "process_name": step["process_name"],
@@ -73,7 +162,8 @@ def solve_chain_backward(ipd_doc, requirement):
 			if out_qty <= 0:
 				continue
 			scale = kg / out_qty
-			outputs[combo] = outputs.get(combo, 0) + kg
+			output_key = _plan_key(reference_item_variant, combo)
+			outputs[output_key] = outputs.get(output_key, 0) + kg
 			for inp in matched.get("input") or []:
 				in_kg = flt(inp.get("qty")) * scale * (1 + flt(inp.get("wastage_pct")) / 100.0)
 				in_key = frozenset((inp.get("attrs") or {}).items())
@@ -82,8 +172,9 @@ def solve_chain_backward(ipd_doc, requirement):
 					# conversion input is a DIFFERENT item (yarn) — its key
 					# stays clean (frozenset()) so the yarn figure aggregates
 					in_key = in_key | carried
-				inputs[in_key] = inputs.get(in_key, 0) + in_kg
-				next_demand[in_key] = next_demand.get(in_key, 0) + in_kg
+				input_key = _plan_key(reference_item_variant, in_key)
+				inputs[input_key] = inputs.get(input_key, 0) + in_kg
+				next_demand[input_key] = next_demand.get(input_key, 0) + in_kg
 		step_plans.append({
 			"process_name": step["process_name"], "position": step["position"],
 			"shape": step["shape"], "outputs": outputs, "inputs": inputs,
@@ -109,7 +200,10 @@ def _load_output_indexed_groups(ipd_name, process_name):
 			declared.add(row.attribute)
 		for _idx, group in matrix.get_combinations_grouped().items():
 			out = (group.get("output") or [{}])[0]
-			key = frozenset((out.get("attrs") or {}).items())
+			key = (
+				matrix.reference_item_variant or "",
+				frozenset((out.get("attrs") or {}).items()),
+			)
 			indexed[key] = "AMBIGUOUS" if key in indexed else group
 	return indexed, declared
 
@@ -139,7 +233,11 @@ def build_fabric_plan(lot_doc, fabric_row, raise_on_unreachable=True, ipd_doc=No
 		attrs = {FABRIC_DIA_ATTRIBUTE: row.dia}
 		if row.colour:
 			attrs[FABRIC_COLOUR_ATTRIBUTE] = row.colour
-		key = frozenset(attrs.items())
+		reference_item_variant = ""
+		if ipd.get("colour_yarn_recipes"):
+			from yrp.yrp.doctype.item.item import get_or_create_variant
+			reference_item_variant = get_or_create_variant(ipd.item, attrs)
+		key = _plan_key(reference_item_variant, attrs.items())
 		requirement[key] = requirement.get(key, 0) + flt(row.weight)
 
 	step_plans, unreachable = solve_chain_backward(ipd, requirement)
@@ -172,27 +270,34 @@ def _write_plan_rows(lot_doc, cloth_item, step_plans):
 	for row in lot_doc.get("lot_fabric_step_ledger") or []:
 		if row.cloth_item != cloth_item:
 			continue
-		existing[(row.process_name or "", row.side or "Output", row.dia or "", row.colour or "")] = row
+		existing[(
+			row.process_name or "", row.side or "Output", row.dia or "",
+			row.colour or "", row.get("reference_item_variant") or "",
+		)] = row
 
 	wanted = {}
 	for plan in step_plans:
-		for combo, kg in plan["outputs"].items():
+		for plan_key, kg in plan["outputs"].items():
+			reference_item_variant, combo = _split_plan_key(plan_key)
 			attrs = dict(combo)
 			key = (plan["process_name"], "Output",
-				attrs.get(FABRIC_DIA_ATTRIBUTE) or "", attrs.get(FABRIC_COLOUR_ATTRIBUTE) or "")
+				attrs.get(FABRIC_DIA_ATTRIBUTE) or "", attrs.get(FABRIC_COLOUR_ATTRIBUTE) or "",
+				reference_item_variant)
 			wanted[key] = wanted.get(key, 0) + kg
 	# the FIRST step's inputs = yarn / procurement figure
 	if step_plans:
 		first = step_plans[0]
-		for combo, kg in first["inputs"].items():
+		for plan_key, kg in first["inputs"].items():
+			reference_item_variant, combo = _split_plan_key(plan_key)
 			attrs = dict(combo)
 			key = (first["process_name"], "Input",
-				attrs.get(FABRIC_DIA_ATTRIBUTE) or "", attrs.get(FABRIC_COLOUR_ATTRIBUTE) or "")
+				attrs.get(FABRIC_DIA_ATTRIBUTE) or "", attrs.get(FABRIC_COLOUR_ATTRIBUTE) or "",
+				reference_item_variant)
 			wanted[key] = wanted.get(key, 0) + kg
 
 	inserted = 0
 	for key, kg in wanted.items():
-		process_name, side, dia, colour = key
+		process_name, side, dia, colour, reference_item_variant = key
 		row = existing.pop(key, None)
 		if row:
 			frappe.db.set_value("Lot Fabric Step Ledger", row.name, "planned_weight",
@@ -209,6 +314,7 @@ def _write_plan_rows(lot_doc, cloth_item, step_plans):
 			new_row.side = side
 			new_row.dia = dia or None
 			new_row.colour = colour or None
+			new_row.reference_item_variant = reference_item_variant or None
 			new_row.planned_weight = flt(kg, 3)
 			new_row.received_weight = 0
 			new_row.save(ignore_permissions=True)
@@ -229,21 +335,26 @@ def _preseed_knitting_program(lot_doc, cloth_item, step_plans):
 	conversion = next((p for p in step_plans if p["shape"] == "conversion"), None)
 	if not conversion:
 		return
-	per_dia = {}
-	for combo, kg in conversion["outputs"].items():
+	per_reference = {}
+	for plan_key, kg in conversion["outputs"].items():
+		reference_item_variant, combo = _split_plan_key(plan_key)
 		dia = dict(combo).get(FABRIC_DIA_ATTRIBUTE)
 		if dia:
-			per_dia[dia] = per_dia.get(dia, 0) + kg
+			key = (dia, reference_item_variant)
+			per_reference[key] = per_reference.get(key, 0) + kg
 
 	program_rows = {
-		r.dia: r for r in lot_doc.get("lot_fabric_programs") or []
+		(r.dia, r.get("reference_item_variant") or ""): r
+		for r in lot_doc.get("lot_fabric_programs") or []
 		if r.cloth_item == cloth_item
 	}
 	drift = []
 	inserted = 0
-	for dia, kg in per_dia.items():
+	for (dia, reference_item_variant), kg in per_reference.items():
 		kg = flt(kg, 3)
-		row = program_rows.get(dia)
+		row = program_rows.get((dia, reference_item_variant))
+		reference_attrs = _reference_attrs(reference_item_variant)
+		colour = reference_attrs.get(FABRIC_COLOUR_ATTRIBUTE)
 		if row is None:
 			inserted += 1
 			new_row = frappe.new_doc("Lot Fabric Program")
@@ -253,6 +364,8 @@ def _preseed_knitting_program(lot_doc, cloth_item, step_plans):
 			new_row.idx = len(lot_doc.get("lot_fabric_programs") or []) + inserted
 			new_row.cloth_item = cloth_item
 			new_row.dia = dia
+			new_row.colour = colour or None
+			new_row.reference_item_variant = reference_item_variant or None
 			new_row.weight = kg
 			new_row.received_weight = 0
 			new_row.save(ignore_permissions=True)
@@ -260,7 +373,8 @@ def _preseed_knitting_program(lot_doc, cloth_item, step_plans):
 			frappe.db.set_value("Lot Fabric Program", row.name, "weight", kg,
 				update_modified=False)
 		elif abs(flt(row.weight) - kg) > 0.001:
-			drift.append(f"{escape_html(cloth_item)} · {escape_html(dia)}: "
+			drift.append(f"{escape_html(cloth_item)} · {escape_html(colour or '')} · "
+				f"{escape_html(dia)}: "
 				f"program {flt(row.weight)} kg vs plan {kg} kg")
 	if drift:
 		frappe.msgprint("<br>".join(drift),
@@ -335,11 +449,16 @@ def _plan_headline(step_plans):
 		return ""
 	first = step_plans[0]
 	parts = []
-	attrless = flt(first["inputs"].get(frozenset()), 2)
+	attrless = flt(sum(
+		kg
+		for plan_key, kg in first["inputs"].items()
+		if not _split_plan_key(plan_key)[1]
+	), 2)
 	if attrless:
 		parts.append(_("{0} kg input").format(attrless))
 	per_dia = {}
-	for combo, kg in first["outputs"].items():
+	for plan_key, kg in first["outputs"].items():
+		_reference_item_variant, combo = _split_plan_key(plan_key)
 		dia = dict(combo).get(FABRIC_DIA_ATTRIBUTE)
 		if dia:
 			per_dia[dia] = per_dia.get(dia, 0) + kg

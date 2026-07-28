@@ -17,6 +17,8 @@
  * EDIT/CREATE as a toggle; cloth items drive the fabric (knitting/dyeing/
  * compacting) IPD tabs and the Lot fabric-details rows.
  */
+import { searchLink } from "@/api/client"
+
 const hideFormFields = [
 	"weight_per_unit",
 	"weight_uom",
@@ -37,9 +39,19 @@ const labels = {
 	name1: "Item Name",
 }
 
+// Keep the /web pickers inside the same legal subset as Desk. The server also
+// validates the default UOM, but filtering here avoids presenting values that
+// can never be saved; Item Group has no equivalent controller guard, so the
+// leaf-only filter is especially important.
+const linkSearchHandlers = {
+	item_group: () => (q) => searchLink("Item Group", q, { is_group: 0 }),
+	default_unit_of_measure: () => (q) => searchLink("UOM", q, { secondary_only: 0 }),
+}
+
 export default {
 	hideFormFields,
 	readOnlyChildFields,
 	boolLabels,
 	labels,
+	linkSearchHandlers,
 }

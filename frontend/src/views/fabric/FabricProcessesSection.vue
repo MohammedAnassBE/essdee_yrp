@@ -50,7 +50,7 @@
 			<!-- ══════════════ OVERVIEW ══════════════ -->
 			<template v-if="view === 'overview'">
 				<div v-if="!steps.length" class="fp-empty">
-					No fabric processes yet. Add the first step — yarn dyeing, knitting, dyeing, compacting, printing, washing.
+					No fabric processes yet.
 				</div>
 
 				<div class="fp-cards">
@@ -76,6 +76,23 @@
 						<div class="fp-summary">
 							<!-- Compact glance-label; full rule detail is in the Edit pop-up. -->
 							<span class="fp-summary-text">{{ shortSummaryOf(step) }}</span>
+						</div>
+
+						<button
+							v-if="detailRows(step).length"
+							class="fp-detail-toggle"
+							type="button"
+							data-testid="fp-toggle-detail"
+							:data-process="step.fabric_process"
+							@click="toggleDetail(step.sequence)"
+						>
+							<span class="fp-chevron" :class="{ 'is-open': expandedSteps[step.sequence] }">▸</span>
+							{{ expandedSteps[step.sequence] ? "Hide combinations" : "View combinations" }}
+							<span class="fp-mut">({{ detailRows(step).length }})</span>
+						</button>
+
+						<div v-if="expandedSteps[step.sequence]" class="fp-detail" data-testid="fp-detail-rows">
+							<div v-for="(row, ri) in detailRows(step)" :key="ri" class="fp-detail-row" v-html="row"></div>
 						</div>
 					</div>
 				</div>
@@ -105,6 +122,8 @@
 					<i class="pi pi-lock" />
 					{{ doc?.approval_status === "Approved"
 						? "This IPD is approved — fabric processes are read-only."
+						: disabled
+							? "Save or cancel the IPD-wide edit before changing Fabric Processes."
 						: "You don't have write permission on IPDs — fabric processes are read-only." }}
 				</div>
 			</template>
@@ -125,7 +144,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import Select from "primevue/select";
 import Button from "primevue/button";
 import { callMethod, getList } from "@/api/client";
@@ -137,6 +156,7 @@ import {
 	blankDraft,
 	blankGroup,
 	blankRule,
+	detailRows,
 	hasConversion,
 	num,
 	ratioLabel,
@@ -149,6 +169,10 @@ const props = defineProps({
 	// The loaded Item Production Detail document (getDoc result). Steps rebuild
 	// whenever it changes (immediate watch — never onMounted-once).
 	doc: { type: Object, required: true },
+	// The parent owns one document-wide edit transaction for recipe/header
+	// fields. Blocking the independent process save while it is active prevents
+	// that save's reload from discarding unsaved recipe/route edits.
+	disabled: { type: Boolean, default: false },
 });
 const emit = defineEmits(["saved"]);
 
@@ -168,7 +192,10 @@ const saving = ref(false);
 // renders saved IPDs, so the is_new() half falls away. Also gated on write
 // permission — read-only users must not see Edit/Remove/Add at all.
 const editable = computed(
-	() => props.doc?.approval_status !== "Approved" && canWrite("Item Production Detail"),
+	() =>
+		!props.disabled &&
+		props.doc?.approval_status !== "Approved" &&
+		canWrite("Item Production Detail"),
 );
 const attributes = computed(() =>
 	[...new Set((props.doc?.item_attributes || []).map((a) => a.attribute).filter(Boolean))],
@@ -231,6 +258,15 @@ async function loadCatalog() {
 	}
 }
 loadCatalog();
+
+// ---- combination detail (expand/collapse; Desk parity) ----------------------
+// Keyed by step sequence; the rows come from detailRows (fabricShapes) — one
+// row per persisted mapping group, Pin-only/empty groups skipped, so the
+// toggle count always matches the rows actually rendered.
+const expandedSteps = reactive({});
+function toggleDetail(seq) {
+	expandedSteps[seq] = !expandedSteps[seq];
+}
 
 const usedProcesses = computed(() => steps.value.map((s) => s.fabric_process).filter(Boolean));
 const availableProcesses = computed(() => allProcesses.value.filter((p) => !usedProcesses.value.includes(p)));
@@ -475,6 +511,13 @@ async function persistSteps(candidateSteps, successDetail) {
 }
 
 async function onEditorSave(step) {
+	if (!editable.value) {
+		toast.warn(
+			"Save the IPD edit first",
+			"Fabric Processes cannot be saved while another IPD-wide edit is open.",
+		);
+		return;
+	}
 	const d = draft.value;
 	if (!d) return;
 	const candidate = steps.value.slice();
@@ -617,6 +660,34 @@ function removeStep(si) {
 
 .fp-summary { grid-column: 2 / 4; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--esd-line); display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .fp-summary-text { font-size: 13px; color: var(--esd-ink); }
+.fp-mut { color: var(--esd-muted); }
+
+/* ---- combination detail (expand/collapse) ---- */
+.fp-detail-toggle {
+	grid-column: 2 / 4;
+	display: inline-flex; align-items: center; gap: 6px; width: fit-content;
+	border: none; background: transparent; color: var(--esd-accent-700);
+	cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 500;
+	padding: 2px 0; margin-top: 4px;
+}
+.fp-detail-toggle:hover { text-decoration: underline; }
+.fp-chevron { display: inline-block; font-size: 10px; transition: transform .15s ease; }
+.fp-chevron.is-open { transform: rotate(90deg); }
+.fp-detail {
+	grid-column: 2 / 4;
+	margin-top: 6px;
+	padding: 8px 10px;
+	background: var(--esd-slate-50);
+	border: 1px solid var(--esd-line);
+	border-radius: var(--radius-sm, 8px);
+	max-height: 320px;
+	overflow-y: auto;
+	display: flex; flex-direction: column; gap: 4px;
+}
+.fp-detail-row { font-size: 12.5px; color: var(--esd-ink); padding: 2px 0; }
+.fp-detail-row:not(:last-child) { border-bottom: 1px dashed var(--esd-line); padding-bottom: 4px; }
+.fp-detail-row :deep(b) { font-weight: 600; }
+.fp-detail-row :deep(.fp-mut) { color: var(--esd-muted); }
 
 /* ---- add bar ---- */
 .fp-addbar { margin-top: 16px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; background: var(--esd-card); border: 1px dashed var(--esd-line); border-radius: var(--radius-sm, 8px); padding: 14px 15px; }

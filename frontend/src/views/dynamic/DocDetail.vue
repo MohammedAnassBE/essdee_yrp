@@ -165,12 +165,14 @@
 						v-if="actionsPlacement === 'header'"
 						:primary-forward="primaryForward"
 						:acting="acting"
+						:show-build-cloth="showBuildClothAction"
 						:show-more="showMoreAction"
 						:show-ewb="showEwbAction"
 						:show-sms="showSmsAction"
 						:show-whats-app="showWhatsAppAction"
 						:show-cancel="showCancelAction"
 						@toggle-more="(e) => moreMenu.toggle(e)"
+						@build-cloth="onBuildClothPrograms"
 						@toggle-ewb="(e) => ewbMenu.toggle(e)"
 						@open-sms="sendSmsOpen = true"
 						@open-whatsapp="sendWhatsAppOpen = true"
@@ -354,7 +356,19 @@
 			:work-order="doc.name"
 			:process-name="doc.process_name || ''"
 			:modified="doc.modified"
+			@applying="markLocalWrite"
 			@calculated="onDeliverablesCalculated"
+		/>
+
+		<!-- Lot: Build Cloth Programs (CPD auto-builder) -->
+		<ClothProgramModal
+			v-if="isLot && doc"
+			v-model:visible="clothProgramOpen"
+			:lot="doc.name"
+			:production-detail="doc.production_detail"
+			:modified="doc.modified"
+			@applying="markLocalWrite"
+			@built="onClothProgramsBuilt"
 		/>
 
 		<!-- Delivery Challan e-Waybill lifecycle + SMS modals (yrp_ewaybill_api).
@@ -427,12 +441,14 @@
 				<DocMovableActions
 					:primary-forward="primaryForward"
 					:acting="acting"
+					:show-build-cloth="showBuildClothAction"
 					:show-more="showMoreAction"
 					:show-ewb="showEwbAction"
 					:show-sms="showSmsAction"
 					:show-whats-app="showWhatsAppAction"
 					:show-cancel="showCancelAction"
 					@toggle-more="(e) => moreMenu.toggle(e)"
+					@build-cloth="() => { onBuildClothPrograms(); actionSheetOpen = false }"
 					@toggle-ewb="(e) => ewbMenu.toggle(e)"
 					@open-sms="() => { sendSmsOpen = true; actionSheetOpen = false }"
 					@open-whatsapp="() => { sendWhatsAppOpen = true; actionSheetOpen = false }"
@@ -707,6 +723,7 @@
 						:show-allow-zero-rate="!!pv.showAllowZeroRate"
 						:show-secondary-toggle="!!pv.showSecondaryToggle"
 						:locked-items="!!pv.lockedItems"
+						:show-dimensions="pv.showDimensions !== false"
 						:qty-control="dcQtyControl"
 						:editable="true"
 						@change="onGridChange"
@@ -821,9 +838,21 @@
 							:style="{ width: childColWidth(ct.fieldname, col) }"
 						>
 							<template #body="{ data, field }">
-								<span :class="{ 'esd-mono': col.input === 'link' }">
-									{{ childCellDisplay(data[field], col) }}
-								</span>
+								<div class="child-cell-value">
+									<span :class="{ 'esd-mono': col.input === 'link' }">
+										{{ childCellDisplay(data[field], col) }}
+									</span>
+									<Button
+										v-if="childLinkCanOpen(col, data, data[field])"
+										icon="pi pi-arrow-up-right"
+										text
+										rounded
+										size="small"
+										class="child-link-open"
+										v-tooltip.top="'Open ' + data[field]"
+										@click.stop.prevent="navigateChildLink(col, data, data[field])"
+									/>
+								</div>
 							</template>
 							<template #editor="{ data, field }">
 								<!-- readonly columns (e.g. Item.attributes.mapping —
@@ -844,16 +873,13 @@
 									fluid
 									autofocus
 								/>
-								<AutoComplete
+								<LinkField
 									v-else-if="col.input === 'link'"
-									v-model="data[field]"
-									:suggestions="childLinkSuggestions"
-									@complete="onChildLinkComplete(col, $event, data)"
-									dropdown
-									completeOnFocus
+									:model-value="data[field]"
+									@update:model-value="data[field] = $event"
+									:target-doctype="childLinkTarget(col, data)"
+									:search-handler="childLinkSearchHandlerFor(col, data)"
 									class="cell-input"
-									fluid
-									autofocus
 								/>
 								<InputText
 									v-else
@@ -899,9 +925,9 @@
 					</DataTable>
 				</div>
 
-				<!-- Lot fabric views (Desk FabricProgram island parity — the 2
-				     approved views only): final requirement (finished cloth) +
-				     dia-wise program with inline weight entry. Emits the transient
+				<!-- Lot fabric views (Desk FabricProgram island parity): one
+				     Dia × Colour matrix combining the finished-cloth requirement,
+				     knitting-program total, and received weight. Emits the transient
 				     fabric_program_details / fabric_requirement_details JSON on
 				     save (see buildPayload); the hidden lot_fabric_programs /
 				     lot_fabric_requirements children are rebuilt server-side.
@@ -909,7 +935,7 @@
 				<div v-else-if="kind === 'lot-fabric'" class="child-editor">
 					<div class="child-editor-head">
 						<h4>Fabric Program</h4>
-						<span class="child-cols-note pivot-note">final requirement (finished cloth) + dia-wise knitting program — the chain plan rebuilds on save</span>
+						<span class="child-cols-note pivot-note">dia × colour requirement matrix with knitting totals — the chain plan rebuilds on save</span>
 					</div>
 					<LotFabricViews
 						:ref="setLotFabricGrid"
@@ -971,7 +997,16 @@
 							:header="col.label"
 						>
 							<template #body="{ data, field }">
-								<span :class="{ 'esd-mono': col.input === 'link' }">
+								<button
+									v-if="childLinkCanOpen(col, data, data[field])"
+									type="button"
+									class="child-link-value esd-mono"
+									@click="navigateChildLink(col, data, data[field])"
+								>
+									<span>{{ childCellDisplay(data[field], col) }}</span>
+									<i class="pi pi-arrow-up-right" />
+								</button>
+								<span v-else :class="{ 'esd-mono': col.input === 'link' }">
 									{{ childCellDisplay(data[field], col) }}
 								</span>
 							</template>
@@ -1246,7 +1281,16 @@
 										:style="{ width: childColWidth(ct.fieldname, col) }"
 									>
 										<template #body="{ data }">
-											<span :class="{ 'esd-mono': col.isLink }">
+											<button
+												v-if="childLinkCanOpen(col, data, data[col.fieldname])"
+												type="button"
+												class="child-link-value esd-mono"
+												@click="navigateChildLink(col, data, data[col.fieldname])"
+											>
+												<span>{{ displayValue(data[col.fieldname], col.type) }}</span>
+												<i class="pi pi-arrow-up-right" />
+											</button>
+											<span v-else :class="{ 'esd-mono': col.isLink }">
 												{{ displayValue(data[col.fieldname], col.type) }}
 											</span>
 										</template>
@@ -1276,8 +1320,8 @@
 							/>
 						</TabPanel>
 
-						<!-- LOT: Fabric Program — the 2 approved fabric views (final
-						     requirement + dia-wise program), read-only mirror of the
+						<!-- LOT: Fabric Program — Dia × Colour requirement matrix
+						     with knitting totals, read-only mirror of the
 						     Desk FabricProgram island. "Recalculate Received" lives
 						     here (saved doc — the Desk's is_dirty guard holds). -->
 						<TabPanel v-if="isLot" value="lot-fabric">
@@ -1366,12 +1410,14 @@
 					<DocMovableActions
 						:primary-forward="primaryForward"
 						:acting="acting"
+						:show-build-cloth="showBuildClothAction"
 						:show-more="showMoreAction"
 						:show-ewb="showEwbAction"
 						:show-sms="showSmsAction"
 						:show-whats-app="showWhatsAppAction"
 						:show-cancel="showCancelAction"
 						@toggle-more="(e) => moreMenu.toggle(e)"
+						@build-cloth="onBuildClothPrograms"
 						@toggle-ewb="(e) => ewbMenu.toggle(e)"
 						@open-sms="sendSmsOpen = true"
 						@open-whatsapp="sendWhatsAppOpen = true"
@@ -1456,12 +1502,14 @@
 			<DocMovableActions
 				:primary-forward="primaryForward"
 				:acting="acting"
+				:show-build-cloth="showBuildClothAction"
 				:show-more="showMoreAction"
 				:show-ewb="showEwbAction"
 				:show-sms="showSmsAction"
 				:show-whats-app="showWhatsAppAction"
 				:show-cancel="showCancelAction"
 				@toggle-more="(e) => moreMenu.toggle(e)"
+				@build-cloth="onBuildClothPrograms"
 				@toggle-ewb="(e) => ewbMenu.toggle(e)"
 				@open-sms="sendSmsOpen = true"
 				@open-whatsapp="sendWhatsAppOpen = true"
@@ -1533,6 +1581,7 @@ import {
 // Q10: tooltip directive for gated (disabled-with-reason) action buttons.
 const vTooltip = Tooltip
 import FabricDeliverablesModal from "./FabricDeliverablesModal.vue"
+import ClothProgramModal from "./ClothProgramModal.vue"
 import StockItemGridEditor from "./StockItemGridEditor.vue"
 import WorkflowActions from "./WorkflowActions.vue"
 import LotOrderEditor from "./LotOrderEditor.vue"
@@ -1631,6 +1680,13 @@ const dirtyArmed = ref(false)
 const registry = computed(() => getRegistryByRoute(props.docRoute))
 const doctype = computed(() => registry.value?.doctype || "")
 const isWorkOrder = computed(() => doctype.value === "Work Order")
+// Process/Lot-aware Work Order choices. The backend returns exact Item/IPD
+// pairs; this state drives both auto-fill and the Item autocomplete so the
+// create/edit shells cannot drift from Desk or server validation.
+const workOrderSelectionOptions = ref([])
+const workOrderItemOptions = ref([])
+const workOrderSelectionLoading = ref(false)
+let workOrderSelectionRequest = 0
 const isDeliveryChallan = computed(() => doctype.value === "Delivery Challan")
 const isGoodsReceivedNote = computed(() => doctype.value === "Goods Received Note")
 const isItem = computed(() => doctype.value === "Item")
@@ -1760,7 +1816,7 @@ const actionDialogPosition = computed(() => {
 // vocabulary). Absent / non-array → null = all of today's actions render.
 // Unknown names are ignored with one console.warn (the server soft-warns the
 // same way); an items list never ADDS an affordance the gates would hide.
-const MOVABLE_ACTION_ITEMS = ["create_grn", "create_dc", "more_menu", "ewaybill_menu", "send_sms", "send_whatsapp", "cancel_doc"]
+const MOVABLE_ACTION_ITEMS = ["create_grn", "create_dc", "complete_transfer", "build_cloth_programs", "more_menu", "ewaybill_menu", "send_sms", "send_whatsapp", "cancel_doc"]
 let unknownActionItemsWarned = false
 const allowedActionItems = computed(() => {
 	const items = uiStore.actionsKnob?.items
@@ -1796,13 +1852,34 @@ const forwardActions = computed(() => {
 		out.push({ key: "wo-grn", label: "Create Goods Received Note", icon: "pi pi-plus-circle", handler: onCreateGrnFromWo, disabled: woGated, tooltip: woTip })
 	if (isDeliveryChallan.value && canCreate("Goods Received Note"))
 		out.push({ key: "dc-grn", label: "Create Goods Received Note", icon: "pi pi-plus-circle", handler: onCreateGrnFromDc, disabled: false, tooltip: "" })
+	if (
+		isGoodsReceivedNote.value
+		&& Number(d.is_internal_unit)
+		&& !Number(d.transfer_complete)
+		&& canCreate("Stock Entry")
+	) {
+		out.push({
+			key: "grn-complete-transfer",
+			label: "Complete Transfer",
+			icon: "pi pi-sync",
+			handler: onCompleteGrnTransfer,
+			disabled: false,
+			tooltip: "",
+			loadingKey: "grn-complete-transfer",
+		})
+	}
 	return out
 })
 // The actions.items filter, applied per forward action (create_dc filters the
 // WO→DC action; create_grn the WO→GRN and DC→GRN ones). Unmapped future keys
 // stay visible — the filter only ever narrows what it knows by name. With the
 // knob absent this is forwardActions unchanged (parity).
-const FORWARD_ACTION_ITEM = { "wo-dc": "create_dc", "wo-grn": "create_grn", "dc-grn": "create_grn" }
+const FORWARD_ACTION_ITEM = {
+	"wo-dc": "create_dc",
+	"wo-grn": "create_grn",
+	"dc-grn": "create_grn",
+	"grn-complete-transfer": "complete_transfer",
+}
 const visibleForwardActions = computed(() =>
 	forwardActions.value.filter((a) => {
 		const item = FORWARD_ACTION_ITEM[a.key]
@@ -1839,14 +1916,36 @@ const moreMenuModel = computed(() => {
 // actions knob, AND-ed with the optional actions.items filter. Same computeds,
 // same handlers, same once-mounted menus/modals — the knob only re-hosts them.
 const showMoreAction = computed(() => moreMenuModel.value.length > 0 && actionAllowed("more_menu"))
-const showEwbAction = computed(() => isDeliveryChallan.value && docstatus.value === 1 && actionAllowed("ewaybill_menu"))
+const showBuildClothAction = computed(
+	() =>
+		mode.value === "view" &&
+		isLot.value &&
+		canWrite(doctype.value) &&
+		!!doc.value?.production_detail &&
+		!isLotTransferred.value &&
+		actionAllowed("build_cloth_programs"),
+)
+const showEwbAction = computed(
+	() =>
+		isDeliveryChallan.value
+		&& docstatus.value === 1
+		&& (canWrite(doctype.value) || !!doc.value?.ewaybill)
+		&& ewbMenuModel.value.length > 0
+		&& actionAllowed("ewaybill_menu"),
+)
 const showSmsAction = computed(
-	() => isDeliveryChallan.value && docstatus.value === 1 && !!doc.value?.supplier && actionAllowed("send_sms"),
+	() =>
+		isDeliveryChallan.value
+		&& docstatus.value === 1
+		&& canWrite(doctype.value)
+		&& !!doc.value?.supplier
+		&& actionAllowed("send_sms"),
 )
 const showWhatsAppAction = computed(
 	() =>
 		isWhatsAppEnabled.value &&
 		docstatus.value === 1 &&
+		canWrite(doctype.value) &&
 		!!doc.value?.[whatsAppSupplierKey.value] &&
 		actionAllowed("send_whatsapp"),
 )
@@ -1860,6 +1959,7 @@ const showCancelAction = computed(
 const anyMovableAction = computed(
 	() =>
 		Boolean(primaryForward.value) ||
+		showBuildClothAction.value ||
 		showMoreAction.value ||
 		showEwbAction.value ||
 		showSmsAction.value ||
@@ -1893,8 +1993,6 @@ const activeTab = ref("details")
 const form = reactive({})
 // Per-field Link autocomplete suggestion buffers (parent fields).
 const linkSuggestions = reactive({})
-// Shared buffer for the child-grid Link cell autocomplete (one cell edits at a time).
-const childLinkSuggestions = ref([])
 // Child-DocType meta indexed by DocType name (from the getdoctype bundle tail).
 // Gives the edit/create child grids typed columns (esp. in create, no rows).
 const childMetaCache = ref({})
@@ -2028,16 +2126,22 @@ const whatsAppSupplierKey = computed(() => whatsAppEnabledDoctypes.value[doctype
 const ewbMenuModel = computed(() => {
 	if (!doc.value) return []
 	if (!doc.value.ewaybill) {
+		if (!canWrite(doctype.value)) return []
 		return [
 			{ label: "Generate e-Waybill", icon: "pi pi-plus", command: () => (ewbGenerateOpen.value = true) },
 			{ label: "Fetch existing", icon: "pi pi-download", command: () => (ewbFetchOpen.value = true) },
 		]
 	}
-	return [
+	const items = [
 		{ label: "Print e-Waybill", icon: "pi pi-print", command: () => printEwaybill() },
-		{ label: "Update Vehicle", icon: "pi pi-truck", command: () => (ewbVehicleOpen.value = true) },
-		{ label: "Cancel e-Waybill", icon: "pi pi-ban", command: () => (ewbCancelOpen.value = true) },
 	]
+	if (canWrite(doctype.value)) {
+		items.push(
+			{ label: "Update Vehicle", icon: "pi pi-truck", command: () => (ewbVehicleOpen.value = true) },
+			{ label: "Cancel e-Waybill", icon: "pi pi-ban", command: () => (ewbCancelOpen.value = true) },
+		)
+	}
+	return items
 })
 
 // Refresh the stored EWB payload, then open the print view in a new tab (same
@@ -2172,6 +2276,8 @@ const STOCK_GROUPED_MAP = {
 		{
 			childField: "deliverables", groupedField: "deliverable_details",
 			ungroupKey: "Work Order Deliverables", label: "Deliverables",
+			lockedItems: true,
+			showDimensions: false,
 			cellFields: [{ name: "pending_quantity", label: "Pending" }],
 			valueFields: ["pending_quantity", "stock_update", "valuation_rate"],
 			entryFields: [
@@ -2183,6 +2289,8 @@ const STOCK_GROUPED_MAP = {
 		{
 			childField: "receivables", groupedField: "receivable_details",
 			ungroupKey: "Work Order Receivables", label: "Receivables",
+			lockedItems: true,
+			showDimensions: false,
 			cellFields: [{ name: "cost", label: "Cost" }, { name: "pending_quantity", label: "Pending" }],
 			valueFields: ["cost", "pending_quantity", "total_cost"],
 			entryFields: [
@@ -2870,6 +2978,7 @@ function inputDescriptor(mf) {
 		help: getFieldHelp(doctype.value, mf.fieldname) || mf.description || "",
 		reqd: !!mf.reqd,
 		readOnly: !!mf.read_only,
+		permlevel: Number(mf.permlevel) || 0,
 		fieldtype: ft,
 		input: "text",
 		wide: false,
@@ -3016,6 +3125,22 @@ function isReqd(f) {
 // posting_date/time stay read-only until "Edit Posting Date and Time" is ticked).
 // Reads `form` so it re-evaluates reactively as the user toggles.
 function isReadOnly(f) {
+	if (!canWriteFieldPermlevel(f.permlevel)) return true
+	// Work Order entry is intentionally sequential: Process → Lot → Item.
+	// The IPD is always derived. One valid Item is auto-filled and locked; only
+	// a genuine multi-cloth context presents an Item choice.
+	if (isWorkOrder.value && f.fieldname === "lot") {
+		return !form.process_name
+	}
+	if (isWorkOrder.value && f.fieldname === "item") {
+		return (
+			!form.process_name
+			|| !form.lot
+			|| workOrderSelectionLoading.value
+			|| workOrderItemOptions.value.length <= 1
+		)
+	}
+	if (isWorkOrder.value && f.fieldname === "production_detail") return true
 	// Lot mirrors lot.js's check_enabled_po gating: with Production-Order mode
 	// ON, `item` is read-only (fetched from the PO) and `production_order` is
 	// pickable; with it OFF, `item` is typed directly and `production_order`
@@ -3029,6 +3154,19 @@ function isReadOnly(f) {
 	}
 	if (f.readOnly) return true
 	return f.readOnlyDependsOn ? evalCondition(f.readOnlyDependsOn) : false
+}
+
+function canWriteFieldPermlevel(permlevel) {
+	const level = Number(permlevel) || 0
+	if (isAdmin.value) return true
+	if (level === 0) return canWrite(doctype.value)
+	return (meta.value?.permissions || []).some(
+		(row) =>
+			(Number(row.permlevel) || 0) === level
+			&& Number(row.write) === 1
+			&& !!row.role
+			&& hasRole(row.role),
+	)
 }
 
 // The form fields actually shown: drop any whose depends_on is currently false,
@@ -3162,6 +3300,7 @@ function blankValueFor(mf) {
 
 function clearForm() {
 	for (const k of Object.keys(form)) delete form[k]
+	if (isWorkOrder.value) resetWorkOrderSelection(false)
 	// Fresh form ⇒ calm again: forget touched fields + any prior save attempt so
 	// a rebuilt create/edit form never opens with required fields pre-reddened.
 	touchedFields.clear()
@@ -3263,6 +3402,8 @@ async function applyCreateFormQuery() {
 	const dt = doctype.value
 	if (dt === "Delivery Challan" && form.work_order) {
 		await onFieldChanged("work_order")
+	} else if (dt === "Work Order" && form.process_name && form.lot) {
+		await loadWorkOrderSelection({ preserveItem: true })
 	} else if (dt === "Goods Received Note" && form.against_id) {
 		await onFieldChanged("against_id")
 	} else if (dt === "Inspection Entry" && form.against_id) {
@@ -3292,6 +3433,9 @@ async function enterEdit() {
 	missingField.value = null
 	buildEditForm()
 	mode.value = "edit"
+	if (isWorkOrder.value) {
+		await loadWorkOrderSelection({ preserveItem: true })
+	}
 	// R3a: for stock-pivot doctypes, hydrate each grid from the doc's grouped
 	// onload JSON (frappe.client.get used for `doc` does NOT carry __onload, so
 	// we fetch via getdoc — the same path the Desk uses). Without this the grid
@@ -3575,7 +3719,7 @@ const CHILD_COL_LAYOUT_TYPES = new Set([
 // Cell input kind for the edit grid: only scalar / link cells are editable in
 // the flat v1 grid; everything else renders as a (read-only) text cell.
 const CHILD_EDITABLE_FIELDTYPES = new Set([
-	"Data", "Small Text", "Int", "Float", "Percent", "Currency", "Link", "Select", "Check",
+	"Data", "Small Text", "Int", "Float", "Percent", "Currency", "Link", "Dynamic Link", "Select", "Check",
 ])
 
 function childColumnsFromMeta(childDt) {
@@ -3592,6 +3736,7 @@ function childColumnsFromMeta(childDt) {
 		if (mf.hidden) continue
 		const d = inputDescriptor(mf)
 		const editable = CHILD_EDITABLE_FIELDTYPES.has(mf.fieldtype)
+		const isLink = mf.fieldtype === "Link" || mf.fieldtype === "Dynamic Link"
 		cols.push({
 			fieldname: mf.fieldname,
 			label: mf.label || humanize(mf.fieldname),
@@ -3600,8 +3745,10 @@ function childColumnsFromMeta(childDt) {
 			reqd: !!mf.reqd,
 			type: mfTypeToDisplay(mf.fieldtype),
 			fieldtype: mf.fieldtype, // raw meta type → default column width
-			isLink: mf.fieldtype === "Link",
-			linkTarget: mf.options || "",
+			isLink,
+			isDynamic: mf.fieldtype === "Dynamic Link",
+			dynamicField: mf.fieldtype === "Dynamic Link" ? (mf.options || "") : "",
+			linkTarget: mf.fieldtype === "Link" ? (mf.options || "") : "",
 			minFraction: d.minFraction,
 			maxFraction: d.maxFraction,
 			// A field the parent pins read-only, OR a non-editable fieldtype:
@@ -3920,7 +4067,93 @@ function resetGrnSource() {
 // controlling field (supplier / delivery_location) changes the factory re-runs
 // and the autocomplete picks up the new filter on next open.
 function linkSearchHandlerFor(f) {
+	if (isWorkOrder.value && f.fieldname === "item") {
+		return async (query = "") => {
+			const needle = String(query || "").trim().toLowerCase()
+			return workOrderItemOptions.value
+				.filter((name) => !needle || String(name).toLowerCase().includes(needle))
+				.map((name) => ({ name }))
+		}
+	}
 	return getLinkSearchHandler(doctype.value, f.fieldname, form)
+}
+
+function resetWorkOrderSelection(clearValues = true) {
+	workOrderSelectionRequest += 1
+	workOrderSelectionLoading.value = false
+	workOrderSelectionOptions.value = []
+	workOrderItemOptions.value = []
+	if (clearValues) {
+		form.item = ""
+		form.production_detail = ""
+	}
+}
+
+function applyWorkOrderItemSelection() {
+	const matches = workOrderSelectionOptions.value.filter(
+		(option) => option.item === form.item,
+	)
+	form.production_detail = matches.length === 1
+		? (matches[0].production_detail || "")
+		: ""
+}
+
+async function loadWorkOrderSelection({ preserveItem = false } = {}) {
+	const request = ++workOrderSelectionRequest
+	workOrderSelectionOptions.value = []
+	workOrderItemOptions.value = []
+	if (!preserveItem) {
+		form.item = ""
+		form.production_detail = ""
+	}
+	if (!form.process_name || !form.lot) return
+
+	workOrderSelectionLoading.value = true
+	try {
+		const context = await callMethod(
+			"essdee_yrp.api.work_order.get_work_order_selection_context",
+			{ lot: form.lot, process_name: form.process_name },
+		)
+		if (request !== workOrderSelectionRequest) return
+		const options = Array.isArray(context?.options) ? context.options : []
+		workOrderSelectionOptions.value = options
+		workOrderItemOptions.value = Array.isArray(context?.item_options)
+			? context.item_options
+			: [...new Set(options.map((option) => option.item).filter(Boolean))]
+
+		if (context?.auto_item) {
+			form.item = context.auto_item
+			form.production_detail = context.auto_production_detail || ""
+		} else if (
+			preserveItem
+			&& form.item
+			&& workOrderItemOptions.value.includes(form.item)
+		) {
+			applyWorkOrderItemSelection()
+		} else {
+			form.item = ""
+			form.production_detail = ""
+		}
+
+		if (!workOrderItemOptions.value.length) {
+			toast.warn(
+				"No valid Work Order Item",
+				context?.is_cloth_process
+					? `No cloth IPD in Lot ${form.lot} contains process ${form.process_name}.`
+					: `Lot ${form.lot} has no garment Item Production Detail.`,
+			)
+		}
+	} catch (e) {
+		if (request === workOrderSelectionRequest) {
+			form.item = ""
+			form.production_detail = ""
+			toast.error("Could not load Work Order items", e.message)
+		}
+	} finally {
+		if (request === workOrderSelectionRequest) {
+			workOrderSelectionLoading.value = false
+		}
+	}
 }
 
 // Wired on editable link/select inputs: cascade fetch_from + clear dependent
@@ -3933,6 +4166,19 @@ async function onFieldChanged(fieldname) {
 	if (doctype.value === "Work Order") {
 		if (fieldname === "supplier") form.supplier_address = ""
 		if (fieldname === "delivery_location") form.delivery_address = ""
+		if (fieldname === "process_name") {
+			if (!form.process_name) form.lot = ""
+			await loadWorkOrderSelection()
+			return
+		}
+		if (fieldname === "lot") {
+			await loadWorkOrderSelection()
+			return
+		}
+		if (fieldname === "item") {
+			applyWorkOrderItemSelection()
+			return
+		}
 	}
 	if (doctype.value === "Goods Received Note" && fieldname === "against") {
 		resetGrnSource()
@@ -3962,32 +4208,44 @@ async function onLinkComplete(field, e) {
 	}
 }
 
-// ── Link autocomplete (child cells) ──
-async function onChildLinkComplete(col, e, row = null) {
-	const target = col.linkTarget
-	if (!target) {
-		childLinkSuggestions.value = []
-		return
+// ── Child-table Link navigation + autocomplete ──
+// Resolve direct and Dynamic Link targets from the child row. The same resolver
+// drives view-mode navigation, edit-mode "open linked document", and search, so
+// a Link never points at a different DocType depending on the current layout.
+function childLinkTarget(col, row = null) {
+	if (!col?.isLink) return ""
+	return col.isDynamic ? (row?.[col.dynamicField] || "") : (col.linkTarget || "")
+}
+
+// /web-managed targets open for every permitted user. For targets outside the
+// Essdee /web registry, preserve the existing admin-only Desk fallback used by
+// header Link fields; restricted /web users are never bounced into Desk.
+function childLinkCanOpen(col, row, value) {
+	if (isEmptyValue(value)) return false
+	const target = childLinkTarget(col, row)
+	if (!target) return false
+	return !!getRegistryByDoctype(target) || isAdmin.value || hasRole("System Manager")
+}
+
+function navigateChildLink(col, row, value) {
+	if (!childLinkCanOpen(col, row, value)) return
+	navigateDoc(childLinkTarget(col, row), value)
+}
+
+// LinkField normally performs its own search. Lot fabric rows need the same
+// constraints as Desk, so only those two cells receive a custom handler.
+function childLinkSearchHandlerFor(col, row = null) {
+	const target = childLinkTarget(col, row)
+	if (!target) return async () => []
+	let filters = null
+	if (isLot.value && col.fieldname === "cloth_item" && target === "Item") {
+		filters = { is_cloth_item: 1 }
+	} else if (isLot.value && col.fieldname === "production_detail" && target === "Item Production Detail") {
+		if (!row?.cloth_item) return async () => []
+		filters = { item: row.cloth_item }
 	}
-	try {
-		// Lot fabric rows mirror the Desk set_query rules: cloth_item offers only
-		// cloth-flagged Items; production_detail offers only the row's cloth
-		// item's IPDs (no suggestions until a cloth item is picked).
-		let filters
-		if (isLot.value && col.fieldname === "cloth_item" && target === "Item") {
-			filters = { is_cloth_item: 1 }
-		} else if (isLot.value && col.fieldname === "production_detail" && target === "Item Production Detail") {
-			if (!row?.cloth_item) {
-				childLinkSuggestions.value = []
-				return
-			}
-			filters = { item: row.cloth_item }
-		}
-		const rows = await searchLink(target, e.query || "", filters)
-		childLinkSuggestions.value = rows.map((r) => r.name)
-	} catch (_) {
-		childLinkSuggestions.value = []
-	}
+	if (!filters) return null
+	return async (query = "") => searchLink(target, query, filters)
 }
 
 // ════════════════ SAVE / SUBMIT / CANCEL / DELETE / AMEND ════════════════
@@ -4423,12 +4681,29 @@ function onCalculateDeliverables() {
 async function onDeliverablesCalculated(res) {
 	markLocalWrite()
 	await docState.load(props.id)
+	// The reload above adopted the fresh `modified`, so any stale flag raised by
+	// our own write's echo (a >3s calculate outlives the suppression window) is
+	// moot — clear it like reloadView does. Without this the false banner would
+	// PERSIST after a successful calculate on slow/big fan-outs.
+	staleNotice.value = false
 	await hydratePivotsForView()
 	toast.success(
 		"Deliverables calculated",
 		`${res?.deliverables ?? 0} deliverable(s) and ${res?.receivables ?? 0} receivable(s).`,
 		6000,
 	)
+}
+
+const clothProgramOpen = ref(false)
+function onBuildClothPrograms() {
+	if (!doc.value) return
+	clothProgramOpen.value = true
+}
+async function onClothProgramsBuilt(res) {
+	markLocalWrite()
+	await reloadView()
+	await hydrateLotForView()
+	toast.success("Cloth programs built", `${res?.cloths_built ?? 0} cloth program(s).`, 6000)
 }
 
 async function onCreateGrnFromWo() {
@@ -4478,6 +4753,24 @@ function onCreateGrnFromDc() {
 			includes_packing: doc.value.includes_packing ? 1 : 0,
 		},
 	})
+}
+
+async function onCompleteGrnTransfer() {
+	if (!doc.value) return
+	acting.value = "grn-complete-transfer"
+	try {
+		const stockEntry = await callMethod(
+			"yrp.yrp.doctype.goods_received_note.goods_received_note.make_grn_completion",
+			{ doc_name: doc.value.name },
+		)
+		if (!stockEntry) throw new Error("The completion Stock Entry was not created.")
+		toast.success("Transfer prepared", `Stock Entry ${stockEntry} created as a draft.`, 6000)
+		router.push(`/stock-entry/${encodeURIComponent(stockEntry)}`)
+	} catch (e) {
+		showActionError("Complete Transfer failed", e)
+	} finally {
+		acting.value = null
+	}
 }
 // deferred: amend flow left as-is by decision — useDoc.amend already routes
 // through the standard Frappe amend (copy → new draft); a rewrite is out of scope.
@@ -5629,6 +5922,49 @@ function stripHtml(s) {
 }
 .edit-dt :deep(.p-datatable-tbody > tr > td) {
 	padding: 6px 10px;
+}
+.child-cell-value {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+}
+.child-cell-value > span {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.child-link-open {
+	flex: 0 0 auto;
+	color: var(--esd-accent-700);
+}
+.child-link-value {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	max-width: 100%;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--esd-accent-700);
+	font: inherit;
+	cursor: pointer;
+	text-align: left;
+}
+.child-link-value > span {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.child-link-value > .pi {
+	flex: 0 0 auto;
+	font-size: 10px;
+}
+.child-link-value:hover > span {
+	text-decoration: underline;
 }
 /* Fixed-layout child tables: clip overflowing cell content so a long value or an
    in-cell editor can't force a column wider than its set width (the old

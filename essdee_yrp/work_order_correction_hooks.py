@@ -4,6 +4,8 @@
 import frappe
 from frappe import _
 
+from essdee_yrp.fabric_ipd import get_yarn_ratio_inputs
+
 
 def validate_correction_ipd_items(doc, method=None):
 	"""Every Work Order Correction deliverable must be sanctioned by the WO's
@@ -15,8 +17,7 @@ def validate_correction_ipd_items(doc, method=None):
 		return
 	ipd = frappe.get_doc("Item Production Detail", ipd_name)
 	allowed = set()
-	if ipd.get("yarn_item"):
-		allowed.add(ipd.yarn_item)
+	allowed.update(row.item for row in get_yarn_ratio_inputs(ipd))
 	for row in ipd.get("item_bom") or []:
 		if row.item:
 			allowed.add(row.item)

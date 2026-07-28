@@ -67,7 +67,18 @@ def update_mapping_values(mapping, attribute_name, values):
 	#    inside the same transaction so the subsequent mapping.save doesn't
 	#    race with an external commit on the same Attribute Value records.
 	for v in clean_values:
-		if not frappe.db.exists("Item Attribute Value", v):
+		existing_attribute = frappe.db.get_value(
+			"Item Attribute Value", v, "attribute_name"
+		)
+		if existing_attribute and existing_attribute != attribute_name:
+			frappe.throw(
+				_("Value {0} already belongs to attribute {1}, not {2}.").format(
+					v, existing_attribute, attribute_name
+				)
+			)
+		if existing_attribute:
+			continue
+		try:
 			frappe.get_doc(
 				{
 					"doctype": "Item Attribute Value",
@@ -75,6 +86,19 @@ def update_mapping_values(mapping, attribute_name, values):
 					"attribute_value": v,
 				}
 			).insert()
+		except frappe.DuplicateEntryError:
+			# Another request may have inserted the deterministic value name
+			# after our first read. Use a locking current read (not the
+			# transaction's old snapshot) and accept only the same attribute.
+			existing_attribute = frappe.db.get_value(
+				"Item Attribute Value", v, "attribute_name", for_update=True
+			)
+			if existing_attribute != attribute_name:
+				frappe.throw(
+					_("Value {0} already belongs to attribute {1}, not {2}.").format(
+						v, existing_attribute or _("another attribute"), attribute_name
+					)
+				)
 
 	# 2. Replace the mapping's child rows in one shot.
 	doc.set("values", [])

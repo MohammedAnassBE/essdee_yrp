@@ -21,6 +21,8 @@ fixtures = [
 					"Process-includes_packing",
 					"Process-is_cloth_process",
 					"Process-item",
+					"Stock Entry-source_grn",
+					"Work Order-lot",
 				],
 			],
 			["dt", "=", "Item Production Detail"],
@@ -131,7 +133,12 @@ doctype_js = {
 	"Purchase Order": "public/js/purchase_order.js",
 	"Delivery Challan": "public/js/delivery_challan.js",
 	"Goods Received Note": "public/js/goods_received_note.js",
-	"Stock Entry": "public/js/stock_entry.js",
+	# List form: both scripts load for Stock Entry. The guard hides the desk Cancel
+	# action on transfer SEs (source_grn set); see the JS file for the mechanism.
+	"Stock Entry": [
+		"public/js/stock_entry.js",
+		"public/js/stock_entry_transfer_cancel_guard.js",
+	],
 }
 doctype_list_js = {"Item Production Detail": "public/js/item_production_detail_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
@@ -166,10 +173,24 @@ doctype_list_js = {"Item Production Detail": "public/js/item_production_detail_l
 # ----------
 
 # add methods and filters to jinja environment
-# jinja = {
-# 	"methods": "essdee_yrp.utils.jinja_methods",
-# 	"filters": "essdee_yrp.utils.jinja_filters"
-# }
+jinja = {
+	"methods": [
+		"essdee_yrp.print_helpers.get_created_date",
+		"essdee_yrp.print_helpers.get_current_user_time",
+		"essdee_yrp.print_helpers.get_user_signature",
+		"essdee_yrp.print_helpers.get_ipd_pf_details",
+		"essdee_yrp.print_helpers.fetch_stock_entry_items",
+		"essdee_yrp.print_helpers.fetch_grn_purchase_item_details",
+		"essdee_yrp.print_helpers.get_dc_structure",
+		"essdee_yrp.print_helpers.fetch_order_item_details",
+		"essdee_yrp.print_helpers.get_supplier_address_display",
+		"essdee_yrp.ipd_ui.fetch_combination_items",
+		"essdee_yrp.essdee_yrp.doctype.lot.lot.get_dict_object",
+		"essdee_yrp.essdee_yrp.doctype.lot.lot.get_mapping_details",
+		"essdee_yrp.essdee_yrp.doctype.lot.lot.get_ipd_print_accessory_combination",
+		"essdee_yrp.essdee_yrp.doctype.lot.lot.get_consumption_sheet_data",
+	],
+}
 
 # Installation
 # ------------
@@ -250,14 +271,27 @@ doc_events = {
 		"on_trash": "essdee_yrp.ipd_validations.on_trash",
 	},
 	"Work Order": {
+		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
 		"validate": "essdee_yrp.work_order_hooks.validate",
+	},
+	"Delivery Challan": {
+		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
 	},
 	"Work Order Correction": {
 		"before_submit": "essdee_yrp.work_order_correction_hooks.validate_correction_ipd_items"
 	},
 	"Goods Received Note": {
+		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
 		"on_submit": "essdee_yrp.fabric_tracking.on_grn_submit",
 		"on_cancel": "essdee_yrp.fabric_tracking.on_grn_cancel",
+	},
+	# A Stock Entry created by the cross-bench GRN transfer (source_grn set) may be
+	# cancelled ONLY by the mrp GRN-cancel flow (cancel_grn_transfer sets
+	# doc.flags.from_grn_transfer). Blocks every other cancel path server-side so the
+	# UI hide (public/js/stock_entry_transfer_cancel_guard.js) cannot be bypassed.
+	"Stock Entry": {
+		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
+		"before_cancel": "essdee_yrp.api.stock_transfer.guard_transfer_se_cancel",
 	},
 }
 

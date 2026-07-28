@@ -62,6 +62,25 @@ def _step_shape(row):
 	resolves. Returns (None, None) for an identity step (no conversion/swap)."""
 	from essdee_yrp.fabric_ipd import get_process_shape
 
+	# Same-value Change rows are route declarations, not operational work.
+	# AMEL -> AMEL (optionally pinned to one Dia) tells the knitting matrix which
+	# finished route it serves, while deliberately bypassing dyeing.  When every
+	# Change in a same-item row is a no-op, exclude the process from the tracked
+	# chain entirely.  Mixed rows still stay in the chain because their real
+	# groups build real matrices.
+	changes = [
+		m for m in (row.get("value_mappings") or [])
+		if m.get("role") == "Change"
+	]
+	in_item, out_item = row.get("input_item"), row.get("output_item")
+	if (
+		changes
+		and in_item
+		and in_item == out_item
+		and all(m.get("from_value") == m.get("to_value") for m in changes)
+	):
+		return None, None
+
 	shape, attribute = get_process_shape(row.get("fabric_process"))
 	if shape:
 		return shape, attribute
@@ -75,7 +94,6 @@ def _step_shape(row):
 		return "multi_swap", changed
 	if changed:
 		return "swap", changed[0]
-	in_item, out_item = row.get("input_item"), row.get("output_item")
 	# Consume(+Introduce) rows resolve here too: differing items -> conversion;
 	# a same-item Consume/Introduce row can never slip through to identity because
 	# validate_consume_mappings blocks it at save time.
@@ -159,10 +177,37 @@ def final_combos(ipd_doc, has_colour=True):
 		combos = set()
 		for name in matrix_names:
 			matrix = frappe.get_doc("IPD Process Matrix", name)
+			if matrix.reference_item_variant:
+				variant = frappe.get_cached_doc(
+					"Item Variant", matrix.reference_item_variant
+				)
+				combos.add(frozenset(
+					(row.attribute, row.attribute_value)
+					for row in variant.get("attributes") or []
+				))
+				continue
 			for _idx, group in matrix.get_combinations_grouped().items():
 				out = (group.get("output") or [{}])[0]
 				attrs = out.get("attrs") or {}
 				combos.add(frozenset(attrs.items()))
+		# Colour-wise knitting matrices carry the intended finished route in
+		# reference_item_variant.  A direct-colour route (AMEL -> AMEL) has no
+		# downstream dyeing matrix by design, so union those exact references
+		# into the reachable requirement choices.
+		for reference in frappe.get_all(
+			"IPD Process Matrix",
+			filters={
+				"ipd": ipd_doc.name,
+				"reference_item_variant": ["is", "set"],
+				"docstatus": ["<", 2],
+			},
+			pluck="reference_item_variant",
+		):
+			variant = frappe.get_cached_doc("Item Variant", reference)
+			combos.add(frozenset(
+				(row.attribute, row.attribute_value)
+				for row in variant.get("attributes") or []
+			))
 		if combos:
 			return combos
 

@@ -103,7 +103,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from "vue"
+import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue"
 import { useUiConfigStore, KnobsPanel } from "@yrp/web-engine"
 import AppSidebar from "./AppSidebar.vue"
 import AppTopbar from "./AppTopbar.vue"
@@ -137,6 +137,13 @@ const navShell = computed(() => ui.active.nav?.shell || "standard")
 const mobileShell = computed(() => navShell.value === "mobile-shell")
 const useMobileShell = computed(() => navPosition.value === "bottom-tabs" || mobileShell.value)
 const topbarNav = computed(() => navPosition.value === "topbar")
+const stopFramedBodyWatch = watch(
+	mobileShell,
+	(active) => {
+		document.body.classList.toggle("esd-mobile-shell-framed", active)
+	},
+	{ immediate: true },
+)
 
 // Sidebar-family variants (consumed only by the v-else sidebar branch):
 //   sidebar-right → rail on the right edge; icon-rail → permanent icon-only rail.
@@ -189,7 +196,11 @@ onMounted(() => {
 	checkAuth()
 	document.addEventListener("keydown", onKeydown)
 })
-onBeforeUnmount(() => document.removeEventListener("keydown", onKeydown))
+onBeforeUnmount(() => {
+	document.removeEventListener("keydown", onKeydown)
+	stopFramedBodyWatch()
+	document.body.classList.remove("esd-mobile-shell-framed")
+})
 </script>
 
 <style scoped>

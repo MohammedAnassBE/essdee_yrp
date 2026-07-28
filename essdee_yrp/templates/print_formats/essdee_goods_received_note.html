@@ -1,0 +1,94 @@
+<div class="essdee-print">
+	{% if doc.docstatus != 1 %}
+		<div class="essdee-print__watermark">
+			{{ "DRAFT" if doc.docstatus == 0 else "CANCELLED" }}
+		</div>
+	{% endif %}
+
+	<div class="essdee-print__header">
+		<div class="essdee-print__party">
+			<div class="essdee-print__title">Goods Received Note</div>
+			<div style="margin-top: 8px">
+				<small>Received from</small><br>
+				<strong>
+					{{ frappe.db.get_value("Supplier", doc.supplier, "supplier_name") or doc.supplier or "—" }}
+				</strong><br>
+				{{ get_supplier_address_display(doc.supplier) or "" }}
+			</div>
+		</div>
+		<div class="essdee-print__meta">
+			<div><strong>No.:</strong> {{ doc.name }}</div>
+			<div><strong>Date:</strong> {{ frappe.utils.formatdate(doc.posting_date, "dd-MM-yyyy") }}</div>
+			<div><strong>Process:</strong> {{ doc.process_name or "—" }}</div>
+			<div><strong>Against:</strong> {{ doc.against or "—" }} {{ doc.against_id or "" }}</div>
+			<div><strong>Vehicle:</strong> {{ doc.vehicle_no or "—" }}</div>
+		</div>
+	</div>
+
+	<table>
+		<thead>
+			<tr>
+				<th style="width: 4%">S.No.</th>
+				<th>Item Variant</th>
+				<th style="width: 12%">Quantity</th>
+				<th style="width: 12%">Secondary</th>
+				<th style="width: 12%">Rate</th>
+				<th style="width: 14%">Amount</th>
+				<th>Comments</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for row in doc.items %}
+				{% if doc.docstatus == 0 or row.quantity > 0 %}
+					<tr>
+						<td>{{ loop.index }}</td>
+						<td><strong>{{ row.item_variant }}</strong></td>
+						<td>{{ frappe.utils.flt(row.quantity, 3) }} {{ row.uom or "" }}</td>
+						<td>
+							{% if row.secondary_qty %}
+								{{ frappe.utils.flt(row.secondary_qty, 3) }} {{ row.secondary_uom or "" }}
+							{% else %}
+								—
+							{% endif %}
+						</td>
+						<td>{{ frappe.utils.fmt_money(row.rate or 0, currency="₹") }}</td>
+						<td>{{ frappe.utils.fmt_money(row.amount or 0, currency="₹") }}</td>
+						<td>{{ row.comments or "" }}</td>
+					</tr>
+				{% endif %}
+			{% endfor %}
+		</tbody>
+	</table>
+
+	<div class="essdee-print__totals">
+		<table>
+			<tr>
+				<th>Total received</th>
+				<td>{{ frappe.utils.flt(doc.total_received_quantity, 3) }}</td>
+			</tr>
+			<tr>
+				<th>Freight</th>
+				<td>{{ frappe.utils.fmt_money(doc.freight_charges or 0, currency="₹") }}</td>
+			</tr>
+			<tr>
+				<th>Total value</th>
+				<td><strong>{{ frappe.utils.fmt_money(doc.total or 0, currency="₹") }}</strong></td>
+			</tr>
+		</table>
+	</div>
+
+	{% if doc.comments %}
+		<div style="border-top: 1px solid #666; padding: 8px">
+			<strong>Comments:</strong><br>
+			{{ doc.comments | replace("\n", "<br>") | safe }}
+		</div>
+	{% endif %}
+
+	<div class="essdee-print__footer">
+		<div>Receiver's Signature</div>
+		<div>
+			For Essdee Knitting Mills Private Limited<br><br>
+			Authorised Signatory
+		</div>
+	</div>
+</div>

@@ -139,7 +139,10 @@ class Lot(Document):
 			if len(self.lot_order_details) > 0:
 				items = fetch_order_item_details(self.get('lot_order_details'), self.production_detail)
 				x = json.dumps(items[0])
-				self.db_set('lot_order_details_json', x, update_modified=False)
+				# onload runs during a GET. Keep the compatibility field on the
+				# in-memory document without taking an unnecessary row lock or
+				# issuing a write that the GET transaction will roll back.
+				self.set('lot_order_details_json', x)
 				self.set_onload('order_item_details', items)
 
 		# if self.cad_detail_data:

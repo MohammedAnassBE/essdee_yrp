@@ -490,6 +490,7 @@ const itemAttrValues = reactive({}) // {attr: [vals]} — builds the cross-produ
 const bomAttrValues = reactive({})  // {attr: [vals]} — bom dropdown options
 const data = ref([])        // generated cross-product rows
 const ipdName = ref(null)   // owning IPD (for the breadcrumb), best-effort
+const loadedModified = ref("")
 // saved `values` from the last load — re-reconciled whenever the attribute
 // selection changes so already-saved combinations survive a rebuild.
 const savedValues = ref([])
@@ -585,6 +586,7 @@ async function load() {
 	isDirty.value = false
 	try {
 		const doc = await getDoc(DOCTYPE, props.id)
+		loadedModified.value = doc.modified || ""
 		item.value = doc.item || ""
 		bomItem.value = doc.bom_item || ""
 		itemAttrRows.value = (doc.item_attributes || []).map((r) => ({
@@ -996,6 +998,7 @@ async function persist(values) {
 	// Preserve the item_attributes / bom_item_attributes child rows verbatim — the
 	// engine reads their same_attribute flags (RISK FLAG 1). Only `values` changes.
 	const payload = {
+		modified: loadedModified.value || undefined,
 		item: item.value || null,
 		bom_item: bomItem.value || null,
 		item_attributes: itemAttrRows.value.map((r) => ({

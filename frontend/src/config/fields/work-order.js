@@ -31,11 +31,11 @@ const detailGroups = [
 		label: "Identity",
 		fields: [
 			"naming_series", "status", "is_rework", "rework_type",
-			"item", "production_detail", "process_name", "parent_wo",
+			"process_name", "lot", "item", "production_detail", "parent_wo",
 		],
 	},
 	{
-		label: "Job-worker & Delivery",
+		label: "Supplier & Delivery",
 		fields: [
 			"supplier", "supplier_type", "supplier_address",
 			"delivery_location", "delivery_address", "terms_and_condition",
@@ -82,13 +82,14 @@ const formOrder = [
 	"naming_series",
 	"edit_wo_date",
 	"wo_date",
+	"process_name",
+	"lot",
+	"item",
+	"production_detail",
 	"supplier",
 	"supplier_name",
 	"parent_wo",
-	"process_name",
 	"terms_and_condition",
-	"item",
-	"production_detail",
 	"delivery_location",
 	"delivery_location_name",
 	"planned_start_date",
@@ -141,12 +142,20 @@ const linkSearchHandlers = {
 			: emptyHandler,
 }
 
-// Q18: unify the vendor party to ONE term across WO/DC/GRN. The Desk/meta calls
-// it "Supplier"; on the shop floor the party doing the job IS the job-worker.
+// Use the DocType's standard Supplier terminology consistently in every shell.
 const labels = {
-	supplier: "Job-worker",
-	supplier_name: "Job-worker Name",
-	supplier_address: "Job-worker Address",
+	supplier: "Supplier",
+	supplier_name: "Supplier Name",
+	supplier_address: "Supplier Address",
+	process_name: "Process",
+	production_detail: "Item Production Detail",
+}
+
+const help = {
+	process_name: "Select the Process first; the Lot and valid Item/IPD choices follow from it.",
+	lot: "Available after Process is selected.",
+	item: "Auto-filled when one valid Item exists; otherwise limited to this Process and Lot.",
+	production_detail: "Read-only; resolved from the selected Process, Lot, and Item.",
 }
 
 export default {
@@ -155,4 +164,5 @@ export default {
 	hideFormFields,
 	linkSearchHandlers,
 	labels,
+	help,
 }

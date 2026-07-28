@@ -12,12 +12,14 @@
   {
    "fieldname": "attribute_value",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Attribute Value",
    "options": "Item Attribute Value"
   },
   {
    "fieldname": "quantity",
    "fieldtype": "Float",
+   "in_list_view": 1,
    "label": "Quantity"
   }
  ],

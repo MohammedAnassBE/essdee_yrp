@@ -290,6 +290,18 @@ body {
 	-webkit-font-smoothing: antialiased;
 }
 
+/* PrimeVue overlays teleport to <body>. Keep them inside the opt-in framed
+   mobile shell even when that shell is previewed on a desktop viewport. */
+body.esd-mobile-shell-framed .p-dialog-mask,
+body.esd-mobile-shell-framed .p-overlay-mask {
+	left: max(0px, calc((100vw - 440px) / 2));
+	right: max(0px, calc((100vw - 440px) / 2));
+	width: auto;
+}
+body.esd-mobile-shell-framed .p-dialog {
+	max-width: min(408px, calc(100vw - 32px)) !important;
+}
+
 #app {
 	height: 100vh;
 }

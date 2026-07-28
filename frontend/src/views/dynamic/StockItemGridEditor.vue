@@ -549,6 +549,7 @@ const blankDraft = () => ({
 	parentItem: "",
 	resolved: false, // true once get_attribute_details returned
 	editing: false, // true while re-editing an existing row (Update vs Add)
+	entryValues: {}, // PARENT_CHILD_MAP.entry_fields, preserved verbatim
 	dimensions: {}, // { fieldname: value }
 	attributes: [], // non-primary attribute NAMES (stage-filtered when dependent)
 	attributeValues: {}, // { attrName: value }
@@ -573,6 +574,16 @@ const blankDraft = () => ({
 })
 const draft = reactive(blankDraft())
 const loadingAttrs = ref(false)
+
+function copyEntryFields(source) {
+	const out = {}
+	for (const fieldname of props.entryFields) {
+		if (Object.prototype.hasOwnProperty.call(source || {}, fieldname)) {
+			out[fieldname] = source[fieldname]
+		}
+	}
+	return out
+}
 
 // ── autocomplete buffers ──
 const itemSuggestions = ref([])
@@ -906,6 +917,7 @@ function commitDraft() {
 		primary_attribute: draft.primaryAttribute || "",
 		default_uom: draft.defaultUom || "",
 		values: valuesOut,
+		...draft.entryValues,
 	}
 	// Per-row entry fields land at the item level so ungroup_items_from_ui
 	// copies them onto each generated child row.
@@ -976,6 +988,7 @@ async function startEdit(gi, index) {
 	resetDraft()
 	draft.editing = true
 	draft.parentItem = it.name
+	draft.entryValues = copyEntryFields(it)
 	draft.dimensions = { ...(it.dimensions || {}) }
 	// Re-resolve the item config — the dependent-attribute attr_list isn't stored
 	// on the row, so we need it to rebuild the stage flow on edit.
@@ -1098,6 +1111,7 @@ function loadData(grouped) {
 			? [...g.primary_attribute_values]
 			: [],
 		items: (g.items || []).map((it) => ({
+			...copyEntryFields(it),
 			name: it.name || "",
 			dimensions: { ...(it.dimensions || {}) },
 			attributes: { ...(it.attributes || {}) },

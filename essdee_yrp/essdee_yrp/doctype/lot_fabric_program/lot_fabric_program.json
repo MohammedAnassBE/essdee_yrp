@@ -6,7 +6,9 @@
  "engine": "InnoDB",
  "field_order": [
   "cloth_item",
+  "colour",
   "dia",
+  "reference_item_variant",
   "weight",
   "received_weight"
  ],
@@ -20,12 +22,26 @@
    "reqd": 1
   },
   {
+   "fieldname": "colour",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Target Colour",
+   "options": "Item Attribute Value"
+  },
+  {
    "fieldname": "dia",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Dia",
    "options": "Item Attribute Value",
    "reqd": 1
+  },
+  {
+   "fieldname": "reference_item_variant",
+   "fieldtype": "Link",
+   "label": "Reference Item Variant",
+   "options": "Item Variant",
+   "read_only": 1
   },
   {
    "fieldname": "weight",

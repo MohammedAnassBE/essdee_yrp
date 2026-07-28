@@ -10,6 +10,13 @@ from frappe.utils import cint, flt, strip_html_tags
 
 DISALLOWED_FIELDTYPES = {"Dynamic Link", "Read Only"}
 
+# These parent fields have controller validations whose result depends on
+# related records. A direct db_set would bypass those guards, so targeted bulk
+# edits of them must use the normal document save path.
+CONTROLLER_VALIDATED_PARENT_FIELDS = {
+	"Item": {"allow_negative_stock", "default_unit_of_measure"},
+}
+
 
 def _as_list(value):
 	if isinstance(value, str):
@@ -189,9 +196,10 @@ def bulk_update_field(doctype, docnames, fieldname, value=None, child_doctype=No
 	The field is resolved through get_bulk_edit_fields() so the client cannot
 	submit a hidden/read-only/high-permlevel field by hand. A child-table field
 	is applied via doc.save() (full controller validation); a parent field is
-	applied via doc.db_set() — a targeted write that SKIPS validate/before_save
-	(intentional for a single-column bulk edit), still permission- and
-	docstatus-gated below.
+	normally applied via doc.db_set() — a targeted write that SKIPS
+	validate/before_save (intentional for a single-column bulk edit), still
+	permission- and docstatus-gated below. Parent fields with controller-level
+	safety checks use doc.save() instead.
 	"""
 	docnames = _as_list(docnames)
 	if not doctype:
@@ -220,6 +228,10 @@ def bulk_update_field(doctype, docnames, fieldname, value=None, child_doctype=No
 				children = doc.get(parent_table_field) or []
 				for child in children:
 					child.set(fieldname, value)
+				_prepare_for_bulk_save(doc)
+				doc.save()
+			elif fieldname in CONTROLLER_VALIDATED_PARENT_FIELDS.get(doctype, set()):
+				doc.set(fieldname, value)
 				_prepare_for_bulk_save(doc)
 				doc.save()
 			else:

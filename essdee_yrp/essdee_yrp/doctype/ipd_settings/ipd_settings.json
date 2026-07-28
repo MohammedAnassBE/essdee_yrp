@@ -9,6 +9,12 @@
   "default_primary_attribute",
   "column_break_vcvr",
   "default_cutting_process",
+  "cloth_program_defaults_section",
+  "default_knitting_process",
+  "default_dyeing_process",
+  "column_break_cloth_program",
+  "default_compacting_process",
+  "default_cloth_per_kg_yarn",
   "packing_details_section",
   "default_packing_process",
   "default_pack_in_stage",
@@ -40,6 +46,45 @@
    "in_list_view": 1,
    "label": "Default Cutting Process",
    "options": "Process",
+   "reqd": 1
+  },
+  {
+   "fieldname": "cloth_program_defaults_section",
+   "fieldtype": "Section Break",
+   "label": "Cloth Program Defaults"
+  },
+  {
+   "fieldname": "default_knitting_process",
+   "fieldtype": "Link",
+   "label": "Default Knitting Process",
+   "options": "Process",
+   "reqd": 1
+  },
+  {
+   "fieldname": "default_dyeing_process",
+   "fieldtype": "Link",
+   "label": "Default Dyeing Process",
+   "options": "Process",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_cloth_program",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Used automatically when a cloth route changes Dia. It is not requested again in the Build Cloth Programs popup.",
+   "fieldname": "default_compacting_process",
+   "fieldtype": "Link",
+   "label": "Default Dia-change Process",
+   "options": "Process"
+  },
+  {
+   "default": "1",
+   "description": "Default kilograms of knitted cloth produced from 1 kilogram of yarn.",
+   "fieldname": "default_cloth_per_kg_yarn",
+   "fieldtype": "Float",
+   "label": "Default Cloth Kg / 1 Kg Yarn",
+   "non_negative": 1,
    "reqd": 1
   },
   {

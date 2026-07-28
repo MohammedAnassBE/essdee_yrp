@@ -296,6 +296,17 @@
 						/>
 					</div>
 					<DataTable :value="group.inputs" class="esd-table combo-dt" :rowHover="false">
+						<Column header="Item" :style="{ minWidth: '220px' }">
+							<template #body="{ data }">
+								<LinkField
+									v-model="data.item"
+									target-doctype="Item"
+									:disabled="readonly"
+									placeholder="Item"
+									class="cell-item"
+								/>
+							</template>
+						</Column>
 						<Column v-for="a in inputAttributes" :key="'i-c-' + a" :header="a">
 							<template #body="{ data }">
 								<Select
@@ -354,6 +365,17 @@
 						/>
 					</div>
 					<DataTable :value="group.outputs" class="esd-table combo-dt" :rowHover="false">
+						<Column header="Item" :style="{ minWidth: '220px' }">
+							<template #body="{ data }">
+								<LinkField
+									v-model="data.item"
+									target-doctype="Item"
+									:disabled="readonly"
+									placeholder="Item"
+									class="cell-item"
+								/>
+							</template>
+						</Column>
 						<Column v-for="a in outputAttributes" :key="'o-c-' + a" :header="a">
 							<template #body="{ data }">
 								<Select
@@ -474,6 +496,7 @@ const dependentAttribute = ref(null)
 // so its human identity is the `item` data field — fetched in fetchDependentAttribute).
 const ipdItem = ref("")
 const docstatus = ref(0)
+const loadedModified = ref("")
 // Default UOMs for new input/output rows — the consumed/produced item's default
 // UOM (input rows ← input_item ‖ IPD item, output rows ← output_item ‖ IPD item).
 const inputUom = ref("")
@@ -554,6 +577,7 @@ async function load() {
 			outputAttributes.value = []
 			groups.value = []
 			docstatus.value = 0
+			loadedModified.value = ""
 			if (header.ipd) {
 				await fetchDependentAttribute()
 				await refreshSideUoms()
@@ -565,6 +589,7 @@ async function load() {
 			}
 		} else {
 			const doc = await getDoc(DOCTYPE, props.id)
+			loadedModified.value = doc.modified || ""
 			header.ipd = doc.ipd || ""
 			header.process_name = doc.process_name || ""
 			header.reference_item_variant = doc.reference_item_variant || ""
@@ -646,7 +671,13 @@ function rebuildGroups(combos, attrs) {
 		const rowAttrs = {}
 		// Only surface attrs we still show as columns (dependent attr excluded).
 		for (const a of list) rowAttrs[a] = attrSet[a] || null
-		const row = { qty: c.quantity, uom: c.uom || "", wastage_pct: c.wastage_pct || 0, attrs: rowAttrs }
+		const row = {
+			item: c.item || "",
+			qty: c.quantity,
+			uom: c.uom || "",
+			wastage_pct: c.wastage_pct || 0,
+			attrs: rowAttrs,
+		}
 		if (c.side === "Input") grouped[c.group_index].inputs.push(row)
 		else grouped[c.group_index].outputs.push(row)
 	}
@@ -784,7 +815,7 @@ function addRow(group, side) {
 	const attrs = {}
 	for (const a of list) attrs[a] = null
 	const uom = (side === "Input" ? inputUom.value : outputUom.value) || ""
-	arr.push({ qty: 0, uom, wastage_pct: 0, attrs })
+	arr.push({ item: "", qty: 0, uom, wastage_pct: 0, attrs })
 }
 function deleteRow(group, key, index) {
 	group[key].splice(index, 1)
@@ -823,7 +854,13 @@ async function generateCombinations(opts = {}) {
 			combo.attrs.forEach((a) => {
 				if (a.attribute in attrs) attrs[a.attribute] = a.attribute_value
 			})
-			g0.inputs.push({ qty: 0, uom: inputUom.value || "", wastage_pct: 0, attrs })
+			g0.inputs.push({
+				item: "",
+				qty: 0,
+				uom: inputUom.value || "",
+				wastage_pct: 0,
+				attrs,
+			})
 		})
 		;(r.output || []).forEach((combo) => {
 			const attrs = {}
@@ -831,7 +868,13 @@ async function generateCombinations(opts = {}) {
 			combo.attrs.forEach((a) => {
 				if (a.attribute in attrs) attrs[a.attribute] = a.attribute_value
 			})
-			g0.outputs.push({ qty: 0, uom: outputUom.value || "", wastage_pct: 0, attrs })
+			g0.outputs.push({
+				item: "",
+				qty: 0,
+				uom: outputUom.value || "",
+				wastage_pct: 0,
+				attrs,
+			})
 		})
 		groups.value.sort((a, b) => a.group_index - b.group_index)
 		await reloadAttributeValues()
@@ -861,6 +904,7 @@ function serializeChildren() {
 					group_index: g.group_index,
 					group_name: g.group_name || null,
 					side,
+					item: row.item || null,
 					combo_index: ci,
 					quantity: row.qty || 0,
 					uom: row.uom || null,
@@ -885,6 +929,7 @@ function serializeChildren() {
 function buildPayload() {
 	const { combinations, combination_attributes } = serializeChildren()
 	return {
+		...(isCreate.value || !loadedModified.value ? {} : { modified: loadedModified.value }),
 		ipd: header.ipd || null,
 		process_name: header.process_name || null,
 		reference_item_variant: header.reference_item_variant || null,
@@ -1332,7 +1377,8 @@ function goMatrixList() {
 }
 .cell-select,
 .cell-num,
-.cell-text {
+.cell-text,
+.cell-item {
 	width: 100%;
 }
 /* Table headers inherit the PART 1c slate band; only refine the type here. */

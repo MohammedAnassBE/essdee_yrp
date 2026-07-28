@@ -85,9 +85,38 @@
 			/>
 		</div>
 
+		<div class="ct-matrix-mode">
+			<strong>Panel-wise consumption matrix</strong>
+			<ToggleSwitch
+				v-if="editing"
+				v-model="panelWiseEnabled"
+				input-id="enable-panel-wise-consumption"
+				@change="onPanelWiseToggle"
+			/>
+			<span v-else class="ct-mode-value">{{ panelWiseEnabled ? "Enabled" : "Disabled" }}</span>
+		</div>
+
+		<div v-if="panelWiseEnabled && panelLoading" class="pk-empty">
+			<i class="pi pi-spin pi-spinner" /> Loading panel matrix…
+		</div>
+		<Message
+			v-else-if="panelWiseEnabled && panelError"
+			severity="warn"
+			:closable="false"
+		>
+			{{ panelError }}
+		</Message>
+		<PanelWiseConsumptionMatrix
+			v-else-if="panelWiseEnabled && panelMatrix"
+			:matrix="panelMatrix"
+			:dia-values="panelDiaValues"
+			:editing="editing"
+			@update:matrix="panelMatrix = $event"
+		/>
+
 		<!-- Cutting combination -->
 		<CombinationPivot
-			v-if="combinable"
+			v-if="combinable && !panelWiseEnabled"
 			title="Cutting combination"
 			test-id="ct-cutting"
 			:editing="editing"
@@ -127,8 +156,11 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import Button from "primevue/button";
+import Message from "primevue/message";
+import ToggleSwitch from "primevue/toggleswitch";
 import LinkField from "@/components/LinkField.vue";
 import CombinationPivot from "./CombinationPivot.vue";
+import PanelWiseConsumptionMatrix from "./PanelWiseConsumptionMatrix.vue";
 import { callMethod } from "@/api/client";
 import { useAppToast } from "@/composables/useToast";
 import { mappingSearch, findBlankCell, stableStringify } from "./combinationCells";
@@ -148,6 +180,12 @@ const cuttingChecked = ref([]);
 const clothChecked = ref([]);
 const cuttingGrid = ref(null);
 const clothGrid = ref(null);
+const panelWiseEnabled = ref(false);
+const panelMatrix = ref(null);
+const panelDiaValues = ref([]);
+const panelLoading = ref(false);
+const panelError = ref("");
+let panelLoadGeneration = 0;
 let storedCuttingChecked = 0;
 let storedClothChecked = 0;
 
@@ -207,6 +245,7 @@ async function hydrate() {
 	cutGridBaseline = stableStringify(cuttingGrid.value);
 	const cc = parseJson(d.cutting_cloths_json, "Cloth mapping");
 	clothGrid.value = cc && (cc.items || []).length ? cc : null;
+	panelWiseEnabled.value = Boolean(d.enable_panel_wise_consumption_matrix);
 	// Baseline mirrors the exact candidate apply() would build (select_list is
 	// re-appended there, which shifts JSON key order) — else every save rewrites
 	// a content-equal value and pollutes the Version trail.
@@ -229,6 +268,12 @@ async function hydrate() {
 		} catch (e) {
 			toast.error("Attributes unavailable", e.message);
 		}
+	}
+	if (panelWiseEnabled.value) await loadPanelMatrix();
+	else {
+		panelMatrix.value = null;
+		panelDiaValues.value = [];
+		panelError.value = "";
 	}
 }
 watch(
@@ -282,6 +327,41 @@ async function buildCombination(kind, checked, target, busy, evt) {
 const buildCutting = (evt) => buildCombination("Cutting", cuttingChecked.value, cuttingGrid, buildingCut, evt);
 const buildCloth = (evt) => buildCombination("Cloth", clothChecked.value, clothGrid, buildingCloth, evt);
 
+async function loadPanelMatrix() {
+	if (!panelWiseEnabled.value) return;
+	if (!combinable.value) {
+		panelMatrix.value = null;
+		panelError.value = "Set the stitching input stage and dependent attribute first.";
+		return;
+	}
+	const generation = ++panelLoadGeneration;
+	panelLoading.value = true;
+	panelError.value = "";
+	try {
+		const payload = await callMethod(
+			"essdee_yrp.panel_wise_consumption.get_panel_wise_consumption_matrix",
+			{ doc: props.doc.name },
+		);
+		if (generation !== panelLoadGeneration) return;
+		panelMatrix.value = payload?.matrix || null;
+		panelDiaValues.value = payload?.dia_values || [];
+	} catch (e) {
+		if (generation !== panelLoadGeneration) return;
+		panelMatrix.value = null;
+		panelError.value = e.message || "Unable to load the panel matrix.";
+	} finally {
+		if (generation === panelLoadGeneration) panelLoading.value = false;
+	}
+}
+async function onPanelWiseToggle() {
+	if (panelWiseEnabled.value) await loadPanelMatrix();
+	else {
+		panelLoadGeneration++;
+		panelMatrix.value = null;
+		panelError.value = "";
+	}
+}
+
 function clothRowIsBlank(r) {
 	return !r.name1 && !r.cloth && !r.required_gsm && !r.is_bom_item;
 }
@@ -298,6 +378,20 @@ function validate() {
 		.map((r, i) => (!clothRowIsBlank(r) && (!r.name1 || !r.cloth) ? i + 1 : 0))
 		.filter(Boolean);
 	if (badCloth.length) return `Row(s) ${badCloth.join(", ")}: name and cloth item are both required`;
+	if (panelWiseEnabled.value) {
+		if (panelError.value) return panelError.value;
+		if (!panelMatrix.value) return "Panel-wise consumption matrix is not loaded";
+		for (const panel of panelMatrix.value.panels || []) {
+			for (const row of panel.rows || []) {
+				if (!row.dia) return `Panel matrix: enter Dia for ${panel.panel_value}, ${row.primary_value}`;
+				for (const packing of panelMatrix.value.packing_values || []) {
+					if (!(Number(row.weights?.[packing]) > 0)) {
+						return `Panel matrix: enter consumption for ${panel.panel_value}, ${row.primary_value}, ${packing}`;
+					}
+				}
+			}
+		}
+	}
 	for (const [label, grid] of [
 		["Cutting combination", cuttingGrid.value],
 		["Cloth mapping", clothGrid.value],
@@ -325,11 +419,16 @@ function apply(ipd) {
 		is_bom_item: r.is_bom_item ? 1 : 0,
 		required_gsm: r.required_gsm || 0,
 	}));
-	ipd.cutting_attributes = cuttingChecked.value.map((a) => ({
-		doctype: "Cutting Attribute Detail",
-		...(cuttingAttrRowNames[a] ? { name: cuttingAttrRowNames[a] } : {}),
-		attribute: a,
-	}));
+	ipd.enable_panel_wise_consumption_matrix = panelWiseEnabled.value ? 1 : 0;
+	if (panelWiseEnabled.value) {
+		ipd.panel_wise_consumption_matrix_json = panelMatrix.value;
+	} else {
+		ipd.cutting_attributes = cuttingChecked.value.map((a) => ({
+			doctype: "Cutting Attribute Detail",
+			...(cuttingAttrRowNames[a] ? { name: cuttingAttrRowNames[a] } : {}),
+			attribute: a,
+		}));
+	}
 	ipd.cloth_attributes = clothChecked.value.map((a) => ({
 		doctype: "Cutting Attribute Detail",
 		...(clothAttrRowNames[a] ? { name: clothAttrRowNames[a] } : {}),
@@ -340,14 +439,16 @@ function apply(ipd) {
 	// UNTICKING ALL attributes is a deliberate clear (Desk on_change writes
 	// {}), detected as: stored attributes existed and are now all unticked.
 	// (A legacy doc with JSON but no stored attribute rows is left intact.)
-	if (!cuttingChecked.value.length && storedCuttingChecked > 0) {
-		ipd.cutting_items_json = {};
-	} else if (
-		cuttingGrid.value &&
-		(cuttingGrid.value.items || []).length &&
-		stableStringify(cuttingGrid.value) !== cutGridBaseline
-	) {
-		ipd.cutting_items_json = cuttingGrid.value;
+	if (!panelWiseEnabled.value) {
+		if (!cuttingChecked.value.length && storedCuttingChecked > 0) {
+			ipd.cutting_items_json = {};
+		} else if (
+			cuttingGrid.value &&
+			(cuttingGrid.value.items || []).length &&
+			stableStringify(cuttingGrid.value) !== cutGridBaseline
+		) {
+			ipd.cutting_items_json = cuttingGrid.value;
+		}
 	}
 	if (!clothChecked.value.length && storedClothChecked > 0) {
 		ipd.cutting_cloths_json = {};
@@ -361,3 +462,28 @@ function apply(ipd) {
 }
 defineExpose({ validate, apply });
 </script>
+
+<style scoped>
+.ct-matrix-mode {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	margin-top: 14px;
+	padding: 13px 15px;
+	border: 1px solid var(--esd-line);
+	border-radius: var(--esd-radius);
+	background: var(--esd-surface2);
+}
+.ct-matrix-mode strong {
+	font-size: 0.86rem;
+}
+.ct-mode-value {
+	flex: 0 0 auto;
+	margin: 0 !important;
+	padding: 5px 9px;
+	border-radius: 999px;
+	background: var(--esd-surface);
+	font-weight: 650;
+}
+</style>

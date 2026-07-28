@@ -17,8 +17,8 @@
                 </th>
             </tr>
             <tr v-for="(item, index) in items.items" :key="index">
-                <td v-for="(value, key) in item" :key="key" class="equal-width">
-                    <div :class="get_input_class(key, index)"></div>
+                <td v-for="attribute in items.attributes" :key="attribute" class="equal-width">
+                    <div :class="get_input_class(attribute, index)"></div>
                 </td>
             </tr>
         </table>
@@ -48,7 +48,7 @@ function set_attributes() {
     remove_attributes()
     if (items.value) {
         for(let i = 0; i < items.value.items.length ; i++){
-            Object.keys(items.value.items[i]).forEach(row => {
+            items.value.attributes.forEach(row => {
                 let val = items.value.items[i][row]
                 let input =createInput(row, i, val, false)
                 if(i == 0 && !input.df.read_only){
@@ -64,7 +64,7 @@ function set_attributes() {
 
 function remove_attributes(){
     for(let i = 0; i < items.value.items.length ; i++){
-        Object.keys(items.value.items[i]).forEach(row => {
+        items.value.attributes.forEach(row => {
             let el = root.value
             let parent_class = "." + get_input_class(row, i);
             $(el).find(parent_class).empty();
@@ -186,7 +186,7 @@ function get_data(){
     }
     const x = ref(items.value)
     for (let i = 0; i < x.value.items.length; i++) {
-        Object.keys(x.value.items[i]).forEach((row, index) => {
+        x.value.attributes.forEach((row) => {
             let input = x.value.items[i][row]
             let value = null
             if(typeof(input) == 'object'){
@@ -196,7 +196,7 @@ function get_data(){
                 value = input
             }
             if(value == null || value == ""){
-                if(index != ind){
+                if(row != field || ind == -1){
                     frappe.throw("Fill all the combinations")    
                 }
                 x.value.items[i][row] = null

@@ -7,7 +7,9 @@ import ClothAccessoryCombination from "./Item_Po_detail/ClothAccessoryCombinatio
 import CombinationItemDetail from "./Item_Po_detail/CombinationItemDetail.vue";
 import CuttingItemDetail from "./Item_Po_detail/CuttingItemDetail.vue";
 import EmblishmentDetails from "./Item_Po_detail/EmblishmentDetails.vue";
+import ColourYarnRecipeEditor from "./Item_Po_detail/ColourYarnRecipeEditor.vue";
 import FabricSwapDetail from "./Item_Po_detail/FabricSwapDetail.vue";
+import PanelWiseConsumptionMatrix from "./Item_Po_detail/PanelWiseConsumptionMatrix.vue";
 import LotOrderedDetail from "./ProductionOrder/LotOrderedDetail.vue";
 import FabricProgram from "./Lot/FabricProgram.vue";
 import FabricProcesses from "./Fabric/FabricProcesses.vue";
@@ -61,6 +63,24 @@ frappe.production.ui.CuttingItemDetail = class {
 	}
 	set_attributes() {
 		this.vue.set_attributes();
+	}
+	get_data() {
+		return JSON.parse(JSON.stringify(this.vue.get_data()));
+	}
+};
+
+frappe.production.ui.PanelWiseConsumptionMatrix = class {
+	constructor(wrapper) {
+		this.$wrapper = $(wrapper);
+		this.make_body();
+	}
+	make_body() {
+		const mounted = mount_component(PanelWiseConsumptionMatrix, this.$wrapper);
+		this.app = mounted.app;
+		this.vue = mounted.vue;
+	}
+	load_data(payload, locked = false) {
+		this.vue.load_data(JSON.parse(JSON.stringify(payload || {})), locked);
 	}
 	get_data() {
 		return JSON.parse(JSON.stringify(this.vue.get_data()));
@@ -178,6 +198,25 @@ frappe.production.ui.FabricSwapDetail = class {
 		// on_change is passed alongside (not inside) the data so the JSON
 		// round-trip cannot strip the callback.
 		this.vue.load_data(JSON.parse(JSON.stringify(data || {})), this.opts.on_change);
+	}
+	get_data() {
+		return JSON.parse(JSON.stringify(this.vue.get_data()));
+	}
+};
+
+frappe.production.ui.ColourYarnRecipeEditor = class {
+	constructor(wrapper, opts = {}) {
+		this.$wrapper = $(wrapper);
+		this.opts = opts;
+		this.make_body();
+	}
+	make_body() {
+		const mounted = mount_component(ColourYarnRecipeEditor, this.$wrapper);
+		this.app = mounted.app;
+		this.vue = mounted.vue;
+	}
+	load_data(payload) {
+		this.vue.load_data(JSON.parse(JSON.stringify(payload || {})), this.opts.on_change);
 	}
 	get_data() {
 		return JSON.parse(JSON.stringify(this.vue.get_data()));

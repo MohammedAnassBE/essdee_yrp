@@ -14,23 +14,27 @@
   {
    "fieldname": "attribute_value",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Attribute Value",
    "options": "Item Attribute Value"
   },
   {
    "fieldname": "major_attribute_value",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Major Attribute Value",
    "options": "Item Attribute Value"
   },
   {
    "fieldname": "index",
    "fieldtype": "Int",
+   "in_list_view": 1,
    "label": "Index"
   },
   {
    "fieldname": "set_item_attribute_value",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Set Item Attribute Value",
    "options": "Item Attribute Value"
   }

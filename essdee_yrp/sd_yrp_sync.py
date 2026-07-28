@@ -437,9 +437,14 @@ def upsert_item_production_detail(data, event=None):
 		for row in data.get("ipd_processes") or []
 		if row
 	]
+	# Garment IPD synchronization deliberately excludes yarn recipes. Yarn is
+	# chosen per Lot in Build Cloth Program and stored on the generated cloth IPD.
+	data["colour_yarn_recipes"] = []
 	return upsert_filtered_doc(
 		data,
-		replace_children=("item_attributes", "item_bom", "ipd_processes"),
+		replace_children=(
+			"item_attributes", "item_bom", "ipd_processes", "colour_yarn_recipes",
+		),
 	)
 
 
@@ -481,6 +486,26 @@ def map_ipd_process_row(row, source_context=None):
 			"out_stage": stage,
 		},
 		"IPD Process",
+	)
+
+
+def map_ipd_colour_yarn_row(row, source_context=None):
+	row_context = (
+		f"{source_context} Colour-wise Yarn Recipe row"
+		if source_context else "Colour-wise Yarn Recipe row"
+	)
+	validate_required_link("Item", row.get("cloth_item"), row_context)
+	validate_required_link("Item", row.get("yarn_item"), row_context)
+	validate_required_link("Item Attribute Value", row.get("colour"), row_context)
+	return filter_child_row(
+		{
+			"doctype": "IPD Colour Yarn Ratio",
+			"cloth_item": row.get("cloth_item"),
+			"colour": row.get("colour"),
+			"yarn_item": row.get("yarn_item"),
+			"ratio": row.get("ratio"),
+		},
+		"IPD Colour Yarn Ratio",
 	)
 
 

@@ -25,7 +25,9 @@ const hideFormFields = [
 
 const linkSearchHandlers = {
 	production_detail: (form) =>
-		form.item ? (q) => searchLink("Item Production Detail", q, { item: form.item }) : null,
+		form.item
+			? (q) => searchLink("Item Production Detail", q, { item: form.item })
+			: async () => [],
 	production_order: (form) =>
 		form.item
 			? (q) => searchLink("Production Order", q, { item: form.item, docstatus: 1 })

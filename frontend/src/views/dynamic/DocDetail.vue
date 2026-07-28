@@ -1816,7 +1816,7 @@ const actionDialogPosition = computed(() => {
 // vocabulary). Absent / non-array → null = all of today's actions render.
 // Unknown names are ignored with one console.warn (the server soft-warns the
 // same way); an items list never ADDS an affordance the gates would hide.
-const MOVABLE_ACTION_ITEMS = ["create_grn", "create_dc", "build_cloth_programs", "more_menu", "ewaybill_menu", "send_sms", "send_whatsapp", "cancel_doc"]
+const MOVABLE_ACTION_ITEMS = ["create_grn", "create_dc", "complete_transfer", "build_cloth_programs", "more_menu", "ewaybill_menu", "send_sms", "send_whatsapp", "cancel_doc"]
 let unknownActionItemsWarned = false
 const allowedActionItems = computed(() => {
 	const items = uiStore.actionsKnob?.items
@@ -1852,13 +1852,34 @@ const forwardActions = computed(() => {
 		out.push({ key: "wo-grn", label: "Create Goods Received Note", icon: "pi pi-plus-circle", handler: onCreateGrnFromWo, disabled: woGated, tooltip: woTip })
 	if (isDeliveryChallan.value && canCreate("Goods Received Note"))
 		out.push({ key: "dc-grn", label: "Create Goods Received Note", icon: "pi pi-plus-circle", handler: onCreateGrnFromDc, disabled: false, tooltip: "" })
+	if (
+		isGoodsReceivedNote.value
+		&& Number(d.is_internal_unit)
+		&& !Number(d.transfer_complete)
+		&& canCreate("Stock Entry")
+	) {
+		out.push({
+			key: "grn-complete-transfer",
+			label: "Complete Transfer",
+			icon: "pi pi-sync",
+			handler: onCompleteGrnTransfer,
+			disabled: false,
+			tooltip: "",
+			loadingKey: "grn-complete-transfer",
+		})
+	}
 	return out
 })
 // The actions.items filter, applied per forward action (create_dc filters the
 // WO→DC action; create_grn the WO→GRN and DC→GRN ones). Unmapped future keys
 // stay visible — the filter only ever narrows what it knows by name. With the
 // knob absent this is forwardActions unchanged (parity).
-const FORWARD_ACTION_ITEM = { "wo-dc": "create_dc", "wo-grn": "create_grn", "dc-grn": "create_grn" }
+const FORWARD_ACTION_ITEM = {
+	"wo-dc": "create_dc",
+	"wo-grn": "create_grn",
+	"dc-grn": "create_grn",
+	"grn-complete-transfer": "complete_transfer",
+}
 const visibleForwardActions = computed(() =>
 	forwardActions.value.filter((a) => {
 		const item = FORWARD_ACTION_ITEM[a.key]
@@ -1904,14 +1925,27 @@ const showBuildClothAction = computed(
 		!isLotTransferred.value &&
 		actionAllowed("build_cloth_programs"),
 )
-const showEwbAction = computed(() => isDeliveryChallan.value && docstatus.value === 1 && actionAllowed("ewaybill_menu"))
+const showEwbAction = computed(
+	() =>
+		isDeliveryChallan.value
+		&& docstatus.value === 1
+		&& (canWrite(doctype.value) || !!doc.value?.ewaybill)
+		&& ewbMenuModel.value.length > 0
+		&& actionAllowed("ewaybill_menu"),
+)
 const showSmsAction = computed(
-	() => isDeliveryChallan.value && docstatus.value === 1 && !!doc.value?.supplier && actionAllowed("send_sms"),
+	() =>
+		isDeliveryChallan.value
+		&& docstatus.value === 1
+		&& canWrite(doctype.value)
+		&& !!doc.value?.supplier
+		&& actionAllowed("send_sms"),
 )
 const showWhatsAppAction = computed(
 	() =>
 		isWhatsAppEnabled.value &&
 		docstatus.value === 1 &&
+		canWrite(doctype.value) &&
 		!!doc.value?.[whatsAppSupplierKey.value] &&
 		actionAllowed("send_whatsapp"),
 )
@@ -2092,16 +2126,22 @@ const whatsAppSupplierKey = computed(() => whatsAppEnabledDoctypes.value[doctype
 const ewbMenuModel = computed(() => {
 	if (!doc.value) return []
 	if (!doc.value.ewaybill) {
+		if (!canWrite(doctype.value)) return []
 		return [
 			{ label: "Generate e-Waybill", icon: "pi pi-plus", command: () => (ewbGenerateOpen.value = true) },
 			{ label: "Fetch existing", icon: "pi pi-download", command: () => (ewbFetchOpen.value = true) },
 		]
 	}
-	return [
+	const items = [
 		{ label: "Print e-Waybill", icon: "pi pi-print", command: () => printEwaybill() },
-		{ label: "Update Vehicle", icon: "pi pi-truck", command: () => (ewbVehicleOpen.value = true) },
-		{ label: "Cancel e-Waybill", icon: "pi pi-ban", command: () => (ewbCancelOpen.value = true) },
 	]
+	if (canWrite(doctype.value)) {
+		items.push(
+			{ label: "Update Vehicle", icon: "pi pi-truck", command: () => (ewbVehicleOpen.value = true) },
+			{ label: "Cancel e-Waybill", icon: "pi pi-ban", command: () => (ewbCancelOpen.value = true) },
+		)
+	}
+	return items
 })
 
 // Refresh the stored EWB payload, then open the print view in a new tab (same
@@ -2938,6 +2978,7 @@ function inputDescriptor(mf) {
 		help: getFieldHelp(doctype.value, mf.fieldname) || mf.description || "",
 		reqd: !!mf.reqd,
 		readOnly: !!mf.read_only,
+		permlevel: Number(mf.permlevel) || 0,
 		fieldtype: ft,
 		input: "text",
 		wide: false,
@@ -3084,6 +3125,7 @@ function isReqd(f) {
 // posting_date/time stay read-only until "Edit Posting Date and Time" is ticked).
 // Reads `form` so it re-evaluates reactively as the user toggles.
 function isReadOnly(f) {
+	if (!canWriteFieldPermlevel(f.permlevel)) return true
 	// Work Order entry is intentionally sequential: Process → Lot → Item.
 	// The IPD is always derived. One valid Item is auto-filled and locked; only
 	// a genuine multi-cloth context presents an Item choice.
@@ -3112,6 +3154,19 @@ function isReadOnly(f) {
 	}
 	if (f.readOnly) return true
 	return f.readOnlyDependsOn ? evalCondition(f.readOnlyDependsOn) : false
+}
+
+function canWriteFieldPermlevel(permlevel) {
+	const level = Number(permlevel) || 0
+	if (isAdmin.value) return true
+	if (level === 0) return canWrite(doctype.value)
+	return (meta.value?.permissions || []).some(
+		(row) =>
+			(Number(row.permlevel) || 0) === level
+			&& Number(row.write) === 1
+			&& !!row.role
+			&& hasRole(row.role),
+	)
 }
 
 // The form fields actually shown: drop any whose depends_on is currently false,
@@ -4698,6 +4753,24 @@ function onCreateGrnFromDc() {
 			includes_packing: doc.value.includes_packing ? 1 : 0,
 		},
 	})
+}
+
+async function onCompleteGrnTransfer() {
+	if (!doc.value) return
+	acting.value = "grn-complete-transfer"
+	try {
+		const stockEntry = await callMethod(
+			"yrp.yrp.doctype.goods_received_note.goods_received_note.make_grn_completion",
+			{ doc_name: doc.value.name },
+		)
+		if (!stockEntry) throw new Error("The completion Stock Entry was not created.")
+		toast.success("Transfer prepared", `Stock Entry ${stockEntry} created as a draft.`, 6000)
+		router.push(`/stock-entry/${encodeURIComponent(stockEntry)}`)
+	} catch (e) {
+		showActionError("Complete Transfer failed", e)
+	} finally {
+		acting.value = null
+	}
 }
 // deferred: amend flow left as-is by decision — useDoc.amend already routes
 // through the standard Frappe amend (copy → new draft); a rewrite is out of scope.

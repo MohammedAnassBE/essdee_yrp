@@ -1128,6 +1128,9 @@ const fetchFields = computed(() => {
 		if (!fields.includes("docstatus")) fields.push("docstatus")
 	}
 	if (isSubmittable.value && !fields.includes("docstatus")) fields.push("docstatus")
+	// Bulk submit/cancel sends the timestamp the row was loaded with, matching
+	// the single-document stale-write guard.
+	if (isSubmittable.value && !fields.includes("modified")) fields.push("modified")
 	if (isWorkflow.value && !fields.includes("workflow_state")) fields.push("workflow_state")
 	// Table density flags (item 6) may need extra source fields: the colourBy
 	// field, and `status` when a plain status field drives colourBy:"status" or
@@ -1976,8 +1979,8 @@ async function runBulkAction(action, candidates) {
 	try {
 		for (const row of rowsToActOn) {
 			try {
-				if (isSubmitAction) await submitDoc(dt, row.name)
-				else await cancelDoc(dt, row.name)
+				if (isSubmitAction) await submitDoc(dt, row.name, row.modified)
+				else await cancelDoc(dt, row.name, row.modified)
 				ok += 1
 			} catch (error) {
 				failures.push({ name: row.name, error })

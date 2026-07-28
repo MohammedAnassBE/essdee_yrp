@@ -496,6 +496,7 @@ const dependentAttribute = ref(null)
 // so its human identity is the `item` data field — fetched in fetchDependentAttribute).
 const ipdItem = ref("")
 const docstatus = ref(0)
+const loadedModified = ref("")
 // Default UOMs for new input/output rows — the consumed/produced item's default
 // UOM (input rows ← input_item ‖ IPD item, output rows ← output_item ‖ IPD item).
 const inputUom = ref("")
@@ -576,6 +577,7 @@ async function load() {
 			outputAttributes.value = []
 			groups.value = []
 			docstatus.value = 0
+			loadedModified.value = ""
 			if (header.ipd) {
 				await fetchDependentAttribute()
 				await refreshSideUoms()
@@ -587,6 +589,7 @@ async function load() {
 			}
 		} else {
 			const doc = await getDoc(DOCTYPE, props.id)
+			loadedModified.value = doc.modified || ""
 			header.ipd = doc.ipd || ""
 			header.process_name = doc.process_name || ""
 			header.reference_item_variant = doc.reference_item_variant || ""
@@ -926,6 +929,7 @@ function serializeChildren() {
 function buildPayload() {
 	const { combinations, combination_attributes } = serializeChildren()
 	return {
+		...(isCreate.value || !loadedModified.value ? {} : { modified: loadedModified.value }),
 		ipd: header.ipd || null,
 		process_name: header.process_name || null,
 		reference_item_variant: header.reference_item_variant || null,

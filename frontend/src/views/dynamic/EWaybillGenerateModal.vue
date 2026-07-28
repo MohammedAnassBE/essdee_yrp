@@ -193,7 +193,7 @@ function initForm() {
 	form.vehicle_no = doc.vehicle_no || ""
 	form.lr_no = doc.lr_no || ""
 	// Desk default: `doc.lr_date || "Today"`.
-	form.lr_date = doc.lr_date ? new Date(doc.lr_date) : new Date()
+	form.lr_date = doc.lr_date ? toLocalDate(doc.lr_date) : new Date()
 	form.mode_of_transport = doc.mode_of_transport || "Road"
 	form.gst_vehicle_type = doc.gst_vehicle_type || "Regular"
 	form.gst_category = doc.gst_category || "Registered Regular"
@@ -250,6 +250,13 @@ function toDateStr(value) {
 	const m = String(dt.getMonth() + 1).padStart(2, "0")
 	const day = String(dt.getDate()).padStart(2, "0")
 	return `${y}-${m}-${day}`
+}
+
+function toLocalDate(value) {
+	if (value instanceof Date) return value
+	const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/)
+	if (!match) return new Date(value)
+	return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
 }
 
 async function onGenerate() {

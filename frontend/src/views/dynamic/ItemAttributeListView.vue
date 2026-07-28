@@ -39,7 +39,7 @@
 				<div class="attr-head">
 					<span class="attr-title">{{ attr.attr_name }}</span>
 					<Button
-						v-if="editingIdx !== idx && attr.attr_values_link"
+						v-if="editingIdx !== idx && attr.attr_values_link && canWrite('Item Item Attribute Mapping')"
 						icon="pi pi-pencil"
 						text
 						rounded
@@ -137,6 +137,7 @@ import AutoComplete from "primevue/autocomplete"
 import Tooltip from "primevue/tooltip"
 import { callMethod, getDocWithOnload, searchLink } from "@/api/client"
 import { useAppToast } from "@/composables/useToast"
+import { usePermissions } from "@/composables/usePermissions"
 
 const vTooltip = Tooltip
 
@@ -149,6 +150,7 @@ const props = defineProps({
 })
 
 const toast = useAppToast()
+const { canWrite } = usePermissions()
 const loading = ref(false)
 const saving = ref(false)
 const attrList = ref([])

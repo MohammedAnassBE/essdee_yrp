@@ -82,7 +82,10 @@ export function useDocNav({ doctype, docRoute, name, enabled }, navigate) {
 			prev,
 			sort_field: sortField,
 			sort_order: sortOrder,
-			...(hasFilters ? { filters } : {}),
+			// Frappe v16's get_next whitelist accepts filters as a dict or JSON
+			// string, not a raw tuple array. Keep object filters as objects and
+			// serialize the advanced-filter tuple form captured from the list.
+			...(hasFilters ? { filters: Array.isArray(filters) ? JSON.stringify(filters) : filters } : {}),
 		})
 
 		const my = ++token

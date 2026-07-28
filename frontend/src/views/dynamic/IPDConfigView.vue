@@ -1771,6 +1771,7 @@ const attrValueSuggestions = ref([])
 // in "edit" mode (-1 otherwise). Single form serves both, switched by mode.
 const bomFormMode = ref("off")
 const editingBomIdx = ref(-1)
+const editingBomName = ref("")
 const bomSaving = ref(false)
 const blankBomDraft = () => ({
 	item: "",
@@ -1790,6 +1791,7 @@ function openAddBom() {
 	if (processFormMode.value !== "off") cancelAddProcess()
 	bomDraft.value = blankBomDraft()
 	editingBomIdx.value = -1
+	editingBomName.value = ""
 	bomFormMode.value = "add"
 }
 function openEditBom(idx) {
@@ -1806,16 +1808,32 @@ function openEditBom(idx) {
 		based_on_attribute_mapping: row.based_on_attribute_mapping ? 1 : 0,
 	}
 	editingBomIdx.value = idx
+	editingBomName.value = row.name || ""
 	bomFormMode.value = "edit"
 }
 function cancelAddBom() {
 	bomFormMode.value = "off"
 	editingBomIdx.value = -1
+	editingBomName.value = ""
 	bomDraft.value = blankBomDraft()
 }
+
+function assertFreshIpd(ipd) {
+	const loaded = doc.value?.modified
+	if (loaded && ipd?.modified && ipd.modified !== loaded) {
+		throw new Error("This IPD changed after you opened it. Refresh before editing its rows.")
+	}
+}
+
+function findCurrentChildIndex(rows, childName, fallbackIdx) {
+	if (childName) return rows.findIndex((row) => row.name === childName)
+	return fallbackIdx >= 0 && fallbackIdx < rows.length ? fallbackIdx : -1
+}
+
 async function deleteBomRow(idx) {
 	const row = (doc.value?.item_bom || [])[idx]
 	if (!row) return
+	const rowName = row.name || ""
 	const label = row.item ? `“${row.item}”` : `row #${idx + 1}`
 	confirm.require({
 		header: "Delete BOM row?",
@@ -1828,8 +1846,11 @@ async function deleteBomRow(idx) {
 					doctype: "Item Production Detail",
 					name: props.id,
 				})
+				assertFreshIpd(ipd)
 				const rows = [...(ipd.item_bom || [])]
-				rows.splice(idx, 1)
+				const currentIdx = findCurrentChildIndex(rows, rowName, idx)
+				if (currentIdx < 0) throw new Error("This BOM row no longer exists. Refresh the IPD.")
+				rows.splice(currentIdx, 1)
 				ipd.item_bom = rows
 				await callMethod("frappe.client.save", { doc: ipd })
 				toast.success("Deleted", "BOM row removed")
@@ -1883,6 +1904,7 @@ async function onDepAttrValueComplete(e) {
 // ── Add/Edit form for IPD Processes ──
 const processFormMode = ref("off") // "off" | "add" | "edit"
 const editingProcessIdx = ref(-1)
+const editingProcessName = ref("")
 const processSaving = ref(false)
 const blankProcessDraft = () => ({ process_name: "", in_stage: "", out_stage: "" })
 const processDraft = ref(blankProcessDraft())
@@ -1892,6 +1914,7 @@ function openAddProcess() {
 	if (bomFormMode.value !== "off") cancelAddBom()
 	processDraft.value = blankProcessDraft()
 	editingProcessIdx.value = -1
+	editingProcessName.value = ""
 	processFormMode.value = "add"
 }
 function openEditProcess(idx) {
@@ -1904,16 +1927,19 @@ function openEditProcess(idx) {
 		out_stage: row.out_stage || "",
 	}
 	editingProcessIdx.value = idx
+	editingProcessName.value = row.name || ""
 	processFormMode.value = "edit"
 }
 function cancelAddProcess() {
 	processFormMode.value = "off"
 	editingProcessIdx.value = -1
+	editingProcessName.value = ""
 	processDraft.value = blankProcessDraft()
 }
 async function deleteProcessRow(idx) {
 	const row = (doc.value?.ipd_processes || [])[idx]
 	if (!row) return
+	const rowName = row.name || ""
 	const label = row.process_name ? `“${row.process_name}”` : `row #${idx + 1}`
 	confirm.require({
 		header: "Delete process row?",
@@ -1926,8 +1952,11 @@ async function deleteProcessRow(idx) {
 					doctype: "Item Production Detail",
 					name: props.id,
 				})
+				assertFreshIpd(ipd)
 				const rows = [...(ipd.ipd_processes || [])]
-				rows.splice(idx, 1)
+				const currentIdx = findCurrentChildIndex(rows, rowName, idx)
+				if (currentIdx < 0) throw new Error("This process row no longer exists. Refresh the IPD.")
+				rows.splice(currentIdx, 1)
 				ipd.ipd_processes = rows
 				await callMethod("frappe.client.save", { doc: ipd })
 				toast.success("Deleted", "Process row removed")
@@ -1960,15 +1989,19 @@ async function saveProcessRow() {
 			doctype: "Item Production Detail",
 			name: props.id,
 		})
+		assertFreshIpd(ipd)
 		const rows = [...(ipd.ipd_processes || [])]
 		const patch = {
 			process_name: proc,
 			in_stage: typeof d.in_stage === "string" ? d.in_stage : d.in_stage?.name || "",
 			out_stage: typeof d.out_stage === "string" ? d.out_stage : d.out_stage?.name || "",
 		}
-		if (processFormMode.value === "edit" && editingProcessIdx.value >= 0 && editingProcessIdx.value < rows.length) {
+		const currentIdx = findCurrentChildIndex(rows, editingProcessName.value, editingProcessIdx.value)
+		if (processFormMode.value === "edit" && currentIdx >= 0) {
 			// Preserve identifiers (name, idx, parent links) so the server updates in place.
-			rows[editingProcessIdx.value] = { ...rows[editingProcessIdx.value], ...patch }
+			rows[currentIdx] = { ...rows[currentIdx], ...patch }
+		} else if (processFormMode.value === "edit") {
+			throw new Error("This process row no longer exists. Refresh the IPD.")
 		} else {
 			rows.push({ doctype: "IPD Process", ...patch })
 		}
@@ -2006,6 +2039,7 @@ async function saveBomRow() {
 			doctype: "Item Production Detail",
 			name: props.id,
 		})
+		assertFreshIpd(ipd)
 		const rows = [...(ipd.item_bom || [])]
 		const patch = {
 			item: typeof d.item === "string" ? d.item : d.item?.name || "",
@@ -2016,7 +2050,8 @@ async function saveBomRow() {
 			dependent_attribute_value: depVal,
 			based_on_attribute_mapping: d.based_on_attribute_mapping ? 1 : 0,
 		}
-		if (bomFormMode.value === "edit" && editingBomIdx.value >= 0 && editingBomIdx.value < rows.length) {
+		const currentIdx = findCurrentChildIndex(rows, editingBomName.value, editingBomIdx.value)
+		if (bomFormMode.value === "edit" && currentIdx >= 0) {
 			// Preserve identifiers + the attribute_mapping link so an existing
 			// cross-product mapping isn't orphaned when the row is edited. But if
 			// the user toggles "based on attribute mapping" OFF, clear the stale
@@ -2024,7 +2059,9 @@ async function saveBomRow() {
 			// the flag is cleared — the engine ignores the mapping once the flag
 			// is off, so a dangling link would just be a confusing orphan).
 			if (!patch.based_on_attribute_mapping) patch.attribute_mapping = null
-			rows[editingBomIdx.value] = { ...rows[editingBomIdx.value], ...patch }
+			rows[currentIdx] = { ...rows[currentIdx], ...patch }
+		} else if (bomFormMode.value === "edit") {
+			throw new Error("This BOM row no longer exists. Refresh the IPD.")
 		} else {
 			rows.push({ doctype: "Item BOM", ...patch })
 		}

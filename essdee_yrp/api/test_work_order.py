@@ -106,7 +106,7 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
 
         addr = _ensure_address()
         self.wo = frappe.get_doc({
-            "doctype": "Work Order", "naming_series": "WO-",
+            "doctype": "Work Order",
             "wo_date": nowdate(), "process_name": self.k_proc,
             "item": self.cloth, "lot": self.lot.name,
             "planned_start_date": nowdate(), "planned_end_date": nowdate(),
@@ -338,7 +338,6 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
         addr = _ensure_address(f"_Test Routed WO Supplier {suffix}")
         work_order = frappe.get_doc({
             "doctype": "Work Order",
-            "naming_series": "WO-",
             "wo_date": nowdate(),
             "process_name": self.k_proc,
             "item": cloth,
@@ -414,7 +413,6 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
         # the Greige -> Red route needs a dyeing Work Order.
         dye_work_order = frappe.get_doc({
             "doctype": "Work Order",
-            "naming_series": "WO-",
             "wo_date": nowdate(),
             "process_name": self.d_proc,
             "item": cloth,
@@ -438,7 +436,6 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
         # not from a Dyeing stage the route never visits.
         compact_work_order = frappe.get_doc({
             "doctype": "Work Order",
-            "naming_series": "WO-",
             "wo_date": nowdate(),
             "process_name": compacting,
             "item": cloth,
@@ -589,7 +586,6 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
         addr = _ensure_address("_Test Multi Yarn WO Supplier")
         return frappe.get_doc({
             "doctype": "Work Order",
-            "naming_series": "WO-",
             "wo_date": nowdate(),
             "process_name": process,
             "item": values["cloth"],

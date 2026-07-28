@@ -161,6 +161,49 @@ def _balanced(src, opener_re, open_ch="{", close_ch="}"):
 	return None
 
 
+class TestIPDEntryAutomationMirror(IntegrationTestCase):
+	"""Keep the Desk and responsive /web IPD entry automations aligned."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		desk = os.path.join(frappe.get_app_path("essdee_yrp"), "public", "js")
+		web = os.path.join(_frontend_dir("essdee_yrp"), "views", "ipd")
+		cls.desk_panel = _read(
+			os.path.join(desk, "Item_Po_detail", "PanelWiseConsumptionMatrix.vue")
+		)
+		cls.desk_ipd = _read(os.path.join(desk, "item_production_detail.js"))
+		cls.web_panel = _read(os.path.join(web, "PanelWiseConsumptionMatrix.vue"))
+		cls.web_stitching = _read(os.path.join(web, "StichingSection.vue"))
+
+	def test_panel_copy_carries_dia_in_desk_and_web(self):
+		self.assertIn("updated(el, binding)", self.desk_panel)
+		self.assertIn("syncDiaLink(el, binding.value)", self.desk_panel)
+		self.assertIn("state.control.set_value(value)", self.desk_panel)
+
+		web_copy = _balanced(
+			self.web_panel,
+			r"function copyFirstPackingToPanel\(\)\s*\{",
+		)
+		self.assertIsNotNone(web_copy)
+		self.assertIn(
+			"row.values[packing] = { dia: source.dia, weight: source.weight }",
+			web_copy,
+		)
+
+	def test_generated_stitching_rows_default_to_one_body(self):
+		self.assertIn("quantity: 1", self.desk_ipd)
+		self.assertIn('category: "Body"', self.desk_ipd)
+
+		web_fetch = _balanced(
+			self.web_stitching,
+			r"async function fetchPanels\(\)\s*\{",
+		)
+		self.assertIsNotNone(web_fetch)
+		self.assertIn("quantity: 1", web_fetch)
+		self.assertIn('category: "Body"', web_fetch)
+
+
 class TestDcWizardStepsEntry(IntegrationTestCase):
 	"""dcEntry 'wizard-steps' reachability + blocked-save reveal (2026-07-18
 	review findings). Both are FRONTEND presentation seams with no standalone

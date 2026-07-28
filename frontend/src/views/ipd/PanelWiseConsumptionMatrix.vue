@@ -212,7 +212,10 @@ function copyFirstPackingToPanel() {
 		return !cell.dia || !(Number(cell.weight) > 0)
 	})
 	if (missing) {
-		toast.warn("Missing consumption", `Enter ${first} consumption for ${missing.primary_value} first.`)
+		toast.warn(
+			"Missing values",
+			`Enter ${first} Dia and consumption for ${missing.primary_value} first.`,
+		)
 		return
 	}
 	for (const row of currentPanel.value.rows) {

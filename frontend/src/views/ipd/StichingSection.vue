@@ -345,8 +345,8 @@ async function fetchPanels() {
 		});
 		rows.value = (res || []).map((r) => ({
 			stiching_attribute_value: r.stiching_attribute_value,
-			quantity: 0,
-			category: "",
+			quantity: 1,
+			category: "Body",
 			set_item_attribute_value: "",
 			is_default: false,
 		}));

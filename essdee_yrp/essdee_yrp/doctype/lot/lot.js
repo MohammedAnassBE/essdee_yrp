@@ -447,14 +447,13 @@ frappe.ui.form.on("Lot", {
 // }
 
 function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
+	const route_detail_fields = {};
+	const route_output_fields = {};
 	const fields = [{
 		label: __("Knitting Program Excess (%)"),
 		fieldname: "excess_percentage",
 		fieldtype: "Float",
 		default: 0,
-		description: __(
-			"Added to every calculated knitting-program route. The finished-cloth requirement stays unchanged, and the Knitting Process default excess is not used."
-		),
 	}];
 	cloths.forEach((c, i) => {
 		const item_yarns = c.item_yarns || [];
@@ -483,29 +482,12 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 		});
 
 		if (required_colours.length) {
-			fields.push({
-				fieldtype: "HTML",
-				fieldname: `route_help_${i}`,
-				options: `<div class="text-muted small" style="margin-bottom:8px">${__(
-					"The Item Yarn Recipe is applied automatically. Set the physical Knitting output colour and Dia for every finished route."
-				)}</div>`,
-			});
 			required_colours.forEach((colour, colour_index) => {
 				const colour_routes = required_routes
 					.filter((route) => route.colour === colour)
 					.sort((a, b) => dia_sort_value(a.dia) - dia_sort_value(b.dia));
 				const colour_total = colour_routes.reduce(
 					(total, route) => total + Number(route.weight || 0), 0);
-				fields.push({
-					fieldtype: "HTML",
-					fieldname: `route_title_${i}_${colour_index}`,
-					options: `<div style="margin:12px 0 5px;font-weight:650">${__(
-						"Finished Colour: {0}", [frappe.utils.escape_html(colour)]
-					)}</div><div class="text-muted small" style="margin-bottom:6px">${__(
-						"{0} routes · {1} kg total",
-						[colour_routes.length, colour_total]
-					)}</div>`,
-				});
 				const route_defaults = colour_routes.map((route) => {
 					const stored_route = stored_routes.find(
 						(row) => row.finished_colour === colour && row.finished_dia === route.dia
@@ -517,16 +499,24 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 						|| "";
 				});
 				const common_output_colours = [...new Set(route_defaults.filter(Boolean))];
-				const bulk_colour_fieldname = `bulk_knitting_output_colour_${i}_${colour_index}`;
+				const detail_fieldnames = [];
+				const edit_key = `${i}_${colour_index}`;
+				route_detail_fields[edit_key] = detail_fieldnames;
 				fields.push({
-					label: __("Apply Knitting Output Colour to All {0} Dias", [colour]),
+					fieldtype: "HTML",
+					fieldname: `route_title_${i}_${colour_index}`,
+					options: cloth_program_route_summary(
+						colour, colour_routes.length, colour_total, edit_key
+					),
+				});
+				const bulk_colour_fieldname = `bulk_knitting_output_colour_${i}_${colour_index}`;
+				route_output_fields[edit_key] = bulk_colour_fieldname;
+				fields.push({
+					label: __("Knitting Output"),
 					fieldname: bulk_colour_fieldname,
 					fieldtype: "Link",
 					options: "Item Attribute Value",
 					default: common_output_colours.length === 1 ? common_output_colours[0] : "",
-					description: __(
-						"Select once to fill every Dia route for this finished colour. Individual routes remain editable."
-					),
 					get_query: () => ({ filters: { attribute_name: "Colour" } }),
 					onchange() {
 						const value = d.get_value(bulk_colour_fieldname) || "";
@@ -542,9 +532,14 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 					const stored_route = stored_routes.find(
 						(row) => row.finished_colour === colour && row.finished_dia === route.dia
 					) || {};
+					const title_fieldname = `physical_route_title_${i}_${colour_index}_${route_index}`;
+					const dia_fieldname = `knitting_output_dia_${i}_${colour_index}_${route_index}`;
+					const colour_fieldname = `knitting_output_colour_${i}_${colour_index}_${route_index}`;
+					detail_fieldnames.push(title_fieldname, dia_fieldname, colour_fieldname);
 					fields.push({
 						fieldtype: "HTML",
-						fieldname: `physical_route_title_${i}_${colour_index}_${route_index}`,
+						fieldname: title_fieldname,
+						hidden: 1,
 						options: `<div style="margin:9px 0 4px;font-weight:600">${__(
 							"{0} · {1} kg finished",
 							[
@@ -555,18 +550,19 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 					});
 					fields.push({
 						label: __("Knitting Output Dia"),
-						fieldname: `knitting_output_dia_${i}_${colour_index}_${route_index}`,
+						fieldname: dia_fieldname,
 						fieldtype: "Link",
+						hidden: 1,
 						options: "Item Attribute Value",
 						reqd: 1,
 						default: stored_route.knitting_output_dia || route.dia || "",
-						description: __("Physical Dia received from Knitting."),
 						get_query: () => ({ filters: { attribute_name: "Dia" } }),
 					});
 					fields.push({
 						label: __("Knitting Output Colour"),
-						fieldname: `knitting_output_colour_${i}_${colour_index}_${route_index}`,
+						fieldname: colour_fieldname,
 						fieldtype: "Link",
+						hidden: 1,
 						options: "Item Attribute Value",
 						reqd: 1,
 						default: stored_route.knitting_output_colour
@@ -574,9 +570,6 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 							|| output_colours[colour]
 							|| profile.greige_colour
 							|| "",
-						description: __(
-							"Select the Finished Colour itself to bypass Dyeing for this route."
-						),
 						get_query: () => ({ filters: { attribute_name: "Colour" } }),
 					});
 				});
@@ -603,9 +596,6 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 			options: "Process",
 			reqd: 0,
 			default: profile.dyeing_process || defaults.dyeing_process || "",
-			description: __(
-				"Required only when at least one Knitting Output Colour differs from its Finished Colour."
-			),
 		});
 	});
 
@@ -725,6 +715,45 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 		}
 	});
 	d.show();
+	Object.entries(route_output_fields).forEach(([key, fieldname]) => {
+		const field = d.fields_dict[fieldname];
+		const $slot = d.$wrapper.find(`[data-cloth-program-output="${key}"]`);
+		if (!field?.$wrapper?.length || !$slot.length) return;
+		field.$wrapper.css({ margin: 0, minWidth: 0 }).appendTo($slot);
+		field.$wrapper.find(".help-box").hide();
+	});
+	d.$wrapper.on("click", "[data-cloth-program-edit]", function () {
+		const key = $(this).attr("data-cloth-program-edit");
+		const is_editing = $(this).attr("aria-expanded") === "true";
+		(route_detail_fields[key] || []).forEach((fieldname) => {
+			d.set_df_property(fieldname, "hidden", is_editing ? 1 : 0);
+		});
+		$(this)
+			.attr("aria-expanded", is_editing ? "false" : "true")
+			.text(is_editing ? __("Edit") : __("Done"));
+	});
+}
+
+function cloth_program_route_summary(colour, route_count, total, edit_key) {
+	return `
+		<div style="display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin:12px 0 5px;
+			padding:10px 12px;border:1px solid var(--border-color);border-radius:8px">
+			<div style="min-width:120px">
+				<div class="text-muted small">${__("Finished Colour")}</div>
+				<strong>${frappe.utils.escape_html(colour || "")}</strong>
+			</div>
+			<div class="text-muted">→</div>
+			<div data-cloth-program-output="${frappe.utils.escape_html(edit_key)}"
+				style="flex:1;min-width:180px"></div>
+			<div class="text-muted small" style="margin-left:auto">
+				${__("{0} routes · {1} kg", [route_count, total])}
+			</div>
+			<button type="button" class="btn btn-default btn-xs"
+				data-cloth-program-edit="${frappe.utils.escape_html(edit_key)}"
+				aria-expanded="false">
+				${__("Edit")}
+			</button>
+		</div>`;
 }
 
 function yarn_recipe_fields() {

@@ -8,6 +8,7 @@ received from knitting, so the yarn deliverable must never be colour-stamped.
 Fixtures follow test_cloth_program's pattern — everything created inside the
 rolled-back test transaction, no frappe.db.commit()."""
 
+from unittest import TestCase
 from unittest.mock import patch
 
 import frappe
@@ -23,9 +24,15 @@ from essdee_yrp.api.test_cloth_program import (
     _reset_cpd,
 )
 from essdee_yrp.api.work_order import (
+    _consolidate_fabric_rows,
+    _selected_lot_fabrics,
     calculate_fabric_deliverables,
     get_fabric_deliverable_context,
     get_work_order_selection_context,
+)
+from essdee_yrp.fabric_reference import (
+    get_reference_allocations,
+    scale_reference_allocations,
 )
 
 
@@ -63,6 +70,89 @@ def _ensure_default_received_type():
                 rt.set(f.fieldname, "Accepted")
         rt.insert(ignore_permissions=True)
     frappe.db.set_single_value("YRP Stock Settings", "default_received_type", "Accepted")
+
+
+class TestSelectedLotFabrics(TestCase):
+    def test_exact_production_detail_excludes_sibling_cloths(self):
+        selected = frappe._dict(
+            name="selected",
+            cloth_item="36's GL Dyed Cloth",
+            production_detail="36's GL Dyed Cloth-3",
+        )
+        sibling = frappe._dict(
+            name="sibling",
+            cloth_item="30's GL",
+            production_detail="30's GL-2",
+        )
+        wo = frappe._dict(
+            item="36's GL Dyed Cloth",
+            production_detail="36's GL Dyed Cloth-3",
+        )
+        lot = frappe._dict(lot_fabric_details=[selected, sibling])
+
+        self.assertEqual(_selected_lot_fabrics(wo, lot), [selected])
+
+    def test_item_fallback_for_legacy_work_order(self):
+        selected = frappe._dict(
+            name="selected",
+            cloth_item="36's GL Dyed Cloth",
+            production_detail="36's GL Dyed Cloth-3",
+        )
+        sibling = frappe._dict(
+            name="sibling",
+            cloth_item="30's GL",
+            production_detail="30's GL-2",
+        )
+        wo = frappe._dict(item="36's GL Dyed Cloth")
+        lot = frappe._dict(lot_fabric_details=[selected, sibling])
+
+        self.assertEqual(_selected_lot_fabrics(wo, lot), [selected])
+
+
+class TestFabricRowConsolidation(TestCase):
+    def test_same_physical_variant_is_stored_once_with_route_allocations(self):
+        rows = [
+            {
+                "item_variant": "Yarn 30's GL",
+                "qty": 10,
+                "pending_quantity": 10,
+                "uom": "Kg",
+                "received_type": "Accepted",
+                "is_calculated": 1,
+                "fabric_reference_variant": "Cloth-36-Grey",
+            },
+            {
+                "item_variant": "Yarn 30's GL",
+                "qty": 15,
+                "pending_quantity": 15,
+                "uom": "Kg",
+                "received_type": "Accepted",
+                "is_calculated": 1,
+                "fabric_reference_variant": "Cloth-36-Red",
+            },
+        ]
+
+        result = _consolidate_fabric_rows(
+            rows, "Work Order Deliverables", supports_allocations=True
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["qty"], 25)
+        self.assertEqual(result[0]["pending_quantity"], 25)
+        self.assertIsNone(result[0]["fabric_reference_variant"])
+        self.assertEqual(
+            get_reference_allocations(result[0]),
+            {"Cloth-36-Grey": 10, "Cloth-36-Red": 15},
+        )
+
+    def test_partial_receipt_is_split_by_stored_route_weights(self):
+        self.assertEqual(
+            scale_reference_allocations(
+                {"Cloth-36-Grey": 40, "Cloth-36-Red": 60},
+                25,
+            ),
+            {"Cloth-36-Grey": 10, "Cloth-36-Red": 15},
+        )
 
 
 class TestCalculateFabricDeliverables(IntegrationTestCase):

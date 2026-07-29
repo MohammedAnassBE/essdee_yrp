@@ -163,6 +163,7 @@ function mount_calculated_work_order_editors(frm) {
 				allowCreate: false,
 				allowEdit: false,
 				allowRemove: false,
+				aggregateDisplay: true,
 			},
 		);
 		let data = frm.doc.__onload?.[config.payload_field] || frm.doc[config.payload_field] || [];
@@ -194,24 +195,6 @@ function open_fabric_calculate(frm) {
 			render_fabric_dialog(frm, ctx);
 		},
 	});
-}
-
-// One planning line under each qty input. null/undefined figures are hidden
-// (e.g. "available" when the preceding fabric step is not managed in this Lot).
-function planning_description(kind, qr) {
-	const kg = (v) => `${flt(v, 3)} kg`;
-	const parts = [];
-	if (kind === "knitting") {
-		parts.push(`${__("Program")} ${kg(qr.program)}`);
-		if (flt(qr.received)) parts.push(`${__("Received")} ${kg(qr.received)}`);
-		parts.push(`${__("Ordered")} ${kg(qr.ordered)}`);
-		parts.push(`${__("Balance")} ${kg(qr.balance)}`);
-	} else if (kind === "dyeing" || kind === "compacting" || kind === "conversion") {
-		if (flt(qr.plan)) parts.push(`${__("Plan")} ${kg(qr.plan)}`);
-		parts.push(`${__("Ordered")} ${kg(qr.ordered)}`);
-		if (qr.available != null) parts.push(`${__("Previous stage available")} ${kg(qr.available)}`);
-	}
-	return parts.length ? parts.join(" · ") : undefined;
 }
 
 // Non-blocking (production_api stance): over-balance warns, never blocks —
@@ -309,23 +292,6 @@ function render_fabric_dialog(frm, ctx) {
 			&& (!reference_routed || (row.qty_rows || []).some((qr) => !qr.knit_colour));
 
 		if (row.kind === "knitting") {
-			if (reference_routed) {
-				fields.push({
-					fieldtype: "HTML",
-					options: `<div class="text-muted small">${__(
-						"Each target colour and Dia uses its own yarn recipe. The recipe is shown below its quantity."
-					)}</div>`,
-				});
-			} else {
-				const yarn_blend = (row.yarns || [])
-					.map((y) => `${frappe.utils.escape_html(y.yarn_item)} ${flt(y.ratio, 3)}%`)
-					.join(" + ");
-				fields.push({
-					fieldtype: "HTML",
-					options: `<div class="text-muted small">${__("Yarn blend")}: <b>${yarn_blend}</b>
-						&nbsp;·&nbsp; 1 kg ${__("blended yarn")} &rarr; ${row.ratio} kg ${__("cloth")}</div>`,
-				});
-			}
 			if (needs_colour_picker) {
 				// too many colour choices for columns — single-colour fallback
 				fields.push({
@@ -362,7 +328,6 @@ function render_fabric_dialog(frm, ctx) {
 					fields.push({
 						fieldtype: "Float", label: qr.label, fieldname,
 						default: is_default_output && qr.prefill ? qr.prefill : undefined,
-						description: ci === 0 ? planning_description(row.kind, qr) : undefined,
 						onchange: () => recompute_yarn(i),
 					});
 					manifest.push({
@@ -379,26 +344,9 @@ function render_fabric_dialog(frm, ctx) {
 			// the primary_action payload is unchanged.
 			const push_qty_field = (qr, j, label) => {
 				const fieldname = `qty_${i}_${j}`;
-				const yarn_recipe = (qr.yarns || [])
-					.map((y) => `${frappe.utils.escape_html(y.yarn_item)} ${flt(y.ratio, 3)}%`)
-					.join(" + ");
-				const plan_description = planning_description(row.kind, qr);
-				const knitting_output = row.kind === "knitting" && reference_routed
-					? [qr.knit_colour, qr.knit_dia]
-						.filter(Boolean)
-						.map((value) => frappe.utils.escape_html(value))
-						.join(" · ")
-					: null;
 				fields.push({
 					fieldtype: "Float", label, fieldname,
 					default: qr.prefill || undefined,
-					description: [
-						knitting_output
-							? `<b>${__("Received from knitting as")}:</b> ${knitting_output}`
-							: null,
-						plan_description,
-						yarn_recipe ? `<b>${__("Yarn")}:</b> ${yarn_recipe}` : null,
-					].filter(Boolean).join("<br>") || undefined,
 					onchange: row.kind === "knitting" ? () => recompute_yarn(i) : undefined,
 				});
 				manifest.push({
@@ -454,7 +402,6 @@ function render_fabric_dialog(frm, ctx) {
 		if (row.kind === "knitting" && !reference_routed && (row.yarns || []).length <= 1) {
 			fields.push({
 				fieldtype: "Float", label: __("Yarn (deliverable) Kg"), fieldname: `yarn_qty_${i}`,
-				description: __("Auto: total cloth ÷ {0}. Edit only if reality differs.", [row.ratio]),
 			});
 		} else if (row.kind === "knitting" && !reference_routed) {
 			fields.push({
@@ -467,7 +414,6 @@ function render_fabric_dialog(frm, ctx) {
 					label: `${yarn.yarn_item} (${flt(yarn.ratio, 3)}%)`,
 					fieldname: `yarn_qty_${i}_${yi}`,
 					read_only: 1,
-					description: __("Calculated from total cloth, the knitting yield, and this yarn's blend ratio."),
 				});
 			});
 		}

@@ -9,6 +9,7 @@ Entered rows become `output_demand` for the base engine (`get_process_io`):
 deliverables are the engine's scaled inputs; receivables are the entered rows
 themselves (1:1 v1 — the Process master's waste/excess applies later)."""
 
+import json
 import re
 
 import frappe
@@ -25,6 +26,10 @@ from essdee_yrp.fabric_ipd import (
 from essdee_yrp.fabric_program import (
 	get_greige_colour,
 	get_knitting_output_colour,
+)
+from essdee_yrp.fabric_reference import (
+	get_reference_allocations,
+	serialise_reference_allocations,
 )
 from essdee_yrp.ipd_validations import get_attribute_mapping, get_ipd_attribute_values
 
@@ -84,10 +89,115 @@ def _conversion_consumes(ipd, process_name):
 	return False
 
 
+def _selected_lot_fabrics(wo, lot):
+	"""Return only the Lot fabric selected on this Work Order.
+
+	`production_detail` identifies the exact Lot Fabric Detail selection. Item is
+	only a fallback for legacy Work Orders that predate that field; an entirely
+	unselected legacy Work Order retains the old all-fabrics behaviour.
+	"""
+	fabrics = list(lot.get("lot_fabric_details") or [])
+	if wo.get("production_detail"):
+		return [
+			fabric for fabric in fabrics
+			if fabric.get("production_detail") == wo.get("production_detail")
+		]
+	if wo.get("item"):
+		return [
+			fabric for fabric in fabrics
+			if fabric.get("cloth_item") == wo.get("item")
+		]
+	return fabrics
+
+
+_CHILD_SYSTEM_FIELDS = {
+	"doctype", "name", "owner", "creation", "modified", "modified_by",
+	"docstatus", "idx", "parent", "parentfield", "parenttype",
+	"table_index", "row_index",
+}
+_CHILD_ADDITIVE_FIELDS = {
+	"qty", "pending_quantity", "secondary_qty", "stock_update",
+	"cancelled_quantity", "total_cost",
+}
+
+
+def _consolidate_fabric_rows(rows, child_doctype, supports_allocations=None):
+	"""Persist one row per physical Item Variant while retaining route splits.
+
+	The popup has one line per finished-colour route, but several routes can
+	consume/produce the same physical variant (all colours knit as the same
+	Greige Dia, or all routes consume the same yarn). Store that physical row
+	once and keep the finished-route quantities in hidden JSON metadata.
+	"""
+	if not rows:
+		return []
+	if supports_allocations is None:
+		supports_allocations = frappe.db.has_column(
+			child_doctype, "fabric_reference_allocations"
+		)
+	if not supports_allocations:
+		# A pre-migrate site cannot safely collapse rows because the legacy Link
+		# can represent only one route.
+		return [
+			row.as_dict() if hasattr(row, "as_dict") else dict(row)
+			for row in rows
+		]
+
+	grouped = []
+	by_identity = {}
+	allocations_by_identity = {}
+
+	for row in rows:
+		source = row.as_dict() if hasattr(row, "as_dict") else dict(row)
+		payload = {
+			key: value
+			for key, value in source.items()
+			if key not in _CHILD_SYSTEM_FIELDS
+		}
+		allocations = get_reference_allocations(payload, payload.get("qty"))
+		payload.pop("fabric_reference_variant", None)
+		payload.pop("fabric_reference_allocations", None)
+
+		identity_payload = {
+			key: value
+			for key, value in payload.items()
+			if key not in _CHILD_ADDITIVE_FIELDS
+		}
+		identity = json.dumps(
+			identity_payload, sort_keys=True, default=str, separators=(",", ":")
+		)
+		target = by_identity.get(identity)
+		if target is None:
+			target = payload
+			by_identity[identity] = target
+			allocations_by_identity[identity] = {}
+			grouped.append(target)
+		else:
+			for fieldname in _CHILD_ADDITIVE_FIELDS:
+				if fieldname in target or fieldname in payload:
+					target[fieldname] = flt(target.get(fieldname)) + flt(payload.get(fieldname))
+
+		target_allocations = allocations_by_identity[identity]
+		for reference, qty in allocations.items():
+			target_allocations[reference] = target_allocations.get(reference, 0) + flt(qty)
+
+	for identity, target in by_identity.items():
+		for fieldname in ("qty", "pending_quantity", "secondary_qty", "stock_update", "cancelled_quantity"):
+			if fieldname in target:
+				target[fieldname] = round(flt(target.get(fieldname)), 3)
+		allocations = allocations_by_identity[identity]
+		target["fabric_reference_allocations"] = serialise_reference_allocations(
+			allocations, target.get("qty")
+		)
+		target["fabric_reference_variant"] = (
+			next(iter(allocations)) if len(allocations) == 1 else None
+		)
+	return grouped
+
+
 @frappe.whitelist()
 def get_fabric_deliverable_context(work_order):
-	"""Popup context: one entry per Lot Fabric Detail whose IPD maps this WO's
-	process to knitting/dyeing/compacting. Empty rows => not a fabric process."""
+	"""Popup context for this WO's selected Lot fabric and process."""
 	wo = frappe.get_doc("Work Order", work_order)
 	wo.check_permission("read")
 	lot = _get_lot(wo)
@@ -95,7 +205,7 @@ def get_fabric_deliverable_context(work_order):
 	rows = []
 	warnings = []
 	kind = None
-	for fabric in lot.get("lot_fabric_details") or []:
+	for fabric in _selected_lot_fabrics(wo, lot):
 		if not fabric.production_detail:
 			continue
 		ipd = frappe.get_cached_doc("Item Production Detail", fabric.production_detail)
@@ -790,7 +900,8 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 		frappe.throw(_("Calculate can only update a draft Work Order."))
 
 	lot = _get_lot(wo)
-	fabric_rows = {f.name: f for f in lot.get("lot_fabric_details") or []}
+	fabric_rows = {f.name: f for f in _selected_lot_fabrics(wo, lot)}
+	all_fabric_rows = {f.name for f in lot.get("lot_fabric_details") or []}
 	default_received_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
 	if not default_received_type:
 		frappe.throw(_("Set Default Received Type in YRP Stock Settings first."))
@@ -814,6 +925,12 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 	for entry in rows:
 		fabric = fabric_rows.get(entry.get("fabric_row"))
 		if not fabric:
+			if entry.get("fabric_row") in all_fabric_rows:
+				frappe.throw(
+					_("Lot fabric row {0} is not selected on this Work Order.").format(
+						entry.get("fabric_row")
+					)
+				)
 			frappe.throw(_("Unknown Lot fabric row {0}.").format(entry.get("fabric_row")))
 		ipd = frappe.get_cached_doc("Item Production Detail", fabric.production_detail)
 		kind = _step_kind(ipd, get_fabric_step(ipd, wo.process_name))
@@ -978,6 +1095,13 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 
 	if not deliverables:
 		frappe.throw(_("Enter a quantity greater than zero for at least one row."))
+
+	deliverables = _consolidate_fabric_rows(
+		deliverables, "Work Order Deliverables"
+	)
+	receivables = _consolidate_fabric_rows(
+		receivables, "Work Order Receivables"
+	)
 
 	# Every calculated row is its OWN logical row for the Vue item editors —
 	# group_items_for_ui buckets by row_index, and rows without one collapse

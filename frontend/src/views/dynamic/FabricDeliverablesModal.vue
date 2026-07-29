@@ -41,14 +41,6 @@
 					Consumes: <b>{{ row.input_item }}</b> → produces <b>{{ row.cloth_item }}</b>
 				</div>
 				<template v-if="row.kind === 'knitting'">
-					<div v-if="row.reference_routed" class="fc-note">
-						Each target colour and Dia uses its own yarn recipe. The recipe is shown below its quantity.
-					</div>
-					<div v-else class="fc-note">
-						Yarn blend:
-						<b>{{ (row.yarns || []).map((y) => `${y.yarn_item} ${y.ratio}%`).join(" + ") }}</b>
-						· 1 kg blended yarn → {{ row.ratio }} kg cloth
-					</div>
 					<div v-if="needsColourPicker(row)" class="fc-field">
 						<label class="field-label">Cloth Colour *</label>
 						<!-- too many colour choices for columns — single-colour fallback.
@@ -87,9 +79,6 @@
 								placeholder="0"
 								@update:modelValue="recomputeYarn(i)"
 							/>
-							<small v-if="colour === row.colour_options[0] && planningLine(row.kind, qr)" class="fc-note-inline">
-								{{ planningLine(row.kind, qr) }}
-							</small>
 						</div>
 					</div>
 				</div>
@@ -117,15 +106,6 @@
 								fluid
 								placeholder="0"
 							/>
-							<small v-if="planningLine(row.kind, it.qr)" class="fc-note-inline">
-								{{ planningLine(row.kind, it.qr) }}
-							</small>
-							<small v-if="routeLabel(row, it.qr)" class="fc-route">
-								Received from knitting as: {{ routeLabel(row, it.qr) }}
-							</small>
-							<small v-if="recipeLabel(it.qr)" class="fc-recipe">
-								Yarn: {{ recipeLabel(it.qr) }}
-							</small>
 						</div>
 					</div>
 				</div>
@@ -141,15 +121,6 @@
 							placeholder="0"
 							@update:modelValue="row.kind === 'knitting' && recomputeYarn(i)"
 						/>
-						<small v-if="planningLine(row.kind, qr)" class="fc-note-inline">
-							{{ planningLine(row.kind, qr) }}
-						</small>
-						<small v-if="routeLabel(row, qr)" class="fc-route">
-							Received from knitting as: {{ routeLabel(row, qr) }}
-						</small>
-						<small v-if="recipeLabel(qr)" class="fc-recipe">
-							Yarn: {{ recipeLabel(qr) }}
-						</small>
 					</div>
 				</template>
 
@@ -165,9 +136,6 @@
 						fluid
 						placeholder="0"
 					/>
-					<small class="fc-note-inline">
-						Auto: total cloth ÷ {{ row.ratio }}. Edit only if reality differs.
-					</small>
 				</div>
 				<div v-else-if="row.kind === 'knitting' && !row.reference_routed" class="fc-yarn-breakdown">
 					<div class="field-label">Calculated yarn deliverables</div>
@@ -212,8 +180,6 @@
  *   column per section (bold heading, row_label per input), else stacked
  *   section blocks; small/flat lists keep the flat label list. `section` /
  *   `row_label` come verbatim from the server — no client re-derivation.
- * - planning line per input = Desk's planning_description (null figures
- *   hidden, e.g. `available` when a preceding fabric step is not Lot-managed).
  * - Non-blocking over-balance warning (production_api stance): knitting /
  *   dyeing per-dia sums vs balance / previous-stage availability, compacting per row.
  * Adapted (widgets only): frappe.ui.Dialog → PrimeVue Dialog, Float →
@@ -319,24 +285,6 @@ async function searchColourValues(row, q) {
 	return searchLink("Item Attribute Value", q, { attribute_name: "Colour" })
 }
 
-// One planning line per qty row (mirrors the Desk dialog's field description).
-// null figures are hidden — e.g. "available" on conversion steps (previous
-// stage not tracked item-aware). `kg` rounds to 3 decimals like Desk's flt.
-function planningLine(kind, qr) {
-	const kg = (v) => `${Math.round((Number(v) || 0) * 1000) / 1000} kg`
-	const parts = []
-	if (kind === "knitting") {
-		parts.push(`Program ${kg(qr.program)}`)
-		if (Number(qr.received)) parts.push(`Received ${kg(qr.received)}`)
-		parts.push(`Ordered ${kg(qr.ordered)}`, `Balance ${kg(qr.balance)}`)
-	} else if (kind === "dyeing" || kind === "compacting" || kind === "conversion") {
-		if (Number(qr.plan)) parts.push(`Plan ${kg(qr.plan)}`)
-		parts.push(`Ordered ${kg(qr.ordered)}`)
-		if (qr.available != null) parts.push(`Previous stage available ${kg(qr.available)}`)
-	}
-	return parts.join(" · ")
-}
-
 const MAX_COLOUR_COLUMNS = 6
 
 function isMultiColour(row) {
@@ -349,17 +297,6 @@ function needsColourPicker(row) {
 	if (row.kind !== "knitting" || !row.has_colour || isMultiColour(row)) return false
 	if (!row.reference_routed) return true
 	return (row.qty_rows || []).some((qr) => !qr.knit_colour)
-}
-
-function recipeLabel(qr) {
-	return (qr.yarns || [])
-		.map((yarn) => `${yarn.yarn_item} ${Math.round((Number(yarn.ratio) || 0) * 1000) / 1000}%`)
-		.join(" + ")
-}
-
-function routeLabel(row, qr) {
-	if (row.kind !== "knitting" || !row.reference_routed) return ""
-	return [qr.knit_colour, qr.knit_dia].filter(Boolean).join(" · ")
 }
 
 // Colour-section layout descriptor (mirrors the Desk's `sectionable` branch):
@@ -547,20 +484,6 @@ async function onApply() {
 	padding: 8px 14px 0;
 	font-size: 12.5px;
 	color: var(--esd-muted);
-}
-.fc-note-inline {
-	color: var(--esd-muted);
-	font-size: 11.5px;
-}
-.fc-recipe {
-	color: var(--esd-text);
-	font-size: 11.5px;
-	font-weight: 500;
-}
-.fc-route {
-	color: var(--esd-primary);
-	font-size: 11.5px;
-	font-weight: 600;
 }
 .fc-field {
 	display: flex;

@@ -246,6 +246,8 @@ def upsert_item(data):
 	# Items whose item_group == DEFAULT_ITEM_GROUP and reassign on the source.
 	if not data.get("item_group") and frappe.db.exists("Item Group", DEFAULT_ITEM_GROUP):
 		data["item_group"] = DEFAULT_ITEM_GROUP
+	from essdee_yrp.item_validations import validate_sync_payload
+	validate_sync_payload(data)
 	return upsert_filtered_doc(data)
 
 
@@ -510,7 +512,10 @@ def map_ipd_colour_yarn_row(row, source_context=None):
 
 
 def upsert_production_order(data, event=None):
+	from essdee_yrp.setup import ensure_yrp_production_order_settings
+
 	source_context = get_source_context(data, event)
+	ensure_yrp_production_order_settings()
 	validate_yrp_settings_for_production_order()
 	validate_required_link("Item", data.get("item"), source_context)
 

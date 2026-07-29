@@ -201,23 +201,30 @@ def calculate_cloth(ipd_doc, variant_attrs, qty, cloth_combination, stitching_co
     if stitching_combination["stitching_attribute"] in cloth_combination["cutting_attributes"]:
         for stiching_attr, attr_qty in stitching_combination["stitching_attribute_count"].items():
             attrs[ipd_doc.stiching_attribute] = stiching_attr
-            cloth_key = get_key(attrs, cloth_combination["cloth_attributes"])
             stich_key = attrs[ipd_doc.packing_attribute]
             if ipd_doc.is_set_item:
                 stich_key = (stich_key, attrs[ipd_doc.set_item_attribute])
             panel_colours = stitching_combination["stitching_combination"].get(stich_key, {})
             if stiching_attr in panel_colours:
                 cloth_colour = panel_colours[stiching_attr]
-                cutting_attrs = attrs.copy()
+                combination_attrs = attrs.copy()
                 if _uses_panel_colour_cutting(ipd_doc):
-                    cutting_attrs[ipd_doc.packing_attribute] = cloth_colour
+                    # Schema 2+ stores both the consumption row and its cloth
+                    # mapping under the colour physically used by this panel.
+                    # The garment colour can differ (for example Navy garment
+                    # -> G Mel panel), so using the garment colour here makes
+                    # a valid ("panel", "G Mel") cloth row look missing.
+                    combination_attrs[ipd_doc.packing_attribute] = cloth_colour
                 cutting_key = get_key(
-                    cutting_attrs, cloth_combination["cutting_attributes"]
+                    combination_attrs, cloth_combination["cutting_attributes"]
                 )
                 cutting_row = cloth_combination["cutting_combination"].get(cutting_key)
                 if not cutting_row:
                     continue
                 dia, weight = cutting_row
+                cloth_key = get_key(
+                    combination_attrs, cloth_combination["cloth_attributes"]
+                )
                 cloth_type = cloth_combination["cloth_combination"].get(cloth_key)
                 if not cloth_type:
                     frappe.throw(_(
@@ -315,9 +322,15 @@ def _validate_garment_ipd(item_detail):
             "before building cloth programs.").format(item_detail.get("name") or ""))
 
 
-def compute_cloth_demand(lot_name):
+def compute_cloth_demand(lot_name, apply_allowance=True):
     """Phase 1 SPLIT entrypoint: {(cloth Item, dia, colour): kg} for a garment Lot,
-    driven by its garment IPD's Cutting tab and the Lot's lot_order_details."""
+    driven by its garment IPD's Cutting tab and the Lot's lot_order_details.
+
+    ``apply_allowance=False`` returns the exact decimal garment demand. Cloth
+    Program uses that mode because its popup percentage is the operator's sole
+    requested uplift; applying MRP Settings allowance first would add a hidden
+    second excess and round every route to whole kilograms.
+    """
     lot_doc = frappe.get_cached_doc("Lot", lot_name)
     item_detail = frappe.get_cached_doc("Item Production Detail", lot_doc.production_detail)
     _validate_garment_ipd(item_detail)
@@ -352,6 +365,8 @@ def compute_cloth_demand(lot_name):
 
     demand = _aggregate_demand(
         item_detail, variant_rows, cloth_combination, stitching_combination, cloth_label_to_item)
+    if not apply_allowance:
+        return demand
     return _apply_cloth_allowance(
         demand,
         frappe.db.get_single_value("MRP Settings", "cloth_allowance_percentage"),

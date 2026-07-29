@@ -29,7 +29,11 @@ from frappe import _
 from frappe.utils import cint, flt
 
 from essdee_yrp.api.work_order import _guard_not_modified
-from essdee_yrp.fabric_ipd import synthesize_fabric_processes_from_tabs
+from essdee_yrp.fabric_ipd import (
+    FABRIC_COLOUR_ATTRIBUTE,
+    FABRIC_DIA_ATTRIBUTE,
+    synthesize_fabric_processes_from_tabs,
+)
 from essdee_yrp.fabric_program import (
     get_greige_colour,
     get_knitting_output_colour_map,
@@ -78,6 +82,35 @@ def _normalize_yarns(selection, required=True):
             _("Yarn Ratio total must be exactly 100. Current total is {0}.").format(flt(total, 3))
         )
     return yarns
+
+
+def _item_yarns_for_cloth(cloth_item, required=False):
+    """Return the reusable yarn recipe stored on the cloth Item master."""
+    item = frappe.get_cached_doc("Item", cloth_item)
+    if item.get("yarn_ratio_details") and not item.get("is_cloth_item"):
+        frappe.throw(
+            _("Enable 'Is Cloth Item' on Item {0} before using its Yarn Ratio.").format(
+                cloth_item
+            )
+        )
+    rows = [
+        {
+            "yarn_item": row.get("yarn_item"),
+            "ratio": flt(row.get("ratio")),
+        }
+        for row in (item.get("yarn_ratio_details") or [])
+        if row.get("yarn_item")
+    ]
+    if not rows:
+        if required:
+            frappe.throw(
+                _(
+                    "Cloth Item {0} has no Yarn Ratio. Open the Item, enable "
+                    "'Is Cloth Item', and add a yarn recipe totalling 100%."
+                ).format(cloth_item)
+            )
+        return []
+    return _normalize_yarns({"yarns": rows})
 
 
 def _recipe_map(rows):
@@ -784,8 +817,40 @@ def _requirement_payload(by_cloth):
     return entries
 
 
+def _exact_program_base_weight(row, raw_demand):
+    """Recover the exact final-route kg before the requirement table rounds it.
+
+    Lot Fabric Requirement intentionally stores three decimals. The plan uses
+    those persisted rows, so multiplying its pre-seeded program by a popup
+    excess causes a second rounding step. A program row's reference variant
+    identifies the exact final Dia/Colour route; use the original demand for
+    that route and round only after applying the popup percentage.
+    """
+    final_dia = row.get("dia")
+    final_colour = row.get("colour") or None
+    reference = row.get("reference_item_variant")
+    if reference:
+        variant = frappe.get_cached_doc("Item Variant", reference)
+        attrs = {
+            value.attribute: value.attribute_value
+            for value in variant.get("attributes") or []
+        }
+        final_dia = attrs.get(FABRIC_DIA_ATTRIBUTE) or final_dia
+        final_colour = attrs.get(FABRIC_COLOUR_ATTRIBUTE) or final_colour
+
+    routes = raw_demand.get(row.get("cloth_item")) or {}
+    for key in (
+        (final_dia, final_colour),
+        (final_dia, final_colour or ""),
+        (final_dia, None),
+    ):
+        if key in routes:
+            return flt(routes[key])
+    return flt(row.get("weight"))
+
+
 @frappe.whitelist()
-def build_cloth_programs(lot, selections, modified=None):
+def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
     """Orchestrator entrypoint (Desk button + /web modal). selections:
     [{cloth_item, yarns:[{yarn_item,ratio}], yarn_item, knitting_process,
     dyeing_process, cloth_per_kg_yarn,
@@ -797,8 +862,15 @@ def build_cloth_programs(lot, selections, modified=None):
     lot_doc = frappe.get_doc("Lot", lot)
     lot_doc.check_permission("write")
     _guard_not_modified(lot_doc, modified)
+    excess_percentage = flt(excess_percentage)
+    if excess_percentage < 0:
+        frappe.throw(_("Knitting program excess percentage cannot be negative."))
+    excess_factor = 1 + excess_percentage / 100
 
-    demand = compute_cloth_demand(lot_doc.name)
+    # Popup excess is authoritative for this build. Start from the exact
+    # garment demand so MRP Settings cloth allowance is not silently stacked
+    # before the operator-entered percentage.
+    demand = compute_cloth_demand(lot_doc.name, apply_allowance=False)
     if not demand:
         frappe.throw(_("This lot has no cloth demand. Run 'Calculate Order Items' first, then retry."))
 
@@ -817,12 +889,26 @@ def build_cloth_programs(lot, selections, modified=None):
         selection = sel_by_cloth.get(cloth)
         if not selection:
             continue
+        # The Item master is the source of truth for yarn composition. Legacy
+        # callers may still submit a recipe only while an old cloth Item has not
+        # yet been configured; current Desk and /web callers submit none.
+        item_yarns = _item_yarns_for_cloth(cloth)
         required_colours = list(
             dict.fromkeys(colour for (_dia, colour) in tuples if colour)
         )
         if required_colours:
-            colour_recipes = _normalize_colour_yarn_recipes(
-                selection, required_colours
+            colour_recipes = (
+                [
+                    {
+                        "colour": colour,
+                        "yarn_item": row["yarn_item"],
+                        "ratio": row["ratio"],
+                    }
+                    for colour in required_colours
+                    for row in item_yarns
+                ]
+                if item_yarns
+                else _normalize_colour_yarn_recipes(selection, required_colours)
             )
             selection["colour_yarn_recipes"] = colour_recipes
             selection["fabric_routes"] = _normalize_fabric_routes(
@@ -855,7 +941,7 @@ def build_cloth_programs(lot, selections, modified=None):
             selection["colour_yarn_recipes"] = []
             selection["knitting_output_colours"] = []
             selection["fabric_routes"] = []
-            selection["yarns"] = _normalize_yarns(selection)
+            selection["yarns"] = item_yarns or _normalize_yarns(selection)
             selection["yarn_item"] = selection["yarns"][0]["yarn_item"]
         selection["production_detail"] = current_cpd.get(cloth)
         route_map = _fabric_route_map(selection)
@@ -886,9 +972,49 @@ def build_cloth_programs(lot, selections, modified=None):
     if not built:
         frappe.throw(_("No selected cloth matches the lot's cloth demand."))
 
+    # Build is authoritative for the calculated knitting program. Drop old
+    # unreceived rows and zero received rows so the plan pre-seed replaces their
+    # quantity without ever losing receipt tracking.
+    lot_doc.set("lot_fabric_programs", [
+        row for row in lot_doc.get("lot_fabric_programs") or []
+        if row.cloth_item not in payload or flt(row.received_weight)
+    ])
+    for row in lot_doc.get("lot_fabric_programs") or []:
+        if row.cloth_item in payload:
+            row.weight = 0
+    lot_doc.flags.force_fabric_plan_rebuild = True
     lot_doc.fabric_requirement_details = frappe.as_json(_requirement_payload(payload))
     lot_doc.save(ignore_permissions=True)
-    return {"cloths_built": len(built), "programs": built}
+    for row in frappe.get_all(
+        "Lot Fabric Program",
+        filters={"parent": lot_doc.name, "parenttype": "Lot"},
+        fields=[
+            "name",
+            "cloth_item",
+            "dia",
+            "colour",
+            "reference_item_variant",
+            "weight",
+        ],
+    ):
+        if row.cloth_item in payload:
+            base_weight = _exact_program_base_weight(row, payload)
+            frappe.db.set_value(
+                "Lot Fabric Program",
+                row.name,
+                "weight",
+                flt(
+                    base_weight * excess_factor,
+                    3,
+                    "Commercial Rounding",
+                ),
+                update_modified=False,
+            )
+    return {
+        "cloths_built": len(built),
+        "programs": built,
+        "excess_percentage": excess_percentage,
+    }
 
 
 def _cloth_rows_from_ipd(ipd):
@@ -975,6 +1101,7 @@ def _cloth_program_defaults():
     defaults = {
         "knitting_process": "",
         "dyeing_process": "",
+        "knitting_output_colour": "",
         "compacting_process": "",
         "cloth_per_kg_yarn": 1.0,
     }
@@ -985,6 +1112,9 @@ def _cloth_program_defaults():
     defaults.update({
         "knitting_process": settings.get("default_knitting_process") or "",
         "dyeing_process": settings.get("default_dyeing_process") or "",
+        "knitting_output_colour": (
+            settings.get("default_knitting_output_colour") or ""
+        ),
         "compacting_process": settings.get("default_compacting_process") or "",
         "cloth_per_kg_yarn": (
             flt(settings.get("default_cloth_per_kg_yarn")) or 1.0
@@ -1044,7 +1174,7 @@ def get_cloth_program_context(lot):
         return {"cloths": [], "defaults": _cloth_program_defaults()}
     ipd = frappe.get_cached_doc("Item Production Detail", lot_doc.production_detail)
     cloths = _cloth_rows_from_ipd(ipd)
-    demand = compute_cloth_demand(lot_doc.name)
+    demand = compute_cloth_demand(lot_doc.name, apply_allowance=False)
     demanded = {cloth for (cloth, _dia, _colour) in demand}
     demanded_colours = {}
     demanded_routes = {}
@@ -1074,13 +1204,16 @@ def get_cloth_program_context(lot):
         c["production_detail"] = cpd_name
         c["required_colours"] = demanded_colours.get(c["cloth_item"], [])
         c["required_routes"] = demanded_routes.get(c["cloth_item"], [])
+        c["item_yarns"] = _item_yarns_for_cloth(c["cloth_item"])
         c["default_yarns"] = _default_yarns_for_cloth(c["cloth_item"], cpd_name)
         c["default_yarn"] = (
             c["default_yarns"][0]["yarn_item"] if c["default_yarns"] else ""
         )
         cpd = frappe.get_cached_doc("Item Production Detail", cpd_name) if cpd_name else None
-        c["profile"] = (
-            _profile_from_cpd(cpd) if cpd else {}
+        c["profile"] = _profile_from_cpd(cpd) if cpd else (
+            _yarn_profile(c["item_yarns"][0]["yarn_item"])
+            if c["item_yarns"]
+            else {}
         )
         c["colour_yarn_recipes"] = [
             {

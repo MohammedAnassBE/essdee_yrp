@@ -61,8 +61,8 @@
 <template>
 	<div class="stock-grid-editor">
 		<!-- ── Existing logical items (grouped pivot view) ── -->
-		<div v-if="groups.length" class="grid-groups">
-			<div v-for="(group, gi) in groups" :key="'g-' + gi" class="grid-group">
+		<div v-if="displayGroups.length" class="grid-groups">
+			<div v-for="(group, gi) in displayGroups" :key="'g-' + gi" class="grid-group">
 				<DataTable :value="group.items" class="esd-table pivot-dt" :rowHover="false" :tableStyle="{ tableLayout: 'fixed', minWidth: '100%' }">
 					<Column header="#" :style="{ width: '40px' }">
 						<template #body="{ index }">{{ index + 1 }}</template>
@@ -105,7 +105,7 @@
 						>
 							<template #body="{ data }">
 								<InputNumber
-									v-if="editable && data.values[pv]"
+									v-if="editable && !aggregateDisplay && data.values[pv]"
 									v-model="data.values[pv].qty"
 									:min="0"
 									:minFractionDigits="0"
@@ -134,7 +134,7 @@
 						<Column header="Qty" :style="{ width: singleColWidth }">
 							<template #body="{ data }">
 								<InputNumber
-									v-if="editable && data.values.default"
+									v-if="editable && !aggregateDisplay && data.values.default"
 									v-model="data.values.default.qty"
 									:min="0"
 									:minFractionDigits="0"
@@ -444,6 +444,7 @@ import AutoComplete from "primevue/autocomplete"
 import Select from "primevue/select"
 import ToggleSwitch from "primevue/toggleswitch"
 import Tooltip from "primevue/tooltip"
+import { groupItemsForDisplay } from "@yrp/web-engine"
 import { callMethod, searchLink } from "@/api/client"
 import { useAppToast } from "@/composables/useToast"
 
@@ -495,6 +496,10 @@ const props = defineProps({
 	// for vouchers whose item set is derived from a parent doc (DC's items
 	// come from the WO; the user only adjusts qtys).
 	lockedItems: { type: Boolean, default: false },
+	// Calculated fabric WOs retain one source row per route reference for
+	// tracking, but present identical physical variants as one summed row.
+	// Display-only: getItems() continues returning the untouched source groups.
+	aggregateDisplay: { type: Boolean, default: false },
 	// dcEntry.qtyControl (Delivery Challan entry, item 5): how the primary qty
 	// inputs render. "input" (default) → today's plain field, byte-identical.
 	// "stepper" → PrimeVue InputNumber showButtons (a +/- stepper). "big-touch"
@@ -534,6 +539,9 @@ const changeArmed = ref(false)
 
 // ── grouped state (== save_stock_items.py shape) ──
 const groups = ref([])
+const displayGroups = computed(() => (
+	props.aggregateDisplay ? groupItemsForDisplay(groups.value) : groups.value
+))
 
 watch(
 	groups,

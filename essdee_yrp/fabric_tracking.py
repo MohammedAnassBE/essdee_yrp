@@ -25,6 +25,10 @@ from essdee_yrp.fabric_ipd import (
 	FABRIC_COLOUR_ATTRIBUTE,
 	FABRIC_DIA_ATTRIBUTE,
 )
+from essdee_yrp.fabric_reference import (
+	get_reference_allocations,
+	scale_reference_allocations,
+)
 
 
 def on_grn_submit(doc, method=None):
@@ -172,7 +176,7 @@ def _grn_deltas_for_cloth(grn, cloth_item, with_colour, with_reference=False):
 	if not variant_names:
 		return {}
 	attrs = _variant_attribute_map(variant_names, cloth_item)
-	references = {}
+	reference_allocations = {}
 	if with_reference and frappe.db.has_column(
 		"Work Order Receivables", "fabric_reference_variant"
 	):
@@ -182,14 +186,19 @@ def _grn_deltas_for_cloth(grn, cloth_item, with_colour, with_reference=False):
 				and row.get("ref_docname")
 		]
 		if ref_names:
-			references = {
-				row.name: row.fabric_reference_variant
-				for row in frappe.get_all(
-					"Work Order Receivables",
-					filters={"name": ["in", ref_names]},
-					fields=["name", "fabric_reference_variant"],
+			fields = ["name", "qty", "fabric_reference_variant"]
+			if frappe.db.has_column(
+				"Work Order Receivables", "fabric_reference_allocations"
+			):
+				fields.append("fabric_reference_allocations")
+			for source in frappe.get_all(
+				"Work Order Receivables",
+				filters={"name": ["in", ref_names]},
+				fields=fields,
+			):
+				reference_allocations[source.name] = get_reference_allocations(
+					source, source.qty
 				)
-			}
 	deltas = {}
 	for row in grn.get("items") or []:
 		info = attrs.get(row.item_variant)
@@ -201,10 +210,20 @@ def _grn_deltas_for_cloth(grn, cloth_item, with_colour, with_reference=False):
 			key = (info[FABRIC_DIA_ATTRIBUTE], info.get(FABRIC_COLOUR_ATTRIBUTE) or "")
 		else:
 			key = (info[FABRIC_DIA_ATTRIBUTE],)
-		if with_reference:
-			key += (references.get(row.get("ref_docname")) or "",)
 		# stock_qty = quantity × conversion_factor in the stock UOM (kg for cloth).
-		deltas[key] = deltas.get(key, 0) + (flt(row.stock_qty) or flt(row.quantity))
+		actual_qty = flt(row.stock_qty) or flt(row.quantity)
+		if with_reference:
+			allocations = scale_reference_allocations(
+				reference_allocations.get(row.get("ref_docname")) or {},
+				actual_qty,
+			)
+			if allocations:
+				for reference, qty in allocations.items():
+					route_key = key + (reference,)
+					deltas[route_key] = deltas.get(route_key, 0) + qty
+				continue
+			key += ("",)
+		deltas[key] = deltas.get(key, 0) + actual_qty
 	return deltas
 
 
@@ -347,10 +366,18 @@ def get_produced_by_reference(lot, process_name, cloth_item, exclude_wo=None):
 	}
 	if exclude_wo:
 		conditions = " AND wo.name != %(exclude_wo)s"
+	allocation_select = (
+		"child.fabric_reference_allocations"
+		if frappe.db.has_column(
+			"Work Order Receivables", "fabric_reference_allocations"
+		)
+		else "NULL AS fabric_reference_allocations"
+	)
 	rows = frappe.db.sql(
 		f"""
-		SELECT IFNULL(child.fabric_reference_variant, '') AS reference_item_variant,
-			SUM(child.qty) AS total
+		SELECT child.qty,
+			IFNULL(child.fabric_reference_variant, '') AS fabric_reference_variant,
+			{allocation_select}
 		FROM `tabWork Order Receivables` child
 		JOIN `tabWork Order` wo ON child.parent = wo.name
 		JOIN `tabItem Variant` iv ON child.item_variant = iv.name
@@ -359,12 +386,15 @@ def get_produced_by_reference(lot, process_name, cloth_item, exclude_wo=None):
 			AND iv.item = %(cloth_item)s
 			AND IFNULL(wo.is_rework, 0) = 0
 			{conditions}
-		GROUP BY IFNULL(child.fabric_reference_variant, '')
 		""",
 		params,
 		as_dict=True,
 	)
-	return {row.reference_item_variant: flt(row.total) for row in rows}
+	result = {}
+	for row in rows:
+		for reference, qty in get_reference_allocations(row, row.qty).items():
+			result[reference] = result.get(reference, 0) + flt(qty)
+	return result
 
 
 def get_produced_by_dia_colour(
@@ -407,7 +437,7 @@ def _sum_by_attributes(child_table, lot, process_name, cloth_item, exclude_wo,
 	# on a site that hasn't configured the lot dimension yet.
 	if not frappe.db.has_column("Work Order", "lot"):
 		return {}
-	attr_joins, attr_selects, group_by = [], [], []
+	attr_joins, attr_selects = [], []
 	for i, attribute in enumerate(attributes):
 		alias = f"a{i}"
 		attr_joins.append(
@@ -415,7 +445,6 @@ def _sum_by_attributes(child_table, lot, process_name, cloth_item, exclude_wo,
 			f"ON {alias}.parent = iv.name AND {alias}.attribute = %(attr{i})s"
 		)
 		attr_selects.append(f"{alias}.attribute_value AS v{i}")
-		group_by.append(f"{alias}.attribute_value")
 
 	# Rework WOs re-handle already-counted kgs — never part of ordered/consumed.
 	conditions = " AND IFNULL(wo.is_rework, 0) = 0"
@@ -423,28 +452,28 @@ def _sum_by_attributes(child_table, lot, process_name, cloth_item, exclude_wo,
 		conditions += " AND wo.name != %(exclude_wo)s"
 	if calculated_only:
 		conditions += " AND IFNULL(child.is_calculated, 0) = 1"
-	if (
-		reference_item_variant is not None
-		and frappe.db.has_column(
-			child_table.removeprefix("tab"), "fabric_reference_variant"
-		)
-	):
-		conditions += (
-			" AND IFNULL(child.fabric_reference_variant, '')"
-			" = %(reference_item_variant)s"
-		)
-
 	params = {
 		"lot": lot, "process_name": process_name, "cloth_item": cloth_item,
 		"exclude_wo": exclude_wo,
-		"reference_item_variant": reference_item_variant or "",
 	}
 	for i, attribute in enumerate(attributes):
 		params[f"attr{i}"] = attribute
 
+	child_doctype = child_table.removeprefix("tab")
+	reference_select = (
+		"IFNULL(child.fabric_reference_variant, '') AS fabric_reference_variant"
+		if frappe.db.has_column(child_doctype, "fabric_reference_variant")
+		else "'' AS fabric_reference_variant"
+	)
+	allocation_select = (
+		"child.fabric_reference_allocations"
+		if frappe.db.has_column(child_doctype, "fabric_reference_allocations")
+		else "NULL AS fabric_reference_allocations"
+	)
 	rows = frappe.db.sql(
 		f"""
-		SELECT {", ".join(attr_selects)}, SUM(child.qty) AS total
+		SELECT {", ".join(attr_selects)}, child.qty,
+			{reference_select}, {allocation_select}
 		FROM `{child_table}` child
 		JOIN `tabWork Order` wo ON child.parent = wo.name
 		JOIN `tabItem Variant` iv ON child.item_variant = iv.name
@@ -452,11 +481,24 @@ def _sum_by_attributes(child_table, lot, process_name, cloth_item, exclude_wo,
 		WHERE wo.docstatus < 2 AND wo.lot = %(lot)s
 			AND wo.process_name = %(process_name)s AND iv.item = %(cloth_item)s
 			{conditions}
-		GROUP BY {", ".join(group_by)}
 		""",
 		params,
 		as_dict=True,
 	)
+	result = {}
+	for row in rows:
+		if reference_item_variant is None:
+			qty = flt(row.qty)
+		else:
+			qty = flt(
+				get_reference_allocations(row, row.qty).get(
+					reference_item_variant
+				)
+			)
+		if not qty:
+			continue
+		key = tuple(row.get(f"v{i}") for i in range(len(attributes)))
+		result[key] = result.get(key, 0) + qty
 	if len(attributes) == 1:
-		return {r.v0: flt(r.total) for r in rows}
-	return {(r.v0, r.v1): flt(r.total) for r in rows}
+		return {key[0]: flt(total) for key, total in result.items()}
+	return {key: flt(total) for key, total in result.items()}

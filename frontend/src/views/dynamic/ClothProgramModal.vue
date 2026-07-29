@@ -13,6 +13,16 @@
       This lot's garment has no cloth items to build.
     </div>
     <div v-else class="cp-list">
+      <label class="cp-excess">
+        <strong>Knitting Program Excess</strong>
+        <InputNumber
+          v-model="excessPercentage"
+          :min="0"
+          :minFractionDigits="0"
+          :maxFractionDigits="3"
+          suffix="%"
+        />
+      </label>
       <div
         v-for="(e, i) in entries"
         :key="e.cloth_item"
@@ -24,14 +34,9 @@
             <div class="cp-card-title">{{ e.label }}</div>
             <div class="cp-cloth-item">{{ e.cloth_item }}</div>
           </div>
-          <div class="cp-recipe-summary">
-            <span>{{ e.requiredColours.length }} demanded colour{{ e.requiredColours.length === 1 ? "" : "s" }}</span>
-            <span>{{ e.requiredRoutes.length }} routes · {{ uniqueDias(e).length }} Dias</span>
-            <span>{{ e.useMainFabricRecipes ? "Main fabric recipes" : recipeModeLabel(e.recipeMode) }}</span>
-          </div>
         </div>
 
-        <section class="cp-colour-recipes">
+        <section v-if="false" class="cp-colour-recipes">
           <label v-if="i > 0" class="cp-main-recipe-toggle">
             <input
               type="checkbox"
@@ -234,14 +239,27 @@
           <small v-if="recipeError(e)" class="cp-recipe-error">{{ recipeError(e) }}</small>
         </section>
 
+        <section class="cp-colour-recipes">
+          <div class="cp-section-head">
+            <div>
+              <strong>Item Yarn Recipe</strong>
+            </div>
+          </div>
+          <div v-if="e.itemYarns.length" class="cp-main-recipe-summary">
+            <span v-for="row in e.itemYarns" :key="row.yarn_item">
+              {{ row.yarn_item }}: {{ formatRatio(row.ratio) }}%
+            </span>
+            <strong>Total: {{ formatRatio(rowsTotal(e.itemYarns)) }}%</strong>
+          </div>
+          <small v-else class="cp-recipe-error">
+            Configure a Yarn Ratio totalling 100% on Cloth Item {{ e.cloth_item }}.
+          </small>
+        </section>
+
         <section v-if="e.requiredColours.length" class="cp-output-colours">
           <div class="cp-section-head">
             <div>
               <strong>Knitting output colour</strong>
-              <small>
-                Set the physical colour received from Knitting for each finished
-                colour route. This becomes the first colour-changing process's input.
-              </small>
             </div>
           </div>
           <div class="cp-output-grid">
@@ -250,70 +268,75 @@
               :key="colour"
               class="cp-output-card"
             >
-              <span class="cp-output-target">
-                <span>{{ colour }} · {{ formatWeight(colourTotal(e, colour)) }} kg</span>
-              </span>
-              <div class="cp-output-bulk">
-                <label>
-                  Apply one output colour to all {{ colour }} Dias
+              <div class="cp-output-summary">
+                <div>
+                  <small>Finished Colour</small>
+                  <strong>{{ colour }}</strong>
+                </div>
+                <i class="pi pi-arrow-right" aria-hidden="true"></i>
+                <label class="cp-output-summary-field">
+                  <small>Knitting Output</small>
                   <LinkField
                     :modelValue="commonOutputColour(e, colour)"
                     @update:modelValue="(v) => setOutputColourForAllDias(e, colour, v)"
                     target-doctype="Item Attribute Value"
                     :filters="{ attribute_name: 'Colour' }"
-                    placeholder="Select once for all Dias"
+                    :placeholder="outputColourLabel(e, colour)"
                   />
                 </label>
+                <span>{{ routesForColour(e, colour).length }} routes · {{ formatWeight(colourTotal(e, colour)) }} kg</span>
                 <Button
-                  label="Use finished colour for all"
-                  icon="pi pi-check"
+                  :label="isEditingRoutes(e, colour) ? 'Done' : 'Edit'"
+                  :icon="isEditingRoutes(e, colour) ? 'pi pi-check' : 'pi pi-pencil'"
                   size="small"
                   outlined
-                  @click="setOutputColourForAllDias(e, colour, colour)"
+                  @click="toggleRouteEditor(e, colour)"
                 />
               </div>
-              <div
-                v-for="route in routesForColour(e, colour)"
-                :key="`${route.dia}-${route.colour}`"
-                class="cp-route-row"
-              >
-                <div class="cp-route-finished">
-                  <strong>{{ route.dia }}</strong>
-                  <small>{{ formatWeight(route.weight) }} kg finished</small>
-                  <small
-                    :class="route.knitting_output_colour === colour ? 'direct' : 'dye'"
-                  >
-                    {{ route.knitting_output_colour === colour ? "Direct colour" : "Needs dyeing" }}
-                  </small>
+              <div v-if="isEditingRoutes(e, colour)" class="cp-output-editor">
+                <div
+                  v-for="route in routesForColour(e, colour)"
+                  :key="`${route.dia}-${route.colour}`"
+                  class="cp-route-row"
+                >
+                  <div class="cp-route-finished">
+                    <strong>{{ route.dia }}</strong>
+                    <small>{{ formatWeight(route.weight) }} kg finished</small>
+                    <small
+                      :class="route.knitting_output_colour === colour ? 'direct' : 'dye'"
+                    >
+                      {{ route.knitting_output_colour === colour ? "Direct colour" : "Needs dyeing" }}
+                    </small>
+                  </div>
+                  <label>
+                    Knitting output Dia
+                    <LinkField
+                      :modelValue="route.knitting_output_dia || ''"
+                      @update:modelValue="(v) => (route.knitting_output_dia = v || '')"
+                      target-doctype="Item Attribute Value"
+                      :filters="{ attribute_name: 'Dia' }"
+                      placeholder="Physical Dia after knitting"
+                    />
+                  </label>
+                  <label>
+                    Knitting output Colour
+                    <LinkField
+                      :modelValue="route.knitting_output_colour || ''"
+                      @update:modelValue="(v) => (route.knitting_output_colour = v || '')"
+                      target-doctype="Item Attribute Value"
+                      :filters="{ attribute_name: 'Colour' }"
+                      placeholder="Physical colour after knitting"
+                    />
+                    <Button
+                      v-if="route.knitting_output_colour !== colour"
+                      label="Use finished colour"
+                      icon="pi pi-check"
+                      size="small"
+                      text
+                      @click="route.knitting_output_colour = colour"
+                    />
+                  </label>
                 </div>
-                <label>
-                  Knitting output Dia
-                  <LinkField
-                    :modelValue="route.knitting_output_dia || ''"
-                    @update:modelValue="(v) => (route.knitting_output_dia = v || '')"
-                    target-doctype="Item Attribute Value"
-                    :filters="{ attribute_name: 'Dia' }"
-                    placeholder="Physical Dia after knitting"
-                  />
-                </label>
-                <label>
-                  Knitting output Colour
-                  <LinkField
-                    :modelValue="route.knitting_output_colour || ''"
-                    @update:modelValue="(v) => (route.knitting_output_colour = v || '')"
-                    target-doctype="Item Attribute Value"
-                    :filters="{ attribute_name: 'Colour' }"
-                    placeholder="Physical colour after knitting"
-                  />
-                  <Button
-                    v-if="route.knitting_output_colour !== colour"
-                    label="Use finished colour"
-                    icon="pi pi-check"
-                    size="small"
-                    text
-                    @click="route.knitting_output_colour = colour"
-                  />
-                </label>
               </div>
             </div>
           </div>
@@ -328,7 +351,6 @@
               :minFractionDigits="0"
               :maxFractionDigits="3"
             />
-            <small class="cp-hint">Knitted cloth yield: kilograms produced from 1 kg yarn.</small>
           </label>
           <label>Knitting Process
             <LinkField
@@ -346,9 +368,6 @@
               target-doctype="Process"
               placeholder="Select dyeing"
             />
-            <small class="cp-hint">
-              Needed only when at least one knitting-output colour differs from its finished colour.
-            </small>
           </label>
         </div>
       </div>
@@ -385,6 +404,8 @@ const toast = useAppToast()
 const loading = ref(false)
 const applying = ref(false)
 const entries = ref([])
+const excessPercentage = ref(0)
+const editingRouteGroups = ref({})
 const initialSnapshot = ref("")
 let recipeGroupCounter = 0
 const RECIPE_MODES = Object.freeze([
@@ -412,11 +433,13 @@ const isDirty = computed(
 async function loadContext() {
   loading.value = true
   entries.value = []
+  excessPercentage.value = 0
+  editingRouteGroups.value = {}
   try {
     const r = await callMethod("essdee_yrp.api.cloth_program.get_cloth_program_context", { lot: props.lot })
     const defaults = (r && r.defaults) || {}
     entries.value = ((r && r.cloths) || []).map((c) => ({
-      ...normaliseColourRecipes(c),
+      ...normaliseColourRecipes(c, defaults),
       cloth_item: c.cloth_item,
       label: c.label,
       production_detail: c.production_detail || "",
@@ -454,22 +477,13 @@ async function loadContext() {
   }
 }
 
-function normaliseColourRecipes(cloth) {
-  const stored = (cloth.colour_yarn_recipes || []).map((row) => ({
-    colour: row.colour || "",
-    yarn_item: row.yarn_item || "",
-    ratio: Number(row.ratio) || 0,
-  }))
+function normaliseColourRecipes(cloth, defaults = {}) {
+  const itemYarns = cloneRows(cloth.item_yarns || [])
   const requiredColours = (cloth.required_colours || []).filter(Boolean)
-  const fallback = cloneRows(
-    cloth.default_yarns?.length
-      ? cloth.default_yarns
-      : [{ yarn_item: cloth.default_yarn || "", ratio: 100 }],
-  )
+  const fallback = cloneRows(itemYarns)
   const recipesByColour = {}
   for (const colour of requiredColours) {
-    const rows = stored.filter((row) => row.colour === colour)
-    recipesByColour[colour] = rows.length ? cloneRows(rows) : cloneRows(fallback)
+    recipesByColour[colour] = cloneRows(fallback)
   }
   const signatures = requiredColours.map((colour) => recipeSignature(recipesByColour[colour]))
   const uniqueSignatures = new Set(signatures)
@@ -478,6 +492,7 @@ function normaliseColourRecipes(cloth) {
   const firstColour = requiredColours[0] || ""
   const storedOutputs = cloth.profile?.knitting_output_colours || {}
   const storedRoutes = cloth.profile?.fabric_routes || []
+  const defaultOutput = defaults.knitting_output_colour || ""
   const legacyOutput = cloth.profile?.greige_colour || ""
   const requiredRoutes = (cloth.required_routes || [])
     .map((route) => {
@@ -493,6 +508,7 @@ function normaliseColourRecipes(cloth) {
         knitting_output_dia: existing?.knitting_output_dia || route.dia || "",
         knitting_output_colour:
           existing?.knitting_output_colour ||
+          defaultOutput ||
           storedOutputs[route.colour] ||
           legacyOutput ||
           "",
@@ -500,6 +516,7 @@ function normaliseColourRecipes(cloth) {
     })
     .sort((a, b) => diaSortValue(a.dia) - diaSortValue(b.dia))
   return {
+    itemYarns,
     requiredColours,
     requiredRoutes,
     recipesByColour,
@@ -702,6 +719,32 @@ function commonOutputColour(entry, colour) {
   return values.length === 1 ? values[0] : ""
 }
 
+function outputColourLabel(entry, colour) {
+  const values = [...new Set(
+    routesForColour(entry, colour)
+      .map((route) => route.knitting_output_colour)
+      .filter(Boolean),
+  )]
+  if (values.length === 1) return values[0]
+  return values.length ? "Mixed by Dia" : "Not set"
+}
+
+function routeEditorKey(entry, colour) {
+  return `${entry.cloth_item}::${colour}`
+}
+
+function isEditingRoutes(entry, colour) {
+  return Boolean(editingRouteGroups.value[routeEditorKey(entry, colour)])
+}
+
+function toggleRouteEditor(entry, colour) {
+  const key = routeEditorKey(entry, colour)
+  editingRouteGroups.value = {
+    ...editingRouteGroups.value,
+    [key]: !editingRouteGroups.value[key],
+  }
+}
+
 function setOutputColourForAllDias(entry, colour, value) {
   for (const route of routesForColour(entry, colour)) {
     route.knitting_output_colour = value || ""
@@ -711,10 +754,6 @@ function setOutputColourForAllDias(entry, colour, value) {
 function colourTotal(entry, colour) {
   return routesForColour(entry, colour).reduce(
     (total, route) => total + (Number(route.weight) || 0), 0)
-}
-
-function uniqueDias(entry) {
-  return [...new Set(entry.requiredRoutes.map((route) => route.dia).filter(Boolean))]
 }
 
 function validateYarnRows(rows) {
@@ -921,6 +960,7 @@ async function onApply() {
       lot: props.lot,
       selections: JSON.stringify(rows),
       modified: props.modified,
+      excess_percentage: excessPercentage.value || 0,
     })
     initialSnapshot.value = JSON.stringify(entries.value)
     emit("update:visible", false)
@@ -935,6 +975,7 @@ async function onApply() {
 
 <style scoped>
 .cp-list { display: flex; flex-direction: column; gap: 16px; container-type: inline-size; }
+.cp-excess { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 16px; border: 1px solid var(--p-content-border-color, #e5e7eb); border-radius: 12px; background: var(--p-content-hover-background, #f8fafc); }
 .cp-card { display: flex; flex-direction: column; border: 1px solid var(--p-content-border-color, #e5e7eb); border-radius: 12px; padding: 16px; }
 .cp-card--invalid { border-color: color-mix(in srgb, var(--p-red-500, #ef4444) 42%, var(--p-content-border-color)); }
 .cp-card-head { order: 0; }
@@ -942,13 +983,9 @@ async function onApply() {
 .cp-colour-recipes { order: 2; }
 .cp-grid { order: 3; }
 .cp-card-head,
-.cp-section-head,
-.cp-recipe-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cp-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .cp-card-title { font-weight: 700; font-size: 1rem; }
 .cp-cloth-item { margin-top: 2px; font-size: 0.78rem; opacity: 0.68; }
-.cp-recipe-summary { justify-content: flex-end; flex-wrap: wrap; font-size: 0.75rem; }
-.cp-recipe-summary span { padding: 4px 8px; border-radius: 999px; background: var(--p-content-hover-background, #f3f4f6); }
-.cp-recipe-summary span.invalid { color: var(--p-red-600, #dc2626); background: color-mix(in srgb, var(--p-red-500, #ef4444) 10%, transparent); }
 .cp-yarn-recipe { margin: 14px 0; padding: 12px; border-radius: 10px; background: var(--p-content-hover-background, #f8fafc); }
 .cp-colour-recipes,
 .cp-output-colours { margin: 14px 0; padding: 12px; border-radius: 10px; background: var(--p-content-hover-background, #f8fafc); }
@@ -1024,6 +1061,15 @@ async function onApply() {
 .cp-yarn-constraint { display: block; margin-top: 7px; opacity: 0.68; }
 .cp-output-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .cp-output-card { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--p-content-border-color, #e5e7eb); border-radius: 9px; background: var(--p-content-background, #fff); }
+.cp-output-summary { display: grid; grid-template-columns: minmax(120px, 0.8fr) auto minmax(140px, 1fr) auto auto; gap: 12px; align-items: center; }
+.cp-output-summary > div,
+.cp-output-summary-field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cp-output-summary small { font-size: 0.68rem; opacity: 0.65; }
+.cp-output-summary > span { font-size: 0.72rem; opacity: 0.68; }
+.cp-output-summary > i { opacity: 0.5; }
+.cp-output-summary-field :deep(.p-autocomplete),
+.cp-output-summary-field :deep(.p-autocomplete-input) { width: 100%; min-width: 0; }
+.cp-output-editor { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 .cp-output-target { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 0.78rem; font-weight: 700; }
 .cp-output-target small { padding: 2px 6px; border-radius: 999px; font-size: 0.64rem; white-space: nowrap; }
 .cp-output-target small.direct { color: var(--p-green-700, #15803d); background: color-mix(in srgb, var(--p-green-500, #22c55e) 12%, transparent); }
@@ -1044,12 +1090,10 @@ async function onApply() {
 .cp-route-finished small.dye { color: var(--p-orange-700, #c2410c); background: color-mix(in srgb, var(--p-orange-500, #f97316) 12%, transparent); }
 .cp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
 .cp-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; }
-.cp-hint { font-size: 0.72rem; opacity: 0.6; }
 .cp-loading, .cp-empty { padding: 24px; text-align: center; opacity: 0.7; }
 @media (max-width: 620px) {
   .cp-card-head,
   .cp-section-head { align-items: stretch; flex-direction: column; }
-  .cp-recipe-summary { justify-content: flex-start; }
   .cp-mode-switch { align-self: stretch; overflow-x: auto; }
   .cp-group-fill { grid-template-columns: 1fr; }
   .cp-yarn-head { display: none; }
@@ -1059,6 +1103,8 @@ async function onApply() {
   .cp-output-grid,
   .cp-grid { grid-template-columns: minmax(0, 1fr); }
   .cp-output-bulk { grid-template-columns: minmax(0, 1fr); }
+  .cp-output-summary { grid-template-columns: minmax(90px, 1fr) auto minmax(110px, 1fr) auto; }
+  .cp-output-summary > span { display: none; }
   .cp-route-row { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 430px) {
@@ -1072,7 +1118,6 @@ async function onApply() {
 @container (max-width: 620px) {
   .cp-card-head,
   .cp-section-head { align-items: stretch; flex-direction: column; }
-  .cp-recipe-summary { justify-content: flex-start; }
   .cp-mode-switch { align-self: stretch; overflow-x: auto; }
   .cp-mode-switch button { min-height: 44px; }
   .cp-yarn-head { display: none; }
@@ -1083,5 +1128,7 @@ async function onApply() {
   .cp-grid,
   .cp-output-bulk,
   .cp-route-row { grid-template-columns: minmax(0, 1fr); }
+  .cp-output-summary { grid-template-columns: minmax(90px, 1fr) auto minmax(110px, 1fr) auto; }
+  .cp-output-summary > span { display: none; }
 }
 </style>

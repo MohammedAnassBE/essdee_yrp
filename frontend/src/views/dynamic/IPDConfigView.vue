@@ -153,7 +153,7 @@
 			<div class="attr-strip">
 				<div class="attr-cell">
 					<span class="al">Item</span>
-					<a class="av esd-mono" @click="navigateDoc('Item', doc.item)">{{ doc.item || "—" }}</a>
+					<a class="av esd-mono" @click="navigateDoc('Item', doc.item, $event)">{{ doc.item || "—" }}</a>
 				</div>
 				<div class="attr-cell">
 					<span class="al">Primary Attribute</span>
@@ -446,7 +446,7 @@
 				<DataTable :value="doc.item_bom || []" class="esd-table cfg-dt" :rowHover="false" dataKey="name">
 					<Column field="item" header="Item">
 						<template #body="{ data }">
-							<a class="cell-link esd-mono" @click="navigateDoc('Item', data.item)">{{ data.item || "—" }}</a>
+							<a class="cell-link esd-mono" @click="navigateDoc('Item', data.item, $event)">{{ data.item || "—" }}</a>
 						</template>
 					</Column>
 					<Column field="qty_of_product" header="Qty of Product">
@@ -2383,11 +2383,16 @@ function goHome() {
 function goList() {
 	router.push("/item-production-detail")
 }
-function navigateDoc(dt, name) {
+function navigateDoc(dt, name, event = null) {
 	if (!name) return
 	const reg = getRegistryByDoctype(dt)
 	if (reg) {
-		router.push(`/${reg.route}/${encodeURIComponent(name)}`)
+		const route = `/${reg.route}/${encodeURIComponent(name)}`
+		if (event?.ctrlKey || event?.metaKey) {
+			window.open(`${window.location.origin}/web${route}`, "_blank", "noopener")
+			return
+		}
+		router.push(route)
 	} else {
 		// Non-registry doctype: don't redirect to Desk — restricted users
 		// must stay in /web (conventions.md 2026-05-29). Tell the user

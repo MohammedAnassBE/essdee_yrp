@@ -550,7 +550,9 @@ def save_fabric_requirement_details(lot_doc):
 		(f.get("plan_status") or "") in ("", "Stale", "Pending Approval")
 		for f in lot_doc.get("lot_fabric_details") or []
 	) and bool(rows)
-	lot_doc.flags.rebuild_fabric_plans = changed or needs_build
+	lot_doc.flags.rebuild_fabric_plans = (
+		changed or needs_build or lot_doc.flags.get("force_fabric_plan_rebuild")
+	)
 
 
 def rebuild_plans_after_save(lot_doc):

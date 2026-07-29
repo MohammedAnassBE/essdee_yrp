@@ -12,6 +12,7 @@
   "cloth_program_defaults_section",
   "default_knitting_process",
   "default_dyeing_process",
+  "default_knitting_output_colour",
   "column_break_cloth_program",
   "default_compacting_process",
   "default_cloth_per_kg_yarn",
@@ -66,6 +67,13 @@
    "label": "Default Dyeing Process",
    "options": "Process",
    "reqd": 1
+  },
+  {
+   "description": "Prefills Knitting Output Colour in the Build Cloth Programs popup when no exact saved fabric route exists.",
+   "fieldname": "default_knitting_output_colour",
+   "fieldtype": "Link",
+   "label": "Default Knitting Yarn Colour",
+   "options": "Item Attribute Value"
   },
   {
    "fieldname": "column_break_cloth_program",

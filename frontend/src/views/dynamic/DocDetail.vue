@@ -723,9 +723,10 @@
 						:show-allow-zero-rate="!!pv.showAllowZeroRate"
 						:show-secondary-toggle="!!pv.showSecondaryToggle"
 						:locked-items="!!pv.lockedItems"
+						:aggregate-display="!!pv.aggregateDisplay"
 						:show-dimensions="pv.showDimensions !== false"
 						:qty-control="dcQtyControl"
-						:editable="true"
+						:editable="pv.editable !== false"
 						@change="onGridChange"
 					/>
 				</div>
@@ -850,7 +851,7 @@
 										size="small"
 										class="child-link-open"
 										v-tooltip.top="'Open ' + data[field]"
-										@click.stop.prevent="navigateChildLink(col, data, data[field])"
+										@click.stop.prevent="navigateChildLink(col, data, data[field], $event)"
 									/>
 								</div>
 							</template>
@@ -1001,7 +1002,7 @@
 									v-if="childLinkCanOpen(col, data, data[field])"
 									type="button"
 									class="child-link-value esd-mono"
-									@click="navigateChildLink(col, data, data[field])"
+									@click="navigateChildLink(col, data, data[field], $event)"
 								>
 									<span>{{ childCellDisplay(data[field], col) }}</span>
 									<i class="pi pi-arrow-up-right" />
@@ -1174,7 +1175,7 @@
 														link: f.isLink && !isEmptyValue(doc[f.fieldname]) && linkHasWebRoute(f),
 														'is-empty': isEmptyValue(doc[f.fieldname]),
 													}"
-													@click="f.isLink && linkHasWebRoute(f) && navigateLink(f, doc[f.fieldname])"
+													@click="f.isLink && linkHasWebRoute(f) && navigateLink(f, doc[f.fieldname], $event)"
 												>
 													<!-- Q1: Link shows the human name + muted code; plain fields show the
 													     formatted value (Q20 bool words via fieldname). A link whose target
@@ -1208,6 +1209,7 @@
 								:value-fields="pivotFor(ct.fieldname)?.valueFields || []"
 								:entry-fields="pivotFor(ct.fieldname)?.entryFields || []"
 								:cell-fields="pivotFor(ct.fieldname)?.cellFields || []"
+								:aggregate-display="!!pivotFor(ct.fieldname)?.aggregateDisplay"
 								:initial-data="viewGrouped[ct.fieldname] || []"
 							/>
 							<!-- Correction items: read-only per-WOC grouped blocks
@@ -1285,7 +1287,7 @@
 												v-if="childLinkCanOpen(col, data, data[col.fieldname])"
 												type="button"
 												class="child-link-value esd-mono"
-												@click="navigateChildLink(col, data, data[col.fieldname])"
+												@click="navigateChildLink(col, data, data[col.fieldname], $event)"
 											>
 												<span>{{ displayValue(data[col.fieldname], col.type) }}</span>
 												<i class="pi pi-arrow-up-right" />
@@ -1362,7 +1364,7 @@
 										v-for="row in g.rows"
 										:key="row.name"
 										class="linked-row"
-										@click="navigateDoc(g.doctype, row.name)"
+										@click="navigateDoc(g.doctype, row.name, $event)"
 									>
 										<span class="lr-id esd-mono">{{ row.name }}</span>
 										<span class="lr-meta">{{ linkedRowMeta(row) }}</span>
@@ -2277,26 +2279,32 @@ const STOCK_GROUPED_MAP = {
 			childField: "deliverables", groupedField: "deliverable_details",
 			ungroupKey: "Work Order Deliverables", label: "Deliverables",
 			lockedItems: true,
+			editable: false,
+			aggregateDisplay: true,
 			showDimensions: false,
 			cellFields: [{ name: "pending_quantity", label: "Pending" }],
 			valueFields: ["pending_quantity", "stock_update", "valuation_rate"],
 			entryFields: [
 				"comments", "secondary_qty", "secondary_uom", "cancelled_quantity",
 				"additional_parameters", "set_combination", "grn_detail_no", "item_type",
-				"is_calculated", "source_grn", "source_grn_item", "source_inspection_entry_item",
+					"is_calculated", "source_grn", "source_grn_item", "source_inspection_entry_item",
+					"fabric_reference_variant", "fabric_reference_allocations",
 			],
 		},
 		{
 			childField: "receivables", groupedField: "receivable_details",
 			ungroupKey: "Work Order Receivables", label: "Receivables",
 			lockedItems: true,
+			editable: false,
+			aggregateDisplay: true,
 			showDimensions: false,
 			cellFields: [{ name: "cost", label: "Cost" }, { name: "pending_quantity", label: "Pending" }],
 			valueFields: ["cost", "pending_quantity", "total_cost"],
 			entryFields: [
 				"comments", "secondary_qty", "secondary_uom", "process_cost",
-				"additional_parameters", "set_combination",
-			],
+					"additional_parameters", "set_combination", "fabric_reference_variant",
+					"fabric_reference_allocations",
+				],
 		},
 	],
 	// Work Order Correction shares the WO child doctypes (Work Order
@@ -4227,9 +4235,9 @@ function childLinkCanOpen(col, row, value) {
 	return !!getRegistryByDoctype(target) || isAdmin.value || hasRole("System Manager")
 }
 
-function navigateChildLink(col, row, value) {
+function navigateChildLink(col, row, value, event = null) {
 	if (!childLinkCanOpen(col, row, value)) return
-	navigateDoc(childLinkTarget(col, row), value)
+	navigateDoc(childLinkTarget(col, row), value, event)
 }
 
 // LinkField normally performs its own search. Lot fabric rows need the same
@@ -5342,10 +5350,15 @@ function goHome() {
 function goList() {
 	router.push(`/${props.docRoute}`)
 }
-function navigateDoc(dt, name) {
+function navigateDoc(dt, name, event = null) {
 	const reg = getRegistryByDoctype(dt)
 	if (reg) {
-		router.push(`/${reg.route}/${encodeURIComponent(name)}`)
+		const route = `/${reg.route}/${encodeURIComponent(name)}`
+		if (event?.ctrlKey || event?.metaKey) {
+			window.open(`${window.location.origin}/web${route}`, "_blank", "noopener")
+			return
+		}
+		router.push(route)
 		return
 	}
 	// Non-registry doctype: with only 8 registered doctypes this fires for
@@ -5359,10 +5372,10 @@ function navigateDoc(dt, name) {
 		toast.info("Not available here", `${dt} records are managed outside /web — ask an administrator.`)
 	}
 }
-function navigateLink(field, value) {
+function navigateLink(field, value, event = null) {
 	if (!value) return
 	const targetDt = linkTargetFor(field)
-	if (targetDt) navigateDoc(targetDt, value)
+	if (targetDt) navigateDoc(targetDt, value, event)
 }
 
 // ── Q1: Link code → human name ───────────────────────────────────────────────

@@ -19,6 +19,16 @@ TEST_GRNS = ("GRN-TEST-0001", "GRN-NEVER-EXISTED", "GRN-TEST-DUP", "GRN-TEST-MUL
 
 
 class TestReceiveGrnTransfer(IntegrationTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # The HTTP handlers commit in production by design. Suppress that
+        # transaction boundary in tests so the class-level rollback owns every
+        # Stock Entry, Stock Ledger Entry, and setup record created here.
+        cls._commit_patcher = patch.object(frappe.db, "commit")
+        cls._commit_patcher.start()
+        cls.addClassCleanup(cls._commit_patcher.stop)
+
     def setUp(self):
         wh = frappe.get_all("Warehouse", filters={"supplier": ["is", "set"]},
                             fields=["name", "supplier"], limit=1)
@@ -58,7 +68,6 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
                     doc.flags.from_grn_transfer = True
                     doc.cancel()
                 frappe.delete_doc("Stock Entry", name, force=True, ignore_permissions=True)
-        frappe.db.commit()
 
     def _make_normal_se(self):
         """A plain Material Receipt with NO source_grn (mirrors receive_grn_transfer's

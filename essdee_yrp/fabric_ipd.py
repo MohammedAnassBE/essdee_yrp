@@ -285,6 +285,11 @@ def ensure_cloth_item_attributes(doc, method=None):
 			item_have.add(attribute)
 			changed = True
 	if changed:
+		# This save only mirrors process attributes onto the cloth Item. Existing
+		# cloth masters may still use the legacy per-program yarn recipe while
+		# they are being migrated to Item-level recipes, so do not make this
+		# internal housekeeping save responsible for validating that recipe.
+		item.flags.skip_cloth_yarn_ratio_validation = True
 		item.save(ignore_permissions=True)
 
 

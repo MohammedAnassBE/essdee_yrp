@@ -18,11 +18,13 @@ from essdee_yrp.web_build import build_web_spa
 
 def after_install():
 	ensure_default_address_template()
+	ensure_yrp_production_order_settings()
 
 
 def after_migrate():
 	ensure_default_address_template()
 	ensure_sd_yrp_consumer_config()
+	ensure_yrp_production_order_settings()
 	build_web_spa()
 
 
@@ -56,3 +58,66 @@ def ensure_default_address_template():
 	doc.is_default = 1
 	doc.template = get_default_address_template()
 	doc.insert(ignore_permissions=True)
+
+
+def ensure_yrp_production_order_settings():
+	"""Install the Production Order mapping required by the SD YRP consumer.
+
+	The base YRP app intentionally leaves these customer-specific choices blank.
+	Essdee's F15 Production Orders are size-grid documents whose generated
+	variants use Stage=Pack. A missing mapping prevents the Production Order from
+	syncing and every linked Lot then fails with a misleading missing-dependency
+	error.
+
+	The function is idempotent and preserves additional configured attributes.
+	On a brand-new site it waits until the synced Size/Stage/Pack masters exist;
+	the first Production Order message calls it again before validation.
+	"""
+	from essdee_yrp.sd_yrp_sync import (
+		PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE,
+		PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE,
+		PRODUCTION_ORDER_GRID_ATTRIBUTE,
+	)
+
+	required_links = (
+		("Item Attribute", PRODUCTION_ORDER_GRID_ATTRIBUTE),
+		("Item Attribute", PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE),
+		("Item Attribute Value", PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE),
+	)
+	if any(not frappe.db.exists(doctype, name) for doctype, name in required_links):
+		return False
+
+	settings = frappe.get_doc("YRP Settings")
+	changed = False
+	grid_row = None
+	for row in settings.production_order_attributes or []:
+		if row.attribute == PRODUCTION_ORDER_GRID_ATTRIBUTE:
+			grid_row = row
+		should_be_grid = row.attribute == PRODUCTION_ORDER_GRID_ATTRIBUTE
+		if bool(row.is_grid_attribute) != should_be_grid:
+			row.is_grid_attribute = should_be_grid
+			changed = True
+
+	if grid_row is None:
+		settings.append(
+			"production_order_attributes",
+			{
+				"attribute": PRODUCTION_ORDER_GRID_ATTRIBUTE,
+				"is_grid_attribute": 1,
+			},
+		)
+		changed = True
+
+	if settings.po_dependent_attribute != PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE:
+		settings.po_dependent_attribute = PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE
+		changed = True
+	if (
+		settings.po_dependent_attribute_value
+		!= PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE
+	):
+		settings.po_dependent_attribute_value = PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE
+		changed = True
+
+	if changed:
+		settings.save(ignore_permissions=True)
+	return changed

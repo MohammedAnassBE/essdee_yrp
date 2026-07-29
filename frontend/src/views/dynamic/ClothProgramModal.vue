@@ -13,6 +13,22 @@
       This lot's garment has no cloth items to build.
     </div>
     <div v-else class="cp-list">
+      <label class="cp-excess">
+        <span>
+          <strong>Knitting Program Excess</strong>
+          <small>
+            Added to every calculated knitting-program route. The finished-cloth
+            requirement stays unchanged, and the Knitting Process default excess is not used.
+          </small>
+        </span>
+        <InputNumber
+          v-model="excessPercentage"
+          :min="0"
+          :minFractionDigits="0"
+          :maxFractionDigits="3"
+          suffix="%"
+        />
+      </label>
       <div
         v-for="(e, i) in entries"
         :key="e.cloth_item"
@@ -27,11 +43,11 @@
           <div class="cp-recipe-summary">
             <span>{{ e.requiredColours.length }} demanded colour{{ e.requiredColours.length === 1 ? "" : "s" }}</span>
             <span>{{ e.requiredRoutes.length }} routes · {{ uniqueDias(e).length }} Dias</span>
-            <span>{{ e.useMainFabricRecipes ? "Main fabric recipes" : recipeModeLabel(e.recipeMode) }}</span>
+            <span>{{ e.itemYarns.length }} Item yarn{{ e.itemYarns.length === 1 ? "" : "s" }}</span>
           </div>
         </div>
 
-        <section class="cp-colour-recipes">
+        <section v-if="false" class="cp-colour-recipes">
           <label v-if="i > 0" class="cp-main-recipe-toggle">
             <input
               type="checkbox"
@@ -234,6 +250,26 @@
           <small v-if="recipeError(e)" class="cp-recipe-error">{{ recipeError(e) }}</small>
         </section>
 
+        <section class="cp-colour-recipes">
+          <div class="cp-section-head">
+            <div>
+              <strong>Item Yarn Recipe</strong>
+              <small>
+                Read from the Cloth Item master and applied automatically to every colour.
+              </small>
+            </div>
+          </div>
+          <div v-if="e.itemYarns.length" class="cp-main-recipe-summary">
+            <span v-for="row in e.itemYarns" :key="row.yarn_item">
+              {{ row.yarn_item }}: {{ formatRatio(row.ratio) }}%
+            </span>
+            <strong>Total: {{ formatRatio(rowsTotal(e.itemYarns)) }}%</strong>
+          </div>
+          <small v-else class="cp-recipe-error">
+            Configure a Yarn Ratio totalling 100% on Cloth Item {{ e.cloth_item }}.
+          </small>
+        </section>
+
         <section v-if="e.requiredColours.length" class="cp-output-colours">
           <div class="cp-section-head">
             <div>
@@ -385,6 +421,7 @@ const toast = useAppToast()
 const loading = ref(false)
 const applying = ref(false)
 const entries = ref([])
+const excessPercentage = ref(0)
 const initialSnapshot = ref("")
 let recipeGroupCounter = 0
 const RECIPE_MODES = Object.freeze([
@@ -412,11 +449,12 @@ const isDirty = computed(
 async function loadContext() {
   loading.value = true
   entries.value = []
+  excessPercentage.value = 0
   try {
     const r = await callMethod("essdee_yrp.api.cloth_program.get_cloth_program_context", { lot: props.lot })
     const defaults = (r && r.defaults) || {}
     entries.value = ((r && r.cloths) || []).map((c) => ({
-      ...normaliseColourRecipes(c),
+      ...normaliseColourRecipes(c, defaults),
       cloth_item: c.cloth_item,
       label: c.label,
       production_detail: c.production_detail || "",
@@ -454,22 +492,13 @@ async function loadContext() {
   }
 }
 
-function normaliseColourRecipes(cloth) {
-  const stored = (cloth.colour_yarn_recipes || []).map((row) => ({
-    colour: row.colour || "",
-    yarn_item: row.yarn_item || "",
-    ratio: Number(row.ratio) || 0,
-  }))
+function normaliseColourRecipes(cloth, defaults = {}) {
+  const itemYarns = cloneRows(cloth.item_yarns || [])
   const requiredColours = (cloth.required_colours || []).filter(Boolean)
-  const fallback = cloneRows(
-    cloth.default_yarns?.length
-      ? cloth.default_yarns
-      : [{ yarn_item: cloth.default_yarn || "", ratio: 100 }],
-  )
+  const fallback = cloneRows(itemYarns)
   const recipesByColour = {}
   for (const colour of requiredColours) {
-    const rows = stored.filter((row) => row.colour === colour)
-    recipesByColour[colour] = rows.length ? cloneRows(rows) : cloneRows(fallback)
+    recipesByColour[colour] = cloneRows(fallback)
   }
   const signatures = requiredColours.map((colour) => recipeSignature(recipesByColour[colour]))
   const uniqueSignatures = new Set(signatures)
@@ -478,6 +507,7 @@ function normaliseColourRecipes(cloth) {
   const firstColour = requiredColours[0] || ""
   const storedOutputs = cloth.profile?.knitting_output_colours || {}
   const storedRoutes = cloth.profile?.fabric_routes || []
+  const defaultOutput = defaults.knitting_output_colour || ""
   const legacyOutput = cloth.profile?.greige_colour || ""
   const requiredRoutes = (cloth.required_routes || [])
     .map((route) => {
@@ -493,6 +523,7 @@ function normaliseColourRecipes(cloth) {
         knitting_output_dia: existing?.knitting_output_dia || route.dia || "",
         knitting_output_colour:
           existing?.knitting_output_colour ||
+          defaultOutput ||
           storedOutputs[route.colour] ||
           legacyOutput ||
           "",
@@ -500,6 +531,7 @@ function normaliseColourRecipes(cloth) {
     })
     .sort((a, b) => diaSortValue(a.dia) - diaSortValue(b.dia))
   return {
+    itemYarns,
     requiredColours,
     requiredRoutes,
     recipesByColour,
@@ -921,6 +953,7 @@ async function onApply() {
       lot: props.lot,
       selections: JSON.stringify(rows),
       modified: props.modified,
+      excess_percentage: excessPercentage.value || 0,
     })
     initialSnapshot.value = JSON.stringify(entries.value)
     emit("update:visible", false)
@@ -935,6 +968,9 @@ async function onApply() {
 
 <style scoped>
 .cp-list { display: flex; flex-direction: column; gap: 16px; container-type: inline-size; }
+.cp-excess { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 16px; border: 1px solid var(--p-content-border-color, #e5e7eb); border-radius: 12px; background: var(--p-content-hover-background, #f8fafc); }
+.cp-excess span { display: flex; flex-direction: column; gap: 3px; }
+.cp-excess small { opacity: 0.68; }
 .cp-card { display: flex; flex-direction: column; border: 1px solid var(--p-content-border-color, #e5e7eb); border-radius: 12px; padding: 16px; }
 .cp-card--invalid { border-color: color-mix(in srgb, var(--p-red-500, #ef4444) 42%, var(--p-content-border-color)); }
 .cp-card-head { order: 0; }

@@ -201,23 +201,30 @@ def calculate_cloth(ipd_doc, variant_attrs, qty, cloth_combination, stitching_co
     if stitching_combination["stitching_attribute"] in cloth_combination["cutting_attributes"]:
         for stiching_attr, attr_qty in stitching_combination["stitching_attribute_count"].items():
             attrs[ipd_doc.stiching_attribute] = stiching_attr
-            cloth_key = get_key(attrs, cloth_combination["cloth_attributes"])
             stich_key = attrs[ipd_doc.packing_attribute]
             if ipd_doc.is_set_item:
                 stich_key = (stich_key, attrs[ipd_doc.set_item_attribute])
             panel_colours = stitching_combination["stitching_combination"].get(stich_key, {})
             if stiching_attr in panel_colours:
                 cloth_colour = panel_colours[stiching_attr]
-                cutting_attrs = attrs.copy()
+                combination_attrs = attrs.copy()
                 if _uses_panel_colour_cutting(ipd_doc):
-                    cutting_attrs[ipd_doc.packing_attribute] = cloth_colour
+                    # Schema 2+ stores both the consumption row and its cloth
+                    # mapping under the colour physically used by this panel.
+                    # The garment colour can differ (for example Navy garment
+                    # -> G Mel panel), so using the garment colour here makes
+                    # a valid ("panel", "G Mel") cloth row look missing.
+                    combination_attrs[ipd_doc.packing_attribute] = cloth_colour
                 cutting_key = get_key(
-                    cutting_attrs, cloth_combination["cutting_attributes"]
+                    combination_attrs, cloth_combination["cutting_attributes"]
                 )
                 cutting_row = cloth_combination["cutting_combination"].get(cutting_key)
                 if not cutting_row:
                     continue
                 dia, weight = cutting_row
+                cloth_key = get_key(
+                    combination_attrs, cloth_combination["cloth_attributes"]
+                )
                 cloth_type = cloth_combination["cloth_combination"].get(cloth_key)
                 if not cloth_type:
                     frappe.throw(_(

@@ -80,6 +80,35 @@ def _normalize_yarns(selection, required=True):
     return yarns
 
 
+def _item_yarns_for_cloth(cloth_item, required=False):
+    """Return the reusable yarn recipe stored on the cloth Item master."""
+    item = frappe.get_cached_doc("Item", cloth_item)
+    if item.get("yarn_ratio_details") and not item.get("is_cloth_item"):
+        frappe.throw(
+            _("Enable 'Is Cloth Item' on Item {0} before using its Yarn Ratio.").format(
+                cloth_item
+            )
+        )
+    rows = [
+        {
+            "yarn_item": row.get("yarn_item"),
+            "ratio": flt(row.get("ratio")),
+        }
+        for row in (item.get("yarn_ratio_details") or [])
+        if row.get("yarn_item")
+    ]
+    if not rows:
+        if required:
+            frappe.throw(
+                _(
+                    "Cloth Item {0} has no Yarn Ratio. Open the Item, enable "
+                    "'Is Cloth Item', and add a yarn recipe totalling 100%."
+                ).format(cloth_item)
+            )
+        return []
+    return _normalize_yarns({"yarns": rows})
+
+
 def _recipe_map(rows):
     """Canonical ``{colour: {yarn_item: ratio}}`` for comparison and reuse."""
     result = {}
@@ -785,7 +814,7 @@ def _requirement_payload(by_cloth):
 
 
 @frappe.whitelist()
-def build_cloth_programs(lot, selections, modified=None):
+def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
     """Orchestrator entrypoint (Desk button + /web modal). selections:
     [{cloth_item, yarns:[{yarn_item,ratio}], yarn_item, knitting_process,
     dyeing_process, cloth_per_kg_yarn,
@@ -797,6 +826,10 @@ def build_cloth_programs(lot, selections, modified=None):
     lot_doc = frappe.get_doc("Lot", lot)
     lot_doc.check_permission("write")
     _guard_not_modified(lot_doc, modified)
+    excess_percentage = flt(excess_percentage)
+    if excess_percentage < 0:
+        frappe.throw(_("Knitting program excess percentage cannot be negative."))
+    excess_factor = 1 + excess_percentage / 100
 
     demand = compute_cloth_demand(lot_doc.name)
     if not demand:
@@ -817,12 +850,26 @@ def build_cloth_programs(lot, selections, modified=None):
         selection = sel_by_cloth.get(cloth)
         if not selection:
             continue
+        # The Item master is the source of truth for yarn composition. Legacy
+        # callers may still submit a recipe only while an old cloth Item has not
+        # yet been configured; current Desk and /web callers submit none.
+        item_yarns = _item_yarns_for_cloth(cloth)
         required_colours = list(
             dict.fromkeys(colour for (_dia, colour) in tuples if colour)
         )
         if required_colours:
-            colour_recipes = _normalize_colour_yarn_recipes(
-                selection, required_colours
+            colour_recipes = (
+                [
+                    {
+                        "colour": colour,
+                        "yarn_item": row["yarn_item"],
+                        "ratio": row["ratio"],
+                    }
+                    for colour in required_colours
+                    for row in item_yarns
+                ]
+                if item_yarns
+                else _normalize_colour_yarn_recipes(selection, required_colours)
             )
             selection["colour_yarn_recipes"] = colour_recipes
             selection["fabric_routes"] = _normalize_fabric_routes(
@@ -855,7 +902,7 @@ def build_cloth_programs(lot, selections, modified=None):
             selection["colour_yarn_recipes"] = []
             selection["knitting_output_colours"] = []
             selection["fabric_routes"] = []
-            selection["yarns"] = _normalize_yarns(selection)
+            selection["yarns"] = item_yarns or _normalize_yarns(selection)
             selection["yarn_item"] = selection["yarns"][0]["yarn_item"]
         selection["production_detail"] = current_cpd.get(cloth)
         route_map = _fabric_route_map(selection)
@@ -886,9 +933,37 @@ def build_cloth_programs(lot, selections, modified=None):
     if not built:
         frappe.throw(_("No selected cloth matches the lot's cloth demand."))
 
+    # Build is authoritative for the calculated knitting program. Drop old
+    # unreceived rows and zero received rows so the plan pre-seed replaces their
+    # quantity without ever losing receipt tracking.
+    lot_doc.set("lot_fabric_programs", [
+        row for row in lot_doc.get("lot_fabric_programs") or []
+        if row.cloth_item not in payload or flt(row.received_weight)
+    ])
+    for row in lot_doc.get("lot_fabric_programs") or []:
+        if row.cloth_item in payload:
+            row.weight = 0
+    lot_doc.flags.force_fabric_plan_rebuild = True
     lot_doc.fabric_requirement_details = frappe.as_json(_requirement_payload(payload))
     lot_doc.save(ignore_permissions=True)
-    return {"cloths_built": len(built), "programs": built}
+    for row in frappe.get_all(
+        "Lot Fabric Program",
+        filters={"parent": lot_doc.name, "parenttype": "Lot"},
+        fields=["name", "cloth_item", "weight"],
+    ):
+        if row.cloth_item in payload:
+            frappe.db.set_value(
+                "Lot Fabric Program",
+                row.name,
+                "weight",
+                flt(flt(row.weight) * excess_factor, 3),
+                update_modified=False,
+            )
+    return {
+        "cloths_built": len(built),
+        "programs": built,
+        "excess_percentage": excess_percentage,
+    }
 
 
 def _cloth_rows_from_ipd(ipd):
@@ -975,6 +1050,7 @@ def _cloth_program_defaults():
     defaults = {
         "knitting_process": "",
         "dyeing_process": "",
+        "knitting_output_colour": "",
         "compacting_process": "",
         "cloth_per_kg_yarn": 1.0,
     }
@@ -985,6 +1061,9 @@ def _cloth_program_defaults():
     defaults.update({
         "knitting_process": settings.get("default_knitting_process") or "",
         "dyeing_process": settings.get("default_dyeing_process") or "",
+        "knitting_output_colour": (
+            settings.get("default_knitting_output_colour") or ""
+        ),
         "compacting_process": settings.get("default_compacting_process") or "",
         "cloth_per_kg_yarn": (
             flt(settings.get("default_cloth_per_kg_yarn")) or 1.0
@@ -1074,13 +1153,16 @@ def get_cloth_program_context(lot):
         c["production_detail"] = cpd_name
         c["required_colours"] = demanded_colours.get(c["cloth_item"], [])
         c["required_routes"] = demanded_routes.get(c["cloth_item"], [])
+        c["item_yarns"] = _item_yarns_for_cloth(c["cloth_item"])
         c["default_yarns"] = _default_yarns_for_cloth(c["cloth_item"], cpd_name)
         c["default_yarn"] = (
             c["default_yarns"][0]["yarn_item"] if c["default_yarns"] else ""
         )
         cpd = frappe.get_cached_doc("Item Production Detail", cpd_name) if cpd_name else None
-        c["profile"] = (
-            _profile_from_cpd(cpd) if cpd else {}
+        c["profile"] = _profile_from_cpd(cpd) if cpd else (
+            _yarn_profile(c["item_yarns"][0]["yarn_item"])
+            if c["item_yarns"]
+            else {}
         )
         c["colour_yarn_recipes"] = [
             {

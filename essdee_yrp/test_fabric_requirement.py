@@ -214,6 +214,10 @@ class TestFabricRequirement(IntegrationTestCase):
             frappe._dict(attribute="Panel"),
             frappe._dict(attribute="Colour"),
         ]
+        ipd.cloth_attributes = [
+            frappe._dict(attribute="Panel"),
+            frappe._dict(attribute="Colour"),
+        ]
         ipd.cutting_items_json = json.dumps({
             "attributes": ["Size", "Panel", "Colour", "Dia", "Weight"],
             "items": [
@@ -225,6 +229,14 @@ class TestFabricRequirement(IntegrationTestCase):
                  "Dia": "14 Dia", "Weight": 0.005},
             ],
         })
+        ipd.cutting_cloths_json = json.dumps({
+            "attributes": ["Panel", "Colour", "Cloth"],
+            "items": [
+                {"Panel": "Front", "Colour": "Navy", "Cloth": "MAIN FABRIC"},
+                {"Panel": "Back", "Colour": "Navy", "Cloth": "MAIN FABRIC"},
+                {"Panel": "Pouch", "Colour": "Red", "Cloth": "CONTRAST FABRIC"},
+            ],
+        })
         ipd.stiching_item_combination_details[-1].attribute_value = "Red"
 
         cc = get_cloth_combination(ipd)
@@ -234,6 +246,10 @@ class TestFabricRequirement(IntegrationTestCase):
         )
 
         self.assertEqual([row["colour"] for row in rows], ["Navy", "Navy", "Red"])
+        self.assertEqual(
+            [row["cloth_type"] for row in rows],
+            ["MAIN FABRIC", "MAIN FABRIC", "CONTRAST FABRIC"],
+        )
         for row, expected in zip(rows, [0.9, 0.8, 1.0]):
             self.assertAlmostEqual(row["quantity"], expected, places=6)
 

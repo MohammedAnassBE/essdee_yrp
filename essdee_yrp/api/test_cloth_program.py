@@ -107,6 +107,15 @@ class TestClothProgram(IntegrationTestCase):
         # Item master itself must carry the flag for is_cloth_ipd() to route the
         # IPD through the cloth-validation path instead of the garment one.
         frappe.db.set_value("Item", self.cloth, "is_cloth_item", 1)
+        frappe.db.delete(
+            "Item Yarn Ratio",
+            {
+                "parent": self.cloth,
+                "parenttype": "Item",
+                "parentfield": "yarn_ratio_details",
+            },
+        )
+        frappe.clear_document_cache("Item", self.cloth)
         _reset_cpd(self.cloth)
         self.k_proc = _ensure_process("_Test Knit CPD", is_item_conversion=1)
         self.d_proc = _ensure_process("_Test Dye CPD")
@@ -1110,6 +1119,90 @@ class TestClothProgram(IntegrationTestCase):
         self.assertTrue(lot.lot_fabric_programs)       # WO knitting pre-seed
         self.assertTrue(lot.lot_fabric_step_ledger)    # CPD chain plan
 
+    def test_build_uses_item_master_yarn_ratio_without_popup_recipe(self):
+        yarn_b = _ensure_item("_Test Item Master Yarn B CPD")
+        item = frappe.get_doc("Item", self.cloth)
+        item.set("yarn_ratio_details", [])
+        item.append("yarn_ratio_details", {
+            "yarn_item": self.yarn,
+            "ratio": 60,
+        })
+        item.append("yarn_ratio_details", {
+            "yarn_item": yarn_b,
+            "ratio": 40,
+        })
+        item.save(ignore_permissions=True)
+
+        selection = {
+            key: value
+            for key, value in self.selection.items()
+            if key not in {"yarn_item", "yarns", "colour_yarn_recipes"}
+        }
+        lot = frappe.get_doc({
+            "doctype": "Lot",
+            "lot_name": "_Test CPD Lot Item Recipe",
+        }).insert(ignore_permissions=True)
+        demand = {(self.cloth, self.dia, self.red): 50.9}
+        with patch.object(cloth_program, "compute_cloth_demand", return_value=demand):
+            build_cloth_programs(lot.name, [selection])
+
+        cpd_name = frappe.db.get_value(
+            "Item Production Detail",
+            {"item": self.cloth, "is_cloth_item": 1},
+            "name",
+        )
+        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        self.assertEqual(
+            [(row.yarn_item, flt(row.ratio)) for row in cpd.yarn_ratio_details],
+            [(self.yarn, 60.0), (yarn_b, 40.0)],
+        )
+        self.assertEqual(
+            [
+                (row.colour, row.yarn_item, flt(row.ratio))
+                for row in cpd.colour_yarn_recipes
+            ],
+            [
+                (self.red, self.yarn, 60.0),
+                (self.red, yarn_b, 40.0),
+            ],
+        )
+
+    def test_build_cloth_programs_applies_manual_excess_once(self):
+        lot = frappe.get_doc({
+            "doctype": "Lot", "lot_name": "_Test CPD Lot Excess",
+        }).insert(ignore_permissions=True)
+        demand = {(self.cloth, self.dia, self.red): 50.9}
+        with patch.object(cloth_program, "compute_cloth_demand", return_value=demand):
+            build_cloth_programs(lot.name, [self.selection])
+            res = build_cloth_programs(
+                lot.name, [self.selection], excess_percentage=5
+            )
+        self.assertEqual(res["excess_percentage"], 5)
+        lot.reload()
+        requirement = next(
+            r for r in lot.lot_fabric_requirements if r.cloth_item == self.cloth
+        )
+        program = next(
+            r for r in lot.lot_fabric_programs if r.cloth_item == self.cloth
+        )
+        planned = sum(
+            flt(r.planned_weight) for r in lot.lot_fabric_step_ledger
+            if r.cloth_item == self.cloth and r.process_name == self.k_proc
+            and r.side == "Output"
+        )
+        self.assertAlmostEqual(requirement.weight, 50.9, places=3)
+        self.assertAlmostEqual(planned, 50.9, places=3)
+        self.assertAlmostEqual(program.weight, 53.445, places=3)
+
+    def test_build_cloth_programs_rejects_negative_excess(self):
+        lot = frappe.get_doc({
+            "doctype": "Lot", "lot_name": "_Test CPD Lot Negative Excess",
+        }).insert(ignore_permissions=True)
+        with self.assertRaisesRegex(frappe.ValidationError, "cannot be negative"):
+            build_cloth_programs(
+                lot.name, [self.selection], excess_percentage=-1
+            )
+
     def test_build_cloth_programs_requires_dyeing_for_coloured_demand(self):
         # A route whose knitting output differs from the finished colour must
         # fail fast without dyeing (not with an opaque planner error).
@@ -1183,6 +1276,7 @@ class TestClothProgram(IntegrationTestCase):
         settings = frappe._dict({
             "default_knitting_process": self.k_proc,
             "default_dyeing_process": self.d_proc,
+            "default_knitting_output_colour": self.greige,
             "default_compacting_process": "_Test Compact CPD",
             "default_cloth_per_kg_yarn": 1,
         })
@@ -1195,6 +1289,7 @@ class TestClothProgram(IntegrationTestCase):
         self.assertEqual(defaults, {
             "knitting_process": self.k_proc,
             "dyeing_process": self.d_proc,
+            "knitting_output_colour": self.greige,
             "compacting_process": "_Test Compact CPD",
             "cloth_per_kg_yarn": 1.0,
         })

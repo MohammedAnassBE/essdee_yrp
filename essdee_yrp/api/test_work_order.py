@@ -194,6 +194,18 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
             {"Dia": self.dia, "Colour": self.greige},
         )
 
+    def test_knitting_ignores_process_default_excess(self):
+        """The Lot program already contains its manually chosen excess."""
+        frappe.db.set_value("Process", self.k_proc, "default_excess", 5)
+        frappe.clear_cache(doctype="Process")
+        try:
+            self._calculate()
+            self.wo.reload()
+            self.assertAlmostEqual(self.wo.receivables[0].qty, 48.05, places=3)
+        finally:
+            frappe.db.set_value("Process", self.k_proc, "default_excess", 0)
+            frappe.clear_cache(doctype="Process")
+
     def test_calculate_is_idempotent_for_partial_variant(self):
         """Second Calculate must REUSE the minted attr-less yarn variant (no
         DuplicateEntryError, no second variant on the yarn Item)."""

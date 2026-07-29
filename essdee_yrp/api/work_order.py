@@ -185,14 +185,14 @@ def _add_planning_data(qty_rows, kind, lot, wo, fabric, ipd, step):
 	Prefill comes from the back-computed PLAN when one exists (else 0 for
 	swaps, per the 2026-07-04 decision). Rework WOs excluded; the current WO's
 	own calculated rows excluded (they get replaced)."""
+	from essdee_yrp.fabric_plan import _route_bypasses_step
 	from essdee_yrp.fabric_tracking import (
 		get_consumed_by_dia_colour,
-		get_produced_by_reference,
 		get_produced_by_dia_colour,
+		get_produced_by_reference,
 		get_step_planned,
 		get_step_received,
 	)
-	from essdee_yrp.fabric_plan import _route_bypasses_step
 
 	cloth = fabric.cloth_item
 
@@ -772,10 +772,10 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 	the same dia), and an attrs-based first-match would misroute the quantity
 	through the wrong group.
 
-	The entered qty is the base OUTPUT demand. The RECEIVABLE is that base scaled
-	by the Process wastage/excess: receivable = qty x (1 - default_wastage% +
-	default_excess%). The DELIVERABLE (consumed input) is untouched by these two
-	percentages. With wastage = excess = 0 the receivable stays 1:1 with qty.
+	The entered qty is the OUTPUT program demand. Knitting program excess is already
+	included when Build Cloth Programs creates that qty, so Knitting ignores the
+	Process default_excess here. Other processes scale RECEIVABLE by their Process
+	wastage/excess. The DELIVERABLE (consumed input) is untouched by these values.
 
 	Receivables are minted on the STEP's real output item (matrix.output_item,
 	falling back to the Lot's cloth item) in that item's default UOM — a mid-chain
@@ -795,23 +795,13 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 	if not default_received_type:
 		frappe.throw(_("Set Default Received Type in YRP Stock Settings first."))
 
-	# Process wastage + excess adjust the RECEIVABLE (the produced/returned output)
-	# ONLY — the deliverable (consumed input) stays the matrix base:
-	# receivable = base x (1 - wastage% + excess%), i.e.
-	# wastage LOWERS the received qty (material lost in the process) and excess
-	# RAISES it (buffer produced). `wo_excess_allowed_percentage` is a SEPARATE
-	# GRN receipt tolerance applied at receipt time and is NOT applied here.
+	# Knitting excess is already baked into the Lot program. Ignore the Process
+	# default_excess for that step so it is never added twice. Other processes
+	# retain their existing receivable wastage/excess calculation.
 	proc = frappe.get_cached_value(
 		"Process", wo.process_name, ["default_wastage", "default_excess"], as_dict=True) or {}
 	recv_wastage = flt(proc.get("default_wastage"))
-	recv_excess = flt(proc.get("default_excess"))
-	recv_factor = 1 - recv_wastage / 100.0 + recv_excess / 100.0
-	if recv_factor <= 0:
-		frappe.throw(_(
-			"Process {0}: wastage {1}% / excess {2}% give a non-positive receivable "
-			"factor ({3}); the received quantity would be zero or negative. Check the "
-			"Process wastage and excess."
-		).format(wo.process_name, recv_wastage, recv_excess, flt(recv_factor, 4)))
+	process_excess = flt(proc.get("default_excess"))
 
 	deliverables, receivables = [], []
 	matrix_cache = {}
@@ -834,6 +824,13 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 				kind = "identity"
 		if not kind:
 			frappe.throw(_("{0} is not a fabric process on IPD {1}.").format(wo.process_name, ipd.name))
+		recv_excess = 0 if kind == "knitting" else process_excess
+		recv_factor = 1 - recv_wastage / 100.0 + recv_excess / 100.0
+		if recv_factor <= 0:
+			frappe.throw(_(
+				"Process {0}: wastage {1}% / excess {2}% give a non-positive "
+				"receivable factor ({3}). Check the Process percentages."
+			).format(wo.process_name, recv_wastage, recv_excess, flt(recv_factor, 4)))
 
 		if kind == "identity":
 			# No conversion: deliverable = receivable, same variant, same qty.

@@ -16,6 +16,7 @@ fixtures = [
 				[
 					"Item-product_category",
 					"Item-is_cloth_item",
+					"Item-yarn_ratio_details",
 					"Supplier-apply_sewing_plan",
 					"Process-additional_allowance",
 					"Process-includes_packing",
@@ -153,6 +154,7 @@ app_include_js = ["essdee_yrp.bundle.js"]
 
 # include js in doctype views
 doctype_js = {
+	"Item": "public/js/item.js",
 	"Item Production Detail": "public/js/item_production_detail.js",
 	"Production Order": "public/js/production_order.js",
 	"Work Order": "public/js/work_order.js",
@@ -281,6 +283,9 @@ after_build = "essdee_yrp.web_build.build_web_spa"
 # Hook on document methods and events
 
 doc_events = {
+	"Item": {
+		"validate": "essdee_yrp.item_validations.validate",
+	},
 	"Item Production Detail": {
 		"onload": "essdee_yrp.ipd_ui.onload",
 		"before_validate": [

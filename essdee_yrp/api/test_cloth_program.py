@@ -1171,12 +1171,23 @@ class TestClothProgram(IntegrationTestCase):
         lot = frappe.get_doc({
             "doctype": "Lot", "lot_name": "_Test CPD Lot Excess",
         }).insert(ignore_permissions=True)
-        demand = {(self.cloth, self.dia, self.red): 50.9}
-        with patch.object(cloth_program, "compute_cloth_demand", return_value=demand):
+        # This live-shaped value exposes both premature rounding and the
+        # cross-site tie-break difference: 15.050 * 1.05 is exactly 15.8025.
+        # MRP rounds that positive half-thousandth up to 15.803, so YRP must
+        # use the same explicit commercial rule regardless of System Settings.
+        demand = {(self.cloth, self.dia, self.red): 15.05}
+        with patch.object(
+            cloth_program, "compute_cloth_demand", return_value=demand
+        ) as compute_demand:
             build_cloth_programs(lot.name, [self.selection])
             res = build_cloth_programs(
                 lot.name, [self.selection], excess_percentage=5
             )
+        self.assertEqual(compute_demand.call_count, 2)
+        self.assertTrue(all(
+            call.kwargs == {"apply_allowance": False}
+            for call in compute_demand.call_args_list
+        ))
         self.assertEqual(res["excess_percentage"], 5)
         lot.reload()
         requirement = next(
@@ -1190,9 +1201,9 @@ class TestClothProgram(IntegrationTestCase):
             if r.cloth_item == self.cloth and r.process_name == self.k_proc
             and r.side == "Output"
         )
-        self.assertAlmostEqual(requirement.weight, 50.9, places=3)
-        self.assertAlmostEqual(planned, 50.9, places=3)
-        self.assertAlmostEqual(program.weight, 53.445, places=3)
+        self.assertEqual(flt(requirement.weight, 3), 15.05)
+        self.assertEqual(flt(planned, 3), 15.05)
+        self.assertEqual(flt(program.weight, 3), 15.803)
 
     def test_build_cloth_programs_rejects_negative_excess(self):
         lot = frappe.get_doc({
@@ -1385,8 +1396,13 @@ class TestClothProgram(IntegrationTestCase):
         # fake garment's single cloth survives the filter.
         demand = {(self.cloth, self.dia, self.red): 1.0}
         with patch.object(frappe, "get_cached_doc", side_effect=fake_cached), \
-                patch.object(cp, "compute_cloth_demand", return_value=demand):
+                patch.object(
+                    cp, "compute_cloth_demand", return_value=demand
+                ) as compute_demand:
             ctx = cp.get_cloth_program_context(lot.name)
+        compute_demand.assert_called_once_with(
+            lot.name, apply_allowance=False
+        )
         self.assertEqual(len(ctx["cloths"]), 1)
         self.assertEqual(ctx["cloths"][0]["cloth_item"], self.cloth)
         self.assertEqual(ctx["cloths"][0]["default_yarn"], self.yarn)

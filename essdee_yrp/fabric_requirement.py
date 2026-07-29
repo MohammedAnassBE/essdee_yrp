@@ -322,9 +322,15 @@ def _validate_garment_ipd(item_detail):
             "before building cloth programs.").format(item_detail.get("name") or ""))
 
 
-def compute_cloth_demand(lot_name):
+def compute_cloth_demand(lot_name, apply_allowance=True):
     """Phase 1 SPLIT entrypoint: {(cloth Item, dia, colour): kg} for a garment Lot,
-    driven by its garment IPD's Cutting tab and the Lot's lot_order_details."""
+    driven by its garment IPD's Cutting tab and the Lot's lot_order_details.
+
+    ``apply_allowance=False`` returns the exact decimal garment demand. Cloth
+    Program uses that mode because its popup percentage is the operator's sole
+    requested uplift; applying MRP Settings allowance first would add a hidden
+    second excess and round every route to whole kilograms.
+    """
     lot_doc = frappe.get_cached_doc("Lot", lot_name)
     item_detail = frappe.get_cached_doc("Item Production Detail", lot_doc.production_detail)
     _validate_garment_ipd(item_detail)
@@ -359,6 +365,8 @@ def compute_cloth_demand(lot_name):
 
     demand = _aggregate_demand(
         item_detail, variant_rows, cloth_combination, stitching_combination, cloth_label_to_item)
+    if not apply_allowance:
+        return demand
     return _apply_cloth_allowance(
         demand,
         frappe.db.get_single_value("MRP Settings", "cloth_allowance_percentage"),

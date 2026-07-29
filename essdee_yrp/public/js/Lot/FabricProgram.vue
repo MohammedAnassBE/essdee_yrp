@@ -24,20 +24,20 @@
 			</header>
 
 			<section class="fp-grid">
-				<h6>{{ __("Finished cloth requirement — Dia × Colour") }}</h6>
+				<h6>{{ __("Knitting Program — Dia × Colour") }}</h6>
 				<div class="fp-table-wrap">
 					<table class="fp-table fp-matrix">
 						<thead>
 							<tr>
-								<th rowspan="2" class="fp-dia">{{ __("Finished Dia") }}</th>
-								<th :colspan="colour_columns(entry).length">
-									{{ __("Finished cloth requirement (Kg)") }}
+								<th rowspan="2" class="fp-dia">{{ __("Dia") }}</th>
+								<th :colspan="program_colour_columns(entry).length">
+									{{ __("Knitting Program (Kg)") }}
 								</th>
 								<th rowspan="2" class="fp-num">{{ __("Total") }}</th>
 							</tr>
 							<tr>
 								<th
-									v-for="colour in colour_columns(entry)"
+									v-for="colour in program_colour_columns(entry)"
 									:key="colour.key"
 									class="fp-num fp-colour"
 								>
@@ -46,101 +46,55 @@
 							</tr>
 						</thead>
 						<tbody>
-							<tr v-for="dia in requirement_dias(entry)" :key="dia">
+							<tr v-for="dia in program_dias(entry)" :key="dia">
 								<td class="fp-dia">{{ dia }}</td>
 								<td
-									v-for="colour in colour_columns(entry)"
+									v-for="colour in program_colour_columns(entry)"
 									:key="colour.key"
 									class="fp-num"
 								>
 									<input
 										v-if="editable"
-										:value="requirement_weight(entry, dia, colour.key)"
+										:value="program_weight(entry, dia, colour.key)"
 										type="number"
 										min="0"
 										step="0.001"
 										class="fp-input"
-										@change="set_requirement_weight(entry, dia, colour.key, $event.target.value)"
+										@change="set_program_weight(entry, dia, colour.key, $event.target.value)"
 									/>
-									<span v-else>{{ requirement_weight(entry, dia, colour.key) }}</span>
+									<span v-else>{{ program_weight(entry, dia, colour.key) }}</span>
 								</td>
-								<td class="fp-num fp-program">{{ requirement_dia_total(entry, dia) }}</td>
+								<td class="fp-num fp-program">{{ program_dia_total(entry, dia) }}</td>
 							</tr>
-							<tr v-if="!requirement_dias(entry).length">
-								<td :colspan="colour_columns(entry).length + 2" class="fp-none">
-									{{ __("No cloth requirement yet") }}
+							<tr v-if="!program_dias(entry).length">
+								<td :colspan="program_colour_columns(entry).length + 2" class="fp-none">
+									{{ __("No knitting program yet") }}
 								</td>
 							</tr>
 							<tr v-else class="fp-total">
 								<td>{{ __("Total") }}</td>
 								<td
-									v-for="colour in colour_columns(entry)"
+									v-for="colour in program_colour_columns(entry)"
 									:key="colour.key"
 									class="fp-num"
 								>
-									{{ colour_total(entry, colour.key) }}
+									{{ program_colour_total(entry, colour.key) }}
 								</td>
-								<td class="fp-num">{{ requirement_total(entry) }}</td>
+								<td class="fp-num">{{ program_total(entry) }}</td>
 							</tr>
 						</tbody>
 					</table>
 				</div>
 
-				<h6 class="fp-route-heading">{{ __("Knitting output plan — exact routes") }}</h6>
-				<div class="fp-table-wrap">
-					<table class="fp-table fp-route-table">
-						<thead>
-							<tr>
-								<th>{{ __("Finished route") }}</th>
-								<th>{{ __("Received from knitting as") }}</th>
-								<th class="fp-num">{{ __("Planned Kg") }}</th>
-								<th class="fp-num">{{ __("Received Kg") }}</th>
-								<th class="fp-num">{{ __("Balance Kg") }}</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr v-for="(route, ri) in program_routes(entry)" :key="route.reference_item_variant || ri">
-								<td>
-									<strong>{{ route.finished_colour || __("Unspecified colour") }}</strong>
-									<small>{{ route.finished_dia || __("No final Dia") }}</small>
-								</td>
-								<td>
-									<strong>{{ route.knitting_output_colour || __("Unspecified colour") }}</strong>
-									<small>{{ route.knitting_output_dia || __("No knitting Dia") }}</small>
-								</td>
-								<td class="fp-num">{{ round_kg(route.weight) }}</td>
-								<td class="fp-num fp-received">{{ round_kg(route.received_weight) }}</td>
-								<td class="fp-num">{{ route_balance(route) }}</td>
-							</tr>
-							<tr v-if="!program_routes(entry).length">
-								<td colspan="5" class="fp-none">
-									{{ entry.ipd_approved
-										? __("Save requirements or rebuild the plan.")
-										: __("Approve the cloth IPD to build its route plan.") }}
-								</td>
-							</tr>
-							<tr v-else class="fp-total">
-								<td colspan="2">{{ __("Total") }}</td>
-								<td class="fp-num">{{ program_total(entry) }}</td>
-								<td class="fp-num fp-received">{{ received_total(entry) }}</td>
-								<td class="fp-num">{{ round_kg(program_total(entry) - received_total(entry)) }}</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-				<div v-if="!entry.ipd_approved" class="fp-hint">
-					{{ __("Plan builds when the IPD is approved.") }}
-				</div>
 			</section>
 		</div>
 	</div>
 </template>
 
 <script setup>
-// Lot Fabric island: finished-cloth requirements are pivoted by Dia × Colour,
-// with the knitting program total and GRN-received kg at the right. The stored
-// data remains the same long-form requirement/program payload used by the
-// planner and Work Orders.
+// Lot Fabric island: the UI shows the saved knitting program pivoted by
+// Dia × Colour. The raw finished-cloth requirement remains in the payload for
+// planning; visible weights include the operator-entered knitting excess.
 import { computed, ref } from "vue";
 
 const entries = ref([]);
@@ -205,83 +159,57 @@ function dia_number(value) {
 	return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER;
 }
 
-function requirement_dias(entry) {
-	const values = [
-		...(entry.final_options?.dias || []),
-		...entry.requirement.map((row) => row.dia),
-	].filter(Boolean);
+function program_dia(row) {
+	return row.finished_dia || row.dia || "";
+}
+
+function program_colour(row) {
+	return row.finished_colour || row.colour || "";
+}
+
+function program_dias(entry) {
+	const values = entry.program.map(program_dia).filter(Boolean);
 	return [...new Set(values)].sort((a, b) =>
 		dia_number(a) - dia_number(b) || String(a).localeCompare(String(b)));
 }
 
-function colour_columns(entry) {
-	const values = [
-		...entry.requirement.map((row) => row.colour),
-		...(entry.colours || []),
-		...(entry.final_options?.colours || []),
-	].filter(Boolean);
-	const colours = [...new Set(values)];
+function program_colour_columns(entry) {
+	const colours = [...new Set(entry.program.map(program_colour).filter(Boolean))]
+		.sort((a, b) => String(a).localeCompare(String(b)));
 	return colours.length
 		? colours.map((colour) => ({ key: colour, label: colour }))
-		: [{ key: "", label: __("Requirement") }];
+		: [{ key: "", label: __("Program") }];
 }
 
-function requirement_row(entry, dia, colour) {
-	return entry.requirement.find(
-		(row) => row.dia === dia && (row.colour || "") === colour);
+function program_row(entry, dia, colour) {
+	return entry.program.find(
+		(row) => program_dia(row) === dia && program_colour(row) === colour);
 }
 
-function requirement_weight(entry, dia, colour) {
-	return round_kg(requirement_row(entry, dia, colour)?.weight);
+function program_weight(entry, dia, colour) {
+	return round_kg(program_row(entry, dia, colour)?.weight);
 }
 
-function set_requirement_weight(entry, dia, colour, value) {
+function set_program_weight(entry, dia, colour, value) {
 	const weight = Math.max(0, Number(value) || 0);
-	const row = requirement_row(entry, dia, colour);
-	if (row) {
-		row.weight = weight;
-	} else if (weight > 0) {
-		entry.requirement.push({ dia, colour: colour || null, weight });
-	}
+	const row = program_row(entry, dia, colour);
+	if (row) row.weight = weight;
 	mark_dirty();
 }
 
-function colour_total(entry, colour) {
-	return round_kg(entry.requirement.reduce(
-		(sum, row) => sum + ((row.colour || "") === colour ? Number(row.weight) || 0 : 0), 0));
+function program_colour_total(entry, colour) {
+	return round_kg(entry.program.reduce(
+		(sum, row) => sum + (program_colour(row) === colour ? Number(row.weight) || 0 : 0), 0));
 }
 
-function requirement_dia_total(entry, dia) {
-	return round_kg(entry.requirement.reduce(
-		(sum, row) => sum + (row.dia === dia ? Number(row.weight) || 0 : 0), 0));
-}
-
-function requirement_total(entry) {
-	return round_kg(entry.requirement.reduce(
-		(sum, row) => sum + (Number(row.weight) || 0), 0));
-}
-
-function program_routes(entry) {
-	return entry.program.slice().sort((a, b) =>
-		String(a.finished_colour || "").localeCompare(String(b.finished_colour || ""))
-		|| dia_number(a.finished_dia) - dia_number(b.finished_dia)
-		|| String(a.finished_dia || "").localeCompare(String(b.finished_dia || "")));
-}
-
-function route_balance(route) {
-	return round_kg(Math.max(
-		(Number(route.weight) || 0) - (Number(route.received_weight) || 0),
-		0,
-	));
+function program_dia_total(entry, dia) {
+	return round_kg(entry.program.reduce(
+		(sum, row) => sum + (program_dia(row) === dia ? Number(row.weight) || 0 : 0), 0));
 }
 
 function program_total(entry) {
-	return round_kg(entry.program.reduce((sum, row) => sum + (Number(row.weight) || 0), 0));
-}
-
-function received_total(entry) {
 	return round_kg(entry.program.reduce(
-		(sum, row) => sum + (Number(row.received_weight) || 0), 0));
+		(sum, row) => sum + (Number(row.weight) || 0), 0));
 }
 
 function mark_dirty() {
@@ -373,21 +301,6 @@ defineExpose({ load_data, get_data, get_requirement });
 .fp-matrix {
 	min-width: 680px;
 }
-.fp-route-heading {
-	margin-top: 14px !important;
-}
-.fp-route-table {
-	min-width: 650px;
-}
-.fp-route-table td > strong,
-.fp-route-table td > small {
-	display: block;
-}
-.fp-route-table td > small {
-	margin-top: 2px;
-	color: var(--text-muted);
-	font-size: 11px;
-}
 .fp-table th,
 .fp-table td {
 	border: 1px solid var(--border-color);
@@ -415,9 +328,6 @@ defineExpose({ load_data, get_data, get_requirement });
 	background: var(--subtle-fg, transparent);
 	font-weight: 600;
 }
-.fp-received {
-	color: var(--text-muted);
-}
 .fp-total td {
 	font-weight: 600;
 	border-top: 2px solid var(--border-color);
@@ -433,11 +343,6 @@ defineExpose({ load_data, get_data, get_requirement });
 	color: var(--text-muted);
 	text-align: center;
 	font-size: 12px;
-}
-.fp-hint {
-	margin-top: 6px;
-	color: var(--text-muted);
-	font-size: 11.5px;
 }
 @media (max-width: 700px) {
 	.fp-head {

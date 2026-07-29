@@ -29,7 +29,11 @@ from frappe import _
 from frappe.utils import cint, flt
 
 from essdee_yrp.api.work_order import _guard_not_modified
-from essdee_yrp.fabric_ipd import synthesize_fabric_processes_from_tabs
+from essdee_yrp.fabric_ipd import (
+    FABRIC_COLOUR_ATTRIBUTE,
+    FABRIC_DIA_ATTRIBUTE,
+    synthesize_fabric_processes_from_tabs,
+)
 from essdee_yrp.fabric_program import (
     get_greige_colour,
     get_knitting_output_colour_map,
@@ -813,6 +817,38 @@ def _requirement_payload(by_cloth):
     return entries
 
 
+def _exact_program_base_weight(row, raw_demand):
+    """Recover the exact final-route kg before the requirement table rounds it.
+
+    Lot Fabric Requirement intentionally stores three decimals. The plan uses
+    those persisted rows, so multiplying its pre-seeded program by a popup
+    excess causes a second rounding step. A program row's reference variant
+    identifies the exact final Dia/Colour route; use the original demand for
+    that route and round only after applying the popup percentage.
+    """
+    final_dia = row.get("dia")
+    final_colour = row.get("colour") or None
+    reference = row.get("reference_item_variant")
+    if reference:
+        variant = frappe.get_cached_doc("Item Variant", reference)
+        attrs = {
+            value.attribute: value.attribute_value
+            for value in variant.get("attributes") or []
+        }
+        final_dia = attrs.get(FABRIC_DIA_ATTRIBUTE) or final_dia
+        final_colour = attrs.get(FABRIC_COLOUR_ATTRIBUTE) or final_colour
+
+    routes = raw_demand.get(row.get("cloth_item")) or {}
+    for key in (
+        (final_dia, final_colour),
+        (final_dia, final_colour or ""),
+        (final_dia, None),
+    ):
+        if key in routes:
+            return flt(routes[key])
+    return flt(row.get("weight"))
+
+
 @frappe.whitelist()
 def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
     """Orchestrator entrypoint (Desk button + /web modal). selections:
@@ -831,7 +867,10 @@ def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
         frappe.throw(_("Knitting program excess percentage cannot be negative."))
     excess_factor = 1 + excess_percentage / 100
 
-    demand = compute_cloth_demand(lot_doc.name)
+    # Popup excess is authoritative for this build. Start from the exact
+    # garment demand so MRP Settings cloth allowance is not silently stacked
+    # before the operator-entered percentage.
+    demand = compute_cloth_demand(lot_doc.name, apply_allowance=False)
     if not demand:
         frappe.throw(_("This lot has no cloth demand. Run 'Calculate Order Items' first, then retry."))
 
@@ -949,14 +988,26 @@ def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
     for row in frappe.get_all(
         "Lot Fabric Program",
         filters={"parent": lot_doc.name, "parenttype": "Lot"},
-        fields=["name", "cloth_item", "weight"],
+        fields=[
+            "name",
+            "cloth_item",
+            "dia",
+            "colour",
+            "reference_item_variant",
+            "weight",
+        ],
     ):
         if row.cloth_item in payload:
+            base_weight = _exact_program_base_weight(row, payload)
             frappe.db.set_value(
                 "Lot Fabric Program",
                 row.name,
                 "weight",
-                flt(flt(row.weight) * excess_factor, 3),
+                flt(
+                    base_weight * excess_factor,
+                    3,
+                    "Commercial Rounding",
+                ),
                 update_modified=False,
             )
     return {
@@ -1123,7 +1174,7 @@ def get_cloth_program_context(lot):
         return {"cloths": [], "defaults": _cloth_program_defaults()}
     ipd = frappe.get_cached_doc("Item Production Detail", lot_doc.production_detail)
     cloths = _cloth_rows_from_ipd(ipd)
-    demand = compute_cloth_demand(lot_doc.name)
+    demand = compute_cloth_demand(lot_doc.name, apply_allowance=False)
     demanded = {cloth for (cloth, _dia, _colour) in demand}
     demanded_colours = {}
     demanded_routes = {}

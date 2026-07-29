@@ -29,18 +29,18 @@
 			</header>
 
 			<section class="lfv-grid">
-				<h6>Finished cloth requirement — Dia × Colour</h6>
+				<h6>Knitting Program — Dia × Colour</h6>
 				<div class="lfv-table-wrap">
 					<table class="lfv-table lfv-matrix">
 						<thead>
 							<tr>
-								<th rowspan="2" class="lfv-dia">Finished Dia</th>
-								<th :colspan="colourColumns(entry).length">Finished cloth requirement (Kg)</th>
+								<th rowspan="2" class="lfv-dia">Dia</th>
+								<th :colspan="programColourColumns(entry).length">Knitting Program (Kg)</th>
 								<th rowspan="2" class="lfv-num">Total</th>
 							</tr>
 							<tr>
 								<th
-									v-for="colour in colourColumns(entry)"
+									v-for="colour in programColourColumns(entry)"
 									:key="colour.key"
 									class="lfv-num lfv-colour"
 								>
@@ -49,89 +49,44 @@
 							</tr>
 						</thead>
 						<tbody>
-							<tr v-for="dia in requirementDias(entry)" :key="dia">
+							<tr v-for="dia in programDias(entry)" :key="dia">
 								<td class="lfv-dia">{{ dia }}</td>
 								<td
-									v-for="colour in colourColumns(entry)"
+									v-for="colour in programColourColumns(entry)"
 									:key="colour.key"
 									class="lfv-num"
 								>
 									<input
 										v-if="!readonly"
-										:value="requirementWeight(entry, dia, colour.key)"
+										:value="programWeight(entry, dia, colour.key)"
 										type="number"
 										min="0"
 										step="0.001"
 										class="lfv-input"
-										@change="setRequirementWeight(entry, dia, colour.key, $event.target.value)"
+										@change="setProgramWeight(entry, dia, colour.key, $event.target.value)"
 									/>
-									<span v-else>{{ requirementWeight(entry, dia, colour.key) }}</span>
+									<span v-else>{{ programWeight(entry, dia, colour.key) }}</span>
 								</td>
-								<td class="lfv-num lfv-program">{{ requirementDiaTotal(entry, dia) }}</td>
+								<td class="lfv-num lfv-program">{{ programDiaTotal(entry, dia) }}</td>
 							</tr>
-							<tr v-if="!requirementDias(entry).length">
-								<td :colspan="colourColumns(entry).length + 2" class="lfv-none">
-									No cloth requirement yet
+							<tr v-if="!programDias(entry).length">
+								<td :colspan="programColourColumns(entry).length + 2" class="lfv-none">
+									No knitting program yet
 								</td>
 							</tr>
 							<tr v-else class="lfv-total">
 								<td>Total</td>
 								<td
-									v-for="colour in colourColumns(entry)"
+									v-for="colour in programColourColumns(entry)"
 									:key="colour.key"
 									class="lfv-num"
 								>
-									{{ colourTotal(entry, colour.key) }}
+									{{ programColourTotal(entry, colour.key) }}
 								</td>
-								<td class="lfv-num">{{ requirementTotal(entry) }}</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-				<h6 class="lfv-route-heading">Knitting output plan — exact routes</h6>
-				<div class="lfv-table-wrap">
-					<table class="lfv-table lfv-route-table">
-						<thead>
-							<tr>
-								<th>Finished route</th>
-								<th>Received from knitting as</th>
-								<th class="lfv-num">Planned Kg</th>
-								<th class="lfv-num">Received Kg</th>
-								<th class="lfv-num">Balance Kg</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr v-for="(route, ri) in programRoutes(entry)" :key="route.reference_item_variant || ri">
-								<td>
-									<strong>{{ route.finished_colour || "Unspecified colour" }}</strong>
-									<small>{{ route.finished_dia || "No final Dia" }}</small>
-								</td>
-								<td>
-									<strong>{{ route.knitting_output_colour || "Unspecified colour" }}</strong>
-									<small>{{ route.knitting_output_dia || "No knitting Dia" }}</small>
-								</td>
-								<td class="lfv-num">{{ roundKg(route.weight) }}</td>
-								<td class="lfv-num lfv-received">{{ roundKg(route.received_weight) }}</td>
-								<td class="lfv-num">{{ routeBalance(route) }}</td>
-							</tr>
-							<tr v-if="!programRoutes(entry).length">
-								<td colspan="5" class="lfv-none">
-									{{ entry.ipd_approved
-										? "Save requirements or rebuild the plan."
-										: "Approve the cloth IPD to build its route plan." }}
-								</td>
-							</tr>
-							<tr v-else class="lfv-total">
-								<td colspan="2">Total</td>
 								<td class="lfv-num">{{ programTotal(entry) }}</td>
-								<td class="lfv-num lfv-received">{{ receivedTotal(entry) }}</td>
-								<td class="lfv-num">{{ roundKg(programTotal(entry) - receivedTotal(entry)) }}</td>
 							</tr>
 						</tbody>
 					</table>
-				</div>
-				<div v-if="!entry.ipd_approved" class="lfv-hint">
-					Plan builds when the IPD is approved.
 				</div>
 			</section>
 		</div>
@@ -143,10 +98,9 @@
  * Lot Fabric views — /web re-port of the Desk Vue island
  * apps/essdee_yrp/essdee_yrp/public/js/Lot/FabricProgram.vue.
  *
- * One compact Dia × Colour matrix combines the two approved views: finished
- * cloth requirement cells plus an exact finished-route → physical-knitting
- * plan and read-only GRN received kg. The persisted payload remains the
- * original two long-form lists.
+ * The UI shows the compact Dia × Colour knitting-program matrix. The raw
+ * finished-cloth requirement remains in the payload for planning, while the
+ * visible weights come from the saved program after the operator's excess.
  *
  * Data contract (byte-faithful to the Desk island):
  *  - loadData(entries): the __onload.fabric_program_details payload built by
@@ -263,93 +217,63 @@ function diaNumber(value) {
 	return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER
 }
 
-function requirementDias(entry) {
-	const values = [
-		...(entry.final_options?.dias || []),
-		...entry.requirement.map((row) => row.dia),
-	].filter(Boolean)
+function programDia(row) {
+	return row.finished_dia || row.dia || ""
+}
+
+function programColour(row) {
+	return row.finished_colour || row.colour || ""
+}
+
+function programDias(entry) {
+	const values = entry.program.map(programDia).filter(Boolean)
 	return [...new Set(values)].sort(
 		(a, b) => diaNumber(a) - diaNumber(b) || String(a).localeCompare(String(b)),
 	)
 }
 
-function colourColumns(entry) {
-	const values = [
-		...entry.requirement.map((row) => row.colour),
-		...(entry.colours || []),
-		...(entry.final_options?.colours || []),
-	].filter(Boolean)
-	const colours = [...new Set(values)]
+function programColourColumns(entry) {
+	const colours = [...new Set(entry.program.map(programColour).filter(Boolean))]
+		.sort((a, b) => String(a).localeCompare(String(b)))
 	return colours.length
 		? colours.map((colour) => ({ key: colour, label: colour }))
-		: [{ key: "", label: "Requirement" }]
+		: [{ key: "", label: "Program" }]
 }
 
-function requirementRow(entry, dia, colour) {
-	return entry.requirement.find(
-		(row) => row.dia === dia && (row.colour || "") === colour,
+function programRow(entry, dia, colour) {
+	return entry.program.find(
+		(row) => programDia(row) === dia && programColour(row) === colour,
 	)
 }
 
-function requirementWeight(entry, dia, colour) {
-	return roundKg(requirementRow(entry, dia, colour)?.weight)
+function programWeight(entry, dia, colour) {
+	return roundKg(programRow(entry, dia, colour)?.weight)
 }
 
-function setRequirementWeight(entry, dia, colour, value) {
+function setProgramWeight(entry, dia, colour, value) {
 	const weight = Math.max(0, Number(value) || 0)
-	const row = requirementRow(entry, dia, colour)
-	if (row) {
-		row.weight = weight
-	} else if (weight > 0) {
-		entry.requirement.push({ dia, colour: colour || null, weight })
-	}
+	const row = programRow(entry, dia, colour)
+	if (row) row.weight = weight
 	markDirty()
 }
 
-function colourTotal(entry, colour) {
-	return roundKg(entry.requirement.reduce(
-		(sum, row) => sum + ((row.colour || "") === colour ? Number(row.weight) || 0 : 0),
+function programColourTotal(entry, colour) {
+	return roundKg(entry.program.reduce(
+		(sum, row) => sum + (programColour(row) === colour ? Number(row.weight) || 0 : 0),
 		0,
 	))
 }
 
-function requirementDiaTotal(entry, dia) {
-	return roundKg(entry.requirement.reduce(
-		(sum, row) => sum + (row.dia === dia ? Number(row.weight) || 0 : 0),
-		0,
-	))
-}
-
-function requirementTotal(entry) {
-	return roundKg(entry.requirement.reduce(
-		(sum, row) => sum + (Number(row.weight) || 0),
-		0,
-	))
-}
-
-function programRoutes(entry) {
-	return entry.program.slice().sort(
-		(a, b) =>
-			String(a.finished_colour || "").localeCompare(String(b.finished_colour || "")) ||
-			diaNumber(a.finished_dia) - diaNumber(b.finished_dia) ||
-			String(a.finished_dia || "").localeCompare(String(b.finished_dia || "")),
-	)
-}
-
-function routeBalance(route) {
-	return roundKg(Math.max(
-		(Number(route.weight) || 0) - (Number(route.received_weight) || 0),
+function programDiaTotal(entry, dia) {
+	return roundKg(entry.program.reduce(
+		(sum, row) => sum + (programDia(row) === dia ? Number(row.weight) || 0 : 0),
 		0,
 	))
 }
 
 function programTotal(entry) {
-	return roundKg(entry.program.reduce((sum, row) => sum + (Number(row.weight) || 0), 0))
-}
-
-function receivedTotal(entry) {
 	return roundKg(entry.program.reduce(
-		(sum, row) => sum + (Number(row.received_weight) || 0),
+		(sum, row) => sum + (Number(row.weight) || 0),
 		0,
 	))
 }
@@ -442,21 +366,6 @@ defineExpose({ loadData, getData, getRequirement, hasItems })
 .lfv-matrix {
 	min-width: 720px;
 }
-.lfv-route-heading {
-	margin-top: 14px !important;
-}
-.lfv-route-table {
-	min-width: 650px;
-}
-.lfv-route-table td > strong,
-.lfv-route-table td > small {
-	display: block;
-}
-.lfv-route-table td > small {
-	margin-top: 2px;
-	color: var(--esd-muted);
-	font-size: 11px;
-}
 .lfv-table th,
 .lfv-table td {
 	border: 1px solid var(--esd-line);
@@ -488,9 +397,6 @@ defineExpose({ loadData, getData, getRequirement, hasItems })
 	background: var(--esd-slate-50);
 	font-weight: 600;
 }
-.lfv-received {
-	color: var(--esd-muted);
-}
 .lfv-total td {
 	font-weight: 600;
 	border-top: 2px solid var(--esd-line);
@@ -508,11 +414,6 @@ defineExpose({ loadData, getData, getRequirement, hasItems })
 	color: var(--esd-muted-2);
 	text-align: center;
 	font-size: 12px;
-}
-.lfv-hint {
-	margin-top: 6px;
-	color: var(--esd-muted);
-	font-size: 11.5px;
 }
 @media (max-width: 700px) {
 	.lfv-head {

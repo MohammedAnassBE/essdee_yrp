@@ -1,0 +1,107 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "item_variant",
+  "quantity",
+  "uom",
+  "work_order_deliverable",
+  "lot",
+  "received_type",
+  "valuation_rate",
+  "set_combination",
+  "stock_qty",
+  "stock_uom",
+  "conversion_factor"
+ ],
+ "fields": [
+  {
+   "fieldname": "item_variant",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item Variant",
+   "options": "Item Variant",
+   "reqd": 1
+  },
+  {
+   "fieldname": "quantity",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Quantity",
+   "reqd": 1
+  },
+  {
+   "fieldname": "uom",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "UOM",
+   "options": "UOM",
+   "reqd": 1
+  },
+  {
+   "fieldname": "work_order_deliverable",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Work Order Deliverable",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "lot",
+   "fieldtype": "Link",
+   "label": "Lot",
+   "options": "Lot"
+  },
+  {
+   "fieldname": "received_type",
+   "fieldtype": "Link",
+   "label": "Received Type",
+   "options": "Received Type"
+  },
+  {
+   "fieldname": "valuation_rate",
+   "fieldtype": "Currency",
+   "label": "Valuation Rate"
+  },
+  {
+   "fieldname": "set_combination",
+   "fieldtype": "JSON",
+   "label": "Set Combination"
+  },
+  {
+   "fieldname": "stock_qty",
+   "fieldtype": "Float",
+   "hidden": 1,
+   "label": "Stock Quantity",
+   "read_only": 1
+  },
+  {
+   "fieldname": "stock_uom",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Stock UOM",
+   "options": "UOM",
+   "read_only": 1
+  },
+  {
+   "fieldname": "conversion_factor",
+   "fieldtype": "Float",
+   "hidden": 1,
+   "label": "Conversion Factor",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "istable": 1,
+ "links": [],
+ "module": "Essdee YRP",
+ "name": "YRP GRN Deliverable",
+ "naming_rule": "Random",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

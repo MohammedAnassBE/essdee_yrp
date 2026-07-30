@@ -418,6 +418,41 @@
 			:dialog-position="actionDialogPosition"
 			@sent="onWhatsAppSent"
 		/>
+		<Dialog
+			v-model:visible="workOrderCloseOpen"
+			modal
+			:header="doc?.open_status === 'Close Request' ? 'Approve Work Order Close' : 'Close Work Order'"
+			:style="{ width: 'min(34rem, 94vw)' }"
+		>
+			<div class="form-grid">
+				<div class="form-field wide">
+					<label class="field-label">Close Reason <span class="req">*</span></label>
+					<Select
+						v-model="workOrderCloseForm.reason"
+						:options="workOrderCloseReasons"
+						placeholder="Select a reason"
+						class="fld"
+					/>
+				</div>
+				<div v-if="workOrderCloseForm.reason === 'Others'" class="form-field wide">
+					<label class="field-label">Other Reason <span class="req">*</span></label>
+					<InputText v-model="workOrderCloseForm.otherReason" class="fld" />
+				</div>
+				<div class="form-field wide">
+					<label class="field-label">Remarks</label>
+					<Textarea v-model="workOrderCloseForm.remarks" rows="3" class="fld" />
+				</div>
+			</div>
+			<template #footer>
+				<Button label="Cancel" severity="secondary" text @click="workOrderCloseOpen = false" />
+				<Button
+					:label="doc?.open_status === 'Close Request' ? 'Approve Close' : 'Continue'"
+					icon="pi pi-lock"
+					:loading="acting === 'wo-close'"
+					@click="onCloseWorkOrder"
+				/>
+			</template>
+		</Dialog>
 
 		<!-- MOVABLE actions, placement "action-sheet" (`actions` knob, item 9): a
 		     bottom Drawer (STACK_DECISION: Drawer-bottom IS the action sheet) that
@@ -1904,6 +1939,37 @@ const moreMenuModel = computed(() => {
 		items.push({ label: "Calculate Order Items", icon: "pi pi-refresh", command: () => onCalculateOrderItems() })
 		items.push({ label: "Calculate BOM", icon: "pi pi-calculator", command: () => onCalculateBom() })
 	}
+	if (
+		isWorkOrder.value
+		&& docstatus.value === 1
+		&& doc.value?.open_status !== "Close"
+		&& (
+			doc.value?.open_status !== "Close Request"
+			|| workOrderClosePermission.value.is_close_manager
+		)
+		&& canWrite(doctype.value)
+	) {
+		items.push({
+			label: doc.value?.open_status === "Close Request"
+				? "Approve Close"
+				: "Close Work Order",
+			icon: "pi pi-lock",
+			command: () => openWorkOrderClose(),
+		})
+	}
+	if (
+		isGoodsReceivedNote.value
+		&& docstatus.value === 1
+		&& doc.value?.against === "Work Order"
+		&& !Number(doc.value?.mrp_stock_entry_created)
+		&& canWrite(doctype.value)
+	) {
+		items.push({
+			label: "Create Stock in MRP",
+			icon: "pi pi-box",
+			command: () => confirmCreateMrpStock(),
+		})
+	}
 	if (canCreate(doctype.value)) {
 		items.push({ label: "Duplicate", icon: "pi pi-copy", command: () => onDuplicate() })
 	}
@@ -1912,6 +1978,119 @@ const moreMenuModel = computed(() => {
 		items.push({ label: "Open in Desk", icon: "pi pi-external-link", url: deskUrl.value, target: "_blank" })
 	return items
 })
+
+const workOrderCloseOpen = ref(false)
+const workOrderClosePermission = ref({
+	approver_role: "",
+	is_close_manager: false,
+})
+const workOrderCloseReasons = [
+	"Cutting Shortage",
+	"Printing Shortage",
+	"Sewing Shortage",
+	"Sewing Missing",
+	"Others",
+]
+
+async function loadWorkOrderClosePermission() {
+	if (!isWorkOrder.value) {
+		workOrderClosePermission.value = {
+			approver_role: "",
+			is_close_manager: false,
+		}
+		return
+	}
+	try {
+		const result = await callMethod(
+			"yrp.yrp.doctype.work_order.work_order.get_close_permission",
+		)
+		workOrderClosePermission.value = {
+			approver_role: result?.approver_role || "",
+			is_close_manager: !!result?.is_close_manager,
+		}
+	} catch (_) {
+		workOrderClosePermission.value = {
+			approver_role: "",
+			is_close_manager: false,
+		}
+	}
+}
+const workOrderCloseForm = reactive({
+	reason: "",
+	otherReason: "",
+	remarks: "",
+})
+
+function openWorkOrderClose() {
+	workOrderCloseForm.reason = doc.value?.close_reason || ""
+	workOrderCloseForm.otherReason = doc.value?.close_other_reason || ""
+	workOrderCloseForm.remarks = doc.value?.close_remarks || ""
+	workOrderCloseOpen.value = true
+}
+
+async function onCloseWorkOrder() {
+	if (!workOrderCloseForm.reason) {
+		toast.warn("Close reason required", "Select why this Work Order is being closed.")
+		return
+	}
+	if (workOrderCloseForm.reason === "Others" && !workOrderCloseForm.otherReason.trim()) {
+		toast.warn("Other reason required", "Enter the other close reason.")
+		return
+	}
+	acting.value = "wo-close"
+	serverError.value = null
+	try {
+		const result = await callMethod("essdee_yrp.work_order_close.close_work_order", {
+			work_order: props.id,
+			close_reason: workOrderCloseForm.reason,
+			close_other_reason: workOrderCloseForm.otherReason,
+			close_remarks: workOrderCloseForm.remarks,
+		})
+		workOrderCloseOpen.value = false
+		await reloadView()
+		if (result?.status === "Close Request") {
+			toast.success("Close requested", "The Work Order is waiting for approval.")
+		} else {
+			toast.success(
+				"Work Order closed",
+				`${result?.deducted_qty || 0} stock quantity cleared from the supplier.`,
+			)
+		}
+	} catch (e) {
+		serverError.value = { title: "Could not close Work Order", lines: errorLines(e) }
+		toast.error("Close failed", e?.message)
+	} finally {
+		acting.value = null
+	}
+}
+
+function confirmCreateMrpStock() {
+	confirm.require({
+		header: "Create Stock in MRP",
+		message:
+			"Transfer this GRN's finished-cloth stock to MRP? "
+			+ "This creates a Material Issue in YRP and a Material Receipt in MRP.",
+		acceptLabel: "Create Stock",
+		accept: () => onCreateMrpStock(),
+	})
+}
+
+async function onCreateMrpStock() {
+	acting.value = "grn-mrp-stock"
+	serverError.value = null
+	try {
+		const result = await callMethod("essdee_yrp.api.mrp_stock_transfer.create_mrp_stock", {
+			grn_name: props.id,
+		})
+		await reloadView()
+		toast.success("Stock created in MRP", `Material Receipt ${result?.mrp_stock_entry || ""}`)
+	} catch (e) {
+		serverError.value = { title: "Could not create MRP stock", lines: errorLines(e) }
+		toast.error("MRP transfer failed", e?.message)
+	} finally {
+		acting.value = null
+	}
+}
 
 // ── Movable-action gates (consumed by DocMovableActions at all placements) ──
 // Each is the EXACT per-button v-if condition the header used before the
@@ -2776,6 +2955,7 @@ async function loadAll() {
 	const metaReady = loadChildMetas() // awaits loadMeta internally; populates childMetaCache
 	await Promise.all([metaReady, docState.load(props.id)])
 	if (!docState.doc.value) return
+	loadWorkOrderClosePermission()
 	// Realtime: (re)subscribe to this doc's room for live "modified" notices.
 	// Dispose any prior subscription first (the :key remount usually unmounts us,
 	// but the [docRoute,id] watcher can re-run loadAll without an unmount).
@@ -4689,6 +4869,7 @@ function onCalculateDeliverables() {
 async function onDeliverablesCalculated(res) {
 	markLocalWrite()
 	await docState.load(props.id)
+	loadWorkOrderClosePermission()
 	// The reload above adopted the fresh `modified`, so any stale flag raised by
 	// our own write's echo (a >3s calculate outlives the suppression window) is
 	// moot — clear it like reloadView does. Without this the false banner would

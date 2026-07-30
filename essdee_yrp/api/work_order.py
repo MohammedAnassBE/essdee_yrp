@@ -955,6 +955,7 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 			treated_item = identity_row.process_item or fabric.cloth_item
 			treated_uom = frappe.db.get_value("Item", treated_item, "default_unit_of_measure")
 			allowed = {frozenset((r["out_attrs"] or {}).items()) for r in _identity_qty_rows(ipd, treated_item, identity_row)}
+			identity_bom_demands = []
 			for line in entry.get("entries") or []:
 				qty = flt(line.get("qty"))
 				if qty <= 0:
@@ -980,6 +981,18 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 					"uom": treated_uom,
 					"pending_quantity": recv_qty,
 				})
+				identity_bom_demands.append({
+					"attrs": out_attrs,
+					"qty": qty,
+					"reference_item_variant": variant,
+				})
+			_append_bom_deliverables(
+				deliverables,
+				ipd,
+				wo.process_name,
+				identity_bom_demands,
+				default_received_type,
+			)
 			continue
 
 		has_colour = _item_has_attribute(fabric.cloth_item, FABRIC_COLOUR_ATTRIBUTE)
@@ -997,6 +1010,7 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 		# Aggregate scaled inputs by variant; receivables per entered row.
 		aggregated = {}
 		fabric_receivables = []
+		bom_demands = []
 		for line in entry.get("entries") or []:
 			qty = flt(line.get("qty"))
 			if qty <= 0:
@@ -1050,6 +1064,16 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 			recv_item = matrix.output_item or fabric.cloth_item
 			if not reference_item_variant:
 				reference_item_variant = _resolve_variant(recv_item, out_attrs)
+			reference_attrs = (
+				_variant_attrs(reference_item_variant)
+				if reference_item_variant
+				else out_attrs
+			)
+			bom_demands.append({
+				"attrs": reference_attrs,
+				"qty": qty,
+				"reference_item_variant": reference_item_variant,
+			})
 
 			for inp in group.get("input") or []:
 				input_item = inp.get("item") or matrix.input_item or ipd.item
@@ -1091,6 +1115,18 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 				"is_calculated": 1,
 				"fabric_reference_variant": reference_item_variant or None,
 			})
+
+		# Item BOM rows are process consumables in addition to the matrix's
+		# principal input. Calculate them per finished-route demand so hidden
+		# allocation metadata remains available when several routes consolidate
+		# into one physical Work Order Deliverable row.
+		_append_bom_deliverables(
+			deliverables,
+			ipd,
+			wo.process_name,
+			bom_demands,
+			default_received_type,
+		)
 		receivables.extend(fabric_receivables)
 
 	if not deliverables:
@@ -1129,6 +1165,44 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 	wo.save()
 
 	return {"deliverables": len(deliverables), "receivables": len(receivables)}
+
+
+def _append_bom_deliverables(
+	deliverables,
+	ipd,
+	process_name,
+	demands,
+	default_received_type,
+):
+	"""Append Item BOM requirements using the same per-route demand contract."""
+	from yrp.yrp.utils.ipd_engine import get_consumables
+
+	for demand in demands:
+		for bom_row in get_consumables(
+			ipd.name,
+			demand["qty"],
+			variants=[{"attrs": demand["attrs"], "qty": demand["qty"]}],
+			process_name=process_name,
+		):
+			bom_item = bom_row.get("item")
+			if not bom_item or flt(bom_row.get("qty")) <= 0:
+				continue
+			deliverables.append({
+				"item_variant": _resolve_variant(
+					bom_item, bom_row.get("attrs") or {}
+				),
+				"qty": flt(bom_row.get("qty"), 3),
+				"uom": bom_row.get("uom")
+				or frappe.db.get_value(
+					"Item", bom_item, "default_unit_of_measure"
+				),
+				"pending_quantity": flt(bom_row.get("qty"), 3),
+				"received_type": default_received_type,
+				"is_calculated": 1,
+				"fabric_reference_variant": (
+					demand.get("reference_item_variant") or None
+				),
+			})
 
 
 def _resolve_matrix_group(matrix_cache, key, ipd, process_name):
@@ -1221,6 +1295,20 @@ def _resolve_variant(item, attrs):
 
 def _item_has_attribute(item, attribute):
 	return attribute in _item_attribute_names(item)
+
+
+def _variant_attrs(item_variant):
+	return {
+		row.attribute: row.attribute_value
+		for row in frappe.get_all(
+			"Item Variant Attribute",
+			filters={
+				"parent": item_variant,
+				"parenttype": "Item Variant",
+			},
+			fields=["attribute", "attribute_value"],
+		)
+	}
 
 
 def _item_attribute_names(item):

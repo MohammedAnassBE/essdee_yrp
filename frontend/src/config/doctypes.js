@@ -1,11 +1,11 @@
 /**
  * Essdee YRP — static DocType registry.
  *
- * The /web UI manages EXACTLY these 9 DocTypes (user scope, 2026-07-03;
- * Work Order Correction added 2026-07-09): Lot, Work Order, Work Order
- * Correction, Delivery Challan, Goods Received Note, Stock Entry, Item,
- * Item Production Detail, Terms and Condition. Nothing else appears in the
- * sidebar / routes / command palette.
+ * The /web UI manages these production DocTypes (user scope, 2026-07-03;
+ * Work Order Correction added 2026-07-09; Process Cost and Lot Transfer added
+ * 2026-07-29): Lot, Work Order, Work Order Correction, Delivery Challan,
+ * Goods Received Note, Process Cost, Stock Entry, Lot Transfer, Item, Item
+ * Production Detail, and Terms and Condition.
  *
  * Used for: sidebar rendering, route → DocType resolution, submittable flags
  * (drives the All/Draft/Submitted/Cancelled tab strip) and per-doctype tab
@@ -28,15 +28,16 @@ const SUBMITTABLE = new Set([
 	"Work Order Correction",
 	"Delivery Challan",
 	"Goods Received Note",
+	"Process Cost",
+	"Lot Transfer",
 	"Stock Entry",
 ])
 
-// No workflow-managed doctypes among the essdee /web 8 (the site's two active
-// Workflows — Process Cost, Item Price — are outside this UI's scope).
-const WORKFLOW = {}
+const WORKFLOW = {
+	"Process Cost": ["Draft", "Approval Pending", "Approved", "Rejected", "Expired"],
+}
 
-// Workflow-state → PrimeVue Tag severity. Kept for the shared Tag helpers even
-// though WORKFLOW is empty (list/detail import this).
+// Workflow-state → PrimeVue Tag severity for the shared list/detail helpers.
 export const WORKFLOW_SEVERITY = {
 	Approved: "success",
 	Rejected: "danger",
@@ -95,6 +96,13 @@ const GROUPS = [
 				{ field: "delivery_challan", label: "Against DC" },
 				{ field: "posting_date", label: "Posting", type: "Date" },
 			] },
+			{ doctype: "Process Cost", icon: "pi pi-indian-rupee", dateTabs: "from_date", tabMode: "workflow", listFields: [
+				{ field: "process_name", label: "Process" },
+				{ field: "supplier", label: "Supplier" },
+				{ field: "item", label: "Item" },
+				{ field: "from_date", label: "From Date", type: "Date" },
+				{ field: "to_date", label: "To Date", type: "Date" },
+			] },
 		],
 	},
 	{
@@ -102,6 +110,10 @@ const GROUPS = [
 		roles: "*",
 		items: [
 			{ doctype: "Stock Entry", icon: "pi pi-sync", dateTabs: "posting_date" },
+			{ doctype: "Lot Transfer", icon: "pi pi-arrow-right-arrow-left", dateTabs: "posting_date", listFields: [
+				{ field: "posting_date", label: "Posting Date", type: "Date" },
+				{ field: "comments", label: "Comments" },
+			] },
 		],
 	},
 	{

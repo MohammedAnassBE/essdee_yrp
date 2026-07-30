@@ -457,6 +457,16 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 	}];
 	cloths.forEach((c, i) => {
 		const item_yarns = c.item_yarns || [];
+		const stored_colour_yarns = c.colour_yarn_recipes || [];
+		const recipe_for_colour = (colour) => {
+			const stored = stored_colour_yarns
+				.filter((row) => row.colour === colour)
+				.map((row) => ({
+					yarn_item: row.yarn_item,
+					ratio: Number(row.ratio || 0),
+				}));
+			return stored.length ? stored : item_yarns;
+		};
 		const profile = c.profile || {};
 		const required_colours = (c.required_colours || []).filter(Boolean);
 		const required_routes = c.required_routes || [];
@@ -475,6 +485,8 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 				)}: <strong>${item_yarns.map((row) =>
 					`${frappe.utils.escape_html(row.yarn_item)} ${Number(row.ratio || 0)}%`
 				).join(" + ")}</strong></div>`
+				: stored_colour_yarns.length
+					? ""
 				: `<div class="text-danger small" style="margin-bottom:10px">${__(
 					"Configure a Yarn Ratio totalling 100% on Cloth Item {0} before building.",
 					[frappe.utils.escape_html(c.cloth_item)]
@@ -575,6 +587,7 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 				});
 			});
 		}
+		c._recipe_for_colour = recipe_for_colour;
 		fields.push({ fieldtype: "Section Break", label: __("Process Settings") });
 		fields.push({
 			label: "Cloth Kgs / 1 Kg Yarn", fieldname: `cloth_per_kg_yarn_${i}`,
@@ -610,6 +623,7 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 				return;
 			}
 			const selections = cloths.map((c, i) => {
+				const profile = c.profile || {};
 				const required_colours = (c.required_colours || []).filter(Boolean);
 				const fabric_routes = [];
 				required_colours.forEach((colour, colour_index) => {
@@ -627,13 +641,18 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 							});
 						});
 				});
-				const recipe = (c.item_yarns || []).map((row) => ({
-					yarn_item: row.yarn_item,
-					ratio: Number(row.ratio || 0),
-				}));
+				const recipe_for_colour = c._recipe_for_colour
+					|| (() => (c.item_yarns || []));
 				const colour_yarn_recipes = required_colours.flatMap((colour) =>
-					recipe.map((row) => ({ colour: colour, ...row }))
+					recipe_for_colour(colour).map((row) => ({
+						colour: colour,
+						yarn_item: row.yarn_item,
+						ratio: Number(row.ratio || 0),
+					}))
 				);
+				const recipe = required_colours.length
+					? recipe_for_colour(required_colours[0])
+					: (c.item_yarns || []);
 				return {
 					cloth_item: values[`cloth_item_${i}`],
 					production_detail: values[`production_detail_${i}`] || null,

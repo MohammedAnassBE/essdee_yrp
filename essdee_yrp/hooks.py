@@ -7,33 +7,7 @@ app_license = "mit"
 required_apps = ["yrp"]
 
 fixtures = [
-	{
-		"dt": "Custom Field",
-		"or_filters": [
-			[
-				"name",
-				"in",
-				[
-					"Item-product_category",
-					"Item-is_cloth_item",
-					"Item-yarn_ratio_details",
-					"Supplier-apply_sewing_plan",
-					"Process-additional_allowance",
-					"Process-includes_packing",
-					"Process-is_cloth_process",
-					"Process-item",
-					"Stock Entry-source_grn",
-					"Work Order-lot",
-					"Work Order Deliverables-fabric_reference_variant",
-					"Work Order Deliverables-fabric_reference_allocations",
-					"Work Order Receivables-fabric_reference_variant",
-					"Work Order Receivables-fabric_reference_allocations",
-				],
-			],
-			["dt", "=", "Item Production Detail"],
-			["dt", "in", ["Production Order", "Production Order Detail"]],
-		],
-	},
+	{"dt": "Custom Field"},
 	# Field-order override: keeps `ipd_processes` on the Item Details tab
 	# (production_api parity) — the custom garment tabs would otherwise pull
 	# it into the hidden-for-cloth Advance Settings tab.
@@ -120,6 +94,8 @@ yrp_web_doctype_catalog = [
 	"Work Order Correction",
 	"Delivery Challan",
 	"Goods Received Note",
+	"Process Cost",
+	"Lot Transfer",
 	"Stock Entry",
 	"Item",
 	"Item Production Detail",
@@ -317,8 +293,16 @@ doc_events = {
 	},
 	"Goods Received Note": {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
-		"on_submit": "essdee_yrp.fabric_tracking.on_grn_submit",
-		"on_cancel": "essdee_yrp.fabric_tracking.on_grn_cancel",
+		"before_validate": "essdee_yrp.fabric_grn.before_validate",
+		"before_cancel": "essdee_yrp.api.mrp_stock_transfer.before_grn_cancel",
+		"on_submit": [
+			"essdee_yrp.fabric_grn.on_submit",
+			"essdee_yrp.fabric_tracking.on_grn_submit",
+		],
+		"on_cancel": [
+			"essdee_yrp.fabric_grn.on_cancel",
+			"essdee_yrp.fabric_tracking.on_grn_cancel",
+		],
 	},
 	# A Stock Entry created by the cross-bench GRN transfer (source_grn set) may be
 	# cancelled ONLY by the mrp GRN-cancel flow (cancel_grn_transfer sets
@@ -367,9 +351,12 @@ doc_events = {
 # Overriding Methods
 # ------------------------------
 #
-# override_whitelisted_methods = {
-# 	"frappe.desk.doctype.event.event.get_events": "essdee_yrp.event.get_events"
-# }
+override_whitelisted_methods = {
+	# Base YRP's Desk button calls this path. Route it through the
+	# Essdee-owned close implementation so Desk and /web use one stock contract.
+	"yrp.yrp.doctype.work_order.work_order.update_stock":
+		"essdee_yrp.work_order_close.close_work_order",
+}
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,

@@ -46,6 +46,8 @@ WEB_DOCTYPES = (
 	"Work Order Correction",
 	"Delivery Challan",
 	"Goods Received Note",
+	"Process Cost",
+	"Lot Transfer",
 	"Stock Entry",
 	"Item",
 	"Item Production Detail",

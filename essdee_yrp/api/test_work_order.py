@@ -807,3 +807,99 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
         ipd.yarn_ratio_details[1].ratio = 39
         with self.assertRaisesRegex(frappe.ValidationError, "total must be exactly 100"):
             ipd.save(ignore_permissions=True)
+
+    def test_item_bom_matches_planned_and_partial_grn_consumption(self):
+        """The WO plan and GRN consumption use the same matrix + Item BOM math."""
+        from essdee_yrp.fabric_grn import before_validate as calculate_grn_consumption
+
+        ipd, v = self._make_ipd()
+        accessory = _ensure_item(f"_Test MY Knit Chemical {frappe.generate_hash(length=6)}")
+        ipd.append("item_bom", {
+            "item": accessory,
+            "qty_of_product": 10,
+            "qty_of_bom_item": 2,
+            "uom": "Kg",
+            "process_name": v["knitting"],
+        })
+        ipd.save(ignore_permissions=True)
+
+        work_order = self._make_work_order(ipd, v, v["knitting"])
+        context = get_fabric_deliverable_context(work_order.name)
+        fabric = context["rows"][0]
+        result = calculate_fabric_deliverables(work_order.name, [{
+            "fabric_row": fabric["fabric_row"],
+            "colour": v["greige"],
+            "entries": [{
+                "key": fabric["qty_rows"][0]["key"],
+                "qty": 30,
+            }],
+        }])
+        self.assertEqual(result, {"deliverables": 3, "receivables": 1})
+
+        work_order.reload()
+        planned = {
+            frappe.db.get_value("Item Variant", row.item_variant, "item"): flt(row.qty)
+            for row in work_order.deliverables
+            if row.is_calculated
+        }
+        self.assertAlmostEqual(planned[v["yarn_a"]], 6.0, places=3)
+        self.assertAlmostEqual(planned[v["yarn_b"]], 4.0, places=3)
+        self.assertAlmostEqual(planned[accessory], 6.0, places=3)
+
+        receivable = work_order.receivables[0]
+        grn = frappe.new_doc("Goods Received Note")
+        grn.against = "Work Order"
+        grn.against_id = work_order.name
+        grn.append("items", {
+            "item_variant": receivable.item_variant,
+            "quantity": 12,
+            "uom": receivable.uom,
+            "ref_docname": receivable.name,
+        })
+        calculate_grn_consumption(grn)
+
+        consumed = {
+            frappe.db.get_value("Item Variant", row.item_variant, "item"): flt(row.quantity)
+            for row in grn.grn_deliverables
+        }
+        self.assertAlmostEqual(consumed[v["yarn_a"]], 2.4, places=3)
+        self.assertAlmostEqual(consumed[v["yarn_b"]], 1.6, places=3)
+        self.assertAlmostEqual(consumed[accessory], 2.4, places=3)
+
+    def test_identity_process_plan_includes_item_bom(self):
+        """Matrix-less identity fabric processes still plan their BOM materials."""
+        ipd, v = self._make_ipd()
+        chemical = _ensure_item(f"_Test MY Wash Chemical {frappe.generate_hash(length=6)}")
+        ipd.append("item_bom", {
+            "item": chemical,
+            "qty_of_product": 10,
+            "qty_of_bom_item": 0.5,
+            "uom": "Kg",
+            "process_name": v["washing"],
+        })
+        ipd.save(ignore_permissions=True)
+
+        work_order = self._make_work_order(ipd, v, v["washing"])
+        context = get_fabric_deliverable_context(work_order.name)
+        fabric = context["rows"][0]
+        red = next(
+            row for row in fabric["qty_rows"]
+            if row["out_attrs"] == {"Dia": v["dia"], "Colour": v["red"]}
+        )
+        result = calculate_fabric_deliverables(work_order.name, [{
+            "fabric_row": fabric["fabric_row"],
+            "entries": [{
+                "key": red["key"],
+                "out_attrs": red["out_attrs"],
+                "qty": 20,
+            }],
+        }])
+        self.assertEqual(result, {"deliverables": 2, "receivables": 1})
+        work_order.reload()
+        planned = {
+            frappe.db.get_value("Item Variant", row.item_variant, "item"): flt(row.qty)
+            for row in work_order.deliverables
+            if row.is_calculated
+        }
+        self.assertAlmostEqual(planned[v["cloth"]], 20.0, places=3)
+        self.assertAlmostEqual(planned[chemical], 1.0, places=3)

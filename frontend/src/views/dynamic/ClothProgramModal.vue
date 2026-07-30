@@ -239,23 +239,6 @@
           <small v-if="recipeError(e)" class="cp-recipe-error">{{ recipeError(e) }}</small>
         </section>
 
-        <section class="cp-colour-recipes">
-          <div class="cp-section-head">
-            <div>
-              <strong>Item Yarn Recipe</strong>
-            </div>
-          </div>
-          <div v-if="e.itemYarns.length" class="cp-main-recipe-summary">
-            <span v-for="row in e.itemYarns" :key="row.yarn_item">
-              {{ row.yarn_item }}: {{ formatRatio(row.ratio) }}%
-            </span>
-            <strong>Total: {{ formatRatio(rowsTotal(e.itemYarns)) }}%</strong>
-          </div>
-          <small v-else class="cp-recipe-error">
-            Configure a Yarn Ratio totalling 100% on Cloth Item {{ e.cloth_item }}.
-          </small>
-        </section>
-
         <section v-if="e.requiredColours.length" class="cp-output-colours">
           <div class="cp-section-head">
             <div>
@@ -479,11 +462,15 @@ async function loadContext() {
 
 function normaliseColourRecipes(cloth, defaults = {}) {
   const itemYarns = cloneRows(cloth.item_yarns || [])
+  const storedColourYarns = cloth.colour_yarn_recipes || []
   const requiredColours = (cloth.required_colours || []).filter(Boolean)
   const fallback = cloneRows(itemYarns)
   const recipesByColour = {}
   for (const colour of requiredColours) {
-    recipesByColour[colour] = cloneRows(fallback)
+    const stored = cloneRows(
+      storedColourYarns.filter((row) => row.colour === colour),
+    )
+    recipesByColour[colour] = stored.length ? stored : cloneRows(fallback)
   }
   const signatures = requiredColours.map((colour) => recipeSignature(recipesByColour[colour]))
   const uniqueSignatures = new Set(signatures)

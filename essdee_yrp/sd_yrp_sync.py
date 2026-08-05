@@ -9,6 +9,10 @@ from frappe.model.rename_doc import rename_doc
 
 SD_YRP_TOPIC = "sd_yrp_master"
 
+LEGACY_DOCTYPE_ALIASES = {
+	"IPD Consumption": "IPD Compacting",
+}
+
 EXACT_MATCH_DOCTYPES = (
 	"Item Attribute",
 	"Item Attribute Value",
@@ -31,6 +35,7 @@ EXACT_MATCH_DOCTYPES = (
 	"Item BOM Attribute Mapping",
 	"Address",
 	"Contact",
+	"IPD Compacting",
 )
 
 CUSTOM_MAPPER_DOCTYPES = (
@@ -75,9 +80,14 @@ LOT_TIME_AND_ACTION_KEY_PARTS = ("time_and_action",)
 
 def handle_sd_yrp_message(payload):
 	header = payload.get("Header") or {}
-	doctype = header.get("DocType")
+	source_doctype = header.get("DocType")
+	doctype = LEGACY_DOCTYPE_ALIASES.get(source_doctype, source_doctype)
 	event = header.get("Event")
 	topic = header.get("Topic")
+	data = payload.get("Payload") or {}
+	if doctype != source_doctype:
+		data = copy.deepcopy(data)
+		data["doctype"] = doctype
 
 	if topic != SD_YRP_TOPIC:
 		frappe.throw(f"Unexpected SD YRP sync topic {topic}")
@@ -85,15 +95,15 @@ def handle_sd_yrp_message(payload):
 		frappe.throw(f"{doctype} is not enabled for SD YRP sync")
 
 	if event in UPSERT_EVENTS:
-		return upsert_doc(payload.get("Payload") or {}, event=event)
+		return upsert_doc(data, event=event)
 	if event in {"after_rename", "rename"}:
-		return rename_synced_doc(payload.get("Payload") or {})
+		return rename_synced_doc(data)
 	if event == "on_trash":
-		return delete_synced_doc(payload.get("Payload") or {})
+		return delete_synced_doc(data)
 	if event == "on_submit":
-		return submit_synced_doc(payload.get("Payload") or {})
+		return submit_synced_doc(data)
 	if event == "on_cancel":
-		return cancel_synced_doc(payload.get("Payload") or {})
+		return cancel_synced_doc(data)
 
 	frappe.throw(f"Unsupported SD YRP sync event {event}")
 
@@ -985,6 +995,25 @@ def ensure_consumer_config():
 	parent = "Spine Consumer Config"
 	changed = False
 	now = frappe.utils.now()
+
+	# Legacy mappings are no longer needed once the target DocType has been
+	# renamed. Keep LEGACY_DOCTYPE_ALIASES in the message handler so messages
+	# published before the deployment can still be consumed safely.
+	for legacy_doctype in LEGACY_DOCTYPE_ALIASES:
+		legacy_names = frappe.get_all(
+			table,
+			filters={
+				"parent": parent,
+				"parenttype": parent,
+				"parentfield": "configs",
+				"document_type": legacy_doctype,
+				"topic": SD_YRP_TOPIC,
+			},
+			pluck="name",
+		)
+		for legacy_name in legacy_names:
+			frappe.db.delete(table, {"name": legacy_name})
+			changed = True
 
 	for doctype in SYNC_DOCTYPES:
 		existing_name = frappe.db.get_value(

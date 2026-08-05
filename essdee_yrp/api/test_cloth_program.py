@@ -127,6 +127,29 @@ class TestClothProgram(IntegrationTestCase):
         }
         self.tuples = {(self.dia, self.red): 50.9}
 
+    def _make_synced_compacting_source(self, compacting_dia):
+        """Create a minimal real garment IPD plus its synced compacting data."""
+        garment_name = (
+            f"_Test Garment Compacting CPD {frappe.generate_hash(length=8)}"
+        )
+        garment = frappe.new_doc("Item Production Detail")
+        garment.name = garment_name
+        garment.item = self.cloth
+        garment.db_insert()
+
+        source = frappe.get_doc({
+            "doctype": "IPD Compacting",
+            "item_production_detail": garment_name,
+            "packing_attribute": "Colour",
+            "compacting_details": [{
+                "cloth_item": self.cloth,
+                "packing_attribute_value": self.red,
+                "input_dia": self.dia,
+                "compacting_dia": compacting_dia,
+            }],
+        }).insert(ignore_permissions=True)
+        return garment_name, source
+
     def test_find_or_create_cpd_seeds_tabs_matrices_and_reachability(self):
         cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
         cpd = frappe.get_doc("Item Production Detail", cpd_name)
@@ -1118,6 +1141,86 @@ class TestClothProgram(IntegrationTestCase):
         self.assertAlmostEqual(reqs[0].weight, 50.9, places=3)
         self.assertTrue(lot.lot_fabric_programs)       # WO knitting pre-seed
         self.assertTrue(lot.lot_fabric_step_ledger)    # CPD chain plan
+
+    def test_build_copies_synced_compacting_details_to_cloth_ipd(self):
+        compacting_dia = _ensure_iav("Dia", "_Test 62 Dia Synced CPD")
+        garment_name, _source = self._make_synced_compacting_source(
+            compacting_dia
+        )
+        lot = frappe.get_doc({
+            "doctype": "Lot",
+            "lot_name": "_Test CPD Lot Synced Compacting",
+            "production_detail": garment_name,
+        }).insert(ignore_permissions=True)
+        demand = {(self.cloth, self.dia, self.red): 50.9}
+
+        with patch.object(
+            cloth_program, "compute_cloth_demand", return_value=demand
+        ):
+            build_cloth_programs(lot.name, [self.selection])
+
+        lot.reload()
+        cpd_name = next(
+            row.production_detail
+            for row in lot.lot_fabric_details
+            if row.cloth_item == self.cloth
+        )
+        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        self.assertEqual(
+            [
+                (row.colour, row.input_dia, row.compacting_dia)
+                for row in cpd.compacting_reference_details
+            ],
+            [(self.red, self.dia, compacting_dia)],
+        )
+
+    def test_changed_synced_compacting_details_create_new_cpd_snapshot(self):
+        first_dia = _ensure_iav("Dia", "_Test 62 Dia Snapshot CPD")
+        second_dia = _ensure_iav("Dia", "_Test 64 Dia Snapshot CPD")
+        garment_name, source = self._make_synced_compacting_source(first_dia)
+        lot = frappe.get_doc({
+            "doctype": "Lot",
+            "lot_name": "_Test CPD Lot Compacting Snapshot",
+            "production_detail": garment_name,
+        }).insert(ignore_permissions=True)
+        demand = {(self.cloth, self.dia, self.red): 50.9}
+
+        with patch.object(
+            cloth_program, "compute_cloth_demand", return_value=demand
+        ):
+            build_cloth_programs(lot.name, [self.selection])
+            lot.reload()
+            first_cpd_name = next(
+                row.production_detail
+                for row in lot.lot_fabric_details
+                if row.cloth_item == self.cloth
+            )
+
+            frappe.db.set_value(
+                "IPD Compacting Details",
+                source.compacting_details[0].name,
+                "compacting_dia",
+                second_dia,
+            )
+            build_cloth_programs(lot.name, [self.selection])
+
+        lot.reload()
+        second_cpd_name = next(
+            row.production_detail
+            for row in lot.lot_fabric_details
+            if row.cloth_item == self.cloth
+        )
+        self.assertNotEqual(first_cpd_name, second_cpd_name)
+        first_cpd = frappe.get_doc("Item Production Detail", first_cpd_name)
+        second_cpd = frappe.get_doc("Item Production Detail", second_cpd_name)
+        self.assertEqual(
+            first_cpd.compacting_reference_details[0].compacting_dia,
+            first_dia,
+        )
+        self.assertEqual(
+            second_cpd.compacting_reference_details[0].compacting_dia,
+            second_dia,
+        )
 
     def test_build_uses_item_master_yarn_ratio_without_popup_recipe(self):
         yarn_b = _ensure_item("_Test Item Master Yarn B CPD")

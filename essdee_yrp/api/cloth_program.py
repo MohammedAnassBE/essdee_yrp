@@ -7,7 +7,8 @@ ONE whitelisted orchestrator (`build_cloth_programs`) runs Phases 2-4:
      stamp yarn + processes + cloth_per_kg_yarn, ADDITIVELY seed (union-merge —
      shared cloths keep sibling lots' rows) knitting_dia_details from the demanded
      dias and dyeing_colour_details {dia, greige->demanded colour} from the
-     demanded (dia,colour) tuples, auto-approve, and save() (matrices auto-rebuild
+     demanded (dia,colour) tuples, copy the garment IPD's synced compacting
+     references for that cloth, auto-approve, and save() (matrices auto-rebuild
      via fabric_ipd.sync_fabric_process_matrices).
   3. attach a Lot Fabric Detail row (cloth_item + CPD) if absent.
   4. write the Lot's transient fabric_requirement_details JSON and lot.save() so
@@ -404,6 +405,99 @@ def _knitting_output_map(selection):
     }
 
 
+def _compacting_reference_set(rows):
+    """Canonical data-only compacting snapshot for CPD profile comparison."""
+    return frozenset(
+        (
+            row.get("colour") or None,
+            row.get("input_dia"),
+            row.get("compacting_dia"),
+        )
+        for row in rows or []
+        if row.get("input_dia") and row.get("compacting_dia")
+    )
+
+
+def _compacting_references_compatible(cpd, selection):
+    """Whether requested compacting mappings can safely extend an unused CPD.
+
+    Referenced CPDs still require an exact snapshot match in
+    ``_profile_matches_exactly``. This looser check only permits an unreferenced
+    legacy CPD to be adopted when it has no contradictory output for the same
+    Colour + Input Dia.
+    """
+    if "compacting_references" not in selection:
+        return True
+
+    existing_by_input = {}
+    for colour, input_dia, compacting_dia in _compacting_reference_set(
+        cpd.get("compacting_reference_details") or []
+    ):
+        existing_by_input.setdefault((colour, input_dia), set()).add(
+            compacting_dia
+        )
+    for colour, input_dia, compacting_dia in _compacting_reference_set(
+        selection.get("compacting_references") or []
+    ):
+        existing_outputs = existing_by_input.get((colour, input_dia))
+        if existing_outputs and compacting_dia not in existing_outputs:
+            return False
+    return True
+
+
+def _get_compacting_references_by_cloth(item_production_detail):
+    """Return synced MRP compacting rows grouped by Cloth Item.
+
+    ``None`` means the garment IPD has no synced IPD Compacting document, so
+    Build Cloth Program preserves the previous/manual CPD behaviour. An empty
+    dictionary means a synced document exists but has no completed rows.
+    """
+    if not item_production_detail:
+        return None
+    source_name = frappe.db.get_value(
+        "IPD Compacting",
+        {"item_production_detail": item_production_detail},
+        "name",
+    )
+    if not source_name:
+        return None
+
+    source = frappe.get_doc("IPD Compacting", source_name)
+    if source.get("packing_attribute") != FABRIC_COLOUR_ATTRIBUTE:
+        frappe.throw(
+            _(
+                "IPD Compacting {0} uses packing attribute {1}. Cloth IPD "
+                "Compacting Details currently support Colour mappings."
+            ).format(source_name, source.get("packing_attribute") or "(blank)")
+        )
+
+    by_cloth = {}
+    seen = set()
+    for row in source.get("compacting_details") or []:
+        cloth_item = row.get("cloth_item")
+        input_dia = row.get("input_dia")
+        compacting_dia = row.get("compacting_dia")
+        if not (cloth_item and input_dia and compacting_dia):
+            continue
+        reference = {
+            "colour": row.get("packing_attribute_value") or None,
+            "input_dia": input_dia,
+            "compacting_dia": compacting_dia,
+            "notes": "",
+        }
+        key = (
+            cloth_item,
+            reference["colour"],
+            input_dia,
+            compacting_dia,
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        by_cloth.setdefault(cloth_item, []).append(reference)
+    return by_cloth
+
+
 def _profile_matches(cpd, selection):
     """Whether a CPD can safely be reused for this operational profile."""
     comparisons = (
@@ -418,6 +512,8 @@ def _profile_matches(cpd, selection):
     existing_ratio = flt(cpd.get("cloth_per_kg_yarn"))
     requested_ratio = flt(selection.get("cloth_per_kg_yarn"))
     if existing_ratio and requested_ratio and abs(existing_ratio - requested_ratio) > 0.000001:
+        return False
+    if not _compacting_references_compatible(cpd, selection):
         return False
 
     requested_outputs = _knitting_output_map(selection)
@@ -465,6 +561,16 @@ def _profile_matches_exactly(cpd, selection):
         flt(cpd.get("cloth_per_kg_yarn"))
         - flt(selection.get("cloth_per_kg_yarn"))
     ) > 0.000001:
+        return False
+    if (
+        "compacting_references" in selection
+        and _compacting_reference_set(
+            cpd.get("compacting_reference_details") or []
+        )
+        != _compacting_reference_set(
+            selection.get("compacting_references") or []
+        )
+    ):
         return False
 
     requested_routes = _fabric_route_map(selection)
@@ -656,6 +762,11 @@ def _find_or_create_cpd(cloth_item, selection, tuples):
     cpd.knitting_process = selection.get("knitting_process")
     cpd.dyeing_process = selection.get("dyeing_process")
     cpd.compacting_process = selection.get("compacting_process")
+    if "compacting_references" in selection:
+        cpd.set(
+            "compacting_reference_details",
+            selection.get("compacting_references") or [],
+        )
 
     route_values = (
         existing_routes.values() if persist_exact_routes else route_map.values()
@@ -856,8 +967,8 @@ def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
     dyeing_process, cloth_per_kg_yarn,
     knitting_output_colours:[{colour,knitting_output_colour}]}].
     ``greige_colour`` remains accepted as the legacy one-colour shortcut.
-    Compacting references are maintained separately on the F16 cloth IPD and
-    are not calculated."""
+    Synced compacting references are copied from the Lot's garment IPD into
+    each generated cloth IPD; they remain data-only and are not calculated."""
     selections = frappe.parse_json(selections) if isinstance(selections, str) else selections
     lot_doc = frappe.get_doc("Lot", lot)
     lot_doc.check_permission("write")
@@ -884,11 +995,22 @@ def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
         for row in lot_doc.get("lot_fabric_details") or []
         if row.cloth_item and row.production_detail
     }
+    compacting_by_cloth = _get_compacting_references_by_cloth(
+        lot_doc.get("production_detail")
+    )
     built, payload = [], {}
     for cloth, tuples in by_cloth.items():
         selection = sel_by_cloth.get(cloth)
         if not selection:
             continue
+        # The synced garment-IPD mapping is authoritative. Do not accept this
+        # profile data from either frontend; both Desk and Vue call this same
+        # server method and receive the saved CPD after the normal reload.
+        selection.pop("compacting_references", None)
+        if compacting_by_cloth is not None:
+            selection["compacting_references"] = compacting_by_cloth.get(
+                cloth, []
+            )
         # The Item master is the source of truth for yarn composition. Legacy
         # callers may still submit a recipe only while an old cloth Item has not
         # yet been configured; current Desk and /web callers submit none.

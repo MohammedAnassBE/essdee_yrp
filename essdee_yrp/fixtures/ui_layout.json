@@ -6,6 +6,7 @@
   "docstatus": 0,
   "doctype": "UI Layout",
   "layout_name": "Default",
+  "render_mode": "Configurable Layout",
   "modified": "2026-07-29 19:06:19.139774",
   "name": "Default"
  },
@@ -16,6 +17,7 @@
   "docstatus": 0,
   "doctype": "UI Layout",
   "layout_name": "Demo 5",
+  "render_mode": "Configurable Layout",
   "modified": "2026-07-16 17:38:50.971578",
   "name": "Demo 5"
  },
@@ -26,6 +28,7 @@
   "docstatus": 0,
   "doctype": "UI Layout",
   "layout_name": "Cutting Supervisor",
+  "render_mode": "Configurable Layout",
   "modified": "2026-07-17 14:24:39.614654",
   "name": "Cutting Supervisor"
  },
@@ -36,6 +39,7 @@
   "docstatus": 0,
   "doctype": "UI Layout",
   "layout_name": "Premium White",
+  "render_mode": "Configurable Layout",
   "modified": "2026-07-17 22:42:36.795072",
   "name": "Premium White"
  },
@@ -46,6 +50,7 @@
   "docstatus": 0,
   "doctype": "UI Layout",
   "layout_name": "Trial Dispatch Ops",
+  "render_mode": "Configurable Layout",
   "modified": "2026-07-28 09:33:52.635998",
   "name": "Trial Dispatch Ops"
  },
@@ -56,6 +61,7 @@
   "docstatus": 0,
   "doctype": "UI Layout",
   "layout_name": "Trial StitchFloor",
+  "render_mode": "Configurable Layout",
   "modified": "2026-07-28 09:33:58.314571",
   "name": "Trial StitchFloor"
  },
@@ -66,6 +72,7 @@
   "docstatus": 0,
   "doctype": "UI Layout",
   "layout_name": "Lot Workbench",
+  "render_mode": "Configurable Layout",
   "modified": "2026-07-29 19:07:09.275652",
   "name": "Lot Workbench"
  },
@@ -76,6 +83,7 @@
   "docstatus": 0,
   "doctype": "UI Layout",
   "layout_name": "Trial Loomline",
+  "render_mode": "Configurable Layout",
   "modified": "2026-07-28 09:34:03.034288",
   "name": "Trial Loomline"
  },
@@ -86,6 +94,7 @@
   "docstatus": 0,
   "doctype": "UI Layout",
   "layout_name": "Demo 7",
+  "render_mode": "Configurable Layout",
   "modified": "2026-07-17 20:32:55.972655",
   "name": "Demo 7"
  }

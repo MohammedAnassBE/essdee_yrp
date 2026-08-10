@@ -12093,5 +12093,31 @@
   "translatable": 0,
   "unique": 0,
   "width": null
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Item Production Detail-tech_pack_version",
+  "dt": "Item Production Detail",
+  "fieldname": "tech_pack_version",
+  "fieldtype": "Data",
+  "label": "Tech Pack Version",
+  "insert_after": "yarn_ratio_details",
+  "is_system_generated": 0,
+  "docstatus": 0,
+  "owner": "Administrator",
+  "modified_by": "Administrator"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Item Production Detail-pattern_version",
+  "dt": "Item Production Detail",
+  "fieldname": "pattern_version",
+  "fieldtype": "Data",
+  "label": "Pattern Version",
+  "insert_after": "tech_pack_version",
+  "is_system_generated": 0,
+  "docstatus": 0,
+  "owner": "Administrator",
+  "modified_by": "Administrator"
  }
 ]

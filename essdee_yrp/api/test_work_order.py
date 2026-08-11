@@ -246,11 +246,12 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
         self.assertEqual(len(ctx["rows"]), 1)
         row = ctx["rows"][0]
         self.assertEqual(row["yarn_item"], self.yarn)
+        self.assertTrue(all(qr["program"] == 48 for qr in row["qty_rows"]))
         payload = [{
             "fabric_row": row["fabric_row"],
             "colour": row["greige_colour"],
             "entries": [
-                {"key": qr["key"], "qty": qr["balance"] or 48.05}
+                {"key": qr["key"], "qty": qr["balance"] or qr["program"]}
                 for qr in row["qty_rows"]
             ],
         }]
@@ -270,8 +271,8 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
         self.assertEqual(variant.item, self.yarn)
         # Owner ruling: NOT Colour-stamped — no attribute rows at all.
         self.assertEqual([r.attribute for r in variant.get("attributes") or []], [])
-        # 48.05 kg cloth / 3.0 cloth-per-kg-yarn ≈ 16.017 kg yarn
-        self.assertAlmostEqual(delivs[0].qty, 48.05 / 3.0, places=2)
+        # The rounded 48 kg cloth program / 3.0 cloth-per-kg-yarn = 16 kg yarn.
+        self.assertAlmostEqual(delivs[0].qty, 48 / 3.0, places=2)
 
         # The receivable keeps its FULL attribute set (cloth declares Dia+Colour;
         # knitting stamps the greige colour) — declared attrs are never dropped.
@@ -291,7 +292,7 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
         try:
             self._calculate()
             self.wo.reload()
-            self.assertAlmostEqual(self.wo.receivables[0].qty, 48.05, places=3)
+            self.assertAlmostEqual(self.wo.receivables[0].qty, 48, places=3)
         finally:
             frappe.db.set_value("Process", self.k_proc, "default_excess", 0)
             frappe.clear_cache(doctype="Process")

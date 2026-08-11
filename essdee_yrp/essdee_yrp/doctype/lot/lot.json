@@ -19,6 +19,8 @@
   "column_break_tvkgg",
   "lot_template",
   "production_detail",
+  "cloth_excess_percentage",
+  "cloth_program_additions",
   "assigned_person_name",
   "status",
   "uom",
@@ -183,6 +185,21 @@
    "fieldtype": "Link",
    "label": "Item Production Detail",
    "options": "Item Production Detail"
+  },
+  {
+   "default": "0",
+   "fieldname": "cloth_excess_percentage",
+   "fieldtype": "Percent",
+   "label": "Cloth Excess Percentage",
+   "non_negative": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "cloth_program_additions",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "Cloth Program Additions",
+   "read_only": 1
   },
   {
    "fieldname": "pack_out_stage",
@@ -457,7 +474,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-04 16:05:00.000000",
+ "modified": "2026-08-11 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "Lot",

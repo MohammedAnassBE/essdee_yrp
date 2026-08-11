@@ -8,6 +8,7 @@ from essdee_yrp.sd_yrp_sync import (
 	PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE,
 	PRODUCTION_ORDER_GRID_ATTRIBUTE,
 	SYNC_DOCTYPES,
+	filter_doc_fields,
 	handle_sd_yrp_message,
 	upsert_doc,
 )
@@ -15,6 +16,29 @@ from essdee_yrp.setup import ensure_yrp_production_order_settings
 
 
 class TestSDYRPSyncSetup(IntegrationTestCase):
+	def test_lot_cloth_excess_percentage_is_syncable(self):
+		field = frappe.get_meta("Lot").get_field("cloth_excess_percentage")
+		self.assertIsNotNone(field)
+		self.assertEqual(field.fieldtype, "Percent")
+		self.assertEqual(field.label, "Cloth Excess Percentage")
+		addition_field = frappe.get_meta("Lot").get_field("cloth_program_additions")
+		self.assertIsNotNone(addition_field)
+		self.assertEqual(addition_field.fieldtype, "JSON")
+		stored_additions = frappe.as_json({
+			"version": 1,
+			"totals": [{"cloth_item": "CLOTH-1", "additional_weight": 20}],
+			"routes": [],
+		})
+
+		filtered = filter_doc_fields({
+			"doctype": "Lot",
+			"name": "TEST-LOT-CLOTH-EXCESS",
+			"cloth_excess_percentage": 7.5,
+			"cloth_program_additions": stored_additions,
+		})
+		self.assertEqual(filtered["cloth_excess_percentage"], 7.5)
+		self.assertEqual(filtered["cloth_program_additions"], stored_additions)
+
 	def test_ipd_compacting_sync_replaces_compacting_child_rows(self):
 		self.assertIn("IPD Compacting", SYNC_DOCTYPES)
 		name = f"_Test IPD Compacting {frappe.generate_hash(length=8)}"

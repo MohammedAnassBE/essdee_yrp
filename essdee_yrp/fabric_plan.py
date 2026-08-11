@@ -109,9 +109,14 @@ def _route_bypasses_step(ipd_doc, step, reference_item_variant, combo):
 	return bool(knitting_output and knitting_output == finished_colour)
 
 
-def solve_chain_backward(ipd_doc, requirement):
+def solve_chain_backward(ipd_doc, requirement, matrix_cache=None):
 	"""requirement: {frozenset({(attr, value), ...}): kg} keyed by finished-cloth
 	attrs. Returns (step_plans FIRST->LAST, unreachable list).
+
+	``matrix_cache`` may be shared by callers validating several independent
+	routes for the same IPD. Matrix documents are immutable during one solve, so
+	reusing the output index avoids reloading the same child tables for every
+	route without changing the calculation.
 
 	step_plans rows: {process_name, position, shape,
 	  outputs: {attrs_frozenset: kg},   # what the step must produce
@@ -123,9 +128,13 @@ def solve_chain_backward(ipd_doc, requirement):
 	steps = get_fabric_steps(ipd_doc)
 	demand = dict(requirement)
 	step_plans, unreachable = [], []
+	matrix_cache = matrix_cache if matrix_cache is not None else {}
 
 	for step in reversed(steps):
-		groups, declared_attrs = _load_output_indexed_groups(ipd_doc.name, step["process_name"])
+		cache_key = (ipd_doc.name, step["process_name"])
+		if cache_key not in matrix_cache:
+			matrix_cache[cache_key] = _load_output_indexed_groups(*cache_key)
+		groups, declared_attrs = matrix_cache[cache_key]
 		outputs, inputs, next_demand = {}, {}, {}
 		for demand_key, kg in demand.items():
 			reference_item_variant, combo = _split_plan_key(demand_key)

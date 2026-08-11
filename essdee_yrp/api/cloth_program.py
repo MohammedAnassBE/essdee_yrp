@@ -25,6 +25,8 @@ same-value routing row so their exact Dia/Colour recipe is retained, but matrix
 generation and the backward planner bypass dyeing for that row.
 """
 
+import math
+
 import frappe
 from frappe import _
 from frappe.utils import cint, flt
@@ -960,6 +962,13 @@ def _exact_program_base_weight(row, raw_demand):
     return flt(row.get("weight"))
 
 
+def _round_program_weight(value):
+    """Match MRP's whole-kilogram cloth-program rounding rule."""
+    value = flt(value)
+    floor = math.floor(value)
+    return math.ceil(value) if value - floor > 0.5 else floor
+
+
 @frappe.whitelist()
 def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
     """Orchestrator entrypoint (Desk button + /web modal). selections:
@@ -1125,11 +1134,7 @@ def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
                 "Lot Fabric Program",
                 row.name,
                 "weight",
-                flt(
-                    base_weight * excess_factor,
-                    3,
-                    "Commercial Rounding",
-                ),
+                _round_program_weight(base_weight * excess_factor),
                 update_modified=False,
             )
     return {

@@ -450,10 +450,10 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 	const route_detail_fields = {};
 	const route_output_fields = {};
 	const fields = [{
-		label: __("Knitting Program Excess (%)"),
+		label: __("Cloth Excess Percentage"),
 		fieldname: "excess_percentage",
 		fieldtype: "Float",
-		default: 0,
+		default: Number(frm.doc.cloth_excess_percentage || 0),
 	}];
 	cloths.forEach((c, i) => {
 		const item_yarns = c.item_yarns || [];

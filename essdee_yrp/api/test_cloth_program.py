@@ -19,6 +19,7 @@ from essdee_yrp.api.cloth_program import (
     _normalize_knitting_output_colours,
     _normalize_yarns,
     _requirement_payload,
+    _round_program_weight,
     build_cloth_programs,
 )
 from essdee_yrp.fabric_chain import final_combos, get_fabric_steps
@@ -1063,7 +1064,8 @@ class TestClothProgram(IntegrationTestCase):
     def test_build_cloth_programs_multicolour_end_to_end(self):
         """(d) The whitelisted orchestrator on multi-colour demand: requirements
         SPLIT per (dia, colour) (not collapsed), plan Built, knitting program per
-        dia sums the colours, ledger carries one dyeing output per colour."""
+        route uses MRP whole-kg rounding, ledger carries one dyeing output per
+        colour."""
         blue = _ensure_iav("Colour", "_Test Blue CPD")
         lot = frappe.get_doc({"doctype": "Lot", "lot_name": "_Test CPD Lot Multi"}).insert(
             ignore_permissions=True)
@@ -1093,7 +1095,7 @@ class TestClothProgram(IntegrationTestCase):
             (self.dia, blue),
         })
         self.assertAlmostEqual(programs[(self.dia, self.red)], 30.0, places=3)
-        self.assertAlmostEqual(programs[(self.dia, blue)], 20.5, places=3)
+        self.assertAlmostEqual(programs[(self.dia, blue)], 20.0, places=3)
 
         dye_out = {(r.dia, r.colour): flt(r.planned_weight)
                    for r in lot.lot_fabric_step_ledger
@@ -1274,10 +1276,8 @@ class TestClothProgram(IntegrationTestCase):
         lot = frappe.get_doc({
             "doctype": "Lot", "lot_name": "_Test CPD Lot Excess",
         }).insert(ignore_permissions=True)
-        # This live-shaped value exposes both premature rounding and the
-        # cross-site tie-break difference: 15.050 * 1.05 is exactly 15.8025.
-        # MRP rounds that positive half-thousandth up to 15.803, so YRP must
-        # use the same explicit commercial rule regardless of System Settings.
+        # Apply the excess to the exact route demand before matching MRP's
+        # whole-kilogram display rule: 15.050 * 1.05 = 15.8025 -> 16.
         demand = {(self.cloth, self.dia, self.red): 15.05}
         with patch.object(
             cloth_program, "compute_cloth_demand", return_value=demand
@@ -1306,7 +1306,12 @@ class TestClothProgram(IntegrationTestCase):
         )
         self.assertEqual(flt(requirement.weight, 3), 15.05)
         self.assertEqual(flt(planned, 3), 15.05)
-        self.assertEqual(flt(program.weight, 3), 15.803)
+        self.assertEqual(flt(program.weight), 16)
+
+    def test_program_weight_rounding_matches_mrp_half_boundary(self):
+        self.assertEqual(_round_program_weight(10.49), 10)
+        self.assertEqual(_round_program_weight(10.5), 10)
+        self.assertEqual(_round_program_weight(10.51), 11)
 
     def test_build_cloth_programs_rejects_negative_excess(self):
         lot = frappe.get_doc({

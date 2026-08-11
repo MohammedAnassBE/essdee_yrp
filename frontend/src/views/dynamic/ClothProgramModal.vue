@@ -14,7 +14,7 @@
     </div>
     <div v-else class="cp-list">
       <label class="cp-excess">
-        <strong>Knitting Program Excess</strong>
+        <strong>Cloth Excess Percentage</strong>
         <InputNumber
           v-model="excessPercentage"
           :min="0"
@@ -376,6 +376,7 @@ const props = defineProps({
   lot: { type: String, required: true },
   productionDetail: { type: String, default: null },
   modified: { type: String, default: null },
+  syncedExcessPercentage: { type: [Number, String], default: 0 },
 })
 // "applying" fires right BEFORE the server write so the host can open its
 // realtime local-write suppression window (markLocalWrite) in time — the
@@ -416,7 +417,7 @@ const isDirty = computed(
 async function loadContext() {
   loading.value = true
   entries.value = []
-  excessPercentage.value = 0
+  excessPercentage.value = Number(props.syncedExcessPercentage || 0)
   editingRouteGroups.value = {}
   try {
     const r = await callMethod("essdee_yrp.api.cloth_program.get_cloth_program_context", { lot: props.lot })

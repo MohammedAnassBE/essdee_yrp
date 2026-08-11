@@ -367,6 +367,7 @@
 			:lot="doc.name"
 			:production-detail="doc.production_detail"
 			:modified="doc.modified"
+			:synced-excess-percentage="doc.cloth_excess_percentage || 0"
 			@applying="markLocalWrite"
 			@built="onClothProgramsBuilt"
 		/>

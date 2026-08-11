@@ -930,15 +930,8 @@ def _requirement_payload(by_cloth):
     return entries
 
 
-def _exact_program_base_weight(row, raw_demand):
-    """Recover the exact final-route kg before the requirement table rounds it.
-
-    Lot Fabric Requirement intentionally stores three decimals. The plan uses
-    those persisted rows, so multiplying its pre-seeded program by a popup
-    excess causes a second rounding step. A program row's reference variant
-    identifies the exact final Dia/Colour route; use the original demand for
-    that route and round only after applying the popup percentage.
-    """
+def _program_final_route(row):
+    """Return the stable final cloth/Dia/Colour identity for a program row."""
     final_dia = row.get("dia")
     final_colour = row.get("colour") or None
     reference = row.get("reference_item_variant")
@@ -950,8 +943,21 @@ def _exact_program_base_weight(row, raw_demand):
         }
         final_dia = attrs.get(FABRIC_DIA_ATTRIBUTE) or final_dia
         final_colour = attrs.get(FABRIC_COLOUR_ATTRIBUTE) or final_colour
+    return row.get("cloth_item"), final_dia, final_colour
 
-    routes = raw_demand.get(row.get("cloth_item")) or {}
+
+def _exact_program_base_weight(row, raw_demand):
+    """Recover the exact final-route kg before the requirement table rounds it.
+
+    Lot Fabric Requirement intentionally stores three decimals. The plan uses
+    those persisted rows, so multiplying its pre-seeded program by a popup
+    excess causes a second rounding step. A program row's reference variant
+    identifies the exact final Dia/Colour route; use the original demand for
+    that route and round only after applying the popup percentage.
+    """
+    cloth_item, final_dia, final_colour = _program_final_route(row)
+
+    routes = raw_demand.get(cloth_item) or {}
     for key in (
         (final_dia, final_colour),
         (final_dia, final_colour or ""),
@@ -967,6 +973,34 @@ def _round_program_weight(value):
     value = flt(value)
     floor = math.floor(value)
     return math.ceil(value) if value - floor > 0.5 else floor
+
+
+def _synced_program_route_additions(value):
+    """Return MRP's resolved per-route whole-kg additions keyed for this Lot."""
+    if not value:
+        return {}
+    if isinstance(value, str):
+        try:
+            value = frappe.parse_json(value)
+        except (TypeError, ValueError):
+            frappe.throw(_("Synced Cloth Program Additions are not valid JSON."))
+    routes = (value.get("routes") or []) if isinstance(value, dict) else []
+    additions = {}
+    for index, row in enumerate(routes, 1):
+        weight = flt(row.get("additional_weight"))
+        if weight < 0:
+            frappe.throw(_(
+                "Synced Cloth Program Additions row {0}: Added Weight cannot be negative."
+            ).format(index))
+        key = (
+            row.get("cloth_item"),
+            row.get("dia"),
+            row.get("colour") or None,
+        )
+        if not all(key[:2]) or weight <= 0:
+            continue
+        additions[key] = additions.get(key, 0) + _round_program_weight(weight)
+    return additions
 
 
 @frappe.whitelist()
@@ -986,6 +1020,9 @@ def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
     if excess_percentage < 0:
         frappe.throw(_("Knitting program excess percentage cannot be negative."))
     excess_factor = 1 + excess_percentage / 100
+    route_additions = _synced_program_route_additions(
+        lot_doc.get("cloth_program_additions")
+    )
 
     # Popup excess is authoritative for this build. Start from the exact
     # garment demand so MRP Settings cloth allowance is not silently stacked
@@ -1130,17 +1167,20 @@ def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
     ):
         if row.cloth_item in payload:
             base_weight = _exact_program_base_weight(row, payload)
+            route_key = _program_final_route(row)
             frappe.db.set_value(
                 "Lot Fabric Program",
                 row.name,
                 "weight",
-                _round_program_weight(base_weight * excess_factor),
+                _round_program_weight(base_weight * excess_factor)
+                + route_additions.get(route_key, 0),
                 update_modified=False,
             )
     return {
         "cloths_built": len(built),
         "programs": built,
         "excess_percentage": excess_percentage,
+        "manual_additional_weight": sum(route_additions.values()),
     }
 
 
@@ -1302,6 +1342,9 @@ def get_cloth_program_context(lot):
     ipd = frappe.get_cached_doc("Item Production Detail", lot_doc.production_detail)
     cloths = _cloth_rows_from_ipd(ipd)
     demand = compute_cloth_demand(lot_doc.name, apply_allowance=False)
+    route_additions = _synced_program_route_additions(
+        lot_doc.get("cloth_program_additions")
+    )
     demanded = {cloth for (cloth, _dia, _colour) in demand}
     demanded_colours = {}
     demanded_routes = {}
@@ -1310,6 +1353,9 @@ def get_cloth_program_context(lot):
             "dia": dia,
             "colour": colour,
             "weight": flt(weight),
+            "additional_weight": route_additions.get(
+                (cloth, dia, colour or None), 0
+            ),
         })
         if colour:
             demanded_colours.setdefault(cloth, [])

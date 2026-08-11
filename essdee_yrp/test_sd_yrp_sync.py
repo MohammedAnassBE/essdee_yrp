@@ -21,13 +21,23 @@ class TestSDYRPSyncSetup(IntegrationTestCase):
 		self.assertIsNotNone(field)
 		self.assertEqual(field.fieldtype, "Percent")
 		self.assertEqual(field.label, "Cloth Excess Percentage")
+		addition_field = frappe.get_meta("Lot").get_field("cloth_program_additions")
+		self.assertIsNotNone(addition_field)
+		self.assertEqual(addition_field.fieldtype, "JSON")
+		stored_additions = frappe.as_json({
+			"version": 1,
+			"totals": [{"cloth_item": "CLOTH-1", "additional_weight": 20}],
+			"routes": [],
+		})
 
 		filtered = filter_doc_fields({
 			"doctype": "Lot",
 			"name": "TEST-LOT-CLOTH-EXCESS",
 			"cloth_excess_percentage": 7.5,
+			"cloth_program_additions": stored_additions,
 		})
 		self.assertEqual(filtered["cloth_excess_percentage"], 7.5)
+		self.assertEqual(filtered["cloth_program_additions"], stored_additions)
 
 	def test_ipd_compacting_sync_replaces_compacting_child_rows(self):
 		self.assertIn("IPD Compacting", SYNC_DOCTYPES)

@@ -284,7 +284,13 @@
                 >
                   <div class="cp-route-finished">
                     <strong>{{ route.dia }}</strong>
-                    <small>{{ formatWeight(route.weight) }} kg finished</small>
+                    <small>
+                      {{ formatWeight(route.weight) }} kg required ·
+                      {{ formatWeight(routeProgramWeight(route)) }} kg program
+                      <template v-if="route.additional_weight">
+                        (+{{ formatWeight(route.additional_weight) }} kg added)
+                      </template>
+                    </small>
                     <small
                       :class="route.knitting_output_colour === colour ? 'direct' : 'dye'"
                     >
@@ -692,6 +698,18 @@ function formatRatio(value) {
 
 function formatWeight(value) {
   return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 3 })
+}
+
+function roundProgramWeight(value) {
+  const number = Number(value || 0)
+  const floor = Math.floor(number)
+  return number - floor > 0.5 ? Math.ceil(number) : floor
+}
+
+function routeProgramWeight(route) {
+  const percentage = Math.max(0, Number(excessPercentage.value || 0))
+  return roundProgramWeight(Number(route.weight || 0) * (1 + percentage / 100))
+    + Number(route.additional_weight || 0)
 }
 
 function routesForColour(entry, colour) {

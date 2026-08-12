@@ -690,6 +690,7 @@ def _validate_exact_route_reachability(doc):
 	from yrp.yrp.doctype.item.item import get_or_create_variant
 
 	problems = []
+	matrix_cache = {}
 	for row in routes:
 		attrs = {
 			FABRIC_DIA_ATTRIBUTE: row.finished_dia,
@@ -699,6 +700,7 @@ def _validate_exact_route_reachability(doc):
 		_step_plans, unreachable = solve_chain_backward(
 			doc,
 			{(reference, frozenset(attrs.items())): 1.0},
+			matrix_cache=matrix_cache,
 		)
 		if unreachable:
 			failed = unreachable[0]
@@ -716,8 +718,33 @@ def _validate_exact_route_reachability(doc):
 
 
 def _delete_all_matrices(ipd_name):
-	for name in frappe.get_all("IPD Process Matrix", filters={"ipd": ipd_name}, pluck="name"):
-		frappe.delete_doc("IPD Process Matrix", name, force=1, ignore_permissions=True)
+	"""Bulk-delete generated matrices and their children.
+
+	These records are an internal materialized view of the cloth IPD and have no
+	external Link consumers. Running Frappe's full document deletion lifecycle
+	for every generated matrix creates a Deleted Document audit row and a
+	dynamic-link cleanup job per matrix, which made large IPDs slow to save.
+	"""
+	names = frappe.get_all(
+		"IPD Process Matrix",
+		filters={"ipd": ipd_name},
+		pluck="name",
+	)
+	if not names:
+		return
+
+	parent_filter = {
+		"parent": ["in", names],
+		"parenttype": "IPD Process Matrix",
+	}
+	for child_doctype in (
+		"IPD Matrix Attribute",
+		"IPD Matrix Combination",
+		"IPD Matrix Combination Attribute",
+	):
+		frappe.db.delete(child_doctype, parent_filter)
+	frappe.db.delete("IPD Process Matrix", {"name": ["in", names]})
+	frappe.clear_document_cache("IPD Process Matrix")
 
 
 def _new_matrix(doc, process):

@@ -12,6 +12,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import flt
 
+from essdee_yrp import fabric_plan
 from essdee_yrp.api import cloth_program
 from essdee_yrp.api.cloth_program import (
     _ensure_lot_fabric_detail,
@@ -24,6 +25,7 @@ from essdee_yrp.api.cloth_program import (
     build_cloth_programs,
 )
 from essdee_yrp.fabric_chain import final_combos, get_fabric_steps
+from essdee_yrp.fabric_ipd import _delete_all_matrices
 from essdee_yrp.fabric_plan import solve_chain_backward
 from essdee_yrp.fabric_program import (
     fetch_fabric_program_details,
@@ -167,6 +169,73 @@ class TestClothProgram(IntegrationTestCase):
         self.assertGreaterEqual(len(matrices), 2)
         want = frozenset({("Dia", self.dia), ("Colour", self.red)})
         self.assertIn(want, final_combos(cpd))
+
+    def test_solve_chain_backward_reuses_shared_matrix_index(self):
+        cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
+        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        requirement = {
+            frozenset({("Dia", self.dia), ("Colour", self.red)}): 1.0,
+        }
+        matrix_cache = {}
+
+        with patch(
+            "essdee_yrp.fabric_plan._load_output_indexed_groups",
+            wraps=fabric_plan._load_output_indexed_groups,
+        ) as load_groups:
+            solve_chain_backward(cpd, requirement, matrix_cache=matrix_cache)
+            first_call_count = load_groups.call_count
+            solve_chain_backward(cpd, requirement, matrix_cache=matrix_cache)
+
+        self.assertEqual(first_call_count, len(get_fabric_steps(cpd)))
+        self.assertEqual(load_groups.call_count, first_call_count)
+
+    def test_generated_matrix_bulk_delete_removes_children_without_audit_rows(self):
+        cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
+        matrix_names = frappe.get_all(
+            "IPD Process Matrix",
+            filters={"ipd": cpd_name},
+            pluck="name",
+        )
+        self.assertTrue(matrix_names)
+
+        deleted_before = frappe.db.count(
+            "Deleted Document",
+            filters={
+                "deleted_doctype": "IPD Process Matrix",
+                "deleted_name": ["in", matrix_names],
+            },
+        )
+        _delete_all_matrices(cpd_name)
+
+        self.assertEqual(
+            frappe.db.count("IPD Process Matrix", {"ipd": cpd_name}),
+            0,
+        )
+        for child_doctype in (
+            "IPD Matrix Attribute",
+            "IPD Matrix Combination",
+            "IPD Matrix Combination Attribute",
+        ):
+            self.assertEqual(
+                frappe.db.count(
+                    child_doctype,
+                    {
+                        "parent": ["in", matrix_names],
+                        "parenttype": "IPD Process Matrix",
+                    },
+                ),
+                0,
+            )
+        self.assertEqual(
+            frappe.db.count(
+                "Deleted Document",
+                filters={
+                    "deleted_doctype": "IPD Process Matrix",
+                    "deleted_name": ["in", matrix_names],
+                },
+            ),
+            deleted_before,
+        )
 
     def test_multi_yarn_recipe_persists_and_builds_matrix_inputs(self):
         yarn_b = _ensure_item("_Test Yarn B CPD")

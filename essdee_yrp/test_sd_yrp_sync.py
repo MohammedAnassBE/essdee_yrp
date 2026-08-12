@@ -16,6 +16,25 @@ from essdee_yrp.setup import ensure_yrp_production_order_settings
 
 
 class TestSDYRPSyncSetup(IntegrationTestCase):
+	def test_ipd_panel_wise_cloth_mapping_is_syncable(self):
+		field = frappe.get_meta("Item Production Detail").get_field("panel_wise_cloth_mapping_json")
+		self.assertIsNotNone(field)
+		self.assertEqual(field.fieldtype, "JSON")
+		self.assertTrue(field.hidden)
+
+		stored_mapping = frappe.as_json({
+			"schema_version": 1,
+			"attributes": ["Panel", "Colour"],
+			"panels": [{"panel_value": "Front", "values": {"Red": {"cloth": "Dyed Fabric"}}}],
+		})
+		filtered = filter_doc_fields({
+			"doctype": "Item Production Detail",
+			"name": "TEST-IPD-PANEL-WISE-CLOTH-MAPPING",
+			"panel_wise_cloth_mapping_json": stored_mapping,
+		})
+
+		self.assertEqual(filtered["panel_wise_cloth_mapping_json"], stored_mapping)
+
 	def test_lot_cloth_excess_percentage_is_syncable(self):
 		field = frappe.get_meta("Lot").get_field("cloth_excess_percentage")
 		self.assertIsNotNone(field)

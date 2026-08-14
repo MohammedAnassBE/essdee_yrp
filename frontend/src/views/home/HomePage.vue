@@ -16,7 +16,7 @@
 
 <script setup>
 import { computed, onErrorCaptured, ref } from "vue"
-import { ScreenRenderer, useUiConfigStore } from "@yrp/web-engine"
+import { ScreenRenderer, useUiConfigStore } from "@/engine"
 import { fallbackConfig } from "@/config/defaultConfig"
 
 const ui = useUiConfigStore()

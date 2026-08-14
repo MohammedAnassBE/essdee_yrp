@@ -119,7 +119,7 @@ import {
 	statusColor,
 	statusTint,
 	useUiConfigStore,
-} from "@yrp/web-engine"
+} from "@/engine"
 import { usePermissions } from "@/composables/usePermissions"
 import { useRealtime } from "@/composables/useRealtime"
 import { useTheme } from "@/composables/useTheme"

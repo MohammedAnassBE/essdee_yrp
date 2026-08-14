@@ -39,7 +39,7 @@
 <script setup>
 /**
  * Lot "Order Details" grid — /web mirror of the Desk Vue island
- * apps/yrp/yrp/public/js/CuttingPlan/components/CutPlanItems.vue.
+ * apps/essdee_yrp/essdee_yrp/public/js/CuttingPlan/components/CutPlanItems.vue.
  *
  * Data contract (byte-faithful): loadData(blocks) receives the grouped
  * structure from Lot.fetch_order_item_details / __onload.order_item_details —

@@ -164,6 +164,10 @@ function mount_calculated_work_order_editors(frm) {
 				allowEdit: false,
 				allowRemove: false,
 				aggregateDisplay: true,
+				aggregateRouteFields: [
+					"fabric_reference_variant",
+					"fabric_reference_allocations",
+				],
 			},
 		);
 		let data = frm.doc.__onload?.[config.payload_field] || frm.doc[config.payload_field] || [];

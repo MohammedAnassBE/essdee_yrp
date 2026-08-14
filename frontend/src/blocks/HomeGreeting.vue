@@ -60,7 +60,7 @@
 <script setup>
 import { computed, ref, watch } from "vue"
 import { useRouter, useRoute } from "vue-router"
-import { useUiConfigStore } from "@yrp/web-engine"
+import { useUiConfigStore } from "@/engine"
 import { useAuth } from "@/composables/useAuth"
 import { usePreviewGate } from "@/composables/usePreviewGate"
 import { getRegistryByDoctype } from "@/config/doctypes"

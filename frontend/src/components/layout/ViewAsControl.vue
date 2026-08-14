@@ -93,7 +93,7 @@ import { ref, computed } from "vue"
 import Dialog from "primevue/dialog"
 import Button from "primevue/button"
 import { useToast } from "primevue/usetoast"
-import { useUiConfigStore } from "@yrp/web-engine"
+import { useUiConfigStore } from "@/engine"
 import LinkField from "@/components/LinkField.vue"
 import { usePermissions } from "@/composables/usePermissions"
 

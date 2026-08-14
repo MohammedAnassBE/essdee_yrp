@@ -50,7 +50,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from "vue"
 import { useRouter } from "vue-router"
-import { formatDate, statusChipStyle } from "@yrp/web-engine"
+import { formatDate, statusChipStyle } from "@/engine"
 import { usePermissions } from "@/composables/usePermissions"
 import { useRealtime } from "@/composables/useRealtime"
 import { useTheme } from "@/composables/useTheme"

@@ -104,7 +104,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue"
-import { useUiConfigStore, KnobsPanel } from "@yrp/web-engine"
+import { useUiConfigStore, KnobsPanel } from "@/engine"
 import AppSidebar from "./AppSidebar.vue"
 import AppTopbar from "./AppTopbar.vue"
 import ChromeBar from "./ChromeBar.vue"

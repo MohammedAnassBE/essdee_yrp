@@ -12,7 +12,7 @@
 	--c-surface: var(--yrp-bg-rgb, 242 246 244);    /* #F2F6F4 — picked teal-biased page ground */
 
 	/* ── Surfaces — value side reads the engine's layout-theme tokens (--yrp-*,
-	   written by @yrp/web-engine applyTheme ONLY for keys present in the layout
+	   written by @/engine applyTheme ONLY for keys present in the layout
 	   theme); the fallback is the exact shipped value, so a layout without theme
 	   knobs renders pixel-identical (parity law). ── */
 	--esd-bg:        var(--yrp-bg, #F2F6F4);        /* picked teal-biased near-white (= --c-surface) */

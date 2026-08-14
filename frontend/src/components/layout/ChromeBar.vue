@@ -98,7 +98,7 @@
 
 <script setup>
 import { computed, onMounted } from "vue"
-import { useUiConfigStore } from "@yrp/web-engine"
+import { useUiConfigStore } from "@/engine"
 import ViewAsControl from "./ViewAsControl.vue"
 import { useAuth } from "@/composables/useAuth"
 import { useTheme } from "@/composables/useTheme"

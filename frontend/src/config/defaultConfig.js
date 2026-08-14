@@ -4,7 +4,7 @@
 // scenario is structurally unreachable (the fallback is inside the JS already
 // executing). The fixture is in exact `bench export-fixtures` format: an array
 // of docs whose `config` field is a JSON *string*.
-import { ENGINE_SCHEMA_VERSION } from "@yrp/web-engine"
+import { ENGINE_SCHEMA_VERSION } from "@/engine"
 
 import layouts from "../../../essdee_yrp/fixtures/ui_layout.json"
 

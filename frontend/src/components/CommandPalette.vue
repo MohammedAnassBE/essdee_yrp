@@ -61,7 +61,7 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue"
 import { useRouter } from "vue-router"
 import Dialog from "primevue/dialog"
-import { useUiConfigStore } from "@yrp/web-engine"
+import { useUiConfigStore } from "@/engine"
 import { getRegistryByDoctype } from "@/config/doctypes"
 import { usePreviewGate } from "@/composables/usePreviewGate"
 import { useTheme } from "@/composables/useTheme"

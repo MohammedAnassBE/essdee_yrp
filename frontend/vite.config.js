@@ -12,7 +12,6 @@ export default defineConfig({
 			// default allow-list and can 403 src/ itself in dev (spec §6.2).
 			allow: [
 				searchForWorkspaceRoot(process.cwd()), // keep default root
-				path.resolve(__dirname, "../../yrp/frontend"), // @yrp/web-engine source
 				path.resolve(__dirname, "../essdee_yrp/fixtures"), // fixture JSON import (spec §12.3)
 			],
 		},
@@ -22,8 +21,7 @@ export default defineConfig({
 		alias: {
 			"@": path.resolve(__dirname, "src"),
 		},
-		// dedupe is THE fix for bare-import resolution through the file: link —
-		// there is no node_modules on the walk-up path from apps/yrp/ (spec §6.2).
+		// Keep one Vue/Pinia instance across the host and its local UI engine.
 		dedupe: ["vue", "pinia"],
 	},
 	build: {

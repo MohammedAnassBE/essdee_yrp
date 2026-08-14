@@ -6,6 +6,11 @@ app_email = "anas@essdee.fit"
 app_license = "mit"
 required_apps = ["yrp"]
 
+# Code-owned downstream extensions for the base /web registry. Layout JSON may
+# reference these safe keys but cannot supply executable methods itself.
+yrp_ui_metrics = ["essdee_yrp.ui_registry.get_metrics"]
+yrp_ui_calculations = ["essdee_yrp.ui_registry.get_calculations"]
+
 fixtures = [
 	{"dt": "Custom Field"},
 	# Field-order override: keeps `ipd_processes` on the Item Details tab
@@ -287,13 +292,17 @@ doc_events = {
 	},
 	"Delivery Challan": {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
+		"before_validate": "essdee_yrp.delivery_challan_hooks.before_validate",
 	},
 	"Work Order Correction": {
 		"before_submit": "essdee_yrp.work_order_correction_hooks.validate_correction_ipd_items"
 	},
 	"Goods Received Note": {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
-		"before_validate": "essdee_yrp.fabric_grn.before_validate",
+		"before_validate": [
+			"essdee_yrp.packing_hooks.set_grn_includes_packing",
+			"essdee_yrp.fabric_grn.before_validate",
+		],
 		"before_cancel": "essdee_yrp.api.mrp_stock_transfer.before_grn_cancel",
 		"on_submit": [
 			"essdee_yrp.fabric_grn.on_submit",
@@ -310,6 +319,7 @@ doc_events = {
 	# UI hide (public/js/stock_entry_transfer_cancel_guard.js) cannot be bypassed.
 	"Stock Entry": {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
+		"before_validate": "essdee_yrp.packing_hooks.set_stock_entry_includes_packing",
 		"before_cancel": "essdee_yrp.api.stock_transfer.guard_transfer_se_cancel",
 	},
 }

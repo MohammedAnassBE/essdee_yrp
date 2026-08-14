@@ -13,6 +13,7 @@ import PanelWiseConsumptionMatrix from "./Item_Po_detail/PanelWiseConsumptionMat
 import LotOrderedDetail from "./ProductionOrder/LotOrderedDetail.vue";
 import FabricProgram from "./Lot/FabricProgram.vue";
 import FabricProcesses from "./Fabric/FabricProcesses.vue";
+import CutPlanItems from "./CuttingPlan/components/CutPlanItems.vue";
 
 frappe.provide("frappe.production.ui");
 
@@ -235,6 +236,28 @@ frappe.production.ui.LotOrderedDetail = class {
 	}
 	load_data(context) {
 		this.vue.load_data(JSON.parse(JSON.stringify(context || {})));
+	}
+};
+
+frappe.production.ui.CutPlanItems = class {
+	constructor(wrapper) {
+		this.$wrapper = $(wrapper);
+		this.make_app();
+	}
+	make_app() {
+		const mounted = mount_component(CutPlanItems, this.$wrapper);
+		this.app = mounted.app;
+		this.vue = mounted.vue;
+	}
+	load_data(item_details, length) {
+		this.vue.load_data(JSON.parse(JSON.stringify(item_details)));
+		if (length > 0) this.update_status();
+	}
+	get_items() {
+		return this.vue.get_items();
+	}
+	update_status() {
+		this.vue.update_docstatus();
 	}
 };
 

@@ -10,9 +10,26 @@ required_apps = ["yrp"]
 # reference these safe keys but cannot supply executable methods itself.
 yrp_ui_metrics = ["essdee_yrp.ui_registry.get_metrics"]
 yrp_ui_calculations = ["essdee_yrp.ui_registry.get_calculations"]
+yrp_ui_actions = [
+	"create_grn",
+	"create_dc",
+	"complete_transfer",
+	"build_cloth_programs",
+	"more_menu",
+	"ewaybill_menu",
+	"send_sms",
+	"send_whatsapp",
+	"cancel_doc",
+]
+yrp_stock_item_entry_fields = [
+	"essdee_yrp.stock_item_extensions.get_entry_fields",
+]
 
 fixtures = [
-	{"dt": "Custom Field"},
+	{
+		"dt": "Custom Field",
+		"filters": [["module", "=", "Essdee YRP"]],
+	},
 	# Field-order override: keeps `ipd_processes` on the Item Details tab
 	# (production_api parity) — the custom garment tabs would otherwise pull
 	# it into the hidden-for-cloth Advance Settings tab.
@@ -24,6 +41,7 @@ fixtures = [
 				"in",
 				[
 					"Item Production Detail-main-field_order",
+					"Item Production Detail-approval_status-options",
 					"Work Order-naming_series-options",
 					"Work Order-naming_series-default",
 					"Delivery Challan-naming_series-options",

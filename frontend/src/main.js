@@ -3,7 +3,7 @@ import { createPinia } from "pinia"
 import PrimeVue from "primevue/config"
 import ToastService from "primevue/toastservice"
 import ConfirmationService from "primevue/confirmationservice"
-import { installEngine, useUiConfigStore, applyTheme } from "@yrp/web-engine"
+import { installEngine, useUiConfigStore, applyTheme } from "@/engine"
 
 import router from "./router"
 import App from "./App.vue"
@@ -44,7 +44,7 @@ app.use(PrimeVue, {
 app.use(ToastService)
 app.use(ConfirmationService)
 
-// @yrp/web-engine host injection (spec §6.1): the engine's only window into
+// @/engine host injection (spec §6.1): the engine's only window into
 // the app — manager gate, class-only mode setter, API client, and router
 // navigation for block deep-links. The engine never imports app code; these
 // four services are everything it may touch.

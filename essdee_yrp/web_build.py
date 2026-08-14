@@ -17,8 +17,8 @@ Design guarantees:
 - **Never crashes the caller.** Every path is wrapped; a build failure logs a
   warning and returns, so it can never break ``bench migrate`` / ``bench build``.
 - **Source-hash gated.** Rebuilds only when the SPA sources actually change
-  (``frontend/src``, ``package.json``, ``yarn.lock``, ``vite.config.js``,
-  ``index.html``, and the linked ``@yrp/web-engine`` source), so ordinary
+  (``frontend/src`` — including the Essdee-owned UI engine — ``package.json``,
+  ``yarn.lock``, ``vite.config.js``, and ``index.html``), so ordinary
   migrations don't pay for a full rebuild. The signature is stored in
   ``public/frontend/.build-hash``.
 - **Installs deps only when missing** (``frontend/node_modules`` absent) using
@@ -42,8 +42,6 @@ _NODE_MODULES = os.path.join(_FRONTEND, "node_modules")
 _OUTPUT = os.path.join(_MODULE_DIR, "public", "frontend")
 _ENTRY_HTML = os.path.join(_OUTPUT, "index.html")
 _HASH_FILE = os.path.join(_OUTPUT, ".build-hash")
-# The @yrp/web-engine source the SPA bundles in — a change here also changes output.
-_YRP_ENGINE_SRC = os.path.abspath(os.path.join(_APP_ROOT, "..", "yrp", "frontend", "src"))
 
 
 def _log(msg, warning=False):
@@ -125,7 +123,7 @@ def _source_signature():
 		if os.path.isfile(p):
 			files.append(p)
 
-	for tree in (os.path.join(_FRONTEND, "src"), _YRP_ENGINE_SRC):
+	for tree in (os.path.join(_FRONTEND, "src"),):
 		if os.path.isdir(tree):
 			for dirpath, dirnames, filenames in os.walk(tree):
 				dirnames.sort()

@@ -33,7 +33,7 @@ export function initTheme() {
 	apply(_theme.value)
 }
 
-// Class-only mode setter for the @yrp/web-engine theme applier (spec §9 item 1,
+// Class-only mode setter for the @/engine theme applier (spec §9 item 1,
 // §19 nit 2). "light"/"dark" force the mode class WITHOUT writing localStorage
 // (a forced-mode layout must never ratchet the user's stored choice, and
 // View-as must never pollute the SM's); "user" — or anything else — re-applies

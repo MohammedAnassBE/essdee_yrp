@@ -11,7 +11,7 @@
 //
 // Capability is untouched: these gates decide what is ADVERTISED, never what
 // the session may do — data and real permissions stay the SM's own (§15).
-import { useUiConfigStore } from "@yrp/web-engine"
+import { useUiConfigStore } from "@/engine"
 import { usePermissions } from "./usePermissions"
 import { noWebCreate } from "@/config/doctypes"
 

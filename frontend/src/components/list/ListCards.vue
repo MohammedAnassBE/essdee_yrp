@@ -83,7 +83,7 @@
 
 <script setup>
 import { computed } from "vue"
-import { CompositeTree, statusChipStyle, statusColor, statusTint, useUiConfigStore } from "@yrp/web-engine"
+import { CompositeTree, statusChipStyle, statusColor, statusTint, useUiConfigStore } from "@/engine"
 import { useTheme } from "@/composables/useTheme"
 
 const props = defineProps({

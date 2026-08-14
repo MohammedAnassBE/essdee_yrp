@@ -8,7 +8,7 @@
 // Adding a genuinely new widget = one .vue file here + one registerBlock line
 // + normal git deploy; instantly addressable from every layout as
 // {"type": "<name>"} (addressable ≠ placed — layouts opt in explicitly).
-import { registerBlock, SummaryTiles, CalculatorPanel } from "@yrp/web-engine" // engine-shipped blocks (registration stays a host decision, §6.3)
+import { registerBlock, SummaryTiles, CalculatorPanel } from "@/engine" // engine-shipped blocks (registration stays a host decision, §6.3)
 import HomeGreeting from "./HomeGreeting.vue" // greeting hero incl. the primary-create split CTA
 import HomeQueues from "./HomeQueues.vue" // "My Work Today" stat cards (wraps useHomeQueues)
 import HomeRecent from "./HomeRecent.vue" // tabbed recent table (or "tiles" variant)

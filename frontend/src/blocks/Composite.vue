@@ -5,7 +5,7 @@
      primitives (stack, grid, card, heading, text, kv-row, badge, stat,
      divider, icon, progress, image[site files], spacer) and binds leaf values
      by DOT-PATH into data THIS host fetched. The tree can never define DOM,
-     queries or logic — rendering is @yrp/web-engine CompositeTree; this file
+     queries or logic — rendering is @/engine CompositeTree; this file
      owns exactly what every host block owns: fetch, permissions, realtime.
 
      Layout contract (knobs are props, spec §6.4):
@@ -42,7 +42,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, watch } from "vue"
-import { CompositeTree, collectBindPaths, useUiConfigStore } from "@yrp/web-engine"
+import { CompositeTree, collectBindPaths, useUiConfigStore } from "@/engine"
 import { usePermissions } from "@/composables/usePermissions"
 import { useRealtime } from "@/composables/useRealtime"
 import { useTheme } from "@/composables/useTheme"

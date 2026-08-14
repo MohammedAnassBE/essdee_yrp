@@ -99,7 +99,7 @@
 <script setup>
 import { computed } from "vue"
 import { useRouter } from "vue-router"
-import { useUiConfigStore } from "@yrp/web-engine"
+import { useUiConfigStore } from "@/engine"
 import { usePermissions } from "@/composables/usePermissions"
 import { usePreviewGate } from "@/composables/usePreviewGate"
 import { getRegistryByDoctype } from "@/config/doctypes"

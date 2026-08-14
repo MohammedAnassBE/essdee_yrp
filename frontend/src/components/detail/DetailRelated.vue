@@ -55,7 +55,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, watch } from "vue"
-import { CompositeTree, collectBindPaths, useUiConfigStore } from "@yrp/web-engine"
+import { CompositeTree, collectBindPaths, useUiConfigStore } from "@/engine"
 import { usePermissions } from "@/composables/usePermissions"
 import { useRealtime } from "@/composables/useRealtime"
 import { useTheme } from "@/composables/useTheme"

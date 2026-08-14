@@ -1,16 +1,26 @@
 # Copyright (c) 2024, Essdee and contributors
 # For license information, please see license.txt
 
-import frappe, json, math
-from six import string_types
+import json
+import math
 from itertools import groupby
+
+import frappe
 from frappe.model.document import Document
 from frappe.model.naming import make_autoname
+from frappe.utils import flt, now_datetime
+from six import string_types
+from yrp.utils import get_panel_colour_combination, get_variant_attr_details, update_if_string_instance
 from yrp.yrp.doctype.holiday_list.holiday_list import get_next_date
-from yrp.yrp.doctype.purchase_order.purchase_order import get_item_group_index
 from yrp.yrp.doctype.item.item import get_attribute_details, get_or_create_variant
-from yrp.utils import update_if_string_instance, get_panel_colour_combination, get_variant_attr_details
-from yrp.yrp.doctype.item_dependent_attribute_mapping.item_dependent_attribute_mapping import get_dependent_attribute_details
+from yrp.yrp.doctype.item_dependent_attribute_mapping.item_dependent_attribute_mapping import (
+	get_dependent_attribute_details,
+)
+from yrp.yrp.doctype.item_production_detail.item_production_detail import (
+	calculate_bom_for_variant_demands,
+)
+from yrp.yrp.doctype.purchase_order.purchase_order import get_item_group_index
+
 from essdee_yrp.fabric_program import (
 	fetch_fabric_program_details,
 	rebuild_plans_after_save,
@@ -19,6 +29,8 @@ from essdee_yrp.fabric_program import (
 	save_fabric_requirement_details,
 	validate_unique_fabric_cloths,
 )
+from essdee_yrp.garment_bom import calculate_essdee_accessory_bom
+
 
 class Lot(Document):
 	def before_submit(self):
@@ -40,7 +52,7 @@ class Lot(Document):
 			order_items = save_order_item_details(self.production_detail, self.lot_order_details, self.order_item_details)
 			self.set('lot_order_details',order_items)
 
-		if self.is_new(): 
+		if self.is_new():
 			self.lot_hash_value = make_autoname(key="hash")
 			if len(self.items) > 0:
 				self.calculate_order()
@@ -54,7 +66,7 @@ class Lot(Document):
 				qty = qty + item.qty
 			self.total_quantity = qty
 			# if self.get("cad_details"):
-			# 	cad_data = update_if_string_instance(self.cad_details)	
+			# 	cad_data = update_if_string_instance(self.cad_details)
 			# 	if cad_data.get(self.item):
 			# 		for colour in cad_data[self.item]:
 			# 			for cat in cad_data[self.item][colour]['categories']:
@@ -68,7 +80,7 @@ class Lot(Document):
 		for item in self.lot_order_details:
 			total_qty += vars(item)['quantity']
 		self.total_order_quantity = total_qty
-	
+
 	def before_save(self):
 		if not self.is_new():
 			prev_ppo = frappe.get_value("Lot", self.name, "production_order")
@@ -89,13 +101,13 @@ class Lot(Document):
 
 	def after_insert(self):
 		if len(self.items) > 0 and self.production_order:
-			add_ppo_lot_qty(self.production_order, self.name, self.items)			
-	
-	def calculate_order(self):	
+			add_ppo_lot_qty(self.production_order, self.name, self.items)
+
+	def calculate_order(self):
 		previous_data = {}
 		for item in self.lot_order_details:
 			set_combination = update_if_string_instance(item.set_combination)
-			if set_combination not in [None, ""]:	
+			if set_combination not in [None, ""]:
 				set_combination = set_combination.copy()
 				set_combination.update({"variant":item.item_variant})
 				set_combination = frozenset(set_combination)
@@ -146,7 +158,7 @@ class Lot(Document):
 				self.set_onload('order_item_details', items)
 
 		# if self.cad_detail_data:
-		# 	data = update_if_string_instance(self.cad_detail_data)		
+		# 	data = update_if_string_instance(self.cad_detail_data)
 		# 	self.set_onload("cad_item_details", data)
 
 def delete_ppo_lot_qty(ppo, lot):
@@ -184,7 +196,7 @@ def calculate_order_details(items, production_detail, packing_uom, final_uom):
 	final_qty = 0
 	if item_detail.is_set_item:
 		attrs = {}
-		parts   = []	
+		parts   = []
 		comb_dict = {}
 		for attr in item_detail.set_item_combination_details:
 			comb_dict.setdefault(attr.major_attribute_value, {})
@@ -197,7 +209,7 @@ def calculate_order_details(items, production_detail, packing_uom, final_uom):
 		for attr in item_detail.packing_attribute_details:
 			for part in parts:
 				colour = comb_dict[attr.attribute_value][part]
-				item_list = [] 
+				item_list = []
 				for item in items:
 					variant = frappe.get_cached_doc("Item Variant", item.item_variant)
 					qty = (item.qty * uom_factor)
@@ -210,7 +222,7 @@ def calculate_order_details(items, production_detail, packing_uom, final_uom):
 						attribute = attribute.as_dict()
 						if attribute.attribute == dept_attr:
 							attrs[attribute.attribute] = pack_stage
-						else:	
+						else:
 							attrs[attribute.attribute] = attribute['attribute_value']
 					attrs[item_detail.packing_attribute] = colour
 					attrs[item_detail.set_item_attribute] = part
@@ -232,11 +244,11 @@ def calculate_order_details(items, production_detail, packing_uom, final_uom):
 						d['set_combination']['major_part'] = major_part
 						d['set_combination']['major_colour'] = comb_dict[attr.attribute_value][major_part]
 					item_list.append(d)
-				x = x + 1		
+				x = x + 1
 				final_list = final_list + item_list
-	else:	
+	else:
 		for attr in item_detail.packing_attribute_details:
-			item_list = [] 
+			item_list = []
 			for item in items:
 				variant = frappe.get_cached_doc("Item Variant", item.item_variant)
 				qty = (item.qty * uom_factor)
@@ -249,7 +261,7 @@ def calculate_order_details(items, production_detail, packing_uom, final_uom):
 					attribute = attribute.as_dict()
 					if attribute.attribute == dept_attr:
 						attrs[attribute.attribute] = pack_stage
-					else:	
+					else:
 						attrs[attribute.attribute] = attribute['attribute_value']
 				attrs[item_detail.packing_attribute] = attr.attribute_value
 				new_variant = get_or_create_variant(variant.item, attrs,dependent_attr=item_detail.dependent_attribute_mapping)
@@ -295,7 +307,7 @@ def save_order_item_details(name, lot_order_details, item_details):
 					quantity = 0
 				item_attributes[item.get('primary_attribute')] = attr
 				variant = get_or_create_variant(item_name,item_attributes)
-				item1['item_variant'] = variant	
+				item1['item_variant'] = variant
 				item1['quantity'] = quantity
 				item1['row_index'] = row_index
 				item1['table_index'] = 0
@@ -318,7 +330,7 @@ def save_item_details(item_details):
 	for id1, row in enumerate(item['items']):
 		if row['primary_attribute']:
 			attributes = row['attributes']
-			attributes[item['dependent_attribute']] = item['final_state']	
+			attributes[item['dependent_attribute']] = item['final_state']
 			for id2, val in enumerate(row['values'].keys()):
 				attributes[row['primary_attribute']] = val
 				item1 = {}
@@ -358,7 +370,7 @@ def fetch_item_details(items, production_detail):
 	for key, variants in groupby(items, lambda i: i['table_index']):
 		variants = list(variants)
 		item1 = {}
-		values = {}	
+		values = {}
 		for variant in variants:
 			current_variant = frappe.get_cached_doc("Item Variant", variant['item_variant'])
 			item_attribute_details = get_item_attribute_details(current_variant, variant_attr_details)
@@ -400,7 +412,7 @@ def fetch_order_item_details(items, production_detail, process=None, includes_pa
 			for prs in prs_doc.process_details:
 				process = prs.process_name
 				break
-			
+
 		field = "quantity" if process == ipd_doc.cutting_process else "cut_qty" if process == ipd_doc.stiching_process else  "stich_qty" if process == ipd_doc.packing_process else None
 		if includes_packing:
 			field = "cut_qty"
@@ -412,11 +424,11 @@ def fetch_order_item_details(items, production_detail, process=None, includes_pa
 					break
 			if stage:
 				field = "cut_qty" if stage == ipd_doc.stiching_in_stage else "stich_qty" if stage == ipd_doc.pack_in_stage else "pack_qty"
-		
+
 		if not field:
 			frappe.msgprint(f"Please Mention Process {process} in IPD")
 			return
-		
+
 	items = [item.as_dict() for item in items]
 	item_details = []
 	items = sorted(items, key = lambda i: i['row_index'])
@@ -449,7 +461,7 @@ def fetch_order_item_details(items, production_detail, process=None, includes_pa
 						item['item_keys']['major_part'] = set_combination.get("major_part")
 
 					if set_combination.get("major_colour"):
-						item['item_keys']['major_colour'] = set_combination.get("major_colour")		
+						item['item_keys']['major_colour'] = set_combination.get("major_colour")
 
 				current_variant = frappe.get_cached_doc("Item Variant", variant['item_variant'])
 				for attr in current_variant.attributes:
@@ -462,7 +474,7 @@ def fetch_order_item_details(items, production_detail, process=None, includes_pa
 			item['values']['default'] = {
 				'qty': getattr(variants[0], field, 0),
 			}
-			
+
 		index = get_item_group_index(item_details, current_item_attribute_details)
 		if index == -1:
 			item_details.append({
@@ -489,7 +501,7 @@ def fetch_order_item_details(items, production_detail, process=None, includes_pa
 			row['total_qty'] = sum
 			total_sum += sum
 		item['size_wise_total'] = size_wise_total
-		item['total_sum'] = total_sum	
+		item['total_sum'] = total_sum
 
 	return item_details
 
@@ -517,7 +529,7 @@ def get_item_details(item_name, attr_details = None, uom=None, production_detail
 	if not attr_details:
 		item = get_attribute_details(item_name, dependent_attr_mapping=dependent_attr_mapping)
 	else:
-		item = attr_details	
+		item = attr_details
 	pack_out_stage = frappe.get_value("Item Production Detail", production_detail,"pack_out_stage")
 	if uom:
 		item['default_uom'] = uom
@@ -537,15 +549,15 @@ def get_item_details(item_name, attr_details = None, uom=None, production_detail
 		item['final_state'] = final_state
 		if item['primary_attribute'] in final_state_attr:
 			final_state_attr.remove(item['primary_attribute'])
-		item['final_state_attr'] = final_state_attr	
-		
+		item['final_state_attr'] = final_state_attr
+
 	elif not item['dependent_attribute'] and not item['primary_attribute']:
 		doc = frappe.get_cached_doc("Item", item['item'])
 		final_state_attr = []
 		x = [attr.attribute for attr in doc.attributes]
 		final_state_attr = final_state_attr + x
 		item['final_state_attr'] = final_state_attr
-		
+
 	if production_detail:
 		pack_attr_value = frappe.get_value("Item Production Detail", production_detail, "packing_attribute")
 		item['packing_attr'] = pack_attr_value
@@ -644,7 +656,7 @@ def get_attributes(data):
 		if attrs.attribute != dept_attr:
 			attribute_list.append(attrs.attribute)
 	attribute_list = attribute_list + ['Ratio', 'MRP']
-	
+
 	attr_list = []
 	for item in data:
 		item= item.as_dict()
@@ -654,7 +666,7 @@ def get_attributes(data):
 			if attr.attribute != dept_attr:
 				temp_attr[attr.attribute] = attr.attribute_value
 		temp_attr['Ratio'] = item['ratio']
-		temp_attr['MRP'] = item['mrp']	
+		temp_attr['MRP'] = item['mrp']
 		attr_list.append(temp_attr)
 	return attribute_list, attr_list
 
@@ -686,7 +698,7 @@ def get_packing_attributes(ipd):
 		set_map_doc = frappe.get_doc("Item Item Attribute Mapping",set_mapping)
 		colour_combo_dict_list = []
 		ratio_combo = []
-		index = -1		
+		index = -1
 		for colour in major_colours:
 			index = index + 1
 			for part in set_map_doc.values:
@@ -705,7 +717,7 @@ def get_packing_attributes(ipd):
 			mapping = item.mapping
 			break
 
-	map_doc = frappe.get_doc("Item Item Attribute Mapping",mapping)		
+	map_doc = frappe.get_doc("Item Item Attribute Mapping",mapping)
 	for item in map_doc.values:
 		sizes += item.attribute_value + ","
 
@@ -715,13 +727,136 @@ def get_packing_attributes(ipd):
 		"ratios":ratios,
 		"combo":combo,
 		"major_colours": major_colours
-	}			
+	}
 
 @frappe.whitelist()
 def update_order_details(doc_name):
 	doc = frappe.get_doc("Lot", doc_name)
 	doc.calculate_order()
 	doc.save()
+
+
+def _get_lot_variant_demands(lot_doc):
+	return [
+		{
+			"item_variant": row.item_variant,
+			"qty": flt(row.quantity),
+		}
+		for row in lot_doc.get("lot_order_details") or []
+		if row.item_variant and flt(row.quantity) > 0
+	]
+
+
+def _build_lot_bom_rows(calculation):
+	"""Convert the generic YRP engine response into Essdee's Lot BOM rows."""
+	aggregated = {}
+	for section in ("major_deliverables", "accessories"):
+		for row in calculation.get(section) or []:
+			required_qty = flt(row.get("required_qty"))
+			if required_qty <= 0:
+				continue
+
+			item_variant = row.get("item_variant")
+			process_name = row.get("process_name")
+			uom = row.get("uom")
+			if not item_variant:
+				frappe.throw(f"Calculated {section} row is missing Item Variant.")
+			if not process_name:
+				frappe.throw(
+					f"Please mention Process for BOM item {item_variant} "
+					"in the Item Production Detail."
+				)
+			if not uom:
+				frappe.throw(f"Calculated BOM item {item_variant} is missing UOM.")
+
+			key = (item_variant, process_name, uom)
+			aggregated.setdefault(
+				key,
+				{
+					"item_name": item_variant,
+					"process_name": process_name,
+					"uom": uom,
+					"required_qty": 0.0,
+				},
+			)
+			aggregated[key]["required_qty"] += required_qty
+
+	return list(aggregated.values())
+
+
+def _build_bom_summary_json(lot_doc, rows):
+	"""Keep the legacy print payload in sync with the matrix-backed rows.
+
+	The generic calculator returns final quantities rather than the old entered
+	product/BOM ratio. Derive an equivalent per-unit ratio from the Lot demand so
+	existing Lot BOM and consumption print formats remain useful.
+	"""
+	total_quantity = flt(lot_doc.total_order_quantity)
+	product_uom = lot_doc.uom or ""
+	summary = {}
+	for row in rows:
+		key = row["item_name"]
+		if key in summary:
+			key = f'{key} · {row["process_name"]}'
+		if key in summary:
+			key = f'{key} · {row["uom"]}'
+		ratio = row["required_qty"] / total_quantity if total_quantity else 0
+		summary[key] = [
+			row["process_name"],
+			1,
+			product_uom,
+			ratio,
+			row["uom"],
+			row["required_qty"],
+		]
+	return summary
+
+
+@frappe.whitelist()
+def calculate_bom(lot_name):
+	"""Calculate and persist a Lot BOM through YRP's common IPD matrix engine."""
+	lot_doc = frappe.get_doc("Lot", lot_name)
+	lot_doc.check_permission("write")
+	if lot_doc.docstatus != 0:
+		frappe.throw("BOM can only be recalculated while the Lot is in Draft.")
+	if not lot_doc.production_detail:
+		frappe.throw("Please mention Item Production Detail before calculating BOM.")
+
+	variant_demands = _get_lot_variant_demands(lot_doc)
+	if not variant_demands:
+		frappe.throw(
+			"Please calculate Lot Order Details with a Qty greater than zero first."
+		)
+
+	# The base calculator owns generic matrix inputs. Essdee's legacy garment
+	# packing stages alter accessory ratios, so replace only that section with
+	# the company-specific adapter before persisting the Lot result. Resolve the
+	# Essdee rows first so an incomplete migrated mapping fails before the base
+	# engine can attempt to resolve an unintended Item Variant.
+	essdee_accessories = calculate_essdee_accessory_bom(
+		lot_doc.production_detail,
+		variant_demands,
+		lot_doc,
+	)
+	calculation = calculate_bom_for_variant_demands(
+		lot_doc.production_detail,
+		variant_demands,
+	)
+	calculation["accessories"] = essdee_accessories
+	bom_rows = _build_lot_bom_rows(calculation)
+	if not bom_rows:
+		frappe.throw("The IPD Process Matrix and Item BOM did not produce any BOM rows.")
+
+	lot_doc.set("bom_summary", bom_rows)
+	lot_doc.set("bom_summary_json", _build_bom_summary_json(lot_doc, bom_rows))
+	lot_doc.last_calculated_time = now_datetime()
+	lot_doc.save()
+
+	return {
+		"bom_summary": bom_rows,
+		"last_calculated_time": lot_doc.last_calculated_time,
+	}
+
 
 @frappe.whitelist()
 def get_mapping_details(ipd):
@@ -740,7 +875,7 @@ def get_mapping_details(ipd):
 			})
 
 	map_dict = {}
-	for mapping in bom_attribute_list:	
+	for mapping in bom_attribute_list:
 		bom_qty = mapping.get('qty')
 		bom_item = mapping.get('bom_item')
 		mapping = mapping.get('bom_attr_mapping_list')
@@ -758,8 +893,8 @@ def get_mapping_details(ipd):
 			qty = d.quantity
 			if d.quantity == 0:
 				qty = bom_qty
-			data[d.index]['quantity'] = qty	
-			
+			data[d.index]['quantity'] = qty
+
 		i = 0
 		while i < len(data):
 			if data[i] == None:
@@ -772,10 +907,10 @@ def get_mapping_details(ipd):
 				item_str = ", ".join(d['item'])
 				bom_str = ", ".join(d['bom'])
 				items += f"{item_str} -> {bom_str} / {d['quantity']}<br>"
-		if bom_item not in map_dict:				
+		if bom_item not in map_dict:
 			map_dict[bom_item] = items
 		else:
-			map_dict[bom_item] += items	
+			map_dict[bom_item] += items
 	return map_dict
 
 @frappe.whitelist()
@@ -803,7 +938,7 @@ def get_ipd_print_accessory_combination(ipd):
 			items[row['major_colour']][row['accessory']] = {
 				"colour":row['accessory_colour'],
 				"cloth_type": row['cloth_type']
-			}			
+			}
 	return items
 
 def get_ironing_mistake_pf_items(lot):
@@ -975,8 +1110,8 @@ def get_consumption_sheet_data(ipd, lot):
 			weight = row1['Weight']/length
 			for row2 in ipd_doc.stiching_item_details:
 				panel_weight[row1[pack_attr]][row2.stiching_attribute_value] = weight
-				
-	elif primary_attr in cut_attrs and len(cut_attrs) == 1:	
+
+	elif primary_attr in cut_attrs and len(cut_attrs) == 1:
 		count = 0
 		tot_weight = 0
 		for row in cut_json['items']:
@@ -995,7 +1130,7 @@ def get_consumption_sheet_data(ipd, lot):
 				"tot_weight": 0,
 				"avg_weight": 0,
 
-			})		
+			})
 			panel_sum[row[stich_attr]]["count"] += 1
 			panel_sum[row[stich_attr]]["tot_weight"] += row['Weight']
 
@@ -1004,7 +1139,7 @@ def get_consumption_sheet_data(ipd, lot):
 
 		for row2 in ipd_doc.stiching_item_details:
 			direct_panel_weight[row.stiching_attribute_value] = panel_sum[row.stiching_attribute_value]['avg_weight']
-		
+
 	elif stich_attr in cut_attrs and pack_attr in cut_attrs and len(cut_attrs) == 2:
 		panel_sum = {}
 		for row in cut_json['items']:
@@ -1021,7 +1156,7 @@ def get_consumption_sheet_data(ipd, lot):
 			})
 			colour_sum[row[pack_attr]]["count"] += 1
 			colour_sum[row[pack_attr]]['tot_weight'] += row['Weight']
-		
+
 		for colour in colour_sum:
 			colour_sum[colour]['avg_weight'] = colour_sum[colour]['tot_weight'] / colour_sum[colour]['count']
 
@@ -1045,8 +1180,8 @@ def get_consumption_sheet_data(ipd, lot):
 
 		for panel in panel_sum:
 			for colour in panel_sum[panel]:
-				panel_sum[panel][colour]['avg_weight'] = panel_sum[panel][colour]['tot_weight'] / panel_sum[panel][colour]['count']	
-		
+				panel_sum[panel][colour]['avg_weight'] = panel_sum[panel][colour]['tot_weight'] / panel_sum[panel][colour]['count']
+
 		for panel in panel_sum:
 			for colour in panel_sum[panel]:
 				colour_panel_weight.setdefault(panel, {})
@@ -1064,7 +1199,7 @@ def get_consumption_sheet_data(ipd, lot):
 	if panel_weight:
 		for mj_colour in panel_weight:
 			for panel in panel_weight[mj_colour]:
-				colour_comb[mj_colour][panel]['weight'] = panel_weight[mj_colour][panel]	
+				colour_comb[mj_colour][panel]['weight'] = panel_weight[mj_colour][panel]
 	elif direct_panel_weight:
 		for colour in colour_comb:
 			for panel in colour_comb[colour]:

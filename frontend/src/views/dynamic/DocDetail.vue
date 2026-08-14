@@ -1638,7 +1638,7 @@ import SendSmsModal from "./SendSmsModal.vue"
 import SendWhatsAppModal from "./SendWhatsAppModal.vue"
 import DocMovableActions from "./DocMovableActions.vue"
 import DetailRelated from "@/components/detail/DetailRelated.vue"
-import { useUiConfigStore } from "@yrp/web-engine"
+import { useUiConfigStore } from "@/engine"
 
 const props = defineProps({
 	docRoute: { type: String, required: true },
@@ -2908,10 +2908,8 @@ function onCalculateBom() {
 			acting.value = "calc-bom"
 			try {
 				await callMethod(
-					"yrp.yrp.doctype.item_production_detail.item_production_detail.get_calculated_bom",
+					"essdee_yrp.essdee_yrp.doctype.lot.lot.calculate_bom",
 					{
-						item_production_detail: doc.value.production_detail,
-						items: doc.value.lot_order_details || [],
 						lot_name: doc.value.name,
 					},
 				)

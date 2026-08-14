@@ -1,0 +1,488 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2025-09-15 14:34:38.995607",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "lot",
+  "item",
+  "finishing_start_date",
+  "production_detail",
+  "delivery_location",
+  "is_set_item",
+  "column_break_klxu",
+  "work_order",
+  "pieces_per_box",
+  "finishing_end_date",
+  "naming_series",
+  "finishing_process",
+  "fp_status",
+  "section_break_umng",
+  "finishing_item_html",
+  "finishing_plan_details",
+  "item_details_tab",
+  "finishing_quantity_html",
+  "finishing_plan_reworked_details",
+  "dc_list",
+  "return_grn_list",
+  "grn_tab",
+  "finishing_plan_grn_html",
+  "finishing_plan_grn_details",
+  "grn_list",
+  "stock_entry_list",
+  "section_break_beyy",
+  "finishing_return_html",
+  "inward_report_tab",
+  "inward_report_html",
+  "fetch_from_old_lot_tab",
+  "finishing_old_lot_html",
+  "finishing_old_lot_items",
+  "finishing_old_lot_given_items",
+  "finishing_old_lot_received_items",
+  "lot_transfer_list",
+  "ironing_excess_tab",
+  "finishing_plan_ironing_excess_html",
+  "ironing_excess_list",
+  "pack_return_tab",
+  "finishing_pack_return_html",
+  "pack_return_list",
+  "ocr_tab",
+  "comments",
+  "finishing_plan_ocr_html",
+  "p_and_l_tab",
+  "p_and_l_html",
+  "incomplete_transfer_tab",
+  "incomplete_transfer_items_html",
+  "incomplete_transfer_dc_list",
+  "incomplete_transfer_grn_list",
+  "alternatives_tab",
+  "alternative_html",
+  "dispatch_history_tab",
+  "finishing_plan_dispatch_logs",
+  "rejection_tab",
+  "finishing_rejection_html"
+ ],
+ "fields": [
+  {
+   "fieldname": "lot",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Lot",
+   "options": "Lot",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_klxu",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "work_order",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Work Order",
+   "options": "Work Order",
+   "read_only": 1
+  },
+  {
+   "default": "Planned",
+   "fieldname": "fp_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "FP Status",
+   "options": "Planned\nPartially Received\nReady to Pack\nPartially Dispatched\nDispatched\nFully Dispatched\nOCR Requested\nOCR Completed\nP&L Submitted",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_umng",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "finishing_item_html",
+   "fieldtype": "HTML",
+   "label": "Finishing Item HTML"
+  },
+  {
+   "fieldname": "item_details_tab",
+   "fieldtype": "Tab Break",
+   "label": "Item Details"
+  },
+  {
+   "fieldname": "finishing_quantity_html",
+   "fieldtype": "HTML",
+   "label": "Finishing Quantity HTML"
+  },
+  {
+   "fetch_from": "lot.item",
+   "fieldname": "item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Item",
+   "options": "Item",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "production_detail.packing_combo",
+   "fetch_if_empty": 1,
+   "fieldname": "pieces_per_box",
+   "fieldtype": "Int",
+   "label": "Pieces Per Box",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "lot.production_detail",
+   "fieldname": "production_detail",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Production Detail",
+   "options": "Item Production Detail"
+  },
+  {
+   "fieldname": "finishing_plan_details",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Finishing Plan Details",
+   "options": "Finishing Plan Detail"
+  },
+  {
+   "fieldname": "finishing_plan_reworked_details",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Finishing Plan Reworked Details",
+   "options": "Finishing Plan Reworked Detail"
+  },
+  {
+   "fieldname": "grn_tab",
+   "fieldtype": "Tab Break",
+   "label": "GRN"
+  },
+  {
+   "fieldname": "finishing_plan_grn_html",
+   "fieldtype": "HTML",
+   "label": "Finishing Plan GRN HTML"
+  },
+  {
+   "fieldname": "finishing_plan_grn_details",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Finishing Plan GRN Details",
+   "options": "Finishing Plan GRN Detail"
+  },
+  {
+   "fieldname": "finishing_return_html",
+   "fieldtype": "HTML",
+   "label": "Finishing Return HTML"
+  },
+  {
+   "fieldname": "section_break_beyy",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "inward_report_tab",
+   "fieldtype": "Tab Break",
+   "label": "Inward"
+  },
+  {
+   "fieldname": "inward_report_html",
+   "fieldtype": "HTML",
+   "label": "Inward Report HTML"
+  },
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Naming Series",
+   "options": "\nFP-2526-"
+  },
+  {
+   "fetch_from": "work_order.delivery_location",
+   "fieldname": "delivery_location",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Delivery Location",
+   "options": "Supplier",
+   "read_only": 1
+  },
+  {
+   "fieldname": "finishing_process",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Finishing Process",
+   "options": "Process",
+   "read_only": 1
+  },
+  {
+   "description": "Date of first DC inward received",
+   "fieldname": "finishing_start_date",
+   "fieldtype": "Date",
+   "label": "Finishing Start Date",
+   "read_only": 1
+  },
+  {
+   "description": "Date of first GRN dispatch created",
+   "fieldname": "finishing_end_date",
+   "fieldtype": "Date",
+   "label": "Finishing End Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "fetch_from_old_lot_tab",
+   "fieldtype": "Tab Break",
+   "label": "Fetch From Old Lot"
+  },
+  {
+   "fieldname": "finishing_old_lot_html",
+   "fieldtype": "HTML",
+   "label": "Finishing Old Lot HTML"
+  },
+  {
+   "fieldname": "finishing_old_lot_items",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Fetched Old Lot Items",
+   "options": "Finishing Plan Old Lot Item"
+  },
+  {
+   "fieldname": "finishing_old_lot_given_items",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Old Lot Items Given",
+   "options": "Finishing Plan Old Lot Given"
+  },
+  {
+   "fieldname": "finishing_old_lot_received_items",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Old Lot Items Received",
+   "options": "Finishing Plan Old Lot Received"
+  },
+  {
+   "fieldname": "dc_list",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "DC List"
+  },
+  {
+   "fieldname": "grn_list",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "GRN List"
+  },
+  {
+   "fieldname": "stock_entry_list",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Stock Entry List"
+  },
+  {
+   "fieldname": "dispatch_history_tab",
+   "fieldtype": "Tab Break",
+   "hidden": 1,
+   "label": "Dispatch History"
+  },
+  {
+   "fieldname": "finishing_plan_dispatch_logs",
+   "fieldtype": "Table",
+   "label": "Dispatch History",
+   "options": "Finishing Plan Dispatch Log",
+   "read_only": 1
+  },
+  {
+   "fieldname": "lot_transfer_list",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Lot Transfer List"
+  },
+  {
+   "fieldname": "ironing_excess_tab",
+   "fieldtype": "Tab Break",
+   "label": "Ironing Excess"
+  },
+  {
+   "fieldname": "finishing_plan_ironing_excess_html",
+   "fieldtype": "HTML",
+   "label": "Finishing Plan Ironing Excess HTML"
+  },
+  {
+   "fieldname": "ironing_excess_list",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Ironing Excess List"
+  },
+  {
+   "fieldname": "pack_return_tab",
+   "fieldtype": "Tab Break",
+   "label": "Pack Return"
+  },
+  {
+   "fieldname": "finishing_pack_return_html",
+   "fieldtype": "HTML",
+   "label": "Finishing Pack Return HTML"
+  },
+  {
+   "fieldname": "ocr_tab",
+   "fieldtype": "Tab Break",
+   "label": "OCR"
+  },
+  {
+   "fieldname": "finishing_plan_ocr_html",
+   "fieldtype": "HTML",
+   "label": "Finishing Plan OCR HTML"
+  },
+  {
+   "fieldname": "p_and_l_tab",
+   "fieldtype": "Tab Break",
+   "label": "P & L"
+  },
+  {
+   "fieldname": "p_and_l_html",
+   "fieldtype": "HTML",
+   "label": "P and L Documents"
+  },
+  {
+   "fieldname": "return_grn_list",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Return GRN List"
+  },
+  {
+   "default": "0",
+   "fetch_from": "production_detail.is_set_item",
+   "fetch_if_empty": 1,
+   "fieldname": "is_set_item",
+   "fieldtype": "Check",
+   "label": "Is Set Item",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pack_return_list",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Pack Return List"
+  },
+  {
+   "fieldname": "comments",
+   "fieldtype": "Small Text",
+   "label": "Comments"
+  },
+  {
+   "fieldname": "incomplete_transfer_tab",
+   "fieldtype": "Tab Break",
+   "label": "InComplete Transfer"
+  },
+  {
+   "fieldname": "incomplete_transfer_items_html",
+   "fieldtype": "HTML",
+   "label": "Incomplete Transfer Items HTML"
+  },
+  {
+   "fieldname": "incomplete_transfer_dc_list",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Incomplete Transfer DC List"
+  },
+  {
+   "fieldname": "incomplete_transfer_grn_list",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Incomplete Transfer GRN List"
+  },
+  {
+   "fieldname": "alternatives_tab",
+   "fieldtype": "Tab Break",
+   "label": "Alternatives"
+  },
+  {
+   "fieldname": "alternative_html",
+   "fieldtype": "HTML",
+   "label": "Alternative HTML"
+  },
+  {
+   "fieldname": "rejection_tab",
+   "fieldtype": "Tab Break",
+   "label": "Rejection"
+  },
+  {
+   "fieldname": "finishing_rejection_html",
+   "fieldtype": "HTML",
+   "label": "Finishing Rejection HTML"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-05-05 18:23:02.051561",
+ "modified_by": "Administrator",
+ "module": "Essdee YRP",
+ "name": "Finishing Plan",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock User",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Store User",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Production Planner",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Merch User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "item",
+ "track_changes": 1
+}

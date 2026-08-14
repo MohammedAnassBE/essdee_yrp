@@ -75,8 +75,6 @@ TRANSIENT_DOC_KEYS = (
 	"__last_sync_on",
 )
 
-LOT_TIME_AND_ACTION_KEY_PARTS = ("time_and_action",)
-
 
 def handle_sd_yrp_message(payload):
 	header = payload.get("Header") or {}
@@ -145,17 +143,37 @@ def upsert_doc(payload, event=None):
 
 
 def upsert_single_doctype(data):
-	# MRP Settings / IPD Settings are Singles — write each replicated field straight
-	# to tabSingles (DB-level, bypassing validation like the other upserts). Fields
-	# the source has but this site's doctype doesn't define are dropped by
-	# filter_doc_fields.
+	# MRP Settings / IPD Settings are Singles. Scalar fields live in tabSingles,
+	# while their Table fields still live in normal child tables. Replicate both
+	# at DB level so every sync converges to the complete source document.
 	doctype = data.get("doctype")
 	data = filter_doc_fields(data)
+	meta = frappe.get_meta(doctype)
+	table_fields = {field.fieldname: field for field in meta.get_table_fields()}
 	skip = {"doctype", "name", "creation", "owner", "idx", "docstatus", "parent", "parenttype", "parentfield"}
 	for fieldname, value in data.items():
-		if fieldname in skip:
+		if fieldname in skip or fieldname in table_fields:
 			continue
 		frappe.db.set_single_value(doctype, fieldname, value)
+
+	for fieldname, field in table_fields.items():
+		if fieldname not in data:
+			continue
+		frappe.db.delete(
+			field.options,
+			{
+				"parenttype": doctype,
+				"parent": doctype,
+				"parentfield": fieldname,
+			},
+		)
+		_db_insert_child_rows(
+			field.options,
+			doctype,
+			doctype,
+			fieldname,
+			data.get(fieldname),
+		)
 	frappe.clear_document_cache(doctype, doctype)
 	return frappe.get_single(doctype)
 
@@ -275,9 +293,7 @@ def upsert_item_dependent_attribute_mapping(data):
 
 
 def upsert_supplier(data):
-	supplier_users = data.pop("supplier_users", []) or []
-	data.pop("terms_and_condition", None)
-	data.pop("price_html", None)
+	supplier_users = data.get("supplier_users", []) or []
 
 	supplier_doc = upsert_filtered_doc(data)
 	sync_supplier_warehouse(supplier_doc.name, data, supplier_users)
@@ -354,6 +370,8 @@ def upsert_user(data):
 		"send_welcome_email": 0,
 		"roles": get_user_roles(data.get("roles") or []),
 	}
+	if frappe.get_meta("User").has_field("telegram_user_id"):
+		user_data["telegram_user_id"] = data.get("telegram_user_id")
 	user_type = data.get("user_type")
 	if user_type and frappe.db.exists("User Type", user_type):
 		user_data["user_type"] = user_type
@@ -614,6 +632,7 @@ def map_production_ordered_rows(data):
 			"doctype": "Production Ordered Detail",
 			"reference_doctype": "Lot" if lot else None,
 			"reference_name": lot,
+			"lot": lot,
 			"item_variant": item_variant,
 			"quantity": row.get("quantity") or 0,
 		})
@@ -654,7 +673,6 @@ def get_production_order_item_details_json(item, rows):
 
 
 def upsert_lot(data, event=None):
-	data = strip_lot_time_and_action_fields(data)
 	source_context = get_source_context(data, event)
 
 	validate_required_link("Item", data.get("item"), source_context)
@@ -699,6 +717,7 @@ def sync_production_ordered_rows_for_lot(data):
 			"doctype": "Production Ordered Detail",
 			"reference_doctype": "Lot",
 			"reference_name": lot,
+			"lot": lot,
 			"item_variant": row.get("item_variant"),
 			"quantity": row.get("qty") or 0,
 		}
@@ -738,19 +757,6 @@ def validate_lot_item_variants(data, source_context):
 	):
 		for row in data.get(fieldname) or []:
 			validate_required_link("Item Variant", row.get(row_key), f"{source_context} {fieldname} row")
-
-
-def strip_lot_time_and_action_fields(data):
-	data = copy.deepcopy(data)
-	for key in list(data):
-		if is_lot_time_and_action_key(key):
-			data.pop(key, None)
-	return data
-
-
-def is_lot_time_and_action_key(key):
-	key = (key or "").lower()
-	return any(part in key for part in LOT_TIME_AND_ACTION_KEY_PARTS)
 
 
 def get_item_default_uom(item_code, source_context=None):

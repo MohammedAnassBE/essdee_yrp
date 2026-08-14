@@ -12,6 +12,8 @@ import FabricSwapDetail from "./Item_Po_detail/FabricSwapDetail.vue";
 import PanelWiseConsumptionMatrix from "./Item_Po_detail/PanelWiseConsumptionMatrix.vue";
 import LotOrderedDetail from "./ProductionOrder/LotOrderedDetail.vue";
 import FabricProgram from "./Lot/FabricProgram.vue";
+import { LotOrderWrapper, OCRDetailWrapper } from "./Lot";
+import AlternativeDetail from "./Finishing/AlternativeDetail.vue";
 import FabricProcesses from "./Fabric/FabricProcesses.vue";
 
 frappe.provide("frappe.production.ui");
@@ -235,6 +237,21 @@ frappe.production.ui.LotOrderedDetail = class {
 	}
 	load_data(context) {
 		this.vue.load_data(JSON.parse(JSON.stringify(context || {})));
+	}
+};
+
+frappe.production.ui.LotOrder = LotOrderWrapper;
+frappe.production.ui.OCRDetail = OCRDetailWrapper;
+
+frappe.production.ui.AlternativeDetail = class {
+	constructor(wrapper) {
+		this.$wrapper = $(wrapper);
+		this.make_app();
+	}
+	make_app() {
+		const mounted = mount_component(AlternativeDetail, this.$wrapper);
+		this.app = mounted.app;
+		this.vue = mounted.vue;
 	}
 };
 

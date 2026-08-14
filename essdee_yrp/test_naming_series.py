@@ -4,7 +4,6 @@ from frappe.tests import IntegrationTestCase
 
 ESSDEE_NAMING_SERIES = {
 	"Work Order": "YRP-WO-.YYYY.-",
-	"Delivery Challan": "YRP-DC-.YYYY.-",
 	"Goods Received Note": "YRP-GRN-.YYYY.-",
 	"Stock Entry": "YRP-STE-.YYYY.-",
 	"Process Cost": "YRP-PC-",
@@ -12,6 +11,9 @@ ESSDEE_NAMING_SERIES = {
 	"Purchase Invoice": "YRP-MPI-.YYYY.-",
 	"Stock Reconciliation": "YRP-ST-RECO-.YYYY.-",
 	"Stock Update": "YRP-SUE-.YYYY.-",
+}
+BASE_NAMING_SERIES = {
+	"Delivery Challan": "DC-.YYYY.-",
 }
 ESSDEE_AUTONAME_SERIES = {
 	"Item Price": "YRP-ITP-.#####",
@@ -40,6 +42,17 @@ class TestEssdeeNamingSeries(IntegrationTestCase):
 
 		for doctype, series in ESSDEE_AUTONAME_SERIES.items():
 			self.assertEqual(frappe.get_meta(doctype, cached=False).autoname, series)
+
+		for doctype, series in BASE_NAMING_SERIES.items():
+			field = frappe.get_meta(doctype, cached=False).get_field("naming_series")
+			self.assertEqual(field.options, series)
+			self.assertEqual(field.default, series)
+			self.assertFalse(
+				frappe.db.exists(
+					"Property Setter",
+					{"doc_type": doctype, "field_name": "naming_series"},
+				)
+			)
 
 	def test_generated_names_use_yrp_prefix(self):
 		for doctype in (*ESSDEE_NAMING_SERIES, *ESSDEE_AUTONAME_SERIES):

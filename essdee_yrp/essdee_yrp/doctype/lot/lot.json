@@ -67,6 +67,7 @@
   "bom_summary",
   "bom_additional_items",
   "bom_summary_json",
+  "lot_time_and_action_details",
   "ocr_detail_tab",
   "ocr_detail_html",
   "alternative_detail_tab",
@@ -328,6 +329,13 @@
    "fieldtype": "JSON",
    "hidden": 1,
    "label": "BOM Summary JSON"
+  },
+  {
+   "fieldname": "lot_time_and_action_details",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Lot Time and Action Details",
+   "options": "Lot Time and Action Detail"
   },
   {
    "default": "0",

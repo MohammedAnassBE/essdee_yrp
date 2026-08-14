@@ -16,16 +16,58 @@ from frappe.contacts.doctype.address_template.address_template import (
 from essdee_yrp.web_build import build_web_spa
 
 
+# Roles referenced by the migrated MRP DocType permissions but not provided by
+# base YRP. Keep these as setup records rather than a Role fixture so migrations
+# never delete or recreate an existing role.
+MRP_SCHEMA_ROLES = (
+	"Brand QA Manager",
+	"Brand QA User",
+	"CAD User",
+	"Cutting User",
+	"Merch Manager",
+	"Store Manager",
+	"T & A Admin",
+	"T & A Manager",
+	"T & A User",
+	"T & A Viewer",
+)
+
+
 def after_install():
 	ensure_default_address_template()
+	ensure_mrp_schema_roles()
 	ensure_yrp_production_order_settings()
+	ensure_lot_packing_boundary()
 
 
 def after_migrate():
 	ensure_default_address_template()
+	ensure_mrp_schema_roles()
 	ensure_sd_yrp_consumer_config()
 	ensure_yrp_production_order_settings()
+	ensure_lot_packing_boundary()
 	build_web_spa()
+
+
+def ensure_mrp_schema_roles():
+	"""Create only the missing application roles referenced by MRP schemas."""
+	for role_name in MRP_SCHEMA_ROLES:
+		if frappe.db.exists("Role", role_name):
+			continue
+		frappe.get_doc(
+			{
+				"doctype": "Role",
+				"role_name": role_name,
+				"desk_access": 1,
+			}
+		).insert(ignore_permissions=True)
+
+
+def ensure_lot_packing_boundary():
+	"""Keep Essdee-owned fields reliable on fresh installs and upgrades."""
+	from essdee_yrp.lot_packing_setup import ensure_boundary
+
+	ensure_boundary()
 
 
 def ensure_sd_yrp_consumer_config():

@@ -108,8 +108,10 @@ def create_mapping(ipd, bom_item, bom_row=None):
 		)
 
 	doc = frappe.new_doc("Item BOM Attribute Mapping")
+	doc.item_production_detail = ipd_doc.name
 	doc.item = ipd_doc.item
 	doc.bom_item = bom_item
+	doc.bom_uom = frappe.db.get_value("Item", bom_item, "default_unit_of_measure")
 	_seed_columns(doc, primary, bom_item)
 	doc.flags.ignore_validate = True
 	doc.insert()

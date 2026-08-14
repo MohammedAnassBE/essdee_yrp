@@ -1,0 +1,201 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2025-03-12 14:39:27.296617",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "lot",
+  "item",
+  "against",
+  "posting_date",
+  "movement_from_cutting",
+  "cutting_plan",
+  "column_break_dcpm",
+  "edit_posting_date_and_time",
+  "from_warehouse",
+  "movement_date",
+  "against_id",
+  "posting_time",
+  "naming_series",
+  "section_break_rnao",
+  "cut_panel_movement_html",
+  "cut_panel_movement_json",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "default": "Today",
+   "fieldname": "movement_date",
+   "fieldtype": "Date",
+   "label": "Movement Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_dcpm",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "lot",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Lot",
+   "options": "Lot",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "lot.item",
+   "fieldname": "item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Item",
+   "options": "Item",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_rnao",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Cut Panel Movement",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "cut_panel_movement_html",
+   "fieldtype": "HTML",
+   "label": "Cut Panel Movement HTML"
+  },
+  {
+   "fieldname": "cut_panel_movement_json",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "Cut Panel Movement JSON"
+  },
+  {
+   "default": "CPM-.YY..MM.-.{#####}",
+   "fieldname": "naming_series",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Naming Series"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "against",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Against",
+   "options": "\nStock Entry\nDelivery Challan\nGoods Received Note",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "against_id",
+   "fieldtype": "Dynamic Link",
+   "label": "Against ID",
+   "options": "against",
+   "read_only": 1
+  },
+  {
+   "fieldname": "from_warehouse",
+   "fieldtype": "Link",
+   "label": "From Warehouse",
+   "options": "Supplier",
+   "reqd": 1
+  },
+  {
+   "default": "Today",
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "label": "Posting Date",
+   "read_only_depends_on": "eval: !doc.edit_posting_date_and_time"
+  },
+  {
+   "default": "Now",
+   "fieldname": "posting_time",
+   "fieldtype": "Time",
+   "label": "Posting Time",
+   "read_only_depends_on": "eval: !doc.edit_posting_date_and_time"
+  },
+  {
+   "default": "0",
+   "fieldname": "movement_from_cutting",
+   "fieldtype": "Check",
+   "label": "Movement From Cutting"
+  },
+  {
+   "depends_on": "eval: doc.movement_from_cutting",
+   "fieldname": "cutting_plan",
+   "fieldtype": "Link",
+   "label": "Cutting Plan",
+   "mandatory_depends_on": "eval: doc.movement_from_cutting",
+   "options": "Cutting Plan"
+  },
+  {
+   "default": "0",
+   "fieldname": "edit_posting_date_and_time",
+   "fieldtype": "Check",
+   "label": "Edit Posting Date and Time"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-07-14 06:54:06.625121",
+ "modified_by": "Administrator",
+ "module": "Essdee YRP",
+ "name": "Cut Panel Movement",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Store User",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Store Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

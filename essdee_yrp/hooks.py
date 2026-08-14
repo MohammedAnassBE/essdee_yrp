@@ -6,8 +6,23 @@ app_email = "anas@essdee.fit"
 app_license = "mit"
 required_apps = ["yrp"]
 
+# Code-owned downstream extensions for the base /web registry. Layout JSON may
+# reference these safe keys but cannot supply executable methods itself.
+yrp_ui_metrics = ["essdee_yrp.ui_registry.get_metrics"]
+yrp_ui_calculations = ["essdee_yrp.ui_registry.get_calculations"]
+
 fixtures = [
-	{"dt": "Custom Field"},
+	# Keep this fixture inside the Essdee customization boundary. Historical
+	# Essdee fields have no module, while newly created fields use Essdee YRP.
+	# Base stock-dimension fields are owned by module YRP and integration fields
+	# by their own app, so neither must be re-exported from this app.
+	{
+		"dt": "Custom Field",
+		"or_filters": [
+			["module", "=", "Essdee YRP"],
+			["module", "is", "not set"],
+		],
+	},
 	# Field-order override: keeps `ipd_processes` on the Item Details tab
 	# (production_api parity) — the custom garment tabs would otherwise pull
 	# it into the hidden-for-cloth Advance Settings tab.
@@ -21,18 +36,38 @@ fixtures = [
 					"Item Production Detail-main-field_order",
 					"Work Order-naming_series-options",
 					"Work Order-naming_series-default",
-					"Delivery Challan-naming_series-options",
-					"Delivery Challan-naming_series-default",
+					"Delivery Challan-from_location-reqd",
+					"Delivery Challan-is_internal_unit-fetch_from",
+					"Delivery Challan-is_internal_unit-fetch_if_empty",
+					"Delivery Challan-is_rework-fetch_from",
+					"Delivery Challan-is_rework-fetch_if_empty",
+					"Delivery Challan-ste_transferred-depends_on",
+					"Delivery Challan-ste_transferred-precision",
+					"Delivery Challan-transfer_complete-depends_on",
+					"Delivery Challan-vehicle_no-allow_on_submit",
+					"Delivery Challan Item-secondary_qty-precision",
 					"Goods Received Note-naming_series-options",
 					"Goods Received Note-naming_series-default",
 					"Stock Entry-naming_series-options",
 					"Stock Entry-naming_series-default",
+					"Stock Entry-additional_amount-read_only_depends_on",
+					"Stock Entry-purpose-options",
 					"Process Cost-naming_series-options",
 					"Process Cost-naming_series-default",
+					"Process Cost-approved_by-read_only",
+					"Process Cost-attribute-mandatory_depends_on",
+					"Process Cost-depends_on_attribute-read_only",
+					"Process Cost-depends_on_attribute-default",
+					"Process Cost-is_expired-read_only",
+					"Process Cost-item-fetch_from",
+					"Production Order-naming_series-options",
+					"Production Order-naming_series-default",
 					"Purchase Order-naming_series-options",
 					"Purchase Order-naming_series-default",
 					"Purchase Invoice-naming_series-options",
 					"Purchase Invoice-naming_series-default",
+					"Purchase Invoice Item-item_group-reqd",
+					"Production Ordered Detail-quantity-fieldtype",
 					"Stock Reconciliation-naming_series-options",
 					"Stock Reconciliation-naming_series-default",
 					"Stock Update-naming_series-options",
@@ -263,6 +298,9 @@ after_build = "essdee_yrp.web_build.build_web_spa"
 # Hook on document methods and events
 
 doc_events = {
+	"Purchase Order": {
+		"before_validate": "essdee_yrp.purchase_order_lots.sync_linked_lots",
+	},
 	"Item": {
 		"validate": "essdee_yrp.item_validations.validate",
 	},
@@ -287,13 +325,18 @@ doc_events = {
 	},
 	"Delivery Challan": {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
+		"before_validate": "essdee_yrp.delivery_challan_hooks.before_validate",
 	},
 	"Work Order Correction": {
 		"before_submit": "essdee_yrp.work_order_correction_hooks.validate_correction_ipd_items"
 	},
 	"Goods Received Note": {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
-		"before_validate": "essdee_yrp.fabric_grn.before_validate",
+		"before_validate": [
+			"essdee_yrp.packing_hooks.set_grn_includes_packing",
+			"essdee_yrp.fabric_grn.before_validate",
+			"essdee_yrp.purchase_order_lots.validate_grn_lots",
+		],
 		"before_cancel": "essdee_yrp.api.mrp_stock_transfer.before_grn_cancel",
 		"on_submit": [
 			"essdee_yrp.fabric_grn.on_submit",
@@ -310,6 +353,7 @@ doc_events = {
 	# UI hide (public/js/stock_entry_transfer_cancel_guard.js) cannot be bypassed.
 	"Stock Entry": {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
+		"before_validate": "essdee_yrp.packing_hooks.set_stock_entry_includes_packing",
 		"before_cancel": "essdee_yrp.api.stock_transfer.guard_transfer_se_cancel",
 	},
 }

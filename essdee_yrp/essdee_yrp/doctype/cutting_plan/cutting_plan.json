@@ -1,0 +1,511 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2024-10-16 14:48:08.751597",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "is_manual_entry",
+  "lot",
+  "maximum_no_of_plys",
+  "lay_no",
+  "naming_series",
+  "cutting_start_date",
+  "cp_status",
+  "version",
+  "no_of_colours",
+  "column_break_nvaz",
+  "item",
+  "maximum_allow_percent",
+  "piece_weight_tolerance",
+  "production_detail",
+  "ipd_cutting_attribute",
+  "cutting_location",
+  "cutting_end_date",
+  "work_order",
+  "open_status",
+  "no_of_colours_completed",
+  "section_break_krhn",
+  "items",
+  "items_html",
+  "section_break_pxju",
+  "cutting_plan_cloth_details",
+  "cloths_html",
+  "cutting_plan_accessory_details",
+  "accessory_html",
+  "grammage_change_log_section",
+  "grammage_change_logs",
+  "report_tab",
+  "completed_items_json",
+  "completed_items_html",
+  "incomplete_items_json",
+  "incompleted_items_html",
+  "section_break_pvnk",
+  "print_panel_html",
+  "recut_fabric_html",
+  "planned_detail_tab",
+  "planned_details_html",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "lot",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Lot",
+   "options": "Lot",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_nvaz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "lot.item",
+   "fieldname": "item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Item",
+   "options": "Item"
+  },
+  {
+   "fetch_from": "lot.production_detail",
+   "fieldname": "production_detail",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Production Detail",
+   "options": "Item Production Detail"
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "0",
+   "fieldname": "lay_no",
+   "fieldtype": "Int",
+   "label": "Lay No",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_krhn",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Items",
+   "options": "Lot Order Detail"
+  },
+  {
+   "fieldname": "items_html",
+   "fieldtype": "HTML",
+   "label": "Items HTML"
+  },
+  {
+   "fieldname": "section_break_pxju",
+   "fieldtype": "Section Break"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "cutting_plan_cloth_details",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Cutting Plan Cloth Details",
+   "options": "Cutting Plan Cloth Detail"
+  },
+  {
+   "fetch_from": "production_detail.stiching_attribute",
+   "fieldname": "ipd_cutting_attribute",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "IPD Cutting Attribute",
+   "options": "Item Attribute"
+  },
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Naming Series"
+  },
+  {
+   "fieldname": "cloths_html",
+   "fieldtype": "HTML",
+   "label": "Cloths HTML"
+  },
+  {
+   "fieldname": "maximum_no_of_plys",
+   "fieldtype": "Int",
+   "label": "Maximum No of Plys",
+   "reqd": 1
+  },
+  {
+   "fieldname": "maximum_allow_percent",
+   "fieldtype": "Percent",
+   "label": "Maximum Allow Percent"
+  },
+  {
+   "allow_on_submit": 1,
+   "description": "Copied from MRP Settings when blank.",
+   "fieldname": "piece_weight_tolerance",
+   "fieldtype": "Float",
+   "label": "Piece Weight Tolerance (kg)",
+   "precision": "4",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cutting_location",
+   "fieldtype": "Select",
+   "label": "Cutting Location",
+   "options": "\nMachine Cutting\nManual Cutting"
+  },
+  {
+   "fieldname": "report_tab",
+   "fieldtype": "Tab Break",
+   "label": "Summary"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "cutting_plan_accessory_details",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Cutting Plan Accessory Details",
+   "options": "Cutting Plan Cloth Detail"
+  },
+  {
+   "fieldname": "accessory_html",
+   "fieldtype": "HTML",
+   "label": "Accessory HTML"
+  },
+  {
+   "fieldname": "grammage_change_log_section",
+   "fieldtype": "Section Break",
+   "label": "Grammage Change Log"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "grammage_change_logs",
+   "fieldtype": "Table",
+   "label": "Grammage Change Logs",
+   "options": "Cutting Plan Grammage Change Log",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "completed_items_json",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "Completed Items JSON"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "incomplete_items_json",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "Incomplete Items JSON"
+  },
+  {
+   "fieldname": "completed_items_html",
+   "fieldtype": "HTML",
+   "label": "Completed Items HTML"
+  },
+  {
+   "fieldname": "incompleted_items_html",
+   "fieldtype": "HTML",
+   "label": "Incompleted Items HTML"
+  },
+  {
+   "fieldname": "version",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Version",
+   "options": "\nV1\nV2\nV3"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "work_order",
+   "fieldtype": "Link",
+   "label": "Work Order",
+   "options": "Work Order",
+   "permlevel": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_manual_entry",
+   "fieldtype": "Check",
+   "label": "Is Manual Entry"
+  },
+  {
+   "fieldname": "planned_detail_tab",
+   "fieldtype": "Tab Break",
+   "label": "Planned Detail"
+  },
+  {
+   "fieldname": "planned_details_html",
+   "fieldtype": "HTML",
+   "label": "Planned Details HTML"
+  },
+  {
+   "allow_on_submit": 1,
+   "description": "Date of first LaySheet created",
+   "fieldname": "cutting_start_date",
+   "fieldtype": "Date",
+   "label": "Cutting Start Date",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "description": "Date when all LaySheets reached Bundles Generated",
+   "fieldname": "cutting_end_date",
+   "fieldtype": "Date",
+   "label": "Cutting End Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Cutting Plan",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "open_status",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Open Status",
+   "options": "\nOpen\nClosed",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "no_of_colours",
+   "fieldtype": "Int",
+   "label": "No of Colours",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "no_of_colours_completed",
+   "fieldtype": "Int",
+   "label": "No of Colours Completed",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "Draft",
+   "fieldname": "cp_status",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "CP Status",
+   "options": "\nDraft\nPlanned\nFabric Partially Received\nReady to Cut\nCutting In Progress\nPartially Completed\nCompleted\nCut Panel Dispatch Pending",
+   "read_only": 1
+  },
+  {
+   "fieldname": "print_panel_html",
+   "fieldtype": "HTML",
+   "label": "Print Panel HTML"
+  },
+  {
+   "fieldname": "recut_fabric_html",
+   "fieldtype": "HTML",
+   "label": "Recut Fabric HTML"
+  },
+  {
+   "fieldname": "section_break_pvnk",
+   "fieldtype": "Section Break"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [
+  {
+   "link_doctype": "Cutting Marker",
+   "link_fieldname": "cutting_plan"
+  },
+  {
+   "link_doctype": "Cutting LaySheet",
+   "link_fieldname": "cutting_plan"
+  },
+  {
+   "link_doctype": "Recut and Print Panel",
+   "link_fieldname": "cutting_plan"
+  }
+ ],
+ "modified": "2026-03-13 10:14:45.796757",
+ "modified_by": "Administrator",
+ "module": "Essdee YRP",
+ "name": "Cutting Plan",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cutting User",
+   "select": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Production Planner",
+   "select": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "CAD User",
+   "select": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Merch User",
+   "select": 1,
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "permlevel": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "permlevel": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cutting User",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "permlevel": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Production Planner",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "permlevel": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "CAD User",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "permlevel": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Merch User",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Brand QA Manager",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Brand QA User",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Purchase User",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Store User",
+   "select": 1,
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock User",
+   "select": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "search_fields": "lot,item",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

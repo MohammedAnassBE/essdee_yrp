@@ -1,3 +1,4 @@
+import json
 from unittest.mock import patch
 
 import frappe
@@ -10,12 +11,109 @@ from essdee_yrp.sd_yrp_sync import (
 	SYNC_DOCTYPES,
 	filter_doc_fields,
 	handle_sd_yrp_message,
+	map_production_ordered_rows,
 	upsert_doc,
 )
 from essdee_yrp.setup import ensure_yrp_production_order_settings
 
 
 class TestSDYRPSyncSetup(IntegrationTestCase):
+	def test_business_identity_fields_are_packaged_in_essdee_fixture(self):
+		with open(
+			frappe.get_app_path("essdee_yrp", "fixtures", "custom_field.json"),
+			encoding="utf-8",
+		) as fixture_file:
+			fields = {
+				(row.get("dt"), row.get("fieldname")): row
+				for row in json.load(fixture_file)
+			}
+
+		self.assertEqual(fields[("Address", "gstin")]["module"], "Essdee YRP")
+		self.assertEqual(
+			fields[("User", "telegram_user_id")]["module"],
+			"Essdee YRP",
+		)
+
+	def test_lot_time_and_action_rows_are_syncable(self):
+		filtered = filter_doc_fields({
+			"doctype": "Lot",
+			"name": "TEST-LOT-TNA",
+			"lot_time_and_action_details": [{
+				"colour": "Black",
+				"master": "Master-00001",
+				"time_and_action": "TNA-00001",
+			}],
+		})
+
+		self.assertEqual(
+			filtered["lot_time_and_action_details"][0],
+			{
+				"doctype": "Lot Time and Action Detail",
+				"colour": "Black",
+				"master": "Master-00001",
+				"time_and_action": "TNA-00001",
+			},
+		)
+
+	def test_production_ordered_row_keeps_direct_and_dynamic_lot_links(self):
+		with patch("essdee_yrp.sd_yrp_sync.validate_required_link"):
+			rows = map_production_ordered_rows({
+				"doctype": "Production Order",
+				"name": "PPO-TEST",
+				"production_ordered_details": [{
+					"item_variant": "ITEM-S",
+					"lot": "LOT-0001",
+					"quantity": 12,
+				}],
+			})
+
+		self.assertEqual(
+			rows[0],
+			{
+				"doctype": "Production Ordered Detail",
+				"reference_doctype": "Lot",
+				"reference_name": "LOT-0001",
+				"lot": "LOT-0001",
+				"item_variant": "ITEM-S",
+				"quantity": 12,
+			},
+		)
+
+	def test_single_sync_replaces_child_table_rows(self):
+		upsert_doc({
+			"doctype": "MRP Settings",
+			"name": "MRP Settings",
+			"enable_price_validation": 1,
+			"purchase_invoice_series_map": [
+				{"series": "SRC-.YYYY.-", "mapped_series": "DST-.YYYY.-"},
+				{"series": "SRC-2-.YYYY.-", "mapped_series": "DST-2-.YYYY.-"},
+			],
+		}, event="on_update")
+
+		settings = frappe.get_single("MRP Settings")
+		self.assertEqual(settings.enable_price_validation, 1)
+		self.assertEqual(
+			[(row.series, row.mapped_series) for row in settings.purchase_invoice_series_map],
+			[
+				("SRC-.YYYY.-", "DST-.YYYY.-"),
+				("SRC-2-.YYYY.-", "DST-2-.YYYY.-"),
+			],
+		)
+
+	def test_supplier_users_remain_on_supplier_and_map_to_warehouse(self):
+		name = f"_Test Sync Supplier {frappe.generate_hash(length=8)}"
+		upsert_doc({
+			"doctype": "Supplier",
+			"name": name,
+			"supplier_name": name,
+			"supplier_users": [{"user": "Administrator"}],
+		}, event="after_insert")
+
+		supplier = frappe.get_doc("Supplier", name)
+		warehouse = frappe.get_doc("Warehouse", name)
+		self.assertEqual([row.user for row in supplier.supplier_users], ["Administrator"])
+		self.assertEqual([row.user for row in warehouse.warehouse_users], ["Administrator"])
+
 	def test_lot_cloth_excess_percentage_is_syncable(self):
 		field = frappe.get_meta("Lot").get_field("cloth_excess_percentage")
 		self.assertIsNotNone(field)

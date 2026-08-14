@@ -64,12 +64,7 @@ frappe.ui.form.on("Work Order", {
 		frm._work_order_item_options = context.item_options || [];
 
 		if (frm.doc.docstatus === 0) {
-			if (context.auto_item) {
-				await set_if_changed(frm, "item", context.auto_item);
-				await set_if_changed(
-					frm, "production_detail", context.auto_production_detail || ""
-				);
-			} else if (
+			if (
 				frm.doc.item
 				&& !frm._work_order_item_options.includes(frm.doc.item)
 			) {
@@ -97,7 +92,7 @@ function update_work_order_header_controls(frm) {
 	const has_context = has_process && Boolean(frm.doc.lot);
 	const items = frm._work_order_item_options || [];
 	frm.toggle_enable("lot", draft && has_process);
-	frm.toggle_enable("item", draft && has_context && items.length > 1);
+	frm.toggle_enable("item", draft && has_context && items.length > 0);
 	frm.toggle_enable("production_detail", false);
 }
 

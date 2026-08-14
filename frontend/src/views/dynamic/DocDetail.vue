@@ -2467,7 +2467,7 @@ const STOCK_GROUPED_MAP = {
 			entryFields: [
 				"comments", "secondary_qty", "secondary_uom", "cancelled_quantity",
 				"additional_parameters", "set_combination", "grn_detail_no", "item_type",
-					"is_calculated", "source_grn", "source_grn_item", "source_inspection_entry_item",
+					"is_calculated", "source_grn", "source_grn_item",
 					"fabric_reference_variant", "fabric_reference_allocations",
 			],
 		},
@@ -2501,7 +2501,7 @@ const STOCK_GROUPED_MAP = {
 			entryFields: [
 				"comments", "secondary_qty", "secondary_uom", "cancelled_quantity",
 				"additional_parameters", "set_combination", "grn_detail_no", "item_type",
-				"is_calculated", "source_grn", "source_grn_item", "source_inspection_entry_item",
+				"is_calculated", "source_grn", "source_grn_item",
 			],
 		},
 		{
@@ -3316,8 +3316,8 @@ function isReqd(f) {
 function isReadOnly(f) {
 	if (!canWriteFieldPermlevel(f.permlevel)) return true
 	// Work Order entry is intentionally sequential: Process → Lot → Item.
-	// The IPD is always derived. One valid Item is auto-filled and locked; only
-	// a genuine multi-cloth context presents an Item choice.
+	// Item is always selected explicitly from the filtered Lot/Process options;
+	// the matching IPD remains derived and locked.
 	if (isWorkOrder.value && f.fieldname === "lot") {
 		return !form.process_name
 	}
@@ -3326,7 +3326,7 @@ function isReadOnly(f) {
 			!form.process_name
 			|| !form.lot
 			|| workOrderSelectionLoading.value
-			|| workOrderItemOptions.value.length <= 1
+			|| workOrderItemOptions.value.length === 0
 		)
 	}
 	if (isWorkOrder.value && f.fieldname === "production_detail") return true
@@ -4310,10 +4310,7 @@ async function loadWorkOrderSelection({ preserveItem = false } = {}) {
 			? context.item_options
 			: [...new Set(options.map((option) => option.item).filter(Boolean))]
 
-		if (context?.auto_item) {
-			form.item = context.auto_item
-			form.production_detail = context.auto_production_detail || ""
-		} else if (
+		if (
 			preserveItem
 			&& form.item
 			&& workOrderItemOptions.value.includes(form.item)

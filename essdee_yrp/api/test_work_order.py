@@ -203,7 +203,7 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
             "supplier_address": addr, "delivery_address": addr,
         }).insert(ignore_permissions=True)
 
-    def test_selection_context_autofills_single_cloth_item_and_ipd(self):
+    def test_selection_context_requires_explicit_cloth_item_selection(self):
         cloth_ipd = frappe.db.get_value(
             "Lot Fabric Detail",
             {"parent": self.lot.name, "cloth_item": self.cloth},
@@ -214,9 +214,9 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
         )
         self.assertTrue(context["is_cloth_process"])
         self.assertEqual(context["item_options"], [self.cloth])
-        self.assertEqual(context["auto_item"], self.cloth)
-        self.assertEqual(context["auto_production_detail"], cloth_ipd)
-        # The server hook applies the same derived pair to API/import-created WOs.
+        self.assertIsNone(context["auto_item"])
+        self.assertIsNone(context["auto_production_detail"])
+        # Once Item is selected, the server hook derives and stores the IPD.
         self.wo.reload()
         self.assertEqual(self.wo.production_detail, cloth_ipd)
 
@@ -237,8 +237,8 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
         context = get_work_order_selection_context(self.lot.name, sewing)
         self.assertFalse(context["is_cloth_process"])
         self.assertEqual(context["item_options"], [self.cloth])
-        self.assertEqual(context["auto_item"], self.cloth)
-        self.assertEqual(context["auto_production_detail"], garment_ipd)
+        self.assertIsNone(context["auto_item"])
+        self.assertIsNone(context["auto_production_detail"])
 
     def _calculate(self):
         ctx = get_fabric_deliverable_context(self.wo.name)

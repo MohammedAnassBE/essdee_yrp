@@ -789,8 +789,8 @@ def get_work_order_selection_context(lot, process_name):
 
 	For a cloth process, a Lot fabric row is selectable only when its linked
 	cloth IPD actually contains ``process_name``.  For every other process the
-	Lot's garment Item/IPD is the single choice.  Desk, /web and server-side
-	validation all use this response so their filtering/autofill cannot drift.
+	Lot's garment Item/IPD is the single choice. Desk, /web and server-side
+	validation all use this response so filtering and derivation cannot drift.
 	"""
 	return _get_work_order_selection_context(lot, process_name, check_permission=True)
 
@@ -858,13 +858,14 @@ def _get_work_order_selection_context(lot, process_name, check_permission=False)
 	options = unique_options
 	item_options = list(dict.fromkeys(option["item"] for option in options))
 
-	auto = options[0] if len(options) == 1 else {}
 	return {
 		"is_cloth_process": is_cloth_process,
 		"options": options,
 		"item_options": item_options,
-		"auto_item": auto.get("item"),
-		"auto_production_detail": auto.get("production_detail"),
+		# Item selection is always explicit. Production Detail is derived only
+		# after the user selects one of the filtered Item options.
+		"auto_item": None,
+		"auto_production_detail": None,
 	}
 
 

@@ -6,15 +6,27 @@ from frappe import _
 
 
 def validate(doc, method=None):
+	set_includes_packing(doc)
 	validate_lot_process_selection(doc)
+
+
+def set_includes_packing(doc):
+	"""Copy Essdee's Process packing rule without coupling base Work Order."""
+	if not doc.meta.get_field("includes_packing"):
+		return
+	doc.includes_packing = 0
+	if doc.get("process_name") and frappe.get_meta("Process").get_field("includes_packing"):
+		doc.includes_packing = frappe.db.get_value(
+			"Process", doc.process_name, "includes_packing"
+		) or 0
 
 
 def validate_lot_process_selection(doc):
 	"""Keep the Work Order's Item/IPD tied to its selected Process and Lot.
 
-	The clients auto-fill this pair, but API/import callers receive the same
-	guard.  Production Detail is derived and never accepted as an independent
-	user choice.
+	The clients require an explicit filtered Item selection, and API/import
+	callers receive the same guard. Production Detail is derived and never
+	accepted as an independent user choice.
 	"""
 	if not doc.get("process_name") or not doc.get("lot"):
 		return
@@ -32,9 +44,6 @@ def validate_lot_process_selection(doc):
 				doc.lot, scope, doc.process_name
 			)
 		)
-
-	if not doc.get("item") and len(options) == 1:
-		doc.item = options[0]["item"]
 
 	item_matches = [option for option in options if option["item"] == doc.get("item")]
 	if not item_matches:

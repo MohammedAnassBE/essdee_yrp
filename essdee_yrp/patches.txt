@@ -17,3 +17,4 @@ essdee_yrp.patches.remove_cloth_ipd_fabric_tabs
 essdee_yrp.patches.setup_sd_yrp_ipd_settings
 essdee_yrp.patches.setup_ipd_yarn_ratios
 essdee_yrp.patches.setup_fabric_reference_allocations
+essdee_yrp.patches.move_lot_packing_boundary_to_essdee

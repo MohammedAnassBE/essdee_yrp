@@ -6,7 +6,19 @@ from frappe import _
 
 
 def validate(doc, method=None):
+	set_includes_packing(doc)
 	validate_lot_process_selection(doc)
+
+
+def set_includes_packing(doc):
+	"""Copy Essdee's Process packing rule without coupling base Work Order."""
+	if not doc.meta.get_field("includes_packing"):
+		return
+	doc.includes_packing = 0
+	if doc.get("process_name") and frappe.get_meta("Process").get_field("includes_packing"):
+		doc.includes_packing = frappe.db.get_value(
+			"Process", doc.process_name, "includes_packing"
+		) or 0
 
 
 def validate_lot_process_selection(doc):

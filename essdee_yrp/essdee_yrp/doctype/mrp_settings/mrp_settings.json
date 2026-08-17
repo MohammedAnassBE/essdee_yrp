@@ -14,6 +14,7 @@
   "erp_site_url",
   "erp_api_key",
   "erp_api_secret",
+  "purchase_invoice_series_map",
   "column_break_d1dky",
   "dc_grn_letter_head",
   "printer_list",
@@ -45,6 +46,14 @@
   "override_pi_approve",
   "column_break_nrkc",
   "enable_production_order",
+  "production_order_action_roles",
+  "production_order_quantity_approver_role",
+  "box_sticker_print_section",
+  "non_set_box_sticker",
+  "non_set_piece_sticker",
+  "column_break_bsp",
+  "set_item_box_sticker",
+  "set_item_piece_sticker",
   "partial_received_percentage",
   "partially_dispatched_percentage",
   "previous_day_entries",
@@ -119,6 +128,12 @@
   {
    "fieldname": "column_break_d1dky",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "purchase_invoice_series_map",
+   "fieldtype": "Table",
+   "label": "Purchase Invoice Series Map",
+   "options": "MRP Settings Series Map"
   },
   {
    "fieldname": "dc_grn_letter_head",
@@ -284,6 +299,53 @@
    "fieldname": "enable_production_order",
    "fieldtype": "Check",
    "label": "Enable Production Order"
+  },
+  {
+   "description": "Only users with one of these roles can edit/request a PPO or use Production Order actions.",
+   "fieldname": "production_order_action_roles",
+   "fieldtype": "Table",
+   "label": "Production Order Action Roles",
+   "options": "Production Order Action Role"
+  },
+  {
+   "description": "Users with this role can approve pending Production Order quantity and ratio update requests.",
+   "fieldname": "production_order_quantity_approver_role",
+   "fieldtype": "Link",
+   "label": "Production Order Quantity Approver Role",
+   "options": "Role"
+  },
+  {
+   "fieldname": "box_sticker_print_section",
+   "fieldtype": "Section Break",
+   "label": "Box Sticker Print"
+  },
+  {
+   "fieldname": "non_set_box_sticker",
+   "fieldtype": "Link",
+   "label": "Non Set Box Sticker",
+   "options": "ZPL Raw Print Format"
+  },
+  {
+   "fieldname": "non_set_piece_sticker",
+   "fieldtype": "Link",
+   "label": "Non Set Piece Sticker",
+   "options": "ZPL Raw Print Format"
+  },
+  {
+   "fieldname": "column_break_bsp",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "set_item_box_sticker",
+   "fieldtype": "Link",
+   "label": "Set Item Box Sticker",
+   "options": "ZPL Raw Print Format"
+  },
+  {
+   "fieldname": "set_item_piece_sticker",
+   "fieldtype": "Link",
+   "label": "Set Item Piece Sticker",
+   "options": "ZPL Raw Print Format"
   },
   {
    "default": "50",

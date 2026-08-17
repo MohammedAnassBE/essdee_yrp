@@ -145,17 +145,37 @@ def upsert_doc(payload, event=None):
 
 
 def upsert_single_doctype(data):
-	# MRP Settings / IPD Settings are Singles — write each replicated field straight
-	# to tabSingles (DB-level, bypassing validation like the other upserts). Fields
-	# the source has but this site's doctype doesn't define are dropped by
-	# filter_doc_fields.
+	# Scalar fields in Singles live in tabSingles, while their Table fields use
+	# normal child tables. Replicate both at DB level; unsupported source fields
+	# are still removed by filter_doc_fields.
 	doctype = data.get("doctype")
 	data = filter_doc_fields(data)
+	meta = frappe.get_meta(doctype)
+	table_fields = {field.fieldname: field for field in meta.get_table_fields()}
 	skip = {"doctype", "name", "creation", "owner", "idx", "docstatus", "parent", "parenttype", "parentfield"}
 	for fieldname, value in data.items():
-		if fieldname in skip:
+		if fieldname in skip or fieldname in table_fields:
 			continue
 		frappe.db.set_single_value(doctype, fieldname, value)
+
+	for fieldname, field in table_fields.items():
+		if fieldname not in data:
+			continue
+		frappe.db.delete(
+			field.options,
+			{
+				"parenttype": doctype,
+				"parent": doctype,
+				"parentfield": fieldname,
+			},
+		)
+		_db_insert_child_rows(
+			field.options,
+			doctype,
+			doctype,
+			fieldname,
+			data.get(fieldname),
+		)
 	frappe.clear_document_cache(doctype, doctype)
 	return frappe.get_single(doctype)
 
@@ -606,7 +626,8 @@ def map_production_ordered_rows(data):
 		item_variant = row.get("item_variant")
 		validate_required_link("Item Variant", item_variant, f"{source_context} Production Ordered Detail row")
 		lot = row.get("lot")
-		# F15's `lot` Link maps onto base yrp's generic dynamic reference.
+		# Preserve F15's direct `lot` Link in the Essdee customization and mirror
+		# it into base YRP's generic dynamic reference.
 		# Lot syncs AFTER Production Order in the initial order, so the lot
 		# record may not exist yet — stamp the reference without validating
 		# (DB-level sync, source is authoritative).
@@ -614,6 +635,7 @@ def map_production_ordered_rows(data):
 			"doctype": "Production Ordered Detail",
 			"reference_doctype": "Lot" if lot else None,
 			"reference_name": lot,
+			"lot": lot,
 			"item_variant": item_variant,
 			"quantity": row.get("quantity") or 0,
 		})
@@ -699,6 +721,7 @@ def sync_production_ordered_rows_for_lot(data):
 			"doctype": "Production Ordered Detail",
 			"reference_doctype": "Lot",
 			"reference_name": lot,
+			"lot": lot,
 			"item_variant": row.get("item_variant"),
 			"quantity": row.get("qty") or 0,
 		}

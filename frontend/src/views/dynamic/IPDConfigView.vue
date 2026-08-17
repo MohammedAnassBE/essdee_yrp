@@ -2093,7 +2093,6 @@ const itemLabel = computed(() => doc.value?.item || "")
 const approvalSeverity = computed(() => {
 	const s = doc.value?.approval_status
 	if (s === "Approved") return "success"
-	if (s === "Cutting Approved") return "info"
 	return "warn"
 })
 

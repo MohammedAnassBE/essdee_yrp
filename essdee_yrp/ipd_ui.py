@@ -107,7 +107,7 @@ def get_approval_roles():
 
 @frappe.whitelist()
 def approve_ipd(doc_name, approval_type="Approved"):
-	if approval_type not in ("Cutting Approved", "Approved"):
+	if approval_type != "Approved":
 		frappe.throw("Invalid approval type")
 
 	allowed_roles = get_approval_roles()

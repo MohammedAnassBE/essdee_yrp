@@ -10,18 +10,14 @@ required_apps = ["yrp"]
 # reference these safe keys but cannot supply executable methods itself.
 yrp_ui_metrics = ["essdee_yrp.ui_registry.get_metrics"]
 yrp_ui_calculations = ["essdee_yrp.ui_registry.get_calculations"]
+yrp_stock_item_entry_fields = ["essdee_yrp.stock_item_extensions.get_entry_fields"]
 
 fixtures = [
-	# Keep this fixture inside the Essdee customization boundary. Historical
-	# Essdee fields have no module, while newly created fields use Essdee YRP.
-	# Base stock-dimension fields are owned by module YRP and integration fields
-	# by their own app, so neither must be re-exported from this app.
+	# Export only fields explicitly owned by this customization app. A patch
+	# stamps the historical fields before this strict filter is used.
 	{
 		"dt": "Custom Field",
-		"or_filters": [
-			["module", "=", "Essdee YRP"],
-			["module", "is", "not set"],
-		],
+		"filters": [["module", "=", "Essdee YRP"]],
 	},
 	# Field-order override: keeps `ipd_processes` on the Item Details tab
 	# (production_api parity) — the custom garment tabs would otherwise pull
@@ -60,8 +56,6 @@ fixtures = [
 					"Process Cost-depends_on_attribute-default",
 					"Process Cost-is_expired-read_only",
 					"Process Cost-item-fetch_from",
-					"Production Order-naming_series-options",
-					"Production Order-naming_series-default",
 					"Purchase Order-naming_series-options",
 					"Purchase Order-naming_series-default",
 					"Purchase Invoice-naming_series-options",
@@ -75,6 +69,7 @@ fixtures = [
 					"Item Price-main-autoname",
 					"Stock Ledger Entry-main-autoname",
 					"Stock Reservation Entry-main-autoname",
+					"Stock Reservation Entry-voucher_type-options",
 				],
 			],
 		],
@@ -337,7 +332,6 @@ doc_events = {
 			"essdee_yrp.fabric_grn.before_validate",
 			"essdee_yrp.purchase_order_lots.validate_grn_lots",
 		],
-		"before_cancel": "essdee_yrp.api.mrp_stock_transfer.before_grn_cancel",
 		"on_submit": [
 			"essdee_yrp.fabric_grn.on_submit",
 			"essdee_yrp.fabric_tracking.on_grn_submit",

@@ -277,10 +277,8 @@ frappe.ui.form.on("Lot", {
 		}
 		if (frm.doc.item && frm.doc.production_detail) {
 			frappe.call({
-				method: "essdee_yrp.essdee_yrp.doctype.lot.lot.get_calculated_bom",
+				method: "essdee_yrp.essdee_yrp.doctype.lot.lot.calculate_bom",
 				args: {
-					item_production_detail: frm.doc.production_detail,
-					items: frm.doc.lot_order_details,
 					lot_name: frm.doc.name
 				},
 				freeze: true,

@@ -71,7 +71,7 @@
 <script setup>
 import { computed, ref, watch } from "vue"
 import { useRoute } from "vue-router"
-import { useUiConfigStore } from "@yrp/web-engine"
+import { useUiConfigStore } from "@/engine"
 import { usePreviewGate } from "@/composables/usePreviewGate"
 import { getRegistryByDoctype } from "@/config/doctypes"
 

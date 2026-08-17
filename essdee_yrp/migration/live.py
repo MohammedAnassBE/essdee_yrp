@@ -69,6 +69,20 @@ LEGACY_REQUIRED_FIELD_CUTOFFS = {
 
 
 class F15SourceBridge:
+	def schemas(self) -> dict[str, dict[str, Any]]:
+		schemas = {}
+		for row in self._run(["schemas"]):
+			if row.get("kind") != "schema" or not isinstance(row.get("schema"), dict):
+				raise MigrationError("F15 source bridge returned an invalid schema payload")
+			schema = row["schema"]
+			name = schema.get("name")
+			if not name or name in schemas:
+				raise MigrationError("F15 source bridge returned duplicate/unnamed metadata")
+			schemas[str(name)] = schema
+		if not schemas:
+			raise MigrationError("F15 source bridge returned no schemas")
+		return schemas
+
 	def status(self) -> dict[str, Any]:
 		lines = list(self._run(["status"]))
 		if len(lines) != 1:
@@ -81,10 +95,13 @@ class F15SourceBridge:
 		*,
 		start_after: str | None = None,
 		batch_size: int = DEFAULT_BATCH_SIZE,
+		limit: int | None = None,
 	) -> Iterable[dict[str, Any]]:
 		args = ["export", "--doctype", doctype, "--batch-size", str(batch_size)]
 		if start_after:
 			args.extend(["--start-after", start_after])
+		if limit is not None:
+			args.extend(["--limit", str(max(0, int(limit)))])
 		yield from self._run(args)
 
 	def reference_data(self) -> dict[str, Any]:
@@ -561,11 +578,11 @@ def run_job(
 		raise MigrationError(f"Unsupported migration mode {mode!r}")
 
 	migration = frappe.get_doc("MRP Data Migration", migration_name)
-	plan, schema_payload = build_schema_analysis()
+	source = F15SourceBridge()
+	plan, schema_payload = build_schema_analysis(source_schemas=source.schemas())
 	if not plan.ready:
 		raise MigrationError("Schema plan is blocked:\n" + "\n".join(plan.issues))
 	_validate_live_target_metadata(plan)
-	source = F15SourceBridge()
 	source_status = source.status()
 	if source_status.get("site") != SOURCE_SITE:
 		raise MigrationError("The source bridge did not connect to the approved source site")
@@ -632,11 +649,11 @@ def run_attachment_smoke_test(source_file_names: Iterable[str]) -> dict[str, Any
 	if not names:
 		raise MigrationError("Attachment smoke test needs at least one File name")
 
-	plan, _schema_payload = build_schema_analysis()
+	source = F15SourceBridge()
+	plan, _schema_payload = build_schema_analysis(source_schemas=source.schemas())
 	if not plan.ready:
 		raise MigrationError("Schema plan is blocked:\n" + "\n".join(plan.issues))
 	_validate_live_target_metadata(plan)
-	source = F15SourceBridge()
 	status = source.file_status(names=names)
 	if int(status.get("file_count") or 0) != len(names):
 		raise MigrationError(

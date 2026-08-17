@@ -1,6 +1,6 @@
 # Production API → YRP / Essdee YRP Migration Context
 
-Last updated: 2026-08-14
+Last updated: 2026-08-17
 Working site: `essdee_yrp.site`
 Working branches: `apps/yrp` → `develop`, `apps/essdee_yrp` → `MRP`
 
@@ -70,6 +70,14 @@ their required shared compatibility helpers. Its recorded F15 commit and dirty
 file list are a historical snapshot. Future agents must re-inventory the
 current F15 HEAD and working tree before implementing any slice.
 
+The current 2026-08-17 code/decision overlay is recorded in
+`docs/MRP_BRANCH_HANDOFF.md`. In particular, the MRP `/web` engine, Lot Desk,
+Lot BOM adapter, approval-status contract, obsolete remote stock action, and
+fixture ownership have been corrected in the working tree. Fabric references
+are preserved through the generic YRP stock-row extension hook. Historical
+migration includes every Time and Action parent/child row, including Lot link
+rows and records not linked to a Lot.
+
 ## Current audit status
 
 - The 2026-08-14 local Spine parity audit found that the existing
@@ -100,10 +108,13 @@ current F15 HEAD and working tree before implementing any slice.
   changed list after their decisions were implemented.
 - Target-only WhatsApp DocTypes are excluded from this migration audit.
 - No production data migration has been performed.
-- A fresh schema analysis on 2026-08-14 against F15 HEAD `bdc8aa93` reports one
-  new blocker introduced after the successful rehearsal:
-  `Goods Received Note.from_closed_wo_sewing_details` has no target field.
-  Resolve the new closed-work-order sewing GRN contract before another dry run.
+- A fresh schema analysis on 2026-08-17 against F15 HEAD `9cc4329c66ab`
+  reports zero blockers. Work Order keeps base YRP's free-text `close_reason`;
+  historical Production API values map to the Essdee-owned Select
+  `sd_close_reason`, while Essdee supplies `close_other_reason`. Goods Received
+  Note now carries the hidden storage-only `from_closed_wo_sewing_details`
+  Check; its special protected Sewing Details behavior is still a later logic
+  slice.
 - The strict document dry run completed on 2026-08-13 for all 3,437,046
   source parent records with zero transformation failures. It audited, rather
   than invented, known historical blanks: Process Cost supplier 492/Lot 546,
@@ -327,8 +338,10 @@ queryable from the GRN chain when needed.
   demands only from the saved Lot; client-supplied rows are never trusted as
   calculation input.
 - Process Cost Lot-dependent field behavior remains an Essdee customization.
-- `MRP Settings` follows the Production API schema except obsolete remote-site
-  credentials are excluded: YRP/MRP API key, secret, and site URL fields.
+- `MRP Settings` follows target capability, not blind source parity. Migrate
+  only settings whose referenced feature/DocType exists on `essdee_yrp.site`;
+  exclude AQL, CLS, notification, Sewing Plan, and obsolete remote-site API
+  key/secret/URL settings rather than creating absent modules for them.
 - Supplier source fields `supplier_users` and `price_html` remain Essdee-owned.
 - Work Order has Essdee field `no_receivables`.
 - Work Order Item is never auto-selected. Lot + Process produce a filtered Item
@@ -355,7 +368,8 @@ queryable from the GRN chain when needed.
 
 ## Important exclusions and pending plans
 
-- Do not add old remote API credential fields to MRP Settings.
+- Do not add old remote API credential fields or absent-module configuration
+  fields to MRP Settings.
 - No data patch is needed for those settings fields; target data will be reset
   before fresh entries are created.
 - The 150 created schemas still require controller/JS/report/permission review
@@ -364,10 +378,9 @@ queryable from the GRN chain when needed.
   master rehearsal, attachment smoke test, and full local rehearsal are
   implemented. The actual historical write migration, final reconciliation,
   production cutover, and rollback execution are still pending.
-- Current F15 schema analysis is blocked by the newly added Goods Received Note
-  `from_closed_wo_sewing_details` field. The earlier zero-blocker rehearsal
-  remains valid evidence for its frozen source snapshot, not for today's
-  changed source tree.
+- Current F15 schema analysis is zero-blocker after adding the Essdee-owned GRN
+  marker field. A fresh Dry Run is still required because the earlier rehearsal
+  belongs to its frozen source snapshot.
 
 ## Data-migration execution design
 
@@ -438,11 +451,15 @@ not only document counts. Canonical audit:
 `docs/audits/2026-08-14-sd-yrp-spine-field-value-audit.md`.
 
 Confirmed and fixed mapper gaps are: Production Ordered Detail direct `lot`,
-MRP Settings child tables, Lot Time and Action rows, Supplier Users retained on
+supported MRP Settings values, Supplier Users retained on
 both Supplier and Warehouse, Address GSTIN, and User Telegram ID. Production
 Order otherwise covers all 25 source parent fields and all five child tables.
 IPD `stage` deliberately maps to both `in_stage` and `out_stage`; 808 live
 common rows matched that transformation.
+
+Historical migration separately includes the complete Time and Action graph,
+including every `Lot Time and Action Detail`. This does not silently broaden
+the ongoing Spine real-time consumer contract.
 
 User sync remains a safe bootstrap rather than a credential clone. Never copy
 passwords, API credentials, reset keys, sessions, last-IP/login/activity, or
@@ -517,6 +534,57 @@ change, or destructive cleanup.
   valid for Lot `YRP-AISH-11042026-01`; that Lot currently permits
   `AISHWARYA PRINT`. Do not misreport this as an inspection-query failure.
 
+## Query-only sample rehearsal — 2026-08-17
+
+- A target backup was taken before sample writes:
+  `20260817_154345-essdee_yrp_site-database.sql.gz`.
+- The rehearsal used the effective live metadata from F15 `mrp3.site`, not
+  only repository JSON. This is required because source DocType metadata has
+  historical migration/Property Setter drift, including Lot Time and Action.
+- Target metadata was reloaded only from the current `yrp/develop` and
+  `essdee_yrp/MRP` definitions. No full `bench migrate` was run.
+- The final capped run migrated at most 20 parents per source DocType through
+  direct SQL upserts, preserved source parent/child names, and immediately
+  read every stored value back through SQL.
+- Final result: 1,469 parents, 18,633 child rows, and 396,709 field values
+  verified; zero DocTypes failed. The repeat run updated 1,446 existing sample
+  parents and inserted 23 parents that had been rolled back by the first
+  diagnostic pass, proving name-based idempotence without duplicates.
+- Critical focused samples passed: Production Order (20 parents/236 children),
+  Item BOM Attribute Mapping (20/247), Lot (20/778, including live Lot Time and
+  Action rows), Time and Action (20/472), Work Order (20/5,600), Goods Received
+  Note (20/553), Lot Transfer (20/75), and MRP Settings (1/5).
+- MRP Settings migrated only supported values: three Purchase Invoice series
+  rows and two Production Order action-role rows. AQL, CLS, notification
+  automation, Sewing Plan configuration, and obsolete YRP remote credentials
+  were not stored.
+- The full read-only external-master audit checked 1,534 distinct values and
+  passed. The controlled full load still needs to copy 22 Addresses, two
+  Roles, two Users, one Email Account, one Letter Head, and one Print Format;
+  these are supporting Frappe masters rather than Production API DocTypes.
+
+Unresolved before the full destructive rehearsal:
+
+1. The Stock Reservation Entry voucher-type mapping is now decided: base YRP
+   exposes `voucher_type` as a generic Select, while Essdee's scoped Property
+   Setter retains the base `Work Order`/`Stock Update` values and adds the
+   legacy `Packing Slip` value used by all 322,187 source rows. The query-only
+   migration can therefore preserve `voucher_type` without a fake Packing
+   Slip DocType. Base YRP now also stores `voucher_no` as plain Data, matching
+   F15 and avoiding an invalid Dynamic Link to the nonexistent Packing Slip
+   DocType. All historical voucher references can be preserved unchanged;
+   280,986 rows additionally have a valid `stock_entry` and 41,201 do not.
+2. The restored local source contains encrypted MRP Settings values for
+   `erp_api_secret` and `sales_api_secret`, but its site encryption key cannot
+   decrypt them. They were not exposed or copied by the sample. The production
+   encryption key/config or an explicit secret re-entry decision is required.
+3. File metadata/blob migration was intentionally excluded from this
+   query-only capped sample. The production public/private file archives must
+   be available for the attachment rehearsal and hash/size/privacy checks.
+4. The current target was not erased. A full reset/load still requires the
+   owner's explicit evening authorization and a fresh backup immediately
+   before deletion.
+
 ## Resume checklist
 
 1. Confirm `apps/essdee_yrp` is on `MRP`, confirm `apps/yrp` remains on
@@ -525,9 +593,8 @@ change, or destructive cleanup.
 3. Read `docs/MRP_BRANCH_HANDOFF.md`, this history, and the referenced plans
    and audits.
 4. Confirm the working site is `essdee_yrp.site`.
-5. First resolve the new
-   `Goods Received Note.from_closed_wo_sewing_details` schema/logic mapping and
-   require zero schema blockers.
+5. Require zero schema blockers; keep the protected closed-Work-Order Sewing
+   Details GRN behavior in the later business-logic plan.
 6. Repeat the read-only dry run against a frozen current source before any
    historical writes.
 7. For every decision, record ownership, schema mapping, logic impact, data

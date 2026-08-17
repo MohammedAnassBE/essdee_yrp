@@ -190,7 +190,7 @@ frappe.ui.form.on("Item Production Detail", {
 			const approval_status = frm.doc.approval_status || "Not Approved"
 			const approval_colour = approval_status === "Approved"
 				? "green"
-				: (approval_status === "Cutting Approved" ? "blue" : "orange")
+				: "orange"
 			frm.page.set_indicator(__(approval_status), approval_colour)
 		}
 		if (!frm.is_new()) {

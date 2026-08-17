@@ -59,7 +59,7 @@ const detailGroups = [
 		label: "Status & Closure",
 		fields: [
 			"open_status", "is_delivered", "is_internal_unit", "includes_packing", "is_manual_entry",
-			"close_reason", "close_other_reason", "close_remarks", "closed_by",
+			"sd_close_reason", "close_other_reason", "close_remarks", "closed_by",
 			"approved_by", "rejection_reason",
 		],
 	},

@@ -1638,7 +1638,7 @@ import SendSmsModal from "./SendSmsModal.vue"
 import SendWhatsAppModal from "./SendWhatsAppModal.vue"
 import DocMovableActions from "./DocMovableActions.vue"
 import DetailRelated from "@/components/detail/DetailRelated.vue"
-import { useUiConfigStore } from "@yrp/web-engine"
+import { useUiConfigStore } from "@/engine"
 
 const props = defineProps({
 	docRoute: { type: String, required: true },
@@ -1958,19 +1958,6 @@ const moreMenuModel = computed(() => {
 			command: () => openWorkOrderClose(),
 		})
 	}
-	if (
-		isGoodsReceivedNote.value
-		&& docstatus.value === 1
-		&& doc.value?.against === "Work Order"
-		&& !Number(doc.value?.mrp_stock_entry_created)
-		&& canWrite(doctype.value)
-	) {
-		items.push({
-			label: "Create Stock in MRP",
-			icon: "pi pi-box",
-			command: () => confirmCreateMrpStock(),
-		})
-	}
 	if (canCreate(doctype.value)) {
 		items.push({ label: "Duplicate", icon: "pi pi-copy", command: () => onDuplicate() })
 	}
@@ -2023,7 +2010,7 @@ const workOrderCloseForm = reactive({
 })
 
 function openWorkOrderClose() {
-	workOrderCloseForm.reason = doc.value?.close_reason || ""
+	workOrderCloseForm.reason = doc.value?.sd_close_reason || ""
 	workOrderCloseForm.otherReason = doc.value?.close_other_reason || ""
 	workOrderCloseForm.remarks = doc.value?.close_remarks || ""
 	workOrderCloseOpen.value = true
@@ -2043,7 +2030,7 @@ async function onCloseWorkOrder() {
 	try {
 		const result = await callMethod("essdee_yrp.work_order_close.close_work_order", {
 			work_order: props.id,
-			close_reason: workOrderCloseForm.reason,
+			sd_close_reason: workOrderCloseForm.reason,
 			close_other_reason: workOrderCloseForm.otherReason,
 			close_remarks: workOrderCloseForm.remarks,
 		})
@@ -2060,34 +2047,6 @@ async function onCloseWorkOrder() {
 	} catch (e) {
 		serverError.value = { title: "Could not close Work Order", lines: errorLines(e) }
 		toast.error("Close failed", e?.message)
-	} finally {
-		acting.value = null
-	}
-}
-
-function confirmCreateMrpStock() {
-	confirm.require({
-		header: "Create Stock in MRP",
-		message:
-			"Transfer this GRN's finished-cloth stock to MRP? "
-			+ "This creates a Material Issue in YRP and a Material Receipt in MRP.",
-		acceptLabel: "Create Stock",
-		accept: () => onCreateMrpStock(),
-	})
-}
-
-async function onCreateMrpStock() {
-	acting.value = "grn-mrp-stock"
-	serverError.value = null
-	try {
-		const result = await callMethod("essdee_yrp.api.mrp_stock_transfer.create_mrp_stock", {
-			grn_name: props.id,
-		})
-		await reloadView()
-		toast.success("Stock created in MRP", `Material Receipt ${result?.mrp_stock_entry || ""}`)
-	} catch (e) {
-		serverError.value = { title: "Could not create MRP stock", lines: errorLines(e) }
-		toast.error("MRP transfer failed", e?.message)
 	} finally {
 		acting.value = null
 	}
@@ -2908,12 +2867,8 @@ function onCalculateBom() {
 			acting.value = "calc-bom"
 			try {
 				await callMethod(
-					"yrp.yrp.doctype.item_production_detail.item_production_detail.get_calculated_bom",
-					{
-						item_production_detail: doc.value.production_detail,
-						items: doc.value.lot_order_details || [],
-						lot_name: doc.value.name,
-					},
+					"essdee_yrp.essdee_yrp.doctype.lot.lot.calculate_bom",
+					{ lot_name: doc.value.name },
 				)
 				toast.success("BOM calculated")
 				await reloadView()

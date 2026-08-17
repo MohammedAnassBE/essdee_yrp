@@ -8,13 +8,13 @@ mirror this app's frontend:
 
 - ``BLOCK_PROP_KEYS`` — "the defineProps list of every registered block"
   (frontend/src/blocks/index.js registrations + each component's defineProps;
-  summary-tiles / calculator-panel ship from the @yrp/web-engine package at
-  apps/yrp/frontend/src).
-- ``HOME_QUEUE_METRICS`` — "the server mirror of HomeQueues.vue
-  METRIC_TO_QUEUE".
+  summary-tiles / calculator-panel ship from this app's local engine at
+  apps/essdee_yrp/frontend/src/engine).
+- ``get_home_queue_metrics()`` — the installed-app registry mirror of
+  HomeQueues.vue ``METRIC_TO_QUEUE``.
 - ``COMPOSITE_PRIMITIVES`` + the COMPOSITE_* binding-grammar constants — the
   Track-1-item-3 deep mirror of the ENGINE grammar
-  (``apps/yrp/frontend/src/composite/grammar.js``): primitive names,
+  (``apps/essdee_yrp/frontend/src/engine/composite/grammar.js``): primitive names,
   container-ness, prop kinds/enums/ranges/defaults, showIf ops, formatter
   names, forbidden path segments and the security regexes.
 
@@ -38,7 +38,6 @@ import subprocess
 
 import frappe
 from frappe.tests import IntegrationTestCase
-
 from yrp.yrp.api.ui_config import (
 	BLOCK_PROP_KEYS,
 	COMPOSITE_BIND_PATH_RE,
@@ -50,9 +49,9 @@ from yrp.yrp.api.ui_config import (
 	COMPOSITE_SHOWIF_OPS,
 	COMPOSITE_SITE_FILE_RE,
 	CURRENT_SCHEMA_VERSION,
-	HOME_QUEUE_METRICS,
 	ICON_RE,
 	LIST_VIEW_KEYS,
+	get_home_queue_metrics,
 )
 
 # Props the server knows that are DELIBERATELY absent from the client's
@@ -293,19 +292,19 @@ class TestDcWizardStepsEntry(IntegrationTestCase):
 
 
 class TestUIClientMirror(IntegrationTestCase):
-	"""BLOCK_PROP_KEYS / HOME_QUEUE_METRICS vs the real frontend sources."""
+	"""Server registries and grammar mirrors vs the real frontend sources."""
 
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
 		cls.host_blocks = os.path.join(_frontend_dir("essdee_yrp"), "blocks")
-		cls.engine_src = _frontend_dir("yrp")
+		cls.engine_src = os.path.join(_frontend_dir("essdee_yrp"), "engine")
 		cls.index_js = _read(os.path.join(cls.host_blocks, "index.js"))
 
 	def _registrations(self):
 		"""block type -> absolute component file path, from index.js."""
 		local = dict(re.findall(r'import\s+(\w+)\s+from\s+"\./([\w.]+\.vue)"', self.index_js))
-		engine_import = re.search(r'import\s*\{([^}]*)\}\s*from\s*"@yrp/web-engine"', self.index_js)
+		engine_import = re.search(r'import\s*\{([^}]*)\}\s*from\s*"@/engine"', self.index_js)
 		engine_names = (
 			{n.strip() for n in engine_import.group(1).split(",") if n.strip()}
 			if engine_import
@@ -358,7 +357,7 @@ class TestUIClientMirror(IntegrationTestCase):
 
 	def test_composite_caps_mirror_engine_grammar(self):
 		"""ui_config.COMPOSITE_MAX_NODES/DEPTH are a hand-maintained mirror of
-		the engine grammar (apps/yrp/frontend/src/composite/grammar.js) — the
+		the engine grammar (apps/essdee_yrp/frontend/src/engine/composite/grammar.js) — the
 		Track-1-item-1 third copy. Either side drifting breaks the caps story
 		the item-3 server validator and the catalog document."""
 		src = _strip_line_comments(_read(os.path.join(self.engine_src, "composite", "grammar.js")))
@@ -388,7 +387,7 @@ class TestUIClientMirror(IntegrationTestCase):
 		self.assertEqual(
 			int(m.group(1)),
 			CURRENT_SCHEMA_VERSION,
-			"ENGINE_SCHEMA_VERSION (apps/yrp/frontend/src/stores/uiConfig.js) and "
+			"ENGINE_SCHEMA_VERSION (apps/essdee_yrp/frontend/src/engine/stores/uiConfig.js) and "
 			"ui_config.CURRENT_SCHEMA_VERSION have drifted — they bump in LOCKSTEP "
 			"(§2.3 rule 1). A server ahead of the engine makes the store reject every "
 			"valid layout as too-new and serve the compiled Default fleet-wide.",
@@ -553,11 +552,64 @@ class TestUIClientMirror(IntegrationTestCase):
 		self.assertEqual(len(keys), len(set(keys)), f"duplicate METRIC_TO_QUEUE keys: {keys}")
 		self.assertEqual(
 			set(keys),
-			set(HOME_QUEUE_METRICS),
-			"HomeQueues.vue METRIC_TO_QUEUE and ui_config.HOME_QUEUE_METRICS have "
+			set(get_home_queue_metrics()),
+			"HomeQueues.vue METRIC_TO_QUEUE and the installed home-queue registry have "
 			"drifted — a home-queues stats save would warn falsely (or a new queue "
 			"metric would draw the 'renders NOTHING' warning); update the mirror "
 			"and regenerate LAYOUT_SCHEMA.json",
+		)
+
+
+class TestCustomizationOwnership(IntegrationTestCase):
+	"""Essdee-only Desk UI and approval vocabulary never leak into base YRP."""
+
+	def test_cut_plan_editor_is_owned_and_registered_by_essdee(self):
+		base_component = frappe.get_app_path(
+			"yrp", "public", "js", "CuttingPlan", "components", "CutPlanItems.vue"
+		)
+		host_component = frappe.get_app_path(
+			"essdee_yrp", "public", "js", "CuttingPlan", "components", "CutPlanItems.vue"
+		)
+		self.assertFalse(os.path.exists(base_component), base_component)
+		self.assertTrue(os.path.exists(host_component), host_component)
+		self.assertNotIn(
+			"CutPlanItems",
+			_read(frappe.get_app_path("yrp", "public", "js", "vue_plugins.js")),
+		)
+		self.assertIn(
+			'CutPlanItems from "./CuttingPlan/components/CutPlanItems.vue"',
+			_read(frappe.get_app_path("essdee_yrp", "public", "js", "vue_plugins.js")),
+		)
+
+	def test_ipd_approval_uses_base_yrp_options(self):
+		base_meta = json.loads(
+			_read(
+				frappe.get_app_path(
+					"yrp",
+					"yrp",
+					"doctype",
+					"item_production_detail",
+					"item_production_detail.json",
+				)
+			)
+		)
+		approval = next(
+			field for field in base_meta["fields"] if field.get("fieldname") == "approval_status"
+		)
+		self.assertEqual(approval["options"], "Not Approved\nApproved")
+
+		fixture = json.loads(
+			_read(frappe.get_app_path("essdee_yrp", "fixtures", "property_setter.json"))
+		)
+		self.assertFalse(
+			any(
+				row.get("name") == "Item Production Detail-approval_status-options"
+				for row in fixture
+			)
+		)
+		self.assertNotIn(
+			'"Item Production Detail-approval_status-options"',
+			_read(frappe.get_app_path("essdee_yrp", "hooks.py")),
 		)
 
 
@@ -614,7 +666,7 @@ class TestStatusColorPrototypeSafety(IntegrationTestCase):
 		node = shutil.which("node") or shutil.which("nodejs")
 		if not node:
 			self.skipTest("node not on PATH — JS runtime regression cannot run")
-		status_colors = os.path.join(_frontend_dir("yrp"), "statusColors.js")
+		status_colors = os.path.join(_frontend_dir("essdee_yrp"), "engine", "statusColors.js")
 		self.assertTrue(os.path.exists(status_colors), status_colors)
 		env = dict(os.environ, SC_URL=pathlib.Path(status_colors).as_uri())
 		proc = subprocess.run(

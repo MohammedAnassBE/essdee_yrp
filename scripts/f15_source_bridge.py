@@ -71,6 +71,61 @@ def _load_schemas():
 	return schemas
 
 
+def _runtime_schema(frappe, doctype, declared):
+	meta = frappe.get_meta(doctype, cached=False)
+	return {
+		"doctype": "DocType",
+		"name": doctype,
+		"module": getattr(meta, "module", None) or declared.get("module"),
+		"istable": int(bool(getattr(meta, "istable", declared.get("istable")))),
+		"issingle": int(bool(getattr(meta, "issingle", declared.get("issingle")))),
+		"autoname": getattr(meta, "autoname", None) or declared.get("autoname"),
+		"fields": [field.as_dict() for field in meta.fields],
+	}
+
+
+def _load_runtime_schemas(frappe, declared_schemas):
+	"""Overlay the approved source catalog with the metadata actually in F15.
+
+	Production API historically changed some DocTypes through migrations and
+	Property Setters, so the checked-out JSON is not always the complete live
+	contract.  Keep the catalog restricted to version-controlled source
+	DocTypes, but read their effective fields from ``frappe.get_meta``.
+	"""
+
+	runtime = {}
+	for doctype, declared in declared_schemas.items():
+		runtime[doctype] = _runtime_schema(frappe, doctype, declared)
+	return runtime
+
+
+def _load_export_schemas(frappe, declared_schemas, parent_doctype):
+	"""Load effective metadata only for one export tree."""
+
+	if parent_doctype not in declared_schemas:
+		return declared_schemas
+	runtime = dict(declared_schemas)
+	pending = [parent_doctype]
+	loaded = set()
+	while pending:
+		doctype = pending.pop()
+		if doctype in loaded:
+			continue
+		loaded.add(doctype)
+		schema = _runtime_schema(frappe, doctype, declared_schemas[doctype])
+		runtime[doctype] = schema
+		for field in _table_fields(schema):
+			child_doctype = field.get("options")
+			if child_doctype in declared_schemas and child_doctype not in loaded:
+				pending.append(child_doctype)
+	return runtime
+
+
+def emit_schemas(schemas):
+	for doctype in sorted(schemas):
+		_write({"kind": "schema", "schema": schemas[doctype]})
+
+
 def _fieldnames(schema):
 	return [
 		field["fieldname"]
@@ -159,7 +214,7 @@ def _add_runtime_passwords(frappe, doctype, name, row):
 		row["__migration_passwords"] = passwords
 
 
-def export_doctype(frappe, schemas, doctype, batch_size, start_after=None):
+def export_doctype(frappe, schemas, doctype, batch_size, start_after=None, limit=None):
 	if doctype not in schemas:
 		raise RuntimeError(f"{doctype} is not a version-controlled Production API DocType")
 	schema = schemas[doctype]
@@ -175,15 +230,18 @@ def export_doctype(frappe, schemas, doctype, batch_size, start_after=None):
 		return
 
 	last_name = start_after or ""
+	remaining = max(0, int(limit)) if limit is not None else None
 	parent_fields = _query_fields(frappe, doctype, schema)
 	while True:
+		if remaining == 0:
+			break
 		filters = {"name": [">", last_name]} if last_name else None
 		rows = frappe.get_all(
 			doctype,
 			filters=filters,
 			fields=parent_fields,
 			order_by="name asc",
-			limit_page_length=batch_size,
+			limit_page_length=min(batch_size, remaining) if remaining is not None else batch_size,
 		)
 		if not rows:
 			break
@@ -218,6 +276,8 @@ def export_doctype(frappe, schemas, doctype, batch_size, start_after=None):
 				data.setdefault(table_field["fieldname"], [])
 			_add_passwords(frappe, doctype, row["name"], schema, data)
 			_write(data)
+		if remaining is not None:
+			remaining -= len(rows)
 		last_name = rows[-1]["name"]
 
 
@@ -714,6 +774,7 @@ def main():
 	parser = argparse.ArgumentParser(description=__doc__)
 	subparsers = parser.add_subparsers(dest="command", required=True)
 	subparsers.add_parser("status")
+	subparsers.add_parser("schemas")
 	subparsers.add_parser("reference-data")
 	file_status = subparsers.add_parser("file-status")
 	file_status.add_argument("--names-json")
@@ -734,17 +795,32 @@ def main():
 	export.add_argument("--doctype", required=True)
 	export.add_argument("--batch-size", type=int, default=500)
 	export.add_argument("--start-after")
+	export.add_argument("--limit", type=int)
 	args = parser.parse_args()
 
 	warnings.filterwarnings("ignore")
 	import frappe
 
-	schemas = _load_schemas()
+	declared_schemas = _load_schemas()
 	frappe.init(site=SOURCE_SITE, sites_path=str(SOURCE_BENCH / "sites"))
 	frappe.connect()
 	try:
+		if args.command == "export":
+			schemas = _load_export_schemas(frappe, declared_schemas, args.doctype)
+		elif args.command in {
+			"schemas",
+			"external-references",
+			"file-health",
+			"file-status",
+			"files",
+		}:
+			schemas = _load_runtime_schemas(frappe, declared_schemas)
+		else:
+			schemas = declared_schemas
 		if args.command == "status":
 			emit_status(frappe, schemas)
+		elif args.command == "schemas":
+			emit_schemas(schemas)
 		elif args.command == "reference-data":
 			emit_reference_data(frappe)
 		elif args.command == "file-status":
@@ -787,6 +863,7 @@ def main():
 				args.doctype,
 				max(1, min(args.batch_size, 2000)),
 				args.start_after,
+				args.limit,
 			)
 	finally:
 		frappe.destroy()

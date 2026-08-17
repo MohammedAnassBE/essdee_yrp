@@ -85,6 +85,19 @@ RULES = {
 	),
 	"MRP Settings": DocTypeRule(
 		ignored_fields={
+			"auto_send_notifications": "Notification automation is not installed on the target",
+			"cls_grammage_approval_roles": "CLS approval configuration is out of scope",
+			"default_major_aql_level": "AQL configuration is not installed on the target",
+			"default_minor_aql_level": "AQL configuration is not installed on the target",
+			"partial_received_percentage": "Sewing Plan settings are out of scope",
+			"partially_dispatched_percentage": "Sewing Plan settings are out of scope",
+			"previous_day_entries": "Sewing Plan settings are out of scope",
+			"sewing_input_qty_type": "Sewing Plan settings are out of scope",
+			"sewing_line_output_type": "Sewing Plan settings are out of scope",
+			"sewing_plan_input_orders": "Sewing Plan settings are out of scope",
+			"sewing_plan_inspection_type": "Sewing Plan settings are out of scope",
+			"sewing_plan_status_summary": "Sewing Plan settings are out of scope",
+			"type_wise_diff_summary": "Sewing Plan settings are out of scope",
 			"yrp_api_key": "Obsolete F15 remote-site credential",
 			"yrp_api_secret": "Obsolete F15 remote-site credential",
 			"yrp_site_url": "Obsolete F15 remote-site credential",
@@ -142,8 +155,6 @@ RULES = {
 	"Stock Reservation Entry": DocTypeRule(
 		allowed_type_changes=frozenset(
 			{
-				("Select", "Link"),
-				("Data", "Dynamic Link"),
 				("Data", "Select"),
 			}
 		),
@@ -180,6 +191,7 @@ RULES = {
 	"Vendor Bill Tracking Assignment Detail": DocTypeRule(
 		target="Bill Tracking Assignment Detail"
 	),
+	"Work Order": DocTypeRule(field_map={"close_reason": "sd_close_reason"}),
 	"Work Order Deliverables": DocTypeRule(field_map={"item_type": "received_type"}),
 	"Work Order Receivables": DocTypeRule(post_transformer="default_received_type"),
 	"Work Station": DocTypeRule(post_transformer="derive_workstation_fields"),

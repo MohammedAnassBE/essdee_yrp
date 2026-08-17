@@ -51,7 +51,7 @@
 <script setup>
 import { ref, computed } from "vue"
 import { useToast } from "primevue/usetoast"
-import { useUiConfigStore } from "@yrp/web-engine"
+import { useUiConfigStore } from "@/engine"
 
 const ui = useUiConfigStore()
 const toast = useToast()

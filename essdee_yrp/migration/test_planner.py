@@ -23,7 +23,7 @@ class MigrationPlannerTest(unittest.TestCase):
 		self.assertEqual(len(self.payload["doctype_details"]), 260)
 		self.assertEqual(
 			self.payload["migration_kinds"],
-			{"custom": 3, "identity": 225, "mapped": 32},
+			{"custom": 3, "identity": 224, "mapped": 33},
 		)
 
 	def test_known_renames_appear_in_doctype_details(self):

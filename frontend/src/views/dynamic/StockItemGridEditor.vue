@@ -444,7 +444,7 @@ import AutoComplete from "primevue/autocomplete"
 import Select from "primevue/select"
 import ToggleSwitch from "primevue/toggleswitch"
 import Tooltip from "primevue/tooltip"
-import { groupItemsForDisplay } from "@yrp/web-engine"
+import { groupItemsForDisplay } from "@/engine"
 import { callMethod, searchLink } from "@/api/client"
 import { useAppToast } from "@/composables/useToast"
 

@@ -114,7 +114,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from "vue"
 import { useRouter } from "vue-router"
-import { collectBindPaths, formatDate, statusChipStyle } from "@yrp/web-engine"
+import { collectBindPaths, formatDate, statusChipStyle } from "@/engine"
 import { usePermissions } from "@/composables/usePermissions"
 import { useRealtime } from "@/composables/useRealtime"
 import { useTheme } from "@/composables/useTheme"

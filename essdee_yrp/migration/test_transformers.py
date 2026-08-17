@@ -64,6 +64,20 @@ class ReviewedTransformerTest(unittest.TestCase):
 		self.assertEqual(row["status"], "Partially Received")
 		self.assertEqual(row["open_status"], "Close")
 
+	def test_work_order_close_reason_maps_to_essdee_owned_field(self):
+		row = transform_document(
+			{
+				"doctype": "Work Order",
+				"name": "WO-CLOSED",
+				"close_reason": "Others",
+				"close_other_reason": "Production stopped",
+			},
+			self.plan,
+		)
+		self.assertEqual(row["sd_close_reason"], "Others")
+		self.assertEqual(row["close_other_reason"], "Production stopped")
+		self.assertNotIn("close_reason", row)
+
 	def test_purchase_order_infers_only_an_unambiguous_header_lot(self):
 		single_lot = transform_document(
 			{
@@ -160,6 +174,33 @@ class ReviewedTransformerTest(unittest.TestCase):
 		self.assertEqual(row["name"], "YRP Stock Settings")
 		self.assertEqual(row["transit_warehouse"], "S-0165")
 		self.assertNotIn("sms_old_database_password", row)
+
+	def test_mrp_settings_omits_uninstalled_module_configuration(self):
+		row = transform_document(
+			{
+				"doctype": "MRP Settings",
+				"name": "MRP Settings",
+				"enable_price_validation": 1,
+				"default_major_aql_level": "AQL 1.0",
+				"auto_send_notifications": [
+					{
+						"doctype": "MRP Settings Notification Doctype List",
+						"name": "ROW-1",
+					}
+				],
+				"sewing_plan_input_orders": [
+					{
+						"doctype": "Sewing Plan Input Order",
+						"name": "ROW-2",
+					}
+				],
+			},
+			self.plan,
+		)
+		self.assertEqual(row["enable_price_validation"], 1)
+		self.assertNotIn("default_major_aql_level", row)
+		self.assertNotIn("auto_send_notifications", row)
+		self.assertNotIn("sewing_plan_input_orders", row)
 
 	def test_blank_historical_purchase_invoice_against_uses_billed_details(self):
 		purchase_order_invoice = transform_document(

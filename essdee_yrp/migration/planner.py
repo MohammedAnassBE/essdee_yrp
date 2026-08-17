@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from essdee_yrp.migration.engine import MigrationPlan, build_plan
 from essdee_yrp.migration.rules import DOCTYPE_RENAMES, RULES
@@ -90,13 +90,24 @@ def build_schema_analysis(
 	*,
 	source_root: str | Path = DEFAULT_SOURCE_ROOT,
 	target_roots: list[str | Path] | tuple[str | Path, ...] = DEFAULT_TARGET_ROOTS,
+	source_schemas: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> tuple[MigrationPlan, dict[str, Any]]:
-	"""Build the complete filesystem-only source-to-target schema analysis."""
+	"""Build the source-to-target schema analysis.
+
+	Repository metadata remains useful for offline review. Live migration runs
+	pass the F15 bridge's effective schemas so source-side migrations and
+	Property Setters cannot hide fields from the contract.
+	"""
 
 	# Notification Template owns SMS Parameter rows even though the child schema
 	# is provided by Frappe Core. Include that one explicit supporting schema;
 	# no other upstream DocTypes are in the Production API migration scope.
-	source_schemas = load_schema_index(source_root, SOURCE_SMS_PARAMETER_ROOT)
+	if source_schemas is None:
+		source_schema_index = load_schema_index(source_root, SOURCE_SMS_PARAMETER_ROOT)
+	else:
+		source_schema_index = {
+			str(name): dict(schema) for name, schema in source_schemas.items()
+		}
 	target_schemas = load_schema_index(*target_roots, TARGET_SMS_PARAMETER_ROOT)
 	custom_fields = APP_ROOT / "essdee_yrp" / "fixtures" / "custom_field.json"
 	property_setters = APP_ROOT / "essdee_yrp" / "fixtures" / "property_setter.json"
@@ -112,7 +123,7 @@ def build_schema_analysis(
 	)
 
 	plan = build_plan(
-		source_schemas,
+		source_schema_index,
 		target_schemas,
 		rules=RULES,
 		doctype_map=DOCTYPE_RENAMES,
@@ -120,7 +131,7 @@ def build_schema_analysis(
 		value_transformers=VALUE_TRANSFORMERS,
 		post_transformers=POST_TRANSFORMERS,
 	)
-	payload = _plan_payload(plan, len(source_schemas), len(target_schemas))
+	payload = _plan_payload(plan, len(source_schema_index), len(target_schemas))
 	return plan, payload
 
 

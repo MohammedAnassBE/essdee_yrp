@@ -6,12 +6,16 @@ from six import string_types
 from itertools import groupby
 from frappe.model.document import Document
 from frappe.model.naming import make_autoname
-from frappe.utils import now_datetime
+from frappe.utils import flt, now_datetime
 from yrp.yrp.doctype.holiday_list.holiday_list import get_next_date
 from yrp.yrp.doctype.purchase_order.purchase_order import get_item_group_index
 from yrp.yrp.doctype.item.item import get_attribute_details, get_or_create_variant
 from yrp.utils import update_if_string_instance, get_panel_colour_combination, get_variant_attr_details
 from yrp.yrp.doctype.item_dependent_attribute_mapping.item_dependent_attribute_mapping import get_dependent_attribute_details
+from yrp.yrp.doctype.item_production_detail.item_production_detail import (
+	calculate_bom_for_variant_demands,
+)
+from essdee_yrp.garment_bom import calculate_essdee_accessory_bom
 from essdee_yrp.fabric_program import (
 	fetch_fabric_program_details,
 	rebuild_plans_after_save,
@@ -1089,76 +1093,123 @@ def check_enabled_po():
 	return frappe.db.get_single_value("MRP Settings", "enable_production_order")
 
 
+def _get_lot_variant_demands(lot_doc):
+	return [
+		{
+			"item_variant": row.item_variant,
+			"qty": flt(row.quantity),
+		}
+		for row in lot_doc.get("lot_order_details") or []
+		if row.item_variant and flt(row.quantity) > 0
+	]
+
+
+def _build_lot_bom_rows(calculation):
+	"""Convert the generic YRP engine response into Essdee's Lot BOM rows."""
+	aggregated = {}
+	for section in ("major_deliverables", "accessories"):
+		for row in calculation.get(section) or []:
+			required_qty = flt(row.get("required_qty"))
+			if required_qty <= 0:
+				continue
+
+			item_variant = row.get("item_variant")
+			process_name = row.get("process_name")
+			uom = row.get("uom")
+			if not item_variant:
+				frappe.throw(f"Calculated {section} row is missing Item Variant.")
+			if not process_name:
+				frappe.throw(
+					f"Please mention Process for BOM item {item_variant} "
+					"in the Item Production Detail."
+				)
+			if not uom:
+				frappe.throw(f"Calculated BOM item {item_variant} is missing UOM.")
+
+			key = (item_variant, process_name, uom)
+			aggregated.setdefault(
+				key,
+				{
+					"item_name": item_variant,
+					"process_name": process_name,
+					"uom": uom,
+					"required_qty": 0.0,
+				},
+			)
+			aggregated[key]["required_qty"] += required_qty
+
+	return list(aggregated.values())
+
+
+def _build_bom_summary_json(lot_doc, rows):
+	"""Keep the legacy print payload in sync with the matrix-backed rows.
+
+	The generic calculator returns final quantities rather than the old entered
+	product/BOM ratio. Derive an equivalent per-unit ratio from the Lot demand so
+	existing Lot BOM and consumption print formats remain useful.
+	"""
+	total_quantity = flt(lot_doc.total_order_quantity)
+	product_uom = lot_doc.uom or ""
+	summary = {}
+	for row in rows:
+		key = row["item_name"]
+		if key in summary:
+			key = f'{key} · {row["process_name"]}'
+		if key in summary:
+			key = f'{key} · {row["uom"]}'
+		ratio = row["required_qty"] / total_quantity if total_quantity else 0
+		summary[key] = [
+			row["process_name"],
+			1,
+			product_uom,
+			ratio,
+			row["uom"],
+			row["required_qty"],
+		]
+	return summary
+
+
 @frappe.whitelist()
-def get_calculated_bom(
-	item_production_detail,
-	items,
-	lot_name,
-	process_name=None,
-	doctype=None,
-	deliverable=False,
-):
-	"""Persist YRP's generic BOM calculation on an Essdee Lot."""
-	from yrp.yrp.doctype.item_production_detail.item_production_detail import (
-		calculate_bom_for_variant_demands,
-	)
+def calculate_bom(lot_name):
+	"""Calculate and persist a Lot BOM through YRP's common IPD matrix engine."""
+	lot_doc = frappe.get_doc("Lot", lot_name)
+	lot_doc.check_permission("write")
+	if lot_doc.docstatus != 0:
+		frappe.throw("BOM can only be recalculated while the Lot is in Draft.")
+	if not lot_doc.production_detail:
+		frappe.throw("Please mention Item Production Detail before calculating BOM.")
 
-	lot = frappe.get_doc("Lot", lot_name)
-	lot.check_permission("write")
-	if not lot.get("production_detail"):
-		frappe.throw("Please select an Item Production Detail on the Lot first.")
-	if item_production_detail and item_production_detail != lot.production_detail:
-		frappe.throw("Item Production Detail must match the saved Lot.")
-	# Persist only from the permission-checked, saved Lot. Client rows are kept
-	# in the signature for compatibility but are never trusted as BOM input.
-	variant_demands = _get_lot_variant_demands(lot)
-	bom = calculate_bom_for_variant_demands(
-		lot.production_detail,
+	variant_demands = _get_lot_variant_demands(lot_doc)
+	if not variant_demands:
+		frappe.throw(
+			"Please calculate Lot Order Details with a Qty greater than zero first."
+		)
+
+	# The base calculator owns generic matrix inputs. Essdee's legacy garment
+	# packing stages alter accessory ratios, so replace only that section with
+	# the company-specific adapter before persisting the Lot result. Resolve the
+	# Essdee rows first so an incomplete migrated mapping fails before the base
+	# engine can attempt to resolve an unintended Item Variant.
+	essdee_accessories = calculate_essdee_accessory_bom(
+		lot_doc.production_detail,
 		variant_demands,
-		process_names=process_name,
-		include_outputs=False,
+		lot_doc,
 	)
-	major_rows = bom["major_deliverables"]
-	accessory_rows = bom["accessories"]
-	bom_summary_rows = [_to_lot_bom_row(row) for row in major_rows + accessory_rows]
-
-	lot.set("bom_summary", bom_summary_rows)
-	lot.bom_summary_json = json.dumps(
-		{"major_deliverables": major_rows, "accessories": accessory_rows},
-		default=str,
+	calculation = calculate_bom_for_variant_demands(
+		lot_doc.production_detail,
+		variant_demands,
 	)
-	lot.last_calculated_time = now_datetime()
-	lot.total_quantity = int(sum(row["qty"] for row in variant_demands))
-	lot.save()
+	calculation["accessories"] = essdee_accessories
+	bom_rows = _build_lot_bom_rows(calculation)
+	if not bom_rows:
+		frappe.throw("The IPD Process Matrix and Item BOM did not produce any BOM rows.")
+
+	lot_doc.set("bom_summary", bom_rows)
+	lot_doc.set("bom_summary_json", _build_bom_summary_json(lot_doc, bom_rows))
+	lot_doc.last_calculated_time = now_datetime()
+	lot_doc.save()
+
 	return {
-		"rows": len(bom_summary_rows),
-		"major_rows": len(major_rows),
-		"accessory_rows": len(accessory_rows),
-		"total_qty": lot.total_quantity,
-	}
-
-
-def _get_lot_variant_demands(lot):
-	rows = []
-	for row in lot.get("lot_order_details") or []:
-		item_variant = row.get("item_variant") if isinstance(row, dict) else row.item_variant
-		quantity = row.get("quantity") if isinstance(row, dict) else row.quantity
-		if item_variant and float(quantity or 0) > 0:
-			rows.append({"item_variant": item_variant, "qty": float(quantity or 0)})
-
-	if not rows:
-		for row in lot.get("items") or []:
-			if row.item_variant and float(row.qty or 0) > 0:
-				rows.append({"item_variant": row.item_variant, "qty": float(row.qty or 0)})
-	if not rows:
-		frappe.throw("Please add Item Variant and Qty before calculating BOM.")
-	return rows
-
-
-def _to_lot_bom_row(row):
-	return {
-		"item_name": row.get("item_variant"),
-		"process_name": row.get("process_name"),
-		"required_qty": row.get("required_qty") or row.get("qty") or 0,
-		"uom": row.get("uom"),
+		"bom_summary": bom_rows,
+		"last_calculated_time": lot_doc.last_calculated_time,
 	}

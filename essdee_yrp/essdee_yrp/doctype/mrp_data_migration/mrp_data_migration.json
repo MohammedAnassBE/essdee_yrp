@@ -97,7 +97,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Draft\nAnalysing\nBlocked\nReady\nDry Run Complete\nQueued\nRunning\nCompleted\nFailed\nVerified",
+   "options": "Draft\nAnalysing\nBlocked\nReady\nDry Run Complete\nQueued\nRunning\nSample Complete\nCompleted\nFailed\nVerified",
    "read_only": 1
   },
   {
@@ -175,7 +175,7 @@
    "fieldname": "last_action",
    "fieldtype": "Select",
    "label": "Last Action",
-   "options": "\nAnalyse\nDry Run\nMigrate\nVerify",
+   "options": "\nAnalyse\nDry Run\nSample\nMigrate\nVerify",
    "read_only": 1
   },
   {

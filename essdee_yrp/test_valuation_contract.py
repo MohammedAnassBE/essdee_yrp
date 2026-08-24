@@ -10,7 +10,7 @@ from essdee_yrp.api.mrp_stock_transfer import (
 	_validate_grn,
 )
 from essdee_yrp.api.work_order import _normalize_generated_uom_rows
-from essdee_yrp.fabric_grn import _aggregate_rows
+from essdee_yrp.fabric_grn import QTY_TOLERANCE, _aggregate_rows
 from essdee_yrp.fabric_tracking import _apply_grn
 from essdee_yrp.hooks import doc_events, override_doctype_class
 from essdee_yrp.overrides.goods_received_note import EssdeeGoodsReceivedNote
@@ -18,6 +18,9 @@ from yrp.yrp.doctype.goods_received_note.goods_received_note import GoodsReceive
 
 
 class TestEssdeeValuationContract(UnitTestCase):
+	def test_fabric_grn_quantity_tolerance_is_defined(self):
+		self.assertEqual(QTY_TOLERANCE, 0.000001)
+
 	def test_grn_hook_uses_one_controller_for_stock_posting(self):
 		self.assertEqual(
 			override_doctype_class["Goods Received Note"],

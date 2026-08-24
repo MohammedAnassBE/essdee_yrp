@@ -19,6 +19,9 @@ from essdee_yrp.fabric_reference import (
 )
 
 
+QTY_TOLERANCE = 0.000001
+
+
 def before_validate(doc, method=None):
 	"""Keep a draft preview; the controller recalculates under lock on submit."""
 	if not is_calculable_fabric_grn(doc):

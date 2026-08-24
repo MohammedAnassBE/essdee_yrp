@@ -322,14 +322,8 @@ doc_events = {
 			"essdee_yrp.fabric_grn.before_validate",
 		],
 		"before_cancel": "essdee_yrp.api.mrp_stock_transfer.before_grn_cancel",
-		"on_submit": [
-			"essdee_yrp.fabric_grn.on_submit",
-			"essdee_yrp.fabric_tracking.on_grn_submit",
-		],
-		"on_cancel": [
-			"essdee_yrp.fabric_grn.on_cancel",
-			"essdee_yrp.fabric_tracking.on_grn_cancel",
-		],
+		"on_submit": "essdee_yrp.fabric_tracking.on_grn_submit",
+		"on_cancel": "essdee_yrp.fabric_tracking.on_grn_cancel",
 	},
 	# A Stock Entry created by the cross-bench GRN transfer (source_grn set) may be
 	# cancelled ONLY by the mrp GRN-cancel flow (cancel_grn_transfer sets
@@ -375,6 +369,10 @@ doc_events = {
 # extend_doctype_class = {
 # 	"Task": "essdee_yrp.custom.task.CustomTaskMixin"
 # }
+
+override_doctype_class = {
+	"Goods Received Note": "essdee_yrp.overrides.goods_received_note.EssdeeGoodsReceivedNote",
+}
 
 # Overriding Methods
 # ------------------------------

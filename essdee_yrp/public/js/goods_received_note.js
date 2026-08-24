@@ -6,6 +6,7 @@ frappe.ui.form.on("Goods Received Note", {
 		if (
 			frm.doc.docstatus === 1
 			&& frm.doc.against === "Work Order"
+			&& !frm.doc.is_return
 			&& !frm.doc.mrp_stock_entry_created
 		) {
 			frm.add_custom_button(__("Create Stock in MRP"), () => {

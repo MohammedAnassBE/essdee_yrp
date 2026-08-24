@@ -42,7 +42,7 @@ def on_grn_cancel(doc, method=None):
 def _apply_grn(grn, sign):
 	if grn.get("against") != "Work Order" or not grn.get("against_id"):
 		return
-	if grn.get("is_rework"):
+	if grn.get("is_rework") or grn.get("is_return"):
 		return
 	wo = frappe.get_cached_doc("Work Order", grn.against_id)
 	if not wo.get("lot"):
@@ -324,7 +324,9 @@ def rebuild_fabric_tracking(lot):
 		FROM `tabGoods Received Note` grn
 		JOIN `tabWork Order` wo ON wo.name = grn.against_id
 		WHERE grn.against = 'Work Order' AND grn.docstatus = 1
-			AND IFNULL(grn.is_rework, 0) = 0 AND wo.lot = %(lot)s
+			AND IFNULL(grn.is_rework, 0) = 0
+			AND IFNULL(grn.is_return, 0) = 0
+			AND wo.lot = %(lot)s
 		ORDER BY grn.posting_date, grn.posting_time
 		""",
 		{"lot": lot},

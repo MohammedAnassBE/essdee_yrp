@@ -33,25 +33,27 @@ class LotTransfer(Document):
 		validate_is_stock_item(parent_item)
 		validate_cancelled_item(parent_item)
 
-		from yrp.stock.utils import get_conversion_factor, get_stock_balance
+		from yrp.stock.uom import resolve_item_uom
+		from yrp.stock.utils import get_stock_balance
 
-		details = get_conversion_factor(row.item, row.uom)
-		row.stock_uom = details.get("stock_uom")
-		row.conversion_factor = details.get("conversion_factor")
+		details = resolve_item_uom(row.item)
+		row.uom = details.uom
+		row.stock_uom = details.stock_uom
+		row.conversion_factor = details.conversion_factor
 		row.stock_qty = flt(row.qty) * flt(row.conversion_factor)
-		if not flt(row.rate):
-			row.rate = get_stock_balance(
-				row.item,
-				row.warehouse,
-				posting_date=self.posting_date,
-				posting_time=self.posting_time,
-				with_valuation_rate=True,
-				lot=row.from_lot,
-				received_type=row.received_type,
-				uom=row.uom,
-			)[1]
-		row.stock_uom_rate = flt(row.rate) / (flt(row.conversion_factor) or 1)
-		row.amount = flt(row.rate) * flt(row.qty)
+		source_dimensions = self._stock_dimensions(row, row.from_lot)
+		row.stock_dimensions = frappe.as_json(source_dimensions)
+		_stock_balance, stock_uom_rate = get_stock_balance(
+			row.item,
+			row.warehouse,
+			posting_date=self.posting_date,
+			posting_time=self.posting_time,
+			with_valuation_rate=True,
+			**source_dimensions,
+		)
+		row.stock_uom_rate = flt(stock_uom_rate)
+		row.rate = flt(stock_uom_rate) * flt(row.conversion_factor)
+		row.amount = flt(row.stock_uom_rate) * flt(row.stock_qty)
 
 	def on_submit(self):
 		self._update_stock_ledger()
@@ -72,26 +74,53 @@ class LotTransfer(Document):
 
 		entries = []
 		for row in self.items:
-			entries.append(self._stock_row(row, row.from_lot, -row.stock_qty, 0))
+			transfer_key = f"{self.name}:{row.name}"
+			entries.append(
+				self._stock_row(
+					row,
+					row.from_lot,
+					-row.stock_qty,
+					0,
+					transfer_key,
+					"outgoing",
+				)
+			)
 			entries.append(
 				self._stock_row(
 					row,
 					row.to_lot,
 					row.stock_qty,
 					row.stock_uom_rate,
+					transfer_key,
+					"incoming",
 				)
 			)
 		if self.docstatus == 2:
 			entries.reverse()
-		make_sl_entries(entries, cancel=self.docstatus == 2)
+		transfer_rates = make_sl_entries(entries, cancel=self.docstatus == 2)
+		if self.docstatus != 2:
+			for row in self.items:
+				actual_rate = flt(transfer_rates.get(f"{self.name}:{row.name}"))
+				if not actual_rate:
+					continue
+				values = {
+					"stock_uom_rate": actual_rate,
+					"rate": actual_rate * flt(row.conversion_factor),
+					"amount": actual_rate * flt(row.stock_qty),
+				}
+				row.update(values)
+				frappe.db.set_value(
+					row.doctype,
+					row.name,
+					values,
+					update_modified=False,
+				)
 
-	def _stock_row(self, row, lot, qty, rate):
+	def _stock_row(self, row, lot, qty, rate, transfer_key, transfer_role):
 		return frappe._dict(
 			{
 				"item": row.item,
 				"warehouse": cstr(row.warehouse),
-				"received_type": row.received_type,
-				"lot": cstr(lot),
 				"posting_date": self.posting_date,
 				"posting_time": self.posting_time,
 				"voucher_type": self.doctype,
@@ -102,8 +131,22 @@ class LotTransfer(Document):
 				"rate": flt(rate),
 				"outgoing_rate": flt(row.stock_uom_rate) if qty < 0 else 0,
 				"is_cancelled": 1 if self.docstatus == 2 else 0,
+				"_transfer_key": transfer_key,
+				"_transfer_role": transfer_role,
+				**self._stock_dimensions(row, lot),
 			}
 		)
+
+	def _stock_dimensions(self, row, lot):
+		from yrp.stock.dimensions import get_dimension_fieldnames
+
+		values = {}
+		for fieldname in get_dimension_fieldnames():
+			if fieldname == "lot":
+				values[fieldname] = cstr(lot)
+			else:
+				values[fieldname] = row.get(fieldname)
+		return values
 
 	def _repost_future_entries(self):
 		from yrp.stock.stock_ledger import enqueue_voucher_repost

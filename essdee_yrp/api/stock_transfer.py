@@ -3,8 +3,8 @@
 
 Warehouse is resolved server-side from the supplier (mrp GRN delivery_location, a
 Supplier docname; the mrp->yrp sync gives it a 1:1 Warehouse named after the supplier).
-Every row carries the mrp lot and received_type="Accepted". item_variant, lot,
-warehouse, and the "Accepted" Received Type must already exist on yrp (no auto-create).
+Every row preserves the configured stock dimensions supplied by MRP. Item,
+dimension masters, and warehouse must already exist on YRP (no auto-create).
 Both create and cancel are idempotent on `source_grn`.
 """
 import json
@@ -78,9 +78,37 @@ def receive_grn_transfer(payload):
             if missing_lot:
                 return {"ok": False, "error": _("Lots missing on essdee_yrp: {0}. "
                                                 "Nothing was transferred.").format(", ".join(map(str, missing_lot)))}
-            if not frappe.db.exists("Received Type", "Accepted"):
-                return {"ok": False, "error": _("Received Type 'Accepted' is missing on essdee_yrp. "
-                                                "Nothing was transferred.")}
+            from yrp.stock.dimensions import get_stock_dimensions
+
+            default_received_type = frappe.db.get_single_value(
+                "YRP Stock Settings", "default_received_type"
+            )
+            for row in items:
+                if not row.get("received_type"):
+                    row["received_type"] = default_received_type
+            for dimension in get_stock_dimensions():
+                fieldname = dimension["fieldname"]
+                doctype = dimension.get("dimension_doctype")
+                if not doctype:
+                    continue
+                missing = sorted(
+                    {
+                        row.get(fieldname)
+                        for row in items
+                        if row.get(fieldname)
+                        and not frappe.db.exists(doctype, row.get(fieldname))
+                    }
+                )
+                if missing:
+                    return {
+                        "ok": False,
+                        "error": _(
+                            "{0} values missing on essdee_yrp: {1}. Nothing was transferred."
+                        ).format(
+                            dimension.get("label") or fieldname,
+                            ", ".join(map(str, missing)),
+                        ),
+                    }
 
             se = frappe.new_doc("Stock Entry")
             se.purpose = "Material Receipt"
@@ -100,13 +128,31 @@ def receive_grn_transfer(payload):
             # (every row rendered, even same-parent sizes as separate entries) over the merged
             # size-grid, and is the only safe choice since same-item different-lot rows must not
             # share a row_index (dimensions are read from the group's first row only).
+            from yrp.stock.dimensions import get_dimension_fieldnames
+            from yrp.stock.uom import resolve_item_uom
+            from yrp.stock.utils import get_conversion_factor
+
             for idx, r in enumerate(items):
-                se.append("items", {
-                    "item": r["item_variant"], "qty": flt(r.get("qty")), "uom": r.get("uom") or None,
-                    "lot": r["lot"], "received_type": "Accepted", "conversion_factor": 1.0,
+                authoritative = resolve_item_uom(r["item_variant"])
+                source_uom = r.get("uom") or authoritative.uom
+                source = get_conversion_factor(r["item_variant"], source_uom)
+                stock_qty = flt(r.get("qty")) * (
+                    flt(source.get("conversion_factor")) or 1
+                )
+                values = {
+                    "item": r["item_variant"],
+                    "qty": stock_qty / (flt(authoritative.conversion_factor) or 1),
+                    "uom": authoritative.uom,
+                    "conversion_factor": authoritative.conversion_factor,
                     "rate": flt(r.get("rate")) if r.get("rate") is not None else 0,
-                    "row_index": idx, "table_index": 0,
-                    "remarks": _("mrp GRN {0}").format(source_grn)})
+                    "row_index": idx,
+                    "table_index": 0,
+                    "remarks": _("mrp GRN {0}").format(source_grn),
+                }
+                for fieldname in get_dimension_fieldnames():
+                    if r.get(fieldname):
+                        values[fieldname] = r.get(fieldname)
+                se.append("items", values)
             se.insert(ignore_permissions=True)
             se.submit()
             frappe.db.commit()

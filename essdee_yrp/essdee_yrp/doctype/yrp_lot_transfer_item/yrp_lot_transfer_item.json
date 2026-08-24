@@ -17,7 +17,8 @@
   "stock_uom",
   "conversion_factor",
   "stock_uom_rate",
-  "amount"
+  "amount",
+  "stock_dimensions"
  ],
  "fields": [
   {
@@ -73,13 +74,15 @@
    "in_list_view": 1,
    "label": "UOM",
    "options": "UOM",
+   "read_only": 1,
    "reqd": 1
   },
   {
    "fieldname": "rate",
    "fieldtype": "Currency",
    "in_list_view": 1,
-   "label": "Rate"
+   "label": "Rate",
+   "read_only": 1
   },
   {
    "fieldname": "stock_qty",
@@ -115,6 +118,13 @@
    "fieldtype": "Currency",
    "hidden": 1,
    "label": "Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "stock_dimensions",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "Stock Dimensions",
    "read_only": 1
   }
  ],

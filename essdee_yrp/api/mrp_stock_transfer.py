@@ -132,6 +132,8 @@ def _validate_grn(doc):
 		frappe.throw(_("Goods Received Note must be submitted before creating MRP stock."))
 	if doc.against != "Work Order":
 		frappe.throw(_("Only Work Order Goods Received Notes can create MRP stock."))
+	if doc.get("is_return"):
+		frappe.throw(_("Return Goods Received Notes cannot create MRP stock."))
 	if doc.get("mrp_stock_entry_created"):
 		frappe.throw(
 			_("MRP stock was already created in Stock Entry {0}.").format(doc.get("mrp_stock_entry") or "?")
@@ -168,6 +170,8 @@ def _validate_remote_masters(doc, rows):
 
 
 def _make_local_issue(doc, rows):
+	from yrp.stock.dimensions import get_dimension_fieldnames
+
 	issue = frappe.new_doc("Stock Entry")
 	issue.purpose = "Material Issue"
 	issue.against = "Goods Received Note"
@@ -185,7 +189,7 @@ def _make_local_issue(doc, rows):
 			"table_index": 0,
 			"remarks": _("MRP transfer for YRP GRN {0}").format(doc.name),
 		}
-		for fieldname in ("lot", "received_type"):
+		for fieldname in get_dimension_fieldnames():
 			if row.get(fieldname):
 				values[fieldname] = row.get(fieldname)
 		issue.append("items", values)
@@ -352,6 +356,7 @@ def before_grn_cancel(doc, method=None):
 		return
 	frappe.has_permission("Goods Received Note", "cancel", doc=doc, throw=True)
 	with synchronization.filelock(_lock_name(doc.name), timeout=60):
+		_preflight_grn_stock_cancel(doc)
 		remote_name = doc.get("mrp_stock_entry")
 		issue_name = doc.get("yrp_material_issue")
 
@@ -381,3 +386,22 @@ def before_grn_cancel(doc, method=None):
 		# Cross the site boundary only after all local reversal validations pass.
 		if remote_name:
 			_cancel_remote_receipt(remote_name)
+
+
+def _preflight_grn_stock_cancel(doc):
+	"""Run YRP's period/valuation ownership gates before crossing sites."""
+	from yrp.stock.dimensions import get_dimension_fieldnames
+	from yrp.stock.stock_ledger import (
+		_lock_voucher_sles_for_cancel,
+		_validate_no_active_valuation_for_cancel,
+		_validate_sl_entries_period,
+	)
+
+	entry = {
+		"voucher_type": doc.doctype,
+		"voucher_no": doc.name,
+		"posting_date": doc.posting_date,
+	}
+	_validate_sl_entries_period([entry])
+	_lock_voucher_sles_for_cancel([entry], get_dimension_fieldnames())
+	_validate_no_active_valuation_for_cancel([entry])

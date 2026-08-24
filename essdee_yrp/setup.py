@@ -17,15 +17,62 @@ from essdee_yrp.web_build import build_web_spa
 
 
 def after_install():
+	ensure_yrp_valuation_contract()
 	ensure_default_address_template()
 	ensure_yrp_production_order_settings()
 
 
 def after_migrate():
+	ensure_yrp_valuation_contract()
 	ensure_default_address_template()
 	ensure_sd_yrp_consumer_config()
 	ensure_yrp_production_order_settings()
 	build_web_spa()
+
+
+def ensure_yrp_valuation_contract():
+	"""Fail deployment before Essdee can activate a partial stock contract."""
+	required_fields = {
+		"Stock Ledger Entry": (
+			"paired_stock_ledger_entry",
+			"valuation_adjustment_value",
+		),
+		"YRP GRN Deliverable": (
+			"goods_received_note_item",
+			"received_item_variant",
+			"material_value",
+			"consumption_sle",
+			"output_receipt_sle",
+			"stock_dimensions",
+		),
+		"Work Order Excess Usage Item": (
+			"actual_value",
+			"source_sle",
+			"stock_dimensions",
+		),
+	}
+	missing = []
+	for doctype, fieldnames in required_fields.items():
+		if not frappe.db.exists("DocType", doctype):
+			missing.append(doctype)
+			continue
+		meta = frappe.get_meta(doctype)
+		missing.extend(
+			f"{doctype}.{fieldname}"
+			for fieldname in fieldnames
+			if not meta.get_field(fieldname)
+		)
+	for doctype in (
+		"Stock Valuation Adjustment",
+		"Stock Valuation Production Link",
+	):
+		if not frappe.db.exists("DocType", doctype):
+			missing.append(doctype)
+	if missing:
+		frappe.throw(
+			"YRP valuation contract is incomplete. Deploy and migrate the matching "
+			f"yrp develop revision together with essdee_yrp. Missing: {', '.join(missing)}"
+		)
 
 
 def ensure_sd_yrp_consumer_config():

@@ -1962,6 +1962,7 @@ const moreMenuModel = computed(() => {
 		isGoodsReceivedNote.value
 		&& docstatus.value === 1
 		&& doc.value?.against === "Work Order"
+		&& !Number(doc.value?.is_return)
 		&& !Number(doc.value?.mrp_stock_entry_created)
 		&& canWrite(doctype.value)
 	) {

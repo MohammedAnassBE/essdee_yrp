@@ -5,25 +5,49 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
+  "goods_received_note_item",
+  "received_item_variant",
   "item_variant",
   "quantity",
   "uom",
+  "stock_qty",
+  "stock_uom",
+  "conversion_factor",
+  "valuation_rate",
+  "material_value",
+  "consumption_sle",
+  "output_receipt_sle",
   "work_order_deliverable",
   "lot",
   "received_type",
-  "valuation_rate",
   "set_combination",
-  "stock_qty",
-  "stock_uom",
-  "conversion_factor"
+  "stock_dimensions"
  ],
  "fields": [
+  {
+   "fieldname": "goods_received_note_item",
+   "fieldtype": "Link",
+   "label": "Received GRN Row",
+   "options": "Goods Received Note Item",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "received_item_variant",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Received Item Variant",
+   "options": "Item Variant",
+   "read_only": 1,
+   "reqd": 1
+  },
   {
    "fieldname": "item_variant",
    "fieldtype": "Link",
    "in_list_view": 1,
-   "label": "Item Variant",
+   "label": "Consumed Item Variant",
    "options": "Item Variant",
+   "read_only": 1,
    "reqd": 1
   },
   {
@@ -31,6 +55,8 @@
    "fieldtype": "Float",
    "in_list_view": 1,
    "label": "Quantity",
+   "precision": "6",
+   "read_only": 1,
    "reqd": 1
   },
   {
@@ -39,58 +65,96 @@
    "in_list_view": 1,
    "label": "UOM",
    "options": "UOM",
+   "read_only": 1,
    "reqd": 1
   },
   {
-   "fieldname": "work_order_deliverable",
-   "fieldtype": "Data",
-   "hidden": 1,
-   "label": "Work Order Deliverable",
-   "no_copy": 1,
+   "fieldname": "stock_qty",
+   "fieldtype": "Float",
+   "label": "Stock Qty",
+   "precision": "6",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "stock_uom",
+   "fieldtype": "Link",
+   "label": "Stock UOM",
+   "options": "UOM",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "conversion_factor",
+   "fieldtype": "Float",
+   "label": "Conversion Factor",
    "read_only": 1
+  },
+  {
+   "fieldname": "valuation_rate",
+   "fieldtype": "Currency",
+   "label": "Actual Valuation Rate",
+   "precision": "6",
+   "read_only": 1
+  },
+  {
+   "fieldname": "material_value",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Material Value",
+   "precision": "6",
+   "read_only": 1
+  },
+  {
+   "fieldname": "consumption_sle",
+   "fieldtype": "Link",
+   "label": "Consumption Stock Ledger Entry",
+   "options": "Stock Ledger Entry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "output_receipt_sle",
+   "fieldtype": "Link",
+   "label": "Output Receipt Stock Ledger Entry",
+   "options": "Stock Ledger Entry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "work_order_deliverable",
+   "fieldtype": "Link",
+   "label": "Work Order Deliverable Row",
+   "no_copy": 1,
+   "options": "Work Order Deliverables",
+   "read_only": 1,
+   "reqd": 1
   },
   {
    "fieldname": "lot",
    "fieldtype": "Link",
    "label": "Lot",
-   "options": "Lot"
+   "options": "Lot",
+   "read_only": 1
   },
   {
    "fieldname": "received_type",
    "fieldtype": "Link",
    "label": "Received Type",
-   "options": "Received Type"
-  },
-  {
-   "fieldname": "valuation_rate",
-   "fieldtype": "Currency",
-   "label": "Valuation Rate"
+   "options": "Received Type",
+   "read_only": 1
   },
   {
    "fieldname": "set_combination",
    "fieldtype": "JSON",
-   "label": "Set Combination"
-  },
-  {
-   "fieldname": "stock_qty",
-   "fieldtype": "Float",
    "hidden": 1,
-   "label": "Stock Quantity",
+   "label": "Set Combination",
    "read_only": 1
   },
   {
-   "fieldname": "stock_uom",
-   "fieldtype": "Link",
+   "fieldname": "stock_dimensions",
+   "fieldtype": "JSON",
    "hidden": 1,
-   "label": "Stock UOM",
-   "options": "UOM",
-   "read_only": 1
-  },
-  {
-   "fieldname": "conversion_factor",
-   "fieldtype": "Float",
-   "hidden": 1,
-   "label": "Conversion Factor",
+   "label": "Stock Dimensions",
    "read_only": 1
   }
  ],

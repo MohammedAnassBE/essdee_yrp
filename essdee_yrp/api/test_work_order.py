@@ -847,6 +847,14 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
         self.assertAlmostEqual(planned[v["yarn_b"]], 4.0, places=3)
         self.assertAlmostEqual(planned[accessory], 6.0, places=3)
 
+        # GRN consumption is restricted to inputs already delivered against
+        # the Work Order. Record the calculated inputs as fully delivered so
+        # this test exercises the partial-output consumption ratio itself.
+        for row in work_order.deliverables:
+            if row.is_calculated:
+                row.db_set("pending_quantity", 0, update_modified=False)
+        work_order.reload()
+
         receivable = work_order.receivables[0]
         grn = frappe.new_doc("Goods Received Note")
         grn.against = "Work Order"

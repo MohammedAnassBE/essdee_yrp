@@ -43,8 +43,8 @@
    "fieldname": "warehouse",
    "fieldtype": "Link",
    "in_list_view": 1,
-   "label": "Location",
-   "options": "Supplier",
+   "label": "Warehouse",
+   "options": "Warehouse",
    "reqd": 1
   },
   {

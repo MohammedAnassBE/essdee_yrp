@@ -9,6 +9,9 @@ readme = "README.md"
 dynamic = ["version"]
 dependencies = [
     # "frappe~=16.0.0" # Installed and managed by bench.
+	"numpy>=2.0,<3",
+	"scipy>=1.14,<2",
+	"ortools>=9.15,<10",
 ]
 
 [build-system]

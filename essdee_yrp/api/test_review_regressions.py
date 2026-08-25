@@ -121,6 +121,6 @@ class TestReviewRegressionContracts(IntegrationTestCase):
 		self.assertNotIn("doc.lr_date ? new Date(doc.lr_date)", source)
 
 	def test_ui_action_vocabulary_includes_complete_transfer(self):
-		source = _read("yrp", "yrp/yrp/api/ui_config.py")
-		action_section = source[source.index("ACTION_ITEMS = (") : source.index("\n)", source.index("ACTION_ITEMS = ("))]
-		self.assertIn('"complete_transfer"', action_section)
+		from yrp.yrp.api.ui_config import get_registered_action_items
+
+		self.assertIn("complete_transfer", get_registered_action_items())

@@ -1,5 +1,15 @@
+from unittest.mock import patch
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
+
+from essdee_yrp.garment_grn import before_validate as calculate_garment_consumption
+from essdee_yrp.overrides.goods_received_note import (
+	aggregate_packing_grn_rows_for_ui,
+	get_work_order_defaults,
+	normalize_cutting_grn_row_indexes,
+	validate_sewing_plan_quantity,
+)
 
 
 class TestGoodsReceivedNoteCustomization(FrappeTestCase):
@@ -100,6 +110,42 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		self.assertIsNone(meta.get_field("essdee_yrp_stock_entry"))
 		self.assertIsNone(meta.get_field("essdee_yrp_stock_entry_created"))
 
+	def test_sewing_grn_is_blocked_without_checking_output(self):
+		grn = frappe._dict(
+			against="Work Order",
+			against_id="TEST-SEWING-WO",
+			name="TEST-SEWING-GRN",
+			items=[frappe._dict(item_variant="PIECE-RED-45", quantity=1)],
+		)
+		with (
+			patch.object(frappe.db, "exists", return_value=True),
+			patch.object(frappe.db, "get_single_value", return_value="Checking Output"),
+			patch.object(frappe.db, "sql", side_effect=[[], []]),
+			self.assertRaisesRegex(frappe.ValidationError, "Checking Output: 0"),
+		):
+			validate_sewing_plan_quantity(grn)
+
+	def test_sewing_grn_accepts_only_remaining_checked_quantity(self):
+		grn = frappe._dict(
+			against="Work Order",
+			against_id="TEST-SEWING-WO",
+			name="TEST-SEWING-GRN",
+			items=[frappe._dict(item_variant="PIECE-RED-45", quantity=6)],
+		)
+		with (
+			patch.object(frappe.db, "exists", return_value=True),
+			patch.object(frappe.db, "get_single_value", return_value="Checking Output"),
+			patch.object(
+				frappe.db,
+				"sql",
+				side_effect=[
+					[frappe._dict(variant="PIECE-RED-45", qty=10)],
+					[frappe._dict(variant="PIECE-RED-45", qty=4)],
+				],
+			),
+		):
+			validate_sewing_plan_quantity(grn)
+
 	def test_approved_base_yrp_fields_are_unchanged(self):
 		meta = frappe.get_meta("Goods Received Note", cached=False)
 
@@ -122,3 +168,285 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 			(lot.fieldtype, lot.options, lot.reqd, lot.read_only),
 			("Link", "Lot", 1, 0),
 		)
+
+	def test_cutting_grn_sizes_share_one_logical_row(self):
+		variants = {
+			"FRONT-45": frappe._dict(
+				item="Maze Capri Set R.N.S",
+				attributes=[
+					frappe._dict(attribute="Stage", attribute_value="Cut"),
+					frappe._dict(attribute="Panel", attribute_value="Front"),
+					frappe._dict(attribute="Colour", attribute_value="Red"),
+					frappe._dict(attribute="Size", attribute_value="45 cm"),
+				],
+			),
+			"FRONT-50": frappe._dict(
+				item="Maze Capri Set R.N.S",
+				attributes=[
+					frappe._dict(attribute="Stage", attribute_value="Cut"),
+					frappe._dict(attribute="Panel", attribute_value="Front"),
+					frappe._dict(attribute="Colour", attribute_value="Red"),
+					frappe._dict(attribute="Size", attribute_value="50 cm"),
+				],
+			),
+		}
+		item = frappe._dict(primary_attribute="Size")
+
+		def get_cached_doc(doctype, name):
+			return variants[name] if doctype == "Item Variant" else item
+
+		rows = [
+			frappe._dict(
+				item_variant=variant,
+				lot="C0826-57",
+				received_type="Accepted",
+				set_combination={"major_part": "Top", "major_colour": "Red"},
+			)
+			for variant in variants
+		]
+		with (
+			patch(
+				"essdee_yrp.overrides.goods_received_note.frappe.get_cached_doc",
+				side_effect=get_cached_doc,
+			),
+			patch(
+				"yrp.stock.dimensions.get_dimension_fieldnames",
+				return_value=["lot", "received_type"],
+			),
+		):
+			normalized = normalize_cutting_grn_row_indexes(rows)
+		self.assertEqual(len({row.row_index for row in normalized}), 1)
+
+		changed_lot = frappe._dict(normalized[0])
+		changed_lot.lot = "ANOTHER-LOT"
+		changed_type = frappe._dict(normalized[0])
+		changed_type.received_type = "Rejected"
+		with (
+			patch(
+				"essdee_yrp.overrides.goods_received_note.frappe.get_cached_doc",
+				side_effect=get_cached_doc,
+			),
+			patch(
+				"yrp.stock.dimensions.get_dimension_fieldnames",
+				return_value=["lot", "received_type"],
+			),
+		):
+			separated = normalize_cutting_grn_row_indexes(
+				[normalized[0], changed_lot, changed_type]
+			)
+		self.assertEqual(len({row.row_index for row in separated}), 3)
+
+	def test_packing_grn_display_adds_split_receivable_rows_per_size(self):
+		variants = {
+			"PACK-45": frappe._dict(
+				item="PACKED-ITEM",
+				attributes=[frappe._dict(attribute="Size", attribute_value="45 cm")],
+			),
+			"PACK-50": frappe._dict(
+				item="PACKED-ITEM",
+				attributes=[frappe._dict(attribute="Size", attribute_value="50 cm")],
+			),
+		}
+		item = frappe._dict(primary_attribute="Size")
+
+		def get_cached_doc(doctype, name):
+			return variants[name] if doctype == "Item Variant" else item
+
+		rows = [
+			frappe._dict(
+				item_variant="PACK-45",
+				quantity=2,
+				stock_qty=10,
+				amount=100,
+				uom="Box",
+				stock_uom="Pieces",
+				conversion_factor=5,
+				lot="LOT-1",
+				received_type="Accepted",
+				set_combination="{}",
+			),
+			frappe._dict(
+				item_variant="PACK-45",
+				quantity=3,
+				stock_qty=15,
+				amount=180,
+				uom="Box",
+				stock_uom="Pieces",
+				conversion_factor=5,
+				lot="LOT-1",
+				received_type="Accepted",
+				set_combination="{}",
+			),
+			frappe._dict(
+				item_variant="PACK-50",
+				quantity=4,
+				stock_qty=20,
+				amount=200,
+				uom="Box",
+				stock_uom="Pieces",
+				conversion_factor=5,
+				lot="LOT-1",
+				received_type="Accepted",
+				set_combination="{}",
+			),
+		]
+		with (
+			patch(
+				"essdee_yrp.overrides.goods_received_note.frappe.get_cached_doc",
+				side_effect=get_cached_doc,
+			),
+			patch(
+				"yrp.stock.dimensions.get_dimension_fieldnames",
+				return_value=["lot", "received_type"],
+			),
+		):
+			aggregated = aggregate_packing_grn_rows_for_ui(rows)
+
+		self.assertEqual(len(aggregated), 2)
+		by_variant = {row.item_variant: row for row in aggregated}
+		self.assertEqual(by_variant["PACK-45"].quantity, 5)
+		self.assertEqual(by_variant["PACK-45"].stock_qty, 25)
+		self.assertEqual(by_variant["PACK-45"].amount, 280)
+		self.assertAlmostEqual(by_variant["PACK-45"].rate, 11.2)
+		self.assertEqual(
+			by_variant["PACK-45"].row_index,
+			by_variant["PACK-50"].row_index,
+		)
+
+	def test_fresh_work_order_grn_defaults_normalize_migrated_size_indexes(self):
+		variants = {
+			"FRONT-45": frappe._dict(
+				item="Maze Capri Set R.N.S",
+				attributes=[
+					frappe._dict(attribute="Panel", attribute_value="Front"),
+					frappe._dict(attribute="Colour", attribute_value="Red"),
+					frappe._dict(attribute="Size", attribute_value="45 cm"),
+				],
+			),
+			"FRONT-50": frappe._dict(
+				item="Maze Capri Set R.N.S",
+				attributes=[
+					frappe._dict(attribute="Panel", attribute_value="Front"),
+					frappe._dict(attribute="Colour", attribute_value="Red"),
+					frappe._dict(attribute="Size", attribute_value="50 cm"),
+				],
+			),
+		}
+		item = frappe._dict(primary_attribute="Size")
+		base_defaults = {
+			"items": [
+				frappe._dict(
+					item_variant=name,
+					row_index=f"legacy-{index}",
+					lot="C0826-57",
+					received_type="Accepted",
+					set_combination={"major_part": "Top", "major_colour": "Red"},
+				)
+				for index, name in enumerate(variants)
+			],
+			"item_details": ["stale"],
+		}
+
+		def get_cached_doc(doctype, name):
+			return variants[name] if doctype == "Item Variant" else item
+
+		with (
+			patch(
+				"yrp.yrp.doctype.goods_received_note.goods_received_note.get_work_order_defaults",
+				return_value=base_defaults,
+			),
+			patch(
+				"essdee_yrp.overrides.goods_received_note.frappe.get_cached_doc",
+				side_effect=get_cached_doc,
+			),
+			patch(
+				"yrp.stock.dimensions.get_dimension_fieldnames",
+				return_value=["lot", "received_type"],
+			),
+			patch(
+				"yrp.stock.save_stock_items.group_items_for_ui",
+				return_value=["grouped"],
+			) as group_items,
+		):
+			defaults = get_work_order_defaults("YRP-WO-TEST")
+
+		normalized = defaults["items"]
+		self.assertEqual(len({row.row_index for row in normalized}), 1)
+		self.assertEqual(defaults["item_details"], ["grouped"])
+		group_items.assert_called_once_with(normalized, "Goods Received Note")
+
+	def test_non_group_garment_process_consumes_each_received_panel(self):
+		variant = "GARMENT-BOTTOM-LEFT-DARK-GREY-45"
+		combination = {"major_colour": "Airforce", "major_part": "Top"}
+		grn = frappe.get_doc(
+			{
+				"doctype": "Goods Received Note",
+				"against": "Work Order",
+				"against_id": "TEST-PRINTING-WO",
+				"process_name": "Printing",
+				"items": [
+					{
+						"item_variant": variant,
+						"quantity": 9,
+						"uom": "Pieces",
+						"lot": "TEST-LOT",
+						"received_type": "Accepted",
+						"set_combination": combination,
+					}
+				],
+			}
+		)
+		deliverable = frappe._dict(
+			name="TEST-DELIVERABLE",
+			item_variant=variant,
+			uom="Pieces",
+			lot="TEST-LOT",
+			received_type="Accepted",
+			set_combination=combination,
+			# Migrated/manual submitted Work Order rows may not carry this UI
+			# provenance flag.  They remain authoritative Deliverables.
+			is_calculated=0,
+			valuation_rate=2,
+		)
+		work_order = frappe._dict(
+			name="TEST-PRINTING-WO",
+			production_detail="TEST-IPD",
+			process_name="Printing",
+			lot="TEST-LOT",
+			deliverables=[deliverable],
+		)
+		ipd = frappe._dict(
+			is_cloth_item=0,
+			cutting_process="Cutting",
+			stiching_process="Stitching",
+			packing_process="Packing",
+			ipd_processes=[frappe._dict(process_name="Printing", in_stage="Cut", out_stage="Cut")],
+		)
+
+		def get_cached_doc(doctype, name):
+			return work_order if doctype == "Work Order" else ipd
+
+		original_get_value = frappe.db.get_value
+
+		def get_value(doctype, filters, fieldname, *args, **kwargs):
+			if doctype == "Process" and filters == "Printing" and fieldname == "is_group":
+				return 0
+			return original_get_value(doctype, filters, fieldname, *args, **kwargs)
+
+		with (
+			patch("essdee_yrp.garment_grn.frappe.get_cached_doc", side_effect=get_cached_doc),
+			patch("essdee_yrp.garment_grn.frappe.db.get_value", side_effect=get_value),
+			patch(
+				"essdee_yrp.garment_grn._stock_uom_values",
+				return_value={"conversion_factor": 1, "stock_uom": "Pieces", "stock_qty": 9},
+			),
+		):
+			calculate_garment_consumption(grn)
+
+		self.assertEqual(len(grn.grn_deliverables), 1)
+		consumed = grn.grn_deliverables[0]
+		self.assertEqual(consumed.item_variant, variant)
+		self.assertEqual(consumed.quantity, 9)
+		self.assertEqual(consumed.stock_qty, 9)
+		self.assertEqual(consumed.work_order_deliverable, deliverable.name)
+		self.assertEqual(consumed.set_combination, combination)

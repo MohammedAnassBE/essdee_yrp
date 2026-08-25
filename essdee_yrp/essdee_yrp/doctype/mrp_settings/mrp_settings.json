@@ -18,6 +18,11 @@
   "column_break_txmw",
   "sales_api_key",
   "sales_api_secret",
+  "hr_details_section",
+  "hr_site_url",
+  "hr_api_key",
+  "hr_api_secret",
+  "hr_shifts",
   "url_shortner_settings_section",
   "shortned_url_domain",
   "column_break_ywpk",
@@ -48,7 +53,21 @@
   "received_type_list",
   "finishing_inward_process",
   "additional_grn_submit_role",
+  "quality_inspection_section",
+  "default_major_aql_level",
+  "column_break_aql",
+  "default_minor_aql_level",
   "finishing_plan_ironing_process",
+  "sewing_plan_tab",
+  "sewing_plan_status_summary",
+  "type_wise_diff_summary",
+  "sewing_plan_input_orders",
+  "previous_day_entries",
+  "sewing_plan_inspection_type",
+  "sewing_line_output_type",
+  "sewing_input_qty_type",
+  "partial_received_percentage",
+  "partially_dispatched_percentage",
   "cutting_plan_section",
   "cloth_allowance_percentage",
   "printer_list",
@@ -57,6 +76,7 @@
   "column_break_nrkc",
   "cut_bundle_cancelled_lot",
   "piece_weight_max",
+  "cls_grammage_approval_roles",
   "box_sticker_print_section",
   "non_set_box_sticker",
   "non_set_piece_sticker",
@@ -182,6 +202,28 @@
    "options": "Role"
   },
   {
+   "collapsible": 1,
+   "fieldname": "quality_inspection_section",
+   "fieldtype": "Section Break",
+   "label": "Quality Inspection"
+  },
+  {
+   "fieldname": "default_major_aql_level",
+   "fieldtype": "Link",
+   "label": "Default Major AQL Level",
+   "options": "AQL Level"
+  },
+  {
+   "fieldname": "column_break_aql",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "default_minor_aql_level",
+   "fieldtype": "Link",
+   "label": "Default Minor AQL Level",
+   "options": "AQL Level"
+  },
+  {
    "fieldname": "cut_bundle_cancelled_lot",
    "fieldtype": "Text",
    "label": "Cut Bundle Cancelled Lot"
@@ -205,6 +247,34 @@
    "fieldname": "sales_api_secret",
    "fieldtype": "Password",
    "label": "Sales API Secret"
+  },
+  {
+   "fieldname": "hr_details_section",
+   "fieldtype": "Section Break",
+   "label": "HR Details"
+  },
+  {
+   "default": "https://hr.essdee.fit",
+   "fieldname": "hr_site_url",
+   "fieldtype": "Data",
+   "label": "HR Site URL"
+  },
+  {
+   "fieldname": "hr_api_key",
+   "fieldtype": "Data",
+   "label": "HR API Key"
+  },
+  {
+   "fieldname": "hr_api_secret",
+   "fieldtype": "Password",
+   "label": "HR API Secret Key"
+  },
+  {
+   "description": "Shift Type names sent to the HR Workers Strength Report filter.",
+   "fieldname": "hr_shifts",
+   "fieldtype": "Table",
+   "label": "Shifts to Fetch",
+   "options": "MRP HR Shift"
   },
   {
    "fieldname": "finishing_inward_process",
@@ -393,10 +463,83 @@
    "label": "Piece Weight Tolerance (kg)"
   },
   {
+   "fieldname": "cls_grammage_approval_roles",
+   "fieldtype": "Table",
+   "label": "CLS Grammage Approval Roles",
+   "options": "CLS Grammage Approval Role"
+  },
+  {
    "fieldname": "finishing_plan_ironing_process",
    "fieldtype": "Link",
    "label": "Finishing Plan Ironing Process",
    "options": "Process"
+  },
+  {
+   "fieldname": "sewing_plan_tab",
+   "fieldtype": "Tab Break",
+   "label": "Sewing Plan"
+  },
+  {
+   "description": "Controls the input-type and received-type columns shown in Sewing Details status summaries.",
+   "fieldname": "sewing_plan_status_summary",
+   "fieldtype": "Table",
+   "label": "Sewing Plan Status Summary",
+   "options": "Sewing Plan Status Summary"
+  },
+  {
+   "fieldname": "type_wise_diff_summary",
+   "fieldtype": "Link",
+   "label": "Type Wise Diff Summary",
+   "options": "Sewing Plan Input Type"
+  },
+  {
+   "description": "Defines the authoritative production-entry sequence. Each Input Type can consume only the quantity recorded in Difference From, plus its configured allowance.",
+   "fieldname": "sewing_plan_input_orders",
+   "fieldtype": "Table",
+   "label": "Sewing Plan Input Orders",
+   "options": "Sewing Plan Input Order"
+  },
+  {
+   "default": "2",
+   "description": "Number of latest production-entry dates that authorized users may delete from Sewing Details.",
+   "fieldname": "previous_day_entries",
+   "fieldtype": "Int",
+   "label": "Previous Day Entries",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "sewing_plan_inspection_type",
+   "fieldtype": "Link",
+   "label": "Sewing Plan Inspection Type",
+   "options": "Sewing Plan Input Type"
+  },
+  {
+   "fieldname": "sewing_line_output_type",
+   "fieldtype": "Link",
+   "label": "Sewing Line Output Type",
+   "options": "Sewing Plan Input Type"
+  },
+  {
+   "fieldname": "sewing_input_qty_type",
+   "fieldtype": "Link",
+   "label": "Sewing Input Qty Type",
+   "options": "Sewing Plan Input Type"
+  },
+  {
+   "default": "50",
+   "description": "Finishing Plan becomes Ready to Pack once received quantity reaches this percentage of cutting quantity.",
+   "fieldname": "partial_received_percentage",
+   "fieldtype": "Percent",
+   "label": "Partial Received Percentage",
+   "non_negative": 1
+  },
+  {
+   "default": "90",
+   "description": "Finishing Plan becomes Dispatched once dispatched pieces reach this percentage of cutting quantity.",
+   "fieldname": "partially_dispatched_percentage",
+   "fieldtype": "Percent",
+   "label": "Partially Dispatched Percentage",
+   "non_negative": 1
   }
  ],
  "issingle": 1,

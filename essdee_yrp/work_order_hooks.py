@@ -5,6 +5,31 @@ import frappe
 from frappe import _
 
 
+def onload(doc, method=None):
+	"""Render Essdee Work Order items as logical rows with Size columns."""
+	del method
+	if not doc.get("production_detail"):
+		return
+
+	from essdee_yrp.item_matrix import normalize_item_matrix_row_indexes
+	from yrp.stock.save_stock_items import group_items_for_ui
+
+	doc.set_onload(
+		"deliverable_details",
+		group_items_for_ui(
+			normalize_item_matrix_row_indexes(doc.get("deliverables") or []),
+			"Work Order Deliverables",
+		),
+	)
+	doc.set_onload(
+		"receivable_details",
+		group_items_for_ui(
+			normalize_item_matrix_row_indexes(doc.get("receivables") or []),
+			"Work Order Receivables",
+		),
+	)
+
+
 def validate(doc, method=None):
 	set_includes_packing(doc)
 	validate_lot_process_selection(doc)

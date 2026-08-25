@@ -1,6 +1,6 @@
 # Production API → YRP / Essdee YRP Migration Context
 
-Last updated: 2026-08-17
+Last updated: 2026-08-25
 Working site: `essdee_yrp.site`
 Working branches: `apps/yrp` → `develop`, `apps/essdee_yrp` → `MRP`
 
@@ -15,6 +15,55 @@ and return to `MRP` later. Base `yrp` currently remains on `develop`. Do not
 treat this work as finished merely because a previous session ended. Update
 the handoff whenever a durable migration decision is made.
 
+The latest execution contract is configuration-driven. `MRP Data Migration`
+does not accept a bench path or site as editable data. The active site is the
+target, while `essdee_yrp_migration` in server-owned site configuration names
+the reviewed local/mounted F15 bench and source site. Production must restore
+or mount the F15 database plus public/private files on the controlled migration
+host; the runner intentionally has no arbitrary remote-command adapter.
+
+The 2026-08-18 post-load hardening removed exact local record exceptions and
+environment values from deployable code. Source snapshots now fingerprint
+effective runtime schema, every parent and child table count/maximum-modified
+value, the exact source-invalid-Link manifest, deployed migration code, target
+schema/mappings, and reviewed server defaults. The source must be in
+maintenance mode for a write run, and the pre-cutover target must stay isolated
+from other writers. The same change made stock reconciliation metadata-driven
+across every configured YRP dimension.
+
+After that hardening, the owner-approved fresh local reset/load/verify completed
+under `MRP-MIG-2026-00002`. It migrated 3,437,124 parents, matched 6,325,639
+parent/child identities and 161,573,787 transformed field values, reconciled
+293,115 stock buckets, audited all 25 source-invalid Links with zero unexpected
+target-invalid Links, and verified all 171 source series counters. The local
+backup contains metadata for 1,004 Files but physical content for only two;
+967 attached missing blobs and 35 orphan attachments are explicitly audited.
+Production must supply the complete public/private archives and run strict file
+mode. Pre-reset and verified post-load backups are recorded in the canonical
+handoff.
+
+The 2026-08-20 Production Order UAT correction is also recorded in the
+canonical handoff. Essdee now owns the ratio/price entry presentation and
+Custom Field mapping while base YRP continues to own generic variant and
+quantity expansion. Production Order request JSON uses whole-second Datetime
+strings so approval dialogs do not reject server-generated timestamps.
+
+The same handoff now records the complete cutting/printing transaction audit:
+PPO → Lot → IPD → cutting Work Order → Cutting Plan → Marker → LaySheet →
+cutting DC → label GRN → printing Work Order → CPM Stock Entry → CPM DC → CPM
+GRN. Remaining Lot/PO and Cutting Plan Lot Transfer actions, cutting cancel
+permissions, CPM address defaults, closed-Work-Order server guards, and full
+CPM DC/GRN reversal coverage are implemented only in `essdee_yrp`. The final
+local Essdee suite passes 427/427.
+
+The 2026-08-25 source-growth overlay supersedes older current-count statements:
+the planner now reports 263 source / 326 target schemas with zero blockers
+(228 identity, 32 mapped, three custom). F15 added Bulk Cutting Lay Sheets and
+MRP HR Shift. Their F16 implementation, fixture-owned Delivery Challan fields,
+Sewing Strength UI/API, permissions, and full 513-test transaction gate are
+recorded in `docs/MRP_BRANCH_HANDOFF.md`. Historical 260/318 and earlier test
+counts below remain dated evidence rather than the current inventory.
+
 ## Goal
 
 The Frappe 15 `production_api` app has carried Essdee's production data and
@@ -22,10 +71,11 @@ business flows for more than three years. The goal is to migrate all required
 schemas, logic, data, and UI into Frappe 16 without copying the old app as one
 monolith.
 
-- F15 reference: `/home/anas/frappe-15/apps/production_api`
+- F15 reference: `/home/anas/frappe-15/apps/production_api`, site
+  `mrp3.site:8002`
 - F16 base platform: `/home/anas/frappe-16/apps/yrp`
 - F16 Essdee layer: `/home/anas/frappe-16/apps/essdee_yrp`
-- Target site: `essdee_yrp.site`
+- Target site: `essdee_yrp.site:8003`
 
 The migration must preserve business meaning and data traceability while using
 the stronger F16 YRP stock and UI architecture.
@@ -42,6 +92,12 @@ when it represents the same business meaning.
 
 The owner must review base-YRP changes. Do not commit `apps/yrp` unless the
 owner explicitly asks.
+
+For the MRP branch, the owner strengthened this on 2026-08-20: do not edit
+base `yrp` at all. Manage base behavior from `essdee_yrp` through supported
+hooks, Custom Fields, client scripts, overrides, and extension points. Stop for
+explicit approval if a future requirement genuinely cannot be implemented
+from the Essdee app.
 
 ## Migration phases
 
@@ -347,6 +403,18 @@ queryable from the GRN chain when needed.
 - Work Order Item is never auto-selected. Lot + Process produce a filtered Item
   list; the user selects an Item, and Essdee derives/stores the matching Item
   Production Detail.
+- Work Order calculation has two Essdee Desk routes. An explicitly
+  `Process.is_cloth_process` Process uses **Calculate Fabric Deliverables**;
+  every other saved draft non-rework garment Work Order uses the F15-compatible
+  **Calculate Items** dialog. The garment route reads the process-appropriate
+  Lot quantity, supports Cutting/Stitching/Packing, IPD extra processes and
+  Process groups, and writes calculated deliverables/receivables plus cutting
+  tracking JSON.
+- Migrated approved IPDs may predate generated `IPD Process Matrix` records.
+  **Generate / Regenerate IPD Process Matrix** rebuilds derived matrices without
+  changing the approved IPD itself. Invalid variants are returned individually;
+  matrix generation must never invent missing Cutting mappings or silently
+  under-demand cloth.
 - Lot Transfer uses Essdee child `Lot Transfer Item`, includes the hidden
   `finishing_plan` link, and unlocks posting date/time only through its checkbox.
 - Purchase Invoice receives the nine approved Production API ERP/GST/ITC fields

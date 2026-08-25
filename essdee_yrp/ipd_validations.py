@@ -1,4 +1,7 @@
+from contextlib import contextmanager
+
 import frappe
+from frappe import _
 from frappe.utils import cint, flt
 
 from yrp.utils import update_if_string_instance
@@ -17,6 +20,7 @@ def is_cloth_ipd(doc):
 
 
 def before_validate(doc, method=None):
+	validate_approved_immutability(doc)
 	apply_ipd_settings_defaults(doc)
 	if is_cloth_ipd(doc):
 		sync_cloth_recipe_snapshot(doc)
@@ -34,6 +38,53 @@ def before_validate(doc, method=None):
 	sync_cutting_cloth_select_list(doc)
 	sync_marker_groups(doc)
 	validate_set_item_defaults(doc)
+	from essdee_yrp.essdee_yrp.doctype.ipd_compacting.ipd_compacting import (
+		stage_compacting_details_from_ipd,
+	)
+
+	stage_compacting_details_from_ipd(doc)
+
+
+def validate_approved_immutability(doc):
+	"""Approved IPDs must be reverted through the approval action before edits."""
+	if doc.is_new() or frappe.flags.in_patch:
+		return
+	allowed_names = frappe.flags.get("generated_cloth_ipd_updates") or set()
+	if doc.name in allowed_names and is_cloth_ipd(doc):
+		return
+	if frappe.db.get_value("Item Production Detail", doc.name, "approval_status") == "Approved":
+		frappe.throw(
+			_("Item Production Detail {0} is Approved. Revert Approval before editing it.").format(
+				doc.name
+			)
+		)
+
+
+@contextmanager
+def allow_generated_cloth_ipd_update(doc):
+	"""Permit one internal rebuild of an auto-managed cloth IPD.
+
+	This deliberately remains a private Python-only capability: browser/API
+	updates to an Approved IPD still have to use the role-gated Revert Approval
+	action first. The allow-list is document-specific and is restored even when
+	validation fails.
+	"""
+	if not is_cloth_ipd(doc):
+		frappe.throw(_("Only cloth production details can use the generated-IPD update path."))
+
+	flag_name = "generated_cloth_ipd_updates"
+	previous = frappe.flags.get(flag_name)
+	allowed_names = set(previous or ())
+	if doc.name:
+		allowed_names.add(doc.name)
+	frappe.flags[flag_name] = allowed_names
+	try:
+		yield
+	finally:
+		if previous is None:
+			frappe.flags.pop(flag_name, None)
+		else:
+			frappe.flags[flag_name] = previous
 
 
 def sync_cloth_recipe_snapshot(doc):
@@ -465,6 +516,11 @@ def validate_swap_rows(rows, table_label, pin_field, from_field, to_field):
 
 
 def on_update(doc, method=None):
+	from essdee_yrp.essdee_yrp.doctype.ipd_compacting.ipd_compacting import (
+		persist_staged_compacting_details,
+	)
+
+	persist_staged_compacting_details(doc)
 	for mapping in getattr(frappe.flags, "delete_bom_mapping", []) or []:
 		frappe.delete_doc(
 			"Item BOM Attribute Mapping",
@@ -477,6 +533,14 @@ def on_update(doc, method=None):
 
 
 def on_trash(doc, method=None):
+	compacting = frappe.db.exists(
+		"IPD Compacting", {"item_production_detail": doc.name}
+	)
+	if compacting:
+		frappe.delete_doc(
+			"IPD Compacting", compacting, force=True, ignore_permissions=True
+		)
+
 	# Process matrices are generated dependents of the IPD, not independent
 	# masters. Delete them before Frappe checks incoming links so their `ipd`
 	# Link does not block deletion of the owning production detail. `force` is

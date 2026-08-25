@@ -175,7 +175,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 		self.assertEqual(row["transit_warehouse"], "S-0165")
 		self.assertNotIn("sms_old_database_password", row)
 
-	def test_mrp_settings_omits_uninstalled_module_configuration(self):
+	def test_mrp_settings_keeps_installed_aql_and_sewing_configuration(self):
 		row = transform_document(
 			{
 				"doctype": "MRP Settings",
@@ -198,9 +198,17 @@ class ReviewedTransformerTest(unittest.TestCase):
 			self.plan,
 		)
 		self.assertEqual(row["enable_price_validation"], 1)
-		self.assertNotIn("default_major_aql_level", row)
+		self.assertEqual(row["default_major_aql_level"], "AQL 1.0")
 		self.assertNotIn("auto_send_notifications", row)
-		self.assertNotIn("sewing_plan_input_orders", row)
+		self.assertEqual(
+			row["sewing_plan_input_orders"],
+			[
+				{
+					"doctype": "Sewing Plan Input Order",
+					"name": "ROW-2",
+				}
+			],
+		)
 
 	def test_blank_historical_purchase_invoice_against_uses_billed_details(self):
 		purchase_order_invoice = transform_document(

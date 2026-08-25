@@ -150,6 +150,12 @@ class Lot(Document):
 				self.set('lot_order_details_json', x)
 				self.set_onload('order_item_details', items)
 
+		if self.get("lot_time_and_action_details"):
+			self.set_onload(
+				"action_details",
+				get_time_and_action_process(self.lot_time_and_action_details),
+			)
+
 		# if self.cad_detail_data:
 		# 	data = update_if_string_instance(self.cad_detail_data)		
 		# 	self.set_onload("cad_item_details", data)
@@ -175,6 +181,39 @@ def add_ppo_lot_qty(ppo, lot, items):
 		doc.parenttype = "Production Order"
 		doc.parentfield = "production_ordered_details"
 		doc.save(ignore_permissions=True)
+
+
+def get_time_and_action_process(action_details):
+	"""Return the next incomplete Time and Action step for every Lot colour."""
+	items = []
+	for item in action_details:
+		pending = frappe.get_all(
+			"Time and Action Detail",
+			filters={
+				"parent": item.time_and_action,
+				"completed": 0,
+			},
+			fields=["*"],
+			order_by="idx asc",
+			limit=1,
+		)
+		if pending:
+			row = pending[0]
+			row["colour"] = item.colour
+			row["master"] = item.master
+			row["process"] = True
+			items.append(row)
+		else:
+			items.append({
+				"colour": item.colour,
+				"master": item.master,
+				"action": "Completed",
+				"department": None,
+				"date": None,
+				"rescheduled_date": None,
+				"process": False,
+			})
+	return items
 
 def calculate_order_details(items, production_detail, packing_uom, final_uom):
 	item_detail = frappe.get_cached_doc("Item Production Detail", production_detail)
@@ -725,6 +764,11 @@ def get_packing_attributes(ipd):
 @frappe.whitelist()
 def update_order_details(doc_name):
 	doc = frappe.get_doc("Lot", doc_name)
+	doc.check_permission("write")
+	if doc.get("lot_time_and_action_details"):
+		frappe.throw(
+			"Order Items cannot be recalculated after Time and Action is created."
+		)
 	doc.calculate_order()
 	doc.save()
 

@@ -40,6 +40,7 @@ class TestLotTransfer(IntegrationTestCase):
 				"to_lot": "LOT-B",
 				"warehouse": "Main Warehouse",
 				"received_type": "Accepted",
+				"quality_grade": "A",
 				"qty": 2,
 				"uom": "Kg",
 				"rate": 0,
@@ -61,8 +62,14 @@ class TestLotTransfer(IntegrationTestCase):
 				"yrp.yrp.doctype.item.item.validate_cancelled_item",
 			),
 			patch(
-				"yrp.stock.utils.get_conversion_factor",
-				return_value={"stock_uom": "Kg", "conversion_factor": 1},
+				"essdee_yrp.essdee_yrp.doctype.lot_transfer.lot_transfer.apply_item_uom",
+				side_effect=lambda target, item_field: target.update(
+					{"uom": "Kg", "stock_uom": "Kg", "conversion_factor": 1}
+				),
+			),
+			patch(
+				"essdee_yrp.essdee_yrp.doctype.lot_transfer.lot_transfer.get_dimension_fieldnames",
+				return_value=["lot", "received_type", "quality_grade"],
 			),
 			patch(
 				"yrp.stock.utils.get_stock_balance",
@@ -79,6 +86,7 @@ class TestLotTransfer(IntegrationTestCase):
 			with_valuation_rate=True,
 			lot="LOT-A",
 			received_type="Accepted",
+			quality_grade="A",
 			uom="Kg",
 		)
 		self.assertEqual(row.rate, 130)

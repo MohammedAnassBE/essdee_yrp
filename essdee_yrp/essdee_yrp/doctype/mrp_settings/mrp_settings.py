@@ -3,6 +3,9 @@
 
 from frappe.model.document import Document
 
+from essdee_yrp.sewing.config import validate_sewing_input_orders
+
 
 class MRPSettings(Document):
-	pass
+	def validate(self):
+		validate_sewing_input_orders(self.sewing_plan_input_orders)

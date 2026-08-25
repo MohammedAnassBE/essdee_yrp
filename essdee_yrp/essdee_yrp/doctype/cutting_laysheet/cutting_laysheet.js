@@ -1,0 +1,569 @@
+// Copyright (c) 2024, Essdee and contributors
+// For license information, please see license.txt
+
+const CLS_LAYOUT_FIELDTYPES = new Set([
+    "Section Break", "Column Break", "Tab Break", "Heading", "Fold",
+]);
+
+function restore_terminal_laysheet_lock(frm) {
+    const state = frm._essdee_terminal_laysheet_lock_state;
+    if (!state) return;
+    for (const [fieldname, values] of Object.entries(state.fields)) {
+        if (!frm.fields_dict[fieldname]) continue;
+        frm.set_df_property(fieldname, "read_only", values.read_only);
+        frm.set_df_property(fieldname, "hidden", values.hidden);
+    }
+    for (const [fieldname, values] of Object.entries(state.html)) {
+        const wrapper = frm.fields_dict[fieldname]?.wrapper;
+        if (!wrapper) continue;
+        $(wrapper).css({ "pointer-events": values.pointer_events, "opacity": values.opacity });
+    }
+    frm._essdee_terminal_laysheet_lock_state = null;
+    if (frm.doc.docstatus === 0 && (frm.perm || []).some((permission) => permission.write)) {
+        frm.enable_save();
+    }
+}
+
+function apply_terminal_laysheet_lock(frm) {
+    if (!['Approval Pending', 'Label Printed', 'Cancelled'].includes(frm.doc.status)) return;
+    const state = { fields: {}, html: {} };
+    for (const df of frm.meta.fields || []) {
+        if (!df.fieldname || CLS_LAYOUT_FIELDTYPES.has(df.fieldtype)) continue;
+        state.fields[df.fieldname] = {
+            read_only: Number(Boolean(df.read_only)),
+            hidden: Number(Boolean(df.hidden)),
+        };
+        if (df.fieldtype === "Button") {
+            frm.set_df_property(df.fieldname, "hidden", 1);
+        } else if (df.fieldtype !== "HTML") {
+            frm.set_df_property(df.fieldname, "read_only", 1);
+        }
+    }
+    for (const df of (frm.meta.fields || []).filter((field) => field.fieldtype === "HTML")) {
+        const wrapper = frm.fields_dict[df.fieldname]?.wrapper;
+        if (!wrapper) continue;
+        const style = getComputedStyle(wrapper);
+        state.html[df.fieldname] = {
+            pointer_events: style.pointerEvents,
+            opacity: style.opacity,
+        };
+        $(wrapper).css({ "pointer-events": "none", "opacity": "0.7" });
+    }
+    frm._essdee_terminal_laysheet_lock_state = state;
+    frm.disable_save();
+}
+
+frappe.ui.form.on("Cutting LaySheet", {
+    setup(frm){
+        frm.set_query("cutting_marker", (doc)=> {
+            let filters = { "docstatus": 1 }
+            if(doc.cutting_plan){
+                filters["cutting_plan"] = doc.cutting_plan
+            } else if(doc.cutting_order){
+                filters["cutting_order"] = doc.cutting_order
+            } else {
+                frappe.msgprint("Set the Cutting Plan or Cutting Order First")
+                return
+            }
+            return { filters: filters }
+        })
+        frm.set_query("cutting_plan", ()=> {
+            return{
+                filters: {
+                    "cp_status":["!=","Completed"]
+                }
+            }
+        })
+        frm.set_query("cutting_order", ()=> {
+            return{
+                filters: {
+                    "docstatus": 1,
+                    "co_status":["!=","Completed"]
+                }
+            }
+        })
+    },
+    refresh(frm) {
+        restore_terminal_laysheet_lock(frm)
+        // Toggle visibility: show one parent, hide the other
+        if (frm.doc.cutting_order) {
+            frm.set_df_property("cutting_plan", "hidden", 1)
+        } else if (frm.doc.cutting_plan) {
+            frm.set_df_property("cutting_order", "hidden", 1)
+        }
+
+        $(".layout-side-section").css("display", "None")
+        removeDefaultPrintEvent();
+        $('[data-original-title=Print]').hide();
+        $("li:has(a:has(span[data-label='Print']))").remove();
+        $(frm.fields_dict['cloths_html'].wrapper).html("")
+        $(frm.fields_dict['accessory_html'].wrapper).html("")
+        frm.laysheet = new frappe.production.ui.LaySheetCloths(frm.fields_dict['cloths_html'].wrapper)
+        if(frm.doc.__onload && frm.doc.__onload.item_details){
+            frm.laysheet.load_data(frm.doc.__onload.item_details)
+        }
+        else{
+            frm.laysheet.load_data([])
+        }
+        if(!frappe.user.has_role("System Manager")){
+            frm.set_df_property("bundle_generated_date", "read_only", true)
+            frm.refresh_field("bundle_generated_date")
+        }
+        if(frm.doc.status == "Label Printed"){
+            frm.set_df_property("start_datetime", "read_only", true)
+            frm.set_df_property("end_datetime", "read_only", true)
+        }
+        else{
+            frm.set_df_property("start_datetime", "read_only", true)
+            frm.set_df_property("end_datetime", "read_only", true)
+        }
+        frm.accessory = new frappe.production.ui.LaySheetAccessory(frm.fields_dict['accessory_html'].wrapper)
+        if(frm.doc.__onload && frm.doc.__onload.item_accessories){
+            frm.accessory.load_data(frm.doc.__onload.item_accessories)
+        }
+        else{
+            frm.accessory.load_data([])
+        }
+		if (frm.laysheet?.set_status) frm.laysheet.set_status(frm.doc.status)
+		if (frm.accessory?.set_status) frm.accessory.set_status(frm.doc.status)
+        $(frm.fields_dict['cutting_marker_ratios_html'].wrapper).html("")
+        if(!frm.doc.__islocal){
+            frm.marker =new frappe.production.ui.CuttingMarker(frm.fields_dict['cutting_marker_ratios_html'].wrapper)
+            frm.marker.load_data(frm.doc.__onload.marker_details)
+        }
+
+        frm.set_df_property('cutting_laysheet_bundles','cannot_add_rows',true)
+		frm.set_df_property('cutting_laysheet_bundles','cannot_delete_rows',true)
+
+        if(frm.doc.status != "Cancelled"){
+            let x = frm.doc.cutting_laysheet_details.length > 0
+            if(frm.doc.is_manual_entry){
+                x = true
+            }
+            if(x && (frm.doc.status == "Bundles Generated" || frm.doc.status == "Completed") ){
+                if(!frm.doc.bundle_generated_date || frm.doc.bundle_generated_date == frappe.datetime.nowdate()){
+                    frm.add_custom_button("Generate",()=> {
+                        frappe.call({
+                            method:"essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.get_parts",
+                            args: {
+                                cutting_marker: frm.doc.cutting_marker,
+                            },
+                            callback:function(r){
+                                let data = r.message
+                                let fields = [
+                                    {
+                                        fieldname:"bundle_generated_date",
+                                        fieldtype:"Date",
+                                        label:"Bundle Generated Date",
+                                        default:frappe.datetime.nowdate(),
+                                        reqd:true,
+                                    },
+                                    {
+                                        fieldname:"parts_table",
+                                        fieldtype:"Table",
+                                        fields:[
+                                            {"fieldname":'part',"fieldtype":"Data","read_only":true,"label":"Part","in_list_view":true},
+                                            {"fieldname":"value","fieldtype":"Int","label":"Value","in_list_view":true}
+                                        ],
+                                        data:data,
+                                        cannot_add_rows:true,
+                                        cannot_delete_rows:true,
+                                    },
+                                ]
+                                if(!frm.doc.is_manual_entry){
+                                    fields = fields.concat([
+                                        {
+                                            fieldtype:"Int",
+                                            fieldname:"maximum_no_of_plys",
+                                            label:"Maximum No of Plys",
+                                            default:frm.doc.maximum_no_of_plys,
+                                            reqd:true,
+                                        },
+                                        {
+                                            fieldname:"maximum_allow_percentage",
+                                            fieldtype:"Int",
+                                            label:"Maximum Allow Percent",
+                                            default: frm.doc.maximum_allow_percentage,
+                                            reqd:true,
+                                        }
+                                    ])
+                                }
+                                let d =  new frappe.ui.Dialog({
+                                    title : "Enter Details",
+                                    fields: fields,
+                                    primary_action:async function (values){
+                                        frappe.call({
+                                            method:"essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.get_cut_sheet_data",
+                                            args: {
+                                                doc_name : frm.doc.name,
+                                                cutting_marker:frm.doc.cutting_marker,
+                                                laysheet_details: frm.doc.cutting_laysheet_details,
+                                                manual_item_details: frm.doc.cutting_laysheet_manual_items,
+                                                items:values.parts_table,
+                                                max_plys:values.maximum_no_of_plys || 0,
+                                                maximum_allow : values.maximum_allow_percentage || 0,
+                                                bundle_generated_date:values.bundle_generated_date,
+                                            },
+                                            freeze:true,
+                                            freeze_message:"Generating Bundles",
+                                            callback: function(){
+                                                frm.reload_doc()
+                                            }
+                                        })
+                                        d.hide()
+                                    }
+                                })
+                                d.show()
+                            }
+                        })
+                    })
+                }
+            }
+            if(frm.doc.cutting_laysheet_bundles.length > 0 && frm.doc.status == "Bundles Generated" ){
+                frm.add_custom_button("Print Labels", ()=> {
+                    if (frm.doc.goods_received_note) {
+                        frappe.msgprint({
+                            title: __("Cannot Print Labels"),
+                            message: __("A Goods Received Note ({0}) has already been created against this Cutting LaySheet.", [frm.doc.goods_received_note]),
+                            indicator: "red"
+                        });
+                        return;
+                    }
+                    frappe.call({
+                        method: "essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.get_piece_weight_tolerance",
+                        args: {
+                            doc_name: frm.doc.name
+                        },
+                        callback: function(r) {
+                            let tolerance = r.message || 0.003;
+                            let diff = Math.abs((frm.doc.piece_weight || 0) - (frm.doc.required_pcs_weight || 0));
+                            if (diff > tolerance && !frm.doc.approved_by) {
+                                // The server rechecks the saved weights and
+                                // tolerance before entering Approval Pending.
+                                frappe.call({
+                                    method: "essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.request_grammage_approval",
+                                    args: { doc_name: frm.doc.name },
+                                    callback() {
+                                        frappe.msgprint({
+                                            title: __("Approval Required"),
+                                            message: __("Weight difference ({0} kg) exceeds tolerance ({1} kg). Approval required from authorized user.", [diff.toFixed(4), tolerance]),
+                                            indicator: "orange"
+                                        });
+                                        frm.reload_doc();
+                                    },
+                                });
+                            } else {
+                                // Within tolerance OR already approved — print directly
+                                if (!frm.doc.approved_by) {
+                                    frm.set_value("approved_by", frappe.session.user);
+                                    frm.refresh_field("approved_by");
+                                }
+                                frm.trigger("label_print");
+                            }
+                        }
+                    });
+                }, "Print")
+            }
+            // Approval Pending: show Approve button for authorized users
+            if(frm.doc.status == "Approval Pending"){
+                frappe.call({
+                    method: "essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.can_approve_grammage",
+                    async: false,
+                    callback: function(r) {
+                        if (r.message) {
+                            frm.add_custom_button(__("Approve"), ()=> {
+                                frappe.call({
+                                    method: "essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.approve_grammage",
+                                    args: { doc_name: frm.doc.name },
+                                    freeze: true,
+                                    freeze_message: __("Approving..."),
+                                    callback: function() {
+                                        frm.reload_doc();
+                                    }
+                                });
+                            }).addClass("btn-primary");
+                        } else {
+                            frm.dashboard.set_headline(__("Grammage approval is pending. An authorized user must approve before labels can be printed."));
+                        }
+                    }
+                });
+            }
+            if(frm.doc.status == "Label Printed" || frm.doc.status == "Bundles Generated"){
+                frm.add_custom_button("Print Movement Chart", ()=> {
+                    let pf = "Essdee Cutting Movement Chart"
+                    if(frm.doc.calculated_parts.split(",").length > 9){
+                        pf = "Essdee Cutting Movement Chart 2"
+                    }
+                    let w = window.open(
+                        frappe.urllib.get_full_url(
+                            "/printview?" + "doctype=" + encodeURIComponent(frm.doc.doctype) + "&name=" +
+                                encodeURIComponent(frm.doc.name) + "&trigger_print=1" + "&format=" +
+                                encodeURIComponent(pf) + "&no_letterhead=1"
+                        )
+                    );
+                    if (!w) {
+                        frappe.msgprint(__("Please enable pop-ups"));
+                        return;
+                    }
+                }, "Print")
+            }
+            frm.add_custom_button("Print Laysheet", ()=> {
+                let w = window.open(
+                    frappe.urllib.get_full_url(
+                        "/printview?" + "doctype=" + encodeURIComponent(frm.doc.doctype) + "&name=" +
+                            encodeURIComponent(frm.doc.name) + "&trigger_print=1" + "&format=" +
+                            encodeURIComponent("Essdee Cutting LaySheet") + "&no_letterhead=1"
+                    )
+                );
+                if (!w) {
+                    frappe.msgprint(__("Please enable pop-ups"));
+                    return;
+                }
+            }, "Print")
+            if(frm.doc.status == "Label Printed" && frappe.user.has_role("System Manager")){
+                frm.add_custom_button("Revert Labels", ()=> {
+                    let d = new frappe.ui.Dialog({
+                        title: "Are you sure want to Revert the Label",
+                        primary_action_label : "Yes",
+                        secondary_action_label: "No",
+                        primary_action(){
+                            d.hide()
+                            frappe.call({
+                                method: "essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.revert_labels",
+                                args : {
+                                    doc_name: frm.doc.name
+                                },
+                                freeze: true,
+                                freeze_message:"Reverting the Label Printed",
+                                callback: function(){
+                                    frm.reload_doc()
+                                }
+                            })
+                            d.hide()
+                        },
+                        secondary_action(){
+                            d.hide()
+                        }
+                    })
+                    d.show()
+                })
+            }
+            if(frappe.user.has_role("System Manager")){
+                if(frm.doc.reverted){
+                    frm.add_custom_button("Update Status", ()=> {
+                        let d = new frappe.ui.Dialog({
+                            title: "Are you sure wanna update the Laysheet to Label Print Status",
+                            primary_action_label: "Yes",
+                            secondary_action_label: "No",
+                            primary_action(){
+                                d.hide()
+                                frappe.call({
+                                    method: "essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.update_label_print_status",
+                                    args: {
+                                        doc_name: frm.doc.name
+                                    }
+                                })
+                            },
+                            secondary_action(){
+                                d.hide()
+                            }
+                        })
+                        d.show()
+                    })
+                }
+                frm.add_custom_button("Cancel", ()=> {
+                    let d = new frappe.ui.Dialog({
+                        title: "Are you sure wanna cancel the Laysheet",
+                        primary_action_label: "Yes",
+                        secondary_action_label: "No",
+                        primary_action(){
+                            d.hide()
+                            frappe.call({
+                                method: "essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.cancel_laysheet",
+                                args: {
+                                    doc_name: frm.doc.name
+                                }
+                            })
+                        },
+                        secondary_action(){
+                            d.hide()
+                        }
+                    })
+                    d.show()
+                })
+            }
+        }
+		apply_terminal_laysheet_lock(frm)
+	},
+    cutting_plan(frm) {
+        if (frm.doc.cutting_plan) {
+            frm.set_value("cutting_order", "")
+            frm.set_df_property("cutting_order", "hidden", 1)
+        } else {
+            frm.set_df_property("cutting_order", "hidden", 0)
+        }
+    },
+    cutting_order(frm) {
+        if (frm.doc.cutting_order) {
+            frm.set_value("cutting_plan", "")
+            frm.set_df_property("cutting_plan", "hidden", 1)
+            // Fetch item from cutting order
+            if (frm.doc.cutting_order) {
+                frappe.db.get_value("Cutting Order", frm.doc.cutting_order, "item").then(r => {
+                    if (r.message && r.message.item) {
+                        frm.set_value("item", r.message.item)
+                    }
+                })
+            }
+        } else {
+            frm.set_df_property("cutting_plan", "hidden", 0)
+        }
+    },
+    validate(frm){
+        if(!frm.doc.__islocal){
+            let items = frm.laysheet.get_items()
+            frm.doc['item_details'] = JSON.stringify(items)
+            let items2 = frm.accessory.get_items()
+            frm.doc['item_accessory_details'] = JSON.stringify(items2)
+        }
+    },
+    label_print(frm){
+        frappe.call({
+            method:"essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.update_cutting_plan",
+            args: {
+                cutting_laysheet: frm.doc.name,
+                check_cp: true,
+            },
+            callback: function(){
+                frappe.ui.form.qz_connect().then(function () {
+                    return frappe.ui.form.qz_get_printer_list();
+                }).then(function (printers) {
+                    let d = new frappe.ui.Dialog({
+                        title:"Select any one printer",
+                        fields: [
+                            {
+                                fieldname: 'printer_list_html',
+                                fieldtype: 'HTML',
+                            },
+                            {
+                                fieldname: "print_order",
+                                fieldtype: "Select",
+                                options: ["Panel", "Bundle No"],
+                                label: "Print Order By",
+                                default: "Panel",
+                            }
+                        ],
+                        size:'small',
+                        primary_action_label:"Print",
+                        primary_action:function(values){
+                            d.hide()
+                            let printer = get_printer()
+                            printer = printer.slice(1, -1);
+                            print_labels(frm, printer, values.print_order)
+                        }
+                    })
+                    d.fields_dict.printer_list_html.$wrapper.html('');
+                    d.fields_dict.printer_list_html.$wrapper.append(get_printers_html(printers))
+                    d.show()
+                }).catch(function (err) {
+                    frappe.ui.form.qz_fail(err);
+                });
+            }
+        })
+    }
+});
+
+function get_printers_html(printers){
+    let htmlContent = `
+        <table>
+            <thead>
+                <tr>
+                    <th style="padding: 10px; border: 1px solid #ddd; background-color: #f4f4f4; font-size: 15px;"></th>
+                    <th style="padding: 10px; border: 1px solid #ddd; background-color: #f4f4f4; font-size: 15px;">Printer</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    for (let i = 0; i < printers.length; i++) {
+        htmlContent += `
+            <tr>
+                <td style="padding: 10px; border: 1px solid #ddd; font-size: 12px;"><input type="checkbox" class="printers-checkbox-${0}" data-response='${JSON.stringify(printers[i])}'></td>
+                <td style="padding: 10px; border: 1px solid #ddd; font-size: 12px;">${printers[i]}</td>
+            </tr>
+        `;
+    }
+
+    htmlContent += `
+                </tbody>
+            </table>`
+
+    return htmlContent
+}
+
+function removeDefaultPrintEvent(){
+    $(document).on('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && (e.key == "p")) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+        }
+    });
+}
+
+function get_printer(){
+    let checkedCheckboxes = $(`.printers-checkbox-${0}:checked`);
+    let printers_list = new Set()
+    checkedCheckboxes.each(function() {
+        let p = $(this).data('response')
+        if(p!=null){
+            printers_list.add(p);
+        }
+        $(this).data('response', null);
+    });
+    if(printers_list.size == 0){
+        frappe.throw("Select a printer")
+    }
+    else if(printers_list.size > 1){
+        frappe.throw("Select only one printer")
+    }
+    else{
+        let prints = [...printers_list]
+        return prints[0]
+    }
+}
+
+function print_labels(frm, printer, print_order){
+    let args = {
+        print_items: frm.doc.cutting_laysheet_bundles,
+        lay_no: frm.doc.lay_no,
+        doc_name: frm.doc.name,
+        print_order: print_order,
+    }
+    if (frm.doc.cutting_order) {
+        args.cutting_order = frm.doc.cutting_order
+    } else {
+        args.cutting_plan = frm.doc.cutting_plan
+    }
+    frappe.call({
+        method:'essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.print_labels',
+        args: args,
+        callback: function(r){
+            if(r.message){
+                let config = qz.configs.create(printer)
+                qz.print(config,[r.message.zpl]).then(()=> {
+                    frappe.call({
+                        method: "essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.mark_labels_printed",
+                        args: {
+                            doc_name: frm.doc.name,
+                            grn: r.message.grn,
+                        },
+                        callback() {
+                            frm.reload_doc()
+                        },
+                    })
+                }).catch((err)=>{
+                    frappe.msgprint(__("Label printing failed. The LaySheet remains Bundles Generated and can be retried."))
+                })
+            }
+        }
+    })
+}

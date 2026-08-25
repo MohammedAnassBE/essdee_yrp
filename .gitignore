@@ -34,6 +34,9 @@ venv.bak/
 
 # Dependency directories
 node_modules/
+# `bench build` links the app dependency tree into public as a symlink. Git
+# treats that symlink as a file, so the directory rule above does not match it.
+essdee_yrp/public/node_modules
 jspm_packages/
 
 # IDEs and editors

@@ -8,6 +8,7 @@
   "item_variant",
   "quantity",
   "uom",
+  "goods_received_note_item",
   "work_order_deliverable",
   "lot",
   "received_type",
@@ -15,7 +16,11 @@
   "set_combination",
   "stock_qty",
   "stock_uom",
-  "conversion_factor"
+  "conversion_factor",
+  "stock_dimensions",
+  "material_value",
+  "consumption_sle",
+  "output_receipt_sle"
  ],
  "fields": [
   {
@@ -40,6 +45,14 @@
    "label": "UOM",
    "options": "UOM",
    "reqd": 1
+  },
+  {
+   "fieldname": "goods_received_note_item",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Goods Received Note Item",
+   "no_copy": 1,
+   "read_only": 1
   },
   {
    "fieldname": "work_order_deliverable",
@@ -91,6 +104,37 @@
    "fieldtype": "Float",
    "hidden": 1,
    "label": "Conversion Factor",
+   "read_only": 1
+  },
+  {
+   "default": "{}",
+   "fieldname": "stock_dimensions",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "Stock Dimensions",
+   "read_only": 1
+  },
+  {
+   "fieldname": "material_value",
+   "fieldtype": "Currency",
+   "hidden": 1,
+   "label": "Material Value",
+   "read_only": 1
+  },
+  {
+   "fieldname": "consumption_sle",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Consumption Stock Ledger Entry",
+   "options": "Stock Ledger Entry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "output_receipt_sle",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Output Receipt Stock Ledger Entry",
+   "options": "Stock Ledger Entry",
    "read_only": 1
   }
  ],

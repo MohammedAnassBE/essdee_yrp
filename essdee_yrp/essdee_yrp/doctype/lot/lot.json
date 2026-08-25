@@ -67,7 +67,11 @@
   "bom_summary",
   "bom_additional_items",
   "bom_summary_json",
+  "time_and_action_tab",
   "lot_time_and_action_details",
+  "time_and_action_html",
+  "section_break_cmku",
+  "time_and_action_report_html",
   "ocr_detail_tab",
   "ocr_detail_html",
   "alternative_detail_tab",
@@ -331,11 +335,30 @@
    "label": "BOM Summary JSON"
   },
   {
+	"fieldname": "time_and_action_tab",
+	"fieldtype": "Tab Break",
+	"label": "Time and Action"
+  },
+  {
    "fieldname": "lot_time_and_action_details",
    "fieldtype": "Table",
    "hidden": 1,
    "label": "Lot Time and Action Details",
    "options": "Lot Time and Action Detail"
+  },
+  {
+	"fieldname": "time_and_action_html",
+	"fieldtype": "HTML",
+	"label": "Time and Action HTML"
+  },
+  {
+	"fieldname": "section_break_cmku",
+	"fieldtype": "Section Break"
+  },
+  {
+	"fieldname": "time_and_action_report_html",
+	"fieldtype": "HTML",
+	"label": "Time and Action Report HTML"
   },
   {
    "default": "0",

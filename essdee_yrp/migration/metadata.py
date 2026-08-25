@@ -10,8 +10,12 @@ import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
 from essdee_yrp.migration.engine import MigrationError
-from essdee_yrp.migration.live import TARGET_SITE, _validate_live_target_metadata
-from essdee_yrp.migration.planner import build_schema_analysis
+from essdee_yrp.migration.config import get_migration_settings
+from essdee_yrp.migration.live import (
+	F15SourceBridge,
+	_validate_live_target_metadata,
+	build_live_schema_analysis,
+)
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
@@ -37,9 +41,12 @@ NON_DEFINITION_KEYS = {
 def sync_migration_metadata() -> dict:
 	"""Load only migration schemas and their reviewed field/property overlays."""
 
-	if frappe.local.site != TARGET_SITE:
-		raise MigrationError(f"Metadata sync must run on {TARGET_SITE}")
-	plan, _payload = build_schema_analysis()
+	settings = get_migration_settings()
+	if frappe.local.site != settings.target_site:
+		raise MigrationError(f"Metadata sync must run on {settings.target_site}")
+	plan, _payload = build_live_schema_analysis(
+		settings, F15SourceBridge(settings)
+	)
 	target_doctypes = set(plan.target_schemas)
 	reloaded = []
 	unresolved = []

@@ -21,6 +21,7 @@ from essdee_yrp.api.cloth_program import (
     _normalize_yarns,
     _requirement_payload,
     _round_program_weight,
+    _save_generated_cpd,
     _synced_program_route_additions,
     build_cloth_programs,
 )
@@ -272,7 +273,7 @@ class TestClothProgram(IntegrationTestCase):
         # snapshot must rebuild it automatically on save.
         cpd.set("yarn_ratio_details", [])
         cpd.yarn_item = None
-        cpd.save(ignore_permissions=True)
+        _save_generated_cpd(cpd)
         cpd.reload()
         self.assertEqual(
             [(row.yarn_item, flt(row.ratio)) for row in cpd.yarn_ratio_details],
@@ -311,7 +312,7 @@ class TestClothProgram(IntegrationTestCase):
             "compacting_dia": compacted_dia,
             "notes": "Applies to all colours",
         })
-        cpd.save(ignore_permissions=True)
+        _save_generated_cpd(cpd)
 
         cpd.reload()
         row = cpd.compacting_reference_details[0]
@@ -679,7 +680,7 @@ class TestClothProgram(IntegrationTestCase):
         cpd.append("fabric_processes", {
             "sequence": 40, "fabric_process": wash,
             "input_item": self.cloth, "output_item": self.cloth, "quantity_ratio": 1})
-        cpd.save(ignore_permissions=True)
+        _save_generated_cpd(cpd)
 
         dia2 = _ensure_iav("Dia", "_Test 70 Dia CPD")
         _find_or_create_cpd(self.cloth, self.selection,
@@ -721,7 +722,7 @@ class TestClothProgram(IntegrationTestCase):
         cpd.append("fabric_processes", {
             "sequence": 40, "fabric_process": wash,
             "input_item": self.cloth, "output_item": self.cloth, "quantity_ratio": 1})
-        cpd.save(ignore_permissions=True)
+        _save_generated_cpd(cpd)
         with self.assertRaisesRegex(frappe.ValidationError, "[Yy]arn"):
             _find_or_create_cpd(
                 self.cloth, dict(self.selection, yarn_item=None), self.tuples)
@@ -738,7 +739,7 @@ class TestClothProgram(IntegrationTestCase):
         cpd.append("fabric_processes", {
             "sequence": 40, "fabric_process": wash,
             "input_item": self.cloth, "output_item": self.cloth, "quantity_ratio": 1})
-        cpd.save(ignore_permissions=True)
+        _save_generated_cpd(cpd)
         _find_or_create_cpd(self.cloth, self.selection, self.tuples)
         cpd = frappe.get_doc("Item Production Detail", cpd_name)
         rows = sorted(cpd.fabric_processes, key=lambda r: r.idx)
@@ -815,7 +816,7 @@ class TestClothProgram(IntegrationTestCase):
         cpd.append("dyeing_colour_details", {
             "dia": self.dia, "from_colour": self.greige, "to_colour": self.red})
         with self.assertRaisesRegex(frappe.ValidationError, "duplicate mapping"):
-            cpd.save(ignore_permissions=True)
+            _save_generated_cpd(cpd)
 
     def test_changed_knitting_output_creates_new_cpd_version(self):
         """An output-colour change never mutates a CPD referenced by an earlier

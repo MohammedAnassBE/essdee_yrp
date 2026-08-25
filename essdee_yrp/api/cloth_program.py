@@ -826,8 +826,16 @@ def _find_or_create_cpd(cloth_item, selection, tuples):
 
     _persist_generic_fabric_rows(cpd)
     cpd.approval_status = "Approved"  # base field is UI-read_only; set server-side
-    cpd.save(ignore_permissions=True)
+    _save_generated_cpd(cpd)
     return cpd.name
+
+
+def _save_generated_cpd(cpd):
+    """Save a builder-owned cloth IPD without weakening Approved-IPD locking."""
+    from essdee_yrp.ipd_validations import allow_generated_cloth_ipd_update
+
+    with allow_generated_cloth_ipd_update(cpd):
+        cpd.save(ignore_permissions=True)
 
 
 def _persist_generic_fabric_rows(cpd):

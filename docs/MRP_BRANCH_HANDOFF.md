@@ -1,19 +1,22 @@
 # MRP Branch Handoff — Production API to Essdee YRP
 
-Last verified: 2026-08-17
+Last verified: 2026-08-25
 Canonical continuation branch: `apps/essdee_yrp` → `MRP`
 Base app branch: `apps/yrp` → `develop`
-Source reference: Frappe 15 `mrp3.site` / `production_api`
-Target: Frappe 16 `essdee_yrp.site` / `yrp` + `essdee_yrp`
+Source reference: Frappe 15 `mrp3.site:8002` / `production_api`
+Target: Frappe 16 `essdee_yrp.site:8003` / `yrp` + `essdee_yrp`
 
 ## Read this first
 
 This is the current handoff for the MRP migration. Read it before changing the
-MRP branch. It separates completed implementation from tested rehearsal,
-pending decisions, and work that has not started.
+MRP branch. It separates completed implementation and local verification from
+the remaining production cutover and deliberately excluded external contracts.
 
 Supporting documents contain the detailed inventories and evidence:
 
+- `docs/audits/2026-08-20-mrp-doctype-functional-audit.md` — screenshot-led
+  Production Order/IPD/cutting/stock workflow audit, final fixes, tested record
+  states, and the current 434-test validation result.
 - `docs/MRP_MIGRATION_CONTEXT.md` — full structural decision history.
 - `docs/plans/2026-08-13-production-api-data-migration.md` — migration engine,
   rehearsal, attachment, and cutover details.
@@ -29,6 +32,303 @@ Supporting documents contain the detailed inventories and evidence:
 
 If an older status paragraph conflicts with this file, this file and the
 current code/tests win. Re-run the checks instead of trusting an old count.
+
+## 2026-08-25 source-growth and transaction gate
+
+The committed F15 source inventory grew to 263 schemas. The current read-only
+planner sees 263 source / 326 target schemas, classifies them as 228 identity,
+32 mapped, and three custom, and reports zero blockers. The three new source
+DocTypes are `Cutting Bulk Lay Sheets`, `Cutting Bulk Lay Sheet Detail`, and
+`MRP HR Shift`; MRP Settings also gained HR connection/shift configuration and
+GRN Rework gained the source-versus-target warehouse option.
+
+The new behavior is owned entirely by `essdee_yrp`. Bulk Lay Sheets now drive
+split-lot LaySheet creation, consolidated Lot Transfer, per-lot submitted DCs,
+stock prerequisite checks, and label completion. Base-DocType links on Delivery
+Challan are shipped as Essdee Custom Field fixtures; Essdee-owned DocTypes use
+their normal schema fields. Sewing Details includes the HR Strength Report,
+whose server endpoint requires Sewing Plan read permission and never returns
+stored credentials.
+
+The complete Essdee run passed 514/514 tests: 23 unit, 295 integration, 110
+legacy-category, and 86 migration/optimizer tests. After the independent
+permission hardening, the focused Strength suite passed 7/7 and runtime
+acceptance passed 6/6. `bench build --app essdee_yrp`, Python compilation, JSON
+parsing, JS syntax checking, targeted `git diff --check`, and the rendered Bulk
+Lay Sheets and Sewing Strength pages passed with no browser-console errors.
+The local target's previously blank HR settings were then copied from the
+configured F15 source through the existing in-memory password bridge and
+Frappe encrypted-password storage; no credential was printed or stored in the
+repository. A real Desk fetch returned HTTP 200 and rendered 181 active
+employees plus 42 summary rows (223 table rows total) with zero console errors.
+The integrated run includes exact/collapsed bundle DC, return, redelivery,
+LIFO cancellation, split-DC stock-ledger matching, GRN, rework, Sewing,
+Finishing, and dispatch paths. No base `yrp` production file was changed for
+this addition.
+
+## 2026-08-20 screenshot-led MRP functional gate
+
+The migrated operational chain was driven in the rendered Desk and `/web` UI
+across normal, draft, submitted, in-progress, partially completed, approval
+pending, bundles generated, label printed, completed, and cancelled records.
+The evidence set has 237 workflow screenshots plus the six authenticated
+canonical `/web` screenshots. See the audit linked above for exact records and
+states.
+
+The audit corrected Work Order address scoping and calculation routing,
+matrix overflow, Approved-IPD authority, cancelled Cutting Plan and terminal
+LaySheet server/UI guards, Cut Panel Movement single-root transaction
+ownership, and the duplicate Production Order Lot card. Base `yrp` owns only
+the two generic Work Order address filters; every other audit change remains
+Essdee-owned.
+
+The follow-up on exact record `YRP-WO-2026-00038` restored Production API's
+non-cloth **Calculate Items** flow in Essdee Desk while retaining the separate
+cloth-specific calculator. The garment service covers Cutting, Stitching,
+Packing, IPD extra processes, and grouped processes. Approved legacy IPDs also
+expose **Generate / Regenerate IPD Process Matrix**, which rebuilds only derived
+matrix documents. `CS-34820 Heavy Tee-1` currently generates 24 Cutting
+matrices and explicitly skips eight Navy variants because the approved source
+IPD has no Navy stitching/panel-colour mapping.
+
+The final independent pass also closed direct-save spoofing into LaySheet
+Approval Pending, Label Printed, and Cancelled states. Grammage requests and
+physical label-print confirmation now pass through locked server actions; the
+label transition verifies the submitted GRN belongs to that LaySheet.
+
+Final `essdee_yrp` validation passed all 434 tests (12 unit, 258 integration,
+78 compatibility-category, 86 remaining), including the complete CPM → DC →
+GRN and CPM → Stock Entry lifecycles. The production frontend built cleanly and
+authenticated `/web` verification captured 6/6 pages with zero console/page
+errors or configuration warnings. No migrate, historical-data rewrite,
+commit, or push was performed.
+
+## 2026-08-18 production-portability gate
+
+The complete local SQL migration has now run: 3,437,124 source parents and
+6,325,639 parent/child documents were migrated, and 161,573,787 transformed
+field values were verified. That local result does not make a hardcoded local
+runner safe for production, so the execution boundary was hardened afterward.
+
+Current production contract:
+
+- The live migration runner contains no F15 bench path, source site, target site,
+  record-name exception list, date cutoff, Received Type name, Item Group
+  name, or Lot BOM process name. The separate filesystem-only schema-planner
+  CLI retains a local developer default; it does not execute the live migration
+  or write site data.
+- The active F16 site is always the target. The source bench/site and the few
+  source-specific legacy defaults come only from server-owned
+  `site_config.json`; Desk/API users cannot change them through the migration
+  document.
+- Only the reviewed `local_bench` source adapter is accepted. The configured
+  F15 bench must be on the same controlled host or mounted/restored locally
+  with its database and public/private files. Arbitrary remote URLs, SSH
+  commands, and credentials are deliberately not accepted.
+- The source must be in maintenance mode for **Migrate**, and the not-yet-live
+  target must remain isolated from business users/writers. A
+  successful Dry Run is reusable only while the source runtime-schema hash,
+  every parent/child table count and maximum modification timestamp, and the
+  exact source-invalid-Link digest remain identical. The deployed migration
+  code, target schema/mapping contract, and server defaults are fingerprinted
+  too, so a deployment or profile edit forces a new Analyse and Dry Run.
+- Historical broken Links are discovered from the frozen source and matched by
+  target DocType/field/row/value. No local record IDs are approved in code.
+- Stock verification uses every live YRP stock dimension and the complete
+  Stock Ledger Entry population; it has no Lot/Received Type or naming-prefix
+  shortcut.
+
+Configure each target site before creating or saving `MRP Data Migration`:
+
+```bash
+bench --site <f16-target-site> set-config --parse essdee_yrp_migration \
+'{"adapter":"local_bench","source_bench":"/absolute/path/to/frappe-15","source_site":"<f15-source-site>","source_app":"production_api","required_defaults":{"IPD Settings.default_knitting_process":"<source-process>","IPD Settings.default_dyeing_process":"<source-process>","Lot BOM.process_name":"<reviewed-process-for-legacy-blank-rows>"}}'
+```
+
+Do not put passwords or API secrets in this profile. MRP Settings Password
+fields use the normal source/target encryption handling and can be configured
+again after cutover when source encryption keys are unavailable.
+
+Read-only verification after this hardening passed against the current local
+source/target combination: live plan 260 source / 318 target DocTypes, 0
+blockers; 293,115 stock buckets exact; all 25 source-invalid Links audited and
+0 unexpected target-invalid Links; 75 focused migration tests passed. No
+historical data was rewritten during this hardening pass.
+
+### Fresh destructive rehearsal after hardening
+
+The owner-approved fresh rehearsal completed on 2026-08-18 through audit run
+`MRP-MIG-2026-00002`:
+
+- The source and target were put in maintenance mode, the target worker and
+  Kafka consumer were paused, and a full pre-reset backup was taken
+  (`20260818_110356-essdee_yrp_site-*`).
+- Analyse reported 260 source / 318 target DocTypes and zero blockers. A fresh
+  Dry Run transformed all 3,437,124 parents with zero failures and locked the
+  source/schema/code/default fingerprint used by Migrate and Verify.
+- The reset removed exactly 3,437,113 non-Single parents, 2,892,711 child rows,
+  969 migrated File records, 3,218 generated supplier warehouses, and 171
+  source series counters. It preserved the 11 Single/configuration DocTypes
+  required to rebuild the live stock-dimension contract. Post-reset checks
+  found zero remaining migration-owned parent, child, File, or series rows.
+- Migrate then wrote all 3,437,124 parents with zero skipped and zero failed.
+  Verify matched 6,325,639 parent/child identities and 161,573,787 transformed
+  field values with no target-only or missing source identity.
+- Stock matched across all 293,115 configured-dimension buckets. Link scanning
+  checked 704 fields: all 25 exact source-invalid values were audited and there
+  were zero unexpected invalid target Links. All 171 source naming counters
+  passed.
+- The restored local source has 1,004 File records but only two physical blobs;
+  967 attached records have an audited missing blob and 35 are audited orphan
+  attachments. The two available blobs passed disk/hash/size/privacy checks.
+  This is a limitation of the local production backup, not permission to omit
+  files in production: a production cutover with complete public/private
+  archives must use strict file mode.
+- A verified post-load backup was taken
+  (`20260818_124059-essdee_yrp_site-*`). Both sites, the worker, and the Kafka
+  consumer were restored to their original non-maintenance state; the target
+  health endpoint and rebuildable MyISAM tables passed.
+
+No production-server cutover was performed. Migration-code changes remain
+uncommitted for owner review.
+
+## 2026-08-18 business-logic implementation gate
+
+The F15 controller inventory has been classified and implemented as F16
+outcomes across all 85 source controllers. An outcome can be a retained
+stronger base-YRP implementation, an Essdee controller, a small Essdee adapter,
+a complete orchestration slice, or an intentional replacement/exclusion. This
+does not mean 85 legacy files were copied.
+
+Completed internal scope includes:
+
+- production setup, PPO changes/pricing, Lot/IPD/Work Order integration;
+- cutting definition, planning, bundle generation, label-to-GRN, panel
+  movement, recut, and exact cancellation/retry behavior;
+- quality/debit/rework mapping through current F16 contracts;
+- Sewing entry, closed-Work-Order GRN, dashboard, status, SCR, history, DPR,
+  monthly summary, item summary, FI updates, and consumption;
+- Finishing/dispatch, dynamic packing, old-Lot, OCR, return/rework, Lot Transfer,
+  and set-item DPR multiplication without multiplying physical boxes;
+- F16 dimension-aware FG stock entry, Item Conversion, Stock Summary, and
+  stock-facing Essdee adapters;
+- Time and Action, Product local behavior and secured files, local FG Item
+  generation, stickers, pricing/profitability, and bulk Work Order close;
+- required Desk JS/dialogs, 18 operational reports, and 32 print formats.
+
+During the final audit, Cutting LaySheet diameter-change stock adjustment was
+found to be carrying a legacy Supplier value into the F16 Warehouse dimension.
+It now resolves the supplier's mapped Warehouse through the base YRP contract,
+and the regression is covered by the complete suite. Sewing permissions were
+also corrected so System Manager retains the standard create/read/write/delete
+contract when the Stock User Custom DocPerm exists.
+
+Verification on `essdee_yrp.site`:
+
+- complete Essdee app suite: 402/402 tests passed;
+- six Sewing parent/child tables match normalized F15 SQL values;
+- all 18 operational reports execute against migrated F16 data;
+- all 32 print formats render against migrated documents;
+- Desk build and all JavaScript syntax checks pass;
+- Python compilation, DocType JSON parsing, and `git diff --check` pass;
+- a real System Manager session opened Sewing Details Dashboard without a
+  browser-console error.
+
+The implementation remains uncommitted for owner review. Base `yrp` was not
+changed by this business-logic completion pass.
+
+## 2026-08-20 Production Order manual-UAT overlay
+
+Owner UAT found that the migrated Production Order client script had retained
+the approval/quantity/status workflows but had omitted the F15 order-entry
+mount. Base YRP's generic entry grid therefore collected quantity only, leaving
+Essdee `Production Order Detail.ratio` and the original price fields at zero.
+
+The Essdee layer now replaces the generic grid inside the existing
+`details_html` field with an Essdee-owned Vue grid for Qty, Ratio, read-only
+Wholesale/Retail Price, and editable MRP. It emits base YRP's generic grouped
+item payload plus the Essdee values: base YRP still owns variant creation and
+quantity expansion, while the Essdee `before_validate` hook maps only its
+Custom Fields onto those child rows. A prior-row fallback preserves values
+owned by later workflows, including `production_order_mrp`, when a submitted
+document is saved again. New unsaved orders use DocType create permission for
+grid editability because Frappe does not supply the saved-document `__onload`
+action-role flag until the document exists; saved drafts retain the configured
+Production Order action-role gate. Server permissions remain authoritative.
+
+The UAT warning `Date 2026-08-20 10:24:28 must be in format DD MM YYYY` came
+from JSON approval-request timestamps containing microseconds. Quantity/ratio,
+status-change, and incoming-transfer requests now store whole-second Frappe
+Datetime strings, and `onload` normalizes already-pending request JSON before a
+Datetime dialog renders it.
+
+Verification on `essdee_yrp.site`: 12/12 focused Production Order business
+tests and 2/2 customization tests passed; the tests cover generic-grid storage
+of ratio/prices, Production Order-to-Lot ratio propagation, and whole-second
+timestamp formatting. The complete Essdee suite then passed 422/422, and
+`bench build --app essdee_yrp` passed. Browser checks on `PPO-00254` and a new
+unsaved Production Order confirmed the custom grid, all eight editable ratio
+inputs, Qty 12 / Ratio 3 / MRP 199 output, and zero console/page errors. A
+post-build browser repeat again returned Qty 12 / Ratio 3 with zero errors. No
+document was saved during browser verification, and base `yrp` was not changed.
+
+## 2026-08-20 cutting and printing workflow UAT overlay
+
+The owner-defined transaction chain was compared record by record between F15
+`mrp3.site:8002` and F16 `essdee_yrp.site:8003`. The connected historical
+oracle is:
+
+`PPO-00081` → `C0326-28` →
+`EE-36221 SHORTS SET HALF SLEEVE (CORD)-3` → `WO-2526-02637-2` →
+`CP-2603-00030` → `CM-2603-00135` → `CLS-2603-00251` →
+cutting DC `DC-2526-07291` → label GRN `GRN-2526-12944` → printing Work
+Order `WO-2627-00005` → internal CPM `CPM-2603-00364` / Stock Entry
+`STE-2026-05590` → outward CPM `CPM-2604-00015` / DC `DC-2627-00057` →
+inward CPM `CPM-2604-00036` / GRN `GRN-2627-00183`.
+
+All document links and persisted business payloads in that chain match the
+migrated F15 source. The corresponding 16 F15/F16 Desk routes were rendered;
+there were zero console or page errors. The audit then found and closed these
+remaining current-source/UI gaps, entirely in `essdee_yrp`:
+
+- Lot again exposes permission-gated **Actions → Link to PO / Unlink from PO**.
+  Both routes use the existing server-authoritative linked-Lot APIs and require
+  an audit reason.
+- A submitted Cutting Plan can create a draft **Lot Transfer** for positive
+  balance cloth. The server validates read/create permission, the submitted
+  plan, a different readable target Lot, the Work Order supplier-to-Warehouse
+  mapping, the configured default Received Type, and dimension-aware rows.
+- System Manager cancel authority for Cutting Marker and Cut Panel Movement is
+  restored by an idempotent Essdee setup task. The task is wired into install
+  and migrate hooks and was also applied directly to the current target site;
+  it does not alter base-YRP metadata files.
+- CPM-created Delivery Challans and GRNs now receive the Work Order address
+  snapshots required by the F16 schemas even though the CPM client opens the
+  new document by assigning defaults directly. A new server guard rejects a
+  closed, cancelled/draft, or different-Lot Work Order even if a caller bypasses
+  the Desk Link filter.
+- Regression coverage now performs a real CPM → DC → incoming CPM → GRN
+  round trip, asserts bundle-ledger/backlink creation, and cancels it in reverse
+  while proving both ledgers and backlinks are cleared. Separate tests cover
+  CPM Stock Entry, collapsed/non-bundle submit and cancel routing, label-to-GRN,
+  and Cutting Plan balance-Lot-Transfer creation.
+
+The old F15 System Manager **Calculate Pieces** Work Order action was reviewed
+but not copied. It is a repair utility built around superseded F15 DC/GRN piece
+recalculation engines, not part of the forward transaction chain, and its
+legacy implementation can increment delivered quantities twice. F16's normal
+DC/GRN lifecycle is already covered directly; any historical repair requirement
+must be specified and implemented as a separate audited, idempotent repair
+operation. Likewise, the F16 omission of **Create Debit** on a closed Work Order
+is an intentional stronger guard, not a missing migration action.
+
+Final verification after these fixes: complete Essdee suite 427/427; cutting
+module 15/15; Lot/PO boundary module 10/10; JavaScript syntax and Python compile
+checks passed; `bench build --app essdee_yrp` passed. Browser verification as a
+System Manager showed the Lot actions, Cutting Plan Lot Transfer, Cutting
+Marker and CPM Cancel controls, and CPM Stock Entry/DC/GRN Create menu with
+zero console/page errors. The base `yrp` repository was not edited by this
+overlay.
 
 ## Why this work exists
 
@@ -55,7 +355,7 @@ Current intended state:
 |---|---|---|
 | `/home/anas/frappe-16/apps/yrp` | `develop` | Already contains the approved generic base work. Do not edit, commit, or switch it as part of Essdee MRP work unless the owner explicitly asks. |
 | `/home/anas/frappe-16/apps/essdee_yrp` | `MRP` | Contains the migration schema, Essdee customization, migration engine, tests, and these documents. |
-| `/home/anas/frappe-15/apps/production_api` | `develop` | Read-only source/reference during F16 work. It currently has owner changes; do not commit them from this repository task. |
+| `/home/anas/frappe-15/apps/production_api` | `feat/cutting-plan-lot-transfer` (current reference branch; re-check before every continuation) | Read-only source/reference during F16 work. It currently has owner changes; do not switch, commit, or discard them from this repository task. |
 
 Essdee `develop` and `MRP` are intentionally separate. The 2026-08-17 review
 selectively ports approved runtime fixes from `develop` into the MRP working
@@ -101,6 +401,14 @@ The fabric-reference and historical Time and Action scope decisions are now
 closed. The separate ongoing Spine real-time-sync scope is unchanged.
 
 ## Durable ownership decisions
+
+### Hard repository rule from the owner — 2026-08-20
+
+For this MRP work, **do not change the base `yrp` app**. Manage and customize
+base-YRP behavior from `essdee_yrp` using its hooks, Custom Fields, client
+scripts, overrides, and published extension points. If a future requirement
+appears impossible without a base change, stop and obtain the owner's explicit
+approval instead of editing `apps/yrp`.
 
 ### Base `yrp`
 
@@ -210,7 +518,7 @@ It includes:
 - renamed DocType, field, Link-option, and value mappings;
 - deterministic dependency groups, including Link cycles;
 - content-hash checkpoints and resumable/delta behavior;
-- fixed F15 subprocess bridge for `mrp3.site` reads;
+- server-configured, read-only F15 subprocess bridge;
 - controlled F16 SQL bulk upserts that preserve source parent and child names;
 - Single DocType and Single child-table handling;
 - supporting-master, password-field, attachment, stock-summary, and `tabSeries`
@@ -279,8 +587,12 @@ them retained.
 
 ## Current source-schema reconciliation
 
-The F15 source moved after the successful rehearsal. Current reviewed F15 HEAD
-is `9cc4329c66ab`.
+The successful migration reconciliation recorded F15 source snapshot
+`9cc4329c66ab`. The current business-logic reference checkout is branch
+`fix/packing-dpr-box-count` at
+`8ad0f3e18b2118387fbe16fb3b45c01c868071f5`; therefore neither value may be
+treated as the production cutover fingerprint. Freeze and fingerprint the
+actual source again at cutover.
 
 The Work Order close fields are resolved without changing base YRP: source
 `close_reason` maps to Essdee `sd_close_reason`, and Essdee supplies
@@ -303,23 +615,27 @@ the read-only Dry Run and its data/attachment gates before any historical write.
 
 ## Work that has not been done
 
-- No live historical business-data migration has been executed on
-  `essdee_yrp.site`.
-- No final production cutover, downtime window, final delta, or rollback has
-  been executed.
-- The 150 schema ports are not all functional workflow ports. Most substantive
-  F15 controllers, JS/Vue components, reports, print formats, scheduled jobs,
-  and permissions still require slice-by-slice review and adaptation.
-- Finishing Plan/Dispatch and Cutting LaySheet behavior is planned but not yet
-  complete merely because their schemas and some UI assets exist.
-- The current F15 working tree has additional owner changes. Its earlier HEAD,
-  dirty-file list, and hash recorded in the 2026-08-13 plan are historical,
-  not a safe current baseline.
-- Local Spine target data was audited but not bulk-republished or converged by
-  this branch handoff. Production sync health must be measured at cutover; do
-  not infer production state from the local disabled scheduler/backlog.
-- No full `bench migrate` was run as part of this final documentation/commit
-  handoff.
+- No production-server cutover, production downtime window, final delta, or
+  rollback rehearsal has been executed. The completed destructive rehearsal is
+  local only.
+- The local source restore does not contain the complete physical public/private
+  file archives. Production attachment transfer still requires strict blob,
+  hash, size, path, and privacy verification against the real archives.
+- Remote FG OMS/DC synchronization is intentionally not reactivated. Its
+  endpoint, authentication, authorization, retry, and idempotency contract must
+  be approved separately if it is still needed.
+- Telegram approval and the global automatic-notification hook are intentionally
+  excluded until their production authorization and delivery contracts are
+  reviewed as separate integration work.
+- The required Desk workflows are ported. A separate `/web` redesign or new
+  Registered Experience is not implied by this migration and must follow the
+  bench UI architecture if requested later.
+- The current F15 working tree can continue to move. Freeze and fingerprint the
+  actual production source again before cutover; do not rely on an older HEAD.
+- Local Spine behavior is covered by current mapping/consumer tests, but
+  production synchronization health must still be observed during cutover.
+- The current MRP implementation and its latest fixes have not been committed;
+  they are intentionally left visible for owner review.
 
 ## Ordered continuation plan
 
@@ -364,29 +680,22 @@ System Manager must invoke the actions in order.
 6. Run the final source delta, repeat verification, and reopen only after every
    gate passes.
 
-### Gate 5 — business-logic slices
+### Gate 5 — business-logic slices: completed locally
 
-After historical-data verification, implement and test in this order:
-
-1. Shared F15-to-F16 compatibility seams.
-2. Complete Finishing Plan + Finishing Plan Dispatch, including current F15
-   packing/OCR behavior and tests.
-3. Cutting Order/Plan/Marker/LaySheet, including label-to-GRN behavior with
-   server-safe retry/idempotency.
-4. Panel movement, inspection, rejection, rework, and recut.
-5. Sewing and Time and Action.
-6. Product/FG, uploads, labels, pricing, and profitability.
-7. Remaining utilities, reports, print formats, permissions, schedules, and
-   integrations.
-
-For each slice, adapt behavior to F16 stock dimensions and permission rules;
-do not blindly copy F15 controllers.
+The internal business-logic slices, required Desk integrations, reports, print
+formats, permissions, cancellation/retry paths, and F16 stock-dimension
+adapters are implemented and covered by the 418-test local suite. Before
+production release, repeat the complete suite on the exact deployment commit
+and run owner UAT over the major end-to-end workflows. External FG OMS/DC,
+Telegram approval, and global notifications remain separate contracts.
 
 ### Gate 6 — UI parity
 
-Complete Desk and `/web` behavior after the backend contract is stable. Use
-the registered-experience versus configurable-layout decision in the bench
-`AGENTS.md`, and verify rendered UI/console rather than code alone.
+Required migrated Desk JS, dialogs, report views, and Sewing Details views are
+implemented. Any later `/web` surface must use the Registered Experience versus
+Configurable Layout decision in the bench `AGENTS.md`; it is a separate design
+scope, not an unfinished controller port. Repeat rendered UI and console checks
+for the production deployment and owner UAT records.
 
 ## Verification requirements for future work
 
@@ -405,6 +714,43 @@ A migration or logic slice is not complete until applicable checks pass:
 9. `apps/frappe` and `apps/erpnext` remain untouched.
 10. An independent diff review finds no secret, generated site data, source
     behavior loss, or unrelated owner change.
+
+## 2026-08-19 complete runtime acceptance overlay
+
+- All 71 migrated parent DocTypes loaded through Frappe's form loader. The four
+  parents without persisted rows also accepted rollback-safe sample documents;
+  `WO Recut` completed an insert, submit, and cancel lifecycle.
+- All 71 parent routes were opened in the real Desk browser while HTTP,
+  JavaScript console, page, and request errors were captured. The only initial
+  Item Group 404 was the verification user's correct lack of Item Master
+  permission; a temporary role proved the route and was removed immediately.
+  Finishing Plan Dispatch's two apparent failures were navigation-cancelled
+  requests and completed cleanly when the route remained open for 20 seconds.
+- All 209 distinct Essdee/YRP server methods referenced by the migrated JS/Vue
+  were invoked with rollback protection: 122 returned, 86 stopped at an
+  intended Frappe business/permission validation, and one Product tech-pack
+  release could not read a deliberately omitted physical attachment. No other
+  Python exception remained.
+- All 55 Essdee `doc_events` handlers executed against valid migrated records.
+  The 100 direct controller lifecycle methods were accounted for as 90 replay
+  passes, six successful real stock lifecycle samples, and four intentional
+  cancellation/audit guards.
+- A real historical defect was found in F15 itself: 27,861 GRN rework detail
+  rows store `set_combination` as JSON encoded twice. Migration correctly
+  preserved the source bytes. Essdee Finishing now unwraps that legacy shape
+  safely in every combination-key path; both previously failing Finishing
+  quantity rebuild APIs pass on `FP-2627-00076`.
+- Real forward-and-reversal tests pass for FG Stock Entry, Item Conversion,
+  Recut and Print Panel, migrated Cutting LaySheet GRN creation, legacy packing
+  GRN stock-only consumption, Cut Bundle Edit, and Cut Panel Movement.
+- The complete Essdee suite passed 418/418. The complete base YRP Stock Entry
+  module passed 13/13 after preserving owner-supplied cancellation backlink
+  exemptions. Python compilation, `git diff --check`, `bench build --app
+  essdee_yrp`, and `bench build --app yrp` passed.
+- Physical Product attachments remain outside this acceptance because the
+  owner explicitly excluded their blobs from the restored local backup. The
+  attachment APIs' synthetic tests still pass; production release testing must
+  use the real public/private file trees.
 
 ## 2026-08-17 validation overlay
 
@@ -432,8 +778,11 @@ A migration or logic slice is not complete until applicable checks pass:
 - Python compilation, JSON parsing, `git diff --check`, fixture ownership,
   Property Setter scope, and patch registration passed.
 - Migration engine/schema unit tests pass with the GRN marker preserved as a
-  storage field. Its special server behavior is intentionally still pending.
-- No `bench migrate`, live data migration, commit, or push was performed.
+  storage field. Its special server behavior was still pending in this
+  2026-08-17 snapshot and is completed in the current business-logic gate.
+- At the time of the 2026-08-17 overlay, no `bench migrate`, live data
+  migration, commit, or push was performed. The later local historical load is
+  recorded in the 2026-08-18 overlay above.
 
 ## Historical 2026-08-14 validation snapshot
 

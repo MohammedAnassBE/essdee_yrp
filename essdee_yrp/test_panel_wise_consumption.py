@@ -109,9 +109,10 @@ class TestPanelWiseConsumption(IntegrationTestCase):
 
 	def test_configured_approver_can_revert_ipd(self):
 		doc = SimpleNamespace(
+			name="TEST-IPD",
 			approval_status="Approved",
 			approved_by="approver@example.com",
-			save=Mock(),
+			check_permission=Mock(),
 		)
 		with patch(
 			"essdee_yrp.ipd_ui.get_approval_roles",
@@ -124,13 +125,23 @@ class TestPanelWiseConsumption(IntegrationTestCase):
 			frappe,
 			"get_doc",
 			return_value=doc,
+		), patch.object(
+			frappe.db,
+			"set_value",
+		) as set_value, patch.object(
+			frappe,
+			"clear_document_cache",
 		):
 			result = revert_ipd_approval("TEST-IPD")
 
 		self.assertEqual(result, {"status": "success"})
-		self.assertEqual(doc.approval_status, "Not Approved")
-		self.assertIsNone(doc.approved_by)
-		doc.save.assert_called_once_with(ignore_permissions=True)
+		doc.check_permission.assert_called_once_with("write")
+		set_value.assert_called_once_with(
+			"Item Production Detail",
+			"TEST-IPD",
+			{"approval_status": "Not Approved", "approved_by": None},
+			update_modified=True,
+		)
 
 	def test_duplicate_keeps_panel_matrix_fields(self):
 		self.assertIn(

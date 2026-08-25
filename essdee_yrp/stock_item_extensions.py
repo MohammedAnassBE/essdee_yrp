@@ -2,6 +2,12 @@
 
 
 ENTRY_FIELDS = {
+	"Stock Entry": (
+		# The base stock editor owns the generic item/dimension pivot.  These
+		# fields are Essdee trace data and must survive its group -> ungroup
+		# round-trip when a Cut Panel Movement creates a Stock Entry.
+		"set_combination",
+	),
 	"Work Order Deliverables": (
 		"fabric_reference_variant",
 		"fabric_reference_allocations",

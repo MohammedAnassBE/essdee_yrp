@@ -30,11 +30,14 @@ class FakePurchaseOrder(frappe._dict):
 class FakeLot(frappe._dict):
 	def __init__(self, **values):
 		super().__init__(values)
+		self.setdefault("docstatus", 0)
 		self.setdefault("production_detail", "IPD-1")
 		self.setdefault("lot_order_details", [])
 		self.setdefault("items", [])
+		self.setdefault("lot_time_and_action_details", [])
 		self.setdefault("allow_write", True)
 		self.saved = False
+		self.calculated = False
 
 	def check_permission(self, permission_type):
 		if permission_type == "write" and not self.allow_write:
@@ -42,6 +45,9 @@ class FakeLot(frappe._dict):
 
 	def set(self, fieldname, value):
 		self[fieldname] = value
+
+	def calculate_order(self):
+		self.calculated = True
 
 	def save(self):
 		self.saved = True
@@ -181,27 +187,31 @@ class TestLotPackingBoundary(FrappeTestCase):
 		}
 		with (
 			patch.object(frappe, "get_doc", return_value=lot),
-			patch(
-				"yrp.yrp.doctype.item_production_detail.item_production_detail."
+			patch.object(
+				lot_controller,
+				"calculate_essdee_accessory_bom",
+				return_value=[],
+			),
+			patch.object(
+				lot_controller,
 				"calculate_bom_for_variant_demands",
 				return_value=bom,
 			) as calculate,
+			patch.object(
+				lot_controller,
+				"_build_lot_bom_rows",
+				return_value=[{"item": "CLOTH-1"}],
+			),
+			patch.object(lot_controller, "_build_bom_summary_json", return_value={}),
 		):
-			result = lot_controller.get_calculated_bom(
-				"IPD-1",
-				[{"item_variant": "ITEM-CLIENT", "qty": 999}],
-				"LOT-1",
-			)
+			result = lot_controller.calculate_bom("LOT-1")
 
 		calculate.assert_called_once_with(
 			"IPD-1",
 			[{"item_variant": "ITEM-SAVED", "qty": 4.0}],
-			process_names=None,
-			include_outputs=False,
 		)
 		self.assertTrue(lot.saved)
-		self.assertEqual(lot.total_quantity, 4)
-		self.assertEqual(result["total_qty"], 4)
+		self.assertEqual(result["bom_summary"], [{"item": "CLOTH-1"}])
 
 	def test_lot_bom_requires_write_permission(self):
 		lot = FakeLot(
@@ -210,12 +220,36 @@ class TestLotPackingBoundary(FrappeTestCase):
 		)
 		with (
 			patch.object(frappe, "get_doc", return_value=lot),
-			patch(
-				"yrp.yrp.doctype.item_production_detail.item_production_detail."
-				"calculate_bom_for_variant_demands"
+			patch.object(
+				lot_controller,
+				"calculate_bom_for_variant_demands",
 			) as calculate,
 			self.assertRaises(frappe.PermissionError),
 		):
-			lot_controller.get_calculated_bom("IPD-1", [], "LOT-1")
+			lot_controller.calculate_bom("LOT-1")
 
 		calculate.assert_not_called()
+
+	def test_order_items_cannot_be_recalculated_after_time_and_action(self):
+		lot = FakeLot(
+			lot_time_and_action_details=[frappe._dict(time_and_action="TNA-1")]
+		)
+		with (
+			patch.object(frappe, "get_doc", return_value=lot),
+			self.assertRaisesRegex(frappe.ValidationError, "after Time and Action"),
+		):
+			lot_controller.update_order_details("LOT-1")
+
+		self.assertFalse(lot.calculated)
+		self.assertFalse(lot.saved)
+
+	def test_order_item_recalculation_requires_write_permission(self):
+		lot = FakeLot(allow_write=False)
+		with (
+			patch.object(frappe, "get_doc", return_value=lot),
+			self.assertRaises(frappe.PermissionError),
+		):
+			lot_controller.update_order_details("LOT-1")
+
+		self.assertFalse(lot.calculated)
+		self.assertFalse(lot.saved)

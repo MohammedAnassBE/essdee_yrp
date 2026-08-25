@@ -15,14 +15,16 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Input Type",
-   "options": "Sewing Plan Input Type"
+   "options": "Sewing Plan Input Type",
+   "reqd": 1
   },
   {
    "fieldname": "difference_from",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Difference From",
-   "options": "Sewing Plan Input Type"
+   "options": "Sewing Plan Input Type",
+   "reqd": 1
   }
  ],
  "grid_page_length": 50,

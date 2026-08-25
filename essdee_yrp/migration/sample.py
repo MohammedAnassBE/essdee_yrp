@@ -15,16 +15,15 @@ from essdee_yrp.migration.engine import MigrationError, transform_document
 from essdee_yrp.migration.live import (
 	F15SourceBridge,
 	FrappeBulkTarget,
-	SOURCE_SITE,
-	TARGET_SITE,
 	TABLE_FIELD_TYPES,
 	_db_value,
 	_quote_identifier,
 	_resolve_and_validate_required_target_values,
 	_validate_external_references,
 	_validate_live_target_metadata,
+	build_live_schema_analysis,
 )
-from essdee_yrp.migration.planner import build_schema_analysis
+from essdee_yrp.migration.config import get_migration_settings
 
 
 MAX_SAMPLE_PER_DOCTYPE = 20
@@ -34,10 +33,11 @@ NUMERIC_FIELD_TYPES = {"Check", "Currency", "Float", "Int", "Percent"}
 def audit_full_external_references() -> dict[str, Any]:
 	"""Read every source Link and report full-migration external blockers."""
 
-	if frappe.local.site != TARGET_SITE:
-		raise MigrationError(f"Reference audit must run on {TARGET_SITE}")
-	source = F15SourceBridge()
-	plan, _payload = build_schema_analysis(source_schemas=source.schemas())
+	settings = get_migration_settings()
+	if frappe.local.site != settings.target_site:
+		raise MigrationError(f"Reference audit must run on {settings.target_site}")
+	source = F15SourceBridge(settings)
+	plan, _payload = build_live_schema_analysis(settings, source)
 	if not plan.ready:
 		return {"status": "Blocked", "issues": list(plan.issues)}
 	try:
@@ -172,8 +172,9 @@ def run_query_only_sample(
 ) -> dict[str, Any]:
 	"""Write and SQL-verify up to 20 source parents per mapped DocType."""
 
-	if frappe.local.site != TARGET_SITE:
-		raise MigrationError(f"Sample migration must run on {TARGET_SITE}")
+	settings = get_migration_settings()
+	if frappe.local.site != settings.target_site:
+		raise MigrationError(f"Sample migration must run on {settings.target_site}")
 	limit = int(limit_per_doctype)
 	if limit < 1 or limit > MAX_SAMPLE_PER_DOCTYPE:
 		raise MigrationError(
@@ -182,21 +183,21 @@ def run_query_only_sample(
 	if not frappe.db.exists("MRP Data Migration", migration_name):
 		raise MigrationError(f"Unknown MRP Data Migration {migration_name}")
 
-	source = F15SourceBridge()
-	plan, schema_payload = build_schema_analysis(source_schemas=source.schemas())
+	source = F15SourceBridge(settings)
+	plan, schema_payload = build_live_schema_analysis(settings, source)
 	if not plan.ready:
 		raise MigrationError("Schema plan is blocked:\n" + "\n".join(plan.issues))
 	_validate_live_target_metadata(plan)
 	source_status = source.status()
-	if source_status.get("site") != SOURCE_SITE:
+	if source_status.get("site") != settings.source_site:
 		raise MigrationError("Source bridge connected to an unapproved site")
 
 	target = QueryOnlySampleTarget()
 	reference_data = source.reference_data()
 	report: dict[str, Any] = {
 		"mode": "query_only_sample",
-		"source_site": SOURCE_SITE,
-		"target_site": TARGET_SITE,
+		"source_site": settings.source_site,
+		"target_site": settings.target_site,
 		"limit_per_parent_doctype": limit,
 		"schema": {
 			"source_doctypes": schema_payload["source_doctypes"],

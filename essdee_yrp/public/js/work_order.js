@@ -11,6 +11,8 @@ frappe.ui.form.on("Work Order", {
 		});
 	},
 	refresh(frm) {
+		frm._work_order_process_is_cloth = null;
+		update_calculate_button(frm);
 		frm.set_df_property("supplier", "label", __("Supplier"));
 		frm.set_df_property("supplier_address", "label", __("Supplier Address"));
 		frm.set_df_property("process_name", "label", __("Process"));
@@ -23,9 +25,9 @@ frappe.ui.form.on("Work Order", {
 		setTimeout(() => {
 			arrange_work_order_header_fields(frm);
 			mount_calculated_work_order_editors(frm);
+			mount_work_order_summary(frm);
+			setup_essdee_work_order_actions(frm);
 		}, 0);
-		if (frm.is_new() || frm.doc.docstatus !== 0) return;
-		frm.add_custom_button(__("Calculate Fabric Deliverables"), () => open_fabric_calculate(frm));
 	},
 	lot(frm) {
 		if (frm.doc.docstatus === 0) {
@@ -50,7 +52,9 @@ frappe.ui.form.on("Work Order", {
 		frm._work_order_selection_request = request_id;
 		frm._work_order_selection_options = [];
 		frm._work_order_item_options = [];
+		frm._work_order_process_is_cloth = null;
 		update_work_order_header_controls(frm);
+		update_calculate_button(frm);
 		if (!frm.doc.lot || !frm.doc.process_name) return;
 
 		const r = await frappe.call({
@@ -62,6 +66,7 @@ frappe.ui.form.on("Work Order", {
 		const context = r.message || {};
 		frm._work_order_selection_options = context.options || [];
 		frm._work_order_item_options = context.item_options || [];
+		frm._work_order_process_is_cloth = Boolean(context.process_is_cloth_process);
 
 		if (frm.doc.docstatus === 0) {
 			if (
@@ -83,8 +88,412 @@ frappe.ui.form.on("Work Order", {
 			}
 		}
 		update_work_order_header_controls(frm);
+		update_calculate_button(frm);
 	},
 });
+
+function update_calculate_button(frm) {
+	const fabric_label = __("Calculate Fabric Deliverables");
+	const garment_label = __("Calculate Items");
+	frm.remove_custom_button(fabric_label);
+	frm.remove_custom_button(garment_label);
+	if (
+		frm.is_new()
+		|| frm.doc.docstatus !== 0
+		|| frm.doc.is_rework
+		|| !frm.doc.lot
+		|| !frm.doc.process_name
+		|| frm._work_order_process_is_cloth === null
+	) {
+		return;
+	}
+	if (frm._work_order_process_is_cloth) {
+		frm.add_custom_button(fabric_label, () => open_fabric_calculate(frm));
+	} else {
+		frm.add_custom_button(garment_label, () => open_garment_calculate(frm));
+	}
+}
+
+const ESSDEE_WORK_ORDER_ACTIONS = [
+	"Material Issue",
+	"Make Cutting Plan",
+	"Make DC",
+	"Make GRN",
+	"Create Recut",
+	"Change Delivery Date",
+	"Change Item",
+	"Create Sewing Plan",
+	"Open Sewing Plan",
+	"Calculate Pieces",
+];
+
+function clear_essdee_work_order_actions(frm) {
+	for (const label of ESSDEE_WORK_ORDER_ACTIONS) {
+		frm.remove_custom_button(__(label));
+		frm.remove_custom_button(__(label), __("Create"));
+	}
+}
+
+function setup_essdee_work_order_actions(frm) {
+	clear_essdee_work_order_actions(frm);
+	const request = (frm._essdee_action_request || 0) + 1;
+	frm._essdee_action_request = request;
+	if (frm.is_new() || frm.doc.docstatus !== 1) {
+		return;
+	}
+	frappe.call({
+		method: "essdee_yrp.work_order_actions.get_work_order_action_context",
+		args: { work_order: frm.doc.name },
+		callback(r) {
+			if (request !== frm._essdee_action_request) return;
+			const context = r.message || {};
+			if (context.can_calculate_pieces) {
+				frm.add_custom_button(__("Calculate Pieces"), () => {
+					rebuild_work_order_pieces(frm);
+				});
+			}
+			if (!context.is_open) return;
+			add_essdee_create_actions(frm, context);
+			if (context.can_change_delivery_date) {
+				frm.add_custom_button(__("Change Delivery Date"), () => {
+					open_change_delivery_date_dialog(frm);
+				});
+			}
+			if (context.can_change_item) {
+				frm.add_custom_button(__("Change Item"), () => {
+					open_change_item_dialog(frm);
+				});
+			}
+			if (context.can_create_sewing_plan) {
+				const label = context.sewing_plan
+					? __("Open Sewing Plan")
+					: __("Create Sewing Plan");
+				frm.add_custom_button(label, () => {
+					if (context.sewing_plan) {
+						frappe.set_route("Form", "Sewing Plan", context.sewing_plan);
+						return;
+					}
+					create_sewing_plan(frm);
+				});
+			}
+		},
+	});
+}
+
+function rebuild_work_order_pieces(frm) {
+	frappe.call({
+		method: "essdee_yrp.work_order_piece_tracking.calculate_completed_pieces",
+		args: { work_order: frm.doc.name },
+		freeze: true,
+		freeze_message: __("Rebuilding Work Order piece quantities..."),
+		callback(r) {
+			const result = r.message || {};
+			frappe.show_alert({
+				message: __("Pieces rebuilt: {0} delivered, {1} received.", [
+					flt(result.total_delivered, 3),
+					flt(result.total_received, 3),
+				]),
+				indicator: "green",
+			});
+			frm.reload_doc();
+		},
+	});
+}
+
+function add_essdee_create_actions(frm, context) {
+	if (context.can_make_material_issue) {
+		frm.add_custom_button(__("Material Issue"), () => {
+			frappe.new_doc("Stock Entry", {
+				purpose: "Material Issue",
+				against: "Work Order",
+				against_id: frm.doc.name,
+				from_warehouse: context.material_issue_warehouse || "",
+				from_supplier: frm.doc.supplier || "",
+				transfer_supplier: frm.doc.supplier || "",
+			});
+		}, __("Create"));
+	}
+	if (context.can_make_cutting_plan) {
+		frm.add_custom_button(__("Make Cutting Plan"), () => {
+			open_local_work_order_doc("Cutting Plan", {
+				work_order: frm.doc.name,
+				lot: frm.doc.lot,
+				item: frm.doc.item,
+				maximum_no_of_plys: 100,
+			});
+		}, __("Create"));
+	}
+	if (context.can_make_delivery_challan) {
+		frm.add_custom_button(__("Make DC"), () => {
+			prepare_work_order_transaction(frm, "Delivery Challan");
+		}, __("Create"));
+	}
+	if (context.can_make_goods_received_note) {
+		frm.add_custom_button(__("Make GRN"), () => {
+			select_grn_delivery_challan(frm);
+		}, __("Create"));
+	}
+	if (context.can_make_recut) {
+		frm.add_custom_button(__("Create Recut"), () => {
+			open_local_work_order_doc("WO Recut", {
+				work_order: frm.doc.name,
+				lot: frm.doc.lot,
+			});
+		}, __("Create"));
+	}
+}
+
+function open_local_work_order_doc(doctype, values) {
+	frappe.model.with_doctype(doctype, () => {
+		const doc = frappe.model.get_new_doc(doctype);
+		for (const [fieldname, value] of Object.entries(values || {})) {
+			if (frappe.meta.has_field(doctype, fieldname)) doc[fieldname] = value;
+		}
+		frappe.set_route("Form", doctype, doc.name);
+	});
+}
+
+function select_grn_delivery_challan(frm) {
+	const dialog = new frappe.ui.Dialog({
+		title: __("Select Delivery Challan"),
+		fields: [
+			{
+				fieldname: "delivery_challan",
+				fieldtype: "Link",
+				options: "Delivery Challan",
+				label: __("Delivery Challan"),
+				get_query: () => ({
+					filters: { work_order: frm.doc.name, docstatus: 1 },
+				}),
+			},
+		],
+		primary_action(values) {
+			dialog.hide();
+			prepare_work_order_transaction(frm, "Goods Received Note", {
+				delivery_challan: values.delivery_challan || "",
+			});
+		},
+	});
+	dialog.show();
+}
+
+function prepare_work_order_transaction(frm, doctype, extra_args = {}) {
+	const method = doctype === "Delivery Challan"
+		? "essdee_yrp.work_order_actions.get_delivery_challan_defaults"
+		: "essdee_yrp.work_order_actions.get_goods_received_note_defaults";
+	frappe.call({
+		method,
+		args: { work_order: frm.doc.name, ...extra_args },
+		freeze: true,
+		freeze_message: __(`Preparing ${doctype}...`),
+		callback(r) {
+			if (r.message) open_prepared_work_order_transaction(doctype, r.message);
+		},
+	});
+}
+
+function open_prepared_work_order_transaction(doctype, values) {
+	frappe.model.with_doctype(doctype, () => {
+		const doc = frappe.model.get_new_doc(doctype);
+		const prepared_item_details = values?.item_details || [];
+		const ignored = new Set(["items", "correction_items", "correction_item_details"]);
+		for (const [fieldname, value] of Object.entries(values || {})) {
+			if (ignored.has(fieldname)) continue;
+			if (fieldname === "item_details") {
+				doc.item_details = JSON.stringify(value || []);
+				continue;
+			}
+			if (frappe.meta.has_field(doctype, fieldname)) doc[fieldname] = value;
+		}
+		if (!doc.posting_date) doc.posting_date = frappe.datetime.nowdate();
+		if (!doc.posting_time) doc.posting_time = frappe.datetime.now_datetime().split(" ")[1];
+		frappe.set_route("Form", doctype, doc.name).then(() => {
+			if (doctype !== "Goods Received Note") return;
+			frappe.after_ajax(() => {
+				if (cur_frm?.doctype !== doctype || cur_frm.doc.name !== doc.name) return;
+				cur_frm.clear_table("items");
+				cur_frm.refresh_field("items");
+				cur_frm.doc.item_details = JSON.stringify(prepared_item_details);
+				if (cur_frm.itemEditor) {
+					cur_frm.itemEditor.load_data(prepared_item_details);
+				}
+				cur_frm.dirty();
+			});
+		});
+	});
+}
+
+function open_change_delivery_date_dialog(frm) {
+	const d = new frappe.ui.Dialog({
+		title: __("Change Delivery Date"),
+		fields: [
+			{
+				fieldname: "expected_date",
+				fieldtype: "Date",
+				label: __("Delivery Date"),
+				default: frm.doc.expected_delivery_date,
+				reqd: 1,
+			},
+			{
+				fieldname: "reason",
+				fieldtype: "Small Text",
+				label: __("Reason"),
+				reqd: 1,
+			},
+		],
+		primary_action_label: __("Submit"),
+		primary_action(values) {
+			frappe.call({
+				method: "essdee_yrp.time_and_action.tracking.update_expected_date",
+				args: {
+					work_order: frm.doc.name,
+					expected_date: values.expected_date,
+					reason: values.reason,
+					_return: 0,
+				},
+				freeze: true,
+				freeze_message: __("Updating delivery date..."),
+				callback() {
+					d.hide();
+					frm.reload_doc();
+				},
+			});
+		},
+	});
+	d.show();
+}
+
+function create_sewing_plan(frm) {
+	frappe.call({
+		method: "essdee_yrp.sewing.plan.create_sewing_plan",
+		args: { work_order: frm.doc.name },
+		freeze: true,
+		freeze_message: __("Creating Sewing Plan..."),
+		callback(r) {
+			if (r.message) frappe.set_route("Form", "Sewing Plan", r.message);
+		},
+	});
+}
+
+function open_change_item_dialog(frm) {
+	frappe.call({
+		method: "essdee_yrp.work_order_actions.get_wo_bom_accessory_items",
+		args: { work_order: frm.doc.name },
+		freeze: true,
+		freeze_message: __("Loading Item BOM rows..."),
+		callback(r) {
+			const result = r.message || {};
+			if (!result.supported || !(result.items || []).length) {
+				frappe.msgprint({
+					title: __("Change Item"),
+					message: result.message || __("No Item BOM rows are available."),
+					indicator: "blue",
+				});
+				return;
+			}
+			const d = new frappe.ui.Dialog({
+				title: __("Change Item"),
+				size: "large",
+				fields: [{ fieldname: "items_html", fieldtype: "HTML" }],
+				primary_action_label: __("Recalculate"),
+				primary_action() {
+					const selected = d.$wrapper
+						.find(".essdee-change-item-row:checked")
+						.map((_, element) => $(element).data("name"))
+						.get();
+					if (!selected.length) {
+						frappe.msgprint(__("Select at least one Item BOM row to recalculate."));
+						return;
+					}
+					d.hide();
+					open_change_item_preview(frm, selected);
+				},
+			});
+			d.fields_dict.items_html.$wrapper.html(render_change_item_rows(result.items));
+			d.show();
+		},
+	});
+}
+
+function open_change_item_preview(frm, selected) {
+	frappe.call({
+		method: "essdee_yrp.work_order_actions.get_wo_bom_accessory_change_preview",
+		args: { work_order: frm.doc.name, selected },
+		freeze: true,
+		freeze_message: __("Recalculating selected Item BOM rows..."),
+		callback(r) {
+			const changes = (r.message || {}).changes || [];
+			const approvable = changes.filter(
+				(change) => change.action === "replace" && change.eligible,
+			);
+			const d = new frappe.ui.Dialog({
+				title: __("Approve Item BOM Change"),
+				size: "large",
+				fields: [{ fieldname: "preview_html", fieldtype: "HTML" }],
+				primary_action_label: __("Approve"),
+				primary_action() {
+					if (!approvable.length) return;
+					frappe.call({
+						method: "essdee_yrp.work_order_actions.apply_bom_accessory_changes",
+						args: { work_order: frm.doc.name, selected },
+						freeze: true,
+						freeze_message: __("Updating selected Item BOM rows..."),
+						callback(res) {
+							const output = res.message || {};
+							frappe.msgprint({
+								title: __("Change Item"),
+								message: __("Updated {0} Item BOM row(s).", [(output.applied || []).length]),
+								indicator: (output.applied || []).length ? "green" : "orange",
+							});
+							d.hide();
+							frm.reload_doc();
+						},
+					});
+				},
+			});
+			d.fields_dict.preview_html.$wrapper.html(render_change_item_preview(changes));
+			d.show();
+			d.get_primary_btn().toggle(approvable.length > 0);
+		},
+	});
+}
+
+function render_change_item_rows(items) {
+	const escape = frappe.utils.escape_html;
+	const rows = items.map((item) => `<tr>
+		<td class="text-center"><input type="checkbox" class="essdee-change-item-row" data-name="${escape(item.row_name)}"></td>
+		<td>${escape(item.branch || "")}</td>
+		<td>${escape(item.item || "")}</td>
+		<td>${escape(item.attributes || "")}</td>
+		<td class="text-right">${flt(item.qty, 3)} ${escape(item.uom || "")}</td>
+	</tr>`).join("");
+	return `<div class="table-responsive"><table class="table table-bordered">
+		<thead><tr><th></th><th>${__("Process")}</th><th>${__("Item BOM")}</th><th>${__("Mapping")}</th><th>${__("Qty")}</th></tr></thead>
+		<tbody>${rows}</tbody>
+	</table></div>`;
+}
+
+function render_change_item_preview(changes) {
+	const escape = frappe.utils.escape_html;
+	if (!changes.length) return `<p class="text-muted">${__("No recalculated changes were found.")}</p>`;
+	const rows = changes.map((change) => {
+		let status = change.eligible
+			? `<span class="text-success">${__("Ready")}</span>`
+			: `<span class="text-danger">${escape(change.reason || __("Not eligible"))}</span>`;
+		if (change.action === "unchanged") status = `<span class="text-muted">${__("No change")}</span>`;
+		return `<tr class="${change.eligible ? "" : "text-muted"}">
+			<td>${escape(change.item || "")}</td>
+			<td>${escape(change.old_variant || "")}<br><span class="text-muted">${__("Qty")}: ${flt(change.old_qty, 3)} ${escape(change.old_uom || "")}</span></td>
+			<td class="text-center">&rarr;</td>
+			<td>${escape(change.new_variant || "")}<br><span class="text-muted">${__("Calculated Qty")}: ${flt(change.new_qty, 3)} ${escape(change.new_uom || "")}</span></td>
+			<td>${status}</td>
+		</tr>`;
+	}).join("");
+	return `<div class="table-responsive"><table class="table table-bordered">
+		<thead><tr><th>${__("Item BOM")}</th><th>${__("Current")}</th><th></th><th>${__("Recalculated")}</th><th>${__("Status")}</th></tr></thead>
+		<tbody>${rows}</tbody>
+	</table></div>`;
+}
 
 function update_work_order_header_controls(frm) {
 	const draft = frm.doc.docstatus === 0;
@@ -172,6 +581,65 @@ function mount_calculated_work_order_editors(frm) {
 		frm[config.editor_key].load_data(data);
 		frm[config.editor_key].update_status();
 	});
+	essdee_yrp.contain_item_editor_matrix(frm, ["deliverable_items", "receivable_items"]);
+}
+
+function mount_work_order_summary(frm) {
+	const field = frm.fields_dict.wo_summary_html;
+	if (!field) return;
+
+	const $wrapper = $(field.wrapper);
+	if (frm._essdee_work_order_summary?.app) {
+		frm._essdee_work_order_summary.app.unmount();
+	}
+	frm._essdee_work_order_summary = null;
+	$wrapper.empty();
+
+	const request = (frm._essdee_summary_request || 0) + 1;
+	frm._essdee_summary_request = request;
+	if (frm.is_new() || frm.doc.docstatus !== 1 || frm.doc.is_rework) return;
+
+	$wrapper.html(`<p class="text-muted" style="padding:12px 0;">${__("Loading Work Order summary...")}</p>`);
+	frappe.call({
+		method: "essdee_yrp.api.work_order.fetch_summary_details",
+		args: {
+			doc_name: frm.doc.name,
+			production_detail: frm.doc.production_detail,
+		},
+		callback(r) {
+			if (request !== frm._essdee_summary_request) return;
+			const result = r.message || {};
+			const rows = result.item_detail || [];
+			$wrapper.empty();
+			if (!rows.length) {
+				$wrapper.html(
+					`<div class="alert alert-info">${__("No Work Order Calculated Item rows are available for this summary.")}</div>`,
+				);
+				return;
+			}
+			if (!frappe.production?.ui?.WOSummary) {
+				$wrapper.html(
+					`<div class="alert alert-danger">${__("Work Order summary component is unavailable. Refresh after rebuilding Essdee assets.")}</div>`,
+				);
+				return;
+			}
+			frm._essdee_work_order_summary = new frappe.production.ui.WOSummary(
+				$wrapper,
+			);
+			frm._essdee_work_order_summary.load_data(
+				rows,
+				result.deliverables || [],
+				{ doctype: "Work Order" },
+			);
+			$wrapper.css("overflow-x", "auto");
+		},
+		error() {
+			if (request !== frm._essdee_summary_request) return;
+			$wrapper.html(
+				`<div class="alert alert-danger">${__("Could not load the Work Order summary.")}</div>`,
+			);
+		},
+	});
 }
 
 function open_fabric_calculate(frm) {
@@ -190,6 +658,181 @@ function open_fabric_calculate(frm) {
 			render_fabric_dialog(frm, ctx);
 		},
 	});
+}
+
+function open_garment_calculate(frm) {
+	if (frm.is_dirty()) {
+		frappe.msgprint(__("Save the Work Order before calculating items."));
+		return;
+	}
+	frappe.call({
+		method: "essdee_yrp.garment_work_order.get_garment_work_order_context",
+		args: { work_order: frm.doc.name },
+		freeze: true,
+		freeze_message: __("Loading Lot items..."),
+		callback(r) {
+			const context = r.message || {};
+			if (!(context.rows || []).length) {
+				frappe.msgprint(__("The Lot has no items available for this process."));
+				return;
+			}
+			render_garment_calculate_dialog(frm, context);
+		},
+	});
+}
+
+function render_garment_calculate_dialog(frm, context) {
+	const rows = context.rows || [];
+	const matrixRows = context.matrix_rows || [];
+	const attributes = context.display_attributes || [];
+	const primaryValues = context.primary_values || [];
+
+	const escape = (value) => frappe.utils.escape_html(String(value ?? ""));
+	const missing_matrices = context.missing_matrix_variants || [];
+	const missing_preview = missing_matrices.slice(0, 5).map(escape).join(", ");
+	const missing_suffix = missing_matrices.length > 5
+		? __(", and {0} more", [missing_matrices.length - 5])
+		: "";
+	const matrix_warning = context.matrix_ready
+		? ""
+		: `<div class="alert alert-warning" style="margin-bottom:12px;">
+			${__("Cutting matrices are missing for {0} selected variant(s): {1}{2}. Open {3} and use Generate / Regenerate IPD Process Matrix. If regeneration skips them, complete those variants' Cutting mappings in the IPD.", [
+				missing_matrices.length,
+				missing_preview,
+				missing_suffix,
+				`<a href="/app/item-production-detail/${encodeURIComponent(context.ipd)}"><b>${escape(context.ipd)}</b></a>`,
+			])}
+		</div>`;
+	const attributeHeader = attributes
+		.map((attribute) => `<th>${escape(__(attribute))}</th>`)
+		.join("");
+	const primaryHeader = primaryValues
+		.map((value) => `<th style="min-width:92px;">${escape(value)}</th>`)
+		.join("");
+	const body = matrixRows.map((row, index) => {
+		const attributeCells = attributes.map(
+			(attribute) => `<td>${escape((row.attributes || {})[attribute] || "")}</td>`,
+		).join("");
+		const qtyCells = primaryValues.map((value) => {
+			const cell = (row.values || {})[value];
+			if (!cell) return '<td class="text-muted text-center">—</td>';
+			return `<td style="min-width:92px;">
+				<input class="form-control input-sm essdee-wo-calc-qty"
+					type="number" min="0" max="${escape(flt(cell.available_qty))}" step="1"
+					value="${escape(flt(cell.qty))}"
+					data-source-row="${escape(cell.source_row)}"
+					data-primary-value="${escape(value)}"
+					title="${escape(cell.item_variant)}">
+			</td>`;
+		}).join("");
+		return `<tr data-matrix-row="${index}">
+			<td><input type="checkbox" class="essdee-wo-row-toggle" checked> ${index + 1}</td>
+			${attributeCells}
+			${qtyCells}
+			<td class="text-right"><strong class="essdee-wo-row-total">0</strong></td>
+		</tr>`;
+	}).join("");
+	const totals = primaryValues
+		.map((value) => `<th class="text-right essdee-wo-column-total" data-primary-value="${escape(value)}">0</th>`)
+		.join("");
+	const html = `${matrix_warning}
+		<h4 style="margin:0 0 10px;">${__("Order Items")}</h4>
+		<div class="mb-2">
+			<button class="btn btn-xs btn-default essdee-wo-select-all">${__("Select All")}</button>
+			<button class="btn btn-xs btn-default essdee-wo-unselect-all" style="margin-left:5px;">${__("Unselect All")}</button>
+		</div>
+		<div style="max-height:55vh;overflow:auto;">
+			<table class="table table-bordered table-sm">
+				<thead><tr><th>${__("S.No.")}</th>${attributeHeader}${primaryHeader}<th class="text-right">${__("Total Qty")}</th></tr></thead>
+				<tbody>${body}</tbody>
+				<tfoot><tr><th>${__("Total")}</th>${attributes.map(() => "<th></th>").join("")}${totals}<th class="text-right essdee-wo-grand-total">0</th></tr></tfoot>
+			</table>
+		</div>`;
+
+	const dialog = new frappe.ui.Dialog({
+		title: __("Lot Items"),
+		size: "extra-large",
+		fields: [{ fieldtype: "HTML", fieldname: "items_html", options: html }],
+		primary_action_label: __("Submit"),
+		primary_action() {
+			const selected = [];
+			dialog.get_field("items_html").$wrapper.find(".essdee-wo-calc-qty").each(function () {
+				const qty = flt($(this).val());
+				if (qty > 0) selected.push({ source_row: $(this).data("source-row"), qty });
+			});
+			if (!selected.length) {
+				frappe.msgprint(__("Enter a quantity greater than zero for at least one row."));
+				return;
+			}
+			frappe.call({
+				method: "essdee_yrp.garment_work_order.calculate_garment_work_order",
+				args: {
+					work_order: frm.doc.name,
+					rows: selected,
+					modified: frm.doc.modified,
+				},
+				freeze: true,
+				freeze_message: __("Calculating Deliverables and Receivables..."),
+				callback(res) {
+					dialog.hide();
+					const result = res.message || {};
+					frappe.show_alert({
+						message: __("Calculated {0} deliverable(s) and {1} receivable(s).", [
+							result.deliverables || 0,
+							result.receivables || 0,
+						]),
+						indicator: "green",
+					});
+					frm.reload_doc();
+				},
+			});
+		},
+	});
+	dialog.show();
+	const wrapper = dialog.get_field("items_html").$wrapper;
+	const updateTotals = () => {
+		const columnTotals = {};
+		let grandTotal = 0;
+		wrapper.find("tr[data-matrix-row]").each(function () {
+			let rowTotal = 0;
+			$(this).find(".essdee-wo-calc-qty").each(function () {
+				const qty = flt($(this).val());
+				const primaryValue = String($(this).data("primary-value"));
+				rowTotal += qty;
+				columnTotals[primaryValue] = (columnTotals[primaryValue] || 0) + qty;
+			});
+			$(this).find(".essdee-wo-row-total").text(rowTotal);
+			grandTotal += rowTotal;
+		});
+		wrapper.find(".essdee-wo-column-total").each(function () {
+			$(this).text(columnTotals[String($(this).data("primary-value"))] || 0);
+		});
+		wrapper.find(".essdee-wo-grand-total").text(grandTotal);
+	};
+	const setRowSelected = (row, selected) => {
+		row.find(".essdee-wo-row-toggle").prop("checked", selected);
+		row.find(".essdee-wo-calc-qty").each(function () {
+			$(this).val(selected ? $(this).attr("max") : 0);
+		});
+	};
+	wrapper.on("input", ".essdee-wo-calc-qty", updateTotals);
+	wrapper.on("change", ".essdee-wo-row-toggle", function () {
+		setRowSelected($(this).closest("tr"), $(this).prop("checked"));
+		updateTotals();
+	});
+	wrapper.on("click", ".essdee-wo-select-all", () => {
+		wrapper.find("tr[data-matrix-row]").each(function () {
+			setRowSelected($(this), true);
+		});
+		updateTotals();
+	});
+	wrapper.on("click", ".essdee-wo-unselect-all", () => {
+		wrapper.find("tr[data-matrix-row]").each(function () {
+			setRowSelected($(this), false);
+		});
+		updateTotals();
+	});
+	updateTotals();
 }
 
 // Non-blocking (production_api stance): over-balance warns, never blocks —

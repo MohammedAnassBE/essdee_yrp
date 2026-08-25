@@ -62,6 +62,14 @@ def _seed_columns(doc, primary_attribute, bom_item):
 	doc.set("bom_item_attributes", bom_rows)
 
 
+def _assert_ipd_is_editable(ipd):
+	ipd_doc = frappe.get_doc("Item Production Detail", ipd)
+	ipd_doc.check_permission("write")
+	if ipd_doc.approval_status == "Approved":
+		frappe.throw(_("Revert Approval before editing Item Production Detail {0}.").format(ipd))
+	return ipd_doc
+
+
 @frappe.whitelist()
 def create_mapping(ipd, bom_item, bom_row=None):
 	"""Create an Item BOM Attribute Mapping for an attribute-mapped BOM row.
@@ -84,7 +92,7 @@ def create_mapping(ipd, bom_item, bom_row=None):
 	# The back-link below writes into the IPD's own Item BOM child row, so the
 	# caller must hold write on the parent IPD (frappe.db.set_value on a child
 	# row would otherwise bypass the parent's permission gate entirely).
-	frappe.get_doc("Item Production Detail", ipd).check_permission("write")
+	ipd_doc = _assert_ipd_is_editable(ipd)
 
 	# Idempotency: never create a second mapping for a row that already has one.
 	# Also verify the row actually belongs to THIS IPD's item_bom table — a
@@ -100,7 +108,6 @@ def create_mapping(ipd, bom_item, bom_row=None):
 		if row_meta.attribute_mapping:
 			return row_meta.attribute_mapping
 
-	ipd_doc = frappe.get_cached_doc("Item Production Detail", ipd)
 	primary = ipd_doc.primary_item_attribute
 	if not primary:
 		frappe.throw(
@@ -162,6 +169,11 @@ def configure_columns(mapping):
 				"Item Attribute first."
 			)
 		)
+	owner = frappe.db.get_value(
+		"Item BOM", {"attribute_mapping": mapping, "parenttype": "Item Production Detail"}, "parent"
+	)
+	if owner:
+		_assert_ipd_is_editable(owner)
 	if not doc.bom_item:
 		frappe.throw(_("This mapping has no BOM Item set."))
 

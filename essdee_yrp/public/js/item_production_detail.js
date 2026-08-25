@@ -1,5 +1,131 @@
 // Copyright (c) 2024, Essdee and contributors
 // For license information, please see license.txt
+
+const IPD_LAYOUT_FIELDTYPES = new Set([
+	"Section Break", "Column Break", "Tab Break", "Heading", "Fold",
+]);
+
+const APPROVED_IPD_HTML_LOCK_CLASS = "essdee-approved-ipd-html-locked";
+
+function ensure_approved_ipd_lock_styles() {
+	if (document.getElementById("essdee-approved-ipd-lock-styles")) return;
+	$("<style>", {
+		id: "essdee-approved-ipd-lock-styles",
+		text: `
+			.${APPROVED_IPD_HTML_LOCK_CLASS} button,
+			.${APPROVED_IPD_HTML_LOCK_CLASS} .btn,
+			.${APPROVED_IPD_HTML_LOCK_CLASS} .cursor-pointer,
+			.${APPROVED_IPD_HTML_LOCK_CLASS} td:has(svg use[href*="delete"]) {
+				display: none !important;
+			}
+			.${APPROVED_IPD_HTML_LOCK_CLASS} input,
+			.${APPROVED_IPD_HTML_LOCK_CLASS} select,
+			.${APPROVED_IPD_HTML_LOCK_CLASS} textarea,
+			.${APPROVED_IPD_HTML_LOCK_CLASS} .form-control {
+				pointer-events: none !important;
+				background: var(--control-bg-disabled, var(--control-bg)) !important;
+				cursor: not-allowed !important;
+			}
+		`,
+	}).appendTo(document.head);
+}
+
+function restore_approved_ipd_lock(frm) {
+	const state = frm._essdee_approved_ipd_lock_state;
+	if (!state) return;
+	for (const [fieldname, values] of Object.entries(state.fields)) {
+		if (!frm.fields_dict[fieldname]) continue;
+		frm.set_df_property(fieldname, "read_only", values.read_only);
+		frm.set_df_property(fieldname, "hidden", values.hidden);
+	}
+	for (const [fieldname, values] of Object.entries(state.html)) {
+		const wrapper = frm.fields_dict[fieldname]?.wrapper;
+		if (!wrapper) continue;
+		$(wrapper).css({
+			"pointer-events": values.pointer_events,
+			"opacity": values.opacity,
+		}).removeClass(APPROVED_IPD_HTML_LOCK_CLASS);
+	}
+	frm._essdee_approved_ipd_lock_state = null;
+	if (frm.doc.docstatus === 0 && (frm.perm || []).some((permission) => permission.write)) {
+		frm.enable_save();
+	}
+}
+
+function apply_approved_ipd_lock(frm) {
+	if (frm.is_new() || frm.doc.approval_status !== "Approved") return;
+	ensure_approved_ipd_lock_styles();
+
+	const state = { fields: {}, html: {} };
+	for (const df of frm.meta.fields || []) {
+		if (!df.fieldname || IPD_LAYOUT_FIELDTYPES.has(df.fieldtype)) continue;
+		state.fields[df.fieldname] = {
+			read_only: Number(Boolean(df.read_only)),
+			hidden: Number(Boolean(df.hidden)),
+		};
+		if (df.fieldtype === "Button") {
+			frm.set_df_property(df.fieldname, "hidden", 1);
+		} else if (df.fieldtype !== "HTML") {
+			frm.set_df_property(df.fieldname, "read_only", 1);
+		}
+	}
+
+	// The panel-wise matrix has a purpose-built locked view that keeps its panel
+	// tabs usable. Other HTML islands expose their own editing controls, so make
+	// those islands view-only as one unit while the IPD is approved.
+	for (const df of (frm.meta.fields || []).filter((field) => field.fieldtype === "HTML")) {
+		if (df.fieldname === "panel_wise_consumption_matrix_html") continue;
+		const wrapper = frm.fields_dict[df.fieldname]?.wrapper;
+		if (!wrapper) continue;
+		const style = getComputedStyle(wrapper);
+		state.html[df.fieldname] = {
+			pointer_events: style.pointerEvents,
+			opacity: style.opacity,
+		};
+		$(wrapper)
+			.addClass(APPROVED_IPD_HTML_LOCK_CLASS)
+			.css({ "pointer-events": "none", "opacity": "1" });
+	}
+
+	frm._essdee_approved_ipd_lock_state = state;
+	frm.disable_save();
+}
+
+function add_ipd_process_matrix_button(frm) {
+	const label = __("Generate / Regenerate IPD Process Matrix");
+	frm.remove_custom_button(label);
+	if (frm.is_new() || !frm.doc.name) return;
+	frm.add_custom_button(label, () => {
+		frappe.call({
+			method: "essdee_yrp.garment_work_order.regenerate_ipd_process_matrices",
+			args: { ipd_name: frm.doc.name },
+			freeze: true,
+			freeze_message: __("Generating IPD Process Matrix..."),
+			callback(r) {
+				const result = r.message || {};
+				const skipped = result.skipped || [];
+				frappe.show_alert({
+					message: __("Generated {0} matrix record(s) for: {1}.{2}", [
+						result.count || 0,
+						(result.processes || []).join(", ") || __("No processes"),
+						skipped.length ? ` ${__("Skipped {0} invalid variant(s).", [skipped.length])}` : "",
+					]),
+					indicator: skipped.length ? "orange" : "green",
+				}, 8);
+				if (skipped.length) {
+					frappe.msgprint({
+						title: __("Matrix Generation Needs IPD Setup"),
+						indicator: "orange",
+						message: skipped.map((row) =>
+							`<b>${frappe.utils.escape_html(row.item_variant)}</b>: ${frappe.utils.escape_html(row.reason)}`
+						).join("<br>"),
+					});
+				}
+			},
+		});
+	});
+}
+
 frappe.ui.form.on("Item Production Detail", {
 	setup:function(frm) {
 		frm.trigger("declarations")
@@ -184,6 +310,7 @@ frappe.ui.form.on("Item Production Detail", {
 		}
 	},
 	refresh: async function(frm) {
+		restore_approved_ipd_lock(frm)
 		frm.trigger('declarations')
 		frm.trigger('onload_post_render')
 		if(!frm.is_new()){
@@ -330,68 +457,11 @@ frappe.ui.form.on("Item Production Detail", {
 		else{
 			frm.set_df_property('get_cutting_combination','hidden',false);
 		}
-		await frm.trigger("render_panel_wise_consumption_matrix")
+			await frm.trigger("render_panel_wise_consumption_matrix")
 
-		// Lock form when Approved
-		if (!frm.is_new() && frm.doc.approval_status === "Approved") {
-			// Disable all Vue component HTML wrappers
-			let html_fields = [
-				"item_attribute_list_values_html", "dependent_attribute_details_html",
-				"set_items_html", "stiching_items_html",
-				"cutting_items_html", "cutting_cloths_html", "cloth_accessories_html",
-				"stiching_accessory_html", "accessory_clothtype_combination_html",
-				"select_attributes_html","select_cloths_attribute_html", 
-				"select_cloth_accessory_html", "bundle_group_html"
-			];
-			html_fields.forEach(f => {
-				if (frm.fields_dict[f]) {
-					$(frm.fields_dict[f].wrapper).css({
-						"pointer-events": "none",
-						"opacity": "0.7"
-					});
-				}
-			});
-			// The panel matrix has its own `locked` view mode: it replaces Dia /
-			// consumption inputs with text and hides Fill/Copy actions. Do NOT
-			// disable pointer events on its wrapper — panel tabs are navigation,
-			// not editing, and approved IPDs must remain inspectable.
-
-			// Make all child tables read-only
-			let tables = [
-				"item_attributes", "item_bom", "packing_attribute_details",
-				"stiching_item_details", "cloth_detail", "cutting_marker_groups",
-				"compacting_reference_details"
-			];
-			tables.forEach(t => {
-				frm.set_df_property(t, "read_only", 1);
-			});
-
-			// Hide all button fields
-			let buttons = [
-				"get_packing_attribute_values", "get_set_item_combination",
-				"get_stiching_item_combination", "get_cutting_combination",
-				"update_cloth_items", "get_cloth_combination",
-				"get_stiching_attribute_values", "get_accessory_combination",
-				"get_stiching_accessory_combination"
-			];
-			buttons.forEach(b => {
-				frm.set_df_property(b, "hidden", 1);
-			});
-
-			// Make key fields read-only
-			let fields = [
-				"item", "packing_combo", "packing_attribute_no",
-				"primary_item_attribute", "dependent_attribute",
-				"stiching_major_attribute_value", "major_attribute_value",
-				"packing_attribute", "stiching_attribute", "set_item_attribute",
-				"is_set_item", "is_same_packing_attribute", "auto_calculate",
-				"enable_panel_wise_consumption_matrix"
-			];
-			fields.forEach(f => {
-				frm.set_df_property(f, "read_only", 1);
-			});
-		}
-	},
+			add_ipd_process_matrix_button(frm)
+			apply_approved_ipd_lock(frm)
+		},
 	make_hide_and_unhide_tabs(frm){
 		if(frm.doc.dependent_attribute){
 			frm.trigger('make_stiching_combination')

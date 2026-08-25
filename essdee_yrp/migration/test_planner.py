@@ -2,28 +2,31 @@ from __future__ import annotations
 
 import unittest
 
-from essdee_yrp.migration.planner import SOURCE_SITE, TARGET_SITE, build_schema_analysis
+from essdee_yrp.migration.planner import build_schema_analysis
 
 
 class MigrationPlannerTest(unittest.TestCase):
 	@classmethod
 	def setUpClass(cls):
-		cls.plan, cls.payload = build_schema_analysis()
+		cls.plan, cls.payload = build_schema_analysis(
+			source_site="configured-source.test",
+			target_site="configured-target.test",
+		)
 
 	def test_schema_analysis_never_reads_or_writes_site_data(self):
-		self.assertEqual(SOURCE_SITE, "mrp3.site")
-		self.assertEqual(TARGET_SITE, "essdee_yrp.site")
+		self.assertEqual(self.payload["source_site"], "configured-source.test")
+		self.assertEqual(self.payload["target_site"], "configured-target.test")
 		self.assertEqual(self.payload["mode"], "schema-only")
 		self.assertFalse(self.payload["reads_site_data"])
 		self.assertFalse(self.payload["writes_site_data"])
 
 	def test_complete_source_inventory_is_classified(self):
-		self.assertEqual(self.payload["source_doctypes"], 260)
-		self.assertEqual(sum(self.payload["migration_kinds"].values()), 260)
-		self.assertEqual(len(self.payload["doctype_details"]), 260)
+		self.assertEqual(self.payload["source_doctypes"], 263)
+		self.assertEqual(sum(self.payload["migration_kinds"].values()), 263)
+		self.assertEqual(len(self.payload["doctype_details"]), 263)
 		self.assertEqual(
 			self.payload["migration_kinds"],
-			{"custom": 3, "identity": 224, "mapped": 33},
+			{"custom": 3, "identity": 228, "mapped": 32},
 		)
 
 	def test_known_renames_appear_in_doctype_details(self):

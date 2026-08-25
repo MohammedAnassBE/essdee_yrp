@@ -32,20 +32,31 @@ MRP_SCHEMA_ROLES = (
 	"T & A Viewer",
 )
 
+MRP_SYSTEM_MANAGER_CANCEL_PERMISSIONS = {
+	"Cut Panel Movement": {"submit": 0},
+	"Cutting Marker": {"submit": 1},
+}
+
 
 def after_install():
 	ensure_default_address_template()
 	ensure_mrp_schema_roles()
+	ensure_mrp_cancel_permissions()
+	ensure_sewing_plan_settings()
 	ensure_yrp_production_order_settings()
 	ensure_lot_packing_boundary()
+	ensure_essdee_stock_dimensions()
 
 
 def after_migrate():
 	ensure_default_address_template()
 	ensure_mrp_schema_roles()
+	ensure_mrp_cancel_permissions()
 	ensure_sd_yrp_consumer_config()
+	ensure_sewing_plan_settings()
 	ensure_yrp_production_order_settings()
 	ensure_lot_packing_boundary()
+	ensure_essdee_stock_dimensions()
 	build_web_spa()
 
 
@@ -63,11 +74,65 @@ def ensure_mrp_schema_roles():
 		).insert(ignore_permissions=True)
 
 
+def ensure_mrp_cancel_permissions():
+	"""Restore the F15 System Manager cancel authority for cutting documents."""
+	for doctype, overrides in MRP_SYSTEM_MANAGER_CANCEL_PERMISSIONS.items():
+		filters = {
+			"parent": doctype,
+			"role": "System Manager",
+			"permlevel": 0,
+			"if_owner": 0,
+		}
+		name = frappe.db.get_value("Custom DocPerm", filters, "name")
+		values = {
+			"read": 1,
+			"write": 1,
+			"create": 1,
+			"delete": 1,
+			"submit": overrides["submit"],
+			"cancel": 1,
+			"amend": 0,
+			"report": 1,
+			"export": 1,
+			"import": 0,
+			"share": 1,
+			"print": 1,
+			"email": 1,
+		}
+		if name:
+			doc = frappe.get_doc("Custom DocPerm", name)
+			doc.update(values)
+			doc.save(ignore_permissions=True)
+		else:
+			frappe.get_doc(
+				{
+					"doctype": "Custom DocPerm",
+					**filters,
+					**values,
+				}
+			).insert(ignore_permissions=True)
+		frappe.clear_cache(doctype=doctype)
+
+
 def ensure_lot_packing_boundary():
 	"""Keep Essdee-owned fields reliable on fresh installs and upgrades."""
 	from essdee_yrp.lot_packing_setup import ensure_boundary
 
 	ensure_boundary()
+
+
+def ensure_essdee_stock_dimensions():
+	"""Extend the configured YRP dimension contract to Essdee stock rows."""
+	from essdee_yrp.stock_dimensions import ensure_essdee_stock_dimension_fields
+
+	ensure_essdee_stock_dimension_fields()
+
+
+def ensure_sewing_plan_settings():
+	"""Install the F15 Sewing Details sequence only when it is unconfigured."""
+	from essdee_yrp.sewing.config import ensure_sewing_plan_settings as ensure
+
+	return ensure()
 
 
 def ensure_sd_yrp_consumer_config():

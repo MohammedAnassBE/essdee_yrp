@@ -132,7 +132,7 @@
 					     essdee flow — the popup reads the WO's Lot's fabric details via
 					     essdee_yrp.api.work_order.get_fabric_deliverable_context. -->
 					<Button
-						v-if="isWorkOrder && docstatus === 0 && !isCreate && canWrite(doctype)"
+						v-if="isWorkOrder && workOrderProcessIsCloth && docstatus === 0 && !isCreate && canWrite(doctype)"
 						label="Calculate Deliverables"
 						icon="pi pi-calculator"
 						size="small"
@@ -1724,6 +1724,7 @@ const isWorkOrder = computed(() => doctype.value === "Work Order")
 const workOrderSelectionOptions = ref([])
 const workOrderItemOptions = ref([])
 const workOrderSelectionLoading = ref(false)
+const workOrderProcessIsCloth = ref(false)
 let workOrderSelectionRequest = 0
 const isDeliveryChallan = computed(() => doctype.value === "Delivery Challan")
 const isGoodsReceivedNote = computed(() => doctype.value === "Goods Received Note")
@@ -2912,6 +2913,7 @@ async function loadAll() {
 	await Promise.all([metaReady, docState.load(props.id)])
 	if (!docState.doc.value) return
 	loadWorkOrderClosePermission()
+	if (isWorkOrder.value) loadWorkOrderProcessVisibility()
 	// Realtime: (re)subscribe to this doc's room for live "modified" notices.
 	// Dispose any prior subscription first (the :key remount usually unmounts us,
 	// but the [docRoute,id] watcher can re-run loadAll without an unmount).
@@ -4227,6 +4229,7 @@ function resetWorkOrderSelection(clearValues = true) {
 	workOrderSelectionLoading.value = false
 	workOrderSelectionOptions.value = []
 	workOrderItemOptions.value = []
+	workOrderProcessIsCloth.value = false
 	if (clearValues) {
 		form.item = ""
 		form.production_detail = ""
@@ -4261,6 +4264,7 @@ async function loadWorkOrderSelection({ preserveItem = false } = {}) {
 		if (request !== workOrderSelectionRequest) return
 		const options = Array.isArray(context?.options) ? context.options : []
 		workOrderSelectionOptions.value = options
+		workOrderProcessIsCloth.value = !!context?.process_is_cloth_process
 		workOrderItemOptions.value = Array.isArray(context?.item_options)
 			? context.item_options
 			: [...new Set(options.map((option) => option.item).filter(Boolean))]
@@ -4294,6 +4298,24 @@ async function loadWorkOrderSelection({ preserveItem = false } = {}) {
 		if (request === workOrderSelectionRequest) {
 			workOrderSelectionLoading.value = false
 		}
+	}
+}
+
+async function loadWorkOrderProcessVisibility() {
+	workOrderProcessIsCloth.value = false
+	const current = doc.value
+	if (!current?.lot || !current?.process_name) return
+	const identity = `${current.name}::${current.process_name}::${current.lot}`
+	try {
+		const context = await callMethod(
+			"essdee_yrp.api.work_order.get_work_order_selection_context",
+			{ lot: current.lot, process_name: current.process_name },
+		)
+		const latest = doc.value
+		if (`${latest?.name}::${latest?.process_name}::${latest?.lot}` !== identity) return
+		workOrderProcessIsCloth.value = !!context?.process_is_cloth_process
+	} catch (_) {
+		workOrderProcessIsCloth.value = false
 	}
 }
 

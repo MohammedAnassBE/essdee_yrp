@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Read-only JSON-lines bridge for the fixed F15 Production API source site.
+"""Read-only JSON-lines bridge for a configured F15 Production API source.
 
 Run this file with the Frappe-15 virtualenv.  It never writes or commits and is
-intentionally fixed to ``mrp3.site`` under ``/home/anas/frappe-15``.
+given its bench, site, and supported app by the server-owned target profile.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import sys
 import warnings
 from datetime import date, datetime, time
@@ -19,12 +20,8 @@ from decimal import Decimal
 from pathlib import Path
 
 
-SOURCE_BENCH = Path("/home/anas/frappe-15")
-SOURCE_SITE = "mrp3.site"
-SOURCE_APP_ROOT = SOURCE_BENCH / "apps" / "production_api" / "production_api"
-SUPPORTING_SCHEMA_ROOTS = (
-	SOURCE_BENCH / "apps" / "frappe" / "frappe" / "core" / "doctype" / "sms_parameter",
-)
+SAFE_NAME = re.compile(r"^[A-Za-z0-9_.-]+$")
+SAFE_FIELDNAME = re.compile(r"^[a-z][a-z0-9_]*$")
 SYSTEM_FIELDS = (
 	"name",
 	"owner",
@@ -56,10 +53,10 @@ SUPPORTING_EXTERNAL_DOCTYPES = {
 }
 
 
-def _load_schemas():
+def _load_schemas(source_app_root, supporting_schema_roots):
 	schemas = {}
-	paths = list(SOURCE_APP_ROOT.rglob("*.json"))
-	for root in SUPPORTING_SCHEMA_ROOTS:
+	paths = list(source_app_root.rglob("*.json"))
+	for root in supporting_schema_roots:
 		paths.extend(root.rglob("*.json"))
 	for path in sorted(paths):
 		try:
@@ -281,18 +278,43 @@ def export_doctype(frappe, schemas, doctype, batch_size, start_after=None, limit
 		last_name = rows[-1]["name"]
 
 
-def emit_status(frappe, schemas):
-	counts = {}
+def emit_status(frappe, schemas, source_site):
+	parent_counts = {}
+	table_counts = {}
+	modified = {}
 	for doctype, schema in sorted(schemas.items()):
-		if schema.get("istable"):
-			continue
-		counts[doctype] = 1 if schema.get("issingle") else frappe.db.count(doctype)
+		count = 1 if schema.get("issingle") else frappe.db.count(doctype)
+		table_counts[doctype] = count
+		if not schema.get("istable"):
+			parent_counts[doctype] = count
+		if schema.get("issingle"):
+			modified[doctype] = None
+		else:
+			modified[doctype] = frappe.db.get_value(
+				doctype, {}, "max(modified)"
+			)
+	schema_payload = json.dumps(
+		schemas, sort_keys=True, separators=(",", ":"), default=_json_default
+	)
+	snapshot_payload = {
+		"site": source_site,
+		"doctype_counts": parent_counts,
+		"table_counts": table_counts,
+		"max_modified": {key: str(value or "") for key, value in modified.items()},
+		"schema_fingerprint": hashlib.sha256(
+			schema_payload.encode("utf-8")
+		).hexdigest(),
+	}
 	_write(
 		{
-			"site": SOURCE_SITE,
+			**snapshot_payload,
+			"snapshot_fingerprint": hashlib.sha256(
+				json.dumps(
+					snapshot_payload, sort_keys=True, separators=(",", ":")
+				).encode("utf-8")
+			).hexdigest(),
 			"maintenance_mode": bool(frappe.conf.get("maintenance_mode")),
-			"doctype_counts": counts,
-			"total_parent_records": sum(counts.values()),
+			"total_parent_records": sum(parent_counts.values()),
 		}
 	)
 
@@ -317,6 +339,31 @@ def _collect_reference_names(value):
 
 def emit_reference_data(frappe):
 	"""Stream authoritative master/default values needed by F16 derivations."""
+
+	default_received_type = frappe.db.get_single_value(
+		"Stock Settings", "default_received_type"
+	)
+	root_item_groups = frappe.get_all(
+		"Item Group",
+		filters={"is_group": 1, "parent_item_group": ["in", (None, "")]},
+		pluck="name",
+		limit_page_length=0,
+	)
+	received_via_values = [
+		row[0]
+		for row in frappe.db.sql(
+			"SELECT DISTINCT `received_via` FROM `tabVendor Bill Tracking` "
+			"WHERE COALESCE(`received_via`, '')<>'' ORDER BY `received_via`"
+		)
+	]
+	_write(
+		{
+			"kind": "migration_defaults",
+			"default_received_type": default_received_type,
+			"root_item_groups": sorted(set(root_item_groups)),
+			"bill_received_via": sorted({str(value) for value in received_via_values if value}),
+		}
+	)
 
 	for row in frappe.get_all(
 		"Item", fields=["name", "item_group", "default_unit_of_measure"], limit_page_length=0
@@ -368,20 +415,27 @@ def _migration_files(frappe, schemas, names=None):
 	)
 
 
-def emit_file_status(frappe, schemas, names=None):
+def emit_file_status(frappe, schemas, source_site, names=None):
 	rows = _migration_files(frappe, schemas, names=names)
+	orphans = [
+		row
+		for row in rows
+		if not frappe.db.exists(row.attached_to_doctype, row.attached_to_name)
+	]
 	unique_content = {
 		(row.content_hash, int(row.is_private or 0)): int(row.file_size or 0)
 		for row in rows
 	}
 	_write(
 		{
-			"site": SOURCE_SITE,
+			"site": source_site,
 			"file_count": len(rows),
 			"file_bytes": sum(int(row.file_size or 0) for row in rows),
 			"unique_content_count": len(unique_content),
 			"unique_content_bytes": sum(unique_content.values()),
 			"max_file_size": max((int(row.file_size or 0) for row in rows), default=0),
+			"orphan_attachment_count": len(orphans),
+			"orphan_attachment_bytes": sum(int(row.file_size or 0) for row in orphans),
 		}
 	)
 
@@ -483,9 +537,35 @@ def emit_files(
 		include_content = not metadata_only and content_key not in seen_content
 		seen_content.add(content_key)
 		if start_after and row.name <= start_after:
+			# Rebuild the availability state for content keys whose first row was
+			# already checkpointed. Without this, a later duplicate can be emitted
+			# with neither content nor missing_blob after a resume.
+			if include_content:
+				file_doc, path = _resolve_physical_file(frappe, row)
+				blob_issue = None
+				if not path:
+					blob_issue = "no physical blob and no same-hash duplicate"
+				else:
+					with open(path, "rb") as handle:
+						content = handle.read()
+					actual_hash = hashlib.md5(content).hexdigest()
+					if row.content_hash and actual_hash != row.content_hash:
+						blob_issue = (
+							f"content hash mismatch: metadata={row.content_hash}, disk={actual_hash}"
+						)
+					elif row.file_size is not None and len(content) != int(row.file_size):
+						blob_issue = (
+							f"size mismatch: metadata={row.file_size}, disk={len(content)}"
+						)
+				if blob_issue:
+					if not allow_missing:
+						raise RuntimeError(f"File {row.name} {blob_issue}")
+					unavailable_content.add(content_key)
 			continue
 		payload = dict(row)
 		payload["kind"] = "file"
+		if not frappe.db.exists(row.attached_to_doctype, row.attached_to_name):
+			payload["orphan_attachment"] = 1
 		if include_content:
 			file_doc, path = _resolve_physical_file(frappe, row)
 			if not path:
@@ -522,23 +602,41 @@ def emit_files(
 		_write(payload)
 
 
-def emit_stock_summary(frappe):
+def emit_stock_summary(frappe, source_site, dimensions):
 	"""Emit a deterministic current-balance digest for every stock bucket."""
 
+	dimensions = [str(fieldname) for fieldname in dimensions]
+	if any(not SAFE_FIELDNAME.fullmatch(fieldname) for fieldname in dimensions):
+		raise RuntimeError("Stock summary received an unsafe dimension fieldname")
+	columns = set(frappe.db.get_table_columns("Stock Ledger Entry"))
+	missing = [fieldname for fieldname in dimensions if fieldname not in columns]
+	if missing:
+		raise RuntimeError(
+			"Source Stock Ledger Entry is missing target dimensions: "
+			+ ", ".join(missing)
+		)
+	dimension_select = ", ".join(
+		f"COALESCE({_quote_identifier(fieldname)}, '')" for fieldname in dimensions
+	)
+	group_fields = ", ".join(_quote_identifier(fieldname) for fieldname in dimensions)
+	select_middle = f", {dimension_select}" if dimension_select else ""
+	group_suffix = f", {group_fields}" if group_fields else ""
 	digest = hashlib.sha256()
 	total_qty = Decimal("0")
 	total_value = Decimal("0")
 	rows = frappe.db.sql(
-		"""
-		SELECT item, warehouse, COALESCE(lot, ''), COALESCE(received_type, ''),
-			SUM(qty), SUM(stock_value_difference)
+		f"""
+		SELECT item, warehouse{select_middle}, SUM(qty), SUM(stock_value_difference)
 		FROM `tabStock Ledger Entry`
 		WHERE COALESCE(is_cancelled, 0) = 0
-		GROUP BY item, warehouse, lot, received_type
-		ORDER BY item, warehouse, lot, received_type
+		GROUP BY item, warehouse{group_suffix}
+		ORDER BY item, warehouse{group_suffix}
 		"""
 	)
-	for item, warehouse, lot, received_type, qty, stock_value in rows:
+	for row in rows:
+		item, warehouse = row[:2]
+		dimension_values = row[2 : 2 + len(dimensions)]
+		qty, stock_value = row[-2:]
 		qty = Decimal(str(qty or 0)).quantize(Decimal("0.000000001"))
 		stock_value = Decimal(str(stock_value or 0)).quantize(Decimal("0.000000001"))
 		total_qty += qty
@@ -546,8 +644,7 @@ def emit_stock_summary(frappe):
 		payload = [
 			item or "",
 			warehouse or "",
-			lot or "",
-			received_type or "",
+			*[value or "" for value in dimension_values],
 			format(qty, "f"),
 			format(stock_value, "f"),
 		]
@@ -555,14 +652,90 @@ def emit_stock_summary(frappe):
 		digest.update(b"\n")
 	_write(
 		{
-			"site": SOURCE_SITE,
-			"ledger_name_prefix": "SLE-",
+			"site": source_site,
+			"dimensions": dimensions,
 			"bucket_count": len(rows),
 			"bucket_digest": digest.hexdigest(),
 			"total_qty": format(total_qty, "f"),
 			"total_stock_value_difference": format(total_value, "f"),
 		}
 	)
+
+
+def emit_broken_links(frappe, schemas):
+	"""Stream every source-invalid Link value with its exact owning identity."""
+
+	for doctype, schema in sorted(schemas.items()):
+		if schema.get("issingle"):
+			document = frappe.get_single(doctype)
+			for field in schema.get("fields") or []:
+				if field.get("fieldtype") not in {"Link", "Data"} or not field.get(
+					"options"
+				):
+					continue
+				if field.get("fieldtype") == "Data" and not frappe.db.exists(
+					"DocType", field.get("options")
+				):
+					continue
+				value = document.get(field.get("fieldname"))
+				if value and not frappe.db.exists(field["options"], value):
+					_write(
+						{
+							"source_doctype": doctype,
+							"source_name": doctype,
+							"fieldname": field.get("fieldname"),
+							"link_doctype": field.get("options"),
+							"value": value,
+						}
+					)
+			continue
+		columns = set(frappe.db.get_table_columns(doctype))
+		for field in schema.get("fields") or []:
+			fieldname = field.get("fieldname")
+			link_doctype = field.get("options")
+			if (
+				field.get("fieldtype") not in {"Link", "Data"}
+				or not fieldname
+				or fieldname not in columns
+				or not link_doctype
+			):
+				continue
+			if field.get("fieldtype") == "Data" and not frappe.db.exists(
+				"DocType", link_doctype
+			):
+				continue
+			table = _quote_identifier("tab" + doctype)
+			field_column = _quote_identifier(fieldname)
+			if not frappe.db.exists("DocType", link_doctype):
+				rows = frappe.db.sql(
+					f"SELECT name, {field_column} FROM {table} "
+					f"WHERE COALESCE({field_column}, '')<>''"
+				)
+			else:
+				link_meta = frappe.get_meta(link_doctype)
+				if link_meta.issingle:
+					rows = frappe.db.sql(
+						f"SELECT name, {field_column} FROM {table} "
+						f"WHERE COALESCE({field_column}, '')<>'' AND {field_column}<>%s",
+						(link_doctype,),
+					)
+				else:
+					link_table = _quote_identifier("tab" + link_doctype)
+					rows = frappe.db.sql(
+						f"SELECT source.name, source.{field_column} FROM {table} source "
+						f"LEFT JOIN {link_table} linked ON linked.name=source.{field_column} "
+						f"WHERE COALESCE(source.{field_column}, '')<>'' AND linked.name IS NULL"
+					)
+			for source_name, value in rows:
+				_write(
+					{
+						"source_doctype": doctype,
+						"source_name": source_name,
+						"fieldname": fieldname,
+						"link_doctype": link_doctype,
+						"value": value,
+					}
+				)
 
 
 def emit_series(frappe):
@@ -772,6 +945,9 @@ def _emit_reference_variants_and_cut_panels(frappe):
 
 def main():
 	parser = argparse.ArgumentParser(description=__doc__)
+	parser.add_argument("--source-bench", required=True)
+	parser.add_argument("--source-site", required=True)
+	parser.add_argument("--source-app", default="production_api")
 	subparsers = parser.add_subparsers(dest="command", required=True)
 	subparsers.add_parser("status")
 	subparsers.add_parser("schemas")
@@ -780,9 +956,14 @@ def main():
 	file_status.add_argument("--names-json")
 	file_health = subparsers.add_parser("file-health")
 	file_health.add_argument("--names-json")
-	subparsers.add_parser("stock-summary")
+	stock_summary = subparsers.add_parser("stock-summary")
+	stock_summary.add_argument("--dimensions-json", required=True)
 	subparsers.add_parser("series")
 	subparsers.add_parser("external-references")
+	subparsers.add_parser("broken-links")
+	exists = subparsers.add_parser("exists")
+	exists.add_argument("--doctype", required=True)
+	exists.add_argument("--name", required=True)
 	files = subparsers.add_parser("files")
 	files.add_argument("--start-after")
 	files.add_argument("--metadata-only", action="store_true")
@@ -801,14 +982,43 @@ def main():
 	warnings.filterwarnings("ignore")
 	import frappe
 
-	declared_schemas = _load_schemas()
-	frappe.init(site=SOURCE_SITE, sites_path=str(SOURCE_BENCH / "sites"))
+	if not SAFE_NAME.fullmatch(args.source_site) or not SAFE_NAME.fullmatch(args.source_app):
+		raise RuntimeError("Unsafe source site or app name")
+	source_bench = Path(args.source_bench)
+	if not source_bench.is_absolute():
+		raise RuntimeError("Source bench must be an absolute path")
+	source_bench = source_bench.resolve()
+	source_app_root = source_bench / "apps" / args.source_app / args.source_app
+	supporting_schema_roots = (
+		source_bench
+		/ "apps"
+		/ "frappe"
+		/ "frappe"
+		/ "core"
+		/ "doctype"
+		/ "sms_parameter",
+	)
+	if not (source_bench / "sites" / args.source_site / "site_config.json").is_file():
+		raise RuntimeError("Configured source site does not exist in the source bench")
+	if not source_app_root.is_dir():
+		raise RuntimeError("Configured source app is not installed in the source bench")
+
+	declared_schemas = _load_schemas(source_app_root, supporting_schema_roots)
+	frappe.init(site=args.source_site, sites_path=str(source_bench / "sites"))
 	frappe.connect()
 	try:
+		if args.source_app not in frappe.get_installed_apps():
+			raise RuntimeError(
+				f"Configured source app {args.source_app!r} is not installed on "
+				f"{args.source_site!r}"
+			)
 		if args.command == "export":
 			schemas = _load_export_schemas(frappe, declared_schemas, args.doctype)
 		elif args.command in {
+			"status",
 			"schemas",
+			"exists",
+			"broken-links",
 			"external-references",
 			"file-health",
 			"file-status",
@@ -818,7 +1028,7 @@ def main():
 		else:
 			schemas = declared_schemas
 		if args.command == "status":
-			emit_status(frappe, schemas)
+			emit_status(frappe, schemas, args.source_site)
 		elif args.command == "schemas":
 			emit_schemas(schemas)
 		elif args.command == "reference-data":
@@ -827,6 +1037,7 @@ def main():
 			emit_file_status(
 				frappe,
 				schemas,
+				args.source_site,
 				names=json.loads(args.names_json) if args.names_json else None,
 			)
 		elif args.command == "file-health":
@@ -836,11 +1047,27 @@ def main():
 				names=json.loads(args.names_json) if args.names_json else None,
 			)
 		elif args.command == "stock-summary":
-			emit_stock_summary(frappe)
+			emit_stock_summary(
+				frappe,
+				args.source_site,
+				json.loads(args.dimensions_json),
+			)
 		elif args.command == "series":
 			emit_series(frappe)
 		elif args.command == "external-references":
 			emit_external_references(frappe, schemas)
+		elif args.command == "broken-links":
+			emit_broken_links(frappe, schemas)
+		elif args.command == "exists":
+			if args.doctype not in schemas or schemas[args.doctype].get("istable"):
+				raise RuntimeError("Exists checks require a declared parent DocType")
+			_write(
+				{
+					"doctype": args.doctype,
+					"name": args.name,
+					"exists": bool(frappe.db.exists(args.doctype, args.name)),
+				}
+			)
 		elif args.command == "supporting-documents":
 			emit_supporting_documents(
 				frappe,

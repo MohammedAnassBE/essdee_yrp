@@ -44,6 +44,11 @@ class TestMRPSchemaStructure(FrappeTestCase):
 			self.assertEqual(field.hidden, 1)
 			self.assertEqual(field.read_only, 1)
 
+	def test_grn_rework_item_uses_the_physical_stock_warehouse(self):
+		field = frappe.get_meta("GRN Rework Item", cached=False).get_field("warehouse")
+		self.assertEqual(field.fieldtype, "Link")
+		self.assertEqual(field.options, "Warehouse")
+
 	def test_link_and_table_targets_are_valid(self):
 		for name, schema in self.schemas.items():
 			for field in schema.get("fields", []):

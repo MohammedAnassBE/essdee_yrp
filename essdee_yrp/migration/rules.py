@@ -41,7 +41,6 @@ RULES = {
 		target="Debit",
 		ignored_fields={
 			"against": "Validated as Work Order by the custom transformer",
-			"quality_inspection": "No source rows contain this optional legacy link",
 		},
 		custom_transformer="essdee_debit_to_debit",
 	),
@@ -50,6 +49,12 @@ RULES = {
 		field_map={"raw_print_format_details": "zpl_raw_print_format_details"},
 	),
 	"Essdee Raw Print Format Detail": DocTypeRule(target="ZPL Raw Print Format Detail"),
+	"FG Stock Entry": DocTypeRule(
+		value_transformers={"warehouse": "supplier_to_warehouse"}
+	),
+	"Finishing Plan Old Lot Item": DocTypeRule(
+		value_transformers={"warehouse": "supplier_to_warehouse"}
+	),
 	"Goods Received Note": DocTypeRule(
 		ignored_fields={
 			"essdee_yrp_stock_entry": "Obsolete cross-site stock-entry reference",
@@ -65,6 +70,9 @@ RULES = {
 		target="Received Type",
 		field_map={"grn_type": "received_type_name"},
 	),
+	"GRN Rework Item": DocTypeRule(
+		value_transformers={"warehouse": "supplier_to_warehouse"}
+	),
 	"Item": DocTypeRule(
 		field_map={"over_delivery_receipt_allowance": "po_excess_allowed_percentage"}
 	),
@@ -77,6 +85,9 @@ RULES = {
 		post_transformer="remove_empty_ipd_process_placeholders",
 	),
 	"IPD Process": DocTypeRule(custom_transformer="ipd_process_to_f16"),
+	"Item Conversion": DocTypeRule(
+		value_transformers={"warehouse": "supplier_to_warehouse"}
+	),
 	"Lot Transfer Item": DocTypeRule(
 		value_transformers={"warehouse": "supplier_to_warehouse"}
 	),
@@ -86,18 +97,6 @@ RULES = {
 	"MRP Settings": DocTypeRule(
 		ignored_fields={
 			"auto_send_notifications": "Notification automation is not installed on the target",
-			"cls_grammage_approval_roles": "CLS approval configuration is out of scope",
-			"default_major_aql_level": "AQL configuration is not installed on the target",
-			"default_minor_aql_level": "AQL configuration is not installed on the target",
-			"partial_received_percentage": "Sewing Plan settings are out of scope",
-			"partially_dispatched_percentage": "Sewing Plan settings are out of scope",
-			"previous_day_entries": "Sewing Plan settings are out of scope",
-			"sewing_input_qty_type": "Sewing Plan settings are out of scope",
-			"sewing_line_output_type": "Sewing Plan settings are out of scope",
-			"sewing_plan_input_orders": "Sewing Plan settings are out of scope",
-			"sewing_plan_inspection_type": "Sewing Plan settings are out of scope",
-			"sewing_plan_status_summary": "Sewing Plan settings are out of scope",
-			"type_wise_diff_summary": "Sewing Plan settings are out of scope",
 			"yrp_api_key": "Obsolete F15 remote-site credential",
 			"yrp_api_secret": "Obsolete F15 remote-site credential",
 			"yrp_site_url": "Obsolete F15 remote-site credential",
@@ -114,7 +113,6 @@ RULES = {
 			"pending_qty": "pending_quantity",
 		},
 		allowed_type_changes=frozenset({("Int", "Data")}),
-		post_transformer="default_received_type",
 	),
 	"Purchase Order": DocTypeRule(
 		value_transformers={
@@ -193,7 +191,7 @@ RULES = {
 	),
 	"Work Order": DocTypeRule(field_map={"close_reason": "sd_close_reason"}),
 	"Work Order Deliverables": DocTypeRule(field_map={"item_type": "received_type"}),
-	"Work Order Receivables": DocTypeRule(post_transformer="default_received_type"),
+	"Work Order Receivables": DocTypeRule(),
 	"Work Station": DocTypeRule(post_transformer="derive_workstation_fields"),
 }
 

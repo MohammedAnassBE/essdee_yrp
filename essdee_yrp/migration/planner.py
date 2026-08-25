@@ -43,10 +43,7 @@ TARGET_SMS_PARAMETER_ROOT = (
 	BENCH_ROOT / "apps" / "frappe" / "frappe" / "core" / "doctype" / "sms_parameter"
 )
 
-SOURCE_SITE = "mrp3.site"
-TARGET_SITE = "essdee_yrp.site"
-
-STOCK_DOCTYPES = [
+DEFAULT_STOCK_DOCTYPES = [
 	"Stock Ledger Entry",
 	"Bin",
 	"Stock Entry Detail",
@@ -61,14 +58,14 @@ STOCK_DOCTYPES = [
 	"Goods Received Note Item",
 	"Inspection Entry Item",
 ]
-OPERATIONAL_DOCTYPES = [
+DEFAULT_OPERATIONAL_DOCTYPES = [
 	"Work Order",
 	"Purchase Order",
 	"Delivery Challan",
 	"Goods Received Note",
 	"Process Cost",
 ]
-ESSDEE_DIMENSIONS = [
+DEFAULT_ESSDEE_DIMENSIONS = [
 	{
 		"dimension_doctype": "Lot",
 		"fieldname": "lot",
@@ -91,6 +88,11 @@ def build_schema_analysis(
 	source_root: str | Path = DEFAULT_SOURCE_ROOT,
 	target_roots: list[str | Path] | tuple[str | Path, ...] = DEFAULT_TARGET_ROOTS,
 	source_schemas: Mapping[str, Mapping[str, Any]] | None = None,
+	dimensions: list[Mapping[str, Any]] | tuple[Mapping[str, Any], ...] = DEFAULT_ESSDEE_DIMENSIONS,
+	stock_doctypes: list[str] | tuple[str, ...] = DEFAULT_STOCK_DOCTYPES,
+	operational_doctypes: list[str] | tuple[str, ...] = DEFAULT_OPERATIONAL_DOCTYPES,
+	source_site: str | None = None,
+	target_site: str | None = None,
 ) -> tuple[MigrationPlan, dict[str, Any]]:
 	"""Build the source-to-target schema analysis.
 
@@ -117,9 +119,9 @@ def build_schema_analysis(
 		target_schemas = apply_property_setter_fixture(target_schemas, property_setters)
 	target_schemas = apply_declared_stock_dimensions(
 		target_schemas,
-		dimensions=ESSDEE_DIMENSIONS,
-		stock_doctypes=STOCK_DOCTYPES,
-		operational_doctypes=OPERATIONAL_DOCTYPES,
+		dimensions=dimensions,
+		stock_doctypes=stock_doctypes,
+		operational_doctypes=operational_doctypes,
 	)
 
 	plan = build_plan(
@@ -131,7 +133,13 @@ def build_schema_analysis(
 		value_transformers=VALUE_TRANSFORMERS,
 		post_transformers=POST_TRANSFORMERS,
 	)
-	payload = _plan_payload(plan, len(source_schema_index), len(target_schemas))
+	payload = _plan_payload(
+		plan,
+		len(source_schema_index),
+		len(target_schemas),
+		source_site=source_site,
+		target_site=target_site,
+	)
 	return plan, payload
 
 
@@ -139,6 +147,9 @@ def _plan_payload(
 	plan: MigrationPlan,
 	source_doctype_count: int,
 	target_doctype_count: int,
+	*,
+	source_site: str | None,
+	target_site: str | None,
 ) -> dict[str, Any]:
 	kinds = Counter(spec.kind for spec in plan.specs.values())
 	group_by_doctype = {
@@ -175,8 +186,8 @@ def _plan_payload(
 		)
 	return {
 		"mode": "schema-only",
-		"source_site": SOURCE_SITE,
-		"target_site": TARGET_SITE,
+		"source_site": source_site,
+		"target_site": target_site,
 		"reads_site_data": False,
 		"writes_site_data": False,
 		"source_doctypes": source_doctype_count,

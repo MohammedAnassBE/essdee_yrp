@@ -1,8 +1,10 @@
-# Copyright (c) 2026, Essdee and contributors
+# Copyright (c) 2023, Essdee and contributors
 # For license information, please see license.txt
 
-from frappe.model.document import Document
+from yrp.yrp.doctype.item_master_template.item_master_template import (
+	ItemMasterTemplate,
+)
 
 
-class FGItemMasterTemplate(Document):
-	pass
+class FGItemMasterTemplate(ItemMasterTemplate):
+	"""Essdee FG template using the generic, maintained YRP mapping contract."""

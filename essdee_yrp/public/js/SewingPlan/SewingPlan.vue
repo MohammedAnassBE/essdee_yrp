@@ -1,0 +1,607 @@
+<template>
+    <div class="sewing-plan-page">
+        <!-- Page Header -->
+        <div class="page-header">
+            <div class="header-container">
+                <div class="header-left">
+                    <h1 class="page-title">Sewing Plan</h1>
+                </div>
+            </div>
+        </div>
+
+        <div class="page-container">
+            <div class="controls-section">
+                <div class="controls-flex">
+                    <div class="tab-nav tab-scroll">
+                        <button
+                            v-for="tab in tabs"
+                            :key="tab.id"
+                            @click="current_tab = tab.id"
+                            class="tab-button"
+                            :class="{ 'active': current_tab === tab.id }"
+                        >
+                            <div class="tab-icon-wrapper">
+                                <component :is="tab.icon" class="tab-icon" />
+                            </div>
+                            <span class="tab-label">{{ tab.label }}</span>
+                        </button>
+                    </div>
+                    <div v-show="current_tab !== 'strength_report'" class="supplier-section">
+                        <div class="refresh-wrap">
+                            <button
+                                @click="refresh_counter++"
+                                class="refresh-btn"
+                                title="Refresh Data"
+                            >
+                                <svg class="refresh-icon" :class="{ 'spinning': is_refreshing }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="supplier-input-flex">
+                            <div ref="supplier_field_wrapper" class="supplier-field-container"></div>
+                            <div v-if="!selected_supplier" class="search-hint">
+                                <svg class="hint-icon pulsate" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                </svg>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content Area -->
+            <div class="content-card">
+                <div class="card-inner">
+                    <StrengthReportTab v-show="current_tab === 'strength_report'" />
+                    <div v-if="selected_supplier" v-show="current_tab !== 'strength_report'">
+                        <DashboardTab
+                            v-show="current_tab === 'dashboard'"
+                            :selected_supplier="selected_supplier"
+                            :refresh_counter="refresh_counter"
+                        />
+                        <StatusSummaryTab
+                            v-show="current_tab === 'status_summary'"
+                            :selected_supplier="selected_supplier"
+                            :refresh_counter="refresh_counter"
+                        />
+                        <DataEntryTab
+                            v-show="current_tab === 'data_entry'"
+                            :selected_supplier="selected_supplier"
+                            :refresh_counter="refresh_counter"
+                            @refresh="refresh_counter++"
+                        />
+                        <DPRTab v-show="current_tab === 'dpr'" :selected_supplier="selected_supplier" :refresh_counter="refresh_counter" />
+                        <SCRTab v-show="current_tab === 'scr'" :selected_supplier="selected_supplier" :refresh_counter="refresh_counter" />
+                        <LineTab
+                            v-show="current_tab === 'line'"
+                            :selected_supplier="selected_supplier"
+                            :refresh_counter="refresh_counter"
+                            @refresh="refresh_counter++"
+                        />
+                        <MonthlySummaryTab
+                            v-show="current_tab === 'monthly_summary'"
+                            :selected_supplier="selected_supplier"
+                            :refresh_counter="refresh_counter"
+                        />
+                        <ItemSummaryTab
+                            v-show="current_tab === 'item_summary'"
+                            :selected_supplier="selected_supplier"
+                            :refresh_counter="refresh_counter"
+                        />
+                        <FIUpdatesTab
+                            v-show="current_tab === 'fi_updates'"
+                            :selected_supplier="selected_supplier"
+                            :refresh_counter="refresh_counter"
+                        />
+                        <Consumption
+                            v-show="current_tab === 'consumption'"
+                            :selected_supplier="selected_supplier"
+                            :refresh_counter="refresh_counter"
+                        />
+                        <ClosedWorkOrderGRNTab
+                            v-show="current_tab === 'closed_wo_grn'"
+                            :selected_supplier="selected_supplier"
+                            :refresh_counter="refresh_counter"
+                        />
+                    </div>
+                    <div v-else-if="current_tab !== 'strength_report'" class="global-empty-state">
+                        <div class="empty-state-visual">
+                            <img src="/assets/frappe/images/ui-states/list-empty-state.svg" alt="Empty State" class="empty-state-img">
+                        </div>
+                        <h4 class="empty-state-title">Nothing to show</h4>
+                        <p class="empty-state-subtitle">Select a Warehouse to view details</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup>
+import { ref, h, onMounted, computed } from 'vue'
+import DashboardTab from './components/DashboardTab.vue'
+import StatusSummaryTab from './components/StatusSummaryTab.vue'
+import DataEntryTab from './components/DataEntryTab.vue'
+import DPRTab from './components/DPRTab.vue'
+import SCRTab from './components/SCRTab.vue'
+import LineTab from './components/LineTab.vue'
+import FIUpdatesTab from './components/FIUpdatesTab.vue'
+import MonthlySummaryTab from './components/MonthlySummaryTab.vue'
+import ItemSummaryTab from './components/ItemSummaryTab.vue'
+import Consumption from './components/Consumption.vue'
+import ClosedWorkOrderGRNTab from './components/ClosedWorkOrderGRNTab.vue'
+import StrengthReportTab from './components/StrengthReportTab.vue'
+
+const IconOverview = () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24', class: 'w-full h-full text-current' }, [h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2.5', d: 'M4 5a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM15 5a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM15 15a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-3z' })])
+const IconLinePlan = () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24', class: 'w-full h-full text-current' }, [h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2.5', d: 'M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2' })])
+const IconManpower = () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24', class: 'w-full h-full text-current' }, [h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2.5', d: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' })])
+const IconMaterials = () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24', class: 'w-full h-full text-current' }, [h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2.5', d: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4' })])
+const IconQuality = () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24', class: 'w-full h-full text-current' }, [h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2.5', d: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' })])
+const IconHistory = () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24', class: 'w-full h-full text-current' }, [h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2.5', d: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' })])
+const IconFI = () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24', class: 'w-full h-full text-current' }, [h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2.5', d: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' })])
+const IconMonthlySummary = () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24', class: 'w-full h-full text-current' }, [h('rect', { x: '3', y: '4', width: '18', height: '18', rx: '2', ry: '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2.5' }), h('line', { x1: '16', y1: '2', x2: '16', y2: '6', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2.5' }), h('line', { x1: '8', y1: '2', x2: '8', y2: '6', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2.5' }), h('line', { x1: '3', y1: '10', x2: '21', y2: '10', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2.5' })])
+const IconItemSummary = () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24', class: 'w-full h-full text-current' }, [h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2.5', d: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01' })])
+
+const hasProductionPlannerRole = computed(() => {
+    return frappe.user.has_role('Production Planner') || frappe.user.has_role('System Manager')
+})
+
+const tabs = computed(() => {
+    const baseTabs = [
+        { id: 'dashboard', label: 'Dashboard', icon: IconOverview },
+        { id: 'status_summary', label: 'Status Summary', icon: IconHistory },
+        { id: 'data_entry', label: 'Data Entry', icon: IconManpower },
+        { id: 'dpr', label: 'DPR', icon: IconQuality },
+        { id: 'scr', label: 'SCR', icon: IconMaterials },
+        { id: 'line', label: 'Entries', icon: IconLinePlan },
+        { id: 'monthly_summary', label: 'Monthly Summary', icon: IconMonthlySummary },
+        { id: 'item_summary', label: 'Item Summary', icon: IconItemSummary },
+		{id:'consumption', label:'Consumption', icon: IconItemSummary},
+		{ id: 'strength_report', label: 'Strength Report', icon: IconManpower },
+		{ id: 'closed_wo_grn', label: 'Closed WO GRN', icon: IconItemSummary }
+    ]
+    if (hasProductionPlannerRole.value) {
+        baseTabs.push({ id: 'fi_updates', label: 'FI Updates', icon: IconFI })
+    }
+    return baseTabs
+})
+const current_tab = ref('dashboard')
+const selected_supplier = ref(null)
+const refresh_counter = ref(0)
+const is_refreshing = ref(false)
+const supplier_field_wrapper = ref(null)
+const sample_doc = ref({})
+let supplier = null
+
+onMounted(() => {
+    initSupplierField()
+})
+
+function initSupplierField() {
+    if (supplier_field_wrapper.value && !$(supplier_field_wrapper.value).find(".frappe-control").length) {
+        supplier = frappe.ui.form.make_control({
+            parent: $(supplier_field_wrapper.value),
+            df: {
+                fieldtype: "Link",
+                fieldname: "supplier",
+                label: "",
+                options: "Supplier",
+                placeholder: "Select Warehouse",
+                get_query: () => {
+                    return {
+                        filters: {
+                            is_company_location: 1
+                        }
+                    }
+                },
+                change: function() {
+                    const val = supplier.get_value()
+                    selected_supplier.value = val || null
+                },
+            },
+            doc: sample_doc.value,
+            render_input: true,
+        })
+    }
+}
+</script>
+
+<style scoped>
+@import "./SewingPlan.css";
+
+.sewing-plan-page {
+    padding: 2rem;
+    background-color: #F9FAFB;
+    min-height: 100vh;
+    color: #111827;
+}
+
+.header-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.header-left {
+    display: flex;
+	margin-bottom: 1.5rem;
+}
+
+.page-title {
+    font-size: 1.875rem;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    color: #111827;
+    margin: 0;
+}
+
+@media (min-width: 640px) {
+    .page-title {
+        font-size: 2.25rem;
+    }
+}
+
+.controls-section {
+    padding: 0 0.25rem;
+}
+
+.controls-flex {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: stretch;
+}
+
+@media (min-width: 1024px) {
+    .controls-flex {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: start;
+        gap: 1rem;
+    }
+}
+
+/* Tab Navigation */
+.tab-nav {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.45rem 0.8rem 0.55rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    width: 100%;
+    min-width: 0;
+    border: 1px solid rgba(226, 232, 240, 0.95);
+    border-radius: 1.35rem;
+    background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.94) 100%);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.045);
+    backdrop-filter: blur(12px);
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+    scroll-padding-inline: 0.9rem;
+    scroll-snap-type: x proximity;
+    min-height: 4.6rem;
+}
+
+.tab-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}
+
+.tab-scroll::-webkit-scrollbar {
+    height: 6px;
+}
+
+.tab-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.tab-scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 999px;
+}
+
+.tab-scroll::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.tab-button {
+    display: flex;
+    align-items: center;
+    gap: 0.42rem;
+    padding: 0.58rem 0.9rem;
+    border-radius: 999px;
+    transition: transform 0.22s ease, box-shadow 0.22s ease, background-color 0.22s ease, color 0.22s ease;
+    border: 1px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    background: transparent;
+    color: #94a3b8;
+    outline: none;
+    position: relative;
+    scroll-snap-align: start;
+}
+
+.tab-button:hover {
+    color: #334155;
+    background-color: rgba(241, 245, 249, 0.92);
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+    transform: translateY(-1px);
+}
+
+.tab-button.active {
+    background: linear-gradient(135deg, #1a73e8 0%, #4f8ff0 100%);
+    color: #ffffff;
+    box-shadow: 0 14px 28px rgba(26, 115, 232, 0.22);
+    border-color: transparent;
+    transform: translateY(-1px);
+}
+
+.tab-button:active {
+    transform: scale(0.96) translateY(0);
+}
+
+.tab-icon-wrapper {
+    width: 1.1rem;
+    height: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.3s ease;
+}
+
+.tab-button:hover .tab-icon-wrapper {
+    transform: scale(1.15) rotate(-3deg);
+}
+
+.tab-icon {
+    width: 100%;
+    height: 100%;
+    color: #cbd5e1;
+    transition: color 0.3s ease;
+}
+
+.tab-button.active .tab-icon {
+    color: #ffffff;
+}
+
+.tab-label {
+    font-size: 0.84rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+
+.supplier-section {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex: 0 0 auto;
+    padding: 0.4rem 0.45rem;
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    border-radius: 1.25rem;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.94) 100%);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+    align-self: start;
+}
+
+@media (min-width: 1024px) {
+    .supplier-section {
+        width: 22rem;
+    }
+}
+
+.refresh-wrap {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    height: 2.55rem;
+}
+
+.supplier-input-flex {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+}
+
+.supplier-field-container {
+    display: flex;
+    min-width: 0;
+    width: 100%;
+    position: relative;
+}
+
+.search-hint {
+    position: absolute;
+    right: 0.95rem;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.supplier-field-container :deep(.control-input-wrapper),
+.supplier-field-container :deep(.form-control),
+.supplier-field-container :deep(.input-with-feedback),
+.supplier-field-container :deep(.control-input) {
+    height: 2.55rem;
+    min-height: 2.55rem;
+    border-radius: 999px;
+}
+
+.supplier-field-container :deep(.control-input-wrapper) {
+    border: none;
+    background: #ffffff;
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.supplier-field-container :deep(.form-control),
+.supplier-field-container :deep(.input-with-feedback),
+.supplier-field-container :deep(.control-input) {
+    border: 0 !important;
+    outline: none !important;
+    background: transparent;
+    box-shadow: none !important;
+    padding-left: 1rem;
+    padding-right: 2.4rem;
+}
+
+.supplier-field-container :deep(.form-control:focus),
+.supplier-field-container :deep(.input-with-feedback:focus),
+.supplier-field-container :deep(.control-input:focus) {
+    border: 0 !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.supplier-field-container :deep(.control-input-wrapper:focus-within) {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.supplier-field-container :deep(.awesomplete) {
+    width: 100%;
+}
+
+.supplier-field-container :deep(.awesomplete > ul) {
+    left: auto !important;
+    right: 0 !important;
+    width: min(100%, 22rem) !important;
+    max-width: calc(100vw - 3rem);
+    border-radius: 1rem;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.10);
+    overflow: hidden;
+}
+
+.refresh-btn {
+    height: 2.55rem;
+    width: 2.55rem;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid #eef2f7;
+    border-radius: 1rem;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.02);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.refresh-btn:hover {
+    color: var(--primary-color, #1a73e8);
+    border-color: #e2e8f0;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.05);
+    background-color: #fcfcfd;
+}
+
+.refresh-btn:active {
+    transform: scale(0.95);
+}
+
+.refresh-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.spinning {
+    animation: spin 1s linear infinite;
+}
+
+/* Content Card */
+.content-card {
+    background-color: white;
+    border-radius: 3rem;
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(243, 244, 246, 0.5);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.global-empty-state {
+    padding: 6rem 0;
+    text-align: center;
+}
+
+.empty-state-visual {
+    width: 3rem;
+    height: 3rem;
+    background-color: #F9FAFB;
+    border-radius: 0.75rem;
+    border: 1px solid #F3F4F6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.5rem;
+    opacity: 0.6;
+}
+
+.empty-state-img {
+    filter: grayscale(1);
+    width: 12.5rem;
+    height: 15.625rem;
+    margin: 0 auto;
+}
+
+.empty-state-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #111827;
+    letter-spacing: -0.025em;
+    margin-bottom: 0.5rem;
+}
+
+.empty-state-subtitle {
+    font-size: 0.875rem;
+    color: #9CA3AF;
+    font-weight: 500;
+    margin: 0;
+}
+
+/* Frappe Control Overrides */
+:deep(.supplier-field-container .frappe-control) {
+    margin-bottom: 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+}
+
+:deep(.supplier-field-container input) {
+    background-color: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    height: 2.55rem !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    padding-left: 1rem !important;
+    padding-right: 2.4rem !important;
+    transition: all 0.2s ease !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+}
+
+:deep(.supplier-field-container input:focus) {
+    border: 0 !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+:deep(.supplier-field-container .awesomplete > ul) {
+    left: 0 !important;
+    right: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+}
+</style>

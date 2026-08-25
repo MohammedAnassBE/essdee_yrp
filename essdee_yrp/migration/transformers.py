@@ -17,9 +17,6 @@ from essdee_yrp.migration.engine import (
 )
 
 
-DEFAULT_RECEIVED_TYPE = "Accepted"
-
-
 def supplier_to_warehouse(
 	value: Any,
 	document: Mapping[str, Any],
@@ -247,18 +244,6 @@ def derive_workstation_fields(
 	return result
 
 
-def default_received_type(
-	output: Mapping[str, Any],
-	source: Mapping[str, Any],
-	spec: MigrationSpec,
-	plan: MigrationPlan,
-	parent: Mapping[str, Any] | None,
-) -> Mapping[str, Any]:
-	result = dict(output)
-	result["received_type"] = result.get("received_type") or DEFAULT_RECEIVED_TYPE
-	return result
-
-
 def default_legacy_stitching_category(
 	output: Mapping[str, Any],
 	source: Mapping[str, Any],
@@ -266,16 +251,9 @@ def default_legacy_stitching_category(
 	plan: MigrationPlan,
 	parent: Mapping[str, Any] | None,
 ) -> Mapping[str, Any]:
-	"""Backfill rows created before stitching categories were introduced.
+	"""Use the deployed target schema's first valid category for legacy blanks."""
 
-	The 796 blank rows stop on 2025-09-18; populated rows start on 2025-09-19.
-	The Production API row generator defaults every new row to ``Body`` and the
-	operator changes only exceptional panel categories afterwards.
-	"""
-
-	result = dict(output)
-	result["category"] = result.get("category") or "Body"
-	return result
+	return _default_first_select_option(output, spec, "category")
 
 
 def default_legacy_lot_costing_type(
@@ -285,14 +263,35 @@ def default_legacy_lot_costing_type(
 	plan: MigrationPlan,
 	parent: Mapping[str, Any] | None,
 ) -> Mapping[str, Any]:
-	"""Preserve the manual costing behavior used before 22-Mar-2024.
+	"""Use the deployed target schema's first valid legacy costing mode."""
 
-	The type field was added with the optional lot-quantity fetch modes. The
-	original path maps to the explicit ``Costing`` branch in that same change.
-	"""
+	return _default_first_select_option(output, spec, "lot_costing_type")
 
+
+def _default_first_select_option(
+	output: Mapping[str, Any], spec: MigrationSpec, fieldname: str
+) -> Mapping[str, Any]:
 	result = dict(output)
-	result["lot_costing_type"] = result.get("lot_costing_type") or "Costing"
+	if result.get(fieldname) not in (None, ""):
+		return result
+	field = next(
+		(
+			row
+			for row in spec.target_schema.get("fields") or []
+			if row.get("fieldname") == fieldname
+		),
+		None,
+	)
+	options = [
+		value.strip()
+		for value in str((field or {}).get("options") or "").splitlines()
+		if value.strip()
+	]
+	if (field or {}).get("fieldtype") != "Select" or not options:
+		raise MigrationError(
+			f"{spec.target}.{fieldname} has no schema-defined legacy Select option"
+		)
+	result[fieldname] = options[0]
 	return result
 
 
@@ -305,7 +304,6 @@ def derive_grn_deliverable_dimensions(
 ) -> Mapping[str, Any]:
 	result = dict(output)
 	result["lot"] = result.get("lot") or (parent or {}).get("lot")
-	result["received_type"] = result.get("received_type") or DEFAULT_RECEIVED_TYPE
 	return result
 
 
@@ -364,7 +362,6 @@ POST_TRANSFORMERS = {
 	"remove_empty_ipd_process_placeholders": remove_empty_ipd_process_placeholders,
 	"derive_production_order_detail_fields": derive_production_order_detail_fields,
 	"derive_workstation_fields": derive_workstation_fields,
-	"default_received_type": default_received_type,
 	"default_legacy_stitching_category": default_legacy_stitching_category,
 	"default_legacy_lot_costing_type": default_legacy_lot_costing_type,
 	"derive_grn_deliverable_dimensions": derive_grn_deliverable_dimensions,

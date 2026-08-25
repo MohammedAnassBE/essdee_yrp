@@ -1,13 +1,45 @@
 # Production API Historical Data Migration
 
-Date: 2026-08-13; status refreshed 2026-08-14
+Date: 2026-08-13; status refreshed 2026-08-25
 Source: Frappe 15 `mrp3.site` / `production_api`
 Target: Frappe 16 `essdee_yrp.site` / `yrp` + `essdee_yrp`
-Status: Complete rehearsal passed on its frozen snapshot; current source has one new Goods Received Note schema blocker; live writes not started
+Status: Complete local SQL migration and value verification passed; production-portability hardening passed read-only validation
 
 Current concise handoff: `docs/MRP_BRANCH_HANDOFF.md`. This file retains the
 detailed migration evidence. If an older execution statement conflicts with
 the handoff or current code, rerun the planner and use the current result.
+
+## Current schema overlay — 2026-08-25
+
+- The committed F15 inventory now contains 263 source schemas after adding
+  Cutting Bulk Lay Sheets, Cutting Bulk Lay Sheet Detail, and MRP HR Shift.
+- The filesystem-only planner currently reports 263 source / 326 target
+  schemas, 228 identity, 32 mapped, three custom, and zero blockers.
+- Older 260/318 counts in dated rehearsal sections below describe the exact
+  earlier snapshot and must not be used as the current cutover fingerprint.
+- The new source behavior and its 513-test operational gate are documented in
+  `docs/MRP_BRANCH_HANDOFF.md`.
+
+## Current execution overlay — 2026-08-18
+
+- Complete local load: 3,437,124 source parents, 6,325,639 parent/child
+  documents, and 161,573,787 transformed values verified.
+- The live source/target plan is Ready: 260 source schemas, 318 target schemas,
+  224 identity, 33 mapped, three custom, and zero blockers.
+- Production connection identity is server-configured under
+  `essdee_yrp_migration`; target identity comes from the active Frappe site.
+  The migration DocType exposes neither editable paths nor credentials.
+- Runtime source schema, all parent/child table counts and latest modification
+  values, plus the exact source-invalid-Link manifest are fingerprinted between
+  Dry Run, Migrate, and Verify. Deployed migration code, target schema/mappings,
+  and reviewed server defaults are part of the gate as well.
+- Read-only post-hardening parity passed: 293,115 stock buckets, 25 exact
+  source-invalid Links audited, zero unexpected invalid target Links, and 75
+  focused tests.
+- Production remains a separate controlled cutover. Configure its real/mounted
+  F15 bench, include file archives, freeze the source, isolate the pre-cutover
+  target from other writers, rerun Analyse and Dry Run, then invoke Migrate.
+  Do not reuse the local snapshot as approval.
 
 ## Current execution evidence (2026-08-13)
 
@@ -75,7 +107,7 @@ direct database copy.
 8. In-memory adapters for focused transformation tests.
 
 `essdee_yrp/migration/live.py` and `scripts/f15_source_bridge.py` provide the
-fixed-source F15 read bridge, F16 database-level bulk target adapter,
+server-configured F15 read bridge, F16 database-level bulk target adapter,
 supporting-master handling, Single handling, password transport, attachment
 transport/preflight, stock-summary checks, naming-series merge, queued jobs,
 and verification.
@@ -86,7 +118,7 @@ and the code-declared dimension profile; it does not connect to a site. Its
 read-only scope must not be mistaken for the scope of the live runner.
 
 `MRP Data Migration` is the Essdee-owned trigger and audit DocType. Each record
-stores the fixed source/target identity, schema totals, one child audit row per
+stores the server-resolved source/target identity, schema totals, one child audit row per
 source DocType, dependency group, mapping JSON, blockers, checkpoints, counts,
 and errors. Only System Manager can access it. Direct API/form mutation of an
 existing audit record is rejected; its server actions own all state changes.
@@ -166,6 +198,6 @@ failed data operation.
    verification, then reopen F16. The actual downtime estimate is calculated
    from rehearsal throughput; it is not guessed in advance.
 
-No live historical write migration or final cutover has been performed. The
-local rehearsal did read source data, but its dry-run path did not write
-historical target business records.
+The complete local historical write rehearsal and verification have now been
+performed. No production-server final cutover has been performed; production
+must repeat every gate against its own frozen source and complete file archive.

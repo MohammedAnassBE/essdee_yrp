@@ -213,6 +213,7 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
             self.lot.name, self.k_proc
         )
         self.assertTrue(context["is_cloth_process"])
+        self.assertTrue(context["process_is_cloth_process"])
         self.assertEqual(context["item_options"], [self.cloth])
         self.assertIsNone(context["auto_item"])
         self.assertIsNone(context["auto_production_detail"])
@@ -236,6 +237,7 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
 
         context = get_work_order_selection_context(self.lot.name, sewing)
         self.assertFalse(context["is_cloth_process"])
+        self.assertFalse(context["process_is_cloth_process"])
         self.assertEqual(context["item_options"], [self.cloth])
         self.assertIsNone(context["auto_item"])
         self.assertIsNone(context["auto_production_detail"])

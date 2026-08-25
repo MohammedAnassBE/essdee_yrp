@@ -46,6 +46,22 @@ def get_supplier_address_display(supplier):
 	return get_address(supplier) or ""
 
 
+def get_warehouse_name(warehouse):
+	if not warehouse:
+		return ""
+	doc = frappe.get_doc("Warehouse", warehouse)
+	doc.check_permission("read")
+	return doc.get("name1") or doc.name
+
+
+def get_warehouse_address_display(warehouse):
+	if not warehouse:
+		return ""
+	doc = frappe.get_doc("Warehouse", warehouse)
+	doc.check_permission("read")
+	return get_supplier_address_display(doc.get("supplier")) if doc.get("supplier") else ""
+
+
 def _supplier_name(supplier):
 	if not supplier:
 		return ""
@@ -102,6 +118,167 @@ def fetch_grn_purchase_item_details(items, docstatus=0):
 	if int(docstatus or 0) != 0:
 		rows = [row for row in rows if flt(row.get("quantity")) > 0]
 	return _group_items(rows, "Goods Received Note")
+
+
+def check_key_value_in_dict_or_list_of_dict(key, value):
+	"""Return whether a print payload contains a non-empty key."""
+	if isinstance(value, dict):
+		return bool(value.get(key))
+	if isinstance(value, list):
+		return any(isinstance(row, dict) and row.get(key) for row in value)
+	return False
+
+
+def parse_json(value):
+	if not value:
+		return None
+	return frappe.parse_json(value) if isinstance(value, str) else value
+
+
+def get_item_from_variant(variant):
+	return frappe.get_cached_value("Item Variant", variant, "item") if variant else None
+
+
+def fetch_item_details(items, include_id=False):
+	"""Build the Purchase Order grid expected by the Essdee print layout.
+
+	The F16 grouping service remains the source of truth. Only legacy display
+	aliases are added here; no transaction data is changed.
+	"""
+	groups = _group_items(items, "Purchase Order")
+	for group in groups:
+		group["additional_parameters"] = [
+			True
+			for item in group.get("items") or []
+			if item.get("additional_parameters")
+		]
+		for item in group.get("items") or []:
+			for detail in (item.get("values") or {}).values():
+				detail["pending_qty"] = detail.get("pending_quantity", 0)
+				detail["cancelled_qty"] = detail.get("cancelled_quantity", 0)
+				detail["tax"] = detail.get("tax") or item.get("tax") or 0
+				if include_id:
+					detail.setdefault("ref_doctype", "Purchase Order Item")
+	return groups
+
+
+def get_cloth_program_print_data(lot):
+	"""Return a print matrix from the saved F16 cloth-program rows.
+
+	Printing must never recalculate or mutate a Lot. The saved program rows are
+	the authoritative quantities created by ``build_cloth_programs``; raw demand
+	is read only to split the displayed required/excess totals.
+	"""
+	from essdee_yrp.fabric_requirement import compute_cloth_demand
+
+	lot_doc = frappe.get_doc("Lot", lot)
+	lot_doc.check_permission("read")
+	additions_payload = parse_json(lot_doc.get("cloth_program_additions")) or {}
+	addition_by_route = {}
+	for row in additions_payload.get("routes") or []:
+		key = (row.get("cloth_item"), row.get("dia"), row.get("colour") or None)
+		addition_by_route[key] = addition_by_route.get(key, 0) + flt(
+			row.get("additional_weight")
+		)
+
+	grouped = OrderedDict()
+	for row in lot_doc.get("lot_fabric_programs") or []:
+		cloth = grouped.setdefault(
+			row.cloth_item,
+			{"cloth_item": row.cloth_item, "routes": [], "colours": set()},
+		)
+		colour = row.colour or "No Colour"
+		cloth["colours"].add(colour)
+		cloth["routes"].append(
+			{
+				"dia": row.dia or "No Dia",
+				"colour": colour,
+				"weight": flt(row.weight),
+				"addition": addition_by_route.get(
+					(row.cloth_item, row.dia, row.colour or None), 0
+				),
+			}
+		)
+
+	tables = []
+	for cloth in grouped.values():
+		colours = sorted(cloth["colours"])
+		colour_totals = {colour: 0 for colour in colours}
+		route_rows = OrderedDict()
+		additions = {colour: 0 for colour in colours}
+		for row in cloth["routes"]:
+			route = route_rows.setdefault(
+				row["dia"],
+				{
+					"fabric_type": "Main Fabric",
+					"dia": row["dia"],
+					"weights": {colour: 0 for colour in colours},
+					"total": 0,
+				},
+			)
+			route["weights"][row["colour"]] += row["weight"]
+			route["total"] += row["weight"]
+			colour_totals[row["colour"]] += row["weight"]
+			additions[row["colour"]] += row["addition"]
+		fabric_total = sum(colour_totals.values())
+		fabric_group = {
+			"fabric_type": "Main Fabric",
+			"routes": list(route_rows.values()),
+			"colour_totals": colour_totals,
+			"additions": additions,
+			"additional_total": sum(additions.values()),
+			"total": fabric_total,
+		}
+		tables.append(
+			{
+				"cloth_item": cloth["cloth_item"],
+				"colours": colours,
+				"routes": list(route_rows.values()),
+				"fabric_groups": [fabric_group],
+				"colour_totals": colour_totals,
+				"total": fabric_total,
+			}
+		)
+
+	program_weight = sum(table["total"] for table in tables)
+	manual_weight = sum(
+		group["additional_total"]
+		for table in tables
+		for group in table["fabric_groups"]
+	)
+	try:
+		required_weight = sum(
+			flt(weight)
+			for weight in compute_cloth_demand(lot_doc.name, apply_allowance=False).values()
+		)
+	except (frappe.ValidationError, frappe.DoesNotExistError):
+		required_weight = max(program_weight - manual_weight, 0)
+
+	cpd_values = []
+	for row in lot_doc.get("lot_fabric_details") or []:
+		if row.production_detail:
+			value = flt(
+				frappe.db.get_value(
+					"Item Production Detail", row.production_detail, "cloth_per_kg_yarn"
+				)
+			)
+			if value and value not in cpd_values:
+				cpd_values.append(value)
+
+	return {
+		"item": lot_doc.get("item"),
+		"production_detail": lot_doc.get("production_detail"),
+		"extra_percentage": flt(lot_doc.get("cloth_excess_percentage")),
+		"cloth_per_kg_yarn": cpds[0] if (cpds := cpd_values) and len(cpds) == 1 else "Per cloth",
+		"uses_compacting_details": False,
+		"tables": tables,
+		"display_totals": {
+			"required_weight": round(required_weight, 3),
+			"extra_weight": round(max(program_weight - required_weight - manual_weight, 0), 3),
+			"manual_additional_weight": round(manual_weight, 3),
+			"program_weight": round(program_weight, 3),
+		},
+	}
 
 
 def get_dc_structure(doc_name):

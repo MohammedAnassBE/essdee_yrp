@@ -11,6 +11,7 @@ themselves (1:1 v1 — the Process master's waste/excess applies later)."""
 
 import json
 import re
+from itertools import groupby
 
 import frappe
 from frappe import _
@@ -799,6 +800,7 @@ def _get_work_order_selection_context(lot, process_name, check_permission=False)
 	if not lot or not process_name:
 		return {
 			"is_cloth_process": False,
+			"process_is_cloth_process": False,
 			"options": [],
 			"item_options": [],
 			"auto_item": None,
@@ -860,6 +862,7 @@ def _get_work_order_selection_context(lot, process_name, check_permission=False)
 
 	return {
 		"is_cloth_process": is_cloth_process,
+		"process_is_cloth_process": configured_cloth_process,
 		"options": options,
 		"item_options": item_options,
 		# Item selection is always explicit. Production Detail is derived only
@@ -1338,3 +1341,224 @@ def _knitting_row(ipd, process_name):
 		if row.get("fabric_process") == process_name:
 			return row
 	return None
+
+
+@frappe.whitelist()
+def fetch_summary_details(doc_name, production_detail=None):
+	"""Return the production_api Work Order summary used by Cutting Plan.
+
+	The Work Order is the authority for the IPD; the optional argument is kept
+	for the legacy Desk call signature but cannot redirect the query to another
+	production definition.
+	"""
+	work_order = frappe.get_doc("Work Order", doc_name)
+	work_order.check_permission("read")
+	if production_detail and production_detail != work_order.production_detail:
+		frappe.throw(_("Production Detail does not match Work Order {0}.").format(doc_name))
+	ipd = frappe.get_cached_doc("Item Production Detail", work_order.production_detail)
+
+	item_details = _planned_summary_rows(work_order, ipd)
+	deliverables = _summary_item_details(work_order.deliverables, ipd)
+	return {
+		"item_detail": item_details,
+		"deliverables": deliverables,
+		"work_order_docstatus": work_order.docstatus,
+	}
+
+
+def _planned_summary_rows(work_order, ipd):
+	from yrp.yrp.doctype.item.item import get_attribute_details
+	from yrp.yrp.doctype.purchase_order.purchase_order import get_item_group_index
+	from yrp.utils import update_if_string_instance
+
+	rows = sorted(
+		work_order.get("work_order_calculated_items") or [],
+		key=lambda row: (row.row_index if row.row_index not in (None, "") else row.idx),
+	)
+	item_details = []
+	for _key, variants_iter in groupby(
+		rows,
+		lambda row: row.row_index if row.row_index not in (None, "") else row.idx,
+	):
+		variants = list(variants_iter)
+		variant_doc = frappe.get_cached_doc("Item Variant", variants[0].item_variant)
+		attribute_details = get_attribute_details(variant_doc.item)
+		item = {
+			"name": variant_doc.item,
+			"attributes": _summary_variant_attributes(variant_doc, attribute_details),
+			"item_keys": {},
+			"is_set_item": ipd.is_set_item,
+			"set_attr": ipd.set_item_attribute,
+			"pack_attr": ipd.packing_attribute,
+			"major_attr_value": ipd.major_attribute_value,
+			"primary_attribute": attribute_details["primary_attribute"],
+			"dependent_attribute": attribute_details["dependent_attribute"],
+			"dependent_attribute_details": attribute_details["dependent_attribute_details"],
+			"values": {},
+		}
+		primary_values = attribute_details["primary_attribute_values"]
+		if item["primary_attribute"]:
+			item["values"] = {value: {"qty": 0} for value in primary_values}
+			for variant in variants:
+				combination = update_if_string_instance(variant.set_combination) or {}
+				for key in ("major_part", "major_colour"):
+					if combination.get(key):
+						item["item_keys"][key] = combination[key]
+				current = frappe.get_cached_doc("Item Variant", variant.item_variant)
+				primary_value = next(
+					(
+						attr.attribute_value
+						for attr in current.attributes
+						if attr.attribute == item["primary_attribute"]
+					),
+					None,
+				)
+				if primary_value:
+					item["values"][primary_value] = {
+						"qty": flt(variant.quantity),
+						"delivered": flt(variant.delivered_quantity),
+						"received": flt(variant.received_qty),
+					}
+		else:
+			variant = variants[0]
+			item["values"]["default"] = {
+				"qty": flt(variant.quantity),
+				"delivered": flt(variant.delivered_quantity),
+				"received": flt(variant.received_qty),
+			}
+
+		index = get_item_group_index(item_details, attribute_details)
+		if index == -1:
+			item_details.append(
+				{
+					"attributes": attribute_details["attributes"],
+					"primary_attribute": attribute_details["primary_attribute"],
+					"primary_attribute_values": primary_values,
+					"dependent_attribute": attribute_details["dependent_attribute"],
+					"dependent_attribute_details": attribute_details["dependent_attribute_details"],
+					"additional_parameters": attribute_details["additional_parameters"],
+					"is_set_item": ipd.is_set_item,
+					"set_attr": ipd.set_item_attribute,
+					"pack_attr": ipd.packing_attribute,
+					"major_attr_value": ipd.major_attribute_value,
+					"items": [item],
+				}
+			)
+		else:
+			item_details[index]["items"].append(item)
+
+	for group in item_details:
+		group["overall_planned"] = 0
+		group["overall_delivered"] = 0
+		group["overall_received"] = 0
+		group["total_details"] = {
+			value: {"planned": 0, "delivered": 0, "received": 0}
+			for value in group["primary_attribute_values"]
+		}
+		for item in group["items"]:
+			item["total_qty"] = 0
+			item["total_delivered"] = 0
+			item["total_received"] = 0
+			for value, quantities in item["values"].items():
+				if value not in group["total_details"]:
+					continue
+				planned = flt(quantities.get("qty"))
+				delivered = flt(quantities.get("delivered"))
+				received = flt(quantities.get("received"))
+				group["total_details"][value]["planned"] += planned
+				group["total_details"][value]["delivered"] += delivered
+				group["total_details"][value]["received"] += received
+				item["total_qty"] += planned
+				item["total_delivered"] += delivered
+				item["total_received"] += received
+			group["overall_planned"] += item["total_qty"]
+			group["overall_delivered"] += item["total_delivered"]
+			group["overall_received"] += item["total_received"]
+	return item_details
+
+
+def _summary_item_details(rows, ipd):
+	from yrp.yrp.doctype.item.item import get_attribute_details
+	from yrp.yrp.doctype.purchase_order.purchase_order import get_item_group_index
+	from yrp.utils import update_if_string_instance
+
+	rows = sorted(
+		rows or [],
+		key=lambda row: (row.row_index if row.row_index not in (None, "") else row.idx),
+	)
+	groups = []
+	for _key, variants_iter in groupby(
+		rows,
+		lambda row: row.row_index if row.row_index not in (None, "") else row.idx,
+	):
+		variants = list(variants_iter)
+		variant_doc = frappe.get_cached_doc("Item Variant", variants[0].item_variant)
+		attribute_details = get_attribute_details(variant_doc.item)
+		item = {
+			"name": variant_doc.item,
+			"lot": variants[0].get("lot"),
+			"attributes": _summary_variant_attributes(variant_doc, attribute_details),
+			"item_keys": {},
+			"is_set_item": ipd.is_set_item,
+			"set_attr": ipd.set_item_attribute,
+			"pack_attr": ipd.packing_attribute,
+			"major_attr_value": ipd.major_attribute_value,
+			"primary_attribute": attribute_details["primary_attribute"],
+			"values": {},
+			"default_uom": variants[0].uom or attribute_details["default_uom"],
+		}
+		primary_values = attribute_details["primary_attribute_values"]
+		if item["primary_attribute"]:
+			item["values"] = {
+				value: {"qty": 0, "pending_qty": 0} for value in primary_values
+			}
+			for variant in variants:
+				combination = update_if_string_instance(variant.set_combination) or {}
+				for key in ("major_part", "major_colour"):
+					if combination.get(key):
+						item["item_keys"][key] = combination[key]
+				current = frappe.get_cached_doc("Item Variant", variant.item_variant)
+				primary_value = next(
+					(
+						attr.attribute_value
+						for attr in current.attributes
+						if attr.attribute == item["primary_attribute"]
+					),
+					None,
+				)
+				if primary_value:
+					item["values"][primary_value] = {
+						"qty": flt(variant.qty),
+						"pending_qty": flt(variant.pending_quantity),
+					}
+		else:
+			variant = variants[0]
+			item["values"]["default"] = {
+				"qty": flt(variant.qty),
+				"pending_qty": flt(variant.pending_quantity),
+			}
+
+		index = get_item_group_index(groups, attribute_details)
+		if index == -1:
+			groups.append(
+				{
+					"attributes": attribute_details["attributes"],
+					"primary_attribute": attribute_details["primary_attribute"],
+					"primary_attribute_values": primary_values,
+					"dependent_attribute": attribute_details["dependent_attribute"],
+					"dependent_attribute_details": attribute_details["dependent_attribute_details"],
+					"additional_parameters": attribute_details["additional_parameters"],
+					"items": [item],
+				}
+			)
+		else:
+			groups[index]["items"].append(item)
+	return groups
+
+
+def _summary_variant_attributes(variant, attribute_details):
+	return {
+		row.attribute: row.attribute_value
+		for row in variant.attributes
+		if row.attribute in attribute_details["attributes"]
+	}

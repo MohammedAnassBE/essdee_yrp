@@ -219,6 +219,8 @@ def bulk_update_field(doctype, docnames, fieldname, value=None, child_doctype=No
 		try:
 			doc = frappe.get_doc(doctype, name)
 			doc.check_permission("write")
+			if doctype == "Item Production Detail" and doc.get("approval_status") == "Approved":
+				frappe.throw(_("Revert Approval before editing Item Production Detail {0}.").format(name))
 			if doc.docstatus == 2:
 				frappe.throw(_("Cancelled documents cannot be updated."))
 			if doc.docstatus == 1 and not field.get("allow_on_submit"):

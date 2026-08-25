@@ -8,6 +8,7 @@
  "field_order": [
   "dc_number",
   "stock_entry",
+  "yrp_stock_entry",
   "supplier",
   "warehouse",
   "column_break_bspt",
@@ -90,7 +91,7 @@
    "fieldname": "warehouse",
    "fieldtype": "Link",
    "label": "Warehouse",
-   "options": "Supplier",
+   "options": "Warehouse",
    "reqd": 1
   },
   {
@@ -116,6 +117,14 @@
    "label": "Stock Entry",
    "no_copy": 1,
    "options": "Stock Entry"
+  },
+  {
+   "fieldname": "yrp_stock_entry",
+   "fieldtype": "Link",
+   "label": "YRP Stock Entry",
+   "no_copy": 1,
+   "options": "Stock Entry",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,

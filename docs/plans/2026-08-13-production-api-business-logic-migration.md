@@ -8,6 +8,9 @@ Status: Plan ready for owner review; business-logic implementation has not start
 Current concise handoff: `docs/MRP_BRANCH_HANDOFF.md`. The source snapshot in
 this plan is evidence from its date, not a permanent pin.
 
+Current server-side ownership/port classification:
+`docs/plans/2026-08-18-production-api-business-logic-classification.md`.
+
 ## Objective
 
 Migrate the required Frappe 15 `production_api` behavior into Frappe 16 without

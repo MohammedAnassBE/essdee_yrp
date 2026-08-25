@@ -10,15 +10,13 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import now_datetime
 
-from essdee_yrp.migration.planner import SOURCE_SITE, TARGET_SITE, build_schema_analysis
+from essdee_yrp.migration.config import get_migration_settings
 
 
 RUNNING_STATUSES = {"Analysing", "Queued", "Running"}
 
 
-SOURCE_APP = "production_api"
-TARGET_APPS = "yrp, essdee_yrp"
-ADAPTER_STATUS = "Live Migration Ready"
+ADAPTER_STATUS = "Configured Local-Bench Source"
 
 
 class MRPDataMigration(Document):
@@ -49,10 +47,11 @@ class MRPDataMigration(Document):
 	def validate(self):
 		# These are code-owned endpoints. A crafted request must not turn the
 		# schema analyser into an arbitrary filesystem/site connection surface.
-		self.source_site = SOURCE_SITE
-		self.source_app = SOURCE_APP
-		self.target_site = TARGET_SITE
-		self.target_apps = TARGET_APPS
+		settings = get_migration_settings()
+		self.source_site = settings.source_site
+		self.source_app = settings.source_app
+		self.target_site = settings.target_site
+		self.target_apps = ", ".join(settings.target_apps)
 		self.adapter_status = ADAPTER_STATUS
 		if not self.is_new() and not self.flags.in_migration_action:
 			frappe.throw(
@@ -74,7 +73,14 @@ class MRPDataMigration(Document):
 		self.last_completed_on = None
 
 		try:
-			_plan, payload = build_schema_analysis()
+			from essdee_yrp.migration.live import (
+				F15SourceBridge,
+				build_live_schema_analysis,
+			)
+
+			settings = get_migration_settings()
+			source = F15SourceBridge(settings)
+			_plan, payload = build_live_schema_analysis(settings, source)
 			self._apply_analysis(payload)
 		except Exception:
 			self.status = "Failed"
@@ -91,7 +97,7 @@ class MRPDataMigration(Document):
 			"source_doctypes": self.source_doctype_count,
 			"target_doctypes": self.target_doctype_count,
 			"blockers": self.blocker_count,
-			"reads_site_data": False,
+			"reads_site_data": True,
 			"writes_site_data": False,
 		}
 

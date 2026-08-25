@@ -68,7 +68,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Warehouse",
-   "options": "Supplier"
+   "options": "Warehouse"
   },
   {
    "fieldname": "grn_reworked_item_details",

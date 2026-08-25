@@ -41,7 +41,7 @@
    "fieldname": "warehouse",
    "fieldtype": "Link",
    "label": "Warehouse",
-   "options": "Supplier",
+   "options": "Warehouse",
    "read_only": 1
   },
   {

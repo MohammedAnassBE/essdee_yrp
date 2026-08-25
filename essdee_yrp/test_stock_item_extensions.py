@@ -18,7 +18,9 @@ class TestStockItemExtensions(UnitTestCase):
 		)
 		self.assertEqual(get_entry_fields("Work Order Deliverables"), expected)
 		self.assertEqual(get_entry_fields("Work Order Receivables"), expected)
-		self.assertEqual(get_entry_fields("Stock Entry"), ())
+		self.assertEqual(get_entry_fields("Stock Entry"), ("set_combination",))
+		self.assertNotIn("fabric_reference_variant", get_entry_fields("Stock Entry"))
+		self.assertNotIn("fabric_reference_allocations", get_entry_fields("Stock Entry"))
 
 	def test_yrp_loads_essdee_fields_through_the_hook(self):
 		fields = _get_entry_fields(

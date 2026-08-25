@@ -128,9 +128,18 @@ def revert_ipd_approval(doc_name):
 		frappe.throw("You do not have permission to revert Item Production Detail approval")
 
 	doc = frappe.get_doc("Item Production Detail", doc_name)
-	doc.approval_status = "Not Approved"
-	doc.approved_by = None
-	doc.save(ignore_permissions=True)
+	doc.check_permission("write")
+	# Reverting is the escape hatch used to repair an approved historical IPD.
+	# Do not resave the whole document here: newer validations may correctly
+	# reject its old payload and would otherwise make the record impossible to
+	# unlock. This role-gated action changes only the approval fields.
+	frappe.db.set_value(
+		"Item Production Detail",
+		doc.name,
+		{"approval_status": "Not Approved", "approved_by": None},
+		update_modified=True,
+	)
+	frappe.clear_document_cache("Item Production Detail", doc.name)
 	return {"status": "success"}
 
 
@@ -895,7 +904,10 @@ def duplicate_ipd(ipd, item=None):
 	for source_row in ipd_doc.get("item_bom") or []:
 		row = copy_child_row(source_row)
 		row["attribute_mapping"] = None
-		row["based_on_attribute_mapping"] = 1 if source_row.based_on_attribute_mapping else 0
+		# The owned mapping links back to the new IPD, so it cannot be inserted
+		# during the new parent's validation. Keep the first insert plain; recreate
+		# owned mappings below after the IPD has a database row.
+		row["based_on_attribute_mapping"] = 0
 		items.append(row)
 	doc.set("item_bom", items)
 	doc.save(ignore_permissions=True)
@@ -911,7 +923,13 @@ def duplicate_ipd(ipd, item=None):
 			new_bom_doc = frappe.copy_doc(bom_doc)
 			if new_bom_doc.meta.get_field("item_production_detail"):
 				new_bom_doc.item_production_detail = doc.name
+			# Migrated F15 mappings can be valid for the authored combination while
+			# not satisfying newer base-YRP completeness rules (for example a BOM
+			# mapping intentionally varying only by Size). Duplication must preserve
+			# that exact mapping; editing it later still uses the normal validator.
+			new_bom_doc.flags.ignore_validate = True
 			new_bom_doc.insert(ignore_permissions=True)
+			target_row.based_on_attribute_mapping = 1
 			target_row.attribute_mapping = new_bom_doc.name
 
 	doc.save(ignore_permissions=True)

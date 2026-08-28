@@ -7,7 +7,7 @@ Target app/branch: `essdee_yrp` / `MRP`
 Target site: `essdee_yrp.site`
 
 Migration source: Frappe 15 `mrp3.site` / `production_api`
-Status: correctness/migration/UI qualification complete; final reviewed MRP commit/push pending
+Status: complete; all final acceptance gates closed
 
 ## 1. Objective and non-negotiable scope
 
@@ -2945,6 +2945,11 @@ to prove stored links, quantities, stock, valuation, projections, and rollback.
   `git apply --reverse --check --binary` proves the patch exactly matches the
   loaded base overlay, the gzip archive passes integrity validation, and base
   YRP itself remains unchanged at `7536d315`.
+- Reviewed Essdee MRP release payload commit
+  `a68fd97c0a796843fa69bf5ca2997ff8c0e3cef2` was created from the complete
+  qualified worktree and pushed successfully to `origin/MRP` on 2026-08-28.
+  The repository was clean immediately after the commit and the pushed remote
+  advanced from `8be20a02` to `a68fd97c`.
 
 The sequential script is accepted only when every created record name and
 evidence result is recorded here or in a linked evidence manifest. A green test
@@ -3048,11 +3053,10 @@ queries are then required to prove database, stock, and valuation correctness.
 - [x] G07 Base `yrp` dirty fingerprints are unchanged and its final deployment artifact is recorded.
 - [x] G08 No site data, credentials, attachment blobs, environment, build cache, or node modules are committed.
 - [x] G09 Local missing attachment blobs are resolved from the production archive or formally accepted as an external deployment action.
-- [ ] G10 Final MRP commit is reviewed, pushed, and the release evidence/report identifies its exact SHA.
+- [x] G10 Final MRP commit is reviewed, pushed, and the release evidence/report identifies its exact SHA.
 
-The only remaining gate is G10: create and push the reviewed MRP release commit,
-then record its exact SHA. The no-screenshot owner instruction remains
-authoritative, so no generic screenshot-producing verifier was run.
+All ten final acceptance gates are closed. The no-screenshot owner instruction
+remained authoritative, so no generic screenshot-producing verifier was run.
 
 ## 12. Known hard limitations at audit start
 

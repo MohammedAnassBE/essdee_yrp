@@ -35,19 +35,7 @@ def get_incomplete_transfer_docs(lot, doc_name):
 	finishing_process = frappe.db.get_single_value("MRP Settings", "finishing_inward_process")
 	if not finishing_process:
 		frappe.throw("Set Finishing Inward Process")
-	work_orders = get_process_work_orders(finishing_process, lot)
-	grns = frappe.get_all(
-		"Goods Received Note",
-		filters={
-			"docstatus": 1,
-			"against": "Work Order",
-			"against_id": ["in", work_orders],
-			"lot": lot,
-			"is_internal_unit": 1,
-			"transfer_complete": 0,
-		},
-		pluck="name",
-	) if work_orders else []
+	grns = _incomplete_transfer_grns(lot, finishing_process)
 	delivery_challans = frappe.get_all(
 		"Delivery Challan",
 		filters={
@@ -65,6 +53,30 @@ def get_incomplete_transfer_docs(lot, doc_name):
 	doc.incomplete_transfer_dc_list = frappe.as_json(dict.fromkeys(delivery_challans, True))
 	doc.save()
 	return {"goods_received_notes": grns, "delivery_challans": delivery_challans}
+
+
+def _incomplete_transfer_grns(lot, finishing_process=None):
+	"""Replay submitted internal-unit GRNs instead of trusting a stale JSON cache."""
+	finishing_process = finishing_process or frappe.db.get_single_value(
+		"MRP Settings", "finishing_inward_process"
+	)
+	if not finishing_process:
+		return []
+	work_orders = get_process_work_orders(finishing_process, lot)
+	if not work_orders:
+		return []
+	return frappe.get_all(
+		"Goods Received Note",
+		filters={
+			"docstatus": 1,
+			"against": "Work Order",
+			"against_id": ["in", work_orders],
+			"lot": lot,
+			"is_internal_unit": 1,
+			"transfer_complete": 0,
+		},
+		pluck="name",
+	)
 
 
 def rebuild_finishing_plan(doc_name, *, check_permission=False):
@@ -106,7 +118,8 @@ def rebuild_finishing_plan(doc_name, *, check_permission=False):
 				items[key]["cutting_qty"] += flt(row.received_qty)
 
 	_sync_delivery_challans(doc)
-	rework = _collect_rework(doc.lot, items)
+	_sync_incomplete_grns(doc, finishing_process)
+	rework = _collect_rework(doc.lot, items, default_type, rejected_type)
 	_apply_delivery_challans(doc, items)
 	_apply_lot_transfers(doc, items)
 	_apply_return_grns(doc, items, rework, default_type, rejected_type)
@@ -137,6 +150,14 @@ def rebuild_finishing_plan(doc_name, *, check_permission=False):
 	apply_auto_fp_status(doc)
 	doc.save(ignore_permissions=not check_permission)
 	return doc.name
+
+
+def _sync_incomplete_grns(doc, finishing_process=None):
+	doc.incomplete_transfer_grn_list = frappe.as_json(
+		dict.fromkeys(
+			_incomplete_transfer_grns(doc.lot, finishing_process), True
+		)
+	)
 
 
 def _sync_delivery_challans(doc):
@@ -262,7 +283,7 @@ def _process_work_order_quantities(work_order, items, default_type, rejected_typ
 				values["rework_qty"] += quantity
 
 
-def _collect_rework(lot, items):
+def _collect_rework(lot, items, default_type, rejected_type):
 	rework = {}
 	for name in frappe.get_all("GRN Rework Item", filters={"lot": lot}, pluck="name"):
 		doc = frappe.get_doc("GRN Rework Item", name)
@@ -284,7 +305,63 @@ def _collect_rework(lot, items):
 			key, _combination = _row_key(row)
 			values = rework.setdefault(key, {"quantity": 0, "reworked_quantity": 0, "rejected_qty": 0})
 			values["reworked_quantity"] += flt(row.quantity)
+	_apply_rework_work_order_receipts(lot, items, rework, default_type, rejected_type)
 	return rework
+
+
+def _apply_rework_work_order_receipts(lot, items, rework, default_type, rejected_type):
+	"""Project submitted generic rework results without duplicating inward."""
+	rework_work_orders = frappe.get_all(
+		"Work Order",
+		filters={"lot": lot, "docstatus": 1, "is_rework": 1},
+		pluck="name",
+	)
+	if not rework_work_orders:
+		return
+	rework_grns = frappe.get_all(
+		"Goods Received Note",
+		filters={
+			"against": "Work Order",
+			"against_id": ["in", rework_work_orders],
+			"docstatus": 1,
+			"is_return": 0,
+		},
+		pluck="name",
+	)
+	if not rework_grns:
+		return
+	receipt_rows = frappe.get_all(
+		"Goods Received Note Item",
+		filters={
+			"parent": ["in", rework_grns],
+			"parenttype": "Goods Received Note",
+		},
+		fields=[
+			"item_variant",
+			"quantity",
+			"received_type",
+			"set_combination",
+		],
+		limit_page_length=0,
+	)
+	_apply_rework_receipt_rows(
+		receipt_rows, items, rework, default_type, rejected_type
+	)
+
+
+def _apply_rework_receipt_rows(rows, items, rework, default_type, rejected_type):
+	for row in rows:
+		key, _combination = _row_key(row)
+		if key not in items:
+			continue
+		values = rework.setdefault(
+			key, {"quantity": 0, "reworked_quantity": 0, "rejected_qty": 0}
+		)
+		received_type = row.get("received_type") or default_type
+		if received_type == default_type:
+			values["reworked_quantity"] += flt(row.quantity)
+		elif received_type == rejected_type:
+			values["rejected_qty"] += flt(row.quantity)
 
 
 def _apply_delivery_challans(doc, items):

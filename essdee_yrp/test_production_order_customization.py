@@ -1,8 +1,19 @@
+from pathlib import Path
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
 
 class TestProductionOrderCustomization(FrappeTestCase):
+	def test_ppo_request_form_stays_editable_for_authorized_manager(self):
+		form_source = Path(
+			frappe.get_app_path(
+				"essdee_yrp", "public", "js", "production_order_workflow.js"
+			)
+		).read_text()
+		self.assertNotIn('frm.doc.status !== "PPO Request"', form_source)
+		self.assertNotIn("frm.disable_save()", form_source)
+
 	def test_production_api_fields_are_essdee_custom_fields(self):
 		meta = frappe.get_meta("Production Order", cached=False)
 		expected = {

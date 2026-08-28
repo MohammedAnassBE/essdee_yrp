@@ -14,14 +14,22 @@ from pathlib import Path
 from typing import Any, Mapping
 
 import frappe
+from frappe.utils import cint
 
 from essdee_yrp.migration.engine import MigrationError
 
 
 CONFIG_KEY = "essdee_yrp_migration"
+RESET_ENABLE_CONFIG_KEY = "essdee_yrp_allow_target_reset"
 SAFE_NAME = re.compile(r"^[A-Za-z0-9_.-]+$")
 SUPPORTED_SOURCE_APP = "production_api"
 TARGET_APPS = ("yrp", "essdee_yrp")
+
+
+def is_target_reset_enabled() -> bool:
+	"""Return the explicit server-side acknowledgement for destructive reset."""
+
+	return bool(cint(frappe.conf.get(RESET_ENABLE_CONFIG_KEY)))
 
 
 @dataclass(frozen=True)

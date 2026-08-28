@@ -304,6 +304,23 @@ def derive_grn_deliverable_dimensions(
 ) -> Mapping[str, Any]:
 	result = dict(output)
 	result["lot"] = result.get("lot") or (parent or {}).get("lot")
+	# The current production_api schema does not expose valuation-lineage fields,
+	# so historical rows normally remain blank. Preserve an explicit value when
+	# a newer source snapshot supplies it; never derive one from row order.
+	target_fields = {
+		row.get("fieldname") for row in spec.target_schema.get("fields") or []
+	}
+	for fieldname in (
+		"goods_received_note_item",
+		"received_item_variant",
+		"work_order_deliverable",
+		"consumption_sle",
+		"output_receipt_sle",
+		"material_value",
+		"stock_dimensions",
+	):
+		if fieldname in source and fieldname in target_fields:
+			result[fieldname] = deepcopy(source[fieldname])
 	return result
 
 

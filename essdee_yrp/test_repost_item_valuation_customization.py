@@ -1,14 +1,40 @@
+from unittest.mock import patch
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
+from frappe.utils import getdate
 
 from yrp.stock.dimensions import (
 	MANAGED_DIMENSION_FIELD_MARKER,
 	STOCK_DOCTYPES,
 	get_stock_dimensions,
 )
+from yrp.stock.stock_ledger import StockValuationPeriodClosedError
 
 
 class TestRepostItemValuationCustomization(FrappeTestCase):
+	def _transaction_repost(self, posting_date):
+		return frappe.get_doc(
+			{
+				"doctype": "Repost Item Valuation",
+				"based_on": "Transaction",
+				"voucher_type": "Stock Entry",
+				"voucher_no": "STE-U42-BOUNDARY-PROBE",
+				"posting_date": posting_date,
+			}
+		)
+
+	@patch(
+		"yrp.stock.stock_ledger.get_last_stock_valuation_closing_date",
+		return_value=getdate("2026-08-20"),
+	)
+	def test_transaction_repost_respects_stock_valuation_closing_boundary(self, _cutoff):
+		with self.assertRaises(StockValuationPeriodClosedError):
+			self._transaction_repost("2026-08-20").validate()
+
+		# Validation must still allow an otherwise valid repost in the open period.
+		self._transaction_repost("2026-08-21").validate()
+
 	def test_via_landed_cost_voucher_is_essdee_owned(self):
 		field = frappe.get_meta("Repost Item Valuation", cached=False).get_field(
 			"via_landed_cost_voucher"

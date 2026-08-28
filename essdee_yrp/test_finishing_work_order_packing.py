@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import frappe
 from frappe.model.workflow import apply_workflow
 from frappe.tests.utils import FrappeTestCase
@@ -8,10 +10,51 @@ from essdee_yrp.finishing.alternative import (
 	update_alternative_lot_quantity,
 )
 from essdee_yrp.finishing.work_order_packing import build_packing_work_order_rows
-from essdee_yrp.finishing.work_order import create_or_refresh_finishing_plan
+from essdee_yrp.finishing.work_order import (
+	create_or_refresh_finishing_plan,
+	on_cancel as on_packing_work_order_cancel,
+	on_submit as on_packing_work_order_submit,
+)
 
 
 class TestFinishingWorkOrderPacking(FrappeTestCase):
+	@patch("essdee_yrp.finishing.work_order.create_or_refresh_finishing_plan")
+	@patch("essdee_yrp.finishing.work_order._transfer_alternative_stock")
+	def test_external_packing_work_order_does_not_create_finishing_plan(
+		self, transfer_alternative_stock, create_finishing_plan
+	):
+		doc = frappe._dict(
+			name="TEST-EXTERNAL-PACKING-WO",
+			includes_packing=1,
+			is_rework=0,
+			is_internal_unit=0,
+		)
+
+		on_packing_work_order_submit(doc)
+
+		transfer_alternative_stock.assert_not_called()
+		create_finishing_plan.assert_not_called()
+
+	@patch("essdee_yrp.finishing.work_order._reverse_alternative_stock")
+	@patch("essdee_yrp.finishing.work_order.frappe.delete_doc")
+	@patch("essdee_yrp.finishing.work_order.frappe.db.get_value", return_value=None)
+	def test_external_packing_work_order_cancel_has_no_internal_side_effects(
+		self, get_value, delete_doc, reverse_alternative_stock
+	):
+		doc = frappe._dict(
+			name="TEST-EXTERNAL-PACKING-WO",
+			includes_packing=1,
+			is_internal_unit=0,
+		)
+
+		on_packing_work_order_cancel(doc)
+
+		get_value.assert_called_once_with(
+			"Finishing Plan", {"work_order": doc.name}, "name"
+		)
+		delete_doc.assert_not_called()
+		reverse_alternative_stock.assert_not_called()
+
 	def test_rebuild_matches_a_migrated_packing_work_order(self):
 		# This migrated F15 record is a stable 40-size/colour + four-accessory
 		# packing fixture.  Its stored rows are the legacy-calculation oracle.

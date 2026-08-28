@@ -1,7 +1,7 @@
 # Copyright (c) 2024, Essdee and contributors
 # For license information, please see license.txt
 
-from frappe import bold
+from frappe import _, bold
 from six import string_types
 from frappe.model.document import Document
 import frappe, json, sys, base64, math, time
@@ -1156,6 +1156,9 @@ def cancel_bundle_ledger(cls_doc, is_cancelled):
 	cancel_cut_bundle_ledger(entries)
 
 def create_cut_bundle_ledger(cls_doc, is_cancelled=0):
+	# The LaySheet is the single transaction root for label/GRN/bundle creation.
+	# A row lock makes a second browser/worker retry observe the first ledger.
+	_lock_cutting_laysheet(cls_doc.name)
 	if frappe.db.exists(
 		"Cut Bundle Movement Ledger",
 		{
@@ -1806,7 +1809,10 @@ def update_cloth_stock(cls_doc, multiplier1, multiplier2):
 	sl_entries = sl_entries + get_table_entries(table, ipd_doc, warehouse, cls_doc.lot, cls_doc.name, received_type, multiplier1, multiplier2)
 	table = cls_doc.cutting_laysheet_accessory_details
 	sl_entries = sl_entries + get_table_entries(table, ipd_doc, warehouse, cls_doc.lot, cls_doc.name, received_type, multiplier1, multiplier2)
-	make_sl_entries(sl_entries)
+	# The outgoing Dia bucket must post before its paired incoming bucket so the
+	# actual FIFO value, not a guessed current rate, becomes the incoming value.
+	sl_entries.sort(key=lambda row: 0 if flt(row.get("qty")) < 0 else 1)
+	make_sl_entries(sl_entries, force_inline=True)
 
 def get_table_entries(cls_table, ipd_doc, warehouse, lot, doc_name, received_type, multiplier1, multiplier2):
 	sl_entries = []
@@ -1822,23 +1828,50 @@ def get_table_entries(cls_table, ipd_doc, warehouse, lot, doc_name, received_typ
 					break
 			uom = frappe.get_cached_value("Item", cloth_name, "default_unit_of_measure")
 			variant = get_or_create_variant(cloth_name, attributes)
-			sl_entries.append(get_sl_entries(variant, warehouse, lot, item, uom, doc_name, received_type, multiplier1))
+			transfer_key = f"{doc_name}:{item.name}:dia-conversion"
+			sl_entries.append(get_sl_entries(variant, warehouse, lot, item, uom, doc_name, received_type, multiplier1, transfer_key))
 			variant = item.cloth_item_variant
-			sl_entries.append(get_sl_entries(variant, warehouse, lot, item, uom, doc_name, received_type, multiplier2))
+			sl_entries.append(get_sl_entries(variant, warehouse, lot, item, uom, doc_name, received_type, multiplier2, transfer_key))
 	return sl_entries
 
-def get_sl_entries(variant, warehouse, lot, item, uom, doc_name, received_type, multiplier):
+def get_sl_entries(variant, warehouse, lot, item, uom, doc_name, received_type, multiplier, transfer_key):
+	from yrp.stock.dimensions import get_dimension_fieldnames
+
 	balance_weight = item.get("balance_weight") or 0
+	quantity = (item.weight - balance_weight) * multiplier
+	dimensions = {}
+	for fieldname in get_dimension_fieldnames():
+		if fieldname == "lot":
+			dimensions[fieldname] = lot
+		elif fieldname == "received_type":
+			dimensions[fieldname] = received_type
+		else:
+			dimensions[fieldname] = item.get(fieldname)
+	valuation_rate = 0
+	if quantity < 0:
+		from yrp.stock.utils import get_stock_balance
+
+		_balance, valuation_rate = get_stock_balance(
+			variant,
+			warehouse,
+			posting_date=frappe.utils.nowdate(),
+			posting_time=frappe.utils.nowtime(),
+			with_valuation_rate=True,
+			**dimensions,
+		)
 	return {
 		"item": variant,
 		"warehouse": warehouse,
-		"received_type":received_type,
-		"lot": lot,
+		**dimensions,
 		"voucher_type": "Cutting LaySheet",
 		"voucher_no": doc_name,
 		"voucher_detail_no": item.name,
-		"qty": (item.weight - balance_weight) * multiplier,
+		"qty": quantity,
 		"uom": uom,
+		"rate": 0,
+		"outgoing_rate": flt(valuation_rate) if quantity < 0 else 0,
+		"_transfer_key": transfer_key,
+		"_transfer_role": "outgoing" if quantity < 0 else "incoming",
 		"is_cancelled": 0,
 		"posting_date": frappe.utils.nowdate(),
 		"posting_time": frappe.utils.nowtime(),
@@ -1974,6 +2007,139 @@ def _cutting_grn_consumed_rows(cls_doc):
 	return rows
 
 
+def calculate_cutting_consumption_plan(grn):
+	"""Allocate weighed cloth/accessories across exact cutting output rows.
+
+	The physical input total is authoritative. Each input is distributed by the
+	output stock-quantity weights, and the final output receives the arithmetic
+	residual so rounding can never create or lose cloth. This gives every output
+	a deterministic production-value lineage without pretending that historical
+	multi-output GRNs can be reconstructed the same way after migration.
+	"""
+	from essdee_yrp.fabric_grn import QTY_TOLERANCE
+	from yrp.stock.utils import get_conversion_factor, get_stock_balance
+	from yrp.yrp.doctype.work_order.work_order import _stock_dimension_values
+
+	if not grn.get("cutting_laysheet") or not grn.get("against_id"):
+		return []
+	cls_doc = frappe.get_doc("Cutting LaySheet", grn.cutting_laysheet)
+	plan_work_order = frappe.db.get_value(
+		"Cutting Plan", cls_doc.cutting_plan, "work_order"
+	)
+	if not plan_work_order or plan_work_order != grn.against_id:
+		frappe.throw(
+			_(
+				"Cutting LaySheet {0} belongs to Work Order {1}, not GRN Work Order {2}."
+			).format(
+				cls_doc.name,
+				plan_work_order or _("an unlinked Cutting Plan"),
+				grn.against_id,
+			)
+		)
+	work_order = frappe.get_doc("Work Order", grn.against_id)
+	deliverables = {}
+	for row in work_order.get("deliverables") or []:
+		if row.get("is_calculated"):
+			deliverables.setdefault((row.item_variant, row.uom), []).append(row)
+	outputs = [
+		row
+		for row in grn.get("items") or []
+		if flt(row.get("stock_qty") or row.get("quantity")) > 0
+	]
+	if not outputs:
+		return []
+	total_output_weight = sum(
+		flt(row.get("stock_qty") or row.get("quantity")) for row in outputs
+	)
+	plan = []
+	for consumed in _cutting_grn_consumed_rows(cls_doc):
+		candidates = deliverables.get(
+			(consumed["item_variant"], consumed.get("uom")), []
+		)
+		if not candidates:
+			frappe.throw(
+				_(
+					"Cutting input {0} ({1}) is not a calculated Deliverable in Work Order {2}."
+				).format(
+					consumed["item_variant"], consumed.get("uom") or "", work_order.name
+				)
+			)
+		if len(candidates) > 1:
+			frappe.throw(
+				_(
+					"Cutting input {0} ({1}) matches multiple calculated Deliverables in Work Order {2}. Consolidate or distinguish their Stock Dimensions before creating the LaySheet GRN."
+				).format(
+					consumed["item_variant"],
+					consumed.get("uom") or "",
+					work_order.name,
+				)
+			)
+		source = candidates[0]
+		conversion = get_conversion_factor(source.item_variant, source.uom)
+		factor = flt(conversion.get("conversion_factor")) or 1
+		input_stock_qty = flt(consumed["qty"]) * factor
+		# The Work Order DC is the business source of this cutting input; stock in
+		# the same warehouse/bucket may belong to another transaction. The stock
+		# ledger remains the separate physical authority during base mapped posting.
+		delivered_qty = max(flt(source.qty) - flt(source.pending_quantity), 0)
+		available_qty = max(delivered_qty - flt(source.stock_update), 0)
+		if flt(consumed["qty"]) > available_qty + QTY_TOLERANCE:
+			frappe.throw(
+				_(
+					"Work Order {0} has only {1} available for cutting input {2}, but the LaySheet used {3}."
+				).format(
+					work_order.name,
+					flt(available_qty, 6),
+					source.item_variant,
+					flt(consumed["qty"], 6),
+				)
+			)
+		dimensions = _stock_dimension_values(work_order, source)
+		_balance, balance_rate = get_stock_balance(
+			source.item_variant,
+			grn.from_warehouse,
+			posting_date=grn.posting_date,
+			posting_time=grn.posting_time,
+			with_valuation_rate=True,
+			**dimensions,
+		)
+		assigned_stock_qty = 0.0
+		for index, output in enumerate(outputs):
+			is_last = index == len(outputs) - 1
+			weight = flt(output.get("stock_qty") or output.get("quantity"))
+			share = (
+				input_stock_qty - assigned_stock_qty
+				if is_last
+				else input_stock_qty * weight / total_output_weight
+			)
+			assigned_stock_qty += share
+			if share <= QTY_TOLERANCE:
+				continue
+			plan.append(
+				{
+					"goods_received_note_item": output.name,
+					"received_item_variant": output.item_variant,
+					"item_variant": source.item_variant,
+					"quantity": share / factor,
+					"stock_qty": share,
+					"uom": source.uom,
+					"stock_uom": conversion.get("stock_uom") or source.uom,
+					"conversion_factor": factor,
+					"work_order_deliverable": source.name,
+					"valuation_rate": flt(
+						source.get("valuation_rate")
+						or source.get("rate")
+						or balance_rate
+					),
+					"dimensions": dimensions,
+					"set_combination": output.get("set_combination") or {},
+				}
+			)
+		if abs(assigned_stock_qty - input_stock_qty) > QTY_TOLERANCE:
+			frappe.throw(_("Cutting input allocation did not conserve stock quantity."))
+	return plan
+
+
 @frappe.whitelist()
 def create_grn_entry(doc_name):
 	cls_doc = frappe.get_doc("Cutting LaySheet", doc_name)
@@ -2052,12 +2218,6 @@ def create_grn_entry(doc_name):
 			grn.set(dimension, defaults[dimension])
 	grn.set("items", receipt_rows)
 
-	from essdee_yrp.fabric_grn import _to_grn_deliverables
-
-	grn.set(
-		"grn_deliverables",
-		_to_grn_deliverables(_cutting_grn_consumed_rows(cls_doc), work_order),
-	)
 	grn.flags.from_cls = True
 	grn.insert()
 	grn.submit()

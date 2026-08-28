@@ -26,7 +26,7 @@ class MigrationPlannerTest(unittest.TestCase):
 		self.assertEqual(len(self.payload["doctype_details"]), 263)
 		self.assertEqual(
 			self.payload["migration_kinds"],
-			{"custom": 3, "identity": 228, "mapped": 32},
+			{"custom": 3, "identity": 227, "mapped": 33},
 		)
 
 	def test_known_renames_appear_in_doctype_details(self):
@@ -58,6 +58,10 @@ class MigrationPlannerTest(unittest.TestCase):
 				"purchase_invoice": "erp_purchase_invoice",
 				"vendor_bill_tracking_history": "bill_tracking_history",
 			},
+		)
+		self.assertIn("description", details["Item"]["ignored_fields"])
+		self.assertIn(
+			"description", details["Item Production Detail"]["ignored_fields"]
 		)
 
 

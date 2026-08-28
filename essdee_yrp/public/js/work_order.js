@@ -135,6 +135,7 @@ function clear_essdee_work_order_actions(frm) {
 }
 
 function setup_essdee_work_order_actions(frm) {
+	hide_unavailable_rework_action(frm);
 	clear_essdee_work_order_actions(frm);
 	const request = (frm._essdee_action_request || 0) + 1;
 	frm._essdee_action_request = request;
@@ -178,6 +179,12 @@ function setup_essdee_work_order_actions(frm) {
 			}
 		},
 	});
+}
+
+function hide_unavailable_rework_action(frm) {
+	if (frappe.model.can_create("Work Order")) return;
+	frm.remove_custom_button(__("Create Rework"));
+	frm.remove_custom_button(__("Create Rework"), __("Create"));
 }
 
 function rebuild_work_order_pieces(frm) {

@@ -8,9 +8,12 @@ from essdee_yrp.finishing.state import (
 	get_finishing_plan_list,
 )
 from essdee_yrp.finishing.grn import (
+	apply_goods_received_note,
 	_update_finishing_inward,
 	_update_return_receipt,
 )
+from essdee_yrp.finishing.rebuild import _apply_rework_receipt_rows
+from essdee_yrp.finishing.insights import fetch_rejected_quantity
 from essdee_yrp.finishing.closure import complete_ocr
 from essdee_yrp.finishing.old_lot import (
 	_apply_lot_transfer_to_finishing,
@@ -31,6 +34,67 @@ from essdee_yrp.finishing.packing_grn import _allocate_set_rows
 
 
 class TestFinishingServices(IntegrationTestCase):
+	@patch("essdee_yrp.finishing.rebuild.rebuild_finishing_plan")
+	def test_legacy_fetch_rejected_button_uses_complete_authoritative_rebuild(
+		self, rebuild
+	):
+		fetch_rejected_quantity("FP-1")
+
+		rebuild.assert_called_once_with("FP-1", check_permission=True)
+
+	@patch("essdee_yrp.finishing.rebuild.rebuild_finishing_plan")
+	@patch("essdee_yrp.finishing.grn._is_finishing_inward_process", return_value=True)
+	@patch("essdee_yrp.finishing.grn.frappe.db.get_value", return_value="FP-1")
+	def test_rework_grn_uses_authoritative_rebuild_instead_of_new_inward(
+		self, _get_value, _is_finishing, rebuild
+	):
+		grn = _doc(
+			name="GRN-REWORK-1",
+			against="Work Order",
+			against_id="WO-REWORK-1",
+			lot="LOT-1",
+			process_name="Stitching",
+			is_rework=1,
+			includes_packing=0,
+		)
+
+		apply_goods_received_note(grn, cancelled=False)
+
+		rebuild.assert_called_once_with("FP-1", check_permission=False)
+
+	def test_rework_receipt_rows_clear_only_accepted_or_rejected_projection(self):
+		key = ("VAR-1", (("major_colour", "Blue"),))
+		items = {key: {"item_variant": "VAR-1"}}
+		rework = {
+			key: {"quantity": 5, "reworked_quantity": 1, "rejected_qty": 0}
+		}
+		rows = [
+			_row(
+				item_variant="VAR-1",
+				quantity=3,
+				received_type="Accepted",
+				set_combination='{"major_colour":"Blue"}',
+			),
+			_row(
+				item_variant="VAR-1",
+				quantity=1,
+				received_type="Rejected",
+				set_combination='{"major_colour":"Blue"}',
+			),
+			_row(
+				item_variant="VAR-1",
+				quantity=1,
+				received_type="Misstitch",
+				set_combination='{"major_colour":"Blue"}',
+			),
+		]
+
+		_apply_rework_receipt_rows(rows, items, rework, "Accepted", "Rejected")
+
+		self.assertEqual(rework[key]["quantity"], 5)
+		self.assertEqual(rework[key]["reworked_quantity"], 4)
+		self.assertEqual(rework[key]["rejected_qty"], 1)
+
 	def test_legacy_dispatch_grid_reads_only_positive_current_quantities(self):
 		self.assertEqual(
 			_normalize_dispatch_quantities(

@@ -12,6 +12,7 @@
   "target_site",
   "target_apps",
   "adapter_status",
+  "allow_missing_source_blobs",
   "status",
   "schema_analysis_section",
   "source_doctype_count",
@@ -87,13 +88,20 @@
    "read_only": 1
   },
   {
+   "default": "0",
+   "description": "Local rehearsal only. Preserve File metadata and audit missing physical blobs instead of blocking. Leave disabled for production cutover.",
+   "fieldname": "allow_missing_source_blobs",
+   "fieldtype": "Check",
+   "label": "Allow Missing Source Blobs"
+  },
+  {
    "default": "Draft",
    "fieldname": "status",
    "fieldtype": "Select",
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Draft\nAnalysing\nBlocked\nReady\nDry Run Complete\nQueued\nRunning\nSample Complete\nCompleted\nFailed\nVerified",
+   "options": "Draft\nAnalysing\nBlocked\nReady\nDry Run Complete\nQueued\nRunning\nSample Complete\nReset Complete\nCompleted\nFailed\nVerified",
    "read_only": 1
   },
   {
@@ -171,7 +179,7 @@
    "fieldname": "last_action",
    "fieldtype": "Select",
    "label": "Last Action",
-   "options": "\nAnalyse\nDry Run\nSample\nMigrate\nVerify",
+   "options": "\nAnalyse\nDry Run\nSample\nReset Target\nMigrate\nVerify",
    "read_only": 1
   },
   {

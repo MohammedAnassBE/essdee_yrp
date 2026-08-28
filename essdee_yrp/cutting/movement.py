@@ -529,14 +529,31 @@ def build_goods_received_note_defaults(
 
 
 def set_completion_cut_panel_movement(stock_entry):
-	"""Carry the CPM link from an internal DC/GRN into its completion leg."""
-	if stock_entry.get("cut_panel_movement") or stock_entry.purpose not in _COMPLETION_PURPOSES:
+	"""Carry authoritative bundle context into an internal completion leg."""
+	if stock_entry.purpose not in _COMPLETION_PURPOSES:
 		return
 	if not stock_entry.against or not stock_entry.against_id:
 		return
-	if frappe.get_meta(stock_entry.against).get_field("cut_panel_movement"):
+	against_meta = frappe.get_meta(stock_entry.against)
+	if (
+		not stock_entry.get("cut_panel_movement")
+		and against_meta.get_field("cut_panel_movement")
+	):
 		stock_entry.cut_panel_movement = frappe.db.get_value(
 			stock_entry.against, stock_entry.against_id, "cut_panel_movement"
+		)
+	if (
+		stock_entry.meta.get_field("allow_non_bundle")
+		and against_meta.get_field("allow_non_bundle")
+	):
+		# A completion is the second leg of the referenced transaction, so its
+		# exact-vs-collapsed mode is never client-selectable.  Reapply this even
+		# when the CPM link is already present to repair saved drafts created
+		# before this inheritance was added and to reject client flag spoofing.
+		stock_entry.allow_non_bundle = cint(
+			frappe.db.get_value(
+				stock_entry.against, stock_entry.against_id, "allow_non_bundle"
+			)
 		)
 
 
@@ -700,6 +717,23 @@ def apply_transaction(doc, *, cancelled=False):
 	if not cpm_name and not allow_non_bundle and not implicit_collapsed_return:
 		return
 
+	# Document hooks can be retried by the client or worker after an uncertain
+	# response. Serialize every bundle side effect on the authoritative voucher
+	# row, then treat the active ledger as the durable completion marker. This
+	# check intentionally precedes the collapsed path as well as the exact path.
+	locked_voucher = frappe.db.get_value(
+		doc.doctype, doc.name, "name", for_update=True
+	)
+	# Direct in-memory callers used by report/compatibility code do not yet have
+	# a database transaction root. Normal submit/cancel hooks always do.
+	if locked_voucher:
+		active_ledger = frappe.db.exists(
+			"Cut Bundle Movement Ledger",
+			{"voucher_type": doc.doctype, "voucher_no": doc.name, "is_cancelled": 0},
+		)
+		if (not cancelled and active_ledger) or (cancelled and not active_ledger):
+			return
+
 	if not cpm_name:
 		if allow_non_bundle or implicit_collapsed_return:
 			from essdee_yrp.essdee_yrp.doctype.cut_bundle_movement_ledger.cut_bundle_movement_ledger import (
@@ -729,12 +763,6 @@ def apply_transaction(doc, *, cancelled=False):
 			_cancel_exact_bundle_entries(doc)
 		if cpm.against == doc.doctype and cpm.against_id == doc.name:
 			cpm.db_set({"against": None, "against_id": None}, update_modified=False)
-		return
-
-	if frappe.db.exists(
-		"Cut Bundle Movement Ledger",
-		{"voucher_type": doc.doctype, "voucher_no": doc.name, "is_cancelled": 0},
-	):
 		return
 
 	is_completion = (

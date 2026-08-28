@@ -5,6 +5,7 @@ from frappe.tests import IntegrationTestCase
 
 from essdee_yrp.finishing.rebuild import (
 	_process_matches_configured,
+	_sync_incomplete_grns,
 	sync_finishing_plans_from_work_order,
 )
 
@@ -84,6 +85,55 @@ class TestFinishingSourceSync(IntegrationTestCase):
 	@patch("essdee_yrp.finishing.rebuild.frappe.db.get_value", return_value=1)
 	def test_process_group_matches_its_configured_child(self, _get_value, _exists):
 		self.assertTrue(_process_matches_configured("Cutting Group", "Cutting"))
+
+	@patch(
+		"essdee_yrp.finishing.rebuild.get_process_work_orders",
+		return_value=["WO-STITCH-1"],
+	)
+	@patch(
+		"essdee_yrp.finishing.rebuild.frappe.get_all",
+		return_value=["GRN-INCOMPLETE-1"],
+	)
+	def test_rebuild_replays_incomplete_grns_from_submitted_sources(
+		self, get_all, _work_orders
+	):
+		doc = frappe._dict(
+			lot="LOT-1",
+			incomplete_transfer_grn_list='{"GRN-CANCELLED": true}',
+		)
+
+		_sync_incomplete_grns(doc, "Stitching")
+
+		self.assertEqual(
+			frappe.parse_json(doc.incomplete_transfer_grn_list),
+			{"GRN-INCOMPLETE-1": True},
+		)
+		get_all.assert_called_once_with(
+			"Goods Received Note",
+			filters={
+				"docstatus": 1,
+				"against": "Work Order",
+				"against_id": ["in", ["WO-STITCH-1"]],
+				"lot": "LOT-1",
+				"is_internal_unit": 1,
+				"transfer_complete": 0,
+			},
+			pluck="name",
+		)
+
+	@patch(
+		"essdee_yrp.finishing.rebuild.get_process_work_orders",
+		return_value=[],
+	)
+	def test_rebuild_clears_cancelled_grn_from_incomplete_cache(self, _work_orders):
+		doc = frappe._dict(
+			lot="LOT-1",
+			incomplete_transfer_grn_list='{"GRN-CANCELLED": true}',
+		)
+
+		_sync_incomplete_grns(doc, "Stitching")
+
+		self.assertEqual(frappe.parse_json(doc.incomplete_transfer_grn_list), {})
 
 
 def _work_order(**values):

@@ -206,22 +206,10 @@ def calculate_garment_work_order(work_order, rows, modified=None):
 	if not demands:
 		frappe.throw(_("Enter a quantity greater than zero for at least one row."))
 
+	deliverables, receivables = calculate_garment_process_rows(
+		ipd, lot, wo.process_name, demands
+	)
 	processes = _processes(wo.process_name)
-	first_inputs, first_outputs = _process_rows(ipd, lot, processes[0], demands)
-	last_inputs, last_outputs = _process_rows(ipd, lot, processes[-1], demands)
-	deliverables = first_inputs + _accessory_rows(ipd, lot, demands, processes)
-	receivables = last_outputs
-	core_processes = {ipd.cutting_process, ipd.stiching_process, ipd.packing_process}
-	if len(processes) > 1 and not core_processes.intersection(
-		(processes[0], processes[-1])
-	):
-		# Preserve Production API's group rule when both boundaries are IPD
-		# extra processes: both boundary inputs are deliverable and both boundary
-		# outputs are receivable. Main-process groups keep only the outside edges.
-		deliverables += last_inputs
-		receivables += first_outputs
-	deliverables = _aggregate_rows(deliverables)
-	receivables = _aggregate_rows(receivables)
 	deliverables = normalize_item_matrix_row_indexes(deliverables)
 	receivables = normalize_item_matrix_row_indexes(receivables)
 	if not deliverables:
@@ -296,6 +284,31 @@ def calculate_garment_work_order(work_order, rows, modified=None):
 		"receivables": len(receivables),
 		"calculated_items": len(demands),
 	}
+
+
+def calculate_garment_process_rows(ipd, lot, process_name, demands):
+	"""Return the authoritative input/output rows for garment demands.
+
+	The same pure process calculation is used when a draft Work Order is built
+	and when a Stitching GRN consumes a partial set of those saved inputs. Keeping
+	that calculation in one place prevents the receipt from drifting to a second
+	BOM or panel interpretation.
+	"""
+	processes = _processes(process_name)
+	first_inputs, first_outputs = _process_rows(ipd, lot, processes[0], demands)
+	last_inputs, last_outputs = _process_rows(ipd, lot, processes[-1], demands)
+	deliverables = first_inputs + _accessory_rows(ipd, lot, demands, processes)
+	receivables = last_outputs
+	core_processes = {ipd.cutting_process, ipd.stiching_process, ipd.packing_process}
+	if len(processes) > 1 and not core_processes.intersection(
+		(processes[0], processes[-1])
+	):
+		# Preserve Production API's group rule when both boundaries are IPD
+		# extra processes: both boundary inputs are deliverable and both boundary
+		# outputs are receivable. Main-process groups keep only the outside edges.
+		deliverables += last_inputs
+		receivables += first_outputs
+	return _aggregate_rows(deliverables), _aggregate_rows(receivables)
 
 
 def _is_cloth_ipd(ipd):
@@ -695,6 +708,7 @@ def _accessory_rows(ipd, lot, demands, processes):
 		ipd.name,
 		[{"item_variant": row["item_variant"], "qty": row["qty"]} for row in demands],
 		lot,
+		process_names=processes,
 	)
 	process_set = set(processes)
 	return [

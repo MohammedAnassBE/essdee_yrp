@@ -11,12 +11,13 @@ from collections import defaultdict
 
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import cint, flt
 
 from yrp.stock.dimensions import get_dimension_fieldnames
 from yrp.stock.stock_ledger import make_sl_entries
 from yrp.stock.utils import get_last_sle_rate
 from yrp.yrp.doctype.delivery_challan.delivery_challan import (
+	_get_warehouse_for_supplier,
 	_normal_json,
 	_sle_base,
 	_update_work_order_status,
@@ -77,29 +78,137 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 		if is_closed_sewing_grn(self):
 			validate_closed_sewing_grn(self)
 			return
+		if self._is_essdee_return():
+			_validate_direct_finishing_return_against(self)
+			return
 		return super().validate_against()
 
+	def set_missing_values(self):
+		super().set_missing_values()
+		if not self._is_essdee_return():
+			return
+		work_order = frappe.get_cached_doc("Work Order", self.against_id)
+		self.process_name = self.process_name or work_order.process_name
+		self.item = self.item or work_order.item
+		self.production_detail = self.production_detail or work_order.production_detail
+		self.from_warehouse = self.from_warehouse or _get_warehouse_for_supplier(
+			self.supplier
+		)
+		self.to_warehouse = self.to_warehouse or _get_warehouse_for_supplier(
+			self.delivery_location
+		)
+		self.freight_charges = 0
+
+	def set_item_defaults(self):
+		super().set_item_defaults()
+		_set_dynamic_packing_piece_uom(self)
+
 	def before_submit(self):
+		if self.get("against") == "Work Order" and self.get("against_id"):
+			# One lock covers sewing caps, source-pending checks, deterministic plan
+			# calculation, and the later Work Order stock-update transition.
+			_lock_work_order(self.against_id)
 		validate_sewing_plan_quantity(self)
+		plan_kind = _new_consumption_plan_kind(self)
+		if plan_kind:
+			plan = _calculate_new_consumption_plan(self, plan_kind)
+			if not plan and any(
+				flt(row.get("stock_qty") or row.get("quantity")) > 0
+				for row in self.get("items") or []
+			):
+				frappe.throw(
+					_(
+						"No deterministic {0} consumption plan was found for this receipt. "
+						"Correct the Work Order/IPD mapping before submitting."
+					).format(plan_kind)
+				)
+			from essdee_yrp.fabric_grn import populate_grn_deliverables
+
+			populate_grn_deliverables(self, plan)
+			self.mapped_stock_update_state = 0
+			self.flags.essdee_mapped_consumption = plan
+		if _has_complete_mapped_consumption(self):
+			_validate_mapped_consumption_ownership(self)
+			if not self.flags.get("essdee_mapped_consumption"):
+				from essdee_yrp.fabric_grn import load_submitted_consumption_plan
+
+				self.mapped_stock_update_state = 0
+				self.flags.essdee_mapped_consumption = (
+					load_submitted_consumption_plan(self)
+				)
 		return super().before_submit()
 
+	def before_cancel(self):
+		if _has_complete_mapped_consumption(self):
+			_lock_work_order(self.against_id)
+			_validate_mapped_consumption_ownership(self)
+			if frappe.db.get_value("Work Order", self.against_id, "open_status") == "Close":
+				frappe.throw(
+					_(
+						"Reopen Work Order {0} before cancelling Goods Received Note {1}."
+					).format(self.against_id, self.name)
+				)
+			from essdee_yrp.fabric_grn import load_submitted_consumption_plan
+
+			self.flags.essdee_mapped_consumption = load_submitted_consumption_plan(self)
+		return super().before_cancel()
+
+	def on_submit(self):
+		plan = self.flags.get("essdee_mapped_consumption")
+		apply_update = bool(
+			plan and _claim_mapped_stock_update_transition(self, target_state=1)
+		)
+		if plan and not apply_update:
+			return
+		super().on_submit()
+		if apply_update:
+			from essdee_yrp.fabric_grn import apply_work_order_stock_update
+
+			apply_work_order_stock_update(self.against_id, plan)
+		self._enqueue_repost_if_mapped()
+
+	def on_cancel(self):
+		plan = self.flags.get("essdee_mapped_consumption")
+		apply_update = bool(
+			plan and _claim_mapped_stock_update_transition(self, target_state=-1)
+		)
+		if plan and not apply_update:
+			return
+		super().on_cancel()
+		if apply_update:
+			from essdee_yrp.fabric_grn import apply_work_order_stock_update
+
+			apply_work_order_stock_update(self.against_id, plan, cancel=True)
+		self._enqueue_repost_if_mapped()
+
 	def validate_items(self):
-		"""Allow a cutting conversion to consume and produce in one warehouse.
+		"""Allow scoped Essdee conversions inside one physical warehouse.
 
 		Ordinary GRNs must use different source and destination warehouses.  A
 		label-generated cutting GRN is a production conversion, though: cloth is
 		consumed and cut-panel variants are received at the cutting unit itself.
-		The later CPM Stock Entry performs the physical warehouse movement.
+		The later CPM Stock Entry performs the physical warehouse movement.  A
+		direct Finishing return similarly reclassifies the Received Type in place;
+		its paired SLEs debit the default type and credit the operator-selected
+		type in this same warehouse.
 		"""
-		if not (
-			self.get("cutting_laysheet")
-			and self.from_warehouse
+		same_warehouse = bool(
+			self.from_warehouse
 			and self.from_warehouse == self.to_warehouse
-		):
+		)
+		allows_same_warehouse = bool(
+			same_warehouse
+			and (self.get("cutting_laysheet") or self._is_essdee_return())
+		)
+		if not allows_same_warehouse:
 			return super().validate_items()
 
 		if not (self.get("items") or self.get("correction_items")):
 			frappe.throw(_("At least one receivable or correction item is required."))
+		if self.against == "Work Order" and not self.from_warehouse:
+			frappe.throw(_("From Warehouse is required."))
+		if not self.to_warehouse:
+			frappe.throw(_("To Warehouse is required."))
 		for row in (self.get("items") or []) + (self.get("correction_items") or []):
 			if not row.item_variant:
 				frappe.throw(_("Row {0}: Item Variant is required.").format(row.idx))
@@ -119,15 +228,277 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 	def make_stock_ledger_entries(self, cancel=False):
 		if not self._is_essdee_return():
 			return super().make_stock_ledger_entries(cancel=cancel)
-		make_sl_entries(_return_stock_ledger_entries(self), cancel=cancel)
+		make_sl_entries(
+			_return_stock_ledger_entries(self, cancel=cancel),
+			cancel=cancel,
+			force_inline=True,
+		)
 
 	def _is_essdee_return(self):
 		return bool(
 			self.against == "Work Order"
 			and self.against_id
 			and self.get("is_return")
+			and self.get("from_finishing")
 			and not self.get("delivery_challan")
 		)
+
+	def _enqueue_repost_if_mapped(self):
+		if not _has_complete_mapped_consumption(self):
+			return
+		from yrp.stock.stock_ledger import enqueue_voucher_repost
+
+		enqueue_voucher_repost(self)
+
+
+def _lock_work_order(work_order):
+	frappe.db.sql(
+		"SELECT name FROM `tabWork Order` WHERE name=%s FOR UPDATE",
+		(work_order,),
+	)
+
+
+def _set_dynamic_packing_piece_uom(grn):
+	"""Keep current dynamic output quantities in Pieces, not legacy Boxes.
+
+	Version 2 stores physical boxes exclusively in ``packing_batches`` and stores
+	the per-size output quantities as physical pieces. Base still validates the
+	Item master first; this scoped business adapter changes only the transaction
+	label/conversion after that authoritative validation.
+	"""
+	from essdee_yrp.dynamic_packing import is_dynamic_packing_grn
+
+	if not is_dynamic_packing_grn(grn):
+		return
+	piece_uom = frappe.db.get_value("Lot", grn.get("lot"), "packing_uom")
+	if not piece_uom:
+		frappe.throw(_("Packing UOM is required on Lot {0}.").format(grn.get("lot")))
+	for row in grn.get("items") or []:
+		stock_uom = row.get("stock_uom") or piece_uom
+		if stock_uom != piece_uom:
+			frappe.throw(
+				_(
+					"Dynamic packing requires Lot packing UOM {0} to match stock UOM {1} for {2}."
+				).format(piece_uom, stock_uom, row.item_variant)
+			)
+		row.uom = piece_uom
+		row.stock_uom = piece_uom
+		row.conversion_factor = 1
+		row.stock_qty = flt(row.quantity)
+		row.amount = flt(row.stock_qty) * flt(row.rate)
+
+
+def _new_consumption_plan_kind(grn):
+	"""Return the exact Essdee planner for a regular new Work Order receipt."""
+	if (
+		grn.get("against") != "Work Order"
+		or not grn.get("against_id")
+		or grn.get("is_return")
+		or grn.get("is_rework")
+		or grn.get("additional_grn")
+		or grn.get("from_closed_wo_sewing_details")
+	):
+		return None
+	if grn.get("cutting_laysheet"):
+		return "cutting"
+	if grn.get("includes_packing"):
+		return "packing"
+
+	from essdee_yrp.garment_grn import (
+		_is_identity_garment_grn,
+		_is_stitching_garment_grn,
+	)
+
+	if _is_stitching_garment_grn(grn):
+		return "stitching"
+
+	if _is_identity_garment_grn(grn):
+		return "identity"
+	from essdee_yrp.fabric_grn import is_calculable_fabric_grn
+
+	return "fabric" if is_calculable_fabric_grn(grn) else None
+
+
+def _calculate_new_consumption_plan(grn, plan_kind):
+	if plan_kind == "cutting":
+		from essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet import (
+			calculate_cutting_consumption_plan,
+		)
+
+		return calculate_cutting_consumption_plan(grn)
+	if plan_kind == "packing":
+		from essdee_yrp.finishing.packing_grn import (
+			calculate_packing_consumption_plan,
+		)
+
+		return calculate_packing_consumption_plan(grn)
+	if plan_kind == "identity":
+		from essdee_yrp.garment_grn import calculate_identity_consumption_plan
+
+		return calculate_identity_consumption_plan(grn)
+	if plan_kind == "stitching":
+		from essdee_yrp.garment_grn import calculate_stitching_consumption_plan
+
+		return calculate_stitching_consumption_plan(grn)
+	from essdee_yrp.fabric_grn import calculate_consumption_plan
+
+	return calculate_consumption_plan(grn)
+
+
+def _has_complete_mapped_consumption(grn):
+	from yrp.yrp.doctype.goods_received_note.goods_received_note import (
+		has_mapped_grn_deliverables,
+	)
+
+	return bool(
+		grn.get("against") == "Work Order"
+		and grn.get("against_id")
+		and has_mapped_grn_deliverables(grn)
+	)
+
+
+def _validate_mapped_consumption_ownership(grn):
+	"""Validate Essdee-owned links before base mapped valuation starts."""
+	from yrp.stock.utils import get_conversion_factor
+	from yrp.yrp.doctype.work_order.work_order import _stock_dimension_values
+
+	items = {row.name: row for row in grn.get("items") or []}
+	work_order = frappe.get_doc("Work Order", grn.against_id)
+	deliverables = {
+		row.name: row for row in work_order.get("deliverables") or []
+	}
+	dimension_fields = get_dimension_fieldnames()
+	mapped_outputs = set()
+	for row in grn.get("grn_deliverables") or []:
+		output = items.get(row.get("goods_received_note_item"))
+		if not output:
+			frappe.throw(
+				_("GRN Deliverable row {0} is not owned by this receipt.").format(
+					row.idx
+				)
+			)
+		mapped_outputs.add(output.name)
+		if row.get("received_item_variant") != output.item_variant:
+			frappe.throw(
+				_(
+					"GRN Deliverable row {0} received variant does not match its output row."
+				).format(row.idx)
+			)
+
+		source = deliverables.get(row.get("work_order_deliverable"))
+		if not source:
+			frappe.throw(
+				_(
+					"GRN Deliverable row {0} is not linked to a Deliverable owned by Work Order {1}."
+				).format(row.idx, work_order.name)
+			)
+		if row.item_variant != source.item_variant or row.uom != source.uom:
+			frappe.throw(
+				_(
+					"GRN Deliverable row {0} input item/UOM does not match Work Order Deliverable {1}."
+				).format(row.idx, source.name)
+			)
+
+		conversion = get_conversion_factor(source.item_variant, source.uom)
+		expected_factor = flt(conversion.get("conversion_factor")) or 1
+		expected_stock_uom = conversion.get("stock_uom") or source.uom
+		if (
+			(row.get("stock_uom") or row.uom) != expected_stock_uom
+			or abs((flt(row.get("conversion_factor")) or 1) - expected_factor) > QTY_TOLERANCE
+			or abs(flt(row.stock_qty) - flt(row.quantity) * expected_factor)
+			> QTY_TOLERANCE
+		):
+			frappe.throw(
+				_(
+					"GRN Deliverable row {0} has an invalid stock-UOM conversion."
+				).format(row.idx)
+			)
+
+		raw_dimensions = row.get("stock_dimensions") or {}
+		if isinstance(raw_dimensions, str):
+			try:
+				raw_dimensions = frappe.parse_json(raw_dimensions)
+			except (TypeError, ValueError):
+				frappe.throw(
+					_("GRN Deliverable row {0} has invalid Stock Dimensions.").format(
+						row.idx
+					)
+				)
+		if not isinstance(raw_dimensions, dict):
+			frappe.throw(
+				_("GRN Deliverable row {0} has invalid Stock Dimensions.").format(
+					row.idx
+				)
+			)
+		actual_dimensions = {
+			fieldname: (
+				row.get(fieldname)
+				if row.get(fieldname) not in (None, "")
+				else raw_dimensions.get(fieldname)
+			)
+			for fieldname in dimension_fields
+		}
+		expected_dimensions = _stock_dimension_values(work_order, source)
+		mismatched = [
+			fieldname
+			for fieldname in dimension_fields
+			if (actual_dimensions.get(fieldname) or None)
+			!= (expected_dimensions.get(fieldname) or None)
+		]
+		if mismatched:
+			frappe.throw(
+				_(
+					"GRN Deliverable row {0} Stock Dimensions do not match Work Order Deliverable {1}: {2}."
+				).format(row.idx, source.name, ", ".join(mismatched))
+			)
+
+	positive_outputs = {
+		row.name
+		for row in grn.get("items") or []
+		if flt(row.get("stock_qty") or row.get("quantity")) > 0
+	}
+	missing_outputs = positive_outputs - mapped_outputs
+	if missing_outputs:
+		frappe.throw(
+			_("Every positive received row requires exact mapped consumption.")
+		)
+
+
+def _claim_mapped_stock_update_transition(grn, *, target_state):
+	"""Claim one submit/cancel bookkeeping transition under the Work Order lock."""
+	current_state = cint(
+		frappe.db.get_value(
+			grn.doctype,
+			grn.name,
+			"mapped_stock_update_state",
+			for_update=True,
+		)
+	)
+	if target_state == 1 and current_state != 0:
+		return False
+	if target_state == -1 and current_state == -1:
+		return False
+	frappe.db.set_value(
+		grn.doctype,
+		grn.name,
+		"mapped_stock_update_state",
+		target_state,
+		update_modified=False,
+	)
+	grn.mapped_stock_update_state = target_state
+	return True
+
+
+def _validate_direct_finishing_return_against(grn):
+	docstatus, open_status = frappe.db.get_value(
+		"Work Order", grn.against_id, ["docstatus", "open_status"]
+	)
+	if docstatus != 1:
+		frappe.throw(_("Work Order {0} must be submitted.").format(grn.against_id))
+	if open_status == "Close":
+		frappe.throw(_("Work Order {0} is closed.").format(grn.against_id))
+	if not grn.get("supplier") or not grn.get("delivery_location"):
+		frappe.throw(_("From Location and Delivery Location are required for a finishing return."))
 
 
 @frappe.whitelist()
@@ -260,6 +631,16 @@ def validate_sewing_plan_quantity(grn):
 	):
 		return
 	if not frappe.db.exists("Sewing Plan", {"work_order": grn.against_id}):
+		return
+	if grn.get("supplier") and frappe.db.exists(
+		"GRN Quantity Validation Exempt Supplier",
+		{
+			"parent": "MRP Settings",
+			"parenttype": "MRP Settings",
+			"parentfield": "grn_quantity_validation_exempt_suppliers",
+			"supplier": grn.supplier,
+		},
+	):
 		return
 
 	checking_type = frappe.db.get_single_value("MRP Settings", "type_wise_diff_summary")
@@ -398,7 +779,7 @@ def _update_returned_deliverables(grn, *, cancel):
 	_update_work_order_status(work_order.name)
 
 
-def _return_stock_ledger_entries(grn):
+def _return_stock_ledger_entries(grn, *, cancel=False):
 	if not grn.from_warehouse or not grn.to_warehouse:
 		frappe.throw(_("From Warehouse and To Warehouse are required for a return GRN."))
 	default_received_type = frappe.db.get_single_value(
@@ -415,17 +796,20 @@ def _return_stock_ledger_entries(grn):
 		if "received_type" in outgoing:
 			outgoing["received_type"] = default_received_type
 		dimensions = {fieldname: outgoing.get(fieldname) for fieldname in dimension_fields}
-		rate, _matched_bucket = get_last_sle_rate(
-			row.item_variant,
-			warehouse=grn.from_warehouse,
-			**dimensions,
-		)
-		if flt(rate) <= 0:
-			frappe.throw(
-				_("No source valuation rate is available for {0} in {1}.").format(
-					row.item_variant, grn.from_warehouse
-				)
+		rate = 0
+		if not cancel:
+			rate, _matched_bucket = get_last_sle_rate(
+				row.item_variant,
+				warehouse=grn.from_warehouse,
+				**dimensions,
 			)
+			if flt(rate) <= 0:
+				frappe.throw(
+					_("No source valuation rate is available for {0} in {1}.").format(
+						row.item_variant, grn.from_warehouse
+					)
+				)
+		transfer_key = f"{grn.name}:{row.name}:finishing-return"
 		entries.extend(
 			[
 				{
@@ -434,12 +818,16 @@ def _return_stock_ledger_entries(grn):
 					"qty": -quantity,
 					"rate": 0,
 					"outgoing_rate": flt(rate),
+					"_transfer_key": transfer_key,
+					"_transfer_role": "outgoing",
 				},
 				{
 					**incoming,
 					"warehouse": grn.to_warehouse,
 					"qty": quantity,
-					"rate": flt(rate),
+					"rate": 0,
+					"_transfer_key": transfer_key,
+					"_transfer_role": "incoming",
 				},
 			]
 		)
@@ -447,16 +835,46 @@ def _return_stock_ledger_entries(grn):
 
 
 def _find_deliverable(work_order, source_row):
+	from yrp.yrp.doctype.delivery_challan.delivery_challan import _normal_json
+
 	if (
 		source_row.get("ref_doctype") == "Work Order Deliverables"
 		and source_row.get("ref_docname")
 	):
 		for row in work_order.get("deliverables") or []:
 			if row.name == source_row.ref_docname:
-				return row
-	for row in work_order.get("deliverables") or []:
-		if row.item_variant != source_row.item_variant:
-			continue
-		if _normal_json(row.set_combination) == _normal_json(source_row.set_combination):
-			return row
+				if _return_deliverable_matches(row, source_row, _normal_json):
+					return row
+				frappe.throw(
+					_(
+						"Row {0}: referenced Work Order Deliverable {1} does not match the returned item/UOM/combination."
+					).format(source_row.idx, source_row.ref_docname)
+				)
+		return None
+
+	candidates = [
+		row
+		for row in work_order.get("deliverables") or []
+		if _return_deliverable_matches(row, source_row, _normal_json)
+	]
+	if len(candidates) == 1:
+		return candidates[0]
+	if len(candidates) > 1:
+		frappe.throw(
+			_(
+				"Row {0}: returned item {1} matches multiple Work Order Deliverables; reload the return to restore its exact reference."
+			).format(source_row.idx, source_row.item_variant)
+		)
 	return None
+
+
+def _return_deliverable_matches(deliverable, source_row, normal_json):
+	return bool(
+		deliverable.item_variant == source_row.item_variant
+		and (
+			not source_row.get("uom")
+			or deliverable.get("uom") == source_row.get("uom")
+		)
+		and normal_json(deliverable.get("set_combination"))
+		== normal_json(source_row.get("set_combination"))
+	)

@@ -21,12 +21,6 @@ def execute():
 					"options": "Item",
 					"insert_after": "includes_packing",
 				},
-				{
-					"fieldname": "additional_allowance",
-					"fieldtype": "Percent",
-					"label": "Additional Allowance",
-					"insert_after": "process_details",
-				},
 			]
 		}
 	)

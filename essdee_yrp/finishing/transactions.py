@@ -1,5 +1,7 @@
 """Finishing-owned orchestration over base YRP DC, GRN, and Stock Entry."""
 
+import re
+
 import frappe
 from frappe.utils import flt, nowdate, nowtime
 
@@ -25,6 +27,43 @@ from yrp.yrp.doctype.item_production_detail.item_production_detail import (
 from yrp.yrp.doctype.supplier.supplier import get_primary_address
 
 
+_FINISHING_GRN_REQUEST_PATTERN = re.compile(r"^[A-Za-z0-9:_-]{1,128}$")
+
+
+def _finishing_grn_request_marker(request_id):
+	if not request_id:
+		return None
+	request_id = str(request_id).strip()
+	if not _FINISHING_GRN_REQUEST_PATTERN.fullmatch(request_id):
+		frappe.throw("Invalid Finishing GRN request ID")
+	return f"[essdee-finishing-grn-request:{request_id}]"
+
+
+def _get_existing_finishing_grn(work_order, lot, marker):
+	if not marker:
+		return None
+	rows = frappe.db.sql(
+		"""
+			SELECT name, docstatus
+			FROM `tabGoods Received Note`
+			WHERE against = 'Work Order'
+				AND against_id = %(work_order)s
+				AND lot = %(lot)s
+				AND COALESCE(from_finishing, 0) = 1
+				AND COALESCE(includes_packing, 0) = 1
+				AND COALESCE(is_return, 0) = 0
+				AND comments = %(marker)s
+				AND docstatus < 2
+			ORDER BY creation
+			LIMIT 1
+			FOR UPDATE
+		""",
+		{"work_order": work_order, "lot": lot, "marker": marker},
+		as_dict=True,
+	)
+	return rows[0] if rows else None
+
+
 @frappe.whitelist()
 def get_primary_values(lot=None, production_detail=None):
 	ipd_name = production_detail or frappe.db.get_value("Lot", lot, "production_detail")
@@ -42,10 +81,23 @@ def create_grn(
 	delivery_location,
 	actual_date,
 	packing_batches=None,
+	request_id=None,
 ):
 	work_order_doc = frappe.get_doc("Work Order", work_order)
 	work_order_doc.check_permission("read")
+	marker = _finishing_grn_request_marker(request_id)
+	if not frappe.db.get_value("Work Order", work_order, "name", for_update=True):
+		frappe.throw(f"Work Order {work_order} does not exist")
+	work_order_doc.reload()
 	_validate_work_order_context(work_order_doc, lot, item_name)
+	existing = _get_existing_finishing_grn(work_order, lot, marker)
+	if existing:
+		if existing.docstatus == 1:
+			return existing.name
+		frappe.throw(
+			f"Finishing GRN request {request_id} already created draft {existing.name}. "
+			"Submit or cancel that draft before retrying."
+		)
 	ipd_name = frappe.db.get_value("Lot", lot, "production_detail")
 	ipd_doc = frappe.get_cached_doc("Item Production Detail", ipd_name)
 	dynamic_packing = bool(
@@ -97,6 +149,7 @@ def create_grn(
 			"vehicle_no": "NA",
 			"dc_no": "NA",
 			"process_name": work_order_doc.process_name,
+			"comments": marker,
 			"from_finishing": 1,
 			"includes_packing": 1,
 			"packing_calculation_version": (
@@ -662,7 +715,7 @@ def create_stock_entry(
 	for row in items:
 		row["received_type"] = default_received_type
 		stock_entry.append("items", row)
-	_populate_stock_rates(stock_entry, from_location)
+	populate_stock_rates(stock_entry, from_location)
 	stock_entry.insert()
 	stock_entry.submit()
 	return stock_entry.name
@@ -722,7 +775,7 @@ def create_material_receipt(data, item_name, lot, ipd, doc_name, location):
 	for row in items:
 		row["received_type"] = default_received_type
 		stock_entry.append("items", row)
-	_populate_stock_rates(stock_entry, location, require_positive=True)
+	populate_stock_rates(stock_entry, location, require_positive=True)
 	stock_entry.insert()
 	stock_entry.submit()
 	return stock_entry.name
@@ -751,7 +804,7 @@ def _validate_work_order_context(work_order_doc, lot, item_name):
 		frappe.throw(f"Work Order {work_order_doc.name} does not belong to Item {item_name}")
 
 
-def _populate_stock_rates(stock_entry, warehouse, *, require_positive=False):
+def populate_stock_rates(stock_entry, warehouse, *, require_positive=False):
 	"""Apply YRP's dimension-aware last valuation rate to programmatic rows."""
 	from yrp.stock.dimensions import get_dimension_fieldnames
 	from yrp.stock.utils import get_last_sle_rate

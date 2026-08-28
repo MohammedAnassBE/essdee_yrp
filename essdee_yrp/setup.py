@@ -37,8 +37,28 @@ MRP_SYSTEM_MANAGER_CANCEL_PERMISSIONS = {
 	"Cutting Marker": {"submit": 1},
 }
 
+DOCPERM_FIELDS = (
+	"select",
+	"read",
+	"write",
+	"create",
+	"delete",
+	"submit",
+	"cancel",
+	"amend",
+	"mask",
+	"report",
+	"export",
+	"import",
+	"share",
+	"print",
+	"email",
+)
+
 
 def after_install():
+	ensure_yrp_valuation_contract()
+	ensure_finishing_plan_dispatch_naming_series()
 	ensure_default_address_template()
 	ensure_mrp_schema_roles()
 	ensure_mrp_cancel_permissions()
@@ -49,6 +69,8 @@ def after_install():
 
 
 def after_migrate():
+	ensure_yrp_valuation_contract()
+	ensure_finishing_plan_dispatch_naming_series()
 	ensure_default_address_template()
 	ensure_mrp_schema_roles()
 	ensure_mrp_cancel_permissions()
@@ -58,6 +80,60 @@ def after_migrate():
 	ensure_lot_packing_boundary()
 	ensure_essdee_stock_dimensions()
 	build_web_spa()
+
+
+def ensure_yrp_valuation_contract():
+	"""Fail deployment before Essdee can activate a partial stock contract."""
+	required_fields = {
+		"Stock Ledger Entry": (
+			"paired_stock_ledger_entry",
+			"valuation_adjustment_value",
+		),
+		"YRP GRN Deliverable": (
+			"goods_received_note_item",
+			"received_item_variant",
+			"material_value",
+			"consumption_sle",
+			"output_receipt_sle",
+			"stock_dimensions",
+		),
+		"Work Order Excess Usage Item": (
+			"actual_value",
+			"source_sle",
+			"stock_dimensions",
+		),
+	}
+	missing = []
+	for doctype, fieldnames in required_fields.items():
+		if not frappe.db.exists("DocType", doctype):
+			missing.append(doctype)
+			continue
+		meta = frappe.get_meta(doctype)
+		missing.extend(
+			f"{doctype}.{fieldname}"
+			for fieldname in fieldnames
+			if not meta.get_field(fieldname)
+		)
+	for doctype in (
+		"Stock Valuation Adjustment",
+		"Stock Valuation Production Link",
+	):
+		if not frappe.db.exists("DocType", doctype):
+			missing.append(doctype)
+	if missing:
+		frappe.throw(
+			"YRP valuation contract is incomplete. Deploy and migrate the matching "
+			f"yrp develop revision together with essdee_yrp. Missing: {', '.join(missing)}"
+		)
+
+
+def ensure_finishing_plan_dispatch_naming_series():
+	"""Remove the migrated hard-coded FY option; the controller derives it."""
+	frappe.db.delete(
+		"Property Setter",
+		{"name": "Finishing Plan Dispatch-naming_series-options"},
+	)
+	frappe.clear_cache(doctype="Finishing Plan Dispatch")
 
 
 def ensure_mrp_schema_roles():
@@ -75,42 +151,43 @@ def ensure_mrp_schema_roles():
 
 
 def ensure_mrp_cancel_permissions():
-	"""Restore the F15 System Manager cancel authority for cutting documents."""
+	"""Restore F15 cancel authority without hiding the floor-role permissions.
+
+	Frappe switches a DocType entirely to ``Custom DocPerm`` as soon as the first
+	custom row exists. Creating only the System Manager override therefore makes
+	the standard Store User/Store Manager rows disappear from authorization.
+	Mirror every standard row first, then apply the one intended override.
+	"""
 	for doctype, overrides in MRP_SYSTEM_MANAGER_CANCEL_PERMISSIONS.items():
-		filters = {
-			"parent": doctype,
-			"role": "System Manager",
-			"permlevel": 0,
-			"if_owner": 0,
-		}
-		name = frappe.db.get_value("Custom DocPerm", filters, "name")
-		values = {
-			"read": 1,
-			"write": 1,
-			"create": 1,
-			"delete": 1,
-			"submit": overrides["submit"],
-			"cancel": 1,
-			"amend": 0,
-			"report": 1,
-			"export": 1,
-			"import": 0,
-			"share": 1,
-			"print": 1,
-			"email": 1,
-		}
-		if name:
-			doc = frappe.get_doc("Custom DocPerm", name)
-			doc.update(values)
-			doc.save(ignore_permissions=True)
-		else:
-			frappe.get_doc(
-				{
-					"doctype": "Custom DocPerm",
-					**filters,
-					**values,
-				}
-			).insert(ignore_permissions=True)
+		standard_rows = frappe.get_all(
+			"DocPerm",
+			filters={"parent": doctype},
+			fields=["role", "permlevel", "if_owner", *DOCPERM_FIELDS],
+			order_by="idx asc",
+		)
+		for standard in standard_rows:
+			filters = {
+				"parent": doctype,
+				"role": standard.role,
+				"permlevel": standard.permlevel,
+				"if_owner": standard.if_owner,
+			}
+			values = {fieldname: standard.get(fieldname) for fieldname in DOCPERM_FIELDS}
+			if standard.role == "System Manager" and standard.permlevel == 0 and not standard.if_owner:
+				values.update({"submit": overrides["submit"], "cancel": 1})
+			name = frappe.db.get_value("Custom DocPerm", filters, "name")
+			if name:
+				doc = frappe.get_doc("Custom DocPerm", name)
+				doc.update(values)
+				doc.save(ignore_permissions=True)
+			else:
+				frappe.get_doc(
+					{
+						"doctype": "Custom DocPerm",
+						**filters,
+						**values,
+					}
+				).insert(ignore_permissions=True)
 		frappe.clear_cache(doctype=doctype)
 
 

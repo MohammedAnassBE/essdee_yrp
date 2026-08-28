@@ -1364,6 +1364,7 @@ class TestClothProgram(IntegrationTestCase):
         ))
         self.assertEqual(res["excess_percentage"], 5)
         lot.reload()
+        self.assertEqual(flt(lot.cloth_excess_percentage), 5)
         requirement = next(
             r for r in lot.lot_fabric_requirements if r.cloth_item == self.cloth
         )

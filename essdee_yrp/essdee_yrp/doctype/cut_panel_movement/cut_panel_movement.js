@@ -98,7 +98,9 @@ function fetch_panels(frm) {
 			posting_time: frm.doc.posting_time,
 			movement_from_cutting: frm.doc.movement_from_cutting,
 			cutting_plan: frm.doc.cutting_plan,
-			get_collapsed: true,
+			// Frappe form calls serialise booleans as text; cint("true") is 0.
+			// Send the numeric flag so collapsed ledger rows reach the rendered UI.
+			get_collapsed: 1,
 		},
 		freeze: true,
 		freeze_message: __("Fetching available bundles..."),
@@ -221,11 +223,11 @@ function open_new_transaction(doctype, values) {
 			doc.posting_time = frappe.datetime.now_datetime().split(" ")[1];
 		}
 		frappe.set_route("Form", doctype, doc.name).then(() => {
-			// The base GRN form fetches Work Order defaults when its prepared
-			// against/DC fields are mounted. Wait for that request, then restore
+			// The base DC and GRN forms fetch Work Order defaults when their
+			// prepared link fields are mounted. Wait for that request, then restore
 			// the exact CPM selection so it cannot be replaced by every pending
 			// Work Order row.
-			if (doctype !== "Goods Received Note") return;
+			if (!["Delivery Challan", "Goods Received Note"].includes(doctype)) return;
 			frappe.after_ajax(() => {
 				if (cur_frm?.doctype !== doctype || cur_frm.doc.name !== doc.name) return;
 				cur_frm.clear_table("items");

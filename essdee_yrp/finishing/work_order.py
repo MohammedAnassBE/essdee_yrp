@@ -24,6 +24,8 @@ def on_submit(doc, method=None):
 		return
 	if doc.get("is_rework"):
 		return
+	if not doc.get("is_internal_unit"):
+		return
 	_transfer_alternative_stock(doc)
 	create_or_refresh_finishing_plan(doc)
 	from essdee_yrp.finishing.box_sticker import auto_create_box_sticker_print
@@ -34,15 +36,17 @@ def on_submit(doc, method=None):
 def on_cancel(doc, method=None):
 	if not doc.get("includes_packing"):
 		return
-	from essdee_yrp.finishing.box_sticker import cancel_box_sticker_prints
+	if doc.get("is_internal_unit"):
+		from essdee_yrp.finishing.box_sticker import cancel_box_sticker_prints
 
-	cancel_box_sticker_prints(doc)
+		cancel_box_sticker_prints(doc)
 	finishing_plan = frappe.db.get_value(
 		"Finishing Plan", {"work_order": doc.name}, "name"
 	)
 	if finishing_plan:
 		frappe.delete_doc("Finishing Plan", finishing_plan, ignore_permissions=True)
-	_reverse_alternative_stock(doc)
+	if doc.get("is_internal_unit"):
+		_reverse_alternative_stock(doc)
 
 
 def create_or_refresh_finishing_plan(work_order):

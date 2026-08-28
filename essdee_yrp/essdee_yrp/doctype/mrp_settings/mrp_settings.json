@@ -61,6 +61,7 @@
   "sewing_plan_tab",
   "sewing_plan_status_summary",
   "type_wise_diff_summary",
+  "grn_quantity_validation_exempt_suppliers",
   "sewing_plan_input_orders",
   "previous_day_entries",
   "sewing_plan_inspection_type",
@@ -491,6 +492,13 @@
    "fieldtype": "Link",
    "label": "Type Wise Diff Summary",
    "options": "Sewing Plan Input Type"
+  },
+  {
+   "description": "Skip the Sewing Plan type-wise quantity check for GRNs received from these supplier locations.",
+   "fieldname": "grn_quantity_validation_exempt_suppliers",
+   "fieldtype": "Table",
+   "label": "GRN Quantity Validation Exempt Suppliers",
+   "options": "GRN Quantity Validation Exempt Supplier"
   },
   {
    "description": "Defines the authoritative production-entry sequence. Each Input Type can consume only the quantity recorded in Difference From, plus its configured allowance.",

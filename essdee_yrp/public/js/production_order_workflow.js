@@ -422,8 +422,6 @@ function setup_ppo_approval_actions(frm) {
   const onload = frm.doc.__onload || {};
   const status = frm.doc.status || "Draft";
   if (status === "PPO Request") {
-    // frm.disable_save();
-
     if (onload.can_approve_ppo) {
       const request = onload.ppo_approval_request || {};
       const requester = request.requested_by
@@ -532,7 +530,6 @@ function can_edit_ppo_ui(frm) {
   const can_create_order = Boolean((frm.perm || []).some((perm) => perm.create));
 	return (
 		frm.doc.docstatus === 0 &&
-		frm.doc.status !== "PPO Request" &&
 		(frm.is_new() ? can_create_order : can_manage_saved_order)
 	);
 }

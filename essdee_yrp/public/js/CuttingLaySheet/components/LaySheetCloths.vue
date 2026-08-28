@@ -273,6 +273,15 @@ function onchange_event(){
                         if(df.default){
                             set_parameters[i].set_value(inputs[i].default)
                         }
+                        else if(df.fieldtype === "Select"){
+                            const options = Array.isArray(df.options)
+                                ? df.options
+                                : String(df.options || "").split("\n")
+                            const validOptions = options.filter(option => option !== null && option !== "")
+                            if(validOptions.length === 1){
+                                set_parameters[i].set_value(validOptions[0])
+                            }
+                        }
                         if(edit_index.value != null && edit_index.value >= 0 && !df.default){
                             let val = items.value[edit_index.value]['set_combination']
                             if(typeof(val) == "string"){
@@ -804,8 +813,9 @@ function parsedSetCombination(item) {
 }
 
 function load_data(item_detail){
-    manual_items.value = item_detail.manual_items
-    items.value = item_detail.cloth_items
+    const details = item_detail && !Array.isArray(item_detail) ? item_detail : {}
+    manual_items.value = details.manual_items || {}
+    items.value = details.cloth_items || []
     manual_index.value = Object.keys(manual_items.value).length + 1
 }
 

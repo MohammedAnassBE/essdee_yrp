@@ -10,6 +10,47 @@ from essdee_yrp.essdee_yrp.doctype.finishing_plan_dispatch import (
 
 
 class TestFinishingPlanDispatch(IntegrationTestCase):
+	def test_new_dispatch_uses_configured_current_fiscal_series(self):
+		with patch.object(
+			finishing_plan_dispatch.frappe.db,
+			"get_single_value",
+			side_effect=["2026-04-01", "2027-03-31"],
+		):
+			series = finishing_plan_dispatch.get_current_fiscal_naming_series(
+				"2026-08-27"
+			)
+		self.assertEqual(series, "FPD-2627-")
+
+		# Desk's new-form loader builds a transient document without __islocal.
+		doc = frappe.get_doc({"doctype": "Finishing Plan Dispatch"})
+		with patch.object(
+			finishing_plan_dispatch,
+			"get_current_fiscal_naming_series",
+			return_value=series,
+		):
+			doc.onload()
+		self.assertEqual(doc.naming_series, series)
+
+	def test_fiscal_series_rejects_date_outside_configured_window(self):
+		with patch.object(
+			finishing_plan_dispatch.frappe.db,
+			"get_single_value",
+			side_effect=["2026-04-01", "2027-03-31"],
+		):
+			with self.assertRaisesRegex(frappe.ValidationError, "outside the configured"):
+				finishing_plan_dispatch.get_current_fiscal_naming_series("2027-04-01")
+
+	def test_fresh_dispatch_rejects_non_current_series_server_side(self):
+		doc = frappe.new_doc("Finishing Plan Dispatch")
+		doc.naming_series = "FPD-2526-"
+		with patch.object(
+			finishing_plan_dispatch,
+			"get_current_fiscal_naming_series",
+			return_value="FPD-2627-",
+		):
+			with self.assertRaisesRegex(frappe.ValidationError, "must be FPD-2627-"):
+				doc.validate()
+
 	def test_stock_dispatch_requires_write_permission(self):
 		dispatch = MagicMock(docstatus=1, stock_entry=None)
 		dispatch.check_permission.side_effect = frappe.PermissionError
@@ -47,6 +88,43 @@ class TestFinishingPlanDispatch(IntegrationTestCase):
 		with patch.object(finishing_plan_dispatch.frappe, "get_doc", return_value=stock_entry):
 			doc.before_cancel()
 		stock_entry.cancel.assert_called_once_with()
+
+	def test_stock_dispatch_populates_dimension_aware_rates_before_insert(self):
+		dispatch = SimpleNamespace(
+			docstatus=1,
+			stock_entry=None,
+			packing_batch_dispatch_json=None,
+			dispatch_colour_details=None,
+			finishing_plan_dispatch_items=[
+				SimpleNamespace(
+					item_variant="ITEM-S",
+					quantity=4,
+					lot="LOT-1",
+					uom="Pieces",
+				)
+			],
+			check_permission=MagicMock(),
+		)
+		stock_entry = MagicMock()
+		stock_entry.name = "STE-TEST"
+		with (
+			patch.object(finishing_plan_dispatch.frappe, "get_doc", return_value=dispatch),
+			patch.object(finishing_plan_dispatch.frappe, "new_doc", return_value=stock_entry),
+			patch.object(
+				finishing_plan_dispatch.frappe.db,
+				"get_single_value",
+				return_value="Accepted",
+			),
+			patch.object(finishing_plan_dispatch, "populate_stock_rates") as populate_rates,
+		):
+			result = finishing_plan_dispatch.create_stock_dispatch(
+				"FPD-TEST", "WH-FROM", "SUP-TO", "TEST-1", 100
+			)
+
+		self.assertEqual(result, "STE-TEST")
+		populate_rates.assert_called_once_with(stock_entry, "WH-FROM")
+		stock_entry.insert.assert_called_once_with()
+		stock_entry.submit.assert_called_once_with()
 
 	def test_draft_merge_keeps_valid_batch_selection_only(self):
 		fresh = _item_row("FP-1")

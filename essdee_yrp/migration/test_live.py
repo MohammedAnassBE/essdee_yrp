@@ -4,27 +4,49 @@ import base64
 import hashlib
 import json
 import unittest
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, call, patch
 
 from essdee_yrp.migration.engine import MigrationError
-from essdee_yrp.migration.config import MigrationSettings
+from essdee_yrp.migration.config import MigrationSettings, is_target_reset_enabled
+from essdee_yrp.essdee_yrp.doctype.mrp_data_migration.mrp_data_migration import (
+	MRPDataMigration,
+	_migration_action_reservation,
+)
 from essdee_yrp.migration.live import (
 	F15SourceBridge,
 	FrappeBulkTarget,
 	_apply_contextual_defaults,
+	_build_target_reset_manifest,
+	_bind_reset_series_checkpoint,
 	_broken_static_link_count,
-	_decode_and_validate_file_payload,
 	_collect_document_identities,
 	_collect_expected_value_rows,
+	_decode_and_validate_file_payload,
+	_delete_reset_file,
+	_delete_target_reset_manifest,
+	enqueue_job,
+	enqueue_reset_job,
+	_generated_supplier_warehouse_names,
+	_include_reset_generated_audit_scope,
 	_is_verified_attachment_url,
+	_mark_reset_started,
 	_migration_contract_fingerprint,
+	_nonzero_reset_counts,
 	_require_previous_snapshot,
+	_source_snapshot,
+	_assert_no_other_active_migration,
 	_run_files,
+	run_job_guarded,
+	run_reset_job_guarded,
 	_same_migrated_value,
+	_target_reset_file_names,
+	_target_reset_counts,
 	_validate_configured_default_contract,
 	_validate_required_target_values,
+	_validate_target_migration_prerequisites,
 )
 
 
@@ -41,6 +63,645 @@ def configured_settings():
 
 
 class MigrationLiveAdapterTest(unittest.TestCase):
+	def test_action_reservation_uses_one_named_lock_and_always_releases_it(self):
+		queries = []
+
+		def sql(query, values=None):
+			queries.append((query, values))
+			return [[1]] if "GET_LOCK" in query else [[1]]
+
+		with (
+			patch(
+				"essdee_yrp.essdee_yrp.doctype.mrp_data_migration.mrp_data_migration.frappe.local.conf",
+				{"db_name": "target_db"},
+			),
+			patch(
+				"essdee_yrp.essdee_yrp.doctype.mrp_data_migration.mrp_data_migration.frappe.db.sql",
+				side_effect=sql,
+			),
+		):
+			with _migration_action_reservation():
+				pass
+
+		self.assertIn("GET_LOCK", queries[0][0])
+		self.assertIn("RELEASE_LOCK", queries[-1][0])
+		self.assertEqual(queries[0][1][0], queries[-1][1][0])
+
+	def test_worker_rejects_a_second_active_migration_record(self):
+		with patch(
+			"essdee_yrp.migration.live.frappe.get_all", return_value=["MIG-OTHER"]
+		):
+			with self.assertRaisesRegex(MigrationError, "MIG-OTHER"):
+				_assert_no_other_active_migration("MIG-CURRENT")
+
+	def test_controller_reloads_its_status_under_row_lock(self):
+		doc = SimpleNamespace(name="MIG-1", reload=Mock())
+		with patch(
+			"essdee_yrp.essdee_yrp.doctype.mrp_data_migration.mrp_data_migration.frappe.db.sql",
+			return_value=[["MIG-1"]],
+		) as sql:
+			MRPDataMigration._lock_and_reload(doc)
+
+		self.assertIn("FOR UPDATE", sql.call_args.args[0])
+		doc.reload.assert_called_once_with()
+
+	def test_reset_manifest_deletes_non_single_graph_and_preserves_singles(self):
+		plan = SimpleNamespace(
+			specs={
+				"Parent": SimpleNamespace(
+					target="Parent", is_child=False, source_schema={"issingle": 0}
+				),
+				"Supplier": SimpleNamespace(
+					target="Supplier", is_child=False, source_schema={"issingle": 0}
+				),
+				"Settings": SimpleNamespace(
+					target="Settings", is_child=False, source_schema={"issingle": 1}
+				),
+				"Child": SimpleNamespace(
+					target="Child", is_child=True, source_schema={"issingle": 0}
+				),
+			},
+			target_schemas={},
+		)
+		source = SimpleNamespace(
+			iter_series=lambda: iter(
+				[
+					{"name": "PARENT-.#####", "current": 3},
+					{"name": "PARENT-.#####", "current": 3},
+					{"name": "", "current": 7},
+				]
+			)
+		)
+		manifest = _build_target_reset_manifest(plan, source)
+
+		self.assertEqual(manifest["parent_target_doctypes"], ["Parent", "Supplier"])
+		self.assertEqual(manifest["single_target_doctypes"], ["Settings"])
+		self.assertEqual(manifest["child_target_doctypes"], ["Child"])
+		self.assertEqual(manifest["source_series_names"], ["", "PARENT-.#####"])
+		self.assertTrue(manifest["delete_generated_supplier_warehouses"])
+
+	def test_reset_manifest_includes_contextual_target_child_tables(self):
+		plan = SimpleNamespace(
+			specs={
+				"Item Production Detail": SimpleNamespace(
+					target="Item Production Detail",
+					is_child=False,
+					source_schema={"issingle": 0},
+				),
+				"Item Item Attribute": SimpleNamespace(
+					target="Item Item Attribute",
+					is_child=True,
+					source_schema={"issingle": 0},
+				),
+			},
+			target_schemas={
+				"Item Production Detail": {
+					"fields": [
+						{
+							"fieldname": "item_attributes",
+							"fieldtype": "Table",
+							"options": "IPD Item Attribute",
+						}
+					]
+				}
+			},
+		)
+		source = SimpleNamespace(iter_series=lambda: iter([]))
+
+		manifest = _build_target_reset_manifest(plan, source)
+
+		self.assertEqual(
+			manifest["child_target_doctypes"],
+			["IPD Item Attribute", "Item Item Attribute"],
+		)
+
+	def test_guarded_queue_entrypoints_mark_preflight_failures(self):
+		for entrypoint, target in (
+			(run_job_guarded, "essdee_yrp.migration.live.run_job"),
+			(run_reset_job_guarded, "essdee_yrp.migration.live.run_reset_job"),
+		):
+			with (
+				patch(target, side_effect=MigrationError("preflight")),
+				patch(
+					"essdee_yrp.migration.live.frappe.db.get_value",
+					return_value="Queued",
+				),
+				patch("essdee_yrp.migration.live._mark_failed") as mark_failed,
+				self.assertRaisesRegex(MigrationError, "preflight"),
+			):
+				entrypoint(migration_name="MIG-1")
+			mark_failed.assert_called_once_with("MIG-1")
+
+	def test_migration_jobs_enqueue_only_after_the_queued_state_commits(self):
+		with patch("essdee_yrp.migration.live.frappe.enqueue") as enqueue:
+			enqueue_job("MIG-1", "dry_run", allow_missing_files=True)
+			self.assertTrue(enqueue.call_args.kwargs["enqueue_after_commit"])
+			self.assertEqual(
+				enqueue.call_args.args[0],
+				"essdee_yrp.migration.live.run_job_guarded",
+			)
+
+			enqueue.reset_mock()
+			enqueue_reset_job("MIG-1")
+			self.assertTrue(enqueue.call_args.kwargs["enqueue_after_commit"])
+			self.assertEqual(
+				enqueue.call_args.args[0],
+				"essdee_yrp.migration.live.run_reset_job_guarded",
+			)
+
+	def test_reset_delete_never_deletes_a_preserved_single_table(self):
+		manifest = {
+			"parent_target_doctypes": ["Parent", "Supplier"],
+			"single_target_doctypes": ["Settings"],
+			"child_target_doctypes": ["Child"],
+			"source_series_names": ["PARENT-.#####"],
+			"delete_generated_supplier_warehouses": True,
+		}
+		before = {
+			"file_names": ["FILE-1", "FILE-2"],
+			"reset_generated_deleted_document_names": [],
+			"generated_supplier_warehouse_names": ["SUP-1"],
+			"child_counts": {"Child": 2},
+			"parent_counts": {"Parent": 1, "Supplier": 1},
+			"preserved_series_values": {"": 7, "PARENT-.#####": 3},
+		}
+		with (
+			patch("essdee_yrp.migration.live._delete_reset_file") as delete_file,
+			patch("essdee_yrp.migration.live.frappe.db.delete") as delete,
+			patch("essdee_yrp.migration.live.frappe.db.sql") as sql,
+			patch("essdee_yrp.migration.live.frappe.db.commit"),
+			patch("essdee_yrp.migration.live.frappe.db.set_value"),
+			patch("essdee_yrp.migration.live._update_progress") as update_progress,
+		):
+			_delete_target_reset_manifest("MIG-1", manifest, before)
+
+		self.assertEqual(delete_file.call_args_list, [call("FILE-1"), call("FILE-2")])
+		deleted_doctypes = [call.args[0] for call in delete.call_args_list]
+		self.assertEqual(deleted_doctypes, ["Warehouse", "Child", "Parent", "Supplier"])
+		self.assertNotIn("Settings", deleted_doctypes)
+		sql.assert_not_called()
+		self.assertEqual(
+			[call.args[1] for call in update_progress.call_args_list],
+			[1, 2, 3, 5, 6, 7],
+		)
+		self.assertEqual(_nonzero_reset_counts({"parent_total": 0}), {})
+
+	def test_reset_file_uses_physical_lifecycle_without_queueing(self):
+		doc = SimpleNamespace(
+			validate_protected_file=Mock(),
+			_delete_file_on_disk=Mock(),
+		)
+		with (
+			patch("essdee_yrp.migration.live.frappe.get_doc", return_value=doc),
+			patch("essdee_yrp.migration.live.frappe.delete_doc") as delete_doc,
+			patch("frappe.model.delete_doc.delete_dynamic_links") as delete_links,
+		):
+			_delete_reset_file("FILE-1")
+
+		doc.validate_protected_file.assert_called_once_with()
+		doc._delete_file_on_disk.assert_called_once_with()
+		delete_doc.assert_called_once_with(
+			"File",
+			"FILE-1",
+			ignore_permissions=True,
+			force=True,
+			for_reload=True,
+			delete_permanently=True,
+		)
+		delete_links.assert_called_once_with("File", "FILE-1")
+
+	def test_reset_retry_includes_only_exact_checkpointed_audit_identities(self):
+		counts = {"total": 10}
+		migration = SimpleNamespace(
+			checkpoint_json=json.dumps(
+				{
+					"mode": "reset",
+					"reset_started_on": "2026-08-25 21:29:47.466686",
+					"reset_generated_deleted_document_names": [
+						"DELETED-1",
+						"DELETED-2",
+					],
+					"reset_generated_comment_names": ["COMMENT-1", "COMMENT-2"],
+				}
+			)
+		)
+
+		def get_all(doctype, **kwargs):
+			requested = kwargs["filters"]["name"][1]
+			return [name for name in requested if name != "DELETED-2"]
+
+		with patch(
+			"essdee_yrp.migration.live.frappe.get_all", side_effect=get_all
+		) as get_all_mock:
+			result = _include_reset_generated_audit_scope(migration, counts)
+
+		self.assertEqual(result["reset_generated_deleted_document_total"], 1)
+		self.assertEqual(result["reset_generated_comment_total"], 2)
+		self.assertEqual(result["reset_generated_audit_total"], 3)
+		self.assertEqual(result["total"], 13)
+		self.assertTrue(
+			all(
+				call.kwargs["filters"].keys() == {"name"}
+				and call.kwargs["limit_page_length"] == 0
+				for call in get_all_mock.call_args_list
+			)
+		)
+
+	def test_failed_reset_analysis_preserves_the_original_reset_start(self):
+		doc = SimpleNamespace(
+			status="Failed",
+			last_action="Reset Target",
+			last_started_on="2026-08-25 21:29:47.466686",
+			checkpoint_json=json.dumps(
+				{"mode": "reset", "preserved_series_values": {"": 5207}}
+			),
+		)
+
+		MRPDataMigration._preserve_failed_reset_checkpoint(doc)
+
+		checkpoint = json.loads(doc.checkpoint_json)
+		self.assertEqual(
+			checkpoint["reset_started_on"], "2026-08-25 21:29:47.466686"
+		)
+
+	def test_fresh_reset_checkpoint_serializes_its_start_time(self):
+		started_on = datetime(2026, 8, 25, 23, 46, 12, 123456)
+		with (
+			patch("essdee_yrp.migration.live.now_datetime", return_value=started_on),
+			patch("essdee_yrp.migration.live.frappe.db.set_value") as set_value,
+			patch("essdee_yrp.migration.live.frappe.db.commit"),
+		):
+			_mark_reset_started(
+				"MIG-1",
+				{"total": 5, "preserved_series_values": {"": 7}},
+			)
+
+		checkpoint = json.loads(set_value.call_args_list[0].args[2]["checkpoint_json"])
+		self.assertEqual(checkpoint["reset_started_on"], str(started_on))
+		self.assertEqual(checkpoint["preserved_series_values"], {"": 7})
+		self.assertEqual(checkpoint["reset_generated_deleted_document_names"], [])
+		self.assertEqual(checkpoint["reset_generated_comment_names"], [])
+
+	def test_reset_counts_preserve_every_series_value_exactly(self):
+		manifest = {
+			"parent_target_doctypes": [],
+			"single_target_doctypes": [],
+			"child_target_doctypes": [],
+			"source_series_names": ["", "SOURCE-.#####"],
+			"delete_generated_supplier_warehouses": False,
+		}
+		with patch(
+			"essdee_yrp.migration.live.frappe.db.sql",
+			return_value=[["", 5207], ["TARGET-.#####", 91]],
+		):
+			before = _target_reset_counts(manifest)
+
+		self.assertEqual(before["total"], 0)
+		self.assertEqual(before["series_total"], 0)
+		self.assertEqual(before["preserved_series_total"], 2)
+		self.assertEqual(
+			before["preserved_series_values"], {"": 5207, "TARGET-.#####": 91}
+		)
+
+		with patch(
+			"essdee_yrp.migration.live.frappe.db.sql",
+			return_value=[["", 5207], ["TARGET-.#####", 92]],
+		):
+			after = _target_reset_counts(manifest, expected_identities=before)
+
+		self.assertEqual(after["preserved_series_mismatch_total"], 1)
+		self.assertEqual(
+			_nonzero_reset_counts(after), {"preserved_series_mismatch_total": 1}
+		)
+
+	def test_reset_retry_keeps_the_first_series_checkpoint(self):
+		before = {
+			"preserved_series_values": {"": 5207, "TARGET-.#####": 91},
+			"preserved_series_total": 2,
+			"preserved_series_mismatch_total": 0,
+			"preserved_series_mismatches": [],
+		}
+		migration = SimpleNamespace(
+			checkpoint_json=json.dumps(
+				{
+					"mode": "reset",
+					"preserved_series_values": {
+						"": 5207,
+						"TARGET-.#####": 91,
+					},
+				}
+			)
+		)
+		bound = _bind_reset_series_checkpoint(migration, before)
+		self.assertEqual(
+			bound["preserved_series_values"], before["preserved_series_values"]
+		)
+
+		before["preserved_series_values"] = {"": 5207, "TARGET-.#####": 92}
+		with self.assertRaisesRegex(MigrationError, "after the first reset attempt"):
+			_bind_reset_series_checkpoint(migration, before)
+
+	def test_reset_post_counts_reinventory_the_complete_current_scope(self):
+		manifest = {
+			"parent_target_doctypes": [],
+			"single_target_doctypes": [],
+			"child_target_doctypes": [],
+			"source_series_names": [],
+			"delete_generated_supplier_warehouses": True,
+		}
+		expected = {
+			"file_names": ["OLD-FILE"],
+			"generated_supplier_warehouse_names": ["OLD-WAREHOUSE"],
+			"preserved_series_values": {"WO-": 40},
+		}
+		with (
+			patch(
+				"essdee_yrp.migration.live._target_reset_file_names",
+				return_value=["NEW-FILE"],
+			),
+			patch(
+				"essdee_yrp.migration.live._generated_supplier_warehouse_names",
+				return_value=["NEW-WAREHOUSE"],
+			),
+			patch(
+				"essdee_yrp.migration.live._target_series_values",
+				return_value={"WO-": 40},
+			),
+			patch(
+				"essdee_yrp.migration.live._existing_document_names",
+				side_effect=lambda doctype, _names: [
+					"OLD-FILE" if doctype == "File" else "OLD-WAREHOUSE"
+				],
+			),
+		):
+			after = _target_reset_counts(manifest, expected_identities=expected)
+
+		self.assertEqual(after["file_names"], ["NEW-FILE", "OLD-FILE"])
+		self.assertEqual(
+			after["generated_supplier_warehouse_names"],
+			["NEW-WAREHOUSE", "OLD-WAREHOUSE"],
+		)
+		self.assertEqual(after["total"], 4)
+
+	def test_reset_files_include_only_non_single_parent_graph(self):
+		manifest = {
+			"parent_target_doctypes": ["Parent"],
+			"single_target_doctypes": ["Settings"],
+			"child_target_doctypes": ["Child"],
+		}
+		file_rows = [
+			SimpleNamespace(
+				name="FILE-PARENT",
+				attached_to_doctype="Parent",
+				attached_to_name="P-1",
+			),
+			SimpleNamespace(
+				name="FILE-CHILD-DELETE",
+				attached_to_doctype="Child",
+				attached_to_name="C-1",
+			),
+			SimpleNamespace(
+				name="FILE-CHILD-PRESERVE",
+				attached_to_doctype="Child",
+				attached_to_name="C-SETTINGS",
+			),
+		]
+
+		def get_all(doctype, **kwargs):
+			return file_rows if doctype == "File" else ["C-1"]
+
+		with patch(
+			"essdee_yrp.migration.live.frappe.get_all", side_effect=get_all
+		) as get_all_mock:
+			names = _target_reset_file_names(manifest)
+
+		self.assertEqual(names, ["FILE-PARENT", "FILE-CHILD-DELETE"])
+		self.assertTrue(get_all_mock.call_args_list)
+		self.assertTrue(
+			all(
+				call.kwargs.get("limit_page_length") == 0
+				for call in get_all_mock.call_args_list
+			)
+		)
+		child_call = next(
+			call for call in get_all_mock.call_args_list if call.args[0] == "Child"
+		)
+		self.assertEqual(
+			child_call.kwargs["filters"]["name"],
+			["in", ["C-1", "C-SETTINGS"]],
+		)
+
+	def test_generated_supplier_warehouse_scope_survives_a_missing_supplier(self):
+		manifest = {"delete_generated_supplier_warehouses": True}
+		with patch(
+			"essdee_yrp.migration.live.frappe.db.sql",
+			return_value=[["SUP-ORPHAN"]],
+		) as sql:
+			names = _generated_supplier_warehouse_names(manifest)
+
+		self.assertEqual(names, ["SUP-ORPHAN"])
+		self.assertNotIn("JOIN", sql.call_args.args[0].upper())
+
+	def test_target_reset_enable_flag_parses_zero_as_disabled(self):
+		with patch(
+			"essdee_yrp.migration.config.frappe",
+			SimpleNamespace(conf={"essdee_yrp_allow_target_reset": "0"}),
+		):
+			self.assertFalse(is_target_reset_enabled())
+		with patch(
+			"essdee_yrp.migration.config.frappe",
+			SimpleNamespace(conf={"essdee_yrp_allow_target_reset": "1"}),
+		):
+			self.assertTrue(is_target_reset_enabled())
+
+	def test_target_migration_prerequisites_cover_production_and_stock_settings(self):
+		values = {
+			("IPD Settings", "item_group"): "Products",
+			("IPD Settings", "default_primary_attribute"): "Size",
+			("IPD Settings", "default_cutting_process"): "Cutting",
+			("IPD Settings", "default_knitting_process"): "Knitting",
+			("IPD Settings", "default_dyeing_process"): "Dyeing",
+			("IPD Settings", "default_packing_process"): "Packing",
+			("IPD Settings", "default_pack_in_stage"): "Piece",
+			("IPD Settings", "default_packing_attribute"): "Colour",
+			("IPD Settings", "default_pack_out_stage"): "Pack",
+			("IPD Settings", "default_stitching_process"): "Stitching",
+			("IPD Settings", "default_stitching_in_stage"): "Cut",
+			("IPD Settings", "default_stitching_attribute"): "Panel",
+			("IPD Settings", "default_stitching_out_stage"): "Piece",
+			("IPD Settings", "default_set_item_attribute"): "Part",
+			("YRP Stock Settings", "transit_warehouse"): "S-0165",
+			("YRP Stock Settings", "default_received_type"): "Accepted",
+			("YRP Stock Settings", "default_rejected_received_type"): "Rejected",
+		}
+		dimensions = [
+			{
+				"dimension_doctype": "Lot",
+				"fieldname": "lot",
+				"label": "Lot",
+				"mandatory": 1,
+				"in_valuation": 1,
+				"is_production_group": 1,
+			},
+			{
+				"dimension_doctype": "Received Type",
+				"fieldname": "received_type",
+				"label": "Received Type",
+				"mandatory": 1,
+				"in_valuation": 1,
+				"is_production_group": 0,
+			},
+		]
+		with (
+			patch(
+				"essdee_yrp.migration.live.frappe.db.get_single_value",
+				side_effect=lambda doctype, fieldname: values[(doctype, fieldname)],
+			),
+			patch("essdee_yrp.migration.live.frappe.db.exists", return_value=True),
+		):
+			result = _validate_target_migration_prerequisites(dimensions)
+
+		self.assertEqual(result["ipd_settings"]["item_group"], "Products")
+		self.assertEqual(result["ipd_settings"]["default_primary_attribute"], "Size")
+		self.assertEqual(
+			[row["fieldname"] for row in result["stock_dimensions"]],
+			["lot", "received_type"],
+		)
+
+	def test_target_migration_prerequisites_reject_missing_and_unsafe_dimensions(self):
+		def get_value(doctype, fieldname):
+			if (doctype, fieldname) == ("IPD Settings", "default_primary_attribute"):
+				return None
+			return "Configured Value"
+
+		dimensions = [
+			{
+				"dimension_doctype": "Lot",
+				"fieldname": "lot",
+				"mandatory": 1,
+				"in_valuation": 1,
+				"is_production_group": 1,
+			},
+			{
+				"dimension_doctype": "Received Type",
+				"fieldname": "received_type",
+				"mandatory": 1,
+				"in_valuation": 0,
+				"is_production_group": 0,
+			},
+		]
+		with (
+			patch(
+				"essdee_yrp.migration.live.frappe.db.get_single_value",
+				side_effect=get_value,
+			),
+			patch("essdee_yrp.migration.live.frappe.db.exists", return_value=True),
+			self.assertRaisesRegex(
+				MigrationError,
+				"default_primary_attribute is required[\\s\\S]*received_type[\\s\\S]*in_valuation=1",
+			),
+		):
+			_validate_target_migration_prerequisites(dimensions)
+
+	def test_target_migration_prerequisites_parse_string_check_values(self):
+		dimensions = [
+			{
+				"dimension_doctype": "Lot",
+				"fieldname": "lot",
+				"mandatory": "1",
+				"in_valuation": "1",
+				"is_production_group": "1",
+			},
+			{
+				"dimension_doctype": "Received Type",
+				"fieldname": "received_type",
+				"mandatory": "1",
+				"in_valuation": "1",
+				"is_production_group": "0",
+			},
+		]
+		with (
+			patch(
+				"essdee_yrp.migration.live.frappe.db.get_single_value",
+				return_value="Configured Value",
+			),
+			patch("essdee_yrp.migration.live.frappe.db.exists", return_value=True),
+		):
+			result = _validate_target_migration_prerequisites(dimensions)
+
+		self.assertEqual(
+			result["stock_dimensions"][1]["is_production_group"], "0"
+		)
+
+	def test_target_migration_prerequisites_resolve_links_from_frozen_source_after_reset(self):
+		values = {
+			("IPD Settings", fieldname): value
+			for fieldname, value in {
+				"item_group": "Products",
+				"default_primary_attribute": "Size",
+				"default_cutting_process": "Cutting",
+				"default_knitting_process": "Knitting",
+				"default_dyeing_process": "Dyeing",
+				"default_packing_process": "Packing",
+				"default_pack_in_stage": "Piece",
+				"default_packing_attribute": "Colour",
+				"default_pack_out_stage": "Pack",
+				"default_stitching_process": "Stitching",
+				"default_stitching_in_stage": "Cut",
+				"default_stitching_attribute": "Panel",
+				"default_stitching_out_stage": "Piece",
+				"default_set_item_attribute": "Part",
+			}.items()
+		}
+		values.update(
+			{
+				("YRP Stock Settings", "transit_warehouse"): "S-0165",
+				("YRP Stock Settings", "default_received_type"): "Accepted",
+				("YRP Stock Settings", "default_rejected_received_type"): "Rejected",
+			}
+		)
+		dimensions = [
+			{
+				"dimension_doctype": "Lot",
+				"fieldname": "lot",
+				"mandatory": 1,
+				"in_valuation": 1,
+				"is_production_group": 1,
+			},
+			{
+				"dimension_doctype": "Received Type",
+				"fieldname": "received_type",
+				"mandatory": 1,
+				"in_valuation": 1,
+				"is_production_group": 0,
+			},
+		]
+		plan = SimpleNamespace(
+			specs={
+				"Item Group": SimpleNamespace(target="Item Group", is_child=False),
+				"Item Attribute": SimpleNamespace(target="Item Attribute", is_child=False),
+				"Item Attribute Value": SimpleNamespace(
+					target="Item Attribute Value", is_child=False
+				),
+				"Process": SimpleNamespace(target="Process", is_child=False),
+				"Supplier": SimpleNamespace(target="Supplier", is_child=False),
+				"GRN Item Type": SimpleNamespace(target="Received Type", is_child=False),
+			}
+		)
+		source = SimpleNamespace(document_exists=lambda doctype, value: True)
+		with (
+			patch(
+				"essdee_yrp.migration.live.frappe.db.get_single_value",
+				side_effect=lambda doctype, fieldname: values[(doctype, fieldname)],
+			),
+			patch("essdee_yrp.migration.live.frappe.db.exists", return_value=False),
+		):
+			result = _validate_target_migration_prerequisites(
+				dimensions, plan=plan, source=source
+			)
+
+		self.assertEqual(result["stock_settings"]["transit_warehouse"], "S-0165")
+
 	def test_missing_link_doctype_uses_structured_failure_result(self):
 		with patch("essdee_yrp.migration.live.frappe.db.exists", return_value=False):
 			self.assertEqual(
@@ -302,6 +963,32 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 		self.assertNotEqual(
 			_migration_contract_fingerprint(base, plan),
 			_migration_contract_fingerprint(changed, plan),
+		)
+
+	def test_source_snapshot_fingerprint_includes_target_prerequisites(self):
+		settings = configured_settings()
+		plan = SimpleNamespace(target_schemas={}, specs={})
+		status = {
+			"snapshot_fingerprint": "source-1",
+			"total_parent_records": 1,
+		}
+		before = _source_snapshot(
+			settings,
+			status,
+			[],
+			plan,
+			{"stock_settings": {"default_received_type": "Accepted"}},
+		)
+		after = _source_snapshot(
+			settings,
+			status,
+			[],
+			plan,
+			{"stock_settings": {"default_received_type": "Fresh"}},
+		)
+		self.assertNotEqual(
+			before["target_prerequisite_fingerprint"],
+			after["target_prerequisite_fingerprint"],
 		)
 
 	def test_migrate_requires_the_exact_dry_run_snapshot(self):
@@ -669,6 +1356,27 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			preserved = _validate_required_target_values(document, schema, audit)
 		self.assertEqual(preserved, 0)
 		self.assertEqual(audit, {"Goods Received Note.lot": 1})
+
+	def test_pre_field_cutting_planner_description_blank_is_audited(self):
+		schema = {
+			"name": "Cutting Laysheet Planner",
+			"fields": [
+				{"fieldname": "description", "fieldtype": "Small Text", "reqd": 1}
+			],
+		}
+		document = {
+			"doctype": "Cutting Laysheet Planner",
+			"name": "CLP-2026-00001",
+			"description": None,
+		}
+		audit = {}
+		with patch(
+			"essdee_yrp.migration.live.frappe.db.get_value",
+			return_value=None,
+		):
+			preserved = _validate_required_target_values(document, schema, audit)
+		self.assertEqual(preserved, 0)
+		self.assertEqual(audit, {"Cutting Laysheet Planner.description": 1})
 
 	def test_cut_panel_warehouse_is_recovered_from_source_references(self):
 		schema = {

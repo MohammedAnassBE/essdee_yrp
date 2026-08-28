@@ -474,12 +474,14 @@ def _post_conversions(parent, conversions):
 			{
 				**incoming,
 				"qty": flt(qty),
-				"rate": flt(rate),
+				# The paired outgoing FIFO result is authoritative. This zero is
+				# replaced by the stock engine before the incoming SLE is posted.
+				"rate": 0,
 				"_transfer_key": transfer_key,
 				"_transfer_role": "incoming",
 			}
 		)
-	make_sl_entries(entries)
+	make_sl_entries(entries, force_inline=True)
 
 
 def _source_dimensions(parent, row, dimension_fieldnames):

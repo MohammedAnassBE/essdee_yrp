@@ -32,7 +32,27 @@ def onload(doc, method=None):
 
 def validate(doc, method=None):
 	set_includes_packing(doc)
+	preserve_dynamic_packing_piece_uom(doc)
 	validate_lot_process_selection(doc)
+
+
+def preserve_dynamic_packing_piece_uom(doc):
+	"""Keep new dynamic packing receivable counters in their physical Piece UOM."""
+	if not (doc.get("production_detail") and doc.get("lot") and doc.get("includes_packing")):
+		return
+	ipd = frappe.get_cached_doc("Item Production Detail", doc.production_detail)
+	if not (
+		ipd.get("based_on_other_attribute_mapping")
+		and ipd.get("packing_mode") == "Size Ratio Packing"
+	):
+		return
+	piece_uom = frappe.db.get_value("Lot", doc.lot, "packing_uom")
+	if not piece_uom:
+		frappe.throw(_("Packing UOM is required on Lot {0}.").format(doc.lot))
+	for row in doc.get("receivables") or []:
+		parent_item = frappe.db.get_value("Item Variant", row.item_variant, "item")
+		if parent_item == ipd.item:
+			row.uom = piece_uom
 
 
 def set_includes_packing(doc):

@@ -87,9 +87,57 @@ class TestLotTransfer(IntegrationTestCase):
 			lot="LOT-A",
 			received_type="Accepted",
 			quality_grade="A",
-			uom="Kg",
 		)
 		self.assertEqual(row.rate, 130)
 		self.assertEqual(row.stock_qty, 2)
 		self.assertEqual(row.stock_uom_rate, 130)
 		self.assertEqual(row.amount, 260)
+
+	def test_submit_persists_actual_fifo_transfer_value(self):
+		transfer = frappe.new_doc("Lot Transfer")
+		transfer.name = "LT-ACTUAL-RATE"
+		transfer.docstatus = 1
+		transfer.posting_date = "2026-07-29"
+		transfer.posting_time = "12:34:56"
+		row = frappe._dict(
+			doctype="Lot Transfer Item",
+			name="LT-ROW-1",
+			item="_Test Lot Transfer Variant",
+			from_lot="LOT-A",
+			to_lot="LOT-B",
+			warehouse="Main Warehouse",
+			received_type="Accepted",
+			quality_grade="A",
+			stock_qty=4,
+			stock_uom="Kg",
+			stock_uom_rate=100,
+			conversion_factor=2,
+		)
+		transfer.items = [row]
+
+		with (
+			patch(
+				"essdee_yrp.essdee_yrp.doctype.lot_transfer.lot_transfer.get_dimension_fieldnames",
+				return_value=["lot", "received_type", "quality_grade"],
+			),
+			patch(
+				"yrp.stock.stock_ledger.make_sl_entries",
+				return_value={"LT-ACTUAL-RATE:LT-ROW-1": 125},
+			) as make_entries,
+			patch("frappe.db.set_value") as set_value,
+		):
+			transfer._update_stock_ledger()
+
+		entries = make_entries.call_args.args[0]
+		self.assertEqual(entries[0]["_transfer_role"], "outgoing")
+		self.assertEqual(entries[1]["_transfer_role"], "incoming")
+		self.assertEqual(entries[0]["_transfer_key"], entries[1]["_transfer_key"])
+		self.assertEqual(row.stock_uom_rate, 125)
+		self.assertEqual(row.rate, 250)
+		self.assertEqual(row.amount, 500)
+		set_value.assert_called_once_with(
+			"Lot Transfer Item",
+			"LT-ROW-1",
+			{"stock_uom_rate": 125.0, "rate": 250.0, "amount": 500.0},
+			update_modified=False,
+		)

@@ -14,14 +14,19 @@ from frappe.utils import flt
 from yrp.yrp.doctype.item.item import get_or_create_variant
 
 
-def calculate_essdee_accessory_bom(ipd_name, variant_demands, lot_doc):
+def calculate_essdee_accessory_bom(
+	ipd_name, variant_demands, lot_doc, process_names=None
+):
 	"""Return Production API-compatible accessory rows for an Essdee Lot."""
 	ipd = frappe.get_doc("Item Production Detail", ipd_name)
 	demands = _normalize_variant_demands(ipd, variant_demands)
 	aggregated = {}
 	total_quantity = sum(demand["qty"] for demand in demands)
+	process_filter = None if process_names is None else set(process_names)
 
 	for bom_row in ipd.get("item_bom") or []:
+		if process_filter is not None and bom_row.process_name not in process_filter:
+			continue
 		wastage_factor = 1 + flt(bom_row.get("wastage_pct")) / 100
 		if bom_row.based_on_attribute_mapping and bom_row.attribute_mapping:
 			for demand in demands:

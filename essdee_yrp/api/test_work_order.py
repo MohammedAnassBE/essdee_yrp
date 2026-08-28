@@ -25,6 +25,7 @@ from essdee_yrp.api.test_cloth_program import (
 )
 from essdee_yrp.api.work_order import (
     _consolidate_fabric_rows,
+    _normalize_generated_uom_rows,
     _selected_lot_fabrics,
     calculate_fabric_deliverables,
     get_fabric_deliverable_context,
@@ -34,6 +35,164 @@ from essdee_yrp.fabric_reference import (
     get_reference_allocations,
     scale_reference_allocations,
 )
+from essdee_yrp.work_order_actions import get_delivery_challan_defaults
+from essdee_yrp.hooks import override_whitelisted_methods
+from essdee_yrp.overrides.delivery_challan import EssdeeDeliveryChallan
+
+
+class TestWorkOrderDeliveryChallanDefaults(TestCase):
+    def test_required_addresses_are_copied_from_work_order(self):
+        work_order = frappe._dict(
+            name="WO-ADDRESS-1",
+            lot="LOT-ADDRESS-1",
+            includes_packing=0,
+            delivery_address="SOURCE-BILLING",
+            delivery_address_details="Source address",
+            supplier_address="TARGET-BILLING",
+            supplier_address_details="Target address",
+        )
+
+        with (
+            patch(
+                "essdee_yrp.work_order_actions._open_submitted_work_order",
+                return_value=work_order,
+            ),
+            patch("frappe.has_permission", return_value=True),
+            patch(
+                "yrp.yrp.doctype.delivery_challan.delivery_challan.get_work_order_defaults",
+                return_value={"items": [], "item_details": []},
+            ),
+        ):
+            defaults = get_delivery_challan_defaults(work_order.name)
+
+        self.assertEqual(defaults["from_address"], "SOURCE-BILLING")
+        self.assertEqual(defaults["from_address_details"], "Source address")
+        self.assertEqual(defaults["supplier_address"], "TARGET-BILLING")
+        self.assertEqual(defaults["supplier_address_details"], "Target address")
+
+    def test_zero_pending_rows_allow_excess_only_in_grouped_editor(self):
+        work_order = frappe._dict(
+            name="WO-EXCESS-1",
+            lot="LOT-EXCESS-1",
+            includes_packing=0,
+            delivery_address="SOURCE-BILLING",
+            delivery_address_details="Source address",
+            supplier_address="TARGET-BILLING",
+            supplier_address_details="Target address",
+        )
+        base_defaults = {
+            "items": [
+                {"item_variant": "FABRIC-WHITE", "pending_quantity": 0},
+                {"item_variant": "FABRIC-GREEN", "pending_quantity": 2},
+            ],
+            "item_details": [
+                {
+                    "items": [
+                        {
+                            "values": {
+                                "White": {"qty": 0, "pending_quantity": 0},
+                                "Green": {"qty": 2, "pending_quantity": 2},
+                                "Rib": {"qty": 0, "pending_quantity": -1},
+                            }
+                        }
+                    ]
+                }
+            ],
+        }
+
+        with (
+            patch(
+                "essdee_yrp.work_order_actions._open_submitted_work_order",
+                return_value=work_order,
+            ),
+            patch("frappe.has_permission", return_value=True),
+            patch(
+                "yrp.yrp.doctype.delivery_challan.delivery_challan.get_work_order_defaults",
+                return_value=base_defaults,
+            ) as base_get_defaults,
+        ):
+            defaults = get_delivery_challan_defaults(
+                work_order.name,
+                posting_date="2026-08-27",
+                posting_time="18:30:00",
+            )
+
+        base_get_defaults.assert_called_once_with(
+            work_order.name,
+            posting_date="2026-08-27",
+            posting_time="18:30:00",
+        )
+        self.assertEqual(defaults["items"][0]["pending_quantity"], 0)
+        values = defaults["item_details"][0]["items"][0]["values"]
+        self.assertIsNone(values["White"]["pending_quantity"])
+        self.assertEqual(values["Green"]["pending_quantity"], 2)
+        self.assertIsNone(values["Rib"]["pending_quantity"])
+
+    def test_manual_delivery_challan_selection_uses_same_adapter(self):
+        self.assertEqual(
+            override_whitelisted_methods[
+                "yrp.yrp.doctype.delivery_challan.delivery_challan.get_work_order_defaults"
+            ],
+            "essdee_yrp.work_order_actions.get_delivery_challan_defaults",
+        )
+
+    def test_saved_draft_onload_keeps_zero_pending_excess_editable(self):
+        doc = EssdeeDeliveryChallan(
+            {"doctype": "Delivery Challan", "docstatus": 0}
+        )
+        grouped = [
+            {
+                "items": [
+                    {
+                        "values": {
+                            "default": {"qty": 1.824, "pending_quantity": 0}
+                        }
+                    }
+                ]
+            }
+        ]
+
+        with patch(
+            "yrp.yrp.doctype.delivery_challan.delivery_challan.DeliveryChallan.onload",
+            side_effect=lambda: doc.set_onload("item_details", grouped),
+        ):
+            doc.onload()
+
+        value = doc.get_onload("item_details")[0]["items"][0]["values"]["default"]
+        self.assertEqual(value["qty"], 1.824)
+        self.assertIsNone(value["pending_quantity"])
+
+
+class TestGeneratedFabricUOM(TestCase):
+    def test_physical_pieces_are_converted_before_box_uom_is_applied(self):
+        rows = [
+            {
+                "item_variant": "TEST-PACKED-VARIANT",
+                "qty": 20,
+                "pending_quantity": 10,
+                "stock_update": 5,
+                "uom": "Pieces",
+            }
+        ]
+        authoritative = frappe._dict(
+            uom="Boxes",
+            stock_uom="Pieces",
+            conversion_factor=10,
+        )
+
+        with (
+            patch("yrp.stock.uom.resolve_item_uom", return_value=authoritative),
+            patch(
+                "yrp.stock.utils.get_conversion_factor",
+                return_value={"conversion_factor": 1, "stock_uom": "Pieces"},
+            ),
+        ):
+            _normalize_generated_uom_rows(rows)
+
+        self.assertEqual(rows[0]["uom"], "Boxes")
+        self.assertEqual(rows[0]["qty"], 2)
+        self.assertEqual(rows[0]["pending_quantity"], 1)
+        self.assertEqual(rows[0]["stock_update"], 0.5)
 
 
 def _ensure_attributed_item(name1, attributes):
@@ -848,6 +1007,14 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
         self.assertAlmostEqual(planned[v["yarn_a"]], 6.0, places=3)
         self.assertAlmostEqual(planned[v["yarn_b"]], 4.0, places=3)
         self.assertAlmostEqual(planned[accessory], 6.0, places=3)
+
+        # A production GRN can consume only inputs that were actually delivered
+        # against the Work Order. This test isolates the matrix/BOM calculation,
+        # so move its calculated inputs to that delivered state first.
+        for row in work_order.deliverables:
+            if row.is_calculated:
+                row.db_set("pending_quantity", 0, update_modified=False)
+        work_order.reload()
 
         receivable = work_order.receivables[0]
         grn = frappe.new_doc("Goods Received Note")

@@ -6,7 +6,7 @@ from operator import itemgetter
 
 import frappe
 from frappe.model.document import Document
-from frappe.utils import flt
+from frappe.utils import flt, getdate, nowdate
 from yrp.utils import get_variant_attr_details, update_if_string_instance
 from yrp.yrp.doctype.item.item import (
 	build_variant_attributes,
@@ -20,9 +20,23 @@ from essdee_yrp.finishing.packing import (
 	get_ipd_packing_config,
 	prepare_dynamic_batch_dispatch,
 )
+from essdee_yrp.finishing.transactions import populate_stock_rates
 
 
 class FinishingPlanDispatch(Document):
+	def validate(self):
+		is_fresh = self.is_new() or not self.name or not frappe.db.exists(
+			"Finishing Plan Dispatch", self.name
+		)
+		if is_fresh and not self.amended_from:
+			expected = get_current_fiscal_naming_series()
+			if self.naming_series and self.naming_series != expected:
+				frappe.throw(
+					f"Finishing Plan Dispatch Naming Series must be {expected} "
+					"for the configured fiscal year"
+				)
+			self.naming_series = expected
+
 	def before_cancel(self):
 		if self.stock_entry:
 			stock_entry = frappe.get_doc("Stock Entry", self.stock_entry)
@@ -30,6 +44,8 @@ class FinishingPlanDispatch(Document):
 				stock_entry.cancel()
 
 	def onload(self):
+		if not self.amended_from and not self.naming_series:
+			self.naming_series = get_current_fiscal_naming_series()
 		if self.docstatus == 0 and self.finishing_items:
 			saved_items = update_if_string_instance(self.finishing_items) or []
 			self.set_onload(
@@ -112,6 +128,27 @@ class FinishingPlanDispatch(Document):
 			)
 		self.set("finishing_plan_dispatch_items", [row.as_dict() for row in selected])
 		_set_dispatch_snapshot(self)
+
+
+@frappe.whitelist()
+def get_current_fiscal_naming_series(reference_date=None):
+	"""Return the authoritative Finishing Plan Dispatch series for MRP's FY."""
+	start = frappe.db.get_single_value("MRP Settings", "fiscal_year_start_date")
+	end = frappe.db.get_single_value("MRP Settings", "fiscal_year_end_date")
+	if not start or not end:
+		frappe.throw(
+			"Configure Fiscal Year Start Date and Fiscal Year End Date in MRP Settings"
+		)
+	start = getdate(start)
+	end = getdate(end)
+	current = getdate(reference_date or nowdate())
+	if end < start:
+		frappe.throw("MRP Settings Fiscal Year End Date cannot precede Start Date")
+	if not start <= current <= end:
+		frappe.throw(
+			f"Date {current} is outside the configured MRP fiscal year {start} to {end}"
+		)
+	return f"FPD-{start.strftime('%y')}{end.strftime('%y')}-"
 
 
 def _has_dispatch_request(row):
@@ -521,6 +558,7 @@ def create_stock_dispatch(
 				"set_combination": "{}",
 			},
 		)
+	populate_stock_rates(stock_entry, from_location)
 	stock_entry.insert()
 	stock_entry.submit()
 	return stock_entry.name

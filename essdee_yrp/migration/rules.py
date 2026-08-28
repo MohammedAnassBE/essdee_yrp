@@ -74,13 +74,25 @@ RULES = {
 		value_transformers={"warehouse": "supplier_to_warehouse"}
 	),
 	"Item": DocTypeRule(
-		field_map={"over_delivery_receipt_allowance": "po_excess_allowed_percentage"}
+		field_map={"over_delivery_receipt_allowance": "po_excess_allowed_percentage"},
+		ignored_fields={
+			"description": (
+				"Removed from finalized base YRP; frozen mrp3.site source audit "
+				"contains zero nonblank values"
+			)
+		},
 	),
 	"Item BOM": DocTypeRule(allowed_type_changes=frozenset({("Data", "Link")})),
 	"Item BOM Attribute Mapping": DocTypeRule(
 		allowed_type_changes=frozenset({("Data", "Link")})
 	),
 	"Item Production Detail": DocTypeRule(
+		ignored_fields={
+			"description": (
+				"Removed from finalized base YRP; frozen mrp3.site source audit "
+				"contains zero nonblank values across all 437 records"
+			)
+		},
 		table_option_map={"item_attributes": "IPD Item Attribute"},
 		post_transformer="remove_empty_ipd_process_placeholders",
 	),
@@ -123,6 +135,13 @@ RULES = {
 	),
 	"Production Order Detail": DocTypeRule(
 		post_transformer="derive_production_order_detail_fields",
+	),
+	"Process": DocTypeRule(
+		# F15/production_api used Additional Allowance for the percentage by
+		# which a Work Order receipt may exceed its planned receivable.  Base
+		# YRP now owns that contract under the explicit field below; retaining
+		# both fields leaves migrated Processes strict at the base default 0%.
+		field_map={"additional_allowance": "wo_excess_allowed_percentage"},
 	),
 	"Product": DocTypeRule(post_transformer="derive_product_item_name"),
 	"Repost Item Valuation": DocTypeRule(

@@ -459,10 +459,12 @@ doc_events = {
 	# UI hide (public/js/stock_entry_transfer_cancel_guard.js) cannot be bypassed.
 	"Stock Entry": {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
+		"onload": "essdee_yrp.stock_entry_hooks.onload",
 		"before_validate": [
 			"essdee_yrp.packing_hooks.set_stock_entry_includes_packing",
 			"essdee_yrp.stock_entry_hooks.before_validate",
 		],
+		"validate": "essdee_yrp.stock_entry_hooks.validate",
 		"before_submit": "essdee_yrp.stock_entry_hooks.before_submit",
 		"on_submit": "essdee_yrp.stock_entry_hooks.on_submit",
 		"before_cancel": [
@@ -521,6 +523,7 @@ doc_events = {
 # Finishing return transaction (is_return), including its two-warehouse stock
 # movement and Work Order Deliverable reversal.
 override_doctype_class = {
+	"Delivery Challan": "essdee_yrp.overrides.delivery_challan.EssdeeDeliveryChallan",
 	"Goods Received Note": "essdee_yrp.overrides.goods_received_note.EssdeeGoodsReceivedNote",
 	"Item Production Detail": "essdee_yrp.overrides.item_production_detail.EssdeeItemProductionDetail",
 }
@@ -529,6 +532,11 @@ override_doctype_class = {
 # ------------------------------
 #
 override_whitelisted_methods = {
+	# Base intentionally offers zero-pending Work Order rows for excess DCs, but
+	# its grouped editor also uses pending as the input maximum. The Essdee
+	# adapter removes only that zero maximum while retaining server authority.
+	"yrp.yrp.doctype.delivery_challan.delivery_challan.get_work_order_defaults":
+		"essdee_yrp.work_order_actions.get_delivery_challan_defaults",
 	# Base YRP's Desk button calls this path. Route it through the
 	# Essdee-owned close implementation so Desk and /web use one stock contract.
 	"yrp.yrp.doctype.work_order.work_order.update_stock":
@@ -542,6 +550,10 @@ override_whitelisted_methods = {
 	# SKU row with all sizes, without rewriting the Work Order source rows.
 	"yrp.yrp.doctype.goods_received_note.goods_received_note.get_work_order_defaults":
 		"essdee_yrp.overrides.goods_received_note.get_work_order_defaults",
+	# The generic popup already subtracts inspection and prior Work Order
+	# consumption. Also subtract Essdee's direct Rework Details conversions.
+	"yrp.yrp.doctype.work_order.work_order.get_rework_source_rows":
+		"essdee_yrp.rework_work_order.get_rework_source_rows",
 }
 #
 # each overriding function accepts a `data` argument;

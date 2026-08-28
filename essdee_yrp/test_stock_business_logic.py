@@ -260,7 +260,7 @@ class TestStockBusinessLogic(IntegrationTestCase):
 		self.assertEqual(stock_entry.items[0].lot, "LOT-1")
 		self.assertEqual(stock_entry.items[0].quality_grade, "A")
 
-	def test_item_conversion_posts_one_value_conserving_transfer(self):
+	def test_item_conversion_preserves_total_value_when_quantities_differ(self):
 		doc = frappe.new_doc("Item Conversion")
 		doc.name = "IC-TEST-1"
 		doc.warehouse = "Main Warehouse"
@@ -269,28 +269,46 @@ class TestStockBusinessLogic(IntegrationTestCase):
 		doc.from_items = [
 			frappe._dict(
 				item="FROM-VAR", stock_qty=2, stock_uom="Kg", stock_uom_rate=40,
-				name="FROM-ROW", lot="LOT-1", quality_grade="A", remarks="from",
+				name="FROM-ROW", doctype="Item Conversion Detail",
+				conversion_factor=1, lot="LOT-1", quality_grade="A", remarks="from",
 			)
 		]
 		doc.to_items = [
 			frappe._dict(
 				item="TO-VAR", stock_qty=4, stock_uom="Kg", stock_uom_rate=20,
-				name="TO-ROW", lot="LOT-2", quality_grade="A", remarks="to",
+				name="TO-ROW", doctype="Item Conversion Detail",
+				conversion_factor=1, lot="LOT-2", quality_grade="A", remarks="to",
 			)
 		]
+		def post_entries(entries, **kwargs):
+			key = entries[0].get("_result_key")
+			if key == "item-conversion-input":
+				return {
+					"entries": {key: {"sle": "SLE-IN", "rate": 50, "value": 100}}
+				}
+			return {
+				"entries": {key: {"sle": "SLE-OUT", "rate": 25, "value": 100}}
+			}
 		with (
 			patch("essdee_yrp.essdee_yrp.doctype.item_conversion.item_conversion.get_dimension_fieldnames", return_value=["lot", "quality_grade"]),
-			patch("yrp.stock.stock_ledger.make_sl_entries") as make_entries,
+			patch("yrp.stock.stock_ledger.make_sl_entries", side_effect=post_entries) as make_entries,
+			patch.object(frappe.db, "set_value"),
+			patch(
+				"yrp.yrp_stock.doctype.stock_valuation_adjustment.stock_valuation_adjustment.register_production_links"
+			) as register_links,
 		):
 			ItemConversion.update_stock_ledger(doc)
 
-		entries = make_entries.call_args.args[0]
-		self.assertEqual([row.qty for row in entries], [-2, 4])
-		self.assertEqual(entries[0]._transfer_role, "outgoing")
-		self.assertEqual(entries[1]._transfer_role, "incoming")
-		self.assertEqual(entries[0]._transfer_key, entries[1]._transfer_key)
-		self.assertEqual(entries[0].quality_grade, "A")
-		make_entries.assert_called_once_with(entries, cancel=False, force_inline=True)
+		self.assertEqual(make_entries.call_count, 2)
+		outgoing = make_entries.call_args_list[0].args[0][0]
+		incoming = make_entries.call_args_list[1].args[0][0]
+		self.assertEqual((outgoing.qty, incoming.qty), (-2, 4))
+		self.assertEqual(incoming.rate, 25)
+		self.assertEqual(doc.from_items[0].amount, 100)
+		self.assertEqual(doc.to_items[0].amount, 100)
+		self.assertEqual(doc.from_total_amount, doc.to_total_amount)
+		self.assertEqual(incoming.quality_grade, "A")
+		register_links.assert_called_once()
 
 	def test_stock_summary_delegates_to_dimension_aware_report(self):
 		rows = [{"item": "VAR-1", "lot": "LOT-1", "bal_qty": 5}]

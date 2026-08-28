@@ -249,8 +249,6 @@ def _validate_ppo_approval_state(doc):
 	previous_status = previous.status or PPO_DRAFT_STATUS
 	if doc.status != previous_status and not doc.flags.get("allow_ppo_request"):
 		frappe.throw("Use the Request PPO Approval button to request approval")
-	if previous_status == PPO_REQUEST_STATUS and not doc.flags.get("allow_ppo_approval"):
-		frappe.throw("Production Order cannot be edited while PPO approval is pending")
 
 
 def _validate_ppo_submission(doc):
@@ -267,7 +265,8 @@ def _validate_ppo_submission(doc):
 		)
 	if not user_has_any_role(approver_roles):
 		frappe.throw(
-			"Only users with the configured Merch User or Merchandising Manager role can approve a PPO"
+			"Only users with the configured Merch User or Merchandising Manager role can approve a PPO",
+			frappe.PermissionError,
 		)
 	if doc.status != PPO_REQUEST_STATUS:
 		frappe.throw("Send the Production Order for PPO approval before submitting it")
@@ -840,7 +839,10 @@ def require_ppo_action_role():
 	if not allowed_roles and SYSTEM_MANAGER_ROLE not in user_roles:
 		frappe.throw("Configure Production Order Action Roles in MRP Settings")
 	if SYSTEM_MANAGER_ROLE not in user_roles and not bool(user_roles & allowed_roles):
-		frappe.throw("You do not have a configured Production Order Action Role")
+		frappe.throw(
+			"You do not have a configured Production Order Action Role",
+			frappe.PermissionError,
+		)
 
 
 def user_has_any_role(allowed_roles):
@@ -957,7 +959,8 @@ def request_ppo_changes(production_order, reason):
 		)
 	if not user_has_any_role(approver_roles):
 		frappe.throw(
-			"Only users with the configured Merch User or Merchandising Manager role can request PPO changes"
+			"Only users with the configured Merch User or Merchandising Manager role can request PPO changes",
+			frappe.PermissionError,
 		)
 
 	reason = (reason or "").strip()
@@ -994,7 +997,8 @@ def approve_ppo(production_order):
 		)
 	if not user_has_any_role(approver_roles):
 		frappe.throw(
-			"Only users with the configured Merch User or Merchandising Manager role can approve a PPO"
+			"Only users with the configured Merch User or Merchandising Manager role can approve a PPO",
+			frappe.PermissionError,
 		)
 
 	lock_production_orders(production_order)
@@ -1099,7 +1103,10 @@ def approve_quantity_and_ratio(production_order):
 	if not approver_role:
 		frappe.throw("Production Order Quantity Approver Role is not configured in MRP Settings")
 	if approver_role not in frappe.get_roles():
-		frappe.throw(f"Only users with the {approver_role} role can approve this request")
+		frappe.throw(
+			f"Only users with the {approver_role} role can approve this request",
+			frappe.PermissionError,
+		)
 
 	lock_production_orders(production_order)
 	doc = frappe.get_doc("Production Order", production_order)
@@ -1455,7 +1462,10 @@ def approve_status_change(production_order):
 	if not approver_role:
 		frappe.throw("Production Order Quantity Approver Role is not configured in MRP Settings")
 	if approver_role not in frappe.get_roles():
-		frappe.throw(f"Only users with the {approver_role} role can approve this request")
+		frappe.throw(
+			f"Only users with the {approver_role} role can approve this request",
+			frappe.PermissionError,
+		)
 
 	lock_production_orders(production_order)
 	doc = frappe.get_doc("Production Order", production_order)
@@ -1665,7 +1675,10 @@ def approve_quantity_transfer(production_order):
 	if not approver_role:
 		frappe.throw("Production Order Quantity Approver Role is not configured in MRP Settings")
 	if approver_role not in frappe.get_roles():
-		frappe.throw(f"Only users with the {approver_role} role can approve this request")
+		frappe.throw(
+			f"Only users with the {approver_role} role can approve this request",
+			frappe.PermissionError,
+		)
 
 	target = frappe.get_doc("Production Order", production_order)
 	request = frappe.parse_json(target.get(INCOMING_TRANSFER_REQUEST_FIELD)) or {}

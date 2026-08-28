@@ -22,11 +22,15 @@ from typing import Any
 
 import frappe
 from frappe.model import no_value_fields
-from frappe.utils import now_datetime
+from frappe.utils import cint, now_datetime
 from frappe.utils.password import set_encrypted_password
 
 from essdee_yrp.migration.engine import MigrationError, MigrationPlan, transform_document
-from essdee_yrp.migration.config import MigrationSettings, get_migration_settings
+from essdee_yrp.migration.config import (
+	MigrationSettings,
+	get_migration_settings,
+	is_target_reset_enabled,
+)
 from essdee_yrp.migration.planner import build_schema_analysis
 
 
@@ -57,8 +61,50 @@ PRESERVE_SOURCE_BLANK_FIELDS = {
 	("Purchase Order", "lot"),
 	("Goods Received Note", "lot"),
 	("Cut Panel Movement", "from_warehouse"),
+	("Cutting Laysheet Planner", "description"),
 }
 SAFE_SQL_FIELDNAME = re.compile(r"^[a-z][a-z0-9_]*$")
+
+# F16 Singles that supply operating context which is not fully represented by
+# every historical F15 document.  Analyse must stop before a Production Order
+# or stock row is transformed when these values are incomplete.  Keeping this
+# contract here (rather than silently inventing values in a transformer) makes
+# the migration prerequisite visible and independently auditable.
+IPD_MIGRATION_PREREQUISITES = {
+	"item_group": "Item Group",
+	"default_primary_attribute": "Item Attribute",
+	"default_cutting_process": "Process",
+	"default_knitting_process": "Process",
+	"default_dyeing_process": "Process",
+	"default_packing_process": "Process",
+	"default_pack_in_stage": "Item Attribute Value",
+	"default_packing_attribute": "Item Attribute",
+	"default_pack_out_stage": "Item Attribute Value",
+	"default_stitching_process": "Process",
+	"default_stitching_in_stage": "Item Attribute Value",
+	"default_stitching_attribute": "Item Attribute",
+	"default_stitching_out_stage": "Item Attribute Value",
+	"default_set_item_attribute": "Item Attribute",
+}
+STOCK_MIGRATION_PREREQUISITES = {
+	"transit_warehouse": "Warehouse",
+	"default_received_type": "Received Type",
+	"default_rejected_received_type": "Received Type",
+}
+REQUIRED_STOCK_DIMENSION_CONTRACT = {
+	"lot": {
+		"dimension_doctype": "Lot",
+		"mandatory": 1,
+		"in_valuation": 1,
+		"is_production_group": 1,
+	},
+	"received_type": {
+		"dimension_doctype": "Received Type",
+		"mandatory": 1,
+		"in_valuation": 1,
+		"is_production_group": 0,
+	},
+}
 
 
 class F15SourceBridge:
@@ -627,11 +673,15 @@ def build_live_schema_analysis(
 		source_site=settings.source_site,
 		target_site=settings.target_site,
 	)
+	target_prerequisites = _validate_target_migration_prerequisites(
+		dimensions, plan=plan, source=source
+	)
 	payload.update(
 		{
 			"mode": "live-schema",
 			"reads_site_data": True,
 			"writes_site_data": False,
+			"target_prerequisites": target_prerequisites,
 		}
 	)
 	_validate_configured_default_contract(plan, settings, source)
@@ -715,6 +765,104 @@ def _target_stock_contract() -> tuple[list[dict[str, Any]], list[str], list[str]
 	return dimensions, list(STOCK_DOCTYPES), list(OPERATIONAL_DOCTYPES)
 
 
+def _validate_target_migration_prerequisites(
+	dimensions: Iterable[Mapping[str, Any]],
+	*,
+	plan: MigrationPlan | None = None,
+	source: F15SourceBridge | None = None,
+) -> dict[str, Any]:
+	"""Validate the reviewed target Singles used by Production/stock migration."""
+
+	issues: list[str] = []
+	values: dict[str, dict[str, Any]] = {"IPD Settings": {}, "YRP Stock Settings": {}}
+	for doctype, fields in (
+		("IPD Settings", IPD_MIGRATION_PREREQUISITES),
+		("YRP Stock Settings", STOCK_MIGRATION_PREREQUISITES),
+	):
+		for fieldname, link_doctype in fields.items():
+			value = frappe.db.get_single_value(doctype, fieldname)
+			values[doctype][fieldname] = value
+			if value in (None, ""):
+				issues.append(f"{doctype}.{fieldname} is required")
+			elif not _target_or_source_prerequisite_exists(
+				link_doctype, str(value), plan=plan, source=source
+			):
+				issues.append(
+					f"{doctype}.{fieldname}={value!r} does not resolve to "
+					f"{link_doctype} on the target or frozen source"
+				)
+
+	dimension_rows = {
+		str(row.get("fieldname") or ""): dict(row) for row in dimensions
+	}
+	for fieldname, expected in REQUIRED_STOCK_DIMENSION_CONTRACT.items():
+		row = dimension_rows.get(fieldname)
+		if not row:
+			issues.append(f"YRP Stock Settings.stock_dimensions is missing {fieldname!r}")
+			continue
+		for key, expected_value in expected.items():
+			actual = row.get(key)
+			if key != "dimension_doctype":
+				actual = cint(actual)
+			if actual != expected_value:
+				issues.append(
+					"YRP Stock Settings.stock_dimensions "
+					f"{fieldname!r} requires {key}={expected_value!r}; found {actual!r}"
+				)
+
+	if issues:
+		raise MigrationError(
+			"Migration target settings are incomplete:\n- " + "\n- ".join(issues)
+		)
+
+	return {
+		"ipd_settings": values["IPD Settings"],
+		"stock_settings": values["YRP Stock Settings"],
+		"stock_dimensions": [
+			{
+				key: row.get(key)
+				for key in (
+					"dimension_doctype",
+					"fieldname",
+					"label",
+					"mandatory",
+					"in_valuation",
+					"is_production_group",
+				)
+			}
+			for row in dimensions
+		],
+	}
+
+
+def _target_or_source_prerequisite_exists(
+	link_doctype: str,
+	value: str,
+	*,
+	plan: MigrationPlan | None,
+	source: F15SourceBridge | None,
+) -> bool:
+	if frappe.db.exists("DocType", link_doctype) and frappe.db.exists(
+		link_doctype, value
+	):
+		return True
+	if not plan or not source:
+		return False
+	source_doctypes = [
+		source_doctype
+		for source_doctype, spec in plan.specs.items()
+		if spec.target == link_doctype and not spec.is_child
+	]
+	# Target Warehouse rows are deterministically generated from source Supplier
+	# identities. They are intentionally absent during the clean reset boundary.
+	if link_doctype == "Warehouse":
+		source_doctypes.append("Supplier")
+	return any(
+		source.document_exists(source_doctype, value)
+		for source_doctype in sorted(set(source_doctypes))
+	)
+
+
 def _target_stock_dimension_fieldnames() -> list[str]:
 	return [str(row["fieldname"]) for row in _target_stock_contract()[0]]
 
@@ -731,6 +879,7 @@ def _source_snapshot(
 	status: Mapping[str, Any],
 	broken_links: list[dict[str, Any]],
 	plan: MigrationPlan,
+	target_prerequisites: Mapping[str, Any],
 ) -> dict[str, Any]:
 	broken_link_payload = json.dumps(
 		broken_links, sort_keys=True, separators=(",", ":"), default=str
@@ -746,6 +895,14 @@ def _source_snapshot(
 		"migration_contract_fingerprint": _migration_contract_fingerprint(
 			settings, plan
 		),
+		"target_prerequisite_fingerprint": hashlib.sha256(
+			json.dumps(
+				target_prerequisites,
+				sort_keys=True,
+				separators=(",", ":"),
+				default=str,
+			).encode("utf-8")
+		).hexdigest(),
 	}
 
 
@@ -768,6 +925,11 @@ def _migration_contract_fingerprint(
 		)
 	]
 	code_paths.append(SOURCE_BRIDGE)
+	code_paths.append(
+		migration_root.parent
+		/ "patches"
+		/ "backfill_deterministic_valuation_lineage.py"
+	)
 	code_digest = hashlib.sha256()
 	for path in code_paths:
 		code_digest.update(path.name.encode("utf-8"))
@@ -851,7 +1013,7 @@ def _require_previous_snapshot(
 	mode: str,
 	current_snapshot: Mapping[str, Any],
 ) -> None:
-	if mode not in {"migrate", "verify"}:
+	if mode not in {"reset", "migrate", "verify"}:
 		return
 	try:
 		previous_report = json.loads(migration.report_json or "{}")
@@ -869,6 +1031,20 @@ def _require_previous_snapshot(
 		)
 
 
+def _assert_no_other_active_migration(migration_name: str) -> None:
+	active = frappe.get_all(
+		"MRP Data Migration",
+		filters={
+			"name": ["!=", migration_name],
+			"status": ["in", sorted(RUNNING_STATUSES)],
+		},
+		pluck="name",
+		limit=1,
+	)
+	if active:
+		raise MigrationError(f"Another migration run is active: {active[0]}")
+
+
 def run_job(
 	migration_name: str,
 	mode: str,
@@ -881,6 +1057,7 @@ def run_job(
 	_assert_target_site(settings)
 	if mode not in {"dry_run", "migrate", "verify"}:
 		raise MigrationError(f"Unsupported migration mode {mode!r}")
+	_assert_no_other_active_migration(migration_name)
 
 	migration = frappe.get_doc("MRP Data Migration", migration_name)
 	source = F15SourceBridge(settings)
@@ -892,7 +1069,13 @@ def run_job(
 	if source_status.get("site") != settings.source_site:
 		raise MigrationError("The source bridge did not connect to the approved source site")
 	broken_links = _source_broken_link_manifest(plan, source)
-	snapshot = _source_snapshot(settings, source_status, broken_links, plan)
+	snapshot = _source_snapshot(
+		settings,
+		source_status,
+		broken_links,
+		plan,
+		schema_payload["target_prerequisites"],
+	)
 	_require_previous_snapshot(migration, mode, snapshot)
 	if mode == "migrate" and not source_status.get("maintenance_mode"):
 		raise MigrationError(
@@ -927,6 +1110,15 @@ def run_job(
 			allow_missing_files=allow_missing_files,
 		)
 		result["series"] = _run_series(source, dry_run=mode == "dry_run")
+		if mode == "migrate":
+			# Framework patches run before legacy source documents are loaded and
+			# their Patch Log entries survive the migration-owned data reset. Run the
+			# same conservative, idempotent backfill at the actual post-load boundary.
+			from essdee_yrp.patches.backfill_deterministic_valuation_lineage import (
+				backfill_deterministic_valuation_lineage,
+			)
+
+			result["valuation_lineage"] = backfill_deterministic_valuation_lineage()
 		result["schema"] = {
 			"source_doctypes": schema_payload["source_doctypes"],
 			"target_doctypes": schema_payload["target_doctypes"],
@@ -941,15 +1133,577 @@ def run_job(
 		raise
 
 
-def enqueue_job(migration_name: str, mode: str):
+def enqueue_job(migration_name: str, mode: str, *, allow_missing_files: bool = False):
 	return frappe.enqueue(
-		"essdee_yrp.migration.live.run_job",
+		"essdee_yrp.migration.live.run_job_guarded",
 		queue="long",
 		timeout=86_400,
+		enqueue_after_commit=True,
 		job_name=f"mrp-data-migration-{migration_name}-{mode}",
 		migration_name=migration_name,
 		mode=mode,
+		allow_missing_files=bool(allow_missing_files),
 	)
+
+
+def enqueue_reset_job(migration_name: str):
+	return frappe.enqueue(
+		"essdee_yrp.migration.live.run_reset_job_guarded",
+		queue="long",
+		timeout=86_400,
+		enqueue_after_commit=True,
+		job_name=f"mrp-data-migration-{migration_name}-reset",
+		migration_name=migration_name,
+	)
+
+
+def run_job_guarded(*args, **kwargs):
+	"""Ensure a queued migration cannot stay Queued after preflight failure."""
+
+	migration_name = str(kwargs.get("migration_name") or (args[0] if args else ""))
+	try:
+		return run_job(*args, **kwargs)
+	except Exception:
+		_mark_queued_failure(migration_name)
+		raise
+
+
+def run_reset_job_guarded(*args, **kwargs):
+	"""Ensure a queued reset cannot stay Queued after preflight failure."""
+
+	migration_name = str(kwargs.get("migration_name") or (args[0] if args else ""))
+	try:
+		return run_reset_job(*args, **kwargs)
+	except Exception:
+		_mark_queued_failure(migration_name)
+		raise
+
+
+def _mark_queued_failure(migration_name: str) -> None:
+	if not migration_name:
+		return
+	status = frappe.db.get_value("MRP Data Migration", migration_name, "status")
+	if status in RUNNING_STATUSES:
+		_mark_failed(migration_name)
+
+
+def preview_target_reset(migration_name: str) -> dict[str, Any]:
+	"""Return the exact current deletion scope without mutating the target."""
+
+	settings = get_migration_settings()
+	_assert_target_site(settings)
+	migration = frappe.get_doc("MRP Data Migration", migration_name)
+	source = F15SourceBridge(settings)
+	plan, schema_payload = build_live_schema_analysis(settings, source)
+	source_status = source.status()
+	broken_links = _source_broken_link_manifest(plan, source)
+	snapshot = _source_snapshot(
+		settings,
+		source_status,
+		broken_links,
+		plan,
+		schema_payload["target_prerequisites"],
+	)
+	_require_previous_snapshot(migration, "reset", snapshot)
+	manifest = _build_target_reset_manifest(plan, source)
+	counts = _include_reset_generated_audit_scope(
+		migration, _target_reset_counts(manifest)
+	)
+	return {
+		"target_site": settings.target_site,
+		"source_site": settings.source_site,
+		"source_maintenance_mode": bool(source_status.get("maintenance_mode")),
+		"server_reset_enabled": is_target_reset_enabled(),
+		"total_rows": counts["total"],
+		"parent_rows": counts["parent_total"],
+		"child_rows": counts["child_total"],
+		"file_rows": counts["file_total"],
+		"generated_supplier_warehouses": counts[
+			"generated_supplier_warehouse_total"
+		],
+		"reset_generated_audit_rows": counts["reset_generated_audit_total"],
+		"source_series_counters": len(manifest["source_series_names"]),
+		"preserved_naming_series_counters": counts["preserved_series_total"],
+		"parent_doctype_count": len(manifest["parent_target_doctypes"]),
+		"child_doctype_count": len(manifest["child_target_doctypes"]),
+		"preserved_single_doctypes": manifest["single_target_doctypes"],
+	}
+
+
+def run_reset_job(migration_name: str) -> dict[str, Any]:
+	"""Delete only the reviewed migration-owned target graph before a fresh load."""
+
+	settings = get_migration_settings()
+	_assert_target_site(settings)
+	if not is_target_reset_enabled():
+		raise MigrationError(
+			"Target reset is not enabled in server configuration. Isolate the target "
+			"and set the one-time reset acknowledgement before retrying."
+		)
+	_assert_no_other_active_migration(migration_name)
+
+	migration = frappe.get_doc("MRP Data Migration", migration_name)
+	source = F15SourceBridge(settings)
+	plan, schema_payload = build_live_schema_analysis(settings, source)
+	if not plan.ready:
+		raise MigrationError("Schema plan is blocked:\n" + "\n".join(plan.issues))
+	_validate_live_target_metadata(plan)
+	source_status = source.status()
+	if source_status.get("site") != settings.source_site:
+		raise MigrationError("The source bridge did not connect to the approved source site")
+	broken_links = _source_broken_link_manifest(plan, source)
+	snapshot = _source_snapshot(
+		settings,
+		source_status,
+		broken_links,
+		plan,
+		schema_payload["target_prerequisites"],
+	)
+	_require_previous_snapshot(migration, "reset", snapshot)
+	if not source_status.get("maintenance_mode"):
+		raise MigrationError(
+			f"{settings.source_site} must be in maintenance mode before target reset"
+		)
+
+	manifest = _build_target_reset_manifest(plan, source)
+	before = _include_reset_generated_audit_scope(
+		migration, _target_reset_counts(manifest)
+	)
+	before = _bind_reset_series_checkpoint(migration, before)
+	_mark_reset_started(migration_name, before)
+	try:
+		_delete_target_reset_manifest(migration_name, manifest, before)
+		after = _include_reset_generated_audit_scope(
+			migration,
+			_target_reset_counts(manifest, expected_identities=before),
+		)
+		remaining = _nonzero_reset_counts(after)
+		if remaining:
+			raise MigrationError(
+				"Target reset left migration-owned rows:\n"
+				+ "\n".join(f"{key}: {value}" for key, value in remaining.items())
+			)
+		# Re-evaluate values and stock-dimension children after every destructive
+		# table operation. Link masters may correctly be absent at this boundary;
+		# they must still resolve from the frozen source graph.
+		dimensions, _stock_doctypes, _operational_doctypes = _target_stock_contract()
+		preserved_prerequisites = _validate_target_migration_prerequisites(
+			dimensions, plan=plan, source=source
+		)
+		result = {
+			"mode": "reset",
+			"processed": before["total"],
+			"skipped": 0,
+			"failed": 0,
+			"before": before,
+			"after": after,
+			"preserved_single_doctypes": manifest["single_target_doctypes"],
+			"preserved_target_prerequisites": preserved_prerequisites,
+			"source_snapshot": snapshot,
+			"source_broken_links": broken_links,
+		}
+		_mark_reset_complete(migration_name, result)
+		frappe.clear_cache()
+		return result
+	except Exception:
+		_mark_failed(migration_name)
+		raise
+
+
+def _build_target_reset_manifest(
+	plan: MigrationPlan,
+	source: F15SourceBridge,
+) -> dict[str, Any]:
+	parent_targets = sorted(
+		{
+			spec.target
+			for spec in plan.specs.values()
+			if not spec.is_child and not spec.source_schema.get("issingle")
+		}
+	)
+	single_targets = sorted(
+		{
+			spec.target
+			for spec in plan.specs.values()
+			if not spec.is_child and spec.source_schema.get("issingle")
+		}
+	)
+	# A parent rule can contextually redirect a source child table to a different
+	# target child DocType (for example Item Production Detail.item_attributes
+	# maps Item Item Attribute to IPD Item Attribute).  That contextual target is
+	# not necessarily the direct target of any child spec, so collecting only
+	# ``spec.is_child`` targets leaves old rows behind when their parent no longer
+	# exists in the source.  Include every physical table referenced by a
+	# migration-owned target parent; deletion remains scoped by parenttype below.
+	child_targets = {
+		spec.target for spec in plan.specs.values() if spec.is_child
+	}
+	for parent_target in parent_targets:
+		for field in (getattr(plan, "target_schemas", {}).get(parent_target) or {}).get(
+			"fields", []
+		):
+			if field.get("fieldtype") in TABLE_FIELD_TYPES and field.get("options"):
+				child_targets.add(str(field["options"]))
+	child_targets = sorted(child_targets)
+	series_names = []
+	for row in source.iter_series():
+		name = str(row.get("name") or "")
+		series_names.append(name)
+	return {
+		"parent_target_doctypes": parent_targets,
+		"single_target_doctypes": single_targets,
+		"child_target_doctypes": child_targets,
+		"source_series_names": sorted(set(series_names)),
+		"delete_generated_supplier_warehouses": "Supplier" in parent_targets,
+	}
+
+
+def _target_reset_counts(
+	manifest: Mapping[str, Any],
+	*,
+	expected_identities: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+	parent_counts = {
+		doctype: int(frappe.db.count(doctype))
+		for doctype in manifest["parent_target_doctypes"]
+	}
+	parenttypes = list(manifest["parent_target_doctypes"])
+	child_counts = {
+		doctype: int(
+			frappe.db.count(doctype, {"parenttype": ["in", parenttypes]})
+			if parenttypes
+			else 0
+		)
+		for doctype in manifest["child_target_doctypes"]
+	}
+	file_names = _target_reset_file_names(manifest)
+	warehouse_names = _generated_supplier_warehouse_names(manifest)
+	if expected_identities is None:
+		preserved_series_values = _target_series_values()
+		preserved_series_mismatches = []
+	else:
+		file_names = sorted(
+			set(file_names)
+			| set(
+				_existing_document_names(
+					"File", list(expected_identities.get("file_names") or [])
+				)
+			)
+		)
+		warehouse_names = sorted(
+			set(warehouse_names)
+			| set(
+				_existing_document_names(
+					"Warehouse",
+					list(
+						expected_identities.get(
+							"generated_supplier_warehouse_names"
+						)
+						or []
+					),
+				)
+			)
+		)
+		preserved_series_values = _target_series_values()
+		expected_series_values = dict(
+			expected_identities.get("preserved_series_values") or {}
+		)
+		preserved_series_mismatches = _series_value_mismatches(
+			expected_series_values, preserved_series_values
+		)
+	total = (
+		sum(parent_counts.values())
+		+ sum(child_counts.values())
+		+ len(file_names)
+		+ len(warehouse_names)
+	)
+	return {
+		"total": total,
+		"parent_total": sum(parent_counts.values()),
+		"child_total": sum(child_counts.values()),
+		"file_total": len(file_names),
+		"generated_supplier_warehouse_total": len(warehouse_names),
+		"series_total": 0,
+		"preserved_series_total": len(preserved_series_values),
+		"preserved_series_mismatch_total": len(preserved_series_mismatches),
+		"parent_counts": parent_counts,
+		"child_counts": child_counts,
+		"file_names": file_names,
+		"generated_supplier_warehouse_names": warehouse_names,
+		"preserved_series_values": preserved_series_values,
+		"preserved_series_mismatches": preserved_series_mismatches,
+	}
+
+
+def _target_reset_file_names(manifest: Mapping[str, Any]) -> list[str]:
+	parent_targets = list(manifest["parent_target_doctypes"])
+	child_targets = list(manifest["child_target_doctypes"])
+	attachment_targets = sorted(set(parent_targets + child_targets))
+	if not attachment_targets:
+		return []
+	rows = frappe.get_all(
+		"File",
+		filters={"attached_to_doctype": ["in", attachment_targets]},
+		fields=["name", "attached_to_doctype", "attached_to_name"],
+		order_by="name asc",
+		limit_page_length=0,
+	)
+	child_names: dict[str, set[str]] = {}
+	for doctype in child_targets:
+		attached_names = sorted(
+			{
+				str(row.attached_to_name)
+				for row in rows
+				if row.attached_to_doctype == doctype and row.attached_to_name
+			}
+		)
+		child_names[doctype] = set()
+		for chunk in _chunks(attached_names, 500):
+			child_names[doctype].update(
+				frappe.get_all(
+					doctype,
+					filters={
+						"name": ["in", chunk],
+						"parenttype": ["in", parent_targets],
+					},
+					pluck="name",
+					limit_page_length=0,
+				)
+			)
+	return [
+		str(row.name)
+		for row in rows
+		if row.attached_to_doctype in parent_targets
+		or str(row.attached_to_name or "")
+		in child_names.get(str(row.attached_to_doctype), set())
+	]
+
+
+def _generated_supplier_warehouse_names(manifest: Mapping[str, Any]) -> list[str]:
+	if not manifest["delete_generated_supplier_warehouses"]:
+		return []
+	return [
+		str(row[0])
+		for row in frappe.db.sql(
+			"SELECT warehouse.name FROM `tabWarehouse` warehouse "
+			"WHERE COALESCE(warehouse.supplier, '')<>'' "
+			"AND warehouse.name=warehouse.supplier ORDER BY warehouse.name"
+		)
+	]
+
+
+def _target_series_values() -> dict[str, int]:
+	"""Snapshot every target naming counter, including the blank identity."""
+
+	return {
+		str(name or ""): int(current or 0)
+		for name, current in frappe.db.sql(
+			"SELECT `name`, `current` FROM `tabSeries` ORDER BY `name`"
+		)
+	}
+
+
+def _series_value_mismatches(
+	expected: Mapping[str, Any],
+	actual: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+	missing = object()
+	mismatches = []
+	for name in sorted(set(expected) | set(actual)):
+		expected_value = expected.get(name, missing)
+		actual_value = actual.get(name, missing)
+		if expected_value == actual_value:
+			continue
+		mismatches.append(
+			{
+				"name": name,
+				"expected": None if expected_value is missing else int(expected_value),
+				"actual": None if actual_value is missing else int(actual_value),
+			}
+		)
+	return mismatches
+
+
+def _bind_reset_series_checkpoint(
+	migration: Any,
+	before: Mapping[str, Any],
+) -> dict[str, Any]:
+	"""Keep the first reset attempt's complete series snapshot across retries."""
+
+	checkpoint = {}
+	if migration.checkpoint_json:
+		try:
+			checkpoint = json.loads(migration.checkpoint_json)
+		except (TypeError, ValueError) as exc:
+			raise MigrationError("Reset checkpoint JSON is invalid") from exc
+		if checkpoint and checkpoint.get("mode") != "reset":
+			raise MigrationError("The migration contains a non-reset checkpoint")
+
+	expected = dict(
+		checkpoint.get("preserved_series_values")
+		or before.get("preserved_series_values")
+		or {}
+	)
+	actual = dict(before.get("preserved_series_values") or {})
+	mismatches = _series_value_mismatches(expected, actual)
+	if mismatches:
+		raise MigrationError(
+			"Naming-series counters changed after the first reset attempt; "
+			"restore or review the preserved reset checkpoint before retrying:\n"
+			+ "\n".join(
+				f"{row['name']!r}: expected={row['expected']}, actual={row['actual']}"
+				for row in mismatches[:100]
+			)
+		)
+
+	bound = dict(before)
+	bound["preserved_series_values"] = expected
+	bound["preserved_series_total"] = len(expected)
+	bound["preserved_series_mismatch_total"] = 0
+	bound["preserved_series_mismatches"] = []
+	bound["reset_started_on"] = checkpoint.get("reset_started_on")
+	return bound
+
+
+def _include_reset_generated_audit_scope(
+	migration: Any,
+	counts: Mapping[str, Any],
+) -> dict[str, Any]:
+	"""Include only exact audit identities already owned by this reset."""
+
+	checkpoint = {}
+	if migration.checkpoint_json:
+		try:
+			checkpoint = json.loads(migration.checkpoint_json)
+		except (TypeError, ValueError) as exc:
+			raise MigrationError("Reset checkpoint JSON is invalid") from exc
+	deleted_document_names = []
+	comment_names = []
+	if checkpoint.get("mode") == "reset":
+		deleted_document_names = _existing_document_names(
+			"Deleted Document",
+			list(checkpoint.get("reset_generated_deleted_document_names") or []),
+		)
+		comment_names = _existing_document_names(
+			"Comment",
+			list(checkpoint.get("reset_generated_comment_names") or []),
+		)
+	result = dict(counts)
+	result["reset_generated_deleted_document_names"] = list(deleted_document_names)
+	result["reset_generated_deleted_document_total"] = len(deleted_document_names)
+	result["reset_generated_comment_names"] = list(comment_names)
+	result["reset_generated_comment_total"] = len(comment_names)
+	result["reset_generated_audit_total"] = len(deleted_document_names) + len(
+		comment_names
+	)
+	result["total"] = int(result.get("total") or 0) + result[
+		"reset_generated_audit_total"
+	]
+	return result
+
+
+def _existing_document_names(doctype: str, names: list[str]) -> list[str]:
+	existing = []
+	for chunk in _chunks(names, 500):
+		existing.extend(
+			str(name)
+			for name in frappe.get_all(
+				doctype,
+				filters={"name": ["in", chunk]},
+				pluck="name",
+				limit_page_length=0,
+			)
+		)
+	return sorted(existing)
+
+
+def _delete_target_reset_manifest(
+	migration_name: str,
+	manifest: Mapping[str, Any],
+	before: Mapping[str, Any],
+) -> None:
+	processed = 0
+	for chunk in _chunks(
+		list(before.get("reset_generated_deleted_document_names") or []), 500
+	):
+		frappe.db.delete("Deleted Document", {"name": ["in", chunk]})
+		frappe.db.commit()
+		processed += len(chunk)
+		_update_progress(migration_name, processed, 0, 0)
+	for chunk in _chunks(
+		list(before.get("reset_generated_comment_names") or []), 500
+	):
+		frappe.db.delete("Comment", {"name": ["in", chunk]})
+		frappe.db.commit()
+		processed += len(chunk)
+		_update_progress(migration_name, processed, 0, 0)
+
+	for chunk in _chunks(list(before["file_names"]), 50):
+		for name in chunk:
+			_delete_reset_file(name)
+			frappe.db.commit()
+			processed += 1
+			_update_progress(migration_name, processed, 0, 0)
+
+	warehouse_names = list(before["generated_supplier_warehouse_names"])
+	for chunk in _chunks(warehouse_names, 500):
+		frappe.db.delete("Warehouse", {"name": ["in", chunk]})
+		frappe.db.commit()
+		processed += len(chunk)
+		_update_progress(migration_name, processed, 0, 0)
+
+	parenttypes = list(manifest["parent_target_doctypes"])
+	for doctype in manifest["child_target_doctypes"]:
+		count = int(before["child_counts"].get(doctype) or 0)
+		if count:
+			frappe.db.delete(doctype, {"parenttype": ["in", parenttypes]})
+			frappe.db.commit()
+		processed += count
+		_update_progress(migration_name, processed, 0, 0)
+
+	for doctype in manifest["parent_target_doctypes"]:
+		count = int(before["parent_counts"].get(doctype) or 0)
+		if count:
+			frappe.db.delete(doctype)
+			frappe.db.commit()
+		processed += count
+		_update_progress(migration_name, processed, 0, 0)
+
+
+def _delete_reset_file(name: str) -> None:
+	"""Run physical File cleanup without creating one queued job per row."""
+
+	from frappe.model.delete_doc import delete_dynamic_links
+
+	doc = frappe.get_doc("File", name)
+	doc.validate_protected_file()
+	doc._delete_file_on_disk()
+	frappe.delete_doc(
+		"File",
+		name,
+		ignore_permissions=True,
+		force=True,
+		for_reload=True,
+		delete_permanently=True,
+	)
+	delete_dynamic_links("File", name)
+
+
+def _nonzero_reset_counts(counts: Mapping[str, Any]) -> dict[str, int]:
+	return {
+		key: int(counts.get(key) or 0)
+		for key in (
+			"parent_total",
+			"child_total",
+			"file_total",
+			"generated_supplier_warehouse_total",
+			"reset_generated_deleted_document_total",
+			"reset_generated_comment_total",
+			"series_total",
+			"preserved_series_mismatch_total",
+		)
+		if int(counts.get(key) or 0)
+	}
 
 
 def run_value_verification(
@@ -3019,6 +3773,69 @@ def _mark_complete(migration_name: str, mode: str, result: Mapping[str, Any]) ->
 			"processed_records": result.get("processed") or 0,
 			"skipped_records": result.get("skipped") or 0,
 			"failed_records": result.get("failed") or 0,
+			"report_json": json.dumps(result, sort_keys=True, default=str),
+			"error_log": None,
+		},
+		update_modified=False,
+	)
+	frappe.db.commit()
+
+
+def _mark_reset_started(migration_name: str, before: Mapping[str, Any]) -> None:
+	started_on = now_datetime()
+	reset_started_on = before.get("reset_started_on") or started_on
+	frappe.db.set_value(
+		"MRP Data Migration",
+		migration_name,
+		{
+			"status": "Running",
+			"last_action": "Reset Target",
+			"last_started_on": started_on,
+			"last_completed_on": None,
+			"processed_records": 0,
+			"skipped_records": 0,
+			"failed_records": 0,
+			"error_log": None,
+			"checkpoint_json": json.dumps(
+				{
+					"mode": "reset",
+					"reset_started_on": str(reset_started_on),
+					"preserved_series_values": before["preserved_series_values"],
+					"reset_generated_deleted_document_names": list(
+						before.get("reset_generated_deleted_document_names") or []
+					),
+					"reset_generated_comment_names": list(
+						before.get("reset_generated_comment_names") or []
+					),
+				},
+				sort_keys=True,
+			),
+		},
+		update_modified=False,
+	)
+	# This field is labelled source records for the migration actions. During the
+	# reset boundary it intentionally shows the exact reviewed deletion total.
+	frappe.db.set_value(
+		"MRP Data Migration",
+		migration_name,
+		"total_source_records",
+		int(before["total"]),
+		update_modified=False,
+	)
+	frappe.db.commit()
+
+
+def _mark_reset_complete(migration_name: str, result: Mapping[str, Any]) -> None:
+	frappe.db.set_value(
+		"MRP Data Migration",
+		migration_name,
+		{
+			"status": "Reset Complete",
+			"last_completed_on": now_datetime(),
+			"processed_records": result.get("processed") or 0,
+			"skipped_records": 0,
+			"failed_records": 0,
+			"checkpoint_json": None,
 			"report_json": json.dumps(result, sort_keys=True, default=str),
 			"error_log": None,
 		},

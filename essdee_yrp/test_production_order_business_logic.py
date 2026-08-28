@@ -85,7 +85,11 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 	def test_base_entry_expansion_keeps_essdee_ratio_and_prices(self):
 		source = self._submitted_order()
 		source_row = source.production_order_details[0]
-		attributes = json.loads(source_row.attributes_json)
+		attributes = (
+			json.loads(source_row.attributes_json)
+			if source_row.attributes_json
+			else get_variant_attr_details(source_row.item_variant)
+		)
 		doc = frappe.new_doc("Production Order")
 		doc.item = source.item
 		doc.delivery_date = source.delivery_date
@@ -198,15 +202,24 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 			self.assertIn(function, frappe.whitelisted)
 			self.assertNotIn(function, frappe.guest_methods)
 
-	def test_approval_status_cannot_be_spoofed_or_edited(self):
+	def test_approval_status_cannot_be_spoofed(self):
 		doc = _dict(docstatus=0, status=PPO_REQUEST_STATUS, flags=_dict())
 		doc.get_doc_before_save = lambda: _dict(status=PPO_DRAFT_STATUS)
 		with self.assertRaises(frappe.ValidationError):
 			_validate_ppo_approval_state(doc)
 
+	def test_pending_ppo_request_can_be_edited_without_spoofing_status(self):
+		doc = _dict(
+			docstatus=0,
+			status=PPO_REQUEST_STATUS,
+			flags=_dict(),
+			production_term="Updated Term",
+		)
 		doc.get_doc_before_save = lambda: _dict(status=PPO_REQUEST_STATUS)
-		with self.assertRaises(frappe.ValidationError):
-			_validate_ppo_approval_state(doc)
+
+		_validate_ppo_approval_state(doc)
+
+		self.assertEqual(doc.status, PPO_REQUEST_STATUS)
 
 	def test_quantity_request_calculation_does_not_mutate_rows(self):
 		rows = {

@@ -9,6 +9,7 @@
   "quantity",
   "uom",
   "goods_received_note_item",
+  "received_item_variant",
   "work_order_deliverable",
   "lot",
   "received_type",
@@ -52,6 +53,15 @@
    "hidden": 1,
    "label": "Goods Received Note Item",
    "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "received_item_variant",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Received Item Variant",
+   "no_copy": 1,
+   "options": "Item Variant",
    "read_only": 1
   },
   {

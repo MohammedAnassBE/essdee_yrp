@@ -112,7 +112,10 @@ def approve_ipd(doc_name, approval_type="Approved"):
 
 	allowed_roles = get_approval_roles()
 	if not any(role in frappe.get_roles() for role in allowed_roles):
-		frappe.throw("You do not have permission to approve Item Production Detail")
+		frappe.throw(
+			"You do not have permission to approve Item Production Detail",
+			frappe.PermissionError,
+		)
 
 	doc = frappe.get_doc("Item Production Detail", doc_name)
 	doc.approval_status = approval_type
@@ -125,7 +128,10 @@ def approve_ipd(doc_name, approval_type="Approved"):
 def revert_ipd_approval(doc_name):
 	allowed_roles = get_approval_roles()
 	if not any(role in frappe.get_roles() for role in allowed_roles):
-		frappe.throw("You do not have permission to revert Item Production Detail approval")
+		frappe.throw(
+			"You do not have permission to revert Item Production Detail approval",
+			frappe.PermissionError,
+		)
 
 	doc = frappe.get_doc("Item Production Detail", doc_name)
 	doc.check_permission("write")

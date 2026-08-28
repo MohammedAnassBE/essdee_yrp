@@ -116,8 +116,36 @@ def get_work_order_action_context(work_order: str) -> dict:
 	}
 
 
+def _enable_zero_pending_excess_in_editor(item_details):
+	"""Remove only the Vue quantity cap for completed normal deliverables.
+
+	Base YRP deliberately returns zero-pending Work Order deliverables so an
+	operator can dispatch excess stock. Its Delivery Challan editor also uses
+	``pending_quantity`` as the HTML/input maximum, which otherwise clamps those
+	rows back to zero. Keep the flat defaults authoritative and clear only the
+	grouped editor value; submit reloads the real pending quantity under the Work
+	Order lock before updating it.
+	"""
+
+	for group in item_details or []:
+		for item in group.get("items") or []:
+			values = item.get("values") or {}
+			if not isinstance(values, dict):
+				continue
+			for value in values.values():
+				if not isinstance(value, dict) or "pending_quantity" not in value:
+					continue
+				if flt(value.get("pending_quantity")) <= 0:
+					value["pending_quantity"] = None
+	return item_details
+
+
 @frappe.whitelist()
-def get_delivery_challan_defaults(work_order: str) -> dict:
+def get_delivery_challan_defaults(
+	work_order: str,
+	posting_date: str | None = None,
+	posting_time: str | None = None,
+) -> dict:
 	"""Prepare one unsaved DC from an open Work Order without browser races."""
 
 	doc = _open_submitted_work_order(work_order)
@@ -126,12 +154,23 @@ def get_delivery_challan_defaults(work_order: str) -> dict:
 		get_work_order_defaults,
 	)
 
-	defaults = get_work_order_defaults(doc.name)
+	defaults = get_work_order_defaults(
+		doc.name,
+		posting_date=posting_date,
+		posting_time=posting_time,
+	)
+	defaults["item_details"] = _enable_zero_pending_excess_in_editor(
+		defaults.get("item_details") or []
+	)
 	defaults.update(
 		{
 			"work_order": doc.name,
 			"lot": doc.lot,
 			"includes_packing": doc.get("includes_packing"),
+			"from_address": doc.delivery_address,
+			"from_address_details": doc.delivery_address_details,
+			"supplier_address": doc.supplier_address,
+			"supplier_address_details": doc.supplier_address_details,
 		}
 	)
 	return defaults

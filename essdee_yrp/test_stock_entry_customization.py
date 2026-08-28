@@ -1,5 +1,12 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
+from unittest.mock import patch
+
+from essdee_yrp.stock_entry_hooks import (
+	_normalize_completion_row_indexes,
+	preserve_dynamic_packing_completion_piece_uom,
+	preserve_dynamic_packing_dispatch_piece_uom,
+)
 
 
 class TestStockEntryCustomization(FrappeTestCase):
@@ -77,3 +84,210 @@ class TestStockEntryCustomization(FrappeTestCase):
 		self.assertEqual(field.fetch_from, "to_supplier.po_terms_and_condition")
 		self.assertEqual(field.fetch_if_empty, 1)
 		self.assertEqual(field.allow_on_submit, 0)
+
+	def test_completion_rows_receive_distinct_vue_group_indexes(self):
+		doc = frappe.new_doc("Stock Entry")
+		doc.purpose = "DC Completion"
+		for index in range(4):
+			doc.append(
+				"items",
+				{
+					"item": f"TEST-VARIANT-{index}",
+					"qty": 1,
+					"row_index": 0,
+				},
+			)
+
+		self.assertTrue(_normalize_completion_row_indexes(doc))
+		self.assertEqual([row.row_index for row in doc.items], [0, 1, 2, 3])
+		self.assertFalse(_normalize_completion_row_indexes(doc))
+
+	def test_normal_stock_entry_indexes_are_not_rewritten(self):
+		doc = frappe.new_doc("Stock Entry")
+		doc.purpose = "Material Receipt"
+		for index in (0, 0):
+			doc.append(
+				"items",
+				{"item": "TEST-VARIANT", "qty": 1, "row_index": index},
+			)
+
+		self.assertFalse(_normalize_completion_row_indexes(doc))
+		self.assertEqual([row.row_index for row in doc.items], [0, 0])
+
+	def test_dynamic_packing_grn_completion_preserves_physical_piece_uom(self):
+		doc = frappe.new_doc("Stock Entry")
+		doc.update(
+			{
+				"purpose": "GRN Completion",
+				"against": "Goods Received Note",
+				"against_id": "TEST-DYNAMIC-PACKING-GRN",
+			}
+		)
+		row = doc.append(
+			"items",
+			{
+				"item": "TEST-PACKED-VARIANT",
+				"qty": 4,
+				"uom": "Box",
+				"stock_uom": "Pieces",
+				"conversion_factor": 12,
+				"stock_qty": 48,
+				"rate": 175,
+				"amount": 700,
+				"against_id_detail": "TEST-GRN-ITEM",
+			},
+		)
+		grn = frappe._dict(
+			name="TEST-DYNAMIC-PACKING-GRN",
+			packing_calculation_version=2,
+			includes_packing=1,
+			from_finishing=1,
+			lot="TEST-LOT",
+			items=[
+				frappe._dict(
+					name="TEST-GRN-ITEM",
+					item_variant="TEST-PACKED-VARIANT",
+					uom="Pieces",
+					stock_uom="Pieces",
+				)
+			],
+		)
+		with (
+			patch("essdee_yrp.stock_entry_hooks.frappe.get_doc", return_value=grn),
+			patch("essdee_yrp.stock_entry_hooks.frappe.db.get_value", return_value="Pieces"),
+		):
+			self.assertTrue(preserve_dynamic_packing_completion_piece_uom(doc))
+
+		self.assertEqual(row.uom, "Pieces")
+		self.assertEqual(row.stock_uom, "Pieces")
+		self.assertEqual(row.conversion_factor, 1)
+		self.assertEqual(row.qty, 4)
+		self.assertEqual(row.stock_qty, 4)
+		self.assertEqual(row.amount, 700)
+		self.assertEqual(doc.total_amount, 700)
+
+	def test_legacy_packing_completion_keeps_base_uom(self):
+		doc = frappe.new_doc("Stock Entry")
+		doc.update(
+			{
+				"purpose": "GRN Completion",
+				"against": "Goods Received Note",
+				"against_id": "TEST-LEGACY-PACKING-GRN",
+			}
+		)
+		row = doc.append(
+			"items",
+			{
+				"item": "TEST-PACKED-VARIANT",
+				"qty": 2,
+				"uom": "Box",
+				"stock_uom": "Pieces",
+				"conversion_factor": 12,
+				"stock_qty": 24,
+				"rate": 100,
+				"against_id_detail": "TEST-GRN-ITEM",
+			},
+		)
+		grn = frappe._dict(
+			name="TEST-LEGACY-PACKING-GRN",
+			packing_calculation_version=1,
+		)
+		with patch("essdee_yrp.stock_entry_hooks.frappe.get_doc", return_value=grn):
+			self.assertFalse(preserve_dynamic_packing_completion_piece_uom(doc))
+
+		self.assertEqual(row.uom, "Box")
+		self.assertEqual(row.conversion_factor, 12)
+		self.assertEqual(row.stock_qty, 24)
+
+	def test_dynamic_packing_dispatch_routes_preserve_physical_piece_uom(self):
+		for against, against_id, finishing_plan in (
+			("Finishing Plan", "TEST-FP", None),
+			("Finishing Plan Dispatch", "TEST-FPD", "TEST-FP"),
+		):
+			with self.subTest(against=against):
+				doc = frappe.new_doc("Stock Entry")
+				doc.update(
+					{
+						"purpose": "Material Issue",
+						"against": against,
+						"against_id": against_id,
+						"packing_batch_dispatch_json": frappe.as_json(
+							[
+								{
+									"finishing_plan": finishing_plan,
+									"packing_calculation_version": 2,
+									"stock_uom": "Pieces",
+									"stock_quantities": {"S": 4, "M": 6},
+								}
+							]
+						),
+					}
+				)
+				for item, quantity in (("TEST-PACKED-S", 4), ("TEST-PACKED-M", 6)):
+					doc.append(
+						"items",
+						{
+							"item": item,
+							"lot": "TEST-LOT",
+							"qty": quantity,
+							"uom": "Box",
+							"stock_uom": "Pieces",
+							"conversion_factor": 12,
+							"stock_qty": quantity * 12,
+							"rate": 175,
+						},
+					)
+
+				def get_value(doctype, name, fieldname):
+					if (doctype, name, fieldname) == ("Finishing Plan", "TEST-FP", "lot"):
+						return "TEST-LOT"
+					if (doctype, name, fieldname) == ("Lot", "TEST-LOT", "packing_uom"):
+						return "Pieces"
+					raise AssertionError((doctype, name, fieldname))
+
+				with patch(
+					"essdee_yrp.stock_entry_hooks.frappe.db.get_value",
+					side_effect=get_value,
+				):
+					self.assertTrue(preserve_dynamic_packing_dispatch_piece_uom(doc))
+
+				self.assertEqual([row.uom for row in doc.items], ["Pieces", "Pieces"])
+				self.assertEqual([row.stock_uom for row in doc.items], ["Pieces", "Pieces"])
+				self.assertEqual([row.conversion_factor for row in doc.items], [1, 1])
+				self.assertEqual([row.stock_qty for row in doc.items], [4, 6])
+
+	def test_legacy_packing_dispatch_keeps_base_uom(self):
+		doc = frappe.new_doc("Stock Entry")
+		doc.update(
+			{
+				"purpose": "Material Issue",
+				"against": "Finishing Plan",
+				"against_id": "TEST-FP",
+				"packing_batch_dispatch_json": frappe.as_json(
+					[
+						{
+							"packing_calculation_version": 1,
+							"stock_uom": "Pieces",
+							"stock_quantities": {"S": 24},
+						}
+					]
+				),
+			}
+		)
+		row = doc.append(
+			"items",
+			{
+				"item": "TEST-PACKED-S",
+				"lot": "TEST-LOT",
+				"qty": 2,
+				"uom": "Box",
+				"stock_uom": "Pieces",
+				"conversion_factor": 12,
+				"stock_qty": 24,
+			},
+		)
+
+		self.assertFalse(preserve_dynamic_packing_dispatch_piece_uom(doc))
+		self.assertEqual(row.uom, "Box")
+		self.assertEqual(row.conversion_factor, 12)
+		self.assertEqual(row.stock_qty, 24)

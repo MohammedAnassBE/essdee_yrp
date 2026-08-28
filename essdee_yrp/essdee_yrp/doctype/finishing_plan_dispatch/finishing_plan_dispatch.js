@@ -6,6 +6,7 @@ const DISPATCH_METHOD =
 
 frappe.ui.form.on("Finishing Plan Dispatch", {
 	refresh(frm) {
+		configure_naming_series(frm);
 		mount_dispatch_editor(frm);
 		const can_write = (frm.perm || []).some((permission) => permission.write);
 
@@ -26,6 +27,32 @@ frappe.ui.form.on("Finishing Plan Dispatch", {
 		}
 	},
 });
+
+async function configure_naming_series(frm) {
+	let series = (frm.doc.naming_series || "").trim();
+	if (series) {
+		frm.set_df_property("naming_series", "options", series);
+		frm.refresh_field("naming_series");
+		return;
+	}
+	if (!frm.is_new() || frm.doc.amended_from || frm.__naming_series_request) return;
+
+	frm.__naming_series_request = (async () => {
+		try {
+			const response = await frappe.call({
+				method: `${DISPATCH_METHOD}.get_current_fiscal_naming_series`,
+			});
+			series = (response.message || "").trim();
+			if (!series || !frm.is_new() || frm.doc.amended_from) return;
+			frm.set_df_property("naming_series", "options", series);
+			await frm.set_value("naming_series", series);
+			frm.refresh_field("naming_series");
+		} finally {
+			delete frm.__naming_series_request;
+		}
+	})();
+	await frm.__naming_series_request;
+}
 
 function mount_dispatch_editor(frm) {
 	const field = frm.fields_dict.finishing_plan_dispatch_html;

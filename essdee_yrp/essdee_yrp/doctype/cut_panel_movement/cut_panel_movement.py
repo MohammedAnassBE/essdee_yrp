@@ -213,6 +213,55 @@ def _check_unmoved_access(from_location, lot):
 		frappe.throw(_("Supplier {0} does not exist.").format(from_location))
 
 
+def _latest_logical_bundle_rows(rows):
+	"""Return the positive latest row for each logical bundle identity.
+
+	``set_combination`` is historical JSON text. Grouping that column directly
+	in SQL treats whitespace/key-order variants as different stock buckets and
+	can resurrect a consumed bundle. Compare its canonical business key in
+	Python, using the same major-colour/part identity as the ledger lifecycle.
+	"""
+	from essdee_yrp.essdee_yrp.doctype.cut_bundle_movement_ledger.cut_bundle_movement_ledger import (
+		_collapsed_set_combination_key,
+	)
+
+	latest = {}
+	for row in rows:
+		key = (row.cbm_key, _collapsed_set_combination_key(row.set_combination))
+		current = latest.get(key)
+		row_order = (row.posting_datetime, row.creation, row.name)
+		if current and row_order <= (
+			current.posting_datetime,
+			current.creation,
+			current.name,
+		):
+			continue
+		latest[key] = row
+	return sorted(
+		(row for row in latest.values() if flt(row.quantity_after_transaction) > 0),
+		key=lambda row: (row.lay_no, row.creation, row.name),
+	)
+
+
+def _get_latest_available_bundle_rows(filters):
+	rows = frappe.get_all(
+		"Cut Bundle Movement Ledger",
+		filters=filters,
+		fields=[
+			"name",
+			"cbm_key",
+			"set_combination",
+			"posting_datetime",
+			"creation",
+			"lay_no",
+			"quantity_after_transaction",
+		],
+		order_by="posting_datetime desc, creation desc, name desc",
+		limit_page_length=0,
+	)
+	return _latest_logical_bundle_rows(rows)
+
+
 @frappe.whitelist()
 def get_cut_bundle_unmoved_data(
 	from_location,
@@ -260,31 +309,16 @@ def get_cut_bundle_unmoved_data(
 				set_item_combinations[row.attribute_value] = None
 
 	posting_datetime = get_combine_datetime(posting_date, posting_time)
-	latest_rows = frappe.db.sql(
-		"""
-		SELECT cbml.name
-		FROM `tabCut Bundle Movement Ledger` cbml
-		INNER JOIN (
-			SELECT cbm_key, set_combination,
-				MAX(posting_datetime) AS max_posting_datetime, MIN(lay_no) AS lay_no
-			FROM `tabCut Bundle Movement Ledger`
-			WHERE posting_datetime <= %(posting_datetime)s
-				AND is_cancelled = 0 AND collapsed_bundle = 0
-				AND is_collapsed = 0 AND transformed = 0
-				AND supplier = %(supplier)s AND lot = %(lot)s
-			GROUP BY cbm_key, set_combination
-		) latest
-			ON latest.cbm_key = cbml.cbm_key
-			AND latest.max_posting_datetime = cbml.posting_datetime
-			AND COALESCE(latest.set_combination, '') = COALESCE(cbml.set_combination, '')
-		WHERE cbml.is_cancelled = 0 AND cbml.is_collapsed = 0
-			AND cbml.collapsed_bundle = 0 AND cbml.transformed = 0
-			AND cbml.quantity_after_transaction > 0
-			AND cbml.supplier = %(supplier)s AND cbml.lot = %(lot)s
-		ORDER BY latest.lay_no ASC, cbml.creation ASC
-		""",
-		{"posting_datetime": posting_datetime, "supplier": from_location, "lot": lot},
-		as_dict=True,
+	latest_rows = _get_latest_available_bundle_rows(
+		{
+			"posting_datetime": ["<=", posting_datetime],
+			"is_cancelled": 0,
+			"collapsed_bundle": 0,
+			"is_collapsed": 0,
+			"transformed": 0,
+			"supplier": from_location,
+			"lot": lot,
+		}
 	)
 
 	lay_details = {}
@@ -391,37 +425,17 @@ def get_cut_bundle_unmoved_data(
 
 	collapsed = []
 	if cint(get_collapsed):
-		conditions = [
-			"posting_datetime <= %(posting_datetime)s",
-			"is_cancelled = 0",
-			"collapsed_bundle = 1",
-			"transformed = 0",
-			"supplier = %(supplier)s",
-			"lot = %(lot)s",
-		]
-		values = {"posting_datetime": posting_datetime, "supplier": from_location, "lot": lot}
+		filters = {
+			"posting_datetime": ["<=", posting_datetime],
+			"is_cancelled": 0,
+			"collapsed_bundle": 1,
+			"transformed": 0,
+			"supplier": from_location,
+			"lot": lot,
+		}
 		if bundle_colour:
-			conditions.append("colour = %(colour)s")
-			values["colour"] = bundle_colour
-		rows = frappe.db.sql(
-			f"""
-			SELECT cbml.name
-			FROM `tabCut Bundle Movement Ledger` cbml
-			INNER JOIN (
-				SELECT cbm_key, set_combination, MAX(posting_datetime) AS max_posting_datetime
-				FROM `tabCut Bundle Movement Ledger`
-				WHERE {' AND '.join(conditions)}
-				GROUP BY cbm_key, set_combination
-			) latest ON latest.cbm_key = cbml.cbm_key
-				AND latest.max_posting_datetime = cbml.posting_datetime
-				AND COALESCE(latest.set_combination, '') = COALESCE(cbml.set_combination, '')
-			WHERE cbml.is_cancelled = 0 AND cbml.collapsed_bundle = 1
-				AND cbml.quantity_after_transaction > 0
-			ORDER BY cbml.lay_no ASC, cbml.creation ASC
-			""",
-			values,
-			as_dict=True,
-		)
+			filters["colour"] = bundle_colour
+		rows = _get_latest_available_bundle_rows(filters)
 		for result in rows:
 			row = frappe.get_doc("Cut Bundle Movement Ledger", result.name)
 			collapsed.append(

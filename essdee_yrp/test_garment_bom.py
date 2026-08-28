@@ -7,6 +7,82 @@ from essdee_yrp.garment_bom import calculate_essdee_accessory_bom
 
 
 class TestGarmentBOM(FrappeTestCase):
+	def test_explicit_empty_process_filter_evaluates_no_bom_rows(self):
+		ipd = frappe._dict(
+			name="_Test Garment IPD",
+			item="_Test Garment",
+			item_bom=[
+				frappe._dict(
+					item="_Test Sticker",
+					process_name="Yolk Fusing",
+					based_on_attribute_mapping=1,
+					attribute_mapping="_Invalid Unrelated Mapping",
+					wastage_pct=0,
+				)
+			],
+		)
+		lot = frappe._dict(pack_in_stage="Piece", pack_out_stage="Pack")
+		variant = frappe._dict(item="_Test Garment", attributes=[])
+
+		with (
+			patch.object(frappe, "get_doc", return_value=ipd),
+			patch.object(frappe, "get_cached_doc", return_value=variant),
+			patch("essdee_yrp.garment_bom.get_or_create_variant") as get_variant,
+		):
+			rows = calculate_essdee_accessory_bom(
+				ipd.name,
+				[{"item_variant": "_Test Garment Variant", "qty": 10}],
+				lot,
+				process_names=[],
+			)
+
+		self.assertEqual(rows, [])
+		get_variant.assert_not_called()
+
+	def test_process_filter_skips_unrelated_accessory_mappings(self):
+		ipd = frappe._dict(
+			name="_Test Garment IPD",
+			item="_Test Garment",
+			item_bom=[
+				frappe._dict(
+					item="_Test Cloth",
+					process_name="Cutting",
+					dependent_attribute_value="Piece",
+					qty_of_product=1,
+					qty_of_bom_item=1,
+					uom="Kg",
+					based_on_attribute_mapping=0,
+					attribute_mapping=None,
+					wastage_pct=0,
+				),
+				frappe._dict(
+					item="_Test Sticker",
+					process_name="Yolk Fusing",
+					based_on_attribute_mapping=1,
+					attribute_mapping="_Invalid Unrelated Mapping",
+					wastage_pct=0,
+				),
+			],
+		)
+		lot = frappe._dict(pack_in_stage="Piece", pack_out_stage="Pack")
+		variant = frappe._dict(item="_Test Garment", attributes=[])
+
+		with (
+			patch.object(frappe, "get_doc", return_value=ipd),
+			patch.object(frappe, "get_cached_doc", return_value=variant),
+			patch("essdee_yrp.garment_bom.get_or_create_variant", return_value="_Test Cloth") as get_variant,
+		):
+			rows = calculate_essdee_accessory_bom(
+				ipd.name,
+				[{"item_variant": "_Test Garment Variant", "qty": 10}],
+				lot,
+				process_names=["Cutting"],
+			)
+
+		get_variant.assert_called_once_with("_Test Cloth", {})
+		self.assertEqual(len(rows), 1)
+		self.assertEqual(rows[0]["required_qty"], 10)
+
 	def test_pack_out_accessory_uses_packing_combo(self):
 		ipd = frappe._dict(
 			name="_Test Garment IPD",

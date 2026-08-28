@@ -391,67 +391,7 @@ def _get_primary_attribute_value(variant, primary_attribute):
 
 @frappe.whitelist()
 def fetch_rejected_quantity(doc_name):
-	"""Rebuild Finishing rework/rejection totals from migrated GRN Rework rows."""
-	finishing_doc = frappe.get_doc("Finishing Plan", doc_name)
-	finishing_doc.check_permission("write")
-	rework_items = {}
-	for name in frappe.get_all("GRN Rework Item", filters={"lot": finishing_doc.lot}, pluck="name"):
-		doc = frappe.get_doc("GRN Rework Item", name)
-		for row in doc.get("grn_rework_item_details") or []:
-			if not flt(row.quantity):
-				continue
-			key, combination = _variant_combination_key(row)
-			values = rework_items.setdefault(key, _empty_rework_row(row.item_variant, combination))
-			values["quantity"] += flt(row.quantity)
-			if row.get("completed"):
-				values["rejected_qty"] += flt(row.get("rejection"))
-		for row in doc.get("grn_reworked_item_details") or []:
-			if not flt(row.quantity):
-				continue
-			key, combination = _variant_combination_key(row)
-			values = rework_items.setdefault(key, _empty_rework_row(row.item_variant, combination))
-			values["reworked_quantity"] += flt(row.quantity)
-	finishing_doc.set("finishing_plan_reworked_details", list(rework_items.values()))
+	"""Refresh the complete authoritative plan behind the legacy button."""
+	from essdee_yrp.finishing.rebuild import rebuild_finishing_plan
 
-	cutting_process = "Cutting"
-	if frappe.get_meta("MRP Settings").has_field("cutting_process"):
-		cutting_process = (
-			frappe.db.get_single_value("MRP Settings", "cutting_process") or cutting_process
-		)
-	cutting = {}
-	for work_order_name in frappe.get_all(
-		"Work Order",
-		filters={
-			"docstatus": 1,
-			"lot": finishing_doc.lot,
-			"process_name": cutting_process,
-		},
-		pluck="name",
-	):
-		work_order = frappe.get_doc("Work Order", work_order_name)
-		for row in work_order.get("work_order_calculated_items") or []:
-			if flt(row.received_qty) <= 0:
-				continue
-			key, _combination = _variant_combination_key(row)
-			cutting[key] = cutting.get(key, 0) + flt(row.received_qty)
-	for row in finishing_doc.get("finishing_plan_details") or []:
-		key, _combination = _variant_combination_key(row)
-		row.reworked = rework_items.get(key, {}).get("reworked_quantity", 0)
-		if key in cutting:
-			row.cutting_qty = cutting[key]
-	finishing_doc.save()
-
-
-def _variant_combination_key(row):
-	combination = json_object(row.set_combination)
-	return (row.item_variant, tuple(sorted(combination.items()))), combination
-
-
-def _empty_rework_row(item_variant, combination):
-	return {
-		"item_variant": item_variant,
-		"quantity": 0,
-		"reworked_quantity": 0,
-		"rejected_qty": 0,
-		"set_combination": frappe.as_json(combination),
-	}
+	return rebuild_finishing_plan(doc_name, check_permission=True)

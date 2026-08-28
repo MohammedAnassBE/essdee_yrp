@@ -46,22 +46,18 @@ class LotTransfer(Document):
 
 		apply_item_uom(row, item_field="item")
 		row.stock_qty = flt(row.qty) * flt(row.conversion_factor)
-		if not flt(row.rate):
-			dimensions = {
-				fieldname: row.get(fieldname) for fieldname in get_dimension_fieldnames()
-			}
-			dimensions["lot"] = row.from_lot
-			row.rate = get_stock_balance(
-				row.item,
-				row.warehouse,
-				posting_date=self.posting_date,
-				posting_time=self.posting_time,
-				with_valuation_rate=True,
-				uom=row.uom,
-				**dimensions,
-			)[1]
-		row.stock_uom_rate = flt(row.rate) / (flt(row.conversion_factor) or 1)
-		row.amount = flt(row.rate) * flt(row.qty)
+		source_dimensions = self._stock_dimensions(row, row.from_lot)
+		_balance, stock_uom_rate = get_stock_balance(
+			row.item,
+			row.warehouse,
+			posting_date=self.posting_date,
+			posting_time=self.posting_time,
+			with_valuation_rate=True,
+			**source_dimensions,
+		)
+		row.stock_uom_rate = flt(stock_uom_rate)
+		row.rate = flt(stock_uom_rate) * flt(row.conversion_factor)
+		row.amount = flt(row.stock_uom_rate) * flt(row.stock_qty)
 
 	def on_submit(self):
 		self._update_stock_ledger()
@@ -82,7 +78,7 @@ class LotTransfer(Document):
 
 		entries = []
 		for row in self.items:
-			transfer_key = f"Lot Transfer:{self.name}:{row.name}"
+			transfer_key = f"{self.name}:{row.name}"
 			entries.append(
 				self._stock_row(
 					row,
@@ -105,12 +101,33 @@ class LotTransfer(Document):
 			)
 		if self.docstatus == 2:
 			entries.reverse()
-		make_sl_entries(entries, cancel=self.docstatus == 2, force_inline=True)
+		transfer_rates = make_sl_entries(
+			entries,
+			cancel=self.docstatus == 2,
+			force_inline=True,
+		)
+		if self.docstatus != 2:
+			for row in self.items:
+				actual_rate = flt(transfer_rates.get(f"{self.name}:{row.name}"))
+				if not actual_rate:
+					continue
+				values = {
+					"stock_uom_rate": actual_rate,
+					"rate": actual_rate * flt(row.conversion_factor),
+					"amount": actual_rate * flt(row.stock_qty),
+				}
+				row.update(values)
+				frappe.db.set_value(
+					row.doctype,
+					row.name,
+					values,
+					update_modified=False,
+				)
 
 	def _stock_row(
 		self, row, lot, qty, rate, transfer_key=None, transfer_role=None
 	):
-		entry = frappe._dict(
+		return frappe._dict(
 			{
 				"item": row.item,
 				"warehouse": cstr(row.warehouse),
@@ -126,12 +143,15 @@ class LotTransfer(Document):
 				"is_cancelled": 1 if self.docstatus == 2 else 0,
 				"_transfer_key": transfer_key,
 				"_transfer_role": transfer_role,
+				**self._stock_dimensions(row, lot),
 			}
 		)
+
+	def _stock_dimensions(self, row, lot):
+		values = {}
 		for fieldname in get_dimension_fieldnames():
-			entry[fieldname] = row.get(fieldname)
-		entry.lot = cstr(lot)
-		return entry
+			values[fieldname] = cstr(lot) if fieldname == "lot" else row.get(fieldname)
+		return values
 
 	def _repost_future_entries(self):
 		from yrp.stock.stock_ledger import enqueue_voucher_repost

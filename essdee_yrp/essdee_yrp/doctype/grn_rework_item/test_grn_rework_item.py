@@ -71,8 +71,9 @@ class TestGRNReworkItem(IntegrationTestCase):
 		self.assertEqual(entries[0]["outgoing_rate"], 13.5)
 		self.assertEqual(entries[1]["qty"], 1)
 		self.assertEqual(entries[1]["received_type"], "Accepted")
-		self.assertEqual(entries[1]["rate"], 13.5)
+		self.assertEqual(entries[1]["rate"], 0)
 		self.assertEqual(entries[0]["_transfer_key"], entries[1]["_transfer_key"])
+		make_entries.assert_called_once_with(entries, force_inline=True)
 
 	def test_finishing_ignores_provisional_rejection(self):
 		row = frappe._dict(
@@ -88,9 +89,9 @@ class TestGRNReworkItem(IntegrationTestCase):
 			grn_reworked_item_details=[],
 		)
 		with (
-			patch.object(rebuild.frappe, "get_all", return_value=["RW-1"]),
+			patch.object(rebuild.frappe, "get_all", side_effect=[["RW-1"], []]),
 			patch.object(rebuild.frappe, "get_doc", return_value=doc),
 			patch.object(rebuild.frappe.db, "get_value", return_value=0),
 		):
-			values = rebuild._collect_rework("LOT-1", {})
+			values = rebuild._collect_rework("LOT-1", {}, "Accepted", "Rejected")
 		self.assertEqual(next(iter(values.values()))["rejected_qty"], 0)

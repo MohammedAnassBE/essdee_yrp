@@ -1136,6 +1136,13 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 	if not deliverables:
 		frappe.throw(_("Enter a quantity greater than zero for at least one row."))
 
+	# The fabric/IPD engine emits its physical quantity in the source UOM. Base
+	# YRP then makes the Item master's transaction UOM authoritative. Convert the
+	# quantity first so 20 Pieces does not silently become 20 Boxes when the Item
+	# is configured as 10 Pieces per Box.
+	_normalize_generated_uom_rows(deliverables)
+	_normalize_generated_uom_rows(receivables)
+
 	deliverables = _consolidate_fabric_rows(
 		deliverables, "Work Order Deliverables"
 	)
@@ -1169,6 +1176,33 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 	wo.save()
 
 	return {"deliverables": len(deliverables), "receivables": len(receivables)}
+
+
+def _normalize_generated_uom_rows(rows):
+	from yrp.stock.uom import resolve_item_uom
+	from yrp.stock.utils import get_conversion_factor
+
+	for row in rows or []:
+		item_variant = row.get("item_variant")
+		if not item_variant:
+			continue
+		authoritative = resolve_item_uom(item_variant)
+		source_uom = row.get("uom") or authoritative.stock_uom
+		source = get_conversion_factor(item_variant, source_uom)
+		source_factor = flt(source.get("conversion_factor")) or 1
+		target_factor = flt(authoritative.conversion_factor) or 1
+		for fieldname in (
+			"qty",
+			"pending_quantity",
+			"stock_update",
+			"cancelled_quantity",
+		):
+			if fieldname in row:
+				row[fieldname] = flt(
+					flt(row.get(fieldname)) * source_factor / target_factor,
+					6,
+				)
+		row["uom"] = authoritative.uom
 
 
 def _append_bom_deliverables(

@@ -52,7 +52,7 @@
     </div>
 </template>
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import MultiSelect from "../../components/MultiSelect.vue";
 
 let items = ref([])
@@ -71,11 +71,16 @@ let doc_panels = cur_frm.doc.calculated_parts
 let version = cur_frm.doc.version
 let grp_panel = null
 let options = []
+let component_active = true
 
 onMounted(() => {
     if(doc_panels){
         create_options(doc_panels.split(","))
     }
+})
+
+onBeforeUnmount(() => {
+    component_active = false
 })
 
 function make_show_panel(){
@@ -123,14 +128,17 @@ function load_data(item){
         if(cur_frm.doc.selected_type == "Manual"){
             show_panel.value = true
         }
-        items.value = item['cutting_marker_ratios']
-        if(item['cutting_marker_ratios'].length == 0){
-            show.value = true
+        const marker_ratios = item?.['cutting_marker_ratios'] || []
+        items.value = marker_ratios
+        show.value = marker_ratios.length == 0
+        if(show.value){
             setTimeout(()=> {
-                create_attributes()
+                if(component_active && show.value){
+                    create_attributes()
+                }
             }, 300)
         }
-        grp_items.value = item['cutting_marker_groups']
+        grp_items.value = item?.['cutting_marker_groups'] || []
     }
 }
 function get_items(){
@@ -156,7 +164,8 @@ function get_items(){
             }
         }
     }
-    if(selected_panels.length != 0 && selected_panels.length != doc_panels.split(",").length && cur_frm.doc.version == 'V3'){
+    const current_panels = cur_frm.doc.calculated_parts || doc_panels || ""
+    if(selected_panels.length != 0 && selected_panels.length != current_panels.split(",").filter(Boolean).length && cur_frm.doc.version == 'V3'){
         frappe.throw("Select All the Panels")
     }
     return {
@@ -166,6 +175,9 @@ function get_items(){
 }
 
 function create_attributes(){
+    if(!component_active || !show.value || !select_field_ref.value){
+        return
+    }
     let el = root.value
     $(select_field_ref.value).html("")
     select_field = frappe.ui.form.make_control({
@@ -192,6 +204,9 @@ function create_attributes(){
             cutting_order: cur_frm.doc.cutting_order,
         },
         callback: function(r){
+            if(!component_active || !show.value || !panel_list.value){
+                return
+            }
             let parts = r.message
             $(panel_list.value).html("")
             select_attrs = frappe.ui.form.make_control({

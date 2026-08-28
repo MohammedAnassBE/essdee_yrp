@@ -4,12 +4,23 @@ import json
 import unittest
 from pathlib import Path
 
+from essdee_yrp.essdee_yrp.doctype.mrp_data_migration.mrp_data_migration import (
+	is_target_reset_ready,
+)
+
 
 DOCTYPE_ROOT = Path(__file__).resolve().parents[1] / "essdee_yrp" / "doctype"
 APP_ROOT = Path(__file__).resolve().parents[2]
 
 
 class MigrationDocTypeSchemaTest(unittest.TestCase):
+	def test_failed_reset_can_preview_and_retry_only_the_same_action(self):
+		self.assertTrue(is_target_reset_ready("Dry Run Complete", "Dry Run"))
+		self.assertTrue(is_target_reset_ready("Failed", "Reset Target"))
+		self.assertFalse(is_target_reset_ready("Failed", "Dry Run"))
+		self.assertFalse(is_target_reset_ready("Failed", "Migrate"))
+		self.assertFalse(is_target_reset_ready("Running", "Reset Target"))
+
 	def test_live_runner_contains_no_local_environment_or_record_whitelist(self):
 		paths = (
 			Path(__file__).with_name("config.py"),
@@ -41,6 +52,40 @@ class MigrationDocTypeSchemaTest(unittest.TestCase):
 			fields["adapter_status"]["default"], "Configured Local-Bench Source"
 		)
 		self.assertEqual(fields["migration_details"]["options"], "MRP Data Migration Detail")
+		self.assertEqual(fields["allow_missing_source_blobs"]["default"], "0")
+		controller = (
+			DOCTYPE_ROOT / "mrp_data_migration" / "mrp_data_migration.py"
+		).read_text()
+		self.assertIn(
+			"allow_missing_files=bool(self.allow_missing_source_blobs)",
+			controller,
+		)
+		self.assertIn("def reset_target", controller)
+		self.assertIn("def get_reset_preview", controller)
+		self.assertIn('expected = f"RESET {self.target_site}"', controller)
+		self.assertIn('allowed_statuses={"Reset Complete", "Failed"}', controller)
+		self.assertIn("Reset Complete", fields["status"]["options"])
+		self.assertIn("Reset Target", fields["last_action"]["options"])
+		client = (
+			DOCTYPE_ROOT / "mrp_data_migration" / "mrp_data_migration.js"
+		).read_text()
+		self.assertIn("Reset Target Data", client)
+		self.assertIn("preview.parent_rows", client)
+		self.assertIn("values.confirmation", client)
+
+	def test_new_desk_run_loads_required_read_only_connection_fields(self):
+		controller = (
+			DOCTYPE_ROOT / "mrp_data_migration" / "mrp_data_migration.py"
+		).read_text()
+		client = (
+			DOCTYPE_ROOT / "mrp_data_migration" / "mrp_data_migration.js"
+		).read_text()
+		self.assertIn("def get_connection_defaults", controller)
+		self.assertIn('frappe.only_for("System Manager")', controller)
+		self.assertIn("get_connection_defaults", client)
+		self.assertNotIn('.prop("disabled"', client)
+		for fieldname in ("source_site", "source_app", "target_site", "target_apps"):
+			self.assertIn(f'"{fieldname}"', controller)
 
 	def test_detail_is_read_only_child_audit_table(self):
 		path = DOCTYPE_ROOT / "mrp_data_migration_detail" / "mrp_data_migration_detail.json"
@@ -55,6 +100,15 @@ class MigrationDocTypeSchemaTest(unittest.TestCase):
 			if row["fieldtype"] not in {"Section Break", "Column Break"}
 		]
 		self.assertTrue(all(row.get("read_only") for row in data_fields))
+
+	def test_cutting_laysheet_planner_tracks_live_source_identity_fields(self):
+		path = DOCTYPE_ROOT / "cutting_laysheet_planner" / "cutting_laysheet_planner.json"
+		schema = json.loads(path.read_text())
+		fields = {row["fieldname"]: row for row in schema["fields"]}
+		self.assertEqual(fields["lot"]["options"], "Lot")
+		self.assertEqual(fields["item"]["options"], "Item")
+		self.assertEqual(fields["description"]["fieldtype"], "Small Text")
+		self.assertTrue(fields["description"]["reqd"])
 
 
 if __name__ == "__main__":

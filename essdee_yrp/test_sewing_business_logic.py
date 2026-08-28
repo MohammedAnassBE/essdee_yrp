@@ -45,6 +45,29 @@ from essdee_yrp.sewing.read_models import (
 
 
 class TestSewingBusinessLogic(IntegrationTestCase):
+	def _data_entry_plan(self):
+		plans = frappe.get_all(
+			"Sewing Plan",
+			fields=["name", "lot", "supplier"],
+			filters={
+				"lot": ["is", "set"],
+				"supplier": ["is", "set"],
+			},
+			order_by="name",
+			limit_page_length=0,
+		)
+		for candidate in plans:
+			payload = get_data_entry_data(candidate.supplier, candidate.lot)
+			plan_data = (payload.get("data") or {}).get(candidate.lot, {}).get(
+				candidate.name
+			)
+			if plan_data and any(
+				colour.get("values")
+				for colour in (plan_data.get("colours") or {}).values()
+			):
+				return frappe.get_doc("Sewing Plan", candidate.name), payload, plan_data
+		self.skipTest("No migrated Sewing Plan has a usable data-entry matrix")
+
 	def test_sewing_input_configuration_matches_f15_sequence(self):
 		configuration = get_sewing_input_configuration()
 		self.assertEqual(
@@ -76,10 +99,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		)
 
 	def test_server_blocks_aql_output_before_checking_output(self):
-		plan_name = frappe.db.get_value("Sewing Plan", {"lot": "C0826-57"}, "name")
-		plan = frappe.get_doc("Sewing Plan", plan_name)
-		payload = get_data_entry_data(plan.supplier, plan.lot)
-		plan_data = payload["data"][plan.lot][plan.name]
+		plan, payload, plan_data = self._data_entry_plan()
 		selected = None
 		for colour in plan_data["colours"].values():
 			for value in colour["values"].values():
@@ -120,10 +140,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 			)
 
 	def test_server_allows_line_output_after_input_quantity(self):
-		plan_name = frappe.db.get_value("Sewing Plan", {"lot": "C0826-57"}, "name")
-		plan = frappe.get_doc("Sewing Plan", plan_name)
-		payload = get_data_entry_data(plan.supplier, plan.lot)
-		plan_data = payload["data"][plan.lot][plan.name]
+		plan, payload, plan_data = self._data_entry_plan()
 		selected = None
 		for colour in plan_data["colours"].values():
 			for value in colour["values"].values():
@@ -176,10 +193,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		cancel_sewing_plan_entry(entry_name)
 
 	def test_server_applies_allowance_to_the_stage_total(self):
-		plan_name = frappe.db.get_value("Sewing Plan", {"lot": "C0826-57"}, "name")
-		plan = frappe.get_doc("Sewing Plan", plan_name)
-		payload = get_data_entry_data(plan.supplier, plan.lot)
-		plan_data = payload["data"][plan.lot][plan.name]
+		plan, payload, plan_data = self._data_entry_plan()
 		selected = None
 		for colour in plan_data["colours"].values():
 			for value in colour["values"].values():

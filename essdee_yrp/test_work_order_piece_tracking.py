@@ -15,6 +15,7 @@ from essdee_yrp.work_order_piece_tracking import (
 from essdee_yrp.finishing.rebuild import (
 	get_configured_cutting_process,
 	get_process_work_orders,
+	rebuild_finishing_plan,
 )
 
 
@@ -135,6 +136,56 @@ class TestWorkOrderPieceTracking(IntegrationTestCase):
 		self.assertEqual(first, second)
 		self.assertEqual(first_rows, second_rows)
 		self.assertEqual(len(second_rows), second["source_rows"])
+
+	def test_finishing_rebuild_retry_is_idempotent_and_has_unique_projection_rows(self):
+		name = "FP-2526-00238"
+		if not frappe.db.exists("Finishing Plan", name):
+			self.skipTest(f"Retained Finishing Plan oracle {name} is unavailable")
+
+		def snapshot():
+			doc = frappe.get_doc("Finishing Plan", name)
+			ignored = {
+				"name",
+				"owner",
+				"creation",
+				"modified",
+				"modified_by",
+				"docstatus",
+				"idx",
+				"parent",
+				"parentfield",
+				"parenttype",
+				"doctype",
+			}
+			return {
+				fieldname: [
+					{
+						key: value
+						for key, value in row.as_dict().items()
+						if key not in ignored
+					}
+					for row in doc.get(fieldname) or []
+				]
+				for fieldname in (
+					"finishing_plan_details",
+					"finishing_plan_reworked_details",
+				)
+			}
+
+		rebuild_finishing_plan(name, check_permission=False)
+		first = snapshot()
+		rebuild_finishing_plan(name, check_permission=False)
+		second = snapshot()
+
+		self.assertEqual(first, second)
+		for fieldname, rows in second.items():
+			keys = [
+				(row.get("item_variant"), frappe.as_json(row.get("set_combination") or {}))
+				for row in rows
+			]
+			self.assertEqual(
+				len(keys), len(set(keys)), f"Duplicate {fieldname} projection rows"
+			)
 
 	def test_recent_historical_replay_has_no_quantity_mismatches(self):
 		result = audit_migrated_piece_tracking(limit=100)

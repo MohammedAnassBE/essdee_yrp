@@ -20,10 +20,10 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		"dc_no": ("Data", None),
 		"cutting_laysheet": ("Link", "Cutting LaySheet"),
 		"mrp_material_issue_ref": ("Link", "Stock Entry"),
-		"is_return": ("Check", None),
 		"is_pack": ("Check", None),
 		"from_finishing": ("Check", None),
 		"avoid_sewing_plan_qty": ("Check", None),
+		"mapped_stock_update_state": ("Int", None),
 		"rework_created": ("Check", None),
 		"grn_date": ("Date", None),
 		"actual_date": ("Date", None),
@@ -145,6 +145,23 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 			),
 		):
 			validate_sewing_plan_quantity(grn)
+
+	def test_configured_supplier_skips_sewing_quantity_validation(self):
+		grn = frappe._dict(
+			against="Work Order",
+			against_id="TEST-SEWING-WO",
+			name="TEST-SEWING-GRN",
+			supplier="EXEMPT-SEWING-UNIT",
+			items=[frappe._dict(item_variant="PIECE-RED-45", quantity=99)],
+		)
+		with (
+			patch.object(frappe.db, "exists", return_value=True) as exists,
+			patch.object(frappe.db, "sql") as sql,
+		):
+			validate_sewing_plan_quantity(grn)
+
+		self.assertEqual(exists.call_count, 2)
+		sql.assert_not_called()
 
 	def test_approved_base_yrp_fields_are_unchanged(self):
 		meta = frappe.get_meta("Goods Received Note", cached=False)
@@ -407,6 +424,10 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 			# provenance flag.  They remain authoritative Deliverables.
 			is_calculated=0,
 			valuation_rate=2,
+			qty=9,
+			pending_quantity=0,
+			stock_update=0,
+			rate=2,
 		)
 		work_order = frappe._dict(
 			name="TEST-PRINTING-WO",
@@ -435,11 +456,17 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 
 		with (
 			patch("essdee_yrp.garment_grn.frappe.get_cached_doc", side_effect=get_cached_doc),
+			patch("essdee_yrp.garment_grn.frappe.get_doc", return_value=work_order),
 			patch("essdee_yrp.garment_grn.frappe.db.get_value", side_effect=get_value),
 			patch(
-				"essdee_yrp.garment_grn._stock_uom_values",
-				return_value={"conversion_factor": 1, "stock_uom": "Pieces", "stock_qty": 9},
+				"yrp.stock.utils.get_conversion_factor",
+				return_value={"conversion_factor": 1, "stock_uom": "Pieces"},
 			),
+			patch(
+				"yrp.yrp.doctype.work_order.work_order._stock_dimension_values",
+				return_value={"lot": "TEST-LOT", "received_type": "Accepted"},
+			),
+			patch("yrp.stock.utils.get_stock_balance", return_value=(9, 2)),
 		):
 			calculate_garment_consumption(grn)
 
@@ -449,4 +476,6 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		self.assertEqual(consumed.quantity, 9)
 		self.assertEqual(consumed.stock_qty, 9)
 		self.assertEqual(consumed.work_order_deliverable, deliverable.name)
+		self.assertEqual(consumed.goods_received_note_item, grn.items[0].name)
+		self.assertEqual(consumed.received_item_variant, variant)
 		self.assertEqual(consumed.set_combination, combination)

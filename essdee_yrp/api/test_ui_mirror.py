@@ -160,6 +160,96 @@ def _balanced(src, opener_re, open_ch="{", close_ch="}"):
 	return None
 
 
+class TestDeskSidebarHardening(IntegrationTestCase):
+	"""Keep invalid Frappe v16 sidebar definitions from issuing /undefined."""
+
+	def test_dividers_and_failed_conditions_never_reach_the_image_renderer(self):
+		bundle = _read(
+			os.path.join(
+				frappe.get_app_path("essdee_yrp"),
+				"public",
+				"js",
+				"essdee_yrp.bundle.js",
+			)
+		)
+		guard = _balanced(
+			bundle,
+			r"essdee_yrp\.guard_sidebar_header_items\s*=\s*function\s*\(\)\s*\{",
+		)
+		self.assertIsNotNone(guard)
+		self.assertIn("item.is_divider", guard)
+		self.assertIn('typeof item.condition === "function" && !item.condition()', guard)
+		self.assertIn("!item.icon && !item.icon_url", guard)
+		self.assertIn("return add_app_item.call(this, item)", guard)
+		self.assertLess(
+			bundle.index("essdee_yrp.guard_sidebar_header_items();"),
+			bundle.index("essdee_yrp.contain_item_editor_matrix"),
+		)
+
+
+class TestCuttingMarkerLifecycleContract(IntegrationTestCase):
+	"""Keep delayed marker controls from writing after the Vue form is gone."""
+
+	def test_marker_guards_delayed_controls_and_reads_current_panel_selection(self):
+		source = _read(
+			os.path.join(
+				frappe.get_app_path("essdee_yrp"),
+				"public",
+				"js",
+				"Cutting_Marker",
+				"components",
+				"cutting_marker.vue",
+			)
+		)
+		self.assertIn("onBeforeUnmount", source)
+		self.assertIn("component_active = false", source)
+		self.assertIn("if(!component_active || !show.value || !select_field_ref.value)", source)
+		self.assertIn("if(!component_active || !show.value || !panel_list.value)", source)
+		self.assertIn("cur_frm.doc.calculated_parts || doc_panels", source)
+
+
+class TestCutPanelMovementCancelOrder(IntegrationTestCase):
+	"""Root transactions must cancel before their linked CPM audit document."""
+
+	def test_root_transaction_forms_exclude_cpm_from_cancel_all_cascade(self):
+		js_dir = os.path.join(frappe.get_app_path("essdee_yrp"), "public", "js")
+		for filename in (
+			"delivery_challan.js",
+			"goods_received_note.js",
+			"stock_entry.js",
+		):
+			with self.subTest(filename=filename):
+				source = _read(os.path.join(js_dir, filename))
+				self.assertIn("ignore_doctypes_on_cancel_all", source)
+				self.assertIn('ignored.add("Cut Panel Movement")', source)
+				self.assertIn("frm.doc.docstatus !== 1 || !frm.doc.cut_panel_movement", source)
+
+
+class TestStockEntryRateInputContract(IntegrationTestCase):
+	"""Positive Material Receipt rates must not fail native step validation."""
+
+	def test_rate_input_accepts_normal_decimal_values_without_relaxing_positive_minimum(self):
+		source = _read(
+			os.path.join(frappe.get_app_path("essdee_yrp"), "public", "js", "stock_entry.js")
+		)
+		self.assertIn("allow_positive_material_receipt_rates(frm)", source)
+		self.assertIn("new MutationObserver(normalize)", source)
+		self.assertIn('input.step = "any"', source)
+		self.assertNotIn('input.removeAttribute("min")', source)
+
+
+class TestWorkOrderReworkPermissionUI(IntegrationTestCase):
+	"""The rendered Create Rework action must mirror server create authority."""
+
+	def test_create_rework_is_removed_without_work_order_create_permission(self):
+		source = _read(
+			os.path.join(frappe.get_app_path("essdee_yrp"), "public", "js", "work_order.js")
+		)
+		self.assertIn("hide_unavailable_rework_action(frm)", source)
+		self.assertIn('frappe.model.can_create("Work Order")', source)
+		self.assertIn('frm.remove_custom_button(__("Create Rework"))', source)
+
+
 class TestIPDEntryAutomationMirror(IntegrationTestCase):
 	"""Keep the Desk and responsive /web IPD entry automations aligned."""
 

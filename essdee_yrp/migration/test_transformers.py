@@ -4,6 +4,9 @@ import unittest
 
 from essdee_yrp.migration.engine import MigrationError, transform_document
 from essdee_yrp.migration.planner import build_schema_analysis
+from essdee_yrp.patches.move_process_allowance_to_base_field import (
+	choose_excess_percentage,
+)
 
 
 class ReviewedTransformerTest(unittest.TestCase):
@@ -63,6 +66,20 @@ class ReviewedTransformerTest(unittest.TestCase):
 		self.assertEqual(row["lot"], "LOT-1")
 		self.assertEqual(row["status"], "Partially Received")
 		self.assertEqual(row["open_status"], "Close")
+
+	def test_process_additional_allowance_moves_to_base_excess_field(self):
+		row = transform_document(
+			{
+				"doctype": "Process",
+				"name": "Cutting",
+				"additional_allowance": 300,
+			},
+			self.plan,
+		)
+		self.assertEqual(row["wo_excess_allowed_percentage"], 300)
+		self.assertNotIn("additional_allowance", row)
+		self.assertEqual(choose_excess_percentage(0, 300), 300)
+		self.assertEqual(choose_excess_percentage(25, 300), 25)
 
 	def test_work_order_close_reason_maps_to_essdee_owned_field(self):
 		row = transform_document(
@@ -157,6 +174,39 @@ class ReviewedTransformerTest(unittest.TestCase):
 			self.plan,
 		)
 		self.assertIsNone(multi_lot["lot"])
+
+	def test_historical_grn_deliverable_lineage_is_never_invented(self):
+		row = transform_document(
+			{
+				"doctype": "GRN Deliverable",
+				"name": "LEGACY-CONSUMPTION-1",
+				"item_variant": "INPUT-1",
+				"quantity": 2,
+				"uom": "Kg",
+			},
+			self.plan,
+		)
+		self.assertEqual(row["doctype"], "YRP GRN Deliverable")
+		self.assertNotIn("goods_received_note_item", row)
+		self.assertNotIn("received_item_variant", row)
+		self.assertNotIn("consumption_sle", row)
+		self.assertNotIn("output_receipt_sle", row)
+
+	def test_explicit_grn_deliverable_lineage_is_preserved(self):
+		row = transform_document(
+			{
+				"doctype": "GRN Deliverable",
+				"name": "LINKED-CONSUMPTION-1",
+				"item_variant": "INPUT-1",
+				"quantity": 2,
+				"uom": "Kg",
+				"goods_received_note_item": "GRN-ITEM-1",
+				"received_item_variant": "OUTPUT-1",
+			},
+			self.plan,
+		)
+		self.assertEqual(row["goods_received_note_item"], "GRN-ITEM-1")
+		self.assertEqual(row["received_item_variant"], "OUTPUT-1")
 
 	def test_stock_settings_single_uses_target_identity_and_drops_secrets(self):
 		row = transform_document(

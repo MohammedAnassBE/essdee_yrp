@@ -1158,6 +1158,7 @@ def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
     for row in lot_doc.get("lot_fabric_programs") or []:
         if row.cloth_item in payload:
             row.weight = 0
+    lot_doc.cloth_excess_percentage = excess_percentage
     lot_doc.flags.force_fabric_plan_rebuild = True
     lot_doc.fabric_requirement_details = frappe.as_json(_requirement_payload(payload))
     lot_doc.save(ignore_permissions=True)

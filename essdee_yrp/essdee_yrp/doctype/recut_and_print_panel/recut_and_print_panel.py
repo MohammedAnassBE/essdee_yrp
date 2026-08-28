@@ -8,6 +8,7 @@ from frappe.utils import flt
 
 from yrp.stock.dimensions import get_dimension_fieldnames
 from yrp.stock.stock_ledger import make_sl_entries
+from yrp.stock.uom import resolve_item_uom
 from yrp.stock.utils import get_stock_balance
 from yrp.yrp.doctype.delivery_challan.delivery_challan import (
 	_get_warehouse_for_supplier,
@@ -90,7 +91,6 @@ class RecutandPrintPanel(Document):
 		default_received_type = frappe.db.get_single_value(
 			"YRP Stock Settings", "default_received_type"
 		)
-		uom_cache = {}
 		for row in self.get("recut_and_print_panel_details") or []:
 			template = cloth_templates.get(row.cloth_type)
 			if not template:
@@ -99,16 +99,13 @@ class RecutandPrintPanel(Document):
 						row.cloth_type
 					)
 				)
-			if template not in uom_cache:
-				uom_cache[template] = frappe.get_cached_value(
-					"Item", template, "default_unit_of_measure"
-				)
-			row.uom = uom_cache[template]
-			row.stock_uom = uom_cache[template]
 			row.item_variant = get_or_create_variant(
 				template,
 				{"Dia": row.dia, packing_attribute: row.colour},
 			)
+			uom = resolve_item_uom(row.item_variant)
+			row.uom = uom.uom
+			row.stock_uom = uom.stock_uom
 			if row.meta.get_field("received_type") and not row.received_type:
 				row.received_type = default_received_type
 			_balance, row.rate = get_stock_balance(
@@ -117,7 +114,6 @@ class RecutandPrintPanel(Document):
 				posting_date=self.posting_date,
 				posting_time=self.posting_time,
 				with_valuation_rate=True,
-				uom=row.uom,
 				**self._dimension_values(row),
 			)
 

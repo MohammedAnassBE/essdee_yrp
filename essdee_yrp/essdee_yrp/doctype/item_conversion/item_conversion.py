@@ -216,27 +216,83 @@ class ItemConversion(Document):
 	def update_stock_ledger(self, cancel: bool = False):
 		from yrp.stock.stock_ledger import make_sl_entries
 
-		transfer_key = f"Item Conversion:{self.name}:value"
-		entries = [
-			self.get_sl_entry(
-				self.from_items[0],
-				qty=-flt(self.from_items[0].stock_qty),
-				rate=0,
-				outgoing_rate=flt(self.from_items[0].stock_uom_rate),
-				transfer_key=transfer_key,
-				transfer_role="outgoing",
-			),
-			self.get_sl_entry(
-				self.to_items[0],
-				qty=flt(self.to_items[0].stock_qty),
-				rate=flt(self.to_items[0].stock_uom_rate),
-				transfer_key=transfer_key,
-				transfer_role="incoming",
-			),
-		]
+		from_row = self.from_items[0]
+		to_row = self.to_items[0]
+		outgoing = self.get_sl_entry(
+			from_row,
+			qty=-flt(from_row.stock_qty),
+			rate=0,
+			outgoing_rate=flt(from_row.stock_uom_rate),
+		)
+		incoming = self.get_sl_entry(
+			to_row,
+			qty=flt(to_row.stock_qty),
+			rate=flt(to_row.stock_uom_rate),
+		)
 		if cancel:
-			entries.reverse()
-		make_sl_entries(entries, cancel=cancel, force_inline=True)
+			make_sl_entries([incoming, outgoing], cancel=True, force_inline=True)
+			return
+
+		# An Item Conversion may change quantity as well as item identity. A
+		# transfer-pair rate is valid only for equal quantities, so value the input
+		# first and derive the output rate from the exact removed total value.
+		outgoing["_result_key"] = "item-conversion-input"
+		consumption = make_sl_entries(
+			[outgoing], return_details=True, force_inline=True
+		)["entries"]["item-conversion-input"]
+		output_stock_qty = flt(to_row.stock_qty)
+		if output_stock_qty <= 0:
+			frappe.throw(_("Converted output Stock Quantity must be greater than zero."))
+		output_stock_rate = flt(consumption["value"]) / output_stock_qty
+		incoming["rate"] = output_stock_rate
+		incoming["_result_key"] = "item-conversion-output"
+		receipt = make_sl_entries(
+			[incoming], return_details=True, force_inline=True
+		)["entries"]["item-conversion-output"]
+		_persist_actual_conversion_values(
+			from_row,
+			to_row,
+			flt(consumption["rate"]),
+			output_stock_rate,
+			flt(consumption["value"]),
+		)
+		self.from_total_amount = flt(consumption["value"])
+		self.to_total_amount = flt(consumption["value"])
+		self.difference_amount = 0
+		frappe.db.set_value(
+			self.doctype,
+			self.name,
+			{
+				"from_total_amount": self.from_total_amount,
+				"to_total_amount": self.to_total_amount,
+				"difference_amount": 0,
+			},
+			update_modified=False,
+		)
+
+		from yrp.yrp_stock.doctype.stock_valuation_adjustment.stock_valuation_adjustment import (
+			register_production_links,
+		)
+
+		register_production_links(
+			self.doctype,
+			self.name,
+			[
+				{
+					"consumption_sle": consumption["sle"],
+					"output_receipt_sle": receipt["sle"],
+					"source_row": from_row.name,
+					"input_quantity": flt(from_row.stock_qty),
+					"allocation_weight": flt(from_row.stock_qty),
+					"stock_dimensions": frappe.as_json(
+						{
+							fieldname: from_row.get(fieldname)
+							for fieldname in get_dimension_fieldnames()
+						}
+					),
+				}
+			],
+		)
 
 	def get_sl_entry(
 		self, row, qty, rate, outgoing_rate=0, transfer_key=None, transfer_role=None
@@ -265,6 +321,27 @@ class ItemConversion(Document):
 		from yrp.stock.stock_ledger import enqueue_voucher_repost
 
 		enqueue_voucher_repost(self)
+
+
+def _persist_actual_conversion_values(
+	from_row, to_row, input_stock_rate, output_stock_rate, actual_value
+):
+	for row, stock_rate in (
+		(from_row, input_stock_rate),
+		(to_row, output_stock_rate),
+	):
+		values = {
+			"stock_uom_rate": stock_rate,
+			"rate": stock_rate * (flt(row.conversion_factor) or 1),
+			"amount": actual_value,
+		}
+		row.update(values)
+		frappe.db.set_value(
+			row.doctype,
+			row.name,
+			values,
+			update_modified=False,
+		)
 
 
 def _validate_warehouse_user(warehouse: str):

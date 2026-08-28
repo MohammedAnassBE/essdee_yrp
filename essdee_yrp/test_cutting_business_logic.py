@@ -41,9 +41,14 @@ from essdee_yrp.cutting.movement import (
 	build_goods_received_note_defaults,
 	build_stock_entry_defaults,
 	get_grouped_movement_rows,
+	set_completion_cut_panel_movement,
 	validate_transaction_link,
 )
 from essdee_yrp.fabric_grn import _resolve_deliverable_source
+from essdee_yrp.overrides.delivery_challan import (
+	strip_generated_invalid_zero_placeholders,
+	strip_unselected_cpm_items,
+)
 from essdee_yrp.essdee_yrp.doctype.cutting_plan.cutting_plan import (
 	can_change_approval_grammage,
 	create_balance_lot_transfer,
@@ -51,6 +56,7 @@ from essdee_yrp.essdee_yrp.doctype.cutting_plan.cutting_plan import (
 )
 from essdee_yrp.essdee_yrp.doctype.cut_panel_movement.cut_panel_movement import (
 	CutPanelMovement,
+	_latest_logical_bundle_rows,
 )
 from essdee_yrp.essdee_yrp.doctype.cut_bundle_movement_ledger.cut_bundle_movement_ledger import (
 	_collapsed_set_combination_key,
@@ -131,6 +137,96 @@ class TestCutBundleMovementTransactionFiltering(UnitTestCase):
 				"Panel": "Bottom Back",
 			},
 		}
+
+	def test_completion_inherits_authoritative_collapsed_bundle_context(self):
+		stock_entry = frappe._dict(
+			doctype="Stock Entry",
+			purpose="DC Completion",
+			against="Delivery Challan",
+			against_id="DC-COLLAPSED",
+			cut_panel_movement="CPM-ALREADY-COPIED",
+			allow_non_bundle=0,
+		)
+		stock_entry.meta = frappe._dict(
+			get_field=lambda fieldname: fieldname == "allow_non_bundle"
+		)
+		against_meta = frappe._dict(
+			get_field=lambda fieldname: fieldname
+			in {"cut_panel_movement", "allow_non_bundle"}
+		)
+
+		with (
+			patch.object(frappe, "get_meta", return_value=against_meta),
+			patch.object(frappe.db, "get_value", return_value=1) as get_value,
+		):
+			set_completion_cut_panel_movement(stock_entry)
+
+		self.assertEqual(stock_entry.cut_panel_movement, "CPM-ALREADY-COPIED")
+		self.assertEqual(stock_entry.allow_non_bundle, 1)
+		get_value.assert_called_once_with(
+			"Delivery Challan", "DC-COLLAPSED", "allow_non_bundle"
+		)
+
+	def test_completion_cannot_spoof_collapsed_bundle_mode(self):
+		stock_entry = frappe._dict(
+			doctype="Stock Entry",
+			purpose="GRN Completion",
+			against="Goods Received Note",
+			against_id="GRN-EXACT",
+			cut_panel_movement="CPM-EXACT",
+			allow_non_bundle=1,
+		)
+		stock_entry.meta = frappe._dict(
+			get_field=lambda fieldname: fieldname == "allow_non_bundle"
+		)
+		against_meta = frappe._dict(
+			get_field=lambda fieldname: fieldname
+			in {"cut_panel_movement", "allow_non_bundle"}
+		)
+
+		with (
+			patch.object(frappe, "get_meta", return_value=against_meta),
+			patch.object(frappe.db, "get_value", return_value=0),
+		):
+			set_completion_cut_panel_movement(stock_entry)
+
+		self.assertEqual(stock_entry.allow_non_bundle, 0)
+
+	def test_latest_bundle_rows_normalise_historical_json_text(self):
+		rows = [
+			frappe._dict(
+				name="opening",
+				cbm_key="bundle-1",
+				set_combination=(
+					'{"major_colour":"White","major_part":"Top",'
+					'"major_panel":"Top Front","is_set_item":1}'
+				),
+				posting_datetime="2026-08-26 10:00:00",
+				creation="2026-08-26 10:00:01",
+				lay_no=1,
+				quantity_after_transaction=20,
+			),
+			frappe._dict(
+				name="moved",
+				cbm_key="bundle-1",
+				set_combination='{"major_part": "Top", "major_colour": "White"}',
+				posting_datetime="2026-08-27 10:00:00",
+				creation="2026-08-27 10:00:01",
+				lay_no=1,
+				quantity_after_transaction=0,
+			),
+			frappe._dict(
+				name="other-combination",
+				cbm_key="bundle-1",
+				set_combination='{"major_colour":"Black","major_part":"Top"}',
+				posting_datetime="2026-08-26 10:00:00",
+				creation="2026-08-26 10:00:02",
+				lay_no=1,
+				quantity_after_transaction=10,
+			),
+		]
+		latest = _latest_logical_bundle_rows(rows)
+		self.assertEqual([row.name for row in latest], ["other-combination"])
 
 	def _entries(self, doc):
 		module = (
@@ -391,6 +487,64 @@ class TestCutBundleMovementTransactionFiltering(UnitTestCase):
 				source_rows, movement_rows, target_doctype="Goods Received Note"
 			)
 
+	def test_cpm_delivery_challan_drops_generated_zero_size_placeholders(self):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Delivery Challan",
+				"cut_panel_movement": "CPM-COLLAPSED",
+				"items": [
+					{
+						"doctype": "Delivery Challan Item",
+						"item_variant": "VAR-ZERO",
+						"qty": 0,
+						"ref_doctype": 0,
+					},
+					{
+						"doctype": "Delivery Challan Item",
+						"item_variant": "VAR-MOVED",
+						"qty": 10,
+						"ref_doctype": "Work Order Deliverables",
+					},
+				],
+			}
+		)
+
+		strip_unselected_cpm_items(doc)
+
+		self.assertEqual(len(doc.items), 1)
+		self.assertEqual(doc.items[0].item_variant, "VAR-MOVED")
+		self.assertEqual(doc.items[0].ref_doctype, "Work Order Deliverables")
+
+	def test_ordinary_delivery_challan_keeps_base_zero_rows(self):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Delivery Challan",
+				"items": [
+					{
+						"doctype": "Delivery Challan Item",
+						"item_variant": "VAR-VALID-ZERO",
+						"qty": 0,
+						"ref_doctype": "Work Order Deliverables",
+						"ref_docname": "VALID-ROW",
+					},
+					{
+						"doctype": "Delivery Challan Item",
+						"item_variant": "VAR-GENERATED-ZERO",
+						"qty": 0,
+						"ref_doctype": 0,
+						"ref_docname": 0,
+					}
+				],
+			}
+		)
+
+		strip_generated_invalid_zero_placeholders(doc)
+		strip_unselected_cpm_items(doc)
+
+		self.assertEqual(len(doc.items), 1)
+		self.assertEqual(doc.items[0].item_variant, "VAR-VALID-ZERO")
+		self.assertEqual(doc.items[0].ref_doctype, "Work Order Deliverables")
+
 
 class TestCuttingBusinessLogic(IntegrationTestCase):
 	@staticmethod
@@ -538,6 +692,29 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 			)
 			self.assertEqual(permission.cancel, 1)
 			self.assertEqual(permission.submit, expected_submit)
+			standard_rows = frappe.get_all(
+				"DocPerm",
+				filters={"parent": doctype},
+				fields=["role", "permlevel", "if_owner", "read", "write", "create", "submit"],
+			)
+			for standard in standard_rows:
+				custom = frappe.db.get_value(
+					"Custom DocPerm",
+					{
+						"parent": doctype,
+						"role": standard.role,
+						"permlevel": standard.permlevel,
+						"if_owner": standard.if_owner,
+					},
+					["read", "write", "create", "submit"],
+					as_dict=True,
+				)
+				self.assertIsNotNone(custom)
+				self.assertEqual(custom.read, standard.read)
+				self.assertEqual(custom.write, standard.write)
+				self.assertEqual(custom.create, standard.create)
+				if standard.role != "System Manager":
+					self.assertEqual(custom.submit, standard.submit)
 
 	def _assert_bundle_generation_persists_precise_cutting_plan_cloth_usage(self):
 		laysheet = SimpleNamespace(
@@ -693,7 +870,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		self.assertEqual(get_table_entries.call_count, 2)
 		for call in get_table_entries.call_args_list:
 			self.assertEqual(call.args[2], "Mapped Supplier Warehouse")
-		make_sl_entries.assert_called_once_with([])
+		make_sl_entries.assert_called_once_with([], force_inline=True)
 
 	def test_cutting_desk_endpoints_resolve_and_require_login(self):
 		methods = (

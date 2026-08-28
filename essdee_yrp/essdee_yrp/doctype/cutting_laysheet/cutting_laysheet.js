@@ -103,7 +103,7 @@ frappe.ui.form.on("Cutting LaySheet", {
             frm.laysheet.load_data(frm.doc.__onload.item_details)
         }
         else{
-            frm.laysheet.load_data([])
+            frm.laysheet.load_data({ manual_items: {}, cloth_items: [] })
         }
         if(!frappe.user.has_role("System Manager")){
             frm.set_df_property("bundle_generated_date", "read_only", true)

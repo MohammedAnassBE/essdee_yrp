@@ -56,6 +56,14 @@ def apply_goods_received_note(grn, *, cancelled):
 	)
 	if not finishing_plan_name:
 		return
+	if grn.get("is_rework"):
+		# Rework receipts resolve an existing non-default inward quantity; they
+		# are not another finishing inward. Rebuild from submitted source state
+		# so submit/cancel and retries remain symmetric and idempotent.
+		from essdee_yrp.finishing.rebuild import rebuild_finishing_plan
+
+		rebuild_finishing_plan(finishing_plan_name, check_permission=False)
+		return
 
 	finishing_doc = frappe.get_doc("Finishing Plan", finishing_plan_name)
 	if grn.get("includes_packing") and not grn.get("is_return"):

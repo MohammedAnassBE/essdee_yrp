@@ -119,6 +119,14 @@ let total_dispatched = ref(0)
 let packing_config = ref({})
 let dynamic_ratio_packing = ref(false)
 let packing_batches = ref([])
+let pendingGrnRequestId = null
+
+function new_grn_request_id() {
+    if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+        return globalThis.crypto.randomUUID()
+    }
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`
+}
 
 onMounted(()=> {
     frappe.call({
@@ -243,6 +251,7 @@ function make_grn(){
 				)
 				return
 			}
+            pendingGrnRequestId = pendingGrnRequestId || new_grn_request_id()
             d.hide();
             frappe.call({
                 method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.create_grn",
@@ -254,10 +263,12 @@ function make_grn(){
 					packing_batches: popupComponent.packing_batches,
                     delivery_location: values.delivery_location,
                     actual_date: values.actual_date,
+                    request_id: pendingGrnRequestId,
                 },
                 freeze: true,
                 freeze_message: "Creating Goods Received Note...",
                 callback: function() {
+                    pendingGrnRequestId = null;
                     frappe.msgprint("GRN Created Successfully");
                     cur_frm.reload_doc();
                 }

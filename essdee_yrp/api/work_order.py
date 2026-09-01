@@ -687,7 +687,7 @@ def _group_label(kind, in_attrs, out_attrs):
 		# different attribute vocabularies — Consume/Introduce). A pair identical
 		# on BOTH sides is noise for the floor user and drops off the LEFT:
 		# knitting's "Navy → Navy · 14 Dia" reads as "Navy · 14 Dia"; a rule that
-		# actually changes the pair ("Grey → Navy") is untouched.
+		# actually changes the pair ("Greige → Navy") is untouched.
 		left_attrs = {a: v for a, v in in_attrs.items() if out_attrs.get(a) != v}
 		left = " · ".join(left_attrs.get(a) or "?" for a in sorted(left_attrs))
 		right = " · ".join(out_attrs.get(a) or "?" for a in sorted(out_attrs))
@@ -749,7 +749,7 @@ def _knit_colour_options(ipd):
 	"""Valid physical knitting-output colour choices.
 
 	Generic-aware: these are the Colour values entering the first dyeing
-	(Colour-swap) step.  They can differ route by route (Greige, Grey, Anthracite
+	(Colour-swap) step.  They can differ route by route (Greige, Anthracite
 	Melange, ...).  Derived from the generic fabric_processes rows; fall back to
 	the recipe colours, then the IPD Colour mapping and finally all Colour values.
 	"""

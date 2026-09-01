@@ -542,10 +542,7 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 					.map((row) => row.colour)
 					.filter(Boolean);
 				const same_finished_set = new Set(same_finished_colours);
-				const grey_output_colour =
-					defaults.grey_knitting_output_colour
-					|| defaults.knitting_output_colour
-					|| "Greige";
+				const non_dyed_colour = defaults.knitting_output_colour || "";
 				const fabric_routes = [];
 				required_colours.forEach((colour) => {
 					(c.required_routes || [])
@@ -566,7 +563,7 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 										|| same_finished_set.has(colour)
 									)
 										? colour
-										: grey_output_colour,
+										: non_dyed_colour,
 								use_dyed_yarn: dyed_colour_set.has(colour) ? 1 : 0,
 							});
 						});
@@ -578,6 +575,7 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 					dyed_yarn_colours: dyed_yarn_colours,
 					same_finished_colours: same_finished_colours,
 					fabric_routes: fabric_routes,
+					non_dyed_colour: non_dyed_colour,
 					yarns: recipe,
 					yarn_item: recipe[0] && recipe[0].yarn_item,
 					cloth_per_kg_yarn: values[`cloth_per_kg_yarn_${i}`],
@@ -605,6 +603,11 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 				);
 				return (
 					invalid_recipe ||
+					(
+						s.required_colours.some(
+							(colour) => !s.dyed_yarn_colours.includes(colour)
+						) && !s.non_dyed_colour
+					) ||
 					!s.knitting_process ||
 					!(s.cloth_per_kg_yarn > 0) ||
 					s.fabric_routes.some(

@@ -215,10 +215,7 @@ function normaliseColourSelection(cloth, defaults = {}) {
   const requiredColours = (cloth.required_colours || []).filter(Boolean)
   const dyedYarnColours = (cloth.dyed_yarn_colours || [])
     .filter((colour) => requiredColours.includes(colour))
-  const greyKnittingOutputColour =
-    defaults.grey_knitting_output_colour ||
-    defaults.knitting_output_colour ||
-    "Greige"
+  const nonDyedColour = defaults.knitting_output_colour || ""
   const storedRoutes = cloth.profile?.fabric_routes || []
   const sameFinishedColours = (cloth.same_finished_colours || [])
     .filter(
@@ -246,7 +243,7 @@ function normaliseColourSelection(cloth, defaults = {}) {
     requiredRoutes,
     dyedYarnColours,
     sameFinishedColours,
-    greyKnittingOutputColour,
+    nonDyedColour,
   }
 }
 
@@ -298,7 +295,7 @@ function knittingOutputColour(entry, colour) {
     || isSameFinishedColour(entry, colour)
   )
     ? colour
-    : entry.greyKnittingOutputColour
+    : entry.nonDyedColour
 }
 
 function validateYarnRows(rows) {
@@ -331,6 +328,12 @@ function entryError(entry) {
   return (
     recipeError(entry) ||
     outputError(entry) ||
+    (
+      entry.requiredColours.some((colour) => !isDyedYarnColour(entry, colour))
+      && !entry.nonDyedColour
+        ? "Set Default Non-Dyed Colour in IPD Settings."
+        : ""
+    ) ||
     (!entry.knitting_process ? "Select a Knitting Process." : "") ||
     (requiresDyeing(entry) && !entry.dyeing_process
       ? "Select a Dyeing Process for the colour-changing routes."

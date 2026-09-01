@@ -89,7 +89,7 @@
 										<small>Finished colour</small>
 										<strong>{{ program.finished_colour || "No Colour" }}</strong>
 										<em :class="program.use_dyed_yarn ? 'is-dyed' : 'is-grey'">
-											{{ program.use_dyed_yarn ? "Dyed yarn" : "Grey yarn input" }}
+											{{ program.use_dyed_yarn ? "Dyed yarn" : "Non-dyed yarn input" }}
 										</em>
 									</div>
 									<div class="fp-program-cell">

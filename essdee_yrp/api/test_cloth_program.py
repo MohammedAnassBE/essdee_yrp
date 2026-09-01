@@ -361,7 +361,6 @@ class TestClothProgram(IntegrationTestCase):
             )
 
     def test_colour_level_dyed_yarn_selection_derives_exact_matrix_contract(self):
-        grey = _ensure_iav("Colour", "Grey")
         greige = _ensure_iav("Colour", "Greige")
         navy = _ensure_iav("Colour", "_Test Navy Dyed Yarn CPD")
         melange = _ensure_iav("Colour", "_Test Anthra Melange CPD")
@@ -429,8 +428,8 @@ class TestClothProgram(IntegrationTestCase):
             },
             {
                 (self.red, coloured_yarn, self.red, 100.0),
-                (navy, coloured_yarn, grey, 100.0),
-                (melange, coloured_yarn, grey, 100.0),
+                (navy, coloured_yarn, greige, 100.0),
+                (melange, coloured_yarn, greige, 100.0),
             },
         )
         self.assertEqual(
@@ -472,8 +471,8 @@ class TestClothProgram(IntegrationTestCase):
             matrix_contracts,
             {
                 (self.red, self.red, self.red),
-                (navy, grey, greige),
-                (melange, grey, melange),
+                (navy, greige, greige),
+                (melange, greige, melange),
             },
         )
 
@@ -1720,11 +1719,15 @@ class TestClothProgram(IntegrationTestCase):
             "knitting_process": self.k_proc,
             "dyeing_process": self.d_proc,
             "knitting_output_colour": self.greige,
-            "grey_yarn_colour": "Grey",
-            "grey_knitting_output_colour": self.greige,
             "compacting_process": "_Test Compact CPD",
             "cloth_per_kg_yarn": 1.0,
         })
+
+    def test_cloth_program_defaults_do_not_hardcode_a_colour(self):
+        with patch.object(cloth_program.frappe.db, "exists", return_value=False):
+            defaults = cloth_program._cloth_program_defaults()
+
+        self.assertEqual(defaults["knitting_output_colour"], "")
 
     def test_new_cloth_ipd_uses_cloth_program_settings_defaults(self):
         from essdee_yrp.ipd_validations import apply_ipd_settings_defaults

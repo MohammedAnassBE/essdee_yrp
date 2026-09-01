@@ -50,11 +50,10 @@ from essdee_yrp.fabric_requirement import compute_cloth_demand
 TAB_SEQUENCES = (10, 20, 30)
 
 # Build Cloth Programs asks two colour-level questions: whether the input is
-# dyed yarn and whether Knitting outputs the Finished Colour. The physical yarn
-# / cloth colours are derived centrally so Desk, /web, stored IPDs, matrices
-# and Work Orders cannot disagree.
-GREY_YARN_COLOUR = "Grey"
-GREIGE_CLOTH_COLOUR = "Greige"
+# dyed yarn and whether Knitting outputs the Finished Colour. The physical
+# non-dyed colour is configured in IPD Settings and shared by the yarn input
+# and default knitting output so Desk, /web, stored IPDs, matrices and Work
+# Orders cannot disagree.
 
 
 def _normalize_yarns(selection, required=True):
@@ -238,18 +237,15 @@ def _derive_colour_yarn_recipes(
 ):
     """Expand the Item-master recipe using one yarn type choice per colour.
 
-    Dyed-yarn colours consume the matching finished-colour yarn variant. An
-    unchecked colour normally maps the Greige knitting source to Grey yarn;
-    when the operator selects another physical source (for example Anthra
-    Melange), that matching yarn variant is consumed. Attribute-less legacy
-    yarn Items keep a blank colour so old operational profiles remain buildable.
+    Dyed-yarn colours consume the matching finished-colour yarn variant. Every
+    non-dyed colour consumes the exact colour configured in IPD Settings. When
+    a legacy caller explicitly supplies another physical source (for example
+    Anthra Melange), that matching yarn variant is consumed. Attribute-less
+    legacy yarn Items keep a blank colour so old profiles remain buildable.
     """
     dyed = set(dyed_colours)
     sources = source_colours or {}
-    greige = (
-        _cloth_program_defaults().get("knitting_output_colour")
-        or GREIGE_CLOTH_COLOUR
-    )
+    non_dyed_colour = _cloth_program_defaults().get("knitting_output_colour")
     rows = []
     for colour in required_colours:
         for yarn in item_yarns:
@@ -257,16 +253,17 @@ def _derive_colour_yarn_recipes(
             attributes = _item_variant_attributes(yarn_item)
             yarn_colour = None
             if FABRIC_COLOUR_ATTRIBUTE in attributes:
-                source_colour = sources.get(colour) or greige
+                source_colour = sources.get(colour) or non_dyed_colour
                 yarn_colour = (
                     colour
                     if colour in dyed
-                    else (
-                        GREY_YARN_COLOUR
-                        if source_colour == greige
-                        else source_colour
-                    )
+                    else source_colour
                 )
+                if not yarn_colour:
+                    frappe.throw(_(
+                        "Set Default Non-Dyed Colour in IPD Settings before "
+                        "building a cloth program with non-dyed yarn."
+                    ))
             rows.append({
                 "colour": colour,
                 "yarn_item": yarn_item,
@@ -367,8 +364,7 @@ def _normalize_knitting_output_colours(selection, required_colours):
 
     ``greige_colour`` remains a supported legacy payload: it is expanded over
     all demanded colours.  Current callers submit explicit rows so one cloth
-    can knit Grey, Greige, Anthracite Melange and Grey Melange in the same
-    production profile.
+    can knit several physical output colours in the same production profile.
     """
     required_colours = list(dict.fromkeys(colour for colour in required_colours if colour))
     raw = selection.get("knitting_output_colours") or []
@@ -561,10 +557,7 @@ def _derive_fabric_routes(
     dyed = set(dyed_colours)
     checkbox_contract = "same_finished_colours" in selection
     same_finished = set(same_finished_colours or [])
-    greige = (
-        _cloth_program_defaults().get("knitting_output_colour")
-        or GREIGE_CLOTH_COLOUR
-    )
+    non_dyed_colour = _cloth_program_defaults().get("knitting_output_colour")
     raw = selection.get("fabric_routes") or [
         {
             "finished_dia": dia,
@@ -590,17 +583,22 @@ def _derive_fabric_routes(
                     or (checkbox_contract and final_colour in same_finished)
                 )
                 else (
-                    greige
+                    non_dyed_colour
                     if checkbox_contract
                     else (
                         row.get("knitting_output_colour")
                         or row.get("output_colour")
-                        or greige
+                        or non_dyed_colour
                     )
                 )
             ),
             "use_dyed_yarn": 1 if final_colour in dyed else 0,
         })
+    if any(not row.get("knitting_output_colour") for row in derived):
+        frappe.throw(_(
+            "Set Default Non-Dyed Colour in IPD Settings before building "
+            "cloth routes that do not leave Knitting in the finished colour."
+        ))
     return _normalize_fabric_routes(
         {**selection, "fabric_routes": derived}, required_routes
     )
@@ -1568,8 +1566,6 @@ def _cloth_program_defaults():
         "knitting_process": "",
         "dyeing_process": "",
         "knitting_output_colour": "",
-        "grey_yarn_colour": GREY_YARN_COLOUR,
-        "grey_knitting_output_colour": GREIGE_CLOTH_COLOUR,
         "compacting_process": "",
         "cloth_per_kg_yarn": 1.0,
     }
@@ -1582,10 +1578,6 @@ def _cloth_program_defaults():
         "dyeing_process": settings.get("default_dyeing_process") or "",
         "knitting_output_colour": (
             settings.get("default_knitting_output_colour") or ""
-        ),
-        "grey_knitting_output_colour": (
-            settings.get("default_knitting_output_colour")
-            or GREIGE_CLOTH_COLOUR
         ),
         "compacting_process": settings.get("default_compacting_process") or "",
         "cloth_per_kg_yarn": (

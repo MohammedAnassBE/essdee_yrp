@@ -49,6 +49,12 @@ from essdee_yrp.fabric_requirement import compute_cloth_demand
 #: is never touched by the auto-builder.
 TAB_SEQUENCES = (10, 20, 30)
 
+# Build Cloth Programs asks two colour-level questions: whether the input is
+# dyed yarn and whether Knitting outputs the Finished Colour. The physical
+# non-dyed colour is configured in IPD Settings and shared by the yarn input
+# and default knitting output so Desk, /web, stored IPDs, matrices and Work
+# Orders cannot disagree.
+
 
 def _normalize_yarns(selection, required=True):
     """Return the popup yarn recipe as validated ``[{yarn_item, ratio}]``.
@@ -117,30 +123,177 @@ def _item_yarns_for_cloth(cloth_item, required=False):
 
 
 def _recipe_map(rows):
-    """Canonical ``{colour: {yarn_item: ratio}}`` for comparison and reuse."""
+    """Canonical recipe snapshot for safe CPD profile comparison and reuse."""
     result = {}
     for row in rows or []:
         colour = row.get("colour")
         yarn_item = row.get("yarn_item")
         if colour and yarn_item:
-            result.setdefault(colour, {})[yarn_item] = flt(row.get("ratio"))
+            result.setdefault(colour, {})[yarn_item] = (
+                flt(row.get("ratio")),
+                row.get("yarn_colour") or None,
+            )
     return result
+
+
+def _item_variant_attributes(item):
+    return set(frappe.get_all(
+        "Item Item Attribute",
+        filters={
+            "parent": item,
+            "parenttype": "Item",
+        },
+        pluck="attribute",
+    ))
+
+
+def _validate_yarn_colour(yarn_item, yarn_colour, row_label):
+    """Validate the physical Colour consumed from a variant-aware yarn Item.
+
+    Legacy yarn templates without a Colour attribute remain valid with a blank
+    value. Once a yarn declares Colour, every operational recipe must identify the
+    exact input variant so the knitting matrix and Work Order consume the right
+    stock item.
+    """
+    attributes = _item_variant_attributes(yarn_item)
+    unsupported = sorted(attributes - {FABRIC_COLOUR_ATTRIBUTE})
+    if unsupported:
+        frappe.throw(_(
+            "{0}: Yarn Item {1} may only use the Colour variant attribute; "
+            "remove {2}."
+        ).format(row_label, yarn_item, ", ".join(unsupported)))
+    has_colour_attribute = FABRIC_COLOUR_ATTRIBUTE in attributes
+    yarn_colour = (yarn_colour or "").strip()
+    if has_colour_attribute and not yarn_colour:
+        frappe.throw(_("{0}: select the Yarn Colour for {1}.").format(
+            row_label, yarn_item
+        ))
+    if not yarn_colour:
+        return None
+    if not has_colour_attribute:
+        frappe.throw(_(
+            "{0}: Yarn Item {1} does not define the Colour attribute."
+        ).format(row_label, yarn_item))
+    if (
+        frappe.db.get_value(
+            "Item Attribute Value", yarn_colour, "attribute_name"
+        )
+        != FABRIC_COLOUR_ATTRIBUTE
+    ):
+        frappe.throw(_("{0}: {1} is not a Colour attribute value.").format(
+            row_label, yarn_colour
+        ))
+    return yarn_colour
+
+
+def _normalize_colour_flags(selection, fieldname, label, required_colours):
+    """Validate a colour-level checkbox list submitted by current UIs."""
+    required = list(dict.fromkeys(colour for colour in required_colours if colour))
+    raw = selection.get(fieldname) or []
+    normalised = []
+    for index, row in enumerate(raw, 1):
+        colour = (
+            row.get("colour") if isinstance(row, dict) else row
+        ) or ""
+        colour = colour.strip()
+        if not colour:
+            frappe.throw(_("{0} row {1}: select a Colour.").format(label, index))
+        if colour not in required:
+            frappe.throw(_(
+                "{0} row {1}: {2} is not required for this Lot."
+            ).format(label, index, colour))
+        if colour in normalised:
+            frappe.throw(_("Duplicate {0} Colour {1}.").format(label, colour))
+        if (
+            frappe.db.get_value(
+                "Item Attribute Value", colour, "attribute_name"
+            )
+            != FABRIC_COLOUR_ATTRIBUTE
+        ):
+            frappe.throw(_("{0} is not a Colour attribute value.").format(colour))
+        normalised.append(colour)
+    return [colour for colour in required if colour in normalised]
+
+
+def _normalize_dyed_yarn_colours(selection, required_colours):
+    """Validate the colour-level dyed-yarn choice submitted by current UIs."""
+    return _normalize_colour_flags(
+        selection, "dyed_yarn_colours", "Dyed yarn colour", required_colours
+    )
+
+
+def _normalize_same_finished_colours(selection, required_colours):
+    """Validate colours whose knitting output equals the finished colour."""
+    return _normalize_colour_flags(
+        selection,
+        "same_finished_colours",
+        "Same finished colour",
+        required_colours,
+    )
+
+
+def _derive_colour_yarn_recipes(
+    item_yarns, required_colours, dyed_colours, source_colours=None
+):
+    """Expand the Item-master recipe using one yarn type choice per colour.
+
+    Dyed-yarn colours consume the matching finished-colour yarn variant. Every
+    non-dyed colour consumes the exact colour configured in IPD Settings. When
+    a legacy caller explicitly supplies another physical source (for example
+    Anthra Melange), that matching yarn variant is consumed. Attribute-less
+    legacy yarn Items keep a blank colour so old profiles remain buildable.
+    """
+    dyed = set(dyed_colours)
+    sources = source_colours or {}
+    non_dyed_colour = _cloth_program_defaults().get("knitting_output_colour")
+    rows = []
+    for colour in required_colours:
+        for yarn in item_yarns:
+            yarn_item = yarn["yarn_item"]
+            attributes = _item_variant_attributes(yarn_item)
+            yarn_colour = None
+            if FABRIC_COLOUR_ATTRIBUTE in attributes:
+                source_colour = sources.get(colour) or non_dyed_colour
+                yarn_colour = (
+                    colour
+                    if colour in dyed
+                    else source_colour
+                )
+                if not yarn_colour:
+                    frappe.throw(_(
+                        "Set Default Non-Dyed Colour in IPD Settings before "
+                        "building a cloth program with non-dyed yarn."
+                    ))
+            rows.append({
+                "colour": colour,
+                "yarn_item": yarn_item,
+                "yarn_colour": yarn_colour,
+                "ratio": yarn["ratio"],
+            })
+    return _normalize_colour_yarn_recipes(
+        {"colour_yarn_recipes": rows}, required_colours
+    )
 
 
 def _normalize_colour_yarn_recipes(selection, required_colours):
     """Validate the Build Cloth Program colour recipes.
 
-    The popup always submits explicit colour rows. Legacy API callers that only
-    send ``yarns`` remain supported by expanding that one recipe across every
-    demanded colour. The expanded rows are the immutable recipe snapshot stored
-    on the generated cloth IPD.
+    The current popup's colour-level selection is expanded before reaching this
+    validator. Legacy API callers may still submit explicit colour rows or one
+    shared ``yarns`` recipe. The normalized rows are the immutable recipe
+    snapshot stored on the generated cloth IPD.
     """
     required_colours = list(dict.fromkeys(colour for colour in required_colours if colour))
     raw = selection.get("colour_yarn_recipes") or []
     if not raw:
         shared = _normalize_yarns(selection)
-        return [
-            {"colour": colour, "yarn_item": row["yarn_item"], "ratio": row["ratio"]}
+        raw = [
+            {
+                "colour": colour,
+                "yarn_item": row["yarn_item"],
+                "yarn_colour": row.get("yarn_colour"),
+                "ratio": row["ratio"],
+            }
             for colour in required_colours
             for row in shared
         ]
@@ -150,6 +303,7 @@ def _normalize_colour_yarn_recipes(selection, required_colours):
     for index, row in enumerate(raw, 1):
         colour = (row.get("colour") or "").strip()
         yarn_item = (row.get("yarn_item") or "").strip()
+        yarn_colour = row.get("yarn_colour")
         ratio = flt(row.get("ratio"))
         if not colour:
             frappe.throw(_("Colour yarn row {0}: select a Colour.").format(index))
@@ -172,9 +326,19 @@ def _normalize_colour_yarn_recipes(selection, required_colours):
             frappe.throw(
                 _("Colour yarn row {0}: Ratio must be greater than zero.").format(index)
             )
+        yarn_colour = _validate_yarn_colour(
+            yarn_item,
+            yarn_colour,
+            _("Colour yarn row {0}").format(index),
+        )
         seen.add(key)
         groups.setdefault(colour, []).append(
-            {"colour": colour, "yarn_item": yarn_item, "ratio": ratio}
+            {
+                "colour": colour,
+                "yarn_item": yarn_item,
+                "yarn_colour": yarn_colour,
+                "ratio": ratio,
+            }
         )
 
     missing = [colour for colour in required_colours if colour not in groups]
@@ -200,8 +364,7 @@ def _normalize_knitting_output_colours(selection, required_colours):
 
     ``greige_colour`` remains a supported legacy payload: it is expanded over
     all demanded colours.  Current callers submit explicit rows so one cloth
-    can knit Grey, Greige, Anthracite Melange and Grey Melange in the same
-    production profile.
+    can knit several physical output colours in the same production profile.
     """
     required_colours = list(dict.fromkeys(colour for colour in required_colours if colour))
     raw = selection.get("knitting_output_colours") or []
@@ -372,6 +535,7 @@ def _normalize_fabric_routes(selection, required_routes):
             "finished_colour": final_colour,
             "knitting_output_dia": knitting_dia,
             "knitting_output_colour": knitting_colour,
+            "use_dyed_yarn": cint(row.get("use_dyed_yarn")),
         })
 
     missing = [
@@ -386,12 +550,82 @@ def _normalize_fabric_routes(selection, required_routes):
     return normalised
 
 
+def _derive_fabric_routes(
+    selection, required_routes, dyed_colours, same_finished_colours=None
+):
+    """Derive checked sources and validate editable unchecked sources."""
+    dyed = set(dyed_colours)
+    checkbox_contract = "same_finished_colours" in selection
+    same_finished = set(same_finished_colours or [])
+    non_dyed_colour = _cloth_program_defaults().get("knitting_output_colour")
+    raw = selection.get("fabric_routes") or [
+        {
+            "finished_dia": dia,
+            "finished_colour": colour,
+            "knitting_output_dia": dia,
+        }
+        for dia, colour in required_routes
+        if dia and colour
+    ]
+    derived = []
+    for row in raw:
+        final_colour = (
+            row.get("finished_colour")
+            or row.get("colour")
+            or ""
+        ).strip()
+        derived.append({
+            **row,
+            "knitting_output_colour": (
+                final_colour
+                if (
+                    final_colour in dyed
+                    or (checkbox_contract and final_colour in same_finished)
+                )
+                else (
+                    non_dyed_colour
+                    if checkbox_contract
+                    else (
+                        row.get("knitting_output_colour")
+                        or row.get("output_colour")
+                        or non_dyed_colour
+                    )
+                )
+            ),
+            "use_dyed_yarn": 1 if final_colour in dyed else 0,
+        })
+    if any(not row.get("knitting_output_colour") for row in derived):
+        frappe.throw(_(
+            "Set Default Non-Dyed Colour in IPD Settings before building "
+            "cloth routes that do not leave Knitting in the finished colour."
+        ))
+    return _normalize_fabric_routes(
+        {**selection, "fabric_routes": derived}, required_routes
+    )
+
+
+def _source_colours_from_routes(routes):
+    """Return the single physical knitting source selected per final colour."""
+    source_colours = {}
+    for row in routes:
+        final_colour = row["finished_colour"]
+        source_colour = row["knitting_output_colour"]
+        existing = source_colours.get(final_colour)
+        if existing and existing != source_colour:
+            frappe.throw(_(
+                "Use one Source Colour for every Dia of Finished Colour {0}."
+            ).format(final_colour))
+        source_colours[final_colour] = source_colour
+    return source_colours
+
+
 def _fabric_route_map(selection):
     """Canonical exact route map keyed by final ``(Dia, Colour)``."""
     return {
         (row.get("finished_dia"), row.get("finished_colour")): {
             "knitting_output_dia": row.get("knitting_output_dia"),
             "knitting_output_colour": row.get("knitting_output_colour"),
+            "use_dyed_yarn": cint(row.get("use_dyed_yarn")),
         }
         for row in selection.get("fabric_routes") or []
         if row.get("finished_dia") and row.get("finished_colour")
@@ -531,6 +765,7 @@ def _profile_matches(cpd, selection):
         (row.finished_dia, row.finished_colour): {
             "knitting_output_dia": row.knitting_output_dia,
             "knitting_output_colour": row.knitting_output_colour,
+            "use_dyed_yarn": cint(row.get("use_dyed_yarn")),
         }
         for row in cpd.get("fabric_routes") or []
     }
@@ -581,6 +816,7 @@ def _profile_matches_exactly(cpd, selection):
             (row.finished_dia, row.finished_colour): {
                 "knitting_output_dia": row.knitting_output_dia,
                 "knitting_output_colour": row.knitting_output_colour,
+                "use_dyed_yarn": cint(row.get("use_dyed_yarn")),
             }
             for row in cpd.get("fabric_routes") or []
         }
@@ -703,6 +939,7 @@ def _find_or_create_cpd(cloth_item, selection, tuples):
                 "cloth_item": cloth_item,
                 "colour": row["colour"],
                 "yarn_item": row["yarn_item"],
+                "yarn_colour": row.get("yarn_colour"),
                 "ratio": flt(row["ratio"]),
             }
             for row in colour_recipes
@@ -736,6 +973,7 @@ def _find_or_create_cpd(cloth_item, selection, tuples):
             "finished_colour": row.finished_colour,
             "knitting_output_dia": row.knitting_output_dia,
             "knitting_output_colour": row.knitting_output_colour,
+            "use_dyed_yarn": cint(row.get("use_dyed_yarn")),
         }
         for row in cpd.get("fabric_routes") or []
     }
@@ -1065,24 +1303,82 @@ def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
             dict.fromkeys(colour for (_dia, colour) in tuples if colour)
         )
         if required_colours:
-            colour_recipes = (
-                [
-                    {
-                        "colour": colour,
-                        "yarn_item": row["yarn_item"],
-                        "ratio": row["ratio"],
+            uses_colour_level_contract = "dyed_yarn_colours" in selection
+            if uses_colour_level_contract:
+                if not item_yarns:
+                    frappe.throw(_(
+                        "Cloth Item {0} has no Yarn Ratio. Configure its Yarn "
+                        "Items and ratios before building Cloth Programs."
+                    ).format(cloth))
+                dyed_colours = _normalize_dyed_yarn_colours(
+                    selection, required_colours
+                )
+                same_finished_colours = (
+                    [
+                        colour
+                        for colour in _normalize_same_finished_colours(
+                            selection, required_colours
+                        )
+                        if colour not in dyed_colours
+                    ]
+                    if "same_finished_colours" in selection
+                    else None
+                )
+                selection["fabric_routes"] = _derive_fabric_routes(
+                    selection,
+                    list(tuples),
+                    dyed_colours,
+                    same_finished_colours,
+                )
+                colour_recipes = _derive_colour_yarn_recipes(
+                    item_yarns,
+                    required_colours,
+                    dyed_colours,
+                    (
+                        None
+                        if same_finished_colours is not None
+                        else _source_colours_from_routes(
+                            selection["fabric_routes"]
+                        )
+                    ),
+                )
+                selection["dyed_yarn_colours"] = dyed_colours
+                if same_finished_colours is not None:
+                    selection["same_finished_colours"] = (
+                        same_finished_colours
+                    )
+            else:
+                recipe_selection = selection
+                if item_yarns and not selection.get("colour_yarn_recipes"):
+                    # Legacy API callers did not submit colour rows.
+                    recipe_selection = {
+                        **selection,
+                        "yarns": item_yarns,
+                        "yarn_item": None,
                     }
-                    for colour in required_colours
+                colour_recipes = _normalize_colour_yarn_recipes(
+                    recipe_selection, required_colours
+                )
+                selection["fabric_routes"] = _normalize_fabric_routes(
+                    selection, list(tuples)
+                )
+            if item_yarns:
+                expected = sorted(
+                    (row["yarn_item"], flt(row["ratio"], 3))
                     for row in item_yarns
-                ]
-                if item_yarns
-                else _normalize_colour_yarn_recipes(selection, required_colours)
-            )
+                )
+                for colour in required_colours:
+                    submitted = sorted(
+                        (row["yarn_item"], flt(row["ratio"], 3))
+                        for row in colour_recipes
+                        if row["colour"] == colour
+                    )
+                    if submitted != expected:
+                        frappe.throw(_(
+                            "Cloth Item {0}'s Yarn Ratio changed. Reopen Build "
+                            "Cloth Programs to use the current Item recipe."
+                        ).format(cloth))
             selection["colour_yarn_recipes"] = colour_recipes
-            selection["fabric_routes"] = _normalize_fabric_routes(
-                selection,
-                list(tuples),
-            )
             # Keep the colour-only compatibility view for older profile readers.
             selection["knitting_output_colours"] = [
                 {
@@ -1257,6 +1553,7 @@ def _profile_from_cpd(cpd):
                 "finished_dia": row.finished_dia,
                 "knitting_output_colour": row.knitting_output_colour,
                 "knitting_output_dia": row.knitting_output_dia,
+                "use_dyed_yarn": cint(row.get("use_dyed_yarn")),
             }
             for row in cpd.get("fabric_routes") or []
         ],
@@ -1392,10 +1689,36 @@ def get_cloth_program_context(lot):
             {
                 "colour": row.colour,
                 "yarn_item": row.yarn_item,
+                "yarn_colour": row.get("yarn_colour"),
                 "ratio": flt(row.ratio),
             }
             for row in ((cpd.get("colour_yarn_recipes") or []) if cpd else [])
             if row.colour in c["required_colours"]
+        ]
+        c["dyed_yarn_colours"] = [
+            colour
+            for colour in c["required_colours"]
+            if (
+                (rows := [
+                    row for row in c["profile"].get("fabric_routes", [])
+                    if row["finished_colour"] == colour
+                ])
+                and all(cint(row.get("use_dyed_yarn")) for row in rows)
+            )
+        ]
+        c["same_finished_colours"] = [
+            colour
+            for colour in c["required_colours"]
+            if colour not in c["dyed_yarn_colours"] and (
+                (rows := [
+                    row for row in c["profile"].get("fabric_routes", [])
+                    if row["finished_colour"] == colour
+                ])
+                and all(
+                    row.get("knitting_output_colour") == colour
+                    for row in rows
+                )
+            )
         ]
     return {
         "cloths": cloths,

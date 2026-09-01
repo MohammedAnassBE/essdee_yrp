@@ -366,6 +366,7 @@ def get_colour_yarn_inputs(doc, colour):
 	rows = [
 		frappe._dict({
 			"item": row.get("yarn_item"),
+			"colour": row.get("yarn_colour"),
 			"ratio": flt(row.get("ratio")),
 			"quantity": flt(row.get("ratio")) / 100.0,
 		})
@@ -757,7 +758,9 @@ def _new_matrix(doc, process):
 
 
 def _colour_knitting_targets(doc):
-	"""Distinct ``(knitting Dia, final Dia, final Colour)`` routes.
+	"""Distinct physical-knitting -> finished-cloth routes.
+
+	Each row is ``(knitting Dia, knitting Colour, final Dia, final Colour)``.
 
 	Manual cloth IPDs are authored only through the generic Fabric Processes
 	tables, so this cannot depend on the hidden legacy dyeing/knitting tabs.  The
@@ -768,11 +771,15 @@ def _colour_knitting_targets(doc):
 	exact_routes = [
 		(
 			row.knitting_output_dia,
+			row.knitting_output_colour,
 			row.finished_dia,
 			row.finished_colour,
 		)
 		for row in doc.get("fabric_routes") or []
-		if row.knitting_output_dia and row.finished_dia and row.finished_colour
+		if row.knitting_output_dia
+		and row.knitting_output_colour
+		and row.finished_dia
+		and row.finished_colour
 	]
 	if exact_routes:
 		return list(dict.fromkeys(exact_routes))
@@ -818,22 +825,29 @@ def _colour_knitting_targets(doc):
 				else ([dia_pin] if dia_pin else entering_dias)
 			)
 			targets.extend(
-				(dia, colour_change.get("to_value"))
+				(
+					dia,
+					colour_change.get("from_value") or colour_change.get("to_value"),
+					dia,
+					colour_change.get("to_value"),
+				)
 				for dia in dias
 				if dia
 			)
 		break
 
 	if targets:
-		return [
-			(dia, dia, colour)
-			for dia, colour in dict.fromkeys(targets)
-		]
+		return list(dict.fromkeys(targets))
 
 	# Legacy tab IPDs remain supported by the same exact routes.
 	for row in doc.get("dyeing_colour_details") or []:
 		if row.get("dia") and row.get("to_colour"):
-			targets.append((row.get("dia"), row.get("to_colour")))
+			targets.append((
+				row.get("dia"),
+				row.get("from_colour") or row.get("to_colour"),
+				row.get("dia"),
+				row.get("to_colour"),
+			))
 	if not targets:
 		dias = [
 			entry.get("to_value")
@@ -853,26 +867,27 @@ def _colour_knitting_targets(doc):
 			r.colour for r in doc.get("colour_yarn_recipes") or []
 			if r.cloth_item == doc.item and r.colour
 		]
-		targets = [(dia, colour) for dia in dias for colour in colours]
-	return [
-		(dia, dia, colour)
-		for dia, colour in dict.fromkeys(targets)
-	]
+		targets = [
+			(dia, colour, dia, colour)
+			for dia in dias
+			for colour in colours
+		]
+	return list(dict.fromkeys(targets))
 
 
 def build_colour_knitting_matrices(doc, row, uom):
 	"""One exact-reference knitting matrix per final Dia/Colour.
 
-	The physical knitting output remains Dia-only in the matrix (the Work Order
-	stamps the route-specific Colour received after knitting);
-	``reference_item_variant`` carries the intended final Dia/Colour so two target
-	colours can use different yarn recipes and different knitting-output colours.
+	The matrix is the complete physical contract: every input combination carries
+	its Yarn Colour, and the output combination carries the exact Colour and Dia
+	received from Knitting. ``reference_item_variant`` separately retains the final
+	Dia/Colour required after downstream fabric processes.
 	"""
 	from yrp.yrp.doctype.item.item import get_or_create_variant
 
 	output_qty = flt(row.get("quantity_ratio")) or 1
 	matrices = []
-	for knitting_dia, final_dia, colour in _colour_knitting_targets(doc):
+	for knitting_dia, knitting_colour, final_dia, colour in _colour_knitting_targets(doc):
 		inputs = get_colour_yarn_inputs(doc, colour)
 		if not inputs:
 			frappe.throw(
@@ -894,7 +909,11 @@ def build_colour_knitting_matrices(doc, row, uom):
 		# so keep it only for a genuine single-yarn recipe.
 		input_items = list(dict.fromkeys(yarn.item for yarn in inputs if yarn.item))
 		matrix.input_item = input_items[0] if len(input_items) == 1 else None
+		if any(yarn.colour for yarn in inputs):
+			matrix.append("input_attributes", {"attribute": FABRIC_COLOUR_ATTRIBUTE})
 		matrix.append("output_attributes", {"attribute": FABRIC_DIA_ATTRIBUTE})
+		if knitting_colour:
+			matrix.append("output_attributes", {"attribute": FABRIC_COLOUR_ATTRIBUTE})
 		for combo_index, yarn in enumerate(inputs):
 			matrix.append("combinations", {
 				"group_index": 0,
@@ -906,6 +925,14 @@ def build_colour_knitting_matrices(doc, row, uom):
 				"uom": frappe.db.get_value("Item", yarn.item, "default_unit_of_measure") or uom,
 				"wastage_pct": 0,
 			})
+			if yarn.colour:
+				matrix.append("combination_attributes", {
+					"group_index": 0,
+					"side": "Input",
+					"combo_index": combo_index,
+					"attribute": FABRIC_COLOUR_ATTRIBUTE,
+					"attribute_value": yarn.colour,
+				})
 		matrix.append("combinations", {
 			"group_index": 0,
 			"group_name": f"{colour} · {final_dia}",
@@ -923,6 +950,14 @@ def build_colour_knitting_matrices(doc, row, uom):
 			"attribute": FABRIC_DIA_ATTRIBUTE,
 			"attribute_value": knitting_dia,
 		})
+		if knitting_colour:
+			matrix.append("combination_attributes", {
+				"group_index": 0,
+				"side": "Output",
+				"combo_index": 0,
+				"attribute": FABRIC_COLOUR_ATTRIBUTE,
+				"attribute_value": knitting_colour,
+			})
 		matrices.append(matrix)
 	return matrices
 

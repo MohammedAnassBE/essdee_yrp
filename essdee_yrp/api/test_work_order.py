@@ -2,8 +2,8 @@
 # For license information, please see license.txt
 """Regression tests for the fabric WO Calculate backend.
 
-Owner ruling: yarn Items are attribute-less. Colour and Dia begin on the cloth
-received from knitting, so the yarn deliverable must never be colour-stamped.
+Legacy attribute-less yarn Items remain supported. Variant-aware yarn recipes
+carry the physical input Colour in their knitting matrix combinations.
 
 Fixtures follow test_cloth_program's pattern — everything created inside the
 rolled-back test transaction, no frappe.db.commit()."""
@@ -162,8 +162,8 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
         self.red = _ensure_iav("Colour", "_Test Red CPD")
         self.yarn = _ensure_item("_Test Plain Yarn WOCalc")
         self.assertEqual(frappe.get_doc("Item", self.yarn).get("attributes"), [])
-        # Kept outside the cloth recipe to exercise the generic partial-variant
-        # resolver without violating the rule that yarn Items are attr-less.
+        # Kept outside this legacy cloth recipe to exercise the generic
+        # partial-variant compatibility resolver.
         self.declared_item = _ensure_attributed_item(
             "_Test Declared Item WOCalc", ["Colour"])
         # Cloth mirrors live Thermal Rib: declares Dia + Colour.
@@ -721,6 +721,9 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
         )
         self.assertEqual(knit_group["output"][0]["item"], v["cloth"])
         self.assertAlmostEqual(flt(knit_group["output"][0]["qty"]), 3.0, places=3)
+        # This fixture exercises the legacy global yarn-ratio path, which keeps
+        # its historical Dia-only knitting output. Colour-wise recipes use the
+        # complete Yarn Colour -> Knitting Colour/Dia contract.
         self.assertEqual(knit_group["output"][0]["attrs"], {"Dia": v["dia"]})
 
         dye_name = next(m.name for m in matrices if m.process_name == v["dyeing"])

@@ -195,16 +195,16 @@
 				<TabPanels class="ipd-tabpanels">
 					<TabPanel value="details" class="ipd-tabpanel">
 
-			<!-- One user-facing cloth definition. The old global yarn-ratio table
-			     is derived server-side from the first colour for compatibility. -->
-			<section v-if="doc.is_cloth_item" class="panel">
+			<!-- Yarn recipes and exact routes are shown against their owning process
+			     in Fabric Processes. Keep this legacy editor out of Item Details. -->
+			<section v-if="false" class="panel">
 				<div class="panel-head">
 					<h3>Cloth Colours &amp; Yarn Recipes</h3>
 					<span class="panel-meta">{{ colourYarnGroups.length }} colour recipe(s)</span>
 				</div>
 				<div class="recipe-help">
-					One card owns a finished cloth colour and its yarn blend. Ratio % is each yarn's share of that
-					colour's blend; there is no second yarn-ratio entry. Maintain Dia and Colour conversions only in
+					One card owns a finished cloth colour, the exact coloured yarn inputs consumed by Knitting,
+					and the physical cloth received from Knitting. Downstream Colour and Dia changes remain under
 					<strong>Fabric Processes</strong>.
 				</div>
 				<div v-if="editing" class="recipe-list">
@@ -227,6 +227,7 @@
 							<strong class="recipe-total" :class="{ invalid: Math.abs(group.total - 100) > 0.001 }">
 								{{ group.total }}%
 							</strong>
+							<span class="recipe-route-count">{{ group.routes.length }} knitting route(s)</span>
 							<Button
 								icon="pi pi-trash"
 								severity="danger"
@@ -236,14 +237,21 @@
 							/>
 						</div>
 						<div class="recipe-yarn-head" aria-hidden="true">
-							<span>Yarn Item</span><span>Blend Share %</span><span></span>
+							<span>Yarn Item</span><span>Yarn Colour</span><span>Blend Share %</span><span></span>
 						</div>
 						<div v-for="(row, rowIndex) in group.rows" :key="row.name || rowIndex" class="recipe-yarn-row">
 							<LinkField
 								:modelValue="row.yarn_item || ''"
 								target-doctype="Item"
 								placeholder="Select yarn item"
-								@update:modelValue="(v) => (row.yarn_item = v || '')"
+								@update:modelValue="(v) => setRecipeYarnItem(row, v)"
+							/>
+							<LinkField
+								:modelValue="row.yarn_colour || ''"
+								target-doctype="Item Attribute Value"
+								:search-handler="searchColour"
+								placeholder="Select yarn colour"
+								@update:modelValue="(v) => (row.yarn_colour = v || '')"
 							/>
 							<InputNumber
 								v-model="row.ratio"
@@ -269,20 +277,65 @@
 							text
 							@click="addColourYarnToGroup(group)"
 						/>
+						<div class="recipe-route-block">
+							<div class="recipe-route-title">
+								<strong>Knitting output routes</strong>
+								<span>Physical matrix output → finished cloth requirement</span>
+							</div>
+							<div v-if="group.routes.length" class="recipe-route-head" aria-hidden="true">
+								<span>Knitting Output Colour</span><span>Knitting Output Dia</span><span>Finished Colour</span><span>Finished Dia</span><span>Route</span>
+							</div>
+							<div v-for="route in group.routes" :key="route.name || `${route.finished_colour}-${route.finished_dia}`" class="recipe-route-row">
+								<LinkField
+									:modelValue="route.knitting_output_colour || ''"
+									target-doctype="Item Attribute Value"
+									:search-handler="searchColour"
+									placeholder="Output colour"
+									@update:modelValue="(v) => (route.knitting_output_colour = v || '')"
+								/>
+								<LinkField
+									:modelValue="route.knitting_output_dia || ''"
+									target-doctype="Item Attribute Value"
+									:search-handler="searchDia"
+									placeholder="Output dia"
+									@update:modelValue="(v) => (route.knitting_output_dia = v || '')"
+								/>
+								<strong>{{ route.finished_colour || "—" }}</strong>
+								<strong>{{ route.finished_dia || "—" }}</strong>
+								<span class="recipe-route-state" :class="{ direct: route.knitting_output_colour === route.finished_colour && route.knitting_output_dia === route.finished_dia }">
+									{{ route.knitting_output_colour === route.finished_colour && route.knitting_output_dia === route.finished_dia ? "Direct" : "Downstream change" }}
+								</span>
+							</div>
+							<div v-if="!group.routes.length" class="recipe-route-empty">No knitting route maintained for this colour.</div>
+						</div>
 					</div>
 					<Button label="Add Finished Colour" icon="pi pi-plus" severity="secondary" text @click="addColourYarnGroup" />
 				</div>
 				<div v-else-if="colourYarnRows.length" class="recipe-view">
 					<div v-for="group in colourYarnGroups" :key="group.key" class="recipe-card">
 						<div class="recipe-card__title">
-							<span>
-								{{ group.colour }}
-							</span>
+							<span>{{ group.colour }}</span>
 							<span>{{ group.total }}%</span>
 						</div>
 						<div v-for="row in group.rows" :key="row.name || row.yarn_item" class="yarn-ratio-view-row">
 							<span class="pv">{{ row.yarn_item }}</span>
+							<span>{{ row.yarn_colour || "No yarn colour" }}</span>
 							<strong>{{ Number(row.ratio || 0) }}%</strong>
+						</div>
+						<div class="recipe-route-view">
+							<div class="recipe-route-title">
+								<strong>Knitting output routes</strong>
+								<span>{{ group.routes.length }} exact route(s)</span>
+							</div>
+							<div v-for="route in group.routes" :key="route.name || `${route.finished_colour}-${route.finished_dia}`" class="recipe-route-view-row">
+								<span><small>Knitting output</small><strong>{{ route.knitting_output_colour || "—" }} · {{ route.knitting_output_dia || "—" }}</strong></span>
+								<i class="pi pi-arrow-right" />
+								<span><small>Finished cloth</small><strong>{{ route.finished_colour || "—" }} · {{ route.finished_dia || "—" }}</strong></span>
+								<span class="recipe-route-state" :class="{ direct: route.knitting_output_colour === route.finished_colour && route.knitting_output_dia === route.finished_dia }">
+									{{ route.knitting_output_colour === route.finished_colour && route.knitting_output_dia === route.finished_dia ? "Direct" : "Downstream change" }}
+								</span>
+							</div>
+							<div v-if="!group.routes.length" class="recipe-route-empty">No knitting route maintained.</div>
 						</div>
 					</div>
 				</div>
@@ -322,7 +375,7 @@
 					<span class="panel-meta">
 						{{ itemAttrCards.length }} attribute(s)
 						<span v-if="itemAttrLoading"> · loading…</span>
-						<span v-else-if="doc.is_cloth_item"> · generated from the cloth routes above</span>
+						<span v-else-if="doc.is_cloth_item"> · generated from Fabric Process routes</span>
 					</span>
 				</div>
 				<div v-if="!itemAttrCards.length" class="panel-empty">
@@ -1227,6 +1280,7 @@ function addColourYarnGroup() {
 		cloth_item: doc.value?.is_cloth_item ? doc.value.item : "",
 		colour: "",
 		yarn_item: "",
+		yarn_colour: "",
 		ratio: 100,
 	})
 }
@@ -1238,8 +1292,14 @@ function addColourYarnToGroup(group) {
 		cloth_item: doc.value?.item || "",
 		colour: group.colour,
 		yarn_item: "",
+		yarn_colour: "",
 		ratio: splitEvenly ? 50 : 0,
 	})
+}
+function setRecipeYarnItem(row, value) {
+	const yarnItem = value || ""
+	if (row.yarn_item !== yarnItem) row.yarn_colour = ""
+	row.yarn_item = yarnItem
 }
 function setRecipeGroupColour(group, value) {
 	const colour = value || ""
@@ -1455,8 +1515,8 @@ function detailsValidate() {
 		const recipeGroups = {}
 		const recipeYarns = {}
 		for (const [index, row] of colourYarnRows.value.entries()) {
-			if (!row.cloth_item || !row.colour || !row.yarn_item) {
-				return `Colour yarn row ${index + 1}: select Cloth, Colour, and Yarn.`
+			if (!row.cloth_item || !row.colour || !row.yarn_item || !row.yarn_colour) {
+				return `Colour yarn row ${index + 1}: select Cloth, Finished Colour, Yarn Item, and Yarn Colour.`
 			}
 			if (!(Number(row.ratio) > 0)) {
 				return `Colour yarn row ${index + 1}: Ratio must be greater than zero.`
@@ -1559,6 +1619,7 @@ function hdrApply(ipd) {
 			cloth_item: row.cloth_item,
 			colour: row.colour,
 			yarn_item: row.yarn_item,
+			yarn_colour: row.yarn_colour,
 			ratio: Number(row.ratio) || 0,
 		}))
 		ipd.fabric_routes = fabricRouteRows.value.map((row) => ({
@@ -2478,10 +2539,11 @@ function fmtNum(v) {
 	align-items: center;
 }
 .yarn-ratio-view-row {
-	display: flex;
-	justify-content: space-between;
+	display: grid;
+	grid-template-columns: minmax(220px, 1fr) minmax(150px, 0.7fr) auto;
+	align-items: center;
 	gap: 16px;
-	max-width: 560px;
+	max-width: 760px;
 }
 .recipe-list,
 .recipe-view,
@@ -2564,7 +2626,7 @@ function fmtNum(v) {
 .recipe-yarn-head,
 .recipe-yarn-row {
 	display: grid;
-	grid-template-columns: minmax(220px, 1fr) 140px auto;
+	grid-template-columns: minmax(220px, 1fr) minmax(160px, 0.75fr) 140px auto;
 	gap: 8px;
 	align-items: center;
 }
@@ -2848,8 +2910,12 @@ function fmtNum(v) {
 		display: none;
 	}
 	.recipe-yarn-row {
-		grid-template-columns: minmax(0, 1fr) 92px auto;
+		grid-template-columns: 1fr;
 		gap: 5px;
+	}
+	.yarn-ratio-view-row {
+		grid-template-columns: 1fr;
+		gap: 4px;
 	}
 	.recipe-route-row,
 	.recipe-route-view-row {
@@ -2893,8 +2959,12 @@ function fmtNum(v) {
 		display: none;
 	}
 	.recipe-yarn-row {
-		grid-template-columns: minmax(0, 1fr) 92px auto;
+		grid-template-columns: 1fr;
 		gap: 5px;
+	}
+	.yarn-ratio-view-row {
+		grid-template-columns: 1fr;
+		gap: 4px;
 	}
 	.recipe-group-head,
 	.recipe-bulk-output,

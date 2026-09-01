@@ -243,7 +243,7 @@
 				<div class="fp-panel-body">
 					<div v-if="draft.change_attrs.includes('Colour')" class="fp-route-help">
 						For the first Colour-changing process, <strong>from</strong> is the physical
-						colour received from Knitting (for example Grey or Anthracite Melange), and
+						colour received from Knitting (for example Greige or Anthracite Melange), and
 						<strong>to</strong> is the finished cloth colour. These transitions drive the
 						colour-wise knitting matrices and Work Order output variants.
 					</div>

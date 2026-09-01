@@ -8,6 +8,7 @@
   "cloth_item",
   "colour",
   "yarn_item",
+  "yarn_colour",
   "ratio"
  ],
  "fields": [
@@ -34,6 +35,14 @@
    "label": "Yarn Item",
    "options": "Item",
    "reqd": 1
+  },
+  {
+   "description": "Physical colour of this yarn consumed by Knitting. Required when the Yarn Item has the Colour attribute.",
+   "fieldname": "yarn_colour",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Yarn Colour",
+   "options": "Item Attribute Value"
   },
   {
    "description": "Percentage within this Cloth Item and Fabric Colour recipe.",

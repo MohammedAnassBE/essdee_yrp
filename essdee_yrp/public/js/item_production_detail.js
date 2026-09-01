@@ -9,6 +9,7 @@ frappe.ui.form.on("Item Production Detail", {
 		frm.set_query("from_dia", "compacting_dia_details", () => ({ filters: { attribute_name: "Dia" } }));
 		frm.set_query("to_dia", "compacting_dia_details", () => ({ filters: { attribute_name: "Dia" } }));
 		frm.set_query("colour", "colour_yarn_recipes", () => ({ filters: { attribute_name: "Colour" } }));
+		frm.set_query("yarn_colour", "colour_yarn_recipes", () => ({ filters: { attribute_name: "Colour" } }));
 		frm.set_query("cloth_item", "colour_yarn_recipes", () => {
 			const cloths = frm.doc.is_cloth_item
 				? [frm.doc.item]
@@ -1611,6 +1612,9 @@ function fabric_processes_payload(frm, all_processes) {
 	return {
 		editable,
 		item: frm.doc.item || null,
+		knitting_process: frm.doc.knitting_process || null,
+		dyeing_process: frm.doc.dyeing_process || null,
+		compacting_process: frm.doc.compacting_process || null,
 		// Conversion input defaults to the IPD's yarn (yarn → cloth); NEVER the
 		// cloth item — a conversion's input and output must be distinct.
 		default_input: frm.doc.yarn_item || null,
@@ -1631,6 +1635,19 @@ function fabric_processes_payload(frm, all_processes) {
 			from_value: m.from_value,
 			to_value: m.to_value,
 		})),
+		colour_yarn_recipes: (frm.doc.colour_yarn_recipes || []).map((row) => ({
+			colour: row.colour,
+			yarn_item: row.yarn_item,
+			yarn_colour: row.yarn_colour,
+			ratio: row.ratio,
+		})),
+		fabric_routes: (frm.doc.fabric_routes || []).map((row) => ({
+			finished_colour: row.finished_colour,
+			finished_dia: row.finished_dia,
+			knitting_output_colour: row.knitting_output_colour,
+			knitting_output_dia: row.knitting_output_dia,
+			use_dyed_yarn: row.use_dyed_yarn,
+		})),
 	};
 }
 
@@ -1645,19 +1662,19 @@ function fabric_processes_write_back(frm, payload) {
 }
 
 // ===========================================================================
-// Colour-wise Yarn Recipes — grouped Desk editor.
+// Colour-wise Yarn Recipes — hidden storage.
 //
-// `colour_yarn_recipes` remains the internal child-table storage, while this
-// Vue island is the only cloth-IPD entry surface. One card = one finished
-// colour, with all yarns and the 100% total visible together. Fabric-route data
-// is preserved in the payload for compatibility, but Dia/Colour conversions
-// are intentionally entered and shown only in the Fabric Processes tab.
+// The exact yarn recipe and physical route are now explained inside the
+// relevant cards on the Fabric Processes tab. Keep the old HTML field and raw
+// tables hidden so Item Details remains item-specific instead of repeating the
+// production flow.
 // ===========================================================================
 
 function colour_yarn_recipe_toggle_grid(frm) {
-	// Colour-wise cards are the single entry surface. The legacy global Yarn
-	// Ratio is derived server-side from the first colour recipe for old readers.
-	["yarn_ratio_details", "colour_yarn_recipes", "fabric_routes"].forEach((fieldname) => {
+	// The legacy global Yarn Ratio is derived server-side from the first colour
+	// recipe for old readers; all user-facing flow detail lives on the process
+	// cards.
+	["yarn_ratio_details", "colour_yarn_recipe_editor", "colour_yarn_recipes", "fabric_routes"].forEach((fieldname) => {
 		const storage = frm.fields_dict[fieldname];
 		if (storage && storage.wrapper && frm.doc.is_cloth_item) {
 			$(storage.wrapper).hide();
@@ -1674,30 +1691,7 @@ function colour_yarn_recipe_mount(frm) {
 	}
 	$wrapper.empty();
 	frm.__colour_yarn_app = null;
-	if (!frm.doc.is_cloth_item) return;
-
-	const app = new frappe.production.ui.ColourYarnRecipeEditor(field.wrapper, {
-		on_change: (payload) => colour_yarn_recipe_write_back(frm, payload),
-	});
-	frm.__colour_yarn_app = app;
-	const can_write = (frm.perm || []).some((permission) => permission.write);
-	app.load_data({
-		cloth_item: frm.doc.item || "",
-		locked: !can_write ||
-			(!frm.is_new() && frm.doc.approval_status === "Approved"),
-		rows: (frm.doc.colour_yarn_recipes || []).map((row) => ({
-			cloth_item: row.cloth_item,
-			colour: row.colour,
-			yarn_item: row.yarn_item,
-			ratio: row.ratio,
-		})),
-		routes: (frm.doc.fabric_routes || []).map((row) => ({
-			finished_colour: row.finished_colour,
-			finished_dia: row.finished_dia,
-			knitting_output_colour: row.knitting_output_colour,
-			knitting_output_dia: row.knitting_output_dia,
-		})),
-	});
+	$wrapper.hide();
 }
 
 function colour_yarn_recipe_write_back(frm, payload) {
@@ -1707,6 +1701,7 @@ function colour_yarn_recipe_write_back(frm, payload) {
 		row.cloth_item = frm.doc.item || values.cloth_item || "";
 		row.colour = values.colour || "";
 		row.yarn_item = values.yarn_item || "";
+		row.yarn_colour = values.yarn_colour || "";
 		row.ratio = Number(values.ratio || 0);
 	});
 	frm.refresh_field("colour_yarn_recipes");
@@ -1717,6 +1712,7 @@ function colour_yarn_recipe_write_back(frm, payload) {
 		row.finished_dia = values.finished_dia || "";
 		row.knitting_output_colour = values.knitting_output_colour || "";
 		row.knitting_output_dia = values.knitting_output_dia || "";
+		row.use_dyed_yarn = values.use_dyed_yarn ? 1 : 0;
 	});
 	frm.refresh_field("fabric_routes");
 	colour_yarn_recipe_toggle_grid(frm);

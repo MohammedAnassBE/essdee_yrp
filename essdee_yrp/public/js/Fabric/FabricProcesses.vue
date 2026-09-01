@@ -26,13 +26,80 @@
 						<span v-if="ratioLabel(step)" class="fp-ratio">{{ ratioLabel(step) }}</span>
 					</div>
 
-					<div class="fp-summary">
+					<div v-if="!programRole(step)" class="fp-summary">
 						<span class="fp-summary-label">{{ __("What changes") }}</span>
 						<span class="fp-summary-text" v-html="summaryOf(step)"></span>
 					</div>
 
+					<div v-else class="fp-program">
+						<template v-if="programRole(step) === 'knitting'">
+							<div class="fp-program-head">
+								<strong>{{ __("Yarn consumption → Knitting output") }}</strong>
+								<span>{{ __("{0} finished colour program(s)", [knittingPrograms.length]) }}</span>
+							</div>
+							<div v-for="program in knittingPrograms" :key="program.finished_colour" class="fp-program-row fp-knitting-row">
+								<div class="fp-program-cell fp-finished-cell">
+									<small>{{ __("Finished colour") }}</small>
+									<strong>{{ program.finished_colour || __("No Colour") }}</strong>
+									<em :class="program.use_dyed_yarn ? 'is-dyed' : 'is-grey'">
+										{{ program.use_dyed_yarn ? __("Dyed yarn") : __("Non-dyed yarn input") }}
+									</em>
+								</div>
+								<div class="fp-program-cell fp-yarn-cell">
+									<small>{{ __("Yarn consumed") }}</small>
+									<span v-for="(yarn, yi) in program.yarns" :key="`${program.finished_colour}-${yi}`">
+										<strong>{{ yarn.yarn_item || __("No yarn item") }}</strong>
+										<span> · {{ yarn.yarn_colour || __("No Colour") }} · {{ formatRatio(yarn.ratio) }}%</span>
+									</span>
+								</div>
+								<span class="fp-program-arrow">→</span>
+								<div class="fp-program-cell fp-output-cell">
+									<small>{{ __("Knitting output") }}</small>
+									<span v-for="output in program.outputs" :key="`${program.finished_colour}-${output.colour}`">
+										<strong>{{ output.colour || __("No Colour") }}</strong>
+										<span> · {{ diaList(output.dias) }}</span>
+									</span>
+								</div>
+							</div>
+						</template>
+
+						<template v-else-if="programRole(step) === 'dyeing'">
+							<div class="fp-program-head">
+								<strong>{{ __("Knitting colour → Finished colour") }}</strong>
+								<span>{{ colourTransitions.length ? __("{0} colour change(s)", [colourTransitions.length]) : __("No colour change") }}</span>
+							</div>
+							<div v-if="colourTransitions.length" class="fp-transition-list">
+								<div v-for="transition in colourTransitions" :key="`${transition.from}-${transition.to}`" class="fp-transition-row">
+									<strong>{{ transition.from || __("No Colour") }}</strong>
+									<span class="fp-program-arrow">→</span>
+									<strong>{{ transition.to || __("No Colour") }}</strong>
+									<span>{{ diaList(transition.dias) }}</span>
+								</div>
+							</div>
+							<div v-else class="fp-program-empty">
+								{{ __("Every route already leaves Knitting in its finished colour; this IPD requires no colour conversion here.") }}
+							</div>
+						</template>
+
+						<template v-else-if="programRole(step) === 'compacting'">
+							<div class="fp-program-head">
+								<strong>{{ __("Knitting Dia → Finished Dia") }}</strong>
+								<span>{{ diaTransitions.length ? __("{0} Dia change(s)", [diaTransitions.length]) : __("No Dia change") }}</span>
+							</div>
+							<div v-if="diaTransitions.length" class="fp-transition-list">
+								<div v-for="transition in diaTransitions" :key="`${transition.from}-${transition.to}-${transition.colour}`" class="fp-transition-row">
+									<span>{{ transition.colour || __("All colours") }}</span>
+									<strong>{{ transition.from || __("No Dia") }}</strong>
+									<span class="fp-program-arrow">→</span>
+									<strong>{{ transition.to || __("No Dia") }}</strong>
+								</div>
+							</div>
+							<div v-else class="fp-program-empty">{{ __("This IPD requires no Dia conversion here.") }}</div>
+						</template>
+					</div>
+
 					<button
-						v-if="detailRows(step).length"
+						v-if="!programRole(step) && detailRows(step).length"
 						class="fp-detail-toggle"
 						data-testid="fp-toggle-detail"
 						:data-process="step.fabric_process"
@@ -43,7 +110,7 @@
 						<span class="fp-mut">({{ detailRows(step).length }})</span>
 					</button>
 
-					<div v-if="expandedSteps[step.sequence]" class="fp-detail" data-testid="fp-detail-rows">
+					<div v-if="!programRole(step) && expandedSteps[step.sequence]" class="fp-detail" data-testid="fp-detail-rows">
 						<div v-for="(row, ri) in detailRows(step)" :key="ri" class="fp-detail-row" v-html="row"></div>
 					</div>
 				</div>
@@ -329,6 +396,11 @@ const defaultInput = ref(null);
 const attributes = ref([]);
 const usedProcesses = ref([]);
 const allProcesses = ref([]);
+const knittingProcess = ref(null);
+const dyeingProcess = ref(null);
+const compactingProcess = ref(null);
+const colourYarnRecipes = ref([]);
+const fabricRoutes = ref([]);
 const valueCache = reactive({});
 let onChange = null;
 
@@ -419,6 +491,11 @@ function load_data(payload, on_change) {
 	defaultInput.value = payload.default_input || payload.item || null;
 	attributes.value = payload.attributes || [];
 	allProcesses.value = payload.all_processes || [];
+	knittingProcess.value = payload.knitting_process || null;
+	dyeingProcess.value = payload.dyeing_process || null;
+	compactingProcess.value = payload.compacting_process || null;
+	colourYarnRecipes.value = payload.colour_yarn_recipes || [];
+	fabricRoutes.value = payload.fabric_routes || [];
 	const maps = payload.mappings || [];
 	steps.value = (payload.processes || [])
 		.slice()
@@ -446,6 +523,84 @@ function load_data(payload, on_change) {
 	addProcessSel.value = "";
 	attributes.value.forEach((a) => loadValues(a));
 }
+
+// Exact cloth-program presentation. The generic mapping rows are an engine
+// contract; these helpers turn the persisted recipe + exact fabric routes into
+// the business flow users need to understand against each process card.
+function programRole(step) {
+	if (!fabricRoutes.value.length) return "";
+	if (knittingProcess.value && step.fabric_process === knittingProcess.value) return "knitting";
+	if (dyeingProcess.value && step.fabric_process === dyeingProcess.value) return "dyeing";
+	if (compactingProcess.value && step.fabric_process === compactingProcess.value) return "compacting";
+	return "";
+}
+
+function uniqueValues(values) {
+	return [...new Set((values || []).filter(Boolean))];
+}
+
+function formatRatio(value) {
+	const ratio = Number(value || 0);
+	return Number.isInteger(ratio) ? String(ratio) : String(Math.round(ratio * 1000) / 1000);
+}
+
+function diaList(dias) {
+	return uniqueValues(dias).join(" · ") || __("No Dia");
+}
+
+const knittingPrograms = computed(() => {
+	const colours = uniqueValues([
+		...colourYarnRecipes.value.map((row) => row.colour),
+		...fabricRoutes.value.map((row) => row.finished_colour),
+	]);
+	return colours.map((colour) => {
+		const routes = fabricRoutes.value.filter((route) => route.finished_colour === colour);
+		const byOutput = new Map();
+		routes.forEach((route) => {
+			const outputColour = route.knitting_output_colour || "";
+			if (!byOutput.has(outputColour)) byOutput.set(outputColour, []);
+			if (route.knitting_output_dia && !byOutput.get(outputColour).includes(route.knitting_output_dia)) {
+				byOutput.get(outputColour).push(route.knitting_output_dia);
+			}
+		});
+		return {
+			finished_colour: colour,
+			use_dyed_yarn: routes.some((route) => Number(route.use_dyed_yarn) === 1),
+			yarns: colourYarnRecipes.value.filter((row) => row.colour === colour),
+			outputs: [...byOutput.entries()].map(([outputColour, dias]) => ({ colour: outputColour, dias })),
+		};
+	});
+});
+
+const colourTransitions = computed(() => {
+	const groups = new Map();
+	fabricRoutes.value.forEach((route) => {
+		if (!route.knitting_output_colour || route.knitting_output_colour === route.finished_colour) return;
+		const key = `${route.knitting_output_colour}\u0001${route.finished_colour}`;
+		if (!groups.has(key)) groups.set(key, {
+			from: route.knitting_output_colour,
+			to: route.finished_colour,
+			dias: [],
+		});
+		const dia = route.finished_dia || route.knitting_output_dia;
+		if (dia && !groups.get(key).dias.includes(dia)) groups.get(key).dias.push(dia);
+	});
+	return [...groups.values()];
+});
+
+const diaTransitions = computed(() => {
+	const groups = new Map();
+	fabricRoutes.value.forEach((route) => {
+		if (!route.knitting_output_dia || route.knitting_output_dia === route.finished_dia) return;
+		const key = `${route.finished_colour}\u0001${route.knitting_output_dia}\u0001${route.finished_dia}`;
+		if (!groups.has(key)) groups.set(key, {
+			colour: route.finished_colour,
+			from: route.knitting_output_dia,
+			to: route.finished_dia,
+		});
+	});
+	return [...groups.values()];
+});
 
 function writeBack() {
 	usedProcesses.value = steps.value.map((s) => s.fabric_process).filter(Boolean);
@@ -1221,6 +1376,66 @@ defineExpose({ load_data, get_steps: () => JSON.parse(JSON.stringify(steps.value
 .fp-summary-text { font-size: var(--text-md); color: var(--text-color); }
 .fp-summary-text :deep(b) { font-weight: 600; }
 
+/* Exact cloth-program truth, rendered against its owning process. */
+.fp-program {
+	grid-column: 2 / 4;
+	margin-top: 9px;
+	border: 1px solid var(--border-color);
+	border-radius: var(--border-radius-md, 8px);
+	overflow: hidden;
+}
+.fp-program-head {
+	display: flex;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 8px 10px;
+	background: var(--subtle-fg, var(--control-bg));
+	border-bottom: 1px solid var(--border-color);
+	font-size: var(--text-sm);
+}
+.fp-program-head > span { color: var(--text-muted); }
+.fp-program-row {
+	display: grid;
+	grid-template-columns: minmax(130px, .7fr) minmax(240px, 1.25fr) auto minmax(210px, 1fr);
+	gap: 12px;
+	align-items: center;
+	padding: 10px;
+}
+.fp-program-row + .fp-program-row,
+.fp-transition-row + .fp-transition-row { border-top: 1px solid var(--border-color); }
+.fp-program-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fp-program-cell small {
+	color: var(--text-muted);
+	font-size: var(--text-xs);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: .04em;
+}
+.fp-program-cell > span { line-height: 1.45; }
+.fp-program-cell > span > span { color: var(--text-muted); }
+.fp-finished-cell em {
+	align-self: flex-start;
+	margin-top: 3px;
+	padding: 2px 7px;
+	border-radius: 999px;
+	font-size: var(--text-xs);
+	font-style: normal;
+	font-weight: 600;
+}
+.fp-finished-cell em.is-dyed { color: var(--purple-700, #6231d3); background: var(--purple-100, #ede7fe); }
+.fp-finished-cell em.is-grey { color: var(--gray-700, #475467); background: var(--bg-gray, #eceff3); }
+.fp-program-arrow { color: var(--text-muted); font-weight: 700; }
+.fp-transition-list { display: flex; flex-direction: column; }
+.fp-transition-row {
+	display: grid;
+	grid-template-columns: minmax(140px, 1fr) auto minmax(140px, 1fr) minmax(140px, 1fr);
+	gap: 10px;
+	align-items: center;
+	padding: 9px 10px;
+}
+.fp-transition-row > span:last-child { color: var(--text-muted); }
+.fp-program-empty { padding: 10px; color: var(--text-muted); font-size: var(--text-sm); }
+
 /* ---- combination detail (expand/collapse) ---- */
 .fp-detail-toggle {
 	grid-column: 2 / 4;
@@ -1322,4 +1537,11 @@ defineExpose({ load_data, get_steps: () => JSON.parse(JSON.stringify(steps.value
 .fp-btn { appearance: none; border: none; background: var(--primary, #2490ef); color: #fff; font: inherit; font-weight: 600; font-size: var(--text-md); padding: 8px 18px; border-radius: var(--border-radius, 6px); cursor: pointer; }
 .fp-btn:disabled { opacity: .45; cursor: not-allowed; }
 .fp-btn-ghost { appearance: none; border: 1px solid var(--border-color); background: var(--control-bg, transparent); color: var(--text-color); font: inherit; font-weight: 500; font-size: var(--text-md); padding: 8px 16px; border-radius: var(--border-radius, 6px); cursor: pointer; }
+
+@media (max-width: 760px) {
+	.fp-program-row { grid-template-columns: 1fr; }
+	.fp-program-row > .fp-program-arrow { transform: rotate(90deg); justify-self: start; }
+	.fp-transition-row { grid-template-columns: 1fr auto 1fr; }
+	.fp-transition-row > span:last-child { grid-column: 1 / -1; }
+}
 </style>

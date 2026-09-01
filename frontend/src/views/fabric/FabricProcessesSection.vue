@@ -73,13 +73,80 @@
 							<span v-if="ratioLabel(step)" class="fp-ratio">{{ ratioLabel(step) }}</span>
 						</div>
 
-						<div class="fp-summary">
+						<div v-if="!programRole(step)" class="fp-summary">
 							<!-- Compact glance-label; full rule detail is in the Edit pop-up. -->
 							<span class="fp-summary-text">{{ shortSummaryOf(step) }}</span>
 						</div>
 
+						<div v-else class="fp-program">
+							<template v-if="programRole(step) === 'knitting'">
+								<div class="fp-program-head">
+									<strong>Yarn consumption → Knitting output</strong>
+									<span>{{ knittingPrograms.length }} finished colour program(s)</span>
+								</div>
+								<div v-for="program in knittingPrograms" :key="program.finished_colour" class="fp-program-row">
+									<div class="fp-program-cell fp-finished-cell">
+										<small>Finished colour</small>
+										<strong>{{ program.finished_colour || "No Colour" }}</strong>
+										<em :class="program.use_dyed_yarn ? 'is-dyed' : 'is-grey'">
+											{{ program.use_dyed_yarn ? "Dyed yarn" : "Grey yarn input" }}
+										</em>
+									</div>
+									<div class="fp-program-cell">
+										<small>Yarn consumed</small>
+										<span v-for="(yarn, yi) in program.yarns" :key="`${program.finished_colour}-${yi}`">
+											<strong>{{ yarn.yarn_item || "No yarn item" }}</strong>
+											<span> · {{ yarn.yarn_colour || "No Colour" }} · {{ formatRatio(yarn.ratio) }}%</span>
+										</span>
+									</div>
+									<span class="fp-program-arrow">→</span>
+									<div class="fp-program-cell">
+										<small>Knitting output</small>
+										<span v-for="output in program.outputs" :key="`${program.finished_colour}-${output.colour}`">
+											<strong>{{ output.colour || "No Colour" }}</strong>
+											<span> · {{ diaList(output.dias) }}</span>
+										</span>
+									</div>
+								</div>
+							</template>
+
+							<template v-else-if="programRole(step) === 'dyeing'">
+								<div class="fp-program-head">
+									<strong>Knitting colour → Finished colour</strong>
+									<span>{{ colourTransitions.length ? `${colourTransitions.length} colour change(s)` : "No colour change" }}</span>
+								</div>
+								<div v-if="colourTransitions.length" class="fp-transition-list">
+									<div v-for="transition in colourTransitions" :key="`${transition.from}-${transition.to}`" class="fp-transition-row">
+										<strong>{{ transition.from || "No Colour" }}</strong>
+										<span class="fp-program-arrow">→</span>
+										<strong>{{ transition.to || "No Colour" }}</strong>
+										<span>{{ diaList(transition.dias) }}</span>
+									</div>
+								</div>
+								<div v-else class="fp-program-empty">
+									Every route already leaves Knitting in its finished colour; this IPD requires no colour conversion here.
+								</div>
+							</template>
+
+							<template v-else-if="programRole(step) === 'compacting'">
+								<div class="fp-program-head">
+									<strong>Knitting Dia → Finished Dia</strong>
+									<span>{{ diaTransitions.length ? `${diaTransitions.length} Dia change(s)` : "No Dia change" }}</span>
+								</div>
+								<div v-if="diaTransitions.length" class="fp-transition-list">
+									<div v-for="transition in diaTransitions" :key="`${transition.from}-${transition.to}-${transition.colour}`" class="fp-transition-row">
+										<span>{{ transition.colour || "All colours" }}</span>
+										<strong>{{ transition.from || "No Dia" }}</strong>
+										<span class="fp-program-arrow">→</span>
+										<strong>{{ transition.to || "No Dia" }}</strong>
+									</div>
+								</div>
+								<div v-else class="fp-program-empty">This IPD requires no Dia conversion here.</div>
+							</template>
+						</div>
+
 						<button
-							v-if="detailRows(step).length"
+							v-if="!programRole(step) && detailRows(step).length"
 							class="fp-detail-toggle"
 							type="button"
 							data-testid="fp-toggle-detail"
@@ -91,7 +158,7 @@
 							<span class="fp-mut">({{ detailRows(step).length }})</span>
 						</button>
 
-						<div v-if="expandedSteps[step.sequence]" class="fp-detail" data-testid="fp-detail-rows">
+						<div v-if="!programRole(step) && expandedSteps[step.sequence]" class="fp-detail" data-testid="fp-detail-rows">
 							<div v-for="(row, ri) in detailRows(step)" :key="ri" class="fp-detail-row" v-html="row"></div>
 						</div>
 					</div>
@@ -203,6 +270,83 @@ const attributes = computed(() =>
 // Conversion input defaults to the IPD's yarn (yarn → cloth); NEVER the cloth
 // item — a conversion's input and output must be distinct.
 const defaultInput = computed(() => props.doc?.yarn_item || props.doc?.item || null);
+
+function programRole(step) {
+	if (!(props.doc?.fabric_routes || []).length) return "";
+	if (props.doc?.knitting_process && step.fabric_process === props.doc.knitting_process) return "knitting";
+	if (props.doc?.dyeing_process && step.fabric_process === props.doc.dyeing_process) return "dyeing";
+	if (props.doc?.compacting_process && step.fabric_process === props.doc.compacting_process) return "compacting";
+	return "";
+}
+
+function uniqueValues(values) {
+	return [...new Set((values || []).filter(Boolean))];
+}
+
+function formatRatio(value) {
+	const ratio = Number(value || 0);
+	return Number.isInteger(ratio) ? String(ratio) : String(Math.round(ratio * 1000) / 1000);
+}
+
+function diaList(dias) {
+	return uniqueValues(dias).join(" · ") || "No Dia";
+}
+
+const knittingPrograms = computed(() => {
+	const recipes = props.doc?.colour_yarn_recipes || [];
+	const routes = props.doc?.fabric_routes || [];
+	const colours = uniqueValues([
+		...recipes.map((row) => row.colour),
+		...routes.map((row) => row.finished_colour),
+	]);
+	return colours.map((colour) => {
+		const colourRoutes = routes.filter((route) => route.finished_colour === colour);
+		const byOutput = new Map();
+		colourRoutes.forEach((route) => {
+			const outputColour = route.knitting_output_colour || "";
+			if (!byOutput.has(outputColour)) byOutput.set(outputColour, []);
+			if (route.knitting_output_dia && !byOutput.get(outputColour).includes(route.knitting_output_dia)) {
+				byOutput.get(outputColour).push(route.knitting_output_dia);
+			}
+		});
+		return {
+			finished_colour: colour,
+			use_dyed_yarn: colourRoutes.some((route) => Number(route.use_dyed_yarn) === 1),
+			yarns: recipes.filter((row) => row.colour === colour),
+			outputs: [...byOutput.entries()].map(([outputColour, dias]) => ({ colour: outputColour, dias })),
+		};
+	});
+});
+
+const colourTransitions = computed(() => {
+	const groups = new Map();
+	(props.doc?.fabric_routes || []).forEach((route) => {
+		if (!route.knitting_output_colour || route.knitting_output_colour === route.finished_colour) return;
+		const key = `${route.knitting_output_colour}\u0001${route.finished_colour}`;
+		if (!groups.has(key)) groups.set(key, {
+			from: route.knitting_output_colour,
+			to: route.finished_colour,
+			dias: [],
+		});
+		const dia = route.finished_dia || route.knitting_output_dia;
+		if (dia && !groups.get(key).dias.includes(dia)) groups.get(key).dias.push(dia);
+	});
+	return [...groups.values()];
+});
+
+const diaTransitions = computed(() => {
+	const groups = new Map();
+	(props.doc?.fabric_routes || []).forEach((route) => {
+		if (!route.knitting_output_dia || route.knitting_output_dia === route.finished_dia) return;
+		const key = `${route.finished_colour}\u0001${route.knitting_output_dia}\u0001${route.finished_dia}`;
+		if (!groups.has(key)) groups.set(key, {
+			colour: route.finished_colour,
+			from: route.knitting_output_dia,
+			to: route.finished_dia,
+		});
+	});
+	return [...groups.values()];
+});
 
 // ---- load (Desk load_data: rebuild steps from the sibling child tables) -----
 watch(
@@ -662,6 +806,66 @@ function removeStep(si) {
 .fp-summary-text { font-size: 13px; color: var(--esd-ink); }
 .fp-mut { color: var(--esd-muted); }
 
+.fp-program {
+	grid-column: 2 / 4;
+	margin-top: 9px;
+	border: 1px solid var(--esd-line);
+	border-radius: var(--radius-sm, 8px);
+	overflow: hidden;
+}
+.fp-program-head {
+	display: flex;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 8px 10px;
+	background: var(--esd-slate-50);
+	border-bottom: 1px solid var(--esd-line);
+	font-size: 12.5px;
+}
+.fp-program-head > span { color: var(--esd-muted); }
+.fp-program-row {
+	display: grid;
+	grid-template-columns: minmax(130px, .7fr) minmax(240px, 1.25fr) auto minmax(210px, 1fr);
+	gap: 12px;
+	align-items: center;
+	padding: 10px;
+}
+.fp-program-row + .fp-program-row,
+.fp-transition-row + .fp-transition-row { border-top: 1px solid var(--esd-line); }
+.fp-program-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fp-program-cell small {
+	color: var(--esd-muted);
+	font-size: 10.5px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: .04em;
+}
+.fp-program-cell > span { line-height: 1.45; }
+.fp-program-cell > span > span { color: var(--esd-muted); }
+.fp-finished-cell em {
+	align-self: flex-start;
+	margin-top: 3px;
+	padding: 2px 7px;
+	border-radius: 999px;
+	font-size: 10.5px;
+	font-style: normal;
+	font-weight: 600;
+}
+.fp-finished-cell em.is-dyed { color: #6231d3; background: #ede7fe; }
+.fp-finished-cell em.is-grey { color: #475467; background: var(--esd-slate-50); }
+.dark .fp-finished-cell em.is-dyed { color: #b79df3; background: rgba(124, 58, 237, .2); }
+.fp-program-arrow { color: var(--esd-muted); font-weight: 700; }
+.fp-transition-list { display: flex; flex-direction: column; }
+.fp-transition-row {
+	display: grid;
+	grid-template-columns: minmax(140px, 1fr) auto minmax(140px, 1fr) minmax(140px, 1fr);
+	gap: 10px;
+	align-items: center;
+	padding: 9px 10px;
+}
+.fp-transition-row > span:last-child { color: var(--esd-muted); }
+.fp-program-empty { padding: 10px; color: var(--esd-muted); font-size: 12.5px; }
+
 /* ---- combination detail (expand/collapse) ---- */
 .fp-detail-toggle {
 	grid-column: 2 / 4;
@@ -694,4 +898,11 @@ function removeStep(si) {
 .fp-addbar-field { display: flex; flex-direction: column; gap: 5px; flex: 0 0 320px; max-width: 320px; }
 .fp-addbar-field label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--esd-muted); font-weight: 600; }
 .fp-locked { margin-top: 14px; display: flex; align-items: center; gap: 8px; color: var(--esd-muted); font-size: 12.5px; }
+
+@media (max-width: 760px) {
+	.fp-program-row { grid-template-columns: 1fr; }
+	.fp-program-row > .fp-program-arrow { transform: rotate(90deg); justify-self: start; }
+	.fp-transition-row { grid-template-columns: 1fr auto 1fr; }
+	.fp-transition-row > span:last-child { grid-column: 1 / -1; }
+}
 </style>

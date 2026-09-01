@@ -66,14 +66,18 @@ def _validate_yarn_rows(rows, cloth_item=None):
 					row_number, yarn_item
 				)
 			)
-		if frappe.db.exists(
+		attributes = set(frappe.get_all(
 			"Item Item Attribute",
-			{"parent": yarn_item, "parenttype": "Item"},
-		):
+			filters={"parent": yarn_item, "parenttype": "Item"},
+			pluck="attribute",
+		))
+		unsupported = sorted(attributes - {"Colour"})
+		if unsupported:
 			frappe.throw(
-				_("Row {0}: Yarn Item {1} must not have variant attributes.").format(
-					row_number, yarn_item
-				)
+				_(
+					"Row {0}: Yarn Item {1} may only use the Colour variant "
+					"attribute; remove {2}."
+				).format(row_number, yarn_item, ", ".join(unsupported))
 			)
 		seen.add(yarn_item)
 		total += ratio

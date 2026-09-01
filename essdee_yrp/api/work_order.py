@@ -447,7 +447,8 @@ def _lookup_attr_sum(keyed, wanted):
 def _matrix_qty_rows(ipd, process_name, kind):
 	"""One qty row per matrix group: {key, label, out_attrs}. The matrices are
 	fully concrete (wildcards expanded at build time), so out_attrs is complete
-	for dyeing/compacting; knitting rows carry Dia (Colour merged at calc)."""
+	for every route. Legacy knitting matrices may still receive their Colour from
+	the route-specific calculation fallback."""
 	matrix_names = frappe.get_all(
 		"IPD Process Matrix",
 		filters={"ipd": ipd.name, "process_name": process_name, "docstatus": ["<", 2]},
@@ -1098,8 +1099,8 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 			continue
 
 		# Knitting: the popup's editable yarn figure overrides the computed
-		# input. Valid while knitting matrices have exactly ONE input (the
-		# attr-less yarn); with more inputs the override is ignored.
+		# input. Valid while knitting matrices have exactly ONE resolved input
+		# variant; with more inputs the override is ignored.
 		yarn_override = flt(entry.get("yarn_qty"))
 		if kind == "knitting" and yarn_override > 0 and len(aggregated) == 1:
 			next(iter(aggregated.values()))["qty"] = yarn_override
@@ -1271,13 +1272,11 @@ def _resolve_variant(item, attrs):
 	"""Resolve the Item Variant for a minted deliverable/receivable, stamping
 	ONLY the attributes the target Item actually declares.
 
-	The IPD matrix combo defines each minted row's intended attribute set; the
-	Item master may declare a DIFFERENT set. Owner ruling (WO-00029, lot
-	C0625-39/2-220): a yarn must never be forced to take a Colour — live
-	TT-YARN-GREY declares Colour while the knitting matrix consumes it
-	attr-less, and base get_or_create_variant threw "Please mention Colour
-	attribute in TT-YARN-GREY" because create_variant demands EVERY declared
-	attribute. So, relative to the base resolver:
+	The IPD matrix combo defines each minted row's intended attribute set. New
+	colour-wise yarn recipes provide the exact Yarn Colour and therefore take the
+	full variant path. Older matrices may omit attributes even when the Item master
+	declares them, so the partial-set fallback remains for compatibility. Relative
+	to the base resolver:
 
 	- attrs the Item does NOT declare are dropped — create_variant would
 	  silently ignore them anyway, but they poison the tuple lookup (the args

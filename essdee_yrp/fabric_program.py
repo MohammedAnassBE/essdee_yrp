@@ -324,6 +324,7 @@ def get_fabric_routes(ipd):
 			"finished_dia": row.finished_dia,
 			"knitting_output_colour": row.knitting_output_colour,
 			"knitting_output_dia": row.knitting_output_dia,
+			"use_dyed_yarn": bool(row.get("use_dyed_yarn")),
 		}
 		for row in ipd.get("fabric_routes") or []
 		if row.finished_colour

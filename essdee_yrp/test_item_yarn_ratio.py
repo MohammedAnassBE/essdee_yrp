@@ -38,6 +38,18 @@ def _ensure_yarn(name):
 	return name
 
 
+def _add_yarn_attribute(yarn, attribute):
+	if not frappe.db.exists("Item Attribute", attribute):
+		frappe.get_doc({
+			"doctype": "Item Attribute",
+			"attribute_name": attribute,
+		}).insert(ignore_permissions=True)
+	doc = frappe.get_doc("Item", yarn)
+	if attribute not in {row.attribute for row in doc.get("attributes") or []}:
+		doc.append("attributes", {"attribute": attribute})
+		doc.save(ignore_permissions=True)
+
+
 class TestItemYarnRatio(IntegrationTestCase):
 	def setUp(self):
 		self.yarn_a = _ensure_yarn("_Test Synced Yarn A")
@@ -90,6 +102,28 @@ class TestItemYarnRatio(IntegrationTestCase):
 			[(row.yarn_item, row.ratio) for row in item.yarn_ratio_details],
 			[(self.yarn_a, 100)],
 		)
+
+	def test_colour_is_the_supported_yarn_variant_attribute(self):
+		colour_yarn = _ensure_yarn("_Test Colour Variant Yarn")
+		_add_yarn_attribute(colour_yarn, "Colour")
+		upsert_item(self._payload([{
+			"doctype": "Item Yarn Ratio",
+			"yarn_item": colour_yarn,
+			"ratio": 100,
+		}]))
+		self.assertEqual(
+			frappe.get_doc("Item", self.cloth).yarn_ratio_details[0].yarn_item,
+			colour_yarn,
+		)
+
+		unsupported_yarn = _ensure_yarn("_Test Unsupported Variant Yarn")
+		_add_yarn_attribute(unsupported_yarn, "Dia")
+		with self.assertRaisesRegex(frappe.ValidationError, "may only use the Colour"):
+			upsert_item(self._payload([{
+				"doctype": "Item Yarn Ratio",
+				"yarn_item": unsupported_yarn,
+				"ratio": 100,
+			}]))
 
 	def test_sync_rejects_non_100_ratio(self):
 		with self.assertRaisesRegex(frappe.ValidationError, "exactly 100"):

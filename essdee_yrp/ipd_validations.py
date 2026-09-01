@@ -112,14 +112,43 @@ def validate_colour_yarn_recipes(doc):
 			frappe.throw(
 				f"Row {row.idx} of Colour-wise Yarn Recipes: Ratio must be greater than zero."
 			)
-		if frappe.db.exists(
+		attributes = set(frappe.get_all(
 			"Item Item Attribute",
-			{"parent": row.yarn_item, "parenttype": "Item"},
-		):
+			filters={
+				"parent": row.yarn_item,
+				"parenttype": "Item",
+			},
+			pluck="attribute",
+		))
+		unsupported = sorted(attributes - {"Colour"})
+		if unsupported:
 			frappe.throw(
 				f"Row {row.idx} of Colour-wise Yarn Recipes: Yarn Item "
-				f"{row.yarn_item} must not have variant attributes."
+				f"{row.yarn_item} may only use the Colour variant attribute; "
+				f"remove {', '.join(unsupported)}."
 			)
+		has_colour_attribute = "Colour" in attributes
+		if has_colour_attribute and not row.get("yarn_colour"):
+			frappe.throw(
+				f"Row {row.idx} of Colour-wise Yarn Recipes: Yarn Item "
+				f"{row.yarn_item} requires a Yarn Colour."
+			)
+		if row.get("yarn_colour"):
+			if not has_colour_attribute:
+				frappe.throw(
+					f"Row {row.idx} of Colour-wise Yarn Recipes: Yarn Item "
+					f"{row.yarn_item} does not define the Colour attribute."
+				)
+			if (
+				frappe.db.get_value(
+					"Item Attribute Value", row.yarn_colour, "attribute_name"
+				)
+				!= "Colour"
+			):
+				frappe.throw(
+					f"Row {row.idx} of Colour-wise Yarn Recipes: "
+					f"{row.yarn_colour} is not a Colour value."
+				)
 		groups[key] = groups.get(key, 0) + ratio
 	for (cloth, colour), total in groups.items():
 		if abs(total - 100.0) > 0.001:
@@ -347,6 +376,14 @@ def validate_fabric_routes(doc):
 				f"{row.finished_colour} / {row.finished_dia}."
 			)
 		seen.add(key)
+		if (
+			row.get("use_dyed_yarn")
+			and row.knitting_output_colour != row.finished_colour
+		):
+			frappe.throw(
+				f"Row {row.idx} of Fabric Routes: a dyed-yarn route must use "
+				"the Finished Colour as its Knitting Output Colour."
+			)
 		if recipe_colours and row.finished_colour not in recipe_colours:
 			frappe.throw(
 				f"Row {row.idx} of Fabric Routes: add a Colour-wise Yarn Recipe "

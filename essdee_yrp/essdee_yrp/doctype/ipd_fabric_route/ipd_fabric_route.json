@@ -8,6 +8,7 @@
   "finished_colour",
   "finished_dia",
   "knitting_output_colour",
+  "use_dyed_yarn",
   "knitting_output_dia"
  ],
  "fields": [
@@ -40,6 +41,15 @@
    "label": "Knitting Output Colour",
    "options": "Item Attribute Value",
    "reqd": 1
+  },
+  {
+   "columns": 2,
+   "default": "0",
+   "description": "When enabled, the knitting output colour is locked to the Finished Colour.",
+   "fieldname": "use_dyed_yarn",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Use Dyed Yarn"
   },
   {
    "columns": 2,

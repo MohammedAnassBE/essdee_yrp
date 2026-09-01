@@ -1,8 +1,8 @@
 <template>
 	<div ref="root" class="cyr-editor">
 		<div class="cyr-help">
-			{{ __("One card represents one finished cloth colour. Ratio % is that yarn's share of this colour's blend; this is the only yarn-ratio entry required, and each card must total exactly 100%.") }}
-			{{ __("Maintain Dia and Colour conversions only in the Fabric Processes tab.") }}
+			{{ __("One card represents one finished cloth colour. Each yarn row identifies the exact coloured yarn input and its share of the blend; every card must total exactly 100%.") }}
+			{{ __("The route summary shows the physical cloth received from Knitting before any downstream Colour or Dia change.") }}
 		</div>
 
 		<div v-if="!groups.length" class="cyr-empty">
@@ -29,11 +29,13 @@
 
 			<div class="cyr-yarn-head" aria-hidden="true">
 				<span>{{ __("Yarn Item") }}</span>
+				<span>{{ __("Yarn Colour") }}</span>
 				<span>{{ __("Blend Share %") }}</span>
 				<span></span>
 			</div>
 			<div v-for="(yarn, yi) in group.yarns" :key="yarn.key" class="cyr-yarn-row">
 				<div :class="`cyr-yarn-${yarn.key}`" class="cyr-yarn-control"></div>
+				<div :class="`cyr-yarn-colour-${yarn.key}`" class="cyr-yarn-colour-control"></div>
 				<input
 					v-model.number="yarn.ratio"
 					type="number"
@@ -55,6 +57,28 @@
 			<button v-if="!locked" type="button" class="btn btn-xs btn-default cyr-add-yarn" @click="add_yarn(gi)">
 				+ {{ __("Add Yarn") }}
 			</button>
+
+			<div class="cyr-routes">
+				<div class="cyr-route-title">
+					<strong>{{ __("Knitting routes") }}</strong>
+					<span>{{ __("Exact physical output stored in the process matrix") }}</span>
+				</div>
+				<div v-if="!group.routes.length" class="cyr-route-empty">
+					{{ __("No knitting route maintained for this finished colour.") }}
+				</div>
+				<div v-for="route in group.routes" :key="route.key" class="cyr-route-row">
+					<span>
+						<small>{{ __("Knitting output") }}</small>
+						<strong>{{ route.knitting_output_colour || __("No Colour") }} · {{ route.knitting_output_dia || __("No Dia") }}</strong>
+					</span>
+					<span class="cyr-route-arrow">→</span>
+					<span>
+						<small>{{ __("Finished cloth") }}</small>
+						<strong>{{ group.colour || __("No Colour") }} · {{ route.finished_dia || __("No Dia") }}</strong>
+					</span>
+					<em :class="{ direct: route_direct(group, route) }">{{ route_label(group, route) }}</em>
+				</div>
+			</div>
 		</div>
 
 		<button v-if="!locked" type="button" class="btn btn-sm btn-default cyr-add-colour" @click="add_group">
@@ -96,6 +120,7 @@ function load_data(data, change_cb) {
 		by_colour.get(colour).yarns.push({
 			key: ++key_counter,
 			yarn_item: row.yarn_item || "",
+			yarn_colour: row.yarn_colour || "",
 			ratio: Number(row.ratio) || 0,
 		});
 	});
@@ -128,6 +153,7 @@ function get_data() {
 				cloth_item: cloth_item.value,
 				colour: group.colour || "",
 				yarn_item: yarn.yarn_item || "",
+				yarn_colour: yarn.yarn_colour || "",
 				ratio: Number(yarn.ratio) || 0,
 			});
 		});
@@ -183,7 +209,7 @@ function add_group() {
 	groups.value.push({
 		key: ++key_counter,
 		colour: "",
-		yarns: [{ key: ++key_counter, yarn_item: "", ratio: 100 }],
+		yarns: [{ key: ++key_counter, yarn_item: "", yarn_colour: "", ratio: 100 }],
 		routes: [],
 		bulk_knitting_output_colour: "",
 	});
@@ -203,6 +229,7 @@ function add_yarn(group_index) {
 	group.yarns.push({
 		key: ++key_counter,
 		yarn_item: "",
+		yarn_colour: "",
 		ratio: split_evenly ? 50 : 0,
 	});
 	emit_change();
@@ -296,6 +323,20 @@ function mount_controls() {
 				__("Select yarn item"),
 				(value) => {
 					yarn.yarn_item = value || "";
+					yarn.yarn_colour = "";
+					$(root.value).find(`.cyr-yarn-colour-${yarn.key}`).empty();
+					emit_change();
+					nextTick(mount_controls);
+				},
+			);
+			make_link(
+				`.cyr-yarn-colour-${yarn.key}`,
+				yarn.yarn_colour,
+				"Item Attribute Value",
+				{ attribute_name: "Colour" },
+				__("Select yarn colour"),
+				(value) => {
+					yarn.yarn_colour = value || "";
 					emit_change();
 				},
 			);
@@ -359,7 +400,7 @@ defineExpose({
 .cyr-yarn-head,
 .cyr-yarn-row {
 	display: grid;
-	grid-template-columns: minmax(220px, 1fr) 130px 32px;
+	grid-template-columns: minmax(180px, 1fr) minmax(150px, 0.8fr) 120px 32px;
 	gap: 8px;
 	align-items: center;
 }
@@ -372,6 +413,50 @@ defineExpose({
 .cyr-ratio {
 	height: 34px;
 }
+.cyr-routes {
+	margin-top: 12px;
+	padding-top: 10px;
+	border-top: 1px solid var(--border-color);
+}
+.cyr-route-title {
+	display: flex;
+	justify-content: space-between;
+	gap: 10px;
+	margin-bottom: 7px;
+}
+.cyr-route-title span,
+.cyr-route-empty,
+.cyr-route-row small {
+	color: var(--text-muted);
+	font-size: 11px;
+}
+.cyr-route-row {
+	display: grid;
+	grid-template-columns: minmax(170px, 1fr) auto minmax(170px, 1fr) auto;
+	gap: 10px;
+	align-items: center;
+	padding: 7px 0;
+}
+.cyr-route-row + .cyr-route-row {
+	border-top: 1px solid var(--border-color);
+}
+.cyr-route-row > span:not(.cyr-route-arrow) {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.cyr-route-row em {
+	padding: 4px 7px;
+	border-radius: 999px;
+	color: var(--orange-700, #b54708);
+	background: var(--orange-50, #fff4e5);
+	font-size: 11px;
+	font-style: normal;
+}
+.cyr-route-row em.direct {
+	color: var(--green-700, #027a48);
+	background: var(--green-50, #ecfdf3);
+}
 .cyr-delete {
 	color: var(--text-muted);
 }
@@ -379,61 +464,6 @@ defineExpose({
 .cyr-add-colour,
 .cyr-add-route {
 	margin-top: 8px;
-}
-.cyr-routes {
-	margin-top: 12px;
-	padding-top: 10px;
-	border-top: 1px solid var(--border-color);
-}
-.cyr-bulk-output {
-	display: grid;
-	grid-template-columns: minmax(220px, 1fr) auto;
-	gap: 8px;
-	align-items: end;
-	margin-bottom: 10px;
-	padding: 9px;
-	border-radius: var(--border-radius-sm, 6px);
-	background: var(--subtle-fg);
-}
-.cyr-route-title {
-	display: flex;
-	align-items: baseline;
-	justify-content: space-between;
-	gap: 8px;
-	margin-bottom: 7px;
-}
-.cyr-route-title span,
-.cyr-route-empty {
-	color: var(--text-muted);
-	font-size: 11px;
-}
-.cyr-route-head,
-.cyr-route-row {
-	display: grid;
-	grid-template-columns: minmax(135px, 0.8fr) minmax(145px, 0.9fr) minmax(180px, 1fr) minmax(110px, auto) 32px;
-	gap: 8px;
-	align-items: center;
-}
-.cyr-route-head {
-	padding: 0 2px 4px;
-	color: var(--text-muted);
-	font-size: 11px;
-	font-weight: 600;
-}
-.cyr-route-row + .cyr-route-row {
-	margin-top: 7px;
-}
-.cyr-route-state {
-	padding: 5px 7px;
-	border-radius: 999px;
-	background: var(--yellow-100);
-	color: var(--yellow-700);
-	font-size: 11px;
-	text-align: center;
-}
-.cyr-route-state.direct {
-	background: var(--green-100);
-	color: var(--green-700);
 }
 .cyr-empty,
 .cyr-locked {
@@ -448,17 +478,11 @@ defineExpose({
 	.cyr-total {
 		justify-self: start;
 	}
-	.cyr-route-head {
-		display: none;
-	}
 	.cyr-route-row {
 		grid-template-columns: 1fr 1fr;
 		padding: 8px;
 		border: 1px solid var(--border-color);
 		border-radius: var(--border-radius-sm, 6px);
-	}
-	.cyr-route-state {
-		text-align: left;
 	}
 }
 @media (max-width: 480px) {
@@ -466,7 +490,7 @@ defineExpose({
 		display: none;
 	}
 	.cyr-yarn-row {
-		grid-template-columns: minmax(0, 1fr) 88px 30px;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 4px;
 	}
 	.cyr-route-row {

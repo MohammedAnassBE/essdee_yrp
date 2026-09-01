@@ -10,13 +10,15 @@ from unittest.mock import patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
-from frappe.utils import flt
+from frappe.utils import cint, flt
 
 from essdee_yrp import fabric_plan
 from essdee_yrp.api import cloth_program
 from essdee_yrp.api.cloth_program import (
     _ensure_lot_fabric_detail,
     _find_or_create_cpd,
+    _normalize_colour_yarn_recipes,
+    _normalize_dyed_yarn_colours,
     _normalize_knitting_output_colours,
     _normalize_yarns,
     _requirement_payload,
@@ -56,6 +58,18 @@ def _ensure_item(name1):
         "doctype": "Item", "name1": name1, "item_group": _ensure_item_group(),
         "default_unit_of_measure": _ensure_uom(), "is_stock_item": 1,
     }).insert(ignore_permissions=True).name
+
+
+def _ensure_attributed_item(name1, attributes):
+    name = _ensure_item(name1)
+    doc = frappe.get_doc("Item", name)
+    have = {row.attribute for row in doc.get("attributes") or []}
+    for attribute in attributes:
+        if attribute not in have:
+            doc.append("attributes", {"attribute": attribute})
+    if len(doc.get("attributes") or []) != len(have):
+        doc.save(ignore_permissions=True)
+    return name
 
 
 def _ensure_item_attribute(name):
@@ -286,6 +300,189 @@ class TestClothProgram(IntegrationTestCase):
             knit.input_item,
             "A multi-yarn knitting matrix must not mislabel its first yarn as the only input.",
         )
+
+    def test_yarn_colour_and_knitting_output_colour_are_matrix_contract(self):
+        yarn_colour = _ensure_iav("Colour", "_Test Natural Yarn CPD")
+        coloured_yarn = _ensure_attributed_item(
+            "_Test Coloured Yarn CPD", ["Colour"]
+        )
+        selection = dict(
+            self.selection,
+            yarn_item=coloured_yarn,
+            yarns=[{"yarn_item": coloured_yarn, "ratio": 100}],
+            colour_yarn_recipes=[{
+                "colour": self.red,
+                "yarn_item": coloured_yarn,
+                "yarn_colour": yarn_colour,
+                "ratio": 100,
+            }],
+            fabric_routes=[{
+                "finished_colour": self.red,
+                "finished_dia": self.dia,
+                "knitting_output_colour": self.greige,
+                "knitting_output_dia": self.dia,
+            }],
+        )
+
+        cpd_name = _find_or_create_cpd(self.cloth, selection, self.tuples)
+        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        self.assertEqual(cpd.colour_yarn_recipes[0].yarn_colour, yarn_colour)
+
+        knit = frappe.get_doc(
+            "IPD Process Matrix",
+            {"ipd": cpd_name, "process_name": self.k_proc},
+        )
+        group = next(iter(knit.get_combinations_grouped().values()))
+        self.assertEqual(group["input"][0]["attrs"], {"Colour": yarn_colour})
+        self.assertEqual(
+            group["output"][0]["attrs"],
+            {"Colour": self.greige, "Dia": self.dia},
+        )
+        reference = frappe.get_doc("Item Variant", knit.reference_item_variant)
+        self.assertEqual(
+            {row.attribute: row.attribute_value for row in reference.attributes},
+            {"Colour": self.red, "Dia": self.dia},
+        )
+
+    def test_variant_yarn_requires_a_valid_yarn_colour(self):
+        coloured_yarn = _ensure_attributed_item(
+            "_Test Required Colour Yarn CPD", ["Colour"]
+        )
+        with self.assertRaisesRegex(frappe.ValidationError, "select the Yarn Colour"):
+            _normalize_colour_yarn_recipes(
+                {
+                    "colour_yarn_recipes": [{
+                        "colour": self.red,
+                        "yarn_item": coloured_yarn,
+                        "ratio": 100,
+                    }],
+                },
+                [self.red],
+            )
+
+    def test_colour_level_dyed_yarn_selection_derives_exact_matrix_contract(self):
+        grey = _ensure_iav("Colour", "Grey")
+        greige = _ensure_iav("Colour", "Greige")
+        navy = _ensure_iav("Colour", "_Test Navy Dyed Yarn CPD")
+        melange = _ensure_iav("Colour", "_Test Anthra Melange CPD")
+        coloured_yarn = _ensure_attributed_item(
+            "_Test Colour-level Yarn CPD", ["Colour"]
+        )
+        item = frappe.get_doc("Item", self.cloth)
+        item.set("yarn_ratio_details", [])
+        item.append("yarn_ratio_details", {
+            "yarn_item": coloured_yarn,
+            "ratio": 100,
+        })
+        item.save(ignore_permissions=True)
+
+        selection = {
+            key: value
+            for key, value in self.selection.items()
+            if key not in {"yarn_item", "yarns", "greige_colour"}
+        }
+        selection.update({
+            "dyed_yarn_colours": [self.red],
+            "same_finished_colours": [melange],
+            "fabric_routes": [
+                {
+                    "finished_colour": self.red,
+                    "finished_dia": self.dia,
+                    "knitting_output_dia": self.dia,
+                },
+                {
+                    "finished_colour": navy,
+                    "finished_dia": self.dia,
+                    "knitting_output_dia": self.dia,
+                },
+                {
+                    "finished_colour": melange,
+                    "finished_dia": self.dia,
+                    "knitting_output_colour": melange,
+                    "knitting_output_dia": self.dia,
+                },
+            ],
+        })
+        lot = frappe.get_doc({
+            "doctype": "Lot",
+            "lot_name": "_Test CPD Lot Colour-level Dyed Yarn",
+        }).insert(ignore_permissions=True)
+        demand = {
+            (self.cloth, self.dia, self.red): 30.0,
+            (self.cloth, self.dia, navy): 20.0,
+            (self.cloth, self.dia, melange): 10.0,
+        }
+        with patch.object(cloth_program, "compute_cloth_demand", return_value=demand):
+            build_cloth_programs(lot.name, [selection])
+
+        lot.reload()
+        cpd_name = next(
+            row.production_detail
+            for row in lot.lot_fabric_details
+            if row.cloth_item == self.cloth
+        )
+        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        self.assertEqual(
+            {
+                (row.colour, row.yarn_item, row.yarn_colour, flt(row.ratio))
+                for row in cpd.colour_yarn_recipes
+            },
+            {
+                (self.red, coloured_yarn, self.red, 100.0),
+                (navy, coloured_yarn, grey, 100.0),
+                (melange, coloured_yarn, grey, 100.0),
+            },
+        )
+        self.assertEqual(
+            {
+                (
+                    row.finished_colour,
+                    row.knitting_output_colour,
+                    cint(row.use_dyed_yarn),
+                )
+                for row in cpd.fabric_routes
+            },
+            {
+                (self.red, self.red, 1),
+                (navy, greige, 0),
+                (melange, melange, 0),
+            },
+        )
+
+        matrix_contracts = set()
+        for matrix_name in frappe.get_all(
+            "IPD Process Matrix",
+            filters={"ipd": cpd_name, "process_name": self.k_proc},
+            pluck="name",
+        ):
+            matrix = frappe.get_doc("IPD Process Matrix", matrix_name)
+            group = next(iter(matrix.get_combinations_grouped().values()))
+            reference = frappe.get_doc("Item Variant", matrix.reference_item_variant)
+            final_colour = next(
+                row.attribute_value
+                for row in reference.attributes
+                if row.attribute == "Colour"
+            )
+            matrix_contracts.add((
+                final_colour,
+                group["input"][0]["attrs"]["Colour"],
+                group["output"][0]["attrs"]["Colour"],
+            ))
+        self.assertEqual(
+            matrix_contracts,
+            {
+                (self.red, self.red, self.red),
+                (navy, grey, greige),
+                (melange, grey, melange),
+            },
+        )
+
+    def test_dyed_yarn_selection_rejects_non_required_colours(self):
+        other = _ensure_iav("Colour", "_Test Other Dyed Yarn CPD")
+        with self.assertRaisesRegex(frappe.ValidationError, "not required"):
+            _normalize_dyed_yarn_colours(
+                {"dyed_yarn_colours": [other]}, [self.red]
+            )
 
     def test_cloth_attribute_values_are_generated_from_routes(self):
         cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
@@ -1523,6 +1720,8 @@ class TestClothProgram(IntegrationTestCase):
             "knitting_process": self.k_proc,
             "dyeing_process": self.d_proc,
             "knitting_output_colour": self.greige,
+            "grey_yarn_colour": "Grey",
+            "grey_knitting_output_colour": self.greige,
             "compacting_process": "_Test Compact CPD",
             "cloth_per_kg_yarn": 1.0,
         })

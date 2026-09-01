@@ -8,6 +8,11 @@ function getCsrfToken() {
   return window.csrf_token || window.frappe?.csrf_token || ''
 }
 
+function redirectToLogin() {
+  const target = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  window.location.href = `/login?redirect-to=${encodeURIComponent(target)}`
+}
+
 function buildQueryString(params) {
   const qs = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {
@@ -85,7 +90,7 @@ async function request(url, options = {}) {
   }
 
   if (response.status === 401) {
-    window.location.href = '/login'
+    redirectToLogin()
     throw new Error('Session expired. Redirecting to login.')
   }
 
@@ -101,6 +106,17 @@ async function request(url, options = {}) {
     } else if (body.message) {
       msg = body.message
     }
+		// Frappe intentionally returns 403 (not 401) when an authenticated-only
+		// whitelisted method is called after the session has become Guest. Its
+		// detail misleadingly says "Function ... is not whitelisted"; the summary
+		// contains the reliable session-expiry signal.
+		if (
+			body.exc_type === 'PermissionError' &&
+			/Login to access/i.test(cleanServerMessage(msg))
+		) {
+			redirectToLogin()
+			throw makeApiError('Session expired. Redirecting to login.', 403, body.exc_type)
+		}
     throw new Error(cleanServerMessage(msg))
   }
 

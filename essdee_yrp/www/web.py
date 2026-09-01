@@ -150,9 +150,10 @@ def get_boot():
 		"socketio_port": frappe.conf.socketio_port or 9000,
 		"app_logo": _website_asset("app_logo", "essdee-logo.png"),
 		"user": user,
-		# Per-user UI config (spec §8.1): resolved server-side by base yrp and
+		# Per-user UI config (spec §8.1): Premium White is Essdee's sole base
+		# layout; bounded personal overrides are still resolved server-side and
 		# injected synchronously — no async race, no loading flash. None on any
-		# failure; the SPA then renders its compiled-in Default (= today's UI).
+		# failure; the SPA then renders its compiled-in Premium White fallback.
 		"ui_config": _safe_ui_config(),
 	}
 
@@ -165,7 +166,7 @@ def _safe_ui_config():
 	survives the import itself failing (e.g. a base-yrp deploy mid-flight), so
 	the /web page can never 500 because of UI config."""
 	try:
-		from yrp.yrp.api.ui_config import get_config_for_boot
+		from essdee_yrp.ui_config import get_config_for_boot
 
 		return get_config_for_boot()
 	except Exception:

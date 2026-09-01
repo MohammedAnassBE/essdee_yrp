@@ -19,3 +19,4 @@ essdee_yrp.patches.setup_ipd_yarn_ratios
 essdee_yrp.patches.setup_fabric_reference_allocations
 essdee_yrp.patches.set_custom_field_ownership
 essdee_yrp.patches.backfill_deterministic_valuation_lineage
+essdee_yrp.patches.keep_premium_white_layout

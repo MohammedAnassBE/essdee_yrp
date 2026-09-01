@@ -71,7 +71,7 @@ installEngine(app, {
 
 // Hydrate the UI-config store from boot (spec §8.2) — synchronous, zero extra
 // round-trip: web.html sets frappe.boot before this bundle runs. A missing or
-// rejected boot config leaves the compiled-in Default (= today's UI) active.
+// rejected boot config leaves the compiled-in Premium White layout active.
 // Then apply the layout theme before first paint; the watch re-applies it on
 // preview enter/exit and refresh.
 const ui = useUiConfigStore(pinia)

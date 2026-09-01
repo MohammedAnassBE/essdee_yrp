@@ -50,7 +50,7 @@ export const useUiConfigStore = defineStore("yrpUiConfig", {
 	state: () => ({
 		config: null, // server-resolved config, or null → getters fall back
 		meta: null, // { layout, has_preference, schema_version, warnings } | null
-		fallback: null, // compiled-in Default (host-supplied via loadFromBoot, §12.3)
+		fallback: null, // compiled-in Premium White (host-supplied via loadFromBoot, §12.3)
 		previewUser: null, // §10 View-as — target user while previewing, else null
 		previewLayout: null, // §10 sandbox — bare layout name while previewing, else null
 		previewPermHints: null, // { can_read, can_create } computed AS the target
@@ -126,7 +126,7 @@ export const useUiConfigStore = defineStore("yrpUiConfig", {
 	actions: {
 		/**
 		 * Hydrate from the boot payload (§8.2): `boot` is frappe.boot.ui_config
-		 * ({config, meta} or null — §8.1) and `fallback` the compiled-in Default
+		 * ({config, meta} or null — §8.1) and `fallback` the compiled-in Premium White
 		 * config object. A rejected/missing boot leaves `config` null so `active`
 		 * serves the fallback — today's UI, structurally unreachable white screen.
 		 */

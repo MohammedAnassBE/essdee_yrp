@@ -378,8 +378,8 @@ class TestUIClientMirror(IntegrationTestCase):
 		of ui_config.CURRENT_SCHEMA_VERSION — the two MUST bump in lockstep
 		(§2.3 rule 1). A server ahead of the engine makes guardPayload reject
 		every valid layout as 'schema_version > engine' and fall back to the
-		compiled Default fleet-wide; the reverse guess-interprets a newer shape
-		the engine cannot read. Parsed with the SAME integer-const regex the
+		compiled Premium White layout fleet-wide; the reverse guess-interprets a
+		newer shape the engine cannot read. Parsed with the SAME integer-const regex the
 		composite-caps mirror above uses."""
 		src = _strip_line_comments(_read(os.path.join(self.engine_src, "stores", "uiConfig.js")))
 		m = re.search(r"export\s+const\s+ENGINE_SCHEMA_VERSION\s*=\s*(\d+)", src)
@@ -390,7 +390,7 @@ class TestUIClientMirror(IntegrationTestCase):
 			"ENGINE_SCHEMA_VERSION (apps/essdee_yrp/frontend/src/engine/stores/uiConfig.js) and "
 			"ui_config.CURRENT_SCHEMA_VERSION have drifted — they bump in LOCKSTEP "
 			"(§2.3 rule 1). A server ahead of the engine makes the store reject every "
-			"valid layout as too-new and serve the compiled Default fleet-wide.",
+			"valid layout as too-new and serve the compiled Premium White layout fleet-wide.",
 		)
 
 	# ── Track 1 item 3: the DEEP grammar mirror (validator vs grammar.js) ──

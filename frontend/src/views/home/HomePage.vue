@@ -4,7 +4,7 @@
      (src/blocks/: home-greeting, home-queues, home-recent, home-quick-create);
      this shell only picks WHICH home screen to render:
        store.homeScreen (the active layout's screens.home)
-       → compiled-in Default home (§12.3) when the config's home is empty
+       → compiled-in Premium White home (§12.3) when the config's home is empty
        → and the same fallback if ScreenRenderer itself ever throws
          (onErrorCaptured; per-block failures are already contained by
          BlockBoundary — this guards the renderer level only, §14 row 11). -->
@@ -28,7 +28,7 @@ const screen = computed(() => {
 })
 
 onErrorCaptured((err) => {
-	console.error("[essdee home] screen render failed — falling back to Default home:", err)
+	console.error("[essdee home] screen render failed — falling back to Premium White home:", err)
 	if (renderFailed.value) return false // fallback failed too: stop, don't loop
 	renderFailed.value = true
 	return false

@@ -1,5 +1,7 @@
 """Essdee Delivery Challan guardrails for CPM-prepared drafts."""
 
+import frappe
+from frappe import _
 from frappe.utils import flt
 
 from yrp.yrp.doctype.delivery_challan.delivery_challan import DeliveryChallan
@@ -57,6 +59,46 @@ def strip_generated_invalid_zero_placeholders(doc):
 
 
 class EssdeeDeliveryChallan(DeliveryChallan):
+	def set_missing_values(self):
+		"""Keep the operator-selected DC source authoritative.
+
+		Base YRP uses the Work Order delivery location as a convenient source
+		fallback. Essdee stock can be issued from a different floor location and
+		warehouse for each DC, so an empty source must remain empty and fail the
+		mandatory-field gate instead of being silently replaced during Save.
+		"""
+		# Two specialized Essdee services create and submit their own DCs without
+		# using the ordinary Desk form. They already carry an explicit source
+		# location and retain base's unique-warehouse resolution. The manual Desk
+		# contract applies to every other DC, including CPM-prepared drafts.
+		if self.get("from_finishing") or self.get("cutting_bulk_lay_sheet"):
+			return super().set_missing_values()
+
+		from_location = self.get("from_location")
+		from_warehouse = self.get("from_warehouse")
+		super().set_missing_values()
+		self.from_location = from_location
+		self.from_warehouse = from_warehouse
+
+	def validate_items(self):
+		"""Allow an Essdee DC to record an in-place dispatch.
+
+		Cutting may issue stock against a Work Order without moving it out of the
+		machine-cutting location. The DC must still update its business lineage,
+		pending quantities, Cutting projections, and paired stock audit entries.
+		Keep every base item/quantity validation; remove only the different-
+		warehouse restriction for Essdee.
+		"""
+		if not (self.get("items") or self.get("correction_items")):
+			frappe.throw(_("At least one deliverable or correction item is required."))
+
+		check_qty = self.docstatus == 1
+		for row in (self.get("items") or []) + (self.get("correction_items") or []):
+			if not row.item_variant:
+				frappe.throw(_("Row {0}: Item Variant is required.").format(row.idx))
+			if check_qty and flt(row.delivered_quantity or row.qty) <= 0:
+				frappe.throw(_("Row {0}: Qty must be greater than zero.").format(row.idx))
+
 	def onload(self):
 		# Sanitize in memory before base grouping so historical/in-flight drafts
 		# that contain numeric-zero Link values can render and be submitted.

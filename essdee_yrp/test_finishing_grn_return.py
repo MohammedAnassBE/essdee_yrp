@@ -18,12 +18,18 @@ class TestFinishingGRNReturn(IntegrationTestCase):
 
 		grn.validate_items()
 
-	def test_ordinary_grn_still_rejects_same_warehouse(self):
+	def test_ordinary_grn_allows_same_warehouse_and_retains_row_validation(self):
 		grn = _return_grn(from_finishing=0, is_return=0)
 
-		with self.assertRaisesRegex(
-			frappe.ValidationError, "From Warehouse and To Warehouse must be different"
-		):
+		grn.validate_items()
+
+		grn.items[0].item_variant = ""
+		with self.assertRaisesRegex(frappe.ValidationError, "Item Variant is required"):
+			grn.validate_items()
+
+		grn.items[0].item_variant = "VAR-1"
+		grn.items[0].quantity = 0
+		with self.assertRaisesRegex(frappe.ValidationError, "Quantity must be greater than zero"):
 			grn.validate_items()
 
 	def test_explicit_return_reference_must_match_its_item(self):

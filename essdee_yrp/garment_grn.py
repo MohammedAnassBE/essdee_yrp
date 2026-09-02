@@ -9,9 +9,369 @@ owns the stock posting; this Essdee hook supplies that company-specific
 
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import cint, cstr, flt
 
 from essdee_yrp.fabric_grn import QTY_TOLERANCE, populate_grn_deliverables
+
+
+@frappe.whitelist()
+def get_grn_calculation_context(goods_received_note):
+	"""Return the saved Work Order demand as an editable GRN matrix.
+
+	Production API's Calculate button did not calculate from the current stock
+	balance or from arbitrary Lot rows. It replayed the exact
+	``work_order_calculated_items`` saved when the Work Order was built. Keep that
+	lineage here and use the F16 garment calculator for the resulting outputs.
+	"""
+	grn = frappe.get_doc("Goods Received Note", goods_received_note)
+	grn.check_permission("read")
+	work_order, ipd = _validate_grn_calculation(grn)
+	context = _calculated_item_context(work_order, ipd)
+	context.update(
+		{
+			"default_received_type": frappe.db.get_single_value(
+				"YRP Stock Settings", "default_received_type"
+			),
+			"modified": cstr(grn.modified),
+		}
+	)
+	return context
+
+
+@frappe.whitelist()
+def calculate_grn_receivables(
+	goods_received_note,
+	rows,
+	received_type,
+	modified=None,
+):
+	"""Replace one Received-Type split with outputs for selected WO demand.
+
+	Other Received-Type quantities already entered on the draft are retained.
+	The saved draft is rebuilt from authoritative Work Order Receivable rows so
+	item/UOM/reference/dimension metadata cannot be supplied by the browser.
+	"""
+	rows = frappe.parse_json(rows) if isinstance(rows, str) else rows
+	grn = frappe.get_doc("Goods Received Note", goods_received_note)
+	grn.check_permission("write")
+	work_order, ipd = _validate_grn_calculation(grn)
+	if modified and cstr(grn.modified) != cstr(modified):
+		frappe.throw(
+			_("{0} was modified after the Calculate dialog opened. Reload and try again.").format(
+				grn.name
+			),
+			frappe.TimestampMismatchError,
+		)
+	if not received_type or not frappe.db.exists("Received Type", received_type):
+		frappe.throw(_("Select a valid Received Type."))
+
+	demands = _validated_grn_demands(work_order, ipd, rows)
+	if not demands:
+		frappe.throw(_("Enter a quantity greater than zero for at least one row."))
+	from essdee_yrp.garment_work_order import calculate_garment_process_rows
+
+	lot = frappe.get_cached_doc("Lot", work_order.lot)
+	_inputs, outputs = calculate_garment_process_rows(
+		ipd, lot, work_order.process_name, demands
+	)
+	if not outputs:
+		frappe.throw(_("The Work Order calculation did not produce any receivables."))
+
+	desired_by_receivable = {}
+	for output in outputs:
+		quantity = flt(output.get("qty"))
+		if quantity <= 0:
+			continue
+		target = _match_calculated_receivable(work_order, output)
+		desired_by_receivable[target.name] = (
+			flt(desired_by_receivable.get(target.name)) + quantity
+		)
+
+	from yrp.stock.dimensions import apply_dimension_defaults
+	from yrp.stock.save_stock_items import group_items_for_ui
+	from yrp.yrp.doctype.delivery_challan.delivery_challan import (
+		_apply_dimension_values_to_rows,
+		_get_production_group_dimensions,
+	)
+	from yrp.yrp.doctype.goods_received_note.goods_received_note import (
+		_pending_receivable_rows,
+	)
+
+	delivery_challan = (
+		frappe.get_doc("Delivery Challan", grn.delivery_challan)
+		if grn.delivery_challan
+		else None
+	)
+	canonical_rows = _pending_receivable_rows(
+		work_order,
+		existing_rows=grn.get("items") or [],
+		delivery_challan=delivery_challan,
+	)
+	canonical_rows = _include_calculated_receivable_rows(
+		canonical_rows,
+		work_order,
+		desired_by_receivable,
+		received_type,
+	)
+	canonical_rows = _apply_calculated_receivable_quantities(
+		canonical_rows,
+		desired_by_receivable,
+		received_type,
+	)
+	_apply_dimension_values_to_rows(
+		canonical_rows, _get_production_group_dimensions(work_order)
+	)
+	apply_dimension_defaults(canonical_rows)
+
+	# Keep the same one-logical-SKU/size layout used when a GRN is first opened.
+	from essdee_yrp.overrides.goods_received_note import (
+		normalize_cutting_grn_row_indexes,
+	)
+
+	canonical_rows = normalize_cutting_grn_row_indexes(canonical_rows)
+	item_details = group_items_for_ui(canonical_rows, "Goods Received Note")
+	grn.item_details = frappe.as_json(item_details)
+	grn.save()
+	return {
+		"name": grn.name,
+		"received_type": received_type,
+		"received_rows": len(canonical_rows),
+		"total_quantity": sum(flt(row.get("quantity")) for row in canonical_rows),
+	}
+
+
+def _validate_grn_calculation(grn):
+	if grn.docstatus != 0:
+		frappe.throw(_("Calculate can update only a draft Goods Received Note."))
+	if grn.get("against") != "Work Order" or not grn.get("against_id"):
+		frappe.throw(_("Calculate is available only for a Work Order Goods Received Note."))
+	if any(
+		grn.get(fieldname)
+		for fieldname in (
+			"is_return",
+			"is_rework",
+			"additional_grn",
+			"includes_packing",
+			"cutting_laysheet",
+			"cut_panel_movement",
+			"from_closed_wo_sewing_details",
+		)
+	):
+		frappe.throw(_("Calculate is not available for this Goods Received Note mode."))
+
+	work_order = frappe.get_doc("Work Order", grn.against_id)
+	if work_order.docstatus != 1 or work_order.get("open_status") == "Close":
+		frappe.throw(_("Work Order {0} must be submitted and open.").format(work_order.name))
+	if not work_order.get("work_order_calculated_items"):
+		frappe.throw(_("Work Order {0} has no saved calculated items.").format(work_order.name))
+	if not work_order.get("production_detail") or not work_order.get("lot"):
+		frappe.throw(_("Work Order {0} is missing its Lot or Item Production Detail.").format(work_order.name))
+	ipd = frappe.get_cached_doc("Item Production Detail", work_order.production_detail)
+	if ipd.get("is_cloth_item"):
+		frappe.throw(_("Use the fabric receipt flow for a cloth Work Order."))
+	return work_order, ipd
+
+
+def _calculated_item_context(work_order, ipd):
+	from yrp.utils import get_variant_attr_details
+	from yrp.yrp.doctype.item_production_detail.item_production_detail import (
+		get_ipd_primary_values,
+	)
+
+	primary_values = list(get_ipd_primary_values(ipd.name) or [])
+	display_attributes = []
+	matrix_rows = []
+	matrix_rows_by_key = {}
+	flat_rows = []
+	for index, source in enumerate(work_order.get("work_order_calculated_items") or []):
+		quantity = flt(source.get("quantity"))
+		if not source.get("item_variant") or quantity <= 0:
+			continue
+		attributes = get_variant_attr_details(source.item_variant)
+		visible_attributes = {
+			key: value
+			for key, value in attributes.items()
+			if key != ipd.get("dependent_attribute")
+		}
+		flat_rows.append(
+			{
+				"source_row": source.name,
+				"item_variant": source.item_variant,
+				"attributes": visible_attributes,
+				"available_qty": quantity,
+				"qty": quantity,
+				"table_index": source.get("table_index"),
+				"row_index": source.get("row_index"),
+			}
+		)
+		for attribute in visible_attributes:
+			if attribute != ipd.get("primary_item_attribute") and attribute not in display_attributes:
+				display_attributes.append(attribute)
+
+		group_key = (
+			cstr(source.get("table_index")),
+			cstr(source.get("row_index") if source.get("row_index") not in (None, "") else index),
+		)
+		matrix_row = matrix_rows_by_key.get(group_key)
+		if matrix_row is None:
+			matrix_row = {
+				"attributes": {
+					key: value
+					for key, value in visible_attributes.items()
+					if key != ipd.get("primary_item_attribute")
+				},
+				"values": {},
+			}
+			matrix_rows_by_key[group_key] = matrix_row
+			matrix_rows.append(matrix_row)
+
+		primary_value = visible_attributes.get(ipd.get("primary_item_attribute")) or "default"
+		if primary_value not in primary_values:
+			primary_values.append(primary_value)
+		matrix_row["values"][primary_value] = {
+			"source_row": source.name,
+			"item_variant": source.item_variant,
+			"available_qty": quantity,
+			"qty": quantity,
+		}
+
+	return {
+		"primary_attribute": ipd.get("primary_item_attribute"),
+		"primary_values": primary_values,
+		"display_attributes": display_attributes,
+		"matrix_rows": matrix_rows,
+		"rows": flat_rows,
+	}
+
+
+def _validated_grn_demands(work_order, ipd, rows):
+	from yrp.utils import get_variant_attr_details
+
+	calculated = {
+		row.name: row for row in work_order.get("work_order_calculated_items") or []
+	}
+	demands = []
+	seen = set()
+	for incoming in rows or []:
+		source_name = incoming.get("source_row")
+		if not source_name or source_name in seen:
+			frappe.throw(_("Each calculated Work Order row may be selected only once."))
+		seen.add(source_name)
+		source = calculated.get(source_name)
+		if not source:
+			frappe.throw(_("Unknown Work Order Calculated Item row {0}.").format(source_name))
+		quantity = flt(incoming.get("qty"))
+		if quantity <= 0:
+			continue
+		available = flt(source.get("quantity"))
+		if quantity > available + QTY_TOLERANCE:
+			frappe.throw(
+				_("Quantity {0} exceeds calculated quantity {1} for {2}.").format(
+					quantity, available, source.item_variant
+				)
+			)
+		if frappe.db.get_value("Item Variant", source.item_variant, "item") != ipd.item:
+			frappe.throw(_("Item Variant {0} does not belong to IPD {1}.").format(source.item_variant, ipd.name))
+		demands.append(
+			{
+				"item_variant": source.item_variant,
+				"qty": quantity,
+				"attrs": get_variant_attr_details(source.item_variant),
+				"table_index": cint(source.get("table_index")),
+				"row_index": cint(source.get("row_index")),
+				"set_combination": source.get("set_combination") or "{}",
+			}
+		)
+	return demands
+
+
+def _match_calculated_receivable(work_order, output):
+	from yrp.yrp.doctype.delivery_challan.delivery_challan import _normal_json
+
+	candidates = [
+		row
+		for row in work_order.get("receivables") or []
+		if row.item_variant == output.get("item_variant")
+		and _normal_json(row.get("set_combination"))
+		== _normal_json(output.get("set_combination"))
+	]
+	for fieldname in ("table_index", "row_index"):
+		value = output.get(fieldname)
+		if value in (None, ""):
+			continue
+		exact = [row for row in candidates if cstr(row.get(fieldname)) == cstr(value)]
+		if exact:
+			candidates = exact
+	if len(candidates) != 1:
+		frappe.throw(
+			_("Calculated output {0} matches {1} Work Order Receivable rows; expected exactly one.").format(
+				output.get("item_variant"), len(candidates)
+			)
+		)
+	return candidates[0]
+
+
+def _apply_calculated_receivable_quantities(rows, desired_by_receivable, received_type):
+	result = []
+	for source in rows or []:
+		row = frappe._dict(source)
+		if (row.get("received_type") or "") == (received_type or ""):
+			row.quantity = flt(desired_by_receivable.get(row.get("ref_docname")))
+			row.stock_qty = row.quantity * (flt(row.get("conversion_factor")) or 1)
+		if flt(row.get("quantity")) > 0:
+			result.append(row)
+	return result
+
+
+def _include_calculated_receivable_rows(
+	rows, work_order, desired_by_receivable, received_type
+):
+	"""Add selected output rows even when their current WO pending is zero.
+
+	Calculate is a draft-entry aid, not a submit gate.  The base pending-row
+	builder deliberately omits fully received outputs, but the owner may still
+	recalculate the draft and let the authoritative Work Order/pending/input
+	checks report at Submit.  All row identity and item metadata still come from
+	the saved Work Order Receivable, never from the browser.
+	"""
+	result = [frappe._dict(row) for row in rows or []]
+	existing = {
+		(row.get("ref_docname"), row.get("received_type") or "")
+		for row in result
+	}
+	selected_type = received_type or ""
+	for target in work_order.get("receivables") or []:
+		if target.name not in desired_by_receivable:
+			continue
+		if (target.name, selected_type) in existing:
+			continue
+		base_row_index = (
+			target.row_index
+			if target.row_index not in (None, "")
+			else target.idx - 1
+		)
+		row = frappe._dict(
+			item_variant=target.item_variant,
+			quantity=0,
+			uom=target.uom,
+			pending_quantity=flt(target.pending_quantity),
+			max_receivable_quantity=max(flt(target.pending_quantity), 0),
+			ref_doctype="Work Order Receivables",
+			ref_docname=target.name,
+			table_index=target.table_index,
+			row_index=(
+				f"{base_row_index}::{received_type}"
+				if received_type
+				else base_row_index
+			),
+			set_combination=target.set_combination,
+			rate=target.cost,
+		)
+		if received_type:
+			row.received_type = received_type
+		result.append(row)
+		existing.add((target.name, selected_type))
+	return result
 
 
 def before_validate(doc, method=None):

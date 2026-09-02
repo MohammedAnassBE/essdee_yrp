@@ -50,7 +50,7 @@ frappe.ui.form.on("Cutting Plan", {
                 frm.cut_plan_cloth_items.load_data(frm.doc.__onload.item_cloth_details, "cloth")
             }
             else {
-                frm.cut_plan_cloth_items.load_data([], null)
+                frm.cut_plan_cloth_items.load_data([], "cloth")
             }
 
             frm.cut_plan_accessory_items = new frappe.production.ui.CutPlanClothItems(frm.fields_dict['accessory_html'].wrapper)
@@ -58,7 +58,7 @@ frappe.ui.form.on("Cutting Plan", {
                 frm.cut_plan_accessory_items.load_data(frm.doc.__onload.item_accessory_details, "accessory")
             }
             else {
-                frm.cut_plan_accessory_items.load_data([], null)
+                frm.cut_plan_accessory_items.load_data([], "accessory")
             }
             frm.add_custom_button("Generate", function () {
                 if (frm.is_dirty()) {
@@ -84,6 +84,9 @@ frappe.ui.form.on("Cutting Plan", {
                     },
                     freeze: true,
                     freeze_message: "Fetching Cloth",
+                    callback: function () {
+                        frm.reload_doc()
+                    }
                 })
             }, "Fetch and Calculate")
             frm.add_custom_button("Calculate LaySheets", function () {

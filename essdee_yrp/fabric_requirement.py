@@ -218,39 +218,50 @@ def calculate_cloth(ipd_doc, variant_attrs, qty, cloth_combination, stitching_co
                 cutting_key = get_key(
                     combination_attrs, cloth_combination["cutting_attributes"]
                 )
-                cutting_row = cloth_combination["cutting_combination"].get(cutting_key)
-                if not cutting_row:
-                    continue
+                cutting_row = _require_cutting_consumption(cloth_combination, cutting_key)
                 dia, weight = cutting_row
                 cloth_key = get_key(
                     combination_attrs, cloth_combination["cloth_attributes"]
                 )
-                cloth_type = cloth_combination["cloth_combination"].get(cloth_key)
-                if not cloth_type:
-                    frappe.throw(_(
-                        "No cloths row for {0} in the garment IPD's Cutting tab "
-                        "cloth combination — add the missing row.").format(cloth_key))
+                cloth_type = _require_cutting_cloth_mapping(cloth_combination, cloth_key)
                 weight = weight * qty * attr_qty
                 cloth_detail.append(add_cloth_detail(weight, cloth_type, cloth_colour, dia, "cloth"))
     else:
         cutting_key = get_key(attrs, cloth_combination["cutting_attributes"])
-        cutting_row = cloth_combination["cutting_combination"].get(cutting_key)
-        if not cutting_row:
-            frappe.throw(_(
-                "No cutting row for {0} in the garment IPD's Cutting tab cloth "
-                "weight combination — add the missing row.").format(cutting_key))
-        dia, weight = cutting_row
+        dia, weight = _require_cutting_consumption(cloth_combination, cutting_key)
         cloth_key = get_key(attrs, cloth_combination["cloth_attributes"])
-        cloth_type = cloth_combination["cloth_combination"].get(cloth_key)
-        if not cloth_type:
-            frappe.throw(_(
-                "No cloths row for {0} in the garment IPD's Cutting tab cloth "
-                "combination — add the missing row.").format(cloth_key))
+        cloth_type = _require_cutting_cloth_mapping(cloth_combination, cloth_key)
         weight = weight * qty
         cloth_detail.append(
             add_cloth_detail(weight, cloth_type, attrs[ipd_doc.packing_attribute], dia, "cloth"))
     accessory_detail = calculate_accessory(ipd_doc, cloth_combination, stitching_combination, attrs, qty)
     return cloth_detail + accessory_detail
+
+
+def _format_combination_key(key):
+    return " / ".join(str(value or "Not Set") for value in key)
+
+
+def _require_cutting_consumption(cloth_combination, key):
+    row = cloth_combination["cutting_combination"].get(key)
+    if not row:
+        frappe.throw(
+            _("No Cutting consumption matches combination {0}.").format(
+                _format_combination_key(key)
+            )
+        )
+    return row
+
+
+def _require_cutting_cloth_mapping(cloth_combination, key):
+    cloth_type = cloth_combination["cloth_combination"].get(key)
+    if not cloth_type:
+        frappe.throw(
+            _(
+                "No Cutting Cloth mapping matches consumption combination {0}."
+            ).format(_format_combination_key(key))
+        )
+    return cloth_type
 
 
 def _aggregate_demand(item_detail, variant_rows, cloth_combination, stitching_combination,

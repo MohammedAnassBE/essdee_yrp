@@ -2289,6 +2289,10 @@ def update_label_print_status(doc_name):
 		calculate_laysheets(doc.cutting_plan)
 	elif doc.cutting_order:
 		calculate_cutting_order_laysheets(doc.cutting_order)
+	return {
+		"status": doc.status,
+		"goods_received_note": doc.goods_received_note,
+	}
 
 @frappe.whitelist()
 def get_primary_values(cutting_laysheet):

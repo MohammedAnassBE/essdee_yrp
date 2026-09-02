@@ -3,6 +3,21 @@
 import frappe
 
 
+@frappe.whitelist()
+def create_return_grn(doc_name, items, received_type=None, cut_panel_movement=None):
+	"""Create the base-authorized return draft and optionally bind whole bundles."""
+	from yrp.yrp.doctype.delivery_challan.delivery_challan import (
+		create_return_grn as create_base_return_grn,
+	)
+
+	name = create_base_return_grn(doc_name, items, received_type)
+	if cut_panel_movement:
+		grn = frappe.get_doc("Goods Received Note", name)
+		grn.cut_panel_movement = cut_panel_movement
+		grn.save()
+	return name
+
+
 def onload(doc, method=None):
 	"""Render a cutting DC as one panel/colour row with Size columns."""
 	del method
@@ -55,3 +70,20 @@ def before_validate(doc, method=None):
 	# flag says only that its supplier is a company location, while a DC must
 	# compare both endpoints (including the same-location no-transit case).  Base
 	# Delivery Challan computes that transaction-specific value authoritatively.
+
+
+def sync_cutting_plan_received_cloth(doc, method=None):
+	"""Reflect a submitted/cancelled DC in every linked Cutting Plan."""
+	del method
+	if not doc.get("work_order"):
+		return
+	from essdee_yrp.essdee_yrp.doctype.cutting_plan.cutting_plan import (
+		rebuild_received_cloth,
+	)
+
+	for name in frappe.get_all(
+		"Cutting Plan",
+		filters={"work_order": doc.work_order, "docstatus": 1},
+		pluck="name",
+	):
+		rebuild_received_cloth(frappe.get_doc("Cutting Plan", name))

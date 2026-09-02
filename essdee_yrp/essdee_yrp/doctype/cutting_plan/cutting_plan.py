@@ -136,18 +136,24 @@ class CuttingPlan(Document):
 		updated_status = None
 		status = self.cp_status
 		if status in ['Planned', 'Ready to Cut', 'Fabric Partially Received']:
-			percent = frappe.db.get_single_value("MRP Settings", "cloth_allowance_percentage")
-			check = True
-			for row in self.cutting_plan_cloth_details:
-				if row.weight < row.required_weight:
-					percent_weight = (row.weight/100) * percent
-					if row.weight < (row.required_weight - percent_weight):
-						check = False
-
-			if check:
-				updated_status = 'Ready to Cut'
+			if not self.cutting_plan_cloth_details:
+				# An empty requirement table is not evidence that all cloth was
+				# received. Historical plans can reach this state when Generate was
+				# skipped, so keep them safely Planned until Fetch regenerates rows.
+				updated_status = 'Planned'
 			else:
-				updated_status = 'Fabric Partially Received'
+				percent = frappe.db.get_single_value("MRP Settings", "cloth_allowance_percentage")
+				check = True
+				for row in self.cutting_plan_cloth_details:
+					if row.weight < row.required_weight:
+						percent_weight = (row.weight/100) * percent
+						if row.weight < (row.required_weight - percent_weight):
+							check = False
+
+				if check:
+					updated_status = 'Ready to Cut'
+				else:
+					updated_status = 'Fabric Partially Received'
 
 		if not updated_status:
 			completed_json = update_if_string_instance(self.completed_items_json)
@@ -282,6 +288,9 @@ class CuttingPlan(Document):
 		return total_rows/total_sizes
 
 	def before_submit(self):
+		if not self.cutting_plan_cloth_details:
+			_generate_cloth_requirements(self, preserve_operational_values=False)
+
 		self.no_of_colours = self.get_no_of_colours()
 		percent = frappe.db.get_single_value("MRP Settings", "cloth_allowance_percentage")
 		check = True
@@ -442,6 +451,34 @@ def get_items(lot):
 @frappe.whitelist()
 def get_cloth1(cutting_plan):
 	cutting_plan_doc = _get_submitted_cutting_plan(cutting_plan)
+	counts = _generate_cloth_requirements(cutting_plan_doc)
+	text = f"Cloth Generated on {datetime.now()} by {frappe.session.user}"
+	cutting_plan_doc.add_comment('Comment',text=text)
+	cutting_plan_doc.save()
+	return counts
+
+
+def _cloth_requirement_key(row):
+	return (
+		row.get("cloth_item_variant"),
+		row.get("cloth_type"),
+		row.get("colour"),
+		row.get("dia"),
+		row.get("accessory"),
+	)
+
+
+def _preserve_cloth_operational_values(required_rows, current_rows):
+	current_by_key = {_cloth_requirement_key(row): row for row in current_rows}
+	for row in required_rows:
+		current = current_by_key.get(_cloth_requirement_key(row))
+		row["weight"] = flt(current.get("weight")) if current else 0.0
+		row["used_weight"] = flt(current.get("used_weight")) if current else 0.0
+		row["balance_weight"] = round(row["weight"] - row["used_weight"], 3)
+	return required_rows
+
+
+def _build_cloth_requirement_rows(cutting_plan_doc):
 	ipd_doc = frappe.get_cached_doc("Item Production Detail", cutting_plan_doc.production_detail)
 	item_attributes = get_attribute_details(cutting_plan_doc.item)
 	cloth_combination = get_cloth_combination(ipd_doc)
@@ -482,8 +519,15 @@ def get_cloth1(cutting_plan):
 			"colour": k[1],
 			'dia': k[2],
 			"required_weight": cloth_details[k],
-			"weight":0.0
+			"weight": 0.0,
+			"used_weight": 0.0,
+			"balance_weight": 0.0,
 		})
+	if not required_cloth_details:
+		frappe.throw(_(
+			"No cloth requirements were generated for Cutting Plan {0}. "
+			"Verify the Cutting consumption and Cutting Cloth mappings in Item Production Detail {1}."
+		).format(cutting_plan_doc.name, cutting_plan_doc.production_detail))
 
 	required_accessory_details = []
 	for k in accessory_detail:
@@ -497,13 +541,28 @@ def get_cloth1(cutting_plan):
 			"colour": k[1],
 			'dia': k[2],
 			"required_weight": accessory_detail[k],
-			"weight":0.0
+			"weight": 0.0,
+			"used_weight": 0.0,
+			"balance_weight": 0.0,
 		})
+	return required_cloth_details, required_accessory_details
+
+
+def _generate_cloth_requirements(cutting_plan_doc, preserve_operational_values=True):
+	required_cloth_details, required_accessory_details = _build_cloth_requirement_rows(cutting_plan_doc)
+	if preserve_operational_values:
+		required_cloth_details = _preserve_cloth_operational_values(
+			required_cloth_details, cutting_plan_doc.cutting_plan_cloth_details
+		)
+		required_accessory_details = _preserve_cloth_operational_values(
+			required_accessory_details, cutting_plan_doc.cutting_plan_accessory_details
+		)
 	cutting_plan_doc.set("cutting_plan_accessory_details", required_accessory_details)
 	cutting_plan_doc.set("cutting_plan_cloth_details", required_cloth_details)
-	text = f"Cloth Generated on {datetime.now()} by {frappe.session.user}"
-	cutting_plan_doc.add_comment('Comment',text=text)
-	cutting_plan_doc.save()
+	return {
+		"cloth_requirements": len(required_cloth_details),
+		"accessory_requirements": len(required_accessory_details),
+	}
 
 def item_attribute_details(variant, item_attributes):
 	attribute_details = {}
@@ -867,41 +926,102 @@ def get_cutting_plan_size_reports(cutting_plan):
 @frappe.whitelist()
 def fetch_received_cloth(docname):
 	cp_doc = _get_submitted_cutting_plan(docname)
-	dc_list = frappe.get_all("Delivery Challan", filters={
-		"docstatus": 1,
-		"work_order": cp_doc.work_order
-	}, pluck="name")
+	return rebuild_received_cloth(cp_doc, add_repair_comment=True)
 
-	for item in cp_doc.cutting_plan_cloth_details:
-		item.weight = 0
 
-	for dc in dc_list:
-		internal, _from, _to = frappe.get_value("Delivery Challan", dc, ["is_internal_unit", "from_address", "supplier_address"])
-		if internal and _from != _to:
-			se_list = frappe.get_all("Stock Entry", filters={
+def rebuild_received_cloth(cp_doc, add_repair_comment=False):
+	"""Recompute received cloth from submitted dispatch/completion documents.
+
+	This is deliberately a rebuild, not an increment. Submit retries, cancels,
+	and historical repairs therefore converge on the same authoritative result.
+	"""
+	generated_requirements = False
+	if not cp_doc.cutting_plan_cloth_details:
+		_generate_cloth_requirements(cp_doc, preserve_operational_values=False)
+		generated_requirements = True
+
+	delivery_challans = frappe.get_all(
+		"Delivery Challan",
+		filters={"docstatus": 1, "work_order": cp_doc.work_order},
+		fields=["name", "is_internal_unit", "from_address", "supplier_address"],
+	)
+	direct_names = []
+	completion_dc_names = []
+	for delivery_challan in delivery_challans:
+		if isinstance(delivery_challan, str):
+			is_internal, from_address, supplier_address = frappe.get_value(
+				"Delivery Challan",
+				delivery_challan,
+				["is_internal_unit", "from_address", "supplier_address"],
+			) or (0, None, None)
+			delivery_challan = frappe._dict(
+				name=delivery_challan,
+				is_internal_unit=is_internal,
+				from_address=from_address,
+				supplier_address=supplier_address,
+			)
+		if (
+			delivery_challan.is_internal_unit
+			and delivery_challan.from_address != delivery_challan.supplier_address
+		):
+			completion_dc_names.append(delivery_challan.name)
+		else:
+			direct_names.append(delivery_challan.name)
+
+	received_by_variant = {}
+	if direct_names:
+		direct_rows = frappe.get_all(
+			"Delivery Challan Item",
+			filters={"parent": ["in", direct_names], "parenttype": "Delivery Challan"},
+			fields=["item_variant", "delivered_quantity"],
+		)
+		if direct_rows and isinstance(direct_rows[0], str):
+			direct_rows = [
+				row
+				for name in direct_names
+				for row in frappe.get_doc("Delivery Challan", name).get("items") or []
+			]
+		for row in direct_rows:
+			received_by_variant[row.item_variant] = (
+				flt(received_by_variant.get(row.item_variant)) + flt(row.delivered_quantity)
+			)
+
+	if completion_dc_names:
+		completion_names = frappe.get_all(
+			"Stock Entry",
+			filters={
 				"purpose": "DC Completion",
 				"against": "Delivery Challan",
+				"against_id": ["in", completion_dc_names],
 				"docstatus": 1,
-				"against_id": dc
-			}, pluck="name")
-			for se in se_list:
-				se_doc = frappe.get_doc("Stock Entry", se)
-				for ste_item in se_doc.items:
-					for item in cp_doc.cutting_plan_cloth_details:
-						if item.cloth_item_variant == ste_item.item:
-							item.weight += ste_item.qty
-							break
-		else:
-			dc_doc = frappe.get_doc("Delivery Challan", dc)
-			for dc_item in dc_doc.items:
-				for item in cp_doc.cutting_plan_cloth_details:
-					if item.cloth_item_variant == dc_item.item_variant:
-						item.weight += dc_item.delivered_quantity
-						break
+			},
+			pluck="name",
+		)
+		if completion_names:
+			for row in frappe.get_all(
+				"Stock Entry Detail",
+				filters={"parent": ["in", completion_names], "parenttype": "Stock Entry"},
+				fields=["item", "qty"],
+			):
+				received_by_variant[row.item] = (
+					flt(received_by_variant.get(row.item)) + flt(row.qty)
+				)
+
+	for item in cp_doc.cutting_plan_cloth_details:
+		item.weight = flt(received_by_variant.get(item.cloth_item_variant))
 	for item in cp_doc.cutting_plan_cloth_details:
 		item.balance_weight = round(item.weight - item.used_weight, 3)
 
-	cp_doc.save()
+	if generated_requirements and add_repair_comment:
+		cp_doc.add_comment(
+			'Comment',
+			text=f"Missing cloth requirements regenerated while fetching received cloth on {datetime.now()} by {frappe.session.user}",
+		)
+	cp_doc.save(ignore_permissions=True)
+	return {
+		"generated_requirements": generated_requirements,
+		"cloth_requirements": len(cp_doc.cutting_plan_cloth_details),
+	}
 
 
 def get_balance_lot_transfer_items(cp_doc, warehouse, received_type):

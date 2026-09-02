@@ -172,6 +172,18 @@ class TestFabricRequirement(IntegrationTestCase):
             (rows[0]["cloth_type"], rows[0]["dia"], rows[0]["colour"]),
             ("Main Fabric", "30 Dia", "Red"))
 
+    def test_panel_cutting_never_silently_drops_a_missing_consumption(self):
+        ipd = _aishwarya_garment_ipd()
+        ipd.cutting_items_json = json.dumps({"attributes": [], "items": []})
+        cc = get_cloth_combination(ipd)
+        sc = get_stitching_combination(ipd)
+
+        with self.assertRaisesRegex(
+            frappe.ValidationError,
+            "No Cutting consumption matches combination",
+        ):
+            calculate_cloth(ipd, {"Size": "75 cm", "Colour": "Navy"}, 10, cc, sc)
+
     def test_aishwarya_size_panel_dia_split_and_pouch_double(self):
         # F4: dia varies by size AND by panel within a size; Pouch counts twice.
         ipd = _aishwarya_garment_ipd()

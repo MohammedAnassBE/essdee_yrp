@@ -272,6 +272,9 @@ empty list and therefore preserves the current strict behavior.
 | A107 | Manual identity Work Order outputs were forced through an unrelated calculated accessory route | U44 reran the actual Cut Panel Movement DC→GRN lifecycle against retained `WO-2627-00857`. Its manually appended exact `Top Front` receivables correctly owned their matching panel inputs, but the A101 accessory replay considered only the Work Order's saved calculated `Top Back` fusing routes and rejected every manual output as an unmatched calculated embellishment row. The transaction rolled back before GRN insert. | FIXED in Essdee only: accessory inference first requires the received Item Variant to exist in a saved calculated route. A migrated/manual exact identity output with no such route consumes its exact panel without fabricating an accessory; a calculated variant with a mismatched combination/index remains a hard error. The new regression and full valuation contract pass 47/47, and the actual DC→GRN submit/cancel round trip passes in 148.3 seconds. Base YRP remains untouched. |
 | A108 | Offline migration planner blocks on removed F15 `Item Production Detail.description` | The diagnostic complete-suite run reached the fail-closed planner after the live source schema gained `Item Production Detail.description`. Finalized base YRP intentionally has no such field, so leaving it unclassified made the migration plan invalid even though no row carried business data. | FIXED in Essdee migration rules/tests: a final read-only SQL audit of live F15 `mrp3.site` proves 437 IPDs, zero nonblank descriptions, and maximum stored length zero. The field is explicitly ignored with that exact reviewed reason; it is neither guessed, copied, nor recreated in base YRP. Transformer and planner modules pass 17/17 and 5/5, and the final unfiltered suite finishes with zero planner blockers. |
 | A109 | Late-valuation integration commits escaped the test rollback and polluted retained acceptance counts | The first post-U44 state audit after a green complete suite found 789 rather than 780 active retained-Lot SLEs and 134 rather than 94 immutable idempotent adjustments. The nine active SLEs belonged only to the latest `_Test Valuation U40 Reverse ...` Stock Entries. The base valuation worker correctly commits between lock/apply phases, so the test's source transactions and audit rows crossed Frappe's outer rollback while its final cancellations did not. Repeated diagnostic runs had retained 40 immutable, uniquely keyed adjustment audit rows. | FIXED in the Essdee integration test only: patch the worker's commit boundary for the duration of this single-threaded test so production phase ordering executes inside the runner transaction and rolls back atomically. The existing prefix-guarded helper cancelled exactly `YRP-STE-2026-00191` through `00199`, restoring 780 active retained SLEs and zero active U40 Stock Entries; no retained business voucher was eligible. Immutable audit history was not deleted, so the documented adjustment inventory is now 134. Transaction safety passes 1/1, the focused chain passes in 193.3 seconds with 780/134/0 unchanged, and the final complete suite again leaves 780/134/0 unchanged. |
+| A110 | Desk Delivery Challan inherits its source from the Work Order | Manual post-release UAT found that choosing a Work Order copied `delivery_location` into the DC From Location and derived its Warehouse, even though the physical issue source is specific to each Essdee dispatch and must be chosen by the operator. Base YRP deliberately supplies that convenience default. | FIXED in Essdee only: both Work-Order default routes now return blank From Location/From Warehouse, the Desk form clears both when the Work Order changes, a scoped Property Setter removes base `from_warehouse.supplier` fetching so From Location is truly enabled, and the Essdee controller preserves blank or explicitly selected source values across base `set_missing_values` so Save cannot silently restore the Work Order location. Both fields remain editable/required and base YRP is untouched. `/web` was excluded at the owner's direction because that frontend is planned for retirement. Focused test/build/rendered-Desk evidence is recorded in the 2026-08-28 follow-up below. |
+| A111 | Same-location Cutting Delivery Challan is rejected as a same-warehouse transfer | Manual post-release UAT requires a Work Order DC even when cloth is already in the Machine Cutting location and therefore does not physically move warehouses. Base YRP rejected every same-warehouse DC before the Work Order/Cutting lifecycle could advance. | FIXED in Essdee only: the DC override retains the complete base item and positive-quantity validation but permits equal From/To Location and equal From/To Warehouse. Same-location endpoints remain non-internal, submit still reduces the Work Order deliverable pending quantity, Cutting Plan received cloth still reads the DC delivered quantity, and stock posting remains an auditable value-preserving `-qty/+qty` transfer pair in the same warehouse. Ordinary stock-availability, Work Order, dimension, UOM, and rate validation remain authoritative. Base YRP, GRN behavior, and `/web` are untouched. Focused evidence is recorded in the 2026-08-28 follow-up below. |
+| A112 | Cutting Plan received-cloth tables are empty despite a submitted cloth DC | Manual UAT on `CP-2608-00018` found no required/received/used/balance cloth table. The plan contains 32 garment rows and submitted DC `DC-2026-00038` contains four exact 116.4 kg cloth deliveries, but the plan was submitted with zero generated cloth child rows; `onload` therefore correctly returned empty arrays. The same component renders all columns on migrated `CP-2608-00015`, proving this is a lifecycle/data-generation gap rather than a missing Vue component. Empty submitted plans can also be incorrectly promoted to Ready to Cut because the status loop treats zero rows as all requirements satisfied. | FIXED in Essdee Desk only: every new submission generates and validates cloth requirements when missing; missing IPD consumption/mapping rows now fail clearly instead of being silently skipped; Fetch Received Cloth regenerates historical empty plans before projecting submitted DC quantities; regeneration preserves existing received/used weights; empty plans remain Planned; Fetch reloads the form; and the component has valid single-table markup plus an explicit empty state. Rendered no-screenshot repair of `CP-2608-00018` produced four visible 116.4/116.4/0/116.4 rows and Ready to Cut with clean browser/network channels. Base YRP and `/web` remain untouched. |
 
 ## 6. Lineage, migration, and API rules
 
@@ -382,6 +385,9 @@ The status markers below are updated as evidence is produced.
 - [x] I50 Serialize bundle and Finishing GRN retry roots, persist a client request identity without schema changes, and prove SLE/CBML/projection/GRN/valuation-adjustment idempotence.
 - [x] I51 Explicitly classify the removed, entirely blank F15 IPD description field so the frozen migration plan remains fail-closed with zero blockers.
 - [x] I52 Contain valuation-worker commits inside the U40 test rollback and prove repeated focused/full runs leave no active test stock or new adjustment audit rows.
+- [x] I53 Keep Essdee Desk DC source selection operator-controlled: never inherit From Location/From Warehouse from the Work Order and never restore them during Save.
+- [x] I54 Allow an Essdee same-location/same-warehouse DC to advance Work Order and Cutting Plan lineage while preserving balanced stock and every unrelated base validation.
+- [x] I55 Guarantee that every submitted Cutting Plan has generated cloth requirements before received/used/balance projection, and render those values in Desk with an explicit safe empty state.
 - [x] R01 Independent diff review: no redundant base behavior, no mixed mapped/unmapped new GRN, no leaked base changes.
 - [x] R02 Final independent diff/review pass covering the later A74/A75 UI findings and the completed end-to-end acceptance changes.
 - [x] R03 Final post-U44/A108/A109 diff, permission, artifact, build, full-suite, rendered-state, and repository-preservation review.
@@ -3057,6 +3063,706 @@ queries are then required to prove database, stock, and valuation correctness.
 
 All ten final acceptance gates are closed. The no-screenshot owner instruction
 remained authoritative, so no generic screenshot-producing verifier was run.
+
+### 2026-08-28 manual UAT follow-up — A110
+
+- The Essdee Work Order adapter now returns blank `from_location` and
+  `from_warehouse`; the Desk Work Order handler clears both when the source Work
+  Order changes; a scoped Essdee Property Setter clears base YRP's
+  `from_warehouse.supplier` fetch from From Location; and the Essdee Delivery
+  Challan controller preserves both the submitted blanks and explicit operator
+  selections across base `set_missing_values`. Both fields remain editable and
+  required. No `/web`
+  source was changed or qualified because the owner directed that frontend to
+  be excluded and retired.
+- Focused regressions are green: `essdee_yrp.api.test_work_order` passed 23/23
+  across its integration and unspecified categories, and
+  `essdee_yrp.test_delivery_challan_customization` passed 14/14 after the A111
+  same-endpoint coverage was added. The specialized
+  bulk-LaySheet route passes 12/12, while the broader Cutting module passes all
+  16 unit cases plus 16/16 executed integration cases with six explicit
+  migrated-dataset skips; that includes the 161-second real CPM → DC → GRN
+  round trip and 87-second migrated LaySheet → GRN lifecycle. Changed Python
+  compiles, the Desk script passes `node --check`, `git diff --check` is clean,
+  and `bench build --app essdee_yrp` succeeds.
+- No-screenshot rendered Desk probes used submitted/open Work Orders
+  `YRP-WO-2026-00058` and `YRP-WO-2026-00046`. After selection both source
+  fields were blank, required, enabled, and in Frappe `Write` status; From
+  Location had no `fetch_from`. Manual source selections persisted, and changing
+  the Work Order cleared both again. Console, page-error, and HTTP-error
+  collections were all empty. The probes remained unsaved local drafts and
+  created no transaction.
+- Base YRP remains untouched: tracked diff fingerprint
+  `849c7a8b2ca97e2fda2c97a95f5078b92c6979cd30e7a53c4d16311eea04a88b`
+  and untracked-test fingerprint
+  `62e3be5d399780b1f1553df65f7ee465764b468e68d8ed0d5b11c9617291d164`
+  are unchanged.
+
+### 2026-08-28 manual UAT follow-up — A111
+
+- Base YRP's only same-warehouse DC rejection is in `validate_items`; Essdee now
+  overrides that method with the otherwise identical item/correction-row and
+  submitted-positive-quantity checks, omitting only the warehouse-inequality
+  rule. Equal From/To Location is also accepted. No GRN rule was widened.
+- A same-location endpoint is non-internal, so no transit/DC Completion step is
+  fabricated. Submit continues through the standard Work Order pending update,
+  Cutting Plan `fetch_received_cloth` reads the submitted DC item's delivered
+  quantity, and the stock engine writes matched outgoing/incoming rows with the
+  same transfer key and warehouse. The warehouse's net quantity and value stay
+  unchanged while the DC and production lineage remain auditable.
+- Focused regressions prove the relaxed validation, retained missing-item and
+  zero-quantity failures, balanced same-warehouse SLE legs, Work Order pending
+  reduction, and Cutting Plan received/balance cloth projection: the Delivery
+  Challan customization module passes 14/14, including proof that the live site
+  resolves Delivery Challan to the Essdee controller and the new Property Setter
+  is included in the scoped deployment fixture. The broader Cutting module passes
+  all 16 unit cases and all 16 executed integration cases, with six explicit
+  migrated-dataset skips; this includes the 147-second real CPM → DC → GRN
+  submit/cancel round trip and 80.6-second migrated LaySheet → GRN lifecycle.
+  The separate Finishing-return module passes 8/8, including its explicit proof
+  that an ordinary same-warehouse GRN remains rejected.
+- A no-screenshot rendered Desk probe used open Work Order
+  `YRP-WO-2026-00058`. The unsaved form retained `S-0164` as both From/To
+  Location and both From/To Warehouse; From Location and From Warehouse were
+  required, enabled, and had Frappe control status `Write`; From Location's
+  effective `fetch_from` was blank. Console, page-error, and failed-request
+  collections were empty, and the probe created no transaction.
+
+### 2026-08-28 manual UAT follow-up — A112
+
+- The table implementation was present and healthy: migrated control plan
+  `CP-2608-00015` rendered four cloth rows and two accessory rows with Required,
+  Received, Used, and Balance columns. The failing plan `CP-2608-00018` instead
+  had zero cloth/accessory children even though its 32 garment rows calculate to
+  four requirements and submitted same-location DC `DC-2026-00038` carries the
+  matching Mint, Black, Olive, and Navy variants at 116.4 kg each. This isolated
+  the defect to requirement generation and refresh lifecycle rather than the
+  Vue table or Delivery Challan data.
+- Essdee now generates missing requirements during initial Cutting Plan submit
+  and makes the existing Fetch Received Cloth action repair historical submitted
+  plans before applying DC quantities. The calculator adopts production_api's
+  current fail-closed consumption/mapping behavior, so one missing panel row can
+  no longer silently create a partial or empty requirement table. Manual
+  regeneration retains operational received and used values for matching rows,
+  and a genuinely empty submitted plan remains Planned instead of satisfying an
+  empty Ready-to-Cut loop.
+- The Desk controller always supplies the cloth/accessory table type and reloads
+  after Fetch. The component now uses valid single-table markup and renders an
+  explicit operator message when requirements are absent. No `/web` source was
+  changed. A pre-repair rendered no-screenshot check on `CP-2608-00018` showed
+  that safe empty state with one table and no console/page/request errors.
+- The real rendered **Fetch and Calculate → Fetch Received Cloth** action then
+  returned `generated_requirements=true` and four rows. After the automatic
+  reload, `CP-2608-00018` visibly showed Mint, Black, Olive, and Navy, each with
+  Required 116.4 kg, Received 116.4 kg, Used 0 kg, and Balance 116.4 kg; status
+  was Ready to Cut. One valid table was mounted, the child and `__onload` counts
+  both equalled four, and browser console, page-error, failed-request, and API
+  error collections were empty.
+- Verification is green: all 12 fabric-requirement tests, all 19 Cutting unit
+  tests, and all 16 executed Cutting integration tests pass, with six intentional
+  dataset skips among the 22 discovered integrations. The real suite includes
+  the 149-second CPM → DC → GRN round trip and the 87.3-second migrated
+  LaySheet → GRN lifecycle. Python compile, `git diff --check`, and
+  `bench build --app essdee_yrp` also pass. Base YRP remains untouched with
+  tracked fingerprint `849c7a8b2ca97e2fda2c97a95f5078b92c6979cd30e7a53c4d16311eea04a88b`
+  and untracked-test fingerprint
+  `62e3be5d399780b1f1553df65f7ee465764b468e68d8ed0d5b11c9617291d164`.
+
+### 2026-08-28 manual UAT follow-up — A113 (completed)
+
+The owner paused the Printing DC/GRN manual test and reported the following
+Desk regressions. This batch is intentionally limited to Essdee's MRP branch;
+base YRP and the retired `/web` frontend remain out of scope.
+
+- [x] A113.1 Restore Lot piece-to-box derivation using the IPD packing combo,
+  then let the existing Lot save lifecycle update Production Order quantities.
+  Remove the Edit action from the derived box table while retaining piece-entry
+  editing.
+- [x] A113.2 Restore Lot-aware Process Cost attribute-value population from the
+  selected IPD/process mapping.
+- [x] A113.3 Restore the Delivery Challan **Update Secondary** interaction and
+  editable secondary quantities in the Desk matrix.
+- [x] A113.4 Rebuild Cutting Plan received-cloth quantities automatically after
+  Delivery Challan submit/cancel and internal-unit DC Completion submit/cancel;
+  retain Fetch Received Cloth as an idempotent historical repair action.
+- [x] A113.5 Render and persist panel-wise IPD Cloth Mapping Details when the
+  panel-wise consumption mode is enabled.
+- [x] A113.6 Make Reverted Cutting LaySheet **Update Status** visibly freeze,
+  report the restored state/GRN, and reload the document after success.
+- [x] A113.7 Restore Cutting Plan list indicators for Planned, Partially Ready,
+  Ready to Cut, Partially Completed, and Completed states.
+- [x] A113.8 Stop fresh/saved Goods Received Note matrices from materializing
+  every Received Type as an unselected zero row; keep the default and explicitly
+  selected types only, while preserving the UI action for adding another type.
+- [x] A113.9 Replace the generic Frappe child-table DC return popup with the
+  production-style responsive return matrix, while continuing to call base
+  YRP's authoritative return-availability and draft-GRN endpoints.
+- [x] A113.10 Profile Stock Entry, Delivery Challan, and Goods Received Note
+  submits against recent UAT documents; remove demonstrated synchronous or
+  repeated work without weakening stock, valuation, pending, or lineage rules.
+- [x] A113.11 Run focused Python/JS tests, Essdee build, Desk no-screenshot UI
+  checks, submit timing checks, diff review, and unchanged-base fingerprint
+  proof before returning the manual test to the owner.
+
+Initial comparison evidence: production_api still contains
+`Lot.derive_items_from_order_details`, its box table has no Edit column, and its
+Process Cost script resolves attribute values from the Lot IPD. Essdee currently
+has none of those three adapters. Essdee also has no Delivery Challan/Cutting
+Plan lifecycle sync, no panel-wise cloth-mapping renderer, and no Cutting Plan
+list script. Base YRP's normal GRN default builder currently emits one row for
+every Received Type, including zero-quantity unselected types; Essdee's current
+normalization preserves those rows. Base YRP's DC Return action uses a generic
+Frappe Table even though its server endpoints already enforce returnable stock,
+previous returns, consumption, dimensions, and quantity caps. Those findings
+are the implementation targets for this batch.
+
+Completion evidence:
+
+- Lot now derives its server-owned box quantities with
+  `ceil(piece quantity / IPD packing_combo)` and uses only the major set part
+  where applicable. The derived Desk matrix no longer has an Edit action; the
+  piece-entry matrix remains editable and the normal Lot save path continues to
+  update the linked Production Order. Rendered record `Test Lot 1` showed 32
+  piece rows, eight derived box rows, and zero box Edit actions.
+- Process Cost now scopes both Attribute and Attribute Value choices to the
+  selected Lot's IPD/process mapping. Base YRP's concurrent item-only callback
+  is neutralized through the Essdee override so it cannot race and replace the
+  Lot result. A rendered unsaved retrigger on `YRP-PC-00026` repopulated Panel
+  value `Top Front` without saving a transaction.
+- The draft DC matrix now mounts one **Update Secondary** control per item
+  group, obtains the Item's secondary UOM, and edits the same data object saved
+  by the base DC editor. Rendered draft `DC-2026-00037` showed the control and
+  its configured `Roll` UOM. The zero-primary-attribute case is explicitly
+  represented by a default quantity column.
+- Cutting Plan receipt projection is now an idempotent rebuild. Submitted
+  direct DC rows are counted immediately; cross-location internal DCs are
+  counted only from submitted DC Completion Stock Entries; submit, cancel, and
+  repeated Fetch operations converge on the same result. Missing historical
+  requirement rows are regenerated before receipt application, while existing
+  received/used values are preserved during explicit regeneration.
+- Current production_api panel-wise consumption and Cloth Mapping behavior was
+  ported into Essdee and wired into IPD validate/save. Rendered IPD
+  `JUNIOR POLO GYM VEST-1` mounted both matrices; Cloth Mapping showed one table
+  and `5 / 5 complete`.
+- Reverted LaySheet **Update Status** now freezes with a restoring message,
+  reports the resulting Label Printed state and GRN, and reloads the form.
+  There was no persisted Reverted LaySheet oracle at final verification, so the
+  callback/return contract was covered by the focused regression instead of
+  mutating a completed operational record.
+- Cutting Plan list view loads the Essdee indicator map. The rendered list
+  returned 21 rows with live Completed/Cutting In Progress indicators and no
+  browser errors; Planned, Fabric Partially Received, Ready to Cut, Partially
+  Completed, Completed, and dispatch-pending branches are covered by the list
+  regression.
+- Fresh and saved draft normal Work Order GRNs now retain only the default or
+  explicitly selected Received Type rows. Rendered drafts `GRN-2627-05043` and
+  `GRN-2627-05033` each displayed only Accepted splits, while still showing the
+  **Add Received Type** choices for rejected/rework categories.
+- Submitted `DC-2026-00041` opened the custom responsive return matrix with
+  authoritative quantities, normal/collapsed and whole-bundle controls, one
+  native HTML table, and zero Frappe child grids. The server wrapper continues
+  to delegate quantity/lineage validation and GRN creation to base YRP's
+  existing endpoints.
+- Profiling isolated the submit freeze to four voucher-ownership checks that
+  each scanned all 1,362,774 Stock Ledger Entries. Essdee now deploys the
+  composite `voucher_type, voucher_no, is_cancelled` index idempotently after
+  install/migrate; the live site has that exact index. The same real CPM → DC →
+  GRN submit/cancel lifecycle fell from 154.2 seconds to 23.9–24.8 seconds
+  (about 84% faster) with stock, valuation, pending, bundle, and cancellation
+  assertions retained. The real CPM → Stock Entry lifecycle completed in
+  5.0 seconds in the full suite (13.8 seconds on a cold standalone run), and the
+  FG-created Stock Entry submit/cancel integration completed in 10.2 seconds.
+- Final focused verification discovered 108 tests: 102 passed and six migrated
+  dataset-dependent Cutting oracles skipped explicitly. This includes Lot 4/4,
+  Process Cost 4/4, panel consumption/mapping 16/16, DC 18/18, GRN 13/13,
+  lifecycle/performance guards 4/4, Cutting unit 19/19, Cutting integration
+  16 passed plus six skips, and Stock integration 8/8. Python compilation, Desk
+  JavaScript syntax, `git diff --check`, and `bench build --app essdee_yrp`
+  passed. No screenshot was produced, as directed; the rendered probes found no
+  console, page, or failed-request errors and saved no transaction.
+- Base YRP was not edited by this batch. Its tracked diff fingerprint remains
+  `849c7a8b2ca97e2fda2c97a95f5078b92c6979cd30e7a53c4d16311eea04a88b`;
+  its untracked delivery-challan test fingerprint remains
+  `62e3be5d399780b1f1553df65f7ee465764b468e68d8ed0d5b11c9617291d164`.
+
+### 2026-08-28 manual UAT stock setup — A114
+
+- Submitted Stock Reconciliation `YRP-ST-RECO-2026-00013` through the Desk for
+  Stitching Work Order `YRP-WO-2026-00060`. It targets warehouse `S-0070`
+  (Essdee Accessories Store - Tirupur), Lot `Test Lot 1`, and Received Type
+  `Accepted`.
+- Only the five Work Order accessories were reconciled: Compo Label 5,600 Nos,
+  Flag Woven Label Black 800 Nos, Flag Woven Label White 4,800 Nos, Essdee
+  Junior Printed PolyCotton Tape 10 mm 1,280 Meter, and Twill Tape 5 mm 168
+  Meter. The reconciliation contains zero `CS-34820 Heavy Tee-*` panel rows.
+- Each submitted Stock Ledger Entry and resulting Bin equals its target
+  quantity, warehouse, Lot, Received Type, and latest ledger valuation rate;
+  browser console, page-error, and failed-request collections were empty.
+
+### 2026-08-28 stock transaction performance follow-up — A115 (completed)
+
+The owner reported that submitting stitching Delivery Challan
+`DC-2026-00043` took more than two minutes and required the same performance
+class to be fixed for DC, GRN, Stock Entry, and Stock Reconciliation.
+
+- [x] A115.1 Trace the real voucher volume and shared stock-ledger path. The DC
+  contains 144 effective item rows and creates 288 Stock Ledger Entries.
+- [x] A115.2 Compare the current YRP engine with production_api's stock
+  optimizations. production_api's `0bbc0769` optimization adds an active
+  item/warehouse/received-type/docstatus/status reservation index; the current
+  Essdee database has 322,193 reservation rows and no usable reservation index.
+- [x] A115.3 Prove the missing-index cost before changing code. Each active
+  reservation lookup performed a full 316,717-row table scan and took
+  0.11–0.24 seconds cold; the ledger invokes that query once per effective SLE.
+- [x] A115.3a The first cold rollback benchmark then exposed the second
+  reservation path: cancelling the DC spent 207.2 seconds looking up each Work
+  Order reservation by voucher/detail against the same unindexed 322,193-row
+  table. This query is specific to YRP's authoritative DC/SRE lifecycle and is
+  not covered by production_api's newer active-bucket index.
+- [x] A115.4 Deploy an idempotent Essdee-owned reservation-bucket index that
+  includes Item, Warehouse, Lot, Received Type, docstatus, and status, plus a
+  separate voucher/detail/docstatus ownership index, without changing base
+  YRP's stock or valuation rules.
+- [x] A115.5 Re-run the exact query plan and a rollback-protected 144-row
+  DC/288-SLE submit/cancel benchmark, then verify document status, SLE/Bin
+  quantities and values, Work Order projection, and zero persistent test data.
+- [x] A115.6 Run the focused stock regressions, setup/index test, compilation,
+  diff review, and unchanged-base fingerprint proof before handoff.
+
+Completion evidence:
+
+- `ensure_stock_transaction_indexes` now installs both reservation indexes
+  idempotently from Essdee's existing after-install/after-migrate setup path.
+  The base YRP engine and its validation, reservation, valuation, dimension,
+  FIFO, pending, and lineage behavior are unchanged.
+- The exact active-bucket query changed from a full 316,717-row scan at
+  0.112–0.243 seconds to an indexed 36-row range at 0.00040–0.00055 seconds.
+  The exact Work Order reservation-owner query changed from a full table scan
+  to one indexed row at 0.00026 seconds.
+- On the real 144-row `DC-2026-00043` dataset, the cold rollback-protected
+  cancellation exposed the second scan at 207.2 seconds. With both indexes,
+  the identical cancellation completed in 3.833 seconds and the amended
+  144-row submission completed in 4.888 seconds.
+- The replay produced 144 outgoing and 144 incoming active SLEs. Their
+  quantities were -62,400/+62,400 and values were
+  -356,530.0112/+356,530.0112; all 288 rows had paired transfer lineage. All
+  288 affected Bin quantity/rate/value snapshots and all 144 Work Order
+  deliverable projections matched the pre-replay state exactly.
+- The savepoint was rolled back. Temporary amendment `DC-2026-00043-1` is
+  absent, original `DC-2026-00043` remains submitted with its original 288
+  active SLEs, and the post-rollback Bin and Work Order snapshots still match.
+- Focused verification is green: Essdee setup/manual UAT 4/4, Delivery Challan
+  18/18, Goods Received Note 13/13, and stock integration 8/8. Base stock
+  engine verification passes 39/39, including reconciliation, reservation,
+  dimensions, FIFO/Moving Average, repost, and the two full-ledger integrity
+  audits; Stock Entry passes 13/13. Total: 95/95 tests. Python compilation and
+  `git diff --check` pass. No UI or `/web` source was changed.
+- Base YRP was not edited by A115. Its tracked diff fingerprint remains
+  `849c7a8b2ca97e2fda2c97a95f5078b92c6979cd30e7a53c4d16311eea04a88b`,
+  and its untracked delivery-challan test fingerprint remains
+  `62e3be5d399780b1f1553df65f7ee465764b468e68d8ed0d5b11c9617291d164`.
+
+### 2026-08-28 Stock Entry and Stock Reconciliation matrix alignment — A116 (completed)
+
+The owner reported that draft Stock Entry `YRP-STE-2026-00202` renders every
+Size as a separate Desk row, most visibly for Lot `Test Lot 1`, Received Type
+`Accepted`, Stage `Cut`, Panel `Top Front`, Colour `Mint`. The same matrix
+contract must be verified and applied to Stock Reconciliation.
+
+- [x] A116.1 Inspect the live Stock Entry and compare its flat child data with
+  the Work Order, Delivery Challan, Goods Received Note, and production_api
+  grouping contracts. The document has 144 valid physical rows, but a previous
+  Essdee compatibility hook rewrites their display indexes to `0..143`.
+- [x] A116.2 Establish the target projection without changing stock data: 18
+  logical panel/colour rows (nine panels x two colours), each with the eight
+  Size values shown as columns. Lot, Received Type, other Stock Dimensions,
+  non-primary attributes, and set combination remain grouping boundaries.
+- [x] A116.3 Replace the Stock Entry per-child display workaround with the
+  existing Essdee logical item-matrix projection. Do not mutate saved children,
+  quantities, source references, validation, or ledger behavior.
+- [x] A116.4 Apply the identical read-model projection to Stock Reconciliation
+  so migrated/programmatic size rows align like Work Order, DC, and GRN while
+  reconciliation targets and stock buckets remain distinct.
+- [x] A116.5 Add focused regressions for both DocTypes, verify the exact live
+  Stock Entry projection and Stock Reconciliation dimension boundaries, inspect
+  both rendered Desk forms without screenshots, and run proportionate stock,
+  compilation, diff, and unchanged-base checks.
+
+Completion evidence:
+
+- production_api and current base YRP both define `row_index` as the logical
+  item row shared by primary-attribute variants. Essdee's former completion
+  workaround instead assigned one index per physical child, which preserved all
+  children but deliberately disabled Size-column grouping. Stock Entry now uses
+  the same copied logical matrix projection already used by Essdee Work Order,
+  DC, and GRN. Stock Reconciliation receives the same onload projection.
+- The grouping key retains parent Item, every non-primary attribute, canonical
+  set combination, Lot, Received Type, all configured Stock Dimensions, and the
+  Stock Reconciliation child warehouse. Therefore only the primary attribute is
+  pivoted into columns; distinct valuation/stock buckets cannot be merged.
+- Exact server verification of `YRP-STE-2026-00202` produced 18 logical rows
+  from 144 physical children. `Top Front / Mint / Accepted / Test Lot 1` became
+  exactly one logical row with 45, 50, 55, 60, 65, 70, 75, and 80 cm values of
+  100 Pieces each. All 144 in-memory children and saved database row indexes
+  remained value-for-value unchanged. Applying the reconciliation projection to
+  those same 144 physical rows produced the identical 18-row result.
+- No-screenshot Desk verification opened the real draft Stock Entry and real
+  submitted reconciliation `ST-RECO-2025-00145`. The Stock Entry rendered one
+  `Top Front / Mint` row with all eight Size headers and values. The
+  reconciliation rendered its eight `EE-34142 HALF SLEEVE T-SHIRT` sizes in one
+  row. Both routes had zero console/page errors and zero failed requests; no
+  document was saved, submitted, cancelled, or created.
+- Verification is green: Essdee Stock Entry/matrix customization 11/11, base
+  Stock Entry 13/13, base Stock Reconciliation 1/1, and the cross-bench Stock
+  Entry integration 13 passed with one dataset-only display oracle skipped
+  because its isolated test fixture exposed fewer than two parent Items. Total:
+  38 passed, one skipped. Python compilation and `git diff --check` pass.
+- Base YRP was not edited. Its tracked diff fingerprint remains
+  `849c7a8b2ca97e2fda2c97a95f5078b92c6979cd30e7a53c4d16311eea04a88b`,
+  and its untracked delivery-challan test fingerprint remains
+  `62e3be5d399780b1f1553df65f7ee465764b468e68d8ed0d5b11c9617291d164`.
+
+### 2026-08-28 GRN calculated-input validation lifecycle — A117 (completed)
+
+The owner found that saving a Stitching GRN draft for Work Order
+`YRP-WO-2026-00060` fails because calculated Compo Label stock has not yet been
+delivered. This availability check belongs to Submit, not ordinary Draft Save.
+
+- [x] A117.1 Trace the exact failure. The shared calculated-input allocator is
+  invoked by `garment_grn.before_validate`; `before_validate` runs during Draft
+  Save. The Work Order plans 5,600 labels, all 5,600 remain pending, and the
+  attempted 100-piece receipt therefore sees zero delivered input available.
+- [x] A117.2 Confirm the authoritative submit gate already exists. The Essdee
+  GRN controller locks the Work Order and rebuilds the applicable cutting,
+  packing, stitching, identity, or fabric consumption plan in `before_submit`.
+- [x] A117.3 Remove only the three draft consumption-planner event hooks while
+  retaining every ordinary draft structural/default/dimension validation and
+  the locked submit-time stock, mapping, quantity, valuation, and lineage gate.
+- [x] A117.4 Prove a representative draft saves with undelivered calculated
+  inputs, prove Submit still rejects the same state, run focused GRN/valuation
+  regressions, and preserve base YRP.
+
+Completion evidence:
+
+- Removed only `finishing.packing_grn.before_validate`,
+  `fabric_grn.before_validate`, and `garment_grn.before_validate` from the GRN
+  Draft Save event list. Packing defaults, purchase-lot validation, and cutting
+  transaction-link validation still run during Draft Save. The Essdee GRN
+  controller's locked `before_submit` consumption-plan rebuild is unchanged.
+- A rollback-protected live draft against `YRP-WO-2026-00060` saved successfully
+  for 100 pieces of Mint / 45 cm while the calculated Compo Label remained
+  completely undelivered. No calculated consumption rows were persisted during
+  that Draft Save, and the temporary GRN was rolled back and confirmed absent.
+- Normal Submit of that same live draft remained blocked first by the Sewing
+  Plan's authoritative Checking Output gate (`Checking Output: 0`, `This GRN:
+  100`). With only that earlier gate isolated, `before_submit` then produced
+  the original authoritative calculated-input error: Compo Label available
+  `0.0`, received row requires `100.0`. Thus Draft Save is allowed, but Submit
+  still cannot create stock without the required output and delivered input.
+- Focused Essdee verification is green: GRN customization 14/14 and valuation
+  contract 47/47. Four independent base GRN modules are also green (internal
+  unit transfer 13/13, rework 3/3, cancel guards 5/5, excess allowance 10/10).
+  Base's aggregate DocType discovery is unavailable because it expects a
+  nonexistent `test_goods_received_note.py`. Two other base modules expose
+  unrelated shared-site fixture assumptions: Purchase Order GRN has one reused
+  Lot item mismatch and one Essdee valuation-rate expectation mismatch; Freight
+  Allocation omits the Supplier/Delivery Address fields that are mandatory on
+  this site. These failures do not enter the changed Work Order draft/submit
+  path and are recorded rather than represented as green.
+- Python compilation and `git diff --check` pass. Base YRP was not edited by
+  A117: its tracked diff fingerprint remains
+  `849c7a8b2ca97e2fda2c97a95f5078b92c6979cd30e7a53c4d16311eea04a88b`,
+  and its untracked delivery-challan test fingerprint remains
+  `62e3be5d399780b1f1553df65f7ee465764b468e68d8ed0d5b11c9617291d164`.
+
+### 2026-08-29 GRN same-warehouse lifecycle — A118 (completed)
+
+The owner superseded the earlier DC-only same-warehouse decision after manual
+UAT found the same base-YRP warehouse-inequality error in Goods Received Note.
+
+- [x] A118.1 Trace the error to base GRN `validate_items` and confirm Essdee's
+  existing override allows equal endpoints only for Cutting conversion and
+  direct Finishing return.
+- [x] A118.2 Extend the Essdee override to permit equal From/To Warehouses for
+  every GRN while retaining mandatory warehouse, row, item, and positive-
+  quantity checks and every later submit/stock/valuation/lineage validation.
+- [x] A118.3 Run focused GRN, return, valuation, compile, diff, and base-YRP
+  preservation checks; then record the exact evidence here.
+
+Completion evidence:
+
+- The site resolves GRN to `EssdeeGoodsReceivedNote`. Its `validate_items`
+  delegates unchanged to base YRP when endpoints differ; when both warehouses
+  match, it omits only the warehouse-inequality exception and repeats base's
+  existing row, applicable warehouse, Item Variant, and positive-quantity
+  gates. Source-pending, calculated-input, Work Order, stock ledger, valuation,
+  UOM, dimension, and lineage methods were not bypassed or changed.
+- The focused return module proves an ordinary same-warehouse GRN now passes,
+  then proves the same document still rejects a missing Item Variant and zero
+  quantity. Its direct Finishing-return submit/cancel and value-preserving
+  paired-SLE coverage also remains green: 8/8.
+- GRN customization passes 14/14 and the valuation contract passes 47/47.
+  Total focused verification: 69/69. Python compilation and `git diff --check`
+  pass. `ruff` is not installed in this bench, so no ruff result is claimed.
+- No Desk JavaScript or `/web` source changed; this was the server validation
+  that raised during Desk Save/Submit. Site cache was cleared so the override
+  is active for the owner's next manual attempt.
+- Base YRP was not edited by A118. Its tracked diff fingerprint remains
+  `849c7a8b2ca97e2fda2c97a95f5078b92c6979cd30e7a53c4d16311eea04a88b`,
+  and its untracked delivery-challan test fingerprint remains
+  `62e3be5d399780b1f1553df65f7ee465764b468e68d8ed0d5b11c9617291d164`.
+
+### 2026-08-29 IPD-backed Item BOM combination generation — A119 (completed)
+
+The owner found that Desk Item BOM Attribute Mapping `qupp2fta20` rendered the
+selected Item Colour/Size and BOM Colour headers but generated no combination
+rows. All three Same Attribute checkboxes were unchecked; this is a mapped-axis
+case, not a Same Attribute case.
+
+- [x] A119.1 Trace the selected axes and compare base YRP, production_api, the
+  linked IPD, and the rendered editor. The base Item has eight Size values but
+  no direct Colour values, while IPD `CS-34820 Heavy Tee-1` owns four Colours
+  and the exact 32 Colour/Size Cutting combinations.
+- [x] A119.2 Keep base YRP unchanged and add an Essdee Desk adapter that replaces
+  only the IPD-backed combination source. Non-IPD mappings retain the base
+  Item-master fallback.
+- [x] A119.3 Preserve the IPD engine's exact row relationships rather than
+  generating a new Cartesian product in the browser, and enforce read access
+  plus IPD-to-Item identity on the server endpoint.
+- [x] A119.4 Verify the exact live endpoint, the unsaved two-axis Desk form, the
+  real saved mapping route, focused tests, compilation, asset build, console,
+  diff, and unchanged-base fingerprints.
+
+Completion evidence:
+
+- The failure was a calculation/data-source integration defect, not a table
+  rendering defect: the Vue grid rendered its headers correctly but the base
+  Item-master Cartesian generator received an empty Colour axis and therefore
+  produced zero rows. production_api instead delegates to the linked IPD's
+  Cutting combination engine.
+- Essdee now subclasses the existing Desk mapping wrapper at form-load time and
+  replaces only `set_attributes` for records carrying
+  `item_production_detail`. The whitelisted Essdee endpoint calls the existing
+  `ipd_ui.get_combination(..., "Cutting")`, removes duplicate/blank invalid
+  rows, adds the editable BOM placeholders, and returns the current editor's
+  row contract. No `/web` frontend or base-YRP source was changed.
+- The exact live endpoint for `CS-34820 Heavy Tee-1`, Item
+  `CS-34820 Heavy Tee`, Item axes Colour + Size, and BOM axis Colour returned 32
+  rows in IPD order: Mint, Black, Olive, and Navy, each with 45, 50, 55, 60,
+  65, 70, 75, and 80 cm.
+- A non-saving Desk browser drive recreated the owner's unchecked three-row
+  attribute selection and generated/rendered all 32 rows. The first row was
+  Mint / 45 cm and the last Navy / 80 cm; the Essdee adapter was active and the
+  browser reported zero console/page errors. Opening the real saved mapping
+  `qupp2fta20` also rendered its currently saved Colour axis as four IPD rows
+  with zero console/page errors. The owner's unsaved Size row will produce the
+  verified 32-row result after reloading the new Desk asset and clicking Get
+  Combination again.
+- Follow-up Save verification found the BOM-side Colour values were persisted
+  correctly (`Black` in all four saved BOM rows), but base Vue's
+  `toggle_row(index, true)` cleared the visible Link input while restoring each
+  enabled row. The Essdee adapter now preserves BOM values when enabling/loading
+  and clears them only when disabling. A fresh Desk load of real mapping
+  `qupp2fta20` rendered all four saved `Black` values and quantities of `1.000`
+  with zero console/page errors.
+- Focused regression verification passes 4/4. The live endpoint check, Python
+  compilation, Desk JavaScript syntax check, `git diff --check`,
+  `bench build --app essdee_yrp`, and site cache clear pass. `ruff` is not
+  installed in this bench, so no ruff result is claimed.
+- Base YRP was not edited by A119. Its tracked diff fingerprint remains
+  `849c7a8b2ca97e2fda2c97a95f5078b92c6979cd30e7a53c4d16311eea04a88b`,
+  and its untracked delivery-challan test fingerprint remains
+  `62e3be5d399780b1f1553df65f7ee465764b468e68d8ed0d5b11c9617291d164`.
+
+### 2026-08-29 Work Order BOM variant-mapping gate — A120 (completed)
+
+The owner found that Work Order `YRP-WO-2026-00061` had retained generic
+accessory `Tag Bullet` even though the Item declares the `Colour` variant
+attribute and the IPD had no Tag Bullet attribute mapping when that Work Order
+was calculated. The later GRN correctly calculated `Tag Bullet-Black`, so the
+saved generic Work Order input could not satisfy its exact lineage check.
+
+- [x] A120.1 Compare production_api variant/BOM validation, base YRP tuple
+  lookup, the live Item/Item Variant records, IPD timing, saved Work Order
+  input, and current mapping.
+- [x] A120.2 Add the generic rule to base YRP: an Item BOM row whose Item
+  declares variant attributes cannot be calculated without enabling and
+  selecting an attribute mapping.
+- [x] A120.3 Apply that base rule at both base IPD accessory calculation
+  boundaries and consume the same rule from Essdee's garment Work Order
+  calculator. Preserve the explicitly supported non-BOM partial-variant paths.
+- [x] A120.4 Add base and Essdee Work Order-calculation regressions, verify the
+  exact current IPD mapping result, compile, run focused suites, review the
+  diff, and leave the already-submitted Work Order/data unchanged.
+
+Completion evidence:
+
+- Live `Tag Bullet` declares Item attribute `Colour`, but the migrated database
+  also contains an empty Item Variant named exactly `Tag Bullet`. With tuple
+  lookup enabled, that legacy exact-name record was returned before
+  `create_variant()` ran, bypassing its existing missing-Colour exception. This
+  is why the original Work Order calculation did not show an error.
+- Base YRP now validates authored Item BOM mapping intent before lookup. The
+  guard is called by both `calculate_accessory_bom` and `get_consumables`.
+  Essdee's garment accessory calculator calls that same base guard, so Desk
+  Work Order calculation stops before it can retain a legacy empty variant.
+- The guard is intentionally scoped to the proven defect: an attribute-bearing
+  BOM Item with no enabled/selected mapping. It does not globally outlaw
+  partial variants because the fabric engine has an explicit legacy contract
+  for some non-BOM attr-less inputs, and it does not rewrite older migrated
+  mappings or Item masters.
+- The current IPD row 16 is now mapped through `qupp2fta20`. A read-only live
+  base calculation for Packing quantity 15 and Colour Black returns
+  `Tag Bullet`, quantity 15, with BOM attributes `{Colour: Black}`; downstream
+  variant resolution therefore selects `Tag Bullet-Black`. The earlier
+  submitted Work Order remains a historical snapshot and was not recalculated
+  or mutated by this fix.
+- Verification is green: base Item BOM/mapping boundary 5/5, Essdee garment
+  BOM/Work Order calculation 6/6, and Lot packing boundary 12/12. The broader
+  garment Work Order module loaded successfully but skipped its four
+  dataset-gated integration cases on this site. Total executed assertions:
+  23/23 passed. Python compilation and both app `git diff --check` pass. No
+  Desk JavaScript, `/web` source, DocType data, Work Order, or stock record was
+  changed.
+- A120 intentionally edits generic base-YRP source in
+  `item_bom.py`, `ipd_engine.py`, and the focused base regression file. All
+  unrelated pre-existing base changes and the untracked Delivery Challan test
+  were preserved. Essdee changes only its garment BOM adapter, focused test,
+  and this audit entry.
+
+### 2026-08-29 Submitted Work Order Tag Bullet test-data correction — A121 (completed)
+
+The owner explicitly requested that the stale generic Tag Bullet calculated
+input on submitted test Work Order `YRP-WO-2026-00061` be corrected to
+`Tag Bullet-Black` so manual finishing/GRN testing can continue.
+
+- [x] A121.1 Resolve the exact child and prove it has no downstream stock or
+  transaction ownership before changing submitted test data.
+- [x] A121.2 Change only the child Item Variant, preserve its quantities,
+  dimensions, UOM, pending state, and identity, clear site cache, and re-read
+  the saved row.
+
+Completion evidence:
+
+- The exact child was Work Order Deliverable `ee8cnllpdg`: `Tag Bullet`, qty
+  6,400 Nos, pending 6,400, stock update zero, cancelled zero, Lot `Test Lot 1`,
+  Received Type `Accepted`. No DC Item, GRN Item, Stock Reservation Entry, or
+  Work Order Correction referenced that Item Variant or child.
+- Target `Tag Bullet-Black` exists under parent Item `Tag Bullet`, carries exact
+  attribute `Colour = Black`, and uses UOM `Nos`.
+- Only `item_variant` on child `ee8cnllpdg` was changed. The post-change Work
+  Order contains one `Tag Bullet-Black` deliverable and zero generic
+  `Tag Bullet` deliverables; qty, pending, stock update, cancellation, UOM, Lot,
+  and Received Type remain unchanged. Site cache was cleared.
+- This correction does not mark the accessory delivered. Its pending quantity
+  intentionally remains 6,400, so the manual test must deliver the required
+  `Tag Bullet-Black` quantity against this Work Order before the GRN can consume
+  it. No stock ledger or transaction document was created or altered.
+
+### 2026-08-29 Final owner Desk usability fixes — A122 (completed)
+
+After completing the full Production Order through Finishing Plan Dispatch
+manual flow, the owner requested four final Desk corrections before beginning
+valuation verification.
+
+- [x] A122.1 Replace Essdee's appended Delivery Challan Secondary Quantity view
+  with an editable Secondary Qty control inside the existing base item/size
+  matrix. Keep Secondary UOM server-derived and remove the redundant host-only
+  Vue component.
+- [x] A122.2 Make Item Production Detail refresh wait for the async Cutting and
+  Cloth Mapping mounts in order, and make the migrated Cloth Mapping column
+  visible. Saved `cutting_cloths_json` for `CS-34820 Heavy Tee-1` must render,
+  not remain populated inside a hidden parent column.
+- [x] A122.3 Restore the production_api-style saved-draft GRN Calculate action,
+  but replay the current F16 `work_order_calculated_items` through Essdee's
+  authoritative garment process calculator. Rebuild item, UOM, dimension,
+  Received Type, rate, and Work Order Receivable linkage on the server.
+- [x] A122.4 Make Purchase Order Stock Dimensions row-owned: show the configured
+  dimensions in the existing Purchase Order Item matrix, keep the generated
+  header production-group field and old Essdee Linked Lots block hidden for
+  legacy compatibility, synchronize hidden legacy Lot links from PO Item rows,
+  and carry exact PO Item dimensions into Purchase Order GRN defaults.
+- [x] A122.5 Run focused Python/UI-source tests, apply the idempotent dimension
+  metadata update to `essdee_yrp.site`, rebuild both Desk asset bundles, verify
+  the named IPD plus representative DC/GRN/PO routes in the rendered Desk and
+  browser console, then complete the independent diff/data-safety review.
+
+Implementation boundary:
+
+- Base YRP owns the reusable inline secondary-field rendering and Purchase
+  Order row-dimension transport. Essdee removes its redundant secondary editor,
+  owns the IPD refresh ordering, and owns the garment-specific GRN calculation
+  adapter/dialog. No retired `/web` source is included.
+- The GRN Calculate endpoint accepts only selected saved Work Order calculation
+  row IDs and quantities. It does not accept browser-supplied variants, UOMs,
+  rates, dimensions, or receivable references, and it preserves quantities in
+  other Received Type splits already saved on the draft.
+
+Completion evidence:
+
+- Delivery Challan `DC-2627-03405` renders Secondary Qty as editable number
+  controls inside its existing size cells. The saved Secondary UOM appears next
+  to the relevant input, blank padded cells no longer display a numeric UOM,
+  and the redundant appended Essdee editor is absent. The Desk reported zero
+  console/page errors.
+- The exact IPD `CS-34820 Heavy Tee-1` renders both saved matrices in the
+  Cutting tab: nine Cutting Detail panel rows and nine Cloth Mapping rows, each
+  mapped to `MAIN FABRIC`. The final root cause was a migrated hidden
+  `column_break_gwca`; its Vue content existed but Frappe assigned the parent
+  column `display:none`. The packaged custom-field source and live metadata now
+  keep that column visible. The final Desk route reported zero console/page
+  errors.
+- Draft `GRN-2627-05043` renders the Calculate button and the production-style
+  matrix dialog: Received Type `Accepted`, two garment rows, eight size
+  columns, and calculated total 11,800. The live read endpoint returned all 16
+  saved Work Order calculation rows. A rollback-contained server apply test
+  rebuilt an exact one-unit linked GRN row and restored the draft transaction;
+  no business document was left changed. The Desk dialog reported zero
+  console/page errors.
+- Draft `PO-2627-0787` now shows Lot and Received Type on each existing item row
+  and in the Fetch Item controls. The generated header Lot and the old empty
+  Essdee Linked Lots section are absent from the Desk, while their stored legacy
+  data and submitted-PO APIs remain intact. Exact PO Item dimensions are used
+  when matching and building PO GRN rows. The Desk reported zero console/page
+  errors.
+- Final focused verification passes 59/59: base stock grouping 4/4, Essdee DC
+  18/18, IPD Cloth Mapping 5/5, GRN customization 16/16, Essdee Lot/PO boundary
+  13/13, and three focused PO dimension/GRN transport assertions. Python
+  compilation, Desk JavaScript syntax, custom-field JSON parsing, both apps'
+  `git diff --check`, and fresh `yrp` plus `essdee_yrp` Desk asset builds
+  all pass. The intended idempotent dimension and visibility metadata updates
+  were applied to `essdee_yrp.site`; the rendered checks did not save, submit,
+  cancel, or otherwise mutate DC, IPD, GRN, or PO business records.
+
+### 2026-08-29 GRN Calculate versus Submit validation boundary — A123 (completed)
+
+The owner confirmed that GRN Calculate is only a draft quantity-entry action.
+Work Order pending, checking-output, calculated-input stock, and other business
+availability gates must run at Submit, not inside the Calculate dialog.
+
+- [x] A123.1 Reproduce the exact failure on `YRP-GRN-2026-00090`: selecting
+  Mint quantity 5 for eight sizes produced 40 in the dialog, but Mint was fully
+  received and the pending-row builder omitted it, causing Calculate's internal
+  draft Save to raise the unrelated empty-items message.
+- [x] A123.2 Let Calculate rebuild selected draft rows from their authoritative
+  saved Work Order Receivables even when current pending is zero. Preserve
+  browser-trust boundaries and all Submit validations.
+- [x] A123.3 Verify Calculate success and Submit rejection as two separate
+  transaction boundaries, restore the exact draft, and run focused regression,
+  compilation, cache, and diff checks.
+
+Completion evidence:
+
+- A rollback-contained call using the owner's exact selection saved eight Mint
+  rows of quantity 5 and returned total quantity 40 without a Calculate error.
+- Submitting that calculated draft was then rejected at Submit with the
+  specific checking-output evidence for every Mint size: Checking Output 100,
+  Already received 100, This GRN 5, Over by 5. This proves availability stayed
+  authoritative while moving to the requested lifecycle boundary.
+- The transaction was rolled back and re-read: `YRP-GRN-2026-00090` remained a
+  Draft with its same modified timestamp and original 16 Olive/Navy rows.
+  Focused GRN customization passes 17/17; Python compilation and Essdee
+  `git diff --check` pass. No Desk asset change was required.
 
 ## 12. Known hard limitations at audit start
 

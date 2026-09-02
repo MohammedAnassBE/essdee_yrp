@@ -7,6 +7,56 @@ from essdee_yrp.garment_bom import calculate_essdee_accessory_bom
 
 
 class TestGarmentBOM(FrappeTestCase):
+	def test_work_order_calculation_rejects_unmapped_attribute_accessory(self):
+		ipd = frappe._dict(
+			name="_Test Garment IPD",
+			item="_Test Garment",
+			item_bom=[
+				frappe._dict(
+					idx=16,
+					item="Tag Bullet",
+					process_name="Packing",
+					dependent_attribute_value="Piece",
+					qty_of_product=1,
+					qty_of_bom_item=1,
+					uom="Nos",
+					based_on_attribute_mapping=0,
+					attribute_mapping=None,
+					wastage_pct=0,
+				)
+			],
+		)
+		lot = frappe._dict(pack_in_stage="Piece", pack_out_stage="Pack")
+		garment_variant = frappe._dict(item="_Test Garment", attributes=[])
+		accessory_item = frappe._dict(
+			attributes=[frappe._dict(attribute="Colour")],
+		)
+
+		def get_cached_doc(doctype, name):
+			if doctype == "Item Variant":
+				return garment_variant
+			if doctype == "Item" and name == "Tag Bullet":
+				return accessory_item
+			raise AssertionError((doctype, name))
+
+		with (
+			patch.object(frappe, "get_doc", return_value=ipd),
+			patch.object(frappe, "get_cached_doc", side_effect=get_cached_doc),
+			patch("essdee_yrp.garment_bom.get_or_create_variant") as get_variant,
+			self.assertRaisesRegex(
+				frappe.ValidationError,
+				"Tag Bullet.*Colour.*has no attribute mapping",
+			),
+		):
+			calculate_essdee_accessory_bom(
+				ipd.name,
+				[{"item_variant": "_Test Garment Variant", "qty": 15}],
+				lot,
+				process_names=["Packing"],
+			)
+
+		get_variant.assert_not_called()
+
 	def test_explicit_empty_process_filter_evaluates_no_bom_rows(self):
 		ipd = frappe._dict(
 			name="_Test Garment IPD",

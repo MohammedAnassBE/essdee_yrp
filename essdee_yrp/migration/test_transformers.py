@@ -289,6 +289,44 @@ class ReviewedTransformerTest(unittest.TestCase):
 		)
 		self.assertEqual(work_order_invoice["against"], "Work Order")
 
+	def test_work_order_purchase_invoice_preserves_legacy_commercial_rows(self):
+		row = transform_document(
+			{
+				"doctype": "Purchase Invoice",
+				"name": "MPI-WO-RATES",
+				"against": "Work Order",
+				"items": [
+					{
+						"doctype": "Purchase Invoice Item",
+						"name": "MPI-ITEM-1",
+						"item": "Stitching to Checking Expenses",
+						"item_group": "Service",
+						"lot": "LOT-1",
+						"qty": 100,
+						"uom": "Nos",
+						"actual_rate": 0,
+						"rate": 4.5,
+					},
+				],
+				"pi_work_order_billed_details": [
+					{
+						"doctype": "PI Work Order Billed Detail",
+						"name": "BILLED-1",
+						"work_order": "WO-1",
+					}
+				],
+			},
+			self.plan,
+		)
+		self.assertEqual(row["essdee_rate_table_source"], "production_api")
+		self.assertEqual(len(row["essdee_items"]), 1)
+		commercial = row["essdee_items"][0]
+		self.assertEqual(commercial["source_rate"], 0)
+		self.assertEqual(commercial["rate"], 4.5)
+		self.assertEqual(commercial["amount"], 450)
+		self.assertEqual(commercial["lot"], "LOT-1")
+		self.assertEqual(len(commercial["group_key"]), 64)
+
 	def test_pre_category_stitching_rows_use_the_legacy_ui_default(self):
 		row = transform_document(
 			{

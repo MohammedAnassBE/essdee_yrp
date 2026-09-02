@@ -5,48 +5,30 @@ from frappe import _
 from frappe.utils import flt
 
 
-_COMPLETION_PURPOSES = {"DC Completion", "GRN Completion"}
-
-
-def _normalize_completion_row_indexes(doc):
-	"""Keep every generated completion row visible in the base YRP Vue grid.
-
-	Delivery Challan and Goods Received Note rows may carry string row indexes
-	(``matrix-0001`` and similar), while Stock Entry Detail stores an Int.  The
-	copy therefore coerces every source index to ``0``.  Base YRP's grouped item
-	editor treats equal row indexes as one logical item and renders only the
-	first parent Item from that group.  Completion entries favour completeness:
-	each physical child row receives its own stable integer index.
-	"""
-	if doc.get("purpose") not in _COMPLETION_PURPOSES:
-		return False
-
-	rows = list(doc.get("items") or [])
-	keys = [row.get("row_index") for row in rows]
-	if len(set(keys)) == len(keys) and all(key is not None for key in keys):
-		return False
-
-	for index, row in enumerate(rows):
-		row.row_index = index
-	return True
-
-
 def onload(doc, method=None):
-	"""Repair legacy/generated draft presentation without writing on read."""
-	changed = _normalize_completion_row_indexes(doc)
-	changed = preserve_dynamic_packing_completion_piece_uom(doc) or changed
-	changed = preserve_dynamic_packing_dispatch_piece_uom(doc) or changed
-	if not changed:
-		return
+	"""Render physical children as logical rows with primary-attribute columns.
 
+	The projection is deliberately built from copies.  Completion entries keep
+	their exact saved children and source lineage, while Desk groups Size variants
+	by parent Item, non-primary attributes, set combination, and Stock Dimensions.
+	"""
+	del method
+	preserve_dynamic_packing_completion_piece_uom(doc)
+	preserve_dynamic_packing_dispatch_piece_uom(doc)
+
+	from essdee_yrp.item_matrix import normalize_item_matrix_row_indexes
 	from yrp.stock.save_stock_items import group_items_for_ui
 
-	doc.set_onload("item_details", group_items_for_ui(doc.get("items") or [], "Stock Entry"))
+	doc.set_onload(
+		"item_details",
+		group_items_for_ui(
+			normalize_item_matrix_row_indexes(doc.get("items") or []),
+			"Stock Entry",
+		),
+	)
 
 
 def before_validate(doc, method=None):
-	_normalize_completion_row_indexes(doc)
-
 	from essdee_yrp.cutting.movement import (
 		set_completion_cut_panel_movement,
 		validate_transaction_link,
@@ -256,6 +238,7 @@ def on_submit(doc, method=None):
 
 	apply_transaction(doc, cancelled=False)
 	apply_stock_entry(doc, cancelled=False)
+	sync_dc_completion_cutting_plan(doc)
 
 
 def on_cancel(doc, method=None):
@@ -264,3 +247,17 @@ def on_cancel(doc, method=None):
 
 	apply_transaction(doc, cancelled=True)
 	apply_stock_entry(doc, cancelled=True)
+	sync_dc_completion_cutting_plan(doc)
+
+
+def sync_dc_completion_cutting_plan(doc):
+	if not (
+		doc.get("purpose") == "DC Completion"
+		and doc.get("against") == "Delivery Challan"
+		and doc.get("against_id")
+	):
+		return
+	delivery_challan = frappe.get_doc("Delivery Challan", doc.against_id)
+	from essdee_yrp.delivery_challan_hooks import sync_cutting_plan_received_cloth
+
+	sync_cutting_plan_received_cloth(delivery_challan)

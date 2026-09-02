@@ -12,6 +12,7 @@ import frappe
 from frappe.contacts.doctype.address_template.address_template import (
 	get_default_address_template,
 )
+from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
 from essdee_yrp.web_build import build_web_spa
 
@@ -57,7 +58,10 @@ DOCPERM_FIELDS = (
 
 
 def after_install():
+	ensure_purchase_invoice_commercial_fields()
+	ensure_process_billing_items()
 	ensure_yrp_valuation_contract()
+	ensure_stock_transaction_indexes()
 	ensure_finishing_plan_dispatch_naming_series()
 	ensure_default_address_template()
 	ensure_mrp_schema_roles()
@@ -69,7 +73,10 @@ def after_install():
 
 
 def after_migrate():
+	ensure_purchase_invoice_commercial_fields()
+	ensure_process_billing_items()
 	ensure_yrp_valuation_contract()
+	ensure_stock_transaction_indexes()
 	ensure_finishing_plan_dispatch_naming_series()
 	ensure_default_address_template()
 	ensure_mrp_schema_roles()
@@ -79,7 +86,140 @@ def after_migrate():
 	ensure_yrp_production_order_settings()
 	ensure_lot_packing_boundary()
 	ensure_essdee_stock_dimensions()
+	from essdee_yrp.purchase_invoice import (
+		backfill_legacy_commercial_items,
+		backfill_unprojected_work_order_drafts,
+	)
+
+	backfill_legacy_commercial_items()
+	backfill_unprojected_work_order_drafts()
 	build_web_spa()
+
+
+def ensure_purchase_invoice_commercial_fields():
+	"""Install Essdee's commercial PI view without changing base YRP schemas."""
+	create_custom_fields(
+		{
+			"Purchase Invoice": [
+				{
+					"fieldname": "essdee_items",
+					"fieldtype": "Table",
+					"label": "Process Items",
+					"options": "Essdee Purchase Invoice Item",
+					"insert_after": "items",
+					"depends_on": "eval:doc.against == 'Work Order'",
+				},
+				{
+					"fieldname": "essdee_rate_table_source",
+					"fieldtype": "Data",
+					"label": "Essdee Rate Table Source",
+					"insert_after": "essdee_items",
+					"hidden": 1,
+					"read_only": 1,
+					"no_copy": 1,
+				},
+			],
+			"Purchase Invoice Item": [
+				{
+					"fieldname": "essdee_group_key",
+					"fieldtype": "Data",
+					"label": "Essdee Commercial Group Key",
+					"insert_after": "set_combination",
+					"hidden": 1,
+					"read_only": 1,
+				},
+				{
+					"fieldname": "essdee_rate_weight",
+					"fieldtype": "Float",
+					"label": "Essdee Commercial Rate Weight",
+					"insert_after": "essdee_group_key",
+					"hidden": 1,
+					"precision": 9,
+					"read_only": 1,
+				},
+			],
+			"PI Work Order Billed Detail": [
+				{
+					"fieldname": "essdee_group_key",
+					"fieldtype": "Data",
+					"label": "Essdee Commercial Group Key",
+					"insert_after": "set_combination",
+					"hidden": 1,
+					"read_only": 1,
+				},
+			],
+		},
+		update=True,
+	)
+	for doctype, fieldnames in {
+		"Purchase Invoice": ("essdee_items", "essdee_rate_table_source"),
+		"Purchase Invoice Item": ("essdee_group_key", "essdee_rate_weight"),
+		"PI Work Order Billed Detail": ("essdee_group_key",),
+	}.items():
+		for fieldname in fieldnames:
+			frappe.db.set_value(
+				"Custom Field",
+				f"{doctype}-{fieldname}",
+				{"module": "Essdee YRP", "is_system_generated": 1},
+				update_modified=False,
+			)
+
+
+def ensure_process_billing_items():
+	"""Complete the migrated production_api billing-item contract for Cutting."""
+	if (
+		not frappe.get_meta("Process").get_field("item")
+		or not frappe.db.exists("Process", "Cutting")
+		or not frappe.db.exists("Item", "Cutting Charges")
+	):
+		return
+	if not frappe.db.get_value("Process", "Cutting", "item"):
+		frappe.db.set_value("Process", "Cutting", "item", "Cutting Charges", update_modified=False)
+
+
+def ensure_stock_transaction_indexes():
+	"""Index the stock lookup paths used on every submit/cancel.
+
+	The migrated Essdee ledger is large enough that filtering SLEs by voucher
+	without this composite index scans the whole ledger. Base YRP's repost,
+	cancel, and ownership guards all use the same three columns.
+
+	Every effective SLE also recomputes the active reserved quantity for its
+	item/warehouse/dimension bucket. The migrated reservation table is large,
+	so leaving that lookup unindexed multiplies a full-table scan by every stock
+	row in a DC, GRN, Stock Entry, or Stock Reconciliation. production_api uses
+	the same item/warehouse/status optimization; Essdee additionally includes
+	the complete stock-dimension bucket used by base YRP's authoritative query.
+	DC submit/cancel also resolves the Work Order reservation once per child row;
+	the voucher-detail index keeps that ownership lookup out of the same scan.
+	"""
+	frappe.db.add_index(
+		"Stock Ledger Entry",
+		["voucher_type", "voucher_no", "is_cancelled"],
+		index_name="idx_sle_voucher_active",
+	)
+	frappe.db.add_index(
+		"Stock Reservation Entry",
+		[
+			"item_code",
+			"warehouse",
+			"lot",
+			"received_type",
+			"docstatus",
+			"status",
+		],
+		index_name="idx_sre_active_stock_bucket",
+	)
+	frappe.db.add_index(
+		"Stock Reservation Entry",
+		[
+			"voucher_type",
+			"voucher_no",
+			"voucher_detail_no",
+			"docstatus",
+		],
+		index_name="idx_sre_voucher_detail_active",
+	)
 
 
 def ensure_yrp_valuation_contract():

@@ -49,6 +49,11 @@ def normalize_item_matrix_row_indexes(rows):
 			attributes,
 			_canonical_json(row.get("set_combination")),
 			dimensions,
+			# Stock Reconciliation stores the stock bucket warehouse on its
+			# child row rather than as a configured Stock Dimension.  Keep it
+			# as a grouping boundary even though the current Desk editor normally
+			# fills every row from the header default.
+			row.get("warehouse") or "",
 			row.get("received_type") or "",
 		)
 		if key not in logical_indexes:

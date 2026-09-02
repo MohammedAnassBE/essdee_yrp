@@ -68,6 +68,13 @@ class TestLotPackingBoundary(FrappeTestCase):
 			if options:
 				self.assertEqual(custom_field.options, options)
 
+		for fieldname in ("lot_details_section", "default_lot", "sd_lot"):
+			self.assertEqual(
+				frappe.get_meta("Purchase Order").get_field(fieldname).hidden,
+				1,
+				fieldname,
+			)
+
 		self.assertEqual(frappe.get_meta("Lot MultiSelect").module, "Essdee YRP")
 
 	def test_linked_lots_are_deduplicated_and_defaulted(self):
@@ -81,6 +88,23 @@ class TestLotPackingBoundary(FrappeTestCase):
 			purchase_order_lots.sync_linked_lots(doc)
 		self.assertEqual(doc.default_lot, "LOT-A")
 		self.assertEqual([row.lot for row in doc.sd_lot], ["LOT-A"])
+
+	def test_po_item_lots_sync_into_hidden_legacy_links(self):
+		doc = FakePurchaseOrder(
+			items=[
+				frappe._dict(lot="LOT-A"),
+				frappe._dict(lot="LOT-B"),
+				frappe._dict(lot="LOT-A"),
+			]
+		)
+		with (
+			patch.object(purchase_order_lots, "_lot_dimension_field", return_value="lot"),
+			patch.object(purchase_order_lots, "_check_lot_permission"),
+		):
+			purchase_order_lots.sync_linked_lots(doc)
+		self.assertEqual([row.lot for row in doc.sd_lot], ["LOT-A", "LOT-B"])
+		# Multiple row Lots have no unambiguous legacy header default.
+		self.assertIsNone(doc.default_lot)
 
 	def test_grn_rejects_unlinked_configured_lot(self):
 		po = frappe._dict(sd_lot=[frappe._dict(lot="LOT-A")])

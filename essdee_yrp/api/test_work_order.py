@@ -41,6 +41,43 @@ from essdee_yrp.overrides.delivery_challan import EssdeeDeliveryChallan
 
 
 class TestWorkOrderDeliveryChallanDefaults(TestCase):
+    def test_source_location_and_warehouse_are_left_for_operator(self):
+        work_order = frappe._dict(
+            name="WO-MANUAL-SOURCE-1",
+            lot="LOT-MANUAL-SOURCE-1",
+            includes_packing=0,
+            delivery_address="SOURCE-BILLING",
+            delivery_address_details="Source address",
+            supplier_address="TARGET-BILLING",
+            supplier_address_details="Target address",
+        )
+        base_defaults = {
+            "from_location": "WORK-ORDER-DELIVERY-LOCATION",
+            "from_warehouse": "WORK-ORDER-DELIVERY-WAREHOUSE",
+            "supplier": "JOB-WORKER",
+            "to_warehouse": "JOB-WORKER-WAREHOUSE",
+            "items": [],
+            "item_details": [],
+        }
+
+        with (
+            patch(
+                "essdee_yrp.work_order_actions._open_submitted_work_order",
+                return_value=work_order,
+            ),
+            patch("frappe.has_permission", return_value=True),
+            patch(
+                "yrp.yrp.doctype.delivery_challan.delivery_challan.get_work_order_defaults",
+                return_value=base_defaults,
+            ),
+        ):
+            defaults = get_delivery_challan_defaults(work_order.name)
+
+        self.assertEqual(defaults["from_location"], "")
+        self.assertEqual(defaults["from_warehouse"], "")
+        self.assertEqual(defaults["supplier"], "JOB-WORKER")
+        self.assertEqual(defaults["to_warehouse"], "JOB-WORKER-WAREHOUSE")
+
     def test_required_addresses_are_copied_from_work_order(self):
         work_order = frappe._dict(
             name="WO-ADDRESS-1",

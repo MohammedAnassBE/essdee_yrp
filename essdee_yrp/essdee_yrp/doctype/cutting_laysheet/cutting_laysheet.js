@@ -361,6 +361,18 @@ frappe.ui.form.on("Cutting LaySheet", {
                                     method: "essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.update_label_print_status",
                                     args: {
                                         doc_name: frm.doc.name
+                                    },
+                                    freeze: true,
+                                    freeze_message: __("Restoring Label Printed status..."),
+                                    callback(r){
+                                        const grn = r.message && r.message.goods_received_note
+                                        frappe.show_alert({
+                                            message: grn
+                                                ? __("Label Printed restored. GRN {0} is active.", [grn])
+                                                : __("Label Printed status restored."),
+                                            indicator: "green",
+                                        }, 7)
+                                        frm.reload_doc()
                                     }
                                 })
                             },

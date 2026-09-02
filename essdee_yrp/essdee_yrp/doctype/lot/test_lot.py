@@ -1,15 +1,62 @@
 # Copyright (c) 2024, Essdee and Contributors
 # See license.txt
 
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from essdee_yrp.essdee_yrp.doctype.lot.lot import calculate_bom, get_ocr_details
+from essdee_yrp.essdee_yrp.doctype.lot.lot import Lot, calculate_bom, get_ocr_details
 
 
 class TestLot(FrappeTestCase):
+	def test_piece_quantities_derive_read_only_box_quantities(self):
+		lot = SimpleNamespace(
+			production_detail="_Test Packing IPD",
+			lot_order_details=[
+				frappe._dict(item_variant="PIECE-S", quantity=25),
+				frappe._dict(item_variant="PIECE-M", quantity=12),
+			],
+			items=[
+				frappe._dict(item_variant="BOX-S", qty=99),
+				frappe._dict(item_variant="BOX-M", qty=99),
+			],
+			flags=frappe._dict(),
+		)
+		ipd = frappe._dict(
+			packing_combo=12,
+			is_set_item=0,
+			primary_item_attribute="Size",
+		)
+		attributes = {
+			"PIECE-S": {"Size": "S"},
+			"PIECE-M": {"Size": "M"},
+			"BOX-S": {"Size": "S"},
+			"BOX-M": {"Size": "M"},
+		}
+		with (
+			patch.object(frappe, "get_cached_doc", return_value=ipd),
+			patch(
+				"essdee_yrp.essdee_yrp.doctype.lot.lot.get_variant_attr_details",
+				side_effect=lambda variant: attributes[variant],
+			),
+		):
+			Lot.derive_items_from_order_details(lot)
+
+		self.assertEqual([row.qty for row in lot.items], [3, 1])
+		self.assertTrue(lot.flags.items_derived)
+
+	def test_box_table_does_not_expose_edit_actions(self):
+		source = (
+			Path(frappe.get_app_path("essdee_yrp"))
+			/ "public/js/Lot/components/LotOrder.vue"
+		).read_text(encoding="utf-8")
+		self.assertNotIn(">Edit<", source)
+		self.assertNotIn("@click=\"edit_item", source)
+		self.assertNotIn("@click=\"delete_item", source)
+
 	def test_calculate_bom_uses_shared_matrix_engine_and_saves_lot(self):
 		lot = frappe._dict(
 			name="_Test Matrix Lot",

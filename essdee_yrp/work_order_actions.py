@@ -167,6 +167,12 @@ def get_delivery_challan_defaults(
 			"work_order": doc.name,
 			"lot": doc.lot,
 			"includes_packing": doc.get("includes_packing"),
+			# The source is transaction-specific in Essdee. A Work Order's
+			# delivery location is context, not authority for where this DC's
+			# stock is physically issued. Keep both fields empty until the
+			# operator deliberately selects them on the Desk form.
+			"from_location": "",
+			"from_warehouse": "",
 			"from_address": doc.delivery_address,
 			"from_address_details": doc.delivery_address_details,
 			"supplier_address": doc.supplier_address,

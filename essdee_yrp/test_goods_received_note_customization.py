@@ -3,8 +3,14 @@ from unittest.mock import patch
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from essdee_yrp.garment_grn import before_validate as calculate_garment_consumption
+from essdee_yrp.garment_grn import (
+	_apply_calculated_receivable_quantities,
+	_include_calculated_receivable_rows,
+	before_validate as calculate_garment_consumption,
+)
 from essdee_yrp.overrides.goods_received_note import (
+	_only_default_received_type,
+	_selected_draft_receivable_rows,
 	aggregate_packing_grn_rows_for_ui,
 	get_work_order_defaults,
 	normalize_cutting_grn_row_indexes,
@@ -55,6 +61,162 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		"in_words": ("Data", None),
 		"approved_by": ("Link", "User"),
 	}
+
+	def test_desk_grn_calculate_uses_saved_work_order_calculation(self):
+		from pathlib import Path
+
+		source = (
+			Path(frappe.get_app_path("essdee_yrp"))
+			/ "public/js/goods_received_note.js"
+		).read_text(encoding="utf-8")
+		self.assertIn("get_grn_calculation_context", source)
+		self.assertIn("calculate_grn_receivables", source)
+		self.assertIn('options: "Received Type"', source)
+		self.assertIn("essdee-grn-calc-qty", source)
+
+	def test_grn_calculate_replaces_only_the_selected_received_type(self):
+		rows = [
+			frappe._dict(
+				ref_docname="REC-1",
+				received_type="Accepted",
+				quantity=10,
+				conversion_factor=1,
+			),
+			frappe._dict(
+				ref_docname="REC-2",
+				received_type="Accepted",
+				quantity=5,
+				conversion_factor=1,
+			),
+			frappe._dict(
+				ref_docname="REC-2",
+				received_type="Rejected",
+				quantity=2,
+				conversion_factor=1,
+			),
+		]
+
+		result = _apply_calculated_receivable_quantities(
+			rows, {"REC-1": 3}, "Accepted"
+		)
+
+		self.assertEqual(
+			[
+				(row.ref_docname, row.received_type, row.quantity)
+				for row in result
+			],
+			[
+				("REC-1", "Accepted", 3),
+				("REC-2", "Rejected", 2),
+			],
+		)
+
+	def test_grn_calculate_can_save_selected_zero_pending_row_for_submit_validation(self):
+		work_order = frappe._dict(
+			receivables=[
+				frappe._dict(
+					name="REC-MINT-45",
+					idx=1,
+					item_variant="GARMENT-MINT-45",
+					uom="Pieces",
+					qty=100,
+					pending_quantity=0,
+					table_index=0,
+					row_index="matrix-0000",
+					set_combination="{}",
+					cost=0,
+				)
+			]
+		)
+
+		rows = _include_calculated_receivable_rows(
+			[], work_order, {"REC-MINT-45": 5}, "Accepted"
+		)
+		rows = _apply_calculated_receivable_quantities(
+			rows, {"REC-MINT-45": 5}, "Accepted"
+		)
+
+		self.assertEqual(len(rows), 1)
+		self.assertEqual(rows[0].ref_docname, "REC-MINT-45")
+		self.assertEqual(rows[0].pending_quantity, 0)
+		self.assertEqual(rows[0].quantity, 5)
+		self.assertEqual(rows[0].received_type, "Accepted")
+
+	def test_calculated_input_availability_is_not_a_draft_save_hook(self):
+		before_validate = frappe.get_hooks("doc_events")["Goods Received Note"][
+			"before_validate"
+		]
+		for method in (
+			"essdee_yrp.finishing.packing_grn.before_validate",
+			"essdee_yrp.fabric_grn.before_validate",
+			"essdee_yrp.garment_grn.before_validate",
+		):
+			self.assertNotIn(method, before_validate)
+		self.assertIn(
+			"essdee_yrp.packing_hooks.set_grn_includes_packing",
+			before_validate,
+		)
+		self.assertIn(
+			"essdee_yrp.purchase_order_lots.validate_grn_lots",
+			before_validate,
+		)
+		self.assertIn(
+			"essdee_yrp.cutting.movement.validate_transaction_link",
+			before_validate,
+		)
+
+	def test_fresh_grn_keeps_only_default_received_type(self):
+		rows = [
+			frappe._dict(item_variant="ITEM", received_type="Accepted"),
+			frappe._dict(item_variant="ITEM", received_type="Rejected"),
+			frappe._dict(item_variant="ITEM", received_type="Rework"),
+		]
+		with patch(
+			"essdee_yrp.overrides.goods_received_note._default_received_type",
+			return_value="Accepted",
+		):
+			filtered = _only_default_received_type(rows)
+		self.assertEqual([row.received_type for row in filtered], ["Accepted"])
+
+	def test_saved_draft_keeps_only_explicit_received_type_rows(self):
+		existing = [
+			frappe._dict(
+				ref_docname="RECEIVABLE-1",
+				item_variant="ITEM-S",
+				received_type="Accepted",
+			)
+		]
+		pending = [
+			frappe._dict(
+				ref_docname="RECEIVABLE-1",
+				item_variant="ITEM-S",
+				received_type=received_type,
+			)
+			for received_type in ("Accepted", "Rejected", "Rework")
+		]
+		grn = frappe._dict(against_id="WO-1", delivery_challan=None)
+		with (
+			patch.object(frappe, "get_doc", return_value=frappe._dict()),
+			patch(
+				"yrp.yrp.doctype.goods_received_note.goods_received_note._pending_receivable_rows",
+				return_value=pending,
+			),
+			patch(
+				"essdee_yrp.overrides.goods_received_note._default_received_type",
+				return_value="Accepted",
+			),
+			patch(
+				"yrp.yrp.doctype.delivery_challan.delivery_challan._get_production_group_dimensions",
+				return_value={},
+			),
+			patch(
+				"yrp.yrp.doctype.delivery_challan.delivery_challan._apply_dimension_values_to_rows"
+			),
+			patch("yrp.stock.dimensions.apply_dimension_defaults"),
+		):
+			filtered = _selected_draft_receivable_rows(grn, existing)
+
+		self.assertEqual([row.received_type for row in filtered], ["Accepted"])
 
 	def test_approved_production_api_fields_are_essdee_custom_fields(self):
 		meta = frappe.get_meta("Goods Received Note", cached=False)

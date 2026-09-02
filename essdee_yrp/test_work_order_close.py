@@ -13,9 +13,9 @@ class TestWorkOrderClose(UnitTestCase):
 			idx=1,
 			item_variant="INPUT-VARIANT",
 			uom="Piece",
-			qty=10,
-			pending_quantity=0,
-			stock_update=8,
+			qty=5000,
+			pending_quantity=-500,
+			stock_update=5200,
 			valuation_rate=0,
 			rate=0,
 		)
@@ -105,14 +105,14 @@ class TestWorkOrderClose(UnitTestCase):
 
 		manager.assert_not_called()
 
-	def test_manager_close_uses_actual_fifo_value_and_persists_lineage(self):
+	def test_manager_close_reduces_unreturned_excess_at_actual_fifo_value(self):
 		doc, row = self._manager_close_doc()
 		ledger_result = {
 			"entries": {
 				"wo-close:WOD-1": {
 					"sle": "SLE-EXCESS-IN",
 					"rate": 13,
-					"value": 26,
+					"value": 3900,
 				}
 			}
 		}
@@ -126,7 +126,7 @@ class TestWorkOrderClose(UnitTestCase):
 			patch.object(
 				frappe.db,
 				"get_value",
-				return_value=frappe._dict(item="OUTPUT-VARIANT", qty=4, rate=20),
+				return_value=frappe._dict(item="OUTPUT-VARIANT", qty=400, rate=20),
 			),
 			patch("essdee_yrp.work_order_close._is_wo_close_manager", return_value=True),
 			patch("essdee_yrp.work_order_close._validate_wo_close"),
@@ -159,7 +159,7 @@ class TestWorkOrderClose(UnitTestCase):
 				"yrp.stock.utils.get_conversion_factor",
 				return_value={"conversion_factor": 1, "stock_uom": "Piece"},
 			),
-			patch("yrp.stock.utils.get_stock_balance", return_value=(2, 12)),
+			patch("yrp.stock.utils.get_stock_balance", return_value=(300, 12)),
 			patch(
 				"yrp.stock.stock_ledger.make_sl_entries",
 				return_value=ledger_result,
@@ -180,12 +180,12 @@ class TestWorkOrderClose(UnitTestCase):
 		self.assertIn("FOR UPDATE", sql.call_args.args[0])
 		posted = make_entries.call_args.args[0]
 		self.assertEqual(len(posted), 1)
-		self.assertEqual(posted[0]["qty"], -2)
+		self.assertEqual(posted[0]["qty"], -300)
 		self.assertEqual(posted[0]["outgoing_rate"], 12)
 		self.assertTrue(make_entries.call_args.kwargs["return_details"])
 		self.assertTrue(make_entries.call_args.kwargs["force_inline"])
-		self.assertEqual(row.stock_update, 10)
-		self.assertEqual(result, {"status": "Close", "deducted_qty": 2.0})
+		self.assertEqual(row.stock_update, 5500)
+		self.assertEqual(result, {"status": "Close", "deducted_qty": 300.0})
 		doc.save.assert_called_once_with(ignore_permissions=True)
 		close_reservations.assert_called_once_with("Work Order", "WO-1")
 		enqueue_repost.assert_called_once()
@@ -195,8 +195,8 @@ class TestWorkOrderClose(UnitTestCase):
 		)
 		allocation = create_adjustment.call_args.kwargs["allocations"][0]
 		self.assertEqual(allocation["target_sle"], "SLE-OUTPUT-1")
-		self.assertEqual(allocation["difference"], 26)
-		self.assertEqual(allocation["new_rate"], 26.5)
+		self.assertEqual(allocation["difference"], 3900)
+		self.assertEqual(allocation["new_rate"], 29.75)
 
 	def test_manager_close_fails_instead_of_clipping_unavailable_excess(self):
 		doc, _row = self._manager_close_doc()
@@ -301,7 +301,7 @@ class TestWorkOrderClose(UnitTestCase):
 				"yrp.stock.utils.get_conversion_factor",
 				return_value={"conversion_factor": 1, "stock_uom": "Piece"},
 			),
-			patch("yrp.stock.utils.get_stock_balance", return_value=(2, 12)),
+			patch("yrp.stock.utils.get_stock_balance", return_value=(300, 12)),
 			patch(
 				"yrp.stock.stock_ledger.make_sl_entries",
 				side_effect=frappe.ValidationError("Stock valuation period is closed"),

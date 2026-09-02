@@ -327,7 +327,7 @@
   "doctype_or_field": "DocField",
   "field_name": "voucher_type",
   "is_system_generated": 1,
-  "modified": "2026-08-17 00:00:00.000000",
+  "modified": "2026-08-17 00:00:00",
   "module": null,
   "name": "Stock Reservation Entry-voucher_type-options",
   "property": "options",
@@ -464,6 +464,7 @@
   "value": "lot.item"
  },
  {
+  "default_value": null,
   "doc_type": "Delivery Challan",
   "docstatus": 0,
   "doctype": "Property Setter",
@@ -471,12 +472,31 @@
   "field_name": "from_location",
   "is_system_generated": 1,
   "modified": "2026-08-12 20:00:00",
+  "module": null,
   "name": "Delivery Challan-from_location-reqd",
   "property": "reqd",
   "property_type": "Check",
+  "row_name": null,
   "value": "1"
  },
  {
+  "default_value": null,
+  "doc_type": "Delivery Challan",
+  "docstatus": 0,
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "from_location",
+  "is_system_generated": 1,
+  "modified": "2026-08-28 11:13:20.263255",
+  "module": null,
+  "name": "Delivery Challan-from_location-fetch_from",
+  "property": "fetch_from",
+  "property_type": "Data",
+  "row_name": null,
+  "value": ""
+ },
+ {
+  "default_value": null,
   "doc_type": "Delivery Challan",
   "docstatus": 0,
   "doctype": "Property Setter",
@@ -484,12 +504,15 @@
   "field_name": "is_rework",
   "is_system_generated": 1,
   "modified": "2026-08-12 20:00:00",
+  "module": null,
   "name": "Delivery Challan-is_rework-fetch_from",
   "property": "fetch_from",
   "property_type": "Data",
+  "row_name": null,
   "value": "work_order.is_rework"
  },
  {
+  "default_value": null,
   "doc_type": "Delivery Challan",
   "docstatus": 0,
   "doctype": "Property Setter",
@@ -497,12 +520,15 @@
   "field_name": "is_rework",
   "is_system_generated": 1,
   "modified": "2026-08-12 20:00:00",
+  "module": null,
   "name": "Delivery Challan-is_rework-fetch_if_empty",
   "property": "fetch_if_empty",
   "property_type": "Check",
+  "row_name": null,
   "value": "1"
  },
  {
+  "default_value": null,
   "doc_type": "Delivery Challan",
   "docstatus": 0,
   "doctype": "Property Setter",
@@ -510,12 +536,15 @@
   "field_name": "ste_transferred",
   "is_system_generated": 1,
   "modified": "2026-08-12 20:00:00",
+  "module": null,
   "name": "Delivery Challan-ste_transferred-depends_on",
   "property": "depends_on",
   "property_type": "Data",
+  "row_name": null,
   "value": "eval: doc.is_internal_unit"
  },
  {
+  "default_value": null,
   "doc_type": "Delivery Challan",
   "docstatus": 0,
   "doctype": "Property Setter",
@@ -523,12 +552,15 @@
   "field_name": "ste_transferred",
   "is_system_generated": 1,
   "modified": "2026-08-12 20:00:00",
+  "module": null,
   "name": "Delivery Challan-ste_transferred-precision",
   "property": "precision",
   "property_type": "Select",
+  "row_name": null,
   "value": "2"
  },
  {
+  "default_value": null,
   "doc_type": "Delivery Challan",
   "docstatus": 0,
   "doctype": "Property Setter",
@@ -536,12 +568,15 @@
   "field_name": "transfer_complete",
   "is_system_generated": 1,
   "modified": "2026-08-12 20:00:00",
+  "module": null,
   "name": "Delivery Challan-transfer_complete-depends_on",
   "property": "depends_on",
   "property_type": "Data",
+  "row_name": null,
   "value": "eval: doc.is_internal_unit"
  },
  {
+  "default_value": null,
   "doc_type": "Delivery Challan",
   "docstatus": 0,
   "doctype": "Property Setter",
@@ -549,12 +584,15 @@
   "field_name": "vehicle_no",
   "is_system_generated": 1,
   "modified": "2026-08-12 20:00:00",
+  "module": null,
   "name": "Delivery Challan-vehicle_no-allow_on_submit",
   "property": "allow_on_submit",
   "property_type": "Check",
+  "row_name": null,
   "value": "1"
  },
  {
+  "default_value": null,
   "doc_type": "Delivery Challan Item",
   "docstatus": 0,
   "doctype": "Property Setter",
@@ -562,12 +600,15 @@
   "field_name": "secondary_qty",
   "is_system_generated": 1,
   "modified": "2026-08-12 20:00:00",
+  "module": null,
   "name": "Delivery Challan Item-secondary_qty-precision",
   "property": "precision",
   "property_type": "Select",
+  "row_name": null,
   "value": "3"
  },
  {
+  "default_value": null,
   "doc_type": "Stock Entry",
   "docstatus": 0,
   "doctype": "Property Setter",
@@ -575,12 +616,15 @@
   "field_name": "additional_amount",
   "is_system_generated": 1,
   "modified": "2026-08-13 11:00:00",
+  "module": null,
   "name": "Stock Entry-additional_amount-read_only_depends_on",
   "property": "read_only_depends_on",
   "property_type": "Data",
+  "row_name": null,
   "value": "eval: doc.purpose != 'Send to Warehouse'"
  },
  {
+  "default_value": null,
   "doc_type": "Stock Entry",
   "docstatus": 0,
   "doctype": "Property Setter",
@@ -588,9 +632,11 @@
   "field_name": "purpose",
   "is_system_generated": 1,
   "modified": "2026-08-13 11:00:00",
+  "module": null,
   "name": "Stock Entry-purpose-options",
   "property": "options",
   "property_type": "Text",
+  "row_name": null,
   "value": "Material Issue\nMaterial Receipt\nSend to Warehouse\nReceive at Warehouse\nMaterial Consumed\nStock Dispatch\nDC Completion\nGRN Completion"
  }
 ]

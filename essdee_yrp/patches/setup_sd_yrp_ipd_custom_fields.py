@@ -182,7 +182,9 @@ IPD_CUSTOM_FIELDS = [
 	_field("cutting_items_html", "HTML", "Cutting Items HTML"),
 	_field("cutting_items_json", "JSON", "Cutting Items JSON", hidden=1),
 	_field("section_break_cqll", "Section Break", "Cloth Mapping Details"),
-	_field("column_break_gwca", "Column Break", hidden=1),
+	# Keep the column visible: Frappe hides every following field in a hidden
+	# column, including the saved Cloth Mapping matrix itself.
+	_field("column_break_gwca", "Column Break"),
 	_field("select_cloths_attribute_html", "HTML", "Select Cloths Attribute HTML"),
 	_field("get_cloth_combination", "Button", "Get Cloth Combination"),
 	_field("cutting_cloths_html", "HTML", "Cutting Cloths HTML"),

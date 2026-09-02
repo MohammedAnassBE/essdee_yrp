@@ -46,6 +46,7 @@ fixtures = [
 					"Item Production Detail-main-field_order",
 					"Work Order-naming_series-options",
 					"Work Order-naming_series-default",
+					"Delivery Challan-from_location-fetch_from",
 					"Delivery Challan-from_location-reqd",
 					"Delivery Challan-is_rework-fetch_from",
 					"Delivery Challan-is_rework-fetch_if_empty",
@@ -196,6 +197,9 @@ doctype_js = {
 	"Purchase Order": "public/js/purchase_order.js",
 	"Delivery Challan": "public/js/delivery_challan.js",
 	"Goods Received Note": "public/js/goods_received_note.js",
+	"Purchase Invoice": "public/js/purchase_invoice.js",
+	"Item BOM Attribute Mapping": "public/js/item_bom_attribute_mapping.js",
+	"Process Cost": "public/js/process_cost.js",
 	"Finishing Plan": "public/js/finishing_plan.js",
 	# List form: both scripts load for Stock Entry. The guard hides the desk Cancel
 	# action on transfer SEs (source_grn set); see the JS file for the mechanism.
@@ -205,6 +209,7 @@ doctype_js = {
 	],
 }
 doctype_list_js = {
+	"Cutting Plan": "public/js/cutting_plan_list.js",
 	"Item Production Detail": "public/js/item_production_detail_list.js",
 	"Production Order": "public/js/production_order_list.js",
 }
@@ -410,11 +415,13 @@ doc_events = {
 			"essdee_yrp.cutting.movement.on_submit",
 			"essdee_yrp.work_order_piece_tracking.on_delivery_challan_submit",
 			"essdee_yrp.finishing.delivery_challan.on_submit",
+			"essdee_yrp.delivery_challan_hooks.sync_cutting_plan_received_cloth",
 		],
 		"on_cancel": [
 			"essdee_yrp.cutting.movement.on_cancel",
 			"essdee_yrp.work_order_piece_tracking.on_delivery_challan_cancel",
 			"essdee_yrp.finishing.delivery_challan.on_cancel",
+			"essdee_yrp.delivery_challan_hooks.sync_cutting_plan_received_cloth",
 			"essdee_yrp.essdee_yrp.doctype.cutting_bulk_lay_sheets.cutting_bulk_lay_sheets.refresh_linked_bulk_status",
 		],
 	},
@@ -425,9 +432,10 @@ doc_events = {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
 		"before_validate": [
 			"essdee_yrp.packing_hooks.set_grn_includes_packing",
-			"essdee_yrp.finishing.packing_grn.before_validate",
-			"essdee_yrp.fabric_grn.before_validate",
-			"essdee_yrp.garment_grn.before_validate",
+			# Calculated-input availability is intentionally not a Draft Save
+			# validation. EssdeeGoodsReceivedNote.before_submit locks the Work
+			# Order and rebuilds the cutting/packing/stitching/identity/fabric
+			# plan before any stock or valuation side effect.
 			"essdee_yrp.purchase_order_lots.validate_grn_lots",
 			"essdee_yrp.cutting.movement.validate_transaction_link",
 		],
@@ -472,6 +480,9 @@ doc_events = {
 			"essdee_yrp.cutting.movement.before_cancel",
 		],
 		"on_cancel": "essdee_yrp.stock_entry_hooks.on_cancel",
+	},
+	"Stock Reconciliation": {
+		"onload": "essdee_yrp.stock_reconciliation_hooks.onload",
 	},
 	"Lot Transfer": {
 		"on_submit": [
@@ -526,12 +537,24 @@ override_doctype_class = {
 	"Delivery Challan": "essdee_yrp.overrides.delivery_challan.EssdeeDeliveryChallan",
 	"Goods Received Note": "essdee_yrp.overrides.goods_received_note.EssdeeGoodsReceivedNote",
 	"Item Production Detail": "essdee_yrp.overrides.item_production_detail.EssdeeItemProductionDetail",
+	"Purchase Invoice": "essdee_yrp.overrides.purchase_invoice.EssdeePurchaseInvoice",
+	"Work Order": "essdee_yrp.overrides.work_order.EssdeeWorkOrder",
 }
 
 # Overriding Methods
 # ------------------------------
 #
 override_whitelisted_methods = {
+	# ERP's existing PI hooks call the production_api-era Bill Tracking routes.
+	# Keep those stable while adapting their ERP PI name to F16's local PI Link.
+	"production_api.production_api.doctype.vendor_bill_tracking.vendor_bill_tracking.close_vendor_bill":
+		"essdee_yrp.erp_purchase_invoice.close_bill_tracking_from_erp",
+	"production_api.production_api.doctype.vendor_bill_tracking.vendor_bill_tracking.revert_purchase_invoice_link":
+		"essdee_yrp.erp_purchase_invoice.revert_bill_tracking_from_erp",
+	# Work Order bills are edited as finished-piece process rows while their
+	# hidden base rows preserve the exact physical GRN valuation lineage.
+	"yrp.yrp.doctype.purchase_invoice.purchase_invoice.fetch_grn_details":
+		"essdee_yrp.purchase_invoice.fetch_grn_details",
 	# Base intentionally offers zero-pending Work Order rows for excess DCs, but
 	# its grouped editor also uses pending as the input maximum. The Essdee
 	# adapter removes only that zero maximum while retaining server authority.
@@ -550,6 +573,10 @@ override_whitelisted_methods = {
 	# SKU row with all sizes, without rewriting the Work Order source rows.
 	"yrp.yrp.doctype.goods_received_note.goods_received_note.get_work_order_defaults":
 		"essdee_yrp.overrides.goods_received_note.get_work_order_defaults",
+	# Base's generic attribute callback runs alongside the Essdee Desk handler.
+	# Route it here so an item-only response cannot race the Lot/IPD response.
+	"yrp.yrp.doctype.process_cost.process_cost.get_pc_attribute_values":
+		"essdee_yrp.process_cost.get_pc_attribute_values",
 	# The generic popup already subtracts inspection and prior Work Order
 	# consumption. Also subtract Essdee's direct Rework Details conversions.
 	"yrp.yrp.doctype.work_order.work_order.get_rework_source_rows":

@@ -33,6 +33,15 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 
 	def onload(self):
 		super().onload()
+		display_rows = self.get("items") or []
+		if (
+			self.docstatus == 0
+			and self.against == "Work Order"
+			and self.against_id
+			and display_rows
+			and not self.get("is_return")
+		):
+			display_rows = _selected_draft_receivable_rows(self, display_rows)
 		if self.get("includes_packing"):
 			# A fixed-ratio packing receipt can split one size across many Work
 			# Order Receivable references. Those rows must remain separate in the
@@ -43,7 +52,7 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 			self.set_onload(
 				"item_details",
 				group_items_for_ui(
-					aggregate_packing_grn_rows_for_ui(self.get("items") or []),
+					aggregate_packing_grn_rows_for_ui(display_rows),
 					"Goods Received Note",
 				),
 			)
@@ -53,6 +62,13 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 			or self.get("allow_non_bundle")
 			or self.get("additional_grn")
 		):
+			if display_rows is not self.get("items"):
+				from yrp.stock.save_stock_items import group_items_for_ui
+
+				self.set_onload(
+					"item_details",
+					group_items_for_ui(display_rows, "Goods Received Note"),
+				)
 			return
 
 		# Cutting and collapsed-bundle GRNs can inherit a different Work Order
@@ -64,7 +80,7 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 		self.set_onload(
 			"item_details",
 			group_items_for_ui(
-				normalize_cutting_grn_row_indexes(self.get("items") or []),
+				normalize_cutting_grn_row_indexes(display_rows),
 				"Goods Received Note",
 			),
 		)
@@ -182,25 +198,19 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 		self._enqueue_repost_if_mapped()
 
 	def validate_items(self):
-		"""Allow scoped Essdee conversions inside one physical warehouse.
+		"""Allow every Essdee GRN to use one physical warehouse as both endpoints.
 
-		Ordinary GRNs must use different source and destination warehouses.  A
-		label-generated cutting GRN is a production conversion, though: cloth is
-		consumed and cut-panel variants are received at the cutting unit itself.
-		The later CPM Stock Entry performs the physical warehouse movement.  A
-		direct Finishing return similarly reclassifies the Received Type in place;
-		its paired SLEs debit the default type and credit the operator-selected
-		type in this same warehouse.
+		Like an in-place Essdee Delivery Challan, a GRN may be required to advance
+		production lineage without a physical warehouse change.  Keep base YRP's
+		complete validation when the endpoints differ.  When they match, omit only
+		the warehouse-inequality rejection and retain the mandatory warehouse,
+		item, and positive-quantity gates.
 		"""
 		same_warehouse = bool(
 			self.from_warehouse
 			and self.from_warehouse == self.to_warehouse
 		)
-		allows_same_warehouse = bool(
-			same_warehouse
-			and (self.get("cutting_laysheet") or self._is_essdee_return())
-		)
-		if not allows_same_warehouse:
+		if not same_warehouse:
 			return super().validate_items()
 
 		if not (self.get("items") or self.get("correction_items")):
@@ -516,10 +526,79 @@ def get_work_order_defaults(work_order, delivery_challan=None):
 	)
 
 	defaults = get_base_work_order_defaults(work_order, delivery_challan)
-	items = normalize_cutting_grn_row_indexes(defaults.get("items") or [])
+	items = _only_default_received_type(defaults.get("items") or [])
+	items = normalize_cutting_grn_row_indexes(items)
 	defaults["items"] = items
 	defaults["item_details"] = group_items_for_ui(items, "Goods Received Note")
 	return defaults
+
+
+def _default_received_type():
+	return frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
+
+
+def _only_default_received_type(rows):
+	"""Initial GRN matrices show the configured default split only.
+
+	The base Vue editor already exposes ``+ Received Type`` actions for every
+	other configured type, so pre-creating zero rows adds noise without enabling
+	any operation.
+	"""
+	default = _default_received_type()
+	if not default:
+		return rows
+	return [
+		row
+		for row in rows or []
+		if not row.get("received_type") or row.get("received_type") == default
+	]
+
+
+def _selected_draft_receivable_rows(grn, existing_rows):
+	"""Rebuild a draft using only Received Types the operator actually saved."""
+	from yrp.stock.dimensions import apply_dimension_defaults
+	from yrp.yrp.doctype.delivery_challan.delivery_challan import (
+		_apply_dimension_values_to_rows,
+		_get_production_group_dimensions,
+	)
+	from yrp.yrp.doctype.goods_received_note.goods_received_note import (
+		_pending_receivable_rows,
+	)
+
+	work_order = frappe.get_doc("Work Order", grn.against_id)
+	delivery_challan = (
+		frappe.get_doc("Delivery Challan", grn.delivery_challan)
+		if grn.delivery_challan
+		else None
+	)
+	rows = _pending_receivable_rows(
+		work_order,
+		existing_rows=existing_rows,
+		delivery_challan=delivery_challan,
+	)
+	default = _default_received_type()
+	selected = {
+		(
+			row.get("ref_docname"),
+			row.get("item_variant"),
+			row.get("delivery_challan_item"),
+			row.get("received_type") or default or "",
+		)
+		for row in existing_rows
+	}
+	rows = [
+		row
+		for row in rows
+		if (
+			row.get("ref_docname"),
+			row.get("item_variant"),
+			row.get("delivery_challan_item"),
+			row.get("received_type") or default or "",
+		) in selected
+	]
+	_apply_dimension_values_to_rows(rows, _get_production_group_dimensions(work_order))
+	apply_dimension_defaults(rows)
+	return rows
 
 
 def normalize_cutting_grn_row_indexes(rows):

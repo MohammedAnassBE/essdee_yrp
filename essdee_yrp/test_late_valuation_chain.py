@@ -130,6 +130,15 @@ class TestLateValuationChain(FrappeTestCase):
 		super().setUpClass()
 		cls.item, cls.uom, cls.dimensions = _stock_context()
 
+	def setUp(self):
+		super().setUp()
+		setting = patch(
+			"yrp.yrp_stock.doctype.stock_valuation_adjustment.stock_valuation_adjustment.is_stock_adjustment_enabled",
+			return_value=True,
+		)
+		setting.start()
+		self.addCleanup(setting.stop)
+
 	def _sle(self, voucher, positive):
 		return frappe.db.get_value(
 			"Stock Ledger Entry",

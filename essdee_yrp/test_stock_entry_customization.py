@@ -2,11 +2,13 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 from unittest.mock import patch
 
+from essdee_yrp.item_matrix import normalize_item_matrix_row_indexes
 from essdee_yrp.stock_entry_hooks import (
-	_normalize_completion_row_indexes,
+	onload as stock_entry_onload,
 	preserve_dynamic_packing_completion_piece_uom,
 	preserve_dynamic_packing_dispatch_piece_uom,
 )
+from essdee_yrp.stock_reconciliation_hooks import onload as stock_reconciliation_onload
 
 
 class TestStockEntryCustomization(FrappeTestCase):
@@ -85,34 +87,117 @@ class TestStockEntryCustomization(FrappeTestCase):
 		self.assertEqual(field.fetch_if_empty, 1)
 		self.assertEqual(field.allow_on_submit, 0)
 
-	def test_completion_rows_receive_distinct_vue_group_indexes(self):
-		doc = frappe.new_doc("Stock Entry")
-		doc.purpose = "DC Completion"
-		for index in range(4):
-			doc.append(
-				"items",
-				{
-					"item": f"TEST-VARIANT-{index}",
-					"qty": 1,
-					"row_index": 0,
-				},
-			)
-
-		self.assertTrue(_normalize_completion_row_indexes(doc))
-		self.assertEqual([row.row_index for row in doc.items], [0, 1, 2, 3])
-		self.assertFalse(_normalize_completion_row_indexes(doc))
-
-	def test_normal_stock_entry_indexes_are_not_rewritten(self):
+	def test_stock_entry_onload_uses_logical_item_matrix_projection(self):
 		doc = frappe.new_doc("Stock Entry")
 		doc.purpose = "Material Receipt"
-		for index in (0, 0):
+		for index in (11, 12):
 			doc.append(
 				"items",
-				{"item": "TEST-VARIANT", "qty": 1, "row_index": index},
+				{"item": f"TEST-VARIANT-{index}", "qty": 1, "row_index": index},
 			)
 
-		self.assertFalse(_normalize_completion_row_indexes(doc))
-		self.assertEqual([row.row_index for row in doc.items], [0, 0])
+		projected = [frappe._dict(item="TEST-VARIANT-11", row_index="matrix-0000")]
+		grouped = [{"primary_attribute": "Size", "items": [{"name": "TEST"}]}]
+		with (
+			patch(
+				"essdee_yrp.item_matrix.normalize_item_matrix_row_indexes",
+				return_value=projected,
+			) as normalize,
+			patch(
+				"yrp.stock.save_stock_items.group_items_for_ui",
+				return_value=grouped,
+			) as group,
+		):
+			stock_entry_onload(doc)
+
+		normalize.assert_called_once()
+		self.assertIs(normalize.call_args.args[0][0], doc.items[0])
+		group.assert_called_once_with(projected, "Stock Entry")
+		self.assertEqual(doc.get_onload("item_details"), grouped)
+		self.assertEqual([row.row_index for row in doc.items], [11, 12])
+
+	def test_stock_reconciliation_onload_uses_same_logical_projection(self):
+		doc = frappe.new_doc("Stock Reconciliation")
+		doc.append(
+			"items",
+			{"item": "TEST-VARIANT", "qty": 1, "row_index": 7},
+		)
+		projected = [frappe._dict(item="TEST-VARIANT", row_index="matrix-0000")]
+		grouped = [{"primary_attribute": "Size", "items": [{"name": "TEST"}]}]
+		with (
+			patch(
+				"essdee_yrp.item_matrix.normalize_item_matrix_row_indexes",
+				return_value=projected,
+			) as normalize,
+			patch(
+				"yrp.stock.save_stock_items.group_items_for_ui",
+				return_value=grouped,
+			) as group,
+		):
+			stock_reconciliation_onload(doc)
+
+		normalize.assert_called_once()
+		self.assertIs(normalize.call_args.args[0][0], doc.items[0])
+		group.assert_called_once_with(projected, "Stock Reconciliation")
+		self.assertEqual(doc.get_onload("item_details"), grouped)
+		self.assertEqual(doc.items[0].row_index, 7)
+
+	def test_stock_reconciliation_projection_keeps_warehouse_bucket_separate(self):
+		variants = {
+			"TEST-CUT-45": frappe._dict(
+				item="TEST-CUT",
+				attributes=[
+					frappe._dict(attribute="Panel", attribute_value="Top Front"),
+					frappe._dict(attribute="Size", attribute_value="45 cm"),
+				],
+			),
+			"TEST-CUT-50": frappe._dict(
+				item="TEST-CUT",
+				attributes=[
+					frappe._dict(attribute="Panel", attribute_value="Top Front"),
+					frappe._dict(attribute="Size", attribute_value="50 cm"),
+				],
+			),
+		}
+		item = frappe._dict(primary_attribute="Size")
+
+		def get_cached_doc(doctype, name):
+			return variants[name] if doctype == "Item Variant" else item
+
+		rows = [
+			frappe._dict(
+				item="TEST-CUT-45",
+				warehouse="WAREHOUSE-A",
+				lot="TEST-LOT",
+				received_type="Accepted",
+			),
+			frappe._dict(
+				item="TEST-CUT-50",
+				warehouse="WAREHOUSE-A",
+				lot="TEST-LOT",
+				received_type="Accepted",
+			),
+			frappe._dict(
+				item="TEST-CUT-45",
+				warehouse="WAREHOUSE-B",
+				lot="TEST-LOT",
+				received_type="Accepted",
+			),
+		]
+		with (
+			patch(
+				"essdee_yrp.item_matrix.frappe.get_cached_doc",
+				side_effect=get_cached_doc,
+			),
+			patch(
+				"essdee_yrp.item_matrix.get_dimension_fieldnames",
+				return_value=["lot", "received_type"],
+			),
+		):
+			normalized = normalize_item_matrix_row_indexes(rows)
+
+		self.assertEqual(normalized[0].row_index, normalized[1].row_index)
+		self.assertNotEqual(normalized[0].row_index, normalized[2].row_index)
 
 	def test_dynamic_packing_grn_completion_preserves_physical_piece_uom(self):
 		doc = frappe.new_doc("Stock Entry")

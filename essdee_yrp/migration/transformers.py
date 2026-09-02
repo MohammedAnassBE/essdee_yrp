@@ -6,6 +6,8 @@ site is opened.  Site-derived invariants are checked again by the live runner.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from copy import deepcopy
 from typing import Any, Mapping
 
@@ -189,7 +191,58 @@ def derive_purchase_invoice_fields(
 		result["against"] = (
 			"Work Order" if source.get("pi_work_order_billed_details") else "Purchase Order"
 		)
+	if result.get("against") == "Work Order":
+		commercial_rows = []
+		for source_row, target_row in zip(
+			source.get("items") or [],
+			result.get("items") or [],
+			strict=True,
+		):
+			source_rate = source_row.get("actual_rate")
+			if source_rate is None or source_rate == "":
+				source_rate = source_row.get("source_rate")
+			if source_rate is None or source_rate == "":
+				source_rate = source_row.get("rate") or 0
+			lot = source_row.get("lot")
+			qty = target_row.get("qty") or 0
+			rate = target_row.get("rate") or 0
+			commercial_rows.append(
+				{
+					"doctype": "Essdee Purchase Invoice Item",
+					"item": target_row.get("item"),
+					"lot": lot,
+					"item_group": target_row.get("item_group"),
+					"expense_head": source_row.get("expense_head"),
+					"qty": qty,
+					"uom": target_row.get("uom"),
+					"source_rate": source_rate,
+					"rate": rate,
+					"amount": qty * rate,
+					"tax": target_row.get("tax"),
+					"group_key": _commercial_group_key(
+						target_row.get("item"),
+						lot,
+						target_row.get("uom"),
+						source_rate,
+						target_row.get("tax"),
+					),
+				}
+			)
+		result["essdee_items"] = commercial_rows
+		result["essdee_rate_table_source"] = "production_api"
 	return result
+
+
+def _commercial_group_key(item, lot, uom, source_rate, tax):
+	payload = [
+		item or "",
+		lot or "",
+		uom or "",
+		round(float(source_rate or 0), 6),
+		tax or "",
+	]
+	encoded = json.dumps(payload, separators=(",", ":"), ensure_ascii=True)
+	return hashlib.sha256(encoded.encode()).hexdigest()
 
 
 def derive_product_item_name(

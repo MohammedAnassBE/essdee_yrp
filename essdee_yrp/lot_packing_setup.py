@@ -11,6 +11,7 @@ CUSTOM_FIELDS = {
 			"fieldtype": "Section Break",
 			"label": "Linked Lots",
 			"insert_after": "delivery_address_display",
+			"hidden": 1,
 			"module": "Essdee YRP",
 		},
 		{
@@ -20,6 +21,7 @@ CUSTOM_FIELDS = {
 			"options": "Lot",
 			"insert_after": "lot_details_section",
 			"allow_on_submit": 1,
+			"hidden": 1,
 			"module": "Essdee YRP",
 		},
 		{
@@ -29,6 +31,7 @@ CUSTOM_FIELDS = {
 			"options": "Lot MultiSelect",
 			"insert_after": "default_lot",
 			"allow_on_submit": 1,
+			"hidden": 1,
 			"module": "Essdee YRP",
 		},
 	],

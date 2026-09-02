@@ -35,6 +35,17 @@ def sync_linked_lots(doc, method=None):
 			linked_rows.append(row)
 			seen.add(row.lot)
 
+	# The Desk Purchase Order now stores dimensions on each PO Item, matching
+	# Stock Entry. Keep the old hidden linked-Lot rows synchronized for existing
+	# reports and submitted-PO APIs, but make the item rows the entry source.
+	item_dimension_field = _lot_dimension_field("Purchase Order Item")
+	for item in doc.get("items") or []:
+		lot = item.get(item_dimension_field) if item_dimension_field else None
+		if lot and lot not in seen:
+			_check_lot_permission(lot)
+			linked_rows.append(doc.append("sd_lot", {"lot": lot}))
+			seen.add(lot)
+
 	dimension_field = _lot_dimension_field("Purchase Order")
 	header_lot = doc.get(dimension_field) if dimension_field else None
 	if not doc.get("default_lot") and header_lot:

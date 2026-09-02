@@ -50,6 +50,8 @@ from essdee_yrp.overrides.delivery_challan import (
 	strip_unselected_cpm_items,
 )
 from essdee_yrp.essdee_yrp.doctype.cutting_plan.cutting_plan import (
+	CuttingPlan,
+	_preserve_cloth_operational_values,
 	can_change_approval_grammage,
 	create_balance_lot_transfer,
 	has_cls_grammage_approval_role,
@@ -2373,6 +2375,95 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 
 
 class TestCuttingPlanClothUsage(UnitTestCase):
+	def test_submit_generates_requirements_when_table_is_empty(self):
+		plan = CuttingPlan(
+			{
+				"doctype": "Cutting Plan",
+				"name": "CP-NEW",
+				"docstatus": 0,
+				"cutting_plan_cloth_details": [],
+			}
+		)
+
+		def generate(doc, preserve_operational_values):
+			self.assertFalse(preserve_operational_values)
+			doc.append(
+				"cutting_plan_cloth_details",
+				{
+					"cloth_item_variant": "TEST-CLOTH",
+					"required_weight": 10,
+					"weight": 0,
+					"used_weight": 0,
+				},
+			)
+
+		with (
+			patch(
+				"essdee_yrp.essdee_yrp.doctype.cutting_plan.cutting_plan._generate_cloth_requirements",
+				side_effect=generate,
+			) as generate_requirements,
+			patch.object(plan, "get_no_of_colours", return_value=1),
+			patch.object(frappe.db, "get_single_value", return_value=0),
+		):
+			plan.before_submit()
+
+		generate_requirements.assert_called_once_with(
+			plan, preserve_operational_values=False
+		)
+		self.assertEqual(plan.cp_status, "Planned")
+
+	def test_regeneration_preserves_received_and_used_weights(self):
+		generated = [
+			{
+				"cloth_item_variant": "TEST-CLOTH",
+				"cloth_type": "Main Fabric",
+				"colour": "Navy",
+				"dia": "60 Dia",
+				"required_weight": 12,
+			}
+		]
+		current = [
+			frappe._dict(
+				cloth_item_variant="TEST-CLOTH",
+				cloth_type="Main Fabric",
+				colour="Navy",
+				dia="60 Dia",
+				weight=10,
+				used_weight=3.25,
+			)
+		]
+
+		rows = _preserve_cloth_operational_values(generated, current)
+
+		self.assertEqual(rows[0]["required_weight"], 12)
+		self.assertEqual(rows[0]["weight"], 10)
+		self.assertEqual(rows[0]["used_weight"], 3.25)
+		self.assertEqual(rows[0]["balance_weight"], 6.75)
+
+	def test_empty_submitted_plan_stays_planned(self):
+		plan = CuttingPlan(
+			{
+				"doctype": "Cutting Plan",
+				"name": "CP-EMPTY",
+				"docstatus": 1,
+				"cp_status": "Planned",
+				"no_of_colours": 1,
+				"cutting_plan_cloth_details": [],
+				"completed_items_json": {"items": []},
+			}
+		)
+		with (
+			patch.object(frappe.db, "sql"),
+			patch.object(frappe.db, "set_value") as set_value,
+			patch.object(plan, "reload"),
+		):
+			plan.on_update_after_submit()
+
+		self.assertIn(
+			(("Cutting Plan", "CP-EMPTY", "cp_status", "Planned"), {}),
+			[(call.args, call.kwargs) for call in set_value.call_args_list],
+		)
+
 	def test_bundle_generation_persists_precise_cutting_plan_cloth_usage(self):
 		TestCuttingBusinessLogic._assert_bundle_generation_persists_precise_cutting_plan_cloth_usage(
 			self

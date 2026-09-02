@@ -44,14 +44,20 @@ class Lot(Document):
 		if self.get('order_item_details') and self.production_detail:
 			order_items = save_order_item_details(self.production_detail, self.lot_order_details, self.order_item_details)
 			self.set('lot_order_details',order_items)
+			if self.production_order and order_items and len(self.items) > 0:
+				self.derive_items_from_order_details()
 
 		if self.is_new(): 
 			self.lot_hash_value = make_autoname(key="hash")
-			if len(self.items) > 0:
+			if len(self.items) > 0 and not self.flags.get("items_derived"):
 				self.calculate_order()
 		else:
 			doc = frappe.get_doc("Lot",self.name)
-			if len(doc.items) == 0 and len(self.items) > 0:
+			if (
+				len(doc.items) == 0
+				and len(self.items) > 0
+				and not self.flags.get("items_derived")
+			):
 				self.calculate_order()
 
 			qty = 0
@@ -131,6 +137,46 @@ class Lot(Document):
 						)
 			self.set('lot_order_details',items)
 			self.set('total_order_quantity', qty)
+
+	def derive_items_from_order_details(self):
+		"""Derive the box table from the operator-entered piece table.
+
+		The Lot's ``items`` rows identify the valid packed variants; their quantities
+		are server-owned once a Production Order is linked.  Only the major set part
+		contributes to the packed-box count because the companion parts are generated
+		from the same finished-garment pieces.
+		"""
+		ipd = frappe.get_cached_doc("Item Production Detail", self.production_detail)
+		pieces_per_box = flt(ipd.packing_combo)
+		if pieces_per_box <= 0:
+			frappe.throw(
+				f"Packing Combo is not set in Item Production Detail {self.production_detail}"
+			)
+
+		pieces_by_size = {}
+		for row in self.lot_order_details:
+			attributes = get_variant_attr_details(row.item_variant)
+			if (
+				ipd.is_set_item
+				and attributes.get(ipd.set_item_attribute) != ipd.major_attribute_value
+			):
+				continue
+			size = attributes.get(ipd.primary_item_attribute)
+			pieces_by_size[size] = flt(pieces_by_size.get(size)) + flt(row.quantity)
+
+		for row in self.items:
+			attributes = get_variant_attr_details(row.item_variant)
+			size = attributes.get(ipd.primary_item_attribute)
+			row.qty = math.ceil(flt(pieces_by_size.pop(size, 0)) / pieces_per_box)
+
+		unmapped = [size for size, pieces in pieces_by_size.items() if flt(pieces) > 0]
+		if unmapped:
+			frappe.throw(
+				"Order details have quantity for size {0}, but there is no box row for that size".format(
+					", ".join(str(size) for size in unmapped)
+				)
+			)
+		self.flags.items_derived = True
 
 	def on_update(self):
 		rebuild_plans_after_save(self)

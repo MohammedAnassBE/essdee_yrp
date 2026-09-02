@@ -10,6 +10,7 @@ import EmblishmentDetails from "./Item_Po_detail/EmblishmentDetails.vue";
 import ColourYarnRecipeEditor from "./Item_Po_detail/ColourYarnRecipeEditor.vue";
 import FabricSwapDetail from "./Item_Po_detail/FabricSwapDetail.vue";
 import PanelWiseConsumptionMatrix from "./Item_Po_detail/PanelWiseConsumptionMatrix.vue";
+import PanelWiseClothMappingMatrix from "./Item_Po_detail/PanelWiseClothMappingMatrix.vue";
 import LotOrderedDetail from "./ProductionOrder/LotOrderedDetail.vue";
 import ProductionOrderEntry from "./ProductionOrder/components/ProductionOrderEntry.vue";
 import UpdatePrice from "./ProductionOrder/components/UpdatePrice.vue";
@@ -35,6 +36,7 @@ import CuttingDetailReport from "./CuttingLaySheet/components/CuttingDetailRepor
 import DailyCutSheetReport from "./CuttingLaySheet/components/DailyCutSheetReport.vue";
 import DailyProductionReport from "./CuttingLaySheet/components/DailyProductionReport.vue";
 import CutPlanClothItems from "./CuttingPlan/components/CutPlanClothItems.vue";
+import ReturnItemsMatrix from "./DeliveryChallan/ReturnItemsMatrix.vue";
 import CutPlanItems from "./CuttingPlan/components/CutPlanItems.vue";
 import MultiCCR from "./CuttingPlan/components/MultiCCR.vue";
 import RecutPrintPanelDetail from "./CuttingPlan/components/RecutPrintPanelDetails.vue";
@@ -193,6 +195,36 @@ frappe.production.ui.PanelWiseConsumptionMatrix = class {
 	}
 	get_data() {
 		return JSON.parse(JSON.stringify(this.vue.get_data()));
+	}
+};
+
+frappe.production.ui.PanelWiseClothMappingMatrix = class {
+	constructor(wrapper) {
+		this.$wrapper = $(wrapper);
+		const mounted = mount_component(PanelWiseClothMappingMatrix, this.$wrapper);
+		this.app = mounted.app;
+		this.vue = mounted.vue;
+	}
+	load_data(payload, locked = false) {
+		this.vue.load_data(JSON.parse(JSON.stringify(payload || {})), locked);
+	}
+	get_data() {
+		return JSON.parse(JSON.stringify(this.vue.get_data()));
+	}
+};
+
+frappe.production.ui.ReturnItemsMatrix = class {
+	constructor(wrapper) {
+		this.$wrapper = $(wrapper);
+		const mounted = mount_component(ReturnItemsMatrix, this.$wrapper);
+		this.app = mounted.app;
+		this.vue = mounted.vue;
+	}
+	load_data(data) {
+		return this.vue.load_data(data || {});
+	}
+	get_data() {
+		return this.vue.get_data();
 	}
 };
 

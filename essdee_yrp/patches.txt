@@ -24,3 +24,4 @@ essdee_yrp.patches.remove_grn_is_return_custom_field
 essdee_yrp.patches.remove_obsolete_delivery_challan_series
 essdee_yrp.patches.backfill_deterministic_valuation_lineage
 essdee_yrp.patches.move_process_allowance_to_base_field
+essdee_yrp.patches.cleanup_empty_legacy_namespace_tables

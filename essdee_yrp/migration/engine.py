@@ -443,11 +443,19 @@ def build_plan(
 
 
 def _doctype_controller_fields(schema: Mapping[str, Any]) -> set[str]:
-	return {
+	controllers = {
 		str(field.get("options"))
 		for field in schema.get("fields") or ()
 		if field.get("fieldtype") == "Dynamic Link" and field.get("options")
 	}
+	controllers.update(
+		str(field.get("fieldname"))
+		for field in schema.get("fields") or ()
+		if field.get("fieldtype") == "Link"
+		and field.get("options") == "DocType"
+		and field.get("fieldname")
+	)
+	return controllers
 
 
 def transform_document(
@@ -492,6 +500,8 @@ def transform_document(
 	for fieldname in SYSTEM_FIELDS:
 		if fieldname in document:
 			output[fieldname] = deepcopy(document[fieldname])
+	if spec.target_schema.get("issingle"):
+		output["name"] = spec.target
 	if "parenttype" in output:
 		parent_spec = plan.specs.get(str(output["parenttype"]))
 		if parent_spec:

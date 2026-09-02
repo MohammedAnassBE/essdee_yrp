@@ -345,7 +345,22 @@ class FrappeBulkTarget:
 			parents_with_field = [doc for doc in documents if fieldname in doc]
 			if not parents_with_field:
 				continue
-			parent_names = [doc["name"] for doc in parents_with_field]
+			# A renamed Single historically used its source DocType as the child
+			# parent identity. Delete both identities so a corrected/retried load
+			# cannot leave those rows orphaned beside the target Single's children.
+			parent_names = list(
+				dict.fromkeys(
+					[
+						*[doc["name"] for doc in parents_with_field],
+						*(
+							child.get("parent")
+							for doc in parents_with_field
+							for child in doc.get(fieldname) or []
+							if child.get("parent")
+						),
+					]
+				)
+			)
 			for names in _chunks(parent_names, 500):
 				frappe.db.delete(
 					table_field.options,
@@ -1181,6 +1196,7 @@ def run_job(
 			source,
 			dry_run=mode == "dry_run",
 			batch_size=max(1, min(int(batch_size), 1000)),
+			source_snapshot=snapshot,
 		)
 		result["files"] = _run_files(
 			migration_name,
@@ -1368,7 +1384,10 @@ def run_reset_job(migration_name: str) -> dict[str, Any]:
 		# they must still resolve from the frozen source graph.
 		dimensions, _stock_doctypes, _operational_doctypes = _target_stock_contract()
 		preserved_prerequisites = _validate_target_migration_prerequisites(
-			dimensions, plan=plan, source=source
+			dimensions,
+			plan=plan,
+			source=source,
+			required_defaults=settings.required_defaults,
 		)
 		result = {
 			"mode": "reset",
@@ -1874,8 +1893,27 @@ def _run_documents(
 	*,
 	dry_run: bool,
 	batch_size: int,
+	source_snapshot: Mapping[str, Any],
 ) -> dict[str, Any]:
-	checkpoint = _load_checkpoint(migration_name) if not dry_run else {"version": 2, "doctypes": {}}
+	checkpoint = {"version": 2, "doctypes": {}}
+	if not dry_run:
+		loaded_checkpoint = _load_checkpoint(migration_name)
+		checkpoint = _bind_checkpoint_to_source_snapshot(
+			loaded_checkpoint, source_snapshot
+		)
+		if checkpoint != loaded_checkpoint:
+			# A sequential last-name checkpoint is valid only for the exact source,
+			# schema, mapping code, and prerequisite contract that created it. Bind
+			# that contract before any supporting-master or document writes so a new
+			# reviewed Dry Run cannot silently skip rows transformed by older code.
+			frappe.db.set_value(
+				'SD YRP MRP Data Migration',
+				migration_name,
+				"checkpoint_json",
+				json.dumps(checkpoint, sort_keys=True),
+				update_modified=False,
+			)
+			frappe.db.commit()
 	target = FrappeBulkTarget()
 	reference_data = source.reference_data()
 	external_reference_count, supporting_external = _validate_external_references(
@@ -2028,12 +2066,18 @@ def _validate_external_references(
 			target_link_doctype = str(target_field.get("options") or "")
 		if not target_link_doctype or target_link_doctype == "File":
 			continue
+		value = row.get("value")
+		# Link-to-DocType fields are the controller half of Dynamic Links (for
+		# example voucher_type / reference_doctype). The generic document
+		# transformer already rewrites these stored values through the migration
+		# plan, so preflight must validate that same target identity.
+		if target_link_doctype == "DocType" and isinstance(value, str):
+			value = plan.specs[value].target if value in plan.specs else value
 		# These values are created by this same historical load. The source bridge
 		# emits only external source masters, but a mapped target field can still
 		# point back into the planned graph.
 		if target_link_doctype in planned_targets:
 			continue
-		value = row.get("value")
 		checked += 1
 		if not frappe.db.exists("DocType", target_link_doctype) or not frappe.db.exists(
 			target_link_doctype, value
@@ -3154,7 +3198,9 @@ def _verify_transformed_value_batch(
 		)
 		if "name" not in fields:
 			fields.insert(0, "name")
-		names = [str(row["name"]) for row in expected_rows]
+		named_rows = [row for row in expected_rows if row.get("name")]
+		generated_rows = [row for row in expected_rows if not row.get("name")]
+		names = [str(row["name"]) for row in named_rows]
 		actual_by_name: dict[str, dict[str, Any]] = {}
 		for name_chunk in _chunks(list(dict.fromkeys(names)), 500):
 			placeholders = ", ".join(["%s"] * len(name_chunk))
@@ -3167,12 +3213,65 @@ def _verify_transformed_value_batch(
 			):
 				actual_by_name[str(row["name"])] = row
 
+		# Some reviewed post-transformers create new child rows that have no
+		# historical source name. The writer gives those rows an opaque generated
+		# name, so verify them by Frappe's stable child-table coordinates instead:
+		# parent + parenttype + parentfield + idx.
+		actual_by_child_position: dict[tuple[str, str, str, int], dict[str, Any]] = {}
+		generated_scopes: dict[tuple[str, str], list[str]] = {}
+		for expected in generated_rows:
+			parent = str(expected.get("parent") or "")
+			parenttype = str(expected.get("parenttype") or "")
+			parentfield = str(expected.get("parentfield") or "")
+			if not parent or not parenttype or not parentfield or not expected.get("idx"):
+				failures.append(
+					f"Unaddressable generated child row in {doctype}: {expected!r}"
+				)
+				continue
+			generated_scopes.setdefault((parenttype, parentfield), []).append(parent)
+		for (parenttype, parentfield), parents in generated_scopes.items():
+			for parent_chunk in _chunks(list(dict.fromkeys(parents)), 500):
+				placeholders = ", ".join(["%s"] * len(parent_chunk))
+				selected = ", ".join(_quote_identifier(field) for field in fields)
+				for row in frappe.db.sql(
+					f"SELECT {selected} FROM {_quote_identifier('tab' + doctype)} "
+					"WHERE `parenttype`=%s AND `parentfield`=%s "
+					f"AND `parent` IN ({placeholders})",
+					[parenttype, parentfield, *parent_chunk],
+					as_dict=True,
+				):
+					key = (
+						str(row.get("parent") or ""),
+						str(row.get("parenttype") or ""),
+						str(row.get("parentfield") or ""),
+						int(row.get("idx") or 0),
+					)
+					if key in actual_by_child_position:
+						failures.append(
+							f"Duplicate generated child position {doctype} {key!r}"
+						)
+					else:
+						actual_by_child_position[key] = row
+
 		for expected in expected_rows:
 			verified_documents += 1
-			name = str(expected["name"])
-			actual = actual_by_name.get(name)
+			name = str(expected.get("name") or "")
+			if name:
+				actual = actual_by_name.get(name)
+				identity = name
+			else:
+				position = (
+					str(expected.get("parent") or ""),
+					str(expected.get("parenttype") or ""),
+					str(expected.get("parentfield") or ""),
+					int(expected.get("idx") or 0),
+				)
+				actual = actual_by_child_position.get(position)
+				identity = (
+					f"{position[1]} {position[0]}.{position[2]}[{position[3]}]"
+				)
 			if actual is None:
-				failures.append(f"Missing value-audit row {doctype} {name}")
+				failures.append(f"Missing value-audit row {doctype} {identity}")
 				continue
 			for fieldname, expected_value in expected.items():
 				if fieldname not in columns:
@@ -3187,19 +3286,21 @@ def _verify_transformed_value_batch(
 					numeric_scale=numeric_scales.get(fieldname),
 				)
 				if target_value and not exact_value:
-					normalized_numeric_values.append(f"{doctype} {name}.{fieldname}")
+					normalized_numeric_values.append(f"{doctype} {identity}.{fieldname}")
 				elif not target_value:
 					if _is_verified_attachment_url(
 						doctype,
-						name,
+						str(actual.get("name") or name),
 						fieldname,
 						actual.get(fieldname),
 						fieldtypes.get(fieldname),
 					):
-						normalized_attachment_urls.append(f"{doctype} {name}.{fieldname}")
+						normalized_attachment_urls.append(
+							f"{doctype} {identity}.{fieldname}"
+						)
 					else:
 						failures.append(
-							f"Value mismatch {doctype} {name}.{fieldname}: "
+							f"Value mismatch {doctype} {identity}.{fieldname}: "
 							f"source={expected_value!r}, target={actual.get(fieldname)!r}"
 						)
 				verified_values += 1
@@ -3431,8 +3532,7 @@ def _collect_document_identities(
 ) -> None:
 	doctype = str(document["doctype"])
 	name = document.get("name")
-	if name:
-		expected_counts[doctype] = expected_counts.get(doctype, 0) + 1
+	expected_counts[doctype] = expected_counts.get(doctype, 0) + 1
 	schema = plan.target_schemas[doctype]
 	# Single DocTypes have no physical `tab<DocType>` table. Their one logical
 	# identity is counted below, while field values live in tabSingles.
@@ -3824,6 +3924,24 @@ def _load_checkpoint(migration_name: str) -> dict[str, Any]:
 	if checkpoint.get("version") != 2 or not isinstance(checkpoint.get("doctypes"), dict):
 		raise MigrationError("Unsupported or malformed migration checkpoint")
 	return checkpoint
+
+
+def _bind_checkpoint_to_source_snapshot(
+	checkpoint: Mapping[str, Any], source_snapshot: Mapping[str, Any]
+) -> dict[str, Any]:
+	"""Return a resumable checkpoint bound to one exact reviewed migration gate."""
+
+	payload = json.dumps(
+		dict(source_snapshot), sort_keys=True, separators=(",", ":"), default=str
+	)
+	snapshot_fingerprint = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+	if checkpoint.get("source_snapshot_fingerprint") == snapshot_fingerprint:
+		return dict(checkpoint)
+	return {
+		"version": 2,
+		"source_snapshot_fingerprint": snapshot_fingerprint,
+		"doctypes": {},
+	}
 
 
 def _mark_started(migration_name: str, mode: str, source_status: Mapping[str, Any]) -> None:

@@ -226,10 +226,31 @@ class TestCombinedSiteNamespace(IntegrationTestCase):
 			execute as execute_yrp_report,
 		)
 
-		yrp_columns, yrp_rows = execute_yrp_report({})
+		stock_sample = frappe.get_all(
+			'YRP Stock Ledger Entry',
+			filters={"docstatus": ["<", 2], "is_cancelled": 0},
+			fields=["item", "warehouse", "posting_date"],
+			order_by="posting_date desc",
+			limit=1,
+		)[0]
+		# The production dataset exceeds the report's deliberate 500k-row safety
+		# limit. Exercise the live report with one real migrated stock bucket rather
+		# than treating an intentionally rejected unbounded query as a namespace
+		# failure.
+		yrp_columns, yrp_rows = execute_yrp_report(
+			{
+				"item": stock_sample.item,
+				"warehouse": stock_sample.warehouse,
+				"from_date": stock_sample.posting_date,
+				"to_date": stock_sample.posting_date,
+			}
+		)
 		self.assertTrue(yrp_columns)
 		self.assertIsInstance(yrp_rows, list)
-		sd_result = execute_sd_yrp_report({})
+		production_order = frappe.get_all(
+			'YRP Production Order', pluck="name", order_by="modified desc", limit=1
+		)[0]
+		sd_result = execute_sd_yrp_report({"production_order": production_order})
 		self.assertTrue(sd_result[0])
 		self.assertIsInstance(sd_result[1], list)
 

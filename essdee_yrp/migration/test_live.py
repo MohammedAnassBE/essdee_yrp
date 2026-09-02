@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import unittest
+from contextlib import ExitStack
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,6 +21,7 @@ from essdee_yrp.migration.live import (
 	FrappeBulkTarget,
 	_apply_contextual_defaults,
 	_build_target_reset_manifest,
+	_bind_checkpoint_to_source_snapshot,
 	_bind_reset_series_checkpoint,
 	_broken_static_link_count,
 	_collect_document_identities,
@@ -39,14 +41,17 @@ from essdee_yrp.migration.live import (
 	_source_snapshot,
 	_assert_no_other_active_migration,
 	_run_files,
+	run_reset_job,
 	run_job_guarded,
 	run_reset_job_guarded,
 	_same_migrated_value,
 	_target_reset_file_names,
 	_target_reset_counts,
 	_validate_configured_default_contract,
+	_validate_external_references,
 	_validate_required_target_values,
 	_validate_target_migration_prerequisites,
+	_verify_transformed_value_batch,
 )
 
 
@@ -63,6 +68,76 @@ def configured_settings():
 
 
 class MigrationLiveAdapterTest(unittest.TestCase):
+	def test_checkpoint_resumes_only_for_the_exact_reviewed_source_snapshot(self):
+		snapshot = {
+			"snapshot_fingerprint": "source-a",
+			"migration_contract_fingerprint": "code-a",
+		}
+		bound = _bind_checkpoint_to_source_snapshot(
+			{"version": 2, "doctypes": {"Supplier": {"last_name": "SUP-9"}}},
+			snapshot,
+		)
+		bound["doctypes"]["Supplier"] = {"last_name": "SUP-9"}
+		resumed = _bind_checkpoint_to_source_snapshot(bound, dict(snapshot))
+		self.assertEqual(resumed["doctypes"]["Supplier"]["last_name"], "SUP-9")
+
+		changed = _bind_checkpoint_to_source_snapshot(
+			bound,
+			{**snapshot, "migration_contract_fingerprint": "code-b"},
+		)
+		self.assertEqual(changed["doctypes"], {})
+		self.assertNotEqual(
+			changed["source_snapshot_fingerprint"],
+			bound["source_snapshot_fingerprint"],
+		)
+
+	def test_external_reference_preflight_maps_link_to_doctype_values(self):
+		plan = SimpleNamespace(
+			specs={
+				"Ledger": SimpleNamespace(
+					target="SD YRP Ledger",
+					ignored_fields={},
+					field_map={},
+					target_schema={
+						"fields": [
+							{
+								"fieldname": "voucher_type",
+								"fieldtype": "Link",
+								"options": "DocType",
+							}
+						]
+					},
+				),
+				"Delivery Challan": SimpleNamespace(
+					target="YRP Delivery Challan"
+				),
+			}
+		)
+		source = SimpleNamespace(
+			iter_external_references=lambda: iter(
+				[
+					{
+						"source_doctype": "Ledger",
+						"source_name": "LEDGER-1",
+						"fieldname": "voucher_type",
+						"dynamic": False,
+						"value": "Delivery Challan",
+					}
+				]
+			)
+		)
+
+		def exists(doctype, name=None):
+			if doctype == "DocType":
+				return name in {"DocType", "YRP Delivery Challan"}
+			return False
+
+		with patch("essdee_yrp.migration.live.frappe.db.exists", side_effect=exists):
+			checked, supporting = _validate_external_references(plan, source)
+
+		self.assertEqual(checked, 1)
+		self.assertEqual(supporting, {})
+
 	def test_action_reservation_uses_one_named_lock_and_always_releases_it(self):
 		queries = []
 
@@ -191,6 +266,79 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			):
 				entrypoint(migration_name="MIG-1")
 			mark_failed.assert_called_once_with("MIG-1")
+
+	def test_reset_revalidates_profile_defaults_after_deletion(self):
+		settings = SimpleNamespace(
+			target_site="target.test",
+			source_site="source.test",
+			required_defaults={
+				"IPD Settings.default_knitting_process": "Knitting",
+				"IPD Settings.default_dyeing_process": "Dyeing",
+			},
+		)
+		plan = SimpleNamespace(ready=True)
+		source = SimpleNamespace(
+			status=Mock(return_value={"site": "source.test", "maintenance_mode": True})
+		)
+		migration = SimpleNamespace()
+		before = {"total": 0}
+		after = {"total": 0}
+
+		with ExitStack() as stack:
+			for target, kwargs in (
+				("essdee_yrp.migration.live.get_migration_settings", {"return_value": settings}),
+				("essdee_yrp.migration.live.is_target_reset_enabled", {"return_value": True}),
+				("essdee_yrp.migration.live._assert_target_site", {}),
+				("essdee_yrp.migration.live._assert_no_other_active_migration", {}),
+				("essdee_yrp.migration.live.frappe.get_doc", {"return_value": migration}),
+				("essdee_yrp.migration.live.F15SourceBridge", {"return_value": source}),
+				(
+					"essdee_yrp.migration.live.build_live_schema_analysis",
+					{"return_value": (plan, {"target_prerequisites": {}})},
+				),
+				("essdee_yrp.migration.live._validate_live_target_metadata", {}),
+				("essdee_yrp.migration.live._source_broken_link_manifest", {"return_value": []}),
+				("essdee_yrp.migration.live._source_snapshot", {"return_value": {}}),
+				("essdee_yrp.migration.live._require_previous_snapshot", {}),
+				(
+					"essdee_yrp.migration.live._build_target_reset_manifest",
+					{"return_value": {"single_target_doctypes": []}},
+				),
+				("essdee_yrp.migration.live._target_reset_counts", {"side_effect": [{}, {}]}),
+				(
+					"essdee_yrp.migration.live._include_reset_generated_audit_scope",
+					{"side_effect": [before, after]},
+				),
+				(
+					"essdee_yrp.migration.live._bind_reset_series_checkpoint",
+					{"return_value": before},
+				),
+				("essdee_yrp.migration.live._mark_reset_started", {}),
+				("essdee_yrp.migration.live._delete_target_reset_manifest", {}),
+				("essdee_yrp.migration.live._nonzero_reset_counts", {"return_value": {}}),
+				(
+					"essdee_yrp.migration.live._target_stock_contract",
+					{"return_value": ([], [], [])},
+				),
+				("essdee_yrp.migration.live._mark_reset_complete", {}),
+				("essdee_yrp.migration.live.frappe.clear_cache", {}),
+			):
+				stack.enter_context(patch(target, **kwargs))
+			validate_prerequisites = stack.enter_context(
+				patch(
+					"essdee_yrp.migration.live._validate_target_migration_prerequisites",
+					return_value={},
+				)
+			)
+			result = run_reset_job("MIG-1")
+
+		validate_prerequisites.assert_called_once_with(
+			[],
+			plan=plan,
+			source=source,
+			required_defaults=settings.required_defaults,
+		)
+		self.assertEqual(result["preserved_target_prerequisites"], {})
 
 	def test_migration_jobs_enqueue_only_after_the_queued_state_commits(self):
 		with patch("essdee_yrp.migration.live.frappe.enqueue") as enqueue:
@@ -911,6 +1059,72 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 		self.assertEqual(pending, {})
 		self.assertEqual(expected, {'SD YRP Company Settings': 1})
 
+	def test_generated_child_identity_is_counted_without_a_source_name(self):
+		plan = SimpleNamespace(
+			target_schemas={
+				'SD YRP Essdee Purchase Invoice Item': {"issingle": 0, "fields": []}
+			}
+		)
+		pending = {}
+		expected = {}
+		_collect_document_identities(
+			{
+				"doctype": 'SD YRP Essdee Purchase Invoice Item',
+				"parent": "PI-1",
+				"parenttype": 'YRP Purchase Invoice',
+				"parentfield": "essdee_items",
+				"idx": 1,
+			},
+			plan,
+			pending,
+			expected,
+		)
+		self.assertEqual(pending, {})
+		self.assertEqual(expected, {'SD YRP Essdee Purchase Invoice Item': 1})
+
+	def test_value_audit_uses_child_position_for_generated_rows(self):
+		doctype = 'SD YRP Essdee Purchase Invoice Item'
+		document = {
+			"doctype": doctype,
+			"item": "ITEM-1",
+			"parent": "PI-1",
+			"parenttype": 'YRP Purchase Invoice',
+			"parentfield": "essdee_items",
+			"idx": 1,
+		}
+		actual = {"name": "generated-name", **document}
+		actual.pop("doctype")
+		plan = SimpleNamespace(
+			target_schemas={
+				doctype: {
+					"issingle": 0,
+					"fields": [{"fieldname": "item", "fieldtype": "Link"}],
+				}
+			}
+		)
+
+		def sql(query, _values=None, **_kwargs):
+			return [] if "information_schema" in query else [actual]
+
+		with (
+			patch(
+				"essdee_yrp.migration.live.frappe.db.get_table_columns",
+				return_value=[
+					"name",
+					"item",
+					"parent",
+					"parenttype",
+					"parentfield",
+					"idx",
+				],
+			),
+			patch("essdee_yrp.migration.live.frappe.db.sql", side_effect=sql),
+		):
+			result = _verify_transformed_value_batch([document], plan)
+
+		self.assertEqual(result["documents"], 1)
+		self.assertEqual(result["failures"], [])
+
 	def test_orphan_attachment_is_audited_without_creating_target_file(self):
 		row = {
 			"name": "FILE-ORPHAN",
@@ -1160,6 +1374,44 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 		self.assertEqual(bulk_rows[0]["parenttype"], 'SD YRP MRP Settings')
 		self.assertEqual(bulk_rows[0]["parentfield"], "routes")
 		self.assertEqual(bulk_rows[0]["parent"], 'SD YRP MRP Settings')
+
+	def test_renamed_single_child_replacement_cleans_source_and_target_parents(self):
+		meta = SimpleNamespace(
+			name='SD YRP MRP Settings',
+			get_table_fields=lambda: [
+				SimpleNamespace(fieldname="routes", options="MRP Settings Route")
+			],
+		)
+		target = FrappeBulkTarget()
+		with (
+			patch("essdee_yrp.migration.live.frappe.db.delete") as delete,
+			patch.object(target, "_bulk_upsert"),
+		):
+			target._replace_child_tables(
+				meta,
+				[
+					{
+						"doctype": 'SD YRP MRP Settings',
+						"name": 'SD YRP MRP Settings',
+						"routes": [
+							{
+								"doctype": "MRP Settings Route",
+								"name": "ROW-1",
+								"parent": "MRP Settings",
+							}
+						],
+					}
+				],
+			)
+
+		delete.assert_called_once_with(
+			"MRP Settings Route",
+			{
+				"parenttype": 'SD YRP MRP Settings',
+				"parentfield": "routes",
+				"parent": ["in", ['SD YRP MRP Settings', "MRP Settings"]],
+			},
+		)
 
 	def test_single_required_value_can_be_preserved_from_target(self):
 		schema = {

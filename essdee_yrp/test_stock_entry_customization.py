@@ -74,8 +74,8 @@ class TestStockEntryCustomization(FrappeTestCase):
 			"eval: doc.purpose != 'Send to Warehouse'",
 		)
 		for name in (
-			"Stock Entry-additional_amount-read_only_depends_on",
-			"Stock Entry-purpose-options",
+			"YRP Stock Entry-additional_amount-read_only_depends_on",
+			"YRP Stock Entry-purpose-options",
 		):
 			self.assertTrue(frappe.db.exists("Property Setter", name))
 

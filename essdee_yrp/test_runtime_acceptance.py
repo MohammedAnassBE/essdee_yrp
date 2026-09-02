@@ -147,7 +147,6 @@ DOC_EVENT_SPECIAL_SAMPLES = {
 	# cancellable. Exercise the on-cancel handlers with a migrated packing WO
 	# whose generated Finishing Plan has no downstream dispatch instead.
 	('YRP Work Order', "on_cancel"): "WO-2627-00478",
-	('YRP Work Order Correction', "before_submit"): "WOC-2026-00001",
 }
 
 DOC_EVENT_FILTERS = {
@@ -187,10 +186,33 @@ class TestRuntimeAcceptance(IntegrationTestCase):
 									pluck="name",
 									limit=1,
 								)
-								self.assertTrue(names, f"No runtime sample for {doctype} / {event}")
-								name = names[0]
+								if names:
+									name = names[0]
+								else:
+									self.assertEqual(
+										doctype,
+										'YRP Work Order Correction',
+										f"No runtime sample for {doctype} / {event}",
+									)
 
-							doc = frappe.get_doc(doctype, name)
+							if doctype == 'YRP Work Order Correction' and not name:
+								# Work Order Correction is an F16-only DocType, so a clean
+								# production_api migration correctly has no historical sample.
+								# Build an unsaved rollback-safe document from a real migrated WO
+								# to exercise the Essdee validation hook on fresh targets as well.
+								work_order_name = frappe.get_all(
+									'YRP Work Order',
+									filters={"production_detail": ["is", "set"]},
+									order_by="modified desc",
+									pluck="name",
+									limit=1,
+								)[0]
+								work_order = frappe.get_doc('YRP Work Order', work_order_name)
+								doc = frappe.new_doc(doctype)
+								doc.work_order = work_order.name
+								doc.production_detail = work_order.production_detail
+							else:
+								doc = frappe.get_doc(doctype, name)
 							if doctype == 'YRP Production Order' and event == "before_submit":
 								frappe.set_user("emp+ansil@essdee.fit")
 							try:

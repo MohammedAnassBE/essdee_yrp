@@ -195,6 +195,94 @@ class MigrationEngineTest(unittest.TestCase):
 		self.assertEqual(row["parenttype"], 'YRP ZPL Raw Print Format')
 		self.assertEqual(row["parentfield"], "zpl_raw_print_format_details")
 
+	def test_dynamic_link_controller_value_follows_doctype_mapping(self):
+		source = {
+			"Ledger": schema(
+				"Ledger",
+				[
+					field("voucher_type", "Link", "DocType"),
+					field("voucher_no", "Dynamic Link", "voucher_type"),
+				],
+			),
+			"Delivery Challan": schema("Delivery Challan", [field("title")]),
+		}
+		target = {
+			"SD YRP Ledger": schema(
+				"SD YRP Ledger",
+				[
+					field("voucher_type", "Link", "DocType"),
+					field("voucher_no", "Dynamic Link", "voucher_type"),
+				],
+			),
+			"YRP Delivery Challan": schema("YRP Delivery Challan", [field("title")]),
+		}
+		plan = build_plan(
+			source,
+			target,
+			doctype_map={
+				"Ledger": "SD YRP Ledger",
+				"Delivery Challan": "YRP Delivery Challan",
+			},
+		)
+		self.assertTrue(plan.ready, plan.issues)
+		output = transform_document(
+			{
+				"doctype": "Ledger",
+				"name": "LEDGER-1",
+				"voucher_type": "Delivery Challan",
+				"voucher_no": "DC-1",
+			},
+			plan,
+		)
+		self.assertEqual(output["doctype"], "SD YRP Ledger")
+		self.assertEqual(output["voucher_type"], "YRP Delivery Challan")
+		self.assertEqual(output["voucher_no"], "DC-1")
+
+	def test_direct_doctype_link_value_follows_doctype_mapping(self):
+		source = {
+			"Route": schema("Route", [field("reference_doctype", "Link", "DocType")]),
+			"Process Cost": schema("Process Cost", [field("title")]),
+		}
+		target = {
+			"SD YRP Route": schema(
+				"SD YRP Route", [field("reference_doctype", "Link", "DocType")]
+			),
+			"YRP Process Cost": schema("YRP Process Cost", [field("title")]),
+		}
+		plan = build_plan(
+			source,
+			target,
+			doctype_map={
+				"Route": "SD YRP Route",
+				"Process Cost": "YRP Process Cost",
+			},
+		)
+		output = transform_document(
+			{
+				"doctype": "Route",
+				"name": "ROW-1",
+				"reference_doctype": "Process Cost",
+			},
+			plan,
+		)
+		self.assertEqual(output["reference_doctype"], "YRP Process Cost")
+
+	def test_renamed_single_uses_target_doctype_as_its_identity(self):
+		source_schema = schema("Settings", [field("enabled", "Check")])
+		source_schema["issingle"] = 1
+		target_schema = schema("SD YRP Settings", [field("enabled", "Check")])
+		target_schema["issingle"] = 1
+		plan = build_plan(
+			{"Settings": source_schema},
+			{"SD YRP Settings": target_schema},
+			doctype_map={"Settings": "SD YRP Settings"},
+		)
+		output = transform_document(
+			{"doctype": "Settings", "name": "Settings", "enabled": 1},
+			plan,
+		)
+		self.assertEqual(output["name"], "SD YRP Settings")
+
 	def test_unmapped_source_field_blocks_plan_and_writes(self):
 		source = {"Source": schema("Source", [field("known"), field("unknown")])}
 		target = {"Source": schema("Source", [field("known")])}

@@ -12,7 +12,7 @@ class TestWorkOrderCloseSchema(unittest.TestCase):
 		fields = {
 			row["fieldname"]: row
 			for row in rows
-			if row.get("dt") == "Work Order"
+			if row.get("dt") == 'YRP Work Order'
 		}
 		reason = fields["sd_close_reason"]
 		self.assertEqual(reason["fieldtype"], "Select")
@@ -26,7 +26,7 @@ class TestWorkOrderCloseSchema(unittest.TestCase):
 		field = next(
 			row
 			for row in rows
-			if row.get("dt") == "Goods Received Note"
+			if row.get("dt") == 'YRP Goods Received Note'
 			and row.get("fieldname") == "from_closed_wo_sewing_details"
 		)
 		self.assertEqual(field["fieldtype"], "Check")

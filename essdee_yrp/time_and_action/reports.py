@@ -16,7 +16,7 @@ def _allowed_names(filters=None, active_only=False):
 	if active_only:
 		query_filters["status"] = ["!=", "Completed"]
 	return frappe.get_list(
-		"Time and Action",
+		'SD YRP Time and Action',
 		filters=query_filters,
 		pluck="name",
 		order_by="name asc",
@@ -30,13 +30,13 @@ def _names_or_empty(filters=None, active_only=False):
 
 def execute_cumulative_time_and_action_delay(filters=None):
 	columns = [
-		{"fieldtype": "Link", "fieldname": "lot", "options": "Lot", "label": "Lot", "width": 120},
-		{"fieldtype": "Link", "fieldname": "item", "options": "Item", "label": "Item", "width": 150},
+		{"fieldtype": "Link", "fieldname": "lot", "options": 'SD YRP Lot', "label": "Lot", "width": 120},
+		{"fieldtype": "Link", "fieldname": "item", "options": 'YRP Item', "label": "Item", "width": 150},
 		{"fieldtype": "Int", "fieldname": "delay", "label": "Delay", "width": 80},
 		{"fieldtype": "Data", "fieldname": "sizes", "label": "Sizes", "width": 130},
 		{"fieldtype": "Float", "fieldname": "qty", "label": "Quantity", "width": 100},
 		{"fieldtype": "Data", "fieldname": "colours", "label": "Colours", "width": 150},
-		{"fieldtype": "Link", "fieldname": "action", "label": "Next Action", "options": "Action", "width": 120},
+		{"fieldtype": "Link", "fieldname": "action", "label": "Next Action", "options": 'SD YRP Action', "width": 120},
 	]
 	names = _names_or_empty(active_only=True)
 	if not names:
@@ -47,8 +47,8 @@ def execute_cumulative_time_and_action_delay(filters=None):
 			MAX(parent.sizes) AS sizes, SUM(parent.qty) AS qty,
 			GROUP_CONCAT(DISTINCT parent.colour ORDER BY parent.colour SEPARATOR ', ') AS colours,
 			GROUP_CONCAT(DISTINCT parent.action ORDER BY parent.action SEPARATOR ', ') AS action
-		FROM `tabTime and Action` parent
-		JOIN `tabTime and Action Detail` detail ON detail.parent = parent.name
+		FROM `tabSD YRP Time and Action` parent
+		JOIN `tabSD YRP Time and Action Detail` detail ON detail.parent = parent.name
 		WHERE parent.name IN %(names)s AND detail.index2 = 1
 		GROUP BY parent.lot, parent.item
 		ORDER BY delay ASC, parent.lot ASC
@@ -62,8 +62,8 @@ def execute_cumulative_time_and_action_delay(filters=None):
 def execute_live_time_and_action_delay(filters=None):
 	filters = _filters(filters)
 	columns = [
-		{"fieldtype": "Link", "fieldname": "lot", "label": "Lot", "options": "Lot", "width": 100},
-		{"fieldtype": "Link", "fieldname": "item", "label": "Item", "options": "Item", "width": 150},
+		{"fieldtype": "Link", "fieldname": "lot", "label": "Lot", "options": 'SD YRP Lot', "width": 100},
+		{"fieldtype": "Link", "fieldname": "item", "label": "Item", "options": 'YRP Item', "width": 150},
 	]
 	if filters.show_style_summary:
 		columns += [
@@ -72,12 +72,12 @@ def execute_live_time_and_action_delay(filters=None):
 		]
 	else:
 		columns += [
-			{"fieldtype": "Link", "fieldname": "master", "label": "Master", "options": "Action Master", "width": 120},
+			{"fieldtype": "Link", "fieldname": "master", "label": "Master", "options": 'SD YRP Action Master', "width": 120},
 			{"fieldtype": "Data", "fieldname": "colour", "label": "Colour", "width": 100},
 			{"fieldtype": "Data", "fieldname": "sizes", "label": "Sizes", "width": 130},
 			{"fieldtype": "Float", "fieldname": "qty", "label": "Qty", "width": 100},
-			{"fieldtype": "Link", "fieldname": "action", "label": "Action", "options": "Action", "width": 150},
-			{"fieldtype": "Link", "fieldname": "department", "label": "Department", "options": "Department", "width": 120},
+			{"fieldtype": "Link", "fieldname": "action", "label": "Action", "options": 'SD YRP Action', "width": 150},
+			{"fieldtype": "Link", "fieldname": "department", "label": "Department", "options": 'YRP Department', "width": 120},
 			{"fieldtype": "Date", "fieldname": "date", "label": "Planned Date", "width": 120},
 			{"fieldtype": "Date", "fieldname": "rescheduled_date", "label": "Rescheduled Date", "width": 120},
 			{"fieldtype": "Int", "fieldname": "date_diff", "label": "Date Diff", "width": 90},
@@ -92,8 +92,8 @@ def execute_live_time_and_action_delay(filters=None):
 			"""
 			SELECT parent.lot, parent.item, MAX(parent.sizes) AS sizes,
 				MIN(DATEDIFF(detail.rescheduled_date, %(today)s)) AS date_diff
-			FROM `tabTime and Action` parent
-			JOIN `tabTime and Action Detail` detail ON detail.parent = parent.name
+			FROM `tabSD YRP Time and Action` parent
+			JOIN `tabSD YRP Time and Action Detail` detail ON detail.parent = parent.name
 			WHERE parent.name IN %(names)s AND detail.completed = 0
 				AND detail.rescheduled_date <= %(today)s
 			GROUP BY parent.lot, parent.item
@@ -109,8 +109,8 @@ def execute_live_time_and_action_delay(filters=None):
 				parent.sizes, parent.qty, detail.action, detail.department,
 				detail.date, detail.rescheduled_date,
 				DATEDIFF(detail.rescheduled_date, %(today)s) AS date_diff
-			FROM `tabTime and Action` parent
-			JOIN `tabTime and Action Detail` detail ON detail.parent = parent.name
+			FROM `tabSD YRP Time and Action` parent
+			JOIN `tabSD YRP Time and Action Detail` detail ON detail.parent = parent.name
 			WHERE parent.name IN %(names)s AND detail.completed = 0
 				AND detail.index2 = 1 AND detail.rescheduled_date <= %(today)s
 			ORDER BY date_diff ASC, parent.lot ASC
@@ -124,8 +124,8 @@ def execute_live_time_and_action_delay(filters=None):
 def execute_time_and_action_delay_analysis(filters=None):
 	filters = _filters(filters)
 	columns = [
-		{"fieldtype": "Link", "fieldname": "action", "label": "Action", "options": "Action", "width": 150},
-		{"fieldtype": "Link", "fieldname": "department", "label": "Department", "options": "Department", "width": 120},
+		{"fieldtype": "Link", "fieldname": "action", "label": "Action", "options": 'SD YRP Action', "width": 150},
+		{"fieldtype": "Link", "fieldname": "department", "label": "Department", "options": 'YRP Department', "width": 120},
 		{"fieldtype": "Date", "fieldname": "date", "label": "Planned Date", "width": 120},
 		{"fieldtype": "Date", "fieldname": "rescheduled_date", "label": "Rescheduled Date", "width": 120},
 		{"fieldtype": "Date", "fieldname": "actual_date", "label": "Actual Date", "width": 120},
@@ -134,7 +134,7 @@ def execute_time_and_action_delay_analysis(filters=None):
 	]
 	if not filters.lot or not filters.time_and_action:
 		return columns, [], None, _delay_chart([])
-	doc = frappe.get_doc("Time and Action", filters.time_and_action)
+	doc = frappe.get_doc('SD YRP Time and Action', filters.time_and_action)
 	doc.check_permission("read")
 	if doc.lot != filters.lot:
 		frappe.throw(_("Time and Action does not belong to the selected Lot."))
@@ -143,7 +143,7 @@ def execute_time_and_action_delay_analysis(filters=None):
 		SELECT action, department, date, rescheduled_date, actual_date,
 			DATEDIFF(rescheduled_date, actual_date) AS date_diff,
 			DATEDIFF(date, actual_date) AS cumulative_diff
-		FROM `tabTime and Action Detail`
+		FROM `tabSD YRP Time and Action Detail`
 		WHERE parent = %(parent)s AND completed = 1
 		ORDER BY idx ASC
 		""",
@@ -175,11 +175,11 @@ def _delay_chart(data):
 def execute_time_and_action_department_performance(filters=None):
 	filters = _filters(filters)
 	group_map = {
-		"Department": ("department", "Department"),
-		"Action": ("action", "Action"),
-		"Work Station": ("work_station", "Work Station"),
+		'YRP Department': ("department", 'YRP Department'),
+		'SD YRP Action': ("action", 'SD YRP Action'),
+		'YRP Work Station': ("work_station", 'YRP Work Station'),
 	}
-	fieldname, options = group_map.get(filters.select or "Department", group_map["Department"])
+	fieldname, options = group_map.get(filters.select or 'YRP Department', group_map['YRP Department'])
 	columns = [
 		{"fieldtype": "Link", "fieldname": fieldname, "options": options, "label": options, "width": 200},
 		{"fieldtype": "Percent", "fieldname": "performance", "label": "Performance", "width": 200},
@@ -198,7 +198,7 @@ def execute_time_and_action_department_performance(filters=None):
 	data = frappe.db.sql(
 		f"""
 		SELECT {fieldname}, AVG(performance) AS performance
-		FROM `tabTime and Action Detail`
+		FROM `tabSD YRP Time and Action Detail`
 		WHERE {' AND '.join(conditions)}
 		GROUP BY {fieldname}
 		ORDER BY performance DESC
@@ -222,8 +222,8 @@ def _performance_chart(data, fieldname):
 def execute_time_and_action_dispatch_report(filters=None):
 	filters = _filters(filters)
 	columns = [
-		{"fieldname": "lot", "fieldtype": "Link", "label": "Lot", "options": "Lot", "width": 200},
-		{"fieldname": "item", "fieldtype": "Link", "label": "Item", "options": "Item", "width": 200},
+		{"fieldname": "lot", "fieldtype": "Link", "label": "Lot", "options": 'SD YRP Lot', "width": 200},
+		{"fieldname": "item", "fieldtype": "Link", "label": "Item", "options": 'YRP Item', "width": 200},
 		{"fieldname": "sizes", "fieldtype": "Data", "label": "Sizes", "width": 300},
 		{"fieldname": "date", "fieldtype": "Date", "label": "Dispatch Date", "width": 200},
 		{"fieldname": "total_order_quantity", "fieldtype": "Int", "label": "Total Quantity"},
@@ -237,9 +237,9 @@ def execute_time_and_action_dispatch_report(filters=None):
 		SELECT parent.lot, parent.item, MAX(parent.sizes) AS sizes,
 			MAX(detail.rescheduled_date) AS date, lot.total_order_quantity,
 			MIN(parent.delay) AS cumulative_delay
-		FROM `tabTime and Action` parent
-		JOIN `tabTime and Action Detail` detail ON detail.parent = parent.name
-		JOIN `tabLot` lot ON lot.name = parent.lot
+		FROM `tabSD YRP Time and Action` parent
+		JOIN `tabSD YRP Time and Action Detail` detail ON detail.parent = parent.name
+		JOIN `tabSD YRP Lot` lot ON lot.name = parent.lot
 		WHERE parent.name IN %(names)s
 		GROUP BY parent.lot, parent.item, lot.total_order_quantity
 		ORDER BY parent.lot ASC, parent.item ASC
@@ -253,14 +253,14 @@ def execute_time_and_action_dispatch_report(filters=None):
 def execute_time_and_action_pending_work(filters=None):
 	filters = _filters(filters)
 	columns = [
-		{"fieldtype": "Link", "fieldname": "lot", "options": "Lot", "label": "Lot", "width": 100},
-		{"fieldtype": "Link", "fieldname": "item", "options": "Item", "label": "Item", "width": 150},
-		{"fieldtype": "Link", "fieldname": "master", "options": "Action Master", "label": "Master", "width": 120},
+		{"fieldtype": "Link", "fieldname": "lot", "options": 'SD YRP Lot', "label": "Lot", "width": 100},
+		{"fieldtype": "Link", "fieldname": "item", "options": 'YRP Item', "label": "Item", "width": 150},
+		{"fieldtype": "Link", "fieldname": "master", "options": 'SD YRP Action Master', "label": "Master", "width": 120},
 		{"fieldtype": "Data", "fieldname": "colour", "label": "Colour", "width": 120},
 		{"fieldtype": "Data", "fieldname": "sizes", "label": "Sizes", "width": 130},
 		{"fieldtype": "Float", "fieldname": "qty", "label": "Quantity", "width": 100},
-		{"fieldtype": "Link", "fieldname": "action", "options": "Action", "label": "Action", "width": 100},
-		{"fieldtype": "Link", "fieldname": "department", "options": "Department", "label": "Department", "width": 120},
+		{"fieldtype": "Link", "fieldname": "action", "options": 'SD YRP Action', "label": "Action", "width": 100},
+		{"fieldtype": "Link", "fieldname": "department", "options": 'YRP Department', "label": "Department", "width": 120},
 		{"fieldtype": "Date", "fieldname": "date", "label": "Planned Date", "width": 120},
 		{"fieldtype": "Date", "fieldname": "rescheduled_date", "label": "Rescheduled Date", "width": 120},
 		{"fieldtype": "Int", "fieldname": "date_diff", "label": "Date Diff", "width": 100},
@@ -288,8 +288,8 @@ def execute_time_and_action_pending_work(filters=None):
 			parent.sizes, parent.qty, detail.action, detail.department,
 			detail.date, detail.rescheduled_date,
 			DATEDIFF(detail.rescheduled_date, %(date)s) AS date_diff
-		FROM `tabTime and Action` parent
-		JOIN `tabTime and Action Detail` detail ON detail.parent = parent.name
+		FROM `tabSD YRP Time and Action` parent
+		JOIN `tabSD YRP Time and Action Detail` detail ON detail.parent = parent.name
 		WHERE {' AND '.join(conditions)}
 		ORDER BY date_diff ASC, parent.lot ASC, detail.idx ASC
 		""",
@@ -302,15 +302,15 @@ def execute_time_and_action_pending_work(filters=None):
 def execute_time_and_action_report(filters=None):
 	filters = _filters(filters)
 	columns = [
-		{"fieldtype": "Link", "fieldname": "lot", "options": "Lot", "label": "Lot", "width": 120},
-		{"fieldtype": "Link", "fieldname": "item", "options": "Item", "label": "Item", "width": 150},
-		{"fieldtype": "Link", "fieldname": "master", "options": "Action Master", "label": "Master", "width": 120},
+		{"fieldtype": "Link", "fieldname": "lot", "options": 'SD YRP Lot', "label": "Lot", "width": 120},
+		{"fieldtype": "Link", "fieldname": "item", "options": 'YRP Item', "label": "Item", "width": 150},
+		{"fieldtype": "Link", "fieldname": "master", "options": 'SD YRP Action Master', "label": "Master", "width": 120},
 		{"fieldtype": "Data", "fieldname": "colour", "label": "Colour", "width": 100},
 		{"fieldtype": "Data", "fieldname": "sizes", "label": "Sizes", "width": 100},
 		{"fieldtype": "Float", "fieldname": "qty", "label": "Quantity", "width": 100},
 		{"fieldtype": "Date", "fieldname": "start_date", "label": "Start Date", "width": 120},
-		{"fieldtype": "Link", "fieldname": "action", "options": "Action", "label": "Action", "width": 100},
-		{"fieldtype": "Link", "fieldname": "department", "options": "Department", "label": "Department", "width": 120},
+		{"fieldtype": "Link", "fieldname": "action", "options": 'SD YRP Action', "label": "Action", "width": 100},
+		{"fieldtype": "Link", "fieldname": "department", "options": 'YRP Department', "label": "Department", "width": 120},
 		{"fieldtype": "Int", "fieldname": "lead_time", "label": "Lead Time", "width": 100},
 		{"fieldtype": "Date", "fieldname": "date", "label": "Planned date", "width": 120},
 		{"fieldtype": "Date", "fieldname": "rescheduled_date", "label": "Rescheduled Date", "width": 120},
@@ -324,8 +324,8 @@ def execute_time_and_action_report(filters=None):
 			parent.colour, parent.sizes, parent.qty, parent.start_date,
 			detail.action, detail.department, detail.lead_time, detail.date,
 			detail.rescheduled_date, detail.idx
-		FROM `tabTime and Action` parent
-		JOIN `tabTime and Action Detail` detail ON detail.parent = parent.name
+		FROM `tabSD YRP Time and Action` parent
+		JOIN `tabSD YRP Time and Action Detail` detail ON detail.parent = parent.name
 		WHERE parent.name IN %(names)s AND detail.completed = 0
 		ORDER BY parent.lot ASC, parent.name ASC, detail.idx ASC
 		""",
@@ -347,7 +347,7 @@ def execute_time_and_action_report(filters=None):
 def execute_time_and_action_summary(filters=None):
 	filters = _filters(filters)
 	columns = [
-		{"fieldtype": "Link", "fieldname": "action", "label": "Action", "options": "Action", "width": 150},
+		{"fieldtype": "Link", "fieldname": "action", "label": "Action", "options": 'SD YRP Action', "width": 150},
 		{"fieldtype": "Int", "fieldname": "no_of_completed", "label": "No of Completed", "width": 200},
 	]
 	if filters.lot:
@@ -362,9 +362,9 @@ def execute_time_and_action_summary(filters=None):
 		FROM (
 			SELECT parent.lot, detail.action, MIN(detail.completed) AS no_of_completed,
 				action.default_order, MAX(detail.actual_date) AS actual_date
-			FROM `tabTime and Action Detail` detail
-			JOIN `tabTime and Action` parent ON parent.name = detail.parent
-			JOIN `tabAction` action ON action.name = detail.action
+			FROM `tabSD YRP Time and Action Detail` detail
+			JOIN `tabSD YRP Time and Action` parent ON parent.name = detail.parent
+			JOIN `tabSD YRP Action` action ON action.name = detail.action
 			WHERE parent.name IN %(names)s AND action.`default` = 1
 			GROUP BY parent.lot, detail.action, action.default_order
 		) grouped

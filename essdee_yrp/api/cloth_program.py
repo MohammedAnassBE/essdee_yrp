@@ -89,7 +89,7 @@ def _normalize_yarns(selection, required=True):
 
 def _item_yarns_for_cloth(cloth_item, required=False):
     """Return the reusable yarn recipe stored on the cloth Item master."""
-    item = frappe.get_cached_doc("Item", cloth_item)
+    item = frappe.get_cached_doc('YRP Item', cloth_item)
     if item.get("yarn_ratio_details") and not item.get("is_cloth_item"):
         frappe.throw(
             _("Enable 'Is Cloth Item' on Item {0} before using its Yarn Ratio.").format(
@@ -262,7 +262,7 @@ def _normalize_knitting_output_colours(selection, required_colours):
             )
         if (
             frappe.db.get_value(
-                "Item Attribute Value", output_colour, "attribute_name"
+                'YRP Item Attribute Value', output_colour, "attribute_name"
             )
             != "Colour"
         ):
@@ -359,7 +359,7 @@ def _normalize_fabric_routes(selection, required_routes):
         ):
             if (
                 frappe.db.get_value(
-                    "Item Attribute Value", value, "attribute_name"
+                    'YRP Item Attribute Value', value, "attribute_name"
                 )
                 != attribute
             ):
@@ -457,14 +457,14 @@ def _get_compacting_references_by_cloth(item_production_detail):
     if not item_production_detail:
         return None
     source_name = frappe.db.get_value(
-        "IPD Compacting",
+        'SD YRP IPD Compacting',
         {"item_production_detail": item_production_detail},
         "name",
     )
     if not source_name:
         return None
 
-    source = frappe.get_doc("IPD Compacting", source_name)
+    source = frappe.get_doc('SD YRP IPD Compacting', source_name)
     if source.get("packing_attribute") != FABRIC_COLOUR_ATTRIBUTE:
         frappe.throw(
             _(
@@ -607,11 +607,11 @@ def _cpd_is_operationally_referenced(cpd_name):
     profile, so a changed requirement creates a new CPD version instead.
     """
     references = (
-        ("Lot Fabric Detail", {"production_detail": cpd_name, "parenttype": "Lot"}),
-        ("Work Order", {"production_detail": cpd_name}),
-        ("Delivery Challan", {"production_detail": cpd_name}),
-        ("Goods Received Note", {"production_detail": cpd_name}),
-        ("Work Order Correction", {"production_detail": cpd_name}),
+        ('SD YRP Lot Fabric Detail', {"production_detail": cpd_name, "parenttype": 'SD YRP Lot'}),
+        ('YRP Work Order', {"production_detail": cpd_name}),
+        ('YRP Delivery Challan', {"production_detail": cpd_name}),
+        ('YRP Goods Received Note', {"production_detail": cpd_name}),
+        ('YRP Work Order Correction', {"production_detail": cpd_name}),
     )
     return any(frappe.db.exists(doctype, filters) for doctype, filters in references)
 
@@ -625,7 +625,7 @@ def _find_reusable_cpd(cloth_item, selection):
     """
     requested = _recipe_map(selection.get("colour_yarn_recipes") or [])
     names = frappe.get_all(
-        "Item Production Detail",
+        'YRP Item Production Detail',
         filters={"item": cloth_item, "is_cloth_item": 1},
         pluck="name",
         order_by="version desc, modified desc",
@@ -637,13 +637,13 @@ def _find_reusable_cpd(cloth_item, selection):
 
     blank_candidate = None
     for name in names:
-        cpd = frappe.get_cached_doc("Item Production Detail", name)
+        cpd = frappe.get_cached_doc('YRP Item Production Detail', name)
         existing = _recipe_map(cpd.get("colour_yarn_recipes") or [])
         compatible = _profile_matches(cpd, selection)
         exact = compatible and _profile_matches_exactly(cpd, selection)
         referenced = _cpd_is_operationally_referenced(name)
         if existing == requested and compatible and (exact or not referenced):
-            return frappe.get_doc("Item Production Detail", name)
+            return frappe.get_doc('YRP Item Production Detail', name)
         if not existing and requested and _profile_matches(cpd, selection):
             if not referenced and blank_candidate is None:
                 blank_candidate = name
@@ -653,9 +653,9 @@ def _find_reusable_cpd(cloth_item, selection):
             and compatible
             and (exact or not referenced)
         ):
-            return frappe.get_doc("Item Production Detail", name)
+            return frappe.get_doc('YRP Item Production Detail', name)
     return (
-        frappe.get_doc("Item Production Detail", blank_candidate)
+        frappe.get_doc('YRP Item Production Detail', blank_candidate)
         if blank_candidate
         else None
     )
@@ -673,7 +673,7 @@ def _find_or_create_cpd(cloth_item, selection, tuples):
     40's GL Dyed Fabric New by 7) — wholesale replace would delete sibling lots'
     demanded rows and break their already-written requirements."""
     cpd = _find_reusable_cpd(cloth_item, selection) or frappe.new_doc(
-        "Item Production Detail"
+        'YRP Item Production Detail'
     )
     # The Lot popup selection is already the authoritative, fully-normalised
     # process profile.  Do not let the new-document defaults hook silently
@@ -692,8 +692,8 @@ def _find_or_create_cpd(cloth_item, selection, tuples):
     # crash in ipd_validations.validate_garment_ipd (e.g. "Enter stiching
     # attribute details"). The Item master is the source of truth the fetch
     # reads from, so it must be stamped here too, not just the CPD field.
-    if not frappe.db.get_value("Item", cloth_item, "is_cloth_item"):
-        frappe.db.set_value("Item", cloth_item, "is_cloth_item", 1)
+    if not frappe.db.get_value('YRP Item', cloth_item, "is_cloth_item"):
+        frappe.db.set_value('YRP Item', cloth_item, "is_cloth_item", 1)
     cpd.is_cloth_item = 1
     colour_recipes = selection.get("colour_yarn_recipes") or []
     cpd.set(
@@ -944,7 +944,7 @@ def _program_final_route(row):
     final_colour = row.get("colour") or None
     reference = row.get("reference_item_variant")
     if reference:
-        variant = frappe.get_cached_doc("Item Variant", reference)
+        variant = frappe.get_cached_doc('YRP Item Variant', reference)
         attrs = {
             value.attribute: value.attribute_value
             for value in variant.get("attributes") or []
@@ -1021,7 +1021,7 @@ def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
     Synced compacting references are copied from the Lot's garment IPD into
     each generated cloth IPD; they remain data-only and are not calculated."""
     selections = frappe.parse_json(selections) if isinstance(selections, str) else selections
-    lot_doc = frappe.get_doc("Lot", lot)
+    lot_doc = frappe.get_doc('SD YRP Lot', lot)
     lot_doc.check_permission("write")
     _guard_not_modified(lot_doc, modified)
     excess_percentage = flt(excess_percentage)
@@ -1163,8 +1163,8 @@ def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
     lot_doc.fabric_requirement_details = frappe.as_json(_requirement_payload(payload))
     lot_doc.save(ignore_permissions=True)
     for row in frappe.get_all(
-        "Lot Fabric Program",
-        filters={"parent": lot_doc.name, "parenttype": "Lot"},
+        'SD YRP Lot Fabric Program',
+        filters={"parent": lot_doc.name, "parenttype": 'SD YRP Lot'},
         fields=[
             "name",
             "cloth_item",
@@ -1178,7 +1178,7 @@ def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
             base_weight = _exact_program_base_weight(row, payload)
             route_key = _program_final_route(row)
             frappe.db.set_value(
-                "Lot Fabric Program",
+                'SD YRP Lot Fabric Program',
                 row.name,
                 "weight",
                 _round_program_weight(base_weight * excess_factor)
@@ -1234,14 +1234,14 @@ def _default_yarns_for_cloth(cloth_item, cpd_name=None):
     see a blank recipe merely because the document predates the child table.
     """
     name = cpd_name or frappe.db.get_value(
-        "Item Production Detail",
+        'YRP Item Production Detail',
         {"item": cloth_item, "is_cloth_item": 1},
         "name",
         order_by="version desc, modified desc",
     )
     if not name:
         return []
-    cpd = frappe.get_cached_doc("Item Production Detail", name)
+    cpd = frappe.get_cached_doc('YRP Item Production Detail', name)
     rows = [
         {"yarn_item": row.yarn_item, "ratio": flt(row.ratio)}
         for row in (cpd.get("yarn_ratio_details") or [])
@@ -1281,10 +1281,10 @@ def _cloth_program_defaults():
         "compacting_process": "",
         "cloth_per_kg_yarn": 1.0,
     }
-    if not frappe.db.exists("DocType", "IPD Settings"):
+    if not frappe.db.exists("DocType", 'SD YRP IPD Settings'):
         return defaults
 
-    settings = frappe.get_single("IPD Settings")
+    settings = frappe.get_single('SD YRP IPD Settings')
     defaults.update({
         "knitting_process": settings.get("default_knitting_process") or "",
         "dyeing_process": settings.get("default_dyeing_process") or "",
@@ -1309,28 +1309,28 @@ def _yarn_profile(yarn_item):
     if not yarn_item:
         return {}
     parents = frappe.get_all(
-        "IPD Yarn Ratio",
-        filters={"yarn_item": yarn_item, "parenttype": "Item Production Detail"},
+        'SD YRP IPD Yarn Ratio',
+        filters={"yarn_item": yarn_item, "parenttype": 'YRP Item Production Detail'},
         pluck="parent",
     )
     name = None
     if parents:
         name = frappe.db.get_value(
-            "Item Production Detail",
+            'YRP Item Production Detail',
             {"name": ["in", parents], "is_cloth_item": 1},
             "name",
             order_by="modified desc",
         )
     if not name:
         name = frappe.db.get_value(
-            "Item Production Detail",
+            'YRP Item Production Detail',
             {"yarn_item": yarn_item, "is_cloth_item": 1},
             "name",
             order_by="modified desc",
         )
     if not name:
         return {}
-    cpd = frappe.get_cached_doc("Item Production Detail", name)
+    cpd = frappe.get_cached_doc('YRP Item Production Detail', name)
     return _profile_from_cpd(cpd)
 
 
@@ -1344,11 +1344,11 @@ def get_cloth_program_context(lot):
     unmapped-label errors at popup-OPEN in both UIs. The per-field profile
     prefill is fetched by the UI via get_yarn_profile once a yarn is known (on
     open and on every yarn change)."""
-    lot_doc = frappe.get_doc("Lot", lot)
+    lot_doc = frappe.get_doc('SD YRP Lot', lot)
     lot_doc.check_permission("read")
     if not lot_doc.production_detail:
         return {"cloths": [], "defaults": _cloth_program_defaults()}
-    ipd = frappe.get_cached_doc("Item Production Detail", lot_doc.production_detail)
+    ipd = frappe.get_cached_doc('YRP Item Production Detail', lot_doc.production_detail)
     cloths = _cloth_rows_from_ipd(ipd)
     demand = compute_cloth_demand(lot_doc.name, apply_allowance=False)
     route_additions = _synced_program_route_additions(
@@ -1378,7 +1378,7 @@ def get_cloth_program_context(lot):
     }
     for c in cloths:
         cpd_name = lot_cpds.get(c["cloth_item"]) or frappe.db.get_value(
-            "Item Production Detail",
+            'YRP Item Production Detail',
             {"item": c["cloth_item"], "is_cloth_item": 1},
             "name",
             order_by="version desc, modified desc",
@@ -1391,7 +1391,7 @@ def get_cloth_program_context(lot):
         c["default_yarn"] = (
             c["default_yarns"][0]["yarn_item"] if c["default_yarns"] else ""
         )
-        cpd = frappe.get_cached_doc("Item Production Detail", cpd_name) if cpd_name else None
+        cpd = frappe.get_cached_doc('YRP Item Production Detail', cpd_name) if cpd_name else None
         c["profile"] = _profile_from_cpd(cpd) if cpd else (
             _yarn_profile(c["item_yarns"][0]["yarn_item"])
             if c["item_yarns"]
@@ -1416,6 +1416,6 @@ def get_cloth_program_context(lot):
 def get_yarn_profile(yarn_item):
     """Reverse-query the profile (processes / ratio / greige) for a picked yarn.
     Called by the Desk dialog + /web modal on yarn selection to prefill fields."""
-    if not frappe.has_permission("Item Production Detail", "read"):
+    if not frappe.has_permission('YRP Item Production Detail', "read"):
         frappe.throw(_("Not permitted"), frappe.PermissionError)
     return _yarn_profile(yarn_item)

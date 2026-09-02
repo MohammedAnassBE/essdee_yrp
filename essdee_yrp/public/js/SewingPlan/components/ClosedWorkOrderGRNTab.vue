@@ -69,7 +69,7 @@ const initializeWorkOrderControl = () => {
             fieldtype: 'Link',
             fieldname: 'closed_work_order',
             label: 'Work Order',
-            options: 'Work Order',
+            options: 'YRP Work Order',
             placeholder: 'Select a closed Work Order',
             get_query: () => ({
                 query: 'essdee_yrp.sewing.closed_work_order.get_closed_sewing_work_orders',
@@ -97,7 +97,7 @@ const showCreatedMessage = (name) => {
     frappe.msgprint({
         title: 'GRN Created',
         indicator: 'green',
-        message: `Goods Received Note <a href="/app/goods-received-note/${encodeURIComponent(name)}"><b>${safeName}</b></a> was created and submitted.`,
+        message: `Goods Received Note <a href="/app/yrp-goods-received-note/${encodeURIComponent(name)}"><b>${safeName}</b></a> was created and submitted.`,
     })
 }
 

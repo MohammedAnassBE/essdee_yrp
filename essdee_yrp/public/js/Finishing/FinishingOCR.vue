@@ -33,7 +33,7 @@
                         <table class="table table-sm table-sm-bordered bordered-table">
                             <thead class="dark-border">
                                 <tr>
-                                    <th :colspan="2">{{ item_name }} <span v-if="part_value != 'Item'"> {{ part_value }} </span></th>
+                                    <th :colspan="2">{{ item_name }} <span v-if="part_value != 'YRP Item'"> {{ part_value }} </span></th>
                                     <th v-for="size in items.primary_values">
                                         {{ size }}
                                     </th>
@@ -616,7 +616,7 @@ function load_consumption_data(doc_name){
     consumption_loading.value = true
     consumption_error.value = ""
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.get_fp_consumption_details",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.get_fp_consumption_details",
         args: {
             doc_name: doc_name,
         },
@@ -638,7 +638,7 @@ function load_stock_balance_data(doc_name){
     stock_balance_loading.value = true
     stock_balance_error.value = ""
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.get_fp_stock_balance_details",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.get_fp_stock_balance_details",
         args: {
             doc_name: doc_name,
         },

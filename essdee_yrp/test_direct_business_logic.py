@@ -1,16 +1,16 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from essdee_yrp.essdee_yrp.doctype.fg_item_size_range.fg_item_size_range import (
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_fg_item_size_range.sd_yrp_fg_item_size_range import (
 	get_sizes,
 )
-from essdee_yrp.essdee_yrp.doctype.lotwise_item_profit.lotwise_item_profit import (
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_lotwise_item_profit.sd_yrp_lotwise_item_profit import (
 	get_lot_qty,
 )
-from essdee_yrp.essdee_yrp.doctype.product_image.product_image import (
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_product_image.sd_yrp_product_image import (
 	get_image_list,
 )
-from essdee_yrp.essdee_yrp.doctype.sales_piece_sticker_print.sales_piece_sticker_print import (
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_sales_piece_sticker_print.sd_yrp_sales_piece_sticker_print import (
 	get_template,
 )
 
@@ -18,12 +18,12 @@ from essdee_yrp.essdee_yrp.doctype.sales_piece_sticker_print.sales_piece_sticker
 class TestDirectBusinessLogic(FrappeTestCase):
 	def test_lot_quantity_api_uses_only_approved_fields(self):
 		lot = frappe.get_all(
-			"Lot Planned Qty",
-			filters={"parenttype": "Lot"},
+			'SD YRP Lot Planned Qty',
+			filters={"parenttype": 'SD YRP Lot'},
 			pluck="parent",
 			limit=1,
 		)[0]
-		lot_doc = frappe.get_doc("Lot", lot)
+		lot_doc = frappe.get_doc('SD YRP Lot', lot)
 		self.assertEqual(
 			get_lot_qty(lot, "qty"),
 			{row.size: row.qty for row in lot_doc.planned_qty if row.size},
@@ -42,22 +42,22 @@ class TestDirectBusinessLogic(FrappeTestCase):
 		)
 
 	def test_existing_product_release_onload_builds_image_payloads(self):
-		name = frappe.get_all("Product Release", pluck="name", limit=1)[0]
-		doc = frappe.get_doc("Product Release", name)
+		name = frappe.get_all('SD YRP Product Release', pluck="name", limit=1)[0]
+		doc = frappe.get_doc('SD YRP Product Release', name)
 		doc.run_method("onload")
 		self.assertIsInstance(doc.get("__onload") or {}, dict)
 
 	def test_existing_size_range_reads_installed_values(self):
-		name = frappe.get_all("FG Item Size Range", pluck="name", limit=1)[0]
-		doc = frappe.get_doc("FG Item Size Range", name)
+		name = frappe.get_all('SD YRP FG Item Size Range', pluck="name", limit=1)[0]
+		doc = frappe.get_doc('SD YRP FG Item Size Range', name)
 		self.assertEqual(
 			get_sizes(name),
 			[row.attribute_value for row in doc.sizes if row.attribute_value],
 		)
 
 	def test_fg_template_reuses_base_attribute_mapping_contract(self):
-		name = frappe.get_all("FG Item Master Template", pluck="name", limit=1)[0]
-		doc = frappe.get_doc("FG Item Master Template", name)
+		name = frappe.get_all('SD YRP FG Item Master Template', pluck="name", limit=1)[0]
+		doc = frappe.get_doc('SD YRP FG Item Master Template', name)
 		doc.run_method("onload")
 		self.assertIn("attr_list", doc.get("__onload") or {})
 

@@ -45,14 +45,14 @@ def validate_sewing_input_orders(rows) -> list[frappe._dict]:
 					"{0} must appear before {1} in Sewing Plan Input Orders."
 				).format(frappe.bold(difference_from), frappe.bold(input_type))
 			)
-		if not frappe.db.exists("Sewing Plan Input Type", input_type):
+		if not frappe.db.exists('SD YRP Sewing Plan Input Type', input_type):
 			frappe.throw(
 				_("Sewing Plan Input Type {0} does not exist.").format(
 					frappe.bold(input_type)
 				)
 			)
 		if difference_from != "Order Qty" and not frappe.db.exists(
-			"Sewing Plan Input Type", difference_from
+			'SD YRP Sewing Plan Input Type', difference_from
 		):
 			frappe.throw(
 				_("Sewing Plan Input Type {0} does not exist.").format(
@@ -68,7 +68,7 @@ def validate_sewing_input_orders(rows) -> list[frappe._dict]:
 				difference_key=_input_key(difference_from),
 				allowance=flt(
 					frappe.db.get_value(
-						"Sewing Plan Input Type", input_type, "allowance"
+						'SD YRP Sewing Plan Input Type', input_type, "allowance"
 					)
 				),
 			)
@@ -78,7 +78,7 @@ def validate_sewing_input_orders(rows) -> list[frappe._dict]:
 
 
 def get_sewing_input_configuration() -> list[frappe._dict]:
-	settings = frappe.get_cached_doc("MRP Settings")
+	settings = frappe.get_cached_doc('SD YRP MRP Settings')
 	return validate_sewing_input_orders(settings.sewing_plan_input_orders)
 
 

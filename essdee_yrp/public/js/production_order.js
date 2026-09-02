@@ -1,4 +1,4 @@
-frappe.ui.form.on("Production Order", {
+frappe.ui.form.on("YRP Production Order", {
 	refresh(frm) {
 		render_lot_ordered_details(frm);
 	},

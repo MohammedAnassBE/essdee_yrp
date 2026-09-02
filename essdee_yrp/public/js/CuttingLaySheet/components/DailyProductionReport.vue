@@ -246,9 +246,9 @@ onMounted(() => {
             fieldtype: 'MultiSelectList',
             label: 'Item',
             fieldname: 'item',
-            options: 'Item',
+            options: 'YRP Item',
             get_data: function(txt) {
-                return frappe.db.get_link_options('Item', txt);
+                return frappe.db.get_link_options('YRP Item', txt);
             }
         },
         doc: sample_doc.value,
@@ -260,9 +260,9 @@ onMounted(() => {
             fieldtype: 'MultiSelectList',
             label: 'Lot',
             fieldname: 'lot',
-            options: 'Lot',
+            options: 'SD YRP Lot',
             get_data: function(txt) {
-                return frappe.db.get_link_options('Lot', txt);
+                return frappe.db.get_link_options('SD YRP Lot', txt);
             }
         },
         doc: sample_doc.value,

@@ -6,11 +6,11 @@ from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
 def execute():
 	create_custom_fields({
-		"Item Production Detail": [{
+		'YRP Item Production Detail': [{
 			"fieldname": "yarn_ratio_details",
 			"fieldtype": "Table",
 			"label": "Yarn Ratio",
-			"options": "IPD Yarn Ratio",
+			"options": 'SD YRP IPD Yarn Ratio',
 			"insert_after": "yarn_item",
 			"depends_on": "eval:doc.is_cloth_item",
 			"description": (
@@ -32,13 +32,13 @@ def execute():
 
 	_insert_into_field_order()
 	_backfill_single_yarns()
-	frappe.clear_cache(doctype="Item Production Detail")
+	frappe.clear_cache(doctype='YRP Item Production Detail')
 
 
 def _insert_into_field_order():
 	name = frappe.db.get_value(
 		"Property Setter",
-		{"doc_type": "Item Production Detail", "property": "field_order"},
+		{"doc_type": 'YRP Item Production Detail', "property": "field_order"},
 		"name",
 	)
 	if not name:
@@ -57,20 +57,20 @@ def _insert_into_field_order():
 
 def _backfill_single_yarns():
 	ipds = frappe.get_all(
-		"Item Production Detail",
+		'YRP Item Production Detail',
 		filters={"is_cloth_item": 1, "yarn_item": ["is", "set"]},
 		fields=["name", "yarn_item"],
 	)
 	for ipd in ipds:
-		if frappe.db.exists("IPD Yarn Ratio", {
+		if frappe.db.exists('SD YRP IPD Yarn Ratio', {
 			"parent": ipd.name,
-			"parenttype": "Item Production Detail",
+			"parenttype": 'YRP Item Production Detail',
 			"parentfield": "yarn_ratio_details",
 		}):
 			continue
-		row = frappe.new_doc("IPD Yarn Ratio")
+		row = frappe.new_doc('SD YRP IPD Yarn Ratio')
 		row.parent = ipd.name
-		row.parenttype = "Item Production Detail"
+		row.parenttype = 'YRP Item Production Detail'
 		row.parentfield = "yarn_ratio_details"
 		row.idx = 1
 		row.yarn_item = ipd.yarn_item

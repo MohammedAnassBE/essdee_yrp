@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
-from yrp.yrp.doctype.work_order.work_order import get_variant_attributes
+from yrp.yrp.doctype.yrp_work_order.yrp_work_order import get_variant_attributes
 
 from essdee_yrp.hooks import override_doctype_class
 from essdee_yrp.overrides.work_order import EssdeeWorkOrder
@@ -11,7 +11,7 @@ from essdee_yrp.overrides.work_order import EssdeeWorkOrder
 class TestEssdeeWorkOrderProcessCost(FrappeTestCase):
 	def test_work_order_controller_is_overridden(self):
 		self.assertEqual(
-			override_doctype_class["Work Order"],
+			override_doctype_class['YRP Work Order'],
 			"essdee_yrp.overrides.work_order.EssdeeWorkOrder",
 		)
 
@@ -126,7 +126,7 @@ class TestEssdeeWorkOrderProcessCost(FrappeTestCase):
 				return_value=_ipd(),
 			),
 			patch(
-				"yrp.yrp.doctype.work_order.work_order.get_variant_attributes",
+				"yrp.yrp.doctype.yrp_work_order.yrp_work_order.get_variant_attributes",
 				side_effect=lambda item_variant: attributes[item_variant],
 			),
 		):
@@ -138,13 +138,13 @@ class TestEssdeeWorkOrderProcessCost(FrappeTestCase):
 		self.assertEqual(by_item["SLEEVE-BLACK-M"].cost, 1)
 
 	def test_pc_25_oracle_conserves_colour_value_with_panel_type_split(self):
-		if not frappe.db.exists("Work Order", "YRP-WO-2026-00058"):
+		if not frappe.db.exists('YRP Work Order', "YRP-WO-2026-00058"):
 			self.skipTest("YRP-WO-2026-00058 is unavailable")
-		if not frappe.db.exists("Process Cost", "YRP-PC-00025"):
+		if not frappe.db.exists('YRP Process Cost', "YRP-PC-00025"):
 			self.skipTest("YRP-PC-00025 is unavailable")
 
-		work_order = frappe.get_doc("Work Order", "YRP-WO-2026-00058")
-		process_cost = frappe.get_doc("Process Cost", "YRP-PC-00025")
+		work_order = frappe.get_doc('YRP Work Order', "YRP-WO-2026-00058")
+		process_cost = frappe.get_doc('YRP Process Cost', "YRP-PC-00025")
 		self.assertIsInstance(work_order, EssdeeWorkOrder)
 		work_order.apply_receivable_process_costs(process_cost)
 
@@ -169,7 +169,7 @@ class TestEssdeeWorkOrderProcessCost(FrappeTestCase):
 
 
 def _work_order():
-	work_order = EssdeeWorkOrder({"doctype": "Work Order", "production_detail": "TEST-IPD"})
+	work_order = EssdeeWorkOrder({"doctype": 'YRP Work Order', "production_detail": "TEST-IPD"})
 	_add_garment_rows(work_order, colour="Black", size="M", quantity=10)
 	return work_order
 

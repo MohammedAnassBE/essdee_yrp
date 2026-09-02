@@ -7,7 +7,7 @@ import urllib.parse
 import frappe
 from frappe import _
 from frappe.utils import cint, flt
-from yrp.yrp.doctype.purchase_invoice.purchase_invoice import _get_tax_rate
+from yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice import _get_tax_rate
 
 from essdee_yrp.erp import (
 	get_erp_response_message,
@@ -32,7 +32,7 @@ def build_erp_invoice_payload(invoice):
 	data = invoice.as_dict(convert_dates_to_str=True)
 	rows = (
 		invoice.get("essdee_items") or []
-		if invoice.against == "Work Order"
+		if invoice.against == 'YRP Work Order'
 		else invoice.get("items") or []
 	)
 	data["items"] = [_erp_item(row) for row in rows]
@@ -92,7 +92,7 @@ def fetch_expense_accounts(items, *, raise_on_error=False):
 
 @frappe.whitelist()
 def fetch_items_expense_head(items):
-	frappe.has_permission("Purchase Invoice", "create", throw=True)
+	frappe.has_permission('YRP Purchase Invoice', "create", throw=True)
 	items = frappe.parse_json(items) if isinstance(items, str) else items
 	if not isinstance(items, list):
 		frappe.throw(_("Purchase Invoice Items must be a list."))
@@ -129,8 +129,8 @@ def create_erp_invoice(invoice):
 def submit_erp_invoice(name):
 	if not is_purchase_invoice_sync_active():
 		frappe.throw(_("Purchase Invoice ERP Sync is not enabled in MRP Settings."))
-	invoice = frappe.get_doc("Purchase Invoice", name)
-	frappe.has_permission("Purchase Invoice", "submit", doc=invoice, throw=True)
+	invoice = frappe.get_doc('YRP Purchase Invoice', name)
+	frappe.has_permission('YRP Purchase Invoice', "submit", doc=invoice, throw=True)
 	if invoice.docstatus == 0:
 		frappe.throw(_("Document is not submitted."))
 	if invoice.docstatus == 2:
@@ -149,7 +149,7 @@ def submit_erp_invoice(name):
 	)
 	_apply_erp_result(invoice, message)
 	frappe.db.set_value(
-		"Purchase Invoice",
+		'YRP Purchase Invoice',
 		invoice.name,
 		{
 			"erp_inv_name": invoice.erp_inv_name,
@@ -182,8 +182,8 @@ def cancel_erp_invoice(invoice):
 
 @frappe.whitelist()
 def get_erp_inv_link(name):
-	invoice = frappe.get_doc("Purchase Invoice", name)
-	frappe.has_permission("Purchase Invoice", "read", doc=invoice, throw=True)
+	invoice = frappe.get_doc('YRP Purchase Invoice', name)
+	frappe.has_permission('YRP Purchase Invoice', "read", doc=invoice, throw=True)
 	if invoice.docstatus != 1 or not invoice.erp_inv_name:
 		frappe.throw(_("ERP Purchase Invoice is not available."))
 	return (
@@ -200,7 +200,7 @@ def close_bill_tracking_from_erp(name, purchase_invoice, remarks=None):
 	Tracking link pointed at the local YRP Purchase Invoice; the ERP name is
 	stored on that local invoice instead.
 	"""
-	bill = frappe.get_doc("Bill Tracking", name)
+	bill = frappe.get_doc('YRP Bill Tracking', name)
 	bill.check_permission("write")
 	local_invoice = _local_invoice_for_erp_callback(name, purchase_invoice)
 	if bill.form_status == "Closed":
@@ -225,7 +225,7 @@ def revert_bill_tracking_from_erp(
 	"""Adapt the ERP cancellation callback without clobbering a replacement PI."""
 	if pi_field not in {"purchase_invoice", "mrp_purchase_invoice"}:
 		frappe.throw(_("Invalid Purchase Invoice field: {0}.").format(pi_field))
-	bill = frappe.get_doc("Bill Tracking", name)
+	bill = frappe.get_doc('YRP Bill Tracking', name)
 	bill.check_permission("write")
 	local_invoice = (
 		expected_pi_name
@@ -234,14 +234,14 @@ def revert_bill_tracking_from_erp(
 	)
 	if not bill.purchase_invoice and bill.form_status != "Closed":
 		return
-	from yrp.yrp.doctype.bill_tracking.bill_tracking import revert_purchase_invoice_link
+	from yrp.yrp.doctype.yrp_bill_tracking.yrp_bill_tracking import revert_purchase_invoice_link
 
 	revert_purchase_invoice_link(name, local_invoice, origin=origin or "ERP-cancel")
 
 
 def _local_invoice_for_erp_callback(bill_tracking, erp_invoice):
 	local_invoice = frappe.db.get_value(
-		"Purchase Invoice",
+		'YRP Purchase Invoice',
 		{
 			"bill_tracking": bill_tracking,
 			"erp_inv_name": erp_invoice,
@@ -254,7 +254,7 @@ def _local_invoice_for_erp_callback(bill_tracking, erp_invoice):
 		# persisted erp_inv_name yet. The already-saved active draft is still the
 		# authoritative owner of this Bill Tracking row.
 		local_invoice = frappe.db.get_value(
-			"Purchase Invoice",
+			'YRP Purchase Invoice',
 			{"bill_tracking": bill_tracking, "docstatus": ["!=", 2]},
 			"name",
 			order_by="modified desc",

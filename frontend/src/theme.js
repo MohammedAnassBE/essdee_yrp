@@ -1,5 +1,5 @@
 /**
- * Essdee YRP PrimeVue preset — teal identity / cool slate surfaces.
+ * SD YRP PrimeVue preset — teal identity / cool slate surfaces.
  *
  * Built on Aura. The `primary` ramp is the Bright Workshop teal anchored on
  * #0E8C7F (--esd-accent), so every Button CTA, status Tag, and highlight

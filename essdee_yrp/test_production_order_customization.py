@@ -15,12 +15,12 @@ class TestProductionOrderCustomization(FrappeTestCase):
 		self.assertNotIn("frm.disable_save()", form_source)
 
 	def test_production_api_fields_are_essdee_custom_fields(self):
-		meta = frappe.get_meta("Production Order", cached=False)
+		meta = frappe.get_meta('YRP Production Order', cached=False)
 		expected = {
 			"comment_log": {"fieldtype": "Long Text", "read_only": 1},
 			"date_change_history": {
 				"fieldtype": "Table",
-				"options": "Production Order Date Change",
+				"options": 'SD YRP Production Order Date Change',
 				"read_only": 1,
 				"allow_on_submit": 1,
 			},
@@ -33,13 +33,13 @@ class TestProductionOrderCustomization(FrappeTestCase):
 			},
 			"item": {
 				"fieldtype": "Link",
-				"options": "Item",
+				"options": 'YRP Item',
 				"reqd": 1,
 				"in_list_view": 1,
 			},
 			"lot_price_overrides": {
 				"fieldtype": "Table",
-				"options": "PPO Lot Price Detail",
+				"options": 'SD YRP PPO Lot Price Detail',
 				"hidden": 1,
 				"allow_on_submit": 1,
 			},
@@ -65,7 +65,7 @@ class TestProductionOrderCustomization(FrappeTestCase):
 			},
 			"quantity_transfer_history": {
 				"fieldtype": "Table",
-				"options": "PPO Quantity Transfer History",
+				"options": 'SD YRP PPO Quantity Transfer History',
 				"read_only": 1,
 				"no_copy": 1,
 				"allow_on_submit": 1,
@@ -98,7 +98,7 @@ class TestProductionOrderCustomization(FrappeTestCase):
 			},
 			"transferred_to_ppo": {
 				"fieldtype": "Link",
-				"options": "Production Order",
+				"options": 'YRP Production Order',
 				"read_only": 1,
 				"no_copy": 1,
 				"allow_on_submit": 1,
@@ -115,7 +115,7 @@ class TestProductionOrderCustomization(FrappeTestCase):
 					frappe.db.exists(
 						"Custom Field",
 						{
-							"dt": "Production Order",
+							"dt": 'YRP Production Order',
 							"fieldname": fieldname,
 							"module": "Essdee YRP",
 						},
@@ -123,7 +123,7 @@ class TestProductionOrderCustomization(FrappeTestCase):
 				)
 
 	def test_naming_series_matches_production_api(self):
-		field = frappe.get_meta("Production Order", cached=False).get_field(
+		field = frappe.get_meta('YRP Production Order', cached=False).get_field(
 			"naming_series"
 		)
 		self.assertEqual(field.fieldtype, "Select")

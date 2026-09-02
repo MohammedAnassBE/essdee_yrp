@@ -41,25 +41,25 @@ class TestReviewRegressionContracts(IntegrationTestCase):
 
 	def test_item_link_pickers_enforce_legal_subsets(self):
 		source = _read("essdee_yrp", "frontend/src/config/fields/item.js")
-		self.assertIn('searchLink("Item Group", q, { is_group: 0 })', source)
-		self.assertIn('searchLink("UOM", q, { secondary_only: 0 })', source)
+		self.assertIn('searchLink("YRP Item Group", q, { is_group: 0 })', source)
+		self.assertIn('searchLink("YRP UOM", q, { secondary_only: 0 })', source)
 
 	def test_guarded_item_bulk_fields_use_controller_save(self):
 		source = _read("essdee_yrp", "essdee_yrp/api/bulk_edit.py")
-		self.assertIn('"Item": {"allow_negative_stock", "default_unit_of_measure"}', source)
+		self.assertIn("'YRP Item': {\"allow_negative_stock\", \"default_unit_of_measure\"}", source)
 		self.assertIn("CONTROLLER_VALIDATED_PARENT_FIELDS.get(doctype, set())", source)
 		self.assertIn("doc.save()", source)
 
 	def test_attribute_value_update_rejects_cross_attribute_reuse_and_handles_race(self):
 		source = _read("essdee_yrp", "essdee_yrp/api/item_attribute.py")
-		self.assertIn('"Item Attribute Value", v, "attribute_name"', source)
+		self.assertIn("'YRP Item Attribute Value', v, \"attribute_name\"", source)
 		self.assertIn("except frappe.DuplicateEntryError", source)
 		self.assertIn("for_update=True", source)
 
 	def test_lot_onload_is_read_only(self):
 		source = _read(
 			"essdee_yrp",
-			"essdee_yrp/essdee_yrp/doctype/lot/lot.py",
+			"essdee_yrp/essdee_yrp/doctype/sd_yrp_lot/sd_yrp_lot.py",
 		)
 		onload = source[source.index("\tdef onload(self):") : source.index("\ndef delete_ppo_lot_qty")]
 		self.assertNotIn("db_set(", onload)
@@ -97,7 +97,7 @@ class TestReviewRegressionContracts(IntegrationTestCase):
 
 	def test_attribute_mapping_pencil_requires_mapping_write_permission(self):
 		source = _read("essdee_yrp", "frontend/src/views/dynamic/ItemAttributeListView.vue")
-		self.assertIn("canWrite('Item Item Attribute Mapping')", source)
+		self.assertIn("canWrite('YRP Item Item Attribute Mapping')", source)
 		self.assertIn("const { canWrite } = usePermissions()", source)
 
 	def test_bulk_submit_cancel_carries_loaded_modified(self):
@@ -112,7 +112,7 @@ class TestReviewRegressionContracts(IntegrationTestCase):
 		self.assertGreaterEqual(source.count("canWrite(doctype.value)"), 6)
 		self.assertIn('"grn-complete-transfer": "complete_transfer"', source)
 		self.assertIn("make_grn_completion", source)
-		self.assertIn('canCreate("Stock Entry")', source)
+		self.assertIn('canCreate("YRP Stock Entry")', source)
 
 	def test_ewaybill_date_prefill_uses_local_calendar_parts(self):
 		source = _read("essdee_yrp", "frontend/src/views/dynamic/EWaybillGenerateModal.vue")

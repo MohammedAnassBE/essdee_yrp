@@ -21,17 +21,17 @@ const linkSearchHandlers = {
 			: null,
 	// Desk parity: only submitted DCs of the selected Work Order.
 	delivery_challan: (form) =>
-		(q) => searchLink("Delivery Challan", q, {
+		(q) => searchLink("YRP Delivery Challan", q, {
 			docstatus: 1,
-			work_order: form.against === "Work Order" ? form.against_id || "" : "",
+			work_order: form.against === "YRP Work Order" ? form.against_id || "" : "",
 		}),
 	from_warehouse: (form) =>
 		form.supplier
-			? (q) => searchLink("Warehouse", q, { supplier: form.supplier })
+			? (q) => searchLink("YRP Warehouse", q, { supplier: form.supplier })
 			: null,
 	to_warehouse: (form) =>
 		form.delivery_location
-			? (q) => searchLink("Warehouse", q, { supplier: form.delivery_location })
+			? (q) => searchLink("YRP Warehouse", q, { supplier: form.delivery_location })
 			: null,
 }
 

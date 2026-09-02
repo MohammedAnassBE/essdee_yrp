@@ -15,7 +15,7 @@
 				<label class="field-label">Transporter</label>
 				<LinkField
 					v-model="form.transporter"
-					target-doctype="Supplier"
+					target-doctype="YRP Supplier"
 					:filters="{ is_transporter: 1 }"
 					placeholder="Search Transporter…"
 					@item-select="onTransporterSelect"
@@ -228,12 +228,12 @@ const generateLabel = computed(() =>
 )
 
 // On transporter select, auto-fill GST Transporter ID from the chosen Supplier
-// (Desk: frappe.db.get_value("Supplier", …, "gst_transporter_id")).
+// (Desk: frappe.db.get_value("YRP Supplier", …, "gst_transporter_id")).
 async function onTransporterSelect(e) {
 	const name = e?.value || form.transporter
 	if (!name) return
 	try {
-		const supplier = await getDoc("Supplier", name)
+		const supplier = await getDoc("YRP Supplier", name)
 		if (supplier?.gst_transporter_id) {
 			form.gst_transporter_id = supplier.gst_transporter_id
 		}

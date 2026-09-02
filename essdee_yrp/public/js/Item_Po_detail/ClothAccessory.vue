@@ -96,7 +96,7 @@ function createInput(attr, index, value, is_header){
         read_only: is_readonly
     }
     if (fieldtype == 'Link' && attr != 'Dia'){
-        df['options'] = 'Item Attribute Value'
+        df['options'] = 'YRP Item Attribute Value'
         df['get_query'] = function(){
             return {
                 query:'essdee_yrp.ipd_ui.get_attribute_detail_values',
@@ -107,7 +107,7 @@ function createInput(attr, index, value, is_header){
         }
     }
     else{
-        df['options'] = 'Item Attribute Value'
+        df['options'] = 'YRP Item Attribute Value'
         df['get_query'] = function(){
             return {
                 filters: {

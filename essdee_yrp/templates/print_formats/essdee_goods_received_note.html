@@ -11,7 +11,7 @@
 			<div style="margin-top: 8px">
 				<small>Received from</small><br>
 				<strong>
-					{{ frappe.db.get_value("Supplier", doc.supplier, "supplier_name") or doc.supplier or "—" }}
+					{{ frappe.db.get_value("YRP Supplier", doc.supplier, "supplier_name") or doc.supplier or "—" }}
 				</strong><br>
 				{{ get_supplier_address_display(doc.supplier) or "" }}
 			</div>

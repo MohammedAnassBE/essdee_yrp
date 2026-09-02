@@ -1,4 +1,4 @@
-frappe.ui.form.on("Goods Received Note", {
+frappe.ui.form.on("YRP Goods Received Note", {
 	refresh(frm) {
 		exclude_grn_cut_panel_movement_from_cancel_all(frm);
 		configure_bundle_return(frm);
@@ -14,7 +14,7 @@ function configure_calculate_button(frm) {
 	if (
 		frm.is_new()
 		|| frm.doc.docstatus !== 0
-		|| frm.doc.against !== "Work Order"
+		|| frm.doc.against !== "YRP Work Order"
 		|| !frm.doc.against_id
 		|| frm.doc.is_return
 		|| frm.doc.is_rework
@@ -105,7 +105,7 @@ function render_calculate_dialog(frm, context) {
 			{
 				fieldname: "received_type",
 				fieldtype: "Link",
-				options: "Received Type",
+				options: "YRP Received Type",
 				label: __("Received Type"),
 				default: context.default_received_type || "",
 				reqd: 1,
@@ -201,7 +201,7 @@ function render_calculate_dialog(frm, context) {
 function exclude_grn_cut_panel_movement_from_cancel_all(frm) {
 	if (frm.doc.docstatus !== 1 || !frm.doc.cut_panel_movement) return;
 	const ignored = new Set(frm.ignore_doctypes_on_cancel_all || []);
-	ignored.add("Cut Panel Movement");
+	ignored.add("SD YRP Cut Panel Movement");
 	frm.ignore_doctypes_on_cancel_all = [...ignored];
 }
 

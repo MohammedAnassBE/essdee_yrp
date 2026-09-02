@@ -19,7 +19,7 @@
  *
  * PERSISTENCE: per-user and SERVER-SIDE (not localStorage). The visible-column
  * selection and field-keyed width map for each (host-doctype, child-table) are
- * stored in the "Essdee Child Table View Setting" DocType via the whitelisted
+ * stored in the "SD YRP Essdee Child Table View Setting" DocType via the whitelisted
  * `essdee_yrp.api.child_table_view` API, scoped to the session user. A
  * user sets columns once and they persist across server restarts AND across
  * browsers/devices. The server already scopes by session user, so the in-memory

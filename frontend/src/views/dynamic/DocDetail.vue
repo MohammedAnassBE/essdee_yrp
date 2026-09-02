@@ -1366,7 +1366,7 @@
 							<LotFabricViews
 								:readonly="true"
 								:initial-data="lotOnload.fabric_program_details ?? []"
-								:can-rebuild="canWrite('Lot')"
+								:can-rebuild="canWrite('SD YRP Lot')"
 								:lot-name="doc?.name || ''"
 								@rebuilt="onFabricRebuilt"
 							/>
@@ -1717,7 +1717,7 @@ const dirtyArmed = ref(false)
 
 const registry = computed(() => getRegistryByRoute(props.docRoute))
 const doctype = computed(() => registry.value?.doctype || "")
-const isWorkOrder = computed(() => doctype.value === "Work Order")
+const isWorkOrder = computed(() => doctype.value === "YRP Work Order")
 // Process/Lot-aware Work Order choices. The backend returns exact Item/IPD
 // pairs; this state drives both auto-fill and the Item autocomplete so the
 // create/edit shells cannot drift from Desk or server validation.
@@ -1726,10 +1726,10 @@ const workOrderItemOptions = ref([])
 const workOrderSelectionLoading = ref(false)
 const workOrderProcessIsCloth = ref(false)
 let workOrderSelectionRequest = 0
-const isDeliveryChallan = computed(() => doctype.value === "Delivery Challan")
-const isGoodsReceivedNote = computed(() => doctype.value === "Goods Received Note")
-const isItem = computed(() => doctype.value === "Item")
-const isLot = computed(() => doctype.value === "Lot")
+const isDeliveryChallan = computed(() => doctype.value === "YRP Delivery Challan")
+const isGoodsReceivedNote = computed(() => doctype.value === "YRP Goods Received Note")
+const isItem = computed(() => doctype.value === "YRP Item")
+const isLot = computed(() => doctype.value === "SD YRP Lot")
 // A transferred Lot's order editors are LOCKED (Desk parity — lot.js hides the
 // LotOrder edit/delete icons and CutPlanItems goes read-only once is_transferred;
 // downstream Cutting Plans reference the rebuilt items/lot_order_details, so a
@@ -1885,17 +1885,17 @@ const forwardActions = computed(() => {
 		? `This Work Order is ${d.open_status} — reopen to create deliveries`
 		: ""
 	const out = []
-	if (isWorkOrder.value && canCreate("Delivery Challan"))
+	if (isWorkOrder.value && canCreate("YRP Delivery Challan"))
 		out.push({ key: "wo-dc", label: "Create Delivery Challan", icon: "pi pi-send", handler: onCreateDcFromWo, disabled: woGated, tooltip: woTip })
-	if (isWorkOrder.value && canCreate("Goods Received Note"))
+	if (isWorkOrder.value && canCreate("YRP Goods Received Note"))
 		out.push({ key: "wo-grn", label: "Create Goods Received Note", icon: "pi pi-plus-circle", handler: onCreateGrnFromWo, disabled: woGated, tooltip: woTip })
-	if (isDeliveryChallan.value && canCreate("Goods Received Note"))
+	if (isDeliveryChallan.value && canCreate("YRP Goods Received Note"))
 		out.push({ key: "dc-grn", label: "Create Goods Received Note", icon: "pi pi-plus-circle", handler: onCreateGrnFromDc, disabled: false, tooltip: "" })
 	if (
 		isGoodsReceivedNote.value
 		&& Number(d.is_internal_unit)
 		&& !Number(d.transfer_complete)
-		&& canCreate("Stock Entry")
+		&& canCreate("YRP Stock Entry")
 	) {
 		out.push({
 			key: "grn-complete-transfer",
@@ -1991,7 +1991,7 @@ async function loadWorkOrderClosePermission() {
 	}
 	try {
 		const result = await callMethod(
-			"yrp.yrp.doctype.work_order.work_order.get_close_permission",
+			"yrp.yrp.doctype.yrp_work_order.yrp_work_order.get_close_permission",
 		)
 		workOrderClosePermission.value = {
 			approver_role: result?.approver_role || "",
@@ -2345,7 +2345,7 @@ const SYSTEM_FIELDS = new Set([
 ])
 const META_HIDDEN_FIELDTYPES = new Set([
 	"Section Break", "Column Break", "Tab Break", "HTML", "Heading", "Button",
-	"Fold", "Image", "Geolocation", "Signature", "Table", "Table MultiSelect",
+	"Fold", "Image", "Geolocation", "SD YRP Signature", "Table", "Table MultiSelect",
 	// Internal data blobs — never useful in a read-only Details view (e.g. Work
 	// Order's *_json fields). Hidden everywhere so no DocType leaks them.
 	"JSON", "Code",
@@ -2375,8 +2375,8 @@ const CHILD_TABLE_EXCLUDE = new Set([
 // fields round-trip. Each entry = one pivot section in the form.
 // Every OTHER doctype is untouched (flat grid + empty grouped JSON, as before).
 const STOCK_GROUPED_MAP = {
-	"Stock Entry": [{
-		childField: "items", groupedField: "item_details", ungroupKey: "Stock Entry",
+	"YRP Stock Entry": [{
+		childField: "items", groupedField: "item_details", ungroupKey: "YRP Stock Entry",
 		label: "Items", valueFields: ["rate", "secondary_qty", "secondary_uom"],
 		entryFields: ["allow_zero_valuation_rate", "make_qty_zero"],
 		// rate is editable PER cell (matches Desk Stock/StockEntry/StockEntry.vue
@@ -2385,8 +2385,8 @@ const STOCK_GROUPED_MAP = {
 		showAllowZeroRate: true,
 		showSecondaryToggle: true,
 	}],
-	"Delivery Challan": [{
-		childField: "items", groupedField: "item_details", ungroupKey: "Delivery Challan",
+	"YRP Delivery Challan": [{
+		childField: "items", groupedField: "item_details", ungroupKey: "YRP Delivery Challan",
 		label: "Items",
 		valueFields: [
 			"rate", "valuation_rate", "pending_quantity", "delivered_quantity",
@@ -2400,8 +2400,8 @@ const STOCK_GROUPED_MAP = {
 		// delete/edit (preference 2026-05-29).
 		lockedItems: true,
 	}],
-	"Goods Received Note": [{
-		childField: "items", groupedField: "item_details", ungroupKey: "Goods Received Note",
+	"YRP Goods Received Note": [{
+		childField: "items", groupedField: "item_details", ungroupKey: "YRP Goods Received Note",
 		label: "Items",
 		valueFields: [
 			"rate", "pending_quantity", "max_receivable_quantity", "stock_qty", "amount",
@@ -2414,10 +2414,10 @@ const STOCK_GROUPED_MAP = {
 		],
 		showSecondaryToggle: true,
 	}],
-	"Work Order": [
+	"YRP Work Order": [
 		{
 			childField: "deliverables", groupedField: "deliverable_details",
-			ungroupKey: "Work Order Deliverables", label: "Deliverables",
+			ungroupKey: "YRP Work Order Deliverables", label: "Deliverables",
 			lockedItems: true,
 			editable: false,
 			aggregateDisplay: true,
@@ -2433,7 +2433,7 @@ const STOCK_GROUPED_MAP = {
 		},
 		{
 			childField: "receivables", groupedField: "receivable_details",
-			ungroupKey: "Work Order Receivables", label: "Receivables",
+			ungroupKey: "YRP Work Order Receivables", label: "Receivables",
 			lockedItems: true,
 			editable: false,
 			aggregateDisplay: true,
@@ -2452,10 +2452,10 @@ const STOCK_GROUPED_MAP = {
 	// onload/sync_vue_item_details contract — reuse the WO pivot configs so
 	// /web edits flow the grouped path (a flat-grid edit would be clobbered by
 	// the stored details JSON on the next validate).
-	"Work Order Correction": [
+	"YRP Work Order Correction": [
 		{
 			childField: "deliverables", groupedField: "deliverable_details",
-			ungroupKey: "Work Order Deliverables", label: "Deliverables",
+			ungroupKey: "YRP Work Order Deliverables", label: "Deliverables",
 			cellFields: [{ name: "pending_quantity", label: "Pending" }],
 			valueFields: ["pending_quantity", "stock_update", "valuation_rate"],
 			entryFields: [
@@ -2466,7 +2466,7 @@ const STOCK_GROUPED_MAP = {
 		},
 		{
 			childField: "receivables", groupedField: "receivable_details",
-			ungroupKey: "Work Order Receivables", label: "Receivables",
+			ungroupKey: "YRP Work Order Receivables", label: "Receivables",
 			cellFields: [{ name: "cost", label: "Cost" }, { name: "pending_quantity", label: "Pending" }],
 			valueFields: ["cost", "pending_quantity", "total_cost"],
 			entryFields: [
@@ -2489,14 +2489,14 @@ const useStockPivot = computed(() => isFormMode.value && stockPivots.value.lengt
 // rebuilds the flat rows); the flat grid is never edited directly. Value/entry
 // fields mirror each voucher's own pivot mapping (deliverables vs receivables).
 const CORRECTION_CONFIG = {
-	"Delivery Challan": {
-		valueFields: STOCK_GROUPED_MAP["Delivery Challan"][0].valueFields,
-		entryFields: STOCK_GROUPED_MAP["Delivery Challan"][0].entryFields,
+	"YRP Delivery Challan": {
+		valueFields: STOCK_GROUPED_MAP["YRP Delivery Challan"][0].valueFields,
+		entryFields: STOCK_GROUPED_MAP["YRP Delivery Challan"][0].entryFields,
 		cellFields: [{ name: "pending_quantity", label: "Pending" }],
 	},
-	"Goods Received Note": {
-		valueFields: STOCK_GROUPED_MAP["Goods Received Note"][0].valueFields,
-		entryFields: STOCK_GROUPED_MAP["Goods Received Note"][0].entryFields,
+	"YRP Goods Received Note": {
+		valueFields: STOCK_GROUPED_MAP["YRP Goods Received Note"][0].valueFields,
+		entryFields: STOCK_GROUPED_MAP["YRP Goods Received Note"][0].entryFields,
 		cellFields: [
 			{ name: "pending_quantity", label: "Pending" },
 			{ name: "max_receivable_quantity", label: "Allowed" },
@@ -2524,33 +2524,33 @@ const viewCorrectionBlocks = ref([])
 // value). The route matches the registry slug — DynamicListPage reads
 // route.query.filters and seeds them as the base filter on first fetch.
 const CONNECTIONS_MAP = {
-	"Work Order": [
+	"YRP Work Order": [
 		{
-			doctype: "Delivery Challan",
+			doctype: "YRP Delivery Challan",
 			route: "/delivery-challan",
 			filters: (name) => [["work_order", "=", name]],
 		},
 		{
-			doctype: "Goods Received Note",
+			doctype: "YRP Goods Received Note",
 			route: "/goods-received-note",
 			filters: (name) => [
-				["against", "=", "Work Order"],
+				["against", "=", "YRP Work Order"],
 				["against_id", "=", name],
 			],
 		},
 		// Extra deliverables/receivables raised against the WO (2026-07-10):
 		// surfaced beside DC/GRN so corrections are one click from the WO.
 		{
-			doctype: "Work Order Correction",
+			doctype: "YRP Work Order Correction",
 			route: "/work-order-correction",
 			filters: (name) => [["work_order", "=", name]],
 		},
 	],
 	// Q9: a Delivery Challan's downstream GRNs (GRN.delivery_challan Link → DC),
 	// so the chain no longer dead-ends at the DC.
-	"Delivery Challan": [
+	"YRP Delivery Challan": [
 		{
-			doctype: "Goods Received Note",
+			doctype: "YRP Goods Received Note",
 			route: "/goods-received-note",
 			filters: (name) => [["delivery_challan", "=", name]],
 		},
@@ -2565,7 +2565,7 @@ const connections = ref([])
 // transfer section is hidden from the Details cards + form (hideViewFields /
 // hideFormFields in the DC/GRN field configs) and rendered instead as compact
 // status badges at the TOP of the Details tab.
-const TRANSFER_BADGE_DOCTYPES = new Set(["Delivery Challan", "Goods Received Note"])
+const TRANSFER_BADGE_DOCTYPES = new Set(["YRP Delivery Challan", "YRP Goods Received Note"])
 const transferBadges = computed(() => {
 	if (!doc.value || !TRANSFER_BADGE_DOCTYPES.has(doctype.value)) return []
 	if (!Number(doc.value.is_internal_unit)) return []
@@ -2627,12 +2627,12 @@ function navigateConnection(c) {
 // R3b: Goods Received Note against a Work Order uses the received-type-SPLIT
 // editor (GRNReceivedTypeEditor) instead of the generic size-pivot — mirrors the
 // Desk's useReceivedTypeGrnEditor gate (editorType === goods_received_note &&
-// against === "Work Order"). GRN-against-Purchase-Order (or a GRN with no source
+// against === "YRP Work Order"). GRN-against-Purchase-Order (or a GRN with no source
 // yet, e.g. create mode where doc.against is unset) keeps the generic pivot.
 // `against` comes from the loaded doc; both editors share the gridRefs surface so
 // hydratePivotsForEdit + buildPayload work for either.
 const useGrnSplit = computed(
-	() => doctype.value === "Goods Received Note" && (form.against || doc.value?.against) === "Work Order",
+	() => doctype.value === "YRP Goods Received Note" && (form.against || doc.value?.against) === "YRP Work Order",
 )
 
 // Per-section refs to the mounted grid editors (keyed by childField), so onSave
@@ -2743,7 +2743,7 @@ const lotFabricHydrated = ref(false)
 const lotPoEnabled = ref(null)
 async function loadLotPoEnabled() {
 	try {
-		const r = await callMethod("essdee_yrp.essdee_yrp.doctype.lot.lot.check_enabled_po", {})
+		const r = await callMethod("essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot.check_enabled_po", {})
 		lotPoEnabled.value = !!r
 	} catch (_) {
 		lotPoEnabled.value = null
@@ -2808,7 +2808,7 @@ async function reloadLotItemsEditor() {
 	}
 	try {
 		const structure = await callMethod(
-			"essdee_yrp.essdee_yrp.doctype.lot.lot.get_item_details",
+			"essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot.get_item_details",
 			{
 				item_name: form.item,
 				uom: form.uom || undefined,
@@ -2838,7 +2838,7 @@ function onCalculateOrderItems() {
 			acting.value = "calc-order"
 			try {
 				await callMethod(
-					"essdee_yrp.essdee_yrp.doctype.lot.lot.update_order_details",
+					"essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot.update_order_details",
 					{ doc_name: doc.value.name },
 				)
 				toast.success("Order items calculated")
@@ -2868,7 +2868,7 @@ function onCalculateBom() {
 			acting.value = "calc-bom"
 			try {
 				await callMethod(
-					"essdee_yrp.essdee_yrp.doctype.lot.lot.calculate_bom",
+					"essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot.calculate_bom",
 					{ lot_name: doc.value.name },
 				)
 				toast.success("BOM calculated")
@@ -3240,7 +3240,7 @@ const editRenderList = computed(() => {
 
 // Columns for the read-only BOM Summary form card — meta-driven (Lot BOM child
 // doctype), same chooser universe as the view tab.
-const bomSummaryColumns = computed(() => (isLot.value ? childColumns([], "Lot BOM") : []))
+const bomSummaryColumns = computed(() => (isLot.value ? childColumns([], "SD YRP Lot BOM") : []))
 
 // Evaluate a Frappe depends_on / mandatory_depends_on expression against a parent
 // state object (`parent`, default the live `form` model). `eval:<js>` runs the JS
@@ -3546,13 +3546,13 @@ async function applyCreateFormQuery() {
 	// flip, not on the initial seed.)
 	await nextTick()
 	const dt = doctype.value
-	if (dt === "Delivery Challan" && form.work_order) {
+	if (dt === "YRP Delivery Challan" && form.work_order) {
 		await onFieldChanged("work_order")
-	} else if (dt === "Work Order" && form.process_name && form.lot) {
+	} else if (dt === "YRP Work Order" && form.process_name && form.lot) {
 		await loadWorkOrderSelection({ preserveItem: true })
-	} else if (dt === "Goods Received Note" && form.against_id) {
+	} else if (dt === "YRP Goods Received Note" && form.against_id) {
 		await onFieldChanged("against_id")
-	} else if (dt === "Inspection Entry" && form.against_id) {
+	} else if (dt === "YRP Inspection Entry" && form.against_id) {
 		await onFieldChanged("against_id")
 	}
 }
@@ -3856,7 +3856,7 @@ function toggleColChooser(fieldname, event) {
 // readonly) so the same objects drive the edit grid without a second pass.
 const CHILD_COL_LAYOUT_TYPES = new Set([
 	"Section Break", "Column Break", "Tab Break", "HTML", "Heading", "Button",
-	"Fold", "Image", "Geolocation", "Signature", "Table", "Table MultiSelect",
+	"Fold", "Image", "Geolocation", "SD YRP Signature", "Table", "Table MultiSelect",
 	// Large/structured text fieldtypes: never editable in the flat v1 grid and
 	// pointless as read-only grid columns (they'd surface a wall of code/markup in
 	// a narrow cell). Exclude them from the child-column universe entirely.
@@ -4034,11 +4034,11 @@ async function runDocAutofill(fieldname) {
 	// production_detail fills the UOM/stage header fields (get_isfinal_uom,
 	// note the response key is dependent_attr_mapping) then reloads the
 	// order-items editor via get_item_details; clearing resets everything.
-	if (dt === "Lot" && fieldname === "production_order") {
+	if (dt === "SD YRP Lot" && fieldname === "production_order") {
 		if (form.production_order) {
 			try {
 				const r = await callMethod("frappe.client.get_value", {
-					doctype: "Production Order",
+					doctype: "YRP Production Order",
 					filters: form.production_order,
 					fieldname: "item",
 				})
@@ -4051,7 +4051,7 @@ async function runDocAutofill(fieldname) {
 		}
 		return
 	}
-	if (dt === "Lot" && fieldname === "production_detail") {
+	if (dt === "SD YRP Lot" && fieldname === "production_detail") {
 		const LOT_IPD_FIELDS = [
 			"uom", "pack_in_stage", "packing_uom", "pack_out_stage",
 			"dependent_attribute_mapping", "tech_pack_version", "pattern_version",
@@ -4064,7 +4064,7 @@ async function runDocAutofill(fieldname) {
 		}
 		try {
 			const r = await callMethod(
-				"essdee_yrp.essdee_yrp.doctype.lot.lot.get_isfinal_uom",
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot.get_isfinal_uom",
 				{ item_production_detail: form.production_detail, get_pack_stage: 1 },
 			)
 			// When the IPD has no dependent-attribute mapping the server returns
@@ -4087,7 +4087,7 @@ async function runDocAutofill(fieldname) {
 		await reloadLotItemsEditor()
 		return
 	}
-	if (dt === "Lot" && fieldname === "item" && !form.item) {
+	if (dt === "SD YRP Lot" && fieldname === "item" && !form.item) {
 		lotItemsGrid.value?.loadData?.([])
 		return
 	}
@@ -4096,7 +4096,7 @@ async function runDocAutofill(fieldname) {
 	// the parent Item auto-fills primary/dependent attribute + item_attributes
 	// child rows. Maps Item fields → IPD fields (different names), so it
 	// short-circuits the generic copy-by-key loop below.
-	if (dt === "Item Production Detail" && fieldname === "item") {
+	if (dt === "YRP Item Production Detail" && fieldname === "item") {
 		if (!form.item) {
 			form.primary_item_attribute = ""
 			form.dependent_attribute = ""
@@ -4105,7 +4105,7 @@ async function runDocAutofill(fieldname) {
 			return
 		}
 		try {
-			const r = await callMethod("yrp.yrp.doctype.item.item.get_complete_item_details", {
+			const r = await callMethod("yrp.yrp.doctype.yrp_item.yrp_item.get_complete_item_details", {
 				item_name: form.item,
 			})
 			if (r && typeof r === "object") {
@@ -4123,11 +4123,11 @@ async function runDocAutofill(fieldname) {
 	// (GRN / Stock Entry) items as the source-bin grouped payload and load the
 	// split editor. get_initial_payload returns the array directly (no header
 	// dict), so it short-circuits the header-copy path below.
-	if (dt === "Inspection Entry" && (fieldname === "against_id" || fieldname === "against")) {
+	if (dt === "YRP Inspection Entry" && (fieldname === "against_id" || fieldname === "against")) {
 		if (!form.against || !form.against_id) return
 		try {
 			const payload = await callMethod(
-				"yrp.yrp.doctype.inspection_entry.inspection_entry.get_initial_payload",
+				"yrp.yrp.doctype.yrp_inspection_entry.yrp_inspection_entry.get_initial_payload",
 				{ against: form.against, against_id: form.against_id },
 			)
 			await nextTick()
@@ -4139,17 +4139,17 @@ async function runDocAutofill(fieldname) {
 	}
 	let method = ""
 	let args = null
-	if (dt === "Delivery Challan" && fieldname === "work_order") {
+	if (dt === "YRP Delivery Challan" && fieldname === "work_order") {
 		if (!form.work_order) return
-		method = "yrp.yrp.doctype.delivery_challan.delivery_challan.get_work_order_defaults"
+		method = "yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan.get_work_order_defaults"
 		args = { work_order: form.work_order, posting_date: form.posting_date, posting_time: form.posting_time }
-	} else if (dt === "Goods Received Note" && (fieldname === "against_id" || fieldname === "delivery_challan")) {
+	} else if (dt === "YRP Goods Received Note" && (fieldname === "against_id" || fieldname === "delivery_challan")) {
 		if (!form.against_id) return
-		if (form.against === "Work Order") {
-			method = "yrp.yrp.doctype.goods_received_note.goods_received_note.get_work_order_defaults"
+		if (form.against === "YRP Work Order") {
+			method = "yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note.get_work_order_defaults"
 			args = { work_order: form.against_id, delivery_challan: form.delivery_challan || "" }
-		} else if (form.against === "Purchase Order") {
-			method = "yrp.yrp.doctype.goods_received_note.goods_received_note.get_purchase_order_defaults"
+		} else if (form.against === "YRP Purchase Order") {
+			method = "yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note.get_purchase_order_defaults"
 			args = { purchase_order: form.against_id }
 		} else return
 	} else {
@@ -4160,7 +4160,7 @@ async function runDocAutofill(fieldname) {
 	// the floor's pick, not WO-derived). The server-side `set_missing_values`
 	// fallback still rescues an empty value on save.
 	const AUTOFILL_SKIP = {
-		"Delivery Challan": new Set(["from_warehouse"]),
+		"YRP Delivery Challan": new Set(["from_warehouse"]),
 	}
 	try {
 		const r = await callMethod(method, args)
@@ -4174,7 +4174,7 @@ async function runDocAutofill(fieldname) {
 		}
 		// GRN: start every received type at 0 so the user types the actual received
 		// qty per row (total still clamped to pending) — no "all accepted" pre-fill.
-		if (dt === "Goods Received Note") zeroGroupedQtys(r.item_details)
+		if (dt === "YRP Goods Received Note") zeroGroupedQtys(r.item_details)
 		await nextTick()
 		for (const pv of stockPivots.value) {
 			const grid = gridRefs[pv.childField]
@@ -4326,7 +4326,7 @@ async function onFieldChanged(fieldname) {
 	// Work Order: changing the party invalidates any address picked under the
 	// previous party (the address autocomplete is filtered by party — keeping a
 	// stale value would let the user submit an address that doesn't belong).
-	if (doctype.value === "Work Order") {
+	if (doctype.value === "YRP Work Order") {
 		if (fieldname === "supplier") form.supplier_address = ""
 		if (fieldname === "delivery_location") form.delivery_address = ""
 		if (fieldname === "process_name") {
@@ -4343,11 +4343,11 @@ async function onFieldChanged(fieldname) {
 			return
 		}
 	}
-	if (doctype.value === "Goods Received Note" && fieldname === "against") {
+	if (doctype.value === "YRP Goods Received Note" && fieldname === "against") {
 		resetGrnSource()
 		return
 	}
-	if (doctype.value === "Inspection Entry" && fieldname === "against") {
+	if (doctype.value === "YRP Inspection Entry" && fieldname === "against") {
 		form.against_id = ""
 		for (const pv of stockPivots.value) gridRefs[pv.childField]?.loadData?.([])
 		return
@@ -4357,7 +4357,7 @@ async function onFieldChanged(fieldname) {
 
 async function onLinkComplete(field, e) {
 	// For a Dynamic Link the target doctype is whatever the controlling field
-	// currently holds (e.g. against_id → form.against === "Work Order").
+	// currently holds (e.g. against_id → form.against === "YRP Work Order").
 	const target = field.isDynamic ? (form[field.dynamicField] || "") : field.linkTarget
 	if (!target) {
 		linkSuggestions[field.fieldname] = []
@@ -4401,9 +4401,9 @@ function childLinkSearchHandlerFor(col, row = null) {
 	const target = childLinkTarget(col, row)
 	if (!target) return async () => []
 	let filters = null
-	if (isLot.value && col.fieldname === "cloth_item" && target === "Item") {
+	if (isLot.value && col.fieldname === "cloth_item" && target === "YRP Item") {
 		filters = { is_cloth_item: 1 }
-	} else if (isLot.value && col.fieldname === "production_detail" && target === "Item Production Detail") {
+	} else if (isLot.value && col.fieldname === "production_detail" && target === "YRP Item Production Detail") {
 		if (!row?.cloth_item) return async () => []
 		filters = { item: row.cloth_item }
 	}
@@ -4873,7 +4873,7 @@ async function onClothProgramsBuilt(res) {
 async function onCreateGrnFromWo() {
 	if (!doc.value) return
 	const query = {
-		against: "Work Order",
+		against: "YRP Work Order",
 		against_id: doc.value.name,
 		supplier: doc.value.supplier || "",
 		supplier_address: doc.value.supplier_address || "",
@@ -4888,7 +4888,7 @@ async function onCreateGrnFromWo() {
 	// qty is a real error source). With several, leave blank — the autofill still
 	// scopes items by the WO and the user picks the DC.
 	try {
-		const { data } = await getList("Delivery Challan", {
+		const { data } = await getList("YRP Delivery Challan", {
 			fields: ["name"],
 			filters: [["work_order", "=", doc.value.name], ["docstatus", "=", 1]],
 			limit_page_length: 5,
@@ -4906,7 +4906,7 @@ function onCreateGrnFromDc() {
 	router.push({
 		path: "/goods-received-note/new",
 		query: {
-			against: "Work Order",
+			against: "YRP Work Order",
 			against_id: doc.value.work_order || "",
 			delivery_challan: doc.value.name,
 			supplier: doc.value.supplier || "",
@@ -4924,7 +4924,7 @@ async function onCompleteGrnTransfer() {
 	acting.value = "grn-complete-transfer"
 	try {
 		const stockEntry = await callMethod(
-			"yrp.yrp.doctype.goods_received_note.goods_received_note.make_grn_completion",
+			"yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note.make_grn_completion",
 			{ doc_name: doc.value.name },
 		)
 		if (!stockEntry) throw new Error("The completion Stock Entry was not created.")
@@ -5477,7 +5477,7 @@ const quickInfo = computed(() => {
 		if (val != null && val !== "") out.push({ label, value: String(val) })
 	}
 	const pref = isWorkOrder.value
-		? [["process_name", "Process"], ["supplier", "Job-worker"], ["total_quantity", "Qty"], ["wo_date", "WO Date"]]
+		? [["process_name", "YRP Process"], ["supplier", "Job-worker"], ["total_quantity", "Qty"], ["wo_date", "WO Date"]]
 		: detailFields.value.slice(0, 5).map((f) => [f.fieldname, f.label])
 	for (const [fn, label] of pref) {
 		const f = detailFields.value.find((x) => x.fieldname === fn)

@@ -344,7 +344,7 @@ function mountDiaLink(el, bindingValue) {
 		df: {
 			fieldtype: "Link",
 			fieldname: `panel_consumption_dia_${++diaControlSequence}`,
-			options: "Item Attribute Value",
+			options: "YRP Item Attribute Value",
 			placeholder: __("Select Dia"),
 			only_select: true,
 			get_query: () => ({
@@ -484,7 +484,7 @@ function fillConsumptionColumn(packing) {
 				fieldtype: "Link",
 				fieldname: "dia",
 				label: "Dia",
-				options: "Item Attribute Value",
+				options: "YRP Item Attribute Value",
 				reqd: 1,
 				only_select: true,
 				get_query: () => ({

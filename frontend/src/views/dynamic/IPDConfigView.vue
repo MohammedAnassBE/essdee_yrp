@@ -106,7 +106,7 @@
 					@click="onRevertApproval"
 				/>
 				<Button
-					v-if="doc && !editing && canCreate('Item Production Detail')"
+					v-if="doc && !editing && canCreate('YRP Item Production Detail')"
 					label="Duplicate IPD"
 					icon="pi pi-copy"
 					size="small"
@@ -116,7 +116,7 @@
 					@click="openDuplicateDialog"
 				/>
 				<Button
-					v-if="doc && !editing && canDelete('Item Production Detail')"
+					v-if="doc && !editing && canDelete('YRP Item Production Detail')"
 					label="Delete"
 					icon="pi pi-trash"
 					size="small"
@@ -153,7 +153,7 @@
 			<div class="attr-strip">
 				<div class="attr-cell">
 					<span class="al">Item</span>
-					<a class="av esd-mono" @click="navigateDoc('Item', doc.item, $event)">{{ doc.item || "—" }}</a>
+					<a class="av esd-mono" @click="navigateDoc('YRP Item', doc.item, $event)">{{ doc.item || "—" }}</a>
 				</div>
 				<div class="attr-cell">
 					<span class="al">Primary Attribute</span>
@@ -218,7 +218,7 @@
 								<span class="recipe-field-label">Finished Colour</span>
 								<LinkField
 									:modelValue="group.colour"
-									target-doctype="Item Attribute Value"
+									target-doctype="YRP Item Attribute Value"
 									:search-handler="searchColour"
 									placeholder="Select finished colour"
 									@update:modelValue="(v) => setRecipeGroupColour(group, v)"
@@ -241,7 +241,7 @@
 						<div v-for="(row, rowIndex) in group.rows" :key="row.name || rowIndex" class="recipe-yarn-row">
 							<LinkField
 								:modelValue="row.yarn_item || ''"
-								target-doctype="Item"
+								target-doctype="YRP Item"
 								placeholder="Select yarn item"
 								@update:modelValue="(v) => (row.yarn_item = v || '')"
 							/>
@@ -444,9 +444,9 @@
 					/>
 				</div>
 				<DataTable :value="doc.item_bom || []" class="esd-table cfg-dt" :rowHover="false" dataKey="name">
-					<Column field="item" header="Item">
+					<Column field="item" header="YRP Item">
 						<template #body="{ data }">
-							<a class="cell-link esd-mono" @click="navigateDoc('Item', data.item, $event)">{{ data.item || "—" }}</a>
+							<a class="cell-link esd-mono" @click="navigateDoc('YRP Item', data.item, $event)">{{ data.item || "—" }}</a>
 						</template>
 					</Column>
 					<Column field="qty_of_product" header="Qty of Product">
@@ -455,10 +455,10 @@
 					<Column field="qty_of_bom_item" header="Qty of BOM Item">
 						<template #body="{ data }">{{ fmtNum(data.qty_of_bom_item) }}</template>
 					</Column>
-					<Column field="uom" header="UOM">
+					<Column field="uom" header="YRP UOM">
 						<template #body="{ data }">{{ data.uom || "—" }}</template>
 					</Column>
-					<Column field="process_name" header="Process">
+					<Column field="process_name" header="YRP Process">
 						<template #body="{ data }">{{ data.process_name || "—" }}</template>
 					</Column>
 					<Column v-if="doc.dependent_attribute" field="dependent_attribute_value" :header="doc.dependent_attribute">
@@ -637,7 +637,7 @@
 					/>
 				</div>
 				<DataTable :value="doc.ipd_processes || []" class="esd-table cfg-dt" :rowHover="false" dataKey="name">
-					<Column field="process_name" header="Process">
+					<Column field="process_name" header="YRP Process">
 						<template #body="{ data }">
 							<span class="strong">{{ data.process_name || "—" }}</span>
 						</template>
@@ -778,7 +778,7 @@
 					<Column field="name" header="Matrix">
 						<template #body="{ data }"><span class="esd-mono">{{ data.name }}</span></template>
 					</Column>
-					<Column field="process_name" header="Process">
+					<Column field="process_name" header="YRP Process">
 						<template #body="{ data }">{{ data.process_name || "—" }}</template>
 					</Column>
 					<Column field="reference_item_variant" header="Reference Variant">
@@ -905,7 +905,7 @@
 											<small>Compacting Dia</small>
 											<LinkField
 												:modelValue="compactingEntryOutput(entry)"
-												target-doctype="Item Attribute Value"
+												target-doctype="YRP Item Attribute Value"
 												:search-handler="searchDia"
 												:forceSelection="true"
 												:invalid="compactingEntryInvalid(entry)"
@@ -983,7 +983,7 @@
 				<LinkField
 					id="duplicate-ipd-item"
 					:model-value="duplicateItem"
-					target-doctype="Item"
+					target-doctype="YRP Item"
 					:filters="duplicateItemFilters"
 					placeholder="Select item"
 					@update:model-value="duplicateItem = $event || ''"
@@ -1171,7 +1171,7 @@ const editing = ref(false)
 const savingAll = ref(false)
 const hdrForm = ref({ tech_pack_version: "", pattern_version: "" })
 const editableDoc = computed(
-	() => doc.value?.approval_status !== "Approved" && canWrite("Item Production Detail"),
+	() => doc.value?.approval_status !== "Approved" && canWrite("YRP Item Production Detail"),
 )
 const canApprove = computed(
 	() =>
@@ -1223,7 +1223,7 @@ function addColourYarnGroup() {
 		return
 	}
 	colourYarnRows.value.push({
-		doctype: "IPD Colour Yarn Ratio",
+		doctype: "SD YRP IPD Colour Yarn Ratio",
 		cloth_item: doc.value?.is_cloth_item ? doc.value.item : "",
 		colour: "",
 		yarn_item: "",
@@ -1234,7 +1234,7 @@ function addColourYarnToGroup(group) {
 	const splitEvenly = group.rows.length === 1 && Number(group.rows[0].ratio) === 100
 	if (splitEvenly) group.rows[0].ratio = 50
 	colourYarnRows.value.push({
-		doctype: "IPD Colour Yarn Ratio",
+		doctype: "SD YRP IPD Colour Yarn Ratio",
 		cloth_item: doc.value?.item || "",
 		colour: group.colour,
 		yarn_item: "",
@@ -1385,7 +1385,7 @@ function generateCompactingCombinations() {
 		if (existing.has(key)) continue
 		existing.add(key)
 		compactingRows.value.push({
-			doctype: "IPD Compacting Reference",
+			doctype: "SD YRP IPD Compacting Reference",
 			colour_specific: Boolean(target.colour),
 			colour: target.colour || "",
 			input_dia: target.input_dia,
@@ -1442,10 +1442,10 @@ function updateCompactingEntry(entry, value) {
 	}
 }
 async function searchColour(query) {
-	return searchLink("Item Attribute Value", query || "", { attribute_name: "Colour" })
+	return searchLink("YRP Item Attribute Value", query || "", { attribute_name: "Colour" })
 }
 async function searchDia(query) {
-	return searchLink("Item Attribute Value", query || "", { attribute_name: "Dia" })
+	return searchLink("YRP Item Attribute Value", query || "", { attribute_name: "Dia" })
 }
 function detailsValidate() {
 	if (doc.value?.is_cloth_item) {
@@ -1546,7 +1546,7 @@ function hdrApply(ipd) {
 			(row) => row.colour === firstColour,
 		)
 		ipd.yarn_ratio_details = firstRecipe.map((row) => ({
-			doctype: "IPD Yarn Ratio",
+			doctype: "SD YRP IPD Yarn Ratio",
 			yarn_item: row.yarn_item,
 			ratio: Number(row.ratio) || 0,
 		}))
@@ -1555,7 +1555,7 @@ function hdrApply(ipd) {
 	if (doc.value?.is_cloth_item) {
 		ipd.colour_yarn_recipes = colourYarnRows.value.map((row) => ({
 			...row,
-			doctype: "IPD Colour Yarn Ratio",
+			doctype: "SD YRP IPD Colour Yarn Ratio",
 			cloth_item: row.cloth_item,
 			colour: row.colour,
 			yarn_item: row.yarn_item,
@@ -1563,7 +1563,7 @@ function hdrApply(ipd) {
 		}))
 		ipd.fabric_routes = fabricRouteRows.value.map((row) => ({
 			...row,
-			doctype: "IPD Fabric Route",
+			doctype: "SD YRP IPD Fabric Route",
 			finished_colour: row.finished_colour,
 			finished_dia: row.finished_dia,
 			knitting_output_colour: row.knitting_output_colour,
@@ -1571,7 +1571,7 @@ function hdrApply(ipd) {
 		}))
 		ipd.compacting_reference_details = compactingRows.value.map((row) => ({
 			...row,
-			doctype: "IPD Compacting Reference",
+			doctype: "SD YRP IPD Compacting Reference",
 			colour: row.colour,
 			input_dia: row.input_dia,
 			compacting_dia: row.compacting_dia,
@@ -1706,7 +1706,7 @@ async function saveAll() {
 	savingAll.value = true
 	try {
 		const ipd = await callMethod("frappe.client.get", {
-			doctype: "Item Production Detail",
+			doctype: "YRP Item Production Detail",
 			name: props.id,
 		})
 		if (doc.value?.modified && ipd.modified !== doc.value.modified) {
@@ -1843,7 +1843,7 @@ async function deleteBomRow(idx) {
 		accept: async () => {
 			try {
 				const ipd = await callMethod("frappe.client.get", {
-					doctype: "Item Production Detail",
+					doctype: "YRP Item Production Detail",
 					name: props.id,
 				})
 				assertFreshIpd(ipd)
@@ -1863,7 +1863,7 @@ async function deleteBomRow(idx) {
 }
 async function onBomItemComplete(e) {
 	try {
-		const rows = await searchLink("Item", e.query || "", {})
+		const rows = await searchLink("YRP Item", e.query || "", {})
 		bomItemSuggestions.value = (rows || []).map((r) => r.name)
 	} catch (_) { bomItemSuggestions.value = [] }
 }
@@ -1875,7 +1875,7 @@ async function onBomItemPick(e) {
 	if (!name) return
 	try {
 		const r = await callMethod("frappe.client.get_value", {
-			doctype: "Item",
+			doctype: "YRP Item",
 			filters: { name },
 			fieldname: "default_unit_of_measure",
 		})
@@ -1884,7 +1884,7 @@ async function onBomItemPick(e) {
 }
 async function onProcessComplete(e) {
 	try {
-		const rows = await searchLink("Process", e.query || "", {})
+		const rows = await searchLink("YRP Process", e.query || "", {})
 		processSuggestions.value = (rows || []).map((r) => r.name)
 	} catch (_) { processSuggestions.value = [] }
 }
@@ -1896,7 +1896,7 @@ async function onDepAttrValueComplete(e) {
 	const attrName = doc.value?.dependent_attribute
 	if (!attrName) { depAttrValueSuggestions.value = []; return }
 	try {
-		const rows = await searchLink("Item Attribute Value", e.query || "", { attribute_name: attrName })
+		const rows = await searchLink("YRP Item Attribute Value", e.query || "", { attribute_name: attrName })
 		depAttrValueSuggestions.value = (rows || []).map((r) => r.name)
 	} catch (_) { depAttrValueSuggestions.value = [] }
 }
@@ -1949,7 +1949,7 @@ async function deleteProcessRow(idx) {
 		accept: async () => {
 			try {
 				const ipd = await callMethod("frappe.client.get", {
-					doctype: "Item Production Detail",
+					doctype: "YRP Item Production Detail",
 					name: props.id,
 				})
 				assertFreshIpd(ipd)
@@ -1972,7 +1972,7 @@ async function onStageComplete(e) {
 	const attrName = doc.value?.dependent_attribute
 	if (!attrName) { stageSuggestions.value = []; return }
 	try {
-		const rows = await searchLink("Item Attribute Value", e.query || "", { attribute_name: attrName })
+		const rows = await searchLink("YRP Item Attribute Value", e.query || "", { attribute_name: attrName })
 		stageSuggestions.value = (rows || []).map((r) => r.name)
 	} catch (_) { stageSuggestions.value = [] }
 }
@@ -1986,7 +1986,7 @@ async function saveProcessRow() {
 	processSaving.value = true
 	try {
 		const ipd = await callMethod("frappe.client.get", {
-			doctype: "Item Production Detail",
+			doctype: "YRP Item Production Detail",
 			name: props.id,
 		})
 		assertFreshIpd(ipd)
@@ -2003,7 +2003,7 @@ async function saveProcessRow() {
 		} else if (processFormMode.value === "edit") {
 			throw new Error("This process row no longer exists. Refresh the IPD.")
 		} else {
-			rows.push({ doctype: "IPD Process", ...patch })
+			rows.push({ doctype: "YRP IPD Process", ...patch })
 		}
 		ipd.ipd_processes = rows
 		await callMethod("frappe.client.save", { doc: ipd })
@@ -2036,7 +2036,7 @@ async function saveBomRow() {
 	bomSaving.value = true
 	try {
 		const ipd = await callMethod("frappe.client.get", {
-			doctype: "Item Production Detail",
+			doctype: "YRP Item Production Detail",
 			name: props.id,
 		})
 		assertFreshIpd(ipd)
@@ -2063,7 +2063,7 @@ async function saveBomRow() {
 		} else if (bomFormMode.value === "edit") {
 			throw new Error("This BOM row no longer exists. Refresh the IPD.")
 		} else {
-			rows.push({ doctype: "Item BOM", ...patch })
+			rows.push({ doctype: "YRP Item BOM", ...patch })
 		}
 		ipd.item_bom = rows
 		await callMethod("frappe.client.save", { doc: ipd })
@@ -2097,7 +2097,7 @@ const approvalSeverity = computed(() => {
 })
 
 const deskUrl = computed(
-	() => `/app/item-production-detail/${encodeURIComponent(props.id)}`,
+	() => `/app/yrp-item-production-detail/${encodeURIComponent(props.id)}`,
 )
 
 async function load() {
@@ -2105,7 +2105,7 @@ async function load() {
 	// generic DocDetail at /web/item-production-detail/new — the router has an
 	// explicit entry BEFORE this view so we should never receive id==="new"
 	// here. Defensive guard: surface a friendly error instead of the old
-	// silent Desk redirect (`/app/item-production-detail/new`) which broke the
+	// silent Desk redirect (`/app/yrp-item-production-detail/new`) which broke the
 	// strict "no Desk for restricted users" rule.
 	if (props.id === "new") {
 		error.value = "Use the New button on the Item Production Detail list — this surface is for existing IPDs."
@@ -2114,7 +2114,7 @@ async function load() {
 	loading.value = true
 	error.value = null
 	try {
-		doc.value = await getDoc("Item Production Detail", props.id)
+		doc.value = await getDoc("YRP Item Production Detail", props.id)
 		hdrHydrate()
 		// A reload after an id change must not leave the user on a tab that no
 		// longer exists for this IPD kind (fabric is cloth-only; the garment
@@ -2161,7 +2161,7 @@ async function loadItemAttributes() {
 			rows.map((r) =>
 				r.mapping
 					? callMethod("frappe.client.get", {
-							doctype: r.mapping_doctype || "Item Item Attribute Mapping",
+							doctype: r.mapping_doctype || "YRP Item Item Attribute Mapping",
 							name: r.mapping,
 					  }).catch(() => null)
 					: Promise.resolve(null),
@@ -2191,7 +2191,7 @@ async function loadItemAttributes() {
 async function loadMatrices() {
 	matricesLoading.value = true
 	try {
-		const { data } = await getList("IPD Process Matrix", {
+		const { data } = await getList("YRP IPD Process Matrix", {
 			filters: { ipd: props.id },
 			fields: ["name", "process_name", "reference_item_variant", "input_item", "output_item"],
 			order_by: "process_name asc, modified desc",
@@ -2305,7 +2305,7 @@ function addAttrValue() {
 async function onAttrNewComplete(card, e) {
 	const q = e?.query || ""
 	try {
-		const rows = await searchLink("Item Attribute Value", q, {
+		const rows = await searchLink("YRP Item Attribute Value", q, {
 			attribute_name: card.attr_name,
 		})
 		attrValueSuggestions.value = (rows || [])
@@ -2351,7 +2351,7 @@ async function configureCombinations(proc) {
 	try {
 		// Find an existing matrix for {ipd, process}. Prefer a generic one (no
 		// reference variant), but any existing matrix is a valid landing spot.
-		const { data } = await getList("IPD Process Matrix", {
+		const { data } = await getList("YRP IPD Process Matrix", {
 			filters: { ipd: props.id, process_name: process },
 			fields: ["name", "reference_item_variant"],
 			order_by: "reference_item_variant asc, modified desc",
@@ -2413,7 +2413,7 @@ function onDelete() {
 		accept: async () => {
 			deleting.value = true
 			try {
-				await deleteDoc("Item Production Detail", props.id)
+				await deleteDoc("YRP Item Production Detail", props.id)
 				toast.success("Deleted", `${props.id} deleted`)
 				router.push("/item-production-detail")
 			} catch (e) {

@@ -37,7 +37,7 @@ let type_value = ref(null)
 function load_data(type){
     type_value.value = type
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.cutting_plan.cutting_plan.get_recut_print_panel_details",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.get_recut_print_panel_details",
         args: {
             cutting_plan: cur_frm.doc.name,
             type: type_value.value,

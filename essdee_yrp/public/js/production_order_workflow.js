@@ -1,7 +1,7 @@
 // Copyright (c) 2025, Essdee and contributors
 // For license information, please see license.txt
 
-frappe.ui.form.on("Production Order", {
+frappe.ui.form.on("YRP Production Order", {
   setup(frm) {
     frm.set_query("production_term", (doc) => {
       return {
@@ -23,7 +23,7 @@ frappe.ui.form.on("Production Order", {
 
     if (frm.doc.docstatus == 1) {
       const has_transfer_marker = !!frappe.meta.has_field(
-        "Production Order",
+        "YRP Production Order",
         "transferred_to_ppo"
       );
       const is_transferred =
@@ -344,17 +344,17 @@ frappe.ui.form.on("Production Order", {
                   callback: function (response) {
                     d.hide();
                     frappe.open_in_new_tab = true;
-                    frappe.set_route("Form", "Lot", response.message);
+                    frappe.set_route("Form", "SD YRP Lot", response.message);
                   },
                 });
               },
             });
             d.show();
           },
-          "Lot"
+          "SD YRP Lot"
         );
       }
-      if (!frappe.perm.has_perm("Production Order", 0, "submit")) {
+      if (!frappe.perm.has_perm("YRP Production Order", 0, "submit")) {
         frm.set_df_property("comments", "read_only", true);
         frm.refresh_field("comments");
       }
@@ -382,7 +382,7 @@ frappe.ui.form.on("Production Order", {
                   fieldtype: "Link",
                   label: "Lot Name",
                   reqd: 1,
-                  options: "Lot",
+                  options: "SD YRP Lot",
                 },
               ],
               primary_action: function () {
@@ -399,14 +399,14 @@ frappe.ui.form.on("Production Order", {
                   callback: function (response) {
                     d.hide();
                     frappe.open_in_new_tab = true;
-                    frappe.set_route("Form", "Lot", values.lot_name);
+                    frappe.set_route("Form", "SD YRP Lot", values.lot_name);
                   },
                 });
               },
             });
             d.show();
           },
-          "Lot"
+          "SD YRP Lot"
         );
       }
     }
@@ -1031,7 +1031,7 @@ function show_approve_quantity_transfer_dialog(frm, request) {
         fieldname: "source_production_order",
         fieldtype: "Link",
         label: __("Source Production Order"),
-        options: "Production Order",
+        options: "YRP Production Order",
         default: request.source_production_order,
         read_only: 1,
       },
@@ -1125,7 +1125,7 @@ function show_transfer_quantity_dialog(frm, alternative_items) {
         fieldname: "target_production_order",
         fieldtype: "Link",
         label: __("Target Production Order"),
-        options: "Production Order",
+        options: "YRP Production Order",
         reqd: 1,
         get_query: () => {
           return {

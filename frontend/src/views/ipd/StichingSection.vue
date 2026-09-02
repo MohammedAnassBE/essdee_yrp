@@ -40,7 +40,7 @@
 				<LinkField
 					v-if="editing"
 					:model-value="form.stiching_major_attribute_value"
-					target-doctype="Item Attribute Value"
+					target-doctype="YRP Item Attribute Value"
 					:search-handler="stichValueSearch"
 					class="st-link"
 					data-testid="st-major"
@@ -86,7 +86,7 @@
 							<LinkField
 								v-if="editing"
 								:model-value="r.stiching_attribute_value || ''"
-								target-doctype="Item Attribute Value"
+								target-doctype="YRP Item Attribute Value"
 								:search-handler="stichValueSearch"
 								class="st-link"
 								@item-select="(e) => (r.stiching_attribute_value = e.value)"
@@ -111,7 +111,7 @@
 							<LinkField
 								v-if="editing"
 								:model-value="r.set_item_attribute_value || ''"
-								target-doctype="Item Attribute Value"
+								target-doctype="YRP Item Attribute Value"
 								:search-handler="setValueSearch"
 								class="st-link"
 								@item-select="(e) => (r.set_item_attribute_value = e.value)"
@@ -170,7 +170,7 @@
 							<LinkField
 								v-else-if="editing"
 								:model-value="row.val[a] || ''"
-								target-doctype="Item Attribute Value"
+								target-doctype="YRP Item Attribute Value"
 								:search-handler="packValueSearch"
 								class="st-link"
 								@item-select="(e) => (row.val[a] = e.value)"
@@ -448,7 +448,7 @@ function apply(ipd) {
 	ipd.stiching_item_details = activeRows()
 		.filter((r) => r.stiching_attribute_value)
 		.map((r) => ({
-			doctype: "Stiching Item Detail",
+			doctype: "SD YRP Stiching Item Detail",
 			...(r.name ? { name: r.name } : {}),
 			stiching_attribute_value: r.stiching_attribute_value,
 			quantity: r.quantity || 0,

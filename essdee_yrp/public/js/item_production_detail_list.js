@@ -1,4 +1,4 @@
-frappe.listview_settings["Item Production Detail"] = {
+frappe.listview_settings["YRP Item Production Detail"] = {
 	add_fields: ["approval_status"],
 	get_indicator: function (doc) {
 		const status_map = {

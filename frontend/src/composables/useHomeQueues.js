@@ -1,5 +1,5 @@
 /**
- * Essdee YRP — Home "My Work Today" work-queues.
+ * SD YRP — Home "My Work Today" work-queues.
  *
  * Four operational queues, each rendered as a clickable card on HomePage that
  * deep-links to its DocType list pre-filtered to the same condition. Counts are
@@ -42,7 +42,7 @@ export function useHomeQueues() {
 			sub: "Lots still in production",
 			icon: "pi pi-inbox",
 			tone: "amber",
-			doctype: "Lot",
+			doctype: "SD YRP Lot",
 			filters: [["status", "=", "Open"]],
 			count: null, // null = still loading / unknown; rendered as "—"
 			error: false,
@@ -53,7 +53,7 @@ export function useHomeQueues() {
 			sub: "Submitted, not closed or cancelled",
 			icon: "pi pi-bars",
 			tone: "slate",
-			doctype: "Work Order",
+			doctype: "YRP Work Order",
 			filters: [
 				["docstatus", "=", 1],
 				["status", "not in", ["Closed", "Cancelled"]],
@@ -67,7 +67,7 @@ export function useHomeQueues() {
 			sub: "Not yet submitted",
 			icon: "pi pi-send",
 			tone: "info",
-			doctype: "Delivery Challan",
+			doctype: "YRP Delivery Challan",
 			filters: [["docstatus", "=", 0]],
 			count: null,
 			error: false,
@@ -78,7 +78,7 @@ export function useHomeQueues() {
 			sub: "Goods Received Notes not yet submitted",
 			icon: "pi pi-plus-circle",
 			tone: "emerald",
-			doctype: "Goods Received Note",
+			doctype: "YRP Goods Received Note",
 			filters: [["docstatus", "=", 0]],
 			count: null,
 			error: false,

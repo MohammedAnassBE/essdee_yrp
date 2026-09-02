@@ -50,7 +50,7 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 
-const METHOD = "essdee_yrp.essdee_yrp.doctype.stock_summary.stock_summary.";
+const METHOD = "essdee_yrp.essdee_yrp.doctype.sd_yrp_stock_summary.sd_yrp_stock_summary.";
 const root = ref(null);
 const rows = ref([]);
 const selected = ref([]);
@@ -63,17 +63,17 @@ const all_selected = computed(() => rows.value.length && selected.value.length =
 
 onMounted(() => {
 	make_control("lot", ".lot-control", {
-		fieldtype: "Table MultiSelect", label: "Lot", options: "Lot MultiSelect",
+		fieldtype: "Table MultiSelect", label: "Lot", options: "SD YRP Lot MultiSelect",
 	});
-	make_control("item", ".item-control", { fieldtype: "Link", label: "Item", options: "Item" });
+	make_control("item", ".item-control", { fieldtype: "Link", label: "Item", options: "YRP Item" });
 	make_control("item_variant", ".variant-control", {
-		fieldtype: "Link", label: "Item Variant", options: "Item Variant",
+		fieldtype: "Link", label: "Item Variant", options: "YRP Item Variant",
 	});
 	make_control("warehouse", ".warehouse-control", {
-		fieldtype: "Link", label: "Warehouse", options: "Warehouse",
+		fieldtype: "Link", label: "Warehouse", options: "YRP Warehouse",
 	});
 	make_control("received_type", ".received-type-control", {
-		fieldtype: "Link", label: "Received Type", options: "Received Type",
+		fieldtype: "Link", label: "Received Type", options: "YRP Received Type",
 	});
 });
 
@@ -142,10 +142,10 @@ function purpose_dialog(action) {
 function location_dialog(purpose, warehouse, action) {
 	const fields = [];
 	if (purpose !== "Material Receipt") {
-		fields.push({ fieldname: "from_warehouse", fieldtype: "Link", options: "Warehouse", label: "From Warehouse", reqd: 1, default: warehouse });
+		fields.push({ fieldname: "from_warehouse", fieldtype: "Link", options: "YRP Warehouse", label: "From Warehouse", reqd: 1, default: warehouse });
 	}
 	if (["Material Receipt", "Send to Warehouse"].includes(purpose)) {
-		fields.push({ fieldname: "to_warehouse", fieldtype: "Link", options: "Warehouse", label: "To Warehouse", reqd: 1, default: purpose === "Material Receipt" ? warehouse : null });
+		fields.push({ fieldname: "to_warehouse", fieldtype: "Link", options: "YRP Warehouse", label: "To Warehouse", reqd: 1, default: purpose === "Material Receipt" ? warehouse : null });
 	}
 	const dialog = new frappe.ui.Dialog({
 		title: __("Stock Entry Locations"), fields,
@@ -162,7 +162,7 @@ function open_doc(doctype, name) {
 function bulk_entry() {
 	const warehouse = require_selection();
 	purpose_dialog((purpose) => location_dialog(purpose, warehouse, async (locations) => {
-		open_doc("Stock Entry", await call("create_bulk_stock_entry", {
+		open_doc("YRP Stock Entry", await call("create_bulk_stock_entry", {
 			locations, selected_items: selected.value, purpose,
 		}));
 	}));
@@ -178,21 +178,21 @@ function single_entry(row) {
 			posting_date: frappe.datetime.get_today(),
 			posting_time: frappe.datetime.now_time(),
 		};
-		open_doc("Stock Entry", await call("create_stock_entry", { stock_values: values }));
+		open_doc("YRP Stock Entry", await call("create_stock_entry", { stock_values: values }));
 	}));
 }
 
 function reconcile() {
 	const warehouse = require_selection();
 	frappe.confirm(__("Create a Stock Reconciliation that sets the selected balances to zero?"), async () => {
-		open_doc("Stock Reconciliation", await call("stock_reconcile", { selected_items: selected.value, warehouse }));
+		open_doc("YRP Stock Reconciliation", await call("stock_reconcile", { selected_items: selected.value, warehouse }));
 	});
 }
 
 function reduce() {
 	const warehouse = require_selection();
 	frappe.confirm(__("Create a Stock Update draft for the selected balances?"), async () => {
-		open_doc("Stock Update", await call("reduce_stock", { selected_items: selected.value, warehouse }));
+		open_doc("YRP Stock Update", await call("reduce_stock", { selected_items: selected.value, warehouse }));
 	});
 }
 
@@ -200,11 +200,11 @@ function transfer_lot() {
 	require_selection();
 	const dialog = new frappe.ui.Dialog({
 		title: __("Transfer to Lot"),
-		fields: [{ fieldname: "lot", fieldtype: "Link", options: "Lot", label: "Target Lot", reqd: 1 }],
+		fields: [{ fieldname: "lot", fieldtype: "Link", options: "SD YRP Lot", label: "Target Lot", reqd: 1 }],
 		primary_action_label: __("Create Draft"),
 		async primary_action(values) {
 			dialog.hide();
-			open_doc("Lot Transfer", await call("lot_transfer_items", {
+			open_doc("SD YRP Lot Transfer", await call("lot_transfer_items", {
 				selected_items: selected.value, transfer_lot: values.lot,
 			}));
 		},

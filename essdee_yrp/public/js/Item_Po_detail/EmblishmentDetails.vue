@@ -64,7 +64,7 @@ function create_inputs(){
             fieldtype: "Link",
             fieldname: "process_name",
             label: "Process",
-            options: "Process",
+            options: "YRP Process",
             onchange:()=>{
                 let selected = process.get_value()
                 if(selected && selected !== "" && selected !== null){

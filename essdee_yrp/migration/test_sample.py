@@ -43,11 +43,11 @@ class TestQueryOnlySample(UnitTestCase):
 			patch.object(target, "_replace_child_tables_sql"),
 		):
 			target.upsert_batch(
-				"MRP Settings",
+				'SD YRP MRP Settings',
 				[
 					{
-						"doctype": "MRP Settings",
-						"name": "MRP Settings",
+						"doctype": 'SD YRP MRP Settings',
+						"name": 'SD YRP MRP Settings',
 						"value": "kept",
 						"__migration_passwords": {"api_secret": "must-not-enter-parent-table"},
 					}
@@ -55,7 +55,7 @@ class TestQueryOnlySample(UnitTestCase):
 			)
 		self.assertEqual(
 			bulk_upsert.call_args.args,
-			("MRP Settings", [{"name": "MRP Settings", "value": "kept"}]),
+			('SD YRP MRP Settings', [{"name": 'SD YRP MRP Settings', "value": "kept"}]),
 		)
 
 	def test_numeric_and_json_sql_round_trip_comparison(self):

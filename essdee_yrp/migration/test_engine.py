@@ -48,10 +48,10 @@ class MigrationEngineTest(unittest.TestCase):
 				[field("grn_type"), field("type", "Select"), field("show_in_sewing_plan", "Check")],
 			)
 		}
-		target = {"Received Type": schema("Received Type", [field("received_type_name")])}
+		target = {'YRP Received Type': schema('YRP Received Type', [field("received_type_name")])}
 		rules = {
 			"GRN Item Type": DocTypeRule(
-				target="Received Type",
+				target='YRP Received Type',
 				field_map={"grn_type": "received_type_name"},
 				ignored_fields={
 					"type": "Test-only reviewed exclusion",
@@ -63,7 +63,7 @@ class MigrationEngineTest(unittest.TestCase):
 			source,
 			target,
 			rules=rules,
-			doctype_map={"GRN Item Type": "Received Type"},
+			doctype_map={"GRN Item Type": 'YRP Received Type'},
 		)
 		document = {
 			"doctype": "GRN Item Type",
@@ -75,7 +75,7 @@ class MigrationEngineTest(unittest.TestCase):
 		self.assertEqual(
 			transform_document(document, plan),
 			{
-				"doctype": "Received Type",
+				"doctype": 'YRP Received Type',
 				"name": "Accepted",
 				"received_type_name": "Accepted",
 			},
@@ -94,19 +94,19 @@ class MigrationEngineTest(unittest.TestCase):
 			),
 		}
 		target = {
-			"Received Type": schema("Received Type", [field("received_type_name")]),
-			"Work Order": schema(
-				"Work Order", [field("deliverables", "Table", "Work Order Deliverables")]
+			'YRP Received Type': schema('YRP Received Type', [field("received_type_name")]),
+			'YRP Work Order': schema(
+				'YRP Work Order', [field("deliverables", "Table", 'YRP Work Order Deliverables')]
 			),
-			"Work Order Deliverables": schema(
-				"Work Order Deliverables",
-				[field("received_type", "Link", "Received Type"), field("qty", "Float")],
+			'YRP Work Order Deliverables': schema(
+				'YRP Work Order Deliverables',
+				[field("received_type", "Link", 'YRP Received Type'), field("qty", "Float")],
 				istable=True,
 			),
 		}
 		rules = {
 			"GRN Item Type": DocTypeRule(
-				target="Received Type", field_map={"grn_type": "received_type_name"}
+				target='YRP Received Type', field_map={"grn_type": "received_type_name"}
 			),
 			"Work Order Deliverables": DocTypeRule(field_map={"item_type": "received_type"}),
 		}
@@ -114,7 +114,11 @@ class MigrationEngineTest(unittest.TestCase):
 			source,
 			target,
 			rules=rules,
-			doctype_map={"GRN Item Type": "Received Type"},
+			doctype_map={
+				"GRN Item Type": "YRP Received Type",
+				"Work Order": "YRP Work Order",
+				"Work Order Deliverables": "YRP Work Order Deliverables",
+			},
 		)
 		self.assertTrue(plan.ready, plan.issues)
 		document = {
@@ -134,7 +138,7 @@ class MigrationEngineTest(unittest.TestCase):
 		}
 		row = transform_document(document, plan)["deliverables"][0]
 		self.assertEqual(row["received_type"], "Accepted")
-		self.assertEqual(row["parenttype"], "Work Order")
+		self.assertEqual(row["parenttype"], 'YRP Work Order')
 		self.assertEqual(row["parentfield"], "deliverables")
 
 	def test_table_and_child_doctype_renames_are_recursive(self):
@@ -148,24 +152,24 @@ class MigrationEngineTest(unittest.TestCase):
 			),
 		}
 		target = {
-			"ZPL Raw Print Format": schema(
-				"ZPL Raw Print Format",
-				[field("zpl_raw_print_format_details", "Table", "ZPL Raw Print Format Detail")],
+			'YRP ZPL Raw Print Format': schema(
+				'YRP ZPL Raw Print Format',
+				[field("zpl_raw_print_format_details", "Table", 'YRP ZPL Raw Print Format Detail')],
 			),
-			"ZPL Raw Print Format Detail": schema(
-				"ZPL Raw Print Format Detail", [field("raw_code", "Code")], istable=True
+			'YRP ZPL Raw Print Format Detail': schema(
+				'YRP ZPL Raw Print Format Detail', [field("raw_code", "Code")], istable=True
 			),
 		}
 		doctype_map = {
-			"Essdee Raw Print Format": "ZPL Raw Print Format",
-			"Essdee Raw Print Format Detail": "ZPL Raw Print Format Detail",
+			"Essdee Raw Print Format": 'YRP ZPL Raw Print Format',
+			"Essdee Raw Print Format Detail": 'YRP ZPL Raw Print Format Detail',
 		}
 		rules = {
 			"Essdee Raw Print Format": DocTypeRule(
-				target="ZPL Raw Print Format",
+				target='YRP ZPL Raw Print Format',
 				field_map={"raw_print_format_details": "zpl_raw_print_format_details"},
 			),
-			"Essdee Raw Print Format Detail": DocTypeRule(target="ZPL Raw Print Format Detail"),
+			"Essdee Raw Print Format Detail": DocTypeRule(target='YRP ZPL Raw Print Format Detail'),
 		}
 		plan = build_plan(source, target, rules=rules, doctype_map=doctype_map)
 		output = transform_document(
@@ -186,9 +190,9 @@ class MigrationEngineTest(unittest.TestCase):
 			plan,
 		)
 		row = output["zpl_raw_print_format_details"][0]
-		self.assertEqual(output["doctype"], "ZPL Raw Print Format")
-		self.assertEqual(row["doctype"], "ZPL Raw Print Format Detail")
-		self.assertEqual(row["parenttype"], "ZPL Raw Print Format")
+		self.assertEqual(output["doctype"], 'YRP ZPL Raw Print Format')
+		self.assertEqual(row["doctype"], 'YRP ZPL Raw Print Format Detail')
+		self.assertEqual(row["parenttype"], 'YRP ZPL Raw Print Format')
 		self.assertEqual(row["parentfield"], "zpl_raw_print_format_details")
 
 	def test_unmapped_source_field_blocks_plan_and_writes(self):

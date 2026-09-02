@@ -342,8 +342,8 @@ def compute_cloth_demand(lot_name, apply_allowance=True):
     requested uplift; applying MRP Settings allowance first would add a hidden
     second excess and round every route to whole kilograms.
     """
-    lot_doc = frappe.get_cached_doc("Lot", lot_name)
-    item_detail = frappe.get_cached_doc("Item Production Detail", lot_doc.production_detail)
+    lot_doc = frappe.get_cached_doc('SD YRP Lot', lot_name)
+    item_detail = frappe.get_cached_doc('YRP Item Production Detail', lot_doc.production_detail)
     _validate_garment_ipd(item_detail)
     cloth_combination = get_cloth_combination(item_detail)
     # Non-blocking sanity: cutting Weight is kg/piece; >1.0 almost always means
@@ -368,7 +368,7 @@ def compute_cloth_demand(lot_name, apply_allowance=True):
         qty = flt(item.quantity)
         if not qty:
             continue
-        variant_doc = frappe.get_cached_doc("Item Variant", item.item_variant)
+        variant_doc = frappe.get_cached_doc('YRP Item Variant', item.item_variant)
         attr_values = {x.attribute: x.attribute_value for x in variant_doc.attributes}
         if item_detail.dependent_attribute and attr_values.get(item_detail.dependent_attribute):
             del attr_values[item_detail.dependent_attribute]
@@ -380,5 +380,5 @@ def compute_cloth_demand(lot_name, apply_allowance=True):
         return demand
     return _apply_cloth_allowance(
         demand,
-        frappe.db.get_single_value("MRP Settings", "cloth_allowance_percentage"),
+        frappe.db.get_single_value('SD YRP MRP Settings', "cloth_allowance_percentage"),
     )

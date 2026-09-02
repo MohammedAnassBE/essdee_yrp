@@ -72,9 +72,9 @@ class TestEssdeeSetup(FrappeTestCase):
 		settings.save.assert_called_once_with(ignore_permissions=True)
 		rows = {row.fieldname: row for row in settings.stock_dimensions}
 		self.assertEqual(set(rows), {"quality_grade", "lot", "received_type"})
-		self.assertEqual(rows["lot"].dimension_doctype, "Lot")
+		self.assertEqual(rows["lot"].dimension_doctype, 'SD YRP Lot')
 		self.assertEqual(rows["lot"].is_production_group, 1)
-		self.assertEqual(rows["received_type"].dimension_doctype, "Received Type")
+		self.assertEqual(rows["received_type"].dimension_doctype, 'YRP Received Type')
 		self.assertEqual(rows["received_type"].in_valuation, 1)
 
 	def test_pymupdf_is_a_runtime_dependency(self):

@@ -35,8 +35,8 @@
 <script>
 import { computed, defineComponent, h, nextTick, ref } from "vue";
 
-const METHOD = "essdee_yrp.essdee_yrp.doctype.item_conversion.item_conversion.";
-const ITEM_METHOD = "yrp.yrp.doctype.item.item.";
+const METHOD = "essdee_yrp.essdee_yrp.doctype.sd_yrp_item_conversion.sd_yrp_item_conversion.";
+const ITEM_METHOD = "yrp.yrp.doctype.yrp_item.yrp_item.";
 
 const ConversionSide = defineComponent({
 	props: ["title", "groups", "editable", "rateReadOnly"],
@@ -99,15 +99,15 @@ export default {
 			const existing = group_index === null ? null : groups[group_index].items[item_index];
 			const details = await call(ITEM_METHOD + "get_attribute_details", { item_name: template });
 			const fields = [
-				{ fieldname: "lot", fieldtype: "Link", options: "Lot", label: "Lot", reqd: 1, default: existing?.lot },
-				{ fieldname: "received_type", fieldtype: "Link", options: "Received Type", label: "Received Type", reqd: 1, default: existing?.received_type },
+				{ fieldname: "lot", fieldtype: "Link", options: "SD YRP Lot", label: "Lot", reqd: 1, default: existing?.lot },
+				{ fieldname: "received_type", fieldtype: "Link", options: "YRP Received Type", label: "Received Type", reqd: 1, default: existing?.received_type },
 				{ fieldname: "remarks", fieldtype: "Data", label: "Remarks", default: existing?.remarks },
 				{ fieldtype: "Section Break", label: "Attributes" },
 			];
 			(details.attributes || []).forEach((attribute, index) => fields.push({
 				fieldname: `attribute_${index}`,
 				fieldtype: "Link",
-				options: "Item Attribute Value",
+				options: "YRP Item Attribute Value",
 				label: attribute,
 				reqd: 1,
 				default: existing?.attributes?.[attribute],

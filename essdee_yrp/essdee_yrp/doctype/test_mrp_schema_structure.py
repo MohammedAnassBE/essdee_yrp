@@ -32,7 +32,7 @@ class TestMRPSchemaStructure(FrappeTestCase):
 				self.assertIsNotNone(get_controller(name))
 
 	def test_finishing_dispatch_item_keeps_packing_trace_fields(self):
-		meta = frappe.get_meta("Finishing Plan Dispatch Item", cached=False)
+		meta = frappe.get_meta('SD YRP Finishing Plan Dispatch Item', cached=False)
 		expected = {
 			"packing_source": "Data",
 			"packing_piece_quantity": "Float",
@@ -45,9 +45,9 @@ class TestMRPSchemaStructure(FrappeTestCase):
 			self.assertEqual(field.read_only, 1)
 
 	def test_grn_rework_item_uses_the_physical_stock_warehouse(self):
-		field = frappe.get_meta("GRN Rework Item", cached=False).get_field("warehouse")
+		field = frappe.get_meta('SD YRP GRN Rework Item', cached=False).get_field("warehouse")
 		self.assertEqual(field.fieldtype, "Link")
-		self.assertEqual(field.options, "Warehouse")
+		self.assertEqual(field.options, 'YRP Warehouse')
 
 	def test_link_and_table_targets_are_valid(self):
 		for name, schema in self.schemas.items():

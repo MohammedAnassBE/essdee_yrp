@@ -18,7 +18,7 @@ export async function loadValues(attr) {
 	if (!attr || valueCache[attr]) return;
 	valueCache[attr] = [];
 	try {
-		const { data } = await getList("Item Attribute Value", {
+		const { data } = await getList("YRP Item Attribute Value", {
 			filters: { attribute_name: attr },
 			fields: ["name"],
 			order_by: "name asc",

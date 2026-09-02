@@ -9,19 +9,19 @@ from essdee_yrp.finishing.state import get_finishing_plan_dict, get_finishing_pl
 from essdee_yrp.finishing.status import apply_auto_fp_status
 from essdee_yrp.finishing.views import reshape_old_lot_rows_for_ui
 from yrp.utils import get_variant_attr_details, update_if_string_instance
-from yrp.yrp.doctype.item.item import build_variant_attributes, get_or_create_variant
+from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_or_create_variant
 
 
 @frappe.whitelist()
 def fetch_from_old_lot(doc_name):
 	"""Persist available OCR-completed sibling-lot quantities for selection."""
-	doc = frappe.get_doc("Finishing Plan", doc_name)
+	doc = frappe.get_doc('SD YRP Finishing Plan', doc_name)
 	doc.check_permission("write")
 	if doc.fp_status == "OCR Completed":
 		frappe.throw("Fetch Items is disabled for Finishing Plans in OCR Completed status.")
-	ipd = frappe.get_cached_doc("Item Production Detail", doc.production_detail)
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', doc.production_detail)
 	open_plans = frappe.get_all(
-		"Finishing Plan",
+		'SD YRP Finishing Plan',
 		filters={
 			"item": doc.item,
 			"name": ["!=", doc.name],
@@ -49,7 +49,7 @@ def fetch_from_old_lot(doc_name):
 	current_colours.discard(None)
 	aggregated = {}
 	for source_name in frappe.get_all(
-		"Finishing Plan",
+		'SD YRP Finishing Plan',
 		filters={
 			"item": doc.item,
 			"fp_status": "OCR Completed",
@@ -57,7 +57,7 @@ def fetch_from_old_lot(doc_name):
 		},
 		pluck="name",
 	):
-		source = frappe.get_doc("Finishing Plan", source_name)
+		source = frappe.get_doc('SD YRP Finishing Plan', source_name)
 		warehouse = _warehouse_for_supplier(source.delivery_location)
 		given_loose = {}
 		given_set = {}
@@ -88,7 +88,7 @@ def fetch_from_old_lot(doc_name):
 				"source_fp": source_name,
 				"source_lot": source_lot,
 				"warehouse": warehouse,
-				"warehouse_name": frappe.db.get_value("Warehouse", warehouse, "name1") or warehouse,
+				"warehouse_name": frappe.db.get_value('YRP Warehouse', warehouse, "name1") or warehouse,
 				"item_variant": item_variant,
 				"colour": colour,
 				"part": part,
@@ -105,13 +105,13 @@ def fetch_from_old_lot(doc_name):
 @frappe.whitelist()
 def create_lot_transfer(data, item_name, ipd, lot, doc_name):
 	payload = update_if_string_instance(data) or []
-	destination = frappe.get_doc("Finishing Plan", doc_name)
+	destination = frappe.get_doc('SD YRP Finishing Plan', doc_name)
 	destination.check_permission("write")
 	if destination.item != item_name or destination.lot != lot or destination.production_detail != ipd:
 		frappe.throw("Finishing Plan, Item, Lot, and Production Detail do not match")
-	ipd_doc = frappe.get_cached_doc("Item Production Detail", ipd)
-	default_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
-	uom = frappe.db.get_value("Item", item_name, "default_unit_of_measure")
+	ipd_doc = frappe.get_cached_doc('YRP Item Production Detail', ipd)
+	default_type = frappe.db.get_single_value('YRP YRP Stock Settings', "default_received_type")
+	uom = frappe.db.get_value('YRP Item', item_name, "default_unit_of_measure")
 	available_rows = {
 		(row.source_lot, row.warehouse, row.item_variant): row
 		for row in destination.get("finishing_old_lot_items") or []
@@ -178,7 +178,7 @@ def create_lot_transfer(data, item_name, ipd, lot, doc_name):
 			row_index += 1
 	if not items:
 		frappe.throw("Select at least one old-lot quantity")
-	transfer = frappe.new_doc("Lot Transfer")
+	transfer = frappe.new_doc('SD YRP Lot Transfer')
 	transfer.finishing_plan = doc_name
 	for row in items:
 		transfer.append("items", row)
@@ -206,7 +206,7 @@ def _apply_lot_transfer_to_finishing(transfer, *, cancelled):
 	if not transfer.get("finishing_plan"):
 		return
 
-	finishing_doc = frappe.get_doc("Finishing Plan", transfer.finishing_plan)
+	finishing_doc = frappe.get_doc('SD YRP Finishing Plan', transfer.finishing_plan)
 	transfer_list = update_if_string_instance(finishing_doc.lot_transfer_list) or {}
 	already_applied = transfer.name in transfer_list
 	if (cancelled and not already_applied) or (not cancelled and already_applied):
@@ -242,7 +242,7 @@ def _record_split_history(_destination, transfer, contributions):
 
 	# The Lot Transfer on_submit hook saves this document, so reload instead of
 	# writing a stale pre-submit instance over the freshly applied quantities.
-	destination = frappe.get_doc("Finishing Plan", transfer.finishing_plan)
+	destination = frappe.get_doc('SD YRP Finishing Plan', transfer.finishing_plan)
 	if any(
 		row.lot_transfer == transfer.name
 		for row in destination.get("finishing_old_lot_received_items") or []
@@ -297,7 +297,7 @@ def _record_split_history(_destination, transfer, contributions):
 
 		source = source_docs.setdefault(
 			entry["source_fp"],
-			frappe.get_doc("Finishing Plan", entry["source_fp"]),
+			frappe.get_doc('SD YRP Finishing Plan', entry["source_fp"]),
 		)
 		source.append(
 			"finishing_old_lot_given_items",
@@ -335,7 +335,7 @@ def _reverse_split_history(transfer):
 	"""Restore old-lot balances and remove both audit rows on cancellation."""
 	if not transfer.get("finishing_plan"):
 		return
-	destination = frappe.get_doc("Finishing Plan", transfer.finishing_plan)
+	destination = frappe.get_doc('SD YRP Finishing Plan', transfer.finishing_plan)
 	received_rows = [
 		row
 		for row in destination.get("finishing_old_lot_received_items") or []
@@ -348,7 +348,7 @@ def _reverse_split_history(transfer):
 	for history in received_rows:
 		source = source_docs.setdefault(
 			history.source_fp,
-			frappe.get_doc("Finishing Plan", history.source_fp),
+			frappe.get_doc('SD YRP Finishing Plan', history.source_fp),
 		)
 		available = next(
 			(
@@ -369,7 +369,7 @@ def _reverse_split_history(transfer):
 					"source_lot": history.source_lot,
 					"warehouse": _warehouse_for_supplier(source.delivery_location),
 					"warehouse_name": frappe.db.get_value(
-						"Warehouse",
+						'YRP Warehouse',
 						_warehouse_for_supplier(source.delivery_location),
 						"name1",
 					)
@@ -416,10 +416,10 @@ def _reverse_split_history(transfer):
 def _warehouse_for_supplier(supplier):
 	if not supplier:
 		frappe.throw(_("Finishing Plan delivery location is required for old-lot transfer"))
-	if frappe.db.exists("Warehouse", {"name": supplier, "disabled": 0, "is_group": 0}):
+	if frappe.db.exists('YRP Warehouse', {"name": supplier, "disabled": 0, "is_group": 0}):
 		return supplier
 	warehouses = frappe.get_all(
-		"Warehouse",
+		'YRP Warehouse',
 		filters={"supplier": supplier, "disabled": 0, "is_group": 0},
 		pluck="name",
 	)

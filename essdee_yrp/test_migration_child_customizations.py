@@ -47,7 +47,7 @@ class TestMigrationChildCustomizations(FrappeTestCase):
 
 	def test_item_production_detail_payload_fields(self):
 		self.assert_essdee_fields(
-			"Item Production Detail",
+			'YRP Item Production Detail',
 			{
 				"compacting_details_json": {"fieldtype": "JSON", "hidden": 1},
 				"panel_wise_cloth_mapping_json": {
@@ -59,7 +59,7 @@ class TestMigrationChildCustomizations(FrappeTestCase):
 
 	def test_delivery_challan_item_fields(self):
 		self.assert_essdee_fields(
-			"Delivery Challan Item",
+			'YRP Delivery Challan Item',
 			{
 				"additional_goods_value": {"fieldtype": "Currency"},
 				"additional_parameters": {"fieldtype": "Data"},
@@ -68,7 +68,7 @@ class TestMigrationChildCustomizations(FrappeTestCase):
 			},
 		)
 		self.assertIsNone(
-			frappe.get_meta("Delivery Challan Item", cached=False).get_field("item_type")
+			frappe.get_meta('YRP Delivery Challan Item', cached=False).get_field("item_type")
 		)
 
 	def test_stock_transfer_children_have_every_configured_dimension(self):
@@ -76,9 +76,9 @@ class TestMigrationChildCustomizations(FrappeTestCase):
 		self.assertTrue(dimensions)
 
 		for doctype in (
-			"Delivery Challan Item",
-			"Goods Received Note Item",
-			"Stock Entry Detail",
+			'YRP Delivery Challan Item',
+			'YRP Goods Received Note Item',
+			'YRP Stock Entry Detail',
 		):
 			meta = frappe.get_meta(doctype, cached=False)
 			for dimension in dimensions:
@@ -99,7 +99,7 @@ class TestMigrationChildCustomizations(FrappeTestCase):
 
 	def test_goods_received_note_item_fields(self):
 		self.assert_essdee_fields(
-			"Goods Received Note Item",
+			'YRP Goods Received Note Item',
 			{
 				"received_types": {"fieldtype": "JSON"},
 				"rework_quantity": {"fieldtype": "Float"},
@@ -109,12 +109,12 @@ class TestMigrationChildCustomizations(FrappeTestCase):
 					"allow_on_submit": 1,
 				},
 				"stock_uom_rate": {"fieldtype": "Currency"},
-				"tax": {"fieldtype": "Link", "options": "Tax Slab"},
+				"tax": {"fieldtype": "Link", "options": 'YRP Tax Slab'},
 			},
 		)
 
 	def test_stock_entry_detail_set_combination(self):
 		self.assert_essdee_fields(
-			"Stock Entry Detail",
+			'YRP Stock Entry Detail',
 			{"set_combination": {"fieldtype": "JSON"}},
 		)

@@ -52,7 +52,7 @@ let upload_promise = null
 
 const attach_input = ref(null)
 const file = ref({})
-const method = 'essdee_yrp.essdee_yrp.doctype.product.product.upload_product_file'
+const method = 'essdee_yrp.essdee_yrp.doctype.sd_yrp_product.sd_yrp_product.upload_product_file'
 const files = ref(cur_frm.doc.product_file_versions)
 const visible_files = ref([])
 
@@ -102,7 +102,7 @@ function create_upload_type_input() {
         parent: $($el).find('.upload-type-control'),
         df: {
             fieldtype: 'Link',
-            options: 'Product Upload Type',
+            options: 'SD YRP Product Upload Type',
             label: 'Upload Type',
             reqd: true,
             onchange: () => {
@@ -122,7 +122,7 @@ async function create_attach_control() {
         return;
     }
     let upload_type = upload_type_input.get_value();
-    let allowed_file_types = (await frappe.db.get_value('Product Upload Type', upload_type, 'allowed_upload_types')).message.allowed_upload_types;
+    let allowed_file_types = (await frappe.db.get_value('SD YRP Product Upload Type', upload_type, 'allowed_upload_types')).message.allowed_upload_types;
 
     let options = {
         restrictions: {},
@@ -130,7 +130,7 @@ async function create_attach_control() {
         docname: cur_frm.doc.name,
         fieldname: 'file',
         as_dataurl: true,
-        // method: 'essdee_yrp.essdee_yrp.doctype.product.product.upload_product_file',
+        // method: 'essdee_yrp.essdee_yrp.doctype.sd_yrp_product.sd_yrp_product.upload_product_file',
         on_success: (f) => {
             file.value = f;
 

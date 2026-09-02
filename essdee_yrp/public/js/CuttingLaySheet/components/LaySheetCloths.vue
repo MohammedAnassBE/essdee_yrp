@@ -244,7 +244,7 @@ function onchange_event(){
     let val = cloth_colour.get_value()
     if(val && val != "" && val != null){
         frappe.call({
-            method:"essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.get_input_fields",
+            method:"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.get_input_fields",
             args: {
                 cutting_marker:cur_frm.doc.cutting_marker,
                 colour: val,
@@ -762,7 +762,7 @@ onMounted(()=> {
     }
     if(cur_frm.doc.cutting_plan){
         frappe.call({
-            method:"essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.get_select_attributes",
+            method:"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.get_select_attributes",
             args: {
                 cutting_plan:cur_frm.doc.cutting_plan,
             },
@@ -773,7 +773,7 @@ onMounted(()=> {
         })
     } else if(cur_frm.doc.cutting_order){
         frappe.call({
-            method:"essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.get_select_attributes",
+            method:"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.get_select_attributes",
             args: {
                 cutting_order:cur_frm.doc.cutting_order,
             },
@@ -785,7 +785,7 @@ onMounted(()=> {
     }
     if(cur_frm.doc.is_manual_entry){
         frappe.call({
-            method: "essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.get_primary_values",
+            method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.get_primary_values",
             args: {
                 cutting_laysheet: cur_frm.doc.name,
             },
@@ -841,7 +841,7 @@ function get_set_colour(item, colour){
         make_dirty()
         let val = item['colour']
         frappe.call({
-            method:"essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.get_input_fields",
+            method:"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.get_input_fields",
             args: {
                 cutting_marker:cur_frm.doc.cutting_marker,
                 colour: val,

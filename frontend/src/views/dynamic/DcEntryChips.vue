@@ -78,8 +78,8 @@ const props = defineProps({
 defineEmits(["pick-wo", "pick-supplier"])
 
 const { canRead } = usePermissions()
-const woAllowed = computed(() => canRead("Work Order"))
-const supAllowed = computed(() => canRead("Delivery Challan"))
+const woAllowed = computed(() => canRead("YRP Work Order"))
+const supAllowed = computed(() => canRead("YRP Delivery Challan"))
 
 const workOrders = ref([]) // [{name, item}]
 const suppliers = ref([]) // distinct supplier names, most recent DC first
@@ -95,7 +95,7 @@ onMounted(() => {
 
 async function loadWorkOrders() {
 	try {
-		const { data } = await getList("Work Order", {
+		const { data } = await getList("YRP Work Order", {
 			fields: ["name", "item"],
 			filters: { docstatus: 1, open_status: ["!=", "Close"] },
 			order_by: "modified desc",
@@ -111,7 +111,7 @@ async function loadWorkOrders() {
 
 async function loadSuppliers() {
 	try {
-		const { data } = await getList("Delivery Challan", {
+		const { data } = await getList("YRP Delivery Challan", {
 			fields: ["supplier"],
 			order_by: "modified desc",
 			limit_page_length: 10,

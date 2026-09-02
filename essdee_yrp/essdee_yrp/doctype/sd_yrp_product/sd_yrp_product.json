@@ -1,0 +1,553 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 1,
+ "autoname": "field:style_no",
+ "creation": "2023-05-18 17:53:46.518369",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "tab_break_v3vhq",
+  "style_no",
+  "product_group",
+  "item_name",
+  "template",
+  "fg_item_category",
+  "sizes",
+  "back_image",
+  "front_image",
+  "column_break_gelhq",
+  "season",
+  "fabric_details",
+  "pieces_per_box",
+  "product_category",
+  "size_range",
+  "description",
+  "tech_pack_no",
+  "section_break_zlpx",
+  "is_set_item",
+  "brand",
+  "category",
+  "is_cord",
+  "column_break_jphn",
+  "sub_brand",
+  "dia",
+  "gsm",
+  "section_break_xbdm",
+  "product_fabric_composition_details",
+  "tab_break_xxll",
+  "product_image",
+  "top_image",
+  "bottom_image",
+  "product_silhouttes_html",
+  "product_placement",
+  "product_placement_html",
+  "trims_tab",
+  "trims",
+  "product_trims_html",
+  "colours_tab",
+  "product_colours",
+  "product_set_colours",
+  "trim_colour_combination_html",
+  "product_trim_combination",
+  "graphic_designs_tab",
+  "product_designs",
+  "product_design_html",
+  "accessories_tab",
+  "product_box_details",
+  "box_detail_html",
+  "product_accessories",
+  "product_accessories_html",
+  "measurement_tab",
+  "top_measurement",
+  "measurement",
+  "product_measurement_descriptions",
+  "column_break_hxvp",
+  "bottom_measurement",
+  "measurement_images_html",
+  "section_break_mjyq",
+  "product_measurement_html",
+  "costing_tab",
+  "costing_html",
+  "attachments_tab",
+  "product_file_versions",
+  "file_html",
+  "tab_break_z27ab",
+  "product_info_extras"
+ ],
+ "fields": [
+  {
+   "fieldname": "product_group",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Product Group",
+   "options": "SD YRP Product Group",
+   "reqd": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Long Text",
+   "in_list_view": 1,
+   "label": "Description",
+   "reqd": 1
+  },
+  {
+   "fieldname": "season",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Season",
+   "options": "SD YRP Product Season"
+  },
+  {
+   "fieldname": "front_image",
+   "fieldtype": "Attach Image",
+   "hidden": 1,
+   "label": "Product Image"
+  },
+  {
+   "fieldname": "back_image",
+   "fieldtype": "Attach Image",
+   "hidden": 1,
+   "label": "Product Image (Back)"
+  },
+  {
+   "fieldname": "product_file_versions",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Product File Versions",
+   "no_copy": 1,
+   "options": "SD YRP Product File Version"
+  },
+  {
+   "fieldname": "file_html",
+   "fieldtype": "HTML",
+   "label": "File HTML"
+  },
+  {
+   "fieldname": "tab_break_v3vhq",
+   "fieldtype": "Tab Break",
+   "label": "Basic"
+  },
+  {
+   "fieldname": "attachments_tab",
+   "fieldtype": "Tab Break",
+   "hidden": 1,
+   "label": "Attachments"
+  },
+  {
+   "fieldname": "style_no",
+   "fieldtype": "Data",
+   "label": "Product Style No.",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "fabric_details",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Fabric Details",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_gelhq",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "gsm",
+   "fieldtype": "Data",
+   "label": "GSM"
+  },
+  {
+   "fieldname": "tab_break_z27ab",
+   "fieldtype": "Tab Break",
+   "hidden": 1,
+   "label": "Extras"
+  },
+  {
+   "fieldname": "product_info_extras",
+   "fieldtype": "Table",
+   "label": "Product Info Extras",
+   "options": "SD YRP Product Info"
+  },
+  {
+   "fieldname": "size_range",
+   "fieldtype": "Link",
+   "label": "Size Range",
+   "options": "SD YRP FG Item Size Range"
+  },
+  {
+   "fieldname": "sizes",
+   "fieldtype": "Table",
+   "label": "Sizes",
+   "options": "SD YRP FG Item Size"
+  },
+  {
+   "fieldname": "costing_tab",
+   "fieldtype": "Tab Break",
+   "label": "Costing"
+  },
+  {
+   "fieldname": "costing_html",
+   "fieldtype": "HTML",
+   "label": "Costing HTML"
+  },
+  {
+   "fieldname": "section_break_zlpx",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "category",
+   "fieldtype": "Link",
+   "label": "Category",
+   "options": "SD YRP Product Category Item"
+  },
+  {
+   "fieldname": "sub_brand",
+   "fieldtype": "Link",
+   "label": "Sub Brand",
+   "options": "SD YRP Product Sub brand"
+  },
+  {
+   "fieldname": "dia",
+   "fieldtype": "Data",
+   "label": "Dia"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_set_item",
+   "fieldtype": "Check",
+   "label": "Is Set Item"
+  },
+  {
+   "fieldname": "tab_break_xxll",
+   "fieldtype": "Tab Break",
+   "label": "Silhouette"
+  },
+  {
+   "fieldname": "top_image",
+   "fieldtype": "Attach Image",
+   "hidden": 1,
+   "label": "Top Image"
+  },
+  {
+   "fieldname": "product_placement",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Product Placement",
+   "options": "SD YRP Product Placement"
+  },
+  {
+   "depends_on": "eval: doc.is_set_item",
+   "fieldname": "bottom_image",
+   "fieldtype": "Attach Image",
+   "hidden": 1,
+   "label": "Bottom Image"
+  },
+  {
+   "fieldname": "trims_tab",
+   "fieldtype": "Tab Break",
+   "label": "Trims"
+  },
+  {
+   "fieldname": "trims",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Trims",
+   "options": "SD YRP Product Placement"
+  },
+  {
+   "fieldname": "colours_tab",
+   "fieldtype": "Tab Break",
+   "label": "Colours"
+  },
+  {
+   "depends_on": "eval: !doc.is_set_item",
+   "fieldname": "product_colours",
+   "fieldtype": "Table",
+   "label": "Product Colours",
+   "options": "SD YRP Product Colour"
+  },
+  {
+   "fieldname": "graphic_designs_tab",
+   "fieldtype": "Tab Break",
+   "label": "Graphic Designs"
+  },
+  {
+   "fieldname": "product_fabric_composition_details",
+   "fieldtype": "Table",
+   "label": "Product Fabric Composition Details",
+   "options": "SD YRP Product Fabric Composition Detail"
+  },
+  {
+   "fieldname": "product_placement_html",
+   "fieldtype": "HTML",
+   "label": "Product Placement HTML"
+  },
+  {
+   "fieldname": "product_trims_html",
+   "fieldtype": "HTML",
+   "label": "Product Trims HTML"
+  },
+  {
+   "fieldname": "product_designs",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Product Designs",
+   "options": "SD YRP Product Design"
+  },
+  {
+   "depends_on": "eval: doc.is_set_item",
+   "fieldname": "product_set_colours",
+   "fieldtype": "Table",
+   "label": "Product Set Colours",
+   "options": "SD YRP Product Set Colour"
+  },
+  {
+   "fieldname": "trim_colour_combination_html",
+   "fieldtype": "HTML",
+   "label": "Trim Colour Combination HTML"
+  },
+  {
+   "fieldname": "product_trim_combination",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Product Trim Combination",
+   "options": "SD YRP Product Placement"
+  },
+  {
+   "fieldname": "accessories_tab",
+   "fieldtype": "Tab Break",
+   "label": "Accessories"
+  },
+  {
+   "fieldname": "measurement_tab",
+   "fieldtype": "Tab Break",
+   "label": "Measurement"
+  },
+  {
+   "depends_on": "eval: !doc.is_set_item",
+   "fieldname": "product_measurement_descriptions",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Product Measurement Descriptions",
+   "options": "SD YRP Product Measurement Description"
+  },
+  {
+   "fieldname": "product_measurement_html",
+   "fieldtype": "HTML",
+   "label": "Product Measurement HTML"
+  },
+  {
+   "fieldname": "column_break_jphn",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_xbdm",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "product_image",
+   "fieldtype": "Attach",
+   "hidden": 1,
+   "label": "Product Image"
+  },
+  {
+   "fieldname": "product_silhouttes_html",
+   "fieldtype": "HTML",
+   "label": "Product Silhouttes HTML"
+  },
+  {
+   "fieldname": "product_design_html",
+   "fieldtype": "HTML",
+   "label": "Product Design HTML"
+  },
+  {
+   "fieldname": "measurement_images_html",
+   "fieldtype": "HTML",
+   "label": "Measurement Images HTML"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_cord",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Is Cord"
+  },
+  {
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "label": "Item Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "box_detail_html",
+   "fieldtype": "HTML",
+   "label": "Box Detail HTML"
+  },
+  {
+   "fieldname": "product_accessories",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Product Accessories",
+   "options": "SD YRP Product Placement"
+  },
+  {
+   "fieldname": "product_accessories_html",
+   "fieldtype": "HTML",
+   "label": "Product Accessories HTML"
+  },
+  {
+   "fieldname": "product_box_details",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Product Box Details",
+   "options": "SD YRP Product Design"
+  },
+  {
+   "fieldname": "pieces_per_box",
+   "fieldtype": "Int",
+   "label": "Pieces Per Box"
+  },
+  {
+   "fieldname": "template",
+   "fieldtype": "Link",
+   "label": "Template",
+   "options": "SD YRP FG Item Master Template"
+  },
+  {
+   "fieldname": "product_category",
+   "fieldtype": "Link",
+   "label": "Product Category",
+   "options": "SD YRP Product Category"
+  },
+  {
+   "fieldname": "fg_item_category",
+   "fieldtype": "Link",
+   "label": "Fg Item Category",
+   "options": "SD YRP FG Item Category"
+  },
+  {
+   "depends_on": "eval: !doc.is_set_item",
+   "fieldname": "measurement",
+   "fieldtype": "Link",
+   "label": "Measurement",
+   "options": "SD YRP Product Measurement"
+  },
+  {
+   "depends_on": "eval: doc.is_set_item",
+   "fieldname": "top_measurement",
+   "fieldtype": "Link",
+   "label": "Top Measurement",
+   "options": "SD YRP Product Measurement"
+  },
+  {
+   "depends_on": "eval: doc.is_set_item",
+   "fieldname": "bottom_measurement",
+   "fieldtype": "Link",
+   "label": "Bottom Measurement",
+   "options": "SD YRP Product Measurement"
+  },
+  {
+   "fieldname": "column_break_hxvp",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_mjyq",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "brand",
+   "fieldtype": "Link",
+   "label": "Brand",
+   "options": "SD YRP Product Brand"
+  },
+  {
+   "default": "0",
+   "fieldname": "tech_pack_no",
+   "fieldtype": "Int",
+   "label": "Tech Pack No",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "image_field": "front_image",
+ "index_web_pages_for_search": 1,
+ "links": [
+  {
+   "link_doctype": "SD YRP Product Release",
+   "link_fieldname": "product"
+  }
+ ],
+ "modified": "2026-02-06 18:47:45.742397",
+ "modified_by": "Administrator",
+ "module": "Essdee YRP",
+ "name": "SD YRP Product",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "PD User",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "PD Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Production Planner",
+   "select": 1,
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Merch User",
+   "select": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

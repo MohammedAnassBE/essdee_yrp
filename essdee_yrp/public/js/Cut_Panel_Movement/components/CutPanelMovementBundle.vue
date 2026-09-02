@@ -202,7 +202,7 @@
                     <th class='table-head'><strong>Colour</strong></th>
                     <th class='table-head'><strong>Panel</strong></th>
                     <th class='table-head'><strong>Quantity</strong></th>
-                    <th v-if="doc == 'Cut Panel Movement'" class="table-head"><strong>Move Qty</strong></th>
+                    <th v-if="doc == 'SD YRP Cut Panel Movement'" class="table-head"><strong>Move Qty</strong></th>
                 </tr>
                 <tr v-for="(data, idx) in items.collapsed_details" :key="data">
                     <td class='table-data'>
@@ -215,10 +215,10 @@
                     <td class='table-data'>{{ data.colour }}</td>
                     <td class='table-data'>{{ data.panel }}</td>
                     <td class='table-data'>{{ data.quantity }}</td>
-                    <td v-if="doc == 'Cut Panel Movement' && docstatus == 0">
+                    <td v-if="doc == 'SD YRP Cut Panel Movement' && docstatus == 0">
                         <input class="form-control" type="number" v-model="data.move_qty"/>
                     </td>
-                    <td v-else-if="doc == 'Cut Panel Movement' && docstatus != 0" class='table-data'>
+                    <td v-else-if="doc == 'SD YRP Cut Panel Movement' && docstatus != 0" class='table-data'>
                         {{ data.move_qty }}
                     </td>
                 </tr>

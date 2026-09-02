@@ -28,8 +28,8 @@ def _lock_name(source_grn):
 def _resolve_warehouse(supplier):
     if not supplier:
         frappe.throw(_("supplier is required to resolve the target warehouse."))
-    wh = frappe.db.get_value("Warehouse", {"supplier": supplier}, "name") or supplier
-    if not wh or not frappe.db.exists("Warehouse", wh):
+    wh = frappe.db.get_value('YRP Warehouse', {"supplier": supplier}, "name") or supplier
+    if not wh or not frappe.db.exists('YRP Warehouse', wh):
         frappe.throw(_("No yrp warehouse for supplier '{0}' — sync gap. "
                        "Nothing was transferred.").format(supplier))
     return wh
@@ -43,7 +43,7 @@ def receive_grn_transfer(payload):
     # ignore_permissions, so an explicit permission check must precede it (a bare
     # @frappe.whitelist() otherwise lets any authenticated user create stock). Raised
     # deliberately OUTSIDE the try below so it surfaces as a real PermissionError (403).
-    frappe.has_permission("Stock Entry", "create", throw=True)
+    frappe.has_permission('YRP Stock Entry', "create", throw=True)
     try:
         data = _as_dict(payload)
         source_grn = data.get("source_grn")
@@ -55,10 +55,10 @@ def receive_grn_transfer(payload):
         # (not a DB unique index, which would collide on the blank source_grn of every
         # other Stock Entry) makes the existence re-check + insert atomic across processes.
         with synchronization.filelock(_lock_name(source_grn), timeout=60):
-            existing = frappe.db.get_value("Stock Entry", {"source_grn": source_grn, "docstatus": 1}, "name")
+            existing = frappe.db.get_value('YRP Stock Entry', {"source_grn": source_grn, "docstatus": 1}, "name")
             if existing:
                 return {"ok": True, "stock_entry": existing, "duplicate": True,
-                        "warehouse": frappe.db.get_value("Stock Entry", existing, "to_warehouse"),
+                        "warehouse": frappe.db.get_value('YRP Stock Entry', existing, "to_warehouse"),
                         "message": _("Already transferred (idempotent).")}
 
             supplier = data.get("supplier")
@@ -69,26 +69,26 @@ def receive_grn_transfer(payload):
                 return {"ok": False, "error": _("No items in payload.")}
 
             missing_var = [r.get("item_variant") for r in items
-                           if not (r.get("item_variant") and frappe.db.exists("Item Variant", r.get("item_variant")))]
+                           if not (r.get("item_variant") and frappe.db.exists('YRP Item Variant', r.get("item_variant")))]
             if missing_var:
                 return {"ok": False, "error": _("Item Variants missing on essdee_yrp (sync gap): {0}. "
                                                 "Nothing was transferred.").format(", ".join(map(str, missing_var)))}
             missing_lot = [r.get("lot") for r in items
-                           if not (r.get("lot") and frappe.db.exists("Lot", r.get("lot")))]
+                           if not (r.get("lot") and frappe.db.exists('SD YRP Lot', r.get("lot")))]
             if missing_lot:
                 return {"ok": False, "error": _("Lots missing on essdee_yrp: {0}. "
                                                 "Nothing was transferred.").format(", ".join(map(str, missing_lot)))}
-            if not frappe.db.exists("Received Type", "Accepted"):
+            if not frappe.db.exists('YRP Received Type', "Accepted"):
                 return {"ok": False, "error": _("Received Type 'Accepted' is missing on essdee_yrp. "
                                                 "Nothing was transferred.")}
 
-            se = frappe.new_doc("Stock Entry")
+            se = frappe.new_doc('YRP Stock Entry')
             se.purpose = "Material Receipt"
             se.to_warehouse = warehouse
             se.to_supplier = supplier
             se.source_grn = source_grn                       # Custom Field (Step 4)
             se.comments = _("mrp GRN {0}").format(source_grn)
-            # Give every row its OWN row_index. The yrp Stock Entry desk form does NOT
+            # Give every row its OWN row_index. The YRP Stock Entry desk form does NOT
             # render the flat child table — its Vue grid renders group_items_for_ui(items)
             # (pushed via onload -> __onload.item_details), which groups rows by row_index
             # and builds each group from its FIRST row's parent item. Left unset, the Int
@@ -127,20 +127,20 @@ def cancel_grn_transfer(source_grn):
     Idempotent: a missing or already-cancelled SE returns ok."""
     # Authorization gate before the cancel (reverses stock ledger entries). Raised
     # OUTSIDE the try so an unauthorized caller gets a real PermissionError (403).
-    frappe.has_permission("Stock Entry", "cancel", throw=True)
+    frappe.has_permission('YRP Stock Entry', "cancel", throw=True)
     try:
         if not source_grn:
             return {"ok": False, "error": _("source_grn is required.")}
-        name = frappe.db.get_value("Stock Entry", {"source_grn": source_grn, "docstatus": 1}, "name")
+        name = frappe.db.get_value('YRP Stock Entry', {"source_grn": source_grn, "docstatus": 1}, "name")
         if name:
-            se = frappe.get_doc("Stock Entry", name)
+            se = frappe.get_doc('YRP Stock Entry', name)
             # Mark this as the legitimate mrp GRN-cancel path so the before_cancel
             # guard (guard_transfer_se_cancel) lets a source_grn SE cancel here.
             se.flags.from_grn_transfer = True
             se.cancel()
             frappe.db.commit()
             return {"ok": True, "stock_entry": name, "message": _("essdee_yrp Stock Entry cancelled.")}
-        if frappe.db.exists("Stock Entry", {"source_grn": source_grn, "docstatus": 2}):
+        if frappe.db.exists('YRP Stock Entry', {"source_grn": source_grn, "docstatus": 2}):
             return {"ok": True, "stock_entry": None, "message": _("Already cancelled (idempotent).")}
         return {"ok": True, "stock_entry": None, "message": _("No yrp Stock Entry to cancel.")}
     except Exception:

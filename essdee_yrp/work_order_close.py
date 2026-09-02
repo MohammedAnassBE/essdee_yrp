@@ -4,7 +4,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, nowdate, nowtime
 
-from yrp.yrp.doctype.work_order.work_order import (
+from yrp.yrp.doctype.yrp_work_order.yrp_work_order import (
 	_apply_close_details,
 	_get_wo_close_approver_role,
 	_is_wo_close_manager,
@@ -39,10 +39,10 @@ def close_work_order(
 		get_conversion_factor,
 		get_stock_balance,
 	)
-	from yrp.yrp.doctype.delivery_challan.delivery_challan import (
+	from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 		_get_warehouse_for_supplier,
 	)
-	from yrp.yrp_stock.doctype.stock_valuation_adjustment.stock_valuation_adjustment import (
+	from yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment.yrp_stock_valuation_adjustment import (
 		create_adjustment,
 		register_production_links,
 	)
@@ -51,10 +51,10 @@ def close_work_order(
 		sd_close_reason or close_reason, close_other_reason
 	)
 	frappe.db.sql(
-		"SELECT name FROM `tabWork Order` WHERE name=%s FOR UPDATE",
+		"SELECT name FROM `tabYRP Work Order` WHERE name=%s FOR UPDATE",
 		(work_order,),
 	)
-	doc = frappe.get_doc("Work Order", work_order)
+	doc = frappe.get_doc('YRP Work Order', work_order)
 	doc.check_permission("write")
 	if doc.docstatus != 1:
 		frappe.throw(_("Only submitted Work Orders can be closed."))
@@ -257,7 +257,7 @@ def close_work_order(
 		allocations=adjustment_allocations,
 		idempotency_key=f"{doc.doctype}:{doc.name}:close:1",
 	)
-	close_voucher_reservations("Work Order", doc.name)
+	close_voucher_reservations('YRP Work Order', doc.name)
 	enqueue_voucher_repost(
 		frappe._dict(
 			doctype=doc.doctype,
@@ -294,12 +294,12 @@ def _get_excess_output_allocations(work_order, deliverable, dimensions):
 		       d.goods_received_note_item AS output_detail,
 		       d.received_item_variant AS output_item,
 		       d.output_receipt_sle, d.stock_qty, d.stock_dimensions
-		FROM `tabYRP GRN Deliverable` d
-		INNER JOIN `tabGoods Received Note` g ON g.name = d.parent
-		WHERE d.parenttype = 'Goods Received Note'
+		FROM `tabSD YRP YRP GRN Deliverable` d
+		INNER JOIN `tabYRP Goods Received Note` g ON g.name = d.parent
+		WHERE d.parenttype = 'YRP Goods Received Note'
 		  AND d.parentfield = 'grn_deliverables'
 		  AND g.docstatus = 1
-		  AND g.against = 'Work Order'
+		  AND g.against = 'YRP Work Order'
 		  AND g.against_id = %s
 		  AND d.work_order_deliverable = %s
 		  AND COALESCE(d.output_receipt_sle, '') != ''
@@ -347,10 +347,10 @@ def _get_excess_output_allocations(work_order, deliverable, dimensions):
 def _get_owned_output_sle(output):
 	"""Load only the active GRN receipt proved by mapped output lineage."""
 	target = frappe.db.get_value(
-		"Stock Ledger Entry",
+		'YRP Stock Ledger Entry',
 		{
 			"name": output["output_receipt_sle"],
-			"voucher_type": "Goods Received Note",
+			"voucher_type": 'YRP Goods Received Note',
 			"voucher_no": output["output_voucher"],
 			"voucher_detail_no": output["output_detail"],
 			"item": output["output_item"],
@@ -398,8 +398,8 @@ def _close_result(work_order, status):
 			frappe.db.sql(
 				"""
 				SELECT COALESCE(SUM(qty), 0)
-				FROM `tabStock Ledger Entry`
-				WHERE voucher_type = 'Work Order'
+				FROM `tabYRP Stock Ledger Entry`
+				WHERE voucher_type = 'YRP Work Order'
 				  AND voucher_no = %s
 				  AND is_cancelled = 0
 				""",

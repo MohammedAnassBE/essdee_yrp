@@ -20,10 +20,10 @@
                 </thead>
                 <tbody class="dark-border">
                     <tr v-for="(date, lt) in lt_list">
-                        <td style="cursor: pointer;" @click="redirect_to('Lot Transfer', lt)">{{ lt }}</td>
+                        <td style="cursor: pointer;" @click="redirect_to('SD YRP Lot Transfer', lt)">{{ lt }}</td>
                         <td>{{ date }}</td>
                         <td>
-                            <button class="btn btn-primary" @click="cancel_doc('Lot Transfer', lt)">Cancel</button>
+                            <button class="btn btn-primary" @click="cancel_doc('SD YRP Lot Transfer', lt)">Cancel</button>
                         </td>
                     </tr>
                 </tbody>
@@ -130,7 +130,7 @@ const MatrixTable = {
                         rows.push(h('tr', { key: `${idx}-${b.key}` }, [
                             first ? h('td', { rowspan: buckets.length }, String(idx + 1)) : null,
                             first ? h('td', { rowspan: buckets.length, class: 'fp-cell' }, [
-                                h('a', { href: '#', onClick: (e) => { e.preventDefault(); redirect_to('Finishing Plan', g.fp) }, class: 'fp-link' }, g.fp),
+                                h('a', { href: '#', onClick: (e) => { e.preventDefault(); redirect_to('SD YRP Finishing Plan', g.fp) }, class: 'fp-link' }, g.fp),
                                 h('div', { class: 'lot-sub' }, g.lot),
                             ]) : null,
                             first ? h('td', { rowspan: buckets.length }, h('span', { class: 'colour-pill' }, g.colour)) : null,
@@ -139,7 +139,7 @@ const MatrixTable = {
                             ...sizes.map(s => h('td', { key: s, class: 'qty-cell' }, (b.map[s] || 0) > 0 ? String(b.map[s]) : h('span', { class: 'cell-empty' }, '—'))),
                             h('td', { class: 'totals-cell' }, h('div', { class: 'xfer-total' }, String(b.total))),
                             first ? h('td', { rowspan: buckets.length, class: 'lt-cell' }, (g.lts || []).map(lt =>
-                                h('div', {}, h('a', { href: '#', onClick: (e) => { e.preventDefault(); redirect_to('Lot Transfer', lt) }, class: 'fp-link' }, lt))
+                                h('div', {}, h('a', { href: '#', onClick: (e) => { e.preventDefault(); redirect_to('SD YRP Lot Transfer', lt) }, class: 'fp-link' }, lt))
                             )) : null,
                         ].filter(Boolean)))
                     })
@@ -172,7 +172,7 @@ if (onload.old_lot_received_matrix) {
 
 function fetch_items(){
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.fetch_from_old_lot",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.fetch_from_old_lot",
         args: {
             "doc_name": cur_frm.doc.name,
         },
@@ -196,7 +196,7 @@ function cancel_doc(doctype, docname){
         primary_action(){
             d.hide()
             frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.cancel_document",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.cancel_document",
                 args: {
                     "doctype": doctype,
                     "docname": docname,
@@ -230,7 +230,7 @@ function lot_transfer() {
             primary_action(){
                 d.hide()
                 frappe.call({
-                    method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.create_lot_transfer",
+                    method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.create_lot_transfer",
                     args: {
                         "data": items.value,
                         "item_name": cur_frm.doc.item,

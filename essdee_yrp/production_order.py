@@ -1,6 +1,6 @@
 import frappe
 
-from yrp.yrp.doctype.item.item import get_attribute_details
+from yrp.yrp.doctype.yrp_item.yrp_item import get_attribute_details
 
 
 @frappe.whitelist()
@@ -13,13 +13,13 @@ def get_lot_ordered_details(production_order):
 	generic dynamic reference (`reference_doctype`/`reference_name`) — only
 	rows referencing a Lot are shown here.
 	"""
-	doc = frappe.get_doc("Production Order", production_order)
+	doc = frappe.get_doc('YRP Production Order', production_order)
 	doc.check_permission("read")
 
 	rows = [
 		row
 		for row in doc.production_ordered_details or []
-		if row.reference_doctype == "Lot" and row.reference_name and row.item_variant
+		if row.reference_doctype == 'SD YRP Lot' and row.reference_name and row.item_variant
 	]
 
 	primary_values = []
@@ -27,7 +27,7 @@ def get_lot_ordered_details(production_order):
 	attr_cache = {}
 
 	for row in rows:
-		variant = frappe.get_cached_doc("Item Variant", row.item_variant)
+		variant = frappe.get_cached_doc('YRP Item Variant', row.item_variant)
 		if variant.item not in attr_cache:
 			attr_cache[variant.item] = get_attribute_details(variant.item)
 		attr_details = attr_cache[variant.item]

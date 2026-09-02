@@ -310,7 +310,7 @@ function fetchReport() {
     errorMessage.value = ''
 
     frappe.call({
-        method: 'essdee_yrp.essdee_yrp.doctype.sewing_plan.sewing_plan.get_worker_strength_report',
+        method: 'essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan.get_worker_strength_report',
         args: {
             report_date: reportDate.value,
             from_time: fromTime.value,
@@ -372,7 +372,7 @@ function downloadEmployeePunches() {
     const headers = [
         'Employee ID',
         'Employee Name',
-        'Department',
+        'YRP Department',
         'Designation',
         'Manpower Agent',
         'Shift',

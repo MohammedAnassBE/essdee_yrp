@@ -21,7 +21,7 @@ class TestWorkOrderClose(UnitTestCase):
 		)
 		doc = frappe._dict(
 			name="WO-1",
-			doctype="Work Order",
+			doctype='YRP Work Order',
 			docstatus=1,
 			open_status="Open",
 			supplier="SUPPLIER-1",
@@ -152,7 +152,7 @@ class TestWorkOrderClose(UnitTestCase):
 				side_effect=record_usage,
 			),
 			patch(
-				"yrp.yrp.doctype.delivery_challan.delivery_challan._get_warehouse_for_supplier",
+				"yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan._get_warehouse_for_supplier",
 				return_value="WH-1",
 			),
 			patch(
@@ -167,10 +167,10 @@ class TestWorkOrderClose(UnitTestCase):
 			patch("yrp.stock.stock_ledger.enqueue_voucher_repost") as enqueue_repost,
 			patch("yrp.stock.utils.close_voucher_reservations") as close_reservations,
 			patch(
-				"yrp.yrp_stock.doctype.stock_valuation_adjustment.stock_valuation_adjustment.register_production_links"
+				"yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment.yrp_stock_valuation_adjustment.register_production_links"
 			) as register_links,
 			patch(
-				"yrp.yrp_stock.doctype.stock_valuation_adjustment.stock_valuation_adjustment.create_adjustment"
+				"yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment.yrp_stock_valuation_adjustment.create_adjustment"
 			) as create_adjustment,
 			patch("essdee_yrp.work_order_close.nowdate", return_value="2026-08-26"),
 			patch("essdee_yrp.work_order_close.nowtime", return_value="17:30:00"),
@@ -187,7 +187,7 @@ class TestWorkOrderClose(UnitTestCase):
 		self.assertEqual(row.stock_update, 5500)
 		self.assertEqual(result, {"status": "Close", "deducted_qty": 300.0})
 		doc.save.assert_called_once_with(ignore_permissions=True)
-		close_reservations.assert_called_once_with("Work Order", "WO-1")
+		close_reservations.assert_called_once_with('YRP Work Order', "WO-1")
 		enqueue_repost.assert_called_once()
 		self.assertEqual(
 			register_links.call_args.args[2][0]["consumption_sle"],
@@ -210,7 +210,7 @@ class TestWorkOrderClose(UnitTestCase):
 				return_value={"lot": "LOT-1", "received_type": "Accepted"},
 			),
 			patch(
-				"yrp.yrp.doctype.delivery_challan.delivery_challan._get_warehouse_for_supplier",
+				"yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan._get_warehouse_for_supplier",
 				return_value="WH-1",
 			),
 			patch(
@@ -242,7 +242,7 @@ class TestWorkOrderClose(UnitTestCase):
 				_get_owned_output_sle(output)
 
 		filters = get_value.call_args.args[1]
-		self.assertEqual(filters["voucher_type"], "Goods Received Note")
+		self.assertEqual(filters["voucher_type"], 'YRP Goods Received Note')
 		self.assertEqual(filters["voucher_no"], "GRN-1")
 		self.assertEqual(filters["voucher_detail_no"], "GRN-ITEM-1")
 		self.assertEqual(filters["item"], "OUTPUT-VARIANT")
@@ -294,7 +294,7 @@ class TestWorkOrderClose(UnitTestCase):
 				],
 			),
 			patch(
-				"yrp.yrp.doctype.delivery_challan.delivery_challan._get_warehouse_for_supplier",
+				"yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan._get_warehouse_for_supplier",
 				return_value="WH-1",
 			),
 			patch(

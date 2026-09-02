@@ -1,9 +1,9 @@
 """Consumer-site setup tasks for essdee_yrp.
 
-essdee_yrp.site (and siblings) run frappe + yrp only, without ERPNext's setup
-wizard. Records the wizard would normally create are therefore absent. This
-module recreates the ones the consumer needs so synced master data (Suppliers,
-Addresses, Contacts) opens cleanly.
+The app supports both lightweight Frappe + YRP consumer sites and the combined
+ERPNext + YRP + SD YRP deployment. Records that may be absent on lightweight
+sites are created idempotently, while optional integrations such as Spine are
+configured only when installed.
 
 Wired from hooks.py as `after_install` and `after_migrate` — both idempotent.
 """
@@ -34,8 +34,8 @@ MRP_SCHEMA_ROLES = (
 )
 
 MRP_SYSTEM_MANAGER_CANCEL_PERMISSIONS = {
-	"Cut Panel Movement": {"submit": 0},
-	"Cutting Marker": {"submit": 1},
+	'SD YRP Cut Panel Movement': {"submit": 0},
+	'SD YRP Cutting Marker': {"submit": 1},
 }
 
 DOCPERM_FIELDS = (
@@ -58,7 +58,7 @@ DOCPERM_FIELDS = (
 
 ESSDEE_REQUIRED_STOCK_DIMENSIONS = (
 	{
-		"dimension_doctype": "Lot",
+		"dimension_doctype": 'SD YRP Lot',
 		"fieldname": "lot",
 		"label": "Lot",
 		"mandatory": 1,
@@ -66,7 +66,7 @@ ESSDEE_REQUIRED_STOCK_DIMENSIONS = (
 		"is_production_group": 1,
 	},
 	{
-		"dimension_doctype": "Received Type",
+		"dimension_doctype": 'YRP Received Type',
 		"fieldname": "received_type",
 		"label": "Received Type",
 		"mandatory": 1,
@@ -119,14 +119,14 @@ def ensure_purchase_invoice_commercial_fields():
 	"""Install Essdee's commercial PI view without changing base YRP schemas."""
 	create_custom_fields(
 		{
-			"Purchase Invoice": [
+			'YRP Purchase Invoice': [
 				{
 					"fieldname": "essdee_items",
 					"fieldtype": "Table",
 					"label": "Process Items",
-					"options": "Essdee Purchase Invoice Item",
+					"options": 'SD YRP Essdee Purchase Invoice Item',
 					"insert_after": "items",
-					"depends_on": "eval:doc.against == 'Work Order'",
+					"depends_on": "eval:doc.against == 'YRP Work Order'",
 				},
 				{
 					"fieldname": "essdee_rate_table_source",
@@ -138,7 +138,7 @@ def ensure_purchase_invoice_commercial_fields():
 					"no_copy": 1,
 				},
 			],
-			"Purchase Invoice Item": [
+			'YRP Purchase Invoice Item': [
 				{
 					"fieldname": "essdee_group_key",
 					"fieldtype": "Data",
@@ -157,7 +157,7 @@ def ensure_purchase_invoice_commercial_fields():
 					"read_only": 1,
 				},
 			],
-			"PI Work Order Billed Detail": [
+			'YRP PI Work Order Billed Detail': [
 				{
 					"fieldname": "essdee_group_key",
 					"fieldtype": "Data",
@@ -171,9 +171,9 @@ def ensure_purchase_invoice_commercial_fields():
 		update=True,
 	)
 	for doctype, fieldnames in {
-		"Purchase Invoice": ("essdee_items", "essdee_rate_table_source"),
-		"Purchase Invoice Item": ("essdee_group_key", "essdee_rate_weight"),
-		"PI Work Order Billed Detail": ("essdee_group_key",),
+		'YRP Purchase Invoice': ("essdee_items", "essdee_rate_table_source"),
+		'YRP Purchase Invoice Item': ("essdee_group_key", "essdee_rate_weight"),
+		'YRP PI Work Order Billed Detail': ("essdee_group_key",),
 	}.items():
 		for fieldname in fieldnames:
 			frappe.db.set_value(
@@ -187,13 +187,13 @@ def ensure_purchase_invoice_commercial_fields():
 def ensure_process_billing_items():
 	"""Complete the migrated production_api billing-item contract for Cutting."""
 	if (
-		not frappe.get_meta("Process").get_field("item")
-		or not frappe.db.exists("Process", "Cutting")
-		or not frappe.db.exists("Item", "Cutting Charges")
+		not frappe.get_meta('YRP Process').get_field("item")
+		or not frappe.db.exists('YRP Process', "Cutting")
+		or not frappe.db.exists('YRP Item', "Cutting Charges")
 	):
 		return
-	if not frappe.db.get_value("Process", "Cutting", "item"):
-		frappe.db.set_value("Process", "Cutting", "item", "Cutting Charges", update_modified=False)
+	if not frappe.db.get_value('YRP Process', "Cutting", "item"):
+		frappe.db.set_value('YRP Process', "Cutting", "item", "Cutting Charges", update_modified=False)
 
 
 def ensure_stock_transaction_indexes():
@@ -213,12 +213,12 @@ def ensure_stock_transaction_indexes():
 	the voucher-detail index keeps that ownership lookup out of the same scan.
 	"""
 	frappe.db.add_index(
-		"Stock Ledger Entry",
+		'YRP Stock Ledger Entry',
 		["voucher_type", "voucher_no", "is_cancelled"],
 		index_name="idx_sle_voucher_active",
 	)
 	frappe.db.add_index(
-		"Stock Reservation Entry",
+		'YRP Stock Reservation Entry',
 		[
 			"item_code",
 			"warehouse",
@@ -230,7 +230,7 @@ def ensure_stock_transaction_indexes():
 		index_name="idx_sre_active_stock_bucket",
 	)
 	frappe.db.add_index(
-		"Stock Reservation Entry",
+		'YRP Stock Reservation Entry',
 		[
 			"voucher_type",
 			"voucher_no",
@@ -261,7 +261,7 @@ def ensure_required_stock_dimensions():
 			f"are missing: {', '.join(missing_doctypes)}"
 		)
 
-	settings = frappe.get_single("YRP Stock Settings")
+	settings = frappe.get_single('YRP YRP Stock Settings')
 	rows_by_fieldname = {
 		row.fieldname: row for row in (settings.stock_dimensions or [])
 	}
@@ -289,11 +289,11 @@ def ensure_required_stock_dimensions():
 def ensure_yrp_valuation_contract():
 	"""Fail deployment before Essdee can activate a partial stock contract."""
 	required_fields = {
-		"Stock Ledger Entry": (
+		'YRP Stock Ledger Entry': (
 			"paired_stock_ledger_entry",
 			"valuation_adjustment_value",
 		),
-		"YRP GRN Deliverable": (
+		'SD YRP YRP GRN Deliverable': (
 			"goods_received_note_item",
 			"received_item_variant",
 			"material_value",
@@ -301,7 +301,7 @@ def ensure_yrp_valuation_contract():
 			"output_receipt_sle",
 			"stock_dimensions",
 		),
-		"Work Order Excess Usage Item": (
+		'YRP Work Order Excess Usage Item': (
 			"actual_value",
 			"source_sle",
 			"stock_dimensions",
@@ -319,8 +319,8 @@ def ensure_yrp_valuation_contract():
 			if not meta.get_field(fieldname)
 		)
 	for doctype in (
-		"Stock Valuation Adjustment",
-		"Stock Valuation Production Link",
+		'YRP Stock Valuation Adjustment',
+		'YRP Stock Valuation Production Link',
 	):
 		if not frappe.db.exists("DocType", doctype):
 			missing.append(doctype)
@@ -337,7 +337,7 @@ def ensure_finishing_plan_dispatch_naming_series():
 		"Property Setter",
 		{"name": "Finishing Plan Dispatch-naming_series-options"},
 	)
-	frappe.clear_cache(doctype="Finishing Plan Dispatch")
+	frappe.clear_cache(doctype='SD YRP Finishing Plan Dispatch')
 
 
 def ensure_mrp_schema_roles():
@@ -461,14 +461,14 @@ def ensure_yrp_production_order_settings():
 	)
 
 	required_links = (
-		("Item Attribute", PRODUCTION_ORDER_GRID_ATTRIBUTE),
-		("Item Attribute", PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE),
-		("Item Attribute Value", PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE),
+		('YRP Item Attribute', PRODUCTION_ORDER_GRID_ATTRIBUTE),
+		('YRP Item Attribute', PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE),
+		('YRP Item Attribute Value', PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE),
 	)
 	if any(not frappe.db.exists(doctype, name) for doctype, name in required_links):
 		return False
 
-	settings = frappe.get_doc("YRP Settings")
+	settings = frappe.get_doc('YRP YRP Settings')
 	changed = False
 	grid_row = None
 	for row in settings.production_order_attributes or []:

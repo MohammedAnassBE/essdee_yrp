@@ -53,17 +53,17 @@ def _readiness_needs_review(readiness):
 
 def _contract_available():
 	return bool(
-		frappe.db.exists("DocType", "Stock Valuation Production Link")
-		and frappe.db.has_column("Stock Ledger Entry", "paired_stock_ledger_entry")
-		and frappe.db.has_column("YRP GRN Deliverable", "goods_received_note_item")
+		frappe.db.exists("DocType", 'YRP Stock Valuation Production Link')
+		and frappe.db.has_column('YRP Stock Ledger Entry', "paired_stock_ledger_entry")
+		and frappe.db.has_column('SD YRP YRP GRN Deliverable', "goods_received_note_item")
 	)
 
 
 def _pair_lot_transfer_sles():
 	rows = frappe.get_all(
-		"Stock Ledger Entry",
+		'YRP Stock Ledger Entry',
 		filters={
-			"voucher_type": "Lot Transfer",
+			"voucher_type": 'SD YRP Lot Transfer',
 			"is_cancelled": 0,
 			"paired_stock_ledger_entry": ["is", "not set"],
 		},
@@ -86,14 +86,14 @@ def _pair_lot_transfer_sles():
 		):
 			continue
 		frappe.db.set_value(
-			"Stock Ledger Entry",
+			'YRP Stock Ledger Entry',
 			outgoing[0].name,
 			"paired_stock_ledger_entry",
 			incoming[0].name,
 			update_modified=False,
 		)
 		frappe.db.set_value(
-			"Stock Ledger Entry",
+			'YRP Stock Ledger Entry',
 			incoming[0].name,
 			"paired_stock_ledger_entry",
 			outgoing[0].name,
@@ -103,16 +103,16 @@ def _pair_lot_transfer_sles():
 
 def _backfill_single_output_grns():
 	from yrp.stock.dimensions import get_dimension_fieldnames
-	from yrp.yrp_stock.doctype.stock_valuation_adjustment.stock_valuation_adjustment import (
+	from yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment.yrp_stock_valuation_adjustment import (
 		register_production_links,
 	)
 
 	dimension_fields = get_dimension_fieldnames()
 	for grn in frappe.get_all(
-		"Goods Received Note",
+		'YRP Goods Received Note',
 		filters={
 			"docstatus": 1,
-			"against": "Work Order",
+			"against": 'YRP Work Order',
 			"is_return": 0,
 			"is_rework": 0,
 		},
@@ -121,7 +121,7 @@ def _backfill_single_output_grns():
 	):
 		grn_name = grn.name
 		outputs = frappe.get_all(
-			"Goods Received Note Item",
+			'YRP Goods Received Note Item',
 			filters={"parent": grn_name, "parentfield": "items"},
 			fields=["name", "item_variant"],
 			limit_page_length=0,
@@ -130,9 +130,9 @@ def _backfill_single_output_grns():
 			continue
 		output = outputs[0]
 		output_sles = frappe.get_all(
-			"Stock Ledger Entry",
+			'YRP Stock Ledger Entry',
 			filters={
-				"voucher_type": "Goods Received Note",
+				"voucher_type": 'YRP Goods Received Note',
 				"voucher_no": grn_name,
 				"voucher_detail_no": output.name,
 				"item": output.item_variant,
@@ -148,10 +148,10 @@ def _backfill_single_output_grns():
 
 		links = []
 		children = frappe.get_all(
-			"YRP GRN Deliverable",
+			'SD YRP YRP GRN Deliverable',
 			filters={
 				"parent": grn_name,
-				"parenttype": "Goods Received Note",
+				"parenttype": 'YRP Goods Received Note',
 				"parentfield": "grn_deliverables",
 			},
 			fields=[
@@ -192,7 +192,7 @@ def _backfill_single_output_grns():
 			material_value = abs(flt(consumption.stock_value_difference))
 			stock_qty = flt(child.stock_qty) or abs(flt(consumption.qty))
 			frappe.db.set_value(
-				"YRP GRN Deliverable",
+				'SD YRP YRP GRN Deliverable',
 				child.name,
 				{
 					"goods_received_note_item": output.name,
@@ -216,7 +216,7 @@ def _backfill_single_output_grns():
 					"stock_dimensions": frappe.as_json(stock_dimensions),
 				}
 			)
-		register_production_links("Goods Received Note", grn_name, links)
+		register_production_links('YRP Goods Received Note', grn_name, links)
 
 
 def _has_base_compatible_production_posting_order(output_sle, consumption_sle):
@@ -240,7 +240,7 @@ def _has_base_compatible_production_posting_order(output_sle, consumption_sle):
 def _get_owned_consumption_sle(grn_name, child, dimension_fields):
 	"""Return one active outgoing SLE owned by this exact legacy input row."""
 	filters = {
-		"voucher_type": "Goods Received Note",
+		"voucher_type": 'YRP Goods Received Note',
 		"voucher_no": grn_name,
 		"voucher_detail_no": child.name,
 		"item": child.item_variant,
@@ -250,7 +250,7 @@ def _get_owned_consumption_sle(grn_name, child, dimension_fields):
 	if child.consumption_sle:
 		filters["name"] = child.consumption_sle
 	rows = frappe.get_all(
-		"Stock Ledger Entry",
+		'YRP Stock Ledger Entry',
 		filters=filters,
 		fields=[
 			"name",
@@ -267,12 +267,12 @@ def _get_owned_consumption_sle(grn_name, child, dimension_fields):
 
 def _resolve_exact_work_order_deliverable(work_order, child, dimension_fields):
 	"""Return one immutable Work Order input row, never the first plausible row."""
-	from yrp.yrp.doctype.delivery_challan.delivery_challan import _normal_json
+	from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import _normal_json
 
 	if not work_order or not child.item_variant:
 		return None
 	rows = frappe.get_all(
-		"Work Order Deliverables",
+		'YRP Work Order Deliverables',
 		filters={"parent": work_order, "item_variant": child.item_variant},
 		fields=[
 			"name",
@@ -343,9 +343,9 @@ def get_valuation_lineage_readiness():
 			"output_receipt_sle"
 		),
 		"unpaired_active_lot_transfer_sles": frappe.db.count(
-			"Stock Ledger Entry",
+			'YRP Stock Ledger Entry',
 			filters={
-				"voucher_type": "Lot Transfer",
+				"voucher_type": 'SD YRP Lot Transfer',
 				"is_cancelled": 0,
 				"paired_stock_ledger_entry": ["is", "not set"],
 			},
@@ -371,12 +371,12 @@ def _count_submitted_grn_rows_missing(fieldname):
 	return frappe.db.sql(
 		f"""
 		SELECT COUNT(*)
-		FROM `tabYRP GRN Deliverable` d
-		INNER JOIN `tabGoods Received Note` g ON g.name = d.parent
-		WHERE d.parenttype = 'Goods Received Note'
+		FROM `tabSD YRP YRP GRN Deliverable` d
+		INNER JOIN `tabYRP Goods Received Note` g ON g.name = d.parent
+		WHERE d.parenttype = 'YRP Goods Received Note'
 		  AND d.parentfield = 'grn_deliverables'
 		  AND g.docstatus = 1
-		  AND g.against = 'Work Order'
+		  AND g.against = 'YRP Work Order'
 		  AND COALESCE(g.is_return, 0) = 0
 		  AND COALESCE(g.is_rework, 0) = 0
 		  AND COALESCE(d.`{fieldname}`, '') = ''
@@ -392,12 +392,12 @@ def _count_submitted_grn_rows_with_condition(condition):
 	return frappe.db.sql(
 		f"""
 		SELECT COUNT(*)
-		FROM `tabYRP GRN Deliverable` d
-		INNER JOIN `tabGoods Received Note` g ON g.name = d.parent
-		WHERE d.parenttype = 'Goods Received Note'
+		FROM `tabSD YRP YRP GRN Deliverable` d
+		INNER JOIN `tabYRP Goods Received Note` g ON g.name = d.parent
+		WHERE d.parenttype = 'YRP Goods Received Note'
 		  AND d.parentfield = 'grn_deliverables'
 		  AND g.docstatus = 1
-		  AND g.against = 'Work Order'
+		  AND g.against = 'YRP Work Order'
 		  AND COALESCE(g.is_return, 0) = 0
 		  AND COALESCE(g.is_rework, 0) = 0
 		  AND ({condition})
@@ -409,18 +409,18 @@ def _count_ambiguous_multi_output_rows():
 	return frappe.db.sql(
 		"""
 		SELECT COUNT(*)
-		FROM `tabYRP GRN Deliverable` d
-		INNER JOIN `tabGoods Received Note` g ON g.name = d.parent
+		FROM `tabSD YRP YRP GRN Deliverable` d
+		INNER JOIN `tabYRP Goods Received Note` g ON g.name = d.parent
 		INNER JOIN (
 			SELECT parent, COUNT(*) AS output_count
-			FROM `tabGoods Received Note Item`
-			WHERE parenttype = 'Goods Received Note' AND parentfield = 'items'
+			FROM `tabYRP Goods Received Note Item`
+			WHERE parenttype = 'YRP Goods Received Note' AND parentfield = 'items'
 			GROUP BY parent
 		) outputs ON outputs.parent = g.name AND outputs.output_count > 1
-		WHERE d.parenttype = 'Goods Received Note'
+		WHERE d.parenttype = 'YRP Goods Received Note'
 		  AND d.parentfield = 'grn_deliverables'
 		  AND g.docstatus = 1
-		  AND g.against = 'Work Order'
+		  AND g.against = 'YRP Work Order'
 		  AND COALESCE(g.is_return, 0) = 0
 		  AND COALESCE(g.is_rework, 0) = 0
 		  AND COALESCE(d.goods_received_note_item, '') = ''
@@ -432,17 +432,17 @@ def _count_invalid_grn_item_links():
 	return frappe.db.sql(
 		"""
 		SELECT COUNT(*)
-		FROM `tabYRP GRN Deliverable` d
-		INNER JOIN `tabGoods Received Note` g ON g.name = d.parent
-		LEFT JOIN `tabGoods Received Note Item` i
+		FROM `tabSD YRP YRP GRN Deliverable` d
+		INNER JOIN `tabYRP Goods Received Note` g ON g.name = d.parent
+		LEFT JOIN `tabYRP Goods Received Note Item` i
 		  ON i.name = d.goods_received_note_item
 		 AND i.parent = g.name
-		 AND i.parenttype = 'Goods Received Note'
+		 AND i.parenttype = 'YRP Goods Received Note'
 		 AND i.parentfield = 'items'
-		WHERE d.parenttype = 'Goods Received Note'
+		WHERE d.parenttype = 'YRP Goods Received Note'
 		  AND d.parentfield = 'grn_deliverables'
 		  AND g.docstatus = 1
-		  AND g.against = 'Work Order'
+		  AND g.against = 'YRP Work Order'
 		  AND COALESCE(g.is_return, 0) = 0
 		  AND COALESCE(g.is_rework, 0) = 0
 		  AND COALESCE(d.goods_received_note_item, '') != ''
@@ -459,18 +459,18 @@ def _count_invalid_sle_links(fieldname, quantity_operator):
 	return frappe.db.sql(
 		f"""
 		SELECT COUNT(*)
-		FROM `tabYRP GRN Deliverable` d
-		INNER JOIN `tabGoods Received Note` g ON g.name = d.parent
-		LEFT JOIN `tabStock Ledger Entry` s
+		FROM `tabSD YRP YRP GRN Deliverable` d
+		INNER JOIN `tabYRP Goods Received Note` g ON g.name = d.parent
+		LEFT JOIN `tabYRP Stock Ledger Entry` s
 		  ON s.name = d.`{fieldname}`
-		 AND s.voucher_type = 'Goods Received Note'
+		 AND s.voucher_type = 'YRP Goods Received Note'
 		 AND s.voucher_no = g.name
 		 AND s.qty {quantity_operator} 0
 		 AND s.is_cancelled = 0
-		WHERE d.parenttype = 'Goods Received Note'
+		WHERE d.parenttype = 'YRP Goods Received Note'
 		  AND d.parentfield = 'grn_deliverables'
 		  AND g.docstatus = 1
-		  AND g.against = 'Work Order'
+		  AND g.against = 'YRP Work Order'
 		  AND COALESCE(g.is_return, 0) = 0
 		  AND COALESCE(g.is_rework, 0) = 0
 		  AND COALESCE(d.`{fieldname}`, '') != ''

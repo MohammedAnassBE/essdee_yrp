@@ -24,8 +24,8 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		"allow_non_bundle": ("Check", None),
 		"delivery_location_name": ("Data", None),
 		"dc_no": ("Data", None),
-		"cutting_laysheet": ("Link", "Cutting LaySheet"),
-		"mrp_material_issue_ref": ("Link", "Stock Entry"),
+		"cutting_laysheet": ("Link", 'SD YRP Cutting LaySheet'),
+		"mrp_material_issue_ref": ("Link", 'YRP Stock Entry'),
 		"is_pack": ("Check", None),
 		"from_finishing": ("Check", None),
 		"avoid_sewing_plan_qty": ("Check", None),
@@ -35,7 +35,7 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		"actual_date": ("Date", None),
 		"is_manual_entry": ("Check", None),
 		"letter_head": ("Link", "Letter Head"),
-		"cut_panel_movement": ("Link", "Cut Panel Movement"),
+		"cut_panel_movement": ("Link", 'SD YRP Cut Panel Movement'),
 		"includes_packing": ("Check", None),
 		"supplier_document_date": ("Date", None),
 		"freight_charge_per_product": ("Currency", None),
@@ -52,9 +52,9 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		"packing_calculation_version": ("Int", None),
 		"total_packing_boxes": ("Float", None),
 		"total_packing_pieces": ("Float", None),
-		"packing_batches": ("Table", "GRN Packing Batch"),
+		"packing_batches": ("Table", 'SD YRP GRN Packing Batch'),
 		"items_json": ("JSON", None),
-		"grn_excess_usage_items": ("Table", "GRN Excess Usage Item"),
+		"grn_excess_usage_items": ("Table", 'SD YRP GRN Excess Usage Item'),
 		"total_delivered_qty": ("Float", None),
 		"total_tax": ("Currency", None),
 		"grand_total": ("Currency", None),
@@ -71,7 +71,7 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		).read_text(encoding="utf-8")
 		self.assertIn("get_grn_calculation_context", source)
 		self.assertIn("calculate_grn_receivables", source)
-		self.assertIn('options: "Received Type"', source)
+		self.assertIn('options: "YRP Received Type"', source)
 		self.assertIn("essdee-grn-calc-qty", source)
 
 	def test_grn_calculate_replaces_only_the_selected_received_type(self):
@@ -143,7 +143,7 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		self.assertEqual(rows[0].received_type, "Accepted")
 
 	def test_calculated_input_availability_is_not_a_draft_save_hook(self):
-		before_validate = frappe.get_hooks("doc_events")["Goods Received Note"][
+		before_validate = frappe.get_hooks("doc_events")['YRP Goods Received Note'][
 			"before_validate"
 		]
 		for method in (
@@ -198,7 +198,7 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		with (
 			patch.object(frappe, "get_doc", return_value=frappe._dict()),
 			patch(
-				"yrp.yrp.doctype.goods_received_note.goods_received_note._pending_receivable_rows",
+				"yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note._pending_receivable_rows",
 				return_value=pending,
 			),
 			patch(
@@ -206,11 +206,11 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 				return_value="Accepted",
 			),
 			patch(
-				"yrp.yrp.doctype.delivery_challan.delivery_challan._get_production_group_dimensions",
+				"yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan._get_production_group_dimensions",
 				return_value={},
 			),
 			patch(
-				"yrp.yrp.doctype.delivery_challan.delivery_challan._apply_dimension_values_to_rows"
+				"yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan._apply_dimension_values_to_rows"
 			),
 			patch("yrp.stock.dimensions.apply_dimension_defaults"),
 		):
@@ -219,7 +219,7 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		self.assertEqual([row.received_type for row in filtered], ["Accepted"])
 
 	def test_approved_production_api_fields_are_essdee_custom_fields(self):
-		meta = frappe.get_meta("Goods Received Note", cached=False)
+		meta = frappe.get_meta('YRP Goods Received Note', cached=False)
 
 		for fieldname, expected in self.EXPECTED_FIELDS.items():
 			with self.subTest(fieldname=fieldname):
@@ -230,7 +230,7 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 					frappe.db.exists(
 						"Custom Field",
 						{
-							"dt": "Goods Received Note",
+							"dt": 'YRP Goods Received Note',
 							"fieldname": fieldname,
 							"module": "Essdee YRP",
 						},
@@ -238,7 +238,7 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 				)
 
 	def test_source_field_attributes_are_preserved(self):
-		meta = frappe.get_meta("Goods Received Note", cached=False)
+		meta = frappe.get_meta('YRP Goods Received Note', cached=False)
 
 		self.assertEqual(meta.get_field("delivery_date").default, "Today")
 		self.assertEqual(meta.get_field("delivery_date").reqd, 1)
@@ -268,13 +268,13 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		self.assertEqual(meta.get_field("approved_by").no_copy, 1)
 
 	def test_obsolete_essdee_stock_entry_fields_are_excluded(self):
-		meta = frappe.get_meta("Goods Received Note", cached=False)
+		meta = frappe.get_meta('YRP Goods Received Note', cached=False)
 		self.assertIsNone(meta.get_field("essdee_yrp_stock_entry"))
 		self.assertIsNone(meta.get_field("essdee_yrp_stock_entry_created"))
 
 	def test_sewing_grn_is_blocked_without_checking_output(self):
 		grn = frappe._dict(
-			against="Work Order",
+			against='YRP Work Order',
 			against_id="TEST-SEWING-WO",
 			name="TEST-SEWING-GRN",
 			items=[frappe._dict(item_variant="PIECE-RED-45", quantity=1)],
@@ -289,7 +289,7 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 
 	def test_sewing_grn_accepts_only_remaining_checked_quantity(self):
 		grn = frappe._dict(
-			against="Work Order",
+			against='YRP Work Order',
 			against_id="TEST-SEWING-WO",
 			name="TEST-SEWING-GRN",
 			items=[frappe._dict(item_variant="PIECE-RED-45", quantity=6)],
@@ -310,7 +310,7 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 
 	def test_configured_supplier_skips_sewing_quantity_validation(self):
 		grn = frappe._dict(
-			against="Work Order",
+			against='YRP Work Order',
 			against_id="TEST-SEWING-WO",
 			name="TEST-SEWING-GRN",
 			supplier="EXEMPT-SEWING-UNIT",
@@ -326,7 +326,7 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		sql.assert_not_called()
 
 	def test_approved_base_yrp_fields_are_unchanged(self):
-		meta = frappe.get_meta("Goods Received Note", cached=False)
+		meta = frappe.get_meta('YRP Goods Received Note', cached=False)
 
 		delivery_location = meta.get_field("delivery_location")
 		self.assertEqual(
@@ -335,7 +335,7 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 				delivery_location.reqd,
 				delivery_location.fetch_from,
 			),
-			("Supplier", 0, "to_warehouse.supplier"),
+			('YRP Supplier', 0, "to_warehouse.supplier"),
 		)
 
 		freight_charges = meta.get_field("freight_charges")
@@ -345,7 +345,7 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		lot = meta.get_field("lot")
 		self.assertEqual(
 			(lot.fieldtype, lot.options, lot.reqd, lot.read_only),
-			("Link", "Lot", 1, 0),
+			("Link", 'SD YRP Lot', 1, 0),
 		)
 
 	def test_cutting_grn_sizes_share_one_logical_row(self):
@@ -372,7 +372,7 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		item = frappe._dict(primary_attribute="Size")
 
 		def get_cached_doc(doctype, name):
-			return variants[name] if doctype == "Item Variant" else item
+			return variants[name] if doctype == 'YRP Item Variant' else item
 
 		rows = [
 			frappe._dict(
@@ -429,7 +429,7 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		item = frappe._dict(primary_attribute="Size")
 
 		def get_cached_doc(doctype, name):
-			return variants[name] if doctype == "Item Variant" else item
+			return variants[name] if doctype == 'YRP Item Variant' else item
 
 		rows = [
 			frappe._dict(
@@ -527,11 +527,11 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		}
 
 		def get_cached_doc(doctype, name):
-			return variants[name] if doctype == "Item Variant" else item
+			return variants[name] if doctype == 'YRP Item Variant' else item
 
 		with (
 			patch(
-				"yrp.yrp.doctype.goods_received_note.goods_received_note.get_work_order_defaults",
+				"yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note.get_work_order_defaults",
 				return_value=base_defaults,
 			),
 			patch(
@@ -552,15 +552,15 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		normalized = defaults["items"]
 		self.assertEqual(len({row.row_index for row in normalized}), 1)
 		self.assertEqual(defaults["item_details"], ["grouped"])
-		group_items.assert_called_once_with(normalized, "Goods Received Note")
+		group_items.assert_called_once_with(normalized, 'YRP Goods Received Note')
 
 	def test_non_group_garment_process_consumes_each_received_panel(self):
 		variant = "GARMENT-BOTTOM-LEFT-DARK-GREY-45"
 		combination = {"major_colour": "Airforce", "major_part": "Top"}
 		grn = frappe.get_doc(
 			{
-				"doctype": "Goods Received Note",
-				"against": "Work Order",
+				"doctype": 'YRP Goods Received Note',
+				"against": 'YRP Work Order',
 				"against_id": "TEST-PRINTING-WO",
 				"process_name": "Printing",
 				"items": [
@@ -607,12 +607,12 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		)
 
 		def get_cached_doc(doctype, name):
-			return work_order if doctype == "Work Order" else ipd
+			return work_order if doctype == 'YRP Work Order' else ipd
 
 		original_get_value = frappe.db.get_value
 
 		def get_value(doctype, filters, fieldname, *args, **kwargs):
-			if doctype == "Process" and filters == "Printing" and fieldname == "is_group":
+			if doctype == 'YRP Process' and filters == "Printing" and fieldname == "is_group":
 				return 0
 			return original_get_value(doctype, filters, fieldname, *args, **kwargs)
 
@@ -625,7 +625,7 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 				return_value={"conversion_factor": 1, "stock_uom": "Pieces"},
 			),
 			patch(
-				"yrp.yrp.doctype.work_order.work_order._stock_dimension_values",
+				"yrp.yrp.doctype.yrp_work_order.yrp_work_order._stock_dimension_values",
 				return_value={"lot": "TEST-LOT", "received_type": "Accepted"},
 			),
 			patch("yrp.stock.utils.get_stock_balance", return_value=(9, 2)),

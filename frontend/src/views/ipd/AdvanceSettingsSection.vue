@@ -72,19 +72,19 @@ const groups = [
 	{
 		title: "Packing",
 		fields: [
-			{ field: "packing_process", label: "Process", doctype: "Process", visible: () => true },
-			{ field: "packing_attribute", label: "Attribute *", doctype: "Item Attribute", attrPick: true, visible: () => true },
+			{ field: "packing_process", label: "Process", doctype: "YRP Process", visible: () => true },
+			{ field: "packing_attribute", label: "Attribute *", doctype: "YRP Item Attribute", attrPick: true, visible: () => true },
 			{
 				field: "pack_in_stage",
 				label: "In stage",
-				doctype: "Item Attribute Value",
+				doctype: "YRP Item Attribute Value",
 				stagePick: true,
 				visible: () => !!props.doc.dependent_attribute_mapping,
 			},
 			{
 				field: "pack_out_stage",
 				label: "Out stage",
-				doctype: "Item Attribute Value",
+				doctype: "YRP Item Attribute Value",
 				stagePick: true,
 				visible: () => !!props.doc.dependent_attribute_mapping,
 			},
@@ -93,19 +93,19 @@ const groups = [
 	{
 		title: "Stitching",
 		fields: [
-			{ field: "stiching_process", label: "Process", doctype: "Process", visible: () => true },
-			{ field: "stiching_attribute", label: "Attribute", doctype: "Item Attribute", attrPick: true, visible: () => true },
+			{ field: "stiching_process", label: "Process", doctype: "YRP Process", visible: () => true },
+			{ field: "stiching_attribute", label: "Attribute", doctype: "YRP Item Attribute", attrPick: true, visible: () => true },
 			{
 				field: "stiching_in_stage",
 				label: "In stage",
-				doctype: "Item Attribute Value",
+				doctype: "YRP Item Attribute Value",
 				stagePick: true,
 				visible: () => !!(props.editing ? form.value.stiching_attribute : props.doc.stiching_attribute),
 			},
 			{
 				field: "stiching_out_stage",
 				label: "Out stage",
-				doctype: "Item Attribute Value",
+				doctype: "YRP Item Attribute Value",
 				stagePick: true,
 				visible: () => !!(props.editing ? form.value.stiching_attribute : props.doc.stiching_attribute),
 			},
@@ -113,7 +113,7 @@ const groups = [
 	},
 	{
 		title: "Cutting",
-		fields: [{ field: "cutting_process", label: "Process", doctype: "Process", visible: () => true }],
+		fields: [{ field: "cutting_process", label: "Process", doctype: "YRP Process", visible: () => true }],
 	},
 ];
 
@@ -153,7 +153,7 @@ async function stageSearch(q) {
 	const mapping = dependentMapping.value;
 	if (!mapping) return [];
 	const res = await callMethod("essdee_yrp.ipd_ui.get_attribute_detail_values", {
-		doctype: "Item Attribute Value",
+		doctype: "YRP Item Attribute Value",
 		txt: q || "",
 		searchfield: "name",
 		start: 0,

@@ -66,7 +66,7 @@ def essdee_debit_to_debit(
 			f"Essdee Debit {document.get('name')} has unsupported against={against!r}"
 		)
 	output = _copy_common_fields(document, spec, plan)
-	output["doctype"] = "Debit"
+	output["doctype"] = 'YRP Debit'
 	output["work_order"] = document.get("against_id")
 	if not output.get("work_order"):
 		raise MigrationError(f"Essdee Debit {document.get('name')} has no Work Order")
@@ -82,7 +82,7 @@ def ipd_process_to_f16(
 	output = _system_values(document)
 	output.update(
 		{
-			"doctype": "IPD Process",
+			"doctype": 'YRP IPD Process',
 			"process_name": document.get("process_name"),
 			"in_stage": stage,
 			"out_stage": stage,
@@ -97,8 +97,8 @@ def stock_settings_to_yrp_stock_settings(
 	plan: MigrationPlan,
 ) -> Mapping[str, Any]:
 	return {
-		"doctype": "YRP Stock Settings",
-		"name": "YRP Stock Settings",
+		"doctype": 'YRP YRP Stock Settings',
+		"name": 'YRP YRP Stock Settings',
 		"transit_warehouse": document.get("transit_warehouse"),
 		"default_received_type": document.get("default_received_type"),
 		"default_rejected_received_type": document.get("default_rejected_type"),
@@ -187,11 +187,15 @@ def derive_purchase_invoice_fields(
 	"""
 
 	result = dict(output)
+	result["against"] = {
+		"Work Order": "YRP Work Order",
+		"Purchase Order": "YRP Purchase Order",
+	}.get(result.get("against"), result.get("against"))
 	if not result.get("against"):
 		result["against"] = (
-			"Work Order" if source.get("pi_work_order_billed_details") else "Purchase Order"
+			'YRP Work Order' if source.get("pi_work_order_billed_details") else 'YRP Purchase Order'
 		)
-	if result.get("against") == "Work Order":
+	if result.get("against") == 'YRP Work Order':
 		commercial_rows = []
 		for source_row, target_row in zip(
 			source.get("items") or [],
@@ -208,7 +212,7 @@ def derive_purchase_invoice_fields(
 			rate = target_row.get("rate") or 0
 			commercial_rows.append(
 				{
-					"doctype": "Essdee Purchase Invoice Item",
+					"doctype": 'SD YRP Essdee Purchase Invoice Item',
 					"item": target_row.get("item"),
 					"lot": lot,
 					"item_group": target_row.get("item_group"),

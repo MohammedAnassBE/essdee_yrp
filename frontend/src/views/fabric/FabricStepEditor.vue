@@ -21,7 +21,7 @@
 
   Adapted for /web:
     - frappe.ui.form.make_control Link(Item) → PrimeVue AutoComplete backed by
-      searchLink("Item") (same picker idiom as IPDConfigView's BOM form).
+      searchLink("YRP Item") (same picker idiom as IPDConfigView's BOM form).
     - datalist value autocompletes → PrimeVue AutoComplete fed from the shared
       Item Attribute Value cache (fabricValues.js).
     - frappe.xcall → callMethod (same whitelisted endpoint).
@@ -365,7 +365,7 @@ function onValComplete(attr, e) {
 const itemSuggestions = ref([]);
 async function onItemComplete(e) {
 	try {
-		const rows = await searchLink("Item", e.query || "", {});
+		const rows = await searchLink("YRP Item", e.query || "", {});
 		itemSuggestions.value = (rows || []).map((r) => r.name);
 	} catch (_) { itemSuggestions.value = []; }
 }

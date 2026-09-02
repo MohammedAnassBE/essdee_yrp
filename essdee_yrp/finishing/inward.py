@@ -18,8 +18,8 @@ def cache_selected_size(key, size, finishing_id):
 
 
 def check_eqi_status(print_size, finishing_id):
-	lot = frappe.db.get_value("Finishing Plan", finishing_id, "lot")
-	process = frappe.db.get_single_value("MRP Settings", "finishing_inward_process")
+	lot = frappe.db.get_value('SD YRP Finishing Plan', finishing_id, "lot")
+	process = frappe.db.get_single_value('SD YRP MRP Settings', "finishing_inward_process")
 	inspection = get_eqi_status(get_process_work_orders(process, lot))
 	failed_suppliers = []
 	for supplier, colours in inspection.items():
@@ -38,10 +38,10 @@ def get_eqi_status(work_orders):
 	if not work_orders:
 		return {}
 	inspection_names = frappe.get_all(
-		"Essdee Quality Inspection",
+		'SD YRP Essdee Quality Inspection',
 		filters={
 			"docstatus": 1,
-			"against": "Work Order",
+			"against": 'YRP Work Order',
 			"against_id": ["in", work_orders],
 		},
 		order_by="posting_date desc",
@@ -49,7 +49,7 @@ def get_eqi_status(work_orders):
 	)
 	result = {}
 	for name in inspection_names:
-		doc = frappe.get_doc("Essdee Quality Inspection", name)
+		doc = frappe.get_doc('SD YRP Essdee Quality Inspection', name)
 		result.setdefault(doc.supplier_name, {})
 		for row in doc.get("essdee_quality_inspection_colours") or []:
 			if row.selected:
@@ -69,12 +69,12 @@ def get_finishing_plan_inward_details(key, lot):
 		return {}
 	frappe.cache().delete_value(cache_key)
 
-	settings = frappe.get_cached_doc("YRP Stock Settings")
+	settings = frappe.get_cached_doc('YRP YRP Stock Settings')
 	rejected_type = settings.default_rejected_received_type
 	default_type = settings.default_received_type
-	process = frappe.db.get_single_value("MRP Settings", "finishing_inward_process")
-	production_detail = frappe.db.get_value("Lot", lot, "production_detail")
-	ipd = frappe.get_cached_doc("Item Production Detail", production_detail)
+	process = frappe.db.get_single_value('SD YRP MRP Settings', "finishing_inward_process")
+	production_detail = frappe.db.get_value('SD YRP Lot', lot, "production_detail")
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', production_detail)
 	result = {"data": {}}
 	received_types = [default_type]
 
@@ -82,7 +82,7 @@ def get_finishing_plan_inward_details(key, lot):
 		_add_inward_rows(
 			result["data"],
 			frappe.get_all(
-				"Work Order Calculated Item",
+				'YRP Work Order Calculated Item',
 				filters={"parent": work_order},
 				fields=["*"],
 			),
@@ -99,7 +99,7 @@ def get_finishing_plan_inward_details(key, lot):
 		_add_inward_rows(
 			result["data"],
 			frappe.get_all(
-				"Work Order Calculated Item",
+				'YRP Work Order Calculated Item',
 				filters={"parent": work_order},
 				fields=["*"],
 			),
@@ -179,7 +179,7 @@ def _add_inward_rows(
 def get_part_value(set_attribute, production_detail):
 	if not set_attribute or not production_detail:
 		return None
-	ipd = frappe.get_cached_doc("Item Production Detail", production_detail)
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', production_detail)
 	mapping = next(
 		(
 			row.mapping
@@ -191,7 +191,7 @@ def get_part_value(set_attribute, production_detail):
 	if not mapping:
 		return None
 	return frappe.get_all(
-		"Item Item Attribute Mapping Value",
+		'YRP Item Item Attribute Mapping Value',
 		filters={"parent": mapping},
 		pluck="attribute_value",
 		order_by="idx asc",

@@ -24,24 +24,24 @@ def get_current_user_time():
 
 
 def get_user_signature(user):
-	if not user or not frappe.db.exists("DocType", "Signature"):
+	if not user or not frappe.db.exists("DocType", 'SD YRP Signature'):
 		return None
 	return frappe.db.get_value(
-		"Signature",
+		'SD YRP Signature',
 		{"user": user, "docstatus": 1},
 		"signature",
 	)
 
 
 def get_ipd_pf_details(ipd):
-	return frappe.get_doc("Item Production Detail", ipd)
+	return frappe.get_doc('YRP Item Production Detail', ipd)
 
 
 def get_supplier_address_display(supplier):
 	"""Essdee-owned print adapter for a YRP Supplier's primary address."""
 	if not supplier:
 		return ""
-	from yrp.yrp.doctype.supplier.supplier import get_supplier_address_display as get_address
+	from yrp.yrp.doctype.yrp_supplier.yrp_supplier import get_supplier_address_display as get_address
 
 	return get_address(supplier) or ""
 
@@ -49,7 +49,7 @@ def get_supplier_address_display(supplier):
 def get_warehouse_name(warehouse):
 	if not warehouse:
 		return ""
-	doc = frappe.get_doc("Warehouse", warehouse)
+	doc = frappe.get_doc('YRP Warehouse', warehouse)
 	doc.check_permission("read")
 	return doc.get("name1") or doc.name
 
@@ -57,7 +57,7 @@ def get_warehouse_name(warehouse):
 def get_warehouse_address_display(warehouse):
 	if not warehouse:
 		return ""
-	doc = frappe.get_doc("Warehouse", warehouse)
+	doc = frappe.get_doc('YRP Warehouse', warehouse)
 	doc.check_permission("read")
 	return get_supplier_address_display(doc.get("supplier")) if doc.get("supplier") else ""
 
@@ -65,14 +65,14 @@ def get_warehouse_address_display(warehouse):
 def _supplier_name(supplier):
 	if not supplier:
 		return ""
-	return frappe.db.get_value("Supplier", supplier, "supplier_name") or supplier
+	return frappe.db.get_value('YRP Supplier', supplier, "supplier_name") or supplier
 
 
 def _work_order_lot(rows):
 	for row in rows or []:
 		parent = row.get("parent")
 		if parent:
-			return frappe.db.get_value("Work Order", parent, "lot") or ""
+			return frappe.db.get_value('YRP Work Order', parent, "lot") or ""
 	return ""
 
 
@@ -109,7 +109,7 @@ def _group_items(rows, parent_doctype, *, lot=None):
 
 def fetch_stock_entry_items(items, ipd=None):
 	"""Return the F15 print shape from F16 Stock Entry rows."""
-	return _group_items(items, "Stock Entry")
+	return _group_items(items, 'YRP Stock Entry')
 
 
 def fetch_grn_purchase_item_details(items, docstatus=0):
@@ -117,7 +117,7 @@ def fetch_grn_purchase_item_details(items, docstatus=0):
 	rows = list(items or [])
 	if int(docstatus or 0) != 0:
 		rows = [row for row in rows if flt(row.get("quantity")) > 0]
-	return _group_items(rows, "Goods Received Note")
+	return _group_items(rows, 'YRP Goods Received Note')
 
 
 def check_key_value_in_dict_or_list_of_dict(key, value):
@@ -136,7 +136,7 @@ def parse_json(value):
 
 
 def get_item_from_variant(variant):
-	return frappe.get_cached_value("Item Variant", variant, "item") if variant else None
+	return frappe.get_cached_value('YRP Item Variant', variant, "item") if variant else None
 
 
 def fetch_item_details(items, include_id=False):
@@ -145,7 +145,7 @@ def fetch_item_details(items, include_id=False):
 	The F16 grouping service remains the source of truth. Only legacy display
 	aliases are added here; no transaction data is changed.
 	"""
-	groups = _group_items(items, "Purchase Order")
+	groups = _group_items(items, 'YRP Purchase Order')
 	for group in groups:
 		group["additional_parameters"] = [
 			True
@@ -158,7 +158,7 @@ def fetch_item_details(items, include_id=False):
 				detail["cancelled_qty"] = detail.get("cancelled_quantity", 0)
 				detail["tax"] = detail.get("tax") or item.get("tax") or 0
 				if include_id:
-					detail.setdefault("ref_doctype", "Purchase Order Item")
+					detail.setdefault("ref_doctype", 'YRP Purchase Order Item')
 	return groups
 
 
@@ -171,7 +171,7 @@ def get_cloth_program_print_data(lot):
 	"""
 	from essdee_yrp.fabric_requirement import compute_cloth_demand
 
-	lot_doc = frappe.get_doc("Lot", lot)
+	lot_doc = frappe.get_doc('SD YRP Lot', lot)
 	lot_doc.check_permission("read")
 	additions_payload = parse_json(lot_doc.get("cloth_program_additions")) or {}
 	addition_by_route = {}
@@ -259,7 +259,7 @@ def get_cloth_program_print_data(lot):
 		if row.production_detail:
 			value = flt(
 				frappe.db.get_value(
-					"Item Production Detail", row.production_detail, "cloth_per_kg_yarn"
+					'YRP Item Production Detail', row.production_detail, "cloth_per_kg_yarn"
 				)
 			)
 			if value and value not in cpd_values:
@@ -282,16 +282,16 @@ def get_cloth_program_print_data(lot):
 
 
 def get_dc_structure(doc_name):
-	doc = frappe.get_doc("Delivery Challan", doc_name)
+	doc = frappe.get_doc('YRP Delivery Challan', doc_name)
 	lot = (
-		frappe.db.get_value("Work Order", doc.work_order, "lot")
+		frappe.db.get_value('YRP Work Order', doc.work_order, "lot")
 		if doc.get("work_order")
 		else None
 	)
-	items = _group_items(doc.get("items") or [], "Delivery Challan", lot=lot)
+	items = _group_items(doc.get("items") or [], 'YRP Delivery Challan', lot=lot)
 	expected_delivery_date = (
 		frappe.db.get_value(
-			"Work Order",
+			'YRP Work Order',
 			doc.work_order,
 			"expected_delivery_date",
 		)
@@ -309,7 +309,7 @@ def _generic_work_order_items(items):
 	item variants and quantities, so the print adapter groups those rows
 	directly without inventing a garment IPD.
 	"""
-	from yrp.yrp.doctype.item.item import get_attribute_details
+	from yrp.yrp.doctype.yrp_item.yrp_item import get_attribute_details
 
 	rows = [
 		row.as_dict() if callable(getattr(row, "as_dict", None)) else dict(row)
@@ -328,7 +328,7 @@ def _generic_work_order_items(items):
 	for variants in row_groups.values():
 		first = variants[0]
 		variant_name = first.get("item_variant")
-		parent_item = frappe.db.get_value("Item Variant", variant_name, "item")
+		parent_item = frappe.db.get_value('YRP Item Variant', variant_name, "item")
 		if not parent_item:
 			continue
 
@@ -352,7 +352,7 @@ def _generic_work_order_items(items):
 			},
 		)
 
-		first_variant = frappe.get_cached_doc("Item Variant", variant_name)
+		first_variant = frappe.get_cached_doc('YRP Item Variant', variant_name)
 		first_attrs = {
 			row.attribute: row.attribute_value
 			for row in (first_variant.attributes or [])
@@ -369,7 +369,7 @@ def _generic_work_order_items(items):
 		if primary and primary_values:
 			entry["values"] = {value: {"qty": 0} for value in primary_values}
 			for row in variants:
-				variant = frappe.get_cached_doc("Item Variant", row.get("item_variant"))
+				variant = frappe.get_cached_doc('YRP Item Variant', row.get("item_variant"))
 				attributes = {
 					value.attribute: value.attribute_value
 					for value in (variant.attributes or [])
@@ -395,7 +395,7 @@ def fetch_order_item_details(
 ):
 	"""Print-safe Work Order adapter for garment and fabric work orders."""
 	if production_detail:
-		from essdee_yrp.essdee_yrp.doctype.lot.lot import (
+		from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import (
 			fetch_order_item_details as fetch_garment_items,
 		)
 
@@ -414,12 +414,12 @@ def prepare_print_document(doc, method=None, settings=None):
 	The aliases exist only for rendering. They are never saved and therefore do
 	not expand or duplicate the canonical F16 DocType schema.
 	"""
-	if doc.doctype == "Delivery Challan":
+	if doc.doctype == 'YRP Delivery Challan':
 		doc.from_location_name = _supplier_name(doc.get("from_location"))
 		doc.from_address_details = get_supplier_address_display(doc.get("from_location"))
 		doc.supplier_name = _supplier_name(doc.get("supplier"))
 		doc.supplier_address_details = get_supplier_address_display(doc.get("supplier"))
-	elif doc.doctype == "Goods Received Note":
+	elif doc.doctype == 'YRP Goods Received Note':
 		doc.supplier_name = _supplier_name(doc.get("supplier"))
 		doc.supplier_address_display = get_supplier_address_display(doc.get("supplier"))
 		doc.grn_date = doc.get("posting_date")
@@ -428,7 +428,7 @@ def prepare_print_document(doc, method=None, settings=None):
 		doc.grand_total = flt(doc.get("total"))
 		doc.in_words = money_in_words(doc.grand_total, "INR")
 		doc.approved_by = doc.get("approved_by") or doc.get("modified_by")
-	elif doc.doctype == "Work Order":
+	elif doc.doctype == 'YRP Work Order':
 		doc.supplier_address_details = (
 			doc.get("supplier_address_details")
 			or get_supplier_address_display(doc.get("supplier"))
@@ -449,7 +449,7 @@ def prepare_print_document(doc, method=None, settings=None):
 				for row in (doc.get("receivables") or [])
 				if row.get("item_variant") and flt(row.get("qty")) > 0
 			]
-	elif doc.doctype == "Stock Entry":
+	elif doc.doctype == 'YRP Stock Entry':
 		doc.transfer_supplier = (
 			doc.get("transfer_supplier")
 			or doc.get("from_supplier")

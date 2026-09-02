@@ -4,17 +4,17 @@ from frappe.tests.utils import FrappeTestCase
 
 class TestReviewedProductionCustomizations(FrappeTestCase):
 	def test_work_station_action_is_essdee_custom_field(self):
-		field = frappe.get_meta("Work Station", cached=False).get_field("action")
+		field = frappe.get_meta('YRP Work Station', cached=False).get_field("action")
 		self.assertIsNotNone(field)
 		self.assertEqual(
 			(field.fieldtype, field.options, field.reqd, field.in_list_view),
-			("Link", "Action", 1, 1),
+			("Link", 'SD YRP Action', 1, 1),
 		)
 		self.assertTrue(
 			frappe.db.exists(
 				"Custom Field",
 				{
-					"dt": "Work Station",
+					"dt": 'YRP Work Station',
 					"fieldname": "action",
 					"module": "Essdee YRP",
 				},
@@ -22,23 +22,23 @@ class TestReviewedProductionCustomizations(FrappeTestCase):
 		)
 
 	def test_lot_has_time_and_action_child_table(self):
-		field = frappe.get_meta("Lot", cached=False).get_field(
+		field = frappe.get_meta('SD YRP Lot', cached=False).get_field(
 			"lot_time_and_action_details"
 		)
 		self.assertIsNotNone(field)
 		self.assertEqual(
 			(field.fieldtype, field.options, field.hidden),
-			("Table", "Lot Time and Action Detail", 1),
+			("Table", 'SD YRP Lot Time and Action Detail', 1),
 		)
 		self.assertFalse(
 			frappe.db.exists(
 				"Custom Field",
-				{"dt": "Lot", "fieldname": "lot_time_and_action_details"},
+				{"dt": 'SD YRP Lot', "fieldname": "lot_time_and_action_details"},
 			)
 		)
 
 	def test_production_ordered_detail_matches_approved_source_fields(self):
-		meta = frappe.get_meta("Production Ordered Detail", cached=False)
+		meta = frappe.get_meta('YRP Production Ordered Detail', cached=False)
 		reference_doctype = meta.get_field("reference_doctype")
 		reference_name = meta.get_field("reference_name")
 		lot = meta.get_field("lot")
@@ -54,14 +54,14 @@ class TestReviewedProductionCustomizations(FrappeTestCase):
 		)
 		self.assertEqual(
 			(lot.fieldtype, lot.options, lot.in_list_view),
-			("Link", "Lot", 1),
+			("Link", 'SD YRP Lot', 1),
 		)
 		self.assertEqual(quantity.fieldtype, "Int")
 		self.assertTrue(
 			frappe.db.exists(
 				"Custom Field",
 				{
-					"dt": "Production Ordered Detail",
+					"dt": 'YRP Production Ordered Detail',
 					"fieldname": "lot",
 					"module": "Essdee YRP",
 				},
@@ -71,7 +71,7 @@ class TestReviewedProductionCustomizations(FrappeTestCase):
 			frappe.db.exists(
 				"Property Setter",
 				{
-					"doc_type": "Production Ordered Detail",
+					"doc_type": 'YRP Production Ordered Detail',
 					"field_name": "quantity",
 					"property": "fieldtype",
 					"value": "Int",

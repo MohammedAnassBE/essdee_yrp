@@ -13,15 +13,15 @@ from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 from yrp.stock.dimensions import get_stock_dimensions
 
 
-MANAGED_FIELD_MARKER = "Managed by Essdee YRP from YRP Stock Dimension"
+MANAGED_FIELD_MARKER = "Managed by SD YRP from YRP Stock Dimension"
 
 # Lot Transfer uses two explicit Lot links because a row represents a movement
 # from one dimension value to another.  Every other configured dimension is a
 # normal dynamic field on that row.
 ESSDEE_STOCK_DIMENSION_TARGETS = {
-	"FG Stock Entry Detail": set(),
-	"Item Conversion Detail": set(),
-	"Lot Transfer Item": {"lot"},
+	'SD YRP FG Stock Entry Detail': set(),
+	'SD YRP Item Conversion Detail': set(),
+	'SD YRP Lot Transfer Item': {"lot"},
 }
 
 
@@ -57,7 +57,7 @@ def ensure_essdee_stock_dimension_fields():
 
 
 def _insert_after(doctype: str, fieldname: str) -> str:
-	if doctype == "Lot Transfer Item":
+	if doctype == 'SD YRP Lot Transfer Item':
 		return "received_type" if fieldname != "received_type" else "warehouse"
 	return "received_type" if fieldname != "received_type" else "lot"
 

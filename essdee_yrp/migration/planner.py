@@ -42,39 +42,44 @@ SOURCE_SMS_PARAMETER_ROOT = (
 TARGET_SMS_PARAMETER_ROOT = (
 	BENCH_ROOT / "apps" / "frappe" / "frappe" / "core" / "doctype" / "sms_parameter"
 )
+TARGET_PREFIXES_BY_MODULE = {
+	"YRP": "YRP ",
+	"YRP Stock": "YRP ",
+	"Essdee YRP": "SD YRP ",
+}
 
 DEFAULT_STOCK_DOCTYPES = [
-	"Stock Ledger Entry",
-	"Bin",
-	"Stock Entry Detail",
-	"Stock Update Detail",
-	"Stock Reconciliation Item",
-	"Purchase Order Item",
-	"Stock Reservation Entry",
-	"Repost Item Valuation",
-	"Work Order Deliverables",
-	"Work Order Receivables",
-	"Delivery Challan Item",
-	"Goods Received Note Item",
-	"Inspection Entry Item",
+	'YRP Stock Ledger Entry',
+	'YRP Bin',
+	'YRP Stock Entry Detail',
+	'YRP Stock Update Detail',
+	'YRP Stock Reconciliation Item',
+	'YRP Purchase Order Item',
+	'YRP Stock Reservation Entry',
+	'YRP Repost Item Valuation',
+	'YRP Work Order Deliverables',
+	'YRP Work Order Receivables',
+	'YRP Delivery Challan Item',
+	'YRP Goods Received Note Item',
+	'YRP Inspection Entry Item',
 ]
 DEFAULT_OPERATIONAL_DOCTYPES = [
-	"Work Order",
-	"Purchase Order",
-	"Delivery Challan",
-	"Goods Received Note",
-	"Process Cost",
+	'YRP Work Order',
+	'YRP Purchase Order',
+	'YRP Delivery Challan',
+	'YRP Goods Received Note',
+	'YRP Process Cost',
 ]
 DEFAULT_ESSDEE_DIMENSIONS = [
 	{
-		"dimension_doctype": "Lot",
+		"dimension_doctype": 'SD YRP Lot',
 		"fieldname": "lot",
 		"label": "Lot",
 		"mandatory": 1,
 		"is_production_group": 1,
 	},
 	{
-		"dimension_doctype": "Received Type",
+		"dimension_doctype": 'YRP Received Type',
 		"fieldname": "received_type",
 		"label": "Received Type",
 		"mandatory": 1,
@@ -123,12 +128,13 @@ def build_schema_analysis(
 		stock_doctypes=stock_doctypes,
 		operational_doctypes=operational_doctypes,
 	)
+	doctype_map = _expanded_doctype_map(target_schemas)
 
 	plan = build_plan(
 		source_schema_index,
 		target_schemas,
 		rules=RULES,
-		doctype_map=DOCTYPE_RENAMES,
+		doctype_map=doctype_map,
 		transformers=TRANSFORMERS,
 		value_transformers=VALUE_TRANSFORMERS,
 		post_transformers=POST_TRANSFORMERS,
@@ -141,6 +147,25 @@ def build_schema_analysis(
 		target_site=target_site,
 	)
 	return plan, payload
+
+
+def _expanded_doctype_map(
+	target_schemas: Mapping[str, Mapping[str, Any]],
+) -> dict[str, str]:
+	"""Map every original app-owned source name to its namespaced target.
+
+	Explicit historical renames win over the mechanical owner prefix. This is
+	important for cases such as ``GRN Deliverable``, whose reviewed target was
+	already named ``YRP GRN Deliverable`` before the namespace migration.
+	"""
+
+	doctype_map = {}
+	for target_name, schema in target_schemas.items():
+		prefix = TARGET_PREFIXES_BY_MODULE.get(str(schema.get("module") or ""))
+		if prefix and target_name.startswith(prefix):
+			doctype_map[target_name.removeprefix(prefix)] = target_name
+	doctype_map.update(DOCTYPE_RENAMES)
+	return doctype_map
 
 
 def _plan_payload(

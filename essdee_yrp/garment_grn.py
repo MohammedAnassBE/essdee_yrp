@@ -23,14 +23,14 @@ def get_grn_calculation_context(goods_received_note):
 	``work_order_calculated_items`` saved when the Work Order was built. Keep that
 	lineage here and use the F16 garment calculator for the resulting outputs.
 	"""
-	grn = frappe.get_doc("Goods Received Note", goods_received_note)
+	grn = frappe.get_doc('YRP Goods Received Note', goods_received_note)
 	grn.check_permission("read")
 	work_order, ipd = _validate_grn_calculation(grn)
 	context = _calculated_item_context(work_order, ipd)
 	context.update(
 		{
 			"default_received_type": frappe.db.get_single_value(
-				"YRP Stock Settings", "default_received_type"
+				'YRP YRP Stock Settings', "default_received_type"
 			),
 			"modified": cstr(grn.modified),
 		}
@@ -52,7 +52,7 @@ def calculate_grn_receivables(
 	item/UOM/reference/dimension metadata cannot be supplied by the browser.
 	"""
 	rows = frappe.parse_json(rows) if isinstance(rows, str) else rows
-	grn = frappe.get_doc("Goods Received Note", goods_received_note)
+	grn = frappe.get_doc('YRP Goods Received Note', goods_received_note)
 	grn.check_permission("write")
 	work_order, ipd = _validate_grn_calculation(grn)
 	if modified and cstr(grn.modified) != cstr(modified):
@@ -62,7 +62,7 @@ def calculate_grn_receivables(
 			),
 			frappe.TimestampMismatchError,
 		)
-	if not received_type or not frappe.db.exists("Received Type", received_type):
+	if not received_type or not frappe.db.exists('YRP Received Type', received_type):
 		frappe.throw(_("Select a valid Received Type."))
 
 	demands = _validated_grn_demands(work_order, ipd, rows)
@@ -70,7 +70,7 @@ def calculate_grn_receivables(
 		frappe.throw(_("Enter a quantity greater than zero for at least one row."))
 	from essdee_yrp.garment_work_order import calculate_garment_process_rows
 
-	lot = frappe.get_cached_doc("Lot", work_order.lot)
+	lot = frappe.get_cached_doc('SD YRP Lot', work_order.lot)
 	_inputs, outputs = calculate_garment_process_rows(
 		ipd, lot, work_order.process_name, demands
 	)
@@ -89,16 +89,16 @@ def calculate_grn_receivables(
 
 	from yrp.stock.dimensions import apply_dimension_defaults
 	from yrp.stock.save_stock_items import group_items_for_ui
-	from yrp.yrp.doctype.delivery_challan.delivery_challan import (
+	from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 		_apply_dimension_values_to_rows,
 		_get_production_group_dimensions,
 	)
-	from yrp.yrp.doctype.goods_received_note.goods_received_note import (
+	from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
 		_pending_receivable_rows,
 	)
 
 	delivery_challan = (
-		frappe.get_doc("Delivery Challan", grn.delivery_challan)
+		frappe.get_doc('YRP Delivery Challan', grn.delivery_challan)
 		if grn.delivery_challan
 		else None
 	)
@@ -129,7 +129,7 @@ def calculate_grn_receivables(
 	)
 
 	canonical_rows = normalize_cutting_grn_row_indexes(canonical_rows)
-	item_details = group_items_for_ui(canonical_rows, "Goods Received Note")
+	item_details = group_items_for_ui(canonical_rows, 'YRP Goods Received Note')
 	grn.item_details = frappe.as_json(item_details)
 	grn.save()
 	return {
@@ -143,7 +143,7 @@ def calculate_grn_receivables(
 def _validate_grn_calculation(grn):
 	if grn.docstatus != 0:
 		frappe.throw(_("Calculate can update only a draft Goods Received Note."))
-	if grn.get("against") != "Work Order" or not grn.get("against_id"):
+	if grn.get("against") != 'YRP Work Order' or not grn.get("against_id"):
 		frappe.throw(_("Calculate is available only for a Work Order Goods Received Note."))
 	if any(
 		grn.get(fieldname)
@@ -159,14 +159,14 @@ def _validate_grn_calculation(grn):
 	):
 		frappe.throw(_("Calculate is not available for this Goods Received Note mode."))
 
-	work_order = frappe.get_doc("Work Order", grn.against_id)
+	work_order = frappe.get_doc('YRP Work Order', grn.against_id)
 	if work_order.docstatus != 1 or work_order.get("open_status") == "Close":
 		frappe.throw(_("Work Order {0} must be submitted and open.").format(work_order.name))
 	if not work_order.get("work_order_calculated_items"):
 		frappe.throw(_("Work Order {0} has no saved calculated items.").format(work_order.name))
 	if not work_order.get("production_detail") or not work_order.get("lot"):
 		frappe.throw(_("Work Order {0} is missing its Lot or Item Production Detail.").format(work_order.name))
-	ipd = frappe.get_cached_doc("Item Production Detail", work_order.production_detail)
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', work_order.production_detail)
 	if ipd.get("is_cloth_item"):
 		frappe.throw(_("Use the fabric receipt flow for a cloth Work Order."))
 	return work_order, ipd
@@ -174,7 +174,7 @@ def _validate_grn_calculation(grn):
 
 def _calculated_item_context(work_order, ipd):
 	from yrp.utils import get_variant_attr_details
-	from yrp.yrp.doctype.item_production_detail.item_production_detail import (
+	from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
 		get_ipd_primary_values,
 	)
 
@@ -270,7 +270,7 @@ def _validated_grn_demands(work_order, ipd, rows):
 					quantity, available, source.item_variant
 				)
 			)
-		if frappe.db.get_value("Item Variant", source.item_variant, "item") != ipd.item:
+		if frappe.db.get_value('YRP Item Variant', source.item_variant, "item") != ipd.item:
 			frappe.throw(_("Item Variant {0} does not belong to IPD {1}.").format(source.item_variant, ipd.name))
 		demands.append(
 			{
@@ -286,7 +286,7 @@ def _validated_grn_demands(work_order, ipd, rows):
 
 
 def _match_calculated_receivable(work_order, output):
-	from yrp.yrp.doctype.delivery_challan.delivery_challan import _normal_json
+	from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import _normal_json
 
 	candidates = [
 		row
@@ -356,7 +356,7 @@ def _include_calculated_receivable_rows(
 			uom=target.uom,
 			pending_quantity=flt(target.pending_quantity),
 			max_receivable_quantity=max(flt(target.pending_quantity), 0),
-			ref_doctype="Work Order Receivables",
+			ref_doctype='YRP Work Order Receivables',
 			ref_docname=target.name,
 			table_index=target.table_index,
 			row_index=(
@@ -390,9 +390,9 @@ def calculate_stitching_consumption_plan(doc):
 	from essdee_yrp.garment_work_order import calculate_garment_process_rows
 	from yrp.utils import get_variant_attr_details
 
-	work_order = frappe.get_doc("Work Order", doc.against_id)
-	ipd = frappe.get_cached_doc("Item Production Detail", work_order.production_detail)
-	lot = frappe.get_cached_doc("Lot", work_order.lot)
+	work_order = frappe.get_doc('YRP Work Order', doc.against_id)
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', work_order.production_detail)
+	lot = frappe.get_cached_doc('SD YRP Lot', work_order.lot)
 	receivables = {row.name: row for row in work_order.get("receivables") or []}
 	required_rows = []
 	for received in doc.get("items") or []:
@@ -449,9 +449,9 @@ def calculate_identity_consumption_plan(doc):
 		return []
 
 	from yrp.stock.utils import get_conversion_factor, get_stock_balance
-	from yrp.yrp.doctype.work_order.work_order import _stock_dimension_values
+	from yrp.yrp.doctype.yrp_work_order.yrp_work_order import _stock_dimension_values
 
-	work_order = frappe.get_doc("Work Order", doc.against_id)
+	work_order = frappe.get_doc('YRP Work Order', doc.against_id)
 	# ``is_calculated`` describes how a Work Order row was populated; it does
 	# not change whether the submitted row is a valid stock source.  Migrated
 	# and manually-added deliverables can legitimately have it unset, and an
@@ -529,7 +529,7 @@ def _calculate_identity_accessory_plan(doc, work_order):
 	from essdee_yrp.fabric_grn import _allocate_to_work_order_deliverables
 	from essdee_yrp.garment_work_order import calculate_garment_process_rows
 	from yrp.utils import get_variant_attr_details
-	from yrp.yrp.doctype.delivery_challan.delivery_challan import _normal_json
+	from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import _normal_json
 
 	calculated = [
 		row
@@ -545,7 +545,7 @@ def _calculate_identity_accessory_plan(doc, work_order):
 	def get_parent_item(item_variant):
 		if item_variant not in variant_parent:
 			variant_parent[item_variant] = frappe.db.get_value(
-				"Item Variant", item_variant, "item"
+				'YRP Item Variant', item_variant, "item"
 			)
 		return variant_parent[item_variant]
 
@@ -559,8 +559,8 @@ def _calculate_identity_accessory_plan(doc, work_order):
 	if not accessory_variants:
 		return []
 
-	ipd = frappe.get_cached_doc("Item Production Detail", work_order.production_detail)
-	lot = frappe.get_cached_doc("Lot", work_order.lot)
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', work_order.production_detail)
+	lot = frappe.get_cached_doc('SD YRP Lot', work_order.lot)
 	routes = []
 	for source in calculated:
 		demand = {
@@ -665,7 +665,7 @@ def _calculate_identity_accessory_plan(doc, work_order):
 
 
 def _is_identity_garment_grn(grn):
-	if grn.get("against") != "Work Order" or not grn.get("against_id"):
+	if grn.get("against") != 'YRP Work Order' or not grn.get("against_id"):
 		return False
 	if (
 		grn.get("is_return")
@@ -676,10 +676,10 @@ def _is_identity_garment_grn(grn):
 	):
 		return False
 
-	work_order = frappe.get_cached_doc("Work Order", grn.against_id)
+	work_order = frappe.get_cached_doc('YRP Work Order', grn.against_id)
 	if not work_order.get("production_detail") or not work_order.get("process_name"):
 		return False
-	ipd = frappe.get_cached_doc("Item Production Detail", work_order.production_detail)
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', work_order.production_detail)
 	if ipd.get("is_cloth_item"):
 		return False
 	if work_order.process_name in {
@@ -688,7 +688,7 @@ def _is_identity_garment_grn(grn):
 		ipd.get("packing_process"),
 	}:
 		return False
-	if frappe.db.get_value("Process", work_order.process_name, "is_group"):
+	if frappe.db.get_value('YRP Process', work_order.process_name, "is_group"):
 		return False
 
 	process_row = next(
@@ -704,7 +704,7 @@ def _is_identity_garment_grn(grn):
 
 def _is_stitching_garment_grn(grn):
 	"""Return whether this is the regular configured Stitching receipt route."""
-	if grn.get("against") != "Work Order" or not grn.get("against_id"):
+	if grn.get("against") != 'YRP Work Order' or not grn.get("against_id"):
 		return False
 	if (
 		grn.get("is_return")
@@ -716,10 +716,10 @@ def _is_stitching_garment_grn(grn):
 	):
 		return False
 
-	work_order = frappe.get_cached_doc("Work Order", grn.against_id)
+	work_order = frappe.get_cached_doc('YRP Work Order', grn.against_id)
 	if not work_order.get("production_detail") or not work_order.get("process_name"):
 		return False
-	ipd = frappe.get_cached_doc("Item Production Detail", work_order.production_detail)
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', work_order.production_detail)
 	return bool(
 		not ipd.get("is_cloth_item")
 		and ipd.get("stiching_process")
@@ -729,9 +729,9 @@ def _is_stitching_garment_grn(grn):
 
 def _find_receivable(receivables, received, work_order_name):
 	"""Resolve and validate the exact Work Order output owned by a GRN row."""
-	from yrp.yrp.doctype.delivery_challan.delivery_challan import _normal_json
+	from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import _normal_json
 
-	if received.get("ref_doctype") not in (None, "", "Work Order Receivables"):
+	if received.get("ref_doctype") not in (None, "", 'YRP Work Order Receivables'):
 		frappe.throw(
 			_("Received row {0} is not linked to a Work Order Receivable.").format(
 				received.idx
@@ -771,7 +771,7 @@ def _find_receivable(receivables, received, work_order_name):
 
 
 def _find_deliverable(deliverables, received, work_order_name):
-	from yrp.yrp.doctype.delivery_challan.delivery_challan import _normal_json
+	from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import _normal_json
 
 	candidates = [
 		row

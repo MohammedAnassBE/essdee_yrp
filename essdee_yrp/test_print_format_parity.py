@@ -28,7 +28,7 @@ DOCUMENT_RUNTIME_ATTRIBUTES = {
 }
 
 PRINT_ALIASES = {
-	"Goods Received Note": {
+	'YRP Goods Received Note': {
 		"approved_by",
 		"grand_total",
 		"grn_date",
@@ -38,7 +38,7 @@ PRINT_ALIASES = {
 		"supplier_name",
 		"total_tax",
 	},
-	"Work Order": {
+	'YRP Work Order': {
 		"delivery_address_details",
 		"supplier_address_details",
 		"work_order_calculated_items",

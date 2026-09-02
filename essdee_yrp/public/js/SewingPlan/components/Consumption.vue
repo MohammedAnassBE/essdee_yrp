@@ -248,7 +248,7 @@ const loadBomItemsFromLot = () => {
     }
 
     frappe.call({
-        method: 'essdee_yrp.essdee_yrp.doctype.sewing_plan.sewing_plan.get_consumption_mapping_data',
+        method: 'essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan.get_consumption_mapping_data',
         args: {
             lot,
             supplier: props.selected_supplier
@@ -277,9 +277,9 @@ const initControls = () => {
                 fieldname: 'lot',
                 label: '',
                 placeholder: 'Select Lot',
-                options: 'Lot',
+                options: 'SD YRP Lot',
                 get_query: () => ({
-                    query: 'essdee_yrp.essdee_yrp.doctype.sewing_plan.sewing_plan.get_supplier_lots',
+                    query: 'essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan.get_supplier_lots',
                     filters: {
                         supplier: props.selected_supplier
                     }
@@ -303,7 +303,7 @@ const loadLots = () => {
     }
 
     frappe.call({
-        method: 'essdee_yrp.essdee_yrp.doctype.sewing_plan.sewing_plan.get_the_lot',
+        method: 'essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan.get_the_lot',
         args: { supplier: props.selected_supplier },
         callback: (r) => {
             lotOptions.value = r.message?.lots || []
@@ -320,7 +320,7 @@ const handleSave = () => {
     saving.value = true
 
     frappe.call({
-        method: 'essdee_yrp.essdee_yrp.doctype.sewing_plan.sewing_plan.save_consumption_data',
+        method: 'essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan.save_consumption_data',
         args: {
             supplier: props.selected_supplier,
             lot: selected_lot.value,

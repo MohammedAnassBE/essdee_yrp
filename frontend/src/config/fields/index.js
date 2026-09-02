@@ -27,12 +27,12 @@ import lot from "./lot.js"
 import itemProductionDetail from "./item-production-detail.js"
 
 const FIELD_CONFIGS = {
-	"Work Order": workOrder,
-	"Delivery Challan": deliveryChallan,
-	"Goods Received Note": goodsReceivedNote,
-	"Item": item,
-	"Lot": lot,
-	"Item Production Detail": itemProductionDetail,
+	"YRP Work Order": workOrder,
+	"YRP Delivery Challan": deliveryChallan,
+	"YRP Goods Received Note": goodsReceivedNote,
+	"YRP Item": item,
+	"SD YRP Lot": lot,
+	"YRP Item Production Detail": itemProductionDetail,
 }
 
 /**

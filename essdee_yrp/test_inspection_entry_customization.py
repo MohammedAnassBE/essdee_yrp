@@ -30,7 +30,7 @@ class TestInspectionEntryCustomization(FrappeTestCase):
 			),
 			patch("essdee_yrp.overrides.inspection_entry._attach_display_meta") as attach,
 		):
-			result = get_initial_payload("Goods Received Note", grn.name)
+			result = get_initial_payload('YRP Goods Received Note', grn.name)
 
 		self.assertEqual(result[0]["warehouse"], "TRANSIT")
 		attach.assert_called_once_with(result)
@@ -53,6 +53,6 @@ class TestInspectionEntryCustomization(FrappeTestCase):
 				return_value=grn,
 			),
 		):
-			result = get_initial_payload("Goods Received Note", grn.name)
+			result = get_initial_payload('YRP Goods Received Note', grn.name)
 
 		self.assertEqual(result[0]["warehouse"], "FINAL")

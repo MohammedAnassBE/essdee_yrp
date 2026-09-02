@@ -1,4 +1,4 @@
-frappe.ui.form.on("Work Order", {
+frappe.ui.form.on("YRP Work Order", {
 	setup(frm) {
 		frm.set_df_property("production_detail", "read_only", 1);
 		frm.set_query("item", () => {
@@ -171,7 +171,7 @@ function setup_essdee_work_order_actions(frm) {
 					: __("Create Sewing Plan");
 				frm.add_custom_button(label, () => {
 					if (context.sewing_plan) {
-						frappe.set_route("Form", "Sewing Plan", context.sewing_plan);
+						frappe.set_route("Form", "SD YRP Sewing Plan", context.sewing_plan);
 						return;
 					}
 					create_sewing_plan(frm);
@@ -182,7 +182,7 @@ function setup_essdee_work_order_actions(frm) {
 }
 
 function hide_unavailable_rework_action(frm) {
-	if (frappe.model.can_create("Work Order")) return;
+	if (frappe.model.can_create("YRP Work Order")) return;
 	frm.remove_custom_button(__("Create Rework"));
 	frm.remove_custom_button(__("Create Rework"), __("Create"));
 }
@@ -210,9 +210,9 @@ function rebuild_work_order_pieces(frm) {
 function add_essdee_create_actions(frm, context) {
 	if (context.can_make_material_issue) {
 		frm.add_custom_button(__("Material Issue"), () => {
-			frappe.new_doc("Stock Entry", {
+			frappe.new_doc("YRP Stock Entry", {
 				purpose: "Material Issue",
-				against: "Work Order",
+				against: "YRP Work Order",
 				against_id: frm.doc.name,
 				from_warehouse: context.material_issue_warehouse || "",
 				from_supplier: frm.doc.supplier || "",
@@ -222,7 +222,7 @@ function add_essdee_create_actions(frm, context) {
 	}
 	if (context.can_make_cutting_plan) {
 		frm.add_custom_button(__("Make Cutting Plan"), () => {
-			open_local_work_order_doc("Cutting Plan", {
+			open_local_work_order_doc("SD YRP Cutting Plan", {
 				work_order: frm.doc.name,
 				lot: frm.doc.lot,
 				item: frm.doc.item,
@@ -232,7 +232,7 @@ function add_essdee_create_actions(frm, context) {
 	}
 	if (context.can_make_delivery_challan) {
 		frm.add_custom_button(__("Make DC"), () => {
-			prepare_work_order_transaction(frm, "Delivery Challan");
+			prepare_work_order_transaction(frm, "YRP Delivery Challan");
 		}, __("Create"));
 	}
 	if (context.can_make_goods_received_note) {
@@ -242,7 +242,7 @@ function add_essdee_create_actions(frm, context) {
 	}
 	if (context.can_make_recut) {
 		frm.add_custom_button(__("Create Recut"), () => {
-			open_local_work_order_doc("WO Recut", {
+			open_local_work_order_doc("SD YRP WO Recut", {
 				work_order: frm.doc.name,
 				lot: frm.doc.lot,
 			});
@@ -267,7 +267,7 @@ function select_grn_delivery_challan(frm) {
 			{
 				fieldname: "delivery_challan",
 				fieldtype: "Link",
-				options: "Delivery Challan",
+				options: "YRP Delivery Challan",
 				label: __("Delivery Challan"),
 				get_query: () => ({
 					filters: { work_order: frm.doc.name, docstatus: 1 },
@@ -276,7 +276,7 @@ function select_grn_delivery_challan(frm) {
 		],
 		primary_action(values) {
 			dialog.hide();
-			prepare_work_order_transaction(frm, "Goods Received Note", {
+			prepare_work_order_transaction(frm, "YRP Goods Received Note", {
 				delivery_challan: values.delivery_challan || "",
 			});
 		},
@@ -285,7 +285,7 @@ function select_grn_delivery_challan(frm) {
 }
 
 function prepare_work_order_transaction(frm, doctype, extra_args = {}) {
-	const method = doctype === "Delivery Challan"
+	const method = doctype === "YRP Delivery Challan"
 		? "essdee_yrp.work_order_actions.get_delivery_challan_defaults"
 		: "essdee_yrp.work_order_actions.get_goods_received_note_defaults";
 	frappe.call({
@@ -315,7 +315,7 @@ function open_prepared_work_order_transaction(doctype, values) {
 		if (!doc.posting_date) doc.posting_date = frappe.datetime.nowdate();
 		if (!doc.posting_time) doc.posting_time = frappe.datetime.now_datetime().split(" ")[1];
 		frappe.set_route("Form", doctype, doc.name).then(() => {
-			if (doctype !== "Goods Received Note") return;
+			if (doctype !== "YRP Goods Received Note") return;
 			frappe.after_ajax(() => {
 				if (cur_frm?.doctype !== doctype || cur_frm.doc.name !== doc.name) return;
 				cur_frm.clear_table("items");
@@ -377,7 +377,7 @@ function create_sewing_plan(frm) {
 		freeze: true,
 		freeze_message: __("Creating Sewing Plan..."),
 		callback(r) {
-			if (r.message) frappe.set_route("Form", "Sewing Plan", r.message);
+			if (r.message) frappe.set_route("Form", "SD YRP Sewing Plan", r.message);
 		},
 	});
 }
@@ -636,7 +636,7 @@ function mount_work_order_summary(frm) {
 			frm._essdee_work_order_summary.load_data(
 				rows,
 				result.deliverables || [],
-				{ doctype: "Work Order" },
+				{ doctype: "YRP Work Order" },
 			);
 			$wrapper.css("overflow-x", "auto");
 		},
@@ -707,7 +707,7 @@ function render_garment_calculate_dialog(frm, context) {
 				missing_matrices.length,
 				missing_preview,
 				missing_suffix,
-				`<a href="/app/item-production-detail/${encodeURIComponent(context.ipd)}"><b>${escape(context.ipd)}</b></a>`,
+				`<a href="/app/yrp-item-production-detail/${encodeURIComponent(context.ipd)}"><b>${escape(context.ipd)}</b></a>`,
 			])}
 		</div>`;
 	const attributeHeader = attributes
@@ -941,7 +941,7 @@ function render_fabric_dialog(frm, ctx) {
 				// too many colour choices for columns — single-colour fallback
 				fields.push({
 					fieldtype: "Link", label: __("Cloth Colour"), fieldname: `colour_${i}`,
-					options: "Item Attribute Value",
+					options: "YRP Item Attribute Value",
 					default: row.greige_colour || undefined,
 					get_query: () => {
 						if (colour_options.length) {

@@ -216,9 +216,9 @@ function deleteRow(i) {
 async function searchAttrValues(attr, q) {
 	try {
 		const res = await callMethod("frappe.desk.search.search_link", {
-			doctype: "Item Attribute Value",
+			doctype: "YRP Item Attribute Value",
 			txt: q || "",
-			query: "yrp.yrp.doctype.item.item.get_item_attribute_values",
+			query: "yrp.yrp.doctype.yrp_item.yrp_item.get_item_attribute_values",
 			filters: {
 				item: struct.value?.item || "",
 				attribute: attr,

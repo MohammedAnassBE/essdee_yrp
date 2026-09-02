@@ -13,10 +13,10 @@
                     </thead>
                     <tbody class="dark-border">
                         <tr v-for="(date, grn) in grn_list">
-                            <td style="cursor: pointer;" @click="redirect_to('Goods Received Note', grn)">{{ grn }}</td>
+                            <td style="cursor: pointer;" @click="redirect_to('YRP Goods Received Note', grn)">{{ grn }}</td>
                             <td>{{ date }}</td>
                             <td>
-                                <button class="btn btn-primary" @click="cancel_doc('Goods Received Note', grn)">Cancel</button>
+                                <button class="btn btn-primary" @click="cancel_doc('YRP Goods Received Note', grn)">Cancel</button>
                             </td>
                         </tr>
                     </tbody>
@@ -34,10 +34,10 @@
                     </thead>
                     <tbody class="dark-border">
                         <tr v-for="(date, se) in se_list">
-                            <td style="cursor: pointer;" @click="redirect_to('Stock Entry', se)">{{ se }}</td>
+                            <td style="cursor: pointer;" @click="redirect_to('YRP Stock Entry', se)">{{ se }}</td>
                             <td>{{ date }}</td>
                             <td>
-                                <button class="btn btn-primary" @click="cancel_doc('Stock Entry', se)">Cancel</button>
+                                <button class="btn btn-primary" @click="cancel_doc('YRP Stock Entry', se)">Cancel</button>
                             </td>
                         </tr>
                     </tbody>
@@ -130,7 +130,7 @@ function new_grn_request_id() {
 
 onMounted(()=> {
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.get_primary_values",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.get_primary_values",
         args: {
             lot: cur_frm.doc.lot
         },
@@ -144,7 +144,7 @@ onMounted(()=> {
         }
     })
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.get_ipd_packing_config",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.get_ipd_packing_config",
         args: {
             lot: cur_frm.doc.lot
         },
@@ -167,7 +167,7 @@ function cancel_doc(doctype, docname){
         primary_action(){
             d.hide()
             frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.cancel_document",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.cancel_document",
                 args: {
                     "doctype": doctype,
                     "docname": docname,
@@ -215,7 +215,7 @@ function make_grn(){
                 "fieldname": "delivery_location",
                 "fieldtype": "Link",
                 "label": "Delivery Location",
-                "options": "Supplier",
+                "options": "YRP Supplier",
                 "reqd": 1,
                 "default": location
             },
@@ -254,7 +254,7 @@ function make_grn(){
             pendingGrnRequestId = pendingGrnRequestId || new_grn_request_id()
             d.hide();
             frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.create_grn",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.create_grn",
                 args: {
                     work_order: cur_frm.doc.work_order,
                     lot: cur_frm.doc.lot,
@@ -296,7 +296,7 @@ function make_dispatch(){
                 "fieldname": "from_location",
                 "fieldtype": "Link",
                 "label": "From Location",
-                "options": "Supplier",
+                "options": "YRP Supplier",
                 "reqd": 1,
                 "default": location,
             },
@@ -304,7 +304,7 @@ function make_dispatch(){
                 "fieldname": "to_location",
                 "fieldtype": "Link",
                 "label": "To Location",
-                "options": "Supplier",
+                "options": "YRP Supplier",
                 "reqd": 1,
             },
             {
@@ -329,7 +329,7 @@ function make_dispatch(){
         primary_action(values) {
             d.hide();
             frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.create_stock_entry",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.create_stock_entry",
                 args: {
                     doc_name: cur_frm.doc.name,
                     lot: cur_frm.doc.lot,

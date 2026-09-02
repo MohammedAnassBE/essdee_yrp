@@ -12,7 +12,7 @@
                             class="preview-img"
                         >
                     </div>
-                    <div v-if="doctype != 'Product Release'" style="padding-top: 10px; text-align: center;">
+                    <div v-if="doctype != 'SD YRP Product Release'" style="padding-top: 10px; text-align: center;">
                         <button
                             class="btn btn-primary btn-sm"
                             @click="upload(fieldnames.top_image)"
@@ -41,7 +41,7 @@
                             class="preview-img"
                         >
                     </div>
-                    <div v-if="doctype != 'Product Release'" style="padding-top: 10px; text-align: center;">
+                    <div v-if="doctype != 'SD YRP Product Release'" style="padding-top: 10px; text-align: center;">
                         <button
                             class="btn btn-primary btn-sm"
                             @click="upload(fieldnames.bottom_image)"
@@ -66,7 +66,7 @@
                     class="preview-img"
                 >
             </div>
-            <div v-if="doctype != 'Product Release'" style="padding-top: 10px; text-align: center;">
+            <div v-if="doctype != 'SD YRP Product Release'" style="padding-top: 10px; text-align: center;">
                 <button
                     class="btn btn-primary btn-sm"
                     @click="upload(fieldnames.product_image)"
@@ -105,7 +105,7 @@ function upload(fieldname) {
         folder: "Home",
         on_success: async (file) => {
             await frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.product.product.delete_and_update_file",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_product.sd_yrp_product.delete_and_update_file",
                 args: {
                     file_url: old_file,
                     fieldname: fieldname,
@@ -133,7 +133,7 @@ function upload_pdf(fieldname) {
         },
         on_success: (file) => {
             frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.product.product.process_single_page_pdf",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_product.sd_yrp_product.process_single_page_pdf",
                 args: {
                     file_url: file.file_url,
                     doctype: cur_frm.doc.doctype,

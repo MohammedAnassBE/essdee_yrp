@@ -21,12 +21,12 @@ FULLY_DISPATCHED_PCT = 97.0
 
 def get_set_item_parts_count(finishing_doc):
 	ipd_name = finishing_doc.production_detail or frappe.get_value(
-		"Lot", finishing_doc.lot, "production_detail"
+		'SD YRP Lot', finishing_doc.lot, "production_detail"
 	)
 	if not ipd_name:
 		return 1
 
-	ipd_doc = frappe.get_cached_doc("Item Production Detail", ipd_name)
+	ipd_doc = frappe.get_cached_doc('YRP Item Production Detail', ipd_name)
 	if not ipd_doc.is_set_item:
 		return 1
 
@@ -58,7 +58,7 @@ def get_finishing_plan_total_cutting(finishing_doc):
 		frappe.db.sql(
 			"""
 				SELECT SUM(quantity)
-				FROM `tabWork Order Calculated Item`
+				FROM `tabYRP Work Order Calculated Item`
 				WHERE parent = %s
 			""",
 			finishing_doc.work_order,
@@ -68,7 +68,7 @@ def get_finishing_plan_total_cutting(finishing_doc):
 
 def get_finishing_dispatch_totals(finishing_doc):
 	if isinstance(finishing_doc, str):
-		finishing_doc = frappe.get_doc("Finishing Plan", finishing_doc)
+		finishing_doc = frappe.get_doc('SD YRP Finishing Plan', finishing_doc)
 
 	total_cutting = get_finishing_plan_total_cutting(finishing_doc)
 	packing_summary = get_finishing_packing_summary(finishing_doc)
@@ -101,7 +101,7 @@ def record_finishing_dispatch_log(
 	source_name=None,
 	dispatch_pieces=None,
 ):
-	if not frappe.get_meta("Finishing Plan").has_field("finishing_plan_dispatch_logs"):
+	if not frappe.get_meta('SD YRP Finishing Plan').has_field("finishing_plan_dispatch_logs"):
 		return
 	if flt(dispatch_boxes) <= 0:
 		return
@@ -151,7 +151,7 @@ def record_finishing_dispatch_log(
 
 
 def cancel_finishing_dispatch_log(finishing_doc, stock_entry_name):
-	if not frappe.get_meta("Finishing Plan").has_field("finishing_plan_dispatch_logs"):
+	if not frappe.get_meta('SD YRP Finishing Plan').has_field("finishing_plan_dispatch_logs"):
 		return
 	for row in finishing_doc.get("finishing_plan_dispatch_logs") or []:
 		if row.stock_entry == stock_entry_name:
@@ -160,7 +160,7 @@ def cancel_finishing_dispatch_log(finishing_doc, stock_entry_name):
 
 def compute_received_status(finishing_doc):
 	if isinstance(finishing_doc, str):
-		finishing_doc = frappe.get_doc("Finishing Plan", finishing_doc)
+		finishing_doc = frappe.get_doc('SD YRP Finishing Plan', finishing_doc)
 
 	total_cutting = get_finishing_plan_total_cutting(finishing_doc)
 	if not total_cutting:
@@ -172,7 +172,7 @@ def compute_received_status(finishing_doc):
 	total_dispatched = get_finishing_dispatch_totals(
 		finishing_doc
 	).total_dispatched_pieces
-	settings = frappe.get_cached_doc("MRP Settings")
+	settings = frappe.get_cached_doc('SD YRP MRP Settings')
 
 	if total_dispatched > 0:
 		dispatch_percentage = (total_dispatched / total_cutting) * 100

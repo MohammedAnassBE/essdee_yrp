@@ -61,7 +61,7 @@ function create_inputs(){
                 fieldname:'part',
                 fieldtype:"Link",
                 label:"Part",
-                options:"Item Attribute Value",
+                options:"YRP Item Attribute Value",
                 reqd:true,
                 get_query(){
                     return {

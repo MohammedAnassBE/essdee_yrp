@@ -58,7 +58,7 @@
 							v-else
 							:modelValue="entries[i].colour || ''"
 							@update:modelValue="(v) => (entries[i].colour = v || null)"
-							target-doctype="Item Attribute Value"
+							target-doctype="YRP Item Attribute Value"
 							:search-handler="(q) => searchColourValues(row, q)"
 							placeholder="Select Colour"
 						/>
@@ -274,7 +274,7 @@ async function loadContext() {
 async function searchColourValues(row, q) {
 	if (row.colour_mapping) {
 		const res = await callMethod("frappe.desk.search.search_link", {
-			doctype: "Item Attribute Value",
+			doctype: "YRP Item Attribute Value",
 			txt: q || "",
 			query: "essdee_yrp.ipd_ui.get_attribute_detail_values",
 			filters: { mapping: row.colour_mapping },
@@ -282,7 +282,7 @@ async function searchColourValues(row, q) {
 		const rows = Array.isArray(res) ? res : res?.results || []
 		return rows.map((r) => ({ name: r.value ?? r.name ?? r }))
 	}
-	return searchLink("Item Attribute Value", q, { attribute_name: "Colour" })
+	return searchLink("YRP Item Attribute Value", q, { attribute_name: "Colour" })
 }
 
 const MAX_COLOUR_COLUMNS = 6

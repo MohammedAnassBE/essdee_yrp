@@ -4,10 +4,10 @@ from frappe.tests.utils import FrappeTestCase
 
 class TestSupplierCustomization(FrappeTestCase):
 	def test_production_api_fields_and_sections_are_installed(self):
-		meta = frappe.get_meta("Supplier", cached=False)
+		meta = frappe.get_meta('YRP Supplier', cached=False)
 		expected = {
 			"user_mapping_section": ("Section Break", None),
-			"supplier_users": ("Table", "Supplier User"),
+			"supplier_users": ("Table", 'SD YRP Supplier User'),
 			"section_break_10": ("Section Break", None),
 			"price_html": ("HTML Editor", None),
 		}
@@ -18,11 +18,11 @@ class TestSupplierCustomization(FrappeTestCase):
 				self.assertEqual((field.fieldtype, field.options), definition)
 
 		terms = meta.get_field("terms_and_condition")
-		self.assertEqual((terms.fieldtype, terms.options), ("Link", "Terms and Condition"))
+		self.assertEqual((terms.fieldtype, terms.options), ("Link", 'YRP Terms and Condition'))
 		self.assertFalse(
 			frappe.db.exists(
 				"Custom Field",
-				{"dt": "Supplier", "fieldname": "terms_and_condition"},
+				{"dt": 'YRP Supplier', "fieldname": "terms_and_condition"},
 			)
 		)
 

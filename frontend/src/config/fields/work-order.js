@@ -134,21 +134,21 @@ const emptyHandler = async () => []
 const linkSearchHandlers = {
 	supplier_address: (form) =>
 		form.supplier
-			? (q) => searchAddressForParty("Supplier", form.supplier, q)
+			? (q) => searchAddressForParty("YRP Supplier", form.supplier, q)
 			: emptyHandler,
 	delivery_address: (form) =>
 		form.delivery_location
-			? (q) => searchAddressForParty("Supplier", form.delivery_location, q)
+			? (q) => searchAddressForParty("YRP Supplier", form.delivery_location, q)
 			: emptyHandler,
 }
 
 // Use the DocType's standard Supplier terminology consistently in every shell.
 const labels = {
-	supplier: "Supplier",
+	supplier: "YRP Supplier",
 	supplier_name: "Supplier Name",
 	supplier_address: "Supplier Address",
-	process_name: "Process",
-	production_detail: "Item Production Detail",
+	process_name: "YRP Process",
+	production_detail: "YRP Item Production Detail",
 }
 
 const help = {

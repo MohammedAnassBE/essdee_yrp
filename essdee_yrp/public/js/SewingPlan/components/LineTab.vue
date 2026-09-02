@@ -165,7 +165,7 @@ onMounted(() => {
         parent: inputTypeWrapper.value,
         df: {
             fieldtype: 'Link',
-            options: 'Sewing Plan Input Type',
+            options: 'SD YRP Sewing Plan Input Type',
             placeholder: 'Input Type',
             fieldname: 'input_type',
             only_select: true
@@ -177,7 +177,7 @@ onMounted(() => {
         parent: workStationWrapper.value,
         df: {
             fieldtype: 'Link',
-            options: 'Work Station',
+            options: 'YRP Work Station',
             placeholder: 'Work Station',
             fieldname: 'work_station',
             only_select: true
@@ -189,7 +189,7 @@ onMounted(() => {
         parent: lotWrapper.value,
         df: {
             fieldtype: 'Link',
-            options: 'Lot',
+            options: 'SD YRP Lot',
             placeholder: 'Lot',
             fieldname: 'lot',
             only_select: true
@@ -204,7 +204,7 @@ const fetchData = () => {
         return
     }
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.sewing_plan.sewing_plan.get_sewing_plan_entries",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan.get_sewing_plan_entries",
         args: {
             supplier: props.selected_supplier,
             input_type: inputTypeControl.value?.get_value(),
@@ -228,7 +228,7 @@ function open_popup(sp_name){
         secondary_action_label: "No",
         primary_action(){
             frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.sewing_plan.sewing_plan.cancel_sewing_plan_entry",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan.cancel_sewing_plan_entry",
                 args: {
                     "doc_id": sp_name,
                 },

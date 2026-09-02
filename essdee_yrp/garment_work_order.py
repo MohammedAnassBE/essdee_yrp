@@ -27,7 +27,7 @@ from essdee_yrp.garment_bom_matrix import (
 from essdee_yrp.item_matrix import normalize_item_matrix_row_indexes
 from yrp.stock.uom import resolve_item_uom
 from yrp.utils import get_variant_attr_details, update_if_string_instance
-from yrp.yrp.doctype.item.item import build_variant_attributes, get_or_create_variant
+from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_or_create_variant
 from yrp.yrp.utils.ipd_engine import calculate_major_deliverables
 
 
@@ -39,7 +39,7 @@ def regenerate_ipd_process_matrices(ipd_name):
 	configuration remains immutable while missing generated child documents are
 	backfilled from that approved configuration.
 	"""
-	ipd = frappe.get_doc("Item Production Detail", ipd_name)
+	ipd = frappe.get_doc('YRP Item Production Detail', ipd_name)
 	ipd.check_permission("write")
 
 	if _is_cloth_ipd(ipd):
@@ -84,7 +84,7 @@ def regenerate_ipd_process_matrices(ipd_name):
 		}
 
 	matrices = frappe.get_all(
-		"IPD Process Matrix",
+		'YRP IPD Process Matrix',
 		filters=matrix_filters,
 		fields=["name", "process_name"],
 		order_by="process_name asc, name asc",
@@ -99,18 +99,18 @@ def regenerate_ipd_process_matrices(ipd_name):
 @frappe.whitelist()
 def get_garment_work_order_context(work_order):
 	"""Return the editable Lot quantities for the legacy ``Calculate Items`` dialog."""
-	wo = frappe.get_doc("Work Order", work_order)
+	wo = frappe.get_doc('YRP Work Order', work_order)
 	wo.check_permission("read")
 	_validate_garment_work_order(wo)
-	lot = frappe.get_doc("Lot", wo.lot)
-	ipd = frappe.get_cached_doc("Item Production Detail", wo.production_detail)
+	lot = frappe.get_doc('SD YRP Lot', wo.lot)
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', wo.production_detail)
 	quantity_field = _quantity_field(ipd, wo.process_name, wo.get("includes_packing"))
 
 	rows = []
 	matrix_rows = []
 	matrix_rows_by_key = {}
 	display_attributes = []
-	from yrp.yrp.doctype.item_production_detail.item_production_detail import (
+	from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
 		get_ipd_primary_values,
 	)
 
@@ -188,7 +188,7 @@ def get_garment_work_order_context(work_order):
 def calculate_garment_work_order(work_order, rows, modified=None):
 	"""Calculate garment deliverables/receivables from selected Lot quantities."""
 	rows = frappe.parse_json(rows) if isinstance(rows, str) else rows
-	wo = frappe.get_doc("Work Order", work_order)
+	wo = frappe.get_doc('YRP Work Order', work_order)
 	wo.check_permission("write")
 	_validate_garment_work_order(wo)
 	if wo.docstatus != 0:
@@ -199,8 +199,8 @@ def calculate_garment_work_order(work_order, rows, modified=None):
 			frappe.TimestampMismatchError,
 		)
 
-	lot = frappe.get_doc("Lot", wo.lot)
-	ipd = frappe.get_cached_doc("Item Production Detail", wo.production_detail)
+	lot = frappe.get_doc('SD YRP Lot', wo.lot)
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', wo.production_detail)
 	quantity_field = _quantity_field(ipd, wo.process_name, wo.get("includes_packing"))
 	demands = _validated_demands(lot, ipd, rows, quantity_field)
 	if not demands:
@@ -218,7 +218,7 @@ def calculate_garment_work_order(work_order, rows, modified=None):
 		frappe.throw(_("The IPD calculation did not produce any receivables."))
 
 	default_received_type = frappe.db.get_single_value(
-		"YRP Stock Settings", "default_received_type"
+		'YRP YRP Stock Settings', "default_received_type"
 	)
 	if not default_received_type:
 		frappe.throw(_("Set Default Received Type in YRP Stock Settings first."))
@@ -229,7 +229,7 @@ def calculate_garment_work_order(work_order, rows, modified=None):
 		wo.append(
 			"deliverables",
 			_filter_child_fields(
-				"Work Order Deliverables",
+				'YRP Work Order Deliverables',
 				{
 					**row,
 					"qty": qty,
@@ -249,7 +249,7 @@ def calculate_garment_work_order(work_order, rows, modified=None):
 		wo.append(
 			"receivables",
 			_filter_child_fields(
-				"Work Order Receivables",
+				'YRP Work Order Receivables',
 				{
 					**row,
 					"qty": qty,
@@ -314,7 +314,7 @@ def calculate_garment_process_rows(ipd, lot, process_name, demands):
 def _is_cloth_ipd(ipd):
 	return bool(
 		ipd.get("is_cloth_item")
-		or frappe.db.get_value("Item", ipd.item, "is_cloth_item")
+		or frappe.db.get_value('YRP Item', ipd.item, "is_cloth_item")
 	)
 
 
@@ -323,9 +323,9 @@ def _validate_garment_work_order(wo):
 		frappe.throw(_("Use the rework item editor for a Rework Work Order."))
 	if not wo.lot or not wo.process_name or not wo.production_detail:
 		frappe.throw(_("Set Process, Lot, Item, and Item Production Detail first."))
-	if frappe.db.get_value("Process", wo.process_name, "is_cloth_process"):
+	if frappe.db.get_value('YRP Process', wo.process_name, "is_cloth_process"):
 		frappe.throw(_("Use Calculate Fabric Deliverables for a cloth process."))
-	lot_ipd = frappe.db.get_value("Lot", wo.lot, "production_detail")
+	lot_ipd = frappe.db.get_value('SD YRP Lot', wo.lot, "production_detail")
 	if lot_ipd != wo.production_detail:
 		frappe.throw(_("Work Order Item Production Detail must match Lot {0}.").format(wo.lot))
 
@@ -334,9 +334,9 @@ def _garment_reference_variants(ipd):
 	filters = {"item": ipd.item}
 	if ipd.dependent_attribute and ipd.get("pack_in_stage"):
 		parents = frappe.get_all(
-			"Item Variant Attribute",
+			'YRP Item Variant Attribute',
 			filters={
-				"parenttype": "Item Variant",
+				"parenttype": 'YRP Item Variant',
 				"attribute": ipd.dependent_attribute,
 				"attribute_value": ipd.pack_in_stage,
 			},
@@ -346,12 +346,12 @@ def _garment_reference_variants(ipd):
 			return []
 		filters["name"] = ["in", parents]
 	return frappe.get_all(
-		"Item Variant", filters=filters, pluck="name", order_by="name asc", limit_page_length=0
+		'YRP Item Variant', filters=filters, pluck="name", order_by="name asc", limit_page_length=0
 	)
 
 
 def _processes(process_name):
-	process = frappe.get_cached_doc("Process", process_name)
+	process = frappe.get_cached_doc('YRP Process', process_name)
 	if not process.get("is_group"):
 		return [process_name]
 	processes = [row.process_name for row in process.get("process_details") or [] if row.process_name]
@@ -411,7 +411,7 @@ def _validated_demands(lot, ipd, rows, quantity_field):
 				)
 			)
 		attrs = get_variant_attr_details(source.item_variant)
-		if frappe.db.get_value("Item Variant", source.item_variant, "item") != ipd.item:
+		if frappe.db.get_value('YRP Item Variant', source.item_variant, "item") != ipd.item:
 			frappe.throw(_("Item Variant {0} does not belong to IPD {1}.").format(source.item_variant, ipd.name))
 		demands.append(
 			{
@@ -434,7 +434,7 @@ def _missing_matrix_variants(ipd, process_name, rows):
 		return []
 	found = set(
 		frappe.get_all(
-			"IPD Process Matrix",
+			'YRP IPD Process Matrix',
 			filters={
 				"ipd": ipd.name,
 				"process_name": ipd.cutting_process,
@@ -490,7 +490,7 @@ def _cutting_inputs(ipd, process_name, demands):
 		demand["item_variant"]
 		for demand in demands
 		if not frappe.db.exists(
-			"IPD Process Matrix",
+			'YRP IPD Process Matrix',
 			{
 				"ipd": ipd.name,
 				"process_name": process_name,
@@ -568,7 +568,7 @@ def _cutting_accessory_outputs(ipd, demands):
 					"item_variant": variant,
 					"qty": flt(requirement["quantity"], 3),
 					"uom": frappe.db.get_value(
-						"Item", cloth_item, "default_unit_of_measure"
+						'YRP Item', cloth_item, "default_unit_of_measure"
 					),
 					"set_combination": "{}",
 					"table_index": demand["table_index"],
@@ -686,7 +686,7 @@ def _packing_rows(ipd, lot, demands):
 def _uom_factor(item_name, from_uom, to_uom):
 	if from_uom == to_uom:
 		return 1
-	item = frappe.get_cached_doc("Item", item_name)
+	item = frappe.get_cached_doc('YRP Item', item_name)
 	factors = {
 		row.uom: flt(row.conversion_factor)
 		for row in item.get("uom_conversion_details") or []
@@ -779,10 +779,10 @@ def _update_cutting_tracking_json(work_order, ipd, processes):
 		work_order.save()
 		return
 
-	from essdee_yrp.essdee_yrp.doctype.cutting_plan.cutting_plan import (
+	from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan import (
 		get_complete_incomplete_structure,
 	)
-	from essdee_yrp.essdee_yrp.doctype.lot.lot import fetch_order_item_details
+	from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import fetch_order_item_details
 
 	items = fetch_order_item_details(
 		work_order.get("work_order_calculated_items") or [], ipd.name

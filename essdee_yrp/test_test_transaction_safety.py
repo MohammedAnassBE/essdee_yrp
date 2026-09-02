@@ -1,4 +1,4 @@
-"""Regression checks that keep Essdee YRP tests inside the runner transaction."""
+"""Regression checks that keep SD YRP tests inside the runner transaction."""
 
 import ast
 from pathlib import Path

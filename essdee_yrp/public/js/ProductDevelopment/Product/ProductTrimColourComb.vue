@@ -8,7 +8,7 @@
                 <div v-for="(item, idx) in selected" :key="idx"
                     class="relative border rounded-lg overflow-hidden bg-white shadow-sm cursor-move"
                     style="width: 100%;"
-                    :draggable="doctype != 'Product Release'"
+                    :draggable="doctype != 'SD YRP Product Release'"
                     @dragstart="onDragStart($event, idx)"
                     @dragover.prevent
                     @drop="onDrop($event, idx)"
@@ -19,7 +19,7 @@
                                 style="height: 140px; pointer-events: none;"
                             />
                         </div>
-                        <div v-if="doctype != 'Product Release'">
+                        <div v-if="doctype != 'SD YRP Product Release'">
                             <button @click.stop="removeSelected(idx)"
                                 style="position: relative; top: 10px;"
                             >
@@ -33,7 +33,7 @@
                             <input type="radio" v-model="item.selected_part"
                                 value="Top" class="mr-1" @change="make_dirty()"
                                 style="padding-top:4px;"
-                                :disabled="doctype == 'Product Release'"
+                                :disabled="doctype == 'SD YRP Product Release'"
                             >
                             Top
                         </label>
@@ -41,7 +41,7 @@
                             <input type="radio" v-model="item.selected_part"
                                 value="Bottom" class="mr-1" @change="make_dirty()"
                                 style="padding-top:4px;"
-                                :disabled="doctype == 'Product Release'"
+                                :disabled="doctype == 'SD YRP Product Release'"
                             >
                             Bottom
                         </label>
@@ -59,7 +59,7 @@
                                 v-model="item.selected_colours"
                                 class="w-3 h-3 mb-1"
                                 @click="make_dirty()"
-                                :disabled="doctype == 'Product Release'"
+                                :disabled="doctype == 'SD YRP Product Release'"
                             />
                             <div class="flex flex-col items-center w-full space-y-2">
                                 <span class="text-center w-full rounded-full px-2 py-1 flex items-center justify-center min-h-[20px]"
@@ -89,7 +89,7 @@
                 </div>
             </div>
         </div>
-        <div v-if="doctype != 'Product Release'">
+        <div v-if="doctype != 'SD YRP Product Release'">
             <h3>Add {{view_page}} Images</h3>
             <input
                 v-model="query"
@@ -146,7 +146,7 @@ onMounted(() => {
                     colour_code: row.top_colour_code
                 })
                 colour_codes[row.top_colour] = row.top_colour_code
-                frappe.db.get_value("Product Colour Code", row.top_colour, "image").then((res) => {
+                frappe.db.get_value("SD YRP Product Colour Code", row.top_colour, "image").then((res) => {
                     if(res.message.image){
                         colour_images[row.top_colour] = res.message.image
                     }
@@ -158,7 +158,7 @@ onMounted(() => {
                     colour_code: row.bottom_colour_code
                 })
                 colour_codes[row.bottom_colour] = row.bottom_colour_code
-                frappe.db.get_value("Product Colour Code", row.bottom_colour, "image").then((res) => {
+                frappe.db.get_value("SD YRP Product Colour Code", row.bottom_colour, "image").then((res) => {
                     if(res.message.image){
                         colour_images[row.bottom_colour] = res.message.image
                     }
@@ -175,7 +175,7 @@ onMounted(() => {
                     colour_code: clr.colour_code
                 })
                 colour_codes[clr.product_colour] = clr.product_colour_code
-                frappe.db.get_value("Product Colour Code", clr.product_colour, "image").then((res) => {
+                frappe.db.get_value("SD YRP Product Colour Code", clr.product_colour, "image").then((res) => {
                     if(res.message.image){
                         colour_images[clr.product_colour] = res.message.image
                     }
@@ -213,7 +213,7 @@ watch(query, async (val) => {
 	}
 
 	let res = await frappe.call({
-		method: "essdee_yrp.essdee_yrp.doctype.product_image.product_image.get_image_list",
+		method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_product_image.sd_yrp_product_image.get_image_list",
 		args: { query: val },
 	})
 

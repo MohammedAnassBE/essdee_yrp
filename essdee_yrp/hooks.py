@@ -43,46 +43,46 @@ fixtures = [
 				"name",
 				"in",
 				[
-					"Item Production Detail-main-field_order",
-					"Work Order-naming_series-options",
-					"Work Order-naming_series-default",
-					"Delivery Challan-from_location-fetch_from",
-					"Delivery Challan-from_location-reqd",
-					"Delivery Challan-is_rework-fetch_from",
-					"Delivery Challan-is_rework-fetch_if_empty",
-					"Delivery Challan-ste_transferred-depends_on",
-					"Delivery Challan-ste_transferred-precision",
-					"Delivery Challan-transfer_complete-depends_on",
-					"Delivery Challan-vehicle_no-allow_on_submit",
-					"Delivery Challan Item-secondary_qty-precision",
-					"Goods Received Note-naming_series-options",
-					"Goods Received Note-naming_series-default",
-					"Stock Entry-naming_series-options",
-					"Stock Entry-naming_series-default",
-					"Stock Entry-additional_amount-read_only_depends_on",
-					"Stock Entry-purpose-options",
-					"Process Cost-naming_series-options",
-					"Process Cost-naming_series-default",
-					"Process Cost-approved_by-read_only",
-					"Process Cost-attribute-mandatory_depends_on",
-					"Process Cost-depends_on_attribute-read_only",
-					"Process Cost-depends_on_attribute-default",
-					"Process Cost-is_expired-read_only",
-					"Process Cost-item-fetch_from",
-					"Purchase Order-naming_series-options",
-					"Purchase Order-naming_series-default",
-					"Purchase Invoice-naming_series-options",
-					"Purchase Invoice-naming_series-default",
-					"Purchase Invoice Item-item_group-reqd",
-					"Production Ordered Detail-quantity-fieldtype",
-					"Stock Reconciliation-naming_series-options",
-					"Stock Reconciliation-naming_series-default",
-					"Stock Update-naming_series-options",
-					"Stock Update-naming_series-default",
-					"Item Price-main-autoname",
-					"Stock Ledger Entry-main-autoname",
-					"Stock Reservation Entry-main-autoname",
-					"Stock Reservation Entry-voucher_type-options",
+					"YRP Item Production Detail-main-field_order",
+					"YRP Work Order-naming_series-options",
+					"YRP Work Order-naming_series-default",
+					"YRP Delivery Challan-from_location-fetch_from",
+					"YRP Delivery Challan-from_location-reqd",
+					"YRP Delivery Challan-is_rework-fetch_from",
+					"YRP Delivery Challan-is_rework-fetch_if_empty",
+					"YRP Delivery Challan-ste_transferred-depends_on",
+					"YRP Delivery Challan-ste_transferred-precision",
+					"YRP Delivery Challan-transfer_complete-depends_on",
+					"YRP Delivery Challan-vehicle_no-allow_on_submit",
+					"YRP Delivery Challan Item-secondary_qty-precision",
+					"YRP Goods Received Note-naming_series-options",
+					"YRP Goods Received Note-naming_series-default",
+					"YRP Stock Entry-naming_series-options",
+					"YRP Stock Entry-naming_series-default",
+					"YRP Stock Entry-additional_amount-read_only_depends_on",
+					"YRP Stock Entry-purpose-options",
+					"YRP Process Cost-naming_series-options",
+					"YRP Process Cost-naming_series-default",
+					"YRP Process Cost-approved_by-read_only",
+					"YRP Process Cost-attribute-mandatory_depends_on",
+					"YRP Process Cost-depends_on_attribute-read_only",
+					"YRP Process Cost-depends_on_attribute-default",
+					"YRP Process Cost-is_expired-read_only",
+					"YRP Process Cost-item-fetch_from",
+					"YRP Purchase Order-naming_series-options",
+					"YRP Purchase Order-naming_series-default",
+					"YRP Purchase Invoice-naming_series-options",
+					"YRP Purchase Invoice-naming_series-default",
+					"YRP Purchase Invoice Item-item_group-reqd",
+					"YRP Production Ordered Detail-quantity-fieldtype",
+					"YRP Stock Reconciliation-naming_series-options",
+					"YRP Stock Reconciliation-naming_series-default",
+					"YRP Stock Update-naming_series-options",
+					"YRP Stock Update-naming_series-default",
+					"YRP Item Price-main-autoname",
+					"YRP Stock Ledger Entry-main-autoname",
+					"YRP Stock Reservation Entry-main-autoname",
+					"YRP Stock Reservation Entry-voucher_type-options",
 				],
 			],
 		],
@@ -93,9 +93,9 @@ fixtures = [
 	{
 		"dt": "Custom DocPerm",
 		"filters": [["parent", "in", [
-			"Item Production Detail",
-			"Terms and Condition",
-			"Sewing Plan Entry Detail",
+			'YRP Item Production Detail',
+			'YRP Terms and Condition',
+			'SD YRP Sewing Plan Entry Detail',
 		]]],
 	},
 	# /web per-user UI (spec §12.2): the code-owned layouts shipped to every site.
@@ -108,7 +108,7 @@ fixtures = [
 	# 2026-07-20 (owner): ship ALL enabled layouts (status = Enabled), not a name
 	# list. `disabled = 0` — so any enabled layout on the exporting site is
 	# captured; disabled layouts (dev drills, unfinished templates) stay out.
-	{"dt": "UI Layout", "filters": [["disabled", "=", 0]]},
+	{"dt": 'YRP UI Layout', "filters": [["disabled", "=", 0]]},
 ]
 
 # Apps
@@ -136,17 +136,17 @@ website_route_rules = [
 # CHECKLIST RULE (same as www/web.py WEB_DOCTYPES, which mirrors
 # frontend/src/config/doctypes.js GROUPS): all three lists change together.
 yrp_web_doctype_catalog = [
-	"Lot",
-	"Work Order",
-	"Work Order Correction",
-	"Delivery Challan",
-	"Goods Received Note",
-	"Process Cost",
-	"Lot Transfer",
-	"Stock Entry",
-	"Item",
-	"Item Production Detail",
-	"Terms and Condition",
+	'SD YRP Lot',
+	'YRP Work Order',
+	'YRP Work Order Correction',
+	'YRP Delivery Challan',
+	'YRP Goods Received Note',
+	'YRP Process Cost',
+	'SD YRP Lot Transfer',
+	'YRP Stock Entry',
+	'YRP Item',
+	'YRP Item Production Detail',
+	'YRP Terms and Condition',
 ]
 
 # Post-login landing: ordinary users land on the custom /web work hub;
@@ -187,31 +187,31 @@ app_include_css = [
 
 # include js in doctype views
 doctype_js = {
-	"Item": "public/js/item.js",
-	"Item Production Detail": "public/js/item_production_detail.js",
-	"Production Order": [
+	'YRP Item': "public/js/item.js",
+	'YRP Item Production Detail': "public/js/item_production_detail.js",
+	'YRP Production Order': [
 		"public/js/production_order.js",
 		"public/js/production_order_workflow.js",
 	],
-	"Work Order": "public/js/work_order.js",
-	"Purchase Order": "public/js/purchase_order.js",
-	"Delivery Challan": "public/js/delivery_challan.js",
-	"Goods Received Note": "public/js/goods_received_note.js",
-	"Purchase Invoice": "public/js/purchase_invoice.js",
-	"Item BOM Attribute Mapping": "public/js/item_bom_attribute_mapping.js",
-	"Process Cost": "public/js/process_cost.js",
-	"Finishing Plan": "public/js/finishing_plan.js",
+	'YRP Work Order': "public/js/work_order.js",
+	'YRP Purchase Order': "public/js/purchase_order.js",
+	'YRP Delivery Challan': "public/js/delivery_challan.js",
+	'YRP Goods Received Note': "public/js/goods_received_note.js",
+	'YRP Purchase Invoice': "public/js/purchase_invoice.js",
+	'YRP Item BOM Attribute Mapping': "public/js/item_bom_attribute_mapping.js",
+	'YRP Process Cost': "public/js/process_cost.js",
+	'SD YRP Finishing Plan': "public/js/finishing_plan.js",
 	# List form: both scripts load for Stock Entry. The guard hides the desk Cancel
 	# action on transfer SEs (source_grn set); see the JS file for the mechanism.
-	"Stock Entry": [
+	'YRP Stock Entry': [
 		"public/js/stock_entry.js",
 		"public/js/stock_entry_transfer_cancel_guard.js",
 	],
 }
 doctype_list_js = {
-	"Cutting Plan": "public/js/cutting_plan_list.js",
-	"Item Production Detail": "public/js/item_production_detail_list.js",
-	"Production Order": "public/js/production_order_list.js",
+	'SD YRP Cutting Plan': "public/js/cutting_plan_list.js",
+	'YRP Item Production Detail': "public/js/item_production_detail_list.js",
+	'YRP Production Order': "public/js/production_order_list.js",
 }
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
@@ -264,30 +264,30 @@ jinja = {
 		"essdee_yrp.print_helpers.get_warehouse_name",
 		"essdee_yrp.print_helpers.get_warehouse_address_display",
 		"essdee_yrp.ipd_ui.fetch_combination_items",
-		"essdee_yrp.essdee_yrp.doctype.lot.lot.get_dict_object",
-		"essdee_yrp.essdee_yrp.doctype.lot.lot.get_mapping_details",
-		"essdee_yrp.essdee_yrp.doctype.lot.lot.get_ipd_print_accessory_combination",
-		"essdee_yrp.essdee_yrp.doctype.lot.lot.get_consumption_sheet_data",
-		"essdee_yrp.essdee_yrp.doctype.shortened_link.shortened_link.get_short_link",
-		"essdee_yrp.essdee_yrp.doctype.product.product.get_latest_product_images",
-		"essdee_yrp.essdee_yrp.doctype.product.product.get_product_colour_codes",
-		"essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.get_panels",
-		"essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.get_bundle_items",
-		"essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.get_colours",
-		"essdee_yrp.essdee_yrp.doctype.cutting_plan.cutting_plan.get_cutting_plan_laysheets_report",
-		"essdee_yrp.essdee_yrp.doctype.cutting_plan.cutting_plan.get_cutting_plan_size_reports",
-		"essdee_yrp.essdee_yrp.doctype.cutting_plan.cutting_plan.get_ccr",
-		"essdee_yrp.essdee_yrp.doctype.cutting_plan.cutting_plan.remove_empty_rows",
-		"essdee_yrp.essdee_yrp.doctype.cutting_order.cutting_order.get_cutting_order_laysheets_report",
-		"essdee_yrp.essdee_yrp.doctype.cutting_order.cutting_order.get_cutting_order_size_reports",
-		"essdee_yrp.essdee_yrp.doctype.cutting_order.cutting_order.get_cutting_order_ccr",
-		"essdee_yrp.essdee_yrp.doctype.cutting_marker.cutting_marker.get_panels_and_size",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot.get_dict_object",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot.get_mapping_details",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot.get_ipd_print_accessory_combination",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot.get_consumption_sheet_data",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_shortened_link.sd_yrp_shortened_link.get_short_link",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_product.sd_yrp_product.get_latest_product_images",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_product.sd_yrp_product.get_product_colour_codes",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.get_panels",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.get_bundle_items",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.get_colours",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.get_cutting_plan_laysheets_report",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.get_cutting_plan_size_reports",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.get_ccr",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.remove_empty_rows",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_order.sd_yrp_cutting_order.get_cutting_order_laysheets_report",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_order.sd_yrp_cutting_order.get_cutting_order_size_reports",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_order.sd_yrp_cutting_order.get_cutting_order_ccr",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_marker.sd_yrp_cutting_marker.get_panels_and_size",
 		"essdee_yrp.production_order_workflow.get_production_order_details",
 		"essdee_yrp.finishing.inward.get_finishing_plan_inward_details",
 		"essdee_yrp.finishing.ocr.get_fp_ocr_details",
 		"essdee_yrp.finishing.ocr.get_ocr_percentage",
 		"essdee_yrp.finishing.ocr.get_ocr_style",
-		"essdee_yrp.essdee_yrp.doctype.finishing_plan_dispatch.finishing_plan_dispatch.get_fpd_print_data",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan_dispatch.sd_yrp_finishing_plan_dispatch.get_fpd_print_data",
 		"essdee_yrp.sewing.read_models.get_sewing_consumption_print_data",
 		"essdee_yrp.sewing.read_models.get_monthly_summary_print_data",
 	],
@@ -356,7 +356,7 @@ after_build = "essdee_yrp.web_build.build_web_spa"
 # Hook on document methods and events
 
 doc_events = {
-	"Production Order": {
+	'YRP Production Order': {
 		"onload": "essdee_yrp.production_order_workflow.onload",
 		"before_validate": "essdee_yrp.production_order_workflow.before_validate",
 		"validate": "essdee_yrp.production_order_workflow.validate",
@@ -365,16 +365,16 @@ doc_events = {
 		"on_submit": "essdee_yrp.production_order_workflow.on_submit",
 		"before_cancel": "essdee_yrp.production_order_workflow.before_cancel",
 	},
-	"Work Station": {
+	'YRP Work Station': {
 		"before_validate": "essdee_yrp.time_and_action.work_station.validate_default_action_work_station",
 	},
-	"Purchase Order": {
+	'YRP Purchase Order': {
 		"before_validate": "essdee_yrp.purchase_order_lots.sync_linked_lots",
 	},
-	"Item": {
+	'YRP Item': {
 		"validate": "essdee_yrp.item_validations.validate",
 	},
-	"Item Production Detail": {
+	'YRP Item Production Detail': {
 		"onload": "essdee_yrp.ipd_ui.onload",
 		"before_validate": [
 			"essdee_yrp.ipd_validations.before_validate",
@@ -389,7 +389,7 @@ doc_events = {
 		],
 		"on_trash": "essdee_yrp.ipd_validations.on_trash",
 	},
-	"Work Order": {
+	'YRP Work Order': {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
 		"onload": "essdee_yrp.work_order_hooks.onload",
 		"validate": "essdee_yrp.work_order_hooks.validate",
@@ -405,9 +405,9 @@ doc_events = {
 			"essdee_yrp.finishing.rebuild.on_work_order_lifecycle_change",
 		],
 	},
-	"Delivery Challan": {
+	'YRP Delivery Challan': {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
-		"after_insert": "essdee_yrp.essdee_yrp.doctype.cutting_bulk_lay_sheets.cutting_bulk_lay_sheets.record_delivery_challan",
+		"after_insert": "essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_bulk_lay_sheets.sd_yrp_cutting_bulk_lay_sheets.record_delivery_challan",
 		"onload": "essdee_yrp.delivery_challan_hooks.onload",
 		"before_validate": "essdee_yrp.delivery_challan_hooks.before_validate",
 		"before_cancel": "essdee_yrp.cutting.movement.before_cancel",
@@ -422,13 +422,13 @@ doc_events = {
 			"essdee_yrp.work_order_piece_tracking.on_delivery_challan_cancel",
 			"essdee_yrp.finishing.delivery_challan.on_cancel",
 			"essdee_yrp.delivery_challan_hooks.sync_cutting_plan_received_cloth",
-			"essdee_yrp.essdee_yrp.doctype.cutting_bulk_lay_sheets.cutting_bulk_lay_sheets.refresh_linked_bulk_status",
+			"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_bulk_lay_sheets.sd_yrp_cutting_bulk_lay_sheets.refresh_linked_bulk_status",
 		],
 	},
-	"Work Order Correction": {
+	'YRP Work Order Correction': {
 		"before_submit": "essdee_yrp.work_order_correction_hooks.validate_correction_ipd_items"
 	},
-	"Goods Received Note": {
+	'YRP Goods Received Note': {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
 		"before_validate": [
 			"essdee_yrp.packing_hooks.set_grn_includes_packing",
@@ -442,7 +442,7 @@ doc_events = {
 		"before_cancel": [
 			"essdee_yrp.finishing.grn.before_cancel",
 			"essdee_yrp.cutting.movement.before_cancel",
-			"essdee_yrp.essdee_yrp.doctype.grn_rework_item.grn_rework_item.before_grn_cancel",
+			"essdee_yrp.essdee_yrp.doctype.sd_yrp_grn_rework_item.sd_yrp_grn_rework_item.before_grn_cancel",
 		],
 		"on_submit": [
 			"essdee_yrp.fabric_grn.on_submit",
@@ -450,7 +450,7 @@ doc_events = {
 			"essdee_yrp.finishing.grn.on_submit",
 			"essdee_yrp.cutting.movement.on_submit",
 			"essdee_yrp.work_order_piece_tracking.on_goods_received_note_submit",
-			"essdee_yrp.essdee_yrp.doctype.grn_rework_item.grn_rework_item.sync_grn_rework",
+			"essdee_yrp.essdee_yrp.doctype.sd_yrp_grn_rework_item.sd_yrp_grn_rework_item.sync_grn_rework",
 		],
 		"on_cancel": [
 			"essdee_yrp.fabric_grn.on_cancel",
@@ -458,14 +458,14 @@ doc_events = {
 			"essdee_yrp.finishing.grn.on_cancel",
 			"essdee_yrp.cutting.movement.on_cancel",
 			"essdee_yrp.work_order_piece_tracking.on_goods_received_note_cancel",
-			"essdee_yrp.essdee_yrp.doctype.grn_rework_item.grn_rework_item.on_grn_cancel",
+			"essdee_yrp.essdee_yrp.doctype.sd_yrp_grn_rework_item.sd_yrp_grn_rework_item.on_grn_cancel",
 		],
 	},
 	# A Stock Entry created by the cross-bench GRN transfer (source_grn set) may be
 	# cancelled ONLY by the mrp GRN-cancel flow (cancel_grn_transfer sets
 	# doc.flags.from_grn_transfer). Blocks every other cancel path server-side so the
 	# UI hide (public/js/stock_entry_transfer_cancel_guard.js) cannot be bypassed.
-	"Stock Entry": {
+	'YRP Stock Entry': {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
 		"onload": "essdee_yrp.stock_entry_hooks.onload",
 		"before_validate": [
@@ -481,17 +481,17 @@ doc_events = {
 		],
 		"on_cancel": "essdee_yrp.stock_entry_hooks.on_cancel",
 	},
-	"Stock Reconciliation": {
+	'YRP Stock Reconciliation': {
 		"onload": "essdee_yrp.stock_reconciliation_hooks.onload",
 	},
-	"Lot Transfer": {
+	'SD YRP Lot Transfer': {
 		"on_submit": [
 			"essdee_yrp.finishing.old_lot.on_lot_transfer_submit",
-			"essdee_yrp.essdee_yrp.doctype.cutting_bulk_lay_sheets.cutting_bulk_lay_sheets.refresh_linked_bulk_status",
+			"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_bulk_lay_sheets.sd_yrp_cutting_bulk_lay_sheets.refresh_linked_bulk_status",
 		],
 		"on_cancel": [
 			"essdee_yrp.finishing.old_lot.on_lot_transfer_cancel",
-			"essdee_yrp.essdee_yrp.doctype.cutting_bulk_lay_sheets.cutting_bulk_lay_sheets.refresh_linked_bulk_status",
+			"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_bulk_lay_sheets.sd_yrp_cutting_bulk_lay_sheets.refresh_linked_bulk_status",
 		],
 	},
 }
@@ -534,11 +534,11 @@ doc_events = {
 # Finishing return transaction (is_return), including its two-warehouse stock
 # movement and Work Order Deliverable reversal.
 override_doctype_class = {
-	"Delivery Challan": "essdee_yrp.overrides.delivery_challan.EssdeeDeliveryChallan",
-	"Goods Received Note": "essdee_yrp.overrides.goods_received_note.EssdeeGoodsReceivedNote",
-	"Item Production Detail": "essdee_yrp.overrides.item_production_detail.EssdeeItemProductionDetail",
-	"Purchase Invoice": "essdee_yrp.overrides.purchase_invoice.EssdeePurchaseInvoice",
-	"Work Order": "essdee_yrp.overrides.work_order.EssdeeWorkOrder",
+	'YRP Delivery Challan': "essdee_yrp.overrides.delivery_challan.EssdeeDeliveryChallan",
+	'YRP Goods Received Note': "essdee_yrp.overrides.goods_received_note.EssdeeGoodsReceivedNote",
+	'YRP Item Production Detail': "essdee_yrp.overrides.item_production_detail.EssdeeItemProductionDetail",
+	'YRP Purchase Invoice': "essdee_yrp.overrides.purchase_invoice.EssdeePurchaseInvoice",
+	'YRP Work Order': "essdee_yrp.overrides.work_order.EssdeeWorkOrder",
 }
 
 # Overriding Methods
@@ -553,33 +553,33 @@ override_whitelisted_methods = {
 		"essdee_yrp.erp_purchase_invoice.revert_bill_tracking_from_erp",
 	# Work Order bills are edited as finished-piece process rows while their
 	# hidden base rows preserve the exact physical GRN valuation lineage.
-	"yrp.yrp.doctype.purchase_invoice.purchase_invoice.fetch_grn_details":
+	"yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice.fetch_grn_details":
 		"essdee_yrp.purchase_invoice.fetch_grn_details",
 	# Base intentionally offers zero-pending Work Order rows for excess DCs, but
 	# its grouped editor also uses pending as the input maximum. The Essdee
 	# adapter removes only that zero maximum while retaining server authority.
-	"yrp.yrp.doctype.delivery_challan.delivery_challan.get_work_order_defaults":
+	"yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan.get_work_order_defaults":
 		"essdee_yrp.work_order_actions.get_delivery_challan_defaults",
 	# Base YRP's Desk button calls this path. Route it through the
 	# Essdee-owned close implementation so Desk and /web use one stock contract.
-	"yrp.yrp.doctype.work_order.work_order.update_stock":
+	"yrp.yrp.doctype.yrp_work_order.yrp_work_order.update_stock":
 		"essdee_yrp.work_order_close.close_work_order",
 	# Internal-unit GRNs live in Transit Warehouse until Complete Transfer;
 	# inspection must classify the bin that actually holds the stock.
-	"yrp.yrp.doctype.inspection_entry.inspection_entry.get_initial_payload":
+	"yrp.yrp.doctype.yrp_inspection_entry.yrp_inspection_entry.get_initial_payload":
 		"essdee_yrp.overrides.inspection_entry.get_initial_payload",
 	# Migrated garment receivables may have one saved row_index per size.
 	# Normalize copied GRN defaults so the editable matrix renders one logical
 	# SKU row with all sizes, without rewriting the Work Order source rows.
-	"yrp.yrp.doctype.goods_received_note.goods_received_note.get_work_order_defaults":
+	"yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note.get_work_order_defaults":
 		"essdee_yrp.overrides.goods_received_note.get_work_order_defaults",
 	# Base's generic attribute callback runs alongside the Essdee Desk handler.
 	# Route it here so an item-only response cannot race the Lot/IPD response.
-	"yrp.yrp.doctype.process_cost.process_cost.get_pc_attribute_values":
+	"yrp.yrp.doctype.yrp_process_cost.yrp_process_cost.get_pc_attribute_values":
 		"essdee_yrp.process_cost.get_pc_attribute_values",
 	# The generic popup already subtracts inspection and prior Work Order
 	# consumption. Also subtract Essdee's direct Rework Details conversions.
-	"yrp.yrp.doctype.work_order.work_order.get_rework_source_rows":
+	"yrp.yrp.doctype.yrp_work_order.yrp_work_order.get_rework_source_rows":
 		"essdee_yrp.rework_work_order.get_rework_source_rows",
 }
 #

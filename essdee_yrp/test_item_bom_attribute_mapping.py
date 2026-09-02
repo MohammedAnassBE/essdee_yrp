@@ -95,7 +95,7 @@ class TestItemBOMAttributeMappingCustomization(FrappeTestCase):
 
 	def test_desk_adapter_is_registered_in_essdee_only(self):
 		self.assertEqual(
-			hooks.doctype_js["Item BOM Attribute Mapping"],
+			hooks.doctype_js['YRP Item BOM Attribute Mapping'],
 			"public/js/item_bom_attribute_mapping.js",
 		)
 		source = (

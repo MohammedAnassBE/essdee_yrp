@@ -21,4 +21,4 @@ def execute():
 				values,
 				update_modified=False,
 			)
-	frappe.clear_cache(doctype="Item Production Detail")
+	frappe.clear_cache(doctype='YRP Item Production Detail')

@@ -32,7 +32,7 @@ def _mapping_values(doc, attribute):
 	for row in doc.get("item_attributes") or []:
 		if row.get("attribute") == attribute and row.get("mapping"):
 			mapping = frappe.get_cached_doc(
-				"Item Item Attribute Mapping", row.get("mapping")
+				'YRP Item Item Attribute Mapping', row.get("mapping")
 			)
 			return [value.attribute_value for value in mapping.get("values") or []]
 	return []
@@ -377,7 +377,7 @@ def get_panel_wise_cloth_mapping_matrix(doc):
 	include_saved = True
 	if not doc.is_new() and doc.name:
 		stored_enabled = frappe.db.get_value(
-			"Item Production Detail", doc.name, "enable_panel_wise_consumption_matrix"
+			'YRP Item Production Detail', doc.name, "enable_panel_wise_consumption_matrix"
 		)
 		include_saved = bool(stored_enabled)
 	matrix, _context = make_panel_wise_cloth_mapping_matrix(

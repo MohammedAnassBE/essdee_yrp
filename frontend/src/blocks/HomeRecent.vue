@@ -132,7 +132,7 @@ const props = defineProps({
 	// Default = today's literal RECENT list in HomePage.vue.
 	doctypes: {
 		type: Array,
-		default: () => ["Work Order", "Delivery Challan", "Goods Received Note", "Stock Entry"],
+		default: () => ["YRP Work Order", "YRP Delivery Challan", "YRP Goods Received Note", "YRP Stock Entry"],
 	},
 	recentStyle: {
 		type: String,

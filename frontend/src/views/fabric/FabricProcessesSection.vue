@@ -195,7 +195,7 @@ const editable = computed(
 	() =>
 		!props.disabled &&
 		props.doc?.approval_status !== "Approved" &&
-		canWrite("Item Production Detail"),
+		canWrite("YRP Item Production Detail"),
 );
 const attributes = computed(() =>
 	[...new Set((props.doc?.item_attributes || []).map((a) => a.attribute).filter(Boolean))],
@@ -244,7 +244,7 @@ const catalogLoading = ref(false);
 async function loadCatalog() {
 	catalogLoading.value = true;
 	try {
-		const { data } = await getList("Process", {
+		const { data } = await getList("YRP Process", {
 			fields: ["name"],
 			order_by: "name asc",
 			limit_page_length: 0,
@@ -462,7 +462,7 @@ async function persistSteps(candidateSteps, successDetail) {
 	saving.value = true;
 	try {
 		const ipd = await callMethod("frappe.client.get", {
-			doctype: "Item Production Detail",
+			doctype: "YRP Item Production Detail",
 			name: props.doc.name,
 		});
 		// Staleness guard — the Desk write-back saves through frm and gets
@@ -476,7 +476,7 @@ async function persistSteps(candidateSteps, successDetail) {
 			return false;
 		}
 		ipd.fabric_processes = candidateSteps.map((s) => ({
-			doctype: "IPD Fabric Process",
+			doctype: "SD YRP IPD Fabric Process",
 			sequence: s.sequence,
 			fabric_process: s.fabric_process,
 			input_item: s.input_item || null,
@@ -487,7 +487,7 @@ async function persistSteps(candidateSteps, successDetail) {
 		candidateSteps.forEach((s) =>
 			s.mappings.forEach((m) =>
 				mappings.push({
-					doctype: "IPD Fabric Value Mapping",
+					doctype: "SD YRP IPD Fabric Value Mapping",
 					sequence: s.sequence,
 					mapping_index: m.mapping_index,
 					attribute: m.attribute,

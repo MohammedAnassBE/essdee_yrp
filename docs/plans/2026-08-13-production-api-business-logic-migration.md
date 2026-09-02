@@ -96,7 +96,7 @@ for owner review. Do not commit base-YRP changes without explicit approval.
 
 ### `essdee_yrp`
 
-Essdee YRP owns:
+SD YRP owns:
 
 - cutting, bundle/panel movement, sewing, finishing, Time and Action, product
   development, labels, P&L, and company approval behavior

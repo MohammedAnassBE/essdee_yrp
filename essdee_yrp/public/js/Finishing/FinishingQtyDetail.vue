@@ -13,10 +13,10 @@
                     </thead>
                     <tbody class="dark-border">
                         <tr v-for="(date, dc) in dc_list">
-                            <td style="cursor: pointer;" @click="redirect_to('Delivery Challan', dc)">{{ dc }}</td>
+                            <td style="cursor: pointer;" @click="redirect_to('YRP Delivery Challan', dc)">{{ dc }}</td>
                             <td>{{ date }}</td>
                             <td>
-                                <button class="btn btn-primary" @click="cancel_doc('Delivery Challan', dc)">Cancel</button>
+                                <button class="btn btn-primary" @click="cancel_doc('YRP Delivery Challan', dc)">Cancel</button>
                             </td>
                         </tr>
                     </tbody>
@@ -34,10 +34,10 @@
                     </thead>
                     <tbody class="dark-border">
                         <tr v-for="(date, rl) in return_list">
-                            <td style="cursor: pointer;" @click="redirect_to('Goods Received Note', rl)">{{ rl }}</td>
+                            <td style="cursor: pointer;" @click="redirect_to('YRP Goods Received Note', rl)">{{ rl }}</td>
                             <td>{{ date }}</td>
                             <td>
-                                <button class="btn btn-primary" @click="cancel_doc('Goods Received Note', rl)">Cancel</button>
+                                <button class="btn btn-primary" @click="cancel_doc('YRP Goods Received Note', rl)">Cancel</button>
                             </td>
                         </tr>
                     </tbody>
@@ -218,7 +218,7 @@ function cancel_doc(doctype, docname){
         primary_action(){
             d.hide()
             frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.cancel_document",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.cancel_document",
                 args: {
                     "doctype": doctype,
                     "docname": docname,
@@ -249,7 +249,7 @@ function create_dc(){
             {
                 "fieldname": "from_location",
                 "fieldtype": "Link",
-                "options": "Supplier",
+                "options": "YRP Supplier",
                 "label": "From Location",
                 "reqd": 1,
                 "default": location
@@ -271,7 +271,7 @@ function create_dc(){
             let dc_items = i.getData();
             d.hide();
             frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.create_delivery_challan",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.create_delivery_challan",
                 args: {
                     data: dc_items,
                     item_name: cur_frm.doc.item,
@@ -307,7 +307,7 @@ function create_loose_piece(){
             {
                 "fieldname": "from_location",
                 "fieldtype": "Link",
-                "options": "Supplier",
+                "options": "YRP Supplier",
                 "label": "From Location",
                 "reqd": 1,
                 "default": location
@@ -323,7 +323,7 @@ function create_loose_piece(){
             let loose_piece_items = i.getData();
             d.hide();
             frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.convert_to_loose_piece_items",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.convert_to_loose_piece_items",
                 args: {
                     "data": loose_piece_items,
                     "work_order": cur_frm.doc.work_order,
@@ -355,7 +355,7 @@ function return_item() {
             {
                 "fieldname": "received_type",
                 "fieldtype": "Link",
-                "options": "Received Type",
+                "options": "YRP Received Type",
                 "label": "Received Type",
                 "reqd": 1,
             },
@@ -370,7 +370,7 @@ function return_item() {
             let returned_items = i.getData();
             d.hide();
             frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.return_items",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.return_items",
                 args: {
                     "data": returned_items,
                     "work_order": cur_frm.doc.work_order,

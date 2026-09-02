@@ -10,7 +10,7 @@ from frappe import _
 from frappe.utils import cstr, flt, getdate, get_time, nowdate, nowtime
 
 from yrp.utils import update_if_string_instance
-from yrp.yrp.doctype.item_production_detail.item_production_detail import (
+from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
 	get_ipd_primary_values,
 )
 
@@ -31,7 +31,7 @@ def get_data_entry_data(supplier: str, lot: str | None = None) -> dict:
 	if lot:
 		filters["lot"] = lot
 	plans = frappe.get_list(
-		"Sewing Plan",
+		'SD YRP Sewing Plan',
 		filters=filters,
 		fields=["name", "lot", "item", "supplier", "work_order"],
 		limit_page_length=0,
@@ -43,14 +43,14 @@ def get_data_entry_data(supplier: str, lot: str | None = None) -> dict:
 	work_orders = {
 		row.name: row
 		for row in frappe.get_all(
-			"Work Order",
+			'YRP Work Order',
 			filters={"name": ["in", [row.work_order for row in plans]]},
 			fields=["name", "production_detail", "open_status"],
 		)
 	}
 	order_rows = frappe.get_all(
-		"Sewing Plan Order Detail",
-		filters={"parent": ["in", plan_names], "parenttype": "Sewing Plan"},
+		'SD YRP Sewing Plan Order Detail',
+		filters={"parent": ["in", plan_names], "parenttype": 'SD YRP Sewing Plan'},
 		fields=[
 			"name",
 			"parent",
@@ -63,7 +63,7 @@ def get_data_entry_data(supplier: str, lot: str | None = None) -> dict:
 		limit_page_length=0,
 	)
 	entry_headers = frappe.get_list(
-		"Sewing Plan Entry Detail",
+		'SD YRP Sewing Plan Entry Detail',
 		filters={"sewing_plan": ["in", plan_names]},
 		fields=["name", "sewing_plan", "input_type"],
 		limit_page_length=0,
@@ -71,10 +71,10 @@ def get_data_entry_data(supplier: str, lot: str | None = None) -> dict:
 	entry_rows = []
 	if entry_headers:
 		entry_rows = frappe.get_all(
-			"Sewing Plan Detail",
+			'SD YRP Sewing Plan Detail',
 			filters={
 				"parent": ["in", [row.name for row in entry_headers]],
-				"parenttype": "Sewing Plan Entry Detail",
+				"parenttype": 'SD YRP Sewing Plan Entry Detail',
 			},
 			fields=["parent", "item_variant", "set_combination", "quantity"],
 			limit_page_length=0,
@@ -97,7 +97,7 @@ def get_data_entry_data(supplier: str, lot: str | None = None) -> dict:
 	ipds = {
 		row.name: row
 		for row in frappe.get_all(
-			"Item Production Detail",
+			'YRP Item Production Detail',
 			filters={"name": ["in", list(ipd_names)]},
 			fields=[
 				"name",
@@ -199,7 +199,7 @@ def get_data_entry_data(supplier: str, lot: str | None = None) -> dict:
 		"input_types": [row.input_type for row in input_configuration],
 		"inspection_type": "pre_final",
 		"default_received_type": frappe.db.get_single_value(
-			"YRP Stock Settings", "default_received_type"
+			'YRP YRP Stock Settings', "default_received_type"
 		),
 	}
 
@@ -214,7 +214,7 @@ def update_sewing_plan_data(payload) -> str:
 
 	payload = _json_object(payload)
 	plan_name = cstr(payload.get("plan")).strip()
-	plan = frappe.get_doc("Sewing Plan", plan_name)
+	plan = frappe.get_doc('SD YRP Sewing Plan', plan_name)
 	plan.check_permission("write")
 	if cstr(payload.get("lot")).strip() != plan.lot:
 		frappe.throw(_("Sewing Plan and Lot do not match."))
@@ -226,10 +226,10 @@ def update_sewing_plan_data(payload) -> str:
 	if action not in {"update", "revert"}:
 		frappe.throw(_("Invalid Sewing inspection action."))
 
-	lot = frappe.get_doc("Lot", plan.lot)
+	lot = frappe.get_doc('SD YRP Lot', plan.lot)
 	if not lot.production_detail:
 		frappe.throw(_("Lot has no production detail."))
-	ipd = frappe.get_doc("Item Production Detail", lot.production_detail)
+	ipd = frappe.get_doc('YRP Item Production Detail', lot.production_detail)
 	variant_attributes = _variant_attributes(
 		{row.item_variant for row in plan.sewing_plan_order_details if row.item_variant}
 	)
@@ -280,12 +280,12 @@ def update_sewing_plan_data(payload) -> str:
 @frappe.whitelist()
 def submit_data_entry_log(payload) -> str:
 	payload = _json_object(payload)
-	frappe.has_permission("Sewing Plan Entry Detail", "create", throw=True)
+	frappe.has_permission('SD YRP Sewing Plan Entry Detail', "create", throw=True)
 
 	plan_name = cstr(payload.get("plan")).strip()
-	plan = frappe.get_doc("Sewing Plan", plan_name)
+	plan = frappe.get_doc('SD YRP Sewing Plan', plan_name)
 	plan.check_permission("read")
-	input_type = _required_link(payload, "input_type", "Sewing Plan Input Type")
+	input_type = _required_link(payload, "input_type", 'SD YRP Sewing Plan Input Type')
 	configuration = {
 		row.input_type: row for row in get_sewing_input_configuration()
 	}
@@ -298,9 +298,9 @@ def submit_data_entry_log(payload) -> str:
 	received_type = cstr(
 		payload.get("received_type") or payload.get("grn_item_type")
 	).strip()
-	if not received_type or not frappe.db.exists("Received Type", received_type):
+	if not received_type or not frappe.db.exists('YRP Received Type', received_type):
 		frappe.throw(_("Select a valid Received Type."))
-	work_station = _required_link(payload, "work_station", "Work Station")
+	work_station = _required_link(payload, "work_station", 'YRP Work Station')
 	entry_date = getdate(payload.get("date") or nowdate())
 	entry_time = get_time(payload.get("time") or nowtime())
 
@@ -309,12 +309,12 @@ def submit_data_entry_log(payload) -> str:
 	if not rows:
 		frappe.throw(_("Enter a quantity for at least one Sewing Plan item."))
 	frappe.db.sql(
-		"select name from `tabSewing Plan` where name = %s for update",
+		"select name from `tabSD YRP Sewing Plan` where name = %s for update",
 		plan.name,
 	)
 	_validate_input_sequence(plan, configuration[input_type], rows)
 
-	entry = frappe.new_doc("Sewing Plan Entry Detail")
+	entry = frappe.new_doc('SD YRP Sewing Plan Entry Detail')
 	entry.sewing_plan = plan.name
 	entry.input_type = input_type
 	entry.received_type = received_type
@@ -336,7 +336,7 @@ def submit_data_entry_log(payload) -> str:
 
 @frappe.whitelist()
 def cancel_sewing_plan_entry(doc_id: str) -> None:
-	entry = frappe.get_doc("Sewing Plan Entry Detail", doc_id)
+	entry = frappe.get_doc('SD YRP Sewing Plan Entry Detail', doc_id)
 	entry.check_permission("delete")
 	entry.delete()
 
@@ -383,10 +383,10 @@ def _validate_input_sequence(plan, configuration, rows) -> None:
 				detail.item_variant,
 				detail.set_combination,
 				detail.quantity
-			from `tabSewing Plan Entry Detail` entry
-			join `tabSewing Plan Detail` detail on detail.parent = entry.name
+			from `tabSD YRP Sewing Plan Entry Detail` entry
+			join `tabSD YRP Sewing Plan Detail` detail on detail.parent = entry.name
 			where entry.sewing_plan = %s
-			  and detail.parenttype = 'Sewing Plan Entry Detail'
+			  and detail.parenttype = 'SD YRP Sewing Plan Entry Detail'
 			for update
 		""",
 		plan.name,
@@ -475,7 +475,7 @@ def _variant_attributes(variants) -> dict[str, dict]:
 		return {}
 	result = defaultdict(dict)
 	for row in frappe.get_all(
-		"Item Variant Attribute",
+		'YRP Item Variant Attribute',
 		filters={"parent": ["in", list(variants)]},
 		fields=["parent", "attribute", "attribute_value"],
 		limit_page_length=0,
@@ -523,6 +523,6 @@ def _empty_data_entry_response(input_configuration=None) -> dict:
 		"input_types": [row.input_type for row in input_configuration],
 		"inspection_type": "pre_final",
 		"default_received_type": frappe.db.get_single_value(
-			"YRP Stock Settings", "default_received_type"
+			'YRP YRP Stock Settings', "default_received_type"
 		),
 	}

@@ -126,7 +126,7 @@ function add_ipd_process_matrix_button(frm) {
 	});
 }
 
-frappe.ui.form.on("Item Production Detail", {
+frappe.ui.form.on("YRP Item Production Detail", {
 	setup:function(frm) {
 		frm.trigger("declarations")
 		frm.set_query("dia", "knitting_dia_details", () => ({ filters: { attribute_name: "Dia" } }));
@@ -410,7 +410,7 @@ frappe.ui.form.on("Item Production Detail", {
 							label: "Item",
 							fieldname: "item",
 							fieldtype: "Link",
-							options: "Item",
+							options: "YRP Item",
 							default: frm.doc.item,
 							reqd: 1,
 						}
@@ -427,7 +427,7 @@ frappe.ui.form.on("Item Production Detail", {
 							freeze_message: "Duplicating IPD",
 							callback: function(r){
 								d.hide()
-								frappe.set_route("Form", "Item Production Detail", r.message)
+								frappe.set_route("Form", "YRP Item Production Detail", r.message)
 							}
 						})
 					},
@@ -1513,7 +1513,7 @@ function fill_selected_compacting_dia(frm) {
 				fieldname: "compacting_dia",
 				fieldtype: "Link",
 				label: __("Compacting Dia"),
-				options: "Item Attribute Value",
+				options: "YRP Item Attribute Value",
 				reqd: 1,
 				get_query: () => ({ filters: { attribute_name: "Dia" } }),
 			},
@@ -1560,7 +1560,7 @@ const FABRIC_SWAP_WIDGETS = {
 	},
 };
 
-frappe.ui.form.on("Item Production Detail", {
+frappe.ui.form.on("YRP Item Production Detail", {
 	setup(frm) {
 		frm.set_query("dia", "dyeing_colour_details", () => ({ filters: { attribute_name: "Dia" } }));
 		frm.set_query("colour", "compacting_dia_details", () => ({ filters: { attribute_name: "Colour" } }));
@@ -1676,7 +1676,7 @@ function fabric_swap_write_back(frm, cfg, rows) {
 // doctype as the storage (hidden) -- the data model is unchanged.
 // ===========================================================================
 
-frappe.ui.form.on("Item Production Detail", {
+frappe.ui.form.on("YRP Item Production Detail", {
 	refresh(frm) {
 		fabric_processes_toggle_grids(frm);
 		fabric_processes_mount(frm);
@@ -1732,7 +1732,7 @@ async function fabric_processes_mount(frm) {
 let _fabric_process_catalog = null;
 async function fabric_processes_catalog() {
 	if (_fabric_process_catalog) return _fabric_process_catalog;
-	const rows = await frappe.db.get_list("Process", { fields: ["name"], limit: 0, order_by: "name asc" });
+	const rows = await frappe.db.get_list("YRP Process", { fields: ["name"], limit: 0, order_by: "name asc" });
 	_fabric_process_catalog = rows.map((r) => r.name);
 	return _fabric_process_catalog;
 }

@@ -153,7 +153,7 @@
 						<label>Reference Item Variant</label>
 						<LinkField
 							v-model="header.reference_item_variant"
-							target-doctype="Item Variant"
+							target-doctype="YRP Item Variant"
 							:search-handler="searchVariantHandler"
 							:disabled="readonly"
 							placeholder="Generic (leave blank)"
@@ -164,7 +164,7 @@
 						<label>Input Item</label>
 						<LinkField
 							v-model="header.input_item"
-							target-doctype="Item"
+							target-doctype="YRP Item"
 							:disabled="readonly"
 							placeholder="IPD item (leave blank)"
 							@item-select="onInputItemChanged"
@@ -176,7 +176,7 @@
 						<label>Output Item</label>
 						<LinkField
 							v-model="header.output_item"
-							target-doctype="Item"
+							target-doctype="YRP Item"
 							:disabled="readonly"
 							placeholder="IPD item (leave blank)"
 							@item-select="onOutputItemChanged"
@@ -296,11 +296,11 @@
 						/>
 					</div>
 					<DataTable :value="group.inputs" class="esd-table combo-dt" :rowHover="false">
-						<Column header="Item" :style="{ minWidth: '220px' }">
+						<Column header="YRP Item" :style="{ minWidth: '220px' }">
 							<template #body="{ data }">
 								<LinkField
 									v-model="data.item"
-									target-doctype="Item"
+									target-doctype="YRP Item"
 									:disabled="readonly"
 									placeholder="Item"
 									class="cell-item"
@@ -332,7 +332,7 @@
 								/>
 							</template>
 						</Column>
-						<Column header="UOM" :style="{ width: '120px' }">
+						<Column header="YRP UOM" :style="{ width: '120px' }">
 							<template #body="{ data }">
 								<InputText v-model="data.uom" :disabled="readonly" placeholder="UOM" class="cell-text" fluid />
 							</template>
@@ -365,11 +365,11 @@
 						/>
 					</div>
 					<DataTable :value="group.outputs" class="esd-table combo-dt" :rowHover="false">
-						<Column header="Item" :style="{ minWidth: '220px' }">
+						<Column header="YRP Item" :style="{ minWidth: '220px' }">
 							<template #body="{ data }">
 								<LinkField
 									v-model="data.item"
-									target-doctype="Item"
+									target-doctype="YRP Item"
 									:disabled="readonly"
 									placeholder="Item"
 									class="cell-item"
@@ -401,7 +401,7 @@
 								/>
 							</template>
 						</Column>
-						<Column header="UOM" :style="{ width: '120px' }">
+						<Column header="YRP UOM" :style="{ width: '120px' }">
 							<template #body="{ data }">
 								<InputText v-model="data.uom" :disabled="readonly" placeholder="UOM" class="cell-text" fluid />
 							</template>
@@ -473,7 +473,7 @@ const toast = useAppToast()
 const confirm = useAppConfirm()
 const { isAdmin, hasRole } = usePermissions()
 
-const DOCTYPE = "IPD Process Matrix"
+const DOCTYPE = "YRP IPD Process Matrix"
 const docState = useDoc(DOCTYPE)
 
 const isCreate = computed(() => props.id === "new")
@@ -549,7 +549,7 @@ const totalCombos = computed(() => {
 })
 
 const deskUrl = computed(
-	() => `/app/ipd-process-matrix/${encodeURIComponent(props.id)}`,
+	() => `/app/yrp-ipd-process-matrix/${encodeURIComponent(props.id)}`,
 )
 
 // ── autocomplete buffers ──
@@ -626,7 +626,7 @@ async function fetchDependentAttribute() {
 	if (!header.ipd) return
 	try {
 		const r = await callMethod("frappe.client.get_value", {
-			doctype: "Item Production Detail",
+			doctype: "YRP Item Production Detail",
 			filters: { name: header.ipd },
 			fieldname: ["dependent_attribute", "item"],
 		})
@@ -688,7 +688,7 @@ function rebuildGroups(combos, attrs) {
 // variants. The matrix is now auto-generated from the IPD, so the old
 // item-variant constraint (yrp.yrp.api.matrix.get_matrix_attribute_values, which
 // resolved values off the IPD item's attribute mappings and rendered empty "—"
-// selects) is obsolete. "Item Attribute Value" is a standalone doctype keyed by
+// selects) is obsolete. "YRP Item Attribute Value" is a standalone doctype keyed by
 // `attribute_name`; we list every value of each attribute in play, both sides.
 async function reloadAttributeValues() {
 	// Clear existing keys.
@@ -698,7 +698,7 @@ async function reloadAttributeValues() {
 	if (!attrs.length) return
 	try {
 		const rows = await callMethod("frappe.client.get_list", {
-			doctype: "Item Attribute Value",
+			doctype: "YRP Item Attribute Value",
 			filters: { attribute_name: ["in", attrs] },
 			fields: ["attribute_name", "attribute_value"],
 			limit_page_length: 0,
@@ -975,13 +975,13 @@ async function onSave() {
 
 // ════════════════ AUTOCOMPLETE QUERIES ════════════════
 async function searchIpd(e) {
-	ipdSuggestions.value = await searchNames("Item Production Detail", e.query)
+	ipdSuggestions.value = await searchNames("YRP Item Production Detail", e.query)
 }
 async function searchProcess(e) {
-	processSuggestions.value = await searchNames("Process", e.query)
+	processSuggestions.value = await searchNames("YRP Process", e.query)
 }
 async function searchAttribute(e) {
-	let names = await searchNames("Item Attribute", e.query)
+	let names = await searchNames("YRP Item Attribute", e.query)
 	// Hide the dependent attribute from the picker entirely (RISK FLAG 2).
 	if (dependentAttribute.value) names = names.filter((n) => n !== dependentAttribute.value)
 	attrSuggestions.value = names
@@ -994,14 +994,14 @@ async function searchVariantHandler(query) {
 		let filters = {}
 		if (header.ipd) {
 			const r = await callMethod("frappe.client.get_value", {
-				doctype: "Item Production Detail",
+				doctype: "YRP Item Production Detail",
 				filters: { name: header.ipd },
 				fieldname: "item",
 			})
 			if (r?.item) filters = { item: r.item }
 		}
 		const rows = await callMethod("frappe.client.get_list", {
-			doctype: "Item Variant",
+			doctype: "YRP Item Variant",
 			filters: { ...filters, name: ["like", `%${query || ""}%`] },
 			fields: ["name"],
 			limit_page_length: 20,
@@ -1041,7 +1041,7 @@ async function fetchItemUom(itemName) {
 	if (!itemName) return ""
 	try {
 		const r = await callMethod("frappe.client.get_value", {
-			doctype: "Item",
+			doctype: "YRP Item",
 			filters: { name: itemName },
 			fieldname: "default_unit_of_measure",
 		})
@@ -1054,7 +1054,7 @@ async function ipdItemName() {
 	if (!header.ipd) return ""
 	try {
 		const r = await callMethod("frappe.client.get_value", {
-			doctype: "Item Production Detail",
+			doctype: "YRP Item Production Detail",
 			filters: { name: header.ipd },
 			fieldname: "item",
 		})
@@ -1098,7 +1098,7 @@ function goIpd() {
 }
 function goMatrixList() {
 	// IPD Process Matrix has no /web list (it's opened from an IPD's process row).
-	// Strict no-Desk rule: don't redirect to /app/ipd-process-matrix — surface a
+	// Strict no-Desk rule: don't redirect to /app/yrp-ipd-process-matrix — surface a
 	// toast instead (mirrors BOMMappingEditor.goMappingList).
 	toast.warn(
 		"No /web list",

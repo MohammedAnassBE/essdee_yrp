@@ -23,37 +23,37 @@ from pymysql.cursors import DictCursor
 
 
 SYNC_DOCTYPES = (
-	"Country",
-	"UOM",
-	"Brand",
-	"Terms and Condition",
-	"Product Season",
-	"Product Category",
-	"Additional Parameter Key",
-	"Additional Parameter Value",
-	"Item Attribute",
-	"Production Term",
-	"User",
-	"Item Category",
-	"Address",
-	"Item Group",
-	"Item Attribute Value",
-	"Department",
-	"Contact",
-	"Item Item Attribute Mapping",
-	"Supplier",
-	"Item",
-	"Process",
-	"Item Variant",
-	"Item Dependent Attribute Mapping",
-	"Item BOM Attribute Mapping",
-	"IPD Settings",
-	"MRP Settings",
-	"Production Order",
-	"Lot Template",
-	"Item Production Detail",
-	"IPD Compacting",
-	"Lot",
+	("Country", "Country"),
+	("UOM", "YRP UOM"),
+	("Brand", "YRP Brand"),
+	("Terms and Condition", "YRP Terms and Condition"),
+	("Product Season", "SD YRP Product Season"),
+	("Product Category", "SD YRP Product Category"),
+	("Additional Parameter Key", "YRP Additional Parameter Key"),
+	("Additional Parameter Value", "YRP Additional Parameter Value"),
+	("Item Attribute", "YRP Item Attribute"),
+	("Production Term", "YRP Production Term"),
+	("User", "User"),
+	("Item Category", "YRP Item Category"),
+	("Address", "Address"),
+	("Item Group", "YRP Item Group"),
+	("Item Attribute Value", "YRP Item Attribute Value"),
+	("Department", "YRP Department"),
+	("Contact", "Contact"),
+	("Item Item Attribute Mapping", "YRP Item Item Attribute Mapping"),
+	("Supplier", "YRP Supplier"),
+	("Item", "YRP Item"),
+	("Process", "YRP Process"),
+	("Item Variant", "YRP Item Variant"),
+	("Item Dependent Attribute Mapping", "YRP Item Dependent Attribute Mapping"),
+	("Item BOM Attribute Mapping", "YRP Item BOM Attribute Mapping"),
+	("IPD Settings", "SD YRP IPD Settings"),
+	("MRP Settings", "SD YRP MRP Settings"),
+	("Production Order", "YRP Production Order"),
+	("Lot Template", "SD YRP Lot Template"),
+	("Item Production Detail", "YRP Item Production Detail"),
+	("IPD Compacting", "SD YRP IPD Compacting"),
+	("Lot", "SD YRP Lot"),
 )
 
 TABLE_FIELD_TYPES = {"Table", "Table MultiSelect"}
@@ -216,9 +216,16 @@ def _child_rows(
 	return grouped
 
 
-def _compare_parent_fields(source, target, doctype: str, source_meta: dict, target_meta: dict) -> dict:
-	source_columns = _columns(source, doctype) if not source_meta["issingle"] else set()
-	target_columns = _columns(target, doctype) if not target_meta["issingle"] else set()
+def _compare_parent_fields(
+	source,
+	target,
+	source_doctype: str,
+	target_doctype: str,
+	source_meta: dict,
+	target_meta: dict,
+) -> dict:
+	source_columns = _columns(source, source_doctype) if not source_meta["issingle"] else set()
+	target_columns = _columns(target, target_doctype) if not target_meta["issingle"] else set()
 	source_scalar = {
 		name: field
 		for name, field in source_meta["fields"].items()
@@ -234,11 +241,11 @@ def _compare_parent_fields(source, target, doctype: str, source_meta: dict, targ
 	common_fields = sorted(set(source_scalar) & set(target_scalar))
 
 	if source_meta["issingle"]:
-		source_rows = {doctype: _single_values(source, doctype)}
-		target_rows = {doctype: _single_values(target, doctype)}
+		source_rows = {"__single__": _single_values(source, source_doctype)}
+		target_rows = {"__single__": _single_values(target, target_doctype)}
 	else:
-		source_rows = _regular_rows(source, doctype, sorted(source_scalar))
-		target_rows = _regular_rows(target, doctype, sorted(target_scalar))
+		source_rows = _regular_rows(source, source_doctype, sorted(source_scalar))
+		target_rows = _regular_rows(target, target_doctype, sorted(target_scalar))
 	common_names = set(source_rows) & set(target_rows)
 
 	mismatches = []
@@ -284,7 +291,15 @@ def _compare_parent_fields(source, target, doctype: str, source_meta: dict, targ
 	}
 
 
-def _compare_child_tables(source, target, doctype: str, source_meta: dict, target_meta: dict, common_names: set[str]) -> list[dict]:
+def _compare_child_tables(
+	source,
+	target,
+	source_doctype: str,
+	target_doctype: str,
+	source_meta: dict,
+	target_meta: dict,
+	common_names: set[str],
+) -> list[dict]:
 	results = []
 	source_tables = {
 		name: field
@@ -321,10 +336,10 @@ def _compare_child_tables(source, target, doctype: str, source_meta: dict, targe
 		}
 		common_fields = sorted(set(source_scalar) & set(target_scalar))
 		source_rows = _child_rows(
-			source, source_child, doctype, fieldname, common_fields, common_names
+			source, source_child, source_doctype, fieldname, common_fields, common_names
 		)
 		target_rows = _child_rows(
-			target, target_child, doctype, fieldname, common_fields, common_names
+			target, target_child, target_doctype, fieldname, common_fields, common_names
 		)
 		bad = [
 			name
@@ -338,7 +353,7 @@ def _compare_child_tables(source, target, doctype: str, source_meta: dict, targe
 			rows = _child_rows(
 				source,
 				source_child,
-				doctype,
+				source_doctype,
 				fieldname,
 				[child_fieldname],
 				common_names,
@@ -377,7 +392,7 @@ def _compare_child_tables(source, target, doctype: str, source_meta: dict, targe
 		if fieldname in target_tables:
 			continue
 		source_child = source_field["options"]
-		rows = _child_rows(source, source_child, doctype, fieldname, [], common_names)
+		rows = _child_rows(source, source_child, source_doctype, fieldname, [], common_names)
 		row_count = sum(len(parent_rows) for parent_rows in rows.values())
 		if row_count:
 			results.append(
@@ -403,26 +418,50 @@ def main() -> int:
 	parser.add_argument("--target-site", required=True)
 	parser.add_argument("--doctypes-json")
 	args = parser.parse_args()
-	doctypes = tuple(json.loads(args.doctypes_json)) if args.doctypes_json else SYNC_DOCTYPES
+	requested = tuple(json.loads(args.doctypes_json)) if args.doctypes_json else SYNC_DOCTYPES
+	target_by_source = dict(SYNC_DOCTYPES)
+	doctypes = tuple(
+		(
+			tuple(row)
+			if isinstance(row, (list, tuple)) and len(row) == 2
+			else (row, target_by_source.get(row, row))
+		)
+		for row in requested
+	)
 
 	source = _connect(args.source_bench.resolve(), args.source_site)
 	target = _connect(args.target_bench.resolve(), args.target_site)
 	try:
 		results = []
-		for doctype in doctypes:
-			source_meta = _meta(source, doctype)
-			target_meta = _meta(target, doctype)
-			parent = _compare_parent_fields(source, target, doctype, source_meta, target_meta)
+		for source_doctype, target_doctype in doctypes:
+			source_meta = _meta(source, source_doctype)
+			target_meta = _meta(target, target_doctype)
+			parent = _compare_parent_fields(
+				source,
+				target,
+				source_doctype,
+				target_doctype,
+				source_meta,
+				target_meta,
+			)
 			children = _compare_child_tables(
 				source,
 				target,
-				doctype,
+				source_doctype,
+				target_doctype,
 				source_meta,
 				target_meta,
 				parent.pop("common_names"),
 			)
 			if parent["field_mismatches"] or parent["populated_source_only_fields"] or children:
-				results.append({"doctype": doctype, **parent, "child_table_mismatches": children})
+				results.append(
+					{
+						"source_doctype": source_doctype,
+						"target_doctype": target_doctype,
+						**parent,
+						"child_table_mismatches": children,
+					}
+				)
 		print(json.dumps(results, indent=2, default=str))
 	finally:
 		source.close()

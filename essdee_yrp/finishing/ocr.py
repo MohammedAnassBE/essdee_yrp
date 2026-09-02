@@ -6,14 +6,14 @@ from frappe.utils import flt
 from essdee_yrp.finishing.packing import get_finishing_packing_summary
 from essdee_yrp.finishing.parsing import json_object
 from yrp.utils import get_variant_attr_details, update_if_string_instance
-from yrp.yrp.doctype.item_production_detail.item_production_detail import (
+from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
 	get_ipd_primary_values,
 )
 
 
 @frappe.whitelist()
 def get_fp_ocr_details(doc_name):
-	doc = frappe.get_doc("Finishing Plan", doc_name)
+	doc = frappe.get_doc('SD YRP Finishing Plan', doc_name)
 	doc.check_permission("read")
 	ocr_data = get_ocr_details(doc)
 	metrics = {
@@ -123,11 +123,11 @@ def get_fp_ocr_details(doc_name):
 
 def get_ocr_details(doc):
 	ipd_name = doc.production_detail or frappe.db.get_value(
-		"Lot", doc.lot, "production_detail"
+		'SD YRP Lot', doc.lot, "production_detail"
 	)
 	is_set_item, packing_attribute, primary_attribute, set_attribute, major_part = (
 		frappe.db.get_value(
-			"Item Production Detail",
+			'YRP Item Production Detail',
 			ipd_name,
 			[
 				"is_set_item",
@@ -142,7 +142,7 @@ def get_ocr_details(doc):
 	parts = set()
 	for row in doc.get("finishing_plan_details") or []:
 		attributes = get_variant_attr_details(row.item_variant)
-		part = attributes.get(set_attribute) if is_set_item else "Item"
+		part = attributes.get(set_attribute) if is_set_item else 'YRP Item'
 		parts.add(part)
 		size = attributes.get(primary_attribute)
 		part_data = ocr_data.setdefault(part, _empty_part())
@@ -187,7 +187,7 @@ def get_ocr_details(doc):
 		part_data["total_inward"] += inward
 		part_data["total"][size]["total_inward"] += inward
 
-	_apply_packing(doc, ocr_data, parts or {"Item"}, primary_attribute)
+	_apply_packing(doc, ocr_data, parts or {'YRP Item'}, primary_attribute)
 	_apply_old_lot_adjustments(
 		doc,
 		ocr_data,
@@ -250,7 +250,7 @@ def _apply_old_lot_adjustments(
 		if not row.item_variant:
 			return
 		attributes = get_variant_attr_details(row.item_variant)
-		part = attributes.get(set_attribute) if is_set_item else "Item"
+		part = attributes.get(set_attribute) if is_set_item else 'YRP Item'
 		size = attributes.get(primary_attribute)
 		colour = attributes.get(packing_attribute)
 		if is_set_item and part != major_part:
@@ -280,7 +280,7 @@ def _apply_rework(
 ):
 	for row in doc.get("finishing_plan_reworked_details") or []:
 		attributes = get_variant_attr_details(row.item_variant)
-		part = attributes.get(set_attribute) if is_set_item else "Item"
+		part = attributes.get(set_attribute) if is_set_item else 'YRP Item'
 		if part not in ocr_data:
 			continue
 		size = attributes.get(primary_attribute)
@@ -308,12 +308,12 @@ def _apply_rework(
 
 
 def _apply_order_quantity(doc, ocr_data, is_set_item, primary_attribute, set_attribute):
-	lot_doc = frappe.get_cached_doc("Lot", doc.lot)
+	lot_doc = frappe.get_cached_doc('SD YRP Lot', doc.lot)
 	for row in lot_doc.get("lot_order_details") or []:
 		if not row.item_variant:
 			continue
 		attributes = get_variant_attr_details(row.item_variant)
-		part = attributes.get(set_attribute) if is_set_item else "Item"
+		part = attributes.get(set_attribute) if is_set_item else 'YRP Item'
 		if part not in ocr_data:
 			continue
 		size = attributes.get(primary_attribute)

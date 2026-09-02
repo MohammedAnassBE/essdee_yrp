@@ -23,7 +23,7 @@ class TestEssdeeUIRegistry(IntegrationTestCase):
 		self.assertEqual(spec["compute"](), len(names))
 		self.assertEqual(
 			spec["goto"](),
-			{"doctype": "Lot", "filters": [["name", "in", names]]},
+			{"doctype": 'SD YRP Lot', "filters": [["name", "in", names]]},
 		)
 
 	def test_lot_balance_rejects_a_dangling_lot(self):

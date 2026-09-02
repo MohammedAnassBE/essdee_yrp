@@ -11,7 +11,7 @@ class TestWorkOrderBulkClose(IntegrationTestCase):
 	def setUp(self):
 		super().setUp()
 		self.work_order = frappe.get_all(
-			"Work Order",
+			'YRP Work Order',
 			filters={"docstatus": 1, "open_status": "Open"},
 			fields=["name", "supplier"],
 			limit=1,

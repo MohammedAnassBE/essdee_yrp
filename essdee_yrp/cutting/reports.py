@@ -19,7 +19,7 @@ from frappe.utils import getdate, sbool
 def _require_report_access() -> None:
 	"""Require the same read authority as the Cutting LaySheet data being reported."""
 
-	frappe.has_permission("Cutting LaySheet", ptype="read", throw=True)
+	frappe.has_permission('SD YRP Cutting LaySheet', ptype="read", throw=True)
 
 
 def update_if_string_instance(value):
@@ -39,9 +39,9 @@ def get_stich_details(ipd_doc):
 @frappe.whitelist()
 def get_daily_production_report(date, location, items=None, lots=None, only_label_printed=False):
 	_require_report_access()
-	from essdee_yrp.essdee_yrp.doctype.lot.lot import fetch_order_item_details
-	from essdee_yrp.essdee_yrp.doctype.cutting_plan.cutting_plan import get_complete_incomplete_structure
-	from yrp.yrp.doctype.item.item import get_or_create_variant
+	from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import fetch_order_item_details
+	from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan import get_complete_incomplete_structure
+	from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
 
 	report_date = getdate(date)
 	only_label_printed = sbool(only_label_printed)
@@ -54,11 +54,11 @@ def get_daily_production_report(date, location, items=None, lots=None, only_labe
 		filter_parts = []
 		if items:
 			filter_values["filter_items"] = items
-			filter_parts.append("cls.cutting_plan IN (SELECT cp.name FROM `tabCutting Plan` cp WHERE cp.item IN %(filter_items)s)")
-			filter_parts.append("cls.cutting_order IN (SELECT co.name FROM `tabCutting Order` co WHERE co.item IN %(filter_items)s)")
+			filter_parts.append("cls.cutting_plan IN (SELECT cp.name FROM `tabSD YRP Cutting Plan` cp WHERE cp.item IN %(filter_items)s)")
+			filter_parts.append("cls.cutting_order IN (SELECT co.name FROM `tabSD YRP Cutting Order` co WHERE co.item IN %(filter_items)s)")
 		if lots:
 			filter_values["filter_lots"] = lots
-			filter_parts.append("cls.cutting_plan IN (SELECT cp.name FROM `tabCutting Plan` cp WHERE cp.lot IN %(filter_lots)s)")
+			filter_parts.append("cls.cutting_plan IN (SELECT cp.name FROM `tabSD YRP Cutting Plan` cp WHERE cp.lot IN %(filter_lots)s)")
 		if filter_parts:
 			filter_sql = f" AND ({' OR '.join(filter_parts)})"
 
@@ -68,7 +68,7 @@ def get_daily_production_report(date, location, items=None, lots=None, only_labe
 			COUNT(*) as bundle_count,
 			SUM(CASE WHEN cls.status = 'Label Printed' THEN 1 ELSE 0 END) as label_count,
 			SUM(CASE WHEN cls.posting_date = %(date)s THEN 1 ELSE 0 END) as created_count
-		FROM `tabCutting LaySheet` cls
+		FROM `tabSD YRP Cutting LaySheet` cls
 		WHERE cls.bundle_generated_date = %(date)s{filter_sql}{status_sql}
 		AND cls.status != 'Cancelled'
 		GROUP BY cls.cutting_plan, cls.cutting_order
@@ -81,9 +81,9 @@ def get_daily_production_report(date, location, items=None, lots=None, only_labe
 	cls_stats_map = {}
 	for row in cls_stats_rows:
 		if row['cutting_plan']:
-			key = ("Cutting Plan", row['cutting_plan'])
+			key = ('SD YRP Cutting Plan', row['cutting_plan'])
 		elif row['cutting_order']:
-			key = ("Cutting Order", row['cutting_order'])
+			key = ('SD YRP Cutting Order', row['cutting_order'])
 		else:
 			continue
 		cls_stats_map[key] = row
@@ -97,21 +97,21 @@ def get_daily_production_report(date, location, items=None, lots=None, only_labe
 	if all_cls_names:
 		bundles = frappe.db.sql("""
 			SELECT parent, part, size, quantity, set_combination
-			FROM `tabCutting LaySheet Bundle`
+			FROM `tabSD YRP Cutting LaySheet Bundle`
 			WHERE parent IN %(names)s
 		""", {"names": all_cls_names}, as_dict=True)
 		for b in bundles:
 			bundles_by_parent.setdefault(b['parent'], []).append(b)
 
 	# Step 3: Batch-fetch Work Order calculated items (CP only)
-	cp_names = [name for dt, name in cls_stats_map.keys() if dt == "Cutting Plan"]
+	cp_names = [name for dt, name in cls_stats_map.keys() if dt == 'SD YRP Cutting Plan']
 	wo_planned_by_cp = {}
 	if cp_names:
 		wo_map_rows = frappe.db.sql("""
 			SELECT cp.name as cp_name, cp.work_order,
 				woci.item_variant, woci.quantity, woci.received_qty
-			FROM `tabCutting Plan` cp
-			JOIN `tabWork Order Calculated Item` woci ON woci.parent = cp.work_order
+			FROM `tabSD YRP Cutting Plan` cp
+			JOIN `tabYRP Work Order Calculated Item` woci ON woci.parent = cp.work_order
 			WHERE cp.name IN %(cp_names)s AND cp.work_order IS NOT NULL AND cp.work_order != ''
 		""", {"cp_names": cp_names}, as_dict=True)
 		for row in wo_map_rows:
@@ -133,13 +133,13 @@ def get_daily_production_report(date, location, items=None, lots=None, only_labe
 	created = 0
 
 	for (parent_dt, parent_name), stats in cls_stats_map.items():
-		if parent_dt == "Cutting Plan":
-			cp_doc = frappe.get_doc("Cutting Plan", parent_name)
+		if parent_dt == 'SD YRP Cutting Plan':
+			cp_doc = frappe.get_doc('SD YRP Cutting Plan', parent_name)
 			if cp_doc.version == "V1":
 				frappe.throw("Can't get report for Cutting Plan Version V1")
 			if location and cp_doc.cutting_location != location:
 				continue
-			detail_doc = frappe.get_cached_doc("Item Production Detail", cp_doc.production_detail)
+			detail_doc = frappe.get_cached_doc('YRP Item Production Detail', cp_doc.production_detail)
 			item_details = fetch_order_item_details(cp_doc.items, cp_doc.production_detail)
 			completed, incomplete = get_complete_incomplete_structure(cp_doc.production_detail, item_details)
 			incomplete_items = update_if_string_instance(incomplete)
@@ -149,10 +149,10 @@ def get_daily_production_report(date, location, items=None, lots=None, only_labe
 			parent_location = cp_doc.cutting_location
 			planned_dict = wo_planned_by_cp.get(parent_name, {})
 		else:
-			co_doc = frappe.get_doc("Cutting Order", parent_name)
+			co_doc = frappe.get_doc('SD YRP Cutting Order', parent_name)
 			if location and co_doc.cutting_location != location:
 				continue
-			detail_doc = frappe.get_cached_doc("Cutting Order Detail", co_doc.cutting_order_detail)
+			detail_doc = frappe.get_cached_doc('SD YRP Cutting Order Detail', co_doc.cutting_order_detail)
 			completed_items = update_if_string_instance(co_doc.completed_items_json)
 			incomplete_items = update_if_string_instance(co_doc.incomplete_items_json)
 			# Enrich CO structure to match CP format expected by Vue template
@@ -301,7 +301,7 @@ def get_daily_production_summary_report(items=None, lots=None, location=None, fr
 	dates = frappe.db.sql(
 		f"""
 			SELECT DISTINCT bundle_generated_date
-			FROM `tabCutting LaySheet`
+			FROM `tabSD YRP Cutting LaySheet`
 			WHERE {where_clause}
 			AND bundle_generated_date IS NOT NULL
 			{extra_filters}
@@ -337,11 +337,11 @@ def get_daily_production_summary_report(items=None, lots=None, location=None, fr
 @frappe.whitelist()
 def get_cutting_detail_report(start_date, end_date, location):
 	_require_report_access()
-	from essdee_yrp.essdee_yrp.doctype.lot.lot import fetch_order_item_details
-	from essdee_yrp.essdee_yrp.doctype.cutting_plan.cutting_plan import get_complete_incomplete_structure
+	from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import fetch_order_item_details
+	from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan import get_complete_incomplete_structure
 	cutting_plans = frappe.db.sql(
 		"""
-			SELECT distinct(cutting_plan) FROM `tabCutting LaySheet` WHERE bundle_generated_date BETWEEN %(start_date)s AND %(end_date)s
+			SELECT distinct(cutting_plan) FROM `tabSD YRP Cutting LaySheet` WHERE bundle_generated_date BETWEEN %(start_date)s AND %(end_date)s
 			AND status = 'Label Printed'
 		""", {
 			"start_date": getdate(start_date),
@@ -353,7 +353,7 @@ def get_cutting_detail_report(start_date, end_date, location):
 	label_printed = 0
 	created = 0
 	for cutting_plan in cutting_plans:
-		cp_doc = frappe.get_doc("Cutting Plan",cutting_plan['cutting_plan'])
+		cp_doc = frappe.get_doc('SD YRP Cutting Plan',cutting_plan['cutting_plan'])
 		if cp_doc.version == "V1":
 			frappe.throw("Can't get report for Cutting Plan Version V1")
 		if location and cp_doc.cutting_location != location:
@@ -363,10 +363,10 @@ def get_cutting_detail_report(start_date, end_date, location):
 		incomplete_items = update_if_string_instance(incomplete)
 		completed_items = update_if_string_instance(completed)
 		production_detail = cp_doc.production_detail
-		ipd_doc = frappe.get_cached_doc("Item Production Detail",production_detail)
+		ipd_doc = frappe.get_cached_doc('YRP Item Production Detail',production_detail)
 		cls_list = frappe.db.sql(
 			"""
-				SELECT name FROM `tabCutting LaySheet` WHERE bundle_generated_date BETWEEN %(start_date)s AND %(end_date)s
+				SELECT name FROM `tabSD YRP Cutting LaySheet` WHERE bundle_generated_date BETWEEN %(start_date)s AND %(end_date)s
 				AND cutting_plan = %(cutting_plan)s AND status = 'Label Printed'
 			""", {
 				"start_date": getdate(start_date),
@@ -377,7 +377,7 @@ def get_cutting_detail_report(start_date, end_date, location):
 		bundle_generated += len(cls_list)
 		cls_list2 = frappe.db.sql(
 			"""
-				SELECT name FROM `tabCutting LaySheet` WHERE bundle_generated_date BETWEEN %(start_date)s AND %(end_date)s
+				SELECT name FROM `tabSD YRP Cutting LaySheet` WHERE bundle_generated_date BETWEEN %(start_date)s AND %(end_date)s
 				AND cutting_plan = %(cutting_plan)s AND status = 'Label Printed'
 			""", {
 				"start_date": getdate(start_date),
@@ -388,7 +388,7 @@ def get_cutting_detail_report(start_date, end_date, location):
 		label_printed += len(cls_list2)
 		cls_list3 = frappe.db.sql(
 			"""
-				SELECT name FROM `tabCutting LaySheet` WHERE posting_date BETWEEN %(start_date)s AND %(end_date)s
+				SELECT name FROM `tabSD YRP Cutting LaySheet` WHERE posting_date BETWEEN %(start_date)s AND %(end_date)s
 				AND cutting_plan = %(cutting_plan)s AND status = 'Label Printed'
 			""", {
 				"start_date": getdate(start_date),
@@ -431,13 +431,13 @@ def get_cutting_detail_report(start_date, end_date, location):
 		total_received_qty = 0
 		planned_dict = {}
 		if cp_doc.work_order:
-			wo_doc = frappe.get_doc("Work Order", cp_doc.work_order)
+			wo_doc = frappe.get_doc('YRP Work Order', cp_doc.work_order)
 			for row in wo_doc.work_order_calculated_items:
 				planned_dict.setdefault(row.item_variant, {
 					"planned": row.quantity,
 					"cumulative": row.received_qty
 				})
-		from yrp.yrp.doctype.item.item import get_or_create_variant
+		from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
 		for row in completed_items['items']:
 			total_qty = 0
 			total_planned = 0
@@ -513,7 +513,7 @@ def calculate_completed(cls_list, ipd_doc, completed_items, incomplete_items, bu
 		if bundles_by_parent is not None:
 			cls_bundles = bundles_by_parent.get(cls['name'], [])
 		else:
-			cls_doc = frappe.get_doc("Cutting LaySheet", cls['name'])
+			cls_doc = frappe.get_doc('SD YRP Cutting LaySheet', cls['name'])
 			cls_bundles = cls_doc.cutting_laysheet_bundles
 		if not ipd_doc.is_set_item:
 			alter_incomplete_items = {}
@@ -609,24 +609,24 @@ def calculate_completed(cls_list, ipd_doc, completed_items, incomplete_items, bu
 @frappe.whitelist()
 def get_cut_sheet_report(date, location):
 	_require_report_access()
-	from essdee_yrp.essdee_yrp.doctype.lot.lot import fetch_order_item_details
-	from essdee_yrp.essdee_yrp.doctype.cutting_plan.cutting_plan import get_complete_incomplete_structure
+	from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import fetch_order_item_details
+	from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan import get_complete_incomplete_structure
 
 	report_date = getdate(date)
 
 	# Get all parents (CP and CO) for CLS on this date
 	parent_rows = frappe.db.sql("""
 		SELECT DISTINCT cutting_plan, cutting_order
-		FROM `tabCutting LaySheet`
+		FROM `tabSD YRP Cutting LaySheet`
 		WHERE bundle_generated_date = %(date)s
 	""", {"date": report_date}, as_dict=True)
 
 	report = []
 	for parent_row in parent_rows:
 		if parent_row['cutting_plan']:
-			parent_dt = "Cutting Plan"
+			parent_dt = 'SD YRP Cutting Plan'
 			parent_name = parent_row['cutting_plan']
-			cp_doc = frappe.get_doc("Cutting Plan", parent_name)
+			cp_doc = frappe.get_doc('SD YRP Cutting Plan', parent_name)
 			if cp_doc.version == "V1":
 				frappe.throw("Can't get report for Cutting Plan Version V1")
 			if location and cp_doc.cutting_location != location:
@@ -634,19 +634,19 @@ def get_cut_sheet_report(date, location):
 			item_details = fetch_order_item_details(cp_doc.items, cp_doc.production_detail)
 			completed, incomplete = get_complete_incomplete_structure(cp_doc.production_detail, item_details)
 			incomplete_items = update_if_string_instance(incomplete)
-			detail_doc = frappe.get_cached_doc("Item Production Detail", cp_doc.production_detail)
+			detail_doc = frappe.get_cached_doc('YRP Item Production Detail', cp_doc.production_detail)
 			parent_item = cp_doc.item
 			parent_lot = cp_doc.lot
 			parent_location = cp_doc.cutting_location
 			parent_field = "cutting_plan"
 		elif parent_row['cutting_order']:
-			parent_dt = "Cutting Order"
+			parent_dt = 'SD YRP Cutting Order'
 			parent_name = parent_row['cutting_order']
-			co_doc = frappe.get_doc("Cutting Order", parent_name)
+			co_doc = frappe.get_doc('SD YRP Cutting Order', parent_name)
 			if location and co_doc.cutting_location != location:
 				continue
 			incomplete_items = update_if_string_instance(co_doc.incomplete_items_json)
-			detail_doc = frappe.get_cached_doc("Cutting Order Detail", co_doc.cutting_order_detail)
+			detail_doc = frappe.get_cached_doc('SD YRP Cutting Order Detail', co_doc.cutting_order_detail)
 			# Enrich CO structure to match CP format expected by Vue template
 			attr_list = [detail_doc.packing_attribute]
 			if detail_doc.is_set_item and detail_doc.set_item_attribute:
@@ -670,7 +670,7 @@ def get_cut_sheet_report(date, location):
 			continue
 
 		cls_list = frappe.db.sql(f"""
-			SELECT name FROM `tabCutting LaySheet`
+			SELECT name FROM `tabSD YRP Cutting LaySheet`
 			WHERE bundle_generated_date = %(date)s AND {parent_field} = %(parent_name)s
 		""", {"date": report_date, "parent_name": parent_name}, as_dict=True)
 
@@ -691,7 +691,7 @@ def get_cut_sheet_report(date, location):
 					alter_incomplete_items[colour][part] = item['values']
 
 		for cls in cls_list:
-			cls_doc = frappe.get_doc("Cutting LaySheet", cls['name'])
+			cls_doc = frappe.get_doc('SD YRP Cutting LaySheet', cls['name'])
 			if not detail_doc.is_set_item:
 				for item in cls_doc.cutting_laysheet_bundles:
 					parts = item.part.split(",")
@@ -796,7 +796,7 @@ def get_multiccr(open_status=None, lot_list=None, item_list=None, category=None)
 
 	lot_list = frappe.db.sql(
 		f"""
-			SELECT t1.name FROM `tabLot` t1 JOIN `tabItem` t2 ON t1.item = t2.name
+			SELECT t1.name FROM `tabSD YRP Lot` t1 JOIN `tabYRP Item` t2 ON t1.item = t2.name
 			WHERE 1 = 1 {conditions} AND (t1.production_detail IS NOT NULL AND t1.production_detail != '')
 		""", con, as_dict=True
 	)
@@ -805,7 +805,7 @@ def get_multiccr(open_status=None, lot_list=None, item_list=None, category=None)
 	output_items = []
 	for lot in lot_list:
 		lot = lot['name']
-		cp_list = frappe.get_all("Cutting Plan", filters={
+		cp_list = frappe.get_all('SD YRP Cutting Plan', filters={
 			"lot": lot,
 			"docstatus": 1,
 		}, pluck="name")
@@ -828,7 +828,7 @@ def get_multiccr(open_status=None, lot_list=None, item_list=None, category=None)
 				completed,
 				version,
 				production_detail,
-			) = frappe.get_value("Cutting Plan", cp, cp_fields)
+			) = frappe.get_value('SD YRP Cutting Plan', cp, cp_fields)
 			if item_name not in output_items:
 				output_items.append(item_name)
 			completed = [update_if_string_instance(completed)]
@@ -842,7 +842,7 @@ def get_multiccr(open_status=None, lot_list=None, item_list=None, category=None)
 						total_qty += total
 				else:
 					set_attribute = row.get('set_item_attr') or frappe.get_cached_value(
-						"Item Production Detail",
+						'YRP Item Production Detail',
 						production_detail,
 						"set_item_attribute",
 					)
@@ -855,10 +855,10 @@ def get_multiccr(open_status=None, lot_list=None, item_list=None, category=None)
 								item['total_qty'] = total
 								total_qty += total
 			cloth_details = frappe.get_all(
-				"Cutting Plan Cloth Detail",
+				'SD YRP Cutting Plan Cloth Detail',
 				filters={
 					"parent": cp,
-					"parenttype": "Cutting Plan",
+					"parenttype": 'SD YRP Cutting Plan',
 					"parentfield": "cutting_plan_cloth_details",
 				},
 				fields=[

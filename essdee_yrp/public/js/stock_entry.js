@@ -1,4 +1,4 @@
-frappe.ui.form.on("Stock Entry", {
+frappe.ui.form.on("YRP Stock Entry", {
 	refresh(frm) {
 		exclude_stock_entry_cut_panel_movement_from_cancel_all(frm);
 		allow_positive_material_receipt_rates(frm);
@@ -53,6 +53,6 @@ function allow_positive_material_receipt_rates(frm) {
 function exclude_stock_entry_cut_panel_movement_from_cancel_all(frm) {
 	if (frm.doc.docstatus !== 1 || !frm.doc.cut_panel_movement) return;
 	const ignored = new Set(frm.ignore_doctypes_on_cancel_all || []);
-	ignored.add("Cut Panel Movement");
+	ignored.add("SD YRP Cut Panel Movement");
 	frm.ignore_doctypes_on_cancel_all = [...ignored];
 }

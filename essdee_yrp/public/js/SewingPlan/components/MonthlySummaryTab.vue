@@ -170,7 +170,7 @@ const fetchData = () => {
     }
 
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.sewing_plan.sewing_plan.get_monthly_summary_data",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan.get_monthly_summary_data",
         args,
         callback: (r) => {
             loading.value = false
@@ -234,7 +234,7 @@ const handlePrint = () => {
         return
     }
     const params = new URLSearchParams({
-        doctype: 'Supplier',
+        doctype: 'YRP Supplier',
         name: props.selected_supplier,
         format: 'Sewing Plan Monthly Summary',
         no_letterhead: '1',
@@ -292,7 +292,7 @@ onMounted(() => {
                 fieldtype: "Link",
                 fieldname: "input_type",
                 label: "",
-                options: "Sewing Plan Input Type",
+                options: "SD YRP Sewing Plan Input Type",
                 placeholder: "Input Type",
                 change: function() {
                     input_type_val.value = input_type_ctrl.get_value() || null

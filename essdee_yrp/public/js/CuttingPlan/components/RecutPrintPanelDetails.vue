@@ -89,7 +89,7 @@ onMounted(()=> {
     items.value = []
     make_clean()
     frappe.call({
-        method:"essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.get_select_attributes",
+        method:"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.get_select_attributes",
         args: {
             cutting_plan:cur_frm.doc.name,
         },

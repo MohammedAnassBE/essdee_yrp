@@ -30,11 +30,11 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
         cls.addClassCleanup(cls._commit_patcher.stop)
 
     def setUp(self):
-        wh = frappe.get_all("Warehouse", filters={"supplier": ["is", "set"]},
+        wh = frappe.get_all('YRP Warehouse', filters={"supplier": ["is", "set"]},
                             fields=["name", "supplier"], limit=1)
-        variants = frappe.get_all("Item Variant", limit=2, pluck="name")
-        lots = frappe.get_all("Lot", limit=2, pluck="name")
-        if not (wh and variants and lots and frappe.db.exists("Received Type", "Accepted")):
+        variants = frappe.get_all('YRP Item Variant', limit=2, pluck="name")
+        lots = frappe.get_all('SD YRP Lot', limit=2, pluck="name")
+        if not (wh and variants and lots and frappe.db.exists('YRP Received Type', "Accepted")):
             self.skipTest("essdee_yrp.site missing a supplier-warehouse / variant / lot / Accepted")
         self.wh = wh[0].name
         self.supplier = wh[0].supplier
@@ -43,36 +43,36 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
         # a 2nd distinct (variant, lot) for the multi-row parity test (may be None on a bare site)
         self.variant2 = variants[1] if len(variants) > 1 else None
         self.lot2 = lots[1] if len(lots) > 1 else None
-        # yrp Item Variant carries no UOM; it lives on the parent Item.
-        item = frappe.db.get_value("Item Variant", self.variant, "item")
-        self.uom = frappe.db.get_value("Item", item, "default_unit_of_measure") \
-            or (frappe.get_all("UOM", limit=1, pluck="name") or ["Nos"])[0]
+        # YRP Item Variant carries no UOM; it lives on the parent Item.
+        item = frappe.db.get_value('YRP Item Variant', self.variant, "item")
+        self.uom = frappe.db.get_value('YRP Item', item, "default_unit_of_measure") \
+            or (frappe.get_all('YRP UOM', limit=1, pluck="name") or ["Nos"])[0]
         self._extra_ses = []            # non-source_grn SEs a test creates; cleaned in tearDown
         self._cleanup()
 
     def tearDown(self):
         for name in getattr(self, "_extra_ses", []):
-            if frappe.db.exists("Stock Entry", name):
-                doc = frappe.get_doc("Stock Entry", name)
+            if frappe.db.exists('YRP Stock Entry', name):
+                doc = frappe.get_doc('YRP Stock Entry', name)
                 if doc.docstatus == 1:          # no source_grn -> guard does not block
                     doc.cancel()
-                frappe.delete_doc("Stock Entry", name, force=True, ignore_permissions=True)
+                frappe.delete_doc('YRP Stock Entry', name, force=True, ignore_permissions=True)
         self._cleanup()
 
     def _cleanup(self):
         for grn in TEST_GRNS:
-            for name in frappe.get_all("Stock Entry", filters={"source_grn": grn}, pluck="name"):
-                doc = frappe.get_doc("Stock Entry", name)
+            for name in frappe.get_all('YRP Stock Entry', filters={"source_grn": grn}, pluck="name"):
+                doc = frappe.get_doc('YRP Stock Entry', name)
                 if doc.docstatus == 1:
                     # source_grn SEs are guarded — cleanup takes the transfer-cancel path
                     doc.flags.from_grn_transfer = True
                     doc.cancel()
-                frappe.delete_doc("Stock Entry", name, force=True, ignore_permissions=True)
+                frappe.delete_doc('YRP Stock Entry', name, force=True, ignore_permissions=True)
 
     def _make_normal_se(self):
         """A plain Material Receipt with NO source_grn (mirrors receive_grn_transfer's
         SE construction minus the transfer marker) — the control for the cancel guard."""
-        se = frappe.new_doc("Stock Entry")
+        se = frappe.new_doc('YRP Stock Entry')
         se.purpose = "Material Receipt"
         se.to_warehouse = self.wh
         se.to_supplier = self.supplier
@@ -95,7 +95,7 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
     def test_creates_and_submits_material_receipt(self):
         r = receive_grn_transfer(self._payload())
         self.assertTrue(r["ok"], r)
-        se = frappe.get_doc("Stock Entry", r["stock_entry"])
+        se = frappe.get_doc('YRP Stock Entry', r["stock_entry"])
         self.assertEqual(se.purpose, "Material Receipt")
         self.assertEqual(se.docstatus, 1)
         self.assertEqual(se.to_warehouse, self.wh)          # auto-resolved from supplier
@@ -103,7 +103,7 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
         self.assertEqual(se.items[0].lot, self.lot)
         self.assertEqual(se.items[0].received_type, "Accepted")
         self.assertEqual(se.items[0].conversion_factor, 1.0)
-        self.assertEqual(frappe.db.get_value("Stock Entry", se.name, "source_grn"), "GRN-TEST-0001")
+        self.assertEqual(frappe.db.get_value('YRP Stock Entry', se.name, "source_grn"), "GRN-TEST-0001")
 
     def test_multi_row_grn_makes_one_se_holding_all_rows(self):
         """A GRN with N item rows transfers as exactly ONE Material Receipt whose
@@ -122,10 +122,10 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
         self.assertTrue(r["ok"], r)
         self.assertFalse(r.get("duplicate"))
         # exactly ONE Stock Entry per GRN (not one-per-row)
-        ses = frappe.get_all("Stock Entry",
+        ses = frappe.get_all('YRP Stock Entry',
                              filters={"source_grn": "GRN-TEST-MULTI", "docstatus": 1}, pluck="name")
         self.assertEqual(len(ses), 1, "there must be exactly ONE Stock Entry for the GRN")
-        se = frappe.get_doc("Stock Entry", ses[0])
+        se = frappe.get_doc('YRP Stock Entry', ses[0])
         # row-count parity + every (item, lot, qty) preserved inside that single SE
         self.assertEqual(len(se.items), len(expected),
                          "every GRN item row must be its own Stock Entry Detail row")
@@ -134,7 +134,7 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
         self.assertEqual(got, want)
 
     def test_multi_item_grn_renders_all_rows_in_desk_grid(self):
-        """DISPLAY parity (the real reported bug): the yrp Stock Entry desk form
+        """DISPLAY parity (the real reported bug): the YRP Stock Entry desk form
         renders its item grid from group_items_for_ui(items) — pushed via
         onload -> __onload.item_details — NOT from the flat child table. Two
         DIFFERENT parent items both stored with the Int-column default
@@ -147,7 +147,7 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
         # The collapse only DROPS a row across DIFFERENT parent items, so the test
         # needs two variants whose parent Items differ (mirrors CS-46206 vs EC-46310).
         by_parent = {}
-        for c in frappe.get_all("Item Variant", fields=["name", "item"], limit=80):
+        for c in frappe.get_all('YRP Item Variant', fields=["name", "item"], limit=80):
             by_parent.setdefault(c.item, c.name)
         if len(by_parent) < 2:
             self.skipTest("essdee_yrp.site needs Item Variants from >=2 distinct parent Items")
@@ -161,11 +161,11 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
         ]
         r = receive_grn_transfer(self._payload(source_grn="GRN-TEST-UIGRID", items=items))
         self.assertTrue(r["ok"], r)
-        se = frappe.get_doc("Stock Entry", r["stock_entry"])
+        se = frappe.get_doc('YRP Stock Entry', r["stock_entry"])
         self.assertEqual(len(se.items), 2, "child table (data) must hold both rows")
 
         # What the desk Vue grid actually receives on load:
-        grouped = group_items_for_ui(se.items, "Stock Entry")
+        grouped = group_items_for_ui(se.items, 'YRP Stock Entry')
         rendered = []
         for group in grouped:
             for entry in group.get("items", []):
@@ -208,7 +208,7 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
         self.assertTrue(created["ok"], created)
         r = cancel_grn_transfer("GRN-TEST-0001")
         self.assertTrue(r["ok"], r)
-        self.assertEqual(frappe.db.get_value("Stock Entry", created["stock_entry"], "docstatus"), 2)
+        self.assertEqual(frappe.db.get_value('YRP Stock Entry', created["stock_entry"], "docstatus"), 2)
 
     def test_cancel_missing_is_idempotent(self):
         r = cancel_grn_transfer("GRN-NEVER-EXISTED")
@@ -228,7 +228,7 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
         finally:
             frappe.set_user("Administrator")
         # nothing was created for this source_grn
-        self.assertFalse(frappe.get_all("Stock Entry",
+        self.assertFalse(frappe.get_all('YRP Stock Entry',
                                         filters={"source_grn": "GRN-TEST-0001"}, limit=1))
 
     # --- Issue D: check-then-insert serialized by a per-source_grn named lock ---
@@ -248,11 +248,11 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
         guard forbids it unless doc.flags.from_grn_transfer is set."""
         created = receive_grn_transfer(self._payload())
         self.assertTrue(created["ok"], created)
-        se = frappe.get_doc("Stock Entry", created["stock_entry"])
+        se = frappe.get_doc('YRP Stock Entry', created["stock_entry"])
         with self.assertRaises(frappe.ValidationError):
             se.cancel()
         self.assertEqual(
-            frappe.db.get_value("Stock Entry", se.name, "docstatus"), 1,
+            frappe.db.get_value('YRP Stock Entry', se.name, "docstatus"), 1,
             "a blocked direct cancel must leave the transfer SE submitted")
 
     def test_cancel_grn_transfer_still_cancels_transfer_se(self):
@@ -263,7 +263,7 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
         r = cancel_grn_transfer("GRN-TEST-0001")
         self.assertTrue(r["ok"], r)
         self.assertEqual(
-            frappe.db.get_value("Stock Entry", created["stock_entry"], "docstatus"), 2)
+            frappe.db.get_value('YRP Stock Entry', created["stock_entry"], "docstatus"), 2)
 
     def test_normal_stock_entry_cancel_is_unaffected(self):
         """A normal Stock Entry (no source_grn) is outside the guard and cancels normally."""

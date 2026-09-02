@@ -4,14 +4,16 @@ import frappe
 from frappe.tests import UnitTestCase
 
 from essdee_yrp.cutting import movement
-from essdee_yrp.essdee_yrp.doctype.cutting_laysheet import cutting_laysheet
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet import (
+	sd_yrp_cutting_laysheet as cutting_laysheet,
+)
 from essdee_yrp.finishing import transactions
 
 
 class TestRetryIdempotency(UnitTestCase):
 	def test_collapsed_bundle_submit_retry_locks_voucher_and_skips_duplicate(self):
 		doc = frappe._dict(
-			doctype="Delivery Challan",
+			doctype='YRP Delivery Challan',
 			name="DC-U44",
 			lot="LOT-U44",
 			cut_panel_movement=None,
@@ -23,7 +25,7 @@ class TestRetryIdempotency(UnitTestCase):
 			patch.object(movement.frappe.db, "get_value", return_value=doc.name) as get_value,
 			patch.object(movement.frappe.db, "exists", return_value="CBML-U44"),
 			patch(
-				"essdee_yrp.essdee_yrp.doctype.cut_bundle_movement_ledger.cut_bundle_movement_ledger.update_collapsed_bundle"
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_bundle_movement_ledger.sd_yrp_cut_bundle_movement_ledger.update_collapsed_bundle"
 			) as update_collapsed,
 		):
 			movement.apply_transaction(doc)
@@ -35,7 +37,7 @@ class TestRetryIdempotency(UnitTestCase):
 
 	def test_bundle_cancel_retry_without_active_ledger_is_a_noop(self):
 		doc = frappe._dict(
-			doctype="Delivery Challan",
+			doctype='YRP Delivery Challan',
 			name="DC-U44-CANCEL",
 			lot="LOT-U44",
 			cut_panel_movement=None,
@@ -47,7 +49,7 @@ class TestRetryIdempotency(UnitTestCase):
 			patch.object(movement.frappe.db, "get_value", return_value=doc.name),
 			patch.object(movement.frappe.db, "exists", return_value=None),
 			patch(
-				"essdee_yrp.essdee_yrp.doctype.cut_bundle_movement_ledger.cut_bundle_movement_ledger.update_collapsed_bundle"
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_bundle_movement_ledger.sd_yrp_cut_bundle_movement_ledger.update_collapsed_bundle"
 			) as update_collapsed,
 		):
 			movement.apply_transaction(doc, cancelled=True)
@@ -55,7 +57,7 @@ class TestRetryIdempotency(UnitTestCase):
 		update_collapsed.assert_not_called()
 
 	def test_laysheet_bundle_retry_locks_before_checking_completion_marker(self):
-		doc = frappe._dict(doctype="Cutting LaySheet", name="CLS-U44")
+		doc = frappe._dict(doctype='SD YRP Cutting LaySheet', name="CLS-U44")
 		with (
 			patch.object(cutting_laysheet, "_lock_cutting_laysheet") as lock,
 			patch.object(cutting_laysheet.frappe.db, "exists", return_value="CBML-U44"),
@@ -95,7 +97,7 @@ class TestRetryIdempotency(UnitTestCase):
 		work_order.check_permission.assert_called_once_with("read")
 		work_order.reload.assert_called_once_with()
 		get_value.assert_called_once_with(
-			"Work Order", "WO-U44", "name", for_update=True
+			'YRP Work Order', "WO-U44", "name", for_update=True
 		)
 		validate.assert_called_once_with(work_order, "LOT-U44", "ITEM-U44")
 		new_doc.assert_not_called()

@@ -4,7 +4,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
-from yrp.yrp.doctype.delivery_challan.delivery_challan import DeliveryChallan
+from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import DeliveryChallan
 
 
 def strip_unselected_cpm_items(doc):

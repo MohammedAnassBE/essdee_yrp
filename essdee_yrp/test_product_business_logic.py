@@ -2,7 +2,7 @@ import frappe
 from frappe import _dict
 from frappe.tests import IntegrationTestCase
 
-from essdee_yrp.essdee_yrp.doctype.product.product import (
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_product.sd_yrp_product import (
 	PRODUCT_ATTACHMENT_FIELDS,
 	_assert_file_attached_to,
 	get_grouped_files,
@@ -24,7 +24,7 @@ class TestProductBusinessLogic(IntegrationTestCase):
 			"process_single_page_pdf",
 		):
 			function = frappe.get_attr(
-				"essdee_yrp.essdee_yrp.doctype.product.product." + method
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_product.sd_yrp_product." + method
 			)
 			self.assertIn(function, frappe.whitelisted, method)
 			self.assertNotIn(function, frappe.guest_methods, method)
@@ -33,31 +33,31 @@ class TestProductBusinessLogic(IntegrationTestCase):
 		self.assertEqual(
 			PRODUCT_ATTACHMENT_FIELDS,
 			{
-				"Product": {
+				'SD YRP Product': {
 					"product_image",
 					"top_image",
 					"bottom_image",
 					"front_image",
 					"back_image",
 				},
-				"Product Colour Code": {"image"},
-				"Product Image": {"image"},
-				"Product Measurement": {"measurement_image"},
+				'SD YRP Product Colour Code': {"image"},
+				'SD YRP Product Image': {"image"},
+				'SD YRP Product Measurement': {"measurement_image"},
 			},
 		)
 
 	def test_attachment_owner_check_rejects_cross_document_file(self):
 		file_doc = _dict(
-			attached_to_doctype="Product",
+			attached_to_doctype='SD YRP Product',
 			attached_to_name="STYLE-001",
 			attached_to_field="product_image",
 		)
 		_assert_file_attached_to(
-			file_doc, "Product", "STYLE-001", "product_image"
+			file_doc, 'SD YRP Product', "STYLE-001", "product_image"
 		)
 		with self.assertRaises(frappe.PermissionError):
 			_assert_file_attached_to(
-				file_doc, "Product", "STYLE-002", "product_image"
+				file_doc, 'SD YRP Product', "STYLE-002", "product_image"
 			)
 
 	def test_trim_colour_payload_discards_values_not_on_product(self):
@@ -89,23 +89,23 @@ class TestProductBusinessLogic(IntegrationTestCase):
 		)
 
 	def test_existing_product_builds_product_development_onload(self):
-		name = frappe.get_all("Product", pluck="name", limit=1)[0]
-		doc = frappe.get_doc("Product", name)
+		name = frappe.get_all('SD YRP Product', pluck="name", limit=1)[0]
+		doc = frappe.get_doc('SD YRP Product', name)
 		doc.run_method("onload")
 		self.assertIn("costing_list", doc.get("__onload") or {})
 
 	def test_release_tech_pack_creates_versioned_snapshot(self):
 		product_name = frappe.get_all(
-			"Product", filters={"is_set_item": 0}, pluck="name", limit=1
+			'SD YRP Product', filters={"is_set_item": 0}, pluck="name", limit=1
 		)[0]
-		product = frappe.get_doc("Product", product_name)
+		product = frappe.get_doc('SD YRP Product', product_name)
 		product.set("product_designs", [])
 		product.set("product_box_details", [])
 		product.save()
 		old_version = product.tech_pack_no or 0
 
 		release_name = release_tech_pack(product.name)
-		release = frappe.get_doc("Product Release", release_name)
+		release = frappe.get_doc('SD YRP Product Release', release_name)
 		self.assertEqual(release.product, product.name)
 		self.assertEqual(release.tech_pack_no, old_version + 1)
 		product.reload()

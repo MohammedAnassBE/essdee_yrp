@@ -47,7 +47,7 @@ def get_dispatch_percentage_report(percentage=None, lot_list=None, item_list=Non
 	item_list = _normalize_multiselect_filter(item_list)
 	conditions = [
 		"fp.docstatus < 2",
-		"log.parenttype = 'Finishing Plan'",
+		"log.parenttype = 'SD YRP Finishing Plan'",
 		"log.parentfield = 'finishing_plan_dispatch_logs'",
 		"ifnull(log.cancelled, 0) = 0",
 		"ifnull(log.dispatch_percentage_before, 0) < %(percentage)s",
@@ -74,8 +74,8 @@ def get_dispatch_percentage_report(percentage=None, lot_list=None, item_list=Non
 				fp.lot,
 				fp.item,
 				log.dispatch_percentage_after AS percentage
-			FROM `tabFinishing Plan Dispatch Log` log
-			INNER JOIN `tabFinishing Plan` fp ON fp.name = log.parent
+			FROM `tabSD YRP Finishing Plan Dispatch Log` log
+			INNER JOIN `tabSD YRP Finishing Plan` fp ON fp.name = log.parent
 			WHERE {" AND ".join(conditions)}
 			ORDER BY log.parent, log.posting_date, log.posting_time, log.idx
 		""",
@@ -205,10 +205,10 @@ def get_work_order_pending_report(
 									* COALESCE(NULLIF(ipd.packing_combo, 0), 1)
 						ELSE SUM(COALESCE(t2.received_qty, 0))
 					END AS pending_quantity
-			FROM `tabWork Order` t1
-			JOIN `tabWork Order Calculated Item` t2 ON t2.parent = t1.name
-			LEFT JOIN `tabLot` l ON l.name = t1.lot
-			LEFT JOIN `tabItem Production Detail` ipd ON ipd.name = l.production_detail
+			FROM `tabYRP Work Order` t1
+			JOIN `tabYRP Work Order Calculated Item` t2 ON t2.parent = t1.name
+			LEFT JOIN `tabSD YRP Lot` l ON l.name = t1.lot
+			LEFT JOIN `tabYRP Item Production Detail` ipd ON ipd.name = l.production_detail
 			LEFT JOIN (
 				SELECT
 					grn.against_id AS work_order,
@@ -220,18 +220,18 @@ def get_work_order_pending_report(
 						CASE WHEN COALESCE(grn.packing_calculation_version, 0) < 2
 							THEN COALESCE(grn_item.quantity, 0) ELSE 0 END
 					) AS legacy_received_qty
-				FROM `tabGoods Received Note` grn
-				JOIN `tabGoods Received Note Item` grn_item
+				FROM `tabYRP Goods Received Note` grn
+				JOIN `tabYRP Goods Received Note Item` grn_item
 					ON grn_item.parent = grn.name
 				WHERE
 					grn.docstatus = 1
-					AND grn.against = 'Work Order'
+					AND grn.against = 'YRP Work Order'
 					AND grn.is_return = 0
 				GROUP BY grn.against_id
 			) packing_grn ON packing_grn.work_order = t1.name
-			LEFT JOIN `tabItem Variant` iv ON iv.name = t2.item_variant
-			LEFT JOIN `tabItem` i ON i.name = iv.item
-			LEFT JOIN `tabSupplier` t3 ON t3.name = t1.supplier
+			LEFT JOIN `tabYRP Item Variant` iv ON iv.name = t2.item_variant
+			LEFT JOIN `tabYRP Item` i ON i.name = iv.item
+			LEFT JOIN `tabYRP Supplier` t3 ON t3.name = t1.supplier
 			WHERE t1.docstatus = 1 {conditions}
 			GROUP BY
 				l.production_order,
@@ -287,7 +287,7 @@ def get_combine_datetime(posting_date, posting_time):
 @frappe.whitelist()
 def make_purchase_order_mapped_doc(items):
 	"""Build a draft Purchase Order from selected Lot Purchase Summary rows."""
-	frappe.has_permission("Purchase Order", "create", throw=True)
+	frappe.has_permission('YRP Purchase Order', "create", throw=True)
 	if isinstance(items, str):
 		items = frappe.parse_json(items)
 	if not isinstance(items, list) or not items:
@@ -297,12 +297,12 @@ def make_purchase_order_mapped_doc(items):
 	for index, item in enumerate(items):
 		item = frappe._dict(item)
 		item_variant = item.item
-		if not item_variant or not frappe.db.exists("Item Variant", item_variant):
+		if not item_variant or not frappe.db.exists('YRP Item Variant', item_variant):
 			frappe.throw(f"Row {index + 1}: a valid Item Variant is required.")
 		if flt(item.qty) <= 0:
 			frappe.throw(f"Row {index + 1}: quantity must be greater than zero.")
 		if item.delivery_location and not frappe.db.exists(
-			"Supplier", item.delivery_location
+			'YRP Supplier', item.delivery_location
 		):
 			frappe.throw(f"Row {index + 1}: delivery location does not exist.")
 		rows.append(
@@ -319,6 +319,6 @@ def make_purchase_order_mapped_doc(items):
 			}
 		)
 
-	doc = frappe.new_doc("Purchase Order")
-	doc.set_onload("item_details", group_items_for_ui(rows, "Purchase Order"))
+	doc = frappe.new_doc('YRP Purchase Order')
+	doc.set_onload("item_details", group_items_for_ui(rows, 'YRP Purchase Order'))
 	return doc

@@ -36,7 +36,7 @@
 		<div v-if="editing" class="em-add">
 			<LinkField
 				:model-value="newProcess"
-				target-doctype="Process"
+				target-doctype="YRP Process"
 				placeholder="Process"
 				class="em-link"
 				@item-select="(e) => (newProcess = e.value)"

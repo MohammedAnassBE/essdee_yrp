@@ -170,16 +170,16 @@ def final_combos(ipd_doc, has_colour=True):
 	if steps:
 		last = steps[-1]
 		matrix_names = frappe.get_all(
-			"IPD Process Matrix",
+			'YRP IPD Process Matrix',
 			filters={"ipd": ipd_doc.name, "process_name": last["process_name"], "docstatus": ["<", 2]},
 			pluck="name",
 		)
 		combos = set()
 		for name in matrix_names:
-			matrix = frappe.get_doc("IPD Process Matrix", name)
+			matrix = frappe.get_doc('YRP IPD Process Matrix', name)
 			if matrix.reference_item_variant:
 				variant = frappe.get_cached_doc(
-					"Item Variant", matrix.reference_item_variant
+					'YRP Item Variant', matrix.reference_item_variant
 				)
 				combos.add(frozenset(
 					(row.attribute, row.attribute_value)
@@ -195,7 +195,7 @@ def final_combos(ipd_doc, has_colour=True):
 		# downstream dyeing matrix by design, so union those exact references
 		# into the reachable requirement choices.
 		for reference in frappe.get_all(
-			"IPD Process Matrix",
+			'YRP IPD Process Matrix',
 			filters={
 				"ipd": ipd_doc.name,
 				"reference_item_variant": ["is", "set"],
@@ -203,7 +203,7 @@ def final_combos(ipd_doc, has_colour=True):
 			},
 			pluck="reference_item_variant",
 		):
-			variant = frappe.get_cached_doc("Item Variant", reference)
+			variant = frappe.get_cached_doc('YRP Item Variant', reference)
 			combos.add(frozenset(
 				(row.attribute, row.attribute_value)
 				for row in variant.get("attributes") or []

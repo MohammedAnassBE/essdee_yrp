@@ -1,6 +1,6 @@
 <!--
   ColumnCustomizerModal — per-user list columns (#2). Lets the user pick which
-  columns show + reorder them; persists to the `User Listview` doctype (base yrp)
+  columns show + reorder them; persists to the `YRP User Listview` doctype (base yrp)
   via save_user_listview / reset_user_listview. Sort + saved filters are deferred.
 -->
 <template>
@@ -103,7 +103,7 @@ async function saveColumns() {
 			fieldname: c.fieldname,
 			enabled: c.enabled ? 1 : 0,
 		}))
-		await callMethod("yrp.yrp.doctype.user_listview.user_listview.save_user_listview", {
+		await callMethod("yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.save_user_listview", {
 			doctype_name: props.doctype,
 			columns: JSON.stringify(columns),
 		})
@@ -121,7 +121,7 @@ async function resetColumns() {
 	if (!props.doctype) return
 	saving.value = true
 	try {
-		await callMethod("yrp.yrp.doctype.user_listview.user_listview.reset_user_listview", {
+		await callMethod("yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.reset_user_listview", {
 			doctype_name: props.doctype,
 		})
 		toast.success("Columns reset", "Reverted to the default columns.")

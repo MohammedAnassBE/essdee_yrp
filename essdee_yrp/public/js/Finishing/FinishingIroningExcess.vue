@@ -12,10 +12,10 @@
                 </thead>
                 <tbody class="dark-border">
                     <tr v-for="(date, ie) in ie_list">
-                        <td style="cursor: pointer;" @click="redirect_to('Stock Entry', ie)">{{ ie }}</td>
+                        <td style="cursor: pointer;" @click="redirect_to('YRP Stock Entry', ie)">{{ ie }}</td>
                         <td>{{ date }}</td>
                         <td>
-                            <button class="btn btn-primary" @click="cancel_doc('Stock Entry', ie)">Cancel</button>
+                            <button class="btn btn-primary" @click="cancel_doc('YRP Stock Entry', ie)">Cancel</button>
                         </td>
                     </tr>
                 </tbody>
@@ -84,7 +84,7 @@ function cancel_doc(doctype, docname){
         primary_action(){
             d.hide()
             frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.cancel_document",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.cancel_document",
                 args: {
                     "doctype": doctype,
                     "docname": docname,
@@ -123,7 +123,7 @@ function add_ironing(){
             let ironing_items = i.getData()
             d.hide();
             frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.create_material_receipt",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.create_material_receipt",
                 args: {
                     data: ironing_items,
                     item_name: cur_frm.doc.item,

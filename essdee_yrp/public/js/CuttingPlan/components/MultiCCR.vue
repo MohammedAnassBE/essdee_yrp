@@ -264,9 +264,9 @@ onMounted(()=> {
             fieldtype: "MultiSelectList",
             fieldname: "lot",
             label: "Lot",
-            options: "Lot",
+            options: "SD YRP Lot",
             get_data: function (txt) {
-                return frappe.db.get_link_options("Lot", txt);
+                return frappe.db.get_link_options("SD YRP Lot", txt);
             },
         },
         doc: sample_doc.value,
@@ -280,9 +280,9 @@ onMounted(()=> {
             fieldtype: "MultiSelectList",
             fieldname: "item",
             label: "Item",
-            options: "Item",
+            options: "YRP Item",
             get_data: function(txt){
-                return frappe.db.get_link_options("Item", txt)
+                return frappe.db.get_link_options("YRP Item", txt)
             }
         },
         doc: sample_doc.value,
@@ -310,7 +310,7 @@ onMounted(()=> {
             fieldname: "product_category",
             fieldtype: "Link",
             label: "Product Category",
-            options: "Product Category",
+            options: "SD YRP Product Category",
             default: 'Inner'
         },
         doc: sample_doc.value,
@@ -330,11 +330,11 @@ function get_list_items(){
             }
         ],
         primary_action(){
-            if (list_converter.select_value == 'Item'){
+            if (list_converter.select_value == 'YRP Item'){
                 let updated_list = item_list.get_value().concat(list_converter.list)
                 item_list.set_value(updated_list)
             }
-            else if(list_converter.select_value == 'Lot'){
+            else if(list_converter.select_value == 'SD YRP Lot'){
                 let updated_list = lot_list.get_value().concat(list_converter.list)
                 lot_list.set_value(updated_list)
             }
@@ -344,7 +344,7 @@ function get_list_items(){
     d.fields_dict['pop_up_html'].$wrapper.html("")
     let el = d.fields_dict['pop_up_html'].$wrapper.get(0)
     let vue = createApp(MultiSelectListConverter, {
-        "items_list": ['Lot', 'Item']
+        "items_list": ['SD YRP Lot', 'YRP Item']
     })
     list_converter = vue.mount(el)
     d.show()

@@ -66,7 +66,7 @@
 				<LinkField
 					id="viewas-layout"
 					v-model="pickedLayout"
-					target-doctype="UI Layout"
+					target-doctype="YRP UI Layout"
 					placeholder="Search layouts…"
 					:filters="{ disabled: 0 }"
 					:dropdown="false"

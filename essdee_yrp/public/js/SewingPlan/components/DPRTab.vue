@@ -204,7 +204,7 @@ const initFilter = () => {
             fieldtype: 'Link',
             fieldname: 'work_station',
             label: 'Work Station',
-            options: 'Work Station',
+            options: 'YRP Work Station',
             placeholder: "Work Station",
             change: () => {
                 selected_ws.value = ws_value.get_value()
@@ -223,7 +223,7 @@ const initFilter = () => {
             fieldtype: 'Link',
             fieldname: 'input_type',
             label: 'Input Type',
-            options: 'Sewing Plan Input Type',
+            options: 'SD YRP Sewing Plan Input Type',
             placeholder: "Input Type",
             change: () => {
                 selected_input_type.value = input_type_control.get_value()
@@ -243,7 +243,7 @@ const initFilter = () => {
 const fetchDPRData = () => {
     if (!props.selected_supplier || !selected_date.value) return
     frappe.call({
-        method: 'essdee_yrp.essdee_yrp.doctype.sewing_plan.sewing_plan.get_sewing_plan_dpr_data',
+        method: 'essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan.get_sewing_plan_dpr_data',
         args: {
             supplier: props.selected_supplier,
             dpr_date: selected_date.value,

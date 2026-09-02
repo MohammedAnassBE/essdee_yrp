@@ -1,4 +1,4 @@
-frappe.ui.form.on("Delivery Challan", {
+frappe.ui.form.on("YRP Delivery Challan", {
 	work_order(frm) {
 		if (frm.doc.docstatus !== 0) return;
 		// Source location and warehouse are specific to this dispatch. Never
@@ -25,7 +25,7 @@ frappe.ui.form.on("Delivery Challan", {
 function replace_return_button(frm) {
 	if (
 		frm.doc.docstatus !== 1 ||
-		!frappe.model.can_create("Goods Received Note") ||
+		!frappe.model.can_create("YRP Goods Received Note") ||
 		!frappe.production?.ui?.ReturnItemsMatrix
 	) {
 		return;
@@ -36,7 +36,7 @@ function replace_return_button(frm) {
 
 function load_return_matrix(frm) {
 	frappe.call({
-		method: "yrp.yrp.doctype.delivery_challan.delivery_challan.get_return_delivery_items",
+		method: "yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan.get_return_delivery_items",
 		args: {doc_name: frm.doc.name},
 		freeze: true,
 		freeze_message: __("Loading returnable items..."),
@@ -62,7 +62,7 @@ function show_return_matrix(frm, data) {
 			{
 				fieldname: "cut_panel_movement",
 				fieldtype: "Link",
-				options: "Cut Panel Movement",
+				options: "SD YRP Cut Panel Movement",
 				label: __("Return Cut Panel Movement"),
 				mandatory_depends_on: "eval:doc.return_whole_bundles",
 				depends_on: "eval:doc.return_whole_bundles",
@@ -97,7 +97,7 @@ function show_return_matrix(frm, data) {
 				callback(r) {
 					if (!r.message) return;
 					dialog.hide();
-					frappe.set_route("Form", "Goods Received Note", r.message);
+					frappe.set_route("Form", "YRP Goods Received Note", r.message);
 				},
 			});
 		},
@@ -112,6 +112,6 @@ function show_return_matrix(frm, data) {
 function exclude_cut_panel_movement_from_cancel_all(frm) {
 	if (frm.doc.docstatus !== 1 || !frm.doc.cut_panel_movement) return;
 	const ignored = new Set(frm.ignore_doctypes_on_cancel_all || []);
-	ignored.add("Cut Panel Movement");
+	ignored.add("SD YRP Cut Panel Movement");
 	frm.ignore_doctypes_on_cancel_all = [...ignored];
 }

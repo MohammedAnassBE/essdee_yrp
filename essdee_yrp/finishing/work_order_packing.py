@@ -14,20 +14,20 @@ from frappe.utils import flt
 
 from essdee_yrp.garment_bom import calculate_essdee_accessory_bom
 from yrp.utils import get_variant_attr_details, update_if_string_instance
-from yrp.yrp.doctype.item.item import build_variant_attributes, get_or_create_variant
+from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_or_create_variant
 
 
 def create_alternative_packing_work_order(source_work_order, target_lot):
 	"""Create the draft packing Work Order for an alternative Lot."""
-	source = frappe.get_doc("Work Order", source_work_order)
+	source = frappe.get_doc('YRP Work Order', source_work_order)
 	source.check_permission("read")
-	lot = frappe.get_doc("Lot", target_lot)
+	lot = frappe.get_doc('SD YRP Lot', target_lot)
 	if not lot.production_detail or not lot.item:
 		frappe.throw(_("Alternative Lot {0} is not configured").format(target_lot))
 	if not lot.get("is_transferred") or not lot.get("transferred_lot"):
 		frappe.throw(_("Lot {0} is not an alternative Lot").format(target_lot))
 
-	work_order = frappe.new_doc("Work Order")
+	work_order = frappe.new_doc('YRP Work Order')
 	for fieldname in (
 		"supplier",
 		"supplier_address",
@@ -64,8 +64,8 @@ def build_packing_work_order_rows(lot, process_name):
 	Item BOM rows for the packing process are additional deliverables, and the
 	pack-out variants are receivables.  It deliberately does not post stock.
 	"""
-	lot = frappe.get_doc("Lot", lot) if isinstance(lot, str) else lot
-	ipd = frappe.get_cached_doc("Item Production Detail", lot.production_detail)
+	lot = frappe.get_doc('SD YRP Lot', lot) if isinstance(lot, str) else lot
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', lot.production_detail)
 	if process_name != ipd.packing_process and not _group_contains(
 		process_name, ipd.packing_process
 	):
@@ -79,7 +79,7 @@ def build_packing_work_order_rows(lot, process_name):
 	if not principal:
 		frappe.throw(_("Lot {0} has no quantity to pack").format(lot.name))
 	default_received_type = frappe.db.get_single_value(
-		"YRP Stock Settings", "default_received_type"
+		'YRP YRP Stock Settings', "default_received_type"
 	)
 	deliverables = []
 	calculated_items = []
@@ -163,10 +163,10 @@ def _principal_rows(lot):
 
 def _accessory_rows(ipd, lot, demands, process_name):
 	processes = {process_name}
-	if frappe.db.get_value("Process", process_name, "is_group"):
+	if frappe.db.get_value('YRP Process', process_name, "is_group"):
 		processes.update(
 			frappe.get_all(
-				"Process Details", filters={"parent": process_name}, pluck="process_name"
+				'YRP Process Details', filters={"parent": process_name}, pluck="process_name"
 			)
 		)
 	return [
@@ -227,7 +227,7 @@ def _uom_factor(item, from_uom, to_uom):
 		return 1
 	factors = {
 		row.uom: flt(row.conversion_factor)
-		for row in frappe.get_cached_doc("Item", item).get("uom_conversion_details") or []
+		for row in frappe.get_cached_doc('YRP Item', item).get("uom_conversion_details") or []
 	}
 	from_factor = factors.get(from_uom)
 	to_factor = factors.get(to_uom)
@@ -261,10 +261,10 @@ def _colour_summary(ipd, principal):
 
 
 def _group_contains(group, process):
-	if not group or not frappe.db.get_value("Process", group, "is_group"):
+	if not group or not frappe.db.get_value('YRP Process', group, "is_group"):
 		return False
 	return bool(
 		frappe.db.exists(
-			"Process Details", {"parent": group, "process_name": process}
+			'YRP Process Details', {"parent": group, "process_name": process}
 		)
 	)

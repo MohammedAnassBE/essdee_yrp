@@ -4,13 +4,13 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import flt
 
-from yrp.yrp_stock.doctype.stock_valuation_adjustment.stock_valuation_adjustment import (
+from yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment.yrp_stock_valuation_adjustment import (
 	create_adjustment,
 	create_reversal,
 	process_adjustment,
 	register_production_links,
 )
-from yrp.yrp_stock.doctype.stock_valuation_adjustment.test_stock_valuation_adjustment import (
+from yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment.test_yrp_stock_valuation_adjustment import (
 	_stock_context,
 	_stock_entry,
 	_warehouse,
@@ -22,7 +22,7 @@ def cleanup_u40_probe_artifacts():
 	names = frappe.db.sql(
 		"""
 		SELECT name
-		FROM `tabStock Entry`
+		FROM `tabYRP Stock Entry`
 		WHERE docstatus = 1
 		  AND (
 			LEFT(COALESCE(from_warehouse, ''), 20) = '_Test Valuation U40 '
@@ -33,13 +33,13 @@ def cleanup_u40_probe_artifacts():
 		pluck=True,
 	)
 	with patch(
-		"yrp.yrp_stock.doctype.stock_valuation_adjustment."
+		"yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment."
 		"stock_valuation_adjustment.enqueue_adjustment"
 	):
 		for name in names:
-			for reversal in create_reversal("Stock Entry", name):
+			for reversal in create_reversal('YRP Stock Entry', name):
 				reversal_state = frappe.db.get_value(
-					"Stock Valuation Adjustment",
+					'YRP Stock Valuation Adjustment',
 					reversal,
 					["status", "reversal_of"],
 					as_dict=True,
@@ -48,21 +48,21 @@ def cleanup_u40_probe_artifacts():
 					reversal_state.status not in {"Completed", "Reversed"}
 					and reversal_state.reversal_of
 					and frappe.db.get_value(
-						"Stock Valuation Adjustment", reversal_state.reversal_of, "status"
+						'YRP Stock Valuation Adjustment', reversal_state.reversal_of, "status"
 					)
 					== "Reversed"
 				):
 					# Repair only an interrupted test race where the reversal's
 					# final parent lock deadlocked after marking its original.
 					frappe.db.set_value(
-						"Stock Valuation Adjustment",
+						'YRP Stock Valuation Adjustment',
 						reversal_state.reversal_of,
 						"status",
 						"Reversal Queued",
 					)
 				process_adjustment(reversal)
 	for name in names:
-		doc = frappe.get_doc("Stock Entry", name)
+		doc = frappe.get_doc('YRP Stock Entry', name)
 		if doc.docstatus == 1:
 			doc.cancel()
 	return names
@@ -82,7 +82,7 @@ def cleanup_exact_valuation_test_artifacts(stock_entries):
 
 	docs = []
 	for name in names:
-		doc = frappe.get_doc("Stock Entry", name)
+		doc = frappe.get_doc('YRP Stock Entry', name)
 		warehouses = [doc.from_warehouse, doc.to_warehouse]
 		warehouses = [warehouse for warehouse in warehouses if warehouse]
 		if not warehouses or any(
@@ -92,14 +92,14 @@ def cleanup_exact_valuation_test_artifacts(stock_entries):
 		docs.append(doc)
 
 	with patch(
-		"yrp.yrp_stock.doctype.stock_valuation_adjustment."
+		"yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment."
 		"stock_valuation_adjustment.enqueue_adjustment"
 	):
 		for name in names:
 			for original in frappe.get_all(
-				"Stock Valuation Adjustment",
+				'YRP Stock Valuation Adjustment',
 				filters={
-					"source_doctype": "Stock Entry",
+					"source_doctype": 'YRP Stock Entry',
 					"source_name": name,
 					"adjustment_type": ["!=", "Reversal"],
 					"docstatus": 1,
@@ -109,9 +109,9 @@ def cleanup_exact_valuation_test_artifacts(stock_entries):
 			):
 				if original.status not in {"Completed", "Reversal Queued", "Reversed"}:
 					process_adjustment(original.name)
-			for reversal in create_reversal("Stock Entry", name):
+			for reversal in create_reversal('YRP Stock Entry', name):
 				if frappe.db.get_value(
-					"Stock Valuation Adjustment", reversal, "status"
+					'YRP Stock Valuation Adjustment', reversal, "status"
 				) not in {"Completed", "Reversed"}:
 					process_adjustment(reversal)
 
@@ -133,7 +133,7 @@ class TestLateValuationChain(FrappeTestCase):
 	def setUp(self):
 		super().setUp()
 		setting = patch(
-			"yrp.yrp_stock.doctype.stock_valuation_adjustment.stock_valuation_adjustment.is_stock_adjustment_enabled",
+			"yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment.yrp_stock_valuation_adjustment.is_stock_adjustment_enabled",
 			return_value=True,
 		)
 		setting.start()
@@ -141,7 +141,7 @@ class TestLateValuationChain(FrappeTestCase):
 
 	def _sle(self, voucher, positive):
 		return frappe.db.get_value(
-			"Stock Ledger Entry",
+			'YRP Stock Ledger Entry',
 			{
 				"voucher_type": voucher.doctype,
 				"voucher_no": voucher.name,
@@ -254,7 +254,7 @@ class TestLateValuationChain(FrappeTestCase):
 		self.assertEqual(create_adjustment(**adjustment_kwargs), adjustment)
 		process_adjustment(adjustment)
 		result = frappe.db.get_value(
-			"Stock Valuation Adjustment",
+			'YRP Stock Valuation Adjustment',
 			adjustment,
 			[
 				"status",
@@ -286,7 +286,7 @@ class TestLateValuationChain(FrappeTestCase):
 		actual_overlays = []
 		for target, expected in zip(scenario["targets"], expected_overlays, strict=True):
 			values = frappe.db.get_value(
-				"Stock Ledger Entry",
+				'YRP Stock Ledger Entry',
 				target.name,
 				["valuation_adjustment_value", "valuation_is_stale"],
 				as_dict=True,
@@ -297,13 +297,13 @@ class TestLateValuationChain(FrappeTestCase):
 
 		final_target = scenario["targets"][-1]
 		final_sle = frappe.db.get_value(
-			"Stock Ledger Entry",
+			'YRP Stock Ledger Entry',
 			final_target.name,
 			["qty", "rate", "valuation_adjustment_value", "stock_value"],
 			as_dict=True,
 		)
 		final_bin = frappe.db.get_value(
-			"Bin",
+			'YRP Bin',
 			{
 				"item_code": self.item,
 				"warehouse": scenario["final_warehouse"],
@@ -322,7 +322,7 @@ class TestLateValuationChain(FrappeTestCase):
 
 		for adjustment in adjustments:
 			entries = frappe.get_all(
-				"Stock Valuation Propagation Entry",
+				'YRP Stock Valuation Propagation Entry',
 				filters={"adjustment": adjustment},
 				fields=["status", "entry_type", "difference", "remaining_difference"],
 			)
@@ -346,7 +346,7 @@ class TestLateValuationChain(FrappeTestCase):
 		if scenario["source"].docstatus != 1:
 			return
 		with patch(
-			"yrp.yrp_stock.doctype.stock_valuation_adjustment."
+			"yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment."
 			"stock_valuation_adjustment.enqueue_adjustment"
 		):
 			for source in [
@@ -359,7 +359,7 @@ class TestLateValuationChain(FrappeTestCase):
 			self.assertAlmostEqual(
 				flt(
 					frappe.db.get_value(
-						"Stock Ledger Entry", target.name, "valuation_adjustment_value"
+						'YRP Stock Ledger Entry', target.name, "valuation_adjustment_value"
 					)
 				),
 				0,

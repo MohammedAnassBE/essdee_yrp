@@ -6,12 +6,12 @@ import frappe
 
 
 def execute():
-	if not frappe.db.has_column("Work Order", "lot"):
+	if not frappe.db.has_column('YRP Work Order', "lot"):
 		return
 	from essdee_yrp.fabric_tracking import rebuild_fabric_tracking
 
 	lots = frappe.db.sql_list(
-		"SELECT DISTINCT parent FROM `tabLot Fabric Detail` WHERE parenttype = 'Lot'"
+		"SELECT DISTINCT parent FROM `tabSD YRP Lot Fabric Detail` WHERE parenttype = 'SD YRP Lot'"
 	)
 	for lot in lots:
 		rebuild_fabric_tracking(lot)

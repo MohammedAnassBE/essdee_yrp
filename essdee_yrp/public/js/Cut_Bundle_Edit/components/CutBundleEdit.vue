@@ -115,7 +115,7 @@ let docstatus = cur_frm.doc.docstatus
 onMounted(()=> {
     if(docstatus == 0 && !cur_frm.is_new()){
         frappe.call({
-            method: "essdee_yrp.essdee_yrp.doctype.cut_bundle_edit.cut_bundle_edit.get_major_colours",
+            method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_bundle_edit.sd_yrp_cut_bundle_edit.get_major_colours",
             args: {
                 posting_date: posting_date,
                 posting_time: posting_time,
@@ -170,7 +170,7 @@ function fetch_bundles(){
     output_bundles.value = []
     make_dirty()
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.cut_panel_movement.cut_panel_movement.get_cut_bundle_unmoved_data",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_panel_movement.sd_yrp_cut_panel_movement.get_cut_bundle_unmoved_data",
         args: {
             from_location: from_location,
             lot: lot,
@@ -273,7 +273,7 @@ function fetch_selected_bundles(){
 }
 
 function addBundle(index=-1){
-    frappe.model.with_doctype("Cut Panel Item", function(){
+    frappe.model.with_doctype("SD YRP Cut Panel Item", function(){
         let data_fields = [
             {
                 fieldtype: "Select",
@@ -298,7 +298,7 @@ function addBundle(index=-1){
                 fieldtype: "Table MultiSelect",
                 fieldname: "panel",
                 label: "Selected Panels",
-                options: "Cut Panel Item",
+                options: "SD YRP Cut Panel Item",
                 reqd: true,
                 onchange: function(){
                     if(d.get_value('colour') && d.get_value("panel")){
@@ -426,7 +426,7 @@ function addBundle(index=-1){
 function get_major_and_set_colour(colour, panel){
     panel = panel[0]['panel']
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.cut_bundle_edit.cut_bundle_edit.get_major_set_colours",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_bundle_edit.sd_yrp_cut_bundle_edit.get_major_set_colours",
         args: {
             colour: colour,
             panel: panel,

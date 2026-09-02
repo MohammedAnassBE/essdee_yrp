@@ -4,7 +4,7 @@
      folds quick-create into the hero: primary CTA = first creatable
      quick-create doctype, the rest sit in the overflow menu. The list comes
      from store.quickCreate (spec §8.3) — the Default layout seeds today's
-     literal ["Lot","Work Order","Delivery Challan"].
+     literal ["SD YRP Lot","YRP Work Order","YRP Delivery Challan"].
 
      Knobs (spec §6.4 — defaults reproduce today's behavior exactly):
        greetingName : String — name shown after "Good morning/…". Default:

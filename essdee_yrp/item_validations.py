@@ -1,4 +1,4 @@
-"""Item-master validation owned by the Essdee YRP customization layer."""
+"""Item-master validation owned by the SD YRP customization layer."""
 
 import frappe
 from frappe import _
@@ -58,8 +58,8 @@ def _validate_yarn_rows(rows, cloth_item=None):
 				_("Row {0}: Ratio must be greater than zero.").format(row_number)
 			)
 		if (
-			frappe.get_meta("Item").has_field("is_cloth_item")
-			and frappe.db.get_value("Item", yarn_item, "is_cloth_item")
+			frappe.get_meta('YRP Item').has_field("is_cloth_item")
+			and frappe.db.get_value('YRP Item', yarn_item, "is_cloth_item")
 		):
 			frappe.throw(
 				_("Row {0}: Cloth Item {1} cannot be selected as yarn.").format(
@@ -67,8 +67,8 @@ def _validate_yarn_rows(rows, cloth_item=None):
 				)
 			)
 		if frappe.db.exists(
-			"Item Item Attribute",
-			{"parent": yarn_item, "parenttype": "Item"},
+			'YRP Item Item Attribute',
+			{"parent": yarn_item, "parenttype": 'YRP Item'},
 		):
 			frappe.throw(
 				_("Row {0}: Yarn Item {1} must not have variant attributes.").format(

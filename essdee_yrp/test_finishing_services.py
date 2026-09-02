@@ -50,7 +50,7 @@ class TestFinishingServices(IntegrationTestCase):
 	):
 		grn = _doc(
 			name="GRN-REWORK-1",
-			against="Work Order",
+			against='YRP Work Order',
 			against_id="WO-REWORK-1",
 			lot="LOT-1",
 			process_name="Stitching",

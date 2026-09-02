@@ -56,9 +56,9 @@ let items = ref({})
 
 onMounted(() => {
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.get_alternative_details",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.get_alternative_details",
         args: {
-            "lot": cur_frm.doc.doctype == 'Lot' ? cur_frm.doc.name : cur_frm.doc.lot,
+            "lot": cur_frm.doc.doctype == 'SD YRP Lot' ? cur_frm.doc.name : cur_frm.doc.lot,
         },
         callback: function (r) {
             items.value = r.message;

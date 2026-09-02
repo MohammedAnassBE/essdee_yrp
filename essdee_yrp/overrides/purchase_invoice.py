@@ -7,7 +7,7 @@ import json
 import frappe
 from frappe import _
 from frappe.utils import flt
-from yrp.yrp.doctype.purchase_invoice.purchase_invoice import PurchaseInvoice
+from yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice import PurchaseInvoice
 
 from essdee_yrp.erp import is_purchase_invoice_sync_enabled
 from essdee_yrp.erp_purchase_invoice import cancel_erp_invoice, create_erp_invoice
@@ -23,7 +23,7 @@ from essdee_yrp.purchase_invoice import (
 class EssdeePurchaseInvoice(PurchaseInvoice):
 	def onload(self):
 		super().onload()
-		if self.against == "Work Order" and self.get("pi_work_order_billed_details"):
+		if self.against == 'YRP Work Order' and self.get("pi_work_order_billed_details"):
 			self.set_onload(
 				"item_details",
 				build_verification_details(self.get("pi_work_order_billed_details")),
@@ -37,23 +37,23 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 		if self.get("essdee_rate_table_source") == LEGACY_RATE_SOURCE and (
 			self.is_new()
 			or frappe.db.get_value(
-				"Purchase Invoice", self.name, "essdee_rate_table_source"
+				'YRP Purchase Invoice', self.name, "essdee_rate_table_source"
 			) != LEGACY_RATE_SOURCE
 		):
 			frappe.throw(_("Legacy Purchase Invoice rate data is migration-owned."))
-		if self.against == "Work Order" and self.get("essdee_rate_table_source") == MODERN_RATE_SOURCE:
+		if self.against == 'YRP Work Order' and self.get("essdee_rate_table_source") == MODERN_RATE_SOURCE:
 			self._rebuild_essdee_work_order_items()
 		super().before_validate()
 
 	def validate(self):
 		self._reset_changed_commercial_approval()
 		super().validate()
-		if self.against == "Work Order" and self.get("essdee_rate_table_source") == MODERN_RATE_SOURCE:
+		if self.against == 'YRP Work Order' and self.get("essdee_rate_table_source") == MODERN_RATE_SOURCE:
 			self._validate_commercial_total()
 			self.total_quantity = sum(flt(row.qty) for row in self.get("essdee_items") or [])
 
 	def before_submit(self):
-		if self.against == "Work Order" and self.get("essdee_rate_table_source") not in {
+		if self.against == 'YRP Work Order' and self.get("essdee_rate_table_source") not in {
 			MODERN_RATE_SOURCE,
 			LEGACY_RATE_SOURCE,
 		}:

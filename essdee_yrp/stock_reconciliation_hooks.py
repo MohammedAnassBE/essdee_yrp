@@ -12,6 +12,6 @@ def onload(doc, method=None):
 		"item_details",
 		group_items_for_ui(
 			normalize_item_matrix_row_indexes(doc.get("items") or []),
-			"Stock Reconciliation",
+			'YRP Stock Reconciliation',
 		),
 	)

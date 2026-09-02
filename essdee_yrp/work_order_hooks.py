@@ -18,14 +18,14 @@ def onload(doc, method=None):
 		"deliverable_details",
 		group_items_for_ui(
 			normalize_item_matrix_row_indexes(doc.get("deliverables") or []),
-			"Work Order Deliverables",
+			'YRP Work Order Deliverables',
 		),
 	)
 	doc.set_onload(
 		"receivable_details",
 		group_items_for_ui(
 			normalize_item_matrix_row_indexes(doc.get("receivables") or []),
-			"Work Order Receivables",
+			'YRP Work Order Receivables',
 		),
 	)
 
@@ -40,17 +40,17 @@ def preserve_dynamic_packing_piece_uom(doc):
 	"""Keep new dynamic packing receivable counters in their physical Piece UOM."""
 	if not (doc.get("production_detail") and doc.get("lot") and doc.get("includes_packing")):
 		return
-	ipd = frappe.get_cached_doc("Item Production Detail", doc.production_detail)
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', doc.production_detail)
 	if not (
 		ipd.get("based_on_other_attribute_mapping")
 		and ipd.get("packing_mode") == "Size Ratio Packing"
 	):
 		return
-	piece_uom = frappe.db.get_value("Lot", doc.lot, "packing_uom")
+	piece_uom = frappe.db.get_value('SD YRP Lot', doc.lot, "packing_uom")
 	if not piece_uom:
 		frappe.throw(_("Packing UOM is required on Lot {0}.").format(doc.lot))
 	for row in doc.get("receivables") or []:
-		parent_item = frappe.db.get_value("Item Variant", row.item_variant, "item")
+		parent_item = frappe.db.get_value('YRP Item Variant', row.item_variant, "item")
 		if parent_item == ipd.item:
 			row.uom = piece_uom
 
@@ -60,9 +60,9 @@ def set_includes_packing(doc):
 	if not doc.meta.get_field("includes_packing"):
 		return
 	doc.includes_packing = 0
-	if doc.get("process_name") and frappe.get_meta("Process").get_field("includes_packing"):
+	if doc.get("process_name") and frappe.get_meta('YRP Process').get_field("includes_packing"):
 		doc.includes_packing = frappe.db.get_value(
-			"Process", doc.process_name, "includes_packing"
+			'YRP Process', doc.process_name, "includes_packing"
 		) or 0
 
 

@@ -18,9 +18,9 @@ class TestGarmentWorkOrder(IntegrationTestCase):
 	ipd = "CS-34820 Heavy Tee-1"
 
 	def setUp(self):
-		if not frappe.db.exists("Work Order", self.work_order):
+		if not frappe.db.exists('YRP Work Order', self.work_order):
 			self.skipTest(f"Migration oracle {self.work_order} is unavailable")
-		if not frappe.db.exists("Item Production Detail", self.ipd):
+		if not frappe.db.exists('YRP Item Production Detail', self.ipd):
 			self.skipTest(f"Migration oracle {self.ipd} is unavailable")
 
 	def test_machine_cutting_context_exposes_every_lot_variant_and_missing_matrix(self):
@@ -54,7 +54,7 @@ class TestGarmentWorkOrder(IntegrationTestCase):
 
 	def test_regeneration_and_calculation_backfill_the_legacy_ipd(self):
 		ipd_modified = frappe.db.get_value(
-			"Item Production Detail", self.ipd, "modified"
+			'YRP Item Production Detail', self.ipd, "modified"
 		)
 		regenerated = regenerate_ipd_process_matrices(self.ipd)
 
@@ -62,11 +62,11 @@ class TestGarmentWorkOrder(IntegrationTestCase):
 		self.assertEqual(regenerated["processes"], ["Cutting"])
 		self.assertEqual(len(regenerated["skipped"]), 8)
 		self.assertEqual(
-			frappe.db.get_value("Item Production Detail", self.ipd, "approval_status"),
+			frappe.db.get_value('YRP Item Production Detail', self.ipd, "approval_status"),
 			"Approved",
 		)
 		self.assertEqual(
-			frappe.db.get_value("Item Production Detail", self.ipd, "modified"),
+			frappe.db.get_value('YRP Item Production Detail', self.ipd, "modified"),
 			ipd_modified,
 		)
 
@@ -83,7 +83,7 @@ class TestGarmentWorkOrder(IntegrationTestCase):
 			result,
 			{"deliverables": 6, "receivables": 216, "calculated_items": 24},
 		)
-		work_order = frappe.get_doc("Work Order", self.work_order)
+		work_order = frappe.get_doc('YRP Work Order', self.work_order)
 		self.assertEqual(len(work_order.deliverables), 6)
 		self.assertEqual(len(work_order.receivables), 216)
 		self.assertEqual(len(work_order.work_order_calculated_items), 24)
@@ -100,7 +100,7 @@ class TestGarmentWorkOrder(IntegrationTestCase):
 			"WO-2627-00735": ("Printing", "cut_qty", 80, 80, 80),
 			"WO-2627-00855": ("Ironing and Packing", "cut_qty", 22, 16, 16),
 		}
-		missing = [name for name in oracles if not frappe.db.exists("Work Order", name)]
+		missing = [name for name in oracles if not frappe.db.exists('YRP Work Order', name)]
 		if missing:
 			self.skipTest(f"Migration Work Order oracles are unavailable: {', '.join(missing)}")
 
@@ -129,14 +129,14 @@ class TestGarmentWorkOrder(IntegrationTestCase):
 	def test_new_recut_defaults_expose_zero_quantity_source_skus(self):
 		name = "WO-2627-00847"
 		if not frappe.db.exists(
-			"Work Order",
+			'YRP Work Order',
 			{"name": name, "docstatus": 1, "open_status": "Open", "is_rework": 0},
 		):
 			self.skipTest(f"Open Work Order recut oracle {name} is unavailable")
 
 		defaults = get_wo_recut_defaults(name)
 		groups = defaults["item_details"]
-		self.assertEqual(defaults["lot"], frappe.db.get_value("Work Order", name, "lot"))
+		self.assertEqual(defaults["lot"], frappe.db.get_value('YRP Work Order', name, "lot"))
 		self.assertTrue(groups)
 		self.assertTrue(any(group.get("items") for group in groups))
 		self.assertTrue(

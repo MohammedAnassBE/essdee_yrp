@@ -12,7 +12,7 @@
        { "type": "composite", "props": {
            "source": {                       // which registry data feeds the scope
              "metrics": ["open_lots", ...],  //   ui_metrics registry names (optional)
-             "doctype": "Work Order",        //   recent records of one doctype (optional)
+             "doctype": "YRP Work Order",        //   recent records of one doctype (optional)
              "limit": 5                      //   1–20, default 5 (with doctype only)
            },
            "tree": { "type": "stack", "children": [ ... ] } } }

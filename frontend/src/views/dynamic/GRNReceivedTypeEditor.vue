@@ -46,7 +46,7 @@
   -------------------------------------------------------------------
   - yrp.stock.api.get_stock_dimensions_for_ui()
         → [ { fieldname, label, options, mandatory } ] (for dimension labels)
-  - yrp.yrp.doctype.goods_received_note.goods_received_note.get_rework_output_received_types()
+  - yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note.get_rework_output_received_types()
         → { received_types: [...], default_received_type } (for the "+RT" buttons)
 -->
 <template>
@@ -69,7 +69,7 @@
 				</Column>
 
 				<!-- Item identity + meta (only on the first split row) -->
-				<Column header="Item" :style="{ minWidth: '190px' }">
+				<Column header="YRP Item" :style="{ minWidth: '190px' }">
 					<template #body="{ index }">
 						<template v-if="index === 0">
 							<div class="grn-item-title esd-mono">{{ row.name }}</div>
@@ -80,7 +80,7 @@
 				</Column>
 
 				<!-- Received Type + remove control -->
-				<Column header="Received Type" :style="{ minWidth: '130px' }">
+				<Column header="YRP Received Type" :style="{ minWidth: '130px' }">
 					<template #body="{ data: split }">
 						<span class="grn-rt-name">{{ split.receivedType || "Received" }}</span>
 						<Button
@@ -217,7 +217,7 @@ onMounted(async () => {
 	}
 	try {
 		const r = await callMethod(
-			"yrp.yrp.doctype.goods_received_note.goods_received_note.get_rework_output_received_types",
+			"yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note.get_rework_output_received_types",
 		)
 		availableRTs.value = (r && Array.isArray(r.received_types)) ? r.received_types : []
 	} catch (_) {

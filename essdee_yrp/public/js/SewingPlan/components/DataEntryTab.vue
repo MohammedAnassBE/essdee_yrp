@@ -422,7 +422,7 @@ const submitUpdate = () => {
             }
 
             frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.sewing_plan.sewing_plan.update_sewing_plan_data",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan.update_sewing_plan_data",
                 args: {
                     payload: payload
                 },
@@ -455,7 +455,7 @@ const initLotFilter = () => {
         df: {
             fieldtype: 'Link',
             fieldname: 'lot',
-            options: 'Lot',
+            options: 'SD YRP Lot',
             label: 'Lot',
             change: () => {
                 selected_lot.value = lot_filter_control.get_value()
@@ -507,7 +507,7 @@ const initFrappeControls = () => {
         df: {
             fieldtype: 'Link',
             fieldname: 'work_station',
-            options: 'Work Station',
+            options: 'YRP Work Station',
             label: 'Work Station',
             change: () => { entry_form.value.work_station = ws_control.get_value() }
         },
@@ -519,7 +519,7 @@ const initFrappeControls = () => {
         df: {
             fieldtype: 'Link',
             fieldname: 'input_type',
-            options: 'Sewing Plan Input Type',
+            options: 'SD YRP Sewing Plan Input Type',
             label: 'Input Type',
             get_query: () => {
                 return {
@@ -540,7 +540,7 @@ const initFrappeControls = () => {
         df: {
             fieldtype: 'Link',
             fieldname: 'received_type',
-            options: 'Received Type',
+            options: 'YRP Received Type',
             label: 'Received Type',
             change: () => { entry_form.value.received_type = grn_type_control.get_value() },
         },
@@ -610,7 +610,7 @@ const submitLog = () => {
         quantities: modal_data.value
     }
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.sewing_plan.sewing_plan.submit_data_entry_log",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan.submit_data_entry_log",
         args: {
              payload: payload
         },
@@ -644,7 +644,7 @@ const fetchData = () => {
         return
     }
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.sewing_plan.sewing_plan.get_data_entry_data",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan.get_data_entry_data",
         args: {
             supplier: props.selected_supplier,
             lot: selected_lot.value

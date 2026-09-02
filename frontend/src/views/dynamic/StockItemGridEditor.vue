@@ -51,7 +51,7 @@
 
   APIs (reused over HTTP via callMethod — same as the Desk component)
   -------------------------------------------------------------------
-  - yrp.yrp.doctype.item.item.get_attribute_details(item_name)
+  - yrp.yrp.doctype.yrp_item.yrp_item.get_attribute_details(item_name)
         → { primary_attribute, primary_attribute_values, attributes, default_uom }
   - yrp.stock.api.get_stock_dimensions_for_ui()
         → [ { fieldname, label, options, mandatory } ]  (lot / received_type …)
@@ -67,7 +67,7 @@
 					<Column header="#" :style="{ width: '40px' }">
 						<template #body="{ index }">{{ index + 1 }}</template>
 					</Column>
-					<Column header="Item" :style="{ minWidth: '160px' }">
+					<Column header="YRP Item" :style="{ minWidth: '160px' }">
 						<template #body="{ data }">
 							<span class="esd-mono">{{ data.name }}</span>
 						</template>
@@ -160,7 +160,7 @@
 						</Column>
 					</template>
 
-					<Column header="UOM" :style="{ width: '84px' }">
+					<Column header="YRP UOM" :style="{ width: '84px' }">
 						<template #body="{ data }">{{ data.default_uom || "—" }}</template>
 					</Column>
 
@@ -672,7 +672,7 @@ async function onUpdateSecondaryToggle(value) {
 	}
 	try {
 		const r = await callMethod("frappe.client.get_value", {
-			doctype: "Item",
+			doctype: "YRP Item",
 			filters: draft.parentItem,
 			fieldname: "secondary_unit_of_measure",
 		})
@@ -735,7 +735,7 @@ async function fetchAttributeDetails(itemName) {
 	loadingAttrs.value = true
 	draft.resolved = false
 	try {
-		const r = await callMethod("yrp.yrp.doctype.item.item.get_attribute_details", {
+		const r = await callMethod("yrp.yrp.doctype.yrp_item.yrp_item.get_attribute_details", {
 			item_name: itemName,
 		})
 		if (!r) {
@@ -1002,7 +1002,7 @@ async function startEdit(gi, index) {
 	// on the row, so we need it to rebuild the stage flow on edit.
 	let r = null
 	try {
-		r = await callMethod("yrp.yrp.doctype.item.item.get_attribute_details", { item_name: it.name })
+		r = await callMethod("yrp.yrp.doctype.yrp_item.yrp_item.get_attribute_details", { item_name: it.name })
 	} catch (_) {
 		toast.warn("Could not reload item config", "Re-pick the item if the attributes look wrong.")
 	}
@@ -1041,7 +1041,7 @@ async function startEdit(gi, index) {
 
 // ════════════════ AUTOCOMPLETE QUERIES ════════════════
 async function searchItem(e) {
-	itemSuggestions.value = await searchNames("Item", e.query, props.itemFilters)
+	itemSuggestions.value = await searchNames("YRP Item", e.query, props.itemFilters)
 }
 
 async function searchDimension(dim, e) {
@@ -1059,7 +1059,7 @@ async function searchDimension(dim, e) {
 async function searchAttributeValue(attr, e) {
 	try {
 		const rows = await callMethod("frappe.client.get_list", {
-			doctype: "Item Attribute Value",
+			doctype: "YRP Item Attribute Value",
 			filters: {
 				attribute_name: attr,
 				attribute_value: ["like", `%${e.query || ""}%`],

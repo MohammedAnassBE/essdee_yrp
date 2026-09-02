@@ -46,7 +46,7 @@ def get_process_shape(process_name):
 	colour AND dia change in the same trip)."""
 	if not process_name:
 		return (None, None)
-	doc = frappe.get_cached_doc("Process", process_name)
+	doc = frappe.get_cached_doc('YRP Process', process_name)
 	if doc.get("is_item_conversion"):
 		return ("conversion", None)
 	swaps = [r.attribute for r in doc.get("value_change_attributes") or []]
@@ -105,11 +105,11 @@ def get_item_attributes(item):
 	attribute names)."""
 	# [] for missing item AND for no-permission alike — a permission-less caller
 	# must not be able to distinguish existing from non-existing Item names.
-	if not item or not frappe.db.exists("Item", item):
+	if not item or not frappe.db.exists('YRP Item', item):
 		return []
-	if not frappe.has_permission("Item", doc=item, ptype="read"):
+	if not frappe.has_permission('YRP Item', doc=item, ptype="read"):
 		return []
-	doc = frappe.get_cached_doc("Item", item)
+	doc = frappe.get_cached_doc('YRP Item', item)
 	return [a.attribute for a in (doc.get("attributes") or [])]
 
 
@@ -276,7 +276,7 @@ def ensure_cloth_item_attributes(doc, method=None):
 
 	if not doc.get("item") or not needed:
 		return
-	item = frappe.get_doc("Item", doc.item)
+	item = frappe.get_doc('YRP Item', doc.item)
 	item_have = {row.attribute for row in item.get("attributes") or []}
 	changed = False
 	for attribute in dict.fromkeys(needed):
@@ -401,7 +401,7 @@ def _matrix_input_specs(doc, row, default_uom):
 				frappe._dict({
 					"item": yarn.item,
 					"quantity": yarn.quantity,
-					"uom": frappe.db.get_value("Item", yarn.item, "default_unit_of_measure")
+					"uom": frappe.db.get_value('YRP Item', yarn.item, "default_unit_of_measure")
 						or default_uom,
 				})
 				for yarn in yarns
@@ -411,7 +411,7 @@ def _matrix_input_specs(doc, row, default_uom):
 		"item": input_item,
 		"quantity": 1.0,
 		"uom": (
-			frappe.db.get_value("Item", input_item, "default_unit_of_measure")
+			frappe.db.get_value('YRP Item', input_item, "default_unit_of_measure")
 			if input_item else None
 		) or default_uom,
 	})]
@@ -651,7 +651,7 @@ def sync_fabric_process_matrices(doc, method=None):
 	if not is_cloth_ipd(doc):
 		return
 
-	uom = frappe.db.get_value("Item", doc.item, "default_unit_of_measure")
+	uom = frappe.db.get_value('YRP Item', doc.item, "default_unit_of_measure")
 
 	# Matrices are NEVER hand-authored (2026-06-25 rule), so wiping every
 	# matrix of this IPD is safe and also clears orphans left behind when a
@@ -687,7 +687,7 @@ def _validate_exact_route_reachability(doc):
 		return
 
 	from essdee_yrp.fabric_plan import solve_chain_backward
-	from yrp.yrp.doctype.item.item import get_or_create_variant
+	from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
 
 	problems = []
 	matrix_cache = {}
@@ -726,7 +726,7 @@ def _delete_all_matrices(ipd_name):
 	dynamic-link cleanup job per matrix, which made large IPDs slow to save.
 	"""
 	names = frappe.get_all(
-		"IPD Process Matrix",
+		'YRP IPD Process Matrix',
 		filters={"ipd": ipd_name},
 		pluck="name",
 	)
@@ -735,21 +735,21 @@ def _delete_all_matrices(ipd_name):
 
 	parent_filter = {
 		"parent": ["in", names],
-		"parenttype": "IPD Process Matrix",
+		"parenttype": 'YRP IPD Process Matrix',
 	}
 	for child_doctype in (
-		"IPD Matrix Attribute",
-		"IPD Matrix Combination",
-		"IPD Matrix Combination Attribute",
+		'YRP IPD Matrix Attribute',
+		'YRP IPD Matrix Combination',
+		'YRP IPD Matrix Combination Attribute',
 	):
 		frappe.db.delete(child_doctype, parent_filter)
-	frappe.db.delete("IPD Process Matrix", {"name": ["in", names]})
-	frappe.clear_document_cache("IPD Process Matrix")
+	frappe.db.delete('YRP IPD Process Matrix', {"name": ["in", names]})
+	frappe.clear_document_cache('YRP IPD Process Matrix')
 
 
 def _new_matrix(doc, process):
 	return frappe.get_doc({
-		"doctype": "IPD Process Matrix",
+		"doctype": 'YRP IPD Process Matrix',
 		"ipd": doc.name,
 		"process_name": process,
 		"output_item": doc.item,
@@ -868,7 +868,7 @@ def build_colour_knitting_matrices(doc, row, uom):
 	``reference_item_variant`` carries the intended final Dia/Colour so two target
 	colours can use different yarn recipes and different knitting-output colours.
 	"""
-	from yrp.yrp.doctype.item.item import get_or_create_variant
+	from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
 
 	output_qty = flt(row.get("quantity_ratio")) or 1
 	matrices = []
@@ -903,7 +903,7 @@ def build_colour_knitting_matrices(doc, row, uom):
 				"item": yarn.item,
 				"combo_index": combo_index,
 				"quantity": yarn.quantity,
-				"uom": frappe.db.get_value("Item", yarn.item, "default_unit_of_measure") or uom,
+				"uom": frappe.db.get_value('YRP Item', yarn.item, "default_unit_of_measure") or uom,
 				"wastage_pct": 0,
 			})
 		matrix.append("combinations", {
@@ -934,7 +934,7 @@ def build_route_fabric_matrices(doc, base_matrix):
 	every Work Order stage, while the matrix combinations continue to carry the
 	physical intermediate Dia/Colour.
 	"""
-	from yrp.yrp.doctype.item.item import get_or_create_variant
+	from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
 
 	routes = [
 		{

@@ -17,28 +17,28 @@ from pathlib import Path
 
 TARGET_MODULE = "Essdee YRP"
 EXPECTED_DOCTYPE_COUNT = 150
-DOCTYPE_RENAMES = {"Purchase Order Lot": "Lot MultiSelect"}
+DOCTYPE_RENAMES = {"Purchase Order Lot": 'SD YRP Lot MultiSelect'}
 LINK_OPTION_RENAMES = {
-	"Essdee Raw Print Format": "ZPL Raw Print Format",
-	"Essdee Raw Print Format Detail": "ZPL Raw Print Format Detail",
-	"Essdee Debit": "Debit",
-	"GRN Item Type": "Received Type",
-	"Stock Settings": "YRP Stock Settings",
-	"Vendor Bill Tracking": "Bill Tracking",
-	"Vendor Bill Tracking Assignment Detail": "Bill Tracking Assignment Detail",
+	"Essdee Raw Print Format": 'YRP ZPL Raw Print Format',
+	"Essdee Raw Print Format Detail": 'YRP ZPL Raw Print Format Detail',
+	"Essdee Debit": 'YRP Debit',
+	"GRN Item Type": 'YRP Received Type',
+	"Stock Settings": 'YRP YRP Stock Settings',
+	"Vendor Bill Tracking": 'YRP Bill Tracking',
+	"Vendor Bill Tracking Assignment Detail": 'YRP Bill Tracking Assignment Detail',
 }
 LINK_FIELD_TYPES = {"Link", "Table", "Table MultiSelect"}
 LOT_TRANSFER_ITEM_FIELDS = [
-	{"fieldname": "item", "fieldtype": "Link", "in_list_view": 1, "label": "Item Variant", "options": "Item Variant", "reqd": 1},
-	{"fieldname": "from_lot", "fieldtype": "Link", "in_list_view": 1, "label": "From Lot", "options": "Lot", "reqd": 1},
-	{"fieldname": "to_lot", "fieldtype": "Link", "in_list_view": 1, "label": "To Lot", "options": "Lot", "reqd": 1},
-	{"fieldname": "warehouse", "fieldtype": "Link", "in_list_view": 1, "label": "Warehouse", "options": "Warehouse", "reqd": 1},
-	{"fieldname": "received_type", "fieldtype": "Link", "in_list_view": 1, "label": "Received Type", "options": "Received Type", "reqd": 1},
+	{"fieldname": "item", "fieldtype": "Link", "in_list_view": 1, "label": "Item Variant", "options": 'YRP Item Variant', "reqd": 1},
+	{"fieldname": "from_lot", "fieldtype": "Link", "in_list_view": 1, "label": "From Lot", "options": 'SD YRP Lot', "reqd": 1},
+	{"fieldname": "to_lot", "fieldtype": "Link", "in_list_view": 1, "label": "To Lot", "options": 'SD YRP Lot', "reqd": 1},
+	{"fieldname": "warehouse", "fieldtype": "Link", "in_list_view": 1, "label": "Warehouse", "options": 'YRP Warehouse', "reqd": 1},
+	{"fieldname": "received_type", "fieldtype": "Link", "in_list_view": 1, "label": "Received Type", "options": 'YRP Received Type', "reqd": 1},
 	{"fieldname": "qty", "fieldtype": "Float", "in_list_view": 1, "label": "Quantity", "reqd": 1},
-	{"fieldname": "uom", "fieldtype": "Link", "in_list_view": 1, "label": "UOM", "options": "UOM", "reqd": 1},
+	{"fieldname": "uom", "fieldtype": "Link", "in_list_view": 1, "label": "UOM", "options": 'YRP UOM', "reqd": 1},
 	{"fieldname": "rate", "fieldtype": "Currency", "in_list_view": 1, "label": "Rate"},
 	{"fieldname": "stock_qty", "fieldtype": "Float", "hidden": 1, "label": "Stock Quantity", "read_only": 1},
-	{"fieldname": "stock_uom", "fieldtype": "Link", "hidden": 1, "label": "Stock UOM", "options": "UOM", "read_only": 1},
+	{"fieldname": "stock_uom", "fieldtype": "Link", "hidden": 1, "label": "Stock UOM", "options": 'YRP UOM', "read_only": 1},
 	{"fieldname": "conversion_factor", "fieldtype": "Float", "hidden": 1, "label": "Conversion Factor", "read_only": 1},
 	{"fieldname": "stock_uom_rate", "fieldtype": "Currency", "hidden": 1, "label": "Stock UOM Rate", "read_only": 1},
 	{"fieldname": "amount", "fieldtype": "Currency", "hidden": 1, "label": "Amount", "read_only": 1},
@@ -103,7 +103,7 @@ def transform_schema(source: dict, target_module: str = TARGET_MODULE) -> tuple[
 			remap_count += 1
 		fields.append(field)
 	target["fields"] = fields
-	if target.get("name") == "Lot Transfer Item":
+	if target.get("name") == 'SD YRP Lot Transfer Item':
 		# Keep the Production API name while preserving the working F16 warehouse-
 		# based child structure formerly called `YRP Lot Transfer Item`.
 		for key in ("allow_rename", "index_web_pages_for_search", "row_format"):

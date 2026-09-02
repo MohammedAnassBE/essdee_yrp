@@ -11,7 +11,7 @@
                 <div v-for="(item, idx) in selected" :key="idx"
                     class="relative border rounded-lg overflow-hidden bg-white shadow-sm cursor-move"
                     style="width: 100%;"
-                    :draggable="doctype != 'Product Release'"
+                    :draggable="doctype != 'SD YRP Product Release'"
                     @dragstart="onDragStart($event, idx)"
                     @dragover.prevent
                     @drop="onDrop($event, idx)"
@@ -23,7 +23,7 @@
                                 style="height: 140px; pointer-events: none;"
                             />
                         </div>
-                        <div v-if="doctype != 'Product Release'">
+                        <div v-if="doctype != 'SD YRP Product Release'">
                             <button @click.stop="removeSelected(idx)"
                                 style="position: relative; top: 10px;"
                             >
@@ -39,7 +39,7 @@
                 </div>
             </div>
         </div>
-        <div v-if="doctype != 'Product Release'">
+        <div v-if="doctype != 'SD YRP Product Release'">
             <h3>Add {{view_page}} Images</h3>
             <div style="display: flex;">
                 <div>
@@ -89,7 +89,7 @@ watch(query, async (val) => {
 		return
 	}
 	let res = await frappe.call({
-		method: "essdee_yrp.essdee_yrp.doctype.product_image.product_image.get_image_list",
+		method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_product_image.sd_yrp_product_image.get_image_list",
 		args: {
             query: val
         },
@@ -148,7 +148,7 @@ async function resolve_unique_title(title) {
     // ("button", "zipper" …) blocks every later upload. Auto-suffix instead.
     let unique = title;
     let i = 1;
-    while (await frappe.db.exists('Product Image', unique)) {
+    while (await frappe.db.exists('SD YRP Product Image', unique)) {
         i += 1;
         unique = `${title}-${i}`;
     }
@@ -191,7 +191,7 @@ function create_image() {
                 method: 'frappe.client.insert',
                 args: {
                     doc: {
-                        doctype: 'Product Image',
+                        doctype: 'SD YRP Product Image',
                         image_title: values.image_title,
                         title_header: values.title_header
                     }
@@ -226,7 +226,7 @@ function create_image() {
             method: 'frappe.client.insert',
             args: {
                 doc: {
-                    doctype: 'Product Image',
+                    doctype: 'SD YRP Product Image',
                     image_title: values.image_title,
                     title_header: values.title_header
                 }
@@ -240,11 +240,11 @@ function create_image() {
                 folder: "Home",
                 on_success: async (file) => {
                     await frappe.call({
-                        method: "essdee_yrp.essdee_yrp.doctype.product.product.delete_and_update_file",
+                        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_product.sd_yrp_product.delete_and_update_file",
                         args: {
                             file_url: null,
                             fieldname: 'image',
-                            doctype: 'Product Image',
+                            doctype: 'SD YRP Product Image',
                             docname: doc.name,
                             updated_url: file.file_url,
                             file_name: file.name
@@ -272,7 +272,7 @@ function create_image() {
             method: 'frappe.client.insert',
             args: {
                 doc: {
-                    doctype: 'Product Image',
+                    doctype: 'SD YRP Product Image',
                     image_title: values.image_title,
                     title_header: values.title_header
                 }
@@ -282,7 +282,7 @@ function create_image() {
         if (res.message) {
             const doc = res.message;
             new frappe.ui.FileUploader({
-                doctype: 'Product Image',
+                doctype: 'SD YRP Product Image',
                 docname: doc.name,
                 fieldname: 'image',
                 folder: 'Home',
@@ -291,10 +291,10 @@ function create_image() {
                 },
                 on_success: (file) => {
                     frappe.call({
-                        method: "essdee_yrp.essdee_yrp.doctype.product.product.process_single_page_pdf",
+                        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_product.sd_yrp_product.process_single_page_pdf",
                         args: {
                             file_url: file.file_url,
-                            doctype: 'Product Image',
+                            doctype: 'SD YRP Product Image',
                             docname: doc.name,
                             fieldname: 'image'
                         },

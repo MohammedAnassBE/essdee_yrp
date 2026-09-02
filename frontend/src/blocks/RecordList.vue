@@ -4,7 +4,7 @@
      Layouts place a small live list of ANY readable DocType on a screen:
 
        { "type": "record-list", "props": {
-           "doctype": "Work Order", "variant": "cards" | "kanban" | "table",
+           "doctype": "YRP Work Order", "variant": "cards" | "kanban" | "table",
            "columns": ["item", "planned_quantity"],   // or [{field,label}]
            "groupBy": "process_name",                 // kanban only
            "titleField": "item",                      // optional bold title

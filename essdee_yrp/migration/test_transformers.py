@@ -38,7 +38,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			},
 			self.plan,
 		)
-		self.assertEqual((row["doctype"], row["work_order"]), ("Debit", "WO-1"))
+		self.assertEqual((row["doctype"], row["work_order"]), ('YRP Debit', "WO-1"))
 		with self.assertRaises(MigrationError):
 			transform_document(
 				{
@@ -186,7 +186,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			},
 			self.plan,
 		)
-		self.assertEqual(row["doctype"], "YRP GRN Deliverable")
+		self.assertEqual(row["doctype"], 'SD YRP YRP GRN Deliverable')
 		self.assertNotIn("goods_received_note_item", row)
 		self.assertNotIn("received_item_variant", row)
 		self.assertNotIn("consumption_sle", row)
@@ -221,7 +221,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			},
 			self.plan,
 		)
-		self.assertEqual(row["name"], "YRP Stock Settings")
+		self.assertEqual(row["name"], 'YRP YRP Stock Settings')
 		self.assertEqual(row["transit_warehouse"], "S-0165")
 		self.assertNotIn("sms_old_database_password", row)
 
@@ -254,7 +254,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			row["sewing_plan_input_orders"],
 			[
 				{
-					"doctype": "Sewing Plan Input Order",
+					"doctype": 'SD YRP Sewing Plan Input Order',
 					"name": "ROW-2",
 				}
 			],
@@ -270,7 +270,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			},
 			self.plan,
 		)
-		self.assertEqual(purchase_order_invoice["against"], "Purchase Order")
+		self.assertEqual(purchase_order_invoice["against"], 'YRP Purchase Order')
 
 		work_order_invoice = transform_document(
 			{
@@ -287,7 +287,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			},
 			self.plan,
 		)
-		self.assertEqual(work_order_invoice["against"], "Work Order")
+		self.assertEqual(work_order_invoice["against"], 'YRP Work Order')
 
 	def test_work_order_purchase_invoice_preserves_legacy_commercial_rows(self):
 		row = transform_document(
@@ -404,7 +404,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			},
 			self.plan,
 		)
-		self.assertEqual(row["item_attributes"][0]["doctype"], "IPD Item Attribute")
+		self.assertEqual(row["item_attributes"][0]["doctype"], 'YRP IPD Item Attribute')
 
 
 if __name__ == "__main__":

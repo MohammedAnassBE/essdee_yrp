@@ -1,4 +1,4 @@
-frappe.ui.form.on("Purchase Order", {
+frappe.ui.form.on("YRP Purchase Order", {
 	refresh(frm) {
 		if (frm.fields_dict.sd_lot) {
 			frm.set_df_property("sd_lot", "read_only", frm.doc.docstatus === 1 ? 1 : 0);
@@ -28,9 +28,9 @@ function manage_linked_lots(frm) {
 						fieldname: "lots",
 						fieldtype: "Table MultiSelect",
 						label: __("Lots"),
-						options: "Lot MultiSelect",
+						options: "SD YRP Lot MultiSelect",
 						get_data(txt) {
-							return frappe.db.get_link_options("Lot", txt);
+							return frappe.db.get_link_options("SD YRP Lot", txt);
 						},
 					},
 					{

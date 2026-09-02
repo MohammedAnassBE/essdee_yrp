@@ -202,7 +202,7 @@ const initLotFilter = () => {
         df: {
             fieldtype: 'Link',
             fieldname: 'lot',
-            options: 'Lot',
+            options: 'SD YRP Lot',
             label: 'Lot',
             change: () => {
                 selected_lot.value = lot_filter_control.get_value()
@@ -246,7 +246,7 @@ const fetchData = () => {
     }
 
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.sewing_plan.sewing_plan.get_scr_data",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan.get_scr_data",
         args: {
             supplier: props.selected_supplier,
             lot: selected_lot.value

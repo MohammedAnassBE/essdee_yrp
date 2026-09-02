@@ -4,13 +4,13 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from essdee_yrp import lot_packing_setup, packing_hooks, purchase_order_lots, work_order_hooks
-from essdee_yrp.essdee_yrp.doctype.lot import lot as lot_controller
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot import sd_yrp_lot as lot_controller
 
 
 class FakePurchaseOrder(frappe._dict):
 	def __init__(self, **values):
 		super().__init__(values)
-		self.setdefault("doctype", "Purchase Order")
+		self.setdefault("doctype", 'YRP Purchase Order')
 		self.setdefault("docstatus", 0)
 		self.setdefault("sd_lot", [])
 		self.meta = frappe._dict(get_field=lambda fieldname: True)
@@ -56,10 +56,10 @@ class FakeLot(frappe._dict):
 class TestLotPackingBoundary(FrappeTestCase):
 	def test_boundary_fields_are_essdee_custom_fields(self):
 		expected = {
-			("Purchase Order", "default_lot"): ("Link", "Lot"),
-			("Purchase Order", "sd_lot"): ("Table", "Lot MultiSelect"),
-			("Process", "includes_packing"): ("Check", None),
-			("Work Order", "includes_packing"): ("Check", None),
+			('YRP Purchase Order', "default_lot"): ("Link", 'SD YRP Lot'),
+			('YRP Purchase Order', "sd_lot"): ("Table", 'SD YRP Lot MultiSelect'),
+			('YRP Process', "includes_packing"): ("Check", None),
+			('YRP Work Order', "includes_packing"): ("Check", None),
 		}
 		for (doctype, fieldname), (fieldtype, options) in expected.items():
 			custom_field = frappe.get_doc("Custom Field", f"{doctype}-{fieldname}")
@@ -70,12 +70,12 @@ class TestLotPackingBoundary(FrappeTestCase):
 
 		for fieldname in ("lot_details_section", "default_lot", "sd_lot"):
 			self.assertEqual(
-				frappe.get_meta("Purchase Order").get_field(fieldname).hidden,
+				frappe.get_meta('YRP Purchase Order').get_field(fieldname).hidden,
 				1,
 				fieldname,
 			)
 
-		self.assertEqual(frappe.get_meta("Lot MultiSelect").module, "Essdee YRP")
+		self.assertEqual(frappe.get_meta('SD YRP Lot MultiSelect').module, "Essdee YRP")
 
 	def test_linked_lots_are_deduplicated_and_defaulted(self):
 		doc = FakePurchaseOrder(
@@ -109,7 +109,7 @@ class TestLotPackingBoundary(FrappeTestCase):
 	def test_grn_rejects_unlinked_configured_lot(self):
 		po = frappe._dict(sd_lot=[frappe._dict(lot="LOT-A")])
 		grn = frappe._dict(
-			against="Purchase Order",
+			against='YRP Purchase Order',
 			against_id="PO-TEST",
 			items=[frappe._dict(lot="LOT-B")],
 		)
@@ -122,7 +122,7 @@ class TestLotPackingBoundary(FrappeTestCase):
 
 	def test_grn_accepts_allowed_or_unrestricted_lot(self):
 		grn = frappe._dict(
-			against="Purchase Order",
+			against='YRP Purchase Order',
 			against_id="PO-TEST",
 			items=[frappe._dict(lot="LOT-A")],
 		)
@@ -185,7 +185,7 @@ class TestLotPackingBoundary(FrappeTestCase):
 		meta = frappe._dict(get_field=lambda fieldname: True)
 		grn = frappe._dict(process_name="PACKING", includes_packing=0, meta=meta)
 		stock_entry = frappe._dict(
-			against="Goods Received Note",
+			against='YRP Goods Received Note',
 			against_id="GRN-1",
 			includes_packing=0,
 			meta=meta,

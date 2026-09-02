@@ -2,7 +2,7 @@
 
 import frappe
 from frappe.utils import cint, flt
-from yrp.yrp.doctype.work_order.work_order import (
+from yrp.yrp.doctype.yrp_work_order.yrp_work_order import (
 	get_rework_source_rows as get_base_rework_source_rows,
 )
 
@@ -21,9 +21,9 @@ def get_rework_source_rows(work_order):
 	Essdee's Rework Details page can also convert stock directly, so its exact
 	GRN child consumption must be removed before presenting the popup quantity.
 	"""
-	doc = frappe.get_doc("Work Order", work_order)
+	doc = frappe.get_doc('YRP Work Order', work_order)
 	doc.check_permission("read")
-	frappe.has_permission("Work Order", "create", throw=True)
+	frappe.has_permission('YRP Work Order', "create", throw=True)
 	return _subtract_direct_clearing(get_base_rework_source_rows(work_order))
 
 
@@ -32,7 +32,7 @@ def _subtract_direct_clearing(rows, direct_rows=None):
 		{
 			row.get("source_grn_item")
 			for row in rows
-			if row.get("source_type") == "Goods Received Note Item"
+			if row.get("source_type") == 'YRP Goods Received Note Item'
 			and row.get("source_grn_item")
 		}
 	)
@@ -41,7 +41,7 @@ def _subtract_direct_clearing(rows, direct_rows=None):
 
 	if direct_rows is None:
 		direct_rows = frappe.get_all(
-			"GRN Rework Item Detail",
+			'SD YRP GRN Rework Item Detail',
 			filters={"source_grn_item": ["in", direct_source_names]},
 			fields=["source_grn_item", "quantity", "reworked", "completed"],
 			limit_page_length=0,
@@ -63,7 +63,7 @@ def _subtract_direct_clearing(rows, direct_rows=None):
 
 	available_rows = []
 	for row in rows:
-		if row.get("source_type") != "Goods Received Note Item":
+		if row.get("source_type") != 'YRP Goods Received Note Item':
 			available_rows.append(row)
 			continue
 		available_qty = max(

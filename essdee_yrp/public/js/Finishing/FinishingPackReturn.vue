@@ -12,10 +12,10 @@
                 </thead>
                 <tbody class="dark-border">
                     <tr v-for="(date, pr) in pr_list">
-                        <td style="cursor: pointer;" @click="redirect_to('Goods Received Note', pr)">{{ pr }}</td>
+                        <td style="cursor: pointer;" @click="redirect_to('YRP Goods Received Note', pr)">{{ pr }}</td>
                         <td>{{ date }}</td>
                         <td>
-                            <button class="btn btn-primary" @click="cancel_doc('Goods Received Note', pr)">Cancel</button>
+                            <button class="btn btn-primary" @click="cancel_doc('YRP Goods Received Note', pr)">Cancel</button>
                         </td>
                     </tr>
                 </tbody>
@@ -86,7 +86,7 @@ function cancel_doc(doctype, docname){
         primary_action(){
             d.hide()
             frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.cancel_document",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.cancel_document",
                 args: {
                     "doctype": doctype,
                     "docname": docname,
@@ -126,7 +126,7 @@ function return_pack_items(){
             d.hide();
             console.log(pack_items)
             frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.return_items",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.return_items",
                 args: {
                     "data": pack_items,
                     "work_order": cur_frm.doc.work_order,

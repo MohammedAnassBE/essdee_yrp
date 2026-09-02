@@ -69,7 +69,7 @@
 								<LinkField
 									v-else
 									:model-value="fillValues[col] || ''"
-									target-doctype="Item Attribute Value"
+									target-doctype="YRP Item Attribute Value"
 									:search-handler="searchFor(col)"
 									class="cp-link"
 									@item-select="(e) => (fillValues[col] = e.value)"
@@ -104,7 +104,7 @@
 							<LinkField
 								v-else
 								:model-value="row[col] || ''"
-								target-doctype="Item Attribute Value"
+								target-doctype="YRP Item Attribute Value"
 								:search-handler="searchFor(col)"
 								class="cp-link"
 								@item-select="(e) => (row[col] = e.value)"

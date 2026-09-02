@@ -1,0 +1,228 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-10 11:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "item_group",
+  "default_primary_attribute",
+  "column_break_vcvr",
+  "default_cutting_process",
+  "cloth_program_defaults_section",
+  "default_knitting_process",
+  "default_dyeing_process",
+  "default_knitting_output_colour",
+  "column_break_cloth_program",
+  "default_compacting_process",
+  "default_cloth_per_kg_yarn",
+  "packing_details_section",
+  "default_packing_process",
+  "default_pack_in_stage",
+  "column_break_vbai",
+  "default_packing_attribute",
+  "default_pack_out_stage",
+  "default_loose_piece_stage",
+  "stitching_details_section",
+  "default_stitching_process",
+  "default_stitching_in_stage",
+  "column_break_ihkx",
+  "default_stitching_attribute",
+  "default_stitching_out_stage",
+  "set_details_section",
+  "default_set_item_attribute"
+ ],
+ "fields": [
+  {
+   "fieldname": "item_group",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item Group",
+   "options": "YRP Item Group",
+   "reqd": 1
+  },
+  {
+   "fieldname": "default_cutting_process",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Default Cutting Process",
+   "options": "YRP Process",
+   "reqd": 1
+  },
+  {
+   "fieldname": "cloth_program_defaults_section",
+   "fieldtype": "Section Break",
+   "label": "Cloth Program Defaults"
+  },
+  {
+   "fieldname": "default_knitting_process",
+   "fieldtype": "Link",
+   "label": "Default Knitting Process",
+   "options": "YRP Process",
+   "reqd": 1
+  },
+  {
+   "fieldname": "default_dyeing_process",
+   "fieldtype": "Link",
+   "label": "Default Dyeing Process",
+   "options": "YRP Process",
+   "reqd": 1
+  },
+  {
+   "description": "Prefills Knitting Output Colour in the Build Cloth Programs popup when no exact saved fabric route exists.",
+   "fieldname": "default_knitting_output_colour",
+   "fieldtype": "Link",
+   "label": "Default Knitting Yarn Colour",
+   "options": "YRP Item Attribute Value"
+  },
+  {
+   "fieldname": "column_break_cloth_program",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Used automatically when a cloth route changes Dia. It is not requested again in the Build Cloth Programs popup.",
+   "fieldname": "default_compacting_process",
+   "fieldtype": "Link",
+   "label": "Default Dia-change Process",
+   "options": "YRP Process"
+  },
+  {
+   "default": "1",
+   "description": "Default kilograms of knitted cloth produced from 1 kilogram of yarn.",
+   "fieldname": "default_cloth_per_kg_yarn",
+   "fieldtype": "Float",
+   "label": "Default Cloth Kg / 1 Kg Yarn",
+   "non_negative": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "default_stitching_process",
+   "fieldtype": "Link",
+   "label": "Default Stitching Process",
+   "options": "YRP Process",
+   "reqd": 1
+  },
+  {
+   "fieldname": "default_packing_process",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Default Packing Process",
+   "options": "YRP Process",
+   "reqd": 1
+  },
+  {
+   "fieldname": "default_pack_in_stage",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Default Pack In Stage",
+   "options": "YRP Item Attribute Value",
+   "reqd": 1
+  },
+  {
+   "fieldname": "default_pack_out_stage",
+   "fieldtype": "Link",
+   "label": "Default Pack Out Stage",
+   "options": "YRP Item Attribute Value",
+   "reqd": 1
+  },
+  {
+   "fieldname": "default_loose_piece_stage",
+   "fieldtype": "Link",
+   "label": "Default Loose Piece Stage",
+   "options": "YRP Item Attribute Value"
+  },
+  {
+   "fieldname": "default_stitching_in_stage",
+   "fieldtype": "Link",
+   "label": "Default Stitching in Stage",
+   "options": "YRP Item Attribute Value",
+   "reqd": 1
+  },
+  {
+   "fieldname": "default_stitching_out_stage",
+   "fieldtype": "Link",
+   "label": "Default Stitching Out Stage",
+   "options": "YRP Item Attribute Value",
+   "reqd": 1
+  },
+  {
+   "fieldname": "default_packing_attribute",
+   "fieldtype": "Link",
+   "label": "Default Packing Attribute",
+   "options": "YRP Item Attribute",
+   "reqd": 1
+  },
+  {
+   "fieldname": "default_stitching_attribute",
+   "fieldtype": "Link",
+   "label": "Default Stitching Attribute",
+   "options": "YRP Item Attribute",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_vcvr",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "packing_details_section",
+   "fieldtype": "Section Break",
+   "label": "Packing Details"
+  },
+  {
+   "fieldname": "column_break_vbai",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "stitching_details_section",
+   "fieldtype": "Section Break",
+   "label": "Stitching Details"
+  },
+  {
+   "fieldname": "column_break_ihkx",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "set_details_section",
+   "fieldtype": "Section Break",
+   "label": "Set Details"
+  },
+  {
+   "fieldname": "default_set_item_attribute",
+   "fieldtype": "Link",
+   "label": "Default Set Item Attribute",
+   "options": "YRP Item Attribute",
+   "reqd": 1
+  },
+  {
+   "fieldname": "default_primary_attribute",
+   "fieldtype": "Link",
+   "label": "Default Primary Attribute",
+   "options": "YRP Item Attribute"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-07-10 11:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Essdee YRP",
+ "name": "SD YRP IPD Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

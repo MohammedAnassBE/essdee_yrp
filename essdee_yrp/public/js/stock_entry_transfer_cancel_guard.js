@@ -17,7 +17,7 @@
 // exists and page.clear_secondary_action() reliably removes it (it adds the `hide`
 // class AND unbinds the click). Scoped to source_grn SEs, so normal Stock Entries
 // keep their Cancel untouched.
-frappe.ui.form.on("Stock Entry", {
+frappe.ui.form.on("YRP Stock Entry", {
 	refresh(frm) {
 		if (frm.doc.docstatus === 1 && frm.doc.source_grn) {
 			frm.page.clear_secondary_action();

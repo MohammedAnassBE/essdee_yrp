@@ -32,6 +32,7 @@ from essdee_yrp.migration.config import (
 	is_target_reset_enabled,
 )
 from essdee_yrp.migration.planner import build_schema_analysis
+from essdee_yrp.migration.rules import DOCTYPE_RENAMES
 
 
 SOURCE_BRIDGE = (
@@ -63,6 +64,9 @@ PRESERVE_SOURCE_BLANK_FIELDS = {
 	("Cut Panel Movement", "from_warehouse"),
 	("Cutting Laysheet Planner", "description"),
 }
+SOURCE_DOCTYPE_BY_TARGET = {
+	target: source for source, target in DOCTYPE_RENAMES.items()
+}
 SAFE_SQL_FIELDNAME = re.compile(r"^[a-z][a-z0-9_]*$")
 
 # Migration operating context that must resolve before a Production Order or
@@ -71,34 +75,34 @@ SAFE_SQL_FIELDNAME = re.compile(r"^[a-z][a-z0-9_]*$")
 # dimension contract. Keeping this here makes the contract independently
 # auditable instead of silently inventing values in a transformer.
 IPD_MIGRATION_PREREQUISITES = {
-	"item_group": "Item Group",
-	"default_cutting_process": "Process",
-	"default_knitting_process": "Process",
-	"default_dyeing_process": "Process",
-	"default_packing_process": "Process",
-	"default_pack_in_stage": "Item Attribute Value",
-	"default_packing_attribute": "Item Attribute",
-	"default_pack_out_stage": "Item Attribute Value",
-	"default_stitching_process": "Process",
-	"default_stitching_in_stage": "Item Attribute Value",
-	"default_stitching_attribute": "Item Attribute",
-	"default_stitching_out_stage": "Item Attribute Value",
-	"default_set_item_attribute": "Item Attribute",
+	"item_group": 'YRP Item Group',
+	"default_cutting_process": 'YRP Process',
+	"default_knitting_process": 'YRP Process',
+	"default_dyeing_process": 'YRP Process',
+	"default_packing_process": 'YRP Process',
+	"default_pack_in_stage": 'YRP Item Attribute Value',
+	"default_packing_attribute": 'YRP Item Attribute',
+	"default_pack_out_stage": 'YRP Item Attribute Value',
+	"default_stitching_process": 'YRP Process',
+	"default_stitching_in_stage": 'YRP Item Attribute Value',
+	"default_stitching_attribute": 'YRP Item Attribute',
+	"default_stitching_out_stage": 'YRP Item Attribute Value',
+	"default_set_item_attribute": 'YRP Item Attribute',
 }
 STOCK_MIGRATION_PREREQUISITES = {
-	"transit_warehouse": "Warehouse",
-	"default_received_type": "Received Type",
-	"default_rejected_received_type": "Received Type",
+	"transit_warehouse": 'YRP Warehouse',
+	"default_received_type": 'YRP Received Type',
+	"default_rejected_received_type": 'YRP Received Type',
 }
 REQUIRED_STOCK_DIMENSION_CONTRACT = {
 	"lot": {
-		"dimension_doctype": "Lot",
+		"dimension_doctype": 'SD YRP Lot',
 		"mandatory": 1,
 		"in_valuation": 1,
 		"is_production_group": 1,
 	},
 	"received_type": {
-		"dimension_doctype": "Received Type",
+		"dimension_doctype": 'YRP Received Type',
 		"mandatory": 1,
 		"in_valuation": 1,
 		"is_production_group": 0,
@@ -331,7 +335,7 @@ class FrappeBulkTarget:
 
 		for name, fieldname, value in passwords:
 			set_encrypted_password(target_doctype, name, value, fieldname=fieldname)
-		if target_doctype == "Supplier":
+		if target_doctype == 'YRP Supplier':
 			self._upsert_supplier_warehouses(documents)
 
 	def _replace_child_tables(self, meta, documents: list[dict[str, Any]]) -> None:
@@ -457,7 +461,7 @@ class FrappeBulkTarget:
 					"docstatus": 0,
 				}
 			)
-		self._bulk_upsert("Warehouse", rows)
+		self._bulk_upsert('YRP Warehouse', rows)
 
 	def upsert_file(
 		self,
@@ -705,8 +709,10 @@ def _validate_configured_default_contract(
 			or isinstance(value, (Mapping, list, tuple, set))
 		):
 			raise MigrationError(f"Invalid configured migration default {key!r}")
-		doctype, fieldname = key.rsplit(".", 1)
-		schema = plan.target_schemas.get(doctype)
+		configured_doctype, fieldname = key.rsplit(".", 1)
+		spec = plan.specs.get(configured_doctype)
+		target_doctype = spec.target if spec else configured_doctype
+		schema = plan.target_schemas.get(target_doctype)
 		field = next(
 			(
 				row
@@ -784,16 +790,16 @@ def _validate_target_migration_prerequisites(
 	"""
 
 	issues: list[str] = []
-	values: dict[str, dict[str, Any]] = {"IPD Settings": {}, "YRP Stock Settings": {}}
+	values: dict[str, dict[str, Any]] = {'SD YRP IPD Settings': {}, 'YRP YRP Stock Settings': {}}
 	value_sources: dict[str, dict[str, str]] = {
-		"IPD Settings": {},
-		"YRP Stock Settings": {},
+		'SD YRP IPD Settings': {},
+		'YRP YRP Stock Settings': {},
 	}
 	source_ipd_settings = _source_single_document(source, "IPD Settings")
 	required_defaults = required_defaults or {}
 	for doctype, fields in (
-		("IPD Settings", IPD_MIGRATION_PREREQUISITES),
-		("YRP Stock Settings", STOCK_MIGRATION_PREREQUISITES),
+		('SD YRP IPD Settings', IPD_MIGRATION_PREREQUISITES),
+		('YRP YRP Stock Settings', STOCK_MIGRATION_PREREQUISITES),
 	):
 		for fieldname, link_doctype in fields.items():
 			target_value = frappe.db.get_single_value(doctype, fieldname)
@@ -807,7 +813,7 @@ def _validate_target_migration_prerequisites(
 			values[doctype][fieldname] = value
 			value_sources[doctype][fieldname] = value_source
 			if value in (None, ""):
-				if doctype == "IPD Settings":
+				if doctype == 'SD YRP IPD Settings':
 					issues.append(
 						f"{doctype}.{fieldname} is required from the F15 source or "
 						"essdee_yrp_migration.required_defaults"
@@ -846,9 +852,9 @@ def _validate_target_migration_prerequisites(
 		)
 
 	return {
-		"ipd_settings": values["IPD Settings"],
-		"ipd_settings_sources": value_sources["IPD Settings"],
-		"stock_settings": values["YRP Stock Settings"],
+		"ipd_settings": values['SD YRP IPD Settings'],
+		"ipd_settings_sources": value_sources['SD YRP IPD Settings'],
+		"stock_settings": values['YRP YRP Stock Settings'],
 		"stock_dimensions": [
 			{
 				key: row.get(key)
@@ -894,12 +900,16 @@ def _migration_prerequisite_value(
 ) -> tuple[Any, str]:
 	"""Return the source/profile value for source-owned IPD settings."""
 
-	if doctype != "IPD Settings" or source_ipd_settings is None:
+	if doctype != 'SD YRP IPD Settings' or source_ipd_settings is None:
 		return target_value, "target"
 	source_value = source_ipd_settings.get(fieldname)
 	if source_value not in (None, ""):
 		return source_value, "production_api"
-	configured_value = required_defaults.get(f"{doctype}.{fieldname}")
+	configured_value = required_defaults.get(f"IPD Settings.{fieldname}")
+	if configured_value in (None, ""):
+		# Accept the final identity for new profiles while preserving existing
+		# site_config entries that correctly use the F15 source DocType name.
+		configured_value = required_defaults.get(f"{doctype}.{fieldname}")
 	if configured_value not in (None, ""):
 		return configured_value, "migration_profile"
 	return None, "missing"
@@ -925,7 +935,7 @@ def _target_or_source_prerequisite_exists(
 	]
 	# Target Warehouse rows are deterministically generated from source Supplier
 	# identities. They are intentionally absent during the clean reset boundary.
-	if link_doctype == "Warehouse":
+	if link_doctype == 'YRP Warehouse':
 		source_doctypes.append("Supplier")
 	return any(
 		source.document_exists(source_doctype, value)
@@ -1103,7 +1113,7 @@ def _require_previous_snapshot(
 
 def _assert_no_other_active_migration(migration_name: str) -> None:
 	active = frappe.get_all(
-		"MRP Data Migration",
+		'SD YRP MRP Data Migration',
 		filters={
 			"name": ["!=", migration_name],
 			"status": ["in", sorted(RUNNING_STATUSES)],
@@ -1129,7 +1139,7 @@ def run_job(
 		raise MigrationError(f"Unsupported migration mode {mode!r}")
 	_assert_no_other_active_migration(migration_name)
 
-	migration = frappe.get_doc("MRP Data Migration", migration_name)
+	migration = frappe.get_doc('SD YRP MRP Data Migration', migration_name)
 	source = F15SourceBridge(settings)
 	plan, schema_payload = build_live_schema_analysis(settings, source)
 	if not plan.ready:
@@ -1252,7 +1262,7 @@ def run_reset_job_guarded(*args, **kwargs):
 def _mark_queued_failure(migration_name: str) -> None:
 	if not migration_name:
 		return
-	status = frappe.db.get_value("MRP Data Migration", migration_name, "status")
+	status = frappe.db.get_value('SD YRP MRP Data Migration', migration_name, "status")
 	if status in RUNNING_STATUSES:
 		_mark_failed(migration_name)
 
@@ -1262,7 +1272,7 @@ def preview_target_reset(migration_name: str) -> dict[str, Any]:
 
 	settings = get_migration_settings()
 	_assert_target_site(settings)
-	migration = frappe.get_doc("MRP Data Migration", migration_name)
+	migration = frappe.get_doc('SD YRP MRP Data Migration', migration_name)
 	source = F15SourceBridge(settings)
 	plan, schema_payload = build_live_schema_analysis(settings, source)
 	source_status = source.status()
@@ -1312,7 +1322,7 @@ def run_reset_job(migration_name: str) -> dict[str, Any]:
 		)
 	_assert_no_other_active_migration(migration_name)
 
-	migration = frappe.get_doc("MRP Data Migration", migration_name)
+	migration = frappe.get_doc('SD YRP MRP Data Migration', migration_name)
 	source = F15SourceBridge(settings)
 	plan, schema_payload = build_live_schema_analysis(settings, source)
 	if not plan.ready:
@@ -1424,7 +1434,7 @@ def _build_target_reset_manifest(
 		"single_target_doctypes": single_targets,
 		"child_target_doctypes": child_targets,
 		"source_series_names": sorted(set(series_names)),
-		"delete_generated_supplier_warehouses": "Supplier" in parent_targets,
+		"delete_generated_supplier_warehouses": 'YRP Supplier' in parent_targets,
 	}
 
 
@@ -1464,7 +1474,7 @@ def _target_reset_counts(
 			set(warehouse_names)
 			| set(
 				_existing_document_names(
-					"Warehouse",
+					'YRP Warehouse',
 					list(
 						expected_identities.get(
 							"generated_supplier_warehouse_names"
@@ -1555,7 +1565,7 @@ def _generated_supplier_warehouse_names(manifest: Mapping[str, Any]) -> list[str
 	return [
 		str(row[0])
 		for row in frappe.db.sql(
-			"SELECT warehouse.name FROM `tabWarehouse` warehouse "
+			"SELECT warehouse.name FROM `tabYRP Warehouse` warehouse "
 			"WHERE COALESCE(warehouse.supplier, '')<>'' "
 			"AND warehouse.name=warehouse.supplier ORDER BY warehouse.name"
 		)
@@ -1717,7 +1727,7 @@ def _delete_target_reset_manifest(
 
 	warehouse_names = list(before["generated_supplier_warehouse_names"])
 	for chunk in _chunks(warehouse_names, 500):
-		frappe.db.delete("Warehouse", {"name": ["in", chunk]})
+		frappe.db.delete('YRP Warehouse', {"name": ["in", chunk]})
 		frappe.db.commit()
 		processed += len(chunk)
 		_update_progress(migration_name, processed, 0, 0)
@@ -1784,7 +1794,7 @@ def run_value_verification(
 
 	settings = get_migration_settings()
 	_assert_target_site(settings)
-	if not frappe.db.exists("MRP Data Migration", migration_name):
+	if not frappe.db.exists('SD YRP MRP Data Migration', migration_name):
 		raise MigrationError(f"Unknown MRP Data Migration {migration_name}")
 	source = F15SourceBridge(settings)
 	plan, _schema_payload = build_live_schema_analysis(settings, source)
@@ -2204,7 +2214,7 @@ def _run_files(
 					bucket_names.add(row["name"])
 					file_state[bucket] = sorted(bucket_names)
 					frappe.db.set_value(
-						"MRP Data Migration",
+						'SD YRP MRP Data Migration',
 						migration_name,
 						"checkpoint_json",
 						json.dumps(checkpoint, sort_keys=True),
@@ -2232,7 +2242,7 @@ def _run_files(
 					orphan_names.add(row["name"])
 					file_state["orphan_attachment_names"] = sorted(orphan_names)
 				frappe.db.set_value(
-					"MRP Data Migration",
+					'SD YRP MRP Data Migration',
 					migration_name,
 					"checkpoint_json",
 					json.dumps(checkpoint, sort_keys=True),
@@ -2493,7 +2503,7 @@ def _prepare_file_settings(
 	settings["temporary_max_file_size"] = required_megabytes
 	settings["restored"] = False
 	frappe.db.set_value(
-		"MRP Data Migration",
+		'SD YRP MRP Data Migration',
 		migration_name,
 		"checkpoint_json",
 		json.dumps(checkpoint, sort_keys=True),
@@ -2517,7 +2527,7 @@ def _restore_file_settings(migration_name: str, checkpoint: dict[str, Any]) -> N
 	)
 	settings["restored"] = True
 	frappe.db.set_value(
-		"MRP Data Migration",
+		'SD YRP MRP Data Migration',
 		migration_name,
 		"checkpoint_json",
 		json.dumps(checkpoint, sort_keys=True),
@@ -2574,8 +2584,8 @@ def _repair_file_links(plan: MigrationPlan) -> None:
 	# These source child tables store both a stable File identity and its fetched
 	# URL, while the File itself is attached to the parent table field.
 	for child_doctype, link_field, url_field in (
-		("Product Design", "file", "graphic_image"),
-		("Product File Version", "file", "file_url"),
+		('SD YRP Product Design', "file", "graphic_image"),
+		('SD YRP Product File Version', "file", "file_url"),
 	):
 		if not frappe.db.exists("DocType", child_doctype):
 			continue
@@ -2604,7 +2614,7 @@ def _flush_batch(
 	state["processed"] = int(state.get("processed") or 0) + len(batch)
 	state["target_doctype"] = target_doctype
 	frappe.db.set_value(
-		"MRP Data Migration",
+		'SD YRP MRP Data Migration',
 		migration_name,
 		"checkpoint_json",
 		json.dumps(checkpoint, sort_keys=True),
@@ -2675,7 +2685,11 @@ def _apply_contextual_defaults(
 	for fieldname in fieldnames:
 		if document.get(fieldname) not in (None, ""):
 			continue
-		configured_value = defaults.get(f"{document.get('doctype')}.{fieldname}")
+		target_doctype = str(document.get("doctype") or "")
+		source_doctype = _source_doctype_for_target(target_doctype)
+		configured_value = defaults.get(f"{source_doctype}.{fieldname}")
+		if configured_value in (None, ""):
+			configured_value = defaults.get(f"{target_doctype}.{fieldname}")
 		if configured_value not in (None, ""):
 			document[fieldname] = configured_value
 	if "received_type" in fieldnames and not document.get("received_type"):
@@ -2717,7 +2731,10 @@ def _validate_required_target_values(
 			continue
 		if _is_valid_historical_required_blank(document, fieldname):
 			if historical_required_blanks is not None:
-				key = f"{document.get('doctype')}.{fieldname}"
+				source_doctype = _source_doctype_for_target(
+					str(document.get("doctype") or "")
+				)
+				key = f"{source_doctype}.{fieldname}"
 				historical_required_blanks[key] = historical_required_blanks.get(key, 0) + 1
 			continue
 		if fieldname:
@@ -2733,7 +2750,7 @@ def _derive_required_value(
 	reference_data: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> Any:
 	reference_data = reference_data or {}
-	if document.get("doctype") == "Item" and fieldname == "item_group":
+	if document.get("doctype") == 'YRP Item' and fieldname == "item_group":
 		# Production API contains legacy Items created before Item Group became
 		# mandatory.  The live SD-YRP consumer already uses the root group for
 		# this exact compatibility case; apply the same deterministic mapping to
@@ -2746,7 +2763,7 @@ def _derive_required_value(
 			"default_received_type"
 		)
 	if (
-		document.get("doctype") == "Cut Panel Movement"
+		document.get("doctype") == 'SD YRP Cut Panel Movement'
 		and fieldname == "from_warehouse"
 	):
 		return reference_data.get("cut_panel_from_warehouse", {}).get(
@@ -2761,18 +2778,18 @@ def _derive_required_value(
 		if item_variant:
 			item = reference_data.get("variant_to_item", {}).get(str(item_variant))
 			if not item:
-				item = frappe.db.get_value("Item Variant", item_variant, "item")
-			if not item and frappe.db.exists("Item", item_variant):
+				item = frappe.db.get_value('YRP Item Variant', item_variant, "item")
+			if not item and frappe.db.exists('YRP Item', item_variant):
 				item = item_variant
 			if item:
 				source_uom = reference_data.get("item_defaults", {}).get(str(item))
 				if source_uom:
 					return source_uom
-				return frappe.db.get_value("Item", item, "default_unit_of_measure")
-	if document.get("doctype") == "Purchase Invoice Item" and fieldname == "item_group":
+				return frappe.db.get_value('YRP Item', item, "default_unit_of_measure")
+	if document.get("doctype") == 'YRP Purchase Invoice Item' and fieldname == "item_group":
 		item = reference_data.get("variant_to_item", {}).get(str(document.get("item")))
 		if not item:
-			item = frappe.db.get_value("Item Variant", document.get("item"), "item")
+			item = frappe.db.get_value('YRP Item Variant', document.get("item"), "item")
 		if item:
 			source_groups = reference_data.get("item_groups", {})
 			if str(item) in source_groups:
@@ -2781,14 +2798,26 @@ def _derive_required_value(
 				return source_groups[str(item)] or _one_source_root_item_group(
 					reference_data
 				)
-			return frappe.db.get_value("Item", item, "item_group")
+			return frappe.db.get_value('YRP Item', item, "item_group")
 	return None
 
 
 def _is_valid_historical_required_blank(
 	document: Mapping[str, Any], fieldname: str
 ) -> bool:
-	return (str(document.get("doctype")), fieldname) in PRESERVE_SOURCE_BLANK_FIELDS
+	source_doctype = _source_doctype_for_target(str(document.get("doctype") or ""))
+	return (source_doctype, fieldname) in PRESERVE_SOURCE_BLANK_FIELDS
+
+
+def _source_doctype_for_target(target_doctype: str) -> str:
+	"""Resolve a namespaced target identity back to its F15 source name."""
+
+	if target_doctype in SOURCE_DOCTYPE_BY_TARGET:
+		return SOURCE_DOCTYPE_BY_TARGET[target_doctype]
+	for prefix in ("SD YRP ", "YRP "):
+		if target_doctype.startswith(prefix):
+			return target_doctype.removeprefix(prefix)
+	return target_doctype
 
 
 def _one_source_root_item_group(
@@ -2817,7 +2846,7 @@ def _ensure_supporting_masters(
 		{str(value) for value in defaults.get("bill_received_via") or [] if value}
 	)
 	target._bulk_upsert(
-		"Bill Tracking Received Via",
+		'YRP Bill Tracking Received Via',
 		[
 			{
 				"name": name,
@@ -2833,12 +2862,12 @@ def _ensure_supporting_masters(
 	)
 	default_received_type = defaults.get("default_received_type")
 	if default_received_type and not frappe.db.exists(
-		"Received Type", default_received_type
+		'YRP Received Type', default_received_type
 	):
 		# The actual ten source records are migrated through GRN Item Type. This
 		# early row only satisfies dependency checks if another DocType sorts first.
 		target._bulk_upsert(
-			"Received Type",
+			'YRP Received Type',
 			[
 				{
 					"name": default_received_type,
@@ -3522,7 +3551,7 @@ def _target_stock_summary(dimensions: Iterable[str]) -> dict[str, Any]:
 	dimensions = [str(fieldname) for fieldname in dimensions]
 	if any(not SAFE_SQL_FIELDNAME.fullmatch(fieldname) for fieldname in dimensions):
 		raise MigrationError("Unsafe target stock dimension fieldname")
-	columns = set(frappe.db.get_table_columns("Stock Ledger Entry"))
+	columns = set(frappe.db.get_table_columns('YRP Stock Ledger Entry'))
 	missing = [fieldname for fieldname in dimensions if fieldname not in columns]
 	if missing:
 		raise MigrationError(
@@ -3541,7 +3570,7 @@ def _target_stock_summary(dimensions: Iterable[str]) -> dict[str, Any]:
 	rows = frappe.db.sql(
 		f"""
 		SELECT item, warehouse{select_middle}, SUM(qty), SUM(stock_value_difference)
-		FROM `tabStock Ledger Entry`
+		FROM `tabYRP Stock Ledger Entry`
 		WHERE COALESCE(is_cancelled, 0) = 0
 		GROUP BY item, warehouse{group_suffix}
 		ORDER BY item, warehouse{group_suffix}
@@ -3788,7 +3817,7 @@ def _broken_dynamic_link_count(
 
 
 def _load_checkpoint(migration_name: str) -> dict[str, Any]:
-	value = frappe.db.get_value("MRP Data Migration", migration_name, "checkpoint_json")
+	value = frappe.db.get_value('SD YRP MRP Data Migration', migration_name, "checkpoint_json")
 	if not value:
 		return {"version": 2, "doctypes": {}}
 	checkpoint = json.loads(value)
@@ -3800,7 +3829,7 @@ def _load_checkpoint(migration_name: str) -> dict[str, Any]:
 def _mark_started(migration_name: str, mode: str, source_status: Mapping[str, Any]) -> None:
 	action = {"dry_run": "Dry Run", "migrate": "Migrate", "verify": "Verify"}[mode]
 	frappe.db.set_value(
-		"MRP Data Migration",
+		'SD YRP MRP Data Migration',
 		migration_name,
 		{
 			"status": "Running",
@@ -3820,7 +3849,7 @@ def _mark_started(migration_name: str, mode: str, source_status: Mapping[str, An
 
 def _update_progress(migration_name: str, processed: int, skipped: int, failed: int) -> None:
 	frappe.db.set_value(
-		"MRP Data Migration",
+		'SD YRP MRP Data Migration',
 		migration_name,
 		{
 			"processed_records": processed,
@@ -3835,7 +3864,7 @@ def _update_progress(migration_name: str, processed: int, skipped: int, failed: 
 def _mark_complete(migration_name: str, mode: str, result: Mapping[str, Any]) -> None:
 	status = {"dry_run": "Dry Run Complete", "migrate": "Completed", "verify": "Verified"}[mode]
 	frappe.db.set_value(
-		"MRP Data Migration",
+		'SD YRP MRP Data Migration',
 		migration_name,
 		{
 			"status": status,
@@ -3855,7 +3884,7 @@ def _mark_reset_started(migration_name: str, before: Mapping[str, Any]) -> None:
 	started_on = now_datetime()
 	reset_started_on = before.get("reset_started_on") or started_on
 	frappe.db.set_value(
-		"MRP Data Migration",
+		'SD YRP MRP Data Migration',
 		migration_name,
 		{
 			"status": "Running",
@@ -3886,7 +3915,7 @@ def _mark_reset_started(migration_name: str, before: Mapping[str, Any]) -> None:
 	# This field is labelled source records for the migration actions. During the
 	# reset boundary it intentionally shows the exact reviewed deletion total.
 	frappe.db.set_value(
-		"MRP Data Migration",
+		'SD YRP MRP Data Migration',
 		migration_name,
 		"total_source_records",
 		int(before["total"]),
@@ -3897,7 +3926,7 @@ def _mark_reset_started(migration_name: str, before: Mapping[str, Any]) -> None:
 
 def _mark_reset_complete(migration_name: str, result: Mapping[str, Any]) -> None:
 	frappe.db.set_value(
-		"MRP Data Migration",
+		'SD YRP MRP Data Migration',
 		migration_name,
 		{
 			"status": "Reset Complete",
@@ -3917,7 +3946,7 @@ def _mark_reset_complete(migration_name: str, result: Mapping[str, Any]) -> None
 def _mark_failed(migration_name: str) -> None:
 	frappe.db.rollback()
 	frappe.db.set_value(
-		"MRP Data Migration",
+		'SD YRP MRP Data Migration',
 		migration_name,
 		{
 			"status": "Failed",

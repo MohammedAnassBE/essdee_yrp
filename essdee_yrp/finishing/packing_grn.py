@@ -24,8 +24,8 @@ def before_validate(grn, method=None):
 	del method
 	if not _is_packing_grn(grn):
 		return
-	work_order = frappe.get_cached_doc("Work Order", grn.against_id)
-	ipd = frappe.get_cached_doc("Item Production Detail", work_order.production_detail)
+	work_order = frappe.get_cached_doc('YRP Work Order', grn.against_id)
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', work_order.production_detail)
 	populate_grn_deliverables(
 		grn, _calculate_packing_inputs(grn, work_order, ipd)
 	)
@@ -35,8 +35,8 @@ def calculate_packing_consumption_plan(grn):
 	"""Rebuild the complete packing input plan under the Work Order lock."""
 	if not _is_packing_grn(grn):
 		return []
-	work_order = frappe.get_doc("Work Order", grn.against_id)
-	ipd = frappe.get_cached_doc("Item Production Detail", work_order.production_detail)
+	work_order = frappe.get_doc('YRP Work Order', grn.against_id)
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', work_order.production_detail)
 	return _calculate_packing_inputs(grn, work_order, ipd)
 
 
@@ -54,7 +54,7 @@ def _calculate_packing_inputs(grn, work_order, ipd):
 
 def _is_packing_grn(grn):
 	return bool(
-		grn.get("against") == "Work Order"
+		grn.get("against") == 'YRP Work Order'
 		and grn.get("against_id")
 		and grn.get("includes_packing")
 		and not grn.get("is_return")
@@ -76,7 +76,7 @@ def _allocate_dynamic_consumed_garments(grn, work_order, ipd):
 	to guess which Work Order garment colour was packed.
 	"""
 	from yrp.stock.utils import get_conversion_factor
-	from yrp.yrp.doctype.work_order.work_order import _stock_dimension_values
+	from yrp.yrp.doctype.yrp_work_order.yrp_work_order import _stock_dimension_values
 
 	calculated = list(work_order.get("work_order_calculated_items") or [])
 	deliverables = list(work_order.get("deliverables") or [])
@@ -256,12 +256,12 @@ def _allocate_consumed_accessories(grn, work_order, ipd, garment_plan):
 	"""Recalculate exact packing BOM rows and map them to delivered WO inputs."""
 	if not garment_plan:
 		return []
-	lot = frappe.get_cached_doc("Lot", grn.get("lot") or work_order.lot)
+	lot = frappe.get_cached_doc('SD YRP Lot', grn.get("lot") or work_order.lot)
 	process_names = {work_order.process_name}
-	if frappe.db.get_value("Process", work_order.process_name, "is_group"):
+	if frappe.db.get_value('YRP Process', work_order.process_name, "is_group"):
 		process_names.update(
 			frappe.get_all(
-				"Process Details",
+				'YRP Process Details',
 				filters={"parent": work_order.process_name},
 				pluck="process_name",
 			)
@@ -330,7 +330,7 @@ def _split_quantity_across_outputs(quantity, outputs):
 
 def _allocate_consumed_garments(grn, work_order, ipd):
 	from yrp.stock.utils import get_conversion_factor
-	from yrp.yrp.doctype.work_order.work_order import _stock_dimension_values
+	from yrp.yrp.doctype.yrp_work_order.yrp_work_order import _stock_dimension_values
 
 	deliverables = list(work_order.get("deliverables") or [])
 	calculated = list(work_order.get("work_order_calculated_items") or [])

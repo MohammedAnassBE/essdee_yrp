@@ -9,6 +9,7 @@ from essdee_yrp.sd_yrp_sync import (
 	PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE,
 	PRODUCTION_ORDER_GRID_ATTRIBUTE,
 	SYNC_DOCTYPES,
+	ensure_consumer_config,
 	filter_doc_fields,
 	handle_sd_yrp_message,
 	map_production_ordered_rows,
@@ -18,6 +19,19 @@ from essdee_yrp.setup import ensure_yrp_production_order_settings
 
 
 class TestSDYRPSyncSetup(IntegrationTestCase):
+	def test_consumer_setup_is_a_noop_when_optional_spine_is_not_installed(self):
+		with (
+			patch.object(
+				frappe,
+				"get_installed_apps",
+				return_value=["frappe", "yrp", "essdee_yrp"],
+			),
+			patch.object(frappe, "get_all") as get_all,
+		):
+			self.assertFalse(ensure_consumer_config())
+
+		get_all.assert_not_called()
+
 	def test_business_identity_fields_are_packaged_in_essdee_fixture(self):
 		with open(
 			frappe.get_app_path("essdee_yrp", "fixtures", "custom_field.json"),
@@ -36,7 +50,7 @@ class TestSDYRPSyncSetup(IntegrationTestCase):
 
 	def test_lot_time_and_action_rows_are_syncable(self):
 		filtered = filter_doc_fields({
-			"doctype": "Lot",
+			"doctype": 'SD YRP Lot',
 			"name": "TEST-LOT-TNA",
 			"lot_time_and_action_details": [{
 				"colour": "Black",
@@ -48,7 +62,7 @@ class TestSDYRPSyncSetup(IntegrationTestCase):
 		self.assertEqual(
 			filtered["lot_time_and_action_details"][0],
 			{
-				"doctype": "Lot Time and Action Detail",
+				"doctype": 'SD YRP Lot Time and Action Detail',
 				"colour": "Black",
 				"master": "Master-00001",
 				"time_and_action": "TNA-00001",
@@ -58,7 +72,7 @@ class TestSDYRPSyncSetup(IntegrationTestCase):
 	def test_production_ordered_row_keeps_direct_and_dynamic_lot_links(self):
 		with patch("essdee_yrp.sd_yrp_sync.validate_required_link"):
 			rows = map_production_ordered_rows({
-				"doctype": "Production Order",
+				"doctype": 'YRP Production Order',
 				"name": "PPO-TEST",
 				"production_ordered_details": [{
 					"item_variant": "ITEM-S",
@@ -70,8 +84,8 @@ class TestSDYRPSyncSetup(IntegrationTestCase):
 		self.assertEqual(
 			rows[0],
 			{
-				"doctype": "Production Ordered Detail",
-				"reference_doctype": "Lot",
+				"doctype": 'YRP Production Ordered Detail',
+				"reference_doctype": 'SD YRP Lot',
 				"reference_name": "LOT-0001",
 				"lot": "LOT-0001",
 				"item_variant": "ITEM-S",
@@ -81,8 +95,8 @@ class TestSDYRPSyncSetup(IntegrationTestCase):
 
 	def test_single_sync_replaces_child_table_rows(self):
 		upsert_doc({
-			"doctype": "MRP Settings",
-			"name": "MRP Settings",
+			"doctype": 'SD YRP MRP Settings',
+			"name": 'SD YRP MRP Settings',
 			"enable_price_validation": 1,
 			"purchase_invoice_series_map": [
 				{"series": "SRC-.YYYY.-", "mapped_series": "DST-.YYYY.-"},
@@ -90,7 +104,7 @@ class TestSDYRPSyncSetup(IntegrationTestCase):
 			],
 		}, event="on_update")
 
-		settings = frappe.get_single("MRP Settings")
+		settings = frappe.get_single('SD YRP MRP Settings')
 		self.assertEqual(settings.enable_price_validation, 1)
 		self.assertEqual(
 			[(row.series, row.mapped_series) for row in settings.purchase_invoice_series_map],
@@ -103,23 +117,23 @@ class TestSDYRPSyncSetup(IntegrationTestCase):
 	def test_supplier_users_remain_on_supplier_and_map_to_warehouse(self):
 		name = f"_Test Sync Supplier {frappe.generate_hash(length=8)}"
 		upsert_doc({
-			"doctype": "Supplier",
+			"doctype": 'YRP Supplier',
 			"name": name,
 			"supplier_name": name,
 			"supplier_users": [{"user": "Administrator"}],
 		}, event="after_insert")
 
-		supplier = frappe.get_doc("Supplier", name)
-		warehouse = frappe.get_doc("Warehouse", name)
+		supplier = frappe.get_doc('YRP Supplier', name)
+		warehouse = frappe.get_doc('YRP Warehouse', name)
 		self.assertEqual([row.user for row in supplier.supplier_users], ["Administrator"])
 		self.assertEqual([row.user for row in warehouse.warehouse_users], ["Administrator"])
 
 	def test_lot_cloth_excess_percentage_is_syncable(self):
-		field = frappe.get_meta("Lot").get_field("cloth_excess_percentage")
+		field = frappe.get_meta('SD YRP Lot').get_field("cloth_excess_percentage")
 		self.assertIsNotNone(field)
 		self.assertEqual(field.fieldtype, "Percent")
 		self.assertEqual(field.label, "Cloth Excess Percentage")
-		addition_field = frappe.get_meta("Lot").get_field("cloth_program_additions")
+		addition_field = frappe.get_meta('SD YRP Lot').get_field("cloth_program_additions")
 		self.assertIsNotNone(addition_field)
 		self.assertEqual(addition_field.fieldtype, "JSON")
 		stored_additions = frappe.as_json({
@@ -129,7 +143,7 @@ class TestSDYRPSyncSetup(IntegrationTestCase):
 		})
 
 		filtered = filter_doc_fields({
-			"doctype": "Lot",
+			"doctype": 'SD YRP Lot',
 			"name": "TEST-LOT-CLOTH-EXCESS",
 			"cloth_excess_percentage": 7.5,
 			"cloth_program_additions": stored_additions,
@@ -141,7 +155,7 @@ class TestSDYRPSyncSetup(IntegrationTestCase):
 		self.assertIn("IPD Compacting", SYNC_DOCTYPES)
 		name = f"_Test IPD Compacting {frappe.generate_hash(length=8)}"
 		base_payload = {
-			"doctype": "IPD Compacting",
+			"doctype": 'SD YRP IPD Compacting',
 			"name": name,
 			"item_production_detail": name,
 			"packing_attribute": "Colour",
@@ -162,7 +176,7 @@ class TestSDYRPSyncSetup(IntegrationTestCase):
 		}
 
 		upsert_doc(base_payload, event="after_insert")
-		inserted = frappe.get_doc("IPD Compacting", name)
+		inserted = frappe.get_doc('SD YRP IPD Compacting', name)
 		self.assertEqual(len(inserted.compacting_details), 2)
 		self.assertEqual(inserted.compacting_details[0].compacting_dia, "21 Dia")
 
@@ -177,7 +191,7 @@ class TestSDYRPSyncSetup(IntegrationTestCase):
 		]
 		upsert_doc(updated_payload, event="on_update")
 
-		updated = frappe.get_doc("IPD Compacting", name)
+		updated = frappe.get_doc('SD YRP IPD Compacting', name)
 		self.assertEqual(len(updated.compacting_details), 1)
 		self.assertEqual(updated.compacting_details[0].cloth_item, "_Test Cloth A")
 		self.assertEqual(updated.compacting_details[0].compacting_dia, "20 Dia")
@@ -204,13 +218,31 @@ class TestSDYRPSyncSetup(IntegrationTestCase):
 			},
 		})
 
-		doc = frappe.get_doc("IPD Compacting", name)
+		doc = frappe.get_doc('SD YRP IPD Compacting', name)
 		self.assertEqual(doc.item_production_detail, name)
 		self.assertEqual(doc.compacting_details[0].compacting_dia, "23 Dia")
 
+	def test_source_and_target_headers_both_resolve_to_target_doctype(self):
+		for header_doctype in ("Lot", "SD YRP Lot"):
+			with self.subTest(header_doctype=header_doctype):
+				with patch("essdee_yrp.sd_yrp_sync.upsert_doc") as upsert:
+					handle_sd_yrp_message({
+						"Header": {
+							"Topic": "sd_yrp_master",
+							"DocType": header_doctype,
+							"Event": "on_update",
+						},
+						"Payload": {"doctype": header_doctype, "name": "LOT-TEST"},
+					})
+
+				upsert.assert_called_once_with(
+					{"doctype": "SD YRP Lot", "name": "LOT-TEST"},
+					event="on_update",
+				)
+
 	def test_essdee_production_order_settings_are_self_healing_and_idempotent(self):
 		settings = frappe.get_doc({
-			"doctype": "YRP Settings",
+			"doctype": 'YRP YRP Settings',
 			"production_order_attributes": [
 				{"attribute": "Colour", "is_grid_attribute": 0},
 			],

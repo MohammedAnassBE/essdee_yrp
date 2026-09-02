@@ -66,35 +66,35 @@ def _centre_panel_context():
 class TestPanelWiseConsumption(IntegrationTestCase):
 	def test_ipd_child_grids_expose_synced_values(self):
 		expected_columns = {
-			"Stiching Item Detail": (
+			'SD YRP Stiching Item Detail': (
 				"stiching_attribute_value",
 				"set_item_attribute_value",
 				"quantity",
 				"category",
 				"is_default",
 			),
-			"Item Production Detail Packing Attribute Detail": (
+			'SD YRP Item Production Detail Packing Attribute Detail': (
 				"attribute_value",
 				"quantity",
 			),
-			"Item Production Detail Packing Size Detail": (
+			'SD YRP Item Production Detail Packing Size Detail': (
 				"attribute_value",
 				"quantity",
 			),
-			"Item Production Detail Packing Assortment Attribute": ("attribute",),
-			"Item Production Detail Cloth Detail": (
+			'SD YRP Item Production Detail Packing Assortment Attribute': ("attribute",),
+			'SD YRP Item Production Detail Cloth Detail': (
 				"name1",
 				"cloth",
 				"required_gsm",
 				"is_bom_item",
 			),
-			"Item Production Detail Set Item Combination": (
+			'SD YRP Item Production Detail Set Item Combination': (
 				"index",
 				"major_attribute_value",
 				"set_item_attribute_value",
 				"attribute_value",
 			),
-			"Cutting Attribute Detail": ("attribute",),
+			'SD YRP Cutting Attribute Detail': ("attribute",),
 		}
 		for doctype, fieldnames in expected_columns.items():
 			meta = frappe.get_meta(doctype)
@@ -137,7 +137,7 @@ class TestPanelWiseConsumption(IntegrationTestCase):
 		self.assertEqual(result, {"status": "success"})
 		doc.check_permission.assert_called_once_with("write")
 		set_value.assert_called_once_with(
-			"Item Production Detail",
+			'YRP Item Production Detail',
 			"TEST-IPD",
 			{"approval_status": "Not Approved", "approved_by": None},
 			update_modified=True,

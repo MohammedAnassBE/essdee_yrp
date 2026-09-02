@@ -19,7 +19,7 @@
                         <td :rowspan="3">
                             <div>
                                 <template v-for="(wo, i) in limited_wo(items['processes'][process]['wo_list'])">
-                                    <div style="cursor: pointer;" @click="redirect_to_doc('Work Order', wo)">{{ wo }}</div>
+                                    <div style="cursor: pointer;" @click="redirect_to_doc('YRP Work Order', wo)">{{ wo }}</div>
                                 </template>
                                 <div v-if="items['processes'][process]['wo_list'].length > 3" class="more-btn-wrapper">
                                     <button class="more-btn" @click="redirect_to_wolist(process)">
@@ -31,7 +31,7 @@
                                 <div v-if="items['processes'][process]['cp_list'].length > 0">
                                     <div><strong>Cutting Plan</strong></div>
                                     <div v-for="cp in items['processes'][process]['cp_list']">
-                                        <div style="cursor: pointer;" @click="redirect_to_doc('Cutting Plan', cp)">{{ cp }}</div>
+                                        <div style="cursor: pointer;" @click="redirect_to_doc('SD YRP Cutting Plan', cp)">{{ cp }}</div>
                                     </div>
                                 </div>
                             </div>
@@ -85,7 +85,7 @@
                     <td>Dispatch</td>
                     <td>
                         <div v-for="fp in items['finishing_plan_list']">
-                            <div style="cursor:pointer;" @click="redirect_to_doc('Finishing Plan', fp)">{{ fp }}</div>
+                            <div style="cursor:pointer;" @click="redirect_to_doc('SD YRP Finishing Plan', fp)">{{ fp }}</div>
                         </div>
                         {{ items['finishing_plan'] }}
                     </td>
@@ -105,7 +105,7 @@ let items = ref({})
 
 onMounted(() => {
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.lot.lot.get_ocr_details",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot.get_ocr_details",
         args: { lot: cur_frm.doc.name },
         callback: function (r) {
             items.value = r.message
@@ -131,7 +131,7 @@ function redirect_to_wolist(process){
     localStorage.setItem("process", process)
     localStorage.setItem("lot", cur_frm.doc.name)
     frappe.open_in_new_tab = true
-    frappe.set_route("Form", "Work Order")
+    frappe.set_route("Form", "YRP Work Order")
 }
 function redirect_to_doc(doctype, docname){
     frappe.open_in_new_tab = true

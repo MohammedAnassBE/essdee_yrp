@@ -87,7 +87,7 @@
 							<LinkField
 								v-if="editing"
 								:model-value="r.attribute_value"
-								target-doctype="Item Attribute Value"
+								target-doctype="YRP Item Attribute Value"
 								:search-handler="attrValueSearch"
 								class="pk-link"
 								@item-select="(e) => (r.attribute_value = e.value)"
@@ -128,7 +128,7 @@
 							<LinkField
 								v-if="editing"
 								:model-value="r.attribute_value"
-								target-doctype="Item Attribute Value"
+								target-doctype="YRP Item Attribute Value"
 								:search-handler="sizeSearch"
 								class="pk-link"
 								@item-select="(e) => (r.attribute_value = e.value)"
@@ -311,7 +311,7 @@ watch(
 async function mappingSearch(mapping, q) {
 	if (!mapping) return [];
 	const res = await callMethod("essdee_yrp.ipd_ui.get_attribute_detail_values", {
-		doctype: "Item Attribute Value",
+		doctype: "YRP Item Attribute Value",
 		txt: q || "",
 		searchfield: "name",
 		start: 0,
@@ -327,7 +327,7 @@ const sizeSearch = (q) => mappingSearch(primaryMapping.value, q);
 async function attrValueSearch(q) {
 	if (!packingMapping.value) return [];
 	const res = await callMethod("essdee_yrp.ipd_ui.get_attribute_detail_values", {
-		doctype: "Item Attribute Value",
+		doctype: "YRP Item Attribute Value",
 		txt: q || "",
 		searchfield: "name",
 		start: 0,
@@ -402,7 +402,7 @@ function apply(ipd) {
 	ipd.packing_attribute_details = rows.value
 		.filter((r) => r.attribute_value)
 		.map((r) => ({
-			doctype: "Item Production Detail Packing Attribute Detail",
+			doctype: "SD YRP Item Production Detail Packing Attribute Detail",
 			...(r.name ? { name: r.name } : {}),
 			attribute_value: r.attribute_value,
 			quantity: r.quantity || 0,
@@ -413,7 +413,7 @@ function apply(ipd) {
 	ipd.packing_size_details = (keepSizes ? sizeRows.value : [])
 		.filter((r) => r.attribute_value)
 		.map((r) => ({
-			doctype: "Item Production Detail Packing Size Detail",
+			doctype: "SD YRP Item Production Detail Packing Size Detail",
 			...(r.name ? { name: r.name } : {}),
 			attribute_value: r.attribute_value,
 			quantity: r.quantity || 0,

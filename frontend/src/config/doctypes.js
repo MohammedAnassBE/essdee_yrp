@@ -1,5 +1,5 @@
 /**
- * Essdee YRP — static DocType registry.
+ * SD YRP — static DocType registry.
  *
  * The /web UI manages these production DocTypes (user scope, 2026-07-03;
  * Work Order Correction added 2026-07-09; Process Cost and Lot Transfer added
@@ -12,7 +12,7 @@
  * behaviour. No DB fetch — instant lookup.
  *
  * Route convention (slugify): DocType label lowercased, non-alphanumerics →
- * "-". e.g. "Goods Received Note" → "goods-received-note".
+ * "-". e.g. "YRP Goods Received Note" → "goods-received-note".
  *
  * `roles`: coarse grouping hint only — the sidebar hard-gates every item on
  * live `canRead(doctype)` from frappe.boot, so real visibility is
@@ -24,17 +24,17 @@
 // on essdee_yrp.site (2026-07-03): Lot, Item, Item Production Detail and
 // Terms and Condition are NOT submittable.
 const SUBMITTABLE = new Set([
-	"Work Order",
-	"Work Order Correction",
-	"Delivery Challan",
-	"Goods Received Note",
-	"Process Cost",
-	"Lot Transfer",
-	"Stock Entry",
+	"YRP Work Order",
+	"YRP Work Order Correction",
+	"YRP Delivery Challan",
+	"YRP Goods Received Note",
+	"YRP Process Cost",
+	"SD YRP Lot Transfer",
+	"YRP Stock Entry",
 ])
 
 const WORKFLOW = {
-	"Process Cost": ["Draft", "Approval Pending", "Approved", "Rejected", "Expired"],
+	"YRP Process Cost": ["Draft", "Approval Pending", "Approved", "Rejected", "Expired"],
 }
 
 // Workflow-state → PrimeVue Tag severity for the shared list/detail helpers.
@@ -63,7 +63,7 @@ const GROUPS = [
 			// Lot: not submittable, has a status Select (Open/Closed) → status
 			// tabs + All per the finalized tab rules.
 			// noCreate: synced via spine_consumer_config — no /web create.
-			{ doctype: "Lot", icon: "pi pi-inbox", tabMode: "status", noCreate: true, listFields: [
+			{ doctype: "SD YRP Lot", icon: "pi pi-inbox", tabMode: "status", noCreate: true, listFields: [
 				{ field: "item", label: "Item" },
 				{ field: "production_detail", label: "IPD" },
 				{ field: "expected_delivery_date", label: "Delivery", type: "Date" },
@@ -71,7 +71,7 @@ const GROUPS = [
 			// Work Order is submittable but its lifecycle is driven by its
 			// many-valued `status` Select — keep the explicit status override
 			// (Submit/Cancel still work via the detail-page buttons).
-			{ doctype: "Work Order", icon: "pi pi-bars", dateTabs: "wo_date", tabMode: "status", listFields: [
+			{ doctype: "YRP Work Order", icon: "pi pi-bars", dateTabs: "wo_date", tabMode: "status", listFields: [
 				{ field: "item", label: "Item" },
 				{ field: "supplier", label: "Job-worker" },
 				{ field: "process_name", label: "Process" },
@@ -80,23 +80,23 @@ const GROUPS = [
 			// Work Order Correction: extra deliverables/receivables against a
 			// submitted WO (user, 2026-07-09: must be in the /web left panel).
 			// Submittable with a many-valued status Select — status tabs like WO.
-			{ doctype: "Work Order Correction", icon: "pi pi-pencil", dateTabs: "correction_date", tabMode: "status", listFields: [
+			{ doctype: "YRP Work Order Correction", icon: "pi pi-pencil", dateTabs: "correction_date", tabMode: "status", listFields: [
 				{ field: "work_order", label: "Work Order" },
 				{ field: "supplier", label: "Job-worker" },
 				{ field: "process_name", label: "Process" },
 				{ field: "correction_date", label: "Correction Date", type: "Date" },
 			] },
-			{ doctype: "Delivery Challan", icon: "pi pi-send", dateTabs: "posting_date", listFields: [
+			{ doctype: "YRP Delivery Challan", icon: "pi pi-send", dateTabs: "posting_date", listFields: [
 				{ field: "work_order", label: "Work Order" },
 				{ field: "supplier", label: "Job-worker" },
 				{ field: "posting_date", label: "Posting", type: "Date" },
 			] },
-			{ doctype: "Goods Received Note", icon: "pi pi-plus-circle", dateTabs: "posting_date", listFields: [
+			{ doctype: "YRP Goods Received Note", icon: "pi pi-plus-circle", dateTabs: "posting_date", listFields: [
 				{ field: "supplier", label: "Supplier" },
 				{ field: "delivery_challan", label: "Against DC" },
 				{ field: "posting_date", label: "Posting", type: "Date" },
 			] },
-			{ doctype: "Process Cost", icon: "pi pi-indian-rupee", dateTabs: "from_date", tabMode: "workflow", listFields: [
+			{ doctype: "YRP Process Cost", icon: "pi pi-indian-rupee", dateTabs: "from_date", tabMode: "workflow", listFields: [
 				{ field: "process_name", label: "Process" },
 				{ field: "supplier", label: "Supplier" },
 				{ field: "item", label: "Item" },
@@ -109,8 +109,8 @@ const GROUPS = [
 		group: "Stock",
 		roles: "*",
 		items: [
-			{ doctype: "Stock Entry", icon: "pi pi-sync", dateTabs: "posting_date" },
-			{ doctype: "Lot Transfer", icon: "pi pi-arrow-right-arrow-left", dateTabs: "posting_date", listFields: [
+			{ doctype: "YRP Stock Entry", icon: "pi pi-sync", dateTabs: "posting_date" },
+			{ doctype: "SD YRP Lot Transfer", icon: "pi pi-arrow-right-arrow-left", dateTabs: "posting_date", listFields: [
 				{ field: "posting_date", label: "Posting Date", type: "Date" },
 				{ field: "comments", label: "Comments" },
 			] },
@@ -121,12 +121,12 @@ const GROUPS = [
 		roles: "*",
 		items: [
 			// noCreate: synced via spine_consumer_config — no /web create.
-			{ doctype: "Item", icon: "pi pi-box", noCreate: true, listFields: [
+			{ doctype: "YRP Item", icon: "pi pi-box", noCreate: true, listFields: [
 				{ field: "name1", label: "Item Name" },
 				{ field: "item_group", label: "Item Group" },
 				{ field: "default_unit_of_measure", label: "UOM" },
 			] },
-			{ doctype: "Item Production Detail", icon: "pi pi-table" },
+			{ doctype: "YRP Item Production Detail", icon: "pi pi-table" },
 		],
 	},
 	{
@@ -134,7 +134,7 @@ const GROUPS = [
 		roles: "*",
 		items: [
 			// noCreate: synced via spine_consumer_config — no /web create.
-			{ doctype: "Terms and Condition", icon: "pi pi-book", noCreate: true },
+			{ doctype: "YRP Terms and Condition", icon: "pi pi-book", noCreate: true },
 		],
 	},
 ]

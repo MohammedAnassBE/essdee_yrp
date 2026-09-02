@@ -33,7 +33,7 @@ def _open_work_order_filters(lot=None, item=None, process_name=None):
 
 def _permitted_work_orders(lot=None, item=None, process_name=None, fields=None):
 	return frappe.get_list(
-		"Work Order",
+		'YRP Work Order',
 		filters=_open_work_order_filters(lot, item, process_name),
 		fields=fields or ["name"],
 		order_by="name asc",
@@ -45,8 +45,8 @@ def _tracking_rows(work_order_names):
 	if not work_order_names:
 		return {}
 	rows = frappe.get_all(
-		"Work Order Tracking Log",
-		filters={"parent": ["in", work_order_names], "parenttype": "Work Order"},
+		'YRP Work Order Tracking Log',
+		filters={"parent": ["in", work_order_names], "parenttype": 'YRP Work Order'},
 		fields=["parent", "from_date", "to_date", "reason", "check_point", "idx"],
 		order_by="parent asc, idx asc",
 	)
@@ -78,7 +78,7 @@ def get_t_and_a_report_data(lot=None, item=None, process_name=None):
 	assigned_by_lot = {
 		row.name: row.assigned_person_name
 		for row in frappe.get_all(
-			"Lot",
+			'SD YRP Lot',
 			filters={"name": ["in", list(lot_names)]},
 			fields=["name", "assigned_person_name"],
 		)
@@ -143,7 +143,7 @@ def get_t_and_a_report_data(lot=None, item=None, process_name=None):
 
 	days = cint(
 		frappe.db.get_single_value(
-			"MRP Settings", "time_and_action_tracking_order_report_days"
+			'SD YRP MRP Settings', "time_and_action_tracking_order_report_days"
 		)
 	) or 6
 	date_keys = []
@@ -224,7 +224,7 @@ def get_work_order_details(detail):
 
 
 def _set_expected_date(work_order, expected_date, reason):
-	doc = frappe.get_doc("Work Order", work_order)
+	doc = frappe.get_doc('YRP Work Order', work_order)
 	doc.check_permission("write")
 	if doc.docstatus != 1 or doc.open_status != "Open":
 		frappe.throw(
@@ -325,7 +325,7 @@ def update_wo_checkpoint(datas):
 		for work_order in _permitted_work_orders(
 			row.get("lot"), row.get("item"), row.get("process_name")
 		):
-			doc = frappe.get_doc("Work Order", work_order.name)
+			doc = frappe.get_doc('YRP Work Order', work_order.name)
 			doc.check_permission("write")
 			matched = False
 			for log in doc.work_order_tracking_logs:
@@ -355,7 +355,7 @@ def get_t_and_a_review_report_data(lot=None, item=None, report_date=None):
 	if report_date:
 		filters["end_date"] = ["<", getdate(report_date)]
 	schedules = frappe.get_list(
-		"Time and Action",
+		'SD YRP Time and Action',
 		filters=filters,
 		fields=[
 			"name",
@@ -378,7 +378,7 @@ def get_t_and_a_review_report_data(lot=None, item=None, report_date=None):
 
 	result = {}
 	for lot_name, lot_schedules in by_lot.items():
-		lot_doc = frappe.get_doc("Lot", lot_name)
+		lot_doc = frappe.get_doc('SD YRP Lot', lot_name)
 		lot_doc.check_permission("read")
 		linked = {
 			row.time_and_action
@@ -388,7 +388,7 @@ def get_t_and_a_review_report_data(lot=None, item=None, report_date=None):
 		for schedule in lot_schedules:
 			if schedule.name not in linked:
 				continue
-			doc = frappe.get_doc("Time and Action", schedule.name)
+			doc = frappe.get_doc('SD YRP Time and Action', schedule.name)
 			master_data = result.setdefault(lot_name, {}).setdefault(
 				doc.master, {"actions": [], "datas": []}
 			)

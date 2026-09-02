@@ -44,13 +44,13 @@ def on_cancel(grn, method=None):
 
 def apply_goods_received_note(grn, *, cancelled):
 	"""Apply or reverse only the Finishing-owned state derived from a GRN."""
-	if grn.against != "Work Order" or not grn.get("lot"):
+	if grn.against != 'YRP Work Order' or not grn.get("lot"):
 		return
 	if not (grn.get("includes_packing") or _is_finishing_inward_process(grn.process_name)):
 		return
 
 	finishing_plan_name = frappe.db.get_value(
-		"Finishing Plan",
+		'SD YRP Finishing Plan',
 		{"lot": grn.lot},
 		"name",
 	)
@@ -65,7 +65,7 @@ def apply_goods_received_note(grn, *, cancelled):
 		rebuild_finishing_plan(finishing_plan_name, check_permission=False)
 		return
 
-	finishing_doc = frappe.get_doc("Finishing Plan", finishing_plan_name)
+	finishing_doc = frappe.get_doc('SD YRP Finishing Plan', finishing_plan_name)
 	if grn.get("includes_packing") and not grn.get("is_return"):
 		_update_packing_receipt(finishing_doc, grn, cancelled=cancelled)
 	elif grn.get("is_return"):
@@ -92,7 +92,7 @@ def _update_packing_receipt(finishing_doc, grn, *, cancelled):
 def _recalculate_finishing_end_date(finishing_doc, grn, grn_list, cancelled):
 	if cancelled:
 		remaining_dates = [
-			frappe.db.get_value("Goods Received Note", name, "posting_date")
+			frappe.db.get_value('YRP Goods Received Note', name, "posting_date")
 			for name in grn_list
 		]
 		remaining_dates = [date for date in remaining_dates if date]
@@ -199,7 +199,7 @@ def _update_finishing_inward(finishing_doc, grn, *, cancelled):
 
 
 def _received_type_defaults():
-	settings = frappe.get_cached_doc("YRP Stock Settings")
+	settings = frappe.get_cached_doc('YRP YRP Stock Settings')
 	return settings.default_received_type, settings.default_rejected_received_type
 
 
@@ -209,16 +209,16 @@ def _item_key(row):
 
 
 def _is_finishing_inward_process(process_name):
-	finishing_process = frappe.db.get_single_value("MRP Settings", "finishing_inward_process")
+	finishing_process = frappe.db.get_single_value('SD YRP MRP Settings', "finishing_inward_process")
 	if not process_name or not finishing_process:
 		return False
 	if process_name == finishing_process:
 		return True
-	if not frappe.db.get_value("Process", process_name, "is_group"):
+	if not frappe.db.get_value('YRP Process', process_name, "is_group"):
 		return False
 	return bool(
 		frappe.db.exists(
-			"Process Details",
+			'YRP Process Details',
 			{"parent": process_name, "process_name": finishing_process},
 		)
 	)

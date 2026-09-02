@@ -31,7 +31,7 @@ export function mappingSearch(mapping) {
 	return async (q) => {
 		if (!mapping) return [];
 		const res = await callMethod("essdee_yrp.ipd_ui.get_attribute_detail_values", {
-			doctype: "Item Attribute Value",
+			doctype: "YRP Item Attribute Value",
 			txt: q || "",
 			searchfield: "name",
 			start: 0,
@@ -44,7 +44,7 @@ export function mappingSearch(mapping) {
 
 // Dia values — plain Item Attribute Value search filtered by attribute (Desk
 // filters: { attribute_name: "Dia" }).
-export const diaSearch = (q) => searchLink("Item Attribute Value", q, { attribute_name: "Dia" });
+export const diaSearch = (q) => searchLink("YRP Item Attribute Value", q, { attribute_name: "Dia" });
 
 // Required-cell check for a grid save: every cell must be filled except
 // "Required GSM" (Desk CuttingItemDetail.get_data allows only that blank).

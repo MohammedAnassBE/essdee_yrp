@@ -52,7 +52,7 @@
 							<div v-if="editing" class="pwc-cell">
 								<LinkField
 									:model-value="cellFor(row, packing).dia || ''"
-									target-doctype="Item Attribute Value"
+									target-doctype="YRP Item Attribute Value"
 									:filters="DIA_FILTERS"
 									:dropdown="false"
 									placeholder="Select Dia"

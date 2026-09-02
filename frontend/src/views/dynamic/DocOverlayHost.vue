@@ -205,7 +205,7 @@
 					<label class="esd-dc-wizard-search-label">Or search any Work Order</label>
 					<LinkField
 						v-model="wizardWoSearch"
-						target-doctype="Work Order"
+						target-doctype="YRP Work Order"
 						:filters="WO_SEARCH_FILTERS"
 						:dropdown="false"
 						placeholder="Search Work Order by number…"
@@ -385,7 +385,7 @@ const wizardWoSearch = ref("")
 // Desk parity (delivery_challan.js set_query / config/fields/delivery-challan.js):
 // a DC targets ONLY submitted, not-closed Work Orders — the SAME filter the
 // form's own work_order Link search uses. LinkField's default search runs
-// searchLink("Work Order", q, filters), so step 1 reaches EVERY valid WO, not
+// searchLink("YRP Work Order", q, filters), so step 1 reaches EVERY valid WO, not
 // just the recent-8 chips.
 const WO_SEARCH_FILTERS = { docstatus: 1, open_status: ["!=", "Close"] }
 // wizard-steps active step ("1".."4"), reset with the picks whenever the DC

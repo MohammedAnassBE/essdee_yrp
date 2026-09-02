@@ -56,10 +56,10 @@ class TestProcessCostCustomization(FrappeTestCase):
 
 	def test_generic_base_callback_is_neutralized_and_desk_adapter_is_loaded(self):
 		self.assertIsNone(get_pc_attribute_values(item="ITEM", attribute="Colour"))
-		self.assertEqual(hooks.doctype_js["Process Cost"], "public/js/process_cost.js")
+		self.assertEqual(hooks.doctype_js['YRP Process Cost'], "public/js/process_cost.js")
 		self.assertEqual(
 			hooks.override_whitelisted_methods[
-				"yrp.yrp.doctype.process_cost.process_cost.get_pc_attribute_values"
+				"yrp.yrp.doctype.yrp_process_cost.yrp_process_cost.get_pc_attribute_values"
 			],
 			"essdee_yrp.process_cost.get_pc_attribute_values",
 		)
@@ -70,7 +70,7 @@ class TestProcessCostCustomization(FrappeTestCase):
 		self.assertIn("process_name: frm.doc.process_name", source)
 
 	def test_field_attributes_match_production_api(self):
-		meta = frappe.get_meta("Process Cost", cached=False)
+		meta = frappe.get_meta('YRP Process Cost', cached=False)
 		expected = {
 			"approved_by": {"read_only": 0},
 			"attribute": {"mandatory_depends_on": ""},
@@ -101,7 +101,7 @@ class TestProcessCostCustomization(FrappeTestCase):
 					frappe.db.get_value(
 						"Property Setter",
 						{
-							"doc_type": "Process Cost",
+							"doc_type": 'YRP Process Cost',
 							"field_name": fieldname,
 							"property": property_name,
 						},

@@ -6,13 +6,13 @@ import frappe
 @frappe.whitelist()
 def create_return_grn(doc_name, items, received_type=None, cut_panel_movement=None):
 	"""Create the base-authorized return draft and optionally bind whole bundles."""
-	from yrp.yrp.doctype.delivery_challan.delivery_challan import (
+	from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 		create_return_grn as create_base_return_grn,
 	)
 
 	name = create_base_return_grn(doc_name, items, received_type)
 	if cut_panel_movement:
-		grn = frappe.get_doc("Goods Received Note", name)
+		grn = frappe.get_doc('YRP Goods Received Note', name)
 		grn.cut_panel_movement = cut_panel_movement
 		grn.save()
 	return name
@@ -31,7 +31,7 @@ def onload(doc, method=None):
 		"item_details",
 		group_items_for_ui(
 			normalize_item_matrix_row_indexes(doc.get("items") or []),
-			"Delivery Challan",
+			'YRP Delivery Challan',
 		),
 	)
 
@@ -51,7 +51,7 @@ def before_validate(doc, method=None):
 	if not doc.work_order:
 		return
 
-	work_order_meta = frappe.get_meta("Work Order")
+	work_order_meta = frappe.get_meta('YRP Work Order')
 	fieldnames = [
 		fieldname
 		for fieldname in WORK_ORDER_FETCH_FIELDS
@@ -60,7 +60,7 @@ def before_validate(doc, method=None):
 	if not fieldnames:
 		return
 
-	values = frappe.db.get_value("Work Order", doc.work_order, fieldnames, as_dict=True)
+	values = frappe.db.get_value('YRP Work Order', doc.work_order, fieldnames, as_dict=True)
 	if not values:
 		return
 
@@ -77,13 +77,13 @@ def sync_cutting_plan_received_cloth(doc, method=None):
 	del method
 	if not doc.get("work_order"):
 		return
-	from essdee_yrp.essdee_yrp.doctype.cutting_plan.cutting_plan import (
+	from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan import (
 		rebuild_received_cloth,
 	)
 
 	for name in frappe.get_all(
-		"Cutting Plan",
+		'SD YRP Cutting Plan',
 		filters={"work_order": doc.work_order, "docstatus": 1},
 		pluck="name",
 	):
-		rebuild_received_cloth(frappe.get_doc("Cutting Plan", name))
+		rebuild_received_cloth(frappe.get_doc('SD YRP Cutting Plan', name))

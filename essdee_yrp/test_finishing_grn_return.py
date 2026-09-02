@@ -35,7 +35,7 @@ class TestFinishingGRNReturn(IntegrationTestCase):
 	def test_explicit_return_reference_must_match_its_item(self):
 		deliverable = _deliverable(item_variant="VAR-OTHER")
 		work_order = _doc(name="WO-1", deliverables=[deliverable])
-		row = _row(ref_doctype="Work Order Deliverables", ref_docname=deliverable.name)
+		row = _row(ref_doctype='YRP Work Order Deliverables', ref_docname=deliverable.name)
 
 		with self.assertRaisesRegex(
 			frappe.ValidationError, "does not match the returned item"
@@ -65,7 +65,7 @@ class TestFinishingGRNReturn(IntegrationTestCase):
 		):
 			_validate_return_quantities(grn)
 
-		self.assertEqual(row.ref_doctype, "Work Order Deliverables")
+		self.assertEqual(row.ref_doctype, 'YRP Work Order Deliverables')
 		self.assertEqual(row.ref_docname, deliverable.name)
 
 	def test_return_submit_and_cancel_restore_deliverable_pending(self):
@@ -198,8 +198,8 @@ def _doc(**values):
 def _return_grn(**values):
 	doc = EssdeeGoodsReceivedNote(
 		{
-			"doctype": "Goods Received Note",
-			"against": "Work Order",
+			"doctype": 'YRP Goods Received Note',
+			"against": 'YRP Work Order',
 			"against_id": "WO-1",
 			"is_return": 1,
 			"from_finishing": 1,

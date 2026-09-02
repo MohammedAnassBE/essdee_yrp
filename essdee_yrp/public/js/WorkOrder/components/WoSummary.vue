@@ -36,7 +36,7 @@
                                 </td>
                                 <td>{{ j.total_qty }}</td>
                             </tr>
-                            <tr v-if="!is_manual && doctype == 'Work Order'">
+                            <tr v-if="!is_manual && doctype == 'YRP Work Order'">
                                 <td>Delivered</td>
                                 <td v-for="attr in i.primary_attribute_values" :key="attr">
                                     <div v-if="j.values?.[attr]?.['delivered'] > 0">{{ j.values?.[attr]?.['delivered'] }}</div>
@@ -45,7 +45,7 @@
                                 <td>{{ j.total_delivered }}</td>
                             </tr>
                             <tr>
-                                <td v-if="doctype=='Work Order'">Received</td>
+                                <td v-if="doctype=='YRP Work Order'">Received</td>
                                 <td v-else>Completed</td>
                                 <td v-for="attr in i.primary_attribute_values" :key="attr">
                                     <div v-if="j.values ?.[attr]?.['received'] > 0">{{ j.values?.[attr]?.['received'] }}</div>
@@ -53,7 +53,7 @@
                                 </td>
                                 <td>{{ j.total_received }}</td>
                             </tr>
-                            <tr v-if="show_pending && !is_manual && doctype == 'Work Order'" class="pending-row">
+                            <tr v-if="show_pending && !is_manual && doctype == 'YRP Work Order'" class="pending-row">
                                 <td><strong>Pending</strong></td>
                                 <td v-for="attr in i.primary_attribute_values" :key="attr">
                                     <div v-if="(j.values?.[attr]?.['delivered'] || 0) - (j.values?.[attr]?.['received'] || 0) > 0">
@@ -76,7 +76,7 @@
                             </td>
                             <td>{{ i.overall_planned }}</td>
                         </tr>
-                        <tr v-if="!is_manual && doctype == 'Work Order'">
+                        <tr v-if="!is_manual && doctype == 'YRP Work Order'">
                             <td>Delivered</td>
                             <td v-for="attr in i.primary_attribute_values" :key="attr">
                                 <div v-if="i.total_details?.[attr]?.['delivered'] > 0">{{ i.total_details?.[attr]?.['delivered'] }}</div>
@@ -85,7 +85,7 @@
                             <td>{{ i.overall_delivered }}</td>
                         </tr>
                         <tr>
-                            <td v-if="doctype=='Work Order'">Received</td>
+                            <td v-if="doctype=='YRP Work Order'">Received</td>
                             <td v-else>Completed</td>
                             <td v-for="attr in i.primary_attribute_values" :key="attr">
                                 <div v-if="i.total_details?.[attr]?.['received'] > 0">{{ i.total_details?.[attr]?.['received'] }}</div>
@@ -93,7 +93,7 @@
                             </td>
                             <td>{{ i.overall_received }}</td>
                         </tr>
-                        <tr v-if="show_pending && !is_manual && doctype == 'Work Order'" class="pending-row">
+                        <tr v-if="show_pending && !is_manual && doctype == 'YRP Work Order'" class="pending-row">
                             <td><strong>Pending</strong></td>
                             <td v-for="attr in i.primary_attribute_values" :key="attr">
                                 <div v-if="(i.total_details?.[attr]?.['delivered'] || 0) - (i.total_details?.[attr]?.['received'] || 0) > 0">
@@ -107,7 +107,7 @@
                 </table>
             </tr>
         </table>
-        <div v-if="doctype == 'Work Order'">
+        <div v-if="doctype == 'YRP Work Order'">
         <h3>Additional Deliverables</h3>
         <table class="table table-sm table-bordered">
 			<tr v-for="(i, item_index) in deliverables_item" :key="item_index">
@@ -180,7 +180,7 @@ let deliverables_item = ref([])
 let doctype = ref(cur_frm.doc.doctype)
 
 onMounted(()=> {
-    if(cur_frm.doc.doctype == "Work Order"){
+    if(cur_frm.doc.doctype == "YRP Work Order"){
         is_manual.value = cur_frm.doc.is_manual_entry;
     }
     else{
@@ -198,7 +198,7 @@ function load_data(item, delivered_items, options) {
     }
     if (options && options.doctype) {
         doctype.value = options.doctype;
-        if (options.doctype === 'Work Order') {
+        if (options.doctype === 'YRP Work Order') {
             is_manual.value = false;
         }
     }

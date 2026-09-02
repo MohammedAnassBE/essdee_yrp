@@ -10,4 +10,4 @@ OBSOLETE_PROPERTY_SETTERS = (
 def execute():
 	"""Remove Essdee overrides after Delivery Challan series returned to base YRP."""
 	frappe.db.delete("Property Setter", {"name": ["in", OBSOLETE_PROPERTY_SETTERS]})
-	frappe.clear_cache(doctype="Delivery Challan")
+	frappe.clear_cache(doctype='YRP Delivery Challan')

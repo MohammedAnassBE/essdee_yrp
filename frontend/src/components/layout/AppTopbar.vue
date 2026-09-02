@@ -110,7 +110,7 @@ const ROUTE_TITLES = {
 	Home: "Home",
 	IPDCreate: "New Item Production Detail",
 	IPDEditFields: "Edit Item Production Detail",
-	IPDConfig: "Item Production Detail",
+	IPDConfig: "YRP Item Production Detail",
 	ProcessMatrix: "Process Matrix",
 	BOMMapping: "Item BOM Mapping",
 }

@@ -52,7 +52,7 @@ function createInput(attr, index, value){
     let df = {
         fieldtype: 'Link',
         fieldname: attr+"_"+index,
-        options: 'Item Attribute Value',
+        options: 'YRP Item Attribute Value',
         get_query : function(){
             return {
                 query:'essdee_yrp.ipd_ui.get_attribute_detail_values',

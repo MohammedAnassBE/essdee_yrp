@@ -14,7 +14,7 @@ HR_EMPLOYEE_FIRST_PUNCHES_PATH = (
 
 @frappe.whitelist()
 def get_worker_strength_report(report_date, from_time, to_time):
-	frappe.has_permission("Sewing Plan", "read", throw=True)
+	frappe.has_permission('SD YRP Sewing Plan', "read", throw=True)
 	if not report_date:
 		frappe.throw("Date is mandatory")
 	if not from_time:
@@ -22,7 +22,7 @@ def get_worker_strength_report(report_date, from_time, to_time):
 	if not to_time:
 		frappe.throw("To Time is mandatory")
 
-	settings = frappe.get_single("MRP Settings")
+	settings = frappe.get_single('SD YRP MRP Settings')
 	hr_site_url = (settings.get("hr_site_url") or "").strip().rstrip("/")
 	api_key = (settings.get("hr_api_key") or "").strip()
 	api_secret = (

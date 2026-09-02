@@ -17,14 +17,14 @@ from essdee_yrp.finishing.packing import (
 )
 from essdee_yrp.finishing.parsing import json_object
 from yrp.utils import get_variant_attr_details, update_if_string_instance
-from yrp.yrp.doctype.item.item import (
+from yrp.yrp.doctype.yrp_item.yrp_item import (
 	build_variant_attributes,
 	get_or_create_variant,
 )
-from yrp.yrp.doctype.item_production_detail.item_production_detail import (
+from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
 	get_ipd_primary_values,
 )
-from yrp.yrp.doctype.supplier.supplier import get_primary_address
+from yrp.yrp.doctype.yrp_supplier.yrp_supplier import get_primary_address
 
 
 _FINISHING_GRN_REQUEST_PATTERN = re.compile(r"^[A-Za-z0-9:_-]{1,128}$")
@@ -45,8 +45,8 @@ def _get_existing_finishing_grn(work_order, lot, marker):
 	rows = frappe.db.sql(
 		"""
 			SELECT name, docstatus
-			FROM `tabGoods Received Note`
-			WHERE against = 'Work Order'
+			FROM `tabYRP Goods Received Note`
+			WHERE against = 'YRP Work Order'
 				AND against_id = %(work_order)s
 				AND lot = %(lot)s
 				AND COALESCE(from_finishing, 0) = 1
@@ -66,7 +66,7 @@ def _get_existing_finishing_grn(work_order, lot, marker):
 
 @frappe.whitelist()
 def get_primary_values(lot=None, production_detail=None):
-	ipd_name = production_detail or frappe.db.get_value("Lot", lot, "production_detail")
+	ipd_name = production_detail or frappe.db.get_value('SD YRP Lot', lot, "production_detail")
 	if not ipd_name:
 		frappe.throw("Item Production Detail is required")
 	return get_ipd_primary_values(ipd_name)
@@ -83,10 +83,10 @@ def create_grn(
 	packing_batches=None,
 	request_id=None,
 ):
-	work_order_doc = frappe.get_doc("Work Order", work_order)
+	work_order_doc = frappe.get_doc('YRP Work Order', work_order)
 	work_order_doc.check_permission("read")
 	marker = _finishing_grn_request_marker(request_id)
-	if not frappe.db.get_value("Work Order", work_order, "name", for_update=True):
+	if not frappe.db.get_value('YRP Work Order', work_order, "name", for_update=True):
 		frappe.throw(f"Work Order {work_order} does not exist")
 	work_order_doc.reload()
 	_validate_work_order_context(work_order_doc, lot, item_name)
@@ -98,8 +98,8 @@ def create_grn(
 			f"Finishing GRN request {request_id} already created draft {existing.name}. "
 			"Submit or cancel that draft before retrying."
 		)
-	ipd_name = frappe.db.get_value("Lot", lot, "production_detail")
-	ipd_doc = frappe.get_cached_doc("Item Production Detail", ipd_name)
+	ipd_name = frappe.db.get_value('SD YRP Lot', lot, "production_detail")
+	ipd_doc = frappe.get_cached_doc('YRP Item Production Detail', ipd_name)
 	dynamic_packing = bool(
 		ipd_doc.based_on_other_attribute_mapping
 		and ipd_doc.packing_mode == "Size Ratio Packing"
@@ -116,12 +116,12 @@ def create_grn(
 		)
 		validate_dynamic_packing_availability(work_order, ipd_doc, batch_rows)
 		size_quantities, total_boxes, total_pieces = aggregate_batch_pieces(batch_rows)
-		uom = frappe.db.get_value("Lot", lot, "packing_uom")
+		uom = frappe.db.get_value('SD YRP Lot', lot, "packing_uom")
 	else:
 		size_quantities = _normalize_size_quantities(data)
 		total_boxes = sum(flt(quantity) for quantity in size_quantities.values())
 		total_pieces = total_boxes * flt(ipd_doc.packing_combo)
-		uom = frappe.db.get_value("Lot", lot, "uom")
+		uom = frappe.db.get_value('SD YRP Lot', lot, "uom")
 
 	items = _build_packing_grn_items(
 		work_order_doc,
@@ -134,10 +134,10 @@ def create_grn(
 	if not items:
 		frappe.throw("Enter at least one packing quantity")
 
-	grn = frappe.new_doc("Goods Received Note")
+	grn = frappe.new_doc('YRP Goods Received Note')
 	grn.update(
 		{
-			"against": "Work Order",
+			"against": 'YRP Work Order',
 			"against_id": work_order,
 			"lot": lot,
 			"actual_date": actual_date,
@@ -180,7 +180,7 @@ def create_grn(
 
 def validate_dynamic_packing_availability(work_order, ipd_doc, batches):
 	if not frappe.db.sql(
-		"SELECT name FROM `tabWork Order` WHERE name = %s FOR UPDATE", work_order
+		"SELECT name FROM `tabYRP Work Order` WHERE name = %s FOR UPDATE", work_order
 	):
 		frappe.throw(f"Work Order {work_order} does not exist")
 	requested = {}
@@ -189,10 +189,10 @@ def validate_dynamic_packing_availability(work_order, ipd_doc, batches):
 			key = (batch["colour"], size)
 			requested[key] = requested.get(key, 0) + flt(pieces)
 
-	work_order_doc = frappe.get_doc("Work Order", work_order)
+	work_order_doc = frappe.get_doc('YRP Work Order', work_order)
 	balances = {}
 	for row in work_order_doc.get("work_order_calculated_items") or []:
-		if frappe.get_cached_value("Item Variant", row.item_variant, "item") != ipd_doc.item:
+		if frappe.get_cached_value('YRP Item Variant', row.item_variant, "item") != ipd_doc.item:
 			continue
 		attributes = get_variant_attr_details(row.item_variant)
 		colour = attributes.get(ipd_doc.packing_attribute)
@@ -227,8 +227,8 @@ def validate_dynamic_packing_transition(work_order, lot):
 	legacy = frappe.db.sql(
 		"""
 			SELECT name
-			FROM `tabGoods Received Note`
-			WHERE against = 'Work Order'
+			FROM `tabYRP Goods Received Note`
+			WHERE against = 'YRP Work Order'
 				AND against_id = %s
 				AND lot = %s
 				AND docstatus = 1
@@ -257,7 +257,7 @@ def _build_packing_grn_items(
 ):
 	stage = ipd_doc.pack_out_stage
 	default_received_type = frappe.db.get_single_value(
-		"YRP Stock Settings", "default_received_type"
+		'YRP YRP Stock Settings', "default_received_type"
 	)
 	items = []
 	for row_index, (size, quantity) in enumerate(size_quantities.items()):
@@ -290,7 +290,7 @@ def _build_packing_grn_items(
 					"quantity": allocated,
 					"uom": uom or receivable.uom,
 					"received_type": default_received_type,
-					"ref_doctype": "Work Order Receivables",
+					"ref_doctype": 'YRP Work Order Receivables',
 					"ref_docname": receivable.name,
 					"table_index": receivable.table_index,
 					"row_index": receivable.row_index or str(row_index),
@@ -363,7 +363,7 @@ def create_delivery_challan(
 ):
 	payload = update_if_string_instance(data) or {}
 	selected_type = payload.get("selected_type")
-	work_order_doc = frappe.get_doc("Work Order", work_order)
+	work_order_doc = frappe.get_doc('YRP Work Order', work_order)
 	work_order_doc.check_permission("read")
 	_validate_work_order_context(work_order_doc, lot, item_name)
 	selected = get_delivery_challan_item_list(
@@ -385,7 +385,7 @@ def create_delivery_challan(
 				"delivered_quantity": selected[key]["qty"],
 				"uom": row.uom,
 				"rate": flt(row.get("rate")),
-				"ref_doctype": "Work Order Deliverables",
+				"ref_doctype": 'YRP Work Order Deliverables',
 				"ref_docname": row.name,
 				"table_index": row.table_index,
 				"row_index": row.row_index,
@@ -396,7 +396,7 @@ def create_delivery_challan(
 	if not items:
 		frappe.throw("Select at least one quantity for Delivery Challan")
 
-	delivery_challan = frappe.new_doc("Delivery Challan")
+	delivery_challan = frappe.new_doc('YRP Delivery Challan')
 	delivery_challan.update(
 		{
 			"work_order": work_order,
@@ -421,8 +421,8 @@ def create_delivery_challan(
 def get_delivery_challan_item_list(
 	lot, item_name, data, is_loose_piece=False
 ):
-	ipd_name = frappe.db.get_value("Lot", lot, "production_detail")
-	ipd = frappe.get_cached_doc("Item Production Detail", ipd_name)
+	ipd_name = frappe.db.get_value('SD YRP Lot', lot, "production_detail")
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', ipd_name)
 	items = {}
 	payload = data.get("data", {}).get("data", {}) if isinstance(data, dict) else {}
 	for colour_row in payload.values():
@@ -458,10 +458,10 @@ def get_delivery_challan_item_list(
 def return_items(data, work_order, lot, item_name, popup_values, is_pack=False):
 	payload = update_if_string_instance(data) or {}
 	popup = update_if_string_instance(popup_values) or {}
-	work_order_doc = frappe.get_doc("Work Order", work_order)
+	work_order_doc = frappe.get_doc('YRP Work Order', work_order)
 	work_order_doc.check_permission("read")
 	_validate_work_order_context(work_order_doc, lot, item_name)
-	ipd = frappe.get_cached_doc("Item Production Detail", work_order_doc.production_detail)
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', work_order_doc.production_detail)
 	quantity_field = "pack_return" if frappe.utils.cint(is_pack) else "return_qty"
 	selected = {}
 	for row_index, colour_row in enumerate(
@@ -513,9 +513,9 @@ def return_items(data, work_order, lot, item_name, popup_values, is_pack=False):
 				"item_variant": variant,
 				"lot": lot,
 				"quantity": values["quantity"],
-				"uom": frappe.db.get_value("Item", item_name, "default_unit_of_measure"),
+				"uom": frappe.db.get_value('YRP Item', item_name, "default_unit_of_measure"),
 				"received_type": popup.get("received_type"),
-				"ref_doctype": "Work Order Deliverables",
+				"ref_doctype": 'YRP Work Order Deliverables',
 				"ref_docname": deliverable.name if deliverable else None,
 				"table_index": 0,
 				"row_index": values["row_index"],
@@ -525,10 +525,10 @@ def return_items(data, work_order, lot, item_name, popup_values, is_pack=False):
 	if not items:
 		frappe.throw("Select at least one return quantity")
 
-	grn = frappe.new_doc("Goods Received Note")
+	grn = frappe.new_doc('YRP Goods Received Note')
 	grn.update(
 		{
-			"against": "Work Order",
+			"against": 'YRP Work Order',
 			"is_return": 1,
 			"is_rework": 0,
 			"includes_packing": work_order_doc.includes_packing,
@@ -566,7 +566,7 @@ def convert_to_loose_piece_items(data, work_order, lot, item_name, from_location
 	quantity from the normal inward bucket to the loose-piece return bucket.
 	"""
 	payload = update_if_string_instance(data) or {}
-	work_order_doc = frappe.get_doc("Work Order", work_order)
+	work_order_doc = frappe.get_doc('YRP Work Order', work_order)
 	work_order_doc.check_permission("read")
 	_validate_work_order_context(work_order_doc, lot, item_name)
 	if not from_location:
@@ -582,7 +582,7 @@ def convert_to_loose_piece_items(data, work_order, lot, item_name, from_location
 		lot,
 		from_location,
 		"NA",
-		frappe.db.get_value("Finishing Plan", {"work_order": work_order}, "name"),
+		frappe.db.get_value('SD YRP Finishing Plan', {"work_order": work_order}, "name"),
 		nowdate(),
 	)
 	goods_received_note = return_items(
@@ -595,7 +595,7 @@ def convert_to_loose_piece_items(data, work_order, lot, item_name, from_location
 			"delivery_location": from_location,
 			"vehicle_no": "NA",
 			"received_type": frappe.db.get_single_value(
-				"YRP Stock Settings", "default_received_type"
+				'YRP YRP Stock Settings', "default_received_type"
 			),
 		},
 	)
@@ -618,7 +618,7 @@ def create_stock_entry(
 	colour_details=None,
 	packing_batch_dispatches=None,
 ):
-	finishing_doc = frappe.get_doc("Finishing Plan", doc_name)
+	finishing_doc = frappe.get_doc('SD YRP Finishing Plan', doc_name)
 	finishing_doc.check_permission("read")
 	if finishing_doc.lot != lot or finishing_doc.item != item_name:
 		frappe.throw("Finishing Plan, Lot, and Item do not match")
@@ -633,7 +633,7 @@ def create_stock_entry(
 	dynamic_dispatches = (
 		prepare_dynamic_batch_dispatch(finishing_doc, requests) if requests else []
 	)
-	ipd = frappe.get_cached_doc("Item Production Detail", finishing_doc.production_detail)
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', finishing_doc.production_detail)
 	items = []
 	if dynamic_dispatches:
 		grouped = {}
@@ -675,20 +675,20 @@ def create_stock_entry(
 						),
 					),
 					"qty": quantity,
-					"uom": frappe.db.get_value("Lot", lot, "uom"),
+					"uom": frappe.db.get_value('SD YRP Lot', lot, "uom"),
 					"lot": lot,
 					"set_combination": "{}",
 				}
 			)
 
 	default_received_type = frappe.db.get_single_value(
-		"YRP Stock Settings", "default_received_type"
+		'YRP YRP Stock Settings', "default_received_type"
 	)
-	stock_entry = frappe.new_doc("Stock Entry")
+	stock_entry = frappe.new_doc('YRP Stock Entry')
 	stock_entry.update(
 		{
 			"purpose": "Material Issue",
-			"against": "Finishing Plan",
+			"against": 'SD YRP Finishing Plan',
 			"against_id": doc_name,
 			"from_warehouse": from_location,
 			"transfer_supplier": to_location,
@@ -724,9 +724,9 @@ def create_stock_entry(
 @frappe.whitelist()
 def create_material_receipt(data, item_name, lot, ipd, doc_name, location):
 	payload = update_if_string_instance(data) or {}
-	finishing_doc = frappe.get_doc("Finishing Plan", doc_name)
+	finishing_doc = frappe.get_doc('SD YRP Finishing Plan', doc_name)
 	finishing_doc.check_permission("read")
-	ipd_doc = frappe.get_cached_doc("Item Production Detail", ipd)
+	ipd_doc = frappe.get_cached_doc('YRP Item Production Detail', ipd)
 	items = []
 	for colour_row in (payload.get("data", {}).get("data", {}) or {}).values():
 		for size, values in (colour_row.get("values") or {}).items():
@@ -750,7 +750,7 @@ def create_material_receipt(data, item_name, lot, ipd, doc_name, location):
 					"qty": quantity,
 					"lot": lot,
 					"uom": frappe.db.get_value(
-						"Item", item_name, "default_unit_of_measure"
+						'YRP Item', item_name, "default_unit_of_measure"
 					),
 					"set_combination": update_if_string_instance(
 						colour_row.get("set_combination")
@@ -760,13 +760,13 @@ def create_material_receipt(data, item_name, lot, ipd, doc_name, location):
 	if not items:
 		frappe.throw("Select at least one ironing excess quantity")
 	default_received_type = frappe.db.get_single_value(
-		"YRP Stock Settings", "default_received_type"
+		'YRP YRP Stock Settings', "default_received_type"
 	)
-	stock_entry = frappe.new_doc("Stock Entry")
+	stock_entry = frappe.new_doc('YRP Stock Entry')
 	stock_entry.update(
 		{
 			"purpose": "Material Receipt",
-			"against": "Finishing Plan",
+			"against": 'SD YRP Finishing Plan',
 			"against_id": doc_name,
 			"to_warehouse": location,
 			"transfer_supplier": location,
@@ -784,10 +784,10 @@ def create_material_receipt(data, item_name, lot, ipd, doc_name, location):
 @frappe.whitelist()
 def cancel_document(doctype, docname):
 	if doctype not in (
-		"Delivery Challan",
-		"Goods Received Note",
-		"Stock Entry",
-		"Lot Transfer",
+		'YRP Delivery Challan',
+		'YRP Goods Received Note',
+		'YRP Stock Entry',
+		'SD YRP Lot Transfer',
 	):
 		frappe.throw("This document type cannot be cancelled from Finishing Plan")
 	doc = frappe.get_doc(doctype, docname)

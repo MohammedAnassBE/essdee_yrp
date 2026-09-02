@@ -1,4 +1,4 @@
-frappe.ui.form.on("Purchase Invoice", {
+frappe.ui.form.on("YRP Purchase Invoice", {
 	refresh(frm) {
 		configure_essdee_process_items(frm);
 		configure_erp_purchase_invoice_actions(frm);
@@ -10,7 +10,7 @@ frappe.ui.form.on("Purchase Invoice", {
 	},
 });
 
-frappe.ui.form.on("Essdee Purchase Invoice Item", {
+frappe.ui.form.on("SD YRP Essdee Purchase Invoice Item", {
 	rate(frm, cdt, cdn) {
 		const row = locals[cdt][cdn];
 		frappe.model.set_value(cdt, cdn, "amount", flt(row.qty) * flt(row.rate));
@@ -28,7 +28,7 @@ const VERIFICATION_GRAND_TOTAL_ROWS = [
 ];
 
 function schedule_essdee_verification_details(frm) {
-	if (frm.doc.against !== "Work Order") return;
+	if (frm.doc.against !== "YRP Work Order") return;
 	const details = frm.doc.__onload && frm.doc.__onload.item_details;
 	if (!details || !details.length || !details[0].colours) return;
 	const token = (frm.__essdee_verification_render_token || 0) + 1;
@@ -44,9 +44,9 @@ function schedule_essdee_verification_details(frm) {
 			if (frm.doc.docstatus === 0 && !frm.doc.approved_by && !frm.is_new()) {
 				try {
 					const [permission, status] = await Promise.all([
-						frappe.xcall("yrp.yrp.doctype.work_order.work_order.get_close_permission"),
+						frappe.xcall("yrp.yrp.doctype.yrp_work_order.yrp_work_order.get_close_permission"),
 						frappe.xcall(
-							"yrp.yrp.doctype.purchase_invoice.purchase_invoice.check_all_wo_closed",
+							"yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice.check_all_wo_closed",
 							{ purchase_invoice: frm.doc.name }
 						),
 					]);
@@ -93,7 +93,7 @@ function render_verification_work_order(item) {
 			const name = bill.pi_name || "";
 			html += `<tr><td>${
 				index + 1
-			}</td><td><a href="/app/purchase-invoice/${encodeURIComponent(name)}"
+			}</td><td><a href="/app/yrp-purchase-invoice/${encodeURIComponent(name)}"
 				target="_blank">${escape_html(name)}</a></td></tr>`;
 		});
 		html += "</tbody></table>";
@@ -177,7 +177,7 @@ function render_verification_close_controls(frm, controls) {
 		!controls ||
 		frm.doc.docstatus !== 0 ||
 		frm.doc.approved_by ||
-		frm.doc.against !== "Work Order"
+		frm.doc.against !== "YRP Work Order"
 	) {
 		return "";
 	}
@@ -242,7 +242,7 @@ function display_number(value, precision) {
 }
 
 function configure_essdee_process_items(frm) {
-	const is_work_order = frm.doc.against === "Work Order";
+	const is_work_order = frm.doc.against === "YRP Work Order";
 	frm.set_df_property(
 		"items_section",
 		"label",
@@ -324,7 +324,7 @@ function configure_erp_purchase_invoice_actions(frm) {
 }
 
 function get_erp_items(frm) {
-	if (frm.doc.against === "Work Order" && (frm.doc.essdee_items || []).length) {
+	if (frm.doc.against === "YRP Work Order" && (frm.doc.essdee_items || []).length) {
 		return frm.doc.essdee_items;
 	}
 	return frm.doc.items || [];
@@ -332,7 +332,7 @@ function get_erp_items(frm) {
 
 function fetch_expense_heads(frm) {
 	const fieldname =
-		frm.doc.against === "Work Order" && (frm.doc.essdee_items || []).length
+		frm.doc.against === "YRP Work Order" && (frm.doc.essdee_items || []).length
 			? "essdee_items"
 			: "items";
 	frappe.call({
@@ -357,7 +357,7 @@ function refresh_commercial_preview(frm) {
 	Promise.all(
 		(frm.doc.essdee_items || []).map(async (row) => {
 			if (!row.tax) return 0;
-			const result = await frappe.db.get_value("Tax Slab", row.tax, "percentage");
+			const result = await frappe.db.get_value("YRP Tax Slab", row.tax, "percentage");
 			return flt(result.message && result.message.percentage);
 		})
 	).then((tax_rates) => {

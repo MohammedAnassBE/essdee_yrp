@@ -3,7 +3,7 @@
 The SPA's child-table grids (DocDetail.vue) let each user choose which columns
 are visible and drag per-column widths. Those choices used to live in browser
 localStorage; this module persists them server-side in the
-"Essdee Child Table View Setting" DocType so a user sets them once and they follow
+"SD YRP Essdee Child Table View Setting" DocType so a user sets them once and they follow
 the user across server restarts AND across browsers/devices.
 
 Both endpoints are scoped to ``frappe.session.user`` — a user can never read or
@@ -18,7 +18,7 @@ import json
 import frappe
 from frappe import _
 
-SETTING_DOCTYPE = "Essdee Child Table View Setting"
+SETTING_DOCTYPE = 'SD YRP Essdee Child Table View Setting'
 
 
 def _required(value, label):

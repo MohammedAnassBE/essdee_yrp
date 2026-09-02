@@ -5,18 +5,18 @@ from frappe.utils import flt, today
 
 from essdee_yrp.finishing.parsing import json_object
 from yrp.utils import update_if_string_instance
-from yrp.yrp.doctype.item.item import get_attribute_details
+from yrp.yrp.doctype.yrp_item.yrp_item import get_attribute_details
 
 
 @frappe.whitelist()
 def get_fp_consumption_details(doc_name):
-	doc = frappe.get_doc("Finishing Plan", doc_name)
+	doc = frappe.get_doc('SD YRP Finishing Plan', doc_name)
 	doc.check_permission("read")
 	if not doc.lot:
 		return {"lot": doc.lot, "processes": []}
 
 	default_received_type = frappe.db.get_single_value(
-		"YRP Stock Settings", "default_received_type"
+		'YRP YRP Stock Settings', "default_received_type"
 	)
 	rows = []
 	for row in _get_jobwork_issued_rows(doc.lot):
@@ -45,9 +45,9 @@ def _get_jobwork_issued_rows(lot):
 	delivery_challans = frappe.db.sql(
 		"""
 			SELECT
-				'Work Order' AS against,
+				'YRP Work Order' AS against,
 				dc.work_order AS against_id,
-				'Delivery Challan' AS source_doctype,
+				'YRP Delivery Challan' AS source_doctype,
 				dc.name AS source_name,
 				dc.from_warehouse AS from_location,
 				dc.from_location_name,
@@ -62,9 +62,9 @@ def _get_jobwork_issued_rows(lot):
 				dci.comments AS remarks,
 				dc.posting_date,
 				dc.posting_time
-			FROM `tabDelivery Challan Item` dci
-			INNER JOIN `tabDelivery Challan` dc ON dc.name = dci.parent
-			LEFT JOIN `tabItem Variant` iv ON iv.name = dci.item_variant
+			FROM `tabYRP Delivery Challan Item` dci
+			INNER JOIN `tabYRP Delivery Challan` dc ON dc.name = dci.parent
+			LEFT JOIN `tabYRP Item Variant` iv ON iv.name = dci.item_variant
 			WHERE dc.docstatus = 1
 				AND dci.docstatus = 1
 				AND dci.delivered_quantity > 0
@@ -78,7 +78,7 @@ def _get_jobwork_issued_rows(lot):
 			SELECT
 				se.against,
 				se.against_id,
-				'Stock Entry' AS source_doctype,
+				'YRP Stock Entry' AS source_doctype,
 				se.name AS source_name,
 				se.from_warehouse AS from_location,
 				from_wh.name1 AS from_location_name,
@@ -93,13 +93,13 @@ def _get_jobwork_issued_rows(lot):
 				sed.remarks,
 				se.posting_date,
 				se.posting_time
-			FROM `tabStock Entry Detail` sed
-			INNER JOIN `tabStock Entry` se ON se.name = sed.parent
-			LEFT JOIN `tabWarehouse` from_wh ON from_wh.name = se.from_warehouse
-			LEFT JOIN `tabWarehouse` to_wh ON to_wh.name = se.to_warehouse
-			LEFT JOIN `tabWork Order` wo
-				ON se.against = 'Work Order' AND wo.name = se.against_id
-			LEFT JOIN `tabItem Variant` iv ON iv.name = sed.item
+			FROM `tabYRP Stock Entry Detail` sed
+			INNER JOIN `tabYRP Stock Entry` se ON se.name = sed.parent
+			LEFT JOIN `tabYRP Warehouse` from_wh ON from_wh.name = se.from_warehouse
+			LEFT JOIN `tabYRP Warehouse` to_wh ON to_wh.name = se.to_warehouse
+			LEFT JOIN `tabYRP Work Order` wo
+				ON se.against = 'YRP Work Order' AND wo.name = se.against_id
+			LEFT JOIN `tabYRP Item Variant` iv ON iv.name = sed.item
 			WHERE se.docstatus = 1
 				AND sed.docstatus = 1
 				AND se.purpose = 'Material Issue'
@@ -127,7 +127,7 @@ def _get_fp_grn_deduction_rows(doc):
 	conditions = [
 		"grn.docstatus = 1",
 		"gri.docstatus = 1",
-		"grn.against = 'Work Order'",
+		"grn.against = 'YRP Work Order'",
 		"grn.against_id = %(work_order)s",
 		"(grn.lot = %(lot)s OR gri.lot = %(lot)s)",
 		"COALESCE(gri.quantity, 0) > 0",
@@ -137,9 +137,9 @@ def _get_fp_grn_deduction_rows(doc):
 	rows = frappe.db.sql(
 		"""
 			SELECT
-				'Work Order' AS against,
+				'YRP Work Order' AS against,
 				grn.against_id,
-				'Goods Received Note' AS source_doctype,
+				'YRP Goods Received Note' AS source_doctype,
 				grn.name AS source_name,
 				COALESCE(gri.lot, grn.lot) AS lot,
 				COALESCE(grn.process_name, wo.process_name) AS process,
@@ -150,10 +150,10 @@ def _get_fp_grn_deduction_rows(doc):
 				gri.comments AS remarks,
 				grn.posting_date,
 				grn.posting_time
-			FROM `tabGoods Received Note Item` gri
-			INNER JOIN `tabGoods Received Note` grn ON grn.name = gri.parent
-			LEFT JOIN `tabWork Order` wo ON wo.name = grn.against_id
-			LEFT JOIN `tabItem Variant` iv ON iv.name = gri.item_variant
+			FROM `tabYRP Goods Received Note Item` gri
+			INNER JOIN `tabYRP Goods Received Note` grn ON grn.name = gri.parent
+			LEFT JOIN `tabYRP Work Order` wo ON wo.name = grn.against_id
+			LEFT JOIN `tabYRP Item Variant` iv ON iv.name = gri.item_variant
 			WHERE {conditions}
 		""".format(conditions=" AND ".join(conditions)),
 		params,
@@ -167,12 +167,12 @@ def _get_fp_grn_deduction_rows(doc):
 
 @frappe.whitelist()
 def get_fp_stock_balance_details(doc_name):
-	doc = frappe.get_doc("Finishing Plan", doc_name)
+	doc = frappe.get_doc('SD YRP Finishing Plan', doc_name)
 	doc.check_permission("read")
 	if not doc.lot:
 		return {"lot": doc.lot, "warehouses": []}
 
-	from yrp.yrp_stock.report.stock_balance.stock_balance import execute
+	from yrp.yrp_stock.report.yrp_stock_balance.yrp_stock_balance import execute
 
 	_columns, balances = execute(
 		frappe._dict(
@@ -193,7 +193,7 @@ def get_fp_stock_balance_details(doc_name):
 		row.item = row.item_name
 		row.quantity = row.bal_qty
 		row.warehouse_name = row.get("warehouse_name") or frappe.db.get_value(
-			"Warehouse", row.warehouse, "name1"
+			'YRP Warehouse', row.warehouse, "name1"
 		)
 		rows.append(row)
 	return {
@@ -233,7 +233,7 @@ def _group_fp_item_rows(
 			top_group[group_name_field] = row.get(group_name_field) or group_value
 		variant = variant_cache.get(row.item_variant)
 		if not variant:
-			variant = frappe.get_cached_doc("Item Variant", row.item_variant)
+			variant = frappe.get_cached_doc('YRP Item Variant', row.item_variant)
 			variant_cache[row.item_variant] = variant
 		item_name = row.get("item") or variant.item
 		item_attributes = item_attribute_cache.get(item_name)

@@ -5,7 +5,7 @@ from frappe import _
 from frappe.utils import cint, flt
 
 from yrp.utils import update_if_string_instance
-from yrp.yrp.doctype.item_dependent_attribute_mapping.item_dependent_attribute_mapping import (
+from yrp.yrp.doctype.yrp_item_dependent_attribute_mapping.yrp_item_dependent_attribute_mapping import (
 	get_dependent_attribute_details,
 )
 
@@ -16,7 +16,7 @@ def is_cloth_ipd(doc):
 		return True
 	if not doc.get("item"):
 		return False
-	return bool(frappe.db.get_value("Item", doc.item, "is_cloth_item"))
+	return bool(frappe.db.get_value('YRP Item', doc.item, "is_cloth_item"))
 
 
 def before_validate(doc, method=None):
@@ -40,7 +40,7 @@ def before_validate(doc, method=None):
 	sync_cutting_cloth_select_list(doc)
 	sync_marker_groups(doc)
 	validate_set_item_defaults(doc)
-	from essdee_yrp.essdee_yrp.doctype.ipd_compacting.ipd_compacting import (
+	from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_compacting.sd_yrp_ipd_compacting import (
 		stage_compacting_details_from_ipd,
 	)
 
@@ -54,7 +54,7 @@ def validate_approved_immutability(doc):
 	allowed_names = frappe.flags.get("generated_cloth_ipd_updates") or set()
 	if doc.name in allowed_names and is_cloth_ipd(doc):
 		return
-	if frappe.db.get_value("Item Production Detail", doc.name, "approval_status") == "Approved":
+	if frappe.db.get_value('YRP Item Production Detail', doc.name, "approval_status") == "Approved":
 		frappe.throw(
 			_("Item Production Detail {0} is Approved. Revert Approval before editing it.").format(
 				doc.name
@@ -148,7 +148,7 @@ def validate_colour_yarn_recipes(doc):
 				f"Row {row.idx} of Colour-wise Yarn Recipes: Cloth Item must be "
 				f"the cloth IPD item ({doc.item})."
 			)
-		if frappe.db.get_value("Item Attribute Value", row.colour, "attribute_name") != "Colour":
+		if frappe.db.get_value('YRP Item Attribute Value', row.colour, "attribute_name") != "Colour":
 			frappe.throw(
 				f"Row {row.idx} of Colour-wise Yarn Recipes: {row.colour} is not a Colour value."
 			)
@@ -166,8 +166,8 @@ def validate_colour_yarn_recipes(doc):
 				f"Row {row.idx} of Colour-wise Yarn Recipes: Ratio must be greater than zero."
 			)
 		if frappe.db.exists(
-			"Item Item Attribute",
-			{"parent": row.yarn_item, "parenttype": "Item"},
+			'YRP Item Item Attribute',
+			{"parent": row.yarn_item, "parenttype": 'YRP Item'},
 		):
 			frappe.throw(
 				f"Row {row.idx} of Colour-wise Yarn Recipes: Yarn Item "
@@ -251,7 +251,7 @@ def sync_cloth_attribute_mapping_values(doc):
 		if expected is None or not attribute_row.get("mapping"):
 			continue
 		mapping = frappe.get_doc(
-			"Item Item Attribute Mapping", attribute_row.get("mapping")
+			'YRP Item Item Attribute Mapping', attribute_row.get("mapping")
 		)
 		current = [
 			row.get("attribute_value")
@@ -266,7 +266,7 @@ def sync_cloth_attribute_mapping_values(doc):
 			for value in expected
 		])
 		mapping.save(ignore_permissions=True)
-		frappe.clear_document_cache("Item Item Attribute Mapping", mapping.name)
+		frappe.clear_document_cache('YRP Item Item Attribute Mapping', mapping.name)
 
 
 def validate_garment_ipd(doc):
@@ -386,7 +386,7 @@ def validate_fabric_routes(doc):
 				frappe.throw(f"Row {row.idx} of Fabric Routes: select {label}.")
 			if (
 				frappe.db.get_value(
-					"Item Attribute Value", value, "attribute_name"
+					'YRP Item Attribute Value', value, "attribute_name"
 				)
 				!= attribute
 			):
@@ -460,14 +460,14 @@ def validate_compacting_references(doc):
 					f"Row {row.idx} of Compacting Reference Details: select {label}."
 				)
 			if frappe.db.get_value(
-				"Item Attribute Value", value, "attribute_name"
+				'YRP Item Attribute Value', value, "attribute_name"
 			) != attribute:
 				frappe.throw(
 					f"Row {row.idx} of Compacting Reference Details: "
 					f"{value} is not a {attribute} value."
 				)
 		if row.get("colour") and frappe.db.get_value(
-			"Item Attribute Value", row.get("colour"), "attribute_name"
+			'YRP Item Attribute Value', row.get("colour"), "attribute_name"
 		) != "Colour":
 			frappe.throw(
 				f"Row {row.idx} of Compacting Details: "
@@ -518,14 +518,14 @@ def validate_swap_rows(rows, table_label, pin_field, from_field, to_field):
 
 
 def on_update(doc, method=None):
-	from essdee_yrp.essdee_yrp.doctype.ipd_compacting.ipd_compacting import (
+	from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_compacting.sd_yrp_ipd_compacting import (
 		persist_staged_compacting_details,
 	)
 
 	persist_staged_compacting_details(doc)
 	for mapping in getattr(frappe.flags, "delete_bom_mapping", []) or []:
 		frappe.delete_doc(
-			"Item BOM Attribute Mapping",
+			'YRP Item BOM Attribute Mapping',
 			mapping,
 			force=True,
 			ignore_permissions=True,
@@ -536,11 +536,11 @@ def on_update(doc, method=None):
 
 def on_trash(doc, method=None):
 	compacting = frappe.db.exists(
-		"IPD Compacting", {"item_production_detail": doc.name}
+		'SD YRP IPD Compacting', {"item_production_detail": doc.name}
 	)
 	if compacting:
 		frappe.delete_doc(
-			"IPD Compacting", compacting, force=True, ignore_permissions=True
+			'SD YRP IPD Compacting', compacting, force=True, ignore_permissions=True
 		)
 
 	# Process matrices are generated dependents of the IPD, not independent
@@ -550,12 +550,12 @@ def on_trash(doc, method=None):
 	# If another real document still links the IPD, the later link check raises
 	# and the request transaction rolls this cleanup back with the IPD deletion.
 	for matrix_name in frappe.get_all(
-		"IPD Process Matrix",
+		'YRP IPD Process Matrix',
 		filters={"ipd": doc.name},
 		pluck="name",
 	):
 		frappe.delete_doc(
-			"IPD Process Matrix",
+			'YRP IPD Process Matrix',
 			matrix_name,
 			force=True,
 			ignore_permissions=True,
@@ -564,25 +564,25 @@ def on_trash(doc, method=None):
 	# Never delete a mapping still referenced outside this IPD — by an Item or
 	# another IPD (legacy cloth IPDs shared docs before ensure_ipd_owned_mappings).
 	documents = {
-		"Item Item Attribute Mapping": [],
-		"Item Dependent Attribute Mapping": [],
-		"Item BOM Attribute Mapping": [],
+		'YRP Item Item Attribute Mapping': [],
+		'YRP Item Dependent Attribute Mapping': [],
+		'YRP Item BOM Attribute Mapping': [],
 	}
 	for attribute in doc.get("item_attributes") or []:
 		if attribute.mapping:
-			if not is_mapping_shared("Item Item Attribute Mapping", attribute.mapping, doc.name):
-				documents["Item Item Attribute Mapping"].append(attribute.mapping)
+			if not is_mapping_shared('YRP Item Item Attribute Mapping', attribute.mapping, doc.name):
+				documents['YRP Item Item Attribute Mapping'].append(attribute.mapping)
 			attribute.mapping = None
 
 	if doc.dependent_attribute_mapping:
-		if not is_mapping_shared("Item Dependent Attribute Mapping", doc.dependent_attribute_mapping, doc.name):
-			documents["Item Dependent Attribute Mapping"].append(doc.dependent_attribute_mapping)
+		if not is_mapping_shared('YRP Item Dependent Attribute Mapping', doc.dependent_attribute_mapping, doc.name):
+			documents['YRP Item Dependent Attribute Mapping'].append(doc.dependent_attribute_mapping)
 		doc.dependent_attribute_mapping = None
 
 	for bom in doc.get("item_bom") or []:
 		if bom.attribute_mapping:
-			if not is_mapping_shared("Item BOM Attribute Mapping", bom.attribute_mapping, doc.name):
-				documents["Item BOM Attribute Mapping"].append(bom.attribute_mapping)
+			if not is_mapping_shared('YRP Item BOM Attribute Mapping', bom.attribute_mapping, doc.name):
+				documents['YRP Item BOM Attribute Mapping'].append(bom.attribute_mapping)
 			bom.attribute_mapping = None
 
 	delete_docs(documents)
@@ -600,10 +600,10 @@ def validate_duplicate_bom_items(doc):
 def apply_ipd_settings_defaults(doc):
 	if doc.flags.get("skip_ipd_settings_defaults"):
 		return
-	if not doc.is_new() or not frappe.db.exists("DocType", "IPD Settings"):
+	if not doc.is_new() or not frappe.db.exists("DocType", 'SD YRP IPD Settings'):
 		return
 
-	settings = frappe.get_single("IPD Settings")
+	settings = frappe.get_single('SD YRP IPD Settings')
 	if is_cloth_ipd(doc):
 		# A manually authored generic Fabric Processes chain is authoritative.
 		# Filling hidden legacy process fields beside it changes how the builder
@@ -682,10 +682,10 @@ def sync_marker_groups(doc):
 
 
 def validate_set_item_defaults(doc):
-	if not doc.is_set_item or doc.is_new() or not frappe.db.exists("Item Production Detail", doc.name):
+	if not doc.is_set_item or doc.is_new() or not frappe.db.exists('YRP Item Production Detail', doc.name):
 		return
 
-	previous_is_set_item = frappe.db.get_value("Item Production Detail", doc.name, "is_set_item")
+	previous_is_set_item = frappe.db.get_value('YRP Item Production Detail', doc.name, "is_set_item")
 	if not previous_is_set_item:
 		return
 
@@ -693,7 +693,7 @@ def validate_set_item_defaults(doc):
 	if not mapping:
 		frappe.throw(f"Mapping is required for Set Item Attribute {doc.set_item_attribute}")
 
-	map_doc = frappe.get_cached_doc("Item Item Attribute Mapping", mapping)
+	map_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', mapping)
 	map_values = [row.attribute_value for row in map_doc.values]
 
 	check_dict = {}
@@ -710,20 +710,20 @@ def validate_set_item_defaults(doc):
 def create_new_mapping_values(doc):
 	for attribute in doc.get("item_attributes") or []:
 		if attribute.mapping:
-			source = frappe.get_cached_doc("Item Item Attribute Mapping", attribute.mapping)
+			source = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attribute.mapping)
 			copy = frappe.copy_doc(source)
 			copy.insert(ignore_permissions=True)
 			attribute.mapping = copy.name
 
 	if doc.dependent_attribute_mapping:
-		source = frappe.get_cached_doc("Item Dependent Attribute Mapping", doc.dependent_attribute_mapping)
+		source = frappe.get_cached_doc('YRP Item Dependent Attribute Mapping', doc.dependent_attribute_mapping)
 		copy = frappe.copy_doc(source)
 		copy.insert(ignore_permissions=True)
 		doc.dependent_attribute_mapping = copy.name
 
 	for bom in doc.get("item_bom") or []:
 		if bom.based_on_attribute_mapping and bom.attribute_mapping:
-			source = frappe.get_doc("Item BOM Attribute Mapping", bom.attribute_mapping)
+			source = frappe.get_doc('YRP Item BOM Attribute Mapping', bom.attribute_mapping)
 			copy = frappe.copy_doc(source)
 			set_if_has_field(copy, "item", doc.item)
 			set_if_has_field(copy, "bom_item", bom.item)
@@ -740,23 +740,23 @@ def ensure_ipd_owned_mappings(doc):
 	(legacy cloth IPDs, duplicated IPDs, re-selecting the item on a saved IPD)
 	with a fresh copy."""
 	for attribute in doc.get("item_attributes") or []:
-		if attribute.mapping and is_mapping_shared("Item Item Attribute Mapping", attribute.mapping, doc.name):
-			source = frappe.get_cached_doc("Item Item Attribute Mapping", attribute.mapping)
+		if attribute.mapping and is_mapping_shared('YRP Item Item Attribute Mapping', attribute.mapping, doc.name):
+			source = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attribute.mapping)
 			copy = frappe.copy_doc(source)
 			copy.insert(ignore_permissions=True)
 			attribute.mapping = copy.name
 
 	if doc.dependent_attribute_mapping and is_mapping_shared(
-		"Item Dependent Attribute Mapping", doc.dependent_attribute_mapping, doc.name
+		'YRP Item Dependent Attribute Mapping', doc.dependent_attribute_mapping, doc.name
 	):
-		source = frappe.get_cached_doc("Item Dependent Attribute Mapping", doc.dependent_attribute_mapping)
+		source = frappe.get_cached_doc('YRP Item Dependent Attribute Mapping', doc.dependent_attribute_mapping)
 		copy = frappe.copy_doc(source)
 		copy.insert(ignore_permissions=True)
 		doc.dependent_attribute_mapping = copy.name
 
 	for bom in doc.get("item_bom") or []:
-		if bom.attribute_mapping and is_mapping_shared("Item BOM Attribute Mapping", bom.attribute_mapping, doc.name):
-			source = frappe.get_doc("Item BOM Attribute Mapping", bom.attribute_mapping)
+		if bom.attribute_mapping and is_mapping_shared('YRP Item BOM Attribute Mapping', bom.attribute_mapping, doc.name):
+			source = frappe.get_doc('YRP Item BOM Attribute Mapping', bom.attribute_mapping)
 			copy = frappe.copy_doc(source)
 			set_if_has_field(copy, "item", doc.item)
 			set_if_has_field(copy, "bom_item", bom.item)
@@ -770,27 +770,27 @@ def is_mapping_shared(doctype, name, ipd_name):
 	never be deleted and get replaced by an owned copy on save. The current
 	item alone is not enough to check: a legacy duplicate can carry mappings
 	belonging to a DIFFERENT item than doc.item."""
-	if doctype == "Item Item Attribute Mapping":
+	if doctype == 'YRP Item Item Attribute Mapping':
 		return bool(
-			frappe.db.exists("Item Item Attribute", {"mapping": name})
-			or frappe.db.exists("IPD Item Attribute", {"mapping": name, "parent": ["!=", ipd_name]})
+			frappe.db.exists('YRP Item Item Attribute', {"mapping": name})
+			or frappe.db.exists('YRP IPD Item Attribute', {"mapping": name, "parent": ["!=", ipd_name]})
 		)
-	if doctype == "Item Dependent Attribute Mapping":
+	if doctype == 'YRP Item Dependent Attribute Mapping':
 		return bool(
-			frappe.db.exists("Item", {"dependent_attribute_mapping": name})
+			frappe.db.exists('YRP Item', {"dependent_attribute_mapping": name})
 			or frappe.db.exists(
-				"Item Production Detail", {"dependent_attribute_mapping": name, "name": ["!=", ipd_name]}
+				'YRP Item Production Detail', {"dependent_attribute_mapping": name, "name": ["!=", ipd_name]}
 			)
 		)
-	if doctype == "Item BOM Attribute Mapping":
-		return bool(frappe.db.exists("Item BOM", {"attribute_mapping": name, "parent": ["!=", ipd_name]}))
+	if doctype == 'YRP Item BOM Attribute Mapping':
+		return bool(frappe.db.exists('YRP Item BOM', {"attribute_mapping": name, "parent": ["!=", ipd_name]}))
 	return False
 
 
 def update_mapping_values(doc):
 	for attribute in doc.get("item_attributes") or []:
 		if not attribute.mapping:
-			mapping = frappe.new_doc("Item Item Attribute Mapping")
+			mapping = frappe.new_doc('YRP Item Item Attribute Mapping')
 			mapping.attribute_name = attribute.attribute
 			mapping.insert(ignore_permissions=True)
 			attribute.mapping = mapping.name
@@ -798,7 +798,7 @@ def update_mapping_values(doc):
 	frappe.flags.delete_bom_mapping = []
 	for bom in doc.get("item_bom") or []:
 		if bom.based_on_attribute_mapping and not bom.attribute_mapping:
-			mapping = frappe.new_doc("Item BOM Attribute Mapping")
+			mapping = frappe.new_doc('YRP Item BOM Attribute Mapping')
 			set_if_has_field(mapping, "item_production_detail", doc.name)
 			set_if_has_field(mapping, "item", doc.item)
 			set_if_has_field(mapping, "bom_item", bom.item)
@@ -848,7 +848,7 @@ def validate_packing_attribute_details(doc):
 	if not mapping:
 		frappe.throw(f"Mapping is required for Packing Attribute {doc.packing_attribute}")
 
-	map_doc = frappe.get_cached_doc("Item Item Attribute Mapping", mapping)
+	map_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', mapping)
 	if len(map_doc.values) < cint(doc.packing_attribute_no):
 		frappe.throw(
 			f"The Packing attribute no is {doc.packing_attribute_no} "
@@ -972,8 +972,8 @@ def validate_cutting_fields(doc):
 		frappe.throw(f"Please mention the {doc.stiching_attribute} in Cutting Combination")
 
 	previous_is_set_item = None
-	if not doc.is_new() and frappe.db.exists("Item Production Detail", doc.name):
-		previous_is_set_item = frappe.db.get_value("Item Production Detail", doc.name, "is_set_item")
+	if not doc.is_new() and frappe.db.exists('YRP Item Production Detail', doc.name):
+		previous_is_set_item = frappe.db.get_value('YRP Item Production Detail', doc.name, "is_set_item")
 
 	if previous_is_set_item:
 		if doc.is_set_item and doc.set_item_attribute not in accessory_attributes and len(accessory_attributes) > 0:
@@ -1034,10 +1034,10 @@ def get_attribute_mapping(doc, attribute):
 
 
 def get_item_attribute_rows(item):
-	if not item or not frappe.db.exists("Item", item):
+	if not item or not frappe.db.exists('YRP Item', item):
 		return []
 
-	item_doc = frappe.get_cached_doc("Item", item)
+	item_doc = frappe.get_cached_doc('YRP Item', item)
 	return [{"attribute": row.attribute} for row in item_doc.get("attributes") or []]
 
 
@@ -1048,7 +1048,7 @@ def get_ipd_attribute_values(doc, attribute):
 	if not mapping:
 		return []
 
-	map_doc = frappe.get_cached_doc("Item Item Attribute Mapping", mapping)
+	map_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', mapping)
 	return [row.attribute_value for row in map_doc.values]
 
 

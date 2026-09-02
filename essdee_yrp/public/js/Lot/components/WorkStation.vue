@@ -98,7 +98,7 @@ function createInput(colour, action, master, work_station){
         df:{
             "fieldtype":"Link",
             "fieldname": colour+"_"+action+"_"+master,
-            "options":"Work Station",
+            "options":"YRP Work Station",
             get_query:function(){
                 return{
                     filters: {

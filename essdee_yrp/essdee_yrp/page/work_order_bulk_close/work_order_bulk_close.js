@@ -35,7 +35,7 @@ class WorkOrderBulkClose {
       fieldname: "supplier",
       label: __("Supplier"),
       fieldtype: "Link",
-      options: "Supplier",
+      options: "YRP Supplier",
       reqd: 1,
       change: () => this.load_work_orders(),
     });
@@ -44,8 +44,8 @@ class WorkOrderBulkClose {
       fieldname: "lot",
       label: __("Lot"),
       fieldtype: "MultiSelectList",
-      options: "Lot",
-      get_data: (txt) => frappe.db.get_link_options("Lot", txt),
+      options: "SD YRP Lot",
+      get_data: (txt) => frappe.db.get_link_options("SD YRP Lot", txt),
       change: () => this.load_work_orders(),
     });
 
@@ -53,8 +53,8 @@ class WorkOrderBulkClose {
       fieldname: "item",
       label: __("Item"),
       fieldtype: "MultiSelectList",
-      options: "Item",
-      get_data: (txt) => frappe.db.get_link_options("Item", txt),
+      options: "YRP Item",
+      get_data: (txt) => frappe.db.get_link_options("YRP Item", txt),
       change: () => this.load_work_orders(),
     });
 
@@ -267,7 +267,7 @@ class WorkOrderBulkClose {
             >
           </td>
           <td>
-            <a href="/app/work-order/${encodeURIComponent(
+            <a href="/app/yrp-work-order/${encodeURIComponent(
               work_order.name
             )}" target="_blank">${this.escape_html(work_order.name)}</a>
           </td>
@@ -680,7 +680,7 @@ class WorkOrderBulkClose {
     let html = `<hr><h4>${__("WO Recut Details")}</h4>`;
     for (const recut of recut_details) {
       html += `<div style="margin-bottom: 15px;">
-        <strong><a href="/app/wo-recut/${encodeURIComponent(
+        <strong><a href="/app/sd-yrp-wo-recut/${encodeURIComponent(
           recut.name
         )}" target="_blank">${this.escape_html(recut.name)}</a></strong>`;
 
@@ -748,7 +748,7 @@ class WorkOrderBulkClose {
       .map(
         (debit, index) => `<tr>
           <td>${index + 1}</td>
-          <td><a href="/app/debit/${encodeURIComponent(
+          <td><a href="/app/yrp-debit/${encodeURIComponent(
             debit.name
           )}" target="_blank">${this.escape_html(debit.name)}</a></td>
           <td>${this.escape_html(debit.debit_type)}</td>

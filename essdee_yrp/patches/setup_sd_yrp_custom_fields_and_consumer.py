@@ -6,7 +6,7 @@ from essdee_yrp.sd_yrp_sync import ensure_consumer_config
 def execute():
 	create_custom_fields(
 		{
-			"Supplier": [
+			'YRP Supplier': [
 				{
 					"fieldname": "apply_sewing_plan",
 					"fieldtype": "Check",

@@ -6,7 +6,7 @@ from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, getdate
 from yrp.utils import get_variant_attr_details
 
-from essdee_yrp.essdee_yrp.doctype.lot.lot import get_item_details as get_lot_item_details
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import get_item_details as get_lot_item_details
 from essdee_yrp.production_order_workflow import (
 	PPO_DRAFT_STATUS,
 	PPO_REQUEST_STATUS,
@@ -26,12 +26,12 @@ from essdee_yrp.production_order_workflow import (
 class TestProductionOrderBusinessLogic(IntegrationTestCase):
 	def _submitted_order(self):
 		name = frappe.get_all(
-			"Production Order",
+			'YRP Production Order',
 			filters={"docstatus": 1, "status": "Open"},
 			pluck="name",
 			limit=1,
 		)[0]
-		return frappe.get_doc("Production Order", name)
+		return frappe.get_doc('YRP Production Order', name)
 
 	def test_workflow_endpoints_are_authenticated(self):
 		methods = (
@@ -90,7 +90,7 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 			if source_row.attributes_json
 			else get_variant_attr_details(source_row.item_variant)
 		)
-		doc = frappe.new_doc("Production Order")
+		doc = frappe.new_doc('YRP Production Order')
 		doc.item = source.item
 		doc.delivery_date = source.delivery_date
 		doc.posting_date = source.posting_date
@@ -132,7 +132,7 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 
 	def test_lot_entry_receives_ratio_stored_on_production_order(self):
 		linked = frappe.get_all(
-			"Lot",
+			'SD YRP Lot',
 			filters={
 				"production_order": ["is", "set"],
 				"production_detail": ["is", "set"],
@@ -140,12 +140,12 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 			fields=["production_order", "production_detail"],
 			limit=1,
 		)[0]
-		doc = frappe.get_doc("Production Order", linked.production_order)
+		doc = frappe.get_doc('YRP Production Order', linked.production_order)
 		row = doc.production_order_details[0]
 		original_ratio = row.ratio
 		try:
 			frappe.db.set_value(
-				"Production Order Detail",
+				'YRP Production Order Detail',
 				row.name,
 				"ratio",
 				7,
@@ -158,7 +158,7 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 			)
 		finally:
 			frappe.db.set_value(
-				"Production Order Detail",
+				'YRP Production Order Detail',
 				row.name,
 				"ratio",
 				original_ratio,
@@ -196,8 +196,8 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 	def test_price_request_actions_are_authenticated(self):
 		for method in ("approve_ppo_price_request", "reject_ppo_price_request"):
 			function = frappe.get_attr(
-				"essdee_yrp.essdee_yrp.doctype.ppo_price_request."
-				f"ppo_price_request.{method}"
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_ppo_price_request."
+				f"sd_yrp_ppo_price_request.{method}"
 			)
 			self.assertIn(function, frappe.whitelisted)
 			self.assertNotIn(function, frappe.guest_methods)

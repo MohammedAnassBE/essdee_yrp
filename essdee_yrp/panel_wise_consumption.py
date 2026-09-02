@@ -26,21 +26,21 @@ def get_permitted_ipd(doc):
 		doc = (
 			frappe.parse_json(doc)
 			if doc.lstrip().startswith("{")
-			else frappe.get_doc("Item Production Detail", doc)
+			else frappe.get_doc('YRP Item Production Detail', doc)
 		)
 	if isinstance(doc, dict):
-		if doc.get("doctype") != "Item Production Detail":
+		if doc.get("doctype") != 'YRP Item Production Detail':
 			frappe.throw(_("Only Item Production Detail data is allowed."))
 		doc = frappe.get_doc(doc)
-	if getattr(doc, "doctype", None) != "Item Production Detail":
+	if getattr(doc, "doctype", None) != 'YRP Item Production Detail':
 		frappe.throw(_("Only Item Production Detail data is allowed."))
 
-	if doc.name and frappe.db.exists("Item Production Detail", doc.name):
+	if doc.name and frappe.db.exists('YRP Item Production Detail', doc.name):
 		# Check the stored document so client-supplied owner/permission fields can
 		# never influence authorization for an unsaved form snapshot.
-		frappe.get_doc("Item Production Detail", doc.name).check_permission("read")
+		frappe.get_doc('YRP Item Production Detail', doc.name).check_permission("read")
 	else:
-		frappe.has_permission("Item Production Detail", "create", throw=True)
+		frappe.has_permission('YRP Item Production Detail', "create", throw=True)
 	return doc
 
 
@@ -81,7 +81,7 @@ def _group_packing_values(context, panel_values):
 def _mapping_values(doc, attribute):
 	for row in doc.get("item_attributes") or []:
 		if row.attribute == attribute and row.mapping:
-			mapping = frappe.get_cached_doc("Item Item Attribute Mapping", row.mapping)
+			mapping = frappe.get_cached_doc('YRP Item Item Attribute Mapping', row.mapping)
 			return [value.attribute_value for value in mapping.get("values") or []]
 	return []
 
@@ -614,7 +614,7 @@ def sync_panel_wise_consumption_matrix(doc):
 	expanded = expand_panel_wise_matrix(matrix, context, require_complete=False)
 	valid_dias = set(
 		frappe.get_all(
-			"Item Attribute Value",
+			'YRP Item Attribute Value',
 			filters={"attribute_name": "Dia"},
 			pluck="name",
 		)
@@ -657,12 +657,12 @@ def get_panel_wise_consumption_matrix(doc):
 	include_saved = True
 	if not doc.is_new() and doc.name:
 		stored_enabled = frappe.db.get_value(
-			"Item Production Detail", doc.name, "enable_panel_wise_consumption_matrix"
+			'YRP Item Production Detail', doc.name, "enable_panel_wise_consumption_matrix"
 		)
 		include_saved = bool(stored_enabled)
 	matrix, context = make_panel_wise_matrix(doc, include_saved=include_saved)
 	dia_values = frappe.get_all(
-		"Item Attribute Value",
+		'YRP Item Attribute Value',
 		filters={"attribute_name": "Dia"},
 		pluck="name",
 	)

@@ -48,7 +48,7 @@
 
   APIs (reused over HTTP; we do NOT import the Desk bundle / cur_frm / make_control)
   ---------------------------------------------------------------------------------
-  - yrp.yrp.doctype.item.item.get_attribute_values(item, attributes) → {attr:[vals]}
+  - yrp.yrp.doctype.yrp_item.yrp_item.get_attribute_values(item, attributes) → {attr:[vals]}
     Used twice: (item, itemAttrs) to build the cross-product, and
     (bom_item, bomAttrs) for the BOM-side dropdown options.
 -->
@@ -467,7 +467,7 @@ const toast = useAppToast()
 const confirm = useAppConfirm()
 const { isAdmin, hasRole } = usePermissions()
 
-const DOCTYPE = "Item BOM Attribute Mapping"
+const DOCTYPE = "YRP Item BOM Attribute Mapping"
 const docState = useDoc(DOCTYPE)
 
 // ── reactive model ──
@@ -551,7 +551,7 @@ const configuring = ref(false)
 const saving = computed(() => docState.saving.value)
 
 const deskUrl = computed(
-	() => `/app/item-bom-attribute-mapping/${encodeURIComponent(props.id)}`,
+	() => `/app/yrp-item-bom-attribute-mapping/${encodeURIComponent(props.id)}`,
 )
 
 const includedCount = computed(() => data.value.filter((r) => r.included).length)
@@ -620,10 +620,10 @@ async function loadAttrPools() {
 	try {
 		const [ip, bp] = await Promise.all([
 			item.value
-				? callMethod("yrp.yrp.doctype.item.item.get_attributes", { item: item.value })
+				? callMethod("yrp.yrp.doctype.yrp_item.yrp_item.get_attributes", { item: item.value })
 				: Promise.resolve([]),
 			bomItem.value
-				? callMethod("yrp.yrp.doctype.item.item.get_attributes", { item: bomItem.value })
+				? callMethod("yrp.yrp.doctype.yrp_item.yrp_item.get_attributes", { item: bomItem.value })
 				: Promise.resolve([]),
 		])
 		itemAttrPool.value = ip || []
@@ -718,7 +718,7 @@ async function loadItemValues(seq) {
 		return
 	}
 	try {
-		const r = await callMethod("yrp.yrp.doctype.item.item.get_attribute_values", {
+		const r = await callMethod("yrp.yrp.doctype.yrp_item.yrp_item.get_attribute_values", {
 			item: item.value,
 			attributes: itemAttrs.value,
 		})
@@ -736,7 +736,7 @@ async function loadBomValues(seq) {
 		return
 	}
 	try {
-		const r = await callMethod("yrp.yrp.doctype.item.item.get_attribute_values", {
+		const r = await callMethod("yrp.yrp.doctype.yrp_item.yrp_item.get_attribute_values", {
 			item: bomItem.value,
 			attributes: bomAttrs.value,
 		})
@@ -753,19 +753,19 @@ async function fetchOwningIpd() {
 	ipdName.value = null
 	try {
 		const rows = await callMethod("frappe.client.get_list", {
-			doctype: "Item BOM",
+			doctype: "YRP Item BOM",
 			filters: { attribute_mapping: props.id },
 			fields: ["parent", "parenttype"],
 			limit_page_length: 1,
 		})
 		const row = (rows || [])[0]
-		if (row && row.parenttype === "Item Production Detail") {
+		if (row && row.parenttype === "YRP Item Production Detail") {
 			ipdName.value = row.parent
 			// Q3: the IPD is hash-named — fetch its produced item so the breadcrumb
 			// shows a human name instead of the hash.
 			try {
 				const ipd = await callMethod("frappe.client.get_value", {
-					doctype: "Item Production Detail",
+					doctype: "YRP Item Production Detail",
 					filters: { name: ipdName.value },
 					fieldname: "item",
 				})
@@ -1092,7 +1092,7 @@ function goIpd() {
 function goMappingList() {
 	// No /web list page for Item BOM Attribute Mapping (open it only from the
 	// owning IPD's BOM row). Strict no-Desk rule: do NOT redirect to
-	// /app/item-bom-attribute-mapping. Surface a friendly toast instead.
+	// /app/yrp-item-bom-attribute-mapping. Surface a friendly toast instead.
 	toast.warn(
 		"No /web list",
 		"Item BOM Attribute Mappings are opened from an IPD's BOM row.",

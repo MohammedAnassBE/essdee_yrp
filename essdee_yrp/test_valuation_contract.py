@@ -6,10 +6,10 @@ import frappe
 from frappe.tests import UnitTestCase
 
 from essdee_yrp.api.work_order import _normalize_generated_uom_rows
-from essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet import (
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet import (
 	calculate_cutting_consumption_plan,
 )
-from essdee_yrp.essdee_yrp.doctype.recut_and_print_panel.recut_and_print_panel import (
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_recut_and_print_panel.sd_yrp_recut_and_print_panel import (
 	RecutandPrintPanel,
 )
 from essdee_yrp.fabric_grn import (
@@ -48,7 +48,7 @@ from essdee_yrp.rework_work_order import (
 	get_rework_source_rows,
 )
 from essdee_yrp.work_order_hooks import preserve_dynamic_packing_piece_uom
-from yrp.yrp.doctype.goods_received_note.goods_received_note import GoodsReceivedNote
+from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import GoodsReceivedNote
 
 
 class TestEssdeeValuationContract(UnitTestCase):
@@ -64,9 +64,9 @@ class TestEssdeeValuationContract(UnitTestCase):
 
 		self.assertEqual(get_rework_source_rows("WO-1"), [])
 
-		get_doc.assert_called_once_with("Work Order", "WO-1")
+		get_doc.assert_called_once_with('YRP Work Order', "WO-1")
 		doc.check_permission.assert_called_once_with("read")
-		has_permission.assert_called_once_with("Work Order", "create", throw=True)
+		has_permission.assert_called_once_with('YRP Work Order', "create", throw=True)
 		get_base_rows.assert_called_once_with("WO-1")
 
 	@patch("essdee_yrp.rework_work_order.get_base_rework_source_rows")
@@ -88,12 +88,12 @@ class TestEssdeeValuationContract(UnitTestCase):
 	def test_rework_popup_subtracts_essdee_direct_clearing(self):
 		rows = [
 			{
-				"source_type": "Goods Received Note Item",
+				"source_type": 'YRP Goods Received Note Item',
 				"source_grn_item": "GRN-ITEM-OPEN",
 				"available_qty": 5,
 			},
 			{
-				"source_type": "Goods Received Note Item",
+				"source_type": 'YRP Goods Received Note Item',
 				"source_grn_item": "GRN-ITEM-COMPLETE",
 				"available_qty": 5,
 			},
@@ -128,7 +128,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 	def test_rework_popup_api_is_overridden_only_at_the_essdee_boundary(self):
 		self.assertEqual(
 			override_whitelisted_methods[
-				"yrp.yrp.doctype.work_order.work_order.get_rework_source_rows"
+				"yrp.yrp.doctype.yrp_work_order.yrp_work_order.get_rework_source_rows"
 			],
 			"essdee_yrp.rework_work_order.get_rework_source_rows",
 		)
@@ -136,8 +136,8 @@ class TestEssdeeValuationContract(UnitTestCase):
 	def test_complete_mapped_grn_dispatch_uses_the_real_base_contract(self):
 		doc = EssdeeGoodsReceivedNote(
 			{
-				"doctype": "Goods Received Note",
-				"against": "Work Order",
+				"doctype": 'YRP Goods Received Note',
+				"against": 'YRP Work Order',
 				"against_id": "WO-1",
 				"grn_deliverables": [
 					{"goods_received_note_item": "GRN-ITEM-1"}
@@ -146,7 +146,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 		)
 		self.assertTrue(_has_complete_mapped_consumption(doc))
 
-		doc.against = "Delivery Challan"
+		doc.against = 'YRP Delivery Challan'
 		self.assertFalse(_has_complete_mapped_consumption(doc))
 
 	def test_fully_mapped_lineage_totals_do_not_raise_a_false_readiness_alert(self):
@@ -203,7 +203,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 		app_path = Path(__file__).parent
 		form_source = (
 			app_path
-			/ "essdee_yrp/doctype/cutting_laysheet/cutting_laysheet.js"
+			/ "essdee_yrp/doctype/sd_yrp_cutting_laysheet/sd_yrp_cutting_laysheet.js"
 		).read_text()
 		component_source = (
 			app_path / "public/js/CuttingLaySheet/components/LaySheetCloths.vue"
@@ -220,13 +220,14 @@ class TestEssdeeValuationContract(UnitTestCase):
 
 	def test_grn_override_is_the_single_new_transaction_controller(self):
 		self.assertEqual(
-			override_doctype_class["Goods Received Note"],
+			override_doctype_class['YRP Goods Received Note'],
 			"essdee_yrp.overrides.goods_received_note.EssdeeGoodsReceivedNote",
 		)
 
 	def test_grn_child_lineage_is_complete_but_historical_links_are_optional(self):
 		path = Path(__file__).parent / (
-			"essdee_yrp/doctype/yrp_grn_deliverable/yrp_grn_deliverable.json"
+			"essdee_yrp/doctype/sd_yrp_yrp_grn_deliverable/"
+			"sd_yrp_yrp_grn_deliverable.json"
 		)
 		fields = {
 			row["fieldname"]: row
@@ -249,7 +250,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 		self.assertFalse(fields["received_item_variant"].get("reqd"))
 
 	def test_non_mapped_grn_still_runs_all_base_submit_and_cancel_guards(self):
-		doc = EssdeeGoodsReceivedNote({"doctype": "Goods Received Note"})
+		doc = EssdeeGoodsReceivedNote({"doctype": 'YRP Goods Received Note'})
 		with (
 			patch("essdee_yrp.overrides.goods_received_note.validate_sewing_plan_quantity"),
 			patch.object(GoodsReceivedNote, "before_submit") as base_submit,
@@ -264,8 +265,8 @@ class TestEssdeeValuationContract(UnitTestCase):
 	def test_work_order_lock_precedes_sewing_quantity_preflight(self):
 		doc = EssdeeGoodsReceivedNote(
 			{
-				"doctype": "Goods Received Note",
-				"against": "Work Order",
+				"doctype": 'YRP Goods Received Note',
+				"against": 'YRP Work Order',
 				"against_id": "WO-SEWING-1",
 			}
 		)
@@ -296,8 +297,8 @@ class TestEssdeeValuationContract(UnitTestCase):
 	def test_selected_new_planner_cannot_fall_back_with_an_empty_plan(self):
 		doc = EssdeeGoodsReceivedNote(
 			{
-				"doctype": "Goods Received Note",
-				"against": "Work Order",
+				"doctype": 'YRP Goods Received Note',
+				"against": 'YRP Work Order',
 				"against_id": "WO-1",
 				"items": [{"item_variant": "OUTPUT-1", "quantity": 1}],
 			}
@@ -321,7 +322,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 
 	def test_cutting_plan_is_selected_before_generic_fabric_planner(self):
 		doc = frappe._dict(
-			against="Work Order",
+			against='YRP Work Order',
 			against_id="WO-1",
 			cutting_laysheet="CLS-1",
 			is_return=0,
@@ -332,7 +333,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 
 	def test_identity_garment_grn_is_excluded_from_fabric_draft_planner(self):
 		doc = frappe._dict(
-			against="Work Order",
+			against='YRP Work Order',
 			against_id="WO-IDENTITY-1",
 			cutting_laysheet=None,
 			is_return=0,
@@ -354,7 +355,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 
 	def test_stitching_plan_is_selected_before_identity_and_fabric(self):
 		doc = frappe._dict(
-			against="Work Order",
+			against='YRP Work Order',
 			against_id="WO-STITCH-1",
 			cutting_laysheet=None,
 			is_return=0,
@@ -376,7 +377,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 
 	def test_stitching_garment_grn_is_excluded_from_fabric_draft_planner(self):
 		doc = frappe._dict(
-			against="Work Order",
+			against='YRP Work Order',
 			against_id="WO-STITCH-1",
 			cutting_laysheet=None,
 			is_return=0,
@@ -413,7 +414,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 		}
 		received = frappe._dict(
 			idx=1,
-			ref_doctype="Work Order Receivables",
+			ref_doctype='YRP Work Order Receivables',
 			ref_docname="WO-OUT-1",
 			item_variant="GARMENT-M",
 			uom="Pieces",
@@ -437,7 +438,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 		)
 		received = frappe._dict(
 			idx=1,
-			ref_doctype="Work Order Receivables",
+			ref_doctype='YRP Work Order Receivables',
 			ref_docname="WO-OUT-1",
 			item_variant="GARMENT-S",
 			uom="Pieces",
@@ -488,7 +489,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 				return_value={"conversion_factor": 1, "stock_uom": "Pieces"},
 			),
 			patch(
-				"yrp.yrp.doctype.work_order.work_order._stock_dimension_values",
+				"yrp.yrp.doctype.yrp_work_order.yrp_work_order._stock_dimension_values",
 				return_value={"lot": "LOT-1", "received_type": "Accepted"},
 			),
 			patch(
@@ -528,7 +529,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 			quantity=4,
 			item_variant="GARMENT-S",
 			uom="Pieces",
-			ref_doctype="Work Order Receivables",
+			ref_doctype='YRP Work Order Receivables',
 			ref_docname="WO-OUT-1",
 			set_combination='{"major_colour":"White"}',
 			lot="LOT-1",
@@ -643,7 +644,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 			item_variant="PANEL-BACK-WINE-S",
 			quantity=135,
 			uom="Pieces",
-			ref_doctype="Work Order Receivables",
+			ref_doctype='YRP Work Order Receivables',
 			ref_docname=receivable.name,
 			set_combination='{"major_colour":"Wine"}',
 			lot="LOT-1",
@@ -735,7 +736,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 					item_variant="PANEL-FRONT-S",
 					quantity=50,
 					uom="Pieces",
-					ref_doctype="Work Order Receivables",
+					ref_doctype='YRP Work Order Receivables',
 					ref_docname=receivable.name,
 					set_combination="{}",
 					lot="LOT-1",
@@ -812,7 +813,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 					idx=1,
 					item_variant="PANEL-FRONT-S",
 					quantity=10,
-					ref_doctype="Work Order Receivables",
+					ref_doctype='YRP Work Order Receivables',
 					ref_docname="WO-OUT-MANUAL",
 					set_combination="{}",
 				)
@@ -891,7 +892,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 					item_variant="PANEL-M",
 					quantity=10,
 					uom="Pieces",
-					ref_doctype="Work Order Receivables",
+					ref_doctype='YRP Work Order Receivables',
 					ref_docname=receivable.name,
 					set_combination="{}",
 					lot="LOT-1",
@@ -924,7 +925,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 
 	def test_closed_sewing_receipt_keeps_its_specialized_stock_only_route(self):
 		doc = frappe._dict(
-			against="Work Order",
+			against='YRP Work Order',
 			against_id="WO-1",
 			from_closed_wo_sewing_details=1,
 			is_return=0,
@@ -1002,7 +1003,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 	def test_recut_uses_stock_uom_rate_when_transaction_uom_differs(self):
 		doc = RecutandPrintPanel(
 			{
-				"doctype": "Recut and Print Panel",
+				"doctype": 'SD YRP Recut and Print Panel',
 				"lot": "LOT-1",
 				"supplier": "CUTTING-UNIT",
 				"posting_date": "2026-08-26",
@@ -1021,24 +1022,24 @@ class TestEssdeeValuationContract(UnitTestCase):
 			patch.object(doc, "_cloth_templates", return_value=("Colour", {"MAIN": "CLOTH"})),
 			patch.object(doc, "_warehouse", return_value="CUT-WH"),
 			patch(
-				"essdee_yrp.essdee_yrp.doctype.recut_and_print_panel.recut_and_print_panel.get_or_create_variant",
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_recut_and_print_panel.sd_yrp_recut_and_print_panel.get_or_create_variant",
 				return_value="CLOTH-RED-60",
 			),
 			patch(
-				"essdee_yrp.essdee_yrp.doctype.recut_and_print_panel.recut_and_print_panel.resolve_item_uom",
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_recut_and_print_panel.sd_yrp_recut_and_print_panel.resolve_item_uom",
 				return_value=frappe._dict(
 					uom="Roll", stock_uom="Kg", conversion_factor=10
 				),
 			),
 			patch(
-				"essdee_yrp.essdee_yrp.doctype.recut_and_print_panel.recut_and_print_panel.get_dimension_fieldnames",
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_recut_and_print_panel.sd_yrp_recut_and_print_panel.get_dimension_fieldnames",
 				return_value=["lot", "received_type"],
 			),
 			patch.object(
 				frappe.db, "get_single_value", return_value="Accepted"
 			),
 			patch(
-				"essdee_yrp.essdee_yrp.doctype.recut_and_print_panel.recut_and_print_panel.get_stock_balance",
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_recut_and_print_panel.sd_yrp_recut_and_print_panel.get_stock_balance",
 				return_value=(20, 7),
 			) as balance,
 		):
@@ -1053,8 +1054,8 @@ class TestEssdeeValuationContract(UnitTestCase):
 	def test_only_explicit_finishing_no_dc_return_uses_specialized_route(self):
 		doc = EssdeeGoodsReceivedNote(
 			{
-				"doctype": "Goods Received Note",
-				"against": "Work Order",
+				"doctype": 'YRP Goods Received Note',
+				"against": 'YRP Work Order',
 				"against_id": "WO-1",
 				"is_return": 1,
 				"from_finishing": 1,
@@ -1106,19 +1107,19 @@ class TestEssdeeValuationContract(UnitTestCase):
 		)
 		with (
 			patch(
-				"essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.frappe.get_doc",
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.frappe.get_doc",
 				side_effect=lambda doctype, _name: (
 					frappe._dict(name="CLS-1", cutting_plan="CP-1")
-					if doctype == "Cutting LaySheet"
+					if doctype == 'SD YRP Cutting LaySheet'
 					else work_order
 				),
 			),
 			patch(
-				"essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.frappe.db.get_value",
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.frappe.db.get_value",
 				return_value="WO-1",
 			),
 			patch(
-				"essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet._cutting_grn_consumed_rows",
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet._cutting_grn_consumed_rows",
 				return_value=[{"item_variant": "CLOTH-1", "uom": "Kg", "qty": 1}],
 			),
 			patch(
@@ -1126,7 +1127,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 				return_value={"conversion_factor": 1, "stock_uom": "Kg"},
 			),
 			patch(
-				"yrp.yrp.doctype.work_order.work_order._stock_dimension_values",
+				"yrp.yrp.doctype.yrp_work_order.yrp_work_order._stock_dimension_values",
 				return_value={"lot": "LOT-1", "received_type": "Accepted"},
 			),
 			patch(
@@ -1173,11 +1174,11 @@ class TestEssdeeValuationContract(UnitTestCase):
 		)
 		with (
 			patch(
-				"essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.frappe.get_doc",
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.frappe.get_doc",
 				return_value=frappe._dict(name="CLS-1", cutting_plan="CP-1"),
 			),
 			patch(
-				"essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.frappe.db.get_value",
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.frappe.db.get_value",
 				return_value="WO-OTHER",
 			),
 		):
@@ -1189,8 +1190,8 @@ class TestEssdeeValuationContract(UnitTestCase):
 	def test_mapped_submit_and_cancel_apply_the_same_persisted_plan(self):
 		doc = EssdeeGoodsReceivedNote(
 			{
-				"doctype": "Goods Received Note",
-				"against": "Work Order",
+				"doctype": 'YRP Goods Received Note',
+				"against": 'YRP Work Order',
 				"against_id": "WO-1",
 			}
 		)
@@ -1270,7 +1271,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 
 	def test_mapped_submit_retry_skips_base_and_work_order_side_effects(self):
 		doc = EssdeeGoodsReceivedNote(
-			{"doctype": "Goods Received Note", "against_id": "WO-1"}
+			{"doctype": 'YRP Goods Received Note', "against_id": "WO-1"}
 		)
 		doc.flags.essdee_mapped_consumption = [
 			{"work_order_deliverable": "WO-D-1", "quantity": 1}
@@ -1290,7 +1291,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 
 	def test_historical_mapped_state_zero_reverses_imported_work_order_counter(self):
 		doc = EssdeeGoodsReceivedNote(
-			{"doctype": "Goods Received Note", "name": "GRN-OLD", "against_id": "WO-1"}
+			{"doctype": 'YRP Goods Received Note', "name": "GRN-OLD", "against_id": "WO-1"}
 		)
 		doc.flags.essdee_mapped_consumption = [
 			{"work_order_deliverable": "WO-D-1", "quantity": 1}
@@ -1309,7 +1310,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 			"WO-1", doc.flags.essdee_mapped_consumption, cancel=True
 		)
 		set_value.assert_called_once_with(
-			"Goods Received Note",
+			'YRP Goods Received Note',
 			"GRN-OLD",
 			"mapped_stock_update_state",
 			-1,
@@ -1319,7 +1320,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 
 	def test_mapped_transition_state_contract(self):
 		doc = frappe._dict(
-			doctype="Goods Received Note",
+			doctype='YRP Goods Received Note',
 			name="GRN-STATE",
 			mapped_stock_update_state=0,
 		)
@@ -1390,8 +1391,8 @@ class TestEssdeeValuationContract(UnitTestCase):
 	def test_direct_finishing_return_resolves_both_real_warehouses(self):
 		doc = EssdeeGoodsReceivedNote(
 			{
-				"doctype": "Goods Received Note",
-				"against": "Work Order",
+				"doctype": 'YRP Goods Received Note',
+				"against": 'YRP Work Order',
 				"against_id": "WO-1",
 				"is_return": 1,
 				"from_finishing": 1,
@@ -1469,7 +1470,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 				return_value=source,
 			),
 			patch(
-				"yrp.yrp.doctype.work_order.work_order._stock_dimension_values",
+				"yrp.yrp.doctype.yrp_work_order.yrp_work_order._stock_dimension_values",
 				return_value=dimensions,
 			),
 			patch(
@@ -1550,7 +1551,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 			name="OUT-M", item_variant="PACK-M", quantity=3, stock_qty=3
 		)
 		grn = frappe._dict(
-			against="Work Order",
+			against='YRP Work Order',
 			against_id=work_order.name,
 			includes_packing=1,
 			packing_calculation_version=2,
@@ -1609,7 +1610,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 				return_value={"stock_uom": "Pieces", "conversion_factor": 1},
 			),
 			patch(
-				"yrp.yrp.doctype.work_order.work_order._stock_dimension_values",
+				"yrp.yrp.doctype.yrp_work_order.yrp_work_order._stock_dimension_values",
 				return_value={"lot": "LOT-1", "received_type": "Accepted"},
 			),
 			patch(
@@ -1700,9 +1701,9 @@ class TestEssdeeValuationContract(UnitTestCase):
 		)
 
 		def get_value(doctype, name, fieldname):
-			if doctype == "Lot":
+			if doctype == 'SD YRP Lot':
 				return "Pieces"
-			if doctype == "Item Variant":
+			if doctype == 'YRP Item Variant':
 				return {"PACK-S": "GARMENT", "CARTON": "CARTON"}[name]
 			raise AssertionError((doctype, name, fieldname))
 
@@ -1780,7 +1781,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 
 		filters = get_all.call_args.kwargs["filters"]
 		self.assertEqual(filters["name"], "SLE-CLAIMED")
-		self.assertEqual(filters["voucher_type"], "Goods Received Note")
+		self.assertEqual(filters["voucher_type"], 'YRP Goods Received Note')
 		self.assertEqual(filters["voucher_no"], "GRN-1")
 		self.assertEqual(filters["voucher_detail_no"], "GRN-DEL-1")
 		self.assertEqual(filters["item"], "INPUT-1")
@@ -1812,7 +1813,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 				return_value=["lot", "received_type"],
 			),
 			patch(
-				"yrp.yrp.doctype.work_order.work_order._stock_dimension_values",
+				"yrp.yrp.doctype.yrp_work_order.yrp_work_order._stock_dimension_values",
 				return_value={"lot": "LOT-1", "received_type": "Accepted"},
 			),
 		):

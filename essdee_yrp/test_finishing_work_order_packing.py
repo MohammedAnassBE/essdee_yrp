@@ -50,7 +50,7 @@ class TestFinishingWorkOrderPacking(FrappeTestCase):
 		on_packing_work_order_cancel(doc)
 
 		get_value.assert_called_once_with(
-			"Finishing Plan", {"work_order": doc.name}, "name"
+			'SD YRP Finishing Plan', {"work_order": doc.name}, "name"
 		)
 		delete_doc.assert_not_called()
 		reverse_alternative_stock.assert_not_called()
@@ -59,12 +59,12 @@ class TestFinishingWorkOrderPacking(FrappeTestCase):
 		# This migrated F15 record is a stable 40-size/colour + four-accessory
 		# packing fixture.  Its stored rows are the legacy-calculation oracle.
 		work_order_name = "WO-2627-00839"
-		if not frappe.db.exists("Work Order", work_order_name):
+		if not frappe.db.exists('YRP Work Order', work_order_name):
 			work_order_name = None
 		if not work_order_name:
 			self.skipTest("No migrated packing Work Order is available")
 
-		work_order = frappe.get_doc("Work Order", work_order_name)
+		work_order = frappe.get_doc('YRP Work Order', work_order_name)
 		rows = build_packing_work_order_rows(work_order.lot, work_order.process_name)
 		self.assertEqual(
 			_rows_by_identity(rows["deliverables"]),
@@ -82,11 +82,11 @@ class TestFinishingWorkOrderPacking(FrappeTestCase):
 	def test_refresh_preserves_finishing_operational_quantities(self):
 		work_order_name = "WO-2627-00839"
 		finishing_plan_name = frappe.db.get_value(
-			"Finishing Plan", {"work_order": work_order_name}, "name"
+			'SD YRP Finishing Plan', {"work_order": work_order_name}, "name"
 		)
 		if not finishing_plan_name:
 			self.skipTest("Migrated Finishing Plan oracle is not available")
-		before = frappe.get_doc("Finishing Plan", finishing_plan_name)
+		before = frappe.get_doc('SD YRP Finishing Plan', finishing_plan_name)
 		operational = {
 			(row.item_variant, row.set_combination): (
 				row.dc_qty,
@@ -101,7 +101,7 @@ class TestFinishingWorkOrderPacking(FrappeTestCase):
 		self.assertEqual(
 			create_or_refresh_finishing_plan(work_order_name), finishing_plan_name
 		)
-		after = frappe.get_doc("Finishing Plan", finishing_plan_name)
+		after = frappe.get_doc('SD YRP Finishing Plan', finishing_plan_name)
 		for row in after.finishing_plan_details:
 			key = (row.item_variant, row.set_combination)
 			if key in operational:
@@ -120,12 +120,12 @@ class TestFinishingWorkOrderPacking(FrappeTestCase):
 		"""Exercise the migrated F15 alternative-plan orchestration transactionally."""
 		finishing_plan = "FP-2627-00057"
 		production_detail = "AISHWARYA PRINT (S/Box)-4"
-		if not frappe.db.exists("Finishing Plan", finishing_plan) or not frappe.db.exists(
-			"Item Production Detail", production_detail
+		if not frappe.db.exists('SD YRP Finishing Plan', finishing_plan) or not frappe.db.exists(
+			'YRP Item Production Detail', production_detail
 		):
 			self.skipTest("Migrated alternative-plan oracle is unavailable")
 		blank_lot = frappe.db.get_value(
-			"Lot",
+			'SD YRP Lot',
 			{
 				"production_detail": ["in", [None, ""]],
 				"production_order": ["in", [None, ""]],
@@ -154,11 +154,11 @@ class TestFinishingWorkOrderPacking(FrappeTestCase):
 				}
 			},
 		)
-		lot = frappe.get_doc("Lot", result["lot"])
+		lot = frappe.get_doc('SD YRP Lot', result["lot"])
 		production_order = frappe.get_doc(
-			"Production Order", result["production_order"]
+			'YRP Production Order', result["production_order"]
 		)
-		work_order = frappe.get_doc("Work Order", result["work_order"])
+		work_order = frappe.get_doc('YRP Work Order', result["work_order"])
 		self.assertEqual(lot.production_order, production_order.name)
 		self.assertEqual(lot.transferred_lot, "F0326-62")
 		self.assertEqual(production_order.docstatus, 1)
@@ -171,7 +171,7 @@ class TestFinishingWorkOrderPacking(FrappeTestCase):
 		# F16 Process Cost is scoped by the production-group dimension (Lot).
 		# The new alternative Lot must therefore receive its own approved rate
 		# before its draft Work Order can be submitted.
-		source_process_cost = frappe.get_doc("Process Cost", "PC-00688")
+		source_process_cost = frappe.get_doc('YRP Process Cost', "PC-00688")
 		process_cost = frappe.copy_doc(source_process_cost)
 		process_cost.from_date = nowdate()
 		process_cost.to_date = add_days(nowdate(), 1)
@@ -188,13 +188,13 @@ class TestFinishingWorkOrderPacking(FrappeTestCase):
 		work_order.submit()
 		self.assertTrue(
 			frappe.db.exists(
-				"Finishing Plan", {"work_order": work_order.name, "lot": lot.name}
+				'SD YRP Finishing Plan', {"work_order": work_order.name, "lot": lot.name}
 			)
 		)
 		stock_entries = frappe.get_all(
-			"Stock Entry",
+			'YRP Stock Entry',
 			filters={
-				"against": "Work Order",
+				"against": 'YRP Work Order',
 				"against_id": work_order.name,
 				"docstatus": 1,
 				"purpose": ["in", ["Material Issue", "Material Receipt"]],
@@ -203,9 +203,9 @@ class TestFinishingWorkOrderPacking(FrappeTestCase):
 		)
 		self.assertEqual(len(stock_entries), 2)
 		stickers = frappe.get_all(
-			"Box Sticker Print",
+			'SD YRP Box Sticker Print',
 			filters={
-				"against": "Work Order",
+				"against": 'YRP Work Order',
 				"against_id": work_order.name,
 				"docstatus": 1,
 			},
@@ -231,9 +231,9 @@ class TestFinishingWorkOrderPacking(FrappeTestCase):
 			work_order.name,
 		)
 		stock_entries = frappe.get_all(
-			"Stock Entry",
+			'YRP Stock Entry',
 			filters={
-				"against": "Work Order",
+				"against": 'YRP Work Order',
 				"against_id": work_order.name,
 				"docstatus": 1,
 				"purpose": ["in", ["Material Issue", "Material Receipt"]],
@@ -246,13 +246,13 @@ class TestFinishingWorkOrderPacking(FrappeTestCase):
 		work_order.flags.ignore_permissions = True
 		work_order.cancel()
 		self.assertFalse(
-			frappe.db.exists("Finishing Plan", {"work_order": work_order.name})
+			frappe.db.exists('SD YRP Finishing Plan', {"work_order": work_order.name})
 		)
 		self.assertTrue(
-			all(frappe.db.get_value("Stock Entry", name, "docstatus") == 2 for name in stock_entries)
+			all(frappe.db.get_value('YRP Stock Entry', name, "docstatus") == 2 for name in stock_entries)
 		)
 		self.assertTrue(
-			all(frappe.db.get_value("Box Sticker Print", name, "docstatus") == 2 for name in stickers)
+			all(frappe.db.get_value('SD YRP Box Sticker Print', name, "docstatus") == 2 for name in stickers)
 		)
 
 

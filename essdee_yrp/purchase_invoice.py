@@ -16,8 +16,8 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 from yrp.stock.uom import resolve_item_uom
-from yrp.yrp.doctype.item.item import get_or_create_variant
-from yrp.yrp.doctype.purchase_invoice.purchase_invoice import (
+from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
+from yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice import (
 	_check_invoice_fetch_permission,
 	_get_item_group,
 	_get_tax_rate,
@@ -25,7 +25,7 @@ from yrp.yrp.doctype.purchase_invoice.purchase_invoice import (
 	_validate_selected_grn,
 	fetch_grn_details as base_fetch_grn_details,
 )
-from yrp.yrp.doctype.work_order.work_order import get_variant_attributes
+from yrp.yrp.doctype.yrp_work_order.yrp_work_order import get_variant_attributes
 
 from essdee_yrp.overrides.work_order import _combination_key, _matches_garment_demand
 from essdee_yrp.erp_purchase_invoice import fetch_expense_accounts
@@ -149,10 +149,10 @@ def _get_variant_attribute_map(item_variants):
 		return {}
 	result = {item_variant: {} for item_variant in item_variants}
 	for row in frappe.get_all(
-		"Item Variant Attribute",
+		'YRP Item Variant Attribute',
 		filters={
 			"parent": ["in", item_variants],
-			"parenttype": "Item Variant",
+			"parenttype": 'YRP Item Variant',
 		},
 		fields=["parent", "attribute", "attribute_value"],
 		order_by="parent, idx",
@@ -164,13 +164,13 @@ def _get_variant_attribute_map(item_variants):
 
 def _get_verification_work_order_context(work_order):
 	work_order_values = frappe.db.get_value(
-		"Work Order",
+		'YRP Work Order',
 		work_order,
 		["lot", "production_detail"],
 		as_dict=True,
 	) or frappe._dict()
 	lot_values = frappe.db.get_value(
-		"Lot",
+		'SD YRP Lot',
 		work_order_values.get("lot"),
 		["production_detail", "item"],
 		as_dict=True,
@@ -179,7 +179,7 @@ def _get_verification_work_order_context(work_order):
 		lot_values.get("production_detail") or work_order_values.get("production_detail")
 	)
 	ipd_values = frappe.db.get_value(
-		"Item Production Detail",
+		'YRP Item Production Detail',
 		production_detail,
 		[
 			"is_set_item",
@@ -203,7 +203,7 @@ def _get_existing_verification_bills(work_order):
 	return frappe.db.sql(
 		"""
 		SELECT parent AS pi_name
-		FROM `tabPI Work Order Billed Detail`
+		FROM `tabYRP PI Work Order Billed Detail`
 		WHERE work_order = %(work_order)s AND docstatus = 1
 		GROUP BY parent, work_order
 		ORDER BY MIN(creation), parent
@@ -251,18 +251,18 @@ def _calculate_verification_grand_total(data):
 @frappe.whitelist()
 def fetch_grn_details(grns, against, supplier, purchase_invoice=None):
 	"""Override base YRP only for Essdee's Work Order billing view."""
-	if against != "Work Order":
+	if against != 'YRP Work Order':
 		payload = base_fetch_grn_details(grns, against, supplier, purchase_invoice)
 		payload["items"] = fetch_expense_accounts(payload.get("items"))
 		return payload
 
 	_check_invoice_fetch_permission(purchase_invoice)
-	frappe.has_permission("Goods Received Note", "read", throw=True)
-	if purchase_invoice and frappe.db.exists("Purchase Invoice", purchase_invoice):
+	frappe.has_permission('YRP Goods Received Note', "read", throw=True)
+	if purchase_invoice and frappe.db.exists('YRP Purchase Invoice', purchase_invoice):
 		# Link values can be masked in Desk for restricted users. The permission-
 		# checked saved document is authoritative; never compare a masked client
 		# placeholder such as XXXXXXXX with the GRN's real supplier.
-		supplier = frappe.db.get_value("Purchase Invoice", purchase_invoice, "supplier")
+		supplier = frappe.db.get_value('YRP Purchase Invoice', purchase_invoice, "supplier")
 	grns = frappe.parse_json(grns) if isinstance(grns, str) else grns
 	if not isinstance(grns, list):
 		frappe.throw(_("Selected GRNs must be a list."))
@@ -276,7 +276,7 @@ def fetch_grn_details(grns, against, supplier, purchase_invoice=None):
 	if supplier and not str(supplier).strip("Xx*"):
 		supplier = None
 	validated_grns = [
-		_validate_selected_grn(grn, supplier, "Work Order", purchase_invoice)
+		_validate_selected_grn(grn, supplier, 'YRP Work Order', purchase_invoice)
 		for grn in grns
 	]
 	selected_suppliers = {grn.supplier for grn in validated_grns}
@@ -313,8 +313,8 @@ def build_work_order_invoice_payload(
 	"""Build commercial, verification, and physical valuation rows together."""
 	grn_docs = []
 	for grn_name in list(dict.fromkeys(grns or [])):
-		_validate_selected_grn(grn_name, supplier, "Work Order", purchase_invoice)
-		grn_docs.append(frappe.get_doc("Goods Received Note", grn_name))
+		_validate_selected_grn(grn_name, supplier, 'YRP Work Order', purchase_invoice)
+		grn_docs.append(frappe.get_doc('YRP Goods Received Note', grn_name))
 	if not grn_docs:
 		frappe.throw(_("Please select at least one GRN."))
 
@@ -331,7 +331,7 @@ def build_work_order_invoice_payload(
 	billed_rows = []
 
 	for work_order_name, selected_grns in by_work_order.items():
-		work_order = frappe.get_doc("Work Order", work_order_name)
+		work_order = frappe.get_doc('YRP Work Order', work_order_name)
 		context = _build_work_order_context(work_order, selected_grns)
 
 		for demand in context["demands"]:
@@ -472,7 +472,7 @@ def build_work_order_invoice_payload(
 
 
 def _build_work_order_context(work_order, selected_grns):
-	process_item = frappe.db.get_value("Process", work_order.process_name, "item")
+	process_item = frappe.db.get_value('YRP Process', work_order.process_name, "item")
 	if not process_item:
 		frappe.throw(
 			_("Process {0} has no Purchase Invoice billing Item configured.").format(
@@ -481,9 +481,9 @@ def _build_work_order_context(work_order, selected_grns):
 		)
 	billing_variant = get_or_create_variant(process_item, {})
 	billing_uom = resolve_item_uom(billing_variant).uom
-	item_group = frappe.db.get_value("Item", process_item, "item_group")
+	item_group = frappe.db.get_value('YRP Item', process_item, "item_group")
 	process_cost = (
-		frappe.get_doc("Process Cost", work_order.process_cost)
+		frappe.get_doc('YRP Process Cost', work_order.process_cost)
 		if work_order.process_cost
 		else None
 	)
@@ -514,7 +514,7 @@ def _build_work_order_context(work_order, selected_grns):
 		frappe.throw(_("Work Order {0} has no calculated garment items.").format(work_order.name))
 
 	ipd = (
-		frappe.get_cached_doc("Item Production Detail", work_order.production_detail)
+		frappe.get_cached_doc('YRP Item Production Detail', work_order.production_detail)
 		if work_order.production_detail
 		else None
 	)
@@ -535,7 +535,7 @@ def _build_work_order_context(work_order, selected_grns):
 
 	selected_names = {grn.name for grn in selected_grns}
 	for tracking in work_order.get("work_order_track_pieces") or []:
-		if tracking.against != "Goods Received Note" or tracking.against_id not in selected_names:
+		if tracking.against != 'YRP Goods Received Note' or tracking.against_id not in selected_names:
 			continue
 		demand = _demand_for_tracking(demands, tracking, work_order.name)
 		demand["selected_qty"] += flt(tracking.received_qty)
@@ -656,7 +656,7 @@ def _physical_rate_weights(demand, ipd):
 
 def _receivable_for_grn_item(context, grn, grn_item):
 	if (
-		grn_item.get("ref_doctype") == "Work Order Receivables"
+		grn_item.get("ref_doctype") == 'YRP Work Order Receivables'
 		and grn_item.get("ref_docname") in context["receivables_by_name"]
 	):
 		return context["receivables_by_name"][grn_item.ref_docname]
@@ -714,19 +714,19 @@ def backfill_legacy_commercial_items():
 	Only invoices whose current base rows are Process billing Item Variants are
 	eligible.  That structural guard excludes F16-native physical-panel drafts.
 	"""
-	if not frappe.db.exists("DocType", "Essdee Purchase Invoice Item"):
+	if not frappe.db.exists("DocType", 'SD YRP Essdee Purchase Invoice Item'):
 		return {"migrated_invoices": 0, "migrated_rows": 0}
 
 	parents = frappe.db.sql(
 		"""
 		SELECT pi.name
-		FROM `tabPurchase Invoice` pi
-		WHERE pi.against = 'Work Order'
+		FROM `tabYRP Purchase Invoice` pi
+		WHERE pi.against = 'YRP Work Order'
 		  AND NOT EXISTS (
 			SELECT 1
-			FROM `tabEssdee Purchase Invoice Item` commercial
+			FROM `tabSD YRP Essdee Purchase Invoice Item` commercial
 			WHERE commercial.parent = pi.name
-			  AND commercial.parenttype = 'Purchase Invoice'
+			  AND commercial.parenttype = 'YRP Purchase Invoice'
 		  )
 		ORDER BY pi.creation, pi.name
 		""",
@@ -735,7 +735,7 @@ def backfill_legacy_commercial_items():
 	migrated_invoices = 0
 	migrated_rows = 0
 	for name in parents:
-		doc = frappe.get_doc("Purchase Invoice", name)
+		doc = frappe.get_doc('YRP Purchase Invoice', name)
 		allowed_variants = _legacy_billing_variants(doc)
 		items = list(doc.get("items") or [])
 		if not items or not allowed_variants or any(row.item not in allowed_variants for row in items):
@@ -750,7 +750,7 @@ def backfill_legacy_commercial_items():
 			lot = row.get("lot") or _legacy_row_lot(doc, row)
 			child = frappe.get_doc(
 				{
-					"doctype": "Essdee Purchase Invoice Item",
+					"doctype": 'SD YRP Essdee Purchase Invoice Item',
 					"parent": doc.name,
 					"parenttype": doc.doctype,
 					"parentfield": "essdee_items",
@@ -774,7 +774,7 @@ def backfill_legacy_commercial_items():
 			child.db_insert()
 			migrated_rows += 1
 		frappe.db.set_value(
-			"Purchase Invoice",
+			'YRP Purchase Invoice',
 			doc.name,
 			"essdee_rate_table_source",
 			LEGACY_RATE_SOURCE,
@@ -795,24 +795,24 @@ def backfill_unprojected_work_order_drafts():
 	the commercial projection existed therefore need the same authoritative GRN
 	rebuild as a fresh Fetch GRN action.
 	"""
-	if not frappe.db.exists("DocType", "Essdee Purchase Invoice Item"):
+	if not frappe.db.exists("DocType", 'SD YRP Essdee Purchase Invoice Item'):
 		return {"migrated_invoices": 0, "migrated_rows": 0, "skipped": []}
 
 	candidates = frappe.db.sql(
 		"""
 		SELECT pi.name
-		FROM `tabPurchase Invoice` pi
-		WHERE pi.against = 'Work Order'
+		FROM `tabYRP Purchase Invoice` pi
+		WHERE pi.against = 'YRP Work Order'
 		  AND pi.docstatus = 0
 		  AND COALESCE(pi.essdee_rate_table_source, '') = ''
 		  AND EXISTS (
-			SELECT 1 FROM `tabPurchase Invoice GRN` grn
+			SELECT 1 FROM `tabYRP Purchase Invoice GRN` grn
 			WHERE grn.parent = pi.name AND COALESCE(grn.grn, '') != ''
 		  )
 		  AND NOT EXISTS (
-			SELECT 1 FROM `tabEssdee Purchase Invoice Item` commercial
+			SELECT 1 FROM `tabSD YRP Essdee Purchase Invoice Item` commercial
 			WHERE commercial.parent = pi.name
-			  AND commercial.parenttype = 'Purchase Invoice'
+			  AND commercial.parenttype = 'YRP Purchase Invoice'
 		  )
 		ORDER BY pi.creation, pi.name
 		""",
@@ -823,7 +823,7 @@ def backfill_unprojected_work_order_drafts():
 	skipped = []
 	for name in candidates:
 		try:
-			doc = frappe.get_doc("Purchase Invoice", name)
+			doc = frappe.get_doc('YRP Purchase Invoice', name)
 			grns = [row.grn for row in doc.get("grn") or [] if row.grn]
 			payload = build_work_order_invoice_payload(
 				grns,
@@ -861,20 +861,20 @@ def _legacy_billing_variants(doc):
 	if not work_orders:
 		return set()
 	processes = frappe.get_all(
-		"Work Order",
+		'YRP Work Order',
 		filters={"name": ["in", list(work_orders)]},
 		pluck="process_name",
 		limit_page_length=0,
 	)
 	items = frappe.get_all(
-		"Process",
+		'YRP Process',
 		filters={"name": ["in", list(set(processes))], "item": ["is", "set"]},
 		pluck="item",
 		limit_page_length=0,
 	) if processes else []
 	return set(
 		frappe.get_all(
-			"Item Variant",
+			'YRP Item Variant',
 			filters={"item": ["in", list(set(items))]},
 			pluck="name",
 			limit_page_length=0,
@@ -897,7 +897,7 @@ def _legacy_row_lot(doc, row):
 	]
 	lots = set(
 		frappe.get_all(
-			"Work Order",
+			'YRP Work Order',
 			filters={"name": ["in", work_orders]},
 			pluck="lot",
 			limit_page_length=0,

@@ -134,7 +134,7 @@
 import { computed, onMounted, ref } from "vue";
 import { copyElementAsImage } from "../../copyElementAsImage";
 
-const METHOD = "essdee_yrp.essdee_yrp.doctype.grn_rework_item.grn_rework_item";
+const METHOD = "essdee_yrp.essdee_yrp.doctype.sd_yrp_grn_rework_item.sd_yrp_grn_rework_item";
 const root = ref(null);
 const items = ref({ report_detail: {}, types: [], total_detail: {}, total_rejection_detail: {} });
 const expandedRowKey = ref(null);
@@ -155,10 +155,10 @@ const pendingTotal = computed(() => (items.value.total_sum || 0) - (items.value.
 const canWrite = computed(() => Boolean(items.value.permissions?.can_write));
 
 onMounted(() => {
-	lotControl = makeControl(".lot-input", { fieldname: "lot", fieldtype: "Link", options: "Lot", label: __("Lot") });
-	itemControl = makeControl(".item-input", { fieldname: "item", fieldtype: "Link", options: "Item", label: __("Item") });
+	lotControl = makeControl(".lot-input", { fieldname: "lot", fieldtype: "Link", options: "SD YRP Lot", label: __("Lot") });
+	itemControl = makeControl(".item-input", { fieldname: "item", fieldtype: "Link", options: "YRP Item", label: __("Item") });
 	colourControl = makeControl(".colour-input", { fieldname: "colour", fieldtype: "Data", label: __("Colour") });
-	receivedTypeControl = makeControl(".received-type-input", { fieldname: "received_type", fieldtype: "Link", options: "Received Type", label: __("Received Type") });
+	receivedTypeControl = makeControl(".received-type-input", { fieldname: "received_type", fieldtype: "Link", options: "YRP Received Type", label: __("Received Type") });
 	showReworkedControl = makeControl(".show-reworked-input", {
 		fieldname: "show_reworked",
 		fieldtype: "Check",
@@ -203,7 +203,7 @@ function colourLabel(details) { return Object.keys(details || {})[0]?.split("-")
 function mistakeLabel(key) { return String(key || "").split("-")[0]; }
 function displayQty(value, type) { return (value.types?.[type] || 0) - (value.rejection_detail?.[type] || 0); }
 function formatDate(value) { return value ? frappe.datetime.str_to_user(String(value).slice(0, 10)) : ""; }
-function openGRN(name) { window.open(`/app/goods-received-note/${encodeURIComponent(name)}`, "_blank"); }
+function openGRN(name) { window.open(`/app/yrp-goods-received-note/${encodeURIComponent(name)}`, "_blank"); }
 
 function validGroup(group) {
 	for (const row of group.items) {

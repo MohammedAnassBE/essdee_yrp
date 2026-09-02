@@ -7,8 +7,8 @@ from essdee_yrp.dynamic_packing import LEGACY_BATCH_TRACKING_VERSION
 from essdee_yrp.finishing.packing import get_dynamic_packed_qty
 from essdee_yrp.finishing.parsing import json_object
 from yrp.utils import get_variant_attr_details, update_if_string_instance
-from yrp.yrp.doctype.item.item import get_attribute_details
-from yrp.yrp.doctype.item_production_detail.item_production_detail import (
+from yrp.yrp.doctype.yrp_item.yrp_item import get_attribute_details
+from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
 	get_ipd_primary_values,
 )
 
@@ -46,9 +46,9 @@ def build_plan_views(doc):
 
 def get_packed_qty(doc):
 	dynamic_grns = frappe.get_all(
-		"Goods Received Note",
+		'YRP Goods Received Note',
 		filters={
-			"against": "Work Order",
+			"against": 'YRP Work Order',
 			"against_id": doc.work_order,
 			"lot": doc.lot,
 			"docstatus": 1,
@@ -64,7 +64,7 @@ def get_packed_qty(doc):
 
 	box_quantity = {"sizes": {}, "total_packed": 0, "total_dispatched": 0}
 	for row in doc.get("finishing_plan_grn_details") or []:
-		variant = frappe.get_cached_doc("Item Variant", row.item_variant)
+		variant = frappe.get_cached_doc('YRP Item Variant', row.item_variant)
 		primary_attribute = get_attribute_details(variant.item)["primary_attribute"]
 		size = next(
 			(
@@ -109,9 +109,9 @@ def before_save(doc):
 
 def _get_ipd_context(doc):
 	ipd_name = doc.production_detail or frappe.db.get_value(
-		"Lot", doc.lot, "production_detail"
+		'SD YRP Lot', doc.lot, "production_detail"
 	)
-	ipd_doc = frappe.get_cached_doc("Item Production Detail", ipd_name)
+	ipd_doc = frappe.get_cached_doc('YRP Item Production Detail', ipd_name)
 	return {
 		"ipd_doc": ipd_doc,
 		"ipd": ipd_name,
@@ -408,9 +408,9 @@ def _build_rejection_details(doc, context):
 	data = {}
 	grand_total = 0
 	for document_name in frappe.get_all(
-		"GRN Rework Item", filters={"lot": doc.lot}, pluck="name"
+		'SD YRP GRN Rework Item', filters={"lot": doc.lot}, pluck="name"
 	):
-		rework_doc = frappe.get_doc("GRN Rework Item", document_name)
+		rework_doc = frappe.get_doc('SD YRP GRN Rework Item', document_name)
 		for row in rework_doc.get("grn_rework_item_details") or []:
 			rework_quantity = flt(row.quantity)
 			rejection_quantity = flt(row.rejection)
@@ -447,9 +447,9 @@ def _build_rejection_details(doc, context):
 def reshape_old_lot_rows_for_ui(doc, ipd_doc=None):
 	if ipd_doc is None:
 		ipd_doc = frappe.get_cached_doc(
-			"Item Production Detail",
+			'YRP Item Production Detail',
 			doc.production_detail
-			or frappe.db.get_value("Lot", doc.lot, "production_detail"),
+			or frappe.db.get_value('SD YRP Lot', doc.lot, "production_detail"),
 		)
 	primary_values = get_ipd_primary_values(ipd_doc.name)
 	groups = {}

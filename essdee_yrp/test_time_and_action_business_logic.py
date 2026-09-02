@@ -1,16 +1,16 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from essdee_yrp.essdee_yrp.doctype.action_master.action_master import (
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_action_master.sd_yrp_action_master import (
 	get_action_master_details,
 )
-from essdee_yrp.essdee_yrp.doctype.time_and_action.time_and_action import (
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_time_and_action.sd_yrp_time_and_action import (
 	get_update_rescheduled_date,
 	get_t_and_a_preview_data,
 	get_t_and_a_update_data,
 	update_t_and_a,
 )
-from essdee_yrp.essdee_yrp.doctype.time_and_action_gantt_chart.time_and_action_gantt_chart import (
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_time_and_action_gantt_chart.sd_yrp_time_and_action_gantt_chart import (
 	get_chart_data,
 )
 from essdee_yrp.time_and_action.reports import (
@@ -58,7 +58,7 @@ class TestTimeAndActionBusinessLogic(FrappeTestCase):
 		result = get_action_master_details(
 			[{"colour": "Test", "master": "Master-00001"}]
 		)
-		master = frappe.get_doc("Action Master", "Master-00001")
+		master = frappe.get_doc('SD YRP Action Master', "Master-00001")
 		self.assertEqual(
 			[row["action"] for row in result["Test"]["details"]],
 			[row.action for row in master.details],
@@ -66,7 +66,7 @@ class TestTimeAndActionBusinessLogic(FrappeTestCase):
 
 	def test_update_payload_contains_only_lot_linked_schedules(self):
 		lot = "F0924-22"
-		result = get_t_and_a_update_data(lot, frappe.db.get_value("Lot", lot, "item"))
+		result = get_t_and_a_update_data(lot, frappe.db.get_value('SD YRP Lot', lot, "item"))
 		returned = {
 			row["t_and_a"]
 			for master in result["data"][lot]["masters"].values()
@@ -74,8 +74,8 @@ class TestTimeAndActionBusinessLogic(FrappeTestCase):
 		}
 		linked = set(
 			frappe.get_all(
-				"Lot Time and Action Detail",
-				filters={"parent": lot, "parenttype": "Lot"},
+				'SD YRP Lot Time and Action Detail',
+				filters={"parent": lot, "parenttype": 'SD YRP Lot'},
 				pluck="time_and_action",
 			)
 		)
@@ -85,7 +85,7 @@ class TestTimeAndActionBusinessLogic(FrappeTestCase):
 	def test_update_rejects_tampered_action_definition(self):
 		lot = "F0924-22"
 		payload = get_t_and_a_update_data(
-			lot, frappe.db.get_value("Lot", lot, "item")
+			lot, frappe.db.get_value('SD YRP Lot', lot, "item")
 		)["data"]
 		row = next(
 			row
@@ -98,7 +98,7 @@ class TestTimeAndActionBusinessLogic(FrappeTestCase):
 
 	def test_gantt_query_returns_only_readable_time_and_action_rows(self):
 		row = frappe.get_all(
-			"Time and Action Detail",
+			'SD YRP Time and Action Detail',
 			filters={"completed": 0},
 			fields=["action"],
 			limit=1,
@@ -132,7 +132,7 @@ class TestTimeAndActionBusinessLogic(FrappeTestCase):
 	def test_rescheduled_preview_ignores_tampered_derived_values(self):
 		lot = "F0924-22"
 		payload = get_t_and_a_update_data(
-			lot, frappe.db.get_value("Lot", lot, "item")
+			lot, frappe.db.get_value('SD YRP Lot', lot, "item")
 		)["data"]
 		master, master_data = next(iter(payload[lot]["masters"].items()))
 		row = master_data["datas"][0]

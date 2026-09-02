@@ -6,7 +6,7 @@ from frappe.utils import cint, flt
 from essdee_yrp.dynamic_packing import DYNAMIC_PACKING_VERSION
 from yrp.utils import get_variant_attr_details
 from yrp.utils import update_if_string_instance
-from yrp.yrp.doctype.item_production_detail.item_production_detail import (
+from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
 	get_ipd_primary_values,
 )
 
@@ -43,7 +43,7 @@ def get_packing_grn_report_values(grn_names, ipd_doc):
 	legacy_combo = flt(ipd_doc.packing_combo)
 
 	for grn_name in grn_names:
-		grn = frappe.get_cached_doc("Goods Received Note", grn_name)
+		grn = frappe.get_cached_doc('YRP Goods Received Note', grn_name)
 		dynamic_ratio = cint(grn.packing_calculation_version) >= DYNAMIC_PACKING_VERSION
 		has_dynamic_ratio = has_dynamic_ratio or dynamic_ratio
 		grn_boxes = 0
@@ -85,9 +85,9 @@ def get_finishing_packed_details(date, lot_list=None, item_list=None):
 	lot_list = _normalize_list(lot_list)
 	item_list = _normalize_list(item_list)
 	grns = frappe.get_list(
-		"Goods Received Note",
+		'YRP Goods Received Note',
 		filters={
-			"against": "Work Order",
+			"against": 'YRP Work Order',
 			"includes_packing": 1,
 			"docstatus": 1,
 			"actual_date": date,
@@ -105,14 +105,14 @@ def get_finishing_packed_details(date, lot_list=None, item_list=None):
 	result = []
 	for lot, grn_names in lot_grns.items():
 		lot_values = frappe.db.get_value(
-			"Lot", lot, ["item", "production_detail"], as_dict=True
+			'SD YRP Lot', lot, ["item", "production_detail"], as_dict=True
 		)
 		if not lot_values or not lot_values.production_detail:
 			continue
 		if item_list and lot_values.item not in item_list:
 			continue
 		ipd_doc = frappe.get_cached_doc(
-			"Item Production Detail", lot_values.production_detail
+			'YRP Item Production Detail', lot_values.production_detail
 		)
 		packing = apply_set_item_multiplier_to_packing_report(
 			get_packing_grn_report_values(grn_names, ipd_doc), ipd_doc
@@ -141,9 +141,9 @@ def get_finishing_dispatch_report(
 	lot_list = _normalize_list(lot_list)
 	item_list = _normalize_list(item_list)
 	grns = frappe.get_list(
-		"Goods Received Note",
+		'YRP Goods Received Note',
 		filters={
-			"against": "Work Order",
+			"against": 'YRP Work Order',
 			"includes_packing": 1,
 			"docstatus": 1,
 			"is_return": 0,
@@ -162,7 +162,7 @@ def get_finishing_dispatch_report(
 	packed_rows = []
 	for lot, grn_names in lot_grns.items():
 		lot_values = frappe.db.get_value(
-			"Lot", lot, ["item", "production_detail"], as_dict=True
+			'SD YRP Lot', lot, ["item", "production_detail"], as_dict=True
 		)
 		if not lot_values or not lot_values.production_detail:
 			continue
@@ -171,7 +171,7 @@ def get_finishing_dispatch_report(
 		packing = get_packing_grn_report_values(
 			grn_names,
 			frappe.get_cached_doc(
-				"Item Production Detail", lot_values.production_detail
+				'YRP Item Production Detail', lot_values.production_detail
 			),
 		)
 		packed_rows.append(
@@ -188,9 +188,9 @@ def get_finishing_dispatch_report(
 		)
 
 	stock_entries = frappe.get_list(
-		"Stock Entry",
+		'YRP Stock Entry',
 		filters={
-			"against": ["in", ["Finishing Plan", "Finishing Plan Dispatch"]],
+			"against": ["in", ['SD YRP Finishing Plan', 'SD YRP Finishing Plan Dispatch']],
 			"purpose": "Material Issue",
 			"docstatus": 1,
 			"posting_date": ["between", [from_date, to_date]],
@@ -206,11 +206,11 @@ def get_finishing_dispatch_report(
 			batch_lot = None
 			if batch.get("finishing_plan"):
 				batch_lot = frappe.get_cached_value(
-					"Finishing Plan", batch["finishing_plan"], "lot"
+					'SD YRP Finishing Plan', batch["finishing_plan"], "lot"
 				)
 			if not batch_lot and batch.get("grn"):
 				batch_lot = frappe.get_cached_value(
-					"Goods Received Note", batch["grn"], "lot"
+					'YRP Goods Received Note', batch["grn"], "lot"
 				)
 			if batch_lot:
 				dynamic_boxes_by_lot[batch_lot] = (
@@ -218,7 +218,7 @@ def get_finishing_dispatch_report(
 					+ flt(batch.get("box_quantity"))
 				)
 		entry_items = frappe.get_all(
-			"Stock Entry Detail",
+			'YRP Stock Entry Detail',
 			filters={"parent": stock_entry.name},
 			fields=["item", "qty", "lot"],
 		)
@@ -247,14 +247,14 @@ def get_finishing_dispatch_report(
 	dispatched_rows = []
 	for lot, values in lot_dispatches.items():
 		lot_values = frappe.db.get_value(
-			"Lot", lot, ["item", "production_detail"], as_dict=True
+			'SD YRP Lot', lot, ["item", "production_detail"], as_dict=True
 		)
 		if not lot_values or not lot_values.production_detail:
 			continue
 		if item_list and lot_values.item not in item_list:
 			continue
 		ipd = frappe.get_cached_doc(
-			"Item Production Detail", lot_values.production_detail
+			'YRP Item Production Detail', lot_values.production_detail
 		)
 		sizes = get_ipd_primary_values(ipd.name)
 		size_quantity = {size: 0 for size in sizes}

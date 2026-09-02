@@ -44,7 +44,7 @@ def update_mapping_values(mapping, attribute_name, values):
 	# The mapping owns exactly one attribute — reject a call whose attribute_name
 	# doesn't match it, so a misdirected request can't create Item Attribute
 	# Values under the wrong attribute.
-	doc = frappe.get_doc("Item Item Attribute Mapping", mapping)
+	doc = frappe.get_doc('YRP Item Item Attribute Mapping', mapping)
 	if doc.attribute_name and doc.attribute_name != attribute_name:
 		frappe.throw(
 			_("Mapping {0} is for attribute {1}, not {2}.").format(
@@ -68,7 +68,7 @@ def update_mapping_values(mapping, attribute_name, values):
 	#    race with an external commit on the same Attribute Value records.
 	for v in clean_values:
 		existing_attribute = frappe.db.get_value(
-			"Item Attribute Value", v, "attribute_name"
+			'YRP Item Attribute Value', v, "attribute_name"
 		)
 		if existing_attribute and existing_attribute != attribute_name:
 			frappe.throw(
@@ -81,7 +81,7 @@ def update_mapping_values(mapping, attribute_name, values):
 		try:
 			frappe.get_doc(
 				{
-					"doctype": "Item Attribute Value",
+					"doctype": 'YRP Item Attribute Value',
 					"attribute_name": attribute_name,
 					"attribute_value": v,
 				}
@@ -91,7 +91,7 @@ def update_mapping_values(mapping, attribute_name, values):
 			# after our first read. Use a locking current read (not the
 			# transaction's old snapshot) and accept only the same attribute.
 			existing_attribute = frappe.db.get_value(
-				"Item Attribute Value", v, "attribute_name", for_update=True
+				'YRP Item Attribute Value', v, "attribute_name", for_update=True
 			)
 			if existing_attribute != attribute_name:
 				frappe.throw(

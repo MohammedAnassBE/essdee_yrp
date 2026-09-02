@@ -1,5 +1,5 @@
 // Essdee Process Cost values are scoped by the Lot's IPD and process.
-frappe.ui.form.on("Process Cost", {
+frappe.ui.form.on("YRP Process Cost", {
 	setup(frm) {
 		frm.set_query("attribute", () => {
 			if (!frm.doc.lot) {

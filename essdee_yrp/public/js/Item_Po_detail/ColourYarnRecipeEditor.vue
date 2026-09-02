@@ -279,7 +279,7 @@ function mount_controls() {
 		make_link(
 			`.cyr-colour-${group.key}`,
 			group.colour,
-			"Item Attribute Value",
+			"YRP Item Attribute Value",
 			{ attribute_name: "Colour" },
 			__("Select finished colour"),
 			(value) => {
@@ -291,7 +291,7 @@ function mount_controls() {
 			make_link(
 				`.cyr-yarn-${yarn.key}`,
 				yarn.yarn_item,
-				"Item",
+				"YRP Item",
 				{ disabled: 0 },
 				__("Select yarn item"),
 				(value) => {

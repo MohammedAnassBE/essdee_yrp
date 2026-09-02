@@ -3,22 +3,22 @@ from frappe.model.naming import set_new_name
 from frappe.tests import IntegrationTestCase
 
 ESSDEE_NAMING_SERIES = {
-	"Work Order": "YRP-WO-.YYYY.-",
-	"Goods Received Note": "YRP-GRN-.YYYY.-",
-	"Stock Entry": "YRP-STE-.YYYY.-",
-	"Process Cost": "YRP-PC-",
-	"Purchase Order": "YRP-PO-.YYYY.-",
-	"Purchase Invoice": "YRP-MPI-.YYYY.-",
-	"Stock Reconciliation": "YRP-ST-RECO-.YYYY.-",
-	"Stock Update": "YRP-SUE-.YYYY.-",
+	'YRP Work Order': "YRP-WO-.YYYY.-",
+	'YRP Goods Received Note': "YRP-GRN-.YYYY.-",
+	'YRP Stock Entry': "YRP-STE-.YYYY.-",
+	'YRP Process Cost': "YRP-PC-",
+	'YRP Purchase Order': "YRP-PO-.YYYY.-",
+	'YRP Purchase Invoice': "YRP-MPI-.YYYY.-",
+	'YRP Stock Reconciliation': "YRP-ST-RECO-.YYYY.-",
+	'YRP Stock Update': "YRP-SUE-.YYYY.-",
 }
 BASE_NAMING_SERIES = {
-	"Delivery Challan": "DC-.YYYY.-",
+	'YRP Delivery Challan': "DC-.YYYY.-",
 }
 ESSDEE_AUTONAME_SERIES = {
-	"Item Price": "YRP-ITP-.#####",
-	"Stock Ledger Entry": "YRP-SLE-.YYYY.-.#####",
-	"Stock Reservation Entry": "YRP-SRE-.YYYY.-.#####",
+	'YRP Item Price': "YRP-ITP-.#####",
+	'YRP Stock Ledger Entry': "YRP-SLE-.YYYY.-.#####",
+	'YRP Stock Reservation Entry': "YRP-SRE-.YYYY.-.#####",
 }
 
 

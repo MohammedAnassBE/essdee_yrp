@@ -1,8 +1,8 @@
-# Essdee YRP local review — 2026-07-27
+# SD YRP local review — 2026-07-27
 
 ## Scope
 
-- Re-reviewed the Essdee YRP web/API audit dated 2026-07-16.
+- Re-reviewed the SD YRP web/API audit dated 2026-07-16.
 - Checked the active YRP UI vocabulary, generated schema, local layout files,
   imported UI Layout records, desktop rendering, mobile rendering, and a
   restricted floor-user rendering.
@@ -61,7 +61,7 @@
 - Trial Loomline desktop: **6/6 screenshots**, no console/page errors.
 - Trial Loomline Lot cards: direct browser check after the density correction,
   no console/page errors.
-- `git diff --check` passed in both Essdee YRP and YRP.
+- `git diff --check` passed in both SD YRP and YRP.
 
 ## Deliberately not changed
 

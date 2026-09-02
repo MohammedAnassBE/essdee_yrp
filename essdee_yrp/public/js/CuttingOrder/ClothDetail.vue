@@ -81,7 +81,7 @@ function fetch_dia_options() {
     frappe.call({
         method: 'frappe.client.get_list',
         args: {
-            doctype: 'Item Attribute Value',
+            doctype: 'YRP Item Attribute Value',
             filters: { attribute_name: 'Dia' },
             fields: ['attribute_value'],
             limit_page_length: 0,

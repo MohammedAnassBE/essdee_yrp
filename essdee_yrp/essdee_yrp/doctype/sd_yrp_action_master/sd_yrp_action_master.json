@@ -1,0 +1,206 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2024-11-08 15:32:06.413061",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "fabric",
+  "product_type",
+  "emblishment",
+  "description",
+  "column_break_vloz",
+  "disable",
+  "action_master_template",
+  "min_qty",
+  "max_qty",
+  "quantity",
+  "lead_time",
+  "section_break_wfwl",
+  "details",
+  "action_master_dependent_details",
+  "action_master_html",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Naming Series",
+   "options": "Master-"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Data",
+   "label": "Description"
+  },
+  {
+   "fieldname": "column_break_vloz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "min_qty",
+   "fieldtype": "Int",
+   "label": "Min Qty"
+  },
+  {
+   "default": "0",
+   "fieldname": "max_qty",
+   "fieldtype": "Int",
+   "label": "Max Qty"
+  },
+  {
+   "fieldname": "quantity",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Quantity",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_wfwl",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "details",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Details",
+   "options": "SD YRP Action Master Detail"
+  },
+  {
+   "fieldname": "fabric",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Fabric"
+  },
+  {
+   "fieldname": "product_type",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Product Type"
+  },
+  {
+   "fieldname": "emblishment",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Emblishment"
+  },
+  {
+   "fieldname": "action_master_dependent_details",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Action Master Dependent Details",
+   "options": "SD YRP Action Master Dependent Detail"
+  },
+  {
+   "fieldname": "action_master_html",
+   "fieldtype": "HTML",
+   "label": "Action Master HTML"
+  },
+  {
+   "fieldname": "action_master_template",
+   "fieldtype": "Link",
+   "label": "Action Master Template",
+   "options": "SD YRP Action Master Template"
+  },
+  {
+   "fieldname": "lead_time",
+   "fieldtype": "Int",
+   "label": "Lead Time",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "0",
+   "fieldname": "disable",
+   "fieldtype": "Check",
+   "label": "Disable"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "SD YRP Action Master",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2025-10-14 18:34:03.812772",
+ "modified_by": "Administrator",
+ "module": "Essdee YRP",
+ "name": "SD YRP Action Master",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "T & A Admin",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "T & A Manager",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "T & A User",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "T & A Viewer",
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "fabric,product_type,emblishment,description,quantity",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

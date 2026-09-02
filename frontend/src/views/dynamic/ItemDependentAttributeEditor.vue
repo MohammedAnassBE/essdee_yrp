@@ -17,7 +17,7 @@
         "Pack":  { uom, name, attributes: ["Size"] },
       } }
 
-  Save calls yrp.yrp.doctype.item.item.update_dependent_attribute_details
+  Save calls yrp.yrp.doctype.yrp_item.yrp_item.update_dependent_attribute_details
   with the FULL matrix; the server replaces the linked
   Item Dependent Attribute Mapping row by row.
 
@@ -74,13 +74,13 @@
 						<strong>{{ data.value }}</strong>
 					</template>
 				</Column>
-				<Column header="UOM" :style="{ minWidth: '180px' }">
+				<Column header="YRP UOM" :style="{ minWidth: '180px' }">
 					<template #body="{ data }">
 						<LinkField
 							v-if="editMode"
 							:model-value="data.uom"
 							@update:model-value="data.uom = $event"
-							target-doctype="UOM"
+							target-doctype="YRP UOM"
 						/>
 						<span v-else>{{ data.uom || "—" }}</span>
 					</template>
@@ -164,7 +164,7 @@ async function load() {
 	loading.value = true
 	editMode.value = false
 	try {
-		const doc = await getDocWithOnload("Item", props.itemName)
+		const doc = await getDocWithOnload("YRP Item", props.itemName)
 		if (!doc) {
 			dependentAttribute.value = ""
 			dependentAttrValues.value = []
@@ -272,7 +272,7 @@ async function onSave() {
 	}
 	saving.value = true
 	try {
-		await callMethod("yrp.yrp.doctype.item.item.update_dependent_attribute_details", {
+		await callMethod("yrp.yrp.doctype.yrp_item.yrp_item.update_dependent_attribute_details", {
 			dependent_attribute_mapping: dependentMapping.value,
 			detail,
 		})

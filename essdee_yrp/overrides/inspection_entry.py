@@ -11,7 +11,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
-from yrp.yrp.doctype.inspection_entry.inspection_entry import (
+from yrp.yrp.doctype.yrp_inspection_entry.yrp_inspection_entry import (
 	_attach_display_meta,
 	get_initial_payload as get_base_initial_payload,
 )
@@ -20,10 +20,10 @@ from yrp.yrp.doctype.inspection_entry.inspection_entry import (
 @frappe.whitelist()
 def get_initial_payload(against, against_id):
 	sources = get_base_initial_payload(against, against_id)
-	if against != "Goods Received Note":
+	if against != 'YRP Goods Received Note':
 		return sources
 
-	grn = frappe.get_doc("Goods Received Note", against_id)
+	grn = frappe.get_doc('YRP Goods Received Note', against_id)
 	if not grn.get("is_internal_unit") or grn.get("transfer_complete"):
 		return sources
 
@@ -37,7 +37,7 @@ def get_initial_payload(against, against_id):
 		)
 
 	transit_warehouse = frappe.db.get_single_value(
-		"YRP Stock Settings", "transit_warehouse"
+		'YRP YRP Stock Settings', "transit_warehouse"
 	)
 	if not transit_warehouse:
 		frappe.throw(

@@ -1,4 +1,4 @@
-# Essdee YRP `/web` UI Implementation Plan
+# SD YRP `/web` UI Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 > **Execution note (per lessons-learned 2026-07-02):** the main agent implements directly; per-task fresh reviewers are NOT used. Gates = 2 plan reviewers (done before execution), the E2E active-driving gate (Task 11), one final whole-branch review (Task 12).

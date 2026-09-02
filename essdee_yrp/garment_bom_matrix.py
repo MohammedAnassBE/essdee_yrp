@@ -24,9 +24,9 @@ from essdee_yrp.fabric_requirement import (
 )
 
 MATRIX_CHILD_DOCTYPES = (
-    "IPD Matrix Attribute",
-    "IPD Matrix Combination",
-    "IPD Matrix Combination Attribute",
+    'YRP IPD Matrix Attribute',
+    'YRP IPD Matrix Combination',
+    'YRP IPD Matrix Combination Attribute',
 )
 
 
@@ -45,7 +45,7 @@ def regenerate_for_lots(lot_names):
 
     variants_by_ipd = defaultdict(set)
     for lot_name in lot_names:
-        lot = frappe.get_doc("Lot", lot_name)
+        lot = frappe.get_doc('SD YRP Lot', lot_name)
         if not lot.production_detail:
             frappe.throw(_("Lot {0} does not have an Item Production Detail.").format(lot.name))
         for row in lot.get("lot_order_details") or []:
@@ -60,8 +60,8 @@ def regenerate_for_lots(lot_names):
 
 def regenerate_garment_bom_matrices(ipd_name, item_variants):
     """Replace generated Cutting matrices for the requested finished variants."""
-    ipd = frappe.get_doc("Item Production Detail", ipd_name)
-    if ipd.get("is_cloth_item") or frappe.db.get_value("Item", ipd.item, "is_cloth_item"):
+    ipd = frappe.get_doc('YRP Item Production Detail', ipd_name)
+    if ipd.get("is_cloth_item") or frappe.db.get_value('YRP Item', ipd.item, "is_cloth_item"):
         frappe.throw(_("{0} is a cloth IPD; use the fabric-process generator.").format(ipd.name))
     _validate_garment_ipd(ipd)
     if not ipd.cutting_process:
@@ -96,7 +96,7 @@ def regenerate_garment_bom_matrices(ipd_name, item_variants):
 
 
 def _get_variant_cloth_rows(ipd, item_variant):
-    variant = frappe.get_cached_doc("Item Variant", item_variant)
+    variant = frappe.get_cached_doc('YRP Item Variant', item_variant)
     if variant.item != ipd.item:
         frappe.throw(
             _("Item Variant {0} does not belong to IPD item {1}.").format(
@@ -144,7 +144,7 @@ def _get_variant_cloth_rows(ipd, item_variant):
                 "item": cloth_item,
                 "attrs": dict(attrs),
                 "quantity": quantity,
-                "uom": frappe.db.get_value("Item", cloth_item, "default_unit_of_measure"),
+                "uom": frappe.db.get_value('YRP Item', cloth_item, "default_unit_of_measure"),
             }
         )
     return rows, output_attrs
@@ -158,7 +158,7 @@ def _group_by_cloth_item(rows):
 
 
 def _build_matrix(ipd, item_variant, output_attrs, cloth_item, cloth_rows):
-    matrix = frappe.new_doc("IPD Process Matrix")
+    matrix = frappe.new_doc('YRP IPD Process Matrix')
     matrix.ipd = ipd.name
     matrix.process_name = ipd.cutting_process
     matrix.reference_item_variant = item_variant
@@ -169,7 +169,7 @@ def _build_matrix(ipd, item_variant, output_attrs, cloth_item, cloth_rows):
     if cloth_item:
         item_attributes = {
             row.attribute
-            for row in frappe.get_cached_doc("Item", cloth_item).get("attributes") or []
+            for row in frappe.get_cached_doc('YRP Item', cloth_item).get("attributes") or []
         }
     input_attributes = sorted(
         {
@@ -227,7 +227,7 @@ def _build_matrix(ipd, item_variant, output_attrs, cloth_item, cloth_rows):
             "item": ipd.item,
             "combo_index": 1,
             "quantity": 1,
-            "uom": frappe.db.get_value("Item", ipd.item, "default_unit_of_measure"),
+            "uom": frappe.db.get_value('YRP Item', ipd.item, "default_unit_of_measure"),
             "wastage_pct": 0,
         },
     )
@@ -247,7 +247,7 @@ def _build_matrix(ipd, item_variant, output_attrs, cloth_item, cloth_rows):
 
 def _delete_generated_matrices(ipd_name, process_name, item_variants):
     names = frappe.get_all(
-        "IPD Process Matrix",
+        'YRP IPD Process Matrix',
         filters={
             "ipd": ipd_name,
             "process_name": process_name,
@@ -260,9 +260,9 @@ def _delete_generated_matrices(ipd_name, process_name, item_variants):
 
     parent_filter = {
         "parent": ["in", names],
-        "parenttype": "IPD Process Matrix",
+        "parenttype": 'YRP IPD Process Matrix',
     }
     for child_doctype in MATRIX_CHILD_DOCTYPES:
         frappe.db.delete(child_doctype, parent_filter)
-    frappe.db.delete("IPD Process Matrix", {"name": ["in", names]})
-    frappe.clear_document_cache("IPD Process Matrix")
+    frappe.db.delete('YRP IPD Process Matrix', {"name": ["in", names]})
+    frappe.clear_document_cache('YRP IPD Process Matrix')

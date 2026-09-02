@@ -20,92 +20,92 @@ from essdee_yrp.cutting.reports import (
 # Parent DocTypes that had a Python controller in the frozen F15 Production API
 # source. Renamed concepts point at their reviewed F16 replacement.
 PARENT_DOCTYPE_OUTCOMES = {
-	"Additional Parameter Key": "Additional Parameter Key",
-	"Additional Parameter Value": "Additional Parameter Value",
-	"AQL Level": "AQL Level",
-	"Brand": "Brand",
-	"Company Settings": "Company Settings",
-	"Cut Bundle Edit": "Cut Bundle Edit",
-	"Cut Bundle Movement Ledger": "Cut Bundle Movement Ledger",
-	"Cut Panel Movement": "Cut Panel Movement",
-	"Cutter": "Cutter",
-	"Cutting LaySheet": "Cutting LaySheet",
-	"Cutting Laysheet Planner": "Cutting Laysheet Planner",
-	"Cutting Marker": "Cutting Marker",
-	"Cutting Order": "Cutting Order",
-	"Cutting Order Detail": "Cutting Order Detail",
-	"Cutting Plan": "Cutting Plan",
-	"Cutting Spreader": "Cutting Spreader",
-	"Delivery Challan": "Delivery Challan",
-	"Department": "Department",
-	"Essdee Debit": "Debit",
-	"Essdee Quality Inspection": "Essdee Quality Inspection",
-	"Excel Sticker Print": "Excel Sticker Print",
-	"FG Item Size Type": "FG Item Size Type",
-	"Finishing Plan": "Finishing Plan",
-	"Finishing Plan Dispatch": "Finishing Plan Dispatch",
-	"Goods Received Note": "Goods Received Note",
-	"GRN Item Type": "Received Type",
-	"GRN Rework Item": "GRN Rework Item",
-	"Item": "Item",
-	"Item Alternative": "Item Alternative",
-	"Item Attribute": "Item Attribute",
-	"Item Attribute Value": "Item Attribute Value",
-	"Item BOM Attribute Mapping": "Item BOM Attribute Mapping",
-	"Item Category": "Item Category",
-	"Item Dependent Attribute Mapping": "Item Dependent Attribute Mapping",
-	"Item Group": "Item Group",
-	"Item Item Attribute Mapping": "Item Item Attribute Mapping",
-	"Item Lead Time": "Item Lead Time",
-	"Item Price": "Item Price",
-	"Item Variant": "Item Variant",
-	"Location": "Location",
-	"Lot Template": "Lot Template",
-	"MRP Settings": "MRP Settings",
-	"Notification Template": "Notification Template",
-	"P and L Document": "P and L Document",
-	"PPO Price Request": "PPO Price Request",
-	"Process": "Process",
-	"Process Cost": "Process Cost",
-	"Product Category": "Product Category",
-	"Production Order": "Production Order",
-	"Production Term": "Production Term",
-	"Purchase Invoice": "Purchase Invoice",
-	"Purchase Order": "Purchase Order",
-	"Purchase Order Log": "Purchase Order Log",
-	"Recut and Print Panel": "Recut and Print Panel",
-	"Sales Item Price": "Sales Item Price",
-	"Sales Piece Sticker Print": "Sales Piece Sticker Print",
-	"Sewing Plan": "Sewing Plan",
-	"Sewing Plan Entry Detail": "Sewing Plan Entry Detail",
-	"Sewing Plan Input Type": "Sewing Plan Input Type",
-	"Shortened Link": "Shortened Link",
-	"Signature": "Signature",
-	"Supplier": "Supplier",
-	"Tax Slab": "Tax Slab",
-	"Telegram Approval Request": "Telegram Approval Request",
-	"Telegram Approval Settings": "Telegram Approval Settings",
-	"Terms and Condition": "Terms and Condition",
-	"UOM": "UOM",
-	"Vendor Bill Delivery Person": "Vendor Bill Delivery Person",
-	"Vendor Bill Tracking": "Bill Tracking",
-	"WO Recut": "WO Recut",
-	"Work Order": "Work Order",
+	'YRP Additional Parameter Key': 'YRP Additional Parameter Key',
+	'YRP Additional Parameter Value': 'YRP Additional Parameter Value',
+	'SD YRP AQL Level': 'SD YRP AQL Level',
+	'YRP Brand': 'YRP Brand',
+	'SD YRP Company Settings': 'SD YRP Company Settings',
+	'SD YRP Cut Bundle Edit': 'SD YRP Cut Bundle Edit',
+	'SD YRP Cut Bundle Movement Ledger': 'SD YRP Cut Bundle Movement Ledger',
+	'SD YRP Cut Panel Movement': 'SD YRP Cut Panel Movement',
+	'SD YRP Cutter': 'SD YRP Cutter',
+	'SD YRP Cutting LaySheet': 'SD YRP Cutting LaySheet',
+	'SD YRP Cutting Laysheet Planner': 'SD YRP Cutting Laysheet Planner',
+	'SD YRP Cutting Marker': 'SD YRP Cutting Marker',
+	'SD YRP Cutting Order': 'SD YRP Cutting Order',
+	'SD YRP Cutting Order Detail': 'SD YRP Cutting Order Detail',
+	'SD YRP Cutting Plan': 'SD YRP Cutting Plan',
+	'SD YRP Cutting Spreader': 'SD YRP Cutting Spreader',
+	'YRP Delivery Challan': 'YRP Delivery Challan',
+	'YRP Department': 'YRP Department',
+	"Essdee Debit": 'YRP Debit',
+	'SD YRP Essdee Quality Inspection': 'SD YRP Essdee Quality Inspection',
+	'YRP Excel Sticker Print': 'YRP Excel Sticker Print',
+	'SD YRP FG Item Size Type': 'SD YRP FG Item Size Type',
+	'SD YRP Finishing Plan': 'SD YRP Finishing Plan',
+	'SD YRP Finishing Plan Dispatch': 'SD YRP Finishing Plan Dispatch',
+	'YRP Goods Received Note': 'YRP Goods Received Note',
+	"GRN Item Type": 'YRP Received Type',
+	'SD YRP GRN Rework Item': 'SD YRP GRN Rework Item',
+	'YRP Item': 'YRP Item',
+	'SD YRP Item Alternative': 'SD YRP Item Alternative',
+	'YRP Item Attribute': 'YRP Item Attribute',
+	'YRP Item Attribute Value': 'YRP Item Attribute Value',
+	'YRP Item BOM Attribute Mapping': 'YRP Item BOM Attribute Mapping',
+	'YRP Item Category': 'YRP Item Category',
+	'YRP Item Dependent Attribute Mapping': 'YRP Item Dependent Attribute Mapping',
+	'YRP Item Group': 'YRP Item Group',
+	'YRP Item Item Attribute Mapping': 'YRP Item Item Attribute Mapping',
+	'SD YRP Item Lead Time': 'SD YRP Item Lead Time',
+	'YRP Item Price': 'YRP Item Price',
+	'YRP Item Variant': 'YRP Item Variant',
+	'SD YRP Location': 'SD YRP Location',
+	'SD YRP Lot Template': 'SD YRP Lot Template',
+	'SD YRP MRP Settings': 'SD YRP MRP Settings',
+	'YRP Notification Template': 'YRP Notification Template',
+	'SD YRP P and L Document': 'SD YRP P and L Document',
+	'SD YRP PPO Price Request': 'SD YRP PPO Price Request',
+	'YRP Process': 'YRP Process',
+	'YRP Process Cost': 'YRP Process Cost',
+	'SD YRP Product Category': 'SD YRP Product Category',
+	'YRP Production Order': 'YRP Production Order',
+	'YRP Production Term': 'YRP Production Term',
+	'YRP Purchase Invoice': 'YRP Purchase Invoice',
+	'YRP Purchase Order': 'YRP Purchase Order',
+	'SD YRP Purchase Order Log': 'SD YRP Purchase Order Log',
+	'SD YRP Recut and Print Panel': 'SD YRP Recut and Print Panel',
+	'SD YRP Sales Item Price': 'SD YRP Sales Item Price',
+	'SD YRP Sales Piece Sticker Print': 'SD YRP Sales Piece Sticker Print',
+	'SD YRP Sewing Plan': 'SD YRP Sewing Plan',
+	'SD YRP Sewing Plan Entry Detail': 'SD YRP Sewing Plan Entry Detail',
+	'SD YRP Sewing Plan Input Type': 'SD YRP Sewing Plan Input Type',
+	'SD YRP Shortened Link': 'SD YRP Shortened Link',
+	'SD YRP Signature': 'SD YRP Signature',
+	'YRP Supplier': 'YRP Supplier',
+	'YRP Tax Slab': 'YRP Tax Slab',
+	'SD YRP Telegram Approval Request': 'SD YRP Telegram Approval Request',
+	'SD YRP Telegram Approval Settings': 'SD YRP Telegram Approval Settings',
+	'YRP Terms and Condition': 'YRP Terms and Condition',
+	'YRP UOM': 'YRP UOM',
+	'YRP Vendor Bill Delivery Person': 'YRP Vendor Bill Delivery Person',
+	"Vendor Bill Tracking": 'YRP Bill Tracking',
+	'SD YRP WO Recut': 'SD YRP WO Recut',
+	'YRP Work Order': 'YRP Work Order',
 }
 
 EXPECTED_EMPTY_DOCTYPES = {
-	"Item Lead Time",
-	"P and L Document",
-	"Purchase Order Log",
-	"WO Recut",
+	'SD YRP Item Lead Time',
+	'SD YRP P and L Document',
+	'SD YRP Purchase Order Log',
+	'SD YRP WO Recut',
 }
 
 SAFE_ZERO_ARGUMENT_READ_METHODS = (
-	"essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.can_approve_grammage",
-	"essdee_yrp.essdee_yrp.doctype.cutting_plan.cutting_plan.can_change_approval_grammage",
-	"essdee_yrp.essdee_yrp.doctype.lot.lot.check_enabled_po",
-	"essdee_yrp.essdee_yrp.doctype.product_image.product_image.get_image_list",
-	"essdee_yrp.essdee_yrp.doctype.sales_piece_sticker_print.sales_piece_sticker_print.get_print_format",
+	"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.can_approve_grammage",
+	"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.can_change_approval_grammage",
+	"essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot.check_enabled_po",
+	"essdee_yrp.essdee_yrp.doctype.sd_yrp_product_image.sd_yrp_product_image.get_image_list",
+	"essdee_yrp.essdee_yrp.doctype.sd_yrp_sales_piece_sticker_print.sd_yrp_sales_piece_sticker_print.get_print_format",
 	"essdee_yrp.ipd_ui.get_approval_roles",
 	"essdee_yrp.ipd_ui.get_ipd_item_group",
 	"essdee_yrp.time_and_action.tracking.get_t_and_a_report_data",
@@ -114,21 +114,21 @@ SAFE_ZERO_ARGUMENT_READ_METHODS = (
 	"yrp.whatsapp_notification.get_enabled_whatsapp_doctypes",
 	"yrp.yrp.api.ui_config.get_my_ui_config",
 	"yrp.yrp.api.ui_config.get_my_ui_overrides",
-	"yrp.yrp.doctype.goods_received_note.goods_received_note.get_rework_output_received_types",
-	"yrp.yrp.doctype.work_order.work_order.get_close_permission",
+	"yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note.get_rework_output_received_types",
+	"yrp.yrp.doctype.yrp_work_order.yrp_work_order.get_close_permission",
 )
 
 EXPECTED_NON_METHOD_REFERENCES = {
-	"essdee_yrp.essdee_yrp.doctype.box_sticker_print.box_sticker_print",
-	"essdee_yrp.essdee_yrp.doctype.cutting_bulk_lay_sheets.cutting_bulk_lay_sheets",
-	"essdee_yrp.essdee_yrp.doctype.cut_panel_movement.cut_panel_movement",
-	"essdee_yrp.essdee_yrp.doctype.essdee_quality_inspection.essdee_quality_inspection",
-	"essdee_yrp.essdee_yrp.doctype.finishing_plan_dispatch.finishing_plan_dispatch",
-	"essdee_yrp.essdee_yrp.doctype.grn_rework_item.grn_rework_item",
-	"essdee_yrp.essdee_yrp.doctype.item_conversion.item_conversion.",
-	"essdee_yrp.essdee_yrp.doctype.stock_summary.stock_summary.",
+	"essdee_yrp.essdee_yrp.doctype.sd_yrp_box_sticker_print.sd_yrp_box_sticker_print",
+	"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_bulk_lay_sheets.sd_yrp_cutting_bulk_lay_sheets",
+	"essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_panel_movement.sd_yrp_cut_panel_movement",
+	"essdee_yrp.essdee_yrp.doctype.sd_yrp_essdee_quality_inspection.sd_yrp_essdee_quality_inspection",
+	"essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan_dispatch.sd_yrp_finishing_plan_dispatch",
+	"essdee_yrp.essdee_yrp.doctype.sd_yrp_grn_rework_item.sd_yrp_grn_rework_item",
+	"essdee_yrp.essdee_yrp.doctype.sd_yrp_item_conversion.sd_yrp_item_conversion.",
+	"essdee_yrp.essdee_yrp.doctype.sd_yrp_stock_summary.sd_yrp_stock_summary.",
 	"essdee_yrp.mrp_stock",
-	"yrp.yrp.doctype.item.item.",
+	"yrp.yrp.doctype.yrp_item.yrp_item.",
 }
 
 SUBMITTED_DOC_EVENTS = {
@@ -142,22 +142,22 @@ SUBMITTED_DOC_EVENTS = {
 DRAFT_VALIDATION_EVENTS = {"before_validate", "validate", "before_submit"}
 
 DOC_EVENT_SPECIAL_SAMPLES = {
-	("Production Order", "before_cancel"): "PPO-00194-2",
+	('YRP Production Order', "before_cancel"): "PPO-00194-2",
 	# The latest packing WO has a submitted dispatch and is intentionally not
 	# cancellable. Exercise the on-cancel handlers with a migrated packing WO
 	# whose generated Finishing Plan has no downstream dispatch instead.
-	("Work Order", "on_cancel"): "WO-2627-00478",
-	("Work Order Correction", "before_submit"): "WOC-2026-00001",
+	('YRP Work Order', "on_cancel"): "WO-2627-00478",
+	('YRP Work Order Correction', "before_submit"): "WOC-2026-00001",
 }
 
 DOC_EVENT_FILTERS = {
 	# Approved IPDs intentionally reject before_validate/validate mutations.
 	# Use a real draft migration sample when exercising the handler inventory.
-	"Item Production Detail": {"approval_status": ["!=", "Approved"]},
+	'YRP Item Production Detail': {"approval_status": ["!=", "Approved"]},
 	# Stale draft Stock Entries can legitimately retain a CPM that was later
 	# linked elsewhere. The handler inventory uses an unrelated entry; the CPM
 	# rejection and lifecycle are covered by the cutting integration matrix.
-	"Stock Entry": {"cut_panel_movement": ["is", "not set"]},
+	'YRP Stock Entry': {"cut_panel_movement": ["is", "not set"]},
 }
 
 
@@ -191,7 +191,7 @@ class TestRuntimeAcceptance(IntegrationTestCase):
 								name = names[0]
 
 							doc = frappe.get_doc(doctype, name)
-							if doctype == "Production Order" and event == "before_submit":
+							if doctype == 'YRP Production Order' and event == "before_submit":
 								frappe.set_user("emp+ansil@essdee.fit")
 							try:
 								frappe.get_attr(handler)(doc, event)
@@ -243,12 +243,12 @@ class TestRuntimeAcceptance(IntegrationTestCase):
 				self.assertEqual(json.loads(loaded.as_json())["name"], name)
 
 	def test_four_empty_parent_doctypes_accept_rollback_safe_samples(self):
-		item = frappe.get_all("Item", pluck="name", limit=1)[0]
+		item = frappe.get_all('YRP Item', pluck="name", limit=1)[0]
 		work_order = frappe.db.sql(
 			"""
 			SELECT wo.name
-			FROM `tabWork Order` wo
-			INNER JOIN `tabWork Order Calculated Item` item ON item.parent = wo.name
+			FROM `tabYRP Work Order` wo
+			INNER JOIN `tabYRP Work Order Calculated Item` item ON item.parent = wo.name
 			WHERE wo.docstatus = 1
 			  AND wo.open_status = 'Open'
 			  AND COALESCE(wo.is_rework, 0) = 0
@@ -257,7 +257,7 @@ class TestRuntimeAcceptance(IntegrationTestCase):
 			LIMIT 1
 			""",
 		)[0][0]
-		work_order_doc = frappe.get_doc("Work Order", work_order)
+		work_order_doc = frappe.get_doc('YRP Work Order', work_order)
 		calculated_item = next(
 			row for row in work_order_doc.work_order_calculated_items if row.quantity > 0
 		)
@@ -265,29 +265,29 @@ class TestRuntimeAcceptance(IntegrationTestCase):
 		samples = (
 			frappe.get_doc(
 				{
-					"doctype": "Item Lead Time",
+					"doctype": 'SD YRP Item Lead Time',
 					"item_name": item,
 					"lead_time": 1,
 				}
 			),
 			frappe.get_doc(
 				{
-					"doctype": "P and L Document",
-					"against": "Item",
+					"doctype": 'SD YRP P and L Document',
+					"against": 'YRP Item',
 					"against_id": item,
 					"comments": "Runtime acceptance sample",
 				}
 			),
 			frappe.get_doc(
 				{
-					"doctype": "Purchase Order Log",
+					"doctype": 'SD YRP Purchase Order Log',
 					"type": "Runtime Acceptance",
 					"reason": "Rollback-safe lifecycle sample",
 				}
 			),
 			frappe.get_doc(
 				{
-					"doctype": "WO Recut",
+					"doctype": 'SD YRP WO Recut',
 					"work_order": work_order,
 					"wo_recut_details": [
 						{
@@ -356,7 +356,7 @@ class TestRuntimeAcceptance(IntegrationTestCase):
 				function()
 
 	def test_contextual_read_endpoints_execute_on_migrated_records(self):
-		cutting_plan = frappe.get_doc("Cutting Plan", "CP-2608-00006")
+		cutting_plan = frappe.get_doc('SD YRP Cutting Plan', "CP-2608-00006")
 		lot = cutting_plan.lot
 
 		get_daily_production_summary_report(
@@ -368,19 +368,19 @@ class TestRuntimeAcceptance(IntegrationTestCase):
 
 		calls = (
 			(
-				"essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.get_cloth_accessories",
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.get_cloth_accessories",
 				{"cutting_plan": cutting_plan.name},
 			),
 			(
-				"essdee_yrp.essdee_yrp.doctype.cutting_laysheet.cutting_laysheet.get_select_attributes",
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.get_select_attributes",
 				{"cutting_plan": cutting_plan.name},
 			),
 			(
-				"essdee_yrp.essdee_yrp.doctype.cutting_marker.cutting_marker.calculate_parts",
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_marker.sd_yrp_cutting_marker.calculate_parts",
 				{"cutting_plan": cutting_plan.name},
 			),
 			(
-				"essdee_yrp.essdee_yrp.doctype.cutting_marker.cutting_marker.get_primary_and_bundle_detail",
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_marker.sd_yrp_cutting_marker.get_primary_and_bundle_detail",
 				{
 					"lot": lot,
 					"selected_value": "Machine",
@@ -389,7 +389,7 @@ class TestRuntimeAcceptance(IntegrationTestCase):
 				},
 			),
 			(
-				"essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.get_primary_values",
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.get_primary_values",
 				{"lot": lot},
 			),
 		)

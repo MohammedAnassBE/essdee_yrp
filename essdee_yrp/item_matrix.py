@@ -29,8 +29,8 @@ def normalize_item_matrix_row_indexes(rows):
 			normalized.append(row)
 			continue
 
-		variant = frappe.get_cached_doc("Item Variant", variant_name)
-		parent_item = frappe.get_cached_doc("Item", variant.item)
+		variant = frappe.get_cached_doc('YRP Item Variant', variant_name)
+		parent_item = frappe.get_cached_doc('YRP Item', variant.item)
 		primary_attribute = parent_item.get("primary_attribute")
 		attributes = tuple(
 			sorted(

@@ -1,6 +1,6 @@
 """Essdee controller behaviour for Item Production Detail."""
 
-from yrp.yrp.doctype.item_production_detail.item_production_detail import (
+from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
 	ItemProductionDetail as BaseItemProductionDetail,
 )
 

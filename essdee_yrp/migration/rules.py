@@ -11,15 +11,51 @@ from essdee_yrp.migration.engine import DocTypeRule
 
 
 DOCTYPE_RENAMES = {
-	"Essdee Debit": "Debit",
-	"Essdee Raw Print Format": "ZPL Raw Print Format",
-	"Essdee Raw Print Format Detail": "ZPL Raw Print Format Detail",
-	"GRN Item Type": "Received Type",
-	"GRN Deliverable": "YRP GRN Deliverable",
-	"Purchase Order Lot": "Lot MultiSelect",
-	"Stock Settings": "YRP Stock Settings",
-	"Vendor Bill Tracking": "Bill Tracking",
-	"Vendor Bill Tracking Assignment Detail": "Bill Tracking Assignment Detail",
+	"Essdee Debit": 'YRP Debit',
+	"Essdee Raw Print Format": 'YRP ZPL Raw Print Format',
+	"Essdee Raw Print Format Detail": 'YRP ZPL Raw Print Format Detail',
+	"GRN Item Type": 'YRP Received Type',
+	"GRN Deliverable": 'SD YRP YRP GRN Deliverable',
+	"Purchase Order Lot": 'SD YRP Lot MultiSelect',
+	"Stock Settings": 'YRP YRP Stock Settings',
+	"Vendor Bill Tracking": 'YRP Bill Tracking',
+	"Vendor Bill Tracking Assignment Detail": 'YRP Bill Tracking Assignment Detail',
+	"Bin": "YRP Bin",
+	"Delivery Challan": "YRP Delivery Challan",
+	"Delivery Challan Item": "YRP Delivery Challan Item",
+	"FG Stock Entry": "SD YRP FG Stock Entry",
+	"Finishing Plan Old Lot Item": "SD YRP Finishing Plan Old Lot Item",
+	"Goods Received Note": "YRP Goods Received Note",
+	"Goods Received Note Item": "YRP Goods Received Note Item",
+	"GRN Rework Item": "SD YRP GRN Rework Item",
+	"IPD Process": "YRP IPD Process",
+	"Item": "YRP Item",
+	"Item BOM": "YRP Item BOM",
+	"Item BOM Attribute Mapping": "YRP Item BOM Attribute Mapping",
+	"Item Conversion": "SD YRP Item Conversion",
+	"Item Production Detail": "YRP Item Production Detail",
+	"Lot Transfer Item": "SD YRP Lot Transfer Item",
+	"Lotwise Item Profit": "SD YRP Lotwise Item Profit",
+	"MRP Settings": "SD YRP MRP Settings",
+	"Process": "YRP Process",
+	"Product": "SD YRP Product",
+	"Production Order Detail": "YRP Production Order Detail",
+	"Purchase Invoice": "YRP Purchase Invoice",
+	"Purchase Order": "YRP Purchase Order",
+	"Purchase Order Item": "YRP Purchase Order Item",
+	"Repost Item Valuation": "YRP Repost Item Valuation",
+	"Stiching Item Detail": "SD YRP Stiching Item Detail",
+	"Stock Entry": "YRP Stock Entry",
+	"Stock Entry Detail": "YRP Stock Entry Detail",
+	"Stock Ledger Entry": "YRP Stock Ledger Entry",
+	"Stock Reconciliation": "YRP Stock Reconciliation",
+	"Stock Reconciliation Item": "YRP Stock Reconciliation Item",
+	"Stock Reservation Entry": "YRP Stock Reservation Entry",
+	"Stock Update": "YRP Stock Update",
+	"Work Order": "YRP Work Order",
+	"Work Order Deliverables": "YRP Work Order Deliverables",
+	"Work Order Receivables": "YRP Work Order Receivables",
+	"Work Station": "YRP Work Station",
 }
 
 
@@ -38,17 +74,17 @@ RULES = {
 		allowed_type_changes=frozenset({("Int", "Data")}),
 	),
 	"Essdee Debit": DocTypeRule(
-		target="Debit",
+		target='YRP Debit',
 		ignored_fields={
 			"against": "Validated as Work Order by the custom transformer",
 		},
 		custom_transformer="essdee_debit_to_debit",
 	),
 	"Essdee Raw Print Format": DocTypeRule(
-		target="ZPL Raw Print Format",
+		target='YRP ZPL Raw Print Format',
 		field_map={"raw_print_format_details": "zpl_raw_print_format_details"},
 	),
-	"Essdee Raw Print Format Detail": DocTypeRule(target="ZPL Raw Print Format Detail"),
+	"Essdee Raw Print Format Detail": DocTypeRule(target='YRP ZPL Raw Print Format Detail'),
 	"FG Stock Entry": DocTypeRule(
 		value_transformers={"warehouse": "supplier_to_warehouse"}
 	),
@@ -63,11 +99,11 @@ RULES = {
 		post_transformer="derive_goods_received_note_fields",
 	),
 	"GRN Deliverable": DocTypeRule(
-		target="YRP GRN Deliverable",
+		target='SD YRP YRP GRN Deliverable',
 		post_transformer="derive_grn_deliverable_dimensions",
 	),
 	"GRN Item Type": DocTypeRule(
-		target="Received Type",
+		target='YRP Received Type',
 		field_map={"grn_type": "received_type_name"},
 	),
 	"GRN Rework Item": DocTypeRule(
@@ -93,7 +129,7 @@ RULES = {
 				"contains zero nonblank values across all 437 records"
 			)
 		},
-		table_option_map={"item_attributes": "IPD Item Attribute"},
+		table_option_map={"item_attributes": 'YRP IPD Item Attribute'},
 		post_transformer="remove_empty_ipd_process_placeholders",
 	),
 	"IPD Process": DocTypeRule(custom_transformer="ipd_process_to_f16"),
@@ -178,7 +214,7 @@ RULES = {
 		value_transformers={"warehouse": "supplier_to_warehouse"},
 	),
 	"Stock Settings": DocTypeRule(
-		target="YRP Stock Settings",
+		target='YRP YRP Stock Settings',
 		field_map={"default_rejected_type": "default_rejected_received_type"},
 		ignored_fields={
 			"sms_old_database_host": "Obsolete legacy database credential",
@@ -197,7 +233,7 @@ RULES = {
 		post_transformer="default_legacy_stitching_category"
 	),
 	"Vendor Bill Tracking": DocTypeRule(
-		target="Bill Tracking",
+		target='YRP Bill Tracking',
 		field_map={
 			"vendor_bill_tracking_history": "bill_tracking_history",
 			"purchase_invoice": "erp_purchase_invoice",
@@ -206,7 +242,7 @@ RULES = {
 		allowed_type_changes=frozenset({("Select", "Link"), ("Data", "Link")}),
 	),
 	"Vendor Bill Tracking Assignment Detail": DocTypeRule(
-		target="Bill Tracking Assignment Detail"
+		target='YRP Bill Tracking Assignment Detail'
 	),
 	"Work Order": DocTypeRule(field_map={"close_reason": "sd_close_reason"}),
 	"Work Order Deliverables": DocTypeRule(field_map={"item_type": "received_type"}),

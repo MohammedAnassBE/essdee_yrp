@@ -25,7 +25,7 @@ const hideFormFields = [
 ]
 
 const readOnlyChildFields = {
-	"Item Item Attribute": ["mapping"],
+	"YRP Item Item Attribute": ["mapping"],
 }
 
 const boolLabels = {
@@ -44,8 +44,8 @@ const labels = {
 // can never be saved; Item Group has no equivalent controller guard, so the
 // leaf-only filter is especially important.
 const linkSearchHandlers = {
-	item_group: () => (q) => searchLink("Item Group", q, { is_group: 0 }),
-	default_unit_of_measure: () => (q) => searchLink("UOM", q, { secondary_only: 0 }),
+	item_group: () => (q) => searchLink("YRP Item Group", q, { is_group: 0 }),
+	default_unit_of_measure: () => (q) => searchLink("YRP UOM", q, { secondary_only: 0 }),
 }
 
 export default {

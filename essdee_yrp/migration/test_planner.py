@@ -26,19 +26,19 @@ class MigrationPlannerTest(unittest.TestCase):
 		self.assertEqual(len(self.payload["doctype_details"]), 263)
 		self.assertEqual(
 			self.payload["migration_kinds"],
-			{"custom": 3, "identity": 227, "mapped": 33},
+			{"custom": 3, "identity": 1, "mapped": 259},
 		)
 
 	def test_known_renames_appear_in_doctype_details(self):
 		details = {row["source_doctype"]: row for row in self.payload["doctype_details"]}
-		self.assertEqual(details["GRN Item Type"]["target_doctype"], "Received Type")
-		self.assertEqual(details["GRN Deliverable"]["target_doctype"], "YRP GRN Deliverable")
-		self.assertEqual(details["Purchase Order Lot"]["target_doctype"], "Lot MultiSelect")
+		self.assertEqual(details["GRN Item Type"]["target_doctype"], 'YRP Received Type')
+		self.assertEqual(details["GRN Deliverable"]["target_doctype"], 'SD YRP YRP GRN Deliverable')
+		self.assertEqual(details["Purchase Order Lot"]["target_doctype"], 'SD YRP Lot MultiSelect')
 		self.assertEqual(
 			details["GRN Item Type"]["field_map"],
 			{"grn_type": "received_type_name"},
 		)
-		self.assertEqual(details["Vendor Bill Tracking"]["target_doctype"], "Bill Tracking")
+		self.assertEqual(details["Vendor Bill Tracking"]["target_doctype"], 'YRP Bill Tracking')
 
 	def test_reviewed_mappings_resolve_every_schema_blocker(self):
 		self.assertTrue(self.plan.ready, self.plan.issues)
@@ -49,7 +49,7 @@ class MigrationPlannerTest(unittest.TestCase):
 		details = {row["source_doctype"]: row for row in self.payload["doctype_details"]}
 		self.assertEqual(
 			details["Item Production Detail"]["table_option_map"],
-			{"item_attributes": "IPD Item Attribute"},
+			{"item_attributes": 'YRP IPD Item Attribute'},
 		)
 		self.assertEqual(
 			details["Vendor Bill Tracking"]["field_map"],

@@ -1,0 +1,1145 @@
+# Copyright (c) 2024, Essdee and contributors
+# For license information, please see license.txt
+import frappe, copy
+from frappe import _
+from datetime import datetime
+from frappe.utils import flt, now, sbool
+from frappe.model.document import Document
+from yrp.utils import update_if_string_instance
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import fetch_order_item_details
+from yrp.yrp.doctype.yrp_item.yrp_item import get_attribute_details, get_or_create_variant
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet import (
+	_save_laysheet_terminal_transition,
+	update_cutting_plan,
+)
+from essdee_yrp.fabric_requirement import calculate_cloth, get_cloth_combination, get_stitching_combination
+from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import get_ipd_primary_values
+
+DEFAULT_PIECE_WEIGHT_TOLERANCE = 0.003
+
+
+def _get_submitted_cutting_plan(name, permission="write"):
+	doc = frappe.get_doc('SD YRP Cutting Plan', name)
+	doc.check_permission(permission)
+	if doc.docstatus != 1:
+		frappe.throw(_("Cutting Plan {0} must be submitted for this action.").format(name))
+	return doc
+
+
+def get_mrp_piece_weight_tolerance():
+	return flt(frappe.db.get_single_value('SD YRP MRP Settings', "piece_weight_tolerance")) or DEFAULT_PIECE_WEIGHT_TOLERANCE
+
+
+def has_cls_grammage_approval_role(user=None):
+	settings = frappe.get_single('SD YRP MRP Settings')
+	approval_roles = [
+		row.role for row in (settings.get("cls_grammage_approval_roles") or [])
+	]
+	if not approval_roles:
+		return False
+
+	user_roles = frappe.get_roles(user or frappe.session.user)
+	return bool(set(approval_roles) & set(user_roles))
+
+
+@frappe.whitelist()
+def can_change_approval_grammage():
+	return has_cls_grammage_approval_role()
+
+
+def approve_pending_laysheets_within_tolerance(cutting_plan, piece_weight_tolerance):
+	approved_laysheets = []
+	laysheets = frappe.get_all(
+		'SD YRP Cutting LaySheet',
+		filters={
+			"cutting_plan": cutting_plan,
+			"status": "Approval Pending",
+		},
+		fields=["name", "piece_weight", "required_pcs_weight"],
+	)
+
+	for laysheet in laysheets:
+		diff = abs(flt(laysheet.piece_weight) - flt(laysheet.required_pcs_weight))
+		if diff > piece_weight_tolerance:
+			continue
+
+		cls_doc = frappe.get_doc('SD YRP Cutting LaySheet', laysheet.name)
+		cls_doc.approved_by = frappe.session.user
+		cls_doc.status = "Bundles Generated"
+		_save_laysheet_terminal_transition(cls_doc, ignore_permissions=True)
+		approved_laysheets.append(laysheet.name)
+
+	return approved_laysheets
+
+
+def add_grammage_change_log(cutting_plan, from_tolerance, to_tolerance):
+	if from_tolerance == to_tolerance:
+		return
+
+	idx = frappe.db.sql(
+		"""
+		SELECT COALESCE(MAX(idx), 0) + 1
+		FROM `tabSD YRP Cutting Plan Grammage Change Log`
+		WHERE parent = %s
+			AND parentfield = 'grammage_change_logs'
+		""",
+		(cutting_plan,),
+	)[0][0]
+	docstatus = frappe.db.get_value('SD YRP Cutting Plan', cutting_plan, "docstatus")
+	frappe.get_doc({
+		"doctype": 'SD YRP Cutting Plan Grammage Change Log',
+		"parent": cutting_plan,
+		"parenttype": 'SD YRP Cutting Plan',
+		"parentfield": "grammage_change_logs",
+		"docstatus": docstatus,
+		"idx": idx,
+		"from_grammage_allowance": from_tolerance,
+		"to_grammage_allowance": to_tolerance,
+		"changed_by": frappe.session.user,
+		"changed_on": now(),
+	}).insert(ignore_permissions=True)
+
+
+@frappe.whitelist()
+def change_approval_grammage(doc_name, piece_weight_tolerance):
+	_get_submitted_cutting_plan(doc_name)
+	if not has_cls_grammage_approval_role():
+		frappe.throw("You do not have the required role to change approval grammage")
+
+	if not frappe.db.exists('SD YRP Cutting Plan', doc_name):
+		frappe.throw("Cutting Plan not found")
+
+	piece_weight_tolerance = flt(piece_weight_tolerance)
+	if piece_weight_tolerance <= 0:
+		frappe.throw("Grammage Allowance must be greater than zero")
+
+	old_piece_weight_tolerance = flt(frappe.db.get_value('SD YRP Cutting Plan', doc_name, "piece_weight_tolerance"))
+	frappe.db.set_value('SD YRP Cutting Plan', doc_name, "piece_weight_tolerance", piece_weight_tolerance)
+	add_grammage_change_log(doc_name, old_piece_weight_tolerance, piece_weight_tolerance)
+	approved_laysheets = approve_pending_laysheets_within_tolerance(doc_name, piece_weight_tolerance)
+	frappe.msgprint(
+		f"Approval grammage changed successfully. {len(approved_laysheets)} pending LaySheet(s) approved.",
+		indicator="green",
+		alert=True,
+	)
+	return {
+		"piece_weight_tolerance": piece_weight_tolerance,
+		"approved_laysheets": approved_laysheets,
+	}
+
+
+class SDYRPCuttingPlan(Document):
+	def on_update_after_submit(self):
+		if self.no_of_colours == 0:
+			self.no_of_colours = self.get_no_of_colours()
+
+		updated_status = None
+		status = self.cp_status
+		if status in ['Planned', 'Ready to Cut', 'Fabric Partially Received']:
+			if not self.cutting_plan_cloth_details:
+				# An empty requirement table is not evidence that all cloth was
+				# received. Historical plans can reach this state when Generate was
+				# skipped, so keep them safely Planned until Fetch regenerates rows.
+				updated_status = 'Planned'
+			else:
+				percent = frappe.db.get_single_value('SD YRP MRP Settings', "cloth_allowance_percentage")
+				check = True
+				for row in self.cutting_plan_cloth_details:
+					if row.weight < row.required_weight:
+						percent_weight = (row.weight/100) * percent
+						if row.weight < (row.required_weight - percent_weight):
+							check = False
+
+				if check:
+					updated_status = 'Ready to Cut'
+				else:
+					updated_status = 'Fabric Partially Received'
+
+		if not updated_status:
+			completed_json = update_if_string_instance(self.completed_items_json)
+			check = True
+			one_colour_completed = False
+			for row in completed_json['items']:
+				if row['completed']:
+					one_colour_completed = True
+				if not row['completed']:
+					check = False
+			if check:
+				updated_status = "Completed"
+			elif one_colour_completed:
+				updated_status = 'Partially Completed'
+			else:
+				updated_status = "Cutting In Progress"
+
+		completed_colours = self.get_completed_colours(updated_status)
+		frappe.db.sql(
+			"""
+				UPDATE `tabSD YRP Cutting Plan Cloth Detail` SET balance_weight = weight - used_weight
+				WHERE parent = %s AND parentfield = 'cutting_plan_cloth_details'
+			""",
+			(self.name,),
+		)
+		frappe.db.set_value(self.doctype, self.name, "cp_status", updated_status)
+		frappe.db.set_value(self.doctype, self.name, "no_of_colours_completed", completed_colours)
+		frappe.db.set_value(self.doctype, self.name, "no_of_colours", self.no_of_colours)
+		self.reload()
+
+	def get_completed_colours(self, status):
+		if status in ['Draft', 'Planned', 'Ready to Cut', 'Cutting In Progress', 'Completed']:
+			return self.no_of_colours
+
+		if status == 'Partially Completed':
+			completed_json = update_if_string_instance(self.completed_items_json)
+			count = 0
+			for row in completed_json['items']:
+				if row['completed']:
+					count += 1
+			return count
+
+		if status == 'Fabric Partially Received':
+			percent = frappe.db.get_single_value('SD YRP MRP Settings', "cloth_allowance_percentage")
+			received_cloths = []
+			for row in self.cutting_plan_cloth_details:
+				if row.weight < row.required_weight:
+					percent_weight = (row.weight/100) * percent
+					if row.weight >= (row.required_weight - percent_weight):
+						received_cloths.append(row.cloth_item_variant)
+				else:
+					received_cloths.append(row.cloth_item_variant)
+
+			ipd_doc = frappe.get_cached_doc('YRP Item Production Detail', self.production_detail)
+			item_attributes = get_attribute_details(self.item)
+			cloth_combination = get_cloth_combination(ipd_doc)
+			stitching_combination = get_stitching_combination(ipd_doc)
+			cloth_detail = {}
+			for cloth in ipd_doc.cloth_detail:
+				cloth_detail[cloth.name1] = cloth.cloth
+
+			cloth_details = {}
+			for item in self.items:
+				variant = frappe.get_doc('YRP Item Variant', item.item_variant)
+				attr_details = item_attribute_details(variant, item_attributes)
+				set_combination = update_if_string_instance(item.set_combination)
+				major_colour = set_combination.get("major_colour")
+				colour = attr_details[ipd_doc.packing_attribute] + "-" + major_colour
+				if ipd_doc.is_set_item:
+					part = attr_details[ipd_doc.set_item_attribute]
+					colour = colour + "-"+ part
+
+				cloth_details.setdefault(colour, [])
+				c = calculate_cloth(ipd_doc, attr_details, item.quantity, cloth_combination, stitching_combination)
+				for c1 in c:
+					variant = get_or_create_variant(cloth_detail[c1["cloth_type"]], {
+						ipd_doc.packing_attribute: c1['colour'],
+						'Dia': c1['dia']
+					})
+					if variant not in cloth_details[colour]:
+						cloth_details[colour].append(variant)
+
+			no_of_completed = 0
+			for colour in cloth_details:
+				check = True
+				for variant in cloth_details[colour]:
+					if variant not in received_cloths:
+						check = False
+						break
+				if check:
+					no_of_completed += 1
+
+			return no_of_completed
+
+		return 0
+
+	def autoname(self):
+		self.naming_series = "CP-.YY..MM.-.{#####}."
+
+	def onload(self):
+		items = fetch_order_item_details(self.items, self.production_detail)
+		self.set_onload('item_details', items)
+
+		cloth_items = fetch_cloth_details(self.cutting_plan_cloth_details)
+		self.set_onload('item_cloth_details', cloth_items)
+
+		accessory_items = fetch_cloth_details(self.cutting_plan_accessory_details)
+		self.set_onload("item_accessory_details",accessory_items)
+
+	def before_validate(self):
+		if not flt(self.piece_weight_tolerance):
+			self.piece_weight_tolerance = get_mrp_piece_weight_tolerance()
+
+		if self.is_new():
+			self.version = "V3"
+			if self.get('item_details'):
+				x, y = get_complete_incomplete_structure(self.production_detail,self.item_details)
+				self.completed_items_json = x
+				self.incomplete_items_json = y
+
+		if self.get('item_details'):
+			items = save_item_details(self.item_details)
+			self.set("items",items)
+
+		if self.get('item_cloth_details'):
+			items = save_item_cloth_details(self.item_cloth_details)
+			self.set("cutting_plan_cloth_details",items)
+
+	def get_no_of_colours(self):
+		total_rows = len(self.items)
+		total_sizes = len(get_ipd_primary_values(self.production_detail))
+		return total_rows/total_sizes
+
+	def before_submit(self):
+		if not self.cutting_plan_cloth_details:
+			_generate_cloth_requirements(self, preserve_operational_values=False)
+
+		self.no_of_colours = self.get_no_of_colours()
+		percent = frappe.db.get_single_value('SD YRP MRP Settings', "cloth_allowance_percentage")
+		check = True
+		all_zero = True
+		for row in self.cutting_plan_cloth_details:
+			if row.weight > 0:
+				all_zero = False
+			if row.weight < row.required_weight:
+				percent_weight = (row.weight/100) * percent
+				if row.weight < (row.required_weight - percent_weight):
+					check = False
+
+		if all_zero:
+			self.cp_status = 'Planned'
+		elif not check:
+			self.cp_status = 'Fabric Partially Received'
+		else:
+			self.cp_status = 'Ready to Cut'
+
+def get_complete_incomplete_structure(ipd,item_details):
+	ipd_doc = frappe.get_doc('YRP Item Production Detail',ipd)
+	stiching_attrs = None
+	panels = {}
+	item_details = update_if_string_instance(item_details)
+	x = item_details
+	x = x[0]
+	x = add_additional_attributes(ipd_doc,x)
+	if ipd_doc.is_set_item:
+		panels, stiching_attrs = get_set_item_panels(ipd_doc,panels)
+	else:
+		panels, stiching_attrs = get_item_panels(ipd_doc,panels)
+	y = copy.deepcopy(x)
+	completed_items_json = get_complete_cut_structure(x,stiching_attrs)
+	incomplete_items_json = get_incomplete_cut_structure(ipd_doc, panels, stiching_attrs, y)
+	return completed_items_json,incomplete_items_json
+
+def get_item_panels(ipd_doc,panels):
+	stiching_attrs = {ipd_doc.stiching_attribute : []}
+	for item in ipd_doc.stiching_item_details:
+		panels[item.stiching_attribute_value] = 0
+		stiching_attrs[ipd_doc.stiching_attribute].append(item.stiching_attribute_value)
+	return panels,stiching_attrs
+
+def get_complete_cut_structure(x,stiching_attrs):
+	for item in x['items']:
+		for val in item['values']:
+			item['values'][val] = 0
+		item['completed'] = False
+		item['completed_date'] = None
+	x = x | stiching_attrs
+	return x
+
+def get_incomplete_cut_structure(ipd_doc,panels, stiching_attrs, y):
+	if ipd_doc.is_set_item:
+		for item in y['items']:
+			for val in item['values']:
+				item['values'][val] = panels[item['attributes'][ipd_doc.set_item_attribute]].copy()
+	else:
+		for item in y['items']:
+			for val in item['values']:
+				item['values'][val] = panels.copy()
+	y = y | stiching_attrs
+	return y
+
+def add_additional_attributes(ipd_doc,x):
+	x['is_set_item'] = ipd_doc.is_set_item
+	x['set_item_attr'] = ipd_doc.set_item_attribute
+	x["stiching_attr"] = ipd_doc.stiching_attribute
+	x['pack_attr'] = ipd_doc.packing_attribute
+	total_qty = {}
+	for item in x['primary_attribute_values']:
+		total_qty[item] = 0
+	x['total_qty'] = total_qty
+
+	return x
+
+def get_set_item_panels(ipd_doc,panels):
+	m = {ipd_doc.stiching_attribute : {}}
+	for item in ipd_doc.stiching_item_details:
+		if item.set_item_attribute_value in panels:
+			panels[item.set_item_attribute_value][item.stiching_attribute_value] = 0
+			m[ipd_doc.stiching_attribute][item.set_item_attribute_value].append(item.stiching_attribute_value)
+		else:
+			panels[item.set_item_attribute_value] = {}
+			panels[item.set_item_attribute_value][item.stiching_attribute_value] = 0
+			m[ipd_doc.stiching_attribute][item.set_item_attribute_value] = []
+			m[ipd_doc.stiching_attribute][item.set_item_attribute_value].append(item.stiching_attribute_value)
+	return panels,m
+
+def save_item_cloth_details(items):
+	items = update_if_string_instance(items)
+	item_details = []
+	for item in items:
+		item_details.append({
+			"cloth_item_variant":item['cloth_item_variant'],
+			"cloth_type":item['cloth_type'],
+			"colour":item['colour'],
+			"dia":item['dia'],
+			"required_weight":item['required_weight'],
+			"weight":item['weight'],
+			"used_weight": item['used_weight'],
+			"balance_weight": round(item['weight'] - item['used_weight'], 3)
+		})
+	return item_details
+
+def save_item_details(item_details):
+	item_details = update_if_string_instance(item_details)
+	items = []
+	row_index = 0
+	table_index = -1
+	for group in item_details:
+		table_index += 1
+		for item in group['items']:
+			item_name = item['name']
+			item_attributes = item['attributes']
+			for attr, values in item['values'].items():
+				item1 = {}
+				quantity = values.get('qty')
+				if not quantity:
+					quantity = 0
+				item_attributes[item.get('primary_attribute')] = attr
+				variant = get_or_create_variant(item_name, item_attributes)
+				item1['item_variant'] = variant
+				item1['quantity'] = quantity
+				item1['row_index'] = row_index
+				item1['table_index'] = 0
+				item1['set_combination'] = item.get('item_keys', {})
+				items.append(item1)
+			row_index += 1
+	return items
+
+def fetch_cloth_details(items):
+	item_details = []
+	for item in items:
+		variant = item.cloth_item_variant
+		variant_doc = frappe.get_doc('YRP Item Variant',variant)
+		item_details.append({
+			"accessory": item.accessory,
+			"cloth_item_variant":item.cloth_item_variant,
+			"item":variant_doc.item,
+			"colour":item.colour,
+			"dia":item.dia,
+			"cloth_type":item.cloth_type,
+			"required_weight":item.required_weight,
+			"weight":item.weight,
+			"used_weight":item.used_weight,
+			"balance_weight":item.balance_weight,
+		})
+	return item_details
+
+@frappe.whitelist()
+def get_items(lot):
+	lot_doc = frappe.get_doc('SD YRP Lot',lot)
+	lot_doc.check_permission("read")
+	items = fetch_order_item_details(lot_doc.lot_order_details, lot_doc.production_detail)
+	return items
+
+@frappe.whitelist()
+def get_cloth1(cutting_plan):
+	cutting_plan_doc = _get_submitted_cutting_plan(cutting_plan)
+	counts = _generate_cloth_requirements(cutting_plan_doc)
+	text = f"Cloth Generated on {datetime.now()} by {frappe.session.user}"
+	cutting_plan_doc.add_comment('Comment',text=text)
+	cutting_plan_doc.save()
+	return counts
+
+
+def _cloth_requirement_key(row):
+	return (
+		row.get("cloth_item_variant"),
+		row.get("cloth_type"),
+		row.get("colour"),
+		row.get("dia"),
+		row.get("accessory"),
+	)
+
+
+def _preserve_cloth_operational_values(required_rows, current_rows):
+	current_by_key = {_cloth_requirement_key(row): row for row in current_rows}
+	for row in required_rows:
+		current = current_by_key.get(_cloth_requirement_key(row))
+		row["weight"] = flt(current.get("weight")) if current else 0.0
+		row["used_weight"] = flt(current.get("used_weight")) if current else 0.0
+		row["balance_weight"] = round(row["weight"] - row["used_weight"], 3)
+	return required_rows
+
+
+def _build_cloth_requirement_rows(cutting_plan_doc):
+	ipd_doc = frappe.get_cached_doc('YRP Item Production Detail', cutting_plan_doc.production_detail)
+	item_attributes = get_attribute_details(cutting_plan_doc.item)
+	cloth_combination = get_cloth_combination(ipd_doc)
+	stitching_combination = get_stitching_combination(ipd_doc)
+	cloth_detail = {}
+	for cloth in ipd_doc.cloth_detail:
+		cloth_detail[cloth.name1] = cloth.cloth
+
+	cloth_details = {}
+	accessory_detail = {}
+	for item in cutting_plan_doc.items:
+		variant = frappe.get_doc('YRP Item Variant', item.item_variant)
+		attr_details = item_attribute_details(variant, item_attributes)
+		if item.set_combination:
+			set_combination = update_if_string_instance(item.set_combination)
+			if set_colour:= set_combination.get("major_colour"):
+				attr_details['set_colour'] = set_colour
+
+		c = calculate_cloth(ipd_doc, attr_details, item.quantity, cloth_combination, stitching_combination)
+		for c1 in c:
+			key = (c1["cloth_type"], c1["colour"], c1["dia"])
+			cloth_details.setdefault(key, 0)
+			cloth_details[key] += c1["quantity"]
+
+			if c1["type"] == "accessory":
+				key = (c1["cloth_type"], c1["colour"], c1["dia"], c1['accessory_name'])
+				accessory_detail.setdefault(key,0)
+				accessory_detail[key] += c1["quantity"]
+
+	required_cloth_details = []
+	for k in cloth_details:
+		attributes = {ipd_doc.packing_attribute: k[1], 'Dia': k[2]}
+		item_name = cloth_detail[k[0]]
+		cloth_name = get_or_create_variant(item_name, attributes)
+		required_cloth_details.append({
+			"cloth_item_variant": cloth_name,
+			"cloth_type": k[0],
+			"colour": k[1],
+			'dia': k[2],
+			"required_weight": cloth_details[k],
+			"weight": 0.0,
+			"used_weight": 0.0,
+			"balance_weight": 0.0,
+		})
+	if not required_cloth_details:
+		frappe.throw(_(
+			"No cloth requirements were generated for Cutting Plan {0}. "
+			"Verify the Cutting consumption and Cutting Cloth mappings in Item Production Detail {1}."
+		).format(cutting_plan_doc.name, cutting_plan_doc.production_detail))
+
+	required_accessory_details = []
+	for k in accessory_detail:
+		attributes = {ipd_doc.packing_attribute: k[1], 'Dia': k[2]}
+		item_name = cloth_detail[k[0]]
+		cloth_name = get_or_create_variant(item_name, attributes)
+		required_accessory_details.append({
+			"accessory": k[3],
+			"cloth_item_variant": cloth_name,
+			"cloth_type": k[0],
+			"colour": k[1],
+			'dia': k[2],
+			"required_weight": accessory_detail[k],
+			"weight": 0.0,
+			"used_weight": 0.0,
+			"balance_weight": 0.0,
+		})
+	return required_cloth_details, required_accessory_details
+
+
+def _generate_cloth_requirements(cutting_plan_doc, preserve_operational_values=True):
+	required_cloth_details, required_accessory_details = _build_cloth_requirement_rows(cutting_plan_doc)
+	if preserve_operational_values:
+		required_cloth_details = _preserve_cloth_operational_values(
+			required_cloth_details, cutting_plan_doc.cutting_plan_cloth_details
+		)
+		required_accessory_details = _preserve_cloth_operational_values(
+			required_accessory_details, cutting_plan_doc.cutting_plan_accessory_details
+		)
+	cutting_plan_doc.set("cutting_plan_accessory_details", required_accessory_details)
+	cutting_plan_doc.set("cutting_plan_cloth_details", required_cloth_details)
+	return {
+		"cloth_requirements": len(required_cloth_details),
+		"accessory_requirements": len(required_accessory_details),
+	}
+
+def item_attribute_details(variant, item_attributes):
+	attribute_details = {}
+	for attr in variant.attributes:
+		if attr.attribute != item_attributes['dependent_attribute']:
+			attribute_details[attr.attribute] = attr.attribute_value
+	return attribute_details
+
+def get_phantom_panels(cutting_plan):
+	# Panels present in the current IPD stiching_item_details but cut in none of the
+	# plan's Label Printed laysheet bundles, restricted to panels whose part holds
+	# non-zero completed quantities in the stored completed_items_json. Rebuilding the
+	# summary structure with such a panel makes min-across-panels 0, moving that
+	# completed back to incomplete. Parts with zero completed (a set part deliberately
+	# never cut in this plan, or one whose only laysheet is not yet Label Printed)
+	# recalc to the same zero — harmless, not reported.
+	cls_list = frappe.get_all('SD YRP Cutting LaySheet', filters={"cutting_plan": cutting_plan, "status": "Label Printed"}, pluck="name")
+	if not cls_list:
+		return []
+	ipd = frappe.get_value('SD YRP Cutting Plan', cutting_plan, "production_detail")
+	if not ipd:
+		return []
+	ipd_doc = frappe.get_cached_doc('YRP Item Production Detail', ipd)
+	panel_part = {}
+	for row in ipd_doc.stiching_item_details:
+		panel_part[row.stiching_attribute_value] = row.set_item_attribute_value if ipd_doc.is_set_item else None
+	cut_panels = set()
+	bundle_parts = frappe.get_all(
+		'SD YRP Cutting LaySheet Bundle',
+		filters={"parenttype": 'SD YRP Cutting LaySheet', "parent": ["in", cls_list]},
+		pluck="part",
+	)
+	for parts in bundle_parts:
+		if not parts:
+			continue
+		# no strip: update_cutting_plan replays with raw split values as keys
+		for part in parts.split(","):
+			cut_panels.add(part)
+	phantom_panels = set(panel_part) - cut_panels
+	if not phantom_panels:
+		return []
+	completed_items = update_if_string_instance(frappe.get_value('SD YRP Cutting Plan', cutting_plan, "completed_items_json"))
+	parts_with_completed = set()
+	for item in completed_items.get("items") or []:
+		# .get chains: legacy/odd-shaped stored JSON must degrade to not-reported,
+		# never raise — this runs inside laysheet cancel/revert/print flows
+		if not any((item.get('values') or {}).values()):
+			continue
+		parts_with_completed.add((item.get('attributes') or {}).get(ipd_doc.set_item_attribute) if ipd_doc.is_set_item else None)
+	return sorted(panel for panel in phantom_panels if panel_part[panel] in parts_with_completed)
+
+@frappe.whitelist()
+def calculate_laysheets(cutting_plan, ignore_phantom_panels=False):
+	_get_submitted_cutting_plan(cutting_plan)
+	# calc(cutting_plan)
+	phantom_panels = get_phantom_panels(cutting_plan)
+	if phantom_panels:
+		manual_trigger = frappe.form_dict.get("cmd") == "essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.calculate_laysheets"
+		if manual_trigger and not sbool(ignore_phantom_panels):
+			frappe.throw(
+				f"Panel(s) <b>{', '.join(phantom_panels)}</b> are in the IPD stitching panels but were not cut in any Label Printed laysheet of this plan, "
+				"while their part already has completed cut quantities. The IPD panel list changed after cutting, and recalculating now would reset "
+				"those completed quantities to zero and move the parts back to incomplete. "
+				"Fix the IPD panel list first, or pass ignore_phantom_panels=1 to recalculate anyway.",
+				title="Panels Never Cut",
+			)
+		frappe.log_error(
+			title=f"Cutting Plan {cutting_plan}: phantom panels on recalculation",
+			message=(
+				f"Panels {phantom_panels} exist in the current IPD stiching_item_details but in no cut bundle "
+				f"of the plan's Label Printed laysheets, and their parts hold non-zero completed quantities. "
+				f"Recalculation proceeded; those completed quantities are stranded back in incomplete_items_json."
+			),
+		)
+	frappe.enqueue(calc, "short", cutting_plan=cutting_plan)
+
+def calc(cutting_plan):
+	cp_doc = frappe.get_doc('SD YRP Cutting Plan',cutting_plan)
+	item_details = fetch_order_item_details(cp_doc.items,cp_doc.production_detail)
+	completed, incomplete = get_complete_incomplete_structure(cp_doc.production_detail,item_details)
+	cp_doc.completed_items_json = completed
+	cp_doc.incomplete_items_json = incomplete
+	for item in cp_doc.cutting_plan_cloth_details:
+		item.used_weight = 0
+		item.balance_weight = 0
+
+	for item in cp_doc.cutting_plan_accessory_details:
+		item.used_weight = 0
+	cp_doc.save()
+
+	cls_list = frappe.get_list('SD YRP Cutting LaySheet',filters = {"cutting_plan":cutting_plan,"status":"Label Printed"},pluck = "name")
+	for cls in cls_list:
+		update_cutting_plan(cls)
+
+	cp_doc.reload()
+	cloth = {}
+	recut_items = frappe.get_all('SD YRP Recut and Print Panel', filters={
+		"cutting_plan": cutting_plan,
+		"docstatus": 1,
+	}, pluck="name")
+
+	for recut in recut_items:
+		recut_doc = frappe.get_doc('SD YRP Recut and Print Panel', recut)
+		for item in recut_doc.recut_and_print_panel_details:
+			key = (item.colour, item.cloth_type, item.dia)
+			cloth.setdefault(key,0)
+			cloth[key] += item.weight
+
+	for item in cp_doc.cutting_plan_cloth_details:
+		key = (item.colour, item.cloth_type, item.dia)
+		if key not in cloth:
+			continue
+		item.used_weight += cloth[key]
+		item.balance_weight = item.weight - item.used_weight
+
+	cp_doc.save()
+
+@frappe.whitelist()
+def get_cutting_plan_laysheets_report(cutting_plan):
+	frappe.get_doc('SD YRP Cutting Plan', cutting_plan).check_permission("read")
+	cp_doc = frappe.get_doc('SD YRP Cutting Plan', cutting_plan)
+	ipd_doc = frappe.get_cached_doc('YRP Item Production Detail', cp_doc.production_detail)
+	from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import get_ipd_primary_values
+	sizes = get_ipd_primary_values(cp_doc.production_detail)
+	panels = []
+	if ipd_doc.is_set_item:
+		panels = {}
+		for row in ipd_doc.stiching_item_details:
+			panels.setdefault(row.set_item_attribute_value, [])
+
+	cls_list = frappe.get_list('SD YRP Cutting LaySheet', filters={"cutting_plan":cutting_plan,"status":"Label Printed"}, pluck="name", order_by="lay_no asc")
+	lay_details = {}
+	for cls in cls_list:
+		cls_doc = frappe.get_doc('SD YRP Cutting LaySheet',cls)
+		lay_no = cls_doc.lay_no
+		lay_details[lay_no] = {}
+		for row in cls_doc.cutting_laysheet_bundles:
+			parts = row.part.split(",")
+			parts = ", ".join(parts)
+			set_combination = update_if_string_instance(row.set_combination)
+			major_colour = set_combination['major_colour']
+			if ipd_doc.is_set_item:
+				if set_combination.get('set_part'):
+					if parts not in panels[set_combination['set_part']]:
+						panels[set_combination['set_part']].append(parts)
+					major_colour = "("+ major_colour +")" + set_combination["set_colour"] +"-"+set_combination.get('set_part')
+				else:
+					if parts not in panels[set_combination['major_part']]:
+						panels[set_combination['major_part']].append(parts)
+					major_colour = major_colour +"-"+set_combination.get('major_part')
+			else:
+				if parts not in panels:
+					panels.append(parts)
+
+			lay_details[lay_no].setdefault(major_colour, {})
+			lay_details[lay_no][major_colour].setdefault(row.size, {})
+			lay_details[lay_no][major_colour][row.size].setdefault(row.shade, {})
+			lay_details[lay_no][major_colour][row.size][row.shade].setdefault(parts, {})
+			lay_details[lay_no][major_colour][row.size][row.shade][parts].setdefault("qty", 0)
+			lay_details[lay_no][major_colour][row.size][row.shade][parts]["qty"] += row.quantity
+			lay_details[lay_no][major_colour][row.size][row.shade][parts].setdefault("bundles", 0)
+			lay_details[lay_no][major_colour][row.size][row.shade][parts]['bundles'] += 1
+	final_data = {}
+	for size in sizes:
+		for lay_number, colour_dict in lay_details.items():
+			if not lay_details.get(lay_number):
+				continue
+			for colour, colour_detail in colour_dict.items():
+				for cur_size, panel_detail in lay_details.get(lay_number).get(colour).items():
+					if cur_size == size:
+						final_data.setdefault(colour, [])
+						for shade in panel_detail:
+							duplicate = {}
+							duplicate['lay_no'] = lay_number
+							duplicate['size'] = size
+							duplicate['shade'] = shade
+							for panel, panel_details in panel_detail[shade].items():
+								duplicate[panel] = panel_details['qty']
+								duplicate[panel+"_Bundle"] = panel_details['bundles']
+							final_data[colour].append(duplicate)
+	return panels, final_data, ipd_doc.is_set_item
+
+@frappe.whitelist()
+def get_ccr(doc_name):
+	frappe.get_doc('SD YRP Cutting Plan', doc_name).check_permission("read")
+	cp_doc = frappe.get_doc('SD YRP Cutting Plan', doc_name)
+	cls_list = frappe.get_all('SD YRP Cutting LaySheet', filters={"cutting_plan": doc_name, "status": "Label Printed"}, pluck="name", order_by="lay_no asc")
+	print_panel_details = get_recut_print_panel_details(doc_name, "Print Panel")
+	recut_details = get_recut_print_panel_details(doc_name, "Recut")
+	markers = {}
+	keys = []
+	for cls in cls_list:
+		cls_doc = frappe.get_doc('SD YRP Cutting LaySheet', cls)
+		sizes = {}
+		for row in cls_doc.cutting_marker_ratios:
+			if row.size not in sizes:
+				sizes[row.size] = row.ratio
+		panels = cls_doc.calculated_parts.split(",")
+		panels.sort()
+		for idx, panel in enumerate(panels):
+			panels[idx] = panel.strip()
+
+		tup_panels = ", ".join(panels)
+		markers.setdefault(tup_panels, {})
+		cloth_type = {}
+		for row in cls_doc.cutting_laysheet_details:
+			key = (row.colour, row.cloth_type)
+			cloth_type.setdefault(row.colour, row.cloth_type)
+			markers[tup_panels].setdefault(key, {
+				"used_weight": 0,
+				"received_weight": 0,
+				"balance_weight": 0,
+				"total_pieces": 0,
+				"reqd_weight": 0,
+			})
+			if key not in keys:
+				keys.append(key)
+				markers[tup_panels][key]['reqd_weight'] += cls_doc.required_pcs_weight
+
+			markers[tup_panels][key]["used_weight"] += row.used_weight
+			for size in sizes:
+				markers[tup_panels][key].setdefault(size, { "bits": 0 })
+				bits = sizes[size] * row.effective_bits
+				markers[tup_panels][key][size]["bits"] += bits
+				markers[tup_panels][key]["total_pieces"] += bits
+
+		if cp_doc.is_manual_entry:
+			for row in cls_doc.cutting_laysheet_bundles:
+				key = (row.colour, cloth_type[row.colour])
+				markers[tup_panels][key][row.size]["bits"] += row.quantity
+				markers[tup_panels][key]["total_pieces"] += row.quantity
+		sizes = {}
+
+	cp_doc_colours = {}
+	for row in cp_doc.cutting_plan_cloth_details:
+		key = (row.colour, row.cloth_type)
+		cp_doc_colours.setdefault(key, { "received_weight": 0 })
+		cp_doc_colours[key]["received_weight"] += row.weight
+
+	for key in cp_doc_colours:
+		colour_count = 0
+		final_index = 0
+		final_mark = None
+		for idx, mark in enumerate(markers):
+			if markers[mark].get(key):
+				colour_count += 1
+				final_index = idx
+				final_mark = mark
+
+		if colour_count == 1:
+			markers[final_mark][key]['received_weight'] = cp_doc_colours[key]['received_weight']
+			markers[final_mark][key]['balance_weight'] = cp_doc_colours[key]['received_weight'] - markers[final_mark][key]['used_weight']
+		elif colour_count > 1:
+			for idx, mark in enumerate(markers):
+				if markers[mark].get(key):
+					if idx == final_index:
+						markers[final_mark][key]['received_weight'] = cp_doc_colours[key]['received_weight']
+						markers[final_mark][key]['balance_weight'] = cp_doc_colours[key]['received_weight'] - markers[final_mark][key]['used_weight']
+					else:
+						markers[mark][key]['received_weight'] = markers[mark][key]['used_weight']
+						markers[mark][key]['balance_weight'] = 0
+						cp_doc_colours[key]['received_weight'] -= markers[mark][key]['used_weight']
+
+	from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import get_ipd_primary_values
+	sizes = get_ipd_primary_values(cp_doc.production_detail)
+	# Ensure every colour entry has all IPD sizes (template iterates over full size list)
+	for mark in markers:
+		for key in markers[mark]:
+			for size in sizes:
+				markers[mark][key].setdefault(size, {"bits": 0})
+	if markers:
+		return {
+			"marker_data": markers,
+			"sizes": sizes,
+			"print_panel_details": print_panel_details,
+			"recut_details": recut_details
+		}
+
+@frappe.whitelist()
+def remove_empty_rows(cutting_json, json_type):
+	cutting_json = update_if_string_instance(cutting_json)
+	output_json = cutting_json.copy()
+	output_json['items'] = []
+	for row in cutting_json['items']:
+		check = False
+		for val in row['values']:
+			if json_type == "completed":
+				if row['values'][val]:
+					check = True
+					break
+			else:
+				for panel in row['values'][val]:
+					if row['values'][val][panel]:
+						check = True
+						break
+			if check:
+				break
+		if check:
+			output_json['items'].append(row)
+
+	if len(output_json['items']) > 0:
+		return [output_json]
+	return None
+
+@frappe.whitelist()
+def get_cutting_plan_size_reports(cutting_plan):
+	frappe.get_doc('SD YRP Cutting Plan', cutting_plan).check_permission("read")
+	cp_doc = frappe.get_doc('SD YRP Cutting Plan', cutting_plan)
+	ipd_doc = frappe.get_cached_doc('YRP Item Production Detail', cp_doc.production_detail)
+	from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import get_ipd_primary_values
+	sizes = get_ipd_primary_values(cp_doc.production_detail)
+	panels = []
+	if ipd_doc.is_set_item:
+		panels = {}
+		for row in ipd_doc.stiching_item_details:
+			panels.setdefault(row.set_item_attribute_value, [])
+
+	cls_list = frappe.get_list('SD YRP Cutting LaySheet', filters={"cutting_plan":cutting_plan,"status":"Label Printed"}, pluck="name", order_by="lay_no asc")
+	size_details = {}
+	for cls in cls_list:
+		cls_doc = frappe.get_doc('SD YRP Cutting LaySheet',cls)
+		for row in cls_doc.cutting_laysheet_bundles:
+			parts = row.part.split(",")
+			parts = ", ".join(parts)
+			set_combination = update_if_string_instance(row.set_combination)
+			major_colour = set_combination['major_colour']
+			if ipd_doc.is_set_item:
+				if set_combination.get('set_part'):
+					if parts not in panels[set_combination['set_part']]:
+						panels[set_combination['set_part']].append(parts)
+					major_colour = "("+ major_colour +")" + set_combination["set_colour"] +"-"+set_combination.get('set_part')
+				else:
+					if parts not in panels[set_combination['major_part']]:
+						panels[set_combination['major_part']].append(parts)
+					major_colour = major_colour +"-"+set_combination.get('major_part')
+			else:
+				if parts not in panels:
+					panels.append(parts)
+			size_details.setdefault(major_colour, {})
+			size_details[major_colour].setdefault(row.size, {})
+			size_details[major_colour][row.size].setdefault(parts, {})
+			size_details[major_colour][row.size][parts].setdefault("qty", 0)
+			size_details[major_colour][row.size][parts]["qty"] += row.quantity
+			size_details[major_colour][row.size][parts].setdefault("bundles", 0)
+			size_details[major_colour][row.size][parts]['bundles'] += 1
+
+	final_data = {}
+	for size in sizes:
+		for colour, colour_details in size_details.items():
+			for dict_size, panel_detail in colour_details.items():
+				if dict_size == size:
+					final_data.setdefault(colour, [])
+					duplicate = {}
+					duplicate['size'] = size
+					for panel in panel_detail:
+						duplicate[panel] = panel_detail[panel]['qty']
+						duplicate[panel+"_Bundle"] = panel_detail[panel]['bundles']
+					final_data[colour].append(duplicate)
+	return panels, final_data, ipd_doc.is_set_item
+
+@frappe.whitelist()
+def fetch_received_cloth(docname):
+	cp_doc = _get_submitted_cutting_plan(docname)
+	return rebuild_received_cloth(cp_doc, add_repair_comment=True)
+
+
+def rebuild_received_cloth(cp_doc, add_repair_comment=False):
+	"""Recompute received cloth from submitted dispatch/completion documents.
+
+	This is deliberately a rebuild, not an increment. Submit retries, cancels,
+	and historical repairs therefore converge on the same authoritative result.
+	"""
+	generated_requirements = False
+	if not cp_doc.cutting_plan_cloth_details:
+		_generate_cloth_requirements(cp_doc, preserve_operational_values=False)
+		generated_requirements = True
+
+	delivery_challans = frappe.get_all(
+		'YRP Delivery Challan',
+		filters={"docstatus": 1, "work_order": cp_doc.work_order},
+		fields=["name", "is_internal_unit", "from_address", "supplier_address"],
+	)
+	direct_names = []
+	completion_dc_names = []
+	for delivery_challan in delivery_challans:
+		if isinstance(delivery_challan, str):
+			is_internal, from_address, supplier_address = frappe.get_value(
+				'YRP Delivery Challan',
+				delivery_challan,
+				["is_internal_unit", "from_address", "supplier_address"],
+			) or (0, None, None)
+			delivery_challan = frappe._dict(
+				name=delivery_challan,
+				is_internal_unit=is_internal,
+				from_address=from_address,
+				supplier_address=supplier_address,
+			)
+		if (
+			delivery_challan.is_internal_unit
+			and delivery_challan.from_address != delivery_challan.supplier_address
+		):
+			completion_dc_names.append(delivery_challan.name)
+		else:
+			direct_names.append(delivery_challan.name)
+
+	received_by_variant = {}
+	if direct_names:
+		direct_rows = frappe.get_all(
+			'YRP Delivery Challan Item',
+			filters={"parent": ["in", direct_names], "parenttype": 'YRP Delivery Challan'},
+			fields=["item_variant", "delivered_quantity"],
+		)
+		if direct_rows and isinstance(direct_rows[0], str):
+			direct_rows = [
+				row
+				for name in direct_names
+				for row in frappe.get_doc('YRP Delivery Challan', name).get("items") or []
+			]
+		for row in direct_rows:
+			received_by_variant[row.item_variant] = (
+				flt(received_by_variant.get(row.item_variant)) + flt(row.delivered_quantity)
+			)
+
+	if completion_dc_names:
+		completion_names = frappe.get_all(
+			'YRP Stock Entry',
+			filters={
+				"purpose": "DC Completion",
+				"against": 'YRP Delivery Challan',
+				"against_id": ["in", completion_dc_names],
+				"docstatus": 1,
+			},
+			pluck="name",
+		)
+		if completion_names:
+			for row in frappe.get_all(
+				'YRP Stock Entry Detail',
+				filters={"parent": ["in", completion_names], "parenttype": 'YRP Stock Entry'},
+				fields=["item", "qty"],
+			):
+				received_by_variant[row.item] = (
+					flt(received_by_variant.get(row.item)) + flt(row.qty)
+				)
+
+	for item in cp_doc.cutting_plan_cloth_details:
+		item.weight = flt(received_by_variant.get(item.cloth_item_variant))
+	for item in cp_doc.cutting_plan_cloth_details:
+		item.balance_weight = round(item.weight - item.used_weight, 3)
+
+	if generated_requirements and add_repair_comment:
+		cp_doc.add_comment(
+			'Comment',
+			text=f"Missing cloth requirements regenerated while fetching received cloth on {datetime.now()} by {frappe.session.user}",
+		)
+	cp_doc.save(ignore_permissions=True)
+	return {
+		"generated_requirements": generated_requirements,
+		"cloth_requirements": len(cp_doc.cutting_plan_cloth_details),
+	}
+
+
+def get_balance_lot_transfer_items(cp_doc, warehouse, received_type):
+	items = []
+	for row in cp_doc.cutting_plan_cloth_details:
+		balance_weight = flt(row.balance_weight, 3)
+		if balance_weight <= 0 or not row.cloth_item_variant:
+			continue
+
+		items.append(
+			{
+				"item": row.cloth_item_variant,
+				"qty": balance_weight,
+				"from_lot": cp_doc.lot,
+				"warehouse": warehouse,
+				"received_type": received_type,
+				"table_index": len(items),
+				"row_index": len(items),
+			}
+		)
+	return items
+
+
+@frappe.whitelist()
+def create_balance_lot_transfer(cutting_plan, to_lot):
+	cp_doc = frappe.get_doc('SD YRP Cutting Plan', cutting_plan)
+	cp_doc.check_permission("read")
+	frappe.has_permission('SD YRP Lot Transfer', "create", throw=True)
+	if cp_doc.docstatus != 1:
+		frappe.throw(_("Submit the Cutting Plan before creating a Lot Transfer."))
+	if not to_lot or not frappe.db.exists('SD YRP Lot', to_lot):
+		frappe.throw(_("Select a valid target Lot."))
+	if cp_doc.lot == to_lot:
+		frappe.throw(_("The target Lot must be different from the current Lot."))
+	frappe.get_doc('SD YRP Lot', to_lot).check_permission("read")
+	if not cp_doc.work_order:
+		frappe.throw(_("Work Order is required in the Cutting Plan."))
+
+	supplier = frappe.get_cached_value('YRP Work Order', cp_doc.work_order, "supplier")
+	if not supplier:
+		frappe.throw(_("Supplier is not configured in Work Order {0}.").format(cp_doc.work_order))
+	from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
+		_get_warehouse_for_supplier,
+	)
+
+	warehouse = _get_warehouse_for_supplier(supplier)
+	if not warehouse:
+		frappe.throw(
+			_("Exactly one enabled Warehouse must be linked to Supplier {0}.").format(
+				supplier
+			)
+		)
+	received_type = frappe.db.get_single_value(
+		'YRP YRP Stock Settings', "default_received_type"
+	)
+	if not received_type:
+		frappe.throw(_("Configure the default Received Type in YRP Stock Settings."))
+
+	items = get_balance_lot_transfer_items(cp_doc, warehouse, received_type)
+	if not items:
+		frappe.throw(_("There is no balance cloth weight to transfer."))
+	for item in items:
+		item["to_lot"] = to_lot
+
+	lot_transfer = frappe.new_doc('SD YRP Lot Transfer')
+	lot_transfer.comments = _("Balance cloth from Cutting Plan {0}").format(cp_doc.name)
+	lot_transfer.set("items", items)
+	lot_transfer.insert()
+	return lot_transfer.name
+
+@frappe.whitelist()
+def create_recut_print_panel(cutting_plan, type, item_details):
+	_get_submitted_cutting_plan(cutting_plan)
+	item_details = update_if_string_instance(item_details)
+	doc = frappe.new_doc('SD YRP Recut and Print Panel')
+	doc.cutting_plan = cutting_plan
+	doc.type = type
+	for row in item_details:
+		doc.append("recut_and_print_panel_details", {
+			"cloth_type": row.get("cloth_type", None),
+			"colour": row.get("colour", None),
+			"dia": row.get("dia", None),
+			"shade": row.get("shade", None),
+			"weight": row.get("weight", 0),
+			"panel_count": row.get("panel_count", 0),
+			"no_of_rolls": row.get("no_of_rolls", 0),
+		})
+	doc.save()
+	doc.submit()
+
+@frappe.whitelist()
+def get_recut_print_panel_details(cutting_plan, type):
+	frappe.get_doc('SD YRP Cutting Plan', cutting_plan).check_permission("read")
+	doc_list = frappe.get_all('SD YRP Recut and Print Panel', filters={
+		"cutting_plan": cutting_plan,
+		"docstatus": 1,
+		"type": type
+	}, pluck="name")
+	items = {}
+	for doc in doc_list:
+		recut_print_panel_doc = frappe.get_doc('SD YRP Recut and Print Panel', doc)
+		for row in recut_print_panel_doc.recut_and_print_panel_details:
+			key = row.cloth_type + "-" + row.colour + "-" + row.dia + "-" + row.shade
+			if key not in items:
+				items[key] = {
+					"cloth_type": row.cloth_type,
+					"colour": row.colour,
+					"dia": row.dia,
+					"shade": row.shade,
+					"weight": row.weight,
+					"panel_count": row.panel_count,
+					"no_of_rolls": row.no_of_rolls,
+				}
+			else:
+				items[key]['weight'] += row.weight
+				items[key]['panel_count'] += row.panel_count
+				items[key]['no_of_rolls'] += row.no_of_rolls
+	return items
+
+
+CuttingPlan = SDYRPCuttingPlan

@@ -221,7 +221,7 @@ class TestCutPanelMovementCancelOrder(IntegrationTestCase):
 			with self.subTest(filename=filename):
 				source = _read(os.path.join(js_dir, filename))
 				self.assertIn("ignore_doctypes_on_cancel_all", source)
-				self.assertIn('ignored.add("Cut Panel Movement")', source)
+				self.assertIn('ignored.add("SD YRP Cut Panel Movement")', source)
 				self.assertIn("frm.doc.docstatus !== 1 || !frm.doc.cut_panel_movement", source)
 
 
@@ -246,7 +246,7 @@ class TestWorkOrderReworkPermissionUI(IntegrationTestCase):
 			os.path.join(frappe.get_app_path("essdee_yrp"), "public", "js", "work_order.js")
 		)
 		self.assertIn("hide_unavailable_rework_action(frm)", source)
-		self.assertIn('frappe.model.can_create("Work Order")', source)
+		self.assertIn('frappe.model.can_create("YRP Work Order")', source)
 		self.assertIn('frm.remove_custom_button(__("Create Rework"))', source)
 
 
@@ -678,8 +678,8 @@ class TestCustomizationOwnership(IntegrationTestCase):
 					"yrp",
 					"yrp",
 					"doctype",
-					"item_production_detail",
-					"item_production_detail.json",
+					"yrp_item_production_detail",
+					"yrp_item_production_detail.json",
 				)
 			)
 		)

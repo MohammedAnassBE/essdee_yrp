@@ -36,50 +36,50 @@ from essdee_yrp.fabric_program import (
 
 
 def _ensure_item_group(name="_Test CPD Group"):
-    if not frappe.db.exists("Item Group", name):
+    if not frappe.db.exists('YRP Item Group', name):
         frappe.get_doc({
-            "doctype": "Item Group", "item_group_name": name,
+            "doctype": 'YRP Item Group', "item_group_name": name,
             "is_group": 0, "parent_item_group": "All Item Groups",
         }).insert(ignore_permissions=True)
     return name
 
 
 def _ensure_uom(name="Kg"):
-    if not frappe.db.exists("UOM", name):
-        frappe.get_doc({"doctype": "UOM", "uom_name": name}).insert(ignore_permissions=True)
+    if not frappe.db.exists('YRP UOM', name):
+        frappe.get_doc({"doctype": 'YRP UOM', "uom_name": name}).insert(ignore_permissions=True)
     return name
 
 
 def _ensure_item(name1):
-    if frappe.db.exists("Item", name1):
+    if frappe.db.exists('YRP Item', name1):
         return name1
     return frappe.get_doc({
-        "doctype": "Item", "name1": name1, "item_group": _ensure_item_group(),
+        "doctype": 'YRP Item', "name1": name1, "item_group": _ensure_item_group(),
         "default_unit_of_measure": _ensure_uom(), "is_stock_item": 1,
     }).insert(ignore_permissions=True).name
 
 
 def _ensure_item_attribute(name):
-    if not frappe.db.exists("Item Attribute", name):
-        frappe.get_doc({"doctype": "Item Attribute", "attribute_name": name}).insert(
+    if not frappe.db.exists('YRP Item Attribute', name):
+        frappe.get_doc({"doctype": 'YRP Item Attribute', "attribute_name": name}).insert(
             ignore_permissions=True)
     return name
 
 
 def _ensure_iav(attribute, value):
     _ensure_item_attribute(attribute)
-    if not frappe.db.exists("Item Attribute Value", value):
+    if not frappe.db.exists('YRP Item Attribute Value', value):
         frappe.get_doc({
-            "doctype": "Item Attribute Value", "attribute_name": attribute,
+            "doctype": 'YRP Item Attribute Value', "attribute_name": attribute,
             "attribute_value": value,
         }).insert(ignore_permissions=True)
     return value
 
 
 def _ensure_process(process_name, is_item_conversion=0):
-    if not frappe.db.exists("Process", process_name):
+    if not frappe.db.exists('YRP Process', process_name):
         frappe.get_doc({
-            "doctype": "Process", "process_name": process_name,
+            "doctype": 'YRP Process', "process_name": process_name,
             "is_item_conversion": is_item_conversion,
         }).insert(ignore_permissions=True)
     return process_name
@@ -93,10 +93,10 @@ def _reset_cpd(cloth_item):
     dangerous here: a test asserting a single fresh dia row would silently see a
     prior test's union-merged rows. Drop any leftover CPD (+ its matrices) for the
     shared test cloth Item so each test starts from a known-empty state."""
-    name = frappe.db.get_value("Item Production Detail", {"item": cloth_item, "is_cloth_item": 1}, "name")
+    name = frappe.db.get_value('YRP Item Production Detail', {"item": cloth_item, "is_cloth_item": 1}, "name")
     if name:
-        frappe.db.delete("IPD Process Matrix", {"ipd": name})
-        frappe.delete_doc("Item Production Detail", name, force=True, ignore_permissions=True)
+        frappe.db.delete('YRP IPD Process Matrix', {"ipd": name})
+        frappe.delete_doc('YRP Item Production Detail', name, force=True, ignore_permissions=True)
 
 
 class TestClothProgram(IntegrationTestCase):
@@ -111,16 +111,16 @@ class TestClothProgram(IntegrationTestCase):
         # Item regardless of what the CPD builder stamps in memory, so the cloth
         # Item master itself must carry the flag for is_cloth_ipd() to route the
         # IPD through the cloth-validation path instead of the garment one.
-        frappe.db.set_value("Item", self.cloth, "is_cloth_item", 1)
+        frappe.db.set_value('YRP Item', self.cloth, "is_cloth_item", 1)
         frappe.db.delete(
-            "Item Yarn Ratio",
+            'SD YRP Item Yarn Ratio',
             {
                 "parent": self.cloth,
-                "parenttype": "Item",
+                "parenttype": 'YRP Item',
                 "parentfield": "yarn_ratio_details",
             },
         )
-        frappe.clear_document_cache("Item", self.cloth)
+        frappe.clear_document_cache('YRP Item', self.cloth)
         _reset_cpd(self.cloth)
         self.k_proc = _ensure_process("_Test Knit CPD", is_item_conversion=1)
         self.d_proc = _ensure_process("_Test Dye CPD")
@@ -137,13 +137,13 @@ class TestClothProgram(IntegrationTestCase):
         garment_name = (
             f"_Test Garment Compacting CPD {frappe.generate_hash(length=8)}"
         )
-        garment = frappe.new_doc("Item Production Detail")
+        garment = frappe.new_doc('YRP Item Production Detail')
         garment.name = garment_name
         garment.item = self.cloth
         garment.db_insert()
 
         source = frappe.get_doc({
-            "doctype": "IPD Compacting",
+            "doctype": 'SD YRP IPD Compacting',
             "item_production_detail": garment_name,
             "packing_attribute": "Colour",
             "compacting_details": [{
@@ -157,7 +157,7 @@ class TestClothProgram(IntegrationTestCase):
 
     def test_find_or_create_cpd_seeds_tabs_matrices_and_reachability(self):
         cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
         self.assertEqual(cpd.is_cloth_item, 1)
         self.assertEqual(cpd.yarn_item, self.yarn)
         self.assertEqual(cpd.cloth_per_kg_yarn, 3.0)
@@ -166,14 +166,14 @@ class TestClothProgram(IntegrationTestCase):
         self.assertEqual(
             [(r.dia, r.from_colour, r.to_colour) for r in cpd.dyeing_colour_details],
             [(self.dia, self.greige, self.red)])
-        matrices = frappe.get_all("IPD Process Matrix", filters={"ipd": cpd_name})
+        matrices = frappe.get_all('YRP IPD Process Matrix', filters={"ipd": cpd_name})
         self.assertGreaterEqual(len(matrices), 2)
         want = frozenset({("Dia", self.dia), ("Colour", self.red)})
         self.assertIn(want, final_combos(cpd))
 
     def test_solve_chain_backward_reuses_shared_matrix_index(self):
         cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
         requirement = {
             frozenset({("Dia", self.dia), ("Colour", self.red)}): 1.0,
         }
@@ -193,7 +193,7 @@ class TestClothProgram(IntegrationTestCase):
     def test_generated_matrix_bulk_delete_removes_children_without_audit_rows(self):
         cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
         matrix_names = frappe.get_all(
-            "IPD Process Matrix",
+            'YRP IPD Process Matrix',
             filters={"ipd": cpd_name},
             pluck="name",
         )
@@ -202,27 +202,27 @@ class TestClothProgram(IntegrationTestCase):
         deleted_before = frappe.db.count(
             "Deleted Document",
             filters={
-                "deleted_doctype": "IPD Process Matrix",
+                "deleted_doctype": 'YRP IPD Process Matrix',
                 "deleted_name": ["in", matrix_names],
             },
         )
         _delete_all_matrices(cpd_name)
 
         self.assertEqual(
-            frappe.db.count("IPD Process Matrix", {"ipd": cpd_name}),
+            frappe.db.count('YRP IPD Process Matrix', {"ipd": cpd_name}),
             0,
         )
         for child_doctype in (
-            "IPD Matrix Attribute",
-            "IPD Matrix Combination",
-            "IPD Matrix Combination Attribute",
+            'YRP IPD Matrix Attribute',
+            'YRP IPD Matrix Combination',
+            'YRP IPD Matrix Combination Attribute',
         ):
             self.assertEqual(
                 frappe.db.count(
                     child_doctype,
                     {
                         "parent": ["in", matrix_names],
-                        "parenttype": "IPD Process Matrix",
+                        "parenttype": 'YRP IPD Process Matrix',
                     },
                 ),
                 0,
@@ -231,7 +231,7 @@ class TestClothProgram(IntegrationTestCase):
             frappe.db.count(
                 "Deleted Document",
                 filters={
-                    "deleted_doctype": "IPD Process Matrix",
+                    "deleted_doctype": 'YRP IPD Process Matrix',
                     "deleted_name": ["in", matrix_names],
                 },
             ),
@@ -252,7 +252,7 @@ class TestClothProgram(IntegrationTestCase):
             ],
         )
         cpd_name = _find_or_create_cpd(self.cloth, selection, self.tuples)
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
         self.assertEqual(
             [(row.yarn_item, flt(row.ratio)) for row in cpd.yarn_ratio_details],
             [(self.yarn, 60.0), (yarn_b, 40.0)],
@@ -260,7 +260,7 @@ class TestClothProgram(IntegrationTestCase):
         self.assertEqual(cpd.yarn_item, self.yarn)
 
         knit = frappe.get_doc(
-            "IPD Process Matrix",
+            'YRP IPD Process Matrix',
             {"ipd": cpd_name, "process_name": self.k_proc},
         )
         group = next(iter(knit.get_combinations_grouped().values()))
@@ -280,7 +280,7 @@ class TestClothProgram(IntegrationTestCase):
             [(self.yarn, 60.0), (yarn_b, 40.0)],
         )
         knit = frappe.get_doc(
-            "IPD Process Matrix",
+            'YRP IPD Process Matrix',
             {"ipd": cpd_name, "process_name": self.k_proc},
         )
         self.assertIsNone(
@@ -290,10 +290,10 @@ class TestClothProgram(IntegrationTestCase):
 
     def test_cloth_attribute_values_are_generated_from_routes(self):
         cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
         mapping_values = {}
         for row in cpd.item_attributes:
-            mapping = frappe.get_doc("Item Item Attribute Mapping", row.mapping)
+            mapping = frappe.get_doc('YRP Item Item Attribute Mapping', row.mapping)
             mapping_values[row.attribute] = [
                 value.attribute_value for value in mapping.values
             ]
@@ -305,7 +305,7 @@ class TestClothProgram(IntegrationTestCase):
     def test_all_colour_compacting_details_are_data_only(self):
         compacted_dia = _ensure_iav("Dia", "_Test 62 Dia CPD")
         cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
         cpd.append("compacting_reference_details", {
             "colour": None,
             "input_dia": self.dia,
@@ -320,7 +320,7 @@ class TestClothProgram(IntegrationTestCase):
         self.assertEqual((row.input_dia, row.compacting_dia), (self.dia, compacted_dia))
         self.assertFalse(
             frappe.db.exists(
-                "IPD Process Matrix",
+                'YRP IPD Process Matrix',
                 {"ipd": cpd_name, "process_name": "Compacting"},
             ),
             "Compacting Details must not create a calculation matrix or Work Order process.",
@@ -350,7 +350,7 @@ class TestClothProgram(IntegrationTestCase):
         first = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
         second = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
         self.assertEqual(first, second)
-        cpd = frappe.get_doc("Item Production Detail", second)
+        cpd = frappe.get_doc('YRP Item Production Detail', second)
         self.assertEqual(len(cpd.knitting_dia_details), 1)
         self.assertEqual(len(cpd.dyeing_colour_details), 1)
         # Additive seeding: a sibling lot demanding a NEW dia on the SAME shared
@@ -360,7 +360,7 @@ class TestClothProgram(IntegrationTestCase):
             self.cloth, self.selection,
             {(self.dia, self.red): 1.0, (dia2, self.red): 1.0})
         self.assertEqual(third, first)
-        cpd = frappe.get_doc("Item Production Detail", third)
+        cpd = frappe.get_doc('YRP Item Production Detail', third)
         self.assertEqual({r.dia for r in cpd.knitting_dia_details}, {self.dia, dia2})
         self.assertIn(
             (self.dia, self.greige, self.red),
@@ -384,7 +384,7 @@ class TestClothProgram(IntegrationTestCase):
         (seq 20, cloth->cloth, 1) with their value mappings — Introduce Dia
         per knitting dia; Change Colour + Pin Dia per dyeing row."""
         cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
         self.assertEqual(
             [(r.sequence, r.fabric_process, r.input_item, r.output_item, flt(r.quantity_ratio))
              for r in sorted(cpd.fabric_processes, key=lambda r: r.sequence)],
@@ -404,7 +404,7 @@ class TestClothProgram(IntegrationTestCase):
         the adapter's: same steps, same reachable final combos."""
         _find_or_create_cpd(self.cloth, self.selection, self.tuples)
         cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
         self.assertEqual(len(cpd.fabric_processes), 2)
         self.assertEqual(len(cpd.fabric_value_mappings), 3)
         self.assertEqual(
@@ -424,7 +424,7 @@ class TestClothProgram(IntegrationTestCase):
         dia2 = _ensure_iav("Dia", "_Test Manual 20 Dia CPD")
         yarn_b = _ensure_item("_Test Manual Yarn B CPD")
 
-        cpd = frappe.new_doc("Item Production Detail")
+        cpd = frappe.new_doc('YRP Item Production Detail')
         cpd.item = self.cloth
         cpd.is_cloth_item = 1
         cpd.approval_status = "Approved"
@@ -492,7 +492,7 @@ class TestClothProgram(IntegrationTestCase):
             {self.red: self.greige, blue: grey_melange},
         )
         knit_matrices = frappe.get_all(
-            "IPD Process Matrix",
+            'YRP IPD Process Matrix',
             filters={"ipd": cpd.name, "process_name": self.k_proc},
             fields=["name", "reference_item_variant"],
         )
@@ -501,7 +501,7 @@ class TestClothProgram(IntegrationTestCase):
             frozenset(
                 (row.attribute, row.attribute_value)
                 for row in frappe.get_doc(
-                    "Item Variant", matrix.reference_item_variant
+                    'YRP Item Variant', matrix.reference_item_variant
                 ).attributes
             )
             for matrix in knit_matrices
@@ -512,7 +512,7 @@ class TestClothProgram(IntegrationTestCase):
         })
         self.assertTrue(
             frappe.db.exists(
-                "IPD Process Matrix",
+                'YRP IPD Process Matrix',
                 {"ipd": cpd.name, "process_name": self.d_proc},
             )
         )
@@ -530,7 +530,7 @@ class TestClothProgram(IntegrationTestCase):
         amel_yarn = _ensure_item("_Test Manual Direct AMEL Yarn CPD")
         compacting = _ensure_process("_Test Manual Direct Compact CPD")
 
-        cpd = frappe.new_doc("Item Production Detail")
+        cpd = frappe.new_doc('YRP Item Production Detail')
         cpd.item = self.cloth
         cpd.is_cloth_item = 1
         cpd.approval_status = "Approved"
@@ -623,11 +623,11 @@ class TestClothProgram(IntegrationTestCase):
             frozenset(
                 (row.attribute, row.attribute_value)
                 for row in frappe.get_doc(
-                    "Item Variant", matrix.reference_item_variant
+                    'YRP Item Variant', matrix.reference_item_variant
                 ).attributes
             )
             for matrix in frappe.get_all(
-                "IPD Process Matrix",
+                'YRP IPD Process Matrix',
                 filters={"ipd": cpd.name, "process_name": self.k_proc},
                 fields=["reference_item_variant"],
             )
@@ -640,7 +640,7 @@ class TestClothProgram(IntegrationTestCase):
             },
         )
         dye_references = frappe.get_all(
-            "IPD Process Matrix",
+            'YRP IPD Process Matrix',
             filters={"ipd": cpd.name, "process_name": self.d_proc},
             pluck="reference_item_variant",
         )
@@ -649,13 +649,13 @@ class TestClothProgram(IntegrationTestCase):
             {
                 row.attribute: row.attribute_value
                 for row in frappe.get_doc(
-                    "Item Variant", dye_references[0]
+                    'YRP Item Variant', dye_references[0]
                 ).attributes
             },
             {"Dia": self.dia, "Colour": self.red},
         )
         compact_matrix = frappe.get_doc(
-            "IPD Process Matrix",
+            'YRP IPD Process Matrix',
             {"ipd": cpd.name, "process_name": compacting},
         )
         compact_group = next(
@@ -676,7 +676,7 @@ class TestClothProgram(IntegrationTestCase):
         re-build; the managed rows are refreshed (new dia appears)."""
         cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
         wash = _ensure_process("_Test Wash CPD")
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
         cpd.append("fabric_processes", {
             "sequence": 40, "fabric_process": wash,
             "input_item": self.cloth, "output_item": self.cloth, "quantity_ratio": 1})
@@ -685,7 +685,7 @@ class TestClothProgram(IntegrationTestCase):
         dia2 = _ensure_iav("Dia", "_Test 70 Dia CPD")
         _find_or_create_cpd(self.cloth, self.selection,
                             {(self.dia, self.red): 1.0, (dia2, self.red): 1.0})
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
         by_seq = {r.sequence: r for r in cpd.fabric_processes}
         self.assertEqual(set(by_seq), {10, 20, 40})
         self.assertEqual(by_seq[40].fabric_process, wash)
@@ -704,7 +704,7 @@ class TestClothProgram(IntegrationTestCase):
         cpd_name = _find_or_create_cpd(
             self.cloth, dict(self.selection, yarn_item=None),
             {(self.dia, self.red): 1.0, (dia2, self.red): 1.0})
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
         self.assertEqual(cpd.get("fabric_processes"), [])
         self.assertEqual(cpd.get("fabric_value_mappings"), [])
         self.assertEqual(
@@ -718,7 +718,7 @@ class TestClothProgram(IntegrationTestCase):
         table that drops knitting/dyeing from the chain — refuse loudly."""
         cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
         wash = _ensure_process("_Test Wash CPD")
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
         cpd.append("fabric_processes", {
             "sequence": 40, "fabric_process": wash,
             "input_item": self.cloth, "output_item": self.cloth, "quantity_ratio": 1})
@@ -735,13 +735,13 @@ class TestClothProgram(IntegrationTestCase):
         be unique, gapless and sequence-ordered."""
         cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
         wash = _ensure_process("_Test Wash CPD")
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
         cpd.append("fabric_processes", {
             "sequence": 40, "fabric_process": wash,
             "input_item": self.cloth, "output_item": self.cloth, "quantity_ratio": 1})
         _save_generated_cpd(cpd)
         _find_or_create_cpd(self.cloth, self.selection, self.tuples)
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
         rows = sorted(cpd.fabric_processes, key=lambda r: r.idx)
         self.assertEqual([r.idx for r in rows], [1, 2, 3])
         self.assertEqual([r.sequence for r in rows], [10, 20, 40])
@@ -756,7 +756,7 @@ class TestClothProgram(IntegrationTestCase):
         still resolves through the adapter."""
         sel = dict(self.selection, yarn_item=None)
         cpd_name = _find_or_create_cpd(self.cloth, sel, self.tuples)
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
         self.assertEqual(cpd.get("fabric_processes"), [])
         self.assertEqual(cpd.get("fabric_value_mappings"), [])
         self.assertEqual(
@@ -776,7 +776,7 @@ class TestClothProgram(IntegrationTestCase):
         blue = _ensure_iav("Colour", "_Test Blue CPD")
         tuples = {(self.dia, self.red): 30.0, (self.dia, blue): 20.5}
         cpd_name = _find_or_create_cpd(self.cloth, self.selection, tuples)
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
         self.assertEqual([r.dia for r in cpd.knitting_dia_details], [self.dia])
         self.assertEqual(
             {(r.dia, r.from_colour, r.to_colour) for r in cpd.dyeing_colour_details},
@@ -788,13 +788,13 @@ class TestClothProgram(IntegrationTestCase):
         blue = _ensure_iav("Colour", "_Test Blue CPD")
         tuples = {(self.dia, self.red): 30.0, (self.dia, blue): 20.5}
         cpd_name = _find_or_create_cpd(self.cloth, self.selection, tuples)
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
 
         combos = final_combos(cpd)
         self.assertIn(frozenset({("Dia", self.dia), ("Colour", self.red)}), combos)
         self.assertIn(frozenset({("Dia", self.dia), ("Colour", blue)}), combos)
 
-        dye_matrix = frappe.get_doc("IPD Process Matrix", {
+        dye_matrix = frappe.get_doc('YRP IPD Process Matrix', {
             "ipd": cpd_name, "process_name": self.d_proc})
         outputs = set()
         for _idx, group in dye_matrix.get_combinations_grouped().items():
@@ -812,7 +812,7 @@ class TestClothProgram(IntegrationTestCase):
         (dia, from_colour, to_colour) row is meaningless and would build two
         identical matrix groups (AMBIGUOUS at solve time) — still rejected."""
         cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
         cpd.append("dyeing_colour_details", {
             "dia": self.dia, "from_colour": self.greige, "to_colour": self.red})
         with self.assertRaisesRegex(frappe.ValidationError, "duplicate mapping"):
@@ -828,8 +828,8 @@ class TestClothProgram(IntegrationTestCase):
         second = _find_or_create_cpd(self.cloth, drift_selection, self.tuples)
 
         self.assertNotEqual(first, second)
-        first_doc = frappe.get_doc("Item Production Detail", first)
-        second_doc = frappe.get_doc("Item Production Detail", second)
+        first_doc = frappe.get_doc('YRP Item Production Detail', first)
+        second_doc = frappe.get_doc('YRP Item Production Detail', second)
         self.assertEqual(first_doc.dyeing_colour_details[0].from_colour, self.greige)
         self.assertEqual(second_doc.dyeing_colour_details[0].from_colour, other_greige)
 
@@ -857,7 +857,7 @@ class TestClothProgram(IntegrationTestCase):
             self.cloth, first_selection, {(self.dia, self.red): 50.9}
         )
         lot = frappe.get_doc({
-            "doctype": "Lot",
+            "doctype": 'SD YRP Lot',
             "lot_name": "_Test CPD Versioned Route Lot",
             "lot_fabric_details": [{
                 "cloth_item": self.cloth,
@@ -887,11 +887,11 @@ class TestClothProgram(IntegrationTestCase):
 
         self.assertNotEqual(first, second)
         self.assertEqual(
-            len(frappe.get_doc("Item Production Detail", first).fabric_routes),
+            len(frappe.get_doc('YRP Item Production Detail', first).fabric_routes),
             1,
         )
         self.assertEqual(
-            len(frappe.get_doc("Item Production Detail", second).fabric_routes),
+            len(frappe.get_doc('YRP Item Production Detail', second).fabric_routes),
             2,
         )
 
@@ -943,7 +943,7 @@ class TestClothProgram(IntegrationTestCase):
             selection,
             {(self.dia, self.red): 30.0, (self.dia, blue): 20.0},
         )
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
 
         self.assertEqual(
             {(row.from_colour, row.to_colour) for row in cpd.dyeing_colour_details},
@@ -958,7 +958,7 @@ class TestClothProgram(IntegrationTestCase):
             grey_melange,
         )
         knit_matrices = frappe.get_all(
-            "IPD Process Matrix",
+            'YRP IPD Process Matrix',
             filters={"ipd": cpd_name, "process_name": self.k_proc},
             fields=["name", "reference_item_variant"],
         )
@@ -1002,7 +1002,7 @@ class TestClothProgram(IntegrationTestCase):
             (self.cloth, final_dia, amel): 20.0,
         }
         lot = frappe.get_doc({
-            "doctype": "Lot",
+            "doctype": 'SD YRP Lot',
             "lot_name": "_Test CPD Lot Direct Colour",
         }).insert(ignore_permissions=True)
         with patch.object(cloth_program, "compute_cloth_demand", return_value=demand):
@@ -1014,7 +1014,7 @@ class TestClothProgram(IntegrationTestCase):
             if row.cloth_item == self.cloth
         )
         self.assertEqual(fabric.plan_status, "Built")
-        cpd = frappe.get_doc("Item Production Detail", fabric.production_detail)
+        cpd = frappe.get_doc('YRP Item Production Detail', fabric.production_detail)
         self.assertEqual(
             {
                 (row.dia, row.from_colour, row.to_colour)
@@ -1038,7 +1038,7 @@ class TestClothProgram(IntegrationTestCase):
         )
 
         dye_matrix = frappe.get_doc(
-            "IPD Process Matrix",
+            'YRP IPD Process Matrix',
             {"ipd": cpd.name, "process_name": self.d_proc},
         )
         dye_groups = list(dye_matrix.get_combinations_grouped().values())
@@ -1114,7 +1114,7 @@ class TestClothProgram(IntegrationTestCase):
         blue = _ensure_iav("Colour", "_Test Blue CPD")
         tuples = {(self.dia, self.red): 30.0, (self.dia, blue): 20.5}
         cpd_name = _find_or_create_cpd(self.cloth, self.selection, tuples)
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
 
         red_key = frozenset({("Dia", self.dia), ("Colour", self.red)})
         blue_key = frozenset({("Dia", self.dia), ("Colour", blue)})
@@ -1138,7 +1138,7 @@ class TestClothProgram(IntegrationTestCase):
         route uses MRP whole-kg rounding, ledger carries one dyeing output per
         colour."""
         blue = _ensure_iav("Colour", "_Test Blue CPD")
-        lot = frappe.get_doc({"doctype": "Lot", "lot_name": "_Test CPD Lot Multi"}).insert(
+        lot = frappe.get_doc({"doctype": 'SD YRP Lot', "lot_name": "_Test CPD Lot Multi"}).insert(
             ignore_permissions=True)
         demand = {
             (self.cloth, self.dia, self.red): 30.0,
@@ -1184,7 +1184,7 @@ class TestClothProgram(IntegrationTestCase):
         self.assertAlmostEqual(sum(knit_out), 50.5, places=3)
 
     def test_ensure_lot_fabric_detail_find_or_append(self):
-        lot = frappe.new_doc("Lot")
+        lot = frappe.new_doc('SD YRP Lot')
         _ensure_lot_fabric_detail(lot, self.cloth, "CPD-X")
         _ensure_lot_fabric_detail(lot, self.cloth, "CPD-Y")  # same cloth -> update, no dup
         self.assertEqual(len(lot.lot_fabric_details), 1)
@@ -1198,7 +1198,7 @@ class TestClothProgram(IntegrationTestCase):
         }])
 
     def test_build_cloth_programs_writes_requirements_and_plan(self):
-        lot = frappe.get_doc({"doctype": "Lot", "lot_name": "_Test CPD Lot"}).insert(
+        lot = frappe.get_doc({"doctype": 'SD YRP Lot', "lot_name": "_Test CPD Lot"}).insert(
             ignore_permissions=True)
         demand = {(self.cloth, self.dia, self.red): 50.9}
         with patch.object(cloth_program, "compute_cloth_demand", return_value=demand):
@@ -1221,7 +1221,7 @@ class TestClothProgram(IntegrationTestCase):
             compacting_dia
         )
         lot = frappe.get_doc({
-            "doctype": "Lot",
+            "doctype": 'SD YRP Lot',
             "lot_name": "_Test CPD Lot Synced Compacting",
             "production_detail": garment_name,
         }).insert(ignore_permissions=True)
@@ -1238,7 +1238,7 @@ class TestClothProgram(IntegrationTestCase):
             for row in lot.lot_fabric_details
             if row.cloth_item == self.cloth
         )
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
         self.assertEqual(
             [
                 (row.colour, row.input_dia, row.compacting_dia)
@@ -1252,7 +1252,7 @@ class TestClothProgram(IntegrationTestCase):
         second_dia = _ensure_iav("Dia", "_Test 64 Dia Snapshot CPD")
         garment_name, source = self._make_synced_compacting_source(first_dia)
         lot = frappe.get_doc({
-            "doctype": "Lot",
+            "doctype": 'SD YRP Lot',
             "lot_name": "_Test CPD Lot Compacting Snapshot",
             "production_detail": garment_name,
         }).insert(ignore_permissions=True)
@@ -1270,7 +1270,7 @@ class TestClothProgram(IntegrationTestCase):
             )
 
             frappe.db.set_value(
-                "IPD Compacting Details",
+                'SD YRP IPD Compacting Details',
                 source.compacting_details[0].name,
                 "compacting_dia",
                 second_dia,
@@ -1284,8 +1284,8 @@ class TestClothProgram(IntegrationTestCase):
             if row.cloth_item == self.cloth
         )
         self.assertNotEqual(first_cpd_name, second_cpd_name)
-        first_cpd = frappe.get_doc("Item Production Detail", first_cpd_name)
-        second_cpd = frappe.get_doc("Item Production Detail", second_cpd_name)
+        first_cpd = frappe.get_doc('YRP Item Production Detail', first_cpd_name)
+        second_cpd = frappe.get_doc('YRP Item Production Detail', second_cpd_name)
         self.assertEqual(
             first_cpd.compacting_reference_details[0].compacting_dia,
             first_dia,
@@ -1297,7 +1297,7 @@ class TestClothProgram(IntegrationTestCase):
 
     def test_build_uses_item_master_yarn_ratio_without_popup_recipe(self):
         yarn_b = _ensure_item("_Test Item Master Yarn B CPD")
-        item = frappe.get_doc("Item", self.cloth)
+        item = frappe.get_doc('YRP Item', self.cloth)
         item.set("yarn_ratio_details", [])
         item.append("yarn_ratio_details", {
             "yarn_item": self.yarn,
@@ -1315,7 +1315,7 @@ class TestClothProgram(IntegrationTestCase):
             if key not in {"yarn_item", "yarns", "colour_yarn_recipes"}
         }
         lot = frappe.get_doc({
-            "doctype": "Lot",
+            "doctype": 'SD YRP Lot',
             "lot_name": "_Test CPD Lot Item Recipe",
         }).insert(ignore_permissions=True)
         demand = {(self.cloth, self.dia, self.red): 50.9}
@@ -1323,11 +1323,11 @@ class TestClothProgram(IntegrationTestCase):
             build_cloth_programs(lot.name, [selection])
 
         cpd_name = frappe.db.get_value(
-            "Item Production Detail",
+            'YRP Item Production Detail',
             {"item": self.cloth, "is_cloth_item": 1},
             "name",
         )
-        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        cpd = frappe.get_doc('YRP Item Production Detail', cpd_name)
         self.assertEqual(
             [(row.yarn_item, flt(row.ratio)) for row in cpd.yarn_ratio_details],
             [(self.yarn, 60.0), (yarn_b, 40.0)],
@@ -1345,7 +1345,7 @@ class TestClothProgram(IntegrationTestCase):
 
     def test_build_cloth_programs_applies_manual_excess_once(self):
         lot = frappe.get_doc({
-            "doctype": "Lot", "lot_name": "_Test CPD Lot Excess",
+            "doctype": 'SD YRP Lot', "lot_name": "_Test CPD Lot Excess",
         }).insert(ignore_permissions=True)
         # Apply the excess to the exact route demand before matching MRP's
         # whole-kilogram display rule: 15.050 * 1.05 = 15.8025 -> 16.
@@ -1387,7 +1387,7 @@ class TestClothProgram(IntegrationTestCase):
 
     def test_synced_added_weight_is_applied_after_percentage_rounding(self):
         lot = frappe.get_doc({
-            "doctype": "Lot",
+            "doctype": 'SD YRP Lot',
             "lot_name": "_Test CPD Lot Added Weight",
             "cloth_program_additions": frappe.as_json({
                 "version": 1,
@@ -1431,7 +1431,7 @@ class TestClothProgram(IntegrationTestCase):
 
     def test_build_cloth_programs_rejects_negative_excess(self):
         lot = frappe.get_doc({
-            "doctype": "Lot", "lot_name": "_Test CPD Lot Negative Excess",
+            "doctype": 'SD YRP Lot', "lot_name": "_Test CPD Lot Negative Excess",
         }).insert(ignore_permissions=True)
         with self.assertRaisesRegex(frappe.ValidationError, "cannot be negative"):
             build_cloth_programs(
@@ -1441,7 +1441,7 @@ class TestClothProgram(IntegrationTestCase):
     def test_build_cloth_programs_requires_dyeing_for_coloured_demand(self):
         # A route whose knitting output differs from the finished colour must
         # fail fast without dyeing (not with an opaque planner error).
-        lot = frappe.get_doc({"doctype": "Lot", "lot_name": "_Test CPD Lot NoDye"}).insert(
+        lot = frappe.get_doc({"doctype": 'SD YRP Lot', "lot_name": "_Test CPD Lot NoDye"}).insert(
             ignore_permissions=True)
         demand = {(self.cloth, self.dia, self.red): 50.9}
         sel = dict(self.selection, dyeing_process=None)
@@ -1450,7 +1450,7 @@ class TestClothProgram(IntegrationTestCase):
                 build_cloth_programs(lot.name, [sel])
 
     def test_build_cloth_programs_is_idempotent(self):
-        lot = frappe.get_doc({"doctype": "Lot", "lot_name": "_Test CPD Lot Idem"}).insert(
+        lot = frappe.get_doc({"doctype": 'SD YRP Lot', "lot_name": "_Test CPD Lot Idem"}).insert(
             ignore_permissions=True)
         demand = {(self.cloth, self.dia, self.red): 50.9}
         with patch.object(cloth_program, "compute_cloth_demand", return_value=demand):
@@ -1460,35 +1460,35 @@ class TestClothProgram(IntegrationTestCase):
         self.assertEqual(
             len([f for f in lot.lot_fabric_details if f.cloth_item == self.cloth]), 1)
         cpd_name = frappe.db.get_value(
-            "Item Production Detail", {"item": self.cloth, "is_cloth_item": 1}, "name")
+            'YRP Item Production Detail', {"item": self.cloth, "is_cloth_item": 1}, "name")
         self.assertEqual(
             len(frappe.get_all(
-                "Item Production Detail", filters={"item": self.cloth, "is_cloth_item": 1})), 1)
+                'YRP Item Production Detail', filters={"item": self.cloth, "is_cloth_item": 1})), 1)
         self.assertGreaterEqual(
-            len(frappe.get_all("IPD Process Matrix", filters={"ipd": cpd_name})), 2)
+            len(frappe.get_all('YRP IPD Process Matrix', filters={"ipd": cpd_name})), 2)
 
     def test_deleting_ipd_deletes_generated_process_matrices(self):
         # Use a cloth Item that no Lot test ever references. IntegrationTestCase
         # shares one class transaction, and a deleted/recreated deterministic CPD
         # name can otherwise be picked up by an earlier Lot's dangling Link.
         delete_cloth = _ensure_item("_Test Delete Cloth CPD")
-        frappe.db.set_value("Item", delete_cloth, "is_cloth_item", 1)
+        frappe.db.set_value('YRP Item', delete_cloth, "is_cloth_item", 1)
         _reset_cpd(delete_cloth)
         selection = dict(self.selection, cloth_item=delete_cloth)
         cpd_name = _find_or_create_cpd(delete_cloth, selection, self.tuples)
         self.assertTrue(
-            frappe.get_all("IPD Process Matrix", filters={"ipd": cpd_name})
+            frappe.get_all('YRP IPD Process Matrix', filters={"ipd": cpd_name})
         )
 
         frappe.delete_doc(
-            "Item Production Detail",
+            'YRP Item Production Detail',
             cpd_name,
             ignore_permissions=True,
         )
 
-        self.assertFalse(frappe.db.exists("Item Production Detail", cpd_name))
+        self.assertFalse(frappe.db.exists('YRP Item Production Detail', cpd_name))
         self.assertFalse(
-            frappe.get_all("IPD Process Matrix", filters={"ipd": cpd_name})
+            frappe.get_all('YRP IPD Process Matrix', filters={"ipd": cpd_name})
         )
 
     def test_default_yarn_for_cloth_absent_then_present(self):
@@ -1532,7 +1532,7 @@ class TestClothProgram(IntegrationTestCase):
     def test_new_cloth_ipd_uses_cloth_program_settings_defaults(self):
         from essdee_yrp.ipd_validations import apply_ipd_settings_defaults
 
-        doc = frappe.new_doc("Item Production Detail")
+        doc = frappe.new_doc('YRP Item Production Detail')
         doc.item = self.cloth
         doc.is_cloth_item = 1
         settings = frappe._dict({
@@ -1575,16 +1575,16 @@ class TestClothProgram(IntegrationTestCase):
         from essdee_yrp.api import cloth_program as cp
         cloth2 = _ensure_item("_Test Cloth CPD Undemanded")
         garment_name = "_Test Garment Filter IPD"
-        lot = frappe.get_doc({"doctype": "Lot", "lot_name": "_Test Filter Lot"}).insert(
+        lot = frappe.get_doc({"doctype": 'SD YRP Lot', "lot_name": "_Test Filter Lot"}).insert(
             ignore_permissions=True)
-        frappe.db.set_value("Lot", lot.name, "production_detail", garment_name)
+        frappe.db.set_value('SD YRP Lot', lot.name, "production_detail", garment_name)
         garment = frappe._dict(name=garment_name, cloth_detail=[
             frappe._dict(name1="Main Fabric", cloth=self.cloth, required_gsm=150, is_bom_item=1),
             frappe._dict(name1="Piping Fabric", cloth=cloth2, required_gsm=0, is_bom_item=1)])
         orig = frappe.get_cached_doc
 
         def fake_cached(dt, name=None, *a, **k):
-            if dt == "Item Production Detail" and name == garment_name:
+            if dt == 'YRP Item Production Detail' and name == garment_name:
                 return garment
             return orig(dt, name, *a, **k)
 
@@ -1603,16 +1603,16 @@ class TestClothProgram(IntegrationTestCase):
         # not intercepted by the fake garment). Set it at DB level to skip link
         # validation for a stub-named garment IPD.
         garment_name = "_Test Garment Ctx IPD"
-        lot = frappe.get_doc({"doctype": "Lot", "lot_name": "_Test Ctx Lot"}).insert(
+        lot = frappe.get_doc({"doctype": 'SD YRP Lot', "lot_name": "_Test Ctx Lot"}).insert(
             ignore_permissions=True)
-        frappe.db.set_value("Lot", lot.name, "production_detail", garment_name)
+        frappe.db.set_value('SD YRP Lot', lot.name, "production_detail", garment_name)
         garment = frappe._dict(name=garment_name, cloth_detail=[
             frappe._dict(name1="Main Fabric", cloth=self.cloth, required_gsm=150, is_bom_item=1)])
         orig = frappe.get_cached_doc
 
         def fake_cached(dt, name=None, *a, **k):
             # Only the garment IPD is faked; the cloth's real CPD is left untouched.
-            if dt == "Item Production Detail" and name == garment_name:
+            if dt == 'YRP Item Production Detail' and name == garment_name:
                 return garment
             return orig(dt, name, *a, **k)
 
@@ -1659,10 +1659,10 @@ class TestClothProgram(IntegrationTestCase):
         _find_or_create_cpd(self.cloth, selection, self.tuples)
         garment_name = "_Test Garment Multi Yarn Ctx IPD"
         lot = frappe.get_doc({
-            "doctype": "Lot",
+            "doctype": 'SD YRP Lot',
             "lot_name": "_Test Multi Yarn Ctx Lot",
         }).insert(ignore_permissions=True)
-        frappe.db.set_value("Lot", lot.name, "production_detail", garment_name)
+        frappe.db.set_value('SD YRP Lot', lot.name, "production_detail", garment_name)
         garment = frappe._dict(name=garment_name, cloth_detail=[
             frappe._dict(
                 name1="Main Fabric",
@@ -1674,7 +1674,7 @@ class TestClothProgram(IntegrationTestCase):
         original = frappe.get_cached_doc
 
         def fake_cached(doctype, name=None, *args, **kwargs):
-            if doctype == "Item Production Detail" and name == garment_name:
+            if doctype == 'YRP Item Production Detail' and name == garment_name:
                 return garment
             return original(doctype, name, *args, **kwargs)
 
@@ -1695,10 +1695,10 @@ class TestClothProgram(IntegrationTestCase):
         from essdee_yrp.ipd_ui import duplicate_ipd
 
         source_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
-        source = frappe.get_doc("Item Production Detail", source_name)
+        source = frappe.get_doc('YRP Item Production Detail', source_name)
 
         duplicate_name = duplicate_ipd(source_name, self.cloth)
-        duplicate = frappe.get_doc("Item Production Detail", duplicate_name)
+        duplicate = frappe.get_doc('YRP Item Production Detail', duplicate_name)
 
         self.assertEqual(duplicate.approval_status, "Not Approved")
         for fieldname in (

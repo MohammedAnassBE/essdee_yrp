@@ -1,4 +1,4 @@
-frappe.ui.form.on("Item", {
+frappe.ui.form.on("YRP Item", {
 	setup(frm) {
 		frm.set_query("yarn_item", "yarn_ratio_details", () => ({
 			filters: {
@@ -31,7 +31,7 @@ frappe.ui.form.on("Item", {
 	},
 });
 
-frappe.ui.form.on("Item Yarn Ratio", {
+frappe.ui.form.on("SD YRP Item Yarn Ratio", {
 	yarn_ratio_details_add(frm) {
 		update_yarn_ratio_total(frm);
 	},

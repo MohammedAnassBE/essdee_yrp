@@ -8,10 +8,10 @@ def get_production_order_price_map(production_order):
 	"""Return the PPO default MRP keyed by its primary attribute value."""
 	doc = (
 		production_order
-		if getattr(production_order, "doctype", None) == "Production Order"
-		else frappe.get_doc("Production Order", production_order)
+		if getattr(production_order, "doctype", None) == 'YRP Production Order'
+		else frappe.get_doc('YRP Production Order', production_order)
 	)
-	primary = frappe.get_value("Item", doc.item, "primary_attribute")
+	primary = frappe.get_value('YRP Item', doc.item, "primary_attribute")
 	price_map = {}
 	if not primary:
 		return price_map
@@ -26,8 +26,8 @@ def get_production_order_price_map(production_order):
 def get_lot_override_map(production_order):
 	doc = (
 		production_order
-		if getattr(production_order, "doctype", None) == "Production Order"
-		else frappe.get_doc("Production Order", production_order)
+		if getattr(production_order, "doctype", None) == 'YRP Production Order'
+		else frappe.get_doc('YRP Production Order', production_order)
 	)
 	overrides = {}
 	for row in doc.get("lot_price_overrides") or []:
@@ -41,10 +41,10 @@ def get_lot_print_state(lot, for_update=False):
 		"""
 		SELECT bsp.name AS box_sticker_print, bsp.modified, detail.name AS detail_name,
 			detail.size, detail.mrp, detail.printed_quantity
-		FROM `tabBox Sticker Print` bsp
-		INNER JOIN `tabBox Sticker Print Detail` detail ON detail.parent = bsp.name
+		FROM `tabSD YRP Box Sticker Print` bsp
+		INNER JOIN `tabSD YRP Box Sticker Print Detail` detail ON detail.parent = bsp.name
 		WHERE bsp.lot = %s AND bsp.docstatus = 1
-			AND bsp.against = 'Work Order' AND COALESCE(bsp.against_id, '') != ''
+			AND bsp.against = 'YRP Work Order' AND COALESCE(bsp.against_id, '') != ''
 		ORDER BY bsp.modified DESC, bsp.creation DESC, detail.idx ASC
 		""" + lock_clause,
 		(lot,),
@@ -75,14 +75,14 @@ def get_lot_print_state(lot, for_update=False):
 
 
 def get_lot_pricing(lot, production_order=None, for_update=False):
-	linked_production_order = frappe.db.get_value("Lot", lot, "production_order")
+	linked_production_order = frappe.db.get_value('SD YRP Lot', lot, "production_order")
 	if not linked_production_order:
 		return None
 	if production_order and linked_production_order != production_order:
 		frappe.throw(f"Lot {lot} is not linked to Production Order {production_order}")
 
 	production_order = linked_production_order
-	ppo_doc = frappe.get_doc("Production Order", production_order)
+	ppo_doc = frappe.get_doc('YRP Production Order', production_order)
 	defaults = get_production_order_price_map(ppo_doc)
 	overrides = get_lot_override_map(ppo_doc).get(lot, {})
 	print_state = get_lot_print_state(lot, for_update=for_update)
@@ -133,7 +133,7 @@ def get_effective_lot_price_map(lot, production_order=None, for_update=False):
 
 
 def validate_lot_price_overrides(doc):
-	if doc.doctype != "Production Order":
+	if doc.doctype != 'YRP Production Order':
 		return
 
 	valid_sizes = set(get_production_order_price_map(doc))
@@ -147,7 +147,7 @@ def validate_lot_price_overrides(doc):
 		if key in seen:
 			frappe.throw(f"Duplicate Lot price override for {row.lot}, size {row.size}")
 		seen.add(key)
-		if frappe.db.get_value("Lot", row.lot, "production_order") != doc.name:
+		if frappe.db.get_value('SD YRP Lot', row.lot, "production_order") != doc.name:
 			frappe.throw(f"Lot {row.lot} is not linked to Production Order {doc.name}")
 		if row.size not in valid_sizes:
 			frappe.throw(f"Size {row.size} is not present in Production Order {doc.name}")
@@ -172,7 +172,7 @@ def sync_unprinted_box_sticker_prices(lot, production_order=None):
 	updated = 0
 	for box_sticker_print in pricing["box_sticker_prints"]:
 		rows = frappe.get_all(
-			"Box Sticker Print Detail",
+			'SD YRP Box Sticker Print Detail',
 			filters={"parent": box_sticker_print},
 			fields=["name", "size", "mrp"],
 		)
@@ -182,7 +182,7 @@ def sync_unprinted_box_sticker_prices(lot, production_order=None):
 				frappe.throw(f"MRP is missing for Lot {lot}, size {row.size}")
 			if flt(row.mrp) != flt(mrp):
 				frappe.db.set_value(
-					"Box Sticker Print Detail", row.name, "mrp", flt(mrp), update_modified=False
+					'SD YRP Box Sticker Print Detail', row.name, "mrp", flt(mrp), update_modified=False
 				)
 				updated += 1
 	return updated

@@ -1,0 +1,8 @@
+from frappe.model.document import Document
+
+
+class SDYRPItemProductionDetailPackingAttributeDetail(Document):
+	pass
+
+
+ItemProductionDetailPackingAttributeDetail = SDYRPItemProductionDetailPackingAttributeDetail

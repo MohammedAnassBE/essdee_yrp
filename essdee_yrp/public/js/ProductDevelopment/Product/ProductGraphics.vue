@@ -12,7 +12,7 @@
                             style="width:100%; max-height:230px; object-fit:contain; border:1px solid #ddd; border-radius:6px;"
                         >
                     </div>
-                    <div v-if="doctype != 'Product Release'">
+                    <div v-if="doctype != 'SD YRP Product Release'">
                         <button
                             class="btn btn-danger btn-sm mt-2"
                             @click="removeImage(idx, row)"
@@ -23,7 +23,7 @@
                 </div>
             </div>
         </div>
-        <div class="row mt-3" v-if="doctype != 'Product Release'">
+        <div class="row mt-3" v-if="doctype != 'SD YRP Product Release'">
             <div class="upload-type-control col-md-4"></div>
             <div class="attach-control col-md-4"></div>
         </div>
@@ -48,12 +48,12 @@ let show_button = ref(false)
 
 const attach_input = ref(null)
 const file = ref({})
-const method = 'essdee_yrp.essdee_yrp.doctype.product.product.upload_graphics_file'
+const method = 'essdee_yrp.essdee_yrp.doctype.sd_yrp_product.sd_yrp_product.upload_graphics_file'
 const files = ref(cur_frm.doc.product_designs)
 const visible_files = ref([])
 
 onMounted(() => {
-    if(doctype != 'Product Release'){
+    if(doctype != 'SD YRP Product Release'){
         create_upload_type_input()
     }
 });
@@ -129,7 +129,7 @@ function upload_pdf() {
         },
         on_success: (file) => {
             frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.product.product.process_pdf_to_images",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_product.sd_yrp_product.process_pdf_to_images",
                 args: {
                     file_url: file.file_url,
                     docname: cur_frm.doc.name,
@@ -167,7 +167,7 @@ async function removeImage(idx, row) {
     if (!yes) return;
 
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.product.product.remove_graphic_image",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_product.sd_yrp_product.remove_graphic_image",
         args: {
             detail: row,
             docname: cur_frm.doc.name

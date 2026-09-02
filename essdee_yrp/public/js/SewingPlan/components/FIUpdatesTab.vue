@@ -175,7 +175,7 @@ const fetchData = () => {
     }
 
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.sewing_plan.sewing_plan.get_fi_updates_data",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan.get_fi_updates_data",
         args: {
             supplier: props.selected_supplier
         },
@@ -214,7 +214,7 @@ const updateData = () => {
 
     updating.value = true
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.sewing_plan.sewing_plan.update_fi_dates",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan.update_fi_dates",
         args: {
             data: data_to_update
         },

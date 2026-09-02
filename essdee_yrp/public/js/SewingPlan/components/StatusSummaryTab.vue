@@ -51,7 +51,7 @@
                             </template>
                             <template v-else>
                                 <td v-for="header in items['header1']" :key="header" class="data-cell item-cell">
-                                    <span v-if="header === 'Lot'" class="lot-pill">{{ rowValue(row, header) }}</span>
+                                    <span v-if="header === 'SD YRP Lot'" class="lot-pill">{{ rowValue(row, header) }}</span>
                                     <template v-else>{{ rowValue(row, header) }}</template>
                                 </td>
                                 <td v-for="header in items['header2']" :key="header" class="data-cell numeric-cell">
@@ -384,8 +384,8 @@ const getAttrValue = (row, attrName) => {
 }
 
 const rowValue = (row, header) => {
-    if (header === 'Item') return row.item || '-'
-    if (header === 'Lot') return row.lot || '-'
+    if (header === 'YRP Item') return row.item || '-'
+    if (header === 'SD YRP Lot') return row.lot || '-'
     if (header === 'Colour') return row.colour || row.display_colour || getAttrValue(row, row.pack_attr)
     if (header === 'Part') return row.part || (row.is_set_item ? getAttrValue(row, row.set_attr) : '-')
     if (['FI Date', 'Input Date', 'Last Sewing Output'].includes(header)) return formatDate(row[header])
@@ -398,7 +398,7 @@ const fetchData = () => {
         return
     }
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.sewing_plan.sewing_plan.get_sp_status_summary",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan.get_sp_status_summary",
         args: {
             supplier: props.selected_supplier
         },

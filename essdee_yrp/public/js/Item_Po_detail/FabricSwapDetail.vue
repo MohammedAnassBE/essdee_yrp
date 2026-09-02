@@ -134,7 +134,7 @@ function make_link(parent_sel, value, attribute, placeholder, change_cb) {
 		parent,
 		df: {
 			fieldtype: "Link",
-			options: "Item Attribute Value",
+			options: "YRP Item Attribute Value",
 			fieldname: parent_sel.replace(/\W/g, "_"),
 			placeholder,
 			get_query: () => ({ filters: { attribute_name: attribute } }),
@@ -176,7 +176,7 @@ function mount_add_pin_control() {
 		parent,
 		df: {
 			fieldtype: "Link",
-			options: "Item Attribute Value",
+			options: "YRP Item Attribute Value",
 			fieldname: "fsw_add_pin",
 			placeholder: `${__("Add")} ${config.value.pin_label}...`,
 			get_query: () => ({ filters: { attribute_name: config.value.pin_attribute } }),

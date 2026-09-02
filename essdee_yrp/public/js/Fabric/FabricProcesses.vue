@@ -354,7 +354,7 @@ function mountItemControls() {
 	inputCtrl = frappe.ui.form.make_control({
 		parent: inputMount.value,
 		df: {
-			fieldtype: "Link", options: "Item", fieldname: "fp_input_item",
+			fieldtype: "Link", options: "YRP Item", fieldname: "fp_input_item",
 			placeholder: __("Pick the consumed item…"),
 			change() { if (draft.value) draft.value.input_item = (inputCtrl.get_value() || ""); },
 		},
@@ -364,7 +364,7 @@ function mountItemControls() {
 	outputCtrl = frappe.ui.form.make_control({
 		parent: outputMount.value,
 		df: {
-			fieldtype: "Link", options: "Item", fieldname: "fp_output_item",
+			fieldtype: "Link", options: "YRP Item", fieldname: "fp_output_item",
 			placeholder: __("Pick the produced item…"),
 			change() { if (draft.value) draft.value.output_item = (outputCtrl.get_value() || ""); },
 		},
@@ -1142,7 +1142,7 @@ async function loadValues(attr) {
 	if (!attr || valueCache[attr]) return;
 	valueCache[attr] = [];
 	try {
-		const rows = await frappe.db.get_list("Item Attribute Value", {
+		const rows = await frappe.db.get_list("YRP Item Attribute Value", {
 			filters: { attribute_name: attr },
 			fields: ["name"],
 			limit: 0,

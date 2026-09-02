@@ -48,7 +48,7 @@ isolation, an Analyse/Dry Run, and recorded verification.
 | F15 `production_api` upstream master | `4fc8f2f366cf8dc73557b01e13c6715c52d2c856` | Read-only divergent reference, including a GRN-validation setting absent from develop |
 
 Installed target versions at audit start: Frappe `16.10.4` on
-`version-16-hotfix`, YRP `0.0.1` develop, Essdee YRP `0.0.1` MRP, Spine
+`version-16-hotfix`, YRP `0.0.1` develop, SD YRP `0.0.1` MRP, Spine
 `v16_master`, and YRP E-Waybill API develop. Target maintenance mode was off.
 
 ### Base repository preservation guard

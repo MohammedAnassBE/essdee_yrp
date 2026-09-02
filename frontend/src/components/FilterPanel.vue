@@ -219,7 +219,7 @@ const ALL_OPERATORS = [
 // fieldtypes that can't be filtered (layout / no-value / table / attachment)
 const NON_FILTER_FT = new Set([
 	"Section Break", "Column Break", "Tab Break", "HTML", "Button", "Image",
-	"Fold", "Heading", "Table", "Table MultiSelect", "Geolocation", "Signature",
+	"Fold", "Heading", "Table", "Table MultiSelect", "Geolocation", "SD YRP Signature",
 	"Barcode", "Attach", "Attach Image",
 ])
 

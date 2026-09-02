@@ -84,7 +84,7 @@ onMounted(() => {
             options: colours.value,
             onchange: () => {
                 frappe.call({
-                    method: "essdee_yrp.essdee_yrp.doctype.time_and_action.time_and_action.get_time_and_action_details",
+                    method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_time_and_action.sd_yrp_time_and_action.get_time_and_action_details",
                     args: {
                         docname: docnames[select_field.value.get_value()]
                     },
@@ -104,7 +104,7 @@ onMounted(() => {
 
 function make_complete(){
     frappe.call({
-        method:"essdee_yrp.essdee_yrp.doctype.time_and_action.time_and_action.make_complete",
+        method:"essdee_yrp.essdee_yrp.doctype.sd_yrp_time_and_action.sd_yrp_time_and_action.make_complete",
         args: {
             "time_and_action":docname.value,
         },

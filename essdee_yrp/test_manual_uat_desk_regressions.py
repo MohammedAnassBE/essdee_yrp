@@ -13,7 +13,7 @@ class TestManualUATDeskRegressions(FrappeTestCase):
 	def test_cutting_laysheet_restore_has_operator_feedback(self):
 		source = (
 			Path(frappe.get_app_path("essdee_yrp"))
-			/ "essdee_yrp/doctype/cutting_laysheet/cutting_laysheet.js"
+			/ "essdee_yrp/doctype/sd_yrp_cutting_laysheet/sd_yrp_cutting_laysheet.js"
 		).read_text(encoding="utf-8")
 		self.assertIn("Restoring Label Printed status", source)
 		self.assertIn("Label Printed restored", source)
@@ -21,7 +21,7 @@ class TestManualUATDeskRegressions(FrappeTestCase):
 
 	def test_cutting_plan_list_status_indicator_is_registered(self):
 		self.assertEqual(
-			hooks.doctype_list_js["Cutting Plan"],
+			hooks.doctype_list_js['SD YRP Cutting Plan'],
 			"public/js/cutting_plan_list.js",
 		)
 		source = (
@@ -43,12 +43,12 @@ class TestManualUATDeskRegressions(FrappeTestCase):
 		add_index.assert_has_calls(
 			[
 				call(
-					"Stock Ledger Entry",
+					'YRP Stock Ledger Entry',
 					["voucher_type", "voucher_no", "is_cancelled"],
 					index_name="idx_sle_voucher_active",
 				),
 				call(
-					"Stock Reservation Entry",
+					'YRP Stock Reservation Entry',
 					[
 						"item_code",
 						"warehouse",
@@ -60,7 +60,7 @@ class TestManualUATDeskRegressions(FrappeTestCase):
 					index_name="idx_sre_active_stock_bucket",
 				),
 				call(
-					"Stock Reservation Entry",
+					'YRP Stock Reservation Entry',
 					[
 						"voucher_type",
 						"voucher_no",
@@ -73,7 +73,7 @@ class TestManualUATDeskRegressions(FrappeTestCase):
 		)
 		self.assertEqual(add_index.call_count, 3)
 		indexes = frappe.db.sql(
-			"SHOW INDEX FROM `tabStock Ledger Entry` WHERE Key_name=%s",
+			"SHOW INDEX FROM `tabYRP Stock Ledger Entry` WHERE Key_name=%s",
 			("idx_sle_voucher_active",),
 			as_dict=True,
 		)
@@ -82,7 +82,7 @@ class TestManualUATDeskRegressions(FrappeTestCase):
 			["voucher_type", "voucher_no", "is_cancelled"],
 		)
 		reservation_indexes = frappe.db.sql(
-			"SHOW INDEX FROM `tabStock Reservation Entry` WHERE Key_name=%s",
+			"SHOW INDEX FROM `tabYRP Stock Reservation Entry` WHERE Key_name=%s",
 			("idx_sre_active_stock_bucket",),
 			as_dict=True,
 		)
@@ -101,7 +101,7 @@ class TestManualUATDeskRegressions(FrappeTestCase):
 			],
 		)
 		voucher_indexes = frappe.db.sql(
-			"SHOW INDEX FROM `tabStock Reservation Entry` WHERE Key_name=%s",
+			"SHOW INDEX FROM `tabYRP Stock Reservation Entry` WHERE Key_name=%s",
 			("idx_sre_voucher_detail_active",),
 			as_dict=True,
 		)
@@ -124,18 +124,18 @@ class TestManualUATDeskRegressions(FrappeTestCase):
 			sync_dc_completion_cutting_plan(
 				frappe._dict(
 					purpose="DC Completion",
-					against="Delivery Challan",
+					against='YRP Delivery Challan',
 					against_id="DC-COMPLETION-1",
 				)
 			)
-		get_doc.assert_called_once_with("Delivery Challan", "DC-COMPLETION-1")
+		get_doc.assert_called_once_with('YRP Delivery Challan', "DC-COMPLETION-1")
 		sync.assert_called_once_with(delivery_challan)
 
 		with patch.object(frappe, "get_doc") as get_doc:
 			sync_dc_completion_cutting_plan(
 				frappe._dict(
 					purpose="Material Transfer",
-					against="Delivery Challan",
+					against='YRP Delivery Challan',
 					against_id="DC-COMPLETION-1",
 				)
 			)

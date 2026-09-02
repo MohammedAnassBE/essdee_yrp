@@ -14,7 +14,7 @@ def validate_default_action_work_station(doc, method=None):
 	filters = {"action": doc.action, "default": 1}
 	if not doc.is_new():
 		filters["name"] = ["!=", doc.name]
-	existing = frappe.get_all("Work Station", filters=filters, pluck="name", limit=1)
+	existing = frappe.get_all('YRP Work Station', filters=filters, pluck="name", limit=1)
 	if existing:
 		frappe.throw(
 			_("Work Station {0} is already the default for Action {1}.").format(
@@ -25,13 +25,13 @@ def validate_default_action_work_station(doc, method=None):
 
 @frappe.whitelist()
 def get_work_stations(items, lot: str) -> dict:
-	lot_doc = frappe.get_doc("Lot", lot)
+	lot_doc = frappe.get_doc('SD YRP Lot', lot)
 	lot_doc.check_permission("read")
 	result = {}
 	for link in lot_doc.lot_time_and_action_details:
 		if not link.time_and_action:
 			continue
-		doc = frappe.get_doc("Time and Action", link.time_and_action)
+		doc = frappe.get_doc('SD YRP Time and Action', link.time_and_action)
 		doc.check_permission("read")
 		if doc.status == "Completed":
 			continue
@@ -55,7 +55,7 @@ def update_t_and_a_ws(datas) -> None:
 		parent = rows[0].get("parent")
 		if not parent or parent in seen:
 			frappe.throw(_("Invalid Time and Action selection."))
-		doc = frappe.get_doc("Time and Action", parent)
+		doc = frappe.get_doc('SD YRP Time and Action', parent)
 		doc.check_permission("write")
 		incoming = {row.get("action"): row for row in rows}
 		if set(incoming) != {row.action for row in doc.details}:
@@ -64,7 +64,7 @@ def update_t_and_a_ws(datas) -> None:
 			work_station = incoming[row.action].get("work_station")
 			if work_station:
 				station_action = frappe.db.get_value(
-					"Work Station", work_station, "action"
+					'YRP Work Station', work_station, "action"
 				)
 				if station_action != row.action:
 					frappe.throw(

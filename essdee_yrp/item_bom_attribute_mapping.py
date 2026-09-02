@@ -77,7 +77,7 @@ def get_item_bom_mapping_combinations(
 	if not ipd:
 		frappe.throw(_("Item Production Detail is required to generate combinations"))
 
-	ipd_doc = frappe.get_doc("Item Production Detail", ipd)
+	ipd_doc = frappe.get_doc('YRP Item Production Detail', ipd)
 	ipd_doc.check_permission("read")
 	if item and ipd_doc.item != item:
 		frappe.throw(

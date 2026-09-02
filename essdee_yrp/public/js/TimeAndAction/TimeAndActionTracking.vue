@@ -131,7 +131,7 @@ onMounted(() => {
             fieldname: "process_name",
             fieldtype: "Link",
             label: "Process",
-            options: "Process",
+            options: "YRP Process",
         },
         doc: sample_doc.value,
         render_input: true,
@@ -143,12 +143,12 @@ onMounted(() => {
         df: {
             fieldname: "lot",
             fieldtype: "Link",
-            options: "Lot",
+            options: "SD YRP Lot",
             label: "Lot",
             onchange:async ()=> {
                 let x = lot.get_value()
                 if(x && x != "" && x != null){
-                    let y = await frappe.db.get_value('Lot',x, "item")
+                    let y = await frappe.db.get_value('SD YRP Lot',x, "item")
                     item.set_value(y.message.item)
                     item.refresh()
                 }
@@ -164,7 +164,7 @@ onMounted(() => {
         df: {
             fieldname: "item",
             fieldtype: "Link",
-            options: "Item",
+            options: "YRP Item",
             label: "Item",
         },
         doc: sample_doc.value,
@@ -244,7 +244,7 @@ function get_work_order_detail(item, idx){
 }
 
 function map_to_work_order(work_order){
-    const url = `/app/work-order/${work_order}`;
+    const url = `/app/yrp-work-order/${work_order}`;
     window.open(url, '_blank');
 }
 

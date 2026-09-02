@@ -13,21 +13,21 @@
  "label": "Time and Actions",
  "links": [
   {"hidden": 0, "is_query_report": 0, "label": "Time and Action Reports", "link_count": 9, "link_type": "DocType", "onboard": 0, "type": "Card Break"},
-  {"hidden": 0, "is_query_report": 1, "label": "Time and Action Report", "link_count": 0, "link_to": "Time and Action Report", "link_type": "Report", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 1, "label": "Time and Action Summary", "link_count": 0, "link_to": "Time and Action Summary", "link_type": "Report", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 1, "label": "Live Time and Action Delay", "link_count": 0, "link_to": "Live Time and Action Delay", "link_type": "Report", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 1, "label": "TIme and Action Pending Work", "link_count": 0, "link_to": "TIme and Action Pending Work", "link_type": "Report", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 1, "label": "Time and Action Delay Analysis", "link_count": 0, "link_to": "Time and Action Delay Analysis", "link_type": "Report", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 1, "label": "Cumulative Time and Action Delay", "link_count": 0, "link_to": "Cumulative Time and Action Delay", "link_type": "Report", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 1, "label": "Time and Action Department Performance", "link_count": 0, "link_to": "Time and Action Department Performance", "link_type": "Report", "onboard": 0, "type": "Link"},
+  {"hidden": 0, "is_query_report": 1, "label": "Time and Action Report", "link_count": 0, "link_to": "SD YRP Time and Action Report", "link_type": "Report", "onboard": 0, "type": "Link"},
+  {"hidden": 0, "is_query_report": 1, "label": "Time and Action Summary", "link_count": 0, "link_to": "SD YRP Time and Action Summary", "link_type": "Report", "onboard": 0, "type": "Link"},
+  {"hidden": 0, "is_query_report": 1, "label": "Live Time and Action Delay", "link_count": 0, "link_to": "SD YRP Live Time and Action Delay", "link_type": "Report", "onboard": 0, "type": "Link"},
+  {"hidden": 0, "is_query_report": 1, "label": "TIme and Action Pending Work", "link_count": 0, "link_to": "SD YRP TIme and Action Pending Work", "link_type": "Report", "onboard": 0, "type": "Link"},
+  {"hidden": 0, "is_query_report": 1, "label": "Time and Action Delay Analysis", "link_count": 0, "link_to": "SD YRP Time and Action Delay Analysis", "link_type": "Report", "onboard": 0, "type": "Link"},
+  {"hidden": 0, "is_query_report": 1, "label": "Cumulative Time and Action Delay", "link_count": 0, "link_to": "SD YRP Cumulative Time and Action Delay", "link_type": "Report", "onboard": 0, "type": "Link"},
+  {"hidden": 0, "is_query_report": 1, "label": "Time and Action Department Performance", "link_count": 0, "link_to": "SD YRP Time and Action Department Performance", "link_type": "Report", "onboard": 0, "type": "Link"},
   {"hidden": 0, "is_query_report": 0, "label": "Time and Action Weekly Review Report", "link_count": 0, "link_to": "t-and-a-weekly-revie", "link_type": "Page", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 1, "label": "Time and Action Dispatch Report", "link_count": 0, "link_to": "Time and Action Dispatch Report", "link_type": "Report", "onboard": 0, "type": "Link"},
+  {"hidden": 0, "is_query_report": 1, "label": "Time and Action Dispatch Report", "link_count": 0, "link_to": "SD YRP Time and Action Dispatch Report", "link_type": "Report", "onboard": 0, "type": "Link"},
   {"hidden": 0, "is_query_report": 0, "label": "Details", "link_count": 5, "link_type": "DocType", "onboard": 0, "type": "Card Break"},
-  {"hidden": 0, "is_query_report": 0, "label": "Action", "link_count": 0, "link_to": "Action", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Action Master", "link_count": 0, "link_to": "Action Master", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Action Master Template", "link_count": 0, "link_to": "Action Master Template", "link_type": "DocType", "onboard": 0, "type": "Link"},
+  {"hidden": 0, "is_query_report": 0, "label": "Action", "link_count": 0, "link_to": "SD YRP Action", "link_type": "DocType", "onboard": 0, "type": "Link"},
+  {"hidden": 0, "is_query_report": 0, "label": "Action Master", "link_count": 0, "link_to": "SD YRP Action Master", "link_type": "DocType", "onboard": 0, "type": "Link"},
+  {"hidden": 0, "is_query_report": 0, "label": "Action Master Template", "link_count": 0, "link_to": "SD YRP Action Master Template", "link_type": "DocType", "onboard": 0, "type": "Link"},
   {"hidden": 0, "is_query_report": 0, "label": "Time and Action Update", "link_count": 0, "link_to": "t_and_a_update", "link_type": "Page", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "T and A Settings", "link_count": 0, "link_to": "T and A Settings", "link_type": "DocType", "onboard": 0, "type": "Link"}
+  {"hidden": 0, "is_query_report": 0, "label": "T and A Settings", "link_count": 0, "link_to": "SD YRP T and A Settings", "link_type": "DocType", "onboard": 0, "type": "Link"}
  ],
  "module": "Essdee YRP",
  "name": "Time and Actions",
@@ -39,8 +39,8 @@
  "roles": [],
  "sequence_id": 5.0,
  "shortcuts": [
-  {"color": "Grey", "doc_view": "List", "label": "Lot", "link_to": "Lot", "stats_filter": "[]", "type": "DocType"},
-  {"color": "Grey", "doc_view": "List", "label": "Item Production Detail", "link_to": "Item Production Detail", "stats_filter": "[]", "type": "DocType"}
+  {"color": "Grey", "doc_view": "List", "label": "Lot", "link_to": "SD YRP Lot", "stats_filter": "[]", "type": "DocType"},
+  {"color": "Grey", "doc_view": "List", "label": "Item Production Detail", "link_to": "YRP Item Production Detail", "stats_filter": "[]", "type": "DocType"}
  ],
  "title": "Time and Actions"
 }

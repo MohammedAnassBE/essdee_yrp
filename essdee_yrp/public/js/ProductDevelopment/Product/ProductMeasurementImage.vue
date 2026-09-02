@@ -36,7 +36,7 @@ import { ref } from "vue";
 const root = ref(null);
 const doc = cur_frm.doc;
 const docstatus = cur_frm.doc.docstatus;
-const image_field = cur_frm.doc.doctype == 'Product Measurement' ? 'measurement_image' : 'image';
+const image_field = cur_frm.doc.doctype == 'SD YRP Product Measurement' ? 'measurement_image' : 'image';
 
 function getImage(path) {
     if (!path) return "";
@@ -54,7 +54,7 @@ function upload() {
                 old_file = null
             }
             await frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.product.product.delete_and_update_file",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_product.sd_yrp_product.delete_and_update_file",
                 args: {
                     file_url: old_file,
                     fieldname: image_field,
@@ -82,7 +82,7 @@ function upload_pdf() {
         },
         on_success: (file) => {
             frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.product.product.process_single_page_pdf",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_product.sd_yrp_product.process_single_page_pdf",
                 args: {
                     file_url: file.file_url,
                     doctype: cur_frm.doc.doctype,

@@ -6,7 +6,7 @@ from frappe.utils import flt, getdate, now_datetime, nowdate
 
 from essdee_yrp.lot_pricing import get_effective_lot_price_map
 from yrp.utils import get_variant_attr_details, update_if_string_instance
-from yrp.yrp.doctype.item.item import build_variant_attributes, get_attribute_details, get_or_create_variant
+from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_attribute_details, get_or_create_variant
 
 
 ALTERNATIVE_PPO_COPY_FIELDS = (
@@ -31,13 +31,13 @@ TRANSFER_MARKER_FIELD = "transferred_to_ppo"
 
 def get_alternative_items(item):
 	items = frappe.db.get_all(
-		"Item Alternative", filters={"item": item}, pluck="alternative_item"
+		'SD YRP Item Alternative', filters={"item": item}, pluck="alternative_item"
 	)
 	return sorted({alternative for alternative in items if alternative and alternative != item})
 
 
 def get_rows_by_size(doc):
-	primary_attribute = frappe.db.get_value("Item", doc.item, "primary_attribute")
+	primary_attribute = frappe.db.get_value('YRP Item', doc.item, "primary_attribute")
 	rows = {}
 	for row in doc.get("production_order_details") or []:
 		size = get_variant_attr_details(row.item_variant).get(primary_attribute) or row.item_variant
@@ -58,10 +58,10 @@ def create_alternative_plan_production_order(
 	"""Create the paired PPO and apply the first alternative-item quantity move."""
 	piece_transfers = _normalise_transfers(transfers)
 	_lock_production_orders(source_production_order)
-	source = frappe.get_doc("Production Order", source_production_order)
+	source = frappe.get_doc('YRP Production Order', source_production_order)
 	if source.docstatus != 1:
 		frappe.throw(_("Source Production Order {0} must be submitted").format(source.name))
-	if frappe.db.get_value("Lot", source_lot, "production_order") != source.name:
+	if frappe.db.get_value('SD YRP Lot', source_lot, "production_order") != source.name:
 		frappe.throw(_("Source Lot is not linked to the selected Production Order"))
 	if alternative_item not in get_alternative_items(source.item):
 		frappe.throw(_("Item {0} is not configured as an alternative of {1}").format(
@@ -69,7 +69,7 @@ def create_alternative_plan_production_order(
 		))
 
 	source_rows = get_rows_by_size(source)
-	target_item = frappe.get_cached_doc("Item", alternative_item)
+	target_item = frappe.get_cached_doc('YRP Item', alternative_item)
 	target_sizes = set(get_attribute_details(alternative_item).get("primary_attribute_values") or [])
 	invalid_sizes = [size for size in piece_transfers if size not in target_sizes]
 	if invalid_sizes:
@@ -82,7 +82,7 @@ def create_alternative_plan_production_order(
 		if size not in source_rows:
 			frappe.throw(_("Size {0} is not present in {1}").format(size, source.name))
 
-	target = frappe.new_doc("Production Order")
+	target = frappe.new_doc('YRP Production Order')
 	for fieldname in ALTERNATIVE_PPO_COPY_FIELDS:
 		if target.meta.has_field(fieldname):
 			target.set(fieldname, source.get(fieldname))
@@ -97,7 +97,7 @@ def create_alternative_plan_production_order(
 		target.delivery_date
 	):
 		target.dont_deliver_after = target.delivery_date
-	pack_out_stage = frappe.db.get_single_value("IPD Settings", "default_pack_out_stage")
+	pack_out_stage = frappe.db.get_single_value('SD YRP IPD Settings', "default_pack_out_stage")
 	seen = set()
 	for size, source_row in source_rows.items():
 		if size not in target_sizes:
@@ -124,7 +124,7 @@ def create_alternative_plan_production_order(
 	target.flags.allow_system_generated_alternative_ppo = True
 	target.submit()
 
-	lot_doc = frappe.get_doc("Lot", target_lot)
+	lot_doc = frappe.get_doc('SD YRP Lot', target_lot)
 	if lot_doc.production_order and lot_doc.production_order != target.name:
 		frappe.throw(_("Alternative Lot is already linked to another Production Order"))
 	if lot_doc.item != alternative_item:
@@ -133,7 +133,7 @@ def create_alternative_plan_production_order(
 	lot_doc.status = "Open"
 	lot_doc.save(ignore_permissions=True)
 
-	target = frappe.get_doc("Production Order", target.name)
+	target = frappe.get_doc('YRP Production Order', target.name)
 	for size, mrp in source_prices.items():
 		row = get_rows_by_size(target).get(size)
 		if not row or flt(mrp) <= 0 or flt(mrp) == flt(row.mrp):
@@ -187,8 +187,8 @@ def apply_alternative_plan_ppo_transfer(
 	)
 	target_boxes = _pieces_to_boxes(piece_transfers, _packing_combo(target_lot))
 	_lock_production_orders(source_production_order, target_production_order)
-	source = frappe.get_doc("Production Order", source_production_order)
-	target = frappe.get_doc("Production Order", target_production_order)
+	source = frappe.get_doc('YRP Production Order', source_production_order)
+	target = frappe.get_doc('YRP Production Order', target_production_order)
 	_validate_pair(source, target, source_lot, target_lot)
 
 	source_rows = get_rows_by_size(source)
@@ -235,8 +235,8 @@ def apply_alternative_plan_ppo_transfer(
 		"reason": reason,
 	}
 	_append_transfer_history(source, target, changes, request, approved_on)
-	frappe.clear_document_cache("Production Order", source.name)
-	frappe.clear_document_cache("Production Order", target.name)
+	frappe.clear_document_cache('YRP Production Order', source.name)
+	frappe.clear_document_cache('YRP Production Order', target.name)
 	return {
 		"source_production_order": source.name,
 		"target_production_order": target.name,
@@ -256,8 +256,8 @@ def _normalise_transfers(transfers):
 
 
 def _packing_combo(lot):
-	ipd = frappe.db.get_value("Lot", lot, "production_detail")
-	combo = flt(frappe.db.get_value("Item Production Detail", ipd, "packing_combo"))
+	ipd = frappe.db.get_value('SD YRP Lot', lot, "production_detail")
+	combo = flt(frappe.db.get_value('YRP Item Production Detail', ipd, "packing_combo"))
 	if combo <= 0:
 		frappe.throw(_("Lot {0} has no valid Packing Combo").format(lot))
 	return combo
@@ -270,7 +270,7 @@ def _pieces_to_boxes(transfers, combo):
 def _lock_production_orders(*names):
 	for name in sorted(set(filter(None, names))):
 		if not frappe.db.sql(
-			"SELECT name FROM `tabProduction Order` WHERE name = %s FOR UPDATE", name
+			"SELECT name FROM `tabYRP Production Order` WHERE name = %s FOR UPDATE", name
 		):
 			frappe.throw(_("Production Order {0} does not exist").format(name))
 
@@ -278,9 +278,9 @@ def _lock_production_orders(*names):
 def _validate_pair(source, target, source_lot, target_lot):
 	if source.docstatus != 1 or target.docstatus != 1:
 		frappe.throw(_("Alternative quantity requires two submitted Production Orders"))
-	if frappe.db.get_value("Lot", source_lot, "production_order") != source.name:
+	if frappe.db.get_value('SD YRP Lot', source_lot, "production_order") != source.name:
 		frappe.throw(_("Source Lot is not linked to its Production Order"))
-	if frappe.db.get_value("Lot", target_lot, "production_order") != target.name:
+	if frappe.db.get_value('SD YRP Lot', target_lot, "production_order") != target.name:
 		frappe.throw(_("Alternative Lot is not linked to its Production Order"))
 	if target.item not in get_alternative_items(source.item):
 		frappe.throw(_("Target item is not configured as an alternative"))
@@ -321,14 +321,14 @@ def _production_order_detail(target, item_doc, size, stage, source_row):
 
 
 def _insert_target_size_row(target, source_row, size):
-	item_doc = frappe.get_cached_doc("Item", target.item)
-	stage = frappe.db.get_single_value("IPD Settings", "default_pack_out_stage")
+	item_doc = frappe.get_cached_doc('YRP Item', target.item)
+	stage = frappe.db.get_single_value('SD YRP IPD Settings', "default_pack_out_stage")
 	row = target.append(
 		"production_order_details",
 		_production_order_detail(target, item_doc, size, stage, source_row),
 	)
 	row.parent = target.name
-	row.parenttype = "Production Order"
+	row.parenttype = 'YRP Production Order'
 	row.parentfield = "production_order_details"
 	row.db_insert()
 	return row

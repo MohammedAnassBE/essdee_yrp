@@ -184,7 +184,7 @@ async function get_action_data(){
     }
     let val = action.get_value()
     if(val && val != "" && val != null){
-        let d = await frappe.db.get_value("Action", val, ["department", "lead_time"])
+        let d = await frappe.db.get_value("SD YRP Action", val, ["department", "lead_time"])
         department.set_value(d.message.department)
         lead_time.set_value(d.message.lead_time)
     }
@@ -193,9 +193,9 @@ async function get_action_data(){
 function add_action(index=null){
     show_div.value = true
     nextTick(() => {
-        action = get_input_field(".cur-action", "Link", "action", "Action", "Action", true, get_action_data);
+        action = get_input_field(".cur-action", "Link", "action", "SD YRP Action", "SD YRP Action", true, get_action_data);
         lead_time = get_input_field(".lead-time", "Int", "lead_time", "Lead Time", null, true);
-        department = get_input_field(".department-val", "Link", "department", "Department", "Department", true);
+        department = get_input_field(".department-val", "Link", "department", "YRP Department", "YRP Department", true);
         check_value = get_input_field(".merge-check", "Check", "merge_action", "Merge Action", null, true)
         one_colour = get_input_field(".one-colour-check", "Check", "one_colour_process", "One Colour Process", null, true)
         if(index == 0 || index){

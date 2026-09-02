@@ -56,7 +56,7 @@ const fetchData = () => {
         return
     }
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.sewing_plan.sewing_plan.get_dashboard_data",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan.get_dashboard_data",
         args: {
             supplier: props.selected_supplier
         },

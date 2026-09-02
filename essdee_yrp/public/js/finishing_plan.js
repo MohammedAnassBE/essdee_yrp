@@ -1,7 +1,7 @@
 // Copyright (c) 2025, Essdee and contributors
 // For license information, please see license.txt
 
-frappe.ui.form.on("Finishing Plan", {
+frappe.ui.form.on("SD YRP Finishing Plan", {
     refresh(frm) {
         if (frm.doc.__islocal) {
             return
@@ -106,7 +106,7 @@ frappe.ui.form.on("Finishing Plan", {
                     "Approve the OCR request and mark this Finishing Plan as OCR Completed?",
                     () => {
                         frappe.call({
-                            method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.approve_ocr_request",
+                            method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.approve_ocr_request",
                             args: { doc_name: frm.doc.name },
                             freeze: true,
                             freeze_message: "Approving...",
@@ -125,7 +125,7 @@ frappe.ui.form.on("Finishing Plan", {
                 "Complete OCR for this Finishing Plan? Status will be set based on unaccountable pieces.",
                 () => {
                     frappe.call({
-                        method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.complete_ocr",
+                        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.complete_ocr",
                         args: { doc_name: frm.doc.name },
                         freeze: true,
                         freeze_message: "Checking unaccountable pieces...",
@@ -148,7 +148,7 @@ frappe.ui.form.on("Finishing Plan", {
         }
         frm.add_custom_button("Fetch Rejected Quantity", () => {
             frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.fetch_rejected_quantity",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.fetch_rejected_quantity",
                 args: {
                     doc_name: frm.doc.name,
                 },
@@ -161,7 +161,7 @@ frappe.ui.form.on("Finishing Plan", {
         })
         frm.add_custom_button("Print Finishing Inward", () => {
             frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.get_primary_values",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.get_primary_values",
                 args: {
                     "production_detail": frm.doc.production_detail,
                 },
@@ -179,7 +179,7 @@ frappe.ui.form.on("Finishing Plan", {
                         ],
                         primary_action(values) {
                             frappe.call({
-                                method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.cache_selected_size",
+                                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.cache_selected_size",
                                 args: {
                                     "key": "inward_pf_size",
                                     "size": values.size,
@@ -202,7 +202,7 @@ frappe.ui.form.on("Finishing Plan", {
             })
         })
         frappe.call({
-            method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.check_is_alternative_item",
+            method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.check_is_alternative_item",
             args: {
                 "item": frm.doc.item,
             },
@@ -237,12 +237,12 @@ frappe.ui.form.on("Finishing Plan", {
                                     label: __("Existing Lot"),
                                     fieldname: "existing_lot",
                                     fieldtype: "Link",
-                                    options: "Lot",
+                                    options: "SD YRP Lot",
                                     depends_on: "eval:doc.lot_source=='Existing Lot'",
                                     mandatory_depends_on: "eval:doc.lot_source=='Existing Lot'",
                                     get_query: () => {
                                         return {
-                                            query: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.get_unconfigured_lots"
+                                            query: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.get_unconfigured_lots"
                                         }
                                     }
                                 },
@@ -250,7 +250,7 @@ frappe.ui.form.on("Finishing Plan", {
                                     label: __("Alternative Item"),
                                     fieldname: "alternative_item",
                                     fieldtype: "Link",
-                                    options: "Item",
+                                    options: "YRP Item",
                                     reqd: 1,
                                     get_query: () => {
                                         return {
@@ -264,7 +264,7 @@ frappe.ui.form.on("Finishing Plan", {
                                     label: __("Item Production Detail"),
                                     fieldname: "production_detail",
                                     fieldtype: "Link",
-                                    options: "Item Production Detail",
+                                    options: "YRP Item Production Detail",
                                     reqd: 1,
                                     get_query: () => {
                                         let alternative_item = d.get_value("alternative_item");
@@ -288,7 +288,7 @@ frappe.ui.form.on("Finishing Plan", {
                             primary_action(values) {
                                 let qty_details = frm.alternative_item.get_data();
                                 frappe.call({
-                                    method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.create_alternative_fp",
+                                    method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.create_alternative_fp",
                                     args: {
                                         "doc_name": frm.doc.name,
                                         "alternative_item": values.alternative_item,
@@ -301,7 +301,7 @@ frappe.ui.form.on("Finishing Plan", {
                                     freeze: true,
                                     freeze_message: "Creating Alternative FP",
                                     callback: function (r) {
-                                        frappe.set_route("Form", "Work Order", r.message)
+                                        frappe.set_route("Form", "YRP Work Order", r.message)
                                         d.hide();
                                     }
                                 })
@@ -315,7 +315,7 @@ frappe.ui.form.on("Finishing Plan", {
         })
         if (!frm.doc.__islocal && frm.doc.lot) {
             frappe.call({
-                method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.get_fp_alternate_lots",
+                method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.get_fp_alternate_lots",
                 args: { fp_lot: frm.doc.lot },
                 callback: function (r) {
                     let alt_lots = r.message || [];
@@ -341,7 +341,7 @@ frappe.ui.form.on("Finishing Plan", {
                             primary_action(values) {
                                 let qty_details = frm.update_qty_grid.get_data();
                                 frappe.call({
-                                    method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.update_alternative_lot_quantity",
+                                    method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.update_alternative_lot_quantity",
                                     args: {
                                         doc_name: frm.doc.name,
                                         target_lot: values.target_lot,
@@ -352,7 +352,7 @@ frappe.ui.form.on("Finishing Plan", {
                                     callback: function (res) {
                                         d.hide();
                                         if (res.message) {
-                                            frappe.set_route("Form", "Work Order", res.message);
+                                            frappe.set_route("Form", "YRP Work Order", res.message);
                                         }
                                     },
                                 });
@@ -371,7 +371,7 @@ frappe.ui.form.on("Finishing Plan", {
     },
     fetch_incomplete_items(frm) {
         frappe.call({
-            method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.get_incomplete_transfer_docs",
+            method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.get_incomplete_transfer_docs",
             args: {
                 lot: frm.doc.lot,
                 doc_name: frm.doc.name
@@ -380,7 +380,7 @@ frappe.ui.form.on("Finishing Plan", {
     },
     fetch_quantity(frm) {
         frappe.call({
-            method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.fetch_quantity",
+            method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.fetch_quantity",
             args: {
                 "doc_name": frm.doc.name
             },
@@ -391,7 +391,7 @@ frappe.ui.form.on("Finishing Plan", {
 });
 
 function apply_p_and_l_tab_visibility(frm) {
-    frappe.db.get_single_value("MRP Settings", "merch_user_role").then((merch_role) => {
+    frappe.db.get_single_value("SD YRP MRP Settings", "merch_user_role").then((merch_role) => {
         const allowed = merch_role && frappe.user.has_role(merch_role);
         frm.set_df_property("p_and_l_tab", "hidden", allowed ? 0 : 1);
         frm.set_df_property("p_and_l_html", "hidden", allowed ? 0 : 1);
@@ -441,7 +441,7 @@ function render_p_and_l_section(frm) {
         const $list = $container.find(".pl-list");
         $list.html(`<div style="color:#64748b;">Loading...</div>`);
         frappe.call({
-            method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.get_p_and_l_documents",
+            method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.get_p_and_l_documents",
             args: { doc_name: frm.doc.name },
             callback: (r) => {
                 const docs = r.message || [];
@@ -474,7 +474,7 @@ function render_p_and_l_section(frm) {
                     const name = $(this).data("name");
                     frappe.confirm("Delete this P&L document?", () => {
                         frappe.call({
-                            method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.delete_p_and_l_document",
+                            method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.delete_p_and_l_document",
                             args: { name },
                             freeze: true,
                             callback: () => {
@@ -498,7 +498,7 @@ function render_p_and_l_section(frm) {
             primary_action_label: "Save",
             primary_action(values) {
                 frappe.call({
-                    method: "essdee_yrp.essdee_yrp.doctype.finishing_plan.finishing_plan.add_p_and_l_document",
+                    method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.add_p_and_l_document",
                     args: {
                         doc_name: frm.doc.name,
                         file_url: values.file,

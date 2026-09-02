@@ -5,7 +5,7 @@ import frappe
 from frappe.utils import cint
 
 from yrp.utils import update_if_string_instance
-from yrp.yrp.doctype.item_dependent_attribute_mapping.item_dependent_attribute_mapping import (
+from yrp.yrp.doctype.yrp_item_dependent_attribute_mapping.yrp_item_dependent_attribute_mapping import (
 	get_dependent_attribute_details,
 )
 
@@ -29,13 +29,13 @@ def load_attribute_list(doc):
 	for attribute in doc.get("item_attributes") or []:
 		if not attribute.attribute:
 			continue
-		attribute_doc = frappe.get_cached_doc("Item Attribute", attribute.attribute)
+		attribute_doc = frappe.get_cached_doc('YRP Item Attribute', attribute.attribute)
 		if attribute_doc.numeric_values:
 			continue
 
 		values = []
 		if attribute.mapping:
-			mapping_doc = frappe.get_cached_doc("Item Item Attribute Mapping", attribute.mapping)
+			mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attribute.mapping)
 			values = mapping_doc.values
 
 		attribute_list.append(
@@ -44,7 +44,7 @@ def load_attribute_list(doc):
 				"attr_name": attribute.attribute,
 				"attr_values_link": attribute.mapping,
 				"attr_values": values,
-				"doctype": "Item Item Attribute Mapping",
+				"doctype": 'YRP Item Item Attribute Mapping',
 			}
 		)
 	doc.set_onload("attr_list", attribute_list)
@@ -55,14 +55,14 @@ def load_bom_attribute_list(doc):
 	for bom in doc.get("item_bom") or []:
 		if not bom.attribute_mapping:
 			continue
-		mapping_doc = frappe.get_cached_doc("Item BOM Attribute Mapping", bom.attribute_mapping)
+		mapping_doc = frappe.get_cached_doc('YRP Item BOM Attribute Mapping', bom.attribute_mapping)
 		bom_attribute_list.append(
 			{
 				"bom_item": bom.item,
 				"bom_attr_mapping_link": bom.attribute_mapping,
 				"bom_attr_mapping_based_on": bom.based_on_attribute_mapping,
 				"bom_attr_mapping_list": mapping_doc.values,
-				"doctype": "Item BOM Attribute Mapping",
+				"doctype": 'YRP Item BOM Attribute Mapping',
 			}
 		)
 	doc.set_onload("bom_attr_list", bom_attribute_list)
@@ -77,7 +77,7 @@ def load_dependent_attribute(doc):
 
 @frappe.whitelist()
 def get_complete_item_details(item_name):
-	item = frappe.get_doc("Item", item_name).as_dict()
+	item = frappe.get_doc('YRP Item', item_name).as_dict()
 
 	from frappe.model import default_fields
 
@@ -90,8 +90,8 @@ def get_complete_item_details(item_name):
 @frappe.whitelist()
 def get_approval_roles():
 	roles = []
-	if frappe.db.exists("DocType", "MRP Settings"):
-		settings = frappe.get_single("MRP Settings")
+	if frappe.db.exists("DocType", 'SD YRP MRP Settings'):
+		settings = frappe.get_single('SD YRP MRP Settings')
 		roles = [
 			role
 			for role in [
@@ -117,7 +117,7 @@ def approve_ipd(doc_name, approval_type="Approved"):
 			frappe.PermissionError,
 		)
 
-	doc = frappe.get_doc("Item Production Detail", doc_name)
+	doc = frappe.get_doc('YRP Item Production Detail', doc_name)
 	doc.approval_status = approval_type
 	doc.approved_by = frappe.session.user
 	doc.save(ignore_permissions=True)
@@ -133,19 +133,19 @@ def revert_ipd_approval(doc_name):
 			frappe.PermissionError,
 		)
 
-	doc = frappe.get_doc("Item Production Detail", doc_name)
+	doc = frappe.get_doc('YRP Item Production Detail', doc_name)
 	doc.check_permission("write")
 	# Reverting is the escape hatch used to repair an approved historical IPD.
 	# Do not resave the whole document here: newer validations may correctly
 	# reject its old payload and would otherwise make the record impossible to
 	# unlock. This role-gated action changes only the approval fields.
 	frappe.db.set_value(
-		"Item Production Detail",
+		'YRP Item Production Detail',
 		doc.name,
 		{"approval_status": "Not Approved", "approved_by": None},
 		update_modified=True,
 	)
-	frappe.clear_document_cache("Item Production Detail", doc.name)
+	frappe.clear_document_cache('YRP Item Production Detail', doc.name)
 	return {"status": "success"}
 
 
@@ -157,7 +157,7 @@ def get_attribute_detail_values(doctype, txt, searchfield, start, page_len, filt
 		return []
 
 	rows = frappe.get_all(
-		"Item Item Attribute Mapping Value",
+		'YRP Item Item Attribute Mapping Value',
 		filters={"parent": mapping},
 		fields=["attribute_value"],
 		order_by="idx asc",
@@ -168,9 +168,9 @@ def get_attribute_detail_values(doctype, txt, searchfield, start, page_len, filt
 
 @frappe.whitelist()
 def get_ipd_item_group():
-	if not frappe.db.exists("DocType", "IPD Settings"):
+	if not frappe.db.exists("DocType", 'SD YRP IPD Settings'):
 		return []
-	item_group = frappe.db.get_single_value("IPD Settings", "item_group")
+	item_group = frappe.db.get_single_value('SD YRP IPD Settings', "item_group")
 	if not item_group:
 		return []
 	if isinstance(item_group, list):
@@ -180,7 +180,7 @@ def get_ipd_item_group():
 
 @frappe.whitelist()
 def get_attribute_values(item_production_detail, attributes=None):
-	ipd_doc = frappe.get_doc("Item Production Detail", item_production_detail)
+	ipd_doc = frappe.get_doc('YRP Item Production Detail', item_production_detail)
 	attribute_values = {}
 
 	attributes = update_if_string_instance(attributes)
@@ -202,7 +202,7 @@ def get_attribute_values(item_production_detail, attributes=None):
 				row.stiching_attribute_value for row in ipd_doc.get("stiching_item_details") or []
 			]
 		else:
-			mapping_doc = frappe.get_cached_doc("Item Item Attribute Mapping", attribute.mapping)
+			mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attribute.mapping)
 			attribute_values[attribute.attribute] = [
 				row.attribute_value for row in mapping_doc.get("values") or []
 			]
@@ -238,7 +238,7 @@ def get_new_combination(
 	doc_name=None,
 ):
 	packing_attribute_details = update_if_string_instance(packing_attribute_details) or []
-	mapping_doc = frappe.get_cached_doc("Item Item Attribute Mapping", attribute_mapping_value)
+	mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attribute_mapping_value)
 	attributes = [row.attribute_value for row in mapping_doc.get("values") or []]
 
 	stiching_item_details = {}
@@ -246,7 +246,7 @@ def get_new_combination(
 	is_default_list = []
 	ipd_doc = None
 	if doc_name:
-		ipd_doc = frappe.get_doc("Item Production Detail", doc_name)
+		ipd_doc = frappe.get_doc('YRP Item Production Detail', doc_name)
 		if ipd_doc.is_set_item:
 			for row in ipd_doc.get("stiching_item_details") or []:
 				stiching_item_details[row.stiching_attribute_value] = row.set_item_attribute_value
@@ -343,7 +343,7 @@ def build_assortment_box_grid(
 
 @frappe.whitelist()
 def get_packing_assortment_combination(doc_name, attributes=None):
-	ipd_doc = frappe.get_doc("Item Production Detail", doc_name)
+	ipd_doc = frappe.get_doc('YRP Item Production Detail', doc_name)
 	separator_attribute = resolve_packing_separator(ipd_doc)
 	assortment_attributes = derive_assortment_attributes(ipd_doc, separator_attribute)
 
@@ -378,7 +378,7 @@ def get_packing_assortment_combination(doc_name, attributes=None):
 
 @frappe.whitelist()
 def get_packing_size_values(doc_name):
-	ipd_doc = frappe.get_doc("Item Production Detail", doc_name)
+	ipd_doc = frappe.get_doc('YRP Item Production Detail', doc_name)
 	return get_ipd_attribute_values(ipd_doc, ipd_doc.primary_item_attribute)
 
 
@@ -393,7 +393,7 @@ def get_ipd_attribute_values(ipd_doc, attribute):
 
 @frappe.whitelist()
 def get_mapping_attribute_values(attribute_mapping_value, attribute_no=None):
-	mapping_doc = frappe.get_cached_doc("Item Item Attribute Mapping", attribute_mapping_value)
+	mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attribute_mapping_value)
 	if attribute_no and len(mapping_doc.values) < int(attribute_no):
 		frappe.throw(
 			f"The Packing attribute number is {attribute_no} "
@@ -419,7 +419,7 @@ def get_stiching_in_stage_attributes(dependent_attribute_mapping, stiching_in_st
 
 @frappe.whitelist()
 def get_combination(doc_name, attributes, combination_type, cloth_list=None):
-	ipd_doc = frappe.get_doc("Item Production Detail", doc_name)
+	ipd_doc = frappe.get_doc('YRP Item Production Detail', doc_name)
 	attributes = update_if_string_instance(attributes) or []
 	item_attributes = ipd_doc.get("item_attributes") or []
 	packing_attr = ipd_doc.packing_attribute
@@ -728,7 +728,7 @@ def add_combination_value(combination_type, item):
 
 @frappe.whitelist()
 def get_stiching_accessory_combination(cloth_list, doc_name):
-	ipd_doc = frappe.get_doc("Item Production Detail", doc_name)
+	ipd_doc = frappe.get_doc('YRP Item Production Detail', doc_name)
 	cloth_list = update_if_string_instance(cloth_list) or []
 	combination_list = {"select_list": cloth_list, "attributes": [], "items": []}
 	cloth_accessories = update_if_string_instance(ipd_doc.accessory_clothtype_json) or {}
@@ -811,7 +811,7 @@ def update_attr_combination(initial_attrs, attributes, last_item, attrs_len):
 def get_attr_mapping_details(mapping):
 	if not mapping:
 		return []
-	mapping_doc = frappe.get_cached_doc("Item Item Attribute Mapping", mapping)
+	mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', mapping)
 	return [row.attribute_value for row in mapping_doc.get("values") or []]
 
 
@@ -860,8 +860,8 @@ DUPLICATE_IPD_SCALAR_FIELDS = (
 
 @frappe.whitelist()
 def duplicate_ipd(ipd, item=None):
-	ipd_doc = frappe.get_doc("Item Production Detail", ipd)
-	doc = frappe.new_doc("Item Production Detail")
+	ipd_doc = frappe.get_doc('YRP Item Production Detail', ipd)
+	doc = frappe.new_doc('YRP Item Production Detail')
 	for fieldname in DUPLICATE_IPD_SCALAR_FIELDS:
 		if ipd_doc.meta.get_field(fieldname) and doc.meta.get_field(fieldname):
 			doc.set(fieldname, ipd_doc.get(fieldname))
@@ -925,7 +925,7 @@ def duplicate_ipd(ipd, item=None):
 			and source_row.based_on_attribute_mapping
 			and source_row.attribute_mapping
 		):
-			bom_doc = frappe.get_doc("Item BOM Attribute Mapping", source_row.attribute_mapping)
+			bom_doc = frappe.get_doc('YRP Item BOM Attribute Mapping', source_row.attribute_mapping)
 			new_bom_doc = frappe.copy_doc(bom_doc)
 			if new_bom_doc.meta.get_field("item_production_detail"):
 				new_bom_doc.item_production_detail = doc.name

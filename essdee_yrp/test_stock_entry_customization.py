@@ -24,14 +24,14 @@ class TestStockEntryCustomization(FrappeTestCase):
 	)
 
 	def test_production_api_fields_are_essdee_custom_fields(self):
-		meta = frappe.get_meta("Stock Entry", cached=False)
+		meta = frappe.get_meta('YRP Stock Entry', cached=False)
 		expected = {
-			"cut_panel_movement": ("Link", "Cut Panel Movement"),
+			"cut_panel_movement": ("Link", 'SD YRP Cut Panel Movement'),
 			"dispatch_colour_details": ("Long Text", None),
 			"includes_packing": ("Check", None),
 			"packing_batch_dispatch_json": ("JSON", None),
 			"packing_slip": ("Data", None),
-			"transfer_supplier": ("Link", "Supplier"),
+			"transfer_supplier": ("Link", 'YRP Supplier'),
 		}
 
 		for fieldname, definition in expected.items():
@@ -43,7 +43,7 @@ class TestStockEntryCustomization(FrappeTestCase):
 					frappe.db.exists(
 						"Custom Field",
 						{
-							"dt": "Stock Entry",
+							"dt": 'YRP Stock Entry',
 							"fieldname": fieldname,
 							"module": "Essdee YRP",
 						},
@@ -51,7 +51,7 @@ class TestStockEntryCustomization(FrappeTestCase):
 				)
 
 	def test_source_field_attributes_are_preserved(self):
-		meta = frappe.get_meta("Stock Entry", cached=False)
+		meta = frappe.get_meta('YRP Stock Entry', cached=False)
 
 		packing_slip = meta.get_field("packing_slip")
 		self.assertEqual(packing_slip.depends_on, "eval:doc.purpose == 'Stock Dispatch'")
@@ -66,7 +66,7 @@ class TestStockEntryCustomization(FrappeTestCase):
 		self.assertEqual(meta.get_field("packing_batch_dispatch_json").read_only, 1)
 
 	def test_approved_property_customizations(self):
-		meta = frappe.get_meta("Stock Entry", cached=False)
+		meta = frappe.get_meta('YRP Stock Entry', cached=False)
 
 		self.assertEqual(meta.get_field("purpose").options, self.EXPECTED_PURPOSES)
 		self.assertEqual(
@@ -80,7 +80,7 @@ class TestStockEntryCustomization(FrappeTestCase):
 			self.assertTrue(frappe.db.exists("Property Setter", name))
 
 	def test_base_terms_and_condition_behavior_is_unchanged(self):
-		field = frappe.get_meta("Stock Entry", cached=False).get_field(
+		field = frappe.get_meta('YRP Stock Entry', cached=False).get_field(
 			"terms_and_condition"
 		)
 		self.assertEqual(field.fetch_from, "to_supplier.po_terms_and_condition")
@@ -88,7 +88,7 @@ class TestStockEntryCustomization(FrappeTestCase):
 		self.assertEqual(field.allow_on_submit, 0)
 
 	def test_stock_entry_onload_uses_logical_item_matrix_projection(self):
-		doc = frappe.new_doc("Stock Entry")
+		doc = frappe.new_doc('YRP Stock Entry')
 		doc.purpose = "Material Receipt"
 		for index in (11, 12):
 			doc.append(
@@ -112,12 +112,12 @@ class TestStockEntryCustomization(FrappeTestCase):
 
 		normalize.assert_called_once()
 		self.assertIs(normalize.call_args.args[0][0], doc.items[0])
-		group.assert_called_once_with(projected, "Stock Entry")
+		group.assert_called_once_with(projected, 'YRP Stock Entry')
 		self.assertEqual(doc.get_onload("item_details"), grouped)
 		self.assertEqual([row.row_index for row in doc.items], [11, 12])
 
 	def test_stock_reconciliation_onload_uses_same_logical_projection(self):
-		doc = frappe.new_doc("Stock Reconciliation")
+		doc = frappe.new_doc('YRP Stock Reconciliation')
 		doc.append(
 			"items",
 			{"item": "TEST-VARIANT", "qty": 1, "row_index": 7},
@@ -138,7 +138,7 @@ class TestStockEntryCustomization(FrappeTestCase):
 
 		normalize.assert_called_once()
 		self.assertIs(normalize.call_args.args[0][0], doc.items[0])
-		group.assert_called_once_with(projected, "Stock Reconciliation")
+		group.assert_called_once_with(projected, 'YRP Stock Reconciliation')
 		self.assertEqual(doc.get_onload("item_details"), grouped)
 		self.assertEqual(doc.items[0].row_index, 7)
 
@@ -162,7 +162,7 @@ class TestStockEntryCustomization(FrappeTestCase):
 		item = frappe._dict(primary_attribute="Size")
 
 		def get_cached_doc(doctype, name):
-			return variants[name] if doctype == "Item Variant" else item
+			return variants[name] if doctype == 'YRP Item Variant' else item
 
 		rows = [
 			frappe._dict(
@@ -200,11 +200,11 @@ class TestStockEntryCustomization(FrappeTestCase):
 		self.assertNotEqual(normalized[0].row_index, normalized[2].row_index)
 
 	def test_dynamic_packing_grn_completion_preserves_physical_piece_uom(self):
-		doc = frappe.new_doc("Stock Entry")
+		doc = frappe.new_doc('YRP Stock Entry')
 		doc.update(
 			{
 				"purpose": "GRN Completion",
-				"against": "Goods Received Note",
+				"against": 'YRP Goods Received Note',
 				"against_id": "TEST-DYNAMIC-PACKING-GRN",
 			}
 		)
@@ -252,11 +252,11 @@ class TestStockEntryCustomization(FrappeTestCase):
 		self.assertEqual(doc.total_amount, 700)
 
 	def test_legacy_packing_completion_keeps_base_uom(self):
-		doc = frappe.new_doc("Stock Entry")
+		doc = frappe.new_doc('YRP Stock Entry')
 		doc.update(
 			{
 				"purpose": "GRN Completion",
-				"against": "Goods Received Note",
+				"against": 'YRP Goods Received Note',
 				"against_id": "TEST-LEGACY-PACKING-GRN",
 			}
 		)
@@ -286,11 +286,11 @@ class TestStockEntryCustomization(FrappeTestCase):
 
 	def test_dynamic_packing_dispatch_routes_preserve_physical_piece_uom(self):
 		for against, against_id, finishing_plan in (
-			("Finishing Plan", "TEST-FP", None),
-			("Finishing Plan Dispatch", "TEST-FPD", "TEST-FP"),
+			('SD YRP Finishing Plan', "TEST-FP", None),
+			('SD YRP Finishing Plan Dispatch', "TEST-FPD", "TEST-FP"),
 		):
 			with self.subTest(against=against):
-				doc = frappe.new_doc("Stock Entry")
+				doc = frappe.new_doc('YRP Stock Entry')
 				doc.update(
 					{
 						"purpose": "Material Issue",
@@ -324,9 +324,9 @@ class TestStockEntryCustomization(FrappeTestCase):
 					)
 
 				def get_value(doctype, name, fieldname):
-					if (doctype, name, fieldname) == ("Finishing Plan", "TEST-FP", "lot"):
+					if (doctype, name, fieldname) == ('SD YRP Finishing Plan', "TEST-FP", "lot"):
 						return "TEST-LOT"
-					if (doctype, name, fieldname) == ("Lot", "TEST-LOT", "packing_uom"):
+					if (doctype, name, fieldname) == ('SD YRP Lot', "TEST-LOT", "packing_uom"):
 						return "Pieces"
 					raise AssertionError((doctype, name, fieldname))
 
@@ -342,11 +342,11 @@ class TestStockEntryCustomization(FrappeTestCase):
 				self.assertEqual([row.stock_qty for row in doc.items], [4, 6])
 
 	def test_legacy_packing_dispatch_keeps_base_uom(self):
-		doc = frappe.new_doc("Stock Entry")
+		doc = frappe.new_doc('YRP Stock Entry')
 		doc.update(
 			{
 				"purpose": "Material Issue",
-				"against": "Finishing Plan",
+				"against": 'SD YRP Finishing Plan',
 				"against_id": "TEST-FP",
 				"packing_batch_dispatch_json": frappe.as_json(
 					[

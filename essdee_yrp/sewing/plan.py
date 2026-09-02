@@ -14,11 +14,11 @@ def on_work_order_submit(doc, method=None):
 
 
 def before_work_order_cancel(doc, method=None):
-	plan = frappe.db.get_value("Sewing Plan", {"work_order": doc.name}, "name")
+	plan = frappe.db.get_value('SD YRP Sewing Plan', {"work_order": doc.name}, "name")
 	if not plan:
 		return
 	entry = frappe.db.get_value(
-		"Sewing Plan Entry Detail", {"sewing_plan": plan}, "name"
+		'SD YRP Sewing Plan Entry Detail', {"sewing_plan": plan}, "name"
 	)
 	if entry:
 		frappe.throw(
@@ -29,18 +29,18 @@ def before_work_order_cancel(doc, method=None):
 
 
 def on_work_order_cancel(doc, method=None):
-	plan = frappe.db.get_value("Sewing Plan", {"work_order": doc.name}, "name")
+	plan = frappe.db.get_value('SD YRP Sewing Plan', {"work_order": doc.name}, "name")
 	if plan:
-		frappe.delete_doc("Sewing Plan", plan, ignore_permissions=True)
+		frappe.delete_doc('SD YRP Sewing Plan', plan, ignore_permissions=True)
 
 
 @frappe.whitelist()
 def create_sewing_plan(work_order: str) -> str | None:
 	"""Permission-aware manual repair endpoint; normal creation is on submit."""
 
-	work_order_doc = frappe.get_doc("Work Order", work_order)
+	work_order_doc = frappe.get_doc('YRP Work Order', work_order)
 	work_order_doc.check_permission("read")
-	frappe.has_permission("Sewing Plan", "create", throw=True)
+	frappe.has_permission('SD YRP Sewing Plan', "create", throw=True)
 	if work_order_doc.docstatus != 1:
 		frappe.throw(_("Work Order {0} must be submitted.").format(work_order))
 	if not _should_have_sewing_plan(work_order_doc):
@@ -50,12 +50,12 @@ def create_sewing_plan(work_order: str) -> str | None:
 
 def create_or_get_sewing_plan(work_order) -> str:
 	work_order = (
-		frappe.get_doc("Work Order", work_order)
+		frappe.get_doc('YRP Work Order', work_order)
 		if isinstance(work_order, str)
 		else work_order
 	)
 	existing = frappe.db.get_value(
-		"Sewing Plan", {"work_order": work_order.name}, "name"
+		'SD YRP Sewing Plan', {"work_order": work_order.name}, "name"
 	)
 	if existing:
 		return existing
@@ -68,7 +68,7 @@ def create_or_get_sewing_plan(work_order) -> str:
 			)
 		)
 
-	plan = frappe.new_doc("Sewing Plan")
+	plan = frappe.new_doc('SD YRP Sewing Plan')
 	plan.naming_series = _default_naming_series()
 	plan.work_order = work_order.name
 	plan.lot = work_order.lot
@@ -86,27 +86,27 @@ def _should_have_sewing_plan(work_order) -> bool:
 	if not cint(work_order.get("is_internal_unit")):
 		return False
 	if not cint(
-		frappe.db.get_value("Supplier", work_order.supplier, "apply_sewing_plan")
+		frappe.db.get_value('YRP Supplier', work_order.supplier, "apply_sewing_plan")
 	):
 		return False
 
 	sewing_process = frappe.db.get_single_value(
-		"MRP Settings", "finishing_inward_process"
+		'SD YRP MRP Settings', "finishing_inward_process"
 	)
 	if not sewing_process or not work_order.process_name:
 		return False
 	if work_order.process_name == sewing_process:
 		return True
 	if not cint(
-		frappe.db.get_value("Process", work_order.process_name, "is_group")
+		frappe.db.get_value('YRP Process', work_order.process_name, "is_group")
 	):
 		return False
 	return bool(
 		frappe.db.exists(
-			"Process Details",
+			'YRP Process Details',
 			{
 				"parent": work_order.process_name,
-				"parenttype": "Process",
+				"parenttype": 'YRP Process',
 				"process_name": sewing_process,
 			},
 		)
@@ -132,7 +132,7 @@ def _order_rows(work_order) -> list[dict]:
 
 
 def _default_naming_series() -> str:
-	field = frappe.get_meta("Sewing Plan").get_field("naming_series")
+	field = frappe.get_meta('SD YRP Sewing Plan').get_field("naming_series")
 	options = [line.strip() for line in (field.options or "").splitlines() if line.strip()]
 	default = (field.default or "").strip()
 	series = default or (options[0] if options else "")

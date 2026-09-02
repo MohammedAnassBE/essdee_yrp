@@ -1,4 +1,4 @@
-frappe.listview_settings["Production Order"] = {
+frappe.listview_settings["YRP Production Order"] = {
 	add_fields: ["price_approval_status", "status"],
 	has_indicator_for_draft: true,
 	get_indicator(doc) {

@@ -253,12 +253,12 @@ onMounted(() => {
         df: {
             fieldname: "lot",
             fieldtype: "Link",
-            options: "Lot",
+            options: "SD YRP Lot",
             label: "Lot",
             onchange:async ()=> {
                 let x = lot.get_value()
                 if(x && x != "" && x != null){
-                    let y = await frappe.db.get_value('Lot',x, "item")
+                    let y = await frappe.db.get_value('SD YRP Lot',x, "item")
                     item.set_value(y.message.item)
                     item.refresh()
                 }
@@ -273,7 +273,7 @@ onMounted(() => {
         df: {
             fieldname: "item",
             fieldtype: "Link",
-            options: "Item",
+            options: "YRP Item",
             label: "Item",
         },
         doc: sample_doc.value,
@@ -308,7 +308,7 @@ function get_filters() {
         return
     }
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.time_and_action.time_and_action.get_t_and_a_update_data",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_time_and_action.sd_yrp_time_and_action.get_t_and_a_update_data",
         args: {
             "lot":lot.get_value(),
             "item": item.get_value(),
@@ -413,7 +413,7 @@ function update_revised_date(){
             primary_action(values){
                 d.hide()
                 frappe.call({
-                    method: "essdee_yrp.essdee_yrp.doctype.time_and_action.time_and_action.revise_date",
+                    method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_time_and_action.sd_yrp_time_and_action.revise_date",
                     args: {
                         data: items.value,
                         reason: values.reason
@@ -447,7 +447,7 @@ async function call_func(event, lot, master, idx, index){
                     if (actions[j]['action'] !== updated_action) continue;
                     const r = await new Promise((resolve, reject) => {
                         frappe.call({
-                            method: "essdee_yrp.essdee_yrp.doctype.time_and_action.time_and_action.get_update_rescheduled_date",
+                            method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_time_and_action.sd_yrp_time_and_action.get_update_rescheduled_date",
                             args: {
                                 "updated_date": date,
                                 "key": "updated",
@@ -480,7 +480,7 @@ async function call_func(event, lot, master, idx, index){
     }
     else{
         frappe.call({
-            method: "essdee_yrp.essdee_yrp.doctype.time_and_action.time_and_action.get_update_rescheduled_date",
+            method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_time_and_action.sd_yrp_time_and_action.get_update_rescheduled_date",
             args: {
                 "updated_date": date,
                 "key": "updated",
@@ -526,7 +526,7 @@ async function remove_date(lot, master, idx, index){
                     if (actions[j]['action'] !== updated_action) continue;
                     const r = await new Promise((resolve, reject) => {
                         frappe.call({
-                            method: "essdee_yrp.essdee_yrp.doctype.time_and_action.time_and_action.get_update_rescheduled_date",
+                            method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_time_and_action.sd_yrp_time_and_action.get_update_rescheduled_date",
                             args: {
                                 "updated_date": d,
                                 "key": "removed",
@@ -560,7 +560,7 @@ async function remove_date(lot, master, idx, index){
     }
     else{
         frappe.call({
-            method: "essdee_yrp.essdee_yrp.doctype.time_and_action.time_and_action.get_update_rescheduled_date",
+            method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_time_and_action.sd_yrp_time_and_action.get_update_rescheduled_date",
             args: {
                 "updated_date": d,
                 "key": "removed",
@@ -667,7 +667,7 @@ function update_all(){
                             const updated_action = actions[j]['action']
                             const r = await new Promise((resolve, reject) => {
                                 frappe.call({
-                                    method: "essdee_yrp.essdee_yrp.doctype.time_and_action.time_and_action.get_update_rescheduled_date",
+                                    method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_time_and_action.sd_yrp_time_and_action.get_update_rescheduled_date",
                                     args: {
                                         "updated_date": date,
                                         "key": "updated",
@@ -731,7 +731,7 @@ function update_t_and_a(){
     }
     else{
         frappe.call({
-            method: "essdee_yrp.essdee_yrp.doctype.time_and_action.time_and_action.update_t_and_a",
+            method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_time_and_action.sd_yrp_time_and_action.update_t_and_a",
             args: {
                 data: items.value
             },

@@ -34,7 +34,7 @@ def fetch_fabric_program_details(lot_doc):
 	for fabric in lot_doc.get("lot_fabric_details") or []:
 		if not fabric.production_detail:
 			continue
-		ipd = frappe.get_cached_doc("Item Production Detail", fabric.production_detail)
+		ipd = frappe.get_cached_doc('YRP Item Production Detail', fabric.production_detail)
 		entries.append({
 			"cloth_item": fabric.cloth_item,
 			"production_detail": fabric.production_detail,
@@ -70,7 +70,7 @@ def _program_row_payload(ipd, row):
 	reference = row.get("reference_item_variant")
 	final_attrs = {}
 	if reference:
-		variant = frappe.get_cached_doc("Item Variant", reference)
+		variant = frappe.get_cached_doc('YRP Item Variant', reference)
 		final_attrs = {
 			value.attribute: value.attribute_value
 			for value in variant.get("attributes") or []
@@ -373,13 +373,13 @@ def validate_unique_fabric_cloths(lot_doc):
 	if lot_doc.is_new():
 		return
 	tracked = frappe.get_all(
-		"Lot Fabric Program",
-		filters={"parent": lot_doc.name, "parenttype": "Lot", "received_weight": ["!=", 0]},
+		'SD YRP Lot Fabric Program',
+		filters={"parent": lot_doc.name, "parenttype": 'SD YRP Lot', "received_weight": ["!=", 0]},
 		pluck="cloth_item",
 	)
 	tracked += frappe.get_all(
-		"Lot Fabric Colour Program",
-		filters={"parent": lot_doc.name, "parenttype": "Lot"},
+		'SD YRP Lot Fabric Colour Program',
+		filters={"parent": lot_doc.name, "parenttype": 'SD YRP Lot'},
 		or_filters={"received_weight": ["!=", 0], "compacted_weight": ["!=", 0]},
 		pluck="cloth_item",
 	)
@@ -410,8 +410,8 @@ def save_fabric_program_details(lot_doc):
 	# that was open across a receipt would otherwise save stale (or missing) rows.
 	# The per-lot lock serializes this rebuild against a GRN submit in flight.
 	if not lot_doc.is_new():
-		frappe.db.get_value("Lot", lot_doc.name, "name", for_update=True)
-	prev_program = _db_received(lot_doc.name, "Lot Fabric Program")
+		frappe.db.get_value('SD YRP Lot', lot_doc.name, "name", for_update=True)
+	prev_program = _db_received(lot_doc.name, 'SD YRP Lot Fabric Program')
 
 	attr_cache = {}
 	program_rows = []
@@ -435,7 +435,7 @@ def save_fabric_program_details(lot_doc):
 				frappe.throw(_("Fabric program: negative weight for {0} / {1}.").format(cloth, dia))
 			_validate_attribute_value(attr_cache, dia, FABRIC_DIA_ATTRIBUTE)
 			if not reference_item_variant and colour:
-				from yrp.yrp.doctype.item.item import get_or_create_variant
+				from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
 				reference_item_variant = get_or_create_variant(
 					cloth,
 					{FABRIC_DIA_ATTRIBUTE: dia, FABRIC_COLOUR_ATTRIBUTE: colour},
@@ -462,7 +462,7 @@ def save_fabric_program_details(lot_doc):
 		):
 			colour = None
 			if reference_item_variant:
-				ref = frappe.get_cached_doc("Item Variant", reference_item_variant)
+				ref = frappe.get_cached_doc('YRP Item Variant', reference_item_variant)
 				colour = next((
 					a.attribute_value for a in ref.get("attributes") or []
 					if a.attribute == FABRIC_COLOUR_ATTRIBUTE
@@ -501,7 +501,7 @@ def save_fabric_requirement_details(lot_doc):
 		fabric = fabric_by_cloth.get(cloth)
 		if not fabric:
 			continue
-		ipd = frappe.get_cached_doc("Item Production Detail", fabric.production_detail)
+		ipd = frappe.get_cached_doc('YRP Item Production Detail', fabric.production_detail)
 		reachable = final_combos(ipd)
 		for row in entry.get("requirement") or []:
 			dia = row.get("dia")
@@ -566,7 +566,7 @@ def rebuild_plans_after_save(lot_doc):
 		if not fabric.production_detail:
 			continue
 		approved = frappe.db.get_value(
-			"Item Production Detail", fabric.production_detail, "approval_status") == "Approved"
+			'YRP Item Production Detail', fabric.production_detail, "approval_status") == "Approved"
 		if approved:
 			# never hard-block the Lot save on solver trouble — reachability was
 			# already gated at requirement entry; residual failures surface as
@@ -577,15 +577,15 @@ def rebuild_plans_after_save(lot_doc):
 				r.cloth_item == fabric.cloth_item
 				for r in lot_doc.get("lot_fabric_requirements") or []
 			)
-			frappe.db.set_value("Lot Fabric Detail", fabric.name, "plan_status",
+			frappe.db.set_value('SD YRP Lot Fabric Detail', fabric.name, "plan_status",
 				"Pending Approval" if has_requirement else "", update_modified=False)
 
 	# the plan/pre-seed wrote rows at the DB level — refresh the in-memory doc so
 	# the save RESPONSE carries them (else the open form's next save deletes them)
 	refresh_server_owned_tables(lot_doc)
 	program_rows = frappe.get_all(
-		"Lot Fabric Program",
-		filters={"parent": lot_doc.name, "parenttype": "Lot"},
+		'SD YRP Lot Fabric Program',
+		filters={"parent": lot_doc.name, "parenttype": 'SD YRP Lot'},
 		fields=["*"],
 		order_by="idx asc, creation asc",
 	)
@@ -596,8 +596,8 @@ def rebuild_plans_after_save(lot_doc):
 
 
 SERVER_OWNED_TABLES = (
-	("lot_fabric_step_ledger", "Lot Fabric Step Ledger"),
-	("lot_colour_programs", "Lot Fabric Colour Program"),  # legacy, frozen
+	("lot_fabric_step_ledger", 'SD YRP Lot Fabric Step Ledger'),
+	("lot_colour_programs", 'SD YRP Lot Fabric Colour Program'),  # legacy, frozen
 )
 
 
@@ -614,7 +614,7 @@ def refresh_server_owned_tables(lot_doc):
 	for parentfield, doctype in SERVER_OWNED_TABLES:
 		rows = frappe.get_all(
 			doctype,
-			filters={"parent": lot_doc.name, "parenttype": "Lot"},
+			filters={"parent": lot_doc.name, "parenttype": 'SD YRP Lot'},
 			fields=["*"],
 			order_by="idx asc, creation asc",
 		)
@@ -635,7 +635,7 @@ def _drop_orphan_ledger_rows(lot_doc, fabric_cloths):
 			and not flt(r.received_weight) and not flt(r.get("compacted_weight"))
 	]
 	for row in orphans:
-		frappe.delete_doc("Lot Fabric Colour Program", row.name,
+		frappe.delete_doc('SD YRP Lot Fabric Colour Program', row.name,
 			ignore_permissions=True, force=True)
 	if orphans:
 		lot_doc.set("lot_colour_programs", [
@@ -646,22 +646,22 @@ def _drop_orphan_ledger_rows(lot_doc, fabric_cloths):
 
 def _db_received(lot_name, child_doctype):
 	"""Stored received_weight keyed by (cloth, dia[, colour]) — fresh from the DB."""
-	if not lot_name or not frappe.db.exists("Lot", lot_name):
+	if not lot_name or not frappe.db.exists('SD YRP Lot', lot_name):
 		return {}
 	fields = ["cloth_item", "dia", "received_weight"]
-	if child_doctype == "Lot Fabric Colour Program":
+	if child_doctype == 'SD YRP Lot Fabric Colour Program':
 		fields.insert(2, "colour")
 	else:
 		fields.insert(2, "reference_item_variant")
 	result = {}
 	for r in frappe.get_all(
 		child_doctype,
-		filters={"parent": lot_name, "parenttype": "Lot"},
+		filters={"parent": lot_name, "parenttype": 'SD YRP Lot'},
 		fields=fields,
 	):
 		key = (
 			(r.cloth_item, r.dia, r.get("reference_item_variant") or "")
-			if child_doctype == "Lot Fabric Program"
+			if child_doctype == 'SD YRP Lot Fabric Program'
 			else (r.cloth_item, r.dia, r.colour)
 		)
 		result[key] = flt(r.received_weight)
@@ -670,7 +670,7 @@ def _db_received(lot_name, child_doctype):
 
 def _validate_attribute_value(cache, value, attribute):
 	if value not in cache:
-		cache[value] = frappe.db.get_value("Item Attribute Value", value, "attribute_name")
+		cache[value] = frappe.db.get_value('YRP Item Attribute Value', value, "attribute_name")
 	if cache[value] != attribute:
 		frappe.throw(_("{0} is not a value of the {1} attribute.").format(value, attribute))
 
@@ -688,7 +688,7 @@ def _warn_program_below_ordered(lot_doc):
 	}
 	warnings = []
 	for cloth, ipd_name in ipd_by_cloth.items():
-		ipd = frappe.get_cached_doc("Item Production Detail", ipd_name)
+		ipd = frappe.get_cached_doc('YRP Item Production Detail', ipd_name)
 		if not ipd.get("knitting_process"):
 			continue
 		ordered = get_produced_by_reference(lot_doc.name, ipd.knitting_process, cloth)

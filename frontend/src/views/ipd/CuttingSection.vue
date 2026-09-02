@@ -51,7 +51,7 @@
 							<LinkField
 								v-if="editing"
 								:model-value="r.cloth"
-								target-doctype="Item"
+								target-doctype="YRP Item"
 								:filters="{ disabled: 0 }"
 								class="ct-link"
 								@item-select="(e) => (r.cloth = e.value)"
@@ -412,7 +412,7 @@ function validate() {
 }
 function apply(ipd) {
 	ipd.cloth_detail = activeCloths().map((r) => ({
-		doctype: "Item Production Detail Cloth Detail",
+		doctype: "SD YRP Item Production Detail Cloth Detail",
 		...(r.name ? { name: r.name } : {}),
 		name1: r.name1,
 		cloth: r.cloth,
@@ -424,13 +424,13 @@ function apply(ipd) {
 		ipd.panel_wise_consumption_matrix_json = panelMatrix.value;
 	} else {
 		ipd.cutting_attributes = cuttingChecked.value.map((a) => ({
-			doctype: "Cutting Attribute Detail",
+			doctype: "SD YRP Cutting Attribute Detail",
 			...(cuttingAttrRowNames[a] ? { name: cuttingAttrRowNames[a] } : {}),
 			attribute: a,
 		}));
 	}
 	ipd.cloth_attributes = clothChecked.value.map((a) => ({
-		doctype: "Cutting Attribute Detail",
+		doctype: "SD YRP Cutting Attribute Detail",
 		...(clothAttrRowNames[a] ? { name: clothAttrRowNames[a] } : {}),
 		attribute: a,
 	}));

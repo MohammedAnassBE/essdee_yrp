@@ -1,0 +1,294 @@
+{
+ "actions": [],
+ "autoname": "MRP-MIG-.YYYY.-.#####",
+ "creation": "2026-08-13 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "connection_section",
+  "source_site",
+  "source_app",
+  "column_break_connection",
+  "target_site",
+  "target_apps",
+  "adapter_status",
+  "allow_missing_source_blobs",
+  "status",
+  "schema_analysis_section",
+  "source_doctype_count",
+  "target_doctype_count",
+  "identity_count",
+  "column_break_analysis",
+  "mapped_count",
+  "custom_count",
+  "blocker_count",
+  "analysed_on",
+  "analysed_by",
+  "execution_section",
+  "last_action",
+  "last_started_on",
+  "last_completed_on",
+  "column_break_execution",
+  "total_source_records",
+  "processed_records",
+  "skipped_records",
+  "failed_records",
+  "details_section",
+  "migration_details",
+  "audit_section",
+  "report_json",
+  "checkpoint_json",
+  "error_log"
+ ],
+ "fields": [
+  {
+   "fieldname": "connection_section",
+   "fieldtype": "Section Break",
+   "label": "Migration Sites"
+  },
+  {
+   "fieldname": "source_site",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Source Site",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "source_app",
+   "fieldtype": "Data",
+   "label": "Source App",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_connection",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "target_site",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Target Site",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "target_apps",
+   "fieldtype": "Data",
+   "label": "Target Apps",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "default": "Configured Local-Bench Source",
+   "fieldname": "adapter_status",
+   "fieldtype": "Data",
+   "label": "Available Adapter",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "Local rehearsal only. Preserve File metadata and audit missing physical blobs instead of blocking. Leave disabled for production cutover.",
+   "fieldname": "allow_missing_source_blobs",
+   "fieldtype": "Check",
+   "label": "Allow Missing Source Blobs"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Draft\nAnalysing\nBlocked\nReady\nDry Run Complete\nQueued\nRunning\nSample Complete\nReset Complete\nCompleted\nFailed\nVerified",
+   "read_only": 1
+  },
+  {
+   "fieldname": "schema_analysis_section",
+   "fieldtype": "Section Break",
+   "label": "Schema Analysis"
+  },
+  {
+   "default": "0",
+   "fieldname": "source_doctype_count",
+   "fieldtype": "Int",
+   "label": "Source DocTypes",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "target_doctype_count",
+   "fieldtype": "Int",
+   "label": "Target DocTypes",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "identity_count",
+   "fieldtype": "Int",
+   "label": "Identity",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_analysis",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "mapped_count",
+   "fieldtype": "Int",
+   "label": "Mapped",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "custom_count",
+   "fieldtype": "Int",
+   "label": "Custom",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "blocker_count",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Blockers",
+   "read_only": 1
+  },
+  {
+   "fieldname": "analysed_on",
+   "fieldtype": "Datetime",
+   "label": "Analysed On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "analysed_by",
+   "fieldtype": "Link",
+   "label": "Analysed By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "execution_section",
+   "fieldtype": "Section Break",
+   "label": "Execution Audit"
+  },
+  {
+   "fieldname": "last_action",
+   "fieldtype": "Select",
+   "label": "Last Action",
+   "options": "\nAnalyse\nDry Run\nSample\nReset Target\nMigrate\nVerify",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_started_on",
+   "fieldtype": "Datetime",
+   "label": "Started On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_completed_on",
+   "fieldtype": "Datetime",
+   "label": "Completed On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_execution",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "total_source_records",
+   "fieldtype": "Int",
+   "label": "Total Source Records",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "processed_records",
+   "fieldtype": "Int",
+   "label": "Processed Records",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "skipped_records",
+   "fieldtype": "Int",
+   "label": "Skipped Records",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "failed_records",
+   "fieldtype": "Int",
+   "label": "Failed Records",
+   "read_only": 1
+  },
+  {
+   "fieldname": "details_section",
+   "fieldtype": "Section Break",
+   "label": "DocType Plan"
+  },
+  {
+   "fieldname": "migration_details",
+   "fieldtype": "Table",
+   "label": "Migration Details",
+   "options": "SD YRP MRP Data Migration Detail",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "audit_section",
+   "fieldtype": "Section Break",
+   "label": "Technical Audit"
+  },
+  {
+   "fieldname": "report_json",
+   "fieldtype": "JSON",
+   "label": "Analysis Report",
+   "read_only": 1
+  },
+  {
+   "fieldname": "checkpoint_json",
+   "fieldtype": "JSON",
+   "label": "Checkpoint",
+   "read_only": 1
+  },
+  {
+   "fieldname": "error_log",
+   "fieldtype": "Long Text",
+   "label": "Blockers / Errors",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-13 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Essdee YRP",
+ "name": "SD YRP MRP Data Migration",
+ "naming_rule": "Expression (old style)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

@@ -5,7 +5,7 @@ from frappe.utils import cint, flt
 
 from essdee_yrp.dynamic_packing import LEGACY_BATCH_TRACKING_VERSION
 from yrp.utils import get_variant_attr_details, update_if_string_instance
-from yrp.yrp.doctype.item_production_detail.item_production_detail import (
+from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
 	get_ipd_primary_values,
 )
 
@@ -27,7 +27,7 @@ def get_dynamic_packed_qty(finishing_doc, grn_names):
 		data.sizes[size] = _empty_size_summary()
 
 	for grn_name in grn_names:
-		grn = frappe.get_doc("Goods Received Note", grn_name)
+		grn = frappe.get_doc('YRP Goods Received Note', grn_name)
 		version = cint(grn.packing_calculation_version)
 		for batch in grn.get("packing_batches") or []:
 			ratio = update_if_string_instance(batch.ratio_json) or {}
@@ -65,14 +65,14 @@ def get_dynamic_packed_qty(finishing_doc, grn_names):
 
 def get_finishing_packing_summary(finishing_doc):
 	if isinstance(finishing_doc, str):
-		finishing_doc = frappe.get_doc("Finishing Plan", finishing_doc)
+		finishing_doc = frappe.get_doc('SD YRP Finishing Plan', finishing_doc)
 
 	grn_names = []
 	if finishing_doc.work_order:
 		grn_names = frappe.get_all(
-			"Goods Received Note",
+			'YRP Goods Received Note',
 			filters={
-				"against": "Work Order",
+				"against": 'YRP Work Order',
 				"against_id": finishing_doc.work_order,
 				"lot": finishing_doc.lot,
 				"docstatus": 1,
@@ -102,15 +102,15 @@ def get_finishing_packing_summary(finishing_doc):
 @frappe.whitelist()
 def get_ipd_packing_config(lot):
 	"""Return the configuration used by Finishing packing entry dialogs."""
-	ipd_name = frappe.db.get_value("Lot", lot, "production_detail")
+	ipd_name = frappe.db.get_value('SD YRP Lot', lot, "production_detail")
 	if not ipd_name:
 		frappe.throw(f"Lot {lot} has no Item Production Detail")
-	ipd = frappe.get_cached_doc("Item Production Detail", ipd_name)
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', ipd_name)
 	colours = []
 	for row in ipd.get("item_attributes") or []:
 		attribute = row.get("attribute") or row.get("item_attribute")
 		if attribute == ipd.packing_attribute and row.mapping:
-			mapping = frappe.get_cached_doc("Item Item Attribute Mapping", row.mapping)
+			mapping = frappe.get_cached_doc('YRP Item Item Attribute Mapping', row.mapping)
 			colours = [value.attribute_value for value in mapping.get("values") or []]
 			break
 	return {
@@ -155,7 +155,7 @@ def prepare_dynamic_batch_dispatch(finishing_doc, dispatches):
 			"""
 				SELECT name, parent, batch_id, colour, box_quantity,
 					dispatched_boxes, pieces_per_box, ratio_json
-				FROM `tabGRN Packing Batch`
+				FROM `tabSD YRP GRN Packing Batch`
 				WHERE name = %s FOR UPDATE
 			""",
 			batch_row,
@@ -164,11 +164,11 @@ def prepare_dynamic_batch_dispatch(finishing_doc, dispatches):
 		if not locked:
 			frappe.throw(f"Packing batch {batch_row} does not exist")
 		batch = locked[0]
-		grn = frappe.get_cached_doc("Goods Received Note", batch.parent)
+		grn = frappe.get_cached_doc('YRP Goods Received Note', batch.parent)
 		version = cint(grn.packing_calculation_version)
 		if (
 			grn.docstatus != 1
-			or grn.against != "Work Order"
+			or grn.against != 'YRP Work Order'
 			or grn.against_id != finishing_doc.work_order
 			or grn.lot != finishing_doc.lot
 			or version < LEGACY_BATCH_TRACKING_VERSION
@@ -186,7 +186,7 @@ def prepare_dynamic_batch_dispatch(finishing_doc, dispatches):
 			size: int(boxes) * flt(per_box) for size, per_box in ratio.items()
 		}
 		box_uom, piece_uom = frappe.get_cached_value(
-			"Lot", finishing_doc.lot, ["uom", "packing_uom"]
+			'SD YRP Lot', finishing_doc.lot, ["uom", "packing_uom"]
 		)
 		if version == LEGACY_BATCH_TRACKING_VERSION:
 			pieces_per_box = flt(batch.pieces_per_box)
@@ -220,12 +220,12 @@ def prepare_dynamic_batch_dispatch(finishing_doc, dispatches):
 def rebuild_finishing_packing_quantities(finishing_doc):
 	"""Idempotently rebuild plan quantities from all submitted packing GRNs."""
 	if isinstance(finishing_doc, str):
-		finishing_doc = frappe.get_doc("Finishing Plan", finishing_doc)
+		finishing_doc = frappe.get_doc('SD YRP Finishing Plan', finishing_doc)
 
 	grns = frappe.get_all(
-		"Goods Received Note",
+		'YRP Goods Received Note',
 		filters={
-			"against": "Work Order",
+			"against": 'YRP Work Order',
 			"against_id": finishing_doc.work_order,
 			"lot": finishing_doc.lot,
 			"docstatus": 1,
@@ -259,7 +259,7 @@ def rebuild_finishing_packing_quantities(finishing_doc):
 	quantities = {}
 	tracked_dispatched = {}
 	primary_attribute = frappe.get_cached_value(
-		"Item Production Detail",
+		'YRP Item Production Detail',
 		finishing_doc.production_detail,
 		"primary_item_attribute",
 	)
@@ -275,7 +275,7 @@ def rebuild_finishing_packing_quantities(finishing_doc):
 
 		variant_by_size = {}
 		for item in frappe.get_all(
-			"Goods Received Note Item",
+			'YRP Goods Received Note Item',
 			filters={"parent": grn.name, "docstatus": 1},
 			fields=["item_variant", "quantity"],
 		):
@@ -288,7 +288,7 @@ def rebuild_finishing_packing_quantities(finishing_doc):
 
 		if version >= LEGACY_BATCH_TRACKING_VERSION:
 			for batch in frappe.get_all(
-				"GRN Packing Batch",
+				'SD YRP GRN Packing Batch',
 				filters={"parent": grn.name},
 				fields=["dispatched_boxes", "ratio_json"],
 			):

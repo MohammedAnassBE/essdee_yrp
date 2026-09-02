@@ -589,11 +589,11 @@ const dateTabField = computed(() => registry.value?.dateTabs || null)
 // ── Columns: meta-driven, overlaid with the user's saved per-user choice (#2) ──
 // No hardcoded listFields: defaults come from the DocType meta (`in_list_view`),
 // the user can pick + reorder via the Customize Columns modal, and the choice is
-// stored in the `User Listview` doctype (base yrp).
+// stored in the `YRP User Listview` doctype (base yrp).
 const NON_LISTABLE = new Set([
 	"Table", "Table MultiSelect", "Text Editor", "Long Text", "Small Text", "Text",
 	"HTML", "HTML Editor", "Code", "Markdown Editor", "Section Break", "Column Break",
-	"Tab Break", "Fold", "Heading", "Button", "Image", "Geolocation", "Signature",
+	"Tab Break", "Fold", "Heading", "Button", "Image", "Geolocation", "SD YRP Signature",
 ])
 const userColumns = ref(null) // saved [{fieldname, enabled, …}] for this user+doctype, or null
 const showColumnsModal = ref(false)
@@ -658,7 +658,7 @@ const bulkEditApplyLabel = computed(() =>
 function bulkInputKind(field) {
 	if (!field) return "text"
 	const ft = field.fieldtype
-	if (["Text", "Long Text", "Code", "Text Editor", "Markdown Editor", "HTML Editor", "JSON", "Geolocation", "Signature"].includes(ft)) {
+	if (["Text", "Long Text", "Code", "Text Editor", "Markdown Editor", "HTML Editor", "JSON", "Geolocation", "SD YRP Signature"].includes(ft)) {
 		return "textarea"
 	}
 	if (["Int", "Long Int", "Float", "Percent", "Currency", "Duration", "Rating"].includes(ft)) return "number"
@@ -1073,7 +1073,7 @@ const modalColumns = computed(() => {
 async function getUserColumns(dt) {
 	try {
 		const r = await callMethod(
-			"yrp.yrp.doctype.user_listview.user_listview.get_user_listview",
+			"yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.get_user_listview",
 			{ doctype_name: dt },
 		)
 		return Array.isArray(r) ? r : null
@@ -1455,7 +1455,7 @@ async function loadMetaAndColumns(dt) {
 			(f) => f.fieldname === "status"
 		)
 		// Read the `status` Select options from meta (used by status-mode tabs). On
-		// this site that resolves to the yrp Work Order's actual option list, so the
+		// this site that resolves to the YRP Work Order's actual option list, so the
 		// tabs always match the live field — no hardcoding.
 		const readStatusOptions = () =>
 			statusField && statusField.fieldtype === "Select"

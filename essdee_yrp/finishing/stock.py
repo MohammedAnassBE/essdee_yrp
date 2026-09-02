@@ -21,14 +21,14 @@ from yrp.utils import update_if_string_instance
 def apply_stock_entry(stock_entry, *, cancelled=False):
 	"""Update Essdee finishing trace state after YRP posts/reverses stock."""
 	_update_incomplete_transfer_tracking(stock_entry, cancelled=cancelled)
-	if stock_entry.against == "Finishing Plan Dispatch":
+	if stock_entry.against == 'SD YRP Finishing Plan Dispatch':
 		_update_dispatch_document(stock_entry, cancelled=cancelled)
-	elif stock_entry.against == "Finishing Plan":
+	elif stock_entry.against == 'SD YRP Finishing Plan':
 		_update_finishing_plan(stock_entry, cancelled=cancelled)
 
 
 def _update_dispatch_document(stock_entry, *, cancelled):
-	dispatch_doc = frappe.get_doc("Finishing Plan Dispatch", stock_entry.against_id)
+	dispatch_doc = frappe.get_doc('SD YRP Finishing Plan Dispatch', stock_entry.against_id)
 	batch_dispatches = _get_batch_dispatches(stock_entry)
 	dynamic_plans, dispatch_boxes, dispatch_pieces = _update_packing_batches(
 		batch_dispatches, cancelled=cancelled
@@ -42,14 +42,14 @@ def _update_dispatch_document(stock_entry, *, cancelled):
 			continue
 
 		detail = frappe.db.get_value(
-			"Finishing Plan GRN Detail",
+			'SD YRP Finishing Plan GRN Detail',
 			row.against_id_detail,
 			["name", "parent", "dispatched"],
 			as_dict=True,
 		)
 		if not detail:
 			detail = frappe.db.get_value(
-				"Finishing Plan GRN Detail",
+				'SD YRP Finishing Plan GRN Detail',
 				{"parent": row.against_id, "item_variant": row.item_variant},
 				["name", "parent", "dispatched"],
 				as_dict=True,
@@ -67,7 +67,7 @@ def _update_dispatch_document(stock_entry, *, cancelled):
 				_("Dispatched quantity cannot be negative for {0}").format(row.item_variant)
 			)
 		frappe.db.set_value(
-			"Finishing Plan GRN Detail", detail.name, "dispatched", max(updated, 0)
+			'SD YRP Finishing Plan GRN Detail', detail.name, "dispatched", max(updated, 0)
 		)
 		if detail.parent:
 			finishing_plan_names.add(detail.parent)
@@ -80,7 +80,7 @@ def _update_dispatch_document(stock_entry, *, cancelled):
 	dispatch_doc.save(ignore_permissions=True)
 
 	for finishing_plan_name in finishing_plan_names:
-		finishing_doc = frappe.get_doc("Finishing Plan", finishing_plan_name)
+		finishing_doc = frappe.get_doc('SD YRP Finishing Plan', finishing_plan_name)
 		if finishing_plan_name in dynamic_plans:
 			rebuild_finishing_packing_quantities(finishing_doc)
 		if cancelled:
@@ -90,7 +90,7 @@ def _update_dispatch_document(stock_entry, *, cancelled):
 				finishing_doc,
 				stock_entry,
 				dispatch_boxes.get(finishing_plan_name, 0),
-				source_doctype="Finishing Plan Dispatch",
+				source_doctype='SD YRP Finishing Plan Dispatch',
 				source_name=dispatch_doc.name,
 				dispatch_pieces=(
 					dispatch_pieces.get(finishing_plan_name)
@@ -103,7 +103,7 @@ def _update_dispatch_document(stock_entry, *, cancelled):
 
 
 def _update_finishing_plan(stock_entry, *, cancelled):
-	finishing_doc = frappe.get_doc("Finishing Plan", stock_entry.against_id)
+	finishing_doc = frappe.get_doc('SD YRP Finishing Plan', stock_entry.against_id)
 	if stock_entry.purpose == "Material Issue":
 		_update_direct_dispatch(finishing_doc, stock_entry, cancelled=cancelled)
 	else:
@@ -166,7 +166,7 @@ def _update_direct_dispatch(finishing_doc, stock_entry, *, cancelled):
 			finishing_doc,
 			stock_entry,
 			dispatch_boxes,
-			source_doctype="Finishing Plan",
+			source_doctype='SD YRP Finishing Plan',
 			source_name=finishing_doc.name,
 			dispatch_pieces=dispatch_pieces if dynamic_dispatch else None,
 		)
@@ -238,7 +238,7 @@ def _update_packing_batches(
 			)
 
 		batch_values = frappe.db.get_value(
-			"GRN Packing Batch",
+			'SD YRP GRN Packing Batch',
 			batch_row,
 			["parent", "box_quantity", "dispatched_boxes"],
 			as_dict=True,
@@ -261,7 +261,7 @@ def _update_packing_batches(
 				)
 			)
 		frappe.db.set_value(
-			"GRN Packing Batch", batch_row, "dispatched_boxes", max(updated, 0)
+			'SD YRP GRN Packing Batch', batch_row, "dispatched_boxes", max(updated, 0)
 		)
 
 		size_pieces = update_if_string_instance(batch.get("size_pieces")) or {}
@@ -282,30 +282,30 @@ def _update_incomplete_transfer_tracking(stock_entry, *, cancelled):
 
 def _update_grn_transfer_tracking(grn_name, *, cancelled):
 	finishing_process = frappe.db.get_single_value(
-		"MRP Settings", "finishing_inward_process"
+		'SD YRP MRP Settings', "finishing_inward_process"
 	)
 	if not finishing_process:
 		return
 	process_name, lot = frappe.db.get_value(
-		"Goods Received Note", grn_name, ["process_name", "lot"]
+		'YRP Goods Received Note', grn_name, ["process_name", "lot"]
 	) or (None, None)
 	if not process_name or not lot:
 		return
 
 	processes = [process_name]
-	if frappe.db.get_value("Process", process_name, "is_group"):
+	if frappe.db.get_value('YRP Process', process_name, "is_group"):
 		processes = frappe.get_all(
-			"Process Details",
+			'YRP Process Details',
 			filters={"parent": process_name},
 			pluck="process_name",
 		)
 	if finishing_process not in processes:
 		return
 
-	finishing_plan = frappe.db.get_value("Finishing Plan", {"lot": lot}, "name")
+	finishing_plan = frappe.db.get_value('SD YRP Finishing Plan', {"lot": lot}, "name")
 	if not finishing_plan:
 		return
-	finishing_doc = frappe.get_doc("Finishing Plan", finishing_plan)
+	finishing_doc = frappe.get_doc('SD YRP Finishing Plan', finishing_plan)
 	entries = update_if_string_instance(finishing_doc.incomplete_transfer_grn_list) or {}
 	if cancelled:
 		entries[grn_name] = True
@@ -316,11 +316,11 @@ def _update_grn_transfer_tracking(grn_name, *, cancelled):
 
 
 def _update_dc_transfer_tracking(delivery_challan, *, cancelled):
-	lot = frappe.db.get_value("Delivery Challan", delivery_challan, "lot")
-	finishing_plan = frappe.db.get_value("Finishing Plan", {"lot": lot}, "name")
+	lot = frappe.db.get_value('YRP Delivery Challan', delivery_challan, "lot")
+	finishing_plan = frappe.db.get_value('SD YRP Finishing Plan', {"lot": lot}, "name")
 	if not finishing_plan:
 		return
-	finishing_doc = frappe.get_doc("Finishing Plan", finishing_plan)
+	finishing_doc = frappe.get_doc('SD YRP Finishing Plan', finishing_plan)
 	entries = update_if_string_instance(finishing_doc.incomplete_transfer_dc_list) or {}
 	if cancelled:
 		entries[delivery_challan] = True

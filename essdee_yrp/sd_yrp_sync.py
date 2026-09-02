@@ -51,6 +51,44 @@ CUSTOM_MAPPER_DOCTYPES = (
 )
 
 SYNC_DOCTYPES = EXACT_MATCH_DOCTYPES + CUSTOM_MAPPER_DOCTYPES
+TARGET_DOCTYPE_BY_SOURCE = {
+	"Item Attribute": "YRP Item Attribute",
+	"Item Attribute Value": "YRP Item Attribute Value",
+	"UOM": "YRP UOM",
+	"Item Group": "YRP Item Group",
+	"Brand": "YRP Brand",
+	"Product Category": "SD YRP Product Category",
+	"Additional Parameter Key": "YRP Additional Parameter Key",
+	"Additional Parameter Value": "YRP Additional Parameter Value",
+	"Department": "YRP Department",
+	"Terms and Condition": "YRP Terms and Condition",
+	"Country": "Country",
+	"Product Season": "SD YRP Product Season",
+	"Process": "YRP Process",
+	"Production Term": "YRP Production Term",
+	"Item Item Attribute Mapping": "YRP Item Item Attribute Mapping",
+	"Item Dependent Attribute Mapping": "YRP Item Dependent Attribute Mapping",
+	"Item Variant": "YRP Item Variant",
+	"Item Category": "YRP Item Category",
+	"Item BOM Attribute Mapping": "YRP Item BOM Attribute Mapping",
+	"Address": "Address",
+	"Contact": "Contact",
+	"IPD Compacting": "SD YRP IPD Compacting",
+	"Item": "YRP Item",
+	"Supplier": "YRP Supplier",
+	"User": "User",
+	"Lot Template": "SD YRP Lot Template",
+	"Item Production Detail": "YRP Item Production Detail",
+	"Production Order": "YRP Production Order",
+	"Lot": "SD YRP Lot",
+	"MRP Settings": "SD YRP MRP Settings",
+	"IPD Settings": "SD YRP IPD Settings",
+}
+SOURCE_DOCTYPE_BY_TARGET = {target: source for source, target in TARGET_DOCTYPE_BY_SOURCE.items()}
+TARGET_CUSTOM_MAPPER_DOCTYPES = tuple(
+	TARGET_DOCTYPE_BY_SOURCE[doctype] for doctype in CUSTOM_MAPPER_DOCTYPES
+)
+CONSUMER_DOCTYPES = tuple(dict.fromkeys((*SYNC_DOCTYPES, *TARGET_DOCTYPE_BY_SOURCE.values())))
 HANDLER_PATH = "essdee_yrp.sd_yrp_sync.handle_sd_yrp_message"
 
 TABLE_FIELD_TYPES = {"Table", "Table MultiSelect"}
@@ -79,18 +117,22 @@ TRANSIENT_DOC_KEYS = (
 def handle_sd_yrp_message(payload):
 	header = payload.get("Header") or {}
 	source_doctype = header.get("DocType")
-	doctype = LEGACY_DOCTYPE_ALIASES.get(source_doctype, source_doctype)
+	canonical_source_doctype = SOURCE_DOCTYPE_BY_TARGET.get(source_doctype, source_doctype)
+	canonical_source_doctype = LEGACY_DOCTYPE_ALIASES.get(
+		canonical_source_doctype, canonical_source_doctype
+	)
+	doctype = TARGET_DOCTYPE_BY_SOURCE.get(canonical_source_doctype)
 	event = header.get("Event")
 	topic = header.get("Topic")
 	data = payload.get("Payload") or {}
-	if doctype != source_doctype:
+	if doctype and data.get("doctype") != doctype:
 		data = copy.deepcopy(data)
 		data["doctype"] = doctype
 
 	if topic != SD_YRP_TOPIC:
 		frappe.throw(f"Unexpected SD YRP sync topic {topic}")
-	if doctype not in SYNC_DOCTYPES:
-		frappe.throw(f"{doctype} is not enabled for SD YRP sync")
+	if canonical_source_doctype not in SYNC_DOCTYPES:
+		frappe.throw(f"{source_doctype} is not enabled for SD YRP sync")
 
 	if event in UPSERT_EVENTS:
 		return upsert_doc(data, event=event)
@@ -118,25 +160,25 @@ def upsert_doc(payload, event=None):
 	if not doctype or not docname:
 		frappe.throw("SD YRP sync payload must include doctype and name")
 
-	if doctype == "Item":
+	if doctype == 'YRP Item':
 		return upsert_item(data)
-	if doctype == "Supplier":
+	if doctype == 'YRP Supplier':
 		return upsert_supplier(data)
 	if doctype == "User":
 		return upsert_user(data)
 	if doctype == "Country":
 		return upsert_country(data)
-	if doctype == "Lot Template":
+	if doctype == 'SD YRP Lot Template':
 		return upsert_lot_template(data, event=event)
-	if doctype == "Item Production Detail":
+	if doctype == 'YRP Item Production Detail':
 		return upsert_item_production_detail(data, event=event)
-	if doctype == "Production Order":
+	if doctype == 'YRP Production Order':
 		return upsert_production_order(data, event=event)
-	if doctype == "Lot":
+	if doctype == 'SD YRP Lot':
 		return upsert_lot(data, event=event)
-	if doctype == "Item Dependent Attribute Mapping":
+	if doctype == 'YRP Item Dependent Attribute Mapping':
 		return upsert_item_dependent_attribute_mapping(data)
-	if doctype in ("MRP Settings", "IPD Settings"):
+	if doctype in ('SD YRP MRP Settings', 'SD YRP IPD Settings'):
 		return upsert_single_doctype(data)
 
 	return upsert_filtered_doc(data)
@@ -272,7 +314,7 @@ def upsert_item(data):
 	# Some legacy source items have a NULL item_group (mandatory on F16). Default
 	# them to the root group so the sync doesn't fail; review later by querying
 	# Items whose item_group == DEFAULT_ITEM_GROUP and reassign on the source.
-	if not data.get("item_group") and frappe.db.exists("Item Group", DEFAULT_ITEM_GROUP):
+	if not data.get("item_group") and frappe.db.exists('YRP Item Group', DEFAULT_ITEM_GROUP):
 		data["item_group"] = DEFAULT_ITEM_GROUP
 	from essdee_yrp.item_validations import validate_sync_payload
 	validate_sync_payload(data)
@@ -284,10 +326,10 @@ def upsert_item_dependent_attribute_mapping(data):
 	# Back-fill the Item's forward link that was deferred to break the Item<->IDAM
 	# cycle. Only when empty, so a genuine source value is never clobbered.
 	item = doc.get("item")
-	if item and frappe.db.exists("Item", item):
-		if not frappe.db.get_value("Item", item, "dependent_attribute_mapping"):
+	if item and frappe.db.exists('YRP Item', item):
+		if not frappe.db.get_value('YRP Item', item, "dependent_attribute_mapping"):
 			frappe.db.set_value(
-				"Item", item, "dependent_attribute_mapping", doc.name, update_modified=False
+				'YRP Item', item, "dependent_attribute_mapping", doc.name, update_modified=False
 			)
 	return doc
 
@@ -301,9 +343,9 @@ def upsert_supplier(data):
 
 
 def sync_supplier_warehouse(supplier, supplier_data, supplier_users):
-	warehouse_name = frappe.db.get_value("Warehouse", {"supplier": supplier}, "name") or supplier
+	warehouse_name = frappe.db.get_value('YRP Warehouse', {"supplier": supplier}, "name") or supplier
 	warehouse_data = {
-		"doctype": "Warehouse",
+		"doctype": 'YRP Warehouse',
 		"name": warehouse_name,
 		"name1": warehouse_name,
 		"supplier": supplier,
@@ -312,8 +354,8 @@ def sync_supplier_warehouse(supplier, supplier_data, supplier_users):
 		"contact_html": supplier_data.get("contact_html"),
 		"warehouse_users": get_warehouse_users(supplier_users),
 	}
-	if frappe.db.exists("Warehouse", warehouse_name):
-		warehouse_data["name1"] = frappe.db.get_value("Warehouse", warehouse_name, "name1") or warehouse_name
+	if frappe.db.exists('YRP Warehouse', warehouse_name):
+		warehouse_data["name1"] = frappe.db.get_value('YRP Warehouse', warehouse_name, "name1") or warehouse_name
 
 	return upsert_filtered_doc(warehouse_data, replace_children=("warehouse_users",))
 
@@ -329,7 +371,7 @@ def get_warehouse_users(supplier_users):
 			continue
 		seen.add(user)
 		if frappe.db.exists("User", user):
-			rows.append({"doctype": "Warehouse User", "user": user})
+			rows.append({"doctype": 'YRP Warehouse User', "user": user})
 		else:
 			missing_users.append(user)
 
@@ -418,7 +460,7 @@ def get_user_roles(roles):
 
 def upsert_lot_template(data, event=None):
 	source_context = get_source_context(data, event)
-	validate_required_link("Item", data.get("item"), source_context)
+	validate_required_link('YRP Item', data.get("item"), source_context)
 
 	data["bom"] = [
 		map_item_bom_row(row, source_context)
@@ -430,27 +472,27 @@ def upsert_lot_template(data, event=None):
 
 def map_item_bom_row(row, source_context):
 	mapped = copy.deepcopy(row)
-	mapped["doctype"] = "Item BOM"
+	mapped["doctype"] = 'YRP Item BOM'
 	mapped.pop("name", None)
 	mapped.pop("wastage_pct", None)
 
 	row_context = f"{source_context} Item BOM row"
 	item = mapped.get("item")
-	validate_required_link("Item", item, row_context)
+	validate_required_link('YRP Item', item, row_context)
 
 	if mapped.get("attribute_mapping"):
-		validate_required_link("Item BOM Attribute Mapping", mapped.get("attribute_mapping"), row_context)
+		validate_required_link('YRP Item BOM Attribute Mapping', mapped.get("attribute_mapping"), row_context)
 
 	if not mapped.get("uom"):
 		mapped["uom"] = get_item_default_uom(item, row_context)
-	validate_required_link("UOM", mapped.get("uom"), row_context)
+	validate_required_link('YRP UOM', mapped.get("uom"), row_context)
 
-	return filter_child_row(mapped, "Item BOM")
+	return filter_child_row(mapped, 'YRP Item BOM')
 
 
 def upsert_item_production_detail(data, event=None):
 	source_context = get_source_context(data, event)
-	validate_required_link("Item", data.get("item"), source_context)
+	validate_required_link('YRP Item', data.get("item"), source_context)
 
 	data["item_attributes"] = [
 		map_ipd_item_attribute_row(row, source_context)
@@ -482,17 +524,17 @@ def map_ipd_item_attribute_row(row, source_context=None):
 	row_context = f"{source_context} IPD item attribute row" if source_context else "IPD item attribute row"
 	attribute = row.get("attribute")
 	mapping = row.get("mapping")
-	validate_required_link("Item Attribute", attribute, row_context)
+	validate_required_link('YRP Item Attribute', attribute, row_context)
 	if mapping:
-		validate_required_link("Item Item Attribute Mapping", mapping, row_context)
+		validate_required_link('YRP Item Item Attribute Mapping', mapping, row_context)
 
 	return filter_child_row(
 		{
-			"doctype": "IPD Item Attribute",
+			"doctype": 'YRP IPD Item Attribute',
 			"attribute": attribute,
 			"mapping": mapping,
 		},
-		"IPD Item Attribute",
+		'YRP IPD Item Attribute',
 	)
 
 
@@ -504,18 +546,18 @@ def map_ipd_process_row(row, source_context=None):
 	row_context = f"{source_context} IPD process row" if source_context else "IPD process row"
 	process_name = row.get("process_name")
 	stage = row.get("stage")
-	validate_required_link("Process", process_name, row_context)
+	validate_required_link('YRP Process', process_name, row_context)
 	if stage:
-		validate_required_link("Item Attribute Value", stage, row_context)
+		validate_required_link('YRP Item Attribute Value', stage, row_context)
 
 	return filter_child_row(
 		{
-			"doctype": "IPD Process",
+			"doctype": 'YRP IPD Process',
 			"process_name": process_name,
 			"in_stage": stage,
 			"out_stage": stage,
 		},
-		"IPD Process",
+		'YRP IPD Process',
 	)
 
 
@@ -524,18 +566,18 @@ def map_ipd_colour_yarn_row(row, source_context=None):
 		f"{source_context} Colour-wise Yarn Recipe row"
 		if source_context else "Colour-wise Yarn Recipe row"
 	)
-	validate_required_link("Item", row.get("cloth_item"), row_context)
-	validate_required_link("Item", row.get("yarn_item"), row_context)
-	validate_required_link("Item Attribute Value", row.get("colour"), row_context)
+	validate_required_link('YRP Item', row.get("cloth_item"), row_context)
+	validate_required_link('YRP Item', row.get("yarn_item"), row_context)
+	validate_required_link('YRP Item Attribute Value', row.get("colour"), row_context)
 	return filter_child_row(
 		{
-			"doctype": "IPD Colour Yarn Ratio",
+			"doctype": 'SD YRP IPD Colour Yarn Ratio',
 			"cloth_item": row.get("cloth_item"),
 			"colour": row.get("colour"),
 			"yarn_item": row.get("yarn_item"),
 			"ratio": row.get("ratio"),
 		},
-		"IPD Colour Yarn Ratio",
+		'SD YRP IPD Colour Yarn Ratio',
 	)
 
 
@@ -545,7 +587,7 @@ def upsert_production_order(data, event=None):
 	source_context = get_source_context(data, event)
 	ensure_yrp_production_order_settings()
 	validate_yrp_settings_for_production_order()
-	validate_required_link("Item", data.get("item"), source_context)
+	validate_required_link('YRP Item', data.get("item"), source_context)
 
 	item_rows = map_production_order_item_rows(data)
 	data["production_order_details"] = item_rows
@@ -559,7 +601,7 @@ def upsert_production_order(data, event=None):
 
 
 def validate_yrp_settings_for_production_order():
-	settings = frappe.get_cached_doc("YRP Settings")
+	settings = frappe.get_cached_doc('YRP YRP Settings')
 	has_size_grid = any(
 		row.attribute == PRODUCTION_ORDER_GRID_ATTRIBUTE and row.is_grid_attribute
 		for row in settings.production_order_attributes or []
@@ -581,11 +623,11 @@ def validate_yrp_settings_for_production_order():
 			f"value to be {PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE}."
 		)
 
-	validate_required_link("Item Attribute", settings.po_dependent_attribute, "YRP Settings")
+	validate_required_link('YRP Item Attribute', settings.po_dependent_attribute, 'YRP YRP Settings')
 	validate_required_link(
-		"Item Attribute Value",
+		'YRP Item Attribute Value',
 		settings.po_dependent_attribute_value,
-		"YRP Settings",
+		'YRP YRP Settings',
 	)
 
 
@@ -596,9 +638,9 @@ def map_production_order_item_rows(data):
 
 	for row in data.get("production_order_details") or []:
 		item_variant = row.get("item_variant")
-		validate_required_link("Item Variant", item_variant, f"{source_context} Production Order Detail row")
+		validate_required_link('YRP Item Variant', item_variant, f"{source_context} Production Order Detail row")
 		rows.append({
-			"doctype": "Production Order Detail",
+			"doctype": 'YRP Production Order Detail',
 			"item": item,
 			"item_variant": item_variant,
 			"attributes_json": get_variant_attributes_json(item_variant),
@@ -622,15 +664,15 @@ def map_production_ordered_rows(data):
 
 	for row in data.get("production_ordered_details") or []:
 		item_variant = row.get("item_variant")
-		validate_required_link("Item Variant", item_variant, f"{source_context} Production Ordered Detail row")
+		validate_required_link('YRP Item Variant', item_variant, f"{source_context} Production Ordered Detail row")
 		lot = row.get("lot")
 		# F15's `lot` Link maps onto base yrp's generic dynamic reference.
 		# Lot syncs AFTER Production Order in the initial order, so the lot
 		# record may not exist yet — stamp the reference without validating
 		# (DB-level sync, source is authoritative).
 		rows.append({
-			"doctype": "Production Ordered Detail",
-			"reference_doctype": "Lot" if lot else None,
+			"doctype": 'YRP Production Ordered Detail',
+			"reference_doctype": 'SD YRP Lot' if lot else None,
 			"reference_name": lot,
 			"lot": lot,
 			"item_variant": item_variant,
@@ -644,13 +686,13 @@ def get_variant_attributes_json(item_variant):
 	if not item_variant:
 		return "{}"
 
-	settings = frappe.get_cached_doc("YRP Settings")
+	settings = frappe.get_cached_doc('YRP YRP Settings')
 	active_attributes = {
 		row.attribute
 		for row in settings.production_order_attributes or []
 		if row.attribute
 	}
-	variant = frappe.get_doc("Item Variant", item_variant)
+	variant = frappe.get_doc('YRP Item Variant', item_variant)
 	attributes = {}
 	for row in variant.get("attributes") or []:
 		if active_attributes and row.attribute not in active_attributes:
@@ -675,10 +717,10 @@ def get_production_order_item_details_json(item, rows):
 def upsert_lot(data, event=None):
 	source_context = get_source_context(data, event)
 
-	validate_required_link("Item", data.get("item"), source_context)
-	validate_required_link("Production Order", data.get("production_order"), source_context)
-	validate_required_link("Item Production Detail", data.get("production_detail"), source_context)
-	validate_required_link("Lot Template", data.get("lot_template"), source_context)
+	validate_required_link('YRP Item', data.get("item"), source_context)
+	validate_required_link('YRP Production Order', data.get("production_order"), source_context)
+	validate_required_link('YRP Item Production Detail', data.get("production_detail"), source_context)
+	validate_required_link('SD YRP Lot Template', data.get("lot_template"), source_context)
 	validate_lot_item_variants(data, source_context)
 
 	doc = upsert_filtered_doc(data)
@@ -701,21 +743,21 @@ def sync_production_ordered_rows_for_lot(data):
 	Item<->IDAM back-fill above.
 	"""
 	lot = data.get("name")
-	frappe.db.delete("Production Ordered Detail", {
-		"parenttype": "Production Order",
+	frappe.db.delete('YRP Production Ordered Detail', {
+		"parenttype": 'YRP Production Order',
 		"parentfield": "production_ordered_details",
-		"reference_doctype": "Lot",
+		"reference_doctype": 'SD YRP Lot',
 		"reference_name": lot,
 	})
 
 	production_order = data.get("production_order")
-	if not (production_order and frappe.db.exists("Production Order", production_order)):
+	if not (production_order and frappe.db.exists('YRP Production Order', production_order)):
 		return
 
 	rows = [
 		{
-			"doctype": "Production Ordered Detail",
-			"reference_doctype": "Lot",
+			"doctype": 'YRP Production Ordered Detail',
+			"reference_doctype": 'SD YRP Lot',
 			"reference_name": lot,
 			"lot": lot,
 			"item_variant": row.get("item_variant"),
@@ -733,14 +775,14 @@ def sync_production_ordered_rows_for_lot(data):
 	start_idx = frappe.db.sql(
 		"""
 		select coalesce(max(idx), 0)
-		from `tabProduction Ordered Detail`
+		from `tabYRP Production Ordered Detail`
 		where parenttype = %s and parent = %s and parentfield = %s
 		""",
-		("Production Order", production_order, "production_ordered_details"),
+		('YRP Production Order', production_order, "production_ordered_details"),
 	)[0][0] or 0
 	_db_insert_child_rows(
-		"Production Ordered Detail",
-		"Production Order",
+		'YRP Production Ordered Detail',
+		'YRP Production Order',
 		production_order,
 		"production_ordered_details",
 		rows,
@@ -756,21 +798,21 @@ def validate_lot_item_variants(data, source_context):
 		("bom_additional_items", "item_name"),
 	):
 		for row in data.get(fieldname) or []:
-			validate_required_link("Item Variant", row.get(row_key), f"{source_context} {fieldname} row")
+			validate_required_link('YRP Item Variant', row.get(row_key), f"{source_context} {fieldname} row")
 
 
 def get_item_default_uom(item_code, source_context=None):
 	if not item_code:
 		frappe.throw(f"Missing Item in {source_context or 'SD YRP sync'}")
-	validate_required_link("Item", item_code, source_context or "SD YRP sync")
+	validate_required_link('YRP Item', item_code, source_context or "SD YRP sync")
 
-	uom = frappe.db.get_value("Item", item_code, "default_unit_of_measure")
+	uom = frappe.db.get_value('YRP Item', item_code, "default_unit_of_measure")
 	if not uom:
 		frappe.throw(
 			f"Missing default_unit_of_measure for Item {item_code} while syncing "
 			f"{source_context or 'SD YRP sync'}"
 		)
-	validate_required_link("UOM", uom, source_context or f"Item {item_code}")
+	validate_required_link('YRP UOM', uom, source_context or f"Item {item_code}")
 	return uom
 
 
@@ -816,10 +858,10 @@ def rename_synced_doc(payload):
 		rebuild_search=False,
 	)
 
-	if doctype == "Supplier":
+	if doctype == 'YRP Supplier':
 		rename_supplier_warehouse(old_name, new_name)
 
-	if doctype in CUSTOM_MAPPER_DOCTYPES:
+	if doctype in TARGET_CUSTOM_MAPPER_DOCTYPES:
 		data["name"] = new_name
 		return upsert_doc(data, event="after_rename")
 
@@ -828,19 +870,19 @@ def rename_synced_doc(payload):
 
 def rename_supplier_warehouse(old_supplier, new_supplier):
 	warehouse = (
-		frappe.db.get_value("Warehouse", {"supplier": new_supplier}, "name")
-		or frappe.db.get_value("Warehouse", {"supplier": old_supplier}, "name")
+		frappe.db.get_value('YRP Warehouse', {"supplier": new_supplier}, "name")
+		or frappe.db.get_value('YRP Warehouse', {"supplier": old_supplier}, "name")
 	)
 
-	if not warehouse and frappe.db.exists("Warehouse", old_supplier):
+	if not warehouse and frappe.db.exists('YRP Warehouse', old_supplier):
 		warehouse = old_supplier
 
 	if not warehouse:
 		return
 
-	if warehouse == old_supplier and not frappe.db.exists("Warehouse", new_supplier):
+	if warehouse == old_supplier and not frappe.db.exists('YRP Warehouse', new_supplier):
 		rename_doc(
-			doctype="Warehouse",
+			doctype='YRP Warehouse',
 			old=old_supplier,
 			new=new_supplier,
 			ignore_permissions=True,
@@ -849,8 +891,8 @@ def rename_supplier_warehouse(old_supplier, new_supplier):
 		)
 		warehouse = new_supplier
 
-	if frappe.db.exists("Warehouse", warehouse):
-		frappe.db.set_value("Warehouse", warehouse, "supplier", new_supplier)
+	if frappe.db.exists('YRP Warehouse', warehouse):
+		frappe.db.set_value('YRP Warehouse', warehouse, "supplier", new_supplier)
 
 
 def delete_synced_doc(payload):
@@ -865,21 +907,21 @@ def delete_synced_doc(payload):
 			frappe.db.set_value("User", docname, "enabled", 0)
 		return
 
-	if doctype == "Supplier":
-		if frappe.db.exists("Supplier", docname):
-			frappe.db.set_value("Supplier", docname, "disabled", 1)
-		warehouse = frappe.db.get_value("Warehouse", {"supplier": docname}, "name")
+	if doctype == 'YRP Supplier':
+		if frappe.db.exists('YRP Supplier', docname):
+			frappe.db.set_value('YRP Supplier', docname, "disabled", 1)
+		warehouse = frappe.db.get_value('YRP Warehouse', {"supplier": docname}, "name")
 		if warehouse:
-			frappe.db.set_value("Warehouse", warehouse, "disabled", 1)
+			frappe.db.set_value('YRP Warehouse', warehouse, "disabled", 1)
 		return
 
-	if doctype == "Lot":
+	if doctype == 'SD YRP Lot':
 		# Mirror F15 delete_ppo_lot_qty: the Lot owns its rows on the PO. Remove
 		# them first so the Lot delete isn't blocked by the dynamic-link check.
-		frappe.db.delete("Production Ordered Detail", {
-			"parenttype": "Production Order",
+		frappe.db.delete('YRP Production Ordered Detail', {
+			"parenttype": 'YRP Production Order',
 			"parentfield": "production_ordered_details",
-			"reference_doctype": "Lot",
+			"reference_doctype": 'SD YRP Lot',
 			"reference_name": docname,
 		})
 
@@ -997,6 +1039,13 @@ def filter_child_row(row, child_doctype):
 
 
 def ensure_consumer_config():
+	# Spine is an optional transport integration. The ERPNext + YRP + SD YRP
+	# combined site intentionally does not install it, so ordinary installs and
+	# migrations must not query Spine-owned DocTypes. If Spine is added later,
+	# the next migrate will populate the mappings idempotently.
+	if "spine" not in frappe.get_installed_apps():
+		return False
+
 	table = "Spine Consumer Handler Mapping"
 	parent = "Spine Consumer Config"
 	changed = False
@@ -1021,7 +1070,7 @@ def ensure_consumer_config():
 			frappe.db.delete(table, {"name": legacy_name})
 			changed = True
 
-	for doctype in SYNC_DOCTYPES:
+	for doctype in CONSUMER_DOCTYPES:
 		existing_name = frappe.db.get_value(
 			table,
 			{
@@ -1090,6 +1139,7 @@ def ensure_consumer_config():
 		frappe.clear_document_cache(parent, parent)
 
 	ensure_consumer_processing_enabled()
+	return True
 
 
 def ensure_consumer_processing_enabled():

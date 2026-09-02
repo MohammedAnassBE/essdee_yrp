@@ -23,7 +23,7 @@ def onload(doc, method=None):
 		"item_details",
 		group_items_for_ui(
 			normalize_item_matrix_row_indexes(doc.get("items") or []),
-			"Stock Entry",
+			'YRP Stock Entry',
 		),
 	)
 
@@ -65,20 +65,20 @@ def preserve_dynamic_packing_completion_piece_uom(doc):
 	"""
 	if not (
 		doc.get("purpose") == "GRN Completion"
-		and doc.get("against") == "Goods Received Note"
+		and doc.get("against") == 'YRP Goods Received Note'
 		and doc.get("against_id")
 	):
 		return False
 
 	from essdee_yrp.dynamic_packing import is_dynamic_packing_grn
 
-	grn = frappe.get_doc("Goods Received Note", doc.against_id)
+	grn = frappe.get_doc('YRP Goods Received Note', doc.against_id)
 	if not is_dynamic_packing_grn(grn):
 		return False
 	if not (grn.get("includes_packing") and grn.get("from_finishing")):
 		return False
 
-	piece_uom = frappe.db.get_value("Lot", grn.get("lot"), "packing_uom")
+	piece_uom = frappe.db.get_value('SD YRP Lot', grn.get("lot"), "packing_uom")
 	if not piece_uom:
 		frappe.throw(_("Packing UOM is required on Lot {0}.").format(grn.get("lot")))
 	source_items = {row.name: row for row in grn.get("items") or []}
@@ -131,7 +131,7 @@ def preserve_dynamic_packing_dispatch_piece_uom(doc):
 	"""
 	if not (
 		doc.get("purpose") == "Material Issue"
-		and doc.get("against") in ("Finishing Plan", "Finishing Plan Dispatch")
+		and doc.get("against") in ('SD YRP Finishing Plan', 'SD YRP Finishing Plan Dispatch')
 		and doc.get("against_id")
 		and doc.get("packing_batch_dispatch_json")
 	):
@@ -155,14 +155,14 @@ def preserve_dynamic_packing_dispatch_piece_uom(doc):
 	uom_by_lot = {}
 	for batch in batches:
 		finishing_plan = batch.get("finishing_plan")
-		if not finishing_plan and doc.against == "Finishing Plan":
+		if not finishing_plan and doc.against == 'SD YRP Finishing Plan':
 			finishing_plan = doc.against_id
 		if not finishing_plan:
 			frappe.throw(_("Dynamic packing dispatch is missing its Finishing Plan"))
-		lot = frappe.db.get_value("Finishing Plan", finishing_plan, "lot")
+		lot = frappe.db.get_value('SD YRP Finishing Plan', finishing_plan, "lot")
 		if not lot:
 			frappe.throw(_("Finishing Plan {0} has no Lot").format(finishing_plan))
-		piece_uom = frappe.db.get_value("Lot", lot, "packing_uom")
+		piece_uom = frappe.db.get_value('SD YRP Lot', lot, "packing_uom")
 		if not piece_uom:
 			frappe.throw(_("Packing UOM is required on Lot {0}.").format(lot))
 		stock_uom = batch.get("stock_uom") or piece_uom
@@ -218,15 +218,15 @@ def preserve_dynamic_packing_dispatch_piece_uom(doc):
 
 
 def before_submit(doc, method=None):
-	if doc.against not in ("Finishing Plan", "Finishing Plan Dispatch"):
+	if doc.against not in ('SD YRP Finishing Plan', 'SD YRP Finishing Plan Dispatch'):
 		return
-	if doc.against == "Finishing Plan Dispatch" and doc.purpose != "Material Issue":
+	if doc.against == 'SD YRP Finishing Plan Dispatch' and doc.purpose != "Material Issue":
 		frappe.throw(_("Finishing Plan Dispatch requires a Material Issue Stock Entry"))
 	if not frappe.db.exists(doc.against, doc.against_id):
 		frappe.throw(_("{0} {1} does not exist").format(doc.against, doc.against_id))
 
 	add_goods_value = frappe.db.get_single_value(
-		"YRP Stock Settings", "add_finishing_plan_goods_value"
+		'YRP YRP Stock Settings', "add_finishing_plan_goods_value"
 	)
 	if doc.purpose == "Material Issue" and not add_goods_value:
 		doc.total_amount = doc.additional_amount or 0
@@ -253,11 +253,11 @@ def on_cancel(doc, method=None):
 def sync_dc_completion_cutting_plan(doc):
 	if not (
 		doc.get("purpose") == "DC Completion"
-		and doc.get("against") == "Delivery Challan"
+		and doc.get("against") == 'YRP Delivery Challan'
 		and doc.get("against_id")
 	):
 		return
-	delivery_challan = frappe.get_doc("Delivery Challan", doc.against_id)
+	delivery_challan = frappe.get_doc('YRP Delivery Challan', doc.against_id)
 	from essdee_yrp.delivery_challan_hooks import sync_cutting_plan_received_cloth
 
 	sync_cutting_plan_received_cloth(delivery_challan)

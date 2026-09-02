@@ -76,7 +76,7 @@ async function load_data(data) {
 		df: {
 			fieldname: "received_type",
 			fieldtype: "Link",
-			options: "Received Type",
+			options: "YRP Received Type",
 			label: __("Return Received Type"),
 			reqd: 1,
 		},

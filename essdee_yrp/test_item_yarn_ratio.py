@@ -8,9 +8,9 @@ from essdee_yrp.sd_yrp_sync import upsert_item
 
 def _ensure_group():
 	name = "_Test Item Yarn Ratio Group"
-	if not frappe.db.exists("Item Group", name):
+	if not frappe.db.exists('YRP Item Group', name):
 		frappe.get_doc({
-			"doctype": "Item Group",
+			"doctype": 'YRP Item Group',
 			"item_group_name": name,
 			"is_group": 0,
 			"parent_item_group": "All Item Groups",
@@ -19,17 +19,17 @@ def _ensure_group():
 
 
 def _ensure_uom():
-	if not frappe.db.exists("UOM", "Kg"):
-		frappe.get_doc({"doctype": "UOM", "uom_name": "Kg"}).insert(
+	if not frappe.db.exists('YRP UOM', "Kg"):
+		frappe.get_doc({"doctype": 'YRP UOM', "uom_name": "Kg"}).insert(
 			ignore_permissions=True
 		)
 	return "Kg"
 
 
 def _ensure_yarn(name):
-	if not frappe.db.exists("Item", name):
+	if not frappe.db.exists('YRP Item', name):
 		frappe.get_doc({
-			"doctype": "Item",
+			"doctype": 'YRP Item',
 			"name1": name,
 			"item_group": _ensure_group(),
 			"default_unit_of_measure": _ensure_uom(),
@@ -46,7 +46,7 @@ class TestItemYarnRatio(IntegrationTestCase):
 
 	def _payload(self, rows):
 		return {
-			"doctype": "Item",
+			"doctype": 'YRP Item',
 			"name": self.cloth,
 			"name1": self.cloth,
 			"item_group": _ensure_group(),
@@ -59,19 +59,19 @@ class TestItemYarnRatio(IntegrationTestCase):
 	def test_sync_inserts_and_replaces_item_yarn_ratio_rows(self):
 		upsert_item(self._payload([
 			{
-				"doctype": "Item Yarn Ratio",
+				"doctype": 'SD YRP Item Yarn Ratio',
 				"name": "_test-sync-yarn-row-a",
 				"yarn_item": self.yarn_a,
 				"ratio": 60,
 			},
 			{
-				"doctype": "Item Yarn Ratio",
+				"doctype": 'SD YRP Item Yarn Ratio',
 				"name": "_test-sync-yarn-row-b",
 				"yarn_item": self.yarn_b,
 				"ratio": 40,
 			},
 		]))
-		item = frappe.get_doc("Item", self.cloth)
+		item = frappe.get_doc('YRP Item', self.cloth)
 		self.assertEqual(
 			[(row.yarn_item, row.ratio) for row in item.yarn_ratio_details],
 			[(self.yarn_a, 60), (self.yarn_b, 40)],
@@ -79,7 +79,7 @@ class TestItemYarnRatio(IntegrationTestCase):
 
 		upsert_item(self._payload([
 			{
-				"doctype": "Item Yarn Ratio",
+				"doctype": 'SD YRP Item Yarn Ratio',
 				"name": "_test-sync-yarn-row-a2",
 				"yarn_item": self.yarn_a,
 				"ratio": 100,
@@ -95,7 +95,7 @@ class TestItemYarnRatio(IntegrationTestCase):
 		with self.assertRaisesRegex(frappe.ValidationError, "exactly 100"):
 			upsert_item(self._payload([
 				{
-					"doctype": "Item Yarn Ratio",
+					"doctype": 'SD YRP Item Yarn Ratio',
 					"yarn_item": self.yarn_a,
 					"ratio": 90,
 				},

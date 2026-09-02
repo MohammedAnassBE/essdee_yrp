@@ -5,7 +5,7 @@ from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
 
 CUSTOM_FIELDS = {
-	"Purchase Order": [
+	'YRP Purchase Order': [
 		{
 			"fieldname": "lot_details_section",
 			"fieldtype": "Section Break",
@@ -18,7 +18,7 @@ CUSTOM_FIELDS = {
 			"fieldname": "default_lot",
 			"fieldtype": "Link",
 			"label": "Default Lot",
-			"options": "Lot",
+			"options": 'SD YRP Lot',
 			"insert_after": "lot_details_section",
 			"allow_on_submit": 1,
 			"hidden": 1,
@@ -28,14 +28,14 @@ CUSTOM_FIELDS = {
 			"fieldname": "sd_lot",
 			"fieldtype": "Table",
 			"label": "Linked Lots",
-			"options": "Lot MultiSelect",
+			"options": 'SD YRP Lot MultiSelect',
 			"insert_after": "default_lot",
 			"allow_on_submit": 1,
 			"hidden": 1,
 			"module": "Essdee YRP",
 		},
 	],
-	"Process": [
+	'YRP Process': [
 		{
 			"fieldname": "includes_packing",
 			"fieldtype": "Check",
@@ -45,7 +45,7 @@ CUSTOM_FIELDS = {
 			"module": "Essdee YRP",
 		},
 	],
-	"Work Order": [
+	'YRP Work Order': [
 		{
 			"fieldname": "includes_packing",
 			"fieldtype": "Check",
@@ -79,8 +79,8 @@ def migrate_legacy_purchase_order_lot_rows():
 	legacy_rows = frappe.db.sql(
 		"""
 		select parent, lot, idx
-		from `tabPurchase Order Lot`
-		where parenttype = 'Purchase Order' and parentfield = 'sd_lot'
+		from `tabYRP Purchase Order Lot`
+		where parenttype = 'YRP Purchase Order' and parentfield = 'sd_lot'
 		order by parent, idx, creation
 		""",
 		as_dict=True,
@@ -90,8 +90,8 @@ def migrate_legacy_purchase_order_lot_rows():
 		for row in frappe.db.sql(
 			"""
 			select parent, lot
-			from `tabLot MultiSelect`
-			where parenttype = 'Purchase Order' and parentfield = 'sd_lot'
+			from `tabSD YRP Lot MultiSelect`
+			where parenttype = 'YRP Purchase Order' and parentfield = 'sd_lot'
 			""",
 			as_dict=True,
 		)
@@ -106,8 +106,8 @@ def migrate_legacy_purchase_order_lot_rows():
 			not row.parent
 			or not row.lot
 			or key in existing
-			or not frappe.db.exists("Purchase Order", row.parent)
-			or not frappe.db.exists("Lot", row.lot)
+			or not frappe.db.exists('YRP Purchase Order', row.parent)
+			or not frappe.db.exists('SD YRP Lot', row.lot)
 		):
 			skipped += 1
 			skipped_rows.append({"parent": row.parent, "lot": row.lot, "idx": row.idx})
@@ -117,10 +117,10 @@ def migrate_legacy_purchase_order_lot_rows():
 			actor = "Administrator"
 		frappe.db.sql(
 			"""
-			insert into `tabLot MultiSelect`
+			insert into `tabSD YRP Lot MultiSelect`
 				(name, creation, modified, modified_by, owner, docstatus,
 				 idx, parent, parentfield, parenttype, lot)
-			values (%s, now(), now(), %s, %s, 0, %s, %s, 'sd_lot', 'Purchase Order', %s)
+			values (%s, now(), now(), %s, %s, 0, %s, %s, 'sd_lot', 'YRP Purchase Order', %s)
 			""",
 			(
 				frappe.generate_hash(length=10),

@@ -1,6 +1,6 @@
 <template>
     <div>
-        <div v-if="show && docstatus == 0 && doctype=='Cutting Marker' ">
+        <div v-if="show && docstatus == 0 && doctype=='SD YRP Cutting Marker' ">
             <div ref="select_field_ref" class="select-field col-md-5"></div>
             <div ref="panel_list" class="panel-list pl-3"></div>
             <button class="btn btn-success" @click="get_combination(true)">Get Combination</button>
@@ -18,7 +18,7 @@
                 <tr v-for="item in items" :key="item">
                     <td>{{item.size}}</td>
                     <td v-if="show_panel">{{item.panel}}</td>
-                    <td v-if="docstatus == 0 && doctype=='Cutting Marker'">
+                    <td v-if="docstatus == 0 && doctype=='SD YRP Cutting Marker'">
                         <input type="number" step="1" v-model="item.ratio" class="form-control"  @blur="make_dirty()">
                     </td>
                     <td v-else>
@@ -26,7 +26,7 @@
                     </td>
                 </tr>
             </table>
-            <button v-if="!show  && docstatus == 0 && doctype=='Cutting Marker'" class="btn btn-info" @click="make_show_panel()">Update Panels</button>
+            <button v-if="!show  && docstatus == 0 && doctype=='SD YRP Cutting Marker'" class="btn btn-info" @click="make_show_panel()">Update Panels</button>
         </div>
         <div v-if="grp_items.length > 0 && version == 'V3'">
             <h3>Group Panels</h3>
@@ -198,7 +198,7 @@ function create_attributes(){
         render_input : true
     })
     frappe.call({
-        method:"essdee_yrp.essdee_yrp.doctype.cutting_marker.cutting_marker.calculate_parts",
+        method:"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_marker.sd_yrp_cutting_marker.calculate_parts",
         args: {
             cutting_plan: cur_frm.doc.cutting_plan,
             cutting_order: cur_frm.doc.cutting_order,
@@ -265,7 +265,7 @@ function get_combination(user_input=null){
     cur_frm.doc.calculated_parts = panels.join(",")
     doc_panels = panels.join(",")
     frappe.call({
-        method:"essdee_yrp.essdee_yrp.doctype.cutting_marker.cutting_marker.get_primary_and_bundle_detail",
+        method:"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_marker.sd_yrp_cutting_marker.get_primary_and_bundle_detail",
         args: {
             lot:cur_frm.doc.lot,
             selected_value: selected_value,

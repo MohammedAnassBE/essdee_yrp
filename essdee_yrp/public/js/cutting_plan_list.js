@@ -1,4 +1,4 @@
-frappe.listview_settings["Cutting Plan"] = {
+frappe.listview_settings["SD YRP Cutting Plan"] = {
 	add_fields: ["cp_status", "no_of_colours", "no_of_colours_completed"],
 	get_indicator(doc) {
 		const colours = {

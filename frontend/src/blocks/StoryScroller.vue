@@ -4,7 +4,7 @@
      record code + a few fields.
 
        { "type": "story-scroller", "props": {
-           "source": "Work Order",              // the DocType to scroll
+           "source": "YRP Work Order",              // the DocType to scroll
            "fields": ["item", "process_name"],  // sub-lines per chip (optional)
            "limit": 12,                         // how many recent records
            "orientation": "horizontal" } }      // | "vertical"

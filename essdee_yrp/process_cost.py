@@ -9,7 +9,7 @@ from yrp.utils import update_if_string_instance
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def get_item_attributes(doctype, txt, searchfield, start, page_len, filters):
-	if doctype != "Item Attribute":
+	if doctype != 'YRP Item Attribute':
 		return []
 	filters = frappe._dict(filters or {})
 	if not filters.item or not filters.lot or not filters.process:
@@ -20,11 +20,11 @@ def get_item_attributes(doctype, txt, searchfield, start, page_len, filters):
 		process_name=filters.process,
 	)
 
-	ipd_name = frappe.db.get_value("Lot", filters.lot, "production_detail")
+	ipd_name = frappe.db.get_value('SD YRP Lot', filters.lot, "production_detail")
 	if not ipd_name:
 		return []
-	frappe.has_permission("Item Production Detail", "read", doc=ipd_name, throw=True)
-	ipd = frappe.get_cached_doc("Item Production Detail", ipd_name)
+	frappe.has_permission('YRP Item Production Detail', "read", doc=ipd_name, throw=True)
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', ipd_name)
 	process_name = filters.process
 	attributes = []
 	if ipd.cutting_process == process_name:
@@ -35,7 +35,7 @@ def get_item_attributes(doctype, txt, searchfield, start, page_len, filters):
 			attributes.append(ipd.set_item_attribute)
 	elif ipd.packing_process == process_name:
 		attributes = [ipd.primary_item_attribute]
-	elif not frappe.db.get_value("Process", process_name, "is_group"):
+	elif not frappe.db.get_value('YRP Process', process_name, "is_group"):
 		for row in ipd.get("ipd_processes") or []:
 			if row.process_name != process_name:
 				continue
@@ -47,7 +47,7 @@ def get_item_attributes(doctype, txt, searchfield, start, page_len, filters):
 				attributes = [ipd.primary_item_attribute]
 			break
 	else:
-		item = frappe.get_cached_doc("Item", filters.item)
+		item = frappe.get_cached_doc('YRP Item', filters.item)
 		attributes = [row.attribute for row in item.get("attributes") or []]
 
 	seen = set()
@@ -81,11 +81,11 @@ def get_pc_attribute_values(
 		return []
 	_check_process_cost_permissions(item=item, lot=lot, process_name=process_name)
 
-	ipd_name = frappe.db.get_value("Lot", lot, "production_detail")
+	ipd_name = frappe.db.get_value('SD YRP Lot', lot, "production_detail")
 	if not ipd_name:
 		frappe.throw(_("Lot {0} has no Item Production Detail.").format(lot))
-	frappe.has_permission("Item Production Detail", "read", doc=ipd_name, throw=True)
-	ipd = frappe.get_cached_doc("Item Production Detail", ipd_name)
+	frappe.has_permission('YRP Item Production Detail', "read", doc=ipd_name, throw=True)
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', ipd_name)
 	mapping = next(
 		(
 			row.mapping
@@ -96,10 +96,10 @@ def get_pc_attribute_values(
 	)
 	if not mapping:
 		mapping = frappe.db.get_value(
-			"Item Item Attribute",
+			'YRP Item Item Attribute',
 			{
 				"parent": ipd_name,
-				"parenttype": "Item Production Detail",
+				"parenttype": 'YRP Item Production Detail',
 				"attribute": attribute,
 			},
 			"mapping",
@@ -113,7 +113,7 @@ def get_pc_attribute_values(
 		for panel in embellishments.get(process_name, {}) or {}:
 			values.append(panel)
 	else:
-		mapping_doc = frappe.get_cached_doc("Item Item Attribute Mapping", mapping)
+		mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', mapping)
 		values = [row.attribute_value for row in mapping_doc.get("values") or []]
 
 	return [
@@ -123,11 +123,11 @@ def get_pc_attribute_values(
 
 
 def _check_process_cost_permissions(*, item=None, lot=None, process_name=None):
-	frappe.has_permission("Process Cost", "read", throw=True)
+	frappe.has_permission('YRP Process Cost', "read", throw=True)
 	for doctype, name in (
-		("Item", item),
-		("Lot", lot),
-		("Process", process_name),
+		('YRP Item', item),
+		('SD YRP Lot', lot),
+		('YRP Process', process_name),
 	):
 		if name:
 			frappe.has_permission(doctype, "read", doc=name, throw=True)

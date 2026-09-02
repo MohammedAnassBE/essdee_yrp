@@ -11,7 +11,7 @@
                     </thead>
                     <tbody class="dark-border">
                         <tr v-for="(date, dc) in dc_list">
-                            <td style="cursor: pointer;" @click="redirect_to('Delivery Challan', dc)">{{ dc }}</td>
+                            <td style="cursor: pointer;" @click="redirect_to('YRP Delivery Challan', dc)">{{ dc }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -26,7 +26,7 @@
                     </thead>
                     <tbody class="dark-border">
                         <tr v-for="(date, grn) in grn_list">
-                            <td style="cursor: pointer;" @click="redirect_to('Goods Received Note', grn)">{{ grn }}</td>
+                            <td style="cursor: pointer;" @click="redirect_to('YRP Goods Received Note', grn)">{{ grn }}</td>
                         </tr>
                     </tbody>
                 </table>

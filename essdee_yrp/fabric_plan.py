@@ -50,7 +50,7 @@ def _split_plan_key(key):
 def _reference_attrs(reference_item_variant):
 	if not reference_item_variant:
 		return {}
-	variant = frappe.get_cached_doc("Item Variant", reference_item_variant)
+	variant = frappe.get_cached_doc('YRP Item Variant', reference_item_variant)
 	return {
 		row.attribute: row.attribute_value
 		for row in variant.get("attributes") or []
@@ -198,13 +198,13 @@ def _load_output_indexed_groups(ipd_name, process_name):
 	A duplicate output projection marks the key "AMBIGUOUS" — the solver throws
 	only if demand actually hits it (protects grandfathered IPDs)."""
 	matrix_names = frappe.get_all(
-		"IPD Process Matrix",
+		'YRP IPD Process Matrix',
 		filters={"ipd": ipd_name, "process_name": process_name, "docstatus": ["<", 2]},
 		pluck="name",
 	)
 	indexed, declared = {}, set()
 	for name in matrix_names:
-		matrix = frappe.get_doc("IPD Process Matrix", name)
+		matrix = frappe.get_doc('YRP IPD Process Matrix', name)
 		for row in matrix.get("output_attributes") or []:
 			declared.add(row.attribute)
 		for _idx, group in matrix.get_combinations_grouped().items():
@@ -236,7 +236,7 @@ def build_fabric_plan(lot_doc, fabric_row, raise_on_unreachable=True, ipd_doc=No
 		return None
 
 	ipd = ipd_doc if (ipd_doc and ipd_doc.name == fabric_row.production_detail) \
-		else frappe.get_cached_doc("Item Production Detail", fabric_row.production_detail)
+		else frappe.get_cached_doc('YRP Item Production Detail', fabric_row.production_detail)
 	requirement = {}
 	for row in requirement_rows:
 		attrs = {FABRIC_DIA_ATTRIBUTE: row.dia}
@@ -244,7 +244,7 @@ def build_fabric_plan(lot_doc, fabric_row, raise_on_unreachable=True, ipd_doc=No
 			attrs[FABRIC_COLOUR_ATTRIBUTE] = row.colour
 		reference_item_variant = ""
 		if ipd.get("colour_yarn_recipes"):
-			from yrp.yrp.doctype.item.item import get_or_create_variant
+			from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
 			reference_item_variant = get_or_create_variant(ipd.item, attrs)
 		key = _plan_key(reference_item_variant, attrs.items())
 		requirement[key] = requirement.get(key, 0) + flt(row.weight)
@@ -309,12 +309,12 @@ def _write_plan_rows(lot_doc, cloth_item, step_plans):
 		process_name, side, dia, colour, reference_item_variant = key
 		row = existing.pop(key, None)
 		if row:
-			frappe.db.set_value("Lot Fabric Step Ledger", row.name, "planned_weight",
+			frappe.db.set_value('SD YRP Lot Fabric Step Ledger', row.name, "planned_weight",
 				flt(kg, 3), update_modified=False)
 		else:
 			inserted += 1
-			new_row = frappe.new_doc("Lot Fabric Step Ledger")
-			new_row.parenttype = "Lot"
+			new_row = frappe.new_doc('SD YRP Lot Fabric Step Ledger')
+			new_row.parenttype = 'SD YRP Lot'
 			new_row.parent = lot_doc.name
 			new_row.parentfield = "lot_fabric_step_ledger"
 			new_row.idx = len(lot_doc.get("lot_fabric_step_ledger") or []) + inserted
@@ -330,10 +330,10 @@ def _write_plan_rows(lot_doc, cloth_item, step_plans):
 
 	for key, row in existing.items():
 		if flt(row.received_weight):
-			frappe.db.set_value("Lot Fabric Step Ledger", row.name, "planned_weight", 0,
+			frappe.db.set_value('SD YRP Lot Fabric Step Ledger', row.name, "planned_weight", 0,
 				update_modified=False)
 		else:
-			frappe.delete_doc("Lot Fabric Step Ledger", row.name,
+			frappe.delete_doc('SD YRP Lot Fabric Step Ledger', row.name,
 				ignore_permissions=True, force=True)
 
 
@@ -366,8 +366,8 @@ def _preseed_knitting_program(lot_doc, cloth_item, step_plans):
 		colour = reference_attrs.get(FABRIC_COLOUR_ATTRIBUTE)
 		if row is None:
 			inserted += 1
-			new_row = frappe.new_doc("Lot Fabric Program")
-			new_row.parenttype = "Lot"
+			new_row = frappe.new_doc('SD YRP Lot Fabric Program')
+			new_row.parenttype = 'SD YRP Lot'
 			new_row.parent = lot_doc.name
 			new_row.parentfield = "lot_fabric_programs"
 			new_row.idx = len(lot_doc.get("lot_fabric_programs") or []) + inserted
@@ -379,7 +379,7 @@ def _preseed_knitting_program(lot_doc, cloth_item, step_plans):
 			new_row.received_weight = 0
 			new_row.save(ignore_permissions=True)
 		elif not flt(row.weight):
-			frappe.db.set_value("Lot Fabric Program", row.name, "weight", kg,
+			frappe.db.set_value('SD YRP Lot Fabric Program', row.name, "weight", kg,
 				update_modified=False)
 		elif abs(flt(row.weight) - kg) > 0.001:
 			drift.append(f"{escape_html(cloth_item)} · {escape_html(colour or '')} · "
@@ -391,7 +391,7 @@ def _preseed_knitting_program(lot_doc, cloth_item, step_plans):
 
 
 def _set_plan_status(fabric_row, status, error):
-	frappe.db.set_value("Lot Fabric Detail", fabric_row.name, {
+	frappe.db.set_value('SD YRP Lot Fabric Detail', fabric_row.name, {
 		"plan_status": status,
 		"plan_error": error,
 		"plan_built_on": now_datetime() if status == "Built" else None,
@@ -403,10 +403,10 @@ def _clear_plan(lot_doc, fabric_row):
 		if row.cloth_item != fabric_row.cloth_item:
 			continue
 		if flt(row.received_weight):
-			frappe.db.set_value("Lot Fabric Step Ledger", row.name, "planned_weight", 0,
+			frappe.db.set_value('SD YRP Lot Fabric Step Ledger', row.name, "planned_weight", 0,
 				update_modified=False)
 		else:
-			frappe.delete_doc("Lot Fabric Step Ledger", row.name,
+			frappe.delete_doc('SD YRP Lot Fabric Step Ledger', row.name,
 				ignore_permissions=True, force=True)
 	_set_plan_status(fabric_row, "", None)
 
@@ -416,18 +416,18 @@ def rebuild_fabric_plans_for_ipd(ipd_doc):
 	this IPD. Per-lot try/except — one lot's bad requirement never blocks the
 	approval or the other lots; failures aggregate into ONE msgprint."""
 	fabric_rows = frappe.get_all(
-		"Lot Fabric Detail",
-		filters={"production_detail": ipd_doc.name, "parenttype": "Lot"},
+		'SD YRP Lot Fabric Detail',
+		filters={"production_detail": ipd_doc.name, "parenttype": 'SD YRP Lot'},
 		fields=["name", "parent", "cloth_item", "production_detail"],
 	)
 	built, failed = [], []
 	for ref in fabric_rows:
-		lot_status = frappe.db.get_value("Lot", ref.parent, "status")
+		lot_status = frappe.db.get_value('SD YRP Lot', ref.parent, "status")
 		if lot_status and lot_status != "Open":
 			continue
 		try:
-			frappe.db.get_value("Lot", ref.parent, "name", for_update=True)
-			lot_doc = frappe.get_doc("Lot", ref.parent)
+			frappe.db.get_value('SD YRP Lot', ref.parent, "name", for_update=True)
+			lot_doc = frappe.get_doc('SD YRP Lot', ref.parent)
 			fabric_row = next(
 				(r for r in lot_doc.get("lot_fabric_details") or [] if r.name == ref.name), None)
 			if not fabric_row:
@@ -439,7 +439,7 @@ def rebuild_fabric_plans_for_ipd(ipd_doc):
 		except Exception as e:
 			frappe.clear_last_message()  # the aggregate below is the one dialog
 			failed.append(f"{escape_html(ref.parent)}: {escape_html(str(e)[:120])}")
-			frappe.db.set_value("Lot Fabric Detail", ref.name,
+			frappe.db.set_value('SD YRP Lot Fabric Detail', ref.name,
 				{"plan_status": "Error", "plan_error": str(e)[:200]}, update_modified=False)
 
 	if built or failed:
@@ -487,9 +487,9 @@ def on_ipd_update(doc, method=None):
 	else:
 		frappe.db.sql(
 			"""
-			UPDATE `tabLot Fabric Detail`
+			UPDATE `tabSD YRP Lot Fabric Detail`
 			SET plan_status = 'Stale'
-			WHERE production_detail = %s AND parenttype = 'Lot' AND plan_status = 'Built'
+			WHERE production_detail = %s AND parenttype = 'SD YRP Lot' AND plan_status = 'Built'
 			""",
 			(doc.name,),
 		)

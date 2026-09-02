@@ -3,7 +3,7 @@
 The SPA's left sidebar groups DocType links into named SECTIONS (Procurement,
 Production, Stock, …). Each user can collapse a section to hide its items; this
 module persists which sections are collapsed server-side in the
-"Essdee Sidebar Setting" DocType so the choice follows the user across server
+"SD YRP Essdee Sidebar Setting" DocType so the choice follows the user across server
 restarts AND across browsers/devices.
 
 Both endpoints are scoped to ``frappe.session.user`` — a user can never read or
@@ -21,7 +21,7 @@ import json
 
 import frappe
 
-SETTING_DOCTYPE = "Essdee Sidebar Setting"
+SETTING_DOCTYPE = 'SD YRP Essdee Sidebar Setting'
 
 
 def _parse_json_field(raw):

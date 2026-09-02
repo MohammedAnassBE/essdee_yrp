@@ -15,7 +15,7 @@ def validate_correction_ipd_items(doc, method=None):
 	ipd_name = doc.get("production_detail")
 	if not ipd_name:
 		return
-	ipd = frappe.get_doc("Item Production Detail", ipd_name)
+	ipd = frappe.get_doc('YRP Item Production Detail', ipd_name)
 	allowed = set()
 	allowed.update(row.item for row in get_yarn_ratio_inputs(ipd))
 	for row in ipd.get("item_bom") or []:
@@ -24,7 +24,7 @@ def validate_correction_ipd_items(doc, method=None):
 	for row in doc.get("deliverables") or []:
 		if not row.item_variant:
 			continue
-		template = frappe.db.get_value("Item Variant", row.item_variant, "item")
+		template = frappe.db.get_value('YRP Item Variant', row.item_variant, "item")
 		if template not in allowed:
 			frappe.throw(
 				_(

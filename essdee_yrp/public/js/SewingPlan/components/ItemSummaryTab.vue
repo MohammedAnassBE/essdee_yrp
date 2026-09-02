@@ -180,7 +180,7 @@ const loadOptions = () => {
         return
     }
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.sewing_plan.sewing_plan.get_item_summary_options",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan.get_item_summary_options",
         args: { supplier: props.selected_supplier },
         callback: (r) => {
             if (r.message) {
@@ -202,7 +202,7 @@ const fetchData = () => {
     fetched.value = true
 
     frappe.call({
-        method: "essdee_yrp.essdee_yrp.doctype.sewing_plan.sewing_plan.get_item_summary_data",
+        method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan.get_item_summary_data",
         args: {
             supplier: props.selected_supplier,
             lots: JSON.stringify(lots.length ? lots : null),

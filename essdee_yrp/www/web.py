@@ -1,4 +1,4 @@
-"""Context provider for the Essdee YRP custom SPA at `/web`.
+"""Context provider for the SD YRP custom SPA at `/web`.
 
 Serves the Vue 3 + PrimeVue single-page app built into
 `essdee_yrp/public/frontend/`. Same serving pattern as the bench's other
@@ -41,17 +41,17 @@ ASSET_BASE = "/assets/essdee_yrp/frontend/"
 # permission lists for exactly these candidates using the authoritative
 # frappe.has_permission() so every SPA gate hides what the user truly can't access.
 WEB_DOCTYPES = (
-	"Lot",
-	"Work Order",
-	"Work Order Correction",
-	"Delivery Challan",
-	"Goods Received Note",
-	"Process Cost",
-	"Lot Transfer",
-	"Stock Entry",
-	"Item",
-	"Item Production Detail",
-	"Terms and Condition",
+	'SD YRP Lot',
+	'YRP Work Order',
+	'YRP Work Order Correction',
+	'YRP Delivery Challan',
+	'YRP Goods Received Note',
+	'YRP Process Cost',
+	'SD YRP Lot Transfer',
+	'YRP Stock Entry',
+	'YRP Item',
+	'YRP Item Production Detail',
+	'YRP Terms and Condition',
 )
 
 # boot.user key -> has_permission ptype used by the SPA's usePermissions composable.

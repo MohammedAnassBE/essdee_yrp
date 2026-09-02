@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import frappe
 from frappe.model.base_document import get_controller
 from frappe.tests.utils import FrappeTestCase
-from yrp.yrp.doctype.purchase_invoice.purchase_invoice import PurchaseInvoice
+from yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice import PurchaseInvoice
 
 from essdee_yrp.erp import get_erp_response_message
 from essdee_yrp.erp_purchase_invoice import (
@@ -46,13 +46,13 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 
 	def test_essdee_controller_and_fetch_override_are_active(self):
 		self.assertEqual(
-			get_controller("Purchase Invoice").__name__,
+			get_controller('YRP Purchase Invoice').__name__,
 			"EssdeePurchaseInvoice",
 		)
 		overrides = frappe.get_hooks("override_whitelisted_methods")
 		self.assertEqual(
 			overrides[
-				"yrp.yrp.doctype.purchase_invoice.purchase_invoice.fetch_grn_details"
+				"yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice.fetch_grn_details"
 			][-1],
 			"essdee_yrp.purchase_invoice.fetch_grn_details",
 		)
@@ -72,18 +72,18 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 		)
 
 	def test_rate_projection_markers_cannot_be_used_to_bypass_fetch(self):
-		legacy = frappe.new_doc("Purchase Invoice")
+		legacy = frappe.new_doc('YRP Purchase Invoice')
 		legacy.essdee_rate_table_source = "production_api"
 		with self.assertRaises(frappe.ValidationError):
 			legacy.before_validate()
 
-		unfetched = frappe.new_doc("Purchase Invoice")
-		unfetched.against = "Work Order"
+		unfetched = frappe.new_doc('YRP Purchase Invoice')
+		unfetched.against = 'YRP Work Order'
 		with self.assertRaises(frappe.ValidationError):
 			unfetched.before_submit()
 
 	def test_parent_production_api_fields_are_essdee_custom_fields(self):
-		meta = frappe.get_meta("Purchase Invoice", cached=False)
+		meta = frappe.get_meta('YRP Purchase Invoice', cached=False)
 		expected = {
 			"gstin": ("Data", None),
 			"pan_no": ("Data", None),
@@ -110,7 +110,7 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 					frappe.db.exists(
 						"Custom Field",
 						{
-							"dt": "Purchase Invoice",
+							"dt": 'YRP Purchase Invoice',
 							"fieldname": fieldname,
 							"module": "Essdee YRP",
 						},
@@ -119,16 +119,16 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 
 		self.assertIsNone(meta.get_field("vendor_bill_tracking"))
 		bill_tracking = meta.get_field("bill_tracking")
-		self.assertEqual((bill_tracking.fieldtype, bill_tracking.options), ("Link", "Bill Tracking"))
+		self.assertEqual((bill_tracking.fieldtype, bill_tracking.options), ("Link", 'YRP Bill Tracking'))
 		self.assertFalse(
 			frappe.db.exists(
 				"Custom Field",
-				{"dt": "Purchase Invoice", "fieldname": "bill_tracking"},
+				{"dt": 'YRP Purchase Invoice', "fieldname": "bill_tracking"},
 			)
 		)
 
 	def test_mrp_settings_owns_complete_erp_connection_contract(self):
-		meta = frappe.get_meta("MRP Settings", cached=False)
+		meta = frappe.get_meta('SD YRP MRP Settings', cached=False)
 		expected = {
 			"enable_purchase_invoice_sync": "Check",
 			"erp_site_url": "Data",
@@ -141,10 +141,10 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 				self.assertEqual(meta.get_field(fieldname).fieldtype, fieldtype)
 
 	def test_erp_payload_uses_process_items_not_hidden_physical_rows(self):
-		invoice = frappe.new_doc("Purchase Invoice")
+		invoice = frappe.new_doc('YRP Purchase Invoice')
 		invoice.name = "YRP-MPI-TEST"
 		invoice.naming_series = "YRP-MPI-.YYYY.-"
-		invoice.against = "Work Order"
+		invoice.against = 'YRP Work Order'
 		invoice.bill_tracking = "BT-TEST"
 		invoice.append(
 			"items",
@@ -234,8 +234,8 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 		post.assert_not_called()
 
 	def test_controller_runs_local_validation_before_erp_lifecycle(self):
-		invoice = frappe.new_doc("Purchase Invoice")
-		invoice.against = "Purchase Order"
+		invoice = frappe.new_doc('YRP Purchase Invoice')
+		invoice.against = 'YRP Purchase Order'
 		with (
 			patch.object(PurchaseInvoice, "before_submit") as local_submit,
 			patch(
@@ -257,9 +257,9 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 			erp_cancel.assert_called_once_with(invoice)
 
 	def test_create_and_cancel_use_existing_erp_endpoints(self):
-		invoice = frappe.new_doc("Purchase Invoice")
+		invoice = frappe.new_doc('YRP Purchase Invoice')
 		invoice.name = "YRP-MPI-TEST"
-		invoice.against = "Purchase Order"
+		invoice.against = 'YRP Purchase Order'
 		invoice.erp_inv_name = "ERP-PI-TEST"
 		response = object()
 		result = {
@@ -383,7 +383,7 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 				return_value=bill,
 			),
 			patch(
-				"yrp.yrp.doctype.bill_tracking.bill_tracking.revert_purchase_invoice_link"
+				"yrp.yrp.doctype.yrp_bill_tracking.yrp_bill_tracking.revert_purchase_invoice_link"
 			) as revert,
 		):
 			revert_bill_tracking_from_erp(
@@ -416,12 +416,12 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 		lookup.assert_not_called()
 
 	def test_child_fields_and_mandatory_item_group(self):
-		meta = frappe.get_meta("Purchase Invoice Item", cached=False)
+		meta = frappe.get_meta('YRP Purchase Invoice Item', cached=False)
 		lot = meta.get_field("lot")
 		expense_head = meta.get_field("expense_head")
 		item_group = meta.get_field("item_group")
 
-		self.assertEqual((lot.fieldtype, lot.options, lot.in_list_view), ("Link", "Lot", 1))
+		self.assertEqual((lot.fieldtype, lot.options, lot.in_list_view), ("Link", 'SD YRP Lot', 1))
 		self.assertEqual(
 			(expense_head.fieldtype, expense_head.read_only, expense_head.in_list_view),
 			("Data", 1, 1),
@@ -433,7 +433,7 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 			field = frappe.db.get_value(
 				"Custom Field",
 				{
-					"dt": "Purchase Invoice Item",
+					"dt": 'YRP Purchase Invoice Item',
 					"fieldname": fieldname,
 					"module": "Essdee YRP",
 				},
@@ -448,7 +448,7 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 			frappe.db.exists(
 				"Property Setter",
 				{
-					"doc_type": "Purchase Invoice Item",
+					"doc_type": 'YRP Purchase Invoice Item',
 					"field_name": "item_group",
 					"property": "reqd",
 					"value": "1",
@@ -457,19 +457,19 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 		)
 
 	def test_commercial_table_and_physical_allocation_fields_are_installed(self):
-		parent = frappe.get_meta("Purchase Invoice", cached=False)
+		parent = frappe.get_meta('YRP Purchase Invoice', cached=False)
 		commercial = parent.get_field("essdee_items")
 		self.assertEqual(
 			(commercial.fieldtype, commercial.options),
-			("Table", "Essdee Purchase Invoice Item"),
+			("Table", 'SD YRP Essdee Purchase Invoice Item'),
 		)
 		self.assertIsNotNone(parent.get_field("essdee_rate_table_source"))
 
-		physical = frappe.get_meta("Purchase Invoice Item", cached=False)
+		physical = frappe.get_meta('YRP Purchase Invoice Item', cached=False)
 		self.assertIsNotNone(physical.get_field("essdee_group_key"))
 		self.assertIsNotNone(physical.get_field("essdee_rate_weight"))
 
-		visible = frappe.get_meta("Essdee Purchase Invoice Item", cached=False)
+		visible = frappe.get_meta('SD YRP Essdee Purchase Invoice Item', cached=False)
 		self.assertTrue(visible.istable)
 		self.assertEqual(visible.get_field("rate").read_only, 0)
 		self.assertEqual(visible.get_field("source_rate").read_only, 1)
@@ -648,7 +648,7 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 			patch(
 				"essdee_yrp.purchase_invoice.frappe.get_doc",
 				side_effect=lambda doctype, name: grn
-				if doctype == "Goods Received Note"
+				if doctype == 'YRP Goods Received Note'
 				else frappe._dict(name=name),
 			),
 			patch(

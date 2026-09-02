@@ -60,19 +60,19 @@ onMounted(() => {
     }
     if(cur_frm.doc.is_set_item){
         if(cur_frm.doc.top_measurement){
-            frappe.db.get_value("Product Measurement", cur_frm.doc.top_measurement, "measurement_image").then((x)=> {
+            frappe.db.get_value("SD YRP Product Measurement", cur_frm.doc.top_measurement, "measurement_image").then((x)=> {
                 image1.value = x.message.measurement_image
             })
         }
         if(cur_frm.doc.bottom_measurement){
-            frappe.db.get_value("Product Measurement", cur_frm.doc.bottom_measurement, "measurement_image").then((x)=> {
+            frappe.db.get_value("SD YRP Product Measurement", cur_frm.doc.bottom_measurement, "measurement_image").then((x)=> {
                 image2.value = x.message.measurement_image
             })
         }
     }
     else{
         if(cur_frm.doc.measurement){
-            frappe.db.get_value("Product Measurement", cur_frm.doc.measurement, "measurement_image").then((x)=> {
+            frappe.db.get_value("SD YRP Product Measurement", cur_frm.doc.measurement, "measurement_image").then((x)=> {
                 image1.value = x.message.measurement_image
             })
         }

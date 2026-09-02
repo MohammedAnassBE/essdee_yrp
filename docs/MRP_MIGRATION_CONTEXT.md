@@ -1,4 +1,4 @@
-# Production API → YRP / Essdee YRP Migration Context
+# Production API → YRP / SD YRP Migration Context
 
 Last updated: 2026-08-25
 Working site: `essdee_yrp.site`
@@ -156,7 +156,7 @@ rows and records not linked to a Lot.
 - The 2026-08-13 re-audit used then-current Production API commit `9c1538d0`. The
   hidden packing-trace fields introduced by `4d48b222`,
   `Finishing Plan Dispatch Item.packing_source` and
-  `packing_piece_quantity`, are present in Essdee YRP and on the live site.
+  `packing_piece_quantity`, are present in SD YRP and on the live site.
   The later `9c1538d0` finishing-dispatch change is logic-only and introduces
   no additional DocType schema drift.
 - 0 changed DocTypes remain open; the structure evaluation is complete.
@@ -220,7 +220,7 @@ rows and records not linked to a Lot.
 
 Open changed DocTypes: none.
 
-The final decision was Repost Item Valuation: Essdee YRP owns the optional
+The final decision was Repost Item Valuation: SD YRP owns the optional
 `via_landed_cost_voucher` compatibility checkbox. Production API currently has
 no MRP caller that sets it to 1. Base YRP remains solely responsible for
 generating its Lot and Received Type stock-dimension fields.
@@ -288,7 +288,7 @@ stock flows.
   existing F16 `pending_quantity` and `cancelled_quantity`. The remaining F16
   quantity, UOM, grouping, amount, and combination structure is approved, so
   Purchase Order Item is closed in the changed list.
-- Delivery Challan is closed in the changed list. Essdee YRP owns the 15
+- Delivery Challan is closed in the changed list. SD YRP owns the 15
   Production API-only fields plus the approved metadata overrides. From
   Location is mandatory; Is Internal Unit, Is Rework, Lot, and Includes
   Packing are enforced from Work Order; Lot is mandatory/read-only; internal
@@ -425,7 +425,7 @@ queryable from the GRN chain when needed.
   F16 Amount, Qty precision, and `set_combination` behavior are retained.
 - Production Order receives the 13 requested Production API fields as Essdee
   Custom Fields. The F16-only `item_details` field is retained.
-- Work Station receives the mandatory `action` Link through Essdee YRP while
+- Work Station receives the mandatory `action` Link through SD YRP while
   retaining the F16 workstation-name naming model and other F16 fields.
 - Lot stores hidden `lot_time_and_action_details` rows using the Essdee-owned
   `Lot Time and Action Detail` child table; current F16 fabric tables remain.

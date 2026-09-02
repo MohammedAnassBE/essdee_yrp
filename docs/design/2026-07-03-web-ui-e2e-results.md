@@ -1,4 +1,4 @@
-# Essdee YRP `/web` UI — E2E acceptance results (2026-07-03)
+# SD YRP `/web` UI — E2E acceptance results (2026-07-03)
 
 Runner: `apps/essdee_yrp/scripts/web-ui-e2e.mjs` (headless Playwright, real
 fills/clicks + literal DOM/DB reads). Site `essdee_yrp.site:8003`. Test user

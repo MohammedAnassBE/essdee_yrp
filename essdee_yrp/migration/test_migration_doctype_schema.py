@@ -4,13 +4,16 @@ import json
 import unittest
 from pathlib import Path
 
-from essdee_yrp.essdee_yrp.doctype.mrp_data_migration.mrp_data_migration import (
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_mrp_data_migration.sd_yrp_mrp_data_migration import (
 	is_target_reset_ready,
 )
 
 
 DOCTYPE_ROOT = Path(__file__).resolve().parents[1] / "essdee_yrp" / "doctype"
 APP_ROOT = Path(__file__).resolve().parents[2]
+MIGRATION_ROOT = DOCTYPE_ROOT / "sd_yrp_mrp_data_migration"
+MIGRATION_DETAIL_ROOT = DOCTYPE_ROOT / "sd_yrp_mrp_data_migration_detail"
+CUTTING_LAYSHEET_PLANNER_ROOT = DOCTYPE_ROOT / "sd_yrp_cutting_laysheet_planner"
 
 
 class MigrationDocTypeSchemaTest(unittest.TestCase):
@@ -39,9 +42,9 @@ class MigrationDocTypeSchemaTest(unittest.TestCase):
 				self.assertNotIn(value, contents, f"{value!r} is hardcoded in {path}")
 
 	def test_parent_is_essdee_owned_and_system_manager_only(self):
-		path = DOCTYPE_ROOT / "mrp_data_migration" / "mrp_data_migration.json"
+		path = MIGRATION_ROOT / "sd_yrp_mrp_data_migration.json"
 		schema = json.loads(path.read_text())
-		self.assertEqual(schema["name"], "MRP Data Migration")
+		self.assertEqual(schema["name"], 'SD YRP MRP Data Migration')
 		self.assertEqual(schema["module"], "Essdee YRP")
 		self.assertEqual([row["role"] for row in schema["permissions"]], ["System Manager"])
 		fields = {row["fieldname"]: row for row in schema["fields"]}
@@ -51,11 +54,9 @@ class MigrationDocTypeSchemaTest(unittest.TestCase):
 		self.assertEqual(
 			fields["adapter_status"]["default"], "Configured Local-Bench Source"
 		)
-		self.assertEqual(fields["migration_details"]["options"], "MRP Data Migration Detail")
+		self.assertEqual(fields["migration_details"]["options"], 'SD YRP MRP Data Migration Detail')
 		self.assertEqual(fields["allow_missing_source_blobs"]["default"], "0")
-		controller = (
-			DOCTYPE_ROOT / "mrp_data_migration" / "mrp_data_migration.py"
-		).read_text()
+		controller = (MIGRATION_ROOT / "sd_yrp_mrp_data_migration.py").read_text()
 		self.assertIn(
 			"allow_missing_files=bool(self.allow_missing_source_blobs)",
 			controller,
@@ -66,20 +67,14 @@ class MigrationDocTypeSchemaTest(unittest.TestCase):
 		self.assertIn('allowed_statuses={"Reset Complete", "Failed"}', controller)
 		self.assertIn("Reset Complete", fields["status"]["options"])
 		self.assertIn("Reset Target", fields["last_action"]["options"])
-		client = (
-			DOCTYPE_ROOT / "mrp_data_migration" / "mrp_data_migration.js"
-		).read_text()
+		client = (MIGRATION_ROOT / "sd_yrp_mrp_data_migration.js").read_text()
 		self.assertIn("Reset Target Data", client)
 		self.assertIn("preview.parent_rows", client)
 		self.assertIn("values.confirmation", client)
 
 	def test_new_desk_run_loads_required_read_only_connection_fields(self):
-		controller = (
-			DOCTYPE_ROOT / "mrp_data_migration" / "mrp_data_migration.py"
-		).read_text()
-		client = (
-			DOCTYPE_ROOT / "mrp_data_migration" / "mrp_data_migration.js"
-		).read_text()
+		controller = (MIGRATION_ROOT / "sd_yrp_mrp_data_migration.py").read_text()
+		client = (MIGRATION_ROOT / "sd_yrp_mrp_data_migration.js").read_text()
 		self.assertIn("def get_connection_defaults", controller)
 		self.assertIn('frappe.only_for("System Manager")', controller)
 		self.assertIn("get_connection_defaults", client)
@@ -88,9 +83,9 @@ class MigrationDocTypeSchemaTest(unittest.TestCase):
 			self.assertIn(f'"{fieldname}"', controller)
 
 	def test_detail_is_read_only_child_audit_table(self):
-		path = DOCTYPE_ROOT / "mrp_data_migration_detail" / "mrp_data_migration_detail.json"
+		path = MIGRATION_DETAIL_ROOT / "sd_yrp_mrp_data_migration_detail.json"
 		schema = json.loads(path.read_text())
-		self.assertEqual(schema["name"], "MRP Data Migration Detail")
+		self.assertEqual(schema["name"], 'SD YRP MRP Data Migration Detail')
 		self.assertTrue(schema["istable"])
 		self.assertEqual(schema["module"], "Essdee YRP")
 		self.assertEqual(schema["permissions"], [])
@@ -102,11 +97,11 @@ class MigrationDocTypeSchemaTest(unittest.TestCase):
 		self.assertTrue(all(row.get("read_only") for row in data_fields))
 
 	def test_cutting_laysheet_planner_tracks_live_source_identity_fields(self):
-		path = DOCTYPE_ROOT / "cutting_laysheet_planner" / "cutting_laysheet_planner.json"
+		path = CUTTING_LAYSHEET_PLANNER_ROOT / "sd_yrp_cutting_laysheet_planner.json"
 		schema = json.loads(path.read_text())
 		fields = {row["fieldname"]: row for row in schema["fields"]}
-		self.assertEqual(fields["lot"]["options"], "Lot")
-		self.assertEqual(fields["item"]["options"], "Item")
+		self.assertEqual(fields["lot"]["options"], 'SD YRP Lot')
+		self.assertEqual(fields["item"]["options"], 'YRP Item')
 		self.assertEqual(fields["description"]["fieldtype"], "Small Text")
 		self.assertTrue(fields["description"]["reqd"])
 

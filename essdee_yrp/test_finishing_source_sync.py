@@ -79,7 +79,7 @@ class TestFinishingSourceSync(IntegrationTestCase):
 	def test_generic_after_submit_hook_is_not_used_as_completion_signal(self):
 		from essdee_yrp import hooks
 
-		self.assertNotIn("on_update_after_submit", hooks.doc_events["Work Order"])
+		self.assertNotIn("on_update_after_submit", hooks.doc_events['YRP Work Order'])
 
 	@patch("essdee_yrp.finishing.rebuild.frappe.db.exists", return_value=True)
 	@patch("essdee_yrp.finishing.rebuild.frappe.db.get_value", return_value=1)
@@ -109,10 +109,10 @@ class TestFinishingSourceSync(IntegrationTestCase):
 			{"GRN-INCOMPLETE-1": True},
 		)
 		get_all.assert_called_once_with(
-			"Goods Received Note",
+			'YRP Goods Received Note',
 			filters={
 				"docstatus": 1,
-				"against": "Work Order",
+				"against": 'YRP Work Order',
 				"against_id": ["in", ["WO-STITCH-1"]],
 				"lot": "LOT-1",
 				"is_internal_unit": 1,

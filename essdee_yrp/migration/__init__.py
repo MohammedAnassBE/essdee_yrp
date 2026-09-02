@@ -1,4 +1,4 @@
-"""Production API to Essdee YRP data-migration primitives.
+"""Production API to SD YRP data-migration primitives.
 
 The package is deliberately split from Frappe I/O.  Its planner, transformer,
 checkpoint, and runner can be verified entirely with in-memory documents before

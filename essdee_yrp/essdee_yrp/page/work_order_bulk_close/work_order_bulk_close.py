@@ -30,11 +30,11 @@ def get_open_work_orders(
 	wo_from_date=None,
 	wo_to_date=None,
 ):
-	frappe.has_permission("Work Order", "read", throw=True)
+	frappe.has_permission('YRP Work Order', "read", throw=True)
 	supplier = cstr(supplier).strip()
 	if not supplier:
 		frappe.throw(_("Supplier is required."))
-	if not frappe.db.exists("Supplier", supplier):
+	if not frappe.db.exists('YRP Supplier', supplier):
 		frappe.throw(_("Supplier {0} does not exist.").format(frappe.bold(supplier)))
 
 	filters = {"supplier": supplier, "docstatus": 1, "open_status": "Open"}
@@ -55,7 +55,7 @@ def get_open_work_orders(
 		filters["wo_date"] = ["<=", to_date]
 
 	rows = frappe.get_list(
-		"Work Order",
+		'YRP Work Order',
 		filters=filters,
 		fields=[
 			"name",
@@ -89,7 +89,7 @@ def close_work_orders(
 		frappe.throw(_("Select at least one Work Order to close."))
 
 	for name in names:
-		doc = frappe.get_doc("Work Order", name, for_update=True)
+		doc = frappe.get_doc('YRP Work Order', name, for_update=True)
 		doc.check_permission("write")
 		if doc.docstatus != 1 or doc.open_status != "Open":
 			frappe.throw(
@@ -110,7 +110,7 @@ def close_work_orders(
 
 @frappe.whitelist()
 def get_work_order_close_details(work_order):
-	doc = frappe.get_doc("Work Order", work_order)
+	doc = frappe.get_doc('YRP Work Order', work_order)
 	doc.check_permission("read")
 	if doc.docstatus != 1 or doc.open_status != "Open":
 		frappe.throw(
@@ -128,25 +128,25 @@ def get_work_order_close_details(work_order):
 	)
 	recut_details = []
 	for recut_name in frappe.get_all(
-		"WO Recut",
+		'SD YRP WO Recut',
 		filters={"work_order": doc.name, "docstatus": ["<", 2]},
 		pluck="name",
 		order_by="creation asc",
 	):
-		recut = frappe.get_doc("WO Recut", recut_name)
+		recut = frappe.get_doc('SD YRP WO Recut', recut_name)
 		recut_details.append(
 			{
 				"name": recut.name,
 				"items": group_items_for_ui(
-					recut.get("wo_recut_details") or [], "Work Order Deliverables"
+					recut.get("wo_recut_details") or [], 'YRP Work Order Deliverables'
 				),
 			}
 		)
 
 	debits = []
-	if frappe.has_permission("Debit", "read"):
+	if frappe.has_permission('YRP Debit', "read"):
 		debits = frappe.get_list(
-			"Debit",
+			'YRP Debit',
 			filters={"work_order": doc.name, "docstatus": 1},
 			fields=[
 				"name",

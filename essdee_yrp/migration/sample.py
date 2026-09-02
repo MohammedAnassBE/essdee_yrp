@@ -95,7 +95,7 @@ class QueryOnlySampleTarget(FrappeBulkTarget):
 		]
 		self._bulk_upsert(target_doctype, parent_rows)
 		self._replace_child_tables_sql(meta, documents)
-		if target_doctype == "Supplier":
+		if target_doctype == 'YRP Supplier':
 			self._upsert_supplier_warehouses(documents)
 
 	def _upsert_single_sql(self, meta, document: Mapping[str, Any]) -> None:
@@ -180,7 +180,7 @@ def run_query_only_sample(
 		raise MigrationError(
 			f"Sample limit must be between 1 and {MAX_SAMPLE_PER_DOCTYPE}"
 		)
-	if not frappe.db.exists("MRP Data Migration", migration_name):
+	if not frappe.db.exists('SD YRP MRP Data Migration', migration_name):
 		raise MigrationError(f"Unknown MRP Data Migration {migration_name}")
 
 	source = F15SourceBridge(settings)
@@ -516,7 +516,7 @@ def _name_exists(doctype: str, name: Any) -> bool:
 def _mark_sample_started(migration_name, plan, source_status, limit) -> None:
 	frappe.db.sql(
 		"""
-		UPDATE `tabMRP Data Migration`
+		UPDATE `tabSD YRP MRP Data Migration`
 		SET `status`='Running', `last_action`='Sample', `last_started_on`=%s,
 			`last_completed_on`=NULL, `total_source_records`=%s,
 			`processed_records`=0, `skipped_records`=0, `failed_records`=0,
@@ -537,7 +537,7 @@ def _mark_sample_started(migration_name, plan, source_status, limit) -> None:
 
 def _update_sample_progress(migration_name, processed, failed) -> None:
 	frappe.db.sql(
-		"UPDATE `tabMRP Data Migration` SET `processed_records`=%s, `failed_records`=%s "
+		"UPDATE `tabSD YRP MRP Data Migration` SET `processed_records`=%s, `failed_records`=%s "
 		"WHERE `name`=%s",
 		(processed, failed, migration_name),
 	)
@@ -547,7 +547,7 @@ def _update_sample_progress(migration_name, processed, failed) -> None:
 def _mark_sample_complete(migration_name, report) -> None:
 	frappe.db.sql(
 		"""
-		UPDATE `tabMRP Data Migration`
+		UPDATE `tabSD YRP MRP Data Migration`
 		SET `status`=%s, `last_completed_on`=%s, `processed_records`=%s,
 			`failed_records`=%s, `report_json`=%s, `error_log`=%s
 		WHERE `name`=%s

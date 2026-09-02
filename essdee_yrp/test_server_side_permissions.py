@@ -4,12 +4,16 @@ import frappe
 from frappe.tests import IntegrationTestCase, UnitTestCase
 
 from essdee_yrp import ipd_ui, production_order_workflow
-from essdee_yrp.essdee_yrp.doctype.finishing_plan_dispatch import (
-	finishing_plan_dispatch,
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan_dispatch import (
+	sd_yrp_finishing_plan_dispatch as finishing_plan_dispatch,
 )
-from essdee_yrp.essdee_yrp.doctype.grn_rework_item import grn_rework_item
-from essdee_yrp.essdee_yrp.doctype.mrp_data_migration import mrp_data_migration
-from yrp.yrp.doctype.inspection_entry import inspection_entry
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_grn_rework_item import (
+	sd_yrp_grn_rework_item as grn_rework_item,
+)
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_mrp_data_migration import (
+	sd_yrp_mrp_data_migration as mrp_data_migration,
+)
+from yrp.yrp.doctype.yrp_inspection_entry import yrp_inspection_entry as inspection_entry
 
 
 class TestServerSidePermissions(UnitTestCase):
@@ -144,10 +148,10 @@ class TestServerSidePermissions(UnitTestCase):
 class TestActualRolelessSession(IntegrationTestCase):
 	def test_whitelisted_sensitive_actions_reject_an_actual_roleless_session(self):
 		grn = frappe.get_all(
-			"Goods Received Note", filters={"docstatus": 1}, pluck="name", limit=1
+			'YRP Goods Received Note', filters={"docstatus": 1}, pluck="name", limit=1
 		)[0]
 		dispatch = frappe.get_all(
-			"Finishing Plan Dispatch", filters={"docstatus": 1}, pluck="name", limit=1
+			'SD YRP Finishing Plan Dispatch', filters={"docstatus": 1}, pluck="name", limit=1
 		)[0]
 		user = f"u43-{frappe.generate_hash(length=10)}@example.com"
 		frappe.get_doc(

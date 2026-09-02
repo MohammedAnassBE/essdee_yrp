@@ -7,7 +7,7 @@
  * Set and persists it.
  *
  * PERSISTENCE: per-user and SERVER-SIDE (not localStorage). The set of collapsed
- * section names is stored in the "Essdee Sidebar Setting" DocType via the
+ * section names is stored in the "SD YRP Essdee Sidebar Setting" DocType via the
  * whitelisted `essdee_yrp.api.sidebar_view` API, scoped to the session
  * user. A user collapses sections once and they persist across server restarts
  * AND across browsers/devices. Mirrors useChildTableColumns: a one-shot load

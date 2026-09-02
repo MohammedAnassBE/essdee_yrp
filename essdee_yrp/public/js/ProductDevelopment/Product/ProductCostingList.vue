@@ -16,7 +16,7 @@
                         <td>{{ c.total_qty }}</td>
                         <td>{{ c.profit_percent_markdown }}</td>
                         <td>
-                            <a :href="'/app/lotwise-item-profit/' + encodeURIComponent(c.name)" class="btn btn-default btn-xs">
+                            <a :href="'/app/sd-yrp-lotwise-item-profit/' + encodeURIComponent(c.name)" class="btn btn-default btn-xs">
                                 Open
                             </a>
                         </td>

@@ -13,8 +13,8 @@ from essdee_yrp.finishing.state import get_finishing_plan_dict, get_finishing_pl
 from essdee_yrp.finishing.status import apply_auto_fp_status
 from yrp.stock.utils import get_last_sle_rate
 from yrp.utils import get_variant_attr_details, update_if_string_instance
-from yrp.yrp.doctype.item.item import get_or_create_variant
-from yrp.yrp.doctype.item_production_detail.item_production_detail import (
+from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
+from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
 	get_ipd_primary_values,
 )
 
@@ -41,42 +41,42 @@ def on_cancel(doc, method=None):
 
 		cancel_box_sticker_prints(doc)
 	finishing_plan = frappe.db.get_value(
-		"Finishing Plan", {"work_order": doc.name}, "name"
+		'SD YRP Finishing Plan', {"work_order": doc.name}, "name"
 	)
 	if finishing_plan:
-		frappe.delete_doc("Finishing Plan", finishing_plan, ignore_permissions=True)
+		frappe.delete_doc('SD YRP Finishing Plan', finishing_plan, ignore_permissions=True)
 	if doc.get("is_internal_unit"):
 		_reverse_alternative_stock(doc)
 
 
 def create_or_refresh_finishing_plan(work_order):
 	work_order = (
-		frappe.get_doc("Work Order", work_order)
+		frappe.get_doc('YRP Work Order', work_order)
 		if isinstance(work_order, str)
 		else work_order
 	)
 	existing = frappe.db.get_value(
-		"Finishing Plan", {"work_order": work_order.name}, "name"
+		'SD YRP Finishing Plan', {"work_order": work_order.name}, "name"
 	)
 	finishing_rows, rework_rows, grn_rows, incomplete_grns = _finishing_rows(
 		work_order
 	)
 	if existing:
-		finishing_plan = frappe.get_doc("Finishing Plan", existing)
+		finishing_plan = frappe.get_doc('SD YRP Finishing Plan', existing)
 		_operational_merge(finishing_plan, finishing_rows, grn_rows)
 		finishing_plan.set("finishing_plan_reworked_details", rework_rows)
 	else:
-		finishing_plan = frappe.new_doc("Finishing Plan")
-		finishing_plan.naming_series = _default_naming_series("Finishing Plan")
+		finishing_plan = frappe.new_doc('SD YRP Finishing Plan')
+		finishing_plan.naming_series = _default_naming_series('SD YRP Finishing Plan')
 		finishing_plan.lot = work_order.lot
 		finishing_plan.work_order = work_order.name
 		finishing_plan.item = work_order.item
 		finishing_plan.production_detail = work_order.production_detail
 		finishing_plan.pieces_per_box = frappe.db.get_value(
-			"Item Production Detail", work_order.production_detail, "packing_combo"
+			'YRP Item Production Detail', work_order.production_detail, "packing_combo"
 		)
 		finishing_plan.finishing_process = frappe.db.get_single_value(
-			"MRP Settings", "finishing_inward_process"
+			'SD YRP MRP Settings', "finishing_inward_process"
 		)
 		if not finishing_plan.finishing_process:
 			frappe.throw(_("Set Finishing Inward Process in MRP Settings"))
@@ -104,20 +104,20 @@ def update_submitted_alternative_work_order(source_plan, work_order, rows):
 		if delta > 0:
 			deltas.append({**row, "qty": delta})
 	_merge_submitted_child(
-		work_order, "deliverables", "Work Order Deliverables", rows["deliverables"]
+		work_order, "deliverables", 'YRP Work Order Deliverables', rows["deliverables"]
 	)
 	_merge_submitted_child(
-		work_order, "receivables", "Work Order Receivables", rows["receivables"]
+		work_order, "receivables", 'YRP Work Order Receivables', rows["receivables"]
 	)
 	_merge_submitted_child(
 		work_order,
 		"work_order_calculated_items",
-		"Work Order Calculated Item",
+		'YRP Work Order Calculated Item',
 		rows["calculated_items"],
 		quantity_field="quantity",
 	)
 	frappe.db.set_value(
-		"Work Order",
+		'YRP Work Order',
 		work_order.name,
 		{
 			"total_quantity": rows["total_quantity"],
@@ -130,10 +130,10 @@ def update_submitted_alternative_work_order(source_plan, work_order, rows):
 
 def _finishing_rows(work_order):
 	default_received = frappe.db.get_single_value(
-		"YRP Stock Settings", "default_received_type"
+		'YRP YRP Stock Settings', "default_received_type"
 	)
 	default_rejected = frappe.db.get_single_value(
-		"YRP Stock Settings", "default_rejected_received_type"
+		'YRP YRP Stock Settings', "default_rejected_received_type"
 	)
 	items = {}
 	for row in work_order.get("work_order_calculated_items") or []:
@@ -152,13 +152,13 @@ def _finishing_rows(work_order):
 		)
 
 	finishing_process = frappe.db.get_single_value(
-		"MRP Settings", "finishing_inward_process"
+		'SD YRP MRP Settings', "finishing_inward_process"
 	)
 	if not finishing_process:
 		frappe.throw(_("Set Finishing Inward Process in MRP Settings"))
 	incomplete_grns = {}
 	for name in get_process_work_orders(finishing_process, work_order.lot):
-		upstream = frappe.get_doc("Work Order", name)
+		upstream = frappe.get_doc('YRP Work Order', name)
 		for row in upstream.get("work_order_calculated_items") or []:
 			key = _row_key(row)
 			if key not in items:
@@ -178,9 +178,9 @@ def _finishing_rows(work_order):
 					items[key]["rework_qty"] += flt(quantity)
 		if upstream.get("is_internal_unit"):
 			for grn in frappe.get_all(
-				"Goods Received Note",
+				'YRP Goods Received Note',
 				filters={
-					"against": "Work Order",
+					"against": 'YRP Work Order',
 					"against_id": name,
 					"docstatus": 1,
 					"transfer_complete": 0,
@@ -194,7 +194,7 @@ def _finishing_rows(work_order):
 		lot=work_order.lot,
 	)
 	for name in get_process_work_orders(cutting_process, work_order.lot):
-		for row in frappe.get_doc("Work Order", name).get(
+		for row in frappe.get_doc('YRP Work Order', name).get(
 			"work_order_calculated_items"
 		) or []:
 			key = _row_key(row)
@@ -228,7 +228,7 @@ def _finishing_rows(work_order):
 			}
 		)
 
-	ipd = frappe.get_cached_doc("Item Production Detail", work_order.production_detail)
+	ipd = frappe.get_cached_doc('YRP Item Production Detail', work_order.production_detail)
 	grn_rows = []
 	for size in get_ipd_primary_values(ipd.name):
 		variant = get_or_create_variant(
@@ -269,7 +269,7 @@ def _operational_merge(finishing_plan, new_rows, grn_rows):
 def _transfer_alternative_stock(work_order, rows=None, source_plan=None):
 	initial_transfer = rows is None
 	transferred_lot = frappe.db.get_value(
-		"Lot", work_order.lot, "transferred_lot"
+		'SD YRP Lot', work_order.lot, "transferred_lot"
 	)
 	if not transferred_lot:
 		return
@@ -277,7 +277,7 @@ def _transfer_alternative_stock(work_order, rows=None, source_plan=None):
 		return
 	if source_plan is None:
 		source_plan_name = frappe.db.get_value(
-			"Finishing Plan", {"lot": transferred_lot}, "name"
+			'SD YRP Finishing Plan', {"lot": transferred_lot}, "name"
 		)
 		if not source_plan_name:
 			frappe.throw(
@@ -285,18 +285,18 @@ def _transfer_alternative_stock(work_order, rows=None, source_plan=None):
 					transferred_lot
 				)
 			)
-		source_plan = frappe.get_doc("Finishing Plan", source_plan_name)
+		source_plan = frappe.get_doc('SD YRP Finishing Plan', source_plan_name)
 	rows = rows if rows is not None else list(work_order.get("deliverables") or [])
 	main_rows = [
 		row
 		for row in rows
 		if flt(row.get("qty")) > 0
-		and frappe.db.get_value("Item Variant", row.get("item_variant"), "item")
+		and frappe.db.get_value('YRP Item Variant', row.get("item_variant"), "item")
 		== work_order.item
 	]
 	if not main_rows:
 		return
-	from yrp.yrp.doctype.delivery_challan.delivery_challan import (
+	from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 		_get_warehouse_for_supplier,
 	)
 
@@ -306,7 +306,7 @@ def _transfer_alternative_stock(work_order, rows=None, source_plan=None):
 			_("No active Warehouse found for supplier {0}").format(work_order.supplier)
 		)
 	received_type = frappe.db.get_single_value(
-		"YRP Stock Settings", "default_received_type"
+		'YRP YRP Stock Settings', "default_received_type"
 	)
 	source_items = []
 	target_items = []
@@ -369,13 +369,13 @@ def _transfer_alternative_stock(work_order, rows=None, source_plan=None):
 
 
 def _make_stock_entry(purpose, from_warehouse, to_warehouse, work_order, items):
-	stock_entry = frappe.new_doc("Stock Entry")
+	stock_entry = frappe.new_doc('YRP Stock Entry')
 	stock_entry.update(
 		{
 			"purpose": purpose,
 			"from_warehouse": from_warehouse,
 			"to_warehouse": to_warehouse,
-			"against": "Work Order",
+			"against": 'YRP Work Order',
 			"against_id": work_order,
 		}
 	)
@@ -387,12 +387,12 @@ def _make_stock_entry(purpose, from_warehouse, to_warehouse, work_order, items):
 
 
 def _reverse_alternative_stock(work_order):
-	if not frappe.db.get_value("Lot", work_order.lot, "transferred_lot"):
+	if not frappe.db.get_value('SD YRP Lot', work_order.lot, "transferred_lot"):
 		return
 	linked = frappe.get_all(
-		"Stock Entry",
+		'YRP Stock Entry',
 		filters={
-			"against": "Work Order",
+			"against": 'YRP Work Order',
 			"against_id": work_order.name,
 			"docstatus": 1,
 			"purpose": ["in", ["Material Receipt", "Material Issue"]],
@@ -405,20 +405,20 @@ def _reverse_alternative_stock(work_order):
 	linked.sort(key=lambda row: 0 if row.purpose == "Material Receipt" else 1)
 	for row in linked:
 		name = row.name
-		stock_entry = frappe.get_doc("Stock Entry", name)
+		stock_entry = frappe.get_doc('YRP Stock Entry', name)
 		if stock_entry.docstatus == 1:
 			stock_entry.cancel()
 	source_plan_name = frappe.db.get_value(
-		"Finishing Plan",
-		{"lot": frappe.db.get_value("Lot", work_order.lot, "transferred_lot")},
+		'SD YRP Finishing Plan',
+		{"lot": frappe.db.get_value('SD YRP Lot', work_order.lot, "transferred_lot")},
 		"name",
 	)
 	if not source_plan_name:
 		return
-	source_plan = frappe.get_doc("Finishing Plan", source_plan_name)
+	source_plan = frappe.get_doc('SD YRP Finishing Plan', source_plan_name)
 	plan_rows = get_finishing_plan_dict(source_plan)
 	for row in work_order.get("deliverables") or []:
-		if frappe.db.get_value("Item Variant", row.item_variant, "item") != work_order.item:
+		if frappe.db.get_value('YRP Item Variant', row.item_variant, "item") != work_order.item:
 			continue
 		source_variant = get_or_create_variant(
 			source_plan.item, get_variant_attr_details(row.item_variant)
@@ -451,11 +451,11 @@ def _merge_submitted_child(
 		child = frappe.new_doc(child_doctype)
 		child.update(row)
 		child.parent = parent.name
-		child.parenttype = "Work Order"
+		child.parenttype = 'YRP Work Order'
 		child.parentfield = parentfield
 		child.idx = index + 1
 		child.insert(ignore_permissions=True)
-	frappe.clear_document_cache("Work Order", parent.name)
+	frappe.clear_document_cache('YRP Work Order', parent.name)
 
 
 def _row_key(row):

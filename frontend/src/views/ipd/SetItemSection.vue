@@ -36,7 +36,7 @@
 				<LinkField
 					v-if="editing"
 					:model-value="form.set_item_attribute"
-					target-doctype="Item Attribute"
+					target-doctype="YRP Item Attribute"
 					:search-handler="attrSearch"
 					class="si-link"
 					data-testid="si-attr"
@@ -49,7 +49,7 @@
 				<LinkField
 					v-if="editing"
 					:model-value="form.major_attribute_value"
-					target-doctype="Item Attribute Value"
+					target-doctype="YRP Item Attribute Value"
 					:search-handler="setValueSearch"
 					class="si-link"
 					data-testid="si-major"
@@ -87,7 +87,7 @@
 							<LinkField
 								v-if="editing"
 								:model-value="row.val[a] || ''"
-								target-doctype="Item Attribute Value"
+								target-doctype="YRP Item Attribute Value"
 								:search-handler="packValueSearch"
 								class="si-link"
 								@item-select="(e) => (row.val[a] = e.value)"

@@ -117,12 +117,12 @@ onMounted(() => {
         df: {
             fieldname: "lot",
             fieldtype: "Link",
-            options: "Lot",
+            options: "SD YRP Lot",
             label: "Lot",
             onchange:async ()=> {
                 let x = lot.get_value()
                 if(x && x != "" && x != null){
-                    let y = await frappe.db.get_value('Lot',x, "item")
+                    let y = await frappe.db.get_value('SD YRP Lot',x, "item")
                     item.set_value(y.message.item)
                     item.refresh()
                 }
@@ -138,7 +138,7 @@ onMounted(() => {
         df: {
             fieldname: "item",
             fieldtype: "Link",
-            options: "Item",
+            options: "YRP Item",
             label: "Item",
         },
         doc: sample_doc.value,

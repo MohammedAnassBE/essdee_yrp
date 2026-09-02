@@ -56,11 +56,32 @@ DOCPERM_FIELDS = (
 	"email",
 )
 
+ESSDEE_REQUIRED_STOCK_DIMENSIONS = (
+	{
+		"dimension_doctype": "Lot",
+		"fieldname": "lot",
+		"label": "Lot",
+		"mandatory": 1,
+		"in_valuation": 1,
+		"is_production_group": 1,
+	},
+	{
+		"dimension_doctype": "Received Type",
+		"fieldname": "received_type",
+		"label": "Received Type",
+		"mandatory": 1,
+		"in_valuation": 1,
+		"is_production_group": 0,
+	},
+)
+
 
 def after_install():
 	ensure_purchase_invoice_commercial_fields()
 	ensure_process_billing_items()
 	ensure_yrp_valuation_contract()
+	ensure_required_stock_dimensions()
+	ensure_essdee_stock_dimensions()
 	ensure_stock_transaction_indexes()
 	ensure_finishing_plan_dispatch_naming_series()
 	ensure_default_address_template()
@@ -69,13 +90,14 @@ def after_install():
 	ensure_sewing_plan_settings()
 	ensure_yrp_production_order_settings()
 	ensure_lot_packing_boundary()
-	ensure_essdee_stock_dimensions()
 
 
 def after_migrate():
 	ensure_purchase_invoice_commercial_fields()
 	ensure_process_billing_items()
 	ensure_yrp_valuation_contract()
+	ensure_required_stock_dimensions()
+	ensure_essdee_stock_dimensions()
 	ensure_stock_transaction_indexes()
 	ensure_finishing_plan_dispatch_naming_series()
 	ensure_default_address_template()
@@ -85,7 +107,6 @@ def after_migrate():
 	ensure_sewing_plan_settings()
 	ensure_yrp_production_order_settings()
 	ensure_lot_packing_boundary()
-	ensure_essdee_stock_dimensions()
 	from essdee_yrp.purchase_invoice import (
 		backfill_legacy_commercial_items,
 		backfill_unprojected_work_order_drafts,
@@ -220,6 +241,51 @@ def ensure_stock_transaction_indexes():
 		],
 		index_name="idx_sre_voucher_detail_active",
 	)
+
+
+def ensure_required_stock_dimensions():
+	"""Install Essdee's required stock-dimension columns before indexing them.
+
+	Base YRP intentionally leaves stock dimensions configurable. Essdee's stock
+	contract requires Lot and Received Type, so a fresh customization-app install
+	must seed those rows before ``ensure_stock_transaction_indexes`` refers to the
+	dynamic columns. Existing dimension rows and any additional user-configured
+	dimensions are preserved.
+	"""
+	missing_doctypes = [
+		dimension["dimension_doctype"]
+		for dimension in ESSDEE_REQUIRED_STOCK_DIMENSIONS
+		if not frappe.db.exists("DocType", dimension["dimension_doctype"])
+	]
+	if missing_doctypes:
+		frappe.throw(
+			"Essdee stock dimensions cannot be configured because these DocTypes "
+			f"are missing: {', '.join(missing_doctypes)}"
+		)
+
+	settings = frappe.get_single("YRP Stock Settings")
+	rows_by_fieldname = {
+		row.fieldname: row for row in (settings.stock_dimensions or [])
+	}
+	changed = False
+	for dimension in ESSDEE_REQUIRED_STOCK_DIMENSIONS:
+		if dimension["fieldname"] in rows_by_fieldname:
+			continue
+		settings.append("stock_dimensions", dimension)
+		changed = True
+
+	if changed:
+		# YRP Stock Settings.on_update clears the dimension cache and creates the
+		# corresponding Custom Fields/columns on every stock-bearing DocType.
+		settings.save(ignore_permissions=True)
+		return
+
+	# Repair an already-configured site whose dynamic fields were not materialized
+	# (for example, an interrupted earlier installation).
+	from yrp.stock.dimensions import clear_dimension_cache, create_dimension_fields
+
+	clear_dimension_cache()
+	create_dimension_fields()
 
 
 def ensure_yrp_valuation_contract():

@@ -7,8 +7,8 @@ import os
 import re
 from mimetypes import guess_type
 
-import fitz
 import frappe
+import pymupdf as fitz
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, cstr, get_url

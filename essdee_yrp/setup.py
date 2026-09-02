@@ -87,7 +87,6 @@ def after_install():
 	ensure_default_address_template()
 	ensure_mrp_schema_roles()
 	ensure_mrp_cancel_permissions()
-	ensure_sewing_plan_settings()
 	ensure_yrp_production_order_settings()
 	ensure_lot_packing_boundary()
 
@@ -104,7 +103,6 @@ def after_migrate():
 	ensure_mrp_schema_roles()
 	ensure_mrp_cancel_permissions()
 	ensure_sd_yrp_consumer_config()
-	ensure_sewing_plan_settings()
 	ensure_yrp_production_order_settings()
 	ensure_lot_packing_boundary()
 	from essdee_yrp.purchase_invoice import (
@@ -409,13 +407,6 @@ def ensure_essdee_stock_dimensions():
 	from essdee_yrp.stock_dimensions import ensure_essdee_stock_dimension_fields
 
 	ensure_essdee_stock_dimension_fields()
-
-
-def ensure_sewing_plan_settings():
-	"""Install the F15 Sewing Details sequence only when it is unconfigured."""
-	from essdee_yrp.sewing.config import ensure_sewing_plan_settings as ensure
-
-	return ensure()
 
 
 def ensure_sd_yrp_consumer_config():

@@ -149,6 +149,17 @@ Do not put passwords or API secrets in this profile. MRP Settings Password
 fields use the normal source/target encryption handling and can be configured
 again after cutover when source encryption keys are unavailable.
 
+Do **not** seed Sewing Plan Input Types, Sewing Plan child rows, MRP Settings
+Sewing values, or IPD Settings on a fresh F16 target. `Migrate` reads the
+Production API `MRP Settings` and `IPD Settings` Singles and writes their
+source values as part of the checkpointed load. Analyse also reads the source
+IPD Settings before any write, so an empty target is valid. The two IPD
+defaults in `required_defaults` are the reviewed F16-only cloth-process fields
+that do not exist in the F15 IPD Settings schema; they are applied in memory
+during the same Migrate step, never as installation seeds. Analyse reports the
+source/profile origin for each required IPD value and blocks before Migrate if
+the source/profile cannot supply one.
+
 Read-only verification after this hardening passed against the current local
 source/target combination: live plan 260 source / 318 target DocTypes, 0
 blockers; 293,115 stock buckets exact; all 25 source-invalid Links audited and

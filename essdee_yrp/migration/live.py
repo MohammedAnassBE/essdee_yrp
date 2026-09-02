@@ -65,14 +65,13 @@ PRESERVE_SOURCE_BLANK_FIELDS = {
 }
 SAFE_SQL_FIELDNAME = re.compile(r"^[a-z][a-z0-9_]*$")
 
-# F16 Singles that supply operating context which is not fully represented by
-# every historical F15 document.  Analyse must stop before a Production Order
-# or stock row is transformed when these values are incomplete.  Keeping this
-# contract here (rather than silently inventing values in a transformer) makes
-# the migration prerequisite visible and independently auditable.
+# Migration operating context that must resolve before a Production Order or
+# stock row is transformed. IPD Settings come from the F15 Single (with only
+# reviewed F16-only profile defaults); stock settings define the target's live
+# dimension contract. Keeping this here makes the contract independently
+# auditable instead of silently inventing values in a transformer.
 IPD_MIGRATION_PREREQUISITES = {
 	"item_group": "Item Group",
-	"default_primary_attribute": "Item Attribute",
 	"default_cutting_process": "Process",
 	"default_knitting_process": "Process",
 	"default_dyeing_process": "Process",
@@ -674,7 +673,10 @@ def build_live_schema_analysis(
 		target_site=settings.target_site,
 	)
 	target_prerequisites = _validate_target_migration_prerequisites(
-		dimensions, plan=plan, source=source
+		dimensions,
+		plan=plan,
+		source=source,
+		required_defaults=settings.required_defaults,
 	)
 	payload.update(
 		{
@@ -770,20 +772,48 @@ def _validate_target_migration_prerequisites(
 	*,
 	plan: MigrationPlan | None = None,
 	source: F15SourceBridge | None = None,
+	required_defaults: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-	"""Validate the reviewed target Singles used by Production/stock migration."""
+	"""Validate migration operating context before any target write occurs.
+
+	IPD Settings are source-owned historical settings.  A new target has no
+	business configuration yet, so Analyse reads the F15 Single and applies only
+	the reviewed profile defaults needed for F16-only fields.  Stock settings and
+	the dimension contract remain target-owned setup, as they define the active
+	F16 stock model.
+	"""
 
 	issues: list[str] = []
 	values: dict[str, dict[str, Any]] = {"IPD Settings": {}, "YRP Stock Settings": {}}
+	value_sources: dict[str, dict[str, str]] = {
+		"IPD Settings": {},
+		"YRP Stock Settings": {},
+	}
+	source_ipd_settings = _source_single_document(source, "IPD Settings")
+	required_defaults = required_defaults or {}
 	for doctype, fields in (
 		("IPD Settings", IPD_MIGRATION_PREREQUISITES),
 		("YRP Stock Settings", STOCK_MIGRATION_PREREQUISITES),
 	):
 		for fieldname, link_doctype in fields.items():
-			value = frappe.db.get_single_value(doctype, fieldname)
+			target_value = frappe.db.get_single_value(doctype, fieldname)
+			value, value_source = _migration_prerequisite_value(
+				doctype,
+				fieldname,
+				target_value=target_value,
+				source_ipd_settings=source_ipd_settings,
+				required_defaults=required_defaults,
+			)
 			values[doctype][fieldname] = value
+			value_sources[doctype][fieldname] = value_source
 			if value in (None, ""):
-				issues.append(f"{doctype}.{fieldname} is required")
+				if doctype == "IPD Settings":
+					issues.append(
+						f"{doctype}.{fieldname} is required from the F15 source or "
+						"essdee_yrp_migration.required_defaults"
+					)
+				else:
+					issues.append(f"{doctype}.{fieldname} is required")
 			elif not _target_or_source_prerequisite_exists(
 				link_doctype, str(value), plan=plan, source=source
 			):
@@ -817,6 +847,7 @@ def _validate_target_migration_prerequisites(
 
 	return {
 		"ipd_settings": values["IPD Settings"],
+		"ipd_settings_sources": value_sources["IPD Settings"],
 		"stock_settings": values["YRP Stock Settings"],
 		"stock_dimensions": [
 			{
@@ -833,6 +864,45 @@ def _validate_target_migration_prerequisites(
 			for row in dimensions
 		],
 	}
+
+
+def _source_single_document(
+	source: F15SourceBridge | None, doctype: str
+) -> dict[str, Any] | None:
+	"""Read one source Single without writing or relying on target state."""
+
+	if source is None or not callable(getattr(source, "iter_documents", None)):
+		return None
+	documents = list(source.iter_documents(doctype, limit=2))
+	if len(documents) != 1:
+		raise MigrationError(
+			f"F15 source must return exactly one {doctype}; found {len(documents)}"
+		)
+	document = dict(documents[0])
+	if document.get("doctype") != doctype or document.get("name") != doctype:
+		raise MigrationError(f"F15 source returned an invalid {doctype} Single")
+	return document
+
+
+def _migration_prerequisite_value(
+	doctype: str,
+	fieldname: str,
+	*,
+	target_value: Any,
+	source_ipd_settings: Mapping[str, Any] | None,
+	required_defaults: Mapping[str, Any],
+) -> tuple[Any, str]:
+	"""Return the source/profile value for source-owned IPD settings."""
+
+	if doctype != "IPD Settings" or source_ipd_settings is None:
+		return target_value, "target"
+	source_value = source_ipd_settings.get(fieldname)
+	if source_value not in (None, ""):
+		return source_value, "production_api"
+	configured_value = required_defaults.get(f"{doctype}.{fieldname}")
+	if configured_value not in (None, ""):
+		return configured_value, "migration_profile"
+	return None, "missing"
 
 
 def _target_or_source_prerequisite_exists(

@@ -517,7 +517,6 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 	def test_target_migration_prerequisites_cover_production_and_stock_settings(self):
 		values = {
 			("IPD Settings", "item_group"): "Products",
-			("IPD Settings", "default_primary_attribute"): "Size",
 			("IPD Settings", "default_cutting_process"): "Cutting",
 			("IPD Settings", "default_knitting_process"): "Knitting",
 			("IPD Settings", "default_dyeing_process"): "Dyeing",
@@ -562,7 +561,6 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			result = _validate_target_migration_prerequisites(dimensions)
 
 		self.assertEqual(result["ipd_settings"]["item_group"], "Products")
-		self.assertEqual(result["ipd_settings"]["default_primary_attribute"], "Size")
 		self.assertEqual(
 			[row["fieldname"] for row in result["stock_dimensions"]],
 			["lot", "received_type"],
@@ -570,7 +568,7 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 
 	def test_target_migration_prerequisites_reject_missing_and_unsafe_dimensions(self):
 		def get_value(doctype, fieldname):
-			if (doctype, fieldname) == ("IPD Settings", "default_primary_attribute"):
+			if (doctype, fieldname) == ("IPD Settings", "default_cutting_process"):
 				return None
 			return "Configured Value"
 
@@ -598,10 +596,105 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			patch("essdee_yrp.migration.live.frappe.db.exists", return_value=True),
 			self.assertRaisesRegex(
 				MigrationError,
-				"default_primary_attribute is required[\\s\\S]*received_type[\\s\\S]*in_valuation=1",
+				"default_cutting_process is required[\\s\\S]*received_type[\\s\\S]*in_valuation=1",
 			),
 		):
 			_validate_target_migration_prerequisites(dimensions)
+
+	def test_empty_target_ipd_settings_use_production_api_and_profile_defaults(self):
+		stock_values = {
+			("YRP Stock Settings", "transit_warehouse"): "S-0165",
+			("YRP Stock Settings", "default_received_type"): "Accepted",
+			("YRP Stock Settings", "default_rejected_received_type"): "Rejected",
+		}
+		dimensions = [
+			{
+				"dimension_doctype": "Lot",
+				"fieldname": "lot",
+				"mandatory": 1,
+				"in_valuation": 1,
+				"is_production_group": 1,
+			},
+			{
+				"dimension_doctype": "Received Type",
+				"fieldname": "received_type",
+				"mandatory": 1,
+				"in_valuation": 1,
+				"is_production_group": 0,
+			},
+		]
+		source_ipd_settings = {
+			"doctype": "IPD Settings",
+			"name": "IPD Settings",
+			"item_group": "Products",
+			"default_cutting_process": "Cutting",
+			"default_packing_process": "Packing",
+			"default_pack_in_stage": "Piece",
+			"default_packing_attribute": "Colour",
+			"default_pack_out_stage": "Pack",
+			"default_stitching_process": "Stitching",
+			"default_stitching_in_stage": "Cut",
+			"default_stitching_attribute": "Panel",
+			"default_stitching_out_stage": "Piece",
+			"default_set_item_attribute": "Part",
+		}
+		plan = SimpleNamespace(
+			specs={
+				"Item Group": SimpleNamespace(target="Item Group", is_child=False),
+				"Item Attribute": SimpleNamespace(target="Item Attribute", is_child=False),
+				"Item Attribute Value": SimpleNamespace(
+					target="Item Attribute Value", is_child=False
+				),
+				"Process": SimpleNamespace(target="Process", is_child=False),
+				"Supplier": SimpleNamespace(target="Supplier", is_child=False),
+				"GRN Item Type": SimpleNamespace(target="Received Type", is_child=False),
+			}
+		)
+		source = SimpleNamespace(
+			iter_documents=lambda doctype, **_kwargs: iter(
+				[source_ipd_settings] if doctype == "IPD Settings" else []
+			),
+			document_exists=lambda _doctype, _value: True,
+		)
+		with (
+			patch(
+				"essdee_yrp.migration.live.frappe.db.get_single_value",
+				side_effect=lambda doctype, fieldname: stock_values.get(
+					(doctype, fieldname)
+				),
+			),
+			patch("essdee_yrp.migration.live.frappe.db.exists", return_value=False),
+		):
+			result = _validate_target_migration_prerequisites(
+				dimensions,
+				plan=plan,
+				source=source,
+				required_defaults={
+					"IPD Settings.default_knitting_process": "Knitting",
+					"IPD Settings.default_dyeing_process": "Dyeing",
+				},
+			)
+
+		self.assertEqual(result["ipd_settings"]["default_cutting_process"], "Cutting")
+		self.assertEqual(result["ipd_settings"]["default_knitting_process"], "Knitting")
+		self.assertEqual(
+			result["ipd_settings_sources"],
+			{
+				"item_group": "production_api",
+				"default_cutting_process": "production_api",
+				"default_knitting_process": "migration_profile",
+				"default_dyeing_process": "migration_profile",
+				"default_packing_process": "production_api",
+				"default_pack_in_stage": "production_api",
+				"default_packing_attribute": "production_api",
+				"default_pack_out_stage": "production_api",
+				"default_stitching_process": "production_api",
+				"default_stitching_in_stage": "production_api",
+				"default_stitching_attribute": "production_api",
+				"default_stitching_out_stage": "production_api",
+				"default_set_item_attribute": "production_api",
+			},
+		)
 
 	def test_target_migration_prerequisites_parse_string_check_values(self):
 		dimensions = [

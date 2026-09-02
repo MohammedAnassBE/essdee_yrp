@@ -9,6 +9,9 @@ import essdee_yrp.setup as setup
 
 
 class TestEssdeeSetup(FrappeTestCase):
+	def test_installation_has_no_sewing_plan_seed_hook(self):
+		self.assertFalse(hasattr(setup, "ensure_sewing_plan_settings"))
+
 	def test_fresh_install_seeds_dimensions_before_stock_indexes(self):
 		calls = []
 		steps = (
@@ -22,7 +25,6 @@ class TestEssdeeSetup(FrappeTestCase):
 			"ensure_default_address_template",
 			"ensure_mrp_schema_roles",
 			"ensure_mrp_cancel_permissions",
-			"ensure_sewing_plan_settings",
 			"ensure_yrp_production_order_settings",
 			"ensure_lot_packing_boundary",
 		)

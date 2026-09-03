@@ -122,10 +122,12 @@ def ensure_purchase_invoice_commercial_fields():
 				{
 					"fieldname": "essdee_items",
 					"fieldtype": "Table",
-					"label": "Process Items",
+					"label": "Grouped Items",
 					"options": 'SD YRP Essdee Purchase Invoice Item',
 					"insert_after": "items",
-					"depends_on": "eval:doc.against == 'YRP Work Order'",
+					"depends_on": (
+						"eval:['YRP Purchase Order', 'YRP Work Order'].includes(doc.against)"
+					),
 				},
 				{
 					"fieldname": "essdee_rate_table_source",

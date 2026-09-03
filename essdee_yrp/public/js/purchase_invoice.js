@@ -8,6 +8,10 @@ frappe.ui.form.on("YRP Purchase Invoice", {
 	against(frm) {
 		configure_essdee_process_items(frm);
 	},
+
+	essdee_rate_table_source(frm) {
+		configure_essdee_process_items(frm);
+	},
 });
 
 frappe.ui.form.on("SD YRP Essdee Purchase Invoice Item", {
@@ -243,16 +247,20 @@ function display_number(value, precision) {
 
 function configure_essdee_process_items(frm) {
 	const is_work_order = frm.doc.against === "YRP Work Order";
-	frm.set_df_property(
-		"items_section",
-		"label",
-		is_work_order ? __("Process Items") : __("Items")
-	);
-	// Work Order invoices expose only the commercial Process Items projection.
-	// The physical panel rows remain server-owned valuation inputs.
-	frm.toggle_display("items", !is_work_order);
-	frm.toggle_display("essdee_items", is_work_order);
-	if (!is_work_order || !frm.fields_dict.essdee_items) return;
+	const is_purchase_order = frm.doc.against === "YRP Purchase Order";
+	const uses_grouped_items =
+		is_work_order ||
+		(is_purchase_order &&
+			((frm.doc.essdee_items || []).length ||
+				["yrp_grn_v1", "production_api"].includes(frm.doc.essdee_rate_table_source)));
+	const grouped_label = is_work_order ? __("Process Items") : __("Grouped Items");
+	frm.set_df_property("items_section", "label", uses_grouped_items ? grouped_label : __("Items"));
+	frm.set_df_property("essdee_items", "label", grouped_label);
+	// Operators edit only the grouped commercial projection. The exact GRN
+	// variants remain server-owned inputs for stock valuation adjustment.
+	frm.toggle_display("items", !uses_grouped_items);
+	frm.toggle_display("essdee_items", uses_grouped_items);
+	if (!uses_grouped_items || !frm.fields_dict.essdee_items) return;
 
 	const grid = frm.fields_dict.essdee_items.grid;
 	grid.cannot_add_rows = true;
@@ -325,7 +333,7 @@ function configure_erp_purchase_invoice_actions(frm) {
 }
 
 function get_erp_items(frm) {
-	if (frm.doc.against === "YRP Work Order" && (frm.doc.essdee_items || []).length) {
+	if ((frm.doc.essdee_items || []).length) {
 		return frm.doc.essdee_items;
 	}
 	return frm.doc.items || [];
@@ -333,9 +341,7 @@ function get_erp_items(frm) {
 
 function fetch_expense_heads(frm) {
 	const fieldname =
-		frm.doc.against === "YRP Work Order" && (frm.doc.essdee_items || []).length
-			? "essdee_items"
-			: "items";
+		(frm.doc.essdee_items || []).length ? "essdee_items" : "items";
 	frappe.call({
 		method: "essdee_yrp.erp_purchase_invoice.fetch_items_expense_head",
 		args: { items: get_erp_items(frm) },

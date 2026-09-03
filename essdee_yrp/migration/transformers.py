@@ -212,51 +212,107 @@ def derive_purchase_invoice_fields(
 		result["against"] = (
 			'YRP Work Order' if source.get("pi_work_order_billed_details") else 'YRP Purchase Order'
 		)
-	if result.get("against") == 'YRP Work Order':
-		mapped_items = list(result.get("items") or [])
-		commercial_rows = []
-		for source_row, target_row in zip(
-			source.get("items") or [],
-			mapped_items,
-			strict=True,
-		):
-			source_rate = source_row.get("actual_rate")
-			if source_rate is None or source_rate == "":
-				source_rate = source_row.get("source_rate")
-			if source_rate is None or source_rate == "":
-				source_rate = source_row.get("rate") or 0
-			lot = source_row.get("lot")
-			qty = target_row.get("qty") or 0
-			rate = target_row.get("rate") or 0
-			commercial_rows.append(
-				{
-					"doctype": 'SD YRP Essdee Purchase Invoice Item',
-					"item": target_row.get("item"),
-					"lot": lot,
-					"item_group": target_row.get("item_group"),
-					"expense_head": source_row.get("expense_head"),
-					"qty": qty,
-					"uom": target_row.get("uom"),
-					"source_rate": source_rate,
-					"rate": rate,
-					"amount": qty * rate,
-					"tax": target_row.get("tax"),
-					"group_key": _commercial_group_key(
-						target_row.get("item"),
-						lot,
-						target_row.get("uom"),
-						source_rate,
-						target_row.get("tax"),
-					),
-				}
+	mapped_items = list(result.get("items") or [])
+	commercial_rows = {}
+	physical_rows = []
+	for source_row, target_row in zip(
+		source.get("items") or [],
+		mapped_items,
+		strict=True,
+	):
+		source_rate = _legacy_purchase_invoice_source_rate(
+			source_row,
+			against=result.get("against"),
+		)
+		lot = source_row.get("lot") or target_row.get("lot")
+		qty = float(target_row.get("qty") or 0)
+		rate = float(target_row.get("rate") or 0)
+		group_key = _commercial_group_key(
+			target_row.get("item"),
+			lot,
+			target_row.get("uom"),
+			source_rate,
+			target_row.get("tax"),
+		)
+		physical_row = dict(target_row)
+		physical_row.update(
+			{
+				"lot": lot,
+				"source_rate": source_rate,
+				"amount": qty * rate,
+				"essdee_group_key": group_key,
+				"essdee_rate_weight": 1,
+			}
+		)
+		physical_rows.append(physical_row)
+
+		commercial_row = commercial_rows.setdefault(
+			group_key,
+			{
+				"doctype": 'SD YRP Essdee Purchase Invoice Item',
+				"item": target_row.get("item"),
+				"lot": lot,
+				"item_group": target_row.get("item_group"),
+				"expense_head": source_row.get("expense_head"),
+				"qty": 0,
+				"uom": target_row.get("uom"),
+				"source_rate": source_rate,
+				"rate": rate,
+				"amount": 0,
+				"tax": target_row.get("tax"),
+				"group_key": group_key,
+			},
+		)
+		if abs(float(commercial_row["rate"] or 0) - rate) > 0.000001:
+			raise MigrationError(
+				f"Purchase Invoice {source.get('name')} has conflicting final rates "
+				f"for commercial group {group_key}"
 			)
-		result["essdee_items"] = commercial_rows
+		if (
+			commercial_row.get("expense_head")
+			and source_row.get("expense_head")
+			and commercial_row["expense_head"] != source_row["expense_head"]
+		):
+			raise MigrationError(
+				f"Purchase Invoice {source.get('name')} has conflicting expense heads "
+				f"for commercial group {group_key}"
+			)
+		commercial_row["expense_head"] = (
+			commercial_row.get("expense_head") or source_row.get("expense_head")
+		)
+		commercial_row["qty"] += qty
+		commercial_row["amount"] += qty * rate
+
+	result["essdee_items"] = list(commercial_rows.values())
+	result["essdee_rate_table_source"] = "production_api"
+	if result.get("against") == 'YRP Work Order':
 		# The F15 rows are commercial Process items, not physical valuation rows.
 		# Preserve them only in Essdee's visible table; the migration writer builds
 		# the base table from the invoice's exact linked GRNs before inserting it.
 		result["items"] = []
-		result["essdee_rate_table_source"] = "production_api"
+	else:
+		# Purchase Order source rows already are the direct linked-GRN variants.
+		# Retain them for stock valuation and add the grouped commercial projection.
+		result["items"] = physical_rows
 	return result
+
+
+def _legacy_purchase_invoice_source_rate(source_row, *, against):
+	source_rate = source_row.get("actual_rate")
+	if (
+		against == 'YRP Purchase Order'
+		and not float(source_rate or 0)
+		and float(source_row.get("rate") or 0)
+	):
+		# Old PO invoices predate reliable actual_rate capture and retain its
+		# database default zero. Their non-zero row rate is the only historical
+		# material-rate value and must keep separately priced GRN groups distinct.
+		source_rate = source_row.get("rate")
+	if source_rate is None or source_rate == "":
+		source_rate = source_row.get("source_rate")
+	if source_rate is None or source_rate == "":
+		source_rate = source_row.get("rate") or 0
+	return float(source_rate)
 
 
 def _commercial_group_key(item, lot, uom, source_rate, tax):

@@ -1,4 +1,4 @@
-"""Purchase Invoice controller for Essdee commercial Work Order rates."""
+"""Purchase Invoice controller for Essdee grouped commercial rates."""
 
 from __future__ import annotations
 
@@ -16,9 +16,13 @@ from essdee_yrp.purchase_invoice import (
 	MODERN_RATE_SOURCE,
 	VALUE_TOLERANCE,
 	build_legacy_work_order_invoice_payload,
+	build_purchase_order_invoice_payload,
 	build_verification_details,
 	build_work_order_invoice_payload,
+	project_purchase_order_items,
 )
+
+PROJECTED_AGAINST = {'YRP Purchase Order', 'YRP Work Order'}
 
 
 class EssdeePurchaseInvoice(PurchaseInvoice):
@@ -48,12 +52,16 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 			LEGACY_RATE_SOURCE,
 		}:
 			self._rebuild_essdee_work_order_items()
+		elif self.against == 'YRP Purchase Order' and self.get(
+			"essdee_rate_table_source"
+		) in {MODERN_RATE_SOURCE, LEGACY_RATE_SOURCE}:
+			self._rebuild_essdee_purchase_order_items()
 		super().before_validate()
 
 	def validate(self):
 		self._reset_changed_commercial_approval()
 		super().validate()
-		if self.against == 'YRP Work Order' and self.get("essdee_rate_table_source") in {
+		if self.against in PROJECTED_AGAINST and self.get("essdee_rate_table_source") in {
 			MODERN_RATE_SOURCE,
 			LEGACY_RATE_SOURCE,
 		}:
@@ -61,11 +69,11 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 			self.total_quantity = sum(flt(row.qty) for row in self.get("essdee_items") or [])
 
 	def before_submit(self):
-		if self.against == 'YRP Work Order' and self.get("essdee_rate_table_source") not in {
+		if self.against in PROJECTED_AGAINST and self.get("essdee_rate_table_source") not in {
 			MODERN_RATE_SOURCE,
 			LEGACY_RATE_SOURCE,
 		}:
-			frappe.throw(_("Fetch GRN into Process Items before submitting this invoice."))
+			frappe.throw(_("Fetch GRN into Grouped Items before submitting this invoice."))
 		super().before_submit()
 		create_erp_invoice(self)
 
@@ -107,12 +115,55 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 		self.allow_to_change_rate = payload["allow_to_change_rate"]
 		self.total_quantity = payload["total_quantity"]
 
+	def _rebuild_essdee_purchase_order_items(self):
+		posted_rows = list(self.get("essdee_items") or [])
+		posted_keys = [row.group_key for row in posted_rows if row.group_key]
+		if len(posted_keys) != len(posted_rows) or len(set(posted_keys)) != len(posted_keys):
+			frappe.throw(_("Grouped Items are stale. Fetch GRN again before saving."))
+		if any(flt(row.rate) < 0 for row in posted_rows):
+			frappe.throw(_("Final Purchase Invoice rate cannot be negative."))
+		final_rates = {row.group_key: row.rate for row in posted_rows}
+		expense_heads = {row.group_key: row.expense_head for row in posted_rows}
+
+		if self.get("essdee_rate_table_source") == LEGACY_RATE_SOURCE:
+			before = self.get_doc_before_save()
+			if not before:
+				frappe.throw(_("Legacy Purchase Invoice rate data is migration-owned."))
+			items, commercial_items = project_purchase_order_items(
+				before.get("items") or [],
+				final_rates=final_rates,
+				expense_heads=expense_heads,
+			)
+			payload = {
+				"items": items,
+				"commercial_items": commercial_items,
+				"allow_to_change_rate": 1,
+				"total_quantity": sum(flt(row["qty"]) for row in commercial_items),
+			}
+		else:
+			grns = [row.grn for row in self.get("grn") or [] if row.grn]
+			payload = build_purchase_order_invoice_payload(
+				grns,
+				supplier=self.supplier,
+				purchase_invoice=None if self.is_new() else self.name,
+				final_rates=final_rates,
+				expense_heads=expense_heads,
+			)
+
+		expected_keys = {row["group_key"] for row in payload["commercial_items"]}
+		if set(posted_keys) != expected_keys:
+			frappe.throw(_("Selected GRNs changed. Fetch GRN again before saving."))
+		self.set("items", payload["items"])
+		self.set("essdee_items", payload["commercial_items"])
+		self.allow_to_change_rate = payload["allow_to_change_rate"]
+		self.total_quantity = payload["total_quantity"]
+
 	def _validate_legacy_projection_inputs(self):
 		before = self.get_doc_before_save()
 		if not before or before.get("essdee_rate_table_source") != LEGACY_RATE_SOURCE:
 			return
-		if self.against != 'YRP Work Order':
-			frappe.throw(_("A migrated Work Order invoice cannot change its source document type."))
+		if self.against != before.against or self.against not in PROJECTED_AGAINST:
+			frappe.throw(_("A migrated invoice cannot change its source document type."))
 		if self.get("essdee_rate_table_source") not in {
 			LEGACY_RATE_SOURCE,
 			MODERN_RATE_SOURCE,
@@ -125,7 +176,7 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 		):
 			frappe.throw(
 				_(
-					"Only Final Rate can be changed in migrated Process Items. "
+					"Only Final Rate can be changed in migrated Grouped Items. "
 					"Use Fetch GRN to rebuild the invoice from different GRNs."
 				)
 			)
@@ -140,7 +191,7 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 		if abs(commercial_total - flt(self.total)) > VALUE_TOLERANCE:
 			frappe.throw(
 				_(
-					"Process Items total {0} does not match the valuation item total {1}."
+					"Grouped Items total {0} does not match the valuation item total {1}."
 				).format(flt(commercial_total, 2), flt(self.total, 2))
 			)
 

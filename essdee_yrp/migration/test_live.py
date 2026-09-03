@@ -185,6 +185,31 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			},
 		)
 
+	def test_purchase_invoice_prewrite_fills_grouped_item_group(self):
+		document = {
+			"doctype": 'YRP Purchase Invoice',
+			"name": "MPI-PO-1",
+			"against": 'YRP Purchase Order',
+			"items": [],
+			"essdee_items": [
+				{
+					"doctype": 'SD YRP Essdee Purchase Invoice Item',
+					"item": "MATERIAL-ITEM",
+					"item_group": None,
+				}
+			],
+		}
+		with patch(
+			"yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice._get_item_group",
+			return_value="Purchase Accessories",
+		):
+			prepared = _prepare_purchase_invoice_migration_documents([document])
+
+		self.assertEqual(
+			prepared[0]["essdee_items"][0]["item_group"],
+			"Purchase Accessories",
+		)
+
 	def test_submitted_unlinked_invoice_blocks_the_migration_batch(self):
 		document = {
 			"doctype": 'YRP Purchase Invoice',

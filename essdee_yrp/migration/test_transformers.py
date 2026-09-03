@@ -329,6 +329,93 @@ class ReviewedTransformerTest(unittest.TestCase):
 		self.assertEqual(commercial["lot"], "LOT-1")
 		self.assertEqual(len(commercial["group_key"]), 64)
 
+	def test_purchase_order_invoice_keeps_direct_rows_and_builds_grouped_rows(self):
+		row = transform_document(
+			{
+				"doctype": "Purchase Invoice",
+				"name": "MPI-PO-RATES",
+				"against": "Purchase Order",
+				"items": [
+					{
+						"doctype": "Purchase Invoice Item",
+						"name": "MPI-PO-ITEM-1",
+						"item": "INNER-ELASTIC-8MM",
+						"item_group": "Purchase Accessories",
+						"lot": "Open Lot",
+						"qty": 100,
+						"uom": "Meter",
+						"actual_rate": 0.7,
+						"rate": 0.7,
+					},
+					{
+						"doctype": "Purchase Invoice Item",
+						"name": "MPI-PO-ITEM-2",
+						"item": "INNER-ELASTIC-8MM",
+						"item_group": "Purchase Accessories",
+						"lot": "Open Lot",
+						"qty": 50,
+						"uom": "Meter",
+						"actual_rate": 0.7,
+						"rate": 0.7,
+					},
+				],
+			},
+			self.plan,
+		)
+
+		self.assertEqual(row["against"], 'YRP Purchase Order')
+		self.assertEqual(row["essdee_rate_table_source"], "production_api")
+		self.assertEqual(len(row["items"]), 2)
+		self.assertEqual(len(row["essdee_items"]), 1)
+		grouped = row["essdee_items"][0]
+		self.assertEqual(grouped["qty"], 150)
+		self.assertEqual(grouped["rate"], 0.7)
+		self.assertEqual(grouped["amount"], 105)
+		self.assertEqual(grouped["lot"], "Open Lot")
+		self.assertTrue(
+			all(item["essdee_group_key"] == grouped["group_key"] for item in row["items"])
+		)
+		self.assertTrue(all(item["essdee_rate_weight"] == 1 for item in row["items"]))
+
+	def test_old_purchase_order_zero_actual_rate_keeps_distinct_rate_groups(self):
+		row = transform_document(
+			{
+				"doctype": "Purchase Invoice",
+				"name": "MPI-PO-OLD-RATES",
+				"against": "Purchase Order",
+				"items": [
+					{
+						"doctype": "Purchase Invoice Item",
+						"name": "MPI-PO-OLD-1",
+						"item": "YARN-GREIGE",
+						"lot": None,
+						"qty": 780,
+						"uom": "Kg",
+						"actual_rate": 0,
+						"rate": 264,
+					},
+					{
+						"doctype": "Purchase Invoice Item",
+						"name": "MPI-PO-OLD-2",
+						"item": "YARN-GREIGE",
+						"lot": None,
+						"qty": 1320,
+						"uom": "Kg",
+						"actual_rate": 0,
+						"rate": 267,
+					},
+				],
+			},
+			self.plan,
+		)
+
+		self.assertEqual([item["source_rate"] for item in row["items"]], [264, 267])
+		self.assertEqual(len(row["essdee_items"]), 2)
+		self.assertEqual(
+			{item["rate"] for item in row["essdee_items"]},
+			{264, 267},
+		)
+
 	def test_pre_category_stitching_rows_use_the_legacy_ui_default(self):
 		row = transform_document(
 			{

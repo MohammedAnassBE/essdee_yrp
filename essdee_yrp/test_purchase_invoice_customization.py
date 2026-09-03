@@ -24,9 +24,11 @@ from essdee_yrp.purchase_invoice import (
 	_physical_rate_weights,
 	_unique_quantity_partition,
 	build_legacy_work_order_invoice_payload,
+	build_purchase_order_invoice_payload,
 	build_verification_details,
 	build_work_order_invoice_payload,
 	commercial_group_key,
+	project_purchase_order_items,
 )
 
 
@@ -79,6 +81,101 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 		rebuild.assert_called_once_with(invoice)
 		self.assertEqual(invoice.essdee_items[0].item, "PROCESS-ITEM")
 		self.assertEqual(invoice.items[0].item, "PHYSICAL-ITEM")
+
+	def test_purchase_order_grouped_rate_rebuilds_direct_grn_rows(self):
+		group_key = commercial_group_key(
+			"INNER-ELASTIC-8MM", "Open Lot", "Meter", 0.7, None
+		)
+
+		def purchase_order_invoice(final_rate):
+			invoice = frappe.new_doc('YRP Purchase Invoice')
+			invoice.name = "MPI-PO-LEGACY-TEST"
+			invoice.against = 'YRP Purchase Order'
+			invoice.essdee_rate_table_source = "production_api"
+			invoice.append(
+				"items",
+				{
+					"item": "INNER-ELASTIC-8MM",
+					"lot": "Open Lot",
+					"item_group": "Purchase Accessories",
+					"qty": 100,
+					"uom": "Meter",
+					"source_rate": 0.7,
+					"rate": 0.7,
+					"amount": 70,
+					"actual_rate": 0.7,
+					"actual_qty": 100,
+					"essdee_group_key": group_key,
+					"essdee_rate_weight": 1,
+				},
+			)
+			invoice.append(
+				"essdee_items",
+				{
+					"item": "INNER-ELASTIC-8MM",
+					"lot": "Open Lot",
+					"item_group": "Purchase Accessories",
+					"qty": 100,
+					"uom": "Meter",
+					"source_rate": 0.7,
+					"rate": final_rate,
+					"amount": 100 * final_rate,
+					"group_key": group_key,
+				},
+			)
+			return invoice
+
+		before = purchase_order_invoice(0.7)
+		invoice = purchase_order_invoice(0.9)
+		# A forged hidden-table rate is ignored; the saved direct GRN structure and
+		# the posted grouped final rate are the only inputs to the rebuild.
+		invoice.items[0].rate = 500
+		with patch.object(invoice, "get_doc_before_save", return_value=before):
+			invoice._rebuild_essdee_purchase_order_items()
+
+		self.assertEqual(invoice.items[0].rate, 0.9)
+		self.assertEqual(invoice.items[0].amount, 90)
+		self.assertEqual(invoice.items[0].source_rate, 0.7)
+		self.assertEqual(invoice.items[0].essdee_group_key, group_key)
+		self.assertEqual(invoice.essdee_items[0].rate, 0.9)
+
+	def test_purchase_order_projection_groups_direct_grn_variants(self):
+		direct, grouped = project_purchase_order_items(
+			[
+				{
+					"item": "INNER-ELASTIC-8MM",
+					"lot": "Open Lot",
+					"item_group": "Purchase Accessories",
+					"qty": 100,
+					"uom": "Meter",
+					"source_rate": 0.7,
+					"rate": 0.7,
+				},
+				{
+					"item": "INNER-ELASTIC-8MM",
+					"lot": "Open Lot",
+					"item_group": "Purchase Accessories",
+					"qty": 50,
+					"uom": "Meter",
+					"source_rate": 0.7,
+					"rate": 0.7,
+				},
+			]
+		)
+
+		self.assertEqual(len(direct), 2)
+		self.assertEqual(len(grouped), 1)
+		self.assertEqual(grouped[0]["qty"], 150)
+		self.assertEqual(grouped[0]["amount"], 105)
+		self.assertTrue(
+			all(row["essdee_group_key"] == grouped[0]["group_key"] for row in direct)
+		)
+
+	def test_purchase_order_payload_caps_selected_grns_at_server_boundary(self):
+		with self.assertRaises(frappe.ValidationError):
+			build_purchase_order_invoice_payload(
+				[f"GRN-{index}" for index in range(201)],
+			)
 
 	def test_legacy_projection_allows_only_rate_changes_without_refetch(self):
 		def legacy_invoice(rate=7, qty=10):
@@ -300,6 +397,36 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 		self.assertEqual(payload["items"][0]["qty"], 100)
 		self.assertEqual(payload["items"][0]["rate"], 7)
 		self.assertEqual(payload["items"][0]["tax"], 5)
+
+	def test_purchase_order_erp_payload_uses_grouped_items_not_direct_rows(self):
+		invoice = frappe.new_doc('YRP Purchase Invoice')
+		invoice.name = "YRP-MPI-PO-TEST"
+		invoice.naming_series = "YRP-MPI-.YYYY.-"
+		invoice.against = 'YRP Purchase Order'
+		invoice.append(
+			"items",
+			{"item": "DIRECT-GRN-ITEM", "qty": 10, "uom": "Nos", "rate": 5},
+		)
+		invoice.append(
+			"essdee_items",
+			{
+				"item": "GROUPED-PO-ITEM",
+				"qty": 10,
+				"uom": "Nos",
+				"source_rate": 5,
+				"rate": 7,
+				"group_key": "group-1",
+			},
+		)
+		with patch(
+			"essdee_yrp.erp_purchase_invoice.get_purchase_invoice_series",
+			return_value="ERP-PI-.YYYY.-",
+		):
+			payload = build_erp_invoice_payload(invoice)
+
+		self.assertEqual(len(payload["items"]), 1)
+		self.assertEqual(payload["items"][0]["item"], "GROUPED-PO-ITEM")
+		self.assertEqual(payload["items"][0]["rate"], 7)
 
 	def test_expense_account_fetch_is_deduplicated_by_billing_item(self):
 		response = object()

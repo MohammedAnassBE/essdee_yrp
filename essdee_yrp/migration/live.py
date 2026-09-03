@@ -2687,6 +2687,9 @@ def _prepare_purchase_invoice_migration_documents(
 		LEGACY_RATE_SOURCE,
 		build_legacy_work_order_invoice_payload,
 	)
+	from yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice import (
+		_get_item_group,
+	)
 
 	prepared_documents = []
 	for document in documents:
@@ -2716,6 +2719,9 @@ def _prepare_purchase_invoice_migration_documents(
 			for fieldname in PURCHASE_INVOICE_ITEM_NUMERIC_DEFAULT_FIELDS:
 				if row.get(fieldname) in (None, ""):
 					row[fieldname] = 0
+		for row in prepared.get("essdee_items") or []:
+			if not row.get("item_group") and row.get("item"):
+				row["item_group"] = _get_item_group(row["item"])
 		prepared_documents.append(prepared)
 	return prepared_documents
 
@@ -2996,9 +3002,13 @@ def _verify_counts(
 	series = _verify_series(source)
 	stock = _verify_stock_summary(source)
 	links = _verify_link_integrity(plan, source_broken_links)
-	from essdee_yrp.purchase_invoice import verify_legacy_work_order_physical_items
+	from essdee_yrp.purchase_invoice import (
+		verify_legacy_purchase_order_projection,
+		verify_legacy_work_order_physical_items,
+	)
 
 	purchase_invoice_projection = verify_legacy_work_order_physical_items()
+	purchase_order_projection = verify_legacy_purchase_order_projection()
 	failures = [
 		*identity["failures"],
 		*values["failures"],
@@ -3006,6 +3016,7 @@ def _verify_counts(
 		*links["failures"],
 		*series["failures"],
 		*purchase_invoice_projection["failures"],
+		*purchase_order_projection["failures"],
 	]
 	if stock["status"] != "Pass":
 		failures.append("Stock bucket digest or totals do not match")
@@ -3026,6 +3037,7 @@ def _verify_counts(
 		"stock": stock,
 		"links": links,
 		"purchase_invoice_physical_projection": purchase_invoice_projection,
+		"purchase_order_dual_projection": purchase_order_projection,
 	}
 
 
@@ -3076,6 +3088,12 @@ def _verify_source_values(
 				historical_required_blanks,
 				reference_data,
 			)
+			if source_doctype == "Purchase Invoice":
+				# Verify the exact document shape produced at the PI pre-write
+				# boundary, including generated projections and normalized fields.
+				target_document = _prepare_purchase_invoice_migration_documents(
+					[target_document]
+				)[0]
 			batch.append(target_document)
 			verified_parents += 1
 			if len(batch) < effective_batch_size:

@@ -30,11 +30,9 @@ MAX_EXPENSE_ACCOUNT_ITEMS = 200
 def build_erp_invoice_payload(invoice):
 	"""Translate the F16 invoice into the legacy ERP API's exact data contract."""
 	data = invoice.as_dict(convert_dates_to_str=True)
-	rows = (
-		invoice.get("essdee_items") or []
-		if invoice.against == 'YRP Work Order'
-		else invoice.get("items") or []
-	)
+	# Every Essdee-projected invoice sends the operator-facing grouped bill.
+	# ``items`` is the hidden direct-GRN valuation projection in that flow.
+	rows = invoice.get("essdee_items") or invoice.get("items") or []
 	data["items"] = [_erp_item(row) for row in rows]
 	# The ERP endpoint still reads this production_api-era key. F16 YRP owns the
 	# same relationship as Purchase Invoice.bill_tracking.

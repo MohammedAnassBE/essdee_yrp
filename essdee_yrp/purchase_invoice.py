@@ -1,9 +1,9 @@
-"""Essdee's commercial Work Order Purchase Invoice projection.
+"""Essdee's commercial Purchase Invoice projection.
 
-Users bill finished garment quantities at one process rate.  Stock valuation,
-however, must retain the exact physical GRN panel rows.  This module owns the
-lossless conversion between those two views and the historical
-``production_api`` backfill.
+Users edit grouped commercial rows while stock valuation retains the exact GRN
+item variants. This module owns the lossless conversion between those two views
+for both Purchase Order and Work Order invoices, including the historical
+``production_api`` migration.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
 from yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice import (
 	_check_invoice_fetch_permission,
 	_get_item_group,
+	_get_po_material_rate,
 	_get_tax_rate,
 	_normal_json,
 	_validate_selected_grn,
@@ -51,6 +52,181 @@ def commercial_group_key(item, lot, uom, source_rate, tax=None):
 	]
 	encoded = json.dumps(payload, separators=(",", ":"), ensure_ascii=True)
 	return hashlib.sha256(encoded.encode()).hexdigest()
+
+
+def project_purchase_order_items(items, *, final_rates=None, expense_heads=None):
+	"""Return direct GRN rows plus their grouped commercial projection.
+
+	The editable final rate is deliberately excluded from the group identity.
+	Each direct row retains the frozen GRN/PO source rate and points to exactly
+	one commercial group, allowing the server to rebuild valuation rows after a
+	rate edit without trusting the hidden client-side table.
+	"""
+	final_rates = {key: flt(value) for key, value in (final_rates or {}).items()}
+	expense_heads = expense_heads or {}
+	direct_rows = []
+	commercial = {}
+	for item in items or []:
+		row = item.as_dict() if hasattr(item, "as_dict") else dict(item)
+		qty = flt(row.get("qty"))
+		source_rate = row.get("source_rate")
+		if source_rate is None or source_rate == "":
+			source_rate = row.get("actual_rate")
+		if source_rate is None or source_rate == "":
+			source_rate = row.get("rate")
+		source_rate = flt(source_rate)
+		group_key = commercial_group_key(
+			row.get("item"),
+			row.get("lot"),
+			row.get("uom"),
+			source_rate,
+			row.get("tax"),
+		)
+		final_rate = flt(final_rates.get(group_key, row.get("rate")))
+		if final_rate < 0:
+			frappe.throw(_("Final Purchase Invoice rate cannot be negative."))
+
+		direct = dict(row)
+		direct.update(
+			{
+				"source_rate": source_rate,
+				"rate": final_rate,
+				"amount": qty * final_rate,
+				"essdee_group_key": group_key,
+				"essdee_rate_weight": 1,
+			}
+		)
+		direct_rows.append(direct)
+
+		expense_head = expense_heads.get(group_key, row.get("expense_head"))
+		group = commercial.setdefault(
+			group_key,
+			{
+				"item": row.get("item"),
+				"lot": row.get("lot"),
+				"item_group": row.get("item_group"),
+				"expense_head": expense_head,
+				"qty": 0,
+				"uom": row.get("uom"),
+				"source_rate": source_rate,
+				"rate": final_rate,
+				"amount": 0,
+				"tax": row.get("tax"),
+				"group_key": group_key,
+			},
+		)
+		if abs(flt(group["rate"]) - final_rate) > 10**-RATE_PRECISION:
+			frappe.throw(_("Grouped Purchase Invoice items contain conflicting final rates."))
+		if (
+			group.get("expense_head")
+			and expense_head
+			and group["expense_head"] != expense_head
+		):
+			frappe.throw(_("Grouped Purchase Invoice items contain conflicting expense heads."))
+		group["expense_head"] = group.get("expense_head") or expense_head
+		group["qty"] += qty
+		group["amount"] += qty * final_rate
+
+	return direct_rows, list(commercial.values())
+
+
+def build_purchase_order_invoice_payload(
+	grns,
+	*,
+	supplier=None,
+	purchase_invoice=None,
+	final_rates=None,
+	expense_heads=None,
+):
+	"""Build exact PO GRN variants and their grouped commercial rows together."""
+	grn_names = list(dict.fromkeys(grns or []))
+	if len(grn_names) > MAX_SELECTED_GRNS:
+		frappe.throw(
+			_("A maximum of {0} GRNs can be fetched at once.").format(MAX_SELECTED_GRNS)
+		)
+	grn_docs = []
+	for grn_name in grn_names:
+		_validate_selected_grn(grn_name, supplier, 'YRP Purchase Order', purchase_invoice)
+		grn_docs.append(frappe.get_doc('YRP Goods Received Note', grn_name))
+	if not grn_docs:
+		frappe.throw(_("Please select at least one GRN."))
+	if len({grn.supplier for grn in grn_docs}) != 1:
+		frappe.throw(_("All selected GRNs must belong to one Supplier."))
+
+	direct = {}
+	for grn in grn_docs:
+		for grn_item in grn.get("items") or []:
+			qty = flt(grn_item.quantity)
+			rate = flt(_get_po_material_rate(grn, grn_item))
+			stock_rate = flt(grn_item.rate)
+			tax = grn_item.get("tax")
+			lot = grn_item.get("lot") or grn.get("lot")
+			set_combination = _normal_json(grn_item.get("set_combination"))
+			key = (
+				grn_item.item_variant,
+				lot,
+				grn_item.uom,
+				rate,
+				tax,
+				json.dumps(set_combination, sort_keys=True),
+			)
+			row = direct.setdefault(
+				key,
+				{
+					"item": grn_item.item_variant,
+					"lot": lot,
+					"item_group": _get_item_group(grn_item.item_variant),
+					"qty": 0,
+					"uom": grn_item.uom,
+					"rate": rate,
+					"source_rate": rate,
+					"amount": 0,
+					"tax": tax,
+					"actual_rate": stock_rate,
+					"actual_qty": 0,
+					"_actual_amount": 0,
+					"set_combination": (
+						json.dumps(set_combination) if set_combination else None
+					),
+				},
+			)
+			row["qty"] += qty
+			row["actual_qty"] += qty
+			row["amount"] += qty * rate
+			row["_actual_amount"] += qty * stock_rate
+
+	direct_rows = list(direct.values())
+	for row in direct_rows:
+		row["actual_rate"] = (
+			flt(row.pop("_actual_amount")) / flt(row["actual_qty"])
+			if flt(row["actual_qty"])
+			else 0
+		)
+	direct_rows, commercial_rows = project_purchase_order_items(
+		direct_rows,
+		final_rates=final_rates,
+		expense_heads=expense_heads,
+	)
+	pre_tax_total = sum(flt(row["amount"]) for row in direct_rows)
+	grand_total = sum(
+		flt(row["amount"]) * (1 + _get_tax_rate(row.get("tax")) / 100)
+		for row in direct_rows
+	)
+	return {
+		"items": direct_rows,
+		"commercial_items": commercial_rows,
+		"total": grand_total,
+		"pre_tax_total": pre_tax_total,
+		"tax_total": grand_total - pre_tax_total,
+		"total_quantity": sum(flt(row["qty"]) for row in direct_rows),
+		"wo_items": [],
+		"tax_rates": {
+			row.get("tax"): _get_tax_rate(row.get("tax"))
+			for row in direct_rows
+			if row.get("tax")
+		},
+		"allow_to_change_rate": 1,
+	}
 
 
 def build_verification_details(rows):
@@ -251,7 +427,47 @@ def _calculate_verification_grand_total(data):
 
 @frappe.whitelist()
 def fetch_grn_details(grns, against, supplier, purchase_invoice=None):
-	"""Override base YRP only for Essdee's Work Order billing view."""
+	"""Build Essdee's grouped and direct Purchase Invoice projections."""
+	if against == 'YRP Purchase Order':
+		_check_invoice_fetch_permission(purchase_invoice)
+		frappe.has_permission('YRP Goods Received Note', "read", throw=True)
+		if purchase_invoice and frappe.db.exists('YRP Purchase Invoice', purchase_invoice):
+			supplier = frappe.db.get_value('YRP Purchase Invoice', purchase_invoice, "supplier")
+		grns = frappe.parse_json(grns) if isinstance(grns, str) else grns
+		if not isinstance(grns, list):
+			frappe.throw(_("Selected GRNs must be a list."))
+		grns = list(dict.fromkeys(grns or []))
+		if len(grns) > MAX_SELECTED_GRNS:
+			frappe.throw(
+				_("A maximum of {0} GRNs can be fetched at once.").format(MAX_SELECTED_GRNS)
+			)
+		if supplier and not str(supplier).strip("Xx*"):
+			supplier = None
+		payload = build_purchase_order_invoice_payload(
+			grns,
+			supplier=supplier,
+			purchase_invoice=purchase_invoice,
+		)
+		payload["commercial_items"] = fetch_expense_accounts(payload["commercial_items"])
+		expense_heads = {
+			row["group_key"]: row.get("expense_head")
+			for row in payload["commercial_items"]
+		}
+		payload["items"], payload["commercial_items"] = project_purchase_order_items(
+			payload["items"],
+			expense_heads=expense_heads,
+		)
+		payload["additional_field_values"] = {
+			"essdee_items": payload.pop("commercial_items"),
+			"essdee_rate_table_source": MODERN_RATE_SOURCE,
+			"total": payload["pre_tax_total"],
+			"total_tax": payload["tax_total"],
+			"grand_total": payload["total"],
+		}
+		payload.pop("pre_tax_total")
+		payload.pop("tax_total")
+		return payload
+
 	if against != 'YRP Work Order':
 		payload = base_fetch_grn_details(grns, against, supplier, purchase_invoice)
 		payload["items"] = fetch_expense_accounts(payload.get("items"))
@@ -1212,6 +1428,98 @@ def verify_legacy_work_order_physical_items(*, invoice_names=None):
 		"verified_physical_rows": verified_rows,
 		"expected_physical_rows": expected_rows,
 		"unlinked_drafts": unlinked_drafts,
+		"failures": failures,
+	}
+
+
+def verify_legacy_purchase_order_projection(*, invoice_names=None):
+	"""Read-only verification that migrated PO invoices contain both projections."""
+	filters = {
+		"against": 'YRP Purchase Order',
+		"essdee_rate_table_source": LEGACY_RATE_SOURCE,
+	}
+	if invoice_names:
+		if isinstance(invoice_names, str):
+			invoice_names = frappe.parse_json(invoice_names)
+		filters["name"] = ["in", list(dict.fromkeys(invoice_names))]
+	failures = []
+	verified_direct_rows = 0
+	verified_grouped_rows = 0
+	unprojected_drafts = []
+	names = frappe.get_all(
+		'YRP Purchase Invoice',
+		filters=filters,
+		pluck="name",
+		order_by="creation, name",
+		limit_page_length=0,
+	)
+	for name in names:
+		invoice = frappe.get_doc('YRP Purchase Invoice', name)
+		direct_rows = list(invoice.get("items") or [])
+		stored_grouped = list(invoice.get("essdee_items") or [])
+		if not direct_rows and not stored_grouped and invoice.docstatus == 0:
+			# Preserve genuinely unfetched source drafts without inventing bill data.
+			# They must use Fetch GRN before they can be saved or submitted in F16.
+			unprojected_drafts.append(name)
+			continue
+		if not direct_rows or not stored_grouped:
+			failures.append(
+				f"{name}: direct rows={len(direct_rows)}, grouped rows={len(stored_grouped)}"
+			)
+			continue
+		expected_direct, expected_grouped = project_purchase_order_items(direct_rows)
+		for idx, (actual, expected) in enumerate(
+			zip(direct_rows, expected_direct, strict=True), 1
+		):
+			expected_values = {
+				fieldname: expected.get(fieldname)
+				for fieldname in (
+					"item",
+					"lot",
+					"item_group",
+					"qty",
+					"uom",
+					"rate",
+					"source_rate",
+					"amount",
+					"tax",
+					"actual_rate",
+					"actual_qty",
+					"set_combination",
+					"essdee_group_key",
+					"essdee_rate_weight",
+				)
+			}
+			mismatch = _physical_row_mismatches(actual, expected_values)
+			if mismatch:
+				failures.append(f"{name} direct row {idx}: {', '.join(mismatch)}")
+				break
+			verified_direct_rows += 1
+
+		actual_by_key = {row.group_key: row for row in stored_grouped if row.group_key}
+		if len(actual_by_key) != len(stored_grouped):
+			failures.append(f"{name}: grouped rows contain blank or duplicate group keys")
+			continue
+		if set(actual_by_key) != {row["group_key"] for row in expected_grouped}:
+			failures.append(f"{name}: grouped row identities do not match direct rows")
+			continue
+		for expected in expected_grouped:
+			actual = actual_by_key[expected["group_key"]]
+			mismatch = _physical_row_mismatches(actual, expected)
+			if mismatch:
+				failures.append(
+					f"{name} grouped row {actual.idx}: {', '.join(mismatch)}"
+				)
+				break
+			verified_grouped_rows += 1
+		if len(failures) >= 100:
+			break
+	return {
+		"status": "Pass" if not failures else "Failed",
+		"invoice_count": len(names),
+		"verified_direct_rows": verified_direct_rows,
+		"verified_grouped_rows": verified_grouped_rows,
+		"unprojected_drafts": unprojected_drafts,
 		"failures": failures,
 	}
 

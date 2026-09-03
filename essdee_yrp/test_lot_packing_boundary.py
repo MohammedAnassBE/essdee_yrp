@@ -169,6 +169,10 @@ class TestLotPackingBoundary(FrappeTestCase):
 			result = lot_packing_setup.migrate_legacy_purchase_order_lot_rows()
 		self.assertEqual(result, {"found": 2, "copied": 1, "skipped": 1})
 		self.assertEqual(sql.call_count, 3)
+		legacy_query = sql.call_args_list[0].args[0]
+		self.assertIn("`tabPurchase Order Lot`", legacy_query)
+		self.assertNotIn("`tabYRP Purchase Order Lot`", legacy_query)
+		self.assertIn("'Purchase Order', 'YRP Purchase Order'", legacy_query)
 
 	def test_work_order_packing_is_copied_by_essdee_hook(self):
 		doc = frappe._dict(process_name="PACKING", includes_packing=0)

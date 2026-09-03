@@ -79,8 +79,9 @@ def migrate_legacy_purchase_order_lot_rows():
 	legacy_rows = frappe.db.sql(
 		"""
 		select parent, lot, idx
-		from `tabYRP Purchase Order Lot`
-		where parenttype = 'YRP Purchase Order' and parentfield = 'sd_lot'
+		from `tabPurchase Order Lot`
+		where parenttype in ('Purchase Order', 'YRP Purchase Order')
+			and parentfield = 'sd_lot'
 		order by parent, idx, creation
 		""",
 		as_dict=True,

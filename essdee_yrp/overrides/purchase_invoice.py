@@ -15,6 +15,7 @@ from essdee_yrp.purchase_invoice import (
 	LEGACY_RATE_SOURCE,
 	MODERN_RATE_SOURCE,
 	VALUE_TOLERANCE,
+	build_legacy_work_order_invoice_payload,
 	build_verification_details,
 	build_work_order_invoice_payload,
 )
@@ -34,6 +35,7 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 		)
 
 	def before_validate(self):
+		self._validate_legacy_projection_inputs()
 		if self.get("essdee_rate_table_source") == LEGACY_RATE_SOURCE and (
 			self.is_new()
 			or frappe.db.get_value(
@@ -41,14 +43,20 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 			) != LEGACY_RATE_SOURCE
 		):
 			frappe.throw(_("Legacy Purchase Invoice rate data is migration-owned."))
-		if self.against == 'YRP Work Order' and self.get("essdee_rate_table_source") == MODERN_RATE_SOURCE:
+		if self.against == 'YRP Work Order' and self.get("essdee_rate_table_source") in {
+			MODERN_RATE_SOURCE,
+			LEGACY_RATE_SOURCE,
+		}:
 			self._rebuild_essdee_work_order_items()
 		super().before_validate()
 
 	def validate(self):
 		self._reset_changed_commercial_approval()
 		super().validate()
-		if self.against == 'YRP Work Order' and self.get("essdee_rate_table_source") == MODERN_RATE_SOURCE:
+		if self.against == 'YRP Work Order' and self.get("essdee_rate_table_source") in {
+			MODERN_RATE_SOURCE,
+			LEGACY_RATE_SOURCE,
+		}:
 			self._validate_commercial_total()
 			self.total_quantity = sum(flt(row.qty) for row in self.get("essdee_items") or [])
 
@@ -66,6 +74,15 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 		cancel_erp_invoice(self)
 
 	def _rebuild_essdee_work_order_items(self):
+		if self.get("essdee_rate_table_source") == LEGACY_RATE_SOURCE:
+			payload = build_legacy_work_order_invoice_payload(self)
+			if payload["unlinked"]:
+				frappe.throw(_("Fetch GRN again before saving this migrated invoice."))
+			self.set("items", payload["items"])
+			self.allow_to_change_rate = 1
+			self.total_quantity = payload["total_quantity"]
+			return
+
 		grns = [row.grn for row in self.get("grn") or [] if row.grn]
 		posted_rows = list(self.get("essdee_items") or [])
 		posted_keys = [row.group_key for row in posted_rows if row.group_key]
@@ -89,6 +106,29 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 		self.set("pi_work_order_billed_details", payload["wo_items"])
 		self.allow_to_change_rate = payload["allow_to_change_rate"]
 		self.total_quantity = payload["total_quantity"]
+
+	def _validate_legacy_projection_inputs(self):
+		before = self.get_doc_before_save()
+		if not before or before.get("essdee_rate_table_source") != LEGACY_RATE_SOURCE:
+			return
+		if self.against != 'YRP Work Order':
+			frappe.throw(_("A migrated Work Order invoice cannot change its source document type."))
+		if self.get("essdee_rate_table_source") not in {
+			LEGACY_RATE_SOURCE,
+			MODERN_RATE_SOURCE,
+		}:
+			frappe.throw(_("Fetch GRN again before changing this migrated invoice."))
+		if (
+			self.get("essdee_rate_table_source") == LEGACY_RATE_SOURCE
+			and _legacy_projection_input_signature(before)
+			!= _legacy_projection_input_signature(self)
+		):
+			frappe.throw(
+				_(
+					"Only Final Rate can be changed in migrated Process Items. "
+					"Use Fetch GRN to rebuild the invoice from different GRNs."
+				)
+			)
 
 	def _validate_commercial_total(self):
 		for row in self.get("essdee_items") or []:
@@ -123,3 +163,47 @@ def _commercial_signature(doc):
 		for row in doc.get("essdee_items") or []
 	)
 	return json.dumps([grns, rates], separators=(",", ":"))
+
+
+def _legacy_projection_input_signature(doc):
+	commercial = [
+		(
+			row.idx,
+			row.group_key or "",
+			row.item or "",
+			row.lot or "",
+			row.item_group or "",
+			row.expense_head or "",
+			round(flt(row.qty), 9),
+			row.uom or "",
+			round(flt(row.source_rate), 9),
+			row.tax or "",
+		)
+		for row in doc.get("essdee_items") or []
+	]
+	grns = [(row.idx, row.grn or "") for row in doc.get("grn") or []]
+	billed = [
+		(
+			row.idx,
+			row.work_order or "",
+			row.item_variant or "",
+			round(flt(row.quantity), 9),
+			round(flt(row.total_delivered), 9),
+			round(flt(row.total_received), 9),
+			round(flt(row.billed), 9),
+			_normalized_json(row.get("set_combination")),
+			row.get("essdee_group_key") or "",
+		)
+		for row in doc.get("pi_work_order_billed_details") or []
+	]
+	return (doc.supplier or "", commercial, grns, billed)
+
+
+def _normalized_json(value):
+	if not value:
+		return ""
+	try:
+		parsed = frappe.parse_json(value) if isinstance(value, str) else value
+		return json.dumps(parsed, sort_keys=True, separators=(",", ":"))
+	except (TypeError, ValueError):
+		return str(value)

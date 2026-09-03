@@ -172,6 +172,22 @@ def derive_purchase_order_fields(
 	return result
 
 
+def derive_process_fields(
+	output: Mapping[str, Any],
+	source: Mapping[str, Any],
+	spec: MigrationSpec,
+	plan: MigrationPlan,
+	parent: Mapping[str, Any] | None,
+) -> Mapping[str, Any]:
+	result = dict(output)
+	# Essdee's Work Order PI flow requires one billing item per Process. Cutting
+	# predates that source field, and setup has always supplied this reviewed
+	# default. Put it in the canonical transform so write and verification agree.
+	if source.get("name") == "Cutting" and not result.get("item"):
+		result["item"] = "Cutting Charges"
+	return result
+
+
 def derive_purchase_invoice_fields(
 	output: Mapping[str, Any],
 	source: Mapping[str, Any],
@@ -196,10 +212,11 @@ def derive_purchase_invoice_fields(
 			'YRP Work Order' if source.get("pi_work_order_billed_details") else 'YRP Purchase Order'
 		)
 	if result.get("against") == 'YRP Work Order':
+		mapped_items = list(result.get("items") or [])
 		commercial_rows = []
 		for source_row, target_row in zip(
 			source.get("items") or [],
-			result.get("items") or [],
+			mapped_items,
 			strict=True,
 		):
 			source_rate = source_row.get("actual_rate")
@@ -233,6 +250,10 @@ def derive_purchase_invoice_fields(
 				}
 			)
 		result["essdee_items"] = commercial_rows
+		# The F15 rows are commercial Process items, not physical valuation rows.
+		# Preserve them only in Essdee's visible table; the post-load projection
+		# rebuilds this base table from the invoice's exact linked GRNs.
+		result["items"] = []
 		result["essdee_rate_table_source"] = "production_api"
 	return result
 
@@ -431,6 +452,7 @@ POST_TRANSFORMERS = {
 	"derive_delivery_challan_fields": derive_delivery_challan_fields,
 	"derive_goods_received_note_fields": derive_goods_received_note_fields,
 	"derive_purchase_order_fields": derive_purchase_order_fields,
+	"derive_process_fields": derive_process_fields,
 	"derive_purchase_invoice_fields": derive_purchase_invoice_fields,
 	"derive_product_item_name": derive_product_item_name,
 	"remove_empty_ipd_process_placeholders": remove_empty_ipd_process_placeholders,

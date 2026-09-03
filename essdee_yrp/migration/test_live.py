@@ -36,6 +36,7 @@ from essdee_yrp.migration.live import (
 	_is_verified_attachment_url,
 	_mark_reset_started,
 	_migration_contract_fingerprint,
+	_migration_generated_identity_allowances,
 	_nonzero_reset_counts,
 	_require_previous_snapshot,
 	_source_snapshot,
@@ -68,6 +69,16 @@ def configured_settings():
 
 
 class MigrationLiveAdapterTest(unittest.TestCase):
+	def test_legacy_pi_physical_rows_have_a_separately_verified_identity_allowance(self):
+		with (
+			patch("essdee_yrp.migration.live.frappe.db.exists", return_value=True),
+			patch("essdee_yrp.migration.live.frappe.db.sql", return_value=[[8210]]),
+		):
+			self.assertEqual(
+				_migration_generated_identity_allowances(),
+				{'YRP Purchase Invoice Item': 8210},
+			)
+
 	def test_checkpoint_resumes_only_for_the_exact_reviewed_source_snapshot(self):
 		snapshot = {
 			"snapshot_fingerprint": "source-a",

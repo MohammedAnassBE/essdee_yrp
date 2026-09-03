@@ -1213,7 +1213,13 @@ def run_job(
 			from essdee_yrp.patches.backfill_deterministic_valuation_lineage import (
 				backfill_deterministic_valuation_lineage,
 			)
+			from essdee_yrp.purchase_invoice import (
+				rebuild_legacy_work_order_physical_items,
+			)
 
+			result["purchase_invoice_physical_projection"] = (
+				rebuild_legacy_work_order_physical_items()
+			)
 			result["valuation_lineage"] = backfill_deterministic_valuation_lineage()
 		result["schema"] = {
 			"source_doctypes": schema_payload["source_doctypes"],
@@ -2944,12 +2950,16 @@ def _verify_counts(
 	series = _verify_series(source)
 	stock = _verify_stock_summary(source)
 	links = _verify_link_integrity(plan, source_broken_links)
+	from essdee_yrp.purchase_invoice import verify_legacy_work_order_physical_items
+
+	purchase_invoice_projection = verify_legacy_work_order_physical_items()
 	failures = [
 		*identity["failures"],
 		*values["failures"],
 		*files["failures"],
 		*links["failures"],
 		*series["failures"],
+		*purchase_invoice_projection["failures"],
 	]
 	if stock["status"] != "Pass":
 		failures.append("Stock bucket digest or totals do not match")
@@ -2969,6 +2979,7 @@ def _verify_counts(
 		"series": series,
 		"stock": stock,
 		"links": links,
+		"purchase_invoice_physical_projection": purchase_invoice_projection,
 	}
 
 
@@ -3496,12 +3507,14 @@ def _verify_source_identities(
 				_update_progress(migration_name, verified_parents, 0, len(failures))
 		flush()
 
+	generated_allowances = _migration_generated_identity_allowances()
 	rows = []
 	for target_doctype, expected_count in sorted(expected_counts.items()):
 		target_meta = frappe.get_meta(target_doctype)
 		target_count = 1 if target_meta.issingle else frappe.db.count(target_doctype)
 		missing = missing_counts.get(target_doctype, 0)
-		target_only = max(0, target_count - expected_count + missing)
+		generated = generated_allowances.get(target_doctype, 0)
+		target_only = max(0, target_count - expected_count - generated + missing)
 		if target_only:
 			failures.append(
 				f"Unexpected target-only rows in {target_doctype}: {target_only}"
@@ -3512,6 +3525,7 @@ def _verify_source_identities(
 				"source_identity_count": expected_count,
 				"target_count": target_count,
 				"target_only_count": target_only,
+				"migration_generated_count": generated,
 				"missing_source_identities": missing,
 				"status": "Pass" if not missing and not target_only else "Failed",
 			}
@@ -3522,6 +3536,25 @@ def _verify_source_identities(
 		"doctypes": rows,
 		"failures": failures,
 	}
+
+
+def _migration_generated_identity_allowances() -> dict[str, int]:
+	"""Target-only rows that have a separate deterministic verification layer."""
+	if not frappe.db.exists("DocType", 'SD YRP Essdee Purchase Invoice Item'):
+		return {}
+	physical_rows = frappe.db.sql(
+		"""
+		SELECT COUNT(*)
+		FROM `tabYRP Purchase Invoice Item` item
+		INNER JOIN `tabYRP Purchase Invoice` invoice ON invoice.name = item.parent
+		WHERE item.parenttype = 'YRP Purchase Invoice'
+		  AND item.parentfield = 'items'
+		  AND invoice.against = 'YRP Work Order'
+		  AND invoice.essdee_rate_table_source = %s
+		""",
+		("production_api",),
+	)[0][0]
+	return {'YRP Purchase Invoice Item': int(physical_rows or 0)}
 
 
 def _collect_document_identities(

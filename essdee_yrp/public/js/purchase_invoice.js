@@ -259,7 +259,8 @@ function configure_essdee_process_items(frm) {
 	grid.cannot_delete_rows = true;
 	grid.only_sortable = false;
 	const editable_rate =
-		frm.doc.docstatus === 0 && frm.doc.essdee_rate_table_source === "yrp_grn_v1";
+		frm.doc.docstatus === 0 &&
+		["yrp_grn_v1", "production_api"].includes(frm.doc.essdee_rate_table_source);
 	for (const fieldname of [
 		"item",
 		"lot",

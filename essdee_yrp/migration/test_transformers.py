@@ -77,6 +77,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			self.plan,
 		)
 		self.assertEqual(row["wo_excess_allowed_percentage"], 300)
+		self.assertEqual(row["item"], "Cutting Charges")
 		self.assertNotIn("additional_allowance", row)
 		self.assertEqual(choose_excess_percentage(0, 300), 300)
 		self.assertEqual(choose_excess_percentage(25, 300), 25)
@@ -319,6 +320,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			self.plan,
 		)
 		self.assertEqual(row["essdee_rate_table_source"], "production_api")
+		self.assertEqual(row["items"], [])
 		self.assertEqual(len(row["essdee_items"]), 1)
 		commercial = row["essdee_items"][0]
 		self.assertEqual(commercial["source_rate"], 0)

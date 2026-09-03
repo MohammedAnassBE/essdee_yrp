@@ -22,6 +22,8 @@ from essdee_yrp.erp_purchase_invoice import (
 )
 from essdee_yrp.purchase_invoice import (
 	_physical_rate_weights,
+	_unique_quantity_partition,
+	build_legacy_work_order_invoice_payload,
 	build_verification_details,
 	build_work_order_invoice_payload,
 	commercial_group_key,
@@ -29,6 +31,115 @@ from essdee_yrp.purchase_invoice import (
 
 
 class TestPurchaseInvoiceCustomization(FrappeTestCase):
+	def test_legacy_direct_item_quantity_partition_must_be_unique(self):
+		items = [("S", 264), ("M", 2016), ("L", 2016), ("2XL", 404)]
+		self.assertIsNone(
+			_unique_quantity_partition(items, [("RATE-8", 2684), ("RATE-0", 2016)])
+		)
+		self.assertEqual(
+			_unique_quantity_partition(
+				[("S", 264), ("M", 2016), ("2XL", 404), ("REST", 7903)],
+				[("RATE-8", 2684), ("RATE-0", 7903)],
+			),
+			[("RATE-8", ["S", "M", "2XL"]), ("RATE-0", ["REST"])],
+		)
+
+	def test_legacy_rate_edit_rebuilds_only_hidden_physical_rows(self):
+		invoice = frappe.new_doc('YRP Purchase Invoice')
+		invoice.name = "MPI-LEGACY-TEST"
+		invoice.against = 'YRP Work Order'
+		invoice.essdee_rate_table_source = "production_api"
+		invoice.append(
+			"essdee_items",
+			{
+				"item": "PROCESS-ITEM",
+				"qty": 10,
+				"uom": "Nos",
+				"rate": 7,
+				"group_key": "GROUP-1",
+			},
+		)
+		payload = {
+			"items": [
+				{
+					"item": "PHYSICAL-ITEM",
+					"qty": 10,
+					"uom": "Nos",
+					"rate": 7,
+				}
+			],
+			"total_quantity": 10,
+			"unlinked": False,
+		}
+		with patch(
+			"essdee_yrp.overrides.purchase_invoice.build_legacy_work_order_invoice_payload",
+			return_value=payload,
+		) as rebuild:
+			invoice._rebuild_essdee_work_order_items()
+		rebuild.assert_called_once_with(invoice)
+		self.assertEqual(invoice.essdee_items[0].item, "PROCESS-ITEM")
+		self.assertEqual(invoice.items[0].item, "PHYSICAL-ITEM")
+
+	def test_legacy_projection_allows_only_rate_changes_without_refetch(self):
+		def legacy_invoice(rate=7, qty=10):
+			invoice = frappe.new_doc('YRP Purchase Invoice')
+			invoice.name = "MPI-LEGACY-TEST"
+			invoice.supplier = "SUPPLIER-1"
+			invoice.against = 'YRP Work Order'
+			invoice.essdee_rate_table_source = "production_api"
+			invoice.append(
+				"essdee_items",
+				{
+					"item": "PROCESS-ITEM",
+					"qty": qty,
+					"uom": "Nos",
+					"source_rate": 7,
+					"rate": rate,
+					"group_key": "GROUP-1",
+				},
+			)
+			return invoice
+
+		before = legacy_invoice()
+		invoice = legacy_invoice(rate=8)
+		with patch.object(invoice, "get_doc_before_save", return_value=before):
+			invoice._validate_legacy_projection_inputs()
+			invoice.essdee_items[0].qty = 11
+			with self.assertRaises(frappe.ValidationError):
+				invoice._validate_legacy_projection_inputs()
+			invoice.essdee_rate_table_source = "yrp_grn_v1"
+			invoice._validate_legacy_projection_inputs()
+
+	def test_legacy_projection_rejects_negative_rates_and_duplicate_groups(self):
+		invoice = frappe.new_doc('YRP Purchase Invoice')
+		invoice.name = "MPI-LEGACY-TEST"
+		invoice.append(
+			"essdee_items",
+			{
+				"item": "PROCESS-ITEM",
+				"qty": 10,
+				"uom": "Nos",
+				"rate": -1,
+				"group_key": "GROUP-1",
+			},
+		)
+		with self.assertRaises(frappe.ValidationError):
+			build_legacy_work_order_invoice_payload(invoice)
+
+		invoice.essdee_items[0].rate = 1
+		invoice.append(
+			"essdee_items",
+			{
+				"item": "PROCESS-ITEM",
+				"qty": 10,
+				"uom": "Nos",
+				"rate": 1,
+				"group_key": "GROUP-1",
+			},
+		)
+		with self.assertRaises(frappe.ValidationError):
+			build_legacy_work_order_invoice_payload(invoice)
+
 	def test_remote_erp_exception_details_are_not_rendered_to_users(self):
 		response = MagicMock(status_code=500, text="")
 		response.json.return_value = {

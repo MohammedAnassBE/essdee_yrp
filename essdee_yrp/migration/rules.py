@@ -178,6 +178,7 @@ RULES = {
 		# YRP now owns that contract under the explicit field below; retaining
 		# both fields leaves migrated Processes strict at the base default 0%.
 		field_map={"additional_allowance": "wo_excess_allowed_percentage"},
+		post_transformer="derive_process_fields",
 	),
 	"Product": DocTypeRule(post_transformer="derive_product_item_name"),
 	"Repost Item Valuation": DocTypeRule(

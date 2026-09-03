@@ -110,7 +110,11 @@ def after_migrate():
 		backfill_unprojected_work_order_drafts,
 	)
 
-	backfill_legacy_commercial_items()
+	legacy_backfill = backfill_legacy_commercial_items()
+	if legacy_backfill.get("migrated_invoices"):
+		from essdee_yrp.purchase_invoice import rebuild_legacy_work_order_physical_items
+
+		rebuild_legacy_work_order_physical_items()
 	backfill_unprojected_work_order_drafts()
 	build_web_spa()
 

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from essdee_yrp.migration.engine import DocTypeRule
 
-
 DOCTYPE_RENAMES = {
 	"Essdee Debit": 'YRP Debit',
 	"Essdee Raw Print Format": 'YRP ZPL Raw Print Format',
@@ -151,6 +150,7 @@ RULES = {
 		}
 	),
 	"Purchase Invoice": DocTypeRule(
+		extra_dependencies=frozenset({"Goods Received Note", "Work Order"}),
 		field_map={"vendor_bill_tracking": "bill_tracking"},
 		allowed_type_changes=frozenset({("Data", "Link")}),
 		post_transformer="derive_purchase_invoice_fields",

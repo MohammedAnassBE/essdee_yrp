@@ -9,11 +9,10 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import defaultdict
-from collections.abc import Iterable, Mapping, MutableMapping
+from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Any, Callable, Protocol
-
+from typing import Any, Protocol
 
 SYSTEM_FIELDS = frozenset(
 	{
@@ -43,6 +42,7 @@ class MigrationError(RuntimeError):
 @dataclass(frozen=True)
 class DocTypeRule:
 	target: str | None = None
+	extra_dependencies: frozenset[str] = field(default_factory=frozenset)
 	field_map: Mapping[str, str] = field(default_factory=dict)
 	table_option_map: Mapping[str, str] = field(default_factory=dict)
 	ignored_fields: Mapping[str, str] = field(default_factory=dict)
@@ -245,7 +245,7 @@ def _build_spec(
 	target_fields = _fields(target_schema)
 	field_map = {fieldname: rule.field_map.get(fieldname, fieldname) for fieldname in source_fields}
 	issues: list[str] = []
-	dependencies: set[str] = set()
+	dependencies: set[str] = set(rule.extra_dependencies)
 	mapped = bool(
 		target_name != source_name
 		or rule.field_map

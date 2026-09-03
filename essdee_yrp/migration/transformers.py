@@ -8,14 +8,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from copy import deepcopy
-from typing import Any, Mapping
+from typing import Any
 
 from essdee_yrp.migration.engine import (
+	SYSTEM_FIELDS,
 	MigrationError,
 	MigrationPlan,
 	MigrationSpec,
-	SYSTEM_FIELDS,
 )
 
 
@@ -251,8 +252,8 @@ def derive_purchase_invoice_fields(
 			)
 		result["essdee_items"] = commercial_rows
 		# The F15 rows are commercial Process items, not physical valuation rows.
-		# Preserve them only in Essdee's visible table; the post-load projection
-		# rebuilds this base table from the invoice's exact linked GRNs.
+		# Preserve them only in Essdee's visible table; the migration writer builds
+		# the base table from the invoice's exact linked GRNs before inserting it.
 		result["items"] = []
 		result["essdee_rate_table_source"] = "production_api"
 	return result

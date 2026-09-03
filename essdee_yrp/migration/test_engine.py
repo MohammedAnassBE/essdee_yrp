@@ -306,6 +306,15 @@ class MigrationEngineTest(unittest.TestCase):
 		plan = build_plan(schemas, schemas)
 		self.assertEqual(plan.dependency_groups, (("A", "B"), ("C",)))
 
+	def test_rule_can_require_a_write_time_dependency(self):
+		schemas = {"A": schema("A", []), "B": schema("B", [])}
+		plan = build_plan(
+			schemas,
+			schemas,
+			rules={"A": DocTypeRule(extra_dependencies=frozenset({"B"}))},
+		)
+		self.assertEqual(plan.dependency_groups, (("B",), ("A",)))
+
 	def test_custom_transformer_must_be_registered_and_preserve_identity(self):
 		source = {"Old": schema("Old", [field("value")])}
 		target = {"New": schema("New", [field("converted")])}

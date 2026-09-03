@@ -14,7 +14,7 @@ from collections import defaultdict
 
 import frappe
 from frappe import _
-from frappe.utils import flt, now_datetime
+from frappe.utils import flt
 from yrp.stock.uom import resolve_item_uom
 from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
 from yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice import (
@@ -23,13 +23,14 @@ from yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice import (
 	_get_tax_rate,
 	_normal_json,
 	_validate_selected_grn,
+)
+from yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice import (
 	fetch_grn_details as base_fetch_grn_details,
 )
 from yrp.yrp.doctype.yrp_work_order.yrp_work_order import get_variant_attributes
 
-from essdee_yrp.overrides.work_order import _combination_key, _matches_garment_demand
 from essdee_yrp.erp_purchase_invoice import fetch_expense_accounts
-
+from essdee_yrp.overrides.work_order import _combination_key, _matches_garment_demand
 
 RATE_PRECISION = 6
 QUANTITY_TOLERANCE = 0.01
@@ -1126,79 +1127,17 @@ def _redistribute_unmapped_direct_commercial_groups(
 	return reconciliations
 
 
-def rebuild_legacy_work_order_physical_items(*, dry_run=False, invoice_names=None):
-	"""Audit and optionally replace migrated Work Order PI base rows.
-
-	All payloads are built and validated before the first delete. Unlinked legacy
-	drafts are deliberately left with an empty hidden table so they cannot submit
-	until the operator fetches GRNs; a submitted/cancelled unlinked invoice blocks
-	the migration instead of inventing lineage.
-	"""
+def verify_legacy_work_order_physical_items(*, invoice_names=None):
+	"""Read-only exact verification of every generated legacy physical row."""
 	if not frappe.db.exists("DocType", 'SD YRP Essdee Purchase Invoice Item'):
 		return {
 			"status": "Skipped",
 			"invoice_count": 0,
-			"physical_row_count": 0,
+			"verified_physical_rows": 0,
+			"expected_physical_rows": 0,
 			"unlinked_drafts": [],
+			"failures": [],
 		}
-	if isinstance(invoice_names, str):
-		invoice_names = frappe.parse_json(invoice_names)
-	filters = {
-		"against": 'YRP Work Order',
-		"essdee_rate_table_source": LEGACY_RATE_SOURCE,
-	}
-	if invoice_names:
-		filters["name"] = ["in", list(dict.fromkeys(invoice_names))]
-	names = frappe.get_all(
-		'YRP Purchase Invoice',
-		filters=filters,
-		pluck="name",
-		order_by="creation, name",
-		limit_page_length=0,
-	)
-	plans = []
-	unlinked_drafts = []
-	failures = []
-	for name in names:
-		try:
-			invoice = frappe.get_doc('YRP Purchase Invoice', name)
-			payload = build_legacy_work_order_invoice_payload(invoice)
-			if payload["unlinked"]:
-				if invoice.docstatus != 0:
-					frappe.throw(
-						_("Submitted or cancelled migrated invoice {0} has no linked GRNs.").format(
-							invoice.name
-						)
-					)
-				unlinked_drafts.append(invoice.name)
-			plans.append((invoice, payload))
-		except Exception as exc:
-			failures.append(f"{name}: {exc}")
-	if failures:
-		frappe.throw(
-			_("Legacy Work Order Purchase Invoice projection failed:\n{0}").format(
-				"\n".join(failures[:100])
-			)
-		)
-
-	if not dry_run:
-		for invoice, payload in plans:
-			_replace_invoice_physical_rows(invoice, payload["items"])
-
-	return {
-		"status": "Audited" if dry_run else "Rebuilt",
-		"invoice_count": len(plans),
-		"physical_row_count": sum(len(payload["items"]) for _invoice, payload in plans),
-		"unlinked_drafts": unlinked_drafts,
-	}
-
-
-def verify_legacy_work_order_physical_items(*, invoice_names=None):
-	"""Read-only exact verification of every generated legacy physical row."""
-	audit = rebuild_legacy_work_order_physical_items(
-		dry_run=True,
-		invoice_names=invoice_names,
-	)
 	filters = {
 		"against": 'YRP Work Order',
 		"essdee_rate_table_source": LEGACY_RATE_SOURCE,
@@ -1209,15 +1148,25 @@ def verify_legacy_work_order_physical_items(*, invoice_names=None):
 		filters["name"] = ["in", list(dict.fromkeys(invoice_names))]
 	failures = []
 	verified_rows = 0
-	for name in frappe.get_all(
+	expected_rows = 0
+	unlinked_drafts = []
+	names = frappe.get_all(
 		'YRP Purchase Invoice',
 		filters=filters,
 		pluck="name",
 		order_by="creation, name",
 		limit_page_length=0,
-	):
+	)
+	for name in names:
 		invoice = frappe.get_doc('YRP Purchase Invoice', name)
-		expected = build_legacy_work_order_invoice_payload(invoice)["items"]
+		payload = build_legacy_work_order_invoice_payload(invoice)
+		if payload["unlinked"]:
+			if invoice.docstatus != 0:
+				failures.append(f"{name}: submitted/cancelled invoice has no linked GRNs")
+				continue
+			unlinked_drafts.append(name)
+		expected = payload["items"]
+		expected_rows += len(expected)
 		actual = frappe.get_all(
 			'YRP Purchase Invoice Item',
 			filters={
@@ -1259,10 +1208,10 @@ def verify_legacy_work_order_physical_items(*, invoice_names=None):
 			break
 	return {
 		"status": "Pass" if not failures else "Failed",
-		"invoice_count": audit["invoice_count"],
+		"invoice_count": len(names),
 		"verified_physical_rows": verified_rows,
-		"expected_physical_rows": audit["physical_row_count"],
-		"unlinked_drafts": audit["unlinked_drafts"],
+		"expected_physical_rows": expected_rows,
+		"unlinked_drafts": unlinked_drafts,
 		"failures": failures,
 	}
 
@@ -1312,61 +1261,6 @@ def _match_legacy_commercial_row(invoice_name, context, demand, commercial_rows)
 			flt(demand["source_rate"], 6),
 		)
 	)
-
-
-def _replace_invoice_physical_rows(invoice, rows):
-	frappe.db.delete(
-		'YRP Purchase Invoice Item',
-		{
-			"parent": invoice.name,
-			"parenttype": invoice.doctype,
-			"parentfield": "items",
-		},
-	)
-	if not rows:
-		frappe.clear_document_cache(invoice.doctype, invoice.name)
-		return
-	now = now_datetime()
-	columns = set(frappe.db.get_table_columns('YRP Purchase Invoice Item'))
-	standard = {
-		"owner": invoice.owner or "Administrator",
-		"creation": invoice.creation or now,
-		"modified": invoice.modified or now,
-		"modified_by": invoice.modified_by or "Administrator",
-		"docstatus": invoice.docstatus,
-		"parent": invoice.name,
-		"parenttype": invoice.doctype,
-		"parentfield": "items",
-	}
-	prepared = []
-	for idx, row in enumerate(rows, 1):
-		values = {**standard, **row, "idx": idx}
-		values["name"] = _physical_child_name(invoice.name, idx, row)
-		prepared.append({key: value for key, value in values.items() if key in columns})
-	fields = [key for key in prepared[0] if all(key in row for row in prepared)]
-	frappe.db.bulk_insert(
-		'YRP Purchase Invoice Item',
-		fields,
-		([row.get(field) for field in fields] for row in prepared),
-	)
-	frappe.clear_document_cache(invoice.doctype, invoice.name)
-
-
-def _physical_child_name(invoice_name, idx, row):
-	payload = json.dumps(
-		[
-			invoice_name,
-			idx,
-			row.get("item"),
-			row.get("uom"),
-			row.get("source_rate"),
-			row.get("essdee_group_key"),
-			row.get("set_combination"),
-		],
-		separators=(",", ":"),
-		ensure_ascii=True,
-	)
-	return "sdpi-" + hashlib.sha256(payload.encode()).hexdigest()[:32]
 
 
 def _physical_row_mismatches(actual, expected):

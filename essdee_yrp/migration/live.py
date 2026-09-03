@@ -15,6 +15,7 @@ import re
 import subprocess
 import tempfile
 from collections.abc import Iterable, Mapping
+from copy import deepcopy
 from datetime import date, datetime, time
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
@@ -25,15 +26,14 @@ from frappe.model import no_value_fields
 from frappe.utils import cint, now_datetime
 from frappe.utils.password import set_encrypted_password
 
-from essdee_yrp.migration.engine import MigrationError, MigrationPlan, transform_document
 from essdee_yrp.migration.config import (
 	MigrationSettings,
 	get_migration_settings,
 	is_target_reset_enabled,
 )
+from essdee_yrp.migration.engine import MigrationError, MigrationPlan, transform_document
 from essdee_yrp.migration.planner import build_schema_analysis
 from essdee_yrp.migration.rules import DOCTYPE_RENAMES
-
 
 SOURCE_BRIDGE = (
 	Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py"
@@ -108,6 +108,15 @@ REQUIRED_STOCK_DIMENSION_CONTRACT = {
 		"is_production_group": 0,
 	},
 }
+PURCHASE_INVOICE_ITEM_NUMERIC_DEFAULT_FIELDS = (
+	"qty",
+	"rate",
+	"source_rate",
+	"amount",
+	"actual_rate",
+	"actual_qty",
+	"essdee_rate_weight",
+)
 
 
 class F15SourceBridge:
@@ -1212,13 +1221,6 @@ def run_job(
 			# same conservative, idempotent backfill at the actual post-load boundary.
 			from essdee_yrp.patches.backfill_deterministic_valuation_lineage import (
 				backfill_deterministic_valuation_lineage,
-			)
-			from essdee_yrp.purchase_invoice import (
-				rebuild_legacy_work_order_physical_items,
-			)
-
-			result["purchase_invoice_physical_projection"] = (
-				rebuild_legacy_work_order_physical_items()
 			)
 			result["valuation_lineage"] = backfill_deterministic_valuation_lineage()
 		result["schema"] = {
@@ -2658,7 +2660,10 @@ def _flush_batch(
 ) -> int:
 	if dry_run:
 		return len(batch)
-	target.upsert_batch(target_doctype, [target_doc for _source, target_doc in batch])
+	target_documents = [target_doc for _source, target_doc in batch]
+	if source_doctype == "Purchase Invoice":
+		target_documents = _prepare_purchase_invoice_migration_documents(target_documents)
+	target.upsert_batch(target_doctype, target_documents)
 	state = checkpoint["doctypes"].setdefault(source_doctype, {})
 	state["last_name"] = batch[-1][0]["name"]
 	state["processed"] = int(state.get("processed") or 0) + len(batch)
@@ -2672,6 +2677,47 @@ def _flush_batch(
 	)
 	frappe.db.commit()
 	return len(batch)
+
+
+def _prepare_purchase_invoice_migration_documents(
+	documents: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+	"""Create both PI child projections before the PI batch is written."""
+	from essdee_yrp.purchase_invoice import (
+		LEGACY_RATE_SOURCE,
+		build_legacy_work_order_invoice_payload,
+	)
+
+	prepared_documents = []
+	for document in documents:
+		prepared = deepcopy(document)
+		if (
+			prepared.get("against") == 'YRP Work Order'
+			and prepared.get("essdee_rate_table_source") == LEGACY_RATE_SOURCE
+		):
+			invoice = frappe.get_doc(prepared)
+			payload = build_legacy_work_order_invoice_payload(invoice)
+			if payload["unlinked"] and int(invoice.docstatus or 0) != 0:
+				raise MigrationError(
+					f"Submitted or cancelled migrated invoice {invoice.name} has no linked GRNs"
+				)
+			prepared["items"] = [
+				{"doctype": 'YRP Purchase Invoice Item', **row}
+				for row in payload["items"]
+			]
+
+		# Frappe's bulk child insert uses the union of fields from the whole batch.
+		# Once projected Work Order rows add a numeric field to that union, an old
+		# Purchase Order row that omitted it would otherwise be inserted as NULL
+		# instead of receiving the child DocType's database default of zero.
+		for row in prepared.get("items") or []:
+			if row.get("docstatus") in (None, ""):
+				row["docstatus"] = int(prepared.get("docstatus") or 0)
+			for fieldname in PURCHASE_INVOICE_ITEM_NUMERIC_DEFAULT_FIELDS:
+				if row.get(fieldname) in (None, ""):
+					row[fieldname] = 0
+		prepared_documents.append(prepared)
+	return prepared_documents
 
 
 def _validate_live_target_metadata(plan: MigrationPlan) -> None:
@@ -3356,7 +3402,7 @@ def _collect_expected_value_rows(
 		row.update(parent)
 	grouped.setdefault(doctype, []).append(row)
 	skipped_password_values = len(document.get("__migration_passwords") or {})
-	for fieldname, table_field in table_fields.items():
+	for fieldname, _table_field in table_fields.items():
 		if fieldname not in document:
 			continue
 		for idx, child in enumerate(document.get(fieldname) or [], start=1):

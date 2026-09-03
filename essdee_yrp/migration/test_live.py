@@ -10,27 +10,27 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
-from essdee_yrp.migration.engine import MigrationError
-from essdee_yrp.migration.config import MigrationSettings, is_target_reset_enabled
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_mrp_data_migration.sd_yrp_mrp_data_migration import (
 	MRPDataMigration,
 	_migration_action_reservation,
 )
+from essdee_yrp.migration.config import MigrationSettings, is_target_reset_enabled
+from essdee_yrp.migration.engine import MigrationError
 from essdee_yrp.migration.live import (
 	F15SourceBridge,
 	FrappeBulkTarget,
 	_apply_contextual_defaults,
-	_build_target_reset_manifest,
+	_assert_no_other_active_migration,
 	_bind_checkpoint_to_source_snapshot,
 	_bind_reset_series_checkpoint,
 	_broken_static_link_count,
+	_build_target_reset_manifest,
 	_collect_document_identities,
 	_collect_expected_value_rows,
 	_decode_and_validate_file_payload,
 	_delete_reset_file,
 	_delete_target_reset_manifest,
-	enqueue_job,
-	enqueue_reset_job,
+	_flush_batch,
 	_generated_supplier_warehouse_names,
 	_include_reset_generated_audit_scope,
 	_is_verified_attachment_url,
@@ -38,21 +38,23 @@ from essdee_yrp.migration.live import (
 	_migration_contract_fingerprint,
 	_migration_generated_identity_allowances,
 	_nonzero_reset_counts,
+	_prepare_purchase_invoice_migration_documents,
 	_require_previous_snapshot,
-	_source_snapshot,
-	_assert_no_other_active_migration,
 	_run_files,
-	run_reset_job,
-	run_job_guarded,
-	run_reset_job_guarded,
 	_same_migrated_value,
-	_target_reset_file_names,
+	_source_snapshot,
 	_target_reset_counts,
+	_target_reset_file_names,
 	_validate_configured_default_contract,
 	_validate_external_references,
 	_validate_required_target_values,
 	_validate_target_migration_prerequisites,
 	_verify_transformed_value_batch,
+	enqueue_job,
+	enqueue_reset_job,
+	run_job_guarded,
+	run_reset_job,
+	run_reset_job_guarded,
 )
 
 
@@ -69,6 +71,139 @@ def configured_settings():
 
 
 class MigrationLiveAdapterTest(unittest.TestCase):
+	def test_purchase_invoice_flush_projects_rows_before_upsert(self):
+		target = Mock()
+		target_document = {"doctype": 'YRP Purchase Invoice', "name": "MPI-1"}
+		prepared_document = {
+			**target_document,
+			"items": [{"doctype": 'YRP Purchase Invoice Item', "item": "ITEM-1"}],
+		}
+		checkpoint = {"doctypes": {}}
+		with (
+			patch(
+				"essdee_yrp.migration.live._prepare_purchase_invoice_migration_documents",
+				return_value=[prepared_document],
+			) as prepare,
+			patch("essdee_yrp.migration.live.frappe.db.set_value"),
+			patch("essdee_yrp.migration.live.frappe.db.commit"),
+		):
+			processed = _flush_batch(
+				"MIG-1",
+				"Purchase Invoice",
+				'YRP Purchase Invoice',
+				[({"name": "MPI-1"}, target_document)],
+				target,
+				checkpoint,
+				False,
+			)
+
+		self.assertEqual(processed, 1)
+		prepare.assert_called_once_with([target_document])
+		target.upsert_batch.assert_called_once_with(
+			'YRP Purchase Invoice', [prepared_document]
+		)
+		self.assertEqual(checkpoint["doctypes"]["Purchase Invoice"]["processed"], 1)
+
+	def test_purchase_invoice_projection_is_built_before_the_migration_write(self):
+		document = {
+			"doctype": 'YRP Purchase Invoice',
+			"name": "MPI-1",
+			"docstatus": 1,
+			"against": 'YRP Work Order',
+			"essdee_rate_table_source": "production_api",
+			"items": [],
+		}
+		invoice = SimpleNamespace(name="MPI-1", docstatus=1)
+		with (
+			patch("essdee_yrp.migration.live.frappe.get_doc", return_value=invoice),
+			patch(
+				"essdee_yrp.purchase_invoice.build_legacy_work_order_invoice_payload",
+				return_value={
+					"items": [{"item": "PHYSICAL-ITEM", "qty": 10}],
+					"unlinked": False,
+				},
+			),
+		):
+			prepared = _prepare_purchase_invoice_migration_documents([document])
+
+		self.assertEqual(document["items"], [])
+		self.assertEqual(
+			prepared[0]["items"],
+			[
+				{
+					"doctype": 'YRP Purchase Invoice Item',
+					"item": "PHYSICAL-ITEM",
+					"docstatus": 1,
+					"qty": 10,
+					"rate": 0,
+					"source_rate": 0,
+					"amount": 0,
+					"actual_rate": 0,
+					"actual_qty": 0,
+					"essdee_rate_weight": 0,
+				}
+			],
+		)
+
+	def test_purchase_order_item_numeric_defaults_survive_mixed_child_batches(self):
+		document = {
+			"doctype": 'YRP Purchase Invoice',
+			"name": "MPI-PO-1",
+			"against": 'YRP Purchase Order',
+			"items": [
+				{
+					"doctype": 'YRP Purchase Invoice Item',
+					"item": "MATERIAL-ITEM",
+					"qty": 20,
+					"rate": 0.33,
+				}
+			],
+		}
+
+		prepared = _prepare_purchase_invoice_migration_documents([document])
+
+		self.assertNotIn("source_rate", document["items"][0])
+		self.assertEqual(
+			{
+				fieldname: prepared[0]["items"][0][fieldname]
+				for fieldname in (
+					"docstatus",
+					"source_rate",
+					"amount",
+					"actual_rate",
+					"actual_qty",
+					"essdee_rate_weight",
+				)
+			},
+			{
+				"docstatus": 0,
+				"source_rate": 0,
+				"amount": 0,
+				"actual_rate": 0,
+				"actual_qty": 0,
+				"essdee_rate_weight": 0,
+			},
+		)
+
+	def test_submitted_unlinked_invoice_blocks_the_migration_batch(self):
+		document = {
+			"doctype": 'YRP Purchase Invoice',
+			"name": "MPI-1",
+			"docstatus": 1,
+			"against": 'YRP Work Order',
+			"essdee_rate_table_source": "production_api",
+		}
+		invoice = SimpleNamespace(name="MPI-1", docstatus=1)
+		with (
+			patch("essdee_yrp.migration.live.frappe.get_doc", return_value=invoice),
+			patch(
+				"essdee_yrp.purchase_invoice.build_legacy_work_order_invoice_payload",
+				return_value={"items": [], "unlinked": True},
+			),
+			self.assertRaisesRegex(MigrationError, "has no linked GRNs"),
+		):
+			_prepare_purchase_invoice_migration_documents([document])
+
 	def test_legacy_pi_physical_rows_have_a_separately_verified_identity_allowance(self):
 		with (
 			patch("essdee_yrp.migration.live.frappe.db.exists", return_value=True),
@@ -154,7 +289,7 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 
 		def sql(query, values=None):
 			queries.append((query, values))
-			return [[1]] if "GET_LOCK" in query else [[1]]
+			return [[1]]
 
 		with (
 			patch(

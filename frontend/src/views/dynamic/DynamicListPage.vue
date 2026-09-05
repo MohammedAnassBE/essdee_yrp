@@ -575,6 +575,7 @@ const toast = useAppToast()
 
 const registry = computed(() => getRegistryByRoute(props.docRoute))
 const doctype = computed(() => registry.value?.doctype || "")
+const isDebit = computed(() => doctype.value === "Debit")
 const isWorkflow = computed(() => registry.value?.isWorkflow || false)
 const meta = shallowRef(null)            // parent DocType meta (docs[0]), cached per route
 const isSubmittable = computed(
@@ -991,6 +992,8 @@ function variantTitleOf(row) {
 // Status chip text for a card: same source order as the table's Status tag
 // (workflow_state > status > docstatus); "" (no signal) = no chip, no tint.
 function variantStatusOf(row) {
+	if (Number(row.docstatus) === 2) return "Cancelled"
+	if (isDebit.value && Number(row.docstatus) === 0) return "Draft"
 	if (isWorkflow.value && row.workflow_state) return row.workflow_state
 	if (typeof row.status === "string" && row.status) return row.status
 	if (isSubmittable.value) return DOCSTATUS_LABELS[row.docstatus] || ""
@@ -1110,6 +1113,11 @@ const fetchFields = computed(() => {
 	for (const c of listColumns.value) {
 		if (!fields.includes(c.field)) fields.push(c.field)
 	}
+	// The Status chip is a fixed table column, not a user-selected list column.
+	// Fetch the real business status whenever the DocType has one; otherwise a
+	// submittable document silently falls back to docstatus and every Work Order
+	// appears as only Draft / Submitted / Cancelled despite its richer lifecycle.
+	if (metaFieldSet.value.has("status") && !fields.includes("status")) fields.push("status")
 	// Card/kanban variants need their own key columns + title + group + status
 	// sources (+ any cardTemplate-bound fields). Guarded by the variant so the
 	// table's query stays IDENTICAL.
@@ -1124,7 +1132,6 @@ const fetchFields = computed(() => {
 			fields.push(kanbanGroupField.value)
 		}
 		for (const f of templateBoundFields.value) if (!fields.includes(f)) fields.push(f)
-		if (metaFieldSet.value.has("status") && !fields.includes("status")) fields.push("status")
 		if (!fields.includes("docstatus")) fields.push("docstatus")
 	}
 	if (isSubmittable.value && !fields.includes("docstatus")) fields.push("docstatus")
@@ -2077,6 +2084,8 @@ function formatNumber(val) {
 
 const DOCSTATUS_LABELS = { 0: "Draft", 1: "Submitted", 2: "Cancelled" }
 function statusLabel(row) {
+	if (Number(row.docstatus) === 2) return "Cancelled"
+	if (isDebit.value && Number(row.docstatus) === 0) return "Draft"
 	if (isWorkflow.value && row.workflow_state) return row.workflow_state
 	return row.status || DOCSTATUS_LABELS[row.docstatus] || "—"
 }
@@ -2085,10 +2094,20 @@ function statusSeverity(ds) {
 	if (ds === 2) return "danger"
 	return "warn"
 }
-// Row-aware severity: workflow_state for workflow doctypes, else docstatus.
+function businessStatusSeverity(status, docstatus) {
+	if (Number(docstatus) === 2) return "danger"
+	const value = String(status || "").toLowerCase()
+	if (!value) return statusSeverity(docstatus)
+	if (STATUS_BAD_RE.test(value)) return "danger"
+	if (value === "close request") return "warn"
+	if (value.startsWith("partially ")) return "info"
+	if (STATUS_GOOD_RE.test(value)) return "success"
+	return statusSeverity(docstatus)
+}
+// Row-aware severity: workflow state, then business status, then docstatus.
 function rowSeverity(row) {
 	if (isWorkflow.value && row.workflow_state) return WORKFLOW_SEVERITY[row.workflow_state] || "warn"
-	return statusSeverity(row.docstatus)
+	return businessStatusSeverity(row.status, row.docstatus)
 }
 
 // Generic status → severity for the opt-in colourBy:"status" tint and the
@@ -2100,6 +2119,7 @@ const STATUS_GOOD_RE = /(complete|success|approved|paid|active|closed|delivered|
 const STATUS_BAD_RE = /(cancel|reject|fail|overdue|error|expired|return|stopped|on hold)/
 function genericStatusSeverity(row) {
 	if (isWorkflow.value && row.workflow_state) return WORKFLOW_SEVERITY[row.workflow_state] || "warn"
+	if (row.status) return businessStatusSeverity(row.status, row.docstatus)
 	if (isSubmittable.value) return statusSeverity(row.docstatus)
 	const s = String(row.status || "").toLowerCase()
 	if (!s) return "warn"

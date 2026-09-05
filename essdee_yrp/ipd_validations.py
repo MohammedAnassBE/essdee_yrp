@@ -20,6 +20,12 @@ def before_validate(doc, method=None):
 	apply_ipd_settings_defaults(doc)
 	if is_cloth_ipd(doc):
 		sync_cloth_recipe_snapshot(doc)
+		# Custom fabric steps are authored around the generated Dyeing/Compacting
+		# stages. Re-resolve those managed transitions from the exact ordered route
+		# before validation/matrix generation, so the previous step's output is
+		# always the next step's input after a reorder.
+		from essdee_yrp.fabric_ipd import reconcile_fabric_route_processes
+		reconcile_fabric_route_processes(doc)
 		return
 	# Yarn recipes are operational Lot inputs owned by generated cloth IPDs.
 	# Synced garment IPDs keep only the panel/process/accessory definition.
@@ -37,35 +43,97 @@ def before_validate(doc, method=None):
 
 
 def sync_cloth_recipe_snapshot(doc):
-	"""Keep the old single/global yarn fields as an internal compatibility view.
+	"""Keep the IPD's editable material recipe and colour snapshots aligned.
 
-	Colour-wise Yarn Recipes are the only user-entered source for a cloth IPD.
-	Older calculation/reporting paths still read ``yarn_ratio_details`` and
-	``yarn_item``; derive those fields from the first finished-colour recipe so
-	the user never has to enter the same yarn blend twice.
+	``yarn_ratio_details`` is the user-facing, versioned IPD recipe.  The Item
+	master seeds it when a cloth program is created, but later Item changes must
+	not rewrite an existing IPD.  Colour-wise rows retain the per-route physical
+	yarn Colour and are regenerated from the IPD composition when that composition
+	is edited.  Old IPDs with only colour rows are backfilled once.
 	"""
-	rows = doc.get("colour_yarn_recipes") or []
-	if not rows:
+	colour_rows = doc.get("colour_yarn_recipes") or []
+	recipe = [row for row in (doc.get("yarn_ratio_details") or []) if row.get("yarn_item")]
+	backfilled_from_colours = False
+
+	if not recipe and colour_rows:
+		backfilled_from_colours = True
+		first = colour_rows[0]
+		first_key = (first.get("cloth_item") or doc.get("item"), first.get("colour"))
+		recipe = [
+			row for row in colour_rows
+			if (row.get("cloth_item") or doc.get("item"), row.get("colour")) == first_key
+		]
+		doc.set("yarn_ratio_details", [
+			{
+				"yarn_item": row.get("yarn_item"),
+				"ratio": flt(row.get("ratio")),
+			}
+			for row in recipe
+			if row.get("yarn_item")
+		])
+		recipe = doc.get("yarn_ratio_details") or []
+
+	doc.yarn_item = recipe[0].get("yarn_item") if recipe else None
+	if not recipe or not colour_rows or not doc.get("fabric_routes"):
 		return
 
-	first = rows[0]
-	first_key = (first.get("cloth_item") or doc.get("item"), first.get("colour"))
-	recipe = [
-		row for row in rows
-		if (row.get("cloth_item") or doc.get("item"), row.get("colour")) == first_key
-	]
-	if not recipe:
+	# Existing colour-wise recipes may intentionally use a different Yarn Item
+	# for each finished colour (for example, Greige yarn for Red and a dyed-yarn
+	# Item for Navy).  Do not flatten those rows on every unrelated IPD save.
+	# Rebuild them only when the user has actually edited this IPD's material
+	# recipe; newly inserted/generated IPDs already arrive with their exact
+	# colour-wise recipe from Build Cloth Program.
+	previous = doc.get_doc_before_save()
+	if not previous or backfilled_from_colours:
 		return
 
-	doc.set("yarn_ratio_details", [
+	def recipe_signature(rows):
+		return [
+			(row.get("yarn_item"), flt(row.get("ratio")))
+			for row in (rows or [])
+			if row.get("yarn_item")
+		]
+
+	if recipe_signature(recipe) == recipe_signature(previous.get("yarn_ratio_details")):
+		return
+
+	from essdee_yrp.api.cloth_program import _derive_colour_yarn_recipes
+
+	routes = doc.get("fabric_routes") or []
+	required_colours = list(dict.fromkeys(
+		row.get("finished_colour") for row in routes if row.get("finished_colour")
+	))
+	dyed_colours = list(dict.fromkeys(
+		row.get("finished_colour") for row in routes
+		if row.get("finished_colour") and cint(row.get("use_dyed_yarn"))
+	))
+	source_colours = {
+		row.get("finished_colour"): row.get("knitting_output_colour")
+		for row in routes
+		if row.get("finished_colour") and row.get("knitting_output_colour")
+	}
+	derived = _derive_colour_yarn_recipes(
+		[
+			{
+				"yarn_item": row.get("yarn_item"),
+				"ratio": flt(row.get("ratio")),
+			}
+			for row in recipe
+		],
+		required_colours,
+		dyed_colours,
+		source_colours,
+	)
+	doc.set("colour_yarn_recipes", [
 		{
+			"cloth_item": doc.get("item"),
+			"colour": row.get("colour"),
 			"yarn_item": row.get("yarn_item"),
+			"yarn_colour": row.get("yarn_colour"),
 			"ratio": flt(row.get("ratio")),
 		}
-		for row in recipe
-		if row.get("yarn_item")
+		for row in derived
 	])
-	doc.yarn_item = doc.yarn_ratio_details[0].yarn_item if doc.yarn_ratio_details else None
 
 
 def validate(doc, method=None):
@@ -260,33 +328,24 @@ def validate_cloth_ipd(doc):
 	dia/colour means "applies to every value" and counts as its own key.
 	Fan-out (several to-values per (dia, from)) is allowed; see
 	validate_swap_rows for the invariant and its rationale."""
-	from essdee_yrp.fabric_ipd import get_yarn_ratio_inputs
+	from essdee_yrp.fabric_ipd import get_yarn_ratio_inputs, is_cloth_recipe_conversion
 
 	validate_fabric_routes(doc)
 	validate_compacting_references(doc)
 
 	yarn_rows = doc.get("yarn_ratio_details") or []
 	if yarn_rows:
-		seen_yarns = set()
-		total = 0.0
-		for row in yarn_rows:
-			if not row.yarn_item:
-				frappe.throw(f"Row {row.idx} of Yarn Ratio: select a Yarn Item.")
-			if row.yarn_item in seen_yarns:
-				frappe.throw(f"Row {row.idx} of Yarn Ratio: duplicate Yarn Item {row.yarn_item}.")
-			seen_yarns.add(row.yarn_item)
-			ratio = flt(row.ratio)
-			if ratio <= 0:
-				frappe.throw(f"Row {row.idx} of Yarn Ratio: Ratio must be greater than zero.")
-			total += ratio
-		if abs(total - 100.0) > 0.001:
-			frappe.throw(f"Yarn Ratio total must be exactly 100. Current total is {flt(total, 3)}.")
+		# Apply the same contract as the reusable Cloth Item recipe: real,
+		# non-cloth, unique Yarn Items; Colour is their only supported variant
+		# attribute; positive ratios total exactly 100%.
+		from essdee_yrp.item_validations import _validate_yarn_rows
+		_validate_yarn_rows(yarn_rows, cloth_item=doc.item)
 
 		# Keep old single-yarn readers harmless during the transition.  The table
 		# and combination-level matrix Item remain the source of truth.
 		doc.yarn_item = yarn_rows[0].yarn_item
 		for process_row in doc.get("fabric_processes") or []:
-			if doc.get("knitting_process") and process_row.fabric_process == doc.knitting_process:
+			if is_cloth_recipe_conversion(doc, process_row):
 				process_row.input_item = doc.yarn_item
 
 	# The engine resolves matrices per process_name with subset attr matching —

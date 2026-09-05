@@ -28,6 +28,9 @@ frappe.ui.form.on("Lot", {
 	},
 	refresh(frm) {
 		$(".layout-side-section").css("display", "none");
+		// Mount first: unrelated legacy widgets later in refresh must never keep
+		// the persisted Cloth Program tab blank if one of them fails to render.
+		mount_cloth_program(frm)
 		frm.page.add_menu_item(__("Calculate"), function () {
 			calculate_all(frm);
 		}, false, 'Ctrl+E', false);
@@ -155,9 +158,6 @@ frappe.ui.form.on("Lot", {
 		if (frm.doc.is_transferred) {
 			frm.order_detail.update_status()
 		}
-		$(frm.fields_dict['fabric_program_html'].wrapper).html("")
-		frm.fabric_program = new frappe.production.ui.FabricProgram(frm.fields_dict['fabric_program_html'].wrapper)
-		frm.fabric_program.load_data((frm.doc.__onload && frm.doc.__onload.fabric_program_details) || [])
 		// if(!frm.is_new()){
 		// 	frm.cad_detail = new frappe.production.ui.CadDetail(frm.fields_dict['cad_detail_html'].wrapper)
 		// 	if(frm.doc.__onload && frm.doc.__onload.cad_item_details) {
@@ -290,6 +290,30 @@ frappe.ui.form.on("Lot", {
 		}
 	}
 });
+
+function mount_cloth_program(frm) {
+	const field = frm.fields_dict.fabric_program_html;
+	if (!field) return;
+	if (frm.fabric_program && frm.fabric_program.app) {
+		frm.fabric_program.app.unmount();
+	}
+	$(field.wrapper).html("");
+	frm.fabric_program = new frappe.production.ui.FabricProgram(field.wrapper);
+	const onload_rows = (frm.doc.__onload && frm.doc.__onload.fabric_program_details) || [];
+	frm.fabric_program.load_data(onload_rows);
+	if (frm.is_new()) return;
+
+	const lot = frm.doc.name;
+	frappe.call({
+		method: "essdee_yrp.fabric_program.get_fabric_program_details",
+		args: { lot },
+		callback(r) {
+			// Ignore a late response if the user navigated to another Lot.
+			if (frm.doc.name !== lot || !frm.fabric_program) return;
+			frm.fabric_program.load_data(r.message || []);
+		},
+	});
+}
 
 
 // frappe.ui.form.on('Lot', {

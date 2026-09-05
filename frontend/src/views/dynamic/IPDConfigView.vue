@@ -51,6 +51,18 @@
 				rounded
 			/>
 			<div class="head-actions">
+				<Button
+					v-if="doc?.is_cloth_item && canWrite('Item Production Detail')"
+					label="Regenerate Matrix"
+					icon="pi pi-refresh"
+					size="small"
+					severity="secondary"
+					outlined
+					:loading="regeneratingMatrix"
+					:disabled="editing || savingAll || approvalBusy"
+					data-testid="ipd-regenerate-matrix"
+					@click="onRegenerateMatrix"
+				/>
 				<!-- DOCUMENT-level edit mode (2026-07-10, user mandate): ONE Edit
 				     puts every tab into edit mode; ONE Save persists all tabs in a
 				     single request; ONE Cancel reverts everything. Never a separate
@@ -1107,6 +1119,7 @@ const confirm = useAppConfirm()
 const { canCreate, canDelete, canWrite, isAdmin, hasRole } = usePermissions()
 const deleting = ref(false)
 const approvalBusy = ref(false)
+const regeneratingMatrix = ref(false)
 const approvalRoles = ref([])
 const duplicateOpen = ref(false)
 const duplicateItem = ref("")
@@ -1676,6 +1689,26 @@ async function onApprove() {
 		toast.error("Approval failed", e.message)
 	} finally {
 		approvalBusy.value = false
+	}
+}
+async function onRegenerateMatrix() {
+	if (!doc.value || regeneratingMatrix.value || editing.value) return
+	regeneratingMatrix.value = true
+	try {
+		const result = await callMethod("essdee_yrp.ipd_ui.regenerate_ipd_matrix", {
+			doc_name: doc.value.name,
+			modified: doc.value.modified,
+		})
+		const count = Number(result?.matrix_count || 0)
+		toast.success(
+			"Matrix regenerated",
+			`${count} process ${count === 1 ? "matrix" : "matrices"} rebuilt`,
+		)
+		await load()
+	} catch (e) {
+		toast.error("Matrix regeneration failed", e.message)
+	} finally {
+		regeneratingMatrix.value = false
 	}
 }
 function onRevertApproval() {

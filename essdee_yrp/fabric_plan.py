@@ -67,6 +67,20 @@ def _route_bypasses_step(ipd_doc, step, reference_item_variant, combo):
 	"""
 	if step.get("shape") not in ("swap", "multi_swap"):
 		return False
+	# Exact-route matrices are stage-aware: matrix sync stamps the finished
+	# reference only on groups the route actually traverses.  Absence of that
+	# reference at this step therefore means a deliberate bypass (for example a
+	# Greige-yarn route whose Knitting output is already its finished colour).
+	if reference_item_variant and ipd_doc.get("fabric_routes"):
+		return not frappe.db.exists(
+			"IPD Process Matrix",
+			{
+				"ipd": ipd_doc.name,
+				"process_name": step.get("process_name"),
+				"reference_item_variant": reference_item_variant,
+				"docstatus": ["<", 2],
+			},
+		)
 	attributes = step.get("attribute")
 	attributes = (
 		attributes
@@ -109,7 +123,9 @@ def _route_bypasses_step(ipd_doc, step, reference_item_variant, combo):
 	return bool(knitting_output and knitting_output == finished_colour)
 
 
-def solve_chain_backward(ipd_doc, requirement, matrix_cache=None):
+def solve_chain_backward(
+	ipd_doc, requirement, matrix_cache=None, allow_ambiguous=False
+):
 	"""requirement: {frozenset({(attr, value), ...}): kg} keyed by finished-cloth
 	attrs. Returns (step_plans FIRST->LAST, unreachable list).
 
@@ -131,6 +147,24 @@ def solve_chain_backward(ipd_doc, requirement, matrix_cache=None):
 	matrix_cache = matrix_cache if matrix_cache is not None else {}
 
 	for step in reversed(steps):
+		if step["shape"] == "identity":
+			# Identity still represents a real operation. It consumes and produces
+			# the exact same physical state 1:1, retaining the finished-route
+			# reference so planning, availability and receipt ledgers stay isolated.
+			outputs, inputs, next_demand = {}, {}, {}
+			for demand_key, kg in demand.items():
+				outputs[demand_key] = outputs.get(demand_key, 0) + kg
+				inputs[demand_key] = inputs.get(demand_key, 0) + kg
+				next_demand[demand_key] = next_demand.get(demand_key, 0) + kg
+			step_plans.append({
+				"process_name": step["process_name"],
+				"position": step["position"],
+				"shape": step["shape"],
+				"outputs": outputs,
+				"inputs": inputs,
+			})
+			demand = next_demand
+			continue
 		cache_key = (ipd_doc.name, step["process_name"])
 		if cache_key not in matrix_cache:
 			matrix_cache[cache_key] = _load_output_indexed_groups(*cache_key)
@@ -147,13 +181,15 @@ def solve_chain_backward(ipd_doc, requirement, matrix_cache=None):
 			matched = groups.get((reference_item_variant, projected))
 			if not matched:
 				matched = groups.get(("", projected))
-			if matched == "AMBIGUOUS":
+			if matched and len(matched) > 1 and not allow_ambiguous:
 				frappe.throw(
 					_("IPD {0} / {1}: two matrix groups produce the same output {2} — "
-					"pin the mapping rows (dia-wise / colour-wise) to make the plan "
-					"deterministic.").format(ipd_doc.name, step["process_name"], dict(projected)),
+					"select the required conversion when creating the Work Order.").format(
+						ipd_doc.name, step["process_name"], dict(projected)
+					),
 					FabricPlanError,
 				)
+			matched = matched[0] if matched else None
 			if not matched and _route_bypasses_step(
 				ipd_doc, step, reference_item_variant, combo
 			):
@@ -195,8 +231,10 @@ def solve_chain_backward(ipd_doc, requirement, matrix_cache=None):
 
 def _load_output_indexed_groups(ipd_name, process_name):
 	"""Matrix groups of (ipd, process) indexed by their OUTPUT attr frozenset.
-	A duplicate output projection marks the key "AMBIGUOUS" — the solver throws
-	only if demand actually hits it (protects grandfathered IPDs)."""
+	All groups for a shared output are retained. Normal automatic planning rejects
+	a many-to-one choice, while IPD reachability validation may follow any one of
+	them because every alternative remains selectable by matrix key on a Work
+	Order."""
 	matrix_names = frappe.get_all(
 		"IPD Process Matrix",
 		filters={"ipd": ipd_name, "process_name": process_name, "docstatus": ["<", 2]},
@@ -213,7 +251,7 @@ def _load_output_indexed_groups(ipd_name, process_name):
 				matrix.reference_item_variant or "",
 				frozenset((out.get("attrs") or {}).items()),
 			)
-			indexed[key] = "AMBIGUOUS" if key in indexed else group
+			indexed.setdefault(key, []).append(group)
 	return indexed, declared
 
 

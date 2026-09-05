@@ -128,6 +128,15 @@
 						:loading="acting === 'submit'"
 						@click="onSubmit"
 					/>
+					<Button
+						v-if="isDebit && docstatus === 1 && doc.status === 'Debit Requested' && canWrite(doctype)"
+						label="Approve Debit"
+						icon="pi pi-check-circle"
+						size="small"
+						class="forward-cta"
+						:loading="acting === 'approve-debit'"
+						@click="onApproveDebit"
+					/>
 					<!-- Work Order: Calculate Deliverables (fabric processes, draft only).
 					     essdee flow — the popup reads the WO's Lot's fabric details via
 					     essdee_yrp.api.work_order.get_fabric_deliverable_context. -->
@@ -962,22 +971,23 @@
 					</DataTable>
 				</div>
 
-				<!-- Lot fabric views (Desk FabricProgram island parity): one
-				     Dia × Colour matrix combining the finished-cloth requirement,
-				     knitting-program total, and received weight. Emits the transient
+				<!-- Lot Cloth Program: saved quantities by finished Dia × Colour.
+				     Emits the transient
 				     fabric_program_details / fabric_requirement_details JSON on
 				     save (see buildPayload); the hidden lot_fabric_programs /
 				     lot_fabric_requirements children are rebuilt server-side.
 				     Editable only while the Lot is Open (Desk rule). -->
 				<div v-else-if="kind === 'lot-fabric'" class="child-editor">
 					<div class="child-editor-head">
-						<h4>Fabric Program</h4>
-						<span class="child-cols-note pivot-note">dia × colour requirement matrix with knitting totals — the chain plan rebuilds on save</span>
+						<h4>Cloth Program</h4>
+						<span class="child-cols-note pivot-note">saved quantities by finished dia × colour, including the selected excess</span>
 					</div>
+					<p v-if="lotProgramLoading" role="status">Loading Cloth Program…</p>
+					<p v-else-if="lotProgramError" role="alert">{{ lotProgramError }} Stored cloth quantities will be preserved when saving.</p>
 					<LotFabricViews
+						v-else
 						:ref="setLotFabricGrid"
 						:readonly="(form.status || 'Open') !== 'Open'"
-						:lot-name="doc?.name || ''"
 						@change="onGridChange"
 					/>
 				</div>
@@ -1151,6 +1161,7 @@
 				<Tabs v-model:value="activeTab">
 					<TabList>
 						<Tab value="details">Details</Tab>
+						<Tab v-if="isWorkOrder" value="work-order-summary">Summary</Tab>
 						<Tab v-if="hasAttributeValuesEditor" value="attribute-values">Attribute Values</Tab>
 						<!-- Lot: DETERMINISTIC tab order (user 2026-07-10) — Fabric Details →
 						     Fabric Program → Order Items → Order Details → … → BOM
@@ -1232,6 +1243,10 @@
 								</section>
 							</div>
 							<div v-else class="empty-inline">No displayable fields.</div>
+						</TabPanel>
+
+						<TabPanel v-if="isWorkOrder" value="work-order-summary">
+							<WorkOrderSummary :key="doc.modified" :work-order="doc.name" />
 						</TabPanel>
 
 						<!-- CHILD TABLES (one panel each) -->
@@ -1358,17 +1373,17 @@
 							/>
 						</TabPanel>
 
-						<!-- LOT: Fabric Program — Dia × Colour requirement matrix
-						     with knitting totals, read-only mirror of the
-						     Desk FabricProgram island. "Recalculate Received" lives
-						     here (saved doc — the Desk's is_dirty guard holds). -->
+						<!-- LOT: persisted Cloth Program, not GRN receipt tracking. -->
 						<TabPanel v-if="isLot" value="lot-fabric">
+							<p v-if="lotProgramLoading" role="status">Loading Cloth Program…</p>
+							<div v-else-if="lotProgramError" role="alert">
+								<p>{{ lotProgramError }}</p>
+								<Button label="Retry" severity="secondary" @click="hydrateLotForView" />
+							</div>
 							<LotFabricViews
+								v-else
 								:readonly="true"
 								:initial-data="lotOnload.fabric_program_details ?? []"
-								:can-rebuild="canWrite('Lot')"
-								:lot-name="doc?.name || ''"
-								@rebuilt="onFabricRebuilt"
 							/>
 						</TabPanel>
 
@@ -1638,6 +1653,7 @@ import SendSmsModal from "./SendSmsModal.vue"
 import SendWhatsAppModal from "./SendWhatsAppModal.vue"
 import DocMovableActions from "./DocMovableActions.vue"
 import DetailRelated from "@/components/detail/DetailRelated.vue"
+import WorkOrderSummary from "./WorkOrderSummary.vue"
 import { useUiConfigStore } from "@/engine"
 
 const props = defineProps({
@@ -1718,6 +1734,7 @@ const dirtyArmed = ref(false)
 const registry = computed(() => getRegistryByRoute(props.docRoute))
 const doctype = computed(() => registry.value?.doctype || "")
 const isWorkOrder = computed(() => doctype.value === "Work Order")
+const isDebit = computed(() => doctype.value === "Debit")
 // Process/Lot-aware Work Order choices. The backend returns exact Item/IPD
 // pairs; this state drives both auto-fill and the Item autocomplete so the
 // create/edit shells cannot drift from Desk or server validation.
@@ -1854,7 +1871,7 @@ const actionDialogPosition = computed(() => {
 // vocabulary). Absent / non-array → null = all of today's actions render.
 // Unknown names are ignored with one console.warn (the server soft-warns the
 // same way); an items list never ADDS an affordance the gates would hide.
-const MOVABLE_ACTION_ITEMS = ["create_grn", "create_dc", "complete_transfer", "build_cloth_programs", "more_menu", "ewaybill_menu", "send_sms", "send_whatsapp", "cancel_doc"]
+const MOVABLE_ACTION_ITEMS = ["create_grn", "create_dc", "create_debit", "complete_transfer", "build_cloth_programs", "more_menu", "ewaybill_menu", "send_sms", "send_whatsapp", "cancel_doc"]
 let unknownActionItemsWarned = false
 const allowedActionItems = computed(() => {
 	const items = uiStore.actionsKnob?.items
@@ -1888,6 +1905,8 @@ const forwardActions = computed(() => {
 		out.push({ key: "wo-dc", label: "Create Delivery Challan", icon: "pi pi-send", handler: onCreateDcFromWo, disabled: woGated, tooltip: woTip })
 	if (isWorkOrder.value && canCreate("Goods Received Note"))
 		out.push({ key: "wo-grn", label: "Create Goods Received Note", icon: "pi pi-plus-circle", handler: onCreateGrnFromWo, disabled: woGated, tooltip: woTip })
+	if (isWorkOrder.value && canCreate("Debit"))
+		out.push({ key: "wo-debit", label: "Create Debit", icon: "pi pi-wallet", handler: onCreateDebitFromWo, disabled: woGated, tooltip: woTip })
 	if (isDeliveryChallan.value && canCreate("Goods Received Note"))
 		out.push({ key: "dc-grn", label: "Create Goods Received Note", icon: "pi pi-plus-circle", handler: onCreateGrnFromDc, disabled: false, tooltip: "" })
 	if (
@@ -1915,6 +1934,7 @@ const forwardActions = computed(() => {
 const FORWARD_ACTION_ITEM = {
 	"wo-dc": "create_dc",
 	"wo-grn": "create_grn",
+	"wo-debit": "create_debit",
 	"dc-grn": "create_grn",
 	"grn-complete-transfer": "complete_transfer",
 }
@@ -2793,14 +2813,35 @@ async function loadLotPoEnabled() {
 const lotOnload = ref({})
 const lotItemsHydrated = ref(false)
 const lotOrderHydrated = ref(false)
+const lotProgramLoading = ref(false)
+const lotProgramError = ref("")
+let lotHydrationRequest = 0
+
+async function loadLotOnload() {
+	const lot = props.id
+	const request = ++lotHydrationRequest
+	lotProgramLoading.value = true
+	lotProgramError.value = ""
+	const [document, program] = await Promise.allSettled([
+		getDocWithOnload("Lot", lot),
+		callMethod("essdee_yrp.fabric_program.get_fabric_program_details", { lot }),
+	])
+	// A slow response from another Lot/mode must never replace current data.
+	if (request !== lotHydrationRequest || props.id !== lot || !isLot.value) return null
+	const onload = document.status === "fulfilled" ? { ...document.value?.__onload } : {}
+	if (program.status === "fulfilled") {
+		onload.fabric_program_details = program.value || []
+	} else {
+		delete onload.fabric_program_details
+		lotProgramError.value = `Could not load the Cloth Program: ${program.reason?.message || "Please retry."}`
+	}
+	lotOnload.value = onload
+	lotProgramLoading.value = false
+	return { onload, documentLoaded: document.status === "fulfilled", programLoaded: program.status === "fulfilled" }
+}
 
 async function hydrateLotForView() {
-	try {
-		const loaded = await getDocWithOnload(doctype.value, props.id)
-		lotOnload.value = loaded?.__onload || {}
-	} catch (_) {
-		lotOnload.value = {}
-	}
+	await loadLotOnload()
 }
 
 async function hydrateLotForEdit() {
@@ -2808,35 +2849,28 @@ async function hydrateLotForEdit() {
 	lotOrderHydrated.value = false
 	lotFabricHydrated.value = false
 	try {
-		const loaded = await getDocWithOnload(doctype.value, props.id)
-		const onload = loaded?.__onload || {}
-		lotOnload.value = onload
+		const result = await loadLotOnload()
+		if (!result) return
+		const { onload, documentLoaded, programLoaded } = result
 		await nextTick()
 		if (lotItemsGrid.value?.loadData && onload.item_details != null) {
 			lotItemsGrid.value.loadData(onload.item_details)
 			lotItemsHydrated.value = true
 		}
-		if (lotOrderGrid.value?.loadData) {
+		if (documentLoaded && lotOrderGrid.value?.loadData) {
 			lotOrderGrid.value.loadData(onload.order_item_details || [])
 			lotOrderHydrated.value = true
 		}
-		// Fabric island: `|| []` mirrors lot.js (the onload key is absent when the
-		// Lot has no fabric rows — an empty island then legitimately emits "[]").
-		if (lotFabricGrid.value?.loadData) {
+		// Only serialize program data after a successful explicit read. A failed
+		// request must never submit an empty array over the saved program.
+		if (programLoaded && lotFabricGrid.value?.loadData) {
 			lotFabricGrid.value.loadData(onload.fabric_program_details || [])
 			lotFabricHydrated.value = true
 		}
+		if (!documentLoaded) toast.warn("Could not load the Lot's order items", "Re-open the page before editing order quantities.")
 	} catch (_) {
 		toast.warn("Could not load the Lot's order items", "Re-open the page before saving, or edit in Desk.")
 	}
-}
-
-// Fabric "Recalculate Received" (view tab): the island already ran the
-// whitelisted rebuild_fabric_tracking — refresh the doc AND the onload payload
-// the island renders from (Desk: cur_frm.reload_doc()).
-async function onFabricRebuilt() {
-	await reloadView()
-	await hydrateLotForView()
 }
 
 // Create/edit: (re)load the items editor from get_item_details after the IPD
@@ -4778,6 +4812,20 @@ function onSubmit() {
 	})
 }
 
+async function onApproveDebit() {
+	acting.value = "approve-debit"
+	try {
+		markLocalWrite()
+		await callMethod("yrp.yrp.doctype.debit.debit.approve_debit", { name: doc.value.name })
+		toast.success("Debit approved", `${doc.value.name} approved`, 6000)
+		await reloadView()
+	} catch (e) {
+		showActionError("Approve Debit failed", e)
+	} finally {
+		acting.value = null
+	}
+}
+
 function onCancel() {
 	confirm.require({
 		header: "Cancel document",
@@ -4852,6 +4900,13 @@ function onCreateDcFromWo() {
 		},
 	})
 }
+function onCreateDebitFromWo() {
+	if (!doc.value) return
+	router.push({
+		path: "/debit/new",
+		query: { work_order: doc.value.name },
+	})
+}
 // Calculate Deliverables — essdee fabric processes (knitting / dyeing /
 // compacting). The modal fetches its own context from
 // essdee_yrp.api.work_order.get_fabric_deliverable_context when opened and
@@ -4892,6 +4947,7 @@ async function onClothProgramsBuilt(res) {
 	markLocalWrite()
 	await reloadView()
 	await hydrateLotForView()
+	activeTab.value = "lot-fabric"
 	toast.success("Cloth programs built", `${res?.cloths_built ?? 0} cloth program(s).`, 6000)
 }
 
@@ -5347,7 +5403,7 @@ const lotViewTabs = computed(() => {
 		out.push({ value: ct.fieldname, label: ct.label, badge: tabBadge(ct) })
 	}
 	pushTable("lot_fabric_details")
-	out.push({ value: "lot-fabric", label: "Fabric Program", badge: 0 })
+	out.push({ value: "lot-fabric", label: "Cloth Program", badge: 0 })
 	out.push({ value: "lot-items", label: "Order Items", badge: 0 })
 	out.push({ value: "lot-order-details", label: "Order Details", badge: 0 })
 	for (const ct of tables) {
@@ -5477,6 +5533,8 @@ const DOCSTATUS_LABELS = { 0: "Draft", 1: "Submitted", 2: "Cancelled" }
 const statusLabel = computed(() => {
 	const d = doc.value
 	if (!d) return ""
+	if (Number(d.docstatus) === 2) return "Cancelled"
+	if (isDebit.value && Number(d.docstatus) === 0) return "Draft"
 	if (isWorkflow.value && d.workflow_state) return d.workflow_state
 	return d.status || DOCSTATUS_LABELS[d.docstatus] || "—"
 })
@@ -5484,8 +5542,9 @@ const statusSeverity = computed(() => {
 	const d = doc.value
 	if (isWorkflow.value && d?.workflow_state) return WORKFLOW_SEVERITY[d.workflow_state] || "warn"
 	const ds = d?.docstatus
-	if (ds === 1) return "success"
 	if (ds === 2) return "danger"
+	if (isDebit.value && d?.status === "Debit Requested") return "warn"
+	if (ds === 1) return "success"
 	return "warn"
 })
 

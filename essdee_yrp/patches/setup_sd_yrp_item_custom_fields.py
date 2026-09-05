@@ -1,18 +1,8 @@
-from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
+"""Historical patch retained for patch-log compatibility.
+
+Essdee Item fields are deployed exclusively through the Custom Field fixture.
+"""
 
 
 def execute():
-	create_custom_fields(
-		{
-			"Item": [
-				{
-					"fieldname": "product_category",
-					"fieldtype": "Link",
-					"label": "Product Category",
-					"options": "Product Category",
-					"insert_after": "categories",
-					"permlevel": 1,
-				}
-			]
-		}
-	)
+	pass

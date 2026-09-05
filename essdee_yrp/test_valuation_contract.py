@@ -21,18 +21,23 @@ class TestEssdeeValuationContract(UnitTestCase):
 	def test_fabric_grn_quantity_tolerance_is_defined(self):
 		self.assertEqual(QTY_TOLERANCE, 0.000001)
 
-	def test_grn_hook_uses_one_controller_for_stock_posting(self):
+	def test_grn_uses_controller_without_lot_tracking_hooks(self):
 		self.assertEqual(
 			override_doctype_class["Goods Received Note"],
 			"essdee_yrp.overrides.goods_received_note.EssdeeGoodsReceivedNote",
 		)
-		self.assertNotIn(
-			"essdee_yrp.fabric_grn.on_submit",
-			doc_events["Goods Received Note"]["on_submit"],
+		grn_events = doc_events["Goods Received Note"]
+		self.assertIn(
+			"essdee_yrp.fabric_grn.before_validate",
+			grn_events["before_validate"],
 		)
 		self.assertNotIn(
-			"essdee_yrp.fabric_grn.on_cancel",
-			doc_events["Goods Received Note"]["on_cancel"],
+			"essdee_yrp.fabric_tracking.on_grn_submit",
+			grn_events.get("on_submit", []),
+		)
+		self.assertNotIn(
+			"essdee_yrp.fabric_tracking.on_grn_cancel",
+			grn_events.get("on_cancel", []),
 		)
 
 	def test_grn_child_schema_contains_full_lineage_contract(self):

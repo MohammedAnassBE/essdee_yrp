@@ -4,7 +4,7 @@
 			{{ __("Add fabric rows above and save — the program grids appear per cloth.") }}
 		</div>
 
-		<div v-for="(entry, ei) in entries" :key="entry.cloth_item" class="fp-card">
+		<div v-for="entry in entries" :key="entry.cloth_item" class="fp-card">
 			<header class="fp-head">
 				<div class="fp-title">
 					<b>{{ entry.cloth_item }}</b>
@@ -13,25 +13,16 @@
 						{{ plan_badge(entry).text }}
 					</span>
 				</div>
-				<button
-					v-if="ei === 0 && !is_new"
-					class="btn btn-xs btn-default"
-					:disabled="rebuilding"
-					@click="rebuild"
-				>
-					{{ rebuilding ? __("Recalculating…") : __("Recalculate Received") }}
-				</button>
 			</header>
 
 			<section class="fp-grid">
-				<h6>{{ __("Knitting Program — Dia × Colour") }}</h6>
 				<div class="fp-table-wrap">
 					<table class="fp-table fp-matrix">
 						<thead>
 							<tr>
 								<th rowspan="2" class="fp-dia">{{ __("Dia") }}</th>
 								<th :colspan="program_colour_columns(entry).length">
-									{{ __("Knitting Program (Kg)") }}
+									{{ __("Cloth Program (Kg)") }}
 								</th>
 								<th rowspan="2" class="fp-num">{{ __("Total") }}</th>
 							</tr>
@@ -98,7 +89,6 @@
 import { computed, ref } from "vue";
 
 const entries = ref([]);
-const rebuilding = ref(false);
 
 // cur_frm reads are not reactive — these stay correct only because lot.js
 // re-mounts this island on every form refresh (same as OCRDetail).
@@ -106,7 +96,6 @@ const editable = computed(() => {
 	const doc = cur_frm ? cur_frm.doc : {};
 	return (doc.status || "Open") === "Open";
 });
-const is_new = computed(() => Boolean(cur_frm && cur_frm.doc.__islocal));
 
 function load_data(data) {
 	entries.value = (data || []).map((entry) => ({
@@ -141,10 +130,7 @@ function get_requirement() {
 function plan_badge(entry) {
 	const status = entry.plan_status || "";
 	if (!status) return null;
-	if (status === "Built") {
-		const when = (entry.plan_built_on || "").slice(0, 10);
-		return { text: __("Plan ready {0}", [when]), cls: "fp-badge--ok" };
-	}
+	if (status === "Built") return null;
 	if (status === "Pending Approval") return { text: __("Plan waiting for IPD approval"), cls: "fp-badge--wait" };
 	if (status === "Stale") return { text: __("Plan outdated — IPD changed"), cls: "fp-badge--warn" };
 	return { text: __("Plan error — open the fabric row"), cls: "fp-badge--err" };
@@ -216,25 +202,6 @@ function mark_dirty() {
 	if (cur_frm) cur_frm.dirty();
 }
 
-function rebuild() {
-	if (!cur_frm || cur_frm.doc.__islocal) return;
-	if (cur_frm.is_dirty()) {
-		frappe.show_alert({ message: __("Save the Lot first."), indicator: "orange" });
-		return;
-	}
-	rebuilding.value = true;
-	frappe.call({
-		method: "essdee_yrp.fabric_tracking.rebuild_fabric_tracking",
-		args: { lot: cur_frm.doc.name },
-		callback() {
-			cur_frm.reload_doc();
-		},
-		always() {
-			rebuilding.value = false;
-		},
-	});
-}
-
 defineExpose({ load_data, get_data, get_requirement });
 </script>
 
@@ -282,7 +249,6 @@ defineExpose({ load_data, get_data, get_requirement });
 	padding: 10px 12px;
 	min-width: 0;
 }
-.fp-grid h6,
 .fp-ledger h6 {
 	font-size: 11.5px;
 	text-transform: uppercase;

@@ -1,27 +1,11 @@
 import json
 
 import frappe
-from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
 
 def execute():
-	create_custom_fields({
-		"Item Production Detail": [{
-			"fieldname": "yarn_ratio_details",
-			"fieldtype": "Table",
-			"label": "Yarn Ratio",
-			"options": "IPD Yarn Ratio",
-			"insert_after": "yarn_item",
-			"depends_on": "eval:doc.is_cloth_item",
-			"description": (
-				"Yarn composition used by the knitting matrix. "
-				"Ratios must total exactly 100."
-			),
-		}],
-	})
-
 	# The single link is retained as a hidden compatibility/default field while
-	# the child table becomes authoritative.
+	# the child table becomes authoritative. Both fields are fixture-owned.
 	if frappe.db.exists("Custom Field", "Item Production Detail-yarn_item"):
 		frappe.db.set_value(
 			"Custom Field",

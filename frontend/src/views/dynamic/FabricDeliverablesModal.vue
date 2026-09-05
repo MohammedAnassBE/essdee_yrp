@@ -5,6 +5,8 @@
 		class="fabric-calc-dialog"
 		:style="{ width: 'min(880px, calc(100vw - 32px))' }"
 		:header="dialogHeader"
+		:closable="!applying && !loading"
+		:closeOnEscape="!applying && !loading"
 		@update:visible="(v) => emit('update:visible', v)"
 		@show="loadContext"
 	>
@@ -15,17 +17,35 @@
 		<div v-else-if="!ctx || !(ctx.rows || []).length" class="esd-empty">
 			<i class="pi pi-info-circle" />
 			<p class="esd-empty__text">
-				This Work Order's process is not a fabric process (knitting / dyeing /
-				compacting) for the Lot's fabrics — nothing to calculate here.
+				No fabric quantity rows are available for this Work Order's configured process.
 			</p>
+			<div v-for="warning in ctx?.warnings || []" :key="warning" class="fc-warning" role="status">{{ warning }}</div>
 		</div>
 
 		<div v-else class="fc-rows">
+			<div class="fc-source-note" role="status">
+				<template v-if="ctx.source_process">
+					<strong>Filled from {{ ctx.source_process.label || ctx.source_process.process_name }} GRNs</strong>
+					<span>Unallocated source stock: {{ ctx.source_process.available }} kg across all source variants. Only compatible inputs can fill the rows below.</span>
+					<span>Return GRNs are excluded. Quantities remain editable and availability is checked again on Calculate.</span>
+				</template>
+				<template v-else>
+					<strong>Planned quantities</strong>
+					<span>Knitting uses the saved Lot Cloth Program; later processes use their plan. Edit quantities, or use Fill Quantity to read an earlier process's submitted GRNs.</span>
+				</template>
+			</div>
+			<div v-for="warning in ctx.warnings || []" :key="warning" class="fc-warning" role="status">{{ warning }}</div>
 			<section v-for="(row, i) in ctx.rows" :key="row.fabric_row" class="fc-row">
 				<header class="esd-card__head">
 					<span class="esd-card__title">{{ row.cloth_item }}</span>
 					<span class="fc-ipd esd-mono">{{ row.production_detail }}</span>
 				</header>
+				<div v-if="row.reference_routed" class="fc-note">
+					Enter quantities by <b>finished cloth Colour and Dia</b>. The IPD determines the consumed inputs and this process's output.
+				</div>
+				<div v-if="(row.qty_rows || []).some((qr) => qr.source_shared)" class="fc-warning">
+					Some outputs share the same received input. Their quantities start at 0; allocate the shared quantity manually. Availability shown on those rows is shared, not additional stock for each row.
+				</div>
 
 				<!-- The IPD derives every attribute; the user enters ONLY quantities —
 				     one row per matrix group (mirrors the Desk dialog exactly). -->
@@ -99,6 +119,9 @@
 						<div class="fc-colour-head">{{ sec.name }}</div>
 						<div v-for="it in sec.items" :key="it.qr.key" class="fc-field fc-field--tight">
 							<label class="field-label">{{ it.qr.row_label || it.qr.label }}</label>
+							<small v-if="it.qr.source_available != null" class="fc-availability">
+								{{ it.qr.source_shared ? 'Shared capacity' : 'Available output' }}: {{ it.qr.source_available }} kg
+							</small>
 							<InputNumber
 								v-model="entries[i].qtys[it.j]"
 								:min="0"
@@ -113,6 +136,9 @@
 				<template v-else>
 					<div v-for="(qr, j) in row.qty_rows || []" :key="qr.key" class="fc-field">
 						<label class="field-label">{{ qr.label }}</label>
+						<small v-if="qr.source_available != null" class="fc-availability">
+							{{ qr.source_shared ? 'Shared capacity' : 'Available output' }}: {{ qr.source_available }} kg
+						</small>
 						<InputNumber
 							v-model="entries[i].qtys[j]"
 							:min="0"
@@ -148,14 +174,51 @@
 		</div>
 
 		<template #footer>
-			<Button label="Cancel" severity="secondary" text :disabled="applying" @click="emit('update:visible', false)" />
+			<Button label="Cancel" severity="secondary" text :disabled="applying || loading" @click="emit('update:visible', false)" />
+			<Button
+				v-if="(ctx?.source_process_options || []).length"
+				label="Fill Quantity"
+				icon="pi pi-download"
+				severity="secondary"
+				:disabled="applying || loading"
+				@click="openSourcePicker"
+			/>
 			<Button
 				v-if="ctx && (ctx.rows || []).length"
 				label="Calculate"
 				icon="pi pi-calculator"
 				:loading="applying"
+				:disabled="loading"
 				@click="onApply"
 			/>
+		</template>
+	</Dialog>
+	<Dialog
+		v-model:visible="sourcePickerOpen"
+		modal
+		header="Fill Quantity from Process GRNs"
+		:style="{ width: 'min(460px, calc(100vw - 32px))' }"
+		:closable="!loading"
+		:closeOnEscape="!loading"
+	>
+		<div class="fc-field">
+			<label for="fabric-source-process" class="field-label">Source Process *</label>
+			<Select
+				v-model="selectedSource"
+				inputId="fabric-source-process"
+				:options="ctx?.source_process_options || []"
+				optionLabel="label"
+				optionValue="value"
+				:disabled="loading"
+				fluid
+				placeholder="Select an earlier process"
+			/>
+			<small>Replaces the popup quantities using submitted GRNs for this Lot and cloth. Return GRNs are excluded. Nothing is saved until Calculate.</small>
+			<p v-if="fillError" class="fc-warning" role="alert">{{ fillError }}</p>
+		</div>
+		<template #footer>
+			<Button label="Cancel" severity="secondary" text :disabled="loading" @click="sourcePickerOpen = false" />
+			<Button label="Fill" icon="pi pi-download" :loading="loading" :disabled="!selectedSource" @click="fillQuantity" />
 		</template>
 	</Dialog>
 </template>
@@ -185,7 +248,7 @@
  * Adapted (widgets only): frappe.ui.Dialog → PrimeVue Dialog, Float →
  * InputNumber, Link → Select/LinkField, HTML notes → styled divs.
  */
-import { ref, computed } from "vue"
+import { ref, computed, watch, onBeforeUnmount } from "vue"
 import Dialog from "primevue/dialog"
 import Select from "primevue/select"
 import InputNumber from "primevue/inputnumber"
@@ -193,6 +256,7 @@ import Button from "primevue/button"
 import LinkField from "@/components/LinkField.vue"
 import { callMethod, searchLink } from "@/api/client"
 import { useAppToast } from "@/composables/useToast"
+import { MAX_COLOUR_COLUMNS, isMultiColour, useFabricDeliverableContext } from "@/composables/useFabricDeliverableContext"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
@@ -217,54 +281,50 @@ const dialogHeader = computed(() =>
 )
 
 const toast = useAppToast()
-const loading = ref(false)
 const applying = ref(false)
-const ctx = ref(null)
-// One entry per context row: { colour, yarnQty, qtys: [per qty_row], colourQtys }
-const entries = ref([])
+const { ctx, entries, loading, load, invalidate } = useFabricDeliverableContext(
+	(args) => callMethod("essdee_yrp.api.work_order.get_fabric_deliverable_context", args),
+)
+const sourcePickerOpen = ref(false)
+const selectedSource = ref(null)
+const fillError = ref("")
+
+watch(() => props.visible, (visible) => {
+	if (!visible) {
+		invalidate()
+		sourcePickerOpen.value = false
+	}
+})
+watch(() => props.workOrder, () => {
+	invalidate()
+	sourcePickerOpen.value = false
+	if (props.visible) loadContext()
+})
+onBeforeUnmount(invalidate)
 
 async function loadContext() {
-	loading.value = true
-	ctx.value = null
-	entries.value = []
+	fillError.value = ""
 	try {
-		const r = await callMethod(
-			"essdee_yrp.api.work_order.get_fabric_deliverable_context",
-			{ work_order: props.workOrder },
-		)
-		ctx.value = r || { is_fabric_process: false, rows: [] }
-		;(ctx.value.warnings || []).forEach((w) => toast.warn("Fabric row skipped", w))
-		// Pre-fill the Lot program/plan balances (server-computed) and the
-		// legacy default physical output colour. Multi-colour knitting has one
-		// quantity slot per physical-output (colour × dia).
-		entries.value = (ctx.value.rows || []).map((row) => {
-			const entry = {
-				// Row-level colour is the SINGLE-COLOUR fallback only. Multi-colour
-				// rows carry a line-level colour per column — the Desk renders no
-				// colour_${i} field there, so fallback_colour posts as null.
-				colour: isMultiColour(row) ? null : row.greige_colour || null,
-				yarnQty: null,
-				qtys: (row.qty_rows || []).map((qr) => qr.prefill || null),
-				colourQtys: {},
-			}
-			if (isMultiColour(row)) {
-				entry.qtys = (row.qty_rows || []).map(() => null)
-				for (const colour of row.colour_options) {
-					entry.colourQtys[colour] = (row.qty_rows || []).map((qr) =>
-						colour === row.greige_colour ? qr.prefill || null : null,
-					)
-				}
-			}
-			return entry
-		})
-		;(ctx.value.rows || []).forEach((row, i) => {
-			if (row.kind === "knitting") recomputeYarn(i)
-		})
+		await load(props.workOrder, null, { reset: true })
 	} catch (e) {
 		toast.error("Couldn't load fabric context", e.message)
 		emit("update:visible", false)
-	} finally {
-		loading.value = false
+	}
+}
+
+function openSourcePicker() {
+	selectedSource.value = ctx.value?.source_process?.value || ctx.value?.source_process_options?.[0]?.value || null
+	fillError.value = ""
+	sourcePickerOpen.value = true
+}
+
+async function fillQuantity() {
+	if (!selectedSource.value || loading.value || applying.value) return
+	fillError.value = ""
+	try {
+		if (await load(props.workOrder, selectedSource.value)) sourcePickerOpen.value = false
+	} catch (e) {
+		fillError.value = e.message
 	}
 }
 
@@ -283,14 +343,6 @@ async function searchColourValues(row, q) {
 		return rows.map((r) => ({ name: r.value ?? r.name ?? r }))
 	}
 	return searchLink("Item Attribute Value", q, { attribute_name: "Colour" })
-}
-
-const MAX_COLOUR_COLUMNS = 6
-
-function isMultiColour(row) {
-	return row.kind === "knitting" && !row.reference_routed && row.has_colour
-		&& (row.colour_options || []).length > 0
-		&& row.colour_options.length <= MAX_COLOUR_COLUMNS
 }
 
 function needsColourPicker(row) {
@@ -400,6 +452,7 @@ function yarnQuantity(i, yarn) {
 }
 
 async function onApply() {
+	if (loading.value || applying.value) return
 	const rows = []
 	for (let i = 0; i < (ctx.value?.rows || []).length; i++) {
 		const row = ctx.value.rows[i]
@@ -439,7 +492,12 @@ async function onApply() {
 	try {
 		const res = await callMethod(
 			"essdee_yrp.api.work_order.calculate_fabric_deliverables",
-			{ work_order: props.workOrder, rows: JSON.stringify(rows), modified: props.modified },
+			{
+				work_order: props.workOrder,
+				rows: JSON.stringify(rows),
+				modified: props.modified,
+				source_process: ctx.value.source_process?.value || null,
+			},
 		)
 		emit("update:visible", false)
 		emit("calculated", res || {})
@@ -452,6 +510,25 @@ async function onApply() {
 </script>
 
 <style scoped>
+.fc-source-note {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 12px 14px;
+	border-radius: 8px;
+	background: var(--esd-accent-50);
+	font-size: 12.5px;
+}
+.fc-warning {
+	padding: 10px 14px;
+	background: var(--esd-warn-50);
+	color: var(--esd-warn);
+	font-size: 12px;
+}
+.fc-availability {
+	color: var(--esd-muted);
+	font-size: 11px;
+}
 .fc-loading {
 	display: flex;
 	align-items: center;

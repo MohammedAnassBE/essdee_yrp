@@ -23,6 +23,7 @@ frappe.ui.form.on("Work Order", {
 		setTimeout(() => {
 			arrange_work_order_header_fields(frm);
 			mount_calculated_work_order_editors(frm);
+			mount_work_order_summary(frm);
 		}, 0);
 		if (frm.is_new() || frm.doc.docstatus !== 0) return;
 		frm.add_custom_button(__("Calculate Fabric Deliverables"), () => open_fabric_calculate(frm));
@@ -183,10 +184,45 @@ function mount_calculated_work_order_editors(frm) {
 	});
 }
 
-function open_fabric_calculate(frm) {
+async function mount_work_order_summary(frm) {
+	const field = frm.fields_dict.wo_summary_html;
+	if (!field) return;
+	const request_id = (frm._essdee_summary_request || 0) + 1;
+	frm._essdee_summary_request = request_id;
+	if (frm._essdee_work_order_summary?.app) {
+		frm._essdee_work_order_summary.app.unmount();
+		frm._essdee_work_order_summary = null;
+	}
+	const wrapper = field.wrapper;
+	$(wrapper).empty();
+	if (frm.is_new()) return;
+	$(wrapper).html(`<div class="text-muted text-center p-4">${__("Loading summary...")}</div>`);
+	try {
+		const name = frm.doc.name;
+		const r = await frappe.call({
+			method: "essdee_yrp.api.work_order.get_work_order_summary",
+			args: { work_order: name },
+		});
+		if (request_id !== frm._essdee_summary_request || frm.doc.name !== name) return;
+		if (!frappe.production.ui.EssdeeWorkOrderSummary) {
+			throw new Error(__("Work Order Summary component is unavailable."));
+		}
+		$(wrapper).empty();
+		frm._essdee_work_order_summary = new frappe.production.ui.EssdeeWorkOrderSummary(wrapper);
+		frm._essdee_work_order_summary.load_data(r.message || {});
+	} catch (error) {
+		if (request_id !== frm._essdee_summary_request) return;
+		console.error(error);
+		$(wrapper).html(
+			`<div class="text-danger text-center p-4">${__("Could not load the Work Order summary.")}</div>`
+		);
+	}
+}
+
+function open_fabric_calculate(frm, source_process = null) {
 	frappe.call({
 		method: "essdee_yrp.api.work_order.get_fabric_deliverable_context",
-		args: { work_order: frm.doc.name },
+		args: { work_order: frm.doc.name, source_process },
 		callback(r) {
 			const ctx = r.message || {};
 			(ctx.warnings || []).forEach((w) => frappe.msgprint({ message: w, indicator: "orange" }));
@@ -206,6 +242,27 @@ function open_fabric_calculate(frm) {
 // per-dia SUM of the dialog's own inputs (colours share one dia's balance).
 function warn_balance_overshoot(ctx, manifest, values) {
 	const overs = [];
+	if (ctx.source_process) {
+		const pools = {};
+		manifest.forEach((m) => {
+			if (!m.source_pool_key) return;
+			if (!pools[m.source_pool_key]) {
+				pools[m.source_pool_key] = {
+					label: m.input_label || m.label,
+					sum: 0,
+					available: m.source_available,
+				};
+			}
+			pools[m.source_pool_key].sum += flt(values[m.fieldname]) || 0;
+		});
+		Object.values(pools).forEach((pool) => {
+			if (pool.available != null && pool.sum > pool.available + 0.001) {
+				overs.push(
+					`${pool.label}: ${pool.sum} > ${__("source GRN available")} ${pool.available}`
+				);
+			}
+		});
+	}
 	ctx.rows.forEach((row, i) => {
 		const fields = manifest.filter((m) => m.row === i);
 		if (row.kind === "knitting" || row.kind === "dyeing") {
@@ -245,6 +302,23 @@ function warn_balance_overshoot(ctx, manifest, values) {
 // attrs. Legacy knitting renders one column per physical output colour
 // WO, 2026-07-04) — each (dia × colour) input becomes its own entry line.
 const MAX_COLOUR_COLUMNS = 6;
+
+function planning_description(row, qty_row) {
+	if (qty_row.source_process) {
+		const message = `${__("Available from {0} GRNs", [qty_row.source_process])}: `
+			+ `${flt(qty_row.source_available || 0, 3)} ${__("Kg")}`;
+		return qty_row.source_shared
+			? `${message} · ${__("Shared input — allocate it across these rows")}`
+			: message;
+	}
+	if (row.kind !== "knitting" || qty_row.program == null) return undefined;
+	const kg = (value) => `${flt(value || 0, 3)} ${__("Kg")}`;
+	return [
+		`${__("Lot program")}: ${kg(qty_row.program)}`,
+		`${__("Already ordered")}: ${kg(qty_row.ordered)}`,
+		`${__("Balance")}: ${kg(qty_row.balance)}`,
+	].join(" · ");
+}
 
 function render_fabric_dialog(frm, ctx) {
 	const fields = [];
@@ -332,6 +406,7 @@ function render_fabric_dialog(frm, ctx) {
 					fields.push({
 						fieldtype: "Float", label: qr.label, fieldname,
 						default: is_default_output && qr.prefill ? qr.prefill : undefined,
+						description: planning_description(row, qr),
 						onchange: () => recompute_yarn(i),
 					});
 					manifest.push({
@@ -351,6 +426,7 @@ function render_fabric_dialog(frm, ctx) {
 				fields.push({
 					fieldtype: "Float", label, fieldname,
 					default: qr.prefill || undefined,
+					description: planning_description(row, qr),
 					onchange: row.kind === "knitting" ? () => recompute_yarn(i) : undefined,
 				});
 				manifest.push({
@@ -358,7 +434,9 @@ function render_fabric_dialog(frm, ctx) {
 					colour: qr.knit_colour || null,
 					label: qr.label,
 					balance: qr.balance,
-					available: qr.available,
+					available: qr.source_available ?? qr.available,
+					source_available: qr.source_available,
+					source_pool_key: qr.source_pool_key,
 					reference_item_variant: qr.reference_item_variant || null,
 				});
 			};
@@ -423,7 +501,7 @@ function render_fabric_dialog(frm, ctx) {
 		}
 	});
 
-	d = new frappe.ui.Dialog({
+	const dialog_options = {
 		title: __("Calculate Fabric Deliverables — {0}", [frm.doc.process_name]),
 		size: "large",
 		fields,
@@ -469,7 +547,11 @@ function render_fabric_dialog(frm, ctx) {
 			warn_balance_overshoot(ctx, manifest, values);
 			frappe.call({
 				method: "essdee_yrp.api.work_order.calculate_fabric_deliverables",
-				args: { work_order: frm.doc.name, rows },
+				args: {
+					work_order: frm.doc.name,
+					rows,
+					source_process: ctx.source_process?.value || null,
+				},
 				freeze: true,
 				callback(res) {
 					d.hide();
@@ -482,7 +564,32 @@ function render_fabric_dialog(frm, ctx) {
 				},
 			});
 		},
-	});
+	};
+	if ((ctx.source_process_options || []).length) {
+		dialog_options.secondary_action_label = __("Fill Quantity");
+		dialog_options.secondary_action = () => {
+			const picker = new frappe.ui.Dialog({
+				title: __("Fill Quantity from Process GRNs"),
+				fields: [{
+					fieldtype: "Select",
+					fieldname: "source_process",
+					label: __("Source Process"),
+					options: ctx.source_process_options,
+					default: ctx.source_process?.value
+						|| ctx.source_process_options[0]?.value,
+					reqd: 1,
+				}],
+				primary_action_label: __("Fill"),
+				primary_action(values) {
+					picker.hide();
+					d.hide();
+					open_fabric_calculate(frm, values.source_process);
+				},
+			});
+			picker.show();
+		};
+	}
+	d = new frappe.ui.Dialog(dialog_options);
 	d.show();
 	// Pre-filled balances must reflect in the auto yarn figure immediately,
 	// not only after the first manual edit.

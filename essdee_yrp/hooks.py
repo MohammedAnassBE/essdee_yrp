@@ -13,6 +13,7 @@ yrp_ui_calculations = ["essdee_yrp.ui_registry.get_calculations"]
 yrp_ui_actions = [
 	"create_grn",
 	"create_dc",
+	"create_debit",
 	"complete_transfer",
 	"build_cloth_programs",
 	"more_menu",
@@ -52,6 +53,7 @@ fixtures = [
 					"Stock Entry-naming_series-default",
 					"Process Cost-naming_series-options",
 					"Process Cost-naming_series-default",
+					"Process-value_change_attributes-depends_on",
 					"Purchase Order-naming_series-options",
 					"Purchase Order-naming_series-default",
 					"Purchase Invoice-naming_series-options",
@@ -112,6 +114,7 @@ yrp_web_doctype_catalog = [
 	"Lot",
 	"Work Order",
 	"Work Order Correction",
+	"Debit",
 	"Delivery Challan",
 	"Goods Received Note",
 	"Process Cost",
@@ -283,6 +286,9 @@ after_build = "essdee_yrp.web_build.build_web_spa"
 # Hook on document methods and events
 
 doc_events = {
+	"Process": {
+		"validate": "essdee_yrp.process_validations.validate",
+	},
 	"Item": {
 		"validate": "essdee_yrp.item_validations.validate",
 	},
@@ -319,8 +325,6 @@ doc_events = {
 			"essdee_yrp.fabric_grn.before_validate",
 		],
 		"before_cancel": "essdee_yrp.api.mrp_stock_transfer.before_grn_cancel",
-		"on_submit": "essdee_yrp.fabric_tracking.on_grn_submit",
-		"on_cancel": "essdee_yrp.fabric_tracking.on_grn_cancel",
 	},
 	# A Stock Entry created by the cross-bench GRN transfer (source_grn set) may be
 	# cancelled ONLY by the mrp GRN-cancel flow (cancel_grn_transfer sets

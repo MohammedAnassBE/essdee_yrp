@@ -46,6 +46,7 @@ def _improve_premium_white():
 						"doctype": "Work Order Correction",
 						"icon": "pi pi-pencil",
 					},
+					{"doctype": "Debit", "icon": "pi pi-wallet"},
 					{"doctype": "Process Cost", "icon": "pi pi-indian-rupee"},
 				],
 			},

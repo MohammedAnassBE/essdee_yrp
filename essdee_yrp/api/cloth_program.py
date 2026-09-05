@@ -35,6 +35,7 @@ from essdee_yrp.api.work_order import _guard_not_modified
 from essdee_yrp.fabric_ipd import (
     FABRIC_COLOUR_ATTRIBUTE,
     FABRIC_DIA_ATTRIBUTE,
+    build_cloth_conversion_rule_mappings,
     synthesize_fabric_processes_from_tabs,
 )
 from essdee_yrp.fabric_program import (
@@ -42,12 +43,6 @@ from essdee_yrp.fabric_program import (
     get_knitting_output_colour_map,
 )
 from essdee_yrp.fabric_requirement import compute_cloth_demand
-
-#: The adapter's fixed sequences for the 3 tab steps (knitting / dyeing /
-#: compacting). _persist_generic_fabric_rows owns EXACTLY these persisted
-#: sequences; any other sequence (a manually-authored washing/printing step)
-#: is never touched by the auto-builder.
-TAB_SEQUENCES = (10, 20, 30)
 
 # Build Cloth Programs asks two colour-level questions: whether the input is
 # dyed yarn and whether Knitting outputs the Finished Colour. The physical
@@ -1084,8 +1079,10 @@ def _persist_generic_fabric_rows(cpd):
     Persisting the adapter's own output (synthesize_fabric_processes_from_tabs)
     verbatim guarantees the persisted path rebuilds byte-identical matrices —
     _attach_persisted_mappings reconstitutes exactly these rows. Idempotent:
-    the managed TAB_SEQUENCES rows are replaced wholesale on every build; rows
-    at any other sequence (manually-authored extra steps) are preserved.
+    managed rows are identified by Process link, not by the old 10/20/30
+    sequence slots. A later Build therefore cannot mistake a manually moved
+    Washing row for Dyeing and delete it. Existing managed rows retain their
+    operator-authored positions while their generated details are refreshed.
 
     All-or-nothing guard: input_item/output_item are REQD on IPD Fabric
     Process, and the knitting input (yarn_item) may legitimately be blank. A
@@ -1098,9 +1095,40 @@ def _persist_generic_fabric_rows(cpd):
     fresh tabs, pre-fix behavior exactly) and the build refuses loudly when
     custom unmanaged steps would make the leftover table partial."""
     synthesized = synthesize_fabric_processes_from_tabs(cpd)
-    managed = set(TAB_SEQUENCES)
-    keep_fp = [r for r in cpd.get("fabric_processes") or [] if cint(r.sequence) not in managed]
-    keep_vm = [r for r in cpd.get("fabric_value_mappings") or [] if cint(r.sequence) not in managed]
+    for row in synthesized:
+        conversion_rules = build_cloth_conversion_rule_mappings(cpd, row)
+        if conversion_rules is not None:
+            row.value_mappings = conversion_rules
+    managed_processes = {
+        process for process in (
+            cpd.get("knitting_process"),
+            cpd.get("dyeing_process"),
+            cpd.get("compacting_process"),
+        ) if process
+    }
+    existing_managed_sequences = {
+        row.fabric_process: cint(row.sequence)
+        for row in cpd.get("fabric_processes") or []
+        if row.fabric_process in managed_processes
+    }
+    managed_sequences = set(existing_managed_sequences.values())
+    keep_fp = [
+        row for row in cpd.get("fabric_processes") or []
+        if row.fabric_process not in managed_processes
+    ]
+    keep_vm = [
+        row for row in cpd.get("fabric_value_mappings") or []
+        if cint(row.sequence) not in managed_sequences
+    ]
+
+    occupied = {cint(row.sequence) for row in keep_fp}
+    for row in synthesized:
+        process = row.get("fabric_process")
+        sequence = existing_managed_sequences.get(process, cint(row.get("sequence")))
+        while sequence in occupied:
+            sequence += 10
+        row.sequence = sequence
+        occupied.add(sequence)
 
     if any(not (row.get("input_item") and row.get("output_item")) for row in synthesized):
         if not (cpd.get("fabric_processes") or cpd.get("fabric_value_mappings")):

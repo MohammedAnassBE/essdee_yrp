@@ -60,6 +60,20 @@ def fetch_fabric_program_details(lot_doc):
 	return entries
 
 
+@frappe.whitelist()
+def get_fabric_program_details(lot):
+	"""Return the persisted Cloth Program for an open Lot form.
+
+	The form still receives the same payload through ``onload`` for its first
+	paint. This explicit reader lets the Cloth Program tab refresh from the
+	database after a build, receipt, schema/layout refresh, or an onload payload
+	omitted by a cached client.
+	"""
+	lot_doc = frappe.get_doc("Lot", lot)
+	lot_doc.check_permission("read")
+	return fetch_fabric_program_details(lot_doc)
+
+
 def _program_row_payload(ipd, row):
 	"""Display/persistence payload for one exact knitting route.
 

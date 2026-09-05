@@ -14,6 +14,7 @@ import LotOrderedDetail from "./ProductionOrder/LotOrderedDetail.vue";
 import FabricProgram from "./Lot/FabricProgram.vue";
 import FabricProcesses from "./Fabric/FabricProcesses.vue";
 import CutPlanItems from "./CuttingPlan/components/CutPlanItems.vue";
+import WorkOrderSummary from "./WorkOrder/WorkOrderSummary.vue";
 
 frappe.provide("frappe.production.ui");
 
@@ -300,5 +301,17 @@ frappe.production.ui.FabricProcesses = class {
 	}
 	get_steps() {
 		return this.vue.get_steps();
+	}
+};
+
+frappe.production.ui.EssdeeWorkOrderSummary = class {
+	constructor(wrapper) {
+		this.$wrapper = $(wrapper);
+		const mounted = mount_component(WorkOrderSummary, this.$wrapper);
+		this.app = mounted.app;
+		this.vue = mounted.vue;
+	}
+	load_data(payload) {
+		this.vue.load_data(JSON.parse(JSON.stringify(payload || {})));
 	}
 };

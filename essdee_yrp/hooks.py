@@ -13,6 +13,7 @@ yrp_ui_calculations = ["essdee_yrp.ui_registry.get_calculations"]
 yrp_ui_actions = [
 	"create_grn",
 	"create_dc",
+	"create_debit",
 	"complete_transfer",
 	"build_cloth_programs",
 	"more_menu",
@@ -52,6 +53,7 @@ fixtures = [
 					"Stock Entry-naming_series-default",
 					"Process Cost-naming_series-options",
 					"Process Cost-naming_series-default",
+					"Process-value_change_attributes-depends_on",
 					"Purchase Order-naming_series-options",
 					"Purchase Order-naming_series-default",
 					"Purchase Invoice-naming_series-options",
@@ -74,17 +76,14 @@ fixtures = [
 		"dt": "Custom DocPerm",
 		"filters": [["parent", "in", ["Item Production Detail", "Terms and Condition"]]],
 	},
-	# /web per-user UI (spec §12.2): the code-owned layouts shipped to every site.
+	# /web UI (spec §12.2): Premium White is the only layout shipped by Essdee.
 	# THE FILTER IS LOAD-BEARING — sync_fixtures force-imports on every
 	# `bench migrate`, so an unfiltered fixture would silently revert every
 	# same-named prod-edited layout and ship stray dev test layouts. Names listed
 	# here are therefore CODE-OWNED: never edit them live on prod (a migrate
-	# reverts the change) — duplicate to a new name instead. Per-user assignment
-	# (YRP UI Preference) is NOT fixtured, so who-gets-which stays prod-owned.
-	# 2026-07-20 (owner): ship ALL enabled layouts (status = Enabled), not a name
-	# list. `disabled = 0` — so any enabled layout on the exporting site is
-	# captured; disabled layouts (dev drills, unfinished templates) stay out.
-	{"dt": "UI Layout", "filters": [["disabled", "=", 0]]},
+	# reverts the change). YRP UI Preference remains un-fixtured; its bounded
+	# personal overrides stay user-owned while the base layout is fixed here.
+	{"dt": "UI Layout", "filters": [["name", "=", "Premium White"]]},
 ]
 
 # Apps
@@ -115,6 +114,7 @@ yrp_web_doctype_catalog = [
 	"Lot",
 	"Work Order",
 	"Work Order Correction",
+	"Debit",
 	"Delivery Challan",
 	"Goods Received Note",
 	"Process Cost",
@@ -286,6 +286,9 @@ after_build = "essdee_yrp.web_build.build_web_spa"
 # Hook on document methods and events
 
 doc_events = {
+	"Process": {
+		"validate": "essdee_yrp.process_validations.validate",
+	},
 	"Item": {
 		"validate": "essdee_yrp.item_validations.validate",
 	},
@@ -322,8 +325,6 @@ doc_events = {
 			"essdee_yrp.fabric_grn.before_validate",
 		],
 		"before_cancel": "essdee_yrp.api.mrp_stock_transfer.before_grn_cancel",
-		"on_submit": "essdee_yrp.fabric_tracking.on_grn_submit",
-		"on_cancel": "essdee_yrp.fabric_tracking.on_grn_cancel",
 	},
 	# A Stock Entry created by the cross-bench GRN transfer (source_grn set) may be
 	# cancelled ONLY by the mrp GRN-cancel flow (cancel_grn_transfer sets
@@ -382,6 +383,16 @@ override_whitelisted_methods = {
 	# Essdee-owned close implementation so Desk and /web use one stock contract.
 	"yrp.yrp.doctype.work_order.work_order.update_stock":
 		"essdee_yrp.work_order_close.close_work_order",
+	# Essdee ships one UI layout. Keep refresh, self-service preference changes,
+	# and System Manager user previews on the same Premium White base as boot.
+	"yrp.yrp.api.ui_config.get_my_ui_config":
+		"essdee_yrp.ui_config.get_my_ui_config",
+	"yrp.yrp.api.ui_config.save_my_ui_overrides":
+		"essdee_yrp.ui_config.save_my_ui_overrides",
+	"yrp.yrp.api.ui_config.reset_my_ui_overrides":
+		"essdee_yrp.ui_config.reset_my_ui_overrides",
+	"yrp.yrp.api.ui_config.get_ui_config_for":
+		"essdee_yrp.ui_config.get_ui_config_for",
 }
 #
 # each overriding function accepts a `data` argument;

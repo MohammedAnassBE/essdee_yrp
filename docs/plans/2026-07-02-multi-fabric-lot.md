@@ -14,7 +14,11 @@
 
 - Bench `/home/anas/frappe-16`, app repo `/home/anas/frappe-16/apps/essdee_yrp` (branch `develop`), site `essdee_yrp.site` (port 8003).
 - **NEVER touch `apps/frappe`, `apps/erpnext`, `apps/yrp`.** All work in `essdee_yrp`.
-- **Custom Fields deploy via FIXTURES ONLY**: create on the site via `bench console` `create_custom_fields(...)` → `bench --site essdee_yrp.site export-fixtures --app essdee_yrp` → the field must appear in `essdee_yrp/fixtures/custom_field.json`. NO `create_custom_fields` patch files.
+- **Custom Fields deploy via FIXTURES ONLY**: create records through the Custom
+  Field DocType, then run `bench --site essdee_yrp.site export-fixtures --app
+  essdee_yrp`; every field must appear in
+  `essdee_yrp/fixtures/custom_field.json`. Never create Custom Fields from a
+  patch or application function.
 - **NO `git commit` at any step.** Work stays uncommitted; the owner authorizes commits explicitly at the end. (Standing bench rule 2026-06-17.)
 - **NO `frappe.db.commit()` inside any test/verification code you write into files.** (Console one-liners that end with commit for setup data are OK.)
 - **v1 quantity math is strictly 1:1** (deliverable weight == receivable qty). No wastage/excess percentages anywhere.
@@ -46,25 +50,11 @@ EOF
 ```
 Expected: `CHECK: None`
 
-- [ ] **Step 2: Create the field on the site**
+- [ ] **Step 2: Create the field through the Custom Field DocType**
 
-```bash
-bench --site essdee_yrp.site console <<'EOF' 2>&1 | grep -a CHECK
-import frappe
-from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
-create_custom_fields({"Item": [{
-    "fieldname": "is_cloth_item",
-    "fieldtype": "Check",
-    "label": "Is Cloth Item",
-    "default": "0",
-    "insert_after": "product_category",
-}]})
-frappe.db.commit()
-print("CHECK:", frappe.db.exists("Custom Field", "Item-is_cloth_item"))
-EOF
-```
-Expected: `CHECK: Item-is_cloth_item`
-(`product_category` is an existing essdee_yrp Custom Field on Item — safe anchor.)
+Create `Item-is_cloth_item` in Desk with fieldname `is_cloth_item`, type
+`Check`, default `0`, and insert it after `product_category`. Export fixtures
+and verify that exact record exists in `fixtures/custom_field.json`.
 
 - [ ] **Step 3: Add to fixtures filter**
 
@@ -230,42 +220,12 @@ Expected: the Lot form renders a "Fabric Details" section with the empty grid; n
 
 Each `.py` mirrors Task 2's controller (class names `IPDKnittingDiaDetail`, `IPDDyeingColourDetail`, `IPDCompactingDiaDetail`).
 
-- [ ] **Step 2: Migrate, then create the IPD Custom Fields on the site**
+- [ ] **Step 2: Migrate, then create the IPD Custom Fields through the Custom Field DocType**
 
-```bash
-bench --site essdee_yrp.site migrate 2>&1 | tail -3
-bench --site essdee_yrp.site console <<'EOF' 2>&1 | grep -a CHECK
-import frappe
-from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
-last_field = frappe.get_meta("Item Production Detail").fields[-1].fieldname
-print("CHECK anchor:", last_field)
-create_custom_fields({"Item Production Detail": [
-  {"fieldname": "is_cloth_item", "fieldtype": "Check", "label": "Is Cloth Item",
-   "fetch_from": "item.is_cloth_item", "read_only": 1, "hidden": 1, "insert_after": "item"},
-  {"fieldname": "fabric_knitting_tab", "fieldtype": "Tab Break", "label": "Knitting",
-   "depends_on": "eval:doc.is_cloth_item", "insert_after": last_field},
-  {"fieldname": "knitting_process", "fieldtype": "Link", "label": "Knitting Process",
-   "options": "Process", "insert_after": "fabric_knitting_tab"},
-  {"fieldname": "knitting_dia_details", "fieldtype": "Table", "label": "Dia Details",
-   "options": "IPD Knitting Dia Detail", "insert_after": "knitting_process"},
-  {"fieldname": "fabric_dyeing_tab", "fieldtype": "Tab Break", "label": "Dyeing",
-   "depends_on": "eval:doc.is_cloth_item", "insert_after": "knitting_dia_details"},
-  {"fieldname": "dyeing_process", "fieldtype": "Link", "label": "Dyeing Process",
-   "options": "Process", "insert_after": "fabric_dyeing_tab"},
-  {"fieldname": "dyeing_colour_details", "fieldtype": "Table", "label": "Colour Details",
-   "options": "IPD Dyeing Colour Detail", "insert_after": "dyeing_process"},
-  {"fieldname": "fabric_compacting_tab", "fieldtype": "Tab Break", "label": "Compacting",
-   "depends_on": "eval:doc.is_cloth_item", "insert_after": "dyeing_colour_details"},
-  {"fieldname": "compacting_process", "fieldtype": "Link", "label": "Compacting Process",
-   "options": "Process", "insert_after": "fabric_compacting_tab"},
-  {"fieldname": "compacting_dia_details", "fieldtype": "Table", "label": "Dia Details",
-   "options": "IPD Compacting Dia Detail", "insert_after": "compacting_process"},
-]})
-frappe.db.commit()
-print("CHECK created:", frappe.db.count("Custom Field", {"dt": "Item Production Detail", "fieldname": ["like", "%knitting%"]}))
-EOF
-```
-Expected: `CHECK created: 3` (`fabric_knitting_tab`, `knitting_process`, `knitting_dia_details` all match the LIKE).
+Run the migration, create the listed IPD records through Desk's Custom Field
+DocType, export fixtures, and verify every record in
+`fixtures/custom_field.json`. Use the field definitions listed below; the
+application must not create them programmatically.
 
 - [ ] **Step 3: Hide the garment tabs on cloth IPDs**
 

@@ -172,6 +172,9 @@ class TestIPDEntryAutomationMirror(IntegrationTestCase):
 			os.path.join(desk, "Item_Po_detail", "PanelWiseConsumptionMatrix.vue")
 		)
 		cls.desk_ipd = _read(os.path.join(desk, "item_production_detail.js"))
+		cls.web_ipd = _read(
+			os.path.join(_frontend_dir("essdee_yrp"), "views", "dynamic", "IPDConfigView.vue")
+		)
 		cls.web_panel = _read(os.path.join(web, "PanelWiseConsumptionMatrix.vue"))
 		cls.web_stitching = _read(os.path.join(web, "StichingSection.vue"))
 
@@ -201,6 +204,45 @@ class TestIPDEntryAutomationMirror(IntegrationTestCase):
 		self.assertIsNotNone(web_fetch)
 		self.assertIn("quantity: 1", web_fetch)
 		self.assertIn('category: "Body"', web_fetch)
+
+	def test_regenerate_matrix_action_is_available_in_desk_and_web(self):
+		for source in (self.desk_ipd, self.web_ipd):
+			self.assertIn("Regenerate Matrix", source)
+			self.assertIn("essdee_yrp.ipd_ui.regenerate_ipd_matrix", source)
+
+
+class TestWorkOrderSummaryAndDebitMirror(IntegrationTestCase):
+	"""The Work Order summary and Debit entry remain reachable in both shells."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		app = frappe.get_app_path("essdee_yrp")
+		cls.web_detail = _read(os.path.join(_frontend_dir("essdee_yrp"), "views", "dynamic", "DocDetail.vue"))
+		cls.web_catalog = _read(os.path.join(_frontend_dir("essdee_yrp"), "config", "doctypes.js"))
+		cls.desk_work_order = _read(os.path.join(app, "public", "js", "work_order.js"))
+		cls.hooks = _read(os.path.join(app, "hooks.py"))
+		cls.web_boot = _read(os.path.join(app, "www", "web.py"))
+		with open(os.path.join(app, "fixtures", "ui_layout.json"), encoding="utf-8") as fixture_file:
+			fixture = json.load(fixture_file)[0]
+		cls.layout = json.loads(fixture["config"])
+
+	def test_work_order_summary_is_mounted_in_web_and_desk(self):
+		self.assertIn('value="work-order-summary"', self.web_detail)
+		self.assertIn("<WorkOrderSummary", self.web_detail)
+		self.assertIn("essdee_yrp.api.work_order.get_work_order_summary", self.desk_work_order)
+		self.assertIn("wo_summary_html", self.desk_work_order)
+		self.assertIn("EssdeeWorkOrderSummary", self.desk_work_order)
+
+	def test_debit_is_created_from_work_order_and_registered_everywhere(self):
+		self.assertIn('label: "Create Debit"', self.web_detail)
+		self.assertIn('path: "/debit/new"', self.web_detail)
+		self.assertIn('"Debit"', self.web_catalog)
+		self.assertIn('"Debit"', self.hooks)
+		self.assertIn('"Debit"', self.web_boot)
+		production = next(group for group in self.layout["nav"]["groups"] if group["id"] == "Production")
+		self.assertIn("Debit", [item["doctype"] for item in production["items"]])
+		self.assertIn("Debit", self.layout["listViews"])
 
 
 class TestDcWizardStepsEntry(IntegrationTestCase):
@@ -378,8 +420,8 @@ class TestUIClientMirror(IntegrationTestCase):
 		of ui_config.CURRENT_SCHEMA_VERSION — the two MUST bump in lockstep
 		(§2.3 rule 1). A server ahead of the engine makes guardPayload reject
 		every valid layout as 'schema_version > engine' and fall back to the
-		compiled Default fleet-wide; the reverse guess-interprets a newer shape
-		the engine cannot read. Parsed with the SAME integer-const regex the
+		compiled Premium White layout fleet-wide; the reverse guess-interprets a
+		newer shape the engine cannot read. Parsed with the SAME integer-const regex the
 		composite-caps mirror above uses."""
 		src = _strip_line_comments(_read(os.path.join(self.engine_src, "stores", "uiConfig.js")))
 		m = re.search(r"export\s+const\s+ENGINE_SCHEMA_VERSION\s*=\s*(\d+)", src)
@@ -390,7 +432,7 @@ class TestUIClientMirror(IntegrationTestCase):
 			"ENGINE_SCHEMA_VERSION (apps/essdee_yrp/frontend/src/engine/stores/uiConfig.js) and "
 			"ui_config.CURRENT_SCHEMA_VERSION have drifted — they bump in LOCKSTEP "
 			"(§2.3 rule 1). A server ahead of the engine makes the store reject every "
-			"valid layout as too-new and serve the compiled Default fleet-wide.",
+			"valid layout as too-new and serve the compiled Premium White layout fleet-wide.",
 		)
 
 	# ── Track 1 item 3: the DEEP grammar mirror (validator vs grammar.js) ──
@@ -557,6 +599,27 @@ class TestUIClientMirror(IntegrationTestCase):
 			"drifted — a home-queues stats save would warn falsely (or a new queue "
 			"metric would draw the 'renders NOTHING' warning); update the mirror "
 			"and regenerate LAYOUT_SCHEMA.json",
+		)
+
+	def test_table_list_fetches_and_displays_business_status(self):
+		"""A fixed Status chip must not fall back to docstatus merely because
+		``status`` is not one of the user's configurable table columns."""
+		source = _read(
+			os.path.join(_frontend_dir("essdee_yrp"), "views", "dynamic", "DynamicListPage.vue")
+		)
+		fetch = _balanced(source, r"const fetchFields = computed\(\(\) => \{")
+		self.assertIsNotNone(fetch)
+		status_fetch = 'metaFieldSet.value.has("status")'
+		self.assertIn(status_fetch, fetch)
+		self.assertLess(
+			fetch.index(status_fetch),
+			fetch.index('if (listVariant.value !== "table")'),
+			"business status is fetched only for cards/kanban; table rows will "
+			"collapse back to Draft/Submitted/Cancelled",
+		)
+		self.assertIn(
+			"return businessStatusSeverity(row.status, row.docstatus)",
+			source,
 		)
 
 

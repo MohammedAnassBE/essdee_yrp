@@ -195,6 +195,11 @@ frappe.ui.form.on("Item Production Detail", {
 			frm.page.set_indicator(__(approval_status), approval_colour)
 		}
 		if (!frm.is_new()) {
+			if (frm.doc.is_cloth_item && frappe.model.can_write("Item Production Detail")) {
+				frm.add_custom_button(__("Regenerate Matrix"), () => regenerate_matrix(frm));
+				frm.change_custom_button_type(__("Regenerate Matrix"), null, "primary");
+			}
+
 			frappe.xcall("essdee_yrp.ipd_ui.get_approval_roles").then(settings => {
 				let allowed = settings || [];
 				if (allowed.some(role => frappe.user_roles.includes(role))) {
@@ -1534,6 +1539,31 @@ function fabric_swap_write_back(frm, cfg, rows) {
 	frm.dirty();
 }
 
+async function regenerate_matrix(frm) {
+	// Matrices are generated from persisted process configuration. If the user
+	// has just edited a Draft IPD, save those changes before rebuilding so the
+	// action cannot silently regenerate from stale server-side rows.
+	if (frm.is_dirty()) {
+		await frm.save();
+	}
+
+	const response = await frappe.call({
+		method: "essdee_yrp.ipd_ui.regenerate_ipd_matrix",
+		args: {
+			doc_name: frm.doc.name,
+			modified: frm.doc.modified,
+		},
+		freeze: true,
+		freeze_message: __("Regenerating process matrices"),
+	});
+	const count = Number(response.message?.matrix_count || 0);
+	await frm.reload_doc();
+	frappe.show_alert({
+		message: __("{0} process matrices regenerated", [count]),
+		indicator: "green",
+	});
+}
+
 // ===========================================================================
 // Generic Fabric Processes — view-integrated Vue entry (2026-07-07 UI rebuild).
 //
@@ -1602,7 +1632,12 @@ async function fabric_processes_mount(frm) {
 let _fabric_process_catalog = null;
 async function fabric_processes_catalog() {
 	if (_fabric_process_catalog) return _fabric_process_catalog;
-	const rows = await frappe.db.get_list("Process", { fields: ["name"], limit: 0, order_by: "name asc" });
+	const rows = await frappe.db.get_list("Process", {
+		filters: { is_cloth_process: 1 },
+		fields: ["name"],
+		limit: 0,
+		order_by: "name asc",
+	});
 	_fabric_process_catalog = rows.map((r) => r.name);
 	return _fabric_process_catalog;
 }
@@ -1612,12 +1647,14 @@ function fabric_processes_payload(frm, all_processes) {
 	return {
 		editable,
 		item: frm.doc.item || null,
-		knitting_process: frm.doc.knitting_process || null,
-		dyeing_process: frm.doc.dyeing_process || null,
-		compacting_process: frm.doc.compacting_process || null,
-		// Conversion input defaults to the IPD's yarn (yarn → cloth); NEVER the
-		// cloth item — a conversion's input and output must be distinct.
-		default_input: frm.doc.yarn_item || null,
+		// The actual consumed Items + ratios belong to the cloth IPD. The Item master
+		// supplies their initial reusable defaults; the IPD keeps and edits its own
+		// versioned snapshot so an approved program remains stable.
+		conversion_inputs: (frm.doc.yarn_ratio_details || []).map((row) => ({
+			item: row.yarn_item,
+			ratio: row.ratio,
+		})),
+		default_input: (frm.doc.yarn_ratio_details || [])[0]?.yarn_item || null,
 		attributes: [...new Set((frm.doc.item_attributes || []).map((a) => a.attribute).filter(Boolean))],
 		all_processes: all_processes || [],
 		processes: (frm.doc.fabric_processes || []).map((r) => ({
@@ -1635,19 +1672,6 @@ function fabric_processes_payload(frm, all_processes) {
 			from_value: m.from_value,
 			to_value: m.to_value,
 		})),
-		colour_yarn_recipes: (frm.doc.colour_yarn_recipes || []).map((row) => ({
-			colour: row.colour,
-			yarn_item: row.yarn_item,
-			yarn_colour: row.yarn_colour,
-			ratio: row.ratio,
-		})),
-		fabric_routes: (frm.doc.fabric_routes || []).map((row) => ({
-			finished_colour: row.finished_colour,
-			finished_dia: row.finished_dia,
-			knitting_output_colour: row.knitting_output_colour,
-			knitting_output_dia: row.knitting_output_dia,
-			use_dyed_yarn: row.use_dyed_yarn,
-		})),
 	};
 }
 
@@ -1656,8 +1680,16 @@ function fabric_processes_write_back(frm, payload) {
 	(payload.processes || []).forEach((p) => Object.assign(frm.add_child("fabric_processes"), p));
 	frm.clear_table("fabric_value_mappings");
 	(payload.mappings || []).forEach((m) => Object.assign(frm.add_child("fabric_value_mappings"), m));
+	frm.clear_table("yarn_ratio_details");
+	(payload.conversion_inputs || []).forEach((row) => {
+		Object.assign(frm.add_child("yarn_ratio_details"), {
+			yarn_item: row.item,
+			ratio: row.ratio,
+		});
+	});
 	frm.refresh_field("fabric_processes");
 	frm.refresh_field("fabric_value_mappings");
+	frm.refresh_field("yarn_ratio_details");
 	frm.dirty();
 }
 
@@ -1671,9 +1703,8 @@ function fabric_processes_write_back(frm, payload) {
 // ===========================================================================
 
 function colour_yarn_recipe_toggle_grid(frm) {
-	// The legacy global Yarn Ratio is derived server-side from the first colour
-	// recipe for old readers; all user-facing flow detail lives on the process
-	// cards.
+	// Yarn Ratio is edited inside the IPD's Item Conversion card. Hide the raw
+	// child grids so the same IPD-owned recipe is not presented twice.
 	["yarn_ratio_details", "colour_yarn_recipe_editor", "colour_yarn_recipes", "fabric_routes"].forEach((fieldname) => {
 		const storage = frm.fields_dict[fieldname];
 		if (storage && storage.wrapper && frm.doc.is_cloth_item) {

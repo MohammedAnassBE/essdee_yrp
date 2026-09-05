@@ -3,7 +3,8 @@
  *
  * The /web UI manages these production DocTypes (user scope, 2026-07-03;
  * Work Order Correction added 2026-07-09; Process Cost and Lot Transfer added
- * 2026-07-29): Lot, Work Order, Work Order Correction, Delivery Challan,
+ * 2026-07-29; Debit added 2026-09-05): Lot, Work Order, Work Order Correction,
+ * Debit, Delivery Challan,
  * Goods Received Note, Process Cost, Stock Entry, Lot Transfer, Item, Item
  * Production Detail, and Terms and Condition.
  *
@@ -26,6 +27,7 @@
 const SUBMITTABLE = new Set([
 	"Work Order",
 	"Work Order Correction",
+	"Debit",
 	"Delivery Challan",
 	"Goods Received Note",
 	"Process Cost",
@@ -85,6 +87,12 @@ const GROUPS = [
 				{ field: "supplier", label: "Job-worker" },
 				{ field: "process_name", label: "Process" },
 				{ field: "correction_date", label: "Correction Date", type: "Date" },
+			] },
+			{ doctype: "Debit", icon: "pi pi-wallet", tabMode: "docstatus", listFields: [
+				{ field: "work_order", label: "Work Order" },
+				{ field: "debit_no", label: "Debit No" },
+				{ field: "debit_type", label: "Debit Type" },
+				{ field: "debit_value", label: "Debit Value", type: "Currency" },
 			] },
 			{ doctype: "Delivery Challan", icon: "pi pi-send", dateTabs: "posting_date", listFields: [
 				{ field: "work_order", label: "Work Order" },

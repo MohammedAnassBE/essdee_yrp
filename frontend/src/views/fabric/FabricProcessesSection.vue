@@ -59,6 +59,28 @@
 						<div class="fp-name">{{ step.fabric_process || "(no process)" }}</div>
 						<span class="fp-badge" :class="'b-' + shapeOf(step).key">{{ shapeOf(step).label }}</span>
 						<div class="fp-card-actions">
+							<div v-if="editable" class="fp-order-actions" aria-label="Reorder process">
+								<button
+									class="fp-order"
+									type="button"
+									data-testid="fp-move-up"
+									:data-process="step.fabric_process"
+									:disabled="saving || !canMoveStep(si, -1)"
+									title="Move process up"
+									:aria-label="`Move ${step.fabric_process || 'process'} up`"
+									@click="moveStep(si, -1)"
+								><i class="pi pi-arrow-up" aria-hidden="true" /></button>
+								<button
+									class="fp-order"
+									type="button"
+									data-testid="fp-move-down"
+									:data-process="step.fabric_process"
+									:disabled="saving || !canMoveStep(si, 1)"
+									title="Move process down"
+									:aria-label="`Move ${step.fabric_process || 'process'} down`"
+									@click="moveStep(si, 1)"
+								><i class="pi pi-arrow-down" aria-hidden="true" /></button>
+							</div>
 							<button v-if="editable" class="fp-edit" type="button" data-testid="fp-edit" :data-process="step.fabric_process" :disabled="saving" @click="openEdit(si)">Edit</button>
 							<button v-if="editable" class="fp-rm" type="button" data-testid="fp-remove" :data-process="step.fabric_process" title="Remove step" :disabled="saving" @click="removeStep(si)">×</button>
 						</div>
@@ -434,6 +456,40 @@ function nextSequence() {
 	return seqs.length ? Math.max(...seqs) + 10 : 10;
 }
 
+function canMoveStep(index, direction) {
+	const target = index + direction;
+	if (target < 0 || target >= steps.value.length) return false;
+	const reordered = steps.value.slice();
+	const [step] = reordered.splice(index, 1);
+	reordered.splice(target, 0, step);
+	return reordered.every((row, rowIndex) => {
+		if (rowIndex === 0) return true;
+		const previousOutput = reordered[rowIndex - 1].output_item;
+		const currentInput = row.input_item;
+		return !previousOutput || !currentInput || previousOutput === currentInput;
+	});
+}
+
+async function moveStep(index, direction) {
+	if (saving.value || !canMoveStep(index, direction)) return;
+	const target = index + direction;
+	// Work on detached rows so a failed save leaves the visible, server-backed
+	// order untouched. The parent reload after a successful save becomes truth.
+	const candidate = steps.value.map((row) => ({
+		...row,
+		mappings: (row.mappings || []).map((mapping) => ({ ...mapping })),
+	}));
+	const [step] = candidate.splice(index, 1);
+	candidate.splice(target, 0, step);
+	candidate.forEach((row, rowIndex) => {
+		row.sequence = (rowIndex + 1) * 10;
+	});
+	await persistSteps(
+		candidate,
+		`${step.fabric_process || "Process"} moved to step ${target + 1}`,
+	);
+}
+
 function openDraft(d) {
 	draft.value = d;
 	editSession.value += 1;
@@ -785,6 +841,17 @@ function removeStep(si) {
 .dark .b-combo { background: rgba(124, 58, 237, 0.2); color: #b79df3; }
 
 .fp-card-actions { display: inline-flex; align-items: center; gap: 8px; grid-column: 3; grid-row: 1; }
+.fp-order-actions { display: inline-flex; align-items: center; gap: 3px; }
+.fp-order {
+	display: inline-grid; place-items: center;
+	border: 1px solid var(--esd-line); background: var(--esd-slate-50);
+	color: var(--esd-ink); width: 32px; height: 32px; border-radius: 7px;
+	cursor: pointer; line-height: 1;
+}
+.fp-order:hover:not(:disabled) { border-color: var(--esd-accent); color: var(--esd-accent-700); }
+.fp-order:focus-visible { outline: 2px solid var(--esd-accent); outline-offset: 2px; }
+.fp-order i { font-size: 14px; font-weight: 700; }
+.fp-order:disabled { opacity: 0.38; cursor: not-allowed; }
 .fp-edit {
 	border: 1px solid var(--esd-line); background: var(--esd-card);
 	color: var(--esd-ink); border-radius: 6px; padding: 3px 12px; cursor: pointer; font-size: 12.5px; font-weight: 500;

@@ -3,11 +3,11 @@
 		<div v-if="!entries.length" class="esd-empty">
 			<i class="pi pi-inbox" />
 			<p class="esd-empty__text">
-				Add rows in Fabric Details and save — the program grids appear per cloth.
+				Use Build Cloth Programs to save the calculated quantities for each cloth here.
 			</p>
 		</div>
 
-		<div v-for="(entry, ei) in entries" :key="entry.cloth_item" class="lfv-card">
+		<div v-for="entry in entries" :key="entry.cloth_item" class="lfv-card">
 			<header class="lfv-head">
 				<div class="lfv-title">
 					<b>{{ entry.cloth_item }}</b>
@@ -16,26 +16,15 @@
 						{{ planBadge(entry).text }}
 					</span>
 				</div>
-				<Button
-					v-if="ei === 0 && canRebuild && lotName"
-					label="Recalculate Received"
-					icon="pi pi-refresh"
-					size="small"
-					severity="secondary"
-					outlined
-					:loading="rebuilding"
-					@click="rebuild"
-				/>
 			</header>
 
 			<section class="lfv-grid">
-				<h6>Knitting Program — Dia × Colour</h6>
 				<div class="lfv-table-wrap">
 					<table class="lfv-table lfv-matrix">
 						<thead>
 							<tr>
-								<th rowspan="2" class="lfv-dia">Dia</th>
-								<th :colspan="programColourColumns(entry).length">Knitting Program (Kg)</th>
+								<th rowspan="2" class="lfv-dia">Finished Dia</th>
+								<th :colspan="programColourColumns(entry).length">Cloth Program (Kg)</th>
 								<th rowspan="2" class="lfv-num">Total</th>
 							</tr>
 							<tr>
@@ -63,6 +52,8 @@
 										min="0"
 										step="0.001"
 										class="lfv-input"
+										:disabled="!programRow(entry, dia, colour.key)"
+										:aria-label="`${entry.cloth_item} · ${colour.label} · ${dia} (kg)`"
 										@change="setProgramWeight(entry, dia, colour.key, $event.target.value)"
 									/>
 									<span v-else>{{ programWeight(entry, dia, colour.key) }}</span>
@@ -71,7 +62,7 @@
 							</tr>
 							<tr v-if="!programDias(entry).length">
 								<td :colspan="programColourColumns(entry).length + 2" class="lfv-none">
-									No knitting program yet
+									No saved cloth program yet — use Build Cloth Programs.
 								</td>
 							</tr>
 							<tr v-else class="lfv-total">
@@ -98,7 +89,7 @@
  * Lot Fabric views — /web re-port of the Desk Vue island
  * apps/essdee_yrp/essdee_yrp/public/js/Lot/FabricProgram.vue.
  *
- * The UI shows the compact Dia × Colour knitting-program matrix. The raw
+ * The UI shows the saved program by finished Dia × Colour. The raw
  * finished-cloth requirement remains in the payload for planning, while the
  * visible weights come from the saved program after the operator's excess.
  *
@@ -115,35 +106,20 @@
  *  - getRequirement(): [{cloth_item, requirement:[{dia,colour,weight}]}] —
  *    the transient `fabric_requirement_details` JSON (server rebuilds
  *    lot_fabric_requirements + the chain plan on save).
- *  - Rebuild button = the Desk's "Recalculate Received": the SAME whitelisted
- *    essdee_yrp.fabric_tracking.rebuild_fabric_tracking; emits "rebuilt" so
- *    the parent reloads the doc + onload (Desk does cur_frm.reload_doc()).
- *
- * Adapted (widgets only): PrimeVue Button + esd-* tokens replace the Desk's
- * native button and frappe CSS vars; feedback uses useAppToast; editability
- * comes from the `readonly` prop (the parent passes
- *  the Desk's rule: Lot status !== "Open" → read-only) instead of cur_frm; the
- *  rebuild button renders only where the parent allows it (view mode — the
- *  Desk's is_dirty guard is structural there: a viewed doc is saved).
+ * Receipt quantities are intentionally not tracked here. Work Order Fill
+ * Quantity reads submitted GRNs on demand. Editing preserves the physical
+ * output Dia/Colour and final reference supplied by the server.
  */
 import { ref, watch } from "vue"
-import Button from "primevue/button"
-import { callMethod } from "@/api/client"
-import { useAppToast } from "@/composables/useToast"
+import { programDia, programColour, roundKg, programDias, programColourColumns, programRow, serializeClothProgram } from "@/engine/lotClothProgram"
 
 const props = defineProps({
 	initialData: { type: Array, default: null },
 	readonly: { type: Boolean, default: false },
-	// Rebuild ("Recalculate Received") is offered only on a saved, non-dirty doc
-	// — the parent (view mode) decides. Needs lotName for the server call.
-	canRebuild: { type: Boolean, default: false },
-	lotName: { type: String, default: "" },
 })
-const emit = defineEmits(["change", "rebuilt"])
-const toast = useAppToast()
+const emit = defineEmits(["change"])
 
 const entries = ref([])
-const rebuilding = ref(false)
 
 // Prop + imperative hydration, LotOrderEditor-style: the view tab binds
 // :initial-data (this watch), edit mode calls loadData() from
@@ -169,15 +145,7 @@ function loadData(data) {
 
 // → transient `fabric_program_details` (Desk get_data, byte-identical shape)
 function getData() {
-	return entries.value.map((entry) => ({
-		cloth_item: entry.cloth_item,
-		program: entry.program.map((r) => ({
-			dia: r.dia,
-			colour: r.colour || null,
-			reference_item_variant: r.reference_item_variant || null,
-			weight: r.weight || 0,
-		})),
-	}))
+	return serializeClothProgram(entries.value)
 }
 
 // → transient `fabric_requirement_details` (Desk get_requirement)
@@ -199,51 +167,10 @@ function hasItems() {
 function planBadge(entry) {
 	const status = entry.plan_status || ""
 	if (!status) return null
-	if (status === "Built") {
-		const when = (entry.plan_built_on || "").slice(0, 10)
-		return { text: `Plan ready ${when}`, cls: "lfv-badge--ok" }
-	}
+	if (status === "Built") return null
 	if (status === "Pending Approval") return { text: "Plan waiting for IPD approval", cls: "lfv-badge--wait" }
 	if (status === "Stale") return { text: "Plan outdated — IPD changed", cls: "lfv-badge--warn" }
 	return { text: "Plan error — open the fabric row", cls: "lfv-badge--err" }
-}
-
-function roundKg(value) {
-	return Math.round((Number(value) || 0) * 1000) / 1000
-}
-
-function diaNumber(value) {
-	const match = String(value || "").match(/-?\d+(?:\.\d+)?/)
-	return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER
-}
-
-function programDia(row) {
-	return row.finished_dia || row.dia || ""
-}
-
-function programColour(row) {
-	return row.finished_colour || row.colour || ""
-}
-
-function programDias(entry) {
-	const values = entry.program.map(programDia).filter(Boolean)
-	return [...new Set(values)].sort(
-		(a, b) => diaNumber(a) - diaNumber(b) || String(a).localeCompare(String(b)),
-	)
-}
-
-function programColourColumns(entry) {
-	const colours = [...new Set(entry.program.map(programColour).filter(Boolean))]
-		.sort((a, b) => String(a).localeCompare(String(b)))
-	return colours.length
-		? colours.map((colour) => ({ key: colour, label: colour }))
-		: [{ key: "", label: "Program" }]
-}
-
-function programRow(entry, dia, colour) {
-	return entry.program.find(
-		(row) => programDia(row) === dia && programColour(row) === colour,
-	)
 }
 
 function programWeight(entry, dia, colour) {
@@ -280,23 +207,6 @@ function programTotal(entry) {
 
 function markDirty() {
 	emit("change")
-}
-
-// Desk "Recalculate Received": zero + replay every submitted fabric GRN.
-// Offered only on a saved doc (canRebuild), so the Desk's is_dirty guard is
-// satisfied structurally; the parent reloads doc + onload on "rebuilt".
-async function rebuild() {
-	if (!props.lotName || rebuilding.value) return
-	rebuilding.value = true
-	try {
-		await callMethod("essdee_yrp.fabric_tracking.rebuild_fabric_tracking", { lot: props.lotName })
-		toast.success("Received quantities recalculated")
-		emit("rebuilt")
-	} catch (e) {
-		toast.error("Recalculate Received failed", e.message)
-	} finally {
-		rebuilding.value = false
-	}
 }
 
 defineExpose({ loadData, getData, getRequirement, hasItems })
@@ -347,13 +257,6 @@ defineExpose({ loadData, getData, getRequirement, hasItems })
 .lfv-grid {
 	padding: 10px 12px;
 	min-width: 0;
-}
-.lfv-grid h6 {
-	font-size: 11px;
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
-	color: var(--esd-muted);
-	margin: 0 0 6px;
 }
 .lfv-table {
 	width: 100%;

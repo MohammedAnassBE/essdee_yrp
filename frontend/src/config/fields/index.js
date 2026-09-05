@@ -25,6 +25,7 @@ import goodsReceivedNote from "./goods-received-note.js"
 import item from "./item.js"
 import lot from "./lot.js"
 import itemProductionDetail from "./item-production-detail.js"
+import debit from "./debit.js"
 
 const FIELD_CONFIGS = {
 	"Work Order": workOrder,
@@ -33,6 +34,7 @@ const FIELD_CONFIGS = {
 	"Item": item,
 	"Lot": lot,
 	"Item Production Detail": itemProductionDetail,
+	"Debit": debit,
 }
 
 /**

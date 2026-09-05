@@ -9,10 +9,10 @@ tracking, the backward planner). It reads the GENERIC fabric-process rows
 synthesized into the same rows by the adapter — so tab and generic IPDs share one
 path. Each step's shape is the Process master's declared shape
 (get_process_shape): item conversion (yarn -> cloth), attribute swap (Colour /
-Dia), or multi_swap (several attrs at once); the row's own mapping roles are the
-fallback when a master is unmaintained. Identity steps (no transition, e.g.
-in-chain Washing) are excluded from the chain and handled by the WO popup's
-identity path.
+Dia), multi_swap (several attrs at once), or identity (no value/item change).
+The row's own mapping roles are the fallback when a master is unmaintained.
+Identity steps stay in the ordered chain: a no-change Washing operation is real
+manufacturing work whose receipt must gate the next operation.
 
 Spec: docs/design/2026-07-04-fabric-chain-plan.md;
 generic model: docs/superpowers/specs/2026-07-07-fabric-process-commonization-design.md
@@ -29,15 +29,15 @@ from essdee_yrp.fabric_ipd import (
 
 def get_fabric_steps(ipd_doc):
 	"""Ordered chain steps, first -> last. Each step:
-	{position, process_name, shape ("conversion"|"swap"|"multi_swap"),
+	{position, process_name, shape ("conversion"|"swap"|"multi_swap"|"identity"),
 	 attribute (swap attr, list of attrs for multi_swap, or None)}.
 
 	Built from the GENERIC fabric_processes rows (get_fabric_process_rows) so one
 	entry point serves BOTH persisted-generic and legacy-tab IPDs: the adapter
 	synthesizes the 3 tab processes into the same rows, giving byte-identical steps
 	(knitting=conversion, dyeing=Colour swap, compacting=Dia swap). Identity steps
-	(no conversion/swap — e.g. in-chain Washing) carry no attribute transition and
-	are excluded here; the WO popup handles them via get_identity_process_row."""
+	(no conversion/swap — e.g. in-chain Washing) remain in this same list so every
+	consumer observes exactly the order authored on the IPD."""
 	from essdee_yrp.fabric_ipd import get_fabric_process_rows
 
 	steps = []
@@ -59,7 +59,8 @@ def _step_shape(row):
 	"""(shape, attribute) for a generic fabric-process row. Prefer the Process
 	master's declared shape (the reusable template owns it — 2026-06-25 rule); fall
 	back to the row's own value-mapping roles so an unmaintained master still
-	resolves. Returns (None, None) for an identity step (no conversion/swap)."""
+	resolves. Returns ("identity", None) for a real no-change process row; None is
+	reserved for same-value route declarations that intentionally create no work."""
 	from essdee_yrp.fabric_ipd import get_process_shape
 
 	# Same-value Change rows are route declarations, not operational work.
@@ -99,7 +100,7 @@ def _step_shape(row):
 	# validate_consume_mappings blocks it at save time.
 	if in_item and out_item and in_item != out_item:
 		return "conversion", None
-	return None, None
+	return "identity", None
 
 
 def get_fabric_step(ipd_doc, process_name):
@@ -227,9 +228,8 @@ def final_combos(ipd_doc, has_colour=True):
 def validate_fabric_chain(doc):
 	"""Called from validate_cloth_ipd: the fabric processes must each use a
 	DISTINCT Process master (matrix, WO and ledger keys all resolve per
-	process_name), so knitting/dyeing/compacting can't share one Process."""
+	process_name), so no Process can occupy two stages in the same chain."""
 	steps = get_fabric_steps(doc)
 	names = [s["process_name"] for s in steps]
 	if len(names) != len(set(names)):
-		frappe.throw(_("Knitting, dyeing and compacting must each use a DIFFERENT "
-			"Process master."))
+		frappe.throw(_("Each Fabric Process stage must use a different Process master."))

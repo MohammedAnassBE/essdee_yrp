@@ -56,7 +56,7 @@ def calculate_consumption_plan(grn):
 
 	from essdee_yrp.fabric_ipd import get_identity_process_row
 
-	identity_row = None if step else get_identity_process_row(ipd, wo.process_name)
+	identity_row = get_identity_process_row(ipd, wo.process_name)
 	if not step and not identity_row:
 		return []
 
@@ -67,7 +67,7 @@ def calculate_consumption_plan(grn):
 		ipd,
 		wo.process_name,
 		demands,
-		identity=bool(identity_row),
+		identity=bool(identity_row or (step and step.get("shape") == "identity")),
 	)
 	return _allocate_to_work_order_deliverables(rows, wo, grn)
 

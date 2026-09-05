@@ -31,6 +31,7 @@ from essdee_yrp.fabric_ipd import _delete_all_matrices
 from essdee_yrp.fabric_plan import solve_chain_backward
 from essdee_yrp.fabric_program import (
     fetch_fabric_program_details,
+    get_fabric_program_details,
     get_knitting_output_colour,
     get_knitting_output_colour_map,
 )
@@ -94,7 +95,24 @@ def _ensure_process(process_name, is_item_conversion=0):
         frappe.get_doc({
             "doctype": "Process", "process_name": process_name,
             "is_item_conversion": is_item_conversion,
+            "is_cloth_process": 1,
         }).insert(ignore_permissions=True)
+    else:
+        values = {
+            "is_cloth_process": 1,
+            "is_item_conversion": is_item_conversion,
+        }
+        frappe.db.set_value("Process", process_name, values, update_modified=False)
+        frappe.clear_document_cache("Process", process_name)
+    return process_name
+
+
+def _ensure_swap_process(process_name, attribute):
+    process_name = _ensure_process(process_name)
+    doc = frappe.get_doc("Process", process_name)
+    if attribute not in {row.attribute for row in doc.get("value_change_attributes") or []}:
+        doc.append("value_change_attributes", {"attribute": attribute})
+        doc.save(ignore_permissions=True)
     return process_name
 
 
@@ -145,6 +163,19 @@ class TestClothProgram(IntegrationTestCase):
         }
         self.tuples = {(self.dia, self.red): 50.9}
 
+    def test_lot_exposes_saved_program_in_cloth_program_tab(self):
+        meta = frappe.get_meta("Lot")
+        tab = meta.get_field("cloth_program_tab")
+        display = meta.get_field("fabric_program_html")
+        self.assertIsNotNone(tab)
+        self.assertEqual((tab.fieldtype, tab.label), ("Tab Break", "Cloth Program"))
+        self.assertEqual((display.fieldtype, display.label), ("HTML", "Cloth Program"))
+        field_order = [field.fieldname for field in meta.fields]
+        self.assertLess(
+            field_order.index("cloth_program_tab"),
+            field_order.index("fabric_program_html"),
+        )
+
     def _make_synced_compacting_source(self, compacting_dia):
         """Create a minimal real garment IPD plus its synced compacting data."""
         garment_name = (
@@ -167,6 +198,332 @@ class TestClothProgram(IntegrationTestCase):
             }],
         }).insert(ignore_permissions=True)
         return garment_name, source
+
+    def test_reordered_washing_chain_rebases_every_exact_route(self):
+        """Full mixed route matrix: two Dias, piece-dyed Greige input, dyed-yarn
+        direct colour, Greige-yarn direct finished colour, identity Washing and
+        Colour-changing White Wash after/before Dyeing."""
+        from yrp.yrp.doctype.item.item import get_or_create_variant
+
+        dia_2 = _ensure_iav("Dia", "_Test 72 Dia Route CPD")
+        knit_dia_1 = _ensure_iav("Dia", "_Test 58 Dia Route CPD")
+        knit_dia_2 = _ensure_iav("Dia", "_Test 70 Dia Route CPD")
+        white = _ensure_iav("Colour", "_Test White Route CPD")
+        bleached = _ensure_iav("Colour", "_Test Bleached Route CPD")
+        navy = _ensure_iav("Colour", "_Test Navy Dyed Yarn Route CPD")
+        green = _ensure_iav("Colour", "_Test Green Greige Yarn Direct CPD")
+        dyed_yarn = _ensure_attributed_item("_Test Dyed Yarn Route CPD", ["Colour"])
+        washing = _ensure_process("_Test Identity Washing Route CPD")
+        white_wash = _ensure_swap_process("_Test White Wash Route CPD", "Colour")
+        compacting = _ensure_swap_process("_Test Compacting Route CPD", "Dia")
+
+        colours = (self.red, white, navy, green)
+        dias = (self.dia, dia_2)
+        knitting_dias = {self.dia: knit_dia_1, dia_2: knit_dia_2}
+        routes = []
+        for dia in dias:
+            routes.extend([
+                {
+                    "finished_dia": dia,
+                    "finished_colour": self.red,
+                    "knitting_output_dia": knitting_dias[dia],
+                    "knitting_output_colour": self.greige,
+                    "use_dyed_yarn": 0,
+                },
+                {
+                    "finished_dia": dia,
+                    "finished_colour": white,
+                    "knitting_output_dia": knitting_dias[dia],
+                    "knitting_output_colour": self.greige,
+                    "use_dyed_yarn": 0,
+                },
+                {
+                    "finished_dia": dia,
+                    "finished_colour": navy,
+                    "knitting_output_dia": knitting_dias[dia],
+                    "knitting_output_colour": navy,
+                    "use_dyed_yarn": 1,
+                },
+                {
+                    "finished_dia": dia,
+                    "finished_colour": green,
+                    "knitting_output_dia": knitting_dias[dia],
+                    "knitting_output_colour": green,
+                    "use_dyed_yarn": 0,
+                },
+            ])
+        selection = dict(
+            self.selection,
+            greige_colour=None,
+            compacting_process=compacting,
+            colour_yarn_recipes=[
+                {
+                    "colour": colour,
+                    "yarn_item": dyed_yarn if colour == navy else self.yarn,
+                    "yarn_colour": navy if colour == navy else None,
+                    "ratio": 100,
+                }
+                for colour in colours
+            ],
+            fabric_routes=routes,
+        )
+        tuples = {(dia, colour): 10 for dia in dias for colour in colours}
+        cpd = frappe.get_doc(
+            "Item Production Detail",
+            _find_or_create_cpd(self.cloth, selection, tuples),
+        )
+        cpd.append("fabric_processes", {
+            "sequence": 40,
+            "fabric_process": washing,
+            "input_item": self.cloth,
+            "output_item": self.cloth,
+            "quantity_ratio": 1,
+        })
+        cpd.append("fabric_processes", {
+            "sequence": 50,
+            "fabric_process": white_wash,
+            "input_item": self.cloth,
+            "output_item": self.cloth,
+            "quantity_ratio": 1,
+        })
+        cpd.append("fabric_value_mappings", {
+            "sequence": 50,
+            "mapping_index": 0,
+            "attribute": "Colour",
+            "role": "Change",
+            "from_value": bleached,
+            "to_value": white,
+        })
+        cpd.save(ignore_permissions=True)
+        cpd.reload()
+
+        after_dye = {
+            (row.dia, row.from_colour, row.to_colour)
+            for row in cpd.dyeing_colour_details
+        }
+        for dia in dias:
+            knit_dia = knitting_dias[dia]
+            self.assertIn((knit_dia, self.greige, self.red), after_dye)
+            self.assertIn((knit_dia, self.greige, bleached), after_dye)
+            self.assertIn((knit_dia, navy, navy), after_dye)
+            self.assertIn((knit_dia, green, green), after_dye)
+        compact_after_dye = {
+            (row.colour, row.from_dia, row.to_dia)
+            for row in cpd.compacting_dia_details
+        }
+        for dia in dias:
+            knit_dia = knitting_dias[dia]
+            self.assertIn((self.red, knit_dia, dia), compact_after_dye)
+            self.assertIn((bleached, knit_dia, dia), compact_after_dye)
+            self.assertIn((navy, knit_dia, dia), compact_after_dye)
+            self.assertIn((green, knit_dia, dia), compact_after_dye)
+
+        process_matrices = frappe.get_all(
+            "IPD Process Matrix",
+            filters={"ipd": cpd.name},
+            fields=["process_name", "reference_item_variant"],
+        )
+        self.assertFalse(any(row.process_name == washing for row in process_matrices))
+        white_references = {
+            get_or_create_variant(self.cloth, {"Dia": dia, "Colour": white})
+            for dia in dias
+        }
+        self.assertEqual(
+            {
+                row.reference_item_variant for row in process_matrices
+                if row.process_name == white_wash
+            },
+            white_references,
+        )
+
+        requirement = {
+            (
+                get_or_create_variant(self.cloth, {"Dia": dia, "Colour": colour}),
+                frozenset({("Dia", dia), ("Colour", colour)}),
+            ): 10
+            for dia in dias for colour in colours
+        }
+        plans, unreachable = solve_chain_backward(cpd, requirement)
+        self.assertFalse(unreachable)
+        identity_plan = next(plan for plan in plans if plan["process_name"] == washing)
+        self.assertEqual(sum(identity_plan["outputs"].values()), 80)
+        self.assertEqual(identity_plan["outputs"], identity_plan["inputs"])
+
+        # Reorder to Knitting -> Washing -> White Wash -> Dyeing and change the
+        # custom transition. Managed Dyeing inputs are regenerated; no Dyeing
+        # row is manually re-entered.
+        sequence_by_process = {
+            self.k_proc: 10,
+            washing: 20,
+            white_wash: 30,
+            compacting: 40,
+            self.d_proc: 50,
+        }
+        old_sequence = {
+            row.fabric_process: row.sequence for row in cpd.fabric_processes
+        }
+        for row in cpd.fabric_processes:
+            row.sequence = sequence_by_process[row.fabric_process]
+        for row in cpd.fabric_value_mappings:
+            process = next(
+                name for name, sequence in old_sequence.items()
+                if flt(sequence) == flt(row.sequence)
+            )
+            row.sequence = sequence_by_process[process]
+            if process == white_wash and row.role == "Change":
+                row.from_value = self.greige
+                row.to_value = bleached
+        cpd.save(ignore_permissions=True)
+        cpd.reload()
+
+        self.assertEqual(
+            [row.fabric_process for row in sorted(cpd.fabric_processes, key=lambda row: row.sequence)],
+            [self.k_proc, washing, white_wash, compacting, self.d_proc],
+        )
+        before_dye = {
+            (row.dia, row.from_colour, row.to_colour)
+            for row in cpd.dyeing_colour_details
+        }
+        for dia in dias:
+            self.assertIn((dia, bleached, self.red), before_dye)
+            self.assertIn((dia, bleached, white), before_dye)
+        compact_before_dye = {
+            (row.colour, row.from_dia, row.to_dia)
+            for row in cpd.compacting_dia_details
+        }
+        for dia in dias:
+            knit_dia = knitting_dias[dia]
+            self.assertIn((bleached, knit_dia, dia), compact_before_dye)
+
+        cloth_program._persist_generic_fabric_rows(cpd)
+        cpd.save(ignore_permissions=True)
+        cpd.reload()
+        self.assertEqual(
+            [row.fabric_process for row in sorted(cpd.fabric_processes, key=lambda row: row.sequence)],
+            [self.k_proc, washing, white_wash, compacting, self.d_proc],
+        )
+        self.assertEqual(
+            {
+                (row.dia, row.from_colour, row.to_colour)
+                for row in cpd.dyeing_colour_details
+            },
+            before_dye,
+        )
+
+    def test_white_wash_accepts_multiple_colours_for_the_same_white_output(self):
+        """Many-to-one colour changes are legal process alternatives.
+
+        Both Red and Bleached may enter White Wash and leave as the same White
+        variant. Saving the IPD must retain both routes and expose both matrix
+        keys to Work Order calculation instead of demanding a Dia/Colour hold.
+        """
+        from essdee_yrp.api.work_order import _matrix_qty_rows
+        from yrp.yrp.doctype.item.item import get_or_create_variant
+
+        dia_2 = _ensure_iav("Dia", "_Test 62 Dia White Wash CPD")
+        white = _ensure_iav("Colour", "_Test White Many To One CPD")
+        bleached = _ensure_iav("Colour", "_Test Bleached Many To One CPD")
+        white_wash = _ensure_swap_process(
+            "_Test Many To One White Wash CPD", "Colour"
+        )
+        routes = [
+            {
+                "finished_dia": dia,
+                "finished_colour": white,
+                "knitting_output_dia": dia,
+                "knitting_output_colour": self.greige,
+                "use_dyed_yarn": 0,
+            }
+            for dia in (self.dia, dia_2)
+        ]
+        selection = dict(
+            self.selection,
+            greige_colour=None,
+            colour_yarn_recipes=[{
+                "colour": white,
+                "yarn_item": self.yarn,
+                "ratio": 100,
+            }],
+            fabric_routes=routes,
+        )
+        cpd = frappe.get_doc(
+            "Item Production Detail",
+            _find_or_create_cpd(
+                self.cloth,
+                selection,
+                {(self.dia, white): 10, (dia_2, white): 10},
+            ),
+        )
+        cpd.append("fabric_processes", {
+            "sequence": 30,
+            "fabric_process": white_wash,
+            "input_item": self.cloth,
+            "output_item": self.cloth,
+            "quantity_ratio": 1,
+        })
+        for mapping_index, source in enumerate((bleached, self.red)):
+            cpd.append("fabric_value_mappings", {
+                "sequence": 30,
+                "mapping_index": mapping_index,
+                "attribute": "Colour",
+                "role": "Change",
+                "from_value": source,
+                "to_value": white,
+            })
+
+        # This save is the regression: it formerly threw "more than one equally
+        # valid process path" before the document could be persisted.
+        cpd.save(ignore_permissions=True)
+        cpd.reload()
+
+        self.assertEqual(
+            {
+                (row.from_value, row.to_value)
+                for row in cpd.fabric_value_mappings
+                if row.sequence == 30 and row.role == "Change"
+            },
+            {(bleached, white), (self.red, white)},
+        )
+        self.assertEqual(
+            {
+                (row.dia, row.from_colour, row.to_colour)
+                for row in cpd.dyeing_colour_details
+            },
+            {
+                (dia, self.greige, source)
+                for dia in (self.dia, dia_2)
+                for source in (bleached, self.red)
+            },
+        )
+
+        qty_rows = _matrix_qty_rows(cpd, white_wash, "dyeing")
+        self.assertEqual(len({row["key"] for row in qty_rows}), 4)
+        self.assertEqual(
+            {
+                (
+                    row["in_attrs"]["Dia"],
+                    row["in_attrs"]["Colour"],
+                    row["out_attrs"]["Colour"],
+                )
+                for row in qty_rows
+            },
+            {
+                (dia, source, white)
+                for dia in (self.dia, dia_2)
+                for source in (bleached, self.red)
+            },
+        )
+        self.assertEqual(
+            {
+                row["reference_item_variant"] for row in qty_rows
+            },
+            {
+                get_or_create_variant(
+                    self.cloth, {"Dia": dia, "Colour": white}
+                )
+                for dia in (self.dia, dia_2)
+            },
+        )
 
     def test_find_or_create_cpd_seeds_tabs_matrices_and_reachability(self):
         cpd_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
@@ -282,15 +639,42 @@ class TestClothProgram(IntegrationTestCase):
             [(self.yarn, 0.6), (yarn_b, 0.4)],
         )
 
-        # Colour recipes are the user-facing source. Clearing the legacy global
-        # snapshot must rebuild it automatically on save.
+        # The recipe belongs to this IPD, not to the Process master. Editing the
+        # persisted percentages must update both its per-colour snapshots and the
+        # actual conversion matrix inputs.
+        cpd.yarn_ratio_details[0].ratio = 55
+        cpd.yarn_ratio_details[1].ratio = 45
+        cpd.save(ignore_permissions=True)
+        cpd.reload()
+        self.assertEqual(
+            [
+                (row.colour, row.yarn_item, flt(row.ratio))
+                for row in cpd.colour_yarn_recipes
+            ],
+            [
+                (self.red, self.yarn, 55.0),
+                (self.red, yarn_b, 45.0),
+            ],
+        )
+        knit = frappe.get_doc(
+            "IPD Process Matrix",
+            {"ipd": cpd_name, "process_name": self.k_proc},
+        )
+        group = next(iter(knit.get_combinations_grouped().values()))
+        self.assertEqual(
+            [(row["item"], flt(row["qty"])) for row in group["input"]],
+            [(self.yarn, 0.55), (yarn_b, 0.45)],
+        )
+
+        # An older client can still clear the compatibility snapshot; backfill it
+        # without losing this IPD's saved multi-input recipe.
         cpd.set("yarn_ratio_details", [])
         cpd.yarn_item = None
         cpd.save(ignore_permissions=True)
         cpd.reload()
         self.assertEqual(
             [(row.yarn_item, flt(row.ratio)) for row in cpd.yarn_ratio_details],
-            [(self.yarn, 60.0), (yarn_b, 40.0)],
+            [(self.yarn, 55.0), (yarn_b, 45.0)],
         )
         knit = frappe.get_doc(
             "IPD Process Matrix",
@@ -592,6 +976,111 @@ class TestClothProgram(IntegrationTestCase):
             [(10, 0, "Dia", "Introduce", None, self.dia),
              (20, 0, "Colour", "Change", self.greige, self.red),
              (20, 0, "Dia", "Pin", self.dia, self.dia)])
+
+    def test_generated_conversion_rules_use_physical_not_final_colours(self):
+        """Configured conversion values are persisted for the editor without
+        treating the final cloth Colour as Knitting's input or output Colour."""
+        knitting = _ensure_process(
+            "_Test Physical Conversion Values CPD", is_item_conversion=1
+        )
+        process = frappe.get_doc("Process", knitting)
+        process.set("conversion_input_attributes", [{"attribute": "Colour"}])
+        process.set("conversion_output_attributes", [
+            {"attribute": "Dia"},
+            {"attribute": "Colour"},
+        ])
+        process.save(ignore_permissions=True)
+
+        yarn_a = _ensure_attributed_item(
+            "_Test Physical Conversion Yarn A CPD", ["Colour"]
+        )
+        yarn_b = _ensure_attributed_item(
+            "_Test Physical Conversion Yarn B CPD", ["Colour"]
+        )
+        selection = dict(
+            self.selection,
+            yarn_item=yarn_a,
+            yarns=[
+                {"yarn_item": yarn_a, "ratio": 60},
+                {"yarn_item": yarn_b, "ratio": 40},
+            ],
+            knitting_process=knitting,
+            colour_yarn_recipes=[
+                {
+                    "colour": self.red,
+                    "yarn_item": yarn_a,
+                    "yarn_colour": self.greige,
+                    "ratio": 60,
+                },
+                {
+                    "colour": self.red,
+                    "yarn_item": yarn_b,
+                    "yarn_colour": self.greige,
+                    "ratio": 40,
+                },
+            ],
+            fabric_routes=[{
+                "finished_dia": self.dia,
+                "finished_colour": self.red,
+                "knitting_output_dia": self.dia,
+                "knitting_output_colour": self.greige,
+                "use_dyed_yarn": 0,
+            }],
+        )
+        cpd_name = _find_or_create_cpd(self.cloth, selection, self.tuples)
+        self.assertEqual(
+            _find_or_create_cpd(self.cloth, selection, self.tuples),
+            cpd_name,
+        )
+        cpd = frappe.get_doc("Item Production Detail", cpd_name)
+        sequence = next(
+            row.sequence for row in cpd.fabric_processes
+            if row.fabric_process == knitting
+        )
+        mappings = [
+            row for row in sorted(cpd.fabric_value_mappings, key=lambda row: row.idx)
+            if row.sequence == sequence
+        ]
+        self.assertEqual(
+            [
+                (
+                    row.mapping_index,
+                    row.attribute,
+                    row.role,
+                    row.from_value or None,
+                    row.to_value or None,
+                )
+                for row in mappings
+            ],
+            [
+                (0, "Colour", "Consume", self.greige, None),
+                (0, "Dia", "Introduce", None, self.dia),
+                (0, "Colour", "Introduce", None, self.greige),
+            ],
+        )
+        self.assertNotIn(
+            self.red,
+            [row.from_value or row.to_value for row in mappings],
+        )
+        matrix = frappe.get_doc(
+            "IPD Process Matrix",
+            {"ipd": cpd.name, "process_name": knitting},
+        )
+        group = next(iter(matrix.get_combinations_grouped().values()))
+        self.assertEqual(
+            {
+                (entry["item"], flt(entry["qty"]), entry["attrs"].get("Colour"))
+                for entry in group["input"]
+            },
+            {
+                (yarn_a, 0.6, self.greige),
+                (yarn_b, 0.4, self.greige),
+            },
+        )
+        self.assertEqual(
+            group["output"][0]["attrs"],
+            {"Dia": self.dia, "Colour": self.greige},
+        )
 
     def test_persisted_generic_rows_idempotent_and_chain_equivalent(self):
         """A re-build must NOT duplicate persisted rows, and the chain read
@@ -1409,6 +1898,12 @@ class TestClothProgram(IntegrationTestCase):
         self.assertAlmostEqual(reqs[0].weight, 50.9, places=3)
         self.assertTrue(lot.lot_fabric_programs)       # WO knitting pre-seed
         self.assertTrue(lot.lot_fabric_step_ledger)    # CPD chain plan
+        api_entries = get_fabric_program_details(lot.name)
+        self.assertEqual(len(api_entries), 1)
+        self.assertEqual(api_entries[0]["cloth_item"], self.cloth)
+        self.assertEqual(len(api_entries[0]["program"]), 1)
+        self.assertEqual(api_entries[0]["program"][0]["finished_colour"], self.red)
+        self.assertEqual(api_entries[0]["program"][0]["finished_dia"], self.dia)
 
     def test_build_copies_synced_compacting_details_to_cloth_ipd(self):
         compacting_dia = _ensure_iav("Dia", "_Test 62 Dia Synced CPD")

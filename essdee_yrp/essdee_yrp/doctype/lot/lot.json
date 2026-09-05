@@ -37,11 +37,6 @@
   "lot_hash_value",
   "fabric_details_section",
   "lot_fabric_details",
-  "fabric_program_html",
-  "lot_fabric_programs",
-  "lot_colour_programs",
-  "lot_fabric_requirements",
-  "lot_fabric_step_ledger",
   "section_break_ry89l",
   "column_break_njmh",
   "planned_qty",
@@ -67,6 +62,12 @@
   "bom_summary",
   "bom_additional_items",
   "bom_summary_json",
+  "cloth_program_tab",
+  "fabric_program_html",
+  "lot_fabric_programs",
+  "lot_colour_programs",
+  "lot_fabric_requirements",
+  "lot_fabric_step_ledger",
   "ocr_detail_tab",
   "ocr_detail_html",
   "alternative_detail_tab",
@@ -439,9 +440,14 @@
    "label": "Alternative HTML"
   },
   {
+   "fieldname": "cloth_program_tab",
+   "fieldtype": "Tab Break",
+   "label": "Cloth Program"
+  },
+  {
    "fieldname": "fabric_program_html",
    "fieldtype": "HTML",
-   "label": "Fabric Program"
+   "label": "Cloth Program"
   },
   {
    "fieldname": "lot_fabric_programs",

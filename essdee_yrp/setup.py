@@ -20,6 +20,7 @@ def after_install():
 	ensure_yrp_valuation_contract()
 	ensure_default_address_template()
 	ensure_yrp_production_order_settings()
+	ensure_process_conversion_configuration()
 
 
 def after_migrate():
@@ -27,7 +28,17 @@ def after_migrate():
 	ensure_default_address_template()
 	ensure_sd_yrp_consumer_config()
 	ensure_yrp_production_order_settings()
+	ensure_process_conversion_configuration()
 	build_web_spa()
+
+
+def ensure_process_conversion_configuration():
+	"""Backfill Process conversion data after Custom Field fixtures are synced."""
+	from essdee_yrp.patches.setup_process_conversion_attributes import (
+		sync_existing_process_configuration,
+	)
+
+	sync_existing_process_configuration()
 
 
 def ensure_yrp_valuation_contract():

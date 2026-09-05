@@ -83,40 +83,40 @@ const EssdeePreset = definePreset(Aura, {
 					950: "var(--yrp-text, #0F1613)",        // --esd-ink
 				},
 			},
-			// Dark Bright Workshop — activated by `.dark` on <html> (darkModeSelector).
-			// Brighter teal primary for contrast; deep cool-slate surfaces (0 = card
-			// ground, low numbers = backgrounds, high numbers = light text).
+			// Dark Premium White — activated by `.dark` on <html> (darkModeSelector).
+			// The layout can replace the anchors through --yrp-* / --esd-* tokens;
+			// neutral graphite residual stops avoid the old green cast.
 			dark: {
 				// Same §9 var-pinning as light — the vars resolve per scheme via the
 				// .dark overrides in global.css, so these are today's exact dark hexes.
 				primary: {
-					color: "var(--esd-accent)", // #2FB8A6 — brighter teal reads on dark
-					inverseColor: "#04241F",
-					hoverColor: "var(--esd-accent-700)", // #5ACCBC
-					activeColor: "#9ADFD3", // no token equivalent — stays literal
+					color: "var(--esd-accent)",
+					contrastColor: "#101318",
+					hoverColor: "var(--esd-accent-700)",
+					activeColor: "var(--esd-accent-700)",
 				},
 				highlight: {
-					background: "rgba(47, 184, 166, 0.16)", // ≠ token alpha .15 — stays literal
-					focusBackground: "rgba(47, 184, 166, 0.24)",
-					color: "var(--esd-accent-700)", // #5ACCBC
-					focusColor: "#9ADFD3", // no token equivalent — stays literal
+					background: "var(--esd-accent-50)",
+					focusBackground: "var(--esd-accent-50)",
+					color: "var(--esd-accent-700)",
+					focusColor: "var(--esd-accent-700)",
 				},
 				// Same var()-pinning rule as the light ramp: the --yrp-* tokens are
 				// .dark-scoped here (engine writes them from the layout's dark{}
 				// overlay), fallbacks are the exact shipped dark hexes.
 				surface: {
-					0:   "var(--yrp-surface, #17211C)",     // component ground (cards, table, dialog)
-					50:  "var(--yrp-surface-2, #1E2B25)",   // row hover
-					100: "#223129",   // header band / secondary surface
-					200: "var(--yrp-line, #2A3A33)",        // borders / lines
-					300: "#3A4C44",   // toggle OFF-track
-					400: "#5F6E68",
-					500: "var(--yrp-muted, #8C9A93)",       // muted text
-					600: "#A5B2AB",
-					700: "var(--yrp-text-2, #C0CDC7)",
-					800: "#D9E3DE",
-					900: "var(--yrp-text, #E9F1ED)",
-					950: "#F4F9F6",   // brightest text
+					0:   "var(--yrp-surface, #191D25)",     // component ground (cards, table, dialog)
+					50:  "var(--yrp-surface-2, #242936)",   // row hover
+					100: "#292F3C",   // neutral header band / secondary surface
+					200: "var(--yrp-line, #353B48)",        // borders / lines
+					300: "#454C5A",   // toggle OFF-track
+					400: "#6B7381",
+					500: "var(--yrp-muted, #AAB1BD)",       // muted text
+					600: "#BAC0CA",
+					700: "var(--yrp-text-2, #CDD1D8)",
+					800: "#E1E4E9",
+					900: "var(--yrp-text, #F1F3F7)",
+					950: "#FAFBFC",   // brightest text
 				},
 			},
 		},

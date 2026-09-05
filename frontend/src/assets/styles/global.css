@@ -157,7 +157,32 @@
 .dark .p-datepicker-input,
 .dark .p-inputnumber-input {
 	background: var(--esd-card);
+	border-color: var(--esd-line);
 	color: var(--esd-ink);
+}
+
+/* Aura's dark auxiliary-control and disabled tokens point at the high end of
+   its surface ramp (which is reserved for text in this preset). Keep every
+   dark form control on the same graphite elevation instead of flashing white. */
+.dark .p-autocomplete-dropdown,
+.dark .p-datepicker-dropdown {
+	background: var(--esd-slate-50);
+	border-color: var(--esd-line);
+	color: var(--esd-ink-2);
+}
+.dark .p-autocomplete-dropdown:not(:disabled):hover,
+.dark .p-datepicker-dropdown:not(:disabled):hover {
+	background: var(--esd-accent-50);
+	color: var(--esd-accent-700);
+}
+.dark .p-inputtext:disabled,
+.dark .p-textarea:disabled,
+.dark .p-select.p-disabled,
+.dark .p-multiselect.p-disabled {
+	background: var(--esd-slate-50);
+	border-color: var(--esd-line);
+	color: var(--esd-muted);
+	opacity: 1;
 }
 /* Checkbox: unchecked box bg also rides a light surface in dark — pin it dark
    (the checked/teal state keeps its accent fill from the preset). */
@@ -191,6 +216,35 @@
 .dark .p-multiselect-label.p-placeholder {
 	color: var(--esd-muted-2);
 }
+
+/* Keep keyboard/hover and selected options visibly distinct in dark mode.
+   PrimeVue teleports these overlays under <body>, so the scheme class remains
+   the stable gate and no light-theme selector is affected. */
+.dark .p-select-option:not(.p-disabled).p-focus,
+.dark .p-select-option:not(.p-disabled)[data-p-focused="true"],
+.dark .p-multiselect-option:not(.p-disabled).p-focus,
+.dark .p-multiselect-option:not(.p-disabled)[data-p-focused="true"],
+.dark .p-autocomplete-option:not(.p-disabled).p-focus,
+.dark .p-autocomplete-option:not(.p-disabled)[data-p-focused="true"] {
+	background: var(--esd-slate-50);
+	color: var(--esd-ink);
+}
+.dark .p-select-option.p-select-option-selected,
+.dark .p-select-option[data-p-selected="true"],
+.dark .p-multiselect-option.p-multiselect-option-selected,
+.dark .p-multiselect-option[data-p-selected="true"],
+.dark .p-autocomplete-option[data-p-selected="true"] {
+	background: var(--esd-accent-50);
+	box-shadow: inset 3px 0 0 var(--esd-accent);
+	color: var(--esd-accent-700);
+}
+.dark .p-select-option.p-select-option-selected.p-focus,
+.dark .p-select-option[data-p-selected="true"][data-p-focused="true"],
+.dark .p-multiselect-option.p-multiselect-option-selected.p-focus,
+.dark .p-multiselect-option[data-p-selected="true"][data-p-focused="true"] {
+	background: var(--esd-accent-50);
+	color: var(--esd-accent-700);
+}
 .dark .p-select-overlay,
 .dark .p-multiselect-overlay,
 .dark .p-autocomplete-overlay,
@@ -207,6 +261,16 @@
 }
 .dark .p-paginator {
 	background: transparent;
+	color: var(--esd-ink);
+}
+
+.dark .p-button.p-button-secondary.p-button-outlined {
+	border-color: var(--esd-line);
+	color: var(--esd-muted);
+}
+.dark .p-button.p-button-secondary.p-button-outlined:not(:disabled):hover {
+	background: var(--esd-slate-50);
+	border-color: var(--esd-muted);
 	color: var(--esd-ink);
 }
 

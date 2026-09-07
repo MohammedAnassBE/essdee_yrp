@@ -1,9 +1,9 @@
 # MRP Branch Handoff — Production API to Essdee YRP
 
-Current execution update: 2026-09-05 — reload and verification finished WITH SOURCE GAPS
+Current execution update: 2026-09-07 — fresh-site one-pass migration verified WITH SOURCE GAPS
 Current continuation branches: `apps/essdee_yrp` → `erp_now`, `apps/yrp` → `erp_now`
 Source reference: Frappe 15 `mrp3.site:8002` / `production_api`
-Current target: Frappe 16 `erp_now.site:8003` / ERPNext + `yrp` + `essdee_yrp` + India Compliance
+Current target: Frappe 16 `erp_now_migration.site:8003` / ERPNext + `yrp` + `essdee_yrp`
 
 Production deployment is a fresh-site, one-pass migration. Finalize schemas,
 fixtures and the original migration transformer before installing the apps and
@@ -23,49 +23,82 @@ to only `Essdee Debit.against`, intentionally represented by `YRP Debit.work_ord
 
 ## Final continuation state — supersedes every running state below
 
-The original full Migrate completed at **16:59:39 IST**; built-in Verify completed
-at **18:16:56 IST**, zero failures, **Verified With Source Gaps**. The independent
-whole-population application audit and complete framework recheck also finished:
-264 source DocTypes / 6,329,767 app rows / 175,644,606 inspected values, plus
-1,108,245 framework/history rows / 22,377,418 SQL values. Zero original-value
-mismatches, missing direct values, rounding or unresolved populated omissions;
-all 262,149 default fills independently verified. The 144 framework Decimal/JSON
-representation differences are numerically exact, not waived mismatches.
+The owner-approved field ownership is implemented and pushed. Base YRP direct
+DocFields are in `yrp` commit `1af54d9`; Essdee direct fields, Custom Field
+fixtures, complete source contract, and the original-load Purchase Invoice
+projections are in `essdee_yrp` commits `2ecd8af` and `ca91f21`. The latter also
+preserves Workflow State masters referenced by fresh-source records. No runtime
+custom-field creator and no post-load business-data repair patch is used.
 
-Final artifacts live in `/home/anas/frappe-16/docs/`:
+`erp_now_migration.site` was created from scratch and contains exactly Frappe
+16.33.0, ERPNext 16.34.1, `yrp` on `erp_now`, and `essdee_yrp` on `erp_now`.
+Analyse found 264 source and 329 target DocTypes with zero blockers. The final
+Dry Run covered 3,437,199 parents with zero skipped/failed rows. A reviewed reset
+preview and execution both affected zero rows because the target was fresh. The
+single write Migrate then loaded 3,437,199 application parents, 2,742 preserved
+orphan children, 1,108,303 framework/history rows, ten credential rows, 26
+retired records, and 1,005 application File records with zero skipped/failed
+application parents.
 
-- `production-api-field-values-20260905-verified.json` (with first-pass provenance)
-- `production-api-reconciliation-20260905.html` (eight-tab owner review)
-- `production-api-field-definitions-20260905.html` (missing-definition inventory)
-- `production-api-desk-verification-20260905.json` (seven live screens)
-- `production-api-reload-20260905.md` (authoritative execution log / backup hashes)
+Built-in Verify completed as **Verified With Source Gaps**. It checked 3,437,199
+parents, 6,353,819 parent/child identities, 6,359,287 parent/child documents and
+177,102,089 target values. Identity failures, value failures and framework
+mismatches are all zero. Links pass with 25 retained source exceptions and zero
+unexpected target exceptions. Purchase Invoice physical and dual-projection
+checks pass.
 
-**Remaining gaps, not a production-ready certificate:** 1,475 source blobs are
-missing/corrupt, one extra Product Release URL lacks File metadata/bytes, and
-nine preserved credentials cannot be decrypted with available keys. The twelve
-local file archives and current/backup configs did not recover them. Original
-production file archives plus the matching site-config backup are required.
-Historical valuation allocation is separately unresolved for 106,563 WO GRN
-deliverables (102,415 ambiguous multi-output); stock adjustment stays disabled.
-Twenty-five historical unresolved source links remain; zero unexpected broken
-target links. The built-in verifier's 2,284 transformed PI numeric storage
-normalizations are disclosed separately from zero original-source rounding.
+The independent physical-SQL audit re-read 264 DocTypes, 6,329,840 source rows,
+6,283 field routes and 176,377,079 source values. It compared 176,360,162 routed
+values: 176,098,013 are exact and all 262,149 target defaults derived from source
+blanks were independently proven. Mismatched values, missing target-row values,
+rounded numerics, populated ignored routes, schema gaps, credential identity/value
+mismatches, Purchase Invoice group/physical mismatches, Bin reservation
+mismatches, retired/archive mismatches, framework mismatches and attachment
+metadata mismatches are all zero.
 
-Passed: 182 migration tests, 64 independent audit/report tests, five rollback-safe
-reservation lifecycle tests, four boot tests, four JSON display tests, compilation,
-asset build and whitespace checks. Actual PIs have correct direct/grouped child
-types and visibility. Bin history, active SREs, Supplier/Address links and the
-migration form render correctly. Seven live screens: zero console/HTTP failures,
-stable routes, no dirty forms. Read-only JSON is escaped before first rendering
-through the host bundle; real session defaults are supplied in the host boot
-hook to avoid the upstream sidebar's asynchronous race. No upstream files changed.
+Purchase Invoice totals are 9,602 invoices, 32,193 direct
+`YRP Purchase Invoice Item` rows and 24,785 grouped
+`SD YRP Essdee Purchase Invoice Item` rows. The
+independent GRN projection check maps 14,555 positive source GRN rows into 8,210
+physical target rows with zero mismatch. `YRP Purchase Invoice.original_item_rows`
+does not exist. Bin totals are 296,519 rows; all 437 non-zero balances and the
+78,646 historical reserved-quantity total match. Active Stock Reservation Entry
+totals also match: 929 entries, 432 buckets and 78,621 reserved units, with five
+historical cache-only buckets totaling 25 retained rather than discarded.
 
-Both sites are open again (`maintenance_mode=0`), schedulers disabled. Full target
-backup `20260905_181721-erp_now_site-*` completed at 18:20:15 IST; gzip and all
-public/private file members verified, matching config/key backup retained.
-No second reset, separate repair migration, commit or push in this continuation.
-No data migration / audit process remains active. Do not restart the completed
-load. Current worktrees contain the migration changes and should be preserved.
+Current evidence in `/home/anas/frappe-16/docs/`:
+
+- `production-api-reconciliation-20260907.html`
+- `production-api-field-definitions-20260907.html`
+- `production-api-field-definitions-20260907.json`
+- `production-api-field-values-20260907-verified.json`
+
+The definition inventory has one absent definition and zero blockers:
+`Essdee Debit.against` is semantically represented by `YRP Debit.work_order` for
+all 32 source rows, so a duplicate operational field is not required.
+
+**Remaining source gaps, not a production-ready certificate:** 1,475 selected
+attachment blobs are unavailable/corrupt in the source snapshot (1,003 app, 469
+framework, three retired), and nine source credential values cannot be decrypted
+with the available source key. Their identities/metadata remain preserved.
+Historical stock-valuation allocation is separately unresolved for 106,563 WO
+GRN deliverables, including 102,415 ambiguous multi-output rows. That is an
+operational lineage-readiness limitation, not an original field-value mismatch.
+
+Verification includes 182 migration tests, 64 independent audit/report tests,
+the fresh Workflow State supporting-master tests, compilation/JSON/diff checks,
+and a fresh-schema 6/6 physical-column/controller test. A transactional
+Production Order/alternative packing flow created its linked Production Order,
+Lot, Work Order, submitted stock entries and Finishing Plan, updated quantities,
+then cancelled/rolled back successfully. On the clean migrated site, Desk,
+`YRP Bin.reserved_qty`, and a dual-projection Purchase Invoice were visually
+checked. The setup-wizard loop was removed by completing both installed-app
+setup flags and setting the standard Desk home to `workspace`; `/desk` is stable.
+
+Both source and target have `maintenance_mode=0`; schedulers remain disabled.
+The temporary target-reset flag is back to `0`. No migration/audit/test process
+is active. Do not restart or repair the completed one-pass load. The historical
+timestamped notes below describe earlier superseded rehearsals only.
 
 ## Earlier timestamped progress — historical, not current status
 

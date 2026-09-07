@@ -15,7 +15,6 @@ class TestEssdeeSetup(FrappeTestCase):
 	def test_fresh_install_seeds_dimensions_before_stock_indexes(self):
 		calls = []
 		steps = (
-			"ensure_purchase_invoice_commercial_fields",
 			"ensure_process_billing_items",
 			"ensure_yrp_valuation_contract",
 			"ensure_required_stock_dimensions",
@@ -26,7 +25,6 @@ class TestEssdeeSetup(FrappeTestCase):
 			"ensure_mrp_schema_roles",
 			"ensure_mrp_cancel_permissions",
 			"ensure_yrp_production_order_settings",
-			"ensure_lot_packing_boundary",
 		)
 		with ExitStack() as stack:
 			for step in steps:

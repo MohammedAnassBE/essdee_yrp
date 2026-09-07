@@ -26,6 +26,7 @@
   "section_break_lzec",
   "cutting_marker_ratios",
   "cutting_marker_ratios_html",
+  "cutting_marker_parts",
   "amended_from",
   "cutting_marker_groups"
  ],
@@ -133,6 +134,13 @@
    "fieldname": "cutting_marker_ratios_html",
    "fieldtype": "HTML",
    "label": "Cutting Marker Ratios HTML"
+  },
+  {
+   "depends_on": "eval: !doc.__islocal && doc.item",
+   "fieldname": "cutting_marker_parts",
+   "fieldtype": "Table",
+   "label": "Cutting Marker Parts",
+   "options": "SD YRP Cutting Marker Part"
   },
   {
    "fieldname": "selected_type",

@@ -557,7 +557,7 @@
   "property": "precision",
   "property_type": "Select",
   "row_name": null,
-  "value": "2"
+  "value": "9"
  },
  {
   "default_value": null,
@@ -638,5 +638,65 @@
   "property_type": "Text",
   "row_name": null,
   "value": "Material Issue\nMaterial Receipt\nSend to Warehouse\nReceive at Warehouse\nMaterial Consumed\nStock Dispatch\nDC Completion\nGRN Completion"
+ },
+ {
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "doc_type": "YRP Delivery Challan",
+  "field_name": "total_delivered_qty",
+  "name": "YRP Delivery Challan-total_delivered_qty-precision",
+  "property": "precision",
+  "property_type": "Select",
+  "value": "9"
+ },
+ {
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "doc_type": "YRP Delivery Challan Item",
+  "field_name": "delivered_quantity",
+  "name": "YRP Delivery Challan Item-delivered_quantity-precision",
+  "property": "precision",
+  "property_type": "Select",
+  "value": "9"
+ },
+ {
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "doc_type": "YRP Delivery Challan Item",
+  "field_name": "pending_quantity",
+  "name": "YRP Delivery Challan Item-pending_quantity-precision",
+  "property": "precision",
+  "property_type": "Select",
+  "value": "9"
+ },
+ {
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "doc_type": "YRP Delivery Challan Item",
+  "field_name": "ste_delivered_quantity",
+  "name": "YRP Delivery Challan Item-ste_delivered_quantity-precision",
+  "property": "precision",
+  "property_type": "Select",
+  "value": "9"
+ },
+ {
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "doc_type": "YRP Goods Received Note Item",
+  "field_name": "quantity",
+  "name": "YRP Goods Received Note Item-quantity-precision",
+  "property": "precision",
+  "property_type": "Select",
+  "value": "9"
+ },
+ {
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "doc_type": "YRP Goods Received Note Item",
+  "field_name": "stock_qty",
+  "name": "YRP Goods Received Note Item-stock_qty-precision",
+  "property": "precision",
+  "property_type": "Select",
+  "value": "9"
  }
 ]

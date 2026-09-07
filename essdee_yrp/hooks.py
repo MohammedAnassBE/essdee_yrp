@@ -6,6 +6,9 @@ app_email = "anas@essdee.fit"
 app_license = "mit"
 required_apps = ["yrp"]
 
+# Sidebar conditions run before the asynchronous toolbar defaults request.
+boot_session = "essdee_yrp.boot.boot_session"
+
 # Code-owned downstream extensions for the base /web registry. Layout JSON may
 # reference these safe keys but cannot supply executable methods itself.
 yrp_ui_metrics = ["essdee_yrp.ui_registry.get_metrics"]
@@ -298,6 +301,8 @@ jinja = {
 
 # before_install = "essdee_yrp.install.before_install"
 after_install = "essdee_yrp.setup.after_install"
+# Precision Property Setters are imported after after_install on fresh sites.
+after_sync = "essdee_yrp.setup.ensure_historical_quantity_storage"
 
 # Consumer-site setup (recreate records ERPNext's setup wizard would install).
 after_migrate = "essdee_yrp.setup.after_migrate"

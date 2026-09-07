@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import io
+import tokenize
 import unittest
 from pathlib import Path
 
@@ -37,7 +39,11 @@ class MigrationDocTypeSchemaTest(unittest.TestCase):
 			"AUDITED_HISTORICAL_BROKEN_LINKS",
 		)
 		for path in paths:
-			contents = path.read_text()
+			# Audit comments can name the backup that exposed a defect. Runtime
+			# literals/identifiers still must obtain connection identity from config.
+			contents = " ".join(token.string for token in tokenize.generate_tokens(
+				io.StringIO(path.read_text()).readline
+			) if token.type != tokenize.COMMENT)
 			for value in forbidden:
 				self.assertNotIn(value, contents, f"{value!r} is hardcoded in {path}")
 

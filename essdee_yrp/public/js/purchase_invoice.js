@@ -252,7 +252,7 @@ function configure_essdee_process_items(frm) {
 		is_work_order ||
 		(is_purchase_order &&
 			((frm.doc.essdee_items || []).length ||
-				["yrp_grn_v1", "production_api"].includes(frm.doc.essdee_rate_table_source)));
+				["yrp_grn_v1", "migrated_v1"].includes(frm.doc.essdee_rate_table_source)));
 	const grouped_label = is_work_order ? __("Process Items") : __("Grouped Items");
 	frm.set_df_property("items_section", "label", uses_grouped_items ? grouped_label : __("Items"));
 	frm.set_df_property("essdee_items", "label", grouped_label);
@@ -268,7 +268,7 @@ function configure_essdee_process_items(frm) {
 	grid.only_sortable = false;
 	const editable_rate =
 		frm.doc.docstatus === 0 &&
-		["yrp_grn_v1", "production_api"].includes(frm.doc.essdee_rate_table_source);
+		["yrp_grn_v1", "migrated_v1"].includes(frm.doc.essdee_rate_table_source);
 	for (const fieldname of [
 		"item",
 		"lot",

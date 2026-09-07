@@ -1,10 +1,196 @@
 # MRP Branch Handoff — Production API to Essdee YRP
 
-Last verified: 2026-08-25
-Canonical continuation branch: `apps/essdee_yrp` → `MRP`
-Base app branch: `apps/yrp` → `develop`
+Current execution update: 2026-09-05 — reload and verification finished WITH SOURCE GAPS
+Current continuation branches: `apps/essdee_yrp` → `erp_now`, `apps/yrp` → `erp_now`
 Source reference: Frappe 15 `mrp3.site:8002` / `production_api`
-Target: Frappe 16 `essdee_yrp.site:8003` / `yrp` + `essdee_yrp`
+Current target: Frappe 16 `erp_now.site:8003` / ERPNext + `yrp` + `essdee_yrp` + India Compliance
+
+Production deployment is a fresh-site, one-pass migration. Finalize schemas,
+fixtures and the original migration transformer before installing the apps and
+loading source data. Development-site correction patches must not be shipped as
+a substitute for producing the right document and child-table values during that
+single migration.
+
+On 2026-09-07 the owner approved restoring every field in the final definition
+inventory. YRP-owned fields are direct base DocFields; Essdee-owned fields are
+direct SD YRP DocFields. Only Essdee extensions of YRP DocTypes remain fixtures:
+the two historical Goods Received Note stock-entry markers, the previously
+approved Item BOM/IPD/Stock Settings extensions, and other existing Essdee
+customizations. `YRP Supplier.deparments` moved into base YRP. The source bridge
+now exports all reviewed physical historical columns, including empty/default
+columns no longer exposed by F15 runtime metadata. The definition audit is down
+to only `Essdee Debit.against`, intentionally represented by `YRP Debit.work_order`.
+
+## Final continuation state — supersedes every running state below
+
+The original full Migrate completed at **16:59:39 IST**; built-in Verify completed
+at **18:16:56 IST**, zero failures, **Verified With Source Gaps**. The independent
+whole-population application audit and complete framework recheck also finished:
+264 source DocTypes / 6,329,767 app rows / 175,644,606 inspected values, plus
+1,108,245 framework/history rows / 22,377,418 SQL values. Zero original-value
+mismatches, missing direct values, rounding or unresolved populated omissions;
+all 262,149 default fills independently verified. The 144 framework Decimal/JSON
+representation differences are numerically exact, not waived mismatches.
+
+Final artifacts live in `/home/anas/frappe-16/docs/`:
+
+- `production-api-field-values-20260905-verified.json` (with first-pass provenance)
+- `production-api-reconciliation-20260905.html` (eight-tab owner review)
+- `production-api-field-definitions-20260905.html` (missing-definition inventory)
+- `production-api-desk-verification-20260905.json` (seven live screens)
+- `production-api-reload-20260905.md` (authoritative execution log / backup hashes)
+
+**Remaining gaps, not a production-ready certificate:** 1,475 source blobs are
+missing/corrupt, one extra Product Release URL lacks File metadata/bytes, and
+nine preserved credentials cannot be decrypted with available keys. The twelve
+local file archives and current/backup configs did not recover them. Original
+production file archives plus the matching site-config backup are required.
+Historical valuation allocation is separately unresolved for 106,563 WO GRN
+deliverables (102,415 ambiguous multi-output); stock adjustment stays disabled.
+Twenty-five historical unresolved source links remain; zero unexpected broken
+target links. The built-in verifier's 2,284 transformed PI numeric storage
+normalizations are disclosed separately from zero original-source rounding.
+
+Passed: 182 migration tests, 64 independent audit/report tests, five rollback-safe
+reservation lifecycle tests, four boot tests, four JSON display tests, compilation,
+asset build and whitespace checks. Actual PIs have correct direct/grouped child
+types and visibility. Bin history, active SREs, Supplier/Address links and the
+migration form render correctly. Seven live screens: zero console/HTTP failures,
+stable routes, no dirty forms. Read-only JSON is escaped before first rendering
+through the host bundle; real session defaults are supplied in the host boot
+hook to avoid the upstream sidebar's asynchronous race. No upstream files changed.
+
+Both sites are open again (`maintenance_mode=0`), schedulers disabled. Full target
+backup `20260905_181721-erp_now_site-*` completed at 18:20:15 IST; gzip and all
+public/private file members verified, matching config/key backup retained.
+No second reset, separate repair migration, commit or push in this continuation.
+No data migration / audit process remains active. Do not restart the completed
+load. Current worktrees contain the migration changes and should be preserved.
+
+## Earlier timestamped progress — historical, not current status
+
+**18:02:23 IST update:** The independent framework recheck has FINISHED successfully:
+1,108,245 rows / 22,377,418 SQL values, zero mismatches, 144 exact numeric
+representation matches. `docs/production-api-field-values-20260905-verified.json`
+retains the complete first pass's application/auxiliary results with proven
+file/hash provenance. Every independent mismatch/gap/fill-error counter is zero.
+The HTML `docs/production-api-reconciliation-20260905.html` is available and
+visually checked, with source/key and new valuation-link warnings prominent.
+Only main built-in Verify PID 538222/session 5638 is still running, now in
+framework history after all parent/child values. Both sites remain isolated.
+Wait for that gate before release, actual Desk checks and final backup.
+The older running-independent state below is superseded by this update.
+
+**LATEST 17:40 IST:** The FULL original load is **Completed**: 3,437,185
+parents, 2,742 orphan children, ten credentials, 26 retired records, 1,108,245
+supporting/history rows, and 1,005 app Files; zero failed/skipped parents.
+Read-only built-in Verify continues in PID 538222 / session 5638. The independent
+full first pass finished: 6,329,767 source rows / 175,644,606 inspected values,
+zero application-value, PI/GRN, reservation, credential, retired/file/archive
+mismatches and all 262,149 blank fills independently verified. Its immutable
+`docs/production-api-field-values-20260905.json` flags 36 framework Print Formats
+because SQL DECIMAL margin text was compared against JSON numbers. All 144
+source margins survive the exporter conversion exactly. The corrected diagnostic
+uses exact Decimal comparison, rejecting real float rounding and Data-string
+coercion. It is re-reading ALL 1,108,245 framework rows in PID 770455 / session
+55543, producing a new `docs/production-api-field-values-20260905-verified.json`
+with first-pass provenance and current valuation readiness. Both remaining checks
+must finish; do not restart them or call the first-pass flags manually waived.
+63 independent audit/report tests pass; the refreshed definition inventory has
+zero unresolved populated-field omissions (33 absent empty/default legacy fields,
+one semantically retained discriminator). Both sites remain in maintenance mode.
+New valuation allocation links remain a separate operational issue: all 106,563
+regular submitted WO GRN deliverables are wholly unmapped, including 102,415
+ambiguous multi-output rows. No invalid links or unpaired active Lot Transfer
+SLEs were reported. This does not erase original source fields, but historical
+valuation adjustment readiness is NOT certified. Source/key gaps remain below.
+The five post-load rollback-safe reservation integration tests PASSED: stock
+issue, reconciliation, incoming-receipt cancellation, backdated outflow and
+rate-only valuation replay. All 12 involved table counts and the naming-counter
+digest are unchanged after rollback; no test business entries were left behind.
+
+The following is the earlier execution history, superseded by the latest state above.
+
+**Latest state: RUNNING on owner instruction.** The previous load committed all
+3,437,185 application parents, then failed at 15:18 IST because one original
+credential references a deleted source FG Item OMS Settings child. The loader
+now preserves that orphan without creating a live child, while retaining
+missing-target and collision guards. All ten actual credentials passed a
+rollback-only write/read test; 182 migration and 28 independent-audit/report
+tests passed. Fresh Analyse → Dry Run → Migrate → Verify started at 15:34 IST
+(PID 538222, exec session 5638). No second reset or repair patch is used.
+The full fresh Dry Run passed at **16:00:32 IST** (3,437,185 parents,
+1,108,245 supporting/history rows, ten credentials, zero failures). Migrate
+preflight passed and the write phase started at **16:03:51 IST** with a fresh
+checkpoint. Independent tests now total 58; an early direct source-GRN
+check also matched all 14,555 positive GRN rows to 8,210 physical PI rows with
+zero quantity/value mismatches. This must be repeated in the final audit.
+At **16:35 IST**, all 3,437,185 application parents are committed with zero
+failures; auxiliary preservation/history and complete verification are pending.
+The final auditor also independently hashes source-disk files for archived
+attachments; it rejects available bytes incorrectly marked missing. Read-only
+disk checks confirm 469 unavailable/corrupt framework blobs out of 474 and all
+three retired blobs unavailable. The combined source-gap count below is unchanged.
+The preliminary full SQL audit finished, but used the OLD incomplete snapshot.
+Its 1,242 missing rows are the previously unfinished orphan-child tail; no
+separate differences in present rows and no numeric rounding were found. All
+262,149 filled source blanks across 17 field routes now have independently
+checked SQL/configuration evidence (zero unverified); they remain separately
+disclosed defaults, never counted as exact original-value copies. The final
+post-load audit must repeat these checks. No final certificate exists yet.
+An early independent Bin/SRE check also matches 437 historical balances totaling
+78,646 and 929 active SREs in 432 buckets totaling 78,621. Five stale source
+cache-only buckets totaling 25 are retained historically, not revived. The final
+auditor repeats this calculation and the final runtime tests remain pending.
+File metadata/folder and forward-reference corrections passed 177 migration
+tests, 26 independent-audit/report tests and a full 1,005-File dry run. Source
+and target are in maintenance mode. Source-gap count is now 1,475 missing/corrupt
+blobs across 1,482 selected attachment rows; nine credential keys are unavailable.
+The execution log `/home/anas/frappe-16/docs/production-api-reload-20260905.md`
+is authoritative. No new complete load or independent final report exists yet.
+
+## 2026-09-05 correction and reload — supersedes old completion statements
+
+The owner requested another complete target reset/reload after finding omitted
+source fields. The reviewed reset removed 6,362,434 migration-owned rows while
+preserving settings, native ERPNext setup and 180 naming counters. The import
+was intentionally paused after 1,279,598 committed parents when a wider audit
+found reverse-linked Address/Contact and framework history outside the old
+pipeline. A new full dry run is now running; **do not report the new target as
+fully migrated or production-ready**.
+
+The original loader now preserves omitted fields, both operational PI item projections, and the original IPD process-row archive,
+2,742 orphan children, 10 credential rows, retired-table records, original
+attachment selections, and full physical quantity precision. Bin's historical
+reserved quantity is retained as the visible `YRP Bin.reserved_qty`; active
+reservations remain authoritative in Stock Reservation Entry and synchronize
+that Bin balance. Both invoice projections are
+built during the original migration, not by repair patches.
+
+The initial supporting/history dry run and independently reconstructed SQL
+inventory agreed on 1,076,132 additional rows. The deeper inbound-reference
+census expands this to 1,108,235 rows by including original import logs,
+prepared reports and their attachments, and related inactive settings.
+The expanded full gate is running. This covers 2,918 Addresses,
+11 Contacts, their children, ordinary comments/versions, and linked framework
+configuration/history. Original values are encrypted in private, resumable
+archive files. Ordinary timeline rows are native; old workflows, permissions,
+sharing keys, mail, reports and integration configuration stay inactive.
+Large history records are split into bounded archive parts and verified by
+an independent physical-file reader. No upstream source is edited.
+
+The frozen source has **1,474 unavailable/corrupt attachment blobs among 1,481
+relevant File records**, and nine credentials cannot be decrypted with its
+current key. Their metadata/ciphertext is retained, but missing file bytes and
+working integrations cannot be certified without the original files/key.
+The current/archived mrp3 backup configs and twelve file tar archives were
+checked read-only; they did not recover these missing bytes or credentials.
+
+Exact backups, tests, current process state, and remaining verification are in
+the bench execution log `docs/production-api-reload-20260905.md`. Both sites
+are currently in maintenance mode; restore original flags safely after the
+controlled load and audits. Current audit record: `MRP-MIG-2026-00001`.
+The older evidence below remains dated history, not proof of this new load.
 
 ## Read this first
 
@@ -652,7 +838,7 @@ the read-only Dry Run and its data/attachment gates before any historical write.
 
 ### Gate 1 — refresh and freeze the source contract
 
-1. Switch only `apps/essdee_yrp` back to `MRP`.
+1. Confirm both current checkouts are `erp_now`; do not switch to the older `MRP` branch for this ERPNext co-installation reload.
 2. Re-read this handoff and inspect all three repositories without resetting
    owner changes.
 3. Record current F15 HEAD, branch, dirty-file list, and diff hash.
@@ -829,7 +1015,7 @@ From `/home/anas/frappe-16`:
 
 ```bash
 git -C apps/essdee_yrp status --short --branch
-git -C apps/essdee_yrp switch MRP
+git -C apps/essdee_yrp branch --show-current
 git -C apps/yrp status --short --branch
 git -C /home/anas/frappe-15/apps/production_api status --short --branch
 

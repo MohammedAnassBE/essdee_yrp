@@ -85,6 +85,8 @@ class SDYRPMRPDataMigration(Document):
 		self.failed_records = 0
 		self.report_json = None
 		self.checkpoint_json = None
+		self.retired_source_rows_json = None
+		self.framework_archive_json = None
 		self.error_log = None
 		self.set("migration_details", [])
 
@@ -226,7 +228,7 @@ class SDYRPMRPDataMigration(Document):
 
 	@frappe.whitelist()
 	def verify(self):
-		return self._enqueue("verify", allowed_statuses={"Completed", "Verified"})
+		return self._enqueue("verify", allowed_statuses={"Completed", "Verified", "Verified With Source Gaps"})
 
 	def _apply_analysis(self, payload):
 		kinds = payload["migration_kinds"]

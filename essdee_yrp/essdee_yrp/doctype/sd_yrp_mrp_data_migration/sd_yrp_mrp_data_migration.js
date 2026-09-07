@@ -99,7 +99,7 @@ frappe.ui.form.on("SD YRP MRP Data Migration", {
 		const actions = [
 			[__("Dry Run"), "dry_run", ["Ready", "Dry Run Complete", "Failed"]],
 			[__("Migrate"), "migrate", ["Reset Complete", "Failed"]],
-			[__("Verify"), "verify", ["Completed", "Verified"]],
+			[__("Verify"), "verify", ["Completed", "Verified", "Verified With Source Gaps"]],
 		];
 		for (const [label, method, statuses] of actions) {
 			if (!statuses.includes(frm.doc.status) || frm.doc.blocker_count) {

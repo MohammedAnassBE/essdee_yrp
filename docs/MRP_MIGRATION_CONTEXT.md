@@ -1,8 +1,15 @@
 # Production API → YRP / SD YRP Migration Context
 
-Last updated: 2026-08-25
-Working site: `essdee_yrp.site`
-Working branches: `apps/yrp` → `develop`, `apps/essdee_yrp` → `MRP`
+Last updated: 2026-09-05
+Working site: `erp_now.site` (ERPNext + YRP + Essdee + India Compliance)
+Working branches: `apps/yrp` → `erp_now`, `apps/essdee_yrp` → `erp_now`
+
+**Current reload is not complete.** The September 5 overlay in
+`docs/MRP_BRANCH_HANDOFF.md` supersedes older sites, branches, counts and
+completion statements below. The owner-authorized reset completed, but the
+import was paused after 1,279,598 committed parents to correct omitted
+supporting/history scope. A fresh full dry run is running. See the bench's
+`docs/production-api-reload-20260905.md` execution log before resuming writes.
 
 ## Read this first
 
@@ -10,10 +17,11 @@ The concise canonical resume document is now `docs/MRP_BRANCH_HANDOFF.md`. Any
 AI agent continuing this branch must read that file, the bench `AGENTS.md`, and
 this detailed decision history before changing code.
 
-The owner may temporarily switch `essdee_yrp` to `develop` for unrelated work
-and return to `MRP` later. Base `yrp` currently remains on `develop`. Do not
-treat this work as finished merely because a previous session ended. Update
-the handoff whenever a durable migration decision is made.
+The earlier migration used `essdee_yrp:MRP` with base `yrp:develop`; the current
+ERPNext co-installation reload uses both `erp_now` checkouts. Do not switch
+branches based on older commands below, and do not treat this work as finished
+merely because a previous session ended. Update the handoff whenever a durable
+migration decision is made.
 
 The latest execution contract is configuration-driven. `MRP Data Migration`
 does not accept a bench path or site as editable data. The active site is the
@@ -436,10 +444,11 @@ queryable from the GRN chain when needed.
 
 ## Important exclusions and pending plans
 
-- Do not add old remote API credential fields or absent-module configuration
-  fields to MRP Settings.
-- No data patch is needed for those settings fields; target data will be reset
-  before fresh entries are created.
+- Superseded 2026-09-07: the owner requires the reviewed legacy MRP Settings
+  fields (`auto_send_notifications`, `yrp_site_url`, `yrp_api_key`, and
+  `yrp_api_secret`) to exist directly on `SD YRP MRP Settings` and to be handled
+  by the original one-pass migration. They are not installed or repaired by a
+  later data patch.
 - The 150 created schemas still require controller/JS/report/permission review
   before they can be considered fully migrated features.
 - The migration engine, live adapters, read-only document dry run, supporting

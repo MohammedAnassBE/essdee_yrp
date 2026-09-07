@@ -12,8 +12,6 @@ import frappe
 from frappe.contacts.doctype.address_template.address_template import (
 	get_default_address_template,
 )
-from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
-
 from essdee_yrp.web_build import build_web_spa
 
 # Roles referenced by the migrated MRP DocType permissions but not provided by
@@ -76,7 +74,6 @@ ESSDEE_REQUIRED_STOCK_DIMENSIONS = (
 
 
 def after_install():
-	ensure_purchase_invoice_commercial_fields()
 	ensure_process_billing_items()
 	ensure_yrp_valuation_contract()
 	ensure_required_stock_dimensions()
@@ -87,11 +84,11 @@ def after_install():
 	ensure_mrp_schema_roles()
 	ensure_mrp_cancel_permissions()
 	ensure_yrp_production_order_settings()
-	ensure_lot_packing_boundary()
 
 
 def after_migrate():
-	ensure_purchase_invoice_commercial_fields()
+	ensure_historical_quantity_storage()
+	validate_purchase_invoice_commercial_fields()
 	ensure_process_billing_items()
 	ensure_yrp_valuation_contract()
 	ensure_required_stock_dimensions()
@@ -114,75 +111,47 @@ def after_migrate():
 	build_web_spa()
 
 
-def ensure_purchase_invoice_commercial_fields():
-	"""Install Essdee's commercial PI view without changing base YRP schemas."""
-	create_custom_fields(
-		{
-			'YRP Purchase Invoice': [
-				{
-					"fieldname": "essdee_items",
-					"fieldtype": "Table",
-					"label": "Grouped Items",
-					"options": 'SD YRP Essdee Purchase Invoice Item',
-					"insert_after": "items",
-					"depends_on": (
-						"eval:['YRP Purchase Order', 'YRP Work Order'].includes(doc.against)"
-					),
-				},
-				{
-					"fieldname": "essdee_rate_table_source",
-					"fieldtype": "Data",
-					"label": "Essdee Rate Table Source",
-					"insert_after": "essdee_items",
-					"hidden": 1,
-					"read_only": 1,
-					"no_copy": 1,
-				},
-			],
-			'YRP Purchase Invoice Item': [
-				{
-					"fieldname": "essdee_group_key",
-					"fieldtype": "Data",
-					"label": "Essdee Commercial Group Key",
-					"insert_after": "set_combination",
-					"hidden": 1,
-					"read_only": 1,
-				},
-				{
-					"fieldname": "essdee_rate_weight",
-					"fieldtype": "Float",
-					"label": "Essdee Commercial Rate Weight",
-					"insert_after": "essdee_group_key",
-					"hidden": 1,
-					"precision": 9,
-					"read_only": 1,
-				},
-			],
-			'YRP PI Work Order Billed Detail': [
-				{
-					"fieldname": "essdee_group_key",
-					"fieldtype": "Data",
-					"label": "Essdee Commercial Group Key",
-					"insert_after": "set_combination",
-					"hidden": 1,
-					"read_only": 1,
-				},
-			],
-		},
-		update=True,
-	)
+def ensure_historical_quantity_storage():
+	"""Apply fixture precision to SQL after Frappe imports Property Setters.
+
+	Frappe 16 uses DocField precision for physical DECIMAL scale. Fixtures load
+	after model sync, so metadata alone does not widen an existing SQL column.
+	Only resync the reviewed application tables whose quantities need nine
+	decimal places to preserve historical Production API values.
+	"""
+	fields = {
+		"YRP Delivery Challan": ("ste_transferred", "total_delivered_qty"),
+		"YRP Delivery Challan Item": ("delivered_quantity", "pending_quantity", "ste_delivered_quantity"),
+		"YRP Goods Received Note Item": ("quantity", "stock_qty"),
+		"SD YRP Lot BOM": ("required_qty",),
+	}
+	for doctype, fieldnames in fields.items():
+		if not frappe.db.exists("DocType", doctype):
+			continue
+		meta = frappe.get_meta(doctype)
+		if any(not meta.get_field(name) or str(meta.get_field(name).precision or "") != "9" for name in fieldnames):
+			frappe.throw(f"Historical quantity precision fixtures are not installed for {doctype}")
+		columns = dict(frappe.db.sql(
+			"SELECT column_name,numeric_scale FROM information_schema.columns "
+			"WHERE table_schema=DATABASE() AND table_name=%s", ("tab" + doctype,),
+		))
+		if any(int(columns.get(name) or 0) < 9 for name in fieldnames):
+			frappe.db.updatedb(doctype)
+
+
+def validate_purchase_invoice_commercial_fields():
+	"""Fail closed if the packaged PI Custom Field fixture was not imported."""
 	for doctype, fieldnames in {
 		'YRP Purchase Invoice': ("essdee_items", "essdee_rate_table_source"),
 		'YRP Purchase Invoice Item': ("essdee_group_key", "essdee_rate_weight"),
 		'YRP PI Work Order Billed Detail': ("essdee_group_key",),
 	}.items():
 		for fieldname in fieldnames:
-			frappe.db.set_value(
-				"Custom Field",
-				f"{doctype}-{fieldname}",
-				{"module": "Essdee YRP", "is_system_generated": 1},
-				update_modified=False,
-			)
+			field = frappe.get_meta(doctype).get_field(fieldname)
+			if not field or not frappe.db.exists("Custom Field", f"{doctype}-{fieldname}"):
+				frappe.throw(
+					f"Essdee YRP Custom Field fixture is missing {doctype}.{fieldname}"
+				)
 
 
 def ensure_process_billing_items():

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from essdee_yrp.migration.engine import (
 	Checkpoint,
@@ -13,6 +14,7 @@ from essdee_yrp.migration.engine import (
 	run_migration,
 	transform_document,
 )
+from essdee_yrp.migration.rules import RULES
 
 
 def schema(name, fields, *, istable=False):
@@ -27,6 +29,24 @@ def field(fieldname, fieldtype="Data", options=None):
 
 
 class MigrationEngineTest(unittest.TestCase):
+	def test_bin_reserved_qty_keeps_its_source_fieldname(self):
+		self.assertNotIn("reserved_qty", RULES["Bin"].field_map)
+		self.assertNotIn("reserved_qty", RULES["Bin"].ignored_fields)
+
+	def test_runtime_metadata_does_not_expose_source_app_name(self):
+		app_root = Path(__file__).resolve().parents[1]
+		former_source_name = "production" + "_api"
+		matches = []
+		for path in app_root.glob("**/doctype/*/*.json"):
+			if former_source_name in path.read_text(encoding="utf-8").lower():
+				matches.append(str(path.relative_to(app_root)))
+		fixture = app_root / "fixtures" / "custom_field.json"
+		fixture_contents = fixture.read_text(encoding="utf-8")
+		if former_source_name in fixture_contents.lower():
+			matches.append(str(fixture.relative_to(app_root)))
+		self.assertEqual(matches, [])
+		self.assertNotIn('"fieldname": "original_item_rows"', fixture_contents)
+
 	def test_identity_documents_use_the_generic_engine(self):
 		schemas = {"Action": schema("Action", [field("title"), field("enabled", "Check")])}
 		plan = build_plan(schemas, schemas)
@@ -69,8 +89,8 @@ class MigrationEngineTest(unittest.TestCase):
 			"doctype": "GRN Item Type",
 			"name": "Accepted",
 			"grn_type": "Accepted",
-			"type": "Accepted",
-			"show_in_sewing_plan": 1,
+			"type": None,
+			"show_in_sewing_plan": 0,
 		}
 		self.assertEqual(
 			transform_document(document, plan),

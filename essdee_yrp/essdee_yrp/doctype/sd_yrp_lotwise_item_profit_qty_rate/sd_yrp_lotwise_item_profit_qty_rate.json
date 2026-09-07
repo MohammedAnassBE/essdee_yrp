@@ -8,6 +8,8 @@
  "field_order": [
   "size",
   "group_index",
+  "ratio",
+  "weight",
   "qty",
   "rate",
   "net_rate"
@@ -53,6 +55,22 @@
    "in_list_view": 1,
    "label": "Group Index",
    "reqd": 1
+  },
+  {
+   "columns": 1,
+   "default": "1",
+   "fieldname": "ratio",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Ratio"
+  },
+  {
+   "columns": 1,
+   "fieldname": "weight",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Weight",
+   "precision": "9"
   }
  ],
  "index_web_pages_for_search": 1,

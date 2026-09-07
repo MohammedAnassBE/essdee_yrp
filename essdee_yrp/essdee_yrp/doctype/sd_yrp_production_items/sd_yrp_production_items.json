@@ -7,6 +7,7 @@
  "engine": "InnoDB",
  "field_order": [
   "item",
+  "process_name",
   "required_qty"
  ],
  "fields": [
@@ -16,6 +17,13 @@
    "in_list_view": 1,
    "label": "Item",
    "options": "YRP Item Variant"
+  },
+  {
+   "fieldname": "process_name",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Process Name",
+   "options": "YRP Process"
   },
   {
    "fieldname": "required_qty",

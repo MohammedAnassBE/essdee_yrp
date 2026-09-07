@@ -110,7 +110,7 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			"name": "MPI-1",
 			"docstatus": 1,
 			"against": 'YRP Work Order',
-			"essdee_rate_table_source": "production_api",
+			"essdee_rate_table_source": "migrated_v1",
 			"items": [],
 		}
 		invoice = SimpleNamespace(name="MPI-1", docstatus=1)
@@ -216,7 +216,7 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			"name": "MPI-1",
 			"docstatus": 1,
 			"against": 'YRP Work Order',
-			"essdee_rate_table_source": "production_api",
+			"essdee_rate_table_source": "migrated_v1",
 		}
 		invoice = SimpleNamespace(name="MPI-1", docstatus=1)
 		with (
@@ -720,6 +720,26 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 		with self.assertRaisesRegex(MigrationError, "after the first reset attempt"):
 			_bind_reset_series_checkpoint(migration, before)
 
+	def test_fresh_reviewed_reset_discards_old_load_checkpoint(self):
+		migration = SimpleNamespace(
+			checkpoint_json=json.dumps({"version": 2, "doctypes": {"Item": {"processed": 2}}}),
+			report_json=json.dumps({"mode": "dry_run", "failed": 0}),
+		)
+		before = {"preserved_series_values": {"TARGET-": 91}}
+		bound = _bind_reset_series_checkpoint(migration, before)
+		self.assertEqual(bound["preserved_series_values"], {"TARGET-": 91})
+		self.assertIsNone(bound["reset_started_on"])
+
+	def test_reset_rejects_old_load_checkpoint_without_successful_dry_run(self):
+		for report in ({}, {"mode": "migrate"}, {"mode": "dry_run", "failed": 1}):
+			with self.subTest(report=report):
+				migration = SimpleNamespace(
+					checkpoint_json=json.dumps({"version": 2, "doctypes": {"Item": {}}}),
+					report_json=json.dumps(report),
+				)
+				with self.assertRaisesRegex(MigrationError, "non-reset checkpoint"):
+					_bind_reset_series_checkpoint(migration, {"preserved_series_values": {}})
+
 	def test_reset_post_counts_reinventory_the_complete_current_scope(self):
 		manifest = {
 			"parent_target_doctypes": [],
@@ -1168,7 +1188,7 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			[
 				{
 					"name": "C-1",
-					"idx": 1,
+					"idx": 99,
 					"value": "A",
 					"parent": "P-1",
 					"parenttype": "Parent",
@@ -1296,7 +1316,7 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 		self.assertEqual(result["documents"], 1)
 		self.assertEqual(result["failures"], [])
 
-	def test_orphan_attachment_is_audited_without_creating_target_file(self):
+	def test_orphan_attachment_metadata_is_preserved_and_missing_blob_audited(self):
 		row = {
 			"name": "FILE-ORPHAN",
 			"file_name": "orphan.png",
@@ -1310,6 +1330,8 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			"missing_blob": 1,
 			"orphan_attachment": 1,
 		}
+		row['source_file_metadata'] = {key: value for key, value in row.items()
+			if key not in {'missing_blob', 'orphan_attachment'}}
 		source = SimpleNamespace(
 			settings=configured_settings(),
 			file_status=lambda: {
@@ -1332,9 +1354,10 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 		checkpoint = {"version": 2, "doctypes": {}}
 		with (
 			patch("essdee_yrp.migration.live._load_checkpoint", return_value=checkpoint),
+			patch("essdee_yrp.migration.live.frappe.db.get_table_columns", return_value=list(row['source_file_metadata'])),
+			patch.object(FrappeBulkTarget, '_bulk_upsert'),
 			patch("essdee_yrp.migration.live._prepare_file_settings"),
 			patch("essdee_yrp.migration.live._restore_file_settings"),
-			patch("essdee_yrp.migration.live._repair_file_links"),
 			patch("essdee_yrp.migration.live.frappe.db.set_value"),
 			patch("essdee_yrp.migration.live.frappe.db.commit"),
 			patch.object(FrappeBulkTarget, "upsert_missing_file_metadata") as upsert,
@@ -1343,10 +1366,11 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 				"MIG-1", plan, source, dry_run=False, allow_missing_files=True
 			)
 
-		upsert.assert_not_called()
+		upsert.assert_called_once_with(row, plan)
 		self.assertEqual(result["processed"], 1)
 		self.assertEqual(result["orphan_attachment_count"], 1)
 		self.assertEqual(checkpoint["files"]["orphan_attachment_names"], ["FILE-ORPHAN"])
+		self.assertEqual(checkpoint["files"]["missing_blob_names"], ["FILE-ORPHAN"])
 
 	def test_selected_attachment_bridge_arguments_are_explicit(self):
 		bridge = F15SourceBridge(configured_settings())

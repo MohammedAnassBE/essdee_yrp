@@ -1,9 +1,13 @@
 import "./vue_plugins";
 import "./supplier_notification";
 import "./supplier_whatsapp";
+import { install_json_formatter } from "./json_format";
 
 frappe.provide("frappe.yrp.work_order");
 frappe.provide("essdee_yrp");
+
+// Register before any form is rendered, not in refresh after unsafe HTML ran.
+install_json_formatter(frappe.form.formatters);
 
 // Frappe v16's sidebar header currently sends divider and failed-condition
 // definitions through add_app_item(). Those definitions have no icon URL, so

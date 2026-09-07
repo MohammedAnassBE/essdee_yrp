@@ -29,7 +29,7 @@ APP_ROOT = Path(__file__).resolve().parents[2]
 BENCH_ROOT = APP_ROOT.parents[1]
 DEFAULT_SOURCE_ROOT = BENCH_ROOT.parent / "frappe-15" / "apps" / "production_api"
 DEFAULT_TARGET_ROOTS = (BENCH_ROOT / "apps" / "yrp", APP_ROOT)
-SOURCE_SMS_PARAMETER_ROOT = (
+SOURCE_SMS_SCHEMA_ROOT = (
 	BENCH_ROOT.parent
 	/ "frappe-15"
 	/ "apps"
@@ -37,10 +37,9 @@ SOURCE_SMS_PARAMETER_ROOT = (
 	/ "frappe"
 	/ "core"
 	/ "doctype"
-	/ "sms_parameter"
 )
-TARGET_SMS_PARAMETER_ROOT = (
-	BENCH_ROOT / "apps" / "frappe" / "frappe" / "core" / "doctype" / "sms_parameter"
+TARGET_SMS_SCHEMA_ROOT = (
+	BENCH_ROOT / "apps" / "frappe" / "frappe" / "core" / "doctype"
 )
 TARGET_PREFIXES_BY_MODULE = {
 	"YRP": "YRP ",
@@ -106,16 +105,25 @@ def build_schema_analysis(
 	Property Setters cannot hide fields from the contract.
 	"""
 
-	# Notification Template owns SMS Parameter rows even though the child schema
-	# is provided by Frappe Core. Include that one explicit supporting schema;
-	# no other upstream DocTypes are in the Production API migration scope.
+	# Production API stores populated SMS Settings.parameters rows even though
+	# both parent and child schemas are provided by Frappe Core. Include only
+	# those two explicit supporting schemas; no other upstream DocTypes enter the
+	# Production API migration scope.
 	if source_schemas is None:
-		source_schema_index = load_schema_index(source_root, SOURCE_SMS_PARAMETER_ROOT)
+		source_schema_index = load_schema_index(
+			source_root,
+			SOURCE_SMS_SCHEMA_ROOT / "sms_settings",
+			SOURCE_SMS_SCHEMA_ROOT / "sms_parameter",
+		)
 	else:
 		source_schema_index = {
 			str(name): dict(schema) for name, schema in source_schemas.items()
 		}
-	target_schemas = load_schema_index(*target_roots, TARGET_SMS_PARAMETER_ROOT)
+	target_schemas = load_schema_index(
+		*target_roots,
+		TARGET_SMS_SCHEMA_ROOT / "sms_settings",
+		TARGET_SMS_SCHEMA_ROOT / "sms_parameter",
+	)
 	custom_fields = APP_ROOT / "essdee_yrp" / "fixtures" / "custom_field.json"
 	property_setters = APP_ROOT / "essdee_yrp" / "fixtures" / "property_setter.json"
 	if custom_fields.is_file():

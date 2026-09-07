@@ -37,7 +37,7 @@ RATE_PRECISION = 6
 QUANTITY_TOLERANCE = 0.01
 VALUE_TOLERANCE = 0.01
 MODERN_RATE_SOURCE = "yrp_grn_v1"
-LEGACY_RATE_SOURCE = "production_api"
+MIGRATED_RATE_SOURCE = "migrated_v1"
 MAX_SELECTED_GRNS = 200
 
 
@@ -1356,7 +1356,7 @@ def verify_legacy_work_order_physical_items(*, invoice_names=None):
 		}
 	filters = {
 		"against": 'YRP Work Order',
-		"essdee_rate_table_source": LEGACY_RATE_SOURCE,
+		"essdee_rate_table_source": MIGRATED_RATE_SOURCE,
 	}
 	if invoice_names:
 		if isinstance(invoice_names, str):
@@ -1436,7 +1436,7 @@ def verify_legacy_purchase_order_projection(*, invoice_names=None):
 	"""Read-only verification that migrated PO invoices contain both projections."""
 	filters = {
 		"against": 'YRP Purchase Order',
-		"essdee_rate_table_source": LEGACY_RATE_SOURCE,
+		"essdee_rate_table_source": MIGRATED_RATE_SOURCE,
 	}
 	if invoice_names:
 		if isinstance(invoice_names, str):
@@ -1468,6 +1468,9 @@ def verify_legacy_purchase_order_projection(*, invoice_names=None):
 			)
 			continue
 		expected_direct, expected_grouped = project_purchase_order_items(direct_rows)
+		# This verifier checks the relationship between the two operational tables.
+		# Exact migrated source values are checked directly against the source by
+		# the migration verifier; no third JSON copy is stored on the invoice.
 		for idx, (actual, expected) in enumerate(
 			zip(direct_rows, expected_direct, strict=True), 1
 		):
@@ -1481,7 +1484,6 @@ def verify_legacy_purchase_order_projection(*, invoice_names=None):
 					"uom",
 					"rate",
 					"source_rate",
-					"amount",
 					"tax",
 					"actual_rate",
 					"actual_qty",
@@ -1912,7 +1914,7 @@ def backfill_legacy_commercial_items():
 			'YRP Purchase Invoice',
 			doc.name,
 			"essdee_rate_table_source",
-			LEGACY_RATE_SOURCE,
+			MIGRATED_RATE_SOURCE,
 			update_modified=False,
 		)
 		migrated_invoices += 1

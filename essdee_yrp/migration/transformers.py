@@ -92,24 +92,6 @@ def ipd_process_to_f16(
 	return output
 
 
-def stock_settings_to_yrp_stock_settings(
-	document: Mapping[str, Any],
-	spec: MigrationSpec,
-	plan: MigrationPlan,
-) -> Mapping[str, Any]:
-	return {
-		"doctype": 'YRP YRP Stock Settings',
-		"name": 'YRP YRP Stock Settings',
-		"transit_warehouse": document.get("transit_warehouse"),
-		"default_received_type": document.get("default_received_type"),
-		"default_rejected_received_type": document.get("default_rejected_type"),
-		"default_fg_lot": document.get("default_fg_lot"),
-		"add_finishing_plan_goods_value": document.get(
-			"add_finishing_plan_goods_value"
-		),
-	}
-
-
 def derive_delivery_challan_fields(
 	output: Mapping[str, Any],
 	source: Mapping[str, Any],
@@ -239,7 +221,10 @@ def derive_purchase_invoice_fields(
 			{
 				"lot": lot,
 				"source_rate": source_rate,
-				"amount": qty * rate,
+				# Preserve the exact historical direct-row amount. Legacy invoice
+				# rows can contain rounding or adjustments that intentionally differ
+				# from qty * rate. Only the grouped commercial row below is derived.
+				"amount": target_row.get("amount"),
 				"essdee_group_key": group_key,
 				"essdee_rate_weight": 1,
 			}
@@ -284,7 +269,7 @@ def derive_purchase_invoice_fields(
 		commercial_row["amount"] += qty * rate
 
 	result["essdee_items"] = list(commercial_rows.values())
-	result["essdee_rate_table_source"] = "production_api"
+	result["essdee_rate_table_source"] = "migrated_v1"
 	if result.get("against") == 'YRP Work Order':
 		# The F15 rows are commercial Process items, not physical valuation rows.
 		# Preserve them only in Essdee's visible table; the migration writer builds
@@ -349,6 +334,7 @@ def remove_empty_ipd_process_placeholders(
 	parent: Mapping[str, Any] | None,
 ) -> Mapping[str, Any]:
 	result = dict(output)
+	result["original_process_rows"] = deepcopy(source.get("ipd_processes") or [])
 	result["ipd_processes"] = [
 		row for row in result.get("ipd_processes") or [] if row.get("process_name")
 	]
@@ -496,7 +482,6 @@ def _system_values(document: Mapping[str, Any]) -> dict[str, Any]:
 TRANSFORMERS = {
 	"essdee_debit_to_debit": essdee_debit_to_debit,
 	"ipd_process_to_f16": ipd_process_to_f16,
-	"stock_settings_to_yrp_stock_settings": stock_settings_to_yrp_stock_settings,
 }
 
 VALUE_TRANSFORMERS = {

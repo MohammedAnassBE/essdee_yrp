@@ -21,12 +21,12 @@ class MigrationPlannerTest(unittest.TestCase):
 		self.assertFalse(self.payload["writes_site_data"])
 
 	def test_complete_source_inventory_is_classified(self):
-		self.assertEqual(self.payload["source_doctypes"], 263)
-		self.assertEqual(sum(self.payload["migration_kinds"].values()), 263)
-		self.assertEqual(len(self.payload["doctype_details"]), 263)
+		self.assertEqual(self.payload["source_doctypes"], 264)
+		self.assertEqual(sum(self.payload["migration_kinds"].values()), 264)
+		self.assertEqual(len(self.payload["doctype_details"]), 264)
 		self.assertEqual(
 			self.payload["migration_kinds"],
-			{"custom": 3, "identity": 1, "mapped": 259},
+			{"custom": 2, "identity": 2, "mapped": 260},
 		)
 
 	def test_known_renames_appear_in_doctype_details(self):
@@ -59,8 +59,8 @@ class MigrationPlannerTest(unittest.TestCase):
 				"vendor_bill_tracking_history": "bill_tracking_history",
 			},
 		)
-		self.assertIn("description", details["Item"]["ignored_fields"])
-		self.assertIn(
+		self.assertNotIn("description", details["Item"]["ignored_fields"])
+		self.assertNotIn(
 			"description", details["Item Production Detail"]["ignored_fields"]
 		)
 

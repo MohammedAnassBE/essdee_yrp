@@ -209,7 +209,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 		self.assertEqual(row["goods_received_note_item"], "GRN-ITEM-1")
 		self.assertEqual(row["received_item_variant"], "OUTPUT-1")
 
-	def test_stock_settings_single_uses_target_identity_and_drops_secrets(self):
+	def test_stock_settings_single_preserves_fields_and_in_memory_secrets(self):
 		row = transform_document(
 			{
 				"doctype": "Stock Settings",
@@ -218,13 +218,15 @@ class ReviewedTransformerTest(unittest.TestCase):
 				"default_fg_lot": "FG Lot",
 				"default_received_type": "Accepted",
 				"default_rejected_type": "Rejected",
-				"sms_old_database_password": "must-not-copy",
+				"sms_old_database_password": "********",
+				"__migration_passwords": {"sms_old_database_password": "test-only"},
 			},
 			self.plan,
 		)
 		self.assertEqual(row["name"], 'YRP YRP Stock Settings')
 		self.assertEqual(row["transit_warehouse"], "S-0165")
-		self.assertNotIn("sms_old_database_password", row)
+		self.assertEqual(row["sms_old_database_password"], "********")
+		self.assertEqual(row["__migration_passwords"], {"sms_old_database_password": "test-only"})
 
 	def test_mrp_settings_keeps_installed_aql_and_sewing_configuration(self):
 		row = transform_document(
@@ -233,12 +235,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 				"name": "MRP Settings",
 				"enable_price_validation": 1,
 				"default_major_aql_level": "AQL 1.0",
-				"auto_send_notifications": [
-					{
-						"doctype": "MRP Settings Notification Doctype List",
-						"name": "ROW-1",
-					}
-				],
+				"auto_send_notifications": [],
 				"sewing_plan_input_orders": [
 					{
 						"doctype": "Sewing Plan Input Order",
@@ -250,7 +247,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 		)
 		self.assertEqual(row["enable_price_validation"], 1)
 		self.assertEqual(row["default_major_aql_level"], "AQL 1.0")
-		self.assertNotIn("auto_send_notifications", row)
+		self.assertEqual(row["auto_send_notifications"], [])
 		self.assertEqual(
 			row["sewing_plan_input_orders"],
 			[
@@ -319,7 +316,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			},
 			self.plan,
 		)
-		self.assertEqual(row["essdee_rate_table_source"], "production_api")
+		self.assertEqual(row["essdee_rate_table_source"], "migrated_v1")
 		self.assertEqual(row["items"], [])
 		self.assertEqual(len(row["essdee_items"]), 1)
 		commercial = row["essdee_items"][0]
@@ -364,7 +361,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 		)
 
 		self.assertEqual(row["against"], 'YRP Purchase Order')
-		self.assertEqual(row["essdee_rate_table_source"], "production_api")
+		self.assertEqual(row["essdee_rate_table_source"], "migrated_v1")
 		self.assertEqual(len(row["items"]), 2)
 		self.assertEqual(len(row["essdee_items"]), 1)
 		grouped = row["essdee_items"][0]

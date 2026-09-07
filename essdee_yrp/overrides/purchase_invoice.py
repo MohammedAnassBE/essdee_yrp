@@ -12,7 +12,7 @@ from yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice import PurchaseIn
 from essdee_yrp.erp import is_purchase_invoice_sync_enabled
 from essdee_yrp.erp_purchase_invoice import cancel_erp_invoice, create_erp_invoice
 from essdee_yrp.purchase_invoice import (
-	LEGACY_RATE_SOURCE,
+	MIGRATED_RATE_SOURCE,
 	MODERN_RATE_SOURCE,
 	VALUE_TOLERANCE,
 	build_legacy_work_order_invoice_payload,
@@ -40,21 +40,21 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 
 	def before_validate(self):
 		self._validate_legacy_projection_inputs()
-		if self.get("essdee_rate_table_source") == LEGACY_RATE_SOURCE and (
+		if self.get("essdee_rate_table_source") == MIGRATED_RATE_SOURCE and (
 			self.is_new()
 			or frappe.db.get_value(
 				'YRP Purchase Invoice', self.name, "essdee_rate_table_source"
-			) != LEGACY_RATE_SOURCE
+			) != MIGRATED_RATE_SOURCE
 		):
 			frappe.throw(_("Legacy Purchase Invoice rate data is migration-owned."))
 		if self.against == 'YRP Work Order' and self.get("essdee_rate_table_source") in {
 			MODERN_RATE_SOURCE,
-			LEGACY_RATE_SOURCE,
+			MIGRATED_RATE_SOURCE,
 		}:
 			self._rebuild_essdee_work_order_items()
 		elif self.against == 'YRP Purchase Order' and self.get(
 			"essdee_rate_table_source"
-		) in {MODERN_RATE_SOURCE, LEGACY_RATE_SOURCE}:
+		) in {MODERN_RATE_SOURCE, MIGRATED_RATE_SOURCE}:
 			self._rebuild_essdee_purchase_order_items()
 		super().before_validate()
 
@@ -63,7 +63,7 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 		super().validate()
 		if self.against in PROJECTED_AGAINST and self.get("essdee_rate_table_source") in {
 			MODERN_RATE_SOURCE,
-			LEGACY_RATE_SOURCE,
+			MIGRATED_RATE_SOURCE,
 		}:
 			self._validate_commercial_total()
 			self.total_quantity = sum(flt(row.qty) for row in self.get("essdee_items") or [])
@@ -71,7 +71,7 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 	def before_submit(self):
 		if self.against in PROJECTED_AGAINST and self.get("essdee_rate_table_source") not in {
 			MODERN_RATE_SOURCE,
-			LEGACY_RATE_SOURCE,
+			MIGRATED_RATE_SOURCE,
 		}:
 			frappe.throw(_("Fetch GRN into Grouped Items before submitting this invoice."))
 		super().before_submit()
@@ -82,7 +82,7 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 		cancel_erp_invoice(self)
 
 	def _rebuild_essdee_work_order_items(self):
-		if self.get("essdee_rate_table_source") == LEGACY_RATE_SOURCE:
+		if self.get("essdee_rate_table_source") == MIGRATED_RATE_SOURCE:
 			payload = build_legacy_work_order_invoice_payload(self)
 			if payload["unlinked"]:
 				frappe.throw(_("Fetch GRN again before saving this migrated invoice."))
@@ -125,7 +125,7 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 		final_rates = {row.group_key: row.rate for row in posted_rows}
 		expense_heads = {row.group_key: row.expense_head for row in posted_rows}
 
-		if self.get("essdee_rate_table_source") == LEGACY_RATE_SOURCE:
+		if self.get("essdee_rate_table_source") == MIGRATED_RATE_SOURCE:
 			before = self.get_doc_before_save()
 			if not before:
 				frappe.throw(_("Legacy Purchase Invoice rate data is migration-owned."))
@@ -160,17 +160,17 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 
 	def _validate_legacy_projection_inputs(self):
 		before = self.get_doc_before_save()
-		if not before or before.get("essdee_rate_table_source") != LEGACY_RATE_SOURCE:
+		if not before or before.get("essdee_rate_table_source") != MIGRATED_RATE_SOURCE:
 			return
 		if self.against != before.against or self.against not in PROJECTED_AGAINST:
 			frappe.throw(_("A migrated invoice cannot change its source document type."))
 		if self.get("essdee_rate_table_source") not in {
-			LEGACY_RATE_SOURCE,
+			MIGRATED_RATE_SOURCE,
 			MODERN_RATE_SOURCE,
 		}:
 			frappe.throw(_("Fetch GRN again before changing this migrated invoice."))
 		if (
-			self.get("essdee_rate_table_source") == LEGACY_RATE_SOURCE
+			self.get("essdee_rate_table_source") == MIGRATED_RATE_SOURCE
 			and _legacy_projection_input_signature(before)
 			!= _legacy_projection_input_signature(self)
 		):

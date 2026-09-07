@@ -26,6 +26,11 @@ SYSTEM_FIELDS = frozenset(
 		"parent",
 		"parentfield",
 		"parenttype",
+		"_user_tags",
+		"_comments",
+		"_assign",
+		"_liked_by",
+		"_seen",
 	}
 )
 LAYOUT_FIELD_TYPES = frozenset(
@@ -474,6 +479,10 @@ def transform_document(
 		raise MigrationError(f"no migration spec for source DocType {source_doctype!r}")
 	if strict and spec.issues:
 		raise MigrationError(f"{source_doctype} is blocked: {'; '.join(spec.issues)}")
+	if strict and not spec.custom_transformer:
+		for fieldname in spec.ignored_fields:
+			if document.get(fieldname) not in (None, "", 0, False, [], {}):
+				raise MigrationError(f"Populated ignored source field {source_doctype}.{fieldname}; preservation mapping required")
 	if spec.custom_transformer:
 		transformer = plan.transformers.get(spec.custom_transformer)
 		if not transformer:

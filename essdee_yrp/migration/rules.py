@@ -60,9 +60,6 @@ DOCTYPE_RENAMES = {
 
 RULES = {
 	"Bin": DocTypeRule(
-		ignored_fields={
-			"reserved_qty": "Derived from migrated Stock Reservation Entry rows in F16",
-		},
 		value_transformers={"warehouse": "supplier_to_warehouse"},
 	),
 	"Delivery Challan": DocTypeRule(
@@ -91,10 +88,6 @@ RULES = {
 		value_transformers={"warehouse": "supplier_to_warehouse"}
 	),
 	"Goods Received Note": DocTypeRule(
-		ignored_fields={
-			"essdee_yrp_stock_entry": "Obsolete cross-site stock-entry reference",
-			"essdee_yrp_stock_entry_created": "Obsolete cross-site stock-entry flag",
-		},
 		post_transformer="derive_goods_received_note_fields",
 	),
 	"GRN Deliverable": DocTypeRule(
@@ -110,24 +103,12 @@ RULES = {
 	),
 	"Item": DocTypeRule(
 		field_map={"over_delivery_receipt_allowance": "po_excess_allowed_percentage"},
-		ignored_fields={
-			"description": (
-				"Removed from finalized base YRP; frozen mrp3.site source audit "
-				"contains zero nonblank values"
-			)
-		},
 	),
 	"Item BOM": DocTypeRule(allowed_type_changes=frozenset({("Data", "Link")})),
 	"Item BOM Attribute Mapping": DocTypeRule(
 		allowed_type_changes=frozenset({("Data", "Link")})
 	),
 	"Item Production Detail": DocTypeRule(
-		ignored_fields={
-			"description": (
-				"Removed from finalized base YRP; frozen mrp3.site source audit "
-				"contains zero nonblank values across all 437 records"
-			)
-		},
 		table_option_map={"item_attributes": 'YRP IPD Item Attribute'},
 		post_transformer="remove_empty_ipd_process_placeholders",
 	),
@@ -141,14 +122,7 @@ RULES = {
 	"Lotwise Item Profit": DocTypeRule(
 		post_transformer="default_legacy_lot_costing_type"
 	),
-	"MRP Settings": DocTypeRule(
-		ignored_fields={
-			"auto_send_notifications": "Notification automation is not installed on the target",
-			"yrp_api_key": "Obsolete F15 remote-site credential",
-			"yrp_api_secret": "Obsolete F15 remote-site credential",
-			"yrp_site_url": "Obsolete F15 remote-site credential",
-		}
-	),
+	"MRP Settings": DocTypeRule(),
 	"Purchase Invoice": DocTypeRule(
 		extra_dependencies=frozenset({"Goods Received Note", "Work Order"}),
 		field_map={"vendor_bill_tracking": "bill_tracking"},
@@ -217,15 +191,7 @@ RULES = {
 	"Stock Settings": DocTypeRule(
 		target='YRP YRP Stock Settings',
 		field_map={"default_rejected_type": "default_rejected_received_type"},
-		ignored_fields={
-			"sms_old_database_host": "Obsolete legacy database credential",
-			"sms_old_database_name": "Obsolete legacy database credential",
-			"sms_old_database_port": "Obsolete legacy database credential",
-			"sms_old_database_user": "Obsolete legacy database credential",
-			"sms_old_database_password": "Obsolete legacy database credential",
-			"location_mapping": "One-time legacy warehouse mapping, replaced by Warehouse.supplier",
-		},
-		custom_transformer="stock_settings_to_yrp_stock_settings",
+		value_transformers={"transit_warehouse": "supplier_to_warehouse"},
 	),
 	"Stock Update": DocTypeRule(
 		value_transformers={"warehouse": "supplier_to_warehouse"}

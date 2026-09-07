@@ -27,7 +27,7 @@
    "fieldtype": "Float",
    "in_list_view": 1,
    "label": "Required Qty",
-   "precision": "3",
+   "precision": "9",
    "reqd": 1
   },
   {

@@ -11,6 +11,7 @@
   "yrp_stock_entry",
   "supplier",
   "warehouse",
+  "lot",
   "column_break_bspt",
   "received_by",
   "posting_date",
@@ -24,6 +25,14 @@
   "amended_from"
  ],
  "fields": [
+  {
+   "fieldname": "lot",
+   "fieldtype": "Link",
+   "label": "Lot",
+   "options": "SD YRP Lot",
+   "read_only": 1,
+   "description": "Historical source header Lot. Current stock dimensions are stored on the item rows."
+  },
   {
    "fieldname": "section_break_m6ps",
    "fieldtype": "Section Break"

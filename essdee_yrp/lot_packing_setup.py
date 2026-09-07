@@ -1,7 +1,6 @@
 """Install the Essdee-owned Lot and packing boundary customizations."""
 
 import frappe
-from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
 
 CUSTOM_FIELDS = {
@@ -63,8 +62,16 @@ CUSTOM_FIELDS = {
 
 
 def ensure_custom_fields():
-	"""Create/update the fields without redefining them in base YRP."""
-	create_custom_fields(CUSTOM_FIELDS, update=True)
+	"""Fail closed when the packaged Custom Field fixture was not imported."""
+	for doctype, fields in CUSTOM_FIELDS.items():
+		for definition in fields:
+			fieldname = definition["fieldname"]
+			if not frappe.get_meta(doctype).get_field(fieldname) or not frappe.db.exists(
+				"Custom Field", f"{doctype}-{fieldname}"
+			):
+				frappe.throw(
+					f"Essdee YRP Custom Field fixture is missing {doctype}.{fieldname}"
+				)
 
 
 def migrate_legacy_purchase_order_lot_rows():

@@ -11,6 +11,7 @@ import argparse
 import base64
 import hashlib
 import json
+import runpy
 import os
 import re
 import sys
@@ -33,6 +34,11 @@ SYSTEM_FIELDS = (
 	"parent",
 	"parentfield",
 	"parenttype",
+	"_user_tags",
+	"_comments",
+	"_assign",
+	"_liked_by",
+	"_seen",
 )
 NO_VALUE_FIELD_TYPES = {
 	"Section Break",
@@ -45,11 +51,290 @@ NO_VALUE_FIELD_TYPES = {
 }
 SUPPORTING_EXTERNAL_DOCTYPES = {
 	"Address",
+	"Contact",
 	"Email Account",
 	"Letter Head",
 	"Print Format",
 	"Role",
 	"User",
+}
+RETIRED_SOURCE_TABLES = (
+	# Historical Production API tables whose DocTypes were removed/renamed.
+	# Keep raw snapshots, not live operational rows: successor records can differ.
+	"WO Debit",
+	"Employee Department",
+	"Item Production Detail Cloth Accessories",
+	# Two orphan dashboard access rows also remain in this source database.
+	# Archive only; never recreate or activate their retired permission rules.
+	"Custom User Dashboard",
+	"Custom User Dashboard User",
+)
+SOURCE_SCHEMA_OVERLAYS = {
+	# These physical columns/child rows remain on the source site but were
+	# removed from its latest runtime metadata. Owner-approved empty/default
+	# columns are included too: the one-pass migration must export the complete
+	# historical schema, not only columns that happen to be populated today.
+	"Cutting Laysheet Planner": [
+		{
+			"fieldname": "lot",
+			"fieldtype": "Link",
+			"label": "Lot",
+			"options": "Lot",
+		},
+		{
+			"fieldname": "description",
+			"fieldtype": "Small Text",
+			"label": "Description",
+		},
+		{
+			"fieldname": "item",
+			"fieldtype": "Link",
+			"label": "Item",
+			"options": "Item",
+		},
+	],
+	"FG Stock Entry": [
+		{"fieldname": "lot", "label": "Lot", "fieldtype": "Link", "options": "Lot"}
+	],
+	"Essdee Quality Inspection": [
+		{
+			"fieldname": "unit_name",
+			"fieldtype": "Link",
+			"in_list_view": 1,
+			"in_standard_filter": 1,
+			"label": "Unit Name",
+			"options": "Supplier",
+			"read_only": 1,
+		}
+	],
+	"Essdee Raw Print Format": [
+		{"fieldname": "raw_code", "fieldtype": "Code", "label": "Raw Code"}
+	],
+	"Cut Panel Movement": [
+		{
+			"fieldname": "process_name",
+			"fieldtype": "Link",
+			"label": "Process Name",
+			"options": "Process",
+			"reqd": 1,
+		}
+	],
+	"Cutting Marker": [
+		{
+			"depends_on": "eval: !doc.__islocal && doc.item",
+			"fieldname": "cutting_marker_parts",
+			"fieldtype": "Table",
+			"label": "Cutting Marker Parts",
+			"options": "Cutting Marker Part",
+		}
+	],
+	"Lot": [
+		{
+			"fieldname": "version",
+			"fieldtype": "Select",
+			"label": "Version",
+			"options": "\nV1\nV2",
+			"read_only": 1,
+		},
+		{
+			"default": "0",
+			"fieldname": "capacity_planning",
+			"fieldtype": "Check",
+			"label": "Capacity Planning",
+		},
+		{
+			"fieldname": "primary_item_attribute",
+			"fieldtype": "Link",
+			"label": "Primary Item Attribute",
+			"options": "Item Attribute",
+		},
+	],
+	"Lotwise Item Profit Qty Rate": [
+		{
+			"default": "1",
+			"fieldname": "ratio",
+			"fieldtype": "Int",
+			"label": "Ratio",
+		},
+		{
+			"columns": 1,
+			"fieldname": "weight",
+			"fieldtype": "Float",
+			"in_list_view": 1,
+			"label": "Weight",
+			"precision": "9",
+		},
+	],
+	"Goods Received Note": [
+		{
+			"fieldname": "billing_address",
+			"fieldtype": "Link",
+			"label": "Billing Address",
+			"options": "Address",
+		},
+		{
+			"fieldname": "billing_address_display",
+			"fieldtype": "Small Text",
+			"label": "Billing Address Details",
+			"read_only": 1,
+		},
+	],
+	"Goods Received Note Item": [
+		{
+			"allow_on_submit": 1,
+			"columns": 1,
+			"fieldname": "received_quantity",
+			"fieldtype": "Float",
+			"in_list_view": 1,
+			"label": "Received Quantity",
+			"precision": "9",
+		},
+		{
+			"fieldname": "rework_details",
+			"fieldtype": "Small Text",
+			"label": "Rework Details",
+		},
+	],
+	"Item BOM": [
+		{
+			"fieldname": "attribute_mapping_based_on",
+			"fieldtype": "Link",
+			"in_list_view": 1,
+			"label": "Attribute mapping based on ",
+			"options": "Item Attribute",
+		}
+	],
+	"Item BOM Attribute Mapping Value": [
+		{
+			"fieldname": "bom_item_attribute",
+			"fieldtype": "Link",
+			"in_list_view": 1,
+			"label": "BOM Item Attribute",
+			"options": "Item Attribute Value",
+		},
+		{
+			"fieldname": "product_attribute",
+			"fieldtype": "Link",
+			"in_list_view": 1,
+			"label": "Product Attribute",
+			"options": "Item Attribute Value",
+		},
+	],
+	"Item Price": [
+		{
+			"fieldname": "price",
+			"fieldtype": "Float",
+			"in_list_view": 1,
+			"label": "Price",
+			"precision": "9",
+		}
+	],
+	"Item BOM Attribute Mapping": [
+		{
+			"fieldname": "lot_template",
+			"fieldtype": "Link",
+			"label": "Lot Template",
+			"options": "Lot Template",
+		}
+	],
+	"Item Production Detail": [
+		{
+			"fieldname": "additional_cloth",
+			"fieldtype": "Float",
+			"label": "Additional Cloth %",
+		},
+		{
+			"fieldname": "stiching_attribute_quantity",
+			"fieldtype": "Int",
+			"label": "Stiching Attribute Quantity",
+		},
+	],
+	"Process Cost": [
+		{
+			"depends_on": "eval: doc.depends_on_attribute",
+			"fieldname": "dependent_attribute",
+			"fieldtype": "Link",
+			"label": "Dependent Attribute",
+			"options": "Item Attribute",
+		},
+		{
+			"depends_on": "eval: doc.depends_on_attribute",
+			"fieldname": "dependent_attribute_values",
+			"fieldtype": "Select",
+			"label": "Dependent Attribute Values",
+		},
+	],
+	"Production Items": [
+		{
+			"fieldname": "process_name",
+			"fieldtype": "Link",
+			"in_list_view": 1,
+			"label": "Process Name",
+			"options": "Process",
+		}
+	],
+	"Production Order": [
+		{
+			"fieldname": "production_detail",
+			"fieldtype": "Link",
+			"label": "Production Detail",
+			"options": "Item Production Detail",
+		}
+	],
+	"Purchase Invoice": [
+		{
+			"fieldname": "debit_type",
+			"fieldtype": "Select",
+			"label": "Debit Type",
+			"options": "\nPermanent\nTemporary",
+		},
+		{"fieldname": "debit_no", "fieldtype": "Data", "label": "Debit No"},
+		{
+			"fieldname": "debit_value",
+			"fieldtype": "Currency",
+			"label": "Debit Value",
+			"precision": "9",
+		},
+	],
+	"Purchase Order": [
+		{
+			"fieldname": "billing_address",
+			"fieldtype": "Link",
+			"label": "Billing Address",
+			"options": "Address",
+		},
+		{
+			"fieldname": "billing_address_display",
+			"fieldtype": "Small Text",
+			"label": "Billing Address Details",
+			"read_only": 1,
+		},
+	],
+	"Sewing Plan": [
+		{
+			"fieldname": "strength_report_date",
+			"fieldtype": "Date",
+			"label": "Strength Report Date",
+		},
+		{
+			"fieldname": "strength_report_from_time",
+			"fieldtype": "Time",
+			"label": "Strength Report From Time",
+		},
+		{
+			"fieldname": "strength_report_to_time",
+			"fieldtype": "Time",
+			"label": "Strength Report To Time",
+		},
+	],
+	"Supplier": [
+		{
+			"fieldname": "deparments",
+			"fieldtype": "Table MultiSelect",
+			"label": "Departments",
+			"options": "Supplier Department",
+		}
+	],
 }
 
 
@@ -70,7 +355,7 @@ def _load_schemas(source_app_root, supporting_schema_roots):
 
 def _runtime_schema(frappe, doctype, declared):
 	meta = frappe.get_meta(doctype, cached=False)
-	return {
+	schema = {
 		"doctype": "DocType",
 		"name": doctype,
 		"module": getattr(meta, "module", None) or declared.get("module"),
@@ -79,6 +364,11 @@ def _runtime_schema(frappe, doctype, declared):
 		"autoname": getattr(meta, "autoname", None) or declared.get("autoname"),
 		"fields": [field.as_dict() for field in meta.fields],
 	}
+	existing = {field.get("fieldname") for field in schema["fields"]}
+	for field in SOURCE_SCHEMA_OVERLAYS.get(doctype, []):
+		if field.get("fieldname") not in existing:
+			schema["fields"].append(dict(field))
+	return schema
 
 
 def _load_runtime_schemas(frappe, declared_schemas):
@@ -121,6 +411,95 @@ def _load_export_schemas(frappe, declared_schemas, parent_doctype):
 def emit_schemas(schemas):
 	for doctype in sorted(schemas):
 		_write({"kind": "schema", "schema": schemas[doctype]})
+
+
+def emit_orphan_children(frappe, schemas, batch_size=500):
+	"""Preserve physical child rows whose historical parent no longer exists.
+
+	Every populated parent context must still have a declared migration route.
+	Unknown contexts fail closed instead of silently omitting their records.
+	"""
+	for doctype, schema in sorted(schemas.items()):
+		if not schema.get("istable"):
+			continue
+		table = _quote_identifier("tab" + doctype)
+		contexts = frappe.db.sql(
+			f"SELECT DISTINCT parenttype, parentfield FROM {table}"
+		)
+		for parenttype, parentfield in contexts:
+			parent_schema = schemas.get(parenttype)
+			field = next(
+				(field for field in _table_fields(parent_schema or {})
+				 if field["fieldname"] == parentfield and field["options"] == doctype),
+				None,
+			)
+			if not parent_schema or not field:
+				raise RuntimeError(
+					f"Unmapped physical child context {doctype}: {parenttype}.{parentfield}"
+				)
+			if parent_schema.get("issingle"):
+				join = ""
+				missing = "child.parent<>%s"
+				values = [parenttype, parentfield, parenttype]
+			else:
+				join = (
+					f"LEFT JOIN {_quote_identifier('tab' + parenttype)} parent "
+					"ON parent.name=child.parent"
+				)
+				missing = "parent.name IS NULL"
+				values = [parenttype, parentfield]
+			last_name = ""
+			fields = ", ".join(
+				"child." + _quote_identifier(fieldname)
+				for fieldname in _query_fields(frappe, doctype, schema)
+			)
+			while True:
+				rows = frappe.db.sql(
+					f"SELECT {fields} FROM {table} child {join} "
+					"WHERE child.parenttype=%s AND child.parentfield=%s "
+					f"AND {missing} AND child.name>%s ORDER BY child.name LIMIT %s",
+					[*values, last_name, batch_size], as_dict=True,
+				)
+				if not rows:
+					break
+				for row in rows:
+					row["doctype"] = doctype
+					_add_passwords(frappe, doctype, row["name"], schema, row)
+					_write(row)
+				last_name = rows[-1]["name"]
+
+
+def emit_auth_rows(frappe, schemas):
+	"""Stream credentials only through the private parent subprocess pipe.
+
+	A backup may lack the encryption key matching historical ciphertext. Keep
+	that ciphertext, explicitly marked unavailable, rather than dropping it.
+	Never put either representation in reports, checkpoints, or error messages.
+	"""
+	from frappe.utils.password import get_decrypted_password
+
+	for row in frappe.db.sql(
+		"SELECT doctype, name, fieldname, password, encrypted FROM __Auth "
+		"WHERE doctype IN %(doctypes)s ORDER BY doctype, name, fieldname",
+		{"doctypes": tuple(sorted(schemas))}, as_dict=True,
+	):
+		row = dict(row)
+		row["source_record_exists"] = bool(
+			schemas[row["doctype"]].get("issingle")
+			or frappe.db.exists(row["doctype"], row["name"])
+		)
+		row["decryptable"] = False
+		if row.get("encrypted"):
+			try:
+				plaintext = get_decrypted_password(
+					row["doctype"], row["name"], row["fieldname"], raise_exception=False
+				)
+			except Exception:
+				plaintext = None
+			if plaintext is not None:
+				row["plaintext"] = plaintext
+				row["decryptable"] = True
+		_write(row)
 
 
 def _fieldnames(schema):
@@ -278,7 +657,140 @@ def export_doctype(frappe, schemas, doctype, batch_size, start_after=None, limit
 		last_name = rows[-1]["name"]
 
 
+def audit_physical_field_coverage(frappe, schemas):
+	"""Fail before reset/load if populated SQL fields are invisible to export.
+
+	Runtime metadata can omit historical physical columns. Reviewed overlays
+	cover known cases; an unfamiliar populated column must stop a deployment,
+	not silently disappear because the latest DocType JSON no longer declares it.
+	Only field identities/counts leave this check, never their values.
+	"""
+
+	numeric_types = {"int", "bigint", "smallint", "tinyint", "mediumint",
+		"decimal", "double", "float", "bit"}
+	undefined = []
+	for doctype, schema in sorted(schemas.items()):
+		known = set(_fieldnames(schema)) | set(SYSTEM_FIELDS)
+		if schema.get("issingle"):
+			rows = frappe.db.sql(
+				"SELECT field, value FROM tabSingles WHERE doctype=%s", (doctype,)
+			)
+			for fieldname, value in rows:
+				if fieldname not in known:
+					undefined.append({"doctype": doctype, "field": fieldname,
+						"material_values": int(value not in (None, ""))})
+			continue
+		columns = frappe.db.sql(
+			"SELECT column_name, data_type FROM information_schema.columns "
+			"WHERE table_schema=DATABASE() AND table_name=%s ORDER BY ordinal_position",
+			("tab" + doctype,),
+		)
+		unknown = [(name, datatype) for name, datatype in columns if name not in known]
+		if not unknown:
+			continue
+		conditions = []
+		for fieldname, datatype in unknown:
+			column = _quote_identifier(fieldname)
+			condition = (f"COALESCE({column},0)<>0" if datatype in numeric_types
+				else f"{column} IS NOT NULL AND CAST({column} AS CHAR)<>''")
+			conditions.append(f"SUM(CASE WHEN {condition} THEN 1 ELSE 0 END)")
+		counts = frappe.db.sql(
+			f"SELECT {', '.join(conditions)} FROM {_quote_identifier('tab' + doctype)}"
+		)[0]
+		undefined.extend({"doctype": doctype, "field": name, "material_values": int(count or 0)}
+			for (name, _datatype), count in zip(unknown, counts))
+	blockers = [row for row in undefined if row["material_values"]]
+	if blockers:
+		raise RuntimeError("Populated source fields are absent from the export schema: " + "; ".join(
+			f"{row['doctype']}.{row['field']} ({row['material_values']} values)" for row in blockers
+		))
+	return {"checked_doctypes": len(schemas), "undefined_empty_fields": undefined}
+
+
+def retired_source_rows(frappe):
+	for doctype in RETIRED_SOURCE_TABLES:
+		if not frappe.db.table_exists(doctype):
+			continue
+		last_name = ""
+		while True:
+			rows = frappe.db.sql(
+				f"SELECT * FROM {_quote_identifier('tab' + doctype)} WHERE name>%s ORDER BY name LIMIT 500",
+				(last_name,), as_dict=True,
+			)
+			if not rows:
+				break
+			for row in rows:
+				yield {"source_doctype": doctype, "row": dict(row)}
+			last_name = rows[-1]["name"]
+	# Attachments of a retired dashboard have no operational parent on the
+	# target. Archive their original metadata and any available bytes as data,
+	# without recreating that dashboard or its permissions.
+	for row in frappe.db.sql(
+		"SELECT * FROM tabFile WHERE attached_to_doctype IN %s ORDER BY name",
+		(RETIRED_SOURCE_TABLES,), as_dict=True,
+	):
+		yield archive_file_row(frappe, row)
+
+
+def archive_file_row(frappe, row):
+	record = {"source_doctype": "File", "row": dict(row)}
+	if row.get('is_folder'):
+		return record
+	_file_doc, path = _resolve_physical_file(frappe, row)
+	if not path:
+		record["blob_issue"] = "Source blob unavailable"
+	else:
+		if Path(path).stat().st_size > 8 * 1024 * 1024:
+			raise RuntimeError("Archived attachment exceeds 8 MiB; review external archive storage before migration")
+		with open(path, "rb") as handle:
+			content = handle.read()
+		if len(content) != int(row.get('file_size') or 0) or hashlib.md5(content).hexdigest() != row.get('content_hash'):
+			record["blob_issue"] = "Source blob does not match its metadata"
+		else:
+			record["blob_base64"] = base64.b64encode(content).decode("ascii")
+	return record
+
+
+def framework_scope(frappe, schemas, related_names=None):
+	helper = runpy.run_path(str(Path(__file__).with_name('f15_framework_archive.py')))
+	scope = helper['build_scope'](frappe, schemas, RETIRED_SOURCE_TABLES,
+		related_names if related_names is not None else related_business_master_names(frappe, schemas),
+		app_file_names=[row.name for row in _migration_files(frappe, schemas)])
+	return helper, scope
+
+
+def emit_framework_rows(frappe, schemas):
+	helper, scope = framework_scope(frappe, schemas)
+	for doctype, row in helper['iter_rows'](frappe, scope):
+		_write(archive_file_row(frappe, row) if doctype == 'File' else
+			{'source_doctype': doctype, 'row': row})
+
+
 def emit_status(frappe, schemas, source_site):
+	physical_coverage = audit_physical_field_coverage(frappe, schemas)
+	related_names = related_business_master_names(frappe, schemas)
+	framework, framework_selection = framework_scope(frappe, schemas, related_names)
+	framework_census = framework['census'](frappe, framework_selection)
+	related_digest = hashlib.sha256()
+	for doctype, names in sorted(related_names.items()):
+		for name in names:
+			related_digest.update(json.dumps(
+				_supporting_document(frappe, doctype, name),
+				sort_keys=True, separators=(",", ":"), default=_json_default,
+			).encode())
+	for table, field in (("__Auth", "doctype"),):
+		physical_table = "__Auth" if table == "__Auth" else "tabFile"
+		count = frappe.db.sql(
+			f"SELECT COUNT(*) FROM {_quote_identifier(physical_table)} WHERE {_quote_identifier(field)} IN %s",
+			(RETIRED_SOURCE_TABLES,),
+		)[0][0]
+		if count:
+			raise RuntimeError(f"Retired source tables have {count} {table} records; add an explicit preservation route before migration")
+	retired_digest = hashlib.sha256()
+	retired_counts = {}
+	for record in retired_source_rows(frappe):
+		retired_counts[record["source_doctype"]] = retired_counts.get(record["source_doctype"], 0) + 1
+		retired_digest.update(json.dumps(record, sort_keys=True, default=_json_default).encode())
 	parent_counts = {}
 	table_counts = {}
 	modified = {}
@@ -298,12 +810,36 @@ def emit_status(frappe, schemas, source_site):
 	)
 	snapshot_payload = {
 		"site": source_site,
+		"physical_field_coverage": physical_coverage,
+		"related_business_master_counts": {key: len(value) for key, value in related_names.items()},
+		"related_business_master_fingerprint": related_digest.hexdigest(),
+		"framework_records": framework_census,
+		"file_metadata_fingerprint": hashlib.sha256(json.dumps(
+			_migration_files(frappe, schemas), sort_keys=True, default=_json_default,
+			separators=(',', ':'),
+		).encode()).hexdigest(),
+		"file_reference_fingerprint": hashlib.sha256(json.dumps(
+			_file_reference_map(frappe, schemas), sort_keys=True, default=_json_default,
+			separators=(',', ':'),
+		).encode()).hexdigest(),
+		"retired_table_counts": retired_counts,
+		"retired_table_fingerprint": retired_digest.hexdigest(),
 		"doctype_counts": parent_counts,
 		"table_counts": table_counts,
 		"max_modified": {key: str(value or "") for key, value in modified.items()},
 		"schema_fingerprint": hashlib.sha256(
 			schema_payload.encode("utf-8")
 		).hexdigest(),
+		# Single and credential edits do not reliably update a normal parent row.
+		"single_fingerprint": hashlib.sha256(json.dumps(frappe.db.sql(
+			"SELECT doctype, field, value FROM tabSingles WHERE doctype IN %(names)s "
+			"ORDER BY doctype, field", {"names": tuple(sorted(schemas))}
+		), default=_json_default, separators=(",", ":")).encode()).hexdigest(),
+		"auth_fingerprint": hashlib.sha256(json.dumps(frappe.db.sql(
+			"SELECT doctype, name, fieldname, password, encrypted FROM __Auth "
+			"WHERE doctype IN %(names)s ORDER BY doctype, name, fieldname",
+			{"names": tuple(sorted(schemas))}
+		), default=_json_default, separators=(",", ":")).encode()).hexdigest(),
 	}
 	_write(
 		{
@@ -379,37 +915,50 @@ def emit_reference_data(frappe):
 	_emit_reference_variants_and_cut_panels(frappe)
 
 
+def _file_reference_map(frappe, schemas):
+	"""Find actual app field references, even when File's owner is blank."""
+	files = frappe.get_all('File', filters={'is_folder': 0}, fields=['name', 'file_url'], limit_page_length=0)
+	by_name = {row.name: [row.name] for row in files}
+	by_url = {}
+	for row in files:
+		if row.file_url:
+			by_url.setdefault(row.file_url, []).append(row.name)
+	result = {}
+	for doctype, schema in sorted(schemas.items()):
+		for field in schema.get('fields') or []:
+			fieldtype, fieldname = field.get('fieldtype'), field.get('fieldname')
+			if fieldtype not in {'Attach', 'Attach Image'} and not (fieldtype == 'Link' and field.get('options') == 'File'):
+				continue
+			if schema.get('issingle'):
+				rows = frappe.db.sql('SELECT %s AS name,value FROM tabSingles WHERE doctype=%s AND field=%s',
+					(doctype, doctype, fieldname), as_dict=True)
+			else:
+				rows = frappe.db.sql(f'SELECT name,{_quote_identifier(fieldname)} AS value '
+					f'FROM {_quote_identifier("tab" + doctype)} WHERE COALESCE({_quote_identifier(fieldname)},\'\')<>\'\' '
+					'ORDER BY name', as_dict=True)
+			for row in rows:
+				for file_id in (by_name if fieldtype == 'Link' else by_url).get(row.value, []):
+					result.setdefault(file_id, []).append({'doctype': doctype, 'name': row.name,
+						'fieldname': fieldname, 'fieldtype': fieldtype})
+	return result
+
+
 def _migration_files(frappe, schemas, names=None):
-	"""Return only attachments owned by version-controlled source DocTypes."""
+	"""Select app-owned attachments and exact app Attach/Link File references."""
 
 	if names is not None:
 		names = sorted({str(name) for name in names if name})
 		if not names:
 			return []
-	filters = {
-		"is_folder": 0,
-		"attached_to_doctype": ["in", sorted(schemas)],
-	}
+	filters = {"is_folder": 0}
 	if names is not None:
 		filters["name"] = ["in", names]
 	return frappe.get_all(
 		"File",
 		filters=filters,
-		fields=[
-			"name",
-			"file_name",
-			"file_url",
-			"file_size",
-			"content_hash",
-			"is_private",
-			"attached_to_doctype",
-			"attached_to_name",
-			"attached_to_field",
-			"owner",
-			"creation",
-			"modified",
-			"modified_by",
-		],
+		or_filters={'attached_to_doctype': ['in', sorted(schemas)],
+			'name': ['in', sorted(_file_reference_map(frappe, schemas)) or ['']]},
+		fields=['*'],
 		order_by="name asc",
 		limit_page_length=0,
 	)
@@ -420,7 +969,8 @@ def emit_file_status(frappe, schemas, source_site, names=None):
 	orphans = [
 		row
 		for row in rows
-		if not frappe.db.exists(row.attached_to_doctype, row.attached_to_name)
+		if not row.attached_to_doctype or not row.attached_to_name
+		or not frappe.db.exists(row.attached_to_doctype, row.attached_to_name)
 	]
 	unique_content = {
 		(row.content_hash, int(row.is_private or 0)): int(row.file_size or 0)
@@ -441,27 +991,38 @@ def emit_file_status(frappe, schemas, source_site, names=None):
 
 
 def _resolve_physical_file(frappe, row):
-	candidates = [row.name]
-	if row.content_hash:
+	candidates = [row['name']]
+	if row.get('content_hash'):
 		candidates.extend(
 			name
 			for name in frappe.get_all(
 				"File",
 				filters={
-					"content_hash": row.content_hash,
-					"is_private": int(row.is_private or 0),
+					"content_hash": row['content_hash'],
+					"is_private": int(row.get('is_private') or 0),
 				},
 				pluck="name",
 				limit_page_length=0,
 			)
-			if name != row.name
+			if name != row['name']
 		)
+	fallback = (None, None)
 	for name in candidates:
 		file_doc = frappe.get_doc("File", name)
 		path = file_doc.get_full_path()
 		if os.path.isfile(path):
-			return file_doc, path
-	return None, None
+			if fallback[0] is None:
+				fallback = (file_doc, path)
+			if row.get('content_hash') and os.path.getsize(path) == int(row.get('file_size') or 0):
+				digest = hashlib.md5()
+				with open(path, 'rb') as handle:
+					for chunk in iter(lambda: handle.read(1024 * 1024), b''):
+						digest.update(chunk)
+				if digest.hexdigest() == row['content_hash']:
+					return file_doc, path
+	# Return an existing corrupt candidate only if no matching duplicate exists,
+	# so the caller can report corruption separately from an absent blob.
+	return fallback
 
 
 def emit_file_health(frappe, schemas, names=None):
@@ -532,6 +1093,7 @@ def emit_files(
 
 	seen_content = set()
 	unavailable_content = set()
+	references = _file_reference_map(frappe, schemas)
 	for row in _migration_files(frappe, schemas, names=names):
 		content_key = (row.content_hash, int(row.is_private or 0))
 		include_content = not metadata_only and content_key not in seen_content
@@ -563,8 +1125,10 @@ def emit_files(
 					unavailable_content.add(content_key)
 			continue
 		payload = dict(row)
+		payload['source_file_metadata'] = dict(row)
+		payload['app_references'] = references.get(row.name, [])
 		payload["kind"] = "file"
-		if not frappe.db.exists(row.attached_to_doctype, row.attached_to_name):
+		if not row.attached_to_doctype or not row.attached_to_name or not frappe.db.exists(row.attached_to_doctype, row.attached_to_name):
 			payload["orphan_attachment"] = 1
 		if include_content:
 			file_doc, path = _resolve_physical_file(frappe, row)
@@ -836,16 +1400,75 @@ def _field_external_reference(frappe, schemas, doctype, field, rows):
 			)
 
 
-def emit_supporting_documents(frappe, doctype, names):
+def related_business_master_names(frappe, schemas):
+	"""Include inbound party links, not only addresses named by an app field."""
+	result = {"Address": set(), "Contact": set()}
+	for doctype, schema in schemas.items():
+		for field in schema.get("fields") or []:
+			if field.get("fieldtype") != "Link" or field.get("options") not in result:
+				continue
+			fieldname = field["fieldname"]
+			if schema.get("issingle"):
+				values = [(frappe.db.get_single_value(doctype, fieldname),)]
+			elif fieldname in frappe.db.get_table_columns(doctype):
+				values = frappe.db.sql(f"SELECT DISTINCT {_quote_identifier(fieldname)} "
+					f"FROM {_quote_identifier('tab' + doctype)} WHERE COALESCE({_quote_identifier(fieldname)},'')<>''")
+			else:
+				continue
+			result[field["options"]].update(str(value) for value, in values if value)
+	for row in frappe.db.sql(
+		"SELECT DISTINCT parenttype,parent FROM `tabDynamic Link` "
+		"WHERE parenttype IN ('Address','Contact') AND link_doctype IN %s",
+		(tuple(sorted(schemas)),), as_dict=True,
+	):
+		if not frappe.db.exists(row.parenttype, row.parent):
+			raise RuntimeError(f"Related Dynamic Link has missing {row.parenttype} parent {row.parent}; preserve this orphan explicitly before migration")
+		result[row.parenttype].add(row.parent)
+	# A related Contact may select an address with no reverse party link of its
+	# own. It is still part of that contact's business data.
+	if result["Contact"]:
+		for address, in frappe.db.sql(
+			"SELECT DISTINCT address FROM tabContact WHERE name IN %s AND COALESCE(address,'')<>''",
+			(tuple(sorted(result["Contact"])),),
+		):
+			if not frappe.db.exists("Address", address):
+				raise RuntimeError("A related Contact selects a missing source Address; review before migration")
+			result["Address"].add(address)
+	return {key: sorted(value) for key, value in result.items()}
+
+
+def _supporting_document(frappe, doctype, name):
 	if doctype not in SUPPORTING_EXTERNAL_DOCTYPES:
 		raise RuntimeError(f"Unsupported external supporting DocType {doctype}")
+	if not frappe.db.exists(doctype, name):
+		raise RuntimeError(f"Missing source {doctype} {name}")
+	document = frappe.get_doc(doctype, name).as_dict(no_nulls=False)
+	# Optional physical audit columns can be absent from live metadata. Keep
+	# them, too; the target mapper must explicitly reject a populated omission.
+	if doctype in {"Address", "Contact"}:
+		physical = frappe.db.sql(
+			f"SELECT * FROM {_quote_identifier('tab' + doctype)} WHERE name=%s",
+			(name,), as_dict=True,
+		)[0]
+		document.update(dict(physical))
+		for field in frappe.get_meta(doctype).get_table_fields():
+			# Read every physical child column, not just fields still declared in
+			# the current metadata. The target must reject any populated omission.
+			document[field.fieldname] = [dict(row, doctype=field.options) for row in frappe.db.sql(
+				f"SELECT * FROM {_quote_identifier('tab' + field.options)} "
+				"WHERE parent=%s AND parenttype=%s AND parentfield=%s ORDER BY idx,name",
+				(name, doctype, field.fieldname), as_dict=True,
+			)]
+	document["doctype"] = doctype
+	_add_runtime_passwords(frappe, doctype, name, document)
+	return document
+
+
+def emit_supporting_documents(frappe, doctype, names):
 	for name in names:
-		if not frappe.db.exists(doctype, name):
-			raise RuntimeError(f"Missing source {doctype} {name}")
-		document = frappe.get_doc(doctype, name).as_dict(no_nulls=False)
-		document["doctype"] = doctype
-		_add_runtime_passwords(frappe, doctype, name, document)
-		_write(document)
+		_write(_supporting_document(frappe, doctype, name))
+
+
 def _emit_reference_variants_and_cut_panels(frappe):
 	for row in frappe.get_all(
 		"Item Variant", fields=["name", "item"], limit_page_length=0
@@ -951,7 +1574,13 @@ def main():
 	subparsers = parser.add_subparsers(dest="command", required=True)
 	subparsers.add_parser("status")
 	subparsers.add_parser("schemas")
+	subparsers.add_parser("orphan-children")
+	subparsers.add_parser("auth-rows")
+	subparsers.add_parser("retired-rows")
 	subparsers.add_parser("reference-data")
+	subparsers.add_parser("related-business-masters")
+	subparsers.add_parser("framework-rows")
+	subparsers.add_parser("framework-census")
 	file_status = subparsers.add_parser("file-status")
 	file_status.add_argument("--names-json")
 	file_health = subparsers.add_parser("file-health")
@@ -997,6 +1626,7 @@ def main():
 		/ "core"
 		/ "doctype"
 		/ "sms_parameter",
+		source_bench / "apps" / "frappe" / "frappe" / "core" / "doctype" / "sms_settings",
 	)
 	if not (source_bench / "sites" / args.source_site / "site_config.json").is_file():
 		raise RuntimeError("Configured source site does not exist in the source bench")
@@ -1017,9 +1647,14 @@ def main():
 		elif args.command in {
 			"status",
 			"schemas",
+			"orphan-children",
+			"auth-rows",
 			"exists",
 			"broken-links",
 			"external-references",
+			"related-business-masters",
+			"framework-rows",
+			"framework-census",
 			"file-health",
 			"file-status",
 			"files",
@@ -1031,6 +1666,13 @@ def main():
 			emit_status(frappe, schemas, args.source_site)
 		elif args.command == "schemas":
 			emit_schemas(schemas)
+		elif args.command == "orphan-children":
+			emit_orphan_children(frappe, schemas)
+		elif args.command == "auth-rows":
+			emit_auth_rows(frappe, schemas)
+		elif args.command == "retired-rows":
+			for record in retired_source_rows(frappe):
+				_write(record)
 		elif args.command == "reference-data":
 			emit_reference_data(frappe)
 		elif args.command == "file-status":
@@ -1056,6 +1698,15 @@ def main():
 			emit_series(frappe)
 		elif args.command == "external-references":
 			emit_external_references(frappe, schemas)
+		elif args.command == "related-business-masters":
+			for doctype, names in related_business_master_names(frappe, schemas).items():
+				for name in names:
+					_write({"doctype": doctype, "name": name})
+		elif args.command == "framework-rows":
+			emit_framework_rows(frappe, schemas)
+		elif args.command == "framework-census":
+			helper, scope = framework_scope(frappe, schemas)
+			_write(helper['census'](frappe, scope))
 		elif args.command == "broken-links":
 			emit_broken_links(frappe, schemas)
 		elif args.command == "exists":
@@ -1075,7 +1726,7 @@ def main():
 				json.loads(args.names_json),
 			)
 		elif args.command == "files":
-				emit_files(
+			emit_files(
 				frappe,
 				schemas,
 				start_after=args.start_after,

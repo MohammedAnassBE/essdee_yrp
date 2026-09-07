@@ -38,9 +38,19 @@
   "audit_section",
   "report_json",
   "checkpoint_json",
+  "retired_source_rows_json",
+  "framework_archive_json",
   "error_log"
  ],
  "fields": [
+  {
+   "fieldname": "framework_archive_json",
+   "fieldtype": "Long Text",
+   "label": "Encrypted Framework Archive Manifest",
+   "description": "Original supporting/timeline/configuration SQL values in private encrypted files. Only ordinary comments and versions are active history; archived permissions and configuration remain inactive.",
+   "read_only": 1,
+   "hidden": 1
+  },
   {
    "fieldname": "connection_section",
    "fieldtype": "Section Break",
@@ -101,7 +111,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Draft\nAnalysing\nBlocked\nReady\nDry Run Complete\nQueued\nRunning\nSample Complete\nReset Complete\nCompleted\nFailed\nVerified",
+   "options": "Draft\nAnalysing\nBlocked\nReady\nDry Run Complete\nQueued\nRunning\nSample Complete\nReset Complete\nCompleted\nFailed\nVerified\nVerified With Source Gaps",
    "read_only": 1
   },
   {
@@ -255,6 +265,14 @@
    "fieldtype": "JSON",
    "label": "Checkpoint",
    "read_only": 1
+  },
+  {
+   "fieldname": "retired_source_rows_json",
+   "fieldtype": "JSON",
+   "label": "Retired Source Table Archive",
+   "description": "Raw historical rows from reviewed retired source tables. Preserved for audit only; never loaded over current operational records.",
+   "read_only": 1,
+   "no_copy": 1
   },
   {
    "fieldname": "error_log",

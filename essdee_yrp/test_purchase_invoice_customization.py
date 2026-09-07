@@ -21,6 +21,7 @@ from essdee_yrp.erp_purchase_invoice import (
 	submit_erp_invoice,
 )
 from essdee_yrp.purchase_invoice import (
+	MODERN_RATE_SOURCE,
 	_physical_rate_weights,
 	_unique_quantity_partition,
 	build_legacy_work_order_invoice_payload,
@@ -50,7 +51,7 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 		invoice = frappe.new_doc('YRP Purchase Invoice')
 		invoice.name = "MPI-LEGACY-TEST"
 		invoice.against = 'YRP Work Order'
-		invoice.essdee_rate_table_source = "production_api"
+		invoice.essdee_rate_table_source = "migrated_v1"
 		invoice.append(
 			"essdee_items",
 			{
@@ -91,7 +92,7 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 			invoice = frappe.new_doc('YRP Purchase Invoice')
 			invoice.name = "MPI-PO-LEGACY-TEST"
 			invoice.against = 'YRP Purchase Order'
-			invoice.essdee_rate_table_source = "production_api"
+			invoice.essdee_rate_table_source = "migrated_v1"
 			invoice.append(
 				"items",
 				{
@@ -183,7 +184,7 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 			invoice.name = "MPI-LEGACY-TEST"
 			invoice.supplier = "SUPPLIER-1"
 			invoice.against = 'YRP Work Order'
-			invoice.essdee_rate_table_source = "production_api"
+			invoice.essdee_rate_table_source = "migrated_v1"
 			invoice.append(
 				"essdee_items",
 				{
@@ -281,7 +282,7 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 
 	def test_rate_projection_markers_cannot_be_used_to_bypass_fetch(self):
 		legacy = frappe.new_doc('YRP Purchase Invoice')
-		legacy.essdee_rate_table_source = "production_api"
+		legacy.essdee_rate_table_source = "migrated_v1"
 		with self.assertRaises(frappe.ValidationError):
 			legacy.before_validate()
 
@@ -474,6 +475,7 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 	def test_controller_runs_local_validation_before_erp_lifecycle(self):
 		invoice = frappe.new_doc('YRP Purchase Invoice')
 		invoice.against = 'YRP Purchase Order'
+		invoice.essdee_rate_table_source = MODERN_RATE_SOURCE
 		with (
 			patch.object(PurchaseInvoice, "before_submit") as local_submit,
 			patch(

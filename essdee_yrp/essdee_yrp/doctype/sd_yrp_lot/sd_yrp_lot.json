@@ -8,6 +8,9 @@
  "engine": "InnoDB",
  "field_order": [
   "lot_name",
+  "version",
+  "capacity_planning",
+  "primary_item_attribute",
   "production_order",
   "item",
   "assigned_person",
@@ -85,6 +88,25 @@
    "label": "Lot Name",
    "reqd": 1,
    "unique": 1
+  },
+  {
+   "fieldname": "version",
+   "fieldtype": "Select",
+   "label": "Version",
+   "options": "\nV1\nV2",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "capacity_planning",
+   "fieldtype": "Check",
+   "label": "Capacity Planning"
+  },
+  {
+   "fieldname": "primary_item_attribute",
+   "fieldtype": "Link",
+   "label": "Primary Item Attribute",
+   "options": "YRP Item Attribute"
   },
   {
    "fieldname": "item",

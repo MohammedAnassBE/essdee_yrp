@@ -267,10 +267,20 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		self.assertEqual(meta.get_field("avoid_sewing_plan_qty").permlevel, 1)
 		self.assertEqual(meta.get_field("approved_by").no_copy, 1)
 
-	def test_obsolete_essdee_stock_entry_fields_are_excluded(self):
+	def test_essdee_stock_entry_fields_are_packaged(self):
 		meta = frappe.get_meta('YRP Goods Received Note', cached=False)
-		self.assertIsNone(meta.get_field("essdee_yrp_stock_entry"))
-		self.assertIsNone(meta.get_field("essdee_yrp_stock_entry_created"))
+		for fieldname in ("essdee_yrp_stock_entry", "essdee_yrp_stock_entry_created"):
+			self.assertIsNotNone(meta.get_field(fieldname))
+			self.assertTrue(
+				frappe.db.exists(
+					"Custom Field",
+					{
+						"dt": "YRP Goods Received Note",
+						"fieldname": fieldname,
+						"module": "Essdee YRP",
+					},
+				)
+			)
 
 	def test_sewing_grn_is_blocked_without_checking_output(self):
 		grn = frappe._dict(

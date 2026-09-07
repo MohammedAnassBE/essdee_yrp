@@ -347,7 +347,7 @@ class TestLateValuationChain(FrappeTestCase):
 			return
 		with patch(
 			"yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment."
-			"stock_valuation_adjustment.enqueue_adjustment"
+			"yrp_stock_valuation_adjustment.enqueue_adjustment"
 		):
 			for source in [
 				scenario["source"],

@@ -3,7 +3,7 @@
 Current execution update: 2026-09-07 — fresh-site one-pass migration verified WITH SOURCE GAPS
 Current continuation branches: `apps/essdee_yrp` → `erp_now`, `apps/yrp` → `erp_now`
 Source reference: Frappe 15 `mrp3.site:8002` / `production_api`
-Current target: Frappe 16 `erp_now_migration.site:8003` / ERPNext + `yrp` + `essdee_yrp`
+Current target: Frappe 16 `erp_now_migration.site:8003` / ERPNext + `yrp` + `essdee_yrp` + India Compliance
 
 Production deployment is a fresh-site, one-pass migration. Finalize schemas,
 fixtures and the original migration transformer before installing the apps and
@@ -30,8 +30,9 @@ projections are in `essdee_yrp` commits `2ecd8af` and `ca91f21`. The latter also
 preserves Workflow State masters referenced by fresh-source records. No runtime
 custom-field creator and no post-load business-data repair patch is used.
 
-`erp_now_migration.site` was created from scratch and contains exactly Frappe
-16.33.0, ERPNext 16.34.1, `yrp` on `erp_now`, and `essdee_yrp` on `erp_now`.
+`erp_now_migration.site` was created from scratch and contains Frappe 16.33.0,
+ERPNext 16.34.1, `yrp` on `erp_now`, `essdee_yrp` on `erp_now`, and India
+Compliance 16.9.0. No retired YRP e-Waybill app is installed.
 Analyse found 264 source and 329 target DocTypes with zero blockers. The final
 Dry Run covered 3,437,199 parents with zero skipped/failed rows. A reviewed reset
 preview and execution both affected zero rows because the target was fresh. The
@@ -94,6 +95,20 @@ then cancelled/rolled back successfully. On the clean migrated site, Desk,
 `YRP Bin.reserved_qty`, and a dual-projection Purchase Invoice were visually
 checked. The setup-wizard loop was removed by completing both installed-app
 setup flags and setting the standard Desk home to `workspace`; `/desk` is stable.
+
+The final namespace/fixture review also packaged the six source precision
+Property Setters that were previously outside the strict fixture filter and
+replaced stale pre-prefix DocType queries in six Essdee print formats. Focused
+namespace, source-contract, transformer, preservation, Delivery Challan, Goods
+Received Note, Purchase Invoice, cutting, late-valuation and print-rendering
+checks all pass. The broad Essdee suite ran 825 tests: 783 passed, 12 skipped,
+11 failed and 19 errored. The 30 non-green cases are outside the field-value
+migration gate and remain explicitly open: India-aware test Address fixtures,
+missing populated-site test masters such as Supplier `S-0002`, one roleless
+session configuration expectation, one child-table permission expectation,
+historical piece-replay lineage, and DocType test setup prerequisites. No
+migration schema, field route, Bin reservation, Purchase Invoice projection,
+namespace, fixture, print-format, or value-reconciliation test failed.
 
 Both source and target have `maintenance_mode=0`; schedulers remain disabled.
 The temporary target-reset flag is back to `0`. No migration/audit/test process

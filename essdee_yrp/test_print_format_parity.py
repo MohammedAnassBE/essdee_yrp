@@ -45,12 +45,36 @@ PRINT_ALIASES = {
 	},
 }
 
+LEGACY_PRINT_DOCTYPE_NAMES = {
+	"Company Settings",
+	"Product Brand",
+	"Product Category Item",
+	"Product Colour Code",
+	"Product Image",
+	"Product Measurement",
+	"Product Sub brand",
+	"Production Term Detail",
+	"Supplier",
+	"Terms and Condition",
+	"Terms and Condition Detail",
+	"Work Order",
+}
+
 
 class TestPrintFormatParity(IntegrationTestCase):
 	def _formats(self):
 		root = Path(frappe.get_app_path("essdee_yrp")) / "essdee_yrp" / "print_format"
 		for path in sorted(root.glob("essdee_*/essdee_*.json")):
 			yield path, json.loads(path.read_text())
+
+	@staticmethod
+	def _template_texts(data):
+		if data.get("html"):
+			yield data["html"]
+		if data.get("format_data"):
+			for row in json.loads(data["format_data"]):
+				if row.get("options"):
+					yield row["options"]
 
 	def test_all_formats_are_essdee_owned(self):
 		formats = list(self._formats())
@@ -80,6 +104,15 @@ class TestPrintFormatParity(IntegrationTestCase):
 					if name not in PRINT_CONTEXT_NAMES and name not in jenv.globals
 				)
 				self.assertEqual(missing, [])
+
+	def test_templates_do_not_query_pre_namespace_doctypes(self):
+		for path, data in self._formats():
+			for template in self._template_texts(data):
+				for old_name in LEGACY_PRINT_DOCTYPE_NAMES:
+					with self.subTest(format=path.parent.name, old_name=old_name):
+						self.assertIsNone(
+							re.search(rf"([\"']){re.escape(old_name)}\1", template)
+						)
 
 	def test_print_doc_fields_exist_in_f16(self):
 		for path, data in self._formats():

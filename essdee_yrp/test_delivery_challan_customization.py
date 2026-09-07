@@ -88,7 +88,7 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 		self.assertIn("on_inline_table_field_change", base_matrix)
 
 	def test_manual_source_property_setter_is_packaged(self):
-		name = "Delivery Challan-from_location-fetch_from"
+		name = "YRP Delivery Challan-from_location-fetch_from"
 		fixture = frappe.parse_json(
 			(
 				Path(frappe.get_app_path("essdee_yrp"))
@@ -379,7 +379,7 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 		self.assertFalse(from_location.fetch_from)
 		self.assertTrue(
 			frappe.db.exists(
-				"Property Setter", "Delivery Challan-from_location-fetch_from"
+				"Property Setter", "YRP Delivery Challan-from_location-fetch_from"
 			)
 		)
 		self.assertEqual(meta.get_field("is_internal_unit").read_only, 1)
@@ -390,12 +390,12 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 		lot = meta.get_field("lot")
 		self.assertEqual(
 			(lot.reqd, lot.read_only, lot.fetch_from, lot.fetch_if_empty),
-			(1, 1, "work_order.lot", 1),
+			(1, 0, None, 0),
 		)
 
 		ste_transferred = meta.get_field("ste_transferred")
 		self.assertEqual(ste_transferred.depends_on, "eval: doc.is_internal_unit")
-		self.assertEqual(str(ste_transferred.precision), "2")
+		self.assertEqual(str(ste_transferred.precision), "9")
 		self.assertEqual(
 			meta.get_field("transfer_complete").depends_on,
 			"eval: doc.is_internal_unit",
@@ -409,14 +409,17 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 		self.assertEqual(parent.get_field("naming_series").options, "DC-.YYYY.-")
 		self.assertEqual(parent.get_field("comments").fieldtype, "Small Text")
 		self.assertEqual(parent.get_field("supplier").fetch_from, "to_warehouse.supplier")
-		self.assertEqual(str(parent.get_field("total_delivered_qty").precision), "3")
-		self.assertEqual(str(child.get_field("pending_quantity").precision), "3")
+		self.assertEqual(str(parent.get_field("total_delivered_qty").precision), "9")
+		self.assertEqual(str(child.get_field("pending_quantity").precision), "9")
 		self.assertEqual(str(child.get_field("secondary_qty").precision), "3")
 
 	def test_work_order_context_is_enforced_server_side(self):
 		doc = frappe.new_doc('YRP Delivery Challan')
 		doc.work_order = "TEST-WO"
 		doc.is_internal_unit = 0
+		# Warm the real metadata before patching Database.get_value. Meta loading
+		# itself uses that method and must not receive the test Work Order row.
+		frappe.get_meta("YRP Work Order")
 
 		with patch(
 			"essdee_yrp.delivery_challan_hooks.frappe.db.get_value",

@@ -1754,7 +1754,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 
 		with self.assertRaisesRegex(
 			frappe.ValidationError,
-			f"already used by active Stock Entry {entry.name}",
+			f"already used by active YRP Stock Entry {entry.name}",
 		):
 			build_delivery_challan_defaults(movement_name, "WO-NOT-REACHED")
 

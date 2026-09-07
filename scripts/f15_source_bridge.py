@@ -57,6 +57,7 @@ SUPPORTING_EXTERNAL_DOCTYPES = {
 	"Print Format",
 	"Role",
 	"User",
+	"Workflow State",
 }
 RETIRED_SOURCE_TABLES = (
 	# Historical Production API tables whose DocTypes were removed/renamed.

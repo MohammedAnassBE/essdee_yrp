@@ -48,6 +48,7 @@ NO_COLUMN_FIELD_TYPES = set(no_value_fields) - TABLE_FIELD_TYPES
 SUPPORTING_EXTERNAL_DOCTYPE_ORDER = (
 	"Role",
 	"User",
+	"Workflow State",
 	"Address",
 	"Contact",
 	"Letter Head",

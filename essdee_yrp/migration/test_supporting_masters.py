@@ -97,6 +97,49 @@ class SupportingMasterTest(unittest.TestCase):
 		self.assertEqual(checked, 1)
 		self.assertEqual(scope, {"Address": {"A-1"}})
 
+	def test_missing_workflow_state_is_loaded_as_a_supporting_master(self):
+		spec = SimpleNamespace(
+			target="YRP Item Price",
+			ignored_fields={},
+			field_map={},
+			target_schema={
+				"fields": [
+					{
+						"fieldname": "workflow_state",
+						"fieldtype": "Link",
+						"options": "Workflow State",
+					}
+				]
+			},
+		)
+		plan = SimpleNamespace(specs={"Item Price": spec})
+		source = SimpleNamespace(
+			iter_external_references=lambda: iter(
+				[
+					{
+						"source_doctype": "Item Price",
+						"source_name": "ITP-00034",
+						"fieldname": "workflow_state",
+						"value": "Approval Pending",
+					}
+				]
+			)
+		)
+
+		def exists(doctype, name):
+			return doctype == "DocType" and name == "Workflow State"
+
+		with patch("essdee_yrp.migration.live.frappe.db.exists", side_effect=exists):
+			checked, scope = _validate_external_references(plan, source)
+		self.assertEqual(checked, 1)
+		self.assertEqual(scope, {"Workflow State": {"Approval Pending"}})
+
+	def test_source_bridge_allows_workflow_state_supporting_documents(self):
+		bridge = runpy.run_path(
+			str(Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py")
+		)
+		self.assertIn("Workflow State", bridge["SUPPORTING_EXTERNAL_DOCTYPES"])
+
 	def test_reverse_contact_scope_includes_its_selected_address(self):
 		bridge = runpy.run_path(str(Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py"))
 		db = Mock()

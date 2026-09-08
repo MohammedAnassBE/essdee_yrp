@@ -1,7 +1,9 @@
 import gzip
 import hashlib
 import json
+import runpy
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -53,10 +55,68 @@ class FrameworkHistoryTest(unittest.TestCase):
 		plan = SimpleNamespace(specs={'Supplier': SimpleNamespace(target='YRP Supplier', source_schema={})})
 		for doctype in ['DocShare', 'Document Share Key', 'Workflow Action', 'Communication', 'Report']:
 			self.assertIsNone(history.native_projection(self.record(doctype=doctype), plan))
-		self.assertIsNone(history.native_projection(self.record(reference_doctype='WO Debit'), plan))
 		with patch('essdee_yrp.migration.live._transform_supporting_document', return_value={'name': 'C-1'}) as transform:
 			self.assertEqual(history.native_projection(self.record(), plan), {'name': 'C-1'})
+			self.assertEqual(
+				history.native_projection(
+					self.record(reference_doctype='WO Debit'), plan
+				),
+				{'name': 'C-1'},
+			)
 			self.assertEqual(transform.call_args.args[2], {'Supplier': 'YRP Supplier'})
+
+	def test_every_comment_is_native_but_version_is_excluded(self):
+		plan = SimpleNamespace(specs={})
+		comment = self.record(reference_doctype='User', reference_name='person@example.com')
+		with patch(
+			'essdee_yrp.migration.live._transform_supporting_document',
+			return_value={'doctype': 'Comment', 'name': 'C-1'},
+		):
+			self.assertEqual(
+				history.native_projection(comment, plan),
+				{'doctype': 'Comment', 'name': 'C-1'},
+			)
+		version = {
+			'source_doctype': 'Version',
+			'row': {'name': 'V-1', 'ref_doctype': 'User', 'docname': 'person@example.com'},
+		}
+		self.assertIsNone(history.native_projection(version, plan))
+
+	def test_source_scope_selects_all_comments_and_no_versions(self):
+		helper = runpy.run_path(
+			str(Path(__file__).resolve().parents[2] / 'scripts' / 'f15_framework_archive.py')
+		)
+		db = Mock()
+		db.sql.side_effect = [
+			[('Comment',), ('Version',)],
+			[],
+			[],
+		]
+		db.exists.return_value = True
+		db.table_exists.return_value = True
+		db.get_table_columns.side_effect = lambda doctype: {
+			'Comment': ['name', 'reference_doctype', 'reference_name'],
+			'Version': ['name', 'ref_doctype', 'docname'],
+			'File': ['name'],
+		}.get(doctype, ['name'])
+
+		def get_meta(doctype):
+			if doctype == 'Comment':
+				fields = [SimpleNamespace(
+					fieldname='reference_doctype', fieldtype='Link', options='DocType'
+				)]
+			else:
+				fields = []
+			return SimpleNamespace(
+				name=doctype,
+				fields=fields,
+				get_table_fields=lambda: [],
+			)
+
+		frappe = SimpleNamespace(db=db, get_meta=get_meta)
+		scope = helper['build_scope'](frappe, {}, (), {})
+		self.assertEqual(scope['Comment'], ('1=1', ()))
+		self.assertNotIn('Version', scope)
 
 	def test_renamed_single_history_points_to_the_target_single_identity(self):
 		plan = SimpleNamespace(specs={'Settings': SimpleNamespace(target='YRP Settings', source_schema={'issingle': 1})})

@@ -140,19 +140,40 @@ class SupportingMasterTest(unittest.TestCase):
 		)
 		self.assertIn("Workflow State", bridge["SUPPORTING_EXTERNAL_DOCTYPES"])
 
-	def test_reverse_contact_scope_includes_its_selected_address(self):
+	def test_supporting_scope_includes_every_address_and_contact(self):
 		bridge = runpy.run_path(str(Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py"))
 		db = Mock()
-		db.sql.side_effect = [[SimpleNamespace(parenttype="Address", parent="A-1"),
-			SimpleNamespace(parenttype="Contact", parent="C-1")], [("A-2",)]]
-		db.exists.return_value = True
+		db.sql.side_effect = [
+			[SimpleNamespace(name="A-1"), SimpleNamespace(name="A-2")],
+			[SimpleNamespace(name="C-1"), SimpleNamespace(name="C-UNLINKED")],
+			[
+				SimpleNamespace(parenttype="Address", parent="A-1"),
+				SimpleNamespace(parenttype="Contact", parent="C-1"),
+			],
+			[("A-2",)],
+		]
 		self.assertEqual(bridge["related_business_master_names"](SimpleNamespace(db=db), {"Supplier": {}}),
-			{"Address": ["A-1", "A-2"], "Contact": ["C-1"]})
+			{"Address": ["A-1", "A-2"], "Contact": ["C-1", "C-UNLINKED"]})
 
 	def test_missing_reverse_link_parent_cannot_be_silently_discarded(self):
 		bridge = runpy.run_path(str(Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py"))
 		db = Mock()
-		db.sql.return_value = [SimpleNamespace(parenttype="Address", parent="MISSING")]
-		db.exists.return_value = False
+		db.sql.side_effect = [
+			[SimpleNamespace(name="A-1")],
+			[],
+			[SimpleNamespace(parenttype="Address", parent="MISSING")],
+		]
 		with self.assertRaisesRegex(RuntimeError, "preserve this orphan explicitly"):
 			bridge["related_business_master_names"](SimpleNamespace(db=db), {"Supplier": {}})
+
+	def test_missing_contact_address_cannot_be_silently_discarded(self):
+		bridge = runpy.run_path(str(Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py"))
+		db = Mock()
+		db.sql.side_effect = [
+			[SimpleNamespace(name="A-1")],
+			[SimpleNamespace(name="C-1")],
+			[],
+			[("MISSING",)],
+		]
+		with self.assertRaisesRegex(RuntimeError, "selects a missing source Address"):
+			bridge["related_business_master_names"](SimpleNamespace(db=db), {})

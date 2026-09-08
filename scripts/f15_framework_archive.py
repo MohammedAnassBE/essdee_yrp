@@ -67,6 +67,13 @@ def build_scope(frappe, schemas, retired_tables, business_names, app_file_names=
 						params.extend((master, tuple(names)))
 		if parts:
 			scope[doctype] = ('(' + ' OR '.join(parts) + ')', tuple(params))
+	# Comment is site business history, not merely history of the DocTypes owned
+	# by production_api. Preserve and restore the complete table. Version is an
+	# intentionally excluded change-log table for this migration: the owner does
+	# not require it on the new site, so do not archive or activate a partial set.
+	if frappe.db.table_exists('Comment'):
+		scope['Comment'] = ('1=1', ())
+	scope.pop('Version', None)
 	for doctype, names in business_names.items():
 		if names:
 			scope[doctype] = ('name IN %s', (tuple(names),))

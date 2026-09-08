@@ -1402,39 +1402,48 @@ def _field_external_reference(frappe, schemas, doctype, field, rows):
 
 
 def related_business_master_names(frappe, schemas):
-	"""Include inbound party links, not only addresses named by an app field."""
-	result = {"Address": set(), "Contact": set()}
-	for doctype, schema in schemas.items():
-		for field in schema.get("fields") or []:
-			if field.get("fieldtype") != "Link" or field.get("options") not in result:
-				continue
-			fieldname = field["fieldname"]
-			if schema.get("issingle"):
-				values = [(frappe.db.get_single_value(doctype, fieldname),)]
-			elif fieldname in frappe.db.get_table_columns(doctype):
-				values = frappe.db.sql(f"SELECT DISTINCT {_quote_identifier(fieldname)} "
-					f"FROM {_quote_identifier('tab' + doctype)} WHERE COALESCE({_quote_identifier(fieldname)},'')<>''")
-			else:
-				continue
-			result[field["options"]].update(str(value) for value, in values if value)
+	"""Return the complete source Address and Contact inventories.
+
+	These are business records in their own right. Restricting them to records
+	referenced by Production API documents silently omits valid standalone or
+	legacy contacts and addresses, so the original migration must load every
+	source identity and its child rows.
+	"""
+	del schemas  # Kept in the signature for bridge-call compatibility.
+	result = {
+		doctype: {
+			str(row.name)
+			for row in frappe.db.sql(
+				f"SELECT name FROM {_quote_identifier('tab' + doctype)} ORDER BY name",
+				as_dict=True,
+			)
+		}
+		for doctype in ("Address", "Contact")
+	}
+
+	# Every Address/Contact Dynamic Link child must still have a source parent.
+	# The supporting-document export will include the complete child collection
+	# for every valid parent below.
 	for row in frappe.db.sql(
 		"SELECT DISTINCT parenttype,parent FROM `tabDynamic Link` "
-		"WHERE parenttype IN ('Address','Contact') AND link_doctype IN %s",
-		(tuple(sorted(schemas)),), as_dict=True,
+		"WHERE parenttype IN ('Address','Contact')",
+		as_dict=True,
 	):
-		if not frappe.db.exists(row.parenttype, row.parent):
+		if str(row.parent) not in result[row.parenttype]:
 			raise RuntimeError(f"Related Dynamic Link has missing {row.parenttype} parent {row.parent}; preserve this orphan explicitly before migration")
-		result[row.parenttype].add(row.parent)
-	# A related Contact may select an address with no reverse party link of its
-	# own. It is still part of that contact's business data.
+
+	# A Contact may select an Address directly, without a reverse Dynamic Link.
+	# Fail closed if that source reference is already broken.
 	if result["Contact"]:
-		for address, in frappe.db.sql(
+		contact_addresses = {
+			str(address)
+			for address, in frappe.db.sql(
 			"SELECT DISTINCT address FROM tabContact WHERE name IN %s AND COALESCE(address,'')<>''",
 			(tuple(sorted(result["Contact"])),),
-		):
-			if not frappe.db.exists("Address", address):
-				raise RuntimeError("A related Contact selects a missing source Address; review before migration")
-			result["Address"].add(address)
+			)
+		}
+		if contact_addresses - result["Address"]:
+			raise RuntimeError("A Contact selects a missing source Address; review before migration")
 	return {key: sorted(value) for key, value in result.items()}
 
 

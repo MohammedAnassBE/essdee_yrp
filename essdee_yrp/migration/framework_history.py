@@ -1,7 +1,8 @@
 """Original-load preservation of related framework data, with no side effects.
 
-All source SQL values are kept in bounded, encrypted private archive chunks.
-Comment/Version timeline rows and custom attachment folders are restored natively.
+All selected source SQL values are kept in bounded, encrypted private archive
+chunks. Every Comment row and custom attachment folders are restored natively;
+Version is intentionally excluded from this migration.
 Installation-owned folder roots retain their target metadata. Workflow,
 sharing, notification, import, report and integration configuration is inert.
 Address/Contact and their children are verified here as well as loaded through
@@ -26,7 +27,7 @@ CHUNK_ROWS = 5000
 CHUNK_BYTES = 4 * 1024 * 1024
 MAX_RECORD_BYTES = 256 * 1024 * 1024
 BUSINESS_TYPES = {'Address', 'Contact', 'Contact Email', 'Contact Phone', 'Dynamic Link'}
-TIMELINE_TYPES = {'Comment', 'Version'}
+TIMELINE_TYPES = {'Comment'}
 NATIVE_WRITE_TYPES = TIMELINE_TYPES | {'File'}
 
 
@@ -132,14 +133,12 @@ def native_projection(record, plan):
 	if doctype == 'Dynamic Link' and row.get('parenttype') not in {'Address', 'Contact'}:
 		return None
 	if doctype in TIMELINE_TYPES:
-		controller = 'reference_doctype' if doctype == 'Comment' else 'ref_doctype'
-		if row.get(controller) not in set(plan.specs) | {'Address', 'Contact'}:
-			return None  # Retired-parent history is preserved only in the archive.
+		controller = 'reference_doctype'
 	output = _transform_supporting_document(row, doctype,
 		{name: spec.target for name, spec in plan.specs.items()})
 	if doctype in TIMELINE_TYPES:
 		spec = plan.specs.get(row.get(controller))
-		name_field = 'reference_name' if doctype == 'Comment' else 'docname'
+		name_field = 'reference_name'
 		if spec and spec.source_schema.get('issingle') and row.get(name_field) == row.get(controller):
 			output[name_field] = spec.target
 	return output

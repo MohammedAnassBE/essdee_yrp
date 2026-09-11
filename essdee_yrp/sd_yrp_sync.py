@@ -13,9 +13,21 @@ LEGACY_DOCTYPE_ALIASES = {
 	"IPD Consumption": "IPD Compacting",
 }
 
+# Active source-to-consumer names. Unlike legacy aliases, these source DocTypes
+# must remain in Spine Consumer Config so new messages continue to be routed.
+SOURCE_DOCTYPE_ALIASES = {
+	"GRN Item Type": "Received Type",
+}
+
+DOCTYPE_ALIASES = {
+	**LEGACY_DOCTYPE_ALIASES,
+	**SOURCE_DOCTYPE_ALIASES,
+}
+
 EXACT_MATCH_DOCTYPES = (
 	"Item Attribute",
 	"Item Attribute Value",
+	"Received Type",
 	"UOM",
 	"Item Group",
 	"Brand",
@@ -51,6 +63,11 @@ CUSTOM_MAPPER_DOCTYPES = (
 )
 
 SYNC_DOCTYPES = EXACT_MATCH_DOCTYPES + CUSTOM_MAPPER_DOCTYPES
+CONSUMER_DOCTYPES = tuple(
+	doctype
+	for doctype in SYNC_DOCTYPES
+	if doctype not in SOURCE_DOCTYPE_ALIASES.values()
+) + tuple(SOURCE_DOCTYPE_ALIASES)
 HANDLER_PATH = "essdee_yrp.sd_yrp_sync.handle_sd_yrp_message"
 
 TABLE_FIELD_TYPES = {"Table", "Table MultiSelect"}
@@ -81,11 +98,13 @@ LOT_TIME_AND_ACTION_KEY_PARTS = ("time_and_action",)
 def handle_sd_yrp_message(payload):
 	header = payload.get("Header") or {}
 	source_doctype = header.get("DocType")
-	doctype = LEGACY_DOCTYPE_ALIASES.get(source_doctype, source_doctype)
+	doctype = DOCTYPE_ALIASES.get(source_doctype, source_doctype)
 	event = header.get("Event")
 	topic = header.get("Topic")
 	data = payload.get("Payload") or {}
-	if doctype != source_doctype:
+	if source_doctype == "GRN Item Type":
+		data = map_grn_item_type(data)
+	elif doctype != source_doctype:
 		data = copy.deepcopy(data)
 		data["doctype"] = doctype
 
@@ -106,6 +125,18 @@ def handle_sd_yrp_message(payload):
 		return cancel_synced_doc(data)
 
 	frappe.throw(f"Unsupported SD YRP sync event {event}")
+
+
+def map_grn_item_type(data):
+	"""Map the MRP master onto YRP's equivalent Received Type schema."""
+	mapped = copy.deepcopy(data)
+	received_type = mapped.get("grn_type") or mapped.get("name")
+	mapped.update({
+		"doctype": "Received Type",
+		"name": received_type,
+		"received_type_name": received_type,
+	})
+	return mapped
 
 
 def handle_exact_match(payload):
@@ -1038,7 +1069,7 @@ def ensure_consumer_config():
 			frappe.db.delete(table, {"name": legacy_name})
 			changed = True
 
-	for doctype in SYNC_DOCTYPES:
+	for doctype in CONSUMER_DOCTYPES:
 		existing_name = frappe.db.get_value(
 			table,
 			{

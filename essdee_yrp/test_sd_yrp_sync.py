@@ -4,6 +4,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from essdee_yrp.sd_yrp_sync import (
+	CONSUMER_DOCTYPES,
 	PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE,
 	PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE,
 	PRODUCTION_ORDER_GRID_ATTRIBUTE,
@@ -17,6 +18,28 @@ from essdee_yrp.setup import ensure_yrp_production_order_settings
 
 
 class TestSDYRPSyncSetup(IntegrationTestCase):
+	def test_grn_item_type_message_creates_received_type(self):
+		name = f"_Test Received Type {frappe.generate_hash(length=8)}"
+		self.assertIn("GRN Item Type", CONSUMER_DOCTYPES)
+		self.assertNotIn("Received Type", CONSUMER_DOCTYPES)
+
+		handle_sd_yrp_message({
+			"Header": {
+				"Topic": "sd_yrp_master",
+				"DocType": "GRN Item Type",
+				"Event": "on_update",
+			},
+			"Payload": {
+				"doctype": "GRN Item Type",
+				"name": name,
+				"grn_type": name,
+				"type": "Accepted",
+			},
+		})
+
+		received_type = frappe.get_doc("Received Type", name)
+		self.assertEqual(received_type.received_type_name, name)
+
 	def test_item_bom_mapping_keeps_ipd_and_bom_uom(self):
 		filtered = filter_doc_fields({
 			"doctype": "Item BOM Attribute Mapping",

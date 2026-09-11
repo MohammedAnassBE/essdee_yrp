@@ -13,7 +13,11 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import flt
 
-from essdee_yrp.api.stock_transfer import cancel_grn_transfer, receive_grn_transfer
+from essdee_yrp.api.stock_transfer import (
+    _apply_transfer_dimensions,
+    cancel_grn_transfer,
+    receive_grn_transfer,
+)
 
 TEST_GRNS = ("GRN-TEST-0001", "GRN-NEVER-EXISTED", "GRN-TEST-DUP", "GRN-TEST-MULTI", "GRN-TEST-UIGRID")
 
@@ -104,6 +108,36 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
         self.assertEqual(se.items[0].received_type, "Accepted")
         self.assertEqual(se.items[0].conversion_factor, 1.0)
         self.assertEqual(frappe.db.get_value("Stock Entry", se.name, "source_grn"), "GRN-TEST-0001")
+
+    def test_blank_received_type_uses_default(self):
+        original = frappe.db.get_single_value(
+            "YRP Stock Settings", "default_received_type"
+        )
+        frappe.db.set_single_value(
+            "YRP Stock Settings", "default_received_type", "Accepted"
+        )
+        payload = self._payload()
+        payload["items"][0]["received_type"] = None
+        try:
+            r = receive_grn_transfer(payload)
+        finally:
+            frappe.db.set_single_value(
+                "YRP Stock Settings", "default_received_type", original
+            )
+
+        self.assertTrue(r["ok"], r)
+        se = frappe.get_doc("Stock Entry", r["stock_entry"])
+        self.assertEqual(se.items[0].received_type, "Accepted")
+
+    def test_received_type_is_copied_when_not_in_dynamic_dimension_fields(self):
+        values = _apply_transfer_dimensions(
+            {},
+            {"lot": self.lot, "received_type": "Accepted"},
+            ["lot"],
+        )
+
+        self.assertEqual(values["lot"], self.lot)
+        self.assertEqual(values["received_type"], "Accepted")
 
     def test_multi_row_grn_makes_one_se_holding_all_rows(self):
         """A GRN with N item rows transfers as exactly ONE Material Receipt whose

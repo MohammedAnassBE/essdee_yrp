@@ -35,6 +35,15 @@ def _resolve_warehouse(supplier):
     return wh
 
 
+def _apply_transfer_dimensions(values, row, dimension_fieldnames):
+    """Copy dynamic dimensions while always retaining mandatory Received Type."""
+    values["received_type"] = row["received_type"]
+    for fieldname in dimension_fieldnames:
+        if row.get(fieldname):
+            values[fieldname] = row.get(fieldname)
+    return values
+
+
 @frappe.whitelist()
 def receive_grn_transfer(payload):
     """Create+submit a Material Receipt for the mrp GRN. Never raises to the HTTP layer;
@@ -86,6 +95,27 @@ def receive_grn_transfer(payload):
             for row in items:
                 if not row.get("received_type"):
                     row["received_type"] = default_received_type
+            if any(not row.get("received_type") for row in items):
+                return {
+                    "ok": False,
+                    "error": _(
+                        "Received Type is missing in the transfer and YRP Stock Settings "
+                        "has no Default Received Type. Nothing was transferred."
+                    ),
+                }
+            missing_received_types = sorted({
+                row.get("received_type")
+                for row in items
+                if not frappe.db.exists("Received Type", row.get("received_type"))
+            })
+            if missing_received_types:
+                return {
+                    "ok": False,
+                    "error": _(
+                        "Received Type values missing on essdee_yrp: {0}. "
+                        "Nothing was transferred."
+                    ).format(", ".join(map(str, missing_received_types))),
+                }
             for dimension in get_stock_dimensions():
                 fieldname = dimension["fieldname"]
                 doctype = dimension.get("dimension_doctype")
@@ -149,9 +179,7 @@ def receive_grn_transfer(payload):
                     "table_index": 0,
                     "remarks": _("mrp GRN {0}").format(source_grn),
                 }
-                for fieldname in get_dimension_fieldnames():
-                    if r.get(fieldname):
-                        values[fieldname] = r.get(fieldname)
+                _apply_transfer_dimensions(values, r, get_dimension_fieldnames())
                 se.append("items", values)
             se.insert(ignore_permissions=True)
             se.submit()

@@ -348,7 +348,7 @@ def _validate_quantity_workflow_lock(doc):
 
 def get_sales_item_price_map(item):
 
-	item_doc = frappe.get_cached_doc('YRP Item', item)
+	item_doc = frappe.get_cached_doc('Item', item)
 	sizes = get_attribute_details(item).get("primary_attribute_values", [])
 	pack_out_stage = frappe.db.get_single_value('SD YRP IPD Settings', "default_pack_out_stage")
 
@@ -415,7 +415,7 @@ def get_box_sticker_mrp_map(production_order, item=None):
 
 @frappe.whitelist()
 def get_order_editor_context(item, production_order=None):
-	item_doc = frappe.get_cached_doc('YRP Item', item)
+	item_doc = frappe.get_cached_doc('Item', item)
 	item_doc.check_permission("read")
 	attribute_details = get_attribute_details(item)
 	primary_values = attribute_details.get("primary_attribute_values", [])
@@ -488,7 +488,7 @@ def get_price_update_context(production_order):
 
 @frappe.whitelist()
 def get_primary_values(item):
-	item_doc = frappe.get_cached_doc('YRP Item', item)
+	item_doc = frappe.get_cached_doc('Item', item)
 	item_doc.check_permission("read")
 	if not item_doc.primary_attribute or not item_doc.dependent_attribute:
 		frappe.throw(f"Can't Create Production Order for Item {item}")
@@ -502,9 +502,9 @@ def get_order_qty(items):
 	order_qty = {}
 	for row in items:
 		current_variant = frappe.get_cached_doc(
-			'YRP Item Variant', row['item_variant'])
+			'Item', row['item_variant'])
 		current_item_attribute_details = get_attribute_details(
-			current_variant.item)
+			(current_variant.variant_of or current_variant.name))
 		primary_attribute = current_item_attribute_details['primary_attribute']
 		for attr in current_variant.attributes:
 			if attr.attribute == primary_attribute:
@@ -528,9 +528,9 @@ def get_ordered_details(items):
 	for row in items:
 		lot_wise_detail.setdefault(row['lot'], {})
 		current_variant = frappe.get_cached_doc(
-			'YRP Item Variant', row['item_variant'])
+			'Item', row['item_variant'])
 		current_item_attribute_details = get_attribute_details(
-			current_variant.item)
+			(current_variant.variant_of or current_variant.name))
 		primary_attribute = current_item_attribute_details['primary_attribute']
 		for attr in current_variant.attributes:
 			if attr.attribute == primary_attribute:
@@ -575,7 +575,7 @@ def update_price(production_order, item_details):
 	else:
 		item_details = payload
 		lot_price_payload = None
-	primary = frappe.get_value('YRP Item', doc.item, "primary_attribute")
+	primary = frappe.get_value('Item', doc.item, "primary_attribute")
 	sales_item_price = get_sales_item_price_map(doc.item)
 	box_sticker_mrp = get_box_sticker_mrp_map(production_order, doc.item)
 	lots = frappe.get_all('SD YRP Lot', filters={"production_order": production_order}, pluck="name")
@@ -1168,7 +1168,7 @@ def approve_quantity_and_ratio(production_order):
 
 def get_rows_by_size(doc):
 	"""Map each size (variant's primary attribute value) to its per-size row."""
-	primary_attribute = frappe.get_value('YRP Item', doc.item, "primary_attribute")
+	primary_attribute = frappe.get_value('Item', doc.item, "primary_attribute")
 	rows_by_size = {}
 	for row in doc.production_order_details:
 		size = get_variant_attr_details(row.item_variant).get(primary_attribute) or row.item_variant
@@ -1539,16 +1539,7 @@ def has_incoming_transfer_request_field():
 	return frappe.get_meta('YRP Production Order').has_field(INCOMING_TRANSFER_REQUEST_FIELD)
 
 
-def get_alternative_items(item):
-	"""Items configured as alternatives of `item`.
-
-	"SD YRP Item Alternative" here is this app's own doctype (item / alternative_item), not
-	ERPNext's - it has no two_way flag, so only the forward leg is resolved and the
-	reciprocal row is maintained by hand. Same resolution as
-	finishing_plan.check_is_alternative_item. The doctype has no validate(), so
-	duplicate, empty and self-referencing rows are possible and are dropped here."""
-	items = frappe.db.get_all('SD YRP Item Alternative', filters={"item": item}, pluck="alternative_item")
-	return sorted({alternative for alternative in items if alternative and alternative != item})
+from essdee_yrp.item_alternatives import get_alternative_items
 
 
 def get_transfer_quantities(doc):
@@ -1787,7 +1778,7 @@ def add_target_size_rows(target, sizes):
 	saved before its item gained the size. The variant, stage and price seeding mirror
 	update_order so the new rows are indistinguishable from the seeded ones; quantity and
 	ratio start at 0 because the transfer adds the quantity and must not invent a ratio."""
-	item_doc = frappe.get_cached_doc('YRP Item', target.item)
+	item_doc = frappe.get_cached_doc('Item', target.item)
 	pack_out_stage = frappe.db.get_single_value('SD YRP IPD Settings', "default_pack_out_stage")
 	sales_item_price = get_sales_item_price_map(target.item)
 

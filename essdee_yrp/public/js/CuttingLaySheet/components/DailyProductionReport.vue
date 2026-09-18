@@ -246,9 +246,9 @@ onMounted(() => {
             fieldtype: 'MultiSelectList',
             label: 'Item',
             fieldname: 'item',
-            options: 'YRP Item',
+            options: 'Item',
             get_data: function(txt) {
-                return frappe.db.get_link_options('YRP Item', txt);
+                return frappe.db.get_link_options('Item', txt);
             }
         },
         doc: sample_doc.value,

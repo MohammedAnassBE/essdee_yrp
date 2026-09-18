@@ -18,7 +18,7 @@ frappe.query_reports["SD YRP Time and Action Department Performance"] = {
 			"fieldname":"select",
 			"options":"Department\nAction\nWork Station",
 			"label":"Select",
-			"default":"YRP Department"
+			"default":"Department"
 		}
 	]
 };

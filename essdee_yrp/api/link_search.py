@@ -82,6 +82,8 @@ def link_search(doctype, txt="", filters=None, page_length=20):
 		except (TypeError, ValueError):
 			filters = {}
 	filters = filters or {}
+	if doctype == "Item Attribute Value":
+		return _search_item_attribute_values(txt, filters, page_length)
 
 	meta = frappe.get_meta(doctype)
 	label_field = _label_field(meta)
@@ -116,3 +118,38 @@ def link_search(doctype, txt="", filters=None, page_length=20):
 		label = (r.get(label_field) if label_field else None) or r["name"]
 		out.append({"name": r["name"], "label": label})
 	return out
+
+
+def _search_item_attribute_values(txt, filters, page_length):
+	"""Expose ERPNext's child-table attribute values as picker values.
+
+	YRP business fields store the selected value as Data, while the canonical
+	values now live under the standard Item Attribute document. Keeping this
+	adapter in the search boundary lets existing form components use the same
+	``[{name, label}]`` contract without pretending the child rows are standalone
+	linkable documents.
+	"""
+	attribute = filters.get("attribute_name") or filters.get("parent")
+	if not attribute or not frappe.db.exists("Item Attribute", attribute):
+		return []
+	frappe.get_doc("Item Attribute", attribute).check_permission("read")
+	try:
+		page_len = max(1, int(page_length or 20))
+	except (TypeError, ValueError):
+		page_len = 20
+	needle = (txt or "").strip().casefold()
+	values = [
+		row.attribute_value
+		for row in frappe.get_all(
+			"Item Attribute Value",
+			filters={
+				"parent": attribute,
+				"parenttype": "Item Attribute",
+				"parentfield": "item_attribute_values",
+			},
+			fields=["attribute_value", "idx"],
+			order_by="idx asc",
+		)
+		if row.attribute_value and (not needle or needle in row.attribute_value.casefold())
+	]
+	return [{"name": value, "label": value} for value in values[:page_len]]

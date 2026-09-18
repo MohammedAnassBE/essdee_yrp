@@ -326,7 +326,7 @@ def get_grouped_movement_rows(doc_name, target_doctype, *, allow_linked=False):
 				"Dia": accessory.get("dia"),
 			},
 		)
-		accessory_uom = frappe.db.get_value('YRP Item', cloth_item, "default_unit_of_measure")
+		accessory_uom = frappe.db.get_value('Item', cloth_item, "stock_uom")
 		row = {
 			("item" if target_doctype == 'YRP Stock Entry' else "item_variant"): variant,
 			("qty" if target_doctype != 'YRP Goods Received Note' else "quantity"): qty,
@@ -600,7 +600,7 @@ def _is_implicit_collapsed_return(doc, lot):
 	for row in doc.get("items") or []:
 		variant = row.get("item_variant")
 		if variant and frappe.db.exists(
-			'YRP Item Variant Attribute',
+			'Item Variant Attribute',
 			{
 				"parent": variant,
 				"attribute": dependent_attribute,
@@ -614,9 +614,9 @@ def _is_implicit_collapsed_return(doc, lot):
 def _as_supplier(location):
 	if not location:
 		return None
-	if frappe.db.exists('YRP Supplier', location):
+	if frappe.db.exists('Supplier', location):
 		return location
-	supplier = frappe.db.get_value('YRP Warehouse', location, "supplier")
+	supplier = frappe.db.get_value('Warehouse', location, "supplier")
 	if not supplier:
 		frappe.throw(_("Warehouse {0} is not linked to a Supplier.").format(location))
 	return supplier

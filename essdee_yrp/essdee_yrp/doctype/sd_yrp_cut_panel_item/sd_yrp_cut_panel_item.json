@@ -11,9 +11,8 @@
  "fields": [
   {
    "fieldname": "panel",
-   "fieldtype": "Link",
-   "label": "Panel",
-   "options": "YRP Item Attribute Value"
+   "fieldtype": "Data",
+   "label": "Panel"
   }
  ],
  "grid_page_length": 50,

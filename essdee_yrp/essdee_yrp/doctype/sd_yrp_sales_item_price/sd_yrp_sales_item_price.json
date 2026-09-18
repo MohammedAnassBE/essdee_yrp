@@ -17,7 +17,7 @@
    "fieldname": "item_variant",
    "fieldtype": "Link",
    "label": "Item Variant",
-   "options": "YRP Item Variant",
+   "options": "Item",
    "read_only": 1,
    "unique": 1
   },

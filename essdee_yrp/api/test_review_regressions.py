@@ -27,6 +27,11 @@ def _read(app, relative_path):
 
 
 class TestReviewRegressionContracts(IntegrationTestCase):
+	def test_web_grn_autofill_uses_the_standard_purchase_order_identity(self):
+		source = _read("essdee_yrp", "frontend/src/views/dynamic/DocDetail.vue")
+		self.assertIn('form.against === "Purchase Order"', source)
+		self.assertNotIn('form.against === "YRP Purchase Order"', source)
+
 	def test_filtered_prev_next_serializes_tuple_filters(self):
 		source = _read("essdee_yrp", "frontend/src/composables/useDocNav.js")
 		self.assertIn(
@@ -41,20 +46,24 @@ class TestReviewRegressionContracts(IntegrationTestCase):
 
 	def test_item_link_pickers_enforce_legal_subsets(self):
 		source = _read("essdee_yrp", "frontend/src/config/fields/item.js")
-		self.assertIn('searchLink("YRP Item Group", q, { is_group: 0 })', source)
-		self.assertIn('searchLink("YRP UOM", q, { secondary_only: 0 })', source)
+		self.assertIn('searchLink("Item Group", q, { is_group: 0 })', source)
+		self.assertIn('searchLink("UOM", q, { secondary_only: 0 })', source)
 
 	def test_guarded_item_bulk_fields_use_controller_save(self):
 		source = _read("essdee_yrp", "essdee_yrp/api/bulk_edit.py")
-		self.assertIn("'YRP Item': {\"allow_negative_stock\", \"default_unit_of_measure\"}", source)
+		self.assertIn("'Item': {\"allow_negative_stock\", \"stock_uom\"}", source)
 		self.assertIn("CONTROLLER_VALIDATED_PARENT_FIELDS.get(doctype, set())", source)
 		self.assertIn("doc.save()", source)
 
-	def test_attribute_value_update_rejects_cross_attribute_reuse_and_handles_race(self):
+	def test_attribute_value_update_uses_the_locked_standard_attribute_table(self):
 		source = _read("essdee_yrp", "essdee_yrp/api/item_attribute.py")
-		self.assertIn("'YRP Item Attribute Value', v, \"attribute_name\"", source)
-		self.assertIn("except frappe.DuplicateEntryError", source)
-		self.assertIn("for_update=True", source)
+		self.assertIn("ensure_global_attribute_values(attribute_name, clean_values)", source)
+		helper = _read("yrp", "yrp/yrp/doctype/yrp_item/yrp_item.py")
+		self.assertIn(
+			'frappe.db.get_value("Item Attribute", attribute, "name", for_update=True)',
+			helper,
+		)
+		self.assertIn('doc.append("item_attribute_values"', helper)
 
 	def test_lot_onload_is_read_only(self):
 		source = _read(
@@ -80,6 +89,33 @@ class TestReviewRegressionContracts(IntegrationTestCase):
 		self.assertIn("editingBomName", source)
 		self.assertIn("editingProcessName", source)
 		self.assertGreaterEqual(source.count("assertFreshIpd(ipd)"), 4)
+
+	def test_desk_ipd_combination_controls_wait_for_vue_matrix_cells(self):
+		component = _read(
+			"essdee_yrp",
+			"essdee_yrp/public/js/Item_Po_detail/CombinationItemDetail.vue",
+		)
+		plugins = _read("essdee_yrp", "essdee_yrp/public/js/vue_plugins.js")
+		self.assertIn("import {nextTick, ref} from 'vue';", component)
+		self.assertIn("async function load_data(item)", component)
+		self.assertIn("async function set_attributes()", component)
+		self.assertGreaterEqual(component.count("await nextTick();"), 2)
+		self.assertIn("df['fieldtype'] = 'Data'", component)
+		self.assertIn("return this.vue.load_data", plugins)
+		self.assertIn("return this.vue.set_attributes", plugins)
+
+	def test_cutting_combination_dia_uses_searchable_data_not_child_link(self):
+		component = _read(
+			"essdee_yrp",
+			"essdee_yrp/public/js/Item_Po_detail/CuttingItemDetail.vue",
+		)
+		self.assertIn("let fieldtype = 'Autocomplete'", component)
+		self.assertNotIn('fieldtype = "Link"', component)
+		self.assertIn("params: { attribute: 'Dia' }", component)
+		self.assertIn(
+			"yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values",
+			component,
+		)
 
 	def test_stock_pivot_round_trips_entry_fields(self):
 		source = _read("essdee_yrp", "frontend/src/views/dynamic/StockItemGridEditor.vue")

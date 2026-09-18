@@ -251,14 +251,20 @@ function use_finished_colour(group) {
 function make_link(parent_selector, value, options, filters, placeholder, change_cb) {
 	const parent = $(root.value).find(parent_selector);
 	if (!parent.length || parent.children().length) return;
+	const isAttributeValue = options === "Item Attribute Value";
 	const control = frappe.ui.form.make_control({
 		parent,
 		df: {
-			fieldtype: "Link",
-			options,
+			fieldtype: isAttributeValue ? "Autocomplete" : "Link",
+			options: isAttributeValue ? undefined : options,
 			fieldname: parent_selector.replace(/\W/g, "_"),
 			placeholder,
-			get_query: () => ({ filters: filters || {} }),
+			get_query: () => isAttributeValue
+				? {
+					query: "yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values",
+					params: { attribute: filters?.attribute_name },
+				}
+				: ({ filters: filters || {} }),
 		},
 		doc: sample_doc.value,
 		render_input: true,
@@ -279,7 +285,7 @@ function mount_controls() {
 		make_link(
 			`.cyr-colour-${group.key}`,
 			group.colour,
-			"YRP Item Attribute Value",
+			"Item Attribute Value",
 			{ attribute_name: "Colour" },
 			__("Select finished colour"),
 			(value) => {
@@ -291,7 +297,7 @@ function mount_controls() {
 			make_link(
 				`.cyr-yarn-${yarn.key}`,
 				yarn.yarn_item,
-				"YRP Item",
+				"Item",
 				{ disabled: 0 },
 				__("Select yarn item"),
 				(value) => {

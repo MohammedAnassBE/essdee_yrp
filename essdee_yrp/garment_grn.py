@@ -12,6 +12,7 @@ from frappe import _
 from frappe.utils import cint, cstr, flt
 
 from essdee_yrp.fabric_grn import QTY_TOLERANCE, populate_grn_deliverables
+from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 
 @frappe.whitelist()
@@ -270,7 +271,7 @@ def _validated_grn_demands(work_order, ipd, rows):
 					quantity, available, source.item_variant
 				)
 			)
-		if frappe.db.get_value('YRP Item Variant', source.item_variant, "item") != ipd.item:
+		if get_parent_item(source.item_variant) != ipd.item:
 			frappe.throw(_("Item Variant {0} does not belong to IPD {1}.").format(source.item_variant, ipd.name))
 		demands.append(
 			{
@@ -542,11 +543,9 @@ def _calculate_identity_accessory_plan(doc, work_order):
 
 	variant_parent = {}
 
-	def get_parent_item(item_variant):
+	def get_cached_parent_item(item_variant):
 		if item_variant not in variant_parent:
-			variant_parent[item_variant] = frappe.db.get_value(
-				'YRP Item Variant', item_variant, "item"
-			)
+			variant_parent[item_variant] = get_parent_item(item_variant)
 		return variant_parent[item_variant]
 
 	accessory_variants = {
@@ -554,7 +553,7 @@ def _calculate_identity_accessory_plan(doc, work_order):
 		for row in work_order.get("deliverables") or []
 		if row.item_variant
 		and row.get("is_calculated")
-		and get_parent_item(row.item_variant) != work_order.item
+		and get_cached_parent_item(row.item_variant) != work_order.item
 	}
 	if not accessory_variants:
 		return []

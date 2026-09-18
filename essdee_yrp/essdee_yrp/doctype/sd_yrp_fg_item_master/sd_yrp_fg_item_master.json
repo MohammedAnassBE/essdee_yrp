@@ -110,7 +110,7 @@
    "fieldname": "brand",
    "fieldtype": "Link",
    "label": "Brand",
-   "options": "YRP Brand"
+   "options": "Brand"
   },
   {
    "fieldname": "section_break_muule",
@@ -126,7 +126,7 @@
    "fieldname": "item",
    "fieldtype": "Link",
    "label": "Item",
-   "options": "YRP Item",
+   "options": "Item",
    "read_only": 1
   },
   {
@@ -146,7 +146,7 @@
    "fieldname": "brand1",
    "fieldtype": "Link",
    "label": "Brand1",
-   "options": "YRP Brand"
+   "options": "Brand"
   },
   {
    "default": "0",

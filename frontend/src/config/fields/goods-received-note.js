@@ -27,11 +27,11 @@ const linkSearchHandlers = {
 		}),
 	from_warehouse: (form) =>
 		form.supplier
-			? (q) => searchLink("YRP Warehouse", q, { supplier: form.supplier })
+			? (q) => searchLink("Warehouse", q, { supplier: form.supplier })
 			: null,
 	to_warehouse: (form) =>
 		form.delivery_location
-			? (q) => searchLink("YRP Warehouse", q, { supplier: form.delivery_location })
+			? (q) => searchLink("Warehouse", q, { supplier: form.delivery_location })
 			: null,
 }
 

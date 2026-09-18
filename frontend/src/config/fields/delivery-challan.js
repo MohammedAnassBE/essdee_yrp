@@ -20,11 +20,11 @@ const linkSearchHandlers = {
 		(q) => searchLink("YRP Work Order", q, { docstatus: 1, open_status: ["!=", "Close"] }),
 	from_warehouse: (form) =>
 		form.from_location
-			? (q) => searchLink("YRP Warehouse", q, { supplier: form.from_location })
+			? (q) => searchLink("Warehouse", q, { supplier: form.from_location })
 			: null,
 	to_warehouse: (form) =>
 		form.supplier
-			? (q) => searchLink("YRP Warehouse", q, { supplier: form.supplier })
+			? (q) => searchLink("Warehouse", q, { supplier: form.supplier })
 			: null,
 }
 

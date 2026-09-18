@@ -624,8 +624,8 @@ def normalize_cutting_grn_row_indexes(rows):
 			normalized.append(row)
 			continue
 
-		variant = frappe.get_cached_doc('YRP Item Variant', variant_name)
-		parent_item = frappe.get_cached_doc('YRP Item', variant.item)
+		variant = frappe.get_cached_doc('Item', variant_name)
+		parent_item = frappe.get_cached_doc('Item', (variant.variant_of or variant.name))
 		primary_attribute = parent_item.get("primary_attribute")
 		attributes = tuple(
 			sorted(
@@ -640,7 +640,7 @@ def normalize_cutting_grn_row_indexes(rows):
 			if fieldname != "received_type"
 		)
 		key = (
-			variant.item,
+			(variant.variant_of or variant.name),
 			attributes,
 			_canonical_json(row.get("set_combination")),
 			dimensions,

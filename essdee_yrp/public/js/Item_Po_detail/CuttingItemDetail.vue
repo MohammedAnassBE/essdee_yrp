@@ -74,11 +74,8 @@ function remove_attributes(){
 
 function createInput(attr, index, value, is_header){
     let parent_class = "." + get_input_class(attr, index);
-    let fieldtype = 'Link'
-    if (attr == "Dia"){
-        fieldtype = "Link"
-    }
-    else if(attr == 'Weight'){
+	let fieldtype = 'Autocomplete'
+    if(attr == 'Weight'){
         fieldtype = 'Float'
     }
     else if(attr == 'Cloth'){
@@ -89,12 +86,13 @@ function createInput(attr, index, value, is_header){
     }
 
     let el = root.value
-    // Read-only attribute cells are display-only — render them as Data so the stored
-    // value shows directly. A read-only Link renders blank here because it can't
-    // async-resolve a link title for the value on this site.
+	// Item Attribute Value is a child table in ERPNext, so attribute values,
+	// including Dia, are searchable Data rather than Link controls. Read-only
+	// attribute cells are display-only and render as Data so the stored value is
+	// always visible.
     let is_readonly = (cur_frm.cutting_attrs || []).includes(attr)
-    if (is_readonly && fieldtype == 'Link'){
-        fieldtype = 'Data'
+	if (is_readonly && fieldtype == 'Autocomplete'){
+		fieldtype = 'Data'
     }
     let df = {
         fieldtype: fieldtype,
@@ -102,25 +100,22 @@ function createInput(attr, index, value, is_header){
         default: value,
         read_only: is_readonly
     }
-    if (fieldtype == 'Link' && attr != 'Dia'){
-        df['options'] = 'YRP Item Attribute Value'
-        df['get_query'] = function(){
-            return {
-                query:'essdee_yrp.ipd_ui.get_attribute_detail_values',
-                filters: {
-                    'mapping': cur_frm.set_packing_attr_map_value,
+	if (fieldtype == 'Autocomplete' && attr != 'Dia'){
+		df['get_query'] = function(){
+			return {
+				query:'essdee_yrp.ipd_ui.search_attribute_detail_values',
+				params: {
+					'mapping': cur_frm.set_packing_attr_map_value,
                 }
             }
         }
     }
-    else if(fieldtype == 'Link'){
-        df['options'] = 'YRP Item Attribute Value'
-        df['get_query'] = function(){
-            return {
-                filters: {
-                    'attribute_name': 'Dia',
-                }
-            }
+	else if(fieldtype == 'Autocomplete'){
+		df['get_query'] = function(){
+			return {
+				query: 'yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values',
+				params: { attribute: 'Dia' },
+			}
         }
     }
     else if(fieldtype == 'Select'){

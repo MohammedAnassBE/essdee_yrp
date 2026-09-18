@@ -33,7 +33,7 @@
                         <table class="table table-sm table-sm-bordered bordered-table">
                             <thead class="dark-border">
                                 <tr>
-                                    <th :colspan="2">{{ item_name }} <span v-if="part_value != 'YRP Item'"> {{ part_value }} </span></th>
+                                    <th :colspan="2">{{ item_name }} <span v-if="part_value != 'Item'"> {{ part_value }} </span></th>
                                     <th v-for="size in items.primary_values">
                                         {{ size }}
                                     </th>

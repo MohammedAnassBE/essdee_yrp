@@ -37,7 +37,7 @@ class TestGarmentBomMatrix(FrappeTestCase):
         real_get_value = frappe.db.get_value
 
         def get_value(doctype, *args, **kwargs):
-            if doctype == 'YRP Item':
+            if doctype == 'Item':
                 return "Pieces"
             return real_get_value(doctype, *args, **kwargs)
 
@@ -77,7 +77,7 @@ class TestGarmentBomMatrix(FrappeTestCase):
         real_get_value = frappe.db.get_value
 
         def get_value(doctype, *args, **kwargs):
-            if doctype == 'YRP Item':
+            if doctype == 'Item':
                 return "Pieces"
             return real_get_value(doctype, *args, **kwargs)
 

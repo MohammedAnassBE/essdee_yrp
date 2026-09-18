@@ -24,7 +24,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Item Variant",
-   "options": "YRP Item Variant",
+   "options": "Item",
    "reqd": 1
   },
   {
@@ -39,7 +39,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Uom",
-   "options": "YRP UOM"
+   "options": "UOM"
   },
   {
    "fieldname": "stock_qty",
@@ -52,7 +52,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Stock UOM",
-   "options": "YRP UOM"
+   "options": "UOM"
   },
   {
    "fieldname": "conversion_factor",

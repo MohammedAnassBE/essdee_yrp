@@ -18,6 +18,7 @@ from collections.abc import Iterable, Mapping
 from copy import deepcopy
 from datetime import date, datetime, time
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from hmac import compare_digest
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -25,7 +26,7 @@ from typing import Any
 import frappe
 from frappe.model import no_value_fields
 from frappe.utils import cint, now_datetime
-from frappe.utils.password import set_encrypted_password
+from frappe.utils.password import get_decrypted_password, set_encrypted_password
 
 from essdee_yrp.migration.config import (
 	MigrationSettings,
@@ -33,6 +34,10 @@ from essdee_yrp.migration.config import (
 	is_target_reset_enabled,
 )
 from essdee_yrp.migration.engine import SYSTEM_FIELDS, MigrationError, MigrationPlan, transform_document
+from essdee_yrp.migration.locking import (
+	MigrationAlreadyRunningError,
+	exclusive_migration_run,
+)
 from essdee_yrp.migration.planner import build_schema_analysis
 from essdee_yrp.migration.rules import DOCTYPE_RENAMES
 
@@ -56,6 +61,95 @@ SUPPORTING_EXTERNAL_DOCTYPE_ORDER = (
 	"Print Format",
 )
 BUSINESS_SUPPORTING_MASTERS = frozenset({"Address", "Contact"})
+# These values are written by Frappe itself while users interact with the target
+# site.  They cannot remain byte-for-byte equal to the frozen source snapshot
+# during a long verification run, and they are not migrated business state.
+VOLATILE_VERIFICATION_FIELDS = {
+	"User": frozenset({"last_active"}),
+}
+# Existing ERP Item UOM rows belong to the independently restored target.  Item
+# commonisation deliberately preserves them; source-owned identities must still
+# exist and are verified individually, but additional target rows are expected.
+PRESERVED_TARGET_CHILD_DOCTYPES = frozenset({"UOM Conversion Detail"})
+TARGET_OWNED_APPROVED_FRAPPE_FIELDS = {
+	# The combined target's setup finalizer owns these values.  Copying the
+	# historical source values would reintroduce the setup-wizard/Desk redirect
+	# loop that finalization explicitly prevents.
+	"System Settings": frozenset({"default_app", "setup_complete"}),
+}
+APPROVED_FRAPPE_DATA_ORDER = (
+	"Role",
+	"Address Template",
+	"Letter Head",
+	"Email Domain",
+	"Email Account",
+	"Module Profile",
+	"User",
+	"Custom DocPerm",
+	"Dashboard Settings",
+	"DefaultValue",
+	"Email Unsubscribe",
+	"List View Settings",
+	"Note",
+	"Notification Settings",
+	"Print Settings",
+	"System Settings",
+	"Website Settings",
+	"Workspace",
+)
+APPROVED_FRAPPE_UNAVAILABLE_IN_F16 = (
+	"Energy Point Settings",
+	"S3 Backup Settings",
+)
+APPROVED_USER_OPTIONAL_UNIQUE_FIELDS = (
+	"username",
+	"mobile_no",
+	"api_key",
+)
+SETUP_WIZARD_APPS = ("frappe", "erpnext")
+DEFAULT_DESK_APP = "erpnext"
+ERPNEXT_PRESET_DOCTYPES = (
+	"Warehouse Type",
+	"Stock Entry Type",
+	"Item Group",
+	"UOM",
+	"Supplier Group",
+	"Customer Group",
+	"Territory",
+	"Mode of Payment",
+)
+
+
+def _migration_physical_target_doctypes(plan: MigrationPlan) -> tuple[str, ...]:
+	"""Return every table physically owned by the transformed migration graph.
+
+	A source child can be redirected to a context-specific target child by its
+	parent rule. Such a target is not necessarily ``spec.target`` for any direct
+	migration route, so spec targets alone are not a complete audit boundary.
+	"""
+
+	discovered = {str(spec.target) for spec in plan.specs.values()}
+	for spec in plan.specs.values():
+		discovered.update(
+			str(target) for target in spec.table_option_map.values() if target
+		)
+	pending = list(discovered)
+	while pending:
+		doctype = pending.pop()
+		schema = plan.target_schemas.get(doctype) or {}
+		for field in schema.get("fields") or []:
+			if field.get("fieldtype") not in TABLE_FIELD_TYPES or not field.get(
+				"options"
+			):
+				continue
+			child_doctype = str(field["options"])
+			if child_doctype in discovered:
+				continue
+			discovered.add(child_doctype)
+			pending.append(child_doctype)
+	return tuple(sorted(discovered))
+
+
 PRESERVE_SOURCE_BLANK_FIELDS = {
 	# These fields are mandatory only in the F16 operating contract. Historical
 	# source rows intentionally used blank to mean a global rate, a multi-Lot
@@ -68,9 +162,9 @@ PRESERVE_SOURCE_BLANK_FIELDS = {
 	("Cut Panel Movement", "from_warehouse"),
 	("Cutting Laysheet Planner", "description"),
 }
-SOURCE_DOCTYPE_BY_TARGET = {
-	target: source for source, target in DOCTYPE_RENAMES.items()
-}
+SOURCE_DOCTYPES_BY_TARGET: dict[str, set[str]] = {}
+for _source_doctype, _target_doctype in DOCTYPE_RENAMES.items():
+	SOURCE_DOCTYPES_BY_TARGET.setdefault(_target_doctype, set()).add(_source_doctype)
 SAFE_SQL_FIELDNAME = re.compile(r"^[a-z][a-z0-9_]*$")
 
 # Migration operating context that must resolve before a Production Order or
@@ -79,25 +173,31 @@ SAFE_SQL_FIELDNAME = re.compile(r"^[a-z][a-z0-9_]*$")
 # dimension contract. Keeping this here makes the contract independently
 # auditable instead of silently inventing values in a transformer.
 IPD_MIGRATION_PREREQUISITES = {
-	"item_group": 'YRP Item Group',
+	"item_group": 'Item Group',
 	"default_cutting_process": 'YRP Process',
 	"default_knitting_process": 'YRP Process',
 	"default_dyeing_process": 'YRP Process',
 	"default_packing_process": 'YRP Process',
-	"default_pack_in_stage": 'YRP Item Attribute Value',
-	"default_packing_attribute": 'YRP Item Attribute',
-	"default_pack_out_stage": 'YRP Item Attribute Value',
+	"default_pack_in_stage": None,
+	"default_packing_attribute": 'Item Attribute',
+	"default_pack_out_stage": None,
 	"default_stitching_process": 'YRP Process',
-	"default_stitching_in_stage": 'YRP Item Attribute Value',
-	"default_stitching_attribute": 'YRP Item Attribute',
-	"default_stitching_out_stage": 'YRP Item Attribute Value',
-	"default_set_item_attribute": 'YRP Item Attribute',
+	"default_stitching_in_stage": None,
+	"default_stitching_attribute": 'Item Attribute',
+	"default_stitching_out_stage": None,
+	"default_set_item_attribute": 'Item Attribute',
 }
 STOCK_MIGRATION_PREREQUISITES = {
-	"transit_warehouse": 'YRP Warehouse',
+	"transit_warehouse": 'Warehouse',
 	"default_received_type": 'YRP Received Type',
 	"default_rejected_received_type": 'YRP Received Type',
 }
+TARGET_OWNED_STOCK_SETTINGS_FIELDS = frozenset(
+	{
+		*STOCK_MIGRATION_PREREQUISITES,
+		"stock_dimensions",
+	}
+)
 REQUIRED_STOCK_DIMENSION_CONTRACT = {
 	"lot": {
 		"dimension_doctype": 'SD YRP Lot',
@@ -154,19 +254,68 @@ class F15SourceBridge:
 		start_after: str | None = None,
 		batch_size: int = DEFAULT_BATCH_SIZE,
 		limit: int | None = None,
+		names: Iterable[str] | None = None,
 	) -> Iterable[dict[str, Any]]:
 		args = ["export", "--doctype", doctype, "--batch-size", str(batch_size)]
+		if names is not None:
+			if start_after or limit is not None:
+				raise MigrationError(
+					"Exact-name source export cannot be combined with start_after/limit"
+				)
+			names = sorted({str(name) for name in names if name})
+			for chunk in _chunks(names, 250):
+				yield from self._run(
+					[
+						*args,
+						"--names-json",
+						json.dumps(chunk, separators=(",", ":")),
+					]
+				)
+			return
 		if start_after:
 			args.extend(["--start-after", start_after])
 		if limit is not None:
 			args.extend(["--limit", str(max(0, int(limit)))])
 		yield from self._run(args)
 
+	def resolve_source_identities(
+		self, doctype: str, names: Iterable[str]
+	) -> Iterable[dict[str, Any]]:
+		"""Locate exact source rows and return their owning parent identities."""
+
+		names = sorted({str(name) for name in names if name})
+		for chunk in _chunks(names, 250):
+			yield from self._run(
+				[
+					"resolve-identities",
+					"--doctype",
+					doctype,
+					"--names-json",
+					json.dumps(chunk, separators=(",", ":")),
+				]
+			)
+
+	def iter_cut_bundle_edit_ledger_dependencies(
+		self, names: Iterable[str]
+	) -> Iterable[dict[str, Any]]:
+		"""Return source ledger identities required by selected edit records."""
+
+		requested = sorted({str(name) for name in names if name})
+		for chunk in _chunks(requested, 250):
+			yield from self._run(
+				[
+					"cut-bundle-edit-ledgers",
+					"--names-json",
+					json.dumps(chunk, separators=(",", ":")),
+				]
+			)
+
 	def reference_data(self) -> dict[str, Any]:
 		data = {
 			"variant_to_item": {},
 			"item_defaults": {},
 			"item_groups": {},
+			"item_attribute_values": {},
 			"cut_panel_from_warehouse": {},
 			"migration_defaults": dict(self.settings.required_defaults),
 		}
@@ -179,20 +328,51 @@ class F15SourceBridge:
 				data["item_groups"][name] = row.get("item_group")
 			elif kind == "item_variant":
 				data["variant_to_item"][name] = row.get("item")
+			elif kind == "item_attribute_value":
+				value = row.get("attribute_value")
+				data["item_attribute_values"][name] = value
+				if name != value:
+					conflicts.append(
+						{
+							"kind": "item_attribute_value_identity",
+							"name": name,
+							"attribute_value": value,
+						}
+					)
 			elif kind == "cut_panel_from_warehouse":
 				if len(row.get("candidates") or []) > 1:
 					conflicts.append(row)
 				elif row.get("warehouse"):
 					data["cut_panel_from_warehouse"][name] = row["warehouse"]
 			elif kind == "migration_defaults":
-				data["migration_defaults"].update(
-					{
-						"default_received_type": row.get("default_received_type"),
-						"root_item_groups": row.get("root_item_groups") or [],
-						"bill_received_via": row.get("bill_received_via") or [],
-					}
-				)
+				migration_defaults = {
+					"default_received_type": row.get("default_received_type"),
+					"root_item_groups": row.get("root_item_groups") or [],
+					"bill_received_via": row.get("bill_received_via") or [],
+				}
+				# Historical packaging Lot BOM rows can predate the mandatory
+				# process field. The source IPD setting is their authoritative
+				# process; do not require a second manually duplicated profile value.
+				if row.get("default_packing_process"):
+					migration_defaults["Lot BOM.process_name"] = row[
+						"default_packing_process"
+					]
+				data["migration_defaults"].update(migration_defaults)
 		if conflicts:
+			identity_conflicts = [
+				row
+				for row in conflicts
+				if row.get("kind") == "item_attribute_value_identity"
+			]
+			if identity_conflicts:
+				raise MigrationError(
+					"Item Attribute Value Link-to-Data conversion is unsafe because "
+					"source names differ from their values: "
+					+ "; ".join(
+						f"{row['name']}={row['attribute_value']}"
+						for row in identity_conflicts[:20]
+					)
+				)
 			raise MigrationError(
 				"Conflicting Cut Panel Movement warehouse references: "
 				+ "; ".join(
@@ -274,6 +454,11 @@ class F15SourceBridge:
 	def iter_related_business_masters(self) -> Iterable[dict[str, Any]]:
 		yield from self._run(["related-business-masters"])
 
+	def iter_approved_frappe_documents(self) -> Iterable[dict[str, Any]]:
+		# Explicitly selected Frappe business/configuration records. This is a
+		# live-data phase, unlike the encrypted framework-history archive.
+		yield from self._run(["approved-frappe-data"])
+
 	def iter_framework_rows(self) -> Iterable[dict[str, Any]]:
 		# Contains private history and inert access/configuration evidence. Never
 		# log the raw payload; the archive phase encrypts it with the target key.
@@ -350,6 +535,8 @@ class FrappeBulkTarget:
 	def upsert_batch(self, target_doctype: str, documents: list[dict[str, Any]]) -> None:
 		if not documents:
 			return
+		if target_doctype == "Item Attribute Value":
+			self._reconcile_item_attribute_values(documents)
 		meta = frappe.get_meta(target_doctype)
 		if meta.issingle:
 			for document in documents:
@@ -375,7 +562,7 @@ class FrappeBulkTarget:
 
 		for name, fieldname, value in passwords:
 			set_encrypted_password(target_doctype, name, value, fieldname=fieldname)
-		if target_doctype == 'YRP Supplier':
+		if target_doctype == 'Supplier':
 			self._upsert_supplier_warehouses(documents)
 
 	def _replace_child_tables(self, meta, documents: list[dict[str, Any]]) -> None:
@@ -495,39 +682,73 @@ class FrappeBulkTarget:
 					fits = False
 				if not fits:
 					raise MigrationError(f"Refusing numeric rounding at {doctype} {row.get('name')}.{fieldname}; target scale is {scale}")
-		fields = [
-			fieldname
-			for fieldname in dict.fromkeys(
-				["name", *[key for row in rows for key in row]]
-			)
-			if fieldname in columns
-		]
-		if "name" not in fields:
+		if "name" not in columns:
 			raise MigrationError(f"{doctype} has no physical name column")
-		chunk_size = max(1, min(len(rows), MAX_SQL_PARAMETERS // max(len(fields), 1)))
 		quoted_table = _quote_identifier(f"tab{doctype}")
-		quoted_fields = ", ".join(_quote_identifier(fieldname) for fieldname in fields)
-		updates = ", ".join(
-			f"{_quote_identifier(fieldname)}=VALUES({_quote_identifier(fieldname)})"
-			for fieldname in fields
-			if fieldname != "name"
-		) or "`name`=VALUES(`name`)"
-		for chunk in _chunks(rows, chunk_size):
-			placeholders = ", ".join(
-				"(" + ", ".join(["%s"] * len(fields)) + ")" for _row in chunk
+		# Never widen a sparse row to the union of every field in the batch. That
+		# used to turn an intentionally omitted field into SQL NULL whenever rows
+		# with different write boundaries shared a batch (for example, a new Item
+		# Variant beside a same-name ERP Item being structurally reconciled). Apart
+		# from violating NOT NULL columns such as docstatus, it could erase target
+		# values that the migration deliberately does not own. Group rows by their
+		# exact physical field set so an omitted key remains untouched on update and
+		# uses the database default on insert.
+		rows_by_fields: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+		for row in rows:
+			fields = (
+				"name",
+				*sorted(key for key in row if key != "name" and key in columns),
 			)
-			values = [
-				_db_value(row.get(fieldname))
-				for row in chunk
+			rows_by_fields.setdefault(fields, []).append(row)
+
+		for fields, matching_rows in rows_by_fields.items():
+			chunk_size = max(
+				1,
+				min(
+					len(matching_rows),
+					MAX_SQL_PARAMETERS // max(len(fields), 1),
+				),
+			)
+			quoted_fields = ", ".join(
+				_quote_identifier(fieldname) for fieldname in fields
+			)
+			updates = ", ".join(
+				f"{_quote_identifier(fieldname)}=VALUES({_quote_identifier(fieldname)})"
 				for fieldname in fields
-			]
-			frappe.db.sql(
-				f"INSERT INTO {quoted_table} ({quoted_fields}) VALUES {placeholders} "
-				f"ON DUPLICATE KEY UPDATE {updates}",
-				values,
-			)
+				if fieldname != "name"
+			) or "`name`=VALUES(`name`)"
+			for chunk in _chunks(matching_rows, chunk_size):
+				placeholders = ", ".join(
+					"(" + ", ".join(["%s"] * len(fields)) + ")"
+					for _row in chunk
+				)
+				values = [
+					_db_value(row.get(fieldname))
+					for row in chunk
+					for fieldname in fields
+				]
+				try:
+					frappe.db.sql(
+						f"INSERT INTO {quoted_table} ({quoted_fields}) VALUES {placeholders} "
+						f"ON DUPLICATE KEY UPDATE {updates}",
+						values,
+					)
+				except Exception as exc:
+					# Keep diagnostics structural: identities and values can be sensitive,
+					# but the exact field shape is enough to locate a failed write path.
+					raise MigrationError(
+						f"Bulk upsert failed for {doctype} fields "
+						f"{', '.join(fields)} ({len(chunk)} rows): {exc}"
+					) from exc
 
 	def _upsert_supplier_warehouses(self, suppliers: list[dict[str, Any]]) -> None:
+		companies = frappe.get_all("Company", pluck="name", limit_page_length=2)
+		if len(companies) != 1:
+			raise MigrationError(
+				"Supplier warehouse migration requires exactly one target Company; "
+				f"found {len(companies)}"
+			)
+		company = companies[0]
 		rows = []
 		for supplier in suppliers:
 			name = supplier.get("name")
@@ -536,7 +757,9 @@ class FrappeBulkTarget:
 			rows.append(
 				{
 					"name": name,
-					"name1": name,
+					"warehouse_name": name,
+					"company": company,
+					"is_group": 0,
 					"supplier": name,
 					"disabled": supplier.get("disabled") or 0,
 					"owner": supplier.get("owner") or "Administrator",
@@ -546,7 +769,50 @@ class FrappeBulkTarget:
 					"docstatus": 0,
 				}
 			)
-		self._bulk_upsert('YRP Warehouse', rows)
+		self._bulk_upsert('Warehouse', rows)
+
+	def _reconcile_item_attribute_values(
+		self, documents: list[dict[str, Any]]
+	) -> None:
+		"""Make the legacy value identity authoritative for ERPNext child rows."""
+
+		for document in documents:
+			name = str(document.get("name") or "")
+			parent = str(document.get("parent") or "")
+			value = document.get("attribute_value")
+			if not name or not parent or value in (None, ""):
+				raise MigrationError(
+					"Item Attribute Value migration row requires name, parent and value"
+				)
+			existing = frappe.db.get_value(
+				"Item Attribute Value",
+				name,
+				["parent", "parenttype", "parentfield", "attribute_value"],
+				as_dict=True,
+			)
+			if existing and (
+				str(existing.parent or "") != parent
+				or existing.parenttype != "Item Attribute"
+				or existing.parentfield != "item_attribute_values"
+				or str(existing.attribute_value or "") != str(value)
+			):
+				raise MigrationError(
+					f"Item Attribute Value identity collision for {name}"
+				)
+			duplicates = frappe.get_all(
+				"Item Attribute Value",
+				filters={
+					"parent": parent,
+					"parenttype": "Item Attribute",
+					"parentfield": "item_attribute_values",
+					"attribute_value": value,
+					"name": ["!=", name],
+				},
+				pluck="name",
+				limit_page_length=0,
+			)
+			if duplicates:
+				frappe.db.delete("Item Attribute Value", {"name": ["in", duplicates]})
 
 	def upsert_file(
 		self,
@@ -1000,12 +1266,14 @@ def _migration_prerequisite_value(
 
 
 def _target_or_source_prerequisite_exists(
-	link_doctype: str,
+	link_doctype: str | None,
 	value: str,
 	*,
 	plan: MigrationPlan | None,
 	source: F15SourceBridge | None,
 ) -> bool:
+	if not link_doctype:
+		return True
 	if frappe.db.exists("DocType", link_doctype) and frappe.db.exists(
 		link_doctype, value
 	):
@@ -1019,7 +1287,7 @@ def _target_or_source_prerequisite_exists(
 	]
 	# Target Warehouse rows are deterministically generated from source Supplier
 	# identities. They are intentionally absent during the clean reset boundary.
-	if link_doctype == 'YRP Warehouse':
+	if link_doctype == 'Warehouse':
 		source_doctypes.append("Supplier")
 	return any(
 		source.document_exists(source_doctype, value)
@@ -1068,6 +1336,24 @@ def _source_snapshot(
 			).encode("utf-8")
 		).hexdigest(),
 	}
+
+
+def _apply_target_owned_configuration_boundary(
+	source_doctype: str, target_document: dict[str, Any]
+) -> dict[str, Any]:
+	"""Keep the target stock operating contract out of historical source writes.
+
+	The migration validates these values before writing any business data. The
+	legacy ``Stock Settings`` row still carries fields with the same names, but
+	they describe the old site's supplier-based transit model. Omitting them
+	from the sparse Single upsert preserves the explicitly configured F16 values
+	and prevents source child rows from replacing the target stock dimensions.
+	"""
+
+	if source_doctype == "Stock Settings":
+		for fieldname in TARGET_OWNED_STOCK_SETTINGS_FIELDS:
+			target_document.pop(fieldname, None)
+	return target_document
 
 
 def _migration_contract_fingerprint(
@@ -1148,11 +1434,34 @@ def _source_broken_link_manifest(
 		source_field = str(row.get("fieldname") or "")
 		if source_field in spec.ignored_fields:
 			continue
+		target_doctype = str(spec.target)
+		target_schema = spec.target_schema
+		if spec.is_child and row.get("parenttype") and row.get("parentfield"):
+			parent_spec = plan.specs.get(str(row["parenttype"]))
+			if parent_spec:
+				source_parentfield = str(row["parentfield"])
+				target_parentfield = parent_spec.field_map.get(
+					source_parentfield, source_parentfield
+				)
+				parent_target_field = next(
+					(
+						field
+						for field in parent_spec.target_schema.get("fields") or []
+						if field.get("fieldname") == target_parentfield
+					),
+					None,
+				)
+				contextual_target = parent_spec.table_option_map.get(
+					source_parentfield
+				) or (parent_target_field or {}).get("options")
+				if contextual_target:
+					target_doctype = str(contextual_target)
+					target_schema = plan.target_schemas.get(target_doctype) or {}
 		target_fieldname = spec.field_map.get(source_field, source_field)
 		target_field = next(
 			(
 				field
-				for field in spec.target_schema.get("fields") or []
+				for field in target_schema.get("fields") or []
 				if field.get("fieldname") == target_fieldname
 			),
 			None,
@@ -1161,7 +1470,7 @@ def _source_broken_link_manifest(
 			continue
 		manifest.append(
 			{
-				"target_doctype": spec.target,
+				"target_doctype": target_doctype,
 				"target_name": str(row.get("source_name") or ""),
 				"target_field": target_fieldname,
 				"target_link_doctype": str(target_field.get("options") or ""),
@@ -1199,10 +1508,25 @@ def _require_previous_snapshot(
 		raise MigrationError(
 			"A completed Dry Run from this production source is required before migration"
 		)
-	if dict(previous_snapshot) != dict(current_snapshot):
+	previous_comparable = dict(previous_snapshot)
+	current_comparable = dict(current_snapshot)
+	if mode == "verify":
+		# Verification must be rerunnable after a verifier-only correction.  The
+		# current plan and transforms are used to audit every stored value, while
+		# the frozen source data, target prerequisites and site identities must
+		# still match the completed migration exactly.
+		previous_comparable.pop("migration_contract_fingerprint", None)
+		current_comparable.pop("migration_contract_fingerprint", None)
+	if previous_comparable != current_comparable:
+		changed_keys = sorted(
+			key
+			for key in set(previous_comparable) | set(current_comparable)
+			if previous_comparable.get(key) != current_comparable.get(key)
+		)
 		raise MigrationError(
 			"Source data/configuration changed after the previous migration gate; "
-			"run Analyse and Dry Run again"
+			"run Analyse and Dry Run again. Changed snapshot fields: "
+			+ ", ".join(changed_keys)
 		)
 
 
@@ -1220,6 +1544,7 @@ def _assert_no_other_active_migration(migration_name: str) -> None:
 		raise MigrationError(f"Another migration run is active: {active[0]}")
 
 
+@exclusive_migration_run
 def run_job(
 	migration_name: str,
 	mode: str,
@@ -1306,6 +1631,7 @@ def run_job(
 				backfill_deterministic_valuation_lineage,
 			)
 			result["valuation_lineage"] = backfill_deterministic_valuation_lineage()
+			result["setup_state"] = _finalize_target_setup_state()
 		result["schema"] = {
 			"source_doctypes": schema_payload["source_doctypes"],
 			"target_doctypes": schema_payload["target_doctypes"],
@@ -1350,6 +1676,10 @@ def run_job_guarded(*args, **kwargs):
 	migration_name = str(kwargs.get("migration_name") or (args[0] if args else ""))
 	try:
 		return run_job(*args, **kwargs)
+	except MigrationAlreadyRunningError:
+		# The lock owner is the real active job; a duplicate enqueue must not mark
+		# that job Failed merely because its own attempt was rejected.
+		raise
 	except Exception:
 		_mark_queued_failure(migration_name)
 		raise
@@ -1361,6 +1691,8 @@ def run_reset_job_guarded(*args, **kwargs):
 	migration_name = str(kwargs.get("migration_name") or (args[0] if args else ""))
 	try:
 		return run_reset_job(*args, **kwargs)
+	except MigrationAlreadyRunningError:
+		raise
 	except Exception:
 		_mark_queued_failure(migration_name)
 		raise
@@ -1417,6 +1749,7 @@ def preview_target_reset(migration_name: str) -> dict[str, Any]:
 	}
 
 
+@exclusive_migration_run
 def run_reset_job(migration_name: str) -> dict[str, Any]:
 	"""Delete only the reviewed migration-owned target graph before a fresh load."""
 
@@ -1544,7 +1877,7 @@ def _build_target_reset_manifest(
 		"single_target_doctypes": single_targets,
 		"child_target_doctypes": child_targets,
 		"source_series_names": sorted(set(series_names)),
-		"delete_generated_supplier_warehouses": 'YRP Supplier' in parent_targets,
+		"delete_generated_supplier_warehouses": 'Supplier' in parent_targets,
 	}
 
 
@@ -1584,7 +1917,7 @@ def _target_reset_counts(
 			set(warehouse_names)
 			| set(
 				_existing_document_names(
-					'YRP Warehouse',
+					'Warehouse',
 					list(
 						expected_identities.get(
 							"generated_supplier_warehouse_names"
@@ -1675,7 +2008,7 @@ def _generated_supplier_warehouse_names(manifest: Mapping[str, Any]) -> list[str
 	return [
 		str(row[0])
 		for row in frappe.db.sql(
-			"SELECT warehouse.name FROM `tabYRP Warehouse` warehouse "
+			"SELECT warehouse.name FROM `tabWarehouse` warehouse "
 			"WHERE COALESCE(warehouse.supplier, '')<>'' "
 			"AND warehouse.name=warehouse.supplier ORDER BY warehouse.name"
 		)
@@ -1846,7 +2179,7 @@ def _delete_target_reset_manifest(
 
 	warehouse_names = list(before["generated_supplier_warehouse_names"])
 	for chunk in _chunks(warehouse_names, 500):
-		frappe.db.delete('YRP Warehouse', {"name": ["in", chunk]})
+		frappe.db.delete('Warehouse', {"name": ["in", chunk]})
 		frappe.db.commit()
 		processed += len(chunk)
 		_update_progress(migration_name, processed, 0, 0)
@@ -1905,6 +2238,7 @@ def _nonzero_reset_counts(counts: Mapping[str, Any]) -> dict[str, int]:
 	}
 
 
+@exclusive_migration_run
 def run_value_verification(
 	migration_name: str,
 	batch_size: int = DEFAULT_BATCH_SIZE,
@@ -2033,16 +2367,45 @@ def _run_documents(
 		else 0
 	)
 	failed: list[str] = []
+	supporting_business_master_reconciliation: dict[str, Any] = {}
 	if not dry_run:
 		_ensure_supporting_masters(target, reference_data)
 		_supporting_external_counts = _load_supporting_external_masters(
-			target, source, supporting_external, plan=plan, dry_run=False
+			target,
+			source,
+			supporting_external,
+			plan=plan,
+			dry_run=False,
+			reconciliation=supporting_business_master_reconciliation,
+		)
+		checkpoint["supporting_business_master_reconciliation"] = (
+			supporting_business_master_reconciliation
+		)
+		frappe.db.set_value(
+			'SD YRP MRP Data Migration',
+			migration_name,
+			"checkpoint_json",
+			json.dumps(checkpoint, sort_keys=True),
+			update_modified=False,
 		)
 		frappe.db.commit()
 	else:
 		_supporting_external_counts = _load_supporting_external_masters(
-			target, source, supporting_external, plan=plan, dry_run=True
+			target,
+			source,
+			supporting_external,
+			plan=plan,
+			dry_run=True,
+			reconciliation=supporting_business_master_reconciliation,
 		)
+	approved_frappe_data = _run_approved_frappe_data(
+		plan,
+		source,
+		target,
+		dry_run=dry_run,
+		batch_size=batch_size,
+	)
+	processed_total += int(approved_frappe_data["processed"])
 
 	for doctype in plan.parent_doctypes:
 		spec = plan.specs[doctype]
@@ -2057,6 +2420,9 @@ def _run_documents(
 		):
 			try:
 				target_document = transform_document(source_document, plan)
+				_apply_target_owned_configuration_boundary(
+					doctype, target_document
+				)
 				preserved_required_values += _resolve_and_validate_required_target_values(
 					target_document,
 					plan,
@@ -2123,6 +2489,10 @@ def _run_documents(
 		},
 		"validated_external_reference_values": external_reference_count,
 		"supporting_external_masters": _supporting_external_counts,
+		"supporting_business_master_reconciliation": (
+			supporting_business_master_reconciliation
+		),
+		"approved_frappe_data": approved_frappe_data,
 		"doctypes": counts,
 	}
 
@@ -2214,6 +2584,7 @@ def _load_supporting_external_masters(
 	*,
 	plan: MigrationPlan,
 	dry_run: bool,
+	reconciliation: dict[str, Any] | None = None,
 ) -> dict[str, int]:
 	names_by_doctype = {
 		doctype: set(names)
@@ -2248,17 +2619,54 @@ def _load_supporting_external_masters(
 		)
 
 	counts = {}
+	if reconciliation is not None:
+		reconciliation.clear()
+		reconciliation.update(
+			{
+				"preserved_target_identities": {
+					doctype: {} for doctype in sorted(BUSINESS_SUPPORTING_MASTERS)
+				},
+				"inserted_source_identities": {
+					doctype: [] for doctype in sorted(BUSINESS_SUPPORTING_MASTERS)
+				},
+			}
+		)
 	doctype_map = {name: spec.target for name, spec in plan.specs.items()}
 	for doctype in SUPPORTING_EXTERNAL_DOCTYPE_ORDER:
 		if doctype in BUSINESS_SUPPORTING_MASTERS:
 			names = names_by_doctype.get(doctype) or set()
 			counts[doctype] = 0
 			batch = []
+			seen = set()
 			for document in source.iter_supporting_documents(doctype, sorted(names)):
-				_assert_supporting_master_not_independently_edited(document, doctype)
+				identity = str(document.get("name") or "")
+				if not identity or identity not in names or identity in seen:
+					raise MigrationError(
+						f"Source returned an invalid or duplicate {doctype} supporting identity"
+					)
+				seen.add(identity)
+				counts[doctype] += 1
+				# This migration is applied after restoring the live ERP database.
+				# Its Address/Contact rows are authoritative on an exact-name
+				# collision; replacing them would discard newer ERP edits and child
+				# links. Only source identities absent from ERP are inserted.
+				existing_identity = frappe.db.exists(doctype, identity)
+				if existing_identity:
+					if reconciliation is not None:
+						reconciliation["preserved_target_identities"][doctype][
+							identity
+						] = (
+							str(existing_identity)
+							if isinstance(existing_identity, str)
+							else identity
+						)
+					continue
+				if reconciliation is not None:
+					reconciliation["inserted_source_identities"][doctype].append(
+						identity
+					)
 				_assert_supporting_child_ownership(document, doctype)
 				batch.append(_transform_supporting_document(document, doctype, doctype_map))
-				counts[doctype] += 1
 				if len(batch) >= 250:
 					if not dry_run:
 						target.upsert_batch(doctype, batch)
@@ -2279,20 +2687,665 @@ def _load_supporting_external_masters(
 	return counts
 
 
-def _assert_supporting_master_not_independently_edited(document, doctype):
-	"""Never overwrite a native ERPNext address/contact or a later user edit."""
-	identity = document.get("name")
-	existing = frappe.db.get_value(doctype, identity,
-		["creation", "modified", "owner", "modified_by"], as_dict=True)
-	if not existing:
-		return
-	for fieldname in ("creation", "modified", "owner", "modified_by"):
-		fieldtype = "Datetime" if fieldname in {"creation", "modified"} else "Data"
-		if not _same_migrated_value(document.get(fieldname), existing.get(fieldname), fieldtype):
-			raise MigrationError(
-				f"Refusing to overwrite independently created or edited {doctype} {identity}; "
-				f"source and target {fieldname} differ. Review this identity before migration."
+def _prepare_approved_frappe_document(
+	document: Mapping[str, Any], plan: MigrationPlan
+) -> dict[str, Any] | None:
+	"""Map one explicitly selected Frappe record into the F16 live schema."""
+
+	source_doctype = str(document.get("doctype") or "")
+	if source_doctype not in APPROVED_FRAPPE_DATA_ORDER:
+		raise MigrationError(f"Unexpected approved Frappe DocType {source_doctype!r}")
+	doctype_map = {name: spec.target for name, spec in plan.specs.items()}
+	working = deepcopy(dict(document))
+	for fieldname in TARGET_OWNED_APPROVED_FRAPPE_FIELDS.get(source_doctype, ()):
+		working.pop(fieldname, None)
+
+	if source_doctype == "Custom DocPerm":
+		parent = str(working.get("parent") or "")
+		working["parent"] = doctype_map.get(parent, parent)
+		# Permissions for a retired/uninstalled DocType cannot be active in F16.
+		# They remain in the encrypted framework archive, while live permissions
+		# are restricted to an installed target DocType.
+		if not frappe.db.exists("DocType", working["parent"]):
+			return None
+	elif source_doctype == "List View Settings":
+		name = str(working.get("name") or "")
+		working["name"] = doctype_map.get(name, name)
+		if not frappe.db.exists("DocType", working["name"]):
+			return None
+	elif source_doctype == "Workspace":
+		for shortcut in working.get("shortcuts") or []:
+			if shortcut.get("type") == "DocType" and shortcut.get("link_to"):
+				shortcut["link_to"] = doctype_map.get(
+					str(shortcut["link_to"]), str(shortcut["link_to"])
+				)
+
+	output = _transform_supporting_document(working, source_doctype, doctype_map)
+	if frappe.get_meta(source_doctype).issingle:
+		output["name"] = source_doctype
+	return output
+
+
+def _assert_approved_frappe_child_identities(document: Mapping[str, Any]) -> None:
+	"""Prevent a source child hash from taking over another target parent."""
+
+	parent_doctype = str(document["doctype"])
+	parent_name = str(document["name"])
+	for field in frappe.get_meta(parent_doctype).get_table_fields():
+		children = document.get(field.fieldname)
+		if not isinstance(children, list):
+			continue
+		names = sorted(
+			{str(row["name"]) for row in children if isinstance(row, Mapping) and row.get("name")}
+		)
+		if not names:
+			continue
+		for chunk in _chunks(names, 500):
+			for row in frappe.get_all(
+				field.options,
+				filters={"name": ["in", chunk]},
+				fields=["name", "parent", "parenttype", "parentfield"],
+				limit_page_length=0,
+			):
+				if (row.parent, row.parenttype, row.parentfield) != (
+					parent_name,
+					parent_doctype,
+					field.fieldname,
+				):
+					raise MigrationError(
+						f"Approved Frappe child identity collision in {field.options}: {row.name}"
+					)
+
+
+def _run_approved_frappe_data(
+	plan: MigrationPlan,
+	source: F15SourceBridge,
+	target: FrappeBulkTarget,
+	*,
+	dry_run: bool,
+	batch_size: int,
+) -> dict[str, Any]:
+	"""Load the owner-approved useful Frappe data as an idempotent phase."""
+
+	order = {doctype: index for index, doctype in enumerate(APPROVED_FRAPPE_DATA_ORDER)}
+	last_order = -1
+	counts: dict[str, int] = {}
+	child_counts: dict[str, int] = {}
+	skipped: dict[str, int] = {}
+	processed = 0
+	documents: list[dict[str, Any]] = []
+
+	for source_document in source.iter_approved_frappe_documents():
+		doctype = str(source_document.get("doctype") or "")
+		position = order.get(doctype)
+		if position is None:
+			raise MigrationError(f"Source returned unapproved Frappe DocType {doctype!r}")
+		if position < last_order:
+			raise MigrationError("Approved Frappe source order is not deterministic")
+		last_order = position
+		document = _prepare_approved_frappe_document(source_document, plan)
+		if document is None:
+			skipped[doctype] = skipped.get(doctype, 0) + 1
+			continue
+		documents.append(document)
+		counts[doctype] = counts.get(doctype, 0) + 1
+		for value in document.values():
+			if not isinstance(value, list):
+				continue
+			for row in value:
+				child_doctype = row.get("doctype") if isinstance(row, dict) else None
+				if child_doctype:
+					child_counts[child_doctype] = child_counts.get(child_doctype, 0) + 1
+		processed += 1
+
+	default_value_reconciliation = _reconcile_approved_default_values(
+		documents, dry_run=dry_run
+	)
+	user_unique_value_reconciliation = _reconcile_approved_user_unique_values(
+		documents, dry_run=dry_run
+	)
+	current_doctype = None
+	batch: list[dict[str, Any]] = []
+
+	def flush() -> None:
+		nonlocal batch
+		if batch and not dry_run:
+			target.upsert_batch(str(batch[0]["doctype"]), batch)
+		batch = []
+
+	for document in documents:
+		doctype = str(document["doctype"])
+		if current_doctype != doctype:
+			flush()
+			current_doctype = doctype
+		_assert_approved_frappe_child_identities(document)
+		batch.append(document)
+		if len(batch) >= batch_size:
+			flush()
+	flush()
+	if not dry_run:
+		frappe.db.commit()
+		frappe.clear_cache()
+	return {
+		"status": "Dry Run" if dry_run else "Loaded",
+		"processed": processed,
+		"processed_with_children": processed + sum(child_counts.values()),
+		"skipped_unavailable_targets": sum(skipped.values()),
+		"doctypes": counts,
+		"child_doctypes": child_counts,
+		"skipped_doctypes": skipped,
+		"unavailable_in_frappe_16": list(APPROVED_FRAPPE_UNAVAILABLE_IN_F16),
+		"default_value_reconciliation": default_value_reconciliation,
+		"user_unique_value_reconciliation": user_unique_value_reconciliation,
+	}
+
+
+def _iter_approved_document_tree(
+	document: Mapping[str, Any],
+) -> Iterable[Mapping[str, Any]]:
+	yield document
+	for value in document.values():
+		if not isinstance(value, list):
+			continue
+		for row in value:
+			if isinstance(row, Mapping) and row.get("doctype"):
+				yield from _iter_approved_document_tree(row)
+
+
+def _approved_default_value_semantics(
+	documents: Iterable[Mapping[str, Any]],
+) -> dict[tuple[str, str, str], set[str]]:
+	"""Index defaults by their logical key, not their random row identity."""
+
+	expected: dict[tuple[str, str, str], set[str]] = {}
+	for document in documents:
+		for row in _iter_approved_document_tree(document):
+			if row.get("doctype") != "DefaultValue":
+				continue
+			name = str(row.get("name") or "")
+			key = tuple(
+				str(row.get(fieldname) or "")
+				for fieldname in ("parent", "parenttype", "defkey")
 			)
+			if not name or not all(key):
+				raise MigrationError(
+					"Approved Frappe DefaultValue is missing its name or semantic key"
+				)
+			expected.setdefault(key, set()).add(name)
+	return expected
+
+
+def _approved_default_value_collisions(
+	expected: Mapping[tuple[str, str, str], set[str]],
+) -> list[dict[str, str]]:
+	"""Return target defaults that shadow a source default under another name."""
+
+	collisions: list[dict[str, str]] = []
+	for (parent, parenttype, defkey), expected_names in sorted(expected.items()):
+		actual_names = set(
+			frappe.get_all(
+				"DefaultValue",
+				filters={
+					"parent": parent,
+					"parenttype": parenttype,
+					"defkey": defkey,
+				},
+				pluck="name",
+				limit_page_length=0,
+			)
+		)
+		for name in sorted(actual_names - set(expected_names)):
+			collisions.append(
+				{
+					"name": name,
+					"parent": parent,
+					"parenttype": parenttype,
+					"defkey": defkey,
+				}
+			)
+	return collisions
+
+
+def _reconcile_approved_default_values(
+	documents: Iterable[Mapping[str, Any]], *, dry_run: bool
+) -> dict[str, Any]:
+	"""Remove fresh-site defaults that collide with the authoritative source set."""
+
+	expected = _approved_default_value_semantics(documents)
+	collisions = _approved_default_value_collisions(expected)
+	if not dry_run:
+		for names in _chunks([row["name"] for row in collisions], 500):
+			frappe.db.delete("DefaultValue", {"name": ["in", names]})
+	return {
+		"status": "Dry Run" if dry_run else "Reconciled",
+		"semantic_keys": len(expected),
+		"source_rows": sum(len(names) for names in expected.values()),
+		"target_only_collisions": len(collisions),
+		"removed_target_only_collisions": 0 if dry_run else len(collisions),
+	}
+
+
+def _reconcile_approved_user_unique_values(
+	documents: Iterable[dict[str, Any]], *, dry_run: bool
+) -> dict[str, Any]:
+	"""Preserve both User identities when optional login aliases collide.
+
+	The ERP clone and the MRP source can contain separate User records for the
+	same person. ``User.name``/email is the authoritative identity referenced by
+	historical documents, while username, mobile number, and API key are optional
+	unique login aliases. A target-only identity must not be overwritten or
+	merged merely because one of those aliases matches. Keep the existing ERP
+	alias and clear the conflicting alias on the migrated source identity.
+	"""
+
+	by_field: dict[str, int] = {}
+	preserved_target_users: set[str] = set()
+	source_users: set[str] = set()
+	for document in documents:
+		if document.get("doctype") != "User" or not document.get("name"):
+			continue
+		source_name = str(document["name"])
+		source_users.add(source_name)
+		for fieldname in APPROVED_USER_OPTIONAL_UNIQUE_FIELDS:
+			value = document.get(fieldname)
+			if value in (None, ""):
+				continue
+			collisions = frappe.get_all(
+				"User",
+				filters={fieldname: value, "name": ["!=", source_name]},
+				pluck="name",
+				limit_page_length=0,
+			)
+			if not collisions:
+				continue
+			# MariaDB permits multiple NULL values in a unique index. Use NULL,
+			# not a fabricated replacement alias, so the migration does not create
+			# a credential the source never owned.
+			document[fieldname] = None
+			by_field[fieldname] = by_field.get(fieldname, 0) + 1
+			preserved_target_users.update(str(name) for name in collisions)
+
+	return {
+		"status": "Dry Run" if dry_run else "Reconciled",
+		"source_users": len(source_users),
+		"conflicting_optional_values": sum(by_field.values()),
+		"cleared_source_aliases": sum(by_field.values()),
+		"preserved_target_users": len(preserved_target_users),
+		"by_field": dict(sorted(by_field.items())),
+	}
+
+
+def _standard_item_attribute_value_pair_inventory() -> dict[str, Any]:
+	"""Return the standard Item attribute/value domain used by migrated Items.
+
+	ERPNext stores ``Item Variant Attribute.attribute_value`` as Data rather than
+	a Link.  The legacy site therefore may contain a physical Item row whose
+	attribute/value pair is not represented by the independently sampled
+	``Item Attribute Value`` child table.  Link closure cannot discover this
+	relationship, so migration verifies the pair explicitly.
+	"""
+
+	rows = frappe.db.sql(
+		"""
+		SELECT child.attribute, child.attribute_value, allowed.name
+		FROM (
+			SELECT DISTINCT variant.attribute, variant.attribute_value
+			FROM `tabItem Variant Attribute` variant
+			INNER JOIN `tabItem` item ON item.name=variant.parent
+			WHERE variant.parenttype='Item'
+				AND variant.parentfield='attributes'
+				AND COALESCE(variant.attribute, '')<>''
+				AND COALESCE(variant.attribute_value, '')<>''
+		) child
+		LEFT JOIN `tabItem Attribute Value` allowed
+			ON allowed.parent=child.attribute
+			AND allowed.parenttype='Item Attribute'
+			AND allowed.parentfield='item_attribute_values'
+			AND allowed.attribute_value=child.attribute_value
+		ORDER BY child.attribute, child.attribute_value
+		""",
+	)
+	missing = [
+		(str(attribute), str(value))
+		for attribute, value, allowed_name in rows
+		if not allowed_name
+	]
+	return {
+		"required_pairs": len(rows),
+		"present_pairs": len(rows) - len(missing),
+		"missing_pairs": missing,
+	}
+
+
+def _derived_item_attribute_value_name(attribute: str, value: str) -> str:
+	payload = f"{attribute}\0{value}".encode("utf-8")
+	return "yrp-iav-" + hashlib.sha256(payload).hexdigest()[:32]
+
+
+def _ensure_standard_item_attribute_value_pairs() -> dict[str, Any]:
+	"""Materialize every Data-encoded Item variant pair in ERPNext's domain.
+
+	These are deterministic compatibility child rows, not repairs to previously
+	migrated business documents.  The phase runs as part of the original sample
+	or full migration after Items and source attribute values have been written.
+	"""
+
+	inventory = _standard_item_attribute_value_pair_inventory()
+	missing = inventory["missing_pairs"]
+	if not missing:
+		return {
+			"status": "Pass",
+			**inventory,
+			"added_pairs": 0,
+		}
+
+	max_indexes = {
+		str(parent): int(max_index or 0)
+		for parent, max_index in frappe.db.sql(
+			"SELECT parent, MAX(idx) FROM `tabItem Attribute Value` "
+			"WHERE parenttype='Item Attribute' "
+			"AND parentfield='item_attribute_values' GROUP BY parent"
+		)
+	}
+	now = now_datetime()
+	rows = []
+	for attribute, value in missing:
+		if not frappe.db.exists("Item Attribute", attribute):
+			raise MigrationError(
+				f"Item variant attribute domain references missing Item Attribute {attribute}"
+			)
+		name = _derived_item_attribute_value_name(attribute, value)
+		existing = frappe.db.get_value(
+			"Item Attribute Value",
+			name,
+			["parent", "attribute_value"],
+			as_dict=True,
+		)
+		if existing and (
+			str(existing.parent or "") != attribute
+			or str(existing.attribute_value or "") != value
+		):
+			raise MigrationError(
+				f"Derived Item Attribute Value identity collision for {name}"
+			)
+		max_indexes[attribute] = max_indexes.get(attribute, 0) + 1
+		rows.append(
+			{
+				"name": name,
+				"parent": attribute,
+				"parenttype": "Item Attribute",
+				"parentfield": "item_attribute_values",
+				"idx": max_indexes[attribute],
+				"attribute_value": value,
+				"abbr": value,
+				"owner": "Administrator",
+				"creation": now,
+				"modified": now,
+				"modified_by": "Administrator",
+				"docstatus": 0,
+			}
+		)
+	FrappeBulkTarget()._bulk_upsert("Item Attribute Value", rows)
+	frappe.db.commit()
+	verified = _standard_item_attribute_value_pair_inventory()
+	if verified["missing_pairs"]:
+		raise MigrationError(
+			"Item Attribute Value dependency finalization left missing pairs: "
+			+ "; ".join(
+				f"{attribute}={value}"
+				for attribute, value in verified["missing_pairs"][:20]
+			)
+		)
+	return {
+		"status": "Pass",
+		**verified,
+		"added_pairs": len(rows),
+	}
+
+
+def _finalize_target_setup_state() -> dict[str, Any]:
+	"""Mark the migrated site usable after its configured source users are loaded."""
+
+	if not frappe.db.exists(
+		"User",
+		{
+			"user_type": "System User",
+			"name": ["not in", ["Administrator", "Guest"]],
+		},
+	):
+		raise MigrationError(
+			"Refusing to finish setup before a non-administrator source user exists"
+		)
+	presets = _ensure_erpnext_preset_masters()
+	rows = frappe.get_all(
+		"Installed Application",
+		filters={"app_name": ["in", list(SETUP_WIZARD_APPS)]},
+		fields=["name", "app_name"],
+		limit_page_length=0,
+	)
+	by_app = {str(row.app_name): str(row.name) for row in rows}
+	missing = sorted(set(SETUP_WIZARD_APPS) - set(by_app))
+	if missing:
+		raise MigrationError(
+			"Target Installed Applications is missing setup rows: " + ", ".join(missing)
+		)
+	# During app installation this initializer deliberately waits for migrated
+	# Size/Stage/Pack masters.  Full migration is the first reliable post-load
+	# boundary at which the Production Order contract can be completed.
+	from essdee_yrp.sd_yrp_sync import validate_yrp_settings_for_production_order
+	from essdee_yrp.setup import ensure_yrp_production_order_settings
+
+	item_attribute_value_dependencies = (
+		_ensure_standard_item_attribute_value_pairs()
+	)
+	production_order_settings_changed = ensure_yrp_production_order_settings()
+	validate_yrp_settings_for_production_order()
+	for app_name in SETUP_WIZARD_APPS:
+		frappe.db.set_value(
+			"Installed Application",
+			by_app[app_name],
+			{"has_setup_wizard": 1, "is_setup_complete": 1},
+			update_modified=False,
+		)
+	from frappe.desk.page.setup_wizard.setup_wizard import disable_future_access
+
+	# Use Frappe's own post-wizard finalizer so the Desk home route and
+	# onboarding state are updated together with System Settings.
+	disable_future_access()
+	frappe.db.set_single_value("System Settings", "default_app", DEFAULT_DESK_APP)
+	frappe.db.set_default("setup_complete", 1)
+	frappe.clear_cache()
+	result = _verify_target_setup_state()
+	if result["failures"]:
+		raise MigrationError(
+			"Target setup finalization failed:\n" + "\n".join(result["failures"])
+		)
+	result["erpnext_presets"] = presets
+	result["production_order_settings"] = {
+		"status": "Configured",
+		"changed": bool(production_order_settings_changed),
+	}
+	result["item_attribute_value_dependencies"] = (
+		item_attribute_value_dependencies
+	)
+	return result
+
+
+def _erpnext_preset_inventory() -> dict[str, Any]:
+	counts = {
+		doctype: int(frappe.db.count(doctype))
+		for doctype in ERPNEXT_PRESET_DOCTYPES
+	}
+	missing = [doctype for doctype, count in counts.items() if not count]
+	if not frappe.db.exists("Warehouse Type", "Transit"):
+		missing.append("Warehouse Type:Transit")
+	return {
+		"counts": counts,
+		"missing": missing,
+		"status": "Pass" if not missing else "Failed",
+	}
+
+
+def _ensure_erpnext_preset_masters() -> dict[str, Any]:
+	"""Install ERPNext's idempotent country presets before bypassing its wizard."""
+
+	country = frappe.db.get_single_value("System Settings", "country")
+	if not country:
+		raise MigrationError(
+			"System Settings.country is required before ERPNext presets are installed"
+		)
+	before = _erpnext_preset_inventory()
+	installed = bool(before["missing"])
+	if installed:
+		from erpnext.setup.setup_wizard.operations.install_fixtures import install
+
+		install(country=str(country))
+		frappe.clear_cache()
+	after = _erpnext_preset_inventory()
+	if after["missing"]:
+		raise MigrationError(
+			"ERPNext preset installation is incomplete: " + ", ".join(after["missing"])
+		)
+	return {
+		"status": "Pass",
+		"country": str(country),
+		"installed": installed,
+		"counts": after["counts"],
+	}
+
+
+def _verify_target_setup_state() -> dict[str, Any]:
+	rows = frappe.get_all(
+		"Installed Application",
+		filters={"app_name": ["in", list(SETUP_WIZARD_APPS)]},
+		fields=["app_name", "has_setup_wizard", "is_setup_complete"],
+		limit_page_length=0,
+	)
+	by_app = {str(row.app_name): row for row in rows}
+	failures = []
+	for app_name in SETUP_WIZARD_APPS:
+		row = by_app.get(app_name)
+		if not row:
+			failures.append(f"Missing Installed Application setup row for {app_name}")
+		elif not cint(row.has_setup_wizard) or not cint(row.is_setup_complete):
+			failures.append(f"Incomplete Installed Application setup row for {app_name}")
+	if not cint(frappe.db.get_single_value("System Settings", "setup_complete")):
+		failures.append("System Settings.setup_complete is not enabled")
+	default_app = frappe.db.get_single_value("System Settings", "default_app")
+	if default_app != DEFAULT_DESK_APP:
+		failures.append(
+			f"System Settings.default_app is {default_app!r}; expected {DEFAULT_DESK_APP!r}"
+		)
+	if not cint(frappe.db.get_default("setup_complete")):
+		failures.append("The global setup_complete default is not enabled")
+	home_page = frappe.db.get_default("desktop:home_page")
+	if home_page != "workspace":
+		failures.append(
+			f"The desktop home page is {home_page!r}; expected 'workspace'"
+		)
+	presets = _erpnext_preset_inventory()
+	if presets["missing"]:
+		failures.append(
+			"ERPNext preset masters are incomplete: " + ", ".join(presets["missing"])
+		)
+	return {
+		"status": "Pass" if not failures else "Failed",
+		"setup_wizard_apps": list(SETUP_WIZARD_APPS),
+		"erpnext_presets": presets,
+		"failures": failures,
+	}
+
+
+def _verify_approved_frappe_data(
+	plan: MigrationPlan, source: F15SourceBridge, *, batch_size: int = 250
+) -> dict[str, Any]:
+	batch: list[dict[str, Any]] = []
+	counts: dict[str, int] = {}
+	skipped: dict[str, int] = {}
+	verified_documents = 0
+	verified_values = 0
+	skipped_password_values = 0
+	verified_password_values = 0
+	failures: list[str] = []
+	documents: list[dict[str, Any]] = []
+	caches: dict[str, dict[str, Any]] = {
+		"columns_cache": {},
+		"fieldtypes_cache": {},
+		"numeric_scales_cache": {},
+	}
+
+	def flush() -> None:
+		nonlocal batch, verified_documents, verified_values, skipped_password_values
+		if not batch:
+			return
+		result = _verify_transformed_value_batch(batch, plan, **caches)
+		verified_documents += result["documents"]
+		verified_values += result["values"]
+		skipped_password_values += result["skipped_password_values"]
+		failures.extend(result["failures"][: max(0, 100 - len(failures))])
+		batch = []
+
+	for source_document in source.iter_approved_frappe_documents():
+		doctype = str(source_document.get("doctype") or "")
+		document = _prepare_approved_frappe_document(source_document, plan)
+		if document is None:
+			skipped[doctype] = skipped.get(doctype, 0) + 1
+			continue
+		counts[doctype] = counts.get(doctype, 0) + 1
+		documents.append(document)
+
+	user_unique_value_reconciliation = _reconcile_approved_user_unique_values(
+		documents, dry_run=True
+	)
+	for document in documents:
+		doctype = str(document.get("doctype") or "")
+		batch.append(document)
+		for fieldname, expected in (document.get("__migration_passwords") or {}).items():
+			try:
+				actual = get_decrypted_password(
+					doctype, document["name"], fieldname, raise_exception=False
+				)
+			except Exception:
+				actual = None
+			verified_password_values += 1
+			if actual is None or not compare_digest(
+				str(actual).encode(), str(expected).encode()
+			):
+				failures.append(
+					f"Approved Frappe credential mismatch: {doctype} {document['name']}.{fieldname}"
+				)
+		if len(batch) >= batch_size:
+			flush()
+		if failures:
+			break
+	flush()
+	default_value_semantics = _reconcile_approved_default_values(
+		documents, dry_run=True
+	)
+	if default_value_semantics["target_only_collisions"]:
+		failures.append(
+			"Approved Frappe defaults contain "
+			f"{default_value_semantics['target_only_collisions']} target-only semantic collisions"
+		)
+	default_value_semantics["status"] = (
+		"Pass"
+		if not default_value_semantics["target_only_collisions"]
+		else "Failed"
+	)
+	return {
+		"status": "Pass" if not failures else "Failed",
+		"source_parent_records": sum(counts.values()),
+		"verified_parent_and_child_documents": verified_documents,
+		"verified_field_values": verified_values,
+		"skipped_password_values": skipped_password_values,
+		"verified_password_values": verified_password_values,
+		"doctypes": counts,
+		"skipped_unavailable_targets": skipped,
+		"unavailable_in_frappe_16": list(APPROVED_FRAPPE_UNAVAILABLE_IN_F16),
+		"default_value_semantics": default_value_semantics,
+		"user_unique_value_reconciliation": user_unique_value_reconciliation,
+		"failures": failures,
+	}
 
 
 def _assert_supporting_child_ownership(document, doctype):
@@ -2321,7 +3374,11 @@ def _transform_supporting_document(
 	columns = set() if meta.issingle else set(frappe.db.get_table_columns(target_doctype))
 	output: dict[str, Any] = {"doctype": target_doctype}
 	table_fields = {field.fieldname for field in meta.fields if field.fieldtype in TABLE_FIELD_TYPES}
-	known = columns | table_fields | {"doctype", "__migration_passwords"}
+	meta_fields = {field.fieldname for field in meta.fields if field.fieldname}
+	known = columns | table_fields | set(SYSTEM_FIELDS) | {"doctype", "__migration_passwords"}
+	if meta.issingle:
+		# Singles live in tabSingles rather than physical per-DocType columns.
+		known.update(meta_fields)
 	missing = sorted(key for key, value in document.items()
 		if key not in known and value not in (None, "", 0, False, [], {}))
 	if missing:
@@ -2874,9 +3931,13 @@ def _flush_batch(
 	checkpoint: dict[str, Any],
 	dry_run: bool,
 ) -> int:
+	target_documents = [target_doc for _source, target_doc in batch]
+	if source_doctype in {"Item", "Item Variant"}:
+		target_documents = _prepare_item_migration_documents(
+			source_doctype, target_documents
+		)
 	if dry_run:
 		return len(batch)
-	target_documents = [target_doc for _source, target_doc in batch]
 	if source_doctype == "Purchase Invoice":
 		target_documents = _prepare_purchase_invoice_migration_documents(target_documents)
 	target.upsert_batch(target_doctype, target_documents)
@@ -2893,6 +3954,103 @@ def _flush_batch(
 	)
 	frappe.db.commit()
 	return len(batch)
+
+
+def _prepare_item_migration_documents(
+	source_doctype: str,
+	documents: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+	"""Merge source catalog structure without overwriting unrelated ERP fields."""
+
+	names = [str(document.get("name") or "") for document in documents]
+	existing_rows = frappe.get_all(
+		"Item",
+		filters={"name": ["in", names]},
+		fields=["name", "has_variants", "variant_of", "variant_based_on"],
+		limit_page_length=0,
+	)
+	existing_by_name = {str(row.name): row for row in existing_rows}
+	prepared = []
+	for document in documents:
+		name = str(document.get("name") or "")
+		existing = existing_by_name.get(name)
+		if not existing:
+			prepared.append(document)
+			continue
+		desired_role = _item_structural_role(document)
+		existing_role = _item_structural_role(existing)
+		if (
+			source_doctype == "Item Variant"
+			and desired_role == "standalone"
+			and existing_role == "template"
+		):
+			# Five historical catalogs contain a self-named, attribute-less Item
+			# Variant beside a real attributed parent Item.  The parent/template is
+			# structurally authoritative: loading the legacy self-variant later must
+			# not turn it back into a standalone Item or delete its attribute rows.
+			# Preserve only the optional physical-variant compatibility values that
+			# do not change the native Item role.
+			prepared.append(
+				{
+					"doctype": "Item",
+					"name": name,
+					**{
+						key: deepcopy(document[key])
+						for key in ("item_tuple_attribute", "sync_with_erp")
+						if key in document
+					},
+				}
+			)
+			continue
+		role_changed = desired_role != existing_role or (
+			desired_role == "variant"
+			and str(document.get("variant_of") or "")
+			!= str(existing.variant_of or "")
+		)
+		if role_changed and frappe.db.exists(
+			"Stock Ledger Entry", {"item_code": name, "is_cancelled": 0}
+		):
+			raise MigrationError(
+				f"Cannot convert existing ERP Item {name} from {existing_role} "
+				f"to {desired_role}: it has ERPNext stock history"
+			)
+
+		if source_doctype == "Item":
+			fields = {
+				"has_variants",
+				"variant_of",
+				"variant_based_on",
+				"attributes",
+				"primary_attribute",
+				"dependent_attribute",
+				"dependent_attribute_mapping",
+				"item_hash_value",
+			}
+		else:
+			fields = {
+				"has_variants",
+				"variant_of",
+				"variant_based_on",
+				"attributes",
+				"item_tuple_attribute",
+				"sync_with_erp",
+			}
+		prepared.append(
+			{
+				"doctype": "Item",
+				"name": name,
+				**{key: deepcopy(document[key]) for key in fields if key in document},
+			}
+		)
+	return prepared
+
+
+def _item_structural_role(document: Mapping[str, Any]) -> str:
+	if int(document.get("has_variants") or 0):
+		return "template"
+	if document.get("variant_of"):
+		return "variant"
+	return "standalone"
 
 
 def _prepare_purchase_invoice_migration_documents(
@@ -2944,9 +4102,12 @@ def _prepare_purchase_invoice_migration_documents(
 
 def _validate_live_target_metadata(plan: MigrationPlan) -> None:
 	missing = []
-	for target_doctype in sorted({spec.target for spec in plan.specs.values()}):
+	for target_doctype in _migration_physical_target_doctypes(plan):
 		if not frappe.db.exists("DocType", target_doctype):
 			missing.append(f"DocType {target_doctype}")
+			continue
+		if target_doctype not in plan.target_schemas:
+			missing.append(f"DocType schema {target_doctype}")
 			continue
 		meta = frappe.get_meta(target_doctype)
 		columns = set() if meta.issingle else set(frappe.db.get_table_columns(target_doctype))
@@ -2959,8 +4120,11 @@ def _validate_live_target_metadata(plan: MigrationPlan) -> None:
 			if not field.get("fieldname") or field.get("fieldtype") in NO_COLUMN_FIELD_TYPES:
 				continue
 			live_field = meta.get_field(field["fieldname"])
+			is_virtual = bool(cint(field.get("is_virtual")))
 			if not live_field or live_field.fieldtype != field.get("fieldtype"):
 				missing.append(f"{target_doctype}.{field['fieldname']} (runtime metadata)")
+			elif bool(cint(live_field.is_virtual)) != is_virtual:
+				missing.append(f"{target_doctype}.{field['fieldname']} (runtime virtual metadata)")
 			elif field.get("fieldtype") in TABLE_FIELD_TYPES | {"Link", "Dynamic Link"} and live_field.options != field.get("options"):
 				missing.append(f"{target_doctype}.{field['fieldname']} (runtime options)")
 			if field.get("precision") not in (None, "") and field["fieldname"] in scales:
@@ -2968,6 +4132,7 @@ def _validate_live_target_metadata(plan: MigrationPlan) -> None:
 					missing.append(f"{target_doctype}.{field['fieldname']} (physical numeric precision)")
 			if (
 				not meta.issingle
+				and not is_virtual
 				and field.get("fieldname")
 				and field.get("fieldtype") not in NO_COLUMN_FIELD_TYPES | TABLE_FIELD_TYPES
 				and field["fieldname"] not in columns
@@ -3082,12 +4247,54 @@ def _derive_required_value(
 	reference_data: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> Any:
 	reference_data = reference_data or {}
-	if document.get("doctype") == 'YRP Item' and fieldname == "item_group":
+	if fieldname == "company":
+		# The commonized ERPNext masters and transactions require Company,
+		# whereas their Production API predecessors did not store one. This
+		# migration contract deliberately requires exactly one target Company,
+		# making that Company the only non-lossy deterministic value.
+		companies = frappe.get_all("Company", pluck="name", limit_page_length=2)
+		if len(companies) == 1:
+			return companies[0]
+	if fieldname == "currency":
+		# Production API Purchase Order did not store a currency. The fresh
+		# rehearsal/production target contract has exactly one Company, so its
+		# default currency is the only deterministic accounting value.
+		currencies = frappe.get_all(
+			"Company", pluck="default_currency", limit_page_length=2
+		)
+		if len(currencies) == 1:
+			return currencies[0]
+	if fieldname == "conversion_rate":
+		company = document.get("company")
+		currency = document.get("currency")
+		company_currency = (
+			frappe.db.get_value("Company", company, "default_currency")
+			if company
+			else None
+		)
+		if currency and company_currency and currency == company_currency:
+			return 1.0
+	if document.get("doctype") == 'Item' and fieldname in {"item_group", "stock_uom"}:
 		# Production API contains legacy Items created before Item Group became
 		# mandatory.  The live SD-YRP consumer already uses the root group for
 		# this exact compatibility case; apply the same deterministic mapping to
 		# the historical query migration without changing any nonblank value.
-		return _one_source_root_item_group(reference_data)
+		item_name = str(document.get("name") or "")
+		parent_item = reference_data.get("variant_to_item", {}).get(item_name)
+		lookup_name = str(parent_item or item_name)
+		if fieldname == "stock_uom":
+			source_uom = reference_data.get("item_defaults", {}).get(lookup_name)
+			if source_uom:
+				return source_uom
+			# Three reviewed source Items have a genuinely blank default UOM. All
+			# are non-stock purchase/service definitions, but ERPNext requires a
+			# Stock UOM even for that Item shape. Use the fresh target's explicit
+			# Stock Settings default rather than hard-coding or guessing by group.
+			return frappe.db.get_single_value("Stock Settings", "stock_uom")
+		return (
+			reference_data.get("item_groups", {}).get(lookup_name)
+			or _one_source_root_item_group(reference_data)
+		)
 	if fieldname == "received_type":
 		# Use the source Stock Settings value. Legacy rows often omitted the
 		# explicit bucket; nonblank rejection/mistake types pass through untouched.
@@ -3101,27 +4308,40 @@ def _derive_required_value(
 		return reference_data.get("cut_panel_from_warehouse", {}).get(
 			str(document.get("name"))
 		)
-	if fieldname == "uom":
+	if fieldname in {"uom", "stock_uom"}:
+		if (
+			document.get("doctype") == "Purchase Order Item"
+			and fieldname == "stock_uom"
+			and document.get("uom")
+		):
+			return document.get("uom")
 		item_variant = (
 			document.get("item_variant")
+			or document.get("item_code")
 			or document.get("item")
 			or document.get("item_name")
 		)
 		if item_variant:
 			item = reference_data.get("variant_to_item", {}).get(str(item_variant))
-			if not item:
-				item = frappe.db.get_value('YRP Item Variant', item_variant, "item")
-			if not item and frappe.db.exists('YRP Item', item_variant):
-				item = item_variant
+			if not item and frappe.db.exists('Item', item_variant):
+				item = frappe.db.get_value('Item', item_variant, "variant_of") or item_variant
 			if item:
 				source_uom = reference_data.get("item_defaults", {}).get(str(item))
 				if source_uom:
 					return source_uom
-				return frappe.db.get_value('YRP Item', item, "default_unit_of_measure")
+				return frappe.db.get_value('Item', item, "stock_uom")
+	if document.get("doctype") == "Purchase Order Item" and fieldname == "item_name":
+		# A legacy PO row stores only the physical Item Variant identity. Standard
+		# Item uses that exact identity as both item_code and item_name during the
+		# commonization, so no display value is invented here.
+		return document.get("item_code")
 	if document.get("doctype") == 'YRP Purchase Invoice Item' and fieldname == "item_group":
 		item = reference_data.get("variant_to_item", {}).get(str(document.get("item")))
-		if not item:
-			item = frappe.db.get_value('YRP Item Variant', document.get("item"), "item")
+		if not item and frappe.db.exists('Item', document.get("item")):
+			item = (
+				frappe.db.get_value('Item', document.get("item"), "variant_of")
+				or document.get("item")
+			)
 		if item:
 			source_groups = reference_data.get("item_groups", {})
 			if str(item) in source_groups:
@@ -3130,7 +4350,7 @@ def _derive_required_value(
 				return source_groups[str(item)] or _one_source_root_item_group(
 					reference_data
 				)
-			return frappe.db.get_value('YRP Item', item, "item_group")
+			return frappe.db.get_value('Item', item, "item_group")
 	return None
 
 
@@ -3144,8 +4364,9 @@ def _is_valid_historical_required_blank(
 def _source_doctype_for_target(target_doctype: str) -> str:
 	"""Resolve a namespaced target identity back to its F15 source name."""
 
-	if target_doctype in SOURCE_DOCTYPE_BY_TARGET:
-		return SOURCE_DOCTYPE_BY_TARGET[target_doctype]
+	source_doctypes = SOURCE_DOCTYPES_BY_TARGET.get(target_doctype) or set()
+	if len(source_doctypes) == 1:
+		return next(iter(source_doctypes))
 	for prefix in ("SD YRP ", "YRP "):
 		if target_doctype.startswith(prefix):
 			return target_doctype.removeprefix(prefix)
@@ -3222,8 +4443,26 @@ def _verify_counts(
 	*,
 	source_broken_links: list[dict[str, Any]],
 ) -> dict[str, Any]:
+	try:
+		migration_report = json.loads(
+			frappe.db.get_value(
+				'SD YRP MRP Data Migration', migration_name, "report_json"
+			)
+			or "{}"
+		)
+	except (TypeError, ValueError) as exc:
+		raise MigrationError("Completed migration report JSON is invalid") from exc
+	if migration_report.get("mode") != "migrate":
+		raise MigrationError(
+			"Verification requires the completed migration report and ownership map"
+		)
+	business_reconciliation = migration_report.get(
+		"supporting_business_master_reconciliation"
+	) or {}
 	identity = _verify_source_identities(plan, source, migration_name)
 	values = _verify_source_values(plan, source, migration_name)
+	supporting_business_masters = _verify_supporting_business_master_identities(source)
+	approved_frappe_data = _verify_approved_frappe_data(plan, source)
 	from essdee_yrp.migration.preservation import run_auth, run_retired_archive, verify_orphan_values
 
 	orphan_values = verify_orphan_values(plan, source)
@@ -3231,7 +4470,16 @@ def _verify_counts(
 	retired = run_retired_archive(migration_name, source, verify=True)
 	from essdee_yrp.migration.framework_history import run_framework_history
 
-	framework_history = run_framework_history(plan, source, migration_name, verify=True)
+	framework_history = run_framework_history(
+		plan,
+		source,
+		migration_name,
+		verify=True,
+		preserved_business_masters=business_reconciliation.get(
+			"preserved_target_identities"
+		)
+		or {},
+	)
 	checkpoint = _load_checkpoint(migration_name)
 	missing_blob_names = set(
 		(checkpoint.get("files") or {}).get("missing_blob_names") or []
@@ -3240,6 +4488,7 @@ def _verify_counts(
 	series = _verify_series(source)
 	stock = _verify_stock_summary(source)
 	links = _verify_link_integrity(plan, source_broken_links)
+	setup_state = _verify_target_setup_state()
 	from essdee_yrp.purchase_invoice import (
 		verify_legacy_purchase_order_projection,
 		verify_legacy_work_order_physical_items,
@@ -3250,6 +4499,8 @@ def _verify_counts(
 	failures = [
 		*identity["failures"],
 		*values["failures"],
+		*supporting_business_masters["failures"],
+		*approved_frappe_data["failures"],
 		*orphan_values["failures"],
 		*auth["failures"],
 		*retired["failures"],
@@ -3259,6 +4510,7 @@ def _verify_counts(
 		*series["failures"],
 		*purchase_invoice_projection["failures"],
 		*purchase_order_projection["failures"],
+		*setup_state["failures"],
 	]
 	if stock["status"] != "Pass":
 		failures.append("Stock bucket digest or totals do not match")
@@ -3269,11 +4521,14 @@ def _verify_counts(
 	return {
 		"mode": "verify",
 		"status": "Verified",
-		"processed": identity["verified_parent_records"],
+		"processed": identity["verified_parent_records"]
+		+ approved_frappe_data["source_parent_records"],
 		"failed": 0,
 		"source_total_parent_records": int(source_status.get("total_parent_records") or 0),
 		"identities": identity,
 		"values": values,
+		"supporting_business_masters": supporting_business_masters,
+		"approved_frappe_data": approved_frappe_data,
 		"orphan_values": orphan_values,
 		"auth": auth,
 		"retired_tables": retired,
@@ -3288,6 +4543,71 @@ def _verify_counts(
 		"links": links,
 		"purchase_invoice_physical_projection": purchase_invoice_projection,
 		"purchase_order_dual_projection": purchase_order_projection,
+		"setup_state": setup_state,
+	}
+
+
+def _verify_supporting_business_master_identities(
+	source: F15SourceBridge,
+	*,
+	batch_size: int = 1000,
+) -> dict[str, Any]:
+	"""Require every source Address/Contact identity in the merged ERP target.
+
+	Existing target rows are intentionally authoritative and therefore are not
+	value-compared with the MRP source. Completeness is still strict: every exact
+	source identity must either have existed already or have been inserted.
+	"""
+
+	names_by_doctype: dict[str, set[str]] = {
+		doctype: set() for doctype in BUSINESS_SUPPORTING_MASTERS
+	}
+	for row in source.iter_related_business_masters():
+		doctype = str(row.get("doctype") or "")
+		name = str(row.get("name") or "")
+		if doctype not in names_by_doctype or not name:
+			raise MigrationError(
+				"Invalid related business-master identity from the source bridge"
+			)
+		names_by_doctype[doctype].add(name)
+
+	rows = []
+	failures = []
+	for doctype in sorted(BUSINESS_SUPPORTING_MASTERS):
+		source_names = names_by_doctype[doctype]
+		target_names: set[str] = set()
+		for chunk in _chunks(sorted(source_names), max(1, min(int(batch_size), 1000))):
+			target_names.update(
+				str(name)
+				for name in frappe.get_all(
+					doctype,
+					filters={"name": ["in", chunk]},
+					pluck="name",
+				)
+			)
+		target_identity_keys = {_database_identity_key(name) for name in target_names}
+		missing = sorted(
+			name
+			for name in source_names
+			if _database_identity_key(name) not in target_identity_keys
+		)
+		rows.append(
+			{
+				"doctype": doctype,
+				"source_identities": len(source_names),
+				"present_in_target": len(target_names),
+				"missing_in_target": len(missing),
+			}
+		)
+		if missing:
+			failures.append(
+				f"{doctype}: {len(missing)} source identities are missing in target "
+				f"({', '.join(missing[:10])})"
+			)
+	return {
+		"status": "Pass" if not failures else "Failed",
+		"doctypes": rows,
+		"failures": failures,
 	}
 
 
@@ -3332,6 +4652,9 @@ def _verify_source_values(
 			source_doctype, batch_size=effective_batch_size
 		):
 			target_document = transform_document(source_document, plan)
+			_apply_target_owned_configuration_boundary(
+				source_doctype, target_document
+			)
 			_resolve_and_validate_required_target_values(
 				target_document,
 				plan,
@@ -3348,6 +4671,11 @@ def _verify_source_values(
 			verified_parents += 1
 			if len(batch) < effective_batch_size:
 				continue
+			if source_doctype in {"Item", "Item Variant"}:
+				# The writer deliberately narrows same-named standard Item updates to
+				# YRP's structural fields. Verify that exact write boundary instead of
+				# incorrectly expecting unrelated ERPNext fields to be overwritten.
+				batch = _prepare_item_migration_documents(source_doctype, batch)
 			result = _verify_transformed_value_batch(
 				batch,
 				plan,
@@ -3370,6 +4698,8 @@ def _verify_source_values(
 				_update_progress(migration_name, verified_parents, 0, 0)
 				last_progress_update = verified_parents
 		if batch and not failures:
+			if source_doctype in {"Item", "Item Variant"}:
+				batch = _prepare_item_migration_documents(source_doctype, batch)
 			result = _verify_transformed_value_batch(
 				batch,
 				plan,
@@ -3536,7 +4866,7 @@ def _verify_transformed_value_batch(
 				name_chunk,
 				as_dict=True,
 			):
-				actual_by_name[str(row["name"])] = row
+				actual_by_name[_database_identity_key(row["name"])] = row
 
 		# Some reviewed post-transformers create new child rows that have no
 		# historical source name. The writer gives those rows an opaque generated
@@ -3582,7 +4912,7 @@ def _verify_transformed_value_batch(
 			verified_documents += 1
 			name = str(expected.get("name") or "")
 			if name:
-				actual = actual_by_name.get(name)
+				actual = actual_by_name.get(_database_identity_key(name))
 				identity = name
 			else:
 				position = (
@@ -3603,15 +4933,21 @@ def _verify_transformed_value_batch(
 					if expected_value not in (None, "", [], {}):
 						failures.append(f"Missing populated target column {doctype}.{fieldname}")
 					continue
-				exact_value = _same_migrated_value(
-					expected_value, actual.get(fieldname), fieldtypes.get(fieldname)
-				)
-				target_value = _same_migrated_value(
-					expected_value,
-					actual.get(fieldname),
-					fieldtypes.get(fieldname),
-					numeric_scale=numeric_scales.get(fieldname),
-				)
+				if fieldname == "name":
+					exact_value = target_value = (
+						_database_identity_key(expected_value)
+						== _database_identity_key(actual.get(fieldname))
+					)
+				else:
+					exact_value = _same_migrated_value(
+						expected_value, actual.get(fieldname), fieldtypes.get(fieldname)
+					)
+					target_value = _same_migrated_value(
+						expected_value,
+						actual.get(fieldname),
+						fieldtypes.get(fieldname),
+						numeric_scale=numeric_scales.get(fieldname),
+					)
 				if target_value and not exact_value:
 					normalized_numeric_values.append(f"{doctype} {identity}.{fieldname}")
 				elif not target_value:
@@ -3667,6 +5003,7 @@ def _collect_expected_value_rows(
 		for fieldname, value in document.items()
 		if fieldname not in table_fields
 		and fieldname not in {"doctype", "__migration_passwords"}
+		and fieldname not in VOLATILE_VERIFICATION_FIELDS.get(doctype, ())
 	}
 	if parent:
 		row.update(parent)
@@ -3728,6 +5065,12 @@ def _same_migrated_value(
 	if isinstance(actual, (date, datetime, time)):
 		actual = str(actual)
 	return str(expected) == str(actual)
+
+
+def _database_identity_key(value: Any) -> str:
+	"""Normalize a name according to MariaDB's case-insensitive DocType keys."""
+
+	return str(value or "").casefold()
 
 
 def _is_verified_attachment_url(
@@ -3793,15 +5136,20 @@ def _verify_source_identities(
 			if not names:
 				continue
 			for chunk in _chunks(list(dict.fromkeys(names)), 500):
-				found = set(
-					frappe.get_all(
+				found = {
+					_database_identity_key(name)
+					for name in frappe.get_all(
 						target_doctype,
 						filters={"name": ["in", chunk]},
 						pluck="name",
 						limit_page_length=0,
 					)
-				)
-				missing = [name for name in chunk if name not in found]
+				}
+				missing = [
+					name
+					for name in chunk
+					if _database_identity_key(name) not in found
+				]
 				if missing:
 					missing_counts[target_doctype] = (
 						missing_counts.get(target_doctype, 0) + len(missing)
@@ -3810,17 +5158,31 @@ def _verify_source_identities(
 						failures.append(f"Missing {target_doctype} {name}")
 		pending.clear()
 
+	def collect_batch(source_doctype: str, documents: list[dict[str, Any]]) -> None:
+		if source_doctype in {"Item", "Item Variant"}:
+			documents = _prepare_item_migration_documents(source_doctype, documents)
+		for document in documents:
+			_collect_document_identities(document, plan, pending, expected_counts)
+
 	for source_doctype in plan.parent_doctypes:
+		document_batch: list[dict[str, Any]] = []
 		for source_document in source.iter_documents(
 			source_doctype, batch_size=batch_size
 		):
 			target_document = transform_document(source_document, plan)
-			_collect_document_identities(target_document, plan, pending, expected_counts)
+			_apply_target_owned_configuration_boundary(
+				source_doctype, target_document
+			)
+			document_batch.append(target_document)
 			verified_parents += 1
-			if verified_parents % batch_size == 0:
+			if len(document_batch) >= batch_size:
+				collect_batch(source_doctype, document_batch)
+				document_batch = []
 				flush()
 			if verified_parents % PROGRESS_UPDATE_INTERVAL == 0:
 				_update_progress(migration_name, verified_parents, 0, len(failures))
+		if document_batch:
+			collect_batch(source_doctype, document_batch)
 		flush()
 
 	from essdee_yrp.migration.preservation import transform_orphan
@@ -3837,9 +5199,13 @@ def _verify_source_identities(
 		missing = missing_counts.get(target_doctype, 0)
 		generated = generated_allowances.get(target_doctype, 0)
 		target_only = max(0, target_count - expected_count - generated + missing)
-		if target_only:
+		preserved_target_owned, unexpected_target_only = (
+			_classify_target_only_identities(target_doctype, target_only)
+		)
+		if unexpected_target_only:
 			failures.append(
-				f"Unexpected target-only rows in {target_doctype}: {target_only}"
+				"Unexpected target-only rows in "
+				f"{target_doctype}: {unexpected_target_only}"
 			)
 		rows.append(
 			{
@@ -3847,9 +5213,15 @@ def _verify_source_identities(
 				"source_identity_count": expected_count,
 				"target_count": target_count,
 				"target_only_count": target_only,
+				"preserved_target_owned_count": preserved_target_owned,
+				"unexpected_target_only_count": unexpected_target_only,
 				"migration_generated_count": generated,
 				"missing_source_identities": missing,
-				"status": "Pass" if not missing and not target_only else "Failed",
+				"status": (
+					"Pass"
+					if not missing and not unexpected_target_only
+					else "Failed"
+				),
 			}
 		)
 	return {
@@ -3860,23 +5232,43 @@ def _verify_source_identities(
 	}
 
 
+def _classify_target_only_identities(
+	target_doctype: str, target_only: int
+) -> tuple[int, int]:
+	"""Split preserved ERP-owned rows from genuinely unexpected identities."""
+
+	target_only = max(0, int(target_only or 0))
+	if target_doctype in PRESERVED_TARGET_CHILD_DOCTYPES:
+		return target_only, 0
+	return 0, target_only
+
+
 def _migration_generated_identity_allowances() -> dict[str, int]:
 	"""Target-only rows that have a separate deterministic verification layer."""
-	if not frappe.db.exists("DocType", 'SD YRP Essdee Purchase Invoice Item'):
-		return {}
-	physical_rows = frappe.db.sql(
-		"""
-		SELECT COUNT(*)
-		FROM `tabYRP Purchase Invoice Item` item
-		INNER JOIN `tabYRP Purchase Invoice` invoice ON invoice.name = item.parent
-		WHERE item.parenttype = 'YRP Purchase Invoice'
-		  AND item.parentfield = 'items'
-		  AND invoice.against = 'YRP Work Order'
-		  AND invoice.essdee_rate_table_source = %s
-		""",
-		("migrated_v1",),
-	)[0][0]
-	return {'YRP Purchase Invoice Item': int(physical_rows or 0)}
+	allowances: dict[str, int] = {}
+	if frappe.db.exists("DocType", 'SD YRP Essdee Purchase Invoice Item'):
+		physical_rows = frappe.db.sql(
+			"""
+			SELECT COUNT(*)
+			FROM `tabYRP Purchase Invoice Item` item
+			INNER JOIN `tabYRP Purchase Invoice` invoice ON invoice.name = item.parent
+			WHERE item.parenttype = 'YRP Purchase Invoice'
+			  AND item.parentfield = 'items'
+			  AND invoice.against = 'YRP Work Order'
+			  AND invoice.essdee_rate_table_source = %s
+			""",
+			("migrated_v1",),
+		)[0][0]
+		allowances['YRP Purchase Invoice Item'] = int(physical_rows or 0)
+	if frappe.db.exists("DocType", "Item Attribute Value"):
+		# These deterministic rows close Data-encoded standard Item variant pairs.
+		# Their semantic pair inventory is verified independently by target setup.
+		derived_values = frappe.db.sql(
+			"SELECT COUNT(*) FROM `tabItem Attribute Value` "
+			"WHERE `name` LIKE 'yrp-iav-%'"
+		)[0][0]
+		allowances["Item Attribute Value"] = int(derived_values or 0)
+	return allowances
 
 
 def _collect_document_identities(
@@ -4062,9 +5454,22 @@ def _verify_link_integrity(
 	broken_values = 0
 	audited_broken_values = 0
 	audited_exceptions: list[str] = []
-	for doctype in sorted({spec.target for spec in plan.specs.values()}):
+	parent_targets = tuple(
+		sorted(
+			{
+				str(spec.target)
+				for spec in plan.specs.values()
+				if not spec.is_child
+			}
+		)
+	)
+	for doctype in _migration_physical_target_doctypes(plan):
+		if doctype not in plan.target_schemas:
+			failures.append(f"Missing migration target schema for {doctype}")
+			continue
 		schema = plan.target_schemas[doctype]
 		meta = frappe.get_meta(doctype)
+		child_parenttypes = parent_targets if meta.istable else ()
 		fields = {
 			field.get("fieldname"): field
 			for field in schema.get("fields") or []
@@ -4082,6 +5487,7 @@ def _verify_link_integrity(
 					approved=approved_by_field.get(
 						(doctype, fieldname, str(field["options"])), {}
 					),
+					parenttypes=child_parenttypes,
 				)
 				if broken:
 					broken_values += broken["total"]
@@ -4102,6 +5508,7 @@ def _verify_link_integrity(
 					fieldname,
 					str(field["options"]),
 					is_single=bool(meta.issingle),
+					parenttypes=child_parenttypes,
 				)
 				if broken:
 					broken_values += broken[0]
@@ -4133,6 +5540,7 @@ def _broken_static_link_count(
 	*,
 	is_single: bool,
 	approved: Mapping[str, str] | None = None,
+	parenttypes: Iterable[str] = (),
 ) -> dict[str, Any] | None:
 	if not frappe.db.exists("DocType", link_doctype):
 		return {
@@ -4142,18 +5550,53 @@ def _broken_static_link_count(
 			"samples": [f"missing target DocType {link_doctype}"],
 		}
 	if is_single:
-		value = frappe.db.get_single_value(doctype, fieldname)
-		if value and not frappe.db.exists(link_doctype, value):
+		# Link integrity is a database audit. Never accept a process-local Single
+		# cache entry that predates an SQL migration write.
+		value = frappe.db.get_single_value(doctype, fieldname, cache=False)
+		link_meta = frappe.get_meta(link_doctype)
+		valid = str(value) == link_doctype if link_meta.issingle else frappe.db.exists(
+			link_doctype, value
+		)
+		if value and not valid:
 			return {"total": 1, "audited": 0, "unexpected": 1, "samples": [str(value)]}
 		return None
 	table = _quote_identifier("tab" + doctype)
 	field = _quote_identifier(fieldname)
+	parenttypes = tuple(parenttypes)
+	scope_sql = " AND source.parenttype IN %s" if parenttypes else ""
+	scope_params = (parenttypes,) if parenttypes else ()
+	link_meta = frappe.get_meta(link_doctype)
+	if link_meta.issingle:
+		rows = frappe.db.sql(
+			f"SELECT source.name, source.{field} FROM {table} source "
+			f"WHERE COALESCE(source.{field}, '')<>'' AND source.{field}<>%s{scope_sql}",
+			(link_doctype, *scope_params),
+		)
+		if not rows:
+			return None
+		approved = dict(approved or {})
+		audited_rows = {
+			str(name): str(value)
+			for name, value in rows
+			if str(approved.get(str(name))) == str(value)
+		}
+		return {
+			"total": len(rows),
+			"audited": len(audited_rows),
+			"unexpected": len(rows) - len(audited_rows),
+			"samples": [
+				f"{name}={value}"
+				for name, value in rows
+				if audited_rows.get(str(name)) != str(value)
+			][:10],
+		}
 	link_table = _quote_identifier("tab" + link_doctype)
 	count = int(
 		frappe.db.sql(
 			f"SELECT COUNT(*) FROM {table} source "
 			f"LEFT JOIN {link_table} linked ON linked.name=source.{field} "
-			f"WHERE COALESCE(source.{field}, '')<>'' AND linked.name IS NULL"
+			f"WHERE COALESCE(source.{field}, '')<>'' AND linked.name IS NULL{scope_sql}",
+			scope_params,
 		)[0][0]
 	)
 	if not count:
@@ -4167,8 +5610,8 @@ def _broken_static_link_count(
 			rows = frappe.db.sql(
 				f"SELECT source.name, source.{field} FROM {table} source "
 				f"LEFT JOIN {link_table} linked ON linked.name=source.{field} "
-				f"WHERE source.name IN ({placeholders}) AND linked.name IS NULL",
-				chunk,
+				f"WHERE source.name IN ({placeholders}) AND linked.name IS NULL{scope_sql}",
+				(*chunk, *scope_params),
 			)
 			for name, value in rows:
 				if str(approved.get(str(name))) == str(value):
@@ -4176,8 +5619,9 @@ def _broken_static_link_count(
 	samples = frappe.db.sql(
 		f"SELECT source.name, source.{field} FROM {table} source "
 		f"LEFT JOIN {link_table} linked ON linked.name=source.{field} "
-		f"WHERE COALESCE(source.{field}, '')<>'' AND linked.name IS NULL "
-		f"LIMIT {10 + len(audited_rows)}"
+		f"WHERE COALESCE(source.{field}, '')<>'' AND linked.name IS NULL{scope_sql} "
+		f"LIMIT {10 + len(audited_rows)}",
+		scope_params,
 	)
 	unexpected_samples = [
 		f"{name}={value}"
@@ -4198,23 +5642,36 @@ def _broken_dynamic_link_count(
 	controller_fieldname: str,
 	*,
 	is_single: bool,
+	parenttypes: Iterable[str] = (),
 ) -> tuple[int, list[str]] | None:
 	if is_single:
 		controller = frappe.db.get_single_value(doctype, controller_fieldname)
 		value = frappe.db.get_single_value(doctype, fieldname)
+		valid = False
+		if controller and frappe.db.exists("DocType", controller):
+			controller_meta = frappe.get_meta(controller)
+			valid = (
+				str(value) == str(controller)
+				if controller_meta.issingle
+				else bool(frappe.db.exists(controller, value))
+			)
 		if value and (
 			not controller
 			or not frappe.db.exists("DocType", controller)
-			or not frappe.db.exists(controller, value)
+			or not valid
 		):
 			return 1, [f"{controller}:{value}"]
 		return None
 	table = _quote_identifier("tab" + doctype)
 	field = _quote_identifier(fieldname)
 	controller_field = _quote_identifier(controller_fieldname)
+	parenttypes = tuple(parenttypes)
+	scope_sql = " AND source.parenttype IN %s" if parenttypes else ""
+	scope_params = (parenttypes,) if parenttypes else ()
 	controllers = frappe.db.sql(
 		f"SELECT DISTINCT source.{controller_field} FROM {table} source "
-		f"WHERE COALESCE(source.{field}, '')<>''"
+		f"WHERE COALESCE(source.{field}, '')<>''{scope_sql}",
+		scope_params,
 	)
 	total = 0
 	samples: list[str] = []
@@ -4223,12 +5680,26 @@ def _broken_dynamic_link_count(
 			count = int(
 				frappe.db.sql(
 					f"SELECT COUNT(*) FROM {table} source WHERE source.{controller_field}=%s "
-					f"AND COALESCE(source.{field}, '')<>''",
-					(controller,),
+					f"AND COALESCE(source.{field}, '')<>''{scope_sql}",
+					(controller, *scope_params),
 				)[0][0]
 			)
 			total += count
 			samples.append(f"missing DocType {controller} ({count})")
+			continue
+		controller_meta = frappe.get_meta(controller)
+		if controller_meta.issingle:
+			rows = frappe.db.sql(
+				f"SELECT source.name, source.{field} FROM {table} source "
+				f"WHERE source.{controller_field}=%s "
+				f"AND COALESCE(source.{field}, '')<>'' AND source.{field}<>%s{scope_sql}",
+				(controller, controller, *scope_params),
+			)
+			if rows:
+				total += len(rows)
+				samples.extend(
+					f"{controller}:{name}={value}" for name, value in rows[:10]
+				)
 			continue
 		link_table = _quote_identifier("tab" + str(controller))
 		count = int(
@@ -4236,8 +5707,8 @@ def _broken_dynamic_link_count(
 				f"SELECT COUNT(*) FROM {table} source "
 				f"LEFT JOIN {link_table} linked ON linked.name=source.{field} "
 				f"WHERE source.{controller_field}=%s AND COALESCE(source.{field}, '')<>'' "
-				"AND linked.name IS NULL",
-				(controller,),
+				f"AND linked.name IS NULL{scope_sql}",
+				(controller, *scope_params),
 			)[0][0]
 		)
 		if not count:
@@ -4248,8 +5719,8 @@ def _broken_dynamic_link_count(
 				f"SELECT source.name, source.{field} FROM {table} source "
 				f"LEFT JOIN {link_table} linked ON linked.name=source.{field} "
 				f"WHERE source.{controller_field}=%s AND COALESCE(source.{field}, '')<>'' "
-				"AND linked.name IS NULL LIMIT 10",
-				(controller,),
+				f"AND linked.name IS NULL{scope_sql} LIMIT 10",
+				(controller, *scope_params),
 			)
 			samples.extend(f"{controller}:{name}={value}" for name, value in rows)
 	return (total, samples[:10]) if total else None

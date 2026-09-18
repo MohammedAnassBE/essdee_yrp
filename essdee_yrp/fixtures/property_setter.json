@@ -145,7 +145,7 @@
  },
  {
   "default_value": null,
-  "doc_type": "YRP Purchase Order",
+  "doc_type": "Purchase Order",
   "docstatus": 0,
   "doctype": "Property Setter",
   "doctype_or_field": "DocField",
@@ -153,15 +153,15 @@
   "is_system_generated": 1,
   "modified": "2026-07-29 18:57:00.971588",
   "module": null,
-  "name": "YRP Purchase Order-naming_series-options",
+  "name": "Purchase Order-naming_series-options",
   "property": "options",
   "property_type": "Text",
   "row_name": null,
-  "value": "YRP-PO-.YYYY.-"
+  "value": "PUR-ORD-.YYYY.-\nYRP-PO-.YYYY.-"
  },
  {
   "default_value": null,
-  "doc_type": "YRP Purchase Order",
+  "doc_type": "Purchase Order",
   "docstatus": 0,
   "doctype": "Property Setter",
   "doctype_or_field": "DocField",
@@ -169,11 +169,11 @@
   "is_system_generated": 1,
   "modified": "2026-07-29 18:57:00.978061",
   "module": null,
-  "name": "YRP Purchase Order-naming_series-default",
+  "name": "Purchase Order-naming_series-default",
   "property": "default",
   "property_type": "Text",
   "row_name": null,
-  "value": "YRP-PO-.YYYY.-"
+  "value": "PUR-ORD-.YYYY.-"
  },
  {
   "default_value": null,

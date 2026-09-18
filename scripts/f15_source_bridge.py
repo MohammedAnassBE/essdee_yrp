@@ -59,6 +59,74 @@ SUPPORTING_EXTERNAL_DOCTYPES = {
 	"User",
 	"Workflow State",
 }
+
+# Frappe records approved by the owner for active (not archive-only) migration.
+# Energy Point Settings and S3 Backup Settings existed in F15, but Frappe 16 no
+# longer provides either DocType; they therefore cannot be live routes.  Spine
+# data remains excluded independently of these selections.
+APPROVED_FRAPPE_DATA_ORDER = (
+	"Role",
+	"Address Template",
+	"Letter Head",
+	"Email Domain",
+	"Email Account",
+	"Module Profile",
+	"User",
+	"Custom DocPerm",
+	"Dashboard Settings",
+	"DefaultValue",
+	"Email Unsubscribe",
+	"List View Settings",
+	"Note",
+	"Notification Settings",
+	"Print Settings",
+	"System Settings",
+	"Website Settings",
+	"Workspace",
+)
+APPROVED_FRAPPE_CHILD_DOCTYPES = frozenset(
+	{
+		"Block Module",
+		"Has Role",
+		"IMAP Folder",
+		"Note Seen By",
+		"Notification Subscribed Document",
+		"DefaultValue",
+		"User Email",
+		"User Social Login",
+		"Top Bar Item",
+		"Website Route Redirect",
+		"Workspace Chart",
+		"Workspace Shortcut",
+		"Workspace Link",
+		"Workspace Quick List",
+		"Workspace Number Card",
+		"Workspace Custom Block",
+	}
+)
+APPROVED_FRAPPE_ARCHIVE_ONLY_DOCTYPES = (
+	# Frappe 16 moved these features to optional apps and has no target DocType.
+	# Their complete F15 Single rows (and matching __Auth rows) stay in the
+	# encrypted, byte-verified framework archive instead of being dropped.
+	"Energy Point Settings",
+	"S3 Backup Settings",
+)
+APPROVED_FRAPPE_ARCHIVE_PREFIX = "Approved Frappe Exact::"
+UNSAFE_SYSTEM_DEFAULT_KEYS = frozenset(
+	{
+		"enable_scheduler",
+		"installed_apps",
+		"is_first_startup",
+		"setup_complete",
+	}
+)
+REMOVED_FRAPPE_FIELDS = {
+	"List View Settings": frozenset({"total_fields"}),
+	"Notification Settings": frozenset(
+		{"enable_email_energy_point", "energy_points_system_notifications"}
+	),
+	"System Settings": frozenset({"allow_older_web_view_links", "setup_complete"}),
+}
 RETIRED_SOURCE_TABLES = (
 	# Historical Production API tables whose DocTypes were removed/renamed.
 	# Keep raw snapshots, not live operational rows: successor records can differ.
@@ -591,19 +659,82 @@ def _add_runtime_passwords(frappe, doctype, name, row):
 		row["__migration_passwords"] = passwords
 
 
-def export_doctype(frappe, schemas, doctype, batch_size, start_after=None, limit=None):
+def _emit_export_parent_rows(frappe, schemas, doctype, schema, rows):
+	"""Emit complete parent documents for an already selected row batch."""
+
+	if not rows:
+		return
+	by_name = {row["name"]: dict(row) for row in rows}
+	parent_names = list(by_name)
+	for table_field in _table_fields(schema):
+		child_doctype = table_field["options"]
+		child_schema = schemas.get(child_doctype)
+		if not child_schema:
+			raise RuntimeError(
+				f"{doctype}.{table_field['fieldname']} uses unversioned child {child_doctype}"
+			)
+		children = frappe.get_all(
+			child_doctype,
+			filters={
+				"parent": ["in", parent_names],
+				"parenttype": doctype,
+				"parentfield": table_field["fieldname"],
+			},
+			fields=_query_fields(frappe, child_doctype, child_schema),
+			order_by="parent asc, idx asc, name asc",
+			limit_page_length=0,
+		)
+		for child in children:
+			child = dict(child)
+			child["doctype"] = child_doctype
+			by_name[child["parent"]].setdefault(table_field["fieldname"], []).append(child)
+	for row in rows:
+		data = by_name[row["name"]]
+		data["doctype"] = doctype
+		for table_field in _table_fields(schema):
+			data.setdefault(table_field["fieldname"], [])
+		_add_passwords(frappe, doctype, row["name"], schema, data)
+		_write(data)
+
+
+def export_doctype(
+	frappe,
+	schemas,
+	doctype,
+	batch_size,
+	start_after=None,
+	limit=None,
+	names=None,
+):
 	if doctype not in schemas:
 		raise RuntimeError(f"{doctype} is not a version-controlled Production API DocType")
 	schema = schemas[doctype]
 	if schema.get("istable"):
 		raise RuntimeError(f"{doctype} is a child DocType and must be exported through its parent")
+	if names is not None and (start_after or limit is not None):
+		raise RuntimeError("Exact-name export cannot be combined with start_after/limit")
 	if schema.get("issingle"):
+		if names is not None and doctype not in set(names):
+			return
 		doc = frappe.get_single(doctype)
 		row = doc.as_dict(no_nulls=False)
 		row["doctype"] = doctype
 		row["name"] = doctype
 		_add_passwords(frappe, doctype, doctype, schema, row)
 		_write(row)
+		return
+	if names is not None:
+		requested = sorted({str(name) for name in names if name})
+		for offset in range(0, len(requested), batch_size):
+			chunk = requested[offset : offset + batch_size]
+			rows = frappe.get_all(
+				doctype,
+				filters={"name": ["in", chunk]},
+				fields=_query_fields(frappe, doctype, schema),
+				order_by="name asc",
+				limit_page_length=0,
+			)
+			_emit_export_parent_rows(frappe, schemas, doctype, schema, rows)
 		return
 
 	last_name = start_after or ""
@@ -622,40 +753,33 @@ def export_doctype(frappe, schemas, doctype, batch_size, start_after=None, limit
 		)
 		if not rows:
 			break
-		by_name = {row["name"]: dict(row) for row in rows}
-		parent_names = list(by_name)
-		for table_field in _table_fields(schema):
-			child_doctype = table_field["options"]
-			child_schema = schemas.get(child_doctype)
-			if not child_schema:
-				raise RuntimeError(
-					f"{doctype}.{table_field['fieldname']} uses unversioned child {child_doctype}"
-				)
-			children = frappe.get_all(
-				child_doctype,
-				filters={
-					"parent": ["in", parent_names],
-					"parenttype": doctype,
-					"parentfield": table_field["fieldname"],
-				},
-				fields=_query_fields(frappe, child_doctype, child_schema),
-				order_by="parent asc, idx asc, name asc",
-				limit_page_length=0,
-			)
-			for child in children:
-				child = dict(child)
-				child["doctype"] = child_doctype
-				by_name[child["parent"]].setdefault(table_field["fieldname"], []).append(child)
-		for row in rows:
-			data = by_name[row["name"]]
-			data["doctype"] = doctype
-			for table_field in _table_fields(schema):
-				data.setdefault(table_field["fieldname"], [])
-			_add_passwords(frappe, doctype, row["name"], schema, data)
-			_write(data)
+		_emit_export_parent_rows(frappe, schemas, doctype, schema, rows)
 		if remaining is not None:
 			remaining -= len(rows)
 		last_name = rows[-1]["name"]
+
+
+def emit_resolved_identities(frappe, schemas, doctype, names):
+	"""Resolve source identities, promoting child rows to their owning parents."""
+
+	if doctype not in schemas:
+		raise RuntimeError(f"Cannot resolve undeclared source DocType {doctype}")
+	schema = schemas[doctype]
+	requested = sorted({str(name) for name in names if name})
+	fields = ["name", "parent", "parenttype"] if schema.get("istable") else ["name"]
+	for offset in range(0, len(requested), 500):
+		rows = frappe.get_all(
+			doctype,
+			filters={"name": ["in", requested[offset : offset + 500]]},
+			fields=fields,
+			order_by="name asc",
+			limit_page_length=0,
+		)
+		for row in rows:
+			payload = {"source_doctype": doctype, "name": row.name}
+			if schema.get("istable"):
+				payload.update({"parent": row.parent, "parenttype": row.parenttype})
+			_write(payload)
 
 
 def audit_physical_field_coverage(frappe, schemas):
@@ -754,9 +878,17 @@ def archive_file_row(frappe, row):
 
 def framework_scope(frappe, schemas, related_names=None):
 	helper = runpy.run_path(str(Path(__file__).with_name('f15_framework_archive.py')))
+	spine_modules = frappe.get_all(
+		'Module Def', filters={'app_name': 'spine'}, pluck='name'
+	)
+	spine_doctypes = (
+		frappe.get_all('DocType', filters={'module': ('in', spine_modules)}, pluck='name')
+		if spine_modules else []
+	)
 	scope = helper['build_scope'](frappe, schemas, RETIRED_SOURCE_TABLES,
 		related_names if related_names is not None else related_business_master_names(frappe, schemas),
-		app_file_names=[row.name for row in _migration_files(frappe, schemas)])
+		app_file_names=[row.name for row in _migration_files(frappe, schemas)],
+		excluded_types=spine_doctypes)
 	return helper, scope
 
 
@@ -765,13 +897,18 @@ def emit_framework_rows(frappe, schemas):
 	for doctype, row in helper['iter_rows'](frappe, scope):
 		_write(archive_file_row(frappe, row) if doctype == 'File' else
 			{'source_doctype': doctype, 'row': row})
+	for record in iter_approved_frappe_exact_archive_records(frappe):
+		_write(record)
 
 
 def emit_status(frappe, schemas, source_site):
 	physical_coverage = audit_physical_field_coverage(frappe, schemas)
+	approved_frappe_data = approved_frappe_census(frappe)
+	approved_frappe_exact_archive = approved_frappe_exact_archive_census(frappe)
 	related_names = related_business_master_names(frappe, schemas)
 	framework, framework_selection = framework_scope(frappe, schemas, related_names)
 	framework_census = framework['census'](frappe, framework_selection)
+	framework_census.update(approved_frappe_exact_archive["tables"])
 	related_digest = hashlib.sha256()
 	for doctype, names in sorted(related_names.items()):
 		for name in names:
@@ -811,6 +948,8 @@ def emit_status(frappe, schemas, source_site):
 	)
 	snapshot_payload = {
 		"site": source_site,
+		"approved_frappe_data": approved_frappe_data,
+		"approved_frappe_exact_archive": approved_frappe_exact_archive,
 		"physical_field_coverage": physical_coverage,
 		"related_business_master_counts": {key: len(value) for key, value in related_names.items()},
 		"related_business_master_fingerprint": related_digest.hexdigest(),
@@ -851,7 +990,8 @@ def emit_status(frappe, schemas, source_site):
 				).encode("utf-8")
 			).hexdigest(),
 			"maintenance_mode": bool(frappe.conf.get("maintenance_mode")),
-			"total_parent_records": sum(parent_counts.values()),
+			"total_parent_records": sum(parent_counts.values())
+			+ int(approved_frappe_data["total"]),
 		}
 	)
 
@@ -880,6 +1020,9 @@ def emit_reference_data(frappe):
 	default_received_type = frappe.db.get_single_value(
 		"Stock Settings", "default_received_type"
 	)
+	default_packing_process = frappe.db.get_single_value(
+		"IPD Settings", "default_packing_process"
+	)
 	root_item_groups = frappe.get_all(
 		"Item Group",
 		filters={"is_group": 1, "parent_item_group": ["in", (None, "")]},
@@ -897,6 +1040,7 @@ def emit_reference_data(frappe):
 		{
 			"kind": "migration_defaults",
 			"default_received_type": default_received_type,
+			"default_packing_process": default_packing_process,
 			"root_item_groups": sorted(set(root_item_groups)),
 			"bill_received_via": sorted({str(value) for value in received_via_values if value}),
 		}
@@ -911,6 +1055,19 @@ def emit_reference_data(frappe):
 				"name": row.name,
 				"item_group": row.item_group,
 				"default_uom": row.default_unit_of_measure,
+			}
+		)
+	for row in frappe.get_all(
+		"Item Attribute Value",
+		fields=["name", "attribute_name", "attribute_value"],
+		limit_page_length=0,
+	):
+		_write(
+			{
+				"kind": "item_attribute_value",
+				"name": row.name,
+				"attribute_name": row.attribute_name,
+				"attribute_value": row.attribute_value,
 			}
 		)
 	_emit_reference_variants_and_cut_panels(frappe)
@@ -1292,15 +1449,28 @@ def emit_broken_links(frappe, schemas):
 						f"WHERE COALESCE(source.{field_column}, '')<>'' AND linked.name IS NULL"
 					)
 			for source_name, value in rows:
-				_write(
-					{
+				payload = {
 						"source_doctype": doctype,
 						"source_name": source_name,
 						"fieldname": fieldname,
 						"link_doctype": link_doctype,
 						"value": value,
 					}
-				)
+				if schema.get("istable"):
+					owner = frappe.db.get_value(
+						doctype,
+						source_name,
+						["parent", "parenttype", "parentfield"],
+						as_dict=True,
+					) or {}
+					payload.update(
+						{
+							"parent": owner.get("parent"),
+							"parenttype": owner.get("parenttype"),
+							"parentfield": owner.get("parentfield"),
+						}
+					)
+				_write(payload)
 
 
 def emit_series(frappe):
@@ -1316,6 +1486,67 @@ def emit_series(frappe):
 				"current": int(row.current or 0),
 			}
 		)
+
+
+def emit_cut_bundle_edit_ledger_dependencies(frappe, names):
+	"""Emit exact movement-ledger rows needed to open selected edit records."""
+
+	requested = sorted({str(name) for name in names if name})
+	if not requested or len(requested) > 250:
+		raise RuntimeError("Cut Bundle Edit dependency requests require 1-250 names")
+	placeholders = ", ".join(["%s"] * len(requested))
+	edits = frappe.db.sql(
+		"SELECT name, warehouse AS from_location, lot, "
+		"TIMESTAMP(posting_date, posting_time) AS posting_datetime "
+		"FROM `tabCut Bundle Edit` "
+		f"WHERE name IN ({placeholders}) ORDER BY name",
+		requested,
+		as_dict=True,
+	)
+	returned = {str(row.name) for row in edits}
+	missing = set(requested) - returned
+	if missing:
+		raise RuntimeError(
+			"Missing Cut Bundle Edit dependency parents: "
+			+ ", ".join(sorted(missing)[:20])
+		)
+	for edit in edits:
+		rows = frappe.db.sql(
+			"""
+			SELECT cbml.name
+			FROM `tabCut Bundle Movement Ledger` cbml
+			INNER JOIN (
+				SELECT cbm_key, MAX(posting_datetime) AS max_posting_datetime, lay_no
+				FROM `tabCut Bundle Movement Ledger`
+				WHERE posting_datetime <= %(posting_datetime)s
+					AND is_cancelled = 0
+					AND supplier = %(supplier)s
+					AND lot = %(lot)s
+					AND transformed = 0
+				GROUP BY cbm_key
+			) latest
+				ON latest.cbm_key = cbml.cbm_key
+				AND latest.max_posting_datetime = cbml.posting_datetime
+			WHERE cbml.posting_datetime <= %(posting_datetime)s
+				AND cbml.supplier = %(supplier)s
+				AND cbml.lot = %(lot)s
+			ORDER BY latest.lay_no, cbml.name
+			""",
+			{
+				"posting_datetime": edit.posting_datetime,
+				"supplier": edit.from_location,
+				"lot": edit.lot,
+			},
+			as_dict=True,
+		)
+		for row in rows:
+			_write(
+				{
+					"source_doctype": "Cut Bundle Movement Ledger",
+					"name": row.name,
+					"required_by": edit.name,
+				}
+			)
 
 
 def emit_external_references(frappe, schemas):
@@ -1479,6 +1710,293 @@ def emit_supporting_documents(frappe, doctype, names):
 		_write(_supporting_document(frappe, doctype, name))
 
 
+def _spine_doctypes(frappe):
+	modules = frappe.get_all("Module Def", filters={"app_name": "spine"}, pluck="name")
+	return set(
+		frappe.get_all("DocType", filters={"module": ("in", modules)}, pluck="name")
+		if modules
+		else []
+	)
+
+
+def _approved_frappe_names(frappe, doctype, spine_doctypes):
+	"""Return the reviewed live-record scope for one Frappe DocType."""
+
+	if frappe.get_meta(doctype).issingle:
+		return [doctype]
+	filters = {}
+	if doctype == "Dashboard Settings":
+		filters["chart_config"] = ("!=", "")
+	elif doctype == "DefaultValue":
+		# Per-user defaults travel inside their User parent. This direct route is
+		# only for the site-level __default collection.
+		filters["parenttype"] = "__default"
+	elif doctype == "Module Profile":
+		# A User's Link must never be copied without its referenced profile.
+		return sorted(
+			{
+				str(value)
+				for value in frappe.get_all(
+					"User",
+					filters={"module_profile": ("is", "set")},
+					pluck="module_profile",
+					limit_page_length=0,
+				)
+				if value
+			}
+		)
+	elif doctype == "List View Settings":
+		filters["name"] = ("not in", tuple(sorted(spine_doctypes | {"Message Log"})))
+	elif doctype == "Role":
+		filters["name"] = ("!=", "Spine User")
+	elif doctype == "Workspace":
+		filters["public"] = 0
+	return frappe.get_all(
+		doctype,
+		filters=filters,
+		pluck="name",
+		order_by="name asc",
+		limit_page_length=0,
+	)
+
+
+def _approved_frappe_document(frappe, doctype, name, spine_doctypes, *, passwords):
+	if frappe.get_meta(doctype).issingle:
+		document = frappe.get_single(doctype).as_dict(no_nulls=False)
+		document["name"] = doctype
+	else:
+		document = frappe.get_doc(doctype, name).as_dict(no_nulls=False)
+	document["doctype"] = doctype
+
+	for fieldname in REMOVED_FRAPPE_FIELDS.get(doctype, ()):
+		document.pop(fieldname, None)
+	if doctype == "User":
+		document["roles"] = [
+			row for row in document.get("roles") or [] if row.get("role") != "Spine User"
+		]
+
+	if passwords:
+		_add_runtime_passwords(frappe, doctype, name, document)
+	return document
+
+
+def iter_approved_frappe_documents(frappe, *, passwords=True):
+	"""Yield active Frappe data in dependency order with explicit exclusions."""
+
+	spine_doctypes = _spine_doctypes(frappe)
+	for doctype in APPROVED_FRAPPE_DATA_ORDER:
+		for name in _approved_frappe_names(frappe, doctype, spine_doctypes):
+			document = _approved_frappe_document(
+				frappe, doctype, name, spine_doctypes, passwords=passwords
+			)
+			if doctype == "Custom DocPerm" and (
+				document.get("role") == "Spine User"
+				or document.get("parent") in spine_doctypes
+				or document.get("parent") in RETIRED_SOURCE_TABLES
+			):
+				continue
+			if doctype == "Email Unsubscribe" and document.get(
+				"reference_doctype"
+			) in spine_doctypes | {"Message Log"}:
+				continue
+			if doctype == "DefaultValue" and document.get(
+				"defkey"
+			) in UNSAFE_SYSTEM_DEFAULT_KEYS:
+				continue
+			for value in document.values():
+				if not isinstance(value, list):
+					continue
+				for row in value:
+					child_doctype = row.get("doctype") if isinstance(row, dict) else None
+					if child_doctype and child_doctype not in APPROVED_FRAPPE_CHILD_DOCTYPES:
+						raise RuntimeError(
+							f"Unapproved Frappe child DocType {child_doctype} in {doctype}"
+						)
+			yield document
+
+
+def approved_frappe_census(frappe):
+	counts = {}
+	child_counts = {}
+	names = {}
+	digest = hashlib.sha256()
+	for document in iter_approved_frappe_documents(frappe, passwords=False):
+		doctype = document["doctype"]
+		counts[doctype] = counts.get(doctype, 0) + 1
+		names.setdefault(doctype, []).append(str(document["name"]))
+		for value in document.values():
+			if not isinstance(value, list):
+				continue
+			for row in value:
+				child_doctype = row.get("doctype") if isinstance(row, dict) else None
+				if child_doctype:
+					child_counts[child_doctype] = child_counts.get(child_doctype, 0) + 1
+		digest.update(
+			json.dumps(
+				document,
+				sort_keys=True,
+				separators=(",", ":"),
+				default=_json_default,
+			).encode()
+		)
+		digest.update(b"\n")
+	auth_digest = hashlib.sha256()
+	auth_count = 0
+	for doctype, record_names in sorted(names.items()):
+		if not record_names:
+			continue
+		for row in frappe.db.sql(
+			"SELECT doctype,name,fieldname,password,encrypted FROM __Auth "
+			"WHERE doctype=%s AND name IN %s ORDER BY name,fieldname",
+			(doctype, tuple(record_names)),
+		):
+			auth_digest.update(
+				json.dumps(row, separators=(",", ":"), default=_json_default).encode()
+			)
+			auth_digest.update(b"\n")
+			auth_count += 1
+	return {
+		"counts": counts,
+		"child_counts": child_counts,
+		"total": sum(counts.values()),
+		"total_with_children": sum(counts.values()) + sum(child_counts.values()),
+		"value_digest": digest.hexdigest(),
+		"auth_count": auth_count,
+		"auth_digest": auth_digest.hexdigest(),
+	}
+
+
+def _approved_frappe_exact_document(frappe, doctype, name):
+	"""Return every physical source value for encrypted compatibility storage."""
+
+	meta = frappe.get_meta(doctype)
+	if meta.issingle:
+		return {
+			"doctype": doctype,
+			"name": doctype,
+			"single_values": [
+				{"field": fieldname, "value": value}
+				for fieldname, value in frappe.db.sql(
+					"SELECT field,value FROM tabSingles WHERE doctype=%s ORDER BY field",
+					(doctype,),
+				)
+			],
+		}
+
+	rows = frappe.db.sql(
+		f"SELECT * FROM {_quote_identifier('tab' + doctype)} WHERE name=%s",
+		(name,),
+		as_dict=True,
+	)
+	if len(rows) != 1:
+		raise RuntimeError(f"Approved Frappe source identity is missing: {doctype} {name}")
+	document = dict(rows[0], doctype=doctype)
+	for field in meta.get_table_fields():
+		if getattr(field, "is_virtual", False) or not frappe.db.table_exists(field.options):
+			continue
+		document[field.fieldname] = [
+			dict(row, doctype=field.options)
+			for row in frappe.db.sql(
+				f"SELECT * FROM {_quote_identifier('tab' + field.options)} "
+				"WHERE parent=%s AND parenttype=%s AND parentfield=%s ORDER BY idx,name",
+				(name, doctype, field.fieldname),
+				as_dict=True,
+			)
+		]
+	if doctype == "User" and isinstance(document.get("roles"), list):
+		# All Spine data remains an explicit owner exclusion, including this role.
+		document["roles"] = [
+			row for row in document["roles"] if row.get("role") != "Spine User"
+		]
+	return document
+
+
+def iter_approved_frappe_exact_archive_records(frappe):
+	"""Yield a lossless encrypted companion for every approved Frappe record."""
+
+	spine_doctypes = _spine_doctypes(frappe)
+	selected_names = {}
+	for doctype in (*APPROVED_FRAPPE_DATA_ORDER, *APPROVED_FRAPPE_ARCHIVE_ONLY_DOCTYPES):
+		if not frappe.db.exists("DocType", doctype):
+			continue
+		names = (
+			[doctype]
+			if doctype in APPROVED_FRAPPE_ARCHIVE_ONLY_DOCTYPES
+			else _approved_frappe_names(frappe, doctype, spine_doctypes)
+		)
+		for name in names:
+			document = _approved_frappe_exact_document(frappe, doctype, name)
+			if doctype == "Custom DocPerm" and (
+				document.get("role") == "Spine User"
+				or document.get("parent") in spine_doctypes
+				or document.get("parent") in RETIRED_SOURCE_TABLES
+			):
+				continue
+			if doctype == "Email Unsubscribe" and document.get(
+				"reference_doctype"
+			) in spine_doctypes | {"Message Log"}:
+				continue
+			selected_names.setdefault(doctype, []).append(str(name))
+			yield {
+				"archive_kind": "approved_frappe_exact",
+				"source_doctype": APPROVED_FRAPPE_ARCHIVE_PREFIX + doctype,
+				"row": document,
+			}
+
+	for doctype, names in sorted(selected_names.items()):
+		if not names:
+			continue
+		for row in frappe.db.sql(
+			"SELECT doctype,name,fieldname,password,encrypted FROM __Auth "
+			"WHERE doctype=%s AND name IN %s ORDER BY name,fieldname",
+			(doctype, tuple(names)),
+			as_dict=True,
+		):
+			yield {
+				"archive_kind": "approved_frappe_exact",
+				"source_doctype": APPROVED_FRAPPE_ARCHIVE_PREFIX + "__Auth",
+				"row": dict(row),
+			}
+
+
+def approved_frappe_exact_archive_census(frappe):
+	counts = {}
+	digest = hashlib.sha256()
+	table_digests = {}
+	for record in iter_approved_frappe_exact_archive_records(frappe):
+		doctype = record["source_doctype"]
+		counts[doctype] = counts.get(doctype, 0) + 1
+		encoded = json.dumps(
+			record,
+			sort_keys=True,
+			separators=(",", ":"),
+			default=_json_default,
+		).encode()
+		digest.update(encoded)
+		digest.update(b"\n")
+		table_digests.setdefault(doctype, hashlib.sha256()).update(
+			encoded
+		)
+		table_digests[doctype].update(b"\n")
+	return {
+		"counts": counts,
+		"total": sum(counts.values()),
+		"value_digest": digest.hexdigest(),
+		"tables": {
+			doctype: {
+				"rows": count,
+				"value_digest": table_digests[doctype].hexdigest(),
+			}
+			for doctype, count in counts.items()
+		},
+	}
+
+
+def emit_approved_frappe_documents(frappe):
+	for document in iter_approved_frappe_documents(frappe):
+		_write(document)
+
+
 def _emit_reference_variants_and_cut_panels(frappe):
 	for row in frappe.get_all(
 		"Item Variant", fields=["name", "item"], limit_page_length=0
@@ -1589,6 +2107,8 @@ def main():
 	subparsers.add_parser("retired-rows")
 	subparsers.add_parser("reference-data")
 	subparsers.add_parser("related-business-masters")
+	subparsers.add_parser("approved-frappe-data")
+	subparsers.add_parser("approved-frappe-census")
 	subparsers.add_parser("framework-rows")
 	subparsers.add_parser("framework-census")
 	file_status = subparsers.add_parser("file-status")
@@ -1616,6 +2136,12 @@ def main():
 	export.add_argument("--batch-size", type=int, default=500)
 	export.add_argument("--start-after")
 	export.add_argument("--limit", type=int)
+	export.add_argument("--names-json")
+	resolve = subparsers.add_parser("resolve-identities")
+	resolve.add_argument("--doctype", required=True)
+	resolve.add_argument("--names-json", required=True)
+	cut_bundle_dependencies = subparsers.add_parser("cut-bundle-edit-ledgers")
+	cut_bundle_dependencies.add_argument("--names-json", required=True)
 	args = parser.parse_args()
 
 	warnings.filterwarnings("ignore")
@@ -1637,19 +2163,37 @@ def main():
 		/ "doctype"
 		/ "sms_parameter",
 		source_bench / "apps" / "frappe" / "frappe" / "core" / "doctype" / "sms_settings",
+		# Only frappe_tools configuration enters the auxiliary one-pass migration.
+		# Spine is installed on the target with clean defaults; none of its source
+		# schemas are part of this contract.
+		source_bench / "apps" / "frappe_tools" / "frappe_tools" / "frappe_tools"
+		/ "doctype" / "document_scanner_settings",
+		source_bench / "apps" / "frappe_tools" / "frappe_tools" / "frappe_tools"
+		/ "doctype" / "document_scanner_settings_items",
+		source_bench / "apps" / "frappe_tools" / "frappe_tools" / "frappe_tools"
+		/ "doctype" / "document_scanner_server_setting",
+		source_bench / "apps" / "frappe_tools" / "frappe_tools" / "frappe_tools"
+		/ "doctype" / "log_file_downloader",
 	)
 	if not (source_bench / "sites" / args.source_site / "site_config.json").is_file():
 		raise RuntimeError("Configured source site does not exist in the source bench")
 	if not source_app_root.is_dir():
 		raise RuntimeError("Configured source app is not installed in the source bench")
+	missing_schema_roots = [str(path) for path in supporting_schema_roots if not path.is_dir()]
+	if missing_schema_roots:
+		raise RuntimeError(
+			"Required source schema roots are unavailable: " + ", ".join(missing_schema_roots)
+		)
 
 	declared_schemas = _load_schemas(source_app_root, supporting_schema_roots)
 	frappe.init(site=args.source_site, sites_path=str(source_bench / "sites"))
 	frappe.connect()
 	try:
-		if args.source_app not in frappe.get_installed_apps():
+		installed_apps = set(frappe.get_installed_apps())
+		missing_apps = {args.source_app, "frappe_tools"} - installed_apps
+		if missing_apps:
 			raise RuntimeError(
-				f"Configured source app {args.source_app!r} is not installed on "
+				f"Required source apps {sorted(missing_apps)!r} are not installed on "
 				f"{args.source_site!r}"
 			)
 		if args.command == "export":
@@ -1663,6 +2207,8 @@ def main():
 			"broken-links",
 			"external-references",
 			"related-business-masters",
+			"approved-frappe-data",
+			"approved-frappe-census",
 			"framework-rows",
 			"framework-census",
 			"file-health",
@@ -1712,11 +2258,17 @@ def main():
 			for doctype, names in related_business_master_names(frappe, schemas).items():
 				for name in names:
 					_write({"doctype": doctype, "name": name})
+		elif args.command == "approved-frappe-data":
+			emit_approved_frappe_documents(frappe)
+		elif args.command == "approved-frappe-census":
+			_write(approved_frappe_census(frappe))
 		elif args.command == "framework-rows":
 			emit_framework_rows(frappe, schemas)
 		elif args.command == "framework-census":
 			helper, scope = framework_scope(frappe, schemas)
-			_write(helper['census'](frappe, scope))
+			census = helper['census'](frappe, scope)
+			census.update(approved_frappe_exact_archive_census(frappe)["tables"])
+			_write(census)
 		elif args.command == "broken-links":
 			emit_broken_links(frappe, schemas)
 		elif args.command == "exists":
@@ -1728,6 +2280,18 @@ def main():
 					"name": args.name,
 					"exists": bool(frappe.db.exists(args.doctype, args.name)),
 				}
+			)
+		elif args.command == "resolve-identities":
+			emit_resolved_identities(
+				frappe,
+				schemas,
+				args.doctype,
+				json.loads(args.names_json),
+			)
+		elif args.command == "cut-bundle-edit-ledgers":
+			emit_cut_bundle_edit_ledger_dependencies(
+				frappe,
+				json.loads(args.names_json),
 			)
 		elif args.command == "supporting-documents":
 			emit_supporting_documents(
@@ -1752,6 +2316,7 @@ def main():
 				max(1, min(args.batch_size, 2000)),
 				args.start_after,
 				args.limit,
+				json.loads(args.names_json) if args.names_json else None,
 			)
 	finally:
 		frappe.destroy()

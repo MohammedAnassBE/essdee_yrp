@@ -227,7 +227,7 @@ def _uom_factor(item, from_uom, to_uom):
 		return 1
 	factors = {
 		row.uom: flt(row.conversion_factor)
-		for row in frappe.get_cached_doc('YRP Item', item).get("uom_conversion_details") or []
+		for row in frappe.get_cached_doc('Item', item).get("uoms") or []
 	}
 	from_factor = factors.get(from_uom)
 	to_factor = factors.get(to_uom)

@@ -61,7 +61,7 @@ def regenerate_for_lots(lot_names):
 def regenerate_garment_bom_matrices(ipd_name, item_variants):
     """Replace generated Cutting matrices for the requested finished variants."""
     ipd = frappe.get_doc('YRP Item Production Detail', ipd_name)
-    if ipd.get("is_cloth_item") or frappe.db.get_value('YRP Item', ipd.item, "is_cloth_item"):
+    if ipd.get("is_cloth_item") or frappe.db.get_value('Item', ipd.item, "is_cloth_item"):
         frappe.throw(_("{0} is a cloth IPD; use the fabric-process generator.").format(ipd.name))
     _validate_garment_ipd(ipd)
     if not ipd.cutting_process:
@@ -96,8 +96,8 @@ def regenerate_garment_bom_matrices(ipd_name, item_variants):
 
 
 def _get_variant_cloth_rows(ipd, item_variant):
-    variant = frappe.get_cached_doc('YRP Item Variant', item_variant)
-    if variant.item != ipd.item:
+    variant = frappe.get_cached_doc('Item', item_variant)
+    if (variant.variant_of or variant.name) != ipd.item:
         frappe.throw(
             _("Item Variant {0} does not belong to IPD item {1}.").format(
                 item_variant, ipd.item
@@ -144,7 +144,7 @@ def _get_variant_cloth_rows(ipd, item_variant):
                 "item": cloth_item,
                 "attrs": dict(attrs),
                 "quantity": quantity,
-                "uom": frappe.db.get_value('YRP Item', cloth_item, "default_unit_of_measure"),
+                "uom": frappe.db.get_value('Item', cloth_item, "stock_uom"),
             }
         )
     return rows, output_attrs
@@ -169,7 +169,7 @@ def _build_matrix(ipd, item_variant, output_attrs, cloth_item, cloth_rows):
     if cloth_item:
         item_attributes = {
             row.attribute
-            for row in frappe.get_cached_doc('YRP Item', cloth_item).get("attributes") or []
+            for row in frappe.get_cached_doc('Item', cloth_item).get("attributes") or []
         }
     input_attributes = sorted(
         {
@@ -227,7 +227,7 @@ def _build_matrix(ipd, item_variant, output_attrs, cloth_item, cloth_rows):
             "item": ipd.item,
             "combo_index": 1,
             "quantity": 1,
-            "uom": frappe.db.get_value('YRP Item', ipd.item, "default_unit_of_measure"),
+            "uom": frappe.db.get_value('Item', ipd.item, "stock_uom"),
             "wastage_pct": 0,
         },
     )

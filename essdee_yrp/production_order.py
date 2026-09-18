@@ -27,10 +27,10 @@ def get_lot_ordered_details(production_order):
 	attr_cache = {}
 
 	for row in rows:
-		variant = frappe.get_cached_doc('YRP Item Variant', row.item_variant)
-		if variant.item not in attr_cache:
-			attr_cache[variant.item] = get_attribute_details(variant.item)
-		attr_details = attr_cache[variant.item]
+		variant = frappe.get_cached_doc('Item', row.item_variant)
+		if (variant.variant_of or variant.name) not in attr_cache:
+			attr_cache[(variant.variant_of or variant.name)] = get_attribute_details((variant.variant_of or variant.name))
+		attr_details = attr_cache[(variant.variant_of or variant.name)]
 		primary_attribute = attr_details.get("primary_attribute")
 
 		for value in attr_details.get("primary_attribute_values") or []:

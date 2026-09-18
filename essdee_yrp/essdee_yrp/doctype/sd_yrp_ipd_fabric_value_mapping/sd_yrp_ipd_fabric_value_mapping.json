@@ -38,7 +38,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Attribute",
-   "options": "YRP Item Attribute",
+   "options": "Item Attribute",
    "reqd": 1
   },
   {
@@ -55,19 +55,17 @@
    "columns": 2,
    "description": "Change: pre-value. Pin: the pinned value (blank = wildcard). Consume: the consumed value (required, never wildcard). Introduce: blank.",
    "fieldname": "from_value",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "From Value",
-   "options": "YRP Item Attribute Value"
+   "label": "From Value"
   },
   {
    "columns": 2,
    "description": "Change/Introduce: post-value. Pin: equals from_value (builder mirrors from). Consume: blank.",
    "fieldname": "to_value",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "To Value",
-   "options": "YRP Item Attribute Value"
+   "label": "To Value"
   }
  ],
  "index_web_pages_for_search": 1,

@@ -47,19 +47,17 @@
    "fieldname": "item",
    "fieldtype": "Link",
    "label": "Item",
-   "options": "YRP Item"
+   "options": "Item"
   },
   {
    "fieldname": "colour",
-   "fieldtype": "Link",
-   "label": "Colour",
-   "options": "YRP Item Attribute Value"
+   "fieldtype": "Data",
+   "label": "Colour"
   },
   {
    "fieldname": "size",
-   "fieldtype": "Link",
-   "label": "Size",
-   "options": "YRP Item Attribute Value"
+   "fieldtype": "Data",
+   "label": "Size"
   },
   {
    "fieldname": "lay_no",
@@ -107,7 +105,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Supplier",
-   "options": "YRP Supplier"
+   "options": "Supplier"
   },
   {
    "fieldname": "column_break_gltp",
@@ -159,7 +157,7 @@
    "fieldname": "item_variant",
    "fieldtype": "Link",
    "label": "Item Variant",
-   "options": "YRP Item Variant"
+   "options": "Item"
   },
   {
    "default": "0",

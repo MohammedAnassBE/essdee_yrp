@@ -205,9 +205,22 @@ async function render_preview(frm) {
 		});
 		const url = `https://api.labelary.com/v1/printers/12dpmm/labels/${encodeURIComponent(
 			result.width
-		)}x${encodeURIComponent(result.height)}/0/${encodeURIComponent(result.code)}`;
+		)}x${encodeURIComponent(result.height)}/0/`;
+		const response = await fetch(url, {
+			method: "POST",
+			headers: {
+				Accept: "image/png",
+				"Content-Type": "application/x-www-form-urlencoded",
+			},
+			body: result.code,
+		});
+		if (!response.ok) {
+			throw new Error(__("Label preview failed with HTTP {0}", [response.status]));
+		}
+		if (frm._sd_box_preview_url) URL.revokeObjectURL(frm._sd_box_preview_url);
+		frm._sd_box_preview_url = URL.createObjectURL(await response.blob());
 		$("<img>", {
-			src: url,
+			src: frm._sd_box_preview_url,
 			alt: __("Label Preview"),
 			css: { border: "2px solid #000", maxWidth: "100%" },
 		}).appendTo(wrapper);

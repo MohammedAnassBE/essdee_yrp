@@ -12,7 +12,7 @@ frappe.query_reports["SD YRP Cut Bundle Balance"] = {
 		{
 			"fieldname": "supplier",
 			"fieldtype": "Link",
-			"options": "YRP Supplier",
+			"options": "Supplier",
 			"label": "Supplier",
 		}
 	]

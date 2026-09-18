@@ -7,7 +7,7 @@ frappe.query_reports["SD YRP Vendor Bill Pending Report"] = {
 			"fieldname" : "department",
 			"fieldtype" : "Link",
 			"label" : "Department",
-			"options" : "YRP Department"
+			"options" : "Department"
 		},
 		{
 			"fieldname" : "bill_start_date",

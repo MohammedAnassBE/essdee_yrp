@@ -9,7 +9,7 @@ from yrp.utils import update_if_string_instance
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def get_item_attributes(doctype, txt, searchfield, start, page_len, filters):
-	if doctype != 'YRP Item Attribute':
+	if doctype != 'Item Attribute':
 		return []
 	filters = frappe._dict(filters or {})
 	if not filters.item or not filters.lot or not filters.process:
@@ -47,7 +47,7 @@ def get_item_attributes(doctype, txt, searchfield, start, page_len, filters):
 				attributes = [ipd.primary_item_attribute]
 			break
 	else:
-		item = frappe.get_cached_doc('YRP Item', filters.item)
+		item = frappe.get_cached_doc('Item', filters.item)
 		attributes = [row.attribute for row in item.get("attributes") or []]
 
 	seen = set()
@@ -125,7 +125,7 @@ def get_pc_attribute_values(
 def _check_process_cost_permissions(*, item=None, lot=None, process_name=None):
 	frappe.has_permission('YRP Process Cost', "read", throw=True)
 	for doctype, name in (
-		('YRP Item', item),
+		('Item', item),
 		('SD YRP Lot', lot),
 		('YRP Process', process_name),
 	):

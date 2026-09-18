@@ -39,24 +39,22 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Cloth Item Variant",
-   "options": "YRP Item Variant",
+   "options": "Item",
    "read_only": 1
   },
   {
    "allow_on_submit": 1,
    "fieldname": "colour",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Colour",
-   "options": "YRP Item Attribute Value"
+   "label": "Colour"
   },
   {
    "allow_on_submit": 1,
    "fieldname": "dia",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Dia",
-   "options": "YRP Item Attribute Value"
+   "label": "Dia"
   },
   {
    "allow_on_submit": 1,

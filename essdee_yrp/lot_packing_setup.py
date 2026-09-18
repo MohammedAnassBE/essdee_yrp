@@ -4,7 +4,7 @@ import frappe
 
 
 CUSTOM_FIELDS = {
-	'YRP Purchase Order': [
+	'Purchase Order': [
 		{
 			"fieldname": "lot_details_section",
 			"fieldtype": "Section Break",
@@ -99,7 +99,7 @@ def migrate_legacy_purchase_order_lot_rows():
 			"""
 			select parent, lot
 			from `tabSD YRP Lot MultiSelect`
-			where parenttype = 'YRP Purchase Order' and parentfield = 'sd_lot'
+			where parenttype = 'Purchase Order' and parentfield = 'sd_lot'
 			""",
 			as_dict=True,
 		)
@@ -114,7 +114,7 @@ def migrate_legacy_purchase_order_lot_rows():
 			not row.parent
 			or not row.lot
 			or key in existing
-			or not frappe.db.exists('YRP Purchase Order', row.parent)
+			or not frappe.db.exists('Purchase Order', row.parent)
 			or not frappe.db.exists('SD YRP Lot', row.lot)
 		):
 			skipped += 1
@@ -128,7 +128,7 @@ def migrate_legacy_purchase_order_lot_rows():
 			insert into `tabSD YRP Lot MultiSelect`
 				(name, creation, modified, modified_by, owner, docstatus,
 				 idx, parent, parentfield, parenttype, lot)
-			values (%s, now(), now(), %s, %s, 0, %s, %s, 'sd_lot', 'YRP Purchase Order', %s)
+			values (%s, now(), now(), %s, %s, 0, %s, %s, 'sd_lot', 'Purchase Order', %s)
 			""",
 			(
 				frappe.generate_hash(length=10),

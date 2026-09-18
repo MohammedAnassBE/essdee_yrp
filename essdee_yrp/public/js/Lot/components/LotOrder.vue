@@ -249,18 +249,15 @@ function create_dependent_attribute() {
 		dep_attr[ind] = frappe.ui.form.make_control({
 			parent: $(el).find(".dependent-attr"),
 			df: {
-				fieldtype: "Link",
+				fieldtype: "Autocomplete",
 				fieldname: attr + "_value",
-				options: "YRP Item Attribute Value",
 				label: attr,
-				only_select: true,
 				get_query: function () {
 					return {
-						query:"yrp.yrp.doctype.yrp_item.yrp_item.get_item_attribute_values",
-						filters: {
+						query:"yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values",
+						params: {
 							item: list_item.value[0].item,
 							attribute: attr,
-							production_detail: cur_frm.doc.production_detail,
 						},
 					};
 				},

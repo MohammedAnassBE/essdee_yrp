@@ -16,7 +16,7 @@
  "name": "SD YRP Purchase Order Itemwise",
  "owner": "Administrator",
  "prepared_report": 0,
- "ref_doctype": "YRP Purchase Order",
+ "ref_doctype": "Purchase Order",
  "report_name": "SD YRP Purchase Order Itemwise",
  "report_type": "Script Report",
  "roles": [

@@ -13,17 +13,21 @@
     </div>
 </template>
 <script setup>
-import {ref} from 'vue';
+import {nextTick, ref} from 'vue';
 
 const items = ref([])
 const root = ref(null)
 const sample_doc = ref({})
 
-function load_data(item){
+async function load_data(item){
     items.value = item;
+    // The matrix cells are rendered by Vue.  Callers populate Frappe controls
+    // immediately afterwards, so wait until those cell wrappers exist first.
+    await nextTick();
 }
 
-function set_attributes() {
+async function set_attributes() {
+    await nextTick();
     remove_attributes()
     if (items.value) {
         for(let i = 0; i < items.value.values.length ; i++){
@@ -50,14 +54,13 @@ function createInput(attr, index, value){
     let parent_class = "." + get_input_class(attr, index);
     let el = root.value
     let df = {
-        fieldtype: 'Link',
-        fieldname: attr+"_"+index,
-        options: 'YRP Item Attribute Value',
-        get_query : function(){
-            return {
-                query:'essdee_yrp.ipd_ui.get_attribute_detail_values',
-                filters: {
-                    'mapping': cur_frm.set_packing_attr_map_value,
+		fieldtype: 'Autocomplete',
+		fieldname: attr+"_"+index,
+		get_query : function(){
+			return {
+				query:'essdee_yrp.ipd_ui.search_attribute_detail_values',
+				params: {
+					'mapping': cur_frm.set_packing_attr_map_value,
                 }
             }
         },
@@ -66,10 +69,10 @@ function createInput(attr, index, value){
 
     if (attr == cur_frm.doc.stiching_major_attribute_value){
         df['read_only'] = true
-        // display-only -> Data so the value renders (a read-only Link shows blank here)
-        if (df['fieldtype'] == 'Link'){
-            df['fieldtype'] = 'Data'
-        }
+        // Display-only controls do not create an Autocomplete input in Frappe
+        // v16.  Use Data so set_value does not validate against a missing
+        // Awesomplete instance while the form is opening.
+        df['fieldtype'] = 'Data'
     }
     let input =  frappe.ui.form.make_control({
         parent: $(el).find(parent_class),

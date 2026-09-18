@@ -30,7 +30,7 @@ const FIELD_CONFIGS = {
 	"YRP Work Order": workOrder,
 	"YRP Delivery Challan": deliveryChallan,
 	"YRP Goods Received Note": goodsReceivedNote,
-	"YRP Item": item,
+	"Item": item,
 	"SD YRP Lot": lot,
 	"YRP Item Production Detail": itemProductionDetail,
 }

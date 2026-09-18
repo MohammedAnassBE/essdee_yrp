@@ -18,7 +18,7 @@ class SDYRPFGStockEntry(Document):
 	def before_validate(self):
 		if not self.items:
 			frappe.throw(_("Add at least one item."))
-		if not frappe.db.exists('YRP Warehouse', self.warehouse):
+		if not frappe.db.exists('Warehouse', self.warehouse):
 			frappe.throw(
 				_("Location {0} is not a Warehouse.").format(frappe.bold(self.warehouse))
 			)
@@ -156,7 +156,7 @@ class SDYRPFGStockEntry(Document):
 
 
 def _validate_warehouse_user(warehouse: str):
-	frappe.get_doc('YRP Warehouse', warehouse).check_user_permission()
+	frappe.get_doc('Warehouse', warehouse).check_user_permission()
 
 
 def _parse_list(value):
@@ -299,12 +299,12 @@ def get_inward_outward_entry(
 			p.creation AS st_entry_date, p.posting_date, p.posting_time,
 			p.customer, p.supplier, p.warehouse, p.received_by,
 			d.lot, p.dc_number, d.item_variant, d.uom,
-			iv.item AS item_name, p.name AS stock_entry,
+			COALESCE(NULLIF(iv.variant_of, ''), iv.name) AS item_name, p.name AS stock_entry,
 			d.received_type
 		FROM `tabSD YRP FG Stock Entry Detail` d
 		INNER JOIN `tabSD YRP FG Stock Entry` p ON p.name = d.parent
-		INNER JOIN `tabYRP Item Variant` iv ON iv.name = d.item_variant
-		WHERE p.name IN %(parents)s AND iv.item = %(item)s
+		INNER JOIN `tabItem` iv ON iv.name = d.item_variant
+		WHERE p.name IN %(parents)s AND COALESCE(NULLIF(iv.variant_of, ''), iv.name) = %(item)s
 		ORDER BY p.posting_date DESC, p.posting_time DESC, p.creation DESC
 		""",
 		{"parents": parents, "item": item},

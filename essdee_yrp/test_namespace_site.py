@@ -75,7 +75,7 @@ class TestCombinedSiteNamespace(IntegrationTestCase):
 							source["ref_doctype"],
 						)
 
-		self.assertEqual(counts, {"DocType": 327, "Report": 33})
+		self.assertEqual(counts, {"DocType": 309, "Report": 33})
 
 	def test_old_custom_identities_and_orphan_tables_are_absent(self):
 		for record_type in ("DocType", "Report"):
@@ -128,23 +128,42 @@ class TestCombinedSiteNamespace(IntegrationTestCase):
 						f"Missing target {field.options}",
 					)
 
-	def test_erpnext_and_custom_business_doctypes_coexist(self):
-		for standard_name, standard_module, custom_name, custom_module in (
-			("Supplier", "Buying", "YRP Supplier", "YRP"),
-			("Item", "Stock", "YRP Item", "YRP"),
-			("Warehouse", "Stock", "YRP Warehouse", "YRP"),
-			("Purchase Invoice", "Accounts", "YRP Purchase Invoice", "YRP"),
-			("Work Order", "Manufacturing", "YRP Work Order", "YRP"),
+	def test_common_masters_are_standard_and_yrp_transactions_remain_owned(self):
+		for standard_name, standard_module in (
+			("Supplier", "Buying"),
+			("Item", "Stock"),
+			("Warehouse", "Stock"),
+			("Purchase Order", "Buying"),
 		):
-			with self.subTest(standard=standard_name, custom=custom_name):
+			with self.subTest(standard=standard_name):
 				self.assertEqual(
 					frappe.db.get_value("DocType", standard_name, "module"),
 					standard_module,
 				)
-				self.assertEqual(
-					frappe.db.get_value("DocType", custom_name, "module"),
-					custom_module,
-				)
+
+		for retired_name in (
+			"YRP Supplier",
+			"YRP Item",
+			"YRP Item Variant",
+			"YRP Warehouse",
+			"YRP Purchase Order",
+			"YRP Purchase Order Item",
+		):
+			with self.subTest(retired=retired_name):
+				self.assertFalse(frappe.db.exists("DocType", retired_name))
+
+		self.assertEqual(
+			frappe.db.get_value("DocType", "YRP Purchase Invoice", "module"),
+			"YRP",
+		)
+		self.assertEqual(
+			frappe.db.get_value("DocType", "YRP Work Order", "module"),
+			"YRP",
+		)
+		self.assertTrue(frappe.get_meta("Item").has_field("primary_attribute"))
+		self.assertTrue(frappe.get_meta("Item").has_field("item_tuple_attribute"))
+		self.assertTrue(frappe.get_meta("Supplier").has_field("deparments"))
+		self.assertTrue(frappe.get_meta("Purchase Order").has_field("is_yrp_managed"))
 
 		self.assertEqual(
 			frappe.db.get_value("DocType", "SD YRP Lot", "module"),
@@ -163,12 +182,12 @@ class TestCombinedSiteNamespace(IntegrationTestCase):
 
 		department = frappe.get_doc(
 			{
-				"doctype": "YRP Department",
+				"doctype": "Department",
 				"department_name": department_name,
 				"department_users": [{"user": "Administrator"}],
 			}
 		).insert()
-		self.assertEqual(department.department_users[0].parenttype, "YRP Department")
+		self.assertEqual(department.department_users[0].parenttype, "Department")
 		self.assertEqual(
 			department.department_users[0].doctype,
 			"YRP Department User",
@@ -208,13 +227,13 @@ class TestCombinedSiteNamespace(IntegrationTestCase):
 		self.assertEqual(term.docstatus, 2)
 
 		frappe.delete_doc("SD YRP Action", action.name, force=True)
-		frappe.delete_doc("YRP Department", department.name, force=True)
+		frappe.delete_doc("Department", department.name, force=True)
 
 	def test_permissions_reports_and_india_compliance_are_live(self):
 		self.assertTrue(
-			frappe.has_permission("YRP Department", "create", user="Administrator")
+			frappe.has_permission("Department", "create", user="Administrator")
 		)
-		self.assertFalse(frappe.has_permission("YRP Department", "create", user="Guest"))
+		self.assertFalse(frappe.has_permission("Department", "create", user="Guest"))
 		self.assertFalse(
 			frappe.has_permission("SD YRP Product Season", "read", user="Guest")
 		)
@@ -226,31 +245,16 @@ class TestCombinedSiteNamespace(IntegrationTestCase):
 			execute as execute_yrp_report,
 		)
 
-		stock_sample = frappe.get_all(
-			'YRP Stock Ledger Entry',
-			filters={"docstatus": ["<", 2], "is_cancelled": 0},
-			fields=["item", "warehouse", "posting_date"],
-			order_by="posting_date desc",
-			limit=1,
-		)[0]
-		# The production dataset exceeds the report's deliberate 500k-row safety
-		# limit. Exercise the live report with one real migrated stock bucket rather
-		# than treating an intentionally rejected unbounded query as a namespace
-		# failure.
 		yrp_columns, yrp_rows = execute_yrp_report(
 			{
-				"item": stock_sample.item,
-				"warehouse": stock_sample.warehouse,
-				"from_date": stock_sample.posting_date,
-				"to_date": stock_sample.posting_date,
+				"item": "__namespace_report_item__",
 			}
 		)
 		self.assertTrue(yrp_columns)
 		self.assertIsInstance(yrp_rows, list)
-		production_order = frappe.get_all(
-			'YRP Production Order', pluck="name", order_by="modified desc", limit=1
-		)[0]
-		sd_result = execute_sd_yrp_report({"production_order": production_order})
+		sd_result = execute_sd_yrp_report(
+			{"production_order": "__namespace_report_production_order__"}
+		)
 		self.assertTrue(sd_result[0])
 		self.assertIsInstance(sd_result[1], list)
 

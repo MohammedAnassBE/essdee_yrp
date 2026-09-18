@@ -159,7 +159,7 @@ def ensure_process_billing_items():
 	if (
 		not frappe.get_meta('YRP Process').get_field("item")
 		or not frappe.db.exists('YRP Process', "Cutting")
-		or not frappe.db.exists('YRP Item', "Cutting Charges")
+		or not frappe.db.exists('Item', "Cutting Charges")
 	):
 		return
 	if not frappe.db.get_value('YRP Process', "Cutting", "item"):
@@ -430,12 +430,16 @@ def ensure_yrp_production_order_settings():
 		PRODUCTION_ORDER_GRID_ATTRIBUTE,
 	)
 
-	required_links = (
-		('YRP Item Attribute', PRODUCTION_ORDER_GRID_ATTRIBUTE),
-		('YRP Item Attribute', PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE),
-		('YRP Item Attribute Value', PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE),
-	)
-	if any(not frappe.db.exists(doctype, name) for doctype, name in required_links):
+	from yrp.yrp.doctype.yrp_item.yrp_item import has_attribute_value
+
+	if (
+		not frappe.db.exists('Item Attribute', PRODUCTION_ORDER_GRID_ATTRIBUTE)
+		or not frappe.db.exists('Item Attribute', PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE)
+		or not has_attribute_value(
+			PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE,
+			PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE,
+		)
+	):
 		return False
 
 	settings = frappe.get_doc('YRP YRP Settings')

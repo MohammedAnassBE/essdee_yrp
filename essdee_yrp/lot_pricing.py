@@ -11,7 +11,7 @@ def get_production_order_price_map(production_order):
 		if getattr(production_order, "doctype", None) == 'YRP Production Order'
 		else frappe.get_doc('YRP Production Order', production_order)
 	)
-	primary = frappe.get_value('YRP Item', doc.item, "primary_attribute")
+	primary = frappe.get_value('Item', doc.item, "primary_attribute")
 	price_map = {}
 	if not primary:
 		return price_map

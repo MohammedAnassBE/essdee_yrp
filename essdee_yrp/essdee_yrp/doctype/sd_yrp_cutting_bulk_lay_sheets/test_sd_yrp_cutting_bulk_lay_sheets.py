@@ -282,12 +282,12 @@ class TestCuttingBulkLaySheets(FrappeTestCase):
 		)
 
 		def get_cached_value(doctype, name, fieldname):
-			if doctype == 'YRP Item Variant':
+			if doctype == 'Item' and fieldname == "variant_of":
 				return {
 					"FABRIC-BEIGE-72": "FABRIC",
 					"RIB-BEIGE-33": "RIB",
 				}[name]
-			if doctype == 'YRP Item':
+			if doctype == 'Item' and fieldname == "stock_uom":
 				return "Kg"
 			raise AssertionError((doctype, name, fieldname))
 

@@ -25,7 +25,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Packing Attribute",
-   "options": "YRP Item Attribute",
+   "options": "Item Attribute",
    "read_only": 1,
    "reqd": 1
   },

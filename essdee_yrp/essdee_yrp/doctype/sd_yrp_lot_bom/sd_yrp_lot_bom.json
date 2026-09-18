@@ -19,7 +19,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Item Name",
-   "options": "YRP Item Variant",
+   "options": "Item",
    "reqd": 1
   },
   {
@@ -64,7 +64,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "UOM",
-   "options": "YRP UOM",
+   "options": "UOM",
    "reqd": 1
   }
  ],

@@ -368,7 +368,7 @@ def compute_cloth_demand(lot_name, apply_allowance=True):
         qty = flt(item.quantity)
         if not qty:
             continue
-        variant_doc = frappe.get_cached_doc('YRP Item Variant', item.item_variant)
+        variant_doc = frappe.get_cached_doc('Item', item.item_variant)
         attr_values = {x.attribute: x.attribute_value for x in variant_doc.attributes}
         if item_detail.dependent_attribute and attr_values.get(item_detail.dependent_attribute):
             del attr_values[item_detail.dependent_attribute]

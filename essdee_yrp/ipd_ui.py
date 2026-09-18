@@ -29,7 +29,7 @@ def load_attribute_list(doc):
 	for attribute in doc.get("item_attributes") or []:
 		if not attribute.attribute:
 			continue
-		attribute_doc = frappe.get_cached_doc('YRP Item Attribute', attribute.attribute)
+		attribute_doc = frappe.get_cached_doc('Item Attribute', attribute.attribute)
 		if attribute_doc.numeric_values:
 			continue
 
@@ -77,7 +77,7 @@ def load_dependent_attribute(doc):
 
 @frappe.whitelist()
 def get_complete_item_details(item_name):
-	item = frappe.get_doc('YRP Item', item_name).as_dict()
+	item = frappe.get_doc('Item', item_name).as_dict()
 
 	from frappe.model import default_fields
 
@@ -164,6 +164,21 @@ def get_attribute_detail_values(doctype, txt, searchfield, start, page_len, filt
 	)
 	txt = (txt or "").lower()
 	return [[row.attribute_value] for row in rows if row.attribute_value.lower().startswith(txt)]
+
+
+@frappe.whitelist()
+def search_attribute_detail_values(txt="", mapping=None, page_len=99):
+	"""Return mapped attribute values for an Autocomplete Data control."""
+	if not mapping:
+		return []
+	rows = frappe.get_all(
+		'YRP Item Item Attribute Mapping Value',
+		filters={"parent": mapping},
+		pluck="attribute_value",
+		order_by="idx asc",
+	)
+	needle = (txt or "").lower()
+	return [value for value in rows if needle in value.lower()][: int(page_len or 99)]
 
 
 @frappe.whitelist()

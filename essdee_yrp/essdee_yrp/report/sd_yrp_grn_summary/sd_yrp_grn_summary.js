@@ -22,13 +22,13 @@ frappe.query_reports["SD YRP GRN Summary"] = {
 			"fieldname": "supplier",
 			"label": __("Supplier"),
 			"fieldtype": "Link",
-			"options": "YRP Supplier",
+			"options": "Supplier",
 		},
 		{
 			"fieldname": "item",
 			"label": __("Item"),
 			"fieldtype": "Link",
-			"options": "YRP Item",
+			"options": "Item",
 		},
 		{
 			"fieldname": "only_show_stock_item",
@@ -45,7 +45,7 @@ frappe.query_reports["SD YRP GRN Summary"] = {
 			"fieldname": "delivery_location",
 			"label": __("Delivery Location"),
 			"fieldtype": "Link",
-			"options": "YRP Supplier",
+			"options": "Supplier",
 		},
 		{
 			"fieldname": "status",

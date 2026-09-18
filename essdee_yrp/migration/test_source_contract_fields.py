@@ -16,12 +16,12 @@ DIRECT_FIELDS = {
 	"SD YRP Cutting Marker": {
 		"cutting_marker_parts": ("Table", "SD YRP Cutting Marker Part")
 	},
-	"SD YRP Essdee Quality Inspection": {"unit_name": ("Link", "YRP Supplier")},
+	"SD YRP Essdee Quality Inspection": {"unit_name": ("Link", "Supplier")},
 	"SD YRP FG Stock Entry": {"lot": ("Link", "SD YRP Lot")},
 	"SD YRP Lot": {
 		"version": ("Select", "\nV1\nV2"),
 		"capacity_planning": ("Check", None),
-		"primary_item_attribute": ("Link", "YRP Item Attribute"),
+		"primary_item_attribute": ("Link", "Item Attribute"),
 	},
 	"SD YRP Lotwise Item Profit Qty Rate": {
 		"ratio": ("Int", None),
@@ -50,18 +50,17 @@ DIRECT_FIELDS = {
 		"received_quantity": ("Float", None),
 		"rework_details": ("Small Text", None),
 	},
-	"YRP Item": {"description": ("Small Text", None)},
 	"YRP Item BOM": {
-		"attribute_mapping_based_on": ("Link", "YRP Item Attribute")
+		"attribute_mapping_based_on": ("Link", "Item Attribute")
 	},
 	"YRP Item BOM Attribute Mapping Value": {
-		"bom_item_attribute": ("Link", "YRP Item Attribute Value"),
-		"product_attribute": ("Link", "YRP Item Attribute Value"),
+		"bom_item_attribute": ("Data", None),
+		"product_attribute": ("Data", None),
 	},
 	"YRP Item Price": {"price": ("Float", None)},
 	"YRP Item Production Detail": {"description": ("Small Text", None)},
 	"YRP Process Cost": {
-		"dependent_attribute": ("Link", "YRP Item Attribute"),
+		"dependent_attribute": ("Link", "Item Attribute"),
 		"dependent_attribute_values": ("Select", None),
 	},
 	"YRP Production Order": {
@@ -72,11 +71,6 @@ DIRECT_FIELDS = {
 		"debit_type": ("Select", "\nPermanent\nTemporary"),
 		"debit_value": ("Currency", None),
 	},
-	"YRP Purchase Order": {
-		"billing_address": ("Link", "Address"),
-		"billing_address_display": ("Small Text", None),
-	},
-	"YRP Supplier": {"deparments": ("Table MultiSelect", "YRP Supplier Department")},
 	"YRP ZPL Raw Print Format": {"raw_code": ("Code", None)},
 	"YRP Bin": {"reserved_qty": ("Float", None)},
 }
@@ -104,7 +98,6 @@ SCHEMA_PATHS = {
 	/ "yrp/doctype/yrp_goods_received_note/yrp_goods_received_note.json",
 	"YRP Goods Received Note Item": YRP_ROOT
 	/ "yrp/doctype/yrp_goods_received_note_item/yrp_goods_received_note_item.json",
-	"YRP Item": YRP_ROOT / "yrp/doctype/yrp_item/yrp_item.json",
 	"YRP Item BOM": YRP_ROOT / "yrp/doctype/yrp_item_bom/yrp_item_bom.json",
 	"YRP Item BOM Attribute Mapping Value": YRP_ROOT
 	/ "yrp/doctype/yrp_item_bom_attribute_mapping_value/yrp_item_bom_attribute_mapping_value.json",
@@ -116,9 +109,6 @@ SCHEMA_PATHS = {
 	/ "yrp/doctype/yrp_production_order/yrp_production_order.json",
 	"YRP Purchase Invoice": YRP_ROOT
 	/ "yrp/doctype/yrp_purchase_invoice/yrp_purchase_invoice.json",
-	"YRP Purchase Order": YRP_ROOT
-	/ "yrp/doctype/yrp_purchase_order/yrp_purchase_order.json",
-	"YRP Supplier": YRP_ROOT / "yrp/doctype/yrp_supplier/yrp_supplier.json",
 	"YRP ZPL Raw Print Format": YRP_ROOT
 	/ "yrp/doctype/yrp_zpl_raw_print_format/yrp_zpl_raw_print_format.json",
 	"YRP Bin": YRP_ROOT / "yrp_stock/doctype/yrp_bin/yrp_bin.json",

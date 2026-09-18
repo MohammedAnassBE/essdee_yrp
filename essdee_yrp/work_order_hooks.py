@@ -3,6 +3,7 @@
 
 import frappe
 from frappe import _
+from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 
 def onload(doc, method=None):
@@ -50,7 +51,7 @@ def preserve_dynamic_packing_piece_uom(doc):
 	if not piece_uom:
 		frappe.throw(_("Packing UOM is required on Lot {0}.").format(doc.lot))
 	for row in doc.get("receivables") or []:
-		parent_item = frappe.db.get_value('YRP Item Variant', row.item_variant, "item")
+		parent_item = get_parent_item(row.item_variant)
 		if parent_item == ipd.item:
 			row.uom = piece_uom
 

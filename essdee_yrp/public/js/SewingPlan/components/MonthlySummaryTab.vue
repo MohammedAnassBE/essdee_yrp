@@ -234,7 +234,7 @@ const handlePrint = () => {
         return
     }
     const params = new URLSearchParams({
-        doctype: 'YRP Supplier',
+        doctype: 'Supplier',
         name: props.selected_supplier,
         format: 'Sewing Plan Monthly Summary',
         no_letterhead: '1',

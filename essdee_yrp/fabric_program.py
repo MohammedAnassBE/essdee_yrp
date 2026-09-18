@@ -70,7 +70,7 @@ def _program_row_payload(ipd, row):
 	reference = row.get("reference_item_variant")
 	final_attrs = {}
 	if reference:
-		variant = frappe.get_cached_doc('YRP Item Variant', reference)
+		variant = frappe.get_cached_doc('Item', reference)
 		final_attrs = {
 			value.attribute: value.attribute_value
 			for value in variant.get("attributes") or []
@@ -462,7 +462,7 @@ def save_fabric_program_details(lot_doc):
 		):
 			colour = None
 			if reference_item_variant:
-				ref = frappe.get_cached_doc('YRP Item Variant', reference_item_variant)
+				ref = frappe.get_cached_doc('Item', reference_item_variant)
 				colour = next((
 					a.attribute_value for a in ref.get("attributes") or []
 					if a.attribute == FABRIC_COLOUR_ATTRIBUTE
@@ -669,9 +669,12 @@ def _db_received(lot_name, child_doctype):
 
 
 def _validate_attribute_value(cache, value, attribute):
-	if value not in cache:
-		cache[value] = frappe.db.get_value('YRP Item Attribute Value', value, "attribute_name")
-	if cache[value] != attribute:
+	from yrp.yrp.doctype.yrp_item.yrp_item import has_attribute_value
+
+	key = (attribute, value)
+	if key not in cache:
+		cache[key] = has_attribute_value(attribute, value)
+	if not cache[key]:
 		frappe.throw(_("{0} is not a value of the {1} attribute.").format(value, attribute))
 
 

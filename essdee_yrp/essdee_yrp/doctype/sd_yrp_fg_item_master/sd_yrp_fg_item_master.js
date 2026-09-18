@@ -14,7 +14,7 @@ frappe.ui.form.on("SD YRP FG Item Master", {
 				args: { name: frm.doc.name },
 				freeze: true,
 				callback(response) {
-					if (response.message) frappe.set_route("Form", "YRP Item", response.message);
+					if (response.message) frappe.set_route("Form", "Item", response.message);
 				},
 			});
 		});

@@ -112,14 +112,14 @@ function show_dispatch_dialog(frm) {
 				fieldname: "from_location",
 				fieldtype: "Link",
 				label: __("From Warehouse"),
-				options: "YRP Warehouse",
+				options: "Warehouse",
 				reqd: 1,
 			},
 			{
 				fieldname: "to_location",
 				fieldtype: "Link",
 				label: __("To Supplier"),
-				options: "YRP Supplier",
+				options: "Supplier",
 				reqd: 1,
 			},
 			{

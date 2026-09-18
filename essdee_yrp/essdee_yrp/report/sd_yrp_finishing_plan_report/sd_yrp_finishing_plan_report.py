@@ -18,7 +18,7 @@ def get_columns():
 			"fieldname": "item",
 			"fieldtype": "Link",
 			"label": "Style",
-			"options": 'YRP Item',
+			"options": 'Item',
 		},
 		{
 			"fieldname": "description",
@@ -147,7 +147,7 @@ def get_data(filters):
 		fil['lot'] = ['in', lot_list]
 	if filters.get('product_category'):
 		item_list = frappe.get_all(
-			'YRP Item',
+			'Item',
 			filters={"product_category": filters.get('product_category')},
 			pluck="name",
 		)

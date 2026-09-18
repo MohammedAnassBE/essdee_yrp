@@ -24,7 +24,7 @@ def _lot_dimension_field(doctype=None):
 
 def sync_linked_lots(doc, method=None):
 	"""Normalize PO links while retaining existing child-row identities."""
-	if not _has_link_fields(doc):
+	if not doc.get("is_yrp_managed") or not _has_link_fields(doc):
 		return
 
 	linked_rows = []
@@ -38,7 +38,7 @@ def sync_linked_lots(doc, method=None):
 	# The Desk Purchase Order now stores dimensions on each PO Item, matching
 	# Stock Entry. Keep the old hidden linked-Lot rows synchronized for existing
 	# reports and submitted-PO APIs, but make the item rows the entry source.
-	item_dimension_field = _lot_dimension_field('YRP Purchase Order Item')
+	item_dimension_field = _lot_dimension_field('Purchase Order Item')
 	for item in doc.get("items") or []:
 		lot = item.get(item_dimension_field) if item_dimension_field else None
 		if lot and lot not in seen:
@@ -46,7 +46,7 @@ def sync_linked_lots(doc, method=None):
 			linked_rows.append(doc.append("sd_lot", {"lot": lot}))
 			seen.add(lot)
 
-	dimension_field = _lot_dimension_field('YRP Purchase Order')
+	dimension_field = _lot_dimension_field('Purchase Order')
 	header_lot = doc.get(dimension_field) if dimension_field else None
 	if not doc.get("default_lot") and header_lot:
 		doc.default_lot = header_lot
@@ -82,7 +82,7 @@ def _check_lot_permission(lot, permission_type="read"):
 
 @frappe.whitelist()
 def get_purchase_order_lots(purchase_order):
-	doc = frappe.get_doc('YRP Purchase Order', purchase_order)
+	doc = frappe.get_doc('Purchase Order', purchase_order)
 	doc.check_permission("read")
 	return [row.lot for row in doc.get("sd_lot") or [] if row.lot]
 
@@ -94,7 +94,7 @@ def get_purchase_orders_for_lot(lot):
 		'SD YRP Lot MultiSelect',
 		filters={
 			"lot": lot,
-			"parenttype": 'YRP Purchase Order',
+			"parenttype": 'Purchase Order',
 			"parentfield": "sd_lot",
 		},
 		pluck="parent",
@@ -102,7 +102,7 @@ def get_purchase_orders_for_lot(lot):
 	if not parent_names:
 		return []
 	return frappe.get_list(
-		'YRP Purchase Order',
+		'Purchase Order',
 		filters={"name": ["in", sorted(set(parent_names))], "docstatus": 1},
 		pluck="name",
 	)
@@ -115,7 +115,7 @@ def _lot_has_grn_on_po(purchase_order, lot):
 	grns = frappe.get_all(
 		'YRP Goods Received Note',
 		filters={
-			"against": 'YRP Purchase Order',
+			"against": 'Purchase Order',
 			"against_id": purchase_order,
 			"docstatus": ["in", [0, 1]],
 		},
@@ -136,7 +136,7 @@ def _lot_has_grn_on_po(purchase_order, lot):
 def update_po_lot_links(doc_name, add_lots=None, remove_lots=None, comment=None):
 	add_lots = _parse_name_list(add_lots)
 	remove_lots = _parse_name_list(remove_lots)
-	doc = frappe.get_doc('YRP Purchase Order', doc_name)
+	doc = frappe.get_doc('Purchase Order', doc_name)
 	doc.check_permission("write")
 	if doc.docstatus == 2:
 		frappe.throw(_("Cannot change Lots on a cancelled Purchase Order."))
@@ -185,7 +185,7 @@ def update_po_lot_links(doc_name, add_lots=None, remove_lots=None, comment=None)
 def update_lot_po_links(lot, add_pos=None, remove_pos=None, comment=None):
 	_check_lot_permission(lot, "write")
 	for purchase_order in _parse_name_list(add_pos):
-		if frappe.db.get_value('YRP Purchase Order', purchase_order, "docstatus") != 1:
+		if frappe.db.get_value('Purchase Order', purchase_order, "docstatus") != 1:
 			frappe.throw(_("Purchase Order {0} is not submitted.").format(purchase_order))
 		update_po_lot_links(purchase_order, add_lots=[lot], comment=comment)
 	for purchase_order in _parse_name_list(remove_pos):
@@ -194,12 +194,14 @@ def update_lot_po_links(lot, add_pos=None, remove_pos=None, comment=None):
 
 def validate_grn_lots(doc, method=None):
 	"""Apply linked-Lot restrictions for PO GRNs on every server save path."""
-	if doc.get("against") != 'YRP Purchase Order' or not doc.get("against_id"):
+	if doc.get("against") != 'Purchase Order' or not doc.get("against_id"):
+		return
+	if not frappe.db.get_value('Purchase Order', doc.against_id, "is_yrp_managed"):
 		return
 	dimension_field = _lot_dimension_field('YRP Goods Received Note Item')
 	if not dimension_field:
 		return
-	po = frappe.get_doc('YRP Purchase Order', doc.against_id)
+	po = frappe.get_doc('Purchase Order', doc.against_id)
 	allowed_lots = {row.lot for row in po.get("sd_lot") or [] if row.lot}
 	# An empty linked list deliberately means unrestricted, matching legacy policy.
 	if not allowed_lots:

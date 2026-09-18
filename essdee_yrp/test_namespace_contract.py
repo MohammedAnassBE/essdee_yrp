@@ -89,10 +89,10 @@ class TestNamespaceContract(unittest.TestCase):
 		):
 			records = list(prefix_owned_doctypes_and_reports._metadata_renames())
 
-		self.assertEqual(len(records), 222)
+		self.assertEqual(len(records), 221)
 		self.assertEqual(
 			len({(record_type, new_name) for record_type, _old_name, new_name in records}),
-			222,
+			221,
 		)
 
 	def test_framework_owned_old_name_is_never_renamed(self):
@@ -148,7 +148,7 @@ class TestNamespaceContract(unittest.TestCase):
 					self.assertEqual(path.parent.name, slug)
 					self.assertEqual(path.name, f"{slug}.json")
 
-		self.assertEqual(counts, {"DocType": 196, "Report": 26})
+		self.assertEqual(counts, {"DocType": 195, "Report": 26})
 
 	def test_owned_link_and_table_targets_never_use_an_old_name(self):
 		doctypes = list(_owned_metadata("DocType"))

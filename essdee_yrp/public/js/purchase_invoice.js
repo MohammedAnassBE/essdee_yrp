@@ -247,7 +247,7 @@ function display_number(value, precision) {
 
 function configure_essdee_process_items(frm) {
 	const is_work_order = frm.doc.against === "YRP Work Order";
-	const is_purchase_order = frm.doc.against === "YRP Purchase Order";
+	const is_purchase_order = frm.doc.against === "Purchase Order";
 	const uses_grouped_items =
 		is_work_order ||
 		(is_purchase_order &&

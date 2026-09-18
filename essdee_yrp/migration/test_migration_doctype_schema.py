@@ -6,11 +6,6 @@ import tokenize
 import unittest
 from pathlib import Path
 
-from essdee_yrp.essdee_yrp.doctype.sd_yrp_mrp_data_migration.sd_yrp_mrp_data_migration import (
-	is_target_reset_ready,
-)
-
-
 DOCTYPE_ROOT = Path(__file__).resolve().parents[1] / "essdee_yrp" / "doctype"
 APP_ROOT = Path(__file__).resolve().parents[2]
 MIGRATION_ROOT = DOCTYPE_ROOT / "sd_yrp_mrp_data_migration"
@@ -19,13 +14,6 @@ CUTTING_LAYSHEET_PLANNER_ROOT = DOCTYPE_ROOT / "sd_yrp_cutting_laysheet_planner"
 
 
 class MigrationDocTypeSchemaTest(unittest.TestCase):
-	def test_failed_reset_can_preview_and_retry_only_the_same_action(self):
-		self.assertTrue(is_target_reset_ready("Dry Run Complete", "Dry Run"))
-		self.assertTrue(is_target_reset_ready("Failed", "Reset Target"))
-		self.assertFalse(is_target_reset_ready("Failed", "Dry Run"))
-		self.assertFalse(is_target_reset_ready("Failed", "Migrate"))
-		self.assertFalse(is_target_reset_ready("Running", "Reset Target"))
-
 	def test_live_runner_contains_no_local_environment_or_record_whitelist(self):
 		paths = (
 			Path(__file__).with_name("config.py"),
@@ -67,16 +55,19 @@ class MigrationDocTypeSchemaTest(unittest.TestCase):
 			"allow_missing_files=bool(self.allow_missing_source_blobs)",
 			controller,
 		)
-		self.assertIn("def reset_target", controller)
-		self.assertIn("def get_reset_preview", controller)
-		self.assertIn('expected = f"RESET {self.target_site}"', controller)
-		self.assertIn('allowed_statuses={"Reset Complete", "Failed"}', controller)
-		self.assertIn("Reset Complete", fields["status"]["options"])
-		self.assertIn("Reset Target", fields["last_action"]["options"])
+		self.assertNotIn("def reset_target", controller)
+		self.assertNotIn("def get_reset_preview", controller)
+		self.assertIn('allowed_statuses={"Dry Run Complete", "Failed"}', controller)
+		self.assertNotIn("Reset Complete", fields["status"]["options"])
+		self.assertNotIn("Reset Target", fields["last_action"]["options"])
 		client = (MIGRATION_ROOT / "sd_yrp_mrp_data_migration.js").read_text()
-		self.assertIn("Reset Target Data", client)
-		self.assertIn("preview.parent_rows", client)
-		self.assertIn("values.confirmation", client)
+		self.assertNotIn("Reset Target Data", client)
+		self.assertIn('[__("Migrate"), "migrate", ["Dry Run Complete", "Failed"]]', client)
+		self.assertIn(
+			'[__("Verify"), "verify", ["Completed", "Verified", "Verified With Source Gaps", "Failed"]]',
+			client,
+		)
+		self.assertIn('and self.last_action != "Verify"', controller)
 
 	def test_new_desk_run_loads_required_read_only_connection_fields(self):
 		controller = (MIGRATION_ROOT / "sd_yrp_mrp_data_migration.py").read_text()
@@ -107,7 +98,7 @@ class MigrationDocTypeSchemaTest(unittest.TestCase):
 		schema = json.loads(path.read_text())
 		fields = {row["fieldname"]: row for row in schema["fields"]}
 		self.assertEqual(fields["lot"]["options"], 'SD YRP Lot')
-		self.assertEqual(fields["item"]["options"], 'YRP Item')
+		self.assertEqual(fields["item"]["options"], 'Item')
 		self.assertEqual(fields["description"]["fieldtype"], "Small Text")
 		self.assertTrue(fields["description"]["reqd"])
 

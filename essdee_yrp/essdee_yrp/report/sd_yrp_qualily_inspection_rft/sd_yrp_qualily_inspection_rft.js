@@ -12,7 +12,7 @@ frappe.query_reports["SD YRP Qualily Inspection RFT"] = {
 		{
 			"fieldname": "item",
 			"fieldtype": "Link",
-			"options": "YRP Item",
+			"options": "Item",
 			"label": "Item"
 		},
 		{
@@ -28,7 +28,7 @@ frappe.query_reports["SD YRP Qualily Inspection RFT"] = {
 		{
 			"fieldname": "supplier",
 			"fieldtype": "Link",
-			"options": "YRP Supplier",
+			"options": "Supplier",
 			"label": "Supplier"
 		},
 		{

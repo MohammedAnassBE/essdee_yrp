@@ -442,7 +442,8 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 	def test_cutting_dc_sizes_share_one_logical_row(self):
 		variants = {
 			"BOTTOM-LEFT-45": frappe._dict(
-				item="Maze Capri Set R.N.S",
+				name="BOTTOM-LEFT-45",
+				variant_of="Maze Capri Set R.N.S",
 				attributes=[
 					frappe._dict(attribute="Stage", attribute_value="Cut"),
 					frappe._dict(attribute="Panel", attribute_value="Bottom Front Left"),
@@ -451,7 +452,8 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 				],
 			),
 			"BOTTOM-LEFT-50": frappe._dict(
-				item="Maze Capri Set R.N.S",
+				name="BOTTOM-LEFT-50",
+				variant_of="Maze Capri Set R.N.S",
 				attributes=[
 					frappe._dict(attribute="Stage", attribute_value="Cut"),
 					frappe._dict(attribute="Panel", attribute_value="Bottom Front Left"),
@@ -460,10 +462,11 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 				],
 			),
 		}
-		item = frappe._dict(primary_attribute="Size")
+		item = frappe._dict(name="Maze Capri Set R.N.S", primary_attribute="Size")
 
 		def get_cached_doc(doctype, name):
-			return variants[name] if doctype == 'YRP Item Variant' else item
+			self.assertEqual(doctype, 'Item')
+			return variants.get(name, item)
 
 		rows = [
 			frappe._dict(

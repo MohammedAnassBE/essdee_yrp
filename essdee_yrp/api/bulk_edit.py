@@ -14,7 +14,7 @@ DISALLOWED_FIELDTYPES = {"Dynamic Link", "Read Only"}
 # related records. A direct db_set would bypass those guards, so targeted bulk
 # edits of them must use the normal document save path.
 CONTROLLER_VALIDATED_PARENT_FIELDS = {
-	'YRP Item': {"allow_negative_stock", "default_unit_of_measure"},
+	'Item': {"allow_negative_stock", "stock_uom"},
 }
 
 

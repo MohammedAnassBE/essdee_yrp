@@ -11,6 +11,27 @@ from datetime import datetime
 
 import frappe
 from frappe.utils import flt, getdate, money_in_words
+from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
+
+
+def get_value_with_pad(value, pad):
+	"""Pad a raw-printer value to the requested display width."""
+
+	value = str(value or "")
+	return value.ljust(max(len(value), int(pad or 0)), " ")
+
+
+def get_item_size(item, item_size, text_size):
+	"""Return the configured printer font size for an item-name length."""
+
+	text_sizes = list(text_size or [])
+	if not text_sizes:
+		return None
+	length = len(str(item or ""))
+	for index, maximum_length in enumerate(item_size or []):
+		if length <= int(maximum_length) and index < len(text_sizes):
+			return text_sizes[index]
+	return text_sizes[-1]
 
 
 def get_created_date(value):
@@ -49,15 +70,15 @@ def get_supplier_address_display(supplier):
 def get_warehouse_name(warehouse):
 	if not warehouse:
 		return ""
-	doc = frappe.get_doc('YRP Warehouse', warehouse)
+	doc = frappe.get_doc('Warehouse', warehouse)
 	doc.check_permission("read")
-	return doc.get("name1") or doc.name
+	return doc.get("warehouse_name") or doc.name
 
 
 def get_warehouse_address_display(warehouse):
 	if not warehouse:
 		return ""
-	doc = frappe.get_doc('YRP Warehouse', warehouse)
+	doc = frappe.get_doc('Warehouse', warehouse)
 	doc.check_permission("read")
 	return get_supplier_address_display(doc.get("supplier")) if doc.get("supplier") else ""
 
@@ -65,7 +86,7 @@ def get_warehouse_address_display(warehouse):
 def _supplier_name(supplier):
 	if not supplier:
 		return ""
-	return frappe.db.get_value('YRP Supplier', supplier, "supplier_name") or supplier
+	return frappe.db.get_value('Supplier', supplier, "supplier_name") or supplier
 
 
 def _work_order_lot(rows):
@@ -136,7 +157,7 @@ def parse_json(value):
 
 
 def get_item_from_variant(variant):
-	return frappe.get_cached_value('YRP Item Variant', variant, "item") if variant else None
+	return get_parent_item(variant)
 
 
 def fetch_item_details(items, include_id=False):
@@ -145,7 +166,7 @@ def fetch_item_details(items, include_id=False):
 	The F16 grouping service remains the source of truth. Only legacy display
 	aliases are added here; no transaction data is changed.
 	"""
-	groups = _group_items(items, 'YRP Purchase Order')
+	groups = _group_items(items, 'Purchase Order')
 	for group in groups:
 		group["additional_parameters"] = [
 			True
@@ -158,7 +179,7 @@ def fetch_item_details(items, include_id=False):
 				detail["cancelled_qty"] = detail.get("cancelled_quantity", 0)
 				detail["tax"] = detail.get("tax") or item.get("tax") or 0
 				if include_id:
-					detail.setdefault("ref_doctype", 'YRP Purchase Order Item')
+					detail.setdefault("ref_doctype", 'Purchase Order Item')
 	return groups
 
 
@@ -328,7 +349,7 @@ def _generic_work_order_items(items):
 	for variants in row_groups.values():
 		first = variants[0]
 		variant_name = first.get("item_variant")
-		parent_item = frappe.db.get_value('YRP Item Variant', variant_name, "item")
+		parent_item = get_parent_item(variant_name)
 		if not parent_item:
 			continue
 
@@ -352,7 +373,7 @@ def _generic_work_order_items(items):
 			},
 		)
 
-		first_variant = frappe.get_cached_doc('YRP Item Variant', variant_name)
+		first_variant = frappe.get_cached_doc('Item', variant_name)
 		first_attrs = {
 			row.attribute: row.attribute_value
 			for row in (first_variant.attributes or [])
@@ -369,7 +390,7 @@ def _generic_work_order_items(items):
 		if primary and primary_values:
 			entry["values"] = {value: {"qty": 0} for value in primary_values}
 			for row in variants:
-				variant = frappe.get_cached_doc('YRP Item Variant', row.get("item_variant"))
+				variant = frappe.get_cached_doc('Item', row.get("item_variant"))
 				attributes = {
 					value.attribute: value.attribute_value
 					for value in (variant.attributes or [])

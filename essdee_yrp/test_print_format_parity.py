@@ -54,7 +54,6 @@ LEGACY_PRINT_DOCTYPE_NAMES = {
 	"Product Measurement",
 	"Product Sub brand",
 	"Production Term Detail",
-	"Supplier",
 	"Terms and Condition",
 	"Terms and Condition Detail",
 	"Work Order",
@@ -130,15 +129,22 @@ class TestPrintFormatParity(IntegrationTestCase):
 	def test_purchase_order_print_adapters(self):
 		from essdee_yrp.print_helpers import (
 			check_key_value_in_dict_or_list_of_dict,
+			get_item_size,
+			get_value_with_pad,
 			parse_json,
 		)
 
 		self.assertTrue(check_key_value_in_dict_or_list_of_dict("lot", [{"lot": "L1"}]))
 		self.assertFalse(check_key_value_in_dict_or_list_of_dict("lot", [{"lot": ""}]))
 		self.assertEqual(parse_json('[{"key": "value"}]'), [{"key": "value"}])
+		self.assertEqual(get_item_size("Small", [5, 10], [30, 20, 10]), 30)
+		self.assertEqual(get_item_size("A very long item", [5, 10], [30, 20, 10]), 10)
+		self.assertEqual(get_value_with_pad("ABC", 5), "ABC  ")
 
 	def test_templates_render_against_migrated_documents(self):
 		from essdee_yrp.print_helpers import prepare_print_document
+		if not frappe.db.exists('SD YRP Cutting Plan', "CP-2608-00006"):
+			self.skipTest("Print rendering against source records runs after data migration")
 
 		for path, data in self._formats():
 			with self.subTest(format=path.parent.name):

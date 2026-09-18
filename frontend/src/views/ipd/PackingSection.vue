@@ -87,7 +87,7 @@
 							<LinkField
 								v-if="editing"
 								:model-value="r.attribute_value"
-								target-doctype="YRP Item Attribute Value"
+								target-doctype="Item Attribute Value"
 								:search-handler="attrValueSearch"
 								class="pk-link"
 								@item-select="(e) => (r.attribute_value = e.value)"
@@ -128,7 +128,7 @@
 							<LinkField
 								v-if="editing"
 								:model-value="r.attribute_value"
-								target-doctype="YRP Item Attribute Value"
+								target-doctype="Item Attribute Value"
 								:search-handler="sizeSearch"
 								class="pk-link"
 								@item-select="(e) => (r.attribute_value = e.value)"
@@ -311,7 +311,7 @@ watch(
 async function mappingSearch(mapping, q) {
 	if (!mapping) return [];
 	const res = await callMethod("essdee_yrp.ipd_ui.get_attribute_detail_values", {
-		doctype: "YRP Item Attribute Value",
+		doctype: "Item Attribute Value",
 		txt: q || "",
 		searchfield: "name",
 		start: 0,
@@ -327,7 +327,7 @@ const sizeSearch = (q) => mappingSearch(primaryMapping.value, q);
 async function attrValueSearch(q) {
 	if (!packingMapping.value) return [];
 	const res = await callMethod("essdee_yrp.ipd_ui.get_attribute_detail_values", {
-		doctype: "YRP Item Attribute Value",
+		doctype: "Item Attribute Value",
 		txt: q || "",
 		searchfield: "name",
 		start: 0,

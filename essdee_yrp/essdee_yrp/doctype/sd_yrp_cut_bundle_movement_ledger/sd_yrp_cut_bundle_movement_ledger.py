@@ -9,7 +9,7 @@ from frappe import _
 from frappe.utils import flt, nowdate, nowtime
 from frappe.model.document import Document
 from yrp.stock.utils import get_combine_datetime
-from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_or_create_variant
+from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_or_create_variant, get_parent_item
 from yrp.utils import get_variant_attr_details, update_if_string_instance
 
 def _get_tuple_attributes(tuple_data):
@@ -148,7 +148,7 @@ class SDYRPCutBundleMovementLedger(Document):
 
 	def set_key(self):
 		lot_hash = frappe.get_cached_value('SD YRP Lot', self.lot, "lot_hash_value")
-		item_hash = frappe.get_cached_value('YRP Item', self.item, "item_hash_value")
+		item_hash = frappe.get_cached_value('Item', self.item, "item_hash_value")
 		parts = [
 			str(lot_hash), str(self.supplier), str(self.lay_no), str(self.bundle_no),
 			str(self.shade), str(item_hash), str(self.size), str(self.colour), str(self.panel),
@@ -283,7 +283,7 @@ def get_previous_entry(entry, collapsed_bundle=0):
 
 def get_cbm_key(entry):
 	lot_hash = frappe.get_cached_value('SD YRP Lot', entry['lot'], "lot_hash_value")
-	item_hash = frappe.get_cached_value('YRP Item', entry['item'], "item_hash_value")
+	item_hash = frappe.get_cached_value('Item', entry['item'], "item_hash_value")
 	parts = [
 		str(lot_hash),
 		str(entry['supplier']),
@@ -378,8 +378,8 @@ def _collapsed_transaction_rows(doc, lot, source_location, attrs):
 		if quantity <= 0:
 			continue
 		variant = row.get(variant_field)
-		item = frappe.db.get_value('YRP Item Variant', variant, "item")
-		dependent_attribute = frappe.db.get_value('YRP Item', item, "dependent_attribute")
+		item = get_parent_item(variant)
+		dependent_attribute = frappe.db.get_value('Item', item, "dependent_attribute")
 		if not dependent_attribute or not check_dependent_stage_variant(
 			variant, dependent_attribute, attrs["stich_stage"]
 		):
@@ -923,7 +923,7 @@ def get_latest_cbml_for_variant(from_location,lot, primary_value, pack_value, st
 def check_dependent_stage_variant(variant, dependent_attribute, dependent_attribute_value):
 	attr_details = frappe.db.sql(
 		"""
-			SELECT attribute, attribute_value FROM `tabYRP Item Variant Attribute` WHERE parent = %(parent)s
+			SELECT attribute, attribute_value FROM `tabItem Variant Attribute` WHERE parent = %(parent)s
 			AND attribute = %(dependent)s AND attribute_value = %(stage_value)s
 		""", {
 			"parent": variant,

@@ -37,7 +37,19 @@ LAYOUT_FIELD_TYPES = frozenset(
 	{"Section Break", "Column Break", "Tab Break", "HTML", "Button", "Heading", "Fold"}
 )
 NUMERIC_FIELD_TYPES = frozenset({"Check", "Int", "Float", "Currency", "Percent"})
-TEXT_FIELD_TYPES = frozenset({"Data", "Small Text", "Text", "Long Text", "Code", "JSON", "Read Only"})
+TEXT_FIELD_TYPES = frozenset(
+	{
+		"Autocomplete",
+		"Code",
+		"Data",
+		"JSON",
+		"Long Text",
+		"Read Only",
+		"Small Text",
+		"Text",
+		"Text Editor",
+	}
+)
 
 
 class MigrationError(RuntimeError):

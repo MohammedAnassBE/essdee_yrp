@@ -94,7 +94,7 @@ class SDYRPCutBundleEdit(Document):
 		self.ignore_linked_doctypes = ('SD YRP Cut Bundle Movement Ledger',)
 		posting_datetime = get_combine_datetime(self.posting_date, self.posting_time)
 		lot_hash = frappe.get_cached_value('SD YRP Lot', self.lot, "lot_hash_value")
-		item_hash = frappe.get_cached_value('YRP Item', self.item, "item_hash_value")
+		item_hash = frappe.get_cached_value('Item', self.item, "item_hash_value")
 		output_json = frappe.json.loads(self.output_json)
 		for row in output_json:
 			parts = [
@@ -171,7 +171,7 @@ class SDYRPCutBundleEdit(Document):
 	def on_submit(self):
 		input_json = frappe.json.loads(self.input_json)
 		lot_hash = frappe.get_cached_value('SD YRP Lot', self.lot, "lot_hash_value")
-		item_hash = frappe.get_cached_value('YRP Item', self.item, "item_hash_value")
+		item_hash = frappe.get_cached_value('Item', self.item, "item_hash_value")
 		for row in input_json:
 			parts = [
 				str(lot_hash), str(self.warehouse), str(row['lay_no']), str(row['bundle_no']),

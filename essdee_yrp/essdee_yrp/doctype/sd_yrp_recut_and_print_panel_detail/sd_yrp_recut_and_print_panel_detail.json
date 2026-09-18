@@ -43,7 +43,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Item Variant",
-   "options": "YRP Item Variant"
+   "options": "Item"
   },
   {
    "fieldname": "cloth_type",
@@ -70,13 +70,13 @@
    "fieldname": "uom",
    "fieldtype": "Link",
    "label": "Uom",
-   "options": "YRP UOM"
+   "options": "UOM"
   },
   {
    "fieldname": "stock_uom",
    "fieldtype": "Link",
    "label": "Stock Uom",
-   "options": "YRP UOM"
+   "options": "UOM"
   },
   {
    "fieldname": "rate",

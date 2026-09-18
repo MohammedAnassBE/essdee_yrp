@@ -67,7 +67,7 @@
 					<Column header="#" :style="{ width: '40px' }">
 						<template #body="{ index }">{{ index + 1 }}</template>
 					</Column>
-					<Column header="YRP Item" :style="{ minWidth: '160px' }">
+					<Column header="Item" :style="{ minWidth: '160px' }">
 						<template #body="{ data }">
 							<span class="esd-mono">{{ data.name }}</span>
 						</template>
@@ -160,7 +160,7 @@
 						</Column>
 					</template>
 
-					<Column header="YRP UOM" :style="{ width: '84px' }">
+					<Column header="UOM" :style="{ width: '84px' }">
 						<template #body="{ data }">{{ data.default_uom || "—" }}</template>
 					</Column>
 
@@ -672,7 +672,7 @@ async function onUpdateSecondaryToggle(value) {
 	}
 	try {
 		const r = await callMethod("frappe.client.get_value", {
-			doctype: "YRP Item",
+			doctype: "Item",
 			filters: draft.parentItem,
 			fieldname: "secondary_unit_of_measure",
 		})
@@ -1041,7 +1041,7 @@ async function startEdit(gi, index) {
 
 // ════════════════ AUTOCOMPLETE QUERIES ════════════════
 async function searchItem(e) {
-	itemSuggestions.value = await searchNames("YRP Item", e.query, props.itemFilters)
+	itemSuggestions.value = await searchNames("Item", e.query, props.itemFilters)
 }
 
 async function searchDimension(dim, e) {
@@ -1059,7 +1059,7 @@ async function searchDimension(dim, e) {
 async function searchAttributeValue(attr, e) {
 	try {
 		const rows = await callMethod("frappe.client.get_list", {
-			doctype: "YRP Item Attribute Value",
+			doctype: "Item Attribute Value",
 			filters: {
 				attribute_name: attr,
 				attribute_value: ["like", `%${e.query || ""}%`],

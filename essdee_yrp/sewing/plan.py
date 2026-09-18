@@ -86,7 +86,7 @@ def _should_have_sewing_plan(work_order) -> bool:
 	if not cint(work_order.get("is_internal_unit")):
 		return False
 	if not cint(
-		frappe.db.get_value('YRP Supplier', work_order.supplier, "apply_sewing_plan")
+		frappe.db.get_value('Supplier', work_order.supplier, "apply_sewing_plan")
 	):
 		return False
 

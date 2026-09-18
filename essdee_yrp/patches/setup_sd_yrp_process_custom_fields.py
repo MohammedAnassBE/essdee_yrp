@@ -1,27 +1,7 @@
-from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
-
 from essdee_yrp.sd_yrp_sync import ensure_consumer_config
 
 
 def execute():
-	create_custom_fields(
-		{
-			'YRP Process': [
-				{
-					"fieldname": "includes_packing",
-					"fieldtype": "Check",
-					"label": "Includes Packing",
-					"insert_after": "is_manual_entry_in_grn",
-					"default": "0",
-				},
-				{
-					"fieldname": "item",
-					"fieldtype": "Link",
-					"label": "Item",
-					"options": 'YRP Item',
-					"insert_after": "includes_packing",
-				},
-			]
-		}
-	)
+	# Fixed fields are fixture-owned. This patch now retains only the unrelated
+	# consumer configuration side effect needed by existing installations.
 	ensure_consumer_config()

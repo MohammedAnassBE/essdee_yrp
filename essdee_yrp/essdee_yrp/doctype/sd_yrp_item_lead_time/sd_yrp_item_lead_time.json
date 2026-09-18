@@ -17,7 +17,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Item Name",
-   "options": "YRP Item",
+   "options": "Item",
    "reqd": 1
   },
   {
@@ -37,7 +37,7 @@
    "fieldname": "supplier",
    "fieldtype": "Link",
    "label": "Supplier",
-   "options": "YRP Supplier"
+   "options": "Supplier"
   }
  ],
  "index_web_pages_for_search": 1,

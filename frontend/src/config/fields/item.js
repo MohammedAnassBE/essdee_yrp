@@ -25,18 +25,15 @@ const hideFormFields = [
 ]
 
 const readOnlyChildFields = {
-	"YRP Item Item Attribute": ["mapping"],
+	"Item Variant Attribute": ["mapping"],
 }
 
 const boolLabels = {
 	is_cloth_item: { on: "Cloth item", off: "Not a cloth item" },
 }
 
-// `name1`'s base-yrp meta label is literally "Name", so the Item list showed
-// two columns both headed "Name" (the doc code + this). Relabel it "Item Name"
-// so the list header is unambiguous (getFieldLabel applies to list headers).
 const labels = {
-	name1: "Item Name",
+	item_name: "Item Name",
 }
 
 // Keep the /web pickers inside the same legal subset as Desk. The server also
@@ -44,8 +41,8 @@ const labels = {
 // can never be saved; Item Group has no equivalent controller guard, so the
 // leaf-only filter is especially important.
 const linkSearchHandlers = {
-	item_group: () => (q) => searchLink("YRP Item Group", q, { is_group: 0 }),
-	default_unit_of_measure: () => (q) => searchLink("YRP UOM", q, { secondary_only: 0 }),
+	item_group: () => (q) => searchLink("Item Group", q, { is_group: 0 }),
+	stock_uom: () => (q) => searchLink("UOM", q, { secondary_only: 0 }),
 }
 
 export default {

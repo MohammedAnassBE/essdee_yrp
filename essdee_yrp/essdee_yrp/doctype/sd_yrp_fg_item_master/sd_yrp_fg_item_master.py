@@ -98,13 +98,13 @@ def create_or_update_item(fg_item):
 		frappe.throw(_("Set an FG Item Master Template."))
 
 	if fg_item.item:
-		item = frappe.get_doc('YRP Item', fg_item.item)
+		item = frappe.get_doc('Item', fg_item.item)
 		item.check_permission("write")
 	else:
 		item = create_item(fg_item)
 		fg_item.db_set("item", item.name, update_modified=False)
 
-	item.name1 = fg_item.name1
+	item.item_name = fg_item.name1
 	item.brand = fg_item.brand
 	item.item_group = "Products"
 	item.hsn_code = fg_item.hsn
@@ -125,21 +125,29 @@ def create_or_update_item(fg_item):
 def create_item(fg_item):
 	template = frappe.get_doc('SD YRP FG Item Master Template', fg_item.template)
 	template.check_permission("read")
-	item = frappe.new_doc('YRP Item')
-	item.name1 = fg_item.name1
+	item = frappe.new_doc('Item')
+	item.item_code = fg_item.name1
+	item.item_name = fg_item.name1
 	item.brand = fg_item.brand
 	item.item_group = "Products"
-	for fieldname in (
-		"default_unit_of_measure",
-		"secondary_unit_of_measure",
-		"uom_conversion_details",
-		"primary_attribute",
-		"dependent_attribute",
-		"dependent_attribute_mapping",
-		"attributes",
-		"additional_parameters",
-	):
-		item.set(fieldname, template.get(fieldname))
+	item.stock_uom = template.default_unit_of_measure
+	item.secondary_unit_of_measure = template.secondary_unit_of_measure
+	item.primary_attribute = template.primary_attribute
+	item.dependent_attribute = template.dependent_attribute
+	item.dependent_attribute_mapping = template.dependent_attribute_mapping
+	item.has_variants = bool(template.attributes)
+	for row in template.uom_conversion_details:
+		item.append("uoms", {"uom": row.uom, "conversion_factor": row.conversion_factor})
+	for row in template.attributes:
+		item.append("attributes", {"attribute": row.attribute, "mapping": row.mapping})
+	for row in template.additional_parameters:
+		item.append(
+			"additional_parameters",
+			{
+				"additional_parameter_key": row.additional_parameter_key,
+				"additional_parameter_value": row.additional_parameter_value,
+			},
+		)
 	item.insert()
 	return item
 
@@ -165,12 +173,12 @@ def _ensure_size_mapping(item, sizes):
 def _ensure_box_conversion(item, pieces_per_box):
 	if cint(pieces_per_box) <= 0:
 		frappe.throw(_("Pieces Per Box must be greater than zero."))
-	row = next((row for row in item.uom_conversion_details if row.uom == "Box"), None)
+	row = next((row for row in item.uoms if row.uom == "Box"), None)
 	if row:
 		row.conversion_factor = cint(pieces_per_box)
 	else:
 		item.append(
-			"uom_conversion_details",
+			"uoms",
 			{"uom": "Box", "conversion_factor": cint(pieces_per_box)},
 		)
 

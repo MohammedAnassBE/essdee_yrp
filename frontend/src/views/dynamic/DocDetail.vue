@@ -1728,7 +1728,7 @@ const workOrderProcessIsCloth = ref(false)
 let workOrderSelectionRequest = 0
 const isDeliveryChallan = computed(() => doctype.value === "YRP Delivery Challan")
 const isGoodsReceivedNote = computed(() => doctype.value === "YRP Goods Received Note")
-const isItem = computed(() => doctype.value === "YRP Item")
+const isItem = computed(() => doctype.value === "Item")
 const isLot = computed(() => doctype.value === "SD YRP Lot")
 // A transferred Lot's order editors are LOCKED (Desk parity — lot.js hides the
 // LotOrder edit/delete icons and CutPlanItems goes read-only once is_transferred;
@@ -4148,7 +4148,7 @@ async function runDocAutofill(fieldname) {
 		if (form.against === "YRP Work Order") {
 			method = "yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note.get_work_order_defaults"
 			args = { work_order: form.against_id, delivery_challan: form.delivery_challan || "" }
-		} else if (form.against === "YRP Purchase Order") {
+		} else if (form.against === "Purchase Order") {
 			method = "yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note.get_purchase_order_defaults"
 			args = { purchase_order: form.against_id }
 		} else return
@@ -4401,7 +4401,7 @@ function childLinkSearchHandlerFor(col, row = null) {
 	const target = childLinkTarget(col, row)
 	if (!target) return async () => []
 	let filters = null
-	if (isLot.value && col.fieldname === "cloth_item" && target === "YRP Item") {
+	if (isLot.value && col.fieldname === "cloth_item" && target === "Item") {
 		filters = { is_cloth_item: 1 }
 	} else if (isLot.value && col.fieldname === "production_detail" && target === "YRP Item Production Detail") {
 		if (!row?.cloth_item) return async () => []

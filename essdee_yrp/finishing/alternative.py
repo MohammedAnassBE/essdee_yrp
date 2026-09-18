@@ -251,9 +251,9 @@ def get_alternative_details(lot):
 
 @frappe.whitelist()
 def check_is_alternative_item(item):
-	return frappe.get_list(
-		'SD YRP Item Alternative', filters={"item": item}, pluck="alternative_item"
-	)
+	from essdee_yrp.item_alternatives import get_alternative_items
+
+	return get_alternative_items(item)
 
 
 def _collect_conversions(qty_details):

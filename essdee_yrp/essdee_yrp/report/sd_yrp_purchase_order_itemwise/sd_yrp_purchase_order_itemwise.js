@@ -8,25 +8,25 @@ frappe.query_reports["SD YRP Purchase Order Itemwise"] = {
 			"fieldname": "item",
 			"label": __("Item"),
 			"fieldtype": "Link",
-			"options": "YRP Item"
+			"options": "Item"
 		},
 		{
 			"fieldname": "supplier",
 			"label": __("Supplier"),
 			"fieldtype": "Link",
-			"options": "YRP Supplier"
+			"options": "Supplier"
 		},
 		{
 			"fieldname": "purchase_order",
 			"label": __("Purchase Order"),
 			"fieldtype": "Link",
-			"options": "YRP Purchase Order"
+			"options": "Purchase Order"
 		},
 		{
 			"fieldname": "delivery_location",
 			"label": __("Delivery Location"),
 			"fieldtype": "Link",
-			"options": "YRP Supplier"
+			"options": "Supplier"
 		},
 		{
 			"fieldname": "lot",
@@ -99,9 +99,9 @@ frappe.query_reports["SD YRP Purchase Order Itemwise"] = {
 				value = `<span class='indicator-pill ${status_colors[data.status]}'>${__(data.status)}</span>`;
 			}
 		} else if (column.fieldname == "supplier_name") {
-			value = `<a href="/app/yrp-supplier/${data.supplier}" data-doctype="YRP Supplier" data-name="${data.supplier}" data-value="${data.supplier}">${data.supplier_name}</a>`;
+			value = `<a href="/app/yrp-supplier/${data.supplier}" data-doctype="Supplier" data-name="${data.supplier}" data-value="${data.supplier}">${data.supplier_name}</a>`;
 		} else if (column.fieldname == "delivery_location_name") {
-			value = `<a href="/app/yrp-supplier/${data.delivery_location}" data-doctype="YRP Supplier" data-name="${data.delivery_location}" data-value="${data.delivery_location}">${data.delivery_location_name}</a>`;
+			value = `<a href="/app/yrp-supplier/${data.delivery_location}" data-doctype="Supplier" data-name="${data.delivery_location}" data-value="${data.delivery_location}">${data.delivery_location_name}</a>`;
 		}
 
 		return value;

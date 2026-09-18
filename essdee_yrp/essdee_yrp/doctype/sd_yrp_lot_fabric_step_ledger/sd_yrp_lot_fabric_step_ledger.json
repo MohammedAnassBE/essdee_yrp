@@ -20,7 +20,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Cloth Item",
-   "options": "YRP Item",
+   "options": "Item",
    "reqd": 1
   },
   {
@@ -40,23 +40,21 @@
   },
   {
    "fieldname": "dia",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Dia",
-   "options": "YRP Item Attribute Value"
+   "label": "Dia"
   },
   {
    "fieldname": "colour",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Colour",
-   "options": "YRP Item Attribute Value"
+   "label": "Colour"
   },
   {
    "fieldname": "reference_item_variant",
    "fieldtype": "Link",
    "label": "Reference Item Variant",
-   "options": "YRP Item Variant",
+   "options": "Item",
    "read_only": 1
   },
   {

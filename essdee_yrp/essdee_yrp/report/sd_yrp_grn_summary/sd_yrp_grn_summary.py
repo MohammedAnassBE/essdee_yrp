@@ -30,14 +30,14 @@ def get_columns():
             "fieldname": "po_name",
             "label": "PO",
             "fieldtype": "Link",
-            "options": 'YRP Purchase Order',
+            "options": 'Purchase Order',
             "width": 100
         },
         {
             "fieldname": "supplier",
             "label": "Supplier",
             "fieldtype": "Link",
-            "options": 'YRP Supplier',
+            "options": 'Supplier',
             "width": 100
         },
         {
@@ -56,7 +56,7 @@ def get_columns():
             "fieldname": "delivery_location",
             "label": "Delivery Location",
             "fieldtype": "Link",
-            "options": 'YRP Supplier',
+            "options": 'Supplier',
             "width": 100
         },
         {
@@ -75,7 +75,7 @@ def get_columns():
             "fieldname": "item_variant",
             "label": "Item Variant",
             "fieldtype": "Link",
-            "options": 'YRP Item Variant',
+            "options": 'Item',
             "width": 150
         },
         {
@@ -88,7 +88,7 @@ def get_columns():
             "fieldname": "uom",
             "label": "UOM",
             "fieldtype": "Link",
-            "options": 'YRP UOM',
+            "options": 'UOM',
             "width": 100
         },
         {
@@ -147,12 +147,11 @@ def get_columns():
 
 def get_data(filters):
     grn_item = frappe.qb.DocType('YRP Goods Received Note Item')
-    po_item = frappe.qb.DocType('YRP Purchase Order Item')
+    po_item = frappe.qb.DocType('Purchase Order Item')
     grn = frappe.qb.DocType('YRP Goods Received Note')
-    po = frappe.qb.DocType('YRP Purchase Order')
-    supplier = frappe.qb.DocType('YRP Supplier')
-    item_variant = frappe.qb.DocType('YRP Item Variant')
-    item = frappe.qb.DocType('YRP Item')
+    po = frappe.qb.DocType('Purchase Order')
+    supplier = frappe.qb.DocType('Supplier')
+    item_variant = frappe.qb.DocType('Item')
 
     q = (
         frappe.qb.from_(grn_item)
@@ -163,9 +162,7 @@ def get_data(filters):
         .left_join(po)
         .on(po_item.parent == po.name)
         .left_join(item_variant)
-        .on(po_item.item_variant == item_variant.name)
-        .inner_join(item)
-        .on(item_variant.item == item.name)
+        .on(po_item.item_code == item_variant.name)
         .left_join(supplier)
         .on(grn.delivery_location == supplier.name)
         .select(
@@ -180,7 +177,7 @@ def get_data(filters):
             grn_item.quantity.as_('received_qty'),
             grn_item.uom,
             grn_item.lot,
-            po_item.delivery_date.as_('expected_delivery_date'),
+            po_item.schedule_date.as_('expected_delivery_date'),
             po_item.qty.as_("po_qty"),
             po_item.rate.as_("po_rate"),
             grn.delivery_date,
@@ -189,11 +186,11 @@ def get_data(filters):
             grn.modified,
             grn.modified_by,
         )
-        .where(grn.against == 'YRP Purchase Order')
+        .where(grn.against == 'Purchase Order')
     )
 
     if filters.get('only_show_stock_item'):
-        q = q.where(item.is_stock_item == 1)
+        q = q.where(item_variant.is_stock_item == 1)
 
     if filters.get('from_date'):
         q = q.where(grn.grn_date >= filters.get('from_date'))
@@ -202,7 +199,10 @@ def get_data(filters):
     if filters.get('supplier'):
         q = q.where(grn.supplier == filters.get('supplier'))
     if filters.get('item'):
-        q = q.where(item_variant.item == filters.get('item'))
+        q = q.where(
+            (item_variant.variant_of == filters.get('item'))
+            | ((item_variant.variant_of.isnull()) & (item_variant.name == filters.get('item')))
+        )
     if filters.get('lot'):
         q = q.where(grn_item.lot == filters.get('lot'))
     if filters.get('grn_status'):

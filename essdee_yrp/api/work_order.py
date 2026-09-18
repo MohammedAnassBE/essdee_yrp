@@ -467,7 +467,7 @@ def _matrix_qty_rows(ipd, process_name, kind):
 		reference_attrs = {}
 		if matrix.reference_item_variant:
 			reference = frappe.get_cached_doc(
-				'YRP Item Variant', matrix.reference_item_variant
+				'Item', matrix.reference_item_variant
 			)
 			reference_attrs = {
 				row.attribute: row.attribute_value
@@ -767,12 +767,9 @@ def _knit_colour_options(ipd):
 	values = get_ipd_attribute_values(ipd, FABRIC_COLOUR_ATTRIBUTE)
 	if values:
 		return values
-	return frappe.get_all(
-		'YRP Item Attribute Value',
-		filters={"attribute_name": FABRIC_COLOUR_ATTRIBUTE},
-		pluck="name",
-		order_by="name asc",
-	)
+	from yrp.yrp.doctype.yrp_item.yrp_item import get_global_attribute_values
+
+	return get_global_attribute_values(FABRIC_COLOUR_ATTRIBUTE)
 
 
 @frappe.whitelist()
@@ -924,7 +921,7 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 
 	def _default_uom(item):
 		if item not in uom_cache:
-			uom_cache[item] = frappe.db.get_value('YRP Item', item, "default_unit_of_measure")
+			uom_cache[item] = frappe.db.get_value('Item', item, "stock_uom")
 		return uom_cache[item]
 	for entry in rows:
 		fabric = fabric_rows.get(entry.get("fabric_row"))
@@ -957,7 +954,7 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 			# No conversion: deliverable = receivable, same variant, same qty.
 			# out_attrs are client-sent: accept only combos this IPD derives.
 			treated_item = identity_row.process_item or fabric.cloth_item
-			treated_uom = frappe.db.get_value('YRP Item', treated_item, "default_unit_of_measure")
+			treated_uom = frappe.db.get_value('Item', treated_item, "stock_uom")
 			allowed = {frozenset((r["out_attrs"] or {}).items()) for r in _identity_qty_rows(ipd, treated_item, identity_row)}
 			identity_bom_demands = []
 			for line in entry.get("entries") or []:
@@ -1026,7 +1023,7 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 			if kind == "knitting" and has_colour:
 				if matrix.reference_item_variant:
 					reference = frappe.get_cached_doc(
-						'YRP Item Variant', matrix.reference_item_variant
+						'Item', matrix.reference_item_variant
 					)
 					target_attrs = {
 						row.attribute: row.attribute_value
@@ -1232,7 +1229,7 @@ def _append_bom_deliverables(
 				"qty": flt(bom_row.get("qty"), 3),
 				"uom": bom_row.get("uom")
 				or frappe.db.get_value(
-					'YRP Item', bom_item, "default_unit_of_measure"
+					'Item', bom_item, "stock_uom"
 				),
 				"pending_quantity": flt(bom_row.get("qty"), 3),
 				"received_type": default_received_type,
@@ -1295,10 +1292,14 @@ def _resolve_variant(item, attrs):
 
 	Items with a dependent attribute (garment stages) keep the base resolver
 	untouched — the stage machinery owns which attributes apply there."""
-	from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
+	from yrp.yrp.doctype.yrp_item.yrp_item import (
+		_copy_template_fields,
+		_variant_code,
+		get_or_create_variant,
+	)
 
 	attrs = {k: v for k, v in (attrs or {}).items() if v}
-	item_doc = frappe.get_cached_doc('YRP Item', item)
+	item_doc = frappe.get_cached_doc('Item', item)
 	if item_doc.get("dependent_attribute"):
 		return get_or_create_variant(item, attrs)
 
@@ -1310,21 +1311,26 @@ def _resolve_variant(item, attrs):
 	# Partial set: base create_variant would throw "Please mention <attr>".
 	# Mirror its shape (display_name = value, sorted tuple hash) so the base
 	# tuple lookup finds this variant on later full-machinery passes too.
-	variant = frappe.new_doc('YRP Item Variant')
-	variant.item = item_doc.name
-	variant.set("attributes", [
+	variant = frappe.new_doc('Item')
+	_copy_template_fields(item_doc, variant)
+	variant.variant_of = item_doc.name
+	variant.variant_based_on = "Item Attribute"
+	rows = [
 		{"attribute": a, "attribute_value": filtered[a], "display_name": filtered[a]}
 		for a in declared if a in filtered
-	])
+	]
+	variant.set("attributes", rows)
 	if filtered:
 		variant.item_tuple_attribute = str(tuple(sorted(filtered.items())))
+	variant.item_code = _variant_code(item_doc, rows)
+	variant.item_name = variant.item_code
 	# Dedupe scoped to THIS item: variant names are hyphen-joins (item +
 	# values) and live items are themselves hyphen-named (TT-YARN + "GREY"
 	# aliases item TT-YARN-GREY), so a name-only lookup could silently link
 	# ANOTHER item's variant. A cross-item name collision instead fails
 	# loudly at insert (review follow-up).
 	existing = frappe.db.exists(
-		'YRP Item Variant', {"name": variant.get_name(), "item": item_doc.name})
+		'Item', {"name": variant.item_code, "variant_of": item_doc.name})
 	if existing:
 		return existing
 	variant.insert()
@@ -1339,10 +1345,10 @@ def _variant_attrs(item_variant):
 	return {
 		row.attribute: row.attribute_value
 		for row in frappe.get_all(
-			'YRP Item Variant Attribute',
+			'Item Variant Attribute',
 			filters={
 				"parent": item_variant,
-				"parenttype": 'YRP Item Variant',
+				"parenttype": 'Item',
 			},
 			fields=["attribute", "attribute_value"],
 		)
@@ -1350,7 +1356,7 @@ def _variant_attrs(item_variant):
 
 
 def _item_attribute_names(item):
-	item_doc = frappe.get_cached_doc('YRP Item', item)
+	item_doc = frappe.get_cached_doc('Item', item)
 	return [row.attribute for row in item_doc.get("attributes") or []]
 
 
@@ -1415,10 +1421,10 @@ def _planned_summary_rows(work_order, ipd):
 		lambda row: row.row_index if row.row_index not in (None, "") else row.idx,
 	):
 		variants = list(variants_iter)
-		variant_doc = frappe.get_cached_doc('YRP Item Variant', variants[0].item_variant)
-		attribute_details = get_attribute_details(variant_doc.item)
+		variant_doc = frappe.get_cached_doc('Item', variants[0].item_variant)
+		attribute_details = get_attribute_details((variant_doc.variant_of or variant_doc.name))
 		item = {
-			"name": variant_doc.item,
+			"name": (variant_doc.variant_of or variant_doc.name),
 			"attributes": _summary_variant_attributes(variant_doc, attribute_details),
 			"item_keys": {},
 			"is_set_item": ipd.is_set_item,
@@ -1438,7 +1444,7 @@ def _planned_summary_rows(work_order, ipd):
 				for key in ("major_part", "major_colour"):
 					if combination.get(key):
 						item["item_keys"][key] = combination[key]
-				current = frappe.get_cached_doc('YRP Item Variant', variant.item_variant)
+				current = frappe.get_cached_doc('Item', variant.item_variant)
 				primary_value = next(
 					(
 						attr.attribute_value
@@ -1526,10 +1532,10 @@ def _summary_item_details(rows, ipd):
 		lambda row: row.row_index if row.row_index not in (None, "") else row.idx,
 	):
 		variants = list(variants_iter)
-		variant_doc = frappe.get_cached_doc('YRP Item Variant', variants[0].item_variant)
-		attribute_details = get_attribute_details(variant_doc.item)
+		variant_doc = frappe.get_cached_doc('Item', variants[0].item_variant)
+		attribute_details = get_attribute_details((variant_doc.variant_of or variant_doc.name))
 		item = {
-			"name": variant_doc.item,
+			"name": (variant_doc.variant_of or variant_doc.name),
 			"lot": variants[0].get("lot"),
 			"attributes": _summary_variant_attributes(variant_doc, attribute_details),
 			"item_keys": {},
@@ -1551,7 +1557,7 @@ def _summary_item_details(rows, ipd):
 				for key in ("major_part", "major_colour"):
 					if combination.get(key):
 						item["item_keys"][key] = combination[key]
-				current = frappe.get_cached_doc('YRP Item Variant', variant.item_variant)
+				current = frappe.get_cached_doc('Item', variant.item_variant)
 				primary_value = next(
 					(
 						attr.attribute_value

@@ -49,7 +49,7 @@ WEB_DOCTYPES = (
 	'YRP Process Cost',
 	'SD YRP Lot Transfer',
 	'YRP Stock Entry',
-	'YRP Item',
+	'Item',
 	'YRP Item Production Detail',
 	'YRP Terms and Condition',
 )

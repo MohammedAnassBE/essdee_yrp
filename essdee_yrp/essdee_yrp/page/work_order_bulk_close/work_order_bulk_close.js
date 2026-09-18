@@ -35,7 +35,7 @@ class WorkOrderBulkClose {
       fieldname: "supplier",
       label: __("Supplier"),
       fieldtype: "Link",
-      options: "YRP Supplier",
+      options: "Supplier",
       reqd: 1,
       change: () => this.load_work_orders(),
     });
@@ -53,8 +53,8 @@ class WorkOrderBulkClose {
       fieldname: "item",
       label: __("Item"),
       fieldtype: "MultiSelectList",
-      options: "YRP Item",
-      get_data: (txt) => frappe.db.get_link_options("YRP Item", txt),
+      options: "Item",
+      get_data: (txt) => frappe.db.get_link_options("Item", txt),
       change: () => this.load_work_orders(),
     });
 

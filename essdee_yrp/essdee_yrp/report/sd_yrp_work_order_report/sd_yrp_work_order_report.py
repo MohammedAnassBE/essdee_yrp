@@ -17,10 +17,10 @@ def get_columns(received_types):
 	columns = [
 		{"fieldname":"work_order","fieldtype":"Link","options":'YRP Work Order',"label":"Work Order"},
 		{"fieldname":"wo_date","fieldtype":"Date","label":"WO Date"},
-		{"fieldname":"supplier","fieldtype":"Link","options":'YRP Supplier',"label":"Supplier"},
+		{"fieldname":"supplier","fieldtype":"Link","options":'Supplier',"label":"Supplier"},
 		{"fieldname":"supplier_name","fieldtype":"Data","label":"Supplier Name"},
 		{"fieldname":"lot","fieldtype":"Link","options":'SD YRP Lot',"label":"Lot"},
-		{"fieldname":"item","fieldtype":"Link","options":'YRP Item',"label":"Item"},
+		{"fieldname":"item","fieldtype":"Link","options":'Item',"label":"Item"},
 		{"fieldname":"wo_colours","fieldtype":"Data","label":"WO Colours"},
 		{"fieldname":"process_name","fieldtype":"Link","options":'YRP Process',"label":"Process"},
 		{"fieldname":"open_status","fieldtype":"Data","label":"WO Status"},

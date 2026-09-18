@@ -64,8 +64,8 @@ def get_packed_qty(doc):
 
 	box_quantity = {"sizes": {}, "total_packed": 0, "total_dispatched": 0}
 	for row in doc.get("finishing_plan_grn_details") or []:
-		variant = frappe.get_cached_doc('YRP Item Variant', row.item_variant)
-		primary_attribute = get_attribute_details(variant.item)["primary_attribute"]
+		variant = frappe.get_cached_doc('Item', row.item_variant)
+		primary_attribute = get_attribute_details((variant.variant_of or variant.name))["primary_attribute"]
 		size = next(
 			(
 				attribute.attribute_value

@@ -384,7 +384,7 @@ const getAttrValue = (row, attrName) => {
 }
 
 const rowValue = (row, header) => {
-    if (header === 'YRP Item') return row.item || '-'
+    if (header === 'Item') return row.item || '-'
     if (header === 'SD YRP Lot') return row.lot || '-'
     if (header === 'Colour') return row.colour || row.display_colour || getAttrValue(row, row.pack_attr)
     if (header === 'Part') return row.part || (row.is_set_item ? getAttrValue(row, row.set_attr) : '-')

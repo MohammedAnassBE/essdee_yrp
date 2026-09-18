@@ -30,9 +30,24 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
         cls.addClassCleanup(cls._commit_patcher.stop)
 
     def setUp(self):
-        wh = frappe.get_all('YRP Warehouse', filters={"supplier": ["is", "set"]},
+        wh = frappe.get_all('Warehouse', filters={"supplier": ["is", "set"]},
                             fields=["name", "supplier"], limit=1)
-        variants = frappe.get_all('YRP Item Variant', limit=2, pluck="name")
+        physical_items = frappe.get_all(
+            'Item',
+            filters={"is_stock_item": 1, "has_variants": 0},
+            fields=["name", "variant_of", "stock_uom"],
+            limit=80,
+        )
+        # This receiver contract supplies conversion_factor=1. Use physical
+        # Items whose parent has no dependent-UOM override so the assertion is
+        # testing the receiver instead of an unrelated UOM mapping policy.
+        variants = [
+            row.name
+            for row in physical_items
+            if not frappe.get_cached_value(
+                'Item', row.variant_of or row.name, "dependent_attribute"
+            )
+        ][:2]
         lots = frappe.get_all('SD YRP Lot', limit=2, pluck="name")
         if not (wh and variants and lots and frappe.db.exists('YRP Received Type', "Accepted")):
             self.skipTest("essdee_yrp.site missing a supplier-warehouse / variant / lot / Accepted")
@@ -43,10 +58,14 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
         # a 2nd distinct (variant, lot) for the multi-row parity test (may be None on a bare site)
         self.variant2 = variants[1] if len(variants) > 1 else None
         self.lot2 = lots[1] if len(lots) > 1 else None
-        # YRP Item Variant carries no UOM; it lives on the parent Item.
-        item = frappe.db.get_value('YRP Item Variant', self.variant, "item")
-        self.uom = frappe.db.get_value('YRP Item', item, "default_unit_of_measure") \
-            or (frappe.get_all('YRP UOM', limit=1, pluck="name") or ["Nos"])[0]
+        # Standard physical Items carry their stock UOM directly.
+        self.uom = frappe.db.get_value('Item', self.variant, "stock_uom") \
+            or (frappe.get_all('UOM', limit=1, pluck="name") or ["Nos"])[0]
+        self.uom2 = (
+            frappe.db.get_value('Item', self.variant2, "stock_uom")
+            if self.variant2
+            else self.uom
+        ) or self.uom
         self._extra_ses = []            # non-source_grn SEs a test creates; cleaned in tearDown
         self._cleanup()
 
@@ -109,14 +128,14 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
         """A GRN with N item rows transfers as exactly ONE Material Receipt whose
         Stock Entry Detail rows equal all N rows — one detail per (item, lot), never
         dropped/merged (row-count parity: len(SE rows) == len(GRN item rows))."""
-        if not (self.variant2 and self.lot2
-                and (self.variant2, self.lot2) != (self.variant, self.lot)):
+        second_lot = self.lot2 or self.lot
+        if not self.variant2 or (self.variant2, second_lot) == (self.variant, self.lot):
             self.skipTest("essdee_yrp.site lacks a 2nd distinct (variant, lot) for a multi-row test")
         expected = [
             {"item_variant": self.variant, "qty": 100.0, "uom": self.uom, "rate": 4.0,
              "lot": self.lot, "received_type": "Accepted"},
-            {"item_variant": self.variant2, "qty": 650.0, "uom": self.uom, "rate": 7.0,
-             "lot": self.lot2, "received_type": "Accepted"},
+            {"item_variant": self.variant2, "qty": 650.0, "uom": self.uom2, "rate": 7.0,
+             "lot": second_lot, "received_type": "Accepted"},
         ]
         r = receive_grn_transfer(self._payload(source_grn="GRN-TEST-MULTI", items=expected))
         self.assertTrue(r["ok"], r)
@@ -147,16 +166,21 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
         # The collapse only DROPS a row across DIFFERENT parent items, so the test
         # needs two variants whose parent Items differ (mirrors CS-46206 vs EC-46310).
         by_parent = {}
-        for c in frappe.get_all('YRP Item Variant', fields=["name", "item"], limit=80):
-            by_parent.setdefault(c.item, c.name)
+        for candidate in frappe.get_all(
+            'Item',
+            filters={"is_stock_item": 1, "has_variants": 0},
+            fields=["name", "variant_of", "stock_uom"],
+            limit=80,
+        ):
+            by_parent.setdefault(candidate.variant_of or candidate.name, candidate)
         if len(by_parent) < 2:
             self.skipTest("essdee_yrp.site needs Item Variants from >=2 distinct parent Items")
-        (_p1, v1), (_p2, v2) = list(by_parent.items())[:2]
+        (_p1, item1), (_p2, item2) = list(by_parent.items())[:2]
         lot_b = self.lot2 or self.lot
         items = [
-            {"item_variant": v1, "qty": 100.0, "uom": self.uom, "rate": 4.0,
+            {"item_variant": item1.name, "qty": 100.0, "uom": item1.stock_uom or self.uom, "rate": 4.0,
              "lot": self.lot, "received_type": "Accepted"},
-            {"item_variant": v2, "qty": 650.0, "uom": self.uom, "rate": 4.0,
+            {"item_variant": item2.name, "qty": 650.0, "uom": item2.stock_uom or self.uom, "rate": 4.0,
              "lot": lot_b, "received_type": "Accepted"},
         ]
         r = receive_grn_transfer(self._payload(source_grn="GRN-TEST-UIGRID", items=items))

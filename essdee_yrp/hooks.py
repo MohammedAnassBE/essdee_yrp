@@ -4,7 +4,7 @@ app_publisher = "anas@essdee.fit"
 app_description = "Essdee customization layer on the yrp app"
 app_email = "anas@essdee.fit"
 app_license = "mit"
-required_apps = ["yrp"]
+required_apps = ["erpnext", "yrp"]
 
 # Sidebar conditions run before the asynchronous toolbar defaults request.
 boot_session = "essdee_yrp.boot.boot_session"
@@ -78,8 +78,8 @@ fixtures = [
 					"YRP Process Cost-depends_on_attribute-default",
 					"YRP Process Cost-is_expired-read_only",
 					"YRP Process Cost-item-fetch_from",
-					"YRP Purchase Order-naming_series-options",
-					"YRP Purchase Order-naming_series-default",
+					"Purchase Order-naming_series-options",
+					"Purchase Order-naming_series-default",
 					"YRP Purchase Invoice-naming_series-options",
 					"YRP Purchase Invoice-naming_series-default",
 					"YRP Purchase Invoice Item-item_group-reqd",
@@ -153,7 +153,7 @@ yrp_web_doctype_catalog = [
 	'YRP Process Cost',
 	'SD YRP Lot Transfer',
 	'YRP Stock Entry',
-	'YRP Item',
+	'Item',
 	'YRP Item Production Detail',
 	'YRP Terms and Condition',
 ]
@@ -196,14 +196,14 @@ app_include_css = [
 
 # include js in doctype views
 doctype_js = {
-	'YRP Item': "public/js/item.js",
+	'Item': "public/js/item.js",
 	'YRP Item Production Detail': "public/js/item_production_detail.js",
 	'YRP Production Order': [
 		"public/js/production_order.js",
 		"public/js/production_order_workflow.js",
 	],
 	'YRP Work Order': "public/js/work_order.js",
-	'YRP Purchase Order': "public/js/purchase_order.js",
+	'Purchase Order': "public/js/purchase_order.js",
 	'YRP Delivery Challan': "public/js/delivery_challan.js",
 	'YRP Goods Received Note': "public/js/goods_received_note.js",
 	'YRP Purchase Invoice': "public/js/purchase_invoice.js",
@@ -256,6 +256,8 @@ doctype_list_js = {
 # add methods and filters to jinja environment
 jinja = {
 	"methods": [
+		"essdee_yrp.print_helpers.get_value_with_pad",
+		"essdee_yrp.print_helpers.get_item_size",
 		"essdee_yrp.print_helpers.get_created_date",
 		"essdee_yrp.print_helpers.get_current_user_time",
 		"essdee_yrp.print_helpers.get_user_signature",
@@ -379,10 +381,10 @@ doc_events = {
 	'YRP Work Station': {
 		"before_validate": "essdee_yrp.time_and_action.work_station.validate_default_action_work_station",
 	},
-	'YRP Purchase Order': {
+	'Purchase Order': {
 		"before_validate": "essdee_yrp.purchase_order_lots.sync_linked_lots",
 	},
-	'YRP Item': {
+	'Item': {
 		"validate": "essdee_yrp.item_validations.validate",
 	},
 	'YRP Item Production Detail': {

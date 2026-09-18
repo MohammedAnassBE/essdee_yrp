@@ -345,7 +345,7 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 				delivery_location.reqd,
 				delivery_location.fetch_from,
 			),
-			('YRP Supplier', 0, "to_warehouse.supplier"),
+			('Supplier', 0, "to_warehouse.supplier"),
 		)
 
 		freight_charges = meta.get_field("freight_charges")
@@ -361,7 +361,8 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 	def test_cutting_grn_sizes_share_one_logical_row(self):
 		variants = {
 			"FRONT-45": frappe._dict(
-				item="Maze Capri Set R.N.S",
+				name="FRONT-45",
+				variant_of="Maze Capri Set R.N.S",
 				attributes=[
 					frappe._dict(attribute="Stage", attribute_value="Cut"),
 					frappe._dict(attribute="Panel", attribute_value="Front"),
@@ -370,7 +371,8 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 				],
 			),
 			"FRONT-50": frappe._dict(
-				item="Maze Capri Set R.N.S",
+				name="FRONT-50",
+				variant_of="Maze Capri Set R.N.S",
 				attributes=[
 					frappe._dict(attribute="Stage", attribute_value="Cut"),
 					frappe._dict(attribute="Panel", attribute_value="Front"),
@@ -379,10 +381,11 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 				],
 			),
 		}
-		item = frappe._dict(primary_attribute="Size")
+		item = frappe._dict(name="Maze Capri Set R.N.S", primary_attribute="Size")
 
 		def get_cached_doc(doctype, name):
-			return variants[name] if doctype == 'YRP Item Variant' else item
+			self.assertEqual(doctype, 'Item')
+			return variants.get(name, item)
 
 		rows = [
 			frappe._dict(
@@ -428,18 +431,21 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 	def test_packing_grn_display_adds_split_receivable_rows_per_size(self):
 		variants = {
 			"PACK-45": frappe._dict(
-				item="PACKED-ITEM",
+				name="PACK-45",
+				variant_of="PACKED-ITEM",
 				attributes=[frappe._dict(attribute="Size", attribute_value="45 cm")],
 			),
 			"PACK-50": frappe._dict(
-				item="PACKED-ITEM",
+				name="PACK-50",
+				variant_of="PACKED-ITEM",
 				attributes=[frappe._dict(attribute="Size", attribute_value="50 cm")],
 			),
 		}
-		item = frappe._dict(primary_attribute="Size")
+		item = frappe._dict(name="PACKED-ITEM", primary_attribute="Size")
 
 		def get_cached_doc(doctype, name):
-			return variants[name] if doctype == 'YRP Item Variant' else item
+			self.assertEqual(doctype, 'Item')
+			return variants.get(name, item)
 
 		rows = [
 			frappe._dict(
@@ -505,7 +511,8 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 	def test_fresh_work_order_grn_defaults_normalize_migrated_size_indexes(self):
 		variants = {
 			"FRONT-45": frappe._dict(
-				item="Maze Capri Set R.N.S",
+				name="FRONT-45",
+				variant_of="Maze Capri Set R.N.S",
 				attributes=[
 					frappe._dict(attribute="Panel", attribute_value="Front"),
 					frappe._dict(attribute="Colour", attribute_value="Red"),
@@ -513,7 +520,8 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 				],
 			),
 			"FRONT-50": frappe._dict(
-				item="Maze Capri Set R.N.S",
+				name="FRONT-50",
+				variant_of="Maze Capri Set R.N.S",
 				attributes=[
 					frappe._dict(attribute="Panel", attribute_value="Front"),
 					frappe._dict(attribute="Colour", attribute_value="Red"),
@@ -521,7 +529,7 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 				],
 			),
 		}
-		item = frappe._dict(primary_attribute="Size")
+		item = frappe._dict(name="Maze Capri Set R.N.S", primary_attribute="Size")
 		base_defaults = {
 			"items": [
 				frappe._dict(
@@ -537,7 +545,8 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		}
 
 		def get_cached_doc(doctype, name):
-			return variants[name] if doctype == 'YRP Item Variant' else item
+			self.assertEqual(doctype, 'Item')
+			return variants.get(name, item)
 
 		with (
 			patch(

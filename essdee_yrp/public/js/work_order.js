@@ -940,19 +940,22 @@ function render_fabric_dialog(frm, ctx) {
 			if (needs_colour_picker) {
 				// too many colour choices for columns — single-colour fallback
 				fields.push({
-					fieldtype: "Link", label: __("Cloth Colour"), fieldname: `colour_${i}`,
-					options: "YRP Item Attribute Value",
+					fieldtype: "Autocomplete", label: __("Cloth Colour"), fieldname: `colour_${i}`,
+					options: colour_options,
 					default: row.greige_colour || undefined,
 					get_query: () => {
 						if (colour_options.length) {
-							return { filters: { name: ["in", colour_options] } };
+							return {};
 						}
 						return row.colour_mapping
 							? {
-								query: "essdee_yrp.ipd_ui.get_attribute_detail_values",
-								filters: { mapping: row.colour_mapping },
+								query: "essdee_yrp.ipd_ui.search_attribute_detail_values",
+								params: { mapping: row.colour_mapping },
 							}
-							: { filters: { attribute_name: "Colour" } };
+							: {
+								query: "yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values",
+								params: { attribute: "Colour" },
+							};
 					},
 				});
 			}

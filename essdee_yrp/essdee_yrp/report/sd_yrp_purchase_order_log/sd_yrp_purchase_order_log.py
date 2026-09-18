@@ -14,7 +14,7 @@ def get_columns():
             "fieldname": "purchase_order",
             "label": "Purchase Order",
             "fieldtype": "Link",
-            "options": 'YRP Purchase Order',
+            "options": 'Purchase Order',
             "width": 100,
         },
 		{
@@ -27,14 +27,14 @@ def get_columns():
             "fieldname": "supplier",
             "label": "Supplier",
             "fieldtype": "Link",
-            "options": 'YRP Supplier',
+            "options": 'Supplier',
             "width": 200,
         },
 		{
             "fieldname": "item_variant",
             "label": "Item",
             "fieldtype": "Link",
-			"options": 'YRP Item Variant',
+			"options": 'Item',
             "width": 200,
         },
 		{

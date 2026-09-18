@@ -3,6 +3,8 @@
 
 import frappe
 
+from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
+
 def execute(filters=None):
 	filters = frappe._dict(filters or {})
 	columns = get_columns()
@@ -46,23 +48,22 @@ def get_data(filters):
 		""", d, as_dict=True
 	)
 	for row in data:
-		item = frappe.get_cached_value('YRP Item Variant', row['item_variant'], "item")
-		row['item'] = item
+		row['item'] = get_parent_item(row['item_variant'])
 
 	return data
 
 def get_columns():
 	return [
 		{"fieldname": "delivery_challan","fieldtype": "Link","options": 'YRP Delivery Challan',"label": "Delivery Challan", "width": 150},
-		{"fieldname": "from_location","fieldtype": "Link","options": 'YRP Supplier',"label": "From Location", "width": 100},
+		{"fieldname": "from_location","fieldtype": "Link","options": 'Supplier',"label": "From Location", "width": 100},
 		{"fieldname": "from_location_name","fieldtype": "Data","label": "From Location Name", "width": 150},
-		{"fieldname": "supplier","fieldtype": "Link","options": 'YRP Supplier',"label": "Supplier", "width": 100},
+		{"fieldname": "supplier","fieldtype": "Link","options": 'Supplier',"label": "Supplier", "width": 100},
 		{"fieldname": "supplier_name","fieldtype": "Data","label": "Supplier Name", "width": 150},
 		{"fieldname": "lot","fieldtype": "Link","options": 'SD YRP Lot',"label": "Lot", "width": 100},
 		{"fieldname": "process_name","fieldtype": "Link","options": 'YRP Process',"label": "Process", "width": 100},
-		{"fieldname": "item","fieldtype": "Link","options": 'YRP Item',"label": "Item", "width": 200},
-		{"fieldname": "item_variant","fieldtype": "Link","options": 'YRP Item Variant',"label": "Item Variant", "width": 200},
+		{"fieldname": "item","fieldtype": "Link","options": 'Item',"label": "Item", "width": 200},
+		{"fieldname": "item_variant","fieldtype": "Link","options": 'Item',"label": "Item Variant", "width": 200},
 		{"fieldname": "qty","fieldtype": "Float","label": "Qty", "width": 100},
 		{"fieldname": "received_type","fieldtype": "Link","options": 'YRP Received Type',"label": "Received Type", "width": 100},
-		{"fieldname": "uom","fieldtype": "Link","options": 'YRP UOM',"label": "UOM", "width": 100},
+		{"fieldname": "uom","fieldtype": "Link","options": 'UOM',"label": "UOM", "width": 100},
 	]

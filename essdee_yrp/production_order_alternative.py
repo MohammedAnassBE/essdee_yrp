@@ -5,6 +5,7 @@ from frappe import _
 from frappe.utils import flt, getdate, now_datetime, nowdate
 
 from essdee_yrp.lot_pricing import get_effective_lot_price_map
+from essdee_yrp.item_alternatives import get_alternative_items
 from yrp.utils import get_variant_attr_details, update_if_string_instance
 from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_attribute_details, get_or_create_variant
 
@@ -29,15 +30,8 @@ INCOMING_TRANSFER_REQUEST_FIELD = "incoming_quantity_transfer_request"
 TRANSFER_MARKER_FIELD = "transferred_to_ppo"
 
 
-def get_alternative_items(item):
-	items = frappe.db.get_all(
-		'SD YRP Item Alternative', filters={"item": item}, pluck="alternative_item"
-	)
-	return sorted({alternative for alternative in items if alternative and alternative != item})
-
-
 def get_rows_by_size(doc):
-	primary_attribute = frappe.db.get_value('YRP Item', doc.item, "primary_attribute")
+	primary_attribute = frappe.db.get_value('Item', doc.item, "primary_attribute")
 	rows = {}
 	for row in doc.get("production_order_details") or []:
 		size = get_variant_attr_details(row.item_variant).get(primary_attribute) or row.item_variant
@@ -69,7 +63,7 @@ def create_alternative_plan_production_order(
 		))
 
 	source_rows = get_rows_by_size(source)
-	target_item = frappe.get_cached_doc('YRP Item', alternative_item)
+	target_item = frappe.get_cached_doc('Item', alternative_item)
 	target_sizes = set(get_attribute_details(alternative_item).get("primary_attribute_values") or [])
 	invalid_sizes = [size for size in piece_transfers if size not in target_sizes]
 	if invalid_sizes:
@@ -321,7 +315,7 @@ def _production_order_detail(target, item_doc, size, stage, source_row):
 
 
 def _insert_target_size_row(target, source_row, size):
-	item_doc = frappe.get_cached_doc('YRP Item', target.item)
+	item_doc = frappe.get_cached_doc('Item', target.item)
 	stage = frappe.db.get_single_value('SD YRP IPD Settings', "default_pack_out_stage")
 	row = target.append(
 		"production_order_details",

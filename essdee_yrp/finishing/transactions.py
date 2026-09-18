@@ -19,6 +19,7 @@ from essdee_yrp.finishing.parsing import json_object
 from yrp.utils import get_variant_attr_details, update_if_string_instance
 from yrp.yrp.doctype.yrp_item.yrp_item import (
 	build_variant_attributes,
+	get_parent_item,
 	get_or_create_variant,
 )
 from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
@@ -192,7 +193,7 @@ def validate_dynamic_packing_availability(work_order, ipd_doc, batches):
 	work_order_doc = frappe.get_doc('YRP Work Order', work_order)
 	balances = {}
 	for row in work_order_doc.get("work_order_calculated_items") or []:
-		if frappe.get_cached_value('YRP Item Variant', row.item_variant, "item") != ipd_doc.item:
+		if get_parent_item(row.item_variant) != ipd_doc.item:
 			continue
 		attributes = get_variant_attr_details(row.item_variant)
 		colour = attributes.get(ipd_doc.packing_attribute)
@@ -513,7 +514,7 @@ def return_items(data, work_order, lot, item_name, popup_values, is_pack=False):
 				"item_variant": variant,
 				"lot": lot,
 				"quantity": values["quantity"],
-				"uom": frappe.db.get_value('YRP Item', item_name, "default_unit_of_measure"),
+				"uom": frappe.db.get_value('Item', item_name, "stock_uom"),
 				"received_type": popup.get("received_type"),
 				"ref_doctype": 'YRP Work Order Deliverables',
 				"ref_docname": deliverable.name if deliverable else None,
@@ -750,7 +751,7 @@ def create_material_receipt(data, item_name, lot, ipd, doc_name, location):
 					"qty": quantity,
 					"lot": lot,
 					"uom": frappe.db.get_value(
-						'YRP Item', item_name, "default_unit_of_measure"
+						'Item', item_name, "stock_uom"
 					),
 					"set_combination": update_if_string_instance(
 						colour_row.get("set_combination")

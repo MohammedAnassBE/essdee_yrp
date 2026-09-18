@@ -14,25 +14,22 @@
   {
    "description": "Leave blank when this Dia mapping applies to all colours.",
    "fieldname": "colour",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Colour (Blank = All Colours)",
-   "options": "YRP Item Attribute Value"
+   "label": "Colour (Blank = All Colours)"
   },
   {
    "fieldname": "input_dia",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Knitting/Input Dia",
-   "options": "YRP Item Attribute Value",
    "reqd": 1
   },
   {
    "fieldname": "compacting_dia",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Compacting Dia",
-   "options": "YRP Item Attribute Value",
    "reqd": 1
   },
   {

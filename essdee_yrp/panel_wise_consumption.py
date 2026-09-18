@@ -612,13 +612,9 @@ def sync_panel_wise_consumption_matrix(doc):
 
 	matrix, context = make_panel_wise_matrix(doc)
 	expanded = expand_panel_wise_matrix(matrix, context, require_complete=False)
-	valid_dias = set(
-		frappe.get_all(
-			'YRP Item Attribute Value',
-			filters={"attribute_name": "Dia"},
-			pluck="name",
-		)
-	)
+	from yrp.yrp.doctype.yrp_item.yrp_item import get_global_attribute_values
+
+	valid_dias = set(get_global_attribute_values("Dia"))
 	matrix_dias = _unique(
 		cell.get("dia")
 		for panel in matrix.get("panels") or []
@@ -661,11 +657,9 @@ def get_panel_wise_consumption_matrix(doc):
 		)
 		include_saved = bool(stored_enabled)
 	matrix, context = make_panel_wise_matrix(doc, include_saved=include_saved)
-	dia_values = frappe.get_all(
-		'YRP Item Attribute Value',
-		filters={"attribute_name": "Dia"},
-		pluck="name",
-	)
+	from yrp.yrp.doctype.yrp_item.yrp_item import get_global_attribute_values
+
+	dia_values = get_global_attribute_values("Dia")
 	dia_values = sorted(_unique(dia_values), key=_natural_key)
 	for panel in matrix["panels"]:
 		for row in panel["rows"]:

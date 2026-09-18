@@ -12,7 +12,7 @@ frappe.query_reports["SD YRP Finishing Plan Report"] = {
 		{
 			"fieldname": "item",
 			"fieldtype": "Link",
-			"options": "YRP Item",
+			"options": "Item",
 			"label": "Item",
 		},
 		{

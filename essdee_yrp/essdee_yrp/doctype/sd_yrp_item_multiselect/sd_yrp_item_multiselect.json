@@ -13,7 +13,7 @@
    "fieldname": "item",
    "fieldtype": "Link",
    "label": "Item",
-   "options": "YRP Item"
+   "options": "Item"
   }
  ],
  "grid_page_length": 50,

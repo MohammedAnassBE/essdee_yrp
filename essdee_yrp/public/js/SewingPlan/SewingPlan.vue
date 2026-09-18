@@ -187,7 +187,7 @@ function initSupplierField() {
                 fieldtype: "Link",
                 fieldname: "supplier",
                 label: "",
-                options: "YRP Supplier",
+                options: "Supplier",
                 placeholder: "Select Warehouse",
                 get_query: () => {
                     return {

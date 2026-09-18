@@ -42,7 +42,7 @@ def get_columns():
 			"fieldname": "item",
 			"fieldtype": "Link",
 			"label": "Item",
-			"options": 'YRP Item',
+			"options": 'Item',
 			"width": 220,
 		},
 		{

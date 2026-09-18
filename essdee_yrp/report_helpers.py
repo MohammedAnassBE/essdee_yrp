@@ -142,7 +142,7 @@ def get_work_order_pending_report(
 			" AND ("
 			"	(COALESCE(t1.includes_packing, 0) = 1 AND t1.item IN %(item)s)"
 			"	OR (COALESCE(t1.includes_packing, 0) = 0 AND ("
-			"		iv.item IN %(item)s OR i.name IN %(item)s OR i.name1 IN %(item)s"
+			"		COALESCE(NULLIF(iv.variant_of, ''), iv.name) IN %(item)s OR i.name IN %(item)s OR i.item_name IN %(item)s"
 			"	))"
 			")"
 		)
@@ -182,7 +182,7 @@ def get_work_order_pending_report(
 				CASE
 					WHEN COALESCE(t1.includes_packing, 0) = 1
 						THEN COALESCE(t1.item, '')
-					ELSE COALESCE(NULLIF(i.name1, ''), i.name, iv.item, '')
+					ELSE COALESCE(NULLIF(i.item_name, ''), i.name, COALESCE(NULLIF(iv.variant_of, ''), iv.name), '')
 				END AS item_name,
 				CASE
 					WHEN COALESCE(t1.includes_packing, 0) = 1
@@ -229,9 +229,9 @@ def get_work_order_pending_report(
 					AND grn.is_return = 0
 				GROUP BY grn.against_id
 			) packing_grn ON packing_grn.work_order = t1.name
-			LEFT JOIN `tabYRP Item Variant` iv ON iv.name = t2.item_variant
-			LEFT JOIN `tabYRP Item` i ON i.name = iv.item
-			LEFT JOIN `tabYRP Supplier` t3 ON t3.name = t1.supplier
+			LEFT JOIN `tabItem` iv ON iv.name = t2.item_variant
+			LEFT JOIN `tabItem` i ON i.name = COALESCE(NULLIF(iv.variant_of, ''), iv.name)
+			LEFT JOIN `tabSupplier` t3 ON t3.name = t1.supplier
 			WHERE t1.docstatus = 1 {conditions}
 			GROUP BY
 				l.production_order,
@@ -244,7 +244,7 @@ def get_work_order_pending_report(
 				CASE
 					WHEN COALESCE(t1.includes_packing, 0) = 1
 						THEN COALESCE(t1.item, '')
-					ELSE COALESCE(NULLIF(i.name1, ''), i.name, iv.item, '')
+					ELSE COALESCE(NULLIF(i.item_name, ''), i.name, COALESCE(NULLIF(iv.variant_of, ''), iv.name), '')
 				END,
 				CASE
 					WHEN COALESCE(t1.includes_packing, 0) = 1
@@ -287,7 +287,7 @@ def get_combine_datetime(posting_date, posting_time):
 @frappe.whitelist()
 def make_purchase_order_mapped_doc(items):
 	"""Build a draft Purchase Order from selected Lot Purchase Summary rows."""
-	frappe.has_permission('YRP Purchase Order', "create", throw=True)
+	frappe.has_permission('Purchase Order', "create", throw=True)
 	if isinstance(items, str):
 		items = frappe.parse_json(items)
 	if not isinstance(items, list) or not items:
@@ -297,21 +297,21 @@ def make_purchase_order_mapped_doc(items):
 	for index, item in enumerate(items):
 		item = frappe._dict(item)
 		item_variant = item.item
-		if not item_variant or not frappe.db.exists('YRP Item Variant', item_variant):
+		if not item_variant or not frappe.db.exists('Item', item_variant):
 			frappe.throw(f"Row {index + 1}: a valid Item Variant is required.")
 		if flt(item.qty) <= 0:
 			frappe.throw(f"Row {index + 1}: quantity must be greater than zero.")
 		if item.delivery_location and not frappe.db.exists(
-			'YRP Supplier', item.delivery_location
+			'Supplier', item.delivery_location
 		):
 			frappe.throw(f"Row {index + 1}: delivery location does not exist.")
 		rows.append(
 			{
-				"item_variant": item_variant,
+				"item_code": item_variant,
 				"qty": flt(item.qty),
 				"lot": item.lot,
 				"delivery_location": item.delivery_location,
-				"delivery_date": item.delivery_date,
+				"schedule_date": item.delivery_date,
 				"expected_delivery_date": item.expected_delivery_date
 				or item.delivery_date,
 				"row_index": index,
@@ -319,6 +319,6 @@ def make_purchase_order_mapped_doc(items):
 			}
 		)
 
-	doc = frappe.new_doc('YRP Purchase Order')
-	doc.set_onload("item_details", group_items_for_ui(rows, 'YRP Purchase Order'))
+	doc = frappe.new_doc('Purchase Order')
+	doc.set_onload("item_details", group_items_for_ui(rows, 'Purchase Order'))
 	return doc

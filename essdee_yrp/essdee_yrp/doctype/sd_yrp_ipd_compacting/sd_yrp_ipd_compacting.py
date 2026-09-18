@@ -184,13 +184,9 @@ def _validate_dia_values(rows):
 	}
 	if not dias:
 		return
-	valid = set(
-		frappe.get_all(
-			'YRP Item Attribute Value',
-			filters={"attribute_name": "Dia", "name": ("in", sorted(dias))},
-			pluck="name",
-		)
-	)
+	from yrp.yrp.doctype.yrp_item.yrp_item import get_global_attribute_values
+
+	valid = set(get_global_attribute_values("Dia")) & dias
 	if invalid := sorted(dias - valid):
 		frappe.throw(_("Invalid Dia value(s): {0}.").format(", ".join(invalid)))
 

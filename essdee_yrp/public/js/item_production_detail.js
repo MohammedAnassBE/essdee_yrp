@@ -410,7 +410,7 @@ frappe.ui.form.on("YRP Item Production Detail", {
 							label: "Item",
 							fieldname: "item",
 							fieldtype: "Link",
-							options: "YRP Item",
+							options: "Item",
 							default: frm.doc.item,
 							reqd: 1,
 						}
@@ -1511,11 +1511,13 @@ function fill_selected_compacting_dia(frm) {
 			},
 			{
 				fieldname: "compacting_dia",
-				fieldtype: "Link",
+				fieldtype: "Autocomplete",
 				label: __("Compacting Dia"),
-				options: "YRP Item Attribute Value",
 				reqd: 1,
-				get_query: () => ({ filters: { attribute_name: "Dia" } }),
+				get_query: () => ({
+					query: "yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values",
+					params: { attribute: "Dia" },
+				}),
 			},
 		],
 		primary_action_label: __("Fill Selected Rows"),

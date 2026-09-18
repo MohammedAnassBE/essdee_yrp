@@ -215,7 +215,7 @@ function make_grn(){
                 "fieldname": "delivery_location",
                 "fieldtype": "Link",
                 "label": "Delivery Location",
-                "options": "YRP Supplier",
+                "options": "Supplier",
                 "reqd": 1,
                 "default": location
             },
@@ -296,7 +296,7 @@ function make_dispatch(){
                 "fieldname": "from_location",
                 "fieldtype": "Link",
                 "label": "From Location",
-                "options": "YRP Supplier",
+                "options": "Supplier",
                 "reqd": 1,
                 "default": location,
             },
@@ -304,7 +304,7 @@ function make_dispatch(){
                 "fieldname": "to_location",
                 "fieldtype": "Link",
                 "label": "To Location",
-                "options": "YRP Supplier",
+                "options": "Supplier",
                 "reqd": 1,
             },
             {

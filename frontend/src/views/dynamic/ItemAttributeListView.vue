@@ -9,7 +9,7 @@
     • Edit mode: chips become removable (× per chip) and an input + Add
       button creates new values; Save / Cancel at the bottom of the card.
     • Save flow (no Desk redirect):
-        1) ensure each new value has an `YRP Item Attribute Value` doc
+        1) ensure each new value has an `Item Attribute Value` doc
            (callMethod("frappe.client.insert") — duplicates are no-ops),
         2) update the `YRP Item Item Attribute Mapping`'s `values` table via
            callMethod("frappe.client.save").
@@ -144,9 +144,9 @@ const vTooltip = Tooltip
 const props = defineProps({
 	itemName: { type: String, required: true },
 	// Host DocType whose __onload.attr_list we read and whose mappings we write.
-	// "YRP Item" by default; "YRP Item Master Template" shares the identical attr_list
+	// "Item" by default; "YRP Item Master Template" shares the identical attr_list
 	// onload contract, so the same editor serves both.
-	doctype: { type: String, default: "YRP Item" },
+	doctype: { type: String, default: "Item" },
 })
 
 const toast = useAppToast()
@@ -168,7 +168,7 @@ const newValueSuggestions = ref([])
 async function onNewValueComplete(attr, e) {
 	const q = e?.query || ""
 	try {
-		const rows = await searchLink("YRP Item Attribute Value", q, {
+		const rows = await searchLink("Item Attribute Value", q, {
 			attribute_name: attr.attr_name,
 		})
 		newValueSuggestions.value = (rows || [])

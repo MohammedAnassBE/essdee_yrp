@@ -475,7 +475,7 @@ def _variant_attributes(variants) -> dict[str, dict]:
 		return {}
 	result = defaultdict(dict)
 	for row in frappe.get_all(
-		'YRP Item Variant Attribute',
+		'Item Variant Attribute',
 		filters={"parent": ["in", list(variants)]},
 		fields=["parent", "attribute", "attribute_value"],
 		limit_page_length=0,

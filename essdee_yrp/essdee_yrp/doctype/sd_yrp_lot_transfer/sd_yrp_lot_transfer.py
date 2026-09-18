@@ -8,6 +8,7 @@ from frappe.utils import cstr, flt
 
 from yrp.stock.dimensions import apply_dimension_defaults, get_dimension_fieldnames
 from yrp.stock.uom import apply_item_uom
+from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 
 class SDYRPLotTransfer(Document):
@@ -35,7 +36,7 @@ class SDYRPLotTransfer(Document):
 			validate_is_stock_item,
 		)
 
-		parent_item = frappe.db.get_value('YRP Item Variant', row.item, "item")
+		parent_item = get_parent_item(row.item)
 		if not parent_item:
 			frappe.throw(_("Row {0}: Item Variant {1} does not exist.").format(row.idx, row.item))
 		validate_disabled(parent_item)
@@ -249,7 +250,7 @@ def get_delivery_challan_details(doc_name, work_order, from_location, target_lot
 	lot_transfer.check_permission("read")
 	if lot_transfer.docstatus != 1:
 		frappe.throw(_("Submit the Lot Transfer before making a Delivery Challan"))
-	if not from_location or not frappe.db.exists('YRP Supplier', from_location):
+	if not from_location or not frappe.db.exists('Supplier', from_location):
 		frappe.throw(_("Select a valid From Location"))
 
 	work_order_doc = frappe.get_doc('YRP Work Order', work_order)

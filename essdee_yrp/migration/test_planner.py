@@ -21,13 +21,57 @@ class MigrationPlannerTest(unittest.TestCase):
 		self.assertFalse(self.payload["writes_site_data"])
 
 	def test_complete_source_inventory_is_classified(self):
-		self.assertEqual(self.payload["source_doctypes"], 264)
-		self.assertEqual(sum(self.payload["migration_kinds"].values()), 264)
-		self.assertEqual(len(self.payload["doctype_details"]), 264)
+		self.assertEqual(self.payload["source_doctypes"], 268)
+		self.assertEqual(sum(self.payload["migration_kinds"].values()), 268)
+		self.assertEqual(len(self.payload["doctype_details"]), 268)
 		self.assertEqual(
 			self.payload["migration_kinds"],
-			{"custom": 2, "identity": 2, "mapped": 260},
+			{"custom": 4, "identity": 13, "mapped": 251},
 		)
+
+	def test_frappe_tools_configuration_is_included_but_spine_data_is_not(self):
+		details = {row["source_doctype"]: row for row in self.payload["doctype_details"]}
+		self.assertTrue(
+			{
+				"Document Scanner Settings",
+				"Document Scanner Settings Items",
+				"Document Scanner Server Setting",
+				"Log File Downloader",
+			}.issubset(details)
+		)
+		for excluded_doctype in (
+			"Message Log",
+			"Spine Consumer Config",
+			"Spine Consumer Handler Mapping",
+			"Spine Producer Config",
+			"Spine Producer Handler Mapping",
+		):
+			self.assertNotIn(excluded_doctype, details)
+
+	def test_approved_frappe_live_data_has_target_value_audit_schemas(self):
+		for doctype in (
+			"Address",
+			"Contact",
+			"Dynamic Link",
+			"Contact Email",
+			"Contact Phone",
+			"Role",
+			"Module Profile",
+			"Block Module",
+			"User",
+			"Has Role",
+			"User Social Login",
+			"Custom DocPerm",
+			"System Settings",
+			"Workspace",
+			"Workspace Shortcut",
+		):
+			self.assertIn(doctype, self.plan.target_schemas)
+		# They are a selective live-data phase, not whole-table reset routes.
+		self.assertNotIn("Address", self.plan.specs)
+		self.assertNotIn("Contact", self.plan.specs)
+		self.assertNotIn("User", self.plan.specs)
+		self.assertNotIn("Custom DocPerm", self.plan.specs)
 
 	def test_known_renames_appear_in_doctype_details(self):
 		details = {row["source_doctype"]: row for row in self.payload["doctype_details"]}

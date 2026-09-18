@@ -41,7 +41,7 @@
    "fieldname": "warehouse",
    "fieldtype": "Link",
    "label": "Warehouse",
-   "options": "YRP Warehouse",
+   "options": "Warehouse",
    "read_only": 1
   },
   {
@@ -55,7 +55,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Item Variant",
-   "options": "YRP Item Variant",
+   "options": "Item",
    "read_only": 1
   },
   {

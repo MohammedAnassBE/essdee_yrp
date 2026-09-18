@@ -31,7 +31,7 @@ def _names_or_empty(filters=None, active_only=False):
 def execute_cumulative_time_and_action_delay(filters=None):
 	columns = [
 		{"fieldtype": "Link", "fieldname": "lot", "options": 'SD YRP Lot', "label": "Lot", "width": 120},
-		{"fieldtype": "Link", "fieldname": "item", "options": 'YRP Item', "label": "Item", "width": 150},
+		{"fieldtype": "Link", "fieldname": "item", "options": 'Item', "label": "Item", "width": 150},
 		{"fieldtype": "Int", "fieldname": "delay", "label": "Delay", "width": 80},
 		{"fieldtype": "Data", "fieldname": "sizes", "label": "Sizes", "width": 130},
 		{"fieldtype": "Float", "fieldname": "qty", "label": "Quantity", "width": 100},
@@ -63,7 +63,7 @@ def execute_live_time_and_action_delay(filters=None):
 	filters = _filters(filters)
 	columns = [
 		{"fieldtype": "Link", "fieldname": "lot", "label": "Lot", "options": 'SD YRP Lot', "width": 100},
-		{"fieldtype": "Link", "fieldname": "item", "label": "Item", "options": 'YRP Item', "width": 150},
+		{"fieldtype": "Link", "fieldname": "item", "label": "Item", "options": 'Item', "width": 150},
 	]
 	if filters.show_style_summary:
 		columns += [
@@ -77,7 +77,7 @@ def execute_live_time_and_action_delay(filters=None):
 			{"fieldtype": "Data", "fieldname": "sizes", "label": "Sizes", "width": 130},
 			{"fieldtype": "Float", "fieldname": "qty", "label": "Qty", "width": 100},
 			{"fieldtype": "Link", "fieldname": "action", "label": "Action", "options": 'SD YRP Action', "width": 150},
-			{"fieldtype": "Link", "fieldname": "department", "label": "Department", "options": 'YRP Department', "width": 120},
+			{"fieldtype": "Link", "fieldname": "department", "label": "Department", "options": 'Department', "width": 120},
 			{"fieldtype": "Date", "fieldname": "date", "label": "Planned Date", "width": 120},
 			{"fieldtype": "Date", "fieldname": "rescheduled_date", "label": "Rescheduled Date", "width": 120},
 			{"fieldtype": "Int", "fieldname": "date_diff", "label": "Date Diff", "width": 90},
@@ -125,7 +125,7 @@ def execute_time_and_action_delay_analysis(filters=None):
 	filters = _filters(filters)
 	columns = [
 		{"fieldtype": "Link", "fieldname": "action", "label": "Action", "options": 'SD YRP Action', "width": 150},
-		{"fieldtype": "Link", "fieldname": "department", "label": "Department", "options": 'YRP Department', "width": 120},
+		{"fieldtype": "Link", "fieldname": "department", "label": "Department", "options": 'Department', "width": 120},
 		{"fieldtype": "Date", "fieldname": "date", "label": "Planned Date", "width": 120},
 		{"fieldtype": "Date", "fieldname": "rescheduled_date", "label": "Rescheduled Date", "width": 120},
 		{"fieldtype": "Date", "fieldname": "actual_date", "label": "Actual Date", "width": 120},
@@ -175,11 +175,11 @@ def _delay_chart(data):
 def execute_time_and_action_department_performance(filters=None):
 	filters = _filters(filters)
 	group_map = {
-		'YRP Department': ("department", 'YRP Department'),
+		'Department': ("department", 'Department'),
 		'SD YRP Action': ("action", 'SD YRP Action'),
 		'YRP Work Station': ("work_station", 'YRP Work Station'),
 	}
-	fieldname, options = group_map.get(filters.select or 'YRP Department', group_map['YRP Department'])
+	fieldname, options = group_map.get(filters.select or 'Department', group_map['Department'])
 	columns = [
 		{"fieldtype": "Link", "fieldname": fieldname, "options": options, "label": options, "width": 200},
 		{"fieldtype": "Percent", "fieldname": "performance", "label": "Performance", "width": 200},
@@ -223,7 +223,7 @@ def execute_time_and_action_dispatch_report(filters=None):
 	filters = _filters(filters)
 	columns = [
 		{"fieldname": "lot", "fieldtype": "Link", "label": "Lot", "options": 'SD YRP Lot', "width": 200},
-		{"fieldname": "item", "fieldtype": "Link", "label": "Item", "options": 'YRP Item', "width": 200},
+		{"fieldname": "item", "fieldtype": "Link", "label": "Item", "options": 'Item', "width": 200},
 		{"fieldname": "sizes", "fieldtype": "Data", "label": "Sizes", "width": 300},
 		{"fieldname": "date", "fieldtype": "Date", "label": "Dispatch Date", "width": 200},
 		{"fieldname": "total_order_quantity", "fieldtype": "Int", "label": "Total Quantity"},
@@ -254,13 +254,13 @@ def execute_time_and_action_pending_work(filters=None):
 	filters = _filters(filters)
 	columns = [
 		{"fieldtype": "Link", "fieldname": "lot", "options": 'SD YRP Lot', "label": "Lot", "width": 100},
-		{"fieldtype": "Link", "fieldname": "item", "options": 'YRP Item', "label": "Item", "width": 150},
+		{"fieldtype": "Link", "fieldname": "item", "options": 'Item', "label": "Item", "width": 150},
 		{"fieldtype": "Link", "fieldname": "master", "options": 'SD YRP Action Master', "label": "Master", "width": 120},
 		{"fieldtype": "Data", "fieldname": "colour", "label": "Colour", "width": 120},
 		{"fieldtype": "Data", "fieldname": "sizes", "label": "Sizes", "width": 130},
 		{"fieldtype": "Float", "fieldname": "qty", "label": "Quantity", "width": 100},
 		{"fieldtype": "Link", "fieldname": "action", "options": 'SD YRP Action', "label": "Action", "width": 100},
-		{"fieldtype": "Link", "fieldname": "department", "options": 'YRP Department', "label": "Department", "width": 120},
+		{"fieldtype": "Link", "fieldname": "department", "options": 'Department', "label": "Department", "width": 120},
 		{"fieldtype": "Date", "fieldname": "date", "label": "Planned Date", "width": 120},
 		{"fieldtype": "Date", "fieldname": "rescheduled_date", "label": "Rescheduled Date", "width": 120},
 		{"fieldtype": "Int", "fieldname": "date_diff", "label": "Date Diff", "width": 100},
@@ -303,14 +303,14 @@ def execute_time_and_action_report(filters=None):
 	filters = _filters(filters)
 	columns = [
 		{"fieldtype": "Link", "fieldname": "lot", "options": 'SD YRP Lot', "label": "Lot", "width": 120},
-		{"fieldtype": "Link", "fieldname": "item", "options": 'YRP Item', "label": "Item", "width": 150},
+		{"fieldtype": "Link", "fieldname": "item", "options": 'Item', "label": "Item", "width": 150},
 		{"fieldtype": "Link", "fieldname": "master", "options": 'SD YRP Action Master', "label": "Master", "width": 120},
 		{"fieldtype": "Data", "fieldname": "colour", "label": "Colour", "width": 100},
 		{"fieldtype": "Data", "fieldname": "sizes", "label": "Sizes", "width": 100},
 		{"fieldtype": "Float", "fieldname": "qty", "label": "Quantity", "width": 100},
 		{"fieldtype": "Date", "fieldname": "start_date", "label": "Start Date", "width": 120},
 		{"fieldtype": "Link", "fieldname": "action", "options": 'SD YRP Action', "label": "Action", "width": 100},
-		{"fieldtype": "Link", "fieldname": "department", "options": 'YRP Department', "label": "Department", "width": 120},
+		{"fieldtype": "Link", "fieldname": "department", "options": 'Department', "label": "Department", "width": 120},
 		{"fieldtype": "Int", "fieldname": "lead_time", "label": "Lead Time", "width": 100},
 		{"fieldtype": "Date", "fieldname": "date", "label": "Planned date", "width": 120},
 		{"fieldtype": "Date", "fieldname": "rescheduled_date", "label": "Rescheduled Date", "width": 120},

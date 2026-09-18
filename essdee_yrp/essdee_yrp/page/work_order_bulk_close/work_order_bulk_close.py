@@ -34,7 +34,7 @@ def get_open_work_orders(
 	supplier = cstr(supplier).strip()
 	if not supplier:
 		frappe.throw(_("Supplier is required."))
-	if not frappe.db.exists('YRP Supplier', supplier):
+	if not frappe.db.exists('Supplier', supplier):
 		frappe.throw(_("Supplier {0} does not exist.").format(frappe.bold(supplier)))
 
 	filters = {"supplier": supplier, "docstatus": 1, "open_status": "Open"}

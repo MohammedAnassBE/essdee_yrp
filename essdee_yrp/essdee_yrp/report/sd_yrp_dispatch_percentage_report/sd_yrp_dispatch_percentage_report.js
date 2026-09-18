@@ -23,9 +23,9 @@ frappe.query_reports["SD YRP Dispatch Percentage Report"] = {
 			"fieldname": "item",
 			"fieldtype": "MultiSelectList",
 			"label": __("Item"),
-			"options": "YRP Item",
+			"options": "Item",
 			get_data(txt) {
-				return frappe.db.get_link_options("YRP Item", txt);
+				return frappe.db.get_link_options("Item", txt);
 			},
 		},
 	],
@@ -58,7 +58,7 @@ function show_dispatch_percentage_paste_dialog(report) {
 		],
 		primary_action_label: __("Apply"),
 		primary_action(values) {
-			const filtername = values.filter_type === "YRP Item" ? "item" : "lot";
+			const filtername = values.filter_type === "Item" ? "item" : "lot";
 			const pasted_values = parse_pasted_values(values.values);
 
 			if (!pasted_values.length) {

@@ -236,10 +236,12 @@ def _ensure_attributed_item(name1, attributes):
     """An Item that DECLARES the given attributes (like live TT-YARN-GREY,
     which declares Colour while the knitting matrix consumes it attr-less)."""
     name = _ensure_item(name1)
-    doc = frappe.get_doc('YRP Item', name)
+    doc = frappe.get_doc('Item', name)
     have = {r.attribute for r in doc.get("attributes") or []}
     missing = [a for a in attributes if a not in have]
-    if missing:
+    if missing or not doc.has_variants:
+        doc.has_variants = 1
+        doc.variant_based_on = "Item Attribute"
         for attr in missing:
             doc.append("attributes", {"attribute": attr})
         doc.save(ignore_permissions=True)
@@ -252,7 +254,8 @@ def _ensure_address(title="_Test WO Calc Sup"):
         return existing
     return frappe.get_doc({
         "doctype": "Address", "address_title": title, "address_type": "Billing",
-        "address_line1": "1 Test Street", "city": "Tiruppur", "country": "India",
+        "address_line1": "1 Test Street", "city": "Tiruppur", "state": "Tamil Nadu",
+        "country": "India",
     }).insert(ignore_permissions=True).name
 
 
@@ -357,14 +360,14 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
         self.greige = _ensure_iav("Colour", "_Test Greige CPD")
         self.red = _ensure_iav("Colour", "_Test Red CPD")
         self.yarn = _ensure_item("_Test Plain Yarn WOCalc")
-        self.assertEqual(frappe.get_doc('YRP Item', self.yarn).get("attributes"), [])
+        self.assertEqual(frappe.get_doc('Item', self.yarn).get("attributes"), [])
         # Kept outside the cloth recipe to exercise the generic partial-variant
         # resolver without violating the rule that yarn Items are attr-less.
         self.declared_item = _ensure_attributed_item(
             "_Test Declared Item WOCalc", ["Colour"])
         # Cloth mirrors live Thermal Rib: declares Dia + Colour.
         self.cloth = _ensure_attributed_item("_Test Cloth WOCalc", ["Dia", "Colour"])
-        frappe.db.set_value('YRP Item', self.cloth, "is_cloth_item", 1)
+        frappe.db.set_value('Item', self.cloth, "is_cloth_item", 1)
         _reset_cpd(self.cloth)
         self.k_proc = _ensure_process("_Test Knit CPD", is_item_conversion=1)
         self.d_proc = _ensure_process("_Test Dye CPD")
@@ -465,8 +468,8 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
         wo = frappe.get_doc('YRP Work Order', self.wo.name)
         delivs = [d for d in wo.get("deliverables") if d.is_calculated]
         self.assertEqual(len(delivs), 1)
-        variant = frappe.get_doc('YRP Item Variant', delivs[0].item_variant)
-        self.assertEqual(variant.item, self.yarn)
+        variant = frappe.get_doc('Item', delivs[0].item_variant)
+        self.assertEqual((variant.variant_of or variant.name), self.yarn)
         # Owner ruling: NOT Colour-stamped — no attribute rows at all.
         self.assertEqual([r.attribute for r in variant.get("attributes") or []], [])
         # The rounded 48 kg cloth program / 3.0 cloth-per-kg-yarn = 16 kg yarn.
@@ -476,8 +479,8 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
         # knitting stamps the greige colour) — declared attrs are never dropped.
         recvs = wo.get("receivables")
         self.assertEqual(len(recvs), 1)
-        recv_variant = frappe.get_doc('YRP Item Variant', recvs[0].item_variant)
-        self.assertEqual(recv_variant.item, self.cloth)
+        recv_variant = frappe.get_doc('Item', recvs[0].item_variant)
+        self.assertEqual(recv_variant.variant_of, self.cloth)
         self.assertEqual(
             {r.attribute: r.attribute_value for r in recv_variant.attributes},
             {"Dia": self.dia, "Colour": self.greige},
@@ -503,8 +506,8 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
         # Assert the exact name set — a bare len() count would be fragile
         # against sibling tests minting OTHER variants on the same yarn in the
         # shared class transaction (review follow-up).
-        variants = frappe.get_all('YRP Item Variant', filters={"item": self.yarn}, pluck="name")
-        self.assertEqual(variants, [self.yarn])
+        self.assertTrue(frappe.db.exists('Item', self.yarn))
+        self.assertFalse(frappe.db.exists('Item', {"variant_of": self.yarn}))
 
     def test_calculated_receivables_keep_process_cost_enforcement(self):
         """Fabric Calculate must leave ordinary Work Order costing intact.
@@ -560,7 +563,7 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
 
         v = _resolve_variant(
             self.declared_item, {"Colour": self.red, "Dia": self.dia})
-        doc = frappe.get_doc('YRP Item Variant', v)
+        doc = frappe.get_doc('Item', v)
         self.assertEqual(
             {r.attribute: r.attribute_value for r in doc.attributes},
             {"Colour": self.red},
@@ -573,8 +576,8 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
         from essdee_yrp.api.work_order import _resolve_variant
 
         v = _resolve_variant(self.cloth, {"Colour": self.red})
-        doc = frappe.get_doc('YRP Item Variant', v)
-        self.assertEqual(doc.item, self.cloth)
+        doc = frappe.get_doc('Item', v)
+        self.assertEqual(doc.variant_of, self.cloth)
         self.assertEqual(
             {r.attribute: r.attribute_value for r in doc.attributes},
             {"Colour": self.red},
@@ -596,7 +599,7 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
         yarn_b = _ensure_item(f"_Test Routed Yarn B {suffix}")
         cloth = _ensure_attributed_item(
             f"_Test Routed Cloth {suffix}", ["Dia", "Colour"])
-        frappe.db.set_value('YRP Item', cloth, "is_cloth_item", 1)
+        frappe.db.set_value('Item', cloth, "is_cloth_item", 1)
         _reset_cpd(cloth)
         compacting = _ensure_process(f"_Test Routed Compact {suffix}")
 
@@ -697,14 +700,15 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
         received_colours = {
             next(
                 attr.attribute_value for attr in frappe.get_doc(
-                    'YRP Item Variant', child.item_variant
+                    'Item', child.item_variant
                 ).attributes if attr.attribute == "Colour"
             )
             for child in work_order.receivables
         }
         self.assertEqual(received_colours, {self.greige, grey_melange})
         delivered_templates = {
-            frappe.db.get_value('YRP Item Variant', child.item_variant, "item")
+            frappe.db.get_value('Item', child.item_variant, "variant_of")
+            or child.item_variant
             for child in work_order.deliverables
             if child.is_calculated
         }
@@ -784,14 +788,14 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
         delivered_attrs = {
             row.attribute: row.attribute_value
             for row in frappe.get_doc(
-                'YRP Item Variant',
+                'Item',
                 compact_work_order.deliverables[0].item_variant,
             ).attributes
         }
         received_attrs = {
             row.attribute: row.attribute_value
             for row in frappe.get_doc(
-                'YRP Item Variant',
+                'Item',
                 compact_work_order.receivables[0].item_variant,
             ).attributes
         }
@@ -823,12 +827,12 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
         yarn_b = _ensure_item(f"_Test MY Yarn B {suffix}")
         # The requested test shape: yarn templates are plain named Items with
         # no Colour (or any other) attribute.
-        self.assertEqual(frappe.get_doc('YRP Item', yarn_a).get("attributes"), [])
-        self.assertEqual(frappe.get_doc('YRP Item', yarn_b).get("attributes"), [])
+        self.assertEqual(frappe.get_doc('Item', yarn_a).get("attributes"), [])
+        self.assertEqual(frappe.get_doc('Item', yarn_b).get("attributes"), [])
 
         cloth = _ensure_attributed_item(
             f"_Test MY Cloth {suffix}", ["Dia", "Colour"])
-        frappe.db.set_value('YRP Item', cloth, "is_cloth_item", 1)
+        frappe.db.set_value('Item', cloth, "is_cloth_item", 1)
         _reset_cpd(cloth)
 
         knitting = _ensure_process(f"_Test MY Knitting {suffix}", is_item_conversion=1)
@@ -957,7 +961,10 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
         for row in knit_wo.deliverables:
             if not row.is_calculated:
                 continue
-            template = frappe.db.get_value('YRP Item Variant', row.item_variant, "item")
+            template = (
+                frappe.db.get_value('Item', row.item_variant, "variant_of")
+                or row.item_variant
+            )
             delivered[template] = flt(row.qty)
         self.assertEqual(set(delivered), {v["yarn_a"], v["yarn_b"]})
         self.assertAlmostEqual(delivered[v["yarn_a"]], 6.0, places=3)
@@ -1037,7 +1044,7 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
 
         work_order.reload()
         planned = {
-            frappe.db.get_value('YRP Item Variant', row.item_variant, "item"): flt(row.qty)
+            (frappe.db.get_value('Item', row.item_variant, "variant_of") or row.item_variant): flt(row.qty)
             for row in work_order.deliverables
             if row.is_calculated
         }
@@ -1066,7 +1073,7 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
         calculate_grn_consumption(grn)
 
         consumed = {
-            frappe.db.get_value('YRP Item Variant', row.item_variant, "item"): flt(row.quantity)
+            (frappe.db.get_value('Item', row.item_variant, "variant_of") or row.item_variant): flt(row.quantity)
             for row in grn.grn_deliverables
         }
         self.assertAlmostEqual(consumed[v["yarn_a"]], 2.4, places=3)
@@ -1104,7 +1111,7 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
         self.assertEqual(result, {"deliverables": 2, "receivables": 1})
         work_order.reload()
         planned = {
-            frappe.db.get_value('YRP Item Variant', row.item_variant, "item"): flt(row.qty)
+            (frappe.db.get_value('Item', row.item_variant, "variant_of") or row.item_variant): flt(row.qty)
             for row in work_order.deliverables
             if row.is_calculated
         }

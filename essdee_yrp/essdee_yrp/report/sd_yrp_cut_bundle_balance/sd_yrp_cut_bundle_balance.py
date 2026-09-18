@@ -14,9 +14,9 @@ def get_columns():
 	return [
 		{"fieldname": "name", "fieldtype": "Link", "options": 'SD YRP Cut Bundle Movement Ledger', "label": "Name"},
 		{"fieldname": "lot", "fieldtype": "Link", "options": 'SD YRP Lot', "label": "Lot"},
-		{"fieldname": "supplier", "fieldtype": "Link", "options": 'YRP Supplier', "label": "Supplier"},
+		{"fieldname": "supplier", "fieldtype": "Link", "options": 'Supplier', "label": "Supplier"},
 		{"fieldname": "supplier_name", "fieldtype": "Data", "label": "Supplier Name"},
-		{"fieldname": "item", "fieldtype": "Link", "options": 'YRP Item', "label": "Item"},
+		{"fieldname": "item", "fieldtype": "Link", "options": 'Item', "label": "Item"},
 		{"fieldname": "lay_no", "fieldtype": "Int", "label": "Lay No"},
 		{"fieldname": "bundle_no", "fieldtype": "Int", "label": "Bundle No"},
 		{"fieldname": "size", "fieldtype": "Data", "label": "Size"},

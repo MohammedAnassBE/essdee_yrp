@@ -23,7 +23,7 @@ class TestLotTransfer(IntegrationTestCase):
 		self.assertTrue(finishing_plan.hidden)
 
 		item_meta = frappe.get_meta('SD YRP Lot Transfer Item', cached=False)
-		self.assertEqual(item_meta.get_field("warehouse").options, 'YRP Warehouse')
+		self.assertEqual(item_meta.get_field("warehouse").options, 'Warehouse')
 		self.assertTrue(item_meta.get_field("warehouse").reqd)
 		self.assertEqual(item_meta.get_field("received_type").options, 'YRP Received Type')
 		self.assertTrue(item_meta.get_field("received_type").reqd)

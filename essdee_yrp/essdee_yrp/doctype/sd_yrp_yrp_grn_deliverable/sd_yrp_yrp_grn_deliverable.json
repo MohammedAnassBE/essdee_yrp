@@ -29,7 +29,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Item Variant",
-   "options": "YRP Item Variant",
+   "options": "Item",
    "reqd": 1
   },
   {
@@ -44,7 +44,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "UOM",
-   "options": "YRP UOM",
+   "options": "UOM",
    "reqd": 1
   },
   {
@@ -61,7 +61,7 @@
    "hidden": 1,
    "label": "Received Item Variant",
    "no_copy": 1,
-   "options": "YRP Item Variant",
+   "options": "Item",
    "read_only": 1
   },
   {
@@ -106,7 +106,7 @@
    "fieldtype": "Link",
    "hidden": 1,
    "label": "Stock UOM",
-   "options": "YRP UOM",
+   "options": "UOM",
    "read_only": 1
   },
   {

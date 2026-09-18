@@ -6,7 +6,7 @@
  "engine": "InnoDB",
  "field_order": ["dia"],
  "fields": [
-  {"fieldname": "dia", "fieldtype": "Link", "in_list_view": 1, "label": "Dia", "options": "YRP Item Attribute Value", "reqd": 1}
+  {"fieldname": "dia", "fieldtype": "Data", "in_list_view": 1, "label": "Dia", "reqd": 1}
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,

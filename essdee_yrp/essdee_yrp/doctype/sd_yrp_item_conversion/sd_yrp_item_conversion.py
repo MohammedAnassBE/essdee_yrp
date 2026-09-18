@@ -20,6 +20,7 @@ from yrp.stock.utils import get_stock_balance
 from yrp.yrp.doctype.yrp_item.yrp_item import (
 	get_attribute_details,
 	get_or_create_variant,
+	get_parent_item,
 	get_variant,
 )
 
@@ -55,7 +56,7 @@ class SDYRPItemConversion(Document):
 	def validate(self):
 		if not self.warehouse:
 			frappe.throw(_("Location is mandatory"))
-		if not frappe.db.exists('YRP Warehouse', self.warehouse):
+		if not frappe.db.exists('Warehouse', self.warehouse):
 			frappe.throw(
 				_("Location {0} is not a Warehouse.").format(frappe.bold(self.warehouse))
 			)
@@ -162,7 +163,7 @@ class SDYRPItemConversion(Document):
 		)
 
 		try:
-			item_template = frappe.get_cached_value('YRP Item Variant', item, "item")
+			item_template = get_parent_item(item)
 			if not item_template:
 				frappe.throw(_("Item Variant {0} does not exist.").format(item))
 			validate_disabled(item_template)
@@ -345,7 +346,7 @@ def _persist_actual_conversion_values(
 
 
 def _validate_warehouse_user(warehouse: str):
-	frappe.get_doc('YRP Warehouse', warehouse).check_user_permission()
+	frappe.get_doc('Warehouse', warehouse).check_user_permission()
 
 
 @frappe.whitelist()
@@ -401,10 +402,10 @@ def fetch_item_conversion_items(items) -> list[dict]:
 		rows, key=lambda row: row.get("row_index") or 0
 	):
 		variants = list(variants_iter)
-		variant_doc = frappe.get_doc('YRP Item Variant', variants[0]["item"])
-		details = get_attribute_details(variant_doc.item)
+		variant_doc = frappe.get_doc('Item', variants[0]["item"])
+		details = get_attribute_details((variant_doc.variant_of or variant_doc.name))
 		item = {
-			"name": variant_doc.item,
+			"name": (variant_doc.variant_of or variant_doc.name),
 			"lot": variants[0].get("lot"),
 			"attributes": _variant_attributes(variant_doc, details),
 			"primary_attribute": details.get("primary_attribute"),
@@ -422,7 +423,7 @@ def fetch_item_conversion_items(items) -> list[dict]:
 				for value in details.get("primary_attribute_values") or []
 			}
 			for variant in variants:
-				current = frappe.get_doc('YRP Item Variant', variant["item"])
+				current = frappe.get_doc('Item', variant["item"])
 				primary_value = next(
 					(
 						row.attribute_value

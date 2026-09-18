@@ -37,18 +37,16 @@
   {
    "columns": 1,
    "fieldname": "colour",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Colour",
-   "options": "YRP Item Attribute Value"
+   "label": "Colour"
   },
   {
    "columns": 1,
    "fieldname": "dia",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Dia",
-   "options": "YRP Item Attribute Value"
+   "label": "Dia"
   },
   {
    "columns": 1,
@@ -97,7 +95,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Cloth Item Variant",
-   "options": "YRP Item Variant"
+   "options": "Item"
   },
   {
    "fieldname": "accessory_weight",
@@ -143,9 +141,8 @@
   },
   {
    "fieldname": "actual_dia",
-   "fieldtype": "Link",
-   "label": "Actual Dia",
-   "options": "YRP Item Attribute Value"
+   "fieldtype": "Data",
+   "label": "Actual Dia"
   }
  ],
  "grid_page_length": 50,

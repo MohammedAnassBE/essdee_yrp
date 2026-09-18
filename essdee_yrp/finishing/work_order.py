@@ -13,7 +13,7 @@ from essdee_yrp.finishing.state import get_finishing_plan_dict, get_finishing_pl
 from essdee_yrp.finishing.status import apply_auto_fp_status
 from yrp.stock.utils import get_last_sle_rate
 from yrp.utils import get_variant_attr_details, update_if_string_instance
-from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
+from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant, get_parent_item
 from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
 	get_ipd_primary_values,
 )
@@ -291,7 +291,7 @@ def _transfer_alternative_stock(work_order, rows=None, source_plan=None):
 		row
 		for row in rows
 		if flt(row.get("qty")) > 0
-		and frappe.db.get_value('YRP Item Variant', row.get("item_variant"), "item")
+		and get_parent_item(row.get("item_variant"))
 		== work_order.item
 	]
 	if not main_rows:
@@ -418,7 +418,7 @@ def _reverse_alternative_stock(work_order):
 	source_plan = frappe.get_doc('SD YRP Finishing Plan', source_plan_name)
 	plan_rows = get_finishing_plan_dict(source_plan)
 	for row in work_order.get("deliverables") or []:
-		if frappe.db.get_value('YRP Item Variant', row.item_variant, "item") != work_order.item:
+		if get_parent_item(row.item_variant) != work_order.item:
 			continue
 		source_variant = get_or_create_variant(
 			source_plan.item, get_variant_attr_details(row.item_variant)

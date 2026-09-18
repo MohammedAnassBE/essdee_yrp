@@ -7,6 +7,59 @@ import frappe
 
 
 class SourceFrameworkScopeTest(unittest.TestCase):
+	def test_owner_excluded_app_doctypes_never_enter_framework_closure(self):
+		helper = runpy.run_path(
+			str(Path(__file__).resolve().parents[2] / 'scripts' / 'f15_framework_archive.py')
+		)
+		excluded = 'Spine Producer Handler Mapping'
+
+		def sql(statement, params=(), **kwargs):
+			if 'SELECT DISTINCT parent FROM tabDocField' in statement:
+				return [('Report',), (excluded,)]
+			if 'SELECT DISTINCT dt FROM' in statement:
+				return []
+			if 'SELECT DISTINCT folder FROM tabFile' in statement:
+				return []
+			self.fail('Unexpected non-read-only/scoped SQL')
+
+		def meta(doctype):
+			if doctype == excluded:
+				self.fail('Excluded Spine metadata must not enter framework scope')
+			return SimpleNamespace(
+				name=doctype,
+				fields=[
+					SimpleNamespace(fieldname='ref_doctype', fieldtype='Link', options='DocType'),
+					SimpleNamespace(fieldname='handlers', fieldtype='Table', options=excluded),
+				],
+				get_table_fields=lambda: [
+					SimpleNamespace(fieldname='handlers', fieldtype='Table', options=excluded)
+				],
+			)
+
+		fake = SimpleNamespace(
+			db=SimpleNamespace(
+				sql=sql,
+				table_exists=lambda dt: dt in {'Report', 'Comment', excluded},
+				get_table_columns=lambda dt: (
+					['name', 'reference_doctype'] if dt == 'Comment' else ['name', 'ref_doctype']
+				),
+				exists=lambda *_args: True,
+			),
+			get_meta=meta,
+		)
+		scope = helper['build_scope'](
+			fake,
+			{'Supplier': {}},
+			(),
+			{},
+			excluded_types=(excluded,),
+		)
+		self.assertIn('Report', scope)
+		self.assertIn('Comment', scope)
+		self.assertIn('NOT IN', scope['Comment'][0])
+		self.assertEqual(scope['Comment'][1], ((excluded,),))
+		self.assertNotIn(excluded, scope)
+
 	def test_indirect_history_and_its_files_are_selected_without_side_effects(self):
 		helper = runpy.run_path(str(Path(__file__).resolve().parents[2] / 'scripts/f15_framework_archive.py'))
 		fields = {'Report': 'ref_doctype', 'Data Import': 'reference_doctype', 'Number Card': 'document_type'}
@@ -43,7 +96,7 @@ class SourceFrameworkScopeTest(unittest.TestCase):
 				return [frappe._dict(name=name, folder=folders[name], is_folder=1)
 					for name in params[0] if name in folders]
 			return []
-		fake = SimpleNamespace(db=SimpleNamespace(sql=sql))
+		fake = SimpleNamespace(db=SimpleNamespace(sql=sql, table_exists=lambda _dt: False))
 		scope = helper['build_scope'](fake, {'Supplier': {}}, (), {})
 		self.assertEqual(scope['File'][1][-1], ('Home', 'Home/product'))
 		del folders['Home']

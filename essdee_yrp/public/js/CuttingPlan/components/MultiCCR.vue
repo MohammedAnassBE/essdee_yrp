@@ -280,9 +280,9 @@ onMounted(()=> {
             fieldtype: "MultiSelectList",
             fieldname: "item",
             label: "Item",
-            options: "YRP Item",
+            options: "Item",
             get_data: function(txt){
-                return frappe.db.get_link_options("YRP Item", txt)
+                return frappe.db.get_link_options("Item", txt)
             }
         },
         doc: sample_doc.value,
@@ -330,7 +330,7 @@ function get_list_items(){
             }
         ],
         primary_action(){
-            if (list_converter.select_value == 'YRP Item'){
+            if (list_converter.select_value == 'Item'){
                 let updated_list = item_list.get_value().concat(list_converter.list)
                 item_list.set_value(updated_list)
             }
@@ -344,7 +344,7 @@ function get_list_items(){
     d.fields_dict['pop_up_html'].$wrapper.html("")
     let el = d.fields_dict['pop_up_html'].$wrapper.get(0)
     let vue = createApp(MultiSelectListConverter, {
-        "items_list": ['SD YRP Lot', 'YRP Item']
+        "items_list": ['SD YRP Lot', 'Item']
     })
     list_converter = vue.mount(el)
     d.show()

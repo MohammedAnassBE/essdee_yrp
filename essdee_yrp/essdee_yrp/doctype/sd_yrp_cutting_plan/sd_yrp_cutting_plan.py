@@ -217,7 +217,7 @@ class SDYRPCuttingPlan(Document):
 
 			cloth_details = {}
 			for item in self.items:
-				variant = frappe.get_doc('YRP Item Variant', item.item_variant)
+				variant = frappe.get_doc('Item', item.item_variant)
 				attr_details = item_attribute_details(variant, item_attributes)
 				set_combination = update_if_string_instance(item.set_combination)
 				major_colour = set_combination.get("major_colour")
@@ -426,11 +426,11 @@ def fetch_cloth_details(items):
 	item_details = []
 	for item in items:
 		variant = item.cloth_item_variant
-		variant_doc = frappe.get_doc('YRP Item Variant',variant)
+		variant_doc = frappe.get_doc('Item',variant)
 		item_details.append({
 			"accessory": item.accessory,
 			"cloth_item_variant":item.cloth_item_variant,
-			"item":variant_doc.item,
+			"item":(variant_doc.variant_of or variant_doc.name),
 			"colour":item.colour,
 			"dia":item.dia,
 			"cloth_type":item.cloth_type,
@@ -490,7 +490,7 @@ def _build_cloth_requirement_rows(cutting_plan_doc):
 	cloth_details = {}
 	accessory_detail = {}
 	for item in cutting_plan_doc.items:
-		variant = frappe.get_doc('YRP Item Variant', item.item_variant)
+		variant = frappe.get_doc('Item', item.item_variant)
 		attr_details = item_attribute_details(variant, item_attributes)
 		if item.set_combination:
 			set_combination = update_if_string_instance(item.set_combination)

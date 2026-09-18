@@ -10,8 +10,9 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot import sd_yrp_lot as lot_controlle
 class FakePurchaseOrder(frappe._dict):
 	def __init__(self, **values):
 		super().__init__(values)
-		self.setdefault("doctype", 'YRP Purchase Order')
+		self.setdefault("doctype", 'Purchase Order')
 		self.setdefault("docstatus", 0)
+		self.setdefault("is_yrp_managed", 1)
 		self.setdefault("sd_lot", [])
 		self.meta = frappe._dict(get_field=lambda fieldname: True)
 
@@ -56,8 +57,8 @@ class FakeLot(frappe._dict):
 class TestLotPackingBoundary(FrappeTestCase):
 	def test_boundary_fields_are_essdee_custom_fields(self):
 		expected = {
-			('YRP Purchase Order', "default_lot"): ("Link", 'SD YRP Lot'),
-			('YRP Purchase Order', "sd_lot"): ("Table", 'SD YRP Lot MultiSelect'),
+			('Purchase Order', "default_lot"): ("Link", 'SD YRP Lot'),
+			('Purchase Order', "sd_lot"): ("Table", 'SD YRP Lot MultiSelect'),
 			('YRP Process', "includes_packing"): ("Check", None),
 			('YRP Work Order', "includes_packing"): ("Check", None),
 		}
@@ -70,7 +71,7 @@ class TestLotPackingBoundary(FrappeTestCase):
 
 		for fieldname in ("lot_details_section", "default_lot", "sd_lot"):
 			self.assertEqual(
-				frappe.get_meta('YRP Purchase Order').get_field(fieldname).hidden,
+				frappe.get_meta('Purchase Order').get_field(fieldname).hidden,
 				1,
 				fieldname,
 			)
@@ -109,12 +110,13 @@ class TestLotPackingBoundary(FrappeTestCase):
 	def test_grn_rejects_unlinked_configured_lot(self):
 		po = frappe._dict(sd_lot=[frappe._dict(lot="LOT-A")])
 		grn = frappe._dict(
-			against='YRP Purchase Order',
+			against='Purchase Order',
 			against_id="PO-TEST",
 			items=[frappe._dict(lot="LOT-B")],
 		)
 		with (
 			patch.object(purchase_order_lots, "_lot_dimension_field", return_value="lot"),
+			patch.object(frappe.db, "get_value", return_value=1),
 			patch.object(frappe, "get_doc", return_value=po),
 			self.assertRaisesRegex(frappe.ValidationError, "LOT-B"),
 		):
@@ -122,12 +124,13 @@ class TestLotPackingBoundary(FrappeTestCase):
 
 	def test_grn_accepts_allowed_or_unrestricted_lot(self):
 		grn = frappe._dict(
-			against='YRP Purchase Order',
+			against='Purchase Order',
 			against_id="PO-TEST",
 			items=[frappe._dict(lot="LOT-A")],
 		)
 		with (
 			patch.object(purchase_order_lots, "_lot_dimension_field", return_value="lot"),
+			patch.object(frappe.db, "get_value", return_value=1),
 			patch.object(
 				frappe,
 				"get_doc",

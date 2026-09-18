@@ -3,12 +3,11 @@
 
 import json
 import frappe
-from frappe.desk.search import search_widget
 from frappe.model.document import Document
 from frappe.utils import flt
 from six import string_types
 
-from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
+from yrp.yrp.doctype.yrp_item.yrp_item import get_global_attribute_values, get_or_create_variant
 
 class SDYRPLotTemplate(Document):
 	def load_attribute_list(self):
@@ -16,7 +15,7 @@ class SDYRPLotTemplate(Document):
 		
 		attribute_list = []
 		for attribute in self.item_attributes:
-			attribute_doc = frappe.get_doc('YRP Item Attribute', attribute.attribute)
+			attribute_doc = frappe.get_doc('Item Attribute', attribute.attribute)
 			if not attribute_doc.numeric_values:
 				if attribute.mapping != None:
 					doc = frappe.get_doc('YRP Item Item Attribute Mapping', attribute.mapping)
@@ -130,35 +129,44 @@ class SDYRPLotTemplate(Document):
 
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
-def get_item_attribute_values(doctype, txt, searchfield, start, page_len, filters):
-	if (doctype != 'YRP Item Attribute Value' or filters['item'] == None or filters['attribute'] == None):
+def get_item_attribute_values(
+	doctype=None, txt="", searchfield=None, start=0, page_len=20, filters=None
+):
+	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
+	attribute = filters.get('attribute')
+	lot_template_name = filters.get('lot_template')
+	if not attribute or not lot_template_name:
 		return []
-
-	attribute = filters['attribute']
-	lot_template_name = filters['lot_template']
-
-	attr = frappe.get_doc('YRP Item Attribute', attribute)
-	if attr.numeric_values:
-		values = search_widget(doctype=doctype, txt=txt, page_length=page_len, searchfield=searchfield, filters=[['YRP Item Attribute Value', 'attribute_name', '=', attribute]])
-		return values
 
 	lot_template = frappe.get_doc('SD YRP Lot Template', lot_template_name)
-	attributes = [attribute.attribute for attribute in lot_template.attributes]
+	attributes = [row.attribute for row in lot_template.item_attributes]
 	if attribute not in attributes:
 		return []
-	for attr_obj in lot_template.attributes:
+	values = []
+	for attr_obj in lot_template.item_attributes:
 		if attribute == attr_obj.attribute:
-			mapping_doc = frappe.get_doc('YRP Item Item Attribute Mapping', attr_obj.mapping)
-			if len(mapping_doc.values) == 0:
-				values = search_widget(doctype=doctype, txt=txt, page_length=page_len, searchfield=searchfield, filters=[['YRP Item Attribute Value', 'attribute_name', '=', attribute]])
-			else:
-				attribute_values = [value.attribute_value for value in mapping_doc.values]
-				return [[value] for value in attribute_values if value.lower().startswith(txt.lower())]
+			if attr_obj.mapping:
+				mapping_doc = frappe.get_doc('YRP Item Item Attribute Mapping', attr_obj.mapping)
+				values = [row.attribute_value for row in mapping_doc.values]
+			break
+	if not values:
+		values = get_global_attribute_values(attribute)
+	needle = (txt or "").lower()
+	return [[value] for value in values if needle in value.lower()][start : start + page_len]
+
+
+@frappe.whitelist()
+def search_lot_template_attribute_values(txt="", attribute=None, lot_template=None, page_len=99):
+	filters = {"attribute": attribute, "lot_template": lot_template}
+	rows = get_item_attribute_values(
+		txt=txt, start=0, page_len=int(page_len or 99), filters=filters
+	)
+	return [row[0] for row in rows]
 		
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def get_item_attributes(doctype, txt, searchfield, start, page_len, filters):
-	if (doctype != 'YRP Item Attribute' or filters['lot_template'] == None):
+	if (doctype != 'Item Attribute' or filters['lot_template'] == None):
 		return []
 	
 	lot_template_name = filters['lot_template']
@@ -294,7 +302,7 @@ def get_planned_qty_based_on_attributes(planned_qty, attributes, based_on = None
 
 
 def validate_bom_item(item, attributes):
-	item = frappe.get_doc('YRP Item', item)
+	item = frappe.get_doc('Item', item)
 	attributes = attributes or []
 	item_attributes = [attr.attribute for attr in item.attributes]
 	if len(attributes) != len(item_attributes):

@@ -5,6 +5,7 @@ import frappe
 from frappe.utils import cint
 
 from essdee_yrp.dynamic_packing import packing_batch_label
+from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 def execute(filters=None):
 	filters = frappe._dict(filters or {})
@@ -69,8 +70,7 @@ def get_data(filters):
 
 	shown_batch_totals = set()
 	for row in data:
-		item = frappe.get_cached_value('YRP Item Variant', row['item_variant'], "item")
-		row['item'] = item
+		row['item'] = get_parent_item(row['item_variant'])
 		if (
 			cint(row.packing_calculation_version) >= 2
 			and row.goods_received_note not in shown_batch_totals
@@ -94,18 +94,18 @@ def get_columns():
 	return [
 		{"fieldname": "goods_received_note","fieldtype": "Link","options": 'YRP Goods Received Note',
 			"label": "Goods Received Note", "width": 100},
-		{"fieldname": "supplier","fieldtype": "Link","options": 'YRP Supplier',"label": "Supplier", "width": 100},
+		{"fieldname": "supplier","fieldtype": "Link","options": 'Supplier',"label": "Supplier", "width": 100},
 		{"fieldname": "supplier_name","fieldtype": "Data","label": "Supplier Name", "width": 150},
-		{"fieldname": "delivery_location","fieldtype": "Link","options": 'YRP Supplier',"label": "Delivery Location", "width": 100},
+		{"fieldname": "delivery_location","fieldtype": "Link","options": 'Supplier',"label": "Delivery Location", "width": 100},
 		{"fieldname": "delivery_location_name","fieldtype": "Data","label": "Delivery Location Name", "width": 150},
 		{"fieldname": "lot","fieldtype": "Link","options": 'SD YRP Lot',"label": "Lot", "width": 100},
 		{"fieldname": "process_name","fieldtype": "Link","options": 'YRP Process',"label": "Process", "width": 100},
-		{"fieldname": "item","fieldtype": "Link","options": 'YRP Item',"label": "Item", "width": 200},
-		{"fieldname": "item_variant","fieldtype": "Link","options": 'YRP Item Variant',"label": "Item Variant", "width": 200},
+		{"fieldname": "item","fieldtype": "Link","options": 'Item',"label": "Item", "width": 200},
+		{"fieldname": "item_variant","fieldtype": "Link","options": 'Item',"label": "Item Variant", "width": 200},
 		{"fieldname": "quantity","fieldtype": "Float","label": "Quantity", "width": 100},
 		{"fieldname": "total_packing_boxes", "fieldtype": "Int", "label": "Packing Boxes", "width": 110},
 		{"fieldname": "total_packing_pieces", "fieldtype": "Int", "label": "Packing Pieces", "width": 110},
 		{"fieldname": "packing_ratio_details", "fieldtype": "Small Text", "label": "Packing Ratios", "width": 320},
 		{"fieldname": "received_type","fieldtype": "Link","options": 'YRP Received Type',"label": "Received Type", "width": 100},
-		{"fieldname": "uom","fieldtype": "Link","options": 'YRP UOM',"label": "UOM", "width": 100},
+		{"fieldname": "uom","fieldtype": "Link","options": 'UOM',"label": "UOM", "width": 100},
 	]

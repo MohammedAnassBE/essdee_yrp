@@ -342,13 +342,12 @@ function mountDiaLink(el, bindingValue) {
 	const control = frappe.ui.form.make_control({
 		parent: el,
 		df: {
-			fieldtype: "Link",
+			fieldtype: "Autocomplete",
 			fieldname: `panel_consumption_dia_${++diaControlSequence}`,
-			options: "YRP Item Attribute Value",
 			placeholder: __("Select Dia"),
-			only_select: true,
 			get_query: () => ({
-				filters: { attribute_name: "Dia" },
+				query: "yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values",
+				params: { attribute: "Dia" },
 			}),
 		},
 		render_input: true,
@@ -481,14 +480,13 @@ function fillConsumptionColumn(packing) {
 		title: `Fill ${packing} column`,
 		fields: [
 			{
-				fieldtype: "Link",
+				fieldtype: "Autocomplete",
 				fieldname: "dia",
 				label: "Dia",
-				options: "YRP Item Attribute Value",
 				reqd: 1,
-				only_select: true,
 				get_query: () => ({
-					filters: { attribute_name: "Dia" },
+					query: "yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values",
+					params: { attribute: "Dia" },
 				}),
 			},
 			{

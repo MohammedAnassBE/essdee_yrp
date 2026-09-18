@@ -42,7 +42,7 @@ class SDYRPCuttingOrderDetail(Document):
 	def load_attribute_list(self):
 		attribute_list = []
 		for attribute in self.item_attributes:
-			attribute_doc = frappe.get_cached_doc('YRP Item Attribute', attribute.attribute)
+			attribute_doc = frappe.get_cached_doc('Item Attribute', attribute.attribute)
 			if not attribute_doc.numeric_values:
 				if attribute.mapping != None:
 					doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attribute.mapping)

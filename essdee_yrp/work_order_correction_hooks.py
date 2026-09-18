@@ -5,6 +5,7 @@ import frappe
 from frappe import _
 
 from essdee_yrp.fabric_ipd import get_yarn_ratio_inputs
+from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 
 def validate_correction_ipd_items(doc, method=None):
@@ -24,7 +25,7 @@ def validate_correction_ipd_items(doc, method=None):
 	for row in doc.get("deliverables") or []:
 		if not row.item_variant:
 			continue
-		template = frappe.db.get_value('YRP Item Variant', row.item_variant, "item")
+		template = get_parent_item(row.item_variant)
 		if template not in allowed:
 			frappe.throw(
 				_(

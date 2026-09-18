@@ -105,11 +105,11 @@ def get_item_attributes(item):
 	attribute names)."""
 	# [] for missing item AND for no-permission alike — a permission-less caller
 	# must not be able to distinguish existing from non-existing Item names.
-	if not item or not frappe.db.exists('YRP Item', item):
+	if not item or not frappe.db.exists('Item', item):
 		return []
-	if not frappe.has_permission('YRP Item', doc=item, ptype="read"):
+	if not frappe.has_permission('Item', doc=item, ptype="read"):
 		return []
-	doc = frappe.get_cached_doc('YRP Item', item)
+	doc = frappe.get_cached_doc('Item', item)
 	return [a.attribute for a in (doc.get("attributes") or [])]
 
 
@@ -276,7 +276,7 @@ def ensure_cloth_item_attributes(doc, method=None):
 
 	if not doc.get("item") or not needed:
 		return
-	item = frappe.get_doc('YRP Item', doc.item)
+	item = frappe.get_doc('Item', doc.item)
 	item_have = {row.attribute for row in item.get("attributes") or []}
 	changed = False
 	for attribute in dict.fromkeys(needed):
@@ -401,7 +401,7 @@ def _matrix_input_specs(doc, row, default_uom):
 				frappe._dict({
 					"item": yarn.item,
 					"quantity": yarn.quantity,
-					"uom": frappe.db.get_value('YRP Item', yarn.item, "default_unit_of_measure")
+					"uom": frappe.db.get_value('Item', yarn.item, "stock_uom")
 						or default_uom,
 				})
 				for yarn in yarns
@@ -411,7 +411,7 @@ def _matrix_input_specs(doc, row, default_uom):
 		"item": input_item,
 		"quantity": 1.0,
 		"uom": (
-			frappe.db.get_value('YRP Item', input_item, "default_unit_of_measure")
+			frappe.db.get_value('Item', input_item, "stock_uom")
 			if input_item else None
 		) or default_uom,
 	})]
@@ -651,7 +651,7 @@ def sync_fabric_process_matrices(doc, method=None):
 	if not is_cloth_ipd(doc):
 		return
 
-	uom = frappe.db.get_value('YRP Item', doc.item, "default_unit_of_measure")
+	uom = frappe.db.get_value('Item', doc.item, "stock_uom")
 
 	# Matrices are NEVER hand-authored (2026-06-25 rule), so wiping every
 	# matrix of this IPD is safe and also clears orphans left behind when a
@@ -903,7 +903,7 @@ def build_colour_knitting_matrices(doc, row, uom):
 				"item": yarn.item,
 				"combo_index": combo_index,
 				"quantity": yarn.quantity,
-				"uom": frappe.db.get_value('YRP Item', yarn.item, "default_unit_of_measure") or uom,
+				"uom": frappe.db.get_value('Item', yarn.item, "stock_uom") or uom,
 				"wastage_pct": 0,
 			})
 		matrix.append("combinations", {

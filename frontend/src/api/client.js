@@ -459,7 +459,7 @@ export async function getCount(doctype, filters = {}, or_filters = null, distinc
  */
 // Title-aware Link search. Delegates to the server `link_search`, which matches
 // the typed text against `name` AND the doctype's title_field / search_fields
-// (so e.g. an Item autonamed `Item-00012` is found by its descriptive `name1`
+// (so e.g. an Item is found by its descriptive `item_name`
 // = "Greige Yarn"). Returns [{ name, label }] — `name` is the value a Link
 // stores, `label` is what to show the user. Back-compat: every existing caller
 // reads `r.name`, which is still present.

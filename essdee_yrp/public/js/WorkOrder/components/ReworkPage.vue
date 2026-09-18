@@ -156,7 +156,7 @@ const canWrite = computed(() => Boolean(items.value.permissions?.can_write));
 
 onMounted(() => {
 	lotControl = makeControl(".lot-input", { fieldname: "lot", fieldtype: "Link", options: "SD YRP Lot", label: __("Lot") });
-	itemControl = makeControl(".item-input", { fieldname: "item", fieldtype: "Link", options: "YRP Item", label: __("Item") });
+	itemControl = makeControl(".item-input", { fieldname: "item", fieldtype: "Link", options: "Item", label: __("Item") });
 	colourControl = makeControl(".colour-input", { fieldname: "colour", fieldtype: "Data", label: __("Colour") });
 	receivedTypeControl = makeControl(".received-type-input", { fieldname: "received_type", fieldtype: "Link", options: "YRP Received Type", label: __("Received Type") });
 	showReworkedControl = makeControl(".show-reworked-input", {

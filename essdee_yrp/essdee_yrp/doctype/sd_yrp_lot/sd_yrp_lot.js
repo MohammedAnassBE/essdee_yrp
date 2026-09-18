@@ -313,7 +313,7 @@ frappe.ui.form.on("SD YRP Lot", {
 function add_purchase_order_link_actions(frm) {
 	frm.add_custom_button(__("Link to PO"), () => {
 		new frappe.ui.form.MultiSelectDialog({
-			doctype: "YRP Purchase Order",
+			doctype: "Purchase Order",
 			target: frm,
 			date_field: "po_date",
 			get_query() {
@@ -352,7 +352,7 @@ function add_purchase_order_link_actions(frm) {
 					return;
 				}
 				new frappe.ui.form.MultiSelectDialog({
-					doctype: "YRP Purchase Order",
+					doctype: "Purchase Order",
 					target: frm,
 					date_field: "po_date",
 					get_query() {
@@ -812,10 +812,12 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 				fields.push({
 					label: __("Knitting Output"),
 					fieldname: bulk_colour_fieldname,
-					fieldtype: "Link",
-					options: "YRP Item Attribute Value",
+					fieldtype: "Autocomplete",
 					default: common_output_colours.length === 1 ? common_output_colours[0] : "",
-					get_query: () => ({ filters: { attribute_name: "Colour" } }),
+					get_query: () => ({
+						query: "yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values",
+						params: { attribute: "Colour" },
+					}),
 					onchange() {
 						const value = d.get_value(bulk_colour_fieldname) || "";
 						colour_routes.forEach((_route, route_index) => {
@@ -849,26 +851,30 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 					fields.push({
 						label: __("Knitting Output Dia"),
 						fieldname: dia_fieldname,
-						fieldtype: "Link",
+						fieldtype: "Autocomplete",
 						hidden: 1,
-						options: "YRP Item Attribute Value",
 						reqd: 1,
 						default: stored_route.knitting_output_dia || route.dia || "",
-						get_query: () => ({ filters: { attribute_name: "Dia" } }),
+						get_query: () => ({
+							query: "yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values",
+							params: { attribute: "Dia" },
+						}),
 					});
 					fields.push({
 						label: __("Knitting Output Colour"),
 						fieldname: colour_fieldname,
-						fieldtype: "Link",
+						fieldtype: "Autocomplete",
 						hidden: 1,
-						options: "YRP Item Attribute Value",
 						reqd: 1,
 						default: stored_route.knitting_output_colour
 							|| default_output_colour
 							|| output_colours[colour]
 							|| profile.greige_colour
 							|| "",
-						get_query: () => ({ filters: { attribute_name: "Colour" } }),
+						get_query: () => ({
+							query: "yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values",
+							params: { attribute: "Colour" },
+						}),
 					});
 				});
 			});
@@ -1078,7 +1084,7 @@ function yarn_recipe_fields() {
 			label: __("Yarn Item"),
 			fieldname: "yarn_item",
 			fieldtype: "Link",
-			options: "YRP Item",
+			options: "Item",
 			in_list_view: 1,
 			columns: 7,
 			reqd: 1,

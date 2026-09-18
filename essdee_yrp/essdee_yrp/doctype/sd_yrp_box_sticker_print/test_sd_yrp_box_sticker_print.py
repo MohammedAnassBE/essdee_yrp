@@ -1,9 +1,10 @@
+import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import frappe
 from frappe import _dict
-from frappe.tests.utils import FrappeTestCase
 
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_box_sticker_print import (
 	sd_yrp_box_sticker_print as box_sticker_print,
@@ -14,7 +15,15 @@ from essdee_yrp.finishing.box_sticker import (
 )
 
 
-class TestBoxStickerPrint(FrappeTestCase):
+class TestBoxStickerPrint(unittest.TestCase):
+	def test_preview_posts_zpl_in_the_request_body(self):
+		client = Path(box_sticker_print.__file__).with_suffix(".js").read_text(
+			encoding="utf-8"
+		)
+		self.assertIn('method: "POST"', client)
+		self.assertIn("body: result.code", client)
+		self.assertNotIn("encodeURIComponent(result.code)", client)
+
 	def test_save_does_not_refetch_or_overwrite_mrp(self):
 		doc = SimpleNamespace(
 			box_sticker_print_details=[

@@ -40,7 +40,7 @@
    "fieldname": "from_location",
    "fieldtype": "Link",
    "label": "Stock Location",
-   "options": "YRP Supplier",
+   "options": "Supplier",
    "reqd": 1
   },
   {

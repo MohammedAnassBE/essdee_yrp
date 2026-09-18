@@ -44,7 +44,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Warehouse",
-   "options": "YRP Warehouse",
+   "options": "Warehouse",
    "reqd": 1
   },
   {
@@ -52,7 +52,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "From Item",
-   "options": "YRP Item",
+   "options": "Item",
    "reqd": 1
   },
   {
@@ -64,7 +64,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "To Item",
-   "options": "YRP Item",
+   "options": "Item",
    "reqd": 1
   },
   {

@@ -209,7 +209,7 @@ def _check_unmoved_access(from_location, lot):
 		frappe.throw(_("Not permitted to prepare a Cut Panel Movement."), frappe.PermissionError)
 	frappe.get_doc('SD YRP Lot', lot).check_permission("read")
 	frappe.has_permission('SD YRP Cut Bundle Movement Ledger', "read", throw=True)
-	if not frappe.db.exists('YRP Supplier', from_location):
+	if not frappe.db.exists('Supplier', from_location):
 		frappe.throw(_("Supplier {0} does not exist.").format(from_location))
 
 

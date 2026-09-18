@@ -27,16 +27,18 @@ class TestGarmentBOM(FrappeTestCase):
 			],
 		)
 		lot = frappe._dict(pack_in_stage="Piece", pack_out_stage="Pack")
-		garment_variant = frappe._dict(item="_Test Garment", attributes=[])
+		garment_variant = frappe._dict(
+			name="_Test Garment Variant", variant_of="_Test Garment", attributes=[]
+		)
 		accessory_item = frappe._dict(
 			attributes=[frappe._dict(attribute="Colour")],
 		)
 
 		def get_cached_doc(doctype, name):
-			if doctype == 'YRP Item Variant':
-				return garment_variant
-			if doctype == 'YRP Item' and name == "Tag Bullet":
+			if doctype == 'Item' and name == "Tag Bullet":
 				return accessory_item
+			if doctype == 'Item' and name == garment_variant.name:
+				return garment_variant
 			raise AssertionError((doctype, name))
 
 		with (
@@ -72,7 +74,9 @@ class TestGarmentBOM(FrappeTestCase):
 			],
 		)
 		lot = frappe._dict(pack_in_stage="Piece", pack_out_stage="Pack")
-		variant = frappe._dict(item="_Test Garment", attributes=[])
+		variant = frappe._dict(
+			name="_Test Garment Variant", variant_of="_Test Garment", attributes=[]
+		)
 
 		with (
 			patch.object(frappe, "get_doc", return_value=ipd),
@@ -115,7 +119,9 @@ class TestGarmentBOM(FrappeTestCase):
 			],
 		)
 		lot = frappe._dict(pack_in_stage="Piece", pack_out_stage="Pack")
-		variant = frappe._dict(item="_Test Garment", attributes=[])
+		variant = frappe._dict(
+			name="_Test Garment Variant", variant_of="_Test Garment", attributes=[]
+		)
 
 		with (
 			patch.object(frappe, "get_doc", return_value=ipd),
@@ -159,16 +165,18 @@ class TestGarmentBOM(FrappeTestCase):
 			packing_uom="Pieces",
 		)
 		variant = frappe._dict(
-			item="_Test Garment",
+			name="_Test Garment Variant",
+			variant_of="_Test Garment",
 			attributes=[],
 		)
 		item = frappe._dict(
-			default_unit_of_measure="Pieces",
-			uom_conversion_details=[],
+			stock_uom="Pieces",
+			uoms=[],
 		)
 
 		def get_cached_doc(doctype, name):
-			return variant if doctype == 'YRP Item Variant' else item
+			self.assertEqual(doctype, 'Item')
+			return variant if name == variant.name else item
 
 		with (
 			patch.object(frappe, "get_doc", return_value=ipd),
@@ -210,7 +218,8 @@ class TestGarmentBOM(FrappeTestCase):
 			packing_uom="Pieces",
 		)
 		variant = frappe._dict(
-			item="_Test Garment",
+			name="_Test Garment Variant",
+			variant_of="_Test Garment",
 			attributes=[frappe._dict(attribute="Colour", attribute_value="Navy")],
 		)
 		mapping = frappe._dict(
@@ -235,7 +244,7 @@ class TestGarmentBOM(FrappeTestCase):
 		)
 
 		def get_cached_doc(doctype, name):
-			return variant if doctype == 'YRP Item Variant' else mapping
+			return variant if doctype == 'Item' else mapping
 
 		with (
 			patch.object(frappe, "get_doc", return_value=ipd),
@@ -274,7 +283,8 @@ class TestGarmentBOM(FrappeTestCase):
 		)
 		lot = frappe._dict(pack_in_stage="Piece", pack_out_stage="Pack")
 		variant = frappe._dict(
-			item="_Test Garment",
+			name="_Test Garment Variant",
+			variant_of="_Test Garment",
 			attributes=[frappe._dict(attribute="Colour", attribute_value="Navy")],
 		)
 		mapping = frappe._dict(
@@ -292,7 +302,7 @@ class TestGarmentBOM(FrappeTestCase):
 		)
 
 		def get_cached_doc(doctype, name):
-			return variant if doctype == 'YRP Item Variant' else mapping
+			return variant if doctype == 'Item' else mapping
 
 		with (
 			patch.object(frappe, "get_doc", return_value=ipd),

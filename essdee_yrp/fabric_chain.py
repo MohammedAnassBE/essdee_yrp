@@ -179,7 +179,7 @@ def final_combos(ipd_doc, has_colour=True):
 			matrix = frappe.get_doc('YRP IPD Process Matrix', name)
 			if matrix.reference_item_variant:
 				variant = frappe.get_cached_doc(
-					'YRP Item Variant', matrix.reference_item_variant
+					'Item', matrix.reference_item_variant
 				)
 				combos.add(frozenset(
 					(row.attribute, row.attribute_value)
@@ -203,7 +203,7 @@ def final_combos(ipd_doc, has_colour=True):
 			},
 			pluck="reference_item_variant",
 		):
-			variant = frappe.get_cached_doc('YRP Item Variant', reference)
+			variant = frappe.get_cached_doc('Item', reference)
 			combos.add(frozenset(
 				(row.attribute, row.attribute_value)
 				for row in variant.get("attributes") or []

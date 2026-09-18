@@ -80,8 +80,8 @@ def _normalize_variant_demands(ipd, variant_demands):
 		)
 		if not variant or quantity <= 0:
 			continue
-		variant_doc = frappe.get_cached_doc('YRP Item Variant', variant)
-		if variant_doc.item != ipd.item:
+		variant_doc = frappe.get_cached_doc('Item', variant)
+		if (variant_doc.variant_of or variant_doc.name) != ipd.item:
 			frappe.throw(
 				_("Item Variant {0} does not belong to IPD item {1}.").format(
 					variant, ipd.item
@@ -131,15 +131,15 @@ def _qty_of_product(ipd, lot_doc, bom_row):
 
 
 def _packing_uom_conversion(item, packing_uom):
-	item_doc = frappe.get_cached_doc('YRP Item', item)
-	from_uom = item_doc.default_unit_of_measure
+	item_doc = frappe.get_cached_doc('Item', item)
+	from_uom = item_doc.stock_uom
 	to_uom = packing_uom or from_uom
 	if from_uom == to_uom:
 		return 1.0
 
 	factors = {
 		row.uom: flt(row.conversion_factor)
-		for row in item_doc.get("uom_conversion_details") or []
+		for row in item_doc.get("uoms") or []
 		if row.uom
 	}
 	from_factor = factors.get(from_uom)
@@ -215,7 +215,7 @@ def _same_attributes(mapping):
 def _add_row(aggregated, bom_row, attrs, quantity):
 	item_variant = get_or_create_variant(bom_row.item, attrs)
 	uom = bom_row.uom or frappe.db.get_value(
-		'YRP Item', bom_row.item, "default_unit_of_measure"
+		'Item', bom_row.item, "stock_uom"
 	)
 	key = (bom_row.process_name, item_variant, uom)
 	if key not in aggregated:

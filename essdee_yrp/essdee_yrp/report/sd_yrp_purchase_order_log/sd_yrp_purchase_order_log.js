@@ -8,7 +8,7 @@ frappe.query_reports["SD YRP Purchase Order Log"] = {
             "fieldname": "purchase_order",
             "label": "Purchase Order",
             "fieldtype": "Link",
-            "options": "YRP Purchase Order",
+            "options": "Purchase Order",
             "width": 100,
         },
 		{
@@ -21,7 +21,7 @@ frappe.query_reports["SD YRP Purchase Order Log"] = {
             "fieldname": "supplier",
             "label": "Supplier",
             "fieldtype": "Link",
-            "options": "YRP Supplier",
+            "options": "Supplier",
             "width": 200,
         },
 	]

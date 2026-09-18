@@ -23,7 +23,7 @@ CONFIG_KEY = "essdee_yrp_migration"
 RESET_ENABLE_CONFIG_KEY = "essdee_yrp_allow_target_reset"
 SAFE_NAME = re.compile(r"^[A-Za-z0-9_.-]+$")
 SUPPORTED_SOURCE_APP = "production_api"
-TARGET_APPS = ("yrp", "essdee_yrp")
+TARGET_APPS = ("yrp", "essdee_yrp", "frappe_tools", "spine")
 
 
 def is_target_reset_enabled() -> bool:

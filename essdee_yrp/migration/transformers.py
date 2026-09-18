@@ -56,6 +56,74 @@ def purchase_order_open_status(
 	return "Close" if value == "Closed" else value
 
 
+def attribute_value_link_to_data(
+	value: Any,
+	document: Mapping[str, Any],
+	spec: MigrationSpec,
+	fieldname: str,
+) -> Any:
+	"""Use the value identity after live preflight verifies name=value."""
+
+	return value
+
+
+def item_attribute_value_to_standard_child(
+	document: Mapping[str, Any],
+	spec: MigrationSpec,
+	plan: MigrationPlan,
+) -> Mapping[str, Any]:
+	"""Move one legacy value master into ERPNext's attribute child table."""
+
+	value = document.get("attribute_value")
+	return {
+		**_system_values(document),
+		"doctype": "Item Attribute Value",
+		"parent": document.get("attribute_name"),
+		"parenttype": "Item Attribute",
+		"parentfield": "item_attribute_values",
+		"attribute_value": value,
+		# Legacy has no abbreviation. Exact legacy Item codes are retained, so
+		# this fallback is not used to rename migrated physical Items.
+		"abbr": value,
+	}
+
+
+def item_variant_to_standard_item(
+	document: Mapping[str, Any],
+	spec: MigrationSpec,
+	plan: MigrationPlan,
+) -> Mapping[str, Any]:
+	"""Represent a legacy physical Item Variant as a standard ERPNext Item."""
+
+	attributes = document.get("attributes") or []
+	standalone = not attributes and document.get("name") == document.get("item")
+	output = _system_values(document)
+	output.update(
+		{
+			"doctype": "Item",
+			"item_code": document.get("name"),
+			"item_name": document.get("name"),
+			"variant_of": None if standalone else document.get("item"),
+			"has_variants": 0,
+			"item_tuple_attribute": document.get("item_tuple_attribute"),
+			"sync_with_erp": document.get("sync_with_erp") or 0,
+			"attributes": [
+				{
+					**_system_values(row),
+					"doctype": "Item Variant Attribute",
+					"variant_of": document.get("item"),
+					"attribute": row.get("attribute"),
+					"attribute_value": row.get("attribute_value"),
+					"display_name": row.get("display_name"),
+					"display_name_is_empty": row.get("display_name_is_empty") or 0,
+				}
+				for row in attributes
+			],
+		}
+	)
+	return output
+
+
 def essdee_debit_to_debit(
 	document: Mapping[str, Any],
 	spec: MigrationSpec,
@@ -139,7 +207,40 @@ def derive_purchase_order_fields(
 	parent: Mapping[str, Any] | None,
 ) -> Mapping[str, Any]:
 	result = dict(output)
-	result["delivery_warehouse"] = source.get("default_delivery_location")
+	result["is_yrp_managed"] = 1
+	fulfilment_status = {
+		"Delivered": "Received",
+		"Partially Delivered": "Partially Received",
+	}.get(source.get("status"), source.get("status") or "Draft")
+	result["yrp_fulfillment_status"] = fulfilment_status
+	result["status"] = {
+		"Ordered": "To Receive",
+		"Partially Received": "To Receive",
+		"Received": "Completed",
+	}.get(fulfilment_status, fulfilment_status)
+
+	items = result.get("items") or []
+	result["total_qty"] = sum(float(row.get("qty") or 0) for row in items)
+	result["total_stock_qty"] = sum(float(row.get("stock_qty") or 0) for row in items)
+	result["total"] = sum(float(row.get("amount") or 0) for row in items)
+	result["total_discount"] = sum(
+		float(row.get("discount_amount") or 0) for row in items
+	)
+	result["total_tax"] = sum(float(row.get("tax_amount") or 0) for row in items)
+	result["grand_total"] = sum(float(row.get("total_amount") or 0) for row in items)
+	result["net_total"] = result["total"] - result["total_discount"]
+	result["total_taxes_and_charges"] = result["total_tax"]
+	result["conversion_rate"] = float(result.get("conversion_rate") or 1)
+	result["base_total"] = result["total"] * result["conversion_rate"]
+	result["base_net_total"] = result["net_total"] * result["conversion_rate"]
+	result["base_total_taxes_and_charges"] = (
+		result["total_tax"] * result["conversion_rate"]
+	)
+	result["base_grand_total"] = result["grand_total"] * result["conversion_rate"]
+	received_qty = sum(float(row.get("received_qty") or 0) for row in items)
+	result["per_received"] = (
+		100 * received_qty / result["total_qty"] if result["total_qty"] else 0
+	)
 	item_lots = {
 		row.get("lot")
 		for row in source.get("items") or []
@@ -152,6 +253,74 @@ def derive_purchase_order_fields(
 	result["lot"] = source.get("default_lot") or (
 		next(iter(item_lots)) if len(item_lots) == 1 else None
 	)
+	return result
+
+
+def derive_purchase_order_item_fields(
+	output: Mapping[str, Any],
+	source: Mapping[str, Any],
+	spec: MigrationSpec,
+	plan: MigrationPlan,
+	parent: Mapping[str, Any] | None,
+) -> Mapping[str, Any]:
+	result = dict(output)
+	item_code = result.get("item_code")
+	uom = result.get("uom")
+	qty = float(result.get("qty") or 0)
+	rate = float(result.get("rate") or 0)
+	amount = qty * rate
+
+	# The legacy row stores its physical Item identity, quantity, UOM and final
+	# rate directly; it has no ERPNext stock-UOM/base-currency shadow fields.
+	# The commonized target is single-company/single-currency, and historical
+	# YRP POs never drive ERPNext stock. A 1:1 shadow therefore preserves the
+	# legacy row's commercial quantity and amount without inventing a conversion.
+	result["item_name"] = result.get("item_name") or item_code
+	result["stock_uom"] = result.get("stock_uom") or uom
+	result["conversion_factor"] = result.get("conversion_factor") or 1.0
+	result["stock_qty"] = qty * float(result["conversion_factor"])
+	result["received_qty"] = max(
+		qty
+		- float(result.get("pending_quantity") or 0)
+		- float(result.get("cancelled_quantity") or 0),
+		0,
+	)
+	result["amount"] = (
+		result.get("amount") if result.get("amount") is not None else amount
+	)
+	result["discount_amount"] = (
+		float(result["amount"]) * float(result.get("discount_percentage") or 0) / 100
+	)
+	result["tax_amount"] = (
+		(float(result["amount"]) - result["discount_amount"])
+		* float(result.get("tax") or 0)
+		/ 100
+	)
+	result["total_amount"] = (
+		float(result["amount"]) - result["discount_amount"] + result["tax_amount"]
+	)
+	result["base_rate"] = result.get("base_rate") if result.get("base_rate") is not None else rate
+	result["base_amount"] = (
+		result.get("base_amount") if result.get("base_amount") is not None else amount
+	)
+	return result
+
+
+def item_to_standard_item(
+	output: Mapping[str, Any],
+	source: Mapping[str, Any],
+	spec: MigrationSpec,
+	plan: MigrationPlan,
+	parent: Mapping[str, Any] | None,
+) -> Mapping[str, Any]:
+	"""Build the standard template/standalone Item identity from a source Item."""
+
+	result = dict(output)
+	result["item_code"] = source.get("name")
+	result["item_name"] = result.get("item_name") or source.get("name")
+	result["has_variants"] = int(bool(source.get("attributes")))
+	result["variant_of"] = None
+	result["variant_based_on"] = "Item Attribute"
 	return result
 
 
@@ -188,11 +357,11 @@ def derive_purchase_invoice_fields(
 	result = dict(output)
 	result["against"] = {
 		"Work Order": "YRP Work Order",
-		"Purchase Order": "YRP Purchase Order",
+		"Purchase Order": "Purchase Order",
 	}.get(result.get("against"), result.get("against"))
 	if not result.get("against"):
 		result["against"] = (
-			'YRP Work Order' if source.get("pi_work_order_billed_details") else 'YRP Purchase Order'
+			'YRP Work Order' if source.get("pi_work_order_billed_details") else 'Purchase Order'
 		)
 	mapped_items = list(result.get("items") or [])
 	commercial_rows = {}
@@ -285,7 +454,7 @@ def derive_purchase_invoice_fields(
 def _legacy_purchase_invoice_source_rate(source_row, *, against):
 	source_rate = source_row.get("actual_rate")
 	if (
-		against == 'YRP Purchase Order'
+		against == 'Purchase Order'
 		and not float(source_rate or 0)
 		and float(source_row.get("rate") or 0)
 	):
@@ -482,9 +651,12 @@ def _system_values(document: Mapping[str, Any]) -> dict[str, Any]:
 TRANSFORMERS = {
 	"essdee_debit_to_debit": essdee_debit_to_debit,
 	"ipd_process_to_f16": ipd_process_to_f16,
+	"item_attribute_value_to_standard_child": item_attribute_value_to_standard_child,
+	"item_variant_to_standard_item": item_variant_to_standard_item,
 }
 
 VALUE_TRANSFORMERS = {
+	"attribute_value_link_to_data": attribute_value_link_to_data,
 	"supplier_to_warehouse": supplier_to_warehouse,
 	"purchase_order_status": purchase_order_status,
 	"purchase_order_open_status": purchase_order_open_status,
@@ -494,6 +666,8 @@ POST_TRANSFORMERS = {
 	"derive_delivery_challan_fields": derive_delivery_challan_fields,
 	"derive_goods_received_note_fields": derive_goods_received_note_fields,
 	"derive_purchase_order_fields": derive_purchase_order_fields,
+	"derive_purchase_order_item_fields": derive_purchase_order_item_fields,
+	"item_to_standard_item": item_to_standard_item,
 	"derive_process_fields": derive_process_fields,
 	"derive_purchase_invoice_fields": derive_purchase_invoice_fields,
 	"derive_product_item_name": derive_product_item_name,

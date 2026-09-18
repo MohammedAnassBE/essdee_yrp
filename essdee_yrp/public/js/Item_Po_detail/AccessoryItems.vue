@@ -59,15 +59,14 @@ function create_inputs(){
             parent:$(el).find(".part-item"),
             df: {
                 fieldname:'part',
-                fieldtype:"Link",
-                label:"Part",
-                options:"YRP Item Attribute Value",
-                reqd:true,
-                get_query(){
-                    return {
-                        query:'essdee_yrp.ipd_ui.get_attribute_detail_values',
-                        filters: {
-                            'mapping': cur_frm.set_item_attr_map_value,
+				fieldtype:"Autocomplete",
+				label:"Part",
+				reqd:true,
+				get_query(){
+					return {
+						query:'essdee_yrp.ipd_ui.search_attribute_detail_values',
+						params: {
+							'mapping': cur_frm.set_item_attr_map_value,
                         }
                     }
                 }

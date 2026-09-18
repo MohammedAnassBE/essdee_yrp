@@ -101,7 +101,7 @@
               <LinkField
                 :modelValue="yarn.yarn_item || ''"
                 @update:modelValue="(v) => onColourYarnChange(e, yarn, v)"
-                target-doctype="YRP Item"
+                target-doctype="Item"
                 placeholder="Select yarn item"
               />
               <InputNumber v-model="yarn.ratio" :min="0" :max="100" :maxFractionDigits="3" suffix="%" />
@@ -167,7 +167,7 @@
                 <LinkField
                   :modelValue="yarn.yarn_item || ''"
                   @update:modelValue="(v) => onColourYarnChange(e, yarn, v)"
-                  target-doctype="YRP Item"
+                  target-doctype="Item"
                   placeholder="Yarn item"
                 />
                 <InputNumber v-model="yarn.ratio" :min="0" :max="100" :maxFractionDigits="3" suffix="%" />
@@ -210,7 +210,7 @@
                   <LinkField
                     :modelValue="yarn.yarn_item || ''"
                     @update:modelValue="(v) => onColourYarnChange(e, yarn, v)"
-                    target-doctype="YRP Item"
+                    target-doctype="Item"
                     placeholder="Yarn item"
                   />
                   <InputNumber v-model="yarn.ratio" :min="0" :max="100" :maxFractionDigits="3" suffix="%" />
@@ -262,7 +262,7 @@
                   <LinkField
                     :modelValue="commonOutputColour(e, colour)"
                     @update:modelValue="(v) => setOutputColourForAllDias(e, colour, v)"
-                    target-doctype="YRP Item Attribute Value"
+                    target-doctype="Item Attribute Value"
                     :filters="{ attribute_name: 'Colour' }"
                     :placeholder="outputColourLabel(e, colour)"
                   />
@@ -302,7 +302,7 @@
                     <LinkField
                       :modelValue="route.knitting_output_dia || ''"
                       @update:modelValue="(v) => (route.knitting_output_dia = v || '')"
-                      target-doctype="YRP Item Attribute Value"
+                      target-doctype="Item Attribute Value"
                       :filters="{ attribute_name: 'Dia' }"
                       placeholder="Physical Dia after knitting"
                     />
@@ -312,7 +312,7 @@
                     <LinkField
                       :modelValue="route.knitting_output_colour || ''"
                       @update:modelValue="(v) => (route.knitting_output_colour = v || '')"
-                      target-doctype="YRP Item Attribute Value"
+                      target-doctype="Item Attribute Value"
                       :filters="{ attribute_name: 'Colour' }"
                       placeholder="Physical colour after knitting"
                     />

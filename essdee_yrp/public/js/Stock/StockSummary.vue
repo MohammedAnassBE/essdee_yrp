@@ -65,12 +65,12 @@ onMounted(() => {
 	make_control("lot", ".lot-control", {
 		fieldtype: "Table MultiSelect", label: "Lot", options: "SD YRP Lot MultiSelect",
 	});
-	make_control("item", ".item-control", { fieldtype: "Link", label: "Item", options: "YRP Item" });
+	make_control("item", ".item-control", { fieldtype: "Link", label: "Item", options: "Item" });
 	make_control("item_variant", ".variant-control", {
-		fieldtype: "Link", label: "Item Variant", options: "YRP Item Variant",
+		fieldtype: "Link", label: "Item Variant", options: "Item",
 	});
 	make_control("warehouse", ".warehouse-control", {
-		fieldtype: "Link", label: "Warehouse", options: "YRP Warehouse",
+		fieldtype: "Link", label: "Warehouse", options: "Warehouse",
 	});
 	make_control("received_type", ".received-type-control", {
 		fieldtype: "Link", label: "Received Type", options: "YRP Received Type",
@@ -142,10 +142,10 @@ function purpose_dialog(action) {
 function location_dialog(purpose, warehouse, action) {
 	const fields = [];
 	if (purpose !== "Material Receipt") {
-		fields.push({ fieldname: "from_warehouse", fieldtype: "Link", options: "YRP Warehouse", label: "From Warehouse", reqd: 1, default: warehouse });
+		fields.push({ fieldname: "from_warehouse", fieldtype: "Link", options: "Warehouse", label: "From Warehouse", reqd: 1, default: warehouse });
 	}
 	if (["Material Receipt", "Send to Warehouse"].includes(purpose)) {
-		fields.push({ fieldname: "to_warehouse", fieldtype: "Link", options: "YRP Warehouse", label: "To Warehouse", reqd: 1, default: purpose === "Material Receipt" ? warehouse : null });
+		fields.push({ fieldname: "to_warehouse", fieldtype: "Link", options: "Warehouse", label: "To Warehouse", reqd: 1, default: purpose === "Material Receipt" ? warehouse : null });
 	}
 	const dialog = new frappe.ui.Dialog({
 		title: __("Stock Entry Locations"), fields,

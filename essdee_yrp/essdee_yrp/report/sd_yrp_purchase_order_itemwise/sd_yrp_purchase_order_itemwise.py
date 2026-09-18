@@ -3,6 +3,7 @@
 
 import frappe
 from pypika import Order
+from frappe.query_builder.functions import Coalesce
 
 
 def execute(filters=None):
@@ -27,7 +28,7 @@ def get_columns():
             "fieldname": "name",
             "label": "PO Number",
             "fieldtype": "Link",
-            "options": 'YRP Purchase Order',
+            "options": 'Purchase Order',
             "width": 115
         },
         {
@@ -40,7 +41,7 @@ def get_columns():
         #     "fieldname": "supplier",
         #     "label": "Supplier",
         #     "fieldtype": "Link",
-#     "options": "YRP Supplier",
+#     "options": "Supplier",
         #     "width": 100
         # },
         {
@@ -53,14 +54,14 @@ def get_columns():
             "fieldname": "item",
             "label": "Item",
             "fieldtype": "Link",
-            "options": 'YRP Item',
+            "options": 'Item',
             "width": 150
         },
         {
             "fieldname": "item_variant",
             "label": "Item Variant",
             "fieldtype": "Link",
-            "options": 'YRP Item Variant',
+            "options": 'Item',
             "width": 150
         },
         {
@@ -91,7 +92,7 @@ def get_columns():
             "fieldname": "uom",
             "label": "UOM",
             "fieldtype": "Link",
-            "options": 'YRP UOM',
+            "options": 'UOM',
             "width": 100
         },
         {
@@ -104,7 +105,7 @@ def get_columns():
         #     "fieldname": "delivery_location",
         #     "label": "Delivery Location",
         #     "fieldtype": "Link",
-#     "options": "YRP Supplier",
+#     "options": "Supplier",
         #     "width": 100
         # },
         {
@@ -180,10 +181,10 @@ def get_columns():
 
 
 def get_data(filters):
-    po_item = frappe.qb.DocType('YRP Purchase Order Item')
-    po = frappe.qb.DocType('YRP Purchase Order')
-    supplier = frappe.qb.DocType('YRP Supplier')
-    item_variant = frappe.qb.DocType('YRP Item Variant')
+    po_item = frappe.qb.DocType('Purchase Order Item')
+    po = frappe.qb.DocType('Purchase Order')
+    supplier = frappe.qb.DocType('Supplier')
+    item_variant = frappe.qb.DocType('Item')
 
     query = (
         frappe.qb.from_(po_item)
@@ -192,10 +193,10 @@ def get_data(filters):
         .left_join(supplier)
         .on(po_item.delivery_location == supplier.name)
         .left_join(item_variant)
-        .on(po_item.item_variant == item_variant.name)
+        .on(po_item.item_code == item_variant.name)
         .select(
-            po_item.item_variant,
-            item_variant.item.as_('item'),
+            po_item.item_code.as_('item_variant'),
+            Coalesce(item_variant.variant_of, item_variant.name).as_('item'),
             po_item.qty,
             po_item.pending_quantity.as_("pending_qty"),
             po_item.cancelled_quantity.as_("cancelled_qty"),
@@ -208,7 +209,7 @@ def get_data(filters):
             po_item.discount_percentage,
             po_item.delivery_location,
             supplier.supplier_name.as_('delivery_location_name'),
-            po_item.delivery_date,
+            po_item.schedule_date.as_('delivery_date'),
             po_item.lot,
             po_item.comments.as_("item_comments"),
             po.name,
@@ -217,7 +218,7 @@ def get_data(filters):
             po.modified_by,
             po.supplier,
             po.supplier_name,
-            po.po_date,
+            po.transaction_date.as_('po_date'),
             po.comments.as_("po_comments"),
             po.status
         )
@@ -225,9 +226,12 @@ def get_data(filters):
     if (filters.get('docstatus')):
         query = query.where(po.docstatus == filters.get('docstatus'))
     if (filters.get('item_variant')):
-        query = query.where(po_item.item_variant == filters.get('item_variant'))
+        query = query.where(po_item.item_code == filters.get('item_variant'))
     if (filters.get('item')):
-        query = query.where(item_variant.item == filters.get('item'))
+        query = query.where(
+            (item_variant.variant_of == filters.get('item'))
+            | ((item_variant.variant_of.isnull()) & (item_variant.name == filters.get('item')))
+        )
     if (filters.get('supplier')):
         query = query.where(po.supplier == filters.get('supplier'))
     if (filters.get('delivery_location')):
@@ -243,14 +247,14 @@ def get_data(filters):
     if (filters.get('date_based_on')):
         if filters.get('date_based_on') == 'Posting Date':
             if filters.get('from_date'):
-                query = query.where(po.po_date >= filters.get('from_date'))
+                query = query.where(po.transaction_date >= filters.get('from_date'))
             if filters.get('to_date'):
-                query = query.where(po.po_date <= filters.get('to_date'))
+                query = query.where(po.transaction_date <= filters.get('to_date'))
         elif filters.get('date_based_on') == 'Delivery Date':
             if filters.get('from_date'):
-                query = query.where(po_item.delivery_date >= filters.get('from_date'))
+                query = query.where(po_item.schedule_date >= filters.get('from_date'))
             if filters.get('to_date'):
-                query = query.where(po_item.delivery_date <= filters.get('to_date'))
+                query = query.where(po_item.schedule_date <= filters.get('to_date'))
 
     query = query.orderby(po.modified, order=Order.desc)
     data = query.run(as_dict=True)

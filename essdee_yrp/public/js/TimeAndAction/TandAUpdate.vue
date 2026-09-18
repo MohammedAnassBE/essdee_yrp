@@ -273,7 +273,7 @@ onMounted(() => {
         df: {
             fieldname: "item",
             fieldtype: "Link",
-            options: "YRP Item",
+            options: "Item",
             label: "Item",
         },
         doc: sample_doc.value,

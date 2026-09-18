@@ -372,7 +372,7 @@ function downloadEmployeePunches() {
     const headers = [
         'Employee ID',
         'Employee Name',
-        'YRP Department',
+        'Department',
         'Designation',
         'Manpower Agent',
         'Shift',

@@ -93,7 +93,7 @@ function remove_attributes(){
 
 function createInput(major_colour, index, value, type, is_header){
     let parent_class = "." + get_input_class(major_colour, index, type);
-    let fieldtype = 'Link'
+	let fieldtype = 'Autocomplete'
     if(type == 'cloth_type'){
         fieldtype = 'Select'
     }
@@ -104,13 +104,12 @@ function createInput(major_colour, index, value, type, is_header){
         fieldname: major_colour+"_"+index,
         default: value,
     }
-    if (fieldtype == 'Link'){
-        df['options'] = 'YRP Item Attribute Value'
-        df['get_query'] = function(){
-            return {
-                query:'essdee_yrp.ipd_ui.get_attribute_detail_values',
-                filters: {
-                    'mapping': cur_frm.set_packing_attr_map_value,
+	if (fieldtype == 'Autocomplete'){
+		df['get_query'] = function(){
+			return {
+				query:'essdee_yrp.ipd_ui.search_attribute_detail_values',
+				params: {
+					'mapping': cur_frm.set_packing_attr_map_value,
                 }
             }
         }

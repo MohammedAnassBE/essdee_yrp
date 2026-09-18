@@ -249,7 +249,7 @@ function create_dc(){
             {
                 "fieldname": "from_location",
                 "fieldtype": "Link",
-                "options": "YRP Supplier",
+                "options": "Supplier",
                 "label": "From Location",
                 "reqd": 1,
                 "default": location
@@ -307,7 +307,7 @@ function create_loose_piece(){
             {
                 "fieldname": "from_location",
                 "fieldtype": "Link",
-                "options": "YRP Supplier",
+                "options": "Supplier",
                 "label": "From Location",
                 "reqd": 1,
                 "default": location

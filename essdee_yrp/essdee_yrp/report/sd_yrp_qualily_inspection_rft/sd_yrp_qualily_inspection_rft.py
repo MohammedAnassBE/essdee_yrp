@@ -22,7 +22,7 @@ def get_columns(max_inspections):
 			"label": "Supplier",
 			"fieldname": "supplier",
 			"fieldtype": "Link",
-			"options": 'YRP Supplier',
+			"options": 'Supplier',
 			"width": 150
 		},
 		{
@@ -36,7 +36,7 @@ def get_columns(max_inspections):
 			"label": "Item",
 			"fieldname": "item",
 			"fieldtype": "Link",
-			"options": 'YRP Item',
+			"options": 'Item',
 			"width": 150
 		},
 		{

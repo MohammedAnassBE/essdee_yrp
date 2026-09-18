@@ -27,12 +27,12 @@ def get_columns():
 		{"fieldname": "from_location_doctype", "fieldtype": "Data", "label": "From Type", "width": 110},
 		{"fieldname": "from_location", "fieldtype": "Dynamic Link", "options": "from_location_doctype", "label": "From Location", "width": 130},
 		{"fieldname": "from_location_name", "fieldtype": "Data", "label": "From Location Name", "width": 200},
-		{"fieldname": "supplier", "fieldtype": "Link", "options": 'YRP Supplier', "label": "Supplier", "width": 130},
+		{"fieldname": "supplier", "fieldtype": "Link", "options": 'Supplier', "label": "Supplier", "width": 130},
 		{"fieldname": "supplier_name", "fieldtype": "Data", "label": "Supplier Name", "width": 200},
 		{"fieldname": "lot", "fieldtype": "Link", "options": 'SD YRP Lot', "label": "Lot", "width": 120},
 		{"fieldname": "process", "fieldtype": "Link", "options": 'YRP Process', "label": "Process", "width": 140},
-		{"fieldname": "item", "fieldtype": "Link", "options": 'YRP Item', "label": "Item", "width": 180},
-		{"fieldname": "item_variant", "fieldtype": "Link", "options": 'YRP Item Variant', "label": "Item Variant", "width": 220},
+		{"fieldname": "item", "fieldtype": "Link", "options": 'Item', "label": "Item", "width": 180},
+		{"fieldname": "item_variant", "fieldtype": "Link", "options": 'Item', "label": "Item Variant", "width": 220},
 		{"fieldname": "quantity", "fieldtype": "Float", "label": "Quantity", "width": 110},
 		{"fieldname": "received_type", "fieldtype": "Link", "options": 'YRP Received Type', "label": "Received Type", "width": 130},
 		{"fieldname": "remarks", "fieldtype": "Data", "label": "Remarks", "width": 200},
@@ -83,7 +83,7 @@ def get_delivery_challan_rows(filters):
 		params["supplier"] = filters.supplier
 
 	if filters.get("item"):
-		conditions.append("iv.item = %(item)s")
+		conditions.append("COALESCE(NULLIF(iv.variant_of, ''), iv.name) = %(item)s")
 		params["item"] = filters.item
 
 	query = """
@@ -92,14 +92,14 @@ def get_delivery_challan_rows(filters):
 			dc.work_order AS against_id,
 			'YRP Delivery Challan' AS source_doctype,
 			dc.name AS source_name,
-			'YRP Supplier' AS from_location_doctype,
+			'Supplier' AS from_location_doctype,
 			dc.from_location AS from_location,
 			dc.from_location_name AS from_location_name,
 			dc.supplier AS supplier,
 			dc.supplier_name AS supplier_name,
 			COALESCE(dci.lot, dc.lot) AS lot,
 			dc.process_name AS process,
-			iv.item AS item,
+			COALESCE(NULLIF(iv.variant_of, ''), iv.name) AS item,
 			dci.item_variant AS item_variant,
 			dci.delivered_quantity AS quantity,
 			dci.received_type AS received_type,
@@ -108,7 +108,7 @@ def get_delivery_challan_rows(filters):
 			dc.posting_time AS posting_time
 		FROM `tabYRP Delivery Challan Item` dci
 		INNER JOIN `tabYRP Delivery Challan` dc ON dc.name = dci.parent
-		LEFT JOIN `tabYRP Item Variant` iv ON iv.name = dci.item_variant
+		LEFT JOIN `tabItem` iv ON iv.name = dci.item_variant
 		WHERE {conditions}
 	""".format(conditions=" AND ".join(conditions))
 
@@ -146,7 +146,7 @@ def get_stock_entry_rows(filters):
 		params["supplier"] = filters.supplier
 
 	if filters.get("item"):
-		conditions.append("iv.item = %(item)s")
+		conditions.append("COALESCE(NULLIF(iv.variant_of, ''), iv.name) = %(item)s")
 		params["item"] = filters.item
 
 	query = """
@@ -155,14 +155,14 @@ def get_stock_entry_rows(filters):
 			se.against_id AS against_id,
 			'YRP Stock Entry' AS source_doctype,
 			se.name AS source_name,
-			'YRP Warehouse' AS from_location_doctype,
+			'Warehouse' AS from_location_doctype,
 			se.from_warehouse AS from_location,
-			from_warehouse.name1 AS from_location_name,
+			from_warehouse.warehouse_name AS from_location_name,
 			{supplier_expression} AS supplier,
 			supplier.supplier_name AS supplier_name,
 			sed.lot AS lot,
 			wo.process_name AS process,
-			iv.item AS item,
+			COALESCE(NULLIF(iv.variant_of, ''), iv.name) AS item,
 			sed.item AS item_variant,
 			sed.qty AS quantity,
 			sed.received_type AS received_type,
@@ -171,10 +171,10 @@ def get_stock_entry_rows(filters):
 			se.posting_time AS posting_time
 		FROM `tabYRP Stock Entry Detail` sed
 		INNER JOIN `tabYRP Stock Entry` se ON se.name = sed.parent
-		LEFT JOIN `tabYRP Warehouse` from_warehouse ON from_warehouse.name = se.from_warehouse
-		LEFT JOIN `tabYRP Supplier` supplier ON supplier.name = {supplier_expression}
+		LEFT JOIN `tabWarehouse` from_warehouse ON from_warehouse.name = se.from_warehouse
+		LEFT JOIN `tabSupplier` supplier ON supplier.name = {supplier_expression}
 		LEFT JOIN `tabYRP Work Order` wo ON se.against = 'YRP Work Order' AND wo.name = se.against_id
-		LEFT JOIN `tabYRP Item Variant` iv ON iv.name = sed.item
+		LEFT JOIN `tabItem` iv ON iv.name = sed.item
 		WHERE {conditions}
 	""".format(
 		conditions=" AND ".join(conditions),

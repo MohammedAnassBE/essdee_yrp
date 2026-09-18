@@ -6,9 +6,9 @@
  "engine": "InnoDB",
  "field_order": ["colour", "from_dia", "to_dia"],
  "fields": [
-  {"fieldname": "colour", "fieldtype": "Link", "in_list_view": 1, "label": "Colour", "options": "YRP Item Attribute Value"},
-  {"fieldname": "from_dia", "fieldtype": "Link", "in_list_view": 1, "label": "From Dia", "options": "YRP Item Attribute Value", "reqd": 1},
-  {"fieldname": "to_dia", "fieldtype": "Link", "in_list_view": 1, "label": "To Dia", "options": "YRP Item Attribute Value", "reqd": 1}
+  {"fieldname": "colour", "fieldtype": "Data", "in_list_view": 1, "label": "Colour"},
+  {"fieldname": "from_dia", "fieldtype": "Data", "in_list_view": 1, "label": "From Dia", "reqd": 1},
+  {"fieldname": "to_dia", "fieldtype": "Data", "in_list_view": 1, "label": "To Dia", "reqd": 1}
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,

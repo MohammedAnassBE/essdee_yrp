@@ -42,6 +42,8 @@ REPORT_CASES = {
 
 class TestOperationalReports(IntegrationTestCase):
 	def test_multiccr_accepts_historical_cutting_plan_payload(self):
+		if not frappe.db.exists('SD YRP Cutting Plan', "CP-2608-00006"):
+			self.skipTest("Historical cutting-plan parity runs after data migration")
 		result = get_multiccr(lot_list=json.dumps(["F1024-54"]))
 		self.assertIn("F1024-54", result["output_lots"])
 

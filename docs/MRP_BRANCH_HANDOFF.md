@@ -1,15 +1,85 @@
 # MRP Branch Handoff — Production API to Essdee YRP
 
-Current execution update: 2026-09-07 — fresh-site one-pass migration verified WITH SOURCE GAPS
+Current execution update: 2026-09-17 — restored-production merge rehearsal verified with agreed source gaps
 Current continuation branches: `apps/essdee_yrp` → `erp_now`, `apps/yrp` → `erp_now`
 Source reference: Frappe 15 `mrp3.site:8002` / `production_api`
-Current target: Frappe 16 `erp_now_migration.site:8003` / ERPNext + `yrp` + `essdee_yrp` + India Compliance
+Current target: Frappe 16 `erp-migration-test.site:8003` / restored ERP production clone + `yrp` + `essdee_yrp` + India Compliance
 
-Production deployment is a fresh-site, one-pass migration. Finalize schemas,
-fixtures and the original migration transformer before installing the apps and
-loading source data. Development-site correction patches must not be shipped as
-a substitute for producing the right document and child-table values during that
-single migration.
+## 2026-09-17 restored-production merge rehearsal
+
+The release-shape target was rebuilt from a backup of the populated ERP
+production site, not from an empty site. After installing and configuring the
+combined apps, `MRP-MIG-2026-00001` analysed 268 source DocTypes against 882
+target DocTypes with zero blockers. Dry Run, Migrate, and Verify all used the
+same additive merge contract:
+
+- existing ERP Address and Contact rows win exact/case-insensitive identity
+  collisions, with only missing MRP identities inserted;
+- existing standard Items receive only the approved narrow structural update;
+- target-owned YRP stock setup is validated and never overwritten by historical
+  source settings;
+- there is no target reset stage and no table-clearing retry path;
+- repeatability, when required, is proven by an idempotent rerun or by restoring
+  an explicitly approved pre-migration ERP snapshot outside this workflow.
+
+The completed write migration and verifier processed **3,437,917** records with
+**zero skipped and zero failed**. Verification checked **176,962,244** field
+values, all **2,940/2,940** source Addresses, all **120/120** source Contacts,
+and **293,125** stock buckets exactly. Unexpected broken links and error-log
+entries were both zero. Existing ERP data remained present and was not reset or
+deleted.
+
+Final status is **Verified With Source Gaps**. As agreed, the gaps are limited
+to unavailable/excluded attachment blobs and nine encrypted password or secret
+values whose source key/material is unavailable. Business and stock data passed
+with no detected loss. Production still requires full database/file backups,
+deployment of the exact tested revisions, source connection setup,
+Analyse → Dry Run → Migrate → Verify, separate file reconciliation, and manual
+reconfiguration of unavailable credentials.
+
+## 2026-09-16 dependency-closed percentage rehearsal
+
+The current disposable target was reinstalled from scratch with all seven
+required apps: Frappe, ERPNext, YRP, Essdee YRP, India Compliance,
+`frappe_tools`, and `spine`. Before importing row one, the target was configured
+with India presets, the production-compatible Company, standard Stock Settings
+(`Nos` and `Stores - EKMPL`), active Fiscal Year `2026-2027`, YRP currency, YRP
+stock defaults, and the Lot/Received Type stock dimensions.
+
+The clean 25% root rehearsal completed with status **Pass**:
+
+- 268 source schemas, 882 target DocTypes, zero schema issues;
+- 859,354 sampled root parents and 597,811 complete child rows;
+- 858,731 inserted parents and 623 reconciled existing parents;
+- 40,882,507 copied field values verified and nine Password values excluded;
+- 2,232 functional dependencies required, 248 already present, 1,984 loaded;
+- recursive dependency closure converged after 29 rounds;
+- 833 Link fields audited with zero unexpected broken values and five exact
+  source-invalid values retained as named exceptions;
+- all 5,127 migrated Purchase Orders passed target-derived invariants;
+- 114/114 migrated parent DocTypes opened through their server controllers;
+- a real browser opened all 114 parent forms and every visible tab with zero
+  page, console, RPC, document, script, route, or modal failures.
+
+The reported PO `PO-2324-2169` now has one item row, quantity and `total_qty`
+30,000, total 46,500, and grand total 54,870. The Vue matrix is present. Its YRP
+Managed Order flag is intentionally true because the migrated source order is a
+YRP-managed order. The reported `SD YRP Cutting Plan CP-2608-00009` and `YRP
+Item Production Detail EE-34702 Hoodie-1` both open successfully, including all
+visible tabs; their mapping, IPD and Item Attribute Value dependencies exist.
+
+Focused validation on this populated target passes: sample migration 22/22,
+live migration 90/90, cloth-program 50/50, and Work Order 23/23. Attachments are
+excluded by the owner's current instruction. This percentage rehearsal proves
+the selected dependency-closed graph, not the omitted 75% of source roots; the
+full production-clone migration remains the release gate for complete counts,
+stock digests, history and collision behavior.
+
+Production deployment is an additive one-pass merge into the backed-up ERP
+site. Finalize schemas, fixtures, merge rules, and the original migration
+transformer before installing the apps and loading source data. Development-site
+correction patches must not be shipped as a substitute for producing the right
+document and child-table values during that single migration.
 
 On 2026-09-07 the owner approved restoring every field in the final definition
 inventory. YRP-owned fields are direct base DocFields; Essdee-owned fields are
@@ -93,8 +163,18 @@ Production Order/alternative packing flow created its linked Production Order,
 Lot, Work Order, submitted stock entries and Finishing Plan, updated quantities,
 then cancelled/rolled back successfully. On the clean migrated site, Desk,
 `YRP Bin.reserved_qty`, and a dual-projection Purchase Invoice were visually
-checked. The setup-wizard loop was removed by completing both installed-app
-setup flags and setting the standard Desk home to `workspace`; `/desk` is stable.
+checked. The setup-wizard loop was removed only after ERPNext's standard India
+preset installer had run; then both installed-app setup flags were completed and
+the standard Desk home was set to `workspace`. Never set the setup flags alone:
+that leaves standard ERPNext masters such as Warehouse Type `Transit`, UOM,
+Item Group, Stock Entry Type, Supplier Group and Customer Group empty. `/desk`
+is stable.
+
+On 2026-09-08 `erp_now_migration.site` was corrected after that earlier ordering
+mistake was detected. `System Settings.country` is `India`, the standard ERPNext
+preset installer completed, and a rollback-only Company creation probe produced
+113 accounts plus `Goods In Transit - ENCP` without error. The probe was rolled
+back and no test Company remains.
 
 The final namespace/fixture review also packaged the six source precision
 Property Setters that were previously outside the strict fixture filter and

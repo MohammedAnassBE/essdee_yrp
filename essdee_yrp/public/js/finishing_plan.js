@@ -250,7 +250,7 @@ frappe.ui.form.on("SD YRP Finishing Plan", {
                                     label: __("Alternative Item"),
                                     fieldname: "alternative_item",
                                     fieldtype: "Link",
-                                    options: "YRP Item",
+                                    options: "Item",
                                     reqd: 1,
                                     get_query: () => {
                                         return {

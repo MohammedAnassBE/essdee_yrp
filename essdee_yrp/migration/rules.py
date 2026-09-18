@@ -28,7 +28,11 @@ DOCTYPE_RENAMES = {
 	"Goods Received Note Item": "YRP Goods Received Note Item",
 	"GRN Rework Item": "SD YRP GRN Rework Item",
 	"IPD Process": "YRP IPD Process",
-	"Item": "YRP Item",
+	"Item": "Item",
+	"Item Attribute": "Item Attribute",
+	"Item Attribute Value": "Item Attribute Value",
+	"Item Variant": "Item",
+	"Item Variant Attribute": "Item Variant Attribute",
 	"Item BOM": "YRP Item BOM",
 	"Item BOM Attribute Mapping": "YRP Item BOM Attribute Mapping",
 	"Item Conversion": "SD YRP Item Conversion",
@@ -40,8 +44,8 @@ DOCTYPE_RENAMES = {
 	"Product": "SD YRP Product",
 	"Production Order Detail": "YRP Production Order Detail",
 	"Purchase Invoice": "YRP Purchase Invoice",
-	"Purchase Order": "YRP Purchase Order",
-	"Purchase Order Item": "YRP Purchase Order Item",
+	"Purchase Order": "Purchase Order",
+	"Purchase Order Item": "Purchase Order Item",
 	"Repost Item Valuation": "YRP Repost Item Valuation",
 	"Stiching Item Detail": "SD YRP Stiching Item Detail",
 	"Stock Entry": "YRP Stock Entry",
@@ -59,6 +63,10 @@ DOCTYPE_RENAMES = {
 
 
 RULES = {
+	"Brand": DocTypeRule(
+		target="Brand",
+		field_map={"name1": "brand"},
+	),
 	"Bin": DocTypeRule(
 		value_transformers={"warehouse": "supplier_to_warehouse"},
 	),
@@ -102,7 +110,38 @@ RULES = {
 		value_transformers={"warehouse": "supplier_to_warehouse"}
 	),
 	"Item": DocTypeRule(
-		field_map={"over_delivery_receipt_allowance": "po_excess_allowed_percentage"},
+		target="Item",
+		field_map={
+			"name1": "item_name",
+			"default_unit_of_measure": "stock_uom",
+			"uom_conversion_details": "uoms",
+			"over_delivery_receipt_allowance": "po_excess_allowed_percentage",
+		},
+		table_option_map={"attributes": "Item Variant Attribute"},
+		allowed_type_changes=frozenset({("Small Text", "Text Editor")}),
+		post_transformer="item_to_standard_item",
+	),
+	"Item Attribute": DocTypeRule(target="Item Attribute"),
+	"Item Attribute Value": DocTypeRule(
+		target="Item Attribute Value",
+		extra_dependencies=frozenset({"Item Attribute"}),
+		custom_transformer="item_attribute_value_to_standard_child",
+	),
+	"Item Variant": DocTypeRule(
+		target="Item",
+		custom_transformer="item_variant_to_standard_item",
+	),
+	"Item Variant Attribute": DocTypeRule(
+		target="Item Variant Attribute",
+		allowed_type_changes=frozenset({("Link", "Data")}),
+		value_transformers={"attribute_value": "attribute_value_link_to_data"},
+	),
+	"Item Alternative": DocTypeRule(
+		target="Item Alternative",
+		field_map={
+			"item": "item_code",
+			"alternative_item": "alternative_item_code",
+		},
 	),
 	"Item BOM": DocTypeRule(allowed_type_changes=frozenset({("Data", "Link")})),
 	"Item BOM Attribute Mapping": DocTypeRule(
@@ -131,12 +170,21 @@ RULES = {
 	),
 	"Purchase Order Item": DocTypeRule(
 		field_map={
+			"item_variant": "item_code",
+			"delivery_date": "schedule_date",
 			"cancelled_qty": "cancelled_quantity",
 			"pending_qty": "pending_quantity",
 		},
-		allowed_type_changes=frozenset({("Int", "Data")}),
+		allowed_type_changes=frozenset({("Int", "Data"), ("Data", "Text Editor")}),
+		post_transformer="derive_purchase_order_item_fields",
 	),
 	"Purchase Order": DocTypeRule(
+		field_map={
+			"po_date": "transaction_date",
+			"supplier_address_display": "address_display",
+			"delivery_address": "shipping_address",
+			"delivery_address_display": "shipping_address_display",
+		},
 		value_transformers={
 			"status": "purchase_order_status",
 			"open_status": "purchase_order_open_status",

@@ -33,7 +33,7 @@ class TestProductionOrderCustomization(FrappeTestCase):
 			},
 			"item": {
 				"fieldtype": "Link",
-				"options": 'YRP Item',
+				"options": 'Item',
 				"reqd": 1,
 				"in_list_view": 1,
 			},

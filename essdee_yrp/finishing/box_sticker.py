@@ -46,7 +46,7 @@ def get_missing_box_sticker_prices(work_order):
 		'YRP Production Order', production_order, "skip_box_sticker_print"
 	):
 		return []
-	primary_attribute = frappe.db.get_value('YRP Item', work_order.item, "primary_attribute")
+	primary_attribute = frappe.db.get_value('Item', work_order.item, "primary_attribute")
 	if not primary_attribute:
 		return []
 	quantity_by_size = _quantity_by_size(work_order, primary_attribute)
@@ -68,7 +68,7 @@ def auto_create_box_sticker_print(work_order):
 		return []
 
 	_lock_production_orders(production_order)
-	primary_attribute = frappe.db.get_value('YRP Item', work_order.item, "primary_attribute")
+	primary_attribute = frappe.db.get_value('Item', work_order.item, "primary_attribute")
 	if not primary_attribute or not frappe.db.exists('SD YRP FG Item Master', work_order.item):
 		return []
 	if frappe.db.exists(

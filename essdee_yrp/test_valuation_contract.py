@@ -652,11 +652,11 @@ class TestEssdeeValuationContract(UnitTestCase):
 		grn = frappe._dict(items=[received])
 		with (
 			patch(
-				"essdee_yrp.garment_grn.frappe.db.get_value",
-				side_effect=lambda doctype, name, field: {
+				"essdee_yrp.garment_grn.get_parent_item",
+				side_effect=lambda item_code: {
 					"PANEL-BACK-WINE-S": "GARMENT",
 					"FUSING-STICKER-S": "FUSING-STICKER",
-				}[name],
+				}[item_code],
 			),
 			patch("essdee_yrp.garment_grn.frappe.get_cached_doc") as get_doc,
 			patch(
@@ -745,9 +745,9 @@ class TestEssdeeValuationContract(UnitTestCase):
 		)
 		with (
 			patch(
-				"essdee_yrp.garment_grn.frappe.db.get_value",
-				side_effect=lambda doctype, name, field: (
-					"GARMENT" if name.startswith("PANEL-") else "INK"
+				"essdee_yrp.garment_grn.get_parent_item",
+				side_effect=lambda item_code: (
+					"GARMENT" if item_code.startswith("PANEL-") else "INK"
 				),
 			),
 			patch(
@@ -821,9 +821,9 @@ class TestEssdeeValuationContract(UnitTestCase):
 		)
 		with (
 			patch(
-				"essdee_yrp.garment_grn.frappe.db.get_value",
-				side_effect=lambda doctype, name, field: (
-					"GARMENT" if name == "PANEL-FRONT-S" else "STICKER"
+				"essdee_yrp.garment_grn.get_parent_item",
+				side_effect=lambda item_code: (
+					"GARMENT" if item_code == "PANEL-FRONT-S" else "STICKER"
 				),
 			),
 			patch(
@@ -901,9 +901,9 @@ class TestEssdeeValuationContract(UnitTestCase):
 		)
 		with (
 			patch(
-				"essdee_yrp.garment_grn.frappe.db.get_value",
-				side_effect=lambda doctype, name, field: (
-					"GARMENT" if name == "PANEL-M" else "ACCESSORY"
+				"essdee_yrp.garment_grn.get_parent_item",
+				side_effect=lambda item_code: (
+					"GARMENT" if item_code == "PANEL-M" else "ACCESSORY"
 				),
 			),
 			patch(
@@ -1703,7 +1703,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 		def get_value(doctype, name, fieldname):
 			if doctype == 'SD YRP Lot':
 				return "Pieces"
-			if doctype == 'YRP Item Variant':
+			if doctype == 'Item':
 				return {"PACK-S": "GARMENT", "CARTON": "CARTON"}[name]
 			raise AssertionError((doctype, name, fieldname))
 
@@ -1715,6 +1715,13 @@ class TestEssdeeValuationContract(UnitTestCase):
 			patch(
 				"essdee_yrp.work_order_hooks.frappe.db.get_value",
 				side_effect=get_value,
+			),
+			patch(
+				"essdee_yrp.work_order_hooks.get_parent_item",
+				side_effect=lambda item_code: {
+					"PACK-S": "GARMENT",
+					"CARTON": "CARTON",
+				}[item_code],
 			),
 		):
 			preserve_dynamic_packing_piece_uom(work_order)

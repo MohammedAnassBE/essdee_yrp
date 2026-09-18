@@ -41,7 +41,7 @@ def get_data(filters):
 		        GROUP BY parent
 		    ) latest ON t2.parent = latest.parent AND t2.idx = latest.max_idx
 		) t3 ON t1.name = t3.parent
-		JOIN `tabYRP Supplier` t4 ON t4.name = t1.supplier
+		JOIN `tabSupplier` t4 ON t4.name = t1.supplier
 		WHERE t1.form_status NOT IN ('Closed')
 		AND t1.docstatus = 1 {q_filters}
 	"""
@@ -65,7 +65,7 @@ def get_columns(filters):
             "fieldname": "supplier",
             "label": "Supplier",
             "fieldtype": "Link",
-            "options": 'YRP Supplier',
+            "options": 'Supplier',
             "width": 115
         },
 		{
@@ -102,7 +102,7 @@ def get_columns(filters):
             "fieldname": "assigned_to",
             "label": "Assigned To",
             "fieldtype": "Link",
-            "options": 'YRP Department',
+            "options": 'Department',
             "width": 115
         },
 		{

@@ -31,7 +31,7 @@ class TestStockEntryCustomization(FrappeTestCase):
 			"includes_packing": ("Check", None),
 			"packing_batch_dispatch_json": ("JSON", None),
 			"packing_slip": ("Data", None),
-			"transfer_supplier": ("Link", 'YRP Supplier'),
+			"transfer_supplier": ("Link", 'Supplier'),
 		}
 
 		for fieldname, definition in expected.items():
@@ -145,24 +145,27 @@ class TestStockEntryCustomization(FrappeTestCase):
 	def test_stock_reconciliation_projection_keeps_warehouse_bucket_separate(self):
 		variants = {
 			"TEST-CUT-45": frappe._dict(
-				item="TEST-CUT",
+				name="TEST-CUT-45",
+				variant_of="TEST-CUT",
 				attributes=[
 					frappe._dict(attribute="Panel", attribute_value="Top Front"),
 					frappe._dict(attribute="Size", attribute_value="45 cm"),
 				],
 			),
 			"TEST-CUT-50": frappe._dict(
-				item="TEST-CUT",
+				name="TEST-CUT-50",
+				variant_of="TEST-CUT",
 				attributes=[
 					frappe._dict(attribute="Panel", attribute_value="Top Front"),
 					frappe._dict(attribute="Size", attribute_value="50 cm"),
 				],
 			),
 		}
-		item = frappe._dict(primary_attribute="Size")
+		item = frappe._dict(name="TEST-CUT", primary_attribute="Size")
 
 		def get_cached_doc(doctype, name):
-			return variants[name] if doctype == 'YRP Item Variant' else item
+			self.assertEqual(doctype, 'Item')
+			return variants.get(name, item)
 
 		rows = [
 			frappe._dict(

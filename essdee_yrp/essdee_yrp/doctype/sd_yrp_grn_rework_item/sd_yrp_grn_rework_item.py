@@ -19,6 +19,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, flt, now_datetime, nowdate, nowtime
 from yrp.utils import get_variant_attr_details
+from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 QTY_TOLERANCE = 0.0001
 
@@ -440,9 +441,7 @@ def _post_conversions(parent, conversions):
 			row.item_variant, warehouse=warehouse, **dimensions
 		)
 		stock_uom = frappe.get_cached_value(
-			'YRP Item',
-			frappe.get_cached_value('YRP Item Variant', row.item_variant, "item"),
-			"default_unit_of_measure",
+			'Item', get_parent_item(row.item_variant), "stock_uom"
 		) or row.uom
 		base = {
 			"item": row.item_variant,
@@ -537,7 +536,7 @@ def download_xl(data):
 	sheet = workbook.create_sheet("Rework Details", 0)
 	types = data.get("types") or []
 	sheet.append(
-		["Series No", "Date", "GRN Number", 'SD YRP Lot', 'YRP Item', "Colour", *types, "Total"]
+		["Series No", "Date", "GRN Number", 'SD YRP Lot', 'Item', "Colour", *types, "Total"]
 	)
 	for series, detail in (data.get("report_detail") or {}).items():
 		first_key = next(iter(detail.get("rework_detail") or {}), "")

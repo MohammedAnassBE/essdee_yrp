@@ -68,7 +68,7 @@ def _apply_price_to_production_order(price_request):
 	production_order = frappe.get_doc(
 		'YRP Production Order', price_request.production_order
 	)
-	primary = frappe.db.get_value('YRP Item', production_order.item, "primary_attribute")
+	primary = frappe.db.get_value('Item', production_order.item, "primary_attribute")
 	rows = {
 		get_variant_attr_details(row.item_variant).get(primary): row
 		for row in production_order.production_order_details

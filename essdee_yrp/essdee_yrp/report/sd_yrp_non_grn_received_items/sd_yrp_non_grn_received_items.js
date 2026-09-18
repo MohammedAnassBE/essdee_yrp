@@ -32,19 +32,19 @@ frappe.query_reports["SD YRP Non-GRN Received Items"] = {
 		{
 			"fieldname": "received_location",
 			"fieldtype": "Link",
-			"options": "YRP Warehouse",
+			"options": "Warehouse",
 			"label": __("Received Location")
 		},
 		{
 			"fieldname": "supplier",
 			"fieldtype": "Link",
-			"options": "YRP Supplier",
+			"options": "Supplier",
 			"label": __("Supplier")
 		},
 		{
 			"fieldname": "item",
 			"fieldtype": "Link",
-			"options": "YRP Item",
+			"options": "Item",
 			"label": __("Item")
 		}
 	]

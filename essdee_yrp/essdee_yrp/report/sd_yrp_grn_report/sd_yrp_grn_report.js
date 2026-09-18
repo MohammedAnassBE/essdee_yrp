@@ -26,13 +26,13 @@ frappe.query_reports["SD YRP GRN Report"] = {
 		{
 			fieldname: "supplier",
 			fieldtype: "Link",
-			options: "YRP Supplier",
+			options: "Supplier",
 			label: "Supplier",
 		},
 		{
 			fieldname: "delivery_location",
 			fieldtype: "Link",
-			options: "YRP Supplier",
+			options: "Supplier",
 			label: "Delivery Location",
 		},
 	]

@@ -106,12 +106,11 @@ export default {
 			];
 			(details.attributes || []).forEach((attribute, index) => fields.push({
 				fieldname: `attribute_${index}`,
-				fieldtype: "Link",
-				options: "YRP Item Attribute Value",
+				fieldtype: "Autocomplete",
 				label: attribute,
 				reqd: 1,
 				default: existing?.attributes?.[attribute],
-				get_query: () => ({ query: ITEM_METHOD + "get_item_attribute_values", filters: { item: template, attribute } }),
+				get_query: () => ({ query: ITEM_METHOD + "search_item_attribute_values", params: { item: template, attribute } }),
 			}));
 			if (details.primary_attribute) {
 				fields.push({

@@ -51,7 +51,7 @@
 							<LinkField
 								v-if="editing"
 								:model-value="r.cloth"
-								target-doctype="YRP Item"
+								target-doctype="Item"
 								:filters="{ disabled: 0 }"
 								class="ct-link"
 								@item-select="(e) => (r.cloth = e.value)"

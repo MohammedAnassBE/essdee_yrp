@@ -1,5 +1,8 @@
-frappe.ui.form.on("YRP Purchase Order", {
+frappe.ui.form.on("Purchase Order", {
 	refresh(frm) {
+		if (!frm.doc.is_yrp_managed) {
+			return;
+		}
 		if (frm.fields_dict.sd_lot) {
 			frm.set_df_property("sd_lot", "read_only", frm.doc.docstatus === 1 ? 1 : 0);
 		}

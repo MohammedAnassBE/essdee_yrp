@@ -14,17 +14,15 @@
  "fields": [
   {
    "fieldname": "stiching_attribute_value",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Stiching Attribute Value",
-   "options": "YRP Item Attribute Value"
+   "label": "Stiching Attribute Value"
   },
   {
    "fieldname": "set_item_attribute_value",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Set Item Attribute Value",
-   "options": "YRP Item Attribute Value"
+   "label": "Set Item Attribute Value"
   },
   {
    "fieldname": "quantity",

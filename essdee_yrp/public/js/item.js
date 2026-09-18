@@ -1,4 +1,4 @@
-frappe.ui.form.on("YRP Item", {
+frappe.ui.form.on("Item", {
 	setup(frm) {
 		frm.set_query("yarn_item", "yarn_ratio_details", () => ({
 			filters: {

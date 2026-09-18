@@ -190,7 +190,7 @@ def stock_reconcile(selected_items, warehouse):
 	_validate_selected_warehouses(rows, {"from_warehouse": warehouse}, "Material Issue")
 	frappe.has_permission('YRP Stock Reconciliation', "create", throw=True)
 	doc = frappe.new_doc('YRP Stock Reconciliation')
-	doc.purpose = 'YRP Stock Reconciliation'
+	doc.purpose = 'Stock Reconciliation'
 	doc.default_warehouse = warehouse
 	detail_meta = frappe.get_meta('YRP Stock Reconciliation Item')
 	for source in rows:

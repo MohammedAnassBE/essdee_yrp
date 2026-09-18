@@ -33,46 +33,50 @@ from essdee_yrp.fabric_program import (
     get_knitting_output_colour,
     get_knitting_output_colour_map,
 )
+from yrp.yrp.doctype.yrp_item.yrp_item import ensure_global_attribute_values
 
 
 def _ensure_item_group(name="_Test CPD Group"):
-    if not frappe.db.exists('YRP Item Group', name):
+    if not frappe.db.exists('Item Group', name):
         frappe.get_doc({
-            "doctype": 'YRP Item Group', "item_group_name": name,
+            "doctype": 'Item Group', "item_group_name": name,
             "is_group": 0, "parent_item_group": "All Item Groups",
         }).insert(ignore_permissions=True)
     return name
 
 
 def _ensure_uom(name="Kg"):
-    if not frappe.db.exists('YRP UOM', name):
-        frappe.get_doc({"doctype": 'YRP UOM', "uom_name": name}).insert(ignore_permissions=True)
+    if not frappe.db.exists('UOM', name):
+        frappe.get_doc({"doctype": 'UOM', "uom_name": name}).insert(ignore_permissions=True)
     return name
 
 
 def _ensure_item(name1):
-    if frappe.db.exists('YRP Item', name1):
+    if frappe.db.exists('Item', name1):
         return name1
     return frappe.get_doc({
-        "doctype": 'YRP Item', "name1": name1, "item_group": _ensure_item_group(),
-        "default_unit_of_measure": _ensure_uom(), "is_stock_item": 1,
+        "doctype": 'Item', "item_code": name1, "item_name": name1,
+        "item_group": _ensure_item_group(),
+        "stock_uom": _ensure_uom(), "is_stock_item": 1,
+        **(
+            {"gst_hsn_code": "999900"}
+            if frappe.get_meta('Item').has_field("gst_hsn_code")
+            and frappe.db.exists("GST HSN Code", "999900")
+            else {}
+        ),
     }).insert(ignore_permissions=True).name
 
 
 def _ensure_item_attribute(name):
-    if not frappe.db.exists('YRP Item Attribute', name):
-        frappe.get_doc({"doctype": 'YRP Item Attribute', "attribute_name": name}).insert(
+    if not frappe.db.exists('Item Attribute', name):
+        frappe.get_doc({"doctype": 'Item Attribute', "attribute_name": name}).insert(
             ignore_permissions=True)
     return name
 
 
 def _ensure_iav(attribute, value):
     _ensure_item_attribute(attribute)
-    if not frappe.db.exists('YRP Item Attribute Value', value):
-        frappe.get_doc({
-            "doctype": 'YRP Item Attribute Value', "attribute_name": attribute,
-            "attribute_value": value,
-        }).insert(ignore_permissions=True)
+    ensure_global_attribute_values(attribute, [value], check_permission=False)
     return value
 
 
@@ -106,21 +110,33 @@ class TestClothProgram(IntegrationTestCase):
         self.red = _ensure_iav("Colour", "_Test Red CPD")
         self.yarn = _ensure_item("_Test Yarn CPD")
         self.cloth = _ensure_item("_Test Cloth CPD")
+        cloth_item = frappe.get_doc('Item', self.cloth)
+        if not cloth_item.has_variants:
+            cloth_item.has_variants = 1
+            cloth_item.variant_based_on = "Item Attribute"
+            cloth_item.set(
+                "attributes",
+                [
+                    {"attribute": "Dia"},
+                    {"attribute": "Colour"},
+                ],
+            )
+            cloth_item.save(ignore_permissions=True)
         # Item Production Detail.is_cloth_item is `fetch_from: item.is_cloth_item`
         # (read-only, fetch_if_empty=0) — every IPD save re-pulls it from the linked
         # Item regardless of what the CPD builder stamps in memory, so the cloth
         # Item master itself must carry the flag for is_cloth_ipd() to route the
         # IPD through the cloth-validation path instead of the garment one.
-        frappe.db.set_value('YRP Item', self.cloth, "is_cloth_item", 1)
+        frappe.db.set_value('Item', self.cloth, "is_cloth_item", 1)
         frappe.db.delete(
             'SD YRP Item Yarn Ratio',
             {
                 "parent": self.cloth,
-                "parenttype": 'YRP Item',
+                "parenttype": 'Item',
                 "parentfield": "yarn_ratio_details",
             },
         )
-        frappe.clear_document_cache('YRP Item', self.cloth)
+        frappe.clear_document_cache('Item', self.cloth)
         _reset_cpd(self.cloth)
         self.k_proc = _ensure_process("_Test Knit CPD", is_item_conversion=1)
         self.d_proc = _ensure_process("_Test Dye CPD")
@@ -501,7 +517,7 @@ class TestClothProgram(IntegrationTestCase):
             frozenset(
                 (row.attribute, row.attribute_value)
                 for row in frappe.get_doc(
-                    'YRP Item Variant', matrix.reference_item_variant
+                    'Item', matrix.reference_item_variant
                 ).attributes
             )
             for matrix in knit_matrices
@@ -623,7 +639,7 @@ class TestClothProgram(IntegrationTestCase):
             frozenset(
                 (row.attribute, row.attribute_value)
                 for row in frappe.get_doc(
-                    'YRP Item Variant', matrix.reference_item_variant
+                    'Item', matrix.reference_item_variant
                 ).attributes
             )
             for matrix in frappe.get_all(
@@ -649,7 +665,7 @@ class TestClothProgram(IntegrationTestCase):
             {
                 row.attribute: row.attribute_value
                 for row in frappe.get_doc(
-                    'YRP Item Variant', dye_references[0]
+                    'Item', dye_references[0]
                 ).attributes
             },
             {"Dia": self.dia, "Colour": self.red},
@@ -1297,7 +1313,7 @@ class TestClothProgram(IntegrationTestCase):
 
     def test_build_uses_item_master_yarn_ratio_without_popup_recipe(self):
         yarn_b = _ensure_item("_Test Item Master Yarn B CPD")
-        item = frappe.get_doc('YRP Item', self.cloth)
+        item = frappe.get_doc('Item', self.cloth)
         item.set("yarn_ratio_details", [])
         item.append("yarn_ratio_details", {
             "yarn_item": self.yarn,
@@ -1472,7 +1488,7 @@ class TestClothProgram(IntegrationTestCase):
         # shares one class transaction, and a deleted/recreated deterministic CPD
         # name can otherwise be picked up by an earlier Lot's dangling Link.
         delete_cloth = _ensure_item("_Test Delete Cloth CPD")
-        frappe.db.set_value('YRP Item', delete_cloth, "is_cloth_item", 1)
+        frappe.db.set_value('Item', delete_cloth, "is_cloth_item", 1)
         _reset_cpd(delete_cloth)
         selection = dict(self.selection, cloth_item=delete_cloth)
         cpd_name = _find_or_create_cpd(delete_cloth, selection, self.tuples)

@@ -19,7 +19,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 from yrp.utils import get_variant_attr_details, update_if_string_instance
-from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_or_create_variant
+from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_or_create_variant, get_parent_item
 
 from essdee_yrp.dynamic_packing import is_dynamic_packing_grn
 
@@ -111,7 +111,7 @@ class PieceState:
 				"item_variant": row.item_variant,
 				"set_combination": _json_dict(row.set_combination),
 				"attributes": get_variant_attr_details(row.item_variant),
-				"parent_item": frappe.db.get_value('YRP Item Variant', row.item_variant, "item"),
+				"parent_item": get_parent_item(row.item_variant),
 				"planned": flt(row.quantity),
 				"delivered": 0.0,
 				"received": 0.0,
@@ -193,7 +193,7 @@ class PieceState:
 		# F15 proportional fallback for an aggregated output variant: distribute
 		# within the same parent item and primary size, retaining exact totals.
 		attributes = get_variant_attr_details(item_variant)
-		parent_item = frappe.db.get_value('YRP Item Variant', item_variant, "item")
+		parent_item = get_parent_item(item_variant)
 		primary = self.ipd.primary_item_attribute
 		candidates = [
 			candidate
@@ -469,7 +469,7 @@ def _apply_packing_receipt(state, grn):
 	for row in grn.get("items") or []:
 		if flt(row.quantity) <= 0:
 			continue
-		variant_doc = frappe.get_cached_doc('YRP Item Variant', row.item_variant)
+		variant_doc = frappe.get_cached_doc('Item', row.item_variant)
 		for attribute_row in attribute_rows:
 			attributes = get_variant_attr_details(row.item_variant)
 			major_colour = (
@@ -483,7 +483,7 @@ def _apply_packing_receipt(state, grn):
 			if ipd.is_set_item:
 				set_combination["major_part"] = ipd.major_attribute_value
 			variant = get_or_create_variant(
-				variant_doc.item,
+				(variant_doc.variant_of or variant_doc.name),
 				build_variant_attributes(attributes, ipd.pack_in_stage, ipd.name),
 			)
 			state.add_received(

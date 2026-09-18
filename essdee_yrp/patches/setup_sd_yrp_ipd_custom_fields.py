@@ -1,4 +1,8 @@
-from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
+"""Historical field inventory retained for patch compatibility only.
+
+The executable patch no longer creates fields. Fixed schema is owned solely by
+``fixtures/custom_field.json``; this inventory is not an installation source.
+"""
 
 
 def _field(fieldname, fieldtype, label=None, **kwargs):
@@ -97,15 +101,14 @@ IPD_CUSTOM_FIELDS = [
 		"set_item_attribute",
 		"Link",
 		"Set Item Attribute",
-		options='YRP Item Attribute',
+		options='Item Attribute',
 		depends_on="eval: doc.is_set_item",
 		mandatory_depends_on="eval: doc.is_set_item",
 	),
 	_field(
 		"major_attribute_value",
-		"Link",
+		"Data",
 		"Major Attribute Value",
-		options='YRP Item Attribute Value',
 		depends_on="eval: doc.is_set_item && doc.set_item_attribute",
 		mandatory_depends_on="eval: doc.is_set_item",
 		description="The main Set Item Attribute",
@@ -128,9 +131,8 @@ IPD_CUSTOM_FIELDS = [
 	_field("stiching_details_section", "Section Break", "Stiching Details"),
 	_field(
 		"stiching_major_attribute_value",
-		"Link",
+		"Data",
 		"Stiching Major Attribute Value",
-		options='YRP Item Attribute Value',
 		depends_on="eval: doc.stiching_attribute",
 	),
 	_field("section_break_lpco", "Section Break"),
@@ -232,9 +234,8 @@ IPD_CUSTOM_FIELDS = [
 	_field("packing_process", "Link", "Packing Process", options='YRP Process'),
 	_field(
 		"pack_in_stage",
-		"Link",
+		"Data",
 		"Pack In Stage",
-		options='YRP Item Attribute Value',
 		depends_on="eval: doc.dependent_attribute_mapping",
 		mandatory_depends_on="eval: doc.dependent_attribute_mapping && !doc.__islocal",
 		description="The stage which is used for packing.",
@@ -244,15 +245,14 @@ IPD_CUSTOM_FIELDS = [
 		"packing_attribute",
 		"Link",
 		"Packing Attribute",
-		options='YRP Item Attribute',
+		options='Item Attribute',
 		mandatory_depends_on="eval: !doc.__islocal",
 		description="Attribute based on which Packing Depends",
 	),
 	_field(
 		"pack_out_stage",
-		"Link",
+		"Data",
 		"Pack Out Stage",
-		options='YRP Item Attribute Value',
 		depends_on="eval: doc.dependent_attribute_mapping",
 		mandatory_depends_on="eval: doc.dependent_attribute_mapping && !doc.__islocal",
 	),
@@ -260,18 +260,16 @@ IPD_CUSTOM_FIELDS = [
 	_field("stiching_process", "Link", "Stiching Process", options='YRP Process'),
 	_field(
 		"stiching_in_stage",
-		"Link",
+		"Data",
 		"Stiching In Stage",
-		options='YRP Item Attribute Value',
 		depends_on="eval: doc.stiching_attribute",
 	),
 	_field("column_break_xhgb", "Column Break"),
-	_field("stiching_attribute", "Link", "Stiching Attribute", options='YRP Item Attribute'),
+	_field("stiching_attribute", "Link", "Stiching Attribute", options='Item Attribute'),
 	_field(
 		"stiching_out_stage",
-		"Link",
+		"Data",
 		"Stiching Out Stage",
-		options='YRP Item Attribute Value',
 		depends_on="eval: doc.stiching_attribute",
 	),
 	_field("cutting_details_section_section", "Section Break", "Cutting Details Section"),
@@ -280,12 +278,4 @@ IPD_CUSTOM_FIELDS = [
 
 
 def execute():
-	insert_after = "bom_attribute_mapping_html"
-	fields = []
-	for field in IPD_CUSTOM_FIELDS:
-		row = dict(field)
-		row["insert_after"] = insert_after
-		fields.append(row)
-		insert_after = row["fieldname"]
-
-	create_custom_fields({'YRP Item Production Detail': fields})
+	"""Retained as an executed-patch marker; fields are fixture-owned."""

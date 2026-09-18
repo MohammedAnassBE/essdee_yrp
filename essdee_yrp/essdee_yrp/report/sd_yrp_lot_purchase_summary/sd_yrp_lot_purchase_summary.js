@@ -18,7 +18,7 @@ frappe.query_reports["SD YRP Lot Purchase Summary"] = {
 			"fieldname": "item",
 			"label": __("Item Variant"),
 			"fieldtype": "Link",
-			"options": "YRP Item Variant",
+			"options": "Item",
 			on_change: (report) => {
 				clear_selected_rows(report);
 				report.refresh(true);
@@ -28,7 +28,7 @@ frappe.query_reports["SD YRP Lot Purchase Summary"] = {
 			"fieldname": "parent_item",
 			"label": __("Item"),
 			"fieldtype": "Link",
-			"options": "YRP Item",
+			"options": "Item",
 			on_change: (report) => {
 				clear_selected_rows(report);
 				report.refresh(true);
@@ -38,13 +38,13 @@ frappe.query_reports["SD YRP Lot Purchase Summary"] = {
 
 	onload(report) {
 		console.log(report);
-		report.page.add_inner_button('YRP Purchase Order', () => {
+		report.page.add_inner_button('Purchase Order', () => {
 			frappe.prompt([
 				{
 					label: 'Delivery Location',
 					fieldname: 'delivery_location',
 					fieldtype: 'Link',
-					options: 'YRP Supplier',
+					options: 'Supplier',
 					reqd: true,
 				},
 				{

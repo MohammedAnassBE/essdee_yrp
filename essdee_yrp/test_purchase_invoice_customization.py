@@ -91,7 +91,7 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 		def purchase_order_invoice(final_rate):
 			invoice = frappe.new_doc('YRP Purchase Invoice')
 			invoice.name = "MPI-PO-LEGACY-TEST"
-			invoice.against = 'YRP Purchase Order'
+			invoice.against = 'Purchase Order'
 			invoice.essdee_rate_table_source = "migrated_v1"
 			invoice.append(
 				"items",
@@ -403,7 +403,7 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 		invoice = frappe.new_doc('YRP Purchase Invoice')
 		invoice.name = "YRP-MPI-PO-TEST"
 		invoice.naming_series = "YRP-MPI-.YYYY.-"
-		invoice.against = 'YRP Purchase Order'
+		invoice.against = 'Purchase Order'
 		invoice.append(
 			"items",
 			{"item": "DIRECT-GRN-ITEM", "qty": 10, "uom": "Nos", "rate": 5},
@@ -474,7 +474,7 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 
 	def test_controller_runs_local_validation_before_erp_lifecycle(self):
 		invoice = frappe.new_doc('YRP Purchase Invoice')
-		invoice.against = 'YRP Purchase Order'
+		invoice.against = 'Purchase Order'
 		invoice.essdee_rate_table_source = MODERN_RATE_SOURCE
 		with (
 			patch.object(PurchaseInvoice, "before_submit") as local_submit,
@@ -499,7 +499,7 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 	def test_create_and_cancel_use_existing_erp_endpoints(self):
 		invoice = frappe.new_doc('YRP Purchase Invoice')
 		invoice.name = "YRP-MPI-TEST"
-		invoice.against = 'YRP Purchase Order'
+		invoice.against = 'Purchase Order'
 		invoice.erp_inv_name = "ERP-PI-TEST"
 		response = object()
 		result = {

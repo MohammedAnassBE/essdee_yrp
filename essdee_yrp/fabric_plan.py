@@ -50,7 +50,7 @@ def _split_plan_key(key):
 def _reference_attrs(reference_item_variant):
 	if not reference_item_variant:
 		return {}
-	variant = frappe.get_cached_doc('YRP Item Variant', reference_item_variant)
+	variant = frappe.get_cached_doc('Item', reference_item_variant)
 	return {
 		row.attribute: row.attribute_value
 		for row in variant.get("attributes") or []

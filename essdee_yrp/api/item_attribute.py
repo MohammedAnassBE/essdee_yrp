@@ -16,6 +16,7 @@ import json
 
 import frappe
 from frappe import _
+from yrp.yrp.doctype.yrp_item.yrp_item import ensure_global_attribute_values
 
 
 @frappe.whitelist()
@@ -63,42 +64,9 @@ def update_mapping_values(mapping, attribute_name, values):
 		seen.add(s)
 		clean_values.append(s)
 
-	# 1. Ensure every value has a backing Item Attribute Value doc. Insert
-	#    inside the same transaction so the subsequent mapping.save doesn't
-	#    race with an external commit on the same Attribute Value records.
-	for v in clean_values:
-		existing_attribute = frappe.db.get_value(
-			'YRP Item Attribute Value', v, "attribute_name"
-		)
-		if existing_attribute and existing_attribute != attribute_name:
-			frappe.throw(
-				_("Value {0} already belongs to attribute {1}, not {2}.").format(
-					v, existing_attribute, attribute_name
-				)
-			)
-		if existing_attribute:
-			continue
-		try:
-			frappe.get_doc(
-				{
-					"doctype": 'YRP Item Attribute Value',
-					"attribute_name": attribute_name,
-					"attribute_value": v,
-				}
-			).insert()
-		except frappe.DuplicateEntryError:
-			# Another request may have inserted the deterministic value name
-			# after our first read. Use a locking current read (not the
-			# transaction's old snapshot) and accept only the same attribute.
-			existing_attribute = frappe.db.get_value(
-				'YRP Item Attribute Value', v, "attribute_name", for_update=True
-			)
-			if existing_attribute != attribute_name:
-				frappe.throw(
-					_("Value {0} already belongs to attribute {1}, not {2}.").format(
-						v, existing_attribute or _("another attribute"), attribute_name
-					)
-				)
+	# Standard ERPNext stores values as rows on Item Attribute, not as
+	# independently named documents.
+	ensure_global_attribute_values(attribute_name, clean_values)
 
 	# 2. Replace the mapping's child rows in one shot.
 	doc.set("values", [])

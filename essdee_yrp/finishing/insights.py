@@ -55,7 +55,7 @@ def _get_jobwork_issued_rows(lot):
 				dc.supplier_name,
 				COALESCE(dci.lot, dc.lot) AS lot,
 				dc.process_name AS process,
-				iv.item AS item,
+				COALESCE(NULLIF(iv.variant_of, ''), iv.name) AS item,
 				dci.item_variant,
 				dci.delivered_quantity AS quantity,
 				dci.received_type,
@@ -64,7 +64,7 @@ def _get_jobwork_issued_rows(lot):
 				dc.posting_time
 			FROM `tabYRP Delivery Challan Item` dci
 			INNER JOIN `tabYRP Delivery Challan` dc ON dc.name = dci.parent
-			LEFT JOIN `tabYRP Item Variant` iv ON iv.name = dci.item_variant
+			LEFT JOIN `tabItem` iv ON iv.name = dci.item_variant
 			WHERE dc.docstatus = 1
 				AND dci.docstatus = 1
 				AND dci.delivered_quantity > 0
@@ -81,12 +81,12 @@ def _get_jobwork_issued_rows(lot):
 				'YRP Stock Entry' AS source_doctype,
 				se.name AS source_name,
 				se.from_warehouse AS from_location,
-				from_wh.name1 AS from_location_name,
+				from_wh.warehouse_name AS from_location_name,
 				COALESCE(se.to_supplier, se.transfer_supplier, se.to_warehouse) AS supplier,
-				to_wh.name1 AS supplier_name,
+				to_wh.warehouse_name AS supplier_name,
 				sed.lot,
 				wo.process_name AS process,
-				iv.item AS item,
+				COALESCE(NULLIF(iv.variant_of, ''), iv.name) AS item,
 				sed.item AS item_variant,
 				sed.qty AS quantity,
 				sed.received_type,
@@ -95,11 +95,11 @@ def _get_jobwork_issued_rows(lot):
 				se.posting_time
 			FROM `tabYRP Stock Entry Detail` sed
 			INNER JOIN `tabYRP Stock Entry` se ON se.name = sed.parent
-			LEFT JOIN `tabYRP Warehouse` from_wh ON from_wh.name = se.from_warehouse
-			LEFT JOIN `tabYRP Warehouse` to_wh ON to_wh.name = se.to_warehouse
+			LEFT JOIN `tabWarehouse` from_wh ON from_wh.name = se.from_warehouse
+			LEFT JOIN `tabWarehouse` to_wh ON to_wh.name = se.to_warehouse
 			LEFT JOIN `tabYRP Work Order` wo
 				ON se.against = 'YRP Work Order' AND wo.name = se.against_id
-			LEFT JOIN `tabYRP Item Variant` iv ON iv.name = sed.item
+			LEFT JOIN `tabItem` iv ON iv.name = sed.item
 			WHERE se.docstatus = 1
 				AND sed.docstatus = 1
 				AND se.purpose = 'Material Issue'
@@ -133,7 +133,7 @@ def _get_fp_grn_deduction_rows(doc):
 		"COALESCE(gri.quantity, 0) > 0",
 	]
 	if doc.item:
-		conditions.append("(iv.item IS NULL OR iv.item != %(fp_item)s)")
+		conditions.append("(COALESCE(NULLIF(iv.variant_of, ''), iv.name) IS NULL OR COALESCE(NULLIF(iv.variant_of, ''), iv.name) != %(fp_item)s)")
 	rows = frappe.db.sql(
 		"""
 			SELECT
@@ -143,7 +143,7 @@ def _get_fp_grn_deduction_rows(doc):
 				grn.name AS source_name,
 				COALESCE(gri.lot, grn.lot) AS lot,
 				COALESCE(grn.process_name, wo.process_name) AS process,
-				iv.item,
+				COALESCE(NULLIF(iv.variant_of, ''), iv.name),
 				gri.item_variant,
 				-gri.quantity AS quantity,
 				gri.received_type,
@@ -153,7 +153,7 @@ def _get_fp_grn_deduction_rows(doc):
 			FROM `tabYRP Goods Received Note Item` gri
 			INNER JOIN `tabYRP Goods Received Note` grn ON grn.name = gri.parent
 			LEFT JOIN `tabYRP Work Order` wo ON wo.name = grn.against_id
-			LEFT JOIN `tabYRP Item Variant` iv ON iv.name = gri.item_variant
+			LEFT JOIN `tabItem` iv ON iv.name = gri.item_variant
 			WHERE {conditions}
 		""".format(conditions=" AND ".join(conditions)),
 		params,
@@ -193,7 +193,7 @@ def get_fp_stock_balance_details(doc_name):
 		row.item = row.item_name
 		row.quantity = row.bal_qty
 		row.warehouse_name = row.get("warehouse_name") or frappe.db.get_value(
-			'YRP Warehouse', row.warehouse, "name1"
+			'Warehouse', row.warehouse, "warehouse_name"
 		)
 		rows.append(row)
 	return {
@@ -233,9 +233,9 @@ def _group_fp_item_rows(
 			top_group[group_name_field] = row.get(group_name_field) or group_value
 		variant = variant_cache.get(row.item_variant)
 		if not variant:
-			variant = frappe.get_cached_doc('YRP Item Variant', row.item_variant)
+			variant = frappe.get_cached_doc('Item', row.item_variant)
 			variant_cache[row.item_variant] = variant
-		item_name = row.get("item") or variant.item
+		item_name = row.get("item") or (variant.variant_of or variant.name)
 		item_attributes = item_attribute_cache.get(item_name)
 		if not item_attributes:
 			item_attributes = get_attribute_details(item_name)

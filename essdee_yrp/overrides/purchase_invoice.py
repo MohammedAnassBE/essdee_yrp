@@ -22,7 +22,7 @@ from essdee_yrp.purchase_invoice import (
 	project_purchase_order_items,
 )
 
-PROJECTED_AGAINST = {'YRP Purchase Order', 'YRP Work Order'}
+PROJECTED_AGAINST = {'Purchase Order', 'YRP Work Order'}
 
 
 class EssdeePurchaseInvoice(PurchaseInvoice):
@@ -40,6 +40,10 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 
 	def before_validate(self):
 		self._validate_legacy_projection_inputs()
+		# Reject Bill Tracking identity changes before rebuilding the grouped
+		# projection, so users receive the authoritative invoice-link error rather
+		# than a secondary GRN/supplier mismatch.
+		self.validate_bill_tracking()
 		if self.get("essdee_rate_table_source") == MIGRATED_RATE_SOURCE and (
 			self.is_new()
 			or frappe.db.get_value(
@@ -52,7 +56,7 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 			MIGRATED_RATE_SOURCE,
 		}:
 			self._rebuild_essdee_work_order_items()
-		elif self.against == 'YRP Purchase Order' and self.get(
+		elif self.against == 'Purchase Order' and self.get(
 			"essdee_rate_table_source"
 		) in {MODERN_RATE_SOURCE, MIGRATED_RATE_SOURCE}:
 			self._rebuild_essdee_purchase_order_items()

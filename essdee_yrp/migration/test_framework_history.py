@@ -14,6 +14,9 @@ from essdee_yrp.migration import framework_history as history
 
 
 class FrameworkHistoryTest(unittest.TestCase):
+	def test_archive_version_requires_the_exact_frappe_companion_scope(self):
+		self.assertEqual(history.ARCHIVE_VERSION, 2)
+
 	def record(self, name='C-1', doctype='Comment', **values):
 		return {'source_doctype': doctype, 'row': {'name': name, 'reference_doctype': 'Supplier', **values}}
 
@@ -146,8 +149,55 @@ class FrameworkHistoryTest(unittest.TestCase):
 		with patch.object(history.frappe, 'get_meta', return_value=SimpleNamespace(fields=[])), \
 			patch.object(history.frappe.db, 'sql', return_value=[history.frappe._dict(name='C-1', content='changed')]):
 			result = history.verify_native(documents)
-		self.assertEqual(result['mismatch_count'], 3)
-		self.assertNotIn('private original text', str(result))
+			self.assertEqual(result['mismatch_count'], 3)
+			self.assertNotIn('private original text', str(result))
+
+	def test_native_verification_uses_case_insensitive_database_identity(self):
+		documents = [{'doctype': 'Email Account', 'name': 'Do not reply', 'email_id': 'a@example.com'}]
+		with patch.object(
+			history.frappe,
+			'get_meta',
+			return_value=SimpleNamespace(
+				fields=[SimpleNamespace(fieldname='email_id', fieldtype='Data')]
+			),
+		), patch.object(
+			history.frappe.db,
+			'sql',
+			return_value=[history.frappe._dict(name='Do Not Reply', email_id='a@example.com')],
+		):
+			result = history.verify_native(documents)
+
+		self.assertEqual(result['mismatch_count'], 0)
+
+	def test_existing_erp_business_parent_and_children_are_target_authoritative(self):
+		documents = [
+			{'doctype': 'Address', 'name': 'ACME-Billing', 'address_line1': 'MRP'},
+			{
+				'doctype': 'Dynamic Link',
+				'name': 'SOURCE-LINK',
+				'parent': 'ACME-Billing',
+				'parenttype': 'Address',
+				'link_name': 'MRP-SUPPLIER',
+			},
+		]
+		with patch.object(
+			history.frappe,
+			'get_meta',
+			return_value=SimpleNamespace(fields=[]),
+		), patch.object(
+			history.frappe.db,
+			'sql',
+			return_value=[history.frappe._dict(name='Acme-Billing', address_line1='ERP')],
+		):
+			result = history.verify_native(
+				documents,
+				preserved_business_masters={
+					'Address': {'ACME-Billing': 'Acme-Billing'}
+				},
+			)
+
+		self.assertEqual(result['mismatch_count'], 0)
+		self.assertEqual(result['preserved_target_rows'], 2)
 
 	def test_archive_resume_reuses_verified_existing_file(self):
 		raw = history.canonical_record(self.record())

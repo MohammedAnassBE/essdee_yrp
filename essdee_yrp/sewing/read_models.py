@@ -196,7 +196,7 @@ def get_sp_status_summary(supplier):
 					totals[header] += flt(value)
 				data.append(row)
 	return {
-		"header1": ['YRP Item', 'SD YRP Lot', "Colour", "Part"],
+		"header1": ['Item', 'SD YRP Lot', "Colour", "Part"],
 		"header2": headers,
 		"header3": ["Work Order Status"],
 		"data": [totals, *data] if data else [],
@@ -850,11 +850,11 @@ def get_consumption_mapping_data(lot, supplier=None):
 			for index, value in sorted(mapping_rows.items())
 		]
 		if not rows:
-			column_names = ['YRP Item']
+			column_names = ['Item']
 			rows = [
 				{
 					"index": 0,
-					"values": {'YRP Item': bom.item},
+					"values": {'Item': bom.item},
 					"quantity": saved_qty.get((bom.item, 0), 0),
 					"item_bom_qty": flt(bom.qty_of_bom_item),
 				}

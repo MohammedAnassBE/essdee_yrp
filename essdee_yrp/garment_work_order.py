@@ -27,7 +27,7 @@ from essdee_yrp.garment_bom_matrix import (
 from essdee_yrp.item_matrix import normalize_item_matrix_row_indexes
 from yrp.stock.uom import resolve_item_uom
 from yrp.utils import get_variant_attr_details, update_if_string_instance
-from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_or_create_variant
+from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_or_create_variant, get_parent_item
 from yrp.yrp.utils.ipd_engine import calculate_major_deliverables
 
 
@@ -314,7 +314,7 @@ def calculate_garment_process_rows(ipd, lot, process_name, demands):
 def _is_cloth_ipd(ipd):
 	return bool(
 		ipd.get("is_cloth_item")
-		or frappe.db.get_value('YRP Item', ipd.item, "is_cloth_item")
+		or frappe.db.get_value('Item', ipd.item, "is_cloth_item")
 	)
 
 
@@ -334,9 +334,9 @@ def _garment_reference_variants(ipd):
 	filters = {"item": ipd.item}
 	if ipd.dependent_attribute and ipd.get("pack_in_stage"):
 		parents = frappe.get_all(
-			'YRP Item Variant Attribute',
+			'Item Variant Attribute',
 			filters={
-				"parenttype": 'YRP Item Variant',
+				"parenttype": 'Item',
 				"attribute": ipd.dependent_attribute,
 				"attribute_value": ipd.pack_in_stage,
 			},
@@ -346,7 +346,7 @@ def _garment_reference_variants(ipd):
 			return []
 		filters["name"] = ["in", parents]
 	return frappe.get_all(
-		'YRP Item Variant', filters=filters, pluck="name", order_by="name asc", limit_page_length=0
+		'Item', filters=filters, pluck="name", order_by="name asc", limit_page_length=0
 	)
 
 
@@ -411,7 +411,7 @@ def _validated_demands(lot, ipd, rows, quantity_field):
 				)
 			)
 		attrs = get_variant_attr_details(source.item_variant)
-		if frappe.db.get_value('YRP Item Variant', source.item_variant, "item") != ipd.item:
+		if get_parent_item(source.item_variant) != ipd.item:
 			frappe.throw(_("Item Variant {0} does not belong to IPD {1}.").format(source.item_variant, ipd.name))
 		demands.append(
 			{
@@ -568,7 +568,7 @@ def _cutting_accessory_outputs(ipd, demands):
 					"item_variant": variant,
 					"qty": flt(requirement["quantity"], 3),
 					"uom": frappe.db.get_value(
-						'YRP Item', cloth_item, "default_unit_of_measure"
+						'Item', cloth_item, "stock_uom"
 					),
 					"set_combination": "{}",
 					"table_index": demand["table_index"],
@@ -686,10 +686,10 @@ def _packing_rows(ipd, lot, demands):
 def _uom_factor(item_name, from_uom, to_uom):
 	if from_uom == to_uom:
 		return 1
-	item = frappe.get_cached_doc('YRP Item', item_name)
+	item = frappe.get_cached_doc('Item', item_name)
 	factors = {
 		row.uom: flt(row.conversion_factor)
-		for row in item.get("uom_conversion_details") or []
+		for row in item.get("uoms") or []
 		if row.uom
 	}
 	from_factor = factors.get(from_uom)

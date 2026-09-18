@@ -59,7 +59,7 @@
 				<LinkField
 					v-if="doc.is_set_item"
 					:model-value="newPart"
-					target-doctype="YRP Item Attribute Value"
+					target-doctype="Item Attribute Value"
 					:search-handler="setValueSearch"
 					class="ca-link"
 					placeholder="Part"
@@ -111,7 +111,7 @@
 								<div v-if="editing" class="ca-fill">
 									<LinkField
 										:model-value="fillColour"
-										target-doctype="YRP Item Attribute Value"
+										target-doctype="Item Attribute Value"
 										:search-handler="packValueSearch"
 										class="ca-link"
 										@item-select="(e) => (fillColour = e.value)"
@@ -141,7 +141,7 @@
 							<LinkField
 									v-if="editing"
 									:model-value="row.accessory_colour || ''"
-									target-doctype="YRP Item Attribute Value"
+									target-doctype="Item Attribute Value"
 									:search-handler="packValueSearch"
 									class="ca-link"
 									@item-select="(e) => (row.accessory_colour = e.value)"

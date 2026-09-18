@@ -17,7 +17,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Item Variant",
-   "options": "YRP Item Variant"
+   "options": "Item"
   },
   {
    "fieldname": "excess_quantity",
@@ -36,7 +36,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "UOM",
-   "options": "YRP UOM"
+   "options": "UOM"
   }
  ],
  "grid_page_length": 50,

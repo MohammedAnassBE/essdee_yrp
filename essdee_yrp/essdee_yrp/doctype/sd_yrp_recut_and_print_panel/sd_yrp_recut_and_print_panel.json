@@ -39,7 +39,7 @@
    "fieldname": "item",
    "fieldtype": "Link",
    "label": "Item",
-   "options": "YRP Item"
+   "options": "Item"
   },
   {
    "fetch_from": "cutting_plan.work_order",
@@ -85,7 +85,7 @@
    "fieldname": "supplier",
    "fieldtype": "Link",
    "label": "Supplier",
-   "options": "YRP Supplier"
+   "options": "Supplier"
   },
   {
    "default": "Today",

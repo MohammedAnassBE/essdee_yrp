@@ -120,11 +120,10 @@ const GROUPS = [
 		group: "Item Masters",
 		roles: "*",
 		items: [
-			// noCreate: synced via spine_consumer_config — no /web create.
-			{ doctype: "YRP Item", icon: "pi pi-box", noCreate: true, listFields: [
-				{ field: "name1", label: "Item Name" },
+			{ doctype: "Item", icon: "pi pi-box", listFields: [
+				{ field: "item_name", label: "Item Name" },
 				{ field: "item_group", label: "Item Group" },
-				{ field: "default_unit_of_measure", label: "UOM" },
+				{ field: "stock_uom", label: "UOM" },
 			] },
 			{ doctype: "YRP Item Production Detail", icon: "pi pi-table" },
 		],

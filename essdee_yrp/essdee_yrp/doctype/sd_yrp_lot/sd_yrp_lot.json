@@ -106,14 +106,14 @@
    "fieldname": "primary_item_attribute",
    "fieldtype": "Link",
    "label": "Primary Item Attribute",
-   "options": "YRP Item Attribute"
+   "options": "Item Attribute"
   },
   {
    "fieldname": "item",
    "fieldtype": "Link",
    "in_standard_filter": 1,
    "label": "Item",
-   "options": "YRP Item",
+   "options": "Item",
    "read_only": 1
   },
   {
@@ -230,16 +230,15 @@
   },
   {
    "fieldname": "pack_out_stage",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "label": "Pack Out Stage",
-   "options": "YRP Item Attribute Value",
    "read_only": 1
   },
   {
    "fieldname": "uom",
    "fieldtype": "Link",
    "label": "UOM",
-   "options": "YRP UOM",
+   "options": "UOM",
    "read_only": 1
   },
   {
@@ -264,16 +263,15 @@
   },
   {
    "fieldname": "pack_in_stage",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "label": "Pack In Stage",
-   "options": "YRP Item Attribute Value",
    "read_only": 1
   },
   {
    "fieldname": "packing_uom",
    "fieldtype": "Link",
    "label": "Packing UOM",
-   "options": "YRP UOM",
+   "options": "UOM",
    "read_only": 1
   },
   {
@@ -398,7 +396,7 @@
    "fieldtype": "Link",
    "hidden": 1,
    "label": "Set Item Attribute",
-   "options": "YRP Item Attribute"
+   "options": "Item Attribute"
   },
   {
    "fieldname": "column_break_njmh",

@@ -117,14 +117,14 @@ class TestSDYRPSyncSetup(IntegrationTestCase):
 	def test_supplier_users_remain_on_supplier_and_map_to_warehouse(self):
 		name = f"_Test Sync Supplier {frappe.generate_hash(length=8)}"
 		upsert_doc({
-			"doctype": 'YRP Supplier',
+			"doctype": 'Supplier',
 			"name": name,
 			"supplier_name": name,
 			"supplier_users": [{"user": "Administrator"}],
 		}, event="after_insert")
 
-		supplier = frappe.get_doc('YRP Supplier', name)
-		warehouse = frappe.get_doc('YRP Warehouse', name)
+		supplier = frappe.get_doc('Supplier', name)
+		warehouse = frappe.get_doc('Warehouse', name)
 		self.assertEqual([row.user for row in supplier.supplier_users], ["Administrator"])
 		self.assertEqual([row.user for row in warehouse.warehouse_users], ["Administrator"])
 
@@ -236,7 +236,11 @@ class TestSDYRPSyncSetup(IntegrationTestCase):
 					})
 
 				upsert.assert_called_once_with(
-					{"doctype": "SD YRP Lot", "name": "LOT-TEST"},
+					{
+						"doctype": "SD YRP Lot",
+						"name": "LOT-TEST",
+						"_sd_yrp_source_doctype": "Lot",
+					},
 					event="on_update",
 				)
 

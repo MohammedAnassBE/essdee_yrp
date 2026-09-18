@@ -79,18 +79,11 @@ function handleClickOutside(e) {
 
 function fetch_dia_options() {
     frappe.call({
-        method: 'frappe.client.get_list',
-        args: {
-            doctype: 'YRP Item Attribute Value',
-            filters: { attribute_name: 'Dia' },
-            fields: ['attribute_value'],
-            limit_page_length: 0,
-            order_by: 'idx asc',
-        },
-        async: false,
+        method: 'yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values',
+        args: { attribute: 'Dia' },
         callback: function(r) {
             if (r.message) {
-                allDiaValues.value = r.message.map(d => d.attribute_value);
+                allDiaValues.value = r.message;
             }
         }
     });

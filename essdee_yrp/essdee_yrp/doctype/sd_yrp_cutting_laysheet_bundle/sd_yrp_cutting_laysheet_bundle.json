@@ -20,19 +20,17 @@
   {
    "columns": 1,
    "fieldname": "size",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Size",
-   "options": "YRP Item Attribute Value",
    "read_only": 1
   },
   {
    "columns": 1,
    "fieldname": "colour",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Colour",
-   "options": "YRP Item Attribute Value",
    "read_only": 1
   },
   {

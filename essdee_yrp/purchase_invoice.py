@@ -146,7 +146,7 @@ def build_purchase_order_invoice_payload(
 		)
 	grn_docs = []
 	for grn_name in grn_names:
-		_validate_selected_grn(grn_name, supplier, 'YRP Purchase Order', purchase_invoice)
+		_validate_selected_grn(grn_name, supplier, 'Purchase Order', purchase_invoice)
 		grn_docs.append(frappe.get_doc('YRP Goods Received Note', grn_name))
 	if not grn_docs:
 		frappe.throw(_("Please select at least one GRN."))
@@ -326,10 +326,10 @@ def _get_variant_attribute_map(item_variants):
 		return {}
 	result = {item_variant: {} for item_variant in item_variants}
 	for row in frappe.get_all(
-		'YRP Item Variant Attribute',
+		'Item Variant Attribute',
 		filters={
 			"parent": ["in", item_variants],
-			"parenttype": 'YRP Item Variant',
+			"parenttype": 'Item',
 		},
 		fields=["parent", "attribute", "attribute_value"],
 		order_by="parent, idx",
@@ -428,7 +428,7 @@ def _calculate_verification_grand_total(data):
 @frappe.whitelist()
 def fetch_grn_details(grns, against, supplier, purchase_invoice=None):
 	"""Build Essdee's grouped and direct Purchase Invoice projections."""
-	if against == 'YRP Purchase Order':
+	if against == 'Purchase Order':
 		_check_invoice_fetch_permission(purchase_invoice)
 		frappe.has_permission('YRP Goods Received Note', "read", throw=True)
 		if purchase_invoice and frappe.db.exists('YRP Purchase Invoice', purchase_invoice):
@@ -974,7 +974,7 @@ def _legacy_work_order_commercial_context(
 				work_order.process_name
 			)
 		)
-	if not frappe.db.exists('YRP Item Variant', process_item):
+	if not frappe.db.exists('Item', process_item):
 		frappe.throw(
 			_("Process {0} billing Item Variant {1} does not exist.").format(
 				work_order.process_name, process_item
@@ -1435,7 +1435,7 @@ def verify_legacy_work_order_physical_items(*, invoice_names=None):
 def verify_legacy_purchase_order_projection(*, invoice_names=None):
 	"""Read-only verification that migrated PO invoices contain both projections."""
 	filters = {
-		"against": 'YRP Purchase Order',
+		"against": 'Purchase Order',
 		"essdee_rate_table_source": MIGRATED_RATE_SOURCE,
 	}
 	if invoice_names:
@@ -1615,7 +1615,7 @@ def _build_work_order_context(
 		)
 	billing_variant = get_or_create_variant(process_item, {})
 	billing_uom = resolve_item_uom(billing_variant).uom
-	item_group = frappe.db.get_value('YRP Item', process_item, "item_group")
+	item_group = frappe.db.get_value('Item', process_item, "item_group")
 	process_cost = (
 		frappe.get_doc('YRP Process Cost', work_order.process_cost)
 		if work_order.process_cost
@@ -2009,14 +2009,28 @@ def _legacy_billing_variants(doc):
 		pluck="item",
 		limit_page_length=0,
 	) if processes else []
-	return set(
+	if not items:
+		return set()
+	parents = list(set(items))
+	variants = set(
 		frappe.get_all(
-			'YRP Item Variant',
-			filters={"item": ["in", list(set(items))]},
+			'Item',
+			filters={"variant_of": ["in", parents]},
 			pluck="name",
 			limit_page_length=0,
 		)
-	) if items else set()
+	)
+	# An attribute-less YRP parent/variant pair is represented by one standalone
+	# standard Item, so include the process Item itself as a billable SKU.
+	variants.update(
+		frappe.get_all(
+			'Item',
+			filters={"name": ["in", parents], "has_variants": 0},
+			pluck="name",
+			limit_page_length=0,
+		)
+	)
+	return variants
 
 
 def _legacy_row_lot(doc, row):

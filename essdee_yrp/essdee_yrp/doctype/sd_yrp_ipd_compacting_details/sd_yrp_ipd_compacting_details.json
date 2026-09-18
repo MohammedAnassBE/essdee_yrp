@@ -16,31 +16,28 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Cloth Item",
-   "options": "YRP Item",
+   "options": "Item",
    "reqd": 1
   },
   {
    "fieldname": "packing_attribute_value",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Packing Attribute Value",
-   "options": "YRP Item Attribute Value",
    "reqd": 1
   },
   {
    "fieldname": "input_dia",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Input Dia",
-   "options": "YRP Item Attribute Value",
    "reqd": 1
   },
   {
    "fieldname": "compacting_dia",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Compacting Dia",
-   "options": "YRP Item Attribute Value"
+   "label": "Compacting Dia"
   }
  ],
  "index_web_pages_for_search": 1,

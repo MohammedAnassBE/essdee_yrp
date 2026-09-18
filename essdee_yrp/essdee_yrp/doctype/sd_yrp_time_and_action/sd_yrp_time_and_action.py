@@ -14,7 +14,7 @@ def get_events_len(date1, date2):
 	"""Count only holidays inside the open/closed scheduling interval."""
 
 	return frappe.db.count(
-		'YRP Holiday',
+		'Holiday',
 		filters=[
 			["holiday_date", ">", getdate(date1)],
 			["holiday_date", "<=", getdate(date2)],
@@ -563,7 +563,7 @@ def get_t_and_a_update_data(lot, item):
 	user = frappe.session.user
 	department_data = frappe.db.sql(
 		"""
-			SELECT parent FROM `tabYRP Department User` WHERE user = %(user)s
+			SELECT parent FROM `tabDepartment User` WHERE user = %(user)s
 		""", {
 			"user": user
 		}, as_dict=True

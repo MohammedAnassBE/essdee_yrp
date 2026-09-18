@@ -137,6 +137,32 @@ class PreservationTest(unittest.TestCase):
 			with self.assertRaisesRegex(MigrationError, "Refusing to drop populated fields"):
 				FrappeBulkTarget()._bulk_upsert("Example", [{"name": "E-1", "missing": 4}])
 
+	def test_bulk_writer_does_not_null_fields_omitted_by_sparse_rows(self):
+		with (
+			patch(
+				"essdee_yrp.migration.live.frappe.db.get_table_columns",
+				return_value=["name", "docstatus", "description"],
+			),
+			patch(
+				"essdee_yrp.migration.live.frappe.db.sql",
+				side_effect=[[], None, None],
+			) as sql,
+		):
+			FrappeBulkTarget()._bulk_upsert(
+				"Example",
+				[
+					{"name": "E-1", "docstatus": 0, "description": "new"},
+					{"name": "E-2", "description": "structure only"},
+				],
+			)
+
+		self.assertEqual(sql.call_count, 3)
+		first_insert, second_insert = sql.call_args_list[1:]
+		self.assertIn("`docstatus`", first_insert.args[0])
+		self.assertNotIn("`docstatus`", second_insert.args[0])
+		self.assertEqual(first_insert.args[1], ["E-1", "new", 0])
+		self.assertEqual(second_insert.args[1], ["E-2", "structure only"])
+
 	def test_purchase_invoice_uses_only_direct_and_grouped_item_tables(self):
 		row = {"doctype": "Purchase Invoice Item", "name": "PII-1", "item": "I-1",
 			"qty": 2, "rate": 10, "amount": 19.95, "idx": 8}

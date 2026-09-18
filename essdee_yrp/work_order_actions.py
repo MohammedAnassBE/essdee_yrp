@@ -280,14 +280,14 @@ def _item_bom_rows(doc, ipd, processes):
 
 
 def _variant_identity(item_variant: str) -> tuple[str, str]:
-	variant = frappe.get_cached_doc('YRP Item Variant', item_variant)
+	variant = frappe.get_cached_doc('Item', item_variant)
 	attributes = ", ".join(
 		f"{row.attribute}: {row.attribute_value}"
 		for row in sorted(
 			variant.get("attributes") or [], key=lambda row: row.attribute
 		)
 	)
-	return variant.item, attributes
+	return (variant.variant_of or variant.name), attributes
 
 
 def _row_reference_reason(row_name: str) -> str | None:

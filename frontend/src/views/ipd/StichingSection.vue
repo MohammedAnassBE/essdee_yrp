@@ -40,7 +40,7 @@
 				<LinkField
 					v-if="editing"
 					:model-value="form.stiching_major_attribute_value"
-					target-doctype="YRP Item Attribute Value"
+					target-doctype="Item Attribute Value"
 					:search-handler="stichValueSearch"
 					class="st-link"
 					data-testid="st-major"
@@ -86,7 +86,7 @@
 							<LinkField
 								v-if="editing"
 								:model-value="r.stiching_attribute_value || ''"
-								target-doctype="YRP Item Attribute Value"
+								target-doctype="Item Attribute Value"
 								:search-handler="stichValueSearch"
 								class="st-link"
 								@item-select="(e) => (r.stiching_attribute_value = e.value)"
@@ -111,7 +111,7 @@
 							<LinkField
 								v-if="editing"
 								:model-value="r.set_item_attribute_value || ''"
-								target-doctype="YRP Item Attribute Value"
+								target-doctype="Item Attribute Value"
 								:search-handler="setValueSearch"
 								class="st-link"
 								@item-select="(e) => (r.set_item_attribute_value = e.value)"
@@ -170,7 +170,7 @@
 							<LinkField
 								v-else-if="editing"
 								:model-value="row.val[a] || ''"
-								target-doctype="YRP Item Attribute Value"
+								target-doctype="Item Attribute Value"
 								:search-handler="packValueSearch"
 								class="st-link"
 								@item-select="(e) => (row.val[a] = e.value)"

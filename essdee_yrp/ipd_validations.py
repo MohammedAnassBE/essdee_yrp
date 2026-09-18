@@ -5,6 +5,7 @@ from frappe import _
 from frappe.utils import cint, flt
 
 from yrp.utils import update_if_string_instance
+from yrp.yrp.doctype.yrp_item.yrp_item import has_attribute_value
 from yrp.yrp.doctype.yrp_item_dependent_attribute_mapping.yrp_item_dependent_attribute_mapping import (
 	get_dependent_attribute_details,
 )
@@ -16,7 +17,7 @@ def is_cloth_ipd(doc):
 		return True
 	if not doc.get("item"):
 		return False
-	return bool(frappe.db.get_value('YRP Item', doc.item, "is_cloth_item"))
+	return bool(frappe.db.get_value('Item', doc.item, "is_cloth_item"))
 
 
 def before_validate(doc, method=None):
@@ -148,7 +149,7 @@ def validate_colour_yarn_recipes(doc):
 				f"Row {row.idx} of Colour-wise Yarn Recipes: Cloth Item must be "
 				f"the cloth IPD item ({doc.item})."
 			)
-		if frappe.db.get_value('YRP Item Attribute Value', row.colour, "attribute_name") != "Colour":
+		if not has_attribute_value("Colour", row.colour):
 			frappe.throw(
 				f"Row {row.idx} of Colour-wise Yarn Recipes: {row.colour} is not a Colour value."
 			)
@@ -167,7 +168,7 @@ def validate_colour_yarn_recipes(doc):
 			)
 		if frappe.db.exists(
 			'YRP Item Item Attribute',
-			{"parent": row.yarn_item, "parenttype": 'YRP Item'},
+			{"parent": row.yarn_item, "parenttype": 'Item'},
 		):
 			frappe.throw(
 				f"Row {row.idx} of Colour-wise Yarn Recipes: Yarn Item "
@@ -384,12 +385,7 @@ def validate_fabric_routes(doc):
 		for value, attribute, label in values:
 			if not value:
 				frappe.throw(f"Row {row.idx} of Fabric Routes: select {label}.")
-			if (
-				frappe.db.get_value(
-					'YRP Item Attribute Value', value, "attribute_name"
-				)
-				!= attribute
-			):
+			if not has_attribute_value(attribute, value):
 				frappe.throw(
 					f"Row {row.idx} of Fabric Routes: {value} is not a {attribute} value."
 				)
@@ -459,16 +455,12 @@ def validate_compacting_references(doc):
 				frappe.throw(
 					f"Row {row.idx} of Compacting Reference Details: select {label}."
 				)
-			if frappe.db.get_value(
-				'YRP Item Attribute Value', value, "attribute_name"
-			) != attribute:
+			if not has_attribute_value(attribute, value):
 				frappe.throw(
 					f"Row {row.idx} of Compacting Reference Details: "
 					f"{value} is not a {attribute} value."
 				)
-		if row.get("colour") and frappe.db.get_value(
-			'YRP Item Attribute Value', row.get("colour"), "attribute_name"
-		) != "Colour":
+		if row.get("colour") and not has_attribute_value("Colour", row.get("colour")):
 			frappe.throw(
 				f"Row {row.idx} of Compacting Details: "
 				f"{row.get('colour')} is not a Colour value."
@@ -777,7 +769,7 @@ def is_mapping_shared(doctype, name, ipd_name):
 		)
 	if doctype == 'YRP Item Dependent Attribute Mapping':
 		return bool(
-			frappe.db.exists('YRP Item', {"dependent_attribute_mapping": name})
+			frappe.db.exists('Item', {"dependent_attribute_mapping": name})
 			or frappe.db.exists(
 				'YRP Item Production Detail', {"dependent_attribute_mapping": name, "name": ["!=", ipd_name]}
 			)
@@ -1034,10 +1026,10 @@ def get_attribute_mapping(doc, attribute):
 
 
 def get_item_attribute_rows(item):
-	if not item or not frappe.db.exists('YRP Item', item):
+	if not item or not frappe.db.exists('Item', item):
 		return []
 
-	item_doc = frappe.get_cached_doc('YRP Item', item)
+	item_doc = frappe.get_cached_doc('Item', item)
 	return [{"attribute": row.attribute} for row in item_doc.get("attributes") or []]
 
 

@@ -26,13 +26,13 @@ frappe.query_reports["SD YRP DC Report"] = {
 		{
 			fieldname: "from_location",
 			fieldtype: "Link",
-			options: "YRP Supplier",
+			options: "Supplier",
 			label: "From Location",
 		},
 		{
 			fieldname: "supplier",
 			fieldtype: "Link",
-			options: "YRP Supplier",
+			options: "Supplier",
 			label: "Supplier",
 		},
 	]

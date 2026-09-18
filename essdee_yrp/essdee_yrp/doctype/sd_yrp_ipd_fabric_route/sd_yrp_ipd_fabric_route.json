@@ -15,40 +15,36 @@
    "columns": 2,
    "description": "Colour required by the garment/panel after all cloth processes.",
    "fieldname": "finished_colour",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Finished Colour",
-   "options": "YRP Item Attribute Value",
    "reqd": 1
   },
   {
    "columns": 2,
    "description": "Dia required after all cloth processes.",
    "fieldname": "finished_dia",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Finished Dia",
-   "options": "YRP Item Attribute Value",
    "reqd": 1
   },
   {
    "columns": 2,
    "description": "Physical colour received from knitting. Equal to Finished Colour means this route bypasses dyeing.",
    "fieldname": "knitting_output_colour",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Knitting Output Colour",
-   "options": "YRP Item Attribute Value",
    "reqd": 1
   },
   {
    "columns": 2,
    "description": "Physical Dia received from knitting. A different Finished Dia requires a real Dia-changing/compacting process.",
    "fieldname": "knitting_output_dia",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Knitting Output Dia",
-   "options": "YRP Item Attribute Value",
    "reqd": 1
   }
  ],

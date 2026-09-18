@@ -74,7 +74,7 @@ function remove_attributes(){
 
 function createInput(attr, index, value, is_header){
     let parent_class = "." + get_input_class(attr, index);
-    let fieldtype = 'Link'
+	let fieldtype = 'Autocomplete'
     if(attr == 'Weight'){
         fieldtype = 'Float'
     }
@@ -86,8 +86,8 @@ function createInput(attr, index, value, is_header){
     // Read-only attribute cells are display-only — render as Data so the value shows
     // (a read-only Link renders blank when it can't async-resolve a link title here).
     let is_readonly = (cur_frm.cutting_attrs || []).includes(attr) || attr == 'Accessory' || attr == cur_frm.doc.stiching_major_attribute_value
-    if (is_readonly && fieldtype == 'Link'){
-        fieldtype = 'Data'
+	if (is_readonly && fieldtype == 'Autocomplete'){
+		fieldtype = 'Data'
     }
     let df = {
         fieldtype: fieldtype,
@@ -95,25 +95,22 @@ function createInput(attr, index, value, is_header){
         default: value,
         read_only: is_readonly
     }
-    if (fieldtype == 'Link' && attr != 'Dia'){
-        df['options'] = 'YRP Item Attribute Value'
-        df['get_query'] = function(){
-            return {
-                query:'essdee_yrp.ipd_ui.get_attribute_detail_values',
-                filters: {
-                    'mapping': cur_frm.set_packing_attr_map_value,
+	if (fieldtype == 'Autocomplete' && attr != 'Dia'){
+		df['get_query'] = function(){
+			return {
+				query:'essdee_yrp.ipd_ui.search_attribute_detail_values',
+				params: {
+					'mapping': cur_frm.set_packing_attr_map_value,
                 }
             }
         }
-    }
-    else{
-        df['options'] = 'YRP Item Attribute Value'
-        df['get_query'] = function(){
-            return {
-                filters: {
-                    'attribute_name': 'Dia',
-                }
-            }
+	}
+	else{
+		df['get_query'] = function(){
+			return {
+				query: 'yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values',
+				params: { attribute: 'Dia' },
+			}
         }
     }
     

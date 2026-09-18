@@ -17,10 +17,10 @@ frappe.query_reports["SD YRP Work Order Pending Report"] = {
 	filters: [
 		multi_select_filter("production_order", "YRP Production Order", "YRP Production Order"),
 		multi_select_filter("lot", "SD YRP Lot", "SD YRP Lot"),
-		multi_select_filter("item", "YRP Item", "YRP Item"),
-		multi_select_filter("item_variant", "YRP Item Variant", "YRP Item Variant"),
+		multi_select_filter("item", "Item", "Item"),
+		multi_select_filter("item_variant", "Item", "Item"),
 		multi_select_filter("process", "YRP Process", "YRP Process"),
-		multi_select_filter("supplier", "YRP Supplier", "YRP Supplier"),
+		multi_select_filter("supplier", "Supplier", "Supplier"),
 		{
 			fieldname: "from_date",
 			label: __("From Date"),

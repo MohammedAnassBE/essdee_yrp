@@ -39,9 +39,17 @@ def source_metadata(frappe, doctype):
 	return meta
 
 
-def build_scope(frappe, schemas, retired_tables, business_names, app_file_names=()):
+def build_scope(
+	frappe,
+	schemas,
+	retired_tables,
+	business_names,
+	app_file_names=(),
+	excluded_types=(),
+):
 	"""Return parameterized row predicates, including children and attachments."""
 	app_types = tuple(sorted(set(schemas) | set(retired_tables)))
+	excluded_types = set(excluded_types)
 	scope = {}
 	metadata = {}
 	# Runtime custom controllers matter as much as standard DocFields.
@@ -50,7 +58,12 @@ def build_scope(frappe, schemas, retired_tables, business_names, app_file_names=
 	types += frappe.db.sql("SELECT DISTINCT dt FROM `tabCustom Field` WHERE "
 		"fieldtype='Dynamic Link' OR (fieldtype='Link' AND options='DocType')")
 	for doctype in sorted({row[0] for row in types}):
-		if doctype in app_types or doctype == 'File' or not frappe.db.table_exists(doctype):
+		if (
+			doctype in app_types
+			or doctype in excluded_types
+			or doctype == 'File'
+			or not frappe.db.table_exists(doctype)
+		):
 			continue
 		meta = metadata.setdefault(doctype, source_metadata(frappe, doctype))
 		columns = set(frappe.db.get_table_columns(doctype))
@@ -68,11 +81,21 @@ def build_scope(frappe, schemas, retired_tables, business_names, app_file_names=
 		if parts:
 			scope[doctype] = ('(' + ' OR '.join(parts) + ')', tuple(params))
 	# Comment is site business history, not merely history of the DocTypes owned
-	# by production_api. Preserve and restore the complete table. Version is an
-	# intentionally excluded change-log table for this migration: the owner does
-	# not require it on the new site, so do not archive or activate a partial set.
+	# by production_api. Preserve every row except history attached to an
+	# owner-excluded app. Version is an intentionally excluded change-log table.
 	if frappe.db.table_exists('Comment'):
-		scope['Comment'] = ('1=1', ())
+		if excluded_types:
+			if 'reference_doctype' not in frappe.db.get_table_columns('Comment'):
+				raise RuntimeError(
+					'Cannot apply owner-approved Comment exclusions without '
+					'Comment.reference_doctype'
+				)
+			scope['Comment'] = (
+				"COALESCE(reference_doctype,'') NOT IN %s",
+				(tuple(sorted(excluded_types)),),
+			)
+		else:
+			scope['Comment'] = ('1=1', ())
 	scope.pop('Version', None)
 	for doctype, names in business_names.items():
 		if names:
@@ -103,7 +126,7 @@ def build_scope(frappe, schemas, retired_tables, business_names, app_file_names=
 		meta = metadata.setdefault(doctype, source_metadata(frappe, doctype))
 		for field in meta.get_table_fields():
 			child = field.options
-			if child in app_types:
+			if child in app_types or child in excluded_types:
 				continue  # Already fully included by the main application loader.
 			clause = ('(parenttype=%s AND parentfield=%s AND parent IN '
 				f'(SELECT name FROM {quote("tab" + doctype)} WHERE {predicate}))')

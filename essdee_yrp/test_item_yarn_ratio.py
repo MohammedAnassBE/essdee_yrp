@@ -8,9 +8,9 @@ from essdee_yrp.sd_yrp_sync import upsert_item
 
 def _ensure_group():
 	name = "_Test Item Yarn Ratio Group"
-	if not frappe.db.exists('YRP Item Group', name):
+	if not frappe.db.exists('Item Group', name):
 		frappe.get_doc({
-			"doctype": 'YRP Item Group',
+			"doctype": 'Item Group',
 			"item_group_name": name,
 			"is_group": 0,
 			"parent_item_group": "All Item Groups",
@@ -19,21 +19,28 @@ def _ensure_group():
 
 
 def _ensure_uom():
-	if not frappe.db.exists('YRP UOM', "Kg"):
-		frappe.get_doc({"doctype": 'YRP UOM', "uom_name": "Kg"}).insert(
+	if not frappe.db.exists('UOM', "Kg"):
+		frappe.get_doc({"doctype": 'UOM', "uom_name": "Kg"}).insert(
 			ignore_permissions=True
 		)
 	return "Kg"
 
 
 def _ensure_yarn(name):
-	if not frappe.db.exists('YRP Item', name):
+	if not frappe.db.exists('Item', name):
 		frappe.get_doc({
-			"doctype": 'YRP Item',
-			"name1": name,
+			"doctype": 'Item',
+			"item_code": name,
+			"item_name": name,
 			"item_group": _ensure_group(),
-			"default_unit_of_measure": _ensure_uom(),
+			"stock_uom": _ensure_uom(),
 			"is_stock_item": 1,
+			**(
+				{"gst_hsn_code": "999900"}
+				if frappe.get_meta('Item').has_field("gst_hsn_code")
+				and frappe.db.exists("GST HSN Code", "999900")
+				else {}
+			),
 		}).insert(ignore_permissions=True)
 	return name
 
@@ -46,11 +53,11 @@ class TestItemYarnRatio(IntegrationTestCase):
 
 	def _payload(self, rows):
 		return {
-			"doctype": 'YRP Item',
+			"doctype": 'Item',
 			"name": self.cloth,
 			"name1": self.cloth,
 			"item_group": _ensure_group(),
-			"default_unit_of_measure": _ensure_uom(),
+			"stock_uom": _ensure_uom(),
 			"is_stock_item": 1,
 			"is_cloth_item": 1,
 			"yarn_ratio_details": rows,
@@ -71,7 +78,7 @@ class TestItemYarnRatio(IntegrationTestCase):
 				"ratio": 40,
 			},
 		]))
-		item = frappe.get_doc('YRP Item', self.cloth)
+		item = frappe.get_doc('Item', self.cloth)
 		self.assertEqual(
 			[(row.yarn_item, row.ratio) for row in item.yarn_ratio_details],
 			[(self.yarn_a, 60), (self.yarn_b, 40)],

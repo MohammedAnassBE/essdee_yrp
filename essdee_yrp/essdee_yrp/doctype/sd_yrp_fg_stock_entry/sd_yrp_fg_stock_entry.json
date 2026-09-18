@@ -94,13 +94,13 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Supplier",
-   "options": "YRP Supplier"
+   "options": "Supplier"
   },
   {
    "fieldname": "warehouse",
    "fieldtype": "Link",
    "label": "Warehouse",
-   "options": "YRP Warehouse",
+   "options": "Warehouse",
    "reqd": 1
   },
   {

@@ -13,7 +13,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Supplier Location",
-   "options": "YRP Supplier",
+   "options": "Supplier",
    "reqd": 1
   }
  ],

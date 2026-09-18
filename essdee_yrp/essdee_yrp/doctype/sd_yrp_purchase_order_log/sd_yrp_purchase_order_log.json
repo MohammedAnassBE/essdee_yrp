@@ -23,7 +23,7 @@
    "fieldname": "purchase_order",
    "fieldtype": "Link",
    "label": "Purchase Order",
-   "options": "YRP Purchase Order"
+   "options": "Purchase Order"
   },
   {
    "fieldname": "po_date",
@@ -34,7 +34,7 @@
    "fieldname": "supplier",
    "fieldtype": "Link",
    "label": "Supplier",
-   "options": "YRP Supplier"
+   "options": "Supplier"
   },
   {
    "fieldname": "type",
@@ -59,7 +59,7 @@
    "fieldname": "item_variant",
    "fieldtype": "Link",
    "label": "Item Variant",
-   "options": "YRP Item Variant"
+   "options": "Item"
   },
   {
    "fieldname": "qty",

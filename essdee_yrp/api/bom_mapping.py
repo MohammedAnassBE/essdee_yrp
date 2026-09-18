@@ -37,11 +37,11 @@ from frappe import _
 def _bom_item_attribute_rows(bom_item):
 	"""[{attribute: a}] for every attribute on the BOM (consumed) Item.
 
-	Mirror production_api: `for item in frappe.get_cached_doc("YRP Item", bom.item).attributes`.
+	Mirror production_api: `for item in frappe.get_cached_doc("Item", bom.item).attributes`.
 	"""
 	if not bom_item:
 		return []
-	item_doc = frappe.get_cached_doc('YRP Item', bom_item)
+	item_doc = frappe.get_cached_doc('Item', bom_item)
 	return [{"attribute": a.attribute} for a in (item_doc.attributes or [])]
 
 
@@ -118,7 +118,7 @@ def create_mapping(ipd, bom_item, bom_row=None):
 	doc.item_production_detail = ipd_doc.name
 	doc.item = ipd_doc.item
 	doc.bom_item = bom_item
-	doc.bom_uom = frappe.db.get_value('YRP Item', bom_item, "default_unit_of_measure")
+	doc.bom_uom = frappe.db.get_value('Item', bom_item, "stock_uom")
 	_seed_columns(doc, primary, bom_item)
 	doc.flags.ignore_validate = True
 	doc.insert()

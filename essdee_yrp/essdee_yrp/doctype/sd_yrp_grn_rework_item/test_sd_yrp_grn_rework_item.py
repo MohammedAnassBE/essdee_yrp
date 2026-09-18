@@ -51,9 +51,9 @@ class TestGRNReworkItem(IntegrationTestCase):
 		)
 
 		def cached_value(doctype, _name, fieldname):
-			if doctype == 'YRP Item Variant':
+			if doctype == 'Item':
 				return "Item-1"
-			if doctype == 'YRP Item' and fieldname == "default_unit_of_measure":
+			if doctype == 'Item' and fieldname == "stock_uom":
 				return "Pieces"
 			return None
 

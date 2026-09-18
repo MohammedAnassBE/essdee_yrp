@@ -74,13 +74,13 @@
 						<strong>{{ data.value }}</strong>
 					</template>
 				</Column>
-				<Column header="YRP UOM" :style="{ minWidth: '180px' }">
+				<Column header="UOM" :style="{ minWidth: '180px' }">
 					<template #body="{ data }">
 						<LinkField
 							v-if="editMode"
 							:model-value="data.uom"
 							@update:model-value="data.uom = $event"
-							target-doctype="YRP UOM"
+							target-doctype="UOM"
 						/>
 						<span v-else>{{ data.uom || "—" }}</span>
 					</template>
@@ -164,7 +164,7 @@ async function load() {
 	loading.value = true
 	editMode.value = false
 	try {
-		const doc = await getDocWithOnload("YRP Item", props.itemName)
+		const doc = await getDocWithOnload("Item", props.itemName)
 		if (!doc) {
 			dependentAttribute.value = ""
 			dependentAttrValues.value = []
@@ -173,7 +173,7 @@ async function load() {
 		}
 		dependentAttribute.value = doc.dependent_attribute || ""
 		dependentMapping.value = doc.dependent_attribute_mapping || ""
-		defaultUom.value = doc.default_unit_of_measure || ""
+		defaultUom.value = doc.stock_uom || ""
 
 		const onload = doc.__onload || {}
 		const attrList = Array.isArray(onload.attr_list) ? onload.attr_list : []
@@ -195,7 +195,7 @@ async function load() {
 		dependentAttrValues.value = depValues
 
 		// Build rows: one per dependent-attribute value. Missing entries get
-		// defaults (uom = item default_unit_of_measure, name = "", no attrs) —
+		// defaults (uom = Item.stock_uom, name = "", no attrs) —
 		// matches the Desk's "create on the fly when the user opens the editor".
 		rows.value = depValues.map((v) => {
 			const e = dataMap[v] || {}

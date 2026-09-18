@@ -28,8 +28,8 @@ def _lock_name(source_grn):
 def _resolve_warehouse(supplier):
     if not supplier:
         frappe.throw(_("supplier is required to resolve the target warehouse."))
-    wh = frappe.db.get_value('YRP Warehouse', {"supplier": supplier}, "name") or supplier
-    if not wh or not frappe.db.exists('YRP Warehouse', wh):
+    wh = frappe.db.get_value('Warehouse', {"supplier": supplier}, "name") or supplier
+    if not wh or not frappe.db.exists('Warehouse', wh):
         frappe.throw(_("No yrp warehouse for supplier '{0}' — sync gap. "
                        "Nothing was transferred.").format(supplier))
     return wh
@@ -69,7 +69,7 @@ def receive_grn_transfer(payload):
                 return {"ok": False, "error": _("No items in payload.")}
 
             missing_var = [r.get("item_variant") for r in items
-                           if not (r.get("item_variant") and frappe.db.exists('YRP Item Variant', r.get("item_variant")))]
+                           if not (r.get("item_variant") and frappe.db.exists('Item', r.get("item_variant")))]
             if missing_var:
                 return {"ok": False, "error": _("Item Variants missing on essdee_yrp (sync gap): {0}. "
                                                 "Nothing was transferred.").format(", ".join(map(str, missing_var)))}

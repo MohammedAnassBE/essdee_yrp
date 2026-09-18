@@ -122,7 +122,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Item",
-   "options": "YRP Item",
+   "options": "Item",
    "read_only": 1
   },
   {
@@ -203,7 +203,7 @@
    "fieldtype": "Link",
    "hidden": 1,
    "label": "Delivery Location",
-   "options": "YRP Supplier",
+   "options": "Supplier",
    "read_only": 1
   },
   {

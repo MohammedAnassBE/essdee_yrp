@@ -21,13 +21,13 @@ def get_columns():
 		{"fieldname": "source_doctype", "fieldtype": "Data", "label": "Source Type", "width": 130},
 		{"fieldname": "source_name", "fieldtype": "Dynamic Link", "options": "source_doctype", "label": "Source ID", "width": 170},
 		{"fieldname": "purpose", "fieldtype": "Data", "label": "Purpose", "width": 140},
-		{"fieldname": "from_location", "fieldtype": "Link", "options": 'YRP Warehouse', "label": "From Warehouse", "width": 130},
+		{"fieldname": "from_location", "fieldtype": "Link", "options": 'Warehouse', "label": "From Warehouse", "width": 130},
 		{"fieldname": "from_location_name", "fieldtype": "Data", "label": "From Location Name", "width": 200},
-		{"fieldname": "supplier", "fieldtype": "Link", "options": 'YRP Supplier', "label": "Supplier", "width": 130},
+		{"fieldname": "supplier", "fieldtype": "Link", "options": 'Supplier', "label": "Supplier", "width": 130},
 		{"fieldname": "supplier_name", "fieldtype": "Data", "label": "Supplier Name", "width": 200},
 		{"fieldname": "lot", "fieldtype": "Link", "options": 'SD YRP Lot', "label": "Lot", "width": 120},
-		{"fieldname": "item", "fieldtype": "Link", "options": 'YRP Item', "label": "Item", "width": 180},
-		{"fieldname": "item_variant", "fieldtype": "Link", "options": 'YRP Item Variant', "label": "Item Variant", "width": 220},
+		{"fieldname": "item", "fieldtype": "Link", "options": 'Item', "label": "Item", "width": 180},
+		{"fieldname": "item_variant", "fieldtype": "Link", "options": 'Item', "label": "Item Variant", "width": 220},
 		{"fieldname": "quantity", "fieldtype": "Float", "label": "Quantity", "width": 110},
 		{"fieldname": "received_type", "fieldtype": "Link", "options": 'YRP Received Type', "label": "Received Type", "width": 130},
 		{"fieldname": "remarks", "fieldtype": "Data", "label": "Remarks", "width": 200},
@@ -69,7 +69,7 @@ def get_data(filters):
 		params["supplier"] = filters.supplier
 
 	if filters.get("item"):
-		conditions.append("iv.item = %(item)s")
+		conditions.append("COALESCE(NULLIF(iv.variant_of, ''), iv.name) = %(item)s")
 		params["item"] = filters.item
 
 	query = """
@@ -78,11 +78,11 @@ def get_data(filters):
 			se.name AS source_name,
 			se.purpose AS purpose,
 			se.from_warehouse AS from_location,
-			from_warehouse.name1 AS from_location_name,
+			from_warehouse.warehouse_name AS from_location_name,
 			{supplier_expression} AS supplier,
 			supplier.supplier_name AS supplier_name,
 			sed.lot AS lot,
-			iv.item AS item,
+			COALESCE(NULLIF(iv.variant_of, ''), iv.name) AS item,
 			sed.item AS item_variant,
 			sed.qty AS quantity,
 			sed.received_type AS received_type,
@@ -91,9 +91,9 @@ def get_data(filters):
 			se.posting_time AS posting_time
 		FROM `tabYRP Stock Entry Detail` sed
 		INNER JOIN `tabYRP Stock Entry` se ON se.name = sed.parent
-		LEFT JOIN `tabYRP Warehouse` from_warehouse ON from_warehouse.name = se.from_warehouse
-		LEFT JOIN `tabYRP Supplier` supplier ON supplier.name = {supplier_expression}
-		LEFT JOIN `tabYRP Item Variant` iv ON iv.name = sed.item
+		LEFT JOIN `tabWarehouse` from_warehouse ON from_warehouse.name = se.from_warehouse
+		LEFT JOIN `tabSupplier` supplier ON supplier.name = {supplier_expression}
+		LEFT JOIN `tabItem` iv ON iv.name = sed.item
 		WHERE {conditions}
 		ORDER BY se.posting_date DESC, se.posting_time DESC, se.name DESC
 	""".format(

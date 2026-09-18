@@ -22,7 +22,7 @@ from essdee_yrp.migration.engine import MigrationError
 
 MIGRATION_DOCTYPE = 'SD YRP MRP Data Migration'
 MANIFEST_FIELD = 'framework_archive_json'
-ARCHIVE_VERSION = 1
+ARCHIVE_VERSION = 2
 CHUNK_ROWS = 5000
 CHUNK_BYTES = 4 * 1024 * 1024
 MAX_RECORD_BYTES = 256 * 1024 * 1024
@@ -173,30 +173,86 @@ def write_timeline(documents, target):
 		target.upsert_batch(doctype, batch)
 
 
-def verify_native(documents):
+def _identity_key(value):
+	return str(value or '').casefold()
+
+
+def _preserved_business_projection(document, preserved_business_masters):
+	"""Return true when the restored ERP parent owns this live projection.
+
+	The exact source row remains in the encrypted archive.  Address/Contact rows
+	that already existed in the restored ERP database, and their child rows, stay
+	target-authoritative and therefore are intentionally not value-compared.
+	"""
+
+	preserved = {
+		doctype: {_identity_key(name) for name in identities}
+		for doctype, identities in (preserved_business_masters or {}).items()
+	}
+	doctype = str(document.get('doctype') or '')
+	if doctype in {'Address', 'Contact'}:
+		return _identity_key(document.get('name')) in preserved.get(doctype, set())
+	if doctype in {'Dynamic Link', 'Contact Email', 'Contact Phone'}:
+		parenttype = str(document.get('parenttype') or '')
+		return (
+			parenttype in {'Address', 'Contact'}
+			and _identity_key(document.get('parent'))
+			in preserved.get(parenttype, set())
+		)
+	return False
+
+
+def verify_native(documents, *, preserved_business_masters=None):
 	from essdee_yrp.migration.live import _quote_identifier, _same_migrated_value
 
-	result = {'rows': 0, 'values': 0, 'mismatch_count': 0, 'failures': []}
+	result = {
+		'rows': 0,
+		'values': 0,
+		'preserved_target_rows': 0,
+		'mismatch_count': 0,
+		'failures': [],
+	}
 	for doctype, batch in _native_batches(documents):
 		fields = {f.fieldname: f.fieldtype for f in frappe.get_meta(doctype).fields}
-		actual = {row.name: row for row in frappe.db.sql(
+		actual = {_identity_key(row.name): row for row in frappe.db.sql(
 			f'SELECT * FROM {_quote_identifier("tab" + doctype)} WHERE name IN %s',
 			(tuple(d['name'] for d in batch),), as_dict=True)}
 		for document in batch:
 			result['rows'] += 1
-			stored = actual.get(document['name'])
+			if _preserved_business_projection(document, preserved_business_masters):
+				result['preserved_target_rows'] += 1
+				continue
+			stored = actual.get(_identity_key(document['name']))
 			for field, value in document.items():
 				if field == 'doctype':
 					continue
 				result['values'] += 1
-				if stored is None or field not in stored or not _same_migrated_value(value, stored[field], fields.get(field)):
+				matches = (
+					stored is not None
+					and field in stored
+					and (
+						_identity_key(value) == _identity_key(stored[field])
+						if field == 'name'
+						else _same_migrated_value(value, stored[field], fields.get(field))
+					)
+				)
+				if not matches:
 					result['mismatch_count'] += 1
 					if len(result['failures']) < 100:
 						result['failures'].append(f'Framework value mismatch: {doctype} {document["name"]}.{field}')
 	return result
 
 
-def run_framework_history(plan, source, migration_name, *, dry_run=False, verify=False, allow_missing_files=False):
+def run_framework_history(
+	plan,
+	source,
+	migration_name,
+	*,
+	dry_run=False,
+	verify=False,
+	allow_missing_files=False,
+	preserved_business_masters=None,
+):
 	from essdee_yrp.migration.live import FrappeBulkTarget
 
 	manifest = {'version': ARCHIVE_VERSION, 'state': 'partial', 'chunks': []}
@@ -206,7 +262,7 @@ def run_framework_history(plan, source, migration_name, *, dry_run=False, verify
 	previous_chunks = {entry['sha256']: entry for entry in stored.get('chunks') or []}
 	counts, native_counts = Counter(), Counter()
 	failures, missing_files = [], []
-	value_count = mismatch_count = 0
+	value_count = mismatch_count = preserved_target_rows = 0
 	target = FrappeBulkTarget()
 	for index, chunk in enumerate(iter_chunks(source.iter_framework_rows())):
 		native = []
@@ -226,8 +282,12 @@ def run_framework_history(plan, source, migration_name, *, dry_run=False, verify
 			if index >= len(entries) or read_archive_chunk(entries[index], migration_name) != raw:
 				mismatch_count += 1
 				failures.append(f'Framework source/archive mismatch at chunk {index + 1}')
-			result = verify_native(native)
+			result = verify_native(
+				native,
+				preserved_business_masters=preserved_business_masters,
+			)
 			value_count += result['values']
+			preserved_target_rows += result['preserved_target_rows']
 			mismatch_count += result['mismatch_count']
 			failures.extend(result['failures'][:max(0, 100 - len(failures))])
 		elif dry_run:
@@ -254,6 +314,7 @@ def run_framework_history(plan, source, migration_name, *, dry_run=False, verify
 			json.dumps(manifest, sort_keys=True), update_modified=False)
 		frappe.db.commit()
 	return {'rows': sum(counts.values()), 'tables': dict(counts), 'native_tables': dict(native_counts),
-		'verified_native_values': value_count, 'mismatch_count': mismatch_count, 'failures': failures,
+		'verified_native_values': value_count, 'preserved_target_rows': preserved_target_rows,
+		'mismatch_count': mismatch_count, 'failures': failures,
 		'missing_blob_count': len(missing_files), 'missing_blobs': missing_files,
 		'archive_encrypted': True, 'status': 'Failed' if failures else 'Pass'}

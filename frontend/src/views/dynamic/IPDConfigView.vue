@@ -153,7 +153,7 @@
 			<div class="attr-strip">
 				<div class="attr-cell">
 					<span class="al">Item</span>
-					<a class="av esd-mono" @click="navigateDoc('YRP Item', doc.item, $event)">{{ doc.item || "—" }}</a>
+					<a class="av esd-mono" @click="navigateDoc('Item', doc.item, $event)">{{ doc.item || "—" }}</a>
 				</div>
 				<div class="attr-cell">
 					<span class="al">Primary Attribute</span>
@@ -218,7 +218,7 @@
 								<span class="recipe-field-label">Finished Colour</span>
 								<LinkField
 									:modelValue="group.colour"
-									target-doctype="YRP Item Attribute Value"
+									target-doctype="Item Attribute Value"
 									:search-handler="searchColour"
 									placeholder="Select finished colour"
 									@update:modelValue="(v) => setRecipeGroupColour(group, v)"
@@ -241,7 +241,7 @@
 						<div v-for="(row, rowIndex) in group.rows" :key="row.name || rowIndex" class="recipe-yarn-row">
 							<LinkField
 								:modelValue="row.yarn_item || ''"
-								target-doctype="YRP Item"
+								target-doctype="Item"
 								placeholder="Select yarn item"
 								@update:modelValue="(v) => (row.yarn_item = v || '')"
 							/>
@@ -444,9 +444,9 @@
 					/>
 				</div>
 				<DataTable :value="doc.item_bom || []" class="esd-table cfg-dt" :rowHover="false" dataKey="name">
-					<Column field="item" header="YRP Item">
+					<Column field="item" header="Item">
 						<template #body="{ data }">
-							<a class="cell-link esd-mono" @click="navigateDoc('YRP Item', data.item, $event)">{{ data.item || "—" }}</a>
+							<a class="cell-link esd-mono" @click="navigateDoc('Item', data.item, $event)">{{ data.item || "—" }}</a>
 						</template>
 					</Column>
 					<Column field="qty_of_product" header="Qty of Product">
@@ -455,7 +455,7 @@
 					<Column field="qty_of_bom_item" header="Qty of BOM Item">
 						<template #body="{ data }">{{ fmtNum(data.qty_of_bom_item) }}</template>
 					</Column>
-					<Column field="uom" header="YRP UOM">
+					<Column field="uom" header="UOM">
 						<template #body="{ data }">{{ data.uom || "—" }}</template>
 					</Column>
 					<Column field="process_name" header="YRP Process">
@@ -905,7 +905,7 @@
 											<small>Compacting Dia</small>
 											<LinkField
 												:modelValue="compactingEntryOutput(entry)"
-												target-doctype="YRP Item Attribute Value"
+												target-doctype="Item Attribute Value"
 												:search-handler="searchDia"
 												:forceSelection="true"
 												:invalid="compactingEntryInvalid(entry)"
@@ -983,7 +983,7 @@
 				<LinkField
 					id="duplicate-ipd-item"
 					:model-value="duplicateItem"
-					target-doctype="YRP Item"
+					target-doctype="Item"
 					:filters="duplicateItemFilters"
 					placeholder="Select item"
 					@update:model-value="duplicateItem = $event || ''"
@@ -1442,10 +1442,10 @@ function updateCompactingEntry(entry, value) {
 	}
 }
 async function searchColour(query) {
-	return searchLink("YRP Item Attribute Value", query || "", { attribute_name: "Colour" })
+	return searchLink("Item Attribute Value", query || "", { attribute_name: "Colour" })
 }
 async function searchDia(query) {
-	return searchLink("YRP Item Attribute Value", query || "", { attribute_name: "Dia" })
+	return searchLink("Item Attribute Value", query || "", { attribute_name: "Dia" })
 }
 function detailsValidate() {
 	if (doc.value?.is_cloth_item) {
@@ -1863,23 +1863,23 @@ async function deleteBomRow(idx) {
 }
 async function onBomItemComplete(e) {
 	try {
-		const rows = await searchLink("YRP Item", e.query || "", {})
+		const rows = await searchLink("Item", e.query || "", { has_variants: 1 })
 		bomItemSuggestions.value = (rows || []).map((r) => r.name)
 	} catch (_) { bomItemSuggestions.value = [] }
 }
 // When the BOM item is chosen, auto-fetch its default UOM (mirrors production_api's
-// item_bom.uom = fetch_from item.default_unit_of_measure — the UOM is derived from
+// item_bom.uom = Item.stock_uom — the UOM is derived from
 // the item, never hand-picked).
 async function onBomItemPick(e) {
 	const name = typeof e?.value === "string" ? e.value : e?.value?.name || bomDraft.value.item
 	if (!name) return
 	try {
 		const r = await callMethod("frappe.client.get_value", {
-			doctype: "YRP Item",
+			doctype: "Item",
 			filters: { name },
-			fieldname: "default_unit_of_measure",
+			fieldname: "stock_uom",
 		})
-		bomDraft.value.uom = r?.default_unit_of_measure || ""
+		bomDraft.value.uom = r?.stock_uom || ""
 	} catch (_) { /* leave uom blank; reqd validation will catch it */ }
 }
 async function onProcessComplete(e) {
@@ -1896,7 +1896,7 @@ async function onDepAttrValueComplete(e) {
 	const attrName = doc.value?.dependent_attribute
 	if (!attrName) { depAttrValueSuggestions.value = []; return }
 	try {
-		const rows = await searchLink("YRP Item Attribute Value", e.query || "", { attribute_name: attrName })
+		const rows = await searchLink("Item Attribute Value", e.query || "", { attribute_name: attrName })
 		depAttrValueSuggestions.value = (rows || []).map((r) => r.name)
 	} catch (_) { depAttrValueSuggestions.value = [] }
 }
@@ -1972,7 +1972,7 @@ async function onStageComplete(e) {
 	const attrName = doc.value?.dependent_attribute
 	if (!attrName) { stageSuggestions.value = []; return }
 	try {
-		const rows = await searchLink("YRP Item Attribute Value", e.query || "", { attribute_name: attrName })
+		const rows = await searchLink("Item Attribute Value", e.query || "", { attribute_name: attrName })
 		stageSuggestions.value = (rows || []).map((r) => r.name)
 	} catch (_) { stageSuggestions.value = [] }
 }
@@ -2305,7 +2305,7 @@ function addAttrValue() {
 async function onAttrNewComplete(card, e) {
 	const q = e?.query || ""
 	try {
-		const rows = await searchLink("YRP Item Attribute Value", q, {
+		const rows = await searchLink("Item Attribute Value", q, {
 			attribute_name: card.attr_name,
 		})
 		attrValueSuggestions.value = (rows || [])

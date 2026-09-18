@@ -88,7 +88,7 @@ def fetch_from_old_lot(doc_name):
 				"source_fp": source_name,
 				"source_lot": source_lot,
 				"warehouse": warehouse,
-				"warehouse_name": frappe.db.get_value('YRP Warehouse', warehouse, "name1") or warehouse,
+					"warehouse_name": frappe.db.get_value('Warehouse', warehouse, "warehouse_name") or warehouse,
 				"item_variant": item_variant,
 				"colour": colour,
 				"part": part,
@@ -111,7 +111,7 @@ def create_lot_transfer(data, item_name, ipd, lot, doc_name):
 		frappe.throw("Finishing Plan, Item, Lot, and Production Detail do not match")
 	ipd_doc = frappe.get_cached_doc('YRP Item Production Detail', ipd)
 	default_type = frappe.db.get_single_value('YRP YRP Stock Settings', "default_received_type")
-	uom = frappe.db.get_value('YRP Item', item_name, "default_unit_of_measure")
+	uom = frappe.db.get_value('Item', item_name, "stock_uom")
 	available_rows = {
 		(row.source_lot, row.warehouse, row.item_variant): row
 		for row in destination.get("finishing_old_lot_items") or []
@@ -369,9 +369,9 @@ def _reverse_split_history(transfer):
 					"source_lot": history.source_lot,
 					"warehouse": _warehouse_for_supplier(source.delivery_location),
 					"warehouse_name": frappe.db.get_value(
-						'YRP Warehouse',
+						'Warehouse',
 						_warehouse_for_supplier(source.delivery_location),
-						"name1",
+							"warehouse_name",
 					)
 					or source.delivery_location,
 					"item_variant": history.item_variant,
@@ -416,10 +416,10 @@ def _reverse_split_history(transfer):
 def _warehouse_for_supplier(supplier):
 	if not supplier:
 		frappe.throw(_("Finishing Plan delivery location is required for old-lot transfer"))
-	if frappe.db.exists('YRP Warehouse', {"name": supplier, "disabled": 0, "is_group": 0}):
+	if frappe.db.exists('Warehouse', {"name": supplier, "disabled": 0, "is_group": 0}):
 		return supplier
 	warehouses = frappe.get_all(
-		'YRP Warehouse',
+		'Warehouse',
 		filters={"supplier": supplier, "disabled": 0, "is_group": 0},
 		pluck="name",
 	)

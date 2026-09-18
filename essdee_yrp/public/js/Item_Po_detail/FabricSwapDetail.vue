@@ -133,11 +133,13 @@ function make_link(parent_sel, value, attribute, placeholder, change_cb) {
 	const input = frappe.ui.form.make_control({
 		parent,
 		df: {
-			fieldtype: "Link",
-			options: "YRP Item Attribute Value",
+			fieldtype: "Autocomplete",
 			fieldname: parent_sel.replace(/\W/g, "_"),
 			placeholder,
-			get_query: () => ({ filters: { attribute_name: attribute } }),
+			get_query: () => ({
+				query: "yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values",
+				params: { attribute },
+			}),
 		},
 		doc: sample_doc.value,
 		render_input: true,
@@ -175,11 +177,13 @@ function mount_add_pin_control() {
 	add_pin_control = frappe.ui.form.make_control({
 		parent,
 		df: {
-			fieldtype: "Link",
-			options: "YRP Item Attribute Value",
+			fieldtype: "Autocomplete",
 			fieldname: "fsw_add_pin",
 			placeholder: `${__("Add")} ${config.value.pin_label}...`,
-			get_query: () => ({ filters: { attribute_name: config.value.pin_attribute } }),
+			get_query: () => ({
+				query: "yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values",
+				params: { attribute: config.value.pin_attribute },
+			}),
 			onchange: () => {
 				const pin = add_pin_control.get_value();
 				if (!pin) return;

@@ -9,7 +9,7 @@ from frappe.model.naming import make_autoname
 from frappe.utils import flt, now_datetime
 from yrp.yrp.doctype.yrp_holiday_list.yrp_holiday_list import get_next_date
 from yrp.yrp.doctype.yrp_purchase_order.yrp_purchase_order import get_item_group_index
-from yrp.yrp.doctype.yrp_item.yrp_item import get_attribute_details, get_or_create_variant
+from yrp.yrp.doctype.yrp_item.yrp_item import get_attribute_details, get_or_create_variant, get_parent_item
 from yrp.utils import update_if_string_instance, get_panel_colour_combination, get_variant_attr_details
 from yrp.yrp.doctype.yrp_item_dependent_attribute_mapping.yrp_item_dependent_attribute_mapping import get_dependent_attribute_details
 from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
@@ -264,13 +264,13 @@ def get_time_and_action_process(action_details):
 def calculate_order_details(items, production_detail, packing_uom, final_uom):
 	item_detail = frappe.get_cached_doc('YRP Item Production Detail', production_detail)
 	final_list = []
-	doc = frappe.get_cached_doc('YRP Item', item_detail.item)
+	doc = frappe.get_cached_doc('Item', item_detail.item)
 	dept_attr = None
 	pack_stage = None
 	if item_detail.dependent_attribute:
 		pack_stage = item_detail.pack_in_stage
 		dept_attr = item_detail.dependent_attribute
-	uom_factor = get_uom_conversion_factor(doc.uom_conversion_details,final_uom, packing_uom)
+	uom_factor = get_uom_conversion_factor(doc.uoms,final_uom, packing_uom)
 	final_qty = 0
 	if item_detail.is_set_item:
 		attrs = {}
@@ -289,7 +289,7 @@ def calculate_order_details(items, production_detail, packing_uom, final_uom):
 				colour = comb_dict[attr.attribute_value][part]
 				item_list = [] 
 				for item in items:
-					variant = frappe.get_cached_doc('YRP Item Variant', item.item_variant)
+					variant = frappe.get_cached_doc('Item', item.item_variant)
 					qty = (item.qty * uom_factor)
 					if item_detail.auto_calculate:
 						qty = qty / item_detail.packing_attribute_no
@@ -304,7 +304,7 @@ def calculate_order_details(items, production_detail, packing_uom, final_uom):
 							attrs[attribute.attribute] = attribute['attribute_value']
 					attrs[item_detail.packing_attribute] = colour
 					attrs[item_detail.set_item_attribute] = part
-					new_variant = get_or_create_variant(variant.item, attrs,dependent_attr=item_detail.dependent_attribute_mapping)
+					new_variant = get_or_create_variant((variant.variant_of or variant.name), attrs,dependent_attr=item_detail.dependent_attribute_mapping)
 					temp_qty = math.ceil(qty) if item_detail.auto_calculate else math.ceil(qty * attr.quantity)
 					if item_detail.major_attribute_value == part:
 						final_qty += temp_qty
@@ -328,7 +328,7 @@ def calculate_order_details(items, production_detail, packing_uom, final_uom):
 		for attr in item_detail.packing_attribute_details:
 			item_list = [] 
 			for item in items:
-				variant = frappe.get_cached_doc('YRP Item Variant', item.item_variant)
+				variant = frappe.get_cached_doc('Item', item.item_variant)
 				qty = (item.qty * uom_factor)
 				if item_detail.auto_calculate:
 					qty = qty / item_detail.packing_attribute_no
@@ -342,7 +342,7 @@ def calculate_order_details(items, production_detail, packing_uom, final_uom):
 					else:	
 						attrs[attribute.attribute] = attribute['attribute_value']
 				attrs[item_detail.packing_attribute] = attr.attribute_value
-				new_variant = get_or_create_variant(variant.item, attrs,dependent_attr=item_detail.dependent_attribute_mapping)
+				new_variant = get_or_create_variant((variant.variant_of or variant.name), attrs,dependent_attr=item_detail.dependent_attribute_mapping)
 				temp_qty = math.ceil(qty) if item_detail.auto_calculate else math.ceil(qty * attr.quantity)
 				final_qty += temp_qty
 				item_list.append({
@@ -438,11 +438,11 @@ def fetch_item_details(items, production_detail):
 	if len(items) == 0:
 		return
 	dependent_attr_map_value = frappe.get_value('YRP Item Production Detail',production_detail,'dependent_attribute_mapping')
-	grp_variant = frappe.get_value('YRP Item Variant', items[0]['item_variant'],'item')
+	grp_variant = get_parent_item(items[0]['item_variant'])
 	variant_attr_details = get_attribute_details(grp_variant, dependent_attr_mapping=dependent_attr_map_value)
 	primary_attr = variant_attr_details['primary_attribute']
 	uom = get_isfinal_uom(production_detail)['uom']
-	doc = frappe.get_cached_doc('YRP Item', grp_variant)
+	doc = frappe.get_cached_doc('Item', grp_variant)
 	item_structure = get_item_details(grp_variant,attr_details=variant_attr_details, uom=uom,production_detail=production_detail, dependent_attr_mapping=dependent_attr_map_value)
 
 	for key, variants in groupby(items, lambda i: i['table_index']):
@@ -450,7 +450,7 @@ def fetch_item_details(items, production_detail):
 		item1 = {}
 		values = {}	
 		for variant in variants:
-			current_variant = frappe.get_cached_doc('YRP Item Variant', variant['item_variant'])
+			current_variant = frappe.get_cached_doc('Item', variant['item_variant'])
 			item_attribute_details = get_item_attribute_details(current_variant, variant_attr_details)
 			if doc.dependent_attribute and doc.dependent_attribute in item_attribute_details:
 				del item_attribute_details[doc.dependent_attribute]
@@ -513,10 +513,10 @@ def fetch_order_item_details(items, production_detail, process=None, includes_pa
 	primary_values = get_ipd_primary_values(production_detail)
 	for key, variants in groupby(items, lambda i: i['row_index']):
 		variants = list(variants)
-		current_variant = frappe.get_cached_doc('YRP Item Variant', variants[0]['item_variant'])
-		current_item_attribute_details = get_attribute_details(current_variant.item)
+		current_variant = frappe.get_cached_doc('Item', variants[0]['item_variant'])
+		current_item_attribute_details = get_attribute_details((current_variant.variant_of or current_variant.name))
 		item = {
-			'name': current_variant.item,
+			'name': (current_variant.variant_of or current_variant.name),
 			'attributes': get_item_attribute_details(current_variant, current_item_attribute_details),
 			"item_keys": {},
 			"is_set_item": ipd_doc.is_set_item,
@@ -541,7 +541,7 @@ def fetch_order_item_details(items, production_detail, process=None, includes_pa
 					if set_combination.get("major_colour"):
 						item['item_keys']['major_colour'] = set_combination.get("major_colour")		
 
-				current_variant = frappe.get_cached_doc('YRP Item Variant', variant['item_variant'])
+				current_variant = frappe.get_cached_doc('Item', variant['item_variant'])
 				for attr in current_variant.attributes:
 					if attr.attribute == item.get('primary_attribute'):
 						item['values'][attr.attribute_value] = {
@@ -630,7 +630,7 @@ def get_item_details(item_name, attr_details = None, uom=None, production_detail
 		item['final_state_attr'] = final_state_attr	
 		
 	elif not item['dependent_attribute'] and not item['primary_attribute']:
-		doc = frappe.get_cached_doc('YRP Item', item['item'])
+		doc = frappe.get_cached_doc('Item', item['item'])
 		final_state_attr = []
 		x = [attr.attribute for attr in doc.attributes]
 		final_state_attr = final_state_attr + x
@@ -676,8 +676,8 @@ def get_isfinal_uom(item_production_detail, get_pack_stage=None):
 				break
 	else:
 		item = doc.item
-		item_doc = frappe.get_cached_doc('YRP Item', item)
-		uom = item_doc.default_unit_of_measure
+		item_doc = frappe.get_cached_doc('Item', item)
+		uom = item_doc.stock_uom
 
 	if get_pack_stage:
 		pack_in_stage = doc.pack_in_stage
@@ -698,12 +698,12 @@ def get_isfinal_uom(item_production_detail, get_pack_stage=None):
 		'uom':uom,
 	}
 
-def get_uom_conversion_factor(uom_conversion_details, from_uom, to_uom):
+def get_uom_conversion_factor(uoms, from_uom, to_uom):
 	if not to_uom:
 		to_uom = from_uom
 	to_uom_factor = None
 	from_uom_factor = None
-	for item in uom_conversion_details:
+	for item in uoms:
 		if item.uom == from_uom:
 			from_uom_factor = item.conversion_factor
 		if item.uom == to_uom:
@@ -726,9 +726,9 @@ def combine_child_tables(table1, table2):
 
 @frappe.whitelist()
 def get_attributes(data):
-	grp_variant_doc = frappe.get_cached_doc('YRP Item Variant', data[0].item_variant)
-	grp_item = grp_variant_doc.item
-	dept_attr = frappe.get_value('YRP Item', grp_item, "dependent_attribute")
+	grp_variant_doc = frappe.get_cached_doc('Item', data[0].item_variant)
+	grp_item = get_parent_item(grp_variant_doc.name)
+	dept_attr = frappe.get_value('Item', grp_item, "dependent_attribute")
 	attribute_list = []
 	for attrs in grp_variant_doc.attributes:
 		if attrs.attribute != dept_attr:
@@ -738,7 +738,7 @@ def get_attributes(data):
 	attr_list = []
 	for item in data:
 		item= item.as_dict()
-		doc = frappe.get_cached_doc('YRP Item Variant', item['item_variant'])
+		doc = frappe.get_cached_doc('Item', item['item_variant'])
 		temp_attr = {}
 		for attr in doc.attributes:
 			if attr.attribute != dept_attr:

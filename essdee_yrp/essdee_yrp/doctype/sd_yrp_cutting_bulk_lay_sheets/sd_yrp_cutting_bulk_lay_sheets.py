@@ -7,6 +7,7 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt, now_datetime, nowtime
+from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 
 class SDYRPCuttingBulkLaySheets(Document):
@@ -378,8 +379,8 @@ def build_lot_transfer_items(laysheet, main_lot, target_lot, warehouse, received
 
 	items = []
 	for item_variant, qty in sorted(quantities.items()):
-		item = frappe.get_cached_value('YRP Item Variant', item_variant, "item")
-		uom = frappe.get_cached_value('YRP Item', item, "default_unit_of_measure")
+		item = get_parent_item(item_variant)
+		uom = frappe.get_cached_value('Item', item, "stock_uom")
 		if not uom:
 			frappe.throw(_("Default UOM is not configured for Item {0}.").format(item))
 		idx = len(items)
@@ -451,7 +452,7 @@ def create_lot_transfer(doc_name, detail_name):
 		"Bundles Generated", "Approval Pending"
 	):
 		frappe.throw(_("Generate bundles before creating the Lot Transfer."))
-	received_type = frappe.db.get_single_value("Stock Settings", "default_received_type")
+	received_type = frappe.db.get_single_value('YRP YRP Stock Settings', "default_received_type")
 	items = build_lot_transfer_items(
 		laysheet, doc.main_lot, row.lot, doc.from_location, received_type
 	)
@@ -518,7 +519,7 @@ def create_bulk_lot_transfer(doc_name):
 	if existing_transfer:
 		return existing_transfer
 
-	received_type = frappe.db.get_single_value("Stock Settings", "default_received_type")
+	received_type = frappe.db.get_single_value('YRP YRP Stock Settings', "default_received_type")
 	items = []
 	for row in doc.lot_details:
 		if not row.cutting_laysheet:
@@ -789,7 +790,7 @@ def validate_bulk_print_prerequisites(laysheet_name):
 		)
 	):
 		frappe.throw(_("The linked Lot Transfer does not match this bulk Lay Sheet."))
-	received_type = frappe.db.get_single_value("Stock Settings", "default_received_type")
+	received_type = frappe.db.get_single_value('YRP YRP Stock Settings', "default_received_type")
 	expected_items = build_lot_transfer_items(
 		laysheet, bulk.main_lot, entry.lot, bulk.from_location, received_type
 	)

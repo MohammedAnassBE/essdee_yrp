@@ -796,7 +796,7 @@ def get_multiccr(open_status=None, lot_list=None, item_list=None, category=None)
 
 	lot_list = frappe.db.sql(
 		f"""
-			SELECT t1.name FROM `tabSD YRP Lot` t1 JOIN `tabYRP Item` t2 ON t1.item = t2.name
+			SELECT t1.name FROM `tabSD YRP Lot` t1 JOIN `tabItem` t2 ON t1.item = t2.name
 			WHERE 1 = 1 {conditions} AND (t1.production_detail IS NOT NULL AND t1.production_detail != '')
 		""", con, as_dict=True
 	)

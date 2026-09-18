@@ -58,7 +58,7 @@ frappe.query_reports["SD YRP Work Order Report"] = {
 		{
 			"fieldname":"supplier",
 			"fieldtype":"Link",
-			"options":"YRP Supplier",
+			"options":"Supplier",
 			"label":"Supplier",
 		},
 		{
@@ -70,7 +70,7 @@ frappe.query_reports["SD YRP Work Order Report"] = {
 		{
 			"fieldname":"item",
 			"fieldtype":"Link",
-			"options":"YRP Item",
+			"options":"Item",
 			"label":"Item",
 		},
 		{

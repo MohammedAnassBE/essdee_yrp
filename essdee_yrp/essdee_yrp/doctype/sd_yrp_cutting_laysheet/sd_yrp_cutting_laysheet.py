@@ -8,7 +8,7 @@ import frappe, json, sys, base64, math, time
 from frappe.utils import getdate, nowdate, now, flt
 from secrets import token_bytes as get_random_bytes
 from yrp.stock.stock_ledger import make_sl_entries
-from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
+from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant, get_parent_item
 from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 	_get_warehouse_for_supplier,
 )
@@ -1826,7 +1826,7 @@ def get_table_entries(cls_table, ipd_doc, warehouse, lot, doc_name, received_typ
 				if cloth.name1 == item.cloth_type:
 					cloth_name = cloth.cloth
 					break
-			uom = frappe.get_cached_value('YRP Item', cloth_name, "default_unit_of_measure")
+			uom = frappe.get_cached_value('Item', cloth_name, "stock_uom")
 			variant = get_or_create_variant(cloth_name, attributes)
 			transfer_key = f"{doc_name}:{item.name}:dia-conversion"
 			sl_entries.append(get_sl_entries(variant, warehouse, lot, item, uom, doc_name, received_type, multiplier1, transfer_key))
@@ -1994,13 +1994,13 @@ def _cutting_grn_consumed_rows(cls_doc):
 	for variant, quantity in quantities.items():
 		if quantity <= 0:
 			continue
-		item = frappe.get_cached_value('YRP Item Variant', variant, "item")
+		item = get_parent_item(variant)
 		rows.append(
 			{
 				"item_variant": variant,
 				"qty": quantity,
 				"uom": frappe.get_cached_value(
-					'YRP Item', item, "default_unit_of_measure"
+					'Item', item, "stock_uom"
 				),
 			}
 		)

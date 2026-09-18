@@ -26,10 +26,9 @@
    "allow_on_submit": 1,
    "columns": 2,
    "fieldname": "size",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Size",
-   "options": "YRP Item Attribute Value",
    "reqd": 1
   },
   {

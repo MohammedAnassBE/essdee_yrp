@@ -89,7 +89,7 @@ def _normalize_yarns(selection, required=True):
 
 def _item_yarns_for_cloth(cloth_item, required=False):
     """Return the reusable yarn recipe stored on the cloth Item master."""
-    item = frappe.get_cached_doc('YRP Item', cloth_item)
+    item = frappe.get_cached_doc('Item', cloth_item)
     if item.get("yarn_ratio_details") and not item.get("is_cloth_item"):
         frappe.throw(
             _("Enable 'Is Cloth Item' on Item {0} before using its Yarn Ratio.").format(
@@ -260,12 +260,7 @@ def _normalize_knitting_output_colours(selection, required_colours):
                     index, colour
                 )
             )
-        if (
-            frappe.db.get_value(
-                'YRP Item Attribute Value', output_colour, "attribute_name"
-            )
-            != "Colour"
-        ):
+        if not has_attribute_value("Colour", output_colour):
             frappe.throw(
                 _("{0} is not a Colour attribute value.").format(output_colour)
             )
@@ -357,12 +352,7 @@ def _normalize_fabric_routes(selection, required_routes):
             (final_colour, "Colour"),
             (knitting_colour, "Colour"),
         ):
-            if (
-                frappe.db.get_value(
-                    'YRP Item Attribute Value', value, "attribute_name"
-                )
-                != attribute
-            ):
+            if not has_attribute_value(attribute, value):
                 frappe.throw(_("{0} is not a {1} attribute value.").format(
                     value, attribute
                 ))
@@ -692,8 +682,8 @@ def _find_or_create_cpd(cloth_item, selection, tuples):
     # crash in ipd_validations.validate_garment_ipd (e.g. "Enter stiching
     # attribute details"). The Item master is the source of truth the fetch
     # reads from, so it must be stamped here too, not just the CPD field.
-    if not frappe.db.get_value('YRP Item', cloth_item, "is_cloth_item"):
-        frappe.db.set_value('YRP Item', cloth_item, "is_cloth_item", 1)
+    if not frappe.db.get_value('Item', cloth_item, "is_cloth_item"):
+        frappe.db.set_value('Item', cloth_item, "is_cloth_item", 1)
     cpd.is_cloth_item = 1
     colour_recipes = selection.get("colour_yarn_recipes") or []
     cpd.set(
@@ -944,7 +934,7 @@ def _program_final_route(row):
     final_colour = row.get("colour") or None
     reference = row.get("reference_item_variant")
     if reference:
-        variant = frappe.get_cached_doc('YRP Item Variant', reference)
+        variant = frappe.get_cached_doc('Item', reference)
         attrs = {
             value.attribute: value.attribute_value
             for value in variant.get("attributes") or []
@@ -1419,3 +1409,4 @@ def get_yarn_profile(yarn_item):
     if not frappe.has_permission('YRP Item Production Detail', "read"):
         frappe.throw(_("Not permitted"), frappe.PermissionError)
     return _yarn_profile(yarn_item)
+from yrp.yrp.doctype.yrp_item.yrp_item import has_attribute_value

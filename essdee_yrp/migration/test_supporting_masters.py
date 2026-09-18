@@ -1,22 +1,113 @@
 import json
 import runpy
 import unittest
-from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from essdee_yrp.migration.engine import MigrationError
 from essdee_yrp.migration.live import (
+	APPROVED_FRAPPE_DATA_ORDER,
 	F15SourceBridge,
-	_assert_supporting_master_not_independently_edited,
 	_assert_supporting_child_ownership,
+	_load_supporting_external_masters,
 	_transform_supporting_document,
 	_validate_external_references,
+	_verify_supporting_business_master_identities,
 )
 
 
 class SupportingMasterTest(unittest.TestCase):
+	def test_approved_frappe_scope_is_explicit_and_never_includes_removed_f16_doctypes(self):
+		bridge = runpy.run_path(
+			str(Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py")
+		)
+		approved = set(bridge["APPROVED_FRAPPE_DATA_ORDER"])
+		self.assertEqual(
+			tuple(bridge["APPROVED_FRAPPE_DATA_ORDER"]), APPROVED_FRAPPE_DATA_ORDER
+		)
+		self.assertIn("User", approved)
+		self.assertIn("Module Profile", approved)
+		self.assertIn("Custom DocPerm", approved)
+		self.assertNotIn("Energy Point Settings", approved)
+		self.assertNotIn("S3 Backup Settings", approved)
+		self.assertEqual(
+			bridge["APPROVED_FRAPPE_ARCHIVE_ONLY_DOCTYPES"],
+			("Energy Point Settings", "S3 Backup Settings"),
+		)
+		self.assertNotIn("Message Log", approved)
+
+	def test_approved_user_drops_only_spine_role_and_keeps_supported_preferences(self):
+		bridge = runpy.run_path(
+			str(Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py")
+		)
+		user = {
+			"name": "user@example.com",
+			"roles": [
+				{"role": "System Manager"},
+				{"role": "Spine User"},
+			],
+			"block_modules": [{"module": "Core"}],
+			"social_logins": [{"provider": "frappe"}],
+			"module_profile": "Default",
+		}
+		frappe = SimpleNamespace(
+			get_meta=lambda _doctype: SimpleNamespace(issingle=False),
+			get_doc=lambda _doctype, _name: SimpleNamespace(
+				as_dict=lambda **_kwargs: dict(user)
+			),
+		)
+		actual = bridge["_approved_frappe_document"](
+			frappe, "User", user["name"], set(), passwords=False
+		)
+		self.assertEqual(actual["roles"], [{"role": "System Manager"}])
+		self.assertEqual(actual["block_modules"], [{"module": "Core"}])
+		self.assertEqual(actual["social_logins"], [{"provider": "frappe"}])
+		self.assertEqual(actual["module_profile"], "Default")
+
+	def test_exact_archive_keeps_live_incompatible_and_auth_rows(self):
+		bridge = runpy.run_path(
+			str(Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py")
+		)
+		iterator = bridge["iter_approved_frappe_exact_archive_records"]
+		globals_ = iterator.__globals__
+		def sql(statement, params=(), **_kwargs):
+			if "FROM __Auth" in statement and params[0] == "S3 Backup Settings":
+				return [{"doctype": "S3 Backup Settings", "name": "S3 Backup Settings",
+					"fieldname": "aws_secret", "password": "ciphertext", "encrypted": 1}]
+			return []
+
+		frappe = SimpleNamespace(
+			db=SimpleNamespace(
+				exists=lambda *_args: True,
+				sql=sql,
+			)
+		)
+		with patch.dict(
+			globals_,
+			{
+				"APPROVED_FRAPPE_DATA_ORDER": ("DefaultValue",),
+				"APPROVED_FRAPPE_ARCHIVE_ONLY_DOCTYPES": ("S3 Backup Settings",),
+				"_spine_doctypes": lambda _frappe: set(),
+				"_approved_frappe_names": lambda *_args: ["UNSAFE-DEFAULT"],
+				"_approved_frappe_exact_document": lambda _frappe, doctype, name: {
+					"doctype": doctype,
+					"name": name,
+					"defkey": "setup_complete" if doctype == "DefaultValue" else None,
+				},
+			},
+		):
+			records = list(iterator(frappe))
+		self.assertEqual(
+			[row["source_doctype"] for row in records],
+			[
+				"Approved Frappe Exact::DefaultValue",
+				"Approved Frappe Exact::S3 Backup Settings",
+				"Approved Frappe Exact::__Auth",
+			],
+		)
+		self.assertEqual(records[-1]["row"]["password"], "ciphertext")
+
 	def test_target_only_children_are_not_deleted_by_supporting_reload(self):
 		field = SimpleNamespace(fieldname='links', options='Dynamic Link')
 		with patch('essdee_yrp.migration.live.frappe.get_meta', return_value=SimpleNamespace(get_table_fields=lambda: [field])), \
@@ -70,21 +161,143 @@ class SupportingMasterTest(unittest.TestCase):
 		self.assertNotIn("private source value", str(error.exception))
 		self.transform({"name": "A-1", "retired_field": None})
 
-	def test_existing_native_master_or_later_edit_is_protected(self):
-		source = {"name": "A-1", "creation": "2020-01-01 00:00:00", "modified": "2021-01-01 00:00:00",
-			"owner": "Administrator", "modified_by": "Administrator"}
-		matching = {**source, "creation": datetime(2020, 1, 1), "modified": datetime(2021, 1, 1)}
-		with patch("essdee_yrp.migration.live.frappe.db.get_value", return_value=matching):
-			_assert_supporting_master_not_independently_edited(source, "Address")
-		with patch("essdee_yrp.migration.live.frappe.db.get_value", return_value={**matching, "modified": datetime(2026, 1, 1)}):
-			with self.assertRaisesRegex(MigrationError, "independently created or edited Address"):
-				_assert_supporting_master_not_independently_edited(source, "Address")
+	def test_existing_erp_business_master_is_preserved_without_replacement(self):
+		target = Mock()
+		source = SimpleNamespace(
+			iter_supporting_documents=lambda doctype, names: iter(
+				[
+					{"doctype": doctype, "name": "A-1", "address_title": "MRP value"}
+				]
+				if names
+				else []
+			)
+		)
+		plan = SimpleNamespace(specs={})
+		reconciliation = {}
+		with (
+			patch("essdee_yrp.migration.live.frappe.db.exists", return_value="a-1"),
+			patch("essdee_yrp.migration.live._assert_supporting_child_ownership") as ownership,
+		):
+			counts = _load_supporting_external_masters(
+				target,
+				source,
+				{"Address": {"A-1"}},
+				plan=plan,
+				dry_run=False,
+				reconciliation=reconciliation,
+			)
+		self.assertEqual(counts["Address"], 1)
+		self.assertNotIn(
+			"Address", [invocation.args[0] for invocation in target.upsert_batch.call_args_list]
+		)
+		ownership.assert_not_called()
+		self.assertEqual(
+			reconciliation["preserved_target_identities"]["Address"],
+			{"A-1": "a-1"},
+		)
+		self.assertEqual(
+			reconciliation["inserted_source_identities"]["Address"], []
+		)
+
+	def test_missing_business_master_is_transformed_and_inserted(self):
+		target = Mock()
+		document = {"doctype": "Address", "name": "A-1"}
+		source = SimpleNamespace(
+			iter_supporting_documents=lambda _doctype, names: iter(
+				[document] if names else []
+			)
+		)
+		plan = SimpleNamespace(specs={})
+		transformed = {"doctype": "Address", "name": "A-1", "address_title": "MRP"}
+		reconciliation = {}
+		with (
+			patch("essdee_yrp.migration.live.frappe.db.exists", return_value=False),
+			patch("essdee_yrp.migration.live._assert_supporting_child_ownership") as ownership,
+			patch(
+				"essdee_yrp.migration.live._transform_supporting_document",
+				return_value=transformed,
+			) as transform,
+		):
+			counts = _load_supporting_external_masters(
+				target,
+				source,
+				{"Address": {"A-1"}},
+				plan=plan,
+				dry_run=False,
+				reconciliation=reconciliation,
+			)
+		self.assertEqual(counts["Address"], 1)
+		ownership.assert_called_once_with(document, "Address")
+		transform.assert_called_once()
+		self.assertIn(
+			("Address", [transformed]),
+			[invocation.args for invocation in target.upsert_batch.call_args_list],
+		)
+		self.assertEqual(
+			reconciliation["inserted_source_identities"]["Address"], ["A-1"]
+		)
+
+	def test_supporting_business_identity_verification_matches_database_case(self):
+		source = SimpleNamespace(
+			iter_related_business_masters=lambda: iter(
+				[
+					{"doctype": "Address", "name": "ACME-Billing"},
+					{"doctype": "Contact", "name": "Manoj Kumar S"},
+				]
+			)
+		)
+		with patch(
+			"essdee_yrp.migration.live.frappe.get_all",
+			side_effect=[["Acme-Billing"], ["Manoj kumar S"]],
+		):
+			result = _verify_supporting_business_master_identities(source)
+
+		self.assertEqual(result["status"], "Pass")
+		self.assertEqual(result["failures"], [])
+
+	def test_supporting_business_master_verifier_requires_every_source_identity(self):
+		source = SimpleNamespace(
+			iter_related_business_masters=lambda: iter(
+				[
+					{"doctype": "Address", "name": "A-1"},
+					{"doctype": "Address", "name": "A-2"},
+					{"doctype": "Contact", "name": "C-1"},
+				]
+			)
+		)
+		with patch(
+			"essdee_yrp.migration.live.frappe.get_all",
+			side_effect=[["A-1"], ["C-1"]],
+		):
+			result = _verify_supporting_business_master_identities(source)
+		self.assertEqual(result["status"], "Failed")
+		self.assertEqual(len(result["failures"]), 1)
+		self.assertIn("Address: 1 source identities", result["failures"][0])
 
 	def test_supporting_argument_batches_are_bounded(self):
 		bridge = object.__new__(F15SourceBridge)
 		bridge._run = Mock(return_value=[])
 		list(bridge.iter_supporting_documents("Address", [f"A-{n}" for n in range(501)]))
 		self.assertEqual([len(json.loads(call.args[0][-1])) for call in bridge._run.call_args_list], [250, 250, 1])
+
+	def test_source_packing_process_defaults_historical_lot_bom_process(self):
+		bridge = object.__new__(F15SourceBridge)
+		bridge.settings = SimpleNamespace(required_defaults={})
+		bridge._run = Mock(
+			return_value=[
+				{
+					"kind": "migration_defaults",
+					"default_received_type": "Accepted",
+					"default_packing_process": "Packing",
+					"root_item_groups": ["All Item Groups"],
+					"bill_received_via": [],
+				}
+			]
+		)
+		self.assertEqual(
+			bridge.reference_data()["migration_defaults"]["Lot BOM.process_name"],
+			"Packing",
+		)
 
 	def test_existing_direct_address_references_are_still_in_reload_scope(self):
 		spec = SimpleNamespace(target="YRP Supplier", ignored_fields={}, field_map={},

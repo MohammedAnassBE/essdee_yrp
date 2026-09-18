@@ -13,10 +13,9 @@
  "fields": [
   {
    "fieldname": "size",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Size",
-   "options": "YRP Item Attribute Value",
    "read_only": 1
   },
   {
@@ -29,10 +28,9 @@
   },
   {
    "fieldname": "panel",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Panel",
-   "options": "YRP Item Attribute Value"
+   "label": "Panel"
   }
  ],
  "index_web_pages_for_search": 1,

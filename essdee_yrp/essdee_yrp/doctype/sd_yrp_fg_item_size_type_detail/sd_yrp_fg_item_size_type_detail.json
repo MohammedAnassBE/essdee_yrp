@@ -12,10 +12,9 @@
  "fields": [
   {
    "fieldname": "size_type_value",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Size Type Value",
-   "options": "YRP Item Attribute Value"
+   "label": "Size Type Value"
   },
   {
    "fieldname": "size",

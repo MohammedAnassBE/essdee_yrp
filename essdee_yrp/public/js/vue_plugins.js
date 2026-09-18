@@ -149,10 +149,10 @@ frappe.production.ui.CombinationItemDetail = class {
 		this.vue = mounted.vue;
 	}
 	load_data(items) {
-		this.vue.load_data(JSON.parse(JSON.stringify(items)));
+		return this.vue.load_data(JSON.parse(JSON.stringify(items)));
 	}
 	set_attributes() {
-		this.vue.set_attributes();
+		return this.vue.set_attributes();
 	}
 	get_data() {
 		return JSON.parse(JSON.stringify(this.vue.get_data()));

@@ -69,7 +69,7 @@
 				</Column>
 
 				<!-- Item identity + meta (only on the first split row) -->
-				<Column header="YRP Item" :style="{ minWidth: '190px' }">
+				<Column header="Item" :style="{ minWidth: '190px' }">
 					<template #body="{ index }">
 						<template v-if="index === 0">
 							<div class="grn-item-title esd-mono">{{ row.name }}</div>

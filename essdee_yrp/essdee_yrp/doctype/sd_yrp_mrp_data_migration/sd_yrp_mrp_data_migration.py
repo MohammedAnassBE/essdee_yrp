@@ -22,13 +22,6 @@ ADAPTER_STATUS = "Configured Local-Bench Source"
 ACTION_LOCK_TIMEOUT = 10
 
 
-def is_target_reset_ready(status: str | None, last_action: str | None) -> bool:
-	"""Allow the reviewed Dry Run and only a retry of that same reset action."""
-	return status == "Dry Run Complete" or (
-		status == "Failed" and last_action == "Reset Target"
-	)
-
-
 @contextmanager
 def _migration_action_reservation():
 	"""Serialize the short state transition that makes an action runnable."""
@@ -115,7 +108,6 @@ class SDYRPMRPDataMigration(Document):
 			if self.status in RUNNING_STATUSES:
 				frappe.throw(_("A migration action is already running."))
 			self._reject_other_active_run()
-			self._preserve_failed_reset_checkpoint()
 
 			started_on = now_datetime()
 			self.flags.in_migration_action = True
@@ -158,77 +150,25 @@ class SDYRPMRPDataMigration(Document):
 			"writes_site_data": False,
 		}
 
-	def _preserve_failed_reset_checkpoint(self):
-		if self.status != "Failed" or self.last_action != "Reset Target":
-			return
-		try:
-			checkpoint = json.loads(self.checkpoint_json or "{}")
-		except (TypeError, ValueError):
-			return
-		if checkpoint.get("mode") != "reset" or checkpoint.get("reset_started_on"):
-			return
-		checkpoint["reset_started_on"] = str(self.last_started_on)
-		self.checkpoint_json = json.dumps(checkpoint, sort_keys=True)
-
 	@frappe.whitelist()
 	def dry_run(self):
 		return self._enqueue("dry_run", allowed_statuses={"Ready", "Dry Run Complete", "Failed"})
 
 	@frappe.whitelist()
-	def get_reset_preview(self):
-		self._check_action_access()
-		if not is_target_reset_ready(self.status, self.last_action):
-			frappe.throw(
-				_("Target reset preview requires a completed Dry Run."),
-				title=_("Dry Run Required"),
-			)
-		from essdee_yrp.migration.live import preview_target_reset
-
-		return preview_target_reset(self.name)
-
-	@frappe.whitelist()
-	def reset_target(self, confirmation: str):
-		self._check_action_access()
-		with _migration_action_reservation():
-			self._lock_and_reload()
-			if self.status in RUNNING_STATUSES:
-				frappe.throw(_("A migration action is already running."))
-			self._reject_other_active_run()
-			if not is_target_reset_ready(self.status, self.last_action):
-				frappe.throw(
-					_("Run and complete the Dry Run before resetting the target."),
-					title=_("Dry Run Required"),
-				)
-			expected = f"RESET {self.target_site}"
-			if confirmation != expected:
-				frappe.throw(
-					_("Type {0} exactly to confirm the target reset.").format(expected),
-					title=_("Reset Confirmation Mismatch"),
-				)
-
-			from essdee_yrp.migration.live import enqueue_reset_job
-
-			job = enqueue_reset_job(self.name)
-			frappe.db.set_value(
-				self.doctype,
-				self.name,
-				{
-					"status": "Queued",
-					"last_action": "Reset Target",
-					"error_log": None,
-				},
-				update_modified=False,
-			)
-			frappe.db.commit()
-		return {"status": "Queued", "job_id": getattr(job, "id", None)}
-
-	@frappe.whitelist()
 	def migrate(self):
-		return self._enqueue("migrate", allowed_statuses={"Reset Complete", "Failed"})
+		return self._enqueue("migrate", allowed_statuses={"Dry Run Complete", "Failed"})
 
 	@frappe.whitelist()
 	def verify(self):
-		return self._enqueue("verify", allowed_statuses={"Completed", "Verified", "Verified With Source Gaps"})
+		return self._enqueue(
+			"verify",
+			allowed_statuses={
+				"Completed",
+				"Verified",
+				"Verified With Source Gaps",
+				"Failed",
+			},
+		)
 
 	def _apply_analysis(self, payload):
 		kinds = payload["migration_kinds"]
@@ -295,6 +235,15 @@ class SDYRPMRPDataMigration(Document):
 				frappe.throw(
 					_("Run and complete the Dry Run before starting the write migration."),
 					title=_("Dry Run Required"),
+				)
+			if (
+				mode == "verify"
+				and self.status == "Failed"
+				and self.last_action != "Verify"
+			):
+				frappe.throw(
+					_("Only a failed Verify can be retried without another migration."),
+					title=_("Completed Migration Required"),
 				)
 
 			from essdee_yrp.migration.live import enqueue_job

@@ -40,7 +40,7 @@
    "fieldname": "item",
    "fieldtype": "Link",
    "label": "Item",
-   "options": "YRP Item"
+   "options": "Item"
   },
   {
    "fieldname": "colour",

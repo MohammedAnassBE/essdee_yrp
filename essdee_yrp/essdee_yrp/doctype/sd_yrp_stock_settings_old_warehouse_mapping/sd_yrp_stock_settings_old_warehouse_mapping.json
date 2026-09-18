@@ -23,7 +23,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Warehouse",
-   "options": "YRP Supplier",
+   "options": "Supplier",
    "reqd": 1,
    "unique": 1
   }

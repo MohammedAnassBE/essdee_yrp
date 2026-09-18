@@ -62,10 +62,65 @@ class ReviewedTransformerTest(unittest.TestCase):
 			},
 			self.plan,
 		)
-		self.assertEqual(row["delivery_warehouse"], "S-0001")
+		self.assertEqual(row["default_delivery_location"], "S-0001")
 		self.assertEqual(row["lot"], "LOT-1")
-		self.assertEqual(row["status"], "Partially Received")
+		self.assertEqual(row["status"], "To Receive")
+		self.assertEqual(row["yrp_fulfillment_status"], "Partially Received")
 		self.assertEqual(row["open_status"], "Close")
+
+	def test_purchase_order_item_builds_standard_commercial_shadow_values(self):
+		row = transform_document(
+			{
+				"doctype": "Purchase Order Item",
+				"name": "POI-1",
+				"item_variant": "LABEL-VARIANT",
+				"qty": 25,
+				"uom": "Nos",
+				"rate": 1.5,
+			},
+			self.plan,
+		)
+		self.assertEqual(row["item_name"], "LABEL-VARIANT")
+		self.assertEqual(row["stock_uom"], "Nos")
+		self.assertEqual(row["conversion_factor"], 1)
+		self.assertEqual(row["stock_qty"], 25)
+		self.assertEqual(row["amount"], 37.5)
+		self.assertEqual(row["discount_amount"], 0)
+		self.assertEqual(row["tax_amount"], 0)
+		self.assertEqual(row["total_amount"], 37.5)
+		self.assertEqual(row["base_rate"], 1.5)
+		self.assertEqual(row["base_amount"], 37.5)
+
+	def test_purchase_order_derives_complete_header_totals_from_transformed_items(self):
+		row = transform_document(
+			{
+				"doctype": "Purchase Order",
+				"name": "PO-1",
+				"status": "Closed",
+				"open_status": "Closed",
+				"items": [
+					{
+						"doctype": "Purchase Order Item",
+						"name": "POI-1",
+						"item_variant": "ITEM-1",
+						"qty": 30000,
+						"pending_qty": 30000,
+						"uom": "Nos",
+						"rate": 1.55,
+						"tax": "18",
+					}
+				],
+			},
+			self.plan,
+		)
+		self.assertEqual(row["status"], "Closed")
+		self.assertEqual(row["yrp_fulfillment_status"], "Closed")
+		self.assertEqual(row["total_qty"], 30000)
+		self.assertEqual(row["total_stock_qty"], 30000)
+		self.assertEqual(row["total"], 46500)
+		self.assertEqual(row["total_tax"], 8370)
+		self.assertEqual(row["grand_total"], 54870)
+		self.assertEqual(row["base_grand_total"], 54870)
 
 	def test_process_additional_allowance_moves_to_base_excess_field(self):
 		row = transform_document(
@@ -268,7 +323,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			},
 			self.plan,
 		)
-		self.assertEqual(purchase_order_invoice["against"], 'YRP Purchase Order')
+		self.assertEqual(purchase_order_invoice["against"], 'Purchase Order')
 
 		work_order_invoice = transform_document(
 			{
@@ -360,7 +415,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			self.plan,
 		)
 
-		self.assertEqual(row["against"], 'YRP Purchase Order')
+		self.assertEqual(row["against"], 'Purchase Order')
 		self.assertEqual(row["essdee_rate_table_source"], "migrated_v1")
 		self.assertEqual(len(row["items"]), 2)
 		self.assertEqual(len(row["essdee_items"]), 1)

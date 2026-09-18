@@ -38,7 +38,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Item Group",
-   "options": "YRP Item Group",
+   "options": "Item Group",
    "reqd": 1
   },
   {
@@ -71,9 +71,8 @@
   {
    "description": "Prefills Knitting Output Colour in the Build Cloth Programs popup when no exact saved fabric route exists.",
    "fieldname": "default_knitting_output_colour",
-   "fieldtype": "Link",
-   "label": "Default Knitting Yarn Colour",
-   "options": "YRP Item Attribute Value"
+   "fieldtype": "Data",
+   "label": "Default Knitting Yarn Colour"
   },
   {
    "fieldname": "column_break_cloth_program",
@@ -112,51 +111,46 @@
   },
   {
    "fieldname": "default_pack_in_stage",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Default Pack In Stage",
-   "options": "YRP Item Attribute Value",
    "reqd": 1
   },
   {
    "fieldname": "default_pack_out_stage",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "label": "Default Pack Out Stage",
-   "options": "YRP Item Attribute Value",
    "reqd": 1
   },
   {
    "fieldname": "default_loose_piece_stage",
-   "fieldtype": "Link",
-   "label": "Default Loose Piece Stage",
-   "options": "YRP Item Attribute Value"
+   "fieldtype": "Data",
+   "label": "Default Loose Piece Stage"
   },
   {
    "fieldname": "default_stitching_in_stage",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "label": "Default Stitching in Stage",
-   "options": "YRP Item Attribute Value",
    "reqd": 1
   },
   {
    "fieldname": "default_stitching_out_stage",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "label": "Default Stitching Out Stage",
-   "options": "YRP Item Attribute Value",
    "reqd": 1
   },
   {
    "fieldname": "default_packing_attribute",
    "fieldtype": "Link",
    "label": "Default Packing Attribute",
-   "options": "YRP Item Attribute",
+   "options": "Item Attribute",
    "reqd": 1
   },
   {
    "fieldname": "default_stitching_attribute",
    "fieldtype": "Link",
    "label": "Default Stitching Attribute",
-   "options": "YRP Item Attribute",
+   "options": "Item Attribute",
    "reqd": 1
   },
   {
@@ -190,14 +184,14 @@
    "fieldname": "default_set_item_attribute",
    "fieldtype": "Link",
    "label": "Default Set Item Attribute",
-   "options": "YRP Item Attribute",
+   "options": "Item Attribute",
    "reqd": 1
   },
   {
    "fieldname": "default_primary_attribute",
    "fieldtype": "Link",
    "label": "Default Primary Attribute",
-   "options": "YRP Item Attribute"
+   "options": "Item Attribute"
   }
  ],
  "grid_page_length": 50,

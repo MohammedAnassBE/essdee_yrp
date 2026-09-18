@@ -13,17 +13,15 @@
  "fields": [
   {
    "fieldname": "attribute_value",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Attribute Value",
-   "options": "YRP Item Attribute Value"
+   "label": "Attribute Value"
   },
   {
    "fieldname": "major_attribute_value",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Major Attribute Value",
-   "options": "YRP Item Attribute Value"
+   "label": "Major Attribute Value"
   },
   {
    "fieldname": "index",
@@ -33,10 +31,9 @@
   },
   {
    "fieldname": "set_item_attribute_value",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Set Item Attribute Value",
-   "options": "YRP Item Attribute Value"
+   "label": "Set Item Attribute Value"
   }
  ],
  "istable": 1,

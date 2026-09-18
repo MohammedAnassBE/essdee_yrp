@@ -232,9 +232,9 @@ def _variant_attribute_map(variant_names, cloth_item):
 	rows = frappe.db.sql(
 		"""
 		SELECT iv.name AS variant, iva.attribute, iva.attribute_value
-		FROM `tabYRP Item Variant` iv
-		JOIN `tabYRP Item Variant Attribute` iva ON iva.parent = iv.name
-		WHERE iv.name IN %(variants)s AND iv.item = %(item)s
+		FROM `tabItem` iv
+		JOIN `tabItem Variant Attribute` iva ON iva.parent = iv.name
+		WHERE iv.name IN %(variants)s AND COALESCE(NULLIF(iv.variant_of, ''), iv.name) = %(item)s
 			AND iva.attribute IN (%(dia)s, %(colour)s)
 		""",
 		{
@@ -288,7 +288,7 @@ def _bump_program_rows(lot, parentfield, child_doctype, cloth_item, deltas, sign
 			if child_doctype == 'SD YRP Lot Fabric Program':
 				new_row.reference_item_variant = key[1] or None
 				if key[1]:
-					ref = frappe.get_cached_doc('YRP Item Variant', key[1])
+					ref = frappe.get_cached_doc('Item', key[1])
 					new_row.colour = next((
 						a.attribute_value for a in ref.get("attributes") or []
 						if a.attribute == FABRIC_COLOUR_ATTRIBUTE
@@ -380,10 +380,10 @@ def get_produced_by_reference(lot, process_name, cloth_item, exclude_wo=None):
 			{allocation_select}
 		FROM `tabYRP Work Order Receivables` child
 		JOIN `tabYRP Work Order` wo ON child.parent = wo.name
-		JOIN `tabYRP Item Variant` iv ON child.item_variant = iv.name
+		JOIN `tabItem` iv ON child.item_variant = iv.name
 		WHERE wo.docstatus < 2 AND wo.lot = %(lot)s
 			AND wo.process_name = %(process_name)s
-			AND iv.item = %(cloth_item)s
+			AND COALESCE(NULLIF(iv.variant_of, ''), iv.name) = %(cloth_item)s
 			AND IFNULL(wo.is_rework, 0) = 0
 			{conditions}
 		""",
@@ -441,7 +441,7 @@ def _sum_by_attributes(child_table, lot, process_name, cloth_item, exclude_wo,
 	for i, attribute in enumerate(attributes):
 		alias = f"a{i}"
 		attr_joins.append(
-			f"JOIN `tabYRP Item Variant Attribute` {alias} "
+			f"JOIN `tabItem Variant Attribute` {alias} "
 			f"ON {alias}.parent = iv.name AND {alias}.attribute = %(attr{i})s"
 		)
 		attr_selects.append(f"{alias}.attribute_value AS v{i}")
@@ -476,10 +476,10 @@ def _sum_by_attributes(child_table, lot, process_name, cloth_item, exclude_wo,
 			{reference_select}, {allocation_select}
 		FROM `{child_table}` child
 		JOIN `tabYRP Work Order` wo ON child.parent = wo.name
-		JOIN `tabYRP Item Variant` iv ON child.item_variant = iv.name
+		JOIN `tabItem` iv ON child.item_variant = iv.name
 		{" ".join(attr_joins)}
 		WHERE wo.docstatus < 2 AND wo.lot = %(lot)s
-			AND wo.process_name = %(process_name)s AND iv.item = %(cloth_item)s
+			AND wo.process_name = %(process_name)s AND COALESCE(NULLIF(iv.variant_of, ''), iv.name) = %(cloth_item)s
 			{conditions}
 		""",
 		params,

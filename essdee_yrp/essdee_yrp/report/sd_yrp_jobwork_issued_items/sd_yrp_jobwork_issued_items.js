@@ -26,19 +26,19 @@ frappe.query_reports["SD YRP Jobwork Issued Items"] = {
 		{
 			"fieldname": "from_location",
 			"fieldtype": "Link",
-			"options": "YRP Supplier",
+			"options": "Supplier",
 			"label": __("From Location")
 		},
 		{
 			"fieldname": "supplier",
 			"fieldtype": "Link",
-			"options": "YRP Supplier",
+			"options": "Supplier",
 			"label": __("Supplier")
 		},
 		{
 			"fieldname": "item",
 			"fieldtype": "Link",
-			"options": "YRP Item",
+			"options": "Item",
 			"label": __("Item")
 		}
 	]

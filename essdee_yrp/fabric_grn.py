@@ -13,6 +13,7 @@ from collections import defaultdict
 import frappe
 from frappe import _
 from frappe.utils import flt
+from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 from essdee_yrp.fabric_chain import get_fabric_step
 from essdee_yrp.fabric_reference import (
@@ -167,13 +168,13 @@ def _calculate_consumed_rows(ipd, process_name, demands, identity=False):
 			"reference_item_variant": demand.get("reference_item_variant"),
 		}
 		if identity:
-			parent_item = frappe.db.get_value('YRP Item Variant', demand["item_variant"], "item")
+			parent_item = get_parent_item(demand["item_variant"])
 			rows.append(
 				{
 					**mapping,
 					"item_variant": demand["item_variant"],
 					"qty": demand["qty"],
-					"uom": frappe.db.get_value('YRP Item', parent_item, "default_unit_of_measure"),
+					"uom": frappe.db.get_value('Item', parent_item, "stock_uom"),
 				}
 			)
 		else:
@@ -209,7 +210,7 @@ def _calculate_consumed_rows(ipd, process_name, demands, identity=False):
 					"item_variant": _resolve_variant(bom_row["item"], bom_row.get("attrs") or {}),
 					"qty": bom_row["qty"],
 					"uom": bom_row.get("uom")
-					or frappe.db.get_value('YRP Item', bom_row["item"], "default_unit_of_measure"),
+					or frappe.db.get_value('Item', bom_row["item"], "stock_uom"),
 				}
 			)
 	return _aggregate_rows(rows)
@@ -666,10 +667,10 @@ def _variant_attrs(item_variant):
 	return {
 		row.attribute: row.attribute_value
 		for row in frappe.get_all(
-			'YRP Item Variant Attribute',
+			'Item Variant Attribute',
 			filters={
 				"parent": item_variant,
-				"parenttype": 'YRP Item Variant',
+				"parenttype": 'Item',
 			},
 			fields=["attribute", "attribute_value"],
 		)

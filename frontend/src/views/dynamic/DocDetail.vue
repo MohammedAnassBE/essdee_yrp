@@ -381,6 +381,17 @@
 			@built="onClothProgramsBuilt"
 		/>
 
+		<!-- Submitted Stock Entry → draft Delivery Challan with exact Stock Entry
+		     quantities mapped against the selected Work Order deliverables. -->
+		<StockEntryMakeDcModal
+			v-if="isStockEntry && doc"
+			v-model:visible="stockEntryMakeDcOpen"
+			:stock-entry="doc.name"
+			:from-location="doc.from_supplier || ''"
+			:to-location="doc.to_supplier || ''"
+			@created="onStockEntryDcCreated"
+		/>
+
 		<!-- Delivery Challan e-Waybill lifecycle + SMS modals (yrp_ewaybill_api).
 		     Each posts its own whitelisted action and reloads the view on success. -->
 		<EWaybillGenerateModal
@@ -1636,6 +1647,7 @@ import {
 const vTooltip = Tooltip
 import FabricDeliverablesModal from "./FabricDeliverablesModal.vue"
 import ClothProgramModal from "./ClothProgramModal.vue"
+import StockEntryMakeDcModal from "./StockEntryMakeDcModal.vue"
 import StockItemGridEditor from "./StockItemGridEditor.vue"
 import WorkflowActions from "./WorkflowActions.vue"
 import LotOrderEditor from "./LotOrderEditor.vue"
@@ -1749,6 +1761,7 @@ const workOrderAddressRequests = {
 }
 const isDeliveryChallan = computed(() => doctype.value === "Delivery Challan")
 const isGoodsReceivedNote = computed(() => doctype.value === "Goods Received Note")
+const isStockEntry = computed(() => doctype.value === "Stock Entry")
 const isItem = computed(() => doctype.value === "Item")
 const isLot = computed(() => doctype.value === "Lot")
 // A transferred Lot's order editors are LOCKED (Desk parity — lot.js hides the
@@ -1922,6 +1935,8 @@ const forwardActions = computed(() => {
 		out.push({ key: "wo-debit", label: "Create Debit", icon: "pi pi-wallet", handler: onCreateDebitFromWo, disabled: woGated, tooltip: woTip })
 	if (isDeliveryChallan.value && canCreate("Goods Received Note"))
 		out.push({ key: "dc-grn", label: "Create Goods Received Note", icon: "pi pi-plus-circle", handler: onCreateGrnFromDc, disabled: false, tooltip: "" })
+	if (isStockEntry.value && canCreate("Delivery Challan"))
+		out.push({ key: "ste-dc", label: "Make DC", icon: "pi pi-send", handler: onMakeDcFromStockEntry, disabled: false, tooltip: "" })
 	if (
 		isGoodsReceivedNote.value
 		&& Number(d.is_internal_unit)
@@ -1949,6 +1964,7 @@ const FORWARD_ACTION_ITEM = {
 	"wo-grn": "create_grn",
 	"wo-debit": "create_debit",
 	"dc-grn": "create_grn",
+	"ste-dc": "create_dc",
 	"grn-complete-transfer": "complete_transfer",
 }
 const visibleForwardActions = computed(() =>
@@ -5080,6 +5096,16 @@ async function onClothProgramsBuilt(res) {
 	await hydrateLotForView()
 	activeTab.value = "lot-fabric"
 	toast.success("Cloth programs built", `${res?.cloths_built ?? 0} cloth program(s).`, 6000)
+}
+
+const stockEntryMakeDcOpen = ref(false)
+function onMakeDcFromStockEntry() {
+	if (!doc.value) return
+	stockEntryMakeDcOpen.value = true
+}
+function onStockEntryDcCreated(name) {
+	toast.success("Delivery Challan created", `Draft ${name} created from ${doc.value?.name || "Stock Entry"}.`, 6000)
+	router.push(`/delivery-challan/${encodeURIComponent(name)}`)
 }
 
 async function onCreateGrnFromWo() {

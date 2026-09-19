@@ -1599,7 +1599,7 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 		):
 			self.assertTrue(is_target_reset_enabled())
 
-	def test_target_migration_prerequisites_cover_production_and_stock_settings(self):
+	def test_target_migration_prerequisites_require_only_default_received_type(self):
 		values = {
 			('SD YRP IPD Settings', "item_group"): "Products",
 			('SD YRP IPD Settings', "default_cutting_process"): "Cutting",
@@ -1614,9 +1614,7 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			('SD YRP IPD Settings', "default_stitching_attribute"): "Panel",
 			('SD YRP IPD Settings', "default_stitching_out_stage"): "Piece",
 			('SD YRP IPD Settings', "default_set_item_attribute"): "Part",
-			('YRP Stock Settings', "transit_warehouse"): "S-0165",
 			('YRP Stock Settings', "default_received_type"): "Accepted",
-			('YRP Stock Settings', "default_rejected_received_type"): "Rejected",
 		}
 		dimensions = [
 			{
@@ -1646,6 +1644,9 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			result = _validate_target_migration_prerequisites(dimensions)
 
 		self.assertEqual(result["ipd_settings"]["item_group"], "Products")
+		self.assertEqual(
+			result["stock_settings"], {"default_received_type": "Accepted"}
+		)
 		self.assertEqual(
 			[row["fieldname"] for row in result["stock_dimensions"]],
 			["lot", "received_type"],
@@ -1688,9 +1689,7 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 
 	def test_empty_target_ipd_settings_use_production_api_and_profile_defaults(self):
 		stock_values = {
-			('YRP Stock Settings', "transit_warehouse"): "S-0165",
 			('YRP Stock Settings', "default_received_type"): "Accepted",
-			('YRP Stock Settings', "default_rejected_received_type"): "Rejected",
 		}
 		dimensions = [
 			{
@@ -1833,9 +1832,7 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 		}
 		values.update(
 			{
-				('YRP Stock Settings', "transit_warehouse"): "S-0165",
 				('YRP Stock Settings', "default_received_type"): "Accepted",
-				('YRP Stock Settings', "default_rejected_received_type"): "Rejected",
 			}
 		)
 		dimensions = [
@@ -1878,7 +1875,7 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 				dimensions, plan=plan, source=source
 			)
 
-		self.assertEqual(result["stock_settings"]["transit_warehouse"], "S-0165")
+		self.assertEqual(result["stock_settings"]["default_received_type"], "Accepted")
 
 	def test_missing_link_doctype_uses_structured_failure_result(self):
 		with patch("essdee_yrp.migration.live.frappe.db.exists", return_value=False):

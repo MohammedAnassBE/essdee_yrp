@@ -209,13 +209,13 @@ IPD_MIGRATION_PREREQUISITES = {
 	"default_set_item_attribute": 'Item Attribute',
 }
 STOCK_MIGRATION_PREREQUISITES = {
-	"transit_warehouse": 'Warehouse',
 	"default_received_type": 'YRP Received Type',
-	"default_rejected_received_type": 'YRP Received Type',
 }
 TARGET_OWNED_STOCK_SETTINGS_FIELDS = frozenset(
 	{
-		*STOCK_MIGRATION_PREREQUISITES,
+		"transit_warehouse",
+		"default_received_type",
+		"default_rejected_received_type",
 		"stock_dimensions",
 	}
 )
@@ -1155,9 +1155,9 @@ def _validate_target_migration_prerequisites(
 
 	IPD Settings are source-owned historical settings.  A new target has no
 	business configuration yet, so Analyse reads the F15 Single and applies only
-	the reviewed profile defaults needed for F16-only fields.  Stock settings and
-	the dimension contract remain target-owned setup, as they define the active
-	F16 stock model.
+	the reviewed profile defaults needed for F16-only fields.  The received-type
+	default and stock-dimension contract are required to transform historical
+	rows. Other target-owned stock settings can be configured after migration.
 	"""
 
 	issues: list[str] = []

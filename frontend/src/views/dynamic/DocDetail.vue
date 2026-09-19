@@ -101,7 +101,7 @@
 				<!-- ── VIEW mode ── -->
 				<template v-if="mode === 'view' && doc">
 					<WorkflowActions
-						v-if="isWorkflow"
+						v-if="workflowChecked && isWorkflow"
 						ref="workflowRef"
 						:doc="doc"
 						:doctype="doctype"
@@ -119,7 +119,7 @@
 						@click="enterEdit"
 					/>
 					<Button
-						v-if="docstatus === 0 && isSubmittable && canSubmit(doctype)"
+						v-if="docstatus === 0 && plainLifecycleAllowed && isSubmittable && canSubmit(doctype)"
 						label="Submit"
 						icon="pi pi-arrow-right"
 						iconPos="right"
@@ -578,7 +578,8 @@
 						<InputText
 							v-if="f.input === 'text'"
 							:id="'fld-' + f.fieldname"
-							v-model="form[f.fieldname]"
+							:modelValue="formTextDisplayValue(f)"
+							@update:modelValue="form[f.fieldname] = $event"
 							:disabled="isReadOnly(f)"
 							:invalid="showInvalid(f)"
 							class="fld"
@@ -1607,7 +1608,7 @@ import { usePermissions } from "@/composables/usePermissions"
 import { useAppConfirm } from "@/composables/useConfirm"
 import { useAppToast } from "@/composables/useToast"
 import { useLinkTitles } from "@/composables/useLinkTitles"
-import { searchLink, getMeta, getDocWithOnload, callMethod, getCount, getList, errorLines, isConflictError } from "@/api/client"
+import { searchLink, searchAddressForParty, getMeta, getDocWithOnload, callMethod, getCount, getList, getActiveWorkflow, errorLines, isConflictError } from "@/api/client"
 import { getRegistryByRoute, getRegistryByDoctype, WORKFLOW_SEVERITY } from "@/config/doctypes"
 import {
 	getDetailFieldConfig,
@@ -1742,6 +1743,10 @@ const workOrderSelectionOptions = ref([])
 const workOrderItemOptions = ref([])
 const workOrderSelectionLoading = ref(false)
 let workOrderSelectionRequest = 0
+const workOrderAddressRequests = {
+	supplier: 0,
+	delivery_location: 0,
+}
 const isDeliveryChallan = computed(() => doctype.value === "Delivery Challan")
 const isGoodsReceivedNote = computed(() => doctype.value === "Goods Received Note")
 const isItem = computed(() => doctype.value === "Item")
@@ -1754,7 +1759,15 @@ const isLot = computed(() => doctype.value === "Lot")
 const isLotTransferred = computed(() => isLot.value && !!(form.is_transferred || doc.value?.is_transferred))
 const hasAttributeValuesEditor = computed(() => isItem.value)
 const isSubmittable = computed(() => registry.value?.isSubmittable || false)
-const isWorkflow = computed(() => registry.value?.isWorkflow || false)
+const activeWorkflow = ref(null)
+const workflowChecked = ref(false)
+const isWorkflow = computed(() =>
+	workflowChecked.value ? !!activeWorkflow.value : !!registry.value?.isWorkflow,
+)
+// Never expose plain Submit/Cancel while workflow detection is in flight or
+// failed. This prevents a direct docstatus action from racing/bypassing an
+// active Frappe Workflow that was not hardcoded in the frontend registry.
+const plainLifecycleAllowed = computed(() => workflowChecked.value && !isWorkflow.value)
 const workflowRef = ref(null)
 const DUPLICATE_DRAFT_STORAGE_PREFIX = "essdee_yrp:duplicate_draft:"
 
@@ -2153,7 +2166,12 @@ const showWhatsAppAction = computed(
 		actionAllowed("send_whatsapp"),
 )
 const showCancelAction = computed(
-	() => docstatus.value === 1 && isSubmittable.value && canCancel(doctype.value) && actionAllowed("cancel_doc"),
+	() =>
+		plainLifecycleAllowed.value
+		&& docstatus.value === 1
+		&& isSubmittable.value
+		&& canCancel(doctype.value)
+		&& actionAllowed("cancel_doc"),
 )
 // The inline strip / floating cluster render in VIEW mode on a loaded doc only
 // (matching the header's `mode === 'view' && doc` template gate — the movable
@@ -2960,6 +2978,26 @@ function onCalculateBom() {
 }
 
 // ── load orchestration ──
+async function loadWorkflowContract() {
+	workflowChecked.value = false
+	activeWorkflow.value = null
+	try {
+		activeWorkflow.value = await getActiveWorkflow(doctype.value)
+		workflowChecked.value = true
+	} catch (_) {
+		// A known workflow may still use its transition control during a transient
+		// contract lookup failure. Unknown doctypes remain fail-safe: no plain
+		// lifecycle action is shown until the server check succeeds.
+		if (registry.value?.isWorkflow) {
+			activeWorkflow.value = {
+				state_field: "workflow_state",
+				states: registry.value.workflowStates || [],
+			}
+			workflowChecked.value = true
+		}
+	}
+}
+
 async function loadAll() {
 	if (!doctype.value) return
 	acting.value = null
@@ -2967,7 +3005,7 @@ async function loadAll() {
 	if (isCreate.value) {
 		// Create mode: meta only, then build a blank form. No doc/linked/activity.
 		mode.value = "create"
-		await docState.loadMeta()
+		await Promise.all([docState.loadMeta(), loadWorkflowContract()])
 		await loadChildMetas()
 		buildCreateForm()
 		if (isLot.value) loadLotPoEnabled()
@@ -2987,7 +3025,7 @@ async function loadAll() {
 	// a non-empty childTables. loadMeta and loadChildMetas share one underlying
 	// getdoctype fetch (see loadChildMetas), so this is a single network round-trip.
 	const metaReady = loadChildMetas() // awaits loadMeta internally; populates childMetaCache
-	await Promise.all([metaReady, docState.load(props.id)])
+	await Promise.all([metaReady, docState.load(props.id), loadWorkflowContract()])
 	if (!docState.doc.value) return
 	loadWorkOrderClosePermission()
 	// Realtime: (re)subscribe to this doc's room for live "modified" notices.
@@ -3094,15 +3132,15 @@ function onShortcut(e) {
 		if (isFormMode.value) {
 			const allowed = mode.value === "create" ? canCreate(doctype.value) : canWrite(doctype.value)
 			if (allowed) onSave()
-		} else if (doc.value && docstatus.value === 0 && isSubmittable.value && canSubmit(doctype.value)) {
-			// Workflow doctypes (isSubmittable=false) are excluded here by design —
+		} else if (doc.value && docstatus.value === 0 && plainLifecycleAllowed.value && isSubmittable.value && canSubmit(doctype.value)) {
+			// Workflow doctypes are excluded here by design —
 			// they submit via workflow transitions, never a plain docstatus PUT.
 			onSubmit()
 		}
 	} else if (key === "d") {
 		e.preventDefault()
 		if (acting.value || isFormMode.value || !doc.value) return
-		if (docstatus.value === 1 && isSubmittable.value && canCancel(doctype.value)) {
+		if (docstatus.value === 1 && plainLifecycleAllowed.value && isSubmittable.value && canCancel(doctype.value)) {
 			onCancel() // submitted → Cancel confirmation
 		} else if (docstatus.value === 0 && canDelete(doctype.value)) {
 			onDelete() // saved draft → Delete confirmation
@@ -4320,6 +4358,86 @@ function applyWorkOrderItemSelection() {
 		: ""
 }
 
+const WORK_ORDER_ADDRESS_FIELDS = {
+	supplier: ["supplier_address", "supplier_address_details"],
+	delivery_location: ["delivery_address", "delivery_address_details"],
+}
+const WORK_ORDER_ADDRESS_DETAIL_FIELDS = new Set([
+	"supplier_address_details",
+	"delivery_address_details",
+])
+
+function plainAddressDisplay(value) {
+	if (!value) return ""
+	// Frappe's get_address_display returns HTML with <br> separators. These
+	// DocFields are read-only Small Text controls in /web, so render a decoded,
+	// comma-separated value while retaining the original HTML in `form` for the
+	// normal document payload / print-format contract.
+	const withLines = String(value).replace(/<br\s*\/?>/gi, "\n")
+	const decoder = document.createElement("textarea")
+	decoder.innerHTML = withLines.replace(/<[^>]*>/g, "")
+	return decoder.value
+		.split(/\r?\n/)
+		.map((part) => part.trim())
+		.filter(Boolean)
+		.join(", ")
+}
+
+function formTextDisplayValue(field) {
+	const value = form[field.fieldname]
+	if (
+		isWorkOrder.value
+		&& WORK_ORDER_ADDRESS_DETAIL_FIELDS.has(field.fieldname)
+	) return plainAddressDisplay(value)
+	return value
+}
+
+async function loadWorkOrderAddressDisplay(addressField, detailsField) {
+	const address = form[addressField]
+	if (!address) {
+		form[detailsField] = ""
+		return
+	}
+	try {
+		const display = await callMethod(
+			"frappe.contacts.doctype.address.address.get_address_display",
+			{ address_dict: address },
+		)
+		// Ignore an older response if the user picked a different address while
+		// the display request was in flight.
+		if (form[addressField] === address) form[detailsField] = display || ""
+	} catch (_) {
+		if (form[addressField] === address) form[detailsField] = ""
+	}
+}
+
+async function autoSelectOnlyWorkOrderAddress(partyField) {
+	const [addressField, detailsField] = WORK_ORDER_ADDRESS_FIELDS[partyField]
+	const party = form[partyField]
+	const request = ++workOrderAddressRequests[partyField]
+	form[addressField] = ""
+	form[detailsField] = ""
+	if (!party) return
+
+	try {
+		const addresses = await searchAddressForParty("Supplier", party, "")
+		if (
+			request !== workOrderAddressRequests[partyField]
+			|| form[partyField] !== party
+		) return
+		// Address type is deliberately irrelevant here: when the Supplier has
+		// exactly one enabled linked address, use it whether it is Billing,
+		// Shipping, Office, or another valid Address type. With multiple addresses
+		// the filtered picker remains explicit, avoiding an arbitrary choice.
+		if (addresses.length === 1) {
+			form[addressField] = addresses[0].name
+			await loadWorkOrderAddressDisplay(addressField, detailsField)
+		}
+	} catch (_) {
+		// Non-blocking: the party-specific address picker remains available.
+	}
+}
+
 async function loadWorkOrderSelection({ preserveItem = false } = {}) {
 	const request = ++workOrderSelectionRequest
 	workOrderSelectionOptions.value = []
@@ -4386,8 +4504,15 @@ async function onFieldChanged(fieldname) {
 	// previous party (the address autocomplete is filtered by party — keeping a
 	// stale value would let the user submit an address that doesn't belong).
 	if (doctype.value === "Work Order") {
-		if (fieldname === "supplier") form.supplier_address = ""
-		if (fieldname === "delivery_location") form.delivery_address = ""
+		if (fieldname === "supplier" || fieldname === "delivery_location") {
+			await autoSelectOnlyWorkOrderAddress(fieldname)
+		}
+		if (fieldname === "supplier_address") {
+			await loadWorkOrderAddressDisplay("supplier_address", "supplier_address_details")
+		}
+		if (fieldname === "delivery_address") {
+			await loadWorkOrderAddressDisplay("delivery_address", "delivery_address_details")
+		}
 		if (fieldname === "process_name") {
 			if (!form.process_name) form.lot = ""
 			await loadWorkOrderSelection()
@@ -4401,6 +4526,12 @@ async function onFieldChanged(fieldname) {
 			applyWorkOrderItemSelection()
 			return
 		}
+	}
+	if (doctype.value === "Stock Entry") {
+		// A warehouse selected for the previous location must never survive a
+		// location change; its next picker open is filtered by stock-entry.js.
+		if (fieldname === "from_supplier") form.from_warehouse = ""
+		if (fieldname === "to_supplier") form.to_warehouse = ""
 	}
 	if (doctype.value === "Goods Received Note" && fieldname === "against") {
 		resetGrnSource()

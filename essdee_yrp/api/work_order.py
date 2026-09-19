@@ -998,12 +998,17 @@ def _get_work_order_selection_context(lot, process_name, check_permission=False)
 			ipd = frappe.get_cached_doc(
 				"Item Production Detail", fabric.production_detail
 			)
+			matches_process = bool(
+				get_fabric_step(ipd, process_name)
+				or get_identity_process_row(ipd, process_name)
+			)
 		except frappe.DoesNotExistError:
+			# A stale Lot/IPD link (including a Process removed from an older IPD
+			# chain) must not break the entire Work Order selector. Skip only that
+			# invalid fabric row; valid rows can still be selected and the empty-result
+			# warning tells the operator when none remain.
 			continue
-		if not (
-			get_fabric_step(ipd, process_name)
-			or get_identity_process_row(ipd, process_name)
-		):
+		if not matches_process:
 			continue
 		cloth_options.append({
 			"item": fabric.cloth_item,

@@ -504,7 +504,7 @@ export async function searchAddressForParty(partyDoctype, partyName, txt) {
     searchfield: 'name',
     start: 0,
     page_len: 20,
-    filters: { link_doctype: partyDoctype, link_name: partyName },
+    filters: { link_doctype: partyDoctype, link_name: partyName, disabled: 0 },
   })
   if (!Array.isArray(rows)) return []
   return rows.map((row) => ({ name: Array.isArray(row) ? row[0] : row.name }))
@@ -651,6 +651,15 @@ export async function duplicateDoc(doctype, name) {
 // role-filtered server-side; apply_workflow enforces role + self-approval. The
 // `doc` arg is passed as a JSON string (the methods parse_json it + load_from_db).
 // ---------------------------------------------------------------------------
+
+/**
+ * Active workflow configured for a DocType, or null when ordinary
+ * docstatus Submit/Cancel applies. This is intentionally server-authoritative:
+ * a workflow-state field can remain after its Workflow is disabled.
+ */
+export async function getActiveWorkflow(doctype) {
+  return await callMethod('essdee_yrp.api.workflow.get_active_workflow', { doctype })
+}
 
 /**
  * Allowed workflow transitions for `doc`, given the current user + workflow_state.

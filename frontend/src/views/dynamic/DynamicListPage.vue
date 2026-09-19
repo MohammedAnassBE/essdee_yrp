@@ -552,7 +552,7 @@ import { useAppToast } from "@/composables/useToast"
 import { collectBindPaths, useUiConfigStore } from "@/engine"
 import { getRegistryByRoute, WORKFLOW_SEVERITY } from "@/config/doctypes"
 import { getFieldLabel } from "@/config/fields"
-import { getMeta, getCount, callMethod, submitDoc, cancelDoc, getBulkEditFields, bulkUpdateField, errorLines } from "@/api/client"
+import { getMeta, getCount, callMethod, submitDoc, cancelDoc, getActiveWorkflow, getBulkEditFields, bulkUpdateField, errorLines } from "@/api/client"
 import ColumnCustomizerModal from "@/components/ColumnCustomizerModal.vue"
 import FilterPanel from "@/components/FilterPanel.vue"
 import LinkField from "@/components/LinkField.vue"
@@ -576,12 +576,16 @@ const toast = useAppToast()
 const registry = computed(() => getRegistryByRoute(props.docRoute))
 const doctype = computed(() => registry.value?.doctype || "")
 const isDebit = computed(() => doctype.value === "Debit")
-const isWorkflow = computed(() => registry.value?.isWorkflow || false)
+const activeWorkflow = shallowRef(null)
+const workflowChecked = ref(false)
+const isWorkflow = computed(() =>
+	workflowChecked.value ? !!activeWorkflow.value : !!registry.value?.isWorkflow,
+)
 const meta = shallowRef(null)            // parent DocType meta (docs[0]), cached per route
 const isSubmittable = computed(
-	() => !isWorkflow.value && (registry.value?.isSubmittable || Number(meta.value?.is_submittable) === 1),
+	() => workflowChecked.value && !isWorkflow.value && (registry.value?.isSubmittable || Number(meta.value?.is_submittable) === 1),
 )
-const workflowStates = computed(() => registry.value?.workflowStates || [])
+const workflowStates = computed(() => activeWorkflow.value?.states || registry.value?.workflowStates || [])
 const dateTabField = computed(() => registry.value?.dateTabs || null)
 
 // Tree view: any DocType flagged is_tree (Item Group, …) can show a hierarchical
@@ -1447,17 +1451,25 @@ async function runInitList() {
 // Runs BEFORE the row query so listColumns / fetchFields resolve first.
 async function loadMetaAndColumns(dt) {
 	meta.value = null
+	activeWorkflow.value = null
+	workflowChecked.value = false
 	statusOptions.value = []
 	tabMode.value = null
 	statusTabs.value = []
 	userColumns.value = null
 	try {
-		const [docs, uc] = await Promise.all([getMeta(dt), getUserColumns(dt)])
+		const [docs, uc, workflow] = await Promise.all([
+			getMeta(dt),
+			getUserColumns(dt),
+			getActiveWorkflow(dt),
+		])
 		// Route changed while awaiting — abandon this stale result.
 		if (dt !== doctype.value) return
 		const parent = docs?.[0] || null
 		meta.value = parent
 		userColumns.value = uc
+		activeWorkflow.value = workflow
+		workflowChecked.value = true
 		const statusField = (parent?.fields || []).find(
 			(f) => f.fieldname === "status"
 		)
@@ -1482,7 +1494,7 @@ async function loadMetaAndColumns(dt) {
 			statusOptions.value = readStatusOptions()
 		} else if (override === "docstatus") {
 			tabMode.value = "docstatus"
-		} else if (override === "workflow") {
+		} else if (override === "workflow" && isWorkflow.value) {
 			tabMode.value = "workflow"
 		} else if (isWorkflow.value) {
 			// Workflow-managed → workflow_state tabs (Draft / Approval Pending /
@@ -1507,6 +1519,13 @@ async function loadMetaAndColumns(dt) {
 		// Meta failure must not break the list — degrade to workflow/docstatus tabs
 		// (both sourced independently of meta) if applicable, else no tab strip.
 		if (dt !== doctype.value) return
+		if (registry.value?.isWorkflow) {
+			activeWorkflow.value = {
+				state_field: "workflow_state",
+				states: registry.value.workflowStates || [],
+			}
+			workflowChecked.value = true
+		}
 		tabMode.value = isWorkflow.value ? "workflow" : isSubmittable.value ? "docstatus" : null
 	}
 }

@@ -226,8 +226,8 @@ class TestEssdeeValuationContract(UnitTestCase):
 
 	def test_grn_child_lineage_is_complete_but_historical_links_are_optional(self):
 		path = Path(__file__).parent / (
-			"essdee_yrp/doctype/sd_yrp_yrp_grn_deliverable/"
-			"sd_yrp_yrp_grn_deliverable.json"
+			"essdee_yrp/doctype/sd_yrp_grn_deliverable/"
+			"sd_yrp_grn_deliverable.json"
 		)
 		fields = {
 			row["fieldname"]: row

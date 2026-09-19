@@ -258,7 +258,7 @@ def _build_packing_grn_items(
 ):
 	stage = ipd_doc.pack_out_stage
 	default_received_type = frappe.db.get_single_value(
-		'YRP YRP Stock Settings', "default_received_type"
+		'YRP Stock Settings', "default_received_type"
 	)
 	items = []
 	for row_index, (size, quantity) in enumerate(size_quantities.items()):
@@ -596,7 +596,7 @@ def convert_to_loose_piece_items(data, work_order, lot, item_name, from_location
 			"delivery_location": from_location,
 			"vehicle_no": "NA",
 			"received_type": frappe.db.get_single_value(
-				'YRP YRP Stock Settings', "default_received_type"
+				'YRP Stock Settings', "default_received_type"
 			),
 		},
 	)
@@ -683,7 +683,7 @@ def create_stock_entry(
 			)
 
 	default_received_type = frappe.db.get_single_value(
-		'YRP YRP Stock Settings', "default_received_type"
+		'YRP Stock Settings', "default_received_type"
 	)
 	stock_entry = frappe.new_doc('YRP Stock Entry')
 	stock_entry.update(
@@ -761,7 +761,7 @@ def create_material_receipt(data, item_name, lot, ipd, doc_name, location):
 	if not items:
 		frappe.throw("Select at least one ironing excess quantity")
 	default_received_type = frappe.db.get_single_value(
-		'YRP YRP Stock Settings', "default_received_type"
+		'YRP Stock Settings', "default_received_type"
 	)
 	stock_entry = frappe.new_doc('YRP Stock Entry')
 	stock_entry.update(

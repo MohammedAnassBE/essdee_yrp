@@ -31,7 +31,7 @@ def get_grn_calculation_context(goods_received_note):
 	context.update(
 		{
 			"default_received_type": frappe.db.get_single_value(
-				'YRP YRP Stock Settings', "default_received_type"
+				'YRP Stock Settings', "default_received_type"
 			),
 			"modified": cstr(grn.modified),
 		}

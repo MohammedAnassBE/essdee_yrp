@@ -527,7 +527,7 @@ def _apply_consumption(grn, cancel=False):
 			dimensions["lot"] = row.get("lot") or wo.get("lot")
 		if "received_type" in dimensions and not dimensions.get("received_type"):
 			dimensions["received_type"] = row.get("received_type") or frappe.db.get_single_value(
-				'YRP YRP Stock Settings', "default_received_type"
+				'YRP Stock Settings', "default_received_type"
 			)
 
 		valuation_rate = flt(row.valuation_rate)

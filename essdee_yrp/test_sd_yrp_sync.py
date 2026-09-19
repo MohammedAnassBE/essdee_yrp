@@ -246,7 +246,7 @@ class TestSDYRPSyncSetup(IntegrationTestCase):
 
 	def test_essdee_production_order_settings_are_self_healing_and_idempotent(self):
 		settings = frappe.get_doc({
-			"doctype": 'YRP YRP Settings',
+			"doctype": 'YRP Settings',
 			"production_order_attributes": [
 				{"attribute": "Colour", "is_grid_attribute": 0},
 			],

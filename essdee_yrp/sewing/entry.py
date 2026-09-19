@@ -199,7 +199,7 @@ def get_data_entry_data(supplier: str, lot: str | None = None) -> dict:
 		"input_types": [row.input_type for row in input_configuration],
 		"inspection_type": "pre_final",
 		"default_received_type": frappe.db.get_single_value(
-			'YRP YRP Stock Settings', "default_received_type"
+			'YRP Stock Settings', "default_received_type"
 		),
 	}
 
@@ -523,6 +523,6 @@ def _empty_data_entry_response(input_configuration=None) -> dict:
 		"input_types": [row.input_type for row in input_configuration],
 		"inspection_type": "pre_final",
 		"default_received_type": frappe.db.get_single_value(
-			'YRP YRP Stock Settings', "default_received_type"
+			'YRP Stock Settings', "default_received_type"
 		),
 	}

@@ -196,7 +196,7 @@ class SourceContractFieldTest(unittest.TestCase):
 				"original_process_rows",
 				"stiching_attribute_quantity",
 			},
-			"YRP YRP Stock Settings": {
+			"YRP Stock Settings": {
 				"location_mapping",
 				"sms_old_database_host",
 				"sms_old_database_name",

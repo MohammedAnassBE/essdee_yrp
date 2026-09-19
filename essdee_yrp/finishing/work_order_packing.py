@@ -79,7 +79,7 @@ def build_packing_work_order_rows(lot, process_name):
 	if not principal:
 		frappe.throw(_("Lot {0} has no quantity to pack").format(lot.name))
 	default_received_type = frappe.db.get_single_value(
-		'YRP YRP Stock Settings', "default_received_type"
+		'YRP Stock Settings', "default_received_type"
 	)
 	deliverables = []
 	calculated_items = []

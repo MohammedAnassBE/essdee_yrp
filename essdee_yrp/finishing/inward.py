@@ -69,7 +69,7 @@ def get_finishing_plan_inward_details(key, lot):
 		return {}
 	frappe.cache().delete_value(cache_key)
 
-	settings = frappe.get_cached_doc('YRP YRP Stock Settings')
+	settings = frappe.get_cached_doc('YRP Stock Settings')
 	rejected_type = settings.default_rejected_received_type
 	default_type = settings.default_received_type
 	process = frappe.db.get_single_value('SD YRP MRP Settings', "finishing_inward_process")

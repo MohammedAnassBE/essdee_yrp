@@ -75,14 +75,22 @@ class MigrationPlannerTest(unittest.TestCase):
 
 	def test_known_renames_appear_in_doctype_details(self):
 		details = {row["source_doctype"]: row for row in self.payload["doctype_details"]}
+		self.assertEqual(details["SMS Settings"]["target_doctype"], "SMS Settings")
+		self.assertEqual(details["Department User"]["target_doctype"], "YRP Department User")
 		self.assertEqual(details["GRN Item Type"]["target_doctype"], 'YRP Received Type')
-		self.assertEqual(details["GRN Deliverable"]["target_doctype"], 'SD YRP YRP GRN Deliverable')
+		self.assertEqual(details["GRN Deliverable"]["target_doctype"], 'SD YRP GRN Deliverable')
+		self.assertEqual(details["Lot Transfer Item"]["target_doctype"], 'SD YRP Lot Transfer Item')
+		self.assertEqual(details["Stock Settings"]["target_doctype"], 'YRP Stock Settings')
 		self.assertEqual(details["Purchase Order Lot"]["target_doctype"], 'SD YRP Lot MultiSelect')
 		self.assertEqual(
 			details["GRN Item Type"]["field_map"],
 			{"grn_type": "received_type_name"},
 		)
 		self.assertEqual(details["Vendor Bill Tracking"]["target_doctype"], 'YRP Bill Tracking')
+
+	def test_migration_targets_never_contain_a_redundant_yrp_segment(self):
+		targets = {row["target_doctype"] for row in self.payload["doctype_details"]}
+		self.assertEqual(sorted(target for target in targets if "YRP YRP" in target), [])
 
 	def test_reviewed_mappings_resolve_every_schema_blocker(self):
 		self.assertTrue(self.plan.ready, self.plan.issues)

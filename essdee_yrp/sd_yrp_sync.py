@@ -730,7 +730,7 @@ def upsert_production_order(data, event=None):
 
 
 def validate_yrp_settings_for_production_order():
-	settings = frappe.get_cached_doc('YRP YRP Settings')
+	settings = frappe.get_cached_doc('YRP Settings')
 	has_size_grid = any(
 		row.attribute == PRODUCTION_ORDER_GRID_ATTRIBUTE and row.is_grid_attribute
 		for row in settings.production_order_attributes or []
@@ -752,11 +752,11 @@ def validate_yrp_settings_for_production_order():
 			f"value to be {PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE}."
 		)
 
-	validate_required_link('Item Attribute', settings.po_dependent_attribute, 'YRP YRP Settings')
+	validate_required_link('Item Attribute', settings.po_dependent_attribute, 'YRP Settings')
 	validate_required_attribute_value(
 		settings.po_dependent_attribute,
 		settings.po_dependent_attribute_value,
-		'YRP YRP Settings',
+		'YRP Settings',
 	)
 
 
@@ -815,7 +815,7 @@ def get_variant_attributes_json(item_variant):
 	if not item_variant:
 		return "{}"
 
-	settings = frappe.get_cached_doc('YRP YRP Settings')
+	settings = frappe.get_cached_doc('YRP Settings')
 	active_attributes = {
 		row.attribute
 		for row in settings.production_order_attributes or []

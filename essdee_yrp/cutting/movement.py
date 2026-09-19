@@ -276,7 +276,7 @@ def get_grouped_movement_rows(doc_name, target_doctype, *, allow_linked=False):
 		variant_group[key] = (panel, collapsed.get("colour"), combination)
 
 	default_received_type = frappe.db.get_single_value(
-		'YRP YRP Stock Settings', "default_received_type"
+		'YRP Stock Settings', "default_received_type"
 	)
 	rows = []
 	row_index = -1
@@ -623,7 +623,7 @@ def _as_supplier(location):
 
 
 def _movement_locations(doc):
-	transit = frappe.db.get_single_value('YRP YRP Stock Settings', "transit_warehouse")
+	transit = frappe.db.get_single_value('YRP Stock Settings', "transit_warehouse")
 	if doc.doctype == 'YRP Delivery Challan':
 		source = doc.from_location or doc.from_warehouse
 		target = transit if doc.is_internal_unit else (doc.supplier or doc.to_warehouse)

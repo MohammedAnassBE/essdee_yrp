@@ -14,9 +14,9 @@ DOCTYPE_RENAMES = {
 	"Essdee Raw Print Format": 'YRP ZPL Raw Print Format',
 	"Essdee Raw Print Format Detail": 'YRP ZPL Raw Print Format Detail',
 	"GRN Item Type": 'YRP Received Type',
-	"GRN Deliverable": 'SD YRP YRP GRN Deliverable',
+	"GRN Deliverable": 'SD YRP GRN Deliverable',
 	"Purchase Order Lot": 'SD YRP Lot MultiSelect',
-	"Stock Settings": 'YRP YRP Stock Settings',
+	"Stock Settings": 'YRP Stock Settings',
 	"Vendor Bill Tracking": 'YRP Bill Tracking',
 	"Vendor Bill Tracking Assignment Detail": 'YRP Bill Tracking Assignment Detail',
 	"Bin": "YRP Bin",
@@ -99,7 +99,7 @@ RULES = {
 		post_transformer="derive_goods_received_note_fields",
 	),
 	"GRN Deliverable": DocTypeRule(
-		target='SD YRP YRP GRN Deliverable',
+		target='SD YRP GRN Deliverable',
 		post_transformer="derive_grn_deliverable_dimensions",
 	),
 	"GRN Item Type": DocTypeRule(
@@ -237,7 +237,7 @@ RULES = {
 		value_transformers={"warehouse": "supplier_to_warehouse"},
 	),
 	"Stock Settings": DocTypeRule(
-		target='YRP YRP Stock Settings',
+		target='YRP Stock Settings',
 		field_map={"default_rejected_type": "default_rejected_received_type"},
 		value_transformers={"transit_warehouse": "supplier_to_warehouse"},
 	),

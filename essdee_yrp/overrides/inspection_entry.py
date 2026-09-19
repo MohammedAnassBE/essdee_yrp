@@ -37,7 +37,7 @@ def get_initial_payload(against, against_id):
 		)
 
 	transit_warehouse = frappe.db.get_single_value(
-		'YRP YRP Stock Settings', "transit_warehouse"
+		'YRP Stock Settings', "transit_warehouse"
 	)
 	if not transit_warehouse:
 		frappe.throw(

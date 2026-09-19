@@ -1801,7 +1801,7 @@ def revert_labels(doc_name):
 def update_cloth_stock(cls_doc, multiplier1, multiplier2):
 	work_order = frappe.get_value('SD YRP Cutting Plan', cls_doc.cutting_plan, "work_order")
 	sl_entries = []
-	received_type = frappe.db.get_single_value('YRP YRP Stock Settings', "default_received_type")
+	received_type = frappe.db.get_single_value('YRP Stock Settings', "default_received_type")
 	ipd, supplier = frappe.get_value('YRP Work Order', work_order, ["production_detail", "supplier"])
 	warehouse = _get_warehouse_for_supplier(supplier)
 	ipd_doc = frappe.get_doc('YRP Item Production Detail', ipd)
@@ -1929,7 +1929,7 @@ def _cutting_grn_output_rows(cls_doc, work_order, item_name, production_detail):
 			outputs[key]["quantity"] += flt(row.quantity) * flt(panel_qty.get(part) or 1)
 
 	default_received_type = frappe.db.get_single_value(
-		'YRP YRP Stock Settings', "default_received_type"
+		'YRP Stock Settings', "default_received_type"
 	)
 	pending_rows = []
 	from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (

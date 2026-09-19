@@ -89,10 +89,10 @@ class TestNamespaceContract(unittest.TestCase):
 		):
 			records = list(prefix_owned_doctypes_and_reports._metadata_renames())
 
-		self.assertEqual(len(records), 221)
+		self.assertEqual(len(records), 219)
 		self.assertEqual(
 			len({(record_type, new_name) for record_type, _old_name, new_name in records}),
-			221,
+			219,
 		)
 
 	def test_framework_owned_old_name_is_never_renamed(self):
@@ -148,7 +148,12 @@ class TestNamespaceContract(unittest.TestCase):
 					self.assertEqual(path.parent.name, slug)
 					self.assertEqual(path.name, f"{slug}.json")
 
-		self.assertEqual(counts, {"DocType": 195, "Report": 26})
+		self.assertEqual(counts, {"DocType": 193, "Report": 26})
+
+	def test_redundant_yrp_segment_is_removed_from_every_owned_doctype(self):
+		doctypes = {name for _path, _data, name in _owned_metadata("DocType")}
+		redundant = sorted(name for name in doctypes if name.startswith("SD YRP YRP "))
+		self.assertEqual(redundant, [])
 
 	def test_owned_link_and_table_targets_never_use_an_old_name(self):
 		doctypes = list(_owned_metadata("DocType"))

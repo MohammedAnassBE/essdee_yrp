@@ -231,7 +231,7 @@ def ensure_required_stock_dimensions():
 			f"are missing: {', '.join(missing_doctypes)}"
 		)
 
-	settings = frappe.get_single('YRP YRP Stock Settings')
+	settings = frappe.get_single('YRP Stock Settings')
 	rows_by_fieldname = {
 		row.fieldname: row for row in (settings.stock_dimensions or [])
 	}
@@ -263,7 +263,7 @@ def ensure_yrp_valuation_contract():
 			"paired_stock_ledger_entry",
 			"valuation_adjustment_value",
 		),
-		'SD YRP YRP GRN Deliverable': (
+		'SD YRP GRN Deliverable': (
 			"goods_received_note_item",
 			"received_item_variant",
 			"material_value",
@@ -442,7 +442,7 @@ def ensure_yrp_production_order_settings():
 	):
 		return False
 
-	settings = frappe.get_doc('YRP YRP Settings')
+	settings = frappe.get_doc('YRP Settings')
 	changed = False
 	grid_row = None
 	for row in settings.production_order_attributes or []:

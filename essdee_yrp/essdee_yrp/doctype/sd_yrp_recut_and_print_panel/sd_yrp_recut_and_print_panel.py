@@ -89,7 +89,7 @@ class SDYRPRecutandPrintPanel(Document):
 		packing_attribute, cloth_templates = self._cloth_templates()
 		warehouse = self._warehouse()
 		default_received_type = frappe.db.get_single_value(
-			'YRP YRP Stock Settings', "default_received_type"
+			'YRP Stock Settings', "default_received_type"
 		)
 		for row in self.get("recut_and_print_panel_details") or []:
 			template = cloth_templates.get(row.cloth_type)

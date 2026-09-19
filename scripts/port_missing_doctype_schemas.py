@@ -23,7 +23,7 @@ LINK_OPTION_RENAMES = {
 	"Essdee Raw Print Format Detail": 'YRP ZPL Raw Print Format Detail',
 	"Essdee Debit": 'YRP Debit',
 	"GRN Item Type": 'YRP Received Type',
-	"Stock Settings": 'YRP YRP Stock Settings',
+	"Stock Settings": 'YRP Stock Settings',
 	"Vendor Bill Tracking": 'YRP Bill Tracking',
 	"Vendor Bill Tracking Assignment Detail": 'YRP Bill Tracking Assignment Detail',
 }

@@ -132,6 +132,12 @@ TARGET_PREFIXES_BY_MODULE = {
 	"Essdee YRP": "SD YRP ",
 }
 
+# These source schemas come from Frappe itself. Their unprefixed identities
+# must win over a mechanically de-prefixed custom target with the same suffix.
+SOURCE_IDENTITY_DOCTYPES = {
+	"SMS Settings",
+}
+
 # These fields are installed by India Compliance, which is a required app on
 # the combined target site. Its definitions are Python constants rather than
 # fixture JSON, so the repository-only planner overlays the same field contract
@@ -363,6 +369,7 @@ def _expanded_doctype_map(
 		if prefix and target_name.startswith(prefix):
 			doctype_map[target_name.removeprefix(prefix)] = target_name
 	doctype_map.update(DOCTYPE_RENAMES)
+	doctype_map.update({doctype: doctype for doctype in SOURCE_IDENTITY_DOCTYPES})
 	return doctype_map
 
 

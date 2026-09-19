@@ -487,7 +487,7 @@ def _key(item_variant, set_combination):
 
 
 def _received_type_defaults():
-	settings = frappe.get_cached_doc('YRP YRP Stock Settings')
+	settings = frappe.get_cached_doc('YRP Stock Settings')
 	return settings.default_received_type, settings.default_rejected_received_type
 
 

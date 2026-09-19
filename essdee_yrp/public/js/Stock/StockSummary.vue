@@ -61,7 +61,8 @@ const control_doc = {};
 
 const all_selected = computed(() => rows.value.length && selected.value.length === rows.value.length);
 
-onMounted(() => {
+onMounted(async () => {
+	await frappe.model.with_doctype("SD YRP Lot MultiSelect");
 	make_control("lot", ".lot-control", {
 		fieldtype: "Table MultiSelect", label: "Lot", options: "SD YRP Lot MultiSelect",
 	});

@@ -196,7 +196,7 @@ def get_goods_received_note_defaults(
 
 	defaults = get_work_order_defaults(doc.name, delivery_challan)
 	default_received_type = frappe.db.get_single_value(
-		'YRP YRP Stock Settings', "default_received_type"
+		'YRP Stock Settings', "default_received_type"
 	)
 	if not default_received_type:
 		default_received_type = frappe.db.get_value(

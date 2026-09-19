@@ -97,6 +97,7 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			"name": "Administrator",
 			"email": "admin@example.com",
 			"last_active": "2026-09-16 10:11:38.555874",
+			"last_known_versions": '{"frappe": "14"}',
 		}
 		plan = SimpleNamespace(
 			target_schemas={
@@ -104,6 +105,7 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 					"fields": [
 						{"fieldname": "email", "fieldtype": "Data"},
 						{"fieldname": "last_active", "fieldtype": "Datetime"},
+						{"fieldname": "last_known_versions", "fieldtype": "Text"},
 					]
 				}
 			}
@@ -126,6 +128,17 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			_classify_target_only_identities("YRP Stock Ledger Entry", 2),
 			(0, 2),
 		)
+		for doctype in (
+			"Item",
+			"Supplier",
+			'YRP Additional Parameter',
+			'YRP Item Item Category',
+		):
+			with self.subTest(doctype=doctype):
+				self.assertEqual(
+					_classify_target_only_identities(doctype, 2),
+					(2, 0),
+				)
 
 	def test_self_named_attribute_less_variant_does_not_erase_template_structure(self):
 		document = {
@@ -165,8 +178,8 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 
 	def test_target_owned_stock_settings_are_omitted_from_source_write(self):
 		document = {
-			"doctype": 'YRP YRP Stock Settings',
-			"name": 'YRP YRP Stock Settings',
+			"doctype": 'YRP Stock Settings',
+			"name": 'YRP Stock Settings',
 			"transit_warehouse": "S-0165",
 			"default_received_type": "Accepted",
 			"default_rejected_received_type": "Rejected",
@@ -796,6 +809,36 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			return_value="Purchase Accessories",
 		):
 			prepared = _prepare_purchase_invoice_migration_documents([document])
+
+		self.assertEqual(
+			prepared[0]["essdee_items"][0]["item_group"],
+			"Purchase Accessories",
+		)
+
+	def test_purchase_invoice_prewrite_uses_direct_item_group_for_grouped_projection(self):
+		document = {
+			"doctype": 'YRP Purchase Invoice',
+			"name": "MPI-PO-1",
+			"against": 'YRP Purchase Order',
+			"items": [
+				{
+					"doctype": 'YRP Purchase Invoice Item',
+					"item": "MATERIAL-ITEM",
+					"item_group": "Purchase Accessories",
+					"essdee_group_key": "group-1",
+				}
+			],
+			"essdee_items": [
+				{
+					"doctype": 'SD YRP Essdee Purchase Invoice Item',
+					"item": "MATERIAL-ITEM",
+					"item_group": "M_Purchase Accessories",
+					"group_key": "group-1",
+				}
+			],
+		}
+
+		prepared = _prepare_purchase_invoice_migration_documents([document])
 
 		self.assertEqual(
 			prepared[0]["essdee_items"][0]["item_group"],
@@ -1571,9 +1614,9 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			('SD YRP IPD Settings', "default_stitching_attribute"): "Panel",
 			('SD YRP IPD Settings', "default_stitching_out_stage"): "Piece",
 			('SD YRP IPD Settings', "default_set_item_attribute"): "Part",
-			('YRP YRP Stock Settings', "transit_warehouse"): "S-0165",
-			('YRP YRP Stock Settings', "default_received_type"): "Accepted",
-			('YRP YRP Stock Settings', "default_rejected_received_type"): "Rejected",
+			('YRP Stock Settings', "transit_warehouse"): "S-0165",
+			('YRP Stock Settings', "default_received_type"): "Accepted",
+			('YRP Stock Settings', "default_rejected_received_type"): "Rejected",
 		}
 		dimensions = [
 			{
@@ -1645,9 +1688,9 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 
 	def test_empty_target_ipd_settings_use_production_api_and_profile_defaults(self):
 		stock_values = {
-			('YRP YRP Stock Settings', "transit_warehouse"): "S-0165",
-			('YRP YRP Stock Settings', "default_received_type"): "Accepted",
-			('YRP YRP Stock Settings', "default_rejected_received_type"): "Rejected",
+			('YRP Stock Settings', "transit_warehouse"): "S-0165",
+			('YRP Stock Settings', "default_received_type"): "Accepted",
+			('YRP Stock Settings', "default_rejected_received_type"): "Rejected",
 		}
 		dimensions = [
 			{
@@ -1790,9 +1833,9 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 		}
 		values.update(
 			{
-				('YRP YRP Stock Settings', "transit_warehouse"): "S-0165",
-				('YRP YRP Stock Settings', "default_received_type"): "Accepted",
-				('YRP YRP Stock Settings', "default_rejected_received_type"): "Rejected",
+				('YRP Stock Settings', "transit_warehouse"): "S-0165",
+				('YRP Stock Settings', "default_received_type"): "Accepted",
+				('YRP Stock Settings', "default_rejected_received_type"): "Rejected",
 			}
 		)
 		dimensions = [

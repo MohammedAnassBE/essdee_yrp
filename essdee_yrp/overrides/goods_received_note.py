@@ -534,7 +534,7 @@ def get_work_order_defaults(work_order, delivery_challan=None):
 
 
 def _default_received_type():
-	return frappe.db.get_single_value('YRP YRP Stock Settings', "default_received_type")
+	return frappe.db.get_single_value('YRP Stock Settings', "default_received_type")
 
 
 def _only_default_received_type(rows):
@@ -862,7 +862,7 @@ def _return_stock_ledger_entries(grn, *, cancel=False):
 	if not grn.from_warehouse or not grn.to_warehouse:
 		frappe.throw(_("From Warehouse and To Warehouse are required for a return GRN."))
 	default_received_type = frappe.db.get_single_value(
-		'YRP YRP Stock Settings', "default_received_type"
+		'YRP Stock Settings', "default_received_type"
 	)
 	dimension_fields = get_dimension_fieldnames()
 	entries = []

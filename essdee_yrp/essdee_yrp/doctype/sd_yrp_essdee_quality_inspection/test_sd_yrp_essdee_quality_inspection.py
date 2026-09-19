@@ -117,7 +117,7 @@ class TestEssdeeQualityInspection(IntegrationTestCase):
 			self.skipTest("Inspection debit parity runs after source data migration")
 		inspection_name = inspection_names[0]
 		inspection = frappe.get_doc('SD YRP Essdee Quality Inspection', inspection_name)
-		frappe.db.set_single_value('YRP YRP Settings', "debit_request_role", "System Manager")
+		frappe.db.set_single_value('YRP Settings', "debit_request_role", "System Manager")
 
 		result = create_inspection_debit(
 			quality_inspection=inspection.name,

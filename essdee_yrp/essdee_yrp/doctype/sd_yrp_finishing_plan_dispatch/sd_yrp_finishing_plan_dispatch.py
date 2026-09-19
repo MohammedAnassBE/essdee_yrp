@@ -528,7 +528,7 @@ def create_stock_dispatch(
 		)
 
 	default_received_type = frappe.db.get_single_value(
-		'YRP YRP Stock Settings', "default_received_type"
+		'YRP Stock Settings', "default_received_type"
 	)
 	stock_entry = frappe.new_doc('YRP Stock Entry')
 	stock_entry.update(

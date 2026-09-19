@@ -278,7 +278,7 @@ def get_scr_data(supplier, lot):
 		add(row, "Final Inspection", row.final_inspection)
 	for row in delivered_rows:
 		add(row, "Delivered Qty", row.delivered_quantity)
-	default_received_type = frappe.db.get_single_value('YRP YRP Stock Settings', "default_received_type")
+	default_received_type = frappe.db.get_single_value('YRP Stock Settings', "default_received_type")
 	for row in detail_rows:
 		entry = entry_map[row.parent]
 		header = entry.input_type

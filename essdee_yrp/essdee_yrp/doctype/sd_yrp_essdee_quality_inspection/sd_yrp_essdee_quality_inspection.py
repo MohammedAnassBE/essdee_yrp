@@ -177,7 +177,7 @@ def create_inspection_debit(
 	if inspection.docstatus != 1:
 		frappe.throw(_("Submit the Quality Inspection before creating a Debit."))
 
-	request_role = frappe.db.get_single_value('YRP YRP Settings', "debit_request_role")
+	request_role = frappe.db.get_single_value('YRP Settings', "debit_request_role")
 	if not request_role or request_role not in frappe.get_roles(frappe.session.user):
 		frappe.throw(_("You do not have permission to request a Debit."))
 

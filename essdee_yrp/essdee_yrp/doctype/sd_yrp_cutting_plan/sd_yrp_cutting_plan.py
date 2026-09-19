@@ -1075,7 +1075,7 @@ def create_balance_lot_transfer(cutting_plan, to_lot):
 			)
 		)
 	received_type = frappe.db.get_single_value(
-		'YRP YRP Stock Settings', "default_received_type"
+		'YRP Stock Settings', "default_received_type"
 	)
 	if not received_type:
 		frappe.throw(_("Configure the default Received Type in YRP Stock Settings."))

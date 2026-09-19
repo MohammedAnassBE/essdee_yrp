@@ -242,7 +242,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			},
 			self.plan,
 		)
-		self.assertEqual(row["doctype"], 'SD YRP YRP GRN Deliverable')
+		self.assertEqual(row["doctype"], 'SD YRP GRN Deliverable')
 		self.assertNotIn("goods_received_note_item", row)
 		self.assertNotIn("received_item_variant", row)
 		self.assertNotIn("consumption_sle", row)
@@ -278,7 +278,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			},
 			self.plan,
 		)
-		self.assertEqual(row["name"], 'YRP YRP Stock Settings')
+		self.assertEqual(row["name"], 'YRP Stock Settings')
 		self.assertEqual(row["transit_warehouse"], "S-0165")
 		self.assertEqual(row["sms_old_database_password"], "********")
 		self.assertEqual(row["__migration_passwords"], {"sms_old_database_password": "test-only"})

@@ -294,7 +294,7 @@ def _get_excess_output_allocations(work_order, deliverable, dimensions):
 		       d.goods_received_note_item AS output_detail,
 		       d.received_item_variant AS output_item,
 		       d.output_receipt_sle, d.stock_qty, d.stock_dimensions
-		FROM `tabSD YRP YRP GRN Deliverable` d
+		FROM `tabSD YRP GRN Deliverable` d
 		INNER JOIN `tabYRP Goods Received Note` g ON g.name = d.parent
 		WHERE d.parenttype = 'YRP Goods Received Note'
 		  AND d.parentfield = 'grn_deliverables'

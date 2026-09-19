@@ -452,7 +452,7 @@ def create_lot_transfer(doc_name, detail_name):
 		"Bundles Generated", "Approval Pending"
 	):
 		frappe.throw(_("Generate bundles before creating the Lot Transfer."))
-	received_type = frappe.db.get_single_value('YRP YRP Stock Settings', "default_received_type")
+	received_type = frappe.db.get_single_value('YRP Stock Settings', "default_received_type")
 	items = build_lot_transfer_items(
 		laysheet, doc.main_lot, row.lot, doc.from_location, received_type
 	)
@@ -519,7 +519,7 @@ def create_bulk_lot_transfer(doc_name):
 	if existing_transfer:
 		return existing_transfer
 
-	received_type = frappe.db.get_single_value('YRP YRP Stock Settings', "default_received_type")
+	received_type = frappe.db.get_single_value('YRP Stock Settings', "default_received_type")
 	items = []
 	for row in doc.lot_details:
 		if not row.cutting_laysheet:
@@ -790,7 +790,7 @@ def validate_bulk_print_prerequisites(laysheet_name):
 		)
 	):
 		frappe.throw(_("The linked Lot Transfer does not match this bulk Lay Sheet."))
-	received_type = frappe.db.get_single_value('YRP YRP Stock Settings', "default_received_type")
+	received_type = frappe.db.get_single_value('YRP Stock Settings', "default_received_type")
 	expected_items = build_lot_transfer_items(
 		laysheet, bulk.main_lot, entry.lot, bulk.from_location, received_type
 	)

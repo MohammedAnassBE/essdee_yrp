@@ -218,7 +218,7 @@ def calculate_garment_work_order(work_order, rows, modified=None):
 		frappe.throw(_("The IPD calculation did not produce any receivables."))
 
 	default_received_type = frappe.db.get_single_value(
-		'YRP YRP Stock Settings', "default_received_type"
+		'YRP Stock Settings', "default_received_type"
 	)
 	if not default_received_type:
 		frappe.throw(_("Set Default Received Type in YRP Stock Settings first."))

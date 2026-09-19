@@ -55,7 +55,7 @@ def _contract_available():
 	return bool(
 		frappe.db.exists("DocType", 'YRP Stock Valuation Production Link')
 		and frappe.db.has_column('YRP Stock Ledger Entry', "paired_stock_ledger_entry")
-		and frappe.db.has_column('SD YRP YRP GRN Deliverable', "goods_received_note_item")
+		and frappe.db.has_column('SD YRP GRN Deliverable', "goods_received_note_item")
 	)
 
 
@@ -148,7 +148,7 @@ def _backfill_single_output_grns():
 
 		links = []
 		children = frappe.get_all(
-			'SD YRP YRP GRN Deliverable',
+			'SD YRP GRN Deliverable',
 			filters={
 				"parent": grn_name,
 				"parenttype": 'YRP Goods Received Note',
@@ -192,7 +192,7 @@ def _backfill_single_output_grns():
 			material_value = abs(flt(consumption.stock_value_difference))
 			stock_qty = flt(child.stock_qty) or abs(flt(consumption.qty))
 			frappe.db.set_value(
-				'SD YRP YRP GRN Deliverable',
+				'SD YRP GRN Deliverable',
 				child.name,
 				{
 					"goods_received_note_item": output.name,
@@ -371,7 +371,7 @@ def _count_submitted_grn_rows_missing(fieldname):
 	return frappe.db.sql(
 		f"""
 		SELECT COUNT(*)
-		FROM `tabSD YRP YRP GRN Deliverable` d
+		FROM `tabSD YRP GRN Deliverable` d
 		INNER JOIN `tabYRP Goods Received Note` g ON g.name = d.parent
 		WHERE d.parenttype = 'YRP Goods Received Note'
 		  AND d.parentfield = 'grn_deliverables'
@@ -392,7 +392,7 @@ def _count_submitted_grn_rows_with_condition(condition):
 	return frappe.db.sql(
 		f"""
 		SELECT COUNT(*)
-		FROM `tabSD YRP YRP GRN Deliverable` d
+		FROM `tabSD YRP GRN Deliverable` d
 		INNER JOIN `tabYRP Goods Received Note` g ON g.name = d.parent
 		WHERE d.parenttype = 'YRP Goods Received Note'
 		  AND d.parentfield = 'grn_deliverables'
@@ -409,7 +409,7 @@ def _count_ambiguous_multi_output_rows():
 	return frappe.db.sql(
 		"""
 		SELECT COUNT(*)
-		FROM `tabSD YRP YRP GRN Deliverable` d
+		FROM `tabSD YRP GRN Deliverable` d
 		INNER JOIN `tabYRP Goods Received Note` g ON g.name = d.parent
 		INNER JOIN (
 			SELECT parent, COUNT(*) AS output_count
@@ -432,7 +432,7 @@ def _count_invalid_grn_item_links():
 	return frappe.db.sql(
 		"""
 		SELECT COUNT(*)
-		FROM `tabSD YRP YRP GRN Deliverable` d
+		FROM `tabSD YRP GRN Deliverable` d
 		INNER JOIN `tabYRP Goods Received Note` g ON g.name = d.parent
 		LEFT JOIN `tabYRP Goods Received Note Item` i
 		  ON i.name = d.goods_received_note_item
@@ -459,7 +459,7 @@ def _count_invalid_sle_links(fieldname, quantity_operator):
 	return frappe.db.sql(
 		f"""
 		SELECT COUNT(*)
-		FROM `tabSD YRP YRP GRN Deliverable` d
+		FROM `tabSD YRP GRN Deliverable` d
 		INNER JOIN `tabYRP Goods Received Note` g ON g.name = d.parent
 		LEFT JOIN `tabYRP Stock Ledger Entry` s
 		  ON s.name = d.`{fieldname}`

@@ -75,7 +75,7 @@ class TestCombinedSiteNamespace(IntegrationTestCase):
 							source["ref_doctype"],
 						)
 
-		self.assertEqual(counts, {"DocType": 309, "Report": 33})
+		self.assertEqual(counts, {"DocType": 307, "Report": 33})
 
 	def test_old_custom_identities_and_orphan_tables_are_absent(self):
 		for record_type in ("DocType", "Report"):
@@ -171,8 +171,8 @@ class TestCombinedSiteNamespace(IntegrationTestCase):
 		)
 		self.assertFalse(frappe.db.exists("DocType", "Lot"))
 		self.assertTrue(frappe.db.exists("DocType", "YRP UI Layout"))
-		self.assertTrue(frappe.db.exists("DocType", "YRP YRP Settings"))
-		self.assertFalse(frappe.db.exists("DocType", "YRP Settings"))
+		self.assertTrue(frappe.db.exists("DocType", "YRP Settings"))
+		self.assertFalse(frappe.db.exists("DocType", "YRP YRP Settings"))
 
 	def test_real_crud_child_link_and_submit_cancel_lifecycle(self):
 		suffix = frappe.generate_hash(length=10)

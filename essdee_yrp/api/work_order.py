@@ -903,7 +903,7 @@ def calculate_fabric_deliverables(work_order, rows, modified=None):
 	lot = _get_lot(wo)
 	fabric_rows = {f.name: f for f in _selected_lot_fabrics(wo, lot)}
 	all_fabric_rows = {f.name for f in lot.get("lot_fabric_details") or []}
-	default_received_type = frappe.db.get_single_value('YRP YRP Stock Settings', "default_received_type")
+	default_received_type = frappe.db.get_single_value('YRP Stock Settings', "default_received_type")
 	if not default_received_type:
 		frappe.throw(_("Set Default Received Type in YRP Stock Settings first."))
 

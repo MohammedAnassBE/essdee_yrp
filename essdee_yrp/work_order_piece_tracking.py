@@ -218,7 +218,7 @@ class PieceState:
 
 	def _add_received_row(self, row, quantity, received_type, voucher):
 		received_type = received_type or frappe.db.get_single_value(
-			'YRP YRP Stock Settings', "default_received_type"
+			'YRP Stock Settings', "default_received_type"
 		)
 		row["received"] += quantity
 		if received_type:
@@ -371,7 +371,7 @@ def _apply_direct_receipt(state, grn):
 
 def _apply_packing_receipt(state, grn):
 	ipd = state.ipd
-	default_type = frappe.db.get_single_value('YRP YRP Stock Settings', "default_received_type")
+	default_type = frappe.db.get_single_value('YRP Stock Settings', "default_received_type")
 	# Packing configuration is mutable, while a submitted GRN is historical.
 	# Migrated F15 Work Orders retain the exact per-GRN projection in
 	# work_order_track_pieces.  Reuse that immutable snapshot when present so a
@@ -494,7 +494,7 @@ def _apply_packing_receipt(state, grn):
 def _snapshot_received_type(state, grn, snapshot_row):
 	"""Resolve the source GRN type for a persisted packing projection row."""
 
-	default_type = frappe.db.get_single_value('YRP YRP Stock Settings', "default_received_type")
+	default_type = frappe.db.get_single_value('YRP Stock Settings', "default_received_type")
 	positive_items = [row for row in grn.get("items") or [] if flt(row.quantity) > 0]
 	all_types = {
 		row.received_type or default_type
@@ -594,7 +594,7 @@ def _apply_panel_receipt(state, grn, panel_list):
 		if not panel or not size:
 			continue
 		received_type = row.received_type or frappe.db.get_single_value(
-			'YRP YRP Stock Settings', "default_received_type"
+			'YRP Stock Settings', "default_received_type"
 		)
 		if received_type not in received_types:
 			received_types.append(received_type)

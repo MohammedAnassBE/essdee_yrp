@@ -114,7 +114,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 
 		work_station = frappe.get_all('YRP Work Station', pluck="name", limit=1)[0]
 		received_type = frappe.db.get_single_value(
-			'YRP YRP Stock Settings', "default_received_type"
+			'YRP Stock Settings', "default_received_type"
 		)
 		original_sql = frappe.db.sql
 
@@ -179,7 +179,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 					"plan": plan.name,
 					"input_type": "Line Output",
 					"received_type": frappe.db.get_single_value(
-						'YRP YRP Stock Settings', "default_received_type"
+						'YRP Stock Settings', "default_received_type"
 					),
 					"work_station": frappe.get_all(
 						'YRP Work Station', pluck="name", limit=1
@@ -218,7 +218,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 					"plan": plan.name,
 					"input_type": "Input Qty",
 					"received_type": frappe.db.get_single_value(
-						'YRP YRP Stock Settings', "default_received_type"
+						'YRP Stock Settings', "default_received_type"
 					),
 					"work_station": frappe.get_all(
 						'YRP Work Station', pluck="name", limit=1
@@ -475,7 +475,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		self.assertIsNotNone(selected)
 		work_station = frappe.get_all('YRP Work Station', pluck="name", limit=1)[0]
 		received_type = frappe.db.get_single_value(
-			'YRP YRP Stock Settings', "default_received_type"
+			'YRP Stock Settings', "default_received_type"
 		)
 
 		previous_user = frappe.session.user

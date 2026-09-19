@@ -16,7 +16,7 @@ def get_fp_consumption_details(doc_name):
 		return {"lot": doc.lot, "processes": []}
 
 	default_received_type = frappe.db.get_single_value(
-		'YRP YRP Stock Settings', "default_received_type"
+		'YRP Stock Settings', "default_received_type"
 	)
 	rows = []
 	for row in _get_jobwork_issued_rows(doc.lot):

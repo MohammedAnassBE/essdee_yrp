@@ -25,7 +25,7 @@ class PreservationTest(unittest.TestCase):
 
 	def test_password_single_identity_is_mapped(self):
 		self.assertEqual(auth_identity(self.credential(), self.plan),
-			("YRP YRP Stock Settings", "YRP YRP Stock Settings", "sms_old_database_password"))
+			("YRP Stock Settings", "YRP Stock Settings", "sms_old_database_password"))
 
 	def test_unknown_password_field_fails_without_exposing_secret(self):
 		row = self.credential(fieldname="not_declared")
@@ -54,7 +54,7 @@ class PreservationTest(unittest.TestCase):
 			patch("essdee_yrp.migration.preservation.set_encrypted_password") as encrypt,
 		):
 			result = run_auth(self.plan, source)
-		encrypt.assert_called_once_with("YRP YRP Stock Settings", "YRP YRP Stock Settings",
+		encrypt.assert_called_once_with("YRP Stock Settings", "YRP Stock Settings",
 			"test-plaintext", fieldname="sms_old_database_password")
 		self.assertEqual(result["reencrypted"], 1)
 		self.assertNotIn("test-plaintext", repr(result))

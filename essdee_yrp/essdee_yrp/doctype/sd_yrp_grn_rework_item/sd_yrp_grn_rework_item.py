@@ -45,9 +45,9 @@ def _json(value):
 
 def _received_type_defaults():
 	return (
-		frappe.db.get_single_value('YRP YRP Stock Settings', "default_received_type"),
+		frappe.db.get_single_value('YRP Stock Settings', "default_received_type"),
 		frappe.db.get_single_value(
-			'YRP YRP Stock Settings', "default_rejected_received_type"
+			'YRP Stock Settings', "default_rejected_received_type"
 		),
 	)
 

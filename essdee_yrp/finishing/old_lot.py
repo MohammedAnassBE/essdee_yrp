@@ -110,7 +110,7 @@ def create_lot_transfer(data, item_name, ipd, lot, doc_name):
 	if destination.item != item_name or destination.lot != lot or destination.production_detail != ipd:
 		frappe.throw("Finishing Plan, Item, Lot, and Production Detail do not match")
 	ipd_doc = frappe.get_cached_doc('YRP Item Production Detail', ipd)
-	default_type = frappe.db.get_single_value('YRP YRP Stock Settings', "default_received_type")
+	default_type = frappe.db.get_single_value('YRP Stock Settings', "default_received_type")
 	uom = frappe.db.get_value('Item', item_name, "stock_uom")
 	available_rows = {
 		(row.source_lot, row.warehouse, row.item_variant): row

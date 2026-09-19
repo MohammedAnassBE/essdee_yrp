@@ -563,7 +563,7 @@ def get_t_and_a_update_data(lot, item):
 	user = frappe.session.user
 	department_data = frappe.db.sql(
 		"""
-			SELECT parent FROM `tabDepartment User` WHERE user = %(user)s
+			SELECT parent FROM `tabYRP Department User` WHERE user = %(user)s
 		""", {
 			"user": user
 		}, as_dict=True

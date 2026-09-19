@@ -260,7 +260,7 @@ def _ensure_address(title="_Test WO Calc Sup"):
 
 
 def _ensure_default_received_type():
-    if frappe.db.get_single_value('YRP YRP Stock Settings', "default_received_type"):
+    if frappe.db.get_single_value('YRP Stock Settings', "default_received_type"):
         return
     if not frappe.db.exists('YRP Received Type', "Accepted"):
         rt = frappe.new_doc('YRP Received Type')
@@ -268,7 +268,7 @@ def _ensure_default_received_type():
             if f.reqd and f.fieldtype == "Data":
                 rt.set(f.fieldname, "Accepted")
         rt.insert(ignore_permissions=True)
-    frappe.db.set_single_value('YRP YRP Stock Settings', "default_received_type", "Accepted")
+    frappe.db.set_single_value('YRP Stock Settings', "default_received_type", "Accepted")
 
 
 class TestSelectedLotFabrics(TestCase):

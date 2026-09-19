@@ -65,12 +65,33 @@ BUSINESS_SUPPORTING_MASTERS = frozenset({"Address", "Contact"})
 # site.  They cannot remain byte-for-byte equal to the frozen source snapshot
 # during a long verification run, and they are not migrated business state.
 VOLATILE_VERIFICATION_FIELDS = {
-	"User": frozenset({"last_active"}),
+	"User": frozenset({"last_active", "last_known_versions"}),
 }
-# Existing ERP Item UOM rows belong to the independently restored target.  Item
-# commonisation deliberately preserves them; source-owned identities must still
-# exist and are verified individually, but additional target rows are expected.
-PRESERVED_TARGET_CHILD_DOCTYPES = frozenset({"UOM Conversion Detail"})
+# These standard masters belong to the independently restored ERP database.
+# The MRP source is merged into them by exact identity, so source identities
+# must all exist while additional ERP-only identities are expected and retained.
+PRESERVED_TARGET_IDENTITY_DOCTYPES = frozenset(
+	{
+		"Brand",
+		"Department",
+		"Item",
+		"Item Attribute Value",
+		"Item Group",
+		"Item Variant Attribute",
+		"Supplier",
+		"UOM",
+	}
+)
+# Existing child rows on commonized ERP Items are target-owned as well.  The
+# migration replaces source-owned child identities but must not reject the
+# unrelated rows already attached to ERP-only Items.
+PRESERVED_TARGET_CHILD_DOCTYPES = frozenset(
+	{
+		"UOM Conversion Detail",
+		'YRP Additional Parameter',
+		'YRP Item Item Category',
+	}
+)
 TARGET_OWNED_APPROVED_FRAPPE_FIELDS = {
 	# The combined target's setup finalizer owns these values.  Copying the
 	# historical source values would reintroduce the setup-wizard/Desk redirect
@@ -1140,16 +1161,16 @@ def _validate_target_migration_prerequisites(
 	"""
 
 	issues: list[str] = []
-	values: dict[str, dict[str, Any]] = {'SD YRP IPD Settings': {}, 'YRP YRP Stock Settings': {}}
+	values: dict[str, dict[str, Any]] = {'SD YRP IPD Settings': {}, 'YRP Stock Settings': {}}
 	value_sources: dict[str, dict[str, str]] = {
 		'SD YRP IPD Settings': {},
-		'YRP YRP Stock Settings': {},
+		'YRP Stock Settings': {},
 	}
 	source_ipd_settings = _source_single_document(source, "IPD Settings")
 	required_defaults = required_defaults or {}
 	for doctype, fields in (
 		('SD YRP IPD Settings', IPD_MIGRATION_PREREQUISITES),
-		('YRP YRP Stock Settings', STOCK_MIGRATION_PREREQUISITES),
+		('YRP Stock Settings', STOCK_MIGRATION_PREREQUISITES),
 	):
 		for fieldname, link_doctype in fields.items():
 			target_value = frappe.db.get_single_value(doctype, fieldname)
@@ -1204,7 +1225,7 @@ def _validate_target_migration_prerequisites(
 	return {
 		"ipd_settings": values['SD YRP IPD Settings'],
 		"ipd_settings_sources": value_sources['SD YRP IPD Settings'],
-		"stock_settings": values['YRP YRP Stock Settings'],
+		"stock_settings": values['YRP Stock Settings'],
 		"stock_dimensions": [
 			{
 				key: row.get(key)
@@ -4093,8 +4114,26 @@ def _prepare_purchase_invoice_migration_documents(
 			for fieldname in PURCHASE_INVOICE_ITEM_NUMERIC_DEFAULT_FIELDS:
 				if row.get(fieldname) in (None, ""):
 					row[fieldname] = 0
+		direct_item_groups: dict[str, str] = {}
+		for row in prepared.get("items") or []:
+			group_key = str(row.get("essdee_group_key") or "")
+			item_group = str(row.get("item_group") or "")
+			if not group_key or not item_group:
+				continue
+			if group_key in direct_item_groups and direct_item_groups[group_key] != item_group:
+				raise MigrationError(
+					f"Purchase Invoice {prepared.get('name')} has conflicting Item Groups "
+					f"for commercial group {group_key}"
+				)
+			direct_item_groups[group_key] = item_group
 		for row in prepared.get("essdee_items") or []:
-			if not row.get("item_group") and row.get("item"):
+			group_key = str(row.get("group_key") or "")
+			if group_key in direct_item_groups:
+				# The F15 grouped row can retain an obsolete M_* Item Group while
+				# its physical row and commonized F16 Item use the current group.
+				# Keep the two operational projections consistent on original load.
+				row["item_group"] = direct_item_groups[group_key]
+			elif not row.get("item_group") and row.get("item"):
 				row["item_group"] = _get_item_group(row["item"])
 		prepared_documents.append(prepared)
 	return prepared_documents
@@ -5238,7 +5277,9 @@ def _classify_target_only_identities(
 	"""Split preserved ERP-owned rows from genuinely unexpected identities."""
 
 	target_only = max(0, int(target_only or 0))
-	if target_doctype in PRESERVED_TARGET_CHILD_DOCTYPES:
+	if target_doctype in (
+		PRESERVED_TARGET_IDENTITY_DOCTYPES | PRESERVED_TARGET_CHILD_DOCTYPES
+	):
 		return target_only, 0
 	return 0, target_only
 

@@ -79,9 +79,9 @@ def audit_bin_reservations(source_db, target_db):
 	result = reconcile_reservations(source_bins, target_bins, source_sres, target_sres)
 	# This source has two stock dimensions. Do not silently collapse a new
 	# populated target dimension into its old four-part grouping.
-	dimensions = query(target_db, 'SELECT fieldname FROM `tabYRP YRP Stock Dimension` '
+	dimensions = query(target_db, 'SELECT fieldname FROM `tabYRP Stock Dimension` '
 		'WHERE parent=%s AND parenttype=%s AND parentfield=%s',
-		('YRP YRP Stock Settings', 'YRP YRP Stock Settings', 'stock_dimensions'))
+		('YRP Stock Settings', 'YRP Stock Settings', 'stock_dimensions'))
 	extra_rows = 0
 	for row in dimensions:
 		if row['fieldname'] in BUCKET_FIELDS:

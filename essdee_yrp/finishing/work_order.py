@@ -130,10 +130,10 @@ def update_submitted_alternative_work_order(source_plan, work_order, rows):
 
 def _finishing_rows(work_order):
 	default_received = frappe.db.get_single_value(
-		'YRP YRP Stock Settings', "default_received_type"
+		'YRP Stock Settings', "default_received_type"
 	)
 	default_rejected = frappe.db.get_single_value(
-		'YRP YRP Stock Settings', "default_rejected_received_type"
+		'YRP Stock Settings', "default_rejected_received_type"
 	)
 	items = {}
 	for row in work_order.get("work_order_calculated_items") or []:
@@ -306,7 +306,7 @@ def _transfer_alternative_stock(work_order, rows=None, source_plan=None):
 			_("No active Warehouse found for supplier {0}").format(work_order.supplier)
 		)
 	received_type = frappe.db.get_single_value(
-		'YRP YRP Stock Settings', "default_received_type"
+		'YRP Stock Settings', "default_received_type"
 	)
 	source_items = []
 	target_items = []

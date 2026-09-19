@@ -226,7 +226,7 @@ def before_submit(doc, method=None):
 		frappe.throw(_("{0} {1} does not exist").format(doc.against, doc.against_id))
 
 	add_goods_value = frappe.db.get_single_value(
-		'YRP YRP Stock Settings', "add_finishing_plan_goods_value"
+		'YRP Stock Settings', "add_finishing_plan_goods_value"
 	)
 	if doc.purpose == "Material Issue" and not add_goods_value:
 		doc.total_amount = doc.additional_amount or 0

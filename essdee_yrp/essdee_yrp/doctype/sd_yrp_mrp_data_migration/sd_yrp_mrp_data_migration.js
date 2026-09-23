@@ -20,9 +20,7 @@ frappe.ui.form.on("SD YRP MRP Data Migration", {
 			frm.add_custom_button(
 				__("Analyse Schema"),
 				() => {
-					frm.call({
-						doc: frm.doc,
-						method: "analyse",
+					run_migration_action(frm, "analyse", {
 						freeze: true,
 						freeze_message: __("Analysing repository schemas..."),
 					}).then(() => frm.reload_doc());
@@ -49,7 +47,7 @@ frappe.ui.form.on("SD YRP MRP Data Migration", {
 			frm.add_custom_button(
 				label,
 				() =>
-					frm.call({ doc: frm.doc, method }).then(() => {
+					run_migration_action(frm, method).then(() => {
 						frappe.show_alert({ message: __("Migration job queued."), indicator: "blue" });
 						frm.reload_doc();
 				}),
@@ -58,3 +56,13 @@ frappe.ui.form.on("SD YRP MRP Data Migration", {
 		}
 	},
 });
+
+function run_migration_action(frm, method, options = {}) {
+	// Reports can exceed request-size limits. Load the saved audit on the server;
+	// its controller remains responsible for permissions, locks and state gates.
+	return frappe.call({
+		...options,
+		method: "run_doc_method",
+		args: { dt: frm.doctype, dn: frm.doc.name, method },
+	});
+}

@@ -63,6 +63,7 @@ DOCTYPE_RENAMES = {
 
 
 RULES = {
+	"SMS Settings": DocTypeRule(custom_transformer="sms_settings_with_roles"),
 	"Brand": DocTypeRule(
 		target="Brand",
 		field_map={"name1": "brand"},
@@ -217,6 +218,7 @@ RULES = {
 		},
 	),
 	"Stock Entry Detail": DocTypeRule(
+		post_transformer="derive_stock_entry_detail_reference",
 		allowed_type_changes=frozenset({("Data", "Dynamic Link")})
 	),
 	"Stock Ledger Entry": DocTypeRule(

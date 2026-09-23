@@ -82,6 +82,8 @@ TARGET_APPROVED_FRAPPE_SCHEMA_ROOTS = tuple(
 		("core", "module_profile"),
 		("desk", "note"),
 		("desk", "note_seen_by"),
+		("desk", "notification_type"),
+		("desk", "notification_type_preference"),
 		("desk", "notification_settings"),
 		("desk", "notification_subscribed_document"),
 		("printing", "print_settings"),

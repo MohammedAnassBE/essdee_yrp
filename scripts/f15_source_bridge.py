@@ -78,6 +78,7 @@ APPROVED_FRAPPE_DATA_ORDER = (
 	"Email Unsubscribe",
 	"List View Settings",
 	"Note",
+	"Notification Type",
 	"Notification Settings",
 	"Print Settings",
 	"System Settings",
@@ -91,6 +92,7 @@ APPROVED_FRAPPE_CHILD_DOCTYPES = frozenset(
 		"IMAP Folder",
 		"Note Seen By",
 		"Notification Subscribed Document",
+		"Notification Type Preference",
 		"DefaultValue",
 		"User Email",
 		"User Social Login",
@@ -2120,6 +2122,7 @@ def main():
 	subparsers.add_parser("series")
 	subparsers.add_parser("external-references")
 	subparsers.add_parser("broken-links")
+	subparsers.add_parser("broken-dynamic-links")
 	exists = subparsers.add_parser("exists")
 	exists.add_argument("--doctype", required=True)
 	exists.add_argument("--name", required=True)
@@ -2186,6 +2189,9 @@ def main():
 		)
 
 	declared_schemas = _load_schemas(source_app_root, supporting_schema_roots)
+	# Frappe 15 resolves bench logs relative to the sites working directory.
+	# Match the CLI context, including under Pilot, before opening the database.
+	os.chdir(source_bench / "sites")
 	frappe.init(site=args.source_site, sites_path=str(source_bench / "sites"))
 	frappe.connect()
 	try:
@@ -2205,6 +2211,7 @@ def main():
 			"auth-rows",
 			"exists",
 			"broken-links",
+			"broken-dynamic-links",
 			"external-references",
 			"related-business-masters",
 			"approved-frappe-data",
@@ -2269,6 +2276,10 @@ def main():
 			census = helper['census'](frappe, scope)
 			census.update(approved_frappe_exact_archive_census(frappe)["tables"])
 			_write(census)
+		elif args.command == "broken-dynamic-links":
+			helper = runpy.run_path(str(Path(__file__).resolve().parents[1] / "essdee_yrp/migration/dynamic_links.py"))
+			for row in helper["iter_broken_dynamic_links"](frappe, schemas):
+				_write(row)
 		elif args.command == "broken-links":
 			emit_broken_links(frappe, schemas)
 		elif args.command == "exists":

@@ -1655,6 +1655,8 @@ def _build_work_order_context(
 	demand_by_receivable = {}
 	receivables_by_name = {}
 	for receivable in work_order.get("receivables") or []:
+		if allow_legacy_references and _inactive_legacy_receivable(receivable, selected_grns):
+			continue
 		demand = _demand_for_receivable(demands, receivable, ipd)
 		demand["receivables"].append(receivable)
 		demand_by_receivable[receivable.name] = demand
@@ -1673,6 +1675,8 @@ def _build_work_order_context(
 		if allow_legacy_references:
 			valid_against.add("Goods Received Note")
 		if tracking.against not in valid_against or tracking.against_id not in selected_names:
+			continue
+		if allow_legacy_references and flt(tracking.received_qty) == 0:
 			continue
 		demand = _demand_for_tracking(demands, tracking, work_order.name)
 		demand["selected_qty"] += flt(tracking.received_qty)
@@ -1709,6 +1713,23 @@ def _build_work_order_context(
 		"lot": lot,
 		"ipd": ipd,
 	}
+
+
+def _inactive_legacy_receivable(receivable, selected_grns):
+	"""Zero planned rows carry no invoice allocation unless a receipt uses them."""
+	if flt(receivable.qty) != 0:
+		return False
+	combination = _combination_key(receivable.get("set_combination"))
+	for grn in selected_grns:
+		for row in grn.get("items") or []:
+			if flt(row.quantity) == 0:
+				continue
+			if row.get("ref_docname") == receivable.name or (
+				row.item_variant == receivable.item_variant
+				and _combination_key(row.get("set_combination")) == combination
+			):
+				return False
+	return True
 
 
 def _demand_for_receivable(demands, receivable, ipd):
@@ -1818,6 +1839,8 @@ def _validate_selected_physical_quantities(context, selected_grns):
 	actual = defaultdict(float)
 	for grn in selected_grns:
 		for grn_item in grn.get("items") or []:
+			if flt(grn_item.quantity) == 0:
+				continue
 			receivable = _receivable_for_grn_item(context, grn, grn_item)
 			actual[receivable.name] += flt(grn_item.quantity)
 

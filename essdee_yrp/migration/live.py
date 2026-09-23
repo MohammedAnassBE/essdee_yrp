@@ -93,6 +93,8 @@ PRESERVED_TARGET_CHILD_DOCTYPES = frozenset(
 	}
 )
 TARGET_OWNED_APPROVED_FRAPPE_FIELDS = {
+	# Live login activity belongs to the target; exact source values stay archived.
+	"User": frozenset({"last_login", "last_active", "last_ip"}),
 	# The combined target's setup finalizer owns these values.  Copying the
 	# historical source values would reintroduce the setup-wizard/Desk redirect
 	# loop that finalization explicitly prevents.
@@ -112,6 +114,7 @@ APPROVED_FRAPPE_DATA_ORDER = (
 	"Email Unsubscribe",
 	"List View Settings",
 	"Note",
+	"Notification Type",
 	"Notification Settings",
 	"Print Settings",
 	"System Settings",
@@ -449,6 +452,9 @@ class F15SourceBridge:
 
 	def iter_broken_links(self) -> Iterable[dict[str, Any]]:
 		yield from self._run(["broken-links"])
+
+	def iter_broken_dynamic_links(self):
+		yield from self._run(["broken-dynamic-links"])
 
 	def document_exists(self, doctype: str, name: str) -> bool:
 		lines = list(self._run(["exists", "--doctype", doctype, "--name", name]))
@@ -1388,6 +1394,7 @@ def _migration_contract_fingerprint(
 		for name in (
 			"config.py",
 			"engine.py",
+			"dynamic_links.py",
 			"live.py",
 			"planner.py",
 			"preservation.py",
@@ -2957,16 +2964,20 @@ def _reconcile_approved_user_unique_values(
 	unique login aliases. A target-only identity must not be overwritten or
 	merged merely because one of those aliases matches. Keep the existing ERP
 	alias and clear the conflicting alias on the migrated source identity.
+	When both identities are migrated, release the obsolete target alias before
+	User writes so source alias reassignment works in either insertion order.
 	"""
 
+	users = {
+		_database_identity_key(document["name"]): document
+		for document in documents
+		if document.get("doctype") == "User" and document.get("name")
+	}
 	by_field: dict[str, int] = {}
 	preserved_target_users: set[str] = set()
-	source_users: set[str] = set()
-	for document in documents:
-		if document.get("doctype") != "User" or not document.get("name"):
-			continue
+	releases: set[tuple[str, str, str]] = set()
+	for document in users.values():
 		source_name = str(document["name"])
-		source_users.add(source_name)
 		for fieldname in APPROVED_USER_OPTIONAL_UNIQUE_FIELDS:
 			value = document.get(fieldname)
 			if value in (None, ""):
@@ -2977,21 +2988,40 @@ def _reconcile_approved_user_unique_values(
 				pluck="name",
 				limit_page_length=0,
 			)
-			if not collisions:
-				continue
-			# MariaDB permits multiple NULL values in a unique index. Use NULL,
-			# not a fabricated replacement alias, so the migration does not create
-			# a credential the source never owned.
-			document[fieldname] = None
-			by_field[fieldname] = by_field.get(fieldname, 0) + 1
-			preserved_target_users.update(str(name) for name in collisions)
+			protected = []
+			for name in collisions:
+				owner = users.get(_database_identity_key(name))
+				if owner is None or fieldname not in owner:
+					protected.append(str(name))
+					continue
+				if _database_identity_key(owner.get(fieldname)) == _database_identity_key(value):
+					raise MigrationError(
+						f"Source Users {source_name} and {name} share unique field {fieldname}"
+					)
+				# This identity is also migrated, so its old ERP alias is about
+				# to be replaced. Release it before any User batch is inserted:
+				# source ordering and alias swaps must not lose incoming values.
+				releases.add((str(name), fieldname, str(value)))
+			if protected:
+				# Target-only identities retain their existing login aliases.
+				document[fieldname] = None
+				by_field[fieldname] = by_field.get(fieldname, 0) + 1
+				preserved_target_users.update(protected)
 
+	if not dry_run:
+		for name, fieldname, old_value in sorted(releases):
+			frappe.db.set_value(
+				"User", {"name": name, fieldname: old_value}, fieldname, None,
+				update_modified=False,
+			)
 	return {
 		"status": "Dry Run" if dry_run else "Reconciled",
-		"source_users": len(source_users),
+		"source_users": len(users),
 		"conflicting_optional_values": sum(by_field.values()),
 		"cleared_source_aliases": sum(by_field.values()),
 		"preserved_target_users": len(preserved_target_users),
+		"released_migrating_aliases": 0 if dry_run else len(releases),
+		"planned_alias_reassignments": len(releases),
 		"by_field": dict(sorted(by_field.items())),
 	}
 
@@ -4526,7 +4556,7 @@ def _verify_counts(
 	files = _verify_files(plan, source, allowed_missing_blob_names=missing_blob_names)
 	series = _verify_series(source)
 	stock = _verify_stock_summary(source)
-	links = _verify_link_integrity(plan, source_broken_links)
+	links = _verify_link_integrity(plan, source_broken_links, source_dynamic_links=source.iter_broken_dynamic_links())
 	setup_state = _verify_target_setup_state()
 	from essdee_yrp.purchase_invoice import (
 		verify_legacy_purchase_order_projection,
@@ -5234,7 +5264,7 @@ def _verify_source_identities(
 	rows = []
 	for target_doctype, expected_count in sorted(expected_counts.items()):
 		target_meta = frappe.get_meta(target_doctype)
-		target_count = 1 if target_meta.issingle else frappe.db.count(target_doctype)
+		target_count = _identity_scope_count(target_doctype, target_meta, plan)
 		missing = missing_counts.get(target_doctype, 0)
 		generated = generated_allowances.get(target_doctype, 0)
 		target_only = max(0, target_count - expected_count - generated + missing)
@@ -5269,6 +5299,16 @@ def _verify_source_identities(
 		"doctypes": rows,
 		"failures": failures,
 	}
+
+
+
+def _identity_scope_count(doctype, meta, plan):
+	if meta.issingle:
+		return 1
+	if meta.istable:
+		parents = sorted({spec.target for spec in plan.specs.values() if not spec.is_child})
+		return frappe.db.count(doctype, {"parenttype": ["in", parents]})
+	return frappe.db.count(doctype)
 
 
 def _classify_target_only_identities(
@@ -5477,6 +5517,7 @@ def _target_stock_summary(dimensions: Iterable[str]) -> dict[str, Any]:
 def _verify_link_integrity(
 	plan: MigrationPlan,
 	source_broken_links: Iterable[Mapping[str, Any]] = (),
+	*, source_dynamic_links: Iterable[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
 	"""Check every static and dynamic Link in the migrated target schemas."""
 
@@ -5544,19 +5585,25 @@ def _verify_link_integrity(
 						)
 			elif fieldtype == "Dynamic Link" and field.get("options"):
 				checked_fields += 1
-				broken = _broken_dynamic_link_count(
-					doctype,
-					fieldname,
-					str(field["options"]),
-					is_single=bool(meta.issingle),
-					parenttypes=child_parenttypes,
-				)
-				if broken:
-					broken_values += broken[0]
-					failures.append(
-						f"Broken Dynamic Link {doctype}.{fieldname}: "
-						f"{broken[0]} values; samples={broken[1]}"
-					)
+	from essdee_yrp.migration.dynamic_links import iter_broken_dynamic_links
+	approved_dynamic = set()
+	for row in source_dynamic_links:
+		spec = plan.specs.get(row["doctype"])
+		if not spec:
+			raise MigrationError(f"Unmapped source Dynamic Link owner {row['doctype']}")
+		linked_spec = plan.specs.get(row["link_doctype"])
+		linked_type = linked_spec.target if linked_spec else row["link_doctype"]
+		value = linked_type if linked_spec and linked_spec.source_schema.get("issingle") and row["value"] == row["link_doctype"] else row["value"]
+		approved_dynamic.add((spec.target, row["name"], spec.field_map.get(row["fieldname"], row["fieldname"]), linked_type, value))
+	dynamic_schemas = {dt: plan.target_schemas[dt] for dt in _migration_physical_target_doctypes(plan) if dt in plan.target_schemas}
+	for row in iter_broken_dynamic_links(frappe, dynamic_schemas, parent_targets):
+		broken_values += 1
+		key = (row["doctype"], row["name"], row["fieldname"], row["link_doctype"], row["value"])
+		if key in approved_dynamic:
+			audited_broken_values += 1
+			audited_exceptions.append(f"{row['doctype']} {row['name']}.{row['fieldname']}: exact source-invalid Dynamic Link")
+		else:
+			failures.append(f"Broken Dynamic Link {row['doctype']} {row['name']}.{row['fieldname']}: {row['link_doctype']}:{row['value']}")
 	return {
 		"status": (
 			"Pass With Audited Source Exceptions"

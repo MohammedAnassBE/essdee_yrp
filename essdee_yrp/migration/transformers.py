@@ -10,6 +10,7 @@ import hashlib
 import json
 from collections.abc import Mapping
 from copy import deepcopy
+from dataclasses import replace
 from typing import Any
 
 from essdee_yrp.migration.engine import (
@@ -158,6 +159,31 @@ def ipd_process_to_f16(
 		}
 	)
 	return output
+
+
+def derive_stock_entry_detail_reference(
+	output: Mapping[str, Any],
+	source: Mapping[str, Any],
+	spec: MigrationSpec,
+	plan: MigrationPlan,
+	parent: Mapping[str, Any] | None,
+) -> Mapping[str, Any]:
+	"""Give the legacy plain-text receipt/challan row ID its target controller."""
+	result = dict(output)
+	if not source.get("against_id_detail"):
+		return result
+	parent = parent or {}
+	child = {
+		("Delivery Challan", "DC Completion"): "Delivery Challan Item",
+		("Goods Received Note", "GRN Completion"): "Goods Received Note Item",
+	}.get((parent.get("against"), parent.get("purpose")))
+	if not child or not parent.get("against_id"):
+		raise MigrationError(
+			f"Stock Entry Detail {source.get('name')}: cannot resolve reference "
+			f"{source.get('against_id_detail')!r} from its parent Stock Entry"
+		)
+	result["against"] = plan.specs[child].target
+	return result
 
 
 def derive_delivery_challan_fields(
@@ -648,7 +674,36 @@ def _system_values(document: Mapping[str, Any]) -> dict[str, Any]:
 	}
 
 
+
+def sms_settings_with_roles(document, spec, plan):
+	"""Preserve SMS-scoped Has Role rows without importing all User role rows."""
+	from essdee_yrp.migration.engine import transform_document
+
+	parent = deepcopy(document)
+	roles = parent.pop("allowed_roles", None)
+	output = transform_document(parent, plan, _spec_override=replace(spec, custom_transformer=None))
+	if roles is None:
+		return output
+	for schema in (spec.source_schema, spec.target_schema):
+		field = next((f for f in schema.get("fields", []) if f.get("fieldname") == "allowed_roles"), {})
+		if field.get("fieldtype") != "Table" or field.get("options") != "Has Role":
+			raise MigrationError("SMS Settings.allowed_roles must use Has Role on both sites")
+	allowed = SYSTEM_FIELDS | {"doctype", "role"}
+	for row in roles:
+		if row.get("doctype") != "Has Role":
+			raise MigrationError("Unexpected SMS Settings role child DocType")
+		for key, value in row.items():
+			if key not in allowed and value not in (None, "", 0, False, [], {}):
+				raise MigrationError(f"Unmapped SMS role field Has Role.{key}")
+		for key, expected in (("parent", "SMS Settings"), ("parenttype", "SMS Settings"), ("parentfield", "allowed_roles")):
+			if row.get(key) != expected:
+				raise MigrationError(f"Invalid SMS role child {key}")
+	output["allowed_roles"] = deepcopy(roles)
+	return output
+
+
 TRANSFORMERS = {
+	"sms_settings_with_roles": sms_settings_with_roles,
 	"essdee_debit_to_debit": essdee_debit_to_debit,
 	"ipd_process_to_f16": ipd_process_to_f16,
 	"item_attribute_value_to_standard_child": item_attribute_value_to_standard_child,
@@ -663,6 +718,7 @@ VALUE_TRANSFORMERS = {
 }
 
 POST_TRANSFORMERS = {
+	"derive_stock_entry_detail_reference": derive_stock_entry_detail_reference,
 	"derive_delivery_challan_fields": derive_delivery_challan_fields,
 	"derive_goods_received_note_fields": derive_goods_received_note_fields,
 	"derive_purchase_order_fields": derive_purchase_order_fields,

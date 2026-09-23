@@ -14,6 +14,38 @@ class ReviewedTransformerTest(unittest.TestCase):
 	def setUpClass(cls):
 		cls.plan, _payload = build_schema_analysis()
 
+	def test_stock_entry_child_reference_uses_parent_context(self):
+		row = {"doctype": "Stock Entry Detail", "name": "STE-ROW", "against_id_detail": "REF-ROW"}
+		for against, purpose, child in (
+			("Delivery Challan", "DC Completion", "YRP Delivery Challan Item"),
+			("Goods Received Note", "GRN Completion", "YRP Goods Received Note Item"),
+		):
+			with self.subTest(against=against):
+				result = transform_document(row, self.plan, parent_document={
+					"against": against, "purpose": purpose, "against_id": "REF-PARENT"})
+				self.assertEqual(result["against"], child)
+				self.assertEqual(result["against_id_detail"], "REF-ROW")
+		for parent in (None, {}, {"against": "Delivery Challan", "purpose": "Material Issue", "against_id": "REF"}):
+			with self.subTest(parent=parent), self.assertRaises(MigrationError):
+				transform_document(row, self.plan, parent_document=parent)
+		blank = transform_document({**row, "against_id_detail": ""}, self.plan)
+		self.assertFalse(blank.get("against"))
+		self.assertNotIn("against", row)
+
+	def test_sms_roles_preserve_identity_and_permissions(self):
+		role = {"doctype": "Has Role", "name": "sms-role-1", "parent": "SMS Settings",
+			"parenttype": "SMS Settings", "parentfield": "allowed_roles", "idx": 1,
+			"role": "System Manager"}
+		doc = {"doctype": "SMS Settings", "name": "SMS Settings", "allowed_roles": [role],
+			"sms_gateway_url": "https://sms.example.test", "message_parameter": "message"}
+		result = transform_document(doc, self.plan)
+		self.assertEqual(result["allowed_roles"], [role])
+		self.assertEqual(result["sms_gateway_url"], doc["sms_gateway_url"])
+		self.assertEqual(doc["allowed_roles"], [role])
+		for changes in ({"parenttype": "User"}, {"doctype": "Unknown Child"}, {"new_permission": "enabled"}):
+			with self.subTest(changes=changes), self.assertRaises(MigrationError):
+				transform_document({**doc, "allowed_roles": [{**role, **changes}]}, self.plan)
+
 	def test_ipd_process_stage_becomes_in_and_out_stage(self):
 		row = transform_document(
 			{

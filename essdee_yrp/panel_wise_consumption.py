@@ -11,6 +11,7 @@ import json
 import re
 
 import frappe
+from yrp.attribute_values import get_mapping_document
 from frappe import _
 from frappe.utils import flt
 
@@ -81,7 +82,7 @@ def _group_packing_values(context, panel_values):
 def _mapping_values(doc, attribute):
 	for row in doc.get("item_attributes") or []:
 		if row.attribute == attribute and row.mapping:
-			mapping = frappe.get_cached_doc('YRP Item Item Attribute Mapping', row.mapping)
+			mapping = get_mapping_document(row.mapping, cached=True)
 			return [value.attribute_value for value in mapping.get("values") or []]
 	return []
 

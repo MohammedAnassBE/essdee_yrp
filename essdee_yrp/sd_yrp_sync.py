@@ -254,6 +254,17 @@ def upsert_filtered_doc(data, replace_children=None):
 	time. `replace_children` is accepted for signature compatibility — every child
 	table present in the payload is rebuilt. See docs/claude/conventions.md (2026-06-30).
 	"""
+	if data.get("doctype") == "YRP Item Item Attribute Mapping":
+		from yrp.attribute_values import normalize_mapping
+		from yrp.yrp.doctype.yrp_item.yrp_item import ensure_global_attribute_values
+		mapping = frappe.get_doc(data)
+		if not mapping.attribute_name and mapping.get("values"):
+			frappe.throw("A synced attribute mapping must declare its attribute")
+		ensure_global_attribute_values(mapping.attribute_name,
+			[row.attribute_value for row in mapping.get("values") or [] if row.attribute_value],
+			check_permission=False)
+		normalize_mapping(mapping)
+		data = mapping.as_dict()
 	source_ts = {f: data.get(f) for f in _SOURCE_TIMESTAMP_FIELDS if data.get(f)}
 	data = filter_doc_fields(data)
 	doctype = data.get("doctype")

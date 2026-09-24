@@ -18,13 +18,13 @@ export async function loadValues(attr) {
 	if (!attr || valueCache[attr]) return;
 	valueCache[attr] = [];
 	try {
-		const { data } = await getList("Item Attribute Value", {
+		const { data } = await getList("YRP Item Attribute Value", {
 			filters: { attribute_name: attr },
-			fields: ["name"],
+			fields: ["attribute_value"],
 			order_by: "name asc",
 			limit_page_length: 0,
 		});
-		valueCache[attr] = (data || []).map((r) => r.name);
+		valueCache[attr] = (data || []).map((r) => r.attribute_value);
 	} catch (_) {
 		valueCache[attr] = [];
 	}

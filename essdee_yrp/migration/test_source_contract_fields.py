@@ -50,19 +50,12 @@ DIRECT_FIELDS = {
 		"received_quantity": ("Float", None),
 		"rework_details": ("Small Text", None),
 	},
-	"YRP Item BOM": {
-		"attribute_mapping_based_on": ("Link", "Item Attribute")
-	},
 	"YRP Item BOM Attribute Mapping Value": {
 		"bom_item_attribute": ("Data", None),
 		"product_attribute": ("Data", None),
 	},
 	"YRP Item Price": {"price": ("Float", None)},
 	"YRP Item Production Detail": {"description": ("Small Text", None)},
-	"YRP Process Cost": {
-		"dependent_attribute": ("Link", "Item Attribute"),
-		"dependent_attribute_values": ("Select", None),
-	},
 	"YRP Production Order": {
 		"production_detail": ("Link", "YRP Item Production Detail")
 	},
@@ -98,13 +91,11 @@ SCHEMA_PATHS = {
 	/ "yrp/doctype/yrp_goods_received_note/yrp_goods_received_note.json",
 	"YRP Goods Received Note Item": YRP_ROOT
 	/ "yrp/doctype/yrp_goods_received_note_item/yrp_goods_received_note_item.json",
-	"YRP Item BOM": YRP_ROOT / "yrp/doctype/yrp_item_bom/yrp_item_bom.json",
 	"YRP Item BOM Attribute Mapping Value": YRP_ROOT
 	/ "yrp/doctype/yrp_item_bom_attribute_mapping_value/yrp_item_bom_attribute_mapping_value.json",
 	"YRP Item Price": YRP_ROOT / "yrp/doctype/yrp_item_price/yrp_item_price.json",
 	"YRP Item Production Detail": YRP_ROOT
 	/ "yrp/doctype/yrp_item_production_detail/yrp_item_production_detail.json",
-	"YRP Process Cost": YRP_ROOT / "yrp/doctype/yrp_process_cost/yrp_process_cost.json",
 	"YRP Production Order": YRP_ROOT
 	/ "yrp/doctype/yrp_production_order/yrp_production_order.json",
 	"YRP Purchase Invoice": YRP_ROOT
@@ -131,7 +122,6 @@ PHYSICAL_OVERLAYS = {
 	"Item Production Detail": {"additional_cloth", "stiching_attribute_quantity"},
 	"Lot": {"capacity_planning", "primary_item_attribute", "version"},
 	"Lotwise Item Profit Qty Rate": {"ratio", "weight"},
-	"Process Cost": {"dependent_attribute", "dependent_attribute_values"},
 	"Production Items": {"process_name"},
 	"Production Order": {"production_detail"},
 	"Purchase Invoice": {"debit_no", "debit_type", "debit_value"},

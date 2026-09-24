@@ -3,6 +3,7 @@
 
 import json
 import frappe
+from yrp.attribute_values import get_mapping_document
 from frappe.model.document import Document
 from frappe.utils import flt
 from six import string_types
@@ -18,7 +19,7 @@ class SDYRPLotTemplate(Document):
 			attribute_doc = frappe.get_doc('Item Attribute', attribute.attribute)
 			if not attribute_doc.numeric_values:
 				if attribute.mapping != None:
-					doc = frappe.get_doc('YRP Item Item Attribute Mapping', attribute.mapping)
+					doc = get_mapping_document(attribute.mapping)
 					attribute_list.append({
 						'name': attribute.name,
 						'attr_name': attribute.attribute,
@@ -63,7 +64,7 @@ class SDYRPLotTemplate(Document):
 		if self.get('__islocal'):
 			for attribute in self.get('item_attributes'):
 				if attribute.mapping:
-					doc = frappe.get_doc('YRP Item Item Attribute Mapping', attribute.mapping)
+					doc = get_mapping_document(attribute.mapping)
 					duplicate_doc = frappe.new_doc('YRP Item Item Attribute Mapping')
 					duplicate_doc.values = doc.values
 					duplicate_doc.save()
@@ -146,7 +147,7 @@ def get_item_attribute_values(
 	for attr_obj in lot_template.item_attributes:
 		if attribute == attr_obj.attribute:
 			if attr_obj.mapping:
-				mapping_doc = frappe.get_doc('YRP Item Item Attribute Mapping', attr_obj.mapping)
+				mapping_doc = get_mapping_document(attr_obj.mapping)
 				values = [row.attribute_value for row in mapping_doc.values]
 			break
 	if not values:
@@ -184,7 +185,7 @@ def get_attribute_values(lot_template, attributes = None):
 
 	for attribute in lot.item_attributes:
 		if attribute.attribute in attributes and attribute.mapping != None:
-			doc = frappe.get_doc('YRP Item Item Attribute Mapping', attribute.mapping)
+			doc = get_mapping_document(attribute.mapping)
 			attribute_values[attribute.attribute] = [d.attribute_value for d in doc.values]
 	
 	return attribute_values

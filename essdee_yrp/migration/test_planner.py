@@ -21,12 +21,12 @@ class MigrationPlannerTest(unittest.TestCase):
 		self.assertFalse(self.payload["writes_site_data"])
 
 	def test_complete_source_inventory_is_classified(self):
-		self.assertEqual(self.payload["source_doctypes"], 268)
-		self.assertEqual(sum(self.payload["migration_kinds"].values()), 268)
-		self.assertEqual(len(self.payload["doctype_details"]), 268)
+		self.assertEqual(self.payload["source_doctypes"], 269)
+		self.assertEqual(sum(self.payload["migration_kinds"].values()), 269)
+		self.assertEqual(len(self.payload["doctype_details"]), 269)
 		self.assertEqual(
 			self.payload["migration_kinds"],
-			{"custom": 4, "identity": 13, "mapped": 251},
+			{"custom": 5, "identity": 12, "mapped": 252},
 		)
 
 	def test_frappe_tools_configuration_is_included_but_spine_data_is_not(self):

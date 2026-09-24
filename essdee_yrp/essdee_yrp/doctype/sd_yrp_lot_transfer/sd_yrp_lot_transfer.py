@@ -11,10 +11,35 @@ from yrp.stock.uom import apply_item_uom
 from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 
+ITEM_EDITOR_CONFIG = {
+	"child_doctype": "SD YRP Lot Transfer Item",
+	"item_field": "item", "qty_field": "qty",
+	"value_fields": ["rate"],
+	"entry_fields": ["from_lot", "to_lot", "warehouse", "received_type", "set_combination"],
+}
+
+
 class SDYRPLotTransfer(Document):
+	def onload(self):
+		from yrp.stock.save_stock_items import group_items_for_ui
+
+		# Historical row indexes are not guaranteed to identify a unique item.
+		rows = []
+		for index, row in enumerate(self.items or []):
+			values = row.as_dict()
+			values["row_index"] = index
+			rows.append(values)
+		self.set_onload("item_details", group_items_for_ui(rows, self.doctype, config=ITEM_EDITOR_CONFIG))
+
 	def before_validate(self):
 		from yrp.stock.utils import apply_posting_datetime
 
+		if self.get("item_details") and self._action != "submit":
+			from yrp.stock.save_stock_items import ungroup_items_from_ui
+
+			self.set("items", ungroup_items_from_ui(
+				self.item_details, self.doctype, config=ITEM_EDITOR_CONFIG
+			))
 		apply_posting_datetime(self)
 		apply_dimension_defaults(self.items)
 

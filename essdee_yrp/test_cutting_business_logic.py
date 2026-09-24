@@ -278,6 +278,22 @@ class TestCutBundleMovementTransactionFiltering(UnitTestCase):
 		# therefore carries 20 pieces while CBML keeps the whole-bundle count 10.
 		self.assertEqual(sum(abs(entry["quantity"]) for entry in later_entries), 10)
 
+	def test_grouped_panel_keeps_one_ledger_identity(self):
+		movement = json.loads(self.cpm.cut_panel_movement_json)
+		group = "Bottom Front Left,Bottom Front Right"
+		movement["panels"]["Bottom"] = [group]
+		row = next(iter(movement["data"].values()))["data"][0]
+		row.update({group: 10, group + "_moved": 1, group + "_colour": "Dark Grey"})
+		self.cpm.cut_panel_movement_json = json.dumps(movement)
+		entries = self._entries(self._dc("DC-GROUP", [("VAR-LEFT", 10), ("VAR-RIGHT", 10)]))
+		self.assertEqual(len(entries), 1)
+		self.assertEqual(entries[0]["panel"], group)
+		self.assertEqual(entries[0]["quantity"], -10)
+		with self.assertRaisesRegex(frappe.ValidationError, "Move all panels"):
+			self._entries(self._dc("DC-HALF-GROUP", [("VAR-LEFT", 10)]))
+		with self.assertRaisesRegex(frappe.ValidationError, "does not match"):
+			self._entries(self._dc("DC-SHORT-GROUP", [("VAR-LEFT", 10), ("VAR-RIGHT", 9)]))
+
 	def test_split_dc_rejects_a_partial_physical_bundle_quantity(self):
 		with self.assertRaisesRegex(
 			frappe.ValidationError,

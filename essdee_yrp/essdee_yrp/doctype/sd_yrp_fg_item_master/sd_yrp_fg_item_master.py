@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import frappe
+from yrp.attribute_values import get_mapping_document
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint
@@ -158,7 +159,7 @@ def _ensure_size_mapping(item, sizes):
 	)
 	if not attribute_row or not attribute_row.mapping:
 		frappe.throw(_("Item {0} has no Size attribute mapping.").format(item.name))
-	mapping = frappe.get_doc('YRP Item Item Attribute Mapping', attribute_row.mapping)
+	mapping = get_mapping_document(attribute_row.mapping)
 	existing = {row.attribute_value for row in mapping.values}
 	changed = False
 	for size in (row.attribute_value for row in sizes if row.attribute_value):

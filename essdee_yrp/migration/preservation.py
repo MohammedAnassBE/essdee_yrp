@@ -146,13 +146,18 @@ def run_retired_archive(migration_name, source, *, dry_run=False, verify=False, 
 
 
 def run_preservation(plan, source, *, migration_name, dry_run=False, allow_missing_files=False):
-	from essdee_yrp.migration.live import FrappeBulkTarget
+	from essdee_yrp.migration.live import FrappeBulkTarget, _apply_contextual_defaults
 
+	reference_data = None
 	target = FrappeBulkTarget()
 	batches = defaultdict(list)
 	counts = Counter()
 	for row in source.iter_orphan_children():
 		document = transform_orphan(row, plan)
+		if document["doctype"] == "YRP Item Item Attribute Mapping Value":
+			if reference_data is None:
+				reference_data = source.reference_data()
+			_apply_contextual_defaults(document, plan.target_schemas[document["doctype"]], reference_data)
 		doctype = document["doctype"]
 		counts[doctype] += 1
 		if not dry_run:
@@ -170,7 +175,9 @@ def run_preservation(plan, source, *, migration_name, dry_run=False, allow_missi
 
 
 def verify_orphan_values(plan, source):
-	from essdee_yrp.migration.live import _verify_transformed_value_batch
+	from essdee_yrp.migration.live import _verify_transformed_value_batch, _apply_contextual_defaults
+
+	reference_data = None
 
 	caches = {"columns_cache": {}, "fieldtypes_cache": {}, "numeric_scales_cache": {}}
 	batch = []
@@ -186,7 +193,12 @@ def verify_orphan_values(plan, source):
 		batch.clear()
 
 	for row in source.iter_orphan_children():
-		batch.append(transform_orphan(row, plan))
+		document = transform_orphan(row, plan)
+		if document["doctype"] == "YRP Item Item Attribute Mapping Value":
+			if reference_data is None:
+				reference_data = source.reference_data()
+			_apply_contextual_defaults(document, plan.target_schemas[document["doctype"]], reference_data)
+		batch.append(document)
 		if len(batch) >= 500:
 			flush()
 	flush()

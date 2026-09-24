@@ -246,7 +246,7 @@ frappe.ui.form.on("YRP Item Production Detail", {
 		})
 		frm.set_query('stiching_major_attribute_value', ()=> {
 			return {
-				query:'essdee_yrp.ipd_ui.get_attribute_detail_values',
+				query:'essdee_yrp.ipd_attribute_links.search_values',
 				filters: {
 					'mapping': frm.stiching_attribute_mapping,
 				}

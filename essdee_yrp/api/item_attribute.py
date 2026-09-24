@@ -15,6 +15,7 @@ value is introduced).
 import json
 
 import frappe
+from yrp.attribute_values import get_mapping_document, get_mapping_values
 from frappe import _
 from yrp.yrp.doctype.yrp_item.yrp_item import ensure_global_attribute_values
 
@@ -45,13 +46,15 @@ def update_mapping_values(mapping, attribute_name, values):
 	# The mapping owns exactly one attribute — reject a call whose attribute_name
 	# doesn't match it, so a misdirected request can't create Item Attribute
 	# Values under the wrong attribute.
-	doc = frappe.get_doc('YRP Item Item Attribute Mapping', mapping)
+	doc = get_mapping_document(mapping)
 	if doc.attribute_name and doc.attribute_name != attribute_name:
 		frappe.throw(
 			_("Mapping {0} is for attribute {1}, not {2}.").format(
 				mapping, doc.attribute_name, attribute_name
 			)
 		)
+
+	doc.check_permission("write")
 
 	# Deduplicate while preserving order — defensive; the frontend already
 	# blocks duplicates client-side, but we don't trust the client alone.
@@ -76,5 +79,5 @@ def update_mapping_values(mapping, attribute_name, values):
 	return {
 		"name": doc.name,
 		"attribute_name": doc.attribute_name,
-		"values": [r.attribute_value for r in doc.values],
+		"values": get_mapping_values(doc.name),
 	}

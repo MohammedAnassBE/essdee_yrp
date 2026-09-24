@@ -1,3 +1,4 @@
+from essdee_yrp.ipd_attribute_links import major_stitching_value
 # Copyright (c) 2024, Essdee and contributors
 # For license information, please see license.txt
 
@@ -5,6 +6,7 @@ from frappe import _, bold
 from six import string_types
 from frappe.model.document import Document
 import frappe, json, sys, base64, math, time
+from yrp.attribute_values import get_mapping_document
 from frappe.utils import getdate, nowdate, now, flt
 from secrets import token_bytes as get_random_bytes
 from yrp.stock.stock_ledger import make_sl_entries
@@ -140,9 +142,10 @@ class SDYRPCuttingLaySheet(Document):
 				)
 			if db_status == "Cancelled":
 				frappe.throw("Can't update a Cancelled Cutting LaySheet")
-			if db_status in ("Approval Pending", "Label Printed") and not transition_allowed:
-				action = "Approve or Cancel" if db_status == "Approval Pending" else "Revert Labels"
-				frappe.throw(f"{action} before editing a {db_status} Cutting LaySheet")
+			# CPM saves accessory moved_weight on Label Printed laysheets, as in
+			# production_api. Do not require label reversion for that save.
+			if db_status == "Approval Pending" and not transition_allowed:
+				frappe.throw("Approve or Cancel before editing an Approval Pending Cutting LaySheet")
 
 		if not self.cutting_plan and not self.cutting_order:
 			frappe.throw("Either Cutting Plan or Cutting Order is required")
@@ -1609,7 +1612,7 @@ def get_input_fields(cutting_marker, colour, select_attributes):
 		major_attr_value = getattr(ipd_doc, 'major_attribute_value', None)
 		is_same_packing_attr = getattr(ipd_doc, 'is_same_colour', False)
 	else:
-		stich_attr_value = ipd_doc.stiching_major_attribute_value
+		stich_attr_value = major_stitching_value(ipd_doc)
 		major_attr_value = ipd_doc.major_attribute_value
 		is_same_packing_attr = ipd_doc.is_same_packing_attribute
 	select_vals = select_attributes['colour']
@@ -1928,6 +1931,13 @@ def _cutting_grn_output_rows(cls_doc, work_order, item_name, production_detail):
 			)
 			outputs[key]["quantity"] += flt(row.quantity) * flt(panel_qty.get(part) or 1)
 
+	for variant, quantity in _cutting_accessory_quantities(cls_doc).items():
+		outputs[(variant, _combination_key({}))] = {
+			"item_variant": variant,
+			"quantity": quantity,
+			"set_combination": {},
+		}
+
 	default_received_type = frappe.db.get_single_value(
 		'YRP Stock Settings', "default_received_type"
 	)
@@ -1980,6 +1990,14 @@ def _cutting_grn_output_rows(cls_doc, work_order, item_name, production_detail):
 	)
 
 
+def _cutting_accessory_quantities(cls_doc):
+	quantities = {}
+	for row in cls_doc.get("cutting_laysheet_accessory_details") or []:
+		if flt(row.weight) > 0:
+			quantities[row.cloth_item_variant] = quantities.get(row.cloth_item_variant, 0) + flt(row.weight)
+	return quantities
+
+
 def _cutting_grn_consumed_rows(cls_doc):
 	quantities = {}
 	for row in cls_doc.cutting_laysheet_details:
@@ -2010,9 +2028,9 @@ def _cutting_grn_consumed_rows(cls_doc):
 def calculate_cutting_consumption_plan(grn):
 	"""Allocate weighed cloth/accessories across exact cutting output rows.
 
-	The physical input total is authoritative. Each input is distributed by the
-	output stock-quantity weights, and the final output receives the arithmetic
-	residual so rounding can never create or lose cloth. This gives every output
+	The physical input total is authoritative. Accessory inputs return to their
+	own receipt rows; the remaining cloth is distributed across panel quantities.
+	The final panel receives the residual so rounding cannot lose cloth. Every output has
 	a deterministic production-value lineage without pretending that historical
 	multi-output GRNs can be reconstructed the same way after migration.
 	"""
@@ -2048,9 +2066,8 @@ def calculate_cutting_consumption_plan(grn):
 	]
 	if not outputs:
 		return []
-	total_output_weight = sum(
-		flt(row.get("stock_qty") or row.get("quantity")) for row in outputs
-	)
+	accessory_quantities = _cutting_accessory_quantities(cls_doc)
+	panel_outputs = [row for row in outputs if row.item_variant not in accessory_quantities]
 	plan = []
 	for consumed in _cutting_grn_consumed_rows(cls_doc):
 		candidates = deliverables.get(
@@ -2103,15 +2120,14 @@ def calculate_cutting_consumption_plan(grn):
 			with_valuation_rate=True,
 			**dimensions,
 		)
+		allocations = _allocate_cutting_input(
+			input_stock_qty,
+			flt(accessory_quantities.get(source.item_variant)) * factor,
+			[row for row in outputs if row.item_variant == source.item_variant],
+			panel_outputs,
+		)
 		assigned_stock_qty = 0.0
-		for index, output in enumerate(outputs):
-			is_last = index == len(outputs) - 1
-			weight = flt(output.get("stock_qty") or output.get("quantity"))
-			share = (
-				input_stock_qty - assigned_stock_qty
-				if is_last
-				else input_stock_qty * weight / total_output_weight
-			)
+		for output, share in allocations:
 			assigned_stock_qty += share
 			if share <= QTY_TOLERANCE:
 				continue
@@ -2138,6 +2154,31 @@ def calculate_cutting_consumption_plan(grn):
 		if abs(assigned_stock_qty - input_stock_qty) > QTY_TOLERANCE:
 			frappe.throw(_("Cutting input allocation did not conserve stock quantity."))
 	return plan
+
+
+def _allocate_cutting_input(input_qty, accessory_qty, accessory_outputs, panel_outputs):
+	"""Return accessory value to its own SKU; allocate only cut cloth to panels."""
+	tolerance = 0.000001
+	returned_qty = sum(flt(row.get("stock_qty") or row.get("quantity")) for row in accessory_outputs)
+	if abs(returned_qty - accessory_qty) > tolerance or accessory_qty > input_qty + tolerance:
+		frappe.throw(_("Cutting accessory receipt quantity must match the LaySheet accessory weight."))
+	allocations = [(row, flt(row.get("stock_qty") or row.get("quantity"))) for row in accessory_outputs]
+	remaining = input_qty - accessory_qty
+	if remaining <= tolerance:
+		return allocations
+	total = sum(flt(row.get("stock_qty") or row.get("quantity")) for row in panel_outputs)
+	if total <= 0:
+		frappe.throw(_("Cutting cloth consumption requires panel receipt rows."))
+	assigned = 0.0
+	for index, row in enumerate(panel_outputs):
+		share = (
+			remaining - assigned
+			if index == len(panel_outputs) - 1
+			else remaining * flt(row.get("stock_qty") or row.get("quantity")) / total
+		)
+		allocations.append((row, share))
+		assigned += share
+	return allocations
 
 
 @frappe.whitelist()
@@ -2358,7 +2399,7 @@ def calculate_cutting_order_laysheets(cutting_order):
 	sizes = []
 	for attr_row in cod.item_attributes:
 		if attr_row.attribute == cod.primary_attribute and attr_row.mapping:
-			mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attr_row.mapping)
+			mapping_doc = get_mapping_document(attr_row.mapping, cached=True)
 			sizes = [v.attribute_value for v in mapping_doc.values]
 			break
 

@@ -1,6 +1,7 @@
 frappe.ui.form.on("YRP Delivery Challan", {
 	work_order(frm) {
 		if (frm.doc.docstatus !== 0) return;
+		if (frm.doc.cut_panel_movement) return;
 		// Source location and warehouse are specific to this dispatch. Never
 		// retain or inherit the Work Order's delivery location when the operator
 		// selects or changes the Work Order.

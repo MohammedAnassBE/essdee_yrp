@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import frappe, json, math
+from yrp.attribute_values import get_mapping_document
 from six import string_types
 from itertools import groupby
 from frappe.model.document import Document
@@ -773,7 +774,7 @@ def get_packing_attributes(ipd):
 			if item.attribute == ipd_doc.set_item_attribute:
 				set_mapping = item.mapping
 				break
-		set_map_doc = frappe.get_doc('YRP Item Item Attribute Mapping',set_mapping)
+		set_map_doc = get_mapping_document(set_mapping)
 		colour_combo_dict_list = []
 		ratio_combo = []
 		index = -1		
@@ -795,7 +796,7 @@ def get_packing_attributes(ipd):
 			mapping = item.mapping
 			break
 
-	map_doc = frappe.get_doc("YRP Item Item Attribute Mapping", mapping)
+	map_doc = get_mapping_document(mapping)
 	for item in map_doc.values:
 		sizes += item.attribute_value + ","
 

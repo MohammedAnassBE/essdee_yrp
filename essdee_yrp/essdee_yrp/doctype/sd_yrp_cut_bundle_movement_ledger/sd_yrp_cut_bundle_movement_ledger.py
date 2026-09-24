@@ -180,36 +180,41 @@ def get_cut_bundle_entry(cpm_doc, doc, target_warehouse, multiplier, cancelled=0
 			for grouped_panel in panels:
 				if not row.get(grouped_panel) or not row.get(grouped_panel+"_moved"):
 					continue
-				for panel in (value.strip() for value in grouped_panel.split(",") if value.strip()):
+				group_panels = [value.strip() for value in grouped_panel.split(",") if value.strip()]
+				matched = [panel for panel in group_panels if _bundle_key(doc, row, grouped_panel, panel) in required]
+				if not matched:
+					continue
+				if len(matched) != len(group_panels):
+					frappe.throw(_("Move all panels in grouped bundle {0} together.").format(grouped_panel))
+				for panel in group_panels:
 					key = _bundle_key(doc, row, grouped_panel, panel)
-					if key not in required:
-						continue
 					if panel not in panel_quantities:
 						frappe.throw(
 							_("Panel {0} is not configured in {1}.").format(panel, ipd)
 						)
 					bundle_quantity = flt(row.get(grouped_panel), 3)
 					selected[key] += bundle_quantity * panel_quantities[panel]
-					items.append({
-						"lot": cpm_doc.lot,
-						"supplier": supplier,
-						"lay_no": row['lay_no'],
-						"bundle_no": row['bundle_no'],
-						"panel": panel,
-						"shade": row['shade'],
-						"posting_date": doc.posting_date,
-						"posting_time": doc.posting_time,
-						"size": row['size'],
-						"colour": row[grouped_panel+'_colour'],
-						"quantity": bundle_quantity * multiplier,
-						"item": item,
-						"voucher_type": doc.doctype,
-						"voucher_no": doc.name,
-						"is_cancelled": cancelled,
-						"set_combination": frappe.json.dumps(
-							_normalise_set_combination(row.get('set_combination'))
-						),
-					})
+				# Keep the exact grouped identity written by the LaySheet (F15 parity).
+				items.append({
+					"lot": cpm_doc.lot,
+					"supplier": supplier,
+					"lay_no": row['lay_no'],
+					"bundle_no": row['bundle_no'],
+					"panel": grouped_panel,
+					"shade": row['shade'],
+					"posting_date": doc.posting_date,
+					"posting_time": doc.posting_time,
+					"size": row['size'],
+					"colour": row[grouped_panel+'_colour'],
+					"quantity": bundle_quantity * multiplier,
+					"item": item,
+					"voucher_type": doc.doctype,
+					"voucher_no": doc.name,
+					"is_cancelled": cancelled,
+					"set_combination": frappe.json.dumps(
+						_normalise_set_combination(row.get('set_combination'))
+					),
+				})
 	_validate_selected_bundle_quantities(required, selected)
 	collapsed_details = []
 

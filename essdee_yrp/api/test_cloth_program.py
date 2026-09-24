@@ -9,6 +9,7 @@ a full garment IPD (that path is covered by test_fabric_requirement)."""
 from unittest.mock import patch
 
 import frappe
+from yrp.attribute_values import get_mapping_values
 from frappe.tests import IntegrationTestCase
 from frappe.utils import flt
 
@@ -310,9 +311,8 @@ class TestClothProgram(IntegrationTestCase):
         mapping_values = {}
         for row in cpd.item_attributes:
             mapping = frappe.get_doc('YRP Item Item Attribute Mapping', row.mapping)
-            mapping_values[row.attribute] = [
-                value.attribute_value for value in mapping.values
-            ]
+            self.assertTrue(all(frappe.db.exists("YRP Item Attribute Value", value.attribute_value) for value in mapping.values))
+            mapping_values[row.attribute] = get_mapping_values(row.mapping)
 
         self.assertIn(self.dia, mapping_values["Dia"])
         self.assertIn(self.red, mapping_values["Colour"])

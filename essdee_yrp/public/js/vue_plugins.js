@@ -869,3 +869,10 @@ frappe.production.ui.TimeAndActionWeeklyReport = class {
 		this.vue = mounted.vue;
 	}
 };
+
+import LotTransferEditor from "./LotTransfer.vue";
+frappe.provide("essdee_yrp");
+essdee_yrp.mount_lot_transfer = (wrapper, frm) => {
+ const app = createApp(LotTransferEditor, {frm});
+ return {app, editor: app.mount(wrapper)};
+};

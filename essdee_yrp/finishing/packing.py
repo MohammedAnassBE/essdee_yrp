@@ -1,6 +1,7 @@
 """Physical box/piece calculations for Essdee Finishing Plans."""
 
 import frappe
+from yrp.attribute_values import get_mapping_document
 from frappe.utils import cint, flt
 
 from essdee_yrp.dynamic_packing import LEGACY_BATCH_TRACKING_VERSION
@@ -110,7 +111,7 @@ def get_ipd_packing_config(lot):
 	for row in ipd.get("item_attributes") or []:
 		attribute = row.get("attribute") or row.get("item_attribute")
 		if attribute == ipd.packing_attribute and row.mapping:
-			mapping = frappe.get_cached_doc('YRP Item Item Attribute Mapping', row.mapping)
+			mapping = get_mapping_document(row.mapping, cached=True)
 			colours = [value.attribute_value for value in mapping.get("values") or []]
 			break
 	return {

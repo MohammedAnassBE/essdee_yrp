@@ -63,6 +63,9 @@ DOCTYPE_RENAMES = {
 
 
 RULES = {
+	"Item Item Attribute Mapping Value": DocTypeRule(
+		table_option_map={"attribute_value": "YRP Item Attribute Value"},
+	),
 	"SMS Settings": DocTypeRule(custom_transformer="sms_settings_with_roles"),
 	"Brand": DocTypeRule(
 		target="Brand",
@@ -144,15 +147,23 @@ RULES = {
 			"alternative_item": "alternative_item_code",
 		},
 	),
-	"Item BOM": DocTypeRule(allowed_type_changes=frozenset({("Data", "Link")})),
+	"Item BOM": DocTypeRule(
+		allowed_type_changes=frozenset({("Data", "Link")}),
+		ignored_fields={"attribute_mapping_based_on": "Retired unused Item BOM field"},
+	),
 	"Item BOM Attribute Mapping": DocTypeRule(
 		allowed_type_changes=frozenset({("Data", "Link")})
 	),
 	"Item Production Detail": DocTypeRule(
+		allowed_type_changes=frozenset({("Data", "Link")}),
 		table_option_map={"item_attributes": 'YRP IPD Item Attribute'},
 		post_transformer="remove_empty_ipd_process_placeholders",
 	),
 	"IPD Process": DocTypeRule(custom_transformer="ipd_process_to_f16"),
+	"Process Cost": DocTypeRule(ignored_fields={
+		"dependent_attribute": "Retired unused Process Cost field",
+		"dependent_attribute_values": "Retired unused Process Cost field",
+	}),
 	"Item Conversion": DocTypeRule(
 		value_transformers={"warehouse": "supplier_to_warehouse"}
 	),

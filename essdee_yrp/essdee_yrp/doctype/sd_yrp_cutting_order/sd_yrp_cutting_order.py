@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import frappe
+from yrp.attribute_values import get_mapping_document
 import json
 import copy
 from frappe.model.document import Document
@@ -41,7 +42,7 @@ class SDYRPCuttingOrder(Document):
 		sizes = []
 		for attr_row in cod.item_attributes:
 			if attr_row.attribute == cod.primary_attribute and attr_row.mapping:
-				mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attr_row.mapping)
+				mapping_doc = get_mapping_document(attr_row.mapping, cached=True)
 				sizes = [v.attribute_value for v in mapping_doc.values]
 				break
 
@@ -182,7 +183,7 @@ def calc_laysheets(cutting_order):
 	sizes = []
 	for attr_row in cod.item_attributes:
 		if attr_row.attribute == cod.primary_attribute and attr_row.mapping:
-			mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attr_row.mapping)
+			mapping_doc = get_mapping_document(attr_row.mapping, cached=True)
 			sizes = [v.attribute_value for v in mapping_doc.values]
 			break
 
@@ -290,7 +291,7 @@ def get_cutting_order_laysheets_report(cutting_order):
 	sizes = []
 	for attr_row in cod_doc.item_attributes:
 		if attr_row.attribute == cod_doc.primary_attribute and attr_row.mapping:
-			mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attr_row.mapping)
+			mapping_doc = get_mapping_document(attr_row.mapping, cached=True)
 			sizes = [v.attribute_value for v in mapping_doc.values]
 			break
 
@@ -364,7 +365,7 @@ def get_cutting_order_size_reports(cutting_order):
 	sizes = []
 	for attr_row in cod_doc.item_attributes:
 		if attr_row.attribute == cod_doc.primary_attribute and attr_row.mapping:
-			mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attr_row.mapping)
+			mapping_doc = get_mapping_document(attr_row.mapping, cached=True)
 			sizes = [v.attribute_value for v in mapping_doc.values]
 			break
 
@@ -459,7 +460,7 @@ def get_cutting_order_ccr(doc_name):
 	all_sizes = []
 	for attr_row in cod_doc.item_attributes:
 		if attr_row.attribute == cod_doc.primary_attribute and attr_row.mapping:
-			mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attr_row.mapping)
+			mapping_doc = get_mapping_document(attr_row.mapping, cached=True)
 			all_sizes = [v.attribute_value for v in mapping_doc.values]
 			break
 
@@ -486,7 +487,7 @@ def get_cutting_order_planned_vs_actual(cutting_order):
 	sizes = []
 	for attr_row in cod_doc.item_attributes:
 		if attr_row.attribute == cod_doc.primary_attribute and attr_row.mapping:
-			mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attr_row.mapping)
+			mapping_doc = get_mapping_document(attr_row.mapping, cached=True)
 			sizes = [v.attribute_value for v in mapping_doc.values]
 			break
 
@@ -592,7 +593,7 @@ def get_cutting_order_detail_data(cutting_order_detail):
 	sizes = []
 	for attr_row in doc.item_attributes:
 		if attr_row.attribute == doc.primary_attribute and attr_row.mapping:
-			mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attr_row.mapping)
+			mapping_doc = get_mapping_document(attr_row.mapping, cached=True)
 			sizes = [v.attribute_value for v in mapping_doc.values]
 			break
 

@@ -15,6 +15,7 @@
   "posting_date",
   "posting_time",
   "section_items",
+  "item_html",
   "items",
   "comments",
   "amended_from"
@@ -104,6 +105,11 @@
    "print_hide": 1,
    "read_only": 1,
    "search_index": 1
+  },
+  {
+   "fieldname": "item_html",
+   "fieldtype": "HTML",
+   "label": "Items"
   }
  ],
  "grid_page_length": 50,

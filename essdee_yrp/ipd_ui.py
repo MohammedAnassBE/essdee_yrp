@@ -2,6 +2,7 @@ import json
 from itertools import groupby, zip_longest
 
 import frappe
+from yrp.attribute_values import get_mapping_document, get_mapping_values
 from frappe.utils import cint
 
 from yrp.utils import update_if_string_instance
@@ -35,7 +36,7 @@ def load_attribute_list(doc):
 
 		values = []
 		if attribute.mapping:
-			mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attribute.mapping)
+			mapping_doc = get_mapping_document(attribute.mapping, cached=True)
 			values = mapping_doc.values
 
 		attribute_list.append(
@@ -156,12 +157,7 @@ def get_attribute_detail_values(doctype, txt, searchfield, start, page_len, filt
 	if not mapping:
 		return []
 
-	rows = frappe.get_all(
-		'YRP Item Item Attribute Mapping Value',
-		filters={"parent": mapping},
-		fields=["attribute_value"],
-		order_by="idx asc",
-	)
+	rows = [frappe._dict(attribute_value=value) for value in get_mapping_values(mapping)]
 	txt = (txt or "").lower()
 	return [[row.attribute_value] for row in rows if row.attribute_value.lower().startswith(txt)]
 
@@ -171,12 +167,7 @@ def search_attribute_detail_values(txt="", mapping=None, page_len=99):
 	"""Return mapped attribute values for an Autocomplete Data control."""
 	if not mapping:
 		return []
-	rows = frappe.get_all(
-		'YRP Item Item Attribute Mapping Value',
-		filters={"parent": mapping},
-		pluck="attribute_value",
-		order_by="idx asc",
-	)
+	rows = get_mapping_values(mapping)
 	needle = (txt or "").lower()
 	return [value for value in rows if needle in value.lower()][: int(page_len or 99)]
 
@@ -217,7 +208,7 @@ def get_attribute_values(item_production_detail, attributes=None):
 				row.stiching_attribute_value for row in ipd_doc.get("stiching_item_details") or []
 			]
 		else:
-			mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attribute.mapping)
+			mapping_doc = get_mapping_document(attribute.mapping, cached=True)
 			attribute_values[attribute.attribute] = [
 				row.attribute_value for row in mapping_doc.get("values") or []
 			]
@@ -253,7 +244,9 @@ def get_new_combination(
 	doc_name=None,
 ):
 	packing_attribute_details = update_if_string_instance(packing_attribute_details) or []
-	mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attribute_mapping_value)
+	mapping_doc = get_mapping_document(attribute_mapping_value, cached=True)
+	from essdee_yrp.ipd_attribute_links import actual_value
+	major_attribute_value = actual_value(major_attribute_value)
 	attributes = [row.attribute_value for row in mapping_doc.get("values") or []]
 
 	stiching_item_details = {}
@@ -408,7 +401,7 @@ def get_ipd_attribute_values(ipd_doc, attribute):
 
 @frappe.whitelist()
 def get_mapping_attribute_values(attribute_mapping_value, attribute_no=None):
-	mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attribute_mapping_value)
+	mapping_doc = get_mapping_document(attribute_mapping_value, cached=True)
 	if attribute_no and len(mapping_doc.values) < int(attribute_no):
 		frappe.throw(
 			f"The Packing attribute number is {attribute_no} "
@@ -826,7 +819,7 @@ def update_attr_combination(initial_attrs, attributes, last_item, attrs_len):
 def get_attr_mapping_details(mapping):
 	if not mapping:
 		return []
-	mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', mapping)
+	mapping_doc = get_mapping_document(mapping, cached=True)
 	return [row.attribute_value for row in mapping_doc.get("values") or []]
 
 

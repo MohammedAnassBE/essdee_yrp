@@ -339,22 +339,31 @@ class F15SourceBridge:
 			"variant_to_item": {},
 			"item_defaults": {},
 			"item_groups": {},
+			"item_dependent_attributes": {},
 			"item_attribute_values": {},
+			"attribute_value_pairs": {},
+			"source_attribute_value_attributes": {},
 			"cut_panel_from_warehouse": {},
 			"migration_defaults": dict(self.settings.required_defaults),
 		}
 		conflicts = []
+		mapping_pairs = []
 		for row in self._run(["reference-data"]):
 			kind = row.get("kind")
 			name = row.get("name")
 			if kind == "item":
 				data["item_defaults"][name] = row.get("default_uom")
 				data["item_groups"][name] = row.get("item_group")
+				data["item_dependent_attributes"][name] = row.get("dependent_attribute")
 			elif kind == "item_variant":
 				data["variant_to_item"][name] = row.get("item")
+			elif kind == "mapping_attribute_value":
+				mapping_pairs.append(row)
 			elif kind == "item_attribute_value":
 				value = row.get("attribute_value")
 				data["item_attribute_values"][name] = value
+				data["source_attribute_value_attributes"][name] = row.get("attribute_name")
+				data["attribute_value_pairs"].setdefault(value, []).append(row.get("attribute_name"))
 				if name != value:
 					conflicts.append(
 						{
@@ -403,6 +412,11 @@ class F15SourceBridge:
 					f"{row['name']}={row['candidates']}" for row in conflicts[:20]
 				)
 			)
+		for row in mapping_pairs:
+			if row.get("attribute_name"):
+				attrs = data["attribute_value_pairs"].setdefault(row["attribute_value"], [])
+				if row["attribute_name"] not in attrs:
+					attrs.append(row["attribute_name"])
 		return data
 
 	def file_status(self, names: Iterable[str] | None = None) -> dict[str, Any]:
@@ -1404,6 +1418,8 @@ def _migration_contract_fingerprint(
 			"transformers.py",
 		)
 	]
+	from yrp import attribute_value_identity, attribute_values
+	code_paths.extend([Path(attribute_value_identity.__file__), Path(attribute_values.__file__)])
 	code_paths.append(SOURCE_BRIDGE)
 	code_paths.append(SOURCE_BRIDGE.with_name('f15_framework_archive.py'))
 	code_paths.append(migration_root.parent / 'purchase_invoice.py')
@@ -3047,12 +3063,16 @@ def _standard_item_attribute_value_pair_inventory() -> dict[str, Any]:
 				AND variant.parentfield='attributes'
 				AND COALESCE(variant.attribute, '')<>''
 				AND COALESCE(variant.attribute_value, '')<>''
+			UNION
+			SELECT attribute_name, attribute_value FROM `tabYRP Item Attribute Value`
 		) child
 		LEFT JOIN `tabItem Attribute Value` allowed
 			ON allowed.parent=child.attribute
 			AND allowed.parenttype='Item Attribute'
 			AND allowed.parentfield='item_attribute_values'
 			AND allowed.attribute_value=child.attribute_value
+		WHERE NOT EXISTS (SELECT 1 FROM `tabItem Attribute` t
+			WHERE t.name=child.attribute AND t.numeric_values=1)
 		ORDER BY child.attribute, child.attribute_value
 		""",
 	)
@@ -4084,6 +4104,7 @@ def _prepare_item_migration_documents(
 				"variant_based_on",
 				"attributes",
 				"item_tuple_attribute",
+				"dependent_attribute_value",
 				"sync_with_erp",
 			}
 		prepared.append(
@@ -4258,6 +4279,53 @@ def _apply_contextual_defaults(
 			configured_value = defaults.get(f"{target_doctype}.{fieldname}")
 		if configured_value not in (None, ""):
 			document[fieldname] = configured_value
+	if document.get("doctype") == "YRP Item Production Detail":
+		from yrp.attribute_value_identity import attribute_value_name
+		value = document.get("stiching_major_attribute_value")
+		attribute = document.get("stiching_attribute")
+		if value and attribute:
+			pairs = reference_data.get("attribute_value_pairs", {})
+			if attribute in pairs.get(value, []):
+				document["stiching_major_attribute_value"] = attribute_value_name(attribute, value)
+	if document.get("doctype") == "YRP Item Item Attribute Mapping":
+		from yrp.attribute_value_identity import attribute_value_name
+		attribute = document.get("attribute_name")
+		rows = document.get("values") or []
+		if not attribute:
+			candidates = None
+			for row in rows:
+				value = row.get("attribute_value")
+				if not value:
+					continue
+				attrs = set(reference_data.get("attribute_value_pairs", {}).get(value, []))
+				candidates = attrs if candidates is None else candidates & attrs
+			if candidates is not None:
+				if len(candidates) != 1:
+					raise MigrationError(f"Ambiguous attribute for mapping {document.get('name')}")
+				attribute = document["attribute_name"] = candidates.pop()
+		pairs = reference_data.get("attribute_value_pairs", {})
+		known_links = {attribute_value_name(attribute, value) for value, attributes in pairs.items() if attribute in attributes}
+		for row in rows:
+			value = row.get("attribute_value")
+			if value and value not in known_links:
+				if attribute not in pairs.get(value, []):
+					raise MigrationError(f"Unknown source attribute/value pair {attribute}: {value}")
+				row["attribute_value"] = attribute_value_name(attribute, value)
+	if document.get("doctype") == "YRP Item Item Attribute Mapping Value":
+		from yrp.attribute_value_identity import attribute_value_name
+		value = document.get("attribute_value")
+		attribute = reference_data.get("source_attribute_value_attributes", {}).get(value)
+		if value and attribute:
+			document["attribute_value"] = attribute_value_name(attribute, value)
+	if document.get("doctype") == "Item" and "dependent_attribute_value" in fieldnames:
+		from yrp.yrp.doctype.yrp_item.yrp_item import get_dependent_attribute_value
+
+		dependent_attribute = reference_data.get("item_dependent_attributes", {}).get(
+			document.get("variant_of")
+		)
+		document["dependent_attribute_value"] = get_dependent_attribute_value(
+			document.get("attributes"), dependent_attribute
+		)
 	if "received_type" in fieldnames and not document.get("received_type"):
 		default_received_type = defaults.get("default_received_type")
 		if default_received_type:
@@ -4463,6 +4531,14 @@ def _ensure_supporting_masters(
 	reference_data: Mapping[str, Mapping[str, Any]],
 ) -> None:
 	now = now_datetime()
+	from yrp.attribute_value_identity import attribute_value_name
+	target._bulk_upsert("YRP Item Attribute Value", [
+		{"name": attribute_value_name(attribute, value), "attribute_name": attribute,
+		 "attribute_value": value, "owner": "Administrator", "creation": now,
+		 "modified": now, "modified_by": "Administrator", "docstatus": 0}
+		for value, attributes in reference_data.get("attribute_value_pairs", {}).items()
+		for attribute in set(attributes)
+	])
 	defaults = reference_data.get("migration_defaults", {})
 	received_via_values = sorted(
 		{str(value) for value in defaults.get("bill_received_via") or [] if value}
@@ -4557,6 +4633,10 @@ def _verify_counts(
 	series = _verify_series(source)
 	stock = _verify_stock_summary(source)
 	links = _verify_link_integrity(plan, source_broken_links, source_dynamic_links=source.iter_broken_dynamic_links())
+	from yrp.attribute_values import verify_attribute_value_links
+	links["failures"].extend(verify_attribute_value_links())
+	if links["failures"]:
+		links["status"] = "Failed"
 	setup_state = _verify_target_setup_state()
 	from essdee_yrp.purchase_invoice import (
 		verify_legacy_purchase_order_projection,

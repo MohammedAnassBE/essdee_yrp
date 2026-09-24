@@ -35,7 +35,7 @@ IPD_CUSTOM_FIELDS = [
 		description="Unique number of attribute values that will be put into a box.",
 	),
 	_field("section_break_rjdy", "Section Break"),
-	_field("auto_calculate", "Check", "Auto Calculate", default="0"),
+	_field("auto_calculate", "Check", "Auto Calculate", default="1"),
 	_field(
 		"get_packing_attribute_values",
 		"Button",
@@ -131,8 +131,9 @@ IPD_CUSTOM_FIELDS = [
 	_field("stiching_details_section", "Section Break", "Stiching Details"),
 	_field(
 		"stiching_major_attribute_value",
-		"Data",
+		"Link",
 		"Stiching Major Attribute Value",
+		options="YRP Item Attribute Value",
 		depends_on="eval: doc.stiching_attribute",
 	),
 	_field("section_break_lpco", "Section Break"),

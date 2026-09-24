@@ -1,4 +1,18 @@
 frappe.ui.form.on("YRP Goods Received Note", {
+	setup(frm) {
+		frm.get_grn_source_defaults = () => {
+			if (!frm.doc.additional_grn || frm.doc.is_return || frm.doc.against !== "YRP Work Order") return null;
+			return {
+				method: "essdee_yrp.additional_grn.get_defaults",
+				args: {work_order: frm.doc.against_id},
+			};
+		};
+	},
+	additional_grn(frm) {
+		if (frm.doc.docstatus === 0 && frm.doc.against_id) {
+			frm.script_manager.trigger("against_id");
+		}
+	},
 	refresh(frm) {
 		exclude_grn_cut_panel_movement_from_cancel_all(frm);
 		configure_bundle_return(frm);

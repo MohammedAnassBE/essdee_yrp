@@ -33,6 +33,15 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 
 	def onload(self):
 		super().onload()
+		if self.get("additional_grn") and self.against == 'YRP Work Order':
+			from yrp.stock.save_stock_items import group_items_for_ui
+
+			rows = [frappe._dict(row.as_dict()) for row in self.items]
+			for row in rows:
+				row.max_receivable_quantity = -1
+			self.set_onload("item_details", group_items_for_ui(
+				normalize_cutting_grn_row_indexes(rows), 'YRP Goods Received Note'))
+			return
 		display_rows = self.get("items") or []
 		if (
 			self.docstatus == 0
@@ -120,6 +129,12 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 		_set_dynamic_packing_piece_uom(self)
 
 	def before_submit(self):
+		if self.get("additional_grn"):
+			from essdee_yrp.additional_grn import validate_receivables, validate_submit_role
+
+			validate_submit_role()
+			validate_receivables(self)
+			self.set("grn_deliverables", [])
 		if self.get("against") == 'YRP Work Order' and self.get("against_id"):
 			# One lock covers sewing caps, source-pending checks, deterministic plan
 			# calculation, and the later Work Order stock-update transition.
@@ -226,6 +241,10 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 				frappe.throw(_("Row {0}: Quantity must be greater than zero.").format(row.idx))
 
 	def validate_source_pending(self):
+		if self.get("additional_grn"):
+			from essdee_yrp.additional_grn import validate_receivables
+
+			return validate_receivables(self)
 		if not self._is_essdee_return():
 			return super().validate_source_pending()
 		_validate_return_quantities(self)

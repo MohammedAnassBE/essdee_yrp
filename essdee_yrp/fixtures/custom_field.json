@@ -7323,7 +7323,7 @@
   "collapsible": 0,
   "collapsible_depends_on": null,
   "columns": 0,
-  "default": "0",
+  "default": "1",
   "depends_on": null,
   "description": null,
   "docstatus": 0,
@@ -10517,7 +10517,7 @@
   "fetch_from": null,
   "fetch_if_empty": 0,
   "fieldname": "stiching_major_attribute_value",
-  "fieldtype": "Data",
+  "fieldtype": "Link",
   "hidden": 0,
   "hide_border": 0,
   "hide_days": 0,
@@ -10555,7 +10555,8 @@
   "sort_options": 0,
   "translatable": 0,
   "unique": 0,
-  "width": null
+  "width": null,
+  "options": "YRP Item Attribute Value"
  },
  {
   "alignment": null,

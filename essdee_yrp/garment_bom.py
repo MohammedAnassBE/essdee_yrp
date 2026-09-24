@@ -109,7 +109,7 @@ def _qty_of_product(ipd, lot_doc, bom_row):
 	pack_in_stage = lot_doc.get("pack_in_stage")
 	pack_out_stage = lot_doc.get("pack_out_stage")
 
-	if stage and stage != pack_in_stage:
+	if stage and stage == pack_out_stage and stage != pack_in_stage:
 		qty_of_product = _packing_uom_conversion(ipd.item, lot_doc.get("packing_uom"))
 		if stage == pack_out_stage:
 			packing_combo = flt(ipd.get("packing_combo"))

@@ -1,6 +1,7 @@
 """Alternative-item Finishing Plan orchestration for Essdee."""
 
 import frappe
+from yrp.attribute_values import get_mapping_values
 from frappe import _
 from frappe.utils import flt
 
@@ -481,18 +482,10 @@ def check_colours_and_sizes(ipd_name, converting_colours, converting_sizes):
 	if not colour_mapping or not size_mapping:
 		frappe.throw(_("Item Production Detail {0} has invalid mappings").format(ipd.name))
 	colours = set(
-		frappe.get_all(
-			'YRP Item Item Attribute Mapping Value',
-			filters={"parent": colour_mapping},
-			pluck="attribute_value",
-		)
+		get_mapping_values(colour_mapping)
 	)
 	sizes = set(
-		frappe.get_all(
-			'YRP Item Item Attribute Mapping Value',
-			filters={"parent": size_mapping},
-			pluck="attribute_value",
-		)
+		get_mapping_values(size_mapping)
 	)
 	missing_colours = set(converting_colours).difference(colours)
 	missing_sizes = set(converting_sizes).difference(sizes)

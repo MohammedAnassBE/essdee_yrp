@@ -331,7 +331,7 @@ def _validate_garment_work_order(wo):
 
 
 def _garment_reference_variants(ipd):
-	filters = {"item": ipd.item}
+	filters = {"variant_of": ipd.item}
 	if ipd.dependent_attribute and ipd.get("pack_in_stage"):
 		parents = frappe.get_all(
 			'Item Variant Attribute',

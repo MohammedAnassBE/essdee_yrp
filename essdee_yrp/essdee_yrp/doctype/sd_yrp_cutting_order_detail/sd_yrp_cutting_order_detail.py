@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import frappe
+from yrp.attribute_values import get_mapping_document
 import json
 from frappe.model.document import Document
 from essdee_yrp.ipd_ui import fetch_combination_items
@@ -45,7 +46,7 @@ class SDYRPCuttingOrderDetail(Document):
 			attribute_doc = frappe.get_cached_doc('Item Attribute', attribute.attribute)
 			if not attribute_doc.numeric_values:
 				if attribute.mapping != None:
-					doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attribute.mapping)
+					doc = get_mapping_document(attribute.mapping, cached=True)
 					attribute_list.append({
 						'name': attribute.name,
 						'attr_name': attribute.attribute,
@@ -106,7 +107,7 @@ class SDYRPCuttingOrderDetail(Document):
 					mapping = item.mapping
 					break
 			if mapping:
-				map_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', mapping)
+				map_doc = get_mapping_document(mapping, cached=True)
 				map_values = [v.attribute_value for v in map_doc.values]
 
 				check_dict = {}
@@ -173,7 +174,7 @@ class SDYRPCuttingOrderDetail(Document):
 				break
 
 		if mapping:
-			map_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', mapping)
+			map_doc = get_mapping_document(mapping, cached=True)
 			if len(map_doc.values) < self.attribute_no:
 				frappe.throw(f"The Packing attribute no is {self.attribute_no} But there is only {len(map_doc.values)} attributes are available")
 
@@ -239,8 +240,8 @@ def duplicate_cod(cod, item=None):
 			continue
 		for new_row in doc.item_attributes:
 			if new_row.attribute == src_row.attribute and new_row.mapping:
-				src_map = frappe.get_cached_doc('YRP Item Item Attribute Mapping', src_row.mapping)
-				new_map = frappe.get_doc('YRP Item Item Attribute Mapping', new_row.mapping)
+				src_map = get_mapping_document(src_row.mapping, cached=True)
+				new_map = get_mapping_document(new_row.mapping)
 				new_map.set("values", [])
 				for v in src_map.values:
 					new_map.append("values", {"attribute_value": v.attribute_value})
@@ -272,7 +273,7 @@ def get_dict_table(table_data):
 def update_attribute_mapping_values(mapping, values):
 	if isinstance(values, str):
 		values = json.loads(values)
-	doc = frappe.get_doc('YRP Item Item Attribute Mapping', mapping)
+	doc = get_mapping_document(mapping)
 	doc.check_permission("write")
 	doc.set("values", [])
 	for v in values:
@@ -282,14 +283,14 @@ def update_attribute_mapping_values(mapping, values):
 
 @frappe.whitelist()
 def get_co_new_combination(attribute_mapping_value, packing_attribute_details, major_attribute_value, is_same_colour=False, doc_name=None):
-	frappe.get_doc('YRP Item Item Attribute Mapping', attribute_mapping_value).check_permission("read")
+	get_mapping_document(attribute_mapping_value).check_permission("read")
 	packing_attribute_details = update_if_string_instance(packing_attribute_details)
 	if isinstance(packing_attribute_details, list):
 		pass
 	elif isinstance(packing_attribute_details, dict):
 		packing_attribute_details = list(packing_attribute_details.values()) if packing_attribute_details else []
 
-	doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attribute_mapping_value)
+	doc = get_mapping_document(attribute_mapping_value, cached=True)
 	attributes = [item.attribute_value for item in doc.values]
 
 	stiching_item_details = {}

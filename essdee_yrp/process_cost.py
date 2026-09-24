@@ -1,6 +1,7 @@
 """Essdee Lot/IPD adapters for the base YRP Process Cost DocType."""
 
 import frappe
+from yrp.attribute_values import get_mapping_document
 from frappe import _
 
 from yrp.utils import update_if_string_instance
@@ -39,9 +40,10 @@ def get_item_attributes(doctype, txt, searchfield, start, page_len, filters):
 		for row in ipd.get("ipd_processes") or []:
 			if row.process_name != process_name:
 				continue
-			if row.stage == ipd.stiching_in_stage:
+			stage = row.get("in_stage") or row.get("stage")
+			if stage == ipd.stiching_in_stage:
 				attributes = [ipd.stiching_attribute, ipd.packing_attribute]
-			elif row.stage == ipd.stiching_out_stage:
+			elif stage == ipd.stiching_out_stage:
 				attributes = [ipd.packing_attribute, ipd.primary_item_attribute]
 			else:
 				attributes = [ipd.primary_item_attribute]
@@ -113,7 +115,7 @@ def get_pc_attribute_values(
 		for panel in embellishments.get(process_name, {}) or {}:
 			values.append(panel)
 	else:
-		mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', mapping)
+		mapping_doc = get_mapping_document(mapping, cached=True)
 		values = [row.attribute_value for row in mapping_doc.get("values") or []]
 
 	return [

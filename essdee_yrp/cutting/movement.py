@@ -469,6 +469,10 @@ def build_delivery_challan_defaults(doc_name, work_order):
 		defaults["allow_non_bundle"] = 1
 	defaults["work_order"] = wo.name
 	_copy_existing_fields(defaults, wo, 'YRP Delivery Challan')
+	# The CPM is the authoritative source of this physical dispatch.
+	defaults["from_location"] = cpm.from_warehouse
+	from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import _get_warehouse_for_supplier
+	defaults["from_warehouse"] = _get_warehouse_for_supplier(cpm.from_warehouse)
 	return defaults
 
 

@@ -1,3 +1,4 @@
+from essdee_yrp.ipd_attribute_links import major_stitching_value
 # Copyright (c) 2025, Essdee and contributors
 # For license information, please see license.txt
 
@@ -321,7 +322,7 @@ def get_major_set_colours(colour, panel, lot):
 	d = {
 		"is_set_item": ipd_doc.is_set_item,
 		"is_same_packing_attribute": ipd_doc.is_same_packing_attribute,
-		'major_panel' : ipd_doc.stiching_major_attribute_value
+		'major_panel' : major_stitching_value(ipd_doc)
 	}
 
 	if ipd_doc.is_set_item:

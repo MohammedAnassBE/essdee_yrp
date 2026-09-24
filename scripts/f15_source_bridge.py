@@ -1049,7 +1049,7 @@ def emit_reference_data(frappe):
 	)
 
 	for row in frappe.get_all(
-		"Item", fields=["name", "item_group", "default_unit_of_measure"], limit_page_length=0
+		"Item", fields=["name", "item_group", "default_unit_of_measure", "dependent_attribute"], limit_page_length=0
 	):
 		_write(
 			{
@@ -1057,8 +1057,14 @@ def emit_reference_data(frappe):
 				"name": row.name,
 				"item_group": row.item_group,
 				"default_uom": row.default_unit_of_measure,
+				"dependent_attribute": row.dependent_attribute,
 			}
 		)
+	for row in frappe.db.sql("""SELECT DISTINCT m.attribute_name, v.attribute_value
+		FROM `tabItem Item Attribute Mapping` m
+		JOIN `tabItem Item Attribute Mapping Value` v ON v.parent=m.name
+		WHERE COALESCE(v.attribute_value,'')<>''""", as_dict=True):
+		_write({"kind": "mapping_attribute_value", **row})
 	for row in frappe.get_all(
 		"Item Attribute Value",
 		fields=["name", "attribute_name", "attribute_value"],

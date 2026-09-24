@@ -1,5 +1,6 @@
 # Adapter module for Cutting Marker / LaySheet to work with either Cutting Plan or Cutting Order
 import frappe
+from yrp.attribute_values import get_mapping_document
 from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import get_ipd_primary_values
 
 
@@ -55,7 +56,7 @@ def get_primary_sizes(parent_dt, parent_name):
 		cod = frappe.get_cached_doc('SD YRP Cutting Order Detail', cod_name)
 		for attr_row in cod.item_attributes:
 			if attr_row.attribute == cod.primary_attribute and attr_row.mapping:
-				mapping_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attr_row.mapping)
+				mapping_doc = get_mapping_document(attr_row.mapping, cached=True)
 				return [v.attribute_value for v in mapping_doc.values]
 		return []
 

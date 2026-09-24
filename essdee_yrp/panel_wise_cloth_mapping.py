@@ -9,6 +9,7 @@ The compact matrix may contain blanks while an IPD is being prepared.
 from itertools import product
 
 import frappe
+from yrp.attribute_values import get_mapping_document
 from frappe import _
 
 from essdee_yrp.panel_wise_consumption import (
@@ -31,9 +32,7 @@ SINGLE_VALUE_KEY = "__single__"
 def _mapping_values(doc, attribute):
 	for row in doc.get("item_attributes") or []:
 		if row.get("attribute") == attribute and row.get("mapping"):
-			mapping = frappe.get_cached_doc(
-				'YRP Item Item Attribute Mapping', row.get("mapping")
-			)
+			mapping = get_mapping_document(row.get("mapping"), cached=True)
 			return [value.attribute_value for value in mapping.get("values") or []]
 	return []
 

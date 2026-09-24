@@ -23,10 +23,10 @@
                 <td>{{ i.cloth_type }}</td>
                 <td>{{ i.colour }}</td>
                 <td>{{ i.dia }}</td>
-                <td>{{ i.required_weight }}</td>
-                <td v-if="type=='cloth'">{{ i.weight }}</td>
-                <td>{{i.used_weight}}</td>
-                <td v-if='type=="cloth"'>{{i.balance_weight}}</td>
+                <td>{{ formatWeight(i.required_weight) }}</td>
+                <td v-if="type=='cloth'">{{ formatWeight(i.weight) }}</td>
+                <td>{{ formatWeight(i.used_weight) }}</td>
+                <td v-if='type=="cloth"'>{{ formatWeight(i.balance_weight) }}</td>
             </tr>
             <tr v-if="!items || items.length === 0">
                 <td :colspan="type == 'cloth' ? 9 : 8" class="text-center text-muted">
@@ -56,14 +56,14 @@
                 <td>{{ i.cloth_type }}</td>
                 <td>{{ i.colour }}</td>
                 <td>{{ i.dia }}</td>
-                <td>{{ i.required_weight }}</td>
+                <td>{{ formatWeight(i.required_weight) }}</td>
                 <td v-if="type=='cloth'">
                     <form>
                         <input class="form-control" type="number" v-model.number="i.weight" min="0" step="0.001" @blur="update_doc()"/>
                     </form>
                 </td>
-                <td>{{i.used_weight}}</td>
-                <td v-if='type=="cloth"'>{{i.balance_weight}}</td>
+                <td>{{ formatWeight(i.used_weight) }}</td>
+                <td v-if='type=="cloth"'>{{ formatWeight(i.balance_weight) }}</td>
             </tr>
             <tr v-if="!items || items.length === 0">
                 <td :colspan="type == 'cloth' ? 9 : 8" class="text-center text-muted">
@@ -77,6 +77,7 @@
 <script setup>
 import {ref} from 'vue';
 
+const formatWeight = value => Number(value || 0).toFixed(3);
 let items = ref(null)
 let docstatus = ref(0)
 let type = ref(null)

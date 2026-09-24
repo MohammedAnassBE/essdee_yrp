@@ -6,6 +6,7 @@ garment-specific report structures.
 """
 
 from __future__ import annotations
+from essdee_yrp.ipd_attribute_links import major_stitching_value
 
 import copy
 import json
@@ -190,8 +191,8 @@ def get_daily_production_report(date, location, items=None, lots=None, only_labe
 			panel_qty[row.stiching_attribute_value] = row.quantity
 
 		if not detail_doc.is_set_item:
-			if hasattr(detail_doc, 'stiching_major_attribute_value') and detail_doc.stiching_major_attribute_value:
-				major_panel['panel'] = detail_doc.stiching_major_attribute_value
+			if hasattr(detail_doc, 'stiching_major_attribute_value') and major_stitching_value(detail_doc):
+				major_panel['panel'] = major_stitching_value(detail_doc)
 			else:
 				# COD may not have stiching_major_attribute_value; derive from is_default or first panel
 				for row in detail_doc.stiching_item_details:
@@ -406,7 +407,7 @@ def get_cutting_detail_report(start_date, end_date, location):
 			panel_qty[row.stiching_attribute_value] = row.quantity
 
 		if not ipd_doc.is_set_item:
-			major_panel['panel'] = ipd_doc.stiching_major_attribute_value
+			major_panel['panel'] = major_stitching_value(ipd_doc)
 
 		for row1, row2 in zip_longest(completed_items['items'], incomplete_items['items']):
 			row1['values1'] = {}

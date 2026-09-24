@@ -1,6 +1,7 @@
 """Finishing inward drill-down and print-size validation."""
 
 import frappe
+from yrp.attribute_values import get_mapping_values
 from frappe.utils import flt
 
 from essdee_yrp.finishing.parsing import json_object
@@ -190,9 +191,4 @@ def get_part_value(set_attribute, production_detail):
 	)
 	if not mapping:
 		return None
-	return frappe.get_all(
-		'YRP Item Item Attribute Mapping Value',
-		filters={"parent": mapping},
-		pluck="attribute_value",
-		order_by="idx asc",
-	)
+	return get_mapping_values(mapping)

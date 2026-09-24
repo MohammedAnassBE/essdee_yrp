@@ -8,6 +8,7 @@ from frappe.utils import flt
 from yrp.yrp.doctype.yrp_work_order.yrp_work_order import (
 	WorkOrder,
 	get_process_cost_rate,
+	get_receivable_stock_quantity,
 	get_variant_attributes,
 	set_receivable_process_cost,
 )
@@ -102,7 +103,7 @@ def apply_garment_panel_process_costs(work_order, process_cost):
 
 		panel_type_value = flt(finished_item_rate) * calculated_qty / len(panel_groups)
 		for panel_rows in panel_groups.values():
-			panel_quantity = sum(flt(row.qty) for row in panel_rows)
+			panel_quantity = sum(get_receivable_stock_quantity(row) for row in panel_rows)
 			if panel_quantity <= 0:
 				return False
 			unit_rate = panel_type_value / panel_quantity

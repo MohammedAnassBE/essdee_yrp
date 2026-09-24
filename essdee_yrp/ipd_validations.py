@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 
 import frappe
+from yrp.attribute_values import get_mapping_document
 from frappe import _
 from frappe.utils import cint, flt
 
@@ -21,6 +22,8 @@ def is_cloth_ipd(doc):
 
 
 def before_validate(doc, method=None):
+	from essdee_yrp.ipd_attribute_links import normalize_major_value
+	normalize_major_value(doc)
 	validate_approved_immutability(doc)
 	apply_ipd_settings_defaults(doc)
 	if is_cloth_ipd(doc):
@@ -251,9 +254,7 @@ def sync_cloth_attribute_mapping_values(doc):
 		expected = values.get(attribute)
 		if expected is None or not attribute_row.get("mapping"):
 			continue
-		mapping = frappe.get_doc(
-			'YRP Item Item Attribute Mapping', attribute_row.get("mapping")
-		)
+		mapping = get_mapping_document(attribute_row.get("mapping"))
 		current = [
 			row.get("attribute_value")
 			for row in mapping.get("values") or []
@@ -685,7 +686,7 @@ def validate_set_item_defaults(doc):
 	if not mapping:
 		frappe.throw(f"Mapping is required for Set Item Attribute {doc.set_item_attribute}")
 
-	map_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', mapping)
+	map_doc = get_mapping_document(mapping, cached=True)
 	map_values = [row.attribute_value for row in map_doc.values]
 
 	check_dict = {}
@@ -702,7 +703,7 @@ def validate_set_item_defaults(doc):
 def create_new_mapping_values(doc):
 	for attribute in doc.get("item_attributes") or []:
 		if attribute.mapping:
-			source = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attribute.mapping)
+			source = get_mapping_document(attribute.mapping, cached=True)
 			copy = frappe.copy_doc(source)
 			copy.insert(ignore_permissions=True)
 			attribute.mapping = copy.name
@@ -733,7 +734,7 @@ def ensure_ipd_owned_mappings(doc):
 	with a fresh copy."""
 	for attribute in doc.get("item_attributes") or []:
 		if attribute.mapping and is_mapping_shared('YRP Item Item Attribute Mapping', attribute.mapping, doc.name):
-			source = frappe.get_cached_doc('YRP Item Item Attribute Mapping', attribute.mapping)
+			source = get_mapping_document(attribute.mapping, cached=True)
 			copy = frappe.copy_doc(source)
 			copy.insert(ignore_permissions=True)
 			attribute.mapping = copy.name
@@ -840,7 +841,7 @@ def validate_packing_attribute_details(doc):
 	if not mapping:
 		frappe.throw(f"Mapping is required for Packing Attribute {doc.packing_attribute}")
 
-	map_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', mapping)
+	map_doc = get_mapping_document(mapping, cached=True)
 	if len(map_doc.values) < cint(doc.packing_attribute_no):
 		frappe.throw(
 			f"The Packing attribute no is {doc.packing_attribute_no} "
@@ -1040,7 +1041,7 @@ def get_ipd_attribute_values(doc, attribute):
 	if not mapping:
 		return []
 
-	map_doc = frappe.get_cached_doc('YRP Item Item Attribute Mapping', mapping)
+	map_doc = get_mapping_document(mapping, cached=True)
 	return [row.attribute_value for row in map_doc.values]
 
 

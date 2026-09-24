@@ -4,6 +4,8 @@
 essdee_yrp.patches.rename_ipd_consumption_to_ipd_compacting
 essdee_yrp.patches.prefix_owned_doctypes_and_reports
 
+essdee_yrp.patches.link_stitching_major_value
+
 [post_model_sync]
 # Patches added in this section will be executed after doctypes are migrated
 essdee_yrp.patches.setup_sd_yrp_spine_consumer

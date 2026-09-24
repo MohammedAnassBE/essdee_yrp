@@ -7,6 +7,15 @@ from essdee_yrp.garment_bom import calculate_essdee_accessory_bom
 
 
 class TestGarmentBOM(FrappeTestCase):
+	def test_printing_cut_stage_preserves_authored_accessory_ratio(self):
+		from essdee_yrp.garment_bom import _qty_of_product
+
+		ipd = frappe._dict(item="Test Garment", packing_combo=5)
+		lot = frappe._dict(pack_in_stage="Piece", pack_out_stage="Pack", packing_uom="Pieces")
+		row = frappe._dict(item="INK Roll", dependent_attribute_value="Cut", qty_of_product=100)
+		with patch("essdee_yrp.garment_bom._packing_uom_conversion", return_value=1):
+			self.assertEqual(1500 / _qty_of_product(ipd, lot, row), 15)
+
 	def test_work_order_calculation_rejects_unmapped_attribute_accessory(self):
 		ipd = frappe._dict(
 			name="_Test Garment IPD",

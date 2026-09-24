@@ -1657,6 +1657,8 @@ def _build_work_order_context(
 	for receivable in work_order.get("receivables") or []:
 		if allow_legacy_references and _inactive_legacy_receivable(receivable, selected_grns):
 			continue
+		if _unreceived_non_garment_return(work_order, receivable, selected_grns):
+			continue
 		demand = _demand_for_receivable(demands, receivable, ipd)
 		demand["receivables"].append(receivable)
 		demand_by_receivable[receivable.name] = demand
@@ -1713,6 +1715,27 @@ def _build_work_order_context(
 		"lot": lot,
 		"ipd": ipd,
 	}
+
+
+def _unreceived_non_garment_return(work_order, receivable, selected_grns):
+	"""Unreceived, uncharged material returns do not belong to garment billing.
+
+	Cutting also plans folding-cloth returns. Keep any received or charged row
+	strictly validated; only an unused return from another Item is excluded.
+	"""
+	if (
+		not work_order.get("item")
+		or flt(receivable.cost)
+		or receivable.get("pending_quantity") is None
+		or flt(receivable.qty) != flt(receivable.pending_quantity)
+	):
+		return False
+	for grn in selected_grns:
+		for row in grn.get("items") or []:
+			if row.get("ref_docname") == receivable.name or row.item_variant == receivable.item_variant:
+				return False
+	template = frappe.get_cached_value("Item", receivable.item_variant, "variant_of")
+	return (template or receivable.item_variant) != work_order.item
 
 
 def _inactive_legacy_receivable(receivable, selected_grns):

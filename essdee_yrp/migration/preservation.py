@@ -154,10 +154,14 @@ def run_preservation(plan, source, *, migration_name, dry_run=False, allow_missi
 	counts = Counter()
 	for row in source.iter_orphan_children():
 		document = transform_orphan(row, plan)
-		if document["doctype"] == "YRP Item Item Attribute Mapping Value":
-			if reference_data is None:
-				reference_data = source.reference_data()
-			_apply_contextual_defaults(document, plan.target_schemas[document["doctype"]], reference_data)
+		if reference_data is None:
+			reference_data = source.reference_data()
+		# Orphan child rows pass through the same Link normalization as rows that
+		# still belong to a migrated parent. Several historical attribute-mapping
+		# children outlived their parent and therefore cannot rely on parent context.
+		_apply_contextual_defaults(
+			document, plan.target_schemas[document["doctype"]], reference_data
+		)
 		doctype = document["doctype"]
 		counts[doctype] += 1
 		if not dry_run:
@@ -194,10 +198,11 @@ def verify_orphan_values(plan, source):
 
 	for row in source.iter_orphan_children():
 		document = transform_orphan(row, plan)
-		if document["doctype"] == "YRP Item Item Attribute Mapping Value":
-			if reference_data is None:
-				reference_data = source.reference_data()
-			_apply_contextual_defaults(document, plan.target_schemas[document["doctype"]], reference_data)
+		if reference_data is None:
+			reference_data = source.reference_data()
+		_apply_contextual_defaults(
+			document, plan.target_schemas[document["doctype"]], reference_data
+		)
 		batch.append(document)
 		if len(batch) >= 500:
 			flush()

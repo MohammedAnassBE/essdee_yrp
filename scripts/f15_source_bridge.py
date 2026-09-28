@@ -1078,6 +1078,16 @@ def emit_reference_data(frappe):
 				"attribute_value": row.attribute_value,
 			}
 		)
+	for row in frappe.get_all(
+		"Supplier", fields=["name", "supplier_name"], limit_page_length=0
+	):
+		_write(
+			{
+				"kind": "supplier_identity",
+				"name": row.name,
+				"supplier_name": row.supplier_name,
+			}
+		)
 	_emit_reference_variants_and_cut_panels(frappe)
 
 

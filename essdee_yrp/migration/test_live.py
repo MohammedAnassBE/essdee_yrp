@@ -67,6 +67,7 @@ from essdee_yrp.migration.live import (
 	_validate_required_target_values,
 	_validate_target_migration_prerequisites,
 	_verify_approved_frappe_data,
+	_verified_attachment_url_relocations,
 	_verify_target_setup_state,
 	_verify_transformed_value_batch,
 	enqueue_job,
@@ -317,6 +318,35 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 		):
 			actual = _prepare_approved_frappe_document(document, plan)
 		self.assertEqual(actual["parent"], "YRP Item")
+
+	def test_approved_custom_permission_adopts_existing_semantic_identity(self):
+		plan = SimpleNamespace(specs={"Lot": SimpleNamespace(target="SD YRP Lot")})
+		document = {
+			"doctype": "Custom DocPerm",
+			"name": "SOURCE-HASH",
+			"parent": "Lot",
+			"role": "AI Bot",
+			"permlevel": 0,
+			"read": 1,
+			"export": 1,
+		}
+		with (
+			patch("essdee_yrp.migration.live.frappe.db.exists", return_value=True),
+			patch(
+				"essdee_yrp.migration.live.frappe.get_all",
+				return_value=["TARGET-HASH"],
+			),
+			patch(
+				"essdee_yrp.migration.live._transform_supporting_document",
+				side_effect=lambda value, _doctype, _map: dict(value),
+			),
+			patch(
+				"essdee_yrp.migration.live.frappe.get_meta",
+				return_value=SimpleNamespace(issingle=False),
+			),
+		):
+			actual = _prepare_approved_frappe_document(document, plan)
+		self.assertEqual(actual["name"], "TARGET-HASH")
 
 	def test_approved_workspace_shortcuts_map_links_but_keep_labels(self):
 		plan = SimpleNamespace(specs={"Lot": SimpleNamespace(target="SD YRP Lot")})
@@ -1976,6 +2006,116 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			_is_verified_attachment_url(
 				'SD YRP Product Image', "IMG-1", "title", "/files/renamed.png", "Data"
 			)
+		)
+
+	def test_attachment_relocation_requires_matching_file_identity_and_bytes(self):
+		plan = SimpleNamespace(
+			specs={
+				"Signature": SimpleNamespace(
+					target="SD YRP Signature",
+					source_schema={"issingle": 0},
+					field_map={"signature": "signature"},
+				)
+			}
+		)
+		source = SimpleNamespace(
+			iter_files=lambda **_kwargs: iter(
+				[
+					{
+						"name": "FILE-1",
+						"file_url": "/files/old.jpg",
+						"content_hash": "abc",
+						"file_size": 12,
+						"is_private": 0,
+						"app_references": [
+							{
+								"doctype": "Signature",
+								"name": "SIGN-1",
+								"fieldname": "signature",
+								"fieldtype": "Attach Image",
+							}
+						],
+					}
+				]
+			),
+		)
+		with patch(
+			"essdee_yrp.migration.live.frappe.db.get_value",
+			return_value={
+				"content_hash": "abc",
+				"file_size": 12,
+				"is_private": 0,
+				"file_url": "/files/new.jpg",
+			},
+		):
+			relocations = _verified_attachment_url_relocations(plan, source)
+		with patch("essdee_yrp.migration.live.frappe.db.exists", return_value=False):
+			self.assertTrue(
+				_is_verified_attachment_url(
+					"SD YRP Signature",
+					"SIGN-1",
+					"signature",
+					"/files/new.jpg",
+					"Attach Image",
+					expected_url="/files/old.jpg",
+					verified_relocations=relocations,
+				)
+			)
+			self.assertFalse(
+				_is_verified_attachment_url(
+					"SD YRP Signature",
+					"SIGN-1",
+					"signature",
+					"/files/other.jpg",
+					"Attach Image",
+					expected_url="/files/old.jpg",
+					verified_relocations=relocations,
+				)
+			)
+
+	def test_supplier_alias_normalizes_master_and_supplier_warehouse_links(self):
+		references = {"supplier_aliases": {"Sivan Motor Works": "Sivan Motors Works"}}
+		with patch("yrp.attribute_links.fields", return_value={}):
+			supplier = {"doctype": "Supplier", "name": "Sivan Motor Works"}
+			_apply_contextual_defaults(supplier, {"fields": []}, references)
+			self.assertEqual(supplier["name"], "Sivan Motors Works")
+			bill = {
+				"doctype": "YRP Bill Tracking",
+				"name": "VBT-1",
+				"supplier": "Sivan Motor Works",
+				"warehouse": "Sivan Motor Works",
+			}
+			_apply_contextual_defaults(
+				bill,
+				{
+					"fields": [
+						{"fieldname": "supplier", "fieldtype": "Link", "options": "Supplier"},
+						{"fieldname": "warehouse", "fieldtype": "Link", "options": "Warehouse"},
+					]
+				},
+				references,
+			)
+		self.assertEqual(bill["supplier"], "Sivan Motors Works")
+		self.assertEqual(bill["warehouse"], "Sivan Motors Works")
+
+	def test_stitching_major_value_uses_source_master_attribute_identity(self):
+		from yrp.attribute_value_identity import attribute_value_name
+
+		document = {
+			"doctype": "YRP Item Production Detail",
+			"name": "IPD-1",
+			"stiching_attribute": "Panel",
+			"stiching_major_attribute_value": "Top",
+		}
+		references = {
+			"attribute_value_pairs": {"Top": ["Part"]},
+			"source_attribute_value_attributes": {},
+		}
+		with patch("yrp.attribute_links.fields", return_value={}):
+			_apply_contextual_defaults(document, {"fields": []}, references)
+		self.assertEqual(
+			document["stiching_major_attribute_value"],
+			attribute_value_name("Part", "Top"),
 		)
 
 	def test_single_identity_is_counted_without_querying_a_physical_table(self):

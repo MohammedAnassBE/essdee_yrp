@@ -81,6 +81,11 @@ BUSINESS_SUPPORTING_MASTERS = frozenset({"Address", "Contact"})
 # during a long verification run, and they are not migrated business state.
 VOLATILE_VERIFICATION_FIELDS = {
 	"User": frozenset({"last_active", "last_known_versions"}),
+	# App fixture sync may recreate an equivalent permission row under a new
+	# random hash and framework-owned timestamps after the migration write.
+	"Custom DocPerm": frozenset(
+		{"owner", "creation", "modified", "modified_by"}
+	),
 }
 # These standard masters belong to the independently restored ERP database.
 # The MRP source is merged into them by exact identity, so source identities
@@ -359,10 +364,12 @@ class F15SourceBridge:
 			"attribute_value_pairs": {},
 			"source_attribute_value_attributes": {},
 			"cut_panel_from_warehouse": {},
+			"supplier_aliases": {},
 			"migration_defaults": dict(self.settings.required_defaults),
 		}
 		conflicts = []
 		mapping_pairs = []
+		source_suppliers = []
 		for row in self._run(["reference-data"]):
 			kind = row.get("kind")
 			name = row.get("name")
@@ -392,6 +399,8 @@ class F15SourceBridge:
 					conflicts.append(row)
 				elif row.get("warehouse"):
 					data["cut_panel_from_warehouse"][name] = row["warehouse"]
+			elif kind == "supplier_identity":
+				source_suppliers.append(row)
 			elif kind == "migration_defaults":
 				migration_defaults = {
 					"default_received_type": row.get("default_received_type"),
@@ -432,6 +441,28 @@ class F15SourceBridge:
 				attrs = data["attribute_value_pairs"].setdefault(row["attribute_value"], [])
 				if row["attribute_name"] not in attrs:
 					attrs.append(row["attribute_name"])
+		for row in source_suppliers:
+			source_name = str(row.get("name") or "")
+			if not source_name:
+				raise MigrationError("Source returned an unnamed Supplier identity")
+			if frappe.db.exists("Supplier", source_name):
+				data["supplier_aliases"][source_name] = source_name
+				continue
+			supplier_name = str(row.get("supplier_name") or "")
+			matches = frappe.get_all(
+				"Supplier",
+				filters={"supplier_name": supplier_name},
+				pluck="name",
+				limit_page_length=0,
+			)
+			if len(matches) > 1:
+				raise MigrationError(
+					f"Ambiguous target Supplier identity for {source_name!r}: "
+					+ ", ".join(sorted(str(value) for value in matches))
+				)
+			data["supplier_aliases"][source_name] = (
+				str(matches[0]) if matches else source_name
+			)
 		return data
 
 	def file_status(self, names: Iterable[str] | None = None) -> dict[str, Any]:
@@ -2767,6 +2798,30 @@ def _prepare_approved_frappe_document(
 		# are restricted to an installed target DocType.
 		if not frappe.db.exists("DocType", working["parent"]):
 			return None
+		role = str(working.get("role") or "")
+		if role:
+			permission_fields = (
+				"if_owner", "permlevel", "select", "read", "write", "create",
+				"delete", "submit", "cancel", "amend", "mask", "report",
+				"export", "import", "share", "print", "email",
+			)
+			filters = {"parent": working["parent"], "role": role}
+			filters.update(
+				{fieldname: int(working.get(fieldname) or 0) for fieldname in permission_fields}
+			)
+			semantic_matches = frappe.get_all(
+				"Custom DocPerm",
+				filters=filters,
+				pluck="name",
+				limit_page_length=0,
+			)
+			if len(semantic_matches) > 1:
+				raise MigrationError(
+					"Ambiguous target Custom DocPerm semantic identity for "
+					f"{working['parent']} / {role}"
+				)
+			if semantic_matches:
+				working["name"] = str(semantic_matches[0])
 	elif source_doctype == "List View Settings":
 		name = str(working.get("name") or "")
 		working["name"] = doctype_map.get(name, name)
@@ -4277,6 +4332,7 @@ def _apply_contextual_defaults(
 
 	reference_data = reference_data or {}
 	defaults = reference_data.get("migration_defaults", {})
+	supplier_aliases = reference_data.get("supplier_aliases", {})
 	fieldnames = {
 		str(field.get("fieldname"))
 		for field in target_schema.get("fields") or []
@@ -4292,6 +4348,22 @@ def _apply_contextual_defaults(
 			configured_value = defaults.get(f"{target_doctype}.{fieldname}")
 		if configured_value not in (None, ""):
 			document[fieldname] = configured_value
+	# MariaDB can merge a source Supplier into an existing ERP Supplier through
+	# Supplier.supplier_name's unique key while keeping the ERP row's primary
+	# identity. Resolve that identity before writing both the master and every
+	# Supplier/Warehouse reference derived from it.
+	if document.get("doctype") == "Supplier" and document.get("name") in supplier_aliases:
+		document["name"] = supplier_aliases[document["name"]]
+	for field in target_schema.get("fields") or []:
+		if field.get("fieldtype") != "Link" or field.get("options") not in {
+			"Supplier",
+			"Warehouse",
+		}:
+			continue
+		fieldname = str(field.get("fieldname") or "")
+		value = document.get(fieldname)
+		if value in supplier_aliases:
+			document[fieldname] = supplier_aliases[value]
 	# Resolve migrated Link values using the original source master identity.
 	# Do not infer an attribute from labels, or change native ERPNext Data rows.
 	from yrp.attribute_links import fields as attribute_link_fields
@@ -4311,11 +4383,27 @@ def _apply_contextual_defaults(
 	if document.get("doctype") == "YRP Item Production Detail":
 		from yrp.attribute_value_identity import attribute_value_name
 		value = document.get("stiching_major_attribute_value")
-		attribute = document.get("stiching_attribute")
-		if value and attribute:
+		if value and not str(value).startswith("IAV-"):
 			pairs = reference_data.get("attribute_value_pairs", {})
-			if attribute in pairs.get(value, []):
-				document["stiching_major_attribute_value"] = attribute_value_name(attribute, value)
+			attribute = reference_data.get(
+				"source_attribute_value_attributes", {}
+			).get(value)
+			if not attribute:
+				attributes = pairs.get(value, [])
+				if len(attributes) == 1:
+					attribute = attributes[0]
+			if not attribute:
+				configured_attribute = document.get("stiching_attribute")
+				if configured_attribute in pairs.get(value, []):
+					attribute = configured_attribute
+			if not attribute:
+				raise MigrationError(
+					"Cannot resolve source stitching major attribute identity: "
+					f"{document.get('name')}={value}"
+				)
+			document["stiching_major_attribute_value"] = attribute_value_name(
+				attribute, value
+			)
 	if document.get("doctype") == "YRP Item Item Attribute Mapping":
 		from yrp.attribute_value_identity import attribute_value_name
 		attribute = document.get("attribute_name")
@@ -4804,6 +4892,7 @@ def _verify_source_values(
 	"""
 
 	reference_data = source.reference_data()
+	attachment_url_relocations = _verified_attachment_url_relocations(plan, source)
 	columns_cache: dict[str, set[str]] = {}
 	fieldtypes_cache: dict[str, dict[str, str]] = {}
 	numeric_scales_cache: dict[str, dict[str, int]] = {}
@@ -4860,6 +4949,7 @@ def _verify_source_values(
 				columns_cache=columns_cache,
 				fieldtypes_cache=fieldtypes_cache,
 				numeric_scales_cache=numeric_scales_cache,
+				attachment_url_relocations=attachment_url_relocations,
 			)
 			doctype_documents += result["documents"]
 			doctype_values += result["values"]
@@ -4884,6 +4974,7 @@ def _verify_source_values(
 				columns_cache=columns_cache,
 				fieldtypes_cache=fieldtypes_cache,
 				numeric_scales_cache=numeric_scales_cache,
+				attachment_url_relocations=attachment_url_relocations,
 			)
 			doctype_documents += result["documents"]
 			doctype_values += result["values"]
@@ -4937,6 +5028,9 @@ def _verify_transformed_value_batch(
 	columns_cache: dict[str, set[str]] | None = None,
 	fieldtypes_cache: dict[str, dict[str, str]] | None = None,
 	numeric_scales_cache: dict[str, dict[str, int]] | None = None,
+	attachment_url_relocations: Mapping[
+		tuple[str, str, str, str], set[str]
+	] | None = None,
 ) -> dict[str, Any]:
 	columns_cache = columns_cache if columns_cache is not None else {}
 	fieldtypes_cache = fieldtypes_cache if fieldtypes_cache is not None else {}
@@ -4991,6 +5085,8 @@ def _verify_transformed_value_batch(
 							fieldname,
 							actual[fieldname],
 							fieldtypes.get(fieldname),
+							expected_url=expected_value,
+							verified_relocations=attachment_url_relocations,
 						):
 							normalized_attachment_urls.append(f"{doctype}.{fieldname}")
 						else:
@@ -5135,6 +5231,8 @@ def _verify_transformed_value_batch(
 						fieldname,
 						actual.get(fieldname),
 						fieldtypes.get(fieldname),
+						expected_url=expected_value,
+						verified_relocations=attachment_url_relocations,
 					):
 						normalized_attachment_urls.append(
 							f"{doctype} {identity}.{fieldname}"
@@ -5251,29 +5349,81 @@ def _database_identity_key(value: Any) -> str:
 	return str(value or "").casefold()
 
 
+def _verified_attachment_url_relocations(
+	plan: MigrationPlan, source: F15SourceBridge
+) -> dict[tuple[str, str, str, str], set[str]]:
+	"""Index URL rewrites proven by the same migrated File identity and bytes."""
+
+	relocations: dict[tuple[str, str, str, str], set[str]] = {}
+	for row in source.iter_files(metadata_only=True):
+		target = frappe.db.get_value(
+			"File",
+			row.get("name"),
+			["content_hash", "file_size", "is_private", "file_url"],
+			as_dict=True,
+		)
+		if not target:
+			continue
+		if (
+			str(target.get("content_hash") or "") != str(row.get("content_hash") or "")
+			or int(target.get("file_size") or 0) != int(row.get("file_size") or 0)
+			or int(target.get("is_private") or 0) != int(row.get("is_private") or 0)
+		):
+			continue
+		source_url = str(row.get("file_url") or "")
+		target_url = str(target.get("file_url") or "")
+		if not source_url or not target_url:
+			continue
+		for reference in row.get("app_references") or []:
+			if reference.get("fieldtype") not in {"Attach", "Attach Image"}:
+				continue
+			spec = plan.specs.get(reference.get("doctype"))
+			if not spec:
+				continue
+			target_name = (
+				spec.target
+				if spec.source_schema.get("issingle")
+				else str(reference.get("name") or "")
+			)
+			target_field = spec.field_map.get(
+				reference.get("fieldname"), reference.get("fieldname")
+			)
+			key = (spec.target, target_name, str(target_field or ""), source_url)
+			relocations.setdefault(key, set()).add(target_url)
+	return relocations
+
+
 def _is_verified_attachment_url(
 	doctype: str,
 	name: str,
 	fieldname: str,
 	actual_url: Any,
 	fieldtype: str | None,
+	*,
+	expected_url: Any = None,
+	verified_relocations: Mapping[
+		tuple[str, str, str, str], set[str]
+	] | None = None,
 ) -> bool:
 	"""Accept only a URL rewritten by the migrated target File lifecycle."""
 
 	if fieldtype not in {"Attach", "Attach Image"} or not actual_url:
 		return False
-	return bool(
-		frappe.db.exists(
-			"File",
-			{
-				"is_folder": 0,
-				"attached_to_doctype": doctype,
-				"attached_to_name": name,
-				"attached_to_field": fieldname,
-				"file_url": str(actual_url),
-			},
-		)
-	)
+	if frappe.db.exists(
+		"File",
+		{
+			"is_folder": 0,
+			"attached_to_doctype": doctype,
+			"attached_to_name": name,
+			"attached_to_field": fieldname,
+			"file_url": str(actual_url),
+		},
+	):
+		return True
+	if expected_url in (None, "") or not verified_relocations:
+		return False
+	key = (doctype, name, fieldname, str(expected_url))
+	return str(actual_url) in verified_relocations.get(key, set())
 
 
 def _verify_series(source: F15SourceBridge) -> dict[str, Any]:
@@ -5303,6 +5453,7 @@ def _verify_source_identities(
 	migration_name: str,
 	batch_size: int = 1000,
 ) -> dict[str, Any]:
+	reference_data = source.reference_data()
 	expected_counts: dict[str, int] = {}
 	missing_counts: dict[str, int] = {}
 	failures: list[str] = []
@@ -5350,6 +5501,9 @@ def _verify_source_identities(
 			target_document = transform_document(source_document, plan)
 			_apply_target_owned_configuration_boundary(
 				source_doctype, target_document
+			)
+			_resolve_and_validate_required_target_values(
+				target_document, plan, reference_data=reference_data
 			)
 			document_batch.append(target_document)
 			verified_parents += 1

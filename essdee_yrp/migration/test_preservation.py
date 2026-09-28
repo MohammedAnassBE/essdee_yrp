@@ -9,7 +9,13 @@ from unittest.mock import Mock, mock_open, patch
 from essdee_yrp.migration.engine import MigrationError, transform_document
 from essdee_yrp.migration.live import FrappeBulkTarget, _relocate_migrated_file_urls, _update_direct_attachment_field
 from essdee_yrp.migration.planner import build_schema_analysis
-from essdee_yrp.migration.preservation import auth_identity, run_auth, run_retired_archive, transform_orphan
+from essdee_yrp.migration.preservation import (
+	auth_identity,
+	run_auth,
+	run_preservation,
+	run_retired_archive,
+	transform_orphan,
+)
 
 
 class PreservationTest(unittest.TestCase):
@@ -79,6 +85,41 @@ class PreservationTest(unittest.TestCase):
 		self.assertEqual(result["parent"], "DELETED-PARENT")
 		self.assertEqual(result["name"], "ORPHAN")
 		self.assertEqual(result["idx"], 0)
+
+	def test_every_orphan_child_uses_contextual_link_normalization(self):
+		document = {
+			"doctype": "YRP Item Dependent Attribute Mapping Detail",
+			"name": "ORPHAN",
+			"attribute_value": "Piece",
+		}
+		plan = SimpleNamespace(
+			target_schemas={document["doctype"]: {"fields": []}}
+		)
+		source = SimpleNamespace(
+			iter_orphan_children=lambda: iter([{"doctype": "legacy"}]),
+			reference_data=Mock(return_value={"attribute_value_pairs": {}}),
+		)
+		with (
+			patch(
+				"essdee_yrp.migration.preservation.transform_orphan",
+				return_value=document,
+			),
+			patch(
+				"essdee_yrp.migration.live._apply_contextual_defaults"
+			) as normalize,
+			patch("essdee_yrp.migration.live.FrappeBulkTarget"),
+			patch(
+				"essdee_yrp.migration.preservation.run_auth", return_value={}
+			),
+			patch(
+				"essdee_yrp.migration.preservation.run_retired_archive",
+				return_value={},
+			),
+		):
+			run_preservation(plan, source, migration_name="MIG-1", dry_run=True)
+		normalize.assert_called_once_with(
+			document, plan.target_schemas[document["doctype"]], source.reference_data.return_value
+		)
 
 	def test_orphan_credential_is_preserved_without_creating_a_record(self):
 		row = self.credential(doctype="FG Item OMS Settings", name="DELETED-CHILD",

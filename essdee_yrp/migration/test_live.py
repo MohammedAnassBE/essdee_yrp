@@ -348,6 +348,33 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			actual = _prepare_approved_frappe_document(document, plan)
 		self.assertEqual(actual["name"], "TARGET-HASH")
 
+	def test_approved_custom_permission_prefers_exact_identity_among_duplicates(self):
+		plan = SimpleNamespace(specs={})
+		document = {
+			"doctype": "Custom DocPerm",
+			"name": "SOURCE-HASH",
+			"parent": "Address",
+			"role": "Maintenance User",
+			"read": 1,
+		}
+		with (
+			patch("essdee_yrp.migration.live.frappe.db.exists", return_value=True),
+			patch(
+				"essdee_yrp.migration.live.frappe.get_all",
+				return_value=["FIXTURE-HASH", "SOURCE-HASH"],
+			),
+			patch(
+				"essdee_yrp.migration.live._transform_supporting_document",
+				side_effect=lambda value, _doctype, _map: dict(value),
+			),
+			patch(
+				"essdee_yrp.migration.live.frappe.get_meta",
+				return_value=SimpleNamespace(issingle=False),
+			),
+		):
+			actual = _prepare_approved_frappe_document(document, plan)
+		self.assertEqual(actual["name"], "SOURCE-HASH")
+
 	def test_approved_workspace_shortcuts_map_links_but_keep_labels(self):
 		plan = SimpleNamespace(specs={"Lot": SimpleNamespace(target="SD YRP Lot")})
 		document = {

@@ -2815,13 +2815,16 @@ def _prepare_approved_frappe_document(
 				pluck="name",
 				limit_page_length=0,
 			)
-			if len(semantic_matches) > 1:
-				raise MigrationError(
-					"Ambiguous target Custom DocPerm semantic identity for "
-					f"{working['parent']} / {role}"
-				)
 			if semantic_matches:
-				working["name"] = str(semantic_matches[0])
+				# A prior load followed by fixture sync can temporarily leave two
+				# rows with identical effective permissions. Prefer the exact source
+				# identity while it exists; otherwise use a stable fixture identity.
+				source_name = str(working.get("name") or "")
+				working["name"] = (
+					source_name
+					if source_name in {str(value) for value in semantic_matches}
+					else sorted(str(value) for value in semantic_matches)[0]
+				)
 	elif source_doctype == "List View Settings":
 		name = str(working.get("name") or "")
 		working["name"] = doctype_map.get(name, name)

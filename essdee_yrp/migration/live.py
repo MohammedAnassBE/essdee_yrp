@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import inspect
 import json
 import math
 import re
@@ -44,6 +45,20 @@ from essdee_yrp.migration.rules import DOCTYPE_RENAMES
 SOURCE_BRIDGE = (
 	Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py"
 )
+
+
+def _file_content_bytes(file_doc: Any) -> bytes:
+	"""Read exact file bytes across Frappe and storage-backed File controllers."""
+	get_content = file_doc.get_content
+	parameters = inspect.signature(get_content).parameters
+	supports_encodings = "encodings" in parameters or any(
+		parameter.kind is inspect.Parameter.VAR_KEYWORD
+		for parameter in parameters.values()
+	)
+	content = get_content(encodings=[]) if supports_encodings else get_content()
+	return content.encode() if isinstance(content, str) else content
+
+
 DEFAULT_BATCH_SIZE = 250
 MAX_SQL_PARAMETERS = 20_000
 PROGRESS_UPDATE_INTERVAL = 10_000
@@ -3832,9 +3847,7 @@ def _verify_migrated_file(
 		raise MigrationError(f"Migrated File {row['name']} has no target blob")
 	# File.get_content tries text encodings by default. A binary payload that
 	# happens to decode as latin-1 must still be compared as its original bytes.
-	target_content = file_doc.get_content(encodings=[])
-	if isinstance(target_content, str):
-		target_content = target_content.encode()
+	target_content = _file_content_bytes(file_doc)
 	actual_hash = hashlib.md5(target_content, usedforsecurity=False).hexdigest()
 	if actual_hash != row.get("content_hash") or len(target_content) != int(
 		row.get("file_size") or 0
@@ -5505,9 +5518,7 @@ def _verify_files(
 			else:
 				failures.append(f"File blob missing on disk {row['name']}")
 		else:
-			content = frappe.get_doc("File", row["name"]).get_content(encodings=[])
-			if isinstance(content, str):
-				content = content.encode()
+			content = _file_content_bytes(frappe.get_doc("File", row["name"]))
 			if len(content) != int(row.get("file_size") or 0) or hashlib.md5(content).hexdigest() != row.get("content_hash"):
 				failures.append(f"File bytes differ from source metadata {row['name']}")
 			else:

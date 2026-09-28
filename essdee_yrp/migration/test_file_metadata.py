@@ -9,6 +9,26 @@ from essdee_yrp.migration.engine import MigrationError
 
 
 class CompleteFileMetadataTest(unittest.TestCase):
+	def test_file_content_bytes_disables_decoding_for_frappe_file(self):
+		class StandardFile:
+			def __init__(self):
+				self.encodings = None
+
+			def get_content(self, encodings=None):
+				self.encodings = encodings
+				return b"\xffbinary"
+
+		file_doc = StandardFile()
+		self.assertEqual(live._file_content_bytes(file_doc), b"\xffbinary")
+		self.assertEqual(file_doc.encodings, [])
+
+	def test_file_content_bytes_supports_storage_controller_without_encodings(self):
+		class S3File:
+			def get_content(self):
+				return "stored content"
+
+		self.assertEqual(live._file_content_bytes(S3File()), b"stored content")
+
 	def setUp(self):
 		self.raw = {'name': 'FILE-1', 'file_type': 'PNG', 'folder': 'Home/product',
 			'file_size': 0, 'file_url': '/files/image.png', 'is_private': 0,

@@ -1,6 +1,8 @@
 """Permission-aware Sewing Plan read models and operator updates."""
 
 from __future__ import annotations
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 from collections import defaultdict
 import re
@@ -82,7 +84,7 @@ def _details(entries):
 def _metadata(plans):
 	lots = {
 		row.name: row
-		for row in frappe.get_all(
+		for row in attribute_db.get_all(
 			'SD YRP Lot',
 			filters={"name": ["in", list({row.lot for row in plans if row.lot})]},
 			fields=["name", "item", "production_detail"],
@@ -92,7 +94,7 @@ def _metadata(plans):
 	ipd_names = {row.production_detail for row in lots.values() if row.production_detail}
 	ipds = {
 		row.name: row
-		for row in frappe.get_all(
+		for row in attribute_db.get_all(
 			'YRP Item Production Detail',
 			filters={"name": ["in", list(ipd_names)]},
 			fields=[
@@ -177,8 +179,8 @@ def get_sp_status_summary(supplier):
 					"item": details.get("item"),
 					"lot": lot,
 					"sewing_plan": plan_name,
-					"colour": colour.get("colour"),
-					"part": colour.get("part"),
+					"colour": _attribute_value(colour.get("colour")),
+					"part": _attribute_value(colour.get("part")),
 					"work_order_status": details.get("work_order_status"),
 				}
 				for header in headers:
@@ -257,7 +259,7 @@ def get_scr_data(supplier, lot):
 			colour,
 			{
 				"values": {},
-				"part": bucket["part"],
+				"part": _attribute_value(bucket["part"]),
 				"colour": colour,
 				"variant_colour": bucket["variant_colour"],
 				"set_combination": bucket["set_combination"],
@@ -381,7 +383,7 @@ def get_sewing_plan_entries(
 				colour,
 				{
 					"values": {},
-					"part": bucket["part"],
+					"part": _attribute_value(bucket["part"]),
 					"colour": colour,
 					"variant_colour": bucket["variant_colour"],
 					"set_combination": bucket["set_combination"],
@@ -441,7 +443,7 @@ def get_sewing_plan_dpr_data(
 				bucket["key"],
 				{
 					"values": {},
-					"part": bucket["part"],
+					"part": _attribute_value(bucket["part"]),
 					"colour": bucket["key"],
 					"variant_colour": bucket["variant_colour"],
 					"set_combination": bucket["set_combination"],
@@ -470,12 +472,12 @@ def get_sewing_plan_dpr_data(
 			if not plan or not ipd:
 				continue
 			bucket, _size = _bucket(row, ipd, order_attributes)
-			key = (plan.lot, bucket["key"], bucket["part"])
+			key = (plan.lot, bucket["key"], _attribute_value(bucket["part"]))
 			if key in seen:
 				continue
 			seen.add(key)
 			pending_fi.append(
-				{"lot": plan.lot, "colour": bucket["key"], "part": bucket["part"]}
+				{"lot": plan.lot, "colour": bucket["key"], "part": _attribute_value(bucket["part"])}
 			)
 
 	headers = _input_types([row.input_type for row in entries])
@@ -655,7 +657,7 @@ def get_item_summary_data(supplier, lots=None, items=None):
 			entry.input_type,
 			entry.work_station or "",
 			bucket["key"],
-			bucket["part"],
+			_attribute_value(bucket["part"]),
 		)
 		group["sizes"].add(size)
 		group["rows"].setdefault(key, defaultdict(float))[size] += flt(row.quantity)
@@ -712,14 +714,14 @@ def get_fi_updates_data(supplier):
 		if not ipd:
 			continue
 		bucket, _size = _bucket(row, ipd, attributes)
-		key = (plan.lot, bucket["key"], bucket["part"])
+		key = (plan.lot, bucket["key"], _attribute_value(bucket["part"]))
 		if key in seen:
 			continue
 		seen.add(key)
 		data.append(
 			{
 				"colour": bucket["key"],
-				"part": bucket["part"],
+				"part": _attribute_value(bucket["part"]),
 				"sewing_plan": plan.name,
 				"lot": plan.lot,
 				"item": plan.item,
@@ -750,7 +752,7 @@ def update_fi_dates(data):
 				frappe.throw(_("Sewing Plan and Lot do not match."))
 			for row in plan.sewing_plan_order_details:
 				bucket, _size = _bucket(row, ipd, attributes)
-				if bucket["key"] == update.get("colour") and bucket["part"] == update.get("part"):
+				if bucket["key"] == _attribute_value(update.get("colour")) and _attribute_value(bucket["part"]) == _attribute_value(update.get("part")):
 					row.fi_date = getdate(update["date"]) if update.get("date") else None
 		plan.save()
 	return _("Success")
@@ -811,7 +813,7 @@ def get_consumption_mapping_data(lot, supplier=None):
 	values_by_mapping = defaultdict(list)
 	attributes_by_mapping = defaultdict(list)
 	if mappings:
-		for row in frappe.get_all(
+		for row in attribute_db.get_all(
 			'YRP Item BOM Attribute Mapping Value',
 			filters={"parent": ["in", mappings]},
 			fields=["parent", "index", "type", "idx", "attribute", "attribute_value", "quantity"],
@@ -836,7 +838,7 @@ def get_consumption_mapping_data(lot, supplier=None):
 				cint(row.index), {"quantity": row.quantity, "values": {}}
 			)
 			key = f"{row.type}_{row.attribute}"
-			mapping["values"][key] = row.attribute_value
+			mapping["values"][key] = _attribute_value(row.attribute_value)
 			mapping["quantity"] = row.quantity
 			if key not in column_names:
 				column_names.append(key)
@@ -895,7 +897,7 @@ def get_consumption_mapping_data(lot, supplier=None):
 
 @frappe.whitelist()
 def get_sewing_consumption_print_data(ipd, lot=None):
-	lot = lot or frappe.db.get_value('SD YRP Lot', {"production_detail": ipd}, "name")
+	lot = lot or attribute_db.get_value('SD YRP Lot', {"production_detail": ipd}, "name")
 	if not lot:
 		return {"ipd": ipd, "lot": "", "supplier": "", "sections": [], "cloth_acc_data": []}
 	supplier = frappe.db.get_value('SD YRP Sewing Plan', {"lot": lot}, "supplier")

@@ -1,3 +1,4 @@
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2026, Essdee and contributors
 # For license information, please see license.txt
 
@@ -108,15 +109,15 @@ class SDYRPCuttingOrderDetail(Document):
 					break
 			if mapping:
 				map_doc = get_mapping_document(mapping, cached=True)
-				map_values = [v.attribute_value for v in map_doc.values]
+				map_values = [_attribute_value(v.attribute_value) for v in map_doc.values]
 
 				check_dict = {}
 				for attr in self.stiching_item_details:
 					if attr.is_default:
-						if check_dict.get(attr.set_item_attribute_value):
-							frappe.throw(f"Select only one Is Default for {attr.set_item_attribute_value}")
+						if check_dict.get(_attribute_value(attr.set_item_attribute_value)):
+							frappe.throw(f"Select only one Is Default for {_attribute_value(attr.set_item_attribute_value)}")
 						else:
-							check_dict[attr.set_item_attribute_value] = 1
+							check_dict[_attribute_value(attr.set_item_attribute_value)] = 1
 
 				if len(check_dict) < len(map_values):
 					frappe.throw("Select Is default for all Set Item Attributes")
@@ -183,7 +184,7 @@ class SDYRPCuttingOrderDetail(Document):
 
 		attr = set()
 		for row in self.attribute_values:
-			attr.add(row.attribute_value)
+			attr.add(_attribute_value(row.attribute_value))
 
 		if len(attr) != len(self.attribute_values):
 			frappe.throw("Duplicate Attribute values are occured in Colour Details")
@@ -196,7 +197,7 @@ class SDYRPCuttingOrderDetail(Document):
 		for row in self.stiching_item_details:
 			if not row.quantity:
 				frappe.throw("Enter value in Panel Details, Zero is not considered as a valid quantity")
-			attr.add(row.stiching_attribute_value)
+			attr.add(_attribute_value(row.stiching_attribute_value))
 
 		if len(attr) != len(self.stiching_item_details):
 			frappe.throw("Duplicate Attribute values are occured in Panel Details")
@@ -215,7 +216,7 @@ def duplicate_cod(cod, item=None):
 	doc.update({
 		"item": item or cod_doc.item,
 		"attribute_no": cod_doc.attribute_no,
-		"major_panel_value": cod_doc.major_panel_value,
+		"major_panel_value": _attribute_value(cod_doc.major_panel_value),
 		"is_same_colour": cod_doc.is_same_colour,
 		"cloth_detail_json": cod_doc.cloth_detail_json,
 	})
@@ -244,7 +245,7 @@ def duplicate_cod(cod, item=None):
 				new_map = get_mapping_document(new_row.mapping)
 				new_map.set("values", [])
 				for v in src_map.values:
-					new_map.append("values", {"attribute_value": v.attribute_value})
+					new_map.append("values", {"attribute_value": _attribute_value(v.attribute_value)})
 				new_map.save(ignore_permissions=True)
 				break
 
@@ -253,7 +254,7 @@ def duplicate_cod(cod, item=None):
 		doc.update({
 			"is_set_item": cod_doc.is_set_item,
 			"set_item_attribute": cod_doc.set_item_attribute,
-			"major_attribute_value": cod_doc.major_attribute_value,
+			"major_attribute_value": _attribute_value(cod_doc.major_attribute_value),
 		})
 		doc.set("set_item_combination_details", get_dict_table(cod_doc.set_item_combination_details))
 		doc.save(ignore_permissions=True)
@@ -291,7 +292,7 @@ def get_co_new_combination(attribute_mapping_value, packing_attribute_details, m
 		packing_attribute_details = list(packing_attribute_details.values()) if packing_attribute_details else []
 
 	doc = get_mapping_document(attribute_mapping_value, cached=True)
-	attributes = [item.attribute_value for item in doc.values]
+	attributes = [_attribute_value(item.attribute_value) for item in doc.values]
 
 	stiching_item_details = {}
 	set_item_details = {}
@@ -303,13 +304,13 @@ def get_co_new_combination(attribute_mapping_value, packing_attribute_details, m
 		co_doc.check_permission("read")
 		if co_doc.is_set_item:
 			for item in co_doc.stiching_item_details:
-				stiching_item_details[item.stiching_attribute_value] = item.set_item_attribute_value
+				stiching_item_details[_attribute_value(item.stiching_attribute_value)] = _attribute_value(item.set_item_attribute_value)
 				if item.is_default:
-					is_default_list.append(item.stiching_attribute_value)
+					is_default_list.append(_attribute_value(item.stiching_attribute_value))
 
 			for item in co_doc.set_item_combination_details:
-				set_item_details.setdefault(item.major_attribute_value, {})
-				set_item_details[item.major_attribute_value][item.set_item_attribute_value] = item.attribute_value
+				set_item_details.setdefault(_attribute_value(item.major_attribute_value), {})
+				set_item_details[_attribute_value(item.major_attribute_value)][_attribute_value(item.set_item_attribute_value)] = _attribute_value(item.attribute_value)
 
 	if isinstance(is_same_colour, str):
 		is_same_colour = is_same_colour in ('true', 'True', '1')
@@ -317,20 +318,20 @@ def get_co_new_combination(attribute_mapping_value, packing_attribute_details, m
 	item_detail = []
 	for item in packing_attribute_details:
 		item_list = {}
-		item_list['major_attribute'] = item['attribute_value']
+		item_list['major_attribute'] = _attribute_value(item['attribute_value'])
 		item_list['val'] = {}
 		for i in attributes:
 			if i == major_attribute_value:
-				item_list['val'][i] = item['attribute_value']
+				item_list['val'][i] = _attribute_value(item['attribute_value'])
 			elif is_same_colour:
 				if doc_name and co_doc and co_doc.is_set_item:
 					part = stiching_item_details[i]
-					item_list['val'][i] = set_item_details[item['attribute_value']][part]
+					item_list['val'][i] = set_item_details[_attribute_value(item['attribute_value'])][part]
 				else:
-					item_list['val'][i] = item['attribute_value']
+					item_list['val'][i] = _attribute_value(item['attribute_value'])
 			elif doc_name and co_doc and co_doc.is_set_item and i in is_default_list:
 				part = stiching_item_details[i]
-				item_list['val'][i] = set_item_details[item['attribute_value']][part]
+				item_list['val'][i] = set_item_details[_attribute_value(item['attribute_value'])][part]
 			else:
 				item_list['val'][i] = None
 		item_detail.append(item_list)

@@ -34,7 +34,7 @@ let docstatus = cur_frm.doc.docstatus || 0
 onMounted(()=> {
     let panels = []
     for(let i = 0; i < cur_frm.doc.stiching_item_details.length; i++){
-        panels.push(cur_frm.doc.stiching_item_details[i].stiching_attribute_value)
+        panels.push(frappe.yrp.attribute_value(cur_frm.doc.stiching_item_details[i].stiching_attribute_value))
     }
     grp_panel = panels
     create_options(panels)
@@ -88,7 +88,7 @@ function load_data(){
         let t_options = []
         let items = []
         for(let i = 0; i < cur_frm.doc.stiching_item_details.length; i++){
-            let p = cur_frm.doc.stiching_item_details[i].stiching_attribute_value
+            let p = frappe.yrp.attribute_value(cur_frm.doc.stiching_item_details[i].stiching_attribute_value)
             t_options.push({ "option": p, "id": p })
         }
         let index = 0

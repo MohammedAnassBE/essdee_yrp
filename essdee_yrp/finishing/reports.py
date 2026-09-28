@@ -1,4 +1,6 @@
 """Finishing packing/dispatch read models used by Desk reports and DPR views."""
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe.utils import cint, flt
@@ -15,9 +17,9 @@ def get_configured_set_item_parts(ipd_doc):
 	if not ipd_doc.is_set_item:
 		return set()
 	return {
-		row.set_item_attribute_value
+		_attribute_value(row.set_item_attribute_value)
 		for row in ipd_doc.get("set_item_combination_details") or []
-		if row.set_item_attribute_value
+		if _attribute_value(row.set_item_attribute_value)
 	}
 
 
@@ -104,7 +106,7 @@ def get_finishing_packed_details(date, lot_list=None, item_list=None):
 
 	result = []
 	for lot, grn_names in lot_grns.items():
-		lot_values = frappe.db.get_value(
+		lot_values = attribute_db.get_value(
 			'SD YRP Lot', lot, ["item", "production_detail"], as_dict=True
 		)
 		if not lot_values or not lot_values.production_detail:
@@ -161,7 +163,7 @@ def get_finishing_dispatch_report(
 
 	packed_rows = []
 	for lot, grn_names in lot_grns.items():
-		lot_values = frappe.db.get_value(
+		lot_values = attribute_db.get_value(
 			'SD YRP Lot', lot, ["item", "production_detail"], as_dict=True
 		)
 		if not lot_values or not lot_values.production_detail:
@@ -246,7 +248,7 @@ def get_finishing_dispatch_report(
 
 	dispatched_rows = []
 	for lot, values in lot_dispatches.items():
-		lot_values = frappe.db.get_value(
+		lot_values = attribute_db.get_value(
 			'SD YRP Lot', lot, ["item", "production_detail"], as_dict=True
 		)
 		if not lot_values or not lot_values.production_detail:

@@ -1,3 +1,4 @@
+from yrp import attribute_links as attribute_db
 # Copyright (c) 2025, Essdee and contributors
 # For license information, please see license.txt
 
@@ -143,7 +144,7 @@ def get_data(filters):
 	if filters.get('item'):
 		fil['item'] = filters.get('item')
 	if filters.get('season'):
-		lot_list = frappe.get_all('SD YRP Lot', filters={"season": filters.get('season')}, pluck="name")
+		lot_list = attribute_db.get_all('SD YRP Lot', filters={"season": filters.get('season')}, pluck="name")
 		fil['lot'] = ['in', lot_list]
 	if filters.get('product_category'):
 		item_list = frappe.get_all(

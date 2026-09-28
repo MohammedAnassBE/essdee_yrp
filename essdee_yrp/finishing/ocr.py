@@ -1,4 +1,5 @@
 """Finishing Plan OCR read model and percentage summaries."""
+from yrp import attribute_links as attribute_db
 
 import frappe
 from frappe.utils import flt
@@ -122,11 +123,11 @@ def get_fp_ocr_details(doc_name):
 
 
 def get_ocr_details(doc):
-	ipd_name = doc.production_detail or frappe.db.get_value(
+	ipd_name = doc.production_detail or attribute_db.get_value(
 		'SD YRP Lot', doc.lot, "production_detail"
 	)
 	is_set_item, packing_attribute, primary_attribute, set_attribute, major_part = (
-		frappe.db.get_value(
+		attribute_db.get_value(
 			'YRP Item Production Detail',
 			ipd_name,
 			[

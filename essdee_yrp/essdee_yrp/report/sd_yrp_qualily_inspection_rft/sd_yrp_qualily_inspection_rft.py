@@ -1,3 +1,4 @@
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2025, Essdee and contributors
 # For license information, please see license.txt
 
@@ -112,14 +113,14 @@ def get_data(filters):
 	max_inspections = 0
 
 	for row in raw_data:
-		key = (row.against_id, row.supplier, row.lot, row.item, row.colour, row.sizes)
+		key = (row.against_id, row.supplier, row.lot, row.item, _attribute_value(row.colour), row.sizes)
 		if key not in grouped_records:
 			grouped_records[key] = {
 				"against_id": row.against_id,
 				"supplier": row.supplier,
 				"lot": row.lot,
 				"item": row.item,
-				"colour": row.colour,
+				"colour": _attribute_value(row.colour),
 				"sizes": row.sizes,
 				"description": row.description,
 				"inspections": []
@@ -139,7 +140,7 @@ def get_data(filters):
 			"supplier": record["supplier"],
 			"lot": record["lot"],
 			"item": record["item"],
-			"colour": record["colour"],
+			"colour": _attribute_value(record["colour"]),
 			"sizes": record["sizes"],
 			"description": record["description"]
 		}

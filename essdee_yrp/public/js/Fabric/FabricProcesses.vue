@@ -1,5 +1,5 @@
 <template>
-	<div class="fabproc">
+	<div ref="root" class="fabproc">
 		<!-- ══════════════ OVERVIEW ══════════════ -->
 		<template v-if="view === 'overview'">
 			<div v-if="!steps.length" class="fp-empty">
@@ -12,12 +12,30 @@
 					<div class="fp-name">{{ step.fabric_process || __("(no process)") }}</div>
 					<span class="fp-badge" :class="'b-' + shapeOf(step).key">{{ shapeOf(step).label }}</span>
 					<div class="fp-card-actions">
+						<div v-if="editable" class="fp-order-actions" :aria-label="__('Reorder process')">
+							<button
+								class="fp-order"
+								data-testid="fp-move-up"
+								:data-process="step.fabric_process"
+								:disabled="!canMoveStep(si, -1)"
+								:title="__('Move process up')"
+								@click="moveStep(si, -1)"
+							>↑</button>
+							<button
+								class="fp-order"
+								data-testid="fp-move-down"
+								:data-process="step.fabric_process"
+								:disabled="!canMoveStep(si, 1)"
+								:title="__('Move process down')"
+								@click="moveStep(si, 1)"
+							>↓</button>
+						</div>
 						<button v-if="editable" class="fp-edit" data-testid="fp-edit" :data-process="step.fabric_process" @click="openEdit(si)">{{ __("Edit") }}</button>
 						<button v-if="editable" class="fp-rm" data-testid="fp-remove" :data-process="step.fabric_process" :title="__('Remove step')" @click="removeStep(si)">×</button>
 					</div>
 
 					<div class="fp-flow">
-						<span class="fp-item">{{ step.input_item || step.output_item }}</span>
+						<span class="fp-item">{{ inputItemLabel(step) }}</span>
 						<template v-if="hasConversion(step)">
 							<span class="fp-arrow">→</span>
 							<span class="fp-item">{{ step.output_item }}</span>
@@ -77,7 +95,7 @@
 					<span class="fp-badge" :class="'b-' + draftBadge.key">{{ draftBadge.label }}</span>
 				</div>
 				<div class="fp-edit-flow">
-					<span class="fp-item">{{ draft.input_item || draft.output_item }}</span>
+					<span class="fp-item">{{ draftInputItemLabel }}</span>
 					<template v-if="draft.shapeKey === 'conv'">
 						<span class="fp-arrow">→</span><span class="fp-item">{{ draft.output_item || __("(pick output)") }}</span>
 					</template>
@@ -88,9 +106,29 @@
 			<!-- CONVERSION: distinct items + introduce 1..N attributes -->
 			<template v-if="draft.shapeKey === 'conv'">
 				<section class="fp-panel">
-					<div class="fp-panel-head">{{ __("Items — a conversion consumes one item and produces another") }}</div>
+					<div class="fp-panel-head">
+						{{ usesInputRecipe ? __("Items — consume the cloth recipe and produce the cloth") : __("Items — consume one item and produce another") }}
+					</div>
 					<div class="fp-panel-body fp-row">
-						<label class="fp-field">
+						<div v-if="usesInputRecipe" class="fp-field fp-recipe-field">
+							<span>{{ __("Input materials and ratios (stored on this IPD)") }}</span>
+							<div class="fp-recipe-list" data-testid="fp-input-recipe">
+								<div v-for="(row, ri) in draft.input_materials" :key="row.key" class="fp-recipe-row">
+									<div class="fp-recipe-item" :data-recipe-input-index="ri"></div>
+									<label class="fp-recipe-ratio">
+										<input v-model.number="row.ratio" type="number" min="0" max="100" step="0.001" :data-testid="'fp-input-ratio-' + ri" />
+										<span>%</span>
+									</label>
+									<button class="fp-chip-x" :title="__('Remove input')" @click="removeInputMaterial(ri)">×</button>
+								</div>
+								<div class="fp-recipe-total" :class="{ 'is-invalid': !recipeTotalValid }">
+									{{ __("Total") }}: {{ recipeTotal }}%
+								</div>
+							</div>
+							<button class="fp-link" data-testid="fp-add-input-material" @click="addInputMaterial">+ {{ __("another input item") }}</button>
+							<small>{{ __("These values are saved on this IPD. The Cloth Item ratio is only the initial default for a new IPD.") }}</small>
+						</div>
+						<label v-else class="fp-field">
 							<span>{{ __("Input item (consumed)") }}</span>
 							<div ref="inputMount" class="fp-linkmount" data-testid="fp-input-item"></div>
 						</label>
@@ -103,27 +141,29 @@
 							<input v-model.number="draft.quantity_ratio" type="number" min="0" step="0.01" data-testid="fp-ratio" />
 						</label>
 					</div>
-					<div v-if="draft.input_item && draft.output_item && draft.input_item === draft.output_item" class="fp-warn">
+					<div v-if="usesInputRecipe && !recipeTotalValid" class="fp-warn">
+						{{ __("The Cloth Item Yarn Ratio must contain positive, unique inputs totalling exactly 100%.") }}
+					</div>
+					<div v-else-if="usesInputRecipe && draft.input_materials.some((row) => row.item === draft.output_item)" class="fp-warn">
+						{{ __("A cloth cannot consume itself in its input recipe.") }}
+					</div>
+					<div v-else-if="draft.input_item && draft.output_item && draft.input_item === draft.output_item" class="fp-warn">
 						{{ __("A conversion's input and output must be different items.") }}
 					</div>
-					<div v-else-if="!draft.input_item" class="fp-warn">
+					<div v-else-if="!usesInputRecipe && !draft.input_item" class="fp-warn">
 						{{ __("Pick the consumed item — a conversion needs a distinct input.") }}
 					</div>
 				</section>
 
 				<section class="fp-panel fp-panel-hero">
-					<div class="fp-panel-head">① {{ __("Which attribute(s) does the new item gain?") }}</div>
+					<div class="fp-panel-head">① {{ __("Configured output attributes") }}</div>
 					<div class="fp-panel-body">
-						<div v-if="consumeMode" class="fp-help">{{ __("Pick each attribute the output carries — its values are entered per rule below.") }}</div>
-						<div v-else class="fp-help">{{ __("Add each attribute the output carries. One varies (type several values); another may be a single default (e.g. a greige colour).") }}</div>
+						<div class="fp-help">{{ __("These attributes come from the Process master. The IPD supplies only their values; add or remove attributes on the Process, not here.") }}</div>
+						<div v-if="!draft.introduce.length" class="fp-warn">
+							{{ __("This Process has no Output Attributes configured, so it is a pure item conversion with no output attribute matrix.") }}
+						</div>
 						<div v-for="(intro, ii) in draft.introduce" :key="ii" class="fp-intro-row">
-							<div class="fp-intro-attr">
-								<select v-model="intro.attr" class="fp-mini-select" @change="loadValues(intro.attr)">
-									<option value="">{{ __("(pick attribute)") }}</option>
-									<option v-for="a in introduceOptions(ii)" :key="a" :value="a">{{ a }}</option>
-								</select>
-								<button v-if="draft.introduce.length > 1" class="fp-chip-x" :title="__('remove')" @click="draft.introduce.splice(ii, 1)">×</button>
-							</div>
+							<div class="fp-intro-attr"><span class="fp-chip c-introduce">{{ intro.attr }}</span></div>
 							<div v-if="!consumeMode" class="fp-chipbox">
 								<span v-for="(v, vi) in intro.chips" :key="v" class="fp-chip c-introduce">
 									{{ v }}
@@ -139,7 +179,6 @@
 								/>
 							</div>
 						</div>
-						<button v-if="unusedIntroduceAttrs.length" class="fp-link" data-testid="fp-add-introduce" @click="addIntroduceAttr">+ {{ __("introduce another attribute") }}</button>
 						<template v-if="!consumeMode">
 							<div v-if="introduceCombos > 0" class="fp-preview">{{ introduceCombos }} {{ __("output combination(s) will be generated") }}</div>
 							<div v-else class="fp-preview fp-mut">{{ __("No attributes introduced — a pure item swap (no matrix generated).") }}</div>
@@ -148,20 +187,12 @@
 				</section>
 
 				<section class="fp-panel">
-					<div class="fp-panel-head">② {{ __("Which input attribute(s) are consumed?") }}</div>
+					<div class="fp-panel-head">② {{ __("Configured input attributes") }}</div>
 					<div class="fp-panel-body">
-						<div class="fp-help">{{ __("Pick these only when a SPECIFIC input value must be consumed — leave empty to consume any.") }}</div>
+						<div class="fp-help">{{ __("These attributes also come from the Process master. Their values identify the consumed input combination in each rule.") }}</div>
 						<div class="fp-selected-attrs">
-							<button
-								v-for="a in consumeAttrOptions"
-								:key="a"
-								type="button"
-								class="fp-toggle"
-								:class="{ on: draft.consume_attrs.includes(a) }"
-								:data-testid="'fp-consume-attr-' + a"
-								@click="toggleConsumeAttr(a)"
-							>{{ a }}</button>
-							<span v-if="!consumeAttrOptions.length" class="fp-mut" style="font-size: var(--text-sm)">{{ draft.input_item ? __("The input item declares no attributes.") : __("Pick the input item to see its attributes.") }}</span>
+							<span v-for="a in consumedAttrsList" :key="a" class="fp-chip c-consume">{{ a }}</span>
+							<span v-if="!consumedAttrsList.length" class="fp-mut" style="font-size: var(--text-sm)">{{ __("No input attributes configured — the conversion accepts the input item without an attribute-specific rule.") }}</span>
 						</div>
 					</div>
 				</section>
@@ -202,19 +233,12 @@
 			<!-- CHANGE: 1..N attributes change, per-group from → to -->
 			<template v-else-if="draft.shapeKey === 'change'">
 				<section class="fp-panel fp-panel-hero">
-					<div class="fp-panel-head">① {{ __("Which attribute(s) change?") }}</div>
+					<div class="fp-panel-head">① {{ __("Configured value-change attributes") }}</div>
 					<div class="fp-panel-body">
 						<div class="fp-selected-attrs">
-							<span v-for="(a, ai) in draft.change_attrs" :key="a" class="fp-chip c-combo">
-								{{ a }}
-								<button v-if="draft.change_attrs.length > 1" class="fp-chip-x" @click="removeChangeAttr(ai)">×</button>
-							</span>
-							<select v-if="unusedChangeAttrs.length" v-model="addChangeAttrSel" class="fp-mini-select" data-testid="fp-add-change-attr" @change="onAddChangeAttr">
-								<option value="">+ {{ __("add a second attribute") }}</option>
-								<option v-for="a in unusedChangeAttrs" :key="a" :value="a">{{ a }}</option>
-							</select>
+							<span v-for="a in draft.change_attrs" :key="a" class="fp-chip c-combo">{{ a }}</span>
 						</div>
-						<div class="fp-help" style="margin-top:8px">{{ draft.change_attrs.length > 1 ? __("These attributes change TOGETHER — one combined group per transition.") : __("Add a second attribute to change two things together in one step.") }}</div>
+						<div class="fp-help" style="margin-top:8px">{{ __("These attributes come from Value Change Attributes on the Process master. Change the Process configuration to change this contract.") }}</div>
 					</div>
 				</section>
 
@@ -286,15 +310,12 @@
 // OVERVIEW: one glanceable card per process step (name, in→out, shape badge,
 // one-line "what changes" summary) with an Edit button, plus an Add-process bar.
 //
-// DETAIL EDITOR (per step, modelled on the Item BOM attribute-mapping editor —
-// select which attribute(s), then enter values):
-//   CONVERSION  → distinct input/output items + Introduce 1..N attributes. Each
-//                 introduced attribute carries its own value(s); the editor takes
-//                 the CROSS-PRODUCT of those value sets into output groups (so
-//                 Knitting = Dia {14,16,18} × Colour {greige} → 3 cloth combos,
-//                 each stamped with its Dia + the default greige Colour).
-//                 OPTIONALLY the INPUT item's attributes can be marked consumed
-//                 (panel ②): once ≥1 is picked the editor switches to RULES MODE
+// DETAIL EDITOR (per step, modelled on the Item BOM attribute-mapping editor):
+//   CONVERSION  → distinct input/output items. The Process master declares its
+//                 input/output attribute contract; the IPD supplies only values.
+//                 With no configured input attributes, the editor takes the
+//                 CROSS-PRODUCT of configured output value sets into groups.
+//                 With configured input attributes it switches to RULES MODE
 //                 — the chip cross-product is replaced by explicit rules (panel
 //                 ③), each pairing one consumed input combination with one
 //                 produced output combination. One mapping_index per complete
@@ -303,12 +324,12 @@
 //                 output side. A rule with no introduced attribute DROPS the
 //                 consumed attribute. Zero consumed attrs = exactly the old
 //                 cross-product behavior.
-//   CHANGE      → 1..N attributes that change TOGETHER; a table of from→to
+//   CHANGE      → the Process master's 1..N Value Change Attributes change
+//                 TOGETHER; a table of from→to
 //                 transitions (one combined group each). 1 attr = attribute swap,
 //                 ≥2 attrs = combination. An optional held (Pin) attribute — ONE
 //                 attribute per step, but its held value is entered PER
-//                 transition ("when <attr> = …", blank = any), so dia-wise
-//                 dyeing / colour-wise compacting maps stay editable here.
+//                 transition ("when <attr> = …", blank = any).
 //   IDENTITY    → nothing changes (no matrix).
 //
 // It OWNS entry, not storage: on Save it writes BOTH sibling child tables
@@ -326,6 +347,7 @@ const steps = ref([]);
 const editable = ref(true);
 const item = ref(null);
 const defaultInput = ref(null);
+const conversionInputs = ref([]);
 const attributes = ref([]);
 const usedProcesses = ref([]);
 const allProcesses = ref([]);
@@ -334,9 +356,9 @@ let onChange = null;
 
 const view = ref("overview");
 const draft = ref(null);
+const root = ref(null);
 const addProcessSel = ref("");
 const adding = ref(false);
-const addChangeAttrSel = ref("");
 
 // Real Frappe Link(Item) controls for a conversion's input/output items — a plain
 // text box can't validate an Item, and input/output must be distinct real items
@@ -345,22 +367,68 @@ const inputMount = ref(null);
 const outputMount = ref(null);
 let inputCtrl = null;
 let outputCtrl = null;
+let recipeInputCtrls = [];
+
+function isInputRecipeDraft(d = draft.value) {
+	return Boolean(d && d.shapeKey === "conv" && d.output_item === item.value);
+}
+
+function disposeRecipeInputControls() {
+	recipeInputCtrls.forEach((ctrl) => {
+		if (ctrl && ctrl.$wrapper) ctrl.$wrapper.remove();
+	});
+	recipeInputCtrls = [];
+	if (root.value) {
+		root.value.querySelectorAll(".fp-recipe-item").forEach((node) => $(node).empty());
+	}
+}
+
+async function mountRecipeInputControls() {
+	if (!isInputRecipeDraft() || !root.value) return;
+	disposeRecipeInputControls();
+	await nextTick();
+	root.value.querySelectorAll(".fp-recipe-item").forEach((node) => {
+		const index = Number(node.dataset.recipeInputIndex);
+		const row = draft.value?.input_materials?.[index];
+		if (!row) return;
+		const ctrl = frappe.ui.form.make_control({
+			parent: node,
+			df: {
+				fieldtype: "Link",
+				options: "Item",
+				fieldname: `fp_recipe_input_${index}`,
+				placeholder: __("Pick an input Item…"),
+				get_query: () => ({ filters: { is_cloth_item: 0 } }),
+				change() { row.item = ctrl.get_value() || ""; },
+			},
+			render_input: true,
+		});
+		ctrl.set_value(row.item || "");
+		recipeInputCtrls[index] = ctrl;
+	});
+}
 
 function mountItemControls() {
 	if (!draft.value || draft.value.shapeKey !== "conv") return;
-	if (!inputMount.value || !outputMount.value) return;
-	$(inputMount.value).empty();
+	if (!outputMount.value) return;
+	if (inputMount.value) $(inputMount.value).empty();
 	$(outputMount.value).empty();
-	inputCtrl = frappe.ui.form.make_control({
-		parent: inputMount.value,
-		df: {
-			fieldtype: "Link", options: "Item", fieldname: "fp_input_item",
-			placeholder: __("Pick the consumed item…"),
-			change() { if (draft.value) draft.value.input_item = (inputCtrl.get_value() || ""); },
-		},
-		render_input: true,
-	});
-	inputCtrl.set_value(draft.value.input_item || "");
+	inputCtrl = null;
+	if (!isInputRecipeDraft() && inputMount.value) {
+		inputCtrl = frappe.ui.form.make_control({
+			parent: inputMount.value,
+			df: {
+				fieldtype: "Link", options: "Item", fieldname: "fp_input_item",
+				placeholder: __("Pick the consumed item…"),
+				change() { if (draft.value) draft.value.input_item = (inputCtrl.get_value() || ""); },
+			},
+			render_input: true,
+		});
+		inputCtrl.set_value(draft.value.input_item || "");
+	} else if (isInputRecipeDraft()) {
+		draft.value.input_item = draft.value.input_materials[0]?.item || "";
+		mountRecipeInputControls();
+	}
 	outputCtrl = frappe.ui.form.make_control({
 		parent: outputMount.value,
 		df: {
@@ -375,6 +443,11 @@ function mountItemControls() {
 
 function syncItemControls() {
 	if (inputCtrl) draft.value.input_item = inputCtrl.get_value() || "";
+	recipeInputCtrls.forEach((ctrl, index) => {
+		if (ctrl && draft.value?.input_materials?.[index]) {
+			draft.value.input_materials[index].item = ctrl.get_value() || "";
+		}
+	});
 	if (outputCtrl) draft.value.output_item = outputCtrl.get_value() || "";
 }
 
@@ -386,6 +459,7 @@ function disposeItemControls() {
 	if (outputMount.value) $(outputMount.value).empty();
 	inputCtrl = null;
 	outputCtrl = null;
+	disposeRecipeInputControls();
 }
 
 // (Re)mount the Item controls whenever we enter a conversion editor.
@@ -398,15 +472,6 @@ watch(
 	{ flush: "post" }
 );
 
-// Fetch the INPUT item's attribute names (for the consumed-attribute toggles)
-// whenever a conversion editor is open and its input item is set/changed — the
-// Link control's change handler updates draft.input_item, so watching it covers
-// both editor-open and item-change. Cached per item; a failed fetch = [].
-watch(
-	() => (view.value === "edit" && draft.value && draft.value.shapeKey === "conv" ? draft.value.input_item : null),
-	(it) => { if (it) loadInputAttrs(it); }
-);
-
 const num = (v) => (v == null || v === "" ? 0 : Number(v));
 const esc = (v) => frappe.utils.escape_html(v == null ? "" : String(v));
 
@@ -416,7 +481,10 @@ function load_data(payload, on_change) {
 	onChange = on_change || onChange;
 	editable.value = payload.editable !== false;
 	item.value = payload.item || null;
-	defaultInput.value = payload.default_input || payload.item || null;
+	defaultInput.value = payload.default_input || null;
+	conversionInputs.value = (payload.conversion_inputs || [])
+		.filter((row) => row && row.item)
+		.map((row) => ({ item: row.item, ratio: Number(row.ratio || 0) }));
 	attributes.value = payload.attributes || [];
 	allProcesses.value = payload.all_processes || [];
 	const maps = payload.mappings || [];
@@ -470,7 +538,14 @@ function writeBack() {
 			})
 		)
 	);
-	onChange({ processes, mappings });
+	onChange({
+		processes,
+		mappings,
+		conversion_inputs: conversionInputs.value.map((row) => ({
+			item: row.item,
+			ratio: Number(row.ratio || 0),
+		})),
+	});
 }
 
 // ---- shape / card display -------------------------------------------------
@@ -481,13 +556,26 @@ function shapeOf(step) {
 	const changeAttrs = new Set(step.mappings.filter((m) => m.role === "Change").map((m) => m.attribute));
 	if (hasIntro || hasConsume || (step.input_item && step.output_item && step.input_item !== step.output_item))
 		return { key: "conv", label: __("Item conversion") };
-	if (changeAttrs.size > 1) return { key: "combo", label: __("Combination") };
-	if (changeAttrs.size === 1) return { key: "swap", label: __("Attribute swap") };
+	if (frappe.yrp.attribute_value(changeAttrs.size) > 1) return { key: "combo", label: __("Combination") };
+	if (frappe.yrp.attribute_value(changeAttrs.size) === 1) return { key: "swap", label: __("Attribute swap") };
 	return { key: "idle", label: __("Identity") };
 }
 
 function hasConversion(step) {
 	return step.input_item && step.output_item && step.input_item !== step.output_item;
+}
+
+function inputItemLabel(step) {
+	if (
+		step.output_item === item.value &&
+		step.input_item !== step.output_item &&
+		conversionInputs.value.length
+	) {
+		return conversionInputs.value
+			.map((row) => `${row.item} ${Number(row.ratio || 0)}%`)
+			.join(" + ");
+	}
+	return step.input_item || step.output_item || __("(pick input)");
 }
 
 function ratioLabel(step) {
@@ -718,14 +806,19 @@ async function fetchShape(process) {
 		const key = t.shape === "conversion" ? "conv"
 			: t.shape === "swap" || t.shape === "multi_swap" ? "change"
 			: "idle";
-		return { key, change_attributes: t.change_attributes || [] };
+		return {
+			key,
+			change_attributes: t.change_attributes || [],
+			input_attributes: t.input_attributes || [],
+			output_attributes: t.output_attributes || [],
+		};
 	} catch (e) {
-		return { key: "idle", change_attributes: [] };
+		return { key: "idle", change_attributes: [], input_attributes: [], output_attributes: [] };
 	}
 }
 
-function blankDraft(process, seq, shapeKey, changeAttrs) {
-	return {
+function blankDraft(process, seq, shapeKey, changeAttrs, inputAttrs = [], outputAttrs = []) {
+	const d = {
 		index: null,
 		sequence: seq,
 		fabric_process: process,
@@ -734,15 +827,22 @@ function blankDraft(process, seq, shapeKey, changeAttrs) {
 		output_item: item.value || "",
 		quantity_ratio: 1,
 		// conversion
-		introduce: [{ attr: attributes.value.includes("Dia") ? "Dia" : (attributes.value[0] || ""), chips: [], input: "" }],
+		introduce: outputAttrs.filter(Boolean).map((attr) => ({ attr, chips: [], input: "" })),
 		// conversion, rules mode — consumed INPUT attributes + per-rule correspondence
-		consume_attrs: [],
+		consume_attrs: inputAttrs.filter(Boolean),
 		rules: [],
+		input_materials: conversionInputs.value.map((row, index) => ({
+			key: `${Date.now()}-${index}`,
+			item: row.item,
+			ratio: Number(row.ratio || 0),
+		})),
 		// change
-		change_attrs: (changeAttrs && changeAttrs.length ? changeAttrs.slice() : [attributes.value[0] || ""]).filter(Boolean),
+		change_attrs: (changeAttrs || []).filter(Boolean),
 		groups: [],
 		pin_attr: "",
 	};
+	if (shapeKey === "conv" && d.consume_attrs.length) d.rules = [blankRule(d)];
+	return d;
 }
 
 async function addProcess() {
@@ -751,9 +851,15 @@ async function addProcess() {
 	const shape = await fetchShape(addProcessSel.value);
 	adding.value = false;
 	const seq = nextSequence();
-	const d = blankDraft(addProcessSel.value, seq, shape.key, shape.change_attributes);
+	const d = blankDraft(
+		addProcessSel.value,
+		seq,
+		shape.key,
+		shape.change_attributes,
+		shape.input_attributes,
+		shape.output_attributes,
+	);
 	if (d.shapeKey === "change") {
-		if (!d.change_attrs.length) d.change_attrs = [attributes.value[0] || ""].filter(Boolean);
 		d.groups = [blankGroup(d.change_attrs)];
 	}
 	d.introduce.forEach((x) => x.attr && loadValues(x.attr));
@@ -765,10 +871,10 @@ async function addProcess() {
 
 // Open the editor for an existing step — reverse persisted mappings back into
 // the editor's shape-specific fields.
-function openEdit(si) {
+async function openEdit(si) {
 	const step = steps.value[si];
-	const shp = shapeOf(step);
-	const shapeKey = shp.key === "conv" ? "conv" : shp.key === "idle" ? "idle" : "change";
+	const transform = await fetchShape(step.fabric_process);
+	const shapeKey = transform.key;
 	// GUARD: the conversion editor can only represent Introduce (chips mode) or
 	// Consume+Introduce (rules mode). A conv step carrying any OTHER role (e.g. a
 	// grid/API-authored Pin on a conversion) would be silently DROPPED on save —
@@ -791,8 +897,33 @@ function openEdit(si) {
 			refuse(__("This conversion step carries {0} entries the editor cannot represent", [frappe.utils.escape_html(foreign.join(", "))]));
 			return;
 		}
+		const allowed = {
+			Consume: new Set(transform.input_attributes),
+			Introduce: new Set(transform.output_attributes),
+		};
+		const unconfigured = step.mappings.filter(
+			(m) => allowed[m.role] && !allowed[m.role].has(m.attribute)
+		);
+		if (unconfigured.length) {
+			refuse(__(
+				"This step uses attributes not configured on its Process master ({0})",
+				[frappe.utils.escape_html([...new Set(unconfigured.map((m) => m.attribute))].join(", "))]
+			));
+			return;
+		}
 	}
 	if (shapeKey === "change") {
+		const configured = new Set(transform.change_attributes);
+		const unconfigured = step.mappings.filter(
+			(m) => m.role === "Change" && !configured.has(m.attribute)
+		);
+		if (unconfigured.length) {
+			refuse(__(
+				"This step changes attributes not configured on its Process master ({0})",
+				[frappe.utils.escape_html([...new Set(unconfigured.map((m) => m.attribute))].join(", "))]
+			));
+			return;
+		}
 		// The change editor holds ONE attribute per step — its held value is
 		// entered per rule, so distinct held VALUES are editable here. Pins
 		// spanning several ATTRIBUTES (or two Pin rows inside one rule) still
@@ -816,7 +947,14 @@ function openEdit(si) {
 		refuse(__("This step carries value-mapping entries the identity editor does not show"));
 		return;
 	}
-	const d = blankDraft(step.fabric_process, step.sequence, shapeKey, []);
+	const d = blankDraft(
+		step.fabric_process,
+		step.sequence,
+		shapeKey,
+		transform.change_attributes,
+		transform.input_attributes,
+		transform.output_attributes,
+	);
 	d.index = si;
 	d.input_item = step.input_item;
 	d.output_item = step.output_item;
@@ -828,21 +966,11 @@ function openEdit(si) {
 	});
 	const groupKeys = Object.keys(groups).sort((a, b) => num(a) - num(b));
 
-	if (shapeKey === "conv" && step.mappings.some((m) => m.role === "Consume")) {
+	if (shapeKey === "conv" && d.consume_attrs.length) {
 		// RULES MODE — rebuild consume_attrs + introduce attrs (first-seen order)
 		// and one rule per mapping_index group. Chips stay empty: values live in
 		// the rules, so untoggling every consumed attribute deliberately does NOT
 		// fall back to a silent cross-product of the rule values.
-		const cons = [];
-		const intros = [];
-		step.mappings.forEach((m) => {
-			if (m.role === "Consume" && !cons.includes(m.attribute)) cons.push(m.attribute);
-			if (m.role === "Introduce" && !intros.includes(m.attribute)) intros.push(m.attribute);
-		});
-		d.consume_attrs = cons;
-		d.introduce = intros.length
-			? intros.map((a) => ({ attr: a, chips: [], input: "" }))
-			: [{ attr: "", chips: [], input: "" }];
 		d.rules = groupKeys.map((k) => {
 			const r = { in: {}, out: {} };
 			groups[k].forEach((m) => {
@@ -855,20 +983,12 @@ function openEdit(si) {
 	} else if (shapeKey === "conv") {
 		// Rebuild introduce[] as {attr, chips[distinct values]} preserving first-seen order.
 		const byAttr = {};
-		const order = [];
 		step.mappings.filter((m) => m.role === "Introduce" && m.to_value).forEach((m) => {
-			if (!(m.attribute in byAttr)) { byAttr[m.attribute] = []; order.push(m.attribute); }
+			if (!(m.attribute in byAttr)) byAttr[m.attribute] = [];
 			if (!byAttr[m.attribute].includes(m.to_value)) byAttr[m.attribute].push(m.to_value);
 		});
-		d.introduce = order.length
-			? order.map((a) => ({ attr: a, chips: byAttr[a], input: "" }))
-			: [{ attr: "", chips: [], input: "" }];
+		d.introduce.forEach((intro) => { intro.chips = byAttr[intro.attr] || []; });
 	} else if (shapeKey === "change") {
-		const changeAttrs = [];
-		step.mappings.filter((m) => m.role === "Change").forEach((m) => {
-			if (!changeAttrs.includes(m.attribute)) changeAttrs.push(m.attribute);
-		});
-		d.change_attrs = changeAttrs.length ? changeAttrs : [attributes.value[0] || ""].filter(Boolean);
 		d.groups = groupKeys.map((k) => {
 			const g = {};
 			d.change_attrs.forEach((a) => {
@@ -896,23 +1016,7 @@ function cancelEdit() {
 	view.value = "overview";
 }
 
-// ---- conversion: introduce attributes -------------------------------------
-
-function introduceOptions(ii) {
-	// This row's own attr + any attribute not used by another introduce row.
-	const used = draft.value.introduce.map((x, i) => (i === ii ? null : x.attr)).filter(Boolean);
-	return attributes.value.filter((a) => !used.includes(a));
-}
-const unusedIntroduceAttrs = computed(() => {
-	if (!draft.value) return [];
-	const used = draft.value.introduce.map((x) => x.attr).filter(Boolean);
-	return attributes.value.filter((a) => !used.includes(a));
-});
-function addIntroduceAttr() {
-	const a = unusedIntroduceAttrs.value[0] || "";
-	draft.value.introduce.push({ attr: a, chips: [], input: "" });
-	if (a) loadValues(a);
-}
+// ---- conversion: configured output attributes -----------------------------
 function addChip(intro) {
 	const v = (intro.input || "").trim();
 	if (!v) return;
@@ -927,45 +1031,60 @@ const introduceCombos = computed(() => {
 
 // ---- conversion: consumed input attributes + rules (role Consume) ----------
 
-// Attribute names of the conversion's INPUT item (the IPD's own attributes
-// describe the OUTPUT side — a converted input may carry different ones).
-const inputAttrCache = reactive({});
-async function loadInputAttrs(itemName) {
-	if (!itemName || inputAttrCache[itemName]) return;
-	inputAttrCache[itemName] = [];
-	try {
-		const attrs = await frappe.xcall("essdee_yrp.fabric_ipd.get_item_attributes", { item: itemName });
-		inputAttrCache[itemName] = attrs || [];
-	} catch (e) {
-		inputAttrCache[itemName] = [];
-	}
-}
-
 // Rules mode = a conversion with ≥1 consumed input attribute. Zero consumed
 // attributes keeps the plain Introduce cross-product (today's behavior).
 const consumeMode = computed(() =>
 	Boolean(draft.value && draft.value.shapeKey === "conv" && draft.value.consume_attrs.length)
 );
-const consumeAttrOptions = computed(() => {
-	const d = draft.value;
-	if (!d || d.shapeKey !== "conv") return [];
-	const fetched = (d.input_item && inputAttrCache[d.input_item]) || [];
-	// Already-selected attrs stay listed even when the fetch fails or the input
-	// item changes, so a persisted step can always be untoggled.
-	return [...fetched, ...d.consume_attrs.filter((a) => !fetched.includes(a))];
-});
 const consumedAttrsList = computed(() =>
 	draft.value ? draft.value.consume_attrs.filter(Boolean) : []
 );
 const introducedAttrsList = computed(() =>
 	draft.value ? draft.value.introduce.map((x) => x.attr).filter(Boolean) : []
 );
-function toggleConsumeAttr(a) {
-	const d = draft.value;
-	const i = d.consume_attrs.indexOf(a);
-	if (i >= 0) d.consume_attrs.splice(i, 1);
-	else { d.consume_attrs.push(a); loadValues(a); }
-	if (d.consume_attrs.length && !d.rules.length) d.rules = [blankRule(d)];
+const usesInputRecipe = computed(() => Boolean(
+	isInputRecipeDraft()
+));
+const draftInputItemLabel = computed(() => {
+	if (!draft.value) return "";
+	if (usesInputRecipe.value) {
+		const rows = draft.value.input_materials || [];
+		return rows.length
+			? rows.map((row) => `${row.item || __("(pick input)")} ${Number(row.ratio || 0)}%`).join(" + ")
+			: __("(add input materials)");
+	}
+	return draft.value.input_item || draft.value.output_item || __("(pick input)");
+});
+const recipeTotal = computed(() =>
+	Number((draft.value?.input_materials || []).reduce(
+		(total, row) => total + Number(row.ratio || 0), 0
+	).toFixed(3))
+);
+const recipeTotalValid = computed(() => {
+	if (!usesInputRecipe.value) return true;
+	const rows = draft.value?.input_materials || [];
+	const items = rows.map((row) => row.item).filter(Boolean);
+	return (
+		rows.length > 0 &&
+		items.length === rows.length &&
+		frappe.yrp.attribute_value(new Set(items).size) === items.length &&
+		rows.every((row) => Number(row.ratio) > 0) &&
+		Math.abs(recipeTotal.value - 100) <= 0.001
+	);
+});
+function addInputMaterial() {
+	if (!draft.value) return;
+	draft.value.input_materials.push({
+		key: `${Date.now()}-${draft.value.input_materials.length}`,
+		item: "",
+		ratio: 0,
+	});
+	nextTick(() => mountRecipeInputControls());
+}
+function removeInputMaterial(index) {
+	if (!draft.value) return;
+	draft.value.input_materials.splice(index, 1);
+	nextTick(() => mountRecipeInputControls());
 }
 // A rule pairs one consumed input combination with one produced output
 // combination. Missing keys read as "" (v-model creates them on first type).
@@ -1003,29 +1122,9 @@ function blankGroup(attrs) {
 	g.__pin = "";
 	return g;
 }
-const unusedChangeAttrs = computed(() =>
-	draft.value ? attributes.value.filter((a) => !draft.value.change_attrs.includes(a)) : []
-);
 const pinOptions = computed(() =>
 	draft.value ? attributes.value.filter((a) => !draft.value.change_attrs.includes(a)) : []
 );
-function onAddChangeAttr() {
-	const a = addChangeAttrSel.value;
-	addChangeAttrSel.value = "";
-	if (!a || draft.value.change_attrs.includes(a)) return;
-	draft.value.change_attrs.push(a);
-	draft.value.groups.forEach((g) => { if (!g[a]) g[a] = { from: "", to: "" }; });
-	loadValues(a);
-}
-function removeChangeAttr(ai) {
-	const a = draft.value.change_attrs[ai];
-	draft.value.change_attrs.splice(ai, 1);
-	draft.value.groups.forEach((g) => delete g[a]);
-	if (draft.value.pin_attr === a) {
-		draft.value.pin_attr = "";
-		draft.value.groups.forEach((g) => { g.__pin = ""; });
-	}
-}
 // Changing the hold ATTRIBUTE invalidates every rule's held value (they were
 // values of the previous attribute) — clear them and load the new autocomplete.
 function onPinAttrChange() {
@@ -1042,7 +1141,12 @@ const canSave = computed(() => {
 	const d = draft.value;
 	if (!d) return false;
 	if (d.shapeKey === "conv") {
-		const itemsOk = Boolean(d.input_item && d.output_item && d.input_item !== d.output_item);
+		const recipeItemsOk = usesInputRecipe.value && recipeTotalValid.value &&
+			!d.input_materials.some((row) => row.item === d.output_item);
+		const singleItemOk = !usesInputRecipe.value && Boolean(
+			d.input_item && d.output_item && d.input_item !== d.output_item
+		);
+		const itemsOk = Boolean(d.output_item && (recipeItemsOk || singleItemOk));
 		if (!d.consume_attrs.length) return itemsOk;
 		return itemsOk && d.rules.some((r) => isCompleteRule(d, r));
 	}
@@ -1057,6 +1161,35 @@ function nextSequence() {
 	return seqs.length ? Math.max(...seqs) + 10 : 10;
 }
 
+function resequenceSteps() {
+	steps.value.forEach((step, index) => {
+		step.sequence = (index + 1) * 10;
+	});
+}
+
+function moveStep(index, direction) {
+	const target = index + direction;
+	if (target < 0 || target >= steps.value.length) return;
+	const [step] = steps.value.splice(index, 1);
+	steps.value.splice(target, 0, step);
+	resequenceSteps();
+	writeBack();
+}
+
+function canMoveStep(index, direction) {
+	const target = index + direction;
+	if (target < 0 || target >= steps.value.length) return false;
+	const reordered = steps.value.slice();
+	const [step] = reordered.splice(index, 1);
+	reordered.splice(target, 0, step);
+	return reordered.every((row, rowIndex) => {
+		if (rowIndex === 0) return true;
+		const previousOutput = reordered[rowIndex - 1].output_item;
+		const currentInput = row.input_item;
+		return !previousOutput || !currentInput || previousOutput === currentInput;
+	});
+}
+
 function crossProduct(lists) {
 	return lists.reduce((acc, list) => {
 		const out = [];
@@ -1069,6 +1202,13 @@ function saveDraft() {
 	syncItemControls();
 	if (!canSave.value) return;
 	const d = draft.value;
+	if (usesInputRecipe.value) {
+		d.input_item = d.input_materials[0]?.item || "";
+		conversionInputs.value = d.input_materials.map((row) => ({
+			item: row.item,
+			ratio: Number(row.ratio || 0),
+		}));
+	}
 	const mappings = [];
 
 	if (d.shapeKey === "conv" && d.consume_attrs.length) {
@@ -1127,12 +1267,14 @@ function saveDraft() {
 
 	if (d.index == null) steps.value.push(step);
 	else steps.value.splice(d.index, 1, step);
+	resequenceSteps();
 	writeBack();
 	cancelEdit();
 }
 
 function removeStep(si) {
 	steps.value.splice(si, 1);
+	resequenceSteps();
 	writeBack();
 }
 
@@ -1198,6 +1340,14 @@ defineExpose({ load_data, get_steps: () => JSON.parse(JSON.stringify(steps.value
 .b-idle { background: var(--bg-gray, #eceff3); color: var(--text-muted); }
 
 .fp-card-actions { display: inline-flex; align-items: center; gap: 8px; }
+.fp-order-actions { display: inline-flex; align-items: center; gap: 3px; }
+.fp-order {
+	border: 1px solid var(--border-color); background: var(--control-bg, transparent);
+	color: var(--text-muted); width: 26px; height: 26px; border-radius: 6px;
+	cursor: pointer; font-size: 13px; line-height: 1;
+}
+.fp-order:hover:not(:disabled) { border-color: var(--primary, #2490ef); color: var(--primary, #2490ef); }
+.fp-order:disabled { opacity: .3; cursor: not-allowed; }
 .fp-edit {
 	border: 1px solid var(--border-color); background: var(--control-bg, transparent);
 	color: var(--text-color); border-radius: 6px; padding: 3px 12px; cursor: pointer; font-size: var(--text-sm); font-weight: 500;
@@ -1272,6 +1422,17 @@ defineExpose({ load_data, get_steps: () => JSON.parse(JSON.stringify(steps.value
 .fp-field { display: flex; flex-direction: column; gap: 4px; min-width: 180px; flex: 1; }
 .fp-field.fp-narrow { flex: 0 0 200px; min-width: 160px; }
 .fp-field > span { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); font-weight: 600; }
+.fp-field > small { color: var(--text-muted); font-size: var(--text-xs); line-height: 1.4; }
+.fp-recipe-field { flex: 1.25; min-width: 280px; }
+.fp-recipe-list { border: 1px solid var(--border-color); border-radius: var(--border-radius, 6px); overflow: hidden; }
+.fp-recipe-row, .fp-recipe-total { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; }
+.fp-recipe-row + .fp-recipe-row, .fp-recipe-total { border-top: 1px solid var(--border-color); }
+.fp-recipe-row span, .fp-recipe-total { color: var(--text-muted); }
+.fp-recipe-item { flex: 1; min-width: 180px; }
+.fp-recipe-ratio { display: flex; align-items: center; gap: 4px; width: 105px; }
+.fp-recipe-ratio input { min-width: 0; text-align: right; }
+.fp-recipe-total { background: var(--subtle-fg, var(--control-bg)); font-size: var(--text-sm); font-weight: 600; }
+.fp-recipe-total.is-invalid { color: var(--red-600, #c0392b); }
 .fp-panel-body select, .fp-panel-body input, .fp-addbar select {
 	font: inherit; font-size: var(--text-md); color: var(--text-color);
 	background: var(--control-bg, var(--fg-color)); border: 1px solid var(--border-color);
@@ -1285,18 +1446,12 @@ defineExpose({ load_data, get_steps: () => JSON.parse(JSON.stringify(steps.value
 .fp-chipbox input { border: none !important; background: transparent !important; padding: 2px 4px !important; flex: 1; min-width: 120px; }
 .fp-chipbox input:focus { outline: none; }
 .fp-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--control-bg, var(--subtle-fg)); border: 1px solid var(--border-color); border-radius: 7px; padding: 3px 6px 3px 10px; font-size: var(--text-sm); color: var(--text-color); }
+.fp-chip.c-consume { border-color: var(--green-300, #86d293); }
 .fp-chip.c-introduce { border-color: var(--blue-300, #93c5fd); }
 .fp-chip.c-combo { border-color: var(--purple-300, #c4b5fd); }
 .fp-chip-x { border: none; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 0; }
 .fp-chip-x:hover { color: var(--red-500, #e03636); }
 .fp-selected-attrs { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.fp-toggle {
-	border: 1px solid var(--border-color); background: var(--control-bg, transparent);
-	color: var(--text-color); border-radius: 7px; padding: 4px 12px; cursor: pointer;
-	font: inherit; font-size: var(--text-sm); font-weight: 500;
-}
-.fp-toggle:hover { border-color: var(--primary, #2490ef); color: var(--primary, #2490ef); }
-.fp-toggle.on { background: var(--blue-100, #e3edfe); border-color: var(--blue-500, #2490ef); color: var(--blue-700, #175cd3); font-weight: 600; }
 .fp-rule-body { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
 .fp-rule-body > .fp-arrow { align-self: center; }
 .fp-rule-side { display: flex; flex-direction: column; min-width: 220px; }

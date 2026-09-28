@@ -1,6 +1,7 @@
 # Copyright (c) 2026, Essdee and contributors
 
 from __future__ import annotations
+from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe import _
@@ -67,7 +68,7 @@ def _append_accessory_details(ipd_doc, cloth_items, combinations):
 
 	for accessory_row in accessories:
 		accessory = accessory_row.get("Accessory") or accessory_row.get("accessory")
-		input_dia = accessory_row.get("Dia") or accessory_row.get("dia")
+		input_dia = accessory_row.get("Dia") or _attribute_value(accessory_row.get("dia"))
 		if not accessory or not input_dia:
 			frappe.throw(_("Accessory and Dia are required for every Cloth Accessory row."))
 		matched = False
@@ -167,9 +168,9 @@ def merge_compacting_details(expected, saved):
 	return [
 		{
 			**detail,
-			"compacting_dia": saved_by_key.get(compacting_key(detail), {}).get(
+			"compacting_dia": _attribute_value(saved_by_key.get(compacting_key(detail), {}).get(
 				"compacting_dia"
-			),
+			)),
 		}
 		for detail in expected
 	]
@@ -179,7 +180,7 @@ def _validate_dia_values(rows):
 	dias = {
 		value
 		for row in rows
-		for value in (row.get("input_dia"), row.get("compacting_dia"))
+		for value in (_attribute_value(row.get("input_dia")), _attribute_value(row.get("compacting_dia")))
 		if value
 	}
 	if not dias:
@@ -208,7 +209,7 @@ def validate_submitted_details(expected, submitted):
 				)
 			)
 		seen.add(key)
-		normalized.append({**expected_by_key[key], "compacting_dia": row.get("compacting_dia")})
+		normalized.append({**expected_by_key[key], "compacting_dia": _attribute_value(row.get("compacting_dia"))})
 	for key, detail in expected_by_key.items():
 		if key not in seen:
 			normalized.append({**detail, "compacting_dia": None})
@@ -225,7 +226,7 @@ def get_ipd_compacting(item_production_detail):
 def get_compacting_mapping(item_production_detail):
 	doc = get_ipd_compacting(item_production_detail)
 	return {
-		compacting_key(row): row.get("compacting_dia")
+		compacting_key(row): _attribute_value(row.get("compacting_dia"))
 		for row in (doc.get("compacting_details") if doc else []) or []
 	}
 

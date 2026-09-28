@@ -28,8 +28,10 @@ frappe.ui.form.on("YRP Process Cost", {
 		frappe.call({
 			method: "essdee_yrp.process_cost.get_pc_attribute_values",
 			args: {
+				item: frm.doc.item,
 				lot: frm.doc.lot,
 				attribute: frm.doc.attribute,
+					for_link: 1,
 				process_name: frm.doc.process_name,
 			},
 			callback(r) {

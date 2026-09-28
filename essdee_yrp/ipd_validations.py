@@ -1,3 +1,5 @@
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 from contextlib import contextmanager
 
 import frappe
@@ -28,6 +30,12 @@ def before_validate(doc, method=None):
 	apply_ipd_settings_defaults(doc)
 	if is_cloth_ipd(doc):
 		sync_cloth_recipe_snapshot(doc)
+		# Custom fabric steps are authored around the generated Dyeing/Compacting
+		# stages. Re-resolve those managed transitions from the exact ordered route
+		# before validation/matrix generation, so the previous step's output is
+		# always the next step's input after a reorder.
+		from essdee_yrp.fabric_ipd import reconcile_fabric_route_processes
+		reconcile_fabric_route_processes(doc)
 		return
 	# Yarn recipes are operational Lot inputs owned by generated cloth IPDs.
 	# Synced garment IPDs keep only the panel/process/accessory definition.
@@ -58,7 +66,7 @@ def validate_approved_immutability(doc):
 	allowed_names = frappe.flags.get("generated_cloth_ipd_updates") or set()
 	if doc.name in allowed_names and is_cloth_ipd(doc):
 		return
-	if frappe.db.get_value('YRP Item Production Detail', doc.name, "approval_status") == "Approved":
+	if attribute_db.get_value('YRP Item Production Detail', doc.name, "approval_status") == "Approved":
 		frappe.throw(
 			_("Item Production Detail {0} is Approved. Revert Approval before editing it.").format(
 				doc.name
@@ -94,35 +102,97 @@ def allow_generated_cloth_ipd_update(doc):
 
 
 def sync_cloth_recipe_snapshot(doc):
-	"""Keep the old single/global yarn fields as an internal compatibility view.
+	"""Keep the IPD's editable material recipe and colour snapshots aligned.
 
-	Colour-wise Yarn Recipes are the only user-entered source for a cloth IPD.
-	Older calculation/reporting paths still read ``yarn_ratio_details`` and
-	``yarn_item``; derive those fields from the first finished-colour recipe so
-	the user never has to enter the same yarn blend twice.
+	``yarn_ratio_details`` is the user-facing, versioned IPD recipe.  The Item
+	master seeds it when a cloth program is created, but later Item changes must
+	not rewrite an existing IPD.  Colour-wise rows retain the per-route physical
+	yarn Colour and are regenerated from the IPD composition when that composition
+	is edited.  Old IPDs with only colour rows are backfilled once.
 	"""
-	rows = doc.get("colour_yarn_recipes") or []
-	if not rows:
+	colour_rows = doc.get("colour_yarn_recipes") or []
+	recipe = [row for row in (doc.get("yarn_ratio_details") or []) if row.get("yarn_item")]
+	backfilled_from_colours = False
+
+	if not recipe and colour_rows:
+		backfilled_from_colours = True
+		first = colour_rows[0]
+		first_key = (first.get("cloth_item") or doc.get("item"), _attribute_value(first.get("colour")))
+		recipe = [
+			row for row in colour_rows
+			if (row.get("cloth_item") or doc.get("item"), _attribute_value(row.get("colour"))) == first_key
+		]
+		doc.set("yarn_ratio_details", [
+			{
+				"yarn_item": row.get("yarn_item"),
+				"ratio": flt(row.get("ratio")),
+			}
+			for row in recipe
+			if row.get("yarn_item")
+		])
+		recipe = doc.get("yarn_ratio_details") or []
+
+	doc.yarn_item = recipe[0].get("yarn_item") if recipe else None
+	if not recipe or not colour_rows or not doc.get("fabric_routes"):
 		return
 
-	first = rows[0]
-	first_key = (first.get("cloth_item") or doc.get("item"), first.get("colour"))
-	recipe = [
-		row for row in rows
-		if (row.get("cloth_item") or doc.get("item"), row.get("colour")) == first_key
-	]
-	if not recipe:
+	# Existing colour-wise recipes may intentionally use a different Yarn Item
+	# for each finished colour (for example, Greige yarn for Red and a dyed-yarn
+	# Item for Navy).  Do not flatten those rows on every unrelated IPD save.
+	# Rebuild them only when the user has actually edited this IPD's material
+	# recipe; newly inserted/generated IPDs already arrive with their exact
+	# colour-wise recipe from Build Cloth Program.
+	previous = doc.get_doc_before_save()
+	if not previous or backfilled_from_colours:
 		return
 
-	doc.set("yarn_ratio_details", [
+	def recipe_signature(rows):
+		return [
+			(row.get("yarn_item"), flt(row.get("ratio")))
+			for row in (rows or [])
+			if row.get("yarn_item")
+		]
+
+	if recipe_signature(recipe) == recipe_signature(previous.get("yarn_ratio_details")):
+		return
+
+	from essdee_yrp.api.cloth_program import _derive_colour_yarn_recipes
+
+	routes = doc.get("fabric_routes") or []
+	required_colours = list(dict.fromkeys(
+		_attribute_value(row.get("finished_colour")) for row in routes if _attribute_value(row.get("finished_colour"))
+	))
+	dyed_colours = list(dict.fromkeys(
+		_attribute_value(row.get("finished_colour")) for row in routes
+		if _attribute_value(row.get("finished_colour")) and cint(row.get("use_dyed_yarn"))
+	))
+	source_colours = {
+		_attribute_value(row.get("finished_colour")): _attribute_value(row.get("knitting_output_colour"))
+		for row in routes
+		if _attribute_value(row.get("finished_colour")) and _attribute_value(row.get("knitting_output_colour"))
+	}
+	derived = _derive_colour_yarn_recipes(
+		[
+			{
+				"yarn_item": row.get("yarn_item"),
+				"ratio": flt(row.get("ratio")),
+			}
+			for row in recipe
+		],
+		required_colours,
+		dyed_colours,
+		source_colours,
+	)
+	doc.set("colour_yarn_recipes", [
 		{
+			"cloth_item": doc.get("item"),
+			"colour": _attribute_value(row.get("colour")),
 			"yarn_item": row.get("yarn_item"),
+			"yarn_colour": _attribute_value(row.get("yarn_colour")),
 			"ratio": flt(row.get("ratio")),
 		}
-		for row in recipe
-		if row.get("yarn_item")
+		for row in derived
 	])
-	doc.yarn_item = doc.yarn_ratio_details[0].yarn_item if doc.yarn_ratio_details else None
 
 
 def validate(doc, method=None):
@@ -152,16 +222,16 @@ def validate_colour_yarn_recipes(doc):
 				f"Row {row.idx} of Colour-wise Yarn Recipes: Cloth Item must be "
 				f"the cloth IPD item ({doc.item})."
 			)
-		if not has_attribute_value("Colour", row.colour):
+		if not has_attribute_value("Colour", _attribute_value(row.colour)):
 			frappe.throw(
-				f"Row {row.idx} of Colour-wise Yarn Recipes: {row.colour} is not a Colour value."
+				f"Row {row.idx} of Colour-wise Yarn Recipes: {_attribute_value(row.colour)} is not a Colour value."
 			)
-		key = (row.cloth_item, row.colour)
+		key = (row.cloth_item, _attribute_value(row.colour))
 		row_key = key + (row.yarn_item,)
 		if row_key in seen:
 			frappe.throw(
 				f"Row {row.idx} of Colour-wise Yarn Recipes: duplicate Yarn Item "
-				f"{row.yarn_item} for {row.cloth_item} / {row.colour}."
+				f"{row.yarn_item} for {row.cloth_item} / {_attribute_value(row.colour)}."
 			)
 		seen.add(row_key)
 		ratio = flt(row.ratio)
@@ -169,14 +239,40 @@ def validate_colour_yarn_recipes(doc):
 			frappe.throw(
 				f"Row {row.idx} of Colour-wise Yarn Recipes: Ratio must be greater than zero."
 			)
-		if frappe.db.exists(
-			'YRP Item Item Attribute',
-			{"parent": row.yarn_item, "parenttype": 'Item'},
-		):
+		attributes = set(frappe.get_all(
+			"Item Variant Attribute",
+			filters={
+				"parent": row.yarn_item,
+				"parenttype": "Item",
+			},
+			pluck="attribute",
+		))
+		unsupported = sorted(attributes - {"Colour"})
+		if unsupported:
 			frappe.throw(
 				f"Row {row.idx} of Colour-wise Yarn Recipes: Yarn Item "
-				f"{row.yarn_item} must not have variant attributes."
+				f"{row.yarn_item} may only use the Colour variant attribute; "
+				f"remove {', '.join(unsupported)}."
 			)
+		has_colour_attribute = "Colour" in attributes
+		if has_colour_attribute and not _attribute_value(row.get("yarn_colour")):
+			frappe.throw(
+				f"Row {row.idx} of Colour-wise Yarn Recipes: Yarn Item "
+				f"{row.yarn_item} requires a Yarn Colour."
+			)
+		if _attribute_value(row.get("yarn_colour")):
+			if not has_colour_attribute:
+				frappe.throw(
+					f"Row {row.idx} of Colour-wise Yarn Recipes: Yarn Item "
+					f"{row.yarn_item} does not define the Colour attribute."
+				)
+			if (
+				not has_attribute_value("Colour", _attribute_value(row.yarn_colour))
+			):
+				frappe.throw(
+					f"Row {row.idx} of Colour-wise Yarn Recipes: "
+					f"{_attribute_value(row.yarn_colour)} is not a Colour value."
+				)
 		groups[key] = groups.get(key, 0) + ratio
 	for (cloth, colour), total in groups.items():
 		if abs(total - 100.0) > 0.001:
@@ -220,28 +316,28 @@ def sync_cloth_attribute_mapping_values(doc):
 			values[attribute].append(value)
 
 	for row in doc.get("fabric_routes") or []:
-		add(FABRIC_DIA_ATTRIBUTE, row.get("finished_dia"))
-		add(FABRIC_DIA_ATTRIBUTE, row.get("knitting_output_dia"))
-		add(FABRIC_COLOUR_ATTRIBUTE, row.get("finished_colour"))
-		add(FABRIC_COLOUR_ATTRIBUTE, row.get("knitting_output_colour"))
+		add(FABRIC_DIA_ATTRIBUTE, _attribute_value(row.get("finished_dia")))
+		add(FABRIC_DIA_ATTRIBUTE, _attribute_value(row.get("knitting_output_dia")))
+		add(FABRIC_COLOUR_ATTRIBUTE, _attribute_value(row.get("finished_colour")))
+		add(FABRIC_COLOUR_ATTRIBUTE, _attribute_value(row.get("knitting_output_colour")))
 
 	for row in doc.get("colour_yarn_recipes") or []:
-		add(FABRIC_COLOUR_ATTRIBUTE, row.get("colour"))
+		add(FABRIC_COLOUR_ATTRIBUTE, _attribute_value(row.get("colour")))
 
 	for row in doc.get("knitting_dia_details") or []:
-		add(FABRIC_DIA_ATTRIBUTE, row.get("dia"))
+		add(FABRIC_DIA_ATTRIBUTE, _attribute_value(row.get("dia")))
 	for row in doc.get("dyeing_colour_details") or []:
-		add(FABRIC_DIA_ATTRIBUTE, row.get("dia"))
-		add(FABRIC_COLOUR_ATTRIBUTE, row.get("from_colour"))
-		add(FABRIC_COLOUR_ATTRIBUTE, row.get("to_colour"))
+		add(FABRIC_DIA_ATTRIBUTE, _attribute_value(row.get("dia")))
+		add(FABRIC_COLOUR_ATTRIBUTE, _attribute_value(row.get("from_colour")))
+		add(FABRIC_COLOUR_ATTRIBUTE, _attribute_value(row.get("to_colour")))
 	for row in doc.get("compacting_dia_details") or []:
-		add(FABRIC_COLOUR_ATTRIBUTE, row.get("colour"))
-		add(FABRIC_DIA_ATTRIBUTE, row.get("from_dia"))
-		add(FABRIC_DIA_ATTRIBUTE, row.get("to_dia"))
+		add(FABRIC_COLOUR_ATTRIBUTE, _attribute_value(row.get("colour")))
+		add(FABRIC_DIA_ATTRIBUTE, _attribute_value(row.get("from_dia")))
+		add(FABRIC_DIA_ATTRIBUTE, _attribute_value(row.get("to_dia")))
 	for row in doc.get("compacting_reference_details") or []:
-		add(FABRIC_COLOUR_ATTRIBUTE, row.get("colour"))
-		add(FABRIC_DIA_ATTRIBUTE, row.get("input_dia"))
-		add(FABRIC_DIA_ATTRIBUTE, row.get("compacting_dia"))
+		add(FABRIC_COLOUR_ATTRIBUTE, _attribute_value(row.get("colour")))
+		add(FABRIC_DIA_ATTRIBUTE, _attribute_value(row.get("input_dia")))
+		add(FABRIC_DIA_ATTRIBUTE, _attribute_value(row.get("compacting_dia")))
 
 	for process in get_fabric_process_rows(doc):
 		for mapping in process.get("value_mappings") or []:
@@ -256,9 +352,9 @@ def sync_cloth_attribute_mapping_values(doc):
 			continue
 		mapping = get_mapping_document(attribute_row.get("mapping"))
 		current = [
-			row.get("attribute_value")
+			_attribute_value(row.get("attribute_value"))
 			for row in mapping.get("values") or []
-			if row.get("attribute_value")
+			if _attribute_value(row.get("attribute_value"))
 		]
 		if mapping.get("attribute_name") == attribute and current == expected:
 			continue
@@ -286,33 +382,24 @@ def validate_cloth_ipd(doc):
 	dia/colour means "applies to every value" and counts as its own key.
 	Fan-out (several to-values per (dia, from)) is allowed; see
 	validate_swap_rows for the invariant and its rationale."""
-	from essdee_yrp.fabric_ipd import get_yarn_ratio_inputs
+	from essdee_yrp.fabric_ipd import get_yarn_ratio_inputs, is_cloth_recipe_conversion
 
 	validate_fabric_routes(doc)
 	validate_compacting_references(doc)
 
 	yarn_rows = doc.get("yarn_ratio_details") or []
 	if yarn_rows:
-		seen_yarns = set()
-		total = 0.0
-		for row in yarn_rows:
-			if not row.yarn_item:
-				frappe.throw(f"Row {row.idx} of Yarn Ratio: select a Yarn Item.")
-			if row.yarn_item in seen_yarns:
-				frappe.throw(f"Row {row.idx} of Yarn Ratio: duplicate Yarn Item {row.yarn_item}.")
-			seen_yarns.add(row.yarn_item)
-			ratio = flt(row.ratio)
-			if ratio <= 0:
-				frappe.throw(f"Row {row.idx} of Yarn Ratio: Ratio must be greater than zero.")
-			total += ratio
-		if abs(total - 100.0) > 0.001:
-			frappe.throw(f"Yarn Ratio total must be exactly 100. Current total is {flt(total, 3)}.")
+		# Apply the same contract as the reusable Cloth Item recipe: real,
+		# non-cloth, unique Yarn Items; Colour is their only supported variant
+		# attribute; positive ratios total exactly 100%.
+		from essdee_yrp.item_validations import _validate_yarn_rows
+		_validate_yarn_rows(yarn_rows, cloth_item=doc.item)
 
 		# Keep old single-yarn readers harmless during the transition.  The table
 		# and combination-level matrix Item remain the source of truth.
 		doc.yarn_item = yarn_rows[0].yarn_item
 		for process_row in doc.get("fabric_processes") or []:
-			if doc.get("knitting_process") and process_row.fabric_process == doc.knitting_process:
+			if is_cloth_recipe_conversion(doc, process_row):
 				process_row.input_item = doc.yarn_item
 
 	# The engine resolves matrices per process_name with subset attr matching —
@@ -373,15 +460,15 @@ def validate_fabric_routes(doc):
 		return
 	seen = set()
 	recipe_colours = {
-		row.colour for row in doc.get("colour_yarn_recipes") or []
-		if row.cloth_item == doc.item and row.colour
+		_attribute_value(row.colour) for row in doc.get("colour_yarn_recipes") or []
+		if row.cloth_item == doc.item and _attribute_value(row.colour)
 	}
 	for row in routes:
 		values = (
-			(row.finished_colour, "Colour", "Finished Colour"),
-			(row.knitting_output_colour, "Colour", "Knitting Output Colour"),
-			(row.finished_dia, "Dia", "Finished Dia"),
-			(row.knitting_output_dia, "Dia", "Knitting Output Dia"),
+			(_attribute_value(row.finished_colour), "Colour", "Finished Colour"),
+			(_attribute_value(row.knitting_output_colour), "Colour", "Knitting Output Colour"),
+			(_attribute_value(row.finished_dia), "Dia", "Finished Dia"),
+			(_attribute_value(row.knitting_output_dia), "Dia", "Knitting Output Dia"),
 		)
 		for value, attribute, label in values:
 			if not value:
@@ -390,19 +477,27 @@ def validate_fabric_routes(doc):
 				frappe.throw(
 					f"Row {row.idx} of Fabric Routes: {value} is not a {attribute} value."
 				)
-		key = (row.finished_dia, row.finished_colour)
+		key = (_attribute_value(row.finished_dia), _attribute_value(row.finished_colour))
 		if key in seen:
 			frappe.throw(
 				f"Row {row.idx} of Fabric Routes duplicates "
-				f"{row.finished_colour} / {row.finished_dia}."
+				f"{_attribute_value(row.finished_colour)} / {_attribute_value(row.finished_dia)}."
 			)
 		seen.add(key)
-		if recipe_colours and row.finished_colour not in recipe_colours:
+		if (
+			row.get("use_dyed_yarn")
+			and _attribute_value(row.knitting_output_colour) != _attribute_value(row.finished_colour)
+		):
+			frappe.throw(
+				f"Row {row.idx} of Fabric Routes: a dyed-yarn route must use "
+				"the Finished Colour as its Knitting Output Colour."
+			)
+		if recipe_colours and _attribute_value(row.finished_colour) not in recipe_colours:
 			frappe.throw(
 				f"Row {row.idx} of Fabric Routes: add a Colour-wise Yarn Recipe "
-				f"for {row.finished_colour}."
+				f"for {_attribute_value(row.finished_colour)}."
 			)
-	routed_colours = {row.finished_colour for row in routes}
+	routed_colours = {_attribute_value(row.finished_colour) for row in routes}
 	missing_routes = sorted(recipe_colours - routed_colours)
 	if missing_routes:
 		frappe.throw(
@@ -412,10 +507,10 @@ def validate_fabric_routes(doc):
 		)
 
 	needs_dyeing = any(
-		row.knitting_output_colour != row.finished_colour for row in routes
+		_attribute_value(row.knitting_output_colour) != _attribute_value(row.finished_colour) for row in routes
 	)
 	needs_compacting = any(
-		row.knitting_output_dia != row.finished_dia for row in routes
+		_attribute_value(row.knitting_output_dia) != _attribute_value(row.finished_dia) for row in routes
 	)
 	from essdee_yrp.fabric_chain import get_fabric_steps
 
@@ -451,7 +546,7 @@ def validate_compacting_references(doc):
 			("input_dia", "Dia", "Knitting/Input Dia"),
 			("compacting_dia", "Dia", "Compacting Dia"),
 		):
-			value = row.get(fieldname)
+			value = _attribute_value(row.get(fieldname))
 			if not value:
 				frappe.throw(
 					f"Row {row.idx} of Compacting Reference Details: select {label}."
@@ -461,17 +556,17 @@ def validate_compacting_references(doc):
 					f"Row {row.idx} of Compacting Reference Details: "
 					f"{value} is not a {attribute} value."
 				)
-		if row.get("colour") and not has_attribute_value("Colour", row.get("colour")):
+		if _attribute_value(row.get("colour")) and not has_attribute_value("Colour", _attribute_value(row.get("colour"))):
 			frappe.throw(
 				f"Row {row.idx} of Compacting Details: "
-				f"{row.get('colour')} is not a Colour value."
+				f"{_attribute_value(row.get('colour'))} is not a Colour value."
 			)
-		key = (row.colour, row.input_dia, row.compacting_dia)
+		key = (_attribute_value(row.colour), _attribute_value(row.input_dia), _attribute_value(row.compacting_dia))
 		if key in seen:
 			frappe.throw(
 				f"Row {row.idx} of Compacting Details duplicates "
-				f"{row.colour or 'All Colours'} / "
-				f"{row.input_dia} -> {row.compacting_dia}."
+				f"{_attribute_value(row.colour) or 'All Colours'} / "
+				f"{_attribute_value(row.input_dia)} -> {_attribute_value(row.compacting_dia)}."
 			)
 		seen.add(key)
 
@@ -678,7 +773,7 @@ def validate_set_item_defaults(doc):
 	if not doc.is_set_item or doc.is_new() or not frappe.db.exists('YRP Item Production Detail', doc.name):
 		return
 
-	previous_is_set_item = frappe.db.get_value('YRP Item Production Detail', doc.name, "is_set_item")
+	previous_is_set_item = attribute_db.get_value('YRP Item Production Detail', doc.name, "is_set_item")
 	if not previous_is_set_item:
 		return
 
@@ -687,14 +782,14 @@ def validate_set_item_defaults(doc):
 		frappe.throw(f"Mapping is required for Set Item Attribute {doc.set_item_attribute}")
 
 	map_doc = get_mapping_document(mapping, cached=True)
-	map_values = [row.attribute_value for row in map_doc.values]
+	map_values = [_attribute_value(row.attribute_value) for row in map_doc.values]
 
 	check_dict = {}
 	for row in doc.get("stiching_item_details") or []:
 		if row.is_default:
-			if check_dict.get(row.set_item_attribute_value):
-				frappe.throw(f"Select only one Is Default for {row.set_item_attribute_value}")
-			check_dict[row.set_item_attribute_value] = 1
+			if check_dict.get(_attribute_value(row.set_item_attribute_value)):
+				frappe.throw(f"Select only one Is Default for {_attribute_value(row.set_item_attribute_value)}")
+			check_dict[_attribute_value(row.set_item_attribute_value)] = 1
 
 	if len(check_dict) < len(map_values):
 		frappe.throw("Select Is default for all Set Item Attributes")
@@ -855,7 +950,7 @@ def validate_packing_attribute_details(doc):
 	attributes = set()
 	if doc.auto_calculate:
 		for row in rows:
-			attributes.add(row.attribute_value)
+			attributes.add(_attribute_value(row.attribute_value))
 			row.quantity = 0
 	else:
 		total = 0.0
@@ -865,7 +960,7 @@ def validate_packing_attribute_details(doc):
 					"Enter value in Packing Attribute Details, Zero is not considered as a valid quantity"
 				)
 			total += flt(row.quantity)
-			attributes.add(row.attribute_value)
+			attributes.add(_attribute_value(row.attribute_value))
 
 		if total != flt(doc.packing_combo):
 			frappe.throw(
@@ -886,12 +981,12 @@ def validate_packing_size_details(doc, ratio_mode):
 	for row in rows:
 		if not row.quantity or row.quantity <= 0:
 			frappe.throw("Quantity should be greater than zero in Packing Size Details.")
-		if row.attribute_value in seen:
-			frappe.throw(f"Duplicate size '{row.attribute_value}' in Packing Size Details.")
-		seen.add(row.attribute_value)
-		if valid_sizes and row.attribute_value not in valid_sizes:
+		if _attribute_value(row.attribute_value) in seen:
+			frappe.throw(f"Duplicate size '{_attribute_value(row.attribute_value)}' in Packing Size Details.")
+		seen.add(_attribute_value(row.attribute_value))
+		if valid_sizes and _attribute_value(row.attribute_value) not in valid_sizes:
 			frappe.throw(
-				f"'{row.attribute_value}' is not a valid {doc.primary_item_attribute} for this item."
+				f"'{_attribute_value(row.attribute_value)}' is not a valid {doc.primary_item_attribute} for this item."
 			)
 
 	if ratio_mode:
@@ -939,7 +1034,7 @@ def validate_stiching_fields(doc):
 			frappe.throw(
 				"Enter value in Stiching Item Details, Zero is not considered as a valid quantity"
 			)
-		attributes.add(row.stiching_attribute_value)
+		attributes.add(_attribute_value(row.stiching_attribute_value))
 
 	if len(attributes) != len(rows):
 		frappe.throw("Duplicate Attribute values are occured in Stiching Item Details")
@@ -966,7 +1061,7 @@ def validate_cutting_fields(doc):
 
 	previous_is_set_item = None
 	if not doc.is_new() and frappe.db.exists('YRP Item Production Detail', doc.name):
-		previous_is_set_item = frappe.db.get_value('YRP Item Production Detail', doc.name, "is_set_item")
+		previous_is_set_item = attribute_db.get_value('YRP Item Production Detail', doc.name, "is_set_item")
 
 	if previous_is_set_item:
 		if doc.is_set_item and doc.set_item_attribute not in accessory_attributes and len(accessory_attributes) > 0:
@@ -977,7 +1072,7 @@ def validate_cutting_fields(doc):
 
 	if doc.is_same_packing_attribute:
 		for row in doc.get("stiching_item_combination_details") or []:
-			row.attribute_value = row.major_attribute_value
+			row.attribute_value = _attribute_value(row.major_attribute_value)
 
 
 def validate_accessory_fields(doc):
@@ -998,10 +1093,10 @@ def sync_emblishment_processes(doc):
 	for process_name in emblishment_data:
 		if process_name in existing:
 			row = existing[process_name]
-			set_process_stage(row, doc.stiching_in_stage)
+			set_process_stage(row, _attribute_value(doc.stiching_in_stage))
 		else:
 			row = {"process_name": process_name}
-			set_process_stage(row, doc.stiching_in_stage)
+			set_process_stage(row, _attribute_value(doc.stiching_in_stage))
 			doc.append("ipd_processes", row)
 
 
@@ -1042,12 +1137,12 @@ def get_ipd_attribute_values(doc, attribute):
 		return []
 
 	map_doc = get_mapping_document(mapping, cached=True)
-	return [row.attribute_value for row in map_doc.values]
+	return [_attribute_value(row.attribute_value) for row in map_doc.values]
 
 
 def resolve_packing_separator(doc):
 	dependent = get_dependent_attribute_details(doc.dependent_attribute_mapping)
-	pack_stage_attrs = dependent["attr_list"].get(doc.pack_out_stage, {}).get("attributes") or []
+	pack_stage_attrs = dependent["attr_list"].get(_attribute_value(doc.pack_out_stage), {}).get("attributes") or []
 	if len(pack_stage_attrs) != 1:
 		frappe.throw(
 			"Packing assortment needs the pack-out stage to keep exactly ONE box attribute "
@@ -1093,9 +1188,9 @@ def save_item_details(combination_item_detail, ipd_doc=None):
 	if ipd_doc and ipd_doc.is_set_item:
 		set_item_stitching_attrs = get_stich_details(ipd_doc)
 		for row in ipd_doc.get("set_item_combination_details") or []:
-			set_item_packing_combination.setdefault(row.major_attribute_value, {})
-			set_item_packing_combination[row.major_attribute_value][row.set_item_attribute_value] = (
-				row.attribute_value
+			set_item_packing_combination.setdefault(_attribute_value(row.major_attribute_value), {})
+			set_item_packing_combination[_attribute_value(row.major_attribute_value)][_attribute_value(row.set_item_attribute_value)] = (
+				_attribute_value(row.attribute_value)
 			)
 
 	for idx, item in enumerate(combination_item_detail.get("values") or []):
@@ -1115,7 +1210,7 @@ def save_item_details(combination_item_detail, ipd_doc=None):
 
 def get_stich_details(doc):
 	return {
-		row.stiching_attribute_value: row.set_item_attribute_value
+		_attribute_value(row.stiching_attribute_value): _attribute_value(row.set_item_attribute_value)
 		for row in doc.get("stiching_item_details") or []
 	}
 

@@ -1,4 +1,6 @@
 """Alternative-item Finishing Plan orchestration for Essdee."""
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from yrp.attribute_values import get_mapping_values
@@ -20,7 +22,7 @@ from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_or_c
 
 @frappe.whitelist()
 def get_fp_alternate_lots(fp_lot):
-	return frappe.get_list(
+	return attribute_db.get_list(
 		'SD YRP Lot',
 		filters={"transferred_lot": fp_lot, "is_transferred": 1},
 		pluck="name",
@@ -110,9 +112,9 @@ def resolve_alternative_lot(
 			"production_detail": production_detail,
 			"item": alternative_item,
 			"uom": response["uom"],
-			"pack_in_stage": response["pack_in_stage"],
+			"pack_in_stage": _attribute_value(response["pack_in_stage"]),
 			"packing_uom": response["packing_uom"],
-			"pack_out_stage": response["pack_out_stage"],
+			"pack_out_stage": _attribute_value(response["pack_out_stage"]),
 			"dependent_attribute_mapping": response["dependent_attr_mapping"],
 			"tech_pack_version": response["tech_pack_version"],
 			"pattern_version": response["pattern_version"],
@@ -149,11 +151,11 @@ def create_alternative_fp(
 	_validate_conversion_balance(finishing_plan, conversions)
 	check_colours_and_sizes(
 		production_detail,
-		sorted({row["colour"] for row in conversions}),
-		sorted({row["size"] for row in conversions}),
+		sorted({_attribute_value(row["colour"]) for row in conversions}),
+		sorted({_attribute_value(row["size"]) for row in conversions}),
 	)
 	work_order = frappe.get_doc('YRP Work Order', finishing_plan.work_order)
-	source_production_order = frappe.db.get_value(
+	source_production_order = attribute_db.get_value(
 		'SD YRP Lot', finishing_plan.lot, "production_order"
 	)
 	if not source_production_order:
@@ -183,7 +185,7 @@ def create_alternative_fp(
 	target_work_order = create_alternative_packing_work_order(
 		work_order.name, lot_doc.name
 	)
-	frappe.db.set_value('SD YRP Lot', finishing_plan.lot, "has_transferred", 1)
+	attribute_db.set_value('SD YRP Lot', finishing_plan.lot, "has_transferred", 1)
 	return {
 		"work_order": target_work_order,
 		"lot": lot_doc.name,
@@ -203,8 +205,8 @@ def update_alternative_lot_quantity(doc_name, target_lot, qty_details):
 
 	lot_doc = frappe.get_doc('SD YRP Lot', target_lot)
 	_append_conversions_to_lot(lot_doc, conversions)
-	source_ppo = frappe.db.get_value('SD YRP Lot', source_plan.lot, "production_order")
-	target_ppo = frappe.db.get_value('SD YRP Lot', target_lot, "production_order")
+	source_ppo = attribute_db.get_value('SD YRP Lot', source_plan.lot, "production_order")
+	target_ppo = attribute_db.get_value('SD YRP Lot', target_lot, "production_order")
 	if not source_ppo or not target_ppo:
 		frappe.throw(_("Both Lots must be linked to Production Orders"))
 	apply_alternative_plan_ppo_transfer(
@@ -236,7 +238,7 @@ def get_alternative_details(lot):
 
 	frappe.get_doc('SD YRP Lot', lot).check_permission("read")
 	result = {}
-	for name in frappe.get_list(
+	for name in attribute_db.get_list(
 		'SD YRP Lot', filters={"transferred_lot": lot}, pluck="name"
 	):
 		lot_doc = frappe.get_doc('SD YRP Lot', name)
@@ -275,7 +277,7 @@ def _collect_conversions(qty_details):
 def _size_quantities(conversions):
 	result = {}
 	for row in conversions:
-		result[row["size"]] = result.get(row["size"], 0) + flt(row["qty"])
+		result[_attribute_value(row["size"])] = result.get(_attribute_value(row["size"]), 0) + flt(row["qty"])
 	return result
 
 
@@ -298,13 +300,13 @@ def _append_conversions_to_lot(lot_doc, conversions):
 		max_row_index = max(max_row_index, int(row.row_index or 0))
 
 	for conversion in conversions:
-		key = (str(conversion["colour"]), str(conversion["size"]))
+		key = (str(_attribute_value(conversion["colour"])), str(_attribute_value(conversion["size"])))
 		row = rows_by_key.get(key)
 		if row:
 			row.quantity = flt(row.quantity) + conversion["qty"]
 			row.cut_qty = flt(row.cut_qty) + conversion["qty"]
 			continue
-		colour = conversion["colour"]
+		colour = _attribute_value(conversion["colour"])
 		if colour not in row_index_by_colour:
 			max_row_index += 1
 			row_index_by_colour[colour] = max_row_index
@@ -312,10 +314,10 @@ def _append_conversions_to_lot(lot_doc, conversions):
 			lot_doc.item,
 			build_variant_attributes(
 				{
-					ipd.primary_item_attribute: conversion["size"],
+					ipd.primary_item_attribute: _attribute_value(conversion["size"]),
 					ipd.packing_attribute: colour,
 				},
-				ipd.pack_in_stage,
+				_attribute_value(ipd.pack_in_stage),
 				ipd.name,
 			),
 		)
@@ -375,7 +377,7 @@ def _rebuild_lot_order_items(lot_doc, ipd):
 		variant = get_or_create_variant(
 			lot_doc.item,
 			build_variant_attributes(
-				{ipd.primary_item_attribute: size}, ipd.pack_out_stage, ipd.name
+				{ipd.primary_item_attribute: size}, _attribute_value(ipd.pack_out_stage), ipd.name
 			),
 		)
 		lot_doc.append(
@@ -399,7 +401,7 @@ def _reduce_source_lot_quantity(source_lot, conversions):
 	ipd = frappe.get_cached_doc('YRP Item Production Detail', lot_doc.production_detail)
 	requested = {}
 	for row in conversions:
-		key = (str(row["colour"]), str(row["size"]))
+		key = (str(_attribute_value(row["colour"])), str(_attribute_value(row["size"])))
 		requested[key] = requested.get(key, 0) + flt(row["qty"])
 	rows_by_key = {}
 	for row in lot_doc.get("lot_order_details") or []:
@@ -426,21 +428,21 @@ def _validate_conversion_balance(source_plan, conversions):
 	for row in conversions:
 		available = flt(
 			(
-				((data.get(row["colour"]) or {}).get("values") or {}).get(
-					row["size"], {}
+				((data.get(_attribute_value(row["colour"])) or {}).get("values") or {}).get(
+					_attribute_value(row["size"]), {}
 				)
 			).get("balance")
 		)
 		if row["qty"] > available + 1e-6:
 			frappe.throw(
 				_("Only {0} is available for {1} / {2}").format(
-					available, row["colour"], row["size"]
+					available, _attribute_value(row["colour"]), _attribute_value(row["size"])
 				)
 			)
 
 
 def _validate_alternate_lot(target_lot, source_lot):
-	values = frappe.db.get_value(
+	values = attribute_db.get_value(
 		'SD YRP Lot', target_lot, ["is_transferred", "transferred_lot"]
 	)
 	if not values or not values[0] or values[1] != source_lot:

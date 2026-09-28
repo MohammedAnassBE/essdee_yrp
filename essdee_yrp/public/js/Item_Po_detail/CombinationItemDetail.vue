@@ -67,7 +67,7 @@ function createInput(attr, index, value){
         default: value,
     }
 
-    if (attr == cur_frm.doc.stiching_major_attribute_value){
+    if (attr == frappe.yrp.attribute_value(cur_frm.doc.stiching_major_attribute_value)){
         df['read_only'] = true
         // Display-only controls do not create an Autocomplete input in Frappe
         // v16.  Use Data so set_value does not validate against a missing

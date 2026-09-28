@@ -4,6 +4,7 @@ Stock and production documents keep one child row per exact Item Variant.
 Their Vue editors use ``row_index`` separately to show every value of the
 parent Item's primary attribute (normally Size) across one logical row.
 """
+from yrp.attribute_links import value as _attribute_value
 
 import json
 
@@ -34,7 +35,7 @@ def normalize_item_matrix_row_indexes(rows):
 		primary_attribute = parent_item.get("primary_attribute")
 		attributes = tuple(
 			sorted(
-				(attribute.attribute, attribute.attribute_value)
+				(attribute.attribute, _attribute_value(attribute.attribute_value))
 				for attribute in (variant.get("attributes") or [])
 				if attribute.attribute != primary_attribute
 			)

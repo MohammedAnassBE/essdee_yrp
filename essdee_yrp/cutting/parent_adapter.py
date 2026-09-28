@@ -1,3 +1,4 @@
+from yrp.attribute_links import value as _attribute_value
 # Adapter module for Cutting Marker / LaySheet to work with either Cutting Plan or Cutting Order
 import frappe
 from yrp.attribute_values import get_mapping_document
@@ -43,7 +44,7 @@ def validate_parent_status(parent_dt, parent_name):
 def get_panels(parent_dt, parent_name):
 	"""Returns panel list from IPD (via CP) or COD (via CO)."""
 	detail_doc = get_detail_doc(parent_dt, parent_name)
-	return [{"part": row.stiching_attribute_value} for row in detail_doc.stiching_item_details]
+	return [{"part": _attribute_value(row.stiching_attribute_value)} for row in detail_doc.stiching_item_details]
 
 
 def get_primary_sizes(parent_dt, parent_name):
@@ -57,7 +58,7 @@ def get_primary_sizes(parent_dt, parent_name):
 		for attr_row in cod.item_attributes:
 			if attr_row.attribute == cod.primary_attribute and attr_row.mapping:
 				mapping_doc = get_mapping_document(attr_row.mapping, cached=True)
-				return [v.attribute_value for v in mapping_doc.values]
+				return [_attribute_value(v.attribute_value) for v in mapping_doc.values]
 		return []
 
 

@@ -16,6 +16,8 @@ already Approved. Plan state never blocks WOs/GRNs (warn-only doctrine).
 
 Spec: docs/design/2026-07-04-fabric-chain-plan.md
 """
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe import _
@@ -52,7 +54,7 @@ def _reference_attrs(reference_item_variant):
 		return {}
 	variant = frappe.get_cached_doc('Item', reference_item_variant)
 	return {
-		row.attribute: row.attribute_value
+		row.attribute: _attribute_value(row.attribute_value)
 		for row in variant.get("attributes") or []
 	}
 
@@ -67,6 +69,20 @@ def _route_bypasses_step(ipd_doc, step, reference_item_variant, combo):
 	"""
 	if step.get("shape") not in ("swap", "multi_swap"):
 		return False
+	# Exact-route matrices are stage-aware: matrix sync stamps the finished
+	# reference only on groups the route actually traverses.  Absence of that
+	# reference at this step therefore means a deliberate bypass (for example a
+	# Greige-yarn route whose Knitting output is already its finished colour).
+	if reference_item_variant and ipd_doc.get("fabric_routes"):
+		return not frappe.db.exists(
+			"YRP IPD Process Matrix",
+			{
+				"ipd": ipd_doc.name,
+				"process_name": step.get("process_name"),
+				"reference_item_variant": reference_item_variant,
+				"docstatus": ["<", 2],
+			},
+		)
 	attributes = step.get("attribute")
 	attributes = (
 		attributes
@@ -109,7 +125,9 @@ def _route_bypasses_step(ipd_doc, step, reference_item_variant, combo):
 	return bool(knitting_output and knitting_output == finished_colour)
 
 
-def solve_chain_backward(ipd_doc, requirement, matrix_cache=None):
+def solve_chain_backward(
+	ipd_doc, requirement, matrix_cache=None, allow_ambiguous=False
+):
 	"""requirement: {frozenset({(attr, value), ...}): kg} keyed by finished-cloth
 	attrs. Returns (step_plans FIRST->LAST, unreachable list).
 
@@ -131,6 +149,24 @@ def solve_chain_backward(ipd_doc, requirement, matrix_cache=None):
 	matrix_cache = matrix_cache if matrix_cache is not None else {}
 
 	for step in reversed(steps):
+		if step["shape"] == "identity":
+			# Identity still represents a real operation. It consumes and produces
+			# the exact same physical state 1:1, retaining the finished-route
+			# reference so planning, availability and receipt ledgers stay isolated.
+			outputs, inputs, next_demand = {}, {}, {}
+			for demand_key, kg in demand.items():
+				outputs[demand_key] = outputs.get(demand_key, 0) + kg
+				inputs[demand_key] = inputs.get(demand_key, 0) + kg
+				next_demand[demand_key] = next_demand.get(demand_key, 0) + kg
+			step_plans.append({
+				"process_name": step["process_name"],
+				"position": step["position"],
+				"shape": step["shape"],
+				"outputs": outputs,
+				"inputs": inputs,
+			})
+			demand = next_demand
+			continue
 		cache_key = (ipd_doc.name, step["process_name"])
 		if cache_key not in matrix_cache:
 			matrix_cache[cache_key] = _load_output_indexed_groups(*cache_key)
@@ -147,13 +183,15 @@ def solve_chain_backward(ipd_doc, requirement, matrix_cache=None):
 			matched = groups.get((reference_item_variant, projected))
 			if not matched:
 				matched = groups.get(("", projected))
-			if matched == "AMBIGUOUS":
+			if matched and len(matched) > 1 and not allow_ambiguous:
 				frappe.throw(
 					_("IPD {0} / {1}: two matrix groups produce the same output {2} — "
-					"pin the mapping rows (dia-wise / colour-wise) to make the plan "
-					"deterministic.").format(ipd_doc.name, step["process_name"], dict(projected)),
+					"select the required conversion when creating the Work Order.").format(
+						ipd_doc.name, step["process_name"], dict(projected)
+					),
 					FabricPlanError,
 				)
+			matched = matched[0] if matched else None
 			if not matched and _route_bypasses_step(
 				ipd_doc, step, reference_item_variant, combo
 			):
@@ -175,6 +213,10 @@ def solve_chain_backward(ipd_doc, requirement, matrix_cache=None):
 			outputs[output_key] = outputs.get(output_key, 0) + kg
 			for inp in matched.get("input") or []:
 				in_kg = flt(inp.get("qty")) * scale * (1 + flt(inp.get("wastage_pct")) / 100.0)
+				if step["shape"] == "conversion":
+					# WO conversion inputs are rounded per material/reference,
+					# before different yarns are combined in this ledger.
+					in_kg = flt(in_kg, 3)
 				in_key = frozenset((inp.get("attrs") or {}).items())
 				if step["shape"] != "conversion":
 					# carried attrs ride along BETWEEN cloth stages; the
@@ -195,8 +237,10 @@ def solve_chain_backward(ipd_doc, requirement, matrix_cache=None):
 
 def _load_output_indexed_groups(ipd_name, process_name):
 	"""Matrix groups of (ipd, process) indexed by their OUTPUT attr frozenset.
-	A duplicate output projection marks the key "AMBIGUOUS" — the solver throws
-	only if demand actually hits it (protects grandfathered IPDs)."""
+	All groups for a shared output are retained. Normal automatic planning rejects
+	a many-to-one choice, while IPD reachability validation may follow any one of
+	them because every alternative remains selectable by matrix key on a Work
+	Order."""
 	matrix_names = frappe.get_all(
 		'YRP IPD Process Matrix',
 		filters={"ipd": ipd_name, "process_name": process_name, "docstatus": ["<", 2]},
@@ -213,7 +257,7 @@ def _load_output_indexed_groups(ipd_name, process_name):
 				matrix.reference_item_variant or "",
 				frozenset((out.get("attrs") or {}).items()),
 			)
-			indexed[key] = "AMBIGUOUS" if key in indexed else group
+			indexed.setdefault(key, []).append(group)
 	return indexed, declared
 
 
@@ -239,9 +283,9 @@ def build_fabric_plan(lot_doc, fabric_row, raise_on_unreachable=True, ipd_doc=No
 		else frappe.get_cached_doc('YRP Item Production Detail', fabric_row.production_detail)
 	requirement = {}
 	for row in requirement_rows:
-		attrs = {FABRIC_DIA_ATTRIBUTE: row.dia}
-		if row.colour:
-			attrs[FABRIC_COLOUR_ATTRIBUTE] = row.colour
+		attrs = {FABRIC_DIA_ATTRIBUTE: _attribute_value(row.dia)}
+		if _attribute_value(row.colour):
+			attrs[FABRIC_COLOUR_ATTRIBUTE] = _attribute_value(row.colour)
 		reference_item_variant = ""
 		if ipd.get("colour_yarn_recipes"):
 			from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
@@ -280,8 +324,8 @@ def _write_plan_rows(lot_doc, cloth_item, step_plans):
 		if row.cloth_item != cloth_item:
 			continue
 		existing[(
-			row.process_name or "", row.side or "Output", row.dia or "",
-			row.colour or "", row.get("reference_item_variant") or "",
+			row.process_name or "", row.side or "Output", _attribute_value(row.dia) or "",
+			_attribute_value(row.colour) or "", row.get("reference_item_variant") or "",
 		)] = row
 
 	wanted = {}
@@ -309,7 +353,7 @@ def _write_plan_rows(lot_doc, cloth_item, step_plans):
 		process_name, side, dia, colour, reference_item_variant = key
 		row = existing.pop(key, None)
 		if row:
-			frappe.db.set_value('SD YRP Lot Fabric Step Ledger', row.name, "planned_weight",
+			attribute_db.set_value('SD YRP Lot Fabric Step Ledger', row.name, "planned_weight",
 				flt(kg, 3), update_modified=False)
 		else:
 			inserted += 1
@@ -330,7 +374,7 @@ def _write_plan_rows(lot_doc, cloth_item, step_plans):
 
 	for key, row in existing.items():
 		if flt(row.received_weight):
-			frappe.db.set_value('SD YRP Lot Fabric Step Ledger', row.name, "planned_weight", 0,
+			attribute_db.set_value('SD YRP Lot Fabric Step Ledger', row.name, "planned_weight", 0,
 				update_modified=False)
 		else:
 			frappe.delete_doc('SD YRP Lot Fabric Step Ledger', row.name,
@@ -353,7 +397,7 @@ def _preseed_knitting_program(lot_doc, cloth_item, step_plans):
 			per_reference[key] = per_reference.get(key, 0) + kg
 
 	program_rows = {
-		(r.dia, r.get("reference_item_variant") or ""): r
+		(_attribute_value(r.dia), r.get("reference_item_variant") or ""): r
 		for r in lot_doc.get("lot_fabric_programs") or []
 		if r.cloth_item == cloth_item
 	}
@@ -379,7 +423,7 @@ def _preseed_knitting_program(lot_doc, cloth_item, step_plans):
 			new_row.received_weight = 0
 			new_row.save(ignore_permissions=True)
 		elif not flt(row.weight):
-			frappe.db.set_value('SD YRP Lot Fabric Program', row.name, "weight", kg,
+			attribute_db.set_value('SD YRP Lot Fabric Program', row.name, "weight", kg,
 				update_modified=False)
 		elif abs(flt(row.weight) - kg) > 0.001:
 			drift.append(f"{escape_html(cloth_item)} · {escape_html(colour or '')} · "
@@ -403,7 +447,7 @@ def _clear_plan(lot_doc, fabric_row):
 		if row.cloth_item != fabric_row.cloth_item:
 			continue
 		if flt(row.received_weight):
-			frappe.db.set_value('SD YRP Lot Fabric Step Ledger', row.name, "planned_weight", 0,
+			attribute_db.set_value('SD YRP Lot Fabric Step Ledger', row.name, "planned_weight", 0,
 				update_modified=False)
 		else:
 			frappe.delete_doc('SD YRP Lot Fabric Step Ledger', row.name,
@@ -422,11 +466,11 @@ def rebuild_fabric_plans_for_ipd(ipd_doc):
 	)
 	built, failed = [], []
 	for ref in fabric_rows:
-		lot_status = frappe.db.get_value('SD YRP Lot', ref.parent, "status")
+		lot_status = attribute_db.get_value('SD YRP Lot', ref.parent, "status")
 		if lot_status and lot_status != "Open":
 			continue
 		try:
-			frappe.db.get_value('SD YRP Lot', ref.parent, "name", for_update=True)
+			attribute_db.get_value('SD YRP Lot', ref.parent, "name", for_update=True)
 			lot_doc = frappe.get_doc('SD YRP Lot', ref.parent)
 			fabric_row = next(
 				(r for r in lot_doc.get("lot_fabric_details") or [] if r.name == ref.name), None)

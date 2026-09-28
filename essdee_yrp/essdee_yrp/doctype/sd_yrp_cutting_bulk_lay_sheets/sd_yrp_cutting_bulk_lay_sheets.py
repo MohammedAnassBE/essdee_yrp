@@ -1,3 +1,4 @@
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2026, Essdee and contributors
 # For license information, please see license.txt
 
@@ -834,15 +835,15 @@ def validate_bulk_print_prerequisites(laysheet_name):
 def validate_cutting_plan_stock(laysheet):
 	required = defaultdict(float)
 	for row in laysheet.cutting_laysheet_details:
-		required[(row.colour, row.cloth_type, row.actual_dia)] += flt(row.weight) - flt(
+		required[(_attribute_value(row.colour), row.cloth_type, _attribute_value(row.actual_dia))] += flt(row.weight) - flt(
 			row.balance_weight
 		)
 	for row in laysheet.cutting_laysheet_accessory_details:
-		required[(row.colour, row.cloth_type, row.actual_dia)] += flt(row.weight)
+		required[(_attribute_value(row.colour), row.cloth_type, _attribute_value(row.actual_dia))] += flt(row.weight)
 
 	plan = frappe.get_doc('SD YRP Cutting Plan', laysheet.cutting_plan)
 	available = {
-		(row.colour, row.cloth_type, row.dia): flt(row.weight) - flt(row.used_weight)
+		(_attribute_value(row.colour), row.cloth_type, _attribute_value(row.dia)): flt(row.weight) - flt(row.used_weight)
 		for row in plan.cutting_plan_cloth_details
 	}
 	shortages = []

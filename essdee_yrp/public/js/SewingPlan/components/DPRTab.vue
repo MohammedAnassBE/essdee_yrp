@@ -259,7 +259,7 @@ const fetchDPRData = () => {
                 const byLot = {}
                 pending.forEach(p => {
                     if (!byLot[p.lot]) byLot[p.lot] = []
-                    const label = p.part ? `${p.colour} — ${p.part}` : p.colour
+                    const label = frappe.yrp.attribute_value(p.part) ? `${frappe.yrp.attribute_value(p.colour)} — ${frappe.yrp.attribute_value(p.part)}` : frappe.yrp.attribute_value(p.colour)
                     byLot[p.lot].push(label)
                 })
                 const pillStyle = 'display:inline-block;padding:4px 10px;margin:3px 4px 3px 0;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;border-radius:9999px;font-size:12px;font-weight:600;white-space:nowrap;'

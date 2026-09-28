@@ -66,8 +66,8 @@ let status = ref(null)
 
 onMounted(() => {
     cur_frm.doc.lot_time_and_action_details.forEach(detail => {
-        colours.value.push(detail.colour);
-        docnames[detail.colour] = detail.time_and_action;
+        colours.value.push(frappe.yrp.attribute_value(detail.colour));
+        docnames[frappe.yrp.attribute_value(detail.colour)] = detail.time_and_action;
     });
     const el = root.value;
     $(el).find(".select-field").html("");

@@ -6,6 +6,8 @@ contracts while deriving every mutable target from current F16 documents.
 """
 
 from __future__ import annotations
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 from collections import defaultdict
 
@@ -77,7 +79,7 @@ def get_t_and_a_report_data(lot=None, item=None, process_name=None):
 	lot_names = {row.lot for row in work_orders if row.lot}
 	assigned_by_lot = {
 		row.name: row.assigned_person_name
-		for row in frappe.get_all(
+		for row in attribute_db.get_all(
 			'SD YRP Lot',
 			filters={"name": ["in", list(lot_names)]},
 			fields=["name", "assigned_person_name"],
@@ -398,7 +400,7 @@ def get_t_and_a_review_report_data(lot=None, item=None, report_date=None):
 				{
 					"item": doc.item,
 					"master": doc.master,
-					"colour": doc.colour,
+					"colour": _attribute_value(doc.colour),
 					"sizes": doc.sizes,
 					"qty": doc.qty,
 					"start_date": doc.start_date,

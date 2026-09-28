@@ -1,4 +1,5 @@
 """Essdee Action/Time-and-Action behavior layered onto base YRP Work Station."""
+from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe import _
@@ -35,11 +36,11 @@ def get_work_stations(items, lot: str) -> dict:
 		doc.check_permission("read")
 		if doc.status == "Completed":
 			continue
-		result[doc.colour] = []
+		result[_attribute_value(doc.colour)] = []
 		for row in doc.details:
 			value = row.as_dict()
 			value["master"] = doc.master
-			result[doc.colour].append(value)
+			result[_attribute_value(doc.colour)].append(value)
 	return result
 
 

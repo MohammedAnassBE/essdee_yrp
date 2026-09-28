@@ -14,6 +14,7 @@ yrp/Frappe conventions (`name1`, `item_name`, `<doctype>_name`, `title`) — so 
 needs no per-doctype configuration and degrades to a plain name search when there
 is no title field.
 """
+from yrp.attribute_links import value as _attribute_value
 
 import json
 
@@ -139,7 +140,7 @@ def _search_item_attribute_values(txt, filters, page_length):
 		page_len = 20
 	needle = (txt or "").strip().casefold()
 	values = [
-		row.attribute_value
+		_attribute_value(row.attribute_value)
 		for row in frappe.get_all(
 			"Item Attribute Value",
 			filters={
@@ -150,6 +151,6 @@ def _search_item_attribute_values(txt, filters, page_length):
 			fields=["attribute_value", "idx"],
 			order_by="idx asc",
 		)
-		if row.attribute_value and (not needle or needle in row.attribute_value.casefold())
+		if _attribute_value(row.attribute_value) and (not needle or needle in _attribute_value(row.attribute_value).casefold())
 	]
 	return [{"name": value, "label": value} for value in values[:page_len]]

@@ -1,3 +1,4 @@
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2024, Essdee and contributors
 # For license information, please see license.txt
 
@@ -66,8 +67,8 @@ class SDYRPActionMasterTemplate(Document):
 	def before_save(self):
 		from essdee_yrp.essdee_yrp.doctype.sd_yrp_time_and_action.sd_yrp_time_and_action import get_t_and_a_preview_data
 		data = get_t_and_a_preview_data(frappe.utils.nowdate(), [{'colour': 'colour', 'master': self.name}], is_template=True, master_doc=self)
-		if len(data["colour"]) > 0:
-			dispatch_date = data['colour'][len(data['colour']) - 1]['rescheduled_date']
+		if len(_attribute_value(data["colour"])) > 0:
+			dispatch_date = _attribute_value(data['colour'])[len(_attribute_value(data['colour'])) - 1]['rescheduled_date']
 			lead_time = date_diff(dispatch_date, frappe.utils.nowdate())
 			self.lead_time = lead_time
 		else:

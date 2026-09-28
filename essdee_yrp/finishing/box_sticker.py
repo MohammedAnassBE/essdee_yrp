@@ -1,4 +1,5 @@
 """Essdee Box Sticker side effects for submitted packing Work Orders."""
+from yrp import attribute_links as attribute_db
 
 import copy
 import math
@@ -41,8 +42,8 @@ def build_box_sticker_details(production_order_sizes, quantity_by_size, price_by
 def get_missing_box_sticker_prices(work_order):
 	"""Return produced sizes that have no effective PPO/Lot MRP."""
 	work_order = _work_order(work_order)
-	production_order = frappe.db.get_value('SD YRP Lot', work_order.lot, "production_order")
-	if not production_order or frappe.db.get_value(
+	production_order = attribute_db.get_value('SD YRP Lot', work_order.lot, "production_order")
+	if not production_order or attribute_db.get_value(
 		'YRP Production Order', production_order, "skip_box_sticker_print"
 	):
 		return []
@@ -61,8 +62,8 @@ def get_missing_box_sticker_prices(work_order):
 def auto_create_box_sticker_print(work_order):
 	"""Create submitted box and piece sticker documents for a packing Work Order."""
 	work_order = _work_order(work_order)
-	production_order = frappe.db.get_value('SD YRP Lot', work_order.lot, "production_order")
-	if not production_order or frappe.db.get_value(
+	production_order = attribute_db.get_value('SD YRP Lot', work_order.lot, "production_order")
+	if not production_order or attribute_db.get_value(
 		'YRP Production Order', production_order, "skip_box_sticker_print"
 	):
 		return []
@@ -106,12 +107,12 @@ def auto_create_box_sticker_print(work_order):
 	if not details:
 		return []
 
-	production_detail = frappe.db.get_value(
+	production_detail = attribute_db.get_value(
 		'SD YRP Lot', work_order.lot, "production_detail"
 	)
 	is_set_item, pieces_per_box = (0, 0)
 	if production_detail:
-		is_set_item, pieces_per_box = frappe.db.get_value(
+		is_set_item, pieces_per_box = attribute_db.get_value(
 			'YRP Item Production Detail',
 			production_detail,
 			["is_set_item", "packing_combo"],

@@ -1,3 +1,5 @@
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2025, Essdee and contributors
 # For license information, please see license.txt
 
@@ -55,10 +57,10 @@ class SDYRPRecutandPrintPanel(Document):
 		return warehouse
 
 	def _cloth_templates(self):
-		production_detail = frappe.db.get_value('SD YRP Lot', self.lot, "production_detail")
+		production_detail = attribute_db.get_value('SD YRP Lot', self.lot, "production_detail")
 		if not production_detail:
 			frappe.throw(_("Lot {0} has no Item Production Detail.").format(self.lot))
-		packing_attribute = frappe.db.get_value(
+		packing_attribute = attribute_db.get_value(
 			'YRP Item Production Detail', production_detail, "packing_attribute"
 		)
 		cloth_templates = {
@@ -101,7 +103,7 @@ class SDYRPRecutandPrintPanel(Document):
 				)
 			row.item_variant = get_or_create_variant(
 				template,
-				{"Dia": row.dia, packing_attribute: row.colour},
+				{"Dia": _attribute_value(row.dia), packing_attribute: _attribute_value(row.colour)},
 			)
 			uom = resolve_item_uom(row.item_variant)
 			row.uom = uom.uom
@@ -120,13 +122,13 @@ class SDYRPRecutandPrintPanel(Document):
 	def _update_cutting_plan(self, *, multiplier):
 		cloth = {}
 		for row in self.get("recut_and_print_panel_details") or []:
-			key = (row.colour, row.cloth_type, row.dia)
+			key = (_attribute_value(row.colour), row.cloth_type, _attribute_value(row.dia))
 			cloth[key] = flt(cloth.get(key)) + flt(row.weight)
 
 		plan = frappe.get_doc('SD YRP Cutting Plan', self.cutting_plan)
 		matched = set()
 		for row in plan.get("cutting_plan_cloth_details") or []:
-			key = (row.colour, row.cloth_type, row.dia)
+			key = (_attribute_value(row.colour), row.cloth_type, _attribute_value(row.dia))
 			if key not in cloth:
 				continue
 			matched.add(key)
@@ -135,8 +137,8 @@ class SDYRPRecutandPrintPanel(Document):
 			if row.balance_weight < -1e-6:
 				frappe.throw(
 					_("{0} {1}, {2} was used more than the received weight.").format(
-						frappe.bold(row.dia),
-						frappe.bold(row.colour),
+						frappe.bold(_attribute_value(row.dia)),
+						frappe.bold(_attribute_value(row.colour)),
 						frappe.bold(row.cloth_type),
 					)
 				)

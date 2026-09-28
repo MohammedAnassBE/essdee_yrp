@@ -1,0 +1,138 @@
+{
+  "SD YRP Cutting Order Detail": [
+    "major_attribute_value",
+    "major_panel_value"
+  ],
+  "SD YRP Cutting Marker Ratio": [
+    "size",
+    "panel"
+  ],
+  "SD YRP Cutting Plan Cloth Detail": [
+    "colour",
+    "dia"
+  ],
+  "SD YRP Cutting Order Panel Detail": [
+    "stiching_attribute_value",
+    "set_item_attribute_value"
+  ],
+  "SD YRP Lot Planned Qty": [
+    "size"
+  ],
+  "SD YRP Cutting Marker Part": [
+    "part"
+  ],
+  "SD YRP Cutting LaySheet Bundle": [
+    "size",
+    "colour"
+  ],
+  "SD YRP Cutting LaySheet Accessory Detail": [
+    "colour",
+    "dia",
+    "actual_dia"
+  ],
+  "SD YRP Cutting Order Colour Value": [
+    "attribute_value"
+  ],
+  "SD YRP FG Item Size Type Detail": [
+    "size_type_value"
+  ],
+  "SD YRP PPO Lot Price Detail": [
+    "size"
+  ],
+  "SD YRP Cut Bundle Movement Ledger": [
+    "colour",
+    "size"
+  ],
+  "SD YRP Cutting LaySheet Detail": [
+    "colour",
+    "dia",
+    "actual_dia"
+  ],
+  "SD YRP Cut Panel Item": [
+    "panel"
+  ],
+  "SD YRP Cutting Order Cloth Detail": [
+    "dia"
+  ],
+  "SD YRP Item Production Detail Packing Size Detail": [
+    "attribute_value"
+  ],
+  "SD YRP Stiching Item Detail": [
+    "set_item_attribute_value",
+    "stiching_attribute_value"
+  ],
+  "SD YRP Item Production Detail Packing Attribute Detail": [
+    "attribute_value"
+  ],
+  "SD YRP Lot": [
+    "pack_out_stage",
+    "pack_in_stage"
+  ],
+  "SD YRP Box Sticker Print Detail": [
+    "size"
+  ],
+  "SD YRP Item Production Detail Set Item Combination": [
+    "attribute_value",
+    "major_attribute_value",
+    "set_item_attribute_value"
+  ],
+  "SD YRP IPD Compacting Details": [
+    "packing_attribute_value",
+    "input_dia",
+    "compacting_dia"
+  ],
+  "SD YRP IPD Settings": [
+    "default_pack_in_stage",
+    "default_pack_out_stage",
+    "default_loose_piece_stage",
+    "default_stitching_in_stage",
+    "default_stitching_out_stage"
+  ],
+  "SD YRP FG Item Size": [
+    "attribute_value"
+  ],
+  "SD YRP IPD Colour Yarn Ratio": [
+    "colour",
+    "yarn_colour"
+  ],
+  "SD YRP IPD Fabric Route": [
+    "finished_colour",
+    "finished_dia",
+    "knitting_output_colour",
+    "knitting_output_dia"
+  ],
+  "SD YRP IPD Knitting Dia Detail": [
+    "dia"
+  ],
+  "SD YRP IPD Dyeing Colour Detail": [
+    "dia",
+    "from_colour",
+    "to_colour"
+  ],
+  "SD YRP IPD Compacting Dia Detail": [
+    "colour",
+    "from_dia",
+    "to_dia"
+  ],
+  "SD YRP IPD Compacting Reference": [
+    "colour",
+    "input_dia",
+    "compacting_dia"
+  ],
+  "SD YRP Lot Fabric Requirement": [
+    "dia",
+    "colour"
+  ],
+  "SD YRP Lot Fabric Program": [
+    "dia",
+    "colour"
+  ],
+  "SD YRP Lot Fabric Step Ledger": [
+    "dia",
+    "colour"
+  ],
+  "SD YRP Lot Fabric Colour Program": [
+    "dia",
+    "colour"
+  ]
+}

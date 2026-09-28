@@ -28,6 +28,7 @@ frappe.ui.form.on("SD YRP Lot", {
 	},
 	refresh(frm) {
 		$(".layout-side-section").css("display", "none");
+		mount_cloth_program(frm);
 		frappe.call({
 			method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot.check_enabled_po",
 			callback: function (r) {
@@ -109,6 +110,25 @@ frappe.ui.form.on("SD YRP Lot", {
 				});
 			});
 		}
+		if (!frm.is_new() && frm.doc.production_detail && !frm.doc.is_transferred
+			&& frm.doc.docstatus !== 2 && frm.has_perm("write")
+			&& (frm.doc.lot_fabric_details || []).length) {
+			frm.add_custom_button(__("Recalculate Cloth Program"), () => {
+				if (frm.is_dirty()) {
+					frappe.msgprint(__("Save the Lot before recalculating the Cloth Program."));
+					return;
+				}
+				frappe.call({
+					method: "essdee_yrp.api.cloth_program.recalculate_cloth_program",
+					args: { lot: frm.doc.name, modified: frm.doc.modified },
+					freeze: true,
+					freeze_message: __("Recalculating Cloth Program..."),
+					callback: (r) => {
+						if (!r.exc) frm.reload_doc();
+					},
+				});
+			});
+		}
 		if (!frm.is_new() && (frm.doc.lot_fabric_programs || []).length) {
 			frm.add_custom_button(__("Cloth Program"), () => {
 				const url = frappe.urllib.get_full_url(
@@ -174,9 +194,6 @@ frappe.ui.form.on("SD YRP Lot", {
 		if (frm.doc.is_transferred) {
 			frm.order_detail.update_status()
 		}
-		$(frm.fields_dict['fabric_program_html'].wrapper).html("")
-		frm.fabric_program = new frappe.production.ui.FabricProgram(frm.fields_dict['fabric_program_html'].wrapper)
-		frm.fabric_program.load_data((frm.doc.__onload && frm.doc.__onload.fabric_program_details) || [])
 		// if(!frm.is_new()){
 		// 	frm.cad_detail = new frappe.production.ui.CadDetail(frm.fields_dict['cad_detail_html'].wrapper)
 		// 	if(frm.doc.__onload && frm.doc.__onload.cad_item_details) {
@@ -223,9 +240,12 @@ frappe.ui.form.on("SD YRP Lot", {
 		frm.doc['order_item_details'] = JSON.stringify(order_items)
 		// Guarded: an unmounted island must leave the transient fields absent so
 		// the server keeps the stored program/requirement rows untouched.
-		if (frm.fabric_program) {
+		if (frm.fabric_program && frm._cloth_program_ready) {
 			frm.doc['fabric_program_details'] = JSON.stringify(frm.fabric_program.get_data())
 			frm.doc['fabric_requirement_details'] = JSON.stringify(frm.fabric_program.get_requirement())
+		} else {
+			delete frm.doc.fabric_program_details;
+			delete frm.doc.fabric_requirement_details;
 		}
 		// if(frm.cad_detail){
 		// 	let cad_data = frm.cad_detail.get_data()
@@ -250,9 +270,9 @@ frappe.ui.form.on("SD YRP Lot", {
 				callback: function (r) {
 					if (r.message) {
 						frm.set_value('uom', r.message.uom)
-						frm.set_value('pack_in_stage', r.message.pack_in_stage)
+						frm.set_value('pack_in_stage', frappe.yrp.attribute_value(r.message.pack_in_stage))
 						frm.set_value('packing_uom', r.message.packing_uom)
-						frm.set_value('pack_out_stage', r.message.pack_out_stage)
+						frm.set_value('pack_out_stage', frappe.yrp.attribute_value(r.message.pack_out_stage))
 						frm.set_value('dependent_attribute_mapping', r.message.dependent_attr_mapping)
 						frm.set_value('tech_pack_version', r.message.tech_pack_version)
 						frm.set_value('pattern_version', r.message.pattern_version)
@@ -457,7 +477,7 @@ function open_time_and_action_dialog(frm) {
 			const packing = response.message || {}
 			const rows = (packing.colour_combo || []).map((row) => ({
 				major_colour: row.major_colour,
-				colour: row.colour,
+				colour: frappe.yrp.attribute_value(row.colour),
 				master: null,
 			}))
 			if (!rows.length) {
@@ -506,7 +526,7 @@ function open_time_and_action_dialog(frm) {
 
 function validate_time_and_action_values(values) {
 	for (const row of values.table || []) {
-		if (!row.master) frappe.throw(__("Select an Action Master for colour {0}.", [row.colour]))
+		if (!row.master) frappe.throw(__("Select an Action Master for colour {0}.", [frappe.yrp.attribute_value(row.colour)]))
 	}
 	if (!values.start_date) frappe.throw(__("Select the Start Date."))
 }
@@ -577,6 +597,50 @@ function preview_time_and_action(dialog) {
 			preview.show()
 		},
 	})
+}
+
+function mount_cloth_program(frm) {
+	const field = frm.fields_dict.fabric_program_html;
+	if (!field) return;
+	frm.fabric_program?.app?.unmount();
+	const request = (frm._cloth_program_request || 0) + 1;
+	frm._cloth_program_request = request;
+	frm._cloth_program_ready = false;
+	const wrapper = $(field.wrapper).empty();
+	const status = $('<div class="text-muted mb-2" role="status"></div>').appendTo(wrapper);
+	const content = $('<div></div>').appendTo(wrapper);
+	frm.fabric_program = new frappe.production.ui.FabricProgram(content[0]);
+	frm.fabric_program.load_data(frm.doc.__onload?.fabric_program_details || []);
+	if (frm.is_new()) {
+		frm._cloth_program_ready = true;
+		return;
+	}
+	const lot = frm.doc.name;
+	const editor = frm.fabric_program;
+	const current = () => frm.doc.name === lot && frm._cloth_program_request === request
+		&& frm.fabric_program === editor;
+	const load = () => {
+		status.text(__('Loading Cloth Program…'));
+		content.css('pointer-events', 'none').attr('inert', '');
+		frappe.call({
+			method: 'essdee_yrp.fabric_program.get_fabric_program_details',
+			args: {lot},
+			callback(r) {
+				if (!current()) return;
+				editor.load_data(r.message || []);
+				frm._cloth_program_ready = true;
+				status.empty();
+				content.css('pointer-events', '').removeAttr('inert');
+			},
+			error() {
+				if (!current()) return;
+				status.text(__('Could not load Cloth Program. '));
+				$('<button type="button" class="btn btn-xs btn-default"></button>')
+					.text(__('Retry')).on('click', load).appendTo(status);
+			},
+		});
+	};
+	load();
 }
 
 
@@ -733,8 +797,7 @@ function preview_time_and_action(dialog) {
 // }
 
 function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
-	const route_detail_fields = {};
-	const route_output_fields = {};
+	const colour_selections = {};
 	const fields = [{
 		label: __("Cloth Excess Percentage"),
 		fieldname: "excess_percentage",
@@ -743,22 +806,12 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 	}];
 	cloths.forEach((c, i) => {
 		const item_yarns = c.item_yarns || [];
-		const stored_colour_yarns = c.colour_yarn_recipes || [];
-		const recipe_for_colour = (colour) => {
-			const stored = stored_colour_yarns
-				.filter((row) => row.colour === colour)
-				.map((row) => ({
-					yarn_item: row.yarn_item,
-					ratio: Number(row.ratio || 0),
-				}));
-			return stored.length ? stored : item_yarns;
-		};
 		const profile = c.profile || {};
 		const required_colours = (c.required_colours || []).filter(Boolean);
-		const required_routes = c.required_routes || [];
-		const output_colours = profile.knitting_output_colours || {};
-		const stored_routes = profile.fabric_routes || [];
-		const default_output_colour = defaults.knitting_output_colour || "";
+		const stored_dyed_colours = new Set(c.dyed_yarn_colours || []);
+		const stored_same_finished_colours = new Set(
+			c.same_finished_colours || []
+		);
 		fields.push({ fieldtype: "Section Break", label: __(frappe.utils.escape_html(`${c.label} — ${c.cloth_item}`)) });
 		fields.push({ fieldtype: "Data", fieldname: `cloth_item_${i}`, hidden: 1, default: c.cloth_item });
 		fields.push({ fieldtype: "Data", fieldname: `production_detail_${i}`, hidden: 1, default: c.production_detail || "" });
@@ -771,8 +824,6 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 				)}: <strong>${item_yarns.map((row) =>
 					`${frappe.utils.escape_html(row.yarn_item)} ${Number(row.ratio || 0)}%`
 				).join(" + ")}</strong></div>`
-				: stored_colour_yarns.length
-					? ""
 				: `<div class="text-danger small" style="margin-bottom:10px">${__(
 					"Configure a Yarn Ratio totalling 100% on Cloth Item {0} before building.",
 					[frappe.utils.escape_html(c.cloth_item)]
@@ -780,106 +831,20 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 		});
 
 		if (required_colours.length) {
-			required_colours.forEach((colour, colour_index) => {
-				const colour_routes = required_routes
-					.filter((route) => route.colour === colour)
-					.sort((a, b) => dia_sort_value(a.dia) - dia_sort_value(b.dia));
-				const colour_total = colour_routes.reduce(
-					(total, route) => total + Number(route.weight || 0), 0);
-				const route_defaults = colour_routes.map((route) => {
-					const stored_route = stored_routes.find(
-						(row) => row.finished_colour === colour && row.finished_dia === route.dia
-					) || {};
-					return stored_route.knitting_output_colour
-						|| default_output_colour
-						|| output_colours[colour]
-						|| profile.greige_colour
-						|| "";
-				});
-				const common_output_colours = [...new Set(route_defaults.filter(Boolean))];
-				const detail_fieldnames = [];
-				const edit_key = `${i}_${colour_index}`;
-				route_detail_fields[edit_key] = detail_fieldnames;
-				fields.push({
-					fieldtype: "HTML",
-					fieldname: `route_title_${i}_${colour_index}`,
-					options: cloth_program_route_summary(
-						colour, colour_routes.length, colour_total, edit_key
-					),
-				});
-				const bulk_colour_fieldname = `bulk_knitting_output_colour_${i}_${colour_index}`;
-				route_output_fields[edit_key] = bulk_colour_fieldname;
-				fields.push({
-					label: __("Knitting Output"),
-					fieldname: bulk_colour_fieldname,
-					fieldtype: "Autocomplete",
-					default: common_output_colours.length === 1 ? common_output_colours[0] : "",
-					get_query: () => ({
-						query: "yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values",
-						params: { attribute: "Colour" },
-					}),
-					onchange() {
-						const value = d.get_value(bulk_colour_fieldname) || "";
-						colour_routes.forEach((_route, route_index) => {
-							d.set_value(
-								`knitting_output_colour_${i}_${colour_index}_${route_index}`,
-								value
-							);
-						});
-					},
-				});
-				colour_routes.forEach((route, route_index) => {
-					const stored_route = stored_routes.find(
-						(row) => row.finished_colour === colour && row.finished_dia === route.dia
-					) || {};
-					const title_fieldname = `physical_route_title_${i}_${colour_index}_${route_index}`;
-					const dia_fieldname = `knitting_output_dia_${i}_${colour_index}_${route_index}`;
-					const colour_fieldname = `knitting_output_colour_${i}_${colour_index}_${route_index}`;
-					detail_fieldnames.push(title_fieldname, dia_fieldname, colour_fieldname);
-					fields.push({
-						fieldtype: "HTML",
-						fieldname: title_fieldname,
-						hidden: 1,
-						options: `<div style="margin:9px 0 4px;font-weight:600">${__(
-							"{0} · {1} kg finished",
-							[
-								frappe.utils.escape_html(route.dia || ""),
-								format_cloth_program_weight(route.weight),
-							]
-						)}</div>`,
-					});
-					fields.push({
-						label: __("Knitting Output Dia"),
-						fieldname: dia_fieldname,
-						fieldtype: "Autocomplete",
-						hidden: 1,
-						reqd: 1,
-						default: stored_route.knitting_output_dia || route.dia || "",
-						get_query: () => ({
-							query: "yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values",
-							params: { attribute: "Dia" },
-						}),
-					});
-					fields.push({
-						label: __("Knitting Output Colour"),
-						fieldname: colour_fieldname,
-						fieldtype: "Autocomplete",
-						hidden: 1,
-						reqd: 1,
-						default: stored_route.knitting_output_colour
-							|| default_output_colour
-							|| output_colours[colour]
-							|| profile.greige_colour
-							|| "",
-						get_query: () => ({
-							query: "yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values",
-							params: { attribute: "Colour" },
-						}),
-					});
-				});
+			colour_selections[i] = required_colours.map((colour) => ({
+				colour,
+				use_dyed_yarn: stored_dyed_colours.has(colour) ? 1 : 0,
+				same_finished_colour: (
+					!stored_dyed_colours.has(colour)
+					&& stored_same_finished_colours.has(colour)
+				) ? 1 : 0,
+			}));
+			fields.push({
+				fieldname: `colour_selection_${i}`,
+				fieldtype: "HTML",
+				options: cloth_program_colour_table(i, colour_selections[i]),
 			});
 		}
-		c._recipe_for_colour = recipe_for_colour;
 		fields.push({ fieldtype: "Section Break", label: __("Process Settings") });
 		fields.push({
 			label: "Cloth Kgs / 1 Kg Yarn", fieldname: `cloth_per_kg_yarn_${i}`,
@@ -895,6 +860,7 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 			reqd: 1,
 			default: profile.knitting_process || defaults.knitting_process || "",
 		});
+		fields.push({ fieldtype: "Column Break" });
 		fields.push({
 			label: "Dyeing Process", fieldname: `dyeing_process_${i}`,
 			fieldtype: "Link",
@@ -917,39 +883,51 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 			const selections = cloths.map((c, i) => {
 				const profile = c.profile || {};
 				const required_colours = (c.required_colours || []).filter(Boolean);
+				const colour_rows = colour_selections[i] || [];
+				const dyed_yarn_colours = colour_rows
+					.filter((row) => Number(row.use_dyed_yarn || 0))
+					.map((row) => frappe.yrp.attribute_value(row.colour))
+					.filter(Boolean);
+				const dyed_colour_set = new Set(dyed_yarn_colours);
+				const same_finished_colours = colour_rows
+					.filter((row) => Number(row.same_finished_colour || 0))
+					.map((row) => frappe.yrp.attribute_value(row.colour))
+					.filter(Boolean);
+				const same_finished_set = new Set(same_finished_colours);
+				const non_dyed_colour = frappe.yrp.attribute_value(defaults.knitting_output_colour) || "";
 				const fabric_routes = [];
-				required_colours.forEach((colour, colour_index) => {
+				required_colours.forEach((colour) => {
 					(c.required_routes || [])
-						.filter((route) => route.colour === colour)
-						.sort((a, b) => dia_sort_value(a.dia) - dia_sort_value(b.dia))
-						.forEach((route, route_index) => {
+						.filter((route) => frappe.yrp.attribute_value(route.colour) === colour)
+						.sort((a, b) => dia_sort_value(frappe.yrp.attribute_value(a.dia)) - dia_sort_value(frappe.yrp.attribute_value(b.dia)))
+						.forEach((route) => {
+							const stored_route = (profile.fabric_routes || []).find(
+								(row) => frappe.yrp.attribute_value(row.finished_colour) === colour && frappe.yrp.attribute_value(row.finished_dia) === frappe.yrp.attribute_value(route.dia)
+							) || {};
 							fabric_routes.push({
 								finished_colour: colour,
-								finished_dia: route.dia,
+								finished_dia: frappe.yrp.attribute_value(route.dia),
 								knitting_output_dia:
-									values[`knitting_output_dia_${i}_${colour_index}_${route_index}`] || null,
+									frappe.yrp.attribute_value(stored_route.knitting_output_dia) || frappe.yrp.attribute_value(route.dia) || null,
 								knitting_output_colour:
-									values[`knitting_output_colour_${i}_${colour_index}_${route_index}`] || null,
+									(
+										dyed_colour_set.has(colour)
+										|| same_finished_set.has(colour)
+									)
+										? colour
+										: non_dyed_colour,
+								use_dyed_yarn: dyed_colour_set.has(colour) ? 1 : 0,
 							});
 						});
 				});
-				const recipe_for_colour = c._recipe_for_colour
-					|| (() => (c.item_yarns || []));
-				const colour_yarn_recipes = required_colours.flatMap((colour) =>
-					recipe_for_colour(colour).map((row) => ({
-						colour: colour,
-						yarn_item: row.yarn_item,
-						ratio: Number(row.ratio || 0),
-					}))
-				);
-				const recipe = required_colours.length
-					? recipe_for_colour(required_colours[0])
-					: (c.item_yarns || []);
+				const recipe = c.item_yarns || [];
 				return {
 					cloth_item: values[`cloth_item_${i}`],
 					production_detail: values[`production_detail_${i}`] || null,
-					colour_yarn_recipes: colour_yarn_recipes,
+					dyed_yarn_colours: dyed_yarn_colours,
+					same_finished_colours: same_finished_colours,
 					fabric_routes: fabric_routes,
+					non_dyed_colour: non_dyed_colour,
 					yarns: recipe,
 					yarn_item: recipe[0] && recipe[0].yarn_item,
 					cloth_per_kg_yarn: values[`cloth_per_kg_yarn_${i}`],
@@ -962,40 +940,31 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 					required_colours: required_colours,
 				};
 			});
-			const incomplete = selections.some((s) => {
-				const groups = {};
-				(s.colour_yarn_recipes.length ? s.colour_yarn_recipes : s.yarns).forEach((row) => {
-					const key = row.colour || "__uncoloured__";
-					if (!groups[key]) groups[key] = [];
-					groups[key].push(row);
-				});
-				const invalid_recipe = Object.values(groups).some((rows) =>
-					!rows.length ||
-					rows.some((row) => !row.yarn_item || !(row.ratio > 0)) ||
-					new Set(rows.map((row) => row.yarn_item)).size !== rows.length ||
-					Math.abs(rows.reduce((sum, row) => sum + row.ratio, 0) - 100) > 0.001
-				);
-				const needs_dyeing = s.fabric_routes.some(
-					(row) => row.knitting_output_colour && row.knitting_output_colour !== row.finished_colour
-				);
-				const needs_compacting = s.fabric_routes.some(
-					(row) => row.knitting_output_dia && row.knitting_output_dia !== row.finished_dia
-				);
-				return (
-					invalid_recipe ||
-					!s.knitting_process ||
-					!(s.cloth_per_kg_yarn > 0) ||
-					s.fabric_routes.some(
-						(row) => !row.knitting_output_colour || !row.knitting_output_dia
-					) ||
-					(needs_dyeing && !s.dyeing_process) ||
-					(needs_compacting && !s.compacting_process)
-				);
+			const issues = [];
+			selections.forEach((s) => {
+				const add_issue = (message) => issues.push(`${frappe.utils.escape_html(s.cloth_item)}: ${message}`);
+				const invalid_recipe = !s.yarns.length
+					|| s.yarns.some((row) => !row.yarn_item || !(Number(row.ratio) > 0))
+					|| frappe.yrp.attribute_value(new Set(s.yarns.map((row) => row.yarn_item)).size) !== s.yarns.length
+					|| Math.abs(s.yarns.reduce((sum, row) => sum + Number(row.ratio), 0) - 100) > 0.001;
+				if (invalid_recipe) add_issue(__("Configure unique Yarn Items with positive ratios totaling 100% on the Cloth Item."));
+				const needs_default = s.required_colours.some((colour) =>
+					!s.dyed_yarn_colours.includes(colour) && !s.same_finished_colours.includes(colour));
+				if (needs_default && !s.non_dyed_colour) {
+					add_issue(__("Set Default Knitting Yarn Colour in SD YRP IPD Settings for colours without Is Dyed Yarn or Same Finished Colour selected."));
+				}
+				if (!s.knitting_process) add_issue(__("Select a Knitting Process."));
+				if (!(s.cloth_per_kg_yarn > 0)) add_issue(__("Cloth Kgs / 1 Kg Yarn must be greater than zero."));
+				if (s.fabric_routes.some((row) => !frappe.yrp.attribute_value(row.knitting_output_dia))) {
+					add_issue(__("Configure the missing Knitting Output Dia in the cloth IPD."));
+				}
+				if (s.fabric_routes.some((row) => frappe.yrp.attribute_value(row.knitting_output_colour) && frappe.yrp.attribute_value(row.knitting_output_colour) !== frappe.yrp.attribute_value(row.finished_colour))
+					&& !s.dyeing_process) add_issue(__("Select a Dyeing Process for routes that change Colour."));
+				if (s.fabric_routes.some((row) => frappe.yrp.attribute_value(row.knitting_output_dia) && frappe.yrp.attribute_value(row.knitting_output_dia) !== frappe.yrp.attribute_value(row.finished_dia))
+					&& !s.compacting_process) add_issue(__("Set Default Dia-change Process in SD YRP IPD Settings for routes that change Dia."));
 			});
-			if (incomplete) {
-				frappe.msgprint(__(
-					"Configure each Cloth Item's Yarn Ratio to total 100%, then complete the Knitting Output Colour, required process, and cloth-per-kg. Dyeing is required for colour-changing routes. Configure the default Dia-change Process in IPD Settings when a route changes Dia."
-				));
+			if (issues.length) {
+				frappe.msgprint({ title: __("Cloth Program Settings Required"), message: issues.join("<br>"), indicator: "orange" });
 				return;
 			}
 			frappe.call({
@@ -1026,108 +995,82 @@ function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
 		}
 	});
 	d.show();
-	Object.entries(route_output_fields).forEach(([key, fieldname]) => {
-		const field = d.fields_dict[fieldname];
-		const $slot = d.$wrapper.find(`[data-cloth-program-output="${key}"]`);
-		if (!field?.$wrapper?.length || !$slot.length) return;
-		field.$wrapper.css({ margin: 0, minWidth: 0 }).appendTo($slot);
-		field.$wrapper.find(".help-box").hide();
-	});
-	d.$wrapper.on("click", "[data-cloth-program-edit]", function () {
-		const key = $(this).attr("data-cloth-program-edit");
-		const is_editing = $(this).attr("aria-expanded") === "true";
-		(route_detail_fields[key] || []).forEach((fieldname) => {
-			d.set_df_property(fieldname, "hidden", is_editing ? 1 : 0);
-		});
-		$(this)
-			.attr("aria-expanded", is_editing ? "false" : "true")
-			.text(is_editing ? __("Edit") : __("Done"));
-	});
+	mount_cloth_program_colour_controls(d, colour_selections);
 }
 
-function format_cloth_program_weight(value) {
-	return frappe.format(Number(value || 0), {
-		fieldtype: "Float",
-		precision: 3,
-	});
-}
-
-function cloth_program_route_summary(colour, route_count, total, edit_key) {
-	const route_label = route_count === 1
-		? __("1 route")
-		: __("{0} routes", [route_count]);
+function cloth_program_colour_table(cloth_index, rows) {
+	const header_style = [
+		"display:grid",
+		"grid-template-columns:minmax(170px,5fr) minmax(120px,3fr) minmax(180px,4fr)",
+		"gap:12px",
+		"align-items:center",
+		"padding:8px 12px",
+		"background:var(--subtle-fg)",
+		"border-bottom:1px solid var(--border-color)",
+		"font-size:12px",
+		"font-weight:600",
+	].join(";");
+	const row_style = [
+		"display:grid",
+		"grid-template-columns:minmax(170px,5fr) minmax(120px,3fr) minmax(180px,4fr)",
+		"gap:12px",
+		"align-items:center",
+		"min-height:48px",
+		"padding:6px 12px",
+		"border-bottom:1px solid var(--border-color)",
+	].join(";");
 	return `
-		<div style="display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin:12px 0 5px;
-			padding:10px 12px;border:1px solid var(--border-color);border-radius:8px">
-			<div style="min-width:120px">
-				<div class="text-muted small">${__("Finished Colour")}</div>
-				<strong>${frappe.utils.escape_html(colour || "")}</strong>
+		<div class="small text-muted" style="margin-bottom:6px">${__("Colours")}</div>
+		<div class="cloth-program-colour-table"
+			style="position:relative;overflow:visible;border:1px solid var(--border-color);border-radius:8px">
+			<div style="${header_style}">
+				<span>${__("Finished Colour")}</span>
+				<span>${__("Is Dyed Yarn")}</span>
+				<span>${__("Same Finished Colour")}</span>
 			</div>
-			<div class="text-muted">→</div>
-			<div data-cloth-program-output="${frappe.utils.escape_html(edit_key)}"
-				style="flex:1;min-width:180px"></div>
-			<div class="text-muted small" style="margin-left:auto;flex:none;
-				text-align:right;white-space:nowrap">
-				${route_label} · ${format_cloth_program_weight(total)} ${__("kg")}
-			</div>
-			<button type="button" class="btn btn-default btn-xs"
-				data-cloth-program-edit="${frappe.utils.escape_html(edit_key)}"
-				aria-expanded="false">
-				${__("Edit")}
-			</button>
+			${rows.map((row, row_index) => `
+				<div style="${row_style}">
+					<strong>${frappe.utils.escape_html(frappe.yrp.attribute_value(row.colour))}</strong>
+					<label style="display:flex;align-items:center;gap:7px;margin:0;cursor:pointer">
+						<input type="checkbox"
+							data-cloth-program-dyed="${cloth_index}:${row_index}"
+							${row.use_dyed_yarn ? "checked" : ""}>
+					</label>
+					<label style="display:flex;align-items:center;gap:7px;margin:0;cursor:pointer">
+						<input type="checkbox"
+							data-cloth-program-same="${cloth_index}:${row_index}"
+							${row.same_finished_colour ? "checked" : ""}
+							${row.use_dyed_yarn ? "disabled" : ""}>
+					</label>
+				</div>
+			`).join("")}
 		</div>`;
 }
 
-function yarn_recipe_fields() {
-	return [
-		{
-			label: __("Yarn Item"),
-			fieldname: "yarn_item",
-			fieldtype: "Link",
-			options: "Item",
-			in_list_view: 1,
-			columns: 7,
-			reqd: 1,
-		},
-		{
-			label: __("Ratio %"),
-			fieldname: "ratio",
-			fieldtype: "Float",
-			in_list_view: 1,
-			columns: 3,
-			reqd: 1,
-		},
-	];
-}
-
-function dialog_colour_recipes(dialog, cloth, cloth_index) {
-	const resolved = {};
-	((cloth && cloth.required_colours) || []).filter(Boolean).forEach((colour, colour_index) => {
-		const source = dialog.get_value(`recipe_source_${cloth_index}_${colour_index}`);
-		const rows = source
-			? (resolved[source] || [])
-			: (dialog.get_value(`colour_yarns_${cloth_index}_${colour_index}`) || []);
-		resolved[colour] = rows.map((row) => ({
-			yarn_item: row.yarn_item || "",
-			ratio: Number(row.ratio || 0),
-		}));
-	});
-	return resolved;
-}
-
-function copy_main_fabric_recipes(dialog, cloths, target_index) {
-	const main = cloths[0];
-	const target = cloths[target_index];
-	if (!main || !target) return;
-
-	const main_recipes = dialog_colour_recipes(dialog, main, 0);
-	(target.required_colours || []).filter(Boolean).forEach((colour, colour_index) => {
-		if (!main_recipes[colour]) return;
-		dialog.set_value(`recipe_source_${target_index}_${colour_index}`, "");
-		dialog.set_value(
-			`colour_yarns_${target_index}_${colour_index}`,
-			main_recipes[colour].map((row) => ({ ...row }))
+function mount_cloth_program_colour_controls(dialog, selections) {
+	dialog.$wrapper.on("change", "[data-cloth-program-dyed]", function () {
+		const [cloth_index, row_index] = $(this)
+			.attr("data-cloth-program-dyed")
+			.split(":");
+		const row = selections[cloth_index][Number(row_index)];
+		const checked = $(this).is(":checked");
+		row.use_dyed_yarn = checked ? 1 : 0;
+		if (checked) {
+			row.same_finished_colour = 0;
+		}
+		const $same = dialog.$wrapper.find(
+			`[data-cloth-program-same="${cloth_index}:${row_index}"]`
 		);
+		$same.prop("checked", Boolean(row.same_finished_colour));
+		$same.prop("disabled", checked);
+	});
+
+	dialog.$wrapper.on("change", "[data-cloth-program-same]", function () {
+		const [cloth_index, row_index] = $(this)
+			.attr("data-cloth-program-same")
+			.split(":");
+		const row = selections[cloth_index][Number(row_index)];
+		row.same_finished_colour = $(this).is(":checked") ? 1 : 0;
 	});
 }
 
@@ -1143,6 +1086,7 @@ function apply_yarn_profile(dialog, i, yarn, cloth) {
 		args: { yarn_item: yarn },
 		callback: function (r) {
 			const p = r.message || {};
+			cloth.profile = { ...(cloth.profile || {}), ...p };
 			if (p.knitting_process && !dialog.get_value(`knitting_process_${i}`)) {
 				dialog.set_value(`knitting_process_${i}`, p.knitting_process);
 			}
@@ -1152,28 +1096,6 @@ function apply_yarn_profile(dialog, i, yarn, cloth) {
 			if (p.cloth_per_kg_yarn && !dialog.get_value(`cloth_per_kg_yarn_${i}`)) {
 				dialog.set_value(`cloth_per_kg_yarn_${i}`, p.cloth_per_kg_yarn);
 			}
-			const outputs = p.knitting_output_colours || {};
-			(cloth.required_colours || []).forEach((colour, colour_index) => {
-				(cloth.required_routes || [])
-					.filter((route) => route.colour === colour)
-					.sort((a, b) => dia_sort_value(a.dia) - dia_sort_value(b.dia))
-					.forEach((route, route_index) => {
-						const stored = (p.fabric_routes || []).find(
-							(row) => row.finished_colour === colour && row.finished_dia === route.dia
-						) || {};
-						const colour_field = `knitting_output_colour_${i}_${colour_index}_${route_index}`;
-						const dia_field = `knitting_output_dia_${i}_${colour_index}_${route_index}`;
-						if (!dialog.get_value(colour_field)) {
-							dialog.set_value(
-								colour_field,
-								stored.knitting_output_colour || outputs[colour] || p.greige_colour || ""
-							);
-						}
-						if (!dialog.get_value(dia_field)) {
-							dialog.set_value(dia_field, stored.knitting_output_dia || route.dia || "");
-						}
-					});
-			});
 		}
 	});
 }

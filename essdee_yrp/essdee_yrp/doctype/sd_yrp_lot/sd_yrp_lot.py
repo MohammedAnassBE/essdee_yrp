@@ -1,3 +1,5 @@
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2024, Essdee and contributors
 # For license information, please see license.txt
 
@@ -159,7 +161,7 @@ class SDYRPLot(Document):
 			attributes = get_variant_attr_details(row.item_variant)
 			if (
 				ipd.is_set_item
-				and attributes.get(ipd.set_item_attribute) != ipd.major_attribute_value
+				and attributes.get(ipd.set_item_attribute) != _attribute_value(ipd.major_attribute_value)
 			):
 				continue
 			size = attributes.get(ipd.primary_item_attribute)
@@ -246,13 +248,13 @@ def get_time_and_action_process(action_details):
 		)
 		if pending:
 			row = pending[0]
-			row["colour"] = item.colour
+			row["colour"] = _attribute_value(item.colour)
 			row["master"] = item.master
 			row["process"] = True
 			items.append(row)
 		else:
 			items.append({
-				"colour": item.colour,
+				"colour": _attribute_value(item.colour),
 				"master": item.master,
 				"action": "Completed",
 				"department": None,
@@ -269,7 +271,7 @@ def calculate_order_details(items, production_detail, packing_uom, final_uom):
 	dept_attr = None
 	pack_stage = None
 	if item_detail.dependent_attribute:
-		pack_stage = item_detail.pack_in_stage
+		pack_stage = _attribute_value(item_detail.pack_in_stage)
 		dept_attr = item_detail.dependent_attribute
 	uom_factor = get_uom_conversion_factor(doc.uoms,final_uom, packing_uom)
 	final_qty = 0
@@ -278,16 +280,16 @@ def calculate_order_details(items, production_detail, packing_uom, final_uom):
 		parts   = []	
 		comb_dict = {}
 		for attr in item_detail.set_item_combination_details:
-			comb_dict.setdefault(attr.major_attribute_value, {})
-			comb_dict[attr.major_attribute_value].setdefault(attr.set_item_attribute_value, attr.attribute_value)
-			if attr.set_item_attribute_value not in parts:
-				parts.append(attr.set_item_attribute_value)
+			comb_dict.setdefault(_attribute_value(attr.major_attribute_value), {})
+			comb_dict[_attribute_value(attr.major_attribute_value)].setdefault(_attribute_value(attr.set_item_attribute_value), _attribute_value(attr.attribute_value))
+			if _attribute_value(attr.set_item_attribute_value) not in parts:
+				parts.append(_attribute_value(attr.set_item_attribute_value))
 	x = 0
 	if item_detail.is_set_item:
-		major_part = item_detail.major_attribute_value
+		major_part = _attribute_value(item_detail.major_attribute_value)
 		for attr in item_detail.packing_attribute_details:
 			for part in parts:
-				colour = comb_dict[attr.attribute_value][part]
+				colour = comb_dict[_attribute_value(attr.attribute_value)][part]
 				item_list = [] 
 				for item in items:
 					variant = frappe.get_cached_doc('Item', item.item_variant)
@@ -302,12 +304,12 @@ def calculate_order_details(items, production_detail, packing_uom, final_uom):
 						if attribute.attribute == dept_attr:
 							attrs[attribute.attribute] = pack_stage
 						else:	
-							attrs[attribute.attribute] = attribute['attribute_value']
+							attrs[attribute.attribute] = _attribute_value(attribute['attribute_value'])
 					attrs[item_detail.packing_attribute] = colour
 					attrs[item_detail.set_item_attribute] = part
 					new_variant = get_or_create_variant((variant.variant_of or variant.name), attrs,dependent_attr=item_detail.dependent_attribute_mapping)
 					temp_qty = math.ceil(qty) if item_detail.auto_calculate else math.ceil(qty * attr.quantity)
-					if item_detail.major_attribute_value == part:
+					if _attribute_value(item_detail.major_attribute_value) == part:
 						final_qty += temp_qty
 					d = {
 						"item_variant": new_variant,
@@ -321,7 +323,7 @@ def calculate_order_details(items, production_detail, packing_uom, final_uom):
 						d['set_combination']['major_colour'] = colour
 					else:
 						d['set_combination']['major_part'] = major_part
-						d['set_combination']['major_colour'] = comb_dict[attr.attribute_value][major_part]
+						d['set_combination']['major_colour'] = comb_dict[_attribute_value(attr.attribute_value)][major_part]
 					item_list.append(d)
 				x = x + 1		
 				final_list = final_list + item_list
@@ -341,8 +343,8 @@ def calculate_order_details(items, production_detail, packing_uom, final_uom):
 					if attribute.attribute == dept_attr:
 						attrs[attribute.attribute] = pack_stage
 					else:	
-						attrs[attribute.attribute] = attribute['attribute_value']
-				attrs[item_detail.packing_attribute] = attr.attribute_value
+						attrs[attribute.attribute] = _attribute_value(attribute['attribute_value'])
+				attrs[item_detail.packing_attribute] = _attribute_value(attr.attribute_value)
 				new_variant = get_or_create_variant((variant.variant_of or variant.name), attrs,dependent_attr=item_detail.dependent_attribute_mapping)
 				temp_qty = math.ceil(qty) if item_detail.auto_calculate else math.ceil(qty * attr.quantity)
 				final_qty += temp_qty
@@ -351,7 +353,7 @@ def calculate_order_details(items, production_detail, packing_uom, final_uom):
 					"quantity": temp_qty,
 					"row_index":x,
 					"table_index": 0,
-					"set_combination":{"major_colour":attr.attribute_value},
+					"set_combination":{"major_colour":_attribute_value(attr.attribute_value)},
 				})
 			x = x + 1
 			final_list = final_list + item_list
@@ -458,7 +460,7 @@ def fetch_item_details(items, production_detail):
 			if doc.primary_attribute:
 				for attr in current_variant.attributes:
 					if attr.attribute == primary_attr:
-						values[attr.attribute_value] = {
+						values[_attribute_value(attr.attribute_value)] = {
 							"qty":variant['qty'],
 							"ratio": variant['ratio'],
 							"mrp": variant['mrp'],
@@ -502,7 +504,7 @@ def fetch_order_item_details(items, production_detail, process=None, includes_pa
 					stage = prs.stage
 					break
 			if stage:
-				field = "cut_qty" if stage == ipd_doc.stiching_in_stage else "stich_qty" if stage == ipd_doc.pack_in_stage else "pack_qty"
+				field = "cut_qty" if stage == _attribute_value(ipd_doc.stiching_in_stage) else "stich_qty" if stage == _attribute_value(ipd_doc.pack_in_stage) else "pack_qty"
 		
 		if not field:
 			frappe.msgprint(f"Please Mention Process {process} in IPD")
@@ -523,7 +525,7 @@ def fetch_order_item_details(items, production_detail, process=None, includes_pa
 			"is_set_item": ipd_doc.is_set_item,
 			"set_attr": ipd_doc.set_item_attribute,
 			"pack_attr": ipd_doc.packing_attribute,
-			"major_attr_value": ipd_doc.major_attribute_value,
+			"major_attr_value": _attribute_value(ipd_doc.major_attribute_value),
 			'primary_attribute': current_item_attribute_details['primary_attribute'],
 			"dependent_attribute": current_item_attribute_details['dependent_attribute'],
 			"dependent_attribute_details": current_item_attribute_details['dependent_attribute_details'],
@@ -545,7 +547,7 @@ def fetch_order_item_details(items, production_detail, process=None, includes_pa
 				current_variant = frappe.get_cached_doc('Item', variant['item_variant'])
 				for attr in current_variant.attributes:
 					if attr.attribute == item.get('primary_attribute'):
-						item['values'][attr.attribute_value] = {
+						item['values'][_attribute_value(attr.attribute_value)] = {
 							'qty': getattr(variant, field, 0),
 						}
 						break
@@ -586,20 +588,20 @@ def fetch_order_item_details(items, production_detail, process=None, includes_pa
 
 def get_quantity(attr, packing_attribute_details):
 	for item in packing_attribute_details:
-		if item.attribute_value == attr:
+		if _attribute_value(item.attribute_value) == attr:
 			return item.quantity
 
 def get_item_attribute_details(variant, item_attributes):
 	attribute_details = {}
 	for attr in variant.attributes:
 		if attr.attribute in item_attributes['attributes']:
-			attribute_details[attr.attribute] = attr.attribute_value
+			attribute_details[attr.attribute] = _attribute_value(attr.attribute_value)
 	return attribute_details
 
 def variant_attribute_details(variant):
 	attribute_details = {}
 	for attr in variant.attributes:
-		attribute_details[attr.attribute] = attr.attribute_value
+		attribute_details[attr.attribute] = _attribute_value(attr.attribute_value)
 	return attribute_details
 
 @frappe.whitelist()
@@ -609,7 +611,7 @@ def get_item_details(item_name, attr_details = None, uom=None, production_detail
 		item = get_attribute_details(item_name, dependent_attr_mapping=dependent_attr_mapping)
 	else:
 		item = attr_details	
-	pack_out_stage = frappe.get_value('YRP Item Production Detail', production_detail,"pack_out_stage")
+	pack_out_stage = attribute_db.get_value('YRP Item Production Detail', production_detail,"pack_out_stage")
 	if uom:
 		item['default_uom'] = uom
 	final_state = None
@@ -672,7 +674,7 @@ def get_isfinal_uom(item_production_detail, get_pack_stage=None):
 	if doc.dependent_attribute_mapping:
 		attribute_details = get_dependent_attribute_details(doc.dependent_attribute_mapping)
 		for attr in attribute_details['attr_list']:
-			if attr == doc.pack_out_stage:
+			if attr == _attribute_value(doc.pack_out_stage):
 				uom = attribute_details['attr_list'][attr]['uom']
 				break
 	else:
@@ -681,8 +683,8 @@ def get_isfinal_uom(item_production_detail, get_pack_stage=None):
 		uom = item_doc.stock_uom
 
 	if get_pack_stage:
-		pack_in_stage = doc.pack_in_stage
-		pack_out_stage = doc.pack_out_stage
+		pack_in_stage = _attribute_value(doc.pack_in_stage)
+		pack_out_stage = _attribute_value(doc.pack_out_stage)
 		if doc.dependent_attribute_mapping:
 			attribute_details = get_dependent_attribute_details(doc.dependent_attribute_mapping)
 			return {
@@ -743,7 +745,7 @@ def get_attributes(data):
 		temp_attr = {}
 		for attr in doc.attributes:
 			if attr.attribute != dept_attr:
-				temp_attr[attr.attribute] = attr.attribute_value
+				temp_attr[attr.attribute] = _attribute_value(attr.attribute_value)
 		temp_attr['Ratio'] = item['ratio']
 		temp_attr['MRP'] = item['mrp']	
 		attr_list.append(temp_attr)
@@ -761,10 +763,10 @@ def get_packing_attributes(ipd):
 		combo = ipd_doc.packing_attribute_no
 
 	for item in ipd_doc.packing_attribute_details:
-		major_colours.append(item.attribute_value)
+		major_colours.append(_attribute_value(item.attribute_value))
 		colour_dict_list.append({
-			"colour": item.attribute_value,
-			"major_colour": item.attribute_value,
+			"colour": _attribute_value(item.attribute_value),
+			"major_colour": _attribute_value(item.attribute_value),
 		})
 		if not combo:
 			ratios.append(ipd_doc.packing_combo/item.quantity)
@@ -782,7 +784,7 @@ def get_packing_attributes(ipd):
 			index = index + 1
 			for part in set_map_doc.values:
 				colour_combo_dict_list.append({
-					"colour": str(colour)+"-"+str(part.attribute_value),
+					"colour": str(colour)+"-"+str(_attribute_value(part.attribute_value)),
 					"major_colour": colour,
 				})
 				if not combo:
@@ -798,7 +800,7 @@ def get_packing_attributes(ipd):
 
 	map_doc = get_mapping_document(mapping)
 	for item in map_doc.values:
-		sizes += item.attribute_value + ","
+		sizes += _attribute_value(item.attribute_value) + ","
 
 	return {
 		"colour_combo": colour_dict_list,
@@ -848,9 +850,9 @@ def get_mapping_details(ipd):
 					x = x -1
 					data.append({"item": [], "bom": [], "quantity": 0})
 			if d.type == "item":
-				data[d.index]["item"].append(d.attribute_value)
+				data[d.index]["item"].append(_attribute_value(d.attribute_value))
 			elif (d.type == "bom"):
-				data[d.index]["bom"].append(d.attribute_value)
+				data[d.index]["bom"].append(_attribute_value(d.attribute_value))
 			qty = d.quantity
 			if d.quantity == 0:
 				qty = bom_qty
@@ -1070,7 +1072,7 @@ def get_consumption_sheet_data(ipd, lot):
 			panel_weight.setdefault(row1[pack_attr], {})
 			weight = row1['Weight']/length
 			for row2 in ipd_doc.stiching_item_details:
-				panel_weight[row1[pack_attr]][row2.stiching_attribute_value] = weight
+				panel_weight[row1[pack_attr]][_attribute_value(row2.stiching_attribute_value)] = weight
 				
 	elif primary_attr in cut_attrs and len(cut_attrs) == 1:	
 		count = 0
@@ -1081,7 +1083,7 @@ def get_consumption_sheet_data(ipd, lot):
 		avg_weight = tot_weight / count
 		weight = avg_weight / length
 		for row in ipd_doc.stiching_item_details:
-			direct_panel_weight[row.stiching_attribute_value] = weight
+			direct_panel_weight[_attribute_value(row.stiching_attribute_value)] = weight
 
 	elif stich_attr in cut_attrs and primary_attr in cut_attrs and len(cut_attrs) == 2:
 		panel_sum = {}
@@ -1099,7 +1101,7 @@ def get_consumption_sheet_data(ipd, lot):
 			panel_sum[panel]['avg_weight'] = panel_sum[panel]['tot_weight'] / panel_sum[panel]['count']
 
 		for row2 in ipd_doc.stiching_item_details:
-			direct_panel_weight[row.stiching_attribute_value] = panel_sum[row.stiching_attribute_value]['avg_weight']
+			direct_panel_weight[_attribute_value(row.stiching_attribute_value)] = panel_sum[_attribute_value(row.stiching_attribute_value)]['avg_weight']
 		
 	elif stich_attr in cut_attrs and pack_attr in cut_attrs and len(cut_attrs) == 2:
 		panel_sum = {}
@@ -1122,10 +1124,10 @@ def get_consumption_sheet_data(ipd, lot):
 			colour_sum[colour]['avg_weight'] = colour_sum[colour]['tot_weight'] / colour_sum[colour]['count']
 
 		for row1 in ipd_doc.packing_attribute_details:
-			panel_weight.setdefault(row1.attribute_value, {})
-			weight = colour_sum[row1.attribute_value]['avg_weight'] / length
+			panel_weight.setdefault(_attribute_value(row1.attribute_value), {})
+			weight = colour_sum[_attribute_value(row1.attribute_value)]['avg_weight'] / length
 			for row2 in ipd_doc.stiching_item_details:
-				panel_weight[row1[pack_attr]][row2.stiching_attribute_value] = weight
+				panel_weight[row1[pack_attr]][_attribute_value(row2.stiching_attribute_value)] = weight
 
 	elif pack_attr in cut_attrs and primary_attr in cut_attrs and stich_attr in cut_attrs and len(cut_attrs) == 3:
 		panel_sum = {}
@@ -1168,7 +1170,7 @@ def get_consumption_sheet_data(ipd, lot):
 	else:
 		for colour in colour_comb:
 			for panel in colour_comb[colour]:
-				colour_comb[colour][panel]['weight'] = colour_panel_weight[panel][colour_comb[colour][panel]["colour"]]
+				colour_comb[colour][panel]['weight'] = colour_panel_weight[panel][_attribute_value(colour_comb[colour][panel]["colour"])]
 
 	for colour in cad_data[item]:
 		for cat in cad_data[item][colour]['categories']:

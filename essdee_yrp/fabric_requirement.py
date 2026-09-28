@@ -21,6 +21,7 @@ on 66% of live garment IPDs) is IN scope: calculate_accessory is ported
 and its kg aggregates into the same (cloth Item, dia, colour) demand the CPDs
 are seeded from.
 """
+from yrp.attribute_links import value as _attribute_value
 
 import json
 
@@ -64,7 +65,7 @@ def add_cloth_detail(weight, cloth_type, cloth_colour, dia, type, accessory_name
 def get_stich_details(ipd_doc):
     stich_details = {}
     for i in ipd_doc.stiching_item_details:
-        stich_details[i.stiching_attribute_value] = i.set_item_attribute_value
+        stich_details[_attribute_value(i.stiching_attribute_value)] = _attribute_value(i.set_item_attribute_value)
     return stich_details
 
 
@@ -105,16 +106,16 @@ def get_stitching_combination(ipd_doc):
 
     stitching_combination = {}
     for detail in ipd_doc.stiching_item_combination_details:
-        key = detail.major_attribute_value
+        key = _attribute_value(detail.major_attribute_value)
         if ipd_doc.is_set_item:
-            key = (key, part_panel_comb[detail.set_item_attribute_value])
+            key = (key, part_panel_comb[_attribute_value(detail.set_item_attribute_value)])
         stitching_combination.setdefault(key, {})
-        stitching_combination[key][detail.set_item_attribute_value] = detail.attribute_value
+        stitching_combination[key][_attribute_value(detail.set_item_attribute_value)] = _attribute_value(detail.attribute_value)
 
     return {
         "stitching_attribute": ipd_doc.stiching_attribute,
         "stitching_attribute_count": {
-            i.stiching_attribute_value: i.quantity for i in ipd_doc.stiching_item_details},
+            _attribute_value(i.stiching_attribute_value): i.quantity for i in ipd_doc.stiching_item_details},
         "is_same_packing_attribute": ipd_doc.is_same_packing_attribute,
         "stitching_combination": stitching_combination,
     }
@@ -277,7 +278,7 @@ def _aggregate_demand(item_detail, variant_rows, cloth_combination, stitching_co
             if c1["cloth_type"] not in cloth_label_to_item:
                 unmapped.add(c1["cloth_type"])
                 continue
-            key = (cloth_label_to_item[c1["cloth_type"]], c1["dia"], c1["colour"])
+            key = (cloth_label_to_item[c1["cloth_type"]], _attribute_value(c1["dia"]), _attribute_value(c1["colour"]))
             cloth_details.setdefault(key, 0)
             cloth_details[key] += c1["quantity"]
     if unmapped:
@@ -369,7 +370,7 @@ def compute_cloth_demand(lot_name, apply_allowance=True):
         if not qty:
             continue
         variant_doc = frappe.get_cached_doc('Item', item.item_variant)
-        attr_values = {x.attribute: x.attribute_value for x in variant_doc.attributes}
+        attr_values = {x.attribute: _attribute_value(x.attribute_value) for x in variant_doc.attributes}
         if item_detail.dependent_attribute and attr_values.get(item_detail.dependent_attribute):
             del attr_values[item_detail.dependent_attribute]
         variant_rows.append((attr_values, qty))

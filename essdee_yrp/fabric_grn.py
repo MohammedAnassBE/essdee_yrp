@@ -7,6 +7,7 @@ module owns only Essdee's IPD/BOM calculation and Work Order ``stock_update``
 bookkeeping. Historical all-unmapped rows retain the explicit legacy hook at
 the bottom of this module.
 """
+from yrp.attribute_links import value as _attribute_value
 
 from collections import defaultdict
 
@@ -96,9 +97,60 @@ def calculate_consumption_plan(grn):
 		ipd,
 		wo.process_name,
 		demands,
-		identity=bool(identity_row),
+		identity=bool(identity_row or (step and step.get("shape") == "identity")),
 	)
+	rows = _align_cloth_input_rounding(rows, wo, ipd, identity=bool(
+		identity_row or (step and step.get("shape") == "identity")
+	))
 	return _allocate_to_work_order_deliverables(rows, wo, grn)
+
+
+def _align_cloth_input_rounding(rows, wo, ipd, *, identity=False):
+	"""Use the WO's three-decimal input allocation for fractional cloth recipes.
+
+	Only reconcile rounding-sized differences against the full planned output.
+	Never clamp to stock currently available: genuine under-deliveries must
+	still fail allocation. Scaling by the full plan also makes partial GRNs
+	consume the same total as a single full receipt.
+	"""
+	if not ipd.get("is_cloth_item"):
+		return rows
+	planned_grn = frappe._dict(items=[frappe._dict(
+		name=row.name, ref_docname=row.name, item_variant=row.item_variant,
+		quantity=row.qty,
+	) for row in wo.get("receivables") or []])
+	full_rows = _calculate_consumed_rows(
+		ipd, wo.process_name, _get_output_demands(planned_grn, wo), identity=identity,
+	)
+	def key(row, reference):
+		return (row.get("item_variant"), row.get("uom"), reference or "")
+
+	expected, counts, planned = {}, {}, {}
+	for row in full_rows:
+		k = key(row, row.get("reference_item_variant"))
+		expected[k] = expected.get(k, 0) + flt(row.get("qty"))
+		counts[k] = counts.get(k, 0) + 1
+	for row in wo.get("deliverables") or []:
+		if not row.get("is_calculated"):
+			continue
+		allocations = get_reference_allocations(row, row.qty) or {"": flt(row.qty)}
+		for reference, qty in allocations.items():
+			k = key(row, reference)
+			planned[k] = planned.get(k, 0) + flt(qty)
+	result = []
+	for row in rows:
+		k = key(row, row.get("reference_item_variant"))
+		full = expected.get(k, 0)
+		target = planned.get(k)
+		if (
+			full > 0
+			and target is not None
+			and target > 0
+			and abs(target - full) <= counts[k] * 0.000500001
+		):
+			row = {**row, "qty": flt(flt(row["qty"]) * target / full, 6)}
+		result.append(row)
+	return result
 
 
 def _get_output_demands(grn, wo):
@@ -665,7 +717,7 @@ def _variant_attrs(item_variant):
 	if not item_variant:
 		return {}
 	return {
-		row.attribute: row.attribute_value
+		row.attribute: _attribute_value(row.attribute_value)
 		for row in frappe.get_all(
 			'Item Variant Attribute',
 			filters={

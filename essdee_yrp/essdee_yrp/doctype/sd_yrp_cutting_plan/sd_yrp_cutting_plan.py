@@ -1,3 +1,5 @@
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2024, Essdee and contributors
 # For license information, please see license.txt
 import frappe, copy
@@ -230,8 +232,8 @@ class SDYRPCuttingPlan(Document):
 				c = calculate_cloth(ipd_doc, attr_details, item.quantity, cloth_combination, stitching_combination)
 				for c1 in c:
 					variant = get_or_create_variant(cloth_detail[c1["cloth_type"]], {
-						ipd_doc.packing_attribute: c1['colour'],
-						'Dia': c1['dia']
+						ipd_doc.packing_attribute: _attribute_value(c1['colour']),
+						'Dia': _attribute_value(c1['dia'])
 					})
 					if variant not in cloth_details[colour]:
 						cloth_details[colour].append(variant)
@@ -330,8 +332,8 @@ def get_complete_incomplete_structure(ipd,item_details):
 def get_item_panels(ipd_doc,panels):
 	stiching_attrs = {ipd_doc.stiching_attribute : []}
 	for item in ipd_doc.stiching_item_details:
-		panels[item.stiching_attribute_value] = 0
-		stiching_attrs[ipd_doc.stiching_attribute].append(item.stiching_attribute_value)
+		panels[_attribute_value(item.stiching_attribute_value)] = 0
+		stiching_attrs[ipd_doc.stiching_attribute].append(_attribute_value(item.stiching_attribute_value))
 	return panels,stiching_attrs
 
 def get_complete_cut_structure(x,stiching_attrs):
@@ -370,14 +372,14 @@ def add_additional_attributes(ipd_doc,x):
 def get_set_item_panels(ipd_doc,panels):
 	m = {ipd_doc.stiching_attribute : {}}
 	for item in ipd_doc.stiching_item_details:
-		if item.set_item_attribute_value in panels:
-			panels[item.set_item_attribute_value][item.stiching_attribute_value] = 0
-			m[ipd_doc.stiching_attribute][item.set_item_attribute_value].append(item.stiching_attribute_value)
+		if _attribute_value(item.set_item_attribute_value) in panels:
+			panels[_attribute_value(item.set_item_attribute_value)][_attribute_value(item.stiching_attribute_value)] = 0
+			m[ipd_doc.stiching_attribute][_attribute_value(item.set_item_attribute_value)].append(_attribute_value(item.stiching_attribute_value))
 		else:
-			panels[item.set_item_attribute_value] = {}
-			panels[item.set_item_attribute_value][item.stiching_attribute_value] = 0
-			m[ipd_doc.stiching_attribute][item.set_item_attribute_value] = []
-			m[ipd_doc.stiching_attribute][item.set_item_attribute_value].append(item.stiching_attribute_value)
+			panels[_attribute_value(item.set_item_attribute_value)] = {}
+			panels[_attribute_value(item.set_item_attribute_value)][_attribute_value(item.stiching_attribute_value)] = 0
+			m[ipd_doc.stiching_attribute][_attribute_value(item.set_item_attribute_value)] = []
+			m[ipd_doc.stiching_attribute][_attribute_value(item.set_item_attribute_value)].append(_attribute_value(item.stiching_attribute_value))
 	return panels,m
 
 def save_item_cloth_details(items):
@@ -387,8 +389,8 @@ def save_item_cloth_details(items):
 		item_details.append({
 			"cloth_item_variant":item['cloth_item_variant'],
 			"cloth_type":item['cloth_type'],
-			"colour":item['colour'],
-			"dia":item['dia'],
+			"colour":_attribute_value(item['colour']),
+			"dia":_attribute_value(item['dia']),
 			"required_weight":item['required_weight'],
 			"weight":item['weight'],
 			"used_weight": item['used_weight'],
@@ -431,8 +433,8 @@ def fetch_cloth_details(items):
 			"accessory": item.accessory,
 			"cloth_item_variant":item.cloth_item_variant,
 			"item":(variant_doc.variant_of or variant_doc.name),
-			"colour":item.colour,
-			"dia":item.dia,
+			"colour":_attribute_value(item.colour),
+			"dia":_attribute_value(item.dia),
 			"cloth_type":item.cloth_type,
 			"required_weight":item.required_weight,
 			"weight":item.weight,
@@ -462,8 +464,8 @@ def _cloth_requirement_key(row):
 	return (
 		row.get("cloth_item_variant"),
 		row.get("cloth_type"),
-		row.get("colour"),
-		row.get("dia"),
+		_attribute_value(row.get("colour")),
+		_attribute_value(row.get("dia")),
 		row.get("accessory"),
 	)
 
@@ -499,12 +501,12 @@ def _build_cloth_requirement_rows(cutting_plan_doc):
 
 		c = calculate_cloth(ipd_doc, attr_details, item.quantity, cloth_combination, stitching_combination)
 		for c1 in c:
-			key = (c1["cloth_type"], c1["colour"], c1["dia"])
+			key = (c1["cloth_type"], _attribute_value(c1["colour"]), _attribute_value(c1["dia"]))
 			cloth_details.setdefault(key, 0)
 			cloth_details[key] += c1["quantity"]
 
 			if c1["type"] == "accessory":
-				key = (c1["cloth_type"], c1["colour"], c1["dia"], c1['accessory_name'])
+				key = (c1["cloth_type"], _attribute_value(c1["colour"]), _attribute_value(c1["dia"]), c1['accessory_name'])
 				accessory_detail.setdefault(key,0)
 				accessory_detail[key] += c1["quantity"]
 
@@ -568,7 +570,7 @@ def item_attribute_details(variant, item_attributes):
 	attribute_details = {}
 	for attr in variant.attributes:
 		if attr.attribute != item_attributes['dependent_attribute']:
-			attribute_details[attr.attribute] = attr.attribute_value
+			attribute_details[attr.attribute] = _attribute_value(attr.attribute_value)
 	return attribute_details
 
 def get_phantom_panels(cutting_plan):
@@ -588,9 +590,9 @@ def get_phantom_panels(cutting_plan):
 	ipd_doc = frappe.get_cached_doc('YRP Item Production Detail', ipd)
 	panel_part = {}
 	for row in ipd_doc.stiching_item_details:
-		panel_part[row.stiching_attribute_value] = row.set_item_attribute_value if ipd_doc.is_set_item else None
+		panel_part[_attribute_value(row.stiching_attribute_value)] = _attribute_value(row.set_item_attribute_value) if ipd_doc.is_set_item else None
 	cut_panels = set()
-	bundle_parts = frappe.get_all(
+	bundle_parts = attribute_db.get_all(
 		'SD YRP Cutting LaySheet Bundle',
 		filters={"parenttype": 'SD YRP Cutting LaySheet', "parent": ["in", cls_list]},
 		pluck="part",
@@ -667,12 +669,12 @@ def calc(cutting_plan):
 	for recut in recut_items:
 		recut_doc = frappe.get_doc('SD YRP Recut and Print Panel', recut)
 		for item in recut_doc.recut_and_print_panel_details:
-			key = (item.colour, item.cloth_type, item.dia)
+			key = (_attribute_value(item.colour), item.cloth_type, _attribute_value(item.dia))
 			cloth.setdefault(key,0)
 			cloth[key] += item.weight
 
 	for item in cp_doc.cutting_plan_cloth_details:
-		key = (item.colour, item.cloth_type, item.dia)
+		key = (_attribute_value(item.colour), item.cloth_type, _attribute_value(item.dia))
 		if key not in cloth:
 			continue
 		item.used_weight += cloth[key]
@@ -691,7 +693,7 @@ def get_cutting_plan_laysheets_report(cutting_plan):
 	if ipd_doc.is_set_item:
 		panels = {}
 		for row in ipd_doc.stiching_item_details:
-			panels.setdefault(row.set_item_attribute_value, [])
+			panels.setdefault(_attribute_value(row.set_item_attribute_value), [])
 
 	cls_list = frappe.get_list('SD YRP Cutting LaySheet', filters={"cutting_plan":cutting_plan,"status":"Label Printed"}, pluck="name", order_by="lay_no asc")
 	lay_details = {}
@@ -700,7 +702,7 @@ def get_cutting_plan_laysheets_report(cutting_plan):
 		lay_no = cls_doc.lay_no
 		lay_details[lay_no] = {}
 		for row in cls_doc.cutting_laysheet_bundles:
-			parts = row.part.split(",")
+			parts = _attribute_value(row.part).split(",")
 			parts = ", ".join(parts)
 			set_combination = update_if_string_instance(row.set_combination)
 			major_colour = set_combination['major_colour']
@@ -718,13 +720,13 @@ def get_cutting_plan_laysheets_report(cutting_plan):
 					panels.append(parts)
 
 			lay_details[lay_no].setdefault(major_colour, {})
-			lay_details[lay_no][major_colour].setdefault(row.size, {})
-			lay_details[lay_no][major_colour][row.size].setdefault(row.shade, {})
-			lay_details[lay_no][major_colour][row.size][row.shade].setdefault(parts, {})
-			lay_details[lay_no][major_colour][row.size][row.shade][parts].setdefault("qty", 0)
-			lay_details[lay_no][major_colour][row.size][row.shade][parts]["qty"] += row.quantity
-			lay_details[lay_no][major_colour][row.size][row.shade][parts].setdefault("bundles", 0)
-			lay_details[lay_no][major_colour][row.size][row.shade][parts]['bundles'] += 1
+			lay_details[lay_no][major_colour].setdefault(_attribute_value(row.size), {})
+			lay_details[lay_no][major_colour][_attribute_value(row.size)].setdefault(row.shade, {})
+			lay_details[lay_no][major_colour][_attribute_value(row.size)][row.shade].setdefault(parts, {})
+			lay_details[lay_no][major_colour][_attribute_value(row.size)][row.shade][parts].setdefault("qty", 0)
+			lay_details[lay_no][major_colour][_attribute_value(row.size)][row.shade][parts]["qty"] += row.quantity
+			lay_details[lay_no][major_colour][_attribute_value(row.size)][row.shade][parts].setdefault("bundles", 0)
+			lay_details[lay_no][major_colour][_attribute_value(row.size)][row.shade][parts]['bundles'] += 1
 	final_data = {}
 	for size in sizes:
 		for lay_number, colour_dict in lay_details.items():
@@ -758,8 +760,8 @@ def get_ccr(doc_name):
 		cls_doc = frappe.get_doc('SD YRP Cutting LaySheet', cls)
 		sizes = {}
 		for row in cls_doc.cutting_marker_ratios:
-			if row.size not in sizes:
-				sizes[row.size] = row.ratio
+			if _attribute_value(row.size) not in sizes:
+				sizes[_attribute_value(row.size)] = row.ratio
 		panels = cls_doc.calculated_parts.split(",")
 		panels.sort()
 		for idx, panel in enumerate(panels):
@@ -769,8 +771,8 @@ def get_ccr(doc_name):
 		markers.setdefault(tup_panels, {})
 		cloth_type = {}
 		for row in cls_doc.cutting_laysheet_details:
-			key = (row.colour, row.cloth_type)
-			cloth_type.setdefault(row.colour, row.cloth_type)
+			key = (_attribute_value(row.colour), row.cloth_type)
+			cloth_type.setdefault(_attribute_value(row.colour), row.cloth_type)
 			markers[tup_panels].setdefault(key, {
 				"used_weight": 0,
 				"received_weight": 0,
@@ -791,14 +793,14 @@ def get_ccr(doc_name):
 
 		if cp_doc.is_manual_entry:
 			for row in cls_doc.cutting_laysheet_bundles:
-				key = (row.colour, cloth_type[row.colour])
-				markers[tup_panels][key][row.size]["bits"] += row.quantity
+				key = (_attribute_value(row.colour), cloth_type[_attribute_value(row.colour)])
+				markers[tup_panels][key][_attribute_value(row.size)]["bits"] += row.quantity
 				markers[tup_panels][key]["total_pieces"] += row.quantity
 		sizes = {}
 
 	cp_doc_colours = {}
 	for row in cp_doc.cutting_plan_cloth_details:
-		key = (row.colour, row.cloth_type)
+		key = (_attribute_value(row.colour), row.cloth_type)
 		cp_doc_colours.setdefault(key, { "received_weight": 0 })
 		cp_doc_colours[key]["received_weight"] += row.weight
 
@@ -878,14 +880,14 @@ def get_cutting_plan_size_reports(cutting_plan):
 	if ipd_doc.is_set_item:
 		panels = {}
 		for row in ipd_doc.stiching_item_details:
-			panels.setdefault(row.set_item_attribute_value, [])
+			panels.setdefault(_attribute_value(row.set_item_attribute_value), [])
 
 	cls_list = frappe.get_list('SD YRP Cutting LaySheet', filters={"cutting_plan":cutting_plan,"status":"Label Printed"}, pluck="name", order_by="lay_no asc")
 	size_details = {}
 	for cls in cls_list:
 		cls_doc = frappe.get_doc('SD YRP Cutting LaySheet',cls)
 		for row in cls_doc.cutting_laysheet_bundles:
-			parts = row.part.split(",")
+			parts = _attribute_value(row.part).split(",")
 			parts = ", ".join(parts)
 			set_combination = update_if_string_instance(row.set_combination)
 			major_colour = set_combination['major_colour']
@@ -902,12 +904,12 @@ def get_cutting_plan_size_reports(cutting_plan):
 				if parts not in panels:
 					panels.append(parts)
 			size_details.setdefault(major_colour, {})
-			size_details[major_colour].setdefault(row.size, {})
-			size_details[major_colour][row.size].setdefault(parts, {})
-			size_details[major_colour][row.size][parts].setdefault("qty", 0)
-			size_details[major_colour][row.size][parts]["qty"] += row.quantity
-			size_details[major_colour][row.size][parts].setdefault("bundles", 0)
-			size_details[major_colour][row.size][parts]['bundles'] += 1
+			size_details[major_colour].setdefault(_attribute_value(row.size), {})
+			size_details[major_colour][_attribute_value(row.size)].setdefault(parts, {})
+			size_details[major_colour][_attribute_value(row.size)][parts].setdefault("qty", 0)
+			size_details[major_colour][_attribute_value(row.size)][parts]["qty"] += row.quantity
+			size_details[major_colour][_attribute_value(row.size)][parts].setdefault("bundles", 0)
+			size_details[major_colour][_attribute_value(row.size)][parts]['bundles'] += 1
 
 	final_data = {}
 	for size in sizes:
@@ -1102,8 +1104,8 @@ def create_recut_print_panel(cutting_plan, type, item_details):
 	for row in item_details:
 		doc.append("recut_and_print_panel_details", {
 			"cloth_type": row.get("cloth_type", None),
-			"colour": row.get("colour", None),
-			"dia": row.get("dia", None),
+			"colour": _attribute_value(row.get("colour", None)),
+			"dia": _attribute_value(row.get("dia", None)),
 			"shade": row.get("shade", None),
 			"weight": row.get("weight", 0),
 			"panel_count": row.get("panel_count", 0),
@@ -1124,12 +1126,12 @@ def get_recut_print_panel_details(cutting_plan, type):
 	for doc in doc_list:
 		recut_print_panel_doc = frappe.get_doc('SD YRP Recut and Print Panel', doc)
 		for row in recut_print_panel_doc.recut_and_print_panel_details:
-			key = row.cloth_type + "-" + row.colour + "-" + row.dia + "-" + row.shade
+			key = row.cloth_type + "-" + _attribute_value(row.colour) + "-" + _attribute_value(row.dia) + "-" + row.shade
 			if key not in items:
 				items[key] = {
 					"cloth_type": row.cloth_type,
-					"colour": row.colour,
-					"dia": row.dia,
+					"colour": _attribute_value(row.colour),
+					"dia": _attribute_value(row.dia),
 					"shade": row.shade,
 					"weight": row.weight,
 					"panel_count": row.panel_count,

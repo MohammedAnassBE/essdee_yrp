@@ -5,6 +5,8 @@ install ``yrp`` + ``essdee_yrp`` without ``production_api``.  These adapters
 therefore build the old print shape from YRP's canonical stock grouping API
 instead of importing an uninstalled customer application.
 """
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 from collections import OrderedDict
 from datetime import datetime
@@ -197,7 +199,7 @@ def get_cloth_program_print_data(lot):
 	additions_payload = parse_json(lot_doc.get("cloth_program_additions")) or {}
 	addition_by_route = {}
 	for row in additions_payload.get("routes") or []:
-		key = (row.get("cloth_item"), row.get("dia"), row.get("colour") or None)
+		key = (row.get("cloth_item"), _attribute_value(row.get("dia")), _attribute_value(row.get("colour")) or None)
 		addition_by_route[key] = addition_by_route.get(key, 0) + flt(
 			row.get("additional_weight")
 		)
@@ -208,15 +210,15 @@ def get_cloth_program_print_data(lot):
 			row.cloth_item,
 			{"cloth_item": row.cloth_item, "routes": [], "colours": set()},
 		)
-		colour = row.colour or "No Colour"
+		colour = _attribute_value(row.colour) or "No Colour"
 		cloth["colours"].add(colour)
 		cloth["routes"].append(
 			{
-				"dia": row.dia or "No Dia",
+				"dia": _attribute_value(row.dia) or "No Dia",
 				"colour": colour,
 				"weight": flt(row.weight),
 				"addition": addition_by_route.get(
-					(row.cloth_item, row.dia, row.colour or None), 0
+					(row.cloth_item, _attribute_value(row.dia), _attribute_value(row.colour) or None), 0
 				),
 			}
 		)
@@ -229,18 +231,18 @@ def get_cloth_program_print_data(lot):
 		additions = {colour: 0 for colour in colours}
 		for row in cloth["routes"]:
 			route = route_rows.setdefault(
-				row["dia"],
+				_attribute_value(row["dia"]),
 				{
 					"fabric_type": "Main Fabric",
-					"dia": row["dia"],
+					"dia": _attribute_value(row["dia"]),
 					"weights": {colour: 0 for colour in colours},
 					"total": 0,
 				},
 			)
-			route["weights"][row["colour"]] += row["weight"]
+			route["weights"][_attribute_value(row["colour"])] += row["weight"]
 			route["total"] += row["weight"]
-			colour_totals[row["colour"]] += row["weight"]
-			additions[row["colour"]] += row["addition"]
+			colour_totals[_attribute_value(row["colour"])] += row["weight"]
+			additions[_attribute_value(row["colour"])] += row["addition"]
 		fabric_total = sum(colour_totals.values())
 		fabric_group = {
 			"fabric_type": "Main Fabric",
@@ -279,7 +281,7 @@ def get_cloth_program_print_data(lot):
 	for row in lot_doc.get("lot_fabric_details") or []:
 		if row.production_detail:
 			value = flt(
-				frappe.db.get_value(
+				attribute_db.get_value(
 					'YRP Item Production Detail', row.production_detail, "cloth_per_kg_yarn"
 				)
 			)
@@ -375,7 +377,7 @@ def _generic_work_order_items(items):
 
 		first_variant = frappe.get_cached_doc('Item', variant_name)
 		first_attrs = {
-			row.attribute: row.attribute_value
+			row.attribute: _attribute_value(row.attribute_value)
 			for row in (first_variant.attributes or [])
 		}
 		entry = {
@@ -392,7 +394,7 @@ def _generic_work_order_items(items):
 			for row in variants:
 				variant = frappe.get_cached_doc('Item', row.get("item_variant"))
 				attributes = {
-					value.attribute: value.attribute_value
+					value.attribute: _attribute_value(value.attribute_value)
 					for value in (variant.attributes or [])
 				}
 				primary_value = attributes.get(primary)

@@ -1,3 +1,5 @@
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2026, Essdee and contributors
 # For license information, please see license.txt
 
@@ -177,8 +179,8 @@ def _build_saved_item_view(doc):
 	for (lot, item), variants in groupby(items, key=itemgetter("lot", "item")):
 		variants = list(variants)
 		fp_name = variants[0]["against_id"]
-		ipd = frappe.db.get_value('SD YRP Lot', lot, "production_detail")
-		primary, dependent, pack_out_stage = frappe.db.get_value(
+		ipd = attribute_db.get_value('SD YRP Lot', lot, "production_detail")
+		primary, dependent, pack_out_stage = attribute_db.get_value(
 			'YRP Item Production Detail',
 			ipd,
 			["primary_item_attribute", "dependent_attribute", "pack_out_stage"],
@@ -201,7 +203,7 @@ def _build_saved_item_view(doc):
 			"batch_dispatches": saved_by_plan.get(fp_name, []),
 		}
 		if packing_summary.dynamic_ratio_packing:
-			row["uom"] = frappe.db.get_value('SD YRP Lot', lot, "packing_uom") or row["uom"]
+			row["uom"] = attribute_db.get_value('SD YRP Lot', lot, "packing_uom") or row["uom"]
 		for variant in variants:
 			size = get_variant_attr_details(variant["item_variant"])[primary]
 			value = row["values"].setdefault(
@@ -255,10 +257,10 @@ def _add_dynamic_dispatch_rows(
 	colour_grid = {}
 	stock_groups = {}
 	for batch in normalized:
-		colour_grid.setdefault(batch["colour"], {})
+		colour_grid.setdefault(_attribute_value(batch["colour"]), {})
 		for size, quantity in batch["size_pieces"].items():
-			colour_grid[batch["colour"]][size] = (
-				colour_grid[batch["colour"]].get(size, 0) + quantity
+			colour_grid[_attribute_value(batch["colour"])][size] = (
+				colour_grid[_attribute_value(batch["colour"])].get(size, 0) + quantity
 			)
 		for size, stock_quantity in (
 			batch.get("stock_quantities") or batch["size_pieces"]
@@ -329,7 +331,7 @@ def _set_dispatch_snapshot(doc):
 		if row.packing_source != "batch":
 			continue
 		fp_doc = frappe.get_doc('SD YRP Finishing Plan', row.against_id)
-		primary = frappe.db.get_value(
+		primary = attribute_db.get_value(
 			'YRP Item Production Detail', fp_doc.production_detail, "primary_item_attribute"
 		)
 		size = get_variant_attr_details(row.item_variant).get(primary, "")
@@ -377,7 +379,7 @@ def _set_dispatch_snapshot(doc):
 
 def _get_dispatch_snapshot_context(fp_name):
 	fp_doc = frappe.get_doc('SD YRP Finishing Plan', fp_name)
-	ipd_fields = frappe.db.get_value(
+	ipd_fields = attribute_db.get_value(
 		'YRP Item Production Detail',
 		fp_doc.production_detail,
 		["primary_item_attribute", "is_set_item", "set_item_attribute"],
@@ -422,10 +424,10 @@ def fetch_fp_items():
 			continue
 		fp_doc = frappe.get_doc('SD YRP Finishing Plan', fp_name)
 		packing_summary = get_finishing_packing_summary(fp_doc)
-		box_uom, piece_uom = frappe.db.get_value(
+		box_uom, piece_uom = attribute_db.get_value(
 			'SD YRP Lot', fp_doc.lot, ["uom", "packing_uom"]
 		)
-		primary, dependent, pack_out_stage = frappe.db.get_value(
+		primary, dependent, pack_out_stage = attribute_db.get_value(
 			'YRP Item Production Detail',
 			fp_doc.production_detail,
 			["primary_item_attribute", "dependent_attribute", "pack_out_stage"],
@@ -629,9 +631,9 @@ def get_fpd_print_data(doc_name):
 			{
 				"lot": lot,
 				"item": item_name,
-				"stage": frappe.db.get_value(
+				"stage": attribute_db.get_value(
 					'YRP Item Production Detail',
-					frappe.db.get_value('SD YRP Lot', lot, "production_detail"),
+					attribute_db.get_value('SD YRP Lot', lot, "production_detail"),
 					"pack_out_stage",
 				),
 				"uom": variants[0]["uom"],

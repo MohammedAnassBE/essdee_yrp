@@ -148,8 +148,8 @@ frappe.ui.form.on("SD YRP Cutting Order", {
 						let quantities = {};
 						(d.sizes || []).forEach(s => { quantities[s] = 0; });
 						data.items.push({
-							colour: item.colour,
-							part: item.part,
+							colour: frappe.yrp.attribute_value(item.colour),
+							part: frappe.yrp.attribute_value(item.part),
 							major_colour: item.major_colour,
 							quantities: quantities,
 						});

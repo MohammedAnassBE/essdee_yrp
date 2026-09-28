@@ -1,4 +1,5 @@
 """Idempotent Finishing Plan rebuild and supporting Desk read actions."""
+from yrp import attribute_links as attribute_db
 
 import frappe
 from frappe.utils import flt
@@ -493,9 +494,9 @@ def _received_type_defaults():
 
 def get_configured_cutting_process(*, production_detail=None, lot=None):
 	if not production_detail and lot:
-		production_detail = frappe.db.get_value('SD YRP Lot', lot, "production_detail")
+		production_detail = attribute_db.get_value('SD YRP Lot', lot, "production_detail")
 	if production_detail:
-		process = frappe.get_cached_value(
+		process = attribute_db.get_cached_value(
 			'YRP Item Production Detail', production_detail, "cutting_process"
 		)
 		if process:

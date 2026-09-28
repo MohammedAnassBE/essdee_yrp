@@ -1,4 +1,6 @@
 """Essdee lifecycle hooks for packing Work Orders and Finishing Plans."""
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe import _
@@ -72,7 +74,7 @@ def create_or_refresh_finishing_plan(work_order):
 		finishing_plan.work_order = work_order.name
 		finishing_plan.item = work_order.item
 		finishing_plan.production_detail = work_order.production_detail
-		finishing_plan.pieces_per_box = frappe.db.get_value(
+		finishing_plan.pieces_per_box = attribute_db.get_value(
 			'YRP Item Production Detail', work_order.production_detail, "packing_combo"
 		)
 		finishing_plan.finishing_process = frappe.db.get_single_value(
@@ -235,7 +237,7 @@ def _finishing_rows(work_order):
 			work_order.item,
 			{
 				ipd.primary_item_attribute: size,
-				**({ipd.dependent_attribute: ipd.pack_out_stage} if ipd.dependent_attribute else {}),
+				**({ipd.dependent_attribute: _attribute_value(ipd.pack_out_stage)} if ipd.dependent_attribute else {}),
 			},
 			dependent_attr=ipd.dependent_attribute_mapping,
 		)
@@ -268,7 +270,7 @@ def _operational_merge(finishing_plan, new_rows, grn_rows):
 
 def _transfer_alternative_stock(work_order, rows=None, source_plan=None):
 	initial_transfer = rows is None
-	transferred_lot = frappe.db.get_value(
+	transferred_lot = attribute_db.get_value(
 		'SD YRP Lot', work_order.lot, "transferred_lot"
 	)
 	if not transferred_lot:
@@ -387,7 +389,7 @@ def _make_stock_entry(purpose, from_warehouse, to_warehouse, work_order, items):
 
 
 def _reverse_alternative_stock(work_order):
-	if not frappe.db.get_value('SD YRP Lot', work_order.lot, "transferred_lot"):
+	if not attribute_db.get_value('SD YRP Lot', work_order.lot, "transferred_lot"):
 		return
 	linked = frappe.get_all(
 		'YRP Stock Entry',
@@ -410,7 +412,7 @@ def _reverse_alternative_stock(work_order):
 			stock_entry.cancel()
 	source_plan_name = frappe.db.get_value(
 		'SD YRP Finishing Plan',
-		{"lot": frappe.db.get_value('SD YRP Lot', work_order.lot, "transferred_lot")},
+		{"lot": attribute_db.get_value('SD YRP Lot', work_order.lot, "transferred_lot")},
 		"name",
 	)
 	if not source_plan_name:

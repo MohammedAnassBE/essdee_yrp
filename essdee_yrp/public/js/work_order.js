@@ -649,11 +649,15 @@ function mount_work_order_summary(frm) {
 	});
 }
 
-function open_fabric_calculate(frm) {
+function open_fabric_calculate(frm, source_process = null, previous_dialog = null) {
+	const request = (frm._fabric_context_request || 0) + 1;
+	frm._fabric_context_request = request;
+	const work_order = frm.doc.name;
 	frappe.call({
 		method: "essdee_yrp.api.work_order.get_fabric_deliverable_context",
-		args: { work_order: frm.doc.name },
+		args: { work_order: frm.doc.name, source_process },
 		callback(r) {
+			if (frm._fabric_context_request !== request || frm.doc.name !== work_order) return;
 			const ctx = r.message || {};
 			(ctx.warnings || []).forEach((w) => frappe.msgprint({ message: w, indicator: "orange" }));
 			if (!(ctx.rows || []).length) {
@@ -662,11 +666,15 @@ function open_fabric_calculate(frm) {
 				}
 				return;
 			}
+			previous_dialog?.hide();
 			render_fabric_dialog(frm, ctx);
 		},
 	});
 }
 
+// Non-blocking (production_api stance): over-balance warns, never blocks —
+// knitting can legitimately over-deliver. Knitting and dyeing check the
+// per-dia SUM of the dialog's own inputs (colours share one dia's balance).
 function open_garment_calculate(frm) {
 	if (frm.is_dirty()) {
 		frappe.msgprint(__("Save the Work Order before calculating items."));
@@ -847,6 +855,27 @@ function render_garment_calculate_dialog(frm, context) {
 // per-dia SUM of the dialog's own inputs (colours share one dia's balance).
 function warn_balance_overshoot(ctx, manifest, values) {
 	const overs = [];
+	if (ctx.source_process) {
+		const pools = {};
+		manifest.forEach((m) => {
+			if (!m.source_pool_key) return;
+			if (!pools[m.source_pool_key]) {
+				pools[m.source_pool_key] = {
+					label: m.input_label || m.label,
+					sum: 0,
+					available: m.source_available,
+				};
+			}
+			pools[m.source_pool_key].sum += flt(values[m.fieldname]) || 0;
+		});
+		Object.values(pools).forEach((pool) => {
+			if (pool.available != null && pool.sum > pool.available + 0.001) {
+				overs.push(
+					`${pool.label}: ${pool.sum} > ${__("source GRN available")} ${pool.available}`
+				);
+			}
+		});
+	}
 	ctx.rows.forEach((row, i) => {
 		const fields = manifest.filter((m) => m.row === i);
 		if (row.kind === "knitting" || row.kind === "dyeing") {
@@ -976,6 +1005,7 @@ function render_fabric_dialog(frm, ctx) {
 					fields.push({
 						fieldtype: "Float", label: qr.label, fieldname,
 						default: is_default_output && qr.prefill ? qr.prefill : undefined,
+						description: planning_description(row, qr),
 						onchange: () => recompute_yarn(i),
 					});
 					manifest.push({
@@ -995,6 +1025,7 @@ function render_fabric_dialog(frm, ctx) {
 				fields.push({
 					fieldtype: "Float", label, fieldname,
 					default: qr.prefill || undefined,
+					description: planning_description(row, qr),
 					onchange: row.kind === "knitting" ? () => recompute_yarn(i) : undefined,
 				});
 				manifest.push({
@@ -1002,7 +1033,9 @@ function render_fabric_dialog(frm, ctx) {
 					colour: qr.knit_colour || null,
 					label: qr.label,
 					balance: qr.balance,
-					available: qr.available,
+					available: qr.source_available ?? qr.available,
+					source_available: qr.source_available,
+					source_pool_key: qr.source_pool_key,
 					reference_item_variant: qr.reference_item_variant || null,
 				});
 			};
@@ -1067,7 +1100,7 @@ function render_fabric_dialog(frm, ctx) {
 		}
 	});
 
-	d = new frappe.ui.Dialog({
+	const dialog_options = {
 		title: __("Calculate Fabric Deliverables — {0}", [frm.doc.process_name]),
 		size: "large",
 		fields,
@@ -1082,13 +1115,13 @@ function render_fabric_dialog(frm, ctx) {
 					const qty = flt(values[m.fieldname]);
 					if (!qty || qty <= 0) return;
 					const line = { key: m.key, out_attrs: m.out_attrs, qty };
-					if (m.colour) line.colour = m.colour;
+					if (frappe.yrp.attribute_value(m.colour)) line.colour = frappe.yrp.attribute_value(m.colour);
 					entries.push(line);
 				});
 				if (!entries.length) return;
 				const fallback_colour = values[`colour_${i}`] || null;
 				if (row.kind === "knitting" && row.has_colour) {
-					if (entries.some((line) => !line.colour) && !fallback_colour) {
+					if (entries.some((line) => !frappe.yrp.attribute_value(line.colour)) && !fallback_colour) {
 						missing_colour = row.cloth_item;
 						return;
 					}
@@ -1113,7 +1146,11 @@ function render_fabric_dialog(frm, ctx) {
 			warn_balance_overshoot(ctx, manifest, values);
 			frappe.call({
 				method: "essdee_yrp.api.work_order.calculate_fabric_deliverables",
-				args: { work_order: frm.doc.name, rows },
+				args: {
+					work_order: frm.doc.name,
+					rows,
+					source_process: ctx.source_process?.value || null,
+				},
 				freeze: true,
 				callback(res) {
 					d.hide();
@@ -1126,11 +1163,52 @@ function render_fabric_dialog(frm, ctx) {
 				},
 			});
 		},
-	});
+	};
+	if ((ctx.source_process_options || []).length) {
+		dialog_options.secondary_action_label = __("Fill Quantity");
+		dialog_options.secondary_action = () => {
+			const picker = new frappe.ui.Dialog({
+				title: __("Fill Quantity from Process GRNs"),
+				fields: [{
+					fieldtype: "Select",
+					fieldname: "source_process",
+					label: __("Source Process"),
+					options: ctx.source_process_options,
+					default: ctx.source_process?.value
+						|| ctx.source_process_options[0]?.value,
+					reqd: 1,
+				}],
+				primary_action_label: __("Fill"),
+				primary_action(values) {
+					picker.hide();
+					open_fabric_calculate(frm, values.source_process, d);
+				},
+			});
+			picker.show();
+		};
+	}
+	d = new frappe.ui.Dialog(dialog_options);
 	d.show();
 	// Pre-filled balances must reflect in the auto yarn figure immediately,
 	// not only after the first manual edit.
 	ctx.rows.forEach((row, i) => {
 		if (row.kind === "knitting") recompute_yarn(i);
 	});
+}
+
+function planning_description(row, qty_row) {
+	if (qty_row.source_process) {
+		const message = `${__("Available from {0} GRNs", [qty_row.source_process])}: `
+			+ `${flt(qty_row.source_available || 0, 3)} ${__("Kg")}`;
+		return qty_row.source_shared
+			? `${message} · ${__("Shared input — allocate it across these rows")}`
+			: message;
+	}
+	if (row.kind !== "knitting" || qty_row.program == null) return undefined;
+	const kg = (value) => `${flt(value || 0, 3)} ${__("Kg")}`;
+	return [
+		`${__("Lot program")}: ${kg(qty_row.program)}`,
+		`${__("Already ordered")}: ${kg(qty_row.ordered)}`,
+		`${__("Balance")}: ${kg(qty_row.balance)}`,
+	].join(" · ");
 }

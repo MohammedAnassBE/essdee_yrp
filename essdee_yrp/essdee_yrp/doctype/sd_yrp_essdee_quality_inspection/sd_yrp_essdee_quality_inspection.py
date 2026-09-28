@@ -2,6 +2,8 @@
 # For license information, please see license.txt
 
 from __future__ import annotations
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe import _
@@ -21,11 +23,11 @@ class SDYRPEssdeeQualityInspection(Document):
 			"colour_size_data",
 			{
 				"colours": [
-					{"colour": row.colour, "selected": bool(row.selected)}
+					{"colour": _attribute_value(row.colour), "selected": bool(row.selected)}
 					for row in self.essdee_quality_inspection_colours
 				],
 				"sizes": [
-					{"size": row.size, "selected": bool(row.selected)}
+					{"size": _attribute_value(row.size), "selected": bool(row.selected)}
 					for row in self.essdee_quality_inspection_sizes
 				],
 			},
@@ -55,17 +57,17 @@ class SDYRPEssdeeQualityInspection(Document):
 			self.set(
 				"essdee_quality_inspection_colours",
 				[
-					{"colour": row.get("colour"), "selected": cint(row.get("selected"))}
+					{"colour": _attribute_value(row.get("colour")), "selected": cint(row.get("selected"))}
 					for row in selection.get("colours") or []
-					if row.get("colour")
+					if _attribute_value(row.get("colour"))
 				],
 			)
 			self.set(
 				"essdee_quality_inspection_sizes",
 				[
-					{"size": row.get("size"), "selected": cint(row.get("selected"))}
+					{"size": _attribute_value(row.get("size")), "selected": cint(row.get("selected"))}
 					for row in selection.get("sizes") or []
-					if row.get("size")
+					if _attribute_value(row.get("size"))
 				],
 			)
 
@@ -177,7 +179,7 @@ def create_inspection_debit(
 	if inspection.docstatus != 1:
 		frappe.throw(_("Submit the Quality Inspection before creating a Debit."))
 
-	request_role = frappe.db.get_single_value('YRP Settings', "debit_request_role")
+	request_role = attribute_db.get_single_value('YRP Settings', "debit_request_role")
 	if not request_role or request_role not in frappe.get_roles(frappe.session.user):
 		frappe.throw(_("You do not have permission to request a Debit."))
 
@@ -281,12 +283,12 @@ def _fetch_colours_and_sizes(work_order) -> tuple[list[dict], list[dict]]:
 def _selected_order_quantity(work_order, inspection) -> float:
 	config = _inspection_attributes(work_order)
 	selected_colours = {
-		row.colour
+		_attribute_value(row.colour)
 		for row in inspection.get("essdee_quality_inspection_colours") or []
 		if row.selected
 	}
 	selected_sizes = {
-		row.size
+		_attribute_value(row.size)
 		for row in inspection.get("essdee_quality_inspection_sizes") or []
 		if row.selected
 	}
@@ -308,7 +310,7 @@ def _inspection_attributes(work_order) -> dict:
 	if not work_order.production_detail:
 		frappe.throw(_("Work Order {0} has no Item Production Detail.").format(work_order.name))
 
-	values = frappe.db.get_value(
+	values = attribute_db.get_value(
 		'YRP Item Production Detail',
 		work_order.production_detail,
 		[
@@ -331,7 +333,7 @@ def _inspection_attributes(work_order) -> dict:
 		"colour_attribute": values.packing_attribute,
 		"is_set_item": cint(values.is_set_item),
 		"set_attribute": values.set_item_attribute,
-		"major_attribute_value": values.major_attribute_value,
+		"major_attribute_value": _attribute_value(values.major_attribute_value),
 	}
 
 
@@ -339,7 +341,7 @@ def _display_colour(attributes: dict, row, config: dict) -> str | None:
 	colour = attributes.get(config["colour_attribute"])
 	if not colour or not config["is_set_item"]:
 		return colour
-	if attributes.get(config["set_attribute"]) == config["major_attribute_value"]:
+	if attributes.get(config["set_attribute"]) == _attribute_value(config["major_attribute_value"]):
 		return colour
 	combination = update_if_string_instance(row.set_combination)
 	major_colour = combination.get("major_colour")

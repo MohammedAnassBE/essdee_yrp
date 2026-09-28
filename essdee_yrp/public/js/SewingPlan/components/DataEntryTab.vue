@@ -416,7 +416,7 @@ const submitUpdate = () => {
                         colour: update_modal_data.value.colours[colour]['variant_colour'],
                         qty: update_modal_data.value.colours[colour].values,
                         set_combination: update_modal_data.value.colours[colour].set_combination,
-                        part: update_modal_data.value.colours[colour].part
+                        part: frappe.yrp.attribute_value(update_modal_data.value.colours[colour].part)
                     }
                 })
             }

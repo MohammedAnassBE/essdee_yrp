@@ -1,3 +1,4 @@
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2026, Essdee and contributors
 # For license information, please see license.txt
 
@@ -217,7 +218,7 @@ def _get_optimizer_inputs(doc):
         frappe.throw("Please add at least one size and quantity before optimizing.")
 
     for row in doc.order_details:
-        size = (row.size or "").strip()
+        size = (_attribute_value(row.size) or "").strip()
         if not size:
             frappe.throw(f"Size is required in order row {row.idx}.")
         if size in seen_sizes:

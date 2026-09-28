@@ -103,10 +103,10 @@ function get_printer(){
         }
         $(this).data('response', null);
     });
-    if(printers_list.size == 0){
+    if(frappe.yrp.attribute_value(printers_list.size) == 0){
         frappe.throw("Select a printer")
     }
-    else if(printers_list.size > 1){
+    else if(frappe.yrp.attribute_value(printers_list.size) > 1){
         frappe.throw("Select only one printer")
     }
     else{

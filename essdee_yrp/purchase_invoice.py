@@ -7,6 +7,8 @@ for both Purchase Order and Work Order invoices, including the historical
 """
 
 from __future__ import annotations
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 import hashlib
 import json
@@ -335,7 +337,7 @@ def _get_variant_attribute_map(item_variants):
 		order_by="parent, idx",
 		limit_page_length=0,
 	):
-		result.setdefault(row.parent, {})[row.attribute] = row.attribute_value
+		result.setdefault(row.parent, {})[row.attribute] = _attribute_value(row.attribute_value)
 	return result
 
 
@@ -346,7 +348,7 @@ def _get_verification_work_order_context(work_order):
 		["lot", "production_detail"],
 		as_dict=True,
 	) or frappe._dict()
-	lot_values = frappe.db.get_value(
+	lot_values = attribute_db.get_value(
 		'SD YRP Lot',
 		work_order_values.get("lot"),
 		["production_detail", "item"],
@@ -355,7 +357,7 @@ def _get_verification_work_order_context(work_order):
 	production_detail = (
 		lot_values.get("production_detail") or work_order_values.get("production_detail")
 	)
-	ipd_values = frappe.db.get_value(
+	ipd_values = attribute_db.get_value(
 		'YRP Item Production Detail',
 		production_detail,
 		[

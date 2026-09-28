@@ -1,4 +1,6 @@
 """Finishing inward drill-down and print-size validation."""
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from yrp.attribute_values import get_mapping_values
@@ -54,11 +56,11 @@ def get_eqi_status(work_orders):
 		result.setdefault(doc.supplier_name, {})
 		for row in doc.get("essdee_quality_inspection_colours") or []:
 			if row.selected:
-				result[doc.supplier_name].setdefault(row.colour, {})
+				result[doc.supplier_name].setdefault(_attribute_value(row.colour), {})
 		for row in doc.get("essdee_quality_inspection_sizes") or []:
 			if row.selected:
 				for colour in result[doc.supplier_name].values():
-					colour.setdefault(row.size, doc.result)
+					colour.setdefault(_attribute_value(row.size), doc.result)
 	return result
 
 
@@ -74,7 +76,7 @@ def get_finishing_plan_inward_details(key, lot):
 	rejected_type = settings.default_rejected_received_type
 	default_type = settings.default_received_type
 	process = frappe.db.get_single_value('SD YRP MRP Settings', "finishing_inward_process")
-	production_detail = frappe.db.get_value('SD YRP Lot', lot, "production_detail")
+	production_detail = attribute_db.get_value('SD YRP Lot', lot, "production_detail")
 	ipd = frappe.get_cached_doc('YRP Item Production Detail', production_detail)
 	result = {"data": {}}
 	received_types = [default_type]

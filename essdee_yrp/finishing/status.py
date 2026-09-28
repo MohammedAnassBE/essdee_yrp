@@ -1,4 +1,5 @@
 """Finishing Plan dispatch totals, audit trail, and automatic status rules."""
+from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe.utils import flt
@@ -31,9 +32,9 @@ def get_set_item_parts_count(finishing_doc):
 		return 1
 
 	parts = {
-		row.set_item_attribute_value
+		_attribute_value(row.set_item_attribute_value)
 		for row in ipd_doc.get("set_item_combination_details") or []
-		if row.set_item_attribute_value
+		if _attribute_value(row.set_item_attribute_value)
 	}
 	if parts:
 		return len(parts)

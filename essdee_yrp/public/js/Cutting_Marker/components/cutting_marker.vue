@@ -220,8 +220,8 @@ function create_attributes(){
                     get_data: () => {
                         return parts.map(attr => {
                             return {
-                                label: attr.part,
-                                value: attr.part,
+                                label: frappe.yrp.attribute_value(attr.part),
+                                value: frappe.yrp.attribute_value(attr.part),
                             };
                         });
                     },

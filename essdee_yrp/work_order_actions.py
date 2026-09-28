@@ -7,6 +7,7 @@ Every mutating endpoint reloads the Work Order and rechecks permission/state.
 """
 
 from __future__ import annotations
+from yrp.attribute_links import value as _attribute_value
 
 from collections import defaultdict
 
@@ -282,7 +283,7 @@ def _item_bom_rows(doc, ipd, processes):
 def _variant_identity(item_variant: str) -> tuple[str, str]:
 	variant = frappe.get_cached_doc('Item', item_variant)
 	attributes = ", ".join(
-		f"{row.attribute}: {row.attribute_value}"
+		f"{row.attribute}: {_attribute_value(row.attribute_value)}"
 		for row in sorted(
 			variant.get("attributes") or [], key=lambda row: row.attribute
 		)

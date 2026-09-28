@@ -1,3 +1,4 @@
+from yrp.attribute_links import value as _attribute_value
 import copy
 import json
 
@@ -757,7 +758,7 @@ def validate_yrp_settings_for_production_order():
 			"SD YRP Production Order sync requires YRP Settings dependent attribute "
 			f"to be {PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE}."
 		)
-	if settings.po_dependent_attribute_value != PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE:
+	if _attribute_value(settings.po_dependent_attribute_value) != PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE:
 		frappe.throw(
 			"SD YRP Production Order sync requires YRP Settings dependent attribute "
 			f"value to be {PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE}."
@@ -766,7 +767,7 @@ def validate_yrp_settings_for_production_order():
 	validate_required_link('Item Attribute', settings.po_dependent_attribute, 'YRP Settings')
 	validate_required_attribute_value(
 		settings.po_dependent_attribute,
-		settings.po_dependent_attribute_value,
+		_attribute_value(settings.po_dependent_attribute_value),
 		'YRP Settings',
 	)
 

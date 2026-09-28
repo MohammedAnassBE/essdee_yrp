@@ -1,3 +1,4 @@
+from yrp import attribute_links as attribute_db
 # Copyright (c) 2025, Essdee and contributors
 # For license information, please see license.txt
 
@@ -46,7 +47,7 @@ def get_data(filters):
 
 		con['supplier'] = filters.get("supplier")
 
-	cb_list = frappe.db.sql(
+	cb_list = attribute_db.business_values(frappe.db.sql(
 		f"""
 			SELECT cbml.name, cbml.lot, cbml.supplier, cbml.supplier_name, cbml.lay_no, cbml.bundle_no,
 				cbml.quantity_after_transaction as qty, cbml.panel, cbml.shade, cbml.item, cbml.size,
@@ -61,6 +62,6 @@ def get_data(filters):
 			WHERE cbml.posting_datetime <= %(datetime_value)s AND cbml.is_collapsed = 0 AND cbml.collapsed_bundle = 0
 			AND cbml.quantity_after_transaction > 0 AND cbml.is_cancelled = 0 {conditions2}
 			ORDER BY latest_cbml.lay_no asc
-		""", con, as_dict=True)
+		""", con, as_dict=True))
 
 	return cb_list

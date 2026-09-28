@@ -7,6 +7,7 @@ configured only when installed.
 
 Wired from hooks.py as `after_install` and `after_migrate` — both idempotent.
 """
+from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe.contacts.doctype.address_template.address_template import (
@@ -87,6 +88,9 @@ def after_install():
 
 
 def after_migrate():
+	from essdee_yrp.patches.setup_process_conversion_attributes import sync_existing_process_configuration
+
+	sync_existing_process_configuration()
 	ensure_historical_quantity_storage()
 	validate_purchase_invoice_commercial_fields()
 	ensure_process_billing_items()

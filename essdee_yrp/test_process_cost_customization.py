@@ -42,8 +42,9 @@ class TestProcessCostCustomization(FrappeTestCase):
 			]
 		)
 		with (
-			patch.object(frappe.db, "get_value", return_value="_Test IPD"),
-			patch.object(frappe, "get_cached_doc", side_effect=[ipd, mapping]),
+			patch.object(frappe.db, "get_value", side_effect=lambda doctype, *args, **kwargs: 0 if doctype == "YRP Process" else "_Test IPD"),
+			patch.object(frappe, "get_cached_doc", return_value=ipd),
+			patch("essdee_yrp.process_cost.get_mapping_document", return_value=mapping),
 		):
 			values = get_pc_attribute_values(
 				lot="_Test Lot", attribute="Colour", process_name="Printing"

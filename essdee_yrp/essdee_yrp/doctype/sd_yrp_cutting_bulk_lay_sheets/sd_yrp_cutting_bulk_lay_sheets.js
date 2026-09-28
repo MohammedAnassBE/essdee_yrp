@@ -218,10 +218,10 @@ function render_active_bundles(frm) {
         <tr>
             <td>${index + 1}</td>
             <td>${escape_bulk(bundle.bundle_no)}</td>
-            <td>${escape_bulk(bundle.size)}</td>
-            <td>${escape_bulk(bundle.colour)}</td>
+            <td>${escape_bulk(frappe.yrp.attribute_value(bundle.size))}</td>
+            <td>${escape_bulk(frappe.yrp.attribute_value(bundle.colour))}</td>
             <td>${escape_bulk(bundle.shade)}</td>
-            <td>${escape_bulk(bundle.part)}</td>
+            <td>${escape_bulk(frappe.yrp.attribute_value(bundle.part))}</td>
             <td class="text-right">${escape_bulk(bundle.quantity)}</td>
             <td>${bundle.is_moved ? escape_bulk(__("Yes")) : escape_bulk(__("No"))}</td>
         </tr>

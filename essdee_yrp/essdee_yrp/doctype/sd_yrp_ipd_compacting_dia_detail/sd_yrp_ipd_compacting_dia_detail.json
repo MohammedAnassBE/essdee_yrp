@@ -4,16 +4,40 @@
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
- "field_order": ["colour", "from_dia", "to_dia"],
+ "field_order": [
+  "colour",
+  "from_dia",
+  "to_dia"
+ ],
  "fields": [
-  {"fieldname": "colour", "fieldtype": "Data", "in_list_view": 1, "label": "Colour"},
-  {"fieldname": "from_dia", "fieldtype": "Data", "in_list_view": 1, "label": "From Dia", "reqd": 1},
-  {"fieldname": "to_dia", "fieldtype": "Data", "in_list_view": 1, "label": "To Dia", "reqd": 1}
+  {
+   "fieldname": "colour",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Colour",
+   "options": "YRP Item Attribute Value"
+  },
+  {
+   "fieldname": "from_dia",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "From Dia",
+   "reqd": 1,
+   "options": "YRP Item Attribute Value"
+  },
+  {
+   "fieldname": "to_dia",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "To Dia",
+   "reqd": 1,
+   "options": "YRP Item Attribute Value"
+  }
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-07-03 11:00:00.000000",
+ "modified": "2026-09-25 15:12:33.705488",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP IPD Compacting Dia Detail",

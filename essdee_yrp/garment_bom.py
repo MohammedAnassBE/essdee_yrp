@@ -5,6 +5,7 @@ module keeps the legacy Essdee meaning of ``Item BOM.dependent_attribute_value``
 an accessory attached to the packed stage is scaled by the garment's packing
 conversion before it is added to a Lot BOM.
 """
+from yrp.attribute_links import value as _attribute_value
 
 from collections import defaultdict
 
@@ -51,8 +52,8 @@ def calculate_essdee_accessory_bom(
 		qty_of_product = _qty_of_product(ipd, lot_doc, bom_row)
 		basis_quantity = total_quantity
 		if (
-			bom_row.dependent_attribute_value
-			and bom_row.dependent_attribute_value == lot_doc.get("pack_out_stage")
+			_attribute_value(bom_row.dependent_attribute_value)
+			and _attribute_value(bom_row.dependent_attribute_value) == _attribute_value(lot_doc.get("pack_out_stage"))
 			and ipd.get("is_set_item")
 		):
 			# This is the legacy set-garment rule in Production API's mode-A path.
@@ -92,7 +93,7 @@ def _normalize_variant_demands(ipd, variant_demands):
 				"item_variant": variant,
 				"qty": quantity,
 				"attrs": {
-					attribute.attribute: attribute.attribute_value
+					attribute.attribute: _attribute_value(attribute.attribute_value)
 					for attribute in variant_doc.get("attributes") or []
 				},
 			}
@@ -105,9 +106,9 @@ def _normalize_variant_demands(ipd, variant_demands):
 
 def _qty_of_product(ipd, lot_doc, bom_row):
 	qty_of_product = flt(bom_row.qty_of_product)
-	stage = bom_row.dependent_attribute_value
-	pack_in_stage = lot_doc.get("pack_in_stage")
-	pack_out_stage = lot_doc.get("pack_out_stage")
+	stage = _attribute_value(bom_row.dependent_attribute_value)
+	pack_in_stage = _attribute_value(lot_doc.get("pack_in_stage"))
+	pack_out_stage = _attribute_value(lot_doc.get("pack_out_stage"))
 
 	if stage and stage == pack_out_stage and stage != pack_in_stage:
 		qty_of_product = _packing_uom_conversion(ipd.item, lot_doc.get("packing_uom"))
@@ -175,14 +176,14 @@ def _resolve_mapping(mapping_name, variant_attrs):
 
 	for rows in rows_by_index.values():
 		item_side = {
-			row.attribute: row.attribute_value
+			row.attribute: _attribute_value(row.attribute_value)
 			for row in rows
 			if row.type == "item" and row.attribute not in same_attributes
 		}
 		if item_side != variant_key:
 			continue
 		bom_attrs = {
-			row.attribute: row.attribute_value for row in rows if row.type == "bom"
+			row.attribute: _attribute_value(row.attribute_value) for row in rows if row.type == "bom"
 		}
 		for attribute in same_attributes:
 			if variant_attrs.get(attribute):

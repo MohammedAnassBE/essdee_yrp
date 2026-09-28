@@ -29,6 +29,7 @@ Item Master Manager, Production Planner, Merch User). `flags.ignore_validate` is
 still set (as the reference does) — that only skips the *values-completeness*
 check on a freshly-seeded doc with no `values` yet; it does not bypass perms.
 """
+from yrp import attribute_links as attribute_db
 
 import frappe
 from frappe import _
@@ -98,7 +99,7 @@ def create_mapping(ipd, bom_item, bom_row=None):
 	# Also verify the row actually belongs to THIS IPD's item_bom table — a
 	# forged bom_row must not re-point another document's row.
 	if bom_row:
-		row_meta = frappe.db.get_value(
+		row_meta = attribute_db.get_value(
 			'YRP Item BOM', bom_row, ["attribute_mapping", "parent", "parenttype"], as_dict=True
 		)
 		if not row_meta:
@@ -125,7 +126,7 @@ def create_mapping(ipd, bom_item, bom_row=None):
 
 	# Back-link inside the same transaction so create + link are atomic.
 	if bom_row:
-		frappe.db.set_value('YRP Item BOM', bom_row, "attribute_mapping", doc.name)
+		attribute_db.set_value('YRP Item BOM', bom_row, "attribute_mapping", doc.name)
 	return doc.name
 
 
@@ -133,7 +134,7 @@ def _owning_ipd_primary(mapping_name):
 	"""Best-effort: the primary attribute of the IPD whose Item BOM row links
 	this mapping. Returns the attribute name or None.
 	"""
-	rows = frappe.get_all(
+	rows = attribute_db.get_all(
 		'YRP Item BOM',
 		filters={"attribute_mapping": mapping_name, "parenttype": 'YRP Item Production Detail'},
 		fields=["parent"],
@@ -141,7 +142,7 @@ def _owning_ipd_primary(mapping_name):
 	)
 	if not rows:
 		return None
-	return frappe.db.get_value('YRP Item Production Detail', rows[0].parent, "primary_item_attribute")
+	return attribute_db.get_value('YRP Item Production Detail', rows[0].parent, "primary_item_attribute")
 
 
 @frappe.whitelist()
@@ -169,7 +170,7 @@ def configure_columns(mapping):
 				"Item Attribute first."
 			)
 		)
-	owner = frappe.db.get_value(
+	owner = attribute_db.get_value(
 		'YRP Item BOM', {"attribute_mapping": mapping, "parenttype": 'YRP Item Production Detail'}, "parent"
 	)
 	if owner:

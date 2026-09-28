@@ -1,3 +1,5 @@
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2025, Essdee and contributors
 # For license information, please see license.txt
 
@@ -89,9 +91,9 @@ class SDYRPCutPanelMovement(Document):
 		is_set_item = cint(json_data.get("is_set_item"))
 		selected = {}
 		for colour, colour_data in (json_data.get("data") or {}).items():
-			selected[colour] = {"part": colour_data.get("part"), "data": []}
+			selected[colour] = {"part": _attribute_value(colour_data.get("part")), "data": []}
 			panel_names = (
-				panels.get(colour_data.get("part"), []) if is_set_item else panels
+				panels.get(_attribute_value(colour_data.get("part")), []) if is_set_item else panels
 			)
 			for row in colour_data.get("data") or []:
 				if row.get("bundle_moved") or any(
@@ -142,7 +144,7 @@ def get_total(items):
 		colour_panel[colour] = {}
 		total_bundle[colour] = 0
 		panels = (
-			(items.get("panels") or {}).get(colour_data.get("part"), [])
+			(items.get("panels") or {}).get(_attribute_value(colour_data.get("part")), [])
 			if items.get("is_set_item")
 			else (items.get("panels") or [])
 		)
@@ -174,14 +176,14 @@ def update_accessory(cutting_plan, movement_value, *, submit):
 	)
 	remaining = defaultdict(float)
 	for row in accessory_rows:
-		key = (row.get("cloth_type"), row.get("colour"), row.get("shade"), row.get("dia"))
+		key = (row.get("cloth_type"), _attribute_value(row.get("colour")), row.get("shade"), _attribute_value(row.get("dia")))
 		remaining[key] += flt(row.get("moved_weight"))
 
 	for name in laysheets:
 		doc = frappe.get_doc('SD YRP Cutting LaySheet', name)
 		changed = False
 		for row in doc.get("cutting_laysheet_accessory_details") or []:
-			key = (row.cloth_type, row.colour, row.shade, row.dia)
+			key = (row.cloth_type, _attribute_value(row.colour), row.shade, _attribute_value(row.dia))
 			needed = remaining.get(key, 0)
 			if needed <= 0:
 				continue
@@ -244,7 +246,7 @@ def _latest_logical_bundle_rows(rows):
 
 
 def _get_latest_available_bundle_rows(filters):
-	rows = frappe.get_all(
+	rows = attribute_db.get_all(
 		'SD YRP Cut Bundle Movement Ledger',
 		filters=filters,
 		fields=[
@@ -282,7 +284,7 @@ def get_cut_bundle_unmoved_data(
 		if plan.version == "V1":
 			frappe.throw(_("Cut Panel Movement is not supported for a V1 Cutting Plan."))
 
-	production_detail = frappe.db.get_value('SD YRP Lot', lot, "production_detail")
+	production_detail = attribute_db.get_value('SD YRP Lot', lot, "production_detail")
 	if not production_detail:
 		frappe.throw(_("Lot {0} has no Item Production Detail.").format(lot))
 	sizes = get_ipd_primary_values(production_detail)
@@ -293,20 +295,20 @@ def get_cut_bundle_unmoved_data(
 	set_item_combinations = {}
 	indexes = {}
 	if ipd_doc.is_set_item:
-		major_part_value = ipd_doc.major_attribute_value
+		major_part_value = _attribute_value(ipd_doc.major_attribute_value)
 		panels = {}
 		for row in ipd_doc.get("stiching_item_details") or []:
-			if row.set_item_attribute_value != major_part_value:
-				set_part_value = row.set_item_attribute_value
-			panels.setdefault(row.set_item_attribute_value, []).append(
-				row.stiching_attribute_value
+			if _attribute_value(row.set_item_attribute_value) != major_part_value:
+				set_part_value = _attribute_value(row.set_item_attribute_value)
+			panels.setdefault(_attribute_value(row.set_item_attribute_value), []).append(
+				_attribute_value(row.stiching_attribute_value)
 			)
 		for row in ipd_doc.get("set_item_combination_details") or []:
 			if indexes.get(row.index):
-				set_item_combinations[indexes[row.index]] = row.attribute_value
+				set_item_combinations[indexes[row.index]] = _attribute_value(row.attribute_value)
 			else:
-				indexes[row.index] = row.attribute_value
-				set_item_combinations[row.attribute_value] = None
+				indexes[row.index] = _attribute_value(row.attribute_value)
+				set_item_combinations[_attribute_value(row.attribute_value)] = None
 
 	posting_datetime = get_combine_datetime(posting_date, posting_time)
 	latest_rows = _get_latest_available_bundle_rows(
@@ -324,9 +326,9 @@ def get_cut_bundle_unmoved_data(
 	lay_details = {}
 	for result in latest_rows:
 		row = frappe.get_doc('SD YRP Cut Bundle Movement Ledger', result.name)
-		parts = row.panel
+		parts = _attribute_value(row.panel)
 		combination = update_if_string_instance(row.set_combination) or {}
-		major_colour = combination.get("major_colour") or row.colour
+		major_colour = combination.get("major_colour") or _attribute_value(row.colour)
 		if ipd_doc.is_set_item:
 			major_part = combination.get("major_part")
 			current = parts.split(",")[0].strip()
@@ -360,10 +362,10 @@ def get_cut_bundle_unmoved_data(
 			.setdefault(row.lay_no, {})
 			.setdefault(major_colour, {})
 			.setdefault(row.bundle_no, {})
-			.setdefault(row.size, {})
+			.setdefault(_attribute_value(row.size), {})
 			.setdefault(row.shade, {})
 			.setdefault(key, {})
-			.setdefault(parts, {"qty": 0, "colour": row.colour})
+			.setdefault(parts, {"qty": 0, "colour": _attribute_value(row.colour)})
 		)
 		panel["qty"] += flt(row.quantity_after_transaction)
 
@@ -381,7 +383,7 @@ def get_cut_bundle_unmoved_data(
 			for row in laysheet.get("cutting_laysheet_accessory_details") or []:
 				balance = flt(row.weight) - flt(row.moved_weight)
 				if balance > 0:
-					accessories[(row.cloth_item, row.cloth_type, row.colour, row.dia, row.shade)] += balance
+					accessories[(row.cloth_item, row.cloth_type, _attribute_value(row.colour), _attribute_value(row.dia), row.shade)] += balance
 		for (cloth_item, cloth_type, colour, dia, shade), weight in accessories.items():
 			accessory_details.append(
 				{
@@ -417,7 +419,7 @@ def get_cut_bundle_unmoved_data(
 								}
 								for panel_name, detail in panel_rows.items():
 									output[panel_name] = detail["qty"]
-									output[f"{panel_name}_colour"] = detail["colour"]
+									output[f"{panel_name}_colour"] = _attribute_value(detail["colour"])
 									output[f"{panel_name}_moved"] = False
 								colour_output["data"].append(output)
 	for detail in final_data.values():
@@ -441,9 +443,9 @@ def get_cut_bundle_unmoved_data(
 			collapsed.append(
 				{
 					"moved": False,
-					"size": row.size,
-					"colour": row.colour,
-					"panel": row.panel,
+					"size": _attribute_value(row.size),
+					"colour": _attribute_value(row.colour),
+					"panel": _attribute_value(row.panel),
 					"quantity": row.quantity_after_transaction,
 					"shade": row.shade,
 					"lay_no": row.lay_no,

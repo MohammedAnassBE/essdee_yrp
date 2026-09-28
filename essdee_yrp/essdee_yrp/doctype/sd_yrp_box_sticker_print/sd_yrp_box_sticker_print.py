@@ -1,3 +1,5 @@
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2026, Essdee and contributors
 # For license information, please see license.txt
 
@@ -38,7 +40,7 @@ def get_fg_details(fg_item, lot=None):
 		if previous:
 			doc = frappe.get_doc('SD YRP Box Sticker Print', previous[0])
 			doc.check_permission("read")
-			return [{"size": row.size, "mrp": row.mrp} for row in doc.box_sticker_print_details]
+			return [{"size": _attribute_value(row.size), "mrp": row.mrp} for row in doc.box_sticker_print_details]
 		mrp = ""
 	prices = mrp.split(",")
 	for size, price in zip_longest(sizes, prices, fillvalue=None):
@@ -65,7 +67,7 @@ def get_print_format(doc, print_items, printer_type):
 		quantity = int(item.get("quantity") or 0)
 		if quantity <= 0:
 			continue
-		row = frappe.db.sql(
+		row = attribute_db.business_values(frappe.db.sql(
 			"""
 				SELECT parent, size, mrp, printed_quantity, quantity,
 					allow_excess_quantity, allow_excess_percentage
@@ -75,7 +77,7 @@ def get_print_format(doc, print_items, printer_type):
 			""",
 			(item.get("doc_name"),),
 			as_dict=True,
-		)
+		))
 		if not row or row[0].parent != doc.name:
 			frappe.throw(_("Invalid Box Sticker Print detail"))
 		row = row[0]
@@ -90,7 +92,7 @@ def get_print_format(doc, print_items, printer_type):
 				frappe.throw(_("Not applicable to print more than the required quantity"))
 		labels = int(math.ceil(quantity / label_count))
 		item = dict(item)
-		item["size"] = doc.size or row.size
+		item["size"] = _attribute_value(doc.size) or _attribute_value(row.size)
 		item["mrp"] = row.mrp
 		prepared.append((item, printed, labels))
 
@@ -99,7 +101,7 @@ def get_print_format(doc, print_items, printer_type):
 		templates += get_template(
 			doc, item, raw_code, label_count, doc.fg_item
 		)
-		frappe.db.set_value(
+		attribute_db.set_value(
 			'SD YRP Box Sticker Print Detail',
 			item["doc_name"],
 			"printed_quantity",
@@ -124,7 +126,7 @@ def get_template(doc, item, raw_code, label_count, fg_item):
 			"item_name": fg_item,
 			"piece_price": mrp,
 			"box_price": box_mrp,
-			"piece_size": item["size"],
+			"piece_size": _attribute_value(item["size"]),
 			"mfdate": f"{mfd_year}/{doc.lot}",
 			"mfdateyear": mfd_year,
 			"dpi": 203,
@@ -160,7 +162,7 @@ def override_print_quantity(print_items, print_format):
 		new_quantity = int(row[0].printed_quantity or 0) - labels * label_count
 		if new_quantity < 0:
 			frappe.throw(_("Printed quantity cannot be negative"))
-		frappe.db.set_value(
+		attribute_db.set_value(
 			'SD YRP Box Sticker Print Detail',
 			item["doc_name"],
 			"printed_quantity",
@@ -178,7 +180,7 @@ def get_raw_code(doc_name):
 		frappe.throw(_("Add at least one Box Sticker Print row"))
 	item = doc.box_sticker_print_details[0].as_dict()
 	item.quantity = 1
-	item.size = doc.size or item.size
+	item.size = _attribute_value(doc.size) or _attribute_value(item.size)
 	return {
 		"code": get_template(
 			doc,
@@ -210,7 +212,7 @@ def _raw_code(print_format, printer_type):
 
 
 def _lock_linked_production_order(lot):
-	production_order = frappe.db.get_value('SD YRP Lot', lot, "production_order")
+	production_order = attribute_db.get_value('SD YRP Lot', lot, "production_order")
 	if production_order:
 		from essdee_yrp.production_order_alternative import _lock_production_orders
 

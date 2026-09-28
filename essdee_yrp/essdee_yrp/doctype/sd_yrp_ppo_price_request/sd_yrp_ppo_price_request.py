@@ -1,3 +1,5 @@
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2026, Essdee and contributors
 # For license information, please see license.txt
 
@@ -37,7 +39,7 @@ def approve_ppo_price_request(name):
 	doc.save()
 	_apply_price_to_production_order(doc)
 	_apply_price_to_box_sticker_prints(doc)
-	frappe.db.set_value(
+	attribute_db.set_value(
 		'YRP Production Order',
 		doc.production_order,
 		"price_approval_status",
@@ -54,7 +56,7 @@ def reject_ppo_price_request(name):
 	doc.approved_by = frappe.session.user
 	doc.approved_at = frappe.utils.now_datetime()
 	doc.save()
-	frappe.db.set_value(
+	attribute_db.set_value(
 		'YRP Production Order',
 		doc.production_order,
 		"price_approval_status",
@@ -74,10 +76,10 @@ def _apply_price_to_production_order(price_request):
 		for row in production_order.production_order_details
 	}
 	for detail in price_request.price_details:
-		row = rows.get(detail.size)
+		row = rows.get(_attribute_value(detail.size))
 		if not row:
 			frappe.throw(
-				f"Size {detail.size} is no longer present in {production_order.name}"
+				f"Size {_attribute_value(detail.size)} is no longer present in {production_order.name}"
 			)
 		if row.get("production_order_mrp") in (None, ""):
 			row.production_order_mrp = row.mrp
@@ -89,7 +91,7 @@ def _apply_price_to_production_order(price_request):
 
 
 def _apply_price_to_box_sticker_prints(price_request):
-	for lot in frappe.get_all(
+	for lot in attribute_db.get_all(
 		'SD YRP Lot',
 		filters={"production_order": price_request.production_order},
 		pluck="name",

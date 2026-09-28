@@ -138,8 +138,8 @@ onMounted(()=> {
                 sizes.value = r.message.sizes
                 panels.value = r.message.panels
                 colours.value = r.message.colours
-                if(cur_frm.doc.colour){
-                    colour.value.set_value(cur_frm.doc.colour)
+                if(frappe.yrp.attribute_value(cur_frm.doc.colour)){
+                    colour.value.set_value(frappe.yrp.attribute_value(cur_frm.doc.colour))
                     colour.value.refresh()
                 }
             }
@@ -220,7 +220,7 @@ function fetch_selected_bundles(){
     let inputs = []
 
     if(Object.keys(bundles['data']).length > 0){
-        let part = bundles['data'][colour.value.get_value()]['part']
+        let part = frappe.yrp.attribute_value(bundles['data'][colour.value.get_value()]['part'])
         let panels = bundles['panels']
         if(part){
             panels = panels[part]
@@ -237,7 +237,7 @@ function fetch_selected_bundles(){
                         "panel": panel,
                         "set_combination": data[i]['set_combination'],
                         "shade": data[i]['shade'],
-                        "size": data[i]['size'],
+                        "size": frappe.yrp.attribute_value(data[i]['size']),
                         "colour": data[i][panel+"_colour"],
                         "is_collapsed": false,
                     })
@@ -254,11 +254,11 @@ function fetch_selected_bundles(){
                     "lay_no": data[i]['lay_no'],
                     "bundle_no": data[i]['bundle_no'],
                     "qty": data[i]["quantity"],
-                    "panel": data[i]['panel'],
+                    "panel": frappe.yrp.attribute_value(data[i]['panel']),
                     "set_combination": data[i]['set_combination'],
                     "shade": data[i]['shade'],
-                    "size": data[i]['size'],
-                    "colour": data[i]["colour"],
+                    "size": frappe.yrp.attribute_value(data[i]['size']),
+                    "colour": frappe.yrp.attribute_value(data[i]["colour"]),
                     "is_collapsed": true,
                 })
             }
@@ -340,9 +340,9 @@ function addBundle(index=-1){
         ]
         if(index != -1){
             let val = output_bundles.value[index]
-            let panel = val.panel.split(",")
-            data_fields[0]['default'] = val.size
-            data_fields[1]['default'] = val.colour
+            let panel = frappe.yrp.attribute_value(val.panel).split(",")
+            data_fields[0]['default'] = frappe.yrp.attribute_value(val.size)
+            data_fields[1]['default'] = frappe.yrp.attribute_value(val.colour)
             data_fields[2]['default'] = panel.map(p => ({panel: p}))
             data_fields[3]['default'] = val.shade
             data_fields[4]['default'] = val.lay_no
@@ -394,8 +394,8 @@ function addBundle(index=-1){
                             cur_set_comb.value.set_colour = val.set_colour
                         }
                         let p = ""
-                        for(let i = 0; i < values.panel.length; i++){
-                            p += values.panel[i]['panel'] + ","
+                        for(let i = 0; i < frappe.yrp.attribute_value(values.panel).length; i++){
+                            p += frappe.yrp.attribute_value(frappe.yrp.attribute_value(values.panel)[i]['panel']) + ","
                         }
                         p = p.slice(0, -1)
                         let bundle_val = {
@@ -405,8 +405,8 @@ function addBundle(index=-1){
                             "panel": p,
                             "set_combination": cur_set_comb.value,
                             "shade": values.shade,
-                            "size": values.size,
-                            "colour": values.colour,
+                            "size": frappe.yrp.attribute_value(values.size),
+                            "colour": frappe.yrp.attribute_value(values.colour),
                         }
                         if(index != -1){
                             output_bundles.value[index] = bundle_val
@@ -424,7 +424,7 @@ function addBundle(index=-1){
 }
 
 function get_major_and_set_colour(colour, panel){
-    panel = panel[0]['panel']
+    panel = frappe.yrp.attribute_value(panel[0]['panel'])
     frappe.call({
         method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_bundle_edit.sd_yrp_cut_bundle_edit.get_major_set_colours",
         args: {
@@ -445,14 +445,14 @@ function split_bundles(){
     }
     let panels = []
     for(let i = 0; i < input_bundles.value.length; i++){
-        if(panels.includes(input_bundles.value[i].panel)){
+        if(panels.includes(frappe.yrp.attribute_value(input_bundles.value[i].panel))){
             continue
         }
-        if(input_bundles.value[i].panel.split(",").length == 1){
+        if(frappe.yrp.attribute_value(input_bundles.value[i].panel).split(",").length == 1){
             frappe.msgprint("Cannot split bundles with single panel")
             return
         }
-        panels.push(input_bundles.value[i].panel)
+        panels.push(frappe.yrp.attribute_value(input_bundles.value[i].panel))
     }
     let i;
     let d = new frappe.ui.Dialog({
@@ -490,7 +490,7 @@ function split_bundles(){
                 for(let j = 0; j < panelGroupsData[panel_grp].length; j++){
                     for(let k = 0; k < input_bundles.value.length; k++){
                         let bundle = input_bundles.value[k]
-                        if(bundle.panel == panel_grp){
+                        if(frappe.yrp.attribute_value(bundle.panel) == panel_grp){
                             let new_bundle = Object.assign({}, bundle)
                             new_bundle.panel = panelGroupsData[panel_grp][j]
                             output_bundles.value.push(new_bundle)

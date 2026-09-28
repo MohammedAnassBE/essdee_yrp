@@ -197,8 +197,8 @@ const updateData = () => {
 
     // Filter only items with dates set
     const data_to_update = items.value.filter(item => item.date).map(item => ({
-        colour: item.colour,
-        part: item.part,
+        colour: frappe.yrp.attribute_value(item.colour),
+        part: frappe.yrp.attribute_value(item.part),
         date: item.date,
         sewing_plan: item.sewing_plan,
         lot: item.lot

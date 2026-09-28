@@ -6,6 +6,8 @@ The compact matrix is an entry aid. ``cutting_items_json`` and
 ``cutting_attributes`` remain the canonical data consumed by production and
 Lot calculations.
 """
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 import json
 import re
@@ -83,7 +85,7 @@ def _mapping_values(doc, attribute):
 	for row in doc.get("item_attributes") or []:
 		if row.attribute == attribute and row.mapping:
 			mapping = get_mapping_document(row.mapping, cached=True)
-			return [value.attribute_value for value in mapping.get("values") or []]
+			return [_attribute_value(value.attribute_value) for value in mapping.get("values") or []]
 	return []
 
 
@@ -100,9 +102,9 @@ def _panel_colour_context(doc, panel_values, source_packing_values):
 	panel_packing_values = {panel: [] for panel in panel_values}
 
 	for detail in doc.get("stiching_item_combination_details") or []:
-		panel = detail.get("set_item_attribute_value")
-		source_colour = detail.get("major_attribute_value")
-		panel_colour = detail.get("attribute_value")
+		panel = _attribute_value(detail.get("set_item_attribute_value"))
+		source_colour = _attribute_value(detail.get("major_attribute_value"))
+		panel_colour = _attribute_value(detail.get("attribute_value"))
 		if panel not in panel_colour_map or not source_colour or not panel_colour:
 			continue
 
@@ -157,15 +159,15 @@ def get_matrix_context(doc):
 
 	primary_values = _mapping_values(doc, primary_attribute)
 	source_packing_values = _unique(
-		row.attribute_value for row in doc.get("packing_attribute_details") or []
+		_attribute_value(row.attribute_value) for row in doc.get("packing_attribute_details") or []
 	)
 	panel_values = _unique(
-		row.stiching_attribute_value for row in doc.get("stiching_item_details") or []
+		_attribute_value(row.stiching_attribute_value) for row in doc.get("stiching_item_details") or []
 	)
 	panel_quantities = {
-		row.stiching_attribute_value: max(flt(row.get("quantity")), 1)
+		_attribute_value(row.stiching_attribute_value): max(flt(row.get("quantity")), 1)
 		for row in doc.get("stiching_item_details") or []
-		if row.stiching_attribute_value
+		if _attribute_value(row.stiching_attribute_value)
 	}
 	if not panel_values:
 		panel_values = _mapping_values(doc, panel_attribute)
@@ -302,7 +304,7 @@ def _target_packing_values(context, panel_value, source_value, source_schema):
 def _merge_cell(target, destination, dia, weight, panel_value, primary_value):
 	cell = target["values"].setdefault(destination, {"dia": None, "weight": None})
 	if dia:
-		existing_dia = cell.get("dia")
+		existing_dia = _attribute_value(cell.get("dia"))
 		if existing_dia and existing_dia != dia:
 			frappe.throw(
 				_(
@@ -358,7 +360,7 @@ def _merge_cutting_rows(matrix, cutting_json, context, source_schema=1):
 			)
 			dia = item.get("Dia")
 			if dia:
-				existing_dia = cell.get("dia")
+				existing_dia = _attribute_value(cell.get("dia"))
 				if existing_dia and existing_dia != dia:
 					frappe.throw(
 						_(
@@ -430,7 +432,7 @@ def _merge_saved_matrix(matrix, saved_matrix, context):
 				source_values = source.get("values") or {}
 			else:
 				source_values = {
-					colour: {"dia": source.get("dia"), "weight": weight}
+					colour: {"dia": _attribute_value(source.get("dia")), "weight": weight}
 					for colour, weight in (source.get("weights") or {}).items()
 				}
 			for source_colour, cell in source_values.items():
@@ -440,7 +442,7 @@ def _merge_saved_matrix(matrix, saved_matrix, context):
 					_merge_cell(
 						target,
 						destination,
-						(cell or {}).get("dia"),
+						_attribute_value((cell or {}).get("dia")),
 						(cell or {}).get("weight"),
 						panel_value,
 						source.get("primary_value"),
@@ -530,7 +532,7 @@ def expand_panel_wise_matrix(matrix, context, require_complete=True):
 				)
 			for packing_value in packing_values:
 				cell = (row.get("values") or {}).get(packing_value) or {}
-				dia = cell.get("dia")
+				dia = _attribute_value(cell.get("dia"))
 				raw_weight = cell.get("weight")
 				has_weight = raw_weight not in (None, "")
 				weight = flt(raw_weight, 6) if has_weight else 0
@@ -617,11 +619,11 @@ def sync_panel_wise_consumption_matrix(doc):
 
 	valid_dias = set(get_global_attribute_values("Dia"))
 	matrix_dias = _unique(
-		cell.get("dia")
+		_attribute_value(cell.get("dia"))
 		for panel in matrix.get("panels") or []
 		for row in panel.get("rows") or []
 		for cell in (row.get("values") or {}).values()
-		if cell.get("dia")
+		if _attribute_value(cell.get("dia"))
 	)
 	invalid_dias = [dia for dia in matrix_dias if dia not in valid_dias]
 	if invalid_dias:
@@ -653,7 +655,7 @@ def get_panel_wise_consumption_matrix(doc):
 	# the standard Cutting rows and start with singleton groups.
 	include_saved = True
 	if not doc.is_new() and doc.name:
-		stored_enabled = frappe.db.get_value(
+		stored_enabled = attribute_db.get_value(
 			'YRP Item Production Detail', doc.name, "enable_panel_wise_consumption_matrix"
 		)
 		include_saved = bool(stored_enabled)
@@ -665,8 +667,8 @@ def get_panel_wise_consumption_matrix(doc):
 	for panel in matrix["panels"]:
 		for row in panel["rows"]:
 			for cell in (row.get("values") or {}).values():
-				if cell.get("dia") and cell["dia"] not in dia_values:
-					dia_values.append(cell["dia"])
+				if _attribute_value(cell.get("dia")) and _attribute_value(cell["dia"]) not in dia_values:
+					dia_values.append(_attribute_value(cell["dia"]))
 
 	return {
 		"matrix": matrix,

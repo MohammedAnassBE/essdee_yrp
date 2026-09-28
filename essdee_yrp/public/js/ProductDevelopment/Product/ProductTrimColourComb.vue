@@ -140,7 +140,7 @@ onMounted(() => {
     if (set_item) {
         for (let i = 0; i < cur_frm.doc.product_set_colours.length; i++) {
             let row = cur_frm.doc.product_set_colours[i]
-            if (row.top_colour && !top_colours.value.find(c => c.colour === row.top_colour)) {
+            if (row.top_colour && !top_colours.value.find(c => frappe.yrp.attribute_value(c.colour) === row.top_colour)) {
                 top_colours.value.push({
                     colour: row.top_colour,
                     colour_code: row.top_colour_code
@@ -152,7 +152,7 @@ onMounted(() => {
                     }
                 })
             }
-            if (row.bottom_colour && !bottom_colours.value.find(c => c.colour === row.bottom_colour)) {
+            if (row.bottom_colour && !bottom_colours.value.find(c => frappe.yrp.attribute_value(c.colour) === row.bottom_colour)) {
                 bottom_colours.value.push({
                     colour: row.bottom_colour,
                     colour_code: row.bottom_colour_code
@@ -169,7 +169,7 @@ onMounted(() => {
     else {
         for (let i = 0; i < cur_frm.doc.product_colours.length; i++) {
             let clr = cur_frm.doc.product_colours[i]
-            if (!colour_list.value.find(c => c.colour === clr.product_colour)) {
+            if (!colour_list.value.find(c => frappe.yrp.attribute_value(c.colour) === clr.product_colour)) {
                 colour_list.value.push({
                     colour: clr.product_colour,
                     colour_code: clr.colour_code

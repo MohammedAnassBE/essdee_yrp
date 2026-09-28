@@ -1,3 +1,5 @@
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2025, Essdee and contributors
 # For license information, please see license.txt
 
@@ -350,7 +352,7 @@ def get_sales_item_price_map(item):
 
 	item_doc = frappe.get_cached_doc('Item', item)
 	sizes = get_attribute_details(item).get("primary_attribute_values", [])
-	pack_out_stage = frappe.db.get_single_value('SD YRP IPD Settings', "default_pack_out_stage")
+	pack_out_stage = attribute_db.get_single_value('SD YRP IPD Settings', "default_pack_out_stage")
 
 	price_map = {}
 
@@ -387,7 +389,7 @@ def get_box_sticker_mrp_map(production_order, item=None):
 	if not production_order:
 		return box_sticker_mrp
 
-	lots = frappe.get_all('SD YRP Lot', filters={"production_order": production_order}, pluck="name")
+	lots = attribute_db.get_all('SD YRP Lot', filters={"production_order": production_order}, pluck="name")
 	if not lots:
 		return box_sticker_mrp
 
@@ -398,14 +400,14 @@ def get_box_sticker_mrp_map(production_order, item=None):
 		order_by="modified desc, creation desc"
 	)
 	for bsp in box_sticker_prints:
-		rows = frappe.get_all(
+		rows = attribute_db.get_all(
 			'SD YRP Box Sticker Print Detail',
 			filters={"parent": bsp.name},
 			fields=["size", "mrp"]
 		)
 
 		for row in rows:
-			size = row.size
+			size = _attribute_value(row.size)
 			if size not in box_sticker_mrp:
 				if row.mrp is not None:
 					box_sticker_mrp[size] = flt(row.mrp)
@@ -480,7 +482,7 @@ def get_price_update_context(production_order):
 					   "has_sales_mrp": sales_mrp is not None, "has_box_sticker_mrp": box_mrp is not None,
 					   "selected_source": selected_source}
 	lots = []
-	for lot in frappe.get_all('SD YRP Lot', filters={"production_order": production_order}, pluck="name", order_by="creation asc"):
+	for lot in attribute_db.get_all('SD YRP Lot', filters={"production_order": production_order}, pluck="name", order_by="creation asc"):
 		pricing = get_lot_pricing(lot, production_order)
 		lots.append(pricing)
 	return {"primary_values": primary_values, "items": items, "lots": lots}
@@ -508,7 +510,7 @@ def get_order_qty(items):
 		primary_attribute = current_item_attribute_details['primary_attribute']
 		for attr in current_variant.attributes:
 			if attr.attribute == primary_attribute:
-				size = attr.attribute_value
+				size = _attribute_value(attr.attribute_value)
 				if not size:
 					break
 				order_qty.setdefault(size, {
@@ -534,7 +536,7 @@ def get_ordered_details(items):
 		primary_attribute = current_item_attribute_details['primary_attribute']
 		for attr in current_variant.attributes:
 			if attr.attribute == primary_attribute:
-				size = attr.attribute_value
+				size = _attribute_value(attr.attribute_value)
 				if not size:
 					break
 				lot_wise_detail[row['lot']].setdefault(
@@ -578,7 +580,7 @@ def update_price(production_order, item_details):
 	primary = frappe.get_value('Item', doc.item, "primary_attribute")
 	sales_item_price = get_sales_item_price_map(doc.item)
 	box_sticker_mrp = get_box_sticker_mrp_map(production_order, doc.item)
-	lots = frappe.get_all('SD YRP Lot', filters={"production_order": production_order}, pluck="name")
+	lots = attribute_db.get_all('SD YRP Lot', filters={"production_order": production_order}, pluck="name")
 	old_prices = {}
 	new_prices = {}
 	default_changes = False
@@ -1242,7 +1244,7 @@ def get_quantity_ratio_change_lines(change_details):
 	lines = []
 	for change in change_details["qty_changes"]:
 		lines.append(
-			f"Quantity {change['size']}: {format_comment_qty(change['old_qty'])} -> {format_comment_qty(change['new_qty'])}")
+			f"Quantity {_attribute_value(change['size'])}: {format_comment_qty(change['old_qty'])} -> {format_comment_qty(change['new_qty'])}")
 	if change_details["qty_changes"]:
 		lines.append(
 			f"Quantity Total: {format_comment_qty(change_details['qty_old_total'])} -> "
@@ -1250,7 +1252,7 @@ def get_quantity_ratio_change_lines(change_details):
 		)
 	for change in change_details["ratio_changes"]:
 		lines.append(
-			f"Ratio {change['size']}: {format_comment_qty(change['old_ratio'])} -> {format_comment_qty(change['new_ratio'])}")
+			f"Ratio {_attribute_value(change['size'])}: {format_comment_qty(change['old_ratio'])} -> {format_comment_qty(change['new_ratio'])}")
 	return lines
 
 
@@ -1363,7 +1365,7 @@ CHANGEABLE_PO_STATUSES = ["Open", "Item Changed", "Not Processed"]
 
 
 def get_linked_lots(production_order):
-	return frappe.get_all(
+	return attribute_db.get_all(
 		'SD YRP Lot',
 		filters={"production_order": production_order},
 		pluck="name",
@@ -1641,7 +1643,7 @@ def transfer_quantity_to_ppo(source_production_order, target_production_order, r
 		"target_previous_status": target.status,
 		"transfers": transfers,
 		"target_original_quantities": {
-			change["size"]: change["old_qty"] for change in changes
+			_attribute_value(change["size"]): change["old_qty"] for change in changes
 		},
 		"requested_user": frappe.session.user,
 		"requested_on": format_request_timestamp(),
@@ -1655,7 +1657,7 @@ def transfer_quantity_to_ppo(source_production_order, target_production_order, r
 
 	return {
 		"target_production_order": target.name,
-		"requested": {change["size"]: change["qty"] for change in changes},
+		"requested": {_attribute_value(change["size"]): change["qty"] for change in changes},
 		"status": "Pending Approval",
 	}
 
@@ -1756,7 +1758,7 @@ def approve_quantity_transfer(production_order):
 		"source_production_order": source.name,
 		"target_production_order": target.name,
 		"status": target.status,
-		"transferred": {change["size"]: change["qty"] for change in changes},
+		"transferred": {_attribute_value(change["size"]): change["qty"] for change in changes},
 	}
 
 
@@ -1779,7 +1781,7 @@ def add_target_size_rows(target, sizes):
 	update_order so the new rows are indistinguishable from the seeded ones; quantity and
 	ratio start at 0 because the transfer adds the quantity and must not invent a ratio."""
 	item_doc = frappe.get_cached_doc('Item', target.item)
-	pack_out_stage = frappe.db.get_single_value('SD YRP IPD Settings', "default_pack_out_stage")
+	pack_out_stage = attribute_db.get_single_value('SD YRP IPD Settings', "default_pack_out_stage")
 	sales_item_price = get_sales_item_price_map(target.item)
 
 	new_rows = {}
@@ -1842,7 +1844,7 @@ def build_quantity_transfer_history_rows(
 	}
 
 	for change in changes:
-		size = change["size"]
+		size = _attribute_value(change["size"])
 		quantity = flt(change["qty"])
 		source_quantity = flt(change.get("source_qty", quantity))
 		target_quantity = flt(change.get("target_qty", quantity))

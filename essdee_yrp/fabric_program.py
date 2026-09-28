@@ -16,6 +16,8 @@ payloads never touch them.
 
 Spec: apps/essdee_yrp/docs/design/2026-07-04-lot-fabric-program-design.md
 """
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe import _
@@ -35,6 +37,11 @@ def fetch_fabric_program_details(lot_doc):
 		if not fabric.production_detail:
 			continue
 		ipd = frappe.get_cached_doc('YRP Item Production Detail', fabric.production_detail)
+		fabric_routes = get_fabric_routes(ipd)
+		current_program = _current_program_payloads(
+			ipd,
+			[r for r in program_rows if r.cloth_item == fabric.cloth_item],
+		)
 		entries.append({
 			"cloth_item": fabric.cloth_item,
 			"production_detail": fabric.production_detail,
@@ -42,22 +49,37 @@ def fetch_fabric_program_details(lot_doc):
 			"colours": _ipd_target_colours(ipd),
 			"greige_colour": get_greige_colour(ipd),
 			"knitting_output_colours": get_knitting_output_colour_map(ipd),
-			"fabric_routes": get_fabric_routes(ipd),
+			"fabric_routes": fabric_routes,
+			"dyed_yarn_colours": sorted({
+				route["finished_colour"] for route in fabric_routes
+				if route.get("use_dyed_yarn") and route.get("finished_colour")
+			}),
 			"plan_status": fabric.get("plan_status") or "",
 			"plan_built_on": str(fabric.get("plan_built_on") or ""),
 			"ipd_approved": (ipd.get("approval_status") == "Approved"),
 			"final_options": _final_options(ipd),
 			"requirement": [
-				{"dia": r.dia, "colour": r.colour, "weight": flt(r.weight)}
+				{"dia": _attribute_value(r.dia), "colour": _attribute_value(r.colour), "weight": flt(r.weight)}
 				for r in requirement_rows if r.cloth_item == fabric.cloth_item
 			],
 			"steps": _ledger_steps(ipd, fabric.cloth_item, ledger_rows),
-			"program": [
-				_program_row_payload(ipd, r)
-				for r in program_rows if r.cloth_item == fabric.cloth_item
-			],
+			"program": current_program,
 		})
 	return entries
+
+
+@frappe.whitelist()
+def get_fabric_program_details(lot):
+	"""Return the persisted Cloth Program for an open Lot form.
+
+	The form still receives the same payload through ``onload`` for its first
+	paint. This explicit reader lets the Cloth Program tab refresh from the
+	database after a build, receipt, schema/layout refresh, or an onload payload
+	omitted by a cached client.
+	"""
+	lot_doc = frappe.get_doc("SD YRP Lot", lot)
+	lot_doc.check_permission("read")
+	return fetch_fabric_program_details(lot_doc)
 
 
 def _program_row_payload(ipd, row):
@@ -72,33 +94,53 @@ def _program_row_payload(ipd, row):
 	if reference:
 		variant = frappe.get_cached_doc('Item', reference)
 		final_attrs = {
-			value.attribute: value.attribute_value
+			value.attribute: _attribute_value(value.attribute_value)
 			for value in variant.get("attributes") or []
 		}
-	final_dia = final_attrs.get(FABRIC_DIA_ATTRIBUTE) or row.dia
-	final_colour = final_attrs.get(FABRIC_COLOUR_ATTRIBUTE) or row.get("colour")
+	final_dia = final_attrs.get(FABRIC_DIA_ATTRIBUTE) or _attribute_value(row.dia)
+	final_colour = final_attrs.get(FABRIC_COLOUR_ATTRIBUTE) or _attribute_value(row.get("colour"))
 	route = next((
 		candidate for candidate in get_fabric_routes(ipd)
-		if candidate["finished_dia"] == final_dia
-		and candidate["finished_colour"] == final_colour
+		if _attribute_value(candidate["finished_dia"]) == final_dia
+		and _attribute_value(candidate["finished_colour"]) == final_colour
 	), None)
 	return {
-		"dia": row.dia,
-		"colour": row.get("colour") or (
-			route and route["knitting_output_colour"]
+		"dia": _attribute_value(row.dia),
+		"colour": _attribute_value(row.get("colour")) or (
+			route and _attribute_value(route["knitting_output_colour"])
 		),
 		"reference_item_variant": reference,
 		"finished_dia": final_dia,
 		"finished_colour": final_colour,
 		"knitting_output_dia": (
-			route and route["knitting_output_dia"]
-		) or row.dia,
+			route and _attribute_value(route["knitting_output_dia"])
+		) or _attribute_value(row.dia),
 		"knitting_output_colour": (
-			route and route["knitting_output_colour"]
-		) or row.get("colour"),
+			route and _attribute_value(route["knitting_output_colour"])
+		) or _attribute_value(row.get("colour")),
 		"weight": flt(row.weight),
 		"received_weight": flt(row.received_weight),
 	}
+
+
+def _current_program_payloads(ipd, rows):
+	"""Return only rows belonging to the IPD's current finished routes.
+
+	Received rows from older IPD revisions remain stored for traceability. They
+	must not add obsolete Dias or Colours to the current Cloth Program matrix.
+	"""
+	options = _final_options(ipd)
+	valid_dias = set(options.get("dias") or [])
+	valid_colours = set(options.get("colours") or [])
+	payloads = []
+	for row in rows:
+		payload = _program_row_payload(ipd, row)
+		if valid_dias and payload["finished_dia"] not in valid_dias:
+			continue
+		if valid_colours and payload["finished_colour"] not in valid_colours:
+			continue
+		payloads.append(payload)
+	return payloads
 
 
 def _final_options(ipd):
@@ -128,7 +170,7 @@ def _ledger_steps(ipd, cloth_item, ledger_rows):
 	for step in get_fabric_steps(ipd):
 		rows = [
 			{
-				"side": r.side or "Output", "dia": r.dia, "colour": r.colour,
+				"side": r.side or "Output", "dia": _attribute_value(r.dia), "colour": _attribute_value(r.colour),
 				"planned_weight": flt(r.planned_weight),
 				"received_weight": flt(r.received_weight),
 			}
@@ -145,14 +187,14 @@ def _ledger_steps(ipd, cloth_item, ledger_rows):
 
 
 def _ipd_dias(ipd):
-	dias = [r.dia for r in ipd.get("knitting_dia_details") or [] if r.dia]
+	dias = [_attribute_value(r.dia) for r in ipd.get("knitting_dia_details") or [] if _attribute_value(r.dia)]
 	if not dias:
 		dias = get_ipd_attribute_values(ipd, FABRIC_DIA_ATTRIBUTE)
 	return list(dict.fromkeys(dias))
 
 
 def _ipd_target_colours(ipd):
-	colours = [r.to_colour for r in ipd.get("dyeing_colour_details") or [] if r.to_colour]
+	colours = [_attribute_value(r.to_colour) for r in ipd.get("dyeing_colour_details") or [] if _attribute_value(r.to_colour)]
 	if not colours:
 		colours = get_ipd_attribute_values(ipd, FABRIC_COLOUR_ATTRIBUTE)
 	return list(dict.fromkeys(colours))
@@ -228,8 +270,8 @@ def get_knitting_output_colour_map(ipd):
 	if exact_routes:
 		sources = {}
 		for route in exact_routes:
-			sources.setdefault(route["finished_colour"], set()).add(
-				route["knitting_output_colour"]
+			sources.setdefault(_attribute_value(route["finished_colour"]), set()).add(
+				_attribute_value(route["knitting_output_colour"])
 			)
 		return {
 			colour: next(iter(values))
@@ -240,8 +282,8 @@ def get_knitting_output_colour_map(ipd):
 	has_colour_change, rows = _first_colour_change_rows(ipd)
 	sources = {}
 	for row in rows:
-		if row["from_colour"] and row["to_colour"]:
-			sources.setdefault(row["to_colour"], set()).add(row["from_colour"])
+		if _attribute_value(row["from_colour"]) and _attribute_value(row["to_colour"]):
+			sources.setdefault(_attribute_value(row["to_colour"]), set()).add(_attribute_value(row["from_colour"]))
 	result = {
 		to_colour: next(iter(from_colours))
 		for to_colour, from_colours in sources.items()
@@ -252,20 +294,20 @@ def get_knitting_output_colour_map(ipd):
 	# process.  Auto-built mixed CPDs persist explicit AMEL -> AMEL / GMEL ->
 	# GMEL rows, but the fallback keeps manually-authored profiles concise.
 	recipe_colours = {
-		row.colour for row in ipd.get("colour_yarn_recipes") or []
-		if row.cloth_item == ipd.item and row.colour
+		_attribute_value(row.colour) for row in ipd.get("colour_yarn_recipes") or []
+		if row.cloth_item == ipd.item and _attribute_value(row.colour)
 	}
 	mapped_targets = {
-		row["to_colour"] for row in rows if row["to_colour"]
+		_attribute_value(row["to_colour"]) for row in rows if _attribute_value(row["to_colour"])
 	}
 	for colour in recipe_colours - mapped_targets:
 		result[colour] = colour
 	if result or has_colour_change:
 		return result
 	return {
-		row.colour: row.colour
+		_attribute_value(row.colour): _attribute_value(row.colour)
 		for row in ipd.get("colour_yarn_recipes") or []
-		if row.cloth_item == ipd.item and row.colour
+		if row.cloth_item == ipd.item and _attribute_value(row.colour)
 	}
 
 
@@ -274,28 +316,28 @@ def get_knitting_output_colour(ipd, finished_colour, dia=None):
 	if dia:
 		route = next((
 			row for row in get_fabric_routes(ipd)
-			if row["finished_colour"] == finished_colour
-			and row["finished_dia"] == dia
+			if _attribute_value(row["finished_colour"]) == finished_colour
+			and _attribute_value(row["finished_dia"]) == dia
 		), None)
 		if route:
-			return route["knitting_output_colour"]
+			return _attribute_value(route["knitting_output_colour"])
 	has_colour_change, rows = _first_colour_change_rows(ipd)
 	target_rows = [
 		row for row in rows
-		if row["to_colour"] == finished_colour
+		if _attribute_value(row["to_colour"]) == finished_colour
 	]
 	if dia:
-		exact = [row for row in target_rows if row["dia"] == dia]
-		wildcard = [row for row in target_rows if not row["dia"]]
+		exact = [row for row in target_rows if _attribute_value(row["dia"]) == dia]
+		wildcard = [row for row in target_rows if not _attribute_value(row["dia"])]
 		target_rows = exact or wildcard
 	sources = {
-		row["from_colour"] for row in target_rows if row["from_colour"]
+		_attribute_value(row["from_colour"]) for row in target_rows if _attribute_value(row["from_colour"])
 	}
 	if len(sources) == 1:
 		return next(iter(sources))
 	recipe_colours = {
-		row.colour for row in ipd.get("colour_yarn_recipes") or []
-		if row.cloth_item == ipd.item and row.colour
+		_attribute_value(row.colour) for row in ipd.get("colour_yarn_recipes") or []
+		if row.cloth_item == ipd.item and _attribute_value(row.colour)
 	}
 	if not target_rows and finished_colour in recipe_colours:
 		return finished_colour
@@ -310,26 +352,27 @@ def get_knitting_output_dia(ipd, finished_colour, finished_dia):
 	"""Physical Dia received from knitting for one exact finished route."""
 	route = next((
 		row for row in get_fabric_routes(ipd)
-		if row["finished_colour"] == finished_colour
-		and row["finished_dia"] == finished_dia
+		if _attribute_value(row["finished_colour"]) == finished_colour
+		and _attribute_value(row["finished_dia"]) == finished_dia
 	), None)
-	return route["knitting_output_dia"] if route else finished_dia
+	return _attribute_value(route["knitting_output_dia"]) if route else finished_dia
 
 
 def get_fabric_routes(ipd):
 	"""Serialisable exact route rows stored on a cloth IPD."""
 	return [
 		{
-			"finished_colour": row.finished_colour,
-			"finished_dia": row.finished_dia,
-			"knitting_output_colour": row.knitting_output_colour,
-			"knitting_output_dia": row.knitting_output_dia,
+			"finished_colour": _attribute_value(row.finished_colour),
+			"finished_dia": _attribute_value(row.finished_dia),
+			"knitting_output_colour": _attribute_value(row.knitting_output_colour),
+			"knitting_output_dia": _attribute_value(row.knitting_output_dia),
+			"use_dyed_yarn": bool(row.get("use_dyed_yarn")),
 		}
 		for row in ipd.get("fabric_routes") or []
-		if row.finished_colour
-		and row.finished_dia
-		and row.knitting_output_colour
-		and row.knitting_output_dia
+		if _attribute_value(row.finished_colour)
+		and _attribute_value(row.finished_dia)
+		and _attribute_value(row.knitting_output_colour)
+		and _attribute_value(row.knitting_output_dia)
 	]
 
 
@@ -372,12 +415,12 @@ def validate_unique_fabric_cloths(lot_doc):
 
 	if lot_doc.is_new():
 		return
-	tracked = frappe.get_all(
+	tracked = attribute_db.get_all(
 		'SD YRP Lot Fabric Program',
 		filters={"parent": lot_doc.name, "parenttype": 'SD YRP Lot', "received_weight": ["!=", 0]},
 		pluck="cloth_item",
 	)
-	tracked += frappe.get_all(
+	tracked += attribute_db.get_all(
 		'SD YRP Lot Fabric Colour Program',
 		filters={"parent": lot_doc.name, "parenttype": 'SD YRP Lot'},
 		or_filters={"received_weight": ["!=", 0], "compacted_weight": ["!=", 0]},
@@ -410,7 +453,7 @@ def save_fabric_program_details(lot_doc):
 	# that was open across a receipt would otherwise save stale (or missing) rows.
 	# The per-lot lock serializes this rebuild against a GRN submit in flight.
 	if not lot_doc.is_new():
-		frappe.db.get_value('SD YRP Lot', lot_doc.name, "name", for_update=True)
+		attribute_db.get_value('SD YRP Lot', lot_doc.name, "name", for_update=True)
 	prev_program = _db_received(lot_doc.name, 'SD YRP Lot Fabric Program')
 
 	attr_cache = {}
@@ -425,8 +468,8 @@ def save_fabric_program_details(lot_doc):
 			continue
 
 		for row in entry.get("program") or []:
-			dia = row.get("dia")
-			colour = row.get("colour") or None
+			dia = _attribute_value(row.get("dia"))
+			colour = _attribute_value(row.get("colour")) or None
 			reference_item_variant = row.get("reference_item_variant") or None
 			weight = flt(row.get("weight"))
 			if not dia:
@@ -464,7 +507,7 @@ def save_fabric_program_details(lot_doc):
 			if reference_item_variant:
 				ref = frappe.get_cached_doc('Item', reference_item_variant)
 				colour = next((
-					a.attribute_value for a in ref.get("attributes") or []
+					_attribute_value(a.attribute_value) for a in ref.get("attributes") or []
 					if a.attribute == FABRIC_COLOUR_ATTRIBUTE
 				), None)
 			program_rows.append({
@@ -504,8 +547,8 @@ def save_fabric_requirement_details(lot_doc):
 		ipd = frappe.get_cached_doc('YRP Item Production Detail', fabric.production_detail)
 		reachable = final_combos(ipd)
 		for row in entry.get("requirement") or []:
-			dia = row.get("dia")
-			colour = row.get("colour") or None
+			dia = _attribute_value(row.get("dia"))
+			colour = _attribute_value(row.get("colour")) or None
 			weight = flt(row.get("weight"))
 			if not dia or weight <= 0:
 				continue
@@ -537,7 +580,7 @@ def save_fabric_requirement_details(lot_doc):
 		)
 
 	existing = [
-		{"cloth_item": r.cloth_item, "dia": r.dia, "colour": r.colour or None,
+		{"cloth_item": r.cloth_item, "dia": _attribute_value(r.dia), "colour": _attribute_value(r.colour) or None,
 			"weight": flt(r.weight)}
 		for r in lot_doc.get("lot_fabric_requirements") or []
 	]
@@ -565,7 +608,7 @@ def rebuild_plans_after_save(lot_doc):
 	for fabric in lot_doc.get("lot_fabric_details") or []:
 		if not fabric.production_detail:
 			continue
-		approved = frappe.db.get_value(
+		approved = attribute_db.get_value(
 			'YRP Item Production Detail', fabric.production_detail, "approval_status") == "Approved"
 		if approved:
 			# never hard-block the Lot save on solver trouble — reachability was
@@ -583,7 +626,7 @@ def rebuild_plans_after_save(lot_doc):
 	# the plan/pre-seed wrote rows at the DB level — refresh the in-memory doc so
 	# the save RESPONSE carries them (else the open form's next save deletes them)
 	refresh_server_owned_tables(lot_doc)
-	program_rows = frappe.get_all(
+	program_rows = attribute_db.get_all(
 		'SD YRP Lot Fabric Program',
 		filters={"parent": lot_doc.name, "parenttype": 'SD YRP Lot'},
 		fields=["*"],
@@ -660,9 +703,9 @@ def _db_received(lot_name, child_doctype):
 		fields=fields,
 	):
 		key = (
-			(r.cloth_item, r.dia, r.get("reference_item_variant") or "")
+			(r.cloth_item, _attribute_value(r.dia), r.get("reference_item_variant") or "")
 			if child_doctype == 'SD YRP Lot Fabric Program'
-			else (r.cloth_item, r.dia, r.colour)
+			else (r.cloth_item, _attribute_value(r.dia), _attribute_value(r.colour))
 		)
 		result[key] = flt(r.received_weight)
 	return result
@@ -704,7 +747,7 @@ def _warn_program_below_ordered(lot_doc):
 			if already and flt(row.weight) < already - 0.001:
 				warnings.append(
 					_("{0} · {1}: program {2} kg is below the {3} kg already on knitting Work Orders").format(
-						escape_html(cloth), escape_html(row.dia), flt(row.weight), already)
+						escape_html(cloth), escape_html(_attribute_value(row.dia)), flt(row.weight), already)
 				)
 	if warnings:
 		frappe.msgprint(

@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 from __future__ import annotations
+from yrp.attribute_links import value as _attribute_value
 
 import json
 from itertools import groupby
@@ -426,7 +427,7 @@ def fetch_item_conversion_items(items) -> list[dict]:
 				current = frappe.get_doc('Item', variant["item"])
 				primary_value = next(
 					(
-						row.attribute_value
+						_attribute_value(row.attribute_value)
 						for row in current.attributes
 						if row.attribute == primary_attribute
 					),
@@ -460,7 +461,7 @@ def fetch_item_conversion_items(items) -> list[dict]:
 def _variant_attributes(variant, details) -> dict:
 	allowed = set(details.get("attributes") or [])
 	return {
-		row.attribute: row.attribute_value
+		row.attribute: _attribute_value(row.attribute_value)
 		for row in variant.attributes
 		if row.attribute in allowed
 	}

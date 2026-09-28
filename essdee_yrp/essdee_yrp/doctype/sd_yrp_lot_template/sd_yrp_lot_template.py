@@ -1,3 +1,4 @@
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2023, Essdee and contributors
 # For license information, please see license.txt
 
@@ -148,7 +149,7 @@ def get_item_attribute_values(
 		if attribute == attr_obj.attribute:
 			if attr_obj.mapping:
 				mapping_doc = get_mapping_document(attr_obj.mapping)
-				values = [row.attribute_value for row in mapping_doc.values]
+				values = [_attribute_value(row.attribute_value) for row in mapping_doc.values]
 			break
 	if not values:
 		values = get_global_attribute_values(attribute)
@@ -186,7 +187,7 @@ def get_attribute_values(lot_template, attributes = None):
 	for attribute in lot.item_attributes:
 		if attribute.attribute in attributes and attribute.mapping != None:
 			doc = get_mapping_document(attribute.mapping)
-			attribute_values[attribute.attribute] = [d.attribute_value for d in doc.values]
+			attribute_values[attribute.attribute] = [_attribute_value(d.attribute_value) for d in doc.values]
 	
 	return attribute_values
 
@@ -277,7 +278,7 @@ def get_planned_qty_based_on_attributes(planned_qty, attributes, based_on = None
 	if 'Size' in based_on:
 		qty = []
 		for q in planned_qty:
-			attribute_values = {'Size': q['size']}
+			attribute_values = {'Size': _attribute_value(q['size'])}
 			x = 1
 			for b in based_on:
 				if b != 'Size':

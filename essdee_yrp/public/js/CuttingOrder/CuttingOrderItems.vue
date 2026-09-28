@@ -130,8 +130,8 @@ function load_data(data) {
 	colours.value = data.colours || [];
 	parts.value = data.parts || [];
 	items.value = (data.items || []).map(item => ({
-		colour: item.colour || '',
-		part: item.part || '',
+		colour: frappe.yrp.attribute_value(item.colour) || '',
+		part: frappe.yrp.attribute_value(item.part) || '',
 		major_colour: item.major_colour || '',
 		quantities: { ...item.quantities },
 	}));
@@ -145,9 +145,9 @@ function get_data() {
 		colours: colours.value,
 		parts: parts.value,
 		items: items.value.map(item => {
-			let obj = { colour: item.colour, quantities: { ...item.quantities } };
+			let obj = { colour: frappe.yrp.attribute_value(item.colour), quantities: { ...item.quantities } };
 			if (isSetItem.value) {
-				obj.part = item.part || '';
+				obj.part = frappe.yrp.attribute_value(item.part) || '';
 				obj.major_colour = item.major_colour || '';
 			}
 			return obj;

@@ -33,7 +33,7 @@ frappe.ui.form.on("SD YRP FG Item Master", {
 		if (!frm.doc.size_range) return frm.set_value("sizes", []);
 		frappe.db.get_doc("SD YRP FG Item Size Range", frm.doc.size_range).then((size_range) => {
 			frm.set_value("sizes", (size_range.sizes || []).map((row) => ({
-				attribute_value: row.attribute_value,
+				attribute_value: frappe.yrp.attribute_value(row.attribute_value),
 			})));
 		});
 	},

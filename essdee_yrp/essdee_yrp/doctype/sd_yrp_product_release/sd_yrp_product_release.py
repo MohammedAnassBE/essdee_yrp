@@ -1,3 +1,4 @@
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2023, Essdee and contributors
 # For license information, please see license.txt
 
@@ -49,8 +50,8 @@ def get_table_onload_data(table, with_list: bool = False) -> list[dict]:
 			"image_name": row.product_image,
 		}
 		if with_list:
-			if row.get("part"):
-				value["selected_part"] = row.part
+			if _attribute_value(row.get("part")):
+				value["selected_part"] = _attribute_value(row.part)
 			value["selected_colours"] = [
 				colour for colour in (row.selected_colours or "").split(",") if colour
 			]

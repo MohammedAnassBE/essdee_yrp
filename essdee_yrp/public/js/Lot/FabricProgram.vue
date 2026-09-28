@@ -27,11 +27,20 @@
 				<h6>{{ __("Knitting Program — Dia × Colour") }}</h6>
 				<div class="fp-table-wrap">
 					<table class="fp-table fp-matrix">
+						<colgroup>
+							<col class="fp-col-dia" />
+							<col
+								v-for="colour in program_colour_columns(entry)"
+								:key="colour.key"
+								class="fp-col-value"
+							/>
+							<col class="fp-col-total" />
+						</colgroup>
 						<thead>
 							<tr>
 								<th rowspan="2" class="fp-dia">{{ __("Dia") }}</th>
 								<th :colspan="program_colour_columns(entry).length">
-									{{ __("Knitting Program (Kg)") }}
+									{{ __("Cloth Program (Kg)") }}
 								</th>
 								<th rowspan="2" class="fp-num">{{ __("Total") }}</th>
 							</tr>
@@ -41,7 +50,13 @@
 									:key="colour.key"
 									class="fp-num fp-colour"
 								>
-									{{ colour.label }}
+									<span>{{ colour.label }}</span>
+									<span
+										v-if="is_dyed_yarn_colour(entry, colour.key)"
+										class="fp-dyed-yarn"
+									>
+										{{ __("Dyed Yarn") }}
+									</span>
 								</th>
 							</tr>
 						</thead>
@@ -121,8 +136,8 @@ function get_data() {
 	return entries.value.map((entry) => ({
 		cloth_item: entry.cloth_item,
 		program: entry.program.map((r) => ({
-			dia: r.dia,
-			colour: r.colour || null,
+			dia: frappe.yrp.attribute_value(r.dia),
+			colour: frappe.yrp.attribute_value(r.colour) || null,
 			reference_item_variant: r.reference_item_variant || null,
 			weight: r.weight || 0,
 		})),
@@ -133,7 +148,7 @@ function get_requirement() {
 	return entries.value.map((entry) => ({
 		cloth_item: entry.cloth_item,
 		requirement: entry.requirement.map((r) => ({
-			dia: r.dia, colour: r.colour || null, weight: r.weight || 0,
+			dia: frappe.yrp.attribute_value(r.dia), colour: frappe.yrp.attribute_value(r.colour) || null, weight: r.weight || 0,
 		})),
 	}));
 }
@@ -160,11 +175,11 @@ function dia_number(value) {
 }
 
 function program_dia(row) {
-	return row.finished_dia || row.dia || "";
+	return frappe.yrp.attribute_value(row.finished_dia) || frappe.yrp.attribute_value(row.dia) || "";
 }
 
 function program_colour(row) {
-	return row.finished_colour || row.colour || "";
+	return frappe.yrp.attribute_value(row.finished_colour) || frappe.yrp.attribute_value(row.colour) || "";
 }
 
 function program_dias(entry) {
@@ -179,6 +194,11 @@ function program_colour_columns(entry) {
 	return colours.length
 		? colours.map((colour) => ({ key: colour, label: colour }))
 		: [{ key: "", label: __("Program") }];
+}
+
+function is_dyed_yarn_colour(entry, colour) {
+	return (entry.dyed_yarn_colours || []).some(
+		(value) => frappe.yrp.attribute_value(value) === colour);
 }
 
 function program_row(entry, dia, colour) {
@@ -300,11 +320,18 @@ defineExpose({ load_data, get_data, get_requirement });
 }
 .fp-matrix {
 	min-width: 680px;
+	table-layout: fixed;
+}
+.fp-col-dia {
+	width: 150px;
+}
+.fp-col-total {
+	width: 90px;
 }
 .fp-table th,
 .fp-table td {
 	border: 1px solid var(--border-color);
-	padding: 4px 8px;
+	padding: 7px 10px;
 	text-align: left;
 }
 .fp-table th {
@@ -314,15 +341,39 @@ defineExpose({ load_data, get_data, get_requirement });
 }
 .fp-num {
 	text-align: right !important;
-	width: 90px;
 }
 .fp-dia {
-	min-width: 105px;
 	white-space: nowrap;
 	font-weight: 500;
 }
+.fp-matrix thead th {
+	text-align: center;
+	vertical-align: middle;
+}
+.fp-matrix thead .fp-dia {
+	text-align: left;
+}
+.fp-matrix thead .fp-num {
+	text-align: center !important;
+}
 .fp-colour {
-	min-width: 82px;
+	min-width: 0;
+	line-height: 1.35;
+}
+.fp-dyed-yarn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: max-content;
+	margin: 4px auto 0;
+	padding: 2px 7px;
+	border-radius: 10px;
+	background: var(--purple-100, #ebe9fe);
+	color: var(--purple-700, #5925dc);
+	font-size: 10px;
+	font-weight: 600;
+	line-height: 1.5;
+	white-space: nowrap;
 }
 .fp-program {
 	background: var(--subtle-fg, transparent);

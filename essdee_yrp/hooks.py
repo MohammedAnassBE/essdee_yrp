@@ -78,6 +78,7 @@ fixtures = [
 					"YRP Process Cost-depends_on_attribute-default",
 					"YRP Process Cost-is_expired-read_only",
 					"YRP Process Cost-item-fetch_from",
+					"YRP Process Cost-item-fetch_if_empty",
 					"Purchase Order-naming_series-options",
 					"Purchase Order-naming_series-default",
 					"YRP Purchase Invoice-naming_series-options",
@@ -369,6 +370,8 @@ after_build = "essdee_yrp.web_build.build_web_spa"
 # Hook on document methods and events
 
 doc_events = {
+	"YRP Process Cost": {"before_validate": "essdee_yrp.process_cost.before_validate"},
+	"YRP Process": {"validate": "essdee_yrp.process_validations.validate"},
 	'YRP Production Order': {
 		"onload": "essdee_yrp.production_order_workflow.onload",
 		"before_validate": "essdee_yrp.production_order_workflow.before_validate",
@@ -664,3 +667,11 @@ override_whitelisted_methods = {
 # ------------
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
+
+# Scoped attribute-value Link normalization for internal document writes.
+extend_doctype_class = globals().get("extend_doctype_class", {})
+for _attribute_link_doctype in ['SD YRP Box Sticker Print', 'SD YRP Box Sticker Print Detail', 'SD YRP Cut Bundle Movement Ledger', 'SD YRP Cut Panel Item', 'SD YRP Cutting LaySheet', 'SD YRP Cutting LaySheet Accessory Detail', 'SD YRP Cutting LaySheet Bundle', 'SD YRP Cutting LaySheet Detail', 'SD YRP Cutting Marker', 'SD YRP Cutting Marker Part', 'SD YRP Cutting Marker Ratio', 'SD YRP Cutting Order Cloth Detail', 'SD YRP Cutting Order Colour Value', 'SD YRP Cutting Order Detail', 'SD YRP Cutting Order Panel Detail', 'SD YRP Cutting Plan', 'SD YRP Cutting Plan Cloth Detail', 'SD YRP FG Item Master', 'SD YRP FG Item Size', 'SD YRP FG Item Size Range', 'SD YRP FG Item Size Type', 'SD YRP FG Item Size Type Detail', 'SD YRP IPD Colour Yarn Ratio', 'SD YRP IPD Compacting', 'SD YRP IPD Compacting Details', 'SD YRP IPD Compacting Dia Detail', 'SD YRP IPD Compacting Reference', 'SD YRP IPD Dyeing Colour Detail', 'SD YRP IPD Fabric Route', 'SD YRP IPD Knitting Dia Detail', 'SD YRP IPD Settings', 'SD YRP Item Production Detail Packing Attribute Detail', 'SD YRP Item Production Detail Packing Size Detail', 'SD YRP Item Production Detail Set Item Combination', 'SD YRP Lot', 'SD YRP Lot Fabric Colour Program', 'SD YRP Lot Fabric Program', 'SD YRP Lot Fabric Requirement', 'SD YRP Lot Fabric Step Ledger', 'SD YRP Lot Planned Qty', 'SD YRP Lot Template', 'SD YRP PPO Lot Price Detail', 'SD YRP Product', 'SD YRP Product Release', 'SD YRP Stiching Item Detail']:
+	_existing_mixins = extend_doctype_class.get(_attribute_link_doctype, [])
+	if isinstance(_existing_mixins, str):
+		_existing_mixins = [_existing_mixins]
+	extend_doctype_class[_attribute_link_doctype] = [*_existing_mixins, "yrp.attribute_links.AttributeLinkStorageMixin"]

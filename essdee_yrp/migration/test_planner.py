@@ -101,7 +101,15 @@ class MigrationPlannerTest(unittest.TestCase):
 		details = {row["source_doctype"]: row for row in self.payload["doctype_details"]}
 		self.assertEqual(
 			details["Item Production Detail"]["table_option_map"],
-			{"item_attributes": 'YRP IPD Item Attribute'},
+			{
+				"item_attributes": 'YRP IPD Item Attribute',
+				"stiching_major_attribute_value": 'YRP Item Attribute Value',
+				"major_attribute_value": 'YRP Item Attribute Value',
+				"pack_in_stage": 'YRP Item Attribute Value',
+				"pack_out_stage": 'YRP Item Attribute Value',
+				"stiching_in_stage": 'YRP Item Attribute Value',
+				"stiching_out_stage": 'YRP Item Attribute Value',
+			},
 		)
 		self.assertEqual(
 			details["Vendor Bill Tracking"]["field_map"],

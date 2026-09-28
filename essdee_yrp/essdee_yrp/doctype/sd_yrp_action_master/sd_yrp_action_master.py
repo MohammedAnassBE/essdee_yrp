@@ -1,3 +1,4 @@
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2024, Essdee and contributors
 # For license information, please see license.txt
 
@@ -65,8 +66,8 @@ class SDYRPActionMaster(Document):
 	def before_save(self):
 		from essdee_yrp.essdee_yrp.doctype.sd_yrp_time_and_action.sd_yrp_time_and_action import get_t_and_a_preview_data
 		data = get_t_and_a_preview_data(frappe.utils.nowdate(), [{'colour': 'colour', 'master': self.name}], is_template=False, master_doc=self)
-		if len(data['colour']) > 0:
-			dispatch_date = data['colour'][len(data['colour']) - 1]['rescheduled_date']
+		if len(_attribute_value(data['colour'])) > 0:
+			dispatch_date = _attribute_value(data['colour'])[len(_attribute_value(data['colour'])) - 1]['rescheduled_date']
 			lead_time = date_diff(dispatch_date, frappe.utils.nowdate())
 			self.lead_time = lead_time
 		else:
@@ -77,9 +78,9 @@ def get_action_master_details(master_list):
 	master_list = update_if_string_instance(master_list)
 	work_station = {}
 	for item in master_list:
-		if not item.get("colour") or not item.get("master"):
+		if not _attribute_value(item.get("colour")) or not item.get("master"):
 			frappe.throw("Colour and Action Master are required")
-		work_station[item['colour']] = {
+		work_station[_attribute_value(item['colour'])] = {
 			"details": [],
 			"dependent_details": []
 		}
@@ -95,10 +96,10 @@ def get_action_master_details(master_list):
 
 				action_data['work_station'] = frappe.get_value('YRP Work Station',name_list[0],"name")
 			action_data['master'] = item['master']
-			work_station[item['colour']]['details'].append(action_data)
+			work_station[_attribute_value(item['colour'])]['details'].append(action_data)
 
 		for row in master_doc.action_master_dependent_details:
-			work_station[item['colour']]['dependent_details'].append(row.as_dict())
+			work_station[_attribute_value(item['colour'])]['dependent_details'].append(row.as_dict())
 
 	return work_station
 

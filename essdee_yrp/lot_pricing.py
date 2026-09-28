@@ -1,3 +1,5 @@
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 import frappe
 from frappe.utils import flt, now_datetime
 
@@ -31,13 +33,13 @@ def get_lot_override_map(production_order):
 	)
 	overrides = {}
 	for row in doc.get("lot_price_overrides") or []:
-		overrides.setdefault(row.lot, {})[row.size] = flt(row.mrp)
+		overrides.setdefault(row.lot, {})[_attribute_value(row.size)] = flt(row.mrp)
 	return overrides
 
 
 def get_lot_print_state(lot, for_update=False):
 	lock_clause = " FOR UPDATE" if for_update else ""
-	rows = frappe.db.sql(
+	rows = attribute_db.business_values(frappe.db.sql(
 		"""
 		SELECT bsp.name AS box_sticker_print, bsp.modified, detail.name AS detail_name,
 			detail.size, detail.mrp, detail.printed_quantity
@@ -49,7 +51,7 @@ def get_lot_print_state(lot, for_update=False):
 		""" + lock_clause,
 		(lot,),
 		as_dict=True,
-	)
+	))
 
 	documents = []
 	prices = {}
@@ -60,7 +62,7 @@ def get_lot_print_state(lot, for_update=False):
 		printed_quantity = flt(row.printed_quantity)
 		locked = locked or printed_quantity > 0
 		entry = prices.setdefault(
-			row.size,
+			_attribute_value(row.size),
 			{
 				"snapshot_mrp": flt(row.mrp),
 				"printed_quantity": 0,
@@ -75,7 +77,7 @@ def get_lot_print_state(lot, for_update=False):
 
 
 def get_lot_pricing(lot, production_order=None, for_update=False):
-	linked_production_order = frappe.db.get_value('SD YRP Lot', lot, "production_order")
+	linked_production_order = attribute_db.get_value('SD YRP Lot', lot, "production_order")
 	if not linked_production_order:
 		return None
 	if production_order and linked_production_order != production_order:
@@ -143,19 +145,19 @@ def validate_lot_price_overrides(doc):
 	current_overrides = {}
 
 	for row in doc.get("lot_price_overrides") or []:
-		key = (row.lot, row.size)
+		key = (row.lot, _attribute_value(row.size))
 		if key in seen:
-			frappe.throw(f"Duplicate Lot price override for {row.lot}, size {row.size}")
+			frappe.throw(f"Duplicate Lot price override for {row.lot}, size {_attribute_value(row.size)}")
 		seen.add(key)
-		if frappe.db.get_value('SD YRP Lot', row.lot, "production_order") != doc.name:
+		if attribute_db.get_value('SD YRP Lot', row.lot, "production_order") != doc.name:
 			frappe.throw(f"Lot {row.lot} is not linked to Production Order {doc.name}")
-		if row.size not in valid_sizes:
-			frappe.throw(f"Size {row.size} is not present in Production Order {doc.name}")
+		if _attribute_value(row.size) not in valid_sizes:
+			frappe.throw(f"Size {_attribute_value(row.size)} is not present in Production Order {doc.name}")
 		if flt(row.mrp) <= 0:
-			frappe.throw(f"MRP must be greater than zero for Lot {row.lot}, size {row.size}")
+			frappe.throw(f"MRP must be greater than zero for Lot {row.lot}, size {_attribute_value(row.size)}")
 		row.changed_by = row.changed_by or frappe.session.user
 		row.changed_on = row.changed_on or now_datetime()
-		current_overrides.setdefault(row.lot, {})[row.size] = flt(row.mrp)
+		current_overrides.setdefault(row.lot, {})[_attribute_value(row.size)] = flt(row.mrp)
 
 	for lot in set(previous_overrides) | set(current_overrides):
 		if previous_overrides.get(lot, {}) == current_overrides.get(lot, {}):
@@ -171,17 +173,17 @@ def sync_unprinted_box_sticker_prices(lot, production_order=None):
 
 	updated = 0
 	for box_sticker_print in pricing["box_sticker_prints"]:
-		rows = frappe.get_all(
+		rows = attribute_db.get_all(
 			'SD YRP Box Sticker Print Detail',
 			filters={"parent": box_sticker_print},
 			fields=["name", "size", "mrp"],
 		)
 		for row in rows:
-			mrp = pricing["prices"].get(row.size, {}).get("effective_mrp")
+			mrp = pricing["prices"].get(_attribute_value(row.size), {}).get("effective_mrp")
 			if mrp is None or flt(mrp) <= 0:
-				frappe.throw(f"MRP is missing for Lot {lot}, size {row.size}")
+				frappe.throw(f"MRP is missing for Lot {lot}, size {_attribute_value(row.size)}")
 			if flt(row.mrp) != flt(mrp):
-				frappe.db.set_value(
+				attribute_db.set_value(
 					'SD YRP Box Sticker Print Detail', row.name, "mrp", flt(mrp), update_modified=False
 				)
 				updated += 1

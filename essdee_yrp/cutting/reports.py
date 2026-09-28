@@ -6,6 +6,8 @@ garment-specific report structures.
 """
 
 from __future__ import annotations
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 from essdee_yrp.ipd_attribute_links import major_stitching_value
 
 import copy
@@ -32,7 +34,7 @@ def update_if_string_instance(value):
 
 def get_stich_details(ipd_doc):
 	return {
-		row.stiching_attribute_value: row.set_item_attribute_value
+		_attribute_value(row.stiching_attribute_value): _attribute_value(row.set_item_attribute_value)
 		for row in ipd_doc.stiching_item_details
 	}
 
@@ -96,11 +98,11 @@ def get_daily_production_report(date, location, items=None, lots=None, only_labe
 
 	bundles_by_parent = {}
 	if all_cls_names:
-		bundles = frappe.db.sql("""
+		bundles = attribute_db.business_values(frappe.db.sql("""
 			SELECT parent, part, size, quantity, set_combination
 			FROM `tabSD YRP Cutting LaySheet Bundle`
 			WHERE parent IN %(names)s
-		""", {"names": all_cls_names}, as_dict=True)
+		""", {"names": all_cls_names}, as_dict=True))
 		for b in bundles:
 			bundles_by_parent.setdefault(b['parent'], []).append(b)
 
@@ -187,8 +189,8 @@ def get_daily_production_report(date, location, items=None, lots=None, only_labe
 		panel_qty = {}
 		for row in detail_doc.stiching_item_details:
 			if row.is_default:
-				major_panel[row.set_item_attribute_value] = row.stiching_attribute_value
-			panel_qty[row.stiching_attribute_value] = row.quantity
+				major_panel[_attribute_value(row.set_item_attribute_value)] = _attribute_value(row.stiching_attribute_value)
+			panel_qty[_attribute_value(row.stiching_attribute_value)] = row.quantity
 
 		if not detail_doc.is_set_item:
 			if hasattr(detail_doc, 'stiching_major_attribute_value') and major_stitching_value(detail_doc):
@@ -197,10 +199,10 @@ def get_daily_production_report(date, location, items=None, lots=None, only_labe
 				# COD may not have stiching_major_attribute_value; derive from is_default or first panel
 				for row in detail_doc.stiching_item_details:
 					if row.is_default:
-						major_panel['panel'] = row.stiching_attribute_value
+						major_panel['panel'] = _attribute_value(row.stiching_attribute_value)
 						break
 				if 'panel' not in major_panel and detail_doc.stiching_item_details:
-					major_panel['panel'] = detail_doc.stiching_item_details[0].stiching_attribute_value
+					major_panel['panel'] = _attribute_value(detail_doc.stiching_item_details[0].stiching_attribute_value)
 
 		for row1, row2 in zip_longest(completed_items['items'], incomplete_items['items']):
 			row1['values1'] = {}
@@ -214,9 +216,9 @@ def get_daily_production_report(date, location, items=None, lots=None, only_labe
 						row1['values1'][size] = x
 			else:
 				for size in row1['values']:
-					if row2['values'][size][major_panel['panel']] > 0:
-						row1['values'][size] += row2['values'][size][major_panel['panel']]
-						x = get_less_qty_panels(row2['values'][size], major_panel['panel'], panel_qty)
+					if row2['values'][size][_attribute_value(major_panel['panel'])] > 0:
+						row1['values'][size] += row2['values'][size][_attribute_value(major_panel['panel'])]
+						x = get_less_qty_panels(row2['values'][size], _attribute_value(major_panel['panel']), panel_qty)
 						row1['values1'][size] = x
 
 		items_list = []
@@ -403,8 +405,8 @@ def get_cutting_detail_report(start_date, end_date, location):
 		panel_qty = {}
 		for row in ipd_doc.stiching_item_details:
 			if row.is_default:
-				major_panel[row.set_item_attribute_value] = row.stiching_attribute_value
-			panel_qty[row.stiching_attribute_value] = row.quantity
+				major_panel[_attribute_value(row.set_item_attribute_value)] = _attribute_value(row.stiching_attribute_value)
+			panel_qty[_attribute_value(row.stiching_attribute_value)] = row.quantity
 
 		if not ipd_doc.is_set_item:
 			major_panel['panel'] = major_stitching_value(ipd_doc)
@@ -421,9 +423,9 @@ def get_cutting_detail_report(start_date, end_date, location):
 						row1['values1'][size] = x
 			else:
 				for size in row1['values']:
-					if row2['values'][size][major_panel['panel']] > 0:
-						row1['values'][size] += row2['values'][size][major_panel['panel']]
-						x = get_less_qty_panels(row2['values'][size], major_panel['panel'], panel_qty)
+					if row2['values'][size][_attribute_value(major_panel['panel'])] > 0:
+						row1['values'][size] += row2['values'][size][_attribute_value(major_panel['panel'])]
+						x = get_less_qty_panels(row2['values'][size], _attribute_value(major_panel['panel']), panel_qty)
 						row1['values1'][size] = x
 
 		items_list = []
@@ -523,12 +525,12 @@ def calculate_completed(cls_list, ipd_doc, completed_items, incomplete_items, bu
 				alter_incomplete_items[colour] = item['values']
 
 			for item in cls_bundles:
-				parts = item.part.split(",")
+				parts = _attribute_value(item.part).split(",")
 				set_combination = update_if_string_instance(item.set_combination)
 				set_colour = set_combination['major_colour']
 				qty = item.quantity
 				for part in parts:
-					alter_incomplete_items[set_colour][item.size][part] += qty
+					alter_incomplete_items[set_colour][_attribute_value(item.size)][part] += qty
 			total_qty = completed_items['total_qty']
 			for item in completed_items['items']:
 				colour = item['attributes'][ipd_doc.packing_attribute]
@@ -561,7 +563,7 @@ def calculate_completed(cls_list, ipd_doc, completed_items, incomplete_items, bu
 					alter_incomplete_items[colour] = {}
 					alter_incomplete_items[colour][part] = item['values']
 			for item in cls_bundles:
-				parts = item.part.split(",")
+				parts = _attribute_value(item.part).split(",")
 				set_combination = update_if_string_instance(item.set_combination)
 				major_part = set_combination['major_part']
 				major_colour = set_combination['major_colour']
@@ -576,10 +578,10 @@ def calculate_completed(cls_list, ipd_doc, completed_items, incomplete_items, bu
 				qty = item.quantity
 				for part in parts:
 					try:
-						alter_incomplete_items[d['major_colour']][d['major_part']][item.size][part] += qty
+						alter_incomplete_items[d['major_colour']][d['major_part']][_attribute_value(item.size)][part] += qty
 					except:
 						secondary_part = stich_details[part]
-						alter_incomplete_items[d['major_colour']][secondary_part][item.size][part] += qty
+						alter_incomplete_items[d['major_colour']][secondary_part][_attribute_value(item.size)][part] += qty
 
 			total_qty = completed_items['total_qty']
 			for item in completed_items['items']:
@@ -695,12 +697,12 @@ def get_cut_sheet_report(date, location):
 			cls_doc = frappe.get_doc('SD YRP Cutting LaySheet', cls['name'])
 			if not detail_doc.is_set_item:
 				for item in cls_doc.cutting_laysheet_bundles:
-					parts = item.part.split(",")
+					parts = _attribute_value(item.part).split(",")
 					set_combination = update_if_string_instance(item.set_combination)
 					set_colour = set_combination['major_colour']
 					qty = item.quantity
 					for part in parts:
-						alter_incomplete_items[set_colour][item.size][part] += qty
+						alter_incomplete_items[set_colour][_attribute_value(item.size)][part] += qty
 				for item in incomplete_items['items']:
 					colour = item['attributes'][detail_doc.packing_attribute]
 					item['values'] = alter_incomplete_items[colour]
@@ -708,7 +710,7 @@ def get_cut_sheet_report(date, location):
 			else:
 				stich_details = get_stich_details(detail_doc)
 				for item in cls_doc.cutting_laysheet_bundles:
-					parts = item.part.split(",")
+					parts = _attribute_value(item.part).split(",")
 					set_combination = update_if_string_instance(item.set_combination)
 					major_part = set_combination['major_part']
 					major_colour = set_combination['major_colour']
@@ -723,10 +725,10 @@ def get_cut_sheet_report(date, location):
 					qty = item.quantity
 					for part in parts:
 						try:
-							alter_incomplete_items[d['major_colour']][d['major_part']][item.size][part] += qty
+							alter_incomplete_items[d['major_colour']][d['major_part']][_attribute_value(item.size)][part] += qty
 						except:
 							secondary_part = stich_details[part]
-							alter_incomplete_items[d['major_colour']][secondary_part][item.size][part] += qty
+							alter_incomplete_items[d['major_colour']][secondary_part][_attribute_value(item.size)][part] += qty
 
 				for item in incomplete_items['items']:
 					set_combination = update_if_string_instance(item['item_keys'])
@@ -842,7 +844,7 @@ def get_multiccr(open_status=None, lot_list=None, item_list=None, category=None)
 						item['total_qty'] = total
 						total_qty += total
 				else:
-					set_attribute = row.get('set_item_attr') or frappe.get_cached_value(
+					set_attribute = row.get('set_item_attr') or attribute_db.get_cached_value(
 						'YRP Item Production Detail',
 						production_detail,
 						"set_item_attribute",
@@ -855,7 +857,7 @@ def get_multiccr(open_status=None, lot_list=None, item_list=None, category=None)
 									total += item['values'][size]
 								item['total_qty'] = total
 								total_qty += total
-			cloth_details = frappe.get_all(
+			cloth_details = attribute_db.get_all(
 				'SD YRP Cutting Plan Cloth Detail',
 				filters={
 					"parent": cp,

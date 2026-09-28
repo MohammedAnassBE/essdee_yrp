@@ -1,6 +1,7 @@
 """Permission-scoped providers for the Production API Time and Action reports."""
 
 from __future__ import annotations
+from yrp import attribute_links as attribute_db
 
 import frappe
 from frappe import _
@@ -41,7 +42,7 @@ def execute_cumulative_time_and_action_delay(filters=None):
 	names = _names_or_empty(active_only=True)
 	if not names:
 		return columns, []
-	data = frappe.db.sql(
+	data = attribute_db.business_values(frappe.db.sql(
 		"""
 		SELECT parent.lot, parent.item, MIN(parent.delay) AS delay,
 			MAX(parent.sizes) AS sizes, SUM(parent.qty) AS qty,
@@ -55,7 +56,7 @@ def execute_cumulative_time_and_action_delay(filters=None):
 		""",
 		{"names": names},
 		as_dict=True,
-	)
+	))
 	return columns, data
 
 
@@ -88,7 +89,7 @@ def execute_live_time_and_action_delay(filters=None):
 		return columns, []
 	values = {"names": names, "today": getdate(nowdate())}
 	if filters.show_style_summary:
-		data = frappe.db.sql(
+		data = attribute_db.business_values(frappe.db.sql(
 			"""
 			SELECT parent.lot, parent.item, MAX(parent.sizes) AS sizes,
 				MIN(DATEDIFF(detail.rescheduled_date, %(today)s)) AS date_diff
@@ -101,9 +102,9 @@ def execute_live_time_and_action_delay(filters=None):
 			""",
 			values,
 			as_dict=True,
-		)
+		))
 	else:
-		data = frappe.db.sql(
+		data = attribute_db.business_values(frappe.db.sql(
 			"""
 			SELECT parent.lot, parent.item, parent.master, parent.colour,
 				parent.sizes, parent.qty, detail.action, detail.department,
@@ -117,7 +118,7 @@ def execute_live_time_and_action_delay(filters=None):
 			""",
 			values,
 			as_dict=True,
-		)
+		))
 	return columns, data
 
 
@@ -232,7 +233,7 @@ def execute_time_and_action_dispatch_report(filters=None):
 	names = _names_or_empty({"lot": filters.lot} if filters.lot else None)
 	if not names:
 		return columns, []
-	data = frappe.db.sql(
+	data = attribute_db.business_values(frappe.db.sql(
 		"""
 		SELECT parent.lot, parent.item, MAX(parent.sizes) AS sizes,
 			MAX(detail.rescheduled_date) AS date, lot.total_order_quantity,
@@ -246,7 +247,7 @@ def execute_time_and_action_dispatch_report(filters=None):
 		""",
 		{"names": names},
 		as_dict=True,
-	)
+	))
 	return columns, data
 
 
@@ -282,7 +283,7 @@ def execute_time_and_action_pending_work(filters=None):
 	if filters.work_station:
 		conditions.append("detail.work_station = %(work_station)s")
 		values["work_station"] = filters.work_station
-	data = frappe.db.sql(
+	data = attribute_db.business_values(frappe.db.sql(
 		f"""
 		SELECT parent.lot, parent.item, parent.master, parent.colour,
 			parent.sizes, parent.qty, detail.action, detail.department,
@@ -295,7 +296,7 @@ def execute_time_and_action_pending_work(filters=None):
 		""",
 		values,
 		as_dict=True,
-	)
+	))
 	return columns, data
 
 
@@ -318,7 +319,7 @@ def execute_time_and_action_report(filters=None):
 	names = _names_or_empty({"lot": filters.lot} if filters.lot else None, active_only=True)
 	if not names:
 		return columns, []
-	all_rows = frappe.db.sql(
+	all_rows = attribute_db.business_values(frappe.db.sql(
 		"""
 		SELECT parent.name AS parent_name, parent.lot, parent.item, parent.master,
 			parent.colour, parent.sizes, parent.qty, parent.start_date,
@@ -331,7 +332,7 @@ def execute_time_and_action_report(filters=None):
 		""",
 		{"names": names},
 		as_dict=True,
-	)
+	))
 	seen = set()
 	data = []
 	for row in all_rows:

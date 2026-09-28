@@ -5,6 +5,8 @@ draft, non-rework garment Work Order.  Cloth processes use the separate fabric
 calculator in :mod:`essdee_yrp.api.work_order`; this module restores the
 garment path over the migrated F16 data model.
 """
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 import math
 
@@ -53,7 +55,7 @@ def regenerate_ipd_process_matrices(ipd_name):
 		if not variants:
 			frappe.throw(
 				_("No {0} Item Variants are available for IPD {1}.").format(
-					ipd.get("pack_in_stage") or "finished-stage", ipd.name
+					_attribute_value(ipd.get("pack_in_stage")) or "finished-stage", ipd.name
 				)
 			)
 		valid_variants = []
@@ -325,20 +327,20 @@ def _validate_garment_work_order(wo):
 		frappe.throw(_("Set Process, Lot, Item, and Item Production Detail first."))
 	if frappe.db.get_value('YRP Process', wo.process_name, "is_cloth_process"):
 		frappe.throw(_("Use Calculate Fabric Deliverables for a cloth process."))
-	lot_ipd = frappe.db.get_value('SD YRP Lot', wo.lot, "production_detail")
+	lot_ipd = attribute_db.get_value('SD YRP Lot', wo.lot, "production_detail")
 	if lot_ipd != wo.production_detail:
 		frappe.throw(_("Work Order Item Production Detail must match Lot {0}.").format(wo.lot))
 
 
 def _garment_reference_variants(ipd):
 	filters = {"variant_of": ipd.item}
-	if ipd.dependent_attribute and ipd.get("pack_in_stage"):
+	if ipd.dependent_attribute and _attribute_value(ipd.get("pack_in_stage")):
 		parents = frappe.get_all(
 			'Item Variant Attribute',
 			filters={
 				"parenttype": 'Item',
 				"attribute": ipd.dependent_attribute,
-				"attribute_value": ipd.pack_in_stage,
+				"attribute_value": _attribute_value(ipd.pack_in_stage),
 			},
 			pluck="parent",
 		)
@@ -373,12 +375,12 @@ def _quantity_field(ipd, process_name, includes_packing=False):
 	row = next((row for row in ipd.get("ipd_processes") or [] if row.process_name == process), None)
 	if not row:
 		frappe.throw(_("Mention process {0} in Item Production Detail {1}.").format(process, ipd.name))
-	stage = row.get("in_stage") or row.get("stage")
-	if stage == ipd.stiching_in_stage:
+	stage = _attribute_value(row.get("in_stage")) or row.get("stage")
+	if stage == _attribute_value(ipd.stiching_in_stage):
 		return "cut_qty"
-	if stage == ipd.pack_in_stage:
+	if stage == _attribute_value(ipd.pack_in_stage):
 		return "stich_qty"
-	if stage == ipd.pack_out_stage:
+	if stage == _attribute_value(ipd.pack_out_stage):
 		return "pack_qty"
 	frappe.throw(
 		_("Process {0} has no supported input stage on Item Production Detail {1}.").format(
@@ -450,17 +452,17 @@ def _missing_matrix_variants(ipd, process_name, rows):
 def _process_rows(ipd, lot, process_name, demands):
 	if process_name == ipd.cutting_process:
 		return _cutting_inputs(ipd, process_name, demands), (
-			_panel_rows(ipd, demands, ipd.stiching_in_stage)
+			_panel_rows(ipd, demands, _attribute_value(ipd.stiching_in_stage))
 			+ _cutting_accessory_outputs(ipd, demands)
 		)
 	if process_name == ipd.stiching_process:
 		return (
-			_panel_rows(ipd, demands, ipd.stiching_in_stage),
-			_stage_rows(ipd, demands, ipd.pack_in_stage),
+			_panel_rows(ipd, demands, _attribute_value(ipd.stiching_in_stage)),
+			_stage_rows(ipd, demands, _attribute_value(ipd.pack_in_stage)),
 		)
 	if process_name == ipd.packing_process:
 		return (
-			_stage_rows(ipd, demands, ipd.pack_in_stage),
+			_stage_rows(ipd, demands, _attribute_value(ipd.pack_in_stage)),
 			_packing_rows(ipd, lot, demands),
 		)
 
@@ -470,16 +472,16 @@ def _process_rows(ipd, lot, process_name, demands):
 	)
 	if not process_row:
 		frappe.throw(_("Mention process {0} in Item Production Detail {1}.").format(process_name, ipd.name))
-	in_stage = process_row.get("in_stage") or process_row.get("stage")
-	out_stage = process_row.get("out_stage") or in_stage
+	in_stage = _attribute_value(process_row.get("in_stage")) or process_row.get("stage")
+	out_stage = _attribute_value(process_row.get("out_stage")) or in_stage
 	inputs = (
 		_panel_rows(ipd, demands, in_stage, process_name=process_name)
-		if in_stage == ipd.stiching_in_stage
+		if in_stage == _attribute_value(ipd.stiching_in_stage)
 		else _stage_rows(ipd, demands, in_stage)
 	)
 	outputs = (
 		_panel_rows(ipd, demands, out_stage, process_name=process_name)
-		if out_stage == ipd.stiching_in_stage
+		if out_stage == _attribute_value(ipd.stiching_in_stage)
 		else _stage_rows(ipd, demands, out_stage)
 	)
 	return inputs, outputs
@@ -559,8 +561,8 @@ def _cutting_accessory_outputs(ipd, demands):
 			variant = get_or_create_variant(
 				cloth_item,
 				{
-					ipd.packing_attribute: requirement["colour"],
-					"Dia": requirement["dia"],
+					ipd.packing_attribute: _attribute_value(requirement["colour"]),
+					"Dia": _attribute_value(requirement["dia"]),
 				},
 			)
 			rows.append(
@@ -647,7 +649,7 @@ def _packing_rows(ipd, lot, demands):
 		ipd.get("based_on_other_attribute_mapping")
 		and ipd.get("packing_mode") == "Size Ratio Packing"
 	)
-	parts_count = len({row.set_item_attribute_value for row in ipd.get("stiching_item_details") or [] if row.set_item_attribute_value}) or 1
+	parts_count = len({_attribute_value(row.set_item_attribute_value) for row in ipd.get("stiching_item_details") or [] if _attribute_value(row.set_item_attribute_value)}) or 1
 	rows = []
 	for demand in demands:
 		attrs = dict(demand["attrs"])
@@ -660,7 +662,7 @@ def _packing_rows(ipd, lot, demands):
 			input_uom = resolve_item_uom(demand["item_variant"]).uom
 			output_variant = get_or_create_variant(
 				ipd.item,
-				build_variant_attributes({ipd.primary_item_attribute: size}, ipd.pack_out_stage, ipd.name),
+				build_variant_attributes({ipd.primary_item_attribute: size}, _attribute_value(ipd.pack_out_stage), ipd.name),
 				dependent_attr=ipd.dependent_attribute_mapping,
 			)
 			output_uom = resolve_item_uom(output_variant).uom
@@ -668,7 +670,7 @@ def _packing_rows(ipd, lot, demands):
 		else:
 			output_variant = get_or_create_variant(
 				ipd.item,
-				build_variant_attributes({ipd.primary_item_attribute: size}, ipd.pack_out_stage, ipd.name),
+				build_variant_attributes({ipd.primary_item_attribute: size}, _attribute_value(ipd.pack_out_stage), ipd.name),
 				dependent_attr=ipd.dependent_attribute_mapping,
 			)
 		rows.append(
@@ -767,7 +769,7 @@ def _update_cutting_tracking_json(work_order, ipd, processes):
 	cut_stage_processes = {
 		row.process_name
 		for row in ipd.get("ipd_processes") or []
-		if (row.get("in_stage") or row.get("stage")) == ipd.stiching_in_stage
+		if (_attribute_value(row.get("in_stage")) or row.get("stage")) == _attribute_value(ipd.stiching_in_stage)
 	}
 	sets_received = ipd.cutting_process in processes or bool(cut_stage_processes.intersection(processes))
 	sets_delivered = ipd.stiching_process in processes or bool(cut_stage_processes.intersection(processes))

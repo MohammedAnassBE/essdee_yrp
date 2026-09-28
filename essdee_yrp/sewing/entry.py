@@ -1,6 +1,8 @@
 """Permission-aware Sewing Plan data entry with configured stage sequencing."""
 
 from __future__ import annotations
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 from collections import defaultdict
 import json
@@ -96,7 +98,7 @@ def get_data_entry_data(supplier: str, lot: str | None = None) -> dict:
 	}
 	ipds = {
 		row.name: row
-		for row in frappe.get_all(
+		for row in attribute_db.get_all(
 			'YRP Item Production Detail',
 			filters={"name": ["in", list(ipd_names)]},
 			fields=[
@@ -137,7 +139,7 @@ def get_data_entry_data(supplier: str, lot: str | None = None) -> dict:
 				bucket["key"],
 				{
 					"values": {},
-					"part": bucket["part"],
+					"part": _attribute_value(bucket["part"]),
 					"colour": bucket["key"],
 					"variant_colour": bucket["variant_colour"],
 					"set_combination": bucket["set_combination"],
@@ -243,8 +245,8 @@ def update_sewing_plan_data(payload) -> str:
 			if quantity < 0:
 				frappe.throw(_("Inspection quantity cannot be negative."))
 			key = (
-				cstr(row.get("colour")).strip(),
-				cstr(row.get("part")).strip(),
+				cstr(_attribute_value(row.get("colour"))).strip(),
+				cstr(_attribute_value(row.get("part"))).strip(),
 				combination_key,
 				cstr(size).strip(),
 			)
@@ -255,7 +257,7 @@ def update_sewing_plan_data(payload) -> str:
 		bucket, size = _entry_bucket(order_row, ipd, variant_attributes)
 		key = (
 			cstr(bucket.get("variant_colour")).strip(),
-			cstr(bucket.get("part")).strip(),
+			cstr(_attribute_value(bucket.get("part"))).strip(),
 			tuple(sorted((bucket.get("set_combination") or {}).items())),
 			cstr(size).strip(),
 		)
@@ -480,7 +482,7 @@ def _variant_attributes(variants) -> dict[str, dict]:
 		fields=["parent", "attribute", "attribute_value"],
 		limit_page_length=0,
 	):
-		result[row.parent][row.attribute] = row.attribute_value
+		result[row.parent][row.attribute] = _attribute_value(row.attribute_value)
 	return dict(result)
 
 

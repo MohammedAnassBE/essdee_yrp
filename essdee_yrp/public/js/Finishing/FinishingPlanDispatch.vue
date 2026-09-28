@@ -149,7 +149,7 @@ function load_data(data) {
         item._colours = cfg.colours || []
         item._combo = Number(cfg.packing_combo) || 1
         item._ratio = {}
-        ;(cfg.packing_size_details || []).forEach(d => { item._ratio[d.attribute_value] = d.quantity })
+        ;(cfg.packing_size_details || []).forEach(d => { item._ratio[frappe.yrp.attribute_value(d.attribute_value)] = d.quantity })
         item._colour_boxes = {}
         item._colour_size = {}
         item._colours.forEach(c => {
@@ -192,12 +192,12 @@ function recompute_dynamic(item, markDirty = true) {
 		const boxes = Number(item._batch_dispatch_boxes[batch.batch_row]) || 0
 		if (!boxes) return
 		item.batch_dispatches.push({batch_row: batch.batch_row, box_quantity: boxes})
-		if (!grid[batch.colour]) grid[batch.colour] = {}
+		if (!grid[frappe.yrp.attribute_value(batch.colour)]) grid[frappe.yrp.attribute_value(batch.colour)] = {}
 		for (const size in (batch.ratio || {})) {
 			const pieces = boxes * (Number(batch.ratio[size]) || 0)
 			if (!item.values[size]) continue
 			item.values[size].dispatch_qty += pieces
-			if (pieces) grid[batch.colour][size] = (grid[batch.colour][size] || 0) + pieces
+			if (pieces) grid[frappe.yrp.attribute_value(batch.colour)][size] = (grid[frappe.yrp.attribute_value(batch.colour)][size] || 0) + pieces
 		}
 	})
 	item.colour_grid = grid

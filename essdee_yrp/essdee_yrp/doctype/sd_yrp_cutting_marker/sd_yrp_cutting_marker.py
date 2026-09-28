@@ -1,3 +1,4 @@
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2024, Essdee and contributors
 # For license information, please see license.txt
 
@@ -69,8 +70,8 @@ class SDYRPCuttingMarker(Document):
 						if not(precision == 5 or precision == 0):
 							frappe.throw("Only 0.5 addition is acceptable")
 					items.append({
-						"size":item['size'],
-						"panel":item['panel'],
+						"size":_attribute_value(item['size']),
+						"panel":_attribute_value(item['panel']),
 						"ratio":ratio,
 					})
 			else:
@@ -85,7 +86,7 @@ class SDYRPCuttingMarker(Document):
 								frappe.throw("Only 0.5 increment is acceptable")
 						for panel in panels:
 							items.append({
-								"size":item['size'],
+								"size":_attribute_value(item['size']),
 								"panel":panel,
 								"ratio": ratio
 							})
@@ -107,18 +108,18 @@ def fetch_marker_details(marker_details, selected_type):
 	if selected_type == "Manual":
 		for item in marker_details:
 			items.append({
-				"size":item.size,
-				"panel":item.panel,
+				"size":_attribute_value(item.size),
+				"panel":_attribute_value(item.panel),
 				"ratio":round(item.ratio,1),
 			})
 	else:
 		sizes = []
 		for item in marker_details:
-			if item.size not in sizes:
-				sizes.append(item.size)
+			if _attribute_value(item.size) not in sizes:
+				sizes.append(_attribute_value(item.size))
 				items.append({
-					"size":item.size,
-					"panel":item.panel,
+					"size":_attribute_value(item.size),
+					"panel":_attribute_value(item.panel),
 					"ratio":item.ratio,
 				})
 	return items
@@ -226,7 +227,7 @@ def calculate_parts(cutting_plan=None, cutting_order=None):
 	attribute_list = []
 	for item in ipd_doc.stiching_item_details:
 		attribute_list.append({
-			"part": item.stiching_attribute_value,
+			"part": _attribute_value(item.stiching_attribute_value),
 		})
 	return attribute_list
 

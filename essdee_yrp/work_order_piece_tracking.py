@@ -8,6 +8,7 @@ makes submit, cancel, return, retry, and the recovery action idempotent.
 """
 
 from __future__ import annotations
+from yrp.attribute_links import value as _attribute_value
 
 import copy
 import json
@@ -55,12 +56,12 @@ def _process_stage(ipd, process_name: str | None) -> str | None:
 	if process_name == ipd.cutting_process:
 		return "cutting"
 	if process_name == ipd.stiching_process:
-		return ipd.stiching_in_stage
+		return _attribute_value(ipd.stiching_in_stage)
 	if process_name == ipd.packing_process:
-		return ipd.pack_out_stage
+		return _attribute_value(ipd.pack_out_stage)
 	for row in ipd.get("ipd_processes") or []:
 		if row.process_name == process_name:
-			return row.get("in_stage") or row.get("stage")
+			return _attribute_value(row.get("in_stage")) or row.get("stage")
 	return None
 
 
@@ -72,30 +73,30 @@ def _is_finishing_process(process_name: str) -> bool:
 def _panel_list(ipd, process_name: str) -> list[str]:
 	stage = _process_stage(ipd, process_name)
 	embellishments = _json_dict(ipd.get("emblishment_details_json"))
-	if stage == ipd.stiching_in_stage and embellishments.get(process_name):
+	if stage == _attribute_value(ipd.stiching_in_stage) and embellishments.get(process_name):
 		panels = update_if_string_instance(embellishments[process_name]) or []
 		if isinstance(panels, list):
 			return panels
 	return [
-		row.stiching_attribute_value
+		_attribute_value(row.stiching_attribute_value)
 		for row in ipd.get("stiching_item_details") or []
-		if row.stiching_attribute_value
+		if _attribute_value(row.stiching_attribute_value)
 	]
 
 
 def _panel_requirements(ipd) -> dict[str, float]:
 	return {
-		row.stiching_attribute_value: flt(row.quantity) or 1
+		_attribute_value(row.stiching_attribute_value): flt(row.quantity) or 1
 		for row in ipd.get("stiching_item_details") or []
-		if row.stiching_attribute_value
+		if _attribute_value(row.stiching_attribute_value)
 	}
 
 
 def _panel_parts(ipd) -> dict[str, str]:
 	return {
-		row.stiching_attribute_value: row.set_item_attribute_value
+		_attribute_value(row.stiching_attribute_value): _attribute_value(row.set_item_attribute_value)
 		for row in ipd.get("stiching_item_details") or []
-		if row.stiching_attribute_value
+		if _attribute_value(row.stiching_attribute_value)
 	}
 
 
@@ -325,10 +326,10 @@ def _apply_delivery_challan(state, challan):
 	_update_date_range(state, challan, "dc")
 	if stage == "cutting":
 		return
-	if _is_finishing_process(challan.process_name) or stage == state.ipd.stiching_in_stage:
+	if _is_finishing_process(challan.process_name) or stage == _attribute_value(state.ipd.stiching_in_stage):
 		_apply_panel_delivery(state, challan, _panel_list(state.ipd, process))
 		return
-	if challan.get("includes_packing") or stage == state.ipd.pack_in_stage:
+	if challan.get("includes_packing") or stage == _attribute_value(state.ipd.pack_in_stage):
 		for row in challan.get("items") or []:
 			state.add_delivery(
 				row.item_variant,
@@ -348,13 +349,13 @@ def _apply_goods_received_note(state, grn):
 	if _is_finishing_process(grn.process_name):
 		_apply_direct_receipt(state, grn)
 		return
-	if grn.get("includes_packing") or stage == state.ipd.pack_out_stage:
+	if grn.get("includes_packing") or stage == _attribute_value(state.ipd.pack_out_stage):
 		_apply_packing_receipt(state, grn)
 		return
-	if stage == state.ipd.pack_in_stage:
+	if stage == _attribute_value(state.ipd.pack_in_stage):
 		_apply_direct_receipt(state, grn)
 		return
-	if stage == state.ipd.stiching_in_stage:
+	if stage == _attribute_value(state.ipd.stiching_in_stage):
 		_apply_panel_receipt(state, grn, _panel_list(state.ipd, process))
 
 
@@ -428,22 +429,22 @@ def _apply_packing_receipt(state, grn):
 					combinations = [
 						row
 						for row in ipd.get("set_item_combination_details") or []
-						if row.major_attribute_value == batch.colour
-						or row.attribute_value == batch.colour
+						if _attribute_value(row.major_attribute_value) == _attribute_value(batch.colour)
+						or _attribute_value(row.attribute_value) == _attribute_value(batch.colour)
 					] or list(ipd.get("set_item_combination_details") or [])
 				for combination in combinations:
 					attributes = {
 						ipd.primary_item_attribute: size,
-						ipd.packing_attribute: batch.colour,
+						ipd.packing_attribute: _attribute_value(batch.colour),
 					}
-					set_combination = {"major_colour": batch.colour}
+					set_combination = {"major_colour": _attribute_value(batch.colour)}
 					if combination:
-						attributes[ipd.packing_attribute] = combination.attribute_value
-						attributes[ipd.set_item_attribute] = combination.set_item_attribute_value
-						set_combination["major_part"] = ipd.major_attribute_value
+						attributes[ipd.packing_attribute] = _attribute_value(combination.attribute_value)
+						attributes[ipd.set_item_attribute] = _attribute_value(combination.set_item_attribute_value)
+						set_combination["major_part"] = _attribute_value(ipd.major_attribute_value)
 					variant = get_or_create_variant(
 						state.work_order.item,
-						build_variant_attributes(attributes, ipd.pack_in_stage, ipd.name),
+						build_variant_attributes(attributes, _attribute_value(ipd.pack_in_stage), ipd.name),
 					)
 					state.add_received(
 						variant, set_combination, quantity, default_type, grn
@@ -454,15 +455,15 @@ def _apply_packing_receipt(state, grn):
 	if ipd.is_set_item:
 		attribute_rows = [
 			{
-				ipd.packing_attribute: row.attribute_value,
-				ipd.set_item_attribute: row.set_item_attribute_value,
-				"major_attr_value": row.major_attribute_value,
+				ipd.packing_attribute: _attribute_value(row.attribute_value),
+				ipd.set_item_attribute: _attribute_value(row.set_item_attribute_value),
+				"major_attr_value": _attribute_value(row.major_attribute_value),
 			}
 			for row in ipd.get("set_item_combination_details") or []
 		]
 	else:
 		attribute_rows = [
-			{ipd.packing_attribute: row.attribute_value}
+			{ipd.packing_attribute: _attribute_value(row.attribute_value)}
 			for row in ipd.get("packing_attribute_details") or []
 		]
 
@@ -481,10 +482,10 @@ def _apply_packing_receipt(state, grn):
 			attributes.pop("major_attr_value", None)
 			set_combination = {"major_colour": major_colour}
 			if ipd.is_set_item:
-				set_combination["major_part"] = ipd.major_attribute_value
+				set_combination["major_part"] = _attribute_value(ipd.major_attribute_value)
 			variant = get_or_create_variant(
 				(variant_doc.variant_of or variant_doc.name),
-				build_variant_attributes(attributes, ipd.pack_in_stage, ipd.name),
+				build_variant_attributes(attributes, _attribute_value(ipd.pack_in_stage), ipd.name),
 			)
 			state.add_received(
 				variant, set_combination, row.quantity, row.received_type, grn
@@ -689,7 +690,7 @@ def _apply_return_grns(state, grns):
 				row.item_variant, row.set_combination, row.quantity
 			):
 				unmatched.append(row)
-	if unmatched and (stage == "cutting" or stage == state.ipd.stiching_in_stage):
+	if unmatched and (stage == "cutting" or stage == _attribute_value(state.ipd.stiching_in_stage)):
 		panel_return = frappe._dict(
 			{
 				"name": grns[-1].name,

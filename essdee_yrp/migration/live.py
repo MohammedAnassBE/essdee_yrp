@@ -4279,6 +4279,22 @@ def _apply_contextual_defaults(
 			configured_value = defaults.get(f"{target_doctype}.{fieldname}")
 		if configured_value not in (None, ""):
 			document[fieldname] = configured_value
+	# Resolve migrated Link values using the original source master identity.
+	# Do not infer an attribute from labels, or change native ERPNext Data rows.
+	from yrp.attribute_links import fields as attribute_link_fields
+	from yrp.attribute_value_identity import attribute_value_name
+	for fieldname in attribute_link_fields().get(document.get("doctype"), []):
+		value = document.get(fieldname)
+		if not value or str(value).startswith("IAV-"):
+			continue
+		attribute = reference_data.get("source_attribute_value_attributes", {}).get(value)
+		if not attribute:
+			attributes = reference_data.get("attribute_value_pairs", {}).get(value, [])
+			if len(attributes) == 1:
+				attribute = next(iter(attributes))
+		if not attribute:
+			raise MigrationError(f"Cannot resolve source attribute identity: {document.get('doctype')}.{fieldname}={value}")
+		document[fieldname] = attribute_value_name(attribute, value)
 	if document.get("doctype") == "YRP Item Production Detail":
 		from yrp.attribute_value_identity import attribute_value_name
 		value = document.get("stiching_major_attribute_value")

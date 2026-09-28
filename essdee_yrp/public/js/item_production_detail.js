@@ -135,6 +135,7 @@ frappe.ui.form.on("YRP Item Production Detail", {
 		frm.set_query("from_dia", "compacting_dia_details", () => ({ filters: { attribute_name: "Dia" } }));
 		frm.set_query("to_dia", "compacting_dia_details", () => ({ filters: { attribute_name: "Dia" } }));
 		frm.set_query("colour", "colour_yarn_recipes", () => ({ filters: { attribute_name: "Colour" } }));
+		frm.set_query("yarn_colour", "colour_yarn_recipes", () => ({ filters: { attribute_name: "Colour" } }));
 		frm.set_query("cloth_item", "colour_yarn_recipes", () => {
 			const cloths = frm.doc.is_cloth_item
 				? [frm.doc.item]
@@ -368,8 +369,8 @@ frappe.ui.form.on("YRP Item Production Detail", {
 			"select_attributes_html", "select_cloth_accessory_html", "bundle_group_html",
 			"panel_wise_consumption_matrix_html", "colour_yarn_recipe_editor"
 		])
-		if(frm.doc.stiching_in_stage && frm.doc.dependent_attribute){
-			frm.cutting_attrs = await get_stich_in_attributes(frm.doc.dependent_attribute_mapping,frm.doc.stiching_in_stage, frm.doc.item)
+		if(frappe.yrp.attribute_value(frm.doc.stiching_in_stage) && frm.doc.dependent_attribute){
+			frm.cutting_attrs = await get_stich_in_attributes(frm.doc.dependent_attribute_mapping,frappe.yrp.attribute_value(frm.doc.stiching_in_stage), frm.doc.item)
 			if(frm.doc.is_set_item){
 				frm.cutting_attrs.push(frm.doc.set_item_attribute)
 			}
@@ -796,7 +797,7 @@ frappe.ui.form.on("YRP Item Production Detail", {
         }
 	},
 	get_set_item_combination(frm){
-		if(!frm.doc.major_attribute_value){
+		if(!frappe.yrp.attribute_value(frm.doc.major_attribute_value)){
 			frappe.msgprint("Set the major attribute value")
 			return
 		}
@@ -805,7 +806,7 @@ frappe.ui.form.on("YRP Item Production Detail", {
 			args: {
 				attribute_mapping_value : frm.set_item_attr_map_value,
 				packing_attribute_details : frm.doc.packing_attribute_details,
-				major_attribute_value : frm.doc.major_attribute_value,
+				major_attribute_value : frappe.yrp.attribute_value(frm.doc.major_attribute_value),
 			},
 			callback:async function(r){
 				await frm.set_item.load_data(r.message)
@@ -817,7 +818,7 @@ frappe.ui.form.on("YRP Item Production Detail", {
 		if(!frm.doc.stiching_attribute){
 			return
 		}
-		if(!frm.doc.stiching_major_attribute_value){
+		if(!frappe.yrp.attribute_value(frm.doc.stiching_major_attribute_value)){
 			frappe.msgprint("Set the stiching major attribute value")
 			return
 		}
@@ -830,7 +831,7 @@ frappe.ui.form.on("YRP Item Production Detail", {
 			args: {
 				attribute_mapping_value : frm.stiching_attribute_mapping,
 				packing_attribute_details : frm.doc.packing_attribute_details,
-				major_attribute_value : frm.doc.stiching_major_attribute_value,
+				major_attribute_value : frappe.yrp.attribute_value(frm.doc.stiching_major_attribute_value),
 				is_same_packing_attribute: frm.doc.is_same_packing_attribute,
 				doc_name : frm.doc.name,
 			},
@@ -899,7 +900,7 @@ frappe.ui.form.on("YRP Item Production Detail", {
 				if(!r.message){ return }
 				// Preserve any quantities the user already entered for a size.
 				let existing = {}
-				;(frm.doc.packing_size_details || []).forEach(row => { existing[row.attribute_value] = row.quantity })
+				;(frm.doc.packing_size_details || []).forEach(row => { existing[frappe.yrp.attribute_value(row.attribute_value)] = row.quantity })
 				// Sizes that carried a quantity but are no longer valid for this item.
 				let dropped = Object.keys(existing).filter(s => existing[s] > 0 && !r.message.includes(s))
 				frm.clear_table('packing_size_details')
@@ -1002,7 +1003,7 @@ frappe.ui.form.on("YRP Item Production Detail", {
 	},
 	set_item_attribute(frm){
 		frm.set_item = new frappe.production.ui.CombinationItemDetail(frm.fields_dict['set_items_html'].wrapper);
-		if(frm.doc.major_attribute_value){
+		if(frappe.yrp.attribute_value(frm.doc.major_attribute_value)){
 			frm.trigger('get_set_item_combination')
 		}
 		if(frm.doc.is_set_item && frm.doc.set_item_attribute){
@@ -1029,7 +1030,7 @@ frappe.ui.form.on("YRP Item Production Detail", {
 	async enable_panel_wise_consumption_matrix(frm){
 		await frm.trigger("render_panel_wise_consumption_matrix")
 		await frm.trigger("render_panel_wise_cloth_mapping")
-		if(!frm.doc.enable_panel_wise_consumption_matrix && frm.doc.stiching_in_stage && frm.doc.dependent_attribute){
+		if(!frm.doc.enable_panel_wise_consumption_matrix && frappe.yrp.attribute_value(frm.doc.stiching_in_stage) && frm.doc.dependent_attribute){
 			make_select_attributes(frm,'select_attributes_html','select_attributes_wrapper','select_attrs_multicheck','cutting_attributes','cutting_items_json','get_cutting_combination')
 			await frm.trigger("make_cutting_combination")
 		}
@@ -1058,7 +1059,7 @@ frappe.ui.form.on("YRP Item Production Detail", {
 		if(!enabled){
 			return
 		}
-		if(!frm.doc.stiching_in_stage || !frm.doc.dependent_attribute){
+		if(!frappe.yrp.attribute_value(frm.doc.stiching_in_stage) || !frm.doc.dependent_attribute){
 			$(field.wrapper).html(
 				'<div class="alert alert-warning">Set the stitching input stage and dependent attribute before using the panel-wise matrix.</div>'
 			)
@@ -1086,7 +1087,7 @@ frappe.ui.form.on("YRP Item Production Detail", {
 		}
 		$(field.wrapper).empty()
 		frm.panel_wise_cloth_mapping = null
-		if(!frm.doc.stiching_in_stage || !frm.doc.dependent_attribute){
+		if(!frappe.yrp.attribute_value(frm.doc.stiching_in_stage) || !frm.doc.dependent_attribute){
 			$(field.wrapper).html(
 				'<div class="text-muted">Configure the Stitching input stage before using the Cloth Mapping matrix.</div>'
 			)
@@ -1302,7 +1303,7 @@ function compacting_route_pairs(frm) {
 		pairs.push({ colour, input_dia });
 	};
 	(frm.doc.fabric_routes || []).forEach((row) => {
-		add_pair(row.finished_colour || "", row.finished_dia || "");
+		add_pair(frappe.yrp.attribute_value(row.finished_colour) || "", frappe.yrp.attribute_value(row.finished_dia) || "");
 	});
 	if (!pairs.length) {
 		const mappings = frm.doc.fabric_value_mappings || [];
@@ -1337,7 +1338,7 @@ function compacting_route_pairs(frm) {
 		if (!pairs.length) {
 			const recipe_colours = [...new Set(
 				(frm.doc.colour_yarn_recipes || [])
-					.map((row) => row.colour)
+					.map((row) => frappe.yrp.attribute_value(row.colour))
 					.filter(Boolean),
 			)];
 			recipe_colours.forEach((colour) => {
@@ -1347,21 +1348,21 @@ function compacting_route_pairs(frm) {
 	}
 	return pairs.sort(
 		(a, b) =>
-			String(a.input_dia).localeCompare(String(b.input_dia), undefined, { numeric: true }) ||
-			String(a.colour).localeCompare(String(b.colour), undefined, { numeric: true }),
+			String(frappe.yrp.attribute_value(a.input_dia)).localeCompare(String(frappe.yrp.attribute_value(b.input_dia)), undefined, { numeric: true }) ||
+			String(frappe.yrp.attribute_value(a.colour)).localeCompare(String(frappe.yrp.attribute_value(b.colour)), undefined, { numeric: true }),
 	);
 }
 
 function compacting_targets(routes, scope, selected_colours) {
 	if (scope === "All Colours") {
-		return [...new Set(routes.map((row) => row.input_dia))].map((input_dia) => ({
+		return [...new Set(routes.map((row) => frappe.yrp.attribute_value(row.input_dia)))].map((input_dia) => ({
 			colour: "",
 			input_dia,
 		}));
 	}
 	if (scope === "Colour Group") {
 		const selected = new Set(selected_colours || []);
-		return routes.filter((row) => selected.has(row.colour));
+		return routes.filter((row) => selected.has(frappe.yrp.attribute_value(row.colour)));
 	}
 	return routes;
 }
@@ -1378,7 +1379,7 @@ function open_compacting_generation_dialog(frm) {
 		});
 		return;
 	}
-	const colours = [...new Set(routes.map((row) => row.colour))].sort((a, b) =>
+	const colours = [...new Set(routes.map((row) => frappe.yrp.attribute_value(row.colour)))].sort((a, b) =>
 		String(a).localeCompare(String(b), undefined, { numeric: true }),
 	);
 	const selected_colours = new Set();
@@ -1454,17 +1455,17 @@ function open_compacting_generation_dialog(frm) {
 			const targets = compacting_targets(routes, values.generation_scope, selected);
 			const existing = new Set(
 				(frm.doc.compacting_reference_details || []).map(
-					(row) => `${row.colour || ""}\u0000${row.input_dia || ""}`,
+					(row) => `${frappe.yrp.attribute_value(row.colour) || ""}\u0000${frappe.yrp.attribute_value(row.input_dia) || ""}`,
 				),
 			);
 			let added = 0;
 			targets.forEach((target) => {
-				const key = `${target.colour || ""}\u0000${target.input_dia || ""}`;
+				const key = `${frappe.yrp.attribute_value(target.colour) || ""}\u0000${frappe.yrp.attribute_value(target.input_dia) || ""}`;
 				if (existing.has(key)) return;
 				existing.add(key);
 				const row = frm.add_child("compacting_reference_details");
-				row.colour = target.colour || "";
-				row.input_dia = target.input_dia;
+				row.colour = frappe.yrp.attribute_value(target.colour) || "";
+				row.input_dia = frappe.yrp.attribute_value(target.input_dia);
 				row.compacting_dia = "";
 				added += 1;
 			});
@@ -1492,7 +1493,7 @@ function fill_selected_compacting_dia(frm) {
 		);
 		return;
 	}
-	const input_dias = [...new Set(selected.map((row) => row.input_dia).filter(Boolean))];
+	const input_dias = [...new Set(selected.map((row) => frappe.yrp.attribute_value(row.input_dia)).filter(Boolean))];
 	if (input_dias.length !== 1) {
 		frappe.msgprint(
 			__("Select rows sharing the same Knitting/Input Dia before filling a colour group."),
@@ -1523,7 +1524,7 @@ function fill_selected_compacting_dia(frm) {
 		primary_action_label: __("Fill Selected Rows"),
 		primary_action(values) {
 			selected.forEach((row) => {
-				row.compacting_dia = values.compacting_dia;
+				row.compacting_dia = frappe.yrp.attribute_value(values.compacting_dia);
 			});
 			frm.refresh_field("compacting_reference_details");
 			frm.dirty();
@@ -1636,10 +1637,10 @@ function fabric_swap_widget_data(frm, cfg) {
 	// Seed suggestion cards ONLY on first entry (empty table). Once rows are
 	// saved, the widget mirrors the stored rows exactly — otherwise a removed
 	// empty card would reappear on every save/refresh.
-	if (!groups.size) {
+	if (!frappe.yrp.attribute_value(groups.size)) {
 		const seeds = cfg.table_field === "dyeing_colour_details"
-			? (frm.doc.knitting_dia_details || []).map((r) => r.dia)
-			: (frm.doc.dyeing_colour_details || []).map((r) => r.to_colour);
+			? (frm.doc.knitting_dia_details || []).map((r) => frappe.yrp.attribute_value(r.dia))
+			: (frm.doc.dyeing_colour_details || []).map((r) => frappe.yrp.attribute_value(r.to_colour));
 		[...new Set(seeds)].filter(Boolean).forEach((pin) => {
 			groups.set(pin, [{ from: "", to: "" }]);
 		});
@@ -1734,7 +1735,12 @@ async function fabric_processes_mount(frm) {
 let _fabric_process_catalog = null;
 async function fabric_processes_catalog() {
 	if (_fabric_process_catalog) return _fabric_process_catalog;
-	const rows = await frappe.db.get_list("YRP Process", { fields: ["name"], limit: 0, order_by: "name asc" });
+	const rows = await frappe.db.get_list("YRP Process", {
+		filters: { is_cloth_process: 1 },
+		fields: ["name"],
+		limit: 0,
+		order_by: "name asc",
+	});
 	_fabric_process_catalog = rows.map((r) => r.name);
 	return _fabric_process_catalog;
 }
@@ -1744,9 +1750,14 @@ function fabric_processes_payload(frm, all_processes) {
 	return {
 		editable,
 		item: frm.doc.item || null,
-		// Conversion input defaults to the IPD's yarn (yarn → cloth); NEVER the
-		// cloth item — a conversion's input and output must be distinct.
-		default_input: frm.doc.yarn_item || null,
+		// The actual consumed Items + ratios belong to the cloth IPD. The Item master
+		// supplies their initial reusable defaults; the IPD keeps and edits its own
+		// versioned snapshot so an approved program remains stable.
+		conversion_inputs: (frm.doc.yarn_ratio_details || []).map((row) => ({
+			item: row.yarn_item,
+			ratio: row.ratio,
+		})),
+		default_input: (frm.doc.yarn_ratio_details || [])[0]?.yarn_item || null,
 		attributes: [...new Set((frm.doc.item_attributes || []).map((a) => a.attribute).filter(Boolean))],
 		all_processes: all_processes || [],
 		processes: (frm.doc.fabric_processes || []).map((r) => ({
@@ -1772,25 +1783,32 @@ function fabric_processes_write_back(frm, payload) {
 	(payload.processes || []).forEach((p) => Object.assign(frm.add_child("fabric_processes"), p));
 	frm.clear_table("fabric_value_mappings");
 	(payload.mappings || []).forEach((m) => Object.assign(frm.add_child("fabric_value_mappings"), m));
+	frm.clear_table("yarn_ratio_details");
+	(payload.conversion_inputs || []).forEach((row) => {
+		Object.assign(frm.add_child("yarn_ratio_details"), {
+			yarn_item: row.item,
+			ratio: row.ratio,
+		});
+	});
 	frm.refresh_field("fabric_processes");
 	frm.refresh_field("fabric_value_mappings");
+	frm.refresh_field("yarn_ratio_details");
 	frm.dirty();
 }
 
 // ===========================================================================
-// Colour-wise Yarn Recipes — grouped Desk editor.
+// Colour-wise Yarn Recipes — hidden storage.
 //
-// `colour_yarn_recipes` remains the internal child-table storage, while this
-// Vue island is the only cloth-IPD entry surface. One card = one finished
-// colour, with all yarns and the 100% total visible together. Fabric-route data
-// is preserved in the payload for compatibility, but Dia/Colour conversions
-// are intentionally entered and shown only in the Fabric Processes tab.
+// The exact yarn recipe and physical route are now explained inside the
+// relevant cards on the Fabric Processes tab. Keep the old HTML field and raw
+// tables hidden so Item Details remains item-specific instead of repeating the
+// production flow.
 // ===========================================================================
 
 function colour_yarn_recipe_toggle_grid(frm) {
-	// Colour-wise cards are the single entry surface. The legacy global Yarn
-	// Ratio is derived server-side from the first colour recipe for old readers.
-	["yarn_ratio_details", "colour_yarn_recipes", "fabric_routes"].forEach((fieldname) => {
+	// Yarn Ratio is edited inside the IPD's Item Conversion card. Hide the raw
+	// child grids so the same IPD-owned recipe is not presented twice.
+	["yarn_ratio_details", "colour_yarn_recipe_editor", "colour_yarn_recipes", "fabric_routes"].forEach((fieldname) => {
 		const storage = frm.fields_dict[fieldname];
 		if (storage && storage.wrapper && frm.doc.is_cloth_item) {
 			$(storage.wrapper).hide();
@@ -1807,30 +1825,7 @@ function colour_yarn_recipe_mount(frm) {
 	}
 	$wrapper.empty();
 	frm.__colour_yarn_app = null;
-	if (!frm.doc.is_cloth_item) return;
-
-	const app = new frappe.production.ui.ColourYarnRecipeEditor(field.wrapper, {
-		on_change: (payload) => colour_yarn_recipe_write_back(frm, payload),
-	});
-	frm.__colour_yarn_app = app;
-	const can_write = (frm.perm || []).some((permission) => permission.write);
-	app.load_data({
-		cloth_item: frm.doc.item || "",
-		locked: !can_write ||
-			(!frm.is_new() && frm.doc.approval_status === "Approved"),
-		rows: (frm.doc.colour_yarn_recipes || []).map((row) => ({
-			cloth_item: row.cloth_item,
-			colour: row.colour,
-			yarn_item: row.yarn_item,
-			ratio: row.ratio,
-		})),
-		routes: (frm.doc.fabric_routes || []).map((row) => ({
-			finished_colour: row.finished_colour,
-			finished_dia: row.finished_dia,
-			knitting_output_colour: row.knitting_output_colour,
-			knitting_output_dia: row.knitting_output_dia,
-		})),
-	});
+	$wrapper.hide();
 }
 
 function colour_yarn_recipe_write_back(frm, payload) {
@@ -1838,18 +1833,20 @@ function colour_yarn_recipe_write_back(frm, payload) {
 	(payload.rows || []).forEach((values) => {
 		const row = frm.add_child("colour_yarn_recipes");
 		row.cloth_item = frm.doc.item || values.cloth_item || "";
-		row.colour = values.colour || "";
+		row.colour = frappe.yrp.attribute_value(values.colour) || "";
 		row.yarn_item = values.yarn_item || "";
+		row.yarn_colour = frappe.yrp.attribute_value(values.yarn_colour) || "";
 		row.ratio = Number(values.ratio || 0);
 	});
 	frm.refresh_field("colour_yarn_recipes");
 	frm.clear_table("fabric_routes");
 	(payload.routes || []).forEach((values) => {
 		const row = frm.add_child("fabric_routes");
-		row.finished_colour = values.finished_colour || "";
-		row.finished_dia = values.finished_dia || "";
-		row.knitting_output_colour = values.knitting_output_colour || "";
-		row.knitting_output_dia = values.knitting_output_dia || "";
+		row.finished_colour = frappe.yrp.attribute_value(values.finished_colour) || "";
+		row.finished_dia = frappe.yrp.attribute_value(values.finished_dia) || "";
+		row.knitting_output_colour = frappe.yrp.attribute_value(values.knitting_output_colour) || "";
+		row.knitting_output_dia = frappe.yrp.attribute_value(values.knitting_output_dia) || "";
+		row.use_dyed_yarn = values.use_dyed_yarn ? 1 : 0;
 	});
 	frm.refresh_field("fabric_routes");
 	colour_yarn_recipe_toggle_grid(frm);

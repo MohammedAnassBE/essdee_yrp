@@ -222,7 +222,7 @@ function on_cloth_type_change(){
         }
     } else {
         // Reset to all dias
-        let all_dias = select_attributes.value['dia'] || []
+        let all_dias = frappe.yrp.attribute_value(select_attributes.value['dia']) || []
         let dia_options = [""].concat([...all_dias])
         if(cloth_dia){
             cloth_dia.df.options = dia_options
@@ -315,12 +315,12 @@ async function add_cloth_item(index){
     let reqd = true
     let not_reqd = false
     cloth_type = get_input_field(".cloth-type", "Select", "cloth_type","Cloth Type", select_attributes.value['cloth_type'], reqd, change=on_cloth_type_change)
-    cloth_colour = get_input_field(".cloth-colour", "Select", "cloth_colour", "Colour", select_attributes.value['colour'], reqd, change=onchange_event)
-    cloth_dia = get_input_field(".cloth-dia", "Select", "cloth_dia", "Dia", select_attributes.value['dia'], reqd, change=update_actual_dia)
+    cloth_colour = get_input_field(".cloth-colour", "Select", "cloth_colour", "Colour", frappe.yrp.attribute_value(select_attributes.value['colour']), reqd, change=onchange_event)
+    cloth_dia = get_input_field(".cloth-dia", "Select", "cloth_dia", "Dia", frappe.yrp.attribute_value(select_attributes.value['dia']), reqd, change=update_actual_dia)
     cloth_shade = get_input_field(".cloth-shade", "Data", "cloth_shade", "Shade", no_options, reqd)
     cloth_weight = get_input_field(".cloth-weight", "Float", "cloth_weight", "Weight in kg's", no_options, reqd)
     cloth_rolls = get_input_field(".cloth-rolls", "Int", "cloth_rolls", "No of Rolls", no_options, reqd)
-    actual_dia = get_input_field(".actual-dia", "Select", "actual_dia", "Actual Dia", select_attributes.value['dia'], reqd)
+    actual_dia = get_input_field(".actual-dia", "Select", "actual_dia", "Actual Dia", frappe.yrp.attribute_value(select_attributes.value['dia']), reqd)
     balance_weight = get_input_field(".cloth-balance", "Float", "balance_weight", "Balance Weight", no_options, reqd)
     if(!cur_frm.doc.is_manual_entry){
         cloth_comment = get_input_field(".cloth-comment", "Small Text", "cloth_comment",'Comment', no_options, not_reqd)
@@ -352,10 +352,10 @@ async function add_cloth_item(index){
             actual_dia.df.options = dia_options
             actual_dia.refresh()
         }
-        cloth_dia.set_value(items.value[index]['dia'])
+        cloth_dia.set_value(frappe.yrp.attribute_value(items.value[index]['dia']))
         cloth_dia.refresh()
-        if(items.value[index]['actual_dia']){
-            actual_dia.set_value(items.value[index]['actual_dia'])
+        if(frappe.yrp.attribute_value(items.value[index]['actual_dia'])){
+            actual_dia.set_value(frappe.yrp.attribute_value(items.value[index]['actual_dia']))
             actual_dia.refresh()
         }
         if(!cur_frm.doc.is_manual_entry){
@@ -837,9 +837,9 @@ function add_manual_item(){
 
 function get_set_colour(item, colour){
     item['colour'] = colour
-    if(item['colour']){
+    if(frappe.yrp.attribute_value(item['colour'])){
         make_dirty()
-        let val = item['colour']
+        let val = frappe.yrp.attribute_value(item['colour'])
         frappe.call({
             method:"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.get_input_fields",
             args: {
@@ -862,7 +862,7 @@ function get_set_colour(item, colour){
 function get_items(){
     if(cur_frm.doc.is_manual_entry){
         Object.keys(manual_items.value).forEach(index => {
-            if(!manual_items.value[index]['colour']){
+            if(!frappe.yrp.attribute_value(manual_items.value[index]['colour'])){
                 frappe.throw("Enter Colour")
             }
             if(!manual_items.value[index]['major_colour']){

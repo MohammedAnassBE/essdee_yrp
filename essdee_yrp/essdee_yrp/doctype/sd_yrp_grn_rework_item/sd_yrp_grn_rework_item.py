@@ -9,6 +9,7 @@ through YRP's dimension-aware stock engine at the source bucket's live rate.
 """
 
 from __future__ import annotations
+from yrp import attribute_links as attribute_db
 
 import json
 from io import BytesIO
@@ -205,10 +206,10 @@ def get_rework_items(
 	):
 		doc = frappe.get_doc('SD YRP GRN Rework Item', name)
 		doc.check_permission("read")
-		ipd = frappe.get_cached_value('SD YRP Lot', doc.lot, "production_detail")
+		ipd = attribute_db.get_cached_value('SD YRP Lot', doc.lot, "production_detail")
 		if not ipd:
 			continue
-		pack_attr, primary_attr, is_set_item, set_attr = frappe.get_cached_value(
+		pack_attr, primary_attr, is_set_item, set_attr = attribute_db.get_cached_value(
 			'YRP Item Production Detail',
 			ipd,
 			[

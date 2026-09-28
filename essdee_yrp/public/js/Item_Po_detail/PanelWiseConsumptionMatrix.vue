@@ -203,7 +203,7 @@ const completeCount = computed(() =>
 					packingValuesFor(panel).filter(
 						(packing) => {
 							const cell = cellFor(row, packing);
-							return cell.dia && Number(cell.weight) > 0;
+							return frappe.yrp.attribute_value(cell.dia) && Number(cell.weight) > 0;
 						}
 					).length,
 				0
@@ -363,7 +363,7 @@ function mountDiaLink(el, bindingValue) {
 		syncSequence: 0,
 	};
 	el.__pwcDiaLink = state;
-	Promise.resolve(control.set_value(cell.dia || "")).then(() => {
+	Promise.resolve(control.set_value(frappe.yrp.attribute_value(cell.dia) || "")).then(() => {
 		if (el.__pwcDiaLink !== state) return;
 		state.initializing = false;
 		state.cleanupMenuPosition = bindDiaMenuPosition(el);
@@ -382,7 +382,7 @@ function mountDiaLink(el, bindingValue) {
 		control.df.onchange = () => {
 			if (state.initializing || state.syncing) return;
 			const value = control.get_value() || null;
-			if (state.cell.dia !== value) {
+			if (frappe.yrp.attribute_value(state.cell.dia) !== value) {
 				state.cell.dia = value;
 				markDirty();
 			}
@@ -401,7 +401,7 @@ function syncDiaLink(el, bindingValue) {
 		state.input.dataset.pwcRow = String(state.rowIndex);
 		state.input.dataset.pwcColumn = String(state.packingIndex);
 	}
-	const value = bindingValue.cell.dia || "";
+	const value = frappe.yrp.attribute_value(bindingValue.cell.dia) || "";
 	if (state.control.get_value() === value) return;
 
 	const syncSequence = ++state.syncSequence;
@@ -463,12 +463,12 @@ function setWeight(row, packing, event) {
 function copyFirstColourToRow(row) {
 	const first = currentPackingValues.value[0];
 	const source = cellFor(row, first);
-	if (!source.dia || !(Number(source.weight) > 0)) {
+	if (!frappe.yrp.attribute_value(source.dia) || !(Number(source.weight) > 0)) {
 		frappe.msgprint(`Enter ${first} Dia and consumption first.`);
 		return;
 	}
 	currentPackingValues.value.forEach((packing) => {
-		row.values[packing] = { dia: source.dia, weight: source.weight };
+		row.values[packing] = { dia: frappe.yrp.attribute_value(source.dia), weight: source.weight };
 	});
 	markDirty();
 }
@@ -504,7 +504,7 @@ function fillConsumptionColumn(packing) {
 			const weight = parseWeight(values.weight);
 			currentPanel.value.rows.forEach((row) => {
 				row.values[packing] = {
-					dia: values.dia,
+					dia: frappe.yrp.attribute_value(values.dia),
 					weight,
 				};
 			});
@@ -519,7 +519,7 @@ function copyFirstColourToPanel() {
 	const first = currentPackingValues.value[0];
 	const missing = currentPanel.value.rows.find((row) => {
 		const cell = cellFor(row, first);
-		return !cell.dia || !(Number(cell.weight) > 0);
+		return !frappe.yrp.attribute_value(cell.dia) || !(Number(cell.weight) > 0);
 	});
 	if (missing) {
 		frappe.msgprint(
@@ -530,7 +530,7 @@ function copyFirstColourToPanel() {
 	currentPanel.value.rows.forEach((row) => {
 		const source = cellFor(row, first);
 		currentPackingValues.value.forEach((packing) => {
-			row.values[packing] = { dia: source.dia, weight: source.weight };
+			row.values[packing] = { dia: frappe.yrp.attribute_value(source.dia), weight: source.weight };
 		});
 	});
 	markDirty();
@@ -587,7 +587,7 @@ function applyPanelDetails() {
 				return;
 			}
 			const sourceCell = cellFor(sourceRow, sourcePacking);
-			if (!sourceCell.dia || !(Number(sourceCell.weight) > 0)) {
+			if (!frappe.yrp.attribute_value(sourceCell.dia) || !(Number(sourceCell.weight) > 0)) {
 				frappe.msgprint(
 					`Enter Dia and consumption for ${sourcePanel.panel_value}, ` +
 						`${sourceRow.primary_value}, ${sourcePacking} first.`
@@ -595,7 +595,7 @@ function applyPanelDetails() {
 				return;
 			}
 			copiedValues[targetPacking] = {
-				dia: sourceCell.dia,
+				dia: frappe.yrp.attribute_value(sourceCell.dia),
 				weight: Number(
 					(
 						Number(sourceCell.weight) *
@@ -662,17 +662,17 @@ function groupSelectedPanels() {
 		for (const packing of packingValues) {
 			const cells = matchingRows.map((row) => cellFor(row, packing));
 			const started = cells.map(
-				(cell) => Boolean(cell.dia) || ![null, undefined, ""].includes(cell.weight)
+				(cell) => Boolean(frappe.yrp.attribute_value(cell.dia)) || ![null, undefined, ""].includes(cell.weight)
 			);
 			const complete = cells.map(
-				(cell) => Boolean(cell.dia) && Number(cell.weight) > 0
+				(cell) => Boolean(frappe.yrp.attribute_value(cell.dia)) && Number(cell.weight) > 0
 			);
 			if (started.some(Boolean) && !complete.every(Boolean)) {
 				frappe.throw(
 					`Complete or clear ${sourceRow.primary_value}, ${packing} for every selected panel before grouping.`
 				);
 			}
-			const dias = [...new Set(cells.map((cell) => cell.dia).filter(Boolean))];
+			const dias = [...new Set(cells.map((cell) => frappe.yrp.attribute_value(cell.dia)).filter(Boolean))];
 			if (dias.length > 1) {
 				frappe.throw(
 					`The selected panels use different Dia values for ${sourceRow.primary_value}, ${packing}.`
@@ -723,7 +723,7 @@ function ungroupCurrentPanel() {
 						return [
 							packing,
 							{
-								dia: cell.dia || null,
+								dia: frappe.yrp.attribute_value(cell.dia) || null,
 								weight: splitWeight(cell.weight, panelValues.length)[panelIndex],
 							},
 						];

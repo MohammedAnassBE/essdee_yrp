@@ -93,7 +93,7 @@ function filteredOptions(index) {
     const row = rows.value[index];
     const search = (row.search || '').toLowerCase();
     return allDiaValues.value.filter(v =>
-        !row.dia.includes(v) && v.toLowerCase().includes(search)
+        !frappe.yrp.attribute_value(row.dia).includes(v) && v.toLowerCase().includes(search)
     );
 }
 
@@ -106,8 +106,8 @@ function onSearchInput(index) {
 }
 
 function selectDia(index, val) {
-    if (!rows.value[index].dia.includes(val)) {
-        rows.value[index].dia.push(val);
+    if (!frappe.yrp.attribute_value(rows.value[index].dia).includes(val)) {
+        frappe.yrp.attribute_value(rows.value[index].dia).push(val);
     }
     rows.value[index].search = '';
     activeRow.value = null;
@@ -122,7 +122,7 @@ function selectFirst(index) {
 }
 
 function removeDia(index, val) {
-    rows.value[index].dia = rows.value[index].dia.filter(d => d !== val);
+    rows.value[index].dia = frappe.yrp.attribute_value(rows.value[index].dia).filter(d => d !== val);
     make_dirty();
 }
 
@@ -155,7 +155,7 @@ function load_data(data) {
     rows.value = data.map(item => ({
         id: nextId++,
         name1: item.name1 || '',
-        dia: item.dia || [],
+        dia: frappe.yrp.attribute_value(item.dia) || [],
         search: '',
     }));
 }
@@ -163,7 +163,7 @@ function load_data(data) {
 function get_data() {
     return rows.value.map(row => ({
         name1: row.name1,
-        dia: row.dia,
+        dia: frappe.yrp.attribute_value(row.dia),
     }));
 }
 

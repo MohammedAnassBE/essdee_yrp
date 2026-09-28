@@ -164,7 +164,7 @@ frappe.ui.form.on('SD YRP Product', {
 			frm.set_value("sizes", []);
 			size_range.sizes.forEach(size => {
 				let row = frm.add_child("sizes");
-				row.attribute_value = size.attribute_value;
+				row.attribute_value = frappe.yrp.attribute_value(size.attribute_value);
 			});
 			frm.refresh_field("sizes");
 		});

@@ -1,3 +1,5 @@
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2024, Essdee and contributors
 # For license information, please see license.txt
 
@@ -115,7 +117,7 @@ def get_t_and_a_preview_data(start_date, table, is_template=False, master_doc=No
 			doc.check_permission("read")
 		else:
 			doc = master_doc
-		doc_data[row['colour']] = doc
+		doc_data[_attribute_value(row['colour'])] = doc
 		day = start_date
 		action_completion_date = {}
 		dependent_action = build_dependent_action_map(doc)
@@ -142,8 +144,8 @@ def get_t_and_a_preview_data(start_date, table, is_template=False, master_doc=No
 			frappe.throw(f"{act} is not a Merge Action in Action Master")
 
 	for row in table:
-		preview_data[row['colour']] = []
-		doc = doc_data[row['colour']]
+		preview_data[_attribute_value(row['colour'])] = []
+		doc = doc_data[_attribute_value(row['colour'])]
 		day = start_date
 		action_completion_date = {}
 		dependent_action = build_dependent_action_map(doc)
@@ -173,7 +175,7 @@ def get_t_and_a_preview_data(start_date, table, is_template=False, master_doc=No
 				struct["work_station"] = data.work_station
 
 			action_completion_date[data.action] = day
-			preview_data[row['colour']].append(struct)
+			preview_data[_attribute_value(row['colour'])].append(struct)
 
 	return preview_data
 
@@ -224,12 +226,12 @@ def create_time_and_action(lot, item_name, args , values, total_qty, items):
 	lot_items = []
 	for idx,item in enumerate(item_list):
 		dependent_action = {}
-		for d in items[item['colour']]['dependent_details']:
+		for d in items[_attribute_value(item['colour'])]['dependent_details']:
 			dependent_action.setdefault(d['action'], []).append(d['dependent_action'])
 
 		action_completion_date = {}
 		day = start_date
-		for data in items[item['colour']]['details']:
+		for data in items[_attribute_value(item['colour'])]['details']:
 			if data['merge_action']:
 				entry = merge_process.setdefault(data['action'], {"count": 0, "lead_time": data['lead_time']})
 				if entry['lead_time'] != data['lead_time']:
@@ -265,7 +267,7 @@ def create_time_and_action(lot, item_name, args , values, total_qty, items):
 			"lot":lot,
 			"item":item_name,
 			"sizes":sizes,
-			"colour":item['colour'],
+			"colour":_attribute_value(item['colour']),
 			"master":item["master"],
 			"start_date":start_date,
 			"major_colour": item['major_colour']
@@ -278,7 +280,7 @@ def create_time_and_action(lot, item_name, args , values, total_qty, items):
 		dependent_list = []
 		action_completion_date = {}
 		dependent_action = {}
-		for dept in items[item['colour']]['dependent_details']:
+		for dept in items[_attribute_value(item['colour'])]['dependent_details']:
 			dependent_action.setdefault(dept['action'], []).append(dept['dependent_action'])
 			dependent_list.append({
 				"action": dept['action'],
@@ -289,7 +291,7 @@ def create_time_and_action(lot, item_name, args , values, total_qty, items):
 		x = 1
 		day = start_date
 		day2 = start_date
-		for colour_item in items[item['colour']]['details']:
+		for colour_item in items[_attribute_value(item['colour'])]['details']:
 			if dependent_action.get(colour_item['action']):
 				dependent_process_list = dependent_action.get(colour_item['action'])
 				if colour_item['merge_action']:
@@ -328,7 +330,7 @@ def create_time_and_action(lot, item_name, args , values, total_qty, items):
 		new_doc.set("end_date", day)
 		new_doc.insert()
 		lot_items.append({
-			"colour":item['colour'],
+			"colour":_attribute_value(item['colour']),
 			"master":item["master"],
 			"time_and_action":new_doc.name,
 		})
@@ -424,7 +426,7 @@ def get_t_and_a_update_data(lot, item):
 					"master": doc.master,
 					"major_colour": doc.major_colour,
 					"revised_times": doc.revised,
-					"colour": doc.colour,
+					"colour": _attribute_value(doc.colour),
 					"sizes": doc.sizes,
 					"qty": doc.qty,
 					"start_date": doc.start_date,
@@ -651,7 +653,7 @@ def get_update_rescheduled_date(updated_date, key, updated_action, data_index, t
 	# permitted actual-date deltas.  This preserves a multi-edit browser draft
 	# without trusting its dependencies, lead times, rescheduled dates, or merge
 	# flags.
-	item = frappe.db.get_value('SD YRP Lot', lot, "item")
+	item = attribute_db.get_value('SD YRP Lot', lot, "item")
 	total_data = get_t_and_a_update_data(lot, item)["data"]
 	ordered = [entry for entry in request_order if entry != request_key]
 	ordered.append(request_key)
@@ -750,7 +752,7 @@ def _calculate_rescheduled_update(
 					if not d or d < row['rescheduled_date']:
 						rescheduled_date_details[row['action']][idx] = row['rescheduled_date']
 
-	updated_colour = total_data[lot]['masters'][master]['datas'][int(data_index)]['colour']
+	updated_colour = _attribute_value(total_data[lot]['masters'][master]['datas'][int(data_index)]['colour'])
 	merge_actions = []
 	for master_val in total_data[lot]['masters']:
 		index = -1
@@ -775,12 +777,12 @@ def _calculate_rescheduled_update(
 					for dept_act in row['dependent_details']:
 						dependent_action[row['action']].setdefault(dept_act, None)
 						dependent_action[row['action']][dept_act] = row['dependent_details'][dept_act]
-						if dept_act == updated_action and data_row['colour'] ==  updated_colour:
+						if dept_act == updated_action and _attribute_value(data_row['colour']) ==  updated_colour:
 							dependency_value = updated_date if key == "updated" else None
 							dependent_action[row['action']][dept_act] = dependency_value
 							row['dependent_details'][dept_act] = dependency_value
 
-			if data_row['colour'] ==  updated_colour:
+			if _attribute_value(data_row['colour']) ==  updated_colour:
 				action_completion_date[updated_action] = updated_date if key == "updated" else None
 
 			for row in data_row['actions']:
@@ -1068,7 +1070,7 @@ def update_t_and_a(data):
 		requested, current, request_order = _collect_requested_updates(
 			lot_data, lot, "write"
 		)
-		item = frappe.db.get_value('SD YRP Lot', lot, "item")
+		item = attribute_db.get_value('SD YRP Lot', lot, "item")
 		calculated = get_t_and_a_update_data(lot, item)["data"]
 		for schedule_action in request_order:
 			desired = requested[schedule_action]["actual_date"]

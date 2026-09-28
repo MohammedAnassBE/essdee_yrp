@@ -242,7 +242,7 @@ const colourOptions = computed(() => {
     for (const row of dataRows.value) {
         if (selected_lots.value.length && !selected_lots.value.includes(row.lot)) continue
         if (selected_items.value.length && !selected_items.value.includes(row.item)) continue
-        const colour = row.colour || row.display_colour
+        const colour = frappe.yrp.attribute_value(row.colour) || row.display_colour
         if (colour) vals.add(colour)
     }
     return [...vals].sort()
@@ -253,7 +253,7 @@ const partOptions = computed(() => {
     for (const row of dataRows.value) {
         if (selected_lots.value.length && !selected_lots.value.includes(row.lot)) continue
         if (selected_items.value.length && !selected_items.value.includes(row.item)) continue
-        const part = row.part || (row.is_set_item && row.attr_details && row.set_attr
+        const part = frappe.yrp.attribute_value(row.part) || (row.is_set_item && row.attr_details && row.set_attr
             ? row.attr_details[row.set_attr]
             : null)
         if (part) vals.add(part)
@@ -267,9 +267,9 @@ const filteredRows = computed(() => {
     return dataRows.value.filter(row => {
         if (selected_lots.value.length && !selected_lots.value.includes(row.lot)) return false
         if (selected_items.value.length && !selected_items.value.includes(row.item)) return false
-        if (selected_colour.value && (row.colour || row.display_colour) !== selected_colour.value) return false
+        if (selected_colour.value && (frappe.yrp.attribute_value(row.colour) || row.display_colour) !== selected_colour.value) return false
         if (selected_part.value) {
-            const part = row.part || (row.attr_details && row.set_attr ? row.attr_details[row.set_attr] : null)
+            const part = frappe.yrp.attribute_value(row.part) || (row.attr_details && row.set_attr ? row.attr_details[row.set_attr] : null)
             if (part !== selected_part.value) return false
         }
         if (selected_from_date.value || selected_to_date.value) {
@@ -386,8 +386,8 @@ const getAttrValue = (row, attrName) => {
 const rowValue = (row, header) => {
     if (header === 'Item') return row.item || '-'
     if (header === 'SD YRP Lot') return row.lot || '-'
-    if (header === 'Colour') return row.colour || row.display_colour || getAttrValue(row, row.pack_attr)
-    if (header === 'Part') return row.part || (row.is_set_item ? getAttrValue(row, row.set_attr) : '-')
+    if (header === 'Colour') return frappe.yrp.attribute_value(row.colour) || row.display_colour || getAttrValue(row, row.pack_attr)
+    if (header === 'Part') return frappe.yrp.attribute_value(row.part) || (row.is_set_item ? getAttrValue(row, row.set_attr) : '-')
     if (['FI Date', 'Input Date', 'Last Sewing Output'].includes(header)) return formatDate(row[header])
     return row[header] ?? '-'
 }

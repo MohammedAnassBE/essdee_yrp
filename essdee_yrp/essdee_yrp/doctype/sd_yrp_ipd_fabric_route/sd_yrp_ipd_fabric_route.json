@@ -8,6 +8,7 @@
   "finished_colour",
   "finished_dia",
   "knitting_output_colour",
+  "use_dyed_yarn",
   "knitting_output_dia"
  ],
  "fields": [
@@ -15,43 +16,56 @@
    "columns": 2,
    "description": "Colour required by the garment/panel after all cloth processes.",
    "fieldname": "finished_colour",
-   "fieldtype": "Data",
+   "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Finished Colour",
-   "reqd": 1
+   "reqd": 1,
+   "options": "YRP Item Attribute Value"
   },
   {
    "columns": 2,
    "description": "Dia required after all cloth processes.",
    "fieldname": "finished_dia",
-   "fieldtype": "Data",
+   "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Finished Dia",
-   "reqd": 1
+   "reqd": 1,
+   "options": "YRP Item Attribute Value"
   },
   {
    "columns": 2,
    "description": "Physical colour received from knitting. Equal to Finished Colour means this route bypasses dyeing.",
    "fieldname": "knitting_output_colour",
-   "fieldtype": "Data",
+   "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Knitting Output Colour",
-   "reqd": 1
+   "reqd": 1,
+   "options": "YRP Item Attribute Value"
   },
   {
    "columns": 2,
    "description": "Physical Dia received from knitting. A different Finished Dia requires a real Dia-changing/compacting process.",
    "fieldname": "knitting_output_dia",
-   "fieldtype": "Data",
+   "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Knitting Output Dia",
-   "reqd": 1
+   "reqd": 1,
+   "options": "YRP Item Attribute Value"
+  },
+  {
+   "columns": 2,
+   "default": "0",
+   "description": "When enabled, the knitting output colour is locked to the Finished Colour.",
+   "fieldname": "use_dyed_yarn",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Use Dyed Yarn"
   }
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-07-25 00:00:00.000000",
+ "modified": "2026-09-25 15:12:33.705488",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP IPD Fabric Route",

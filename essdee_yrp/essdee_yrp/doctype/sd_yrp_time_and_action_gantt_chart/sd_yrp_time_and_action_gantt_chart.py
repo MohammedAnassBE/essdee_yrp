@@ -1,3 +1,4 @@
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2024, Essdee and contributors
 # For license information, please see license.txt
 
@@ -51,7 +52,7 @@ def get_chart_data(action: str, work_station: str | None = None) -> list[dict]:
 		items.append(
 			{
 				"id": index,
-				"name": f"{parent.lot}-{parent.item}-{parent.colour}",
+				"name": f"{parent.lot}-{parent.item}-{_attribute_value(parent.colour)}",
 				"start": row.actual_start_date
 				if row.actual_date
 				else row.rescheduled_start_date,

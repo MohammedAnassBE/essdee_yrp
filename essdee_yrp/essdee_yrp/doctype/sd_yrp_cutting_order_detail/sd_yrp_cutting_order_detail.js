@@ -222,7 +222,7 @@ frappe.ui.form.on("SD YRP Cutting Order Detail", {
 	},
 
 	get_set_item_combination(frm) {
-		if (!frm.doc.major_attribute_value) {
+		if (!frappe.yrp.attribute_value(frm.doc.major_attribute_value)) {
 			frappe.msgprint("Set the major attribute value");
 			return;
 		}
@@ -231,7 +231,7 @@ frappe.ui.form.on("SD YRP Cutting Order Detail", {
 			args: {
 				attribute_mapping_value: frm.set_item_attr_map_value,
 				packing_attribute_details: frm.doc.attribute_values,
-				major_attribute_value: frm.doc.major_attribute_value,
+				major_attribute_value: frappe.yrp.attribute_value(frm.doc.major_attribute_value),
 			},
 			callback: async function(r) {
 				await frm.set_item.load_data(r.message);
@@ -244,7 +244,7 @@ frappe.ui.form.on("SD YRP Cutting Order Detail", {
 		if (!frm.doc.stiching_attribute) {
 			return;
 		}
-		if (!frm.doc.major_panel_value) {
+		if (!frappe.yrp.attribute_value(frm.doc.major_panel_value)) {
 			frappe.msgprint("Set the major panel value");
 			return;
 		}
@@ -257,7 +257,7 @@ frappe.ui.form.on("SD YRP Cutting Order Detail", {
 			args: {
 				attribute_mapping_value: frm.stiching_attribute_mapping,
 				packing_attribute_details: frm.doc.attribute_values,
-				major_attribute_value: frm.doc.major_panel_value,
+				major_attribute_value: frappe.yrp.attribute_value(frm.doc.major_panel_value),
 				is_same_colour: frm.doc.is_same_colour,
 				doc_name: frm.doc.name,
 			},

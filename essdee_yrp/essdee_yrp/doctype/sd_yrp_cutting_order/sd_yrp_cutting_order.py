@@ -1,3 +1,4 @@
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2026, Essdee and contributors
 # For license information, please see license.txt
 
@@ -43,7 +44,7 @@ class SDYRPCuttingOrder(Document):
 		for attr_row in cod.item_attributes:
 			if attr_row.attribute == cod.primary_attribute and attr_row.mapping:
 				mapping_doc = get_mapping_document(attr_row.mapping, cached=True)
-				sizes = [v.attribute_value for v in mapping_doc.values]
+				sizes = [_attribute_value(v.attribute_value) for v in mapping_doc.values]
 				break
 
 		# Build panels and stiching_attrs in CP-compatible format
@@ -51,16 +52,16 @@ class SDYRPCuttingOrder(Document):
 			panels = {}
 			stiching_attrs = {cod.stiching_attribute: {}}
 			for row in cod.stiching_item_details:
-				panels.setdefault(row.set_item_attribute_value, {})
-				panels[row.set_item_attribute_value][row.stiching_attribute_value] = 0
-				stiching_attrs[cod.stiching_attribute].setdefault(row.set_item_attribute_value, [])
-				stiching_attrs[cod.stiching_attribute][row.set_item_attribute_value].append(row.stiching_attribute_value)
+				panels.setdefault(_attribute_value(row.set_item_attribute_value), {})
+				panels[_attribute_value(row.set_item_attribute_value)][_attribute_value(row.stiching_attribute_value)] = 0
+				stiching_attrs[cod.stiching_attribute].setdefault(_attribute_value(row.set_item_attribute_value), [])
+				stiching_attrs[cod.stiching_attribute][_attribute_value(row.set_item_attribute_value)].append(_attribute_value(row.stiching_attribute_value))
 		else:
 			panels = {}
 			stiching_attrs = {cod.stiching_attribute: []}
 			for row in cod.stiching_item_details:
-				panels[row.stiching_attribute_value] = 0
-				stiching_attrs[cod.stiching_attribute].append(row.stiching_attribute_value)
+				panels[_attribute_value(row.stiching_attribute_value)] = 0
+				stiching_attrs[cod.stiching_attribute].append(_attribute_value(row.stiching_attribute_value))
 
 		# Build CP-compatible items list
 		total_qty = {size: 0 for size in sizes}
@@ -69,12 +70,12 @@ class SDYRPCuttingOrder(Document):
 
 		for item in data.get('items', []):
 			# Build attributes dict
-			colour = item.get('colour', '')
+			colour = _attribute_value(item.get('colour', ''))
 			attributes = {cod.packing_attribute: colour}
 			item_keys = {}
 
 			if cod.is_set_item:
-				part = item.get('part', '')
+				part = _attribute_value(item.get('part', ''))
 				attributes[cod.set_item_attribute] = part
 				item_keys = {
 					"major_colour": item.get('major_colour', colour),
@@ -184,7 +185,7 @@ def calc_laysheets(cutting_order):
 	for attr_row in cod.item_attributes:
 		if attr_row.attribute == cod.primary_attribute and attr_row.mapping:
 			mapping_doc = get_mapping_document(attr_row.mapping, cached=True)
-			sizes = [v.attribute_value for v in mapping_doc.values]
+			sizes = [_attribute_value(v.attribute_value) for v in mapping_doc.values]
 			break
 
 	# Build panels and stiching_attrs
@@ -192,16 +193,16 @@ def calc_laysheets(cutting_order):
 		panels = {}
 		stiching_attrs = {cod.stiching_attribute: {}}
 		for row in cod.stiching_item_details:
-			panels.setdefault(row.set_item_attribute_value, {})
-			panels[row.set_item_attribute_value][row.stiching_attribute_value] = 0
-			stiching_attrs[cod.stiching_attribute].setdefault(row.set_item_attribute_value, [])
-			stiching_attrs[cod.stiching_attribute][row.set_item_attribute_value].append(row.stiching_attribute_value)
+			panels.setdefault(_attribute_value(row.set_item_attribute_value), {})
+			panels[_attribute_value(row.set_item_attribute_value)][_attribute_value(row.stiching_attribute_value)] = 0
+			stiching_attrs[cod.stiching_attribute].setdefault(_attribute_value(row.set_item_attribute_value), [])
+			stiching_attrs[cod.stiching_attribute][_attribute_value(row.set_item_attribute_value)].append(_attribute_value(row.stiching_attribute_value))
 	else:
 		panels = {}
 		stiching_attrs = {cod.stiching_attribute: []}
 		for row in cod.stiching_item_details:
-			panels[row.stiching_attribute_value] = 0
-			stiching_attrs[cod.stiching_attribute].append(row.stiching_attribute_value)
+			panels[_attribute_value(row.stiching_attribute_value)] = 0
+			stiching_attrs[cod.stiching_attribute].append(_attribute_value(row.stiching_attribute_value))
 
 	# Build zeroed completed/incomplete items
 	total_qty = {size: 0 for size in sizes}
@@ -209,12 +210,12 @@ def calc_laysheets(cutting_order):
 	incomplete_items = []
 
 	for item in data.get('items', []):
-		colour = item.get('colour', '')
+		colour = _attribute_value(item.get('colour', ''))
 		attributes = {cod.packing_attribute: colour}
 		item_keys = {}
 
 		if cod.is_set_item:
-			part = item.get('part', '')
+			part = _attribute_value(item.get('part', ''))
 			attributes[cod.set_item_attribute] = part
 			item_keys = {
 				"major_colour": item.get('major_colour', colour),
@@ -292,14 +293,14 @@ def get_cutting_order_laysheets_report(cutting_order):
 	for attr_row in cod_doc.item_attributes:
 		if attr_row.attribute == cod_doc.primary_attribute and attr_row.mapping:
 			mapping_doc = get_mapping_document(attr_row.mapping, cached=True)
-			sizes = [v.attribute_value for v in mapping_doc.values]
+			sizes = [_attribute_value(v.attribute_value) for v in mapping_doc.values]
 			break
 
 	panels = []
 	if cod_doc.is_set_item:
 		panels = {}
 		for row in cod_doc.stiching_item_details:
-			panels.setdefault(row.set_item_attribute_value, [])
+			panels.setdefault(_attribute_value(row.set_item_attribute_value), [])
 
 	cls_list = frappe.get_list('SD YRP Cutting LaySheet', filters={"cutting_order": cutting_order, "status": "Label Printed"}, pluck="name", order_by="lay_no asc")
 	lay_details = {}
@@ -308,7 +309,7 @@ def get_cutting_order_laysheets_report(cutting_order):
 		lay_no = cls_doc.lay_no
 		lay_details[lay_no] = {}
 		for row in cls_doc.cutting_laysheet_bundles:
-			parts = row.part.split(",")
+			parts = _attribute_value(row.part).split(",")
 			parts = ", ".join(parts)
 			set_combination = update_if_string_instance(row.set_combination)
 			major_colour = set_combination['major_colour']
@@ -326,13 +327,13 @@ def get_cutting_order_laysheets_report(cutting_order):
 					panels.append(parts)
 
 			lay_details[lay_no].setdefault(major_colour, {})
-			lay_details[lay_no][major_colour].setdefault(row.size, {})
-			lay_details[lay_no][major_colour][row.size].setdefault(row.shade, {})
-			lay_details[lay_no][major_colour][row.size][row.shade].setdefault(parts, {})
-			lay_details[lay_no][major_colour][row.size][row.shade][parts].setdefault("qty", 0)
-			lay_details[lay_no][major_colour][row.size][row.shade][parts]["qty"] += row.quantity
-			lay_details[lay_no][major_colour][row.size][row.shade][parts].setdefault("bundles", 0)
-			lay_details[lay_no][major_colour][row.size][row.shade][parts]['bundles'] += 1
+			lay_details[lay_no][major_colour].setdefault(_attribute_value(row.size), {})
+			lay_details[lay_no][major_colour][_attribute_value(row.size)].setdefault(row.shade, {})
+			lay_details[lay_no][major_colour][_attribute_value(row.size)][row.shade].setdefault(parts, {})
+			lay_details[lay_no][major_colour][_attribute_value(row.size)][row.shade][parts].setdefault("qty", 0)
+			lay_details[lay_no][major_colour][_attribute_value(row.size)][row.shade][parts]["qty"] += row.quantity
+			lay_details[lay_no][major_colour][_attribute_value(row.size)][row.shade][parts].setdefault("bundles", 0)
+			lay_details[lay_no][major_colour][_attribute_value(row.size)][row.shade][parts]['bundles'] += 1
 
 	final_data = {}
 	for size in sizes:
@@ -366,21 +367,21 @@ def get_cutting_order_size_reports(cutting_order):
 	for attr_row in cod_doc.item_attributes:
 		if attr_row.attribute == cod_doc.primary_attribute and attr_row.mapping:
 			mapping_doc = get_mapping_document(attr_row.mapping, cached=True)
-			sizes = [v.attribute_value for v in mapping_doc.values]
+			sizes = [_attribute_value(v.attribute_value) for v in mapping_doc.values]
 			break
 
 	panels = []
 	if cod_doc.is_set_item:
 		panels = {}
 		for row in cod_doc.stiching_item_details:
-			panels.setdefault(row.set_item_attribute_value, [])
+			panels.setdefault(_attribute_value(row.set_item_attribute_value), [])
 
 	cls_list = frappe.get_list('SD YRP Cutting LaySheet', filters={"cutting_order": cutting_order, "status": "Label Printed"}, pluck="name", order_by="lay_no asc")
 	size_details = {}
 	for cls in cls_list:
 		cls_doc = frappe.get_doc('SD YRP Cutting LaySheet', cls)
 		for row in cls_doc.cutting_laysheet_bundles:
-			parts = row.part.split(",")
+			parts = _attribute_value(row.part).split(",")
 			parts = ", ".join(parts)
 			set_combination = update_if_string_instance(row.set_combination)
 			major_colour = set_combination['major_colour']
@@ -397,12 +398,12 @@ def get_cutting_order_size_reports(cutting_order):
 				if parts not in panels:
 					panels.append(parts)
 			size_details.setdefault(major_colour, {})
-			size_details[major_colour].setdefault(row.size, {})
-			size_details[major_colour][row.size].setdefault(parts, {})
-			size_details[major_colour][row.size][parts].setdefault("qty", 0)
-			size_details[major_colour][row.size][parts]["qty"] += row.quantity
-			size_details[major_colour][row.size][parts].setdefault("bundles", 0)
-			size_details[major_colour][row.size][parts]['bundles'] += 1
+			size_details[major_colour].setdefault(_attribute_value(row.size), {})
+			size_details[major_colour][_attribute_value(row.size)].setdefault(parts, {})
+			size_details[major_colour][_attribute_value(row.size)][parts].setdefault("qty", 0)
+			size_details[major_colour][_attribute_value(row.size)][parts]["qty"] += row.quantity
+			size_details[major_colour][_attribute_value(row.size)][parts].setdefault("bundles", 0)
+			size_details[major_colour][_attribute_value(row.size)][parts]['bundles'] += 1
 
 	final_data = {}
 	for size in sizes:
@@ -431,8 +432,8 @@ def get_cutting_order_ccr(doc_name):
 		cls_doc = frappe.get_doc('SD YRP Cutting LaySheet', cls)
 		sizes = {}
 		for row in cls_doc.cutting_marker_ratios:
-			if row.size not in sizes:
-				sizes[row.size] = row.ratio
+			if _attribute_value(row.size) not in sizes:
+				sizes[_attribute_value(row.size)] = row.ratio
 		panels = cls_doc.calculated_parts.split(",")
 		panels.sort()
 		for idx, panel in enumerate(panels):
@@ -441,7 +442,7 @@ def get_cutting_order_ccr(doc_name):
 		tup_panels = ", ".join(panels)
 		markers.setdefault(tup_panels, {})
 		for row in cls_doc.cutting_laysheet_details:
-			key = (row.colour, row.cloth_type)
+			key = (_attribute_value(row.colour), row.cloth_type)
 			markers[tup_panels].setdefault(key, {
 				"used_weight": 0,
 				"total_pieces": 0,
@@ -461,7 +462,7 @@ def get_cutting_order_ccr(doc_name):
 	for attr_row in cod_doc.item_attributes:
 		if attr_row.attribute == cod_doc.primary_attribute and attr_row.mapping:
 			mapping_doc = get_mapping_document(attr_row.mapping, cached=True)
-			all_sizes = [v.attribute_value for v in mapping_doc.values]
+			all_sizes = [_attribute_value(v.attribute_value) for v in mapping_doc.values]
 			break
 
 	# Ensure every colour entry has all sizes
@@ -488,7 +489,7 @@ def get_cutting_order_planned_vs_actual(cutting_order):
 	for attr_row in cod_doc.item_attributes:
 		if attr_row.attribute == cod_doc.primary_attribute and attr_row.mapping:
 			mapping_doc = get_mapping_document(attr_row.mapping, cached=True)
-			sizes = [v.attribute_value for v in mapping_doc.values]
+			sizes = [_attribute_value(v.attribute_value) for v in mapping_doc.values]
 			break
 
 	# Parse planned quantities from items_json
@@ -517,8 +518,8 @@ def get_cutting_order_planned_vs_actual(cutting_order):
 				key = (major_colour, None, major_colour)
 
 			actual_qty.setdefault(key, {s: 0 for s in sizes})
-			if row.size in actual_qty[key]:
-				actual_qty[key][row.size] += row.quantity
+			if _attribute_value(row.size) in actual_qty[key]:
+				actual_qty[key][_attribute_value(row.size)] += row.quantity
 
 	# Build WOSummary-shaped result
 	items_list = []
@@ -527,14 +528,14 @@ def get_cutting_order_planned_vs_actual(cutting_order):
 	overall_received = 0
 
 	for item in planned_items:
-		colour = item.get('colour', '')
+		colour = _attribute_value(item.get('colour', ''))
 		quantities = item.get('quantities', {})
 
 		attributes = {cod_doc.packing_attribute: colour}
 		item_keys = {}
 
 		if cod_doc.is_set_item:
-			part = item.get('part', '')
+			part = _attribute_value(item.get('part', ''))
 			attributes[cod_doc.set_item_attribute] = part
 			major_colour = item.get('major_colour', colour)
 			item_keys = {"major_colour": major_colour}
@@ -588,13 +589,13 @@ def get_cutting_order_detail_data(cutting_order_detail):
 	doc = frappe.get_doc('SD YRP Cutting Order Detail', cutting_order_detail)
 	doc.check_permission("read")
 
-	colours = [row.attribute_value for row in doc.attribute_values]
+	colours = [_attribute_value(row.attribute_value) for row in doc.attribute_values]
 
 	sizes = []
 	for attr_row in doc.item_attributes:
 		if attr_row.attribute == doc.primary_attribute and attr_row.mapping:
 			mapping_doc = get_mapping_document(attr_row.mapping, cached=True)
-			sizes = [v.attribute_value for v in mapping_doc.values]
+			sizes = [_attribute_value(v.attribute_value) for v in mapping_doc.values]
 			break
 
 	if doc.is_set_item:
@@ -602,10 +603,10 @@ def get_cutting_order_detail_data(cutting_order_detail):
 		comb_dict = {}
 		parts = []
 		for row in doc.set_item_combination_details:
-			comb_dict.setdefault(row.major_attribute_value, {})
-			comb_dict[row.major_attribute_value][row.set_item_attribute_value] = row.attribute_value
-			if row.set_item_attribute_value not in parts:
-				parts.append(row.set_item_attribute_value)
+			comb_dict.setdefault(_attribute_value(row.major_attribute_value), {})
+			comb_dict[_attribute_value(row.major_attribute_value)][_attribute_value(row.set_item_attribute_value)] = _attribute_value(row.attribute_value)
+			if _attribute_value(row.set_item_attribute_value) not in parts:
+				parts.append(_attribute_value(row.set_item_attribute_value))
 
 		# Build actual items: for each major colour × part, resolve actual colour
 		items = []
@@ -627,7 +628,7 @@ def get_cutting_order_detail_data(cutting_order_detail):
 			"items": items,
 		}
 	else:
-		parts = [row.stiching_attribute_value for row in doc.stiching_item_details]
+		parts = [_attribute_value(row.stiching_attribute_value) for row in doc.stiching_item_details]
 
 		return {
 			"item": doc.item,

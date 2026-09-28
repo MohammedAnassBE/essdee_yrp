@@ -1,3 +1,4 @@
+from yrp import attribute_links as attribute_db
 # Copyright (c) 2026, anas@essdee.fit and contributors
 # For license information, please see license.txt
 
@@ -47,7 +48,7 @@ def preserve_dynamic_packing_piece_uom(doc):
 		and ipd.get("packing_mode") == "Size Ratio Packing"
 	):
 		return
-	piece_uom = frappe.db.get_value('SD YRP Lot', doc.lot, "packing_uom")
+	piece_uom = attribute_db.get_value('SD YRP Lot', doc.lot, "packing_uom")
 	if not piece_uom:
 		frappe.throw(_("Packing UOM is required on Lot {0}.").format(doc.lot))
 	for row in doc.get("receivables") or []:

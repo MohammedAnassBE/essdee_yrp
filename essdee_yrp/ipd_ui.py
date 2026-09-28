@@ -1,3 +1,5 @@
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 import json
 from itertools import groupby, zip_longest
 
@@ -140,7 +142,7 @@ def revert_ipd_approval(doc_name):
 	# Do not resave the whole document here: newer validations may correctly
 	# reject its old payload and would otherwise make the record impossible to
 	# unlock. This role-gated action changes only the approval fields.
-	frappe.db.set_value(
+	attribute_db.set_value(
 		'YRP Item Production Detail',
 		doc.name,
 		{"approval_status": "Not Approved", "approved_by": None},
@@ -159,7 +161,7 @@ def get_attribute_detail_values(doctype, txt, searchfield, start, page_len, filt
 
 	rows = [frappe._dict(attribute_value=value) for value in get_mapping_values(mapping)]
 	txt = (txt or "").lower()
-	return [[row.attribute_value] for row in rows if row.attribute_value.lower().startswith(txt)]
+	return [[_attribute_value(row.attribute_value)] for row in rows if _attribute_value(row.attribute_value).lower().startswith(txt)]
 
 
 @frappe.whitelist()
@@ -176,7 +178,7 @@ def search_attribute_detail_values(txt="", mapping=None, page_len=99):
 def get_ipd_item_group():
 	if not frappe.db.exists("DocType", 'SD YRP IPD Settings'):
 		return []
-	item_group = frappe.db.get_single_value('SD YRP IPD Settings', "item_group")
+	item_group = attribute_db.get_single_value('SD YRP IPD Settings', "item_group")
 	if not item_group:
 		return []
 	if isinstance(item_group, list):
@@ -200,17 +202,17 @@ def get_attribute_values(item_production_detail, attributes=None):
 		if attribute.attribute == ipd_doc.packing_attribute:
 			values = []
 			for row in ipd_doc.get("stiching_item_combination_details") or []:
-				if row.major_attribute_value not in values:
-					values.append(row.major_attribute_value)
+				if _attribute_value(row.major_attribute_value) not in values:
+					values.append(_attribute_value(row.major_attribute_value))
 			attribute_values[attribute.attribute] = values
 		elif attribute.attribute == ipd_doc.stiching_attribute:
 			attribute_values[attribute.attribute] = [
-				row.stiching_attribute_value for row in ipd_doc.get("stiching_item_details") or []
+				_attribute_value(row.stiching_attribute_value) for row in ipd_doc.get("stiching_item_details") or []
 			]
 		else:
 			mapping_doc = get_mapping_document(attribute.mapping, cached=True)
 			attribute_values[attribute.attribute] = [
-				row.attribute_value for row in mapping_doc.get("values") or []
+				_attribute_value(row.attribute_value) for row in mapping_doc.get("values") or []
 			]
 	return attribute_values
 
@@ -224,13 +226,13 @@ def fetch_combination_items(combination_items):
 	for _key, items in groupby(combination_items, lambda row: row["index"]):
 		items = list(items)
 		item_list = {
-			"major_attribute": items[0]["major_attribute_value"],
+			"major_attribute": _attribute_value(items[0]["major_attribute_value"]),
 			"val": {},
 		}
 		for item in items:
-			if item["set_item_attribute_value"] not in combination_result["attributes"]:
-				combination_result["attributes"].append(item["set_item_attribute_value"])
-			item_list["val"][item["set_item_attribute_value"]] = item["attribute_value"]
+			if _attribute_value(item["set_item_attribute_value"]) not in combination_result["attributes"]:
+				combination_result["attributes"].append(_attribute_value(item["set_item_attribute_value"]))
+			item_list["val"][_attribute_value(item["set_item_attribute_value"])] = _attribute_value(item["attribute_value"])
 		combination_result["values"].append(item_list)
 	return combination_result
 
@@ -247,7 +249,7 @@ def get_new_combination(
 	mapping_doc = get_mapping_document(attribute_mapping_value, cached=True)
 	from essdee_yrp.ipd_attribute_links import actual_value
 	major_attribute_value = actual_value(major_attribute_value)
-	attributes = [row.attribute_value for row in mapping_doc.get("values") or []]
+	attributes = [_attribute_value(row.attribute_value) for row in mapping_doc.get("values") or []]
 
 	stiching_item_details = {}
 	set_item_details = {}
@@ -257,31 +259,31 @@ def get_new_combination(
 		ipd_doc = frappe.get_doc('YRP Item Production Detail', doc_name)
 		if ipd_doc.is_set_item:
 			for row in ipd_doc.get("stiching_item_details") or []:
-				stiching_item_details[row.stiching_attribute_value] = row.set_item_attribute_value
+				stiching_item_details[_attribute_value(row.stiching_attribute_value)] = _attribute_value(row.set_item_attribute_value)
 				if row.is_default:
-					is_default_list.append(row.stiching_attribute_value)
+					is_default_list.append(_attribute_value(row.stiching_attribute_value))
 
 			for row in ipd_doc.get("set_item_combination_details") or []:
-				set_item_details.setdefault(row.major_attribute_value, {})
-				set_item_details[row.major_attribute_value][row.set_item_attribute_value] = (
-					row.attribute_value
+				set_item_details.setdefault(_attribute_value(row.major_attribute_value), {})
+				set_item_details[_attribute_value(row.major_attribute_value)][_attribute_value(row.set_item_attribute_value)] = (
+					_attribute_value(row.attribute_value)
 				)
 
 	item_detail = []
 	for row in packing_attribute_details:
-		item_list = {"major_attribute": row.get("attribute_value"), "val": {}}
+		item_list = {"major_attribute": _attribute_value(row.get("attribute_value")), "val": {}}
 		for attribute in attributes:
 			if attribute == major_attribute_value:
-				item_list["val"][attribute] = row.get("attribute_value")
+				item_list["val"][attribute] = _attribute_value(row.get("attribute_value"))
 			elif cint(is_same_packing_attribute):
 				if doc_name and ipd_doc and ipd_doc.is_set_item:
 					part = stiching_item_details.get(attribute)
-					item_list["val"][attribute] = set_item_details.get(row.get("attribute_value"), {}).get(part)
+					item_list["val"][attribute] = set_item_details.get(_attribute_value(row.get("attribute_value")), {}).get(part)
 				else:
-					item_list["val"][attribute] = row.get("attribute_value")
+					item_list["val"][attribute] = _attribute_value(row.get("attribute_value"))
 			elif doc_name and ipd_doc and ipd_doc.is_set_item and attribute in is_default_list:
 				part = stiching_item_details.get(attribute)
-				item_list["val"][attribute] = set_item_details.get(row.get("attribute_value"), {}).get(part)
+				item_list["val"][attribute] = set_item_details.get(_attribute_value(row.get("attribute_value")), {}).get(part)
 			else:
 				item_list["val"][attribute] = None
 		item_detail.append(item_list)
@@ -291,7 +293,7 @@ def get_new_combination(
 
 def resolve_packing_separator(ipd_doc):
 	dependent = get_dependent_attribute_details(ipd_doc.dependent_attribute_mapping)
-	pack_stage_attrs = dependent["attr_list"].get(ipd_doc.pack_out_stage, {}).get("attributes") or []
+	pack_stage_attrs = dependent["attr_list"].get(_attribute_value(ipd_doc.pack_out_stage), {}).get("attributes") or []
 	if len(pack_stage_attrs) != 1:
 		frappe.throw(
 			"Packing assortment needs the pack-out stage to keep exactly ONE box attribute "
@@ -411,11 +413,11 @@ def get_mapping_attribute_values(attribute_mapping_value, attribute_no=None):
 	attribute_value_list = []
 	for index, attr in enumerate(mapping_doc.values):
 		if not attribute_no:
-			attribute_value_list.append({"stiching_attribute_value": attr.attribute_value})
+			attribute_value_list.append({"stiching_attribute_value": _attribute_value(attr.attribute_value)})
 		else:
 			if index > int(attribute_no) - 1:
 				break
-			attribute_value_list.append({"attribute_value": attr.attribute_value})
+			attribute_value_list.append({"attribute_value": _attribute_value(attr.attribute_value)})
 	return attribute_value_list
 
 
@@ -433,11 +435,11 @@ def get_combination(doc_name, attributes, combination_type, cloth_list=None):
 	packing_attr = ipd_doc.packing_attribute
 	packing_attr_details = ipd_doc.get("packing_attribute_details") or []
 
-	cloth_colours = [row.attribute_value for row in packing_attr_details]
+	cloth_colours = [_attribute_value(row.attribute_value) for row in packing_attr_details]
 	if ipd_doc.is_set_item:
 		for row in ipd_doc.get("set_item_combination_details") or []:
-			if row.attribute_value not in cloth_colours:
-				cloth_colours.append(row.attribute_value)
+			if _attribute_value(row.attribute_value) not in cloth_colours:
+				cloth_colours.append(_attribute_value(row.attribute_value))
 
 	item_attr_val_list = get_combination_attr_list(
 		attributes, packing_attr, cloth_colours, item_attributes
@@ -516,8 +518,8 @@ def get_combination(doc_name, attributes, combination_type, cloth_list=None):
 
 		item_attr_list[set_attr] = {value: [] for value in item_attr_val_list[set_attr]}
 		for row in ipd_doc.get("set_item_combination_details") or []:
-			if row.attribute_value not in item_attr_list[set_attr][row.set_item_attribute_value]:
-				item_attr_list[set_attr][row.set_item_attribute_value].append(row.attribute_value)
+			if _attribute_value(row.attribute_value) not in item_attr_list[set_attr][_attribute_value(row.set_item_attribute_value)]:
+				item_attr_list[set_attr][_attribute_value(row.set_item_attribute_value)].append(_attribute_value(row.attribute_value))
 
 		set_attr_values = item_attr_list[set_attr]
 		del item_attr_list[set_attr]
@@ -601,12 +603,12 @@ def pop_attributes(attributes, attr_list):
 
 def get_set_tri_struct(ipd_doc, item_attr_list, set_attr, pack_attr, stich_attr):
 	for row in ipd_doc.get("set_item_combination_details") or []:
-		if row.attribute_value not in item_attr_list[set_attr][row.set_item_attribute_value][pack_attr]:
-			item_attr_list[set_attr][row.set_item_attribute_value][pack_attr].append(row.attribute_value)
+		if _attribute_value(row.attribute_value) not in item_attr_list[set_attr][_attribute_value(row.set_item_attribute_value)][pack_attr]:
+			item_attr_list[set_attr][_attribute_value(row.set_item_attribute_value)][pack_attr].append(_attribute_value(row.attribute_value))
 
 	for row in ipd_doc.get("stiching_item_details") or []:
-		item_attr_list[set_attr][row.set_item_attribute_value][stich_attr].append(
-			row.stiching_attribute_value
+		item_attr_list[set_attr][_attribute_value(row.set_item_attribute_value)][stich_attr].append(
+			_attribute_value(row.stiching_attribute_value)
 		)
 	return item_attr_list
 
@@ -702,8 +704,8 @@ def change_attr_list(item_attr_val_list, stiching_item_details, stiching_attr, s
 	attr_list = item_attr_val_list.copy()
 	stiching_details = {}
 	for row in stiching_item_details:
-		stiching_details.setdefault(row.set_item_attribute_value, []).append(
-			row.stiching_attribute_value
+		stiching_details.setdefault(_attribute_value(row.set_item_attribute_value), []).append(
+			_attribute_value(row.stiching_attribute_value)
 		)
 	del attr_list[stiching_attr]
 	attr_list[set_attr] = stiching_details
@@ -714,9 +716,9 @@ def change_pack_stich_attr_list(item_attr_val_list, stiching_item_combination_de
 	attr_list = item_attr_val_list.copy()
 	panel_details = {}
 	for row in stiching_item_combination_details:
-		panel_details.setdefault(row.set_item_attribute_value, [])
-		if row.attribute_value not in panel_details[row.set_item_attribute_value]:
-			panel_details[row.set_item_attribute_value].append(row.attribute_value)
+		panel_details.setdefault(_attribute_value(row.set_item_attribute_value), [])
+		if _attribute_value(row.attribute_value) not in panel_details[_attribute_value(row.set_item_attribute_value)]:
+			panel_details[_attribute_value(row.set_item_attribute_value)].append(_attribute_value(row.attribute_value))
 	del attr_list[stiching_attr]
 	attr_list[pack_attr] = panel_details
 	return attr_list
@@ -755,8 +757,8 @@ def get_stiching_accessory_combination(cloth_list, doc_name):
 		set_colours = {}
 		for row in ipd_doc.get("set_item_combination_details") or []:
 			set_colours.setdefault(row.index, {})
-			set_colours[row.index][row.set_item_attribute_value] = row.attribute_value
-			part_colours.setdefault(row.set_item_attribute_value, []).append(row.attribute_value)
+			set_colours[row.index][_attribute_value(row.set_item_attribute_value)] = _attribute_value(row.attribute_value)
+			part_colours.setdefault(_attribute_value(row.set_item_attribute_value), []).append(_attribute_value(row.attribute_value))
 
 		for accessory, part in cloth_accessories.items():
 			for idx, colour in enumerate(part_colours.get(part, [])):
@@ -767,13 +769,13 @@ def get_stiching_accessory_combination(cloth_list, doc_name):
 					"accessory_colour": None,
 					"cloth_type": None,
 				}
-				if part != ipd_doc.major_attribute_value:
-					row["major_attr_value"] = set_colours.get(idx, {}).get(ipd_doc.major_attribute_value)
+				if part != _attribute_value(ipd_doc.major_attribute_value):
+					row["major_attr_value"] = set_colours.get(idx, {}).get(_attribute_value(ipd_doc.major_attribute_value))
 				combination_list["items"].append(row)
 	else:
 		combination_list["is_set_item"] = 0
 		combination_list["attributes"] = ["Accessory", "Major Colour", "Accessory Colour", "Cloth"]
-		colours = [row.attribute_value for row in ipd_doc.get("packing_attribute_details") or []]
+		colours = [_attribute_value(row.attribute_value) for row in ipd_doc.get("packing_attribute_details") or []]
 		for accessory in cloth_accessories:
 			for colour in colours:
 				combination_list["items"].append(
@@ -820,7 +822,7 @@ def get_attr_mapping_details(mapping):
 	if not mapping:
 		return []
 	mapping_doc = get_mapping_document(mapping, cached=True)
-	return [row.attribute_value for row in mapping_doc.get("values") or []]
+	return [_attribute_value(row.attribute_value) for row in mapping_doc.get("values") or []]
 
 
 DUPLICATE_IPD_SCALAR_FIELDS = (
@@ -911,7 +913,7 @@ def duplicate_ipd(ipd, item=None):
 	if ipd_doc.is_set_item:
 		doc.is_set_item = ipd_doc.is_set_item
 		doc.set_item_attribute = ipd_doc.set_item_attribute
-		doc.major_attribute_value = ipd_doc.major_attribute_value
+		doc.major_attribute_value = _attribute_value(ipd_doc.major_attribute_value)
 		copy_tables(ipd_doc, doc, ["set_item_combination_details"])
 
 	items = []

@@ -1,6 +1,7 @@
 # Copyright (c) 2026, Essdee and contributors
 
 from __future__ import annotations
+from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from yrp.attribute_values import get_mapping_document
@@ -23,14 +24,14 @@ class SDYRPFGItemMaster(Document):
 			return
 		self.validate_sizes()
 		self.available_sizes = ",".join(
-			row.attribute_value for row in self.sizes if row.attribute_value
+			_attribute_value(row.attribute_value) for row in self.sizes if _attribute_value(row.attribute_value)
 		)
 
 	def validate_sizes(self):
 		if not self.size_range:
 			frappe.throw(_("Please set Size Range."))
 		expected = get_sizes(self.size_range)
-		current = [row.attribute_value for row in self.sizes if row.attribute_value]
+		current = [_attribute_value(row.attribute_value) for row in self.sizes if _attribute_value(row.attribute_value)]
 		if current != expected:
 			self.set("sizes", [{"attribute_value": size} for size in expected])
 
@@ -160,9 +161,9 @@ def _ensure_size_mapping(item, sizes):
 	if not attribute_row or not attribute_row.mapping:
 		frappe.throw(_("Item {0} has no Size attribute mapping.").format(item.name))
 	mapping = get_mapping_document(attribute_row.mapping)
-	existing = {row.attribute_value for row in mapping.values}
+	existing = {_attribute_value(row.attribute_value) for row in mapping.values}
 	changed = False
-	for size in (row.attribute_value for row in sizes if row.attribute_value):
+	for size in (_attribute_value(row.attribute_value) for row in sizes if _attribute_value(row.attribute_value)):
 		if size not in existing:
 			mapping.append("values", {"attribute_value": size})
 			existing.add(size)
@@ -201,9 +202,9 @@ def _create_size_variants(item, sizes):
 				_("Item {0} has no dependent stage mapped only to Size.").format(item.name)
 			)
 	for row in sizes:
-		if not row.attribute_value:
+		if not _attribute_value(row.attribute_value):
 			continue
-		attributes = {"Size": row.attribute_value}
+		attributes = {"Size": _attribute_value(row.attribute_value)}
 		if dependent_value:
 			attributes[item.dependent_attribute] = dependent_value
 		get_or_create_variant(item.name, attributes)

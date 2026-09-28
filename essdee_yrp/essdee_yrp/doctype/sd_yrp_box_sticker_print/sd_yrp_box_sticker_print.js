@@ -92,7 +92,7 @@ async function open_print_dialog(frm) {
 function open_quantity_dialog(frm, printer, printer_type) {
 	const data = (frm.doc.box_sticker_print_details || []).map((row) => ({
 		doc_name: row.name,
-		size: row.size,
+		size: frappe.yrp.attribute_value(row.size),
 		mrp: row.mrp,
 		total_quantity: row.quantity,
 		printed_quantity: row.printed_quantity,

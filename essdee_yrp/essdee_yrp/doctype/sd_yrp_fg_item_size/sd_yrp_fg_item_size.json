@@ -11,15 +11,16 @@
  "fields": [
   {
    "fieldname": "attribute_value",
-   "fieldtype": "Data",
+   "fieldtype": "Link",
    "in_list_view": 1,
-   "label": "Attribute Value"
+   "label": "Attribute Value",
+   "options": "YRP Item Attribute Value"
   }
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2023-10-18 11:36:08.711517",
+ "modified": "2026-09-25 15:12:33.705488",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP FG Item Size",

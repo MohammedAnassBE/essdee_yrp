@@ -5,6 +5,8 @@ restores a Work Order deliverable and moves stock from the Finishing warehouse
 to the selected destination/received-type bucket. Keeping that branch here
 prevents Essdee fields such as ``is_return`` from leaking into base YRP.
 """
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 import json
 from collections import defaultdict
@@ -299,7 +301,7 @@ def _set_dynamic_packing_piece_uom(grn):
 
 	if not is_dynamic_packing_grn(grn):
 		return
-	piece_uom = frappe.db.get_value('SD YRP Lot', grn.get("lot"), "packing_uom")
+	piece_uom = attribute_db.get_value('SD YRP Lot', grn.get("lot"), "packing_uom")
 	if not piece_uom:
 		frappe.throw(_("Packing UOM is required on Lot {0}.").format(grn.get("lot")))
 	for row in grn.get("items") or []:
@@ -648,7 +650,7 @@ def normalize_cutting_grn_row_indexes(rows):
 		primary_attribute = parent_item.get("primary_attribute")
 		attributes = tuple(
 			sorted(
-				(attribute.attribute, attribute.attribute_value)
+				(attribute.attribute, _attribute_value(attribute.attribute_value))
 				for attribute in (variant.get("attributes") or [])
 				if attribute.attribute != primary_attribute
 			)

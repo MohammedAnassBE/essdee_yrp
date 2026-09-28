@@ -1,4 +1,6 @@
 """Physical box/piece calculations for Essdee Finishing Plans."""
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from yrp.attribute_values import get_mapping_document
@@ -46,7 +48,7 @@ def get_dynamic_packed_qty(finishing_doc, grn_names):
 					"grn": grn_name,
 					"batch_row": batch.name,
 					"batch_id": batch.batch_id,
-					"colour": batch.colour,
+					"colour": _attribute_value(batch.colour),
 					"box_quantity": boxes,
 					"dispatched_boxes": dispatched_boxes,
 					"available_boxes": max(boxes - dispatched_boxes, 0),
@@ -103,7 +105,7 @@ def get_finishing_packing_summary(finishing_doc):
 @frappe.whitelist()
 def get_ipd_packing_config(lot):
 	"""Return the configuration used by Finishing packing entry dialogs."""
-	ipd_name = frappe.db.get_value('SD YRP Lot', lot, "production_detail")
+	ipd_name = attribute_db.get_value('SD YRP Lot', lot, "production_detail")
 	if not ipd_name:
 		frappe.throw(f"Lot {lot} has no Item Production Detail")
 	ipd = frappe.get_cached_doc('YRP Item Production Detail', ipd_name)
@@ -112,7 +114,7 @@ def get_ipd_packing_config(lot):
 		attribute = row.get("attribute") or row.get("item_attribute")
 		if attribute == ipd.packing_attribute and row.mapping:
 			mapping = get_mapping_document(row.mapping, cached=True)
-			colours = [value.attribute_value for value in mapping.get("values") or []]
+			colours = [_attribute_value(value.attribute_value) for value in mapping.get("values") or []]
 			break
 	return {
 		"based_on_other_attribute_mapping": ipd.based_on_other_attribute_mapping,
@@ -125,7 +127,7 @@ def get_ipd_packing_config(lot):
 		"primary_attribute": ipd.primary_item_attribute,
 		"packing_attribute": ipd.packing_attribute,
 		"packing_size_details": [
-			{"attribute_value": row.attribute_value, "quantity": row.quantity}
+			{"attribute_value": _attribute_value(row.attribute_value), "quantity": row.quantity}
 			for row in ipd.get("packing_size_details") or []
 		],
 		"colours": colours,
@@ -186,7 +188,7 @@ def prepare_dynamic_batch_dispatch(finishing_doc, dispatches):
 		size_pieces = {
 			size: int(boxes) * flt(per_box) for size, per_box in ratio.items()
 		}
-		box_uom, piece_uom = frappe.get_cached_value(
+		box_uom, piece_uom = attribute_db.get_cached_value(
 			'SD YRP Lot', finishing_doc.lot, ["uom", "packing_uom"]
 		)
 		if version == LEGACY_BATCH_TRACKING_VERSION:
@@ -205,7 +207,7 @@ def prepare_dynamic_batch_dispatch(finishing_doc, dispatches):
 				"batch_row": batch_row,
 				"grn": grn.name,
 				"batch_id": batch.batch_id,
-				"colour": batch.colour,
+				"colour": _attribute_value(batch.colour),
 				"box_quantity": int(boxes),
 				"pieces_per_box": flt(batch.pieces_per_box),
 				"ratio": ratio,
@@ -259,7 +261,7 @@ def rebuild_finishing_packing_quantities(finishing_doc):
 
 	quantities = {}
 	tracked_dispatched = {}
-	primary_attribute = frappe.get_cached_value(
+	primary_attribute = attribute_db.get_cached_value(
 		'YRP Item Production Detail',
 		finishing_doc.production_detail,
 		"primary_item_attribute",

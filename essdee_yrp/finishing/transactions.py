@@ -1,4 +1,6 @@
 """Finishing-owned orchestration over base YRP DC, GRN, and Stock Entry."""
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 import re
 
@@ -67,7 +69,7 @@ def _get_existing_finishing_grn(work_order, lot, marker):
 
 @frappe.whitelist()
 def get_primary_values(lot=None, production_detail=None):
-	ipd_name = production_detail or frappe.db.get_value('SD YRP Lot', lot, "production_detail")
+	ipd_name = production_detail or attribute_db.get_value('SD YRP Lot', lot, "production_detail")
 	if not ipd_name:
 		frappe.throw("Item Production Detail is required")
 	return get_ipd_primary_values(ipd_name)
@@ -99,7 +101,7 @@ def create_grn(
 			f"Finishing GRN request {request_id} already created draft {existing.name}. "
 			"Submit or cancel that draft before retrying."
 		)
-	ipd_name = frappe.db.get_value('SD YRP Lot', lot, "production_detail")
+	ipd_name = attribute_db.get_value('SD YRP Lot', lot, "production_detail")
 	ipd_doc = frappe.get_cached_doc('YRP Item Production Detail', ipd_name)
 	dynamic_packing = bool(
 		ipd_doc.based_on_other_attribute_mapping
@@ -117,12 +119,12 @@ def create_grn(
 		)
 		validate_dynamic_packing_availability(work_order, ipd_doc, batch_rows)
 		size_quantities, total_boxes, total_pieces = aggregate_batch_pieces(batch_rows)
-		uom = frappe.db.get_value('SD YRP Lot', lot, "packing_uom")
+		uom = attribute_db.get_value('SD YRP Lot', lot, "packing_uom")
 	else:
 		size_quantities = _normalize_size_quantities(data)
 		total_boxes = sum(flt(quantity) for quantity in size_quantities.values())
 		total_pieces = total_boxes * flt(ipd_doc.packing_combo)
-		uom = frappe.db.get_value('SD YRP Lot', lot, "uom")
+		uom = attribute_db.get_value('SD YRP Lot', lot, "uom")
 
 	items = _build_packing_grn_items(
 		work_order_doc,
@@ -166,7 +168,7 @@ def create_grn(
 			"packing_batches",
 			{
 				"batch_id": batch["batch_id"],
-				"colour": batch["colour"],
+				"colour": _attribute_value(batch["colour"]),
 				"box_quantity": batch["box_quantity"],
 				"dispatched_boxes": 0,
 				"pieces_per_box": batch["pieces_per_box"],
@@ -187,7 +189,7 @@ def validate_dynamic_packing_availability(work_order, ipd_doc, batches):
 	requested = {}
 	for batch in batches:
 		for size, pieces in batch["size_pieces"].items():
-			key = (batch["colour"], size)
+			key = (_attribute_value(batch["colour"]), size)
 			requested[key] = requested.get(key, 0) + flt(pieces)
 
 	work_order_doc = frappe.get_doc('YRP Work Order', work_order)
@@ -256,7 +258,7 @@ def _build_packing_grn_items(
 	size_quantities,
 	uom,
 ):
-	stage = ipd_doc.pack_out_stage
+	stage = _attribute_value(ipd_doc.pack_out_stage)
 	default_received_type = frappe.db.get_single_value(
 		'YRP Stock Settings', "default_received_type"
 	)
@@ -422,7 +424,7 @@ def create_delivery_challan(
 def get_delivery_challan_item_list(
 	lot, item_name, data, is_loose_piece=False
 ):
-	ipd_name = frappe.db.get_value('SD YRP Lot', lot, "production_detail")
+	ipd_name = attribute_db.get_value('SD YRP Lot', lot, "production_detail")
 	ipd = frappe.get_cached_doc('YRP Item Production Detail', ipd_name)
 	items = {}
 	payload = data.get("data", {}).get("data", {}) if isinstance(data, dict) else {}
@@ -436,14 +438,14 @@ def get_delivery_challan_item_list(
 				continue
 			attributes = {
 				ipd.primary_item_attribute: size,
-				ipd.packing_attribute: colour_row.get("colour"),
+				ipd.packing_attribute: _attribute_value(colour_row.get("colour")),
 			}
 			if ipd.is_set_item:
-				attributes[ipd.set_item_attribute] = colour_row.get("part")
+				attributes[ipd.set_item_attribute] = _attribute_value(colour_row.get("part"))
 			variant = get_or_create_variant(
 				item_name,
 				build_variant_attributes(
-					attributes, ipd.stiching_out_stage, ipd_name
+					attributes, _attribute_value(ipd.stiching_out_stage), ipd_name
 				),
 			)
 			combination = update_if_string_instance(
@@ -474,13 +476,13 @@ def return_items(data, work_order, lot, item_name, popup_values, is_pack=False):
 				continue
 			attributes = {
 				ipd.primary_item_attribute: size,
-				ipd.packing_attribute: colour_row.get("colour"),
+				ipd.packing_attribute: _attribute_value(colour_row.get("colour")),
 			}
 			if ipd.is_set_item:
-				attributes[ipd.set_item_attribute] = colour_row.get("part")
+				attributes[ipd.set_item_attribute] = _attribute_value(colour_row.get("part"))
 			variant = get_or_create_variant(
 				item_name,
-				build_variant_attributes(attributes, ipd.stiching_out_stage, ipd.name),
+				build_variant_attributes(attributes, _attribute_value(ipd.stiching_out_stage), ipd.name),
 			)
 			combination = update_if_string_instance(
 				colour_row.get("set_combination")
@@ -649,7 +651,7 @@ def create_stock_entry(
 						item_name,
 						build_variant_attributes(
 							{ipd.primary_item_attribute: size},
-							ipd.pack_out_stage,
+							_attribute_value(ipd.pack_out_stage),
 							ipd.name,
 						),
 					),
@@ -671,12 +673,12 @@ def create_stock_entry(
 						item_name,
 						build_variant_attributes(
 							{ipd.primary_item_attribute: size},
-							ipd.pack_out_stage,
+							_attribute_value(ipd.pack_out_stage),
 							ipd.name,
 						),
 					),
 					"qty": quantity,
-					"uom": frappe.db.get_value('SD YRP Lot', lot, "uom"),
+					"uom": attribute_db.get_value('SD YRP Lot', lot, "uom"),
 					"lot": lot,
 					"set_combination": "{}",
 				}
@@ -736,16 +738,16 @@ def create_material_receipt(data, item_name, lot, ipd, doc_name, location):
 				continue
 			attributes = {
 				ipd_doc.primary_item_attribute: size,
-				ipd_doc.packing_attribute: colour_row.get("colour"),
+				ipd_doc.packing_attribute: _attribute_value(colour_row.get("colour")),
 			}
 			if ipd_doc.is_set_item:
-				attributes[ipd_doc.set_item_attribute] = colour_row.get("part")
+				attributes[ipd_doc.set_item_attribute] = _attribute_value(colour_row.get("part"))
 			items.append(
 				{
 					"item": get_or_create_variant(
 						item_name,
 						build_variant_attributes(
-							attributes, ipd_doc.stiching_out_stage, ipd
+							attributes, _attribute_value(ipd_doc.stiching_out_stage), ipd
 						),
 					),
 					"qty": quantity,

@@ -1,4 +1,5 @@
 """Thin Stock Entry event adapter for Essdee-owned workflows."""
+from yrp import attribute_links as attribute_db
 
 import frappe
 from frappe import _
@@ -78,7 +79,7 @@ def preserve_dynamic_packing_completion_piece_uom(doc):
 	if not (grn.get("includes_packing") and grn.get("from_finishing")):
 		return False
 
-	piece_uom = frappe.db.get_value('SD YRP Lot', grn.get("lot"), "packing_uom")
+	piece_uom = attribute_db.get_value('SD YRP Lot', grn.get("lot"), "packing_uom")
 	if not piece_uom:
 		frappe.throw(_("Packing UOM is required on Lot {0}.").format(grn.get("lot")))
 	source_items = {row.name: row for row in grn.get("items") or []}
@@ -162,7 +163,7 @@ def preserve_dynamic_packing_dispatch_piece_uom(doc):
 		lot = frappe.db.get_value('SD YRP Finishing Plan', finishing_plan, "lot")
 		if not lot:
 			frappe.throw(_("Finishing Plan {0} has no Lot").format(finishing_plan))
-		piece_uom = frappe.db.get_value('SD YRP Lot', lot, "packing_uom")
+		piece_uom = attribute_db.get_value('SD YRP Lot', lot, "packing_uom")
 		if not piece_uom:
 			frappe.throw(_("Packing UOM is required on Lot {0}.").format(lot))
 		stock_uom = batch.get("stock_uom") or piece_uom

@@ -51,13 +51,15 @@
   },
   {
    "fieldname": "colour",
-   "fieldtype": "Data",
-   "label": "Colour"
+   "fieldtype": "Link",
+   "label": "Colour",
+   "options": "YRP Item Attribute Value"
   },
   {
    "fieldname": "size",
-   "fieldtype": "Data",
-   "label": "Size"
+   "fieldtype": "Link",
+   "label": "Size",
+   "options": "YRP Item Attribute Value"
   },
   {
    "fieldname": "lay_no",
@@ -199,7 +201,7 @@
  "in_create": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-14 06:54:06.625121",
+ "modified": "2026-09-25 15:12:33.705488",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP Cut Bundle Movement Ledger",

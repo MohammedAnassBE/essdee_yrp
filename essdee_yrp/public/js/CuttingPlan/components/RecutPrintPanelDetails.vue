@@ -132,8 +132,8 @@ function check_values(){
 async function add_cloth_item(){
     show_button1.value = false
     cloth_type = get_input_field(".cloth-type", "Select", "cloth_type","Cloth Type", select_attributes.value['cloth_type'])
-    cloth_colour = get_input_field(".cloth-colour", "Select", "cloth_colour", "Colour", select_attributes.value['colour'])
-    cloth_dia = get_input_field(".cloth-dia", "Select", "cloth_dia", "Dia", select_attributes.value['dia'])
+    cloth_colour = get_input_field(".cloth-colour", "Select", "cloth_colour", "Colour", frappe.yrp.attribute_value(select_attributes.value['colour']))
+    cloth_dia = get_input_field(".cloth-dia", "Select", "cloth_dia", "Dia", frappe.yrp.attribute_value(select_attributes.value['dia']))
     cloth_shade = get_input_field(".cloth-shade", "Data", "cloth_shade", "Shade", null)
     cloth_weight = get_input_field(".cloth-weight", "Float", "cloth_weight", "Weight in kg's", null)
     cloth_rolls = get_input_field(".cloth-rolls", "Int", "cloth_rolls", "No of Rolls", null)

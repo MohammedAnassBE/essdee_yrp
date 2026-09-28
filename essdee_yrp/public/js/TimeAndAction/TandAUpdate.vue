@@ -282,7 +282,7 @@ onMounted(() => {
 });
 
 function show_popup(lot, master, idx){
-    let colour = items.value[lot]['masters'][master]['datas'][idx]['colour']
+    let colour = frappe.yrp.attribute_value(items.value[lot]['masters'][master]['datas'][idx]['colour'])
     let d = new frappe.ui.Dialog({
         title: `${colour} Rescheduled Details`,
         size: "extra-large",
@@ -345,8 +345,8 @@ function update_revised_date(){
         for (const master_val of Object.keys(items.value[lot_value]['masters'])) {
             const masterData = items.value[lot_value]['masters'][master_val]['datas']
             for (let i = 0; i < masterData.length; i++) {
-                if(!colour_d.hasOwnProperty(masterData[i]['colour'])){
-                    colour_d[masterData[i]['colour']] = {
+                if(!colour_d.hasOwnProperty(frappe.yrp.attribute_value(masterData[i]['colour']))){
+                    colour_d[frappe.yrp.attribute_value(masterData[i]['colour'])] = {
                         "action": null,
                         "delay": null
                     }
@@ -369,8 +369,8 @@ function update_revised_date(){
                         break
                     }
                     else{
-                        colour_d[masterData[i]['colour']]['action'] = actions[j]['action']
-                        colour_d[masterData[i]['colour']]['delay'] = actions[j]['date_diff']
+                        colour_d[frappe.yrp.attribute_value(masterData[i]['colour'])]['action'] = actions[j]['action']
+                        colour_d[frappe.yrp.attribute_value(masterData[i]['colour'])]['delay'] = actions[j]['date_diff']
                     }
                 }
             }
@@ -591,10 +591,10 @@ function update_same_action(lot){
             for( let j = 0; j < items.value[lot]['masters'][master]['datas'][i]['actions'].length; j++){
                 if(("enable_date" in items.value[lot]['masters'][master]['datas'][i]['actions'][j])){
                     if(items.value[lot]['masters'][master]['datas'][i]['actions'][j]['enable_date']){
-                        if(!same_dict.hasOwnProperty(items.value[lot]['masters'][master]['datas'][i]['colour'])){
-                            same_dict[items.value[lot]['masters'][master]['datas'][i]['colour']] = []
+                        if(!same_dict.hasOwnProperty(frappe.yrp.attribute_value(items.value[lot]['masters'][master]['datas'][i]['colour']))){
+                            same_dict[frappe.yrp.attribute_value(items.value[lot]['masters'][master]['datas'][i]['colour'])] = []
                         }
-                        same_dict[items.value[lot]['masters'][master]['datas'][i]['colour']].push(items.value[lot]['masters'][master]['datas'][i]['actions'][j]['action'])
+                        same_dict[frappe.yrp.attribute_value(items.value[lot]['masters'][master]['datas'][i]['colour'])].push(items.value[lot]['masters'][master]['datas'][i]['actions'][j]['action'])
                     }
                 }
             }
@@ -727,7 +727,7 @@ function get_date(date){
 function update_t_and_a(){
     let check = check_reason()
     if(!check['val']){
-        frappe.msgprint(`For ${check['colour']}, Please enter reason for the ${check['action']} delay`)
+        frappe.msgprint(`For ${frappe.yrp.attribute_value(check['colour'])}, Please enter reason for the ${check['action']} delay`)
     }
     else{
         frappe.call({
@@ -753,7 +753,7 @@ function check_reason(){
                     return {
                         "val": false,
                         "action": row1['action'],
-                        "colour": row['colour'],
+                        "colour": frappe.yrp.attribute_value(row['colour']),
                     }
                 }
             }

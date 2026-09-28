@@ -1,4 +1,5 @@
 """Read models and rebuild actions for the Finishing Plan Desk views."""
+from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe.utils import flt, today
@@ -242,7 +243,7 @@ def _group_fp_item_rows(
 			item_attribute_cache[item_name] = item_attributes
 		attribute_names = item_attributes.get("attributes") or []
 		attributes = {
-			attr.attribute: attr.attribute_value
+			attr.attribute: _attribute_value(attr.attribute_value)
 			for attr in variant.attributes
 			if attr.attribute in attribute_names
 		}
@@ -385,7 +386,7 @@ def _get_primary_attribute_value(variant, primary_attribute):
 		return None
 	for attribute in variant.attributes:
 		if attribute.attribute == primary_attribute:
-			return attribute.attribute_value
+			return _attribute_value(attribute.attribute_value)
 	return None
 
 

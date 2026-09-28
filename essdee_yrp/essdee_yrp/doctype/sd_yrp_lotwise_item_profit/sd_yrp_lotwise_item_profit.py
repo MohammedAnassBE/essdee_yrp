@@ -1,3 +1,4 @@
+from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2023, Essdee and contributors
 # For license information, please see license.txt
 
@@ -23,9 +24,9 @@ def get_lot_qty(lot: str, quantity_type: str | None = None, **kwargs) -> dict:
 	lot_doc = frappe.get_doc('SD YRP Lot', lot)
 	lot_doc.check_permission("read")
 	return {
-		row.size: row.get(quantity_type)
+		_attribute_value(row.size): row.get(quantity_type)
 		for row in lot_doc.planned_qty
-		if row.size
+		if _attribute_value(row.size)
 	}
 
 

@@ -1,4 +1,5 @@
 """Essdee garment-specific Work Order process-cost allocation."""
+from yrp.attribute_links import value as _attribute_value
 
 import json
 from collections import defaultdict
@@ -92,7 +93,7 @@ def apply_garment_panel_process_costs(work_order, process_cost):
 			return False
 		finished_item_rate = get_process_cost_rate(
 			demand["row"].item_variant,
-			attribute_quantities[demand["attribute_value"]],
+			attribute_quantities[_attribute_value(demand["attribute_value"])],
 			process_cost,
 		)
 		panel_groups = defaultdict(list)

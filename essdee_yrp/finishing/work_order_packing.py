@@ -5,6 +5,7 @@ controller.  In F16 the Work Order controller remains generic; this adapter
 owns only the garment packing projection used by Finishing and alternative
 items.
 """
+from yrp.attribute_links import value as _attribute_value
 
 import math
 
@@ -197,7 +198,7 @@ def _packing_receivables(ipd, lot, principal, default_received_type):
 		variant = get_or_create_variant(
 			ipd.item,
 			build_variant_attributes(
-				{ipd.primary_item_attribute: size}, ipd.pack_out_stage, ipd.name
+				{ipd.primary_item_attribute: size}, _attribute_value(ipd.pack_out_stage), ipd.name
 			),
 		)
 		entry = aggregated.setdefault(
@@ -244,9 +245,9 @@ def _set_parts_count(ipd):
 	if not ipd.is_set_item:
 		return 1
 	parts = {
-		row.set_item_attribute_value
+		_attribute_value(row.set_item_attribute_value)
 		for row in ipd.get("set_item_combination_details") or []
-		if row.set_item_attribute_value
+		if _attribute_value(row.set_item_attribute_value)
 	}
 	return len(parts) or 1
 

@@ -91,7 +91,7 @@ frappe.ui.form.on('SD YRP Lotwise Item Profit', {
 		if (frm.doc.product) {
 			frappe.db.get_doc("SD YRP Product", frm.doc.product).then(result => {
 				let sizes = result.sizes.map((v) => {
-					return v.attribute_value
+					return frappe.yrp.attribute_value(v.attribute_value)
 				});
 				// let prices_str = result.prices;
 				// let prices = []
@@ -133,8 +133,8 @@ frappe.ui.form.on('SD YRP Lotwise Item Profit', {
 	get_size_cloth_combination: function(frm) {
 		let sizes = []
 		$.each(frm.doc.qty_rate_chart || [], function(i, v) {
-			if (!sizes.includes(v.size)) {
-				sizes.push(v.size);
+			if (!sizes.includes(frappe.yrp.attribute_value(v.size))) {
+				sizes.push(frappe.yrp.attribute_value(v.size));
 			}
 		})
 		let cloth_group = []
@@ -162,9 +162,9 @@ frappe.ui.form.on('SD YRP Lotwise Item Profit', {
 		let cloth_group_weight = {}
 		$.each(frm.doc.piece_cloth_weight || [], function(i, v) {
 			if (cloth_group_weight.hasOwnProperty(v.cloth_group)){
-				cloth_group_weight[v.cloth_group] += (((v.weight || 0) / 1000) * get_size_qty(frm, v.size))
+				cloth_group_weight[v.cloth_group] += (((v.weight || 0) / 1000) * get_size_qty(frm, frappe.yrp.attribute_value(v.size)))
 			} else {
-				cloth_group_weight[v.cloth_group] = (((v.weight || 0) / 1000) * get_size_qty(frm, v.size))
+				cloth_group_weight[v.cloth_group] = (((v.weight || 0) / 1000) * get_size_qty(frm, frappe.yrp.attribute_value(v.size)))
 			}
 		})
 		$.each(frm.doc.cloth_value || [], function(i, v) {
@@ -269,9 +269,9 @@ function fetch_lot_qty(frm) {
 	}).then((r) => {
 		let data = r.message;
 		$.each(frm.doc.qty_rate_chart || [], function(i, v) {
-			if (data[frm.doc.qty_rate_chart[i].size]) {
-				console.log(data[frm.doc.qty_rate_chart[i].size]);
-				frm.doc.qty_rate_chart[i].qty = data[frm.doc.qty_rate_chart[i].size];
+			if (data[frappe.yrp.attribute_value(frm.doc.qty_rate_chart[i].size)]) {
+				console.log(data[frappe.yrp.attribute_value(frm.doc.qty_rate_chart[i].size)]);
+				frm.doc.qty_rate_chart[i].qty = data[frappe.yrp.attribute_value(frm.doc.qty_rate_chart[i].size)];
 			}
 		});
 		frm.refresh_field("qty_rate_chart");
@@ -282,7 +282,7 @@ function fetch_lot_qty(frm) {
 function get_size_qty(frm, size) {
 	let qty = 0;
 	$.each(frm.doc.qty_rate_chart || [], function(i, v) {
-		if (frm.doc.qty_rate_chart[i].size == size) {
+		if (frappe.yrp.attribute_value(frm.doc.qty_rate_chart[i].size) == size) {
 			qty = frm.doc.qty_rate_chart[i].qty;
 			return false;
 		}
@@ -298,7 +298,7 @@ function calculate_backwards_rate(frm, percent) {
 			console.log('Qty', v.qty)
 			let cloth_group = qty_groups[v.group_index].cloth_group || {}
 			$.each(frm.doc.piece_cloth_weight || [], function(i, weight) {
-				if (v.size == weight.size) {
+				if (frappe.yrp.attribute_value(v.size) == frappe.yrp.attribute_value(weight.size)) {
 					if (cloth_group.hasOwnProperty(weight.cloth_group)) {
 						console.log('Value', (weight.weight/1000 * v.qty))
 						cloth_group[weight.cloth_group] = {
@@ -319,7 +319,7 @@ function calculate_backwards_rate(frm, percent) {
 		} else  {
 			let cloth_group = {}
 			$.each(frm.doc.piece_cloth_weight || [], function(i, weight) {
-				if (v.size == weight.size) {
+				if (frappe.yrp.attribute_value(v.size) == frappe.yrp.attribute_value(weight.size)) {
 					if (cloth_group.hasOwnProperty(weight.cloth_group)) {
 						cloth_group[weight.cloth_group] = {
 							'total_qty': cloth_group[weight.cloth_group].total_qty + v.qty,
@@ -338,7 +338,7 @@ function calculate_backwards_rate(frm, percent) {
 				cloth_group: cloth_group,
 			};
 		}
-		console.log(v.size, JSON.parse(JSON.stringify(qty_groups)))
+		console.log(frappe.yrp.attribute_value(v.size), JSON.parse(JSON.stringify(qty_groups)))
     })
 	// Calculate avg rate of cloth used
 	let cloth_value = {};

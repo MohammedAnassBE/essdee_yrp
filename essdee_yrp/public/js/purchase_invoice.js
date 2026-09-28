@@ -128,7 +128,7 @@ function render_verification_work_order(item) {
 				html += `<td rowspan="6">${index + 1}</td>
 					<td rowspan="6">${escape_html(colour.split("@")[0].trim())}</td>`;
 				if (item.is_set_item) {
-					html += `<td rowspan="6">${escape_html(colour_data.part)}</td>`;
+					html += `<td rowspan="6">${escape_html(frappe.yrp.attribute_value(colour_data.part))}</td>`;
 				}
 			}
 			html += `<td>${label}</td>`;

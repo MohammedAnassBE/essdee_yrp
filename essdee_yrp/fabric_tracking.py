@@ -17,6 +17,8 @@ Balance semantics:
   - production against the program/plan -> WO RECEIVABLES (outputs)
   - consumption of available cloth      -> WO DELIVERABLES (inputs, is_calculated=1)
 """
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe.utils import flt
@@ -49,7 +51,7 @@ def _apply_grn(grn, sign):
 		return
 	# Serialize per lot: two GRNs of the same lot submitting concurrently would
 	# otherwise race the read-modify-write below (lost kgs / duplicate key rows).
-	frappe.db.get_value('SD YRP Lot', wo.lot, "name", for_update=True)
+	attribute_db.get_value('SD YRP Lot', wo.lot, "name", for_update=True)
 	lot = frappe.get_doc('SD YRP Lot', wo.lot)
 	from essdee_yrp.fabric_chain import get_fabric_step
 
@@ -89,7 +91,7 @@ def _bump_ledger_rows(lot, cloth_item, process_name, deltas, sign):
 		if (r.side or "Output") != "Output":
 			continue
 		rows[(
-			r.dia or "", r.colour or "", r.get("reference_item_variant") or "",
+			_attribute_value(r.dia) or "", _attribute_value(r.colour) or "", r.get("reference_item_variant") or "",
 		)] = r
 
 	inserted = 0
@@ -139,12 +141,12 @@ def get_step_received(
 	if reference_item_variant is not None:
 		filters["reference_item_variant"] = reference_item_variant or ""
 	result = {}
-	for r in frappe.get_all(
+	for r in attribute_db.get_all(
 		'SD YRP Lot Fabric Step Ledger',
 		filters=filters,
 		fields=["dia", "colour", "received_weight"],
 	):
-		key = (r.dia or "", r.colour or "")
+		key = (_attribute_value(r.dia) or "", _attribute_value(r.colour) or "")
 		result[key] = result.get(key, 0) + flt(r.received_weight)
 	return result
 
@@ -160,12 +162,12 @@ def get_step_planned(
 	if reference_item_variant is not None:
 		filters["reference_item_variant"] = reference_item_variant or ""
 	result = {}
-	for r in frappe.get_all(
+	for r in attribute_db.get_all(
 		'SD YRP Lot Fabric Step Ledger',
 		filters=filters,
 		fields=["dia", "colour", "planned_weight"],
 	):
-		key = (r.dia or "", r.colour or "")
+		key = (_attribute_value(r.dia) or "", _attribute_value(r.colour) or "")
 		result[key] = result.get(key, 0) + flt(r.planned_weight)
 	return result
 
@@ -245,7 +247,7 @@ def _variant_attribute_map(variant_names, cloth_item):
 	)
 	result = {}
 	for r in rows:
-		result.setdefault(r.variant, {})[r.attribute] = r.attribute_value
+		result.setdefault(r.variant, {})[r.attribute] = _attribute_value(r.attribute_value)
 	return result
 
 
@@ -258,9 +260,9 @@ def _bump_program_rows(lot, parentfield, child_doctype, cloth_item, deltas, sign
 		if r.cloth_item != cloth_item:
 			continue
 		key = (
-			(r.dia, r.get("reference_item_variant") or "")
+			(_attribute_value(r.dia), r.get("reference_item_variant") or "")
 			if child_doctype == 'SD YRP Lot Fabric Program'
-			else (r.dia, r.colour)
+			else (_attribute_value(r.dia), _attribute_value(r.colour))
 		)
 		rows[key] = r
 
@@ -290,7 +292,7 @@ def _bump_program_rows(lot, parentfield, child_doctype, cloth_item, deltas, sign
 				if key[1]:
 					ref = frappe.get_cached_doc('Item', key[1])
 					new_row.colour = next((
-						a.attribute_value for a in ref.get("attributes") or []
+						_attribute_value(a.attribute_value) for a in ref.get("attributes") or []
 						if a.attribute == FABRIC_COLOUR_ATTRIBUTE
 					), None)
 			if child_doctype == 'SD YRP Lot Fabric Colour Program':
@@ -310,12 +312,12 @@ def rebuild_fabric_tracking(lot):
 		frappe.throw(_("Configure the 'lot' stock dimension (YRP Stock Settings) first."))
 	lot_doc = frappe.get_doc('SD YRP Lot', lot)
 	lot_doc.check_permission("write")
-	frappe.db.get_value('SD YRP Lot', lot, "name", for_update=True)
+	attribute_db.get_value('SD YRP Lot', lot, "name", for_update=True)
 
 	for row in lot_doc.get("lot_fabric_programs") or []:
-		frappe.db.set_value('SD YRP Lot Fabric Program', row.name, "received_weight", 0, update_modified=False)
+		attribute_db.set_value('SD YRP Lot Fabric Program', row.name, "received_weight", 0, update_modified=False)
 	for row in lot_doc.get("lot_fabric_step_ledger") or []:
-		frappe.db.set_value('SD YRP Lot Fabric Step Ledger', row.name, "received_weight", 0,
+		attribute_db.set_value('SD YRP Lot Fabric Step Ledger', row.name, "received_weight", 0,
 			update_modified=False)
 
 	grn_names = frappe.db.sql(

@@ -182,7 +182,7 @@ frappe.ui.form.on("SD YRP Finishing Plan", {
                                 method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.cache_selected_size",
                                 args: {
                                     "key": "inward_pf_size",
-                                    "size": values.size,
+                                    "size": frappe.yrp.attribute_value(values.size),
                                     "finishing_id": frm.doc.name,
                                 },
                                 callback: function (r) {

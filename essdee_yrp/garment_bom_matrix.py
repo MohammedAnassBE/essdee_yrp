@@ -9,6 +9,7 @@ These matrices are generated records, never user-authored records.  The
 generator replaces only Cutting matrices for the explicitly requested finished
 Item Variants; matrices for other processes and variants are left untouched.
 """
+from yrp.attribute_links import value as _attribute_value
 
 from collections import defaultdict
 
@@ -105,7 +106,7 @@ def _get_variant_cloth_rows(ipd, item_variant):
         )
 
     output_attrs = {
-        row.attribute: row.attribute_value
+        row.attribute: _attribute_value(row.attribute_value)
         for row in variant.get("attributes") or []
         if row.attribute != ipd.dependent_attribute
     }
@@ -131,8 +132,8 @@ def _get_variant_cloth_rows(ipd, item_variant):
             # not marked Is BOM Item from Lot.bom_summary.
             continue
         attrs = {
-            ipd.packing_attribute: requirement["colour"],
-            "Dia": requirement["dia"],
+            ipd.packing_attribute: _attribute_value(requirement["colour"]),
+            "Dia": _attribute_value(requirement["dia"]),
         }
         key = (cloth_item, tuple(sorted(attrs.items())))
         aggregated[key] += flt(requirement["quantity"])

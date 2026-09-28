@@ -1,3 +1,4 @@
+from yrp.attribute_links import value as _attribute_value
 import frappe
 
 from yrp.yrp.doctype.yrp_item.yrp_item import get_attribute_details
@@ -39,7 +40,7 @@ def get_lot_ordered_details(production_order):
 
 		for attr in variant.get("attributes") or []:
 			if attr.attribute == primary_attribute:
-				size = attr.attribute_value
+				size = _attribute_value(attr.attribute_value)
 				if not size:
 					break
 				lot_wise_detail.setdefault(row.reference_name, {})

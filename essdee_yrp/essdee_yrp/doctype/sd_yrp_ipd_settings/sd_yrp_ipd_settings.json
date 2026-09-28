@@ -71,7 +71,8 @@
   {
    "description": "Prefills Knitting Output Colour in the Build Cloth Programs popup when no exact saved fabric route exists.",
    "fieldname": "default_knitting_output_colour",
-   "fieldtype": "Data",
+   "fieldtype": "Link",
+   "options": "YRP Item Attribute Value",
    "label": "Default Knitting Yarn Colour"
   },
   {
@@ -111,33 +112,38 @@
   },
   {
    "fieldname": "default_pack_in_stage",
-   "fieldtype": "Data",
+   "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Default Pack In Stage",
-   "reqd": 1
+   "reqd": 1,
+   "options": "YRP Item Attribute Value"
   },
   {
    "fieldname": "default_pack_out_stage",
-   "fieldtype": "Data",
+   "fieldtype": "Link",
    "label": "Default Pack Out Stage",
-   "reqd": 1
+   "reqd": 1,
+   "options": "YRP Item Attribute Value"
   },
   {
    "fieldname": "default_loose_piece_stage",
-   "fieldtype": "Data",
-   "label": "Default Loose Piece Stage"
+   "fieldtype": "Link",
+   "label": "Default Loose Piece Stage",
+   "options": "YRP Item Attribute Value"
   },
   {
    "fieldname": "default_stitching_in_stage",
-   "fieldtype": "Data",
+   "fieldtype": "Link",
    "label": "Default Stitching in Stage",
-   "reqd": 1
+   "reqd": 1,
+   "options": "YRP Item Attribute Value"
   },
   {
    "fieldname": "default_stitching_out_stage",
-   "fieldtype": "Data",
+   "fieldtype": "Link",
    "label": "Default Stitching Out Stage",
-   "reqd": 1
+   "reqd": 1,
+   "options": "YRP Item Attribute Value"
   },
   {
    "fieldname": "default_packing_attribute",
@@ -198,7 +204,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-07-10 11:00:00.000000",
+ "modified": "2026-09-25 15:12:33.705488",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP IPD Settings",

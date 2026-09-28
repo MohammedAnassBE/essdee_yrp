@@ -138,7 +138,7 @@ const colours = computed(() => config.value.colours || [])
 const combo = computed(() => Number(config.value.packing_combo) || 1)
 const ratio = computed(() => {
     const r = {}
-    ;(config.value.packing_size_details || []).forEach(d => { r[d.attribute_value] = d.quantity })
+    ;(config.value.packing_size_details || []).forEach(d => { r[frappe.yrp.attribute_value(d.attribute_value)] = d.quantity })
     return r
 })
 
@@ -225,10 +225,10 @@ const colour_details = computed(() => {
         available_batches.value.forEach(batch => {
             const boxes = Number(batch_dispatch_boxes[batch.batch_row]) || 0
             if (!boxes) return
-            if (!out[batch.colour]) out[batch.colour] = {}
+            if (!out[frappe.yrp.attribute_value(batch.colour)]) out[frappe.yrp.attribute_value(batch.colour)] = {}
             primary_values.value.forEach(size => {
                 const pieces = boxes * (Number((batch.ratio || {})[size]) || 0)
-                if (pieces) out[batch.colour][size] = (out[batch.colour][size] || 0) + pieces
+                if (pieces) out[frappe.yrp.attribute_value(batch.colour)][size] = (out[frappe.yrp.attribute_value(batch.colour)][size] || 0) + pieces
             })
         })
     } else if (mode.value === 'Size Ratio Packing') {

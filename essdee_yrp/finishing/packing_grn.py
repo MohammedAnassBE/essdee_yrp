@@ -1,4 +1,5 @@
 """Calculate every Work Order input consumed by a packing GRN."""
+from yrp.attribute_links import value as _attribute_value
 
 from collections import defaultdict
 
@@ -102,7 +103,7 @@ def _allocate_dynamic_consumed_garments(grn, work_order, ipd):
 	if not batches:
 		frappe.throw(_("A dynamic packing GRN requires at least one packing batch."))
 	for batch in batches:
-		colour = batch.get("colour")
+		colour = _attribute_value(batch.get("colour"))
 		ratio = json_object(batch.get("ratio_json") or batch.get("ratio"))
 		boxes = flt(batch.get("box_quantity"))
 		for size, per_box in ratio.items():

@@ -286,3 +286,31 @@ def get_rule(source_doctype: str) -> DocTypeRule:
 	if rule:
 		return rule
 	return DocTypeRule(target=DOCTYPE_RENAMES.get(source_doctype, source_doctype))
+
+# Attribute-value masters have scoped identities in YRP. Preserve the source
+# Link semantics while pointing every declared value field at the scoped master.
+def _register_attribute_value_links():
+	import json
+	from dataclasses import replace
+	from pathlib import Path
+	import yrp
+
+	registries = [
+		Path(yrp.__file__).parent / "attribute_link_fields.json",
+		Path(__file__).parents[1] / "attribute_link_fields.json",
+	]
+	for path in registries:
+		for target, fields in json.loads(path.read_text()).items():
+			source = target.removeprefix("SD YRP ").removeprefix("YRP ")
+			rule = RULES.get(source, DocTypeRule())
+			options = dict(rule.table_option_map)
+			if target == "YRP Item Production Detail":
+				options["stiching_major_attribute_value"] = "YRP Item Attribute Value"
+			if target == "YRP IPD Process":
+				options["stage"] = "YRP Item Attribute Value"
+			for fieldname in fields:
+				options[fieldname] = "YRP Item Attribute Value"
+			RULES[source] = replace(rule, table_option_map=options)
+
+
+_register_attribute_value_links()

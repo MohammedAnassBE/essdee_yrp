@@ -1,4 +1,5 @@
 """Transfer auditable leftover Finishing quantities between lots."""
+from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe import _
@@ -81,7 +82,7 @@ def fetch_from_old_lot(doc_name):
 		attributes = get_variant_attr_details(item_variant)
 		colour = attributes.get(ipd.packing_attribute)
 		part = attributes.get(ipd.set_item_attribute) if ipd.is_set_item else None
-		set_value = colour if not ipd.is_set_item or ipd.major_attribute_value == part else None
+		set_value = colour if not ipd.is_set_item or _attribute_value(ipd.major_attribute_value) == part else None
 		doc.append(
 			"finishing_old_lot_items",
 			{
@@ -132,10 +133,10 @@ def create_lot_transfer(data, item_name, ipd, lot, doc_name):
 					ipd_doc.packing_attribute: colour,
 				}
 				if ipd_doc.is_set_item:
-					attributes[ipd_doc.set_item_attribute] = colour_entry.get("part")
+					attributes[ipd_doc.set_item_attribute] = _attribute_value(colour_entry.get("part"))
 				variant = get_or_create_variant(
 					item_name,
-					build_variant_attributes(attributes, ipd_doc.stiching_out_stage, ipd),
+					build_variant_attributes(attributes, _attribute_value(ipd_doc.stiching_out_stage), ipd),
 				)
 				available = available_rows.get(
 					(group.get("lot"), group.get("warehouse"), variant)
@@ -146,7 +147,7 @@ def create_lot_transfer(data, item_name, ipd, lot, doc_name):
 					frappe.throw(f"Transfer quantity exceeds old-lot balance for {variant}")
 				combination = {"major_colour": colour_entry.get("set_combination")}
 				if ipd_doc.is_set_item:
-					combination["major_part"] = ipd_doc.major_attribute_value
+					combination["major_part"] = _attribute_value(ipd_doc.major_attribute_value)
 				items.append(
 					{
 						"item": variant,
@@ -168,7 +169,7 @@ def create_lot_transfer(data, item_name, ipd, lot, doc_name):
 						"source_lot": group.get("lot"),
 						"item_variant": variant,
 						"colour": colour,
-						"part": colour_entry.get("part"),
+						"part": _attribute_value(colour_entry.get("part")),
 						"set_combination": combination,
 						"size": size,
 						"loose_piece": loose,
@@ -285,10 +286,10 @@ def _record_split_history(_destination, transfer, contributions):
 				"source_fp": entry["source_fp"],
 				"source_lot": entry["source_lot"],
 				"item_variant": entry["item_variant"],
-				"colour": entry["colour"],
-				"part": entry["part"],
+				"colour": _attribute_value(entry["colour"]),
+				"part": _attribute_value(entry["part"]),
 				"set_combination": combination_json,
-				"size": entry["size"],
+				"size": _attribute_value(entry["size"]),
 				"loose_piece_taken": entry["loose_piece"],
 				"loose_piece_set_taken": entry["loose_piece_set"],
 				"lot_transfer": transfer.name,
@@ -305,10 +306,10 @@ def _record_split_history(_destination, transfer, contributions):
 				"destination_fp": destination.name,
 				"destination_lot": destination.lot,
 				"item_variant": entry["item_variant"],
-				"colour": entry["colour"],
-				"part": entry["part"],
+				"colour": _attribute_value(entry["colour"]),
+				"part": _attribute_value(entry["part"]),
 				"set_combination": combination_json,
-				"size": entry["size"],
+				"size": _attribute_value(entry["size"]),
 				"loose_piece_given": entry["loose_piece"],
 				"loose_piece_set_given": entry["loose_piece_set"],
 				"lot_transfer": transfer.name,
@@ -375,10 +376,10 @@ def _reverse_split_history(transfer):
 					)
 					or source.delivery_location,
 					"item_variant": history.item_variant,
-					"colour": history.colour,
-					"part": history.part,
-					"set_combination": combination.get("major_colour") or history.colour,
-					"size": history.size,
+					"colour": _attribute_value(history.colour),
+					"part": _attribute_value(history.part),
+					"set_combination": combination.get("major_colour") or _attribute_value(history.colour),
+					"size": _attribute_value(history.size),
 					"balance_loose_piece": 0,
 					"balance_loose_piece_set": 0,
 				},

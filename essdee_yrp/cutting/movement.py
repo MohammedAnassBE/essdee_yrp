@@ -5,6 +5,8 @@ Stock Entry, Delivery Challan, and Goods Received Note remain base-YRP
 documents: this module only builds their generic item payloads and mirrors the
 selected bundle movement into the Essdee bundle ledger on submit/cancel.
 """
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 import json
 from collections import defaultdict
@@ -174,12 +176,12 @@ def _load_movement(doc_name, *, allow_linked=False):
 
 def _get_uom(ipd_doc):
 	details = get_dependent_attribute_details(ipd_doc.dependent_attribute_mapping)
-	stage = (details.get("attr_list") or {}).get(ipd_doc.stiching_in_stage) or {}
+	stage = (details.get("attr_list") or {}).get(_attribute_value(ipd_doc.stiching_in_stage)) or {}
 	uom = stage.get("uom")
 	if not uom:
 		frappe.throw(
 			_("UOM is not configured for stitching stage {0} in {1}.").format(
-				ipd_doc.stiching_in_stage, ipd_doc.dependent_attribute_mapping
+				_attribute_value(ipd_doc.stiching_in_stage), ipd_doc.dependent_attribute_mapping
 			)
 		)
 	return uom
@@ -191,7 +193,7 @@ def get_grouped_movement_rows(doc_name, target_doctype, *, allow_linked=False):
 		frappe.throw(_("Unsupported Cut Panel Movement target {0}.").format(target_doctype))
 
 	doc = _load_movement(doc_name, allow_linked=allow_linked)
-	ipd_name, item_name = frappe.db.get_value(
+	ipd_name, item_name = attribute_db.get_value(
 		'SD YRP Lot', doc.lot, ["production_detail", "item"]
 	) or (None, None)
 	if not ipd_name or not item_name:
@@ -200,7 +202,7 @@ def get_grouped_movement_rows(doc_name, target_doctype, *, allow_linked=False):
 	uom = _get_uom(ipd_doc)
 
 	panel_qty = {
-		row.stiching_attribute_value: flt(row.quantity)
+		_attribute_value(row.stiching_attribute_value): flt(row.quantity)
 		for row in ipd_doc.get("stiching_item_details") or []
 	}
 	movement = frappe.parse_json(doc.cut_panel_movement_json)
@@ -211,7 +213,7 @@ def get_grouped_movement_rows(doc_name, target_doctype, *, allow_linked=False):
 	variant_group = {}
 	selected_exact = False
 	for colour, colour_data in (movement.get("data") or {}).items():
-		part = colour_data.get("part")
+		part = _attribute_value(colour_data.get("part"))
 		panels = (
 			(movement.get("panels") or {}).get(part, [])
 			if ipd_doc.is_set_item
@@ -227,9 +229,9 @@ def get_grouped_movement_rows(doc_name, target_doctype, *, allow_linked=False):
 					if panel not in panel_qty:
 						frappe.throw(_("Panel {0} is not configured in {1}.").format(panel, ipd_name))
 					attributes = {
-						ipd_doc.primary_item_attribute: data.get("size"),
+						ipd_doc.primary_item_attribute: _attribute_value(data.get("size")),
 						ipd_doc.packing_attribute: data.get(f"{grouped_panel}_colour"),
-						ipd_doc.dependent_attribute: ipd_doc.stiching_in_stage,
+						ipd_doc.dependent_attribute: _attribute_value(ipd_doc.stiching_in_stage),
 						ipd_doc.stiching_attribute: panel,
 					}
 					variant = get_or_create_variant(item_name, attributes)
@@ -258,14 +260,14 @@ def get_grouped_movement_rows(doc_name, target_doctype, *, allow_linked=False):
 					quantity, available
 				)
 			)
-		panel = collapsed.get("panel")
+		panel = _attribute_value(collapsed.get("panel"))
 		if panel not in panel_qty:
 			frappe.throw(_("Panel {0} is not configured in {1}.").format(panel, ipd_name))
 		combination = _json_dict(collapsed.get("set_combination"))
 		attributes = {
-			ipd_doc.primary_item_attribute: collapsed.get("size"),
-			ipd_doc.packing_attribute: collapsed.get("colour"),
-			ipd_doc.dependent_attribute: ipd_doc.stiching_in_stage,
+			ipd_doc.primary_item_attribute: _attribute_value(collapsed.get("size")),
+			ipd_doc.packing_attribute: _attribute_value(collapsed.get("colour")),
+			ipd_doc.dependent_attribute: _attribute_value(ipd_doc.stiching_in_stage),
 			ipd_doc.stiching_attribute: panel,
 		}
 		variant = get_or_create_variant(item_name, attributes)
@@ -273,7 +275,7 @@ def get_grouped_movement_rows(doc_name, target_doctype, *, allow_linked=False):
 		# Collapsed CBML quantities are already stored as physical panel pieces,
 		# including the IPD per-garment panel multiplier.
 		variant_totals[key] += quantity
-		variant_group[key] = (panel, collapsed.get("colour"), combination)
+		variant_group[key] = (panel, _attribute_value(collapsed.get("colour")), combination)
 
 	default_received_type = frappe.db.get_single_value(
 		'YRP Stock Settings', "default_received_type"
@@ -322,8 +324,8 @@ def get_grouped_movement_rows(doc_name, target_doctype, *, allow_linked=False):
 		variant = get_or_create_variant(
 			cloth_item,
 			{
-				ipd_doc.packing_attribute: accessory.get("colour"),
-				"Dia": accessory.get("dia"),
+				ipd_doc.packing_attribute: _attribute_value(accessory.get("colour")),
+				"Dia": _attribute_value(accessory.get("dia")),
 			},
 		)
 		accessory_uom = frappe.db.get_value('Item', cloth_item, "stock_uom")
@@ -591,10 +593,10 @@ def _bundle_tracking_disabled(lot):
 def _is_implicit_collapsed_return(doc, lot):
 	if doc.doctype != 'YRP Goods Received Note' or not doc.get("is_return") or not lot:
 		return False
-	production_detail = frappe.db.get_value('SD YRP Lot', lot, "production_detail")
+	production_detail = attribute_db.get_value('SD YRP Lot', lot, "production_detail")
 	if not production_detail:
 		return False
-	stage, dependent_attribute = frappe.db.get_value(
+	stage, dependent_attribute = attribute_db.get_value(
 		'YRP Item Production Detail',
 		production_detail,
 		["stiching_in_stage", "dependent_attribute"],
@@ -653,7 +655,7 @@ def _cancel_exact_bundle_entries(doc):
 		_collapsed_set_combination_key,
 	)
 
-	rows = frappe.get_all(
+	rows = attribute_db.get_all(
 		'SD YRP Cut Bundle Movement Ledger',
 		filters={
 			"voucher_type": doc.doctype,
@@ -664,7 +666,7 @@ def _cancel_exact_bundle_entries(doc):
 	)
 	for row in rows:
 		future = None
-		for candidate in frappe.get_all(
+		for candidate in attribute_db.get_all(
 			'SD YRP Cut Bundle Movement Ledger',
 			filters={
 				"cbm_key": row.cbm_key,
@@ -688,7 +690,7 @@ def _cancel_exact_bundle_entries(doc):
 				_("Cancel the later cut-bundle movement {0} first.").format(future)
 			)
 	for row in rows:
-		frappe.db.set_value(
+		attribute_db.set_value(
 			'SD YRP Cut Bundle Movement Ledger',
 			row.name,
 			"is_cancelled",

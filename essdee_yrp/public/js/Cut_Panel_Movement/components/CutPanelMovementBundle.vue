@@ -279,7 +279,7 @@ function update_panel_column(colour, panel, event){
 function update_row(item, colour, index, bundle_moved = 0){
     let return_val = false
     if(items.value.is_set_item){
-        let pt = items.value['data'][colour]['part']
+        let pt = frappe.yrp.attribute_value(items.value['data'][colour]['part'])
         for(let i = 0 ; i < items.value['panels'][pt].length ; i++){
             let panel = items.value['panels'][pt][i]
             if(item.hasOwnProperty(panel) && item[panel] > 0){
@@ -337,7 +337,7 @@ function update_row(item, colour, index, bundle_moved = 0){
 
 function update_panel(item, panel){
     make_dirty()
-    if(item.panel == 1 || item.panel == true){
+    if(frappe.yrp.attribute_value(item.panel) == 1 || frappe.yrp.attribute_value(item.panel) == true){
         return true
     }
     return false
@@ -356,8 +356,8 @@ function update_table(colour, val){
 }
 
 function qty_in_bundle(row, colour_detail, panels){
-    if (colour_detail['part']){
-        panels = panels[colour_detail['part']]
+    if (frappe.yrp.attribute_value(colour_detail['part'])){
+        panels = panels[frappe.yrp.attribute_value(colour_detail['part'])]
     }
     for(let i = 0; i < panels.length; i++){
         if(row[panels[i]] > 0){

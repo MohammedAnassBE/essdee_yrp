@@ -1,3 +1,5 @@
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 from essdee_yrp.ipd_attribute_links import major_stitching_value
 # Copyright (c) 2025, Essdee and contributors
 # For license information, please see license.txt
@@ -60,13 +62,13 @@ class SDYRPCutBundleEdit(Document):
 		is_set_item = json_data['is_set_item']
 		data = json_data['data']
 		for colour in data:
-			datas[colour] = {"part":data[colour]['part'], 'data':[]}
+			datas[colour] = {"part":_attribute_value(data[colour]['part']), 'data':[]}
 			for row in data[colour]['data']:
 				if row['bundle_moved']:
 					datas[colour]['data'].append(row)
 				else:
 					if is_set_item:
-						part = data[colour]['part']
+						part = _attribute_value(data[colour]['part'])
 						for panel in panels[part]:
 							x = panel+"_moved"
 							if panel in row and x in row and row[x] == True:
@@ -94,7 +96,7 @@ class SDYRPCutBundleEdit(Document):
 			frappe.throw(_("A Cut Bundle Edit cannot be cancelled after its labels are printed."))
 		self.ignore_linked_doctypes = ('SD YRP Cut Bundle Movement Ledger',)
 		posting_datetime = get_combine_datetime(self.posting_date, self.posting_time)
-		lot_hash = frappe.get_cached_value('SD YRP Lot', self.lot, "lot_hash_value")
+		lot_hash = attribute_db.get_cached_value('SD YRP Lot', self.lot, "lot_hash_value")
 		item_hash = frappe.get_cached_value('Item', self.item, "item_hash_value")
 		output_json = frappe.json.loads(self.output_json)
 		for row in output_json:
@@ -105,9 +107,9 @@ class SDYRPCutBundleEdit(Document):
 				str(row['bundle_no']),
 				str(row['shade']),
 				str(item_hash),
-				str(row['size']),
-				str(row['colour']),
-				str(row['panel']),
+				str(_attribute_value(row['size'])),
+				str(_attribute_value(row['colour'])),
+				str(_attribute_value(row['panel'])),
 			]
 			key = "-".join(parts)
 			future = frappe.db.sql(
@@ -133,12 +135,14 @@ class SDYRPCutBundleEdit(Document):
 				"lot": self.lot,
 				"lay_no": row['lay_no'],
 				"bundle": row['bundle_no'],
-				"size": row['size'],
+				"size": _attribute_value(row['size']),
 				"shade": row['shade'],
 				"item": self.item,
-				"panel": row['panel'],
-				"colour": row['colour'],
+				"panel": _attribute_value(row['panel']),
+				"colour": _attribute_value(row['colour']),
 			}
+			d['size'] = attribute_db.link(d['size'])
+			d['colour'] = attribute_db.link(d['colour'])
 			if row['is_collapsed']:
 				frappe.db.sql(
 					"""
@@ -171,12 +175,12 @@ class SDYRPCutBundleEdit(Document):
 
 	def on_submit(self):
 		input_json = frappe.json.loads(self.input_json)
-		lot_hash = frappe.get_cached_value('SD YRP Lot', self.lot, "lot_hash_value")
+		lot_hash = attribute_db.get_cached_value('SD YRP Lot', self.lot, "lot_hash_value")
 		item_hash = frappe.get_cached_value('Item', self.item, "item_hash_value")
 		for row in input_json:
 			parts = [
 				str(lot_hash), str(self.warehouse), str(row['lay_no']), str(row['bundle_no']),
-				str(row['shade']), str(item_hash), str(row['size']), str(row['colour']), str(row['panel']),
+				str(row['shade']), str(item_hash), str(_attribute_value(row['size'])), str(_attribute_value(row['colour'])), str(_attribute_value(row['panel'])),
 			]
 			cbm_key = "-".join(parts)
 			d = {
@@ -186,13 +190,15 @@ class SDYRPCutBundleEdit(Document):
 				"lot": self.lot,
 				"lay_no": row['lay_no'],
 				"bundle": row['bundle_no'],
-				"size": row['size'],
+				"size": _attribute_value(row['size']),
 				"shade": row['shade'],
 				"item": self.item,
-				"panel": row['panel'],
-				"colour": row['colour'],
+				"panel": _attribute_value(row['panel']),
+				"colour": _attribute_value(row['colour']),
 				"cbm_key": cbm_key,
 			}
+			d['size'] = attribute_db.link(d['size'])
+			d['colour'] = attribute_db.link(d['colour'])
 			if row['is_collapsed']:
 				frappe.db.sql(
 					"""
@@ -220,9 +226,9 @@ class SDYRPCutBundleEdit(Document):
 		d = {
 			"lot" : self.lot,
 			"item" : self.item,
-			"size" : row['size'],
-			"colour" : row['colour'],
-			"panel" : row['panel'],
+			"size" : _attribute_value(row['size']),
+			"colour" : _attribute_value(row['colour']),
+			"panel" : _attribute_value(row['panel']),
 			"lay_no" : row['lay_no'],
 			"bundle_no" : row['bundle_no'],
 			"quantity" : row['qty'],
@@ -247,9 +253,9 @@ class SDYRPCutBundleEdit(Document):
 		json_value = frappe.json.loads(json_value)
 		d = {}
 		for row in json_value:
-			panels = row['panel'].split(",")
+			panels = _attribute_value(row['panel']).split(",")
 			for panel in panels:
-				key = (row['size'], row['colour'], panel)
+				key = (_attribute_value(row['size']), _attribute_value(row['colour']), panel)
 				d.setdefault(key, 0)
 				d[key] += row['qty']
 		return d
@@ -277,7 +283,7 @@ def get_major_colours(posting_date, posting_time, from_location, lot):
 	ipd_doc = frappe.get_doc('YRP Item Production Detail', ipd)
 	panels = []
 	for row in ipd_doc.stiching_item_details:
-		panels.append(row.stiching_attribute_value)
+		panels.append(_attribute_value(row.stiching_attribute_value))
 
 	sizes = []
 	colours = []
@@ -286,17 +292,17 @@ def get_major_colours(posting_date, posting_time, from_location, lot):
 
 	for cb in cb_list:
 		cb_doc = frappe.get_doc('SD YRP Cut Bundle Movement Ledger', cb['name'])
-		if cb_doc.size not in sizes:
-			sizes.append(cb_doc.size)
+		if _attribute_value(cb_doc.size) not in sizes:
+			sizes.append(_attribute_value(cb_doc.size))
 
 		set_combination = update_if_string_instance(cb_doc.set_combination)
-		major_colour = cb_doc.colour
+		major_colour = _attribute_value(cb_doc.colour)
 		if major_colour not in colours:
 			colours.append(major_colour)
 
 		if set_combination:
 			major_colour = set_combination['major_colour']
-			parts = cb_doc.panel
+			parts = _attribute_value(cb_doc.panel)
 			if parts not in panels:
 				panels.append(parts)
 			if ipd_doc.is_set_item:
@@ -326,20 +332,20 @@ def get_major_set_colours(colour, panel, lot):
 	}
 
 	if ipd_doc.is_set_item:
-		d['major_part'] = ipd_doc.major_attribute_value
+		d['major_part'] = _attribute_value(ipd_doc.major_attribute_value)
 		panel = panel.split(",")
 		panel = panel[0].strip()
 		part = None
 		default_panel = None
 		for row in ipd_doc.stiching_item_details:
-			if row.stiching_attribute_value == panel:
-				part = row.set_item_attribute_value
+			if _attribute_value(row.stiching_attribute_value) == panel:
+				part = _attribute_value(row.set_item_attribute_value)
 				break
 		for row in ipd_doc.stiching_item_details:
-			if row.set_item_attribute_value == part and row.is_default:
-				default_panel = row.stiching_attribute_value
+			if _attribute_value(row.set_item_attribute_value) == part and row.is_default:
+				default_panel = _attribute_value(row.stiching_attribute_value)
 				break
-		if part == ipd_doc.major_attribute_value:
+		if part == _attribute_value(ipd_doc.major_attribute_value):
 			if ipd_doc.is_same_packing_attribute:
 				d['major_colour'] = colour
 			else:
@@ -395,10 +401,10 @@ def print_labels(doctype, doc_name):
 			^FO510,403^A0,40,40^FDQty^FS
 
 			^FO150,130^A0,40,40^FD: {cbe_doc.item}^FS
-			^FO150,195^A0,40,40^FD: {item['panel']}^FS
+			^FO150,195^A0,40,40^FD: {_attribute_value(item['panel'])}^FS
 			^FO150,267^A0,40,40^FD: {item['lay_no']}^FS
-			^FO150,335^A0,40,40^FD: {item['colour']}^FS
-			^FO150,403^A0,40,40^FD: {item['size']}^FS
+			^FO150,335^A0,40,40^FD: {_attribute_value(item['colour'])}^FS
+			^FO150,403^A0,40,40^FD: {_attribute_value(item['size'])}^FS
 			^FO150,470^A0,40,40^FD: {cbe_doc.lot}^FS
 			^FO680,267^A0,40,40^FD: {item['bundle_no']}^FS
 			^FO610,335^A0,40,40^FD: {item['shade']}^FS

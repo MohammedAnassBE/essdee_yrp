@@ -110,7 +110,7 @@ const mode = computed(() => {
 const colours = computed(() => config.value.colours || [])
 const ratio = computed(() => {
     const r = {}
-    ;(config.value.packing_size_details || []).forEach(d => { r[d.attribute_value] = d.quantity })
+    ;(config.value.packing_size_details || []).forEach(d => { r[frappe.yrp.attribute_value(d.attribute_value)] = d.quantity })
     return r
 })
 
@@ -124,7 +124,7 @@ function make_batch(source = null) {
     const row = {
         key: ++batch_sequence,
         colour: source
-            ? source.colour
+            ? frappe.yrp.attribute_value(source.colour)
             : (colours.value.length === 1 ? colours.value[0] : ''),
         box_quantity: source ? source.box_quantity : 0,
         ratio: {},
@@ -176,7 +176,7 @@ watch(() => config.value.colours, () => {
     ensure_colour_state()
     if (colours.value.length === 1) {
         ratio_batches.forEach(batch => {
-            if (!batch.colour) batch.colour = colours.value[0]
+            if (!frappe.yrp.attribute_value(batch.colour)) batch.colour = colours.value[0]
         })
     }
 }, { immediate: true })
@@ -187,7 +187,7 @@ const ratios_valid = computed(() =>
     || ratio_batches.every(batch => batch_pieces_per_box(batch) === combo.value))
 const colours_valid = computed(() =>
     mode.value !== 'Size Ratio Packing'
-    || ratio_batches.every(batch => colours.value.includes(batch.colour)))
+    || ratio_batches.every(batch => colours.value.includes(frappe.yrp.attribute_value(batch.colour))))
 
 function round3(x) { return Math.round((Number(x) || 0) * 1000) / 1000 }
 
@@ -224,7 +224,7 @@ const total_boxes = computed(() =>
         : colours.value.reduce((sum, colour) => sum + (Number(colour_boxes[colour]) || 0), 0))
 
 const packing_batches = computed(() => ratio_batches.map(batch => ({
-    colour: batch.colour,
+    colour: frappe.yrp.attribute_value(batch.colour),
     box_quantity: Number(batch.box_quantity) || 0,
     ratio: Object.fromEntries(primary_values.value.map(size => [size, Number(batch.ratio[size]) || 0])),
 })))

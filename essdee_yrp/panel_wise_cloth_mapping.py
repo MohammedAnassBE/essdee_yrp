@@ -5,6 +5,8 @@
 The compact matrix may contain blanks while an IPD is being prepared.
 ``cutting_cloths_json`` remains the canonical contract used by Lot and BOM flows.
 """
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 from itertools import product
 
@@ -33,7 +35,7 @@ def _mapping_values(doc, attribute):
 	for row in doc.get("item_attributes") or []:
 		if row.get("attribute") == attribute and row.get("mapping"):
 			mapping = get_mapping_document(row.get("mapping"), cached=True)
-			return [value.attribute_value for value in mapping.get("values") or []]
+			return [_attribute_value(value.attribute_value) for value in mapping.get("values") or []]
 	return []
 
 
@@ -375,7 +377,7 @@ def get_panel_wise_cloth_mapping_matrix(doc):
 
 	include_saved = True
 	if not doc.is_new() and doc.name:
-		stored_enabled = frappe.db.get_value(
+		stored_enabled = attribute_db.get_value(
 			'YRP Item Production Detail', doc.name, "enable_panel_wise_consumption_matrix"
 		)
 		include_saved = bool(stored_enabled)

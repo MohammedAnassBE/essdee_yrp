@@ -5,6 +5,7 @@ YRP's dimension-aware transaction controllers.
 """
 
 from __future__ import annotations
+from yrp.attribute_links import value as _attribute_value
 
 from collections import defaultdict
 
@@ -45,7 +46,7 @@ def normalize_packing_batches(
 	normalized = []
 	for index, raw in enumerate(batches, 1):
 		raw = update_if_string_instance(raw) or {}
-		colour = (raw.get("colour") or "").strip()
+		colour = (_attribute_value(raw.get("colour")) or "").strip()
 		if valid_colour_set and colour not in valid_colour_set:
 			frappe.throw(f"Packing ratio {index}: select a valid colour")
 
@@ -125,7 +126,7 @@ def packing_batch_label(batch):
 	ratio_text = ", ".join(
 		f"{size}:{cint(qty)}" for size, qty in ratio.items() if flt(qty)
 	)
-	colour = batch.get("colour") or "No Colour"
+	colour = _attribute_value(batch.get("colour")) or "No Colour"
 	return f"{colour} [{ratio_text}]"
 
 

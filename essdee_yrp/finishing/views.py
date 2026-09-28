@@ -1,4 +1,6 @@
 """Read models consumed by the Finishing Plan Desk components."""
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe.utils import flt
@@ -68,7 +70,7 @@ def get_packed_qty(doc):
 		primary_attribute = get_attribute_details((variant.variant_of or variant.name))["primary_attribute"]
 		size = next(
 			(
-				attribute.attribute_value
+				_attribute_value(attribute.attribute_value)
 				for attribute in variant.attributes
 				if attribute.attribute == primary_attribute
 			),
@@ -108,7 +110,7 @@ def before_save(doc):
 
 
 def _get_ipd_context(doc):
-	ipd_name = doc.production_detail or frappe.db.get_value(
+	ipd_name = doc.production_detail or attribute_db.get_value(
 		'SD YRP Lot', doc.lot, "production_detail"
 	)
 	ipd_doc = frappe.get_cached_doc('YRP Item Production Detail', ipd_name)
@@ -160,7 +162,7 @@ def _build_inward_details(doc, context):
 			flt(row.accepted_qty) + flt(row.lot_transferred) + flt(row.ironing_excess)
 		)
 		block["colour_total"]["accepted"] += accepted
-		block["values"][identity.size]["accepted"] += accepted
+		block["values"][_attribute_value(identity.size)]["accepted"] += accepted
 
 	for row in doc.get("finishing_plan_reworked_details") or []:
 		identity = _row_identity(row, context)
@@ -174,17 +176,17 @@ def _build_inward_details(doc, context):
 			("pending", pending),
 		):
 			block["colour_total"][fieldname] += value
-			block["values"][identity.size][fieldname] += value
+			block["values"][_attribute_value(identity.size)][fieldname] += value
 	return data
 
 
 def _ensure_inward_block(data, identity):
 	block = data["data"].setdefault(
-		identity.colour,
+		_attribute_value(identity.colour),
 		{
 			"values": {},
 			"colour": identity.variant_colour,
-			"part": identity.part,
+			"part": _attribute_value(identity.part),
 			"colour_total": {
 				"accepted": 0,
 				"reworked": 0,
@@ -194,10 +196,10 @@ def _ensure_inward_block(data, identity):
 		},
 	)
 	block["values"].setdefault(
-		identity.size,
+		_attribute_value(identity.size),
 		{"accepted": 0, "reworked": 0, "pending": 0, "rejected": 0},
 	)
-	data["total"].setdefault(identity.size, 0)
+	data["total"].setdefault(_attribute_value(identity.size), 0)
 	return block
 
 
@@ -206,11 +208,11 @@ def _build_rework_details(doc, context):
 	for row in doc.get("finishing_plan_reworked_details") or []:
 		identity = _row_identity(row, context)
 		block = data["data"].setdefault(
-			identity.colour,
+			_attribute_value(identity.colour),
 			{
 				"values": {},
 				"colour": identity.variant_colour,
-				"part": identity.part,
+				"part": _attribute_value(identity.part),
 				"colour_total": {
 					"rework_qty": 0,
 					"reworked": 0,
@@ -220,7 +222,7 @@ def _build_rework_details(doc, context):
 			},
 		)
 		block["values"].setdefault(
-			identity.size,
+			_attribute_value(identity.size),
 			{"rework_qty": 0, "reworked": 0, "pending": 0, "rejected": 0},
 		)
 		pending = max(
@@ -233,8 +235,8 @@ def _build_rework_details(doc, context):
 			("rejected", flt(row.rejected_qty)),
 		):
 			block["colour_total"][fieldname] += value
-			block["values"][identity.size][fieldname] += value
-		data["total"].setdefault(identity.size, 0)
+			block["values"][_attribute_value(identity.size)][fieldname] += value
+		data["total"].setdefault(_attribute_value(identity.size), 0)
 	return data
 
 
@@ -245,7 +247,7 @@ def _build_quantity_views(doc, context):
 	pack_return = {"data": {}, "total": {}, "total_qty": 0}
 	for row in doc.get("finishing_plan_details") or []:
 		identity = _row_identity(row, context)
-		part = identity.part or "item"
+		part = _attribute_value(identity.part) or "item"
 		inward = _ensure_quantity_inward(finishing_inward, identity, part)
 		quantity = _ensure_quantity_balance(finishing_quantity, identity)
 		ironing = _ensure_ironing(finishing_ironing, identity)
@@ -258,8 +260,8 @@ def _build_quantity_views(doc, context):
 		cut_sew_difference = delivered - cutting
 		for target in (
 			inward["colour_total"],
-			inward["values"][identity.size],
-			finishing_inward["total"][part][identity.size],
+			inward["values"][_attribute_value(identity.size)],
+			finishing_inward["total"][part][_attribute_value(identity.size)],
 			finishing_inward["over_all"][part],
 		):
 			target["cutting"] += cutting
@@ -281,7 +283,7 @@ def _build_quantity_views(doc, context):
 			- flt(row.pack_return_qty)
 			- flt(row.transferred_qty)
 		)
-		for target in (quantity["colour_total"], quantity["values"][identity.size]):
+		for target in (quantity["colour_total"], quantity["values"][_attribute_value(identity.size)]):
 			target["accepted"] += accepted
 			target["dc_qty"] += flt(row.dc_qty)
 			target["balance"] += balance
@@ -289,18 +291,18 @@ def _build_quantity_views(doc, context):
 			target["return_qty"] += flt(row.return_qty)
 			target["pack_return"] += flt(row.pack_return_qty)
 
-		ironing["values"][identity.size]["ironing"] += flt(row.ironing_excess)
+		ironing["values"][_attribute_value(identity.size)]["ironing"] += flt(row.ironing_excess)
 		ironing["colour_total"]["ironing"] += flt(row.ironing_excess)
-		finishing_ironing["total"][identity.size]["ironing"] += flt(
+		finishing_ironing["total"][_attribute_value(identity.size)]["ironing"] += flt(
 			row.ironing_excess
 		)
 		finishing_ironing["total_qty"]["ironing"] += flt(row.ironing_excess)
 
-		packing_return["values"][identity.size]["pack_returned_qty"] += flt(
+		packing_return["values"][_attribute_value(identity.size)]["pack_returned_qty"] += flt(
 			row.pack_return_qty
 		)
 		packing_return["colour_total"] += flt(row.pack_return_qty)
-		pack_return["total"][identity.size] += flt(row.pack_return_qty)
+		pack_return["total"][_attribute_value(identity.size)] += flt(row.pack_return_qty)
 		pack_return["total_qty"] += flt(row.pack_return_qty)
 
 	return {
@@ -316,18 +318,18 @@ def _build_quantity_views(doc, context):
 
 def _ensure_quantity_inward(data, identity, part):
 	block = data["data"].setdefault(
-		identity.colour,
+		_attribute_value(identity.colour),
 		{
 			"values": {},
-			"part": identity.part,
+			"part": _attribute_value(identity.part),
 			"colour": identity.variant_colour,
 			"set_combination": identity.combination,
 			"colour_total": _empty_inward_totals(),
 		},
 	)
-	block["values"].setdefault(identity.size, _empty_inward_totals())
+	block["values"].setdefault(_attribute_value(identity.size), _empty_inward_totals())
 	data["total"].setdefault(part, {})
-	data["total"][part].setdefault(identity.size, _empty_inward_totals())
+	data["total"][part].setdefault(_attribute_value(identity.size), _empty_inward_totals())
 	data["over_all"].setdefault(part, _empty_inward_totals())
 	return block
 
@@ -344,18 +346,18 @@ def _empty_inward_totals():
 
 def _ensure_quantity_balance(data, identity):
 	block = data["data"].setdefault(
-		identity.colour,
+		_attribute_value(identity.colour),
 		{
 			"values": {},
-			"part": identity.part,
+			"part": _attribute_value(identity.part),
 			"check_value": True,
 			"colour": identity.variant_colour,
 			"set_combination": identity.combination,
 			"colour_total": _empty_balance_totals(),
 		},
 	)
-	block["values"].setdefault(identity.size, _empty_balance_totals())
-	data["total"].setdefault(identity.size, 0)
+	block["values"].setdefault(_attribute_value(identity.size), _empty_balance_totals())
+	data["total"].setdefault(_attribute_value(identity.size), 0)
 	return block
 
 
@@ -372,35 +374,35 @@ def _empty_balance_totals():
 
 def _ensure_ironing(data, identity):
 	block = data["data"].setdefault(
-		identity.colour,
+		_attribute_value(identity.colour),
 		{
 			"values": {},
-			"part": identity.part,
+			"part": _attribute_value(identity.part),
 			"colour": identity.variant_colour,
 			"set_combination": identity.combination,
 			"colour_total": {"ironing": 0, "ironing_dc": 0},
 		},
 	)
-	block["values"].setdefault(identity.size, {"ironing": 0, "ironing_dc": 0})
-	data["total"].setdefault(identity.size, {"ironing": 0})
+	block["values"].setdefault(_attribute_value(identity.size), {"ironing": 0, "ironing_dc": 0})
+	data["total"].setdefault(_attribute_value(identity.size), {"ironing": 0})
 	return block
 
 
 def _ensure_pack_return(data, identity):
 	block = data["data"].setdefault(
-		identity.colour,
+		_attribute_value(identity.colour),
 		{
 			"values": {},
-			"part": identity.part,
+			"part": _attribute_value(identity.part),
 			"colour": identity.variant_colour,
 			"set_combination": identity.combination,
 			"colour_total": 0,
 		},
 	)
 	block["values"].setdefault(
-		identity.size, {"pack_returned_qty": 0, "pack_return": 0}
+		_attribute_value(identity.size), {"pack_returned_qty": 0, "pack_return": 0}
 	)
-	data["total"].setdefault(identity.size, 0)
+	data["total"].setdefault(_attribute_value(identity.size), 0)
 	return block
 
 
@@ -419,19 +421,19 @@ def _build_rejection_details(doc, context):
 			identity = _row_identity(row, context)
 			received_type = row.received_type or "Unspecified"
 			block = data.setdefault(received_type, {}).setdefault(
-				identity.colour,
+				_attribute_value(identity.colour),
 				{
-					"part": identity.part,
+					"part": _attribute_value(identity.part),
 					"rework": {"values": {}, "total": 0},
 					"rejection": {"values": {}, "total": 0},
 				},
 			)
-			block["rework"]["values"][identity.size] = (
-				block["rework"]["values"].get(identity.size, 0) + rework_quantity
+			block["rework"]["values"][_attribute_value(identity.size)] = (
+				block["rework"]["values"].get(_attribute_value(identity.size), 0) + rework_quantity
 			)
 			block["rework"]["total"] += rework_quantity
-			block["rejection"]["values"][identity.size] = (
-				block["rejection"]["values"].get(identity.size, 0) + rejection_quantity
+			block["rejection"]["values"][_attribute_value(identity.size)] = (
+				block["rejection"]["values"].get(_attribute_value(identity.size), 0) + rejection_quantity
 			)
 			block["rejection"]["total"] += rejection_quantity
 			grand_total += rejection_quantity
@@ -449,19 +451,19 @@ def reshape_old_lot_rows_for_ui(doc, ipd_doc=None):
 		ipd_doc = frappe.get_cached_doc(
 			'YRP Item Production Detail',
 			doc.production_detail
-			or frappe.db.get_value('SD YRP Lot', doc.lot, "production_detail"),
+			or attribute_db.get_value('SD YRP Lot', doc.lot, "production_detail"),
 		)
 	primary_values = get_ipd_primary_values(ipd_doc.name)
 	groups = {}
 	for row in doc.get("finishing_old_lot_items") or []:
 		key = (row.source_lot, row.warehouse, row.warehouse_name)
 		group = groups.setdefault(key, {"data": {}, "total": {}})
-		colour = row.colour
+		colour = _attribute_value(row.colour)
 		block = group["data"].setdefault(
 			colour,
 			{
 				"values": {},
-				"part": row.part,
+				"part": _attribute_value(row.part),
 				"colour": colour,
 				"set_combination": row.set_combination,
 				"colour_total": _empty_old_lot_totals(),
@@ -470,7 +472,7 @@ def reshape_old_lot_rows_for_ui(doc, ipd_doc=None):
 		for size in primary_values:
 			block["values"].setdefault(size, _empty_old_lot_totals())
 			group["total"].setdefault(size, 0)
-		if row.size not in primary_values:
+		if _attribute_value(row.size) not in primary_values:
 			continue
 		values = {
 			"balance_loose_piece": flt(row.balance_loose_piece),
@@ -479,9 +481,9 @@ def reshape_old_lot_rows_for_ui(doc, ipd_doc=None):
 			"transfer_loose_piece_set": flt(row.transfer_loose_piece_set),
 		}
 		for fieldname, quantity in values.items():
-			block["values"][row.size][fieldname] += quantity
+			block["values"][_attribute_value(row.size)][fieldname] += quantity
 			block["colour_total"][fieldname] += quantity
-		group["total"][row.size] += (
+		group["total"][_attribute_value(row.size)] += (
 			values["balance_loose_piece"] + values["balance_loose_piece_set"]
 		)
 
@@ -499,7 +501,7 @@ def reshape_old_lot_rows_for_ui(doc, ipd_doc=None):
 			}
 		)
 	colours = [
-		row.attribute_value for row in ipd_doc.get("packing_attribute_details") or []
+		_attribute_value(row.attribute_value) for row in ipd_doc.get("packing_attribute_details") or []
 	]
 	return {"data": data, "colours": colours}
 
@@ -526,16 +528,16 @@ def _build_transfer_matrix(
 		key = (
 			row.get(counterpart_plan_field),
 			row.get(counterpart_lot_field),
-			row.colour,
-			row.part or "",
+			_attribute_value(row.colour),
+			_attribute_value(row.part) or "",
 		)
 		group = groups.setdefault(
 			key,
 			{
 				"fp": row.get(counterpart_plan_field),
 				"lot": row.get(counterpart_lot_field),
-				"colour": row.colour,
-				"part": row.part,
+				"colour": _attribute_value(row.colour),
+				"part": _attribute_value(row.part),
 				"lp": {size: 0 for size in primary_values},
 				"lps": {size: 0 for size in primary_values},
 				"lts": [],
@@ -543,11 +545,11 @@ def _build_transfer_matrix(
 				"lps_total": 0,
 			},
 		)
-		if row.size in group["lp"]:
+		if _attribute_value(row.size) in group["lp"]:
 			loose_piece = flt(row.get(loose_piece_field))
 			loose_piece_set = flt(row.get(loose_piece_set_field))
-			group["lp"][row.size] += loose_piece
-			group["lps"][row.size] += loose_piece_set
+			group["lp"][_attribute_value(row.size)] += loose_piece
+			group["lps"][_attribute_value(row.size)] += loose_piece_set
 			group["lp_total"] += loose_piece
 			group["lps_total"] += loose_piece_set
 		if row.lot_transfer and row.lot_transfer not in group["lts"]:

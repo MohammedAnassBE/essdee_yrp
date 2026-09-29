@@ -4,6 +4,10 @@ from yrp.attribute_links import value as _attribute_value
 import frappe
 from frappe.utils import flt
 
+from essdee_yrp.finishing.old_lot_history import (
+	active_old_lot_transfer_rows,
+	get_old_lot_received_rows,
+)
 from essdee_yrp.finishing.packing import get_finishing_packing_summary
 from yrp.utils import get_variant_attr_details
 
@@ -225,6 +229,7 @@ def get_unaccountable_quantity(finishing_doc, dispatched_pieces=None):
 	rejected = sum(flt(row.rejected_qty) for row in rows)
 	loose_piece = sum(flt(row.return_qty) for row in rows)
 	loose_piece_set = sum(flt(row.pack_return_qty) for row in rows)
+	transferred_as_loose_piece = 0
 
 	for row in finishing_doc.get("finishing_plan_reworked_details") or []:
 		rejected += flt(row.rejected_qty)
@@ -234,10 +239,15 @@ def get_unaccountable_quantity(finishing_doc, dispatched_pieces=None):
 			0,
 		)
 
-	for row in finishing_doc.get("finishing_old_lot_given_items") or []:
+	for row in active_old_lot_transfer_rows(
+		finishing_doc.get("finishing_old_lot_given_items")
+	):
 		loose_piece -= flt(row.loose_piece_given)
 		loose_piece_set -= flt(row.loose_piece_set_given)
-	for row in finishing_doc.get("finishing_old_lot_received_items") or []:
+		transferred_as_loose_piece += flt(row.loose_piece_given) + flt(
+			row.loose_piece_set_given
+		)
+	for row in get_old_lot_received_rows(finishing_doc):
 		loose_piece += flt(row.loose_piece_taken)
 		loose_piece_set += flt(row.loose_piece_set_taken)
 
@@ -252,4 +262,5 @@ def get_unaccountable_quantity(finishing_doc, dispatched_pieces=None):
 		- loose_piece
 		- loose_piece_set
 		- transferred
+		- transferred_as_loose_piece
 	)

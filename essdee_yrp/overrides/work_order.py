@@ -5,6 +5,7 @@ import json
 from collections import defaultdict
 
 import frappe
+from frappe import _
 from frappe.utils import flt
 from yrp.yrp.doctype.yrp_work_order.yrp_work_order import (
 	WorkOrder,
@@ -17,6 +18,23 @@ from yrp.yrp.doctype.yrp_work_order.yrp_work_order import (
 
 class EssdeeWorkOrder(WorkOrder):
 	"""Split garment rates by panel type before falling back to base YRP."""
+
+	def get_submit_readiness_issues(self):
+		issues = super().get_submit_readiness_issues()
+		if not self.get("includes_packing"):
+			return issues
+
+		from essdee_yrp.finishing.box_sticker import get_missing_box_sticker_prices
+
+		missing_prices = get_missing_box_sticker_prices(self, for_update=True)
+		if missing_prices:
+			issues.append(
+				_(
+					"Lot-wise price is not set for Lot {0} in sizes: {1}. "
+					"Set the price for this Lot in the Production Order before submitting."
+				).format(self.lot, ", ".join(missing_prices))
+			)
+		return issues
 
 	def apply_receivable_process_costs(self, process_cost):
 		if apply_garment_panel_process_costs(self, process_cost):

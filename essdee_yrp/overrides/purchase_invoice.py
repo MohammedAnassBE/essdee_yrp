@@ -9,8 +9,13 @@ from frappe import _
 from frappe.utils import flt
 from yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice import PurchaseInvoice
 
-from essdee_yrp.erp import is_purchase_invoice_sync_enabled
-from essdee_yrp.erp_purchase_invoice import cancel_erp_invoice, create_erp_invoice
+from essdee_yrp.erp_purchase_invoice import (
+	cancel_erp_invoice,
+	create_erp_invoice,
+	is_erp_purchase_invoice_available,
+	link_erp_invoice_to_bill_tracking,
+	unlink_erp_invoice_from_bill_tracking,
+)
 from essdee_yrp.purchase_invoice import (
 	MIGRATED_RATE_SOURCE,
 	MODERN_RATE_SOURCE,
@@ -35,7 +40,7 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 			)
 		self.set_onload(
 			"erp_purchase_invoice_sync_enabled",
-			is_purchase_invoice_sync_enabled(),
+			is_erp_purchase_invoice_available(),
 		)
 
 	def before_validate(self):
@@ -83,7 +88,12 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 
 	def before_cancel(self):
 		super().before_cancel()
+		unlink_erp_invoice_from_bill_tracking(self)
 		cancel_erp_invoice(self)
+
+	def on_submit(self):
+		super().on_submit()
+		link_erp_invoice_to_bill_tracking(self)
 
 	def _rebuild_essdee_work_order_items(self):
 		if self.get("essdee_rate_table_source") == MIGRATED_RATE_SOURCE:

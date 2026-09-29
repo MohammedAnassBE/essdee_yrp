@@ -548,6 +548,36 @@ def derive_production_order_detail_fields(
 	return result
 
 
+def derive_finishing_plan_audit_fields(
+	output: Mapping[str, Any],
+	source: Mapping[str, Any],
+	spec: MigrationSpec,
+	plan: MigrationPlan,
+	parent: Mapping[str, Any] | None,
+) -> Mapping[str, Any]:
+	"""Preserve the current audit workflow and normalize legacy OCR requests."""
+	result = dict(output)
+	status = result.get("fp_status")
+	modified_date = str(source.get("modified") or "")[:10] or None
+	if status == "OCR Requested":
+		result["fp_status"] = "Ready for Audit"
+		result["audit_requested_date"] = (
+			result.get("audit_requested_date") or modified_date
+		)
+	elif status == "Ready for Audit":
+		result["audit_requested_date"] = (
+			result.get("audit_requested_date") or modified_date
+		)
+	elif status == "Audit Completed":
+		result["audit_requested_date"] = (
+			result.get("audit_requested_date") or modified_date
+		)
+		result["audit_completed_date"] = (
+			result.get("audit_completed_date") or modified_date
+		)
+	return result
+
+
 def derive_workstation_fields(
 	output: Mapping[str, Any],
 	source: Mapping[str, Any],
@@ -729,6 +759,7 @@ POST_TRANSFORMERS = {
 	"derive_product_item_name": derive_product_item_name,
 	"remove_empty_ipd_process_placeholders": remove_empty_ipd_process_placeholders,
 	"derive_production_order_detail_fields": derive_production_order_detail_fields,
+	"derive_finishing_plan_audit_fields": derive_finishing_plan_audit_fields,
 	"derive_workstation_fields": derive_workstation_fields,
 	"default_legacy_stitching_category": default_legacy_stitching_category,
 	"default_legacy_lot_costing_type": default_legacy_lot_costing_type,

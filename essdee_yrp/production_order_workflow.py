@@ -33,6 +33,10 @@ TRACKED_DATE_LABELS = {label: fieldname for fieldname, label in TRACKED_DATE_FIE
 
 PPO_DRAFT_STATUS = "Draft"
 PPO_REQUEST_STATUS = "PPO Request"
+CLOSED_PO_STATUS = "Closed"
+AUTO_AUDIT_CLOSE_FLAG = "allow_auto_audit_close"
+REOPEN_PRODUCTION_ORDER_FLAG = "allow_production_order_reopen"
+AUDIT_COMPLETE_FINISHING_PLAN_STATUSES = {"Audit Completed", "OCR Completed"}
 PPO_APPROVER_ROLE_FIELDS = ("merch_user_role", "merchandising_manager_role")
 SYSTEM_GENERATED_ALTERNATIVE_PPO_FLAG = "allow_system_generated_alternative_ppo"
 
@@ -127,6 +131,7 @@ def _apply_essdee_order_entry_details(doc):
 def validate(doc, method=None):
 	_validate_ppo_approval_state(doc)
 	_validate_tracked_date_update(doc)
+	_validate_closed_status_transition(doc)
 	_validate_quantity_workflow_lock(doc)
 	validate_lot_price_overrides(doc)
 
@@ -135,6 +140,7 @@ def before_update_after_submit(doc, method=None):
 	# Frappe routes submitted-document edits through this lifecycle event; keep
 	# the workflow locks authoritative even when a caller bypasses the Desk UI.
 	_validate_tracked_date_update(doc)
+	_validate_closed_status_transition(doc)
 	_validate_quantity_workflow_lock(doc)
 	validate_lot_price_overrides(doc)
 
@@ -290,6 +296,28 @@ def _validate_tracked_date_update(doc):
 			frappe._("Use the Change Dates button to update {0} after submission.").format(
 				", ".join(changed_fields)
 			)
+		)
+
+
+def _validate_closed_status_transition(doc):
+	if doc.docstatus != 1:
+		return
+	previous = doc.get_doc_before_save()
+	if not previous:
+		return
+	if (
+		previous.status == CLOSED_PO_STATUS
+		and doc.status != CLOSED_PO_STATUS
+		and not doc.flags.get(REOPEN_PRODUCTION_ORDER_FLAG)
+	):
+		frappe.throw("A closed Production Order cannot be reopened")
+	if (
+		doc.status == CLOSED_PO_STATUS
+		and previous.status != CLOSED_PO_STATUS
+		and not doc.flags.get(AUTO_AUDIT_CLOSE_FLAG)
+	):
+		frappe.throw(
+			"Production Order can be closed only after every linked Lot completes audit"
 		)
 
 
@@ -1371,6 +1399,74 @@ def get_linked_lots(production_order):
 		pluck="name",
 		order_by="name asc",
 	)
+
+
+def close_production_order_if_all_lots_audited(production_order):
+	"""Close a submitted Production Order after every linked Lot finishes audit."""
+	if not production_order:
+		return False
+
+	lock_production_orders(production_order)
+	doc = frappe.get_doc('YRP Production Order', production_order)
+	if doc.docstatus != 1 or doc.status == CLOSED_PO_STATUS:
+		return False
+
+	linked_lots = get_linked_lots(production_order)
+	if not linked_lots:
+		return False
+
+	finishing_plans = frappe.get_all(
+		'SD YRP Finishing Plan',
+		filters={"lot": ("in", linked_lots)},
+		fields=["lot", "fp_status"],
+	)
+	statuses_by_lot = {lot: [] for lot in linked_lots}
+	for finishing_plan in finishing_plans:
+		statuses_by_lot.setdefault(finishing_plan.lot, []).append(
+			finishing_plan.fp_status
+		)
+
+	if any(
+		not statuses
+		or any(
+			status not in AUDIT_COMPLETE_FINISHING_PLAN_STATUSES
+			for status in statuses
+		)
+		for statuses in statuses_by_lot.values()
+	):
+		return False
+
+	old_status = doc.status or ""
+	log_date = frappe.utils.formatdate(frappe.utils.nowdate(), "dd-mm-yyyy")
+	append_comment_log_block(doc, "\n".join([
+		f"[{log_date}] Production Order Auto Closed after Finishing Audit",
+		f"Status: {old_status or 'None'} -> {CLOSED_PO_STATUS}",
+	]))
+	doc.status = CLOSED_PO_STATUS
+	doc.flags[AUTO_AUDIT_CLOSE_FLAG] = True
+	doc.save(ignore_permissions=True)
+	return True
+
+
+@frappe.whitelist()
+def reopen_production_order(production_order):
+	if "System Manager" not in frappe.get_roles():
+		frappe.throw("Only System Manager can reopen a Production Order")
+
+	lock_production_orders(production_order)
+	doc = frappe.get_doc('YRP Production Order', production_order)
+	if doc.docstatus != 1 or doc.status != CLOSED_PO_STATUS:
+		frappe.throw("Only a submitted, closed Production Order can be reopened")
+
+	log_date = frappe.utils.formatdate(frappe.utils.nowdate(), "dd-mm-yyyy")
+	append_comment_log_block(doc, "\n".join([
+		f"[{log_date}] Production Order Reopened - {frappe.session.user}",
+		f"Status: {CLOSED_PO_STATUS} -> Open",
+	]))
+	doc.status = "Open"
+	doc.flags[REOPEN_PRODUCTION_ORDER_FLAG] = True
+	doc.save(ignore_permissions=True)
+	return {"old_status": CLOSED_PO_STATUS, "new_status": "Open"}
 
 
 def validate_status_change_has_no_linked_lot(production_order, action="changed"):

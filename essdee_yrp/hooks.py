@@ -208,6 +208,7 @@ doctype_js = {
 	'YRP Delivery Challan': "public/js/delivery_challan.js",
 	'YRP Goods Received Note': "public/js/goods_received_note.js",
 	'YRP Purchase Invoice': "public/js/purchase_invoice.js",
+	'YRP Bill Tracking': "public/js/bill_tracking.js",
 	'YRP Item BOM Attribute Mapping': "public/js/item_bom_attribute_mapping.js",
 	'YRP Process Cost': "public/js/process_cost.js",
 	'SD YRP Finishing Plan': "public/js/finishing_plan.js",
@@ -515,7 +516,12 @@ doc_events = {
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
+scheduler_events = {
+	"cron": {
+		"0 0 * * *": [
+			"essdee_yrp.finishing.closure.auto_complete_ocr_after_30_days"
+		],
+	},
 # 	"all": [
 # 		"essdee_yrp.tasks.all"
 # 	],
@@ -531,7 +537,7 @@ doc_events = {
 # 	"monthly": [
 # 		"essdee_yrp.tasks.monthly"
 # 	],
-# }
+}
 
 # Testing
 # -------

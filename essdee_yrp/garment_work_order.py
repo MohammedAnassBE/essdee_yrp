@@ -203,8 +203,7 @@ def calculate_garment_work_order(work_order, rows, modified=None):
 
 	lot = frappe.get_doc('SD YRP Lot', wo.lot)
 	ipd = frappe.get_cached_doc('YRP Item Production Detail', wo.production_detail)
-	quantity_field = _quantity_field(ipd, wo.process_name, wo.get("includes_packing"))
-	demands = _validated_demands(lot, ipd, rows, quantity_field)
+	demands = _validated_demands(lot, ipd, rows)
 	if not demands:
 		frappe.throw(_("Enter a quantity greater than zero for at least one row."))
 
@@ -280,6 +279,20 @@ def calculate_garment_work_order(work_order, rows, modified=None):
 	wo.wo_colours = _colour_summary(ipd, demands)
 	wo.save()
 	_update_cutting_tracking_json(wo, ipd, processes)
+
+	if wo.get("includes_packing"):
+		from essdee_yrp.finishing.box_sticker import get_missing_box_sticker_prices
+
+		missing_prices = get_missing_box_sticker_prices(wo)
+		if missing_prices:
+			frappe.msgprint(
+				_(
+					"Lot-wise price is not set for Lot {0} in sizes: {1}. "
+					"Set the price for this Lot in the Production Order before submitting."
+				).format(wo.lot, ", ".join(missing_prices)),
+				title=_("Work Order Calculation"),
+				indicator="orange",
+			)
 
 	return {
 		"deliverables": len(deliverables),
@@ -389,7 +402,7 @@ def _quantity_field(ipd, process_name, includes_packing=False):
 	)
 
 
-def _validated_demands(lot, ipd, rows, quantity_field):
+def _validated_demands(lot, ipd, rows):
 	rows = rows or []
 	by_name = {row.name: row for row in lot.get("lot_order_details") or []}
 	demands = []
@@ -405,13 +418,6 @@ def _validated_demands(lot, ipd, rows, quantity_field):
 		qty = flt(incoming.get("qty"))
 		if qty <= 0:
 			continue
-		available = flt(source.get(quantity_field))
-		if qty > available + 0.001:
-			frappe.throw(
-				_("Quantity {0} exceeds available {1} for {2}.").format(
-					qty, available, source.item_variant
-				)
-			)
 		attrs = get_variant_attr_details(source.item_variant)
 		if get_parent_item(source.item_variant) != ipd.item:
 			frappe.throw(_("Item Variant {0} does not belong to IPD {1}.").format(source.item_variant, ipd.name))

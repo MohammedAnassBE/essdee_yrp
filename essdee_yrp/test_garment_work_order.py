@@ -4,6 +4,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from essdee_yrp.garment_work_order import (
+	_validated_demands,
 	calculate_garment_work_order,
 	get_garment_work_order_context,
 	regenerate_ipd_process_matrices,
@@ -90,6 +91,25 @@ class TestGarmentWorkOrder(IntegrationTestCase):
 		self.assertGreater(work_order.total_quantity, 0)
 		self.assertTrue(work_order.completed_items_json)
 		self.assertTrue(work_order.incompleted_items_json)
+
+	def test_calculation_accepts_quantity_above_the_lot_quantity(self):
+		work_order = frappe.get_doc('YRP Work Order', self.work_order)
+		lot = frappe.get_doc('SD YRP Lot', work_order.lot)
+		ipd = frappe.get_cached_doc(
+			'YRP Item Production Detail', work_order.production_detail
+		)
+		context = get_garment_work_order_context(self.work_order)
+		source = context["rows"][0]
+		excess_qty = source["available_qty"] + 450
+
+		demands = _validated_demands(
+			lot,
+			ipd,
+			[{"source_row": source["source_row"], "qty": excess_qty}],
+		)
+
+		self.assertEqual(len(demands), 1)
+		self.assertEqual(demands[0]["qty"], excess_qty)
 
 	def test_main_group_and_extra_process_branches(self):
 		oracles = {

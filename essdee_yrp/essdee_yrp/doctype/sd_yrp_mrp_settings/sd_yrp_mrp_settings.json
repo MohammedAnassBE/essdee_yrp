@@ -51,6 +51,7 @@
   "enable_production_order",
   "production_order_action_roles",
   "production_order_quantity_approver_role",
+  "accounts_user_role",
   "grn_cancellation_in_days",
   "dc_grn_letter_head",
   "time_and_action_tracking_order_report_days",
@@ -474,6 +475,14 @@
    "options": "Role"
   },
   {
+   "default": "Accounts User",
+   "description": "Users with this role can mark a Finishing Plan audit as completed.",
+   "fieldname": "accounts_user_role",
+   "fieldtype": "Link",
+   "label": "Accounts User Role",
+   "options": "Role"
+  },
+  {
    "default": "0.01",
    "description": "Minimum allowed piece weight in kg for Cutting LaySheet validation",
    "fieldname": "piece_weight_min",
@@ -583,7 +592,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-07-01 00:00:00.000000",
+ "modified": "2026-09-28 15:37:39.890569",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP MRP Settings",

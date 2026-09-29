@@ -14,7 +14,9 @@ from essdee_yrp.finishing.grn import (
 )
 from essdee_yrp.finishing.rebuild import _apply_rework_receipt_rows
 from essdee_yrp.finishing.insights import fetch_rejected_quantity
-from essdee_yrp.finishing.closure import complete_ocr
+from essdee_yrp.finishing import closure
+from essdee_yrp.finishing.closure import complete_audit, complete_ocr, request_audit
+from essdee_yrp.finishing.old_lot_history import get_old_lot_received_rows
 from essdee_yrp.finishing.old_lot import (
 	_apply_lot_transfer_to_finishing,
 	_record_split_history,
@@ -311,7 +313,7 @@ class TestFinishingServices(IntegrationTestCase):
 
 	@patch("essdee_yrp.finishing.old_lot.apply_auto_fp_status")
 	@patch("essdee_yrp.finishing.old_lot.frappe.get_doc")
-	def test_old_lot_history_submit_and_cancel_are_symmetric(self, get_doc, _status):
+	def test_old_lot_history_uses_source_side_single_source_of_truth(self, get_doc, _status):
 		available = _row(
 			source_fp="FP-SOURCE",
 			source_lot="LOT-OLD",
@@ -334,7 +336,11 @@ class TestFinishingServices(IntegrationTestCase):
 			delivery_location="WH-1",
 			finishing_old_lot_given_items=[],
 		)
-		transfer = _doc(name="LT-1", finishing_plan="FP-DEST")
+		transfer = _doc(
+			name="LT-1",
+			finishing_plan="FP-DEST",
+			items=[_row(to_lot="LOT-NEW")],
+		)
 		get_doc.side_effect = lambda _doctype, name: (
 			destination if name == "FP-DEST" else source
 		)
@@ -351,27 +357,112 @@ class TestFinishingServices(IntegrationTestCase):
 		}
 
 		_record_split_history(destination, transfer, [contribution])
-		self.assertEqual(available.balance_loose_piece, 2)
-		self.assertEqual(available.balance_loose_piece_set, 1)
-		self.assertEqual(len(destination.finishing_old_lot_received_items), 1)
-		self.assertEqual(len(source.finishing_old_lot_given_items), 1)
-
-		_reverse_split_history(transfer)
 		self.assertEqual(available.balance_loose_piece, 5)
 		self.assertEqual(available.balance_loose_piece_set, 2)
 		self.assertEqual(destination.finishing_old_lot_received_items, [])
+		self.assertEqual(len(source.finishing_old_lot_given_items), 1)
+
+		with patch(
+			"essdee_yrp.finishing.old_lot.frappe.get_all",
+			side_effect=[["FP-SOURCE"], []],
+		):
+			_reverse_split_history(transfer)
 		self.assertEqual(source.finishing_old_lot_given_items, [])
 
-	@patch("essdee_yrp.finishing.closure.get_unaccountable_quantity", return_value=0)
 	@patch("essdee_yrp.finishing.closure.frappe.get_doc")
-	def test_complete_ocr_closes_only_a_zero_balance_plan(self, get_doc, _balance):
-		plan = _doc(name="FP-1", fp_status="Fully Dispatched")
+	def test_complete_ocr_requires_completed_audit(self, get_doc):
+		plan = _doc(name="FP-1", fp_status="Audit Completed", lot="LOT-1")
 		get_doc.return_value = plan
 
-		result = complete_ocr("FP-1")
+		with (
+			patch.object(closure.frappe, "get_roles", return_value=["System Manager"]),
+			patch.object(
+				closure,
+				"close_linked_production_order_if_all_lots_audited",
+			) as close_order,
+		):
+			result = complete_ocr("FP-1")
 
-		self.assertEqual(result, {"fp_status": "OCR Completed", "unaccountable": 0.0})
+		self.assertEqual(result, {"fp_status": "OCR Completed"})
 		self.assertEqual(plan.fp_status, "OCR Completed")
+		close_order.assert_called_once_with("LOT-1")
+
+	def test_audit_request_and_completion_capture_dates(self):
+		plan = _doc(
+			name="FP-1",
+			fp_status="Dispatched",
+			lot="LOT-1",
+			audit_requested_date=None,
+			audit_completed_date=None,
+		)
+		with (
+			patch.object(closure.frappe, "get_doc", return_value=plan),
+			patch.object(closure, "today", return_value="2026-09-28"),
+		):
+			request_audit("FP-1")
+		self.assertEqual(plan.fp_status, "Ready for Audit")
+		self.assertEqual(plan.audit_requested_date, "2026-09-28")
+
+		with (
+			patch.object(closure, "require_accounts_user_role"),
+			patch.object(closure.frappe, "get_doc", return_value=plan),
+			patch.object(closure, "today", return_value="2026-09-29"),
+			patch.object(
+				closure,
+				"close_linked_production_order_if_all_lots_audited",
+			) as close_order,
+		):
+			complete_audit("FP-1")
+		self.assertEqual(plan.fp_status, "Audit Completed")
+		self.assertEqual(plan.audit_completed_date, "2026-09-29")
+		close_order.assert_called_once_with("LOT-1")
+
+	def test_daily_job_uses_only_audit_completed_date_older_than_30_days(self):
+		with (
+			patch.object(closure, "today", return_value="2026-09-28"),
+			patch.object(
+				closure.frappe,
+				"get_all",
+				return_value=["FP-OLD"],
+			) as get_all,
+			patch.object(closure.frappe.db, "set_value") as set_value,
+		):
+			self.assertEqual(closure.auto_complete_ocr_after_30_days(), 1)
+		get_all.assert_called_once_with(
+			'SD YRP Finishing Plan',
+			filters={
+				"fp_status": "Audit Completed",
+				"audit_completed_date": ("<", "2026-08-29"),
+			},
+			pluck="name",
+		)
+		set_value.assert_called_once_with(
+			'SD YRP Finishing Plan', "FP-OLD", "fp_status", "OCR Completed"
+		)
+
+	def test_destination_receipts_are_derived_from_source_history(self):
+		destination = _doc(
+			name="FP-DEST",
+			finishing_old_lot_received_items=[],
+		)
+		given = _row(
+			source_fp="FP-SOURCE",
+			item_variant="VAR-1",
+			size="S",
+			loose_piece_given=8,
+			lot_transfer=None,
+		)
+		with patch(
+			"essdee_yrp.finishing.old_lot_history.frappe.get_all",
+			side_effect=[
+				[given],
+				[_row(name="FP-SOURCE", lot="LOT-SOURCE")],
+			],
+		):
+			received = get_old_lot_received_rows(destination)
+		self.assertEqual(len(received), 1)
+		self.assertEqual(received[0].source_lot, "LOT-SOURCE")
+		self.assertEqual(received[0].loose_piece_taken, 8)
 
 	@patch("essdee_yrp.finishing.status.get_set_item_parts_count", return_value=2)
 	@patch("essdee_yrp.finishing.status.get_finishing_packing_summary")
@@ -414,9 +505,8 @@ class TestFinishingServices(IntegrationTestCase):
 			],
 		)
 
-		# 112 inward - 90 dispatched - 3 rejected - 2 pending - 5 transferred
-		# - (3 - 2 + 1) loose - (4 - 1 + 1) loose-set = 6.
-		self.assertEqual(get_unaccountable_quantity(doc, dispatched_pieces=90), 6)
+		# Given loose pieces remain accounted for as an explicit transfer bucket.
+		self.assertEqual(get_unaccountable_quantity(doc, dispatched_pieces=90), 3)
 
 	@patch("essdee_yrp.finishing.status.get_unaccountable_quantity", return_value=0)
 	@patch("essdee_yrp.finishing.status.get_finishing_dispatch_totals")
@@ -464,6 +554,8 @@ def _row(**values):
 		"received_type": None,
 		"item": None,
 		"qty": 0,
+		"to_lot": None,
+		"lot_transfer": None,
 	}
 	defaults.update(values)
 	return frappe._dict(defaults)

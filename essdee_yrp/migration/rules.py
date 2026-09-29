@@ -96,6 +96,9 @@ RULES = {
 	"FG Stock Entry": DocTypeRule(
 		value_transformers={"warehouse": "supplier_to_warehouse"}
 	),
+	"Finishing Plan": DocTypeRule(
+		post_transformer="derive_finishing_plan_audit_fields",
+	),
 	"Finishing Plan Old Lot Item": DocTypeRule(
 		value_transformers={"warehouse": "supplier_to_warehouse"}
 	),

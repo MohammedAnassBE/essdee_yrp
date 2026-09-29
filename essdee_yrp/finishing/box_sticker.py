@@ -8,7 +8,10 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
-from essdee_yrp.lot_pricing import get_effective_lot_price_map
+from essdee_yrp.lot_pricing import (
+	get_effective_lot_price_map,
+	get_explicit_lot_price_map,
+)
 from essdee_yrp.production_order_alternative import _lock_production_orders
 from yrp.utils import get_variant_attr_details
 
@@ -39,19 +42,23 @@ def build_box_sticker_details(production_order_sizes, quantity_by_size, price_by
 	return details
 
 
-def get_missing_box_sticker_prices(work_order):
-	"""Return produced sizes that have no effective PPO/Lot MRP."""
+def get_missing_box_sticker_prices(work_order, for_update=False):
+	"""Return produced sizes that have no explicit Lot-wise MRP."""
 	work_order = _work_order(work_order)
 	production_order = attribute_db.get_value('SD YRP Lot', work_order.lot, "production_order")
 	if not production_order or attribute_db.get_value(
 		'YRP Production Order', production_order, "skip_box_sticker_print"
 	):
 		return []
+	if for_update:
+		_lock_production_orders(production_order)
 	primary_attribute = frappe.db.get_value('Item', work_order.item, "primary_attribute")
 	if not primary_attribute:
 		return []
 	quantity_by_size = _quantity_by_size(work_order, primary_attribute)
-	price_by_size = get_effective_lot_price_map(work_order.lot, production_order)
+	price_by_size = get_explicit_lot_price_map(
+		work_order.lot, production_order, for_update=for_update
+	)
 	return sorted(
 		size
 		for size, quantity in quantity_by_size.items()
@@ -83,10 +90,10 @@ def auto_create_box_sticker_print(work_order):
 	):
 		return []
 
-	missing_prices = get_missing_box_sticker_prices(work_order)
+	missing_prices = get_missing_box_sticker_prices(work_order, for_update=True)
 	if missing_prices:
 		frappe.throw(
-			_("MRP is missing for Lot {0} in sizes: {1}. Update the Production Order or Lot price before submitting.").format(
+			_("Lot-wise price is not set for Lot {0} in sizes: {1}. Set the price for this Lot in the Production Order before submitting.").format(
 				work_order.lot, ", ".join(missing_prices)
 			)
 		)

@@ -2,9 +2,11 @@
 
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import add_days, today
 
-from essdee_yrp.finishing.status import get_unaccountable_quantity
+from essdee_yrp.production_order_workflow import (
+	close_production_order_if_all_lots_audited,
+)
 
 
 @frappe.whitelist()
@@ -58,35 +60,117 @@ def delete_p_and_l_document(name):
 	return True
 
 
-@frappe.whitelist()
-def approve_ocr_request(doc_name):
-	if "System Manager" not in frappe.get_roles():
-		frappe.throw(_("Only a System Manager can approve OCR requests."))
-	plan = frappe.get_doc('SD YRP Finishing Plan', doc_name)
-	plan.check_permission("write")
-	if plan.fp_status != "OCR Requested":
+def get_accounts_user_role():
+	return (
+		frappe.db.get_single_value('SD YRP MRP Settings', "accounts_user_role") or ""
+	).strip()
+
+
+def require_accounts_user_role():
+	accounts_role = get_accounts_user_role()
+	if not accounts_role:
+		frappe.throw(_("Configure Accounts User Role in MRP Settings."))
+	if accounts_role not in frappe.get_roles():
 		frappe.throw(
-			_("Finishing Plan is not in OCR Requested state (current: {0}).").format(
+			_("Only users with the {0} role can complete the audit.").format(
+				accounts_role
+			)
+		)
+
+
+def close_linked_production_order_if_all_lots_audited(lot):
+	production_order = frappe.db.get_value(
+		'SD YRP Lot', lot, "production_order"
+	)
+	if not production_order:
+		return False
+	return close_production_order_if_all_lots_audited(production_order)
+
+
+def auto_complete_ocr_after_30_days():
+	"""Complete OCR after an audited plan has remained open for over 30 days."""
+	cutoff_date = add_days(today(), -30)
+	finishing_plans = frappe.get_all(
+		'SD YRP Finishing Plan',
+		filters={
+			"fp_status": "Audit Completed",
+			"audit_completed_date": ("<", cutoff_date),
+		},
+		pluck="name",
+	)
+	for finishing_plan in finishing_plans:
+		frappe.db.set_value(
+			'SD YRP Finishing Plan',
+			finishing_plan,
+			"fp_status",
+			"OCR Completed",
+		)
+	return len(finishing_plans)
+
+
+@frappe.whitelist()
+def request_audit(doc_name):
+	plan = frappe.get_doc('SD YRP Finishing Plan', doc_name, for_update=True)
+	plan.check_permission("write")
+	if plan.fp_status not in ("Dispatched", "Fully Dispatched"):
+		frappe.throw(
+			_(
+				"Audit can be requested only for a Dispatched or Fully Dispatched "
+				"Finishing Plan (current: {0})."
+			).format(plan.fp_status)
+		)
+	plan.fp_status = "Ready for Audit"
+	plan.audit_requested_date = today()
+	plan.audit_completed_date = None
+	plan.save(ignore_permissions=True)
+	return {
+		"fp_status": plan.fp_status,
+		"audit_requested_date": plan.audit_requested_date,
+	}
+
+
+@frappe.whitelist()
+def complete_audit(doc_name):
+	require_accounts_user_role()
+	plan = frappe.get_doc('SD YRP Finishing Plan', doc_name, for_update=True)
+	if plan.fp_status != "Ready for Audit":
+		frappe.throw(
+			_("Finishing Plan is not Ready for Audit (current: {0}).").format(
 				plan.fp_status
 			)
 		)
-	plan.fp_status = "OCR Completed"
-	plan.save()
-	return {"fp_status": plan.fp_status}
+	plan.fp_status = "Audit Completed"
+	plan.audit_completed_date = today()
+	plan.save(ignore_permissions=True)
+	close_linked_production_order_if_all_lots_audited(plan.lot)
+	return {
+		"fp_status": plan.fp_status,
+		"audit_completed_date": plan.audit_completed_date,
+	}
 
 
 @frappe.whitelist()
 def complete_ocr(doc_name):
-	plan = frappe.get_doc('SD YRP Finishing Plan', doc_name)
-	plan.check_permission("write")
-	if plan.fp_status not in ("Dispatched", "Fully Dispatched"):
+	if "System Manager" not in frappe.get_roles():
+		frappe.throw(_("Only System Manager can complete OCR."))
+	plan = frappe.get_doc('SD YRP Finishing Plan', doc_name, for_update=True)
+	if plan.fp_status != "Audit Completed":
 		frappe.throw(
-			_("OCR can be completed only for a dispatched Finishing Plan.")
+			_(
+				"OCR can be completed only after the audit is completed "
+				"(current: {0})."
+			).format(plan.fp_status)
 		)
-	unaccountable = flt(get_unaccountable_quantity(plan), 6)
-	plan.fp_status = "OCR Completed" if abs(unaccountable) < 0.000001 else "OCR Requested"
-	plan.save()
-	return {"fp_status": plan.fp_status, "unaccountable": unaccountable}
+	plan.fp_status = "OCR Completed"
+	plan.save(ignore_permissions=True)
+	close_linked_production_order_if_all_lots_audited(plan.lot)
+	return {"fp_status": plan.fp_status}
+
+
+@frappe.whitelist()
+def approve_ocr_request(doc_name):
+	"""Compatibility alias for clients using the previous approval endpoint."""
+	return complete_ocr(doc_name)
 
 
 def _require_p_and_l_role():

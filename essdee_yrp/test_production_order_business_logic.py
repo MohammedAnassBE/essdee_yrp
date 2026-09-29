@@ -1,4 +1,5 @@
 import json
+from unittest.mock import MagicMock, patch
 
 import frappe
 from frappe import _dict
@@ -7,6 +8,7 @@ from frappe.utils import add_days, getdate
 from yrp.utils import get_variant_attr_details
 
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import get_item_details as get_lot_item_details
+from essdee_yrp import production_order_workflow
 from essdee_yrp.production_order_workflow import (
 	PPO_DRAFT_STATUS,
 	PPO_REQUEST_STATUS,
@@ -24,6 +26,113 @@ from essdee_yrp.production_order_workflow import (
 
 
 class TestProductionOrderBusinessLogic(IntegrationTestCase):
+	def test_finishing_audit_closes_only_when_every_lot_is_complete(self):
+		doc = _dict(
+			name="PPO-TEST",
+			docstatus=1,
+			status="Open",
+			comment_log="",
+			flags=_dict(),
+		)
+		doc.db_set = MagicMock(
+			side_effect=lambda fieldname, value: doc.update({fieldname: value})
+		)
+		doc.save = MagicMock()
+		with (
+			patch.object(production_order_workflow, "lock_production_orders"),
+			patch.object(
+				production_order_workflow.frappe, "get_doc", return_value=doc
+			),
+			patch.object(
+				production_order_workflow,
+				"get_linked_lots",
+				return_value=["LOT-1", "LOT-2"],
+			),
+			patch.object(
+				production_order_workflow.frappe,
+				"get_all",
+				return_value=[
+					_dict(lot="LOT-1", fp_status="Audit Completed"),
+					_dict(lot="LOT-2", fp_status="OCR Completed"),
+				],
+			),
+		):
+			closed = production_order_workflow.close_production_order_if_all_lots_audited(
+				"PPO-TEST"
+			)
+
+		self.assertTrue(closed)
+		self.assertEqual(doc.status, "Closed")
+		self.assertTrue(doc.flags.allow_auto_audit_close)
+		doc.save.assert_called_once_with(ignore_permissions=True)
+
+	def test_finishing_audit_keeps_order_open_when_a_lot_has_no_plan(self):
+		doc = _dict(
+			name="PPO-TEST",
+			docstatus=1,
+			status="Open",
+			flags=_dict(),
+		)
+		doc.save = MagicMock()
+		with (
+			patch.object(production_order_workflow, "lock_production_orders"),
+			patch.object(
+				production_order_workflow.frappe, "get_doc", return_value=doc
+			),
+			patch.object(
+				production_order_workflow,
+				"get_linked_lots",
+				return_value=["LOT-1", "LOT-WITHOUT-FP"],
+			),
+			patch.object(
+				production_order_workflow.frappe,
+				"get_all",
+				return_value=[_dict(lot="LOT-1", fp_status="OCR Completed")],
+			),
+		):
+			closed = production_order_workflow.close_production_order_if_all_lots_audited(
+				"PPO-TEST"
+			)
+
+		self.assertFalse(closed)
+		self.assertEqual(doc.status, "Open")
+		doc.save.assert_not_called()
+
+	def test_system_manager_can_reopen_closed_production_order(self):
+		doc = _dict(
+			name="PPO-TEST",
+			docstatus=1,
+			status="Closed",
+			comment_log="Existing entry",
+			flags=_dict(),
+		)
+		doc.db_set = MagicMock(
+			side_effect=lambda fieldname, value: doc.update({fieldname: value})
+		)
+		doc.save = MagicMock()
+		with (
+			patch.object(
+				production_order_workflow.frappe,
+				"get_roles",
+				return_value=["System Manager"],
+			),
+			patch.object(production_order_workflow, "lock_production_orders"),
+			patch.object(
+				production_order_workflow.frappe, "get_doc", return_value=doc
+			),
+			patch.object(
+				production_order_workflow.frappe,
+				"session",
+				_dict(user="administrator@example.com"),
+			),
+		):
+			result = production_order_workflow.reopen_production_order("PPO-TEST")
+
+		self.assertEqual(result, {"old_status": "Closed", "new_status": "Open"})
+		self.assertEqual(doc.status, "Open")
+		self.assertTrue(doc.flags.allow_production_order_reopen)
+		doc.save.assert_called_once_with(ignore_permissions=True)
+
 	def _submitted_order(self):
 		names = frappe.get_all(
 			'YRP Production Order',

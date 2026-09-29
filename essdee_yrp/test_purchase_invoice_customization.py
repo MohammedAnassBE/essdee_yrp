@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import frappe
 from frappe.model.base_document import get_controller
@@ -11,12 +11,15 @@ from essdee_yrp.erp_purchase_invoice import (
 	CREATE_ENDPOINT,
 	EXPENSE_ACCOUNT_ENDPOINT,
 	SUBMIT_ENDPOINT,
+	_create_local_erp_invoice,
+	_run_local_erp_action,
 	build_erp_invoice_payload,
 	cancel_erp_invoice,
 	close_bill_tracking_from_erp,
 	create_erp_invoice,
 	fetch_expense_accounts,
 	fetch_items_expense_head,
+	get_erp_inv_link,
 	revert_bill_tracking_from_erp,
 	submit_erp_invoice,
 )
@@ -433,6 +436,10 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 		response = object()
 		with (
 			patch(
+				"essdee_yrp.erp_purchase_invoice.is_same_site_erp_available",
+				return_value=False,
+			),
+			patch(
 				"essdee_yrp.erp_purchase_invoice.is_purchase_invoice_sync_active",
 				return_value=True,
 			),
@@ -456,6 +463,34 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 			EXPENSE_ACCOUNT_ENDPOINT,
 			{"item": "Stitching Charges"},
 		)
+		self.assertEqual(
+			[row["expense_head"] for row in rows],
+			["Job Work Charges - E", "Job Work Charges - E"],
+		)
+
+	def test_same_site_expense_account_fetch_uses_local_erpnext_data(self):
+		api = MagicMock()
+		api.get_erp_item_expense_account.return_value = "Job Work Charges - E"
+		with (
+			patch(
+				"essdee_yrp.erp_purchase_invoice.is_same_site_erp_available",
+				return_value=True,
+			),
+			patch(
+				"essdee_yrp.erp_purchase_invoice._local_erp_purchase_invoice_api",
+				return_value=api,
+			),
+			patch("essdee_yrp.erp_purchase_invoice.post_erp_request") as post,
+		):
+			rows = fetch_expense_accounts(
+				[
+					{"item": "Stitching Charges", "qty": 10},
+					{"item": "Stitching Charges", "qty": 20},
+				]
+			)
+
+		api.get_erp_item_expense_account.assert_called_once_with("Stitching Charges")
+		post.assert_not_called()
 		self.assertEqual(
 			[row["expense_head"] for row in rows],
 			["Job Work Charges - E", "Job Work Charges - E"],
@@ -486,15 +521,153 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 			local_submit.assert_called_once_with()
 			erp_create.assert_called_once_with(invoice)
 
+		lifecycle = MagicMock()
 		with (
 			patch.object(PurchaseInvoice, "before_cancel") as local_cancel,
 			patch(
 				"essdee_yrp.overrides.purchase_invoice.cancel_erp_invoice"
 			) as erp_cancel,
+			patch(
+				"essdee_yrp.overrides.purchase_invoice.unlink_erp_invoice_from_bill_tracking"
+			) as unlink_erp,
 		):
+			lifecycle.attach_mock(unlink_erp, "unlink")
+			lifecycle.attach_mock(erp_cancel, "cancel")
 			invoice.before_cancel()
 			local_cancel.assert_called_once_with()
-			erp_cancel.assert_called_once_with(invoice)
+			self.assertEqual(
+				lifecycle.mock_calls,
+				[call.unlink(invoice), call.cancel(invoice)],
+			)
+
+		with (
+			patch.object(PurchaseInvoice, "on_submit") as local_on_submit,
+			patch(
+				"essdee_yrp.overrides.purchase_invoice.link_erp_invoice_to_bill_tracking"
+			) as link_erp,
+		):
+			invoice.on_submit()
+			local_on_submit.assert_called_once_with()
+			link_erp.assert_called_once_with(invoice)
+
+	def test_same_site_create_uses_local_erp_creator(self):
+		invoice = frappe.new_doc('YRP Purchase Invoice')
+		invoice.name = "YRP-MPI-LOCAL"
+		result = {
+			"name": "ERP-PI-LOCAL",
+			"docstatus": 1,
+			"amount": 125,
+			"due_date": "2026-09-30",
+		}
+		with (
+			patch(
+				"essdee_yrp.erp_purchase_invoice.is_same_site_erp_available",
+				return_value=True,
+			),
+			patch(
+				"essdee_yrp.erp_purchase_invoice.build_erp_invoice_payload",
+				return_value={"name": invoice.name},
+			),
+			patch(
+				"essdee_yrp.erp_purchase_invoice._create_local_erp_invoice",
+				return_value=result,
+			) as local_create,
+			patch("essdee_yrp.erp_purchase_invoice.post_erp_request") as post,
+		):
+			create_erp_invoice(invoice)
+
+		local_create.assert_called_once_with({"name": invoice.name})
+		post.assert_not_called()
+		self.assertEqual(invoice.erp_inv_name, "ERP-PI-LOCAL")
+		self.assertEqual(invoice.erp_inv_docstatus, 1)
+		self.assertEqual(invoice.final_amount, 125)
+
+	def test_local_erp_creator_compares_already_prefixed_item_groups_directly(self):
+		api = MagicMock()
+		api.get_erp_item_expense_account.return_value = "Purchase Expenses - E"
+		api._create.return_value = {
+			"name": "ERP-PI-LOCAL",
+			"docstatus": 1,
+			"amount": 125,
+			"due_date": "2026-09-30",
+		}
+		payload = {
+			"vendor_bill_tracking": "BT-TEST",
+			"items": [
+				{
+					"item": "POLYTHENE",
+					"item_group": "M_Purchase Accessories",
+				}
+			],
+		}
+		with (
+			patch(
+				"essdee_yrp.erp_purchase_invoice._local_erp_purchase_invoice_api",
+				return_value=api,
+			),
+			patch("essdee_yrp.erp_purchase_invoice.frappe.db.exists", return_value=True),
+			patch(
+				"essdee_yrp.erp_purchase_invoice.frappe.db.get_value",
+				return_value="M_Purchase Accessories",
+			),
+			patch("essdee_yrp.erp_purchase_invoice.frappe.db.set_value"),
+		):
+			result = _create_local_erp_invoice(payload)
+
+		api.create.assert_not_called()
+		api._create.assert_called_once()
+		created_payload = api._create.call_args.args[0]
+		self.assertEqual(
+			created_payload["items"][0]["item_group"],
+			"M_Purchase Accessories",
+		)
+		self.assertIsNone(created_payload["vendor_bill_tracking"])
+		self.assertEqual(result["name"], "ERP-PI-LOCAL")
+
+	def test_same_site_submit_temporarily_suppresses_legacy_remote_callback(self):
+		api = MagicMock()
+		api.submit.return_value = {
+			"name": "ERP-PI-DRAFT",
+			"docstatus": 1,
+			"amount": 500,
+			"due_date": "2026-09-30",
+		}
+		with (
+			patch(
+				"essdee_yrp.erp_purchase_invoice.frappe.db.get_value",
+				return_value="BT-TEST",
+			),
+			patch("essdee_yrp.erp_purchase_invoice.frappe.db.set_value") as db_set,
+			patch("essdee_yrp.erp_purchase_invoice.frappe.db.exists", return_value=True),
+			patch(
+				"essdee_yrp.erp_purchase_invoice._local_erp_purchase_invoice_api",
+				return_value=api,
+			),
+		):
+			result = _run_local_erp_action("submit", "ERP-PI-DRAFT")
+
+		api.submit.assert_called_once_with("ERP-PI-DRAFT")
+		self.assertEqual(result["docstatus"], 1)
+		self.assertEqual(db_set.call_args_list[0].args[2:4], ("vendor_bill_tracking", None))
+		self.assertEqual(db_set.call_args_list[1].args[2:4], ("vendor_bill_tracking", "BT-TEST"))
+
+	def test_same_site_show_bill_routes_to_local_purchase_invoice(self):
+		invoice = frappe._dict(
+			name="YRP-MPI-LOCAL",
+			docstatus=1,
+			erp_inv_name="PI/LOCAL 001",
+		)
+		with (
+			patch("essdee_yrp.erp_purchase_invoice.frappe.get_doc", return_value=invoice),
+			patch("essdee_yrp.erp_purchase_invoice.frappe.has_permission"),
+			patch(
+				"essdee_yrp.erp_purchase_invoice.is_same_site_erp_available",
+				return_value=True,
+			),
+		):
+			link = get_erp_inv_link(invoice.name)
+
+		self.assertEqual(link, "/app/purchase-invoice/PI%2FLOCAL%20001")
 
 	def test_create_and_cancel_use_existing_erp_endpoints(self):
 		invoice = frappe.new_doc('YRP Purchase Invoice')
@@ -509,6 +682,10 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 			"due_date": "2026-09-30",
 		}
 		with (
+			patch(
+				"essdee_yrp.erp_purchase_invoice.is_same_site_erp_available",
+				return_value=False,
+			),
 			patch(
 				"essdee_yrp.erp_purchase_invoice.is_purchase_invoice_sync_active",
 				return_value=True,
@@ -535,6 +712,10 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 
 		invoice.erp_inv_docstatus = 1
 		with (
+			patch(
+				"essdee_yrp.erp_purchase_invoice.is_same_site_erp_available",
+				return_value=False,
+			),
 			patch(
 				"essdee_yrp.erp_purchase_invoice.is_purchase_invoice_sync_active",
 				return_value=True,
@@ -567,6 +748,10 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 		}
 		with (
 			patch(
+				"essdee_yrp.erp_purchase_invoice.is_same_site_erp_available",
+				return_value=False,
+			),
+			patch(
 				"essdee_yrp.erp_purchase_invoice.is_purchase_invoice_sync_active",
 				return_value=True,
 			),
@@ -596,7 +781,13 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 		bill = MagicMock()
 		bill.form_status = "Open"
 		bill.purchase_invoice = None
+		bill.erp_purchase_invoice = None
+		bill.get.side_effect = lambda fieldname: getattr(bill, fieldname, None)
 		with (
+			patch(
+				"essdee_yrp.erp_purchase_invoice._same_site_erp_invoice_context",
+				return_value=(False, None),
+			),
 			patch(
 				"essdee_yrp.erp_purchase_invoice._local_invoice_for_erp_callback",
 				return_value="YRP-MPI-TEST",
@@ -613,7 +804,12 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 
 		bill.purchase_invoice = "YRP-MPI-TEST"
 		bill.form_status = "Closed"
+		bill.erp_purchase_invoice = "ERP-PI-TEST"
 		with (
+			patch(
+				"essdee_yrp.erp_purchase_invoice._same_site_erp_invoice_context",
+				return_value=(False, None),
+			),
 			patch(
 				"essdee_yrp.erp_purchase_invoice._local_invoice_for_erp_callback",
 				return_value="YRP-MPI-TEST",
@@ -639,6 +835,59 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 		)
 		self.assertEqual(bill.check_permission.call_args_list[-1].args, ("write",))
 
+	def test_same_site_erp_invoice_closes_and_reopens_without_a_yrp_invoice(self):
+		bill = MagicMock()
+		bill.docstatus = 1
+		bill.form_status = "Open"
+		bill.purchase_invoice = None
+		bill.erp_purchase_invoice = None
+		bill.assigned_to = "Accounts"
+		bill.get.side_effect = lambda fieldname: getattr(bill, fieldname, None)
+
+		with (
+			patch(
+				"essdee_yrp.erp_purchase_invoice._same_site_erp_invoice_context",
+				return_value=(True, None),
+			),
+			patch(
+				"essdee_yrp.erp_purchase_invoice.frappe.get_doc",
+				return_value=bill,
+			),
+		):
+			close_bill_tracking_from_erp("BT-TEST", "ERP-PI-TEST", "ERP submit")
+
+		self.assertEqual(bill.form_status, "Closed")
+		self.assertEqual(bill.erp_purchase_invoice, "ERP-PI-TEST")
+		self.assertEqual(bill.append.call_args.args[0], "bill_tracking_history")
+		self.assertEqual(bill.append.call_args.args[1]["action"], "Close")
+		bill.save.assert_called_once_with(ignore_permissions=True)
+
+		bill.reset_mock()
+		bill.form_status = "Closed"
+		bill.erp_purchase_invoice = "ERP-PI-TEST"
+		with (
+			patch(
+				"essdee_yrp.erp_purchase_invoice._same_site_erp_invoice_context",
+				return_value=(True, None),
+			),
+			patch(
+				"essdee_yrp.erp_purchase_invoice.frappe.get_doc",
+				return_value=bill,
+			),
+		):
+			revert_bill_tracking_from_erp(
+				"BT-TEST",
+				"purchase_invoice",
+				"ERP-PI-TEST",
+				origin="ERP-cancel",
+			)
+
+		self.assertEqual(bill.form_status, "Reopen")
+		self.assertIsNone(bill.erp_purchase_invoice)
+		self.assertEqual(bill.append.call_args.args[0], "bill_tracking_history")
+		self.assertEqual(bill.append.call_args.args[1]["action"], "Reopen")
+		bill.save.assert_called_once_with(ignore_permissions=True)
+
 	def test_erp_bill_tracking_callbacks_check_permission_before_lookup(self):
 		bill = MagicMock()
 		bill.check_permission.side_effect = frappe.PermissionError
@@ -648,11 +897,15 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 				return_value=bill,
 			),
 			patch(
+				"essdee_yrp.erp_purchase_invoice._same_site_erp_invoice_context"
+			) as same_site_lookup,
+			patch(
 				"essdee_yrp.erp_purchase_invoice._local_invoice_for_erp_callback"
 			) as lookup,
 			self.assertRaises(frappe.PermissionError),
 		):
 			close_bill_tracking_from_erp("BT-TEST", "ERP-PI-TEST")
+		same_site_lookup.assert_not_called()
 		lookup.assert_not_called()
 
 	def test_child_fields_and_mandatory_item_group(self):

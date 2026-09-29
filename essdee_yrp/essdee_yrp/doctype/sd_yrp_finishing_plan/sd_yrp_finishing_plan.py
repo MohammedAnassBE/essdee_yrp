@@ -27,9 +27,12 @@ from essdee_yrp.finishing.insights import (
 from essdee_yrp.finishing.closure import (
 	add_p_and_l_document,
 	approve_ocr_request,
+	complete_audit,
 	complete_ocr,
 	delete_p_and_l_document,
+	get_accounts_user_role,
 	get_p_and_l_documents,
+	request_audit,
 )
 from essdee_yrp.finishing.inward import (
 	cache_selected_size,
@@ -80,6 +83,11 @@ from essdee_yrp.finishing.views import (
 
 class SDYRPFinishingPlan(Document):
 	def onload(self):
+		accounts_role = get_accounts_user_role()
+		self.set_onload(
+			"can_complete_audit",
+			bool(accounts_role and accounts_role in frappe.get_roles()),
+		)
 		views = build_plan_views(self)
 		self.set_onload(
 			"finishing_plan_data",

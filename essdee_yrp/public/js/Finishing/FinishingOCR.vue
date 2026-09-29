@@ -124,6 +124,15 @@
                                     </th>
                                 </tr>
                                 <tr>
+                                    <th :colspan="2">Transferred as Loose Piece ( F1 )</th>
+                                    <td v-for="size in items.primary_values">
+                                        {{ items['ocr_data'][part_value]['total'][size]['transferred_as_loose_piece'] }}
+                                    </td>
+                                    <th>
+                                        {{ items['ocr_data'][part_value]['transferred_as_loose_piece'] }}
+                                    </th>
+                                </tr>
+                                <tr>
                                     <th :colspan="2">Difference ( (E + F) - D )</th>
                                     <td v-for="size in items.primary_values"
                                         :style="get_style(
@@ -337,7 +346,7 @@
                                     </th>
                                 </tr>
                                 <tr>
-                                    <th :colspan="2">Unaccountable (( G + I + J + K + L ) - (B + D1 + D2 ))</th>
+                                    <th :colspan="2">Unaccountable (( F + F1 + G + I + J + K + L ) - (B + D1 + D2 ))</th>
                                     <th v-for="size in items.primary_values" :style="get_style(get_total_difference(part_value, size))">
                                         {{ get_total_difference(part_value, size) }}
                                     </th>
@@ -714,7 +723,9 @@ function get_total_difference(part_value, size){
             items.value['ocr_data'][part_value]['total'][size]['rejected'] +
             items.value['ocr_data'][part_value]['total'][size]['loose_piece_set'] +
             items.value['ocr_data'][part_value]['total'][size]['loose_piece'] +
-            items.value['ocr_data'][part_value]['total'][size]['pending']) -
+            items.value['ocr_data'][part_value]['total'][size]['pending'] +
+            items.value['ocr_data'][part_value]['total'][size]['transferred'] +
+            items.value['ocr_data'][part_value]['total'][size]['transferred_as_loose_piece']) -
             (items.value['ocr_data'][part_value]['total'][size]['sewing_received'] +
             items.value['ocr_data'][part_value]['total'][size]['old_lot'] +
             items.value['ocr_data'][part_value]['total'][size]['ironing_excess'])
@@ -725,7 +736,9 @@ function get_total(part_value){
             items.value['ocr_data'][part_value]['rejected'] +
             items.value['ocr_data'][part_value]['loose_piece_set'] +
             items.value['ocr_data'][part_value]['loose_piece'] +
-            items.value['ocr_data'][part_value]['pending']) -
+            items.value['ocr_data'][part_value]['pending'] +
+            items.value['ocr_data'][part_value]['transferred'] +
+            items.value['ocr_data'][part_value]['transferred_as_loose_piece']) -
             (items.value['ocr_data'][part_value]['sewing_received'] +
             items.value['ocr_data'][part_value]['old_lot'] +
             items.value['ocr_data'][part_value]['ironing_excess'])
@@ -742,7 +755,8 @@ function get_cut_to_dispatch(part_value){
         "val1": items.value['ocr_data'][part_value]['cutting'] +
                 items.value['ocr_data'][part_value]['old_lot'] +
                 items.value['ocr_data'][part_value]['ironing_excess'] -
-                items.value['ocr_data'][part_value]['transferred'],
+                items.value['ocr_data'][part_value]['transferred'] -
+                items.value['ocr_data'][part_value]['transferred_as_loose_piece'],
         "val2": items.value['ocr_data'][part_value]['dispatched_piece']
     }
 }
@@ -766,7 +780,8 @@ function get_inward_to_dispatch(part_value){
         "val1": items.value['ocr_data'][part_value]['sewing_received'] +
                 items.value['ocr_data'][part_value]['old_lot'] +
                 items.value['ocr_data'][part_value]['ironing_excess'] -
-                items.value['ocr_data'][part_value]['transferred'],
+                items.value['ocr_data'][part_value]['transferred'] -
+                items.value['ocr_data'][part_value]['transferred_as_loose_piece'],
         "val2": items.value['ocr_data'][part_value]['dispatched_piece']
     }
 }
@@ -821,7 +836,8 @@ function get_unaccountable(part_value){
                 items.value['ocr_data'][part_value]['loose_piece_set'] +
                 items.value['ocr_data'][part_value]['loose_piece'] +
                 items.value['ocr_data'][part_value]['pending'] +
-                items.value['ocr_data'][part_value]['transferred']
+                items.value['ocr_data'][part_value]['transferred'] +
+                items.value['ocr_data'][part_value]['transferred_as_loose_piece']
             )
     }
 }

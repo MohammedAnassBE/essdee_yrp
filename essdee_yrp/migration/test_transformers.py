@@ -100,6 +100,47 @@ class ReviewedTransformerTest(unittest.TestCase):
 		self.assertEqual(row["yrp_fulfillment_status"], "Partially Received")
 		self.assertEqual(row["open_status"], "Close")
 
+	def test_finishing_audit_fields_and_accounts_role_are_migration_safe(self):
+		legacy = transform_document(
+			{
+				"doctype": "Finishing Plan",
+				"name": "FP-LEGACY",
+				"modified": "2026-09-27 14:30:00",
+				"fp_status": "OCR Requested",
+				"audit_requested_date": None,
+				"audit_completed_date": None,
+			},
+			self.plan,
+		)
+		self.assertEqual(legacy["doctype"], 'SD YRP Finishing Plan')
+		self.assertEqual(legacy["fp_status"], "Ready for Audit")
+		self.assertEqual(legacy["audit_requested_date"], "2026-09-27")
+
+		current = transform_document(
+			{
+				"doctype": "Finishing Plan",
+				"name": "FP-AUDITED",
+				"modified": "2026-09-28 12:00:00",
+				"fp_status": "Audit Completed",
+				"audit_requested_date": "2026-09-26",
+				"audit_completed_date": "2026-09-28",
+			},
+			self.plan,
+		)
+		self.assertEqual(current["audit_requested_date"], "2026-09-26")
+		self.assertEqual(current["audit_completed_date"], "2026-09-28")
+
+		settings = transform_document(
+			{
+				"doctype": "MRP Settings",
+				"name": "MRP Settings",
+				"accounts_user_role": "Accounts User",
+			},
+			self.plan,
+		)
+		self.assertEqual(settings["doctype"], 'SD YRP MRP Settings')
+		self.assertEqual(settings["accounts_user_role"], "Accounts User")
+
 	def test_purchase_order_item_builds_standard_commercial_shadow_values(self):
 		row = transform_document(
 			{

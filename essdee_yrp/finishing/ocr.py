@@ -4,6 +4,10 @@ from yrp import attribute_links as attribute_db
 import frappe
 from frappe.utils import flt
 
+from essdee_yrp.finishing.old_lot_history import (
+	active_old_lot_transfer_rows,
+	get_old_lot_received_rows,
+)
 from essdee_yrp.finishing.packing import get_finishing_packing_summary
 from essdee_yrp.finishing.parsing import json_object
 from yrp.utils import get_variant_attr_details, update_if_string_instance
@@ -42,6 +46,7 @@ def get_fp_ocr_details(doc_name):
 			+ values["old_lot"]
 			+ values["ironing_excess"]
 			- values["transferred"]
+			- values["transferred_as_loose_piece"]
 		)
 		metrics["get_total"][part] = (
 			values["packed_box_qty"]
@@ -49,13 +54,17 @@ def get_fp_ocr_details(doc_name):
 			+ values["loose_piece_set"]
 			+ values["loose_piece"]
 			+ values["pending"]
+			+ values["transferred"]
+			+ values["transferred_as_loose_piece"]
 			- values["sewing_received"]
 			- values["old_lot"]
 			- values["ironing_excess"]
 		)
 		metric_rows = {
 			"get_cut_to_dispatch": {
-				"val1": cutting_available - values["transferred"],
+				"val1": cutting_available
+				- values["transferred"]
+				- values["transferred_as_loose_piece"],
 				"val2": values["dispatched_piece"],
 			},
 			"get_cut_to_inward": {
@@ -113,6 +122,8 @@ def get_fp_ocr_details(doc_name):
 				+ row["loose_piece_set"]
 				+ row["loose_piece"]
 				+ row["pending"]
+				+ row["transferred"]
+				+ row["transferred_as_loose_piece"]
 				- row["sewing_received"]
 				- row["old_lot"]
 				- row["ironing_excess"]
@@ -270,9 +281,25 @@ def _apply_old_lot_adjustments(
 			target["loose_piece"] += loose_piece
 			target["loose_piece_set"] += loose_piece_set
 
-	for row in doc.get("finishing_old_lot_given_items") or []:
+	def apply_transferred_as_loose_piece(row, quantity):
+		if not row.item_variant:
+			return
+		attributes = get_variant_attr_details(row.item_variant)
+		part = attributes.get(set_attribute) if is_set_item else 'Item'
+		size = attributes.get(primary_attribute)
+		if part not in ocr_data or size not in ocr_data[part]["total"]:
+			return
+		ocr_data[part]["total"][size]["transferred_as_loose_piece"] += quantity
+		ocr_data[part]["transferred_as_loose_piece"] += quantity
+
+	for row in active_old_lot_transfer_rows(
+		doc.get("finishing_old_lot_given_items")
+	):
 		apply(row, -flt(row.loose_piece_given), -flt(row.loose_piece_set_given))
-	for row in doc.get("finishing_old_lot_received_items") or []:
+		apply_transferred_as_loose_piece(
+			row, flt(row.loose_piece_given) + flt(row.loose_piece_set_given)
+		)
+	for row in get_old_lot_received_rows(doc):
 		apply(row, flt(row.loose_piece_taken), flt(row.loose_piece_set_taken))
 
 
@@ -330,6 +357,7 @@ def _empty_part():
 		"cutting": 0,
 		"dc_qty": 0,
 		"transferred": 0,
+		"transferred_as_loose_piece": 0,
 		"packed_box": 0,
 		"packed_box_qty": 0,
 		"dispatched_box": 0,
@@ -351,6 +379,7 @@ def _empty_size():
 		"cutting_qty": 0,
 		"dc_qty": 0,
 		"transferred": 0,
+		"transferred_as_loose_piece": 0,
 		"packed_box": 0,
 		"packed_box_qty": 0,
 		"dispatched_box": 0,

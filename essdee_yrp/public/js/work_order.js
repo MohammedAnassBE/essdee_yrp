@@ -733,7 +733,7 @@ function render_garment_calculate_dialog(frm, context) {
 			if (!cell) return '<td class="text-muted text-center">—</td>';
 			return `<td style="min-width:92px;">
 				<input class="form-control input-sm essdee-wo-calc-qty"
-					type="number" min="0" max="${escape(flt(cell.available_qty))}" step="1"
+					type="number" min="0" step="1"
 					value="${escape(flt(cell.qty))}"
 					data-source-row="${escape(cell.source_row)}"
 					data-primary-value="${escape(value)}"

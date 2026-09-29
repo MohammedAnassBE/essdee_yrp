@@ -150,14 +150,13 @@ const MatrixTable = {
     },
 }
 
-// Hide "Fetch Items" button when this FP is OCR Completed, or when items are already fetched/pending action.
+// Fetch remains available so every transfer can refresh the current balance.
 const show_fetch_button = computed(() => {
     if (cur_frm.doc.fp_status === "OCR Completed") return false
-    if (items.value && items.value.length > 0) return false
     return true
 })
 
-// Hydrate from persisted onload payload so reload shows the previously fetched rows.
+// History is loaded with the document; available balances are fetched live.
 const onload = cur_frm.doc.__onload || {}
 if (onload.old_lot_data) {
     items.value = onload.old_lot_data.data || []
@@ -170,22 +169,26 @@ if (onload.old_lot_received_matrix) {
     received_matrix.value = onload.old_lot_received_matrix
 }
 
-function fetch_items(){
+function fetch_items(freeze = true, show_empty_message = true){
     frappe.call({
         method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.fetch_from_old_lot",
         args: {
             "doc_name": cur_frm.doc.name,
         },
-        freeze: true,
-        freeze_message: "Fetching from OCR Completed Finishing Plan",
+        freeze: freeze,
+        freeze_message: "Fetching available loose pieces",
         callback: function(r){
             items.value = r.message.data || [];
             colours.value = r.message.colours || []
-            if (!items.value.length) {
-                frappe.show_alert({ message: "No transferable items found in any OCR Completed plan for this item.", indicator: "orange" })
+            if (show_empty_message && !items.value.length) {
+                frappe.show_alert({ message: "No transferable loose pieces found in other Finishing Plans for this item.", indicator: "orange" })
             }
         }
     })
+}
+
+if (cur_frm.doc.fp_status !== "OCR Completed") {
+    fetch_items(false, false)
 }
 
 function cancel_doc(doctype, docname){
@@ -241,7 +244,9 @@ function lot_transfer() {
                     freeze: true,
                     freeze_message: "Transferring Items....",
                     callback: function(){
-                        frappe.msgprint("Items Transferred")
+                        cur_frm.reload_doc().then(() => {
+                            frappe.msgprint("Items Transferred")
+                        })
                     }
                 })
             },

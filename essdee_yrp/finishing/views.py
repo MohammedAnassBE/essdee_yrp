@@ -8,6 +8,10 @@ from frappe.utils import flt
 from essdee_yrp.dynamic_packing import LEGACY_BATCH_TRACKING_VERSION
 from essdee_yrp.finishing.packing import get_dynamic_packed_qty
 from essdee_yrp.finishing.parsing import json_object
+from essdee_yrp.finishing.old_lot_history import (
+	active_old_lot_transfer_rows,
+	get_old_lot_received_rows,
+)
 from yrp.utils import get_variant_attr_details, update_if_string_instance
 from yrp.yrp.doctype.yrp_item.yrp_item import get_attribute_details
 from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
@@ -22,13 +26,10 @@ def build_plan_views(doc):
 	views["rework_details"] = _build_rework_details(doc, context)
 	views["rejection_details"] = _build_rejection_details(doc, context)
 	views["packed_qty"] = get_packed_qty(doc)
-	views["old_lot_data"] = (
-		reshape_old_lot_rows_for_ui(doc, context["ipd_doc"])
-		if doc.get("finishing_old_lot_items")
-		else {"data": [], "colours": []}
-	)
+	# Available balances are recalculated on demand and never persisted.
+	views["old_lot_data"] = {"data": [], "colours": []}
 	views["old_lot_given_matrix"] = _build_transfer_matrix(
-		doc.get("finishing_old_lot_given_items") or [],
+		active_old_lot_transfer_rows(doc.get("finishing_old_lot_given_items")),
 		context["primary_values"],
 		"destination_fp",
 		"destination_lot",
@@ -36,7 +37,7 @@ def build_plan_views(doc):
 		"loose_piece_set_given",
 	)
 	views["old_lot_received_matrix"] = _build_transfer_matrix(
-		doc.get("finishing_old_lot_received_items") or [],
+		get_old_lot_received_rows(doc),
 		context["primary_values"],
 		"source_fp",
 		"source_lot",
@@ -456,7 +457,7 @@ def reshape_old_lot_rows_for_ui(doc, ipd_doc=None):
 	primary_values = get_ipd_primary_values(ipd_doc.name)
 	groups = {}
 	for row in doc.get("finishing_old_lot_items") or []:
-		key = (row.source_lot, row.warehouse, row.warehouse_name)
+		key = (row.source_fp, row.source_lot, row.warehouse, row.warehouse_name)
 		group = groups.setdefault(key, {"data": {}, "total": {}})
 		colour = _attribute_value(row.colour)
 		block = group["data"].setdefault(
@@ -488,9 +489,10 @@ def reshape_old_lot_rows_for_ui(doc, ipd_doc=None):
 		)
 
 	data = []
-	for (source_lot, warehouse, warehouse_name), group in groups.items():
+	for (source_fp, source_lot, warehouse, warehouse_name), group in groups.items():
 		data.append(
 			{
+				"source_fp": source_fp,
 				"lot": source_lot,
 				"warehouse": warehouse,
 				"warehouse_name": warehouse_name,

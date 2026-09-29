@@ -95,6 +95,9 @@ function createInput(attr, index, value, is_header){
         default: value,
         read_only: is_readonly
     }
+	if (attr == 'Weight'){
+		df['precision'] = 4
+	}
 	if (fieldtype == 'Autocomplete' && attr != 'Dia'){
 		df['get_query'] = function(){
 			return {

@@ -21,7 +21,7 @@ class TestWorkOrderClose(UnitTestCase):
 		)
 		doc = frappe._dict(
 			name="WO-1",
-			doctype='YRP Work Order',
+			doctype="YRP Work Order",
 			docstatus=1,
 			open_status="Open",
 			supplier="SUPPLIER-1",
@@ -92,9 +92,7 @@ class TestWorkOrderClose(UnitTestCase):
 
 	def test_close_requires_authoritative_work_order_write_permission(self):
 		doc = frappe._dict(name="WO-1", docstatus=1, open_status="Open")
-		doc.check_permission = MagicMock(
-			side_effect=frappe.PermissionError("Not permitted")
-		)
+		doc.check_permission = MagicMock(side_effect=frappe.PermissionError("Not permitted"))
 		with (
 			patch.object(frappe.db, "sql"),
 			patch.object(frappe, "get_doc", return_value=doc),
@@ -187,7 +185,7 @@ class TestWorkOrderClose(UnitTestCase):
 		self.assertEqual(row.stock_update, 5500)
 		self.assertEqual(result, {"status": "Close", "deducted_qty": 300.0})
 		doc.save.assert_called_once_with(ignore_permissions=True)
-		close_reservations.assert_called_once_with('YRP Work Order', "WO-1")
+		close_reservations.assert_called_once_with("YRP Work Order", "WO-1")
 		enqueue_repost.assert_called_once()
 		self.assertEqual(
 			register_links.call_args.args[2][0]["consumption_sle"],
@@ -236,13 +234,11 @@ class TestWorkOrderClose(UnitTestCase):
 			"output_item": "OUTPUT-VARIANT",
 		}
 		with patch.object(frappe.db, "get_value", return_value=None) as get_value:
-			with self.assertRaisesRegex(
-				frappe.ValidationError, "active owned GRN receipt"
-			):
+			with self.assertRaisesRegex(frappe.ValidationError, "active owned GRN receipt"):
 				_get_owned_output_sle(output)
 
 		filters = get_value.call_args.args[1]
-		self.assertEqual(filters["voucher_type"], 'YRP Goods Received Note')
+		self.assertEqual(filters["voucher_type"], "YRP Goods Received Note")
 		self.assertEqual(filters["voucher_no"], "GRN-1")
 		self.assertEqual(filters["voucher_detail_no"], "GRN-ITEM-1")
 		self.assertEqual(filters["item"], "OUTPUT-VARIANT")

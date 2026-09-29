@@ -3,9 +3,9 @@ from unittest.mock import MagicMock, patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
+from essdee_yrp.cutting.movement import apply_transaction
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_fg_stock_entry.sd_yrp_fg_stock_entry import FGStockEntry
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_item_conversion.sd_yrp_item_conversion import ItemConversion
-from essdee_yrp.cutting.movement import apply_transaction
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_stock_summary import (
 	sd_yrp_stock_summary as stock_summary,
 )
@@ -23,20 +23,18 @@ class _StockEntryStub:
 
 class TestStockBusinessLogic(IntegrationTestCase):
 	def test_recut_valid_issue_submit_and_cancel(self):
-		if not frappe.db.exists('SD YRP Cutting Plan', "CP-2606-00038"):
+		if not frappe.db.exists("SD YRP Cutting Plan", "CP-2606-00038"):
 			self.skipTest("Recut lifecycle requires the migrated cutting-plan fixture")
-		plan = frappe.get_doc('SD YRP Cutting Plan', "CP-2606-00038")
+		plan = frappe.get_doc("SD YRP Cutting Plan", "CP-2606-00038")
 		cloth_row = next(
 			row
 			for row in plan.cutting_plan_cloth_details
-			if row.colour == "White Red Stripes"
-			and row.cloth_type == "MAIN FABRIC"
-			and row.dia == "60 Dia"
+			if row.colour == "White Red Stripes" and row.cloth_type == "MAIN FABRIC" and row.dia == "60 Dia"
 		)
 		original_used_weight = cloth_row.used_weight
 		doc = frappe.get_doc(
 			{
-				"doctype": 'SD YRP Recut and Print Panel',
+				"doctype": "SD YRP Recut and Print Panel",
 				"cutting_plan": plan.name,
 				"work_order": plan.work_order,
 				"lot": plan.lot,
@@ -70,16 +68,14 @@ class TestStockBusinessLogic(IntegrationTestCase):
 		cloth_row = next(
 			row
 			for row in plan.cutting_plan_cloth_details
-			if row.colour == "White Red Stripes"
-			and row.cloth_type == "MAIN FABRIC"
-			and row.dia == "60 Dia"
+			if row.colour == "White Red Stripes" and row.cloth_type == "MAIN FABRIC" and row.dia == "60 Dia"
 		)
 		self.assertAlmostEqual(cloth_row.used_weight, original_used_weight + 0.001)
 		self.assertEqual(
 			frappe.db.count(
-				'YRP Stock Ledger Entry',
+				"YRP Stock Ledger Entry",
 				{
-					"voucher_type": 'SD YRP Recut and Print Panel',
+					"voucher_type": "SD YRP Recut and Print Panel",
 					"voucher_no": doc.name,
 					"is_cancelled": 0,
 				},
@@ -92,9 +88,7 @@ class TestStockBusinessLogic(IntegrationTestCase):
 		cloth_row = next(
 			row
 			for row in plan.cutting_plan_cloth_details
-			if row.colour == "White Red Stripes"
-			and row.cloth_type == "MAIN FABRIC"
-			and row.dia == "60 Dia"
+			if row.colour == "White Red Stripes" and row.cloth_type == "MAIN FABRIC" and row.dia == "60 Dia"
 		)
 		self.assertAlmostEqual(cloth_row.used_weight, original_used_weight)
 		self.assertEqual(doc.docstatus, 2)
@@ -102,14 +96,14 @@ class TestStockBusinessLogic(IntegrationTestCase):
 	def test_fg_stock_entry_valid_receipt_submit_and_cancel(self):
 		for doctype, name in (
 			("Warehouse", "S-0165"),
-			('Item', "Fusing Sticker-REGULAR-White-Move Air"),
-			('SD YRP Lot', "Open Lot"),
+			("Item", "Fusing Sticker-REGULAR-White-Move Air"),
+			("SD YRP Lot", "Open Lot"),
 		):
 			if not frappe.db.exists(doctype, name):
 				self.skipTest("FG lifecycle requires migrated stock masters")
 		doc = frappe.get_doc(
 			{
-				"doctype": 'SD YRP FG Stock Entry',
+				"doctype": "SD YRP FG Stock Entry",
 				"warehouse": "S-0165",
 				"posting_date": "2026-08-18",
 				"posting_time": "10:30:00",
@@ -130,9 +124,9 @@ class TestStockBusinessLogic(IntegrationTestCase):
 		doc.insert()
 		doc.submit()
 
-		linked = frappe.get_doc('YRP Stock Entry', doc.yrp_stock_entry)
+		linked = frappe.get_doc("YRP Stock Entry", doc.yrp_stock_entry)
 		self.assertEqual(linked.docstatus, 1)
-		self.assertEqual(linked.against, 'SD YRP FG Stock Entry')
+		self.assertEqual(linked.against, "SD YRP FG Stock Entry")
 		self.assertEqual(linked.against_id, doc.name)
 		self.assertEqual(linked.items[0].lot, "Open Lot")
 		self.assertEqual(linked.items[0].received_type, "Accepted")
@@ -146,9 +140,9 @@ class TestStockBusinessLogic(IntegrationTestCase):
 		variant = "Fusing Sticker-REGULAR-White-Move Air"
 		for doctype, name in (
 			("Warehouse", "S-0165"),
-			('Item', "Fusing Sticker"),
-			('Item', variant),
-			('SD YRP Lot', "Open Lot"),
+			("Item", "Fusing Sticker"),
+			("Item", variant),
+			("SD YRP Lot", "Open Lot"),
 		):
 			if not frappe.db.exists(doctype, name):
 				self.skipTest("Item-conversion lifecycle requires migrated stock masters")
@@ -161,7 +155,7 @@ class TestStockBusinessLogic(IntegrationTestCase):
 		}
 		doc = frappe.get_doc(
 			{
-				"doctype": 'SD YRP Item Conversion',
+				"doctype": "SD YRP Item Conversion",
 				"naming_series": "IC-.YYYY.-",
 				"warehouse": "S-0165",
 				"from_item": "Fusing Sticker",
@@ -179,8 +173,8 @@ class TestStockBusinessLogic(IntegrationTestCase):
 		self.assertEqual(doc.from_total_amount, doc.to_total_amount)
 		self.assertEqual(
 			frappe.db.count(
-				'YRP Stock Ledger Entry',
-				{"voucher_type": 'SD YRP Item Conversion', "voucher_no": doc.name},
+				"YRP Stock Ledger Entry",
+				{"voucher_type": "SD YRP Item Conversion", "voucher_no": doc.name},
 			),
 			2,
 		)
@@ -190,9 +184,9 @@ class TestStockBusinessLogic(IntegrationTestCase):
 
 	def test_unrelated_stock_entry_does_not_enter_cut_bundle_tracking(self):
 		doc = frappe._dict(
-			doctype='YRP Stock Entry',
+			doctype="YRP Stock Entry",
 			name="STE-RUNTIME-TEST",
-			against='SD YRP Finishing Plan Dispatch',
+			against="SD YRP Finishing Plan Dispatch",
 			against_id="FPD-RUNTIME-TEST",
 			cut_panel_movement=None,
 			allow_non_bundle=0,
@@ -205,7 +199,7 @@ class TestStockBusinessLogic(IntegrationTestCase):
 		dimensions = [
 			{
 				"fieldname": "lot",
-				"dimension_doctype": 'SD YRP Lot',
+				"dimension_doctype": "SD YRP Lot",
 				"label": "Lot",
 				"mandatory": 1,
 			},
@@ -229,20 +223,20 @@ class TestStockBusinessLogic(IntegrationTestCase):
 
 		fields = create_fields.call_args.args[0]
 		self.assertEqual(
-			{row["fieldname"] for row in fields['SD YRP FG Stock Entry Detail']},
+			{row["fieldname"] for row in fields["SD YRP FG Stock Entry Detail"]},
 			{"lot", "quality_grade"},
 		)
 		self.assertEqual(
-			{row["fieldname"] for row in fields['SD YRP Item Conversion Detail']},
+			{row["fieldname"] for row in fields["SD YRP Item Conversion Detail"]},
 			{"lot", "quality_grade"},
 		)
 		self.assertEqual(
-			{row["fieldname"] for row in fields['SD YRP Lot Transfer Item']},
+			{row["fieldname"] for row in fields["SD YRP Lot Transfer Item"]},
 			{"quality_grade"},
 		)
 
 	def test_fg_stock_entry_builds_base_stock_entry_with_dimensions(self):
-		doc = frappe.new_doc('SD YRP FG Stock Entry')
+		doc = frappe.new_doc("SD YRP FG Stock Entry")
 		doc.name = "FG-TEST-1"
 		doc.warehouse = "Main Warehouse"
 		doc.posting_date = "2026-08-18"
@@ -264,52 +258,78 @@ class TestStockBusinessLogic(IntegrationTestCase):
 		meta = MagicMock()
 		meta.get_field.return_value = True
 		with (
-			patch("essdee_yrp.essdee_yrp.doctype.sd_yrp_fg_stock_entry.sd_yrp_fg_stock_entry.frappe.has_permission"),
-			patch("essdee_yrp.essdee_yrp.doctype.sd_yrp_fg_stock_entry.sd_yrp_fg_stock_entry.frappe.new_doc", return_value=stock_entry),
-			patch("essdee_yrp.essdee_yrp.doctype.sd_yrp_fg_stock_entry.sd_yrp_fg_stock_entry.frappe.get_meta", return_value=meta),
-			patch("essdee_yrp.essdee_yrp.doctype.sd_yrp_fg_stock_entry.sd_yrp_fg_stock_entry.get_dimension_fieldnames", return_value=["lot", "quality_grade"]),
+			patch(
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_fg_stock_entry.sd_yrp_fg_stock_entry.frappe.has_permission"
+			),
+			patch(
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_fg_stock_entry.sd_yrp_fg_stock_entry.frappe.new_doc",
+				return_value=stock_entry,
+			),
+			patch(
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_fg_stock_entry.sd_yrp_fg_stock_entry.frappe.get_meta",
+				return_value=meta,
+			),
+			patch(
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_fg_stock_entry.sd_yrp_fg_stock_entry.get_dimension_fieldnames",
+				return_value=["lot", "quality_grade"],
+			),
 		):
 			result = FGStockEntry._make_yrp_stock_entry(doc)
 
 		self.assertIs(result, stock_entry)
 		self.assertEqual(stock_entry.purpose, "Material Receipt")
 		self.assertEqual(stock_entry.to_warehouse, "Main Warehouse")
-		self.assertEqual(stock_entry.against, 'SD YRP FG Stock Entry')
+		self.assertEqual(stock_entry.against, "SD YRP FG Stock Entry")
 		self.assertEqual(stock_entry.items[0].rate, 20)
 		self.assertEqual(stock_entry.items[0].lot, "LOT-1")
 		self.assertEqual(stock_entry.items[0].quality_grade, "A")
 
 	def test_item_conversion_preserves_total_value_when_quantities_differ(self):
-		doc = frappe.new_doc('SD YRP Item Conversion')
+		doc = frappe.new_doc("SD YRP Item Conversion")
 		doc.name = "IC-TEST-1"
 		doc.warehouse = "Main Warehouse"
 		doc.posting_date = "2026-08-18"
 		doc.posting_time = "11:00:00"
 		doc.from_items = [
 			frappe._dict(
-				item="FROM-VAR", stock_qty=2, stock_uom="Kg", stock_uom_rate=40,
-				name="FROM-ROW", doctype='SD YRP Item Conversion Detail',
-				conversion_factor=1, lot="LOT-1", quality_grade="A", remarks="from",
+				item="FROM-VAR",
+				stock_qty=2,
+				stock_uom="Kg",
+				stock_uom_rate=40,
+				name="FROM-ROW",
+				doctype="SD YRP Item Conversion Detail",
+				conversion_factor=1,
+				lot="LOT-1",
+				quality_grade="A",
+				remarks="from",
 			)
 		]
 		doc.to_items = [
 			frappe._dict(
-				item="TO-VAR", stock_qty=4, stock_uom="Kg", stock_uom_rate=20,
-				name="TO-ROW", doctype='SD YRP Item Conversion Detail',
-				conversion_factor=1, lot="LOT-2", quality_grade="A", remarks="to",
+				item="TO-VAR",
+				stock_qty=4,
+				stock_uom="Kg",
+				stock_uom_rate=20,
+				name="TO-ROW",
+				doctype="SD YRP Item Conversion Detail",
+				conversion_factor=1,
+				lot="LOT-2",
+				quality_grade="A",
+				remarks="to",
 			)
 		]
+
 		def post_entries(entries, **kwargs):
 			key = entries[0].get("_result_key")
 			if key == "item-conversion-input":
-				return {
-					"entries": {key: {"sle": "SLE-IN", "rate": 50, "value": 100}}
-				}
-			return {
-				"entries": {key: {"sle": "SLE-OUT", "rate": 25, "value": 100}}
-			}
+				return {"entries": {key: {"sle": "SLE-IN", "rate": 50, "value": 100}}}
+			return {"entries": {key: {"sle": "SLE-OUT", "rate": 25, "value": 100}}}
+
 		with (
-			patch("essdee_yrp.essdee_yrp.doctype.sd_yrp_item_conversion.sd_yrp_item_conversion.get_dimension_fieldnames", return_value=["lot", "quality_grade"]),
+			patch(
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_item_conversion.sd_yrp_item_conversion.get_dimension_fieldnames",
+				return_value=["lot", "quality_grade"],
+			),
 			patch("yrp.stock.stock_ledger.make_sl_entries", side_effect=post_entries) as make_entries,
 			patch.object(frappe.db, "set_value"),
 			patch(
@@ -337,7 +357,9 @@ class TestStockBusinessLogic(IntegrationTestCase):
 			patch.object(stock_summary, "stock_balance", return_value=([], rows)) as report,
 		):
 			result = stock_summary.get_stock_summary(
-				lot=[{"lot": "LOT-1"}], item="ITEM-1", warehouse="Main Warehouse",
+				lot=[{"lot": "LOT-1"}],
+				item="ITEM-1",
+				warehouse="Main Warehouse",
 				received_type="Accepted",
 			)
 

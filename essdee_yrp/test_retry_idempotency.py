@@ -13,7 +13,7 @@ from essdee_yrp.finishing import transactions
 class TestRetryIdempotency(UnitTestCase):
 	def test_collapsed_bundle_submit_retry_locks_voucher_and_skips_duplicate(self):
 		doc = frappe._dict(
-			doctype='YRP Delivery Challan',
+			doctype="YRP Delivery Challan",
 			name="DC-U44",
 			lot="LOT-U44",
 			cut_panel_movement=None,
@@ -30,14 +30,12 @@ class TestRetryIdempotency(UnitTestCase):
 		):
 			movement.apply_transaction(doc)
 
-		get_value.assert_called_once_with(
-			doc.doctype, doc.name, "name", for_update=True
-		)
+		get_value.assert_called_once_with(doc.doctype, doc.name, "name", for_update=True)
 		update_collapsed.assert_not_called()
 
 	def test_bundle_cancel_retry_without_active_ledger_is_a_noop(self):
 		doc = frappe._dict(
-			doctype='YRP Delivery Challan',
+			doctype="YRP Delivery Challan",
 			name="DC-U44-CANCEL",
 			lot="LOT-U44",
 			cut_panel_movement=None,
@@ -57,7 +55,7 @@ class TestRetryIdempotency(UnitTestCase):
 		update_collapsed.assert_not_called()
 
 	def test_laysheet_bundle_retry_locks_before_checking_completion_marker(self):
-		doc = frappe._dict(doctype='SD YRP Cutting LaySheet', name="CLS-U44")
+		doc = frappe._dict(doctype="SD YRP Cutting LaySheet", name="CLS-U44")
 		with (
 			patch.object(cutting_laysheet, "_lock_cutting_laysheet") as lock,
 			patch.object(cutting_laysheet.frappe.db, "exists", return_value="CBML-U44"),
@@ -72,9 +70,7 @@ class TestRetryIdempotency(UnitTestCase):
 		work_order = MagicMock()
 		with (
 			patch.object(transactions.frappe, "get_doc", return_value=work_order),
-			patch.object(
-				transactions.frappe.db, "get_value", return_value="WO-U44"
-			) as get_value,
+			patch.object(transactions.frappe.db, "get_value", return_value="WO-U44") as get_value,
 			patch.object(transactions, "_validate_work_order_context") as validate,
 			patch.object(
 				transactions,
@@ -96,9 +92,7 @@ class TestRetryIdempotency(UnitTestCase):
 		self.assertEqual(result, "GRN-U44")
 		work_order.check_permission.assert_called_once_with("read")
 		work_order.reload.assert_called_once_with()
-		get_value.assert_called_once_with(
-			'YRP Work Order', "WO-U44", "name", for_update=True
-		)
+		get_value.assert_called_once_with("YRP Work Order", "WO-U44", "name", for_update=True)
 		validate.assert_called_once_with(work_order, "LOT-U44", "ITEM-U44")
 		new_doc.assert_not_called()
 

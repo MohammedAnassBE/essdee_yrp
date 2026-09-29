@@ -3,6 +3,7 @@
 import frappe
 from frappe import _
 from frappe.utils import flt, getdate, now_datetime
+from yrp.utils import update_if_string_instance
 
 from essdee_yrp.finishing.packing import rebuild_finishing_packing_quantities
 from essdee_yrp.finishing.parsing import json_object
@@ -13,7 +14,6 @@ from essdee_yrp.finishing.state import (
 	get_finishing_rework_list,
 )
 from essdee_yrp.finishing.status import apply_auto_fp_status
-from yrp.utils import update_if_string_instance
 
 
 def before_cancel(grn, method=None):
@@ -21,17 +21,11 @@ def before_cancel(grn, method=None):
 	if not grn.get("includes_packing"):
 		return
 	dispatched_batch = next(
-		(
-			row
-			for row in grn.get("packing_batches") or []
-			if flt(row.get("dispatched_boxes")) > 0
-		),
+		(row for row in grn.get("packing_batches") or [] if flt(row.get("dispatched_boxes")) > 0),
 		None,
 	)
 	if dispatched_batch:
-		frappe.throw(
-			_("Cancel the related Finishing Plan dispatch entries before cancelling this GRN")
-		)
+		frappe.throw(_("Cancel the related Finishing Plan dispatch entries before cancelling this GRN"))
 
 
 def on_submit(grn, method=None):
@@ -44,13 +38,13 @@ def on_cancel(grn, method=None):
 
 def apply_goods_received_note(grn, *, cancelled):
 	"""Apply or reverse only the Finishing-owned state derived from a GRN."""
-	if grn.against != 'YRP Work Order' or not grn.get("lot"):
+	if grn.against != "YRP Work Order" or not grn.get("lot"):
 		return
 	if not (grn.get("includes_packing") or _is_finishing_inward_process(grn.process_name)):
 		return
 
 	finishing_plan_name = frappe.db.get_value(
-		'SD YRP Finishing Plan',
+		"SD YRP Finishing Plan",
 		{"lot": grn.lot},
 		"name",
 	)
@@ -65,7 +59,7 @@ def apply_goods_received_note(grn, *, cancelled):
 		rebuild_finishing_plan(finishing_plan_name, check_permission=False)
 		return
 
-	finishing_doc = frappe.get_doc('SD YRP Finishing Plan', finishing_plan_name)
+	finishing_doc = frappe.get_doc("SD YRP Finishing Plan", finishing_plan_name)
 	if grn.get("includes_packing") and not grn.get("is_return"):
 		_update_packing_receipt(finishing_doc, grn, cancelled=cancelled)
 	elif grn.get("is_return"):
@@ -92,8 +86,7 @@ def _update_packing_receipt(finishing_doc, grn, *, cancelled):
 def _recalculate_finishing_end_date(finishing_doc, grn, grn_list, cancelled):
 	if cancelled:
 		remaining_dates = [
-			frappe.db.get_value('YRP Goods Received Note', name, "posting_date")
-			for name in grn_list
+			frappe.db.get_value("YRP Goods Received Note", name, "posting_date") for name in grn_list
 		]
 		remaining_dates = [date for date in remaining_dates if date]
 		finishing_doc.finishing_end_date = max(remaining_dates) if remaining_dates else None
@@ -199,7 +192,7 @@ def _update_finishing_inward(finishing_doc, grn, *, cancelled):
 
 
 def _received_type_defaults():
-	settings = frappe.get_cached_doc('YRP Stock Settings')
+	settings = frappe.get_cached_doc("YRP Stock Settings")
 	return settings.default_received_type, settings.default_rejected_received_type
 
 
@@ -209,16 +202,16 @@ def _item_key(row):
 
 
 def _is_finishing_inward_process(process_name):
-	finishing_process = frappe.db.get_single_value('SD YRP MRP Settings', "finishing_inward_process")
+	finishing_process = frappe.db.get_single_value("SD YRP MRP Settings", "finishing_inward_process")
 	if not process_name or not finishing_process:
 		return False
 	if process_name == finishing_process:
 		return True
-	if not frappe.db.get_value('YRP Process', process_name, "is_group"):
+	if not frappe.db.get_value("YRP Process", process_name, "is_group"):
 		return False
 	return bool(
 		frappe.db.exists(
-			'YRP Process Details',
+			"YRP Process Details",
 			{"parent": process_name, "process_name": finishing_process},
 		)
 	)

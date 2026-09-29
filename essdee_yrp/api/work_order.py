@@ -8,7 +8,6 @@ only enters quantities — one row per matrix group (user-locked 2026-07-03).
 Entered rows become `output_demand` for the base engine (`get_process_io`):
 deliverables are the engine's scaled inputs; receivables are the entered rows
 themselves (1:1 v1 — the Process master's waste/excess applies later)."""
-from yrp.attribute_links import value as _attribute_value
 
 import json
 import re
@@ -17,6 +16,7 @@ from itertools import groupby
 import frappe
 from frappe import _
 from frappe.utils import cstr, flt
+from yrp.attribute_links import value as _attribute_value
 
 from essdee_yrp.fabric_chain import get_fabric_step, get_fabric_steps
 from essdee_yrp.fabric_ipd import (
@@ -91,10 +91,7 @@ def _step_kind(ipd, step):
 def _conversion_process_row(ipd, process_name):
 	"""Return the configured IPD row responsible for a conversion step."""
 	return next(
-		(
-			row for row in get_fabric_process_rows(ipd)
-			if row.get("fabric_process") == process_name
-		),
+		(row for row in get_fabric_process_rows(ipd) if row.get("fabric_process") == process_name),
 		None,
 	)
 
@@ -119,32 +116,36 @@ def _selected_lot_fabrics(wo, lot):
 	fabrics = list(lot.get("lot_fabric_details") or [])
 	if wo.get("production_detail"):
 		return [
-			fabric for fabric in fabrics
-			if fabric.get("production_detail") == wo.get("production_detail")
+			fabric for fabric in fabrics if fabric.get("production_detail") == wo.get("production_detail")
 		]
 	if wo.get("item"):
-		return [
-			fabric for fabric in fabrics
-			if fabric.get("cloth_item") == wo.get("item")
-		]
+		return [fabric for fabric in fabrics if fabric.get("cloth_item") == wo.get("item")]
 	return fabrics
 
 
 _CHILD_SYSTEM_FIELDS = {
-	"doctype", "name", "owner", "creation", "modified", "modified_by",
-	"docstatus", "idx", "parent", "parentfield", "parenttype",
-	"table_index", "row_index",
+	"doctype",
+	"name",
+	"owner",
+	"creation",
+	"modified",
+	"modified_by",
+	"docstatus",
+	"idx",
+	"parent",
+	"parentfield",
+	"parenttype",
+	"table_index",
+	"row_index",
 }
 _CHILD_ADDITIVE_FIELDS = {
-	"qty", "pending_quantity", "secondary_qty", "stock_update",
-	"cancelled_quantity", "total_cost",
+	"qty",
+	"pending_quantity",
+	"secondary_qty",
+	"stock_update",
+	"cancelled_quantity",
+	"total_cost",
 }
-
-
-
-
-
-
 
 
 def _consolidate_fabric_rows(rows, child_doctype, supports_allocations=None):
@@ -158,16 +159,11 @@ def _consolidate_fabric_rows(rows, child_doctype, supports_allocations=None):
 	if not rows:
 		return []
 	if supports_allocations is None:
-		supports_allocations = frappe.db.has_column(
-			child_doctype, "fabric_reference_allocations"
-		)
+		supports_allocations = frappe.db.has_column(child_doctype, "fabric_reference_allocations")
 	if not supports_allocations:
 		# A pre-migrate site cannot safely collapse rows because the legacy Link
 		# can represent only one route.
-		return [
-			row.as_dict() if hasattr(row, "as_dict") else dict(row)
-			for row in rows
-		]
+		return [row.as_dict() if hasattr(row, "as_dict") else dict(row) for row in rows]
 
 	grouped = []
 	by_identity = {}
@@ -175,23 +171,13 @@ def _consolidate_fabric_rows(rows, child_doctype, supports_allocations=None):
 
 	for row in rows:
 		source = row.as_dict() if hasattr(row, "as_dict") else dict(row)
-		payload = {
-			key: value
-			for key, value in source.items()
-			if key not in _CHILD_SYSTEM_FIELDS
-		}
+		payload = {key: value for key, value in source.items() if key not in _CHILD_SYSTEM_FIELDS}
 		allocations = get_reference_allocations(payload, payload.get("qty"))
 		payload.pop("fabric_reference_variant", None)
 		payload.pop("fabric_reference_allocations", None)
 
-		identity_payload = {
-			key: value
-			for key, value in payload.items()
-			if key not in _CHILD_ADDITIVE_FIELDS
-		}
-		identity = json.dumps(
-			identity_payload, sort_keys=True, default=str, separators=(",", ":")
-		)
+		identity_payload = {key: value for key, value in payload.items() if key not in _CHILD_ADDITIVE_FIELDS}
+		identity = json.dumps(identity_payload, sort_keys=True, default=str, separators=(",", ":"))
 		target = by_identity.get(identity)
 		if target is None:
 			target = payload
@@ -215,9 +201,7 @@ def _consolidate_fabric_rows(rows, child_doctype, supports_allocations=None):
 		target["fabric_reference_allocations"] = serialise_reference_allocations(
 			allocations, target.get("qty")
 		)
-		target["fabric_reference_variant"] = (
-			next(iter(allocations)) if len(allocations) == 1 else None
-		)
+		target["fabric_reference_variant"] = next(iter(allocations)) if len(allocations) == 1 else None
 	return grouped
 
 
@@ -240,7 +224,7 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 	for fabric in _selected_lot_fabrics(wo, lot):
 		if not fabric.production_detail:
 			continue
-		ipd = frappe.get_cached_doc('YRP Item Production Detail', fabric.production_detail)
+		ipd = frappe.get_cached_doc("YRP Item Production Detail", fabric.production_detail)
 		step = get_fabric_step(ipd, wo.process_name)
 		row_kind = _step_kind(ipd, step)
 		identity_row = get_identity_process_row(ipd, wo.process_name) if row_kind == "identity" else None
@@ -282,15 +266,14 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 					source_process=source_process,
 				)
 				if selected_source.get("unmatched"):
-					warnings.append(_(
-						"{0} GRN receipt(s) do not enter this process and were ignored: {1}"
-					).format(
-						selected_source["process_name"],
-						", ".join(selected_source["unmatched"]),
-					))
-		reference_routed = (
-			row_kind == "knitting"
-			and any(row.get("reference_item_variant") for row in qty_rows)
+					warnings.append(
+						_("{0} GRN receipt(s) do not enter this process and were ignored: {1}").format(
+							selected_source["process_name"],
+							", ".join(selected_source["unmatched"]),
+						)
+					)
+		reference_routed = row_kind == "knitting" and any(
+			row.get("reference_item_variant") for row in qty_rows
 		)
 		if reference_routed:
 			for qty_row in qty_rows:
@@ -300,42 +283,46 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 				# Knitting output colour is route-specific: the first Colour
 				# change's input for this final (Colour, Dia).  No colour-changing
 				# process means the helper returns the target colour itself.
-				qty_row["knit_colour"] = get_knitting_output_colour(
-					ipd, target_colour, target_dia
-				)
-				qty_row["knit_dia"] = (
-					qty_row.get("out_attrs") or {}
-				).get(FABRIC_DIA_ATTRIBUTE)
+				qty_row["knit_colour"] = get_knitting_output_colour(ipd, target_colour, target_dia)
+				qty_row["knit_dia"] = (qty_row.get("out_attrs") or {}).get(FABRIC_DIA_ATTRIBUTE)
 		# Knitting yarn + cloth-per-kg-yarn come from the matched generic row (its
 		# input_item / quantity_ratio) so a generic IPD with blank tab yarn_item /
 		# cloth_per_kg_yarn still resolves. The adapter fills the same values from
 		# the tabs for legacy IPDs, so this is behaviour-preserving. A "conversion"
 		# row reuses the same lookup only to tell the popup which item is consumed.
 		kn_row = _knitting_row(ipd, wo.process_name) if row_kind in ("knitting", "conversion") else None
-		rows.append({
-			"input_item": (kn_row and kn_row.get("input_item")) if row_kind == "conversion" else None,
-			"fabric_row": fabric.name,
-			"yarn_item": (kn_row and kn_row.get("input_item")) or ipd.get("yarn_item"),
-			"yarns": [] if reference_routed else [
-				{"yarn_item": yarn.item, "ratio": flt(yarn.ratio)}
-				for yarn in get_yarn_ratio_inputs(ipd)
-			] if row_kind == "knitting" else [],
-			"cloth_item": fabric.cloth_item,
-			"treated_item": treated_item,
-			"production_detail": fabric.production_detail,
-			"kind": row_kind,
-			"reference_routed": reference_routed,
-			"ratio": (flt(kn_row.get("quantity_ratio")) if kn_row else flt(ipd.get("cloth_per_kg_yarn"))) or 1,
-			"has_colour": has_colour,
-			"greige_colour": get_greige_colour(ipd) if row_kind == "knitting" else None,
-			"colour_options": _knit_colour_options(ipd) if (row_kind == "knitting" and has_colour) else [],
-			"colour_mapping": (
-				get_attribute_mapping(ipd, FABRIC_COLOUR_ATTRIBUTE)
+		rows.append(
+			{
+				"input_item": (kn_row and kn_row.get("input_item")) if row_kind == "conversion" else None,
+				"fabric_row": fabric.name,
+				"yarn_item": (kn_row and kn_row.get("input_item")) or ipd.get("yarn_item"),
+				"yarns": []
+				if reference_routed
+				else [
+					{"yarn_item": yarn.item, "ratio": flt(yarn.ratio)} for yarn in get_yarn_ratio_inputs(ipd)
+				]
+				if row_kind == "knitting"
+				else [],
+				"cloth_item": fabric.cloth_item,
+				"treated_item": treated_item,
+				"production_detail": fabric.production_detail,
+				"kind": row_kind,
+				"reference_routed": reference_routed,
+				"ratio": (flt(kn_row.get("quantity_ratio")) if kn_row else flt(ipd.get("cloth_per_kg_yarn")))
+				or 1,
+				"has_colour": has_colour,
+				"greige_colour": get_greige_colour(ipd) if row_kind == "knitting" else None,
+				"colour_options": _knit_colour_options(ipd)
 				if (row_kind == "knitting" and has_colour)
-				else None
-			),
-			"qty_rows": qty_rows,
-		})
+				else [],
+				"colour_mapping": (
+					get_attribute_mapping(ipd, FABRIC_COLOUR_ATTRIBUTE)
+					if (row_kind == "knitting" and has_colour)
+					else None
+				),
+				"qty_rows": qty_rows,
+			}
+		)
 
 	return {
 		"is_fabric_process": bool(rows) or bool(warnings),
@@ -367,11 +354,10 @@ def _add_planning_data(qty_rows, kind, lot, wo, fabric, ipd, step):
 	if kind == "knitting":
 		program_rows = {
 			(_attribute_value(r.dia), r.get("reference_item_variant") or ""): r
-			for r in lot.get("lot_fabric_programs") or [] if r.cloth_item == cloth
+			for r in lot.get("lot_fabric_programs") or []
+			if r.cloth_item == cloth
 		}
-		ordered = get_produced_by_reference(
-			lot.name, wo.process_name, cloth, exclude_wo=wo.name
-		)
+		ordered = get_produced_by_reference(lot.name, wo.process_name, cloth, exclude_wo=wo.name)
 		for qr in qty_rows:
 			dia = (qr.get("out_attrs") or {}).get(FABRIC_DIA_ATTRIBUTE)
 			reference = qr.get("reference_item_variant") or ""
@@ -383,15 +369,17 @@ def _add_planning_data(qty_rows, kind, lot, wo, fabric, ipd, step):
 				)
 			program = flt(row.weight) if row else 0
 			already = flt(ordered.get(reference))
-			qr.update({
-				"program": program,
-				"ordered": already,
-				"balance": max(program - already, 0),
-				# The operator asked for the persisted Cloth Program itself to be
-				# prefilled. `balance` is still shown and over-ordering remains a
-				# non-blocking warning in the popup.
-				"prefill": program,
-			})
+			qr.update(
+				{
+					"program": program,
+					"ordered": already,
+					"balance": max(program - already, 0),
+					# The operator asked for the persisted Cloth Program itself to be
+					# prefilled. `balance` is still shown and over-ordering remains a
+					# non-blocking warning in the popup.
+					"prefill": program,
+				}
+			)
 		return
 
 	# any swap/identity step, at any chain depth (dyeing, compacting,
@@ -399,18 +387,14 @@ def _add_planning_data(qty_rows, kind, lot, wo, fabric, ipd, step):
 	# A Consume-rule conversion consumes/produces NON-cloth items whose attrs may
 	# not be Dia/Colour — the cloth-keyed ledger would over-report via the
 	# blank-matches-any rule. Show no `available` until tracking is item-aware.
-	reference_aware = any(
-		qr.get("reference_item_variant") for qr in qty_rows
-	)
+	reference_aware = any(qr.get("reference_item_variant") for qr in qty_rows)
 	alternative_counts = {}
 	for qr in qty_rows:
 		alternative_key = (
 			qr.get("reference_item_variant") or "",
 			frozenset((qr.get("out_attrs") or {}).items()),
 		)
-		alternative_counts[alternative_key] = (
-			alternative_counts.get(alternative_key, 0) + 1
-		)
+		alternative_counts[alternative_key] = alternative_counts.get(alternative_key, 0) + 1
 	planned_cache = {}
 	ordered_cache = {}
 
@@ -434,22 +418,29 @@ def _add_planning_data(qty_rows, kind, lot, wo, fabric, ipd, step):
 
 		out_key = (out_attrs.get(FABRIC_DIA_ATTRIBUTE) or "", out_attrs.get(FABRIC_COLOUR_ATTRIBUTE) or "")
 		plan = flt(planned.get(out_key))
-		already = flt(ordered_out.get((out_key[0] or None, out_key[1] or None))
-			or ordered_out.get(out_key))
-		is_alternative = alternative_counts.get((
-			reference,
-			frozenset(out_attrs.items()),
-		), 0) > 1
-		qr.update({
-			"plan": plan,
-			"ordered": already,
-			"available": None,
-			# A many-to-one process (Red -> White and Bleached -> White) is
-			# intentionally chosen by the operator. Never prefill every alternative
-			# with the same plan and accidentally double the required quantity.
-			"prefill": 0 if is_alternative else (max(plan - already, 0) if plan else 0),
-			"is_alternative": is_alternative,
-		})
+		already = flt(ordered_out.get((out_key[0] or None, out_key[1] or None)) or ordered_out.get(out_key))
+		is_alternative = (
+			alternative_counts.get(
+				(
+					reference,
+					frozenset(out_attrs.items()),
+				),
+				0,
+			)
+			> 1
+		)
+		qr.update(
+			{
+				"plan": plan,
+				"ordered": already,
+				"available": None,
+				# A many-to-one process (Red -> White and Bleached -> White) is
+				# intentionally chosen by the operator. Never prefill every alternative
+				# with the same plan and accidentally double the required quantity.
+				"prefill": 0 if is_alternative else (max(plan - already, 0) if plan else 0),
+				"is_alternative": is_alternative,
+			}
+		)
 
 
 def _matrix_qty_rows(ipd, process_name, kind):
@@ -458,7 +449,7 @@ def _matrix_qty_rows(ipd, process_name, kind):
 	for every route. Legacy knitting matrices may still receive their Colour from
 	the route-specific calculation fallback."""
 	matrix_names = frappe.get_all(
-		'YRP IPD Process Matrix',
+		"YRP IPD Process Matrix",
 		filters={"ipd": ipd.name, "process_name": process_name, "docstatus": ["<", 2]},
 		pluck="name",
 	)
@@ -471,12 +462,10 @@ def _matrix_qty_rows(ipd, process_name, kind):
 
 	qty_rows = []
 	for name in matrix_names:
-		matrix = frappe.get_doc('YRP IPD Process Matrix', name)
+		matrix = frappe.get_doc("YRP IPD Process Matrix", name)
 		reference_attrs = {}
 		if matrix.reference_item_variant:
-			reference = frappe.get_cached_doc(
-				'Item', matrix.reference_item_variant
-			)
+			reference = frappe.get_cached_doc("Item", matrix.reference_item_variant)
 			reference_attrs = {
 				row.attribute: _attribute_value(row.attribute_value)
 				for row in reference.get("attributes") or []
@@ -494,37 +483,41 @@ def _matrix_qty_rows(ipd, process_name, kind):
 				label = " · ".join(value for value in (section, row_label) if value)
 			inputs = group.get("input") or []
 			input_total = sum(flt(row.get("qty")) for row in inputs) or 1
-			qty_rows.append({
-				"key": f"{name}:{group_index}",
-				"label": label,
-				# section/row_label split the label for the popup's colour-section
-				# layout; `label` itself stays untouched (server API compat).
-				"section": section,
-				"row_label": row_label,
-				"out_attrs": out_attrs,
-				# input-side attrs carry (from_dia, colour) for compacting and
-				# (dia, from_colour) for dyeing — availability is keyed on them.
-				"in_attrs": in_attrs,
-				"reference_item_variant": matrix.reference_item_variant,
-				"target_attrs": reference_attrs,
-				"output_qty": flt(out.get("qty")) or 1,
-				"input_specs": [
-					{
-						"item": row.get("item") or matrix.input_item or ipd.item,
-						"attrs": row.get("attrs") or {},
-						"qty": flt(row.get("qty")),
-						"uom": row.get("uom"),
-					}
-					for row in inputs
-				],
-				"yarns": [
-					{
-						"yarn_item": row.get("item") or matrix.input_item,
-						"ratio": flt(row.get("qty")) / input_total * 100,
-					}
-					for row in inputs
-				] if kind == "knitting" else [],
-			})
+			qty_rows.append(
+				{
+					"key": f"{name}:{group_index}",
+					"label": label,
+					# section/row_label split the label for the popup's colour-section
+					# layout; `label` itself stays untouched (server API compat).
+					"section": section,
+					"row_label": row_label,
+					"out_attrs": out_attrs,
+					# input-side attrs carry (from_dia, colour) for compacting and
+					# (dia, from_colour) for dyeing — availability is keyed on them.
+					"in_attrs": in_attrs,
+					"reference_item_variant": matrix.reference_item_variant,
+					"target_attrs": reference_attrs,
+					"output_qty": flt(out.get("qty")) or 1,
+					"input_specs": [
+						{
+							"item": row.get("item") or matrix.input_item or ipd.item,
+							"attrs": row.get("attrs") or {},
+							"qty": flt(row.get("qty")),
+							"uom": row.get("uom"),
+						}
+						for row in inputs
+					],
+					"yarns": [
+						{
+							"yarn_item": row.get("item") or matrix.input_item,
+							"ratio": flt(row.get("qty")) / input_total * 100,
+						}
+						for row in inputs
+					]
+					if kind == "knitting"
+					else [],
+				}
+			)
 	return qty_rows
 
 
@@ -548,14 +541,18 @@ def _identity_qty_rows(ipd, treated_item, identity_row=None):
 	# stamping them onto another item would mint wrong variants.
 	if treated_item != ipd.item and declared:
 		frappe.throw(
-			_("IPD {0}: identity process on {1} needs an attribute-less item — its attributes "
-			"({2}) cannot be derived from this IPD.").format(ipd.name, treated_item, ", ".join(declared))
+			_(
+				"IPD {0}: identity process on {1} needs an attribute-less item — its attributes "
+				"({2}) cannot be derived from this IPD."
+			).format(ipd.name, treated_item, ", ".join(declared))
 		)
 	unsupported = [a for a in declared if a not in (FABRIC_DIA_ATTRIBUTE, FABRIC_COLOUR_ATTRIBUTE)]
 	if unsupported:
 		frappe.throw(
-			_("IPD {0}: cannot derive values for attribute(s) {1} of {2} — identity processes "
-			"support Dia/Colour items only.").format(ipd.name, ", ".join(unsupported), treated_item)
+			_(
+				"IPD {0}: cannot derive values for attribute(s) {1} of {2} — identity processes "
+				"support Dia/Colour items only."
+			).format(ipd.name, ", ".join(unsupported), treated_item)
 		)
 
 	combo_rows = _identity_combos_from_prev_step(ipd, treated_item, identity_row, declared)
@@ -568,9 +565,14 @@ def _identity_qty_rows(ipd, treated_item, identity_row=None):
 		colours = _identity_attr_values(ipd, FABRIC_COLOUR_ATTRIBUTE) if has_colour else []
 		if (has_dia and not dias) or (has_colour and not colours):
 			frappe.throw(
-				_("IPD {0}: cannot derive the {1} values for {2} — maintain the fabric tabs or "
-				"the IPD's attribute mapping values.").format(
-					ipd.name, FABRIC_DIA_ATTRIBUTE if (has_dia and not dias) else FABRIC_COLOUR_ATTRIBUTE, treated_item)
+				_(
+					"IPD {0}: cannot derive the {1} values for {2} — maintain the fabric tabs or "
+					"the IPD's attribute mapping values."
+				).format(
+					ipd.name,
+					FABRIC_DIA_ATTRIBUTE if (has_dia and not dias) else FABRIC_COLOUR_ATTRIBUTE,
+					treated_item,
+				)
 			)
 
 		if dias and colours:
@@ -584,11 +586,13 @@ def _identity_qty_rows(ipd, treated_item, identity_row=None):
 		combo_rows = [{"attrs": combo, "reference_item_variant": None} for combo in combos]
 
 	# Floor-friendly order: colour groups together, dias numerically inside.
-	combo_rows.sort(key=lambda row: (
-		(row.get("attrs") or {}).get(FABRIC_COLOUR_ATTRIBUTE) or "",
-		_dia_sort_key((row.get("attrs") or {}).get(FABRIC_DIA_ATTRIBUTE)),
-		row.get("reference_item_variant") or "",
-	))
+	combo_rows.sort(
+		key=lambda row: (
+			(row.get("attrs") or {}).get(FABRIC_COLOUR_ATTRIBUTE) or "",
+			_dia_sort_key((row.get("attrs") or {}).get(FABRIC_DIA_ATTRIBUTE)),
+			row.get("reference_item_variant") or "",
+		)
+	)
 
 	rows = []
 	for i, combo_row in enumerate(combo_rows):
@@ -600,32 +604,32 @@ def _identity_qty_rows(ipd, treated_item, identity_row=None):
 		if reference and target_attrs != combo:
 			physical_colour = combo.get(FABRIC_COLOUR_ATTRIBUTE) or "?"
 			target_colour = target_attrs.get(FABRIC_COLOUR_ATTRIBUTE) or "?"
-			section = _("{0} · for finished {1}").format(
-				physical_colour, target_colour
-			)
+			section = _("{0} · for finished {1}").format(physical_colour, target_colour)
 			physical_dia = combo.get(FABRIC_DIA_ATTRIBUTE)
 			target_dia = target_attrs.get(FABRIC_DIA_ATTRIBUTE)
 			if physical_dia and target_dia and physical_dia != target_dia:
 				row_label = _("{0} · finished {1}").format(physical_dia, target_dia)
-		rows.append({
-			"key": f"identity:{i}",
-			"label": label,
-			"section": section,
-			"row_label": row_label,
-			"out_attrs": combo,
-			"in_attrs": combo,
-			"reference_item_variant": reference,
-			"target_attrs": target_attrs,
-			"output_qty": 1,
-			"input_specs": [{
-				"item": treated_item,
-				"attrs": combo,
-				"qty": 1,
-				"uom": frappe.db.get_value(
-					"Item", treated_item, "stock_uom"
-				),
-			}],
-		})
+		rows.append(
+			{
+				"key": f"identity:{i}",
+				"label": label,
+				"section": section,
+				"row_label": row_label,
+				"out_attrs": combo,
+				"in_attrs": combo,
+				"reference_item_variant": reference,
+				"target_attrs": target_attrs,
+				"output_qty": 1,
+				"input_specs": [
+					{
+						"item": treated_item,
+						"attrs": combo,
+						"qty": 1,
+						"uom": frappe.db.get_value("Item", treated_item, "stock_uom"),
+					}
+				],
+			}
+		)
 	return rows
 
 
@@ -653,17 +657,21 @@ def _identity_combos_from_prev_step(ipd, treated_item, identity_row, declared):
 			for path in _solve_authored_fabric_routes(ipd, process_rows, route, managed={}):
 				for part in path:
 					row = part["row"]
-					if (flt(row.get("sequence")) != flt(sequence)
-						or row.get("fabric_process") != identity_row.get("fabric_process")):
+					if flt(row.get("sequence")) != flt(sequence) or row.get(
+						"fabric_process"
+					) != identity_row.get("fabric_process"):
 						continue
 					state = part["before"]
 					attrs = state.get("attrs") or {}
 					if state.get("item") != treated_item or set(attrs) != set(declared):
 						continue
-					reference = _resolve_variant(ipd.item, {
-						FABRIC_DIA_ATTRIBUTE: _attribute_value(route.finished_dia),
-						FABRIC_COLOUR_ATTRIBUTE: _attribute_value(route.finished_colour),
-					})
+					reference = _resolve_variant(
+						ipd.item,
+						{
+							FABRIC_DIA_ATTRIBUTE: _attribute_value(route.finished_dia),
+							FABRIC_COLOUR_ATTRIBUTE: _attribute_value(route.finished_colour),
+						},
+					)
 					key = (reference, frozenset(attrs.items()))
 					if key not in seen:
 						seen.add(key)
@@ -671,7 +679,8 @@ def _identity_combos_from_prev_step(ipd, treated_item, identity_row, declared):
 		return combos
 
 	prior = [
-		row for row in process_rows  # already sequence-ordered
+		row
+		for row in process_rows  # already sequence-ordered
 		if flt(row.get("sequence")) < flt(sequence) and _is_transforming_row(row)
 	]
 	if not prior:
@@ -679,13 +688,13 @@ def _identity_combos_from_prev_step(ipd, treated_item, identity_row, declared):
 	prev = prior[-1]
 
 	matrix_names = frappe.get_all(
-		'YRP IPD Process Matrix',
+		"YRP IPD Process Matrix",
 		filters={"ipd": ipd.name, "process_name": prev.get("fabric_process"), "docstatus": ["<", 2]},
 		pluck="name",
 	)
 	combos, seen = [], set()
 	for name in matrix_names:
-		matrix = frappe.get_doc('YRP IPD Process Matrix', name)
+		matrix = frappe.get_doc("YRP IPD Process Matrix", name)
 		if (matrix.output_item or ipd.item) != treated_item:
 			continue  # the prior step produces a different item — not our input
 		for _group_index, group in sorted(matrix.get_combinations_grouped().items()):
@@ -699,18 +708,17 @@ def _identity_combos_from_prev_step(ipd, treated_item, identity_row, declared):
 				key = (matrix.reference_item_variant or "", frozenset(attrs.items()))
 				if key not in seen:
 					seen.add(key)
-					combos.append({
-						"attrs": dict(attrs),
-						"reference_item_variant": matrix.reference_item_variant,
-					})
+					combos.append(
+						{
+							"attrs": dict(attrs),
+							"reference_item_variant": matrix.reference_item_variant,
+						}
+					)
 	return combos or None
 
 
 def _is_transforming_row(row):
-	if any(
-		m.get("role") in ("Change", "Introduce", "Consume")
-		for m in row.get("value_mappings") or []
-	):
+	if any(m.get("role") in ("Change", "Introduce", "Consume") for m in row.get("value_mappings") or []):
 		return True
 	in_item, out_item = row.get("input_item"), row.get("output_item")
 	return bool(in_item and out_item and in_item != out_item)
@@ -777,8 +785,11 @@ def _group_label(kind, in_attrs, out_attrs):
 	changed = [a for a in out_attrs if in_attrs.get(a) != out_attrs.get(a)]
 	if len(changed) > 1:
 		# multi_swap (Dye-Compact): show the full combo transition
-		return (" · ".join(in_attrs.get(a) or "?" for a in sorted(in_attrs))
-			+ " → " + " · ".join(out_attrs.get(a) or "?" for a in sorted(out_attrs)))
+		return (
+			" · ".join(in_attrs.get(a) or "?" for a in sorted(in_attrs))
+			+ " → "
+			+ " · ".join(out_attrs.get(a) or "?" for a in sorted(out_attrs))
+		)
 	if kind == "dyeing":
 		dia = out_attrs.get(FABRIC_DIA_ATTRIBUTE)
 		swap = f"{in_attrs.get(FABRIC_COLOUR_ATTRIBUTE)} → {out_attrs.get(FABRIC_COLOUR_ATTRIBUTE)}"
@@ -795,8 +806,7 @@ def _sided_label(in_attrs, out_attrs, attributes):
 	shows once. One side empty -> the other side alone; both empty -> None."""
 	attributes = sorted(attributes)
 	left = " · ".join(
-		in_attrs[a] or "?" for a in attributes
-		if a in in_attrs and in_attrs.get(a) != out_attrs.get(a)
+		in_attrs[a] or "?" for a in attributes if a in in_attrs and in_attrs.get(a) != out_attrs.get(a)
 	)
 	right = " · ".join(out_attrs[a] or "?" for a in attributes if a in out_attrs)
 	if left and right:
@@ -834,7 +844,8 @@ def _knit_colour_options(ipd):
 	if options:
 		return options
 	recipe_colours = [
-		_attribute_value(row.colour) for row in ipd.get("colour_yarn_recipes") or []
+		_attribute_value(row.colour)
+		for row in ipd.get("colour_yarn_recipes") or []
 		if row.cloth_item == ipd.item and _attribute_value(row.colour)
 	]
 	if recipe_colours:
@@ -851,7 +862,7 @@ def _knit_colour_options(ipd):
 def get_lot_fabric_items(lot):
 	"""Cloth items on the Lot's fabric table — used by the WO form to filter
 	the Item link for cloth processes (client get_list can't query child tables)."""
-	lot_doc = frappe.get_doc('SD YRP Lot', lot)
+	lot_doc = frappe.get_doc("SD YRP Lot", lot)
 	lot_doc.check_permission("read")
 	return sorted({f.cloth_item for f in lot_doc.get("lot_fabric_details") or [] if f.cloth_item})
 
@@ -879,24 +890,19 @@ def _get_work_order_selection_context(lot, process_name, check_permission=False)
 			"auto_production_detail": None,
 		}
 
-	lot_doc = frappe.get_doc('SD YRP Lot', lot)
+	lot_doc = frappe.get_doc("SD YRP Lot", lot)
 	if check_permission:
 		lot_doc.check_permission("read")
 
-	configured_cloth_process = bool(
-		frappe.db.get_value('YRP Process', process_name, "is_cloth_process")
-	)
+	configured_cloth_process = bool(frappe.db.get_value("YRP Process", process_name, "is_cloth_process"))
 	cloth_options = []
 	for fabric in lot_doc.get("lot_fabric_details") or []:
 		if not fabric.cloth_item or not fabric.production_detail:
 			continue
 		try:
-			ipd = frappe.get_cached_doc(
-				'YRP Item Production Detail', fabric.production_detail
-			)
+			ipd = frappe.get_cached_doc("YRP Item Production Detail", fabric.production_detail)
 			matches_process = bool(
-				get_fabric_step(ipd, process_name)
-				or get_identity_process_row(ipd, process_name)
+				get_fabric_step(ipd, process_name) or get_identity_process_row(ipd, process_name)
 			)
 		except frappe.DoesNotExistError:
 			# A stale Lot/IPD link (including a Process removed from an older IPD
@@ -906,11 +912,13 @@ def _get_work_order_selection_context(lot, process_name, check_permission=False)
 			continue
 		if not matches_process:
 			continue
-		cloth_options.append({
-			"item": fabric.cloth_item,
-			"production_detail": fabric.production_detail,
-			"fabric_row": fabric.name,
-		})
+		cloth_options.append(
+			{
+				"item": fabric.cloth_item,
+				"production_detail": fabric.production_detail,
+				"fabric_row": fabric.name,
+			}
+		)
 
 	# The IPD chain is authoritative. The Process flag still says that a
 	# configured cloth process with no matching IPD must NOT fall through to the
@@ -919,11 +927,13 @@ def _get_work_order_selection_context(lot, process_name, check_permission=False)
 	options = cloth_options
 	if not is_cloth_process:
 		if lot_doc.get("item") and lot_doc.get("production_detail"):
-			options.append({
-				"item": lot_doc.item,
-				"production_detail": lot_doc.production_detail,
-				"fabric_row": None,
-			})
+			options.append(
+				{
+					"item": lot_doc.item,
+					"production_detail": lot_doc.production_detail,
+					"fabric_row": None,
+				}
+			)
 
 	# Preserve Lot row order while removing accidental duplicate pairs.
 	unique_options = []
@@ -950,9 +960,7 @@ def _get_work_order_selection_context(lot, process_name, check_permission=False)
 
 
 @frappe.whitelist()
-def calculate_fabric_deliverables(
-	work_order, rows, modified=None, source_process=None
-):
+def calculate_fabric_deliverables(work_order, rows, modified=None, source_process=None):
 	"""rows = [{fabric_row, colour?, yarn_qty?, entries: [{out_attrs, qty}]}].
 
 	knitting:   entries = cloth kgs per dia; yarn deliverable computed by the
@@ -976,7 +984,7 @@ def calculate_fabric_deliverables(
 	For knitting/dyeing/compacting the matrix output_item IS the cloth item, so
 	their behaviour is unchanged."""
 	rows = frappe.parse_json(rows) if isinstance(rows, str) else rows
-	wo = frappe.get_doc('YRP Work Order', work_order)
+	wo = frappe.get_doc("YRP Work Order", work_order)
 	wo.check_permission("write")
 	_guard_not_modified(wo, modified)
 	if wo.docstatus != 0:
@@ -985,15 +993,19 @@ def calculate_fabric_deliverables(
 	lot = _get_lot(wo)
 	fabric_rows = {f.name: f for f in _selected_lot_fabrics(wo, lot)}
 	all_fabric_rows = {f.name for f in lot.get("lot_fabric_details") or []}
-	default_received_type = frappe.db.get_single_value('YRP Stock Settings', "default_received_type")
+	default_received_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
 	if not default_received_type:
 		frappe.throw(_("Set Default Received Type in YRP Stock Settings first."))
 
 	# Knitting excess is already baked into the Lot program. Ignore the Process
 	# default_excess for that step so it is never added twice. Other processes
 	# retain their existing receivable wastage/excess calculation.
-	proc = frappe.get_cached_value(
-		'YRP Process', wo.process_name, ["default_wastage", "default_excess"], as_dict=True) or {}
+	proc = (
+		frappe.get_cached_value(
+			"YRP Process", wo.process_name, ["default_wastage", "default_excess"], as_dict=True
+		)
+		or {}
+	)
 	recv_wastage = flt(proc.get("default_wastage"))
 	process_excess = flt(proc.get("default_excess"))
 
@@ -1004,8 +1016,9 @@ def calculate_fabric_deliverables(
 
 	def _default_uom(item):
 		if item not in uom_cache:
-			uom_cache[item] = frappe.db.get_value('Item', item, "stock_uom")
+			uom_cache[item] = frappe.db.get_value("Item", item, "stock_uom")
 		return uom_cache[item]
+
 	for entry in rows:
 		fabric = fabric_rows.get(entry.get("fabric_row"))
 		if not fabric:
@@ -1018,11 +1031,14 @@ def calculate_fabric_deliverables(
 			frappe.throw(_("Unknown Lot fabric row {0}.").format(entry.get("fabric_row")))
 		ipd = frappe.get_cached_doc("YRP Item Production Detail", fabric.production_detail)
 		if source_process:
-			source_demands.setdefault(ipd.name, {
-				"ipd": ipd,
-				"cloth_item": fabric.cloth_item,
-				"rows": [],
-			})
+			source_demands.setdefault(
+				ipd.name,
+				{
+					"ipd": ipd,
+					"cloth_item": fabric.cloth_item,
+					"rows": [],
+				},
+			)
 		kind = _step_kind(ipd, get_fabric_step(ipd, wo.process_name))
 		identity_row = get_identity_process_row(ipd, wo.process_name) if kind == "identity" else None
 		if not kind:
@@ -1034,10 +1050,12 @@ def calculate_fabric_deliverables(
 		recv_excess = 0 if kind == "knitting" else process_excess
 		recv_factor = 1 - recv_wastage / 100.0 + recv_excess / 100.0
 		if recv_factor <= 0:
-			frappe.throw(_(
-				"Process {0}: wastage {1}% / excess {2}% give a non-positive "
-				"receivable factor ({3}). Check the Process percentages."
-			).format(wo.process_name, recv_wastage, recv_excess, flt(recv_factor, 4)))
+			frappe.throw(
+				_(
+					"Process {0}: wastage {1}% / excess {2}% give a non-positive "
+					"receivable factor ({3}). Check the Process percentages."
+				).format(wo.process_name, recv_wastage, recv_excess, flt(recv_factor, 4))
+			)
 
 		if kind == "identity":
 			# No conversion: deliverable = receivable, same variant, same qty.
@@ -1048,9 +1066,7 @@ def calculate_fabric_deliverables(
 			allowed_by_key = {row["key"]: row for row in identity_rows}
 			allowed_by_attrs = {}
 			for row in identity_rows:
-				allowed_by_attrs.setdefault(
-					frozenset((row.get("out_attrs") or {}).items()), []
-				).append(row)
+				allowed_by_attrs.setdefault(frozenset((row.get("out_attrs") or {}).items()), []).append(row)
 			identity_bom_demands = []
 			for line in entry.get("entries") or []:
 				qty = flt(line.get("qty"))
@@ -1064,7 +1080,9 @@ def calculate_fabric_deliverables(
 				if not identity_qty_row:
 					frappe.throw(
 						_("Combination {0} is not derived from IPD {1} — reopen the Calculate popup.").format(
-							out_attrs or treated_item, ipd.name))
+							out_attrs or treated_item, ipd.name
+						)
+					)
 				variant = _resolve_variant(treated_item, out_attrs)
 				reference = identity_qty_row.get("reference_item_variant")
 				principal = {
@@ -1080,18 +1098,22 @@ def calculate_fabric_deliverables(
 				if source_process:
 					source_demands[ipd.name]["rows"].append(principal)
 				recv_qty = flt(qty * recv_factor, 3)
-				receivables.append({
-					"item_variant": variant,
-					"qty": recv_qty,
-					"uom": treated_uom,
-					"pending_quantity": recv_qty,
-					"fabric_reference_variant": reference,
-				})
-				identity_bom_demands.append({
-					"attrs": out_attrs,
-					"qty": qty,
-					"reference_item_variant": reference or variant,
-				})
+				receivables.append(
+					{
+						"item_variant": variant,
+						"qty": recv_qty,
+						"uom": treated_uom,
+						"pending_quantity": recv_qty,
+						"fabric_reference_variant": reference,
+					}
+				)
+				identity_bom_demands.append(
+					{
+						"attrs": out_attrs,
+						"qty": qty,
+						"reference_item_variant": reference or variant,
+					}
+				)
 			_append_bom_deliverables(
 				deliverables,
 				ipd,
@@ -1122,14 +1144,10 @@ def calculate_fabric_deliverables(
 			if qty <= 0:
 				continue
 			line_colour = _attribute_value(line.get("colour")) or colour
-			matrix, group = _resolve_matrix_group(
-				matrix_cache, line.get("key"), ipd, wo.process_name
-			)
+			matrix, group = _resolve_matrix_group(matrix_cache, line.get("key"), ipd, wo.process_name)
 			if kind == "knitting" and has_colour:
 				if matrix.reference_item_variant:
-					reference = frappe.get_cached_doc(
-						'Item', matrix.reference_item_variant
-					)
+					reference = frappe.get_cached_doc("Item", matrix.reference_item_variant)
 					target_attrs = {
 						row.attribute: _attribute_value(row.attribute_value)
 						for row in reference.get("attributes") or []
@@ -1140,15 +1158,17 @@ def calculate_fabric_deliverables(
 						target_attrs.get(FABRIC_DIA_ATTRIBUTE),
 					)
 					if line_colour and line_colour != expected_colour:
-						frappe.throw(_(
-							"Knitting route {0} / {1} must receive colour {2}, "
-							"not {3}. Reopen the Calculate popup."
-						).format(
-							target_attrs.get(FABRIC_COLOUR_ATTRIBUTE),
-							target_attrs.get(FABRIC_DIA_ATTRIBUTE),
-							expected_colour,
-							line_colour,
-						))
+						frappe.throw(
+							_(
+								"Knitting route {0} / {1} must receive colour {2}, "
+								"not {3}. Reopen the Calculate popup."
+							).format(
+								target_attrs.get(FABRIC_COLOUR_ATTRIBUTE),
+								target_attrs.get(FABRIC_DIA_ATTRIBUTE),
+								expected_colour,
+								line_colour,
+							)
+						)
 					line_colour = expected_colour
 				if not line_colour:
 					frappe.throw(_("Select the cloth Colour for {0}.").format(fabric.cloth_item))
@@ -1170,16 +1190,14 @@ def calculate_fabric_deliverables(
 			recv_item = matrix.output_item or fabric.cloth_item
 			if not reference_item_variant:
 				reference_item_variant = _resolve_variant(recv_item, out_attrs)
-			reference_attrs = (
-				_variant_attrs(reference_item_variant)
-				if reference_item_variant
-				else out_attrs
+			reference_attrs = _variant_attrs(reference_item_variant) if reference_item_variant else out_attrs
+			bom_demands.append(
+				{
+					"attrs": reference_attrs,
+					"qty": qty,
+					"reference_item_variant": reference_item_variant,
+				}
 			)
-			bom_demands.append({
-				"attrs": reference_attrs,
-				"qty": qty,
-				"reference_item_variant": reference_item_variant,
-			})
 
 			for inp in group.get("input") or []:
 				input_item = inp.get("item") or matrix.input_item or ipd.item
@@ -1193,13 +1211,15 @@ def calculate_fabric_deliverables(
 			# grey yarn -> dyed yarn — produces the dyed yarn, NOT the Lot's cloth).
 			# For knitting/dyeing/compacting matrices output_item IS the cloth item.
 			recv_qty = flt(qty * recv_factor, 3)
-			fabric_receivables.append({
-				"item_variant": _resolve_variant(recv_item, out_attrs),
-				"qty": recv_qty,
-				"uom": _default_uom(recv_item),
-				"pending_quantity": recv_qty,
-				"fabric_reference_variant": reference_item_variant,
-			})
+			fabric_receivables.append(
+				{
+					"item_variant": _resolve_variant(recv_item, out_attrs),
+					"qty": recv_qty,
+					"uom": _default_uom(recv_item),
+					"pending_quantity": recv_qty,
+					"fabric_reference_variant": reference_item_variant,
+				}
+			)
 		if not fabric_receivables:
 			continue
 
@@ -1241,6 +1261,26 @@ def calculate_fabric_deliverables(
 	if not deliverables:
 		frappe.throw(_("Enter a quantity greater than zero for at least one row."))
 
+	return _save_calculated_fabric_rows(
+		wo,
+		lot,
+		deliverables,
+		receivables,
+		source_demands=source_demands,
+		source_process=source_process,
+	)
+
+
+def _save_calculated_fabric_rows(
+	wo,
+	lot,
+	deliverables,
+	receivables,
+	*,
+	source_demands,
+	source_process,
+):
+	"""Normalize, consolidate, and persist calculated Work Order rows."""
 	# Base YRP now treats transaction UOM as Item master data. Preserve the
 	# engine's physical stock quantity before Work Order validation overwrites
 	# each row's UOM (for example, 20 Pieces -> 2 Boxes at factor 10).
@@ -1262,12 +1302,8 @@ def calculate_fabric_deliverables(
 				source_process=source_process,
 			)
 
-	deliverables = _consolidate_fabric_rows(
-		deliverables, 'YRP Work Order Deliverables'
-	)
-	receivables = _consolidate_fabric_rows(
-		receivables, 'YRP Work Order Receivables'
-	)
+	deliverables = _consolidate_fabric_rows(deliverables, "YRP Work Order Deliverables")
+	receivables = _consolidate_fabric_rows(receivables, "YRP Work Order Receivables")
 
 	# Every calculated row is its OWN logical row for the Vue item editors —
 	# group_items_for_ui buckets by row_index, and rows without one collapse
@@ -1293,13 +1329,9 @@ def calculate_fabric_deliverables(
 	wo.deliverable_details = ""
 	wo.receivable_details = ""
 	if wo.meta.get_field("fabric_source_process"):
-		wo.fabric_source_process = (
-			selected_source["process_name"] if selected_source else None
-		)
+		wo.fabric_source_process = selected_source["process_name"] if selected_source else None
 	if wo.meta.get_field("fabric_source_process_step"):
-		wo.fabric_source_process_step = (
-			selected_source["value"] if selected_source else None
-		)
+		wo.fabric_source_process_step = selected_source["value"] if selected_source else None
 	wo.save()
 
 	return {"deliverables": len(deliverables), "receivables": len(receivables)}
@@ -1352,22 +1384,17 @@ def _append_bom_deliverables(
 			bom_item = bom_row.get("item")
 			if not bom_item or flt(bom_row.get("qty")) <= 0:
 				continue
-			deliverables.append({
-				"item_variant": _resolve_variant(
-					bom_item, bom_row.get("attrs") or {}
-				),
-				"qty": flt(bom_row.get("qty"), 3),
-				"uom": bom_row.get("uom")
-				or frappe.db.get_value(
-					'Item', bom_item, "stock_uom"
-				),
-				"pending_quantity": flt(bom_row.get("qty"), 3),
-				"received_type": default_received_type,
-				"is_calculated": 1,
-				"fabric_reference_variant": (
-					demand.get("reference_item_variant") or None
-				),
-			})
+			deliverables.append(
+				{
+					"item_variant": _resolve_variant(bom_item, bom_row.get("attrs") or {}),
+					"qty": flt(bom_row.get("qty"), 3),
+					"uom": bom_row.get("uom") or frappe.db.get_value("Item", bom_item, "stock_uom"),
+					"pending_quantity": flt(bom_row.get("qty"), 3),
+					"received_type": default_received_type,
+					"is_calculated": 1,
+					"fabric_reference_variant": (demand.get("reference_item_variant") or None),
+				}
+			)
 
 
 def _resolve_matrix_group(matrix_cache, key, ipd, process_name):
@@ -1383,7 +1410,7 @@ def _resolve_matrix_group(matrix_cache, key, ipd, process_name):
 		frappe.throw(_("Malformed matrix group key {0} — reopen the Calculate popup.").format(key))
 	if matrix_name not in matrix_cache:
 		try:
-			matrix = frappe.get_doc('YRP IPD Process Matrix', matrix_name)
+			matrix = frappe.get_doc("YRP IPD Process Matrix", matrix_name)
 		except frappe.DoesNotExistError:
 			# the IPD was re-saved between popup open and Calculate — matrices
 			# are wiped and rebuilt under new names on every IPD save
@@ -1391,8 +1418,11 @@ def _resolve_matrix_group(matrix_cache, key, ipd, process_name):
 		matrix_cache[matrix_name] = (matrix, matrix.get_combinations_grouped())
 	matrix, groups = matrix_cache[matrix_name]
 	if matrix.ipd != ipd.name or matrix.process_name != process_name:
-		frappe.throw(_("Matrix {0} does not belong to IPD {1} / process {2}.").format(
-			matrix_name, ipd.name, process_name))
+		frappe.throw(
+			_("Matrix {0} does not belong to IPD {1} / process {2}.").format(
+				matrix_name, ipd.name, process_name
+			)
+		)
 	group = groups.get(int(group_index))
 	if group is None:
 		frappe.throw(_("Matrix group {0} no longer exists — reopen the Calculate popup.").format(key))
@@ -1427,7 +1457,7 @@ def _resolve_variant(item, attrs):
 	)
 
 	attrs = {k: v for k, v in (attrs or {}).items() if v}
-	item_doc = frappe.get_cached_doc('Item', item)
+	item_doc = frappe.get_cached_doc("Item", item)
 	if item_doc.get("dependent_attribute"):
 		return get_or_create_variant(item, attrs)
 
@@ -1439,13 +1469,14 @@ def _resolve_variant(item, attrs):
 	# Partial set: base create_variant would throw "Please mention <attr>".
 	# Mirror its shape (display_name = value, sorted tuple hash) so the base
 	# tuple lookup finds this variant on later full-machinery passes too.
-	variant = frappe.new_doc('Item')
+	variant = frappe.new_doc("Item")
 	_copy_template_fields(item_doc, variant)
 	variant.variant_of = item_doc.name
 	variant.variant_based_on = "Item Attribute"
 	rows = [
 		{"attribute": a, "attribute_value": filtered[a], "display_name": filtered[a]}
-		for a in declared if a in filtered
+		for a in declared
+		if a in filtered
 	]
 	variant.set("attributes", rows)
 	if filtered:
@@ -1457,8 +1488,7 @@ def _resolve_variant(item, attrs):
 	# aliases item TT-YARN-GREY), so a name-only lookup could silently link
 	# ANOTHER item's variant. A cross-item name collision instead fails
 	# loudly at insert (review follow-up).
-	existing = frappe.db.exists(
-		'Item', {"name": variant.item_code, "variant_of": item_doc.name})
+	existing = frappe.db.exists("Item", {"name": variant.item_code, "variant_of": item_doc.name})
 	if existing:
 		return existing
 	variant.insert()
@@ -1473,10 +1503,10 @@ def _variant_attrs(item_variant):
 	return {
 		row.attribute: _attribute_value(row.attribute_value)
 		for row in frappe.get_all(
-			'Item Variant Attribute',
+			"Item Variant Attribute",
 			filters={
 				"parent": item_variant,
-				"parenttype": 'Item',
+				"parenttype": "Item",
 			},
 			fields=["attribute", "attribute_value"],
 		)
@@ -1484,14 +1514,14 @@ def _variant_attrs(item_variant):
 
 
 def _item_attribute_names(item):
-	item_doc = frappe.get_cached_doc('Item', item)
+	item_doc = frappe.get_cached_doc("Item", item)
 	return [row.attribute for row in item_doc.get("attributes") or []]
 
 
 def _get_lot(wo):
 	if not wo.get("lot"):
 		frappe.throw(_("Select a Lot on the Work Order first."))
-	lot = frappe.get_doc('SD YRP Lot', wo.lot)
+	lot = frappe.get_doc("SD YRP Lot", wo.lot)
 	lot.check_permission("read")
 	return lot
 
@@ -1519,11 +1549,11 @@ def fetch_summary_details(doc_name, production_detail=None):
 	for the legacy Desk call signature but cannot redirect the query to another
 	production definition.
 	"""
-	work_order = frappe.get_doc('YRP Work Order', doc_name)
+	work_order = frappe.get_doc("YRP Work Order", doc_name)
 	work_order.check_permission("read")
 	if production_detail and production_detail != work_order.production_detail:
 		frappe.throw(_("Production Detail does not match Work Order {0}.").format(doc_name))
-	ipd = frappe.get_cached_doc('YRP Item Production Detail', work_order.production_detail)
+	ipd = frappe.get_cached_doc("YRP Item Production Detail", work_order.production_detail)
 
 	item_details = _planned_summary_rows(work_order, ipd)
 	deliverables = _summary_item_details(work_order.deliverables, ipd)
@@ -1535,13 +1565,13 @@ def fetch_summary_details(doc_name, production_detail=None):
 
 
 def _planned_summary_rows(work_order, ipd):
+	from yrp.utils import update_if_string_instance
 	from yrp.yrp.doctype.yrp_item.yrp_item import get_attribute_details
 	from yrp.yrp.doctype.yrp_purchase_order.yrp_purchase_order import get_item_group_index
-	from yrp.utils import update_if_string_instance
 
 	rows = sorted(
 		work_order.get("work_order_calculated_items") or [],
-		key=lambda row: (row.row_index if row.row_index not in (None, "") else row.idx),
+		key=lambda row: row.row_index if row.row_index not in (None, "") else row.idx,
 	)
 	item_details = []
 	for _key, variants_iter in groupby(
@@ -1549,8 +1579,8 @@ def _planned_summary_rows(work_order, ipd):
 		lambda row: row.row_index if row.row_index not in (None, "") else row.idx,
 	):
 		variants = list(variants_iter)
-		variant_doc = frappe.get_cached_doc('Item', variants[0].item_variant)
-		attribute_details = get_attribute_details((variant_doc.variant_of or variant_doc.name))
+		variant_doc = frappe.get_cached_doc("Item", variants[0].item_variant)
+		attribute_details = get_attribute_details(variant_doc.variant_of or variant_doc.name)
 		item = {
 			"name": (variant_doc.variant_of or variant_doc.name),
 			"attributes": _summary_variant_attributes(variant_doc, attribute_details),
@@ -1572,7 +1602,7 @@ def _planned_summary_rows(work_order, ipd):
 				for key in ("major_part", "major_colour"):
 					if combination.get(key):
 						item["item_keys"][key] = combination[key]
-				current = frappe.get_cached_doc('Item', variant.item_variant)
+				current = frappe.get_cached_doc("Item", variant.item_variant)
 				primary_value = next(
 					(
 						_attribute_value(attr.attribute_value)
@@ -1646,13 +1676,13 @@ def _planned_summary_rows(work_order, ipd):
 
 
 def _summary_item_details(rows, ipd):
+	from yrp.utils import update_if_string_instance
 	from yrp.yrp.doctype.yrp_item.yrp_item import get_attribute_details
 	from yrp.yrp.doctype.yrp_purchase_order.yrp_purchase_order import get_item_group_index
-	from yrp.utils import update_if_string_instance
 
 	rows = sorted(
 		rows or [],
-		key=lambda row: (row.row_index if row.row_index not in (None, "") else row.idx),
+		key=lambda row: row.row_index if row.row_index not in (None, "") else row.idx,
 	)
 	groups = []
 	for _key, variants_iter in groupby(
@@ -1660,8 +1690,8 @@ def _summary_item_details(rows, ipd):
 		lambda row: row.row_index if row.row_index not in (None, "") else row.idx,
 	):
 		variants = list(variants_iter)
-		variant_doc = frappe.get_cached_doc('Item', variants[0].item_variant)
-		attribute_details = get_attribute_details((variant_doc.variant_of or variant_doc.name))
+		variant_doc = frappe.get_cached_doc("Item", variants[0].item_variant)
+		attribute_details = get_attribute_details(variant_doc.variant_of or variant_doc.name)
 		item = {
 			"name": (variant_doc.variant_of or variant_doc.name),
 			"lot": variants[0].get("lot"),
@@ -1677,15 +1707,13 @@ def _summary_item_details(rows, ipd):
 		}
 		primary_values = attribute_details["primary_attribute_values"]
 		if item["primary_attribute"]:
-			item["values"] = {
-				value: {"qty": 0, "pending_qty": 0} for value in primary_values
-			}
+			item["values"] = {value: {"qty": 0, "pending_qty": 0} for value in primary_values}
 			for variant in variants:
 				combination = update_if_string_instance(variant.set_combination) or {}
 				for key in ("major_part", "major_colour"):
 					if combination.get(key):
 						item["item_keys"][key] = combination[key]
-				current = frappe.get_cached_doc('Item', variant.item_variant)
+				current = frappe.get_cached_doc("Item", variant.item_variant)
 				primary_value = next(
 					(
 						_attribute_value(attr.attribute_value)

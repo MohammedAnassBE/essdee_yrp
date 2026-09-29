@@ -1,8 +1,7 @@
-from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2025, Essdee and contributors
 # For license information, please see license.txt
-
 import frappe
+from yrp.attribute_links import value as _attribute_value
 
 
 def execute(filters=None):
@@ -13,68 +12,33 @@ def execute(filters=None):
 
 def get_columns(max_inspections):
 	columns = [
-		{
-			"label": "Against ID",
-			"fieldname": "against_id",
-			"fieldtype": "Data",
-			"width": 120
-		},
+		{"label": "Against ID", "fieldname": "against_id", "fieldtype": "Data", "width": 120},
 		{
 			"label": "Supplier",
 			"fieldname": "supplier",
 			"fieldtype": "Link",
-			"options": 'Supplier',
-			"width": 150
+			"options": "Supplier",
+			"width": 150,
 		},
-		{
-			"label": "Lot",
-			"fieldname": "lot",
-			"fieldtype": "Link",
-			"options": 'SD YRP Lot',
-			"width": 120
-		},
-		{
-			"label": "Item",
-			"fieldname": "item",
-			"fieldtype": "Link",
-			"options": 'Item',
-			"width": 150
-		},
-		{
-			"label": "Colour",
-			"fieldname": "colour",
-			"fieldtype": "Data",
-			"width": 100
-		},
-		{
-			"label": "Sizes",
-			"fieldname": "sizes",
-			"fieldtype": "Data",
-			"width": 150
-		},
-		{
-			"label": "Description",
-			"fieldname": "description",
-			"fieldtype": "Data",
-			"width": 200
-		}
+		{"label": "Lot", "fieldname": "lot", "fieldtype": "Link", "options": "SD YRP Lot", "width": 120},
+		{"label": "Item", "fieldname": "item", "fieldtype": "Link", "options": "Item", "width": 150},
+		{"label": "Colour", "fieldname": "colour", "fieldtype": "Data", "width": 100},
+		{"label": "Sizes", "fieldname": "sizes", "fieldtype": "Data", "width": 150},
+		{"label": "Description", "fieldname": "description", "fieldtype": "Data", "width": 200},
 	]
 
 	for i in range(1, max_inspections + 1):
-		columns.extend([
-			{
-				"label": f"Inspection {i} Date",
-				"fieldname": f"posting_date_{i}",
-				"fieldtype": "Date",
-				"width": 130
-			},
-			{
-				"label": f"Result {i}",
-				"fieldname": f"result_{i}",
-				"fieldtype": "Data",
-				"width": 120
-			}
-		])
+		columns.extend(
+			[
+				{
+					"label": f"Inspection {i} Date",
+					"fieldname": f"posting_date_{i}",
+					"fieldtype": "Date",
+					"width": 130,
+				},
+				{"label": f"Result {i}", "fieldname": f"result_{i}", "fieldtype": "Data", "width": 120},
+			]
+		)
 
 	return columns
 
@@ -88,7 +52,8 @@ def get_data(filters):
 		 WHERE parent = t1.name AND selected = 1) as sizes
 	"""
 
-	raw_data = frappe.db.sql(f"""
+	raw_data = frappe.db.sql(
+		f"""
 		SELECT
 			t1.against_id,
 			t1.supplier,
@@ -106,7 +71,10 @@ def get_data(filters):
 		WHERE 1=1 {conditions}
 		ORDER BY
 			t1.against_id, t1.supplier, t1.lot, t1.item, t2.colour, t1.posting_date
-	""", filters, as_dict=1)
+	""",
+		filters,
+		as_dict=1,
+	)
 
 	pivoted_data = []
 	grouped_records = {}
@@ -123,13 +91,10 @@ def get_data(filters):
 				"colour": _attribute_value(row.colour),
 				"sizes": row.sizes,
 				"description": row.description,
-				"inspections": []
+				"inspections": [],
 			}
 
-		grouped_records[key]["inspections"].append({
-			"date": row.posting_date,
-			"result": row.result
-		})
+		grouped_records[key]["inspections"].append({"date": row.posting_date, "result": row.result})
 
 		max_inspections = max(max_inspections, len(grouped_records[key]["inspections"]))
 
@@ -142,7 +107,7 @@ def get_data(filters):
 			"item": record["item"],
 			"colour": _attribute_value(record["colour"]),
 			"sizes": record["sizes"],
-			"description": record["description"]
+			"description": record["description"],
 		}
 
 		for i, inspection in enumerate(record["inspections"]):

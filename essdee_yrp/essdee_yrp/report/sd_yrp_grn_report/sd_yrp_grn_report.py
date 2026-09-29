@@ -3,9 +3,10 @@
 
 import frappe
 from frappe.utils import cint
+from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 from essdee_yrp.dynamic_packing import packing_batch_label
-from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
+
 
 def execute(filters=None):
 	filters = frappe._dict(filters or {})
@@ -13,29 +14,30 @@ def execute(filters=None):
 	data = get_data(filters)
 	return columns, data
 
+
 def get_data(filters):
 	filters = frappe._dict(filters or {})
 	d = {}
 	conditions = ""
 	if filters.from_date:
-		conditions += f" AND t2.posting_date >= %(from_date)s"
-		d['from_date'] = filters.from_date
+		conditions += " AND t2.posting_date >= %(from_date)s"
+		d["from_date"] = filters.from_date
 
 	if filters.to_date:
-		conditions += f" AND t2.posting_date <= %(to_date)s"
-		d['to_date'] = filters.to_date
+		conditions += " AND t2.posting_date <= %(to_date)s"
+		d["to_date"] = filters.to_date
 
 	if filters.lot:
-		conditions += f" AND t2.lot = %(lot)s"
-		d['lot'] = filters.lot
+		conditions += " AND t2.lot = %(lot)s"
+		d["lot"] = filters.lot
 
 	if filters.supplier:
-		conditions += f" AND t2.supplier = %(supplier)s"
-		d['supplier'] = filters.supplier
+		conditions += " AND t2.supplier = %(supplier)s"
+		d["supplier"] = filters.supplier
 
 	if filters.delivery_location:
-		conditions += f" AND t2.delivery_location = %(delivery_location)s"
-		d['delivery_location'] = filters.delivery_location
+		conditions += " AND t2.delivery_location = %(delivery_location)s"
+		d["delivery_location"] = filters.delivery_location
 
 	data = frappe.db.sql(
 		f"""
@@ -45,20 +47,24 @@ def get_data(filters):
 			t2.total_packing_pieces
 			FROM `tabYRP Goods Received Note Item` as t1 JOIN `tabYRP Goods Received Note` as t2 ON t2.name = t1.parent
 			WHERE t2.against = 'YRP Work Order' AND t2.docstatus = 1 AND t1.quantity > 0 {conditions}
-		""", d, as_dict=True
+		""",
+		d,
+		as_dict=True,
 	)
 	batches_by_grn = {}
-	dynamic_grns = [
-		row.goods_received_note for row in data
-		if cint(row.packing_calculation_version) >= 2
-	]
+	dynamic_grns = [row.goods_received_note for row in data if cint(row.packing_calculation_version) >= 2]
 	if dynamic_grns:
 		for batch in frappe.get_all(
-			'SD YRP GRN Packing Batch',
+			"SD YRP GRN Packing Batch",
 			filters={"parent": ["in", list(set(dynamic_grns))]},
 			fields=[
-				"parent", "batch_id", "colour", "box_quantity", "pieces_per_box",
-				"total_pieces", "ratio_json",
+				"parent",
+				"batch_id",
+				"colour",
+				"box_quantity",
+				"pieces_per_box",
+				"total_pieces",
+				"ratio_json",
 			],
 			order_by="parent, idx",
 		):
@@ -70,42 +76,83 @@ def get_data(filters):
 
 	shown_batch_totals = set()
 	for row in data:
-		row['item'] = get_parent_item(row['item_variant'])
-		if (
-			cint(row.packing_calculation_version) >= 2
-			and row.goods_received_note not in shown_batch_totals
-		):
-			row['packing_ratio_details'] = "\n".join(
-				batches_by_grn.get(row.goods_received_note, [])
-			)
+		row["item"] = get_parent_item(row["item_variant"])
+		if cint(row.packing_calculation_version) >= 2 and row.goods_received_note not in shown_batch_totals:
+			row["packing_ratio_details"] = "\n".join(batches_by_grn.get(row.goods_received_note, []))
 			shown_batch_totals.add(row.goods_received_note)
 		elif cint(row.packing_calculation_version) >= 2:
 			# GRN rows are size-wise; show physical batch totals once so exports do not
 			# accidentally multiply the same boxes and pieces by the number of sizes.
-			row['total_packing_boxes'] = None
-			row['total_packing_pieces'] = None
-			row['packing_ratio_details'] = ""
+			row["total_packing_boxes"] = None
+			row["total_packing_pieces"] = None
+			row["packing_ratio_details"] = ""
 		else:
-			row['packing_ratio_details'] = ""
+			row["packing_ratio_details"] = ""
 
 	return data
 
+
 def get_columns():
 	return [
-		{"fieldname": "goods_received_note","fieldtype": "Link","options": 'YRP Goods Received Note',
-			"label": "Goods Received Note", "width": 100},
-		{"fieldname": "supplier","fieldtype": "Link","options": 'Supplier',"label": "Supplier", "width": 100},
-		{"fieldname": "supplier_name","fieldtype": "Data","label": "Supplier Name", "width": 150},
-		{"fieldname": "delivery_location","fieldtype": "Link","options": 'Supplier',"label": "Delivery Location", "width": 100},
-		{"fieldname": "delivery_location_name","fieldtype": "Data","label": "Delivery Location Name", "width": 150},
-		{"fieldname": "lot","fieldtype": "Link","options": 'SD YRP Lot',"label": "Lot", "width": 100},
-		{"fieldname": "process_name","fieldtype": "Link","options": 'YRP Process',"label": "Process", "width": 100},
-		{"fieldname": "item","fieldtype": "Link","options": 'Item',"label": "Item", "width": 200},
-		{"fieldname": "item_variant","fieldtype": "Link","options": 'Item',"label": "Item Variant", "width": 200},
-		{"fieldname": "quantity","fieldtype": "Float","label": "Quantity", "width": 100},
+		{
+			"fieldname": "goods_received_note",
+			"fieldtype": "Link",
+			"options": "YRP Goods Received Note",
+			"label": "Goods Received Note",
+			"width": 100,
+		},
+		{
+			"fieldname": "supplier",
+			"fieldtype": "Link",
+			"options": "Supplier",
+			"label": "Supplier",
+			"width": 100,
+		},
+		{"fieldname": "supplier_name", "fieldtype": "Data", "label": "Supplier Name", "width": 150},
+		{
+			"fieldname": "delivery_location",
+			"fieldtype": "Link",
+			"options": "Supplier",
+			"label": "Delivery Location",
+			"width": 100,
+		},
+		{
+			"fieldname": "delivery_location_name",
+			"fieldtype": "Data",
+			"label": "Delivery Location Name",
+			"width": 150,
+		},
+		{"fieldname": "lot", "fieldtype": "Link", "options": "SD YRP Lot", "label": "Lot", "width": 100},
+		{
+			"fieldname": "process_name",
+			"fieldtype": "Link",
+			"options": "YRP Process",
+			"label": "Process",
+			"width": 100,
+		},
+		{"fieldname": "item", "fieldtype": "Link", "options": "Item", "label": "Item", "width": 200},
+		{
+			"fieldname": "item_variant",
+			"fieldtype": "Link",
+			"options": "Item",
+			"label": "Item Variant",
+			"width": 200,
+		},
+		{"fieldname": "quantity", "fieldtype": "Float", "label": "Quantity", "width": 100},
 		{"fieldname": "total_packing_boxes", "fieldtype": "Int", "label": "Packing Boxes", "width": 110},
 		{"fieldname": "total_packing_pieces", "fieldtype": "Int", "label": "Packing Pieces", "width": 110},
-		{"fieldname": "packing_ratio_details", "fieldtype": "Small Text", "label": "Packing Ratios", "width": 320},
-		{"fieldname": "received_type","fieldtype": "Link","options": 'YRP Received Type',"label": "Received Type", "width": 100},
-		{"fieldname": "uom","fieldtype": "Link","options": 'UOM',"label": "UOM", "width": 100},
+		{
+			"fieldname": "packing_ratio_details",
+			"fieldtype": "Small Text",
+			"label": "Packing Ratios",
+			"width": 320,
+		},
+		{
+			"fieldname": "received_type",
+			"fieldtype": "Link",
+			"options": "YRP Received Type",
+			"label": "Received Type",
+			"width": 100,
+		},
+		{"fieldname": "uom", "fieldtype": "Link", "options": "UOM", "label": "UOM", "width": 100},
 	]

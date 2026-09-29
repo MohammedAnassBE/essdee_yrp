@@ -9,15 +9,15 @@ reader by editing a document field.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 import frappe
 from frappe.utils import cint
 
 from essdee_yrp.migration.engine import MigrationError
-
 
 CONFIG_KEY = "essdee_yrp_migration"
 RESET_ENABLE_CONFIG_KEY = "essdee_yrp_allow_target_reset"
@@ -82,15 +82,12 @@ def get_migration_settings() -> MigrationSettings:
 	raw = frappe.conf.get(CONFIG_KEY)
 	if not isinstance(raw, Mapping):
 		raise MigrationError(
-			f"Configure {CONFIG_KEY} in {target_site}/site_config.json before "
-			"using the migration"
+			f"Configure {CONFIG_KEY} in {target_site}/site_config.json before using the migration"
 		)
 
 	adapter = str(raw.get("adapter") or "local_bench")
 	if adapter != "local_bench":
-		raise MigrationError(
-			f"Unsupported migration source adapter {adapter!r}; expected 'local_bench'"
-		)
+		raise MigrationError(f"Unsupported migration source adapter {adapter!r}; expected 'local_bench'")
 
 	source_bench_value = raw.get("source_bench")
 	if not source_bench_value:
@@ -101,13 +98,9 @@ def get_migration_settings() -> MigrationSettings:
 	source_bench = source_bench.resolve()
 
 	source_site = _safe_name(raw.get("source_site"), "source_site")
-	source_app = _safe_name(
-		raw.get("source_app") or SUPPORTED_SOURCE_APP, "source_app"
-	)
+	source_app = _safe_name(raw.get("source_app") or SUPPORTED_SOURCE_APP, "source_app")
 	if source_app != SUPPORTED_SOURCE_APP:
-		raise MigrationError(
-			f"This migration contract supports only source app {SUPPORTED_SOURCE_APP!r}"
-		)
+		raise MigrationError(f"This migration contract supports only source app {SUPPORTED_SOURCE_APP!r}")
 
 	required_defaults = raw.get("required_defaults") or {}
 	if not isinstance(required_defaults, Mapping):
@@ -124,10 +117,7 @@ def get_migration_settings() -> MigrationSettings:
 	)
 	missing_target_apps = sorted(set(settings.target_apps) - set(frappe.get_installed_apps()))
 	if missing_target_apps:
-		raise MigrationError(
-			"Migration target is missing required apps: "
-			+ ", ".join(missing_target_apps)
-		)
+		raise MigrationError("Migration target is missing required apps: " + ", ".join(missing_target_apps))
 	_validate_local_source(settings)
 	return settings
 
@@ -148,6 +138,4 @@ def _validate_local_source(settings: MigrationSettings) -> None:
 	}
 	missing = [label for label, path in required_paths.items() if not path.exists()]
 	if missing:
-		raise MigrationError(
-			"Configured migration source is incomplete: " + ", ".join(missing)
-		)
+		raise MigrationError("Configured migration source is incomplete: " + ", ".join(missing))

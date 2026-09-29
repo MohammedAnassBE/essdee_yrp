@@ -3,9 +3,8 @@
 import json
 
 import frappe
-from frappe.utils import flt, getdate, get_time
+from frappe.utils import flt, get_time, getdate
 from six import string_types
-
 from yrp.stock.save_stock_items import group_items_for_ui
 
 
@@ -287,7 +286,7 @@ def get_combine_datetime(posting_date, posting_time):
 @frappe.whitelist()
 def make_purchase_order_mapped_doc(items):
 	"""Build a draft Purchase Order from selected Lot Purchase Summary rows."""
-	frappe.has_permission('Purchase Order', "create", throw=True)
+	frappe.has_permission("Purchase Order", "create", throw=True)
 	if isinstance(items, str):
 		items = frappe.parse_json(items)
 	if not isinstance(items, list) or not items:
@@ -297,13 +296,11 @@ def make_purchase_order_mapped_doc(items):
 	for index, item in enumerate(items):
 		item = frappe._dict(item)
 		item_variant = item.item
-		if not item_variant or not frappe.db.exists('Item', item_variant):
+		if not item_variant or not frappe.db.exists("Item", item_variant):
 			frappe.throw(f"Row {index + 1}: a valid Item Variant is required.")
 		if flt(item.qty) <= 0:
 			frappe.throw(f"Row {index + 1}: quantity must be greater than zero.")
-		if item.delivery_location and not frappe.db.exists(
-			'Supplier', item.delivery_location
-		):
+		if item.delivery_location and not frappe.db.exists("Supplier", item.delivery_location):
 			frappe.throw(f"Row {index + 1}: delivery location does not exist.")
 		rows.append(
 			{
@@ -312,13 +309,12 @@ def make_purchase_order_mapped_doc(items):
 				"lot": item.lot,
 				"delivery_location": item.delivery_location,
 				"schedule_date": item.delivery_date,
-				"expected_delivery_date": item.expected_delivery_date
-				or item.delivery_date,
+				"expected_delivery_date": item.expected_delivery_date or item.delivery_date,
 				"row_index": index,
 				"table_index": index,
 			}
 		)
 
-	doc = frappe.new_doc('Purchase Order')
-	doc.set_onload("item_details", group_items_for_ui(rows, 'Purchase Order'))
+	doc = frappe.new_doc("Purchase Order")
+	doc.set_onload("item_details", group_items_for_ui(rows, "Purchase Order"))
 	return doc

@@ -31,10 +31,12 @@ class TestFinishingSourceSync(IntegrationTestCase):
 		updated = sync_finishing_plans_from_work_order(work_order)
 
 		self.assertEqual(updated, ["FP-1", "FP-2"])
-		rebuild_plan.assert_has_calls([
-			(("FP-1",), {"check_permission": False}),
-			(("FP-2",), {"check_permission": False}),
-		])
+		rebuild_plan.assert_has_calls(
+			[
+				(("FP-1",), {"check_permission": False}),
+				(("FP-2",), {"check_permission": False}),
+			]
+		)
 
 	@patch("essdee_yrp.finishing.rebuild.rebuild_finishing_plan")
 	@patch(
@@ -79,7 +81,7 @@ class TestFinishingSourceSync(IntegrationTestCase):
 	def test_generic_after_submit_hook_is_not_used_as_completion_signal(self):
 		from essdee_yrp import hooks
 
-		self.assertNotIn("on_update_after_submit", hooks.doc_events['YRP Work Order'])
+		self.assertNotIn("on_update_after_submit", hooks.doc_events["YRP Work Order"])
 
 	@patch("essdee_yrp.finishing.rebuild.frappe.db.exists", return_value=True)
 	@patch("essdee_yrp.finishing.rebuild.frappe.db.get_value", return_value=1)
@@ -94,9 +96,7 @@ class TestFinishingSourceSync(IntegrationTestCase):
 		"essdee_yrp.finishing.rebuild.frappe.get_all",
 		return_value=["GRN-INCOMPLETE-1"],
 	)
-	def test_rebuild_replays_incomplete_grns_from_submitted_sources(
-		self, get_all, _work_orders
-	):
+	def test_rebuild_replays_incomplete_grns_from_submitted_sources(self, get_all, _work_orders):
 		doc = frappe._dict(
 			lot="LOT-1",
 			incomplete_transfer_grn_list='{"GRN-CANCELLED": true}',
@@ -109,10 +109,10 @@ class TestFinishingSourceSync(IntegrationTestCase):
 			{"GRN-INCOMPLETE-1": True},
 		)
 		get_all.assert_called_once_with(
-			'YRP Goods Received Note',
+			"YRP Goods Received Note",
 			filters={
 				"docstatus": 1,
-				"against": 'YRP Work Order',
+				"against": "YRP Work Order",
 				"against_id": ["in", ["WO-STITCH-1"]],
 				"lot": "LOT-1",
 				"is_internal_unit": 1,

@@ -1,13 +1,11 @@
-from yrp import attribute_links as attribute_db
-from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2025, Essdee and contributors
 # For license information, please see license.txt
-
 import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt
-
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 from yrp.stock.dimensions import get_dimension_fieldnames
 from yrp.stock.stock_ledger import make_sl_entries
 from yrp.stock.uom import resolve_item_uom
@@ -28,7 +26,7 @@ class SDYRPRecutandPrintPanel(Document):
 		make_sl_entries(self._get_stock_ledger_entries())
 
 	def before_cancel(self):
-		self.ignore_linked_doctypes = ('YRP Stock Ledger Entry', 'YRP Repost Item Valuation')
+		self.ignore_linked_doctypes = ("YRP Stock Ledger Entry", "YRP Repost Item Valuation")
 		self._update_cutting_plan(multiplier=-1)
 
 	def on_cancel(self):
@@ -37,36 +35,30 @@ class SDYRPRecutandPrintPanel(Document):
 	def _validate_context(self):
 		if not self.cutting_plan:
 			return
-		plan = frappe.get_doc('SD YRP Cutting Plan', self.cutting_plan)
+		plan = frappe.get_doc("SD YRP Cutting Plan", self.cutting_plan)
 		plan.check_permission("read")
 		if self.lot and plan.lot != self.lot:
-			frappe.throw(
-				_("Cutting Plan {0} does not belong to Lot {1}.").format(
-					plan.name, self.lot
-				)
-			)
+			frappe.throw(_("Cutting Plan {0} does not belong to Lot {1}.").format(plan.name, self.lot))
 
 	def _warehouse(self):
 		warehouse = _get_warehouse_for_supplier(self.supplier)
 		if not warehouse:
 			frappe.throw(
-				_("Exactly one enabled Warehouse must be linked to Supplier {0}.").format(
-					self.supplier
-				)
+				_("Exactly one enabled Warehouse must be linked to Supplier {0}.").format(self.supplier)
 			)
 		return warehouse
 
 	def _cloth_templates(self):
-		production_detail = attribute_db.get_value('SD YRP Lot', self.lot, "production_detail")
+		production_detail = attribute_db.get_value("SD YRP Lot", self.lot, "production_detail")
 		if not production_detail:
 			frappe.throw(_("Lot {0} has no Item Production Detail.").format(self.lot))
 		packing_attribute = attribute_db.get_value(
-			'YRP Item Production Detail', production_detail, "packing_attribute"
+			"YRP Item Production Detail", production_detail, "packing_attribute"
 		)
 		cloth_templates = {
 			row.name1: row.cloth
 			for row in frappe.get_all(
-				'SD YRP Item Production Detail Cloth Detail',
+				"SD YRP Item Production Detail Cloth Detail",
 				filters={"parent": production_detail},
 				fields=["name1", "cloth"],
 			)
@@ -90,9 +82,7 @@ class SDYRPRecutandPrintPanel(Document):
 			return
 		packing_attribute, cloth_templates = self._cloth_templates()
 		warehouse = self._warehouse()
-		default_received_type = frappe.db.get_single_value(
-			'YRP Stock Settings', "default_received_type"
-		)
+		default_received_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
 		for row in self.get("recut_and_print_panel_details") or []:
 			template = cloth_templates.get(row.cloth_type)
 			if not template:
@@ -125,7 +115,7 @@ class SDYRPRecutandPrintPanel(Document):
 			key = (_attribute_value(row.colour), row.cloth_type, _attribute_value(row.dia))
 			cloth[key] = flt(cloth.get(key)) + flt(row.weight)
 
-		plan = frappe.get_doc('SD YRP Cutting Plan', self.cutting_plan)
+		plan = frappe.get_doc("SD YRP Cutting Plan", self.cutting_plan)
 		matched = set()
 		for row in plan.get("cutting_plan_cloth_details") or []:
 			key = (_attribute_value(row.colour), row.cloth_type, _attribute_value(row.dia))
@@ -146,9 +136,7 @@ class SDYRPRecutandPrintPanel(Document):
 		if missing:
 			colour, cloth_type, dia = next(iter(missing))
 			frappe.throw(
-				_("No Cutting Plan cloth row exists for {0} / {1} / {2}.").format(
-					dia, colour, cloth_type
-				)
+				_("No Cutting Plan cloth row exists for {0} / {1} / {2}.").format(dia, colour, cloth_type)
 			)
 		plan.save(ignore_permissions=True)
 

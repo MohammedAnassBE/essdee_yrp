@@ -9,14 +9,13 @@ from pathlib import Path
 import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
-from essdee_yrp.migration.engine import MigrationError
 from essdee_yrp.migration.config import get_migration_settings
+from essdee_yrp.migration.engine import MigrationError
 from essdee_yrp.migration.live import (
 	F15SourceBridge,
 	_validate_live_target_metadata,
 	build_live_schema_analysis,
 )
-
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 CUSTOM_FIELD_FIXTURE = PACKAGE_ROOT / "fixtures" / "custom_field.json"
@@ -44,9 +43,7 @@ def sync_migration_metadata() -> dict:
 	settings = get_migration_settings()
 	if frappe.local.site != settings.target_site:
 		raise MigrationError(f"Metadata sync must run on {settings.target_site}")
-	plan, _payload = build_live_schema_analysis(
-		settings, F15SourceBridge(settings)
-	)
+	plan, _payload = build_live_schema_analysis(settings, F15SourceBridge(settings))
 	target_doctypes = set(plan.target_schemas)
 	reloaded = []
 	unresolved = []
@@ -76,9 +73,7 @@ def sync_migration_metadata() -> dict:
 		doctype = row.get("dt")
 		if doctype not in target_doctypes or row.get("module") != "Essdee YRP":
 			continue
-		definition = {
-			key: value for key, value in row.items() if key not in NON_DEFINITION_KEYS
-		}
+		definition = {key: value for key, value in row.items() if key not in NON_DEFINITION_KEYS}
 		custom_fields[str(doctype)].append(definition)
 	create_custom_fields(dict(custom_fields), update=True)
 
@@ -89,13 +84,7 @@ def sync_migration_metadata() -> dict:
 		name = row["name"]
 		if frappe.db.exists("Property Setter", name):
 			doc = frappe.get_doc("Property Setter", name)
-			doc.update(
-				{
-					key: value
-					for key, value in row.items()
-					if key not in NON_DEFINITION_KEYS
-				}
-			)
+			doc.update({key: value for key, value in row.items() if key not in NON_DEFINITION_KEYS})
 			doc.save(ignore_permissions=True)
 		else:
 			frappe.get_doc(row).insert(ignore_permissions=True)

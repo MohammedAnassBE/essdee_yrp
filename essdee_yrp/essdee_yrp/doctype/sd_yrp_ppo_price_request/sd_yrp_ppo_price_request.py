@@ -1,14 +1,13 @@
-from yrp import attribute_links as attribute_db
-from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2026, Essdee and contributors
 # For license information, please see license.txt
-
 import frappe
 from frappe.model.document import Document
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
+from yrp.utils import get_variant_attr_details
 
 from essdee_yrp.lot_pricing import sync_unprinted_box_sticker_prices
 from essdee_yrp.production_order_workflow import lock_production_orders
-from yrp.utils import get_variant_attr_details
 
 
 class SDYRPPPOPriceRequest(Document):
@@ -22,7 +21,7 @@ def _require_system_manager(action):
 
 def _pending_request(name, action):
 	_require_system_manager(action)
-	doc = frappe.get_doc('SD YRP PPO Price Request', name)
+	doc = frappe.get_doc("SD YRP PPO Price Request", name)
 	doc.check_permission("write")
 	if doc.status != "Pending":
 		frappe.throw(f"Cannot {action} a request with status '{doc.status}'")
@@ -40,7 +39,7 @@ def approve_ppo_price_request(name):
 	_apply_price_to_production_order(doc)
 	_apply_price_to_box_sticker_prints(doc)
 	attribute_db.set_value(
-		'YRP Production Order',
+		"YRP Production Order",
 		doc.production_order,
 		"price_approval_status",
 		"",
@@ -57,7 +56,7 @@ def reject_ppo_price_request(name):
 	doc.approved_at = frappe.utils.now_datetime()
 	doc.save()
 	attribute_db.set_value(
-		'YRP Production Order',
+		"YRP Production Order",
 		doc.production_order,
 		"price_approval_status",
 		"",
@@ -67,10 +66,8 @@ def reject_ppo_price_request(name):
 
 
 def _apply_price_to_production_order(price_request):
-	production_order = frappe.get_doc(
-		'YRP Production Order', price_request.production_order
-	)
-	primary = frappe.db.get_value('Item', production_order.item, "primary_attribute")
+	production_order = frappe.get_doc("YRP Production Order", price_request.production_order)
+	primary = frappe.db.get_value("Item", production_order.item, "primary_attribute")
 	rows = {
 		get_variant_attr_details(row.item_variant).get(primary): row
 		for row in production_order.production_order_details
@@ -92,7 +89,7 @@ def _apply_price_to_production_order(price_request):
 
 def _apply_price_to_box_sticker_prints(price_request):
 	for lot in attribute_db.get_all(
-		'SD YRP Lot',
+		"SD YRP Lot",
 		filters={"production_order": price_request.production_order},
 		pluck="name",
 	):

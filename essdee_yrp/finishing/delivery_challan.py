@@ -16,9 +16,7 @@ def on_cancel(delivery_challan, method=None):
 def _sync_finishing_plan(delivery_challan):
 	if not delivery_challan.get("includes_packing") or not delivery_challan.get("lot"):
 		return
-	finishing_plan = frappe.db.get_value(
-		'SD YRP Finishing Plan', {"lot": delivery_challan.lot}, "name"
-	)
+	finishing_plan = frappe.db.get_value("SD YRP Finishing Plan", {"lot": delivery_challan.lot}, "name")
 	if not finishing_plan:
 		return
 	from essdee_yrp.finishing.rebuild import rebuild_finishing_plan

@@ -8,7 +8,7 @@ from essdee_yrp.work_order_hooks import validate_lot_process_selection
 
 class TestWorkOrderCustomization(FrappeTestCase):
 	def test_no_receivables_is_an_essdee_custom_field(self):
-		field = frappe.get_meta('YRP Work Order', cached=False).get_field("no_receivables")
+		field = frappe.get_meta("YRP Work Order", cached=False).get_field("no_receivables")
 		self.assertIsNotNone(field)
 		self.assertEqual(field.fieldtype, "Check")
 		self.assertEqual(field.default, "0")
@@ -16,7 +16,7 @@ class TestWorkOrderCustomization(FrappeTestCase):
 			frappe.db.exists(
 				"Custom Field",
 				{
-					"dt": 'YRP Work Order',
+					"dt": "YRP Work Order",
 					"fieldname": "no_receivables",
 					"module": "Essdee YRP",
 				},
@@ -37,9 +37,7 @@ class TestWorkOrderCustomization(FrappeTestCase):
 			return_value=context,
 		):
 			with self.assertRaisesRegex(frappe.ValidationError, "not available"):
-				validate_lot_process_selection(
-					frappe._dict(lot="LOT-A", process_name="KNITTING", item=None)
-				)
+				validate_lot_process_selection(frappe._dict(lot="LOT-A", process_name="KNITTING", item=None))
 
 			doc = frappe._dict(lot="LOT-A", process_name="KNITTING", item="CLOTH-A")
 			validate_lot_process_selection(doc)

@@ -19,7 +19,7 @@
         </table>
         <button style="margin-top:10px;" @click="add_groups()" class="btn btn-success">Add Groups</button>
 
-    </div>    
+    </div>
 </template>
 
 <script setup>

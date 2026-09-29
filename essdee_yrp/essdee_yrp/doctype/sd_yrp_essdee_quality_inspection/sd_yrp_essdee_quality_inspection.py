@@ -2,16 +2,14 @@
 # For license information, please see license.txt
 
 from __future__ import annotations
-from yrp import attribute_links as attribute_db
-from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, flt
-
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 from yrp.utils import get_variant_attr_details, update_if_string_instance
-
 
 VALID_RESULTS = {"Pass", "Fail", "Hold"}
 VALID_CHECKING_LEVELS = {"Level 1", "Level 2"}
@@ -89,21 +87,19 @@ class SDYRPEssdeeQualityInspection(Document):
 			frappe.throw(_("Result must be Pass, Fail, or Hold."))
 
 		self.inspector = frappe.session.user
-		self.inspector_name = frappe.db.get_value(
-			"User", frappe.session.user, "full_name"
-		)
+		self.inspector_name = frappe.db.get_value("User", frappe.session.user, "full_name")
 
 
 def get_debit_details(quality_inspection: str) -> list[dict]:
 	"""Return visible active Debit requests created from one inspection."""
 
-	if not frappe.get_meta('YRP Debit').has_field("quality_inspection"):
+	if not frappe.get_meta("YRP Debit").has_field("quality_inspection"):
 		return []
-	if not frappe.has_permission('YRP Debit', "read"):
+	if not frappe.has_permission("YRP Debit", "read"):
 		return []
 
 	return frappe.get_list(
-		'YRP Debit',
+		"YRP Debit",
 		filters={
 			"quality_inspection": quality_inspection,
 			"docstatus": ["!=", 2],
@@ -146,8 +142,7 @@ def get_against_details(against: str, against_id: str) -> dict:
 		"lot": work_order.lot,
 		"item": work_order.item,
 		"order_qty": sum(
-			flt(row.delivered_quantity)
-			for row in work_order.get("work_order_calculated_items") or []
+			flt(row.delivered_quantity) for row in work_order.get("work_order_calculated_items") or []
 		),
 	}
 
@@ -156,12 +151,8 @@ def get_against_details(against: str, against_id: str) -> dict:
 def get_default_aql_level() -> dict:
 	_require_quality_access()
 	return {
-		"major": frappe.db.get_single_value(
-			'SD YRP MRP Settings', "default_major_aql_level"
-		),
-		"minor": frappe.db.get_single_value(
-			'SD YRP MRP Settings', "default_minor_aql_level"
-		),
+		"major": frappe.db.get_single_value("SD YRP MRP Settings", "default_major_aql_level"),
+		"minor": frappe.db.get_single_value("SD YRP MRP Settings", "default_minor_aql_level"),
 	}
 
 
@@ -174,12 +165,12 @@ def create_inspection_debit(
 ) -> dict:
 	"""Create the mapped base-YRP Debit through an inspection-authorized action."""
 
-	inspection = frappe.get_doc('SD YRP Essdee Quality Inspection', quality_inspection)
+	inspection = frappe.get_doc("SD YRP Essdee Quality Inspection", quality_inspection)
 	inspection.check_permission("read")
 	if inspection.docstatus != 1:
 		frappe.throw(_("Submit the Quality Inspection before creating a Debit."))
 
-	request_role = attribute_db.get_single_value('YRP Settings', "debit_request_role")
+	request_role = attribute_db.get_single_value("YRP Settings", "debit_request_role")
 	if not request_role or request_role not in frappe.get_roles(frappe.session.user):
 		frappe.throw(_("You do not have permission to request a Debit."))
 
@@ -192,7 +183,7 @@ def create_inspection_debit(
 
 	debit = frappe.get_doc(
 		{
-			"doctype": 'YRP Debit',
+			"doctype": "YRP Debit",
 			"work_order": inspection.against_id,
 			"debit_type": "Permanent",
 			"debit_value": debit_value,
@@ -211,16 +202,16 @@ def create_inspection_debit(
 
 def _require_quality_access() -> None:
 	if not (
-		frappe.has_permission('SD YRP Essdee Quality Inspection', "read")
-		or frappe.has_permission('SD YRP Essdee Quality Inspection', "create")
+		frappe.has_permission("SD YRP Essdee Quality Inspection", "read")
+		or frappe.has_permission("SD YRP Essdee Quality Inspection", "create")
 	):
 		frappe.throw(_("You do not have access to Quality Inspection."), frappe.PermissionError)
 
 
 def _get_work_order(against: str, against_id: str):
-	if against != 'YRP Work Order' or not against_id:
+	if against != "YRP Work Order" or not against_id:
 		frappe.throw(_("Quality Inspection must be against a Work Order."))
-	work_order = frappe.get_doc('YRP Work Order', against_id)
+	work_order = frappe.get_doc("YRP Work Order", against_id)
 	work_order.check_permission("read")
 	return work_order
 
@@ -248,7 +239,7 @@ def _get_aql_limits(
 
 
 def _matching_aql_row(aql_level: str, offer_qty: int):
-	doc = frappe.get_cached_doc('SD YRP AQL Level', aql_level)
+	doc = frappe.get_cached_doc("SD YRP AQL Level", aql_level)
 	for row in doc.get("aql_level_limit_details") or []:
 		if cint(row.min_qty) <= offer_qty <= cint(row.max_qty):
 			return row
@@ -311,7 +302,7 @@ def _inspection_attributes(work_order) -> dict:
 		frappe.throw(_("Work Order {0} has no Item Production Detail.").format(work_order.name))
 
 	values = attribute_db.get_value(
-		'YRP Item Production Detail',
+		"YRP Item Production Detail",
 		work_order.production_detail,
 		[
 			"primary_item_attribute",

@@ -27,13 +27,13 @@ from essdee_yrp.purchase_invoice import (
 	project_purchase_order_items,
 )
 
-PROJECTED_AGAINST = {'Purchase Order', 'YRP Work Order'}
+PROJECTED_AGAINST = {"Purchase Order", "YRP Work Order"}
 
 
 class EssdeePurchaseInvoice(PurchaseInvoice):
 	def onload(self):
 		super().onload()
-		if self.against == 'YRP Work Order' and self.get("pi_work_order_billed_details"):
+		if self.against == "YRP Work Order" and self.get("pi_work_order_billed_details"):
 			self.set_onload(
 				"item_details",
 				build_verification_details(self.get("pi_work_order_billed_details")),
@@ -51,19 +51,19 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 		self.validate_bill_tracking()
 		if self.get("essdee_rate_table_source") == MIGRATED_RATE_SOURCE and (
 			self.is_new()
-			or frappe.db.get_value(
-				'YRP Purchase Invoice', self.name, "essdee_rate_table_source"
-			) != MIGRATED_RATE_SOURCE
+			or frappe.db.get_value("YRP Purchase Invoice", self.name, "essdee_rate_table_source")
+			!= MIGRATED_RATE_SOURCE
 		):
 			frappe.throw(_("Legacy Purchase Invoice rate data is migration-owned."))
-		if self.against == 'YRP Work Order' and self.get("essdee_rate_table_source") in {
+		if self.against == "YRP Work Order" and self.get("essdee_rate_table_source") in {
 			MODERN_RATE_SOURCE,
 			MIGRATED_RATE_SOURCE,
 		}:
 			self._rebuild_essdee_work_order_items()
-		elif self.against == 'Purchase Order' and self.get(
-			"essdee_rate_table_source"
-		) in {MODERN_RATE_SOURCE, MIGRATED_RATE_SOURCE}:
+		elif self.against == "Purchase Order" and self.get("essdee_rate_table_source") in {
+			MODERN_RATE_SOURCE,
+			MIGRATED_RATE_SOURCE,
+		}:
 			self._rebuild_essdee_purchase_order_items()
 		super().before_validate()
 
@@ -183,11 +183,11 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 			MODERN_RATE_SOURCE,
 		}:
 			frappe.throw(_("Fetch GRN again before changing this migrated invoice."))
-		if (
-			self.get("essdee_rate_table_source") == MIGRATED_RATE_SOURCE
-			and _legacy_projection_input_signature(before)
-			!= _legacy_projection_input_signature(self)
-		):
+		if self.get(
+			"essdee_rate_table_source"
+		) == MIGRATED_RATE_SOURCE and _legacy_projection_input_signature(
+			before
+		) != _legacy_projection_input_signature(self):
 			frappe.throw(
 				_(
 					"Only Final Rate can be changed in migrated Grouped Items. "
@@ -204,9 +204,9 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 		commercial_total = sum(flt(row.amount) for row in self.get("essdee_items") or [])
 		if abs(commercial_total - flt(self.total)) > VALUE_TOLERANCE:
 			frappe.throw(
-				_(
-					"Grouped Items total {0} does not match the valuation item total {1}."
-				).format(flt(commercial_total, 2), flt(self.total, 2))
+				_("Grouped Items total {0} does not match the valuation item total {1}.").format(
+					flt(commercial_total, 2), flt(self.total, 2)
+				)
 			)
 
 	def _reset_changed_commercial_approval(self):
@@ -223,10 +223,7 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 
 def _commercial_signature(doc):
 	grns = sorted(row.grn for row in doc.get("grn") or [] if row.grn)
-	rates = sorted(
-		(row.group_key or "", round(flt(row.rate), 6))
-		for row in doc.get("essdee_items") or []
-	)
+	rates = sorted((row.group_key or "", round(flt(row.rate), 6)) for row in doc.get("essdee_items") or [])
 	return json.dumps([grns, rates], separators=(",", ":"))
 
 
@@ -270,5 +267,5 @@ def _normalized_json(value):
 	try:
 		parsed = frappe.parse_json(value) if isinstance(value, str) else value
 		return json.dumps(parsed, sort_keys=True, separators=(",", ":"))
-	except (TypeError, ValueError):
+	except TypeError, ValueError:
 		return str(value)

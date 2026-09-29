@@ -11,7 +11,7 @@ class TestWorkOrderBulkClose(IntegrationTestCase):
 	def setUp(self):
 		super().setUp()
 		work_orders = frappe.get_all(
-			'YRP Work Order',
+			"YRP Work Order",
 			filters={"docstatus": 1, "open_status": "Open"},
 			fields=["name", "supplier"],
 			limit=1,
@@ -27,10 +27,6 @@ class TestWorkOrderBulkClose(IntegrationTestCase):
 
 	def test_close_preview_uses_f16_summary_and_debit_shape(self):
 		result = get_work_order_close_details(self.work_order.name)
-		self.assertEqual(
-			set(result), {"summary", "recut_details", "debits"}
-		)
-		self.assertEqual(
-			result["summary"]["work_order_docstatus"], 1
-		)
+		self.assertEqual(set(result), {"summary", "recut_details", "debits"})
+		self.assertEqual(result["summary"]["work_order_docstatus"], 1)
 		self.assertTrue(all("name" in row for row in result["debits"]))

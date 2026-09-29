@@ -306,7 +306,6 @@ const copyToClipboard = async (header) => {
     const sectionEl = sectionRefs.value[header]
     copyingHeader.value = header
     if (!sectionEl) {
-        console.log(`No element found for header: ${header}`)
         return
     }
 

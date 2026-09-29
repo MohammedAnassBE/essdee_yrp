@@ -1,20 +1,20 @@
 # Copyright (c) 2026, Essdee and contributors
 
 from __future__ import annotations
-from yrp.attribute_links import value as _attribute_value
 
 import frappe
-from yrp.attribute_values import get_mapping_document
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint
-
-from essdee_yrp.essdee_yrp.doctype.sd_yrp_fg_item_size_range.sd_yrp_fg_item_size_range import (
-	get_sizes,
-)
+from yrp.attribute_links import value as _attribute_value
+from yrp.attribute_values import get_mapping_document
 from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant, rename_item
 from yrp.yrp.doctype.yrp_item_dependent_attribute_mapping.yrp_item_dependent_attribute_mapping import (
 	get_dependent_attribute_details,
+)
+
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_fg_item_size_range.sd_yrp_fg_item_size_range import (
+	get_sizes,
 )
 
 
@@ -24,14 +24,20 @@ class SDYRPFGItemMaster(Document):
 			return
 		self.validate_sizes()
 		self.available_sizes = ",".join(
-			_attribute_value(row.attribute_value) for row in self.sizes if _attribute_value(row.attribute_value)
+			_attribute_value(row.attribute_value)
+			for row in self.sizes
+			if _attribute_value(row.attribute_value)
 		)
 
 	def validate_sizes(self):
 		if not self.size_range:
 			frappe.throw(_("Please set Size Range."))
 		expected = get_sizes(self.size_range)
-		current = [_attribute_value(row.attribute_value) for row in self.sizes if _attribute_value(row.attribute_value)]
+		current = [
+			_attribute_value(row.attribute_value)
+			for row in self.sizes
+			if _attribute_value(row.attribute_value)
+		]
 		if current != expected:
 			self.set("sizes", [{"attribute_value": size} for size in expected])
 
@@ -56,7 +62,7 @@ class SDYRPFGItemMaster(Document):
 
 @frappe.whitelist()
 def sync_fg_item(name, rename=False):
-	doc = frappe.get_doc('SD YRP FG Item Master', name)
+	doc = frappe.get_doc("SD YRP FG Item Master", name)
 	doc.check_permission("write")
 	return doc.sync_item(rename=cint(rename))
 
@@ -68,7 +74,7 @@ def sync_fg_items(names, rename=False):
 	if not names:
 		frappe.throw(_("Select at least one FG Item Master."))
 	for name in names:
-		frappe.get_doc('SD YRP FG Item Master', name).check_permission("write")
+		frappe.get_doc("SD YRP FG Item Master", name).check_permission("write")
 	job = frappe.enqueue(
 		"essdee_yrp.essdee_yrp.doctype.sd_yrp_fg_item_master.sd_yrp_fg_item_master.sync_fg_items_background",
 		queue="long",
@@ -83,7 +89,7 @@ def sync_fg_items_background(names, rename=False):
 	failures = {}
 	for name in names or []:
 		try:
-			frappe.get_doc('SD YRP FG Item Master', name).sync_item(rename=cint(rename))
+			frappe.get_doc("SD YRP FG Item Master", name).sync_item(rename=cint(rename))
 		except Exception:
 			failures[name] = frappe.get_traceback(with_context=True)
 	if failures:
@@ -100,7 +106,7 @@ def create_or_update_item(fg_item):
 		frappe.throw(_("Set an FG Item Master Template."))
 
 	if fg_item.item:
-		item = frappe.get_doc('Item', fg_item.item)
+		item = frappe.get_doc("Item", fg_item.item)
 		item.check_permission("write")
 	else:
 		item = create_item(fg_item)
@@ -125,9 +131,9 @@ def create_or_update_item(fg_item):
 
 
 def create_item(fg_item):
-	template = frappe.get_doc('SD YRP FG Item Master Template', fg_item.template)
+	template = frappe.get_doc("SD YRP FG Item Master Template", fg_item.template)
 	template.check_permission("read")
-	item = frappe.new_doc('Item')
+	item = frappe.new_doc("Item")
 	item.item_code = fg_item.name1
 	item.item_name = fg_item.name1
 	item.brand = fg_item.brand
@@ -155,15 +161,15 @@ def create_item(fg_item):
 
 
 def _ensure_size_mapping(item, sizes):
-	attribute_row = next(
-		(row for row in item.attributes if row.attribute == "Size"), None
-	)
+	attribute_row = next((row for row in item.attributes if row.attribute == "Size"), None)
 	if not attribute_row or not attribute_row.mapping:
 		frappe.throw(_("Item {0} has no Size attribute mapping.").format(item.name))
 	mapping = get_mapping_document(attribute_row.mapping)
 	existing = {_attribute_value(row.attribute_value) for row in mapping.values}
 	changed = False
-	for size in (_attribute_value(row.attribute_value) for row in sizes if _attribute_value(row.attribute_value)):
+	for size in (
+		_attribute_value(row.attribute_value) for row in sizes if _attribute_value(row.attribute_value)
+	):
 		if size not in existing:
 			mapping.append("values", {"attribute_value": size})
 			existing.add(size)
@@ -198,9 +204,7 @@ def _create_size_variants(item, sizes):
 			None,
 		)
 		if not dependent_value:
-			frappe.throw(
-				_("Item {0} has no dependent stage mapped only to Size.").format(item.name)
-			)
+			frappe.throw(_("Item {0} has no dependent stage mapped only to Size.").format(item.name))
 	for row in sizes:
 		if not _attribute_value(row.attribute_value):
 			continue

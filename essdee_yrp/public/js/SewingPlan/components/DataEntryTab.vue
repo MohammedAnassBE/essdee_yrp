@@ -356,9 +356,7 @@ const openModal = async (lot, plan) => {
     active_plan.value = plan
 
     modal_data.value = items.value[lot][plan]
-    console.log(modal_data.value)
     Object.keys(modal_data.value.colours).forEach(colour => {
-        console.log(colour)
         Object.keys(modal_data.value.colours[colour].values).forEach(size => {
             modal_data.value.colours[colour].values[size].data_entry = 0
         })

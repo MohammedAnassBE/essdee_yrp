@@ -42,7 +42,7 @@ class TestReviewRegressionContracts(IntegrationTestCase):
 	def test_lot_ipd_picker_stays_empty_until_item_is_selected(self):
 		source = _read("essdee_yrp", "frontend/src/config/fields/lot.js")
 		self.assertIn(": async () => []", source)
-		self.assertIn('{ item: form.item }', source)
+		self.assertIn("{ item: form.item }", source)
 
 	def test_item_link_pickers_enforce_legal_subsets(self):
 		source = _read("essdee_yrp", "frontend/src/config/fields/item.js")
@@ -51,7 +51,7 @@ class TestReviewRegressionContracts(IntegrationTestCase):
 
 	def test_guarded_item_bulk_fields_use_controller_save(self):
 		source = _read("essdee_yrp", "essdee_yrp/api/bulk_edit.py")
-		self.assertIn("'Item': {\"allow_negative_stock\", \"stock_uom\"}", source)
+		self.assertIn('\'Item\': {"allow_negative_stock", "stock_uom"}', source)
 		self.assertIn("CONTROLLER_VALIDATED_PARENT_FIELDS.get(doctype, set())", source)
 		self.assertIn("doc.save()", source)
 

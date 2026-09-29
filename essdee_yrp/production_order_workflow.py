@@ -1,12 +1,11 @@
-from yrp import attribute_links as attribute_db
-from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2025, Essdee and contributors
 # For license information, please see license.txt
-
 import json
 
 import frappe
 from frappe.utils import cint, date_diff, flt, get_datetime, getdate, now_datetime
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 from yrp.utils import get_variant_attr_details, update_if_string_instance
 from yrp.yrp.doctype.yrp_item.yrp_item import (
 	build_variant_attributes,
@@ -43,19 +42,13 @@ SYSTEM_GENERATED_ALTERNATIVE_PPO_FLAG = "allow_system_generated_alternative_ppo"
 
 def format_request_timestamp(value=None):
 	"""Return a Frappe Datetime value without unsupported microseconds."""
-	return get_datetime(value or now_datetime()).replace(microsecond=0).strftime(
-		"%Y-%m-%d %H:%M:%S"
-	)
+	return get_datetime(value or now_datetime()).replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def before_cancel(doc, method=None):
 	linked_lots = get_linked_lots(doc.name)
 	if linked_lots:
-		frappe.throw(
-			frappe._("Production Order is linked to Lot(s): {0}").format(
-				", ".join(linked_lots)
-			)
-		)
+		frappe.throw(frappe._("Production Order is linked to Lot(s): {0}").format(", ".join(linked_lots)))
 
 
 def before_validate(doc, method=None):
@@ -212,7 +205,7 @@ def onload(doc, method=None):
 		)
 
 	price_requests = frappe.get_all(
-		'SD YRP PPO Price Request',
+		"SD YRP PPO Price Request",
 		filters={"production_order": doc.name},
 		fields=[
 			"name",
@@ -227,13 +220,13 @@ def onload(doc, method=None):
 	)
 	doc.set_onload("price_requests", price_requests)
 	pending_name = frappe.db.get_value(
-		'SD YRP PPO Price Request', {"production_order": doc.name, "status": "Pending"}
+		"SD YRP PPO Price Request", {"production_order": doc.name, "status": "Pending"}
 	)
 	if pending_name:
 		if doc.price_approval_status != "Pending Approval":
 			doc.db_set("price_approval_status", "Pending Approval", update_modified=False)
 			doc.price_approval_status = "Pending Approval"
-		pending_doc = frappe.get_doc('SD YRP PPO Price Request', pending_name)
+		pending_doc = frappe.get_doc("SD YRP PPO Price Request", pending_name)
 		doc.set_onload(
 			"pending_price_request",
 			{
@@ -262,9 +255,7 @@ def _validate_ppo_approval_state(doc):
 def _validate_ppo_submission(doc):
 	if doc.flags.get(SYSTEM_GENERATED_ALTERNATIVE_PPO_FLAG):
 		if doc.status != PPO_REQUEST_STATUS:
-			frappe.throw(
-				"System-generated alternative Production Order must be ready for approval"
-			)
+			frappe.throw("System-generated alternative Production Order must be ready for approval")
 		return
 	approver_roles = get_ppo_approver_roles()
 	if not approver_roles:
@@ -316,9 +307,7 @@ def _validate_closed_status_transition(doc):
 		and previous.status != CLOSED_PO_STATUS
 		and not doc.flags.get(AUTO_AUDIT_CLOSE_FLAG)
 	):
-		frappe.throw(
-			"Production Order can be closed only after every linked Lot completes audit"
-		)
+		frappe.throw("Production Order can be closed only after every linked Lot completes audit")
 
 
 def _validate_quantity_workflow_lock(doc):
@@ -327,9 +316,7 @@ def _validate_quantity_workflow_lock(doc):
 	previous = doc.get_doc_before_save()
 	if not previous:
 		return
-	quantity_ratio_changed = get_quantity_ratio_snapshot(doc) != get_quantity_ratio_snapshot(
-		previous
-	)
+	quantity_ratio_changed = get_quantity_ratio_snapshot(doc) != get_quantity_ratio_snapshot(previous)
 	if previous.get(TRANSFER_MARKER_FIELD):
 		if doc.status != previous.status:
 			frappe.throw("Status cannot be changed after quantity has been transferred")
@@ -340,10 +327,9 @@ def _validate_quantity_workflow_lock(doc):
 		or previous.get(QUANTITY_REQUEST_FIELD)
 		or previous.get(STATUS_REQUEST_FIELD)
 	):
-		request_changed = (
-			doc.get(QUANTITY_REQUEST_FIELD) != previous.get(QUANTITY_REQUEST_FIELD)
-			or doc.get(STATUS_REQUEST_FIELD) != previous.get(STATUS_REQUEST_FIELD)
-		)
+		request_changed = doc.get(QUANTITY_REQUEST_FIELD) != previous.get(QUANTITY_REQUEST_FIELD) or doc.get(
+			STATUS_REQUEST_FIELD
+		) != previous.get(STATUS_REQUEST_FIELD)
 		status_changed = doc.status != previous.status
 		approval_allowed = any(
 			doc.flags.get(flag)
@@ -353,9 +339,7 @@ def _validate_quantity_workflow_lock(doc):
 				"allow_quantity_transfer_approval",
 			)
 		)
-		if not approval_allowed and (
-			quantity_ratio_changed or request_changed or status_changed
-		):
+		if not approval_allowed and (quantity_ratio_changed or request_changed or status_changed):
 			frappe.throw("Use the appropriate Approve button to complete the pending request")
 	if (
 		previous.status in TRANSFERABLE_PO_STATUSES
@@ -366,9 +350,8 @@ def _validate_quantity_workflow_lock(doc):
 			"Quantity or Ratio cannot be changed when Production Order is Item Changed or Not Processed"
 		)
 	if previous.get(INCOMING_TRANSFER_REQUEST_FIELD):
-		transfer_request_changed = (
-			doc.get(INCOMING_TRANSFER_REQUEST_FIELD)
-			!= previous.get(INCOMING_TRANSFER_REQUEST_FIELD)
+		transfer_request_changed = doc.get(INCOMING_TRANSFER_REQUEST_FIELD) != previous.get(
+			INCOMING_TRANSFER_REQUEST_FIELD
 		)
 		if not doc.flags.get("allow_quantity_transfer_approval") and (
 			quantity_ratio_changed or transfer_request_changed
@@ -377,36 +360,45 @@ def _validate_quantity_workflow_lock(doc):
 
 
 def get_sales_item_price_map(item):
-
-	item_doc = frappe.get_cached_doc('Item', item)
+	item_doc = frappe.get_cached_doc("Item", item)
 	sizes = get_attribute_details(item).get("primary_attribute_values", [])
-	pack_out_stage = attribute_db.get_single_value('SD YRP IPD Settings', "default_pack_out_stage")
+	pack_out_stage = attribute_db.get_single_value("SD YRP IPD Settings", "default_pack_out_stage")
 
 	price_map = {}
 
 	for size in sizes:
-		variant = get_variant(
-			item, build_variant_attributes({item_doc.primary_attribute: size}, pack_out_stage, item_doc)
-		) if item_doc.primary_attribute and item_doc.dependent_attribute else None
-		candidates = list(set(filter(None, [
-			variant,
-			f"{item}-{size}",
-			f"{item.replace(' ', '-')}-{size}",
-			f"{item.replace('-', ' ')}-{size}"
-		])))
+		variant = (
+			get_variant(
+				item, build_variant_attributes({item_doc.primary_attribute: size}, pack_out_stage, item_doc)
+			)
+			if item_doc.primary_attribute and item_doc.dependent_attribute
+			else None
+		)
+		candidates = list(
+			set(
+				filter(
+					None,
+					[
+						variant,
+						f"{item}-{size}",
+						f"{item.replace(' ', '-')}-{size}",
+						f"{item.replace('-', ' ')}-{size}",
+					],
+				)
+			)
+		)
 
 		rows = frappe.get_all(
-			'SD YRP Sales Item Price',
+			"SD YRP Sales Item Price",
 			filters={"item_variant": ["in", candidates]},
-			fields=["item_variant", "rate", "retail_rate", "mrp_rate"]
+			fields=["item_variant", "rate", "retail_rate", "mrp_rate"],
 		)
-		price_row = next(
-			(r for r in rows if r.item_variant in candidates), None)
+		price_row = next((r for r in rows if r.item_variant in candidates), None)
 
 		price_map[size] = {
 			"wholesale": flt(price_row.rate) if price_row else 0,
 			"retail": flt(price_row.retail_rate) if price_row else 0,
-			"sales_mrp": flt(price_row.mrp_rate) if price_row and price_row.mrp_rate is not None else None
+			"sales_mrp": flt(price_row.mrp_rate) if price_row and price_row.mrp_rate is not None else None,
 		}
 
 	return price_map
@@ -417,21 +409,19 @@ def get_box_sticker_mrp_map(production_order, item=None):
 	if not production_order:
 		return box_sticker_mrp
 
-	lots = attribute_db.get_all('SD YRP Lot', filters={"production_order": production_order}, pluck="name")
+	lots = attribute_db.get_all("SD YRP Lot", filters={"production_order": production_order}, pluck="name")
 	if not lots:
 		return box_sticker_mrp
 
 	box_sticker_prints = frappe.get_all(
-		'SD YRP Box Sticker Print',
+		"SD YRP Box Sticker Print",
 		filters={"lot": ["in", lots], "docstatus": 1},
 		fields=["name"],
-		order_by="modified desc, creation desc"
+		order_by="modified desc, creation desc",
 	)
 	for bsp in box_sticker_prints:
 		rows = attribute_db.get_all(
-			'SD YRP Box Sticker Print Detail',
-			filters={"parent": bsp.name},
-			fields=["size", "mrp"]
+			"SD YRP Box Sticker Print Detail", filters={"parent": bsp.name}, fields=["size", "mrp"]
 		)
 
 		for row in rows:
@@ -445,7 +435,7 @@ def get_box_sticker_mrp_map(production_order, item=None):
 
 @frappe.whitelist()
 def get_order_editor_context(item, production_order=None):
-	item_doc = frappe.get_cached_doc('Item', item)
+	item_doc = frappe.get_cached_doc("Item", item)
 	item_doc.check_permission("read")
 	attribute_details = get_attribute_details(item)
 	primary_values = attribute_details.get("primary_attribute_values", [])
@@ -460,13 +450,18 @@ def get_order_editor_context(item, production_order=None):
 
 	for size in primary_values:
 		price_row = sales_item_price.get(size, {})
-		context["items"][size] = {"qty": 0, "ratio": 0, "mrp": 0,
-								  "wholesale": price_row.get("wholesale", 0), "retail": price_row.get("retail", 0)}
+		context["items"][size] = {
+			"qty": 0,
+			"ratio": 0,
+			"mrp": 0,
+			"wholesale": price_row.get("wholesale", 0),
+			"retail": price_row.get("retail", 0),
+		}
 
-	if not production_order or not frappe.db.exists('YRP Production Order', production_order):
+	if not production_order or not frappe.db.exists("YRP Production Order", production_order):
 		return context
 
-	doc = frappe.get_doc('YRP Production Order', production_order)
+	doc = frappe.get_doc("YRP Production Order", production_order)
 	doc.check_permission("read")
 
 	order_qty = get_order_qty(doc.production_order_details)
@@ -476,8 +471,7 @@ def get_order_editor_context(item, production_order=None):
 			continue
 		context["items"][size]["qty"] = order_qty[size].get("qty", 0)
 		context["items"][size]["ratio"] = order_qty[size].get("ratio", 0)
-		context["items"][size]["mrp"] = order_qty[size].get(
-			"mrp", context["items"][size]["mrp"])
+		context["items"][size]["mrp"] = order_qty[size].get("mrp", context["items"][size]["mrp"])
 
 	context["ordered"] = get_ordered_details(doc.production_ordered_details)
 
@@ -487,11 +481,10 @@ def get_order_editor_context(item, production_order=None):
 @frappe.whitelist()
 def get_price_update_context(production_order):
 	require_ppo_action_role()
-	doc = frappe.get_doc('YRP Production Order', production_order)
+	doc = frappe.get_doc("YRP Production Order", production_order)
 	doc.check_permission("read")
 
-	primary_values = get_attribute_details(doc.item).get(
-		"primary_attribute_values", [])
+	primary_values = get_attribute_details(doc.item).get("primary_attribute_values", [])
 
 	order_qty = get_order_qty(doc.production_order_details)
 	production_order_prices = get_production_order_price_map(doc)
@@ -500,17 +493,25 @@ def get_price_update_context(production_order):
 	box_sticker_mrp = get_box_sticker_mrp_map(production_order, doc.item)
 	items = {}
 	for size in primary_values:
-
 		sales_mrp = sales_item_price.get(size, {}).get("sales_mrp")
 		box_mrp = box_sticker_mrp.get(size)
 
 		production_order_mrp = flt(production_order_prices.get(size, 0))
 		selected_source = "production_order_mrp"
-		items[size] = {"qty": flt(order_qty.get(size, {}).get("qty", 0)), "ratio": flt(order_qty.get(size, {}).get("ratio", 0)), "production_order_mrp": production_order_mrp, "sales_mrp": sales_mrp, "box_sticker_mrp": box_mrp,
-					   "has_sales_mrp": sales_mrp is not None, "has_box_sticker_mrp": box_mrp is not None,
-					   "selected_source": selected_source}
+		items[size] = {
+			"qty": flt(order_qty.get(size, {}).get("qty", 0)),
+			"ratio": flt(order_qty.get(size, {}).get("ratio", 0)),
+			"production_order_mrp": production_order_mrp,
+			"sales_mrp": sales_mrp,
+			"box_sticker_mrp": box_mrp,
+			"has_sales_mrp": sales_mrp is not None,
+			"has_box_sticker_mrp": box_mrp is not None,
+			"selected_source": selected_source,
+		}
 	lots = []
-	for lot in attribute_db.get_all('SD YRP Lot', filters={"production_order": production_order}, pluck="name", order_by="creation asc"):
+	for lot in attribute_db.get_all(
+		"SD YRP Lot", filters={"production_order": production_order}, pluck="name", order_by="creation asc"
+	):
 		pricing = get_lot_pricing(lot, production_order)
 		lots.append(pricing)
 	return {"primary_values": primary_values, "items": items, "lots": lots}
@@ -518,12 +519,12 @@ def get_price_update_context(production_order):
 
 @frappe.whitelist()
 def get_primary_values(item):
-	item_doc = frappe.get_cached_doc('Item', item)
+	item_doc = frappe.get_cached_doc("Item", item)
 	item_doc.check_permission("read")
 	if not item_doc.primary_attribute or not item_doc.dependent_attribute:
 		frappe.throw(f"Can't Create Production Order for Item {item}")
 	attr_details = get_attribute_details(item)
-	return attr_details['primary_attribute_values']
+	return attr_details["primary_attribute_values"]
 
 
 @frappe.whitelist()
@@ -531,23 +532,22 @@ def get_order_qty(items):
 	items = [item.as_dict() for item in items]
 	order_qty = {}
 	for row in items:
-		current_variant = frappe.get_cached_doc(
-			'Item', row['item_variant'])
+		current_variant = frappe.get_cached_doc("Item", row["item_variant"])
 		current_item_attribute_details = get_attribute_details(
-			(current_variant.variant_of or current_variant.name))
-		primary_attribute = current_item_attribute_details['primary_attribute']
+			current_variant.variant_of or current_variant.name
+		)
+		primary_attribute = current_item_attribute_details["primary_attribute"]
 		for attr in current_variant.attributes:
 			if attr.attribute == primary_attribute:
 				size = _attribute_value(attr.attribute_value)
 				if not size:
 					break
-				order_qty.setdefault(size, {
-									 "qty": 0, "ratio": 0, "mrp": 0, "wholesale": 0, "retail": 0})
-				order_qty[size]['qty'] += row['quantity']
-				order_qty[size]['ratio'] += row['ratio']
-				order_qty[size]['mrp'] += row['mrp']
-				order_qty[size]['wholesale'] += row['wholesale_price']
-				order_qty[size]['retail'] += row['retail_price']
+				order_qty.setdefault(size, {"qty": 0, "ratio": 0, "mrp": 0, "wholesale": 0, "retail": 0})
+				order_qty[size]["qty"] += row["quantity"]
+				order_qty[size]["ratio"] += row["ratio"]
+				order_qty[size]["mrp"] += row["mrp"]
+				order_qty[size]["wholesale"] += row["wholesale_price"]
+				order_qty[size]["retail"] += row["retail_price"]
 				break
 	return order_qty
 
@@ -556,28 +556,26 @@ def get_ordered_details(items):
 	items = [item.as_dict() for item in items]
 	lot_wise_detail = {}
 	for row in items:
-		lot_wise_detail.setdefault(row['lot'], {})
-		current_variant = frappe.get_cached_doc(
-			'Item', row['item_variant'])
+		lot_wise_detail.setdefault(row["lot"], {})
+		current_variant = frappe.get_cached_doc("Item", row["item_variant"])
 		current_item_attribute_details = get_attribute_details(
-			(current_variant.variant_of or current_variant.name))
-		primary_attribute = current_item_attribute_details['primary_attribute']
+			current_variant.variant_of or current_variant.name
+		)
+		primary_attribute = current_item_attribute_details["primary_attribute"]
 		for attr in current_variant.attributes:
 			if attr.attribute == primary_attribute:
 				size = _attribute_value(attr.attribute_value)
 				if not size:
 					break
-				lot_wise_detail[row['lot']].setdefault(
-					size, {"qty": 0})
-				lot_wise_detail[row['lot']
-								][size]['qty'] += row['quantity']
+				lot_wise_detail[row["lot"]].setdefault(size, {"qty": 0})
+				lot_wise_detail[row["lot"]][size]["qty"] += row["quantity"]
 				break
 	return lot_wise_detail
 
 
 @frappe.whitelist()
 def get_production_order_details(production_order):
-	doc = frappe.get_doc('YRP Production Order', production_order)
+	doc = frappe.get_doc("YRP Production Order", production_order)
 	doc.check_permission("read")
 	order_qty = get_order_qty(doc.production_order_details)
 	return order_qty
@@ -587,14 +585,14 @@ def has_submitted_box_sticker_for_item(item):
 	item_names = item
 	if not item_names:
 		return False
-	return bool(frappe.db.exists('SD YRP Box Sticker Print', {"fg_item": ["in", item_names], "docstatus": 1}))
+	return bool(frappe.db.exists("SD YRP Box Sticker Print", {"fg_item": ["in", item_names], "docstatus": 1}))
 
 
 @frappe.whitelist()
 def update_price(production_order, item_details):
 	require_ppo_action_role()
 	lock_production_orders(production_order)
-	doc = frappe.get_doc('YRP Production Order', production_order)
+	doc = frappe.get_doc("YRP Production Order", production_order)
 	doc.check_permission("write")
 	if doc.docstatus != 1:
 		frappe.throw("Price can be changed only after Production Order is submitted")
@@ -605,10 +603,10 @@ def update_price(production_order, item_details):
 	else:
 		item_details = payload
 		lot_price_payload = None
-	primary = frappe.get_value('Item', doc.item, "primary_attribute")
+	primary = frappe.get_value("Item", doc.item, "primary_attribute")
 	sales_item_price = get_sales_item_price_map(doc.item)
 	box_sticker_mrp = get_box_sticker_mrp_map(production_order, doc.item)
-	lots = attribute_db.get_all('SD YRP Lot', filters={"production_order": production_order}, pluck="name")
+	lots = attribute_db.get_all("SD YRP Lot", filters={"production_order": production_order}, pluck="name")
 	old_prices = {}
 	new_prices = {}
 	default_changes = False
@@ -617,20 +615,19 @@ def update_price(production_order, item_details):
 		for row in doc.production_order_details:
 			attrs = get_variant_attr_details(row.item_variant)
 			if attrs.get(primary) == size:
-				old_prices[size] = {"mrp": flt(row.mrp),
-									"wholesale": flt(row.wholesale_price),
-									"retail": flt(row.retail_price)}
-				selected_source = item_details[size].get(
-					"selected_source")
+				old_prices[size] = {
+					"mrp": flt(row.mrp),
+					"wholesale": flt(row.wholesale_price),
+					"retail": flt(row.retail_price),
+				}
+				selected_source = item_details[size].get("selected_source")
 				if selected_source == "sales_mrp":
 					if sales_item_price.get(size, {}).get("sales_mrp") is None:
-						frappe.throw(
-							f"Sales MRP not available for size {size}")
+						frappe.throw(f"Sales MRP not available for size {size}")
 					new_mrp = flt(sales_item_price[size]["sales_mrp"])
 				elif selected_source == "box_sticker_mrp":
 					if box_sticker_mrp.get(size) is None:
-						frappe.throw(
-							f"Box Sticker MRP not available for size {size}")
+						frappe.throw(f"Box Sticker MRP not available for size {size}")
 					new_mrp = flt(box_sticker_mrp[size])
 				elif selected_source == "production_order_mrp":
 					new_mrp = flt(row.mrp)
@@ -638,8 +635,11 @@ def update_price(production_order, item_details):
 					frappe.throw(f"Invalid MRP source for size {size}")
 				if new_mrp <= 0 and selected_source != "production_order_mrp":
 					frappe.throw(f"MRP must be greater than zero for size {size}")
-				new_prices[size] = {"mrp": new_mrp, "wholesale": flt(
-					row.wholesale_price), "retail": flt(row.retail_price)}
+				new_prices[size] = {
+					"mrp": new_mrp,
+					"wholesale": flt(row.wholesale_price),
+					"retail": flt(row.retail_price),
+				}
 				if flt(row.mrp) != new_mrp:
 					default_changes = True
 					row.mrp = new_mrp
@@ -678,13 +678,16 @@ def update_price(production_order, item_details):
 		doc.set("lot_price_overrides", [])
 		for lot in lots:
 			for size, mrp in new_overrides.get(lot, {}).items():
-				doc.append("lot_price_overrides", {
-					"lot": lot,
-					"size": size,
-					"mrp": mrp,
-					"changed_by": frappe.session.user,
-					"changed_on": now_datetime(),
-				})
+				doc.append(
+					"lot_price_overrides",
+					{
+						"lot": lot,
+						"size": size,
+						"mrp": mrp,
+						"changed_by": frappe.session.user,
+						"changed_on": now_datetime(),
+					},
+				)
 
 	if not default_changes and not override_changes:
 		return {"default_prices_updated": 0, "lot_prices_updated": 0, "box_sticker_rows_updated": 0}
@@ -718,9 +721,9 @@ def _apply_prices_to_ppo(doc, item_details, primary):
 		for row in doc.production_order_details:
 			attrs = get_variant_attr_details(row.item_variant)
 			if attrs.get(primary) == size:
-				row.mrp = item_details[size]['mrp']
-				row.wholesale_price = item_details[size]['wholesale']
-				row.retail_price = item_details[size]['retail']
+				row.mrp = item_details[size]["mrp"]
+				row.wholesale_price = item_details[size]["wholesale"]
+				row.retail_price = item_details[size]["retail"]
 				break
 	doc.save(ignore_permissions=True)
 
@@ -729,14 +732,18 @@ def _create_ppo_price_request(production_order, old_prices, new_prices, auto_app
 	price_details = []
 	for size in new_prices:
 		old = old_prices.get(size, {})
-		price_details.append({"size": size, ""
-							  "old_mrp": flt(old.get("mrp")),
-							  "new_mrp": flt(new_prices[size]['mrp']),
-							  "old_wholesale_price": flt(old.get("wholesale")),
-							  "new_wholesale_price": flt(new_prices[size]['wholesale']),
-							  "old_retail_price": flt(old.get("retail")),
-							  "new_retail_price": flt(new_prices[size]['retail'])})
-	request = frappe.new_doc('SD YRP PPO Price Request')
+		price_details.append(
+			{
+				"size": size,
+				"old_mrp": flt(old.get("mrp")),
+				"new_mrp": flt(new_prices[size]["mrp"]),
+				"old_wholesale_price": flt(old.get("wholesale")),
+				"new_wholesale_price": flt(new_prices[size]["wholesale"]),
+				"old_retail_price": flt(old.get("retail")),
+				"new_retail_price": flt(new_prices[size]["retail"]),
+			}
+		)
+	request = frappe.new_doc("SD YRP PPO Price Request")
 	request.production_order = production_order
 	request.requested_by = frappe.session.user
 	request.requested_at = frappe.utils.now_datetime()
@@ -754,7 +761,7 @@ def _create_ppo_price_request(production_order, old_prices, new_prices, auto_app
 def update_production_order_date(production_order, date_field, new_date, reason):
 	require_ppo_action_role()
 	fieldname = get_tracked_date_fieldname(date_field)
-	doc = frappe.get_doc('YRP Production Order', production_order)
+	doc = frappe.get_doc("YRP Production Order", production_order)
 	doc.check_permission("write")
 
 	if doc.docstatus != 1:
@@ -778,16 +785,19 @@ def update_production_order_date(production_order, date_field, new_date, reason)
 	doc.lead_time_given = new_lead_time
 	_validate_production_dates(doc)
 
-	doc.append("date_change_history", {
-		"date_field": TRACKED_DATE_FIELDS[fieldname],
-		"previous_date": previous_date,
-		"new_date": new_date,
-		"reason": reason,
-		"previous_lead_time": previous_lead_time,
-		"new_lead_time": new_lead_time,
-		"changed_by": frappe.session.user,
-		"changed_on": now_datetime(),
-	})
+	doc.append(
+		"date_change_history",
+		{
+			"date_field": TRACKED_DATE_FIELDS[fieldname],
+			"previous_date": previous_date,
+			"new_date": new_date,
+			"reason": reason,
+			"previous_lead_time": previous_lead_time,
+			"new_lead_time": new_lead_time,
+			"changed_by": frappe.session.user,
+			"changed_on": now_datetime(),
+		},
+	)
 	doc.flags.allow_tracked_date_change = True
 	doc.save(ignore_permissions=True)
 
@@ -814,11 +824,7 @@ def get_date_value(value):
 
 
 def _validate_production_dates(doc):
-	if (
-		doc.delivery_date
-		and doc.posting_date
-		and getdate(doc.delivery_date) < getdate(doc.posting_date)
-	):
+	if doc.delivery_date and doc.posting_date and getdate(doc.delivery_date) < getdate(doc.posting_date):
 		frappe.throw("Delivery date is less than Posting Date")
 	if (
 		doc.delivery_date
@@ -838,19 +844,21 @@ SYSTEM_MANAGER_ROLE = "System Manager"
 
 
 def get_quantity_approver_role():
-	return (frappe.db.get_single_value('SD YRP MRP Settings', "production_order_quantity_approver_role") or "").strip()
+	return (
+		frappe.db.get_single_value("SD YRP MRP Settings", "production_order_quantity_approver_role") or ""
+	).strip()
 
 
 def get_ppo_approver_roles():
 	return {
 		role.strip()
 		for fieldname in PPO_APPROVER_ROLE_FIELDS
-		if (role := frappe.db.get_single_value('SD YRP MRP Settings', fieldname)) and role.strip()
+		if (role := frappe.db.get_single_value("SD YRP MRP Settings", fieldname)) and role.strip()
 	}
 
 
 def get_ppo_action_roles():
-	settings = frappe.get_cached_doc('SD YRP MRP Settings')
+	settings = frappe.get_cached_doc("SD YRP MRP Settings")
 	return {
 		row.role.strip()
 		for row in settings.get("production_order_action_roles") or []
@@ -886,13 +894,17 @@ def validate_ppo_request_readiness(doc, posting_date=None):
 
 	if not doc.production_term:
 		frappe.throw("Production Term is required before requesting PPO approval")
-	if frappe.get_value('YRP Production Term', doc.production_term, "docstatus") != 1:
+	if frappe.get_value("YRP Production Term", doc.production_term, "docstatus") != 1:
 		frappe.throw("Selected Production Term must be submitted before requesting PPO approval")
 
 	posting_date = posting_date or doc.posting_date
 	if doc.delivery_date and posting_date and getdate(doc.delivery_date) < getdate(posting_date):
 		frappe.throw("Delivery date is less than Posting Date")
-	if doc.delivery_date and doc.dont_deliver_after and getdate(doc.delivery_date) > getdate(doc.dont_deliver_after):
+	if (
+		doc.delivery_date
+		and doc.dont_deliver_after
+		and getdate(doc.delivery_date) > getdate(doc.dont_deliver_after)
+	):
 		frappe.throw("Don't deliver after date is less than delivery date")
 
 
@@ -903,9 +915,7 @@ def validate_ppo_request_links(doc):
 
 	invalid_links, cancelled_links = doc.get_invalid_links()
 	for child in doc.get_all_children():
-		child_invalid, child_cancelled = child.get_invalid_links(
-			is_submittable=doc.meta.is_submittable
-		)
+		child_invalid, child_cancelled = child.get_invalid_links(is_submittable=doc.meta.is_submittable)
 		invalid_links.extend(child_invalid)
 		cancelled_links.extend(child_cancelled)
 
@@ -921,10 +931,7 @@ def validate_ppo_request_links(doc):
 
 
 def get_quantity_ratio_snapshot(doc):
-	return {
-		row.item_variant: (flt(row.quantity), flt(row.ratio))
-		for row in doc.production_order_details
-	}
+	return {row.item_variant: (flt(row.quantity), flt(row.ratio)) for row in doc.production_order_details}
 
 
 def lock_production_orders(*names):
@@ -932,7 +939,7 @@ def lock_production_orders(*names):
 	names = sorted({name for name in names if name})
 	if not names:
 		return
-	production_order = frappe.qb.DocType('YRP Production Order')
+	production_order = frappe.qb.DocType("YRP Production Order")
 	(
 		frappe.qb.from_(production_order)
 		.select(production_order.name)
@@ -947,7 +954,7 @@ def request_ppo_approval(production_order):
 	require_ppo_action_role()
 
 	lock_production_orders(production_order)
-	doc = frappe.get_doc('YRP Production Order', production_order)
+	doc = frappe.get_doc("YRP Production Order", production_order)
 	doc.check_permission("write")
 
 	if doc.docstatus != 0:
@@ -984,9 +991,7 @@ def request_ppo_approval(production_order):
 def request_ppo_changes(production_order, reason):
 	approver_roles = get_ppo_approver_roles()
 	if not approver_roles:
-		frappe.throw(
-			"Merch User Role and Merchandising Manager Role are not configured in MRP Settings"
-		)
+		frappe.throw("Merch User Role and Merchandising Manager Role are not configured in MRP Settings")
 	if not user_has_any_role(approver_roles):
 		frappe.throw(
 			"Only users with the configured Merch User or Merchandising Manager role can request PPO changes",
@@ -998,17 +1003,19 @@ def request_ppo_changes(production_order, reason):
 		frappe.throw("Reason is required to request PPO changes")
 
 	lock_production_orders(production_order)
-	doc = frappe.get_doc('YRP Production Order', production_order)
+	doc = frappe.get_doc("YRP Production Order", production_order)
 	doc.check_permission("read")
 	if doc.docstatus != 0 or doc.status != PPO_REQUEST_STATUS:
 		frappe.throw("Production Order does not have a pending PPO approval request")
 
 	original_requester = doc.get("ppo_requested_by")
-	doc.db_set({
-		"status": PPO_DRAFT_STATUS,
-		"ppo_requested_by": None,
-		"ppo_requested_on": None,
-	})
+	doc.db_set(
+		{
+			"status": PPO_DRAFT_STATUS,
+			"ppo_requested_by": None,
+			"ppo_requested_on": None,
+		}
+	)
 	append_ppo_changes_requested_to_comment_log(doc, reason, original_requester)
 
 	return {
@@ -1022,9 +1029,7 @@ def request_ppo_changes(production_order, reason):
 def approve_ppo(production_order):
 	approver_roles = get_ppo_approver_roles()
 	if not approver_roles:
-		frappe.throw(
-			"Merch User Role and Merchandising Manager Role are not configured in MRP Settings"
-		)
+		frappe.throw("Merch User Role and Merchandising Manager Role are not configured in MRP Settings")
 	if not user_has_any_role(approver_roles):
 		frappe.throw(
 			"Only users with the configured Merch User or Merchandising Manager role can approve a PPO",
@@ -1032,7 +1037,7 @@ def approve_ppo(production_order):
 		)
 
 	lock_production_orders(production_order)
-	doc = frappe.get_doc('YRP Production Order', production_order)
+	doc = frappe.get_doc("YRP Production Order", production_order)
 	doc.check_permission("read")
 
 	if doc.docstatus != 0 or doc.status != PPO_REQUEST_STATUS:
@@ -1054,7 +1059,7 @@ def approve_ppo(production_order):
 def update_quantity_and_ratio(production_order, size_quantities, size_ratios, requested_by, reason):
 	require_ppo_action_role()
 	lock_production_orders(production_order)
-	doc = frappe.get_doc('YRP Production Order', production_order)
+	doc = frappe.get_doc("YRP Production Order", production_order)
 	doc.check_permission("write")
 
 	if doc.docstatus != 1:
@@ -1064,7 +1069,9 @@ def update_quantity_and_ratio(production_order, size_quantities, size_ratios, re
 		frappe.throw("Quantity and Ratio update can be requested only when Production Order status is Open")
 
 	if doc.get(TRANSFER_MARKER_FIELD):
-		frappe.throw(f"Quantity is locked because it was already transferred to {doc.get(TRANSFER_MARKER_FIELD)}")
+		frappe.throw(
+			f"Quantity is locked because it was already transferred to {doc.get(TRANSFER_MARKER_FIELD)}"
+		)
 
 	if doc.get(QUANTITY_REQUEST_FIELD):
 		frappe.throw("A Quantity and Ratio update request is already pending")
@@ -1081,7 +1088,9 @@ def update_quantity_and_ratio(production_order, size_quantities, size_ratios, re
 
 	approver_role = get_quantity_approver_role()
 	if not approver_role:
-		frappe.throw("Set Production Order Quantity Approver Role in MRP Settings before requesting an update")
+		frappe.throw(
+			"Set Production Order Quantity Approver Role in MRP Settings before requesting an update"
+		)
 
 	if requested_by not in QUANTITY_CHANGE_REQUESTED_BY_OPTIONS:
 		frappe.throw("Who Told to Change must be one of: " + ", ".join(QUANTITY_CHANGE_REQUESTED_BY_OPTIONS))
@@ -1114,10 +1123,12 @@ def update_quantity_and_ratio(production_order, size_quantities, size_ratios, re
 		"requested_on": format_request_timestamp(),
 		"previous_status": doc.status,
 	}
-	doc.db_set({
-		QUANTITY_REQUEST_FIELD: frappe.as_json(request),
-		"status": QUANTITY_REQUEST_STATUS,
-	})
+	doc.db_set(
+		{
+			QUANTITY_REQUEST_FIELD: frappe.as_json(request),
+			"status": QUANTITY_REQUEST_STATUS,
+		}
+	)
 	append_quantity_ratio_request_to_comment_log(doc, change_details, request)
 
 	return {
@@ -1139,7 +1150,7 @@ def approve_quantity_and_ratio(production_order):
 		)
 
 	lock_production_orders(production_order)
-	doc = frappe.get_doc('YRP Production Order', production_order)
+	doc = frappe.get_doc("YRP Production Order", production_order)
 	doc.check_permission("read")
 
 	if doc.docstatus != 1 or doc.status != QUANTITY_REQUEST_STATUS:
@@ -1149,7 +1160,9 @@ def approve_quantity_and_ratio(production_order):
 	if doc.get(INCOMING_TRANSFER_REQUEST_FIELD):
 		frappe.throw("Approve the incoming quantity transfer before approving a Quantity and Ratio request")
 	if doc.get(TRANSFER_MARKER_FIELD):
-		frappe.throw(f"Quantity is locked because it was already transferred to {doc.get(TRANSFER_MARKER_FIELD)}")
+		frappe.throw(
+			f"Quantity is locked because it was already transferred to {doc.get(TRANSFER_MARKER_FIELD)}"
+		)
 	if doc.production_ordered_details:
 		frappe.throw("Cannot approve the request. Quantities are already ordered against Lots")
 
@@ -1168,8 +1181,12 @@ def approve_quantity_and_ratio(production_order):
 	for size, row in rows_by_size.items():
 		if size not in original_quantities or size not in original_ratios:
 			frappe.throw(f"Pending request is missing the original values for size {size}")
-		if flt(row.quantity) != flt(original_quantities[size]) or flt(row.ratio) != flt(original_ratios[size]):
-			frappe.throw("Production Order quantity or ratio changed while the request was pending. Create a new request")
+		if flt(row.quantity) != flt(original_quantities[size]) or flt(row.ratio) != flt(
+			original_ratios[size]
+		):
+			frappe.throw(
+				"Production Order quantity or ratio changed while the request was pending. Create a new request"
+			)
 
 	change_details = get_quantity_ratio_changes(rows_by_size, new_quantities, new_ratios)
 	if not change_details["qty_changes"] and not change_details["ratio_changes"]:
@@ -1198,7 +1215,7 @@ def approve_quantity_and_ratio(production_order):
 
 def get_rows_by_size(doc):
 	"""Map each size (variant's primary attribute value) to its per-size row."""
-	primary_attribute = frappe.get_value('Item', doc.item, "primary_attribute")
+	primary_attribute = frappe.get_value("Item", doc.item, "primary_attribute")
 	rows_by_size = {}
 	for row in doc.production_order_details:
 		size = get_variant_attr_details(row.item_variant).get(primary_attribute) or row.item_variant
@@ -1272,7 +1289,8 @@ def get_quantity_ratio_change_lines(change_details):
 	lines = []
 	for change in change_details["qty_changes"]:
 		lines.append(
-			f"Quantity {_attribute_value(change['size'])}: {format_comment_qty(change['old_qty'])} -> {format_comment_qty(change['new_qty'])}")
+			f"Quantity {_attribute_value(change['size'])}: {format_comment_qty(change['old_qty'])} -> {format_comment_qty(change['new_qty'])}"
+		)
 	if change_details["qty_changes"]:
 		lines.append(
 			f"Quantity Total: {format_comment_qty(change_details['qty_old_total'])} -> "
@@ -1280,7 +1298,8 @@ def get_quantity_ratio_change_lines(change_details):
 		)
 	for change in change_details["ratio_changes"]:
 		lines.append(
-			f"Ratio {_attribute_value(change['size'])}: {format_comment_qty(change['old_ratio'])} -> {format_comment_qty(change['new_ratio'])}")
+			f"Ratio {_attribute_value(change['size'])}: {format_comment_qty(change['old_ratio'])} -> {format_comment_qty(change['new_ratio'])}"
+		)
 	return lines
 
 
@@ -1288,10 +1307,12 @@ def append_quantity_ratio_request_to_comment_log(doc, change_details, request):
 	log_date = frappe.utils.formatdate(frappe.utils.nowdate(), "dd-mm-yyyy")
 	lines = [f"[{log_date}] Quantity/Ratio Update Requested - {request['requested_user']}"]
 	lines.extend(get_quantity_ratio_change_lines(change_details))
-	lines.extend([
-		f"Who Told to Change: {request['requested_by']}",
-		f"Reason: {request['reason']}",
-	])
+	lines.extend(
+		[
+			f"Who Told to Change: {request['requested_by']}",
+			f"Reason: {request['reason']}",
+		]
+	)
 	append_comment_log_block(doc, "\n".join(lines))
 
 
@@ -1299,11 +1320,13 @@ def append_quantity_ratio_to_comment_log(doc, change_details, request, approved_
 	log_date = frappe.utils.formatdate(frappe.utils.nowdate(), "dd-mm-yyyy")
 	lines = [f"[{log_date}] Quantity/Ratio Update Approved - {approved_by}"]
 	lines.extend(get_quantity_ratio_change_lines(change_details))
-	lines.extend([
-		f"Who Told to Change: {request['requested_by']}",
-		f"Requested By: {request['requested_user']}",
-		f"Reason: {request['reason']}",
-	])
+	lines.extend(
+		[
+			f"Who Told to Change: {request['requested_by']}",
+			f"Requested By: {request['requested_user']}",
+			f"Reason: {request['reason']}",
+		]
+	)
 	append_comment_log_block(doc, "\n".join(lines))
 
 
@@ -1354,11 +1377,11 @@ def format_comment_qty(value):
 @frappe.whitelist()
 def create_lot(production_order, lot_name):
 	require_ppo_action_role()
-	if frappe.db.exists('SD YRP Lot', lot_name):
+	if frappe.db.exists("SD YRP Lot", lot_name):
 		frappe.throw(frappe._("Lot Name {0} already exists").format(lot_name))
-	po_doc = frappe.get_doc('YRP Production Order', production_order)
+	po_doc = frappe.get_doc("YRP Production Order", production_order)
 	po_doc.check_permission("read")
-	lot = frappe.new_doc('SD YRP Lot')
+	lot = frappe.new_doc("SD YRP Lot")
 	lot.lot_name = lot_name
 	lot.production_order = production_order
 	lot.item = po_doc.item
@@ -1370,15 +1393,14 @@ def create_lot(production_order, lot_name):
 @frappe.whitelist()
 def link_lot(production_order, lot_name):
 	require_ppo_action_role()
-	lot = frappe.get_doc('SD YRP Lot', lot_name)
-	po_doc = frappe.get_doc('YRP Production Order', production_order)
+	lot = frappe.get_doc("SD YRP Lot", lot_name)
+	po_doc = frappe.get_doc("YRP Production Order", production_order)
 	lot.check_permission("read")
 	po_doc.check_permission("read")
 	if lot.item and lot.item != po_doc.item:
 		frappe.throw("This Lot is linked with a different Item")
 	if lot.production_order and lot.production_order != production_order:
-		frappe.throw(
-			f"This Lot is already linked with Production Order {lot.production_order}")
+		frappe.throw(f"This Lot is already linked with Production Order {lot.production_order}")
 	lot.production_order = production_order
 	if not lot.item:
 		lot.item = po_doc.item
@@ -1394,7 +1416,7 @@ CHANGEABLE_PO_STATUSES = ["Open", "Item Changed", "Not Processed"]
 
 def get_linked_lots(production_order):
 	return attribute_db.get_all(
-		'SD YRP Lot',
+		"SD YRP Lot",
 		filters={"production_order": production_order},
 		pluck="name",
 		order_by="name asc",
@@ -1407,7 +1429,7 @@ def close_production_order_if_all_lots_audited(production_order):
 		return False
 
 	lock_production_orders(production_order)
-	doc = frappe.get_doc('YRP Production Order', production_order)
+	doc = frappe.get_doc("YRP Production Order", production_order)
 	if doc.docstatus != 1 or doc.status == CLOSED_PO_STATUS:
 		return False
 
@@ -1416,32 +1438,31 @@ def close_production_order_if_all_lots_audited(production_order):
 		return False
 
 	finishing_plans = frappe.get_all(
-		'SD YRP Finishing Plan',
+		"SD YRP Finishing Plan",
 		filters={"lot": ("in", linked_lots)},
 		fields=["lot", "fp_status"],
 	)
 	statuses_by_lot = {lot: [] for lot in linked_lots}
 	for finishing_plan in finishing_plans:
-		statuses_by_lot.setdefault(finishing_plan.lot, []).append(
-			finishing_plan.fp_status
-		)
+		statuses_by_lot.setdefault(finishing_plan.lot, []).append(finishing_plan.fp_status)
 
 	if any(
-		not statuses
-		or any(
-			status not in AUDIT_COMPLETE_FINISHING_PLAN_STATUSES
-			for status in statuses
-		)
+		not statuses or any(status not in AUDIT_COMPLETE_FINISHING_PLAN_STATUSES for status in statuses)
 		for statuses in statuses_by_lot.values()
 	):
 		return False
 
 	old_status = doc.status or ""
 	log_date = frappe.utils.formatdate(frappe.utils.nowdate(), "dd-mm-yyyy")
-	append_comment_log_block(doc, "\n".join([
-		f"[{log_date}] Production Order Auto Closed after Finishing Audit",
-		f"Status: {old_status or 'None'} -> {CLOSED_PO_STATUS}",
-	]))
+	append_comment_log_block(
+		doc,
+		"\n".join(
+			[
+				f"[{log_date}] Production Order Auto Closed after Finishing Audit",
+				f"Status: {old_status or 'None'} -> {CLOSED_PO_STATUS}",
+			]
+		),
+	)
 	doc.status = CLOSED_PO_STATUS
 	doc.flags[AUTO_AUDIT_CLOSE_FLAG] = True
 	doc.save(ignore_permissions=True)
@@ -1454,15 +1475,20 @@ def reopen_production_order(production_order):
 		frappe.throw("Only System Manager can reopen a Production Order")
 
 	lock_production_orders(production_order)
-	doc = frappe.get_doc('YRP Production Order', production_order)
+	doc = frappe.get_doc("YRP Production Order", production_order)
 	if doc.docstatus != 1 or doc.status != CLOSED_PO_STATUS:
 		frappe.throw("Only a submitted, closed Production Order can be reopened")
 
 	log_date = frappe.utils.formatdate(frappe.utils.nowdate(), "dd-mm-yyyy")
-	append_comment_log_block(doc, "\n".join([
-		f"[{log_date}] Production Order Reopened - {frappe.session.user}",
-		f"Status: {CLOSED_PO_STATUS} -> Open",
-	]))
+	append_comment_log_block(
+		doc,
+		"\n".join(
+			[
+				f"[{log_date}] Production Order Reopened - {frappe.session.user}",
+				f"Status: {CLOSED_PO_STATUS} -> Open",
+			]
+		),
+	)
 	doc.status = "Open"
 	doc.flags[REOPEN_PRODUCTION_ORDER_FLAG] = True
 	doc.save(ignore_permissions=True)
@@ -1482,7 +1508,7 @@ def validate_status_change_has_no_linked_lot(production_order, action="changed")
 def change_status(production_order, new_status, reason):
 	require_ppo_action_role()
 	lock_production_orders(production_order)
-	doc = frappe.get_doc('YRP Production Order', production_order)
+	doc = frappe.get_doc("YRP Production Order", production_order)
 	doc.check_permission("write")
 
 	if doc.docstatus != 1:
@@ -1493,7 +1519,9 @@ def change_status(production_order, new_status, reason):
 		frappe.throw(f"Status cannot be changed after {doc.status} is approved")
 
 	if doc.get(TRANSFER_MARKER_FIELD):
-		frappe.throw(f"Status is locked because quantity was already transferred to {doc.get(TRANSFER_MARKER_FIELD)}")
+		frappe.throw(
+			f"Status is locked because quantity was already transferred to {doc.get(TRANSFER_MARKER_FIELD)}"
+		)
 
 	if (
 		doc.status == QUANTITY_REQUEST_STATUS
@@ -1518,7 +1546,9 @@ def change_status(production_order, new_status, reason):
 	if new_status in STATUS_APPROVAL_REQUIRED_STATUSES:
 		approver_role = get_quantity_approver_role()
 		if not approver_role:
-			frappe.throw("Set Production Order Quantity Approver Role in MRP Settings before requesting a status change")
+			frappe.throw(
+				"Set Production Order Quantity Approver Role in MRP Settings before requesting a status change"
+			)
 
 		request = {
 			"previous_status": old_status,
@@ -1527,10 +1557,12 @@ def change_status(production_order, new_status, reason):
 			"requested_user": frappe.session.user,
 			"requested_on": format_request_timestamp(),
 		}
-		doc.db_set({
-			STATUS_REQUEST_FIELD: frappe.as_json(request),
-			"status": QUANTITY_REQUEST_STATUS,
-		})
+		doc.db_set(
+			{
+				STATUS_REQUEST_FIELD: frappe.as_json(request),
+				"status": QUANTITY_REQUEST_STATUS,
+			}
+		)
 		append_status_change_request_to_comment_log(doc, request)
 		return {
 			"old_status": old_status,
@@ -1541,11 +1573,16 @@ def change_status(production_order, new_status, reason):
 
 	doc.db_set("status", new_status)
 	log_date = frappe.utils.formatdate(frappe.utils.nowdate(), "dd-mm-yyyy")
-	append_comment_log_block(doc, "\n".join([
-		f"[{log_date}] Status Changed - {frappe.session.user}",
-		f"Status: {old_status or 'None'} -> {new_status}",
-		f"Reason: {reason}",
-	]))
+	append_comment_log_block(
+		doc,
+		"\n".join(
+			[
+				f"[{log_date}] Status Changed - {frappe.session.user}",
+				f"Status: {old_status or 'None'} -> {new_status}",
+				f"Reason: {reason}",
+			]
+		),
+	)
 
 	return {
 		"old_status": old_status,
@@ -1566,14 +1603,16 @@ def approve_status_change(production_order):
 		)
 
 	lock_production_orders(production_order)
-	doc = frappe.get_doc('YRP Production Order', production_order)
+	doc = frappe.get_doc("YRP Production Order", production_order)
 	doc.check_permission("read")
 
 	if doc.docstatus != 1 or doc.status != QUANTITY_REQUEST_STATUS:
 		frappe.throw("Production Order does not have a pending status change request")
 	validate_status_change_has_no_linked_lot(production_order, action="approved")
 	if doc.get(TRANSFER_MARKER_FIELD):
-		frappe.throw(f"Status is locked because quantity was already transferred to {doc.get(TRANSFER_MARKER_FIELD)}")
+		frappe.throw(
+			f"Status is locked because quantity was already transferred to {doc.get(TRANSFER_MARKER_FIELD)}"
+		)
 	if doc.get(QUANTITY_REQUEST_FIELD):
 		frappe.throw("Production Order has a pending Quantity and Ratio request, not a status change request")
 
@@ -1602,21 +1641,31 @@ def approve_status_change(production_order):
 
 def append_status_change_request_to_comment_log(doc, request):
 	log_date = frappe.utils.formatdate(frappe.utils.nowdate(), "dd-mm-yyyy")
-	append_comment_log_block(doc, "\n".join([
-		f"[{log_date}] Status Change Requested - {request['requested_user']}",
-		f"Status: {request['previous_status']} -> {request['requested_status']}",
-		f"Reason: {request['reason']}",
-	]))
+	append_comment_log_block(
+		doc,
+		"\n".join(
+			[
+				f"[{log_date}] Status Change Requested - {request['requested_user']}",
+				f"Status: {request['previous_status']} -> {request['requested_status']}",
+				f"Reason: {request['reason']}",
+			]
+		),
+	)
 
 
 def append_status_change_approved_to_comment_log(doc, request, approved_by):
 	log_date = frappe.utils.formatdate(frappe.utils.nowdate(), "dd-mm-yyyy")
-	append_comment_log_block(doc, "\n".join([
-		f"[{log_date}] Status Change Approved - {approved_by}",
-		f"Status: {request['previous_status']} -> {request['requested_status']}",
-		f"Requested By: {request['requested_user']}",
-		f"Reason: {request['reason']}",
-	]))
+	append_comment_log_block(
+		doc,
+		"\n".join(
+			[
+				f"[{log_date}] Status Change Approved - {approved_by}",
+				f"Status: {request['previous_status']} -> {request['requested_status']}",
+				f"Requested By: {request['requested_user']}",
+				f"Reason: {request['reason']}",
+			]
+		),
+	)
 
 
 # A PPO can push its quantity out only from these statuses. "Open" is still live and
@@ -1630,11 +1679,11 @@ INCOMING_TRANSFER_REQUEST_FIELD = "incoming_quantity_transfer_request"
 
 def has_transfer_marker_field():
 	"""The one-shot marker is a DocType change, so it is absent until migrate has run."""
-	return frappe.get_meta('YRP Production Order').has_field(TRANSFER_MARKER_FIELD)
+	return frappe.get_meta("YRP Production Order").has_field(TRANSFER_MARKER_FIELD)
 
 
 def has_incoming_transfer_request_field():
-	return frappe.get_meta('YRP Production Order').has_field(INCOMING_TRANSFER_REQUEST_FIELD)
+	return frappe.get_meta("YRP Production Order").has_field(INCOMING_TRANSFER_REQUEST_FIELD)
 
 
 from essdee_yrp.item_alternatives import get_alternative_items
@@ -1661,19 +1710,25 @@ def transfer_quantity_to_ppo(source_production_order, target_production_order, r
 		frappe.throw("Target Production Order must be different from this Production Order")
 
 	lock_production_orders(source_production_order, target_production_order)
-	doc = frappe.get_doc('YRP Production Order', source_production_order)
+	doc = frappe.get_doc("YRP Production Order", source_production_order)
 	doc.check_permission("write")
 
 	if not has_transfer_marker_field():
-		frappe.throw("Cannot transfer quantity. Run bench migrate first - the transfer marker field is missing")
+		frappe.throw(
+			"Cannot transfer quantity. Run bench migrate first - the transfer marker field is missing"
+		)
 	if not has_incoming_transfer_request_field():
-		frappe.throw("Cannot transfer quantity. Run bench migrate first - the incoming transfer request field is missing")
+		frappe.throw(
+			"Cannot transfer quantity. Run bench migrate first - the incoming transfer request field is missing"
+		)
 
 	if doc.docstatus != 1:
 		frappe.throw("Quantity can be transferred only after Production Order is submitted")
 
 	if doc.status not in TRANSFERABLE_PO_STATUSES:
-		frappe.throw("Quantity can be transferred only when status is one of: " + ", ".join(TRANSFERABLE_PO_STATUSES))
+		frappe.throw(
+			"Quantity can be transferred only when status is one of: " + ", ".join(TRANSFERABLE_PO_STATUSES)
+		)
 
 	if doc.get(TRANSFER_MARKER_FIELD):
 		frappe.throw(f"Quantity is already requested or transferred to {doc.get(TRANSFER_MARKER_FIELD)}")
@@ -1690,10 +1745,10 @@ def transfer_quantity_to_ppo(source_production_order, target_production_order, r
 	if not reason:
 		frappe.throw("Reason is required")
 
-	if not frappe.db.exists('YRP Production Order', target_production_order):
+	if not frappe.db.exists("YRP Production Order", target_production_order):
 		frappe.throw(f"Production Order {target_production_order} does not exist")
 
-	target = frappe.get_doc('YRP Production Order', target_production_order)
+	target = frappe.get_doc("YRP Production Order", target_production_order)
 	target.check_permission("write")
 
 	if target.docstatus != 1:
@@ -1713,7 +1768,9 @@ def transfer_quantity_to_ppo(source_production_order, target_production_order, r
 
 	approver_role = get_quantity_approver_role()
 	if not approver_role:
-		frappe.throw("Set Production Order Quantity Approver Role in MRP Settings before requesting a quantity transfer")
+		frappe.throw(
+			"Set Production Order Quantity Approver Role in MRP Settings before requesting a quantity transfer"
+		)
 
 	transfers = get_transfer_quantities(doc)
 	if not transfers:
@@ -1725,12 +1782,14 @@ def transfer_quantity_to_ppo(source_production_order, target_production_order, r
 	changes = []
 	for size, qty in transfers.items():
 		old_qty = flt(target_rows_by_size[size].quantity) if size in target_rows_by_size else 0
-		changes.append({
-			"size": size,
-			"qty": qty,
-			"old_qty": old_qty,
-			"new_qty": old_qty + qty,
-		})
+		changes.append(
+			{
+				"size": size,
+				"qty": qty,
+				"old_qty": old_qty,
+				"new_qty": old_qty + qty,
+			}
+		)
 
 	request = {
 		"transfer_reference": frappe.generate_hash(length=10),
@@ -1745,10 +1804,12 @@ def transfer_quantity_to_ppo(source_production_order, target_production_order, r
 		"requested_on": format_request_timestamp(),
 		"reason": reason,
 	}
-	target.db_set({
-		INCOMING_TRANSFER_REQUEST_FIELD: frappe.as_json(request),
-		"status": QUANTITY_REQUEST_STATUS,
-	})
+	target.db_set(
+		{
+			INCOMING_TRANSFER_REQUEST_FIELD: frappe.as_json(request),
+			"status": QUANTITY_REQUEST_STATUS,
+		}
+	)
 	doc.db_set(TRANSFER_MARKER_FIELD, target.name)
 
 	return {
@@ -1769,16 +1830,16 @@ def approve_quantity_transfer(production_order):
 			frappe.PermissionError,
 		)
 
-	target = frappe.get_doc('YRP Production Order', production_order)
+	target = frappe.get_doc("YRP Production Order", production_order)
 	request = frappe.parse_json(target.get(INCOMING_TRANSFER_REQUEST_FIELD)) or {}
 	source_name = request.get("source_production_order")
 	if not source_name:
 		frappe.throw("Pending quantity transfer request details are missing")
 
 	lock_production_orders(source_name, production_order)
-	target = frappe.get_doc('YRP Production Order', production_order)
+	target = frappe.get_doc("YRP Production Order", production_order)
 	target.check_permission("read")
-	source = frappe.get_doc('YRP Production Order', source_name)
+	source = frappe.get_doc("YRP Production Order", source_name)
 	request = frappe.parse_json(target.get(INCOMING_TRANSFER_REQUEST_FIELD)) or {}
 	if request.get("source_production_order") != source_name:
 		frappe.throw("Quantity transfer request changed while approval was pending. Reload and try again")
@@ -1789,7 +1850,9 @@ def approve_quantity_transfer(production_order):
 	if target.docstatus != 1 or target.status != QUANTITY_REQUEST_STATUS:
 		frappe.throw("Destination Production Order does not have a pending quantity transfer request")
 	if target.get(TRANSFER_MARKER_FIELD):
-		frappe.throw(f"Destination Production Order already transferred its quantity to {target.get(TRANSFER_MARKER_FIELD)}")
+		frappe.throw(
+			f"Destination Production Order already transferred its quantity to {target.get(TRANSFER_MARKER_FIELD)}"
+		)
 	if source.docstatus != 1 or source.status not in TRANSFERABLE_PO_STATUSES:
 		frappe.throw("Source Production Order is no longer eligible to transfer quantity")
 	if source.get(TRANSFER_MARKER_FIELD) != target.name:
@@ -1799,11 +1862,7 @@ def approve_quantity_transfer(production_order):
 	if target.item not in get_alternative_items(source.item):
 		frappe.throw(f"Item {target.item} is not an alternative item of {source.item}")
 
-	transfers = {
-		size: flt(qty)
-		for size, qty in (request.get("transfers") or {}).items()
-		if flt(qty) > 0
-	}
+	transfers = {size: flt(qty) for size, qty in (request.get("transfers") or {}).items() if flt(qty) > 0}
 	if not transfers:
 		frappe.throw("Pending quantity transfer request has no quantity")
 
@@ -1812,11 +1871,14 @@ def approve_quantity_transfer(production_order):
 	original_quantities = request.get("target_original_quantities") or {}
 	for size in transfers:
 		if size not in original_quantities:
-			frappe.throw(f"Pending quantity transfer request is missing the original quantity for size {size}")
+			frappe.throw(
+				f"Pending quantity transfer request is missing the original quantity for size {size}"
+			)
 		current_qty = flt(target_rows_by_size[size].quantity) if size in target_rows_by_size else 0
 		if current_qty != flt(original_quantities[size]):
 			frappe.throw(
-				f"Destination quantity for size {size} changed while approval was pending. Create a new transfer request")
+				f"Destination quantity for size {size} changed while approval was pending. Create a new transfer request"
+			)
 
 	if missing_sizes:
 		target_rows_by_size.update(add_target_size_rows(target, missing_sizes))
@@ -1826,12 +1888,14 @@ def approve_quantity_transfer(production_order):
 		row = target_rows_by_size[size]
 		old_qty = flt(row.quantity)
 		row.quantity = old_qty + qty
-		changes.append({
-			"size": size,
-			"qty": qty,
-			"old_qty": old_qty,
-			"new_qty": flt(row.quantity),
-		})
+		changes.append(
+			{
+				"size": size,
+				"qty": qty,
+				"old_qty": old_qty,
+				"new_qty": flt(row.quantity),
+			}
+		)
 
 	target.set(INCOMING_TRANSFER_REQUEST_FIELD, None)
 	target.status = target_previous_status
@@ -1865,7 +1929,8 @@ def validate_transfer_target_sizes(target, transfers, target_rows_by_size):
 		unknown_sizes = [size for size in missing_sizes if size not in target_sizes]
 		if unknown_sizes:
 			frappe.throw(
-				f"Item {target.item} of Production Order {target.name} is not made in size {', '.join(unknown_sizes)}")
+				f"Item {target.item} of Production Order {target.name} is not made in size {', '.join(unknown_sizes)}"
+			)
 	return missing_sizes
 
 
@@ -1876,23 +1941,27 @@ def add_target_size_rows(target, sizes):
 	saved before its item gained the size. The variant, stage and price seeding mirror
 	update_order so the new rows are indistinguishable from the seeded ones; quantity and
 	ratio start at 0 because the transfer adds the quantity and must not invent a ratio."""
-	item_doc = frappe.get_cached_doc('Item', target.item)
-	pack_out_stage = attribute_db.get_single_value('SD YRP IPD Settings', "default_pack_out_stage")
+	item_doc = frappe.get_cached_doc("Item", target.item)
+	pack_out_stage = attribute_db.get_single_value("SD YRP IPD Settings", "default_pack_out_stage")
 	sales_item_price = get_sales_item_price_map(target.item)
 
 	new_rows = {}
 	for size in sizes:
 		price_row = sales_item_price.get(size, {})
-		new_rows[size] = target.append("production_order_details", {
-			"item_variant": get_or_create_variant(
-				target.item, build_variant_attributes({item_doc.primary_attribute: size}, pack_out_stage, item_doc)
-			),
-			"quantity": 0,
-			"ratio": 0,
-			"mrp": 0,
-			"wholesale_price": price_row.get("wholesale", 0),
-			"retail_price": price_row.get("retail", 0),
-		})
+		new_rows[size] = target.append(
+			"production_order_details",
+			{
+				"item_variant": get_or_create_variant(
+					target.item,
+					build_variant_attributes({item_doc.primary_attribute: size}, pack_out_stage, item_doc),
+				),
+				"quantity": 0,
+				"ratio": 0,
+				"mrp": 0,
+				"wholesale_price": price_row.get("wholesale", 0),
+				"retail_price": price_row.get("retail", 0),
+			},
+		)
 	return new_rows
 
 
@@ -1948,35 +2017,39 @@ def build_quantity_transfer_history_rows(
 		source_before = flt(
 			change["source_old_qty"]
 			if "source_old_qty" in change
-			else source_row.quantity if source_row else 0
+			else source_row.quantity
+			if source_row
+			else 0
 		)
 		source_after = flt(
-			change["source_new_qty"]
-			if "source_new_qty" in change
-			else source_before - source_quantity
+			change["source_new_qty"] if "source_new_qty" in change else source_before - source_quantity
 		)
 		if not source_row or source_before < source_quantity:
 			frappe.throw(
 				f"Source quantity for size {size} changed while approval was pending. Create a new transfer request"
 			)
-		source_history.append({
-			**common,
-			"movement": "Reduced",
-			"counterpart_production_order": target.name,
-			"size": size,
-			"quantity": source_quantity,
-			"quantity_before": source_before,
-			"quantity_after": source_after,
-		})
-		target_history.append({
-			**common,
-			"movement": "Added",
-			"counterpart_production_order": source.name,
-			"size": size,
-			"quantity": target_quantity,
-			"quantity_before": flt(change["old_qty"]),
-			"quantity_after": flt(change["new_qty"]),
-		})
+		source_history.append(
+			{
+				**common,
+				"movement": "Reduced",
+				"counterpart_production_order": target.name,
+				"size": size,
+				"quantity": source_quantity,
+				"quantity_before": source_before,
+				"quantity_after": source_after,
+			}
+		)
+		target_history.append(
+			{
+				**common,
+				"movement": "Added",
+				"counterpart_production_order": source.name,
+				"size": size,
+				"quantity": target_quantity,
+				"quantity_before": flt(change["old_qty"]),
+				"quantity_after": flt(change["new_qty"]),
+			}
+		)
 
 	return source_history, target_history
 
@@ -2001,4 +2074,4 @@ def append_quantity_transfer_history(
 	for parent, rows in ((source, source_history), (target, target_history)):
 		for values in rows:
 			parent.append("quantity_transfer_history", values).db_insert()
-		frappe.clear_document_cache('YRP Production Order', parent.name)
+		frappe.clear_document_cache("YRP Production Order", parent.name)

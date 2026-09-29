@@ -1,12 +1,11 @@
 # Copyright (c) 2026, Essdee and contributors
 
 from __future__ import annotations
-from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe import _
 from frappe.model.document import Document
-
+from yrp.attribute_links import value as _attribute_value
 
 COMPACTING_KEY_FIELDS = ("cloth_item", "packing_attribute_value", "input_dia")
 
@@ -91,17 +90,13 @@ def _append_accessory_details(ipd_doc, cloth_items, combinations):
 			cloth_item = cloth_items.get(cloth_label)
 			if not cloth_label or not packing_value or not cloth_item:
 				frappe.throw(
-					_("Complete the Cloth and Accessory Colour mapping for accessory {0}.").format(
-						accessory
-					)
+					_("Complete the Cloth and Accessory Colour mapping for accessory {0}.").format(accessory)
 				)
 			_append_detail(combinations, cloth_item, packing_value, input_dia)
 			matched = True
 		if not matched:
 			frappe.throw(
-				_("No Cloth Accessory colour mapping was found for accessory {0}.").format(
-					accessory
-				)
+				_("No Cloth Accessory colour mapping was found for accessory {0}.").format(accessory)
 			)
 
 
@@ -113,8 +108,7 @@ def get_expected_compacting_details(ipd_doc):
 	if not packing_attribute:
 		frappe.throw(_("Select the Packing Attribute before entering Compacting Details."))
 	cloth_attributes = [
-		row.get("attribute") for row in ipd_doc.get("cloth_attributes") or []
-		if row.get("attribute")
+		row.get("attribute") for row in ipd_doc.get("cloth_attributes") or [] if row.get("attribute")
 	]
 	if not cloth_attributes:
 		frappe.throw(_("Configure the Cloth Mapping attributes before entering Compacting Details."))
@@ -134,9 +128,7 @@ def get_expected_compacting_details(ipd_doc):
 		cloth_item = cloth_items.get(cloth_label)
 		if not cloth_label or not cloth_item:
 			frappe.throw(
-				_("Cloth Mapping combination {0} has no valid Cloth Detail.").format(
-					_format_key(key)
-				)
+				_("Cloth Mapping combination {0} has no valid Cloth Detail.").format(_format_key(key))
 			)
 		if key in cloth_by_attributes and cloth_by_attributes[key] != cloth_item:
 			frappe.throw(
@@ -168,9 +160,9 @@ def merge_compacting_details(expected, saved):
 	return [
 		{
 			**detail,
-			"compacting_dia": _attribute_value(saved_by_key.get(compacting_key(detail), {}).get(
-				"compacting_dia"
-			)),
+			"compacting_dia": _attribute_value(
+				saved_by_key.get(compacting_key(detail), {}).get("compacting_dia")
+			),
 		}
 		for detail in expected
 	]
@@ -209,7 +201,9 @@ def validate_submitted_details(expected, submitted):
 				)
 			)
 		seen.add(key)
-		normalized.append({**expected_by_key[key], "compacting_dia": _attribute_value(row.get("compacting_dia"))})
+		normalized.append(
+			{**expected_by_key[key], "compacting_dia": _attribute_value(row.get("compacting_dia"))}
+		)
 	for key, detail in expected_by_key.items():
 		if key not in seen:
 			normalized.append({**detail, "compacting_dia": None})
@@ -219,8 +213,8 @@ def validate_submitted_details(expected, submitted):
 
 
 def get_ipd_compacting(item_production_detail):
-	name = frappe.db.exists('SD YRP IPD Compacting', {"item_production_detail": item_production_detail})
-	return frappe.get_doc('SD YRP IPD Compacting', name) if name else None
+	name = frappe.db.exists("SD YRP IPD Compacting", {"item_production_detail": item_production_detail})
+	return frappe.get_doc("SD YRP IPD Compacting", name) if name else None
 
 
 def get_compacting_mapping(item_production_detail):
@@ -247,14 +241,14 @@ def _context(ipd_doc):
 
 @frappe.whitelist()
 def get_compacting_details(item_production_detail):
-	ipd_doc = frappe.get_doc('YRP Item Production Detail', item_production_detail)
+	ipd_doc = frappe.get_doc("YRP Item Production Detail", item_production_detail)
 	ipd_doc.check_permission("read")
 	return _context(ipd_doc)
 
 
 @frappe.whitelist()
 def save_compacting_details(item_production_detail, rows, expected_modified=None):
-	ipd_doc = frappe.get_doc('YRP Item Production Detail', item_production_detail)
+	ipd_doc = frappe.get_doc("YRP Item Production Detail", item_production_detail)
 	ipd_doc.check_permission("write")
 	if not ipd_doc.get("enable_panel_wise_consumption_matrix"):
 		frappe.throw(_("Enable Panel-wise Consumption Matrix before saving Compacting Details."))
@@ -268,7 +262,7 @@ def save_compacting_details(item_production_detail, rows, expected_modified=None
 			frappe.TimestampMismatchError,
 		)
 	if not compacting:
-		compacting = frappe.new_doc('SD YRP IPD Compacting')
+		compacting = frappe.new_doc("SD YRP IPD Compacting")
 		compacting.item_production_detail = ipd_doc.name
 	compacting.packing_attribute = ipd_doc.packing_attribute
 	compacting.set("compacting_details", normalized)
@@ -294,9 +288,7 @@ def stage_compacting_details_from_ipd(ipd_doc):
 		ipd_doc.flags.staged_compacting_details = []
 		return
 	expected_keys = {compacting_key(row) for row in expected}
-	submitted = [
-		row for row in payload.get("rows") or [] if compacting_key(row) in expected_keys
-	]
+	submitted = [row for row in payload.get("rows") or [] if compacting_key(row) in expected_keys]
 	ipd_doc.flags.staged_compacting_details = validate_submitted_details(expected, submitted)
 
 
@@ -305,7 +297,7 @@ def persist_staged_compacting_details(ipd_doc):
 		return
 	compacting = get_ipd_compacting(ipd_doc.name)
 	if not compacting:
-		compacting = frappe.new_doc('SD YRP IPD Compacting')
+		compacting = frappe.new_doc("SD YRP IPD Compacting")
 		compacting.item_production_detail = ipd_doc.name
 	compacting.packing_attribute = ipd_doc.packing_attribute
 	compacting.set("compacting_details", ipd_doc.flags.staged_compacting_details)
@@ -315,7 +307,7 @@ def persist_staged_compacting_details(ipd_doc):
 
 class SDYRPIPDCompacting(Document):
 	def validate(self):
-		ipd_doc = frappe.get_cached_doc('YRP Item Production Detail', self.item_production_detail)
+		ipd_doc = frappe.get_cached_doc("YRP Item Production Detail", self.item_production_detail)
 		# Migrated IPDs can legitimately predate the parent packing-attribute
 		# field. Preserve the explicit historical compacting value in that case;
 		# a configured parent remains authoritative for current records.

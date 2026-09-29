@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
+from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import DeliveryChallan
 
 from essdee_yrp import hooks
 from essdee_yrp.cutting.movement import (
@@ -18,7 +19,6 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan impor
 )
 from essdee_yrp.item_matrix import normalize_item_matrix_row_indexes
 from essdee_yrp.overrides.delivery_challan import EssdeeDeliveryChallan
-from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import DeliveryChallan
 
 
 class TestDeliveryChallanCustomization(FrappeTestCase):
@@ -36,13 +36,11 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 		rebuild.assert_called_once_with(plan)
 
 	def test_custom_return_matrix_uses_authoritative_base_endpoints(self):
-		source = (
-			Path(frappe.get_app_path("essdee_yrp"))
-			/ "public/js/delivery_challan.js"
-		).read_text(encoding="utf-8")
+		source = (Path(frappe.get_app_path("essdee_yrp")) / "public/js/delivery_challan.js").read_text(
+			encoding="utf-8"
+		)
 		component = (
-			Path(frappe.get_app_path("essdee_yrp"))
-			/ "public/js/DeliveryChallan/ReturnItemsMatrix.vue"
+			Path(frappe.get_app_path("essdee_yrp")) / "public/js/DeliveryChallan/ReturnItemsMatrix.vue"
 		).read_text(encoding="utf-8")
 		self.assertIn("Return Whole Bundles", source)
 		self.assertIn("get_return_delivery_items", source)
@@ -66,19 +64,13 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 
 	def test_secondary_quantity_uses_the_base_inline_dc_matrix(self):
 		app_path = Path(frappe.get_app_path("essdee_yrp"))
-		source = (app_path / "public/js/delivery_challan.js").read_text(
-			encoding="utf-8"
-		)
-		plugins = (app_path / "public/js/vue_plugins.js").read_text(
-			encoding="utf-8"
-		)
+		source = (app_path / "public/js/delivery_challan.js").read_text(encoding="utf-8")
+		plugins = (app_path / "public/js/vue_plugins.js").read_text(encoding="utf-8")
 		base_editor = (
-			Path(frappe.get_app_path("yrp"))
-			/ "public/js/WorkOrder/WorkOrderItemEditor.vue"
+			Path(frappe.get_app_path("yrp")) / "public/js/WorkOrder/WorkOrderItemEditor.vue"
 		).read_text(encoding="utf-8")
 		base_matrix = (
-			Path(frappe.get_app_path("yrp"))
-			/ "public/js/Stock/components/ItemDimensionFetch.vue"
+			Path(frappe.get_app_path("yrp")) / "public/js/Stock/components/ItemDimensionFetch.vue"
 		).read_text(encoding="utf-8")
 
 		self.assertNotIn("mount_secondary_quantity_editor", source)
@@ -90,11 +82,9 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 	def test_manual_source_property_setter_is_packaged(self):
 		name = "YRP Delivery Challan-from_location-fetch_from"
 		fixture = frappe.parse_json(
-			(
-				Path(frappe.get_app_path("essdee_yrp"))
-				/ "fixtures"
-				/ "property_setter.json"
-			).read_text(encoding="utf-8")
+			(Path(frappe.get_app_path("essdee_yrp")) / "fixtures" / "property_setter.json").read_text(
+				encoding="utf-8"
+			)
 		)
 		setter = next(row for row in fixture if row.get("name") == name)
 		self.assertEqual(
@@ -104,18 +94,18 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 				setter["property"],
 				setter["value"],
 			),
-			('YRP Delivery Challan', "from_location", "fetch_from", ""),
+			("YRP Delivery Challan", "from_location", "fetch_from", ""),
 		)
 		property_fixture = next(row for row in hooks.fixtures if row["dt"] == "Property Setter")
 		self.assertIn(name, property_fixture["filters"][0][2])
 
 	def test_site_uses_essdee_delivery_challan_controller(self):
-		self.assertIsInstance(frappe.new_doc('YRP Delivery Challan'), EssdeeDeliveryChallan)
+		self.assertIsInstance(frappe.new_doc("YRP Delivery Challan"), EssdeeDeliveryChallan)
 
 	def test_same_location_and_warehouse_delivery_is_allowed(self):
 		doc = EssdeeDeliveryChallan(
 			{
-				"doctype": 'YRP Delivery Challan',
+				"doctype": "YRP Delivery Challan",
 				"docstatus": 1,
 				"from_location": "SAME-LOCATION",
 				"supplier": "SAME-LOCATION",
@@ -123,7 +113,7 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 				"to_warehouse": "SAME-WAREHOUSE",
 				"items": [
 					{
-						"doctype": 'YRP Delivery Challan Item',
+						"doctype": "YRP Delivery Challan Item",
 						"item_variant": "SAME-WAREHOUSE-ITEM",
 						"qty": 1,
 					}
@@ -148,7 +138,7 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 	def test_same_warehouse_delivery_builds_balanced_stock_legs(self):
 		doc = EssdeeDeliveryChallan(
 			{
-				"doctype": 'YRP Delivery Challan',
+				"doctype": "YRP Delivery Challan",
 				"name": "DC-SAME-WAREHOUSE-1",
 				"posting_date": "2026-08-28",
 				"posting_time": "12:00:00",
@@ -156,7 +146,7 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 				"to_warehouse": "SAME-WAREHOUSE",
 				"items": [
 					{
-						"doctype": 'YRP Delivery Challan Item',
+						"doctype": "YRP Delivery Challan Item",
 						"item_variant": "SAME-WAREHOUSE-ITEM",
 						"uom": "Nos",
 						"stock_uom": "Nos",
@@ -189,7 +179,7 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 	def test_same_location_delivery_updates_work_order_and_cutting_plan(self):
 		doc = EssdeeDeliveryChallan(
 			{
-				"doctype": 'YRP Delivery Challan',
+				"doctype": "YRP Delivery Challan",
 				"work_order": "WO-SAME-LOCATION",
 				"from_location": "MACHINE-CUTTING",
 				"supplier": "MACHINE-CUTTING",
@@ -197,7 +187,7 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 				"to_warehouse": "MACHINE-CUTTING-WAREHOUSE",
 				"items": [
 					{
-						"doctype": 'YRP Delivery Challan Item',
+						"doctype": "YRP Delivery Challan Item",
 						"item_variant": "CUTTING-CLOTH",
 						"qty": 4,
 						"delivered_quantity": 4,
@@ -220,15 +210,11 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 				"yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan._find_matching_row",
 				return_value=deliverable,
 			),
-			patch(
-				"yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan._update_work_order_status"
-			),
+			patch("yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan._update_work_order_status"),
 		):
 			doc.update_work_order_deliverables()
 
-		deliverable.db_set.assert_called_once_with(
-			"pending_quantity", 6.0, update_modified=False
-		)
+		deliverable.db_set.assert_called_once_with("pending_quantity", 6.0, update_modified=False)
 
 		cloth_row = frappe._dict(
 			cloth_item_variant="CUTTING-CLOTH",
@@ -268,10 +254,7 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 
 	def test_desk_clears_source_when_work_order_changes(self):
 		source = (
-			Path(frappe.get_app_path("essdee_yrp"))
-			/ "public"
-			/ "js"
-			/ "delivery_challan.js"
+			Path(frappe.get_app_path("essdee_yrp")) / "public" / "js" / "delivery_challan.js"
 		).read_text(encoding="utf-8")
 
 		self.assertIn("work_order(frm)", source)
@@ -279,15 +262,11 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 		self.assertIn('from_warehouse: ""', source)
 
 	def test_work_order_defaults_cannot_refill_manual_source_fields(self):
-		doc = EssdeeDeliveryChallan({"doctype": 'YRP Delivery Challan'})
+		doc = EssdeeDeliveryChallan({"doctype": "YRP Delivery Challan"})
 
 		def apply_base_defaults(target):
-			target.from_location = (
-				target.from_location or "WORK-ORDER-DELIVERY-LOCATION"
-			)
-			target.from_warehouse = (
-				target.from_warehouse or "WORK-ORDER-DELIVERY-WAREHOUSE"
-			)
+			target.from_location = target.from_location or "WORK-ORDER-DELIVERY-LOCATION"
+			target.from_warehouse = target.from_warehouse or "WORK-ORDER-DELIVERY-WAREHOUSE"
 
 		for from_location, from_warehouse in (
 			("", ""),
@@ -314,7 +293,7 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 	def test_specialized_service_can_resolve_its_explicit_source_warehouse(self):
 		doc = EssdeeDeliveryChallan(
 			{
-				"doctype": 'YRP Delivery Challan',
+				"doctype": "YRP Delivery Challan",
 				"from_finishing": 1,
 				"from_location": "FINISHING-LOCATION",
 			}
@@ -335,12 +314,12 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 		self.assertEqual(doc.from_warehouse, "FINISHING-WAREHOUSE")
 
 	def test_production_api_fields_are_essdee_custom_fields(self):
-		meta = frappe.get_meta('YRP Delivery Challan', cached=False)
+		meta = frappe.get_meta("YRP Delivery Challan", cached=False)
 		expected = {
 			"actual_date": ("Date", None),
 			"additional_goods_value": ("Currency", None),
 			"allow_non_bundle": ("Check", None),
-			"cut_panel_movement": ("Link", 'SD YRP Cut Panel Movement'),
+			"cut_panel_movement": ("Link", "SD YRP Cut Panel Movement"),
 			"from_address": ("Link", "Address"),
 			"from_address_details": ("Small Text", None),
 			"from_finishing": ("Check", None),
@@ -363,7 +342,7 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 					frappe.db.exists(
 						"Custom Field",
 						{
-							"dt": 'YRP Delivery Challan',
+							"dt": "YRP Delivery Challan",
 							"fieldname": fieldname,
 							"module": "Essdee YRP",
 						},
@@ -371,17 +350,13 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 				)
 
 	def test_approved_field_attributes(self):
-		meta = frappe.get_meta('YRP Delivery Challan', cached=False)
+		meta = frappe.get_meta("YRP Delivery Challan", cached=False)
 
 		from_location = meta.get_field("from_location")
 		self.assertEqual(from_location.reqd, 1)
 		self.assertFalse(from_location.read_only)
 		self.assertFalse(from_location.fetch_from)
-		self.assertTrue(
-			frappe.db.exists(
-				"Property Setter", "YRP Delivery Challan-from_location-fetch_from"
-			)
-		)
+		self.assertTrue(frappe.db.exists("Property Setter", "YRP Delivery Challan-from_location-fetch_from"))
 		self.assertEqual(meta.get_field("is_internal_unit").read_only, 1)
 		self.assertFalse(meta.get_field("is_internal_unit").fetch_from)
 		self.assertEqual(meta.get_field("is_rework").read_only, 1)
@@ -403,8 +378,8 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 		self.assertEqual(meta.get_field("vehicle_no").allow_on_submit, 1)
 
 	def test_better_base_attributes_are_preserved(self):
-		parent = frappe.get_meta('YRP Delivery Challan', cached=False)
-		child = frappe.get_meta('YRP Delivery Challan Item', cached=False)
+		parent = frappe.get_meta("YRP Delivery Challan", cached=False)
+		child = frappe.get_meta("YRP Delivery Challan Item", cached=False)
 
 		self.assertEqual(parent.get_field("naming_series").options, "DC-.YYYY.-")
 		self.assertEqual(parent.get_field("comments").fieldtype, "Small Text")
@@ -414,7 +389,7 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 		self.assertEqual(str(child.get_field("secondary_qty").precision), "3")
 
 	def test_work_order_context_is_enforced_server_side(self):
-		doc = frappe.new_doc('YRP Delivery Challan')
+		doc = frappe.new_doc("YRP Delivery Challan")
 		doc.work_order = "TEST-WO"
 		doc.is_internal_unit = 0
 		# Warm the real metadata before patching Database.get_value. Meta loading
@@ -465,7 +440,7 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 		item = frappe._dict(name="Maze Capri Set R.N.S", primary_attribute="Size")
 
 		def get_cached_doc(doctype, name):
-			self.assertEqual(doctype, 'Item')
+			self.assertEqual(doctype, "Item")
 			return variants.get(name, item)
 
 		rows = [
@@ -517,7 +492,7 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 		overlaid = _overlay_source_rows(
 			source_rows,
 			movement_rows,
-			target_doctype='YRP Delivery Challan',
+			target_doctype="YRP Delivery Challan",
 		)
 
 		self.assertEqual([row.qty for row in overlaid], [12, 18])

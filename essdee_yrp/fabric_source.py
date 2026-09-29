@@ -5,16 +5,15 @@ from submitted GRNs of an earlier IPD process and reservations are the
 calculated deliverables of other live Work Orders.  Nothing in this module
 writes receipt totals back to the Lot.
 """
-from yrp.attribute_links import value as _attribute_value
 
 from collections import Counter
 
 import frappe
 from frappe import _
 from frappe.utils import flt
+from yrp.attribute_links import value as _attribute_value
 
 from essdee_yrp.fabric_chain import get_fabric_steps
-
 
 QTY_TOLERANCE = 0.001
 
@@ -26,9 +25,7 @@ def process_step_key(step):
 def get_source_process_options(ipd, current_process):
 	"""Earlier configured steps, immediate predecessor first."""
 	steps = get_fabric_steps(ipd)
-	current = next(
-		(step for step in steps if step["process_name"] == current_process), None
-	)
+	current = next((step for step in steps if step["process_name"] == current_process), None)
 	if not current:
 		return []
 	name_counts = Counter(step["process_name"] for step in steps)
@@ -36,7 +33,7 @@ def get_source_process_options(ipd, current_process):
 		{
 			"value": process_step_key(step),
 			"label": (
-				_('{0} (Step {1})').format(step["process_name"], step["position"] + 1)
+				_("{0} (Step {1})").format(step["process_name"], step["position"] + 1)
 				if name_counts[step["process_name"]] > 1
 				else step["process_name"]
 			),
@@ -49,29 +46,22 @@ def get_source_process_options(ipd, current_process):
 
 def resolve_source_process(ipd, current_process, source_process):
 	options = get_source_process_options(ipd, current_process)
-	match = next(
-		(option for option in options if option["value"] == source_process), None
-	)
+	match = next((option for option in options if option["value"] == source_process), None)
 	# Process-name fallback keeps API callers created before step keys working,
 	# but only when the name identifies exactly one eligible earlier step.
 	if not match:
-		by_name = [
-			option for option in options
-			if option["process_name"] == source_process
-		]
+		by_name = [option for option in options if option["process_name"] == source_process]
 		match = by_name[0] if len(by_name) == 1 else None
 	if not match:
 		frappe.throw(
-			_('{0} is not an earlier process of {1} on IPD {2}.').format(
+			_("{0} is not an earlier process of {1} on IPD {2}.").format(
 				source_process, current_process, ipd.name
 			)
 		)
 	return match
 
 
-def fill_from_source_grns(
-	qty_rows, *, lot, ipd, current_process, current_work_order, source_process
-):
+def fill_from_source_grns(qty_rows, *, lot, ipd, current_process, current_work_order, source_process):
 	"""Mutate popup rows with fillable output quantities from source GRNs.
 
 	One physical source variant can feed several output rules (Greige -> Red and
@@ -92,7 +82,7 @@ def fill_from_source_grns(
 	positive = {variant: qty for variant, qty in net.items() if qty > QTY_TOLERANCE}
 	if not positive:
 		frappe.throw(
-			_('No unallocated submitted GRN quantity is available from process {0}.').format(
+			_("No unallocated submitted GRN quantity is available from process {0}.").format(
 				selected["process_name"]
 			)
 		)
@@ -109,10 +99,7 @@ def fill_from_source_grns(
 			required = flt(spec.get("qty"))
 			if required <= 0 or not spec.get("item"):
 				continue
-			spec_matches = {
-				variant for variant, info in variant_info.items()
-				if _matches_input(info, spec)
-			}
+			spec_matches = {variant for variant, info in variant_info.items() if _matches_input(info, spec)}
 			matched.update(spec_matches)
 			available = sum(positive[variant] for variant in spec_matches)
 			capacities.append(available * output_qty / required)
@@ -122,33 +109,31 @@ def fill_from_source_grns(
 		match_counts.update(matched)
 
 	if not all_matched:
-		labels = ", ".join(
-			_variant_label(variant, variant_info[variant])
-			for variant in sorted(positive)
-		)
+		labels = ", ".join(_variant_label(variant, variant_info[variant]) for variant in sorted(positive))
 		frappe.throw(
 			_(
-				'Process {0} received {1}, but the current {2} popup has no compatible input row. '
-				'Check the IPD process mapping or select another source process.'
+				"Process {0} received {1}, but the current {2} popup has no compatible input row. "
+				"Check the IPD process mapping or select another source process."
 			).format(selected["process_name"], labels, current_process)
 		)
 
 	for qty_row, matched, capacity in row_matches:
 		shared = any(match_counts[variant] > 1 for variant in matched)
-		qty_row.update({
-			"source_process": selected["process_name"],
-			"source_process_step": selected["value"],
-			"source_available": flt(capacity, 3),
-			"source_shared": shared,
-			"source_pool_key": "|".join(sorted(matched)),
-			# Never guess a split when several target rules consume the same
-			# physical GRN variant. Unique matches can be filled completely.
-			"prefill": 0 if shared else flt(capacity, 3),
-		})
+		qty_row.update(
+			{
+				"source_process": selected["process_name"],
+				"source_process_step": selected["value"],
+				"source_available": flt(capacity, 3),
+				"source_shared": shared,
+				"source_pool_key": "|".join(sorted(matched)),
+				# Never guess a split when several target rules consume the same
+				# physical GRN variant. Unique matches can be filled completely.
+				"prefill": 0 if shared else flt(capacity, 3),
+			}
+		)
 
 	unmatched = [
-		_variant_label(variant, variant_info[variant])
-		for variant in sorted(set(positive) - all_matched)
+		_variant_label(variant, variant_info[variant]) for variant in sorted(set(positive) - all_matched)
 	]
 	return {
 		"value": selected["value"],
@@ -162,7 +147,13 @@ def fill_from_source_grns(
 
 
 def validate_source_demands(
-	demands, *, lot, ipd, cloth_item, current_process, current_work_order,
+	demands,
+	*,
+	lot,
+	ipd,
+	cloth_item,
+	current_process,
+	current_work_order,
 	source_process,
 ):
 	"""Recheck source availability during Calculate; the popup may be stale."""
@@ -187,15 +178,21 @@ def validate_source_demands(
 		if qty > available + QTY_TOLERANCE:
 			frappe.throw(
 				_(
-					'{0}: requested {1} Kg from {2}, but only {3} Kg remains available '
-					'in submitted GRNs. Reopen Fill Quantity.'
+					"{0}: requested {1} Kg from {2}, but only {3} Kg remains available "
+					"in submitted GRNs. Reopen Fill Quantity."
 				).format(variant, flt(qty, 3), selected["process_name"], flt(available, 3))
 			)
 	return selected
 
 
 def get_source_availability(
-	*, lot, ipd, cloth_item, source_process, source_step, current_process,
+	*,
+	lot,
+	ipd,
+	cloth_item,
+	source_process,
+	source_step,
+	current_process,
 	current_work_order,
 ):
 	"""Physical Item Variant quantities: submitted source GRNs minus reservations."""
@@ -286,10 +283,7 @@ def get_source_availability(
 		"received": received,
 		"reserved": reserved,
 		"net": {
-			variant: flt(
-				flt(received.get(variant)) - flt(reserved.get(variant)), 3
-			)
-			for variant in variants
+			variant: flt(flt(received.get(variant)) - flt(reserved.get(variant)), 3) for variant in variants
 		},
 	}
 
@@ -332,11 +326,7 @@ def _rows_in_stock_uom(rows, quantity_field="qty"):
 		stock_qty = flt(row.get("stock_qty"))
 		if not stock_qty:
 			qty = flt(row.get(quantity_field))
-			factor = flt(
-				(get_conversion_factor(variant, row.get("uom")) or {}).get(
-					"conversion_factor"
-				)
-			) or 1
+			factor = flt((get_conversion_factor(variant, row.get("uom")) or {}).get("conversion_factor")) or 1
 			stock_qty = qty * factor
 		result[variant] = result.get(variant, 0) + stock_qty
 	return {variant: flt(qty, 6) for variant, qty in result.items()}

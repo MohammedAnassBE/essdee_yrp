@@ -8,20 +8,24 @@ class TestProcessConversionConfiguration(IntegrationTestCase):
 	def setUp(self):
 		for attribute in ("Colour", "Dia"):
 			if not frappe.db.exists("Item Attribute", attribute):
-				frappe.get_doc({
-					"doctype": "Item Attribute",
-					"attribute_name": attribute,
-				}).insert(ignore_permissions=True)
+				frappe.get_doc(
+					{
+						"doctype": "Item Attribute",
+						"attribute_name": attribute,
+					}
+				).insert(ignore_permissions=True)
 
 	def make_process(self, name, is_item_conversion=1, is_cloth_process=1):
 		if frappe.db.exists("YRP Process", name):
 			frappe.delete_doc("YRP Process", name, force=True)
-		return frappe.get_doc({
-			"doctype": "YRP Process",
-			"process_name": name,
-			"is_item_conversion": is_item_conversion,
-			"is_cloth_process": is_cloth_process,
-		})
+		return frappe.get_doc(
+			{
+				"doctype": "YRP Process",
+				"process_name": name,
+				"is_item_conversion": is_item_conversion,
+				"is_cloth_process": is_cloth_process,
+			}
+		)
 
 	def test_conversion_transform_comes_from_process_attribute_contract(self):
 		process = self.make_process("_Test Configured Conversion")

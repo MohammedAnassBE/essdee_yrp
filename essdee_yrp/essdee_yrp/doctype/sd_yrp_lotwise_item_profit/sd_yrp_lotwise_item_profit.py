@@ -1,10 +1,9 @@
-from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2023, Essdee and contributors
 # For license information, please see license.txt
-
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from yrp.attribute_links import value as _attribute_value
 
 
 class SDYRPLotwiseItemProfit(Document):
@@ -21,7 +20,7 @@ def get_lot_qty(lot: str, quantity_type: str | None = None, **kwargs) -> dict:
 	if quantity_type not in allowed_fields:
 		frappe.throw(_("Select a valid Lot quantity type."))
 
-	lot_doc = frappe.get_doc('SD YRP Lot', lot)
+	lot_doc = frappe.get_doc("SD YRP Lot", lot)
 	lot_doc.check_permission("read")
 	return {
 		_attribute_value(row.size): row.get(quantity_type)

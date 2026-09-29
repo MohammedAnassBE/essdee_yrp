@@ -1,7 +1,6 @@
 import frappe
 from frappe.utils import flt
 
-
 LEGACY_CUSTOM_FIELD = "Process-additional_allowance"
 
 
@@ -16,7 +15,7 @@ def execute():
 		return
 
 	for row in frappe.get_all(
-		'YRP Process',
+		"YRP Process",
 		fields=["name", "additional_allowance", "wo_excess_allowed_percentage"],
 	):
 		percentage = choose_excess_percentage(
@@ -25,7 +24,7 @@ def execute():
 		)
 		if percentage != flt(row.wo_excess_allowed_percentage):
 			frappe.db.set_value(
-				'YRP Process',
+				"YRP Process",
 				row.name,
 				"wo_excess_allowed_percentage",
 				percentage,
@@ -33,4 +32,4 @@ def execute():
 			)
 
 	frappe.db.delete("Custom Field", {"name": LEGACY_CUSTOM_FIELD})
-	frappe.clear_cache(doctype='YRP Process')
+	frappe.clear_cache(doctype="YRP Process")

@@ -102,11 +102,17 @@ fixtures = [
 	# floor roles, granted as Custom DocPerm (base yrp stays untouched).
 	{
 		"dt": "Custom DocPerm",
-		"filters": [["parent", "in", [
-			'YRP Item Production Detail',
-			'YRP Terms and Condition',
-			'SD YRP Sewing Plan Entry Detail',
-		]]],
+		"filters": [
+			[
+				"parent",
+				"in",
+				[
+					"YRP Item Production Detail",
+					"YRP Terms and Condition",
+					"SD YRP Sewing Plan Entry Detail",
+				],
+			]
+		],
 	},
 	# /web per-user UI (spec §12.2): the code-owned layouts shipped to every site.
 	# THE FILTER IS LOAD-BEARING — sync_fixtures force-imports on every
@@ -118,7 +124,7 @@ fixtures = [
 	# 2026-07-20 (owner): ship ALL enabled layouts (status = Enabled), not a name
 	# list. `disabled = 0` — so any enabled layout on the exporting site is
 	# captured; disabled layouts (dev drills, unfinished templates) stay out.
-	{"dt": 'YRP UI Layout', "filters": [["disabled", "=", 0]]},
+	{"dt": "YRP UI Layout", "filters": [["disabled", "=", 0]]},
 ]
 
 # Apps
@@ -146,17 +152,17 @@ website_route_rules = [
 # CHECKLIST RULE (same as www/web.py WEB_DOCTYPES, which mirrors
 # frontend/src/config/doctypes.js GROUPS): all three lists change together.
 yrp_web_doctype_catalog = [
-	'SD YRP Lot',
-	'YRP Work Order',
-	'YRP Work Order Correction',
-	'YRP Delivery Challan',
-	'YRP Goods Received Note',
-	'YRP Process Cost',
-	'SD YRP Lot Transfer',
-	'YRP Stock Entry',
-	'Item',
-	'YRP Item Production Detail',
-	'YRP Terms and Condition',
+	"SD YRP Lot",
+	"YRP Work Order",
+	"YRP Work Order Correction",
+	"YRP Delivery Challan",
+	"YRP Goods Received Note",
+	"YRP Process Cost",
+	"SD YRP Lot Transfer",
+	"YRP Stock Entry",
+	"Item",
+	"YRP Item Production Detail",
+	"YRP Terms and Condition",
 ]
 
 # Post-login landing: ordinary users land on the custom /web work hub;
@@ -177,9 +183,7 @@ app_include_js = [
 	"essdee_yrp.bundle.js",
 	"assets/essdee_yrp/node_modules/frappe-gantt/dist/frappe-gantt.min.js",
 ]
-app_include_css = [
-	"assets/essdee_yrp/node_modules/frappe-gantt/dist/frappe-gantt.min.css"
-]
+app_include_css = ["assets/essdee_yrp/node_modules/frappe-gantt/dist/frappe-gantt.min.css"]
 
 # include js, css files in header of web template
 # web_include_css = "/assets/essdee_yrp/css/essdee_yrp.css"
@@ -197,32 +201,32 @@ app_include_css = [
 
 # include js in doctype views
 doctype_js = {
-	'Item': "public/js/item.js",
-	'YRP Item Production Detail': "public/js/item_production_detail.js",
-	'YRP Production Order': [
+	"Item": "public/js/item.js",
+	"YRP Item Production Detail": "public/js/item_production_detail.js",
+	"YRP Production Order": [
 		"public/js/production_order.js",
 		"public/js/production_order_workflow.js",
 	],
-	'YRP Work Order': "public/js/work_order.js",
-	'Purchase Order': "public/js/purchase_order.js",
-	'YRP Delivery Challan': "public/js/delivery_challan.js",
-	'YRP Goods Received Note': "public/js/goods_received_note.js",
-	'YRP Purchase Invoice': "public/js/purchase_invoice.js",
-	'YRP Bill Tracking': "public/js/bill_tracking.js",
-	'YRP Item BOM Attribute Mapping': "public/js/item_bom_attribute_mapping.js",
-	'YRP Process Cost': "public/js/process_cost.js",
-	'SD YRP Finishing Plan': "public/js/finishing_plan.js",
+	"YRP Work Order": "public/js/work_order.js",
+	"Purchase Order": "public/js/purchase_order.js",
+	"YRP Delivery Challan": "public/js/delivery_challan.js",
+	"YRP Goods Received Note": "public/js/goods_received_note.js",
+	"YRP Purchase Invoice": "public/js/purchase_invoice.js",
+	"YRP Bill Tracking": "public/js/bill_tracking.js",
+	"YRP Item BOM Attribute Mapping": "public/js/item_bom_attribute_mapping.js",
+	"YRP Process Cost": "public/js/process_cost.js",
+	"SD YRP Finishing Plan": "public/js/finishing_plan.js",
 	# List form: both scripts load for Stock Entry. The guard hides the desk Cancel
 	# action on transfer SEs (source_grn set); see the JS file for the mechanism.
-	'YRP Stock Entry': [
+	"YRP Stock Entry": [
 		"public/js/stock_entry.js",
 		"public/js/stock_entry_transfer_cancel_guard.js",
 	],
 }
 doctype_list_js = {
-	'SD YRP Cutting Plan': "public/js/cutting_plan_list.js",
-	'YRP Item Production Detail': "public/js/item_production_detail_list.js",
-	'YRP Production Order': "public/js/production_order_list.js",
+	"SD YRP Cutting Plan": "public/js/cutting_plan_list.js",
+	"YRP Item Production Detail": "public/js/item_production_detail_list.js",
+	"YRP Production Order": "public/js/production_order_list.js",
 }
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
@@ -373,7 +377,7 @@ after_build = "essdee_yrp.web_build.build_web_spa"
 doc_events = {
 	"YRP Process Cost": {"before_validate": "essdee_yrp.process_cost.before_validate"},
 	"YRP Process": {"validate": "essdee_yrp.process_validations.validate"},
-	'YRP Production Order': {
+	"YRP Production Order": {
 		"onload": "essdee_yrp.production_order_workflow.onload",
 		"before_validate": "essdee_yrp.production_order_workflow.before_validate",
 		"validate": "essdee_yrp.production_order_workflow.validate",
@@ -382,16 +386,16 @@ doc_events = {
 		"on_submit": "essdee_yrp.production_order_workflow.on_submit",
 		"before_cancel": "essdee_yrp.production_order_workflow.before_cancel",
 	},
-	'YRP Work Station': {
+	"YRP Work Station": {
 		"before_validate": "essdee_yrp.time_and_action.work_station.validate_default_action_work_station",
 	},
-	'Purchase Order': {
+	"Purchase Order": {
 		"before_validate": "essdee_yrp.purchase_order_lots.sync_linked_lots",
 	},
-	'Item': {
+	"Item": {
 		"validate": "essdee_yrp.item_validations.validate",
 	},
-	'YRP Item Production Detail': {
+	"YRP Item Production Detail": {
 		"onload": "essdee_yrp.ipd_ui.onload",
 		"before_validate": [
 			"essdee_yrp.ipd_validations.before_validate",
@@ -406,7 +410,7 @@ doc_events = {
 		],
 		"on_trash": "essdee_yrp.ipd_validations.on_trash",
 	},
-	'YRP Work Order': {
+	"YRP Work Order": {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
 		"onload": "essdee_yrp.work_order_hooks.onload",
 		"validate": "essdee_yrp.work_order_hooks.validate",
@@ -422,7 +426,7 @@ doc_events = {
 			"essdee_yrp.finishing.rebuild.on_work_order_lifecycle_change",
 		],
 	},
-	'YRP Delivery Challan': {
+	"YRP Delivery Challan": {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
 		"after_insert": "essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_bulk_lay_sheets.sd_yrp_cutting_bulk_lay_sheets.record_delivery_challan",
 		"onload": "essdee_yrp.delivery_challan_hooks.onload",
@@ -442,10 +446,10 @@ doc_events = {
 			"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_bulk_lay_sheets.sd_yrp_cutting_bulk_lay_sheets.refresh_linked_bulk_status",
 		],
 	},
-	'YRP Work Order Correction': {
+	"YRP Work Order Correction": {
 		"before_submit": "essdee_yrp.work_order_correction_hooks.validate_correction_ipd_items"
 	},
-	'YRP Goods Received Note': {
+	"YRP Goods Received Note": {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
 		"before_validate": [
 			"essdee_yrp.packing_hooks.set_grn_includes_packing",
@@ -482,7 +486,7 @@ doc_events = {
 	# cancelled ONLY by the mrp GRN-cancel flow (cancel_grn_transfer sets
 	# doc.flags.from_grn_transfer). Blocks every other cancel path server-side so the
 	# UI hide (public/js/stock_entry_transfer_cancel_guard.js) cannot be bypassed.
-	'YRP Stock Entry': {
+	"YRP Stock Entry": {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
 		"onload": "essdee_yrp.stock_entry_hooks.onload",
 		"before_validate": [
@@ -498,10 +502,10 @@ doc_events = {
 		],
 		"on_cancel": "essdee_yrp.stock_entry_hooks.on_cancel",
 	},
-	'YRP Stock Reconciliation': {
+	"YRP Stock Reconciliation": {
 		"onload": "essdee_yrp.stock_reconciliation_hooks.onload",
 	},
-	'SD YRP Lot Transfer': {
+	"SD YRP Lot Transfer": {
 		"on_submit": [
 			"essdee_yrp.finishing.old_lot.on_lot_transfer_submit",
 			"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_bulk_lay_sheets.sd_yrp_cutting_bulk_lay_sheets.refresh_linked_bulk_status",
@@ -518,25 +522,23 @@ doc_events = {
 
 scheduler_events = {
 	"cron": {
-		"0 0 * * *": [
-			"essdee_yrp.finishing.closure.auto_complete_ocr_after_30_days"
-		],
+		"0 0 * * *": ["essdee_yrp.finishing.closure.auto_complete_ocr_after_30_days"],
 	},
-# 	"all": [
-# 		"essdee_yrp.tasks.all"
-# 	],
-# 	"daily": [
-# 		"essdee_yrp.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"essdee_yrp.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"essdee_yrp.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"essdee_yrp.tasks.monthly"
-# 	],
+	# 	"all": [
+	# 		"essdee_yrp.tasks.all"
+	# 	],
+	# 	"daily": [
+	# 		"essdee_yrp.tasks.daily"
+	# 	],
+	# 	"hourly": [
+	# 		"essdee_yrp.tasks.hourly"
+	# 	],
+	# 	"weekly": [
+	# 		"essdee_yrp.tasks.weekly"
+	# 	],
+	# 	"monthly": [
+	# 		"essdee_yrp.tasks.monthly"
+	# 	],
 }
 
 # Testing
@@ -556,11 +558,11 @@ scheduler_events = {
 # Finishing return transaction (is_return), including its two-warehouse stock
 # movement and Work Order Deliverable reversal.
 override_doctype_class = {
-	'YRP Delivery Challan': "essdee_yrp.overrides.delivery_challan.EssdeeDeliveryChallan",
-	'YRP Goods Received Note': "essdee_yrp.overrides.goods_received_note.EssdeeGoodsReceivedNote",
-	'YRP Item Production Detail': "essdee_yrp.overrides.item_production_detail.EssdeeItemProductionDetail",
-	'YRP Purchase Invoice': "essdee_yrp.overrides.purchase_invoice.EssdeePurchaseInvoice",
-	'YRP Work Order': "essdee_yrp.overrides.work_order.EssdeeWorkOrder",
+	"YRP Delivery Challan": "essdee_yrp.overrides.delivery_challan.EssdeeDeliveryChallan",
+	"YRP Goods Received Note": "essdee_yrp.overrides.goods_received_note.EssdeeGoodsReceivedNote",
+	"YRP Item Production Detail": "essdee_yrp.overrides.item_production_detail.EssdeeItemProductionDetail",
+	"YRP Purchase Invoice": "essdee_yrp.overrides.purchase_invoice.EssdeePurchaseInvoice",
+	"YRP Work Order": "essdee_yrp.overrides.work_order.EssdeeWorkOrder",
 }
 
 # Overriding Methods
@@ -569,40 +571,31 @@ override_doctype_class = {
 override_whitelisted_methods = {
 	# ERP's existing PI hooks call the production_api-era Bill Tracking routes.
 	# Keep those stable while adapting their ERP PI name to F16's local PI Link.
-	"production_api.production_api.doctype.vendor_bill_tracking.vendor_bill_tracking.close_vendor_bill":
-		"essdee_yrp.erp_purchase_invoice.close_bill_tracking_from_erp",
-	"production_api.production_api.doctype.vendor_bill_tracking.vendor_bill_tracking.revert_purchase_invoice_link":
-		"essdee_yrp.erp_purchase_invoice.revert_bill_tracking_from_erp",
+	"production_api.production_api.doctype.vendor_bill_tracking.vendor_bill_tracking.close_vendor_bill": "essdee_yrp.erp_purchase_invoice.close_bill_tracking_from_erp",
+	"production_api.production_api.doctype.vendor_bill_tracking.vendor_bill_tracking.revert_purchase_invoice_link": "essdee_yrp.erp_purchase_invoice.revert_bill_tracking_from_erp",
 	# Work Order bills are edited as finished-piece process rows while their
 	# hidden base rows preserve the exact physical GRN valuation lineage.
-	"yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice.fetch_grn_details":
-		"essdee_yrp.purchase_invoice.fetch_grn_details",
+	"yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice.fetch_grn_details": "essdee_yrp.purchase_invoice.fetch_grn_details",
 	# Base intentionally offers zero-pending Work Order rows for excess DCs, but
 	# its grouped editor also uses pending as the input maximum. The Essdee
 	# adapter removes only that zero maximum while retaining server authority.
-	"yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan.get_work_order_defaults":
-		"essdee_yrp.work_order_actions.get_delivery_challan_defaults",
+	"yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan.get_work_order_defaults": "essdee_yrp.work_order_actions.get_delivery_challan_defaults",
 	# Base YRP's Desk button calls this path. Route it through the
 	# Essdee-owned close implementation so Desk and /web use one stock contract.
-	"yrp.yrp.doctype.yrp_work_order.yrp_work_order.update_stock":
-		"essdee_yrp.work_order_close.close_work_order",
+	"yrp.yrp.doctype.yrp_work_order.yrp_work_order.update_stock": "essdee_yrp.work_order_close.close_work_order",
 	# Internal-unit GRNs live in Transit Warehouse until Complete Transfer;
 	# inspection must classify the bin that actually holds the stock.
-	"yrp.yrp.doctype.yrp_inspection_entry.yrp_inspection_entry.get_initial_payload":
-		"essdee_yrp.overrides.inspection_entry.get_initial_payload",
+	"yrp.yrp.doctype.yrp_inspection_entry.yrp_inspection_entry.get_initial_payload": "essdee_yrp.overrides.inspection_entry.get_initial_payload",
 	# Migrated garment receivables may have one saved row_index per size.
 	# Normalize copied GRN defaults so the editable matrix renders one logical
 	# SKU row with all sizes, without rewriting the Work Order source rows.
-	"yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note.get_work_order_defaults":
-		"essdee_yrp.overrides.goods_received_note.get_work_order_defaults",
+	"yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note.get_work_order_defaults": "essdee_yrp.overrides.goods_received_note.get_work_order_defaults",
 	# Base's generic attribute callback runs alongside the Essdee Desk handler.
 	# Route it here so an item-only response cannot race the Lot/IPD response.
-	"yrp.yrp.doctype.yrp_process_cost.yrp_process_cost.get_pc_attribute_values":
-		"essdee_yrp.process_cost.get_pc_attribute_values",
+	"yrp.yrp.doctype.yrp_process_cost.yrp_process_cost.get_pc_attribute_values": "essdee_yrp.process_cost.get_pc_attribute_values",
 	# The generic popup already subtracts inspection and prior Work Order
 	# consumption. Also subtract Essdee's direct Rework Details conversions.
-	"yrp.yrp.doctype.yrp_work_order.yrp_work_order.get_rework_source_rows":
-		"essdee_yrp.rework_work_order.get_rework_source_rows",
+	"yrp.yrp.doctype.yrp_work_order.yrp_work_order.get_rework_source_rows": "essdee_yrp.rework_work_order.get_rework_source_rows",
 }
 #
 # each overriding function accepts a `data` argument;
@@ -676,8 +669,57 @@ override_whitelisted_methods = {
 
 # Scoped attribute-value Link normalization for internal document writes.
 extend_doctype_class = globals().get("extend_doctype_class", {})
-for _attribute_link_doctype in ['SD YRP Box Sticker Print', 'SD YRP Box Sticker Print Detail', 'SD YRP Cut Bundle Movement Ledger', 'SD YRP Cut Panel Item', 'SD YRP Cutting LaySheet', 'SD YRP Cutting LaySheet Accessory Detail', 'SD YRP Cutting LaySheet Bundle', 'SD YRP Cutting LaySheet Detail', 'SD YRP Cutting Marker', 'SD YRP Cutting Marker Part', 'SD YRP Cutting Marker Ratio', 'SD YRP Cutting Order Cloth Detail', 'SD YRP Cutting Order Colour Value', 'SD YRP Cutting Order Detail', 'SD YRP Cutting Order Panel Detail', 'SD YRP Cutting Plan', 'SD YRP Cutting Plan Cloth Detail', 'SD YRP FG Item Master', 'SD YRP FG Item Size', 'SD YRP FG Item Size Range', 'SD YRP FG Item Size Type', 'SD YRP FG Item Size Type Detail', 'SD YRP IPD Colour Yarn Ratio', 'SD YRP IPD Compacting', 'SD YRP IPD Compacting Details', 'SD YRP IPD Compacting Dia Detail', 'SD YRP IPD Compacting Reference', 'SD YRP IPD Dyeing Colour Detail', 'SD YRP IPD Fabric Route', 'SD YRP IPD Knitting Dia Detail', 'SD YRP IPD Settings', 'SD YRP Item Production Detail Packing Attribute Detail', 'SD YRP Item Production Detail Packing Size Detail', 'SD YRP Item Production Detail Set Item Combination', 'SD YRP Lot', 'SD YRP Lot Fabric Colour Program', 'SD YRP Lot Fabric Program', 'SD YRP Lot Fabric Requirement', 'SD YRP Lot Fabric Step Ledger', 'SD YRP Lot Planned Qty', 'SD YRP Lot Template', 'SD YRP PPO Lot Price Detail', 'SD YRP Product', 'SD YRP Product Release', 'SD YRP Stiching Item Detail']:
+for _attribute_link_doctype in [
+	"SD YRP Box Sticker Print",
+	"SD YRP Box Sticker Print Detail",
+	"SD YRP Cut Bundle Movement Ledger",
+	"SD YRP Cut Panel Item",
+	"SD YRP Cutting LaySheet",
+	"SD YRP Cutting LaySheet Accessory Detail",
+	"SD YRP Cutting LaySheet Bundle",
+	"SD YRP Cutting LaySheet Detail",
+	"SD YRP Cutting Marker",
+	"SD YRP Cutting Marker Part",
+	"SD YRP Cutting Marker Ratio",
+	"SD YRP Cutting Order Cloth Detail",
+	"SD YRP Cutting Order Colour Value",
+	"SD YRP Cutting Order Detail",
+	"SD YRP Cutting Order Panel Detail",
+	"SD YRP Cutting Plan",
+	"SD YRP Cutting Plan Cloth Detail",
+	"SD YRP FG Item Master",
+	"SD YRP FG Item Size",
+	"SD YRP FG Item Size Range",
+	"SD YRP FG Item Size Type",
+	"SD YRP FG Item Size Type Detail",
+	"SD YRP IPD Colour Yarn Ratio",
+	"SD YRP IPD Compacting",
+	"SD YRP IPD Compacting Details",
+	"SD YRP IPD Compacting Dia Detail",
+	"SD YRP IPD Compacting Reference",
+	"SD YRP IPD Dyeing Colour Detail",
+	"SD YRP IPD Fabric Route",
+	"SD YRP IPD Knitting Dia Detail",
+	"SD YRP IPD Settings",
+	"SD YRP Item Production Detail Packing Attribute Detail",
+	"SD YRP Item Production Detail Packing Size Detail",
+	"SD YRP Item Production Detail Set Item Combination",
+	"SD YRP Lot",
+	"SD YRP Lot Fabric Colour Program",
+	"SD YRP Lot Fabric Program",
+	"SD YRP Lot Fabric Requirement",
+	"SD YRP Lot Fabric Step Ledger",
+	"SD YRP Lot Planned Qty",
+	"SD YRP Lot Template",
+	"SD YRP PPO Lot Price Detail",
+	"SD YRP Product",
+	"SD YRP Product Release",
+	"SD YRP Stiching Item Detail",
+]:
 	_existing_mixins = extend_doctype_class.get(_attribute_link_doctype, [])
 	if isinstance(_existing_mixins, str):
 		_existing_mixins = [_existing_mixins]
-	extend_doctype_class[_attribute_link_doctype] = [*_existing_mixins, "yrp.attribute_links.AttributeLinkStorageMixin"]
+	extend_doctype_class[_attribute_link_doctype] = [
+		*_existing_mixins,
+		"yrp.attribute_links.AttributeLinkStorageMixin",
+	]

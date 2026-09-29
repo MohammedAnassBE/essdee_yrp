@@ -6,7 +6,6 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from jinja2 import nodes
 
-
 PRINT_CONTEXT_NAMES = {
 	"doc",
 	"footer",
@@ -28,7 +27,7 @@ DOCUMENT_RUNTIME_ATTRIBUTES = {
 }
 
 PRINT_ALIASES = {
-	'YRP Goods Received Note': {
+	"YRP Goods Received Note": {
 		"approved_by",
 		"grand_total",
 		"grn_date",
@@ -38,7 +37,7 @@ PRINT_ALIASES = {
 		"supplier_name",
 		"total_tax",
 	},
-	'YRP Work Order': {
+	"YRP Work Order": {
 		"delivery_address_details",
 		"supplier_address_details",
 		"work_order_calculated_items",
@@ -109,9 +108,7 @@ class TestPrintFormatParity(IntegrationTestCase):
 			for template in self._template_texts(data):
 				for old_name in LEGACY_PRINT_DOCTYPE_NAMES:
 					with self.subTest(format=path.parent.name, old_name=old_name):
-						self.assertIsNone(
-							re.search(rf"([\"']){re.escape(old_name)}\1", template)
-						)
+						self.assertIsNone(re.search(rf"([\"']){re.escape(old_name)}\1", template))
 
 	def test_print_doc_fields_exist_in_f16(self):
 		for path, data in self._formats():
@@ -143,7 +140,8 @@ class TestPrintFormatParity(IntegrationTestCase):
 
 	def test_templates_render_against_migrated_documents(self):
 		from essdee_yrp.print_helpers import prepare_print_document
-		if not frappe.db.exists('SD YRP Cutting Plan', "CP-2608-00006"):
+
+		if not frappe.db.exists("SD YRP Cutting Plan", "CP-2608-00006"):
 			self.skipTest("Print rendering against source records runs after data migration")
 
 		for path, data in self._formats():

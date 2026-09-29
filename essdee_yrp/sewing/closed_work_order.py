@@ -6,7 +6,6 @@ import frappe
 from frappe import _
 from frappe.desk.reportview import get_match_cond
 from frappe.utils import cint, cstr, flt, getdate, nowtime, today
-
 from yrp.stock.dimensions import apply_dimension_defaults
 from yrp.stock.save_stock_items import group_items_for_ui, ungroup_items_from_ui
 from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
@@ -20,9 +19,7 @@ from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
 
 def is_closed_sewing_grn(doc) -> bool:
 	return bool(
-		doc.get("from_closed_wo_sewing_details")
-		and doc.against == 'YRP Work Order'
-		and doc.against_id
+		doc.get("from_closed_wo_sewing_details") and doc.against == "YRP Work Order" and doc.against_id
 	)
 
 
@@ -52,7 +49,7 @@ def get_closed_sewing_work_orders(
 	supplier = cstr(filters.get("supplier")).strip()
 	if not supplier:
 		return []
-	if not frappe.has_permission('YRP Work Order', "read"):
+	if not frappe.has_permission("YRP Work Order", "read"):
 		return []
 
 	return frappe.db.sql(
@@ -73,7 +70,7 @@ def get_closed_sewing_work_orders(
 				OR wo.item LIKE %(txt)s
 				OR wo.process_name LIKE %(txt)s
 			)
-			{get_match_cond('YRP Work Order')}
+			{get_match_cond("YRP Work Order")}
 		ORDER BY wo.modified DESC
 		LIMIT %(start)s, %(page_len)s
 		""",
@@ -102,7 +99,7 @@ def get_closed_work_order_grn_details(work_order: str, supplier: str) -> dict:
 		"delivery_address": doc.delivery_address,
 		"has_pending_items": bool(rows),
 		"items": rows,
-		"item_details": group_items_for_ui(rows, 'YRP Goods Received Note'),
+		"item_details": group_items_for_ui(rows, "YRP Goods Received Note"),
 	}
 
 
@@ -113,14 +110,14 @@ def create_closed_work_order_grn(
 	values,
 	item_details,
 ) -> dict:
-	frappe.has_permission('YRP Goods Received Note', "create", throw=True)
-	frappe.has_permission('YRP Goods Received Note', "submit", throw=True)
+	frappe.has_permission("YRP Goods Received Note", "create", throw=True)
+	frappe.has_permission("YRP Goods Received Note", "submit", throw=True)
 
 	# Hold the source row lock through insert+submit, preventing two requests from
 	# consuming the same pending quantity.
 	doc = _get_closed_sewing_work_order(work_order, supplier, for_update=True)
 	values = _json_object(values)
-	rows = ungroup_items_from_ui(item_details, 'YRP Goods Received Note')
+	rows = ungroup_items_from_ui(item_details, "YRP Goods Received Note")
 	rows = _normalize_selected_rows(doc, rows)
 
 	posting_date = getdate(values.get("posting_date") or today())
@@ -135,11 +132,11 @@ def create_closed_work_order_grn(
 	if not vehicle_no:
 		frappe.throw(_("Vehicle Number is required."))
 
-	grn = frappe.new_doc('YRP Goods Received Note')
+	grn = frappe.new_doc("YRP Goods Received Note")
 	grn.update(
 		{
 			"naming_series": "GRN-",
-			"against": 'YRP Work Order',
+			"against": "YRP Work Order",
 			"against_id": doc.name,
 			"supplier": doc.supplier,
 			"supplier_address": doc.supplier_address,
@@ -148,12 +145,9 @@ def create_closed_work_order_grn(
 			"delivery_date": delivery_date,
 			"posting_date": posting_date,
 			"posting_time": values.get("posting_time") or nowtime(),
-			"edit_posting_date_and_time": cint(
-				values.get("edit_posting_date_and_time")
-			),
+			"edit_posting_date_and_time": cint(values.get("edit_posting_date_and_time")),
 			"supplier_document_no": supplier_document_no,
-			"supplier_document_date": values.get("supplier_document_date")
-			or delivery_date,
+			"supplier_document_date": values.get("supplier_document_date") or delivery_date,
 			"vehicle_no": vehicle_no,
 			"dc_no": cstr(values.get("dc_no")).strip(),
 			"comments": cstr(values.get("comments")).strip(),
@@ -182,13 +176,11 @@ def _get_closed_sewing_work_order(
 	if not work_order:
 		frappe.throw(_("Work Order is required."))
 
-	doc = frappe.get_doc('YRP Work Order', work_order, for_update=for_update)
+	doc = frappe.get_doc("YRP Work Order", work_order, for_update=for_update)
 	doc.check_permission("read")
 	if doc.docstatus != 1 or doc.open_status != "Close":
 		frappe.throw(
-			_("Work Order {0} is not a submitted, closed Work Order.").format(
-				frappe.bold(work_order)
-			)
+			_("Work Order {0} is not a submitted, closed Work Order.").format(frappe.bold(work_order))
 		)
 	if supplier and doc.supplier != supplier:
 		frappe.throw(
@@ -196,12 +188,8 @@ def _get_closed_sewing_work_order(
 				frappe.bold(work_order), frappe.bold(supplier)
 			)
 		)
-	if not frappe.db.exists('SD YRP Sewing Plan', {"work_order": doc.name}):
-		frappe.throw(
-			_("Work Order {0} is not linked to Sewing Details.").format(
-				frappe.bold(work_order)
-			)
-		)
+	if not frappe.db.exists("SD YRP Sewing Plan", {"work_order": doc.name}):
+		frappe.throw(_("Work Order {0} is not linked to Sewing Details.").format(frappe.bold(work_order)))
 	return doc
 
 
@@ -232,10 +220,7 @@ def _normalize_selected_rows(work_order, rows: list[dict]) -> list[dict]:
 		frappe.throw(_("Enter a received quantity for at least one item."))
 
 	trusted_rows = _closed_work_order_receivable_rows(work_order)
-	trusted = {
-		(row.get("ref_docname"), cstr(row.get("received_type")).strip()): row
-		for row in trusted_rows
-	}
+	trusted = {(row.get("ref_docname"), cstr(row.get("received_type")).strip()): row for row in trusted_rows}
 	selected = {}
 	for row in rows:
 		quantity = flt(row.get("quantity"))
@@ -246,7 +231,7 @@ def _normalize_selected_rows(work_order, rows: list[dict]) -> list[dict]:
 			cstr(row.get("received_type")).strip(),
 		)
 		template = trusted.get(key)
-		if not template or row.get("ref_doctype") != 'YRP Work Order Receivables':
+		if not template or row.get("ref_doctype") != "YRP Work Order Receivables":
 			frappe.throw(_("A selected item does not belong to this Work Order."))
 		selected[key] = flt(selected.get(key)) + quantity
 

@@ -21,7 +21,6 @@ from pathlib import Path
 import pymysql
 from pymysql.cursors import DictCursor
 
-
 SYNC_DOCTYPES = (
 	("Country", "Country"),
 	("UOM", "YRP UOM"),
@@ -210,9 +209,7 @@ def _child_rows(
 		for row in cursor.fetchall():
 			if row["parent"] not in parents:
 				continue
-			grouped[row["parent"]].append(
-				tuple(_normalise(row.get(field)) for field in fields)
-			)
+			grouped[row["parent"]].append(tuple(_normalise(row.get(field)) for field in fields))
 	return grouped
 
 
@@ -253,8 +250,7 @@ def _compare_parent_fields(
 		bad = [
 			name
 			for name in common_names
-			if _normalise(source_rows[name].get(fieldname))
-			!= _normalise(target_rows[name].get(fieldname))
+			if _normalise(source_rows[name].get(fieldname)) != _normalise(target_rows[name].get(fieldname))
 		]
 		if bad:
 			mismatches.append(
@@ -325,14 +321,12 @@ def _compare_child_tables(
 		source_scalar = {
 			name: field
 			for name, field in source_child_meta["fields"].items()
-			if field["fieldtype"] not in TABLE_FIELD_TYPES | NO_COLUMN_FIELD_TYPES
-			and name in source_columns
+			if field["fieldtype"] not in TABLE_FIELD_TYPES | NO_COLUMN_FIELD_TYPES and name in source_columns
 		}
 		target_scalar = {
 			name: field
 			for name, field in target_child_meta["fields"].items()
-			if field["fieldtype"] not in TABLE_FIELD_TYPES | NO_COLUMN_FIELD_TYPES
-			and name in target_columns
+			if field["fieldtype"] not in TABLE_FIELD_TYPES | NO_COLUMN_FIELD_TYPES and name in target_columns
 		}
 		common_fields = sorted(set(source_scalar) & set(target_scalar))
 		source_rows = _child_rows(
@@ -341,11 +335,7 @@ def _compare_child_tables(
 		target_rows = _child_rows(
 			target, target_child, target_doctype, fieldname, common_fields, common_names
 		)
-		bad = [
-			name
-			for name in common_names
-			if source_rows.get(name, []) != target_rows.get(name, [])
-		]
+		bad = [name for name in common_names if source_rows.get(name, []) != target_rows.get(name, [])]
 
 		source_only_fields = []
 		for child_fieldname in sorted(set(source_scalar) - set(target_scalar)):

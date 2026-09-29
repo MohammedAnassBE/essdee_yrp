@@ -7,12 +7,13 @@ configured only when installed.
 
 Wired from hooks.py as `after_install` and `after_migrate` — both idempotent.
 """
-from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe.contacts.doctype.address_template.address_template import (
 	get_default_address_template,
 )
+from yrp.attribute_links import value as _attribute_value
+
 from essdee_yrp.web_build import build_web_spa
 
 # Roles referenced by the migrated MRP DocType permissions but not provided by
@@ -32,8 +33,8 @@ MRP_SCHEMA_ROLES = (
 )
 
 MRP_SYSTEM_MANAGER_CANCEL_PERMISSIONS = {
-	'SD YRP Cut Panel Movement': {"submit": 0},
-	'SD YRP Cutting Marker': {"submit": 1},
+	"SD YRP Cut Panel Movement": {"submit": 0},
+	"SD YRP Cutting Marker": {"submit": 1},
 }
 
 DOCPERM_FIELDS = (
@@ -56,7 +57,7 @@ DOCPERM_FIELDS = (
 
 ESSDEE_REQUIRED_STOCK_DIMENSIONS = (
 	{
-		"dimension_doctype": 'SD YRP Lot',
+		"dimension_doctype": "SD YRP Lot",
 		"fieldname": "lot",
 		"label": "Lot",
 		"mandatory": 1,
@@ -64,7 +65,7 @@ ESSDEE_REQUIRED_STOCK_DIMENSIONS = (
 		"is_production_group": 1,
 	},
 	{
-		"dimension_doctype": 'YRP Received Type',
+		"dimension_doctype": "YRP Received Type",
 		"fieldname": "received_type",
 		"label": "Received Type",
 		"mandatory": 1,
@@ -133,12 +134,18 @@ def ensure_historical_quantity_storage():
 		if not frappe.db.exists("DocType", doctype):
 			continue
 		meta = frappe.get_meta(doctype)
-		if any(not meta.get_field(name) or str(meta.get_field(name).precision or "") != "9" for name in fieldnames):
+		if any(
+			not meta.get_field(name) or str(meta.get_field(name).precision or "") != "9"
+			for name in fieldnames
+		):
 			frappe.throw(f"Historical quantity precision fixtures are not installed for {doctype}")
-		columns = dict(frappe.db.sql(
-			"SELECT column_name,numeric_scale FROM information_schema.columns "
-			"WHERE table_schema=DATABASE() AND table_name=%s", ("tab" + doctype,),
-		))
+		columns = dict(
+			frappe.db.sql(
+				"SELECT column_name,numeric_scale FROM information_schema.columns "
+				"WHERE table_schema=DATABASE() AND table_name=%s",
+				("tab" + doctype,),
+			)
+		)
 		if any(int(columns.get(name) or 0) < 9 for name in fieldnames):
 			frappe.db.updatedb(doctype)
 
@@ -146,28 +153,26 @@ def ensure_historical_quantity_storage():
 def validate_purchase_invoice_commercial_fields():
 	"""Fail closed if the packaged PI Custom Field fixture was not imported."""
 	for doctype, fieldnames in {
-		'YRP Purchase Invoice': ("essdee_items", "essdee_rate_table_source"),
-		'YRP Purchase Invoice Item': ("essdee_group_key", "essdee_rate_weight"),
-		'YRP PI Work Order Billed Detail': ("essdee_group_key",),
+		"YRP Purchase Invoice": ("essdee_items", "essdee_rate_table_source"),
+		"YRP Purchase Invoice Item": ("essdee_group_key", "essdee_rate_weight"),
+		"YRP PI Work Order Billed Detail": ("essdee_group_key",),
 	}.items():
 		for fieldname in fieldnames:
 			field = frappe.get_meta(doctype).get_field(fieldname)
 			if not field or not frappe.db.exists("Custom Field", f"{doctype}-{fieldname}"):
-				frappe.throw(
-					f"Essdee YRP Custom Field fixture is missing {doctype}.{fieldname}"
-				)
+				frappe.throw(f"Essdee YRP Custom Field fixture is missing {doctype}.{fieldname}")
 
 
 def ensure_process_billing_items():
 	"""Complete the migrated production_api billing-item contract for Cutting."""
 	if (
-		not frappe.get_meta('YRP Process').get_field("item")
-		or not frappe.db.exists('YRP Process', "Cutting")
-		or not frappe.db.exists('Item', "Cutting Charges")
+		not frappe.get_meta("YRP Process").get_field("item")
+		or not frappe.db.exists("YRP Process", "Cutting")
+		or not frappe.db.exists("Item", "Cutting Charges")
 	):
 		return
-	if not frappe.db.get_value('YRP Process', "Cutting", "item"):
-		frappe.db.set_value('YRP Process', "Cutting", "item", "Cutting Charges", update_modified=False)
+	if not frappe.db.get_value("YRP Process", "Cutting", "item"):
+		frappe.db.set_value("YRP Process", "Cutting", "item", "Cutting Charges", update_modified=False)
 
 
 def ensure_stock_transaction_indexes():
@@ -187,12 +192,12 @@ def ensure_stock_transaction_indexes():
 	the voucher-detail index keeps that ownership lookup out of the same scan.
 	"""
 	frappe.db.add_index(
-		'YRP Stock Ledger Entry',
+		"YRP Stock Ledger Entry",
 		["voucher_type", "voucher_no", "is_cancelled"],
 		index_name="idx_sle_voucher_active",
 	)
 	frappe.db.add_index(
-		'YRP Stock Reservation Entry',
+		"YRP Stock Reservation Entry",
 		[
 			"item_code",
 			"warehouse",
@@ -204,7 +209,7 @@ def ensure_stock_transaction_indexes():
 		index_name="idx_sre_active_stock_bucket",
 	)
 	frappe.db.add_index(
-		'YRP Stock Reservation Entry',
+		"YRP Stock Reservation Entry",
 		[
 			"voucher_type",
 			"voucher_no",
@@ -235,10 +240,8 @@ def ensure_required_stock_dimensions():
 			f"are missing: {', '.join(missing_doctypes)}"
 		)
 
-	settings = frappe.get_single('YRP Stock Settings')
-	rows_by_fieldname = {
-		row.fieldname: row for row in (settings.stock_dimensions or [])
-	}
+	settings = frappe.get_single("YRP Stock Settings")
+	rows_by_fieldname = {row.fieldname: row for row in (settings.stock_dimensions or [])}
 	changed = False
 	for dimension in ESSDEE_REQUIRED_STOCK_DIMENSIONS:
 		if dimension["fieldname"] in rows_by_fieldname:
@@ -263,11 +266,11 @@ def ensure_required_stock_dimensions():
 def ensure_yrp_valuation_contract():
 	"""Fail deployment before Essdee can activate a partial stock contract."""
 	required_fields = {
-		'YRP Stock Ledger Entry': (
+		"YRP Stock Ledger Entry": (
 			"paired_stock_ledger_entry",
 			"valuation_adjustment_value",
 		),
-		'SD YRP GRN Deliverable': (
+		"SD YRP GRN Deliverable": (
 			"goods_received_note_item",
 			"received_item_variant",
 			"material_value",
@@ -275,7 +278,7 @@ def ensure_yrp_valuation_contract():
 			"output_receipt_sle",
 			"stock_dimensions",
 		),
-		'YRP Work Order Excess Usage Item': (
+		"YRP Work Order Excess Usage Item": (
 			"actual_value",
 			"source_sle",
 			"stock_dimensions",
@@ -287,14 +290,10 @@ def ensure_yrp_valuation_contract():
 			missing.append(doctype)
 			continue
 		meta = frappe.get_meta(doctype)
-		missing.extend(
-			f"{doctype}.{fieldname}"
-			for fieldname in fieldnames
-			if not meta.get_field(fieldname)
-		)
+		missing.extend(f"{doctype}.{fieldname}" for fieldname in fieldnames if not meta.get_field(fieldname))
 	for doctype in (
-		'YRP Stock Valuation Adjustment',
-		'YRP Stock Valuation Production Link',
+		"YRP Stock Valuation Adjustment",
+		"YRP Stock Valuation Production Link",
 	):
 		if not frappe.db.exists("DocType", doctype):
 			missing.append(doctype)
@@ -311,7 +310,7 @@ def ensure_finishing_plan_dispatch_naming_series():
 		"Property Setter",
 		{"name": "Finishing Plan Dispatch-naming_series-options"},
 	)
-	frappe.clear_cache(doctype='SD YRP Finishing Plan Dispatch')
+	frappe.clear_cache(doctype="SD YRP Finishing Plan Dispatch")
 
 
 def ensure_mrp_schema_roles():
@@ -428,17 +427,17 @@ def ensure_yrp_production_order_settings():
 	On a brand-new site it waits until the synced Size/Stage/Pack masters exist;
 	the first Production Order message calls it again before validation.
 	"""
+	from yrp.yrp.doctype.yrp_item.yrp_item import has_attribute_value
+
 	from essdee_yrp.sd_yrp_sync import (
 		PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE,
 		PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE,
 		PRODUCTION_ORDER_GRID_ATTRIBUTE,
 	)
 
-	from yrp.yrp.doctype.yrp_item.yrp_item import has_attribute_value
-
 	if (
-		not frappe.db.exists('Item Attribute', PRODUCTION_ORDER_GRID_ATTRIBUTE)
-		or not frappe.db.exists('Item Attribute', PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE)
+		not frappe.db.exists("Item Attribute", PRODUCTION_ORDER_GRID_ATTRIBUTE)
+		or not frappe.db.exists("Item Attribute", PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE)
 		or not has_attribute_value(
 			PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE,
 			PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE,
@@ -446,7 +445,7 @@ def ensure_yrp_production_order_settings():
 	):
 		return False
 
-	settings = frappe.get_doc('YRP Settings')
+	settings = frappe.get_doc("YRP Settings")
 	changed = False
 	grid_row = None
 	for row in settings.production_order_attributes or []:
@@ -470,10 +469,7 @@ def ensure_yrp_production_order_settings():
 	if settings.po_dependent_attribute != PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE:
 		settings.po_dependent_attribute = PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE
 		changed = True
-	if (
-		settings.po_dependent_attribute_value
-		!= PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE
-	):
+	if settings.po_dependent_attribute_value != PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE:
 		settings.po_dependent_attribute_value = PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE
 		changed = True
 

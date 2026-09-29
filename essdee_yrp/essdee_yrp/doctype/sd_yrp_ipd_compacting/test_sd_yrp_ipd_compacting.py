@@ -42,7 +42,9 @@ class TestIPDCompacting(IntegrationTestCase):
 				self.expected,
 				[{**self.expected[0], "compacting_dia": "64"}],
 			)
-		self.assertEqual({compacting_key(row) for row in rows}, {compacting_key(row) for row in self.expected})
+		self.assertEqual(
+			{compacting_key(row) for row in rows}, {compacting_key(row) for row in self.expected}
+		)
 		by_key = {compacting_key(row): row for row in rows}
 		self.assertEqual(by_key[compacting_key(self.expected[0])]["compacting_dia"], "64")
 		self.assertIsNone(by_key[compacting_key(self.expected[1])]["compacting_dia"])
@@ -51,9 +53,11 @@ class TestIPDCompacting(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			validate_submitted_details(
 				self.expected,
-				[{
-					"cloth_item": "OTHER",
-					"packing_attribute_value": "Red",
-					"input_dia": "60",
-				}],
+				[
+					{
+						"cloth_item": "OTHER",
+						"packing_attribute_value": "Red",
+						"input_dia": "60",
+					}
+				],
 			)

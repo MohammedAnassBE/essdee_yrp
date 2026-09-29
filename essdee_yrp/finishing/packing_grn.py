@@ -1,11 +1,13 @@
 """Calculate every Work Order input consumed by a packing GRN."""
-from yrp.attribute_links import value as _attribute_value
 
 from collections import defaultdict
 
 import frappe
 from frappe import _
 from frappe.utils import flt
+from yrp.attribute_links import value as _attribute_value
+from yrp.stock.utils import get_stock_balance
+from yrp.utils import get_variant_attr_details
 
 from essdee_yrp.dynamic_packing import is_dynamic_packing_grn
 from essdee_yrp.fabric_grn import (
@@ -14,9 +16,6 @@ from essdee_yrp.fabric_grn import (
 )
 from essdee_yrp.finishing.parsing import json_object
 from essdee_yrp.garment_bom import calculate_essdee_accessory_bom
-from yrp.stock.utils import get_stock_balance
-from yrp.utils import get_variant_attr_details
-
 
 QTY_TOLERANCE = 0.000001
 
@@ -25,19 +24,17 @@ def before_validate(grn, method=None):
 	del method
 	if not _is_packing_grn(grn):
 		return
-	work_order = frappe.get_cached_doc('YRP Work Order', grn.against_id)
-	ipd = frappe.get_cached_doc('YRP Item Production Detail', work_order.production_detail)
-	populate_grn_deliverables(
-		grn, _calculate_packing_inputs(grn, work_order, ipd)
-	)
+	work_order = frappe.get_cached_doc("YRP Work Order", grn.against_id)
+	ipd = frappe.get_cached_doc("YRP Item Production Detail", work_order.production_detail)
+	populate_grn_deliverables(grn, _calculate_packing_inputs(grn, work_order, ipd))
 
 
 def calculate_packing_consumption_plan(grn):
 	"""Rebuild the complete packing input plan under the Work Order lock."""
 	if not _is_packing_grn(grn):
 		return []
-	work_order = frappe.get_doc('YRP Work Order', grn.against_id)
-	ipd = frappe.get_cached_doc('YRP Item Production Detail', work_order.production_detail)
+	work_order = frappe.get_doc("YRP Work Order", grn.against_id)
+	ipd = frappe.get_cached_doc("YRP Item Production Detail", work_order.production_detail)
 	return _calculate_packing_inputs(grn, work_order, ipd)
 
 
@@ -47,15 +44,13 @@ def _calculate_packing_inputs(grn, work_order, ipd):
 		if is_dynamic_packing_grn(grn)
 		else _allocate_consumed_garments(grn, work_order, ipd)
 	)
-	accessories = _allocate_consumed_accessories(
-		grn, work_order, ipd, garments
-	)
+	accessories = _allocate_consumed_accessories(grn, work_order, ipd, garments)
 	return [*garments, *accessories]
 
 
 def _is_packing_grn(grn):
 	return bool(
-		grn.get("against") == 'YRP Work Order'
+		grn.get("against") == "YRP Work Order"
 		and grn.get("against_id")
 		and grn.get("includes_packing")
 		and not grn.get("is_return")
@@ -81,13 +76,9 @@ def _allocate_dynamic_consumed_garments(grn, work_order, ipd):
 
 	calculated = list(work_order.get("work_order_calculated_items") or [])
 	deliverables = list(work_order.get("deliverables") or [])
-	attributes = {
-		_row_key(row): get_variant_attr_details(row.item_variant)
-		for row in calculated
-	}
+	attributes = {_row_key(row): get_variant_attr_details(row.item_variant) for row in calculated}
 	remaining_by_row = {
-		_row_key(row): max(flt(row.delivered_quantity) - flt(row.received_qty), 0)
-		for row in calculated
+		_row_key(row): max(flt(row.delivered_quantity) - flt(row.received_qty), 0) for row in calculated
 	}
 	outputs_by_size = _positive_outputs_by_size(grn, ipd)
 	output_remaining = {
@@ -122,9 +113,9 @@ def _allocate_dynamic_consumed_garments(grn, work_order, ipd):
 				]
 				if not candidates:
 					frappe.throw(
-						_(
-							"Packing needs {0} delivered pieces for {1} / {2}, but none are available."
-						).format(output_quantity, colour, size)
+						_("Packing needs {0} delivered pieces for {1} / {2}, but none are available.").format(
+							output_quantity, colour, size
+						)
 					)
 
 				groups = [candidates]
@@ -139,9 +130,7 @@ def _allocate_dynamic_consumed_garments(grn, work_order, ipd):
 					groups = list(by_part.values())
 
 				for group in groups:
-					allocations = _allocate_rows(
-						group, output_quantity, remaining_by_row
-					)
+					allocations = _allocate_rows(group, output_quantity, remaining_by_row)
 					allocated = sum(quantity for _rows, quantity in allocations)
 					if allocated + QTY_TOLERANCE < output_quantity:
 						frappe.throw(
@@ -208,11 +197,7 @@ def _allocate_dynamic_consumed_garments(grn, work_order, ipd):
 
 	leftover = sum(max(flt(quantity), 0) for quantity in output_remaining.values())
 	if leftover > QTY_TOLERANCE:
-		frappe.throw(
-			_("Packing batch ratios do not account for {0} received pieces.").format(
-				leftover
-			)
-		)
+		frappe.throw(_("Packing batch ratios do not account for {0} received pieces.").format(leftover))
 	return result
 
 
@@ -246,9 +231,7 @@ def _take_output_chunks(outputs_by_size, output_remaining, size, requested):
 			break
 	if remaining > QTY_TOLERANCE:
 		frappe.throw(
-			_("Packing batches require {0} more received pieces for size {1}.").format(
-				remaining, size
-			)
+			_("Packing batches require {0} more received pieces for size {1}.").format(remaining, size)
 		)
 	return chunks
 
@@ -257,12 +240,12 @@ def _allocate_consumed_accessories(grn, work_order, ipd, garment_plan):
 	"""Recalculate exact packing BOM rows and map them to delivered WO inputs."""
 	if not garment_plan:
 		return []
-	lot = frappe.get_cached_doc('SD YRP Lot', grn.get("lot") or work_order.lot)
+	lot = frappe.get_cached_doc("SD YRP Lot", grn.get("lot") or work_order.lot)
 	process_names = {work_order.process_name}
-	if frappe.db.get_value('YRP Process', work_order.process_name, "is_group"):
+	if frappe.db.get_value("YRP Process", work_order.process_name, "is_group"):
 		process_names.update(
 			frappe.get_all(
-				'YRP Process Details',
+				"YRP Process Details",
 				filters={"parent": work_order.process_name},
 				pluck="process_name",
 			)
@@ -336,8 +319,7 @@ def _allocate_consumed_garments(grn, work_order, ipd):
 	deliverables = list(work_order.get("deliverables") or [])
 	calculated = list(work_order.get("work_order_calculated_items") or [])
 	remaining_by_row = {
-		_row_key(row): max(flt(row.delivered_quantity) - flt(row.received_qty), 0)
-		for row in calculated
+		_row_key(row): max(flt(row.delivered_quantity) - flt(row.received_qty), 0) for row in calculated
 	}
 	result = []
 
@@ -345,9 +327,7 @@ def _allocate_consumed_garments(grn, work_order, ipd):
 		output_stock_qty = flt(output.get("stock_qty"))
 		if output_stock_qty <= 0:
 			continue
-		size = get_variant_attr_details(output.item_variant).get(
-			ipd.primary_item_attribute
-		)
+		size = get_variant_attr_details(output.item_variant).get(ipd.primary_item_attribute)
 		if not size:
 			frappe.throw(
 				_("Packed item {0} has no {1} attribute.").format(
@@ -357,8 +337,7 @@ def _allocate_consumed_garments(grn, work_order, ipd):
 		candidates = [
 			row
 			for row in calculated
-			if get_variant_attr_details(row.item_variant).get(ipd.primary_item_attribute)
-			== size
+			if get_variant_attr_details(row.item_variant).get(ipd.primary_item_attribute) == size
 			and flt(remaining_by_row.get(_row_key(row))) > 0
 		]
 		allocations = (
@@ -366,14 +345,12 @@ def _allocate_consumed_garments(grn, work_order, ipd):
 			if ipd.is_set_item
 			else _allocate_rows(candidates, output_stock_qty, remaining_by_row)
 		)
-		allocated_output = sum(
-			quantity for _rows, quantity in allocations
-		)
+		allocated_output = sum(quantity for _rows, quantity in allocations)
 		if allocated_output + 0.001 < output_stock_qty:
 			frappe.throw(
-				_(
-					"Packing needs {0} delivered pieces for {1}, but only {2} are available."
-				).format(output_stock_qty, size, allocated_output)
+				_("Packing needs {0} delivered pieces for {1}, but only {2} are available.").format(
+					output_stock_qty, size, allocated_output
+				)
 			)
 
 		for rows, quantity in allocations:
@@ -414,8 +391,7 @@ def _allocate_consumed_garments(grn, work_order, ipd):
 
 def _allocate_set_rows(rows, requested, remaining_by_row=None):
 	remaining_by_row = remaining_by_row or {
-		_row_key(row): max(flt(row.delivered_quantity) - flt(row.received_qty), 0)
-		for row in rows
+		_row_key(row): max(flt(row.delivered_quantity) - flt(row.received_qty), 0) for row in rows
 	}
 	groups = {}
 	for row in rows:
@@ -423,15 +399,10 @@ def _allocate_set_rows(rows, requested, remaining_by_row=None):
 		groups.setdefault(key, []).append(row)
 	remaining = flt(requested)
 	allocations = []
-	for group_rows in sorted(
-		groups.values(), key=lambda values: min(flt(row.idx) for row in values)
-	):
+	for group_rows in sorted(groups.values(), key=lambda values: min(flt(row.idx) for row in values)):
 		if len(group_rows) < 2:
 			continue
-		available = min(
-			flt(remaining_by_row.get(_row_key(row)))
-			for row in group_rows
-		)
+		available = min(flt(remaining_by_row.get(_row_key(row))) for row in group_rows)
 		quantity = min(remaining, available)
 		if quantity > 0:
 			allocations.append((group_rows, quantity))
@@ -446,8 +417,7 @@ def _allocate_set_rows(rows, requested, remaining_by_row=None):
 
 def _allocate_rows(rows, requested, remaining_by_row=None):
 	remaining_by_row = remaining_by_row or {
-		_row_key(row): max(flt(row.delivered_quantity) - flt(row.received_qty), 0)
-		for row in rows
+		_row_key(row): max(flt(row.delivered_quantity) - flt(row.received_qty), 0) for row in rows
 	}
 	remaining = flt(requested)
 	allocations = []
@@ -473,13 +443,10 @@ def _find_deliverable(deliverables, calculated_row):
 	candidates = [
 		row
 		for row in deliverables
-		if row.item_variant == calculated_row.item_variant
-		and json_object(row.set_combination) == combination
+		if row.item_variant == calculated_row.item_variant and json_object(row.set_combination) == combination
 	]
 	if len(candidates) != 1:
 		frappe.throw(
-			_("Cannot identify the packing Deliverable for {0}.").format(
-				calculated_row.item_variant
-			)
+			_("Cannot identify the packing Deliverable for {0}.").format(calculated_row.item_variant)
 		)
 	return candidates[0]

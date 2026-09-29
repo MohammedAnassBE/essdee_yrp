@@ -5,7 +5,6 @@ import json
 import unittest
 from pathlib import Path
 
-
 BENCH_ROOT = Path(__file__).resolve().parents[4]
 YRP_ROOT = BENCH_ROOT / "apps" / "yrp" / "yrp"
 ESSDEE_ROOT = BENCH_ROOT / "apps" / "essdee_yrp" / "essdee_yrp"
@@ -13,9 +12,7 @@ ESSDEE_ROOT = BENCH_ROOT / "apps" / "essdee_yrp" / "essdee_yrp"
 
 DIRECT_FIELDS = {
 	"SD YRP Cut Panel Movement": {"process_name": ("Link", "YRP Process")},
-	"SD YRP Cutting Marker": {
-		"cutting_marker_parts": ("Table", "SD YRP Cutting Marker Part")
-	},
+	"SD YRP Cutting Marker": {"cutting_marker_parts": ("Table", "SD YRP Cutting Marker Part")},
 	"SD YRP Essdee Quality Inspection": {"unit_name": ("Link", "Supplier")},
 	"SD YRP FG Stock Entry": {"lot": ("Link", "SD YRP Lot")},
 	"SD YRP Lot": {
@@ -56,9 +53,7 @@ DIRECT_FIELDS = {
 	},
 	"YRP Item Price": {"price": ("Float", None)},
 	"YRP Item Production Detail": {"description": ("Small Text", None)},
-	"YRP Production Order": {
-		"production_detail": ("Link", "YRP Item Production Detail")
-	},
+	"YRP Production Order": {"production_detail": ("Link", "YRP Item Production Detail")},
 	"YRP Purchase Invoice": {
 		"debit_no": ("Data", None),
 		"debit_type": ("Select", "\nPermanent\nTemporary"),
@@ -81,14 +76,11 @@ SCHEMA_PATHS = {
 	"SD YRP Lot": ESSDEE_ROOT / "essdee_yrp/doctype/sd_yrp_lot/sd_yrp_lot.json",
 	"SD YRP Lotwise Item Profit Qty Rate": ESSDEE_ROOT
 	/ "essdee_yrp/doctype/sd_yrp_lotwise_item_profit_qty_rate/sd_yrp_lotwise_item_profit_qty_rate.json",
-	"SD YRP MRP Settings": ESSDEE_ROOT
-	/ "essdee_yrp/doctype/sd_yrp_mrp_settings/sd_yrp_mrp_settings.json",
+	"SD YRP MRP Settings": ESSDEE_ROOT / "essdee_yrp/doctype/sd_yrp_mrp_settings/sd_yrp_mrp_settings.json",
 	"SD YRP Production Items": ESSDEE_ROOT
 	/ "essdee_yrp/doctype/sd_yrp_production_items/sd_yrp_production_items.json",
-	"SD YRP Sewing Plan": ESSDEE_ROOT
-	/ "essdee_yrp/doctype/sd_yrp_sewing_plan/sd_yrp_sewing_plan.json",
-	"YRP Goods Received Note": YRP_ROOT
-	/ "yrp/doctype/yrp_goods_received_note/yrp_goods_received_note.json",
+	"SD YRP Sewing Plan": ESSDEE_ROOT / "essdee_yrp/doctype/sd_yrp_sewing_plan/sd_yrp_sewing_plan.json",
+	"YRP Goods Received Note": YRP_ROOT / "yrp/doctype/yrp_goods_received_note/yrp_goods_received_note.json",
 	"YRP Goods Received Note Item": YRP_ROOT
 	/ "yrp/doctype/yrp_goods_received_note_item/yrp_goods_received_note_item.json",
 	"YRP Item BOM Attribute Mapping Value": YRP_ROOT
@@ -96,10 +88,8 @@ SCHEMA_PATHS = {
 	"YRP Item Price": YRP_ROOT / "yrp/doctype/yrp_item_price/yrp_item_price.json",
 	"YRP Item Production Detail": YRP_ROOT
 	/ "yrp/doctype/yrp_item_production_detail/yrp_item_production_detail.json",
-	"YRP Production Order": YRP_ROOT
-	/ "yrp/doctype/yrp_production_order/yrp_production_order.json",
-	"YRP Purchase Invoice": YRP_ROOT
-	/ "yrp/doctype/yrp_purchase_invoice/yrp_purchase_invoice.json",
+	"YRP Production Order": YRP_ROOT / "yrp/doctype/yrp_production_order/yrp_production_order.json",
+	"YRP Purchase Invoice": YRP_ROOT / "yrp/doctype/yrp_purchase_invoice/yrp_purchase_invoice.json",
 	"YRP ZPL Raw Print Format": YRP_ROOT
 	/ "yrp/doctype/yrp_zpl_raw_print_format/yrp_zpl_raw_print_format.json",
 	"YRP Bin": YRP_ROOT / "yrp_stock/doctype/yrp_bin/yrp_bin.json",
@@ -140,8 +130,7 @@ def _load_overlays() -> dict[str, list[dict]]:
 	tree = ast.parse(path.read_text(encoding="utf-8"))
 	for node in tree.body:
 		if isinstance(node, ast.Assign) and any(
-			isinstance(target, ast.Name) and target.id == "SOURCE_SCHEMA_OVERLAYS"
-			for target in node.targets
+			isinstance(target, ast.Name) and target.id == "SOURCE_SCHEMA_OVERLAYS" for target in node.targets
 		):
 			return ast.literal_eval(node.value)
 	raise AssertionError("SOURCE_SCHEMA_OVERLAYS is not declared")

@@ -16,16 +16,14 @@ def get_reference_allocations(row, total_qty=None):
 	if isinstance(raw, str):
 		try:
 			raw = frappe.parse_json(raw)
-		except (TypeError, ValueError):
+		except TypeError, ValueError:
 			raw = None
 
 	allocations = {}
 	if isinstance(raw, dict):
 		for reference, qty in raw.items():
 			if reference and flt(qty):
-				allocations[str(reference)] = (
-					allocations.get(str(reference), 0) + flt(qty)
-				)
+				allocations[str(reference)] = allocations.get(str(reference), 0) + flt(qty)
 	elif isinstance(raw, list):
 		for allocation in raw:
 			if not isinstance(allocation, dict):
@@ -48,9 +46,7 @@ def normalise_reference_allocations(allocations, total_qty):
 	"""Round allocations to 3dp while keeping their sum equal to the row qty."""
 	total_qty = _qty(total_qty)
 	rows = [
-		(reference, _qty(qty))
-		for reference, qty in (allocations or {}).items()
-		if reference and flt(qty)
+		(reference, _qty(qty)) for reference, qty in (allocations or {}).items() if reference and flt(qty)
 	]
 	if not rows:
 		return {}
@@ -73,9 +69,7 @@ def scale_reference_allocations(allocations, actual_qty):
 	"""Split an actual receipt proportionally across its stored route plan."""
 	actual_qty = _qty(actual_qty)
 	weights = [
-		(reference, flt(qty))
-		for reference, qty in (allocations or {}).items()
-		if reference and flt(qty) > 0
+		(reference, flt(qty)) for reference, qty in (allocations or {}).items() if reference and flt(qty) > 0
 	]
 	total_weight = sum(qty for _reference, qty in weights)
 	if not weights or total_weight <= 0:

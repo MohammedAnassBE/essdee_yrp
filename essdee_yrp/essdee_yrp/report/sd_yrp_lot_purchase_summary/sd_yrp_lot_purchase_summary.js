@@ -37,7 +37,6 @@ frappe.query_reports["SD YRP Lot Purchase Summary"] = {
 	],
 
 	onload(report) {
-		console.log(report);
 		report.page.add_inner_button('Purchase Order', () => {
 			frappe.prompt([
 				{

@@ -1,14 +1,15 @@
-from yrp.attribute_links import value as _attribute_value
+import json
+
 # Copyright (c) 2026, Essdee and contributors
 # For license information, please see license.txt
-
 import frappe
-from yrp.attribute_values import get_mapping_document
-import json
 from frappe.model.document import Document
+from yrp.attribute_links import value as _attribute_value
+from yrp.attribute_values import get_mapping_document
+from yrp.utils import update_if_string_instance
+
 from essdee_yrp.ipd_ui import fetch_combination_items
 from essdee_yrp.ipd_validations import save_item_details
-from yrp.utils import update_if_string_instance
 
 
 class SDYRPCuttingOrderDetail(Document):
@@ -16,8 +17,9 @@ class SDYRPCuttingOrderDetail(Document):
 		item = self.item
 		version = frappe.db.sql(
 			"""SELECT max(version) as max_version FROM `tabSD YRP Cutting Order Detail` WHERE item = %s""",
-			(item,), as_dict=True
-		)[0]['max_version']
+			(item,),
+			as_dict=True,
+		)[0]["max_version"]
 		if version:
 			new_version = version + 1
 		else:
@@ -27,53 +29,57 @@ class SDYRPCuttingOrderDetail(Document):
 		self.version = new_version
 
 	def on_update(self):
-		for mapping in getattr(self, '_orphaned_mappings', []):
-			frappe.delete_doc('YRP Item Item Attribute Mapping', mapping, ignore_permissions=True)
+		for mapping in getattr(self, "_orphaned_mappings", []):
+			frappe.delete_doc("YRP Item Item Attribute Mapping", mapping, ignore_permissions=True)
 
 	def onload(self):
 		self.load_attribute_list()
 
-		set_items = fetch_combination_items(self.get('set_item_combination_details'))
-		if len(set_items['values']) > 0:
-			self.set_onload('set_item_detail', set_items)
+		set_items = fetch_combination_items(self.get("set_item_combination_details"))
+		if len(set_items["values"]) > 0:
+			self.set_onload("set_item_detail", set_items)
 
-		stich_items = fetch_combination_items(self.get('stiching_item_combination_details'))
-		if len(stich_items['values']) > 0:
-			self.set_onload('stiching_item_detail', stich_items)
+		stich_items = fetch_combination_items(self.get("stiching_item_combination_details"))
+		if len(stich_items["values"]) > 0:
+			self.set_onload("stiching_item_detail", stich_items)
 
 	def load_attribute_list(self):
 		attribute_list = []
 		for attribute in self.item_attributes:
-			attribute_doc = frappe.get_cached_doc('Item Attribute', attribute.attribute)
+			attribute_doc = frappe.get_cached_doc("Item Attribute", attribute.attribute)
 			if not attribute_doc.numeric_values:
-				if attribute.mapping != None:
+				if attribute.mapping is not None:
 					doc = get_mapping_document(attribute.mapping, cached=True)
-					attribute_list.append({
-						'name': attribute.name,
-						'attr_name': attribute.attribute,
-						'attr_values_link': attribute.mapping,
-						'attr_values': doc.values,
-						'doctype': 'YRP Item Item Attribute Mapping'
-					})
+					attribute_list.append(
+						{
+							"name": attribute.name,
+							"attr_name": attribute.attribute,
+							"attr_values_link": attribute.mapping,
+							"attr_values": doc.values,
+							"doctype": "YRP Item Item Attribute Mapping",
+						}
+					)
 				else:
-					attribute_list.append({
-						'name': attribute.name,
-						'attr_name': attribute.attribute,
-						'attr_values_link': attribute.mapping,
-						'attr_values': [],
-						'doctype': 'YRP Item Item Attribute Mapping'
-					})
-		self.set_onload('attr_list', attribute_list)
+					attribute_list.append(
+						{
+							"name": attribute.name,
+							"attr_name": attribute.attribute,
+							"attr_values_link": attribute.mapping,
+							"attr_values": [],
+							"doctype": "YRP Item Item Attribute Mapping",
+						}
+					)
+		self.set_onload("attr_list", attribute_list)
 
 	def before_validate(self):
 		if self.is_new():
-			settings = frappe.get_cached_doc('SD YRP IPD Settings')
+			settings = frappe.get_cached_doc("SD YRP IPD Settings")
 			self.primary_attribute = settings.default_primary_attribute
 			self.packing_attribute = settings.default_packing_attribute
 			self.stiching_attribute = settings.default_stitching_attribute
 			self.set_item_attribute = settings.default_set_item_attribute
 
-			existing_attrs = {row.attribute for row in self.get('item_attributes')}
+			existing_attrs = {row.attribute for row in self.get("item_attributes")}
 			for attr in [
 				settings.default_primary_attribute,
 				settings.default_packing_attribute,
@@ -81,24 +87,24 @@ class SDYRPCuttingOrderDetail(Document):
 				settings.default_set_item_attribute,
 			]:
 				if attr and attr not in existing_attrs:
-					self.append('item_attributes', {'attribute': attr})
+					self.append("item_attributes", {"attribute": attr})
 					existing_attrs.add(attr)
 
-		if self.get('set_item_detail') and self.is_set_item:
+		if self.get("set_item_detail") and self.is_set_item:
 			set_details = save_item_details(self.set_item_detail)
-			self.set('set_item_combination_details', set_details)
+			self.set("set_item_combination_details", set_details)
 
-		if self.get('stiching_item_detail'):
+		if self.get("stiching_item_detail"):
 			stiching_detail = save_item_details(self.stiching_item_detail, ipd_doc=self)
-			self.set('stiching_item_combination_details', stiching_detail)
+			self.set("stiching_item_combination_details", stiching_detail)
 
 		if not self.is_set_item:
-			self.set('set_item_combination_details', [])
-			self.set('major_attribute_value', None)
-			self.set('set_item_attribute', None)
+			self.set("set_item_combination_details", [])
+			self.set("major_attribute_value", None)
+			self.set("set_item_attribute", None)
 
 		if self.is_set_item and not self.set_item_attribute:
-			settings = frappe.get_cached_doc('SD YRP IPD Settings')
+			settings = frappe.get_cached_doc("SD YRP IPD Settings")
 			self.set_item_attribute = settings.default_set_item_attribute
 
 		if self.is_set_item and not self.is_new():
@@ -115,7 +121,9 @@ class SDYRPCuttingOrderDetail(Document):
 				for attr in self.stiching_item_details:
 					if attr.is_default:
 						if check_dict.get(_attribute_value(attr.set_item_attribute_value)):
-							frappe.throw(f"Select only one Is Default for {_attribute_value(attr.set_item_attribute_value)}")
+							frappe.throw(
+								f"Select only one Is Default for {_attribute_value(attr.set_item_attribute_value)}"
+							)
 						else:
 							check_dict[_attribute_value(attr.set_item_attribute_value)] = 1
 
@@ -127,7 +135,7 @@ class SDYRPCuttingOrderDetail(Document):
 		if self.cloth_detail_json:
 			try:
 				cloth_data = json.loads(self.cloth_detail_json)
-			except (json.JSONDecodeError, TypeError):
+			except json.JSONDecodeError, TypeError:
 				cloth_data = []
 
 		if len(cloth_data) > 0:
@@ -144,15 +152,15 @@ class SDYRPCuttingOrderDetail(Document):
 		if not self.is_new():
 			previous = self.get_doc_before_save()
 			if previous:
-				current_mappings = {a.mapping for a in self.get('item_attributes') if a.mapping}
-				for attr in previous.get('item_attributes'):
+				current_mappings = {a.mapping for a in self.get("item_attributes") if a.mapping}
+				for attr in previous.get("item_attributes"):
 					if attr.mapping and attr.mapping not in current_mappings:
 						self._orphaned_mappings.append(attr.mapping)
 
 		# Auto-create mappings for new attribute rows
-		for attribute in self.get('item_attributes'):
+		for attribute in self.get("item_attributes"):
 			if not attribute.mapping:
-				doc = frappe.new_doc('YRP Item Item Attribute Mapping')
+				doc = frappe.new_doc("YRP Item Item Attribute Mapping")
 				doc.attribute_name = attribute.attribute
 				doc.save()
 				attribute.mapping = doc.name
@@ -177,7 +185,9 @@ class SDYRPCuttingOrderDetail(Document):
 		if mapping:
 			map_doc = get_mapping_document(mapping, cached=True)
 			if len(map_doc.values) < self.attribute_no:
-				frappe.throw(f"The Packing attribute no is {self.attribute_no} But there is only {len(map_doc.values)} attributes are available")
+				frappe.throw(
+					f"The Packing attribute no is {self.attribute_no} But there is only {len(map_doc.values)} attributes are available"
+				)
 
 		if len(self.attribute_values) != self.attribute_no:
 			frappe.throw(f"Only {self.attribute_no} {self.packing_attribute}'s are required")
@@ -205,21 +215,23 @@ class SDYRPCuttingOrderDetail(Document):
 
 @frappe.whitelist()
 def duplicate_cod(cod, item=None):
-	cod_doc = frappe.get_doc('SD YRP Cutting Order Detail', cod)
+	cod_doc = frappe.get_doc("SD YRP Cutting Order Detail", cod)
 	cod_doc.check_permission("read")
-	if not frappe.has_permission('SD YRP Cutting Order Detail', "create"):
+	if not frappe.has_permission("SD YRP Cutting Order Detail", "create"):
 		raise frappe.PermissionError
-	doc = frappe.new_doc('SD YRP Cutting Order Detail')
+	doc = frappe.new_doc("SD YRP Cutting Order Detail")
 
 	# Copy scalar fields (primary_attribute, packing_attribute, stiching_attribute,
 	# set_item_attribute are set by before_validate from IPD Settings on new docs)
-	doc.update({
-		"item": item or cod_doc.item,
-		"attribute_no": cod_doc.attribute_no,
-		"major_panel_value": _attribute_value(cod_doc.major_panel_value),
-		"is_same_colour": cod_doc.is_same_colour,
-		"cloth_detail_json": cod_doc.cloth_detail_json,
-	})
+	doc.update(
+		{
+			"item": item or cod_doc.item,
+			"attribute_no": cod_doc.attribute_no,
+			"major_panel_value": _attribute_value(cod_doc.major_panel_value),
+			"is_same_colour": cod_doc.is_same_colour,
+			"cloth_detail_json": cod_doc.cloth_detail_json,
+		}
+	)
 
 	# Copy child tables (except item_attributes — handled specially)
 	doc.set("attribute_values", get_dict_table(cod_doc.attribute_values))
@@ -251,11 +263,13 @@ def duplicate_cod(cod, item=None):
 
 	# Handle set item fields
 	if cod_doc.is_set_item:
-		doc.update({
-			"is_set_item": cod_doc.is_set_item,
-			"set_item_attribute": cod_doc.set_item_attribute,
-			"major_attribute_value": _attribute_value(cod_doc.major_attribute_value),
-		})
+		doc.update(
+			{
+				"is_set_item": cod_doc.is_set_item,
+				"set_item_attribute": cod_doc.set_item_attribute,
+				"major_attribute_value": _attribute_value(cod_doc.major_attribute_value),
+			}
+		)
 		doc.set("set_item_combination_details", get_dict_table(cod_doc.set_item_combination_details))
 		doc.save(ignore_permissions=True)
 
@@ -283,13 +297,21 @@ def update_attribute_mapping_values(mapping, values):
 
 
 @frappe.whitelist()
-def get_co_new_combination(attribute_mapping_value, packing_attribute_details, major_attribute_value, is_same_colour=False, doc_name=None):
+def get_co_new_combination(
+	attribute_mapping_value,
+	packing_attribute_details,
+	major_attribute_value,
+	is_same_colour=False,
+	doc_name=None,
+):
 	get_mapping_document(attribute_mapping_value).check_permission("read")
 	packing_attribute_details = update_if_string_instance(packing_attribute_details)
 	if isinstance(packing_attribute_details, list):
 		pass
 	elif isinstance(packing_attribute_details, dict):
-		packing_attribute_details = list(packing_attribute_details.values()) if packing_attribute_details else []
+		packing_attribute_details = (
+			list(packing_attribute_details.values()) if packing_attribute_details else []
+		)
 
 	doc = get_mapping_document(attribute_mapping_value, cached=True)
 	attributes = [_attribute_value(item.attribute_value) for item in doc.values]
@@ -300,45 +322,49 @@ def get_co_new_combination(attribute_mapping_value, packing_attribute_details, m
 	co_doc = None
 
 	if doc_name:
-		co_doc = frappe.get_doc('SD YRP Cutting Order Detail', doc_name)
+		co_doc = frappe.get_doc("SD YRP Cutting Order Detail", doc_name)
 		co_doc.check_permission("read")
 		if co_doc.is_set_item:
 			for item in co_doc.stiching_item_details:
-				stiching_item_details[_attribute_value(item.stiching_attribute_value)] = _attribute_value(item.set_item_attribute_value)
+				stiching_item_details[_attribute_value(item.stiching_attribute_value)] = _attribute_value(
+					item.set_item_attribute_value
+				)
 				if item.is_default:
 					is_default_list.append(_attribute_value(item.stiching_attribute_value))
 
 			for item in co_doc.set_item_combination_details:
 				set_item_details.setdefault(_attribute_value(item.major_attribute_value), {})
-				set_item_details[_attribute_value(item.major_attribute_value)][_attribute_value(item.set_item_attribute_value)] = _attribute_value(item.attribute_value)
+				set_item_details[_attribute_value(item.major_attribute_value)][
+					_attribute_value(item.set_item_attribute_value)
+				] = _attribute_value(item.attribute_value)
 
 	if isinstance(is_same_colour, str):
-		is_same_colour = is_same_colour in ('true', 'True', '1')
+		is_same_colour = is_same_colour in ("true", "True", "1")
 
 	item_detail = []
 	for item in packing_attribute_details:
 		item_list = {}
-		item_list['major_attribute'] = _attribute_value(item['attribute_value'])
-		item_list['val'] = {}
+		item_list["major_attribute"] = _attribute_value(item["attribute_value"])
+		item_list["val"] = {}
 		for i in attributes:
 			if i == major_attribute_value:
-				item_list['val'][i] = _attribute_value(item['attribute_value'])
+				item_list["val"][i] = _attribute_value(item["attribute_value"])
 			elif is_same_colour:
 				if doc_name and co_doc and co_doc.is_set_item:
 					part = stiching_item_details[i]
-					item_list['val'][i] = set_item_details[_attribute_value(item['attribute_value'])][part]
+					item_list["val"][i] = set_item_details[_attribute_value(item["attribute_value"])][part]
 				else:
-					item_list['val'][i] = _attribute_value(item['attribute_value'])
+					item_list["val"][i] = _attribute_value(item["attribute_value"])
 			elif doc_name and co_doc and co_doc.is_set_item and i in is_default_list:
 				part = stiching_item_details[i]
-				item_list['val'][i] = set_item_details[_attribute_value(item['attribute_value'])][part]
+				item_list["val"][i] = set_item_details[_attribute_value(item["attribute_value"])][part]
 			else:
-				item_list['val'][i] = None
+				item_list["val"][i] = None
 		item_detail.append(item_list)
 
 	item_details = {}
-	item_details['attributes'] = attributes
-	item_details['values'] = item_detail
+	item_details["attributes"] = attributes
+	item_details["values"] = item_detail
 	return item_details
 
 

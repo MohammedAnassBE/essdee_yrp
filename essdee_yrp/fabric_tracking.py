@@ -17,11 +17,11 @@ Balance semantics:
   - production against the program/plan -> WO RECEIVABLES (outputs)
   - consumption of available cloth      -> WO DELIVERABLES (inputs, is_calculated=1)
 """
-from yrp import attribute_links as attribute_db
-from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe.utils import flt
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 from essdee_yrp.fabric_ipd import (
 	FABRIC_COLOUR_ATTRIBUTE,
@@ -42,30 +42,28 @@ def on_grn_cancel(doc, method=None):
 
 
 def _apply_grn(grn, sign):
-	if grn.get("against") != 'YRP Work Order' or not grn.get("against_id"):
+	if grn.get("against") != "YRP Work Order" or not grn.get("against_id"):
 		return
 	if grn.get("is_rework"):
 		return
-	wo = frappe.get_cached_doc('YRP Work Order', grn.against_id)
+	wo = frappe.get_cached_doc("YRP Work Order", grn.against_id)
 	if not wo.get("lot"):
 		return
 	# Serialize per lot: two GRNs of the same lot submitting concurrently would
 	# otherwise race the read-modify-write below (lost kgs / duplicate key rows).
-	attribute_db.get_value('SD YRP Lot', wo.lot, "name", for_update=True)
-	lot = frappe.get_doc('SD YRP Lot', wo.lot)
+	attribute_db.get_value("SD YRP Lot", wo.lot, "name", for_update=True)
+	lot = frappe.get_doc("SD YRP Lot", wo.lot)
 	from essdee_yrp.fabric_chain import get_fabric_step
 
 	for fabric in lot.get("lot_fabric_details") or []:
 		if not fabric.production_detail:
 			continue
-		ipd = frappe.get_cached_doc('YRP Item Production Detail', fabric.production_detail)
+		ipd = frappe.get_cached_doc("YRP Item Production Detail", fabric.production_detail)
 		step = get_fabric_step(ipd, wo.process_name)
 		if not step:
 			continue
 		# every chain step's receipts land on the step ledger (dia + colour)
-		deltas = _grn_deltas_for_cloth(
-			grn, fabric.cloth_item, with_colour=True, with_reference=True
-		)
+		deltas = _grn_deltas_for_cloth(grn, fabric.cloth_item, with_colour=True, with_reference=True)
 		if not deltas:
 			continue
 		_bump_ledger_rows(lot, fabric.cloth_item, step["process_name"], deltas, sign)
@@ -77,8 +75,15 @@ def _apply_grn(grn, sign):
 				per_dia[(key[0], key[2] if len(key) > 2 else "")] = (
 					per_dia.get((key[0], key[2] if len(key) > 2 else ""), 0) + kg
 				)
-			_bump_program_rows(lot, "lot_fabric_programs", 'SD YRP Lot Fabric Program',
-				fabric.cloth_item, per_dia, sign, "received_weight")
+			_bump_program_rows(
+				lot,
+				"lot_fabric_programs",
+				"SD YRP Lot Fabric Program",
+				fabric.cloth_item,
+				per_dia,
+				sign,
+				"received_weight",
+			)
 
 
 def _bump_ledger_rows(lot, cloth_item, process_name, deltas, sign):
@@ -90,9 +95,13 @@ def _bump_ledger_rows(lot, cloth_item, process_name, deltas, sign):
 			continue
 		if (r.side or "Output") != "Output":
 			continue
-		rows[(
-			_attribute_value(r.dia) or "", _attribute_value(r.colour) or "", r.get("reference_item_variant") or "",
-		)] = r
+		rows[
+			(
+				_attribute_value(r.dia) or "",
+				_attribute_value(r.colour) or "",
+				r.get("reference_item_variant") or "",
+			)
+		] = r
 
 	inserted = 0
 	for key, kg in deltas.items():
@@ -107,8 +116,8 @@ def _bump_ledger_rows(lot, cloth_item, process_name, deltas, sign):
 				(sign * kg, row.name),
 			)
 		else:
-			new_row = frappe.new_doc('SD YRP Lot Fabric Step Ledger')
-			new_row.parenttype = 'SD YRP Lot'
+			new_row = frappe.new_doc("SD YRP Lot Fabric Step Ledger")
+			new_row.parenttype = "SD YRP Lot"
 			new_row.parent = lot.name
 			new_row.parentfield = "lot_fabric_step_ledger"
 			new_row.idx = len(lot.get("lot_fabric_step_ledger") or []) + 1 + inserted
@@ -124,9 +133,7 @@ def _bump_ledger_rows(lot, cloth_item, process_name, deltas, sign):
 			inserted += 1
 
 
-def get_step_received(
-	lot, cloth_item, process_name, reference_item_variant=None
-):
+def get_step_received(lot, cloth_item, process_name, reference_item_variant=None):
 	"""{(dia, colour): kg} received on a step's ledger Output rows — the popup's
 	'previous stage produced' figure.
 
@@ -135,14 +142,17 @@ def get_step_received(
 	physical Dia/Colour from borrowing each other's receipts.
 	"""
 	filters = {
-		"parent": lot, "parenttype": 'SD YRP Lot', "cloth_item": cloth_item,
-		"process_name": process_name, "side": "Output",
+		"parent": lot,
+		"parenttype": "SD YRP Lot",
+		"cloth_item": cloth_item,
+		"process_name": process_name,
+		"side": "Output",
 	}
 	if reference_item_variant is not None:
 		filters["reference_item_variant"] = reference_item_variant or ""
 	result = {}
 	for r in attribute_db.get_all(
-		'SD YRP Lot Fabric Step Ledger',
+		"SD YRP Lot Fabric Step Ledger",
 		filters=filters,
 		fields=["dia", "colour", "received_weight"],
 	):
@@ -151,19 +161,20 @@ def get_step_received(
 	return result
 
 
-def get_step_planned(
-	lot, cloth_item, process_name, reference_item_variant=None
-):
+def get_step_planned(lot, cloth_item, process_name, reference_item_variant=None):
 	"""{(dia, colour): kg} planned on a step's ledger Output rows."""
 	filters = {
-		"parent": lot, "parenttype": 'SD YRP Lot', "cloth_item": cloth_item,
-		"process_name": process_name, "side": "Output",
+		"parent": lot,
+		"parenttype": "SD YRP Lot",
+		"cloth_item": cloth_item,
+		"process_name": process_name,
+		"side": "Output",
 	}
 	if reference_item_variant is not None:
 		filters["reference_item_variant"] = reference_item_variant or ""
 	result = {}
 	for r in attribute_db.get_all(
-		'SD YRP Lot Fabric Step Ledger',
+		"SD YRP Lot Fabric Step Ledger",
 		filters=filters,
 		fields=["dia", "colour", "planned_weight"],
 	):
@@ -179,28 +190,22 @@ def _grn_deltas_for_cloth(grn, cloth_item, with_colour, with_reference=False):
 		return {}
 	attrs = _variant_attribute_map(variant_names, cloth_item)
 	reference_allocations = {}
-	if with_reference and frappe.db.has_column(
-		'YRP Work Order Receivables', "fabric_reference_variant"
-	):
+	if with_reference and frappe.db.has_column("YRP Work Order Receivables", "fabric_reference_variant"):
 		ref_names = [
-			row.ref_docname for row in grn.get("items") or []
-			if row.get("ref_doctype") == 'YRP Work Order Receivables'
-				and row.get("ref_docname")
+			row.ref_docname
+			for row in grn.get("items") or []
+			if row.get("ref_doctype") == "YRP Work Order Receivables" and row.get("ref_docname")
 		]
 		if ref_names:
 			fields = ["name", "qty", "fabric_reference_variant"]
-			if frappe.db.has_column(
-				'YRP Work Order Receivables', "fabric_reference_allocations"
-			):
+			if frappe.db.has_column("YRP Work Order Receivables", "fabric_reference_allocations"):
 				fields.append("fabric_reference_allocations")
 			for source in frappe.get_all(
-				'YRP Work Order Receivables',
+				"YRP Work Order Receivables",
 				filters={"name": ["in", ref_names]},
 				fields=fields,
 			):
-				reference_allocations[source.name] = get_reference_allocations(
-					source, source.qty
-				)
+				reference_allocations[source.name] = get_reference_allocations(source, source.qty)
 	deltas = {}
 	for row in grn.get("items") or []:
 		info = attrs.get(row.item_variant)
@@ -221,7 +226,7 @@ def _grn_deltas_for_cloth(grn, cloth_item, with_colour, with_reference=False):
 			)
 			if allocations:
 				for reference, qty in allocations.items():
-					route_key = key + (reference,)
+					route_key = (*key, reference)
 					deltas[route_key] = deltas.get(route_key, 0) + qty
 				continue
 			key += ("",)
@@ -240,8 +245,10 @@ def _variant_attribute_map(variant_names, cloth_item):
 			AND iva.attribute IN (%(dia)s, %(colour)s)
 		""",
 		{
-			"variants": variant_names, "item": cloth_item,
-			"dia": FABRIC_DIA_ATTRIBUTE, "colour": FABRIC_COLOUR_ATTRIBUTE,
+			"variants": variant_names,
+			"item": cloth_item,
+			"dia": FABRIC_DIA_ATTRIBUTE,
+			"colour": FABRIC_COLOUR_ATTRIBUTE,
 		},
 		as_dict=True,
 	)
@@ -261,14 +268,17 @@ def _bump_program_rows(lot, parentfield, child_doctype, cloth_item, deltas, sign
 			continue
 		key = (
 			(_attribute_value(r.dia), r.get("reference_item_variant") or "")
-			if child_doctype == 'SD YRP Lot Fabric Program'
+			if child_doctype == "SD YRP Lot Fabric Program"
 			else (_attribute_value(r.dia), _attribute_value(r.colour))
 		)
 		rows[key] = r
 
 	# table + column come from the hardcoded call sites, never from user input
-	table = "tabSD YRP Lot Fabric Program" if child_doctype == 'SD YRP Lot Fabric Program' \
+	table = (
+		"tabSD YRP Lot Fabric Program"
+		if child_doctype == "SD YRP Lot Fabric Program"
 		else "tabSD YRP Lot Fabric Colour Program"
+	)
 	column = "received_weight" if value_field == "received_weight" else "compacted_weight"
 	inserted = 0
 	for key, kg in deltas.items():
@@ -281,21 +291,25 @@ def _bump_program_rows(lot, parentfield, child_doctype, cloth_item, deltas, sign
 			)
 		else:
 			new_row = frappe.new_doc(child_doctype)
-			new_row.parenttype = 'SD YRP Lot'
+			new_row.parenttype = "SD YRP Lot"
 			new_row.parent = lot.name
 			new_row.parentfield = parentfield
 			new_row.idx = len(lot.get(parentfield) or []) + 1 + inserted
 			new_row.cloth_item = cloth_item
 			new_row.dia = key[0]
-			if child_doctype == 'SD YRP Lot Fabric Program':
+			if child_doctype == "SD YRP Lot Fabric Program":
 				new_row.reference_item_variant = key[1] or None
 				if key[1]:
-					ref = frappe.get_cached_doc('Item', key[1])
-					new_row.colour = next((
-						_attribute_value(a.attribute_value) for a in ref.get("attributes") or []
-						if a.attribute == FABRIC_COLOUR_ATTRIBUTE
-					), None)
-			if child_doctype == 'SD YRP Lot Fabric Colour Program':
+					ref = frappe.get_cached_doc("Item", key[1])
+					new_row.colour = next(
+						(
+							_attribute_value(a.attribute_value)
+							for a in ref.get("attributes") or []
+							if a.attribute == FABRIC_COLOUR_ATTRIBUTE
+						),
+						None,
+					)
+			if child_doctype == "SD YRP Lot Fabric Colour Program":
 				new_row.colour = key[1]
 			new_row.weight = 0
 			new_row.set(column, flt(sign * kg, 3))
@@ -308,17 +322,21 @@ def rebuild_fabric_tracking(lot):
 	"""Zero both received columns and replay every submitted fabric GRN of this lot.
 	Recovery path for any drift — same idea as production_api's Calculate Pieces."""
 	from frappe import _
-	if not frappe.db.has_column('YRP Work Order', "lot"):
+
+	if not frappe.db.has_column("YRP Work Order", "lot"):
 		frappe.throw(_("Configure the 'lot' stock dimension (YRP Stock Settings) first."))
-	lot_doc = frappe.get_doc('SD YRP Lot', lot)
+	lot_doc = frappe.get_doc("SD YRP Lot", lot)
 	lot_doc.check_permission("write")
-	attribute_db.get_value('SD YRP Lot', lot, "name", for_update=True)
+	attribute_db.get_value("SD YRP Lot", lot, "name", for_update=True)
 
 	for row in lot_doc.get("lot_fabric_programs") or []:
-		attribute_db.set_value('SD YRP Lot Fabric Program', row.name, "received_weight", 0, update_modified=False)
+		attribute_db.set_value(
+			"SD YRP Lot Fabric Program", row.name, "received_weight", 0, update_modified=False
+		)
 	for row in lot_doc.get("lot_fabric_step_ledger") or []:
-		attribute_db.set_value('SD YRP Lot Fabric Step Ledger', row.name, "received_weight", 0,
-			update_modified=False)
+		attribute_db.set_value(
+			"SD YRP Lot Fabric Step Ledger", row.name, "received_weight", 0, update_modified=False
+		)
 
 	grn_names = frappe.db.sql(
 		"""
@@ -333,21 +351,27 @@ def rebuild_fabric_tracking(lot):
 		pluck="name",
 	)
 	for name in grn_names:
-		_apply_grn(frappe.get_doc('YRP Goods Received Note', name), 1)
+		_apply_grn(frappe.get_doc("YRP Goods Received Note", name), 1)
 
 	from essdee_yrp.fabric_program import fetch_fabric_program_details
-	return fetch_fabric_program_details(frappe.get_doc('SD YRP Lot', lot))
+
+	return fetch_fabric_program_details(frappe.get_doc("SD YRP Lot", lot))
 
 
 # ---------------------------------------------------------------------------
 # Balance queries for the WO Calculate popup (consumed by essdee_yrp.api.work_order)
 # ---------------------------------------------------------------------------
 
+
 def get_produced_by_dia(lot, process_name, cloth_item, exclude_wo=None):
 	"""{dia: kg} of RECEIVABLES on other non-cancelled WOs of this lot+process —
 	how much of the program is already ordered to be produced (knitting)."""
 	return _sum_by_attributes(
-		"tabYRP Work Order Receivables", lot, process_name, cloth_item, exclude_wo,
+		"tabYRP Work Order Receivables",
+		lot,
+		process_name,
+		cloth_item,
+		exclude_wo,
 		attributes=(FABRIC_DIA_ATTRIBUTE,),
 	)
 
@@ -355,8 +379,8 @@ def get_produced_by_dia(lot, process_name, cloth_item, exclude_wo=None):
 def get_produced_by_reference(lot, process_name, cloth_item, exclude_wo=None):
 	"""{reference_item_variant: kg} already ordered on knitting WOs."""
 	if not (
-		frappe.db.has_column('YRP Work Order', "lot")
-		and frappe.db.has_column('YRP Work Order Receivables', "fabric_reference_variant")
+		frappe.db.has_column("YRP Work Order", "lot")
+		and frappe.db.has_column("YRP Work Order Receivables", "fabric_reference_variant")
 	):
 		return {}
 	conditions = ""
@@ -370,9 +394,7 @@ def get_produced_by_reference(lot, process_name, cloth_item, exclude_wo=None):
 		conditions = " AND wo.name != %(exclude_wo)s"
 	allocation_select = (
 		"child.fabric_reference_allocations"
-		if frappe.db.has_column(
-			'YRP Work Order Receivables', "fabric_reference_allocations"
-		)
+		if frappe.db.has_column("YRP Work Order Receivables", "fabric_reference_allocations")
 		else "NULL AS fabric_reference_allocations"
 	)
 	rows = frappe.db.sql(
@@ -400,12 +422,19 @@ def get_produced_by_reference(lot, process_name, cloth_item, exclude_wo=None):
 
 
 def get_produced_by_dia_colour(
-	lot, process_name, cloth_item, exclude_wo=None,
+	lot,
+	process_name,
+	cloth_item,
+	exclude_wo=None,
 	reference_item_variant=None,
 ):
 	"""{(dia, colour): kg} of RECEIVABLES — dyed output already ordered (dyeing)."""
 	return _sum_by_attributes(
-		"tabYRP Work Order Receivables", lot, process_name, cloth_item, exclude_wo,
+		"tabYRP Work Order Receivables",
+		lot,
+		process_name,
+		cloth_item,
+		exclude_wo,
 		attributes=(FABRIC_DIA_ATTRIBUTE, FABRIC_COLOUR_ATTRIBUTE),
 		reference_item_variant=reference_item_variant,
 	)
@@ -414,33 +443,54 @@ def get_produced_by_dia_colour(
 def get_consumed_by_dia(lot, process_name, cloth_item, exclude_wo=None):
 	"""{dia: kg} of calculated DELIVERABLES — greige already consumed (dyeing input)."""
 	return _sum_by_attributes(
-		"tabYRP Work Order Deliverables", lot, process_name, cloth_item, exclude_wo,
-		attributes=(FABRIC_DIA_ATTRIBUTE,), calculated_only=True,
+		"tabYRP Work Order Deliverables",
+		lot,
+		process_name,
+		cloth_item,
+		exclude_wo,
+		attributes=(FABRIC_DIA_ATTRIBUTE,),
+		calculated_only=True,
 	)
 
 
 def get_consumed_by_dia_colour(
-	lot, process_name, cloth_item, exclude_wo=None,
+	lot,
+	process_name,
+	cloth_item,
+	exclude_wo=None,
 	reference_item_variant=None,
 ):
 	"""{(dia, colour): kg} of calculated DELIVERABLES — dyed cloth already consumed
 	(compacting input)."""
 	return _sum_by_attributes(
-		"tabYRP Work Order Deliverables", lot, process_name, cloth_item, exclude_wo,
-		attributes=(FABRIC_DIA_ATTRIBUTE, FABRIC_COLOUR_ATTRIBUTE), calculated_only=True,
+		"tabYRP Work Order Deliverables",
+		lot,
+		process_name,
+		cloth_item,
+		exclude_wo,
+		attributes=(FABRIC_DIA_ATTRIBUTE, FABRIC_COLOUR_ATTRIBUTE),
+		calculated_only=True,
 		reference_item_variant=reference_item_variant,
 	)
 
 
-def _sum_by_attributes(child_table, lot, process_name, cloth_item, exclude_wo,
-		attributes, calculated_only=False, reference_item_variant=None):
+def _sum_by_attributes(
+	child_table,
+	lot,
+	process_name,
+	cloth_item,
+	exclude_wo,
+	attributes,
+	calculated_only=False,
+	reference_item_variant=None,
+):
 	# WO.lot is the site-configured stock-dimension Custom Field (created by
 	# yrp.stock.dimensions, never shipped as a fixture) — degrade gracefully
 	# on a site that hasn't configured the lot dimension yet.
-	if not frappe.db.has_column('YRP Work Order', "lot"):
+	if not frappe.db.has_column("YRP Work Order", "lot"):
 		return {}
 	attr_joins, attr_selects = [], []
-	for i, attribute in enumerate(attributes):
+	for i in range(len(attributes)):
 		alias = f"a{i}"
 		attr_joins.append(
 			f"JOIN `tabItem Variant Attribute` {alias} "
@@ -455,7 +505,9 @@ def _sum_by_attributes(child_table, lot, process_name, cloth_item, exclude_wo,
 	if calculated_only:
 		conditions += " AND IFNULL(child.is_calculated, 0) = 1"
 	params = {
-		"lot": lot, "process_name": process_name, "cloth_item": cloth_item,
+		"lot": lot,
+		"process_name": process_name,
+		"cloth_item": cloth_item,
 		"exclude_wo": exclude_wo,
 	}
 	for i, attribute in enumerate(attributes):
@@ -492,11 +544,7 @@ def _sum_by_attributes(child_table, lot, process_name, cloth_item, exclude_wo,
 		if reference_item_variant is None:
 			qty = flt(row.qty)
 		else:
-			qty = flt(
-				get_reference_allocations(row, row.qty).get(
-					reference_item_variant
-				)
-			)
+			qty = flt(get_reference_allocations(row, row.qty).get(reference_item_variant))
 		if not qty:
 			continue
 		key = tuple(row.get(f"v{i}") for i in range(len(attributes)))

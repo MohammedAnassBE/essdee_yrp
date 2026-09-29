@@ -50,10 +50,7 @@ def _build_mapping_rows(
 			continue
 		seen.add(key)
 
-		row = {
-			f"item_{attribute}": source.get(attribute)
-			for attribute in item_attributes
-		}
+		row = {f"item_{attribute}": source.get(attribute) for attribute in item_attributes}
 		row.update({f"bom_{attribute}": None for attribute in bom_attributes})
 		row["quantity"] = 0
 		row["included"] = True
@@ -77,7 +74,7 @@ def get_item_bom_mapping_combinations(
 	if not ipd:
 		frappe.throw(_("Item Production Detail is required to generate combinations"))
 
-	ipd_doc = frappe.get_doc('YRP Item Production Detail', ipd)
+	ipd_doc = frappe.get_doc("YRP Item Production Detail", ipd)
 	ipd_doc.check_permission("read")
 	if item and ipd_doc.item != item:
 		frappe.throw(
@@ -94,9 +91,7 @@ def get_item_bom_mapping_combinations(
 		"Cutting",
 	)
 	available_attributes = set(combination_data.get("attributes") or [])
-	missing_attributes = [
-		attribute for attribute in item_attributes if attribute not in available_attributes
-	]
+	missing_attributes = [attribute for attribute in item_attributes if attribute not in available_attributes]
 	if missing_attributes:
 		frappe.throw(
 			_("IPD {0} cannot generate the selected attribute(s): {1}").format(

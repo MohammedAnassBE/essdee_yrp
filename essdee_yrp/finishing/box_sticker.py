@@ -1,5 +1,4 @@
 """Essdee Box Sticker side effects for submitted packing Work Orders."""
-from yrp import attribute_links as attribute_db
 
 import copy
 import math
@@ -7,13 +6,14 @@ import math
 import frappe
 from frappe import _
 from frappe.utils import flt
+from yrp import attribute_links as attribute_db
+from yrp.utils import get_variant_attr_details
 
 from essdee_yrp.lot_pricing import (
 	get_effective_lot_price_map,
 	get_explicit_lot_price_map,
 )
 from essdee_yrp.production_order_alternative import _lock_production_orders
-from yrp.utils import get_variant_attr_details
 
 
 def build_box_sticker_details(production_order_sizes, quantity_by_size, price_by_size):
@@ -45,20 +45,18 @@ def build_box_sticker_details(production_order_sizes, quantity_by_size, price_by
 def get_missing_box_sticker_prices(work_order, for_update=False):
 	"""Return produced sizes that have no explicit Lot-wise MRP."""
 	work_order = _work_order(work_order)
-	production_order = attribute_db.get_value('SD YRP Lot', work_order.lot, "production_order")
+	production_order = attribute_db.get_value("SD YRP Lot", work_order.lot, "production_order")
 	if not production_order or attribute_db.get_value(
-		'YRP Production Order', production_order, "skip_box_sticker_print"
+		"YRP Production Order", production_order, "skip_box_sticker_print"
 	):
 		return []
 	if for_update:
 		_lock_production_orders(production_order)
-	primary_attribute = frappe.db.get_value('Item', work_order.item, "primary_attribute")
+	primary_attribute = frappe.db.get_value("Item", work_order.item, "primary_attribute")
 	if not primary_attribute:
 		return []
 	quantity_by_size = _quantity_by_size(work_order, primary_attribute)
-	price_by_size = get_explicit_lot_price_map(
-		work_order.lot, production_order, for_update=for_update
-	)
+	price_by_size = get_explicit_lot_price_map(work_order.lot, production_order, for_update=for_update)
 	return sorted(
 		size
 		for size, quantity in quantity_by_size.items()
@@ -69,22 +67,22 @@ def get_missing_box_sticker_prices(work_order, for_update=False):
 def auto_create_box_sticker_print(work_order):
 	"""Create submitted box and piece sticker documents for a packing Work Order."""
 	work_order = _work_order(work_order)
-	production_order = attribute_db.get_value('SD YRP Lot', work_order.lot, "production_order")
+	production_order = attribute_db.get_value("SD YRP Lot", work_order.lot, "production_order")
 	if not production_order or attribute_db.get_value(
-		'YRP Production Order', production_order, "skip_box_sticker_print"
+		"YRP Production Order", production_order, "skip_box_sticker_print"
 	):
 		return []
 
 	_lock_production_orders(production_order)
-	primary_attribute = frappe.db.get_value('Item', work_order.item, "primary_attribute")
-	if not primary_attribute or not frappe.db.exists('SD YRP FG Item Master', work_order.item):
+	primary_attribute = frappe.db.get_value("Item", work_order.item, "primary_attribute")
+	if not primary_attribute or not frappe.db.exists("SD YRP FG Item Master", work_order.item):
 		return []
 	if frappe.db.exists(
-		'SD YRP Box Sticker Print',
+		"SD YRP Box Sticker Print",
 		{
 			"lot": work_order.lot,
 			"docstatus": 1,
-			"against": 'YRP Work Order',
+			"against": "YRP Work Order",
 			"against_id": ["!=", ""],
 		},
 	):
@@ -93,38 +91,32 @@ def auto_create_box_sticker_print(work_order):
 	missing_prices = get_missing_box_sticker_prices(work_order, for_update=True)
 	if missing_prices:
 		frappe.throw(
-			_("Lot-wise price is not set for Lot {0} in sizes: {1}. Set the price for this Lot in the Production Order before submitting.").format(
-				work_order.lot, ", ".join(missing_prices)
-			)
+			_(
+				"Lot-wise price is not set for Lot {0} in sizes: {1}. Set the price for this Lot in the Production Order before submitting."
+			).format(work_order.lot, ", ".join(missing_prices))
 		)
 
-	production_order_doc = frappe.get_doc('YRP Production Order', production_order)
+	production_order_doc = frappe.get_doc("YRP Production Order", production_order)
 	production_order_sizes = []
 	for row in production_order_doc.production_order_details:
 		size = get_variant_attr_details(row.item_variant).get(primary_attribute)
 		if size:
 			production_order_sizes.append(size)
 	quantity_by_size = _quantity_by_size(work_order, primary_attribute)
-	price_by_size = get_effective_lot_price_map(
-		work_order.lot, production_order, for_update=True
-	)
-	details = build_box_sticker_details(
-		production_order_sizes, quantity_by_size, price_by_size
-	)
+	price_by_size = get_effective_lot_price_map(work_order.lot, production_order, for_update=True)
+	details = build_box_sticker_details(production_order_sizes, quantity_by_size, price_by_size)
 	if not details:
 		return []
 
-	production_detail = attribute_db.get_value(
-		'SD YRP Lot', work_order.lot, "production_detail"
-	)
+	production_detail = attribute_db.get_value("SD YRP Lot", work_order.lot, "production_detail")
 	is_set_item, pieces_per_box = (0, 0)
 	if production_detail:
 		is_set_item, pieces_per_box = attribute_db.get_value(
-			'YRP Item Production Detail',
+			"YRP Item Production Detail",
 			production_detail,
 			["is_set_item", "packing_combo"],
 		) or (0, 0)
-	settings = frappe.get_cached_doc('SD YRP MRP Settings')
+	settings = frappe.get_cached_doc("SD YRP MRP Settings")
 	if is_set_item:
 		box_format = settings.set_item_box_sticker
 		print_formats = [box_format, settings.set_item_piece_sticker]
@@ -146,16 +138,14 @@ def auto_create_box_sticker_print(work_order):
 		if print_format == box_format and flt(pieces_per_box) > 0:
 			for row in print_details:
 				row["quantity"] = math.ceil(flt(row["quantity"]) / flt(pieces_per_box))
-		box_sticker = frappe.new_doc('SD YRP Box Sticker Print')
+		box_sticker = frappe.new_doc("SD YRP Box Sticker Print")
 		box_sticker.update(
 			{
 				"lot": work_order.lot,
 				"fg_item": work_order.item,
-				"piece_per_box": frappe.db.get_value(
-					'SD YRP FG Item Master', work_order.item, "pcs_per_box"
-				),
+				"piece_per_box": frappe.db.get_value("SD YRP FG Item Master", work_order.item, "pcs_per_box"),
 				"print_format": print_format,
-				"against": 'YRP Work Order',
+				"against": "YRP Work Order",
 				"against_id": work_order.name,
 			}
 		)
@@ -171,15 +161,15 @@ def cancel_box_sticker_prints(work_order):
 	"""Cancel only the submitted stickers generated for this Work Order."""
 	work_order = _work_order(work_order)
 	for name in frappe.get_all(
-		'SD YRP Box Sticker Print',
+		"SD YRP Box Sticker Print",
 		filters={
-			"against": 'YRP Work Order',
+			"against": "YRP Work Order",
 			"against_id": work_order.name,
 			"docstatus": 1,
 		},
 		pluck="name",
 	):
-		doc = frappe.get_doc('SD YRP Box Sticker Print', name)
+		doc = frappe.get_doc("SD YRP Box Sticker Print", name)
 		doc.flags.ignore_permissions = True
 		doc.cancel()
 
@@ -194,4 +184,4 @@ def _quantity_by_size(work_order, primary_attribute):
 
 
 def _work_order(value):
-	return frappe.get_doc('YRP Work Order', value) if isinstance(value, str) else value
+	return frappe.get_doc("YRP Work Order", value) if isinstance(value, str) else value

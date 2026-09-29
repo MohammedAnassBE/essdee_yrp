@@ -15,10 +15,6 @@ class TestMigrationExecutionLock(TestCase):
 
 	def test_rejects_an_overlapping_execution(self):
 		wrapped = locking.exclusive_migration_run(lambda: self.fail("must not run"))
-		with patch.object(
-			locking, "filelock", side_effect=LockTimeoutError("already held")
-		):
-			with self.assertRaisesRegex(
-				locking.MigrationAlreadyRunningError, "already running"
-			):
+		with patch.object(locking, "filelock", side_effect=LockTimeoutError("already held")):
+			with self.assertRaisesRegex(locking.MigrationAlreadyRunningError, "already running"):
 				wrapped()

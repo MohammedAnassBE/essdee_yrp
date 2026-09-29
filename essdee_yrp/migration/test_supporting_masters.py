@@ -19,13 +19,9 @@ from essdee_yrp.migration.live import (
 
 class SupportingMasterTest(unittest.TestCase):
 	def test_approved_frappe_scope_is_explicit_and_never_includes_removed_f16_doctypes(self):
-		bridge = runpy.run_path(
-			str(Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py")
-		)
+		bridge = runpy.run_path(str(Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py"))
 		approved = set(bridge["APPROVED_FRAPPE_DATA_ORDER"])
-		self.assertEqual(
-			tuple(bridge["APPROVED_FRAPPE_DATA_ORDER"]), APPROVED_FRAPPE_DATA_ORDER
-		)
+		self.assertEqual(tuple(bridge["APPROVED_FRAPPE_DATA_ORDER"]), APPROVED_FRAPPE_DATA_ORDER)
 		self.assertIn("User", approved)
 		self.assertIn("Module Profile", approved)
 		self.assertIn("Custom DocPerm", approved)
@@ -38,9 +34,7 @@ class SupportingMasterTest(unittest.TestCase):
 		self.assertNotIn("Message Log", approved)
 
 	def test_approved_user_drops_only_spine_role_and_keeps_supported_preferences(self):
-		bridge = runpy.run_path(
-			str(Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py")
-		)
+		bridge = runpy.run_path(str(Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py"))
 		user = {
 			"name": "user@example.com",
 			"roles": [
@@ -53,28 +47,30 @@ class SupportingMasterTest(unittest.TestCase):
 		}
 		frappe = SimpleNamespace(
 			get_meta=lambda _doctype: SimpleNamespace(issingle=False),
-			get_doc=lambda _doctype, _name: SimpleNamespace(
-				as_dict=lambda **_kwargs: dict(user)
-			),
+			get_doc=lambda _doctype, _name: SimpleNamespace(as_dict=lambda **_kwargs: dict(user)),
 		)
-		actual = bridge["_approved_frappe_document"](
-			frappe, "User", user["name"], set(), passwords=False
-		)
+		actual = bridge["_approved_frappe_document"](frappe, "User", user["name"], set(), passwords=False)
 		self.assertEqual(actual["roles"], [{"role": "System Manager"}])
 		self.assertEqual(actual["block_modules"], [{"module": "Core"}])
 		self.assertEqual(actual["social_logins"], [{"provider": "frappe"}])
 		self.assertEqual(actual["module_profile"], "Default")
 
 	def test_exact_archive_keeps_live_incompatible_and_auth_rows(self):
-		bridge = runpy.run_path(
-			str(Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py")
-		)
+		bridge = runpy.run_path(str(Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py"))
 		iterator = bridge["iter_approved_frappe_exact_archive_records"]
 		globals_ = iterator.__globals__
+
 		def sql(statement, params=(), **_kwargs):
 			if "FROM __Auth" in statement and params[0] == "S3 Backup Settings":
-				return [{"doctype": "S3 Backup Settings", "name": "S3 Backup Settings",
-					"fieldname": "aws_secret", "password": "ciphertext", "encrypted": 1}]
+				return [
+					{
+						"doctype": "S3 Backup Settings",
+						"name": "S3 Backup Settings",
+						"fieldname": "aws_secret",
+						"password": "ciphertext",
+						"encrypted": 1,
+					}
+				]
 			return []
 
 		frappe = SimpleNamespace(
@@ -109,42 +105,88 @@ class SupportingMasterTest(unittest.TestCase):
 		self.assertEqual(records[-1]["row"]["password"], "ciphertext")
 
 	def test_target_only_children_are_not_deleted_by_supporting_reload(self):
-		field = SimpleNamespace(fieldname='links', options='Dynamic Link')
-		with patch('essdee_yrp.migration.live.frappe.get_meta', return_value=SimpleNamespace(get_table_fields=lambda: [field])), \
-			patch('essdee_yrp.migration.live.frappe.get_all', return_value=['TARGET-ONLY']):
-			with self.assertRaisesRegex(MigrationError, 'Target-only children'):
-				_assert_supporting_child_ownership({'name': 'A-1', 'links': [{'name': 'SOURCE'}]}, 'Address')
+		field = SimpleNamespace(fieldname="links", options="Dynamic Link")
+		with (
+			patch(
+				"essdee_yrp.migration.live.frappe.get_meta",
+				return_value=SimpleNamespace(get_table_fields=lambda: [field]),
+			),
+			patch("essdee_yrp.migration.live.frappe.get_all", return_value=["TARGET-ONLY"]),
+		):
+			with self.assertRaisesRegex(MigrationError, "Target-only children"):
+				_assert_supporting_child_ownership({"name": "A-1", "links": [{"name": "SOURCE"}]}, "Address")
 
 	def test_source_child_identity_cannot_take_over_an_unrelated_parent(self):
-		field = SimpleNamespace(fieldname='links', options='Dynamic Link')
-		with patch('essdee_yrp.migration.live.frappe.get_meta', return_value=SimpleNamespace(get_table_fields=lambda: [field])), \
-			patch('essdee_yrp.migration.live.frappe.get_all', side_effect=[[], [SimpleNamespace(name='SOURCE', parent='OTHER', parenttype='Address', parentfield='links')]]):
-			with self.assertRaisesRegex(MigrationError, 'identity collision'):
-				_assert_supporting_child_ownership({'name': 'A-1', 'links': [{'name': 'SOURCE'}]}, 'Address')
+		field = SimpleNamespace(fieldname="links", options="Dynamic Link")
+		with (
+			patch(
+				"essdee_yrp.migration.live.frappe.get_meta",
+				return_value=SimpleNamespace(get_table_fields=lambda: [field]),
+			),
+			patch(
+				"essdee_yrp.migration.live.frappe.get_all",
+				side_effect=[
+					[],
+					[
+						SimpleNamespace(
+							name="SOURCE", parent="OTHER", parenttype="Address", parentfield="links"
+						)
+					],
+				],
+			),
+		):
+			with self.assertRaisesRegex(MigrationError, "identity collision"):
+				_assert_supporting_child_ownership({"name": "A-1", "links": [{"name": "SOURCE"}]}, "Address")
 
 	def meta(self, doctype):
 		fields = {
 			"Address": [("address_title", "Data", None), ("links", "Table", "Dynamic Link")],
-			"Dynamic Link": [("link_doctype", "Link", "DocType"), ("link_name", "Dynamic Link", "link_doctype")],
+			"Dynamic Link": [
+				("link_doctype", "Link", "DocType"),
+				("link_name", "Dynamic Link", "link_doctype"),
+			],
 		}
-		return SimpleNamespace(issingle=False, fields=[SimpleNamespace(fieldname=name, fieldtype=kind, options=options)
-			for name, kind, options in fields[doctype]])
+		return SimpleNamespace(
+			issingle=False,
+			fields=[
+				SimpleNamespace(fieldname=name, fieldtype=kind, options=options)
+				for name, kind, options in fields[doctype]
+			],
+		)
 
 	def columns(self, doctype):
 		return ["name", "owner", "creation", "modified", "modified_by", "docstatus", "idx", "_user_tags"] + (
-			["address_title"] if doctype == "Address" else ["parent", "parenttype", "parentfield", "link_doctype", "link_name"])
+			["address_title"]
+			if doctype == "Address"
+			else ["parent", "parenttype", "parentfield", "link_doctype", "link_name"]
+		)
 
 	def transform(self, document):
 		with (
 			patch("essdee_yrp.migration.live.frappe.get_meta", side_effect=self.meta),
 			patch("essdee_yrp.migration.live.frappe.db.get_table_columns", side_effect=self.columns),
 		):
-			return _transform_supporting_document(document, "Address", {"Supplier": "YRP Supplier", "Location": "YRP Warehouse"})
+			return _transform_supporting_document(
+				document, "Address", {"Supplier": "YRP Supplier", "Location": "YRP Warehouse"}
+			)
 
 	def test_address_reverse_links_map_doctype_without_renaming_fields_or_records(self):
-		source = {"doctype": "Address", "name": "A-1", "address_title": "Billing",
-			"_user_tags": "source-tag", "links": [{"doctype": "Dynamic Link", "name": "L-1",
-				"link_doctype": "Supplier", "link_name": "S-1", "parenttype": "Address", "idx": 0}]}
+		source = {
+			"doctype": "Address",
+			"name": "A-1",
+			"address_title": "Billing",
+			"_user_tags": "source-tag",
+			"links": [
+				{
+					"doctype": "Dynamic Link",
+					"name": "L-1",
+					"link_doctype": "Supplier",
+					"link_name": "S-1",
+					"parenttype": "Address",
+					"idx": 0,
+				}
+			],
+		}
 		actual = self.transform(source)
 		self.assertEqual(actual["name"], "A-1")
 		self.assertEqual(actual["_user_tags"], "source-tag")
@@ -165,11 +207,7 @@ class SupportingMasterTest(unittest.TestCase):
 		target = Mock()
 		source = SimpleNamespace(
 			iter_supporting_documents=lambda doctype, names: iter(
-				[
-					{"doctype": doctype, "name": "A-1", "address_title": "MRP value"}
-				]
-				if names
-				else []
+				[{"doctype": doctype, "name": "A-1", "address_title": "MRP value"}] if names else []
 			)
 		)
 		plan = SimpleNamespace(specs={})
@@ -187,25 +225,19 @@ class SupportingMasterTest(unittest.TestCase):
 				reconciliation=reconciliation,
 			)
 		self.assertEqual(counts["Address"], 1)
-		self.assertNotIn(
-			"Address", [invocation.args[0] for invocation in target.upsert_batch.call_args_list]
-		)
+		self.assertNotIn("Address", [invocation.args[0] for invocation in target.upsert_batch.call_args_list])
 		ownership.assert_not_called()
 		self.assertEqual(
 			reconciliation["preserved_target_identities"]["Address"],
 			{"A-1": "a-1"},
 		)
-		self.assertEqual(
-			reconciliation["inserted_source_identities"]["Address"], []
-		)
+		self.assertEqual(reconciliation["inserted_source_identities"]["Address"], [])
 
 	def test_missing_business_master_is_transformed_and_inserted(self):
 		target = Mock()
 		document = {"doctype": "Address", "name": "A-1"}
 		source = SimpleNamespace(
-			iter_supporting_documents=lambda _doctype, names: iter(
-				[document] if names else []
-			)
+			iter_supporting_documents=lambda _doctype, names: iter([document] if names else [])
 		)
 		plan = SimpleNamespace(specs={})
 		transformed = {"doctype": "Address", "name": "A-1", "address_title": "MRP"}
@@ -233,9 +265,7 @@ class SupportingMasterTest(unittest.TestCase):
 			("Address", [transformed]),
 			[invocation.args for invocation in target.upsert_batch.call_args_list],
 		)
-		self.assertEqual(
-			reconciliation["inserted_source_identities"]["Address"], ["A-1"]
-		)
+		self.assertEqual(reconciliation["inserted_source_identities"]["Address"], ["A-1"])
 
 	def test_supporting_business_identity_verification_matches_database_case(self):
 		source = SimpleNamespace(
@@ -278,7 +308,9 @@ class SupportingMasterTest(unittest.TestCase):
 		bridge = object.__new__(F15SourceBridge)
 		bridge._run = Mock(return_value=[])
 		list(bridge.iter_supporting_documents("Address", [f"A-{n}" for n in range(501)]))
-		self.assertEqual([len(json.loads(call.args[0][-1])) for call in bridge._run.call_args_list], [250, 250, 1])
+		self.assertEqual(
+			[len(json.loads(call.args[0][-1])) for call in bridge._run.call_args_list], [250, 250, 1]
+		)
 
 	def test_source_packing_process_defaults_historical_lot_bom_process(self):
 		bridge = object.__new__(F15SourceBridge)
@@ -300,11 +332,27 @@ class SupportingMasterTest(unittest.TestCase):
 		)
 
 	def test_existing_direct_address_references_are_still_in_reload_scope(self):
-		spec = SimpleNamespace(target="YRP Supplier", ignored_fields={}, field_map={},
-			target_schema={"fields": [{"fieldname": "billing_address", "fieldtype": "Link", "options": "Address"}]})
+		spec = SimpleNamespace(
+			target="YRP Supplier",
+			ignored_fields={},
+			field_map={},
+			target_schema={
+				"fields": [{"fieldname": "billing_address", "fieldtype": "Link", "options": "Address"}]
+			},
+		)
 		plan = SimpleNamespace(specs={"Supplier": spec})
-		source = SimpleNamespace(iter_external_references=lambda: iter([{
-			"source_doctype": "Supplier", "source_name": "S-1", "fieldname": "billing_address", "value": "A-1"}]))
+		source = SimpleNamespace(
+			iter_external_references=lambda: iter(
+				[
+					{
+						"source_doctype": "Supplier",
+						"source_name": "S-1",
+						"fieldname": "billing_address",
+						"value": "A-1",
+					}
+				]
+			)
+		)
 		with patch("essdee_yrp.migration.live.frappe.db.exists", return_value=True):
 			checked, scope = _validate_external_references(plan, source)
 		self.assertEqual(checked, 1)
@@ -348,9 +396,7 @@ class SupportingMasterTest(unittest.TestCase):
 		self.assertEqual(scope, {"Workflow State": {"Approval Pending"}})
 
 	def test_source_bridge_allows_workflow_state_supporting_documents(self):
-		bridge = runpy.run_path(
-			str(Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py")
-		)
+		bridge = runpy.run_path(str(Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py"))
 		self.assertIn("Workflow State", bridge["SUPPORTING_EXTERNAL_DOCTYPES"])
 
 	def test_supporting_scope_includes_every_address_and_contact(self):
@@ -365,8 +411,10 @@ class SupportingMasterTest(unittest.TestCase):
 			],
 			[("A-2",)],
 		]
-		self.assertEqual(bridge["related_business_master_names"](SimpleNamespace(db=db), {"Supplier": {}}),
-			{"Address": ["A-1", "A-2"], "Contact": ["C-1", "C-UNLINKED"]})
+		self.assertEqual(
+			bridge["related_business_master_names"](SimpleNamespace(db=db), {"Supplier": {}}),
+			{"Address": ["A-1", "A-2"], "Contact": ["C-1", "C-UNLINKED"]},
+		)
 
 	def test_missing_reverse_link_parent_cannot_be_silently_discarded(self):
 		bridge = runpy.run_path(str(Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py"))

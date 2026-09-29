@@ -1,10 +1,9 @@
 """Small, deterministic state helpers shared by finishing workflow services."""
 
 import frappe
-
-from essdee_yrp.finishing.parsing import json_object
 from yrp.utils import update_if_string_instance
 
+from essdee_yrp.finishing.parsing import json_object
 
 DETAIL_FIELDS = (
 	"cutting_qty",

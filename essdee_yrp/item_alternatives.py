@@ -6,9 +6,7 @@ import frappe
 def get_alternative_items(item):
 	if not item:
 		return []
-	forward = frappe.get_all(
-		"Item Alternative", filters={"item_code": item}, pluck="alternative_item_code"
-	)
+	forward = frappe.get_all("Item Alternative", filters={"item_code": item}, pluck="alternative_item_code")
 	reverse = frappe.get_all(
 		"Item Alternative",
 		filters={"alternative_item_code": item, "two_way": 1},

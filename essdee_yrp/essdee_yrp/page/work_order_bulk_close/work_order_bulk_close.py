@@ -3,10 +3,10 @@ import json
 import frappe
 from frappe import _
 from frappe.utils import cstr, flt, getdate
+from yrp.stock.save_stock_items import group_items_for_ui
 
 from essdee_yrp.api.work_order import fetch_summary_details
 from essdee_yrp.work_order_close import close_work_order
-from yrp.stock.save_stock_items import group_items_for_ui
 
 
 def _as_list(value):
@@ -15,7 +15,7 @@ def _as_list(value):
 	if isinstance(value, str):
 		try:
 			value = json.loads(value)
-		except (TypeError, ValueError):
+		except TypeError, ValueError:
 			value = [value]
 	if not isinstance(value, (list, tuple, set)):
 		value = [value]
@@ -30,11 +30,11 @@ def get_open_work_orders(
 	wo_from_date=None,
 	wo_to_date=None,
 ):
-	frappe.has_permission('YRP Work Order', "read", throw=True)
+	frappe.has_permission("YRP Work Order", "read", throw=True)
 	supplier = cstr(supplier).strip()
 	if not supplier:
 		frappe.throw(_("Supplier is required."))
-	if not frappe.db.exists('Supplier', supplier):
+	if not frappe.db.exists("Supplier", supplier):
 		frappe.throw(_("Supplier {0} does not exist.").format(frappe.bold(supplier)))
 
 	filters = {"supplier": supplier, "docstatus": 1, "open_status": "Open"}
@@ -55,7 +55,7 @@ def get_open_work_orders(
 		filters["wo_date"] = ["<=", to_date]
 
 	rows = frappe.get_list(
-		'YRP Work Order',
+		"YRP Work Order",
 		filters=filters,
 		fields=[
 			"name",
@@ -89,12 +89,10 @@ def close_work_orders(
 		frappe.throw(_("Select at least one Work Order to close."))
 
 	for name in names:
-		doc = frappe.get_doc('YRP Work Order', name, for_update=True)
+		doc = frappe.get_doc("YRP Work Order", name, for_update=True)
 		doc.check_permission("write")
 		if doc.docstatus != 1 or doc.open_status != "Open":
-			frappe.throw(
-				_("Work Order {0} is no longer open.").format(frappe.bold(name))
-			)
+			frappe.throw(_("Work Order {0} is no longer open.").format(frappe.bold(name)))
 
 	results = []
 	for name in names:
@@ -110,12 +108,10 @@ def close_work_orders(
 
 @frappe.whitelist()
 def get_work_order_close_details(work_order):
-	doc = frappe.get_doc('YRP Work Order', work_order)
+	doc = frappe.get_doc("YRP Work Order", work_order)
 	doc.check_permission("read")
 	if doc.docstatus != 1 or doc.open_status != "Open":
-		frappe.throw(
-			_("Work Order {0} is no longer open.").format(frappe.bold(work_order))
-		)
+		frappe.throw(_("Work Order {0} is no longer open.").format(frappe.bold(work_order)))
 
 	summary = (
 		fetch_summary_details(doc.name, doc.production_detail)
@@ -128,25 +124,25 @@ def get_work_order_close_details(work_order):
 	)
 	recut_details = []
 	for recut_name in frappe.get_all(
-		'SD YRP WO Recut',
+		"SD YRP WO Recut",
 		filters={"work_order": doc.name, "docstatus": ["<", 2]},
 		pluck="name",
 		order_by="creation asc",
 	):
-		recut = frappe.get_doc('SD YRP WO Recut', recut_name)
+		recut = frappe.get_doc("SD YRP WO Recut", recut_name)
 		recut_details.append(
 			{
 				"name": recut.name,
 				"items": group_items_for_ui(
-					recut.get("wo_recut_details") or [], 'YRP Work Order Deliverables'
+					recut.get("wo_recut_details") or [], "YRP Work Order Deliverables"
 				),
 			}
 		)
 
 	debits = []
-	if frappe.has_permission('YRP Debit', "read"):
+	if frappe.has_permission("YRP Debit", "read"):
 		debits = frappe.get_list(
-			'YRP Debit',
+			"YRP Debit",
 			filters={"work_order": doc.name, "docstatus": 1},
 			fields=[
 				"name",

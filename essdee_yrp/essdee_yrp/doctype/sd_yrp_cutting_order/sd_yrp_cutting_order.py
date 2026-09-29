@@ -1,12 +1,12 @@
-from yrp.attribute_links import value as _attribute_value
+import copy
+import json
+
 # Copyright (c) 2026, Essdee and contributors
 # For license information, please see license.txt
-
 import frappe
-from yrp.attribute_values import get_mapping_document
-import json
-import copy
 from frappe.model.document import Document
+from yrp.attribute_links import value as _attribute_value
+from yrp.attribute_values import get_mapping_document
 from yrp.utils import update_if_string_instance
 
 
@@ -17,8 +17,8 @@ class SDYRPCuttingOrder(Document):
 	def onload(self):
 		if self.items_json:
 			try:
-				self.set_onload('cutting_order_items', json.loads(self.items_json))
-			except (json.JSONDecodeError, TypeError):
+				self.set_onload("cutting_order_items", json.loads(self.items_json))
+			except json.JSONDecodeError, TypeError:
 				pass
 
 	def validate(self):
@@ -30,14 +30,10 @@ class SDYRPCuttingOrder(Document):
 			frappe.throw("Please enter item quantities before submitting")
 
 		data = json.loads(self.items_json)
-		if not any(
-			qty > 0
-			for item in data.get('items', [])
-			for qty in item.get('quantities', {}).values()
-		):
+		if not any(qty > 0 for item in data.get("items", []) for qty in item.get("quantities", {}).values()):
 			frappe.throw("At least one quantity must be greater than zero")
 
-		cod = frappe.get_doc('SD YRP Cutting Order Detail', self.cutting_order_detail)
+		cod = frappe.get_doc("SD YRP Cutting Order Detail", self.cutting_order_detail)
 
 		# Get sizes from COD
 		sizes = []
@@ -53,9 +49,15 @@ class SDYRPCuttingOrder(Document):
 			stiching_attrs = {cod.stiching_attribute: {}}
 			for row in cod.stiching_item_details:
 				panels.setdefault(_attribute_value(row.set_item_attribute_value), {})
-				panels[_attribute_value(row.set_item_attribute_value)][_attribute_value(row.stiching_attribute_value)] = 0
-				stiching_attrs[cod.stiching_attribute].setdefault(_attribute_value(row.set_item_attribute_value), [])
-				stiching_attrs[cod.stiching_attribute][_attribute_value(row.set_item_attribute_value)].append(_attribute_value(row.stiching_attribute_value))
+				panels[_attribute_value(row.set_item_attribute_value)][
+					_attribute_value(row.stiching_attribute_value)
+				] = 0
+				stiching_attrs[cod.stiching_attribute].setdefault(
+					_attribute_value(row.set_item_attribute_value), []
+				)
+				stiching_attrs[cod.stiching_attribute][_attribute_value(row.set_item_attribute_value)].append(
+					_attribute_value(row.stiching_attribute_value)
+				)
 		else:
 			panels = {}
 			stiching_attrs = {cod.stiching_attribute: []}
@@ -68,24 +70,24 @@ class SDYRPCuttingOrder(Document):
 		completed_items = []
 		incomplete_items = []
 
-		for item in data.get('items', []):
+		for item in data.get("items", []):
 			# Build attributes dict
-			colour = _attribute_value(item.get('colour', ''))
+			colour = _attribute_value(item.get("colour", ""))
 			attributes = {cod.packing_attribute: colour}
 			item_keys = {}
 
 			if cod.is_set_item:
-				part = _attribute_value(item.get('part', ''))
+				part = _attribute_value(item.get("part", ""))
 				attributes[cod.set_item_attribute] = part
 				item_keys = {
-					"major_colour": item.get('major_colour', colour),
+					"major_colour": item.get("major_colour", colour),
 					"major_part": part,
 				}
 
 			# Build values dict from quantities (keyed by size)
 			values = {}
 			for size in sizes:
-				values[size] = item.get('quantities', {}).get(size, 0)
+				values[size] = item.get("quantities", {}).get(size, 0)
 
 			# Completed item: zeroed values
 			comp_item = {
@@ -146,16 +148,19 @@ class SDYRPCuttingOrder(Document):
 		completed_json = update_if_string_instance(self.completed_items_json)
 		all_completed = True
 		any_completed = False
-		for item in completed_json.get('items', []):
-			if item.get('completed'):
+		for item in completed_json.get("items", []):
+			if item.get("completed"):
 				any_completed = True
 			else:
 				all_completed = False
 
-		has_laysheets = frappe.db.exists('SD YRP Cutting LaySheet', {
-			"cutting_order": self.name,
-			"status": ["!=", "Cancelled"],
-		})
+		has_laysheets = frappe.db.exists(
+			"SD YRP Cutting LaySheet",
+			{
+				"cutting_order": self.name,
+				"status": ["!=", "Cancelled"],
+			},
+		)
 
 		if all_completed and any_completed:
 			new_status = "Completed"
@@ -171,13 +176,13 @@ class SDYRPCuttingOrder(Document):
 
 @frappe.whitelist()
 def calculate_laysheets(cutting_order):
-	frappe.get_doc('SD YRP Cutting Order', cutting_order).check_permission("write")
+	frappe.get_doc("SD YRP Cutting Order", cutting_order).check_permission("write")
 	frappe.enqueue(calc_laysheets, "short", cutting_order=cutting_order)
 
 
 def calc_laysheets(cutting_order):
-	co_doc = frappe.get_doc('SD YRP Cutting Order', cutting_order)
-	cod = frappe.get_cached_doc('SD YRP Cutting Order Detail', co_doc.cutting_order_detail)
+	co_doc = frappe.get_doc("SD YRP Cutting Order", cutting_order)
+	cod = frappe.get_cached_doc("SD YRP Cutting Order Detail", co_doc.cutting_order_detail)
 	data = json.loads(co_doc.items_json)
 
 	# Get sizes from COD
@@ -194,9 +199,15 @@ def calc_laysheets(cutting_order):
 		stiching_attrs = {cod.stiching_attribute: {}}
 		for row in cod.stiching_item_details:
 			panels.setdefault(_attribute_value(row.set_item_attribute_value), {})
-			panels[_attribute_value(row.set_item_attribute_value)][_attribute_value(row.stiching_attribute_value)] = 0
-			stiching_attrs[cod.stiching_attribute].setdefault(_attribute_value(row.set_item_attribute_value), [])
-			stiching_attrs[cod.stiching_attribute][_attribute_value(row.set_item_attribute_value)].append(_attribute_value(row.stiching_attribute_value))
+			panels[_attribute_value(row.set_item_attribute_value)][
+				_attribute_value(row.stiching_attribute_value)
+			] = 0
+			stiching_attrs[cod.stiching_attribute].setdefault(
+				_attribute_value(row.set_item_attribute_value), []
+			)
+			stiching_attrs[cod.stiching_attribute][_attribute_value(row.set_item_attribute_value)].append(
+				_attribute_value(row.stiching_attribute_value)
+			)
 	else:
 		panels = {}
 		stiching_attrs = {cod.stiching_attribute: []}
@@ -209,16 +220,16 @@ def calc_laysheets(cutting_order):
 	completed_items = []
 	incomplete_items = []
 
-	for item in data.get('items', []):
-		colour = _attribute_value(item.get('colour', ''))
+	for item in data.get("items", []):
+		colour = _attribute_value(item.get("colour", ""))
 		attributes = {cod.packing_attribute: colour}
 		item_keys = {}
 
 		if cod.is_set_item:
-			part = _attribute_value(item.get('part', ''))
+			part = _attribute_value(item.get("part", ""))
 			attributes[cod.set_item_attribute] = part
 			item_keys = {
-				"major_colour": item.get('major_colour', colour),
+				"major_colour": item.get("major_colour", colour),
 				"major_part": part,
 			}
 
@@ -273,8 +284,15 @@ def calc_laysheets(cutting_order):
 	co_doc.save()
 
 	# Re-process all Label Printed LaySheets
-	from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet import update_cutting_plan
-	cls_list = frappe.get_list('SD YRP Cutting LaySheet', filters={"cutting_order": cutting_order, "status": "Label Printed"}, pluck="name")
+	from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet import (
+		update_cutting_plan,
+	)
+
+	cls_list = frappe.get_list(
+		"SD YRP Cutting LaySheet",
+		filters={"cutting_order": cutting_order, "status": "Label Printed"},
+		pluck="name",
+	)
 	for cls in cls_list:
 		update_cutting_plan(cls)
 
@@ -284,9 +302,9 @@ def calc_laysheets(cutting_order):
 
 @frappe.whitelist()
 def get_cutting_order_laysheets_report(cutting_order):
-	co_doc = frappe.get_doc('SD YRP Cutting Order', cutting_order)
+	co_doc = frappe.get_doc("SD YRP Cutting Order", cutting_order)
 	co_doc.check_permission("read")
-	cod_doc = frappe.get_cached_doc('SD YRP Cutting Order Detail', co_doc.cutting_order_detail)
+	cod_doc = frappe.get_cached_doc("SD YRP Cutting Order Detail", co_doc.cutting_order_detail)
 
 	# Get sizes from COD
 	sizes = []
@@ -302,26 +320,38 @@ def get_cutting_order_laysheets_report(cutting_order):
 		for row in cod_doc.stiching_item_details:
 			panels.setdefault(_attribute_value(row.set_item_attribute_value), [])
 
-	cls_list = frappe.get_list('SD YRP Cutting LaySheet', filters={"cutting_order": cutting_order, "status": "Label Printed"}, pluck="name", order_by="lay_no asc")
+	cls_list = frappe.get_list(
+		"SD YRP Cutting LaySheet",
+		filters={"cutting_order": cutting_order, "status": "Label Printed"},
+		pluck="name",
+		order_by="lay_no asc",
+	)
 	lay_details = {}
 	for cls in cls_list:
-		cls_doc = frappe.get_doc('SD YRP Cutting LaySheet', cls)
+		cls_doc = frappe.get_doc("SD YRP Cutting LaySheet", cls)
 		lay_no = cls_doc.lay_no
 		lay_details[lay_no] = {}
 		for row in cls_doc.cutting_laysheet_bundles:
 			parts = _attribute_value(row.part).split(",")
 			parts = ", ".join(parts)
 			set_combination = update_if_string_instance(row.set_combination)
-			major_colour = set_combination['major_colour']
+			major_colour = set_combination["major_colour"]
 			if cod_doc.is_set_item:
-				if set_combination.get('set_part'):
-					if parts not in panels[set_combination['set_part']]:
-						panels[set_combination['set_part']].append(parts)
-					major_colour = "("+ major_colour +")" + set_combination["set_colour"] +"-"+set_combination.get('set_part')
+				if set_combination.get("set_part"):
+					if parts not in panels[set_combination["set_part"]]:
+						panels[set_combination["set_part"]].append(parts)
+					major_colour = (
+						"("
+						+ major_colour
+						+ ")"
+						+ set_combination["set_colour"]
+						+ "-"
+						+ set_combination.get("set_part")
+					)
 				else:
-					if parts not in panels[set_combination['major_part']]:
-						panels[set_combination['major_part']].append(parts)
-					major_colour = major_colour +"-"+set_combination.get('major_part')
+					if parts not in panels[set_combination["major_part"]]:
+						panels[set_combination["major_part"]].append(parts)
+					major_colour = major_colour + "-" + set_combination.get("major_part")
 			else:
 				if parts not in panels:
 					panels.append(parts)
@@ -330,37 +360,43 @@ def get_cutting_order_laysheets_report(cutting_order):
 			lay_details[lay_no][major_colour].setdefault(_attribute_value(row.size), {})
 			lay_details[lay_no][major_colour][_attribute_value(row.size)].setdefault(row.shade, {})
 			lay_details[lay_no][major_colour][_attribute_value(row.size)][row.shade].setdefault(parts, {})
-			lay_details[lay_no][major_colour][_attribute_value(row.size)][row.shade][parts].setdefault("qty", 0)
-			lay_details[lay_no][major_colour][_attribute_value(row.size)][row.shade][parts]["qty"] += row.quantity
-			lay_details[lay_no][major_colour][_attribute_value(row.size)][row.shade][parts].setdefault("bundles", 0)
-			lay_details[lay_no][major_colour][_attribute_value(row.size)][row.shade][parts]['bundles'] += 1
+			lay_details[lay_no][major_colour][_attribute_value(row.size)][row.shade][parts].setdefault(
+				"qty", 0
+			)
+			lay_details[lay_no][major_colour][_attribute_value(row.size)][row.shade][parts]["qty"] += (
+				row.quantity
+			)
+			lay_details[lay_no][major_colour][_attribute_value(row.size)][row.shade][parts].setdefault(
+				"bundles", 0
+			)
+			lay_details[lay_no][major_colour][_attribute_value(row.size)][row.shade][parts]["bundles"] += 1
 
 	final_data = {}
 	for size in sizes:
 		for lay_number, colour_dict in lay_details.items():
 			if not lay_details.get(lay_number):
 				continue
-			for colour, colour_detail in colour_dict.items():
+			for colour, _colour_detail in colour_dict.items():
 				for cur_size, panel_detail in lay_details.get(lay_number).get(colour).items():
 					if cur_size == size:
 						final_data.setdefault(colour, [])
 						for shade in panel_detail:
 							duplicate = {}
-							duplicate['lay_no'] = lay_number
-							duplicate['size'] = size
-							duplicate['shade'] = shade
+							duplicate["lay_no"] = lay_number
+							duplicate["size"] = size
+							duplicate["shade"] = shade
 							for panel, panel_details in panel_detail[shade].items():
-								duplicate[panel] = panel_details['qty']
-								duplicate[panel+"_Bundle"] = panel_details['bundles']
+								duplicate[panel] = panel_details["qty"]
+								duplicate[panel + "_Bundle"] = panel_details["bundles"]
 							final_data[colour].append(duplicate)
 	return panels, final_data, cod_doc.is_set_item
 
 
 @frappe.whitelist()
 def get_cutting_order_size_reports(cutting_order):
-	co_doc = frappe.get_doc('SD YRP Cutting Order', cutting_order)
+	co_doc = frappe.get_doc("SD YRP Cutting Order", cutting_order)
 	co_doc.check_permission("read")
-	cod_doc = frappe.get_cached_doc('SD YRP Cutting Order Detail', co_doc.cutting_order_detail)
+	cod_doc = frappe.get_cached_doc("SD YRP Cutting Order Detail", co_doc.cutting_order_detail)
 
 	# Get sizes from COD
 	sizes = []
@@ -376,24 +412,36 @@ def get_cutting_order_size_reports(cutting_order):
 		for row in cod_doc.stiching_item_details:
 			panels.setdefault(_attribute_value(row.set_item_attribute_value), [])
 
-	cls_list = frappe.get_list('SD YRP Cutting LaySheet', filters={"cutting_order": cutting_order, "status": "Label Printed"}, pluck="name", order_by="lay_no asc")
+	cls_list = frappe.get_list(
+		"SD YRP Cutting LaySheet",
+		filters={"cutting_order": cutting_order, "status": "Label Printed"},
+		pluck="name",
+		order_by="lay_no asc",
+	)
 	size_details = {}
 	for cls in cls_list:
-		cls_doc = frappe.get_doc('SD YRP Cutting LaySheet', cls)
+		cls_doc = frappe.get_doc("SD YRP Cutting LaySheet", cls)
 		for row in cls_doc.cutting_laysheet_bundles:
 			parts = _attribute_value(row.part).split(",")
 			parts = ", ".join(parts)
 			set_combination = update_if_string_instance(row.set_combination)
-			major_colour = set_combination['major_colour']
+			major_colour = set_combination["major_colour"]
 			if cod_doc.is_set_item:
-				if set_combination.get('set_part'):
-					if parts not in panels[set_combination['set_part']]:
-						panels[set_combination['set_part']].append(parts)
-					major_colour = "("+ major_colour +")" + set_combination["set_colour"] +"-"+set_combination.get('set_part')
+				if set_combination.get("set_part"):
+					if parts not in panels[set_combination["set_part"]]:
+						panels[set_combination["set_part"]].append(parts)
+					major_colour = (
+						"("
+						+ major_colour
+						+ ")"
+						+ set_combination["set_colour"]
+						+ "-"
+						+ set_combination.get("set_part")
+					)
 				else:
-					if parts not in panels[set_combination['major_part']]:
-						panels[set_combination['major_part']].append(parts)
-					major_colour = major_colour +"-"+set_combination.get('major_part')
+					if parts not in panels[set_combination["major_part"]]:
+						panels[set_combination["major_part"]].append(parts)
+					major_colour = major_colour + "-" + set_combination.get("major_part")
 			else:
 				if parts not in panels:
 					panels.append(parts)
@@ -403,7 +451,7 @@ def get_cutting_order_size_reports(cutting_order):
 			size_details[major_colour][_attribute_value(row.size)][parts].setdefault("qty", 0)
 			size_details[major_colour][_attribute_value(row.size)][parts]["qty"] += row.quantity
 			size_details[major_colour][_attribute_value(row.size)][parts].setdefault("bundles", 0)
-			size_details[major_colour][_attribute_value(row.size)][parts]['bundles'] += 1
+			size_details[major_colour][_attribute_value(row.size)][parts]["bundles"] += 1
 
 	final_data = {}
 	for size in sizes:
@@ -412,24 +460,29 @@ def get_cutting_order_size_reports(cutting_order):
 				if dict_size == size:
 					final_data.setdefault(colour, [])
 					duplicate = {}
-					duplicate['size'] = size
+					duplicate["size"] = size
 					for panel in panel_detail:
-						duplicate[panel] = panel_detail[panel]['qty']
-						duplicate[panel+"_Bundle"] = panel_detail[panel]['bundles']
+						duplicate[panel] = panel_detail[panel]["qty"]
+						duplicate[panel + "_Bundle"] = panel_detail[panel]["bundles"]
 					final_data[colour].append(duplicate)
 	return panels, final_data, cod_doc.is_set_item
 
 
 @frappe.whitelist()
 def get_cutting_order_ccr(doc_name):
-	co_doc = frappe.get_doc('SD YRP Cutting Order', doc_name)
+	co_doc = frappe.get_doc("SD YRP Cutting Order", doc_name)
 	co_doc.check_permission("read")
-	cod_doc = frappe.get_cached_doc('SD YRP Cutting Order Detail', co_doc.cutting_order_detail)
+	cod_doc = frappe.get_cached_doc("SD YRP Cutting Order Detail", co_doc.cutting_order_detail)
 
-	cls_list = frappe.get_all('SD YRP Cutting LaySheet', filters={"cutting_order": doc_name, "status": "Label Printed"}, pluck="name", order_by="lay_no asc")
+	cls_list = frappe.get_all(
+		"SD YRP Cutting LaySheet",
+		filters={"cutting_order": doc_name, "status": "Label Printed"},
+		pluck="name",
+		order_by="lay_no asc",
+	)
 	markers = {}
 	for cls in cls_list:
-		cls_doc = frappe.get_doc('SD YRP Cutting LaySheet', cls)
+		cls_doc = frappe.get_doc("SD YRP Cutting LaySheet", cls)
 		sizes = {}
 		for row in cls_doc.cutting_marker_ratios:
 			if _attribute_value(row.size) not in sizes:
@@ -443,10 +496,13 @@ def get_cutting_order_ccr(doc_name):
 		markers.setdefault(tup_panels, {})
 		for row in cls_doc.cutting_laysheet_details:
 			key = (_attribute_value(row.colour), row.cloth_type)
-			markers[tup_panels].setdefault(key, {
-				"used_weight": 0,
-				"total_pieces": 0,
-			})
+			markers[tup_panels].setdefault(
+				key,
+				{
+					"used_weight": 0,
+					"total_pieces": 0,
+				},
+			)
 
 			markers[tup_panels][key]["used_weight"] += row.used_weight
 			for size in sizes:
@@ -480,9 +536,9 @@ def get_cutting_order_ccr(doc_name):
 
 @frappe.whitelist()
 def get_cutting_order_planned_vs_actual(cutting_order):
-	co_doc = frappe.get_doc('SD YRP Cutting Order', cutting_order)
+	co_doc = frappe.get_doc("SD YRP Cutting Order", cutting_order)
 	co_doc.check_permission("read")
-	cod_doc = frappe.get_cached_doc('SD YRP Cutting Order Detail', co_doc.cutting_order_detail)
+	cod_doc = frappe.get_cached_doc("SD YRP Cutting Order Detail", co_doc.cutting_order_detail)
 
 	# Get sizes from COD
 	sizes = []
@@ -493,26 +549,26 @@ def get_cutting_order_planned_vs_actual(cutting_order):
 			break
 
 	# Parse planned quantities from items_json
-	data = json.loads(co_doc.items_json or '{}')
-	planned_items = data.get('items', [])
+	data = json.loads(co_doc.items_json or "{}")
+	planned_items = data.get("items", [])
 
 	# Aggregate actual quantities from LaySheet bundles
 	# Key: (colour, part_or_none) -> {size: qty}
 	actual_qty = {}
 	cls_list = frappe.get_list(
-		'SD YRP Cutting LaySheet',
+		"SD YRP Cutting LaySheet",
 		filters={"cutting_order": cutting_order, "status": "Label Printed"},
 		pluck="name",
 	)
 	for cls_name in cls_list:
-		cls_doc = frappe.get_doc('SD YRP Cutting LaySheet', cls_name)
+		cls_doc = frappe.get_doc("SD YRP Cutting LaySheet", cls_name)
 		for row in cls_doc.cutting_laysheet_bundles:
 			set_combination = update_if_string_instance(row.set_combination)
-			major_colour = set_combination.get('major_colour', '')
+			major_colour = set_combination.get("major_colour", "")
 
 			if cod_doc.is_set_item:
-				part = set_combination.get('set_part') or set_combination.get('major_part', '')
-				colour = set_combination.get('set_colour') or major_colour
+				part = set_combination.get("set_part") or set_combination.get("major_part", "")
+				colour = set_combination.get("set_colour") or major_colour
 				key = (colour, part, major_colour)
 			else:
 				key = (major_colour, None, major_colour)
@@ -528,16 +584,16 @@ def get_cutting_order_planned_vs_actual(cutting_order):
 	overall_received = 0
 
 	for item in planned_items:
-		colour = _attribute_value(item.get('colour', ''))
-		quantities = item.get('quantities', {})
+		colour = _attribute_value(item.get("colour", ""))
+		quantities = item.get("quantities", {})
 
 		attributes = {cod_doc.packing_attribute: colour}
 		item_keys = {}
 
 		if cod_doc.is_set_item:
-			part = _attribute_value(item.get('part', ''))
+			part = _attribute_value(item.get("part", ""))
 			attributes[cod_doc.set_item_attribute] = part
-			major_colour = item.get('major_colour', colour)
+			major_colour = item.get("major_colour", colour)
 			item_keys = {"major_colour": major_colour}
 			key = (colour, part, major_colour)
 		else:
@@ -568,15 +624,17 @@ def get_cutting_order_planned_vs_actual(cutting_order):
 		overall_planned += total_qty
 		overall_received += total_received
 
-	result = [{
-		"pack_attr": cod_doc.packing_attribute,
-		"is_set_item": cod_doc.is_set_item,
-		"primary_attribute_values": sizes,
-		"items": items_list,
-		"total_details": total_details,
-		"overall_planned": overall_planned,
-		"overall_received": overall_received,
-	}]
+	result = [
+		{
+			"pack_attr": cod_doc.packing_attribute,
+			"is_set_item": cod_doc.is_set_item,
+			"primary_attribute_values": sizes,
+			"items": items_list,
+			"total_details": total_details,
+			"overall_planned": overall_planned,
+			"overall_received": overall_received,
+		}
+	]
 
 	if cod_doc.is_set_item:
 		result[0]["set_attr"] = cod_doc.set_item_attribute
@@ -586,7 +644,7 @@ def get_cutting_order_planned_vs_actual(cutting_order):
 
 @frappe.whitelist()
 def get_cutting_order_detail_data(cutting_order_detail):
-	doc = frappe.get_doc('SD YRP Cutting Order Detail', cutting_order_detail)
+	doc = frappe.get_doc("SD YRP Cutting Order Detail", cutting_order_detail)
 	doc.check_permission("read")
 
 	colours = [_attribute_value(row.attribute_value) for row in doc.attribute_values]
@@ -604,7 +662,9 @@ def get_cutting_order_detail_data(cutting_order_detail):
 		parts = []
 		for row in doc.set_item_combination_details:
 			comb_dict.setdefault(_attribute_value(row.major_attribute_value), {})
-			comb_dict[_attribute_value(row.major_attribute_value)][_attribute_value(row.set_item_attribute_value)] = _attribute_value(row.attribute_value)
+			comb_dict[_attribute_value(row.major_attribute_value)][
+				_attribute_value(row.set_item_attribute_value)
+			] = _attribute_value(row.attribute_value)
 			if _attribute_value(row.set_item_attribute_value) not in parts:
 				parts.append(_attribute_value(row.set_item_attribute_value))
 
@@ -613,11 +673,13 @@ def get_cutting_order_detail_data(cutting_order_detail):
 		for major_colour in colours:
 			for part in parts:
 				actual_colour = comb_dict.get(major_colour, {}).get(part, major_colour)
-				items.append({
-					"colour": actual_colour,
-					"part": part,
-					"major_colour": major_colour,
-				})
+				items.append(
+					{
+						"colour": actual_colour,
+						"part": part,
+						"major_colour": major_colour,
+					}
+				)
 
 		return {
 			"item": doc.item,

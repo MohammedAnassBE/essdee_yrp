@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import wraps
-from typing import Callable, TypeVar
+from typing import TypeVar
 
 from frappe.utils.file_lock import LockTimeoutError
 from frappe.utils.synchronization import filelock
 
 from essdee_yrp.migration.engine import MigrationError
-
 
 MIGRATION_EXECUTION_LOCK = "sd_yrp_mrp_migration_execution"
 _Return = TypeVar("_Return")

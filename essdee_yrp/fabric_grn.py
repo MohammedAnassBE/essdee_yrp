@@ -7,13 +7,13 @@ module owns only Essdee's IPD/BOM calculation and Work Order ``stock_update``
 bookkeeping. Historical all-unmapped rows retain the explicit legacy hook at
 the bottom of this module.
 """
-from yrp.attribute_links import value as _attribute_value
 
 from collections import defaultdict
 
 import frappe
 from frappe import _
 from frappe.utils import flt
+from yrp.attribute_links import value as _attribute_value
 from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 from essdee_yrp.fabric_chain import get_fabric_step
@@ -21,7 +21,6 @@ from essdee_yrp.fabric_reference import (
 	get_reference_allocations,
 	scale_reference_allocations,
 )
-
 
 QTY_TOLERANCE = 0.000001
 
@@ -46,7 +45,7 @@ def is_calculable_fabric_grn(grn):
 	# those rows with the standard IPD matrix would lose the weighed cutting data.
 	if grn.flags.get("from_cls") or grn.get("cutting_laysheet"):
 		return False
-	if grn.get("against") != 'YRP Work Order' or not grn.get("against_id"):
+	if grn.get("against") != "YRP Work Order" or not grn.get("against_id"):
 		return False
 	if (
 		grn.get("is_return")
@@ -55,7 +54,7 @@ def is_calculable_fabric_grn(grn):
 		or grn.get("includes_packing")
 	):
 		return False
-	if not frappe.db.exists('YRP Work Order', grn.against_id):
+	if not frappe.db.exists("YRP Work Order", grn.against_id):
 		return False
 	# Identity garment processes have their own exact 1:1 planner. Letting the
 	# generic fabric hook run first performs a second calculation and briefly
@@ -67,7 +66,7 @@ def is_calculable_fabric_grn(grn):
 
 	if _is_identity_garment_grn(grn) or _is_stitching_garment_grn(grn):
 		return False
-	wo = frappe.get_cached_doc('YRP Work Order', grn.against_id)
+	wo = frappe.get_cached_doc("YRP Work Order", grn.against_id)
 	return bool(wo.get("production_detail") and wo.get("process_name"))
 
 
@@ -80,8 +79,8 @@ def calculate_consumption_plan(grn):
 	if not is_calculable_fabric_grn(grn):
 		return []
 
-	wo = frappe.get_doc('YRP Work Order', grn.against_id)
-	ipd = frappe.get_cached_doc('YRP Item Production Detail', wo.production_detail)
+	wo = frappe.get_doc("YRP Work Order", grn.against_id)
+	ipd = frappe.get_cached_doc("YRP Item Production Detail", wo.production_detail)
 	step = get_fabric_step(ipd, wo.process_name)
 
 	from essdee_yrp.fabric_ipd import get_identity_process_row
@@ -99,9 +98,9 @@ def calculate_consumption_plan(grn):
 		demands,
 		identity=bool(identity_row or (step and step.get("shape") == "identity")),
 	)
-	rows = _align_cloth_input_rounding(rows, wo, ipd, identity=bool(
-		identity_row or (step and step.get("shape") == "identity")
-	))
+	rows = _align_cloth_input_rounding(
+		rows, wo, ipd, identity=bool(identity_row or (step and step.get("shape") == "identity"))
+	)
 	return _allocate_to_work_order_deliverables(rows, wo, grn)
 
 
@@ -115,13 +114,24 @@ def _align_cloth_input_rounding(rows, wo, ipd, *, identity=False):
 	"""
 	if not ipd.get("is_cloth_item"):
 		return rows
-	planned_grn = frappe._dict(items=[frappe._dict(
-		name=row.name, ref_docname=row.name, item_variant=row.item_variant,
-		quantity=row.qty,
-	) for row in wo.get("receivables") or []])
-	full_rows = _calculate_consumed_rows(
-		ipd, wo.process_name, _get_output_demands(planned_grn, wo), identity=identity,
+	planned_grn = frappe._dict(
+		items=[
+			frappe._dict(
+				name=row.name,
+				ref_docname=row.name,
+				item_variant=row.item_variant,
+				quantity=row.qty,
+			)
+			for row in wo.get("receivables") or []
+		]
 	)
+	full_rows = _calculate_consumed_rows(
+		ipd,
+		wo.process_name,
+		_get_output_demands(planned_grn, wo),
+		identity=identity,
+	)
+
 	def key(row, reference):
 		return (row.get("item_variant"), row.get("uom"), reference or "")
 
@@ -142,12 +152,7 @@ def _align_cloth_input_rounding(rows, wo, ipd, *, identity=False):
 		k = key(row, row.get("reference_item_variant"))
 		full = expected.get(k, 0)
 		target = planned.get(k)
-		if (
-			full > 0
-			and target is not None
-			and target > 0
-			and abs(target - full) <= counts[k] * 0.000500001
-		):
+		if full > 0 and target is not None and target > 0 and abs(target - full) <= counts[k] * 0.000500001:
 			row = {**row, "qty": flt(flt(row["qty"]) * target / full, 6)}
 		result.append(row)
 	return result
@@ -226,7 +231,7 @@ def _calculate_consumed_rows(ipd, process_name, demands, identity=False):
 					**mapping,
 					"item_variant": demand["item_variant"],
 					"qty": demand["qty"],
-					"uom": frappe.db.get_value('Item', parent_item, "stock_uom"),
+					"uom": frappe.db.get_value("Item", parent_item, "stock_uom"),
 				}
 			)
 		else:
@@ -236,9 +241,7 @@ def _calculate_consumed_rows(ipd, process_name, demands, identity=False):
 				rows.append(
 					{
 						**mapping,
-						"item_variant": _resolve_variant(
-							input_row["item"], input_row.get("attrs") or {}
-						),
+						"item_variant": _resolve_variant(input_row["item"], input_row.get("attrs") or {}),
 						"qty": input_row["qty"],
 						"uom": input_row.get("uom"),
 					}
@@ -261,8 +264,7 @@ def _calculate_consumed_rows(ipd, process_name, demands, identity=False):
 					**mapping,
 					"item_variant": _resolve_variant(bom_row["item"], bom_row.get("attrs") or {}),
 					"qty": bom_row["qty"],
-					"uom": bom_row.get("uom")
-					or frappe.db.get_value('Item', bom_row["item"], "stock_uom"),
+					"uom": bom_row.get("uom") or frappe.db.get_value("Item", bom_row["item"], "stock_uom"),
 				}
 			)
 	return _aggregate_rows(rows)
@@ -297,13 +299,12 @@ def _aggregate_rows(rows):
 	]
 
 
-def _allocate_to_work_order_deliverables(
-	rows, wo, grn, *, exact_business_key=False
-):
+def _allocate_to_work_order_deliverables(rows, wo, grn, *, exact_business_key=False):
 	"""Allocate each exact output demand to available Work Order input rows."""
-	from essdee_yrp.fabric_reference import get_reference_allocations
 	from yrp.stock.utils import get_conversion_factor, get_stock_balance
 	from yrp.yrp.doctype.yrp_work_order.yrp_work_order import _stock_dimension_values
+
+	from essdee_yrp.fabric_reference import get_reference_allocations
 
 	available = []
 	for deliverable in wo.get("deliverables") or []:
@@ -320,9 +321,7 @@ def _allocate_to_work_order_deliverables(
 				"stock_uom": conversion.get("stock_uom") or deliverable.uom,
 				"available_stock_qty": available_qty * factor,
 				"dimensions": _stock_dimension_values(wo, deliverable),
-				"references": set(
-					get_reference_allocations(deliverable, deliverable.qty)
-				),
+				"references": set(get_reference_allocations(deliverable, deliverable.qty)),
 			}
 		)
 
@@ -330,20 +329,12 @@ def _allocate_to_work_order_deliverables(
 	plan = []
 	for required in rows:
 		conversion = get_conversion_factor(required["item_variant"], required.get("uom"))
-		required_stock_qty = flt(required["qty"]) * (
-			flt(conversion.get("conversion_factor")) or 1
-		)
+		required_stock_qty = flt(required["qty"]) * (flt(conversion.get("conversion_factor")) or 1)
 		remaining_stock_qty = required_stock_qty
 		reference = required.get("reference_item_variant")
-		candidates = [
-			item
-			for item in available
-			if item["row"].item_variant == required["item_variant"]
-		]
+		candidates = [item for item in available if item["row"].item_variant == required["item_variant"]]
 		if required.get("uom"):
-			candidates = [
-				item for item in candidates if item["row"].uom == required["uom"]
-			]
+			candidates = [item for item in candidates if item["row"].uom == required["uom"]]
 		if "set_combination" in required:
 			from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import _normal_json
 
@@ -351,8 +342,7 @@ def _allocate_to_work_order_deliverables(
 			candidates = [
 				item
 				for item in candidates
-				if _normal_json(item["row"].get("set_combination"))
-				== required_combination
+				if _normal_json(item["row"].get("set_combination")) == required_combination
 			]
 		if exact_business_key and len(candidates) != 1:
 			frappe.throw(
@@ -399,11 +389,7 @@ def _allocate_to_work_order_deliverables(
 					"uom": row.uom,
 					"stock_uom": source["stock_uom"],
 					"conversion_factor": source["factor"],
-					"valuation_rate": flt(
-						row.valuation_rate
-						or row.rate
-						or valuation_cache[valuation_key]
-					),
+					"valuation_rate": flt(row.valuation_rate or row.rate or valuation_cache[valuation_key]),
 					"dimensions": dimensions,
 					"set_combination": row.get("set_combination") or {},
 				}
@@ -488,10 +474,7 @@ def apply_work_order_stock_update(work_order, plan, cancel=False):
 		_update_work_order_status,
 	)
 
-	rows = {
-		row.name: row
-		for row in frappe.get_doc('YRP Work Order', work_order).get("deliverables") or []
-	}
+	rows = {row.name: row for row in frappe.get_doc("YRP Work Order", work_order).get("deliverables") or []}
 	qty_by_row = defaultdict(float)
 	for item in plan:
 		row_name = item.get("work_order_deliverable")
@@ -503,20 +486,14 @@ def apply_work_order_stock_update(work_order, plan, cancel=False):
 		row = rows.get(row_name)
 		if not row:
 			frappe.throw(
-				_("Work Order Deliverable {0} no longer exists on {1}.").format(
-					row_name, work_order
-				)
+				_("Work Order Deliverable {0} no longer exists on {1}.").format(row_name, work_order)
 			)
 		current = flt(row.stock_update)
 		if cancel and current + QTY_TOLERANCE < qty:
-			frappe.throw(
-				_("Consumed stock audit mismatch for Work Order Deliverable {0}.").format(
-					row_name
-				)
-			)
+			frappe.throw(_("Consumed stock audit mismatch for Work Order Deliverable {0}.").format(row_name))
 		new_value = current - qty if cancel else current + qty
 		frappe.db.set_value(
-			'YRP Work Order Deliverables',
+			"YRP Work Order Deliverables",
 			row_name,
 			"stock_update",
 			flt(max(new_value, 0), 6),
@@ -526,7 +503,7 @@ def apply_work_order_stock_update(work_order, plan, cancel=False):
 
 
 def _apply_consumption(grn, cancel=False):
-	if grn.get("against") != 'YRP Work Order' or not grn.get("against_id") or not grn.get("grn_deliverables"):
+	if grn.get("against") != "YRP Work Order" or not grn.get("against_id") or not grn.get("grn_deliverables"):
 		return
 	from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
 		has_mapped_grn_deliverables,
@@ -542,8 +519,8 @@ def _apply_consumption(grn, cancel=False):
 		_update_work_order_status,
 	)
 
-	frappe.db.get_value('YRP Work Order', grn.against_id, "name", for_update=True)
-	wo = frappe.get_doc('YRP Work Order', grn.against_id)
+	frappe.db.get_value("YRP Work Order", grn.against_id, "name", for_update=True)
+	wo = frappe.get_doc("YRP Work Order", grn.against_id)
 	deliverables = {row.name: row for row in wo.get("deliverables") or []}
 	dimension_fields = get_dimension_fieldnames()
 	entries = []
@@ -552,9 +529,7 @@ def _apply_consumption(grn, cancel=False):
 	# and must remain strict. Historical production_api rows (notably packing
 	# GRNs) predate that link and can legitimately consume stock variants that
 	# are not themselves Work Order Deliverables; those are stock-only rows.
-	has_explicit_links = any(
-		row.get("work_order_deliverable") for row in grn.grn_deliverables
-	)
+	has_explicit_links = any(row.get("work_order_deliverable") for row in grn.grn_deliverables)
 
 	for row in grn.grn_deliverables:
 		qty = flt(row.stock_qty) or flt(row.quantity)
@@ -579,7 +554,7 @@ def _apply_consumption(grn, cancel=False):
 			dimensions["lot"] = row.get("lot") or wo.get("lot")
 		if "received_type" in dimensions and not dimensions.get("received_type"):
 			dimensions["received_type"] = row.get("received_type") or frappe.db.get_single_value(
-				'YRP Stock Settings', "default_received_type"
+				"YRP Stock Settings", "default_received_type"
 			)
 
 		valuation_rate = flt(row.valuation_rate)
@@ -639,8 +614,7 @@ def _resolve_deliverable_source(row, deliverables, work_order):
 	candidates = [
 		source
 		for source in deliverables.values()
-		if source.item_variant == row.item_variant
-		and (not row.get("uom") or source.uom == row.uom)
+		if source.item_variant == row.item_variant and (not row.get("uom") or source.uom == row.uom)
 	]
 	if len(candidates) == 1:
 		return candidates[0]
@@ -650,18 +624,14 @@ def _resolve_deliverable_source(row, deliverables, work_order):
 	row_combination = _normal_json(row.get("set_combination"))
 	if row_combination not in (None, "", "{}", {}):
 		candidates = [
-			source
-			for source in candidates
-			if _normal_json(source.get("set_combination")) == row_combination
+			source for source in candidates if _normal_json(source.get("set_combination")) == row_combination
 		]
 
 	for fieldname in ("lot", "received_type"):
 		value = row.get(fieldname)
 		if not value:
 			continue
-		candidates = [
-			source for source in candidates if source.get(fieldname) == value
-		]
+		candidates = [source for source in candidates if source.get(fieldname) == value]
 
 	if len(candidates) == 1:
 		return candidates[0]
@@ -696,7 +666,7 @@ def _validate_legacy_deliverable_match(row, source, work_order):
 	if isinstance(raw_dimensions, str):
 		try:
 			raw_dimensions = frappe.parse_json(raw_dimensions)
-		except (TypeError, ValueError):
+		except TypeError, ValueError:
 			frappe.throw(_("Migrated consumed row has invalid Stock Dimensions."))
 	if not isinstance(raw_dimensions, dict):
 		frappe.throw(_("Migrated consumed row has invalid Stock Dimensions."))
@@ -707,9 +677,9 @@ def _validate_legacy_deliverable_match(row, source, work_order):
 			mismatched.append(fieldname)
 	if mismatched:
 		frappe.throw(
-			_(
-				"Migrated consumed row {0} does not match linked Work Order Deliverable {1}: {2}."
-			).format(row.item_variant, source.name, ", ".join(mismatched))
+			_("Migrated consumed row {0} does not match linked Work Order Deliverable {1}: {2}.").format(
+				row.item_variant, source.name, ", ".join(mismatched)
+			)
 		)
 
 
@@ -719,10 +689,10 @@ def _variant_attrs(item_variant):
 	return {
 		row.attribute: _attribute_value(row.attribute_value)
 		for row in frappe.get_all(
-			'Item Variant Attribute',
+			"Item Variant Attribute",
 			filters={
 				"parent": item_variant,
-				"parenttype": 'Item',
+				"parenttype": "Item",
 			},
 			fields=["attribute", "attribute_value"],
 		)

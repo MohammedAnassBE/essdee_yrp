@@ -5,8 +5,6 @@ restores a Work Order deliverable and moves stock from the Finishing warehouse
 to the selected destination/received-type bucket. Keeping that branch here
 prevents Essdee fields such as ``is_return`` from leaking into base YRP.
 """
-from yrp import attribute_links as attribute_db
-from yrp.attribute_links import value as _attribute_value
 
 import json
 from collections import defaultdict
@@ -14,7 +12,8 @@ from collections import defaultdict
 import frappe
 from frappe import _
 from frappe.utils import cint, flt
-
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 from yrp.stock.dimensions import get_dimension_fieldnames
 from yrp.stock.stock_ledger import make_sl_entries
 from yrp.stock.utils import get_last_sle_rate
@@ -26,7 +25,6 @@ from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 )
 from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import GoodsReceivedNote
 
-
 QTY_TOLERANCE = 0.0001
 
 
@@ -35,19 +33,21 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 
 	def onload(self):
 		super().onload()
-		if self.get("additional_grn") and self.against == 'YRP Work Order':
+		if self.get("additional_grn") and self.against == "YRP Work Order":
 			from yrp.stock.save_stock_items import group_items_for_ui
 
 			rows = [frappe._dict(row.as_dict()) for row in self.items]
 			for row in rows:
 				row.max_receivable_quantity = -1
-			self.set_onload("item_details", group_items_for_ui(
-				normalize_cutting_grn_row_indexes(rows), 'YRP Goods Received Note'))
+			self.set_onload(
+				"item_details",
+				group_items_for_ui(normalize_cutting_grn_row_indexes(rows), "YRP Goods Received Note"),
+			)
 			return
 		display_rows = self.get("items") or []
 		if (
 			self.docstatus == 0
-			and self.against == 'YRP Work Order'
+			and self.against == "YRP Work Order"
 			and self.against_id
 			and display_rows
 			and not self.get("is_return")
@@ -64,21 +64,17 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 				"item_details",
 				group_items_for_ui(
 					aggregate_packing_grn_rows_for_ui(display_rows),
-					'YRP Goods Received Note',
+					"YRP Goods Received Note",
 				),
 			)
 			return
-		if not (
-			self.get("cutting_laysheet")
-			or self.get("allow_non_bundle")
-			or self.get("additional_grn")
-		):
+		if not (self.get("cutting_laysheet") or self.get("allow_non_bundle") or self.get("additional_grn")):
 			if display_rows is not self.get("items"):
 				from yrp.stock.save_stock_items import group_items_for_ui
 
 				self.set_onload(
 					"item_details",
-					group_items_for_ui(display_rows, 'YRP Goods Received Note'),
+					group_items_for_ui(display_rows, "YRP Goods Received Note"),
 				)
 			return
 
@@ -92,7 +88,7 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 			"item_details",
 			group_items_for_ui(
 				normalize_cutting_grn_row_indexes(display_rows),
-				'YRP Goods Received Note',
+				"YRP Goods Received Note",
 			),
 		)
 
@@ -114,16 +110,12 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 		super().set_missing_values()
 		if not self._is_essdee_return():
 			return
-		work_order = frappe.get_cached_doc('YRP Work Order', self.against_id)
+		work_order = frappe.get_cached_doc("YRP Work Order", self.against_id)
 		self.process_name = self.process_name or work_order.process_name
 		self.item = self.item or work_order.item
 		self.production_detail = self.production_detail or work_order.production_detail
-		self.from_warehouse = self.from_warehouse or _get_warehouse_for_supplier(
-			self.supplier
-		)
-		self.to_warehouse = self.to_warehouse or _get_warehouse_for_supplier(
-			self.delivery_location
-		)
+		self.from_warehouse = self.from_warehouse or _get_warehouse_for_supplier(self.supplier)
+		self.to_warehouse = self.to_warehouse or _get_warehouse_for_supplier(self.delivery_location)
 		self.freight_charges = 0
 
 	def set_item_defaults(self):
@@ -137,7 +129,7 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 			validate_submit_role()
 			validate_receivables(self)
 			self.set("grn_deliverables", [])
-		if self.get("against") == 'YRP Work Order' and self.get("against_id"):
+		if self.get("against") == "YRP Work Order" and self.get("against_id"):
 			# One lock covers sewing caps, source-pending checks, deterministic plan
 			# calculation, and the later Work Order stock-update transition.
 			_lock_work_order(self.against_id)
@@ -146,8 +138,7 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 		if plan_kind:
 			plan = _calculate_new_consumption_plan(self, plan_kind)
 			if not plan and any(
-				flt(row.get("stock_qty") or row.get("quantity")) > 0
-				for row in self.get("items") or []
+				flt(row.get("stock_qty") or row.get("quantity")) > 0 for row in self.get("items") or []
 			):
 				frappe.throw(
 					_(
@@ -166,20 +157,18 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 				from essdee_yrp.fabric_grn import load_submitted_consumption_plan
 
 				self.mapped_stock_update_state = 0
-				self.flags.essdee_mapped_consumption = (
-					load_submitted_consumption_plan(self)
-				)
+				self.flags.essdee_mapped_consumption = load_submitted_consumption_plan(self)
 		return super().before_submit()
 
 	def before_cancel(self):
 		if _has_complete_mapped_consumption(self):
 			_lock_work_order(self.against_id)
 			_validate_mapped_consumption_ownership(self)
-			if frappe.db.get_value('YRP Work Order', self.against_id, "open_status") == "Close":
+			if frappe.db.get_value("YRP Work Order", self.against_id, "open_status") == "Close":
 				frappe.throw(
-					_(
-						"Reopen Work Order {0} before cancelling Goods Received Note {1}."
-					).format(self.against_id, self.name)
+					_("Reopen Work Order {0} before cancelling Goods Received Note {1}.").format(
+						self.against_id, self.name
+					)
 				)
 			from essdee_yrp.fabric_grn import load_submitted_consumption_plan
 
@@ -188,9 +177,7 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 
 	def on_submit(self):
 		plan = self.flags.get("essdee_mapped_consumption")
-		apply_update = bool(
-			plan and _claim_mapped_stock_update_transition(self, target_state=1)
-		)
+		apply_update = bool(plan and _claim_mapped_stock_update_transition(self, target_state=1))
 		if plan and not apply_update:
 			return
 		super().on_submit()
@@ -202,9 +189,7 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 
 	def on_cancel(self):
 		plan = self.flags.get("essdee_mapped_consumption")
-		apply_update = bool(
-			plan and _claim_mapped_stock_update_transition(self, target_state=-1)
-		)
+		apply_update = bool(plan and _claim_mapped_stock_update_transition(self, target_state=-1))
 		if plan and not apply_update:
 			return
 		super().on_cancel()
@@ -223,16 +208,13 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 		the warehouse-inequality rejection and retain the mandatory warehouse,
 		item, and positive-quantity gates.
 		"""
-		same_warehouse = bool(
-			self.from_warehouse
-			and self.from_warehouse == self.to_warehouse
-		)
+		same_warehouse = bool(self.from_warehouse and self.from_warehouse == self.to_warehouse)
 		if not same_warehouse:
 			return super().validate_items()
 
 		if not (self.get("items") or self.get("correction_items")):
 			frappe.throw(_("At least one receivable or correction item is required."))
-		if self.against == 'YRP Work Order' and not self.from_warehouse:
+		if self.against == "YRP Work Order" and not self.from_warehouse:
 			frappe.throw(_("From Warehouse is required."))
 		if not self.to_warehouse:
 			frappe.throw(_("To Warehouse is required."))
@@ -267,7 +249,7 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 
 	def _is_essdee_return(self):
 		return bool(
-			self.against == 'YRP Work Order'
+			self.against == "YRP Work Order"
 			and self.against_id
 			and self.get("is_return")
 			and self.get("from_finishing")
@@ -301,16 +283,16 @@ def _set_dynamic_packing_piece_uom(grn):
 
 	if not is_dynamic_packing_grn(grn):
 		return
-	piece_uom = attribute_db.get_value('SD YRP Lot', grn.get("lot"), "packing_uom")
+	piece_uom = attribute_db.get_value("SD YRP Lot", grn.get("lot"), "packing_uom")
 	if not piece_uom:
 		frappe.throw(_("Packing UOM is required on Lot {0}.").format(grn.get("lot")))
 	for row in grn.get("items") or []:
 		stock_uom = row.get("stock_uom") or piece_uom
 		if stock_uom != piece_uom:
 			frappe.throw(
-				_(
-					"Dynamic packing requires Lot packing UOM {0} to match stock UOM {1} for {2}."
-				).format(piece_uom, stock_uom, row.item_variant)
+				_("Dynamic packing requires Lot packing UOM {0} to match stock UOM {1} for {2}.").format(
+					piece_uom, stock_uom, row.item_variant
+				)
 			)
 		row.uom = piece_uom
 		row.stock_uom = piece_uom
@@ -322,7 +304,7 @@ def _set_dynamic_packing_piece_uom(grn):
 def _new_consumption_plan_kind(grn):
 	"""Return the exact Essdee planner for a regular new Work Order receipt."""
 	if (
-		grn.get("against") != 'YRP Work Order'
+		grn.get("against") != "YRP Work Order"
 		or not grn.get("against_id")
 		or grn.get("is_return")
 		or grn.get("is_rework")
@@ -382,9 +364,7 @@ def _has_complete_mapped_consumption(grn):
 	)
 
 	return bool(
-		grn.get("against") == 'YRP Work Order'
-		and grn.get("against_id")
-		and has_mapped_grn_deliverables(grn)
+		grn.get("against") == "YRP Work Order" and grn.get("against_id") and has_mapped_grn_deliverables(grn)
 	)
 
 
@@ -394,40 +374,32 @@ def _validate_mapped_consumption_ownership(grn):
 	from yrp.yrp.doctype.yrp_work_order.yrp_work_order import _stock_dimension_values
 
 	items = {row.name: row for row in grn.get("items") or []}
-	work_order = frappe.get_doc('YRP Work Order', grn.against_id)
-	deliverables = {
-		row.name: row for row in work_order.get("deliverables") or []
-	}
+	work_order = frappe.get_doc("YRP Work Order", grn.against_id)
+	deliverables = {row.name: row for row in work_order.get("deliverables") or []}
 	dimension_fields = get_dimension_fieldnames()
 	mapped_outputs = set()
 	for row in grn.get("grn_deliverables") or []:
 		output = items.get(row.get("goods_received_note_item"))
 		if not output:
-			frappe.throw(
-				_("GRN Deliverable row {0} is not owned by this receipt.").format(
-					row.idx
-				)
-			)
+			frappe.throw(_("GRN Deliverable row {0} is not owned by this receipt.").format(row.idx))
 		mapped_outputs.add(output.name)
 		if row.get("received_item_variant") != output.item_variant:
 			frappe.throw(
-				_(
-					"GRN Deliverable row {0} received variant does not match its output row."
-				).format(row.idx)
+				_("GRN Deliverable row {0} received variant does not match its output row.").format(row.idx)
 			)
 
 		source = deliverables.get(row.get("work_order_deliverable"))
 		if not source:
 			frappe.throw(
-				_(
-					"GRN Deliverable row {0} is not linked to a Deliverable owned by Work Order {1}."
-				).format(row.idx, work_order.name)
+				_("GRN Deliverable row {0} is not linked to a Deliverable owned by Work Order {1}.").format(
+					row.idx, work_order.name
+				)
 			)
 		if row.item_variant != source.item_variant or row.uom != source.uom:
 			frappe.throw(
-				_(
-					"GRN Deliverable row {0} input item/UOM does not match Work Order Deliverable {1}."
-				).format(row.idx, source.name)
+				_("GRN Deliverable row {0} input item/UOM does not match Work Order Deliverable {1}.").format(
+					row.idx, source.name
+				)
 			)
 
 		conversion = get_conversion_factor(source.item_variant, source.uom)
@@ -436,36 +408,21 @@ def _validate_mapped_consumption_ownership(grn):
 		if (
 			(row.get("stock_uom") or row.uom) != expected_stock_uom
 			or abs((flt(row.get("conversion_factor")) or 1) - expected_factor) > QTY_TOLERANCE
-			or abs(flt(row.stock_qty) - flt(row.quantity) * expected_factor)
-			> QTY_TOLERANCE
+			or abs(flt(row.stock_qty) - flt(row.quantity) * expected_factor) > QTY_TOLERANCE
 		):
-			frappe.throw(
-				_(
-					"GRN Deliverable row {0} has an invalid stock-UOM conversion."
-				).format(row.idx)
-			)
+			frappe.throw(_("GRN Deliverable row {0} has an invalid stock-UOM conversion.").format(row.idx))
 
 		raw_dimensions = row.get("stock_dimensions") or {}
 		if isinstance(raw_dimensions, str):
 			try:
 				raw_dimensions = frappe.parse_json(raw_dimensions)
-			except (TypeError, ValueError):
-				frappe.throw(
-					_("GRN Deliverable row {0} has invalid Stock Dimensions.").format(
-						row.idx
-					)
-				)
+			except TypeError, ValueError:
+				frappe.throw(_("GRN Deliverable row {0} has invalid Stock Dimensions.").format(row.idx))
 		if not isinstance(raw_dimensions, dict):
-			frappe.throw(
-				_("GRN Deliverable row {0} has invalid Stock Dimensions.").format(
-					row.idx
-				)
-			)
+			frappe.throw(_("GRN Deliverable row {0} has invalid Stock Dimensions.").format(row.idx))
 		actual_dimensions = {
 			fieldname: (
-				row.get(fieldname)
-				if row.get(fieldname) not in (None, "")
-				else raw_dimensions.get(fieldname)
+				row.get(fieldname) if row.get(fieldname) not in (None, "") else raw_dimensions.get(fieldname)
 			)
 			for fieldname in dimension_fields
 		}
@@ -473,8 +430,7 @@ def _validate_mapped_consumption_ownership(grn):
 		mismatched = [
 			fieldname
 			for fieldname in dimension_fields
-			if (actual_dimensions.get(fieldname) or None)
-			!= (expected_dimensions.get(fieldname) or None)
+			if (actual_dimensions.get(fieldname) or None) != (expected_dimensions.get(fieldname) or None)
 		]
 		if mismatched:
 			frappe.throw(
@@ -484,15 +440,11 @@ def _validate_mapped_consumption_ownership(grn):
 			)
 
 	positive_outputs = {
-		row.name
-		for row in grn.get("items") or []
-		if flt(row.get("stock_qty") or row.get("quantity")) > 0
+		row.name for row in grn.get("items") or [] if flt(row.get("stock_qty") or row.get("quantity")) > 0
 	}
 	missing_outputs = positive_outputs - mapped_outputs
 	if missing_outputs:
-		frappe.throw(
-			_("Every positive received row requires exact mapped consumption.")
-		)
+		frappe.throw(_("Every positive received row requires exact mapped consumption."))
 
 
 def _claim_mapped_stock_update_transition(grn, *, target_state):
@@ -522,7 +474,7 @@ def _claim_mapped_stock_update_transition(grn, *, target_state):
 
 def _validate_direct_finishing_return_against(grn):
 	docstatus, open_status = frappe.db.get_value(
-		'YRP Work Order', grn.against_id, ["docstatus", "open_status"]
+		"YRP Work Order", grn.against_id, ["docstatus", "open_status"]
 	)
 	if docstatus != 1:
 		frappe.throw(_("Work Order {0} must be submitted.").format(grn.against_id))
@@ -550,12 +502,12 @@ def get_work_order_defaults(work_order, delivery_challan=None):
 	items = _only_default_received_type(defaults.get("items") or [])
 	items = normalize_cutting_grn_row_indexes(items)
 	defaults["items"] = items
-	defaults["item_details"] = group_items_for_ui(items, 'YRP Goods Received Note')
+	defaults["item_details"] = group_items_for_ui(items, "YRP Goods Received Note")
 	return defaults
 
 
 def _default_received_type():
-	return frappe.db.get_single_value('YRP Stock Settings', "default_received_type")
+	return frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
 
 
 def _only_default_received_type(rows):
@@ -568,11 +520,7 @@ def _only_default_received_type(rows):
 	default = _default_received_type()
 	if not default:
 		return rows
-	return [
-		row
-		for row in rows or []
-		if not row.get("received_type") or row.get("received_type") == default
-	]
+	return [row for row in rows or [] if not row.get("received_type") or row.get("received_type") == default]
 
 
 def _selected_draft_receivable_rows(grn, existing_rows):
@@ -586,11 +534,9 @@ def _selected_draft_receivable_rows(grn, existing_rows):
 		_pending_receivable_rows,
 	)
 
-	work_order = frappe.get_doc('YRP Work Order', grn.against_id)
+	work_order = frappe.get_doc("YRP Work Order", grn.against_id)
 	delivery_challan = (
-		frappe.get_doc('YRP Delivery Challan', grn.delivery_challan)
-		if grn.delivery_challan
-		else None
+		frappe.get_doc("YRP Delivery Challan", grn.delivery_challan) if grn.delivery_challan else None
 	)
 	rows = _pending_receivable_rows(
 		work_order,
@@ -615,7 +561,8 @@ def _selected_draft_receivable_rows(grn, existing_rows):
 			row.get("item_variant"),
 			row.get("delivery_challan_item"),
 			row.get("received_type") or default or "",
-		) in selected
+		)
+		in selected
 	]
 	_apply_dimension_values_to_rows(rows, _get_production_group_dimensions(work_order))
 	apply_dimension_defaults(rows)
@@ -645,8 +592,8 @@ def normalize_cutting_grn_row_indexes(rows):
 			normalized.append(row)
 			continue
 
-		variant = frappe.get_cached_doc('Item', variant_name)
-		parent_item = frappe.get_cached_doc('Item', (variant.variant_of or variant.name))
+		variant = frappe.get_cached_doc("Item", variant_name)
+		parent_item = frappe.get_cached_doc("Item", (variant.variant_of or variant.name))
 		primary_attribute = parent_item.get("primary_attribute")
 		attributes = tuple(
 			sorted(
@@ -656,9 +603,7 @@ def normalize_cutting_grn_row_indexes(rows):
 			)
 		)
 		dimensions = tuple(
-			(fieldname, row.get(fieldname))
-			for fieldname in dimension_fields
-			if fieldname != "received_type"
+			(fieldname, row.get(fieldname)) for fieldname in dimension_fields if fieldname != "received_type"
 		)
 		key = (
 			(variant.variant_of or variant.name),
@@ -724,26 +669,26 @@ def aggregate_packing_grn_rows_for_ui(rows):
 def validate_sewing_plan_quantity(grn):
 	"""Cap stitching receipts at committed Checking Output, per variant."""
 	if (
-		grn.get("against") != 'YRP Work Order'
+		grn.get("against") != "YRP Work Order"
 		or grn.get("is_return")
 		or grn.get("avoid_sewing_plan_qty")
 		or not grn.get("against_id")
 	):
 		return
-	if not frappe.db.exists('SD YRP Sewing Plan', {"work_order": grn.against_id}):
+	if not frappe.db.exists("SD YRP Sewing Plan", {"work_order": grn.against_id}):
 		return
 	if grn.get("supplier") and frappe.db.exists(
-		'SD YRP GRN Quantity Validation Exempt Supplier',
+		"SD YRP GRN Quantity Validation Exempt Supplier",
 		{
-			"parent": 'SD YRP MRP Settings',
-			"parenttype": 'SD YRP MRP Settings',
+			"parent": "SD YRP MRP Settings",
+			"parenttype": "SD YRP MRP Settings",
 			"parentfield": "grn_quantity_validation_exempt_suppliers",
 			"supplier": grn.supplier,
 		},
 	):
 		return
 
-	checking_type = frappe.db.get_single_value('SD YRP MRP Settings', "type_wise_diff_summary")
+	checking_type = frappe.db.get_single_value("SD YRP MRP Settings", "type_wise_diff_summary")
 	if not checking_type:
 		return
 
@@ -798,8 +743,7 @@ def validate_sewing_plan_quantity(grn):
 		if flt(running_total, 3) > flt(cap, 3):
 			mismatches.append(
 				_(
-					"{0} &mdash; Checking Output: {1}, Already received: {2}, "
-					"This GRN: {3}, Over by: {4}"
+					"{0} &mdash; Checking Output: {1}, Already received: {2}, This GRN: {3}, Over by: {4}"
 				).format(
 					variant,
 					format_quantity(cap),
@@ -825,7 +769,7 @@ def _canonical_json(value):
 
 
 def _validate_return_quantities(grn):
-	work_order = frappe.get_doc('YRP Work Order', grn.against_id)
+	work_order = frappe.get_doc("YRP Work Order", grn.against_id)
 	quantities = defaultdict(float)
 	deliverables = {}
 	for row in grn.get("items") or []:
@@ -836,7 +780,7 @@ def _validate_return_quantities(grn):
 					row.idx, row.item_variant
 				)
 			)
-		row.ref_doctype = 'YRP Work Order Deliverables'
+		row.ref_doctype = "YRP Work Order Deliverables"
 		row.ref_docname = deliverable.name
 		quantities[deliverable.name] += flt(row.quantity)
 		deliverables[deliverable.name] = deliverable
@@ -853,7 +797,7 @@ def _validate_return_quantities(grn):
 
 
 def _update_returned_deliverables(grn, *, cancel):
-	work_order = frappe.get_doc('YRP Work Order', grn.against_id)
+	work_order = frappe.get_doc("YRP Work Order", grn.against_id)
 	quantities = defaultdict(float)
 	for row in grn.get("items") or []:
 		deliverable = _find_deliverable(work_order, row)
@@ -870,11 +814,7 @@ def _update_returned_deliverables(grn, *, cancel):
 			else flt(deliverable.pending_quantity) + quantity
 		)
 		if pending < -QTY_TOLERANCE or pending > flt(deliverable.qty) + QTY_TOLERANCE:
-			frappe.throw(
-				_("Returned pending quantity is invalid for {0}.").format(
-					deliverable.item_variant
-				)
-			)
+			frappe.throw(_("Returned pending quantity is invalid for {0}.").format(deliverable.item_variant))
 		deliverable.db_set("pending_quantity", max(pending, 0), update_modified=False)
 	_update_work_order_status(work_order.name)
 
@@ -882,9 +822,7 @@ def _update_returned_deliverables(grn, *, cancel):
 def _return_stock_ledger_entries(grn, *, cancel=False):
 	if not grn.from_warehouse or not grn.to_warehouse:
 		frappe.throw(_("From Warehouse and To Warehouse are required for a return GRN."))
-	default_received_type = frappe.db.get_single_value(
-		'YRP Stock Settings', "default_received_type"
-	)
+	default_received_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
 	dimension_fields = get_dimension_fieldnames()
 	entries = []
 	for row in grn.get("items") or []:
@@ -935,12 +873,7 @@ def _return_stock_ledger_entries(grn, *, cancel=False):
 
 
 def _find_deliverable(work_order, source_row):
-	from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import _normal_json
-
-	if (
-		source_row.get("ref_doctype") == 'YRP Work Order Deliverables'
-		and source_row.get("ref_docname")
-	):
+	if source_row.get("ref_doctype") == "YRP Work Order Deliverables" and source_row.get("ref_docname"):
 		for row in work_order.get("deliverables") or []:
 			if row.name == source_row.ref_docname:
 				if _return_deliverable_matches(row, source_row, _normal_json):
@@ -971,10 +904,6 @@ def _find_deliverable(work_order, source_row):
 def _return_deliverable_matches(deliverable, source_row, normal_json):
 	return bool(
 		deliverable.item_variant == source_row.item_variant
-		and (
-			not source_row.get("uom")
-			or deliverable.get("uom") == source_row.get("uom")
-		)
-		and normal_json(deliverable.get("set_combination"))
-		== normal_json(source_row.get("set_combination"))
+		and (not source_row.get("uom") or deliverable.get("uom") == source_row.get("uom"))
+		and normal_json(deliverable.get("set_combination")) == normal_json(source_row.get("set_combination"))
 	)

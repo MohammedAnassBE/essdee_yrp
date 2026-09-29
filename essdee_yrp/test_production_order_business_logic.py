@@ -7,8 +7,8 @@ from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, getdate
 from yrp.utils import get_variant_attr_details
 
-from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import get_item_details as get_lot_item_details
 from essdee_yrp import production_order_workflow
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import get_item_details as get_lot_item_details
 from essdee_yrp.production_order_workflow import (
 	PPO_DRAFT_STATUS,
 	PPO_REQUEST_STATUS,
@@ -17,8 +17,8 @@ from essdee_yrp.production_order_workflow import (
 	_validate_ppo_approval_state,
 	format_request_timestamp,
 	get_order_editor_context,
-	get_quantity_ratio_changes,
 	get_price_update_context,
+	get_quantity_ratio_changes,
 	onload,
 	update_production_order_date,
 	validate_size_quantities,
@@ -34,15 +34,11 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 			comment_log="",
 			flags=_dict(),
 		)
-		doc.db_set = MagicMock(
-			side_effect=lambda fieldname, value: doc.update({fieldname: value})
-		)
+		doc.db_set = MagicMock(side_effect=lambda fieldname, value: doc.update({fieldname: value}))
 		doc.save = MagicMock()
 		with (
 			patch.object(production_order_workflow, "lock_production_orders"),
-			patch.object(
-				production_order_workflow.frappe, "get_doc", return_value=doc
-			),
+			patch.object(production_order_workflow.frappe, "get_doc", return_value=doc),
 			patch.object(
 				production_order_workflow,
 				"get_linked_lots",
@@ -57,9 +53,7 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 				],
 			),
 		):
-			closed = production_order_workflow.close_production_order_if_all_lots_audited(
-				"PPO-TEST"
-			)
+			closed = production_order_workflow.close_production_order_if_all_lots_audited("PPO-TEST")
 
 		self.assertTrue(closed)
 		self.assertEqual(doc.status, "Closed")
@@ -76,9 +70,7 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 		doc.save = MagicMock()
 		with (
 			patch.object(production_order_workflow, "lock_production_orders"),
-			patch.object(
-				production_order_workflow.frappe, "get_doc", return_value=doc
-			),
+			patch.object(production_order_workflow.frappe, "get_doc", return_value=doc),
 			patch.object(
 				production_order_workflow,
 				"get_linked_lots",
@@ -90,9 +82,7 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 				return_value=[_dict(lot="LOT-1", fp_status="OCR Completed")],
 			),
 		):
-			closed = production_order_workflow.close_production_order_if_all_lots_audited(
-				"PPO-TEST"
-			)
+			closed = production_order_workflow.close_production_order_if_all_lots_audited("PPO-TEST")
 
 		self.assertFalse(closed)
 		self.assertEqual(doc.status, "Open")
@@ -106,9 +96,7 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 			comment_log="Existing entry",
 			flags=_dict(),
 		)
-		doc.db_set = MagicMock(
-			side_effect=lambda fieldname, value: doc.update({fieldname: value})
-		)
+		doc.db_set = MagicMock(side_effect=lambda fieldname, value: doc.update({fieldname: value}))
 		doc.save = MagicMock()
 		with (
 			patch.object(
@@ -117,9 +105,7 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 				return_value=["System Manager"],
 			),
 			patch.object(production_order_workflow, "lock_production_orders"),
-			patch.object(
-				production_order_workflow.frappe, "get_doc", return_value=doc
-			),
+			patch.object(production_order_workflow.frappe, "get_doc", return_value=doc),
 			patch.object(
 				production_order_workflow.frappe,
 				"session",
@@ -135,14 +121,14 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 
 	def _submitted_order(self):
 		names = frappe.get_all(
-			'YRP Production Order',
+			"YRP Production Order",
 			filters={"docstatus": 1, "status": "Open"},
 			pluck="name",
 			limit=1,
 		)
 		if not names:
 			self.skipTest("Production Order source-record parity runs after data migration")
-		return frappe.get_doc('YRP Production Order', names[0])
+		return frappe.get_doc("YRP Production Order", names[0])
 
 	def test_workflow_endpoints_are_authenticated(self):
 		methods = (
@@ -163,9 +149,7 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 			"approve_quantity_transfer",
 		)
 		for method in methods:
-			function = frappe.get_attr(
-				f"essdee_yrp.production_order_workflow.{method}"
-			)
+			function = frappe.get_attr(f"essdee_yrp.production_order_workflow.{method}")
 			self.assertIn(function, frappe.whitelisted, method)
 			self.assertNotIn(function, frappe.guest_methods, method)
 
@@ -201,7 +185,7 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 			if source_row.attributes_json
 			else get_variant_attr_details(source_row.item_variant)
 		)
-		doc = frappe.new_doc('YRP Production Order')
+		doc = frappe.new_doc("YRP Production Order")
 		doc.item = source.item
 		doc.delivery_date = source.delivery_date
 		doc.posting_date = source.posting_date
@@ -243,7 +227,7 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 
 	def test_lot_entry_receives_ratio_stored_on_production_order(self):
 		linked_rows = frappe.get_all(
-			'SD YRP Lot',
+			"SD YRP Lot",
 			filters={
 				"production_order": ["is", "set"],
 				"production_detail": ["is", "set"],
@@ -254,12 +238,12 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 		if not linked_rows:
 			self.skipTest("Lot/PPO source-record parity runs after data migration")
 		linked = linked_rows[0]
-		doc = frappe.get_doc('YRP Production Order', linked.production_order)
+		doc = frappe.get_doc("YRP Production Order", linked.production_order)
 		row = doc.production_order_details[0]
 		original_ratio = row.ratio
 		try:
 			frappe.db.set_value(
-				'YRP Production Order Detail',
+				"YRP Production Order Detail",
 				row.name,
 				"ratio",
 				7,
@@ -272,7 +256,7 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 			)
 		finally:
 			frappe.db.set_value(
-				'YRP Production Order Detail',
+				"YRP Production Order Detail",
 				row.name,
 				"ratio",
 				original_ratio,
@@ -290,9 +274,7 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 			doc.save()
 
 		doc.reload()
-		new_date = add_days(
-			max(getdate(doc.delivery_date), getdate(doc.dont_deliver_after)), 1
-		)
+		new_date = add_days(max(getdate(doc.delivery_date), getdate(doc.dont_deliver_after)), 1)
 		result = update_production_order_date(
 			doc.name,
 			"Don't Deliver After",
@@ -310,8 +292,7 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 	def test_price_request_actions_are_authenticated(self):
 		for method in ("approve_ppo_price_request", "reject_ppo_price_request"):
 			function = frappe.get_attr(
-				"essdee_yrp.essdee_yrp.doctype.sd_yrp_ppo_price_request."
-				f"sd_yrp_ppo_price_request.{method}"
+				f"essdee_yrp.essdee_yrp.doctype.sd_yrp_ppo_price_request.sd_yrp_ppo_price_request.{method}"
 			)
 			self.assertIn(function, frappe.whitelisted)
 			self.assertNotIn(function, frappe.guest_methods)

@@ -7,20 +7,18 @@ from frappe.tests.utils import FrappeTestCase
 class TestProductionOrderCustomization(FrappeTestCase):
 	def test_ppo_request_form_stays_editable_for_authorized_manager(self):
 		form_source = Path(
-			frappe.get_app_path(
-				"essdee_yrp", "public", "js", "production_order_workflow.js"
-			)
+			frappe.get_app_path("essdee_yrp", "public", "js", "production_order_workflow.js")
 		).read_text()
 		self.assertNotIn('frm.doc.status !== "PPO Request"', form_source)
 		self.assertNotIn("frm.disable_save()", form_source)
 
 	def test_production_api_fields_are_essdee_custom_fields(self):
-		meta = frappe.get_meta('YRP Production Order', cached=False)
+		meta = frappe.get_meta("YRP Production Order", cached=False)
 		expected = {
 			"comment_log": {"fieldtype": "Long Text", "read_only": 1},
 			"date_change_history": {
 				"fieldtype": "Table",
-				"options": 'SD YRP Production Order Date Change',
+				"options": "SD YRP Production Order Date Change",
 				"read_only": 1,
 				"allow_on_submit": 1,
 			},
@@ -33,13 +31,13 @@ class TestProductionOrderCustomization(FrappeTestCase):
 			},
 			"item": {
 				"fieldtype": "Link",
-				"options": 'Item',
+				"options": "Item",
 				"reqd": 1,
 				"in_list_view": 1,
 			},
 			"lot_price_overrides": {
 				"fieldtype": "Table",
-				"options": 'SD YRP PPO Lot Price Detail',
+				"options": "SD YRP PPO Lot Price Detail",
 				"hidden": 1,
 				"allow_on_submit": 1,
 			},
@@ -65,7 +63,7 @@ class TestProductionOrderCustomization(FrappeTestCase):
 			},
 			"quantity_transfer_history": {
 				"fieldtype": "Table",
-				"options": 'SD YRP PPO Quantity Transfer History',
+				"options": "SD YRP PPO Quantity Transfer History",
 				"read_only": 1,
 				"no_copy": 1,
 				"allow_on_submit": 1,
@@ -74,8 +72,7 @@ class TestProductionOrderCustomization(FrappeTestCase):
 				"fieldtype": "Select",
 				"default": "Draft",
 				"options": (
-					"\nDraft\nPPO Request\nOpen\nPending Request\nItem Changed\n"
-					"Not Processed\nClosed"
+					"\nDraft\nPPO Request\nOpen\nPending Request\nItem Changed\nNot Processed\nClosed"
 				),
 				"read_only": 1,
 				"no_copy": 1,
@@ -98,7 +95,7 @@ class TestProductionOrderCustomization(FrappeTestCase):
 			},
 			"transferred_to_ppo": {
 				"fieldtype": "Link",
-				"options": 'YRP Production Order',
+				"options": "YRP Production Order",
 				"read_only": 1,
 				"no_copy": 1,
 				"allow_on_submit": 1,
@@ -115,7 +112,7 @@ class TestProductionOrderCustomization(FrappeTestCase):
 					frappe.db.exists(
 						"Custom Field",
 						{
-							"dt": 'YRP Production Order',
+							"dt": "YRP Production Order",
 							"fieldname": fieldname,
 							"module": "Essdee YRP",
 						},
@@ -123,9 +120,7 @@ class TestProductionOrderCustomization(FrappeTestCase):
 				)
 
 	def test_naming_series_matches_production_api(self):
-		field = frappe.get_meta('YRP Production Order', cached=False).get_field(
-			"naming_series"
-		)
+		field = frappe.get_meta("YRP Production Order", cached=False).get_field("naming_series")
 		self.assertEqual(field.fieldtype, "Select")
 		self.assertEqual(field.options, "\nPPO-")
 		self.assertEqual(field.reqd, 1)

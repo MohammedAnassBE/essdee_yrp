@@ -5,6 +5,11 @@ from unittest.mock import MagicMock, call, patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
+from essdee_yrp.finishing.rebuild import (
+	get_configured_cutting_process,
+	get_process_work_orders,
+	rebuild_finishing_plan,
+)
 from essdee_yrp.work_order_piece_tracking import (
 	audit_migrated_piece_tracking,
 	compare_work_order_piece_tracking,
@@ -12,23 +17,14 @@ from essdee_yrp.work_order_piece_tracking import (
 	on_goods_received_note_submit,
 	rebuild_work_order_piece_tracking,
 )
-from essdee_yrp.finishing.rebuild import (
-	get_configured_cutting_process,
-	get_process_work_orders,
-	rebuild_finishing_plan,
-)
 
 
 class TestWorkOrderPieceTracking(IntegrationTestCase):
 	@patch("essdee_yrp.work_order_piece_tracking.rebuild_work_order_piece_tracking")
 	@patch("essdee_yrp.work_order_piece_tracking.frappe.db.get_value", return_value=None)
-	def test_generic_base_work_orders_do_not_enter_essdee_piece_replay(
-		self, _get_value, rebuild
-	):
+	def test_generic_base_work_orders_do_not_enter_essdee_piece_replay(self, _get_value, rebuild):
 		on_delivery_challan_submit(frappe._dict(work_order="BASE-WO"))
-		on_goods_received_note_submit(
-			frappe._dict(against='YRP Work Order', against_id="BASE-WO")
-		)
+		on_goods_received_note_submit(frappe._dict(against="YRP Work Order", against_id="BASE-WO"))
 		rebuild.assert_not_called()
 
 	@patch("essdee_yrp.finishing.rebuild.sync_finishing_plans_from_work_order")
@@ -77,8 +73,8 @@ class TestWorkOrderPieceTracking(IntegrationTestCase):
 		self.assertEqual(
 			get_doc.call_args_list[:2],
 			[
-				call('YRP Work Order', "WO-1", for_update=True),
-				call('SD YRP Lot', "LOT-1", for_update=True),
+				call("YRP Work Order", "WO-1", for_update=True),
+				call("SD YRP Lot", "LOT-1", for_update=True),
 			],
 		)
 		self.assertEqual(result["finishing_plans"], ["FP-1"])
@@ -93,7 +89,7 @@ class TestWorkOrderPieceTracking(IntegrationTestCase):
 			"WO-2526-02687-1",  # set-item packing expansion + returns
 			"WO-2627-00604-1",  # fractional legacy quantities in Int counters
 		)
-		missing = [name for name in oracles if not frappe.db.exists('YRP Work Order', name)]
+		missing = [name for name in oracles if not frappe.db.exists("YRP Work Order", name)]
 		if missing:
 			self.skipTest(f"Migrated piece-tracking oracles unavailable: {', '.join(missing)}")
 
@@ -104,11 +100,11 @@ class TestWorkOrderPieceTracking(IntegrationTestCase):
 
 	def test_rebuild_is_idempotent_and_does_not_duplicate_tracking_rows(self):
 		name = "WO-2627-00005"
-		if not frappe.db.exists('YRP Work Order', {"name": name, "docstatus": 1}):
+		if not frappe.db.exists("YRP Work Order", {"name": name, "docstatus": 1}):
 			self.skipTest(f"Migrated Work Order oracle {name} is unavailable")
 
 		first = rebuild_work_order_piece_tracking(name, check_permission=False)
-		first_doc = frappe.get_doc('YRP Work Order', name)
+		first_doc = frappe.get_doc("YRP Work Order", name)
 		first_rows = [
 			(
 				row.item_variant,
@@ -121,7 +117,7 @@ class TestWorkOrderPieceTracking(IntegrationTestCase):
 		]
 
 		second = rebuild_work_order_piece_tracking(name, check_permission=False)
-		second_doc = frappe.get_doc('YRP Work Order', name)
+		second_doc = frappe.get_doc("YRP Work Order", name)
 		second_rows = [
 			(
 				row.item_variant,
@@ -139,11 +135,11 @@ class TestWorkOrderPieceTracking(IntegrationTestCase):
 
 	def test_finishing_rebuild_retry_is_idempotent_and_has_unique_projection_rows(self):
 		name = "FP-2526-00238"
-		if not frappe.db.exists('SD YRP Finishing Plan', name):
+		if not frappe.db.exists("SD YRP Finishing Plan", name):
 			self.skipTest(f"Retained Finishing Plan oracle {name} is unavailable")
 
 		def snapshot():
-			doc = frappe.get_doc('SD YRP Finishing Plan', name)
+			doc = frappe.get_doc("SD YRP Finishing Plan", name)
 			ignored = {
 				"name",
 				"owner",
@@ -159,11 +155,7 @@ class TestWorkOrderPieceTracking(IntegrationTestCase):
 			}
 			return {
 				fieldname: [
-					{
-						key: value
-						for key, value in row.as_dict().items()
-						if key not in ignored
-					}
+					{key: value for key, value in row.as_dict().items() if key not in ignored}
 					for row in doc.get(fieldname) or []
 				]
 				for fieldname in (
@@ -180,12 +172,9 @@ class TestWorkOrderPieceTracking(IntegrationTestCase):
 		self.assertEqual(first, second)
 		for fieldname, rows in second.items():
 			keys = [
-				(row.get("item_variant"), frappe.as_json(row.get("set_combination") or {}))
-				for row in rows
+				(row.get("item_variant"), frappe.as_json(row.get("set_combination") or {})) for row in rows
 			]
-			self.assertEqual(
-				len(keys), len(set(keys)), f"Duplicate {fieldname} projection rows"
-			)
+			self.assertEqual(len(keys), len(set(keys)), f"Duplicate {fieldname} projection rows")
 
 	def test_recent_historical_replay_has_no_quantity_mismatches(self):
 		result = audit_migrated_piece_tracking(limit=100)
@@ -200,23 +189,23 @@ class TestWorkOrderPieceTracking(IntegrationTestCase):
 		missing = [
 			name
 			for name, _source_type in oracles
-			if not frappe.db.exists('YRP Work Order', {"name": name, "docstatus": 1})
+			if not frappe.db.exists("YRP Work Order", {"name": name, "docstatus": 1})
 		]
 		if missing:
 			self.skipTest(f"Migrated return oracles unavailable: {', '.join(missing)}")
 
 		for work_order_name, source_type in oracles:
 			with self.subTest(work_order=work_order_name):
-				work_order = frappe.get_doc('YRP Work Order', work_order_name)
+				work_order = frappe.get_doc("YRP Work Order", work_order_name)
 				finishing_plan_name = frappe.db.get_value(
-					'SD YRP Finishing Plan', {"lot": work_order.lot}, "name"
+					"SD YRP Finishing Plan", {"lot": work_order.lot}, "name"
 				)
 				self.assertTrue(finishing_plan_name)
 				self.assertTrue(
 					frappe.db.exists(
-						'YRP Goods Received Note',
+						"YRP Goods Received Note",
 						{
-							"against": 'YRP Work Order',
+							"against": "YRP Work Order",
 							"against_id": work_order.name,
 							"docstatus": 1,
 							"is_return": 1,
@@ -224,15 +213,11 @@ class TestWorkOrderPieceTracking(IntegrationTestCase):
 					)
 				)
 
-				rebuild_work_order_piece_tracking(
-					work_order.name, check_permission=False
-				)
-				finishing_plan = frappe.get_doc('SD YRP Finishing Plan', finishing_plan_name)
+				rebuild_work_order_piece_tracking(work_order.name, check_permission=False)
+				finishing_plan = frappe.get_doc("SD YRP Finishing Plan", finishing_plan_name)
 
 				if source_type == "Stitching":
-					process = frappe.db.get_single_value(
-						'SD YRP MRP Settings', "finishing_inward_process"
-					)
+					process = frappe.db.get_single_value("SD YRP MRP Settings", "finishing_inward_process")
 					expected_delivered, expected_received = _source_totals(
 						get_process_work_orders(process, work_order.lot)
 					)
@@ -262,7 +247,7 @@ def _source_totals(work_orders):
 	delivered = 0
 	received = 0
 	for name in work_orders:
-		for row in frappe.get_doc('YRP Work Order', name).work_order_calculated_items:
+		for row in frappe.get_doc("YRP Work Order", name).work_order_calculated_items:
 			delivered += row.delivered_quantity
 			received += row.received_qty
 	return delivered, received

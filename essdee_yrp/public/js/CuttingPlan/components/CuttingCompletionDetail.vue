@@ -194,8 +194,8 @@ function load_data(item_data, is_pop_up){
         pop_up.value = is_pop_up
         get_total()
     }
-    catch(e) {
-        console.log(e)
+    catch {
+        items.value = {}
     }
 }
 

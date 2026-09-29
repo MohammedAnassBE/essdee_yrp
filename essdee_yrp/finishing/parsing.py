@@ -20,6 +20,6 @@ def json_object(value, *, max_depth: int = 3) -> dict:
 			break
 		try:
 			value = frappe.parse_json(value)
-		except (TypeError, ValueError):
+		except TypeError, ValueError:
 			return {}
 	return value if isinstance(value, dict) else {}

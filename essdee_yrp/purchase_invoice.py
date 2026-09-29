@@ -7,8 +7,6 @@ for both Purchase Order and Work Order invoices, including the historical
 """
 
 from __future__ import annotations
-from yrp import attribute_links as attribute_db
-from yrp.attribute_links import value as _attribute_value
 
 import hashlib
 import json
@@ -17,6 +15,8 @@ from collections import defaultdict
 import frappe
 from frappe import _
 from frappe.utils import flt
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 from yrp.stock.uom import resolve_item_uom
 from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
 from yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice import (
@@ -119,11 +119,7 @@ def project_purchase_order_items(items, *, final_rates=None, expense_heads=None)
 		)
 		if abs(flt(group["rate"]) - final_rate) > 10**-RATE_PRECISION:
 			frappe.throw(_("Grouped Purchase Invoice items contain conflicting final rates."))
-		if (
-			group.get("expense_head")
-			and expense_head
-			and group["expense_head"] != expense_head
-		):
+		if group.get("expense_head") and expense_head and group["expense_head"] != expense_head:
 			frappe.throw(_("Grouped Purchase Invoice items contain conflicting expense heads."))
 		group["expense_head"] = group.get("expense_head") or expense_head
 		group["qty"] += qty
@@ -143,13 +139,11 @@ def build_purchase_order_invoice_payload(
 	"""Build exact PO GRN variants and their grouped commercial rows together."""
 	grn_names = list(dict.fromkeys(grns or []))
 	if len(grn_names) > MAX_SELECTED_GRNS:
-		frappe.throw(
-			_("A maximum of {0} GRNs can be fetched at once.").format(MAX_SELECTED_GRNS)
-		)
+		frappe.throw(_("A maximum of {0} GRNs can be fetched at once.").format(MAX_SELECTED_GRNS))
 	grn_docs = []
 	for grn_name in grn_names:
-		_validate_selected_grn(grn_name, supplier, 'Purchase Order', purchase_invoice)
-		grn_docs.append(frappe.get_doc('YRP Goods Received Note', grn_name))
+		_validate_selected_grn(grn_name, supplier, "Purchase Order", purchase_invoice)
+		grn_docs.append(frappe.get_doc("YRP Goods Received Note", grn_name))
 	if not grn_docs:
 		frappe.throw(_("Please select at least one GRN."))
 	if len({grn.supplier for grn in grn_docs}) != 1:
@@ -187,9 +181,7 @@ def build_purchase_order_invoice_payload(
 					"actual_rate": stock_rate,
 					"actual_qty": 0,
 					"_actual_amount": 0,
-					"set_combination": (
-						json.dumps(set_combination) if set_combination else None
-					),
+					"set_combination": (json.dumps(set_combination) if set_combination else None),
 				},
 			)
 			row["qty"] += qty
@@ -200,9 +192,7 @@ def build_purchase_order_invoice_payload(
 	direct_rows = list(direct.values())
 	for row in direct_rows:
 		row["actual_rate"] = (
-			flt(row.pop("_actual_amount")) / flt(row["actual_qty"])
-			if flt(row["actual_qty"])
-			else 0
+			flt(row.pop("_actual_amount")) / flt(row["actual_qty"]) if flt(row["actual_qty"]) else 0
 		)
 	direct_rows, commercial_rows = project_purchase_order_items(
 		direct_rows,
@@ -210,10 +200,7 @@ def build_purchase_order_invoice_payload(
 		expense_heads=expense_heads,
 	)
 	pre_tax_total = sum(flt(row["amount"]) for row in direct_rows)
-	grand_total = sum(
-		flt(row["amount"]) * (1 + _get_tax_rate(row.get("tax")) / 100)
-		for row in direct_rows
-	)
+	grand_total = sum(flt(row["amount"]) * (1 + _get_tax_rate(row.get("tax")) / 100) for row in direct_rows)
 	return {
 		"items": direct_rows,
 		"commercial_items": commercial_rows,
@@ -222,11 +209,7 @@ def build_purchase_order_invoice_payload(
 		"tax_total": grand_total - pre_tax_total,
 		"total_quantity": sum(flt(row["qty"]) for row in direct_rows),
 		"wo_items": [],
-		"tax_rates": {
-			row.get("tax"): _get_tax_rate(row.get("tax"))
-			for row in direct_rows
-			if row.get("tax")
-		},
+		"tax_rates": {row.get("tax"): _get_tax_rate(row.get("tax")) for row in direct_rows if row.get("tax")},
 		"allow_to_change_rate": 1,
 	}
 
@@ -273,11 +256,7 @@ def build_verification_details(rows):
 			packing_attr = context.get("packing_attr")
 			set_attr = context.get("set_attr")
 			size = attributes.get(primary) or _("Unspecified")
-			major_colour = (
-				combination.get("major_colour")
-				or attributes.get(packing_attr)
-				or _("Unspecified")
-			)
+			major_colour = combination.get("major_colour") or attributes.get(packing_attr) or _("Unspecified")
 			colour = major_colour
 			part = None
 			if data["is_set_item"]:
@@ -328,10 +307,10 @@ def _get_variant_attribute_map(item_variants):
 		return {}
 	result = {item_variant: {} for item_variant in item_variants}
 	for row in frappe.get_all(
-		'Item Variant Attribute',
+		"Item Variant Attribute",
 		filters={
 			"parent": ["in", item_variants],
-			"parenttype": 'Item',
+			"parenttype": "Item",
 		},
 		fields=["parent", "attribute", "attribute_value"],
 		order_by="parent, idx",
@@ -342,32 +321,39 @@ def _get_variant_attribute_map(item_variants):
 
 
 def _get_verification_work_order_context(work_order):
-	work_order_values = frappe.db.get_value(
-		'YRP Work Order',
-		work_order,
-		["lot", "production_detail"],
-		as_dict=True,
-	) or frappe._dict()
-	lot_values = attribute_db.get_value(
-		'SD YRP Lot',
-		work_order_values.get("lot"),
-		["production_detail", "item"],
-		as_dict=True,
-	) or frappe._dict()
-	production_detail = (
-		lot_values.get("production_detail") or work_order_values.get("production_detail")
+	work_order_values = (
+		frappe.db.get_value(
+			"YRP Work Order",
+			work_order,
+			["lot", "production_detail"],
+			as_dict=True,
+		)
+		or frappe._dict()
 	)
-	ipd_values = attribute_db.get_value(
-		'YRP Item Production Detail',
-		production_detail,
-		[
-			"is_set_item",
-			"primary_item_attribute",
-			"packing_attribute",
-			"set_item_attribute",
-		],
-		as_dict=True,
-	) or frappe._dict()
+	lot_values = (
+		attribute_db.get_value(
+			"SD YRP Lot",
+			work_order_values.get("lot"),
+			["production_detail", "item"],
+			as_dict=True,
+		)
+		or frappe._dict()
+	)
+	production_detail = lot_values.get("production_detail") or work_order_values.get("production_detail")
+	ipd_values = (
+		attribute_db.get_value(
+			"YRP Item Production Detail",
+			production_detail,
+			[
+				"is_set_item",
+				"primary_item_attribute",
+				"packing_attribute",
+				"set_item_attribute",
+			],
+			as_dict=True,
+		)
+		or frappe._dict()
+	)
 	return frappe._dict(
 		lot=work_order_values.get("lot"),
 		item_name=lot_values.get("item"),
@@ -401,10 +387,7 @@ def _calculate_verification_grand_total(data):
 		"pending_for_bill",
 		"grn_quantity",
 	)
-	size_totals = {
-		size: {field: 0 for field in fields}
-		for size in data["sizes"]
-	}
+	size_totals = {size: {field: 0 for field in fields} for size in data["sizes"]}
 	for colour in data["colours"].values():
 		for size in data["sizes"]:
 			values = colour["data"].get(size) or {}
@@ -420,29 +403,24 @@ def _calculate_verification_grand_total(data):
 			size_totals[size]["grn_quantity"] += quantity
 	return {
 		"sizes": size_totals,
-		"total": {
-			field: sum(size_totals[size][field] for size in data["sizes"])
-			for field in fields
-		},
+		"total": {field: sum(size_totals[size][field] for size in data["sizes"]) for field in fields},
 	}
 
 
 @frappe.whitelist()
 def fetch_grn_details(grns, against, supplier, purchase_invoice=None):
 	"""Build Essdee's grouped and direct Purchase Invoice projections."""
-	if against == 'Purchase Order':
+	if against == "Purchase Order":
 		_check_invoice_fetch_permission(purchase_invoice)
-		frappe.has_permission('YRP Goods Received Note', "read", throw=True)
-		if purchase_invoice and frappe.db.exists('YRP Purchase Invoice', purchase_invoice):
-			supplier = frappe.db.get_value('YRP Purchase Invoice', purchase_invoice, "supplier")
+		frappe.has_permission("YRP Goods Received Note", "read", throw=True)
+		if purchase_invoice and frappe.db.exists("YRP Purchase Invoice", purchase_invoice):
+			supplier = frappe.db.get_value("YRP Purchase Invoice", purchase_invoice, "supplier")
 		grns = frappe.parse_json(grns) if isinstance(grns, str) else grns
 		if not isinstance(grns, list):
 			frappe.throw(_("Selected GRNs must be a list."))
 		grns = list(dict.fromkeys(grns or []))
 		if len(grns) > MAX_SELECTED_GRNS:
-			frappe.throw(
-				_("A maximum of {0} GRNs can be fetched at once.").format(MAX_SELECTED_GRNS)
-			)
+			frappe.throw(_("A maximum of {0} GRNs can be fetched at once.").format(MAX_SELECTED_GRNS))
 		if supplier and not str(supplier).strip("Xx*"):
 			supplier = None
 		payload = build_purchase_order_invoice_payload(
@@ -451,10 +429,7 @@ def fetch_grn_details(grns, against, supplier, purchase_invoice=None):
 			purchase_invoice=purchase_invoice,
 		)
 		payload["commercial_items"] = fetch_expense_accounts(payload["commercial_items"])
-		expense_heads = {
-			row["group_key"]: row.get("expense_head")
-			for row in payload["commercial_items"]
-		}
+		expense_heads = {row["group_key"]: row.get("expense_head") for row in payload["commercial_items"]}
 		payload["items"], payload["commercial_items"] = project_purchase_order_items(
 			payload["items"],
 			expense_heads=expense_heads,
@@ -470,18 +445,18 @@ def fetch_grn_details(grns, against, supplier, purchase_invoice=None):
 		payload.pop("tax_total")
 		return payload
 
-	if against != 'YRP Work Order':
+	if against != "YRP Work Order":
 		payload = base_fetch_grn_details(grns, against, supplier, purchase_invoice)
 		payload["items"] = fetch_expense_accounts(payload.get("items"))
 		return payload
 
 	_check_invoice_fetch_permission(purchase_invoice)
-	frappe.has_permission('YRP Goods Received Note', "read", throw=True)
-	if purchase_invoice and frappe.db.exists('YRP Purchase Invoice', purchase_invoice):
+	frappe.has_permission("YRP Goods Received Note", "read", throw=True)
+	if purchase_invoice and frappe.db.exists("YRP Purchase Invoice", purchase_invoice):
 		# Link values can be masked in Desk for restricted users. The permission-
 		# checked saved document is authoritative; never compare a masked client
 		# placeholder such as XXXXXXXX with the GRN's real supplier.
-		supplier = frappe.db.get_value('YRP Purchase Invoice', purchase_invoice, "supplier")
+		supplier = frappe.db.get_value("YRP Purchase Invoice", purchase_invoice, "supplier")
 	grns = frappe.parse_json(grns) if isinstance(grns, str) else grns
 	if not isinstance(grns, list):
 		frappe.throw(_("Selected GRNs must be a list."))
@@ -489,14 +464,11 @@ def fetch_grn_details(grns, against, supplier, purchase_invoice=None):
 	if not grns:
 		frappe.throw(_("Please select at least one GRN."))
 	if len(grns) > MAX_SELECTED_GRNS:
-		frappe.throw(
-			_("A maximum of {0} GRNs can be fetched at once.").format(MAX_SELECTED_GRNS)
-		)
+		frappe.throw(_("A maximum of {0} GRNs can be fetched at once.").format(MAX_SELECTED_GRNS))
 	if supplier and not str(supplier).strip("Xx*"):
 		supplier = None
 	validated_grns = [
-		_validate_selected_grn(grn, supplier, 'YRP Work Order', purchase_invoice)
-		for grn in grns
+		_validate_selected_grn(grn, supplier, "YRP Work Order", purchase_invoice) for grn in grns
 	]
 	selected_suppliers = {grn.supplier for grn in validated_grns}
 	if len(selected_suppliers) != 1:
@@ -532,8 +504,8 @@ def build_work_order_invoice_payload(
 	"""Build commercial, verification, and physical valuation rows together."""
 	grn_docs = []
 	for grn_name in list(dict.fromkeys(grns or [])):
-		_validate_selected_grn(grn_name, supplier, 'YRP Work Order', purchase_invoice)
-		grn_docs.append(frappe.get_doc('YRP Goods Received Note', grn_name))
+		_validate_selected_grn(grn_name, supplier, "YRP Work Order", purchase_invoice)
+		grn_docs.append(frappe.get_doc("YRP Goods Received Note", grn_name))
 	if not grn_docs:
 		frappe.throw(_("Please select at least one GRN."))
 
@@ -550,7 +522,7 @@ def build_work_order_invoice_payload(
 	billed_rows = []
 
 	for work_order_name, selected_grns in by_work_order.items():
-		work_order = frappe.get_doc('YRP Work Order', work_order_name)
+		work_order = frappe.get_doc("YRP Work Order", work_order_name)
 		context = _build_work_order_context(work_order, selected_grns)
 
 		for demand in context["demands"]:
@@ -606,9 +578,7 @@ def build_work_order_invoice_payload(
 				if quantity <= 0:
 					continue
 				conversion_factor = (
-					flt(grn_item.stock_qty) / quantity
-					if flt(grn_item.stock_qty) and quantity
-					else 1
+					flt(grn_item.stock_qty) / quantity if flt(grn_item.stock_qty) and quantity else 1
 				)
 				physical_source_rate = flt(receivable.cost) * conversion_factor
 				rate_weight = demand["weights"][receivable.name] * conversion_factor
@@ -655,24 +625,19 @@ def build_work_order_invoice_payload(
 	for row in hidden_rows:
 		row["amount"] = flt(row["qty"]) * flt(row["rate"])
 		row["actual_rate"] = (
-			flt(row.pop("_actual_amount")) / flt(row["actual_qty"])
-			if flt(row["actual_qty"])
-			else 0
+			flt(row.pop("_actual_amount")) / flt(row["actual_qty"]) if flt(row["actual_qty"]) else 0
 		)
 
 	commercial_total = sum(flt(row["amount"]) for row in commercial_rows)
 	hidden_total = sum(flt(row["amount"]) for row in hidden_rows)
 	if abs(commercial_total - hidden_total) > VALUE_TOLERANCE:
 		frappe.throw(
-			_(
-				"The commercial process value {0} does not reconcile with the physical GRN value {1}."
-			).format(flt(commercial_total, 2), flt(hidden_total, 2))
+			_("The commercial process value {0} does not reconcile with the physical GRN value {1}.").format(
+				flt(commercial_total, 2), flt(hidden_total, 2)
+			)
 		)
 
-	grand_total = sum(
-		flt(row["amount"]) * (1 + _get_tax_rate(row.get("tax")) / 100)
-		for row in hidden_rows
-	)
+	grand_total = sum(flt(row["amount"]) * (1 + _get_tax_rate(row.get("tax")) / 100) for row in hidden_rows)
 	return {
 		"items": hidden_rows,
 		"commercial_items": commercial_rows,
@@ -681,11 +646,7 @@ def build_work_order_invoice_payload(
 		"tax_total": grand_total - hidden_total,
 		"total_quantity": sum(flt(row["qty"]) for row in commercial_rows),
 		"wo_items": billed_rows,
-		"tax_rates": {
-			row.get("tax"): _get_tax_rate(row.get("tax"))
-			for row in hidden_rows
-			if row.get("tax")
-		},
+		"tax_rates": {row.get("tax"): _get_tax_rate(row.get("tax")) for row in hidden_rows if row.get("tax")},
 		"allow_to_change_rate": 1,
 	}
 
@@ -702,19 +663,11 @@ def build_legacy_work_order_invoice_payload(invoice):
 	"""
 	commercial_rows = list(invoice.get("essdee_items") or [])
 	if not commercial_rows:
-		frappe.throw(
-			_("Migrated Work Order Purchase Invoice {0} has no Process Items.").format(
-				invoice.name
-			)
-		)
+		frappe.throw(_("Migrated Work Order Purchase Invoice {0} has no Process Items.").format(invoice.name))
 	group_keys = [row.get("group_key") for row in commercial_rows]
-	if any(not group_key for group_key in group_keys) or len(set(group_keys)) != len(
-		group_keys
-	):
+	if any(not group_key for group_key in group_keys) or len(set(group_keys)) != len(group_keys):
 		frappe.throw(
-			_("Migrated Work Order Purchase Invoice {0} has stale Process Items.").format(
-				invoice.name
-			)
+			_("Migrated Work Order Purchase Invoice {0} has stale Process Items.").format(invoice.name)
 		)
 	if any(flt(row.rate) < 0 for row in commercial_rows):
 		frappe.throw(_("Final process rate cannot be negative."))
@@ -732,10 +685,7 @@ def build_legacy_work_order_invoice_payload(invoice):
 			"unlinked": True,
 		}
 
-	grn_docs = [
-		_load_historical_work_order_grn(name, invoice.supplier)
-		for name in grn_names
-	]
+	grn_docs = [_load_historical_work_order_grn(name, invoice.supplier) for name in grn_names]
 	by_work_order = defaultdict(list)
 	for grn in grn_docs:
 		if not grn.against_id:
@@ -746,7 +696,7 @@ def build_legacy_work_order_invoice_payload(invoice):
 	billed_rows = []
 	projected_group_qty = defaultdict(float)
 	for work_order_name, selected_grns in by_work_order.items():
-		work_order = frappe.get_doc('YRP Work Order', work_order_name)
+		work_order = frappe.get_doc("YRP Work Order", work_order_name)
 		physical_inputs = _legacy_physical_inputs(work_order, selected_grns)
 		commercial_qty = sum(
 			flt(row.quantity)
@@ -853,14 +803,10 @@ def build_legacy_work_order_invoice_payload(invoice):
 				commercial_row = demand.get("legacy_commercial_row")
 				if not commercial_row:
 					frappe.throw(
-						_("GRN {0} row {1} has no migrated commercial group.").format(
-							grn.name, grn_item.idx
-						)
+						_("GRN {0} row {1} has no migrated commercial group.").format(grn.name, grn_item.idx)
 					)
 				conversion_factor = (
-					flt(grn_item.stock_qty) / quantity
-					if flt(grn_item.stock_qty) and quantity
-					else 1
+					flt(grn_item.stock_qty) / quantity if flt(grn_item.stock_qty) and quantity else 1
 				)
 				physical_source_rate = flt(receivable.cost) * conversion_factor
 				rate_weight = demand["weights"][receivable.name] * conversion_factor
@@ -908,9 +854,7 @@ def build_legacy_work_order_invoice_payload(invoice):
 		projected_qty = projected_group_qty.get(commercial_row.group_key, 0)
 		if projected_qty <= QUANTITY_TOLERANCE:
 			frappe.throw(
-				_(
-					"Purchase Invoice {0} Process Item {1} could not be mapped to its linked GRNs."
-				).format(
+				_("Purchase Invoice {0} Process Item {1} could not be mapped to its linked GRNs.").format(
 					invoice.name,
 					commercial_row.idx,
 				)
@@ -934,9 +878,7 @@ def build_legacy_work_order_invoice_payload(invoice):
 	for row in hidden_rows:
 		row["amount"] = flt(row["qty"]) * flt(row["rate"])
 		row["actual_rate"] = (
-			flt(row.pop("_actual_amount")) / flt(row["actual_qty"])
-			if flt(row["actual_qty"])
-			else 0
+			flt(row.pop("_actual_amount")) / flt(row["actual_qty"]) if flt(row["actual_qty"]) else 0
 		)
 	commercial_total = sum(flt(row.qty) * flt(row.rate) for row in commercial_rows)
 	hidden_total = sum(flt(row["amount"]) for row in hidden_rows)
@@ -946,10 +888,7 @@ def build_legacy_work_order_invoice_payload(invoice):
 				"Purchase Invoice {0} commercial value {1} does not reconcile with physical GRN value {2}."
 			).format(invoice.name, flt(commercial_total, 2), flt(hidden_total, 2))
 		)
-	grand_total = sum(
-		flt(row["amount"]) * (1 + _get_tax_rate(row.get("tax")) / 100)
-		for row in hidden_rows
-	)
+	grand_total = sum(flt(row["amount"]) * (1 + _get_tax_rate(row.get("tax")) / 100) for row in hidden_rows)
 	return {
 		"items": hidden_rows,
 		"commercial_items": [row.as_dict() for row in commercial_rows],
@@ -969,14 +908,12 @@ def _legacy_work_order_commercial_context(
 	selected_grns,
 	commercial_rows,
 ):
-	process_item = frappe.db.get_value('YRP Process', work_order.process_name, "item")
+	process_item = frappe.db.get_value("YRP Process", work_order.process_name, "item")
 	if not process_item:
 		frappe.throw(
-			_("Process {0} has no Purchase Invoice billing Item configured.").format(
-				work_order.process_name
-			)
+			_("Process {0} has no Purchase Invoice billing Item configured.").format(work_order.process_name)
 		)
-	if not frappe.db.exists('Item', process_item):
+	if not frappe.db.exists("Item", process_item):
 		frappe.throw(
 			_("Process {0} billing Item Variant {1} does not exist.").format(
 				work_order.process_name, process_item
@@ -986,18 +923,12 @@ def _legacy_work_order_commercial_context(
 	billing_uom = resolve_item_uom(billing_variant).uom
 	lots = {grn.get("lot") or work_order.get("lot") for grn in selected_grns}
 	if len(lots) != 1:
-		frappe.throw(
-			_("Selected GRNs for Work Order {0} do not have one Lot.").format(
-				work_order.name
-			)
-		)
+		frappe.throw(_("Selected GRNs for Work Order {0} do not have one Lot.").format(work_order.name))
 	lot = next(iter(lots))
 	candidates = [
 		row
 		for row in commercial_rows
-		if row.item == billing_variant
-		and (row.get("lot") or "") == (lot or "")
-		and row.uom == billing_uom
+		if row.item == billing_variant and (row.get("lot") or "") == (lot or "") and row.uom == billing_uom
 	]
 	if not candidates:
 		frappe.throw(
@@ -1023,8 +954,9 @@ def _legacy_physical_inputs(work_order, selected_grns):
 				continue
 			receivable = None
 			if (
-				grn_item.get("ref_doctype") in {
-					'YRP Work Order Receivables',
+				grn_item.get("ref_doctype")
+				in {
+					"YRP Work Order Receivables",
 					"Work Order Receivables",
 				}
 				and grn_item.get("ref_docname") in receivables
@@ -1047,9 +979,7 @@ def _legacy_physical_inputs(work_order, selected_grns):
 					)
 				)
 			conversion_factor = (
-				flt(grn_item.stock_qty) / quantity
-				if flt(grn_item.stock_qty) and quantity
-				else 1
+				flt(grn_item.stock_qty) / quantity if flt(grn_item.stock_qty) and quantity else 1
 			)
 			inputs.append(
 				{
@@ -1061,11 +991,7 @@ def _legacy_physical_inputs(work_order, selected_grns):
 				}
 			)
 	if not inputs:
-		frappe.throw(
-			_("Work Order {0} linked GRNs have no positive item rows.").format(
-				work_order.name
-			)
-		)
+		frappe.throw(_("Work Order {0} linked GRNs have no positive item rows.").format(work_order.name))
 	return inputs
 
 
@@ -1074,23 +1000,12 @@ def _select_legacy_work_order_commercial_row(candidates, physical_inputs, commer
 		return candidates[0]
 	if commercial_qty <= QUANTITY_TOLERANCE:
 		return None
-	source_value = sum(
-		flt(row["quantity"]) * flt(row["source_rate"])
-		for row in physical_inputs
-	)
+	source_value = sum(flt(row["quantity"]) * flt(row["source_rate"]) for row in physical_inputs)
 	derived_source_rate = source_value / commercial_qty
-	exact = [
-		row
-		for row in candidates
-		if abs(flt(row.source_rate) - derived_source_rate) <= VALUE_TOLERANCE
-	]
+	exact = [row for row in candidates if abs(flt(row.source_rate) - derived_source_rate) <= VALUE_TOLERANCE]
 	if len(exact) == 1:
 		return exact[0]
-	quantity_matches = [
-		row
-		for row in candidates
-		if abs(flt(row.qty) - commercial_qty) <= QUANTITY_TOLERANCE
-	]
+	quantity_matches = [row for row in candidates if abs(flt(row.qty) - commercial_qty) <= QUANTITY_TOLERANCE]
 	return quantity_matches[0] if len(quantity_matches) == 1 else None
 
 
@@ -1121,8 +1036,7 @@ def _partition_direct_legacy_groups(invoice, work_order, physical_inputs, candid
 	if set(details_by_key) != set(inputs_by_key):
 		return None
 	if any(
-		abs(details_by_key[key]["qty"] - inputs_by_key[key]["qty"])
-		> QUANTITY_TOLERANCE
+		abs(details_by_key[key]["qty"] - inputs_by_key[key]["qty"]) > QUANTITY_TOLERANCE
 		for key in details_by_key
 	):
 		return None
@@ -1137,16 +1051,8 @@ def _partition_direct_legacy_groups(invoice, work_order, physical_inputs, candid
 	return [
 		(
 			rows_by_group[group_key],
-			[
-				physical
-				for key in grouped_keys
-				for physical in inputs_by_key[key]["rows"]
-			],
-			[
-				detail
-				for key in grouped_keys
-				for detail in details_by_key[key]["rows"]
-			],
+			[physical for key in grouped_keys for physical in inputs_by_key[key]["rows"]],
+			[detail for key in grouped_keys for detail in details_by_key[key]["rows"]],
 		)
 		for group_key, grouped_keys in assignments
 	]
@@ -1206,19 +1112,14 @@ def _append_simple_legacy_physical_rows(
 	commercial_qty,
 	lot,
 ):
-	source_value = sum(
-		flt(row["quantity"]) * flt(row["source_rate"])
-		for row in physical_inputs
-	)
+	source_value = sum(flt(row["quantity"]) * flt(row["source_rate"]) for row in physical_inputs)
 	physical_qty = sum(flt(row["quantity"]) for row in physical_inputs)
 	if physical_qty <= QUANTITY_TOLERANCE:
 		frappe.throw(_("Linked GRNs have no positive physical quantity."))
 	for physical in physical_inputs:
 		grn_item = physical["grn_item"]
 		if abs(source_value) > 0.0000001:
-			rate_weight = (
-				commercial_qty * flt(physical["source_rate"]) / source_value
-			)
+			rate_weight = commercial_qty * flt(physical["source_rate"]) / source_value
 		else:
 			rate_weight = commercial_qty / physical_qty
 		final_physical_rate = flt(commercial_row.rate) * rate_weight
@@ -1254,9 +1155,7 @@ def _append_simple_legacy_physical_rows(
 		)
 		row["qty"] += flt(physical["quantity"])
 		row["actual_qty"] += flt(physical["quantity"])
-		row["_actual_amount"] += (
-			flt(physical["quantity"]) * flt(physical["actual_rate"])
-		)
+		row["_actual_amount"] += flt(physical["quantity"]) * flt(physical["actual_rate"])
 
 
 def _redistribute_unmapped_direct_commercial_groups(
@@ -1278,25 +1177,17 @@ def _redistribute_unmapped_direct_commercial_groups(
 	reconciliations = []
 	for rows in by_signature.values():
 		if len(rows) <= 1 or all(
-			projected_group_qty.get(row.group_key, 0) > QUANTITY_TOLERANCE
-			for row in rows
+			projected_group_qty.get(row.group_key, 0) > QUANTITY_TOLERANCE for row in rows
 		):
 			continue
 		group_keys = {row.group_key for row in rows}
-		physical_rows = [
-			(key, row)
-			for key, row in hidden.items()
-			if row["essdee_group_key"] in group_keys
-		]
+		physical_rows = [(key, row) for key, row in hidden.items() if row["essdee_group_key"] in group_keys]
 		target_qty = sum(flt(row.qty) for row in rows)
 		physical_qty = sum(flt(row["qty"]) for _key, row in physical_rows)
 		if (
 			not physical_rows
 			or abs(target_qty - physical_qty) > QUANTITY_TOLERANCE
-			or any(
-				abs(flt(row["essdee_rate_weight"]) - 1) > 0.000001
-				for _key, row in physical_rows
-			)
+			or any(abs(flt(row["essdee_rate_weight"]) - 1) > 0.000001 for _key, row in physical_rows)
 		):
 			continue
 		for key, _row in physical_rows:
@@ -1313,9 +1204,7 @@ def _redistribute_unmapped_direct_commercial_groups(
 				)
 				assigned_qty += quantity
 				actual_rate = (
-					flt(row["_actual_amount"]) / flt(row["actual_qty"])
-					if flt(row["actual_qty"])
-					else 0
+					flt(row["_actual_amount"]) / flt(row["actual_qty"]) if flt(row["actual_qty"]) else 0
 				)
 				row["qty"] = quantity
 				row["actual_qty"] = quantity
@@ -1347,7 +1236,7 @@ def _redistribute_unmapped_direct_commercial_groups(
 
 def verify_legacy_work_order_physical_items(*, invoice_names=None):
 	"""Read-only exact verification of every generated legacy physical row."""
-	if not frappe.db.exists("DocType", 'SD YRP Essdee Purchase Invoice Item'):
+	if not frappe.db.exists("DocType", "SD YRP Essdee Purchase Invoice Item"):
 		return {
 			"status": "Skipped",
 			"invoice_count": 0,
@@ -1357,7 +1246,7 @@ def verify_legacy_work_order_physical_items(*, invoice_names=None):
 			"failures": [],
 		}
 	filters = {
-		"against": 'YRP Work Order',
+		"against": "YRP Work Order",
 		"essdee_rate_table_source": MIGRATED_RATE_SOURCE,
 	}
 	if invoice_names:
@@ -1369,14 +1258,14 @@ def verify_legacy_work_order_physical_items(*, invoice_names=None):
 	expected_rows = 0
 	unlinked_drafts = []
 	names = frappe.get_all(
-		'YRP Purchase Invoice',
+		"YRP Purchase Invoice",
 		filters=filters,
 		pluck="name",
 		order_by="creation, name",
 		limit_page_length=0,
 	)
 	for name in names:
-		invoice = frappe.get_doc('YRP Purchase Invoice', name)
+		invoice = frappe.get_doc("YRP Purchase Invoice", name)
 		payload = build_legacy_work_order_invoice_payload(invoice)
 		if payload["unlinked"]:
 			if invoice.docstatus != 0:
@@ -1386,10 +1275,10 @@ def verify_legacy_work_order_physical_items(*, invoice_names=None):
 		expected = payload["items"]
 		expected_rows += len(expected)
 		actual = frappe.get_all(
-			'YRP Purchase Invoice Item',
+			"YRP Purchase Invoice Item",
 			filters={
 				"parent": name,
-				"parenttype": 'YRP Purchase Invoice',
+				"parenttype": "YRP Purchase Invoice",
 				"parentfield": "items",
 			},
 			fields=[
@@ -1412,9 +1301,7 @@ def verify_legacy_work_order_physical_items(*, invoice_names=None):
 			limit_page_length=0,
 		)
 		if len(actual) != len(expected):
-			failures.append(
-				f"{name}: hidden row count {len(actual)} != expected {len(expected)}"
-			)
+			failures.append(f"{name}: hidden row count {len(actual)} != expected {len(expected)}")
 			continue
 		for idx, (actual_row, expected_row) in enumerate(zip(actual, expected, strict=True), 1):
 			mismatch = _physical_row_mismatches(actual_row, expected_row)
@@ -1437,7 +1324,7 @@ def verify_legacy_work_order_physical_items(*, invoice_names=None):
 def verify_legacy_purchase_order_projection(*, invoice_names=None):
 	"""Read-only verification that migrated PO invoices contain both projections."""
 	filters = {
-		"against": 'Purchase Order',
+		"against": "Purchase Order",
 		"essdee_rate_table_source": MIGRATED_RATE_SOURCE,
 	}
 	if invoice_names:
@@ -1449,14 +1336,14 @@ def verify_legacy_purchase_order_projection(*, invoice_names=None):
 	verified_grouped_rows = 0
 	unprojected_drafts = []
 	names = frappe.get_all(
-		'YRP Purchase Invoice',
+		"YRP Purchase Invoice",
 		filters=filters,
 		pluck="name",
 		order_by="creation, name",
 		limit_page_length=0,
 	)
 	for name in names:
-		invoice = frappe.get_doc('YRP Purchase Invoice', name)
+		invoice = frappe.get_doc("YRP Purchase Invoice", name)
 		direct_rows = list(invoice.get("items") or [])
 		stored_grouped = list(invoice.get("essdee_items") or [])
 		if not direct_rows and not stored_grouped and invoice.docstatus == 0:
@@ -1465,17 +1352,13 @@ def verify_legacy_purchase_order_projection(*, invoice_names=None):
 			unprojected_drafts.append(name)
 			continue
 		if not direct_rows or not stored_grouped:
-			failures.append(
-				f"{name}: direct rows={len(direct_rows)}, grouped rows={len(stored_grouped)}"
-			)
+			failures.append(f"{name}: direct rows={len(direct_rows)}, grouped rows={len(stored_grouped)}")
 			continue
 		expected_direct, expected_grouped = project_purchase_order_items(direct_rows)
 		# This verifier checks the relationship between the two operational tables.
 		# Exact migrated source values are checked directly against the source by
 		# the migration verifier; no third JSON copy is stored on the invoice.
-		for idx, (actual, expected) in enumerate(
-			zip(direct_rows, expected_direct, strict=True), 1
-		):
+		for idx, (actual, expected) in enumerate(zip(direct_rows, expected_direct, strict=True), 1):
 			expected_values = {
 				fieldname: expected.get(fieldname)
 				for fieldname in (
@@ -1511,9 +1394,7 @@ def verify_legacy_purchase_order_projection(*, invoice_names=None):
 			actual = actual_by_key[expected["group_key"]]
 			mismatch = _physical_row_mismatches(actual, expected)
 			if mismatch:
-				failures.append(
-					f"{name} grouped row {actual.idx}: {', '.join(mismatch)}"
-				)
+				failures.append(f"{name} grouped row {actual.idx}: {', '.join(mismatch)}")
 				break
 			verified_grouped_rows += 1
 		if len(failures) >= 100:
@@ -1530,7 +1411,7 @@ def verify_legacy_purchase_order_projection(*, invoice_names=None):
 
 def _load_historical_work_order_grn(name, supplier):
 	values = frappe.db.get_value(
-		'YRP Goods Received Note',
+		"YRP Goods Received Note",
 		name,
 		["docstatus", "supplier", "against"],
 		as_dict=True,
@@ -1541,9 +1422,9 @@ def _load_historical_work_order_grn(name, supplier):
 		frappe.throw(_("Goods Received Note {0} must be submitted.").format(name))
 	if values.supplier != supplier:
 		frappe.throw(_("Goods Received Note {0} belongs to another supplier.").format(name))
-	if values.against != 'YRP Work Order':
+	if values.against != "YRP Work Order":
 		frappe.throw(_("Goods Received Note {0} is not against a Work Order.").format(name))
-	return frappe.get_doc('YRP Goods Received Note', name)
+	return frappe.get_doc("YRP Goods Received Note", name)
 
 
 def _match_legacy_commercial_row(invoice_name, context, demand, commercial_rows):
@@ -1555,9 +1436,7 @@ def _match_legacy_commercial_row(invoice_name, context, demand, commercial_rows)
 		and row.uom == context["billing_uom"]
 	]
 	exact = [
-		row
-		for row in candidates
-		if abs(flt(row.source_rate) - flt(demand["source_rate"])) <= VALUE_TOLERANCE
+		row for row in candidates if abs(flt(row.source_rate) - flt(demand["source_rate"])) <= VALUE_TOLERANCE
 	]
 	if len(exact) == 1:
 		return exact[0]
@@ -1608,20 +1487,16 @@ def _build_work_order_context(
 	allow_missing_process_cost=False,
 	allow_legacy_references=False,
 ):
-	process_item = frappe.db.get_value('YRP Process', work_order.process_name, "item")
+	process_item = frappe.db.get_value("YRP Process", work_order.process_name, "item")
 	if not process_item:
 		frappe.throw(
-			_("Process {0} has no Purchase Invoice billing Item configured.").format(
-				work_order.process_name
-			)
+			_("Process {0} has no Purchase Invoice billing Item configured.").format(work_order.process_name)
 		)
 	billing_variant = get_or_create_variant(process_item, {})
 	billing_uom = resolve_item_uom(billing_variant).uom
-	item_group = frappe.db.get_value('Item', process_item, "item_group")
+	item_group = frappe.db.get_value("Item", process_item, "item_group")
 	process_cost = (
-		frappe.get_doc('YRP Process Cost', work_order.process_cost)
-		if work_order.process_cost
-		else None
+		frappe.get_doc("YRP Process Cost", work_order.process_cost) if work_order.process_cost else None
 	)
 	if not process_cost and not allow_missing_process_cost:
 		frappe.throw(_("Work Order {0} has no Process Cost.").format(work_order.name))
@@ -1650,7 +1525,7 @@ def _build_work_order_context(
 		frappe.throw(_("Work Order {0} has no calculated garment items.").format(work_order.name))
 
 	ipd = (
-		frappe.get_cached_doc('YRP Item Production Detail', work_order.production_detail)
+		frappe.get_cached_doc("YRP Item Production Detail", work_order.production_detail)
 		if work_order.production_detail
 		else None
 	)
@@ -1675,7 +1550,7 @@ def _build_work_order_context(
 
 	selected_names = {grn.name for grn in selected_grns}
 	for tracking in work_order.get("work_order_track_pieces") or []:
-		valid_against = {'YRP Goods Received Note'}
+		valid_against = {"YRP Goods Received Note"}
 		if allow_legacy_references:
 			valid_against.add("Goods Received Note")
 		if tracking.against not in valid_against or tracking.against_id not in selected_names:
@@ -1686,15 +1561,11 @@ def _build_work_order_context(
 		demand["selected_qty"] += flt(tracking.received_qty)
 	if not any(flt(demand["selected_qty"]) > 0 for demand in demands):
 		frappe.throw(
-			_("Selected GRNs have no finished-piece tracking rows in Work Order {0}.").format(
-				work_order.name
-			)
+			_("Selected GRNs have no finished-piece tracking rows in Work Order {0}.").format(work_order.name)
 		)
 
 	for demand in demands:
-		source_value = sum(
-			flt(row.cost) * flt(row.qty) for row in demand["receivables"]
-		)
+		source_value = sum(flt(row.cost) * flt(row.qty) for row in demand["receivables"])
 		demand["source_rate"] = source_value / demand["planned_qty"]
 		demand["weights"] = _physical_rate_weights(demand, ipd)
 		demand["group_key"] = commercial_group_key(
@@ -1762,19 +1633,14 @@ def _demand_for_receivable(demands, receivable, ipd):
 	exact = [
 		demand
 		for demand in demands
-		if demand["row"].item_variant == receivable.item_variant
-		and demand["combination"] == combination
+		if demand["row"].item_variant == receivable.item_variant and demand["combination"] == combination
 	]
 	if len(exact) == 1:
 		return exact[0]
 
 	attributes = get_variant_attributes(receivable.item_variant)
 	garment = (
-		[
-			demand
-			for demand in demands
-			if _matches_garment_demand(demand, receivable, attributes, ipd)
-		]
+		[demand for demand in demands if _matches_garment_demand(demand, receivable, attributes, ipd)]
 		if ipd
 		else []
 	)
@@ -1792,18 +1658,13 @@ def _demand_for_tracking(demands, tracking, work_order):
 	matches = [
 		demand
 		for demand in demands
-		if demand["row"].item_variant == tracking.item_variant
-		and demand["combination"] == combination
+		if demand["row"].item_variant == tracking.item_variant and demand["combination"] == combination
 	]
 	if not matches and combination == "{}":
-		matches = [
-			demand for demand in demands if demand["row"].item_variant == tracking.item_variant
-		]
+		matches = [demand for demand in demands if demand["row"].item_variant == tracking.item_variant]
 	if len(matches) != 1:
 		frappe.throw(
-			_("Tracking item {0} in Work Order {1} is ambiguous.").format(
-				tracking.item_variant, work_order
-			)
+			_("Tracking item {0} in Work Order {1} is ambiguous.").format(tracking.item_variant, work_order)
 		)
 	return matches[0]
 
@@ -1812,9 +1673,7 @@ def _physical_rate_weights(demand, ipd):
 	"""Return per-physical-unit shares whose planned extended sum is one piece."""
 	source_rate = flt(demand["source_rate"])
 	if abs(source_rate) > 0.0000001:
-		return {
-			row.name: flt(row.cost) / source_rate for row in demand["receivables"]
-		}
+		return {row.name: flt(row.cost) / source_rate for row in demand["receivables"]}
 
 	panel_attribute = ipd.get("stiching_attribute") if ipd else None
 	panel_groups = defaultdict(list)
@@ -1839,7 +1698,7 @@ def _physical_rate_weights(demand, ipd):
 
 def _receivable_for_grn_item(context, grn, grn_item):
 	if (
-		grn_item.get("ref_doctype") == 'YRP Work Order Receivables'
+		grn_item.get("ref_doctype") == "YRP Work Order Receivables"
 		and grn_item.get("ref_docname") in context["receivables_by_name"]
 	):
 		return context["receivables_by_name"][grn_item.ref_docname]
@@ -1853,9 +1712,7 @@ def _receivable_for_grn_item(context, grn, grn_item):
 	]
 	if len(matches) != 1:
 		frappe.throw(
-			_("GRN {0} row {1} cannot be mapped to one Work Order receivable.").format(
-				grn.name, grn_item.idx
-			)
+			_("GRN {0} row {1} cannot be mapped to one Work Order receivable.").format(grn.name, grn_item.idx)
 		)
 	return matches[0]
 
@@ -1871,11 +1728,7 @@ def _validate_selected_physical_quantities(context, selected_grns):
 
 	for receivable_name, receivable in context["receivables_by_name"].items():
 		demand = context["demand_by_receivable"][receivable_name]
-		expected = (
-			flt(demand["selected_qty"])
-			* flt(receivable.qty)
-			/ flt(demand["planned_qty"])
-		)
+		expected = flt(demand["selected_qty"]) * flt(receivable.qty) / flt(demand["planned_qty"])
 		if abs(expected - actual[receivable_name]) > QUANTITY_TOLERANCE:
 			frappe.throw(
 				_(
@@ -1899,7 +1752,7 @@ def backfill_legacy_commercial_items():
 	Only invoices whose current base rows are Process billing Item Variants are
 	eligible.  That structural guard excludes F16-native physical-panel drafts.
 	"""
-	if not frappe.db.exists("DocType", 'SD YRP Essdee Purchase Invoice Item'):
+	if not frappe.db.exists("DocType", "SD YRP Essdee Purchase Invoice Item"):
 		return {"migrated_invoices": 0, "migrated_rows": 0}
 
 	parents = frappe.db.sql(
@@ -1920,7 +1773,7 @@ def backfill_legacy_commercial_items():
 	migrated_invoices = 0
 	migrated_rows = 0
 	for name in parents:
-		doc = frappe.get_doc('YRP Purchase Invoice', name)
+		doc = frappe.get_doc("YRP Purchase Invoice", name)
 		allowed_variants = _legacy_billing_variants(doc)
 		items = list(doc.get("items") or [])
 		if not items or not allowed_variants or any(row.item not in allowed_variants for row in items):
@@ -1935,7 +1788,7 @@ def backfill_legacy_commercial_items():
 			lot = row.get("lot") or _legacy_row_lot(doc, row)
 			child = frappe.get_doc(
 				{
-					"doctype": 'SD YRP Essdee Purchase Invoice Item',
+					"doctype": "SD YRP Essdee Purchase Invoice Item",
 					"parent": doc.name,
 					"parenttype": doc.doctype,
 					"parentfield": "essdee_items",
@@ -1951,15 +1804,13 @@ def backfill_legacy_commercial_items():
 					"rate": row.rate,
 					"amount": flt(row.qty) * flt(row.rate),
 					"tax": row.get("tax"),
-					"group_key": commercial_group_key(
-						row.item, lot, row.uom, source_value, row.get("tax")
-					),
+					"group_key": commercial_group_key(row.item, lot, row.uom, source_value, row.get("tax")),
 				}
 			)
 			child.db_insert()
 			migrated_rows += 1
 		frappe.db.set_value(
-			'YRP Purchase Invoice',
+			"YRP Purchase Invoice",
 			doc.name,
 			"essdee_rate_table_source",
 			MIGRATED_RATE_SOURCE,
@@ -1980,7 +1831,7 @@ def backfill_unprojected_work_order_drafts():
 	the commercial projection existed therefore need the same authoritative GRN
 	rebuild as a fresh Fetch GRN action.
 	"""
-	if not frappe.db.exists("DocType", 'SD YRP Essdee Purchase Invoice Item'):
+	if not frappe.db.exists("DocType", "SD YRP Essdee Purchase Invoice Item"):
 		return {"migrated_invoices": 0, "migrated_rows": 0, "skipped": []}
 
 	candidates = frappe.db.sql(
@@ -2008,7 +1859,7 @@ def backfill_unprojected_work_order_drafts():
 	skipped = []
 	for name in candidates:
 		try:
-			doc = frappe.get_doc('YRP Purchase Invoice', name)
+			doc = frappe.get_doc("YRP Purchase Invoice", name)
 			grns = [row.grn for row in doc.get("grn") or [] if row.grn]
 			payload = build_work_order_invoice_payload(
 				grns,
@@ -2038,31 +1889,31 @@ def backfill_unprojected_work_order_drafts():
 
 
 def _legacy_billing_variants(doc):
-	work_orders = {
-		row.work_order
-		for row in doc.get("pi_work_order_billed_details") or []
-		if row.work_order
-	}
+	work_orders = {row.work_order for row in doc.get("pi_work_order_billed_details") or [] if row.work_order}
 	if not work_orders:
 		return set()
 	processes = frappe.get_all(
-		'YRP Work Order',
+		"YRP Work Order",
 		filters={"name": ["in", list(work_orders)]},
 		pluck="process_name",
 		limit_page_length=0,
 	)
-	items = frappe.get_all(
-		'YRP Process',
-		filters={"name": ["in", list(set(processes))], "item": ["is", "set"]},
-		pluck="item",
-		limit_page_length=0,
-	) if processes else []
+	items = (
+		frappe.get_all(
+			"YRP Process",
+			filters={"name": ["in", list(set(processes))], "item": ["is", "set"]},
+			pluck="item",
+			limit_page_length=0,
+		)
+		if processes
+		else []
+	)
 	if not items:
 		return set()
 	parents = list(set(items))
 	variants = set(
 		frappe.get_all(
-			'Item',
+			"Item",
 			filters={"variant_of": ["in", parents]},
 			pluck="name",
 			limit_page_length=0,
@@ -2072,7 +1923,7 @@ def _legacy_billing_variants(doc):
 	# standard Item, so include the process Item itself as a billable SKU.
 	variants.update(
 		frappe.get_all(
-			'Item',
+			"Item",
 			filters={"name": ["in", parents], "has_variants": 0},
 			pluck="name",
 			limit_page_length=0,
@@ -2089,17 +1940,19 @@ def _legacy_row_lot(doc, row):
 	work_orders = [
 		value
 		for value in dict.fromkeys(
-			detail.work_order
-			for detail in doc.get("pi_work_order_billed_details") or []
-			if detail.work_order
+			detail.work_order for detail in doc.get("pi_work_order_billed_details") or [] if detail.work_order
 		)
 	]
-	lots = set(
-		frappe.get_all(
-			'YRP Work Order',
-			filters={"name": ["in", work_orders]},
-			pluck="lot",
-			limit_page_length=0,
+	lots = (
+		set(
+			frappe.get_all(
+				"YRP Work Order",
+				filters={"name": ["in", work_orders]},
+				pluck="lot",
+				limit_page_length=0,
+			)
 		)
-	) if work_orders else set()
+		if work_orders
+		else set()
+	)
 	return next(iter(lots)) if len(lots) == 1 else None

@@ -14,7 +14,6 @@ from frappe.utils import now_datetime
 
 from essdee_yrp.migration.config import get_migration_settings
 
-
 RUNNING_STATUSES = {"Analysing", "Queued", "Running"}
 
 
@@ -28,9 +27,7 @@ def _migration_action_reservation():
 	database_name = str(frappe.local.conf.get("db_name") or "site")
 	database_key = hashlib.sha256(database_name.encode()).hexdigest()[:32]
 	lock_name = f"essdee_yrp_mrp_action:{database_key}"
-	acquired = frappe.db.sql(
-		"SELECT GET_LOCK(%s, %s)", (lock_name, ACTION_LOCK_TIMEOUT)
-	)[0][0]
+	acquired = frappe.db.sql("SELECT GET_LOCK(%s, %s)", (lock_name, ACTION_LOCK_TIMEOUT))[0][0]
 	if acquired != 1:
 		frappe.throw(
 			_("Another migration request is being reserved. Retry after it finishes."),
@@ -227,20 +224,12 @@ class SDYRPMRPDataMigration(Document):
 				)
 			if self.blocker_count:
 				frappe.throw(_("Resolve every schema blocker before running the migration."))
-			if (
-				mode == "migrate"
-				and self.status == "Failed"
-				and self.last_action != "Migrate"
-			):
+			if mode == "migrate" and self.status == "Failed" and self.last_action != "Migrate":
 				frappe.throw(
 					_("Run and complete the Dry Run before starting the write migration."),
 					title=_("Dry Run Required"),
 				)
-			if (
-				mode == "verify"
-				and self.status == "Failed"
-				and self.last_action != "Verify"
-			):
+			if mode == "verify" and self.status == "Failed" and self.last_action != "Verify":
 				frappe.throw(
 					_("Only a failed Verify can be retried without another migration."),
 					title=_("Completed Migration Required"),
@@ -281,7 +270,7 @@ class SDYRPMRPDataMigration(Document):
 
 	def _reject_other_active_run(self):
 		active = frappe.get_all(
-			'SD YRP MRP Data Migration',
+			"SD YRP MRP Data Migration",
 			filters={
 				"name": ["!=", self.name],
 				"status": ["in", sorted(RUNNING_STATUSES)],

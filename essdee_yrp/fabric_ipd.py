@@ -1,9 +1,8 @@
-from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2026, anas@essdee.fit and contributors
 # For license information, please see license.txt
-
 import frappe
 from frappe.utils import flt
+from yrp.attribute_links import value as _attribute_value
 
 from essdee_yrp.ipd_validations import is_cloth_ipd
 
@@ -47,7 +46,7 @@ def get_process_shape(process_name):
 	colour AND dia change in the same trip)."""
 	if not process_name:
 		return (None, None)
-	doc = frappe.get_cached_doc('YRP Process', process_name)
+	doc = frappe.get_cached_doc("YRP Process", process_name)
 	if doc.get("is_item_conversion"):
 		return ("conversion", None)
 	swaps = [r.attribute for r in doc.get("value_change_attributes") or []]
@@ -79,12 +78,10 @@ def get_process_transform(process):
 			"is_item_conversion": True,
 			"change_attributes": [],
 			"input_attributes": [
-				row.attribute for row in doc.get("conversion_input_attributes") or []
-				if row.attribute
+				row.attribute for row in doc.get("conversion_input_attributes") or [] if row.attribute
 			],
 			"output_attributes": [
-				row.attribute for row in doc.get("conversion_output_attributes") or []
-				if row.attribute
+				row.attribute for row in doc.get("conversion_output_attributes") or [] if row.attribute
 			],
 		}
 	if shape == "swap":
@@ -123,11 +120,11 @@ def get_item_attributes(item):
 	attribute names)."""
 	# [] for missing item AND for no-permission alike — a permission-less caller
 	# must not be able to distinguish existing from non-existing Item names.
-	if not item or not frappe.db.exists('Item', item):
+	if not item or not frappe.db.exists("Item", item):
 		return []
-	if not frappe.has_permission('Item', doc=item, ptype="read"):
+	if not frappe.has_permission("Item", doc=item, ptype="read"):
 		return []
-	doc = frappe.get_cached_doc('Item', item)
+	doc = frappe.get_cached_doc("Item", item)
 	return [a.attribute for a in (doc.get("attributes") or [])]
 
 
@@ -143,13 +140,17 @@ def validate_fabric_process_shapes(doc):
 		shape, attribute = get_process_shape(process_name)
 		expected = FABRIC_KIND_SHAPES[kind]
 		if expected.get("is_item_conversion") and shape != "conversion":
-			problems.append(frappe._(
-				"{0}: tick Item Conversion on the Process master (yarn → cloth)."
-			).format(frappe.utils.escape_html(process_name)))
+			problems.append(
+				frappe._("{0}: tick Item Conversion on the Process master (yarn → cloth).").format(
+					frappe.utils.escape_html(process_name)
+				)
+			)
 		elif expected.get("swap_attribute") and (shape, attribute) != ("swap", expected["swap_attribute"]):
-			problems.append(frappe._(
-				"{0}: add {1} to Value Change Attributes on the Process master."
-			).format(frappe.utils.escape_html(process_name), expected["swap_attribute"]))
+			problems.append(
+				frappe._("{0}: add {1} to Value Change Attributes on the Process master.").format(
+					frappe.utils.escape_html(process_name), expected["swap_attribute"]
+				)
+			)
 	if problems:
 		frappe.msgprint(
 			"<br>".join(problems),
@@ -180,41 +181,51 @@ def validate_consume_mappings(doc):
 				role = entry.get("role")
 				attribute = frappe.utils.escape_html(entry.get("attribute") or "")
 				if same_item and role in ("Consume", "Introduce"):
-					frappe.throw(frappe._(
-						"Fabric process {0}: {1} entries need differing input and output "
-						"items — the same item ({2}) cannot gain or lose an attribute. "
-						"Use Change or Pin instead."
-					).format(process, role, frappe.utils.escape_html(in_item or "")))
+					frappe.throw(
+						frappe._(
+							"Fabric process {0}: {1} entries need differing input and output "
+							"items — the same item ({2}) cannot gain or lose an attribute. "
+							"Use Change or Pin instead."
+						).format(process, role, frappe.utils.escape_html(in_item or ""))
+					)
 				if role == "Consume":
 					# A blank input_item normalizes to the IPD item at build time —
 					# which is exactly the same-item gain/loss case above. Only the
 					# legacy knitting Introduce may leave the input blank.
 					if not in_item:
-						frappe.throw(frappe._(
-							"Fabric process {0}: Consume entries need an explicit Input "
-							"Item — a blank input falls back to the IPD's own item, which "
-							"cannot lose an attribute."
-						).format(process))
+						frappe.throw(
+							frappe._(
+								"Fabric process {0}: Consume entries need an explicit Input "
+								"Item — a blank input falls back to the IPD's own item, which "
+								"cannot lose an attribute."
+							).format(process)
+						)
 					if not entry.get("from_value"):
-						frappe.throw(frappe._(
-							"Fabric process {0}: the Consume entry for attribute {1} needs a "
-							"From Value — Consume always names the concrete consumed value "
-							"(no wildcards)."
-						).format(process, attribute))
+						frappe.throw(
+							frappe._(
+								"Fabric process {0}: the Consume entry for attribute {1} needs a "
+								"From Value — Consume always names the concrete consumed value "
+								"(no wildcards)."
+							).format(process, attribute)
+						)
 					if entry.get("to_value"):
-						frappe.throw(frappe._(
-							"Fabric process {0}: the Consume entry for attribute {1} must "
-							"leave To Value empty — Consume stamps the input side only "
-							"(pair it with an Introduce entry to produce something)."
-						).format(process, attribute))
+						frappe.throw(
+							frappe._(
+								"Fabric process {0}: the Consume entry for attribute {1} must "
+								"leave To Value empty — Consume stamps the input side only "
+								"(pair it with an Introduce entry to produce something)."
+							).format(process, attribute)
+						)
 					consumed.add(attribute)
 				elif role == "Change":
 					changed.add(attribute)
 			for attribute in sorted(consumed & changed):
-				frappe.throw(frappe._(
-					"Fabric process {0}: mapping group {1} both Consumes and Changes "
-					"attribute {2} — ambiguous. Use one role per attribute in a group."
-				).format(process, mapping_index, attribute))
+				frappe.throw(
+					frappe._(
+						"Fabric process {0}: mapping group {1} both Consumes and Changes "
+						"attribute {2} — ambiguous. Use one role per attribute in a group."
+					).format(process, mapping_index, attribute)
+				)
 
 
 def get_identity_process_row(ipd_doc, process_name):
@@ -241,8 +252,7 @@ def get_identity_process_row(ipd_doc, process_name):
 			continue
 		shape, _attribute = get_process_shape(process_name)
 		has_transition = any(
-			m.get("role") in ("Change", "Introduce", "Consume")
-			for m in (row.get("value_mappings") or [])
+			m.get("role") in ("Change", "Introduce", "Consume") for m in (row.get("value_mappings") or [])
 		)
 		# Agree with fabric_chain._step_shape: a mapping-less row that CHANGES the
 		# item (input != output) is a conversion, not identity — never treat it 1:1.
@@ -269,7 +279,9 @@ def ensure_cloth_item_attributes(doc, method=None):
 	if doc.get("dyeing_process"):
 		needed.append(FABRIC_COLOUR_ATTRIBUTE)
 	# Dia-wise dyeing rows reference Dia; colour-wise compacting rows reference Colour.
-	if doc.get("dia_wise_colour_change") or any(_attribute_value(row.get("dia")) for row in doc.get("dyeing_colour_details") or []):
+	if doc.get("dia_wise_colour_change") or any(
+		_attribute_value(row.get("dia")) for row in doc.get("dyeing_colour_details") or []
+	):
 		needed.append(FABRIC_DIA_ATTRIBUTE)
 	if doc.get("colour_wise_dia_change") or any(
 		_attribute_value(row.get("colour")) for row in doc.get("compacting_dia_details") or []
@@ -277,10 +289,9 @@ def ensure_cloth_item_attributes(doc, method=None):
 		needed.append(FABRIC_COLOUR_ATTRIBUTE)
 	for process_row in get_fabric_process_rows(doc):
 		for mapping in process_row.get("value_mappings") or []:
-			if (
-				mapping.get("attribute") in (FABRIC_DIA_ATTRIBUTE, FABRIC_COLOUR_ATTRIBUTE)
-				and mapping.get("role") in ("Change", "Introduce", "Consume", "Pin")
-			):
+			if mapping.get("attribute") in (FABRIC_DIA_ATTRIBUTE, FABRIC_COLOUR_ATTRIBUTE) and mapping.get(
+				"role"
+			) in ("Change", "Introduce", "Consume", "Pin"):
 				needed.append(mapping.get("attribute"))
 	if doc.get("colour_yarn_recipes"):
 		needed.append(FABRIC_COLOUR_ATTRIBUTE)
@@ -294,7 +305,7 @@ def ensure_cloth_item_attributes(doc, method=None):
 
 	if not doc.get("item") or not needed:
 		return
-	item = frappe.get_doc('Item', doc.item)
+	item = frappe.get_doc("Item", doc.item)
 	item_have = {row.attribute for row in item.get("attributes") or []}
 	changed = False
 	for attribute in dict.fromkeys(needed):
@@ -373,22 +384,15 @@ def reconcile_fabric_route_processes(doc):
 		return
 	sequences = [flt(row.get("sequence")) for row in rows]
 	if len(sequences) != len(set(sequences)):
-		frappe.throw(frappe._(
-			"Every Fabric Process needs a distinct Sequence. Reorder the steps and save again."
-		))
+		frappe.throw(
+			frappe._("Every Fabric Process needs a distinct Sequence. Reorder the steps and save again.")
+		)
 	process_names = [row.get("fabric_process") for row in rows if row.get("fabric_process")]
 	if len(process_names) != len(set(process_names)):
-		frappe.throw(frappe._(
-			"Each Process can appear only once in a Fabric Process chain."
-		))
-	recipe_positions = [
-		index for index, row in enumerate(rows)
-		if is_cloth_recipe_conversion(doc, row)
-	]
+		frappe.throw(frappe._("Each Process can appear only once in a Fabric Process chain."))
+	recipe_positions = [index for index, row in enumerate(rows) if is_cloth_recipe_conversion(doc, row)]
 	if recipe_positions and recipe_positions[0] != 0:
-		frappe.throw(frappe._(
-			"The cloth recipe Item Conversion must remain the first Fabric Process."
-		))
+		frappe.throw(frappe._("The cloth recipe Item Conversion must remain the first Fabric Process."))
 
 	managed_pairs = [
 		(process, attribute)
@@ -399,9 +403,7 @@ def reconcile_fabric_route_processes(doc):
 		if process
 	]
 	if len({process for process, _attribute in managed_pairs}) != len(managed_pairs):
-		frappe.throw(frappe._(
-			"Dyeing and Compacting must use different Process masters."
-		))
+		frappe.throw(frappe._("Dyeing and Compacting must use different Process masters."))
 	managed = dict(managed_pairs)
 	managed.pop(None, None)
 	if not managed:
@@ -417,9 +419,7 @@ def reconcile_fabric_route_processes(doc):
 					continue
 				before, after = part["before"], part["after"]
 				pin_attribute = (
-					FABRIC_DIA_ATTRIBUTE
-					if attribute == FABRIC_COLOUR_ATTRIBUTE
-					else FABRIC_COLOUR_ATTRIBUTE
+					FABRIC_DIA_ATTRIBUTE if attribute == FABRIC_COLOUR_ATTRIBUTE else FABRIC_COLOUR_ATTRIBUTE
 				)
 				transition = (
 					before.get("attrs", {}).get(attribute),
@@ -427,9 +427,16 @@ def reconcile_fabric_route_processes(doc):
 					before.get("attrs", {}).get(pin_attribute),
 				)
 				if not transition[0] or not transition[1]:
-					frappe.throw(frappe._(
-						"Fabric Route {0} / {1} cannot derive the {2} entering and leaving {3}."
-					).format(_attribute_value(route.finished_colour), _attribute_value(route.finished_dia), attribute, process))
+					frappe.throw(
+						frappe._(
+							"Fabric Route {0} / {1} cannot derive the {2} entering and leaving {3}."
+						).format(
+							_attribute_value(route.finished_colour),
+							_attribute_value(route.finished_dia),
+							attribute,
+							process,
+						)
+					)
 				# A same-Dia route does not need a Compacting declaration. Colour
 				# no-ops are retained because legacy knitting-output readers use the
 				# Dyeing table to identify direct-colour routes.
@@ -440,50 +447,62 @@ def reconcile_fabric_route_processes(doc):
 
 	managed_sequences = {
 		flt(row.get("sequence")): row.get("fabric_process")
-		for row in rows if row.get("fabric_process") in managed
+		for row in rows
+		if row.get("fabric_process") in managed
 	}
 	preserved = [
-		row for row in doc.get("fabric_value_mappings") or []
+		row
+		for row in doc.get("fabric_value_mappings") or []
 		if flt(row.get("sequence")) not in managed_sequences
 	]
 	doc.set("fabric_value_mappings", preserved)
 	for sequence, process in managed_sequences.items():
 		attribute = managed[process]
 		pin_attribute = (
-			FABRIC_DIA_ATTRIBUTE
-			if attribute == FABRIC_COLOUR_ATTRIBUTE
-			else FABRIC_COLOUR_ATTRIBUTE
+			FABRIC_DIA_ATTRIBUTE if attribute == FABRIC_COLOUR_ATTRIBUTE else FABRIC_COLOUR_ATTRIBUTE
 		)
 		for mapping_index, (from_value, to_value, pin_value) in enumerate(resolved[process]):
-			doc.append("fabric_value_mappings", {
-				"sequence": sequence,
-				"mapping_index": mapping_index,
-				"attribute": attribute,
-				"role": "Change",
-				"from_value": from_value,
-				"to_value": to_value,
-			})
-			doc.append("fabric_value_mappings", {
-				"sequence": sequence,
-				"mapping_index": mapping_index,
-				"attribute": pin_attribute,
-				"role": "Pin",
-				"from_value": pin_value,
-				"to_value": pin_value,
-			})
+			doc.append(
+				"fabric_value_mappings",
+				{
+					"sequence": sequence,
+					"mapping_index": mapping_index,
+					"attribute": attribute,
+					"role": "Change",
+					"from_value": from_value,
+					"to_value": to_value,
+				},
+			)
+			doc.append(
+				"fabric_value_mappings",
+				{
+					"sequence": sequence,
+					"mapping_index": mapping_index,
+					"attribute": pin_attribute,
+					"role": "Pin",
+					"from_value": pin_value,
+					"to_value": pin_value,
+				},
+			)
 
 	# Keep compatibility readers and a later Build Cloth Program refresh aligned
 	# with the rebased generic source of truth.
 	if doc.get("dyeing_process") in resolved:
-		doc.set("dyeing_colour_details", [
-			{"from_colour": source, "to_colour": target, "dia": dia}
-			for source, target, dia in resolved[doc.dyeing_process]
-		])
+		doc.set(
+			"dyeing_colour_details",
+			[
+				{"from_colour": source, "to_colour": target, "dia": dia}
+				for source, target, dia in resolved[doc.dyeing_process]
+			],
+		)
 	if doc.get("compacting_process") in resolved:
-		doc.set("compacting_dia_details", [
-			{"from_dia": source, "to_dia": target, "colour": colour}
-			for source, target, colour in resolved[doc.compacting_process]
-		])
+		doc.set(
+			"compacting_dia_details",
+			[
+				{"from_dia": source, "to_dia": target, "colour": colour}
+				for source, target, colour in resolved[doc.compacting_process]
+			],
+		)
 
 
 def _solve_authored_fabric_routes(doc, rows, route, managed):
@@ -510,16 +529,19 @@ def _solve_authored_fabric_routes(doc, rows, route, managed):
 	}
 	operations = [row for row in rows if not is_cloth_recipe_conversion(doc, row)]
 	managed_values = {
-		attribute: list(dict.fromkeys(
-			[start["attrs"].get(attribute), target["attrs"].get(attribute)] + [
-				entry.get(side)
-				for row in operations
-				for entry in _entries(row)
-				if entry.get("attribute") == attribute
-				for side in ("from_value", "to_value")
-				if entry.get(side)
-			]
-		))
+		attribute: list(
+			dict.fromkeys(
+				[start["attrs"].get(attribute), target["attrs"].get(attribute)]
+				+ [
+					entry.get(side)
+					for row in operations
+					for entry in _entries(row)
+					if entry.get("attribute") == attribute
+					for side in ("from_value", "to_value")
+					if entry.get(side)
+				]
+			)
+		)
 		for attribute in (FABRIC_DIA_ATTRIBUTE, FABRIC_COLOUR_ATTRIBUTE)
 	}
 
@@ -548,7 +570,7 @@ def _solve_authored_fabric_routes(doc, rows, route, managed):
 						"mapping_index": mapping_index,
 					}
 					candidate_score = score + score_delta
-					candidate_path = path + [part]
+					candidate_path = [*path, part]
 					candidate_key = _fabric_state_key(after)
 					current = next_frontier.get(candidate_key)
 					if current is None or candidate_score > current[0]:
@@ -560,10 +582,12 @@ def _solve_authored_fabric_routes(doc, rows, route, managed):
 	result = frontier.get(_fabric_state_key(target))
 	label = f"{_attribute_value(route.finished_colour)} / {_attribute_value(route.finished_dia)}"
 	if not result:
-		frappe.throw(frappe._(
-			"Fabric Route {0} cannot pass through the current Fabric Process order. "
-			"Correct the custom transition values."
-		).format(label))
+		frappe.throw(
+			frappe._(
+				"Fabric Route {0} cannot pass through the current Fabric Process order. "
+				"Correct the custom transition values."
+			).format(label)
+		)
 	return result[1]
 
 
@@ -641,22 +665,28 @@ def get_yarn_ratio_inputs(doc):
 	Quantities are expressed on a one-kilogram total-blend basis.
 	"""
 	rows = [
-		frappe._dict({
-			"item": row.get("yarn_item"),
-			"ratio": flt(row.get("ratio")),
-			"quantity": flt(row.get("ratio")) / 100.0,
-		})
+		frappe._dict(
+			{
+				"item": row.get("yarn_item"),
+				"ratio": flt(row.get("ratio")),
+				"quantity": flt(row.get("ratio")) / 100.0,
+			}
+		)
 		for row in (doc.get("yarn_ratio_details") or [])
 		if row.get("yarn_item")
 	]
 	if rows:
 		return rows
 	if doc.get("yarn_item"):
-		return [frappe._dict({
-			"item": doc.get("yarn_item"),
-			"ratio": 100.0,
-			"quantity": 1.0,
-		})]
+		return [
+			frappe._dict(
+				{
+					"item": doc.get("yarn_item"),
+					"ratio": 100.0,
+					"quantity": 1.0,
+				}
+			)
+		]
 	return []
 
 
@@ -667,16 +697,18 @@ def get_colour_yarn_inputs(doc, colour):
 	IPD-wide recipe remains the fallback for documents without colour routing.
 	"""
 	rows = [
-		frappe._dict({
-			"item": row.get("yarn_item"),
-			"colour": _attribute_value(row.get("yarn_colour")),
-			"ratio": flt(row.get("ratio")),
-			"quantity": flt(row.get("ratio")) / 100.0,
-		})
+		frappe._dict(
+			{
+				"item": row.get("yarn_item"),
+				"colour": _attribute_value(row.get("yarn_colour")),
+				"ratio": flt(row.get("ratio")),
+				"quantity": flt(row.get("ratio")) / 100.0,
+			}
+		)
 		for row in (doc.get("colour_yarn_recipes") or [])
 		if row.get("cloth_item") == doc.item
-			and _attribute_value(row.get("colour")) == colour
-			and row.get("yarn_item")
+		and _attribute_value(row.get("colour")) == colour
+		and row.get("yarn_item")
 	]
 	return rows or get_yarn_ratio_inputs(doc)
 
@@ -694,10 +726,7 @@ def is_cloth_recipe_conversion(doc, row):
 	if not process or not frappe.db.exists("YRP Process", process):
 		return False
 	process_doc = frappe.get_cached_doc("YRP Process", process)
-	return bool(
-		process_doc.get("is_cloth_process")
-		and process_doc.get("is_item_conversion")
-	)
+	return bool(process_doc.get("is_cloth_process") and process_doc.get("is_item_conversion"))
 
 
 def build_cloth_conversion_rule_mappings(doc, row):
@@ -718,21 +747,26 @@ def build_cloth_conversion_rule_mappings(doc, row):
 	if not is_cloth_recipe_conversion(doc, row):
 		return None
 	process_doc = frappe.get_cached_doc("YRP Process", row.get("fabric_process"))
-	input_attributes = list(dict.fromkeys(
-		entry.attribute
-		for entry in process_doc.get("conversion_input_attributes") or []
-		if entry.attribute
-	))
-	output_attributes = list(dict.fromkeys(
-		entry.attribute
-		for entry in process_doc.get("conversion_output_attributes") or []
-		if entry.attribute
-	))
+	input_attributes = list(
+		dict.fromkeys(
+			entry.attribute
+			for entry in process_doc.get("conversion_input_attributes") or []
+			if entry.attribute
+		)
+	)
+	output_attributes = list(
+		dict.fromkeys(
+			entry.attribute
+			for entry in process_doc.get("conversion_output_attributes") or []
+			if entry.attribute
+		)
+	)
 	if not input_attributes or not output_attributes:
 		return None
 
 	routes = [
-		route for route in doc.get("fabric_routes") or []
+		route
+		for route in doc.get("fabric_routes") or []
 		if _attribute_value(route.get("finished_colour"))
 		and _attribute_value(route.get("knitting_output_dia"))
 		and _attribute_value(route.get("knitting_output_colour"))
@@ -747,56 +781,63 @@ def build_cloth_conversion_rule_mappings(doc, row):
 	}
 	if unsupported_inputs or unsupported_outputs:
 		unsupported = ", ".join(sorted(unsupported_inputs | unsupported_outputs))
-		frappe.throw(frappe._(
-			"Cloth {0}: Build Cloth Program has no physical value source for {1} "
-			"on Process {2}. Enter that conversion directly in the IPD."
-		).format(doc.item, unsupported, row.get("fabric_process")))
+		frappe.throw(
+			frappe._(
+				"Cloth {0}: Build Cloth Program has no physical value source for {1} "
+				"on Process {2}. Enter that conversion directly in the IPD."
+			).format(doc.item, unsupported, row.get("fabric_process"))
+		)
 
 	recipes_by_finished_colour = {}
 	for recipe in doc.get("colour_yarn_recipes") or []:
 		if recipe.get("cloth_item") == doc.item and _attribute_value(recipe.get("colour")):
-			recipes_by_finished_colour.setdefault(
-				_attribute_value(recipe.get("colour")), []
-			).append(recipe)
+			recipes_by_finished_colour.setdefault(_attribute_value(recipe.get("colour")), []).append(recipe)
 
 	mappings = []
 	seen_rules = set()
 	for route in routes:
 		recipes = recipes_by_finished_colour.get(_attribute_value(route.get("finished_colour")), [])
 		if not recipes:
-			frappe.throw(frappe._(
-				"Cloth {0}: add a Yarn Recipe for the final route {1}."
-			).format(doc.item, _attribute_value(route.get("finished_colour"))))
+			frappe.throw(
+				frappe._("Cloth {0}: add a Yarn Recipe for the final route {1}.").format(
+					doc.item, _attribute_value(route.get("finished_colour"))
+				)
+			)
 
-		consumed_colours = list(dict.fromkeys(
-			_attribute_value(recipe.get("yarn_colour")) for recipe in recipes
-			if _attribute_value(recipe.get("yarn_colour"))
-		))
+		consumed_colours = list(
+			dict.fromkeys(
+				_attribute_value(recipe.get("yarn_colour"))
+				for recipe in recipes
+				if _attribute_value(recipe.get("yarn_colour"))
+			)
+		)
 		if FABRIC_COLOUR_ATTRIBUTE in input_attributes:
 			if not consumed_colours:
-				frappe.throw(frappe._(
-					"Cloth {0} / final route {1}: Process {2} requires a consumed "
-					"Colour, but its IPD yarn recipe has no Yarn Colour."
-				).format(
-					doc.item,
-					_attribute_value(route.get("finished_colour")),
-					row.get("fabric_process"),
-				))
+				frappe.throw(
+					frappe._(
+						"Cloth {0} / final route {1}: Process {2} requires a consumed "
+						"Colour, but its IPD yarn recipe has no Yarn Colour."
+					).format(
+						doc.item,
+						_attribute_value(route.get("finished_colour")),
+						row.get("fabric_process"),
+					)
+				)
 			if len(consumed_colours) != 1:
-				frappe.throw(frappe._(
-					"Cloth {0} / final route {1}: Process {2} has one consumed "
-					"Colour field, but its combined yarns use {3}."
-				).format(
-					doc.item,
-					_attribute_value(route.get("finished_colour")),
-					row.get("fabric_process"),
-					", ".join(consumed_colours),
-				))
+				frappe.throw(
+					frappe._(
+						"Cloth {0} / final route {1}: Process {2} has one consumed "
+						"Colour field, but its combined yarns use {3}."
+					).format(
+						doc.item,
+						_attribute_value(route.get("finished_colour")),
+						row.get("fabric_process"),
+						", ".join(consumed_colours),
+					)
+				)
 
 		input_values = {
-			FABRIC_COLOUR_ATTRIBUTE: (
-				consumed_colours[0] if consumed_colours else None
-			),
+			FABRIC_COLOUR_ATTRIBUTE: (consumed_colours[0] if consumed_colours else None),
 		}
 		output_values = {
 			FABRIC_DIA_ATTRIBUTE: _attribute_value(route.get("knitting_output_dia")),
@@ -811,21 +852,29 @@ def build_cloth_conversion_rule_mappings(doc, row):
 		seen_rules.add(rule)
 		mapping_index = len(seen_rules) - 1
 		for attribute in input_attributes:
-			mappings.append(frappe._dict({
-				"mapping_index": mapping_index,
-				"attribute": attribute,
-				"role": "Consume",
-				"from_value": input_values[attribute],
-				"to_value": None,
-			}))
+			mappings.append(
+				frappe._dict(
+					{
+						"mapping_index": mapping_index,
+						"attribute": attribute,
+						"role": "Consume",
+						"from_value": input_values[attribute],
+						"to_value": None,
+					}
+				)
+			)
 		for attribute in output_attributes:
-			mappings.append(frappe._dict({
-				"mapping_index": mapping_index,
-				"attribute": attribute,
-				"role": "Introduce",
-				"from_value": None,
-				"to_value": output_values[attribute],
-			}))
+			mappings.append(
+				frappe._dict(
+					{
+						"mapping_index": mapping_index,
+						"attribute": attribute,
+						"role": "Introduce",
+						"from_value": None,
+						"to_value": output_values[attribute],
+					}
+				)
+			)
 	return mappings
 
 
@@ -835,23 +884,26 @@ def _matrix_input_specs(doc, row, default_uom):
 		yarns = get_yarn_ratio_inputs(doc)
 		if yarns:
 			return [
-				frappe._dict({
-					"item": yarn.item,
-					"quantity": yarn.quantity,
-					"uom": frappe.db.get_value('Item', yarn.item, "stock_uom")
-						or default_uom,
-				})
+				frappe._dict(
+					{
+						"item": yarn.item,
+						"quantity": yarn.quantity,
+						"uom": frappe.db.get_value("Item", yarn.item, "stock_uom") or default_uom,
+					}
+				)
 				for yarn in yarns
 			]
 	input_item = row.get("input_item")
-	return [frappe._dict({
-		"item": input_item,
-		"quantity": 1.0,
-		"uom": (
-			frappe.db.get_value('Item', input_item, "stock_uom")
-			if input_item else None
-		) or default_uom,
-	})]
+	return [
+		frappe._dict(
+			{
+				"item": input_item,
+				"quantity": 1.0,
+				"uom": (frappe.db.get_value("Item", input_item, "stock_uom") if input_item else None)
+				or default_uom,
+			}
+		)
+	]
 
 
 def _attach_persisted_mappings(doc, process_rows):
@@ -872,21 +924,30 @@ def _attach_persisted_mappings(doc, process_rows):
 		# preserving the user's intra-group order (multi_swap group_name / side
 		# value stamp order both depend on it).
 		step_maps = sorted(by_seq.get(seq, []), key=lambda m: flt(m.get("mapping_index")))
-		mappings = [frappe._dict({
-			"mapping_index": m.get("mapping_index"),
-			"attribute": m.get("attribute"),
-			"role": m.get("role"),
-			"from_value": m.get("from_value") or None,
-			"to_value": m.get("to_value") or None,
-		}) for m in step_maps]
-		rows.append(frappe._dict({
-			"sequence": row.get("sequence"),
-			"fabric_process": row.get("fabric_process"),
-			"input_item": row.get("input_item") or None,
-			"output_item": row.get("output_item") or None,
-			"quantity_ratio": row.get("quantity_ratio"),
-			"value_mappings": mappings,
-		}))
+		mappings = [
+			frappe._dict(
+				{
+					"mapping_index": m.get("mapping_index"),
+					"attribute": m.get("attribute"),
+					"role": m.get("role"),
+					"from_value": m.get("from_value") or None,
+					"to_value": m.get("to_value") or None,
+				}
+			)
+			for m in step_maps
+		]
+		rows.append(
+			frappe._dict(
+				{
+					"sequence": row.get("sequence"),
+					"fabric_process": row.get("fabric_process"),
+					"input_item": row.get("input_item") or None,
+					"output_item": row.get("output_item") or None,
+					"quantity_ratio": row.get("quantity_ratio"),
+					"value_mappings": mappings,
+				}
+			)
+		)
 	return rows
 
 
@@ -905,81 +966,113 @@ def synthesize_fabric_processes_from_tabs(doc):
 	if doc.get("knitting_process"):
 		mappings = []
 		for idx, row in enumerate(doc.get("knitting_dia_details") or []):
-			mappings.append(frappe._dict({
-				"mapping_index": idx,
-				"attribute": FABRIC_DIA_ATTRIBUTE,
-				"role": "Introduce",
-				"from_value": None,
-				"to_value": _attribute_value(row.get("dia")),
-			}))
-		rows.append(frappe._dict({
-			"sequence": 10,
-			"fabric_process": doc.knitting_process,
-			"input_item": doc.get("yarn_item"),
-			"output_item": doc.item,
-			"quantity_ratio": flt(doc.get("cloth_per_kg_yarn")) or 1,
-			"value_mappings": mappings,
-		}))
+			mappings.append(
+				frappe._dict(
+					{
+						"mapping_index": idx,
+						"attribute": FABRIC_DIA_ATTRIBUTE,
+						"role": "Introduce",
+						"from_value": None,
+						"to_value": _attribute_value(row.get("dia")),
+					}
+				)
+			)
+		rows.append(
+			frappe._dict(
+				{
+					"sequence": 10,
+					"fabric_process": doc.knitting_process,
+					"input_item": doc.get("yarn_item"),
+					"output_item": doc.item,
+					"quantity_ratio": flt(doc.get("cloth_per_kg_yarn")) or 1,
+					"value_mappings": mappings,
+				}
+			)
+		)
 
 	if doc.get("dyeing_process"):
 		mappings = []
 		for idx, row in enumerate(doc.get("dyeing_colour_details") or []):
-			mappings.append(frappe._dict({
-				"mapping_index": idx,
-				"attribute": FABRIC_COLOUR_ATTRIBUTE,
-				"role": "Change",
-				"from_value": _attribute_value(row.get("from_colour")),
-				"to_value": _attribute_value(row.get("to_colour")),
-			}))
+			mappings.append(
+				frappe._dict(
+					{
+						"mapping_index": idx,
+						"attribute": FABRIC_COLOUR_ATTRIBUTE,
+						"role": "Change",
+						"from_value": _attribute_value(row.get("from_colour")),
+						"to_value": _attribute_value(row.get("to_colour")),
+					}
+				)
+			)
 			# CRITIQUE FIX (b): ALWAYS emit the Dia pin, even when blank. A blank
 			# from_value marks a WILDCARD pin that build_fabric_matrix expands into
 			# one group per derived dia — reproducing the old wildcard-row
 			# expansion. Omitting it would collapse the swap into a single
 			# dia-less group and lose the per-dia matrices.
 			dia = _attribute_value(row.get("dia")) or None
-			mappings.append(frappe._dict({
-				"mapping_index": idx,
-				"attribute": FABRIC_DIA_ATTRIBUTE,
-				"role": "Pin",
-				"from_value": dia,
-				"to_value": dia,
-			}))
-		rows.append(frappe._dict({
-			"sequence": 20,
-			"fabric_process": doc.dyeing_process,
-			"input_item": doc.item,
-			"output_item": doc.item,
-			"quantity_ratio": 1,
-			"value_mappings": mappings,
-		}))
+			mappings.append(
+				frappe._dict(
+					{
+						"mapping_index": idx,
+						"attribute": FABRIC_DIA_ATTRIBUTE,
+						"role": "Pin",
+						"from_value": dia,
+						"to_value": dia,
+					}
+				)
+			)
+		rows.append(
+			frappe._dict(
+				{
+					"sequence": 20,
+					"fabric_process": doc.dyeing_process,
+					"input_item": doc.item,
+					"output_item": doc.item,
+					"quantity_ratio": 1,
+					"value_mappings": mappings,
+				}
+			)
+		)
 
 	if doc.get("compacting_process"):
 		mappings = []
 		for idx, row in enumerate(doc.get("compacting_dia_details") or []):
-			mappings.append(frappe._dict({
-				"mapping_index": idx,
-				"attribute": FABRIC_DIA_ATTRIBUTE,
-				"role": "Change",
-				"from_value": _attribute_value(row.get("from_dia")),
-				"to_value": _attribute_value(row.get("to_dia")),
-			}))
+			mappings.append(
+				frappe._dict(
+					{
+						"mapping_index": idx,
+						"attribute": FABRIC_DIA_ATTRIBUTE,
+						"role": "Change",
+						"from_value": _attribute_value(row.get("from_dia")),
+						"to_value": _attribute_value(row.get("to_dia")),
+					}
+				)
+			)
 			# CRITIQUE FIX (b): wildcard Colour pin (blank colour) — see dyeing.
 			colour = _attribute_value(row.get("colour")) or None
-			mappings.append(frappe._dict({
-				"mapping_index": idx,
-				"attribute": FABRIC_COLOUR_ATTRIBUTE,
-				"role": "Pin",
-				"from_value": colour,
-				"to_value": colour,
-			}))
-		rows.append(frappe._dict({
-			"sequence": 30,
-			"fabric_process": doc.compacting_process,
-			"input_item": doc.item,
-			"output_item": doc.item,
-			"quantity_ratio": 1,
-			"value_mappings": mappings,
-		}))
+			mappings.append(
+				frappe._dict(
+					{
+						"mapping_index": idx,
+						"attribute": FABRIC_COLOUR_ATTRIBUTE,
+						"role": "Pin",
+						"from_value": colour,
+						"to_value": colour,
+					}
+				)
+			)
+		rows.append(
+			frappe._dict(
+				{
+					"sequence": 30,
+					"fabric_process": doc.compacting_process,
+					"input_item": doc.item,
+					"output_item": doc.item,
+					"quantity_ratio": 1,
+					"value_mappings": mappings,
+				}
+			)
+		)
 
 	return rows
 
@@ -1046,12 +1139,18 @@ def _seed_entering_values(rows, attribute):
 	row (chain order) that Introduces it (-> its introduced to-values) or Changes
 	it (-> its from-values). Empty when no step produces it."""
 	for row in rows:
-		introduced = [m.get("to_value") for m in _entries(row)
-			if m.get("role") == "Introduce" and m.get("attribute") == attribute and m.get("to_value")]
+		introduced = [
+			m.get("to_value")
+			for m in _entries(row)
+			if m.get("role") == "Introduce" and m.get("attribute") == attribute and m.get("to_value")
+		]
 		if introduced:
 			return introduced
-		changed_from = [m.get("from_value") for m in _entries(row)
-			if m.get("role") == "Change" and m.get("attribute") == attribute and m.get("from_value")]
+		changed_from = [
+			m.get("from_value")
+			for m in _entries(row)
+			if m.get("role") == "Change" and m.get("attribute") == attribute and m.get("from_value")
+		]
 		if changed_from:
 			return changed_from
 	return []
@@ -1063,17 +1162,21 @@ def _swap_rows(row, attribute):
 	group's pinned value for the passthrough rule."""
 	swaps = []
 	for _idx, entries in _group_by_mapping_index(_entries(row)):
-		change = next((e for e in entries
-			if e.get("role") == "Change" and e.get("attribute") == attribute), None)
+		change = next(
+			(e for e in entries if e.get("role") == "Change" and e.get("attribute") == attribute), None
+		)
 		if not change:
 			continue
-		pin = next((e.get("from_value") for e in entries
-			if e.get("role") == "Pin" and e.get("from_value")), None)
-		swaps.append({
-			"pin_value": pin,
-			"from_value": change.get("from_value"),
-			"to_value": change.get("to_value"),
-		})
+		pin = next(
+			(e.get("from_value") for e in entries if e.get("role") == "Pin" and e.get("from_value")), None
+		)
+		swaps.append(
+			{
+				"pin_value": pin,
+				"from_value": change.get("from_value"),
+				"to_value": change.get("to_value"),
+			}
+		)
 	return swaps
 
 
@@ -1088,7 +1191,7 @@ def sync_fabric_process_matrices(doc, method=None):
 	if not is_cloth_ipd(doc):
 		return
 
-	uom = frappe.db.get_value('Item', doc.item, "stock_uom")
+	uom = frappe.db.get_value("Item", doc.item, "stock_uom")
 
 	# Matrices are NEVER hand-authored (2026-06-25 rule), so wiping every
 	# matrix of this IPD is safe and also clears orphans left behind when a
@@ -1126,8 +1229,9 @@ def _validate_exact_route_reachability(doc):
 	if not routes:
 		return
 
-	from essdee_yrp.fabric_plan import solve_chain_backward
 	from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
+
+	from essdee_yrp.fabric_plan import solve_chain_backward
 
 	problems = []
 	matrix_cache = {}
@@ -1167,7 +1271,7 @@ def _delete_all_matrices(ipd_name):
 	dynamic-link cleanup job per matrix, which made large IPDs slow to save.
 	"""
 	names = frappe.get_all(
-		'YRP IPD Process Matrix',
+		"YRP IPD Process Matrix",
 		filters={"ipd": ipd_name},
 		pluck="name",
 	)
@@ -1176,25 +1280,27 @@ def _delete_all_matrices(ipd_name):
 
 	parent_filter = {
 		"parent": ["in", names],
-		"parenttype": 'YRP IPD Process Matrix',
+		"parenttype": "YRP IPD Process Matrix",
 	}
 	for child_doctype in (
-		'YRP IPD Matrix Attribute',
-		'YRP IPD Matrix Combination',
-		'YRP IPD Matrix Combination Attribute',
+		"YRP IPD Matrix Attribute",
+		"YRP IPD Matrix Combination",
+		"YRP IPD Matrix Combination Attribute",
 	):
 		frappe.db.delete(child_doctype, parent_filter)
-	frappe.db.delete('YRP IPD Process Matrix', {"name": ["in", names]})
-	frappe.clear_document_cache('YRP IPD Process Matrix')
+	frappe.db.delete("YRP IPD Process Matrix", {"name": ["in", names]})
+	frappe.clear_document_cache("YRP IPD Process Matrix")
 
 
 def _new_matrix(doc, process):
-	return frappe.get_doc({
-		"doctype": 'YRP IPD Process Matrix',
-		"ipd": doc.name,
-		"process_name": process,
-		"output_item": doc.item,
-	})
+	return frappe.get_doc(
+		{
+			"doctype": "YRP IPD Process Matrix",
+			"ipd": doc.name,
+			"process_name": process,
+			"output_item": doc.item,
+		}
+	)
 
 
 def _colour_recipe_conversion_targets(doc):
@@ -1229,8 +1335,7 @@ def _colour_recipe_conversion_targets(doc):
 	for position, process_row in enumerate(get_fabric_process_rows(doc)):
 		groups = _group_by_mapping_index(_entries(process_row))
 		has_colour_change = any(
-			entry.get("role") == "Change"
-			and entry.get("attribute") == FABRIC_COLOUR_ATTRIBUTE
+			entry.get("role") == "Change" and entry.get("attribute") == FABRIC_COLOUR_ATTRIBUTE
 			for _mapping_index, entries in groups
 			for entry in entries
 		)
@@ -1239,31 +1344,39 @@ def _colour_recipe_conversion_targets(doc):
 
 		entering_dias = values_entering(doc, position, FABRIC_DIA_ATTRIBUTE)
 		for _mapping_index, entries in groups:
-			colour_change = next((
-				entry for entry in entries
-				if entry.get("role") == "Change"
-				and entry.get("attribute") == FABRIC_COLOUR_ATTRIBUTE
-				and entry.get("to_value")
-			), None)
+			colour_change = next(
+				(
+					entry
+					for entry in entries
+					if entry.get("role") == "Change"
+					and entry.get("attribute") == FABRIC_COLOUR_ATTRIBUTE
+					and entry.get("to_value")
+				),
+				None,
+			)
 			if not colour_change:
 				continue
-			dia_change = next((
-				entry for entry in entries
-				if entry.get("role") == "Change"
-				and entry.get("attribute") == FABRIC_DIA_ATTRIBUTE
-				and entry.get("to_value")
-			), None)
-			dia_pin = next((
-				entry.get("from_value") for entry in entries
-				if entry.get("role") == "Pin"
-				and entry.get("attribute") == FABRIC_DIA_ATTRIBUTE
-				and entry.get("from_value")
-			), None)
-			dias = (
-				[dia_change.get("to_value")]
-				if dia_change
-				else ([dia_pin] if dia_pin else entering_dias)
+			dia_change = next(
+				(
+					entry
+					for entry in entries
+					if entry.get("role") == "Change"
+					and entry.get("attribute") == FABRIC_DIA_ATTRIBUTE
+					and entry.get("to_value")
+				),
+				None,
 			)
+			dia_pin = next(
+				(
+					entry.get("from_value")
+					for entry in entries
+					if entry.get("role") == "Pin"
+					and entry.get("attribute") == FABRIC_DIA_ATTRIBUTE
+					and entry.get("from_value")
+				),
+				None,
+			)
+			dias = [dia_change.get("to_value")] if dia_change else ([dia_pin] if dia_pin else entering_dias)
 			targets.extend(
 				(
 					dia,
@@ -1282,12 +1395,14 @@ def _colour_recipe_conversion_targets(doc):
 	# Legacy tab IPDs remain supported by the same exact routes.
 	for row in doc.get("dyeing_colour_details") or []:
 		if _attribute_value(row.get("dia")) and _attribute_value(row.get("to_colour")):
-			targets.append((
-				_attribute_value(row.get("dia")),
-				_attribute_value(row.get("from_colour")) or _attribute_value(row.get("to_colour")),
-				_attribute_value(row.get("dia")),
-				_attribute_value(row.get("to_colour")),
-			))
+			targets.append(
+				(
+					_attribute_value(row.get("dia")),
+					_attribute_value(row.get("from_colour")) or _attribute_value(row.get("to_colour")),
+					_attribute_value(row.get("dia")),
+					_attribute_value(row.get("to_colour")),
+				)
+			)
 	if not targets:
 		dias = [
 			entry.get("to_value")
@@ -1298,20 +1413,21 @@ def _colour_recipe_conversion_targets(doc):
 			and entry.get("to_value")
 		]
 		if not dias:
-			dias = [_attribute_value(r.dia) for r in doc.get("knitting_dia_details") or [] if _attribute_value(r.dia)]
+			dias = [
+				_attribute_value(r.dia)
+				for r in doc.get("knitting_dia_details") or []
+				if _attribute_value(r.dia)
+			]
 		if not dias:
 			from essdee_yrp.ipd_validations import get_ipd_attribute_values
 
 			dias = get_ipd_attribute_values(doc, FABRIC_DIA_ATTRIBUTE)
 		colours = [
-			_attribute_value(r.colour) for r in doc.get("colour_yarn_recipes") or []
+			_attribute_value(r.colour)
+			for r in doc.get("colour_yarn_recipes") or []
 			if r.cloth_item == doc.item and _attribute_value(r.colour)
 		]
-		targets = [
-			(dia, colour, dia, colour)
-			for dia in dias
-			for colour in colours
-		]
+		targets = [(dia, colour, dia, colour) for dia in dias for colour in colours]
 	return list(dict.fromkeys(targets))
 
 
@@ -1330,11 +1446,7 @@ def build_colour_recipe_conversion_matrices(doc, row, uom):
 	for conversion_dia, conversion_colour, final_dia, colour in _colour_recipe_conversion_targets(doc):
 		inputs = get_colour_yarn_inputs(doc, colour)
 		if not inputs:
-			frappe.throw(
-				frappe._("Add a Colour-wise Yarn Recipe for {0} / {1}.").format(
-					doc.item, colour
-				)
-			)
+			frappe.throw(frappe._("Add a Colour-wise Yarn Recipe for {0} / {1}.").format(doc.item, colour))
 		matrix = _new_matrix(doc, row.get("fabric_process"))
 		matrix.reference_item_variant = get_or_create_variant(
 			doc.item,
@@ -1355,49 +1467,64 @@ def build_colour_recipe_conversion_matrices(doc, row, uom):
 		if conversion_colour:
 			matrix.append("output_attributes", {"attribute": FABRIC_COLOUR_ATTRIBUTE})
 		for combo_index, yarn in enumerate(inputs):
-			matrix.append("combinations", {
+			matrix.append(
+				"combinations",
+				{
+					"group_index": 0,
+					"group_name": f"{colour} · {final_dia}",
+					"side": "Input",
+					"item": yarn.item,
+					"combo_index": combo_index,
+					"quantity": yarn.quantity,
+					"uom": frappe.db.get_value("Item", yarn.item, "stock_uom") or uom,
+					"wastage_pct": 0,
+				},
+			)
+			if _attribute_value(yarn.colour):
+				matrix.append(
+					"combination_attributes",
+					{
+						"group_index": 0,
+						"side": "Input",
+						"combo_index": combo_index,
+						"attribute": FABRIC_COLOUR_ATTRIBUTE,
+						"attribute_value": _attribute_value(yarn.colour),
+					},
+				)
+		matrix.append(
+			"combinations",
+			{
 				"group_index": 0,
 				"group_name": f"{colour} · {final_dia}",
-				"side": "Input",
-				"item": yarn.item,
-				"combo_index": combo_index,
-				"quantity": yarn.quantity,
-				"uom": frappe.db.get_value('Item', yarn.item, "stock_uom") or uom,
+				"side": "Output",
+				"item": matrix.output_item,
+				"combo_index": 0,
+				"quantity": output_qty,
+				"uom": uom,
 				"wastage_pct": 0,
-			})
-			if _attribute_value(yarn.colour):
-				matrix.append("combination_attributes", {
-					"group_index": 0,
-					"side": "Input",
-					"combo_index": combo_index,
-					"attribute": FABRIC_COLOUR_ATTRIBUTE,
-					"attribute_value": _attribute_value(yarn.colour),
-				})
-		matrix.append("combinations", {
-			"group_index": 0,
-			"group_name": f"{colour} · {final_dia}",
-			"side": "Output",
-			"item": matrix.output_item,
-			"combo_index": 0,
-			"quantity": output_qty,
-			"uom": uom,
-			"wastage_pct": 0,
-		})
-		matrix.append("combination_attributes", {
-			"group_index": 0,
-			"side": "Output",
-			"combo_index": 0,
-			"attribute": FABRIC_DIA_ATTRIBUTE,
-			"attribute_value": conversion_dia,
-		})
-		if conversion_colour:
-			matrix.append("combination_attributes", {
+			},
+		)
+		matrix.append(
+			"combination_attributes",
+			{
 				"group_index": 0,
 				"side": "Output",
 				"combo_index": 0,
-				"attribute": FABRIC_COLOUR_ATTRIBUTE,
-				"attribute_value": conversion_colour,
-			})
+				"attribute": FABRIC_DIA_ATTRIBUTE,
+				"attribute_value": conversion_dia,
+			},
+		)
+		if conversion_colour:
+			matrix.append(
+				"combination_attributes",
+				{
+					"group_index": 0,
+					"side": "Output",
+					"combo_index": 0,
+					"attribute": FABRIC_COLOUR_ATTRIBUTE,
+					"attribute_value": conversion_colour,
+				},
+			)
 		matrices.append(matrix)
 	return matrices
 
@@ -1433,17 +1560,27 @@ def build_stage_route_matrices(doc, rows, base_matrices):
 				seen.add(key)
 				base_matrix = base_matrices.get(process)
 				if not base_matrix:
-					frappe.throw(frappe._(
-						"Fabric Route {0} / {1}: process {2} changes the route but generated no matrix."
-					).format(_attribute_value(route.finished_colour), _attribute_value(route.finished_dia), process))
-				group = _matrix_group_for_states(
-					base_matrix, part["before"], part["after"]
-				)
+					frappe.throw(
+						frappe._(
+							"Fabric Route {0} / {1}: process {2} changes the route but generated no matrix."
+						).format(
+							_attribute_value(route.finished_colour),
+							_attribute_value(route.finished_dia),
+							process,
+						)
+					)
+				group = _matrix_group_for_states(base_matrix, part["before"], part["after"])
 				if not group:
-					frappe.throw(frappe._(
-						"Fabric Route {0} / {1}: no {2} matrix group connects the previous "
-						"process output to the next process input."
-					).format(_attribute_value(route.finished_colour), _attribute_value(route.finished_dia), process))
+					frappe.throw(
+						frappe._(
+							"Fabric Route {0} / {1}: no {2} matrix group connects the previous "
+							"process output to the next process input."
+						).format(
+							_attribute_value(route.finished_colour),
+							_attribute_value(route.finished_dia),
+							process,
+						)
+					)
 				matrices.append(_clone_route_matrix(doc, base_matrix, group, route))
 	return matrices
 
@@ -1484,38 +1621,38 @@ def _clone_route_matrix(doc, base_matrix, group, route):
 			FABRIC_COLOUR_ATTRIBUTE: _attribute_value(route.finished_colour),
 		},
 	)
-	for attribute in dict.fromkeys(
-		attribute
-		for combo in inputs
-		for attribute in (combo.get("attrs") or {})
-	):
+	for attribute in dict.fromkeys(attribute for combo in inputs for attribute in (combo.get("attrs") or {})):
 		matrix.append("input_attributes", {"attribute": attribute})
 	for attribute in dict.fromkeys(
-		attribute
-		for combo in outputs
-		for attribute in (combo.get("attrs") or {})
+		attribute for combo in outputs for attribute in (combo.get("attrs") or {})
 	):
 		matrix.append("output_attributes", {"attribute": attribute})
 	for side, combos in (("Input", inputs), ("Output", outputs)):
 		for combo_index, combo in enumerate(combos):
-			matrix.append("combinations", {
-				"group_index": 0,
-				"group_name": group.get("group_name"),
-				"side": side,
-				"item": combo.get("item"),
-				"combo_index": combo_index,
-				"quantity": flt(combo.get("qty")),
-				"uom": combo.get("uom"),
-				"wastage_pct": flt(combo.get("wastage_pct")),
-			})
-			for attribute, value in (combo.get("attrs") or {}).items():
-				matrix.append("combination_attributes", {
+			matrix.append(
+				"combinations",
+				{
 					"group_index": 0,
+					"group_name": group.get("group_name"),
 					"side": side,
+					"item": combo.get("item"),
 					"combo_index": combo_index,
-					"attribute": attribute,
-					"attribute_value": value,
-				})
+					"quantity": flt(combo.get("qty")),
+					"uom": combo.get("uom"),
+					"wastage_pct": flt(combo.get("wastage_pct")),
+				},
+			)
+			for attribute, value in (combo.get("attrs") or {}).items():
+				matrix.append(
+					"combination_attributes",
+					{
+						"group_index": 0,
+						"side": side,
+						"combo_index": combo_index,
+						"attribute": attribute,
+						"attribute_value": value,
+					},
+				)
 	return matrix
 
 
@@ -1539,7 +1676,7 @@ def build_fabric_matrix(doc, row, uom):
 	if not entries:
 		return None
 
-	input_item = row.get("input_item")
+	row.get("input_item")
 	output_item = row.get("output_item") or doc.item
 	output_uom = uom
 	output_qty = flt(row.get("quantity_ratio")) or 1
@@ -1579,27 +1716,55 @@ def build_fabric_matrix(doc, row, uom):
 	for group_index, group in enumerate(expanded):
 		group_name = _group_name(group)
 		for combo_index, spec in enumerate(input_specs):
-			matrix.append("combinations", {
-				"group_index": group_index, "group_name": group_name, "side": "Input",
-				"item": spec.item, "combo_index": combo_index,
-				"quantity": spec.quantity, "uom": spec.uom, "wastage_pct": 0,
-			})
-		matrix.append("combinations", {
-			"group_index": group_index, "group_name": group_name, "side": "Output",
-			"item": output_item, "combo_index": 0,
-			"quantity": output_qty, "uom": output_uom, "wastage_pct": 0,
-		})
+			matrix.append(
+				"combinations",
+				{
+					"group_index": group_index,
+					"group_name": group_name,
+					"side": "Input",
+					"item": spec.item,
+					"combo_index": combo_index,
+					"quantity": spec.quantity,
+					"uom": spec.uom,
+					"wastage_pct": 0,
+				},
+			)
+		matrix.append(
+			"combinations",
+			{
+				"group_index": group_index,
+				"group_name": group_name,
+				"side": "Output",
+				"item": output_item,
+				"combo_index": 0,
+				"quantity": output_qty,
+				"uom": output_uom,
+				"wastage_pct": 0,
+			},
+		)
 		for combo_index, _spec in enumerate(input_specs):
 			for attribute, value in _side_values(group, "Input"):
-				matrix.append("combination_attributes", {
-					"group_index": group_index, "side": "Input", "combo_index": combo_index,
-					"attribute": attribute, "attribute_value": value,
-				})
+				matrix.append(
+					"combination_attributes",
+					{
+						"group_index": group_index,
+						"side": "Input",
+						"combo_index": combo_index,
+						"attribute": attribute,
+						"attribute_value": value,
+					},
+				)
 		for attribute, value in _side_values(group, "Output"):
-			matrix.append("combination_attributes", {
-				"group_index": group_index, "side": "Output", "combo_index": 0,
-				"attribute": attribute, "attribute_value": value,
-			})
+			matrix.append(
+				"combination_attributes",
+				{
+					"group_index": group_index,
+					"side": "Output",
+					"combo_index": 0,
+					"attribute": attribute,
+					"attribute_value": value,
+				},
+			)
 	return matrix
 
 
@@ -1611,10 +1776,7 @@ def _is_noop_change_group(group):
 	entries are no-ops; changing Dia while holding Colour remains real work.
 	"""
 	changes = [entry for entry in group if entry.get("role") == "Change"]
-	return bool(changes) and all(
-		entry.get("from_value") == entry.get("to_value")
-		for entry in changes
-	)
+	return bool(changes) and all(entry.get("from_value") == entry.get("to_value") for entry in changes)
 
 
 def _add_carry_pins(doc, row, groups):
@@ -1647,13 +1809,18 @@ def _add_carry_pins(doc, row, groups):
 					continue
 				# Appended AFTER the group's own entries so explicit entry order
 				# (group_name / side value stamps) is untouched.
-				group = group + [frappe._dict({
-					"mapping_index": idx,
-					"attribute": attribute,
-					"role": "Pin",
-					"from_value": None,
-					"to_value": None,
-				})]
+				group = [
+					*group,
+					frappe._dict(
+						{
+							"mapping_index": idx,
+							"attribute": attribute,
+							"role": "Pin",
+							"from_value": None,
+							"to_value": None,
+						}
+					),
+				]
 		carried.append((idx, group))
 	return carried
 
@@ -1701,8 +1868,12 @@ def _side_values(group, side):
 	for entry in group:
 		role = entry.get("role")
 		if role == "Change":
-			values.append((entry.get("attribute"),
-				entry.get("from_value") if side == "Input" else entry.get("to_value")))
+			values.append(
+				(
+					entry.get("attribute"),
+					entry.get("from_value") if side == "Input" else entry.get("to_value"),
+				)
+			)
 		elif role == "Introduce":
 			if side == "Output":
 				values.append((entry.get("attribute"), entry.get("to_value")))
@@ -1725,16 +1896,21 @@ def _group_name(group):
 	changes = [e for e in group if e.get("role") == "Change"]
 	introduces = [e for e in group if e.get("role") == "Introduce"]
 	consumes = [e for e in group if e.get("role") == "Consume"]
-	pins = [e.get("from_value") for e in group
-		if e.get("role") == "Pin" and e.get("from_value")]
+	pins = [e.get("from_value") for e in group if e.get("role") == "Pin" and e.get("from_value")]
 	if changes:
 		froms = [e.get("from_value") for e in changes]
 		tos = [e.get("to_value") for e in changes]
-		core = (f"{froms[0]} -> {tos[0]}" if len(changes) == 1
-			else " · ".join(map(str, froms)) + " -> " + " · ".join(map(str, tos)))
+		core = (
+			f"{froms[0]} -> {tos[0]}"
+			if len(changes) == 1
+			else " · ".join(map(str, froms)) + " -> " + " · ".join(map(str, tos))
+		)
 	elif consumes and introduces:
-		core = (" · ".join(str(e.get("from_value")) for e in consumes)
-			+ " -> " + " · ".join(str(e.get("to_value")) for e in introduces))
+		core = (
+			" · ".join(str(e.get("from_value")) for e in consumes)
+			+ " -> "
+			+ " · ".join(str(e.get("to_value")) for e in introduces)
+		)
 	elif consumes:
 		froms = [e.get("from_value") for e in consumes]
 		core = froms[0] if len(consumes) == 1 else " · ".join(map(str, froms))
@@ -1754,8 +1930,9 @@ def _is_wildcard_pin(entry):
 
 
 def _change_from_key(group):
-	return tuple(sorted(e.get("from_value") for e in group
-		if e.get("role") == "Change" and e.get("from_value")))
+	return tuple(
+		sorted(e.get("from_value") for e in group if e.get("role") == "Change" and e.get("from_value"))
+	)
 
 
 def _expand_mapping_indexes(doc, position, groups):
@@ -1798,7 +1975,7 @@ def _expand_mapping_indexes(doc, position, groups):
 			# covered-key to tuples before a third fabric attribute arrives.
 			if len(wild_attrs) == 1 and (wild_attrs[0], combo[0], change_from) in covered:
 				continue
-			expanded.append(_clone_group(group, dict(zip(wild_attrs, combo))))
+			expanded.append(_clone_group(group, dict(zip(wild_attrs, combo, strict=False))))
 	return expanded
 
 

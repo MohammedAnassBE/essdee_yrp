@@ -17,22 +17,22 @@ import argparse
 import base64
 import datetime as dt
 import decimal
-import json
 import hashlib
+import json
 import os
 import re
 import sys
 import time
-from hmac import compare_digest
 from collections import defaultdict
+from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, field
+from hmac import compare_digest
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 import pymysql
 from cryptography.fernet import Fernet, InvalidToken
 from pymysql.cursors import DictCursor, SSDictCursor
-
 
 TABLE_FIELD_TYPES = {"Table", "Table MultiSelect"}
 LAYOUT_FIELD_TYPES = {
@@ -62,9 +62,7 @@ SYSTEM_FIELDS = (
 	"_liked_by",
 	"_seen",
 )
-SENSITIVE_FIELD = re.compile(
-	r"(?:password|secret|token|api_key|credential|auth|^value$)", re.I
-)
+SENSITIVE_FIELD = re.compile(r"(?:password|secret|token|api_key|credential|auth|^value$)", re.I)
 SAMPLE_LIMIT = 5
 
 
@@ -167,11 +165,7 @@ def _quote(value: str) -> str:
 
 
 def _schema_fields(schema: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
-	return {
-		str(row["fieldname"]): row
-		for row in schema.get("fields") or []
-		if row.get("fieldname")
-	}
+	return {str(row["fieldname"]): row for row in schema.get("fields") or [] if row.get("fieldname")}
 
 
 def _columns(connection, doctype: str) -> dict[str, dict[str, Any]]:
@@ -227,10 +221,7 @@ def _target_rows(connection, doctype: str, names: list[str]) -> dict[str, dict[s
 	if not names:
 		return {}
 	placeholders = ",".join(["%s"] * len(names))
-	query = (
-		f"SELECT * FROM {_quote('tab' + doctype)} "
-		f"WHERE name IN ({placeholders})"
-	)
+	query = f"SELECT * FROM {_quote('tab' + doctype)} WHERE name IN ({placeholders})"
 	with connection.cursor() as cursor:
 		cursor.execute(query, names)
 		return {str(row["name"]): row for row in cursor.fetchall()}
@@ -310,7 +301,7 @@ def _compare_values(
 	if fieldtype == "JSON":
 		try:
 			return "exact" if _json_value(expected) == _json_value(actual) else "mismatch"
-		except (TypeError, ValueError, json.JSONDecodeError):
+		except TypeError, ValueError, json.JSONDecodeError:
 			pass
 	return "exact" if str(_plain(expected)) == str(_plain(actual)) else "mismatch"
 
@@ -324,9 +315,7 @@ def _doctype_controllers(schema: Mapping[str, Any]) -> set[str]:
 	controllers.update(
 		str(row.get("fieldname"))
 		for row in schema.get("fields") or []
-		if row.get("fieldtype") == "Link"
-		and row.get("options") == "DocType"
-		and row.get("fieldname")
+		if row.get("fieldtype") == "Link" and row.get("options") == "DocType" and row.get("fieldname")
 	)
 	return controllers
 
@@ -343,7 +332,11 @@ def _custom_targets(
 			return ["work_order"], "custom_transform", "against_id renamed to work_order"
 	if source_doctype == "IPD Process":
 		if fieldname == "stage":
-			return ["in_stage", "out_stage"], "custom_transform", "stage duplicated into in_stage and out_stage"
+			return (
+				["in_stage", "out_stage"],
+				"custom_transform",
+				"stage duplicated into in_stage and out_stage",
+			)
 	if source_doctype == "Stock Settings":
 		mapping = {
 			"transit_warehouse": "transit_warehouse",
@@ -507,9 +500,7 @@ class Auditor:
 		target_columns = self._target_cols(route.target_doctype)
 		row_metrics = []
 		for fieldname, source_field in _schema_fields(spec.source_schema).items():
-			targets, disposition, reason = _field_route(
-				self.plan, route, fieldname, source_field
-			)
+			targets, disposition, reason = _field_route(self.plan, route, fieldname, source_field)
 			metric = self._metric(
 				route,
 				fieldname,
@@ -530,12 +521,8 @@ class Auditor:
 				and fieldname not in source_columns
 			):
 				metric.missing_source_column = True
-			if metric.source_fieldtype not in (
-				LAYOUT_FIELD_TYPES | TABLE_FIELD_TYPES | {"Password"}
-			):
-				metric.missing_target_columns = [
-					target for target in targets if target not in target_columns
-				]
+			if metric.source_fieldtype not in (LAYOUT_FIELD_TYPES | TABLE_FIELD_TYPES | {"Password"}):
+				metric.missing_target_columns = [target for target in targets if target not in target_columns]
 		for fieldname in SYSTEM_FIELDS:
 			if fieldname not in source_columns:
 				continue
@@ -574,9 +561,7 @@ class Auditor:
 			"missing_direct_rows": 0,
 			"special_projection_rows": 0,
 		}
-		for batch in _iter_source_batches(
-			self.source_db, route, query_columns, self.batch_size
-		):
+		for batch in _iter_source_batches(self.source_db, route, query_columns, self.batch_size):
 			direct = []
 			special = []
 			for row in batch:
@@ -585,10 +570,7 @@ class Auditor:
 					and str(row.get("parent") or "") in self.wo_invoice_names
 				):
 					special.append(row)
-				elif (
-					route.source_doctype == "IPD Process"
-					and not row.get("process_name")
-				):
+				elif route.source_doctype == "IPD Process" and not row.get("process_name"):
 					special.append(row)
 				else:
 					direct.append(row)
@@ -674,7 +656,8 @@ class Auditor:
 				"System",
 				[],
 				disposition,
-				reason + "; original child identity/system metadata checked independently in the raw source archive",
+				reason
+				+ "; original child identity/system metadata checked independently in the raw source archive",
 			)
 			metric.source_rows += 1
 			self._record_source_value(metric, source[fieldname])
@@ -695,9 +678,7 @@ class Auditor:
 		target = _single_values(self.target_db, route.target_doctype)
 		target_fields = _schema_fields(self.plan.target_schemas[route.target_doctype])
 		for fieldname, source_field in _schema_fields(spec.source_schema).items():
-			target_names, disposition, reason = _field_route(
-				self.plan, route, fieldname, source_field
-			)
+			target_names, disposition, reason = _field_route(self.plan, route, fieldname, source_field)
 			metric = self._metric(
 				route,
 				fieldname,
@@ -804,9 +785,16 @@ class Auditor:
 				metric.mismatches += 1
 				self._add_sample(metric, identity, value, "[missing target row]")
 			return
-		expected = value if already_expected else _expected_value(
-			self.plan, route, fieldname, value,
-			controllers=self.doctype_controllers[route.source_doctype],
+		expected = (
+			value
+			if already_expected
+			else _expected_value(
+				self.plan,
+				route,
+				fieldname,
+				value,
+				controllers=self.doctype_controllers[route.source_doctype],
+			)
 		)
 		metric.compared_values += 1
 		outcomes = []
@@ -855,10 +843,10 @@ class Auditor:
 def _child_routes(plan) -> dict[str, list[Route]]:
 	routes: dict[str, list[Route]] = defaultdict(list)
 	for source_parent, parent_spec in plan.specs.items():
-		for fieldname, field in _schema_fields(parent_spec.source_schema).items():
-			if field.get("fieldtype") not in TABLE_FIELD_TYPES or not field.get("options"):
+		for fieldname, schema_field in _schema_fields(parent_spec.source_schema).items():
+			if schema_field.get("fieldtype") not in TABLE_FIELD_TYPES or not schema_field.get("options"):
 				continue
-			source_child = str(field["options"])
+			source_child = str(schema_field["options"])
 			if source_child not in plan.specs:
 				continue
 			target_parentfield = parent_spec.field_map.get(fieldname, fieldname)
@@ -902,9 +890,7 @@ def _stored_child_routes(plan, source_db, source_doctype: str) -> list[Route]:
 		)
 		target_child = plan.specs[source_doctype].target
 		if parent_spec:
-			target_parent_field = _schema_fields(parent_spec.target_schema).get(
-				target_parentfield
-			) or {}
+			target_parent_field = _schema_fields(parent_spec.target_schema).get(target_parentfield) or {}
 			target_child = str(target_parent_field.get("options") or target_child)
 		routes.append(
 			Route(
@@ -928,12 +914,14 @@ def _compare_auth_value(source, target, source_key, target_key):
 	if source["encrypted"]:
 		try:
 			plain = Fernet(str(source_key).encode()).decrypt(str(source["password"]).encode())
-		except (InvalidToken, ValueError, TypeError):
+		except InvalidToken, ValueError, TypeError:
 			matches = compare_digest(str(source["password"]).encode(), str(target["password"]).encode())
-			return ("Ciphertext preserved; source key unavailable" if matches else "Ciphertext mismatch"), matches
+			return (
+				"Ciphertext preserved; source key unavailable" if matches else "Ciphertext mismatch"
+			), matches
 		try:
 			actual = Fernet(str(target_key).encode()).decrypt(str(target["password"]).encode())
-		except (InvalidToken, ValueError, TypeError):
+		except InvalidToken, ValueError, TypeError:
 			return "Target decryption failed", False
 		matches = compare_digest(plain, actual)
 		return ("Re-encrypted value matches" if matches else "Decrypted value mismatch"), matches
@@ -965,11 +953,12 @@ def _audit_auth(plan, source_db, target_db, *, source_key=None, target_key=None)
 		target_doctypes = sorted({spec.target for spec in plan.specs.values()})
 		cursor.execute(
 			"SELECT doctype, name, fieldname, password, encrypted FROM __Auth WHERE doctype IN ("
-			+ ",".join(["%s"] * len(target_doctypes)) + ")", target_doctypes,
+			+ ",".join(["%s"] * len(target_doctypes))
+			+ ")",
+			target_doctypes,
 		)
 		target_rows = {
-			(str(row["doctype"]), str(row["name"]), str(row["fieldname"])): row
-			for row in cursor.fetchall()
+			(str(row["doctype"]), str(row["name"]), str(row["fieldname"])): row for row in cursor.fetchall()
 		}
 	results = []
 	expected_keys = set()
@@ -979,16 +968,18 @@ def _audit_auth(plan, source_db, target_db, *, source_key=None, target_key=None)
 		spec = plan.specs[source_doctype]
 		target_field = spec.field_map.get(fieldname, fieldname)
 		ignored = fieldname in spec.ignored_fields
-		target_name = (
-			spec.target if spec.source_schema.get("issingle") else str(row["name"])
-		)
+		target_name = spec.target if spec.source_schema.get("issingle") else str(row["name"])
 		target_identity = (spec.target, target_name, target_field)
 		expected_keys.add(target_identity)
-		value_status, value_matches = _compare_auth_value(row, target_rows.get(target_identity), source_key, target_key)
-		source_exists = _credential_record_exists(source_db, source_doctype, row["name"],
-			is_single=bool(spec.source_schema.get("issingle")))
-		target_exists = _credential_record_exists(target_db, spec.target, target_name,
-			is_single=bool(spec.target_schema.get("issingle")))
+		value_status, value_matches = _compare_auth_value(
+			row, target_rows.get(target_identity), source_key, target_key
+		)
+		source_exists = _credential_record_exists(
+			source_db, source_doctype, row["name"], is_single=bool(spec.source_schema.get("issingle"))
+		)
+		target_exists = _credential_record_exists(
+			target_db, spec.target, target_name, is_single=bool(spec.target_schema.get("issingle"))
+		)
 		record_identity_matches = source_exists == target_exists
 		results.append(
 			{
@@ -1022,16 +1013,14 @@ def _audit_auth(plan, source_db, target_db, *, source_key=None, target_key=None)
 	return {
 		"source_auth_rows": len(source_rows),
 		"target_rows_found": sum(row["target_auth_row_exists"] for row in results),
-		"missing_expected_rows": sum(
-			row["status"] == "Missing" for row in results
-		),
-		"ignored_rows_with_data": sum(
-			row["status"] == "Ignored With Data" for row in results
-		),
+		"missing_expected_rows": sum(row["status"] == "Missing" for row in results),
+		"ignored_rows_with_data": sum(row["status"] == "Ignored With Data" for row in results),
 		"value_mismatches": sum(not row["value_matches"] for row in results),
 		"record_identity_mismatches": sum(not row["record_identity_matches"] for row in results),
 		"source_orphan_rows": sum(not row["source_record_exists"] for row in results),
-		"source_key_unavailable_rows": sum(row["value_status"] == "Ciphertext preserved; source key unavailable" for row in results),
+		"source_key_unavailable_rows": sum(
+			row["value_status"] == "Ciphertext preserved; source key unavailable" for row in results
+		),
 		"extra_target_auth_identities": [list(key) for key in sorted(set(target_rows) - expected_keys)],
 		"rows": results,
 	}
@@ -1101,7 +1090,11 @@ def _audit_purchase_invoice_projection(source_db, target_db, wo_names: set[str])
 			conflicts.append(f"{row['parent']} conflicting rate for {key[1:]}")
 		if group["source_rate"] != _decimal_value(source_rate):
 			conflicts.append(f"{row['parent']} conflicting frozen source rate for {key[1:]}")
-		if group["expense_head"] and row.get("expense_head") and group["expense_head"] != row.get("expense_head"):
+		if (
+			group["expense_head"]
+			and row.get("expense_head")
+			and group["expense_head"] != row.get("expense_head")
+		):
 			conflicts.append(f"{row['parent']} conflicting expense head for {key[1:]}")
 		group["expense_head"] = group["expense_head"] or row.get("expense_head")
 		group["source_rows"] += 1
@@ -1131,14 +1124,13 @@ def _audit_purchase_invoice_projection(source_db, target_db, wo_names: set[str])
 			"qty": _decimal_value(target.get("qty")) == source["qty"],
 			"rate": _decimal_value(target.get("rate")) == source["rate"],
 			"source_rate": _decimal_value(target.get("source_rate")) == source["source_rate"],
-			"amount": abs(_decimal_value(target.get("amount")) - source["amount"]) <= decimal.Decimal("0.000001"),
+			"amount": abs(_decimal_value(target.get("amount")) - source["amount"])
+			<= decimal.Decimal("0.000001"),
 			"expense_head": (target.get("expense_head") or None) == (source["expense_head"] or None),
 			"item_group": not source["item_group"] or target.get("item_group") == source["item_group"],
 		}
 		if not all(checks.values()):
-			mismatches.append(
-				{"key": list(key), "reason": "aggregate mismatch", "checks": checks}
-			)
+			mismatches.append({"key": list(key), "reason": "aggregate mismatch", "checks": checks})
 	for key in actual.keys() - expected.keys():
 		mismatches.append({"key": list(key), "reason": "unexpected grouped target row"})
 	mismatches.extend({"reason": "duplicate grouped target row", "key": key} for key in duplicate_actual)
@@ -1195,9 +1187,7 @@ def _summarize(auditor: Auditor, auth: Mapping[str, Any], pi: Mapping[str, Any])
 		"compared_field_values": sum(row["compared_values"] for row in fields),
 		"exact_matches": sum(row["exact_matches"] for row in fields),
 		"normalized_matches": sum(row["normalized_matches"] for row in fields),
-		"target_fills_from_source_blank": sum(
-			row["target_filled_from_source_blank"] for row in fields
-		),
+		"target_fills_from_source_blank": sum(row["target_filled_from_source_blank"] for row in fields),
 		"verified_default_fills": sum(row["verified_default_fills"] for row in fields),
 		"unverified_default_fills": sum(
 			row["target_filled_from_source_blank"] - row["verified_default_fills"] for row in fields
@@ -1228,7 +1218,7 @@ def _audit_source_archives(plan, source_db, target_db):
 		checked_rows = checked_values = 0
 		failures = []
 		for offset in range(0, len(names), 500):
-			batch = names[offset:offset + 500]
+			batch = names[offset : offset + 500]
 			placeholders = ",".join(["%s"] * len(batch))
 			with source_db.cursor() as cursor:
 				cursor.execute(
@@ -1242,13 +1232,14 @@ def _audit_source_archives(plan, source_db, target_db):
 			with target_db.cursor() as cursor:
 				cursor.execute(
 					f"SELECT name, {_quote(archive_field)} FROM {_quote('tab' + plan.specs[parent].target)} "
-					f"WHERE name IN ({placeholders})", batch,
+					f"WHERE name IN ({placeholders})",
+					batch,
 				)
 				targets = {row["name"]: row[archive_field] for row in cursor.fetchall()}
 			for name in batch:
 				try:
 					archived = json.loads(targets.get(name) or "null")
-				except (ValueError, TypeError):
+				except ValueError, TypeError:
 					archived = None
 				if not isinstance(archived, list):
 					failures.append(f"{parent} {name}: missing/invalid {archive_field}")
@@ -1264,22 +1255,38 @@ def _audit_source_archives(plan, source_db, target_db):
 							continue
 						fieldtype = fields.get(fieldname, {}).get("fieldtype", "System")
 						checked_values += 1
-						if fieldname not in actual or _compare_values(value, actual[fieldname], fieldtype, None) != "exact":
-							failures.append(f"{parent} {name}/{row['name']}.{fieldname}: archived value differs")
-		results.append({"source_parent": parent, "archive_field": archive_field,
-			"parents": len(names), "source_rows": checked_rows, "values": checked_values,
-			"mismatch_count": len(failures), "samples": failures[:100]})
+						if (
+							fieldname not in actual
+							or _compare_values(value, actual[fieldname], fieldtype, None) != "exact"
+						):
+							failures.append(
+								f"{parent} {name}/{row['name']}.{fieldname}: archived value differs"
+							)
+		results.append(
+			{
+				"source_parent": parent,
+				"archive_field": archive_field,
+				"parents": len(names),
+				"source_rows": checked_rows,
+				"values": checked_values,
+				"mismatch_count": len(failures),
+				"samples": failures[:100],
+			}
+		)
 	return {"mismatch_count": sum(r["mismatch_count"] for r in results), "tables": results}
 
 
 def _audit_retired_tables(source_db, target_db, migration_name, *, source_site_path=None):
 	"""Independently inspect raw retired tables and the persisted target archive."""
 	with target_db.cursor() as cursor:
-		cursor.execute("SELECT retired_source_rows_json FROM `tabSD YRP MRP Data Migration` WHERE name=%s", (migration_name,))
+		cursor.execute(
+			"SELECT retired_source_rows_json FROM `tabSD YRP MRP Data Migration` WHERE name=%s",
+			(migration_name,),
+		)
 		stored = cursor.fetchone()
 	try:
 		archive = json.loads((stored or {}).get("retired_source_rows_json") or "null")
-	except (ValueError, TypeError):
+	except ValueError, TypeError:
 		archive = None
 	if not isinstance(archive, list):
 		return {"mismatch_count": 1, "tables": [], "samples": ["Missing retired-table archive"]}
@@ -1287,14 +1294,25 @@ def _audit_retired_tables(source_db, target_db, migration_name, *, source_site_p
 	failures = [] if len(by_key) == len(archive) else ["Duplicate retired-table archive identity"]
 	remaining = set(by_key)
 	tables = []
-	retired_names = ("WO Debit", "Employee Department", "Item Production Detail Cloth Accessories", "Custom User Dashboard", "Custom User Dashboard User")
+	retired_names = (
+		"WO Debit",
+		"Employee Department",
+		"Item Production Detail Cloth Accessories",
+		"Custom User Dashboard",
+		"Custom User Dashboard User",
+	)
 	for doctype in (*retired_names, "File"):
 		with source_db.cursor() as cursor:
-			cursor.execute("SELECT 1 FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=%s", ("tab"+doctype,))
+			cursor.execute(
+				"SELECT 1 FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=%s",
+				("tab" + doctype,),
+			)
 			if not cursor.fetchone():
 				continue
 			if doctype == "File":
-				cursor.execute("SELECT * FROM tabFile WHERE attached_to_doctype IN %s ORDER BY name", (retired_names,))
+				cursor.execute(
+					"SELECT * FROM tabFile WHERE attached_to_doctype IN %s ORDER BY name", (retired_names,)
+				)
 			else:
 				cursor.execute(f"SELECT * FROM {_quote('tab' + doctype)} ORDER BY name")
 			rows = cursor.fetchall()
@@ -1309,9 +1327,19 @@ def _audit_retired_tables(source_db, target_db, migration_name, *, source_site_p
 			for fieldname, value in row.items():
 				values += 1
 				fieldtype = "Float" if isinstance(value, decimal.Decimal) else "System"
-				if fieldname not in actual or _compare_values(value, actual[fieldname], fieldtype, None) != "exact":
+				if (
+					fieldname not in actual
+					or _compare_values(value, actual[fieldname], fieldtype, None) != "exact"
+				):
 					failures.append(f"{doctype} {row['name']}.{fieldname}: archived value differs")
-		tables.append({"source_doctype": doctype, "rows": len(rows), "values": values, "mismatch_count": len(failures)-before})
+		tables.append(
+			{
+				"source_doctype": doctype,
+				"rows": len(rows),
+				"values": values,
+				"mismatch_count": len(failures) - before,
+			}
+		)
 	failures.extend(f"Unexpected archived identity {dt} {name}" for dt, name in sorted(remaining))
 	missing_blobs = []
 	verified_blobs = 0
@@ -1329,23 +1357,36 @@ def _audit_retired_tables(source_db, target_db, migration_name, *, source_site_p
 		checked_source_blobs += 1
 		available_source_blobs += int(available)
 		if not available:
-			missing_blobs.append({"name": row["name"], "issue": "Source bytes unavailable/corrupt in independent disk check"})
+			missing_blobs.append(
+				{"name": row["name"], "issue": "Source bytes unavailable/corrupt in independent disk check"}
+			)
 		if record.get("blob_issue"):
 			if available:
-				failures.append(f"Retired File {row['name']}: available source bytes incorrectly archived as missing")
+				failures.append(
+					f"Retired File {row['name']}: available source bytes incorrectly archived as missing"
+				)
 			continue
 		try:
 			content = base64.b64decode(record["blob_base64"], validate=True)
-			matches = len(content) == int(row["file_size"]) and hashlib.md5(content).hexdigest() == row["content_hash"]
-		except (KeyError, ValueError, TypeError):
+			matches = (
+				len(content) == int(row["file_size"])
+				and hashlib.md5(content).hexdigest() == row["content_hash"]
+			)
+		except KeyError, ValueError, TypeError:
 			matches = False
 		if not matches:
 			failures.append(f"Retired File {row['name']}: archived blob differs")
 		else:
 			verified_blobs += 1
-	return {"mismatch_count": len(failures), "tables": tables, "samples": failures[:100],
-		"independently_checked_source_blobs": checked_source_blobs, "available_source_blobs": available_source_blobs,
-		"missing_source_blobs": missing_blobs, "verified_blobs": verified_blobs}
+	return {
+		"mismatch_count": len(failures),
+		"tables": tables,
+		"samples": failures[:100],
+		"independently_checked_source_blobs": checked_source_blobs,
+		"available_source_blobs": available_source_blobs,
+		"missing_source_blobs": missing_blobs,
+		"verified_blobs": verified_blobs,
+	}
 
 
 def _audit_debit_discriminator(source_db):
@@ -1353,7 +1394,8 @@ def _audit_debit_discriminator(source_db):
 		cursor.execute("SELECT `against`, COUNT(*) AS n FROM `tabEssdee Debit` GROUP BY `against`")
 		rows = cursor.fetchall()
 	return {
-		"source_doctype": "Essdee Debit", "source_field": "against",
+		"source_doctype": "Essdee Debit",
+		"source_field": "against",
 		"target_representation": "YRP Debit.work_order",
 		"source_values": [{"value": row["against"], "count": row["n"]} for row in rows],
 		"unsupported_rows": sum(row["n"] for row in rows if row["against"] not in (None, "", "Work Order")),
@@ -1368,7 +1410,9 @@ def main() -> int:
 	parser.add_argument("--output", type=Path, required=True)
 	parser.add_argument("--batch-size", type=int, default=500)
 	parser.add_argument("--doctypes-json")
-	parser.add_argument("--migration", required=True, help="Exact target migration audit record holding retired source rows")
+	parser.add_argument(
+		"--migration", required=True, help="Exact target migration audit record holding retired source rows"
+	)
 	args = parser.parse_args()
 	bench = args.bench.resolve()
 	output = args.output.resolve()
@@ -1394,8 +1438,13 @@ def main() -> int:
 		source_db = _connect(settings.source_bench, settings.source_site)
 		target_db = _connect(bench, args.site)
 		try:
-			auditor = Auditor(plan, source_db, target_db, max(1, args.batch_size),
-				configured_defaults=settings.required_defaults)
+			auditor = Auditor(
+				plan,
+				source_db,
+				target_db,
+				max(1, args.batch_size),
+				configured_defaults=settings.required_defaults,
+			)
 			child_routes = _child_routes(plan)
 			inferred_child_routes = []
 			for source_doctype in sorted(plan.specs):
@@ -1404,9 +1453,7 @@ def main() -> int:
 				spec = plan.specs[source_doctype]
 				if spec.source_schema.get("istable"):
 					routes = list(child_routes.get(source_doctype) or [])
-					declared_keys = {
-						(route.source_parenttype, route.source_parentfield) for route in routes
-					}
+					declared_keys = {(route.source_parenttype, route.source_parentfield) for route in routes}
 					for stored_route in _stored_child_routes(plan, source_db, source_doctype):
 						key = (
 							stored_route.source_parenttype,
@@ -1421,8 +1468,7 @@ def main() -> int:
 								"source_context": stored_route.label,
 								"target_doctype": stored_route.target_doctype,
 								"target_context": (
-									f"{stored_route.target_parenttype}."
-									f"{stored_route.target_parentfield}"
+									f"{stored_route.target_parenttype}.{stored_route.target_parentfield}"
 								),
 								"reason": "stored child context absent from current parent metadata",
 							}
@@ -1436,12 +1482,16 @@ def main() -> int:
 						auditor.audit_route(route)
 				else:
 					auditor.audit_route(Route(source_doctype, spec.target))
-			auth = _audit_auth(plan, source_db, target_db,
-				source_key=_load_site_config(settings.source_bench, settings.source_site).get("encryption_key"),
-				target_key=_load_site_config(bench, args.site).get("encryption_key"))
-			pi = _audit_purchase_invoice_projection(
-				source_db, target_db, auditor.wo_invoice_names
+			auth = _audit_auth(
+				plan,
+				source_db,
+				target_db,
+				source_key=_load_site_config(settings.source_bench, settings.source_site).get(
+					"encryption_key"
+				),
+				target_key=_load_site_config(bench, args.site).get("encryption_key"),
 			)
+			pi = _audit_purchase_invoice_projection(source_db, target_db, auditor.wo_invoice_names)
 			from audit_invoice_grn_values import audit_invoice_grn_values
 
 			physical_pi = audit_invoice_grn_values(source_db, target_db, auditor.wo_invoice_names)
@@ -1449,23 +1499,39 @@ def main() -> int:
 
 			reservations = audit_bin_reservations(source_db, target_db)
 			archives = _audit_source_archives(plan, source_db, target_db)
-			retired = _audit_retired_tables(source_db, target_db, args.migration,
-				source_site_path=settings.source_bench / 'sites' / settings.source_site)
+			retired = _audit_retired_tables(
+				source_db,
+				target_db,
+				args.migration,
+				source_site_path=settings.source_bench / "sites" / settings.source_site,
+			)
 			from audit_attachment_values import audit_attachments
 
-			attachments = audit_attachments(source_db, target_db, plan,
-				settings.source_bench / 'sites' / settings.source_site, bench / 'sites' / args.site)
+			attachments = audit_attachments(
+				source_db,
+				target_db,
+				plan,
+				settings.source_bench / "sites" / settings.source_site,
+				bench / "sites" / args.site,
+			)
 			from audit_framework_values import audit_framework
 
-			framework = audit_framework(source_db, target_db, plan, args.migration,
-				bench / 'sites' / args.site,
-				_load_site_config(bench, args.site).get('encryption_key'),
-				source_site_path=settings.source_bench / 'sites' / settings.source_site)
+			framework = audit_framework(
+				source_db,
+				target_db,
+				plan,
+				args.migration,
+				bench / "sites" / args.site,
+				_load_site_config(bench, args.site).get("encryption_key"),
+				source_site_path=settings.source_bench / "sites" / settings.source_site,
+			)
 			debit = _audit_debit_discriminator(source_db)
 			# Operational readiness of NEW valuation links is separate from
 			# original-source-value parity. Keep unresolved history visible even
 			# after the migration screen replaces its Migrate report with Verify.
-			from essdee_yrp.patches.backfill_deterministic_valuation_lineage import get_valuation_lineage_readiness
+			from essdee_yrp.patches.backfill_deterministic_valuation_lineage import (
+				get_valuation_lineage_readiness,
+			)
 
 			valuation_readiness = get_valuation_lineage_readiness()
 			field_results = sorted(
@@ -1528,9 +1594,7 @@ def main() -> int:
 			payload["summary"]["attachment_value_mismatches"] = attachments["mismatch_count"]
 			payload["summary"]["unsupported_debit_discriminators"] = debit["unsupported_rows"]
 			output.parent.mkdir(parents=True, exist_ok=True)
-			output.write_text(
-				json.dumps(payload, indent=2, default=str), encoding="utf-8"
-			)
+			output.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
 			print(json.dumps(payload["summary"], indent=2))
 		finally:
 			source_db.close()

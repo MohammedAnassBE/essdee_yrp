@@ -17,13 +17,10 @@ from essdee_yrp.erp import (
 	post_erp_request,
 )
 
-
 CREATE_ENDPOINT = "/api/method/essdee.essdee.utils.mrp.purchase_invoice.create"
 SUBMIT_ENDPOINT = "/api/method/essdee.essdee.utils.mrp.purchase_invoice.submit"
 CANCEL_ENDPOINT = "/api/method/essdee.essdee.utils.mrp.purchase_invoice.cancel"
-EXPENSE_ACCOUNT_ENDPOINT = (
-	"/api/method/essdee.essdee.utils.mrp.purchase_invoice.get_erp_item_expense_account"
-)
+EXPENSE_ACCOUNT_ENDPOINT = "/api/method/essdee.essdee.utils.mrp.purchase_invoice.get_erp_item_expense_account"
 MAX_EXPENSE_ACCOUNT_ITEMS = 200
 
 
@@ -122,16 +119,12 @@ def fetch_expense_accounts(items, *, raise_on_error=False):
 
 @frappe.whitelist()
 def fetch_items_expense_head(items):
-	frappe.has_permission('YRP Purchase Invoice', "create", throw=True)
+	frappe.has_permission("YRP Purchase Invoice", "create", throw=True)
 	items = frappe.parse_json(items) if isinstance(items, str) else items
 	if not isinstance(items, list):
 		frappe.throw(_("Purchase Invoice Items must be a list."))
 	if len(items) > MAX_EXPENSE_ACCOUNT_ITEMS:
-		frappe.throw(
-			_("A maximum of {0} Items can be fetched at once.").format(
-				MAX_EXPENSE_ACCOUNT_ITEMS
-			)
-		)
+		frappe.throw(_("A maximum of {0} Items can be fetched at once.").format(MAX_EXPENSE_ACCOUNT_ITEMS))
 	for row in items:
 		if not isinstance(row, dict):
 			frappe.throw(_("Invalid Purchase Invoice Item details."))
@@ -162,8 +155,8 @@ def create_erp_invoice(invoice):
 
 @frappe.whitelist()
 def submit_erp_invoice(name):
-	invoice = frappe.get_doc('YRP Purchase Invoice', name)
-	frappe.has_permission('YRP Purchase Invoice', "submit", doc=invoice, throw=True)
+	invoice = frappe.get_doc("YRP Purchase Invoice", name)
+	frappe.has_permission("YRP Purchase Invoice", "submit", doc=invoice, throw=True)
 	if invoice.docstatus == 0:
 		frappe.throw(_("Document is not submitted."))
 	if invoice.docstatus == 2:
@@ -171,9 +164,7 @@ def submit_erp_invoice(name):
 	if not invoice.erp_inv_name:
 		frappe.throw(_("ERP Purchase Invoice has not been created."))
 	if cint(invoice.erp_inv_docstatus) != 0:
-		frappe.throw(
-			_("ERP Purchase Invoice {0} is already submitted.").format(invoice.erp_inv_name)
-		)
+		frappe.throw(_("ERP Purchase Invoice {0} is already submitted.").format(invoice.erp_inv_name))
 
 	if is_same_site_erp_available():
 		message = _run_local_erp_action("submit", invoice.erp_inv_name)
@@ -187,7 +178,7 @@ def submit_erp_invoice(name):
 		frappe.throw(_("ERP Purchase Invoice creation is not available on this site."))
 	_apply_erp_result(invoice, message)
 	frappe.db.set_value(
-		'YRP Purchase Invoice',
+		"YRP Purchase Invoice",
 		invoice.name,
 		{
 			"erp_inv_name": invoice.erp_inv_name,
@@ -224,25 +215,20 @@ def cancel_erp_invoice(invoice):
 
 @frappe.whitelist()
 def get_erp_inv_link(name):
-	invoice = frappe.get_doc('YRP Purchase Invoice', name)
-	frappe.has_permission('YRP Purchase Invoice', "read", doc=invoice, throw=True)
+	invoice = frappe.get_doc("YRP Purchase Invoice", name)
+	frappe.has_permission("YRP Purchase Invoice", "read", doc=invoice, throw=True)
 	if invoice.docstatus != 1 or not invoice.erp_inv_name:
 		frappe.throw(_("ERP Purchase Invoice is not available."))
 	if is_same_site_erp_available():
 		return f"/app/purchase-invoice/{urllib.parse.quote(invoice.erp_inv_name, safe='')}"
-	return (
-		f"{get_erp_site_url()}/app/purchase-invoice/"
-		f"{urllib.parse.quote(invoice.erp_inv_name, safe='')}"
-	)
+	return f"{get_erp_site_url()}/app/purchase-invoice/{urllib.parse.quote(invoice.erp_inv_name, safe='')}"
 
 
 def link_erp_invoice_to_bill_tracking(invoice):
 	"""Store the same-site ERP invoice on Bill Tracking after YRP submit closes it."""
 	if not invoice.get("bill_tracking") or not invoice.get("erp_inv_name"):
 		return
-	current = frappe.db.get_value(
-		'YRP Bill Tracking', invoice.bill_tracking, "erp_purchase_invoice"
-	)
+	current = frappe.db.get_value("YRP Bill Tracking", invoice.bill_tracking, "erp_purchase_invoice")
 	if current and current != invoice.erp_inv_name:
 		frappe.throw(
 			_("Bill Tracking {0} is already linked to ERP Purchase Invoice {1}.").format(
@@ -250,7 +236,7 @@ def link_erp_invoice_to_bill_tracking(invoice):
 			)
 		)
 	frappe.db.set_value(
-		'YRP Bill Tracking',
+		"YRP Bill Tracking",
 		invoice.bill_tracking,
 		"erp_purchase_invoice",
 		invoice.erp_inv_name,
@@ -263,13 +249,11 @@ def unlink_erp_invoice_from_bill_tracking(invoice):
 	if not invoice.get("bill_tracking") or not invoice.get("erp_inv_name"):
 		return
 	if (
-		frappe.db.get_value(
-			'YRP Bill Tracking', invoice.bill_tracking, "erp_purchase_invoice"
-		)
+		frappe.db.get_value("YRP Bill Tracking", invoice.bill_tracking, "erp_purchase_invoice")
 		== invoice.erp_inv_name
 	):
 		frappe.db.set_value(
-			'YRP Bill Tracking',
+			"YRP Bill Tracking",
 			invoice.bill_tracking,
 			"erp_purchase_invoice",
 			None,
@@ -342,9 +326,7 @@ def _validate_local_erp_items(items, api):
 
 def _run_local_erp_action(action, invoice_name):
 	"""Submit/cancel locally while YRP owns the matching Bill Tracking lifecycle."""
-	bill_tracking = frappe.db.get_value(
-		"Purchase Invoice", invoice_name, "vendor_bill_tracking"
-	)
+	bill_tracking = frappe.db.get_value("Purchase Invoice", invoice_name, "vendor_bill_tracking")
 	if bill_tracking:
 		frappe.db.set_value(
 			"Purchase Invoice",
@@ -380,11 +362,9 @@ def close_bill_tracking_from_erp(name, purchase_invoice, remarks=None):
 	``mrp_purchase_invoice_name``. A directly-created ERP invoice has no such
 	link, so it closes Bill Tracking against ``erp_purchase_invoice`` alone.
 	"""
-	bill = frappe.get_doc('YRP Bill Tracking', name)
+	bill = frappe.get_doc("YRP Bill Tracking", name)
 	bill.check_permission("write")
-	same_site_invoice, local_invoice = _same_site_erp_invoice_context(
-		name, purchase_invoice
-	)
+	same_site_invoice, local_invoice = _same_site_erp_invoice_context(name, purchase_invoice)
 	if not same_site_invoice:
 		local_invoice = _local_invoice_for_erp_callback(name, purchase_invoice)
 
@@ -426,12 +406,15 @@ def close_bill_tracking_from_erp(name, purchase_invoice, remarks=None):
 			)
 		if bill.docstatus != 1:
 			frappe.throw(_("Bill Tracking must be submitted before it can be closed."))
-		bill.append("bill_tracking_history", {
-			"assigned_by": frappe.session.user,
-			"assigned_on": frappe.utils.now_datetime(),
-			"remarks": remarks,
-			"action": "Close",
-		})
+		bill.append(
+			"bill_tracking_history",
+			{
+				"assigned_by": frappe.session.user,
+				"assigned_on": frappe.utils.now_datetime(),
+				"remarks": remarks,
+				"action": "Close",
+			},
+		)
 		bill.form_status = "Closed"
 		bill.erp_purchase_invoice = purchase_invoice
 	bill.save(ignore_permissions=True)
@@ -447,22 +430,20 @@ def revert_bill_tracking_from_erp(
 	"""Adapt the ERP cancellation callback without clobbering a replacement PI."""
 	if pi_field not in {"purchase_invoice", "mrp_purchase_invoice"}:
 		frappe.throw(_("Invalid Purchase Invoice field: {0}.").format(pi_field))
-	bill = frappe.get_doc('YRP Bill Tracking', name)
+	bill = frappe.get_doc("YRP Bill Tracking", name)
 	bill.check_permission("write")
 	if pi_field == "mrp_purchase_invoice":
 		local_invoice = expected_pi_name
 		same_site_invoice = False
 	else:
-		same_site_invoice, local_invoice = _same_site_erp_invoice_context(
-			name, expected_pi_name
-		)
+		same_site_invoice, local_invoice = _same_site_erp_invoice_context(name, expected_pi_name)
 		if not same_site_invoice:
 			local_invoice = _local_invoice_for_erp_callback(name, expected_pi_name)
 
 	if local_invoice:
 		if bill.get("erp_purchase_invoice") == expected_pi_name:
 			frappe.db.set_value(
-				'YRP Bill Tracking',
+				"YRP Bill Tracking",
 				name,
 				"erp_purchase_invoice",
 				None,
@@ -488,13 +469,16 @@ def revert_bill_tracking_from_erp(
 		)
 		return
 	bill.erp_purchase_invoice = None
-	bill.append("bill_tracking_history", {
-		"assigned_to": bill.assigned_to,
-		"assigned_on": frappe.utils.now_datetime(),
-		"assigned_by": frappe.session.user,
-		"remarks": f"Auto-reverted: erp_purchase_invoice={expected_pi_name} ({origin or 'ERP-cancel'})",
-		"action": "Reopen",
-	})
+	bill.append(
+		"bill_tracking_history",
+		{
+			"assigned_to": bill.assigned_to,
+			"assigned_on": frappe.utils.now_datetime(),
+			"assigned_by": frappe.session.user,
+			"remarks": f"Auto-reverted: erp_purchase_invoice={expected_pi_name} ({origin or 'ERP-cancel'})",
+			"action": "Reopen",
+		},
+	)
 	if bill.form_status == "Closed":
 		bill.form_status = "Reopen"
 	bill.save(ignore_permissions=True)
@@ -523,7 +507,7 @@ def _same_site_erp_invoice_context(bill_tracking, erp_invoice):
 
 def _local_invoice_for_erp_callback(bill_tracking, erp_invoice):
 	local_invoice = frappe.db.get_value(
-		'YRP Purchase Invoice',
+		"YRP Purchase Invoice",
 		{
 			"bill_tracking": bill_tracking,
 			"erp_inv_name": erp_invoice,
@@ -536,16 +520,14 @@ def _local_invoice_for_erp_callback(bill_tracking, erp_invoice):
 		# persisted erp_inv_name yet. The already-saved active draft is still the
 		# authoritative owner of this Bill Tracking row.
 		local_invoice = frappe.db.get_value(
-			'YRP Purchase Invoice',
+			"YRP Purchase Invoice",
 			{"bill_tracking": bill_tracking, "docstatus": ["!=", 2]},
 			"name",
 			order_by="modified desc",
 		)
 	if not local_invoice:
 		frappe.throw(
-			_("No active local Purchase Invoice was found for Bill Tracking {0}.").format(
-				bill_tracking
-			)
+			_("No active local Purchase Invoice was found for Bill Tracking {0}.").format(bill_tracking)
 		)
 	return local_invoice
 
@@ -555,9 +537,7 @@ def _apply_erp_result(invoice, result):
 		frappe.throw(_("ERP returned an invalid Purchase Invoice response."))
 	missing = [field for field in ("name", "docstatus", "amount", "due_date") if field not in result]
 	if missing:
-		frappe.throw(
-			_("ERP Purchase Invoice response is missing: {0}.").format(", ".join(missing))
-		)
+		frappe.throw(_("ERP Purchase Invoice response is missing: {0}.").format(", ".join(missing)))
 	invoice.update(
 		{
 			"erp_inv_name": result["name"],

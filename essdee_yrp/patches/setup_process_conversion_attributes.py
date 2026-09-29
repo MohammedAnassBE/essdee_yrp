@@ -9,10 +9,7 @@ def execute():
 		"YRP Process",
 		"value_change_attributes",
 		"depends_on",
-		(
-			"eval:doc.is_group != 1 && "
-			"(!doc.is_cloth_process || !doc.is_item_conversion)"
-		),
+		("eval:doc.is_group != 1 && (!doc.is_cloth_process || !doc.is_item_conversion)"),
 		"Data",
 	)
 	sync_existing_process_configuration()
@@ -75,11 +72,8 @@ def _mark_existing_cloth_processes():
 		)
 
 	for process_name in processes:
-		if (
-			frappe.db.exists("YRP Process", process_name)
-			and not frappe.db.get_value(
-				"YRP Process", process_name, "is_cloth_process"
-			)
+		if frappe.db.exists("YRP Process", process_name) and not frappe.db.get_value(
+			"YRP Process", process_name, "is_cloth_process"
 		):
 			frappe.db.set_value(
 				"YRP Process",

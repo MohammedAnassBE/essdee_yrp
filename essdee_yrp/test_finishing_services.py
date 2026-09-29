@@ -3,28 +3,29 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from essdee_yrp.finishing.state import (
-	get_finishing_plan_dict,
-	get_finishing_plan_list,
-)
-from essdee_yrp.finishing.grn import (
-	apply_goods_received_note,
-	_update_finishing_inward,
-	_update_return_receipt,
-)
-from essdee_yrp.finishing.rebuild import _apply_rework_receipt_rows
-from essdee_yrp.finishing.insights import fetch_rejected_quantity
 from essdee_yrp.finishing import closure
 from essdee_yrp.finishing.closure import complete_audit, complete_ocr, request_audit
-from essdee_yrp.finishing.old_lot_history import get_old_lot_received_rows
+from essdee_yrp.finishing.grn import (
+	_update_finishing_inward,
+	_update_return_receipt,
+	apply_goods_received_note,
+)
+from essdee_yrp.finishing.insights import fetch_rejected_quantity
 from essdee_yrp.finishing.old_lot import (
 	_apply_lot_transfer_to_finishing,
 	_record_split_history,
 	_reverse_split_history,
 )
+from essdee_yrp.finishing.old_lot_history import get_old_lot_received_rows
+from essdee_yrp.finishing.packing_grn import _allocate_set_rows
 from essdee_yrp.finishing.parsing import json_object
+from essdee_yrp.finishing.rebuild import _apply_rework_receipt_rows
 from essdee_yrp.finishing.reports import (
 	apply_set_item_multiplier_to_packing_report,
+)
+from essdee_yrp.finishing.state import (
+	get_finishing_plan_dict,
+	get_finishing_plan_list,
 )
 from essdee_yrp.finishing.status import (
 	compute_received_status,
@@ -32,14 +33,11 @@ from essdee_yrp.finishing.status import (
 	get_unaccountable_quantity,
 )
 from essdee_yrp.finishing.transactions import _normalize_dispatch_quantities
-from essdee_yrp.finishing.packing_grn import _allocate_set_rows
 
 
 class TestFinishingServices(IntegrationTestCase):
 	@patch("essdee_yrp.finishing.rebuild.rebuild_finishing_plan")
-	def test_legacy_fetch_rejected_button_uses_complete_authoritative_rebuild(
-		self, rebuild
-	):
+	def test_legacy_fetch_rejected_button_uses_complete_authoritative_rebuild(self, rebuild):
 		fetch_rejected_quantity("FP-1")
 
 		rebuild.assert_called_once_with("FP-1", check_permission=True)
@@ -52,7 +50,7 @@ class TestFinishingServices(IntegrationTestCase):
 	):
 		grn = _doc(
 			name="GRN-REWORK-1",
-			against='YRP Work Order',
+			against="YRP Work Order",
 			against_id="WO-REWORK-1",
 			lot="LOT-1",
 			process_name="Stitching",
@@ -67,9 +65,7 @@ class TestFinishingServices(IntegrationTestCase):
 	def test_rework_receipt_rows_clear_only_accepted_or_rejected_projection(self):
 		key = ("VAR-1", (("major_colour", "Blue"),))
 		items = {key: {"item_variant": "VAR-1"}}
-		rework = {
-			key: {"quantity": 5, "reworked_quantity": 1, "rejected_qty": 0}
-		}
+		rework = {key: {"quantity": 5, "reworked_quantity": 1, "rejected_qty": 0}}
 		rows = [
 			_row(
 				item_variant="VAR-1",
@@ -130,7 +126,9 @@ class TestFinishingServices(IntegrationTestCase):
 		]
 		pista = [
 			_row(name="PISTA-TOP", idx=3, set_combination='{"major_colour":"Pista"}', delivered_quantity=8),
-			_row(name="PISTA-BOTTOM", idx=4, set_combination='{"major_colour":"Pista"}', delivered_quantity=8),
+			_row(
+				name="PISTA-BOTTOM", idx=4, set_combination='{"major_colour":"Pista"}', delivered_quantity=8
+			),
 		]
 		balances = {row.name: row.delivered_quantity for row in [*red, *pista]}
 
@@ -172,11 +170,7 @@ class TestFinishingServices(IntegrationTestCase):
 		return_value=("Accepted", "Rejected"),
 	)
 	def test_grn_finishing_inward_apply_and_cancel_are_symmetric(self, _defaults):
-		doc = _doc(
-			finishing_plan_details=[
-				_row(item_variant="VAR-1", received_type_json='{"Accepted":2}')
-			]
-		)
+		doc = _doc(finishing_plan_details=[_row(item_variant="VAR-1", received_type_json='{"Accepted":2}')])
 		grn = _doc(
 			items=[
 				_row(item_variant="VAR-1", received_type="Accepted", quantity=3),
@@ -286,9 +280,7 @@ class TestFinishingServices(IntegrationTestCase):
 		plan = _doc(
 			name="FP-1",
 			lot_transfer_list="{}",
-			finishing_plan_details=[
-				_row(item_variant="VAR-1", set_combination='{"major_colour":"Blue"}')
-			],
+			finishing_plan_details=[_row(item_variant="VAR-1", set_combination='{"major_colour":"Blue"}')],
 		)
 		transfer = _doc(
 			name="LT-1",
@@ -341,9 +333,7 @@ class TestFinishingServices(IntegrationTestCase):
 			finishing_plan="FP-DEST",
 			items=[_row(to_lot="LOT-NEW")],
 		)
-		get_doc.side_effect = lambda _doctype, name: (
-			destination if name == "FP-DEST" else source
-		)
+		get_doc.side_effect = lambda _doctype, name: destination if name == "FP-DEST" else source
 		contribution = {
 			"source_fp": "FP-SOURCE",
 			"source_lot": "LOT-OLD",
@@ -429,16 +419,14 @@ class TestFinishingServices(IntegrationTestCase):
 		):
 			self.assertEqual(closure.auto_complete_ocr_after_30_days(), 1)
 		get_all.assert_called_once_with(
-			'SD YRP Finishing Plan',
+			"SD YRP Finishing Plan",
 			filters={
 				"fp_status": "Audit Completed",
 				"audit_completed_date": ("<", "2026-08-29"),
 			},
 			pluck="name",
 		)
-		set_value.assert_called_once_with(
-			'SD YRP Finishing Plan', "FP-OLD", "fp_status", "OCR Completed"
-		)
+		set_value.assert_called_once_with("SD YRP Finishing Plan", "FP-OLD", "fp_status", "OCR Completed")
 
 	def test_destination_receipts_are_derived_from_source_history(self):
 		destination = _doc(
@@ -466,9 +454,7 @@ class TestFinishingServices(IntegrationTestCase):
 
 	@patch("essdee_yrp.finishing.status.get_set_item_parts_count", return_value=2)
 	@patch("essdee_yrp.finishing.status.get_finishing_packing_summary")
-	def test_legacy_set_dispatch_converts_boxes_to_component_pieces(
-		self, packing_summary, _parts_count
-	):
+	def test_legacy_set_dispatch_converts_boxes_to_component_pieces(self, packing_summary, _parts_count):
 		packing_summary.return_value = frappe._dict(dynamic_ratio_packing=False)
 		doc = _doc(
 			pieces_per_box=5,
@@ -494,15 +480,9 @@ class TestFinishingServices(IntegrationTestCase):
 					pack_return_qty=4,
 				)
 			],
-			finishing_plan_reworked_details=[
-				_row(quantity=7, reworked_quantity=4, rejected_qty=1)
-			],
-			finishing_old_lot_given_items=[
-				_row(loose_piece_given=2, loose_piece_set_given=1)
-			],
-			finishing_old_lot_received_items=[
-				_row(loose_piece_taken=1, loose_piece_set_taken=1)
-			],
+			finishing_plan_reworked_details=[_row(quantity=7, reworked_quantity=4, rejected_qty=1)],
+			finishing_old_lot_given_items=[_row(loose_piece_given=2, loose_piece_set_given=1)],
+			finishing_old_lot_received_items=[_row(loose_piece_taken=1, loose_piece_set_taken=1)],
 		)
 
 		# Given loose pieces remain accounted for as an explicit transfer bucket.

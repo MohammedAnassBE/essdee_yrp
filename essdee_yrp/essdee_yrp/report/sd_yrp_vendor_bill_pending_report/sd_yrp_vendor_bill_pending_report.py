@@ -9,20 +9,17 @@ def execute(filters=None):
 	columns, data = get_columns(filters), get_data(filters)
 	return columns, data
 
-def get_columns(filters):
-	return []
 
 def get_data(filters):
-
 	q_filters = ""
 
-	if filters and filters.get('department'):
+	if filters and filters.get("department"):
 		q_filters += f" AND t1.assigned_to = {frappe.db.escape(filters.get('department'))} "
 
-	if filters and filters.get('bill_start_date'):
+	if filters and filters.get("bill_start_date"):
 		q_filters += f" AND t1.creation >= {frappe.db.escape(filters.get('bill_start_date'))} "
 
-	if filters and filters.get('bill_end_date'):
+	if filters and filters.get("bill_end_date"):
 		q_filters += f" AND t1.creation <= {frappe.db.escape(filters.get('bill_end_date'))} "
 
 	query = f"""
@@ -46,94 +43,52 @@ def get_data(filters):
 		AND t1.docstatus = 1 {q_filters}
 	"""
 
-	result = frappe.db.sql(query, {
-		"curr_date" : today()
-	}, as_dict=True)
+	result = frappe.db.sql(query, {"curr_date": today()}, as_dict=True)
 	return result
 
-def get_columns(filters):
 
+def get_columns(filters):
 	return [
 		{
-            "fieldname": "name",
-            "label": "Bill Tracking Number",
-            "fieldtype": "Link",
-            "options": 'YRP Bill Tracking',
-            "width": 115
-        },
+			"fieldname": "name",
+			"label": "Bill Tracking Number",
+			"fieldtype": "Link",
+			"options": "YRP Bill Tracking",
+			"width": 115,
+		},
 		{
-            "fieldname": "supplier",
-            "label": "Supplier",
-            "fieldtype": "Link",
-            "options": 'Supplier',
-            "width": 115
-        },
+			"fieldname": "supplier",
+			"label": "Supplier",
+			"fieldtype": "Link",
+			"options": "Supplier",
+			"width": 115,
+		},
+		{"fieldname": "supplier_name", "label": "Supplier Name", "fieldtype": "Data", "width": 115},
+		{"fieldname": "gstin", "label": "GST", "fieldtype": "Data", "width": 115},
+		{"fieldname": "pan", "label": "Pan", "fieldtype": "Data", "width": 115},
+		{"fieldname": "bill_no", "label": "Invoice No", "fieldtype": "Data", "width": 115},
+		{"fieldname": "bill_age", "label": "Bill Age", "fieldtype": "Int", "width": 115},
 		{
-            "fieldname": "supplier_name",
-            "label": "Supplier Name",
-            "fieldtype": "Data",
-            "width": 115
-        },
+			"fieldname": "assigned_to",
+			"label": "Assigned To",
+			"fieldtype": "Link",
+			"options": "Department",
+			"width": 115,
+		},
 		{
-            "fieldname": "gstin",
-            "label": "GST",
-            "fieldtype": "Data",
-            "width": 115
-        },
+			"fieldname": "assigned_by",
+			"label": "Assigned User",
+			"fieldtype": "Link",
+			"options": "User",
+			"width": 115,
+		},
+		{"fieldname": "assigned_on", "label": "Assigned On", "fieldtype": "Date", "width": 115},
+		{"fieldname": "date_diff", "label": "Assigned Age", "fieldtype": "Int", "width": 115},
 		{
-            "fieldname": "pan",
-            "label": "Pan",
-            "fieldtype": "Data",
-            "width": 115
-        },
-		{
-            "fieldname": "bill_no",
-            "label": "Invoice No",
-            "fieldtype": "Data",
-            "width": 115
-        },
-		{
-            "fieldname": "bill_age",
-            "label": "Bill Age",
-            "fieldtype": "Int",
-            "width": 115
-        },
-		{
-            "fieldname": "assigned_to",
-            "label": "Assigned To",
-            "fieldtype": "Link",
-            "options": 'Department',
-            "width": 115
-        },
-		{
-            "fieldname": "assigned_by",
-            "label": "Assigned User",
-            "fieldtype": "Link",
-            "options": "User",
-            "width": 115
-        },
-		{
-            "fieldname": "assigned_on",
-            "label": "Assigned On",
-            "fieldtype": "Date",
-            "width": 115
-        },
-		{
-            "fieldname": "date_diff",
-            "label": "Assigned Age",
-            "fieldtype": "Int",
-            "width": 115
-        },
-		{
-            "fieldname": "assignment_comment",
-            "label": "Assignment Comment",
-            "fieldtype": "Small Text",
-            "width": 115
-        },
-		{
-            "fieldname": "received",
-            "label": "Bill Received",
-            "fieldtype": "Check",
-            "width": 115
-        },
+			"fieldname": "assignment_comment",
+			"label": "Assignment Comment",
+			"fieldtype": "Small Text",
+			"width": 115,
+		},
+		{"fieldname": "received", "label": "Bill Received", "fieldtype": "Check", "width": 115},
 	]

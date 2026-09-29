@@ -7,24 +7,24 @@ and cannot connect to either the source or target site.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from essdee_yrp.migration.engine import DocTypeRule, MigrationPlan, build_plan
 from essdee_yrp.migration.rules import DOCTYPE_RENAMES, RULES
-from essdee_yrp.migration.transformers import (
-	POST_TRANSFORMERS,
-	TRANSFORMERS,
-	VALUE_TRANSFORMERS,
-)
 from essdee_yrp.migration.schema import (
 	apply_custom_field_fixture,
 	apply_declared_stock_dimensions,
 	apply_property_setter_fixture,
 	load_schema_index,
 )
-
+from essdee_yrp.migration.transformers import (
+	POST_TRANSFORMERS,
+	TRANSFORMERS,
+	VALUE_TRANSFORMERS,
+)
 
 APP_ROOT = Path(__file__).resolve().parents[2]
 BENCH_ROOT = APP_ROOT.parents[1]
@@ -34,18 +34,8 @@ DEFAULT_TARGET_ROOTS = (
 	BENCH_ROOT / "apps" / "yrp",
 	APP_ROOT,
 )
-SOURCE_SMS_SCHEMA_ROOT = (
-	BENCH_ROOT.parent
-	/ "frappe-15"
-	/ "apps"
-	/ "frappe"
-	/ "frappe"
-	/ "core"
-	/ "doctype"
-)
-TARGET_SMS_SCHEMA_ROOT = (
-	BENCH_ROOT / "apps" / "frappe" / "frappe" / "core" / "doctype"
-)
+SOURCE_SMS_SCHEMA_ROOT = BENCH_ROOT.parent / "frappe-15" / "apps" / "frappe" / "frappe" / "core" / "doctype"
+TARGET_SMS_SCHEMA_ROOT = BENCH_ROOT / "apps" / "frappe" / "frappe" / "core" / "doctype"
 TARGET_FRAPPE_ROOT = BENCH_ROOT / "apps" / "frappe" / "frappe"
 
 
@@ -109,24 +99,68 @@ TARGET_APPROVED_FRAPPE_SCHEMA_ROOTS = tuple(
 # source-data contract.  Spine is installed with clean defaults; all of its
 # source data is excluded by owner decision.
 SOURCE_AUXILIARY_SCHEMA_ROOTS = (
-	BENCH_ROOT.parent / "frappe-15" / "apps" / "frappe_tools" / "frappe_tools"
-	/ "frappe_tools" / "doctype" / "document_scanner_settings",
-	BENCH_ROOT.parent / "frappe-15" / "apps" / "frappe_tools" / "frappe_tools"
-	/ "frappe_tools" / "doctype" / "document_scanner_settings_items",
-	BENCH_ROOT.parent / "frappe-15" / "apps" / "frappe_tools" / "frappe_tools"
-	/ "frappe_tools" / "doctype" / "document_scanner_server_setting",
-	BENCH_ROOT.parent / "frappe-15" / "apps" / "frappe_tools" / "frappe_tools"
-	/ "frappe_tools" / "doctype" / "log_file_downloader",
+	BENCH_ROOT.parent
+	/ "frappe-15"
+	/ "apps"
+	/ "frappe_tools"
+	/ "frappe_tools"
+	/ "frappe_tools"
+	/ "doctype"
+	/ "document_scanner_settings",
+	BENCH_ROOT.parent
+	/ "frappe-15"
+	/ "apps"
+	/ "frappe_tools"
+	/ "frappe_tools"
+	/ "frappe_tools"
+	/ "doctype"
+	/ "document_scanner_settings_items",
+	BENCH_ROOT.parent
+	/ "frappe-15"
+	/ "apps"
+	/ "frappe_tools"
+	/ "frappe_tools"
+	/ "frappe_tools"
+	/ "doctype"
+	/ "document_scanner_server_setting",
+	BENCH_ROOT.parent
+	/ "frappe-15"
+	/ "apps"
+	/ "frappe_tools"
+	/ "frappe_tools"
+	/ "frappe_tools"
+	/ "doctype"
+	/ "log_file_downloader",
 )
 TARGET_AUXILIARY_SCHEMA_ROOTS = (
-	BENCH_ROOT / "apps" / "frappe_tools" / "frappe_tools" / "frappe_tools"
-	/ "doctype" / "document_scanner_settings",
-	BENCH_ROOT / "apps" / "frappe_tools" / "frappe_tools" / "frappe_tools"
-	/ "doctype" / "document_scanner_settings_items",
-	BENCH_ROOT / "apps" / "frappe_tools" / "frappe_tools" / "frappe_tools"
-	/ "doctype" / "document_scanner_server_setting",
-	BENCH_ROOT / "apps" / "frappe_tools" / "frappe_tools" / "frappe_tools"
-	/ "doctype" / "log_file_downloader",
+	BENCH_ROOT
+	/ "apps"
+	/ "frappe_tools"
+	/ "frappe_tools"
+	/ "frappe_tools"
+	/ "doctype"
+	/ "document_scanner_settings",
+	BENCH_ROOT
+	/ "apps"
+	/ "frappe_tools"
+	/ "frappe_tools"
+	/ "frappe_tools"
+	/ "doctype"
+	/ "document_scanner_settings_items",
+	BENCH_ROOT
+	/ "apps"
+	/ "frappe_tools"
+	/ "frappe_tools"
+	/ "frappe_tools"
+	/ "doctype"
+	/ "document_scanner_server_setting",
+	BENCH_ROOT
+	/ "apps"
+	/ "frappe_tools"
+	/ "frappe_tools"
+	/ "frappe_tools"
+	/ "doctype"
+	/ "log_file_downloader",
 )
 TARGET_PREFIXES_BY_MODULE = {
 	"YRP": "YRP ",
@@ -145,9 +179,7 @@ SOURCE_IDENTITY_DOCTYPES = {
 # fixture JSON, so the repository-only planner overlays the same field contract
 # and the live preflight still verifies that the fields really exist.
 INDIA_COMPLIANCE_TARGET_FIELDS = {
-	"Item": (
-		{"fieldname": "is_ineligible_for_itc", "fieldtype": "Check"},
-	),
+	"Item": ({"fieldname": "is_ineligible_for_itc", "fieldtype": "Check"},),
 	"Supplier": (
 		{"fieldname": "gstin", "fieldtype": "Autocomplete"},
 		{"fieldname": "pan", "fieldtype": "Data"},
@@ -155,37 +187,37 @@ INDIA_COMPLIANCE_TARGET_FIELDS = {
 }
 
 DEFAULT_STOCK_DOCTYPES = [
-	'YRP Stock Ledger Entry',
-	'YRP Bin',
-	'YRP Stock Entry Detail',
-	'YRP Stock Update Detail',
-	'YRP Stock Reconciliation Item',
-	'Purchase Order Item',
-	'YRP Stock Reservation Entry',
-	'YRP Repost Item Valuation',
-	'YRP Work Order Deliverables',
-	'YRP Work Order Receivables',
-	'YRP Delivery Challan Item',
-	'YRP Goods Received Note Item',
-	'YRP Inspection Entry Item',
+	"YRP Stock Ledger Entry",
+	"YRP Bin",
+	"YRP Stock Entry Detail",
+	"YRP Stock Update Detail",
+	"YRP Stock Reconciliation Item",
+	"Purchase Order Item",
+	"YRP Stock Reservation Entry",
+	"YRP Repost Item Valuation",
+	"YRP Work Order Deliverables",
+	"YRP Work Order Receivables",
+	"YRP Delivery Challan Item",
+	"YRP Goods Received Note Item",
+	"YRP Inspection Entry Item",
 ]
 DEFAULT_OPERATIONAL_DOCTYPES = [
-	'YRP Work Order',
-	'Purchase Order',
-	'YRP Delivery Challan',
-	'YRP Goods Received Note',
-	'YRP Process Cost',
+	"YRP Work Order",
+	"Purchase Order",
+	"YRP Delivery Challan",
+	"YRP Goods Received Note",
+	"YRP Process Cost",
 ]
 DEFAULT_ESSDEE_DIMENSIONS = [
 	{
-		"dimension_doctype": 'SD YRP Lot',
+		"dimension_doctype": "SD YRP Lot",
 		"fieldname": "lot",
 		"label": "Lot",
 		"mandatory": 1,
 		"is_production_group": 1,
 	},
 	{
-		"dimension_doctype": 'YRP Received Type',
+		"dimension_doctype": "YRP Received Type",
 		"fieldname": "received_type",
 		"label": "Received Type",
 		"mandatory": 1,
@@ -223,9 +255,7 @@ def build_schema_analysis(
 			*SOURCE_AUXILIARY_SCHEMA_ROOTS,
 		)
 	else:
-		source_schema_index = {
-			str(name): dict(schema) for name, schema in source_schemas.items()
-		}
+		source_schema_index = {str(name): dict(schema) for name, schema in source_schemas.items()}
 	target_schemas = load_schema_index(
 		*target_roots,
 		TARGET_SMS_SCHEMA_ROOT / "sms_settings",
@@ -244,9 +274,7 @@ def build_schema_analysis(
 		if custom_fields.is_file():
 			target_schemas = apply_custom_field_fixture(target_schemas, custom_fields)
 		if property_setters.is_file():
-			target_schemas = apply_property_setter_fixture(
-				target_schemas, property_setters
-			)
+			target_schemas = apply_property_setter_fixture(target_schemas, property_setters)
 	target_schemas = apply_declared_stock_dimensions(
 		target_schemas,
 		dimensions=dimensions,
@@ -289,11 +317,7 @@ def _apply_external_target_fields(
 			continue
 		fields = [dict(field) for field in schema.get("fields") or []]
 		existing = {field.get("fieldname") for field in fields}
-		fields.extend(
-			dict(field)
-			for field in declared_fields
-			if field["fieldname"] not in existing
-		)
+		fields.extend(dict(field) for field in declared_fields if field["fieldname"] not in existing)
 		result[doctype] = {**schema, "fields": fields}
 	return result
 
@@ -393,11 +417,7 @@ def _plan_payload(
 	for source_doctype, spec in sorted(
 		plan.specs.items(), key=lambda row: (group_by_doctype[row[0]], row[0])
 	):
-		changed_field_map = {
-			source: target
-			for source, target in spec.field_map.items()
-			if source != target
-		}
+		changed_field_map = {source: target for source, target in spec.field_map.items() if source != target}
 		details.append(
 			{
 				"source_doctype": source_doctype,

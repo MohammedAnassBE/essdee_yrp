@@ -19,7 +19,7 @@
 		"semi": "off",
 		"camelcase": "off",
 		"no-unused-vars": "off",
-		"no-console": ["warn"],
+		"no-console": ["warn", { "allow": ["warn", "error"] }],
 		"no-extra-boolean-cast": ["off"],
 		"no-control-regex": ["off"],
 	},
@@ -120,6 +120,7 @@
 		"after": true,
 		"qz": true,
 		"localforage": true,
-		"extend_cscript": true
+		"extend_cscript": true,
+		"essdee_yrp": true
 	}
 }

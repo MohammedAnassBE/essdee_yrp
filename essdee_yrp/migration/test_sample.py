@@ -8,13 +8,13 @@ from essdee_yrp.migration.config import TARGET_APPS, MigrationSettings
 from essdee_yrp.migration.live import F15SourceBridge
 from essdee_yrp.migration.sample import (
 	QueryOnlySampleTarget,
-	_collect_missing_link_identities,
 	_close_percentage_sample_dependencies,
+	_collect_missing_link_identities,
 	_dependency_round_order,
 	_do_percentage_approved_frappe_data,
 	_finalize_percentage_business_configuration,
-	_load_percentage_sample_functional_dependencies,
 	_load_percentage_sample_configuration_dependencies,
+	_load_percentage_sample_functional_dependencies,
 	_percentage_limit,
 	_purchase_invoice_grn_dependencies,
 	_same_db_value,
@@ -41,9 +41,7 @@ class TestQueryOnlySample(UnitTestCase):
 		bridge = self.source_bridge()
 		with patch.object(bridge, "_run", return_value=iter(())) as run:
 			list(bridge.iter_documents("Lot", batch_size=20, limit=20))
-		run.assert_called_once_with(
-			["export", "--doctype", "Lot", "--batch-size", "20", "--limit", "20"]
-		)
+		run.assert_called_once_with(["export", "--doctype", "Lot", "--batch-size", "20", "--limit", "20"])
 
 	def test_source_bridge_exports_exact_dependency_names_in_bounded_chunks(self):
 		bridge = self.source_bridge()
@@ -133,11 +131,11 @@ class TestQueryOnlySample(UnitTestCase):
 			patch.object(target, "_replace_child_tables_sql"),
 		):
 			target.upsert_batch(
-				'SD YRP MRP Settings',
+				"SD YRP MRP Settings",
 				[
 					{
-						"doctype": 'SD YRP MRP Settings',
-						"name": 'SD YRP MRP Settings',
+						"doctype": "SD YRP MRP Settings",
+						"name": "SD YRP MRP Settings",
 						"value": "kept",
 						"__migration_passwords": {"api_secret": "must-not-enter-parent-table"},
 					}
@@ -145,7 +143,7 @@ class TestQueryOnlySample(UnitTestCase):
 			)
 		self.assertEqual(
 			bulk_upsert.call_args.args,
-			('SD YRP MRP Settings', [{"name": 'SD YRP MRP Settings', "value": "kept"}]),
+			("SD YRP MRP Settings", [{"name": "SD YRP MRP Settings", "value": "kept"}]),
 		)
 
 	def test_single_upsert_replaces_fresh_site_values_without_duplicates(self):
@@ -175,11 +173,7 @@ class TestQueryOnlySample(UnitTestCase):
 
 	def test_single_link_closure_bypasses_stale_value_cache(self):
 		plan = frappe._dict(
-			specs={
-				"Settings": frappe._dict(
-					target="Target Settings", table_option_map={}, is_child=False
-				)
-			},
+			specs={"Settings": frappe._dict(target="Target Settings", table_option_map={}, is_child=False)},
 			target_schemas={
 				"Target Settings": {
 					"fields": [
@@ -201,16 +195,12 @@ class TestQueryOnlySample(UnitTestCase):
 			patch.object(frappe.db, "get_table_columns", return_value=[]),
 			patch.object(frappe.db, "get_single_value", return_value="Knitting") as get_single,
 			patch.object(frappe, "get_meta", return_value=settings_meta),
-			patch(
-				"essdee_yrp.migration.sample._existing_names", return_value=set()
-			),
+			patch("essdee_yrp.migration.sample._existing_names", return_value=set()),
 		):
 			missing = _collect_missing_link_identities(plan)
 
 		self.assertEqual(missing, {"Target Process": {"Knitting"}})
-		get_single.assert_called_once_with(
-			"Target Settings", "default_process", cache=False
-		)
+		get_single.assert_called_once_with("Target Settings", "default_process", cache=False)
 
 	def test_percentage_sample_finalizes_post_load_production_order_settings(self):
 		with (
@@ -218,9 +208,7 @@ class TestQueryOnlySample(UnitTestCase):
 				"essdee_yrp.setup.ensure_yrp_production_order_settings",
 				return_value=True,
 			) as ensure_settings,
-			patch(
-				"essdee_yrp.sd_yrp_sync.validate_yrp_settings_for_production_order"
-			) as validate_settings,
+			patch("essdee_yrp.sd_yrp_sync.validate_yrp_settings_for_production_order") as validate_settings,
 			patch.object(frappe.db, "commit") as commit,
 		):
 			result = _finalize_percentage_business_configuration()
@@ -259,9 +247,7 @@ class TestQueryOnlySample(UnitTestCase):
 				"essdee_yrp.migration.sample.transform_document",
 				side_effect=lambda document, _plan: document,
 			),
-			patch(
-				"essdee_yrp.migration.sample._resolve_and_validate_required_target_values"
-			),
+			patch("essdee_yrp.migration.sample._resolve_and_validate_required_target_values"),
 			patch("essdee_yrp.migration.sample._strip_password_values"),
 			patch(
 				"essdee_yrp.migration.sample._verify_documents_sql",
@@ -304,16 +290,12 @@ class TestQueryOnlySample(UnitTestCase):
 				"Child A": frappe._dict(
 					target="Target Child",
 					field_map={"source_value": "target_value"},
-					value_transformers={
-						"source_value": "attribute_value_link_to_data"
-					},
+					value_transformers={"source_value": "attribute_value_link_to_data"},
 				),
 				"Settings": frappe._dict(
 					target="Target Settings",
 					field_map={},
-					value_transformers={
-						"default_stage": "attribute_value_link_to_data"
-					},
+					value_transformers={"default_stage": "attribute_value_link_to_data"},
 				),
 			}
 		)
@@ -326,13 +308,9 @@ class TestQueryOnlySample(UnitTestCase):
 				side_effect=[child_meta, settings_meta],
 			),
 			patch.object(frappe.db, "table_exists", return_value=True),
-			patch.object(
-				frappe.db, "get_table_columns", return_value=["target_value"]
-			),
+			patch.object(frappe.db, "get_table_columns", return_value=["target_value"]),
 			patch.object(frappe.db, "sql", return_value=[("Red",), ("Blue",)]),
-			patch.object(
-				frappe.db, "get_single_value", return_value="Pack"
-			),
+			patch.object(frappe.db, "get_single_value", return_value="Pack"),
 		):
 			values = _transformed_attribute_value_names(plan)
 
@@ -420,9 +398,7 @@ class TestQueryOnlySample(UnitTestCase):
 		document = {
 			"doctype": "Settings",
 			"name": "Settings",
-			"original_rows": [
-				{"doctype": "Retired Source Child", "name": "ROW-1", "value": "kept"}
-			],
+			"original_rows": [{"doctype": "Retired Source Child", "name": "ROW-1", "value": "kept"}],
 		}
 		with patch.object(frappe, "get_meta", return_value=meta) as get_meta:
 			self.assertEqual(_strip_password_values(document), 0)
@@ -448,9 +424,7 @@ class TestQueryOnlySample(UnitTestCase):
 		self.assertEqual(_percentage_limit(100, 25), 25)
 
 	def test_dependency_closure_defers_purchase_invoice_behind_new_prerequisites(self):
-		plan = frappe._dict(
-			parent_doctypes=["Item Variant", "Process", "Purchase Invoice"]
-		)
+		plan = frappe._dict(parent_doctypes=["Item Variant", "Process", "Purchase Invoice"])
 		ordered, deferred = _dependency_round_order(
 			plan,
 			{
@@ -476,19 +450,12 @@ class TestQueryOnlySample(UnitTestCase):
 			specs={"Node": frappe._dict(target="Target Node")},
 		)
 		source = MagicMock()
-		source.resolve_source_identities.side_effect = (
-			lambda _doctype, names: [{"name": next(iter(names))}]
-		)
-		source.iter_documents.side_effect = (
-			lambda _doctype, **kwargs: [
-				{"doctype": "Node", "name": name}
-				for name in kwargs["names"]
-			]
-		)
+		source.resolve_source_identities.side_effect = lambda _doctype, names: [{"name": next(iter(names))}]
+		source.iter_documents.side_effect = lambda _doctype, **kwargs: [
+			{"doctype": "Node", "name": name} for name in kwargs["names"]
+		]
 		target = MagicMock()
-		missing_rounds = [
-			{"Target Node": {f"NODE-{index}"}} for index in range(1, 22)
-		] + [{}]
+		missing_rounds = [{"Target Node": {f"NODE-{index}"}} for index in range(1, 22)] + [{}]
 		with (
 			patch(
 				"essdee_yrp.migration.sample._source_candidates_by_target",
@@ -509,9 +476,7 @@ class TestQueryOnlySample(UnitTestCase):
 					"name": document["name"],
 				},
 			),
-			patch(
-				"essdee_yrp.migration.sample._resolve_and_validate_required_target_values"
-			),
+			patch("essdee_yrp.migration.sample._resolve_and_validate_required_target_values"),
 			patch("essdee_yrp.migration.sample._strip_password_values"),
 			patch(
 				"essdee_yrp.migration.sample._verify_documents_sql",
@@ -542,9 +507,7 @@ class TestQueryOnlySample(UnitTestCase):
 		source.iter_cut_bundle_edit_ledger_dependencies.return_value = [
 			{"source_doctype": "Cut Bundle Movement Ledger", "name": "LEDGER-1"}
 		]
-		source.iter_documents.return_value = [
-			{"doctype": "Cut Bundle Movement Ledger", "name": "LEDGER-1"}
-		]
+		source.iter_documents.return_value = [{"doctype": "Cut Bundle Movement Ledger", "name": "LEDGER-1"}]
 		target = MagicMock()
 		target.existing_names.return_value = set()
 		with (
@@ -553,9 +516,7 @@ class TestQueryOnlySample(UnitTestCase):
 				"essdee_yrp.migration.sample.transform_document",
 				return_value={"doctype": "Target Ledger", "name": "LEDGER-1"},
 			),
-			patch(
-				"essdee_yrp.migration.sample._resolve_and_validate_required_target_values"
-			),
+			patch("essdee_yrp.migration.sample._resolve_and_validate_required_target_values"),
 			patch("essdee_yrp.migration.sample._strip_password_values"),
 			patch(
 				"essdee_yrp.migration.sample._verify_documents_sql",
@@ -593,9 +554,7 @@ class TestQueryOnlySample(UnitTestCase):
 			),
 			patch(
 				"essdee_yrp.migration.sample._source_broken_link_manifest",
-				return_value=[
-					{"target_link_doctype": "Target Node", "value": "MISSING"}
-				],
+				return_value=[{"target_link_doctype": "Target Node", "value": "MISSING"}],
 			),
 			patch(
 				"essdee_yrp.migration.sample._collect_missing_link_identities",
@@ -629,14 +588,10 @@ class TestQueryOnlySample(UnitTestCase):
 		]
 
 		self.assertEqual(
-			_purchase_invoice_grn_dependencies(
-				source, {"MPI-1"}, batch_size=250
-			),
+			_purchase_invoice_grn_dependencies(source, {"MPI-1"}, batch_size=250),
 			{"GRN-1", "GRN-2"},
 		)
-		source.iter_documents.assert_called_once_with(
-			"Purchase Invoice", batch_size=250, names=["MPI-1"]
-		)
+		source.iter_documents.assert_called_once_with("Purchase Invoice", batch_size=250, names=["MPI-1"])
 
 	def test_sample_module_has_no_document_mutation_api(self):
 		source = (Path(__file__).resolve().parent / "sample.py").read_text()

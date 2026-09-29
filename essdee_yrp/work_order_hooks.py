@@ -1,9 +1,8 @@
-from yrp import attribute_links as attribute_db
 # Copyright (c) 2026, anas@essdee.fit and contributors
 # For license information, please see license.txt
-
 import frappe
 from frappe import _
+from yrp import attribute_links as attribute_db
 from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 
@@ -13,21 +12,22 @@ def onload(doc, method=None):
 	if not doc.get("production_detail"):
 		return
 
-	from essdee_yrp.item_matrix import normalize_item_matrix_row_indexes
 	from yrp.stock.save_stock_items import group_items_for_ui
+
+	from essdee_yrp.item_matrix import normalize_item_matrix_row_indexes
 
 	doc.set_onload(
 		"deliverable_details",
 		group_items_for_ui(
 			normalize_item_matrix_row_indexes(doc.get("deliverables") or []),
-			'YRP Work Order Deliverables',
+			"YRP Work Order Deliverables",
 		),
 	)
 	doc.set_onload(
 		"receivable_details",
 		group_items_for_ui(
 			normalize_item_matrix_row_indexes(doc.get("receivables") or []),
-			'YRP Work Order Receivables',
+			"YRP Work Order Receivables",
 		),
 	)
 
@@ -42,13 +42,10 @@ def preserve_dynamic_packing_piece_uom(doc):
 	"""Keep new dynamic packing receivable counters in their physical Piece UOM."""
 	if not (doc.get("production_detail") and doc.get("lot") and doc.get("includes_packing")):
 		return
-	ipd = frappe.get_cached_doc('YRP Item Production Detail', doc.production_detail)
-	if not (
-		ipd.get("based_on_other_attribute_mapping")
-		and ipd.get("packing_mode") == "Size Ratio Packing"
-	):
+	ipd = frappe.get_cached_doc("YRP Item Production Detail", doc.production_detail)
+	if not (ipd.get("based_on_other_attribute_mapping") and ipd.get("packing_mode") == "Size Ratio Packing"):
 		return
-	piece_uom = attribute_db.get_value('SD YRP Lot', doc.lot, "packing_uom")
+	piece_uom = attribute_db.get_value("SD YRP Lot", doc.lot, "packing_uom")
 	if not piece_uom:
 		frappe.throw(_("Packing UOM is required on Lot {0}.").format(doc.lot))
 	for row in doc.get("receivables") or []:
@@ -62,10 +59,8 @@ def set_includes_packing(doc):
 	if not doc.meta.get_field("includes_packing"):
 		return
 	doc.includes_packing = 0
-	if doc.get("process_name") and frappe.get_meta('YRP Process').get_field("includes_packing"):
-		doc.includes_packing = frappe.db.get_value(
-			'YRP Process', doc.process_name, "includes_packing"
-		) or 0
+	if doc.get("process_name") and frappe.get_meta("YRP Process").get_field("includes_packing"):
+		doc.includes_packing = frappe.db.get_value("YRP Process", doc.process_name, "includes_packing") or 0
 
 
 def validate_lot_process_selection(doc):
@@ -80,16 +75,12 @@ def validate_lot_process_selection(doc):
 
 	from essdee_yrp.api.work_order import _get_work_order_selection_context
 
-	context = _get_work_order_selection_context(
-		doc.lot, doc.process_name, check_permission=False
-	)
+	context = _get_work_order_selection_context(doc.lot, doc.process_name, check_permission=False)
 	options = context["options"]
 	if not options:
 		scope = _("cloth IPDs") if context["is_cloth_process"] else _("garment IPD")
 		frappe.throw(
-			_("Lot {0} has no {1} configured for process {2}.").format(
-				doc.lot, scope, doc.process_name
-			)
+			_("Lot {0} has no {1} configured for process {2}.").format(doc.lot, scope, doc.process_name)
 		)
 
 	item_matches = [option for option in options if option["item"] == doc.get("item")]

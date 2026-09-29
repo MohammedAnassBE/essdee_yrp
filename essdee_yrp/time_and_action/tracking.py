@@ -6,14 +6,14 @@ contracts while deriving every mutable target from current F16 documents.
 """
 
 from __future__ import annotations
-from yrp import attribute_links as attribute_db
-from yrp.attribute_links import value as _attribute_value
 
 from collections import defaultdict
 
 import frappe
 from frappe import _
 from frappe.utils import add_days, cint, flt, getdate, nowdate
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 
 
 def _json_value(value):
@@ -35,7 +35,7 @@ def _open_work_order_filters(lot=None, item=None, process_name=None):
 
 def _permitted_work_orders(lot=None, item=None, process_name=None, fields=None):
 	return frappe.get_list(
-		'YRP Work Order',
+		"YRP Work Order",
 		filters=_open_work_order_filters(lot, item, process_name),
 		fields=fields or ["name"],
 		order_by="name asc",
@@ -47,8 +47,8 @@ def _tracking_rows(work_order_names):
 	if not work_order_names:
 		return {}
 	rows = frappe.get_all(
-		'YRP Work Order Tracking Log',
-		filters={"parent": ["in", work_order_names], "parenttype": 'YRP Work Order'},
+		"YRP Work Order Tracking Log",
+		filters={"parent": ["in", work_order_names], "parenttype": "YRP Work Order"},
 		fields=["parent", "from_date", "to_date", "reason", "check_point", "idx"],
 		order_by="parent asc, idx asc",
 	)
@@ -77,25 +77,25 @@ def get_t_and_a_report_data(lot=None, item=None, process_name=None):
 	)
 	logs = _tracking_rows([row.name for row in work_orders])
 	lot_names = {row.lot for row in work_orders if row.lot}
-	assigned_by_lot = {
-		row.name: row.assigned_person_name
-		for row in attribute_db.get_all(
-			'SD YRP Lot',
-			filters={"name": ["in", list(lot_names)]},
-			fields=["name", "assigned_person_name"],
-		)
-	} if lot_names else {}
+	assigned_by_lot = (
+		{
+			row.name: row.assigned_person_name
+			for row in attribute_db.get_all(
+				"SD YRP Lot",
+				filters={"name": ["in", list(lot_names)]},
+				fields=["name", "assigned_person_name"],
+			)
+		}
+		if lot_names
+		else {}
+	)
 
 	grouped = {}
 	has_tracking_rows = False
 	for work_order in work_orders:
 		key = (work_order.lot, work_order.item, work_order.process_name)
 		planned_end = getdate(work_order.planned_end_date) if work_order.planned_end_date else None
-		expected = (
-			getdate(work_order.expected_delivery_date)
-			if work_order.expected_delivery_date
-			else None
-		)
+		expected = getdate(work_order.expected_delivery_date) if work_order.expected_delivery_date else None
 		delay = (planned_end - expected).days if planned_end and expected else 0
 		entry = grouped.setdefault(
 			key,
@@ -115,9 +115,7 @@ def get_t_and_a_report_data(lot=None, item=None, process_name=None):
 			},
 		)
 		entry["qty"] += flt(work_order.planned_quantity)
-		if planned_end and (
-			not entry["planned_end_date"] or planned_end > entry["planned_end_date"]
-		):
+		if planned_end and (not entry["planned_end_date"] or planned_end > entry["planned_end_date"]):
 			entry["planned_end_date"] = planned_end
 		entry["delay"] = max(entry["delay"], delay)
 
@@ -133,9 +131,7 @@ def get_t_and_a_report_data(lot=None, item=None, process_name=None):
 				entry["_dates"][from_label] = to_date
 			if not entry["_expected_date"] or to_date > entry["_expected_date"]:
 				entry["_expected_date"] = to_date
-			if log.reason and (
-				not entry["_reason_date"] or to_date >= entry["_reason_date"]
-			):
+			if log.reason and (not entry["_reason_date"] or to_date >= entry["_reason_date"]):
 				entry["reason"] = log.reason
 				entry["_reason_date"] = to_date
 			if cint(log.check_point) and (
@@ -143,11 +139,10 @@ def get_t_and_a_report_data(lot=None, item=None, process_name=None):
 			):
 				entry["_checkpoint_date"] = to_date
 
-	days = cint(
-		frappe.db.get_single_value(
-			'SD YRP MRP Settings', "time_and_action_tracking_order_report_days"
-		)
-	) or 6
+	days = (
+		cint(frappe.db.get_single_value("SD YRP MRP Settings", "time_and_action_tracking_order_report_days"))
+		or 6
+	)
 	date_keys = []
 	if has_tracking_rows:
 		current_date = getdate(nowdate())
@@ -165,26 +160,18 @@ def get_t_and_a_report_data(lot=None, item=None, process_name=None):
 			"qty": entry["qty"],
 			"reason": entry["reason"],
 			"planned_end_date": (
-				entry["planned_end_date"].strftime("%d-%m-%Y")
-				if entry["planned_end_date"]
-				else None
+				entry["planned_end_date"].strftime("%d-%m-%Y") if entry["planned_end_date"] else None
 			),
 			"delay": entry["delay"],
 			"assigned": entry["assigned"],
 			"check_point": (
-				entry["_checkpoint_date"].strftime("%d-%m-%Y")
-				if entry["_checkpoint_date"]
-				else None
+				entry["_checkpoint_date"].strftime("%d-%m-%Y") if entry["_checkpoint_date"] else None
 			),
 			"expected_date": (
-				entry["_expected_date"].strftime("%d-%m-%Y")
-				if entry["_expected_date"]
-				else None
+				entry["_expected_date"].strftime("%d-%m-%Y") if entry["_expected_date"] else None
 			),
 		}
-		row.update(
-			{key: value.strftime("%d-%m-%Y") for key, value in entry["_dates"].items()}
-		)
+		row.update({key: value.strftime("%d-%m-%Y") for key, value in entry["_dates"].items()})
 		rows.append(row)
 
 	return {
@@ -226,14 +213,10 @@ def get_work_order_details(detail):
 
 
 def _set_expected_date(work_order, expected_date, reason):
-	doc = frappe.get_doc('YRP Work Order', work_order)
+	doc = frappe.get_doc("YRP Work Order", work_order)
 	doc.check_permission("write")
 	if doc.docstatus != 1 or doc.open_status != "Open":
-		frappe.throw(
-			_("Work Order {0} must be submitted and open.").format(
-				frappe.bold(doc.name)
-			)
-		)
+		frappe.throw(_("Work Order {0} must be submitted and open.").format(frappe.bold(doc.name)))
 	expected_date = getdate(expected_date)
 	reason = (reason or "").strip()
 	if not reason:
@@ -303,7 +286,7 @@ def _checkpoint_date(row):
 			continue
 		try:
 			dates.append(getdate(candidate, parse_day_first=True))
-		except (TypeError, ValueError):
+		except TypeError, ValueError:
 			continue
 	return max(dates) if dates else None
 
@@ -324,10 +307,8 @@ def update_wo_checkpoint(datas):
 					frappe.bold(row.get("process_name") or ""),
 				)
 			)
-		for work_order in _permitted_work_orders(
-			row.get("lot"), row.get("item"), row.get("process_name")
-		):
-			doc = frappe.get_doc('YRP Work Order', work_order.name)
+		for work_order in _permitted_work_orders(row.get("lot"), row.get("item"), row.get("process_name")):
+			doc = frappe.get_doc("YRP Work Order", work_order.name)
 			doc.check_permission("write")
 			matched = False
 			for log in doc.work_order_tracking_logs:
@@ -357,7 +338,7 @@ def get_t_and_a_review_report_data(lot=None, item=None, report_date=None):
 	if report_date:
 		filters["end_date"] = ["<", getdate(report_date)]
 	schedules = frappe.get_list(
-		'SD YRP Time and Action',
+		"SD YRP Time and Action",
 		filters=filters,
 		fields=[
 			"name",
@@ -380,20 +361,14 @@ def get_t_and_a_review_report_data(lot=None, item=None, report_date=None):
 
 	result = {}
 	for lot_name, lot_schedules in by_lot.items():
-		lot_doc = frappe.get_doc('SD YRP Lot', lot_name)
+		lot_doc = frappe.get_doc("SD YRP Lot", lot_name)
 		lot_doc.check_permission("read")
-		linked = {
-			row.time_and_action
-			for row in lot_doc.lot_time_and_action_details
-			if row.time_and_action
-		}
+		linked = {row.time_and_action for row in lot_doc.lot_time_and_action_details if row.time_and_action}
 		for schedule in lot_schedules:
 			if schedule.name not in linked:
 				continue
-			doc = frappe.get_doc('SD YRP Time and Action', schedule.name)
-			master_data = result.setdefault(lot_name, {}).setdefault(
-				doc.master, {"actions": [], "datas": []}
-			)
+			doc = frappe.get_doc("SD YRP Time and Action", schedule.name)
+			master_data = result.setdefault(lot_name, {}).setdefault(doc.master, {"actions": [], "datas": []})
 			if not master_data["actions"]:
 				master_data["actions"] = [row.action for row in doc.details]
 			master_data["datas"].append(

@@ -3,9 +3,9 @@
 
 import frappe
 from frappe import _
+from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 from essdee_yrp.fabric_ipd import get_yarn_ratio_inputs
-from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 
 def validate_correction_ipd_items(doc, method=None):
@@ -16,7 +16,7 @@ def validate_correction_ipd_items(doc, method=None):
 	ipd_name = doc.get("production_detail")
 	if not ipd_name:
 		return
-	ipd = frappe.get_doc('YRP Item Production Detail', ipd_name)
+	ipd = frappe.get_doc("YRP Item Production Detail", ipd_name)
 	allowed = set()
 	allowed.update(row.item for row in get_yarn_ratio_inputs(ipd))
 	for row in ipd.get("item_bom") or []:

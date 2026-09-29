@@ -5,9 +5,9 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_action_master.sd_yrp_action_master imp
 	get_action_master_details,
 )
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_time_and_action.sd_yrp_time_and_action import (
-	get_update_rescheduled_date,
 	get_t_and_a_preview_data,
 	get_t_and_a_update_data,
+	get_update_rescheduled_date,
 	update_t_and_a,
 )
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_time_and_action_gantt_chart.sd_yrp_time_and_action_gantt_chart import (
@@ -35,7 +35,7 @@ class TestTimeAndActionBusinessLogic(FrappeTestCase):
 			self.skipTest(f"{doctype} {name} is a migrated-data fixture")
 
 	def test_preview_matches_production_calendar_fixture(self):
-		self._require_migrated_record('SD YRP Action Master', "Master-00001")
+		self._require_migrated_record("SD YRP Action Master", "Master-00001")
 		preview = get_t_and_a_preview_data(
 			"2026-08-18",
 			[{"colour": "Test", "master": "Master-00001"}],
@@ -60,11 +60,9 @@ class TestTimeAndActionBusinessLogic(FrappeTestCase):
 		)
 
 	def test_action_master_details_are_rebuilt_from_server_master(self):
-		self._require_migrated_record('SD YRP Action Master', "Master-00001")
-		result = get_action_master_details(
-			[{"colour": "Test", "master": "Master-00001"}]
-		)
-		master = frappe.get_doc('SD YRP Action Master', "Master-00001")
+		self._require_migrated_record("SD YRP Action Master", "Master-00001")
+		result = get_action_master_details([{"colour": "Test", "master": "Master-00001"}])
+		master = frappe.get_doc("SD YRP Action Master", "Master-00001")
 		self.assertEqual(
 			[row["action"] for row in result["Test"]["details"]],
 			[row.action for row in master.details],
@@ -72,17 +70,15 @@ class TestTimeAndActionBusinessLogic(FrappeTestCase):
 
 	def test_update_payload_contains_only_lot_linked_schedules(self):
 		lot = "F0924-22"
-		self._require_migrated_record('SD YRP Lot', lot)
-		result = get_t_and_a_update_data(lot, frappe.db.get_value('SD YRP Lot', lot, "item"))
+		self._require_migrated_record("SD YRP Lot", lot)
+		result = get_t_and_a_update_data(lot, frappe.db.get_value("SD YRP Lot", lot, "item"))
 		returned = {
-			row["t_and_a"]
-			for master in result["data"][lot]["masters"].values()
-			for row in master["datas"]
+			row["t_and_a"] for master in result["data"][lot]["masters"].values() for row in master["datas"]
 		}
 		linked = set(
 			frappe.get_all(
-				'SD YRP Lot Time and Action Detail',
-				filters={"parent": lot, "parenttype": 'SD YRP Lot'},
+				"SD YRP Lot Time and Action Detail",
+				filters={"parent": lot, "parenttype": "SD YRP Lot"},
 				pluck="time_and_action",
 			)
 		)
@@ -91,22 +87,16 @@ class TestTimeAndActionBusinessLogic(FrappeTestCase):
 
 	def test_update_rejects_tampered_action_definition(self):
 		lot = "F0924-22"
-		self._require_migrated_record('SD YRP Lot', lot)
-		payload = get_t_and_a_update_data(
-			lot, frappe.db.get_value('SD YRP Lot', lot, "item")
-		)["data"]
-		row = next(
-			row
-			for master in payload[lot]["masters"].values()
-			for row in master["datas"]
-		)
+		self._require_migrated_record("SD YRP Lot", lot)
+		payload = get_t_and_a_update_data(lot, frappe.db.get_value("SD YRP Lot", lot, "item"))["data"]
+		row = next(row for master in payload[lot]["masters"].values() for row in master["datas"])
 		row["actions"][0]["lead_time"] += 1
 		with self.assertRaises(frappe.ValidationError):
 			update_t_and_a(payload)
 
 	def test_gantt_query_returns_only_readable_time_and_action_rows(self):
 		rows = frappe.get_all(
-			'SD YRP Time and Action Detail',
+			"SD YRP Time and Action Detail",
 			filters={"completed": 0},
 			fields=["action"],
 			limit=1,
@@ -142,10 +132,8 @@ class TestTimeAndActionBusinessLogic(FrappeTestCase):
 
 	def test_rescheduled_preview_ignores_tampered_derived_values(self):
 		lot = "F0924-22"
-		self._require_migrated_record('SD YRP Lot', lot)
-		payload = get_t_and_a_update_data(
-			lot, frappe.db.get_value('SD YRP Lot', lot, "item")
-		)["data"]
+		self._require_migrated_record("SD YRP Lot", lot)
+		payload = get_t_and_a_update_data(lot, frappe.db.get_value("SD YRP Lot", lot, "item"))["data"]
 		master, master_data = next(iter(payload[lot]["masters"].items()))
 		row = master_data["datas"][0]
 		action = row["actions"][0]
@@ -166,7 +154,5 @@ class TestTimeAndActionBusinessLogic(FrappeTestCase):
 			for data_row in result["total_data"][lot]["masters"][master]["datas"]
 			if data_row["t_and_a"] == row["t_and_a"]
 		)
-		calculated = next(
-			value for value in location["actions"] if value["action"] == action["action"]
-		)
+		calculated = next(value for value in location["actions"] if value["action"] == action["action"])
 		self.assertNotEqual(str(calculated["rescheduled_date"]), "2099-12-31")

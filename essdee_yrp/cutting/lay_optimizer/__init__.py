@@ -16,15 +16,15 @@ Date: 2026-08-09
 """
 
 from .core import (
-    optimize_lay_plan,
-    optimize_all_strategies,
+	optimize_all_strategies,
+	optimize_lay_plan,
 )
-from .display import print_plan, print_comparison
+from .display import print_comparison, print_plan
 
 __version__ = "4.1.0"
 __all__ = [
-    "optimize_lay_plan",
-    "optimize_all_strategies",
-    "print_plan",
-    "print_comparison",
+	"optimize_all_strategies",
+	"optimize_lay_plan",
+	"print_comparison",
+	"print_plan",
 ]

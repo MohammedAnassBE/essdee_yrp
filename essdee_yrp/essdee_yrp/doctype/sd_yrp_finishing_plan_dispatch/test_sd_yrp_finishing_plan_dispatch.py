@@ -16,13 +16,11 @@ class TestFinishingPlanDispatch(IntegrationTestCase):
 			"get_single_value",
 			side_effect=["2026-04-01", "2027-03-31"],
 		):
-			series = finishing_plan_dispatch.get_current_fiscal_naming_series(
-				"2026-08-27"
-			)
+			series = finishing_plan_dispatch.get_current_fiscal_naming_series("2026-08-27")
 		self.assertEqual(series, "FPD-2627-")
 
 		# Desk's new-form loader builds a transient document without __islocal.
-		doc = frappe.get_doc({"doctype": 'SD YRP Finishing Plan Dispatch'})
+		doc = frappe.get_doc({"doctype": "SD YRP Finishing Plan Dispatch"})
 		with patch.object(
 			finishing_plan_dispatch,
 			"get_current_fiscal_naming_series",
@@ -41,7 +39,7 @@ class TestFinishingPlanDispatch(IntegrationTestCase):
 				finishing_plan_dispatch.get_current_fiscal_naming_series("2027-04-01")
 
 	def test_fresh_dispatch_rejects_non_current_series_server_side(self):
-		doc = frappe.new_doc('SD YRP Finishing Plan Dispatch')
+		doc = frappe.new_doc("SD YRP Finishing Plan Dispatch")
 		doc.naming_series = "FPD-2526-"
 		with patch.object(
 			finishing_plan_dispatch,
@@ -56,18 +54,14 @@ class TestFinishingPlanDispatch(IntegrationTestCase):
 		dispatch.check_permission.side_effect = frappe.PermissionError
 		with patch.object(finishing_plan_dispatch.frappe, "get_doc", return_value=dispatch):
 			with self.assertRaises(frappe.PermissionError):
-				finishing_plan_dispatch.create_stock_dispatch(
-					"FPD-TEST", "WH-FROM", "SUP-TO", "TEST-1", 1
-				)
+				finishing_plan_dispatch.create_stock_dispatch("FPD-TEST", "WH-FROM", "SUP-TO", "TEST-1", 1)
 		dispatch.check_permission.assert_called_once_with("write")
 
 	def test_stock_dispatch_rejects_draft_document(self):
 		dispatch = MagicMock(docstatus=0, stock_entry=None)
 		with patch.object(finishing_plan_dispatch.frappe, "get_doc", return_value=dispatch):
 			with self.assertRaisesRegex(frappe.ValidationError, "Submit the Finishing Plan Dispatch"):
-				finishing_plan_dispatch.create_stock_dispatch(
-					"FPD-TEST", "WH-FROM", "SUP-TO", "TEST-1", 1
-				)
+				finishing_plan_dispatch.create_stock_dispatch("FPD-TEST", "WH-FROM", "SUP-TO", "TEST-1", 1)
 
 	def test_stock_dispatch_rejects_existing_active_stock_entry(self):
 		dispatch = MagicMock(docstatus=1, stock_entry="STE-TEST")
@@ -76,15 +70,11 @@ class TestFinishingPlanDispatch(IntegrationTestCase):
 			patch.object(finishing_plan_dispatch.frappe.db, "get_value", return_value=1),
 		):
 			with self.assertRaisesRegex(frappe.ValidationError, "already exists"):
-				finishing_plan_dispatch.create_stock_dispatch(
-					"FPD-TEST", "WH-FROM", "SUP-TO", "TEST-1", 1
-				)
+				finishing_plan_dispatch.create_stock_dispatch("FPD-TEST", "WH-FROM", "SUP-TO", "TEST-1", 1)
 
 	def test_cancel_cascades_to_submitted_dispatch_stock_entry(self):
 		stock_entry = MagicMock(docstatus=1)
-		doc = frappe.get_doc(
-			{"doctype": 'SD YRP Finishing Plan Dispatch', "stock_entry": "STE-TEST"}
-		)
+		doc = frappe.get_doc({"doctype": "SD YRP Finishing Plan Dispatch", "stock_entry": "STE-TEST"})
 		with patch.object(finishing_plan_dispatch.frappe, "get_doc", return_value=stock_entry):
 			doc.before_cancel()
 		stock_entry.cancel.assert_called_once_with()
@@ -150,7 +140,7 @@ class TestFinishingPlanDispatch(IntegrationTestCase):
 	def test_zero_quantity_legacy_rows_are_not_persisted(self):
 		doc = frappe.get_doc(
 			{
-				"doctype": 'SD YRP Finishing Plan Dispatch',
+				"doctype": "SD YRP Finishing Plan Dispatch",
 				"finishing_items": frappe.as_json([_item_row("FP-LEGACY")]),
 			}
 		)
@@ -179,10 +169,8 @@ class TestFinishingPlanDispatch(IntegrationTestCase):
 		selected["values"]["S"]["dispatch_qty"] = 3
 		doc = frappe.get_doc(
 			{
-				"doctype": 'SD YRP Finishing Plan Dispatch',
-				"finishing_items": frappe.as_json(
-					[selected, _item_row("FP-UNSELECTED")]
-				),
+				"doctype": "SD YRP Finishing Plan Dispatch",
+				"finishing_items": frappe.as_json([selected, _item_row("FP-UNSELECTED")]),
 			}
 		)
 		fp_doc = SimpleNamespace(
@@ -205,13 +193,11 @@ class TestFinishingPlanDispatch(IntegrationTestCase):
 			[row["doc_name"] for row in frappe.parse_json(doc.finishing_items)],
 			["FP-SELECTED"],
 		)
-		get_doc.assert_called_once_with('SD YRP Finishing Plan', "FP-SELECTED")
+		get_doc.assert_called_once_with("SD YRP Finishing Plan", "FP-SELECTED")
 
 	def test_empty_dispatch_cannot_submit(self):
-		doc = frappe.get_doc({"doctype": 'SD YRP Finishing Plan Dispatch'})
-		with self.assertRaisesRegex(
-			frappe.ValidationError, "Select at least one Finishing Plan"
-		):
+		doc = frappe.get_doc({"doctype": "SD YRP Finishing Plan Dispatch"})
+		with self.assertRaisesRegex(frappe.ValidationError, "Select at least one Finishing Plan"):
 			doc.before_submit()
 
 

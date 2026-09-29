@@ -11,16 +11,13 @@ import frappe
 from frappe.model.base_document import get_controller
 from frappe.tests import IntegrationTestCase
 
-
 APP_SPECS = (
 	("yrp", {"YRP", "YRP Stock"}, "YRP "),
 	("essdee_yrp", {"Essdee YRP"}, "SD YRP "),
 )
 LINK_FIELD_TYPES = {"Link", "Table", "Table MultiSelect"}
 CUSTOM_MODULES = {"YRP", "YRP Stock", "Essdee YRP"}
-CUSTOM_HOOK_PATH = re.compile(
-	r"^(?:yrp|essdee_yrp)(?:\.[A-Za-z_][A-Za-z0-9_]*)+$"
-)
+CUSTOM_HOOK_PATH = re.compile(r"^(?:yrp|essdee_yrp)(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
 
 
 def _owned_metadata(record_type: str):
@@ -29,7 +26,7 @@ def _owned_metadata(record_type: str):
 		for path in root.rglob("*.json"):
 			try:
 				data = json.loads(path.read_text())
-			except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+			except OSError, UnicodeDecodeError, json.JSONDecodeError:
 				continue
 			if not isinstance(data, dict):
 				continue
@@ -45,10 +42,7 @@ def _owned_metadata(record_type: str):
 class TestCombinedSiteNamespace(IntegrationTestCase):
 	def test_approved_app_stack_is_installed_without_the_retired_ewaybill_app(self):
 		installed = set(frappe.get_installed_apps())
-		self.assertTrue(
-			{"frappe", "erpnext", "yrp", "essdee_yrp", "india_compliance"}
-			<= installed
-		)
+		self.assertTrue({"frappe", "erpnext", "yrp", "essdee_yrp", "india_compliance"} <= installed)
 		self.assertNotIn("yrp_ewaybill_api", installed)
 
 	def test_all_owned_doctypes_reports_controllers_and_tables_are_synced(self):
@@ -230,19 +224,16 @@ class TestCombinedSiteNamespace(IntegrationTestCase):
 		frappe.delete_doc("Department", department.name, force=True)
 
 	def test_permissions_reports_and_india_compliance_are_live(self):
-		self.assertTrue(
-			frappe.has_permission("Department", "create", user="Administrator")
-		)
+		self.assertTrue(frappe.has_permission("Department", "create", user="Administrator"))
 		self.assertFalse(frappe.has_permission("Department", "create", user="Guest"))
-		self.assertFalse(
-			frappe.has_permission("SD YRP Product Season", "read", user="Guest")
+		self.assertFalse(frappe.has_permission("SD YRP Product Season", "read", user="Guest"))
+
+		from yrp.yrp_stock.report.yrp_stock_balance.yrp_stock_balance import (
+			execute as execute_yrp_report,
 		)
 
 		from essdee_yrp.essdee_yrp.report.sd_yrp_work_order_pending_report.sd_yrp_work_order_pending_report import (
 			execute as execute_sd_yrp_report,
-		)
-		from yrp.yrp_stock.report.yrp_stock_balance.yrp_stock_balance import (
-			execute as execute_yrp_report,
 		)
 
 		yrp_columns, yrp_rows = execute_yrp_report(
@@ -252,9 +243,7 @@ class TestCombinedSiteNamespace(IntegrationTestCase):
 		)
 		self.assertTrue(yrp_columns)
 		self.assertIsInstance(yrp_rows, list)
-		sd_result = execute_sd_yrp_report(
-			{"production_order": "__namespace_report_production_order__"}
-		)
+		sd_result = execute_sd_yrp_report({"production_order": "__namespace_report_production_order__"})
 		self.assertTrue(sd_result[0])
 		self.assertIsInstance(sd_result[1], list)
 

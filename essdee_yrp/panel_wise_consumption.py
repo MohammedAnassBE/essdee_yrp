@@ -6,17 +6,16 @@ The compact matrix is an entry aid. ``cutting_items_json`` and
 ``cutting_attributes`` remain the canonical data consumed by production and
 Lot calculations.
 """
-from yrp import attribute_links as attribute_db
-from yrp.attribute_links import value as _attribute_value
 
 import json
 import re
 
 import frappe
-from yrp.attribute_values import get_mapping_document
 from frappe import _
 from frappe.utils import flt
-
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
+from yrp.attribute_values import get_mapping_document
 
 SCHEMA_VERSION = 4
 PANEL_COLOUR_SCHEMA_VERSION = 2
@@ -29,21 +28,21 @@ def get_permitted_ipd(doc):
 		doc = (
 			frappe.parse_json(doc)
 			if doc.lstrip().startswith("{")
-			else frappe.get_doc('YRP Item Production Detail', doc)
+			else frappe.get_doc("YRP Item Production Detail", doc)
 		)
 	if isinstance(doc, dict):
-		if doc.get("doctype") != 'YRP Item Production Detail':
+		if doc.get("doctype") != "YRP Item Production Detail":
 			frappe.throw(_("Only Item Production Detail data is allowed."))
 		doc = frappe.get_doc(doc)
-	if getattr(doc, "doctype", None) != 'YRP Item Production Detail':
+	if getattr(doc, "doctype", None) != "YRP Item Production Detail":
 		frappe.throw(_("Only Item Production Detail data is allowed."))
 
-	if doc.name and frappe.db.exists('YRP Item Production Detail', doc.name):
+	if doc.name and frappe.db.exists("YRP Item Production Detail", doc.name):
 		# Check the stored document so client-supplied owner/permission fields can
 		# never influence authorization for an unsaved form snapshot.
-		frappe.get_doc('YRP Item Production Detail', doc.name).check_permission("read")
+		frappe.get_doc("YRP Item Production Detail", doc.name).check_permission("read")
 	else:
-		frappe.has_permission('YRP Item Production Detail', "create", throw=True)
+		frappe.has_permission("YRP Item Production Detail", "create", throw=True)
 	return doc
 
 
@@ -90,10 +89,7 @@ def _mapping_values(doc, attribute):
 
 
 def _natural_key(value):
-	return [
-		int(part) if part.isdigit() else part.lower()
-		for part in re.split(r"(\d+)", value or "")
-	]
+	return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", value or "")]
 
 
 def _panel_colour_context(doc, panel_values, source_packing_values):
@@ -111,10 +107,9 @@ def _panel_colour_context(doc, panel_values, source_packing_values):
 		existing = panel_colour_map[panel].get(source_colour)
 		if existing and existing != panel_colour:
 			frappe.throw(
-				_(
-					"Panel {0} maps garment colour {1} to both {2} and {3} in "
-					"the Stitching tab."
-				).format(panel, source_colour, existing, panel_colour)
+				_("Panel {0} maps garment colour {1} to both {2} and {3} in the Stitching tab.").format(
+					panel, source_colour, existing, panel_colour
+				)
 			)
 		panel_colour_map[panel][source_colour] = panel_colour
 		if panel_colour not in panel_packing_values[panel]:
@@ -123,9 +118,7 @@ def _panel_colour_context(doc, panel_values, source_packing_values):
 	for panel in panel_values:
 		if not panel_packing_values[panel]:
 			panel_packing_values[panel] = list(source_packing_values)
-			panel_colour_map[panel] = {
-				colour: colour for colour in source_packing_values
-			}
+			panel_colour_map[panel] = {colour: colour for colour in source_packing_values}
 
 	return panel_colour_map, panel_packing_values
 
@@ -138,10 +131,7 @@ def get_matrix_context(doc):
 
 	if any(not attribute for attribute in attributes):
 		frappe.throw(
-			_(
-				"Panel-wise Consumption Matrix needs Primary, Stitching/Panel, "
-				"and Packing attributes."
-			)
+			_("Panel-wise Consumption Matrix needs Primary, Stitching/Panel, and Packing attributes.")
 		)
 	if len(set(attributes)) != 3:
 		frappe.throw(
@@ -152,9 +142,9 @@ def get_matrix_context(doc):
 		)
 	if doc.get("is_set_item") and doc.get("set_item_attribute") not in attributes:
 		frappe.throw(
-			_(
-				"Panel-wise Consumption Matrix cannot omit the Set Item Attribute {0}."
-			).format(doc.get("set_item_attribute"))
+			_("Panel-wise Consumption Matrix cannot omit the Set Item Attribute {0}.").format(
+				doc.get("set_item_attribute")
+			)
 		)
 
 	primary_values = _mapping_values(doc, primary_attribute)
@@ -180,20 +170,10 @@ def get_matrix_context(doc):
 	if not source_packing_values:
 		missing.append(packing_attribute)
 	if missing:
-		frappe.throw(
-			_("No values are configured for matrix attribute(s): {0}.").format(
-				", ".join(missing)
-			)
-		)
+		frappe.throw(_("No values are configured for matrix attribute(s): {0}.").format(", ".join(missing)))
 
-	panel_colour_map, panel_packing_values = _panel_colour_context(
-		doc, panel_values, source_packing_values
-	)
-	packing_values = _unique(
-		colour
-		for panel in panel_values
-		for colour in panel_packing_values[panel]
-	)
+	panel_colour_map, panel_packing_values = _panel_colour_context(doc, panel_values, source_packing_values)
+	packing_values = _unique(colour for panel in panel_values for colour in panel_packing_values[panel])
 
 	return {
 		"primary_attribute": primary_attribute,
@@ -245,9 +225,7 @@ def _blank_matrix(context, panel_groups=None):
 
 def _matrix_indexes(matrix):
 	panel_index = {
-		tuple(_panel_values(panel)): panel
-		for panel in matrix.get("panels") or []
-		if _panel_values(panel)
+		tuple(_panel_values(panel)): panel for panel in matrix.get("panels") or [] if _panel_values(panel)
 	}
 	row_index = {}
 	for panel_values, panel in panel_index.items():
@@ -260,8 +238,8 @@ def _matrix_indexes(matrix):
 
 def _matrix_schema(value):
 	try:
-		return int((_as_json(value).get("schema_version") or 1))
-	except (TypeError, ValueError):
+		return int(_as_json(value).get("schema_version") or 1)
+	except TypeError, ValueError:
 		return 1
 
 
@@ -276,9 +254,7 @@ def _saved_panel_groups(saved_matrix, context):
 	groups = []
 	for group in saved_matrix.get("panels") or []:
 		panel_values = [
-			panel
-			for panel in _panel_values(group)
-			if panel in valid_panels and panel not in seen
+			panel for panel in _panel_values(group) if panel in valid_panels and panel not in seen
 		]
 		if not panel_values:
 			continue
@@ -351,21 +327,16 @@ def _merge_cutting_rows(matrix, cutting_json, context, source_schema=1):
 			continue
 
 		packing_value = item.get(packing_attribute)
-		destinations = _target_packing_values(
-			context, panel_value, packing_value, source_schema
-		)
+		destinations = _target_packing_values(context, panel_value, packing_value, source_schema)
 		for destination in destinations:
-			cell = target["values"].setdefault(
-				destination, {"dia": None, "weight": None}
-			)
+			cell = target["values"].setdefault(destination, {"dia": None, "weight": None})
 			dia = item.get("Dia")
 			if dia:
 				existing_dia = _attribute_value(cell.get("dia"))
 				if existing_dia and existing_dia != dia:
 					frappe.throw(
 						_(
-							"Cannot group Cutting rows: {0}, {1}, {2} has more "
-							"than one Dia ({3}, {4})."
+							"Cannot group Cutting rows: {0}, {1}, {2} has more than one Dia ({3}, {4})."
 						).format(
 							panel_value,
 							primary_value,
@@ -387,9 +358,7 @@ def _merge_cutting_rows(matrix, cutting_json, context, source_schema=1):
 					_(
 						"Cannot convert the existing Cutting rows: panel {0}, {1}, "
 						"fabric colour {2} has different consumptions ({3} and {4})."
-					).format(
-						panel_value, primary_value, destination, existing, weight
-					)
+					).format(panel_value, primary_value, destination, existing, weight)
 				)
 			panel_contributions[panel_value] = weight
 
@@ -398,9 +367,7 @@ def _merge_cutting_rows(matrix, cutting_json, context, source_schema=1):
 			for packing in panel.get("packing_values") or []:
 				values = contributions.get((id(row), packing), {})
 				if values:
-					row["values"][packing]["weight"] = flt(
-						sum(flt(value, 6) for value in values.values()), 6
-					)
+					row["values"][packing]["weight"] = flt(sum(flt(value, 6) for value in values.values()), 6)
 
 
 def _merge_saved_matrix(matrix, saved_matrix, context):
@@ -424,8 +391,7 @@ def _merge_saved_matrix(matrix, saved_matrix, context):
 			target_key = id(target)
 			if target_key not in reset_rows:
 				target["values"] = {
-					colour: {"dia": None, "weight": None}
-					for colour in target.get("values") or {}
+					colour: {"dia": None, "weight": None} for colour in target.get("values") or {}
 				}
 				reset_rows.add(target_key)
 			if source_schema >= CELL_SCHEMA_VERSION:
@@ -436,9 +402,7 @@ def _merge_saved_matrix(matrix, saved_matrix, context):
 					for colour, weight in (source.get("weights") or {}).items()
 				}
 			for source_colour, cell in source_values.items():
-				for destination in _target_packing_values(
-					context, panel_value, source_colour, source_schema
-				):
+				for destination in _target_packing_values(context, panel_value, source_colour, source_schema):
 					_merge_cell(
 						target,
 						destination,
@@ -452,9 +416,7 @@ def _merge_saved_matrix(matrix, saved_matrix, context):
 def make_panel_wise_matrix(doc, include_saved=True):
 	context = get_matrix_context(doc)
 	saved_matrix = doc.get("panel_wise_consumption_matrix_json")
-	panel_groups = (
-		_saved_panel_groups(saved_matrix, context) if include_saved else None
-	)
+	panel_groups = _saved_panel_groups(saved_matrix, context) if include_saved else None
 	matrix = _blank_matrix(context, panel_groups=panel_groups)
 	source_schema = _matrix_schema(doc.get("panel_wise_consumption_matrix_json"))
 	_merge_cutting_rows(
@@ -465,9 +427,7 @@ def make_panel_wise_matrix(doc, include_saved=True):
 	)
 	if include_saved:
 		# The compact editor is newer and wins over its expanded copy on save.
-		_merge_saved_matrix(
-			matrix, doc.get("panel_wise_consumption_matrix_json"), context
-		)
+		_merge_saved_matrix(matrix, doc.get("panel_wise_consumption_matrix_json"), context)
 	return matrix, context
 
 
@@ -495,17 +455,11 @@ def expand_panel_wise_matrix(matrix, context, require_complete=True):
 			frappe.throw(_("A panel group cannot be empty."))
 		unknown = [value for value in panel_values if value not in context["panel_values"]]
 		if unknown:
-			frappe.throw(
-				_("Unknown panel(s) in the consumption matrix: {0}.").format(
-					", ".join(unknown)
-				)
-			)
+			frappe.throw(_("Unknown panel(s) in the consumption matrix: {0}.").format(", ".join(unknown)))
 		duplicates = [value for value in panel_values if value in seen_panels]
 		if duplicates:
 			frappe.throw(
-				_("Duplicate panel(s) in the consumption matrix: {0}.").format(
-					", ".join(duplicates)
-				)
+				_("Duplicate panel(s) in the consumption matrix: {0}.").format(", ".join(duplicates))
 			)
 		seen_panels.update(panel_values)
 		packing_values = _group_packing_values(context, panel_values)
@@ -515,21 +469,13 @@ def expand_panel_wise_matrix(matrix, context, require_complete=True):
 		for row in panel.get("rows") or []:
 			primary_value = row.get("primary_value")
 			if primary_value in rows:
-				frappe.throw(
-					_("Duplicate {0} row for panel {1}.").format(
-						primary_value, panel_label
-					)
-				)
+				frappe.throw(_("Duplicate {0} row for panel {1}.").format(primary_value, panel_label))
 			rows[primary_value] = row
 
 		for primary_value in context["primary_values"]:
 			row = rows.get(primary_value)
 			if not row:
-				frappe.throw(
-					_("{0} is missing for panel {1}.").format(
-						primary_value, panel_label
-					)
-				)
+				frappe.throw(_("{0} is missing for panel {1}.").format(primary_value, panel_label))
 			for packing_value in packing_values:
 				cell = (row.get("values") or {}).get(packing_value) or {}
 				dia = _attribute_value(cell.get("dia"))
@@ -565,7 +511,7 @@ def expand_panel_wise_matrix(matrix, context, require_complete=True):
 				share = flt(weight / len(panel_values), 6)
 				panel_totals = [share] * len(panel_values)
 				panel_totals[-1] = flt(weight - sum(panel_totals[:-1]), 6)
-				for panel_value, panel_total in zip(panel_values, panel_totals):
+				for panel_value, panel_total in zip(panel_values, panel_totals, strict=False):
 					panel_weight = panel_total
 					if len(panel_values) > 1:
 						# A grouped cell stores the displayed group total, while a
@@ -585,14 +531,10 @@ def expand_panel_wise_matrix(matrix, context, require_complete=True):
 						}
 					)
 
-	missing_panels = [
-		panel for panel in context["panel_values"] if panel not in seen_panels
-	]
+	missing_panels = [panel for panel in context["panel_values"] if panel not in seen_panels]
 	if missing_panels:
 		frappe.throw(
-			_("Panel(s) missing from the consumption matrix: {0}.").format(
-				", ".join(missing_panels)
-			)
+			_("Panel(s) missing from the consumption matrix: {0}.").format(", ".join(missing_panels))
 		)
 
 	attributes = [
@@ -602,7 +544,7 @@ def expand_panel_wise_matrix(matrix, context, require_complete=True):
 	]
 	return {
 		"combination_type": "Cutting",
-		"attributes": attributes + ["Dia", "Weight"],
+		"attributes": [*attributes, "Dia", "Weight"],
 		"items": items,
 		"select_list": {},
 	}
@@ -656,7 +598,7 @@ def get_panel_wise_consumption_matrix(doc):
 	include_saved = True
 	if not doc.is_new() and doc.name:
 		stored_enabled = attribute_db.get_value(
-			'YRP Item Production Detail', doc.name, "enable_panel_wise_consumption_matrix"
+			"YRP Item Production Detail", doc.name, "enable_panel_wise_consumption_matrix"
 		)
 		include_saved = bool(stored_enabled)
 	matrix, context = make_panel_wise_matrix(doc, include_saved=include_saved)
@@ -674,8 +616,7 @@ def get_panel_wise_consumption_matrix(doc):
 		"matrix": matrix,
 		"dia_values": dia_values,
 		"row_count": sum(
-			len(context["primary_values"])
-			* len(context["panel_packing_values"][panel])
+			len(context["primary_values"]) * len(context["panel_packing_values"][panel])
 			for panel in context["panel_values"]
 		),
 	}

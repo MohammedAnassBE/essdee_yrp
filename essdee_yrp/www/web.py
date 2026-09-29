@@ -21,7 +21,7 @@ import json
 import os
 
 import frappe
-import frappe.sessions  # noqa: F401  (ensures get_csrf_token is importable)
+import frappe.sessions
 
 no_cache = 1
 
@@ -41,17 +41,17 @@ ASSET_BASE = "/assets/essdee_yrp/frontend/"
 # permission lists for exactly these candidates using the authoritative
 # frappe.has_permission() so every SPA gate hides what the user truly can't access.
 WEB_DOCTYPES = (
-	'SD YRP Lot',
-	'YRP Work Order',
-	'YRP Work Order Correction',
-	'YRP Delivery Challan',
-	'YRP Goods Received Note',
-	'YRP Process Cost',
-	'SD YRP Lot Transfer',
-	'YRP Stock Entry',
-	'Item',
-	'YRP Item Production Detail',
-	'YRP Terms and Condition',
+	"SD YRP Lot",
+	"YRP Work Order",
+	"YRP Work Order Correction",
+	"YRP Delivery Challan",
+	"YRP Goods Received Note",
+	"YRP Process Cost",
+	"SD YRP Lot Transfer",
+	"YRP Stock Entry",
+	"Item",
+	"YRP Item Production Detail",
+	"YRP Terms and Condition",
 )
 
 # boot.user key -> has_permission ptype used by the SPA's usePermissions composable.
@@ -96,9 +96,7 @@ def get_context(context):
 
 def _resolve_frontend_assets():
 	"""Return (js_url, css_url) for the current hashed Vite entry files."""
-	assets_dir = os.path.join(
-		os.path.dirname(__file__), "..", "public", "frontend", "assets"
-	)
+	assets_dir = os.path.join(os.path.dirname(__file__), "..", "public", "frontend", "assets")
 	assets_dir = os.path.realpath(assets_dir)
 
 	base = "/assets/essdee_yrp/frontend/assets/"

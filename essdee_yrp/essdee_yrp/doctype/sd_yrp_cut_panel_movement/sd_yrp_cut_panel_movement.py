@@ -1,8 +1,5 @@
-from yrp import attribute_links as attribute_db
-from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2025, Essdee and contributors
 # For license information, please see license.txt
-
 from collections import defaultdict
 from operator import itemgetter
 
@@ -10,7 +7,8 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, flt
-
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 from yrp.stock.utils import get_combine_datetime
 from yrp.utils import update_if_string_instance
 from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
@@ -57,7 +55,7 @@ class SDYRPCutPanelMovement(Document):
 			return
 		if self.is_new():
 			existing = frappe.db.exists(
-				'SD YRP Cut Panel Movement',
+				"SD YRP Cut Panel Movement",
 				{
 					"lot": self.lot,
 					"from_warehouse": self.from_warehouse,
@@ -92,21 +90,15 @@ class SDYRPCutPanelMovement(Document):
 		selected = {}
 		for colour, colour_data in (json_data.get("data") or {}).items():
 			selected[colour] = {"part": _attribute_value(colour_data.get("part")), "data": []}
-			panel_names = (
-				panels.get(_attribute_value(colour_data.get("part")), []) if is_set_item else panels
-			)
+			panel_names = panels.get(_attribute_value(colour_data.get("part")), []) if is_set_item else panels
 			for row in colour_data.get("data") or []:
 				if row.get("bundle_moved") or any(
 					row.get(panel) and row.get(f"{panel}_moved") for panel in panel_names
 				):
 					selected[colour]["data"].append(row)
-		json_data["data"] = {
-			colour: detail for colour, detail in selected.items() if detail["data"]
-		}
+		json_data["data"] = {colour: detail for colour, detail in selected.items() if detail["data"]}
 		json_data["accessory_data"] = [
-			row
-			for row in (json_data.get("accessory_data") or [])
-			if flt(row.get("moved_weight")) > 0
+			row for row in (json_data.get("accessory_data") or []) if flt(row.get("moved_weight")) > 0
 		]
 		collapsed_details = []
 		for row in json_data.get("collapsed_details") or []:
@@ -114,17 +106,11 @@ class SDYRPCutPanelMovement(Document):
 			if not cint(row.get("moved")) or move_qty <= 0:
 				continue
 			if move_qty > flt(row.get("quantity"), 3):
-				frappe.throw(
-					_("Collapsed move qty cannot exceed its available quantity.")
-				)
+				frappe.throw(_("Collapsed move qty cannot exceed its available quantity."))
 			row["move_qty"] = move_qty
 			collapsed_details.append(row)
 		json_data["collapsed_details"] = collapsed_details
-		if (
-			not json_data["data"]
-			and not json_data["accessory_data"]
-			and not json_data["collapsed_details"]
-		):
+		if not json_data["data"] and not json_data["accessory_data"] and not json_data["collapsed_details"]:
 			frappe.throw(_("Select at least one panel or accessory quantity."))
 		self.cut_panel_movement_json = json_data
 
@@ -169,18 +155,23 @@ def update_accessory(cutting_plan, movement_value, *, submit):
 		return
 	order = "asc" if submit else "desc"
 	laysheets = frappe.get_all(
-		'SD YRP Cutting LaySheet',
+		"SD YRP Cutting LaySheet",
 		filters={"cutting_plan": cutting_plan, "status": "Label Printed"},
 		pluck="name",
 		order_by=f"lay_no {order}",
 	)
 	remaining = defaultdict(float)
 	for row in accessory_rows:
-		key = (row.get("cloth_type"), _attribute_value(row.get("colour")), row.get("shade"), _attribute_value(row.get("dia")))
+		key = (
+			row.get("cloth_type"),
+			_attribute_value(row.get("colour")),
+			row.get("shade"),
+			_attribute_value(row.get("dia")),
+		)
 		remaining[key] += flt(row.get("moved_weight"))
 
 	for name in laysheets:
-		doc = frappe.get_doc('SD YRP Cutting LaySheet', name)
+		doc = frappe.get_doc("SD YRP Cutting LaySheet", name)
 		changed = False
 		for row in doc.get("cutting_laysheet_accessory_details") or []:
 			key = (row.cloth_type, _attribute_value(row.colour), row.shade, _attribute_value(row.dia))
@@ -205,13 +196,13 @@ def update_accessory(cutting_plan, movement_value, *, submit):
 
 def _check_unmoved_access(from_location, lot):
 	if not (
-		frappe.has_permission('SD YRP Cut Panel Movement', "create")
-		or frappe.has_permission('SD YRP Cut Panel Movement', "write")
+		frappe.has_permission("SD YRP Cut Panel Movement", "create")
+		or frappe.has_permission("SD YRP Cut Panel Movement", "write")
 	):
 		frappe.throw(_("Not permitted to prepare a Cut Panel Movement."), frappe.PermissionError)
-	frappe.get_doc('SD YRP Lot', lot).check_permission("read")
-	frappe.has_permission('SD YRP Cut Bundle Movement Ledger', "read", throw=True)
-	if not frappe.db.exists('Supplier', from_location):
+	frappe.get_doc("SD YRP Lot", lot).check_permission("read")
+	frappe.has_permission("SD YRP Cut Bundle Movement Ledger", "read", throw=True)
+	if not frappe.db.exists("Supplier", from_location):
 		frappe.throw(_("Supplier {0} does not exist.").format(from_location))
 
 
@@ -247,7 +238,7 @@ def _latest_logical_bundle_rows(rows):
 
 def _get_latest_available_bundle_rows(filters):
 	rows = attribute_db.get_all(
-		'SD YRP Cut Bundle Movement Ledger',
+		"SD YRP Cut Bundle Movement Ledger",
 		filters=filters,
 		fields=[
 			"name",
@@ -277,18 +268,18 @@ def get_cut_bundle_unmoved_data(
 ):
 	_check_unmoved_access(from_location, lot)
 	if cutting_plan:
-		plan = frappe.get_doc('SD YRP Cutting Plan', cutting_plan)
+		plan = frappe.get_doc("SD YRP Cutting Plan", cutting_plan)
 		plan.check_permission("read")
 		if plan.lot != lot:
 			frappe.throw(_("Cutting Plan {0} does not belong to Lot {1}.").format(plan.name, lot))
 		if plan.version == "V1":
 			frappe.throw(_("Cut Panel Movement is not supported for a V1 Cutting Plan."))
 
-	production_detail = attribute_db.get_value('SD YRP Lot', lot, "production_detail")
+	production_detail = attribute_db.get_value("SD YRP Lot", lot, "production_detail")
 	if not production_detail:
 		frappe.throw(_("Lot {0} has no Item Production Detail.").format(lot))
 	sizes = get_ipd_primary_values(production_detail)
-	ipd_doc = frappe.get_cached_doc('YRP Item Production Detail', production_detail)
+	ipd_doc = frappe.get_cached_doc("YRP Item Production Detail", production_detail)
 	panels = []
 	major_part_value = None
 	set_part_value = None
@@ -325,7 +316,7 @@ def get_cut_bundle_unmoved_data(
 
 	lay_details = {}
 	for result in latest_rows:
-		row = frappe.get_doc('SD YRP Cut Bundle Movement Ledger', result.name)
+		row = frappe.get_doc("SD YRP Cut Bundle Movement Ledger", result.name)
 		parts = _attribute_value(row.panel)
 		combination = update_if_string_instance(row.set_combination) or {}
 		major_colour = combination.get("major_colour") or _attribute_value(row.colour)
@@ -358,8 +349,7 @@ def get_cut_bundle_unmoved_data(
 			combination_key["major_part"] = combination.get("major_part")
 		key = tuple(sorted(combination_key.items()))
 		panel = (
-			lay_details
-			.setdefault(row.lay_no, {})
+			lay_details.setdefault(row.lay_no, {})
 			.setdefault(major_colour, {})
 			.setdefault(row.bundle_no, {})
 			.setdefault(_attribute_value(row.size), {})
@@ -375,15 +365,23 @@ def get_cut_bundle_unmoved_data(
 			frappe.throw(_("Cutting Plan is required for a movement from Cutting."))
 		accessories = defaultdict(float)
 		for laysheet_name in frappe.get_all(
-			'SD YRP Cutting LaySheet',
+			"SD YRP Cutting LaySheet",
 			filters={"cutting_plan": cutting_plan, "status": "Label Printed"},
 			pluck="name",
 		):
-			laysheet = frappe.get_doc('SD YRP Cutting LaySheet', laysheet_name)
+			laysheet = frappe.get_doc("SD YRP Cutting LaySheet", laysheet_name)
 			for row in laysheet.get("cutting_laysheet_accessory_details") or []:
 				balance = flt(row.weight) - flt(row.moved_weight)
 				if balance > 0:
-					accessories[(row.cloth_item, row.cloth_type, _attribute_value(row.colour), _attribute_value(row.dia), row.shade)] += balance
+					accessories[
+						(
+							row.cloth_item,
+							row.cloth_type,
+							_attribute_value(row.colour),
+							_attribute_value(row.dia),
+							row.shade,
+						)
+					] += balance
 		for (cloth_item, cloth_type, colour, dia, shade), weight in accessories.items():
 			accessory_details.append(
 				{
@@ -439,7 +437,7 @@ def get_cut_bundle_unmoved_data(
 			filters["colour"] = bundle_colour
 		rows = _get_latest_available_bundle_rows(filters)
 		for result in rows:
-			row = frappe.get_doc('SD YRP Cut Bundle Movement Ledger', result.name)
+			row = frappe.get_doc("SD YRP Cut Bundle Movement Ledger", result.name)
 			collapsed.append(
 				{
 					"moved": False,
@@ -479,9 +477,7 @@ def create_delivery_challan(doc_name, work_order):
 
 
 @frappe.whitelist()
-def create_goods_received_note(
-	doc_name, work_order, return_items=False, delivery_challan=None
-):
+def create_goods_received_note(doc_name, work_order, return_items=False, delivery_challan=None):
 	from essdee_yrp.cutting.movement import build_goods_received_note_defaults
 
 	return build_goods_received_note_defaults(
@@ -493,8 +489,8 @@ def create_goods_received_note(
 
 
 def on_doctype_update():
-	frappe.db.add_index('SD YRP Cut Panel Movement', ["item", "lot"])
-	frappe.db.add_index('SD YRP Cut Panel Movement', ["against", "against_id"])
+	frappe.db.add_index("SD YRP Cut Panel Movement", ["item", "lot"])
+	frappe.db.add_index("SD YRP Cut Panel Movement", ["against", "against_id"])
 
 
 CutPanelMovement = SDYRPCutPanelMovement

@@ -64,7 +64,6 @@ onMounted(() => {
             items.value = r.message;
         }
     })
-    console.log('AlternativeDetail mounted');
 })
 
 </script>

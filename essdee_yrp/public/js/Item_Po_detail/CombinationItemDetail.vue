@@ -34,7 +34,7 @@ async function set_attributes() {
             Object.keys(items.value.values[i]['val']).forEach(row => {
                 let val = items.value.values[i]['val'][row]
                 let input =createInput(row, i, val)
-                items.value.values[i]['val'][row] = input 
+                items.value.values[i]['val'][row] = input
             })
         }
     }

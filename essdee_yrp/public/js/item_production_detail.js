@@ -391,14 +391,14 @@ frappe.ui.form.on("YRP Item Production Detail", {
 		frm.refresh_field('stiching_accessory_json')
 		if (frm.doc.__islocal) {
 			hide_field(["item_attribute_list_values_html", "bom_attribute_mapping_html",'dependent_attribute_details_html']);
-		} 
+		}
 		else {
 			unhide_field(["item_attribute_list_values_html", "bom_attribute_mapping_html",'dependent_attribute_details_html']);
 			frm.trigger('load_item_attribute_details')
-			
+
 			if (!frm.doc.is_set_item){
 				hide_field('set_items_html')
-			} 
+			}
 			else{
 				unhide_field('set_items_html')
 				frm.trigger('make_set_combination')
@@ -450,7 +450,7 @@ frappe.ui.form.on("YRP Item Production Detail", {
 				d.show()
 			})
 		}
-		
+
 		await frm.trigger('make_hide_and_unhide_tabs')
 		if((frm.doc.cloth_detail || []).length == 0){
 			frm.set_df_property('get_cutting_combination','hidden',true);
@@ -531,7 +531,7 @@ frappe.ui.form.on("YRP Item Production Detail", {
 					}
 				}
 				let cut_json = frm.doc.cutting_cloths_json
-				if (typeof(cut_json) == "string"){
+				if (typeof (cut_json) == "string"){
 					cut_json = JSON.parse(cut_json)
 				}
 				cut_json['select_list'] = cloths
@@ -546,7 +546,7 @@ frappe.ui.form.on("YRP Item Production Detail", {
 					if(frm.doc.cloth_detail[i].name1 && frm.doc.cloth_detail[i].cloth){
 						cloths.push(frm.doc.cloth_detail[i].name1)
 					}
-				}	
+				}
 				let stich_json = frm.doc.stiching_accessory_json
 				stich_json = parse_json_value(stich_json, {})
 				stich_json['select_list'] = cloths
@@ -602,7 +602,7 @@ frappe.ui.form.on("YRP Item Production Detail", {
 			for(let i = 0; i < frm.doc.cloth_detail.length; i++ ){
 				cloth_list.push(frm.doc.cloth_detail[i]['name1'])
 			}
-			if(typeof(acc) == "string"){
+			if(typeof (acc) == "string"){
 				acc = JSON.parse(acc)
 			}
 			acc['select_list'] = cloth_list
@@ -940,7 +940,7 @@ frappe.ui.form.on("YRP Item Production Detail", {
 			frappe.msgprint("Fill The Cloth Details")
 			return
 		}
-		cloth_list = []
+		const cloth_list = []
 		for(let i = 0; i < frm.doc.cloth_detail.length; i++ ){
 			cloth_list.push(frm.doc.cloth_detail[i]['name1'])
 		}
@@ -985,7 +985,7 @@ frappe.ui.form.on("YRP Item Production Detail", {
 		})
 	},
 	get_stiching_accessory_combination(frm){
-		cloth_list = []
+		const cloth_list = []
 		for(let i = 0; i < frm.doc.cloth_detail.length; i++ ){
 			cloth_list.push(frm.doc.cloth_detail[i]['name1'])
 		}
@@ -1127,11 +1127,11 @@ function showOrHideColumns(frm, fields, table, hidden) {
 	}
 	grid.visible_columns = undefined;
 	grid.setup_visible_columns();
-	
+
 	grid.header_row.wrapper.remove();
 	delete grid.header_row;
 	grid.make_head();
-	
+
 	for (let row of grid.grid_rows) {
 		if (row.open_form_button) {
 			row.open_form_button.parent().remove();
@@ -1246,7 +1246,7 @@ async function get_stich_in_attributes(dependent_attribute_mapping, stiching_in_
                 item: item,
             },
             callback: function(r) {
-                resolve(r.message); 
+                resolve(r.message);
             },
         });
     });
@@ -1276,9 +1276,9 @@ function make_select_attributes(frm, html_field, html_class, name, attrs, json_f
 						check = 1
 					}
 					return {
-						label: attr,   
-						value: attr,  
-						checked: check   
+						label: attr,
+						value: attr,
+						checked: check
 					};
 				});
 			},

@@ -5,15 +5,14 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cstr, flt
-
 from yrp.stock.dimensions import apply_dimension_defaults, get_dimension_fieldnames
 from yrp.stock.uom import apply_item_uom
 from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
-
 ITEM_EDITOR_CONFIG = {
 	"child_doctype": "SD YRP Lot Transfer Item",
-	"item_field": "item", "qty_field": "qty",
+	"item_field": "item",
+	"qty_field": "qty",
 	"value_fields": ["rate"],
 	"entry_fields": ["from_lot", "to_lot", "warehouse", "received_type", "set_combination"],
 }
@@ -37,9 +36,9 @@ class SDYRPLotTransfer(Document):
 		if self.get("item_details") and self._action != "submit":
 			from yrp.stock.save_stock_items import ungroup_items_from_ui
 
-			self.set("items", ungroup_items_from_ui(
-				self.item_details, self.doctype, config=ITEM_EDITOR_CONFIG
-			))
+			self.set(
+				"items", ungroup_items_from_ui(self.item_details, self.doctype, config=ITEM_EDITOR_CONFIG)
+			)
 		apply_posting_datetime(self)
 		apply_dimension_defaults(self.items)
 
@@ -91,8 +90,8 @@ class SDYRPLotTransfer(Document):
 
 	def before_cancel(self):
 		self.ignore_linked_doctypes = (
-			'YRP Stock Ledger Entry',
-			'YRP Repost Item Valuation',
+			"YRP Stock Ledger Entry",
+			"YRP Repost Item Valuation",
 		)
 		self._update_stock_ledger()
 
@@ -150,9 +149,7 @@ class SDYRPLotTransfer(Document):
 					update_modified=False,
 				)
 
-	def _stock_row(
-		self, row, lot, qty, rate, transfer_key=None, transfer_role=None
-	):
+	def _stock_row(self, row, lot, qty, rate, transfer_key=None, transfer_role=None):
 		return frappe._dict(
 			{
 				"item": row.item,
@@ -193,9 +190,7 @@ def get_lot_transfer_target_lot(items):
 
 
 def get_lot_transfer_items_for_target_lot(items, target_lot):
-	target_items = [
-		row for row in items if row.to_lot == target_lot and flt(row.qty) > 0
-	]
+	target_items = [row for row in items if row.to_lot == target_lot and flt(row.qty) > 0]
 	if not target_items:
 		frappe.throw(_("Lot Transfer has no items for target Lot {0}").format(target_lot))
 	return target_items
@@ -222,7 +217,7 @@ def get_lot_transfer_delivery_items(transfer_items, work_order_items, target_lot
 		item = frappe._dict(source.as_dict())
 		item.lot = target_lot
 		item.received_type = received_types.get(item.item_variant)
-		item.ref_doctype = 'YRP Work Order Deliverables'
+		item.ref_doctype = "YRP Work Order Deliverables"
 		item.ref_docname = item.name
 		item.comments = None
 		item.delivered_quantity = 0
@@ -234,10 +229,9 @@ def get_lot_transfer_delivery_items(transfer_items, work_order_items, target_lot
 			first_matching_row.setdefault(item.item_variant, len(delivery_items))
 			if transfer_uom[item.item_variant] != item.uom:
 				frappe.throw(
-					_(
-						"UOM mismatch for Item {0}: Lot Transfer uses {1}, "
-						"but Work Order uses {2}"
-					).format(item.item_variant, transfer_uom[item.item_variant], item.uom)
+					_("UOM mismatch for Item {0}: Lot Transfer uses {1}, but Work Order uses {2}").format(
+						item.item_variant, transfer_uom[item.item_variant], item.uom
+					)
 				)
 			delivered_qty = min(remaining_qty, available_qty)
 			item.delivered_quantity = delivered_qty
@@ -259,10 +253,9 @@ def get_lot_transfer_delivery_items(transfer_items, work_order_items, target_lot
 
 	if items_not_in_work_order:
 		frappe.throw(
-			_(
-				"The following Lot Transfer items are not in the selected Work Order "
-				"deliverables: {0}"
-			).format(", ".join(sorted(items_not_in_work_order)))
+			_("The following Lot Transfer items are not in the selected Work Order deliverables: {0}").format(
+				", ".join(sorted(items_not_in_work_order))
+			)
 		)
 	return [row for row in delivery_items if flt(row.qty) > 0]
 
@@ -271,63 +264,41 @@ def get_lot_transfer_delivery_items(transfer_items, work_order_items, target_lot
 def get_delivery_challan_details(doc_name, work_order, from_location, target_lot=None):
 	"""Build F16 Delivery Challan defaults for one target Lot in a bulk transfer."""
 
-	lot_transfer = frappe.get_doc('SD YRP Lot Transfer', doc_name)
+	lot_transfer = frappe.get_doc("SD YRP Lot Transfer", doc_name)
 	lot_transfer.check_permission("read")
 	if lot_transfer.docstatus != 1:
 		frappe.throw(_("Submit the Lot Transfer before making a Delivery Challan"))
-	if not from_location or not frappe.db.exists('Supplier', from_location):
+	if not from_location or not frappe.db.exists("Supplier", from_location):
 		frappe.throw(_("Select a valid From Location"))
 
-	work_order_doc = frappe.get_doc('YRP Work Order', work_order)
+	work_order_doc = frappe.get_doc("YRP Work Order", work_order)
 	work_order_doc.check_permission("read")
-	if (
-		work_order_doc.docstatus != 1
-		or work_order_doc.open_status != "Open"
-		or work_order_doc.is_delivered
-	):
+	if work_order_doc.docstatus != 1 or work_order_doc.open_status != "Open" or work_order_doc.is_delivered:
 		frappe.throw(_("Select an open, submitted Work Order"))
 
 	transfer_items = lot_transfer.items
 	if target_lot:
-		transfer_items = get_lot_transfer_items_for_target_lot(
-			transfer_items, target_lot
-		)
+		transfer_items = get_lot_transfer_items_for_target_lot(transfer_items, target_lot)
 	else:
 		target_lot = get_lot_transfer_target_lot(transfer_items)
 	if work_order_doc.lot != target_lot:
-		frappe.throw(
-			_("Work Order {0} must belong to target Lot {1}").format(
-				work_order, target_lot
-			)
-		)
+		frappe.throw(_("Work Order {0} must belong to target Lot {1}").format(work_order, target_lot))
 
-	items = get_lot_transfer_delivery_items(
-		transfer_items, work_order_doc.deliverables, target_lot
-	)
+	items = get_lot_transfer_delivery_items(transfer_items, work_order_doc.deliverables, target_lot)
+	from frappe.contacts.doctype.address.address import get_address_display
 	from yrp.stock.save_stock_items import group_items_for_ui
 	from yrp.yrp.doctype.yrp_supplier.yrp_supplier import get_primary_address
-	from frappe.contacts.doctype.address.address import get_address_display
 
 	from_address = get_primary_address(from_location)
 	if not from_address:
-		frappe.throw(
-			_("Primary Address is not configured for From Location {0}").format(
-				from_location
-			)
-		)
-	supplier_address = work_order_doc.supplier_address or get_primary_address(
-		work_order_doc.supplier
-	)
+		frappe.throw(_("Primary Address is not configured for From Location {0}").format(from_location))
+	supplier_address = work_order_doc.supplier_address or get_primary_address(work_order_doc.supplier)
 	if not supplier_address:
-		frappe.throw(
-			_("Primary Address is not configured for Supplier {0}").format(
-				work_order_doc.supplier
-			)
-		)
+		frappe.throw(_("Primary Address is not configured for Supplier {0}").format(work_order_doc.supplier))
 
 	return {
 		"items": items,
-		"item_details": group_items_for_ui(items, 'YRP Delivery Challan'),
+		"item_details": group_items_for_ui(items, "YRP Delivery Challan"),
 		"work_order": work_order_doc.name,
 		"lot": target_lot,
 		"item": work_order_doc.item,

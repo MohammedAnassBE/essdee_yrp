@@ -31,9 +31,7 @@ class TestProcessCostCustomization(FrappeTestCase):
 			stiching_attribute="Panel",
 			cutting_process="Cutting",
 			emblishment_details_json={},
-			item_attributes=[
-				frappe._dict(attribute="Colour", mapping="_Test Colour Mapping")
-			],
+			item_attributes=[frappe._dict(attribute="Colour", mapping="_Test Colour Mapping")],
 		)
 		mapping = frappe._dict(
 			values=[
@@ -42,13 +40,15 @@ class TestProcessCostCustomization(FrappeTestCase):
 			]
 		)
 		with (
-			patch.object(frappe.db, "get_value", side_effect=lambda doctype, *args, **kwargs: 0 if doctype == "YRP Process" else "_Test IPD"),
+			patch.object(
+				frappe.db,
+				"get_value",
+				side_effect=lambda doctype, *args, **kwargs: 0 if doctype == "YRP Process" else "_Test IPD",
+			),
 			patch.object(frappe, "get_cached_doc", return_value=ipd),
 			patch("essdee_yrp.process_cost.get_mapping_document", return_value=mapping),
 		):
-			values = get_pc_attribute_values(
-				lot="_Test Lot", attribute="Colour", process_name="Printing"
-			)
+			values = get_pc_attribute_values(lot="_Test Lot", attribute="Colour", process_name="Printing")
 
 		self.assertEqual(
 			[row["attribute_value"] for row in values],
@@ -57,21 +57,21 @@ class TestProcessCostCustomization(FrappeTestCase):
 
 	def test_generic_base_callback_is_neutralized_and_desk_adapter_is_loaded(self):
 		self.assertIsNone(get_pc_attribute_values(item="ITEM", attribute="Colour"))
-		self.assertEqual(hooks.doctype_js['YRP Process Cost'], "public/js/process_cost.js")
+		self.assertEqual(hooks.doctype_js["YRP Process Cost"], "public/js/process_cost.js")
 		self.assertEqual(
 			hooks.override_whitelisted_methods[
 				"yrp.yrp.doctype.yrp_process_cost.yrp_process_cost.get_pc_attribute_values"
 			],
 			"essdee_yrp.process_cost.get_pc_attribute_values",
 		)
-		source = (
-			Path(frappe.get_app_path("essdee_yrp")) / "public/js/process_cost.js"
-		).read_text(encoding="utf-8")
+		source = (Path(frappe.get_app_path("essdee_yrp")) / "public/js/process_cost.js").read_text(
+			encoding="utf-8"
+		)
 		self.assertIn("lot: frm.doc.lot", source)
 		self.assertIn("process_name: frm.doc.process_name", source)
 
 	def test_field_attributes_match_production_api(self):
-		meta = frappe.get_meta('YRP Process Cost', cached=False)
+		meta = frappe.get_meta("YRP Process Cost", cached=False)
 		expected = {
 			"approved_by": {"read_only": 0},
 			"attribute": {"mandatory_depends_on": ""},
@@ -102,7 +102,7 @@ class TestProcessCostCustomization(FrappeTestCase):
 					frappe.db.get_value(
 						"Property Setter",
 						{
-							"doc_type": 'YRP Process Cost',
+							"doc_type": "YRP Process Cost",
 							"field_name": fieldname,
 							"property": property_name,
 						},

@@ -264,10 +264,7 @@ def _build_spec(
 	issues: list[str] = []
 	dependencies: set[str] = set(rule.extra_dependencies)
 	mapped = bool(
-		target_name != source_name
-		or rule.field_map
-		or rule.table_option_map
-		or rule.post_transformer
+		target_name != source_name or rule.field_map or rule.table_option_map or rule.post_transformer
 	)
 	if rule.post_transformer and rule.post_transformer not in available_post_transformers:
 		issues.append(f"post transformer {rule.post_transformer!r} is required")
@@ -309,9 +306,7 @@ def _build_spec(
 		target_type = str(target_field.get("fieldtype") or "")
 		value_transformer = rule.value_transformers.get(source_fieldname)
 		if value_transformer and value_transformer not in available_value_transformers:
-			issues.append(
-				f"{source_fieldname}: value transformer {value_transformer!r} is required"
-			)
+			issues.append(f"{source_fieldname}: value transformer {value_transformer!r} is required")
 		if not _compatible_types(source_type, target_type, rule):
 			issues.append(f"{source_fieldname}: incompatible type {source_type!r} -> {target_type!r}")
 		if source_type != target_type:
@@ -443,11 +438,7 @@ def build_plan(
 		)
 		for name, schema in sorted(source_schemas.items())
 	}
-	issues = tuple(
-		f"{name}: {issue}"
-		for name, spec in sorted(specs.items())
-		for issue in spec.issues
-	)
+	issues = tuple(f"{name}: {issue}" for name, spec in sorted(specs.items()) for issue in spec.issues)
 	return MigrationPlan(
 		specs=specs,
 		dependency_groups=_dependency_groups(specs),
@@ -468,9 +459,7 @@ def _doctype_controller_fields(schema: Mapping[str, Any]) -> set[str]:
 	controllers.update(
 		str(field.get("fieldname"))
 		for field in schema.get("fields") or ()
-		if field.get("fieldtype") == "Link"
-		and field.get("options") == "DocType"
-		and field.get("fieldname")
+		if field.get("fieldtype") == "Link" and field.get("options") == "DocType" and field.get("fieldname")
 	)
 	return controllers
 
@@ -494,13 +483,13 @@ def transform_document(
 	if strict and not spec.custom_transformer:
 		for fieldname in spec.ignored_fields:
 			if document.get(fieldname) not in (None, "", 0, False, [], {}):
-				raise MigrationError(f"Populated ignored source field {source_doctype}.{fieldname}; preservation mapping required")
+				raise MigrationError(
+					f"Populated ignored source field {source_doctype}.{fieldname}; preservation mapping required"
+				)
 	if spec.custom_transformer:
 		transformer = plan.transformers.get(spec.custom_transformer)
 		if not transformer:
-			raise MigrationError(
-				f"{source_doctype} requires custom transformer {spec.custom_transformer!r}"
-			)
+			raise MigrationError(f"{source_doctype} requires custom transformer {spec.custom_transformer!r}")
 		output = dict(transformer(deepcopy(document), spec, plan))
 		if output.get("doctype") != spec.target:
 			raise MigrationError(
@@ -595,9 +584,7 @@ def _contextual_child_spec(
 	source_spec = plan.specs.get(source_doctype)
 	target_schema = plan.target_schemas.get(target_doctype)
 	if not source_spec or not target_schema:
-		raise MigrationError(
-			f"cannot map contextual child {source_doctype!r} to {target_doctype!r}"
-		)
+		raise MigrationError(f"cannot map contextual child {source_doctype!r} to {target_doctype!r}")
 	return MigrationSpec(
 		source=source_spec.source,
 		target=target_doctype,
@@ -626,14 +613,11 @@ def _apply_post_transformer(
 		return dict(output)
 	transformer = plan.post_transformers.get(spec.post_transformer)
 	if not transformer:
-		raise MigrationError(
-			f"{spec.source} requires post transformer {spec.post_transformer!r}"
-		)
+		raise MigrationError(f"{spec.source} requires post transformer {spec.post_transformer!r}")
 	result = dict(transformer(output, source, spec, plan, parent_document))
 	if result.get("doctype") != spec.target:
 		raise MigrationError(
-			f"{spec.post_transformer} returned DocType {result.get('doctype')!r}; "
-			f"expected {spec.target!r}"
+			f"{spec.post_transformer} returned DocType {result.get('doctype')!r}; expected {spec.target!r}"
 		)
 	return result
 

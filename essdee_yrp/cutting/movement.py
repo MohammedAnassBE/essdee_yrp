@@ -5,8 +5,6 @@ Stock Entry, Delivery Challan, and Goods Received Note remain base-YRP
 documents: this module only builds their generic item payloads and mirrors the
 selected bundle movement into the Essdee bundle ledger on submit/cancel.
 """
-from yrp import attribute_links as attribute_db
-from yrp.attribute_links import value as _attribute_value
 
 import json
 from collections import defaultdict
@@ -14,6 +12,8 @@ from collections import defaultdict
 import frappe
 from frappe import _
 from frappe.utils import cint, flt
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 from yrp.stock.dimensions import apply_dimension_defaults, get_dimension_fieldnames
 from yrp.stock.save_stock_items import group_items_for_ui
 from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
@@ -32,9 +32,9 @@ from yrp.yrp.doctype.yrp_item_dependent_attribute_mapping.yrp_item_dependent_att
 
 _COMPLETION_PURPOSES = {"DC Completion", "GRN Completion"}
 _ROOT_TRANSACTION_DOCTYPES = (
-	'YRP Stock Entry',
-	'YRP Delivery Challan',
-	'YRP Goods Received Note',
+	"YRP Stock Entry",
+	"YRP Delivery Challan",
+	"YRP Goods Received Note",
 )
 
 
@@ -45,7 +45,7 @@ def _json_dict(value):
 		return value
 	try:
 		data = json.loads(value)
-	except (TypeError, ValueError, json.JSONDecodeError):
+	except TypeError, ValueError, json.JSONDecodeError:
 		frappe.throw(_("Invalid Set Combination data in the cut-panel movement."))
 	if not isinstance(data, dict):
 		frappe.throw(_("Set Combination must be a JSON object."))
@@ -81,7 +81,7 @@ def get_active_root_transactions(cpm_name, *, exclude_doctype=None, exclude_name
 		}
 		if doctype == exclude_doctype and exclude_name:
 			filters["name"] = ["!=", exclude_name]
-		if doctype == 'YRP Stock Entry':
+		if doctype == "YRP Stock Entry":
 			filters["purpose"] = ["not in", tuple(_COMPLETION_PURPOSES)]
 		for row in frappe.get_all(
 			doctype,
@@ -122,13 +122,11 @@ def validate_transaction_link(doc, method=None):
 	"""Enforce one active root Stock Entry/DC/GRN per submitted CPM."""
 	del method
 	cpm_name = doc.get("cut_panel_movement")
-	if not cpm_name or (
-		doc.doctype == 'YRP Stock Entry' and doc.purpose in _COMPLETION_PURPOSES
-	):
+	if not cpm_name or (doc.doctype == "YRP Stock Entry" and doc.purpose in _COMPLETION_PURPOSES):
 		return
 
 	cpm = frappe.db.get_value(
-		'SD YRP Cut Panel Movement',
+		"SD YRP Cut Panel Movement",
 		cpm_name,
 		["docstatus", "against", "against_id"],
 		as_dict=True,
@@ -136,9 +134,7 @@ def validate_transaction_link(doc, method=None):
 	)
 	if not cpm or cpm.docstatus != 1:
 		frappe.throw(_("Cut Panel Movement {0} must be submitted.").format(cpm_name))
-	if cpm.against_id and (
-		cpm.against != doc.doctype or cpm.against_id != doc.name
-	):
+	if cpm.against_id and (cpm.against != doc.doctype or cpm.against_id != doc.name):
 		frappe.throw(
 			_("Cut Panel Movement {0} is already linked to {1} {2}.").format(
 				cpm_name, cpm.against, cpm.against_id
@@ -155,7 +151,7 @@ def validate_transaction_link(doc, method=None):
 
 
 def _load_movement(doc_name, *, allow_linked=False):
-	doc = frappe.get_doc('SD YRP Cut Panel Movement', doc_name)
+	doc = frappe.get_doc("SD YRP Cut Panel Movement", doc_name)
 	doc.check_permission("read")
 	if doc.docstatus != 1:
 		frappe.throw(_("Cut Panel Movement {0} must be submitted.").format(doc.name))
@@ -189,16 +185,17 @@ def _get_uom(ipd_doc):
 
 def get_grouped_movement_rows(doc_name, target_doctype, *, allow_linked=False):
 	"""Return the selected CPM panels/accessories as flat target item rows."""
-	if target_doctype not in {'YRP Stock Entry', 'YRP Delivery Challan', 'YRP Goods Received Note'}:
+	if target_doctype not in {"YRP Stock Entry", "YRP Delivery Challan", "YRP Goods Received Note"}:
 		frappe.throw(_("Unsupported Cut Panel Movement target {0}.").format(target_doctype))
 
 	doc = _load_movement(doc_name, allow_linked=allow_linked)
-	ipd_name, item_name = attribute_db.get_value(
-		'SD YRP Lot', doc.lot, ["production_detail", "item"]
-	) or (None, None)
+	ipd_name, item_name = attribute_db.get_value("SD YRP Lot", doc.lot, ["production_detail", "item"]) or (
+		None,
+		None,
+	)
 	if not ipd_name or not item_name:
 		frappe.throw(_("Lot {0} is missing its Item Production Detail or Item.").format(doc.lot))
-	ipd_doc = frappe.get_cached_doc('YRP Item Production Detail', ipd_name)
+	ipd_doc = frappe.get_cached_doc("YRP Item Production Detail", ipd_name)
 	uom = _get_uom(ipd_doc)
 
 	panel_qty = {
@@ -255,11 +252,7 @@ def get_grouped_movement_rows(doc_name, target_doctype, *, allow_linked=False):
 		if quantity <= 0:
 			continue
 		if quantity > available:
-			frappe.throw(
-				_("Collapsed move qty {0} exceeds available qty {1}.").format(
-					quantity, available
-				)
-			)
+			frappe.throw(_("Collapsed move qty {0} exceeds available qty {1}.").format(quantity, available))
 		panel = _attribute_value(collapsed.get("panel"))
 		if panel not in panel_qty:
 			frappe.throw(_("Panel {0} is not configured in {1}.").format(panel, ipd_name))
@@ -277,9 +270,7 @@ def get_grouped_movement_rows(doc_name, target_doctype, *, allow_linked=False):
 		variant_totals[key] += quantity
 		variant_group[key] = (panel, _attribute_value(collapsed.get("colour")), combination)
 
-	default_received_type = frappe.db.get_single_value(
-		'YRP Stock Settings', "default_received_type"
-	)
+	default_received_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
 	rows = []
 	row_index = -1
 	table_index = -1
@@ -301,8 +292,8 @@ def get_grouped_movement_rows(doc_name, target_doctype, *, allow_linked=False):
 			row_index += 1
 			table_index += 1
 		row = {
-			("item" if target_doctype == 'YRP Stock Entry' else "item_variant"): variant,
-			("qty" if target_doctype != 'YRP Goods Received Note' else "quantity"): flt(variant_totals[key]),
+			("item" if target_doctype == "YRP Stock Entry" else "item_variant"): variant,
+			("qty" if target_doctype != "YRP Goods Received Note" else "quantity"): flt(variant_totals[key]),
 			"uom": uom,
 			"table_index": table_index,
 			"row_index": row_index,
@@ -328,10 +319,10 @@ def get_grouped_movement_rows(doc_name, target_doctype, *, allow_linked=False):
 				"Dia": _attribute_value(accessory.get("dia")),
 			},
 		)
-		accessory_uom = frappe.db.get_value('Item', cloth_item, "stock_uom")
+		accessory_uom = frappe.db.get_value("Item", cloth_item, "stock_uom")
 		row = {
-			("item" if target_doctype == 'YRP Stock Entry' else "item_variant"): variant,
-			("qty" if target_doctype != 'YRP Goods Received Note' else "quantity"): qty,
+			("item" if target_doctype == "YRP Stock Entry" else "item_variant"): variant,
+			("qty" if target_doctype != "YRP Goods Received Note" else "quantity"): qty,
 			"uom": accessory_uom,
 			"table_index": table_index,
 			"row_index": row_index,
@@ -349,14 +340,12 @@ def get_grouped_movement_rows(doc_name, target_doctype, *, allow_linked=False):
 
 
 def build_stock_entry_defaults(doc_name):
-	_require_create_permission('YRP Stock Entry')
-	doc, _ipd, rows = get_grouped_movement_rows(doc_name, 'YRP Stock Entry')
+	_require_create_permission("YRP Stock Entry")
+	doc, _ipd, rows = get_grouped_movement_rows(doc_name, "YRP Stock Entry")
 	from_warehouse = _get_warehouse_for_supplier(doc.from_warehouse)
 	if not from_warehouse:
 		frappe.throw(
-			_("Exactly one enabled Warehouse must be linked to Supplier {0}.").format(
-				doc.from_warehouse
-			)
+			_("Exactly one enabled Warehouse must be linked to Supplier {0}.").format(doc.from_warehouse)
 		)
 	defaults = {
 		"purpose": "Send to Warehouse",
@@ -364,7 +353,7 @@ def build_stock_entry_defaults(doc_name):
 		"from_supplier": doc.from_warehouse,
 		"cut_panel_movement": doc.name,
 		"items": rows,
-		"item_details": group_items_for_ui(rows, 'YRP Stock Entry'),
+		"item_details": group_items_for_ui(rows, "YRP Stock Entry"),
 	}
 	if _movement_uses_collapsed(frappe.parse_json(doc.cut_panel_movement_json)):
 		defaults["allow_non_bundle"] = 1
@@ -386,7 +375,7 @@ def _movement_details(rows, qty_field):
 
 
 def _overlay_source_rows(source_rows, movement_rows, *, target_doctype):
-	qty_field = "quantity" if target_doctype == 'YRP Goods Received Note' else "qty"
+	qty_field = "quantity" if target_doctype == "YRP Goods Received Note" else "qty"
 	details = _movement_details(movement_rows, qty_field)
 	matched = 0
 	output = []
@@ -405,7 +394,7 @@ def _overlay_source_rows(source_rows, movement_rows, *, target_doctype):
 		row.table_index = movement.table_index
 		row.row_index = movement.row_index
 		conversion = flt(row.get("conversion_factor")) or 1
-		if target_doctype == 'YRP Goods Received Note':
+		if target_doctype == "YRP Goods Received Note":
 			row.quantity = qty
 			row.received_quantity = qty
 		else:
@@ -417,9 +406,7 @@ def _overlay_source_rows(source_rows, movement_rows, *, target_doctype):
 	if not matched:
 		frappe.throw(_("The selected panels do not match any row in the selected Work Order."))
 	if details:
-		frappe.throw(
-			_("Some selected panels do not match any row in the selected Work Order.")
-		)
+		frappe.throw(_("Some selected panels do not match any row in the selected Work Order."))
 	return output
 
 
@@ -428,7 +415,7 @@ def _copy_existing_fields(target, source, target_doctype):
 		"supplier_name": "supplier_name",
 		"delivery_location_name": "delivery_location_name",
 	}
-	if target_doctype == 'YRP Delivery Challan':
+	if target_doctype == "YRP Delivery Challan":
 		field_map.update(
 			{
 				"supplier_address": "supplier_address",
@@ -452,40 +439,37 @@ def _copy_existing_fields(target, source, target_doctype):
 
 
 def build_delivery_challan_defaults(doc_name, work_order):
-	_require_create_permission('YRP Delivery Challan')
-	cpm, _ipd, movement_rows = get_grouped_movement_rows(doc_name, 'YRP Delivery Challan')
-	wo = frappe.get_doc('YRP Work Order', work_order)
+	_require_create_permission("YRP Delivery Challan")
+	cpm, _ipd, movement_rows = get_grouped_movement_rows(doc_name, "YRP Delivery Challan")
+	wo = frappe.get_doc("YRP Work Order", work_order)
 	wo.check_permission("read")
 	if wo.docstatus != 1 or wo.open_status == "Close" or wo.lot != cpm.lot:
 		frappe.throw(_("Select an open, submitted Work Order for Lot {0}.").format(cpm.lot))
 	defaults = get_dc_work_order_defaults(
 		work_order, posting_date=cpm.posting_date, posting_time=cpm.posting_time
 	)
-	items = _overlay_source_rows(
-		defaults.get("items"), movement_rows, target_doctype='YRP Delivery Challan'
-	)
+	items = _overlay_source_rows(defaults.get("items"), movement_rows, target_doctype="YRP Delivery Challan")
 	defaults["items"] = items
-	defaults["item_details"] = group_items_for_ui(items, 'YRP Delivery Challan')
+	defaults["item_details"] = group_items_for_ui(items, "YRP Delivery Challan")
 	defaults["cut_panel_movement"] = cpm.name
 	if _movement_uses_collapsed(frappe.parse_json(cpm.cut_panel_movement_json)):
 		defaults["allow_non_bundle"] = 1
 	defaults["work_order"] = wo.name
-	_copy_existing_fields(defaults, wo, 'YRP Delivery Challan')
+	_copy_existing_fields(defaults, wo, "YRP Delivery Challan")
 	# The CPM is the authoritative source of this physical dispatch.
 	defaults["from_location"] = cpm.from_warehouse
 	from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import _get_warehouse_for_supplier
+
 	defaults["from_warehouse"] = _get_warehouse_for_supplier(cpm.from_warehouse)
 	return defaults
 
 
-def build_goods_received_note_defaults(
-	doc_name, work_order, return_items=False, delivery_challan=None
-):
-	_require_create_permission('YRP Goods Received Note')
+def build_goods_received_note_defaults(doc_name, work_order, return_items=False, delivery_challan=None):
+	_require_create_permission("YRP Goods Received Note")
 	cpm, _ipd, movement_rows = get_grouped_movement_rows(
-		doc_name, 'YRP Goods Received Note', allow_linked=cint(return_items)
+		doc_name, "YRP Goods Received Note", allow_linked=cint(return_items)
 	)
-	wo = frappe.get_doc('YRP Work Order', work_order)
+	wo = frappe.get_doc("YRP Work Order", work_order)
 	wo.check_permission("read")
 	if wo.docstatus != 1 or wo.open_status == "Close" or wo.lot != cpm.lot:
 		frappe.throw(_("Select an open, submitted Work Order for Lot {0}.").format(cpm.lot))
@@ -495,42 +479,36 @@ def build_goods_received_note_defaults(
 		for row in wo.get("deliverables") or []:
 			values = row.as_dict()
 			values["quantity"] = values.get("qty")
-			values["ref_doctype"] = 'YRP Work Order Deliverables'
+			values["ref_doctype"] = "YRP Work Order Deliverables"
 			values["ref_docname"] = row.name
 			source_rows.append(values)
-		return _overlay_source_rows(
-			source_rows, movement_rows, target_doctype='YRP Goods Received Note'
-		)
+		return _overlay_source_rows(source_rows, movement_rows, target_doctype="YRP Goods Received Note")
 
 	delivery_challan_doc = None
 	if delivery_challan:
-		delivery_challan_doc = frappe.get_doc('YRP Delivery Challan', delivery_challan)
+		delivery_challan_doc = frappe.get_doc("YRP Delivery Challan", delivery_challan)
 		delivery_challan_doc.check_permission("read")
 		if delivery_challan_doc.docstatus != 1:
-			frappe.throw(
-				_("Delivery Challan {0} must be submitted.").format(delivery_challan)
-			)
+			frappe.throw(_("Delivery Challan {0} must be submitted.").format(delivery_challan))
 		if delivery_challan_doc.work_order != wo.name:
 			frappe.throw(
-				_("Delivery Challan {0} does not belong to Work Order {1}.").format(
-					delivery_challan, wo.name
-				)
+				_("Delivery Challan {0} does not belong to Work Order {1}.").format(delivery_challan, wo.name)
 			)
 
 	defaults = get_grn_work_order_defaults(work_order, delivery_challan)
 	items = _overlay_source_rows(
-		defaults.get("items"), movement_rows, target_doctype='YRP Goods Received Note'
+		defaults.get("items"), movement_rows, target_doctype="YRP Goods Received Note"
 	)
 	defaults["items"] = items
-	defaults["item_details"] = group_items_for_ui(items, 'YRP Goods Received Note')
+	defaults["item_details"] = group_items_for_ui(items, "YRP Goods Received Note")
 	defaults["cut_panel_movement"] = cpm.name
 	if delivery_challan_doc:
 		defaults["delivery_challan"] = delivery_challan_doc.name
 	if _movement_uses_collapsed(frappe.parse_json(cpm.cut_panel_movement_json)):
 		defaults["allow_non_bundle"] = 1
-	defaults["against"] = 'YRP Work Order'
+	defaults["against"] = "YRP Work Order"
 	defaults["against_id"] = wo.name
-	_copy_existing_fields(defaults, wo, 'YRP Goods Received Note')
+	_copy_existing_fields(defaults, wo, "YRP Goods Received Note")
 	return defaults
 
 
@@ -541,63 +519,51 @@ def set_completion_cut_panel_movement(stock_entry):
 	if not stock_entry.against or not stock_entry.against_id:
 		return
 	against_meta = frappe.get_meta(stock_entry.against)
-	if (
-		not stock_entry.get("cut_panel_movement")
-		and against_meta.get_field("cut_panel_movement")
-	):
+	if not stock_entry.get("cut_panel_movement") and against_meta.get_field("cut_panel_movement"):
 		stock_entry.cut_panel_movement = frappe.db.get_value(
 			stock_entry.against, stock_entry.against_id, "cut_panel_movement"
 		)
-	if (
-		stock_entry.meta.get_field("allow_non_bundle")
-		and against_meta.get_field("allow_non_bundle")
-	):
+	if stock_entry.meta.get_field("allow_non_bundle") and against_meta.get_field("allow_non_bundle"):
 		# A completion is the second leg of the referenced transaction, so its
 		# exact-vs-collapsed mode is never client-selectable.  Reapply this even
 		# when the CPM link is already present to repair saved drafts created
 		# before this inheritance was added and to reject client flag spoofing.
 		stock_entry.allow_non_bundle = cint(
-			frappe.db.get_value(
-				stock_entry.against, stock_entry.against_id, "allow_non_bundle"
-			)
+			frappe.db.get_value(stock_entry.against, stock_entry.against_id, "allow_non_bundle")
 		)
 
 
 def add_cancel_link_exemptions(doc):
 	has_bundle_entries = frappe.db.exists(
-		'SD YRP Cut Bundle Movement Ledger',
+		"SD YRP Cut Bundle Movement Ledger",
 		{
 			"voucher_type": doc.doctype,
 			"voucher_no": doc.name,
 			"is_cancelled": 0,
 		},
 	)
-	if (
-		not doc.get("cut_panel_movement")
-		and not doc.get("allow_non_bundle")
-		and not has_bundle_entries
-	):
+	if not doc.get("cut_panel_movement") and not doc.get("allow_non_bundle") and not has_bundle_entries:
 		return
 	exemptions = list(doc.get("ignore_linked_doctypes") or ())
-	for doctype in ('SD YRP Cut Bundle Movement Ledger', 'SD YRP Cut Panel Movement'):
+	for doctype in ("SD YRP Cut Bundle Movement Ledger", "SD YRP Cut Panel Movement"):
 		if doctype not in exemptions:
 			exemptions.append(doctype)
 	doc.ignore_linked_doctypes = tuple(exemptions)
 
 
 def _bundle_tracking_disabled(lot):
-	value = frappe.db.get_single_value('SD YRP MRP Settings', "cut_bundle_cancelled_lot") or ""
+	value = frappe.db.get_single_value("SD YRP MRP Settings", "cut_bundle_cancelled_lot") or ""
 	return lot in {entry.strip() for entry in value.split(",") if entry.strip()}
 
 
 def _is_implicit_collapsed_return(doc, lot):
-	if doc.doctype != 'YRP Goods Received Note' or not doc.get("is_return") or not lot:
+	if doc.doctype != "YRP Goods Received Note" or not doc.get("is_return") or not lot:
 		return False
-	production_detail = attribute_db.get_value('SD YRP Lot', lot, "production_detail")
+	production_detail = attribute_db.get_value("SD YRP Lot", lot, "production_detail")
 	if not production_detail:
 		return False
 	stage, dependent_attribute = attribute_db.get_value(
-		'YRP Item Production Detail',
+		"YRP Item Production Detail",
 		production_detail,
 		["stiching_in_stage", "dependent_attribute"],
 	) or (None, None)
@@ -606,7 +572,7 @@ def _is_implicit_collapsed_return(doc, lot):
 	for row in doc.get("items") or []:
 		variant = row.get("item_variant")
 		if variant and frappe.db.exists(
-			'Item Variant Attribute',
+			"Item Variant Attribute",
 			{
 				"parent": variant,
 				"attribute": dependent_attribute,
@@ -620,23 +586,23 @@ def _is_implicit_collapsed_return(doc, lot):
 def _as_supplier(location):
 	if not location:
 		return None
-	if frappe.db.exists('Supplier', location):
+	if frappe.db.exists("Supplier", location):
 		return location
-	supplier = frappe.db.get_value('Warehouse', location, "supplier")
+	supplier = frappe.db.get_value("Warehouse", location, "supplier")
 	if not supplier:
 		frappe.throw(_("Warehouse {0} is not linked to a Supplier.").format(location))
 	return supplier
 
 
 def _movement_locations(doc):
-	transit = frappe.db.get_single_value('YRP Stock Settings', "transit_warehouse")
-	if doc.doctype == 'YRP Delivery Challan':
+	transit = frappe.db.get_single_value("YRP Stock Settings", "transit_warehouse")
+	if doc.doctype == "YRP Delivery Challan":
 		source = doc.from_location or doc.from_warehouse
 		target = transit if doc.is_internal_unit else (doc.supplier or doc.to_warehouse)
-	elif doc.doctype == 'YRP Goods Received Note':
+	elif doc.doctype == "YRP Goods Received Note":
 		source = doc.supplier or doc.from_warehouse
 		target = transit if doc.is_internal_unit else (doc.delivery_location or doc.to_warehouse)
-	elif doc.doctype == 'YRP Stock Entry':
+	elif doc.doctype == "YRP Stock Entry":
 		if doc.purpose == "Send to Warehouse":
 			source = doc.from_warehouse
 			target = doc.to_warehouse if doc.skip_transit else transit
@@ -656,7 +622,7 @@ def _cancel_exact_bundle_entries(doc):
 	)
 
 	rows = attribute_db.get_all(
-		'SD YRP Cut Bundle Movement Ledger',
+		"SD YRP Cut Bundle Movement Ledger",
 		filters={
 			"voucher_type": doc.doctype,
 			"voucher_no": doc.name,
@@ -667,7 +633,7 @@ def _cancel_exact_bundle_entries(doc):
 	for row in rows:
 		future = None
 		for candidate in attribute_db.get_all(
-			'SD YRP Cut Bundle Movement Ledger',
+			"SD YRP Cut Bundle Movement Ledger",
 			filters={
 				"cbm_key": row.cbm_key,
 				"is_cancelled": 0,
@@ -677,21 +643,20 @@ def _cancel_exact_bundle_entries(doc):
 			},
 			fields=["name", "posting_datetime", "creation", "set_combination"],
 		):
-			if (
-				(candidate.posting_datetime, candidate.creation, candidate.name)
-				> (row.posting_datetime, row.creation, row.name)
-				and _collapsed_set_combination_key(candidate.set_combination)
-				== _collapsed_set_combination_key(row.set_combination)
+			if (candidate.posting_datetime, candidate.creation, candidate.name) > (
+				row.posting_datetime,
+				row.creation,
+				row.name,
+			) and _collapsed_set_combination_key(candidate.set_combination) == _collapsed_set_combination_key(
+				row.set_combination
 			):
 				future = candidate.name
 				break
 		if future:
-			frappe.throw(
-				_("Cancel the later cut-bundle movement {0} first.").format(future)
-			)
+			frappe.throw(_("Cancel the later cut-bundle movement {0} first.").format(future))
 	for row in rows:
 		attribute_db.set_value(
-			'SD YRP Cut Bundle Movement Ledger',
+			"SD YRP Cut Bundle Movement Ledger",
 			row.name,
 			"is_cancelled",
 			1,
@@ -707,16 +672,16 @@ def apply_transaction(doc, *, cancelled=False):
 	# explicitly linked or the caller opted into collapsed-bundle handling.
 	# Finishing/dispatch Stock Entries can point at DocTypes that do not expose a
 	# Lot field and must remain completely outside the cutting lifecycle.
-	if doc.doctype == 'YRP Stock Entry' and not cpm_name and not allow_non_bundle:
+	if doc.doctype == "YRP Stock Entry" and not cpm_name and not allow_non_bundle:
 		return
 
 	lot = doc.get("lot")
-	if not lot and doc.doctype == 'YRP Stock Entry' and doc.against and doc.against_id:
+	if not lot and doc.doctype == "YRP Stock Entry" and doc.against and doc.against_id:
 		against_meta = frappe.get_meta(doc.against)
 		if against_meta.get_field("lot"):
 			lot = frappe.db.get_value(doc.against, doc.against_id, "lot")
 	if not lot and cpm_name:
-		lot = frappe.db.get_value('SD YRP Cut Panel Movement', cpm_name, "lot")
+		lot = frappe.db.get_value("SD YRP Cut Panel Movement", cpm_name, "lot")
 	if not lot or _bundle_tracking_disabled(lot):
 		return
 	implicit_collapsed_return = _is_implicit_collapsed_return(doc, lot)
@@ -727,14 +692,12 @@ def apply_transaction(doc, *, cancelled=False):
 	# response. Serialize every bundle side effect on the authoritative voucher
 	# row, then treat the active ledger as the durable completion marker. This
 	# check intentionally precedes the collapsed path as well as the exact path.
-	locked_voucher = frappe.db.get_value(
-		doc.doctype, doc.name, "name", for_update=True
-	)
+	locked_voucher = frappe.db.get_value(doc.doctype, doc.name, "name", for_update=True)
 	# Direct in-memory callers used by report/compatibility code do not yet have
 	# a database transaction root. Normal submit/cancel hooks always do.
 	if locked_voucher:
 		active_ledger = frappe.db.exists(
-			'SD YRP Cut Bundle Movement Ledger',
+			"SD YRP Cut Bundle Movement Ledger",
 			{"voucher_type": doc.doctype, "voucher_no": doc.name, "is_cancelled": 0},
 		)
 		if (not cancelled and active_ledger) or (cancelled and not active_ledger):
@@ -750,11 +713,11 @@ def apply_transaction(doc, *, cancelled=False):
 				doc.doctype,
 				doc.name,
 				"on_cancel" if cancelled else "on_submit",
-				non_stich_process=doc.doctype == 'YRP Goods Received Note',
+				non_stich_process=doc.doctype == "YRP Goods Received Note",
 			)
 		return
 
-	cpm = frappe.get_doc('SD YRP Cut Panel Movement', cpm_name)
+	cpm = frappe.get_doc("SD YRP Cut Panel Movement", cpm_name)
 	if cpm.docstatus != 1:
 		frappe.throw(_("Cut Panel Movement {0} must be submitted.").format(cpm.name))
 
@@ -771,9 +734,7 @@ def apply_transaction(doc, *, cancelled=False):
 			cpm.db_set({"against": None, "against_id": None}, update_modified=False)
 		return
 
-	is_completion = (
-		doc.doctype == 'YRP Stock Entry' and doc.purpose in _COMPLETION_PURPOSES
-	)
+	is_completion = doc.doctype == "YRP Stock Entry" and doc.purpose in _COMPLETION_PURPOSES
 	if not is_completion:
 		if cpm.against_id and (cpm.against != doc.doctype or cpm.against_id != doc.name):
 			frappe.throw(

@@ -172,7 +172,6 @@ const copyToClipboard = async () => {
     const ele = document.getElementById('scr-section')
     copying.value = true
     if (!ele) {
-        console.log('Element not found: scr-section')
         copying.value = false
         return
     }

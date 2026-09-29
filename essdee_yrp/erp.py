@@ -9,13 +9,12 @@ import requests
 from frappe import _
 from frappe.utils import cint
 
-
 ERP_REQUEST_TIMEOUT = 120
 
 
 def is_purchase_invoice_sync_enabled():
 	"""Return the configured business switch without exposing credentials."""
-	return bool(cint(frappe.db.get_single_value('SD YRP MRP Settings', "enable_purchase_invoice_sync")))
+	return bool(cint(frappe.db.get_single_value("SD YRP MRP Settings", "enable_purchase_invoice_sync")))
 
 
 def is_purchase_invoice_sync_active():
@@ -30,7 +29,7 @@ def is_purchase_invoice_sync_active():
 def get_purchase_invoice_series(series):
 	if not series:
 		return None
-	settings = frappe.get_single('SD YRP MRP Settings')
+	settings = frappe.get_single("SD YRP MRP Settings")
 	for row in settings.get("purchase_invoice_series_map") or []:
 		if row.series == series:
 			return row.mapped_series
@@ -38,7 +37,7 @@ def get_purchase_invoice_series(series):
 
 
 def get_erp_site_url():
-	url = frappe.db.get_single_value('SD YRP MRP Settings', "erp_site_url")
+	url = frappe.db.get_single_value("SD YRP MRP Settings", "erp_site_url")
 	if not url:
 		frappe.throw(_("Please configure ERP Site URL in MRP Settings."))
 	return str(url).rstrip("/")
@@ -49,7 +48,7 @@ def post_erp_request(endpoint, data):
 	if not is_purchase_invoice_sync_active():
 		frappe.throw(_("Purchase Invoice ERP Sync is not enabled in MRP Settings."))
 
-	settings = frappe.get_single('SD YRP MRP Settings')
+	settings = frappe.get_single("SD YRP MRP Settings")
 	api_secret = settings.get_password("erp_api_secret")
 	if not settings.erp_site_url or not settings.erp_api_key or not api_secret:
 		frappe.throw(_("Please configure the ERP Site URL, API Key, and API Secret in MRP Settings."))
@@ -78,7 +77,7 @@ def get_erp_response_message(response, *, title, allow_empty=False, raise_on_err
 	"""Decode one ERP response and give every PI action the same error handling."""
 	try:
 		payload = response.json()
-	except (TypeError, ValueError):
+	except TypeError, ValueError:
 		payload = {}
 
 	if response.status_code == 200 and (allow_empty or "message" in payload):

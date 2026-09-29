@@ -30,7 +30,7 @@ STEP 6 (run before cleanup) — Default-layout regression run: set YRP UI Prefer
 
 ANOMALY INVESTIGATED — phantom TT-CLOTH-15: the Default run produced version 16, not 15, because TT-CLOTH-15 appeared at 11:38:16.475 (between my runs), owner Administrator, same shape (TT-CLOTH/TT-YARN). Forensics: (a) each of my drives captured exactly ONE POST to the create endpoint; (b) TT-CLOTH-15 was MODIFIED at 11:40:42 — a time when none of my browser scripts were running; (c) decisive experiment ipd-view-watch.mjs: opening an IPD record view fires ZERO mutating /api/resource requests (only frappe.client.get reads), and two extra views created no new record. Conclusion: TT-CLOTH-15 belongs to a concurrent external actor (user manually retesting, or a parallel session). Positive side-effect: three near-concurrent same-item creates (11:36:42 mine, 11:38:16 external, 11:39:28 mine) each received unique sequential names (14/15/16) with no deadlock and no 500 — live confirmation of the autoname serialization fix under real multi-actor concurrency.
 
-STEP 5 — Error Log recheck (bench console): entries with creation > 2026-07-16 11:30:13.900638 -> [] (none). 
+STEP 5 — Error Log recheck (bench console): entries with creation > 2026-07-16 11:30:13.900638 -> [] (none).
 
 STEP 7 + RESTORE — Administrator preference restored to "Demo 7" (DB value verified + live boot meta {"layout": "Demo 7"}); deleted TT-CLOTH-14 and TT-CLOTH-16 with frappe.delete_doc + commit (EXISTS -> None both); TT-CLOTH-15 left in place (external actor's record, reported above); final counts: TT-CLOTH IPDs 14 (= 13 baseline + external -15), mapping count 6685 (= 6683 baseline + -15's 2 copies) — my footprint fully removed.
 

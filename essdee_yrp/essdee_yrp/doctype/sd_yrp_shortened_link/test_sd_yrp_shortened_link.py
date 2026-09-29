@@ -24,7 +24,7 @@ class TestShortenedLink(IntegrationTestCase):
 		self.assertEqual([row["role"] for row in schema["permissions"]], ["System Manager"])
 
 	def test_expiry_boundary_and_redirect_scheme(self):
-		doc = frappe.new_doc('SD YRP Shortened Link')
+		doc = frappe.new_doc("SD YRP Shortened Link")
 		doc.type = "Link"
 		doc.link = "javascript:alert(1)"
 		with self.assertRaises(frappe.ValidationError):
@@ -36,10 +36,16 @@ class TestShortenedLink(IntegrationTestCase):
 	def test_authenticated_print_preview_checks_target_permission(self):
 		target = MagicMock()
 		with (
-			patch("essdee_yrp.essdee_yrp.doctype.sd_yrp_shortened_link.sd_yrp_shortened_link.frappe.get_doc", return_value=target),
-			patch("essdee_yrp.essdee_yrp.doctype.sd_yrp_shortened_link.sd_yrp_shortened_link.render_document_print", return_value="html"),
+			patch(
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_shortened_link.sd_yrp_shortened_link.frappe.get_doc",
+				return_value=target,
+			),
+			patch(
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_shortened_link.sd_yrp_shortened_link.render_document_print",
+				return_value="html",
+			),
 		):
-			self.assertEqual(get_print_pdf('SD YRP Lot', "LOT-1"), "html")
+			self.assertEqual(get_print_pdf("SD YRP Lot", "LOT-1"), "html")
 		target.check_permission.assert_called_once_with("print")
 
 	def test_unknown_public_token_is_rejected(self):

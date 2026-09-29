@@ -21,13 +21,12 @@ class TestManualUATDeskRegressions(FrappeTestCase):
 
 	def test_cutting_plan_list_status_indicator_is_registered(self):
 		self.assertEqual(
-			hooks.doctype_list_js['SD YRP Cutting Plan'],
+			hooks.doctype_list_js["SD YRP Cutting Plan"],
 			"public/js/cutting_plan_list.js",
 		)
-		source = (
-			Path(frappe.get_app_path("essdee_yrp"))
-			/ "public/js/cutting_plan_list.js"
-		).read_text(encoding="utf-8")
+		source = (Path(frappe.get_app_path("essdee_yrp")) / "public/js/cutting_plan_list.js").read_text(
+			encoding="utf-8"
+		)
 		for status in (
 			"Planned",
 			"Fabric Partially Received",
@@ -43,12 +42,12 @@ class TestManualUATDeskRegressions(FrappeTestCase):
 		add_index.assert_has_calls(
 			[
 				call(
-					'YRP Stock Ledger Entry',
+					"YRP Stock Ledger Entry",
 					["voucher_type", "voucher_no", "is_cancelled"],
 					index_name="idx_sle_voucher_active",
 				),
 				call(
-					'YRP Stock Reservation Entry',
+					"YRP Stock Reservation Entry",
 					[
 						"item_code",
 						"warehouse",
@@ -60,7 +59,7 @@ class TestManualUATDeskRegressions(FrappeTestCase):
 					index_name="idx_sre_active_stock_bucket",
 				),
 				call(
-					'YRP Stock Reservation Entry',
+					"YRP Stock Reservation Entry",
 					[
 						"voucher_type",
 						"voucher_no",
@@ -87,10 +86,7 @@ class TestManualUATDeskRegressions(FrappeTestCase):
 			as_dict=True,
 		)
 		self.assertEqual(
-			[
-				row.Column_name
-				for row in sorted(reservation_indexes, key=lambda row: row.Seq_in_index)
-			],
+			[row.Column_name for row in sorted(reservation_indexes, key=lambda row: row.Seq_in_index)],
 			[
 				"item_code",
 				"warehouse",
@@ -106,10 +102,7 @@ class TestManualUATDeskRegressions(FrappeTestCase):
 			as_dict=True,
 		)
 		self.assertEqual(
-			[
-				row.Column_name
-				for row in sorted(voucher_indexes, key=lambda row: row.Seq_in_index)
-			],
+			[row.Column_name for row in sorted(voucher_indexes, key=lambda row: row.Seq_in_index)],
 			["voucher_type", "voucher_no", "voucher_detail_no", "docstatus"],
 		)
 
@@ -117,25 +110,23 @@ class TestManualUATDeskRegressions(FrappeTestCase):
 		delivery_challan = frappe._dict(name="DC-COMPLETION-1")
 		with (
 			patch.object(frappe, "get_doc", return_value=delivery_challan) as get_doc,
-			patch(
-				"essdee_yrp.delivery_challan_hooks.sync_cutting_plan_received_cloth"
-			) as sync,
+			patch("essdee_yrp.delivery_challan_hooks.sync_cutting_plan_received_cloth") as sync,
 		):
 			sync_dc_completion_cutting_plan(
 				frappe._dict(
 					purpose="DC Completion",
-					against='YRP Delivery Challan',
+					against="YRP Delivery Challan",
 					against_id="DC-COMPLETION-1",
 				)
 			)
-		get_doc.assert_called_once_with('YRP Delivery Challan', "DC-COMPLETION-1")
+		get_doc.assert_called_once_with("YRP Delivery Challan", "DC-COMPLETION-1")
 		sync.assert_called_once_with(delivery_challan)
 
 		with patch.object(frappe, "get_doc") as get_doc:
 			sync_dc_completion_cutting_plan(
 				frappe._dict(
 					purpose="Material Transfer",
-					against='YRP Delivery Challan',
+					against="YRP Delivery Challan",
 					against_id="DC-COMPLETION-1",
 				)
 			)

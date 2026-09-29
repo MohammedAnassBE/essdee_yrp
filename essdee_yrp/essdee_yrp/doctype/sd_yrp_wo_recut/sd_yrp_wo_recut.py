@@ -5,7 +5,6 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt
-
 from yrp.stock.save_stock_items import group_items_for_ui, ungroup_items_from_ui
 from yrp.utils import update_if_string_instance
 
@@ -15,16 +14,14 @@ class SDYRPWORecut(Document):
 		if not self.is_new():
 			self.set_onload(
 				"recut_item_details",
-				group_items_for_ui(
-					self.get("wo_recut_details") or [], 'YRP Work Order Deliverables'
-				),
+				group_items_for_ui(self.get("wo_recut_details") or [], "YRP Work Order Deliverables"),
 			)
 
 	def before_validate(self):
 		if self.docstatus == 1 or not self.get("recut_item_details"):
 			return
 		grouped = update_if_string_instance(self.recut_item_details)
-		rows = ungroup_items_from_ui(grouped, 'YRP Work Order Deliverables')
+		rows = ungroup_items_from_ui(grouped, "YRP Work Order Deliverables")
 		self.set(
 			"wo_recut_details",
 			[
@@ -39,14 +36,10 @@ class SDYRPWORecut(Document):
 		)
 
 	def validate(self):
-		work_order = frappe.get_doc('YRP Work Order', self.work_order)
+		work_order = frappe.get_doc("YRP Work Order", self.work_order)
 		work_order.check_permission("read")
 		if work_order.docstatus != 1 or work_order.open_status != "Open":
-			frappe.throw(
-				_("Work Order {0} must be submitted and open.").format(
-					frappe.bold(work_order.name)
-				)
-			)
+			frappe.throw(_("Work Order {0} must be submitted and open.").format(frappe.bold(work_order.name)))
 		if work_order.get("is_rework"):
 			frappe.throw(_("A WO Recut cannot be created from a rework Work Order."))
 		if self.lot and self.lot != work_order.lot:

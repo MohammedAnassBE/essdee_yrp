@@ -1,24 +1,22 @@
 """Read models and rebuild actions for the Finishing Plan Desk views."""
-from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe.utils import flt, today
-
-from essdee_yrp.finishing.parsing import json_object
+from yrp.attribute_links import value as _attribute_value
 from yrp.utils import update_if_string_instance
 from yrp.yrp.doctype.yrp_item.yrp_item import get_attribute_details
+
+from essdee_yrp.finishing.parsing import json_object
 
 
 @frappe.whitelist()
 def get_fp_consumption_details(doc_name):
-	doc = frappe.get_doc('SD YRP Finishing Plan', doc_name)
+	doc = frappe.get_doc("SD YRP Finishing Plan", doc_name)
 	doc.check_permission("read")
 	if not doc.lot:
 		return {"lot": doc.lot, "processes": []}
 
-	default_received_type = frappe.db.get_single_value(
-		'YRP Stock Settings', "default_received_type"
-	)
+	default_received_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
 	rows = []
 	for row in _get_jobwork_issued_rows(doc.lot):
 		if row.get("item") == doc.item:
@@ -134,7 +132,9 @@ def _get_fp_grn_deduction_rows(doc):
 		"COALESCE(gri.quantity, 0) > 0",
 	]
 	if doc.item:
-		conditions.append("(COALESCE(NULLIF(iv.variant_of, ''), iv.name) IS NULL OR COALESCE(NULLIF(iv.variant_of, ''), iv.name) != %(fp_item)s)")
+		conditions.append(
+			"(COALESCE(NULLIF(iv.variant_of, ''), iv.name) IS NULL OR COALESCE(NULLIF(iv.variant_of, ''), iv.name) != %(fp_item)s)"
+		)
 	rows = frappe.db.sql(
 		"""
 			SELECT
@@ -168,7 +168,7 @@ def _get_fp_grn_deduction_rows(doc):
 
 @frappe.whitelist()
 def get_fp_stock_balance_details(doc_name):
-	doc = frappe.get_doc('SD YRP Finishing Plan', doc_name)
+	doc = frappe.get_doc("SD YRP Finishing Plan", doc_name)
 	doc.check_permission("read")
 	if not doc.lot:
 		return {"lot": doc.lot, "warehouses": []}
@@ -194,7 +194,7 @@ def get_fp_stock_balance_details(doc_name):
 		row.item = row.item_name
 		row.quantity = row.bal_qty
 		row.warehouse_name = row.get("warehouse_name") or frappe.db.get_value(
-			'Warehouse', row.warehouse, "warehouse_name"
+			"Warehouse", row.warehouse, "warehouse_name"
 		)
 		rows.append(row)
 	return {
@@ -234,7 +234,7 @@ def _group_fp_item_rows(
 			top_group[group_name_field] = row.get(group_name_field) or group_value
 		variant = variant_cache.get(row.item_variant)
 		if not variant:
-			variant = frappe.get_cached_doc('Item', row.item_variant)
+			variant = frappe.get_cached_doc("Item", row.item_variant)
 			variant_cache[row.item_variant] = variant
 		item_name = row.get("item") or (variant.variant_of or variant.name)
 		item_attributes = item_attribute_cache.get(item_name)
@@ -259,9 +259,7 @@ def _group_fp_item_rows(
 				"primary_attribute_values": primary_values,
 				"items": [],
 				"total_details": (
-					{value: 0 for value in primary_values}
-					if primary_attribute
-					else {"default": 0}
+					{value: 0 for value in primary_values} if primary_attribute else {"default": 0}
 				),
 				"overall_total": 0,
 				"_item_index": {},
@@ -294,9 +292,7 @@ def _group_fp_item_rows(
 				"source_report": row.get("source_report"),
 				"item": item_name,
 				"attributes": attributes,
-				"received_type": (
-					row.get("received_type") if "received_type" in item_key_fields else None
-				),
+				"received_type": (row.get("received_type") if "received_type" in item_key_fields else None),
 				"stock_uom": row.get("stock_uom"),
 				"values": {},
 				"total_quantity": 0,
@@ -330,9 +326,7 @@ def _group_fp_item_rows(
 				clamp_negative=clamp_negative,
 				remove_zero_items=remove_zero_items,
 			)
-			group["items"].sort(
-				key=lambda item: (item.get("item") or "", item.get("received_type") or "")
-			)
+			group["items"].sort(key=lambda item: (item.get("item") or "", item.get("received_type") or ""))
 			group.pop("_item_index", None)
 		top_group["groups"] = [group for group in top_group["groups"] if group.get("items")]
 		top_group.pop("_group_index", None)
@@ -359,9 +353,11 @@ def _update_fp_consumption_received_type(item, received_type):
 
 
 def _recalculate_fp_item_group_totals(group, clamp_negative=False, remove_zero_items=False):
-	total_details = {
-		value: 0 for value in group.get("primary_attribute_values") or []
-	} if group.get("primary_attribute") else {"default": 0}
+	total_details = (
+		{value: 0 for value in group.get("primary_attribute_values") or []}
+		if group.get("primary_attribute")
+		else {"default": 0}
+	)
 	items = []
 	for item in group.get("items") or []:
 		total_quantity = 0

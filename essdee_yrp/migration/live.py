@@ -42,9 +42,7 @@ from essdee_yrp.migration.locking import (
 from essdee_yrp.migration.planner import build_schema_analysis
 from essdee_yrp.migration.rules import DOCTYPE_RENAMES
 
-SOURCE_BRIDGE = (
-	Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py"
-)
+SOURCE_BRIDGE = Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py"
 
 
 def _file_content_bytes(file_doc: Any) -> bytes:
@@ -52,8 +50,7 @@ def _file_content_bytes(file_doc: Any) -> bytes:
 	get_content = file_doc.get_content
 	parameters = inspect.signature(get_content).parameters
 	supports_encodings = "encodings" in parameters or any(
-		parameter.kind is inspect.Parameter.VAR_KEYWORD
-		for parameter in parameters.values()
+		parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters.values()
 	)
 	content = get_content(encodings=[]) if supports_encodings else get_content()
 	return content.encode() if isinstance(content, str) else content
@@ -83,9 +80,7 @@ VOLATILE_VERIFICATION_FIELDS = {
 	"User": frozenset({"last_active", "last_known_versions"}),
 	# App fixture sync may recreate an equivalent permission row under a new
 	# random hash and framework-owned timestamps after the migration write.
-	"Custom DocPerm": frozenset(
-		{"owner", "creation", "modified", "modified_by"}
-	),
+	"Custom DocPerm": frozenset({"owner", "creation", "modified", "modified_by"}),
 }
 # These standard masters belong to the independently restored ERP database.
 # The MRP source is merged into them by exact identity, so source identities
@@ -108,8 +103,8 @@ PRESERVED_TARGET_IDENTITY_DOCTYPES = frozenset(
 PRESERVED_TARGET_CHILD_DOCTYPES = frozenset(
 	{
 		"UOM Conversion Detail",
-		'YRP Additional Parameter',
-		'YRP Item Item Category',
+		"YRP Additional Parameter",
+		"YRP Item Item Category",
 	}
 )
 TARGET_OWNED_APPROVED_FRAPPE_FIELDS = {
@@ -174,17 +169,13 @@ def _migration_physical_target_doctypes(plan: MigrationPlan) -> tuple[str, ...]:
 
 	discovered = {str(spec.target) for spec in plan.specs.values()}
 	for spec in plan.specs.values():
-		discovered.update(
-			str(target) for target in spec.table_option_map.values() if target
-		)
+		discovered.update(str(target) for target in spec.table_option_map.values() if target)
 	pending = list(discovered)
 	while pending:
 		doctype = pending.pop()
 		schema = plan.target_schemas.get(doctype) or {}
 		for field in schema.get("fields") or []:
-			if field.get("fieldtype") not in TABLE_FIELD_TYPES or not field.get(
-				"options"
-			):
+			if field.get("fieldtype") not in TABLE_FIELD_TYPES or not field.get("options"):
 				continue
 			child_doctype = str(field["options"])
 			if child_doctype in discovered:
@@ -217,22 +208,22 @@ SAFE_SQL_FIELDNAME = re.compile(r"^[a-z][a-z0-9_]*$")
 # dimension contract. Keeping this here makes the contract independently
 # auditable instead of silently inventing values in a transformer.
 IPD_MIGRATION_PREREQUISITES = {
-	"item_group": 'Item Group',
-	"default_cutting_process": 'YRP Process',
-	"default_knitting_process": 'YRP Process',
-	"default_dyeing_process": 'YRP Process',
-	"default_packing_process": 'YRP Process',
+	"item_group": "Item Group",
+	"default_cutting_process": "YRP Process",
+	"default_knitting_process": "YRP Process",
+	"default_dyeing_process": "YRP Process",
+	"default_packing_process": "YRP Process",
 	"default_pack_in_stage": None,
-	"default_packing_attribute": 'Item Attribute',
+	"default_packing_attribute": "Item Attribute",
 	"default_pack_out_stage": None,
-	"default_stitching_process": 'YRP Process',
+	"default_stitching_process": "YRP Process",
 	"default_stitching_in_stage": None,
-	"default_stitching_attribute": 'Item Attribute',
+	"default_stitching_attribute": "Item Attribute",
 	"default_stitching_out_stage": None,
-	"default_set_item_attribute": 'Item Attribute',
+	"default_set_item_attribute": "Item Attribute",
 }
 STOCK_MIGRATION_PREREQUISITES = {
-	"default_received_type": 'YRP Received Type',
+	"default_received_type": "YRP Received Type",
 }
 TARGET_OWNED_STOCK_SETTINGS_FIELDS = frozenset(
 	{
@@ -244,13 +235,13 @@ TARGET_OWNED_STOCK_SETTINGS_FIELDS = frozenset(
 )
 REQUIRED_STOCK_DIMENSION_CONTRACT = {
 	"lot": {
-		"dimension_doctype": 'SD YRP Lot',
+		"dimension_doctype": "SD YRP Lot",
 		"mandatory": 1,
 		"in_valuation": 1,
 		"is_production_group": 1,
 	},
 	"received_type": {
-		"dimension_doctype": 'YRP Received Type',
+		"dimension_doctype": "YRP Received Type",
 		"mandatory": 1,
 		"in_valuation": 1,
 		"is_production_group": 0,
@@ -303,9 +294,7 @@ class F15SourceBridge:
 		args = ["export", "--doctype", doctype, "--batch-size", str(batch_size)]
 		if names is not None:
 			if start_after or limit is not None:
-				raise MigrationError(
-					"Exact-name source export cannot be combined with start_after/limit"
-				)
+				raise MigrationError("Exact-name source export cannot be combined with start_after/limit")
 			names = sorted({str(name) for name in names if name})
 			for chunk in _chunks(names, 250):
 				yield from self._run(
@@ -322,9 +311,7 @@ class F15SourceBridge:
 			args.extend(["--limit", str(max(0, int(limit)))])
 		yield from self._run(args)
 
-	def resolve_source_identities(
-		self, doctype: str, names: Iterable[str]
-	) -> Iterable[dict[str, Any]]:
+	def resolve_source_identities(self, doctype: str, names: Iterable[str]) -> Iterable[dict[str, Any]]:
 		"""Locate exact source rows and return their owning parent identities."""
 
 		names = sorted({str(name) for name in names if name})
@@ -339,9 +326,7 @@ class F15SourceBridge:
 				]
 			)
 
-	def iter_cut_bundle_edit_ledger_dependencies(
-		self, names: Iterable[str]
-	) -> Iterable[dict[str, Any]]:
+	def iter_cut_bundle_edit_ledger_dependencies(self, names: Iterable[str]) -> Iterable[dict[str, Any]]:
 		"""Return source ledger identities required by selected edit records."""
 
 		requested = sorted({str(name) for name in names if name})
@@ -411,30 +396,21 @@ class F15SourceBridge:
 				# process field. The source IPD setting is their authoritative
 				# process; do not require a second manually duplicated profile value.
 				if row.get("default_packing_process"):
-					migration_defaults["Lot BOM.process_name"] = row[
-						"default_packing_process"
-					]
+					migration_defaults["Lot BOM.process_name"] = row["default_packing_process"]
 				data["migration_defaults"].update(migration_defaults)
 		if conflicts:
 			identity_conflicts = [
-				row
-				for row in conflicts
-				if row.get("kind") == "item_attribute_value_identity"
+				row for row in conflicts if row.get("kind") == "item_attribute_value_identity"
 			]
 			if identity_conflicts:
 				raise MigrationError(
 					"Item Attribute Value Link-to-Data conversion is unsafe because "
 					"source names differ from their values: "
-					+ "; ".join(
-						f"{row['name']}={row['attribute_value']}"
-						for row in identity_conflicts[:20]
-					)
+					+ "; ".join(f"{row['name']}={row['attribute_value']}" for row in identity_conflicts[:20])
 				)
 			raise MigrationError(
 				"Conflicting Cut Panel Movement warehouse references: "
-				+ "; ".join(
-					f"{row['name']}={row['candidates']}" for row in conflicts[:20]
-				)
+				+ "; ".join(f"{row['name']}={row['candidates']}" for row in conflicts[:20])
 			)
 		for row in mapping_pairs:
 			if row.get("attribute_name"):
@@ -460,9 +436,7 @@ class F15SourceBridge:
 					f"Ambiguous target Supplier identity for {source_name!r}: "
 					+ ", ".join(sorted(str(value) for value in matches))
 				)
-			data["supplier_aliases"][source_name] = (
-				str(matches[0]) if matches else source_name
-			)
+			data["supplier_aliases"][source_name] = str(matches[0]) if matches else source_name
 		return data
 
 	def file_status(self, names: Iterable[str] | None = None) -> dict[str, Any]:
@@ -551,9 +525,7 @@ class F15SourceBridge:
 		# log the raw payload; the archive phase encrypts it with the target key.
 		yield from self._run(["framework-rows"])
 
-	def iter_supporting_documents(
-		self, doctype: str, names: Iterable[str]
-	) -> Iterable[dict[str, Any]]:
+	def iter_supporting_documents(self, doctype: str, names: Iterable[str]) -> Iterable[dict[str, Any]]:
 		names = list(names)
 		if not names:
 			return
@@ -561,8 +533,13 @@ class F15SourceBridge:
 		# must not become one unbounded --names-json argument.
 		for chunk in _chunks(names, 250):
 			yield from self._run(
-				["supporting-documents", "--doctype", doctype, "--names-json",
-					json.dumps(chunk, separators=(",", ":"))]
+				[
+					"supporting-documents",
+					"--doctype",
+					doctype,
+					"--names-json",
+					json.dumps(chunk, separators=(",", ":")),
+				]
 			)
 
 	def _run(self, args: list[str]) -> Iterable[dict[str, Any]]:
@@ -613,9 +590,7 @@ class F15SourceBridge:
 			if return_code:
 				stderr.seek(0)
 				message = stderr.read().strip()
-				raise MigrationError(
-					f"F15 source bridge failed with exit {return_code}: {message[-4000:]}"
-				)
+				raise MigrationError(f"F15 source bridge failed with exit {return_code}: {message[-4000:]}")
 
 
 class FrappeBulkTarget:
@@ -649,7 +624,7 @@ class FrappeBulkTarget:
 
 		for name, fieldname, value in passwords:
 			set_encrypted_password(target_doctype, name, value, fieldname=fieldname)
-		if target_doctype == 'Supplier':
+		if target_doctype == "Supplier":
 			self._upsert_supplier_warehouses(documents)
 
 	def _replace_child_tables(self, meta, documents: list[dict[str, Any]]) -> None:
@@ -739,8 +714,14 @@ class FrappeBulkTarget:
 		if not rows:
 			return
 		columns = set(frappe.db.get_table_columns(doctype))
-		missing = sorted({key for row in rows for key, value in row.items()
-			if key not in columns and value not in (None, "", [], {})})
+		missing = sorted(
+			{
+				key
+				for row in rows
+				for key, value in row.items()
+				if key not in columns and value not in (None, "", [], {})
+			}
+		)
 		if missing:
 			raise MigrationError(f"Refusing to drop populated fields from {doctype}: {', '.join(missing)}")
 		# The source bridge exports SQL Decimals as strings. Check those exact
@@ -751,7 +732,8 @@ class FrappeBulkTarget:
 			self._decimal_scales = {}
 		if doctype not in self._decimal_scales:
 			self._decimal_scales[doctype] = {
-				name: int(scale) for name, scale in frappe.db.sql(
+				name: int(scale)
+				for name, scale in frappe.db.sql(
 					"SELECT column_name,numeric_scale FROM information_schema.columns "
 					"WHERE table_schema=DATABASE() AND table_name=%s AND data_type='decimal'",
 					("tab" + doctype,),
@@ -768,7 +750,9 @@ class FrappeBulkTarget:
 				except InvalidOperation:
 					fits = False
 				if not fits:
-					raise MigrationError(f"Refusing numeric rounding at {doctype} {row.get('name')}.{fieldname}; target scale is {scale}")
+					raise MigrationError(
+						f"Refusing numeric rounding at {doctype} {row.get('name')}.{fieldname}; target scale is {scale}"
+					)
 		if "name" not in columns:
 			raise MigrationError(f"{doctype} has no physical name column")
 		quoted_table = _quote_identifier(f"tab{doctype}")
@@ -796,24 +780,18 @@ class FrappeBulkTarget:
 					MAX_SQL_PARAMETERS // max(len(fields), 1),
 				),
 			)
-			quoted_fields = ", ".join(
-				_quote_identifier(fieldname) for fieldname in fields
-			)
-			updates = ", ".join(
-				f"{_quote_identifier(fieldname)}=VALUES({_quote_identifier(fieldname)})"
-				for fieldname in fields
-				if fieldname != "name"
-			) or "`name`=VALUES(`name`)"
-			for chunk in _chunks(matching_rows, chunk_size):
-				placeholders = ", ".join(
-					"(" + ", ".join(["%s"] * len(fields)) + ")"
-					for _row in chunk
-				)
-				values = [
-					_db_value(row.get(fieldname))
-					for row in chunk
+			quoted_fields = ", ".join(_quote_identifier(fieldname) for fieldname in fields)
+			updates = (
+				", ".join(
+					f"{_quote_identifier(fieldname)}=VALUES({_quote_identifier(fieldname)})"
 					for fieldname in fields
-				]
+					if fieldname != "name"
+				)
+				or "`name`=VALUES(`name`)"
+			)
+			for chunk in _chunks(matching_rows, chunk_size):
+				placeholders = ", ".join("(" + ", ".join(["%s"] * len(fields)) + ")" for _row in chunk)
+				values = [_db_value(row.get(fieldname)) for row in chunk for fieldname in fields]
 				try:
 					frappe.db.sql(
 						f"INSERT INTO {quoted_table} ({quoted_fields}) VALUES {placeholders} "
@@ -832,8 +810,7 @@ class FrappeBulkTarget:
 		companies = frappe.get_all("Company", pluck="name", limit_page_length=2)
 		if len(companies) != 1:
 			raise MigrationError(
-				"Supplier warehouse migration requires exactly one target Company; "
-				f"found {len(companies)}"
+				f"Supplier warehouse migration requires exactly one target Company; found {len(companies)}"
 			)
 		company = companies[0]
 		rows = []
@@ -856,11 +833,9 @@ class FrappeBulkTarget:
 					"docstatus": 0,
 				}
 			)
-		self._bulk_upsert('Warehouse', rows)
+		self._bulk_upsert("Warehouse", rows)
 
-	def _reconcile_item_attribute_values(
-		self, documents: list[dict[str, Any]]
-	) -> None:
+	def _reconcile_item_attribute_values(self, documents: list[dict[str, Any]]) -> None:
 		"""Make the legacy value identity authoritative for ERPNext child rows."""
 
 		for document in documents:
@@ -868,9 +843,7 @@ class FrappeBulkTarget:
 			parent = str(document.get("parent") or "")
 			value = document.get("attribute_value")
 			if not name or not parent or value in (None, ""):
-				raise MigrationError(
-					"Item Attribute Value migration row requires name, parent and value"
-				)
+				raise MigrationError("Item Attribute Value migration row requires name, parent and value")
 			existing = frappe.db.get_value(
 				"Item Attribute Value",
 				name,
@@ -883,9 +856,7 @@ class FrappeBulkTarget:
 				or existing.parentfield != "item_attribute_values"
 				or str(existing.attribute_value or "") != str(value)
 			):
-				raise MigrationError(
-					f"Item Attribute Value identity collision for {name}"
-				)
+				raise MigrationError(f"Item Attribute Value identity collision for {name}")
 			duplicates = frappe.get_all(
 				"Item Attribute Value",
 				filters={
@@ -959,16 +930,17 @@ class FrappeBulkTarget:
 			existing_doc = frappe.get_doc("File", existing_name)
 			if existing_doc.exists_on_disk():
 				_relocate_migrated_file_urls(
-					target_doctype, target_name, target_field, existing.file_url,
+					target_doctype,
+					target_name,
+					target_field,
+					existing.file_url,
 					source_url=row.get("file_url"),
 					source_file_name=row.get("name"),
 				)
 				return {"status": "existing", "file_url": existing.file_url}
 			content = _decode_and_validate_file_payload(row)
 			if content is None:
-				raise MigrationError(
-					f"File {existing_name} target metadata exists but its blob is missing"
-				)
+				raise MigrationError(f"File {existing_name} target metadata exists but its blob is missing")
 			existing_doc.flags.new_file = True
 			existing_doc.save_file(content=content, ignore_existing_file_check=True)
 			frappe.db.set_value(
@@ -985,7 +957,10 @@ class FrappeBulkTarget:
 			if existing_doc.content_hash != row.get("content_hash"):
 				raise MigrationError(f"File {existing_name} changed during blob repair")
 			_relocate_migrated_file_urls(
-				target_doctype, target_name, target_field, existing_doc.file_url,
+				target_doctype,
+				target_name,
+				target_field,
+				existing_doc.file_url,
 				source_url=row.get("file_url"),
 				source_file_name=row.get("name"),
 			)
@@ -1025,14 +1000,10 @@ class FrappeBulkTarget:
 		elif content is not None:
 			file_doc.content = content
 		else:
-			raise MigrationError(
-				f"File {existing_name} omitted content before its blob was migrated"
-			)
+			raise MigrationError(f"File {existing_name} omitted content before its blob was migrated")
 		file_doc.insert(ignore_permissions=True, set_name=existing_name)
 		if file_doc.content_hash != row.get("content_hash"):
-			raise MigrationError(
-				f"File {existing_name} changed content during target creation"
-			)
+			raise MigrationError(f"File {existing_name} changed content during target creation")
 		frappe.db.set_value(
 			"File",
 			file_doc.name,
@@ -1045,7 +1016,10 @@ class FrappeBulkTarget:
 			update_modified=False,
 		)
 		_relocate_migrated_file_urls(
-			target_doctype, target_name, target_field, file_doc.file_url,
+			target_doctype,
+			target_name,
+			target_field,
+			file_doc.file_url,
 			source_url=row.get("file_url"),
 			source_file_name=row.get("name"),
 		)
@@ -1151,42 +1125,30 @@ def _validate_configured_default_contract(
 		target_doctype = spec.target if spec else configured_doctype
 		schema = plan.target_schemas.get(target_doctype)
 		field = next(
-			(
-				row
-				for row in (schema or {}).get("fields") or []
-				if row.get("fieldname") == fieldname
-			),
+			(row for row in (schema or {}).get("fields") or [] if row.get("fieldname") == fieldname),
 			None,
 		)
 		if not field or field.get("fieldtype") in TABLE_FIELD_TYPES:
 			raise MigrationError(f"Unknown configured migration default {key}")
 		if field.get("fieldtype") == "Select":
 			options = {
-				option.strip()
-				for option in str(field.get("options") or "").splitlines()
-				if option.strip()
+				option.strip() for option in str(field.get("options") or "").splitlines() if option.strip()
 			}
 			if str(value) not in options:
-				raise MigrationError(
-					f"Configured migration default {key}={value!r} is not a Select option"
-				)
+				raise MigrationError(f"Configured migration default {key}={value!r} is not a Select option")
 		if field.get("fieldtype") != "Link":
 			continue
 		link_doctype = str(field.get("options") or "")
 		if not link_doctype:
 			raise MigrationError(f"Configured Link default {key} has no target DocType")
-		if frappe.db.exists("DocType", link_doctype) and frappe.db.exists(
-			link_doctype, value
-		):
+		if frappe.db.exists("DocType", link_doctype) and frappe.db.exists(link_doctype, value):
 			continue
 		source_doctypes = [
 			source_doctype
 			for source_doctype, spec in plan.specs.items()
 			if spec.target == link_doctype and not spec.is_child
 		]
-		if len(source_doctypes) != 1 or not source.document_exists(
-			source_doctypes[0], str(value)
-		):
+		if len(source_doctypes) != 1 or not source.document_exists(source_doctypes[0], str(value)):
 			raise MigrationError(
 				f"Configured migration default {key}={value!r} does not resolve "
 				f"to {link_doctype} on the target or frozen source"
@@ -1227,16 +1189,16 @@ def _validate_target_migration_prerequisites(
 	"""
 
 	issues: list[str] = []
-	values: dict[str, dict[str, Any]] = {'SD YRP IPD Settings': {}, 'YRP Stock Settings': {}}
+	values: dict[str, dict[str, Any]] = {"SD YRP IPD Settings": {}, "YRP Stock Settings": {}}
 	value_sources: dict[str, dict[str, str]] = {
-		'SD YRP IPD Settings': {},
-		'YRP Stock Settings': {},
+		"SD YRP IPD Settings": {},
+		"YRP Stock Settings": {},
 	}
 	source_ipd_settings = _source_single_document(source, "IPD Settings")
 	required_defaults = required_defaults or {}
 	for doctype, fields in (
-		('SD YRP IPD Settings', IPD_MIGRATION_PREREQUISITES),
-		('YRP Stock Settings', STOCK_MIGRATION_PREREQUISITES),
+		("SD YRP IPD Settings", IPD_MIGRATION_PREREQUISITES),
+		("YRP Stock Settings", STOCK_MIGRATION_PREREQUISITES),
 	):
 		for fieldname, link_doctype in fields.items():
 			target_value = frappe.db.get_single_value(doctype, fieldname)
@@ -1250,7 +1212,7 @@ def _validate_target_migration_prerequisites(
 			values[doctype][fieldname] = value
 			value_sources[doctype][fieldname] = value_source
 			if value in (None, ""):
-				if doctype == 'SD YRP IPD Settings':
+				if doctype == "SD YRP IPD Settings":
 					issues.append(
 						f"{doctype}.{fieldname} is required from the F15 source or "
 						"essdee_yrp_migration.required_defaults"
@@ -1265,9 +1227,7 @@ def _validate_target_migration_prerequisites(
 					f"{link_doctype} on the target or frozen source"
 				)
 
-	dimension_rows = {
-		str(row.get("fieldname") or ""): dict(row) for row in dimensions
-	}
+	dimension_rows = {str(row.get("fieldname") or ""): dict(row) for row in dimensions}
 	for fieldname, expected in REQUIRED_STOCK_DIMENSION_CONTRACT.items():
 		row = dimension_rows.get(fieldname)
 		if not row:
@@ -1284,14 +1244,12 @@ def _validate_target_migration_prerequisites(
 				)
 
 	if issues:
-		raise MigrationError(
-			"Migration target settings are incomplete:\n- " + "\n- ".join(issues)
-		)
+		raise MigrationError("Migration target settings are incomplete:\n- " + "\n- ".join(issues))
 
 	return {
-		"ipd_settings": values['SD YRP IPD Settings'],
-		"ipd_settings_sources": value_sources['SD YRP IPD Settings'],
-		"stock_settings": values['YRP Stock Settings'],
+		"ipd_settings": values["SD YRP IPD Settings"],
+		"ipd_settings_sources": value_sources["SD YRP IPD Settings"],
+		"stock_settings": values["YRP Stock Settings"],
 		"stock_dimensions": [
 			{
 				key: row.get(key)
@@ -1309,18 +1267,14 @@ def _validate_target_migration_prerequisites(
 	}
 
 
-def _source_single_document(
-	source: F15SourceBridge | None, doctype: str
-) -> dict[str, Any] | None:
+def _source_single_document(source: F15SourceBridge | None, doctype: str) -> dict[str, Any] | None:
 	"""Read one source Single without writing or relying on target state."""
 
 	if source is None or not callable(getattr(source, "iter_documents", None)):
 		return None
 	documents = list(source.iter_documents(doctype, limit=2))
 	if len(documents) != 1:
-		raise MigrationError(
-			f"F15 source must return exactly one {doctype}; found {len(documents)}"
-		)
+		raise MigrationError(f"F15 source must return exactly one {doctype}; found {len(documents)}")
 	document = dict(documents[0])
 	if document.get("doctype") != doctype or document.get("name") != doctype:
 		raise MigrationError(f"F15 source returned an invalid {doctype} Single")
@@ -1337,7 +1291,7 @@ def _migration_prerequisite_value(
 ) -> tuple[Any, str]:
 	"""Return the source/profile value for source-owned IPD settings."""
 
-	if doctype != 'SD YRP IPD Settings' or source_ipd_settings is None:
+	if doctype != "SD YRP IPD Settings" or source_ipd_settings is None:
 		return target_value, "target"
 	source_value = source_ipd_settings.get(fieldname)
 	if source_value not in (None, ""):
@@ -1361,9 +1315,7 @@ def _target_or_source_prerequisite_exists(
 ) -> bool:
 	if not link_doctype:
 		return True
-	if frappe.db.exists("DocType", link_doctype) and frappe.db.exists(
-		link_doctype, value
-	):
+	if frappe.db.exists("DocType", link_doctype) and frappe.db.exists(link_doctype, value):
 		return True
 	if not plan or not source:
 		return False
@@ -1374,11 +1326,10 @@ def _target_or_source_prerequisite_exists(
 	]
 	# Target Warehouse rows are deterministically generated from source Supplier
 	# identities. They are intentionally absent during the clean reset boundary.
-	if link_doctype == 'Warehouse':
+	if link_doctype == "Warehouse":
 		source_doctypes.append("Supplier")
 	return any(
-		source.document_exists(source_doctype, value)
-		for source_doctype in sorted(set(source_doctypes))
+		source.document_exists(source_doctype, value) for source_doctype in sorted(set(source_doctypes))
 	)
 
 
@@ -1388,9 +1339,7 @@ def _target_stock_dimension_fieldnames() -> list[str]:
 
 def _assert_target_site(settings: MigrationSettings) -> None:
 	if frappe.local.site != settings.target_site:
-		raise MigrationError(
-			f"Migration target changed from {settings.target_site} to {frappe.local.site}"
-		)
+		raise MigrationError(f"Migration target changed from {settings.target_site} to {frappe.local.site}")
 
 
 def _source_snapshot(
@@ -1400,20 +1349,14 @@ def _source_snapshot(
 	plan: MigrationPlan,
 	target_prerequisites: Mapping[str, Any],
 ) -> dict[str, Any]:
-	broken_link_payload = json.dumps(
-		broken_links, sort_keys=True, separators=(",", ":"), default=str
-	)
+	broken_link_payload = json.dumps(broken_links, sort_keys=True, separators=(",", ":"), default=str)
 	return {
 		**settings.public_dict(),
 		"snapshot_fingerprint": status.get("snapshot_fingerprint"),
 		"total_parent_records": int(status.get("total_parent_records") or 0),
 		"source_broken_link_count": len(broken_links),
-		"source_broken_link_digest": hashlib.sha256(
-			broken_link_payload.encode("utf-8")
-		).hexdigest(),
-		"migration_contract_fingerprint": _migration_contract_fingerprint(
-			settings, plan
-		),
+		"source_broken_link_digest": hashlib.sha256(broken_link_payload.encode("utf-8")).hexdigest(),
+		"migration_contract_fingerprint": _migration_contract_fingerprint(settings, plan),
 		"target_prerequisite_fingerprint": hashlib.sha256(
 			json.dumps(
 				target_prerequisites,
@@ -1443,9 +1386,7 @@ def _apply_target_owned_configuration_boundary(
 	return target_document
 
 
-def _migration_contract_fingerprint(
-	settings: MigrationSettings, plan: MigrationPlan
-) -> str:
+def _migration_contract_fingerprint(settings: MigrationSettings, plan: MigrationPlan) -> str:
 	"""Bind the gate to deployed code, target schema, mappings, and defaults."""
 
 	migration_root = Path(__file__).resolve().parent
@@ -1465,15 +1406,12 @@ def _migration_contract_fingerprint(
 		)
 	]
 	from yrp import attribute_value_identity, attribute_values
+
 	code_paths.extend([Path(attribute_value_identity.__file__), Path(attribute_values.__file__)])
 	code_paths.append(SOURCE_BRIDGE)
-	code_paths.append(SOURCE_BRIDGE.with_name('f15_framework_archive.py'))
-	code_paths.append(migration_root.parent / 'purchase_invoice.py')
-	code_paths.append(
-		migration_root.parent
-		/ "patches"
-		/ "backfill_deterministic_valuation_lineage.py"
-	)
+	code_paths.append(SOURCE_BRIDGE.with_name("f15_framework_archive.py"))
+	code_paths.append(migration_root.parent / "purchase_invoice.py")
+	code_paths.append(migration_root.parent / "patches" / "backfill_deterministic_valuation_lineage.py")
 	code_digest = hashlib.sha256()
 	for path in code_paths:
 		code_digest.update(path.name.encode("utf-8"))
@@ -1483,11 +1421,26 @@ def _migration_contract_fingerprint(
 	contract = {
 		"code_digest": code_digest.hexdigest(),
 		"supporting_schemas": {
-			name: {"fields": [(field.fieldname, field.fieldtype, field.options)
-				for field in frappe.get_meta(name).fields],
-				"columns": frappe.db.sql("SELECT column_name,column_type FROM information_schema.columns "
-					"WHERE table_schema=DATABASE() AND table_name=%s ORDER BY ordinal_position", ('tab' + name,))}
-			for name in ('Address', 'Contact', 'Dynamic Link', 'Contact Email', 'Contact Phone', 'Comment', 'Version')
+			name: {
+				"fields": [
+					(field.fieldname, field.fieldtype, field.options)
+					for field in frappe.get_meta(name).fields
+				],
+				"columns": frappe.db.sql(
+					"SELECT column_name,column_type FROM information_schema.columns "
+					"WHERE table_schema=DATABASE() AND table_name=%s ORDER BY ordinal_position",
+					("tab" + name,),
+				),
+			}
+			for name in (
+				"Address",
+				"Contact",
+				"Dynamic Link",
+				"Contact Email",
+				"Contact Phone",
+				"Comment",
+				"Version",
+			)
 		},
 		"required_defaults": dict(settings.required_defaults),
 		"target_schemas": plan.target_schemas,
@@ -1530,9 +1483,7 @@ def _source_broken_link_manifest(
 			parent_spec = plan.specs.get(str(row["parenttype"]))
 			if parent_spec:
 				source_parentfield = str(row["parentfield"])
-				target_parentfield = parent_spec.field_map.get(
-					source_parentfield, source_parentfield
-				)
+				target_parentfield = parent_spec.field_map.get(source_parentfield, source_parentfield)
 				parent_target_field = next(
 					(
 						field
@@ -1541,9 +1492,9 @@ def _source_broken_link_manifest(
 					),
 					None,
 				)
-				contextual_target = parent_spec.table_option_map.get(
-					source_parentfield
-				) or (parent_target_field or {}).get("options")
+				contextual_target = parent_spec.table_option_map.get(source_parentfield) or (
+					parent_target_field or {}
+				).get("options")
 				if contextual_target:
 					target_doctype = str(contextual_target)
 					target_schema = plan.target_schemas.get(target_doctype) or {}
@@ -1595,9 +1546,7 @@ def _require_previous_snapshot(
 		raise MigrationError("Previous migration report is not valid JSON") from exc
 	previous_snapshot = previous_report.get("source_snapshot") or {}
 	if not previous_snapshot:
-		raise MigrationError(
-			"A completed Dry Run from this production source is required before migration"
-		)
+		raise MigrationError("A completed Dry Run from this production source is required before migration")
 	previous_comparable = dict(previous_snapshot)
 	current_comparable = dict(current_snapshot)
 	if mode == "verify":
@@ -1615,14 +1564,13 @@ def _require_previous_snapshot(
 		)
 		raise MigrationError(
 			"Source data/configuration changed after the previous migration gate; "
-			"run Analyse and Dry Run again. Changed snapshot fields: "
-			+ ", ".join(changed_keys)
+			"run Analyse and Dry Run again. Changed snapshot fields: " + ", ".join(changed_keys)
 		)
 
 
 def _assert_no_other_active_migration(migration_name: str) -> None:
 	active = frappe.get_all(
-		'SD YRP MRP Data Migration',
+		"SD YRP MRP Data Migration",
 		filters={
 			"name": ["!=", migration_name],
 			"status": ["in", sorted(RUNNING_STATUSES)],
@@ -1649,7 +1597,7 @@ def run_job(
 		raise MigrationError(f"Unsupported migration mode {mode!r}")
 	_assert_no_other_active_migration(migration_name)
 
-	migration = frappe.get_doc('SD YRP MRP Data Migration', migration_name)
+	migration = frappe.get_doc("SD YRP MRP Data Migration", migration_name)
 	source = F15SourceBridge(settings)
 	plan, schema_payload = build_live_schema_analysis(settings, source)
 	if not plan.ready:
@@ -1696,13 +1644,19 @@ def run_job(
 		from essdee_yrp.migration.preservation import run_preservation
 
 		result["preservation"] = run_preservation(
-			plan, source, migration_name=migration_name, dry_run=mode == "dry_run",
+			plan,
+			source,
+			migration_name=migration_name,
+			dry_run=mode == "dry_run",
 			allow_missing_files=allow_missing_files,
 		)
 		from essdee_yrp.migration.framework_history import run_framework_history
 
 		result["framework_history"] = run_framework_history(
-			plan, source, migration_name, dry_run=mode == "dry_run",
+			plan,
+			source,
+			migration_name,
+			dry_run=mode == "dry_run",
 			allow_missing_files=allow_missing_files,
 		)
 		result["files"] = _run_files(
@@ -1720,6 +1674,7 @@ def run_job(
 			from essdee_yrp.patches.backfill_deterministic_valuation_lineage import (
 				backfill_deterministic_valuation_lineage,
 			)
+
 			result["valuation_lineage"] = backfill_deterministic_valuation_lineage()
 			result["setup_state"] = _finalize_target_setup_state()
 		result["schema"] = {
@@ -1791,7 +1746,7 @@ def run_reset_job_guarded(*args, **kwargs):
 def _mark_queued_failure(migration_name: str) -> None:
 	if not migration_name:
 		return
-	status = frappe.db.get_value('SD YRP MRP Data Migration', migration_name, "status")
+	status = frappe.db.get_value("SD YRP MRP Data Migration", migration_name, "status")
 	if status in RUNNING_STATUSES:
 		_mark_failed(migration_name)
 
@@ -1801,7 +1756,7 @@ def preview_target_reset(migration_name: str) -> dict[str, Any]:
 
 	settings = get_migration_settings()
 	_assert_target_site(settings)
-	migration = frappe.get_doc('SD YRP MRP Data Migration', migration_name)
+	migration = frappe.get_doc("SD YRP MRP Data Migration", migration_name)
 	source = F15SourceBridge(settings)
 	plan, schema_payload = build_live_schema_analysis(settings, source)
 	source_status = source.status()
@@ -1815,9 +1770,7 @@ def preview_target_reset(migration_name: str) -> dict[str, Any]:
 	)
 	_require_previous_snapshot(migration, "reset", snapshot)
 	manifest = _build_target_reset_manifest(plan, source)
-	counts = _include_reset_generated_audit_scope(
-		migration, _target_reset_counts(manifest)
-	)
+	counts = _include_reset_generated_audit_scope(migration, _target_reset_counts(manifest))
 	return {
 		"target_site": settings.target_site,
 		"source_site": settings.source_site,
@@ -1827,9 +1780,7 @@ def preview_target_reset(migration_name: str) -> dict[str, Any]:
 		"parent_rows": counts["parent_total"],
 		"child_rows": counts["child_total"],
 		"file_rows": counts["file_total"],
-		"generated_supplier_warehouses": counts[
-			"generated_supplier_warehouse_total"
-		],
+		"generated_supplier_warehouses": counts["generated_supplier_warehouse_total"],
 		"reset_generated_audit_rows": counts["reset_generated_audit_total"],
 		"source_series_counters": len(manifest["source_series_names"]),
 		"preserved_naming_series_counters": counts["preserved_series_total"],
@@ -1852,7 +1803,7 @@ def run_reset_job(migration_name: str) -> dict[str, Any]:
 		)
 	_assert_no_other_active_migration(migration_name)
 
-	migration = frappe.get_doc('SD YRP MRP Data Migration', migration_name)
+	migration = frappe.get_doc("SD YRP MRP Data Migration", migration_name)
 	source = F15SourceBridge(settings)
 	plan, schema_payload = build_live_schema_analysis(settings, source)
 	if not plan.ready:
@@ -1871,14 +1822,10 @@ def run_reset_job(migration_name: str) -> dict[str, Any]:
 	)
 	_require_previous_snapshot(migration, "reset", snapshot)
 	if not source_status.get("maintenance_mode"):
-		raise MigrationError(
-			f"{settings.source_site} must be in maintenance mode before target reset"
-		)
+		raise MigrationError(f"{settings.source_site} must be in maintenance mode before target reset")
 
 	manifest = _build_target_reset_manifest(plan, source)
-	before = _include_reset_generated_audit_scope(
-		migration, _target_reset_counts(manifest)
-	)
+	before = _include_reset_generated_audit_scope(migration, _target_reset_counts(manifest))
 	before = _bind_reset_series_checkpoint(migration, before)
 	_mark_reset_started(migration_name, before)
 	try:
@@ -1948,13 +1895,9 @@ def _build_target_reset_manifest(
 	# ``spec.is_child`` targets leaves old rows behind when their parent no longer
 	# exists in the source.  Include every physical table referenced by a
 	# migration-owned target parent; deletion remains scoped by parenttype below.
-	child_targets = {
-		spec.target for spec in plan.specs.values() if spec.is_child
-	}
+	child_targets = {spec.target for spec in plan.specs.values() if spec.is_child}
 	for parent_target in parent_targets:
-		for field in (getattr(plan, "target_schemas", {}).get(parent_target) or {}).get(
-			"fields", []
-		):
+		for field in (getattr(plan, "target_schemas", {}).get(parent_target) or {}).get("fields", []):
 			if field.get("fieldtype") in TABLE_FIELD_TYPES and field.get("options"):
 				child_targets.add(str(field["options"]))
 	child_targets = sorted(child_targets)
@@ -1967,7 +1910,7 @@ def _build_target_reset_manifest(
 		"single_target_doctypes": single_targets,
 		"child_target_doctypes": child_targets,
 		"source_series_names": sorted(set(series_names)),
-		"delete_generated_supplier_warehouses": 'Supplier' in parent_targets,
+		"delete_generated_supplier_warehouses": "Supplier" in parent_targets,
 	}
 
 
@@ -1976,17 +1919,10 @@ def _target_reset_counts(
 	*,
 	expected_identities: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-	parent_counts = {
-		doctype: int(frappe.db.count(doctype))
-		for doctype in manifest["parent_target_doctypes"]
-	}
+	parent_counts = {doctype: int(frappe.db.count(doctype)) for doctype in manifest["parent_target_doctypes"]}
 	parenttypes = list(manifest["parent_target_doctypes"])
 	child_counts = {
-		doctype: int(
-			frappe.db.count(doctype, {"parenttype": ["in", parenttypes]})
-			if parenttypes
-			else 0
-		)
+		doctype: int(frappe.db.count(doctype, {"parenttype": ["in", parenttypes]}) if parenttypes else 0)
 		for doctype in manifest["child_target_doctypes"]
 	}
 	file_names = _target_reset_file_names(manifest)
@@ -1997,39 +1933,23 @@ def _target_reset_counts(
 	else:
 		file_names = sorted(
 			set(file_names)
-			| set(
-				_existing_document_names(
-					"File", list(expected_identities.get("file_names") or [])
-				)
-			)
+			| set(_existing_document_names("File", list(expected_identities.get("file_names") or [])))
 		)
 		warehouse_names = sorted(
 			set(warehouse_names)
 			| set(
 				_existing_document_names(
-					'Warehouse',
-					list(
-						expected_identities.get(
-							"generated_supplier_warehouse_names"
-						)
-						or []
-					),
+					"Warehouse",
+					list(expected_identities.get("generated_supplier_warehouse_names") or []),
 				)
 			)
 		)
 		preserved_series_values = _target_series_values()
-		expected_series_values = dict(
-			expected_identities.get("preserved_series_values") or {}
-		)
+		expected_series_values = dict(expected_identities.get("preserved_series_values") or {})
 		preserved_series_mismatches = _series_value_mismatches(
 			expected_series_values, preserved_series_values
 		)
-	total = (
-		sum(parent_counts.values())
-		+ sum(child_counts.values())
-		+ len(file_names)
-		+ len(warehouse_names)
-	)
+	total = sum(parent_counts.values()) + sum(child_counts.values()) + len(file_names) + len(warehouse_names)
 	return {
 		"total": total,
 		"parent_total": sum(parent_counts.values()),
@@ -2087,8 +2007,7 @@ def _target_reset_file_names(manifest: Mapping[str, Any]) -> list[str]:
 		str(row.name)
 		for row in rows
 		if row.attached_to_doctype in parent_targets
-		or str(row.attached_to_name or "")
-		in child_names.get(str(row.attached_to_doctype), set())
+		or str(row.attached_to_name or "") in child_names.get(str(row.attached_to_doctype), set())
 	]
 
 
@@ -2110,9 +2029,7 @@ def _target_series_values() -> dict[str, int]:
 
 	return {
 		str(name or ""): int(current or 0)
-		for name, current in frappe.db.sql(
-			"SELECT `name`, `current` FROM `tabSeries` ORDER BY `name`"
-		)
+		for name, current in frappe.db.sql("SELECT `name`, `current` FROM `tabSeries` ORDER BY `name`")
 	}
 
 
@@ -2161,11 +2078,7 @@ def _bind_reset_series_checkpoint(
 				raise MigrationError("The migration contains a non-reset checkpoint")
 			checkpoint = {}
 
-	expected = dict(
-		checkpoint.get("preserved_series_values")
-		or before.get("preserved_series_values")
-		or {}
-	)
+	expected = dict(checkpoint.get("preserved_series_values") or before.get("preserved_series_values") or {})
 	actual = dict(before.get("preserved_series_values") or {})
 	mismatches = _series_value_mismatches(expected, actual)
 	if mismatches:
@@ -2215,12 +2128,8 @@ def _include_reset_generated_audit_scope(
 	result["reset_generated_deleted_document_total"] = len(deleted_document_names)
 	result["reset_generated_comment_names"] = list(comment_names)
 	result["reset_generated_comment_total"] = len(comment_names)
-	result["reset_generated_audit_total"] = len(deleted_document_names) + len(
-		comment_names
-	)
-	result["total"] = int(result.get("total") or 0) + result[
-		"reset_generated_audit_total"
-	]
+	result["reset_generated_audit_total"] = len(deleted_document_names) + len(comment_names)
+	result["total"] = int(result.get("total") or 0) + result["reset_generated_audit_total"]
 	return result
 
 
@@ -2245,16 +2154,12 @@ def _delete_target_reset_manifest(
 	before: Mapping[str, Any],
 ) -> None:
 	processed = 0
-	for chunk in _chunks(
-		list(before.get("reset_generated_deleted_document_names") or []), 500
-	):
+	for chunk in _chunks(list(before.get("reset_generated_deleted_document_names") or []), 500):
 		frappe.db.delete("Deleted Document", {"name": ["in", chunk]})
 		frappe.db.commit()
 		processed += len(chunk)
 		_update_progress(migration_name, processed, 0, 0)
-	for chunk in _chunks(
-		list(before.get("reset_generated_comment_names") or []), 500
-	):
+	for chunk in _chunks(list(before.get("reset_generated_comment_names") or []), 500):
 		frappe.db.delete("Comment", {"name": ["in", chunk]})
 		frappe.db.commit()
 		processed += len(chunk)
@@ -2269,7 +2174,7 @@ def _delete_target_reset_manifest(
 
 	warehouse_names = list(before["generated_supplier_warehouse_names"])
 	for chunk in _chunks(warehouse_names, 500):
-		frappe.db.delete('Warehouse', {"name": ["in", chunk]})
+		frappe.db.delete("Warehouse", {"name": ["in", chunk]})
 		frappe.db.commit()
 		processed += len(chunk)
 		_update_progress(migration_name, processed, 0, 0)
@@ -2337,7 +2242,7 @@ def run_value_verification(
 
 	settings = get_migration_settings()
 	_assert_target_site(settings)
-	if not frappe.db.exists('SD YRP MRP Data Migration', migration_name):
+	if not frappe.db.exists("SD YRP MRP Data Migration", migration_name):
 		raise MigrationError(f"Unknown MRP Data Migration {migration_name}")
 	source = F15SourceBridge(settings)
 	plan, _schema_payload = build_live_schema_analysis(settings, source)
@@ -2374,8 +2279,7 @@ def run_attachment_smoke_test(source_file_names: Iterable[str]) -> dict[str, Any
 	status = source.file_status(names=names)
 	if int(status.get("file_count") or 0) != len(names):
 		raise MigrationError(
-			"Selected source File count mismatch: "
-			f"{status.get('file_count')} != {len(names)}"
+			f"Selected source File count mismatch: {status.get('file_count')} != {len(names)}"
 		)
 
 	target = FrappeBulkTarget()
@@ -2422,16 +2326,14 @@ def _run_documents(
 	checkpoint = {"version": 2, "doctypes": {}}
 	if not dry_run:
 		loaded_checkpoint = _load_checkpoint(migration_name)
-		checkpoint = _bind_checkpoint_to_source_snapshot(
-			loaded_checkpoint, source_snapshot
-		)
+		checkpoint = _bind_checkpoint_to_source_snapshot(loaded_checkpoint, source_snapshot)
 		if checkpoint != loaded_checkpoint:
 			# A sequential last-name checkpoint is valid only for the exact source,
 			# schema, mapping code, and prerequisite contract that created it. Bind
 			# that contract before any supporting-master or document writes so a new
 			# reviewed Dry Run cannot silently skip rows transformed by older code.
 			frappe.db.set_value(
-				'SD YRP MRP Data Migration',
+				"SD YRP MRP Data Migration",
 				migration_name,
 				"checkpoint_json",
 				json.dumps(checkpoint, sort_keys=True),
@@ -2440,9 +2342,7 @@ def _run_documents(
 			frappe.db.commit()
 	target = FrappeBulkTarget()
 	reference_data = source.reference_data()
-	external_reference_count, supporting_external = _validate_external_references(
-		plan, source
-	)
+	external_reference_count, supporting_external = _validate_external_references(plan, source)
 	for row in source.iter_related_business_masters():
 		if row.get("doctype") not in BUSINESS_SUPPORTING_MASTERS or not row.get("name"):
 			raise MigrationError("Invalid related business-master scope from the source bridge")
@@ -2468,11 +2368,9 @@ def _run_documents(
 			dry_run=False,
 			reconciliation=supporting_business_master_reconciliation,
 		)
-		checkpoint["supporting_business_master_reconciliation"] = (
-			supporting_business_master_reconciliation
-		)
+		checkpoint["supporting_business_master_reconciliation"] = supporting_business_master_reconciliation
 		frappe.db.set_value(
-			'SD YRP MRP Data Migration',
+			"SD YRP MRP Data Migration",
 			migration_name,
 			"checkpoint_json",
 			json.dumps(checkpoint, sort_keys=True),
@@ -2510,9 +2408,7 @@ def _run_documents(
 		):
 			try:
 				target_document = transform_document(source_document, plan)
-				_apply_target_owned_configuration_boundary(
-					doctype, target_document
-				)
+				_apply_target_owned_configuration_boundary(doctype, target_document)
 				preserved_required_values += _resolve_and_validate_required_target_values(
 					target_document,
 					plan,
@@ -2574,14 +2470,10 @@ def _run_documents(
 		"failed": 0,
 		"preserved_required_values": preserved_required_values,
 		"historical_required_blanks": historical_required_blanks,
-		"source_reference_counts": {
-			key: len(value) for key, value in reference_data.items()
-		},
+		"source_reference_counts": {key: len(value) for key, value in reference_data.items()},
 		"validated_external_reference_values": external_reference_count,
 		"supporting_external_masters": _supporting_external_counts,
-		"supporting_business_master_reconciliation": (
-			supporting_business_master_reconciliation
-		),
+		"supporting_business_master_reconciliation": (supporting_business_master_reconciliation),
 		"approved_frappe_data": approved_frappe_data,
 		"doctypes": counts,
 	}
@@ -2615,9 +2507,7 @@ def _validate_external_references(
 			None,
 		)
 		if not target_field:
-			failures.append(
-				f"External reference field has no target: {source_doctype}.{source_field}"
-			)
+			failures.append(f"External reference field has no target: {source_doctype}.{source_field}")
 			continue
 		if row.get("dynamic"):
 			source_link_doctype = str(row.get("link_doctype") or "")
@@ -2661,8 +2551,7 @@ def _validate_external_references(
 				break
 	if failures:
 		raise MigrationError(
-			"Target is missing external Link masters required by source data:\n"
-			+ "\n".join(failures)
+			"Target is missing external Link masters required by source data:\n" + "\n".join(failures)
 		)
 	return checked, missing_supporting
 
@@ -2676,11 +2565,7 @@ def _load_supporting_external_masters(
 	dry_run: bool,
 	reconciliation: dict[str, Any] | None = None,
 ) -> dict[str, int]:
-	names_by_doctype = {
-		doctype: set(names)
-		for doctype, names in missing.items()
-		if names
-	}
+	names_by_doctype = {doctype: set(names) for doctype, names in missing.items() if names}
 	source_documents: dict[str, list[dict[str, Any]]] = {}
 
 	# Read Users first so their Has Role children can close the dependency set
@@ -2704,9 +2589,7 @@ def _load_supporting_external_masters(
 
 	role_names = names_by_doctype.get("Role") or set()
 	if role_names:
-		source_documents["Role"] = list(
-			source.iter_supporting_documents("Role", sorted(role_names))
-		)
+		source_documents["Role"] = list(source.iter_supporting_documents("Role", sorted(role_names)))
 
 	counts = {}
 	if reconciliation is not None:
@@ -2743,18 +2626,12 @@ def _load_supporting_external_masters(
 				existing_identity = frappe.db.exists(doctype, identity)
 				if existing_identity:
 					if reconciliation is not None:
-						reconciliation["preserved_target_identities"][doctype][
-							identity
-						] = (
-							str(existing_identity)
-							if isinstance(existing_identity, str)
-							else identity
+						reconciliation["preserved_target_identities"][doctype][identity] = (
+							str(existing_identity) if isinstance(existing_identity, str) else identity
 						)
 					continue
 				if reconciliation is not None:
-					reconciliation["inserted_source_identities"][doctype].append(
-						identity
-					)
+					reconciliation["inserted_source_identities"][doctype].append(identity)
 				_assert_supporting_child_ownership(document, doctype)
 				batch.append(_transform_supporting_document(document, doctype, doctype_map))
 				if len(batch) >= 250:
@@ -2768,8 +2645,7 @@ def _load_supporting_external_masters(
 			continue
 		documents = source_documents.get(doctype) or []
 		transformed = [
-			_transform_supporting_document(document, doctype, doctype_map)
-			for document in documents
+			_transform_supporting_document(document, doctype, doctype_map) for document in documents
 		]
 		counts[doctype] = len(transformed)
 		if not dry_run:
@@ -2801,14 +2677,26 @@ def _prepare_approved_frappe_document(
 		role = str(working.get("role") or "")
 		if role:
 			permission_fields = (
-				"if_owner", "permlevel", "select", "read", "write", "create",
-				"delete", "submit", "cancel", "amend", "mask", "report",
-				"export", "import", "share", "print", "email",
+				"if_owner",
+				"permlevel",
+				"select",
+				"read",
+				"write",
+				"create",
+				"delete",
+				"submit",
+				"cancel",
+				"amend",
+				"mask",
+				"report",
+				"export",
+				"import",
+				"share",
+				"print",
+				"email",
 			)
 			filters = {"parent": working["parent"], "role": role}
-			filters.update(
-				{fieldname: int(working.get(fieldname) or 0) for fieldname in permission_fields}
-			)
+			filters.update({fieldname: int(working.get(fieldname) or 0) for fieldname in permission_fields})
 			semantic_matches = frappe.get_all(
 				"Custom DocPerm",
 				filters=filters,
@@ -2833,9 +2721,7 @@ def _prepare_approved_frappe_document(
 	elif source_doctype == "Workspace":
 		for shortcut in working.get("shortcuts") or []:
 			if shortcut.get("type") == "DocType" and shortcut.get("link_to"):
-				shortcut["link_to"] = doctype_map.get(
-					str(shortcut["link_to"]), str(shortcut["link_to"])
-				)
+				shortcut["link_to"] = doctype_map.get(str(shortcut["link_to"]), str(shortcut["link_to"]))
 
 	output = _transform_supporting_document(working, source_doctype, doctype_map)
 	if frappe.get_meta(source_doctype).issingle:
@@ -2852,9 +2738,7 @@ def _assert_approved_frappe_child_identities(document: Mapping[str, Any]) -> Non
 		children = document.get(field.fieldname)
 		if not isinstance(children, list):
 			continue
-		names = sorted(
-			{str(row["name"]) for row in children if isinstance(row, Mapping) and row.get("name")}
-		)
+		names = sorted({str(row["name"]) for row in children if isinstance(row, Mapping) and row.get("name")})
 		if not names:
 			continue
 		for chunk in _chunks(names, 500):
@@ -2915,12 +2799,8 @@ def _run_approved_frappe_data(
 					child_counts[child_doctype] = child_counts.get(child_doctype, 0) + 1
 		processed += 1
 
-	default_value_reconciliation = _reconcile_approved_default_values(
-		documents, dry_run=dry_run
-	)
-	user_unique_value_reconciliation = _reconcile_approved_user_unique_values(
-		documents, dry_run=dry_run
-	)
+	default_value_reconciliation = _reconcile_approved_default_values(documents, dry_run=dry_run)
+	user_unique_value_reconciliation = _reconcile_approved_user_unique_values(documents, dry_run=dry_run)
 	current_doctype = None
 	batch: list[dict[str, Any]] = []
 
@@ -2980,14 +2860,9 @@ def _approved_default_value_semantics(
 			if row.get("doctype") != "DefaultValue":
 				continue
 			name = str(row.get("name") or "")
-			key = tuple(
-				str(row.get(fieldname) or "")
-				for fieldname in ("parent", "parenttype", "defkey")
-			)
+			key = tuple(str(row.get(fieldname) or "") for fieldname in ("parent", "parenttype", "defkey"))
 			if not name or not all(key):
-				raise MigrationError(
-					"Approved Frappe DefaultValue is missing its name or semantic key"
-				)
+				raise MigrationError("Approved Frappe DefaultValue is missing its name or semantic key")
 			expected.setdefault(key, set()).add(name)
 	return expected
 
@@ -3100,7 +2975,10 @@ def _reconcile_approved_user_unique_values(
 	if not dry_run:
 		for name, fieldname, old_value in sorted(releases):
 			frappe.db.set_value(
-				"User", {"name": name, fieldname: old_value}, fieldname, None,
+				"User",
+				{"name": name, fieldname: old_value},
+				fieldname,
+				None,
 				update_modified=False,
 			)
 	return {
@@ -3149,11 +3027,7 @@ def _standard_item_attribute_value_pair_inventory() -> dict[str, Any]:
 		ORDER BY child.attribute, child.attribute_value
 		""",
 	)
-	missing = [
-		(str(attribute), str(value))
-		for attribute, value, allowed_name in rows
-		if not allowed_name
-	]
+	missing = [(str(attribute), str(value)) for attribute, value, allowed_name in rows if not allowed_name]
 	return {
 		"required_pairs": len(rows),
 		"present_pairs": len(rows) - len(missing),
@@ -3162,7 +3036,7 @@ def _standard_item_attribute_value_pair_inventory() -> dict[str, Any]:
 
 
 def _derived_item_attribute_value_name(attribute: str, value: str) -> str:
-	payload = f"{attribute}\0{value}".encode("utf-8")
+	payload = f"{attribute}\0{value}".encode()
 	return "yrp-iav-" + hashlib.sha256(payload).hexdigest()[:32]
 
 
@@ -3206,12 +3080,9 @@ def _ensure_standard_item_attribute_value_pairs() -> dict[str, Any]:
 			as_dict=True,
 		)
 		if existing and (
-			str(existing.parent or "") != attribute
-			or str(existing.attribute_value or "") != value
+			str(existing.parent or "") != attribute or str(existing.attribute_value or "") != value
 		):
-			raise MigrationError(
-				f"Derived Item Attribute Value identity collision for {name}"
-			)
+			raise MigrationError(f"Derived Item Attribute Value identity collision for {name}")
 		max_indexes[attribute] = max_indexes.get(attribute, 0) + 1
 		rows.append(
 			{
@@ -3235,10 +3106,7 @@ def _ensure_standard_item_attribute_value_pairs() -> dict[str, Any]:
 	if verified["missing_pairs"]:
 		raise MigrationError(
 			"Item Attribute Value dependency finalization left missing pairs: "
-			+ "; ".join(
-				f"{attribute}={value}"
-				for attribute, value in verified["missing_pairs"][:20]
-			)
+			+ "; ".join(f"{attribute}={value}" for attribute, value in verified["missing_pairs"][:20])
 		)
 	return {
 		"status": "Pass",
@@ -3257,9 +3125,7 @@ def _finalize_target_setup_state() -> dict[str, Any]:
 			"name": ["not in", ["Administrator", "Guest"]],
 		},
 	):
-		raise MigrationError(
-			"Refusing to finish setup before a non-administrator source user exists"
-		)
+		raise MigrationError("Refusing to finish setup before a non-administrator source user exists")
 	presets = _ensure_erpnext_preset_masters()
 	rows = frappe.get_all(
 		"Installed Application",
@@ -3270,18 +3136,14 @@ def _finalize_target_setup_state() -> dict[str, Any]:
 	by_app = {str(row.app_name): str(row.name) for row in rows}
 	missing = sorted(set(SETUP_WIZARD_APPS) - set(by_app))
 	if missing:
-		raise MigrationError(
-			"Target Installed Applications is missing setup rows: " + ", ".join(missing)
-		)
+		raise MigrationError("Target Installed Applications is missing setup rows: " + ", ".join(missing))
 	# During app installation this initializer deliberately waits for migrated
 	# Size/Stage/Pack masters.  Full migration is the first reliable post-load
 	# boundary at which the Production Order contract can be completed.
 	from essdee_yrp.sd_yrp_sync import validate_yrp_settings_for_production_order
 	from essdee_yrp.setup import ensure_yrp_production_order_settings
 
-	item_attribute_value_dependencies = (
-		_ensure_standard_item_attribute_value_pairs()
-	)
+	item_attribute_value_dependencies = _ensure_standard_item_attribute_value_pairs()
 	production_order_settings_changed = ensure_yrp_production_order_settings()
 	validate_yrp_settings_for_production_order()
 	for app_name in SETUP_WIZARD_APPS:
@@ -3301,25 +3163,18 @@ def _finalize_target_setup_state() -> dict[str, Any]:
 	frappe.clear_cache()
 	result = _verify_target_setup_state()
 	if result["failures"]:
-		raise MigrationError(
-			"Target setup finalization failed:\n" + "\n".join(result["failures"])
-		)
+		raise MigrationError("Target setup finalization failed:\n" + "\n".join(result["failures"]))
 	result["erpnext_presets"] = presets
 	result["production_order_settings"] = {
 		"status": "Configured",
 		"changed": bool(production_order_settings_changed),
 	}
-	result["item_attribute_value_dependencies"] = (
-		item_attribute_value_dependencies
-	)
+	result["item_attribute_value_dependencies"] = item_attribute_value_dependencies
 	return result
 
 
 def _erpnext_preset_inventory() -> dict[str, Any]:
-	counts = {
-		doctype: int(frappe.db.count(doctype))
-		for doctype in ERPNEXT_PRESET_DOCTYPES
-	}
+	counts = {doctype: int(frappe.db.count(doctype)) for doctype in ERPNEXT_PRESET_DOCTYPES}
 	missing = [doctype for doctype, count in counts.items() if not count]
 	if not frappe.db.exists("Warehouse Type", "Transit"):
 		missing.append("Warehouse Type:Transit")
@@ -3335,9 +3190,7 @@ def _ensure_erpnext_preset_masters() -> dict[str, Any]:
 
 	country = frappe.db.get_single_value("System Settings", "country")
 	if not country:
-		raise MigrationError(
-			"System Settings.country is required before ERPNext presets are installed"
-		)
+		raise MigrationError("System Settings.country is required before ERPNext presets are installed")
 	before = _erpnext_preset_inventory()
 	installed = bool(before["missing"])
 	if installed:
@@ -3347,9 +3200,7 @@ def _ensure_erpnext_preset_masters() -> dict[str, Any]:
 		frappe.clear_cache()
 	after = _erpnext_preset_inventory()
 	if after["missing"]:
-		raise MigrationError(
-			"ERPNext preset installation is incomplete: " + ", ".join(after["missing"])
-		)
+		raise MigrationError("ERPNext preset installation is incomplete: " + ", ".join(after["missing"]))
 	return {
 		"status": "Pass",
 		"country": str(country),
@@ -3377,21 +3228,15 @@ def _verify_target_setup_state() -> dict[str, Any]:
 		failures.append("System Settings.setup_complete is not enabled")
 	default_app = frappe.db.get_single_value("System Settings", "default_app")
 	if default_app != DEFAULT_DESK_APP:
-		failures.append(
-			f"System Settings.default_app is {default_app!r}; expected {DEFAULT_DESK_APP!r}"
-		)
+		failures.append(f"System Settings.default_app is {default_app!r}; expected {DEFAULT_DESK_APP!r}")
 	if not cint(frappe.db.get_default("setup_complete")):
 		failures.append("The global setup_complete default is not enabled")
 	home_page = frappe.db.get_default("desktop:home_page")
 	if home_page != "workspace":
-		failures.append(
-			f"The desktop home page is {home_page!r}; expected 'workspace'"
-		)
+		failures.append(f"The desktop home page is {home_page!r}; expected 'workspace'")
 	presets = _erpnext_preset_inventory()
 	if presets["missing"]:
-		failures.append(
-			"ERPNext preset masters are incomplete: " + ", ".join(presets["missing"])
-		)
+		failures.append("ERPNext preset masters are incomplete: " + ", ".join(presets["missing"]))
 	return {
 		"status": "Pass" if not failures else "Failed",
 		"setup_wizard_apps": list(SETUP_WIZARD_APPS),
@@ -3438,23 +3283,17 @@ def _verify_approved_frappe_data(
 		counts[doctype] = counts.get(doctype, 0) + 1
 		documents.append(document)
 
-	user_unique_value_reconciliation = _reconcile_approved_user_unique_values(
-		documents, dry_run=True
-	)
+	user_unique_value_reconciliation = _reconcile_approved_user_unique_values(documents, dry_run=True)
 	for document in documents:
 		doctype = str(document.get("doctype") or "")
 		batch.append(document)
 		for fieldname, expected in (document.get("__migration_passwords") or {}).items():
 			try:
-				actual = get_decrypted_password(
-					doctype, document["name"], fieldname, raise_exception=False
-				)
+				actual = get_decrypted_password(doctype, document["name"], fieldname, raise_exception=False)
 			except Exception:
 				actual = None
 			verified_password_values += 1
-			if actual is None or not compare_digest(
-				str(actual).encode(), str(expected).encode()
-			):
+			if actual is None or not compare_digest(str(actual).encode(), str(expected).encode()):
 				failures.append(
 					f"Approved Frappe credential mismatch: {doctype} {document['name']}.{fieldname}"
 				)
@@ -3463,18 +3302,14 @@ def _verify_approved_frappe_data(
 		if failures:
 			break
 	flush()
-	default_value_semantics = _reconcile_approved_default_values(
-		documents, dry_run=True
-	)
+	default_value_semantics = _reconcile_approved_default_values(documents, dry_run=True)
 	if default_value_semantics["target_only_collisions"]:
 		failures.append(
 			"Approved Frappe defaults contain "
 			f"{default_value_semantics['target_only_collisions']} target-only semantic collisions"
 		)
 	default_value_semantics["status"] = (
-		"Pass"
-		if not default_value_semantics["target_only_collisions"]
-		else "Failed"
+		"Pass" if not default_value_semantics["target_only_collisions"] else "Failed"
 	)
 	return {
 		"status": "Pass" if not failures else "Failed",
@@ -3498,15 +3333,29 @@ def _assert_supporting_child_ownership(document, doctype):
 		if field.fieldname not in document:
 			continue
 		names = {row.get("name") for row in document[field.fieldname] or []}
-		actual = frappe.get_all(field.options, filters={"parent": document["name"],
-			"parenttype": doctype, "parentfield": field.fieldname}, pluck="name")
+		actual = frappe.get_all(
+			field.options,
+			filters={"parent": document["name"], "parenttype": doctype, "parentfield": field.fieldname},
+			pluck="name",
+		)
 		if set(actual) - names:
-			raise MigrationError(f"Target-only children exist in {doctype} {document['name']}.{field.fieldname}; review before replacement")
+			raise MigrationError(
+				f"Target-only children exist in {doctype} {document['name']}.{field.fieldname}; review before replacement"
+			)
 		if names:
-			for row in frappe.get_all(field.options, filters={"name": ["in", sorted(names)]},
-				fields=["name", "parent", "parenttype", "parentfield"]):
-				if (row.parent, row.parenttype, row.parentfield) != (document["name"], doctype, field.fieldname):
-					raise MigrationError(f"Supporting child identity collision in {field.options}: {row.name}")
+			for row in frappe.get_all(
+				field.options,
+				filters={"name": ["in", sorted(names)]},
+				fields=["name", "parent", "parenttype", "parentfield"],
+			):
+				if (row.parent, row.parenttype, row.parentfield) != (
+					document["name"],
+					doctype,
+					field.fieldname,
+				):
+					raise MigrationError(
+						f"Supporting child identity collision in {field.options}: {row.name}"
+					)
 
 
 def _transform_supporting_document(
@@ -3523,10 +3372,15 @@ def _transform_supporting_document(
 	if meta.issingle:
 		# Singles live in tabSingles rather than physical per-DocType columns.
 		known.update(meta_fields)
-	missing = sorted(key for key, value in document.items()
-		if key not in known and value not in (None, "", 0, False, [], {}))
+	missing = sorted(
+		key
+		for key, value in document.items()
+		if key not in known and value not in (None, "", 0, False, [], {})
+	)
 	if missing:
-		raise MigrationError(f"Refusing to omit populated supporting fields from {target_doctype}: {', '.join(missing)}")
+		raise MigrationError(
+			f"Refusing to omit populated supporting fields from {target_doctype}: {', '.join(missing)}"
+		)
 	for fieldname in SYSTEM_FIELDS:
 		if fieldname in document and fieldname in columns:
 			output[fieldname] = document[fieldname]
@@ -3545,17 +3399,18 @@ def _transform_supporting_document(
 	# runtime metadata. The bulk writer remains the final storage-shape guard.
 	for fieldname in columns & document.keys():
 		output.setdefault(fieldname, document[fieldname])
-	controllers = {field.fieldname for field in meta.fields
-		if field.fieldtype == "Link" and field.options == "DocType"}
-	controllers.update(field.options for field in meta.fields if field.fieldtype == "Dynamic Link" and field.options)
+	controllers = {
+		field.fieldname for field in meta.fields if field.fieldtype == "Link" and field.options == "DocType"
+	}
+	controllers.update(
+		field.options for field in meta.fields if field.fieldtype == "Dynamic Link" and field.options
+	)
 	controllers.add("parenttype")
 	for fieldname in controllers:
 		value = output.get(fieldname)
 		if isinstance(value, str):
 			output[fieldname] = doctype_map.get(value, value)
-	password_fields = {
-		field.fieldname for field in meta.fields if field.fieldtype == "Password"
-	}
+	password_fields = {field.fieldname for field in meta.fields if field.fieldtype == "Password"}
 	passwords = {
 		fieldname: value
 		for fieldname, value in (document.get("__migration_passwords") or {}).items()
@@ -3603,24 +3458,24 @@ def _run_files(
 			allow_missing=allow_missing_files,
 		):
 			_validate_file_metadata(row, plan)
-			_file_metadata_values(row, plan)  # Reject an incomplete/unsupported metadata export in the dry run too.
+			_file_metadata_values(
+				row, plan
+			)  # Reject an incomplete/unsupported metadata export in the dry run too.
 			is_orphan = bool(row.get("orphan_attachment"))
 			if is_orphan:
 				orphan_attachment_count += 1
 				orphan_attachment_bytes += int(row.get("file_size") or 0)
 			if row.get("missing_blob"):
 				if not allow_missing_files:
-					raise MigrationError(
-						f"File {row.get('name')} has no source blob"
-					)
+					raise MigrationError(f"File {row.get('name')} has no source blob")
 				missing_file_count += 1
 				missing_file_bytes += int(row.get("file_size") or 0)
-				missing_content[
-					(str(row.get("content_hash") or ""), int(row.get("is_private") or 0))
-				] = int(row.get("file_size") or 0)
+				missing_content[(str(row.get("content_hash") or ""), int(row.get("is_private") or 0))] = int(
+					row.get("file_size") or 0
+				)
 				if not dry_run:
 					target.upsert_missing_file_metadata(row, plan)
-					target._bulk_upsert('File', [_file_metadata_values(row, plan)])
+					target._bulk_upsert("File", [_file_metadata_values(row, plan)])
 					file_state = checkpoint.setdefault("files", {})
 					file_state["last_name"] = row["name"]
 					file_state["processed"] = int(file_state.get("processed") or 0) + 1
@@ -3633,7 +3488,7 @@ def _run_files(
 							set(file_state.get("orphan_attachment_names") or []) | {row["name"]}
 						)
 					frappe.db.set_value(
-						'SD YRP MRP Data Migration',
+						"SD YRP MRP Data Migration",
 						migration_name,
 						"checkpoint_json",
 						json.dumps(checkpoint, sort_keys=True),
@@ -3648,13 +3503,19 @@ def _run_files(
 				content_bytes += len(content)
 			if not dry_run:
 				outcome = target.upsert_file(row, plan)
-				for reference in row.get('app_references') or []:
-					ref_spec = plan.specs[reference['doctype']]
-					ref_name = ref_spec.target if ref_spec.source_schema.get('issingle') else reference['name']
-					_update_direct_attachment_field(ref_spec.target, ref_name,
-						ref_spec.field_map.get(reference['fieldname'], reference['fieldname']),
-						outcome['file_url'], source_url=row.get('file_url'))
-				target._bulk_upsert('File', [_file_metadata_values(row, plan, file_url=outcome['file_url'])])
+				for reference in row.get("app_references") or []:
+					ref_spec = plan.specs[reference["doctype"]]
+					ref_name = (
+						ref_spec.target if ref_spec.source_schema.get("issingle") else reference["name"]
+					)
+					_update_direct_attachment_field(
+						ref_spec.target,
+						ref_name,
+						ref_spec.field_map.get(reference["fieldname"], reference["fieldname"]),
+						outcome["file_url"],
+						source_url=row.get("file_url"),
+					)
+				target._bulk_upsert("File", [_file_metadata_values(row, plan, file_url=outcome["file_url"])])
 				if outcome["status"] in {"created", "repaired"}:
 					created += 1
 				else:
@@ -3667,7 +3528,7 @@ def _run_files(
 					orphan_names.add(row["name"])
 					file_state["orphan_attachment_names"] = sorted(orphan_names)
 				frappe.db.set_value(
-					'SD YRP MRP Data Migration',
+					"SD YRP MRP Data Migration",
 					migration_name,
 					"checkpoint_json",
 					json.dumps(checkpoint, sort_keys=True),
@@ -3712,9 +3573,7 @@ def _run_files(
 		"orphan_attachment_count": orphan_attachment_count,
 		"orphan_attachment_bytes": orphan_attachment_bytes,
 		"orphan_attachment_policy": "Preserve metadata and available bytes with original missing-parent identity",
-		"missing_file_policy": "Audited Local Backup Omission"
-		if allow_missing_files
-		else "Strict",
+		"missing_file_policy": "Audited Local Backup Omission" if allow_missing_files else "Strict",
 	}
 
 
@@ -3768,42 +3627,40 @@ def _get_target_series_current(name: str) -> int | None:
 
 
 def _file_spec(row, plan):
-	spec = plan.specs.get(row.get('attached_to_doctype'))
+	spec = plan.specs.get(row.get("attached_to_doctype"))
 	if spec:
 		return spec
 	# A source app may reference an unowned File by URL or File Link. Preserve
 	# its null owner identity instead of inventing an attachment relationship.
-	if (row.get('app_references') and not row.get('attached_to_doctype')
-		and not row.get('attached_to_name')):
-		return SimpleNamespace(target=row.get('attached_to_doctype'), field_map={}, source_schema={})
+	if row.get("app_references") and not row.get("attached_to_doctype") and not row.get("attached_to_name"):
+		return SimpleNamespace(target=row.get("attached_to_doctype"), field_map={}, source_schema={})
 	raise MigrationError(f"File {row.get('name')} has an unmapped attachment owner")
 
 
 def _file_target_name(row, spec):
-	name = row.get('attached_to_name')
-	if (getattr(spec, 'source_schema', {}).get('issingle')
-		and name == row.get('attached_to_doctype')):
+	name = row.get("attached_to_name")
+	if getattr(spec, "source_schema", {}).get("issingle") and name == row.get("attached_to_doctype"):
 		return spec.target
 	return name
 
 
 def _file_metadata_values(row, plan, *, file_url=None):
 	"""Keep every original File SQL column, not only blob/attachment identity."""
-	raw = row.get('source_file_metadata')
-	if not isinstance(raw, dict) or raw.get('name') != row.get('name'):
-		raise MigrationError('The source bridge must supply complete original File metadata')
-	columns = set(frappe.db.get_table_columns('File'))
+	raw = row.get("source_file_metadata")
+	if not isinstance(raw, dict) or raw.get("name") != row.get("name"):
+		raise MigrationError("The source bridge must supply complete original File metadata")
+	columns = set(frappe.db.get_table_columns("File"))
 	missing = set(raw) - columns
 	if missing:
-		raise MigrationError('Source File columns have no target storage: ' + ', '.join(sorted(missing)))
+		raise MigrationError("Source File columns have no target storage: " + ", ".join(sorted(missing)))
 	values = dict(raw)
 	spec = _file_spec(row, plan)
-	values['attached_to_doctype'] = spec.target
-	values['attached_to_name'] = _file_target_name(row, spec)
-	field = row.get('attached_to_field')
-	values['attached_to_field'] = spec.field_map.get(field, field) if field else field
+	values["attached_to_doctype"] = spec.target
+	values["attached_to_name"] = _file_target_name(row, spec)
+	field = row.get("attached_to_field")
+	values["attached_to_field"] = spec.field_map.get(field, field) if field else field
 	if file_url is not None:
-		values['file_url'] = file_url
+		values["file_url"] = file_url
 	return values
 
 
@@ -3815,19 +3672,22 @@ def _validate_file_metadata(row: Mapping[str, Any], plan: MigrationPlan) -> None
 	)
 	missing = [fieldname for fieldname in required if not row.get(fieldname)]
 	if missing:
-		raise MigrationError(
-			f"File {row.get('name')} has blank required metadata: {', '.join(missing)}"
-		)
+		raise MigrationError(f"File {row.get('name')} has blank required metadata: {', '.join(missing)}")
 	_file_spec(row, plan)
-	if row.get('attached_to_doctype') and not row.get('attached_to_name'):
+	if row.get("attached_to_doctype") and not row.get("attached_to_name"):
 		raise MigrationError(f"File {row.get('name')} has no attachment name")
-	for reference in row.get('app_references') or []:
-		spec = plan.specs.get(reference.get('doctype'))
-		fields = {field['fieldname']: field for field in spec.source_schema.get('fields', [])} if spec else {}
-		field = fields.get(reference.get('fieldname'), {})
-		if (not reference.get('name') or field.get('fieldtype') != reference.get('fieldtype')
-			or not (field.get('fieldtype') in {'Attach', 'Attach Image'}
-				or (field.get('fieldtype') == 'Link' and field.get('options') == 'File'))):
+	for reference in row.get("app_references") or []:
+		spec = plan.specs.get(reference.get("doctype"))
+		fields = {field["fieldname"]: field for field in spec.source_schema.get("fields", [])} if spec else {}
+		field = fields.get(reference.get("fieldname"), {})
+		if (
+			not reference.get("name")
+			or field.get("fieldtype") != reference.get("fieldtype")
+			or not (
+				field.get("fieldtype") in {"Attach", "Attach Image"}
+				or (field.get("fieldtype") == "Link" and field.get("options") == "File")
+			)
+		):
 			raise MigrationError(f"File {row.get('name')} has an invalid app field reference")
 
 
@@ -3841,13 +3701,10 @@ def _decode_and_validate_file_payload(row: Mapping[str, Any]) -> bytes | None:
 		raise MigrationError(f"File {row.get('name')} contains invalid base64") from exc
 	actual_hash = hashlib.md5(content, usedforsecurity=False).hexdigest()
 	if actual_hash != row.get("content_hash"):
-		raise MigrationError(
-			f"File {row.get('name')} content hash mismatch after transport"
-		)
+		raise MigrationError(f"File {row.get('name')} content hash mismatch after transport")
 	if len(content) != int(row.get("file_size") or 0):
 		raise MigrationError(
-			f"File {row.get('name')} size mismatch after transport: "
-			f"{len(content)} != {row.get('file_size')}"
+			f"File {row.get('name')} size mismatch after transport: {len(content)} != {row.get('file_size')}"
 		)
 	return content
 
@@ -3907,17 +3764,13 @@ def _verify_migrated_file(
 	# happens to decode as latin-1 must still be compared as its original bytes.
 	target_content = _file_content_bytes(file_doc)
 	actual_hash = hashlib.md5(target_content, usedforsecurity=False).hexdigest()
-	if actual_hash != row.get("content_hash") or len(target_content) != int(
-		row.get("file_size") or 0
-	):
+	if actual_hash != row.get("content_hash") or len(target_content) != int(row.get("file_size") or 0):
 		raise MigrationError(f"Migrated File {row['name']} target blob changed")
 	if expected_content is not None and target_content != expected_content:
 		raise MigrationError(f"Migrated File {row['name']} bytes differ from source")
 	url_prefix = "/private/files/" if int(row.get("is_private") or 0) else "/files/"
 	if not str(target.file_url or "").startswith(url_prefix):
-		raise MigrationError(
-			f"Migrated File {row['name']} has invalid privacy URL {target.file_url!r}"
-		)
+		raise MigrationError(f"Migrated File {row['name']} has invalid privacy URL {target.file_url!r}")
 	if target_field:
 		field = frappe.get_meta(spec.target).get_field(target_field)
 		if field and field.fieldtype in {"Attach", "Attach Image"}:
@@ -3928,8 +3781,7 @@ def _verify_migrated_file(
 			)
 			if field_value != target.file_url:
 				raise MigrationError(
-					f"Migrated File {row['name']} did not repair "
-					f"{spec.target}.{target_field}"
+					f"Migrated File {row['name']} did not repair {spec.target}.{target_field}"
 				)
 	return {
 		"metadata": True,
@@ -3948,9 +3800,7 @@ def _prepare_file_settings(
 ) -> None:
 	settings = checkpoint.setdefault("file_settings", {})
 	if "original_max_file_size" not in settings:
-		settings["original_max_file_size"] = frappe.db.get_single_value(
-			"System Settings", "max_file_size"
-		)
+		settings["original_max_file_size"] = frappe.db.get_single_value("System Settings", "max_file_size")
 		settings["original_strip_exif"] = frappe.db.get_single_value(
 			"System Settings", "strip_exif_metadata_from_uploaded_images"
 		)
@@ -3961,13 +3811,11 @@ def _prepare_file_settings(
 	frappe.db.set_single_value("System Settings", "max_file_size", required_megabytes)
 	# Historical bytes must remain byte-identical; uploading an existing JPEG a
 	# second time must not rewrite it through the current EXIF policy.
-	frappe.db.set_single_value(
-		"System Settings", "strip_exif_metadata_from_uploaded_images", 0
-	)
+	frappe.db.set_single_value("System Settings", "strip_exif_metadata_from_uploaded_images", 0)
 	settings["temporary_max_file_size"] = required_megabytes
 	settings["restored"] = False
 	frappe.db.set_value(
-		'SD YRP MRP Data Migration',
+		"SD YRP MRP Data Migration",
 		migration_name,
 		"checkpoint_json",
 		json.dumps(checkpoint, sort_keys=True),
@@ -3981,9 +3829,7 @@ def _restore_file_settings(migration_name: str, checkpoint: dict[str, Any]) -> N
 	settings = checkpoint.get("file_settings") or {}
 	if "original_max_file_size" not in settings:
 		return
-	frappe.db.set_single_value(
-		"System Settings", "max_file_size", settings.get("original_max_file_size")
-	)
+	frappe.db.set_single_value("System Settings", "max_file_size", settings.get("original_max_file_size"))
 	frappe.db.set_single_value(
 		"System Settings",
 		"strip_exif_metadata_from_uploaded_images",
@@ -3991,7 +3837,7 @@ def _restore_file_settings(migration_name: str, checkpoint: dict[str, Any]) -> N
 	)
 	settings["restored"] = True
 	frappe.db.set_value(
-		'SD YRP MRP Data Migration',
+		"SD YRP MRP Data Migration",
 		migration_name,
 		"checkpoint_json",
 		json.dumps(checkpoint, sort_keys=True),
@@ -4040,18 +3886,28 @@ def _update_direct_attachment_field(
 
 
 def _relocate_migrated_file_urls(
-	target_doctype, target_name, target_field, file_url, *, source_url, source_file_name,
+	target_doctype,
+	target_name,
+	target_field,
+	file_url,
+	*,
+	source_url,
+	source_file_name,
 ):
 	if not source_url or source_url == file_url:
 		return
 	_update_direct_attachment_field(
-		target_doctype, target_name, target_field, file_url, source_url=source_url,
+		target_doctype,
+		target_name,
+		target_field,
+		file_url,
+		source_url=source_url,
 	)
 	# Child rows with a File link can relocate that exact file too, but never
 	# overwrite a conflicting historical URL or unrelated row.
 	for child_doctype, link_field, url_field in (
-		('SD YRP Product Design', "file", "graphic_image"),
-		('SD YRP Product File Version', "file", "file_url"),
+		("SD YRP Product Design", "file", "graphic_image"),
+		("SD YRP Product File Version", "file", "file_url"),
 	):
 		if not frappe.db.exists("DocType", child_doctype):
 			continue
@@ -4075,9 +3931,7 @@ def _flush_batch(
 ) -> int:
 	target_documents = [target_doc for _source, target_doc in batch]
 	if source_doctype in {"Item", "Item Variant"}:
-		target_documents = _prepare_item_migration_documents(
-			source_doctype, target_documents
-		)
+		target_documents = _prepare_item_migration_documents(source_doctype, target_documents)
 	if dry_run:
 		return len(batch)
 	if source_doctype == "Purchase Invoice":
@@ -4088,7 +3942,7 @@ def _flush_batch(
 	state["processed"] = int(state.get("processed") or 0) + len(batch)
 	state["target_doctype"] = target_doctype
 	frappe.db.set_value(
-		'SD YRP MRP Data Migration',
+		"SD YRP MRP Data Migration",
 		migration_name,
 		"checkpoint_json",
 		json.dumps(checkpoint, sort_keys=True),
@@ -4121,11 +3975,7 @@ def _prepare_item_migration_documents(
 			continue
 		desired_role = _item_structural_role(document)
 		existing_role = _item_structural_role(existing)
-		if (
-			source_doctype == "Item Variant"
-			and desired_role == "standalone"
-			and existing_role == "template"
-		):
+		if source_doctype == "Item Variant" and desired_role == "standalone" and existing_role == "template":
 			# Five historical catalogs contain a self-named, attribute-less Item
 			# Variant beside a real attributed parent Item.  The parent/template is
 			# structurally authoritative: loading the legacy self-variant later must
@@ -4146,12 +3996,9 @@ def _prepare_item_migration_documents(
 			continue
 		role_changed = desired_role != existing_role or (
 			desired_role == "variant"
-			and str(document.get("variant_of") or "")
-			!= str(existing.variant_of or "")
+			and str(document.get("variant_of") or "") != str(existing.variant_of or "")
 		)
-		if role_changed and frappe.db.exists(
-			"Stock Ledger Entry", {"item_code": name, "is_cancelled": 0}
-		):
+		if role_changed and frappe.db.exists("Stock Ledger Entry", {"item_code": name, "is_cancelled": 0}):
 			raise MigrationError(
 				f"Cannot convert existing ERP Item {name} from {existing_role} "
 				f"to {desired_role}: it has ERPNext stock history"
@@ -4200,19 +4047,20 @@ def _prepare_purchase_invoice_migration_documents(
 	documents: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
 	"""Create both PI child projections before the PI batch is written."""
+	from yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice import (
+		_get_item_group,
+	)
+
 	from essdee_yrp.purchase_invoice import (
 		MIGRATED_RATE_SOURCE,
 		build_legacy_work_order_invoice_payload,
-	)
-	from yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice import (
-		_get_item_group,
 	)
 
 	prepared_documents = []
 	for document in documents:
 		prepared = deepcopy(document)
 		if (
-			prepared.get("against") == 'YRP Work Order'
+			prepared.get("against") == "YRP Work Order"
 			and prepared.get("essdee_rate_table_source") == MIGRATED_RATE_SOURCE
 		):
 			invoice = frappe.get_doc(prepared)
@@ -4221,10 +4069,7 @@ def _prepare_purchase_invoice_migration_documents(
 				raise MigrationError(
 					f"Submitted or cancelled migrated invoice {invoice.name} has no linked GRNs"
 				)
-			prepared["items"] = [
-				{"doctype": 'YRP Purchase Invoice Item', **row}
-				for row in payload["items"]
-			]
+			prepared["items"] = [{"doctype": "YRP Purchase Invoice Item", **row} for row in payload["items"]]
 
 		# Frappe's bulk child insert uses the union of fields from the whole batch.
 		# Once projected Work Order rows add a numeric field to that union, an old
@@ -4272,11 +4117,17 @@ def _validate_live_target_metadata(plan: MigrationPlan) -> None:
 			continue
 		meta = frappe.get_meta(target_doctype)
 		columns = set() if meta.issingle else set(frappe.db.get_table_columns(target_doctype))
-		scales = {} if meta.issingle else dict(frappe.db.sql(
-			"SELECT column_name,numeric_scale FROM information_schema.columns "
-			"WHERE table_schema=DATABASE() AND table_name=%s AND data_type='decimal'",
-			("tab" + target_doctype,),
-		))
+		scales = (
+			{}
+			if meta.issingle
+			else dict(
+				frappe.db.sql(
+					"SELECT column_name,numeric_scale FROM information_schema.columns "
+					"WHERE table_schema=DATABASE() AND table_name=%s AND data_type='decimal'",
+					("tab" + target_doctype,),
+				)
+			)
+		)
 		for field in plan.target_schemas[target_doctype].get("fields") or []:
 			if not field.get("fieldname") or field.get("fieldtype") in NO_COLUMN_FIELD_TYPES:
 				continue
@@ -4286,7 +4137,10 @@ def _validate_live_target_metadata(plan: MigrationPlan) -> None:
 				missing.append(f"{target_doctype}.{field['fieldname']} (runtime metadata)")
 			elif bool(cint(live_field.is_virtual)) != is_virtual:
 				missing.append(f"{target_doctype}.{field['fieldname']} (runtime virtual metadata)")
-			elif field.get("fieldtype") in TABLE_FIELD_TYPES | {"Link", "Dynamic Link"} and live_field.options != field.get("options"):
+			elif field.get("fieldtype") in TABLE_FIELD_TYPES | {
+				"Link",
+				"Dynamic Link",
+			} and live_field.options != field.get("options"):
 				missing.append(f"{target_doctype}.{field['fieldname']} (runtime options)")
 			if field.get("precision") not in (None, "") and field["fieldname"] in scales:
 				if int(scales[field["fieldname"]]) < int(field["precision"]):
@@ -4337,9 +4191,7 @@ def _apply_contextual_defaults(
 	defaults = reference_data.get("migration_defaults", {})
 	supplier_aliases = reference_data.get("supplier_aliases", {})
 	fieldnames = {
-		str(field.get("fieldname"))
-		for field in target_schema.get("fields") or []
-		if field.get("fieldname")
+		str(field.get("fieldname")) for field in target_schema.get("fields") or [] if field.get("fieldname")
 	}
 	for fieldname in fieldnames:
 		if document.get(fieldname) not in (None, ""):
@@ -4371,6 +4223,7 @@ def _apply_contextual_defaults(
 	# Do not infer an attribute from labels, or change native ERPNext Data rows.
 	from yrp.attribute_links import fields as attribute_link_fields
 	from yrp.attribute_value_identity import attribute_value_name
+
 	for fieldname in attribute_link_fields().get(document.get("doctype"), []):
 		value = document.get(fieldname)
 		if not value or str(value).startswith("IAV-"):
@@ -4381,16 +4234,17 @@ def _apply_contextual_defaults(
 			if len(attributes) == 1:
 				attribute = next(iter(attributes))
 		if not attribute:
-			raise MigrationError(f"Cannot resolve source attribute identity: {document.get('doctype')}.{fieldname}={value}")
+			raise MigrationError(
+				f"Cannot resolve source attribute identity: {document.get('doctype')}.{fieldname}={value}"
+			)
 		document[fieldname] = attribute_value_name(attribute, value)
 	if document.get("doctype") == "YRP Item Production Detail":
 		from yrp.attribute_value_identity import attribute_value_name
+
 		value = document.get("stiching_major_attribute_value")
 		if value and not str(value).startswith("IAV-"):
 			pairs = reference_data.get("attribute_value_pairs", {})
-			attribute = reference_data.get(
-				"source_attribute_value_attributes", {}
-			).get(value)
+			attribute = reference_data.get("source_attribute_value_attributes", {}).get(value)
 			if not attribute:
 				attributes = pairs.get(value, [])
 				if len(attributes) == 1:
@@ -4404,11 +4258,10 @@ def _apply_contextual_defaults(
 					"Cannot resolve source stitching major attribute identity: "
 					f"{document.get('name')}={value}"
 				)
-			document["stiching_major_attribute_value"] = attribute_value_name(
-				attribute, value
-			)
+			document["stiching_major_attribute_value"] = attribute_value_name(attribute, value)
 	if document.get("doctype") == "YRP Item Item Attribute Mapping":
 		from yrp.attribute_value_identity import attribute_value_name
+
 		attribute = document.get("attribute_name")
 		rows = document.get("values") or []
 		if not attribute:
@@ -4424,7 +4277,11 @@ def _apply_contextual_defaults(
 					raise MigrationError(f"Ambiguous attribute for mapping {document.get('name')}")
 				attribute = document["attribute_name"] = candidates.pop()
 		pairs = reference_data.get("attribute_value_pairs", {})
-		known_links = {attribute_value_name(attribute, value) for value, attributes in pairs.items() if attribute in attributes}
+		known_links = {
+			attribute_value_name(attribute, value)
+			for value, attributes in pairs.items()
+			if attribute in attributes
+		}
 		for row in rows:
 			value = row.get("attribute_value")
 			if value and value not in known_links:
@@ -4433,6 +4290,7 @@ def _apply_contextual_defaults(
 				row["attribute_value"] = attribute_value_name(attribute, value)
 	if document.get("doctype") == "YRP Item Item Attribute Mapping Value":
 		from yrp.attribute_value_identity import attribute_value_name
+
 		value = document.get("attribute_value")
 		attribute = reference_data.get("source_attribute_value_attributes", {}).get(value)
 		if value and attribute:
@@ -4476,18 +4334,14 @@ def _validate_required_target_values(
 		if target_schema.get("issingle"):
 			existing = frappe.db.get_single_value(str(target_schema["name"]), fieldname)
 		elif document.get("name"):
-			existing = frappe.db.get_value(
-				str(target_schema["name"]), document["name"], fieldname
-			)
+			existing = frappe.db.get_value(str(target_schema["name"]), document["name"], fieldname)
 		if existing not in (None, ""):
 			document[fieldname] = existing
 			preserved += 1
 			continue
 		if _is_valid_historical_required_blank(document, fieldname):
 			if historical_required_blanks is not None:
-				source_doctype = _source_doctype_for_target(
-					str(document.get("doctype") or "")
-				)
+				source_doctype = _source_doctype_for_target(str(document.get("doctype") or ""))
 				key = f"{source_doctype}.{fieldname}"
 				historical_required_blanks[key] = historical_required_blanks.get(key, 0) + 1
 			continue
@@ -4516,22 +4370,16 @@ def _derive_required_value(
 		# Production API Purchase Order did not store a currency. The fresh
 		# rehearsal/production target contract has exactly one Company, so its
 		# default currency is the only deterministic accounting value.
-		currencies = frappe.get_all(
-			"Company", pluck="default_currency", limit_page_length=2
-		)
+		currencies = frappe.get_all("Company", pluck="default_currency", limit_page_length=2)
 		if len(currencies) == 1:
 			return currencies[0]
 	if fieldname == "conversion_rate":
 		company = document.get("company")
 		currency = document.get("currency")
-		company_currency = (
-			frappe.db.get_value("Company", company, "default_currency")
-			if company
-			else None
-		)
+		company_currency = frappe.db.get_value("Company", company, "default_currency") if company else None
 		if currency and company_currency and currency == company_currency:
 			return 1.0
-	if document.get("doctype") == 'Item' and fieldname in {"item_group", "stock_uom"}:
+	if document.get("doctype") == "Item" and fieldname in {"item_group", "stock_uom"}:
 		# Production API contains legacy Items created before Item Group became
 		# mandatory.  The live SD-YRP consumer already uses the root group for
 		# this exact compatibility case; apply the same deterministic mapping to
@@ -4548,23 +4396,15 @@ def _derive_required_value(
 			# Stock UOM even for that Item shape. Use the fresh target's explicit
 			# Stock Settings default rather than hard-coding or guessing by group.
 			return frappe.db.get_single_value("Stock Settings", "stock_uom")
-		return (
-			reference_data.get("item_groups", {}).get(lookup_name)
-			or _one_source_root_item_group(reference_data)
+		return reference_data.get("item_groups", {}).get(lookup_name) or _one_source_root_item_group(
+			reference_data
 		)
 	if fieldname == "received_type":
 		# Use the source Stock Settings value. Legacy rows often omitted the
 		# explicit bucket; nonblank rejection/mistake types pass through untouched.
-		return reference_data.get("migration_defaults", {}).get(
-			"default_received_type"
-		)
-	if (
-		document.get("doctype") == 'SD YRP Cut Panel Movement'
-		and fieldname == "from_warehouse"
-	):
-		return reference_data.get("cut_panel_from_warehouse", {}).get(
-			str(document.get("name"))
-		)
+		return reference_data.get("migration_defaults", {}).get("default_received_type")
+	if document.get("doctype") == "SD YRP Cut Panel Movement" and fieldname == "from_warehouse":
+		return reference_data.get("cut_panel_from_warehouse", {}).get(str(document.get("name")))
 	if fieldname in {"uom", "stock_uom"}:
 		if (
 			document.get("doctype") == "Purchase Order Item"
@@ -4580,40 +4420,33 @@ def _derive_required_value(
 		)
 		if item_variant:
 			item = reference_data.get("variant_to_item", {}).get(str(item_variant))
-			if not item and frappe.db.exists('Item', item_variant):
-				item = frappe.db.get_value('Item', item_variant, "variant_of") or item_variant
+			if not item and frappe.db.exists("Item", item_variant):
+				item = frappe.db.get_value("Item", item_variant, "variant_of") or item_variant
 			if item:
 				source_uom = reference_data.get("item_defaults", {}).get(str(item))
 				if source_uom:
 					return source_uom
-				return frappe.db.get_value('Item', item, "stock_uom")
+				return frappe.db.get_value("Item", item, "stock_uom")
 	if document.get("doctype") == "Purchase Order Item" and fieldname == "item_name":
 		# A legacy PO row stores only the physical Item Variant identity. Standard
 		# Item uses that exact identity as both item_code and item_name during the
 		# commonization, so no display value is invented here.
 		return document.get("item_code")
-	if document.get("doctype") == 'YRP Purchase Invoice Item' and fieldname == "item_group":
+	if document.get("doctype") == "YRP Purchase Invoice Item" and fieldname == "item_group":
 		item = reference_data.get("variant_to_item", {}).get(str(document.get("item")))
-		if not item and frappe.db.exists('Item', document.get("item")):
-			item = (
-				frappe.db.get_value('Item', document.get("item"), "variant_of")
-				or document.get("item")
-			)
+		if not item and frappe.db.exists("Item", document.get("item")):
+			item = frappe.db.get_value("Item", document.get("item"), "variant_of") or document.get("item")
 		if item:
 			source_groups = reference_data.get("item_groups", {})
 			if str(item) in source_groups:
 				# The PI row and its source Item can both predate mandatory
 				# Item Group. Keep this aligned with the legacy Item mapping.
-				return source_groups[str(item)] or _one_source_root_item_group(
-					reference_data
-				)
-			return frappe.db.get_value('Item', item, "item_group")
+				return source_groups[str(item)] or _one_source_root_item_group(reference_data)
+			return frappe.db.get_value("Item", item, "item_group")
 	return None
 
 
-def _is_valid_historical_required_blank(
-	document: Mapping[str, Any], fieldname: str
-) -> bool:
+def _is_valid_historical_required_blank(document: Mapping[str, Any], fieldname: str) -> bool:
 	source_doctype = _source_doctype_for_target(str(document.get("doctype") or ""))
 	return (source_doctype, fieldname) in PRESERVE_SOURCE_BLANK_FIELDS
 
@@ -4633,16 +4466,11 @@ def _source_doctype_for_target(target_doctype: str) -> str:
 def _one_source_root_item_group(
 	reference_data: Mapping[str, Mapping[str, Any]] | None,
 ) -> str | None:
-	values = list(
-		(reference_data or {}).get("migration_defaults", {}).get("root_item_groups")
-		or []
-	)
+	values = list((reference_data or {}).get("migration_defaults", {}).get("root_item_groups") or [])
 	if len(values) == 1:
 		return str(values[0])
 	if values:
-		raise MigrationError(
-			"Source has several root Item Groups; configure one unambiguous migration root"
-		)
+		raise MigrationError("Source has several root Item Groups; configure one unambiguous migration root")
 	return None
 
 
@@ -4652,19 +4480,28 @@ def _ensure_supporting_masters(
 ) -> None:
 	now = now_datetime()
 	from yrp.attribute_value_identity import attribute_value_name
-	target._bulk_upsert("YRP Item Attribute Value", [
-		{"name": attribute_value_name(attribute, value), "attribute_name": attribute,
-		 "attribute_value": value, "owner": "Administrator", "creation": now,
-		 "modified": now, "modified_by": "Administrator", "docstatus": 0}
-		for value, attributes in reference_data.get("attribute_value_pairs", {}).items()
-		for attribute in set(attributes)
-	])
-	defaults = reference_data.get("migration_defaults", {})
-	received_via_values = sorted(
-		{str(value) for value in defaults.get("bill_received_via") or [] if value}
-	)
+
 	target._bulk_upsert(
-		'YRP Bill Tracking Received Via',
+		"YRP Item Attribute Value",
+		[
+			{
+				"name": attribute_value_name(attribute, value),
+				"attribute_name": attribute,
+				"attribute_value": value,
+				"owner": "Administrator",
+				"creation": now,
+				"modified": now,
+				"modified_by": "Administrator",
+				"docstatus": 0,
+			}
+			for value, attributes in reference_data.get("attribute_value_pairs", {}).items()
+			for attribute in set(attributes)
+		],
+	)
+	defaults = reference_data.get("migration_defaults", {})
+	received_via_values = sorted({str(value) for value in defaults.get("bill_received_via") or [] if value})
+	target._bulk_upsert(
+		"YRP Bill Tracking Received Via",
 		[
 			{
 				"name": name,
@@ -4679,13 +4516,11 @@ def _ensure_supporting_masters(
 		],
 	)
 	default_received_type = defaults.get("default_received_type")
-	if default_received_type and not frappe.db.exists(
-		'YRP Received Type', default_received_type
-	):
+	if default_received_type and not frappe.db.exists("YRP Received Type", default_received_type):
 		# The actual ten source records are migrated through GRN Item Type. This
 		# early row only satisfies dependency checks if another DocType sorts first.
 		target._bulk_upsert(
-			'YRP Received Type',
+			"YRP Received Type",
 			[
 				{
 					"name": default_received_type,
@@ -4710,20 +4545,13 @@ def _verify_counts(
 ) -> dict[str, Any]:
 	try:
 		migration_report = json.loads(
-			frappe.db.get_value(
-				'SD YRP MRP Data Migration', migration_name, "report_json"
-			)
-			or "{}"
+			frappe.db.get_value("SD YRP MRP Data Migration", migration_name, "report_json") or "{}"
 		)
 	except (TypeError, ValueError) as exc:
 		raise MigrationError("Completed migration report JSON is invalid") from exc
 	if migration_report.get("mode") != "migrate":
-		raise MigrationError(
-			"Verification requires the completed migration report and ownership map"
-		)
-	business_reconciliation = migration_report.get(
-		"supporting_business_master_reconciliation"
-	) or {}
+		raise MigrationError("Verification requires the completed migration report and ownership map")
+	business_reconciliation = migration_report.get("supporting_business_master_reconciliation") or {}
 	identity = _verify_source_identities(plan, source, migration_name)
 	values = _verify_source_values(plan, source, migration_name)
 	supporting_business_masters = _verify_supporting_business_master_identities(source)
@@ -4740,20 +4568,18 @@ def _verify_counts(
 		source,
 		migration_name,
 		verify=True,
-		preserved_business_masters=business_reconciliation.get(
-			"preserved_target_identities"
-		)
-		or {},
+		preserved_business_masters=business_reconciliation.get("preserved_target_identities") or {},
 	)
 	checkpoint = _load_checkpoint(migration_name)
-	missing_blob_names = set(
-		(checkpoint.get("files") or {}).get("missing_blob_names") or []
-	)
+	missing_blob_names = set((checkpoint.get("files") or {}).get("missing_blob_names") or [])
 	files = _verify_files(plan, source, allowed_missing_blob_names=missing_blob_names)
 	series = _verify_series(source)
 	stock = _verify_stock_summary(source)
-	links = _verify_link_integrity(plan, source_broken_links, source_dynamic_links=source.iter_broken_dynamic_links())
+	links = _verify_link_integrity(
+		plan, source_broken_links, source_dynamic_links=source.iter_broken_dynamic_links()
+	)
 	from yrp.attribute_values import verify_attribute_value_links
+
 	links["failures"].extend(verify_attribute_value_links())
 	if links["failures"]:
 		links["status"] = "Failed"
@@ -4784,14 +4610,11 @@ def _verify_counts(
 	if stock["status"] != "Pass":
 		failures.append("Stock bucket digest or totals do not match")
 	if failures:
-		raise MigrationError(
-			"Post-migration verification failed:\n" + "\n".join(failures[:100])
-		)
+		raise MigrationError("Post-migration verification failed:\n" + "\n".join(failures[:100]))
 	return {
 		"mode": "verify",
 		"status": "Verified",
-		"processed": identity["verified_parent_records"]
-		+ approved_frappe_data["source_parent_records"],
+		"processed": identity["verified_parent_records"] + approved_frappe_data["source_parent_records"],
 		"failed": 0,
 		"source_total_parent_records": int(source_status.get("total_parent_records") or 0),
 		"identities": identity,
@@ -4803,7 +4626,9 @@ def _verify_counts(
 		"retired_tables": retired,
 		"framework_history": framework_history,
 		"complete_source_preservation": not (
-			files["audited_missing_blob_count"] or auth["source_key_unavailable"] or retired["missing_blob_count"]
+			files["audited_missing_blob_count"]
+			or auth["source_key_unavailable"]
+			or retired["missing_blob_count"]
 			or framework_history["missing_blob_count"]
 		),
 		"files": files,
@@ -4828,16 +4653,12 @@ def _verify_supporting_business_master_identities(
 	source identity must either have existed already or have been inserted.
 	"""
 
-	names_by_doctype: dict[str, set[str]] = {
-		doctype: set() for doctype in BUSINESS_SUPPORTING_MASTERS
-	}
+	names_by_doctype: dict[str, set[str]] = {doctype: set() for doctype in BUSINESS_SUPPORTING_MASTERS}
 	for row in source.iter_related_business_masters():
 		doctype = str(row.get("doctype") or "")
 		name = str(row.get("name") or "")
 		if doctype not in names_by_doctype or not name:
-			raise MigrationError(
-				"Invalid related business-master identity from the source bridge"
-			)
+			raise MigrationError("Invalid related business-master identity from the source bridge")
 		names_by_doctype[doctype].add(name)
 
 	rows = []
@@ -4856,9 +4677,7 @@ def _verify_supporting_business_master_identities(
 			)
 		target_identity_keys = {_database_identity_key(name) for name in target_names}
 		missing = sorted(
-			name
-			for name in source_names
-			if _database_identity_key(name) not in target_identity_keys
+			name for name in source_names if _database_identity_key(name) not in target_identity_keys
 		)
 		rows.append(
 			{
@@ -4918,13 +4737,9 @@ def _verify_source_values(
 		doctype_passwords = 0
 		doctype_attachment_urls = 0
 		doctype_numeric_values = 0
-		for source_document in source.iter_documents(
-			source_doctype, batch_size=effective_batch_size
-		):
+		for source_document in source.iter_documents(source_doctype, batch_size=effective_batch_size):
 			target_document = transform_document(source_document, plan)
-			_apply_target_owned_configuration_boundary(
-				source_doctype, target_document
-			)
+			_apply_target_owned_configuration_boundary(source_doctype, target_document)
 			_resolve_and_validate_required_target_values(
 				target_document,
 				plan,
@@ -4934,9 +4749,7 @@ def _verify_source_values(
 			if source_doctype == "Purchase Invoice":
 				# Verify the exact document shape produced at the PI pre-write
 				# boundary, including generated projections and normalized fields.
-				target_document = _prepare_purchase_invoice_migration_documents(
-					[target_document]
-				)[0]
+				target_document = _prepare_purchase_invoice_migration_documents([target_document])[0]
 			batch.append(target_document)
 			verified_parents += 1
 			if len(batch) < effective_batch_size:
@@ -5031,15 +4844,11 @@ def _verify_transformed_value_batch(
 	columns_cache: dict[str, set[str]] | None = None,
 	fieldtypes_cache: dict[str, dict[str, str]] | None = None,
 	numeric_scales_cache: dict[str, dict[str, int]] | None = None,
-	attachment_url_relocations: Mapping[
-		tuple[str, str, str, str], set[str]
-	] | None = None,
+	attachment_url_relocations: Mapping[tuple[str, str, str, str], set[str]] | None = None,
 ) -> dict[str, Any]:
 	columns_cache = columns_cache if columns_cache is not None else {}
 	fieldtypes_cache = fieldtypes_cache if fieldtypes_cache is not None else {}
-	numeric_scales_cache = (
-		numeric_scales_cache if numeric_scales_cache is not None else {}
-	)
+	numeric_scales_cache = numeric_scales_cache if numeric_scales_cache is not None else {}
 	grouped: dict[str, list[dict[str, Any]]] = {}
 	skipped_password_values = 0
 	for document in documents:
@@ -5079,9 +4888,7 @@ def _verify_transformed_value_batch(
 					if fieldname not in actual:
 						failures.append(f"Missing Single value {doctype}.{fieldname}")
 						continue
-					if not _same_migrated_value(
-						expected_value, actual[fieldname], fieldtypes.get(fieldname)
-					):
+					if not _same_migrated_value(expected_value, actual[fieldname], fieldtypes.get(fieldname)):
 						if _is_verified_attachment_url(
 							doctype,
 							doctype,
@@ -5121,12 +4928,7 @@ def _verify_transformed_value_batch(
 			}
 		numeric_scales = numeric_scales_cache[doctype]
 		fields = sorted(
-			{
-				fieldname
-				for expected in expected_rows
-				for fieldname in expected
-				if fieldname in columns
-			}
+			{fieldname for expected in expected_rows for fieldname in expected if fieldname in columns}
 		)
 		if "name" not in fields:
 			fields.insert(0, "name")
@@ -5156,9 +4958,7 @@ def _verify_transformed_value_batch(
 			parenttype = str(expected.get("parenttype") or "")
 			parentfield = str(expected.get("parentfield") or "")
 			if not parent or not parenttype or not parentfield or not expected.get("idx"):
-				failures.append(
-					f"Unaddressable generated child row in {doctype}: {expected!r}"
-				)
+				failures.append(f"Unaddressable generated child row in {doctype}: {expected!r}")
 				continue
 			generated_scopes.setdefault((parenttype, parentfield), []).append(parent)
 		for (parenttype, parentfield), parents in generated_scopes.items():
@@ -5179,9 +4979,7 @@ def _verify_transformed_value_batch(
 						int(row.get("idx") or 0),
 					)
 					if key in actual_by_child_position:
-						failures.append(
-							f"Duplicate generated child position {doctype} {key!r}"
-						)
+						failures.append(f"Duplicate generated child position {doctype} {key!r}")
 					else:
 						actual_by_child_position[key] = row
 
@@ -5199,9 +4997,7 @@ def _verify_transformed_value_batch(
 					int(expected.get("idx") or 0),
 				)
 				actual = actual_by_child_position.get(position)
-				identity = (
-					f"{position[1]} {position[0]}.{position[2]}[{position[3]}]"
-				)
+				identity = f"{position[1]} {position[0]}.{position[2]}[{position[3]}]"
 			if actual is None:
 				failures.append(f"Missing value-audit row {doctype} {identity}")
 				continue
@@ -5211,10 +5007,9 @@ def _verify_transformed_value_batch(
 						failures.append(f"Missing populated target column {doctype}.{fieldname}")
 					continue
 				if fieldname == "name":
-					exact_value = target_value = (
-						_database_identity_key(expected_value)
-						== _database_identity_key(actual.get(fieldname))
-					)
+					exact_value = target_value = _database_identity_key(
+						expected_value
+					) == _database_identity_key(actual.get(fieldname))
 				else:
 					exact_value = _same_migrated_value(
 						expected_value, actual.get(fieldname), fieldtypes.get(fieldname)
@@ -5237,9 +5032,7 @@ def _verify_transformed_value_batch(
 						expected_url=expected_value,
 						verified_relocations=attachment_url_relocations,
 					):
-						normalized_attachment_urls.append(
-							f"{doctype} {identity}.{fieldname}"
-						)
+						normalized_attachment_urls.append(f"{doctype} {identity}.{fieldname}")
 					else:
 						failures.append(
 							f"Value mismatch {doctype} {identity}.{fieldname}: "
@@ -5322,9 +5115,7 @@ def _same_migrated_value(
 			actual_decimal = Decimal(str(actual or 0))
 			if numeric_scale is not None:
 				quantum = Decimal(1).scaleb(-numeric_scale)
-				expected_decimal = expected_decimal.quantize(
-					quantum, rounding=ROUND_HALF_UP
-				)
+				expected_decimal = expected_decimal.quantize(quantum, rounding=ROUND_HALF_UP)
 			return expected_decimal == actual_decimal
 		except InvalidOperation:
 			return False
@@ -5333,7 +5124,7 @@ def _same_migrated_value(
 			left = json.loads(expected) if isinstance(expected, str) else expected
 			right = json.loads(actual) if isinstance(actual, str) else actual
 			return left == right
-		except (TypeError, ValueError):
+		except TypeError, ValueError:
 			pass
 	if isinstance(expected, bytes):
 		expected = expected.decode(errors="replace")
@@ -5384,13 +5175,9 @@ def _verified_attachment_url_relocations(
 			if not spec:
 				continue
 			target_name = (
-				spec.target
-				if spec.source_schema.get("issingle")
-				else str(reference.get("name") or "")
+				spec.target if spec.source_schema.get("issingle") else str(reference.get("name") or "")
 			)
-			target_field = spec.field_map.get(
-				reference.get("fieldname"), reference.get("fieldname")
-			)
+			target_field = spec.field_map.get(reference.get("fieldname"), reference.get("fieldname"))
 			key = (spec.target, target_name, str(target_field or ""), source_url)
 			relocations.setdefault(key, set()).add(target_url)
 	return relocations
@@ -5404,9 +5191,7 @@ def _is_verified_attachment_url(
 	fieldtype: str | None,
 	*,
 	expected_url: Any = None,
-	verified_relocations: Mapping[
-		tuple[str, str, str, str], set[str]
-	] | None = None,
+	verified_relocations: Mapping[tuple[str, str, str, str], set[str]] | None = None,
 ) -> bool:
 	"""Accept only a URL rewritten by the migrated target File lifecycle."""
 
@@ -5437,9 +5222,7 @@ def _verify_series(source: F15SourceBridge) -> dict[str, Any]:
 		source_current = int(row.get("current") or 0)
 		target_current = _get_target_series_current(name)
 		if target_current is None or int(target_current or 0) < source_current:
-			failures.append(
-				f"Naming series {name!r}: target={target_current}, source={source_current}"
-			)
+			failures.append(f"Naming series {name!r}: target={target_current}, source={source_current}")
 		verified += 1
 		if len(failures) >= 100:
 			break
@@ -5477,15 +5260,9 @@ def _verify_source_identities(
 						limit_page_length=0,
 					)
 				}
-				missing = [
-					name
-					for name in chunk
-					if _database_identity_key(name) not in found
-				]
+				missing = [name for name in chunk if _database_identity_key(name) not in found]
 				if missing:
-					missing_counts[target_doctype] = (
-						missing_counts.get(target_doctype, 0) + len(missing)
-					)
+					missing_counts[target_doctype] = missing_counts.get(target_doctype, 0) + len(missing)
 					for name in missing[: max(0, 100 - len(failures))]:
 						failures.append(f"Missing {target_doctype} {name}")
 		pending.clear()
@@ -5498,16 +5275,10 @@ def _verify_source_identities(
 
 	for source_doctype in plan.parent_doctypes:
 		document_batch: list[dict[str, Any]] = []
-		for source_document in source.iter_documents(
-			source_doctype, batch_size=batch_size
-		):
+		for source_document in source.iter_documents(source_doctype, batch_size=batch_size):
 			target_document = transform_document(source_document, plan)
-			_apply_target_owned_configuration_boundary(
-				source_doctype, target_document
-			)
-			_resolve_and_validate_required_target_values(
-				target_document, plan, reference_data=reference_data
-			)
+			_apply_target_owned_configuration_boundary(source_doctype, target_document)
+			_resolve_and_validate_required_target_values(target_document, plan, reference_data=reference_data)
 			document_batch.append(target_document)
 			verified_parents += 1
 			if len(document_batch) >= batch_size:
@@ -5534,14 +5305,11 @@ def _verify_source_identities(
 		missing = missing_counts.get(target_doctype, 0)
 		generated = generated_allowances.get(target_doctype, 0)
 		target_only = max(0, target_count - expected_count - generated + missing)
-		preserved_target_owned, unexpected_target_only = (
-			_classify_target_only_identities(target_doctype, target_only)
+		preserved_target_owned, unexpected_target_only = _classify_target_only_identities(
+			target_doctype, target_only
 		)
 		if unexpected_target_only:
-			failures.append(
-				"Unexpected target-only rows in "
-				f"{target_doctype}: {unexpected_target_only}"
-			)
+			failures.append(f"Unexpected target-only rows in {target_doctype}: {unexpected_target_only}")
 		rows.append(
 			{
 				"target_doctype": target_doctype,
@@ -5552,11 +5320,7 @@ def _verify_source_identities(
 				"unexpected_target_only_count": unexpected_target_only,
 				"migration_generated_count": generated,
 				"missing_source_identities": missing,
-				"status": (
-					"Pass"
-					if not missing and not unexpected_target_only
-					else "Failed"
-				),
+				"status": ("Pass" if not missing and not unexpected_target_only else "Failed"),
 			}
 		)
 	return {
@@ -5565,7 +5329,6 @@ def _verify_source_identities(
 		"doctypes": rows,
 		"failures": failures,
 	}
-
 
 
 def _identity_scope_count(doctype, meta, plan):
@@ -5577,15 +5340,11 @@ def _identity_scope_count(doctype, meta, plan):
 	return frappe.db.count(doctype)
 
 
-def _classify_target_only_identities(
-	target_doctype: str, target_only: int
-) -> tuple[int, int]:
+def _classify_target_only_identities(target_doctype: str, target_only: int) -> tuple[int, int]:
 	"""Split preserved ERP-owned rows from genuinely unexpected identities."""
 
 	target_only = max(0, int(target_only or 0))
-	if target_doctype in (
-		PRESERVED_TARGET_IDENTITY_DOCTYPES | PRESERVED_TARGET_CHILD_DOCTYPES
-	):
+	if target_doctype in (PRESERVED_TARGET_IDENTITY_DOCTYPES | PRESERVED_TARGET_CHILD_DOCTYPES):
 		return target_only, 0
 	return 0, target_only
 
@@ -5593,7 +5352,7 @@ def _classify_target_only_identities(
 def _migration_generated_identity_allowances() -> dict[str, int]:
 	"""Target-only rows that have a separate deterministic verification layer."""
 	allowances: dict[str, int] = {}
-	if frappe.db.exists("DocType", 'SD YRP Essdee Purchase Invoice Item'):
+	if frappe.db.exists("DocType", "SD YRP Essdee Purchase Invoice Item"):
 		physical_rows = frappe.db.sql(
 			"""
 			SELECT COUNT(*)
@@ -5606,13 +5365,12 @@ def _migration_generated_identity_allowances() -> dict[str, int]:
 			""",
 			("migrated_v1",),
 		)[0][0]
-		allowances['YRP Purchase Invoice Item'] = int(physical_rows or 0)
+		allowances["YRP Purchase Invoice Item"] = int(physical_rows or 0)
 	if frappe.db.exists("DocType", "Item Attribute Value"):
 		# These deterministic rows close Data-encoded standard Item variant pairs.
 		# Their semantic pair inventory is verified independently by target setup.
 		derived_values = frappe.db.sql(
-			"SELECT COUNT(*) FROM `tabItem Attribute Value` "
-			"WHERE `name` LIKE 'yrp-iav-%'"
+			"SELECT COUNT(*) FROM `tabItem Attribute Value` WHERE `name` LIKE 'yrp-iav-%'"
 		)[0][0]
 		allowances["Item Attribute Value"] = int(derived_values or 0)
 	return allowances
@@ -5659,15 +5417,20 @@ def _verify_files(
 		target = frappe.db.get_value(
 			"File",
 			row["name"],
-			['*'],
+			["*"],
 			as_dict=True,
 		)
-		expected_metadata = _file_metadata_values(row, plan,
-			file_url=target.file_url if target and row['name'] not in allowed_missing_blob_names else None)
+		expected_metadata = _file_metadata_values(
+			row,
+			plan,
+			file_url=target.file_url if target and row["name"] not in allowed_missing_blob_names else None,
+		)
 		if not target:
 			failures.append(f"Missing File {row['name']}")
-		elif any(field not in target or not _same_migrated_value(value, target[field], 'Data')
-			for field, value in expected_metadata.items()):
+		elif any(
+			field not in target or not _same_migrated_value(value, target[field], "Data")
+			for field, value in expected_metadata.items()
+		):
 			failures.append(f"Full File metadata mismatch {row['name']}")
 		elif not frappe.get_doc("File", row["name"]).exists_on_disk():
 			if row["name"] in allowed_missing_blob_names:
@@ -5676,7 +5439,9 @@ def _verify_files(
 				failures.append(f"File blob missing on disk {row['name']}")
 		else:
 			content = _file_content_bytes(frappe.get_doc("File", row["name"]))
-			if len(content) != int(row.get("file_size") or 0) or hashlib.md5(content).hexdigest() != row.get("content_hash"):
+			if len(content) != int(row.get("file_size") or 0) or hashlib.md5(content).hexdigest() != row.get(
+				"content_hash"
+			):
 				failures.append(f"File bytes differ from source metadata {row['name']}")
 			else:
 				verified_blobs += 1
@@ -5692,9 +5457,7 @@ def _verify_files(
 		"source_file_bytes": int(status.get("file_bytes") or 0),
 		"status": (
 			"Pass With Audited Omissions"
-			if not failures
-			and verified == int(status.get("file_count") or 0)
-			and audited_missing_blobs
+			if not failures and verified == int(status.get("file_count") or 0) and audited_missing_blobs
 			else "Pass"
 			if not failures and verified == int(status.get("file_count") or 0)
 			else "Failed"
@@ -5727,16 +5490,13 @@ def _target_stock_summary(dimensions: Iterable[str]) -> dict[str, Any]:
 	dimensions = [str(fieldname) for fieldname in dimensions]
 	if any(not SAFE_SQL_FIELDNAME.fullmatch(fieldname) for fieldname in dimensions):
 		raise MigrationError("Unsafe target stock dimension fieldname")
-	columns = set(frappe.db.get_table_columns('YRP Stock Ledger Entry'))
+	columns = set(frappe.db.get_table_columns("YRP Stock Ledger Entry"))
 	missing = [fieldname for fieldname in dimensions if fieldname not in columns]
 	if missing:
 		raise MigrationError(
-			"Target Stock Ledger Entry is missing configured dimensions: "
-			+ ", ".join(missing)
+			"Target Stock Ledger Entry is missing configured dimensions: " + ", ".join(missing)
 		)
-	dimension_select = ", ".join(
-		f"COALESCE({_quote_identifier(fieldname)}, '')" for fieldname in dimensions
-	)
+	dimension_select = ", ".join(f"COALESCE({_quote_identifier(fieldname)}, '')" for fieldname in dimensions)
 	group_fields = ", ".join(_quote_identifier(fieldname) for fieldname in dimensions)
 	select_middle = f", {dimension_select}" if dimension_select else ""
 	group_suffix = f", {group_fields}" if group_fields else ""
@@ -5781,7 +5541,8 @@ def _target_stock_summary(dimensions: Iterable[str]) -> dict[str, Any]:
 def _verify_link_integrity(
 	plan: MigrationPlan,
 	source_broken_links: Iterable[Mapping[str, Any]] = (),
-	*, source_dynamic_links: Iterable[Mapping[str, Any]] = (),
+	*,
+	source_dynamic_links: Iterable[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
 	"""Check every static and dynamic Link in the migrated target schemas."""
 
@@ -5792,23 +5553,13 @@ def _verify_link_integrity(
 			str(row.get("target_field") or ""),
 			str(row.get("target_link_doctype") or ""),
 		)
-		approved_by_field.setdefault(key, {})[
-			str(row.get("target_name") or "")
-		] = str(row.get("value") or "")
+		approved_by_field.setdefault(key, {})[str(row.get("target_name") or "")] = str(row.get("value") or "")
 	failures: list[str] = []
 	checked_fields = 0
 	broken_values = 0
 	audited_broken_values = 0
 	audited_exceptions: list[str] = []
-	parent_targets = tuple(
-		sorted(
-			{
-				str(spec.target)
-				for spec in plan.specs.values()
-				if not spec.is_child
-			}
-		)
-	)
+	parent_targets = tuple(sorted({str(spec.target) for spec in plan.specs.values() if not spec.is_child}))
 	for doctype in _migration_physical_target_doctypes(plan):
 		if doctype not in plan.target_schemas:
 			failures.append(f"Missing migration target schema for {doctype}")
@@ -5817,9 +5568,7 @@ def _verify_link_integrity(
 		meta = frappe.get_meta(doctype)
 		child_parenttypes = parent_targets if meta.istable else ()
 		fields = {
-			field.get("fieldname"): field
-			for field in schema.get("fields") or []
-			if field.get("fieldname")
+			field.get("fieldname"): field for field in schema.get("fields") or [] if field.get("fieldname")
 		}
 		for fieldname, field in fields.items():
 			fieldtype = field.get("fieldtype")
@@ -5830,9 +5579,7 @@ def _verify_link_integrity(
 					fieldname,
 					str(field["options"]),
 					is_single=bool(meta.issingle),
-					approved=approved_by_field.get(
-						(doctype, fieldname, str(field["options"])), {}
-					),
+					approved=approved_by_field.get((doctype, fieldname, str(field["options"])), {}),
 					parenttypes=child_parenttypes,
 				)
 				if broken:
@@ -5850,6 +5597,7 @@ def _verify_link_integrity(
 			elif fieldtype == "Dynamic Link" and field.get("options"):
 				checked_fields += 1
 	from essdee_yrp.migration.dynamic_links import iter_broken_dynamic_links
+
 	approved_dynamic = set()
 	for row in source_dynamic_links:
 		spec = plan.specs.get(row["doctype"])
@@ -5857,17 +5605,39 @@ def _verify_link_integrity(
 			raise MigrationError(f"Unmapped source Dynamic Link owner {row['doctype']}")
 		linked_spec = plan.specs.get(row["link_doctype"])
 		linked_type = linked_spec.target if linked_spec else row["link_doctype"]
-		value = linked_type if linked_spec and linked_spec.source_schema.get("issingle") and row["value"] == row["link_doctype"] else row["value"]
-		approved_dynamic.add((spec.target, row["name"], spec.field_map.get(row["fieldname"], row["fieldname"]), linked_type, value))
-	dynamic_schemas = {dt: plan.target_schemas[dt] for dt in _migration_physical_target_doctypes(plan) if dt in plan.target_schemas}
+		value = (
+			linked_type
+			if linked_spec
+			and linked_spec.source_schema.get("issingle")
+			and row["value"] == row["link_doctype"]
+			else row["value"]
+		)
+		approved_dynamic.add(
+			(
+				spec.target,
+				row["name"],
+				spec.field_map.get(row["fieldname"], row["fieldname"]),
+				linked_type,
+				value,
+			)
+		)
+	dynamic_schemas = {
+		dt: plan.target_schemas[dt]
+		for dt in _migration_physical_target_doctypes(plan)
+		if dt in plan.target_schemas
+	}
 	for row in iter_broken_dynamic_links(frappe, dynamic_schemas, parent_targets):
 		broken_values += 1
 		key = (row["doctype"], row["name"], row["fieldname"], row["link_doctype"], row["value"])
 		if key in approved_dynamic:
 			audited_broken_values += 1
-			audited_exceptions.append(f"{row['doctype']} {row['name']}.{row['fieldname']}: exact source-invalid Dynamic Link")
+			audited_exceptions.append(
+				f"{row['doctype']} {row['name']}.{row['fieldname']}: exact source-invalid Dynamic Link"
+			)
 		else:
-			failures.append(f"Broken Dynamic Link {row['doctype']} {row['name']}.{row['fieldname']}: {row['link_doctype']}:{row['value']}")
+			failures.append(
+				f"Broken Dynamic Link {row['doctype']} {row['name']}.{row['fieldname']}: {row['link_doctype']}:{row['value']}"
+			)
 	return {
 		"status": (
 			"Pass With Audited Source Exceptions"
@@ -5906,9 +5676,7 @@ def _broken_static_link_count(
 		# cache entry that predates an SQL migration write.
 		value = frappe.db.get_single_value(doctype, fieldname, cache=False)
 		link_meta = frappe.get_meta(link_doctype)
-		valid = str(value) == link_doctype if link_meta.issingle else frappe.db.exists(
-			link_doctype, value
-		)
+		valid = str(value) == link_doctype if link_meta.issingle else frappe.db.exists(link_doctype, value)
 		if value and not valid:
 			return {"total": 1, "audited": 0, "unexpected": 1, "samples": [str(value)]}
 		return None
@@ -5928,18 +5696,14 @@ def _broken_static_link_count(
 			return None
 		approved = dict(approved or {})
 		audited_rows = {
-			str(name): str(value)
-			for name, value in rows
-			if str(approved.get(str(name))) == str(value)
+			str(name): str(value) for name, value in rows if str(approved.get(str(name))) == str(value)
 		}
 		return {
 			"total": len(rows),
 			"audited": len(audited_rows),
 			"unexpected": len(rows) - len(audited_rows),
 			"samples": [
-				f"{name}={value}"
-				for name, value in rows
-				if audited_rows.get(str(name)) != str(value)
+				f"{name}={value}" for name, value in rows if audited_rows.get(str(name)) != str(value)
 			][:10],
 		}
 	link_table = _quote_identifier("tab" + link_doctype)
@@ -5976,9 +5740,7 @@ def _broken_static_link_count(
 		scope_params,
 	)
 	unexpected_samples = [
-		f"{name}={value}"
-		for name, value in samples
-		if audited_rows.get(str(name)) != str(value)
+		f"{name}={value}" for name, value in samples if audited_rows.get(str(name)) != str(value)
 	][:10]
 	return {
 		"total": count,
@@ -6007,11 +5769,7 @@ def _broken_dynamic_link_count(
 				if controller_meta.issingle
 				else bool(frappe.db.exists(controller, value))
 			)
-		if value and (
-			not controller
-			or not frappe.db.exists("DocType", controller)
-			or not valid
-		):
+		if value and (not controller or not frappe.db.exists("DocType", controller) or not valid):
 			return 1, [f"{controller}:{value}"]
 		return None
 	table = _quote_identifier("tab" + doctype)
@@ -6049,9 +5807,7 @@ def _broken_dynamic_link_count(
 			)
 			if rows:
 				total += len(rows)
-				samples.extend(
-					f"{controller}:{name}={value}" for name, value in rows[:10]
-				)
+				samples.extend(f"{controller}:{name}={value}" for name, value in rows[:10])
 			continue
 		link_table = _quote_identifier("tab" + str(controller))
 		count = int(
@@ -6079,7 +5835,7 @@ def _broken_dynamic_link_count(
 
 
 def _load_checkpoint(migration_name: str) -> dict[str, Any]:
-	value = frappe.db.get_value('SD YRP MRP Data Migration', migration_name, "checkpoint_json")
+	value = frappe.db.get_value("SD YRP MRP Data Migration", migration_name, "checkpoint_json")
 	if not value:
 		return {"version": 2, "doctypes": {}}
 	checkpoint = json.loads(value)
@@ -6093,9 +5849,7 @@ def _bind_checkpoint_to_source_snapshot(
 ) -> dict[str, Any]:
 	"""Return a resumable checkpoint bound to one exact reviewed migration gate."""
 
-	payload = json.dumps(
-		dict(source_snapshot), sort_keys=True, separators=(",", ":"), default=str
-	)
+	payload = json.dumps(dict(source_snapshot), sort_keys=True, separators=(",", ":"), default=str)
 	snapshot_fingerprint = hashlib.sha256(payload.encode("utf-8")).hexdigest()
 	if checkpoint.get("source_snapshot_fingerprint") == snapshot_fingerprint:
 		return dict(checkpoint)
@@ -6109,7 +5863,7 @@ def _bind_checkpoint_to_source_snapshot(
 def _mark_started(migration_name: str, mode: str, source_status: Mapping[str, Any]) -> None:
 	action = {"dry_run": "Dry Run", "migrate": "Migrate", "verify": "Verify"}[mode]
 	frappe.db.set_value(
-		'SD YRP MRP Data Migration',
+		"SD YRP MRP Data Migration",
 		migration_name,
 		{
 			"status": "Running",
@@ -6129,7 +5883,7 @@ def _mark_started(migration_name: str, mode: str, source_status: Mapping[str, An
 
 def _update_progress(migration_name: str, processed: int, skipped: int, failed: int) -> None:
 	frappe.db.set_value(
-		'SD YRP MRP Data Migration',
+		"SD YRP MRP Data Migration",
 		migration_name,
 		{
 			"processed_records": processed,
@@ -6146,7 +5900,7 @@ def _mark_complete(migration_name: str, mode: str, result: Mapping[str, Any]) ->
 	if mode == "verify" and result.get("complete_source_preservation") is False:
 		status = "Verified With Source Gaps"
 	frappe.db.set_value(
-		'SD YRP MRP Data Migration',
+		"SD YRP MRP Data Migration",
 		migration_name,
 		{
 			"status": status,
@@ -6166,7 +5920,7 @@ def _mark_reset_started(migration_name: str, before: Mapping[str, Any]) -> None:
 	started_on = now_datetime()
 	reset_started_on = before.get("reset_started_on") or started_on
 	frappe.db.set_value(
-		'SD YRP MRP Data Migration',
+		"SD YRP MRP Data Migration",
 		migration_name,
 		{
 			"status": "Running",
@@ -6185,9 +5939,7 @@ def _mark_reset_started(migration_name: str, before: Mapping[str, Any]) -> None:
 					"reset_generated_deleted_document_names": list(
 						before.get("reset_generated_deleted_document_names") or []
 					),
-					"reset_generated_comment_names": list(
-						before.get("reset_generated_comment_names") or []
-					),
+					"reset_generated_comment_names": list(before.get("reset_generated_comment_names") or []),
 				},
 				sort_keys=True,
 			),
@@ -6197,7 +5949,7 @@ def _mark_reset_started(migration_name: str, before: Mapping[str, Any]) -> None:
 	# This field is labelled source records for the migration actions. During the
 	# reset boundary it intentionally shows the exact reviewed deletion total.
 	frappe.db.set_value(
-		'SD YRP MRP Data Migration',
+		"SD YRP MRP Data Migration",
 		migration_name,
 		"total_source_records",
 		int(before["total"]),
@@ -6208,7 +5960,7 @@ def _mark_reset_started(migration_name: str, before: Mapping[str, Any]) -> None:
 
 def _mark_reset_complete(migration_name: str, result: Mapping[str, Any]) -> None:
 	frappe.db.set_value(
-		'SD YRP MRP Data Migration',
+		"SD YRP MRP Data Migration",
 		migration_name,
 		{
 			"status": "Reset Complete",
@@ -6229,7 +5981,7 @@ def _mark_reset_complete(migration_name: str, result: Mapping[str, Any]) -> None
 def _mark_failed(migration_name: str, *, interrupted: bool = False) -> None:
 	frappe.db.rollback()
 	frappe.db.set_value(
-		'SD YRP MRP Data Migration',
+		"SD YRP MRP Data Migration",
 		migration_name,
 		{
 			"status": "Failed",

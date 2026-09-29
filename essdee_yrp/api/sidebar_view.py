@@ -21,7 +21,7 @@ import json
 
 import frappe
 
-SETTING_DOCTYPE = 'SD YRP Essdee Sidebar Setting'
+SETTING_DOCTYPE = "SD YRP Essdee Sidebar Setting"
 
 
 def _parse_json_field(raw):
@@ -30,7 +30,7 @@ def _parse_json_field(raw):
 		return None
 	try:
 		return json.loads(raw)
-	except (ValueError, TypeError):
+	except ValueError, TypeError:
 		return None
 
 
@@ -44,7 +44,7 @@ def _coerce_to_json_text(value):
 	if isinstance(value, str):
 		try:
 			value = json.loads(value) if value.strip() else None
-		except (ValueError, TypeError):
+		except ValueError, TypeError:
 			value = None
 	if not isinstance(value, list):
 		value = []

@@ -3,7 +3,6 @@ from unittest.mock import patch
 import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import getdate
-
 from yrp.stock.dimensions import (
 	MANAGED_DIMENSION_FIELD_MARKER,
 	STOCK_DOCTYPES,
@@ -16,9 +15,9 @@ class TestRepostItemValuationCustomization(FrappeTestCase):
 	def _transaction_repost(self, posting_date):
 		return frappe.get_doc(
 			{
-				"doctype": 'YRP Repost Item Valuation',
+				"doctype": "YRP Repost Item Valuation",
 				"based_on": "Transaction",
-				"voucher_type": 'YRP Stock Entry',
+				"voucher_type": "YRP Stock Entry",
 				"voucher_no": "STE-U42-BOUNDARY-PROBE",
 				"posting_date": posting_date,
 			}
@@ -36,7 +35,7 @@ class TestRepostItemValuationCustomization(FrappeTestCase):
 		self._transaction_repost("2026-08-21").validate()
 
 	def test_via_landed_cost_voucher_is_essdee_owned(self):
-		field = frappe.get_meta('YRP Repost Item Valuation', cached=False).get_field(
+		field = frappe.get_meta("YRP Repost Item Valuation", cached=False).get_field(
 			"via_landed_cost_voucher"
 		)
 
@@ -48,7 +47,7 @@ class TestRepostItemValuationCustomization(FrappeTestCase):
 			frappe.db.exists(
 				"Custom Field",
 				{
-					"dt": 'YRP Repost Item Valuation',
+					"dt": "YRP Repost Item Valuation",
 					"fieldname": "via_landed_cost_voucher",
 					"module": "Essdee YRP",
 				},
@@ -56,8 +55,8 @@ class TestRepostItemValuationCustomization(FrappeTestCase):
 		)
 
 	def test_stock_dimensions_remain_base_yrp_managed(self):
-		self.assertIn('YRP Repost Item Valuation', STOCK_DOCTYPES)
-		meta = frappe.get_meta('YRP Repost Item Valuation', cached=False)
+		self.assertIn("YRP Repost Item Valuation", STOCK_DOCTYPES)
+		meta = frappe.get_meta("YRP Repost Item Valuation", cached=False)
 
 		for dimension in get_stock_dimensions():
 			with self.subTest(fieldname=dimension.fieldname):
@@ -70,7 +69,7 @@ class TestRepostItemValuationCustomization(FrappeTestCase):
 					frappe.db.exists(
 						"Custom Field",
 						{
-							"dt": 'YRP Repost Item Valuation',
+							"dt": "YRP Repost Item Valuation",
 							"fieldname": dimension.fieldname,
 							"module": "Essdee YRP",
 						},

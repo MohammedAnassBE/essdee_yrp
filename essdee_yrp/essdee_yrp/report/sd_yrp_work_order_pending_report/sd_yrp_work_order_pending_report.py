@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Essdee and contributors
 # For license information, please see license.txt
 
-from frappe import _dict, _
+from frappe import _, _dict
 from frappe.utils import flt
 
 from essdee_yrp.report_helpers import get_work_order_pending_report
@@ -29,28 +29,28 @@ def get_columns():
 			"fieldname": "production_order",
 			"label": _("Production Order"),
 			"fieldtype": "Link",
-			"options": 'YRP Production Order',
+			"options": "YRP Production Order",
 			"width": 180,
 		},
 		{
 			"fieldname": "work_order",
 			"label": _("Work Order"),
 			"fieldtype": "Link",
-			"options": 'YRP Work Order',
+			"options": "YRP Work Order",
 			"width": 180,
 		},
 		{
 			"fieldname": "lot",
 			"label": _("Lot"),
 			"fieldtype": "Link",
-			"options": 'SD YRP Lot',
+			"options": "SD YRP Lot",
 			"width": 160,
 		},
 		{
 			"fieldname": "process_name",
 			"label": _("Process"),
 			"fieldtype": "Link",
-			"options": 'YRP Process',
+			"options": "YRP Process",
 			"width": 140,
 		},
 		{
@@ -69,7 +69,7 @@ def get_columns():
 			"fieldname": "item_variant",
 			"label": _("Item Variant"),
 			"fieldtype": "Link",
-			"options": 'Item',
+			"options": "Item",
 			"width": 220,
 		},
 		{

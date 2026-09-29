@@ -486,7 +486,6 @@ function split_bundles(){
             });
             output_bundles.value = []
             Object.keys(panelGroupsData).forEach((panel_grp) => {
-                console.log(panel_grp)
                 for(let j = 0; j < panelGroupsData[panel_grp].length; j++){
                     for(let k = 0; k < input_bundles.value.length; k++){
                         let bundle = input_bundles.value[k]

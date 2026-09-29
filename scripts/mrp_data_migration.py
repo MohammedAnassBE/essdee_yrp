@@ -13,11 +13,10 @@ import json
 import sys
 from pathlib import Path
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(APP_ROOT))
 
-from essdee_yrp.migration.planner import (  # noqa: E402
+from essdee_yrp.migration.planner import (
 	DEFAULT_SOURCE_ROOT,
 	DEFAULT_TARGET_ROOTS,
 	build_schema_analysis,

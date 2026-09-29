@@ -37,20 +37,15 @@ class TestDirectBusinessLogic(FrappeTestCase):
 	def test_product_image_lookup_returns_only_readable_shape(self):
 		rows = get_image_list("")
 		self.assertLessEqual(len(rows), 50)
-		self.assertTrue(
-			all(
-				set(row) == {"image_url", "image_title", "image_name"}
-				for row in rows
-			)
-		)
+		self.assertTrue(all(set(row) == {"image_url", "image_title", "image_name"} for row in rows))
 
 	def test_existing_product_release_onload_builds_image_payloads(self):
 		doc = frappe.get_doc(
 			{
-				"doctype": 'SD YRP Product Release',
+				"doctype": "SD YRP Product Release",
 				"product_placement": [
 					{
-						"doctype": 'SD YRP Product Placement',
+						"doctype": "SD YRP Product Placement",
 						"title_header": "Front",
 					}
 				],
@@ -85,7 +80,7 @@ class TestDirectBusinessLogic(FrappeTestCase):
 	def test_fg_template_reuses_base_attribute_mapping_contract(self):
 		doc = frappe.get_doc(
 			{
-				"doctype": 'SD YRP FG Item Master Template',
+				"doctype": "SD YRP FG Item Master Template",
 				"name": "_Test FG Item Master Template",
 			}
 		)

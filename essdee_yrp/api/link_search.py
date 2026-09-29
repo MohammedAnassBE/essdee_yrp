@@ -14,11 +14,11 @@ yrp/Frappe conventions (`name1`, `item_name`, `<doctype>_name`, `title`) — so 
 needs no per-doctype configuration and degrades to a plain name search when there
 is no title field.
 """
-from yrp.attribute_links import value as _attribute_value
 
 import json
 
 import frappe
+from yrp.attribute_links import value as _attribute_value
 
 # Conventional human-name field names probed for the LABEL when a doctype has no
 # explicit title_field (checked against meta.has_field, so unknowns are safe).
@@ -80,7 +80,7 @@ def link_search(doctype, txt="", filters=None, page_length=20):
 	if isinstance(filters, str):
 		try:
 			filters = json.loads(filters)
-		except (TypeError, ValueError):
+		except TypeError, ValueError:
 			filters = {}
 	filters = filters or {}
 	if doctype == "Item Attribute Value":
@@ -104,7 +104,7 @@ def link_search(doctype, txt="", filters=None, page_length=20):
 
 	try:
 		page_len = int(page_length or 20)
-	except (TypeError, ValueError):
+	except TypeError, ValueError:
 		page_len = 20
 	rows = frappe.get_list(
 		doctype,
@@ -136,7 +136,7 @@ def _search_item_attribute_values(txt, filters, page_length):
 	frappe.get_doc("Item Attribute", attribute).check_permission("read")
 	try:
 		page_len = max(1, int(page_length or 20))
-	except (TypeError, ValueError):
+	except TypeError, ValueError:
 		page_len = 20
 	needle = (txt or "").strip().casefold()
 	values = [
@@ -151,6 +151,7 @@ def _search_item_attribute_values(txt, filters, page_length):
 			fields=["attribute_value", "idx"],
 			order_by="idx asc",
 		)
-		if _attribute_value(row.attribute_value) and (not needle or needle in _attribute_value(row.attribute_value).casefold())
+		if _attribute_value(row.attribute_value)
+		and (not needle or needle in _attribute_value(row.attribute_value).casefold())
 	]
 	return [{"name": value, "label": value} for value in values[:page_len]]

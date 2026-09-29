@@ -39,9 +39,9 @@ __all__ = [
 	"SewingPlan",
 	"cancel_sewing_plan_entry",
 	"create_sewing_plan",
-	"get_data_entry_data",
 	"get_consumption_mapping_data",
 	"get_dashboard_data",
+	"get_data_entry_data",
 	"get_fi_updates_data",
 	"get_item_summary_data",
 	"get_item_summary_options",
@@ -56,8 +56,8 @@ __all__ = [
 	"get_the_lot",
 	"save_consumption_data",
 	"submit_data_entry_log",
-	"update_sewing_plan_data",
 	"update_fi_dates",
+	"update_sewing_plan_data",
 ]
 
 

@@ -17,8 +17,9 @@ import json
 import os
 import sys
 from collections import defaultdict
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from audit_production_api_source_values import (
 	LAYOUT_FIELD_TYPES,
@@ -29,7 +30,6 @@ from audit_production_api_source_values import (
 	_quote,
 	_schema_fields,
 )
-
 
 STANDARD_COLUMNS = {
 	"name",
@@ -56,7 +56,7 @@ def _owner_index(bench: Path) -> dict[str, str]:
 		for path in (bench / "apps" / app).glob("**/doctype/*/*.json"):
 			try:
 				payload = json.loads(path.read_text(encoding="utf-8"))
-			except (OSError, ValueError):
+			except OSError, ValueError:
 				continue
 			if payload.get("doctype") == "DocType" and payload.get("name"):
 				result[str(payload["name"])] = app
@@ -114,8 +114,7 @@ def _child_context_count(
 		)
 		rows = list(cursor.fetchall())
 		cursor.execute(
-			"SELECT 1 FROM information_schema.tables "
-			"WHERE table_schema=DATABASE() AND table_name=%s",
+			"SELECT 1 FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=%s",
 			("tab" + parenttype,),
 		)
 		parent_has_table = bool(cursor.fetchone())
@@ -130,8 +129,7 @@ def _child_context_count(
 		placeholders = ",".join(["%s"] * len(batch))
 		with source_db.cursor() as cursor:
 			cursor.execute(
-				f"SELECT name FROM {_quote('tab' + parenttype)} "
-				f"WHERE name IN ({placeholders})",
+				f"SELECT name FROM {_quote('tab' + parenttype)} WHERE name IN ({placeholders})",
 				batch,
 			)
 			existing.update(str(row["name"]) for row in cursor.fetchall())
@@ -172,9 +170,7 @@ def _missing_live_metadata_fields(
 					fieldname,
 				)
 			auth_rows = _auth_count(source_db, source_doctype, fieldname) if fieldtype == "Password" else 0
-			has_information = bool(
-				field_stats["material_values"] or child_rows or auth_rows
-			)
+			has_information = bool(field_stats["material_values"] or child_rows or auth_rows)
 			note = ""
 			if source_doctype == "Essdee Debit" and fieldname == "against":
 				classification = "Semantically retained"
@@ -232,9 +228,7 @@ def _direct_field_schema_drift(plan, owners) -> list[dict[str, Any]]:
 				source_value = str(source_field.get(property_name) or "")
 				target_value = str(target_field.get(property_name) or "")
 				if source_value != target_value:
-					differences.append(
-						f"{property_name}: {source_value!r} -> {target_value!r}"
-					)
+					differences.append(f"{property_name}: {source_value!r} -> {target_value!r}")
 			if not differences:
 				continue
 			rows.append(
@@ -280,10 +274,7 @@ def _physical_column_stats(source_db, doctype: str, column: str, data_type: str)
 		nonblank = f"SUM(CASE WHEN {quoted} IS NOT NULL THEN 1 ELSE 0 END)"
 		material = f"SUM(CASE WHEN COALESCE({quoted},0)<>0 THEN 1 ELSE 0 END)"
 	else:
-		nonblank = (
-			f"SUM(CASE WHEN {quoted} IS NOT NULL "
-			f"AND CAST({quoted} AS CHAR)<>'' THEN 1 ELSE 0 END)"
-		)
+		nonblank = f"SUM(CASE WHEN {quoted} IS NOT NULL AND CAST({quoted} AS CHAR)<>'' THEN 1 ELSE 0 END)"
 		material = nonblank
 	with source_db.cursor() as cursor:
 		cursor.execute(
@@ -348,9 +339,7 @@ def _physical_schema_drift(plan, source_db, owners) -> list[dict[str, Any]]:
 			if fieldname in source_fields or fieldname in STANDARD_COLUMNS:
 				continue
 			data_type = str(column["data_type"])
-			field_stats = _physical_column_stats(
-				source_db, source_doctype, fieldname, data_type
-			)
+			field_stats = _physical_column_stats(source_db, source_doctype, fieldname, data_type)
 			target_defined = fieldname in target_fields
 			if target_defined:
 				classification = "Target defines field; source metadata is stale"
@@ -412,18 +401,10 @@ def _legacy_child_contexts(
 		source_context = str(inferred["source_context"])
 		parenttype, parentfield = source_context.split(".", 1)
 		source_doctype = str(inferred["source_doctype"])
-		target_parenttype, target_parentfield = str(inferred["target_context"]).split(
-			".", 1
-		)
-		count, attached, orphan = _child_context_count(
-			source_db, source_doctype, parenttype, parentfield
-		)
+		target_parenttype, target_parentfield = str(inferred["target_context"]).split(".", 1)
+		count, attached, orphan = _child_context_count(source_db, source_doctype, parenttype, parentfield)
 		target_parent_spec = plan.specs.get(parenttype)
-		target_fields = (
-			_schema_fields(target_parent_spec.target_schema)
-			if target_parent_spec
-			else {}
-		)
+		target_fields = _schema_fields(target_parent_spec.target_schema) if target_parent_spec else {}
 		# Historical inferred routes are inputs, not proof that the new bridge
 		# still omits this context. Re-evaluate against the current schema plan.
 		source_fields = _schema_fields(target_parent_spec.source_schema) if target_parent_spec else {}
@@ -459,9 +440,7 @@ def _legacy_child_contexts(
 def _summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
 	target_absent = [row for row in rows if not row["target_field_defined"]]
 	carrying_data = [
-		row
-		for row in target_absent
-		if row["material_values"] or row["child_rows"] or row["auth_rows"]
+		row for row in target_absent if row["material_values"] or row["child_rows"] or row["auth_rows"]
 	]
 	return {
 		"inventory_rows": len(rows),
@@ -472,16 +451,13 @@ def _summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
 			row["severity"] == "retained" and row in carrying_data for row in rows
 		),
 		"target_absent_empty_or_default": sum(
-			row["severity"] == "empty" and not row["target_field_defined"]
-			for row in rows
+			row["severity"] == "empty" and not row["target_field_defined"] for row in rows
 		),
 		"by_target_doctype_owner": {
 			app: {
 				"inventory": sum(row["target_doctype_owner"] == app for row in rows),
 				"blockers": sum(
-					row["target_doctype_owner"] == app
-					and row["severity"] == "blocker"
-					for row in rows
+					row["target_doctype_owner"] == app and row["severity"] == "blocker" for row in rows
 				),
 			}
 			for app in sorted({row["target_doctype_owner"] for row in rows})
@@ -490,22 +466,29 @@ def _summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _safe_json(value: Any) -> str:
-	return json.dumps(value, ensure_ascii=False, separators=(",", ":")).replace(
-		"</", "<\\/"
-	)
+	return json.dumps(value, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
 
 
 def _render(payload: Mapping[str, Any]) -> str:
 	summary = payload["summary"]
 	rows = payload["rows"]
 	body = "".join(
-		"<tr>" + "".join(
+		"<tr>"
+		+ "".join(
 			f"<td>{html.escape(str(row.get(key, '')))}</td>"
 			for key in (
-				"source_doctype", "source_field", "target_doctype", "target_field",
-				"target_doctype_owner", "material_values", "classification", "action",
+				"source_doctype",
+				"source_field",
+				"target_doctype",
+				"target_field",
+				"target_doctype_owner",
+				"material_values",
+				"classification",
+				"action",
 			)
-		) + "</tr>" for row in rows
+		)
+		+ "</tr>"
+		for row in rows
 	)
 	return f"""<!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -516,13 +499,13 @@ strong{{display:block;font-size:1.5rem}}.table{{overflow:auto;background:white}}
 td,th{{padding:.7rem;text-align:left;border:1px solid #ddd;vertical-align:top}}th{{background:#e9edf4}}
 input{{margin:1rem 0;padding:.7rem;width:min(90%,36rem)}}p{{max-width:80rem}}</style>
 <h1>Production API → YRP / SD YRP: field-definition audit</h1>
-<p>Generated {html.escape(payload['generated_on'])}. Source: {html.escape(payload['source']['site'])}.
-Target: {html.escape(payload['target']['site'])}.</p>
+<p>Generated {html.escape(payload["generated_on"])}. Source: {html.escape(payload["source"]["site"])}.
+Target: {html.escape(payload["target"]["site"])}.</p>
 <div class="summary">
-<div class="card"><strong>{summary['unresolved_blockers']}</strong>unresolved definition gaps with data</div>
-<div class="card"><strong>{summary['target_absent_definitions']}</strong>absent target definitions</div>
-<div class="card"><strong>{summary['target_absent_empty_or_default']}</strong>empty/default-only source definitions</div>
-<div class="card"><strong>{summary['semantically_retained_or_recoverable']}</strong>semantically retained definitions</div>
+<div class="card"><strong>{summary["unresolved_blockers"]}</strong>unresolved definition gaps with data</div>
+<div class="card"><strong>{summary["target_absent_definitions"]}</strong>absent target definitions</div>
+<div class="card"><strong>{summary["target_absent_empty_or_default"]}</strong>empty/default-only source definitions</div>
+<div class="card"><strong>{summary["semantically_retained_or_recoverable"]}</strong>semantically retained definitions</div>
 </div>
 <p>This read-only inventory checks current schema mappings, physical source columns and historical child contexts.
 A mapped definition does <em>not</em> prove that its values have been loaded: use the separate full value reconciliation,
@@ -540,9 +523,7 @@ const q=e.target.value.toLowerCase();document.querySelectorAll('tbody tr').forEa
 def main() -> int:
 	parser = argparse.ArgumentParser(description=__doc__)
 	parser.add_argument("--site")
-	parser.add_argument(
-		"--bench", type=Path, default=Path(__file__).resolve().parents[3]
-	)
+	parser.add_argument("--bench", type=Path, default=Path(__file__).resolve().parents[3])
 	parser.add_argument("--value-audit", type=Path)
 	parser.add_argument("--json-output", type=Path, required=True)
 	parser.add_argument("--html-output", type=Path, required=True)
@@ -583,22 +564,16 @@ def main() -> int:
 		source_db = _connect(settings.source_bench, settings.source_site)
 		try:
 			stats = _audited_field_stats(value_audit)
-			metadata_rows = _missing_live_metadata_fields(
-				plan, source_db, stats, owners, value_audit
-			)
+			metadata_rows = _missing_live_metadata_fields(plan, source_db, stats, owners, value_audit)
 			direct_schema_rows = _direct_field_schema_drift(plan, owners)
 			physical_rows = _physical_schema_drift(plan, source_db, owners)
-			context_rows = _legacy_child_contexts(
-				plan, source_db, value_audit, owners
-			)
+			context_rows = _legacy_child_contexts(plan, source_db, value_audit, owners)
 		finally:
 			source_db.close()
 		rows = sorted(
 			metadata_rows + direct_schema_rows + physical_rows + context_rows,
 			key=lambda row: (
-				{"blocker": 0, "review": 1, "retained": 2, "empty": 3}.get(
-					row["severity"], 9
-				),
+				{"blocker": 0, "review": 1, "retained": 2, "empty": 3}.get(row["severity"], 9),
 				row["target_doctype_owner"],
 				row["source_doctype"],
 				row["source_field"],
@@ -620,9 +595,7 @@ def main() -> int:
 			"summary": _summary(rows),
 			"rows": rows,
 		}
-		json_output_path.write_text(
-			json.dumps(payload, indent=2, default=str), encoding="utf-8"
-		)
+		json_output_path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
 		html_output_path.write_text(_render(payload), encoding="utf-8")
 		print(json.dumps(payload["summary"], indent=2))
 	finally:

@@ -1,22 +1,22 @@
 """Read models consumed by the Finishing Plan Desk components."""
-from yrp import attribute_links as attribute_db
-from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe.utils import flt
-
-from essdee_yrp.dynamic_packing import LEGACY_BATCH_TRACKING_VERSION
-from essdee_yrp.finishing.packing import get_dynamic_packed_qty
-from essdee_yrp.finishing.parsing import json_object
-from essdee_yrp.finishing.old_lot_history import (
-	active_old_lot_transfer_rows,
-	get_old_lot_received_rows,
-)
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 from yrp.utils import get_variant_attr_details, update_if_string_instance
 from yrp.yrp.doctype.yrp_item.yrp_item import get_attribute_details
 from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
 	get_ipd_primary_values,
 )
+
+from essdee_yrp.dynamic_packing import LEGACY_BATCH_TRACKING_VERSION
+from essdee_yrp.finishing.old_lot_history import (
+	active_old_lot_transfer_rows,
+	get_old_lot_received_rows,
+)
+from essdee_yrp.finishing.packing import get_dynamic_packed_qty
+from essdee_yrp.finishing.parsing import json_object
 
 
 def build_plan_views(doc):
@@ -49,9 +49,9 @@ def build_plan_views(doc):
 
 def get_packed_qty(doc):
 	dynamic_grns = frappe.get_all(
-		'YRP Goods Received Note',
+		"YRP Goods Received Note",
 		filters={
-			"against": 'YRP Work Order',
+			"against": "YRP Work Order",
 			"against_id": doc.work_order,
 			"lot": doc.lot,
 			"docstatus": 1,
@@ -67,8 +67,8 @@ def get_packed_qty(doc):
 
 	box_quantity = {"sizes": {}, "total_packed": 0, "total_dispatched": 0}
 	for row in doc.get("finishing_plan_grn_details") or []:
-		variant = frappe.get_cached_doc('Item', row.item_variant)
-		primary_attribute = get_attribute_details((variant.variant_of or variant.name))["primary_attribute"]
+		variant = frappe.get_cached_doc("Item", row.item_variant)
+		primary_attribute = get_attribute_details(variant.variant_of or variant.name)["primary_attribute"]
 		size = next(
 			(
 				_attribute_value(attribute.attribute_value)
@@ -79,9 +79,7 @@ def get_packed_qty(doc):
 		)
 		if not size:
 			continue
-		value = box_quantity["sizes"].setdefault(
-			size, {"packed": 0, "dispatched": 0, "cur_dispatch": 0}
-		)
+		value = box_quantity["sizes"].setdefault(size, {"packed": 0, "dispatched": 0, "cur_dispatch": 0})
 		value["packed"] += flt(row.quantity)
 		value["dispatched"] += flt(row.dispatched)
 		box_quantity["total_packed"] += flt(row.quantity)
@@ -103,18 +101,14 @@ def before_save(doc):
 		combination = _json_object(row.set_combination)
 		key = (row.item_variant, tuple(sorted(combination.items())))
 		if key not in items:
-			frappe.throw(
-				f"Rework item {row.item_variant} has no matching Finishing Plan detail"
-			)
+			frappe.throw(f"Rework item {row.item_variant} has no matching Finishing Plan detail")
 		items[key]["reworked"] += flt(row.reworked_quantity)
 	doc.set("finishing_plan_details", get_finishing_plan_list(items))
 
 
 def _get_ipd_context(doc):
-	ipd_name = doc.production_detail or attribute_db.get_value(
-		'SD YRP Lot', doc.lot, "production_detail"
-	)
-	ipd_doc = frappe.get_cached_doc('YRP Item Production Detail', ipd_name)
+	ipd_name = doc.production_detail or attribute_db.get_value("SD YRP Lot", doc.lot, "production_detail")
+	ipd_doc = frappe.get_cached_doc("YRP Item Production Detail", ipd_name)
 	return {
 		"ipd_doc": ipd_doc,
 		"ipd": ipd_name,
@@ -129,9 +123,7 @@ def _get_ipd_context(doc):
 def _row_identity(row, context):
 	combination = _json_object(row.set_combination)
 	attributes = get_variant_attr_details(row.item_variant)
-	major_colour = combination.get("major_colour") or attributes.get(
-		context["pack_attr"], ""
-	)
+	major_colour = combination.get("major_colour") or attributes.get(context["pack_attr"], "")
 	part = None
 	colour = major_colour
 	if context["is_set_item"]:
@@ -159,18 +151,14 @@ def _build_inward_details(doc, context):
 	for row in doc.get("finishing_plan_details") or []:
 		identity = _row_identity(row, context)
 		block = _ensure_inward_block(data, identity)
-		accepted = (
-			flt(row.accepted_qty) + flt(row.lot_transferred) + flt(row.ironing_excess)
-		)
+		accepted = flt(row.accepted_qty) + flt(row.lot_transferred) + flt(row.ironing_excess)
 		block["colour_total"]["accepted"] += accepted
 		block["values"][_attribute_value(identity.size)]["accepted"] += accepted
 
 	for row in doc.get("finishing_plan_reworked_details") or []:
 		identity = _row_identity(row, context)
 		block = _ensure_inward_block(data, identity)
-		pending = max(
-			flt(row.quantity) - flt(row.reworked_quantity) - flt(row.rejected_qty), 0
-		)
+		pending = max(flt(row.quantity) - flt(row.reworked_quantity) - flt(row.rejected_qty), 0)
 		for fieldname, value in (
 			("reworked", flt(row.reworked_quantity)),
 			("rejected", flt(row.rejected_qty)),
@@ -226,9 +214,7 @@ def _build_rework_details(doc, context):
 			_attribute_value(identity.size),
 			{"rework_qty": 0, "reworked": 0, "pending": 0, "rejected": 0},
 		)
-		pending = max(
-			flt(row.quantity) - flt(row.reworked_quantity) - flt(row.rejected_qty), 0
-		)
+		pending = max(flt(row.quantity) - flt(row.reworked_quantity) - flt(row.rejected_qty), 0)
 		for fieldname, value in (
 			("rework_qty", flt(row.quantity)),
 			("reworked", flt(row.reworked_quantity)),
@@ -272,10 +258,7 @@ def _build_quantity_views(doc, context):
 			target["cut_sew_diff"] += cut_sew_difference
 
 		accepted = (
-			flt(row.accepted_qty)
-			+ flt(row.reworked)
-			+ flt(row.lot_transferred)
-			+ flt(row.ironing_excess)
+			flt(row.accepted_qty) + flt(row.reworked) + flt(row.lot_transferred) + flt(row.ironing_excess)
 		)
 		balance = (
 			accepted
@@ -294,9 +277,7 @@ def _build_quantity_views(doc, context):
 
 		ironing["values"][_attribute_value(identity.size)]["ironing"] += flt(row.ironing_excess)
 		ironing["colour_total"]["ironing"] += flt(row.ironing_excess)
-		finishing_ironing["total"][_attribute_value(identity.size)]["ironing"] += flt(
-			row.ironing_excess
-		)
+		finishing_ironing["total"][_attribute_value(identity.size)]["ironing"] += flt(row.ironing_excess)
 		finishing_ironing["total_qty"]["ironing"] += flt(row.ironing_excess)
 
 		packing_return["values"][_attribute_value(identity.size)]["pack_returned_qty"] += flt(
@@ -400,9 +381,7 @@ def _ensure_pack_return(data, identity):
 			"colour_total": 0,
 		},
 	)
-	block["values"].setdefault(
-		_attribute_value(identity.size), {"pack_returned_qty": 0, "pack_return": 0}
-	)
+	block["values"].setdefault(_attribute_value(identity.size), {"pack_returned_qty": 0, "pack_return": 0})
 	data["total"].setdefault(_attribute_value(identity.size), 0)
 	return block
 
@@ -410,10 +389,8 @@ def _ensure_pack_return(data, identity):
 def _build_rejection_details(doc, context):
 	data = {}
 	grand_total = 0
-	for document_name in frappe.get_all(
-		'SD YRP GRN Rework Item', filters={"lot": doc.lot}, pluck="name"
-	):
-		rework_doc = frappe.get_doc('SD YRP GRN Rework Item', document_name)
+	for document_name in frappe.get_all("SD YRP GRN Rework Item", filters={"lot": doc.lot}, pluck="name"):
+		rework_doc = frappe.get_doc("SD YRP GRN Rework Item", document_name)
 		for row in rework_doc.get("grn_rework_item_details") or []:
 			rework_quantity = flt(row.quantity)
 			rejection_quantity = flt(row.rejection)
@@ -450,9 +427,8 @@ def _build_rejection_details(doc, context):
 def reshape_old_lot_rows_for_ui(doc, ipd_doc=None):
 	if ipd_doc is None:
 		ipd_doc = frappe.get_cached_doc(
-			'YRP Item Production Detail',
-			doc.production_detail
-			or attribute_db.get_value('SD YRP Lot', doc.lot, "production_detail"),
+			"YRP Item Production Detail",
+			doc.production_detail or attribute_db.get_value("SD YRP Lot", doc.lot, "production_detail"),
 		)
 	primary_values = get_ipd_primary_values(ipd_doc.name)
 	groups = {}

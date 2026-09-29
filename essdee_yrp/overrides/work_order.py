@@ -1,5 +1,4 @@
 """Essdee garment-specific Work Order process-cost allocation."""
-from yrp.attribute_links import value as _attribute_value
 
 import json
 from collections import defaultdict
@@ -7,6 +6,7 @@ from collections import defaultdict
 import frappe
 from frappe import _
 from frappe.utils import flt
+from yrp.attribute_links import value as _attribute_value
 from yrp.yrp.doctype.yrp_work_order.yrp_work_order import (
 	WorkOrder,
 	get_process_cost_rate,
@@ -55,7 +55,7 @@ def apply_garment_panel_process_costs(work_order, process_cost):
 	if not attribute or not calculated_items or not receivables or not work_order.get("production_detail"):
 		return False
 
-	ipd = frappe.get_cached_doc('YRP Item Production Detail', work_order.production_detail)
+	ipd = frappe.get_cached_doc("YRP Item Production Detail", work_order.production_detail)
 	panel_attribute = ipd.get("stiching_attribute")
 	if not panel_attribute or attribute == panel_attribute:
 		return False

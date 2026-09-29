@@ -17,11 +17,13 @@ from essdee_yrp.fabric_source import (
 def _row(colour, target):
 	return {
 		"key": target,
-		"input_specs": [{
-			"item": "Test Cloth",
-			"attrs": {"Dia": "32 Dia", "Colour": colour},
-			"qty": 1,
-		}],
+		"input_specs": [
+			{
+				"item": "Test Cloth",
+				"attrs": {"Dia": "32 Dia", "Colour": colour},
+				"qty": 1,
+			}
+		],
 		"output_qty": 1,
 		"out_attrs": {"Dia": "32 Dia", "Colour": target},
 	}
@@ -36,9 +38,7 @@ class TestFabricSourceProcesses(TestCase):
 			{"position": 2, "process_name": "Dyeing"},
 			{"position": 3, "process_name": "Washing"},
 		]
-		options = get_source_process_options(
-			frappe._dict(name="Test IPD"), "Washing"
-		)
+		options = get_source_process_options(frappe._dict(name="Test IPD"), "Washing")
 		self.assertEqual(
 			[option["process_name"] for option in options],
 			["Dyeing", "White Wash", "Knitting"],
@@ -131,17 +131,13 @@ class TestFabricSourceFill(TestCase):
 			},
 		}
 
-		with self.assertRaisesRegex(
-			frappe.ValidationError, "no compatible input row"
-		):
+		with self.assertRaisesRegex(frappe.ValidationError, "no compatible input row"):
 			self._fill(rows, availability, variants)
 
 	@patch("essdee_yrp.fabric_source._rows_in_stock_uom")
 	@patch("essdee_yrp.fabric_source.get_source_availability")
 	@patch("essdee_yrp.fabric_source.resolve_source_process")
-	def test_calculate_rechecks_stale_or_overallocated_quantity(
-		self, resolve, availability, stock_rows
-	):
+	def test_calculate_rechecks_stale_or_overallocated_quantity(self, resolve, availability, stock_rows):
 		resolve.return_value = {
 			"value": "0::Knitting",
 			"process_name": "Knitting",
@@ -153,9 +149,7 @@ class TestFabricSourceFill(TestCase):
 		}
 		stock_rows.return_value = {"Greige-32": 90}
 
-		with self.assertRaisesRegex(
-			frappe.ValidationError, "only 80.0 Kg remains available"
-		):
+		with self.assertRaisesRegex(frappe.ValidationError, "only 80.0 Kg remains available"):
 			validate_source_demands(
 				[{"item_variant": "Greige-32", "qty": 90, "uom": "Kg"}],
 				lot="LOT-1",
@@ -185,9 +179,7 @@ class TestFabricSourceTransactions(IntegrationTestCase):
 		return doc
 
 	def _source_receipt(self, suffix, qty, *, is_rework=0, is_return=0):
-		wo = self._work_order(
-			f"_Test Source WO {suffix}", "Knitting", self.item, 1
-		)
+		wo = self._work_order(f"_Test Source WO {suffix}", "Knitting", self.item, 1)
 		receivable = frappe.new_doc("YRP Work Order Receivables")
 		receivable.name = f"_Test Source WOR {suffix}"
 		receivable.parent = wo.name

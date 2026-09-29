@@ -1,9 +1,11 @@
 """Transfer auditable leftover Finishing quantities between lots."""
-from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe import _
 from frappe.utils import flt, now_datetime
+from yrp.attribute_links import value as _attribute_value
+from yrp.utils import get_variant_attr_details, update_if_string_instance
+from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_or_create_variant
 
 from essdee_yrp.finishing.old_lot_history import (
 	get_old_lot_source_balance,
@@ -12,18 +14,16 @@ from essdee_yrp.finishing.parsing import json_object
 from essdee_yrp.finishing.state import get_finishing_plan_dict, get_finishing_plan_list
 from essdee_yrp.finishing.status import apply_auto_fp_status
 from essdee_yrp.finishing.views import reshape_old_lot_rows_for_ui
-from yrp.utils import get_variant_attr_details, update_if_string_instance
-from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_or_create_variant
 
 
 @frappe.whitelist()
 def fetch_from_old_lot(doc_name):
 	"""Return current sibling-lot loose balances without persisting UI rows."""
-	doc = frappe.get_doc('SD YRP Finishing Plan', doc_name)
+	doc = frappe.get_doc("SD YRP Finishing Plan", doc_name)
 	doc.check_permission("write")
 	if doc.fp_status == "OCR Completed":
 		frappe.throw("Fetch Items is disabled for Finishing Plans in OCR Completed status.")
-	ipd = frappe.get_cached_doc('YRP Item Production Detail', doc.production_detail)
+	ipd = frappe.get_cached_doc("YRP Item Production Detail", doc.production_detail)
 	current_colours = {
 		get_variant_attr_details(row.item_variant).get(ipd.packing_attribute)
 		for row in doc.get("finishing_plan_details") or []
@@ -31,7 +31,7 @@ def fetch_from_old_lot(doc_name):
 	current_colours.discard(None)
 	aggregated = {}
 	for source_name in frappe.get_all(
-		'SD YRP Finishing Plan',
+		"SD YRP Finishing Plan",
 		filters={
 			"item": doc.item,
 			"name": ["!=", doc.name],
@@ -39,16 +39,14 @@ def fetch_from_old_lot(doc_name):
 		},
 		pluck="name",
 	):
-		source = frappe.get_doc('SD YRP Finishing Plan', source_name)
+		source = frappe.get_doc("SD YRP Finishing Plan", source_name)
 		warehouse = _warehouse_for_supplier(source.delivery_location)
 		seen_variants = set()
 		for row in source.get("finishing_plan_details") or []:
 			if row.item_variant in seen_variants:
 				continue
 			seen_variants.add(row.item_variant)
-			loose, loose_set = get_old_lot_source_balance(
-				source, row.item_variant
-			)
+			loose, loose_set = get_old_lot_source_balance(source, row.item_variant)
 			if not loose and not loose_set:
 				continue
 			attributes = get_variant_attr_details(row.item_variant)
@@ -63,21 +61,26 @@ def fetch_from_old_lot(doc_name):
 		attributes = get_variant_attr_details(item_variant)
 		colour = attributes.get(ipd.packing_attribute)
 		part = attributes.get(ipd.set_item_attribute) if ipd.is_set_item else None
-		set_value = colour if not ipd.is_set_item or _attribute_value(ipd.major_attribute_value) == part else None
+		set_value = (
+			colour if not ipd.is_set_item or _attribute_value(ipd.major_attribute_value) == part else None
+		)
 		fetched_rows.append(
-			frappe._dict({
-				"source_fp": source_name,
-				"source_lot": source_lot,
-				"warehouse": warehouse,
-					"warehouse_name": frappe.db.get_value('Warehouse', warehouse, "warehouse_name") or warehouse,
-				"item_variant": item_variant,
-				"colour": colour,
-				"part": part,
-				"set_combination": set_value,
-				"size": attributes.get(ipd.primary_item_attribute),
-				"balance_loose_piece": quantities[0],
-				"balance_loose_piece_set": quantities[1],
-			}),
+			frappe._dict(
+				{
+					"source_fp": source_name,
+					"source_lot": source_lot,
+					"warehouse": warehouse,
+					"warehouse_name": frappe.db.get_value("Warehouse", warehouse, "warehouse_name")
+					or warehouse,
+					"item_variant": item_variant,
+					"colour": colour,
+					"part": part,
+					"set_combination": set_value,
+					"size": attributes.get(ipd.primary_item_attribute),
+					"balance_loose_piece": quantities[0],
+					"balance_loose_piece_set": quantities[1],
+				}
+			),
 		)
 	return reshape_old_lot_rows_for_ui(
 		frappe._dict(
@@ -92,13 +95,13 @@ def fetch_from_old_lot(doc_name):
 @frappe.whitelist()
 def create_lot_transfer(data, item_name, ipd, lot, doc_name):
 	payload = update_if_string_instance(data) or []
-	destination = frappe.get_doc('SD YRP Finishing Plan', doc_name)
+	destination = frappe.get_doc("SD YRP Finishing Plan", doc_name)
 	destination.check_permission("write")
 	if destination.item != item_name or destination.lot != lot or destination.production_detail != ipd:
 		frappe.throw("Finishing Plan, Item, Lot, and Production Detail do not match")
-	ipd_doc = frappe.get_cached_doc('YRP Item Production Detail', ipd)
-	default_type = frappe.db.get_single_value('YRP Stock Settings', "default_received_type")
-	uom = frappe.db.get_value('Item', item_name, "stock_uom")
+	ipd_doc = frappe.get_cached_doc("YRP Item Production Detail", ipd)
+	default_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
+	uom = frappe.db.get_value("Item", item_name, "stock_uom")
 	items = []
 	contributions = []
 	row_index = 0
@@ -162,7 +165,7 @@ def create_lot_transfer(data, item_name, ipd, lot, doc_name):
 		destination_fp=doc_name,
 		item_name=item_name,
 	)
-	transfer = frappe.new_doc('SD YRP Lot Transfer')
+	transfer = frappe.new_doc("SD YRP Lot Transfer")
 	transfer.finishing_plan = doc_name
 	for row in items:
 		transfer.append("items", row)
@@ -172,15 +175,11 @@ def create_lot_transfer(data, item_name, ipd, lot, doc_name):
 	return transfer.name
 
 
-def _validate_old_lot_transfer_balances(
-	contributions, destination_fp=None, item_name=None
-):
+def _validate_old_lot_transfer_balances(contributions, destination_fp=None, item_name=None):
 	requested = {}
 	for entry in contributions:
 		key = (entry["source_fp"], entry["item_variant"])
-		values = requested.setdefault(
-			key, {"loose_piece": 0, "loose_piece_set": 0}
-		)
+		values = requested.setdefault(key, {"loose_piece": 0, "loose_piece_set": 0})
 		values["loose_piece"] += flt(entry["loose_piece"])
 		values["loose_piece_set"] += flt(entry["loose_piece_set"])
 
@@ -191,12 +190,11 @@ def _validate_old_lot_transfer_balances(
 		)
 
 	for (source_name, item_variant), quantities in requested.items():
-		source = frappe.get_doc('SD YRP Finishing Plan', source_name)
+		source = frappe.get_doc("SD YRP Finishing Plan", source_name)
 		entries = [
 			entry
 			for entry in contributions
-			if entry["source_fp"] == source_name
-			and entry["item_variant"] == item_variant
+			if entry["source_fp"] == source_name and entry["item_variant"] == item_variant
 		]
 		if destination_fp and source_name == destination_fp:
 			frappe.throw("Source and destination Finishing Plans cannot be the same.")
@@ -207,16 +205,9 @@ def _validate_old_lot_transfer_balances(
 		source_warehouse = _warehouse_for_supplier(source.delivery_location)
 		if any(entry["warehouse"] != source_warehouse for entry in entries):
 			frappe.throw(f"Source warehouse changed for {source_name}. Fetch Items again.")
-		if item_variant not in {
-			row.item_variant for row in source.get("finishing_plan_details") or []
-		}:
-			frappe.throw(
-				f"Item {item_variant} is no longer available in {source_name}. "
-				"Fetch Items again."
-			)
-		available_loose, available_loose_set = get_old_lot_source_balance(
-			source, item_variant
-		)
+		if item_variant not in {row.item_variant for row in source.get("finishing_plan_details") or []}:
+			frappe.throw(f"Item {item_variant} is no longer available in {source_name}. Fetch Items again.")
+		available_loose, available_loose_set = get_old_lot_source_balance(source, item_variant)
 		if quantities["loose_piece"] > available_loose:
 			frappe.throw(
 				f"Loose Piece requested from {source_name} exceeds the current "
@@ -247,7 +238,7 @@ def _apply_lot_transfer_to_finishing(transfer, *, cancelled):
 	if not transfer.get("finishing_plan"):
 		return
 
-	finishing_doc = frappe.get_doc('SD YRP Finishing Plan', transfer.finishing_plan)
+	finishing_doc = frappe.get_doc("SD YRP Finishing Plan", transfer.finishing_plan)
 	transfer_list = update_if_string_instance(finishing_doc.lot_transfer_list) or {}
 	already_applied = transfer.name in transfer_list
 	if (cancelled and not already_applied) or (not cancelled and already_applied):
@@ -285,7 +276,7 @@ def _record_split_history(_destination, transfer, contributions):
 	for entry in contributions:
 		source = source_docs.setdefault(
 			entry["source_fp"],
-			frappe.get_doc('SD YRP Finishing Plan', entry["source_fp"]),
+			frappe.get_doc("SD YRP Finishing Plan", entry["source_fp"]),
 		)
 		if any(
 			row.lot_transfer == transfer.name
@@ -317,8 +308,8 @@ def _record_split_history(_destination, transfer, contributions):
 def _reverse_split_history(transfer):
 	"""Remove source history and any legacy destination copy on cancellation."""
 	for child_doctype, parentfield in (
-		('SD YRP Finishing Plan Old Lot Given', "finishing_old_lot_given_items"),
-		('SD YRP Finishing Plan Old Lot Received', "finishing_old_lot_received_items"),
+		("SD YRP Finishing Plan Old Lot Given", "finishing_old_lot_given_items"),
+		("SD YRP Finishing Plan Old Lot Received", "finishing_old_lot_received_items"),
 	):
 		parents = set(
 			frappe.get_all(
@@ -328,14 +319,10 @@ def _reverse_split_history(transfer):
 			)
 		)
 		for parent in parents:
-			plan = frappe.get_doc('SD YRP Finishing Plan', parent)
+			plan = frappe.get_doc("SD YRP Finishing Plan", parent)
 			plan.set(
 				parentfield,
-				[
-					row
-					for row in plan.get(parentfield) or []
-					if row.lot_transfer != transfer.name
-				],
+				[row for row in plan.get(parentfield) or [] if row.lot_transfer != transfer.name],
 			)
 			plan.save(ignore_permissions=True)
 
@@ -343,10 +330,10 @@ def _reverse_split_history(transfer):
 def _warehouse_for_supplier(supplier):
 	if not supplier:
 		frappe.throw(_("Finishing Plan delivery location is required for old-lot transfer"))
-	if frappe.db.exists('Warehouse', {"name": supplier, "disabled": 0, "is_group": 0}):
+	if frappe.db.exists("Warehouse", {"name": supplier, "disabled": 0, "is_group": 0}):
 		return supplier
 	warehouses = frappe.get_all(
-		'Warehouse',
+		"Warehouse",
 		filters={"supplier": supplier, "disabled": 0, "is_group": 0},
 		pluck="name",
 	)
@@ -355,7 +342,5 @@ def _warehouse_for_supplier(supplier):
 	if not warehouses:
 		frappe.throw(_("No active stock Warehouse is linked to Supplier {0}").format(supplier))
 	frappe.throw(
-		_("Multiple stock Warehouses are linked to Supplier {0}; select a unique mapping").format(
-			supplier
-		)
+		_("Multiple stock Warehouses are linked to Supplier {0}; select a unique mapping").format(supplier)
 	)

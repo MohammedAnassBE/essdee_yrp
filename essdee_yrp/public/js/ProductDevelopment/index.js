@@ -25,7 +25,7 @@ export class ProductFileVersionsWrapper {
         //     })
         // });
     }
-};
+}
 
 export class ProductCostingListWrapper {
     constructor(wrapper) {
@@ -44,7 +44,7 @@ export class ProductCostingListWrapper {
         //     })
         // });
     }
-};
+}
 
 export class ProductImageListWrapper {
     constructor(wrapper) {

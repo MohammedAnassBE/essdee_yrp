@@ -50,12 +50,11 @@ class TestLot(FrappeTestCase):
 
 	def test_box_table_does_not_expose_edit_actions(self):
 		source = (
-			Path(frappe.get_app_path("essdee_yrp"))
-			/ "public/js/Lot/components/LotOrder.vue"
+			Path(frappe.get_app_path("essdee_yrp")) / "public/js/Lot/components/LotOrder.vue"
 		).read_text(encoding="utf-8")
 		self.assertNotIn(">Edit<", source)
-		self.assertNotIn("@click=\"edit_item", source)
-		self.assertNotIn("@click=\"delete_item", source)
+		self.assertNotIn('@click="edit_item', source)
+		self.assertNotIn('@click="delete_item', source)
 
 	def test_calculate_bom_uses_shared_matrix_engine_and_saves_lot(self):
 		lot = frappe._dict(
@@ -123,9 +122,9 @@ class TestLot(FrappeTestCase):
 
 	def test_ocr_details_does_not_require_f15_plan_doctypes(self):
 		def get_all(doctype, *args, **kwargs):
-			if doctype == 'YRP Work Order':
+			if doctype == "YRP Work Order":
 				return ["_Test OCR Work Order"]
-			if doctype == 'YRP Goods Received Note':
+			if doctype == "YRP Goods Received Note":
 				return []
 			self.fail(f"Unexpected DocType query: {doctype}")
 

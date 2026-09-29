@@ -7,7 +7,6 @@ from frappe.tests import IntegrationTestCase
 
 from essdee_yrp.cutting.reports import get_item_data, get_multiccr
 
-
 REPORT_CASES = {
 	"sd_yrp_cut_bundle_balance": {"lot": "__missing__"},
 	"sd_yrp_dc_report": {"from_date": "2099-01-01", "to_date": "2099-01-02"},
@@ -28,7 +27,7 @@ REPORT_CASES = {
 	"sd_yrp_purchase_order_itemwise": {"purchase_order": "__missing__"},
 	"sd_yrp_purchase_order_log": {"purchase_order": "__missing__"},
 	"sd_yrp_qualily_inspection_rft": {"lot": "__missing__"},
-	"sd_yrp_recently_modified_docs": {"doctype": 'SD YRP Lot', "days": 0},
+	"sd_yrp_recently_modified_docs": {"doctype": "SD YRP Lot", "days": 0},
 	"sd_yrp_vendor_bill_pending_report": {"department": "__missing__"},
 	"sd_yrp_work_order_pending_report": {"lot": ["__missing__"]},
 	"sd_yrp_work_order_report": {
@@ -42,7 +41,7 @@ REPORT_CASES = {
 
 class TestOperationalReports(IntegrationTestCase):
 	def test_multiccr_accepts_historical_cutting_plan_payload(self):
-		if not frappe.db.exists('SD YRP Cutting Plan', "CP-2608-00006"):
+		if not frappe.db.exists("SD YRP Cutting Plan", "CP-2608-00006"):
 			self.skipTest("Historical cutting-plan parity runs after data migration")
 		result = get_multiccr(lot_list=json.dumps(["F1024-54"]))
 		self.assertIn("F1024-54", result["output_lots"])
@@ -89,9 +88,7 @@ class TestOperationalReports(IntegrationTestCase):
 	def test_migrated_reports_execute_against_f16_schema(self):
 		for report, filters in REPORT_CASES.items():
 			with self.subTest(report=report):
-				module = importlib.import_module(
-					f"essdee_yrp.essdee_yrp.report.{report}.{report}"
-				)
+				module = importlib.import_module(f"essdee_yrp.essdee_yrp.report.{report}.{report}")
 				result = module.execute(frappe._dict(filters))
 				columns, data = result[:2]
 				self.assertIsInstance(columns, list)

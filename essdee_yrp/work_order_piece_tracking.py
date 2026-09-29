@@ -8,7 +8,6 @@ makes submit, cancel, return, retry, and the recovery action idempotent.
 """
 
 from __future__ import annotations
-from yrp.attribute_links import value as _attribute_value
 
 import copy
 import json
@@ -19,6 +18,7 @@ from itertools import zip_longest
 import frappe
 from frappe import _
 from frappe.utils import cint, flt
+from yrp.attribute_links import value as _attribute_value
 from yrp.utils import get_variant_attr_details, update_if_string_instance
 from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_or_create_variant, get_parent_item
 
@@ -37,7 +37,7 @@ def _json_key(value) -> str:
 def _processes(process_name: str | None) -> list[str]:
 	if not process_name:
 		return []
-	process = frappe.get_cached_doc('YRP Process', process_name)
+	process = frappe.get_cached_doc("YRP Process", process_name)
 	if not process.get("is_group"):
 		return [process_name]
 	return [row.process_name for row in process.get("process_details") or [] if row.process_name]
@@ -66,7 +66,7 @@ def _process_stage(ipd, process_name: str | None) -> str | None:
 
 
 def _is_finishing_process(process_name: str) -> bool:
-	configured = frappe.db.get_single_value('SD YRP MRP Settings', "finishing_inward_process")
+	configured = frappe.db.get_single_value("SD YRP MRP Settings", "finishing_inward_process")
 	return bool(configured and configured in _processes(process_name))
 
 
@@ -175,7 +175,7 @@ class PieceState:
 				"set_combination": row["set_combination"],
 				"delivered_quantity": quantity,
 				"received_qty": 0,
-				"against": 'YRP Delivery Challan',
+				"against": "YRP Delivery Challan",
 				"against_id": voucher.name,
 				"date": voucher.posting_date,
 			}
@@ -219,7 +219,7 @@ class PieceState:
 
 	def _add_received_row(self, row, quantity, received_type, voucher):
 		received_type = received_type or frappe.db.get_single_value(
-			'YRP Stock Settings', "default_received_type"
+			"YRP Stock Settings", "default_received_type"
 		)
 		row["received"] += quantity
 		if received_type:
@@ -230,7 +230,7 @@ class PieceState:
 				"set_combination": row["set_combination"],
 				"delivered_quantity": 0,
 				"received_qty": quantity,
-				"against": 'YRP Goods Received Note',
+				"against": "YRP Goods Received Note",
 				"against_id": voucher.name,
 				"date": voucher.posting_date,
 			}
@@ -319,7 +319,7 @@ def _update_date_range(state, source, prefix):
 
 def _apply_delivery_challan(state, challan):
 	process = _process_for_direction(challan.process_name, "delivery")
-	process_doc = frappe.get_cached_doc('YRP Process', challan.process_name)
+	process_doc = frappe.get_cached_doc("YRP Process", challan.process_name)
 	if process_doc.get("is_manual_entry_in_grn"):
 		return
 	stage = _process_stage(state.ipd, process)
@@ -372,7 +372,7 @@ def _apply_direct_receipt(state, grn):
 
 def _apply_packing_receipt(state, grn):
 	ipd = state.ipd
-	default_type = frappe.db.get_single_value('YRP Stock Settings', "default_received_type")
+	default_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
 	# Packing configuration is mutable, while a submitted GRN is historical.
 	# Migrated F15 Work Orders retain the exact per-GRN projection in
 	# work_order_track_pieces.  Reuse that immutable snapshot when present so a
@@ -380,7 +380,7 @@ def _apply_packing_receipt(state, grn):
 	# production.  A genuinely new GRN has no snapshot yet and follows the live
 	# configuration paths below; the resulting tracking rows then become its
 	# snapshot on persistence.
-	snapshot_rows = state.source_tracking.get(('YRP Goods Received Note', grn.name)) or []
+	snapshot_rows = state.source_tracking.get(("YRP Goods Received Note", grn.name)) or []
 	if snapshot_rows:
 		snapshot_occurrences = defaultdict(int)
 		for row in snapshot_rows:
@@ -389,15 +389,11 @@ def _apply_packing_receipt(state, grn):
 			# though the calculated Work Order row did.  Recover it only when
 			# the item variant identifies one unambiguous calculated row.
 			matching_rows = [
-				candidate
-				for candidate in state.rows
-				if candidate["item_variant"] == row.item_variant
+				candidate for candidate in state.rows if candidate["item_variant"] == row.item_variant
 			]
 			if not _json_dict(snapshot_combination) and matching_rows:
 				occurrence = snapshot_occurrences[row.item_variant]
-				snapshot_combination = matching_rows[
-					occurrence % len(matching_rows)
-				]["set_combination"]
+				snapshot_combination = matching_rows[occurrence % len(matching_rows)]["set_combination"]
 				snapshot_occurrences[row.item_variant] += 1
 			state.add_received(
 				row.item_variant,
@@ -440,15 +436,15 @@ def _apply_packing_receipt(state, grn):
 					set_combination = {"major_colour": _attribute_value(batch.colour)}
 					if combination:
 						attributes[ipd.packing_attribute] = _attribute_value(combination.attribute_value)
-						attributes[ipd.set_item_attribute] = _attribute_value(combination.set_item_attribute_value)
+						attributes[ipd.set_item_attribute] = _attribute_value(
+							combination.set_item_attribute_value
+						)
 						set_combination["major_part"] = _attribute_value(ipd.major_attribute_value)
 					variant = get_or_create_variant(
 						state.work_order.item,
 						build_variant_attributes(attributes, _attribute_value(ipd.pack_in_stage), ipd.name),
 					)
-					state.add_received(
-						variant, set_combination, quantity, default_type, grn
-					)
+					state.add_received(variant, set_combination, quantity, default_type, grn)
 		return
 
 	attribute_rows = []
@@ -470,7 +466,7 @@ def _apply_packing_receipt(state, grn):
 	for row in grn.get("items") or []:
 		if flt(row.quantity) <= 0:
 			continue
-		variant_doc = frappe.get_cached_doc('Item', row.item_variant)
+		variant_doc = frappe.get_cached_doc("Item", row.item_variant)
 		for attribute_row in attribute_rows:
 			attributes = get_variant_attr_details(row.item_variant)
 			major_colour = (
@@ -487,20 +483,16 @@ def _apply_packing_receipt(state, grn):
 				(variant_doc.variant_of or variant_doc.name),
 				build_variant_attributes(attributes, _attribute_value(ipd.pack_in_stage), ipd.name),
 			)
-			state.add_received(
-				variant, set_combination, row.quantity, row.received_type, grn
-			)
+			state.add_received(variant, set_combination, row.quantity, row.received_type, grn)
 
 
 def _snapshot_received_type(state, grn, snapshot_row):
 	"""Resolve the source GRN type for a persisted packing projection row."""
 
-	default_type = frappe.db.get_single_value('YRP Stock Settings', "default_received_type")
+	default_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
 	positive_items = [row for row in grn.get("items") or [] if flt(row.quantity) > 0]
 	all_types = {
-		row.received_type or default_type
-		for row in positive_items
-		if row.received_type or default_type
+		row.received_type or default_type for row in positive_items if row.received_type or default_type
 	}
 	if len(all_types) == 1:
 		return next(iter(all_types))
@@ -526,8 +518,7 @@ def _snapshot_received_quantity(state, grn, snapshot_row):
 	size_items = [
 		row
 		for row in grn.get("items") or []
-		if flt(row.quantity) > 0
-		and get_variant_attr_details(row.item_variant).get(primary) == snapshot_size
+		if flt(row.quantity) > 0 and get_variant_attr_details(row.item_variant).get(primary) == snapshot_size
 	]
 	if len(size_items) != 1:
 		return snapshot_row.received_qty
@@ -535,9 +526,7 @@ def _snapshot_received_quantity(state, grn, snapshot_row):
 	# Only restore the decimal residue proven to have been truncated into the
 	# legacy Int tracking field.  Integer packing ratios and GRN deliverables
 	# continue to use their exact persisted projection quantity.
-	if source_quantity != cint(source_quantity) and flt(
-		snapshot_row.received_qty
-	) == cint(source_quantity):
+	if source_quantity != cint(source_quantity) and flt(snapshot_row.received_qty) == cint(source_quantity):
 		return source_quantity
 	return snapshot_row.received_qty
 
@@ -557,11 +546,7 @@ def _apply_panel_delivery(state, challan, panel_list):
 	ipd = state.ipd
 	panel_parts = _panel_parts(ipd)
 	for row in challan.get("items") or []:
-		quantity = flt(
-			row.get("delivered_quantity")
-			or row.get("qty")
-			or row.get("quantity")
-		)
+		quantity = flt(row.get("delivered_quantity") or row.get("qty") or row.get("quantity"))
 		if quantity <= 0:
 			continue
 		attributes = get_variant_attr_details(row.item_variant)
@@ -595,7 +580,7 @@ def _apply_panel_receipt(state, grn, panel_list):
 		if not panel or not size:
 			continue
 		received_type = row.received_type or frappe.db.get_single_value(
-			'YRP Stock Settings', "default_received_type"
+			"YRP Stock Settings", "default_received_type"
 		)
 		if received_type not in received_types:
 			received_types.append(received_type)
@@ -611,9 +596,7 @@ def _apply_panel_receipt(state, grn, panel_list):
 				cell[panel] = panel_types
 				break
 	for received_type in received_types:
-		_apply_panel_completions(
-			state, grn, panel_list, received_type=received_type
-		)
+		_apply_panel_completions(state, grn, panel_list, received_type=received_type)
 
 
 def _apply_panel_completions(state, voucher, panel_list, received_type):
@@ -632,9 +615,7 @@ def _apply_panel_completions(state, voucher, panel_list, received_type):
 				if panel not in panel_list:
 					continue
 				quantity = (
-					flt((raw_quantity or {}).get(received_type))
-					if received_type
-					else flt(raw_quantity)
+					flt((raw_quantity or {}).get(received_type)) if received_type else flt(raw_quantity)
 				)
 				possible = min(
 					possible,
@@ -647,9 +628,7 @@ def _apply_panel_completions(state, voucher, panel_list, received_type):
 				cell[received_type] = flt(cell.get(received_type)) + possible
 				complete_entry["values"][size] = cell
 			else:
-				complete_entry["values"][size] = flt(
-					complete_entry["values"].get(size)
-				) + possible
+				complete_entry["values"][size] = flt(complete_entry["values"].get(size)) + possible
 			for panel, raw_quantity in (panels or {}).items():
 				if panel not in panel_list:
 					continue
@@ -658,9 +637,7 @@ def _apply_panel_completions(state, voucher, panel_list, received_type):
 					raw_quantity[received_type] = flt(raw_quantity.get(received_type)) - used
 				else:
 					panels[panel] = flt(raw_quantity) - used
-			_emit_completed_item(
-				state, complete_entry, size, possible, voucher, received_type
-			)
+			_emit_completed_item(state, complete_entry, size, possible, voucher, received_type)
 			if received_type:
 				complete_entry["values"][size][received_type] -= possible
 			else:
@@ -686,9 +663,7 @@ def _apply_return_grns(state, grns):
 	unmatched = []
 	for grn in grns:
 		for row in grn.get("items") or []:
-			if not state.subtract_delivery(
-				row.item_variant, row.set_combination, row.quantity
-			):
+			if not state.subtract_delivery(row.item_variant, row.set_combination, row.quantity):
 				unmatched.append(row)
 	if unmatched and (stage == "cutting" or stage == _attribute_value(state.ipd.stiching_in_stage)):
 		panel_return = frappe._dict(
@@ -698,9 +673,7 @@ def _apply_return_grns(state, grns):
 				"items": unmatched,
 			}
 		)
-		_apply_panel_return(
-			state, panel_return, _panel_list(state.ipd, process)
-		)
+		_apply_panel_return(state, panel_return, _panel_list(state.ipd, process))
 
 
 def _apply_panel_return(state, grn, panel_list):
@@ -727,20 +700,18 @@ def _apply_panel_return(state, grn, panel_list):
 def calculate_work_order_piece_tracking(work_order: str) -> dict:
 	"""Calculate the complete derived projection without persisting it."""
 
-	doc = frappe.get_doc('YRP Work Order', work_order)
+	doc = frappe.get_doc("YRP Work Order", work_order)
 	if doc.docstatus != 1:
 		frappe.throw(_("Work Order {0} must be submitted.").format(frappe.bold(doc.name)))
-	ipd = frappe.get_cached_doc('YRP Item Production Detail', doc.production_detail)
+	ipd = frappe.get_cached_doc("YRP Item Production Detail", doc.production_detail)
 	state = PieceState(doc, ipd)
 
-	for challan in _source_documents(
-		'YRP Delivery Challan', {"work_order": doc.name}
-	):
+	for challan in _source_documents("YRP Delivery Challan", {"work_order": doc.name}):
 		_apply_delivery_challan(state, challan)
 
 	grns = _source_documents(
-		'YRP Goods Received Note',
-		{"against": 'YRP Work Order', "against_id": doc.name},
+		"YRP Goods Received Note",
+		{"against": "YRP Work Order", "against_id": doc.name},
 	)
 	for grn in grns:
 		if not grn.get("is_return"):
@@ -752,16 +723,14 @@ def calculate_work_order_piece_tracking(work_order: str) -> dict:
 def compare_work_order_piece_tracking(work_order: str) -> dict:
 	"""Compact rollback-safe comparison against a migrated Work Order oracle."""
 
-	doc = frappe.get_doc('YRP Work Order', work_order)
+	doc = frappe.get_doc("YRP Work Order", work_order)
 	result = calculate_work_order_piece_tracking(work_order)
 	actual = {row.name: row for row in doc.get("work_order_calculated_items") or []}
 	row_mismatches = []
 	for expected in result["rows"]:
 		row = actual[expected["name"]]
 		checks = {
-			"delivered_quantity": (
-				flt(row.delivered_quantity), expected["delivered_quantity"]
-			),
+			"delivered_quantity": (flt(row.delivered_quantity), expected["delivered_quantity"]),
 			"received_qty": (flt(row.received_qty), expected["received_qty"]),
 			"received_type_json": (
 				_json_dict(row.received_type_json),
@@ -774,9 +743,7 @@ def compare_work_order_piece_tracking(work_order: str) -> dict:
 			if values[0] != values[1]
 		}
 		if different:
-			row_mismatches.append(
-				{"item_variant": row.item_variant, "differences": different}
-			)
+			row_mismatches.append({"item_variant": row.item_variant, "differences": different})
 	actual_totals = {
 		"delivered": flt(doc.total_no_of_pieces_delivered, 3),
 		"received": flt(doc.total_no_of_pieces_received, 3),
@@ -881,19 +848,17 @@ def _rebuild_lot_stage_quantities(lot):
 	fields = ("cut_qty", "stich_qty", "pack_qty")
 	totals = {field: defaultdict(float) for field in fields}
 	for name in frappe.get_all(
-		'YRP Work Order',
+		"YRP Work Order",
 		filters={"lot": lot.name, "docstatus": 1, "is_rework": 0},
 		pluck="name",
 	):
-		work_order = frappe.get_doc('YRP Work Order', name)
-		ipd = frappe.get_cached_doc('YRP Item Production Detail', work_order.production_detail)
+		work_order = frappe.get_doc("YRP Work Order", name)
+		ipd = frappe.get_cached_doc("YRP Item Production Detail", work_order.production_detail)
 		field = _lot_quantity_field(work_order, ipd)
 		if not field:
 			continue
 		for row in work_order.get("work_order_calculated_items") or []:
-			totals[field][(row.item_variant, _json_key(row.set_combination))] += flt(
-				row.received_qty
-			)
+			totals[field][(row.item_variant, _json_key(row.set_combination))] += flt(row.received_qty)
 	for row in lot.get("lot_order_details") or []:
 		identity = (row.item_variant, _json_key(row.set_combination))
 		for field in fields:
@@ -901,17 +866,15 @@ def _rebuild_lot_stage_quantities(lot):
 	lot.save(ignore_permissions=True)
 
 
-def rebuild_work_order_piece_tracking(
-	work_order: str, *, check_permission: bool = True
-) -> dict:
+def rebuild_work_order_piece_tracking(work_order: str, *, check_permission: bool = True) -> dict:
 	"""Lock and persist an idempotent projection from submitted DCs/GRNs."""
 
 	# Lock the source row first to identify the Lot, then lock that shared Lot
 	# before any consistent reads. Different Work Orders for one Lot can finish
 	# in separate queue workers; taking the common lock at the start ensures the
 	# second worker creates its read snapshot only after the first has committed.
-	doc = frappe.get_doc('YRP Work Order', work_order, for_update=True)
-	locked_lot = frappe.get_doc('SD YRP Lot', doc.lot, for_update=True)
+	doc = frappe.get_doc("YRP Work Order", work_order, for_update=True)
+	locked_lot = frappe.get_doc("SD YRP Lot", doc.lot, for_update=True)
 	if check_permission:
 		doc.check_permission("write")
 	if doc.docstatus != 1:
@@ -952,20 +915,12 @@ def on_delivery_challan_cancel(doc, method=None):
 
 
 def on_goods_received_note_submit(doc, method=None):
-	if (
-		doc.against == 'YRP Work Order'
-		and doc.against_id
-		and _has_piece_tracking_context(doc.against_id)
-	):
+	if doc.against == "YRP Work Order" and doc.against_id and _has_piece_tracking_context(doc.against_id):
 		rebuild_work_order_piece_tracking(doc.against_id, check_permission=False)
 
 
 def on_goods_received_note_cancel(doc, method=None):
-	if (
-		doc.against == 'YRP Work Order'
-		and doc.against_id
-		and _has_piece_tracking_context(doc.against_id)
-	):
+	if doc.against == "YRP Work Order" and doc.against_id and _has_piece_tracking_context(doc.against_id):
 		rebuild_work_order_piece_tracking(doc.against_id, check_permission=False)
 
 
@@ -976,4 +931,4 @@ def _has_piece_tracking_context(work_order: str) -> bool:
 	Those transactions still use the base stock engine, but have no panel/size
 	matrix for Essdee to replay.
 	"""
-	return bool(frappe.db.get_value('YRP Work Order', work_order, "production_detail"))
+	return bool(frappe.db.get_value("YRP Work Order", work_order, "production_detail"))

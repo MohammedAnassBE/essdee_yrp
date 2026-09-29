@@ -46,8 +46,8 @@ let version = cur_frm.doc.version
 function load_data(item){
     try {
         items.value = JSON.parse(item);
-    } catch(e) {
-        console.log(e);
+    } catch {
+        items.value = {};
     }
 }
 

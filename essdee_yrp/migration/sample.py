@@ -5,19 +5,21 @@ from __future__ import annotations
 import json
 import math
 from collections import defaultdict
+from collections.abc import Mapping
 from datetime import date, datetime, time
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-from typing import Any, Mapping
+from typing import Any
 
 import frappe
 from frappe.utils import now_datetime
 
+from essdee_yrp.migration.config import get_migration_settings
 from essdee_yrp.migration.engine import MigrationError, transform_document
 from essdee_yrp.migration.live import (
-	F15SourceBridge,
-	FrappeBulkTarget,
 	SUPPORTING_EXTERNAL_DOCTYPE_ORDER,
 	TABLE_FIELD_TYPES,
+	F15SourceBridge,
+	FrappeBulkTarget,
 	_assert_approved_frappe_child_identities,
 	_db_value,
 	_ensure_standard_item_attribute_value_pairs,
@@ -39,9 +41,7 @@ from essdee_yrp.migration.live import (
 	_verify_link_integrity,
 	build_live_schema_analysis,
 )
-from essdee_yrp.migration.config import get_migration_settings
 from essdee_yrp.migration.locking import exclusive_migration_run
-
 
 MAX_SAMPLE_PER_DOCTYPE = 20
 DEFAULT_PERCENTAGE_SAMPLE = 25
@@ -67,9 +67,7 @@ def audit_full_external_references() -> dict[str, Any]:
 	return {
 		"status": "Pass",
 		"checked": checked,
-		"supporting_external_to_copy": {
-			doctype: len(names) for doctype, names in sorted(missing.items())
-		},
+		"supporting_external_to_copy": {doctype: len(names) for doctype, names in sorted(missing.items())},
 	}
 
 
@@ -117,7 +115,7 @@ class QueryOnlySampleTarget(FrappeBulkTarget):
 		]
 		self._bulk_upsert(target_doctype, parent_rows)
 		self._replace_child_tables_sql(meta, documents)
-		if target_doctype == 'Supplier':
+		if target_doctype == "Supplier":
 			self._upsert_supplier_warehouses(documents)
 
 	def _upsert_single_sql(self, meta, document: Mapping[str, Any]) -> None:
@@ -144,15 +142,13 @@ class QueryOnlySampleTarget(FrappeBulkTarget):
 		# replacing the fresh-site default.  Delete the exact incoming fields first
 		# so this query-only writer has the same semantics as set_single_value().
 		frappe.db.sql(
-			"DELETE FROM `tabSingles` WHERE `doctype`=%s "
-			f"AND `field` IN ({field_placeholders})",
+			f"DELETE FROM `tabSingles` WHERE `doctype`=%s AND `field` IN ({field_placeholders})",
 			[meta.name, *fieldnames],
 		)
 		placeholders = ", ".join(["(%s, %s, %s)"] * len(rows))
 		values = [value for row in rows for value in row]
 		frappe.db.sql(
-			"INSERT INTO `tabSingles` (`doctype`, `field`, `value`) VALUES "
-			+ placeholders,
+			"INSERT INTO `tabSingles` (`doctype`, `field`, `value`) VALUES " + placeholders,
 			values,
 		)
 		# get_single_value() caches each field in-process.  Analyse reads the
@@ -220,10 +216,8 @@ def run_query_only_sample(
 		raise MigrationError(f"Sample migration must run on {settings.target_site}")
 	limit = int(limit_per_doctype)
 	if limit < 1 or limit > MAX_SAMPLE_PER_DOCTYPE:
-		raise MigrationError(
-			f"Sample limit must be between 1 and {MAX_SAMPLE_PER_DOCTYPE}"
-		)
-	if not frappe.db.exists('SD YRP MRP Data Migration', migration_name):
+		raise MigrationError(f"Sample limit must be between 1 and {MAX_SAMPLE_PER_DOCTYPE}")
+	if not frappe.db.exists("SD YRP MRP Data Migration", migration_name):
 		raise MigrationError(f"Unknown MRP Data Migration {migration_name}")
 
 	source = F15SourceBridge(settings)
@@ -264,9 +258,7 @@ def run_query_only_sample(
 		row = {
 			"source_doctype": source_doctype,
 			"target_doctype": spec.target,
-			"source_total": int(
-				(source_status.get("doctype_counts") or {}).get(source_doctype) or 0
-			),
+			"source_total": int((source_status.get("doctype_counts") or {}).get(source_doctype) or 0),
 			"sampled_parents": 0,
 			"sampled_children": 0,
 			"inserted_parents": 0,
@@ -295,9 +287,7 @@ def run_query_only_sample(
 				row["skipped_password_values"] += _strip_password_values(target_document)
 				target_documents.append(target_document)
 			if source_doctype in {"Item", "Item Variant"}:
-				target_documents = _prepare_item_migration_documents(
-					source_doctype, target_documents
-				)
+				target_documents = _prepare_item_migration_documents(source_doctype, target_documents)
 
 			existing = target.existing_names(
 				spec.target,
@@ -343,9 +333,7 @@ def run_query_only_sample(
 		limit,
 	)
 	report["totals"] = dict(totals)
-	report["failed_doctypes"] = sum(
-		1 for row in report["doctypes"] if row["status"] == "Failed"
-	)
+	report["failed_doctypes"] = sum(1 for row in report["doctypes"] if row["status"] == "Failed")
 	report["status"] = "Pass" if not report["issues"] else "Failed"
 	_mark_sample_complete(migration_name, report)
 	return report
@@ -370,11 +358,9 @@ def run_query_only_percentage_sample(
 		raise MigrationError(f"Sample migration must run on {settings.target_site}")
 	percentage = int(percentage)
 	if percentage < 1 or percentage > MAX_PERCENTAGE_SAMPLE:
-		raise MigrationError(
-			f"Percentage sample must be between 1 and {MAX_PERCENTAGE_SAMPLE}"
-		)
+		raise MigrationError(f"Percentage sample must be between 1 and {MAX_PERCENTAGE_SAMPLE}")
 	batch_size = max(1, min(int(batch_size), 1000))
-	if not frappe.db.exists('SD YRP MRP Data Migration', migration_name):
+	if not frappe.db.exists("SD YRP MRP Data Migration", migration_name):
 		raise MigrationError(f"Unknown MRP Data Migration {migration_name}")
 
 	source = F15SourceBridge(settings)
@@ -450,9 +436,7 @@ def run_query_only_percentage_sample(
 	totals = defaultdict(int)
 	# PI Work Order projection reads linked GRNs from the target. Defer PI until
 	# every other sampled business DocType has been written.
-	ordered_doctypes = [
-		doctype for doctype in plan.parent_doctypes if doctype != "Purchase Invoice"
-	]
+	ordered_doctypes = [doctype for doctype in plan.parent_doctypes if doctype != "Purchase Invoice"]
 	if "Purchase Invoice" in plan.parent_doctypes:
 		ordered_doctypes.append("Purchase Invoice")
 	for source_doctype in ordered_doctypes:
@@ -488,14 +472,10 @@ def run_query_only_percentage_sample(
 				row["skipped_password_values"] += _strip_password_values(document)
 				batch.append(document)
 				if len(batch) >= batch_size:
-					_write_percentage_batch(
-						source_doctype, spec.target, batch, target, plan, row
-					)
+					_write_percentage_batch(source_doctype, spec.target, batch, target, plan, row)
 					batch = []
 			if batch:
-				_write_percentage_batch(
-					source_doctype, spec.target, batch, target, plan, row
-				)
+				_write_percentage_batch(source_doctype, spec.target, batch, target, plan, row)
 			if row["sampled_parents"] != requested:
 				raise MigrationError(
 					f"Source returned {row['sampled_parents']} of {requested} requested parents"
@@ -520,9 +500,7 @@ def run_query_only_percentage_sample(
 			"skipped_password_values",
 		):
 			totals[key] += int(row[key])
-		_update_sample_progress(
-			migration_name, totals["sampled_parents"], len(report["issues"])
-		)
+		_update_sample_progress(migration_name, totals["sampled_parents"], len(report["issues"]))
 		# A failed DocType invalidates the rehearsal. Stop immediately so a
 		# large 25% run cannot spend hours loading later tables after its result
 		# is already unusable; the returned report retains the exact first error.
@@ -531,14 +509,12 @@ def run_query_only_percentage_sample(
 
 	if not report["issues"]:
 		try:
-			report["functional_dependencies"] = (
-				_load_percentage_sample_functional_dependencies(
-					source,
-					target,
-					plan,
-					reference_data,
-					batch_size=batch_size,
-				)
+			report["functional_dependencies"] = _load_percentage_sample_functional_dependencies(
+				source,
+				target,
+				plan,
+				reference_data,
+				batch_size=batch_size,
 			)
 		except Exception as exc:
 			frappe.db.rollback()
@@ -559,14 +535,12 @@ def run_query_only_percentage_sample(
 
 	if not report["issues"]:
 		try:
-			report["configuration_dependencies"] = (
-				_load_percentage_sample_configuration_dependencies(
-					source,
-					target,
-					plan,
-					reference_data,
-					batch_size=batch_size,
-				)
+			report["configuration_dependencies"] = _load_percentage_sample_configuration_dependencies(
+				source,
+				target,
+				plan,
+				reference_data,
+				batch_size=batch_size,
 			)
 		except Exception as exc:
 			frappe.db.rollback()
@@ -574,18 +548,14 @@ def run_query_only_percentage_sample(
 
 	if not report["issues"]:
 		try:
-			report["item_attribute_value_dependencies"] = (
-				_ensure_standard_item_attribute_value_pairs()
-			)
+			report["item_attribute_value_dependencies"] = _ensure_standard_item_attribute_value_pairs()
 		except Exception as exc:
 			frappe.db.rollback()
 			report["issues"].append(f"Item attribute value dependencies: {exc}")
 
 	if not report["issues"]:
 		try:
-			report["business_configuration"] = (
-				_finalize_percentage_business_configuration()
-			)
+			report["business_configuration"] = _finalize_percentage_business_configuration()
 		except Exception as exc:
 			frappe.db.rollback()
 			report["issues"].append(f"Business configuration: {exc}")
@@ -599,9 +569,7 @@ def run_query_only_percentage_sample(
 
 	if not report["issues"]:
 		source_broken_links = _source_broken_link_manifest(plan, source)
-		report["link_integrity"] = _verify_link_integrity(
-			plan, source_broken_links
-		)
+		report["link_integrity"] = _verify_link_integrity(plan, source_broken_links)
 		if report["link_integrity"]["failures"]:
 			report["issues"].extend(report["link_integrity"]["failures"])
 
@@ -611,9 +579,7 @@ def run_query_only_percentage_sample(
 			report["issues"].extend(report["target_invariants"]["failures"])
 
 	report["totals"] = dict(totals)
-	report["failed_doctypes"] = sum(
-		1 for row in report["doctypes"] if row["status"] == "Failed"
-	)
+	report["failed_doctypes"] = sum(1 for row in report["doctypes"] if row["status"] == "Failed")
 	report["status"] = "Pass" if not report["issues"] else "Failed"
 	_mark_sample_complete(migration_name, report)
 	return report
@@ -665,9 +631,7 @@ def _load_percentage_sample_configuration_dependencies(
 	result = {"status": "Pass", "required": 0, "already_present": 0, "loaded": 0}
 	for source_doctype, names in required.items():
 		if source_doctype not in plan.specs:
-			raise MigrationError(
-				f"Migration plan is missing configuration dependency {source_doctype}"
-			)
+			raise MigrationError(f"Migration plan is missing configuration dependency {source_doctype}")
 		target_doctype = str(plan.specs[source_doctype].target)
 		existing = target.existing_names(target_doctype, sorted(names))
 		missing = names - existing
@@ -675,13 +639,9 @@ def _load_percentage_sample_configuration_dependencies(
 		result["already_present"] += len(existing)
 		for chunk in _chunks(sorted(missing), batch_size):
 			documents = []
-			for source_document in source.iter_documents(
-				source_doctype, batch_size=batch_size, names=chunk
-			):
+			for source_document in source.iter_documents(source_doctype, batch_size=batch_size, names=chunk):
 				document = transform_document(source_document, plan)
-				_resolve_and_validate_required_target_values(
-					document, plan, reference_data=reference_data
-				)
+				_resolve_and_validate_required_target_values(document, plan, reference_data=reference_data)
 				_strip_password_values(document)
 				documents.append(document)
 			if len(documents) != len(chunk):
@@ -708,18 +668,14 @@ def _transformed_attribute_value_names(plan) -> set[str]:
 			if transformer != "attribute_value_link_to_data":
 				continue
 			target_doctype = str(spec.target)
-			target_fieldname = str(
-				spec.field_map.get(source_fieldname, source_fieldname)
-			)
+			target_fieldname = str(spec.field_map.get(source_fieldname, source_fieldname))
 			identity = (target_doctype, target_fieldname)
 			if identity in seen_fields:
 				continue
 			seen_fields.add(identity)
 			meta = frappe.get_meta(target_doctype)
 			if meta.issingle:
-				value = frappe.db.get_single_value(
-					target_doctype, target_fieldname, cache=False
-				)
+				value = frappe.db.get_single_value(target_doctype, target_fieldname, cache=False)
 				if value not in (None, ""):
 					values.add(str(value))
 				continue
@@ -757,11 +713,7 @@ def _verify_percentage_target_invariants(plan) -> dict[str, Any]:
 		if not name:
 			continue
 		try:
-			document = (
-				frappe.get_single(doctype)
-				if meta.issingle
-				else frappe.get_doc(doctype, name)
-			)
+			document = frappe.get_single(doctype) if meta.issingle else frappe.get_doc(doctype, name)
 			document.run_method("onload")
 			opened.append(f"{doctype}:{name}")
 		except Exception as exc:
@@ -840,9 +792,7 @@ def _verify_percentage_purchase_orders() -> dict[str, Any]:
 			("grand_total", grand_total, item_grand_total),
 			("per_received", per_received, item_per_received),
 		):
-			if abs(Decimal(str(actual or 0)) - Decimal(str(expected or 0))) > Decimal(
-				"0.000001"
-			):
+			if abs(Decimal(str(actual or 0)) - Decimal(str(expected or 0))) > Decimal("0.000001"):
 				mismatches.append(label)
 		expected_status = {
 			"Ordered": "To Receive",
@@ -892,13 +842,9 @@ def _load_percentage_sample_functional_dependencies(
 	loaded = 0
 	for chunk in _chunks(sorted(missing), batch_size):
 		documents = []
-		for source_document in source.iter_documents(
-			ledger_source, batch_size=batch_size, names=chunk
-		):
+		for source_document in source.iter_documents(ledger_source, batch_size=batch_size, names=chunk):
 			document = transform_document(source_document, plan)
-			_resolve_and_validate_required_target_values(
-				document, plan, reference_data=reference_data
-			)
+			_resolve_and_validate_required_target_values(document, plan, reference_data=reference_data)
 			_strip_password_values(document)
 			documents.append(document)
 		if len(documents) != len(chunk):
@@ -966,8 +912,7 @@ def _existing_names(doctype: str, names: set[str]) -> set[str]:
 		found.update(
 			str(row[0])
 			for row in frappe.db.sql(
-				f"SELECT `name` FROM {_quote_identifier('tab' + doctype)} "
-				f"WHERE `name` IN ({placeholders})",
+				f"SELECT `name` FROM {_quote_identifier('tab' + doctype)} WHERE `name` IN ({placeholders})",
 				chunk,
 			)
 		)
@@ -978,15 +923,7 @@ def _collect_missing_link_identities(plan) -> dict[str, set[str]]:
 	"""Return distinct missing target identities across every migrated Link."""
 
 	missing: dict[str, set[str]] = defaultdict(set)
-	parent_targets = tuple(
-		sorted(
-			{
-				str(spec.target)
-				for spec in plan.specs.values()
-				if not spec.is_child
-			}
-		)
-	)
+	parent_targets = tuple(sorted({str(spec.target) for spec in plan.specs.values() if not spec.is_child}))
 	for doctype in _migration_physical_target_doctypes(plan):
 		if doctype not in plan.target_schemas:
 			raise MigrationError(f"Missing migration target schema for {doctype}")
@@ -1002,9 +939,7 @@ def _collect_missing_link_identities(plan) -> dict[str, set[str]]:
 		if not meta.issingle and not frappe.db.table_exists(doctype):
 			continue
 		columns = set() if meta.issingle else set(frappe.db.get_table_columns(doctype))
-		child_scope = (
-			" AND source.parenttype IN %s" if meta.istable and parent_targets else ""
-		)
+		child_scope = " AND source.parenttype IN %s" if meta.istable and parent_targets else ""
 		child_scope_params = (parent_targets,) if child_scope else ()
 		for field in schema.get("fields") or []:
 			fieldname = str(field.get("fieldname") or "")
@@ -1014,20 +949,14 @@ def _collect_missing_link_identities(plan) -> dict[str, set[str]]:
 			if fieldtype == "Link" and field.get("options"):
 				linked_doctype = str(field["options"])
 				if not frappe.db.exists("DocType", linked_doctype):
-					raise MigrationError(
-						f"{doctype}.{fieldname} links to missing DocType {linked_doctype}"
-					)
+					raise MigrationError(f"{doctype}.{fieldname} links to missing DocType {linked_doctype}")
 				if meta.issingle:
 					# Migration writes Singles through SQL, and other setup/migration
 					# code can repopulate the process-local value cache between writes.
 					# Dependency closure must always inspect the committed row, not a
 					# cached pre-migration default.
-					value = frappe.db.get_single_value(
-						doctype, fieldname, cache=False
-					)
-					if value and value not in _existing_names(
-						linked_doctype, {str(value)}
-					):
+					value = frappe.db.get_single_value(doctype, fieldname, cache=False)
+					if value and value not in _existing_names(linked_doctype, {str(value)}):
 						missing[linked_doctype].add(str(value))
 					continue
 				if fieldname not in columns:
@@ -1059,22 +988,14 @@ def _collect_missing_link_identities(plan) -> dict[str, set[str]]:
 					if not meta.issingle:
 						continue
 				if meta.issingle:
-					linked_doctype = frappe.db.get_single_value(
-						doctype, controller, cache=False
-					)
-					value = frappe.db.get_single_value(
-						doctype, fieldname, cache=False
-					)
+					linked_doctype = frappe.db.get_single_value(doctype, controller, cache=False)
+					value = frappe.db.get_single_value(doctype, fieldname, cache=False)
 					if value and (
 						not linked_doctype
 						or not frappe.db.exists("DocType", linked_doctype)
-						or value not in _existing_names(
-							str(linked_doctype), {str(value)}
-						)
+						or value not in _existing_names(str(linked_doctype), {str(value)})
 					):
-						missing[str(linked_doctype or "<blank Dynamic Link>")].add(
-							str(value)
-						)
+						missing[str(linked_doctype or "<blank Dynamic Link>")].add(str(value))
 					continue
 				rows = frappe.db.sql(
 					f"SELECT DISTINCT {_quote_identifier(controller)}, "
@@ -1093,9 +1014,7 @@ def _collect_missing_link_identities(plan) -> dict[str, set[str]]:
 						raise MigrationError(
 							f"{doctype}.{fieldname} selects missing DocType {linked_doctype}"
 						)
-					missing[linked_doctype].update(
-						values - _existing_names(linked_doctype, values)
-					)
+					missing[linked_doctype].update(values - _existing_names(linked_doctype, values))
 	return {doctype: names for doctype, names in missing.items() if names}
 
 
@@ -1139,9 +1058,7 @@ def _close_percentage_sample_dependencies(
 				"status": "Pass",
 				"rounds": rounds,
 				"loaded_parent_documents": dict(total_loaded),
-				"audited_source_invalid_identities": sum(
-					len(names) for names in missing.values()
-				),
+				"audited_source_invalid_identities": sum(len(names) for names in missing.values()),
 			}
 
 		parent_names: dict[str, set[str]] = defaultdict(set)
@@ -1157,9 +1074,7 @@ def _close_percentage_sample_dependencies(
 				continue
 			resolved_target_names = set()
 			for source_doctype in sorted(candidates):
-				for identity in source.resolve_source_identities(
-					source_doctype, target_names
-				):
+				for identity in source.resolve_source_identities(source_doctype, target_names):
 					resolved_target_names.add(str(identity["name"]))
 					if identity.get("parent") and identity.get("parenttype"):
 						parent_doctype = str(identity["parenttype"])
@@ -1173,9 +1088,7 @@ def _close_percentage_sample_dependencies(
 			# Only genuinely absent source identities may be retained for the final
 			# exact owner/field audit. The final verifier—not this value-level set—
 			# decides whether every use is one of the approved source exceptions.
-			unapproved_unresolved = unresolved - audited_missing.get(
-				target_doctype, set()
-			)
+			unapproved_unresolved = unresolved - audited_missing.get(target_doctype, set())
 			if unapproved_unresolved:
 				unrouted[target_doctype].update(unapproved_unresolved)
 
@@ -1185,9 +1098,7 @@ def _close_percentage_sample_dependencies(
 		# explicitly surface them as prerequisites and let the normal closure loop
 		# load their own dependency graph before admitting the invoice.
 		purchase_invoice_names = parent_names.get("Purchase Invoice") or set()
-		uninspected_invoices = (
-			purchase_invoice_names - inspected_purchase_invoice_names
-		)
+		uninspected_invoices = purchase_invoice_names - inspected_purchase_invoice_names
 		if uninspected_invoices:
 			required_grns = _purchase_invoice_grn_dependencies(
 				source,
@@ -1196,9 +1107,7 @@ def _close_percentage_sample_dependencies(
 			)
 			inspected_purchase_invoice_names.update(uninspected_invoices)
 			grn_target = plan.specs["Goods Received Note"].target
-			missing_grns = required_grns - _existing_names(
-				grn_target, required_grns
-			)
+			missing_grns = required_grns - _existing_names(grn_target, required_grns)
 			if missing_grns:
 				parent_names["Goods Received Note"].update(missing_grns)
 
@@ -1241,8 +1150,7 @@ def _close_percentage_sample_dependencies(
 				for doctype, names in sorted(unaudited_remaining.items())
 			)
 			raise MigrationError(
-				"Dependency closure made no progress with remaining missing Links: "
-				+ remaining
+				"Dependency closure made no progress with remaining missing Links: " + remaining
 			)
 
 		loaded_this_round = defaultdict(int)
@@ -1282,9 +1190,7 @@ def _close_percentage_sample_dependencies(
 					_strip_password_values(document)
 					documents.append(document)
 				if source_doctype in {"Item", "Item Variant"}:
-					documents = _prepare_item_migration_documents(
-						source_doctype, documents
-					)
+					documents = _prepare_item_migration_documents(source_doctype, documents)
 				if source_doctype == "Purchase Invoice":
 					documents = _prepare_purchase_invoice_migration_documents(documents)
 				if len(documents) != len(chunk):
@@ -1303,9 +1209,7 @@ def _close_percentage_sample_dependencies(
 		rounds.append(
 			{
 				"round": round_number,
-				"missing_identities_before": sum(
-					len(names) for names in actionable_missing.values()
-				),
+				"missing_identities_before": sum(len(names) for names in actionable_missing.values()),
 				"loaded": dict(loaded_this_round),
 				"deferred_purchase_invoices": deferred_purchase_invoices,
 			}
@@ -1319,9 +1223,7 @@ def _purchase_invoice_grn_dependencies(source, invoice_names, *, batch_size):
 	returned = set()
 	grns = set()
 	for chunk in _chunks(sorted(requested), batch_size):
-		for document in source.iter_documents(
-			"Purchase Invoice", batch_size=batch_size, names=chunk
-		):
+		for document in source.iter_documents("Purchase Invoice", batch_size=batch_size, names=chunk):
 			name = str(document.get("name") or "")
 			if name:
 				returned.add(name)
@@ -1331,8 +1233,7 @@ def _purchase_invoice_grn_dependencies(source, invoice_names, *, batch_size):
 	missing = requested - returned
 	if missing:
 		raise MigrationError(
-			"Source returned no Purchase Invoice dependency document for: "
-			+ ", ".join(sorted(missing)[:20])
+			"Source returned no Purchase Invoice dependency document for: " + ", ".join(sorted(missing)[:20])
 		)
 	return grns
 
@@ -1386,9 +1287,7 @@ def _write_percentage_batch(
 		prepared = _prepare_item_migration_documents(source_doctype, prepared)
 	if source_doctype == "Purchase Invoice":
 		prepared = _prepare_purchase_invoice_migration_documents(prepared)
-	existing = target.existing_names(
-		target_doctype, [str(document["name"]) for document in prepared]
-	)
+	existing = target.existing_names(target_doctype, [str(document["name"]) for document in prepared])
 	target.upsert_batch(target_doctype, prepared)
 	verification = _verify_documents_sql(prepared, plan)
 	if verification["issues"]:
@@ -1473,13 +1372,8 @@ def _do_percentage_approved_frappe_data(
 	batch_size,
 	report,
 ) -> None:
-	counts = (
-		(source_status.get("approved_frappe_data") or {}).get("counts") or {}
-	)
-	limits = {
-		doctype: _percentage_limit(int(count or 0), percentage)
-		for doctype, count in counts.items()
-	}
+	counts = (source_status.get("approved_frappe_data") or {}).get("counts") or {}
+	limits = {doctype: _percentage_limit(int(count or 0), percentage) for doctype, count in counts.items()}
 	seen = defaultdict(int)
 	rows_by_doctype: dict[str, dict[str, Any]] = {}
 	default_value_documents: list[dict[str, Any]] = []
@@ -1537,21 +1431,17 @@ def _do_percentage_approved_frappe_data(
 				row["skipped_unavailable_targets"] += 1
 				continue
 			_strip_password_values(document)
-			unique_result = _reconcile_approved_user_unique_values(
-				[document], dry_run=False
-			)
-			user_unique_value_reconciliation["source_users"] += unique_result[
-				"source_users"
-			]
-			user_unique_value_reconciliation[
+			unique_result = _reconcile_approved_user_unique_values([document], dry_run=False)
+			user_unique_value_reconciliation["source_users"] += unique_result["source_users"]
+			user_unique_value_reconciliation["conflicting_optional_values"] += unique_result[
 				"conflicting_optional_values"
-			] += unique_result["conflicting_optional_values"]
-			user_unique_value_reconciliation["cleared_source_aliases"] += (
-				unique_result["cleared_source_aliases"]
-			)
-			user_unique_value_reconciliation["preserved_target_users"] += (
-				unique_result["preserved_target_users"]
-			)
+			]
+			user_unique_value_reconciliation["cleared_source_aliases"] += unique_result[
+				"cleared_source_aliases"
+			]
+			user_unique_value_reconciliation["preserved_target_users"] += unique_result[
+				"preserved_target_users"
+			]
 			for fieldname, count in unique_result["by_field"].items():
 				by_field = user_unique_value_reconciliation["by_field"]
 				by_field[fieldname] = by_field.get(fieldname, 0) + count
@@ -1562,15 +1452,11 @@ def _do_percentage_approved_frappe_data(
 			batch_doctype = doctype
 			batch.append(document)
 		flush()
-		report["approved_frappe_default_value_reconciliation"] = (
-			_reconcile_approved_default_values(
-				default_value_documents,
-				dry_run=False,
-			)
+		report["approved_frappe_default_value_reconciliation"] = _reconcile_approved_default_values(
+			default_value_documents,
+			dry_run=False,
 		)
-		report["approved_frappe_user_unique_value_reconciliation"] = (
-			user_unique_value_reconciliation
-		)
+		report["approved_frappe_user_unique_value_reconciliation"] = user_unique_value_reconciliation
 		frappe.db.commit()
 		frappe.clear_cache()
 	except Exception as exc:
@@ -1600,23 +1486,17 @@ def _do_percentage_approved_frappe_data(
 			message = f"Source returned {seen[doctype]} of {limits[doctype]} requested rows"
 			row["issues"].append(message)
 			report["issues"].append(f"{doctype}: {message}")
-	report["approved_frappe_data"] = [
-		rows_by_doctype[doctype] for doctype in counts
-	]
+	report["approved_frappe_data"] = [rows_by_doctype[doctype] for doctype in counts]
 
 
 def _strip_password_values(document: dict[str, Any]) -> int:
 	passwords = document.pop("__migration_passwords", {}) or {}
 	meta = frappe.get_meta(str(document["doctype"]))
 	password_fieldnames = {
-		field.fieldname
-		for field in meta.fields
-		if field.fieldname and field.fieldtype == "Password"
+		field.fieldname for field in meta.fields if field.fieldname and field.fieldtype == "Password"
 	}
 	table_fieldnames = {
-		field.fieldname
-		for field in meta.fields
-		if field.fieldname and field.fieldtype in TABLE_FIELD_TYPES
+		field.fieldname for field in meta.fields if field.fieldname and field.fieldtype in TABLE_FIELD_TYPES
 	}
 	count = len(passwords)
 	for fieldname in password_fieldnames:
@@ -1651,14 +1531,10 @@ def _verify_document_sql(document, plan, result, *, parent_context=None) -> None
 	doctype = str(document["doctype"])
 	schema = plan.target_schemas[doctype]
 	field_by_name = {
-		field["fieldname"]: field
-		for field in schema.get("fields") or []
-		if field.get("fieldname")
+		field["fieldname"]: field for field in schema.get("fields") or [] if field.get("fieldname")
 	}
 	table_fields = {
-		name: field
-		for name, field in field_by_name.items()
-		if field.get("fieldtype") in TABLE_FIELD_TYPES
+		name: field for name, field in field_by_name.items() if field.get("fieldtype") in TABLE_FIELD_TYPES
 	}
 
 	if schema.get("issingle"):
@@ -1669,13 +1545,10 @@ def _verify_document_sql(document, plan, result, *, parent_context=None) -> None
 		actual = dict(actual_rows)
 		if len(actual_rows) != len(actual):
 			duplicate_fields = sorted(
-				fieldname
-				for fieldname in actual
-				if sum(1 for row in actual_rows if row[0] == fieldname) > 1
+				fieldname for fieldname in actual if sum(1 for row in actual_rows if row[0] == fieldname) > 1
 			)
 			result["issues"].append(
-				f"{doctype} has duplicate Single values: "
-				+ ", ".join(duplicate_fields[:20])
+				f"{doctype} has duplicate Single values: " + ", ".join(duplicate_fields[:20])
 			)
 	else:
 		columns = set(frappe.db.get_table_columns(doctype))
@@ -1725,9 +1598,7 @@ def _verify_document_sql(document, plan, result, *, parent_context=None) -> None
 			continue
 		fieldtype = (field_by_name.get(fieldname) or {}).get("fieldtype")
 		numeric_scale = (
-			result["_numeric_scales"].get(doctype, {}).get(fieldname)
-			if not schema.get("issingle")
-			else None
+			result["_numeric_scales"].get(doctype, {}).get(fieldname) if not schema.get("issingle") else None
 		)
 		if not _same_db_value(
 			expected_value,
@@ -1757,9 +1628,7 @@ def _verify_document_sql(document, plan, result, *, parent_context=None) -> None
 		}
 		expected_names = {str(child["name"]) for child in children}
 		if actual_names != expected_names:
-			result["issues"].append(
-				f"{doctype} {document['name']}.{fieldname} child identities differ"
-			)
+			result["issues"].append(f"{doctype} {document['name']}.{fieldname} child identities differ")
 			continue
 		for idx, child in enumerate(children, start=1):
 			result["child_rows"] += 1
@@ -1797,7 +1666,7 @@ def _same_db_value(expected, actual, fieldtype, *, numeric_scale=None) -> bool:
 			left = json.loads(expected) if isinstance(expected, str) else expected
 			right = json.loads(actual) if isinstance(actual, str) else actual
 			return left == right
-		except (TypeError, ValueError):
+		except TypeError, ValueError:
 			pass
 	if isinstance(expected, (date, datetime, time)):
 		expected = str(expected)

@@ -77,8 +77,6 @@ function load_data(data){
 let pr_list = JSON.parse(cur_frm.doc.pack_return_list || "{}");
 
 function cancel_doc(doctype, docname){
-    console.log(doctype)
-    console.log(docname)
     let d = new frappe.ui.Dialog({
         title: `Are you sure want to cancel this ${doctype}`,
         primary_action_label: 'Yes',
@@ -124,7 +122,6 @@ function return_pack_items(){
         primary_action(){
             let pack_items = i.getData()
             d.hide();
-            console.log(pack_items)
             frappe.call({
                 method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan.sd_yrp_finishing_plan.return_items",
                 args: {

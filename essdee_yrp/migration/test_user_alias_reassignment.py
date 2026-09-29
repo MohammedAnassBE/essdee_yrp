@@ -1,6 +1,7 @@
 """A fresh ERP snapshot must not discard aliases vacated by another source User."""
-from copy import deepcopy
+
 import unittest
+from copy import deepcopy
 from unittest.mock import patch
 
 from essdee_yrp.migration.engine import MigrationError
@@ -21,9 +22,12 @@ class UserAliasReassignmentTest(unittest.TestCase):
 						source.reverse()
 
 					def get_all(_doctype, *, filters, **kwargs):
-						return [name for name, row in target.items()
+						return [
+							name
+							for name, row in target.items()
 							if name.casefold() != filters["name"][1].casefold()
-							and row[fieldname] == filters[fieldname]]
+							and row[fieldname] == filters[fieldname]
+						]
 
 					def set_value(_doctype, filters, field, value, **kwargs):
 						self.assertFalse(kwargs["update_modified"])
@@ -31,8 +35,12 @@ class UserAliasReassignmentTest(unittest.TestCase):
 						self.assertEqual(row[field], filters[field])
 						row[field] = value
 
-					with patch("essdee_yrp.migration.live.frappe.get_all", side_effect=get_all), \
-						patch("essdee_yrp.migration.live.frappe.db.set_value", side_effect=set_value) as write:
+					with (
+						patch("essdee_yrp.migration.live.frappe.get_all", side_effect=get_all),
+						patch(
+							"essdee_yrp.migration.live.frappe.db.set_value", side_effect=set_value
+						) as write,
+					):
 						expected = deepcopy(source)
 						preview = _reconcile_approved_user_unique_values(expected, dry_run=True)
 						write.assert_not_called()
@@ -54,8 +62,10 @@ class UserAliasReassignmentTest(unittest.TestCase):
 
 	def test_source_owner_with_unmapped_alias_remains_protected(self):
 		docs = [{"doctype": "User", "name": "a", "username": "kept"}, {"doctype": "User", "name": "b"}]
-		with patch("essdee_yrp.migration.live.frappe.get_all", return_value=["b"]), \
-			patch("essdee_yrp.migration.live.frappe.db.set_value") as write:
+		with (
+			patch("essdee_yrp.migration.live.frappe.get_all", return_value=["b"]),
+			patch("essdee_yrp.migration.live.frappe.db.set_value") as write,
+		):
 			result = _reconcile_approved_user_unique_values(docs, dry_run=False)
 		write.assert_not_called()
 		self.assertIsNone(docs[0]["username"])
@@ -63,8 +73,10 @@ class UserAliasReassignmentTest(unittest.TestCase):
 
 	def test_duplicate_source_alias_is_rejected_before_writes(self):
 		docs = [{"doctype": "User", "name": name, "username": "same"} for name in ("a", "b")]
-		with patch("essdee_yrp.migration.live.frappe.get_all", return_value=["b"]), \
-			patch("essdee_yrp.migration.live.frappe.db.set_value") as write:
+		with (
+			patch("essdee_yrp.migration.live.frappe.get_all", return_value=["b"]),
+			patch("essdee_yrp.migration.live.frappe.db.set_value") as write,
+		):
 			with self.assertRaisesRegex(MigrationError, "share unique field"):
 				_reconcile_approved_user_unique_values(docs, dry_run=False)
 		write.assert_not_called()

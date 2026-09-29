@@ -5,15 +5,13 @@ YRP's dimension-aware transaction controllers.
 """
 
 from __future__ import annotations
-from yrp.attribute_links import value as _attribute_value
 
 from collections import defaultdict
 
 import frappe
 from frappe.utils import cint, flt
-
+from yrp.attribute_links import value as _attribute_value
 from yrp.utils import update_if_string_instance
-
 
 LEGACY_BATCH_TRACKING_VERSION = 1
 DYNAMIC_PACKING_VERSION = 2
@@ -26,9 +24,7 @@ def _positive_integer(value, label):
 	return cint(value)
 
 
-def normalize_packing_batches(
-	batches, valid_sizes, valid_colours=None, expected_pieces_per_box=None
-):
+def normalize_packing_batches(batches, valid_sizes, valid_colours=None, expected_pieces_per_box=None):
 	"""Validate GRN-time packing rows and calculate exact piece quantities."""
 	batches = update_if_string_instance(batches) or []
 	if not isinstance(batches, list) or not batches:
@@ -39,9 +35,7 @@ def normalize_packing_batches(
 	valid_colour_set = set(valid_colours or [])
 	expected_pieces = None
 	if expected_pieces_per_box is not None:
-		expected_pieces = _positive_integer(
-			expected_pieces_per_box, "Configured pieces per box"
-		)
+		expected_pieces = _positive_integer(expected_pieces_per_box, "Configured pieces per box")
 
 	normalized = []
 	for index, raw in enumerate(batches, 1):
@@ -59,21 +53,13 @@ def normalize_packing_batches(
 		for size in valid_sizes:
 			qty = flt(raw_ratio.get(size))
 			if qty < 0 or qty != cint(qty):
-				frappe.throw(
-					f"Packing ratio {index}, {size}: quantity should be a whole number"
-				)
+				frappe.throw(f"Packing ratio {index}, {size}: quantity should be a whole number")
 			if qty:
 				ratio[size] = cint(qty)
 
-		unknown_sizes = [
-			size
-			for size, qty in raw_ratio.items()
-			if flt(qty) and size not in valid_size_set
-		]
+		unknown_sizes = [size for size, qty in raw_ratio.items() if flt(qty) and size not in valid_size_set]
 		if unknown_sizes:
-			frappe.throw(
-				f"Packing ratio {index}: invalid sizes {', '.join(sorted(unknown_sizes))}"
-			)
+			frappe.throw(f"Packing ratio {index}: invalid sizes {', '.join(sorted(unknown_sizes))}")
 		if not ratio:
 			frappe.throw(f"Packing ratio {index}: enter quantity for at least one size")
 
@@ -123,9 +109,7 @@ def packing_batch_label(batch):
 	as_dict = getattr(batch, "as_dict", None)
 	batch = as_dict() if callable(as_dict) else batch
 	ratio = update_if_string_instance(batch.get("ratio") or batch.get("ratio_json")) or {}
-	ratio_text = ", ".join(
-		f"{size}:{cint(qty)}" for size, qty in ratio.items() if flt(qty)
-	)
+	ratio_text = ", ".join(f"{size}:{cint(qty)}" for size, qty in ratio.items() if flt(qty))
 	colour = _attribute_value(batch.get("colour")) or "No Colour"
 	return f"{colour} [{ratio_text}]"
 

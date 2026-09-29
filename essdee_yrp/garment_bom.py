@@ -5,22 +5,20 @@ module keeps the legacy Essdee meaning of ``Item BOM.dependent_attribute_value``
 an accessory attached to the packed stage is scaled by the garment's packing
 conversion before it is added to a Lot BOM.
 """
-from yrp.attribute_links import value as _attribute_value
 
 from collections import defaultdict
 
 import frappe
 from frappe import _
 from frappe.utils import flt
+from yrp.attribute_links import value as _attribute_value
 from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
 from yrp.yrp.doctype.yrp_item_bom.yrp_item_bom import validate_bom_item_variant_mapping
 
 
-def calculate_essdee_accessory_bom(
-	ipd_name, variant_demands, lot_doc, process_names=None
-):
+def calculate_essdee_accessory_bom(ipd_name, variant_demands, lot_doc, process_names=None):
 	"""Return Production API-compatible accessory rows for an Essdee Lot."""
-	ipd = frappe.get_doc('YRP Item Production Detail', ipd_name)
+	ipd = frappe.get_doc("YRP Item Production Detail", ipd_name)
 	demands = _normalize_variant_demands(ipd, variant_demands)
 	aggregated = {}
 	total_quantity = sum(demand["qty"] for demand in demands)
@@ -37,9 +35,7 @@ def calculate_essdee_accessory_bom(
 				if not mapped:
 					continue
 				qty_of_product = _qty_of_product(ipd, lot_doc, bom_row)
-				qty_of_bom = flt(mapped.get("qty_of_bom_item")) or flt(
-					bom_row.qty_of_bom_item
-				)
+				qty_of_bom = flt(mapped.get("qty_of_bom_item")) or flt(bom_row.qty_of_bom_item)
 				quantity = demand["qty"] * qty_of_bom / qty_of_product
 				_add_row(
 					aggregated,
@@ -53,7 +49,8 @@ def calculate_essdee_accessory_bom(
 		basis_quantity = total_quantity
 		if (
 			_attribute_value(bom_row.dependent_attribute_value)
-			and _attribute_value(bom_row.dependent_attribute_value) == _attribute_value(lot_doc.get("pack_out_stage"))
+			and _attribute_value(bom_row.dependent_attribute_value)
+			== _attribute_value(lot_doc.get("pack_out_stage"))
 			and ipd.get("is_set_item")
 		):
 			# This is the legacy set-garment rule in Production API's mode-A path.
@@ -66,9 +63,7 @@ def calculate_essdee_accessory_bom(
 
 def _normalize_variant_demands(ipd, variant_demands):
 	variant_demands = (
-		frappe.parse_json(variant_demands)
-		if isinstance(variant_demands, str)
-		else variant_demands
+		frappe.parse_json(variant_demands) if isinstance(variant_demands, str) else variant_demands
 	)
 	if isinstance(variant_demands, dict):
 		variant_demands = [variant_demands]
@@ -76,18 +71,12 @@ def _normalize_variant_demands(ipd, variant_demands):
 	demands = []
 	for row in variant_demands or []:
 		variant = row.get("item_variant") or row.get("variant") or row.get("name")
-		quantity = flt(
-			row.get("qty") or row.get("quantity") or row.get("required_qty")
-		)
+		quantity = flt(row.get("qty") or row.get("quantity") or row.get("required_qty"))
 		if not variant or quantity <= 0:
 			continue
-		variant_doc = frappe.get_cached_doc('Item', variant)
+		variant_doc = frappe.get_cached_doc("Item", variant)
 		if (variant_doc.variant_of or variant_doc.name) != ipd.item:
-			frappe.throw(
-				_("Item Variant {0} does not belong to IPD item {1}.").format(
-					variant, ipd.item
-				)
-			)
+			frappe.throw(_("Item Variant {0} does not belong to IPD item {1}.").format(variant, ipd.item))
 		demands.append(
 			{
 				"item_variant": variant,
@@ -123,52 +112,34 @@ def _qty_of_product(ipd, lot_doc, bom_row):
 			qty_of_product *= packing_combo
 
 	if qty_of_product <= 0:
-		frappe.throw(
-			_("Qty of Product must be greater than zero for BOM item {0}.").format(
-				bom_row.item
-			)
-		)
+		frappe.throw(_("Qty of Product must be greater than zero for BOM item {0}.").format(bom_row.item))
 	return qty_of_product
 
 
 def _packing_uom_conversion(item, packing_uom):
-	item_doc = frappe.get_cached_doc('Item', item)
+	item_doc = frappe.get_cached_doc("Item", item)
 	from_uom = item_doc.stock_uom
 	to_uom = packing_uom or from_uom
 	if from_uom == to_uom:
 		return 1.0
 
-	factors = {
-		row.uom: flt(row.conversion_factor)
-		for row in item_doc.get("uoms") or []
-		if row.uom
-	}
+	factors = {row.uom: flt(row.conversion_factor) for row in item_doc.get("uoms") or [] if row.uom}
 	from_factor = factors.get(from_uom)
 	to_factor = factors.get(to_uom)
 	if not from_factor or not to_factor:
-		frappe.throw(
-			_("Missing UOM conversion from {0} to {1} on Item {2}.").format(
-				from_uom, to_uom, item
-			)
-		)
+		frappe.throw(_("Missing UOM conversion from {0} to {1} on Item {2}.").format(from_uom, to_uom, item))
 	return from_factor / to_factor
 
 
 def _resolve_mapping(mapping_name, variant_attrs):
-	mapping = frappe.get_cached_doc('YRP Item BOM Attribute Mapping', mapping_name)
+	mapping = frappe.get_cached_doc("YRP Item BOM Attribute Mapping", mapping_name)
 	same_attributes = _same_attributes(mapping)
-	required_bom_attributes = {
-		row.attribute for row in mapping.get("bom_item_attributes") or []
-	}
+	required_bom_attributes = {row.attribute for row in mapping.get("bom_item_attributes") or []}
 	item_key_attributes = [
-		row.attribute
-		for row in mapping.get("item_attributes") or []
-		if row.attribute not in same_attributes
+		row.attribute for row in mapping.get("item_attributes") or [] if row.attribute not in same_attributes
 	]
 	variant_key = {
-		attribute: variant_attrs[attribute]
-		for attribute in item_key_attributes
-		if attribute in variant_attrs
+		attribute: variant_attrs[attribute] for attribute in item_key_attributes if attribute in variant_attrs
 	}
 	rows_by_index = defaultdict(list)
 	for row in mapping.get("values") or []:
@@ -201,11 +172,7 @@ def _resolve_mapping(mapping_name, variant_attrs):
 
 
 def _same_attributes(mapping):
-	item_same = {
-		row.attribute
-		for row in mapping.get("item_attributes") or []
-		if row.same_attribute
-	}
+	item_same = {row.attribute for row in mapping.get("item_attributes") or [] if row.same_attribute}
 	return {
 		row.attribute
 		for row in mapping.get("bom_item_attributes") or []
@@ -215,9 +182,7 @@ def _same_attributes(mapping):
 
 def _add_row(aggregated, bom_row, attrs, quantity):
 	item_variant = get_or_create_variant(bom_row.item, attrs)
-	uom = bom_row.uom or frappe.db.get_value(
-		'Item', bom_row.item, "stock_uom"
-	)
+	uom = bom_row.uom or frappe.db.get_value("Item", bom_row.item, "stock_uom")
 	key = (bom_row.process_name, item_variant, uom)
 	if key not in aggregated:
 		aggregated[key] = {

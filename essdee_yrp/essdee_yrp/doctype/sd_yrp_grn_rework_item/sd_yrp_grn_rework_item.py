@@ -9,7 +9,6 @@ through YRP's dimension-aware stock engine at the source bucket's live rate.
 """
 
 from __future__ import annotations
-from yrp import attribute_links as attribute_db
 
 import json
 from io import BytesIO
@@ -19,6 +18,7 @@ import openpyxl
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, flt, now_datetime, nowdate, nowtime
+from yrp import attribute_links as attribute_db
 from yrp.utils import get_variant_attr_details
 from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
@@ -29,9 +29,7 @@ class SDYRPGRNReworkItem(Document):
 	def on_trash(self):
 		if self.get("grn_reworked_item_details") or self.get("grn_rejected_item_details"):
 			frappe.throw(
-				_("GRN Rework Item {0} has stock conversions and cannot be deleted.").format(
-					self.name
-				)
+				_("GRN Rework Item {0} has stock conversions and cannot be deleted.").format(self.name)
 			)
 
 
@@ -39,17 +37,15 @@ def _json(value):
 	if isinstance(value, str):
 		try:
 			return json.loads(value or "{}")
-		except (TypeError, ValueError):
+		except TypeError, ValueError:
 			return {}
 	return value or {}
 
 
 def _received_type_defaults():
 	return (
-		frappe.db.get_single_value('YRP Stock Settings', "default_received_type"),
-		frappe.db.get_single_value(
-			'YRP Stock Settings', "default_rejected_received_type"
-		),
+		frappe.db.get_single_value("YRP Stock Settings", "default_received_type"),
+		frappe.db.get_single_value("YRP Stock Settings", "default_rejected_received_type"),
 	)
 
 
@@ -60,9 +56,9 @@ def _actual_receipt_warehouse(grn_item, fallback):
 	is not necessarily the live stock bucket.
 	"""
 	warehouse = frappe.db.get_value(
-		'YRP Stock Ledger Entry',
+		"YRP Stock Ledger Entry",
 		{
-			"voucher_type": 'YRP Goods Received Note',
+			"voucher_type": "YRP Goods Received Note",
 			"voucher_no": grn_item.parent,
 			"voucher_detail_no": grn_item.name,
 			"is_cancelled": 0,
@@ -78,15 +74,13 @@ def sync_grn_rework(doc, method=None):
 	"""Create one idempotent rework source per GRN logical matrix row."""
 	del method
 	if isinstance(doc, str):
-		doc = frappe.get_doc('YRP Goods Received Note', doc)
+		doc = frappe.get_doc("YRP Goods Received Note", doc)
 	if doc.docstatus != 1 or doc.get("is_return") or doc.get("is_rework"):
 		return []
 
 	accepted, rejected = _received_type_defaults()
 	if not accepted or not rejected:
-		frappe.throw(
-			_("Configure default Accepted and Rejected Received Types in YRP Stock Settings.")
-		)
+		frappe.throw(_("Configure default Accepted and Rejected Received Types in YRP Stock Settings."))
 
 	groups = {}
 	for row in doc.get("items") or []:
@@ -94,13 +88,13 @@ def sync_grn_rework(doc, method=None):
 		received_type = row.get("received_type") or accepted
 		if quantity <= QTY_TOLERANCE or received_type in {accepted, rejected}:
 			continue
-		if frappe.db.exists('SD YRP GRN Rework Item Detail', {"source_grn_item": row.name}):
+		if frappe.db.exists("SD YRP GRN Rework Item Detail", {"source_grn_item": row.name}):
 			continue
 		groups.setdefault(row.get("row_index") or row.name, []).append(row)
 
 	created = []
 	for rows in groups.values():
-		rework = frappe.new_doc('SD YRP GRN Rework Item')
+		rework = frappe.new_doc("SD YRP GRN Rework Item")
 		rework.update(
 			{
 				"naming_series": "RW-",
@@ -133,19 +127,17 @@ def sync_grn_rework(doc, method=None):
 @frappe.whitelist()
 def sync_grn_rework_for_name(grn_number):
 	"""Permission-checked backfill for an already submitted GRN."""
-	grn = frappe.get_doc('YRP Goods Received Note', grn_number)
+	grn = frappe.get_doc("YRP Goods Received Note", grn_number)
 	grn.check_permission("read")
-	if not frappe.has_permission('SD YRP GRN Rework Item', "create"):
+	if not frappe.has_permission("SD YRP GRN Rework Item", "create"):
 		frappe.throw(_("Not permitted to create GRN Rework Items."), frappe.PermissionError)
 	return sync_grn_rework(grn)
 
 
 def before_grn_cancel(doc, method=None):
 	del method
-	for name in frappe.get_all(
-		'SD YRP GRN Rework Item', filters={"grn_number": doc.name}, pluck="name"
-	):
-		rework = frappe.get_doc('SD YRP GRN Rework Item', name)
+	for name in frappe.get_all("SD YRP GRN Rework Item", filters={"grn_number": doc.name}, pluck="name"):
+		rework = frappe.get_doc("SD YRP GRN Rework Item", name)
 		if rework.get("grn_reworked_item_details") or rework.get("grn_rejected_item_details"):
 			frappe.throw(
 				_(
@@ -157,16 +149,14 @@ def before_grn_cancel(doc, method=None):
 
 def on_grn_cancel(doc, method=None):
 	del method
-	for name in frappe.get_all(
-		'SD YRP GRN Rework Item', filters={"grn_number": doc.name}, pluck="name"
-	):
-		frappe.delete_doc('SD YRP GRN Rework Item', name, ignore_permissions=True)
+	for name in frappe.get_all("SD YRP GRN Rework Item", filters={"grn_number": doc.name}, pluck="name"):
+		frappe.delete_doc("SD YRP GRN Rework Item", name, ignore_permissions=True)
 
 
 def _page_permissions():
 	return {
-		"can_read": bool(frappe.has_permission('SD YRP GRN Rework Item', "read")),
-		"can_write": bool(frappe.has_permission('SD YRP GRN Rework Item', "write")),
+		"can_read": bool(frappe.has_permission("SD YRP GRN Rework Item", "read")),
+		"can_write": bool(frappe.has_permission("SD YRP GRN Rework Item", "write")),
 	}
 
 
@@ -202,15 +192,15 @@ def get_rework_items(
 		"permissions": permissions,
 	}
 	for name in frappe.get_all(
-		'SD YRP GRN Rework Item', filters=filters, pluck="name", order_by="creation desc"
+		"SD YRP GRN Rework Item", filters=filters, pluck="name", order_by="creation desc"
 	):
-		doc = frappe.get_doc('SD YRP GRN Rework Item', name)
+		doc = frappe.get_doc("SD YRP GRN Rework Item", name)
 		doc.check_permission("read")
-		ipd = attribute_db.get_cached_value('SD YRP Lot', doc.lot, "production_detail")
+		ipd = attribute_db.get_cached_value("SD YRP Lot", doc.lot, "production_detail")
 		if not ipd:
 			continue
 		pack_attr, primary_attr, is_set_item, set_attr = attribute_db.get_cached_value(
-			'YRP Item Production Detail',
+			"YRP Item Production Detail",
 			ipd,
 			[
 				"packing_attribute",
@@ -262,18 +252,16 @@ def get_rework_items(
 			)
 			if row.received_type not in data["types"]:
 				data["types"].append(row.received_type)
-			data["total_detail"][row.received_type] = (
-				data["total_detail"].get(row.received_type, 0) + qty
-			)
-			data["total_rejection_detail"][row.received_type] = (
-				data["total_rejection_detail"].get(row.received_type, 0) + flt(row.rejection)
-			)
+			data["total_detail"][row.received_type] = data["total_detail"].get(row.received_type, 0) + qty
+			data["total_rejection_detail"][row.received_type] = data["total_rejection_detail"].get(
+				row.received_type, 0
+			) + flt(row.rejection)
 			data["total_sum"] += qty
 			data["total_rejection"] += flt(row.rejection)
 			detail["types"][row.received_type] = detail["types"].get(row.received_type, 0) + qty
-			detail["rejection_detail"][row.received_type] = (
-				detail["rejection_detail"].get(row.received_type, 0) + flt(row.rejection)
-			)
+			detail["rejection_detail"][row.received_type] = detail["rejection_detail"].get(
+				row.received_type, 0
+			) + flt(row.rejection)
 			detail["total"] += qty
 			detail["total_rejection"] += flt(row.rejection)
 		for group in detail["rework_detail"].values():
@@ -290,7 +278,7 @@ def _size_sort_key(value):
 	text = str(value or "")
 	try:
 		return (0, float(text.split()[0]))
-	except (TypeError, ValueError):
+	except TypeError, ValueError:
 		return (1, text)
 
 
@@ -301,14 +289,14 @@ def _load_action_rows(payload):
 	row_names = [row.get("row_name") for row in rows if row.get("row_name")]
 	parents = set(
 		frappe.get_all(
-			'SD YRP GRN Rework Item Detail',
+			"SD YRP GRN Rework Item Detail",
 			filters={"name": ("in", row_names)},
 			pluck="parent",
 		)
 	)
 	if len(row_names) != len(rows) or len(parents) != 1:
 		frappe.throw(_("All selected Rework rows must belong to one source document."))
-	parent = frappe.get_doc('SD YRP GRN Rework Item', parents.pop(), for_update=True)
+	parent = frappe.get_doc("SD YRP GRN Rework Item", parents.pop(), for_update=True)
 	parent.check_permission("write")
 	by_name = {row.name: row for row in parent.grn_rework_item_details}
 	if any(name not in by_name for name in row_names):
@@ -337,9 +325,9 @@ def update_partial_quantity(data, lot=None):
 			)
 		if qty + flt(source.rejection) > remaining + QTY_TOLERANCE:
 			frappe.throw(
-				_(
-					"Reworked and provisional Rejection quantities for {0} cannot exceed {1}."
-				).format(source.item_variant, remaining)
+				_("Reworked and provisional Rejection quantities for {0} cannot exceed {1}.").format(
+					source.item_variant, remaining
+				)
 			)
 		if qty <= QTY_TOLERANCE:
 			continue
@@ -435,20 +423,14 @@ def _post_conversions(parent, conversions):
 	entries = []
 	for sequence, (row, target_type, qty) in enumerate(conversions, start=1):
 		dimensions = _source_dimensions(parent, row, get_dimension_fieldnames())
-		warehouse = _source_warehouse(
-			parent, row, dimensions, qty, get_stock_balance
-		)
-		rate, _matched = get_last_sle_rate(
-			row.item_variant, warehouse=warehouse, **dimensions
-		)
-		stock_uom = frappe.get_cached_value(
-			'Item', get_parent_item(row.item_variant), "stock_uom"
-		) or row.uom
+		warehouse = _source_warehouse(parent, row, dimensions, qty, get_stock_balance)
+		rate, _matched = get_last_sle_rate(row.item_variant, warehouse=warehouse, **dimensions)
+		stock_uom = frappe.get_cached_value("Item", get_parent_item(row.item_variant), "stock_uom") or row.uom
 		base = {
 			"item": row.item_variant,
 			"warehouse": warehouse,
 			"uom": stock_uom,
-			"voucher_type": 'SD YRP GRN Rework Item',
+			"voucher_type": "SD YRP GRN Rework Item",
 			"voucher_no": parent.name,
 			"voucher_detail_no": row.name,
 			"posting_date": nowdate(),
@@ -486,10 +468,8 @@ def _post_conversions(parent, conversions):
 
 def _source_dimensions(parent, row, dimension_fieldnames):
 	values = {}
-	if row.get("source_grn_item") and frappe.db.exists(
-		'YRP Goods Received Note Item', row.source_grn_item
-	):
-		source = frappe.get_doc('YRP Goods Received Note Item', row.source_grn_item)
+	if row.get("source_grn_item") and frappe.db.exists("YRP Goods Received Note Item", row.source_grn_item):
+		source = frappe.get_doc("YRP Goods Received Note Item", row.source_grn_item)
 		values.update({fieldname: source.get(fieldname) for fieldname in dimension_fieldnames})
 	if "lot" in dimension_fieldnames:
 		values["lot"] = values.get("lot") or parent.lot
@@ -501,9 +481,7 @@ def _source_dimensions(parent, row, dimension_fieldnames):
 def _source_warehouse(parent, row, dimensions, qty, get_stock_balance):
 	candidates = [parent.warehouse]
 	if parent.grn_number:
-		final_warehouse = frappe.db.get_value(
-			'YRP Goods Received Note', parent.grn_number, "to_warehouse"
-		)
+		final_warehouse = frappe.db.get_value("YRP Goods Received Note", parent.grn_number, "to_warehouse")
 		if final_warehouse and final_warehouse not in candidates:
 			candidates.append(final_warehouse)
 	balances = {}
@@ -524,21 +502,19 @@ def _source_warehouse(parent, row, dimensions, qty, get_stock_balance):
 def _rebuild_finishing(lot):
 	from essdee_yrp.finishing.rebuild import rebuild_finishing_plan
 
-	for name in frappe.get_all('SD YRP Finishing Plan', filters={"lot": lot}, pluck="name"):
+	for name in frappe.get_all("SD YRP Finishing Plan", filters={"lot": lot}, pluck="name"):
 		rebuild_finishing_plan(name, check_permission=False)
 
 
 @frappe.whitelist()
 def download_xl(data):
-	if not frappe.has_permission('SD YRP GRN Rework Item', "read"):
+	if not frappe.has_permission("SD YRP GRN Rework Item", "read"):
 		frappe.throw(_("Not permitted to export GRN Rework Items."), frappe.PermissionError)
 	data = _json(data)
 	workbook = openpyxl.Workbook(write_only=True)
 	sheet = workbook.create_sheet("Rework Details", 0)
 	types = data.get("types") or []
-	sheet.append(
-		["Series No", "Date", "GRN Number", 'SD YRP Lot', 'Item', "Colour", *types, "Total"]
-	)
+	sheet.append(["Series No", "Date", "GRN Number", "SD YRP Lot", "Item", "Colour", *types, "Total"])
 	for series, detail in (data.get("report_detail") or {}).items():
 		first_key = next(iter(detail.get("rework_detail") or {}), "")
 		colour = "-".join(first_key.split("-")[1:])

@@ -1,29 +1,29 @@
 """Alternative-item Finishing Plan orchestration for Essdee."""
-from yrp import attribute_links as attribute_db
-from yrp.attribute_links import value as _attribute_value
 
 import frappe
-from yrp.attribute_values import get_mapping_values
 from frappe import _
 from frappe.utils import flt
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
+from yrp.attribute_values import get_mapping_values
+from yrp.utils import get_variant_attr_details, update_if_string_instance
+from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_or_create_variant
 
+from essdee_yrp.finishing.parsing import json_object
 from essdee_yrp.finishing.work_order_packing import (
 	build_packing_work_order_rows,
 	create_alternative_packing_work_order,
 )
-from essdee_yrp.finishing.parsing import json_object
 from essdee_yrp.production_order_alternative import (
 	apply_alternative_plan_ppo_transfer,
 	create_alternative_plan_production_order,
 )
-from yrp.utils import get_variant_attr_details, update_if_string_instance
-from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_or_create_variant
 
 
 @frappe.whitelist()
 def get_fp_alternate_lots(fp_lot):
 	return attribute_db.get_list(
-		'SD YRP Lot',
+		"SD YRP Lot",
 		filters={"transferred_lot": fp_lot, "is_transferred": 1},
 		pluck="name",
 		order_by="creation desc",
@@ -71,11 +71,7 @@ def validate_lot_is_unconfigured(lot_doc):
 	if lot_doc.status == "Closed":
 		problems.append(_("Status is Closed"))
 	if problems:
-		frappe.throw(
-			_("Lot {0} is already configured ({1})").format(
-				lot_doc.name, ", ".join(problems)
-			)
-		)
+		frappe.throw(_("Lot {0} is already configured ({1})").format(lot_doc.name, ", ".join(problems)))
 
 
 def resolve_alternative_lot(
@@ -91,15 +87,15 @@ def resolve_alternative_lot(
 	if lot_source == "existing":
 		if not existing_lot:
 			frappe.throw(_("Please select an existing Lot"))
-		lot_doc = frappe.get_doc('SD YRP Lot', existing_lot)
+		lot_doc = frappe.get_doc("SD YRP Lot", existing_lot)
 		lot_doc.check_permission("write")
 		validate_lot_is_unconfigured(lot_doc)
 	else:
-		frappe.has_permission('SD YRP Lot', "create", throw=True)
-		lot_doc = frappe.new_doc('SD YRP Lot')
+		frappe.has_permission("SD YRP Lot", "create", throw=True)
+		lot_doc = frappe.new_doc("SD YRP Lot")
 		lot_doc.lot_name = lot_name
 
-	ipd = frappe.get_cached_doc('YRP Item Production Detail', production_detail)
+	ipd = frappe.get_cached_doc("YRP Item Production Detail", production_detail)
 	if ipd.item != alternative_item:
 		frappe.throw(
 			_("Item Production Detail {0} belongs to {1}, not {2}").format(
@@ -137,14 +133,10 @@ def create_alternative_fp(
 	lot_source="new",
 	existing_lot=None,
 ):
-	finishing_plan = frappe.get_doc('SD YRP Finishing Plan', doc_name)
+	finishing_plan = frappe.get_doc("SD YRP Finishing Plan", doc_name)
 	finishing_plan.check_permission("write")
 	qty_details = update_if_string_instance(qty_details) or {}
-	lot_source = (
-		"existing"
-		if str(lot_source).strip().lower() in ("existing", "existing lot")
-		else "new"
-	)
+	lot_source = "existing" if str(lot_source).strip().lower() in ("existing", "existing lot") else "new"
 	conversions = _collect_conversions(qty_details)
 	if not conversions:
 		frappe.throw(_("Enter a quantity to move"))
@@ -154,14 +146,10 @@ def create_alternative_fp(
 		sorted({_attribute_value(row["colour"]) for row in conversions}),
 		sorted({_attribute_value(row["size"]) for row in conversions}),
 	)
-	work_order = frappe.get_doc('YRP Work Order', finishing_plan.work_order)
-	source_production_order = attribute_db.get_value(
-		'SD YRP Lot', finishing_plan.lot, "production_order"
-	)
+	work_order = frappe.get_doc("YRP Work Order", finishing_plan.work_order)
+	source_production_order = attribute_db.get_value("SD YRP Lot", finishing_plan.lot, "production_order")
 	if not source_production_order:
-		frappe.throw(
-			_("Source Lot {0} has no Production Order").format(finishing_plan.lot)
-		)
+		frappe.throw(_("Source Lot {0} has no Production Order").format(finishing_plan.lot))
 
 	lot_doc = resolve_alternative_lot(
 		lot_source,
@@ -182,10 +170,8 @@ def create_alternative_fp(
 		finishing_plan=finishing_plan.name,
 	)
 	_reduce_source_lot_quantity(finishing_plan.lot, conversions)
-	target_work_order = create_alternative_packing_work_order(
-		work_order.name, lot_doc.name
-	)
-	attribute_db.set_value('SD YRP Lot', finishing_plan.lot, "has_transferred", 1)
+	target_work_order = create_alternative_packing_work_order(work_order.name, lot_doc.name)
+	attribute_db.set_value("SD YRP Lot", finishing_plan.lot, "has_transferred", 1)
 	return {
 		"work_order": target_work_order,
 		"lot": lot_doc.name,
@@ -195,7 +181,7 @@ def create_alternative_fp(
 
 @frappe.whitelist()
 def update_alternative_lot_quantity(doc_name, target_lot, qty_details):
-	source_plan = frappe.get_doc('SD YRP Finishing Plan', doc_name)
+	source_plan = frappe.get_doc("SD YRP Finishing Plan", doc_name)
 	source_plan.check_permission("write")
 	_validate_alternate_lot(target_lot, source_plan.lot)
 	conversions = _collect_conversions(update_if_string_instance(qty_details) or {})
@@ -203,10 +189,10 @@ def update_alternative_lot_quantity(doc_name, target_lot, qty_details):
 		frappe.throw(_("Enter a quantity to move"))
 	_validate_conversion_balance(source_plan, conversions)
 
-	lot_doc = frappe.get_doc('SD YRP Lot', target_lot)
+	lot_doc = frappe.get_doc("SD YRP Lot", target_lot)
 	_append_conversions_to_lot(lot_doc, conversions)
-	source_ppo = attribute_db.get_value('SD YRP Lot', source_plan.lot, "production_order")
-	target_ppo = attribute_db.get_value('SD YRP Lot', target_lot, "production_order")
+	source_ppo = attribute_db.get_value("SD YRP Lot", source_plan.lot, "production_order")
+	target_ppo = attribute_db.get_value("SD YRP Lot", target_lot, "production_order")
 	if not source_ppo or not target_ppo:
 		frappe.throw(_("Both Lots must be linked to Production Orders"))
 	apply_alternative_plan_ppo_transfer(
@@ -215,13 +201,11 @@ def update_alternative_lot_quantity(doc_name, target_lot, qty_details):
 		source_lot=source_plan.lot,
 		target_lot=target_lot,
 		transfers=_size_quantities(conversions),
-		reason=_("Additional alternative conversion from Finishing Plan {0}").format(
-			source_plan.name
-		),
+		reason=_("Additional alternative conversion from Finishing Plan {0}").format(source_plan.name),
 	)
 	_reduce_source_lot_quantity(source_plan.lot, conversions)
 
-	work_order = frappe.get_doc('YRP Work Order', _get_packing_work_order(target_lot))
+	work_order = frappe.get_doc("YRP Work Order", _get_packing_work_order(target_lot))
 	rows = build_packing_work_order_rows(lot_doc, work_order.process_name)
 	if work_order.docstatus == 0:
 		_apply_draft_work_order_rows(work_order, rows)
@@ -236,18 +220,14 @@ def update_alternative_lot_quantity(doc_name, target_lot, qty_details):
 def get_alternative_details(lot):
 	from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import fetch_order_item_details
 
-	frappe.get_doc('SD YRP Lot', lot).check_permission("read")
+	frappe.get_doc("SD YRP Lot", lot).check_permission("read")
 	result = {}
-	for name in attribute_db.get_list(
-		'SD YRP Lot', filters={"transferred_lot": lot}, pluck="name"
-	):
-		lot_doc = frappe.get_doc('SD YRP Lot', name)
+	for name in attribute_db.get_list("SD YRP Lot", filters={"transferred_lot": lot}, pluck="name"):
+		lot_doc = frappe.get_doc("SD YRP Lot", name)
 		result[name] = {
 			"item": lot_doc.item,
 			"ipd": lot_doc.production_detail,
-			"details": fetch_order_item_details(
-				lot_doc.lot_order_details, lot_doc.production_detail
-			),
+			"details": fetch_order_item_details(lot_doc.lot_order_details, lot_doc.production_detail),
 		}
 	return result
 
@@ -261,16 +241,14 @@ def check_is_alternative_item(item):
 
 def _collect_conversions(qty_details):
 	conversions = []
-	data = ((qty_details.get("data") or {}).get("data") or {})
+	data = (qty_details.get("data") or {}).get("data") or {}
 	for colour, row in data.items():
 		if not row.get("check_value"):
 			continue
 		for size, values in (row.get("values") or {}).items():
 			quantity = flt(values.get("conversion_qty"))
 			if quantity > 0:
-				conversions.append(
-					{"colour": colour, "size": size, "qty": quantity}
-				)
+				conversions.append({"colour": colour, "size": size, "qty": quantity})
 	return conversions
 
 
@@ -282,14 +260,10 @@ def _size_quantities(conversions):
 
 
 def _append_conversions_to_lot(lot_doc, conversions):
-	frappe.db.sql(
-		"SELECT name FROM `tabSD YRP Lot` WHERE name = %s FOR UPDATE", (lot_doc.name,)
-	)
+	frappe.db.sql("SELECT name FROM `tabSD YRP Lot` WHERE name = %s FOR UPDATE", (lot_doc.name,))
 	lot_doc.reload()
-	ipd = frappe.get_cached_doc('YRP Item Production Detail', lot_doc.production_detail)
-	rows_by_key = {
-		_lot_row_key(row, ipd): row for row in lot_doc.get("lot_order_details") or []
-	}
+	ipd = frappe.get_cached_doc("YRP Item Production Detail", lot_doc.production_detail)
+	rows_by_key = {_lot_row_key(row, ipd): row for row in lot_doc.get("lot_order_details") or []}
 	row_index_by_colour = {}
 	max_row_index = -1
 	for row in lot_doc.get("lot_order_details") or []:
@@ -336,9 +310,7 @@ def _append_conversions_to_lot(lot_doc, conversions):
 		)
 		rows_by_key[key] = row
 	_rebuild_lot_order_items(lot_doc, ipd)
-	lot_doc.total_order_quantity = sum(
-		flt(row.quantity) for row in lot_doc.get("lot_order_details") or []
-	)
+	lot_doc.total_order_quantity = sum(flt(row.quantity) for row in lot_doc.get("lot_order_details") or [])
 	lot_doc.total_quantity = sum(flt(row.qty) for row in lot_doc.get("items") or [])
 	lot_doc.save(ignore_permissions=True)
 
@@ -347,11 +319,7 @@ def _lot_row_key(row, ipd):
 	attributes = get_variant_attr_details(row.item_variant)
 	combination = json_object(row.set_combination)
 	return (
-		str(
-			attributes.get(ipd.packing_attribute)
-			or combination.get("major_colour")
-			or ""
-		),
+		str(attributes.get(ipd.packing_attribute) or combination.get("major_colour") or ""),
 		str(attributes.get(ipd.primary_item_attribute) or ""),
 	)
 
@@ -394,11 +362,9 @@ def _rebuild_lot_order_items(lot_doc, ipd):
 
 
 def _reduce_source_lot_quantity(source_lot, conversions):
-	frappe.db.sql(
-		"SELECT name FROM `tabSD YRP Lot` WHERE name = %s FOR UPDATE", (source_lot,)
-	)
-	lot_doc = frappe.get_doc('SD YRP Lot', source_lot)
-	ipd = frappe.get_cached_doc('YRP Item Production Detail', lot_doc.production_detail)
+	frappe.db.sql("SELECT name FROM `tabSD YRP Lot` WHERE name = %s FOR UPDATE", (source_lot,))
+	lot_doc = frappe.get_doc("SD YRP Lot", source_lot)
+	ipd = frappe.get_cached_doc("YRP Item Production Detail", lot_doc.production_detail)
 	requested = {}
 	for row in conversions:
 		key = (str(_attribute_value(row["colour"])), str(_attribute_value(row["size"])))
@@ -416,9 +382,7 @@ def _reduce_source_lot_quantity(source_lot, conversions):
 			if remaining <= 0:
 				break
 	_rebuild_lot_order_items(lot_doc, ipd)
-	lot_doc.total_order_quantity = sum(
-		flt(row.quantity) for row in lot_doc.get("lot_order_details") or []
-	)
+	lot_doc.total_order_quantity = sum(flt(row.quantity) for row in lot_doc.get("lot_order_details") or [])
 	lot_doc.total_quantity = sum(flt(row.qty) for row in lot_doc.get("items") or [])
 	lot_doc.save(ignore_permissions=True)
 
@@ -442,18 +406,14 @@ def _validate_conversion_balance(source_plan, conversions):
 
 
 def _validate_alternate_lot(target_lot, source_lot):
-	values = attribute_db.get_value(
-		'SD YRP Lot', target_lot, ["is_transferred", "transferred_lot"]
-	)
+	values = attribute_db.get_value("SD YRP Lot", target_lot, ["is_transferred", "transferred_lot"])
 	if not values or not values[0] or values[1] != source_lot:
-		frappe.throw(
-			_("Lot {0} is not an alternative of {1}").format(target_lot, source_lot)
-		)
+		frappe.throw(_("Lot {0} is not an alternative of {1}").format(target_lot, source_lot))
 
 
 def _get_packing_work_order(target_lot):
 	work_orders = frappe.get_all(
-		'YRP Work Order',
+		"YRP Work Order",
 		filters={"lot": target_lot, "includes_packing": 1, "docstatus": ["in", [0, 1]]},
 		pluck="name",
 		order_by="docstatus desc, creation desc",
@@ -475,7 +435,7 @@ def _apply_draft_work_order_rows(work_order, rows):
 
 
 def check_colours_and_sizes(ipd_name, converting_colours, converting_sizes):
-	ipd = frappe.get_cached_doc('YRP Item Production Detail', ipd_name)
+	ipd = frappe.get_cached_doc("YRP Item Production Detail", ipd_name)
 	if ipd.is_set_item:
 		frappe.throw(_("Set Item is not applicable for Alternative Items"))
 	mappings = {row.attribute: row.mapping for row in ipd.get("item_attributes") or []}
@@ -483,23 +443,15 @@ def check_colours_and_sizes(ipd_name, converting_colours, converting_sizes):
 	size_mapping = mappings.get(ipd.primary_item_attribute)
 	if not colour_mapping or not size_mapping:
 		frappe.throw(_("Item Production Detail {0} has invalid mappings").format(ipd.name))
-	colours = set(
-		get_mapping_values(colour_mapping)
-	)
-	sizes = set(
-		get_mapping_values(size_mapping)
-	)
+	colours = set(get_mapping_values(colour_mapping))
+	sizes = set(get_mapping_values(size_mapping))
 	missing_colours = set(converting_colours).difference(colours)
 	missing_sizes = set(converting_sizes).difference(sizes)
 	if missing_colours:
 		frappe.throw(
-			_("Production Detail does not contain colour(s): {0}").format(
-				", ".join(sorted(missing_colours))
-			)
+			_("Production Detail does not contain colour(s): {0}").format(", ".join(sorted(missing_colours)))
 		)
 	if missing_sizes:
 		frappe.throw(
-			_("Production Detail does not contain size(s): {0}").format(
-				", ".join(sorted(missing_sizes))
-			)
+			_("Production Detail does not contain size(s): {0}").format(", ".join(sorted(missing_sizes)))
 		)

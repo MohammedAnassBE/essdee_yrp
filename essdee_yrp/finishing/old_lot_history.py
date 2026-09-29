@@ -11,16 +11,12 @@ def active_old_lot_transfer_rows(rows):
 		return rows
 	cancelled = set(
 		frappe.get_all(
-			'SD YRP Lot Transfer',
+			"SD YRP Lot Transfer",
 			filters={"name": ("in", list(lot_transfers)), "docstatus": 2},
 			pluck="name",
 		)
 	)
-	return [
-		row
-		for row in rows
-		if not row.lot_transfer or row.lot_transfer not in cancelled
-	]
+	return [row for row in rows if not row.lot_transfer or row.lot_transfer not in cancelled]
 
 
 def get_old_lot_received_rows(doc):
@@ -30,15 +26,13 @@ def get_old_lot_received_rows(doc):
 	exists, allowing migrated old and new transfers to coexist without doubling
 	the OCR quantity.
 	"""
-	legacy_rows = active_old_lot_transfer_rows(
-		doc.get("finishing_old_lot_received_items")
-	)
+	legacy_rows = active_old_lot_transfer_rows(doc.get("finishing_old_lot_received_items"))
 	if not doc.get("name"):
 		return legacy_rows
 
 	given_rows = active_old_lot_transfer_rows(
 		frappe.get_all(
-			'SD YRP Finishing Plan Old Lot Given',
+			"SD YRP Finishing Plan Old Lot Given",
 			filters={"destination_fp": doc.name},
 			fields=[
 				"parent as source_fp",
@@ -60,7 +54,7 @@ def get_old_lot_received_rows(doc):
 	source_lots = {
 		row.name: row.lot
 		for row in frappe.get_all(
-			'SD YRP Finishing Plan',
+			"SD YRP Finishing Plan",
 			filters={"name": ("in", list(source_fps))},
 			fields=["name", "lot"],
 		)
@@ -80,15 +74,11 @@ def get_old_lot_received_rows(doc):
 		)
 		for row in given_rows
 	]
-	derived_keys = {
-		(row.lot_transfer, row.source_fp, row.item_variant, row.size)
-		for row in received_rows
-	}
+	derived_keys = {(row.lot_transfer, row.source_fp, row.item_variant, row.size) for row in received_rows}
 	received_rows.extend(
 		row
 		for row in legacy_rows
-		if (row.lot_transfer, row.source_fp, row.item_variant, row.size)
-		not in derived_keys
+		if (row.lot_transfer, row.source_fp, row.item_variant, row.size) not in derived_keys
 	)
 	return received_rows
 
@@ -104,9 +94,7 @@ def get_old_lot_source_balance(source, item_variant):
 		for row in source.get("finishing_plan_details") or []
 		if row.item_variant == item_variant
 	)
-	for row in active_old_lot_transfer_rows(
-		source.get("finishing_old_lot_given_items")
-	):
+	for row in active_old_lot_transfer_rows(source.get("finishing_old_lot_given_items")):
 		if row.item_variant != item_variant:
 			continue
 		loose_piece -= flt(row.loose_piece_given)

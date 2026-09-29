@@ -7,10 +7,8 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import add_months, cint, flt, nowdate
-
 from yrp.stock.dimensions import get_dimension_fieldnames
 from yrp.yrp_stock.report.yrp_stock_balance.yrp_stock_balance import execute as stock_balance
-
 
 ALLOWED_STOCK_ENTRY_PURPOSES = {
 	"Material Consumed",
@@ -31,13 +29,11 @@ def _parse(value, default=None):
 
 
 def _dimension_values(source: dict) -> dict:
-	return {
-		fieldname: source.get(fieldname) for fieldname in get_dimension_fieldnames()
-	}
+	return {fieldname: source.get(fieldname) for fieldname in get_dimension_fieldnames()}
 
 
 def _check_stock_read_permission():
-	frappe.has_permission('YRP Stock Ledger Entry', "read", throw=True)
+	frappe.has_permission("YRP Stock Ledger Entry", "read", throw=True)
 
 
 @frappe.whitelist()
@@ -85,8 +81,8 @@ def get_stock_summary(
 def _new_stock_entry(purpose: str, locations: dict, rows: list[dict]):
 	if purpose not in ALLOWED_STOCK_ENTRY_PURPOSES:
 		frappe.throw(_("Unsupported Stock Entry purpose {0}.").format(purpose))
-	frappe.has_permission('YRP Stock Entry', "create", throw=True)
-	doc = frappe.new_doc('YRP Stock Entry')
+	frappe.has_permission("YRP Stock Entry", "create", throw=True)
+	doc = frappe.new_doc("YRP Stock Entry")
 	doc.purpose = purpose
 	doc.from_warehouse = locations.get("from_warehouse")
 	doc.to_warehouse = locations.get("to_warehouse")
@@ -97,7 +93,7 @@ def _new_stock_entry(purpose: str, locations: dict, rows: list[dict]):
 	if purpose == "Send to Warehouse" and not doc.to_warehouse:
 		frappe.throw(_("To Warehouse is required."))
 
-	detail_meta = frappe.get_meta('YRP Stock Entry Detail')
+	detail_meta = frappe.get_meta("YRP Stock Entry Detail")
 	for source in rows:
 		qty = flt(source.get("qty") or source.get("bal_qty"))
 		if qty <= 0:
@@ -151,9 +147,7 @@ def _validate_selected_warehouses(rows, locations, purpose):
 	if len(warehouses) > 1:
 		frappe.throw(_("Select stock from one Warehouse at a time."))
 	expected = (
-		locations.get("to_warehouse")
-		if purpose == "Material Receipt"
-		else locations.get("from_warehouse")
+		locations.get("to_warehouse") if purpose == "Material Receipt" else locations.get("from_warehouse")
 	)
 	if warehouses and expected not in warehouses:
 		frappe.throw(_("The selected stock does not belong to the chosen Warehouse."))
@@ -163,11 +157,11 @@ def _validate_selected_warehouses(rows, locations, purpose):
 def reduce_stock(selected_items, warehouse):
 	rows = _parse(selected_items, []) or []
 	_validate_selected_warehouses(rows, {"from_warehouse": warehouse}, "Material Issue")
-	frappe.has_permission('YRP Stock Update', "create", throw=True)
-	doc = frappe.new_doc('YRP Stock Update')
+	frappe.has_permission("YRP Stock Update", "create", throw=True)
+	doc = frappe.new_doc("YRP Stock Update")
 	doc.warehouse = warehouse
 	doc.update_type = "Reduce"
-	detail_meta = frappe.get_meta('YRP Stock Update Detail')
+	detail_meta = frappe.get_meta("YRP Stock Update Detail")
 	for source in rows:
 		values = {
 			"item_variant": source.get("item"),
@@ -188,11 +182,11 @@ def reduce_stock(selected_items, warehouse):
 def stock_reconcile(selected_items, warehouse):
 	rows = _parse(selected_items, []) or []
 	_validate_selected_warehouses(rows, {"from_warehouse": warehouse}, "Material Issue")
-	frappe.has_permission('YRP Stock Reconciliation', "create", throw=True)
-	doc = frappe.new_doc('YRP Stock Reconciliation')
-	doc.purpose = 'Stock Reconciliation'
+	frappe.has_permission("YRP Stock Reconciliation", "create", throw=True)
+	doc = frappe.new_doc("YRP Stock Reconciliation")
+	doc.purpose = "Stock Reconciliation"
 	doc.default_warehouse = warehouse
-	detail_meta = frappe.get_meta('YRP Stock Reconciliation Item')
+	detail_meta = frappe.get_meta("YRP Stock Reconciliation Item")
 	for source in rows:
 		values = {
 			"item": source.get("item"),
@@ -216,11 +210,11 @@ def lot_transfer_items(selected_items, transfer_lot):
 	warehouses = {row.get("warehouse") for row in rows if row.get("warehouse")}
 	if len(warehouses) != 1:
 		frappe.throw(_("Select stock from one Warehouse at a time."))
-	if not frappe.db.exists('SD YRP Lot', transfer_lot):
+	if not frappe.db.exists("SD YRP Lot", transfer_lot):
 		frappe.throw(_("Target Lot {0} does not exist.").format(transfer_lot))
-	frappe.has_permission('SD YRP Lot Transfer', "create", throw=True)
-	doc = frappe.new_doc('SD YRP Lot Transfer')
-	detail_meta = frappe.get_meta('SD YRP Lot Transfer Item')
+	frappe.has_permission("SD YRP Lot Transfer", "create", throw=True)
+	doc = frappe.new_doc("SD YRP Lot Transfer")
+	detail_meta = frappe.get_meta("SD YRP Lot Transfer Item")
 	for source in rows:
 		if source.get("lot") == transfer_lot:
 			frappe.throw(_("Source and target Lot must be different."))

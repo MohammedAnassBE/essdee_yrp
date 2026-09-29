@@ -21,11 +21,18 @@ class ReviewedTransformerTest(unittest.TestCase):
 			("Goods Received Note", "GRN Completion", "YRP Goods Received Note Item"),
 		):
 			with self.subTest(against=against):
-				result = transform_document(row, self.plan, parent_document={
-					"against": against, "purpose": purpose, "against_id": "REF-PARENT"})
+				result = transform_document(
+					row,
+					self.plan,
+					parent_document={"against": against, "purpose": purpose, "against_id": "REF-PARENT"},
+				)
 				self.assertEqual(result["against"], child)
 				self.assertEqual(result["against_id_detail"], "REF-ROW")
-		for parent in (None, {}, {"against": "Delivery Challan", "purpose": "Material Issue", "against_id": "REF"}):
+		for parent in (
+			None,
+			{},
+			{"against": "Delivery Challan", "purpose": "Material Issue", "against_id": "REF"},
+		):
 			with self.subTest(parent=parent), self.assertRaises(MigrationError):
 				transform_document(row, self.plan, parent_document=parent)
 		blank = transform_document({**row, "against_id_detail": ""}, self.plan)
@@ -33,11 +40,22 @@ class ReviewedTransformerTest(unittest.TestCase):
 		self.assertNotIn("against", row)
 
 	def test_sms_roles_preserve_identity_and_permissions(self):
-		role = {"doctype": "Has Role", "name": "sms-role-1", "parent": "SMS Settings",
-			"parenttype": "SMS Settings", "parentfield": "allowed_roles", "idx": 1,
-			"role": "System Manager"}
-		doc = {"doctype": "SMS Settings", "name": "SMS Settings", "allowed_roles": [role],
-			"sms_gateway_url": "https://sms.example.test", "message_parameter": "message"}
+		role = {
+			"doctype": "Has Role",
+			"name": "sms-role-1",
+			"parent": "SMS Settings",
+			"parenttype": "SMS Settings",
+			"parentfield": "allowed_roles",
+			"idx": 1,
+			"role": "System Manager",
+		}
+		doc = {
+			"doctype": "SMS Settings",
+			"name": "SMS Settings",
+			"allowed_roles": [role],
+			"sms_gateway_url": "https://sms.example.test",
+			"message_parameter": "message",
+		}
 		result = transform_document(doc, self.plan)
 		self.assertEqual(result["allowed_roles"], [role])
 		self.assertEqual(result["sms_gateway_url"], doc["sms_gateway_url"])
@@ -70,7 +88,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			},
 			self.plan,
 		)
-		self.assertEqual((row["doctype"], row["work_order"]), ('YRP Debit', "WO-1"))
+		self.assertEqual((row["doctype"], row["work_order"]), ("YRP Debit", "WO-1"))
 		with self.assertRaises(MigrationError):
 			transform_document(
 				{
@@ -112,7 +130,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			},
 			self.plan,
 		)
-		self.assertEqual(legacy["doctype"], 'SD YRP Finishing Plan')
+		self.assertEqual(legacy["doctype"], "SD YRP Finishing Plan")
 		self.assertEqual(legacy["fp_status"], "Ready for Audit")
 		self.assertEqual(legacy["audit_requested_date"], "2026-09-27")
 
@@ -138,7 +156,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			},
 			self.plan,
 		)
-		self.assertEqual(settings["doctype"], 'SD YRP MRP Settings')
+		self.assertEqual(settings["doctype"], "SD YRP MRP Settings")
 		self.assertEqual(settings["accounts_user_role"], "Accounts User")
 
 	def test_purchase_order_item_builds_standard_commercial_shadow_values(self):
@@ -315,7 +333,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			},
 			self.plan,
 		)
-		self.assertEqual(row["doctype"], 'SD YRP GRN Deliverable')
+		self.assertEqual(row["doctype"], "SD YRP GRN Deliverable")
 		self.assertNotIn("goods_received_note_item", row)
 		self.assertNotIn("received_item_variant", row)
 		self.assertNotIn("consumption_sle", row)
@@ -351,7 +369,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			},
 			self.plan,
 		)
-		self.assertEqual(row["name"], 'YRP Stock Settings')
+		self.assertEqual(row["name"], "YRP Stock Settings")
 		self.assertEqual(row["transit_warehouse"], "S-0165")
 		self.assertEqual(row["sms_old_database_password"], "********")
 		self.assertEqual(row["__migration_passwords"], {"sms_old_database_password": "test-only"})
@@ -380,7 +398,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			row["sewing_plan_input_orders"],
 			[
 				{
-					"doctype": 'SD YRP Sewing Plan Input Order',
+					"doctype": "SD YRP Sewing Plan Input Order",
 					"name": "ROW-2",
 				}
 			],
@@ -396,7 +414,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			},
 			self.plan,
 		)
-		self.assertEqual(purchase_order_invoice["against"], 'Purchase Order')
+		self.assertEqual(purchase_order_invoice["against"], "Purchase Order")
 
 		work_order_invoice = transform_document(
 			{
@@ -413,7 +431,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			},
 			self.plan,
 		)
-		self.assertEqual(work_order_invoice["against"], 'YRP Work Order')
+		self.assertEqual(work_order_invoice["against"], "YRP Work Order")
 
 	def test_work_order_purchase_invoice_preserves_legacy_commercial_rows(self):
 		row = transform_document(
@@ -488,7 +506,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			self.plan,
 		)
 
-		self.assertEqual(row["against"], 'Purchase Order')
+		self.assertEqual(row["against"], "Purchase Order")
 		self.assertEqual(row["essdee_rate_table_source"], "migrated_v1")
 		self.assertEqual(len(row["items"]), 2)
 		self.assertEqual(len(row["essdee_items"]), 1)
@@ -497,9 +515,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 		self.assertEqual(grouped["rate"], 0.7)
 		self.assertEqual(grouped["amount"], 105)
 		self.assertEqual(grouped["lot"], "Open Lot")
-		self.assertTrue(
-			all(item["essdee_group_key"] == grouped["group_key"] for item in row["items"])
-		)
+		self.assertTrue(all(item["essdee_group_key"] == grouped["group_key"] for item in row["items"]))
 		self.assertTrue(all(item["essdee_rate_weight"] == 1 for item in row["items"]))
 
 	def test_old_purchase_order_zero_actual_rate_keeps_distinct_rate_groups(self):
@@ -618,7 +634,7 @@ class ReviewedTransformerTest(unittest.TestCase):
 			},
 			self.plan,
 		)
-		self.assertEqual(row["item_attributes"][0]["doctype"], 'YRP IPD Item Attribute')
+		self.assertEqual(row["item_attributes"][0]["doctype"], "YRP IPD Item Attribute")
 
 
 if __name__ == "__main__":

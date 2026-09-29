@@ -51,9 +51,9 @@ class TestGRNReworkItem(IntegrationTestCase):
 		)
 
 		def cached_value(doctype, _name, fieldname):
-			if doctype == 'Item':
+			if doctype == "Item":
 				return "Item-1"
-			if doctype == 'Item' and fieldname == "stock_uom":
+			if doctype == "Item" and fieldname == "stock_uom":
 				return "Pieces"
 			return None
 

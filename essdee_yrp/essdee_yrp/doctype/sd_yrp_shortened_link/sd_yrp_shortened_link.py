@@ -66,9 +66,7 @@ def _validate_redirect_url(url):
 def render_document_print(doctype, docname, print_format=None):
 	"""Render a configured print target without the legacy localhost API/token hop."""
 	doc = frappe.get_doc(doctype, docname)
-	default_letterhead = frappe.db.get_value(
-		"Letter Head", {"disabled": 0, "is_default": 1}, "name"
-	)
+	default_letterhead = frappe.db.get_value("Letter Head", {"disabled": 0, "is_default": 1}, "name")
 	with print_language(None):
 		html = frappe.get_print(
 			doctype,
@@ -91,10 +89,10 @@ def get_print_pdf(doctype, docname, print_format=None):
 def create_print_sl(doctype, docname):
 	target = frappe.get_doc(doctype, docname)
 	target.check_permission("read")
-	expires_in = frappe.db.get_single_value('SD YRP MRP Settings', "link_expiry_days") or 14
+	expires_in = frappe.db.get_single_value("SD YRP MRP Settings", "link_expiry_days") or 14
 	doc = frappe.get_doc(
 		{
-			"doctype": 'SD YRP Shortened Link',
+			"doctype": "SD YRP Shortened Link",
 			"type": "Print PDF",
 			"document_type": doctype,
 			"document_linked": docname,
@@ -109,7 +107,7 @@ def get_short_link(doctype, docname):
 	if not doctype or not docname:
 		return None
 	name = create_print_sl(doctype, docname)
-	domain = (frappe.db.get_single_value('SD YRP MRP Settings', "shortned_url_domain") or "").strip()
+	domain = (frappe.db.get_single_value("SD YRP MRP Settings", "shortned_url_domain") or "").strip()
 	if domain:
 		return f"{domain.rstrip('/')}/{name}"
 	return get_url(
@@ -122,9 +120,9 @@ def get_short_link(doctype, docname):
 def parse_short_link(token=None, hash=None):
 	"""Resolve an unguessable public token and perform its configured action."""
 	name = token or hash
-	if not name or not frappe.db.exists('SD YRP Shortened Link', name):
+	if not name or not frappe.db.exists("SD YRP Shortened Link", name):
 		raise frappe.DoesNotExistError(_("Invalid shortened link."))
-	doc = frappe.get_doc('SD YRP Shortened Link', name)
+	doc = frappe.get_doc("SD YRP Shortened Link", name)
 	if doc.is_expired():
 		doc.redirect()
 		return

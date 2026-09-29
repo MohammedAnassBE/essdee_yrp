@@ -3,38 +3,38 @@ from frappe.model.naming import set_new_name
 from frappe.tests import IntegrationTestCase
 
 ESSDEE_NAMING_SERIES = {
-	'YRP Work Order': "YRP-WO-.YYYY.-",
-	'YRP Goods Received Note': "YRP-GRN-.YYYY.-",
-	'YRP Stock Entry': "YRP-STE-.YYYY.-",
-	'YRP Process Cost': "YRP-PC-",
-	'YRP Purchase Invoice': "YRP-MPI-.YYYY.-",
-	'YRP Stock Reconciliation': "YRP-ST-RECO-.YYYY.-",
-	'YRP Stock Update': "YRP-SUE-.YYYY.-",
+	"YRP Work Order": "YRP-WO-.YYYY.-",
+	"YRP Goods Received Note": "YRP-GRN-.YYYY.-",
+	"YRP Stock Entry": "YRP-STE-.YYYY.-",
+	"YRP Process Cost": "YRP-PC-",
+	"YRP Purchase Invoice": "YRP-MPI-.YYYY.-",
+	"YRP Stock Reconciliation": "YRP-ST-RECO-.YYYY.-",
+	"YRP Stock Update": "YRP-SUE-.YYYY.-",
 }
 BASE_NAMING_SERIES = {
-	'YRP Delivery Challan': "DC-.YYYY.-",
+	"YRP Delivery Challan": "DC-.YYYY.-",
 }
 ESSDEE_AUTONAME_SERIES = {
-	'YRP Item Price': "YRP-ITP-.#####",
-	'YRP Stock Ledger Entry': "YRP-SLE-.YYYY.-.#####",
-	'YRP Stock Reservation Entry': "YRP-SRE-.YYYY.-.#####",
+	"YRP Item Price": "YRP-ITP-.#####",
+	"YRP Stock Ledger Entry": "YRP-SLE-.YYYY.-.#####",
+	"YRP Stock Reservation Entry": "YRP-SRE-.YYYY.-.#####",
 }
 
 
 class TestEssdeeNamingSeries(IntegrationTestCase):
 	def test_standard_purchase_order_keeps_native_default_and_offers_yrp_series(self):
-		field = frappe.get_meta('Purchase Order', cached=False).get_field("naming_series")
+		field = frappe.get_meta("Purchase Order", cached=False).get_field("naming_series")
 		self.assertEqual(field.default, "PUR-ORD-.YYYY.-")
 		self.assertEqual(
 			field.options.splitlines(),
 			["PUR-ORD-.YYYY.-", "YRP-PO-.YYYY.-"],
 		)
 
-		native = frappe.new_doc('Purchase Order')
+		native = frappe.new_doc("Purchase Order")
 		set_new_name(native)
 		self.assertTrue(native.name.startswith("PUR-ORD-"))
 
-		yrp_managed = frappe.new_doc('Purchase Order')
+		yrp_managed = frappe.new_doc("Purchase Order")
 		yrp_managed.is_yrp_managed = 1
 		yrp_managed.run_method("before_naming")
 		set_new_name(yrp_managed)

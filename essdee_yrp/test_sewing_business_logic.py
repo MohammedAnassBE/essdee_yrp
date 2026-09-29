@@ -13,16 +13,16 @@ from essdee_yrp.sewing.closed_work_order import (
 	get_closed_work_order_grn_details,
 )
 from essdee_yrp.sewing.config import get_sewing_input_configuration
-from essdee_yrp.sewing.plan import (
-	_order_rows,
-	_should_have_sewing_plan,
-	create_or_get_sewing_plan,
-)
 from essdee_yrp.sewing.entry import (
 	cancel_sewing_plan_entry,
 	get_data_entry_data,
 	submit_data_entry_log,
 	update_sewing_plan_data,
+)
+from essdee_yrp.sewing.plan import (
+	_order_rows,
+	_should_have_sewing_plan,
+	create_or_get_sewing_plan,
 )
 from essdee_yrp.sewing.read_models import (
 	get_consumption_mapping_data,
@@ -47,7 +47,7 @@ from essdee_yrp.sewing.read_models import (
 class TestSewingBusinessLogic(IntegrationTestCase):
 	def _data_entry_plan(self):
 		plans = frappe.get_all(
-			'SD YRP Sewing Plan',
+			"SD YRP Sewing Plan",
 			fields=["name", "lot", "supplier"],
 			filters={
 				"lot": ["is", "set"],
@@ -58,26 +58,20 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		)
 		for candidate in plans:
 			payload = get_data_entry_data(candidate.supplier, candidate.lot)
-			plan_data = (payload.get("data") or {}).get(candidate.lot, {}).get(
-				candidate.name
-			)
+			plan_data = (payload.get("data") or {}).get(candidate.lot, {}).get(candidate.name)
 			if plan_data and any(
-				colour.get("values")
-				for colour in (plan_data.get("colours") or {}).values()
+				colour.get("values") for colour in (plan_data.get("colours") or {}).values()
 			):
-				return frappe.get_doc('SD YRP Sewing Plan', candidate.name), payload, plan_data
+				return frappe.get_doc("SD YRP Sewing Plan", candidate.name), payload, plan_data
 		self.skipTest("No migrated Sewing Plan has a usable data-entry matrix")
 
 	def test_sewing_input_configuration_matches_f15_sequence(self):
-		settings = frappe.get_single('SD YRP MRP Settings')
+		settings = frappe.get_single("SD YRP MRP Settings")
 		if not settings.get("sewing_plan_input_orders"):
 			self.skipTest("Sewing sequence parity requires migrated MRP Settings")
 		configuration = get_sewing_input_configuration()
 		self.assertEqual(
-			[
-				(row.input_type, row.difference_from, flt(row.allowance))
-				for row in configuration
-			],
+			[(row.input_type, row.difference_from, flt(row.allowance)) for row in configuration],
 			[
 				("Input Qty", "Order Qty", 75),
 				("Line Output", "Input Qty", 20),
@@ -102,7 +96,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		)
 
 	def test_server_blocks_aql_output_before_checking_output(self):
-		plan, payload, plan_data = self._data_entry_plan()
+		plan, _payload, plan_data = self._data_entry_plan()
 		selected = None
 		for colour in plan_data["colours"].values():
 			for value in colour["values"].values():
@@ -112,10 +106,8 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 					selected = value
 		self.assertIsNotNone(selected)
 
-		work_station = frappe.get_all('YRP Work Station', pluck="name", limit=1)[0]
-		received_type = frappe.db.get_single_value(
-			'YRP Stock Settings', "default_received_type"
-		)
+		work_station = frappe.get_all("YRP Work Station", pluck="name", limit=1)[0]
+		received_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
 		original_sql = frappe.db.sql
 
 		def without_prior_entries(query, *args, **kwargs):
@@ -143,7 +135,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 			)
 
 	def test_server_allows_line_output_after_input_quantity(self):
-		plan, payload, plan_data = self._data_entry_plan()
+		plan, _payload, plan_data = self._data_entry_plan()
 		selected = None
 		for colour in plan_data["colours"].values():
 			for value in colour["values"].values():
@@ -152,11 +144,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 					value["data_entry"] = 1
 					selected = value
 		self.assertIsNotNone(selected)
-		source = next(
-			row
-			for row in plan.sewing_plan_order_details
-			if row.name == selected["order_detail"]
-		)
+		source = next(row for row in plan.sewing_plan_order_details if row.name == selected["order_detail"])
 		original_sql = frappe.db.sql
 
 		def with_one_input_quantity(query, *args, **kwargs):
@@ -171,41 +159,35 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 				]
 			return original_sql(query, *args, **kwargs)
 
-		with patch.object(
-			frappe.db, "sql", side_effect=with_one_input_quantity
-		):
+		with patch.object(frappe.db, "sql", side_effect=with_one_input_quantity):
 			entry_name = submit_data_entry_log(
 				{
 					"plan": plan.name,
 					"input_type": "Line Output",
 					"received_type": frappe.db.get_single_value(
-						'YRP Stock Settings', "default_received_type"
+						"YRP Stock Settings", "default_received_type"
 					),
-					"work_station": frappe.get_all(
-						'YRP Work Station', pluck="name", limit=1
-					)[0],
+					"work_station": frappe.get_all("YRP Work Station", pluck="name", limit=1)[0],
 					"date": nowdate(),
 					"time": nowtime(),
 					"quantities": plan_data,
 				}
 			)
 		self.assertEqual(
-			frappe.db.get_value('SD YRP Sewing Plan Entry Detail', entry_name, "input_type"),
+			frappe.db.get_value("SD YRP Sewing Plan Entry Detail", entry_name, "input_type"),
 			"Line Output",
 		)
 		cancel_sewing_plan_entry(entry_name)
 
 	def test_server_applies_allowance_to_the_stage_total(self):
-		plan, payload, plan_data = self._data_entry_plan()
+		plan, _payload, plan_data = self._data_entry_plan()
 		selected = None
 		for colour in plan_data["colours"].values():
 			for value in colour["values"].values():
 				value["data_entry"] = 0
 				if selected is None:
 					allowed_total = flt(value.get("order_qty")) * 1.75
-					value["data_entry"] = (
-						allowed_total - flt(value.get("input_qty")) + 1
-					)
+					value["data_entry"] = allowed_total - flt(value.get("input_qty")) + 1
 					selected = value
 		self.assertIsNotNone(selected)
 
@@ -218,11 +200,9 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 					"plan": plan.name,
 					"input_type": "Input Qty",
 					"received_type": frappe.db.get_single_value(
-						'YRP Stock Settings', "default_received_type"
+						"YRP Stock Settings", "default_received_type"
 					),
-					"work_station": frappe.get_all(
-						'YRP Work Station', pluck="name", limit=1
-					)[0],
+					"work_station": frappe.get_all("YRP Work Station", pluck="name", limit=1)[0],
 					"date": nowdate(),
 					"time": nowtime(),
 					"quantities": plan_data,
@@ -231,7 +211,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 
 	def _closed_work_order(self):
 		suppliers = frappe.get_all(
-			'SD YRP Sewing Plan',
+			"SD YRP Sewing Plan",
 			fields=["supplier"],
 			group_by="supplier",
 			limit=20,
@@ -240,7 +220,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 			if not supplier_row.supplier:
 				continue
 			work_orders = get_closed_sewing_work_orders(
-				'YRP Work Order',
+				"YRP Work Order",
 				"",
 				"name",
 				0,
@@ -248,7 +228,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 				{"supplier": supplier_row.supplier},
 			)
 			for work_order, *_display in work_orders:
-				doc = frappe.get_doc('YRP Work Order', work_order)
+				doc = frappe.get_doc("YRP Work Order", work_order)
 				if any(flt(row.pending_quantity) > 0 for row in doc.receivables):
 					return doc
 		self.skipTest("No migrated closed Sewing Work Order has a pending receivable")
@@ -264,9 +244,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 						value["qty"] = 1
 						selected = {
 							"ref_docname": value["ref_docname"],
-							"received_type": (item.get("dimensions") or {}).get(
-								"received_type"
-							),
+							"received_type": (item.get("dimensions") or {}).get("received_type"),
 						}
 		if not selected:
 			self.fail("Closed Work Order editor data has no selectable receivable")
@@ -291,13 +269,11 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 
 		work_order = self._closed_work_order()
 		matches = get_closed_sewing_work_orders(
-			'YRP Work Order', "", "name", 0, 100, {"supplier": work_order.supplier}
+			"YRP Work Order", "", "name", 0, 100, {"supplier": work_order.supplier}
 		)
 		self.assertIn(work_order.name, {row[0] for row in matches})
 		self.assertEqual(
-			get_closed_sewing_work_orders(
-				'YRP Work Order', "", "name", 0, 20, {"supplier": ""}
-			),
+			get_closed_sewing_work_orders("YRP Work Order", "", "name", 0, 20, {"supplier": ""}),
 			[],
 		)
 
@@ -324,14 +300,10 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 
 	def test_closed_work_order_grn_submit_and_cancel_lifecycle(self):
 		work_order = self._closed_work_order()
-		details = get_closed_work_order_grn_details(
-			work_order.name, work_order.supplier
-		)
+		details = get_closed_work_order_grn_details(work_order.name, work_order.supplier)
 		item_details, selected = self._one_quantity(details["item_details"])
 		pending_before = flt(
-			frappe.db.get_value(
-				'YRP Work Order Receivables', selected["ref_docname"], "pending_quantity"
-			)
+			frappe.db.get_value("YRP Work Order Receivables", selected["ref_docname"], "pending_quantity")
 		)
 
 		result = create_closed_work_order_grn(
@@ -347,7 +319,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 			},
 			item_details=item_details,
 		)
-		grn = frappe.get_doc('YRP Goods Received Note', result["name"])
+		grn = frappe.get_doc("YRP Goods Received Note", result["name"])
 
 		self.assertEqual(grn.docstatus, 1)
 		self.assertEqual(grn.from_closed_wo_sewing_details, 1)
@@ -356,13 +328,11 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		self.assertEqual(len(grn.items), 1)
 		self.assertEqual(grn.items[0].ref_docname, selected["ref_docname"])
 		self.assertEqual(grn.items[0].lot, work_order.lot)
-		self.assertEqual(
-			grn.items[0].received_type, selected["received_type"]
-		)
+		self.assertEqual(grn.items[0].received_type, selected["received_type"])
 		self.assertEqual(
 			flt(
 				frappe.db.get_value(
-					'YRP Work Order Receivables',
+					"YRP Work Order Receivables",
 					selected["ref_docname"],
 					"pending_quantity",
 				)
@@ -371,9 +341,9 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		)
 		self.assertTrue(
 			frappe.db.exists(
-				'YRP Stock Ledger Entry',
+				"YRP Stock Ledger Entry",
 				{
-					"voucher_type": 'YRP Goods Received Note',
+					"voucher_type": "YRP Goods Received Note",
 					"voucher_no": grn.name,
 					"is_cancelled": 0,
 					"lot": work_order.lot,
@@ -387,7 +357,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		self.assertEqual(
 			flt(
 				frappe.db.get_value(
-					'YRP Work Order Receivables',
+					"YRP Work Order Receivables",
 					selected["ref_docname"],
 					"pending_quantity",
 				)
@@ -396,9 +366,9 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		)
 		self.assertFalse(
 			frappe.db.exists(
-				'YRP Stock Ledger Entry',
+				"YRP Stock Ledger Entry",
 				{
-					"voucher_type": 'YRP Goods Received Note',
+					"voucher_type": "YRP Goods Received Note",
 					"voucher_no": grn.name,
 					"is_cancelled": 0,
 				},
@@ -406,17 +376,15 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		)
 
 	def test_migrated_sewing_plans_match_work_order_calculated_items(self):
-		plans = frappe.get_all(
-			'SD YRP Sewing Plan', fields=["name", "work_order"], limit=500
-		)
+		plans = frappe.get_all("SD YRP Sewing Plan", fields=["name", "work_order"], limit=500)
 		if not plans:
 			self.skipTest("Sewing-plan parity requires migrated plans")
 		self.assertGreater(len(plans), 100)
 		matched = 0
 		mismatches = []
 		for plan_row in plans:
-			work_order = frappe.get_doc('YRP Work Order', plan_row.work_order)
-			plan = frappe.get_doc('SD YRP Sewing Plan', plan_row.name)
+			work_order = frappe.get_doc("YRP Work Order", plan_row.work_order)
+			plan = frappe.get_doc("SD YRP Sewing Plan", plan_row.name)
 			expected = self._quantity_map(_order_rows(work_order))
 			actual = self._quantity_map(plan.sewing_plan_order_details)
 			if expected == actual:
@@ -433,25 +401,23 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		self.assertEqual(matched, len(plans), mismatches)
 
 	def test_sewing_plan_creation_is_idempotent_for_migrated_work_order(self):
-		plan_names = frappe.get_all('SD YRP Sewing Plan', pluck="name", limit=1)
+		plan_names = frappe.get_all("SD YRP Sewing Plan", pluck="name", limit=1)
 		if not plan_names:
 			self.skipTest("Sewing-plan idempotency requires a migrated plan")
 		plan_name = plan_names[0]
-		plan = frappe.get_doc('SD YRP Sewing Plan', plan_name)
-		work_order = frappe.get_doc('YRP Work Order', plan.work_order)
+		plan = frappe.get_doc("SD YRP Sewing Plan", plan_name)
+		work_order = frappe.get_doc("YRP Work Order", plan.work_order)
 		self.assertTrue(_should_have_sewing_plan(work_order))
-		before = frappe.db.count(
-			'SD YRP Sewing Plan', filters={"work_order": work_order.name}
-		)
+		before = frappe.db.count("SD YRP Sewing Plan", filters={"work_order": work_order.name})
 		self.assertEqual(create_or_get_sewing_plan(work_order), plan.name)
 		self.assertEqual(
-			frappe.db.count('SD YRP Sewing Plan', filters={"work_order": work_order.name}),
+			frappe.db.count("SD YRP Sewing Plan", filters={"work_order": work_order.name}),
 			before,
 		)
 
 	def test_stock_user_can_create_and_delete_server_normalized_entry(self):
 		plan_names = frappe.get_all(
-			'SD YRP Sewing Plan',
+			"SD YRP Sewing Plan",
 			filters={"supplier": "S-0172"},
 			pluck="name",
 			limit=1,
@@ -459,7 +425,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		if not plan_names:
 			self.skipTest("Stock-user lifecycle requires the migrated sewing fixture")
 		plan_name = plan_names[0]
-		plan = frappe.get_doc('SD YRP Sewing Plan', plan_name)
+		plan = frappe.get_doc("SD YRP Sewing Plan", plan_name)
 		payload = get_data_entry_data(plan.supplier, plan.lot)
 		plan_data = payload["data"][plan.lot][plan.name]
 		selected = None
@@ -473,17 +439,13 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 			if selected:
 				break
 		self.assertIsNotNone(selected)
-		work_station = frappe.get_all('YRP Work Station', pluck="name", limit=1)[0]
-		received_type = frappe.db.get_single_value(
-			'YRP Stock Settings', "default_received_type"
-		)
+		work_station = frappe.get_all("YRP Work Station", pluck="name", limit=1)[0]
+		received_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
 
 		previous_user = frappe.session.user
 		try:
 			frappe.set_user("emp+devika@essdee.fit")
-			self.assertTrue(
-				frappe.has_permission('SD YRP Sewing Plan Entry Detail', "create")
-			)
+			self.assertTrue(frappe.has_permission("SD YRP Sewing Plan Entry Detail", "create"))
 			entry_name = submit_data_entry_log(
 				{
 					"plan": plan.name,
@@ -495,19 +457,13 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 					"quantities": plan_data,
 				}
 			)
-			entry = frappe.get_doc('SD YRP Sewing Plan Entry Detail', entry_name)
-			source = frappe.get_doc(
-				'SD YRP Sewing Plan Order Detail', selected["order_detail"]
-			)
+			entry = frappe.get_doc("SD YRP Sewing Plan Entry Detail", entry_name)
+			source = frappe.get_doc("SD YRP Sewing Plan Order Detail", selected["order_detail"])
 			self.assertEqual(entry.owner, "emp+devika@essdee.fit")
 			self.assertEqual(len(entry.sewing_plan_details), 1)
-			self.assertEqual(
-				entry.sewing_plan_details[0].item_variant, source.item_variant
-			)
+			self.assertEqual(entry.sewing_plan_details[0].item_variant, source.item_variant)
 			cancel_sewing_plan_entry(entry.name)
-			self.assertFalse(
-				frappe.db.exists('SD YRP Sewing Plan Entry Detail', entry.name)
-			)
+			self.assertFalse(frappe.db.exists("SD YRP Sewing Plan Entry Detail", entry.name))
 		finally:
 			frappe.set_user(previous_user)
 
@@ -528,7 +484,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 			frappe.set_user(user)
 			for permission in ("read", "write", "create", "delete", "report", "export"):
 				self.assertTrue(
-					frappe.has_permission('SD YRP Sewing Plan Entry Detail', permission),
+					frappe.has_permission("SD YRP Sewing Plan Entry Detail", permission),
 					f"System Manager lost {permission} after adding custom permissions",
 				)
 		finally:
@@ -538,7 +494,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 
 	def test_inspection_update_resolves_saved_plan_rows(self):
 		plan_names = frappe.get_all(
-			'SD YRP Sewing Plan',
+			"SD YRP Sewing Plan",
 			filters={"supplier": "S-0172"},
 			pluck="name",
 			limit=1,
@@ -546,13 +502,11 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		if not plan_names:
 			self.skipTest("Inspection update requires the migrated sewing fixture")
 		plan_name = plan_names[0]
-		plan = frappe.get_doc('SD YRP Sewing Plan', plan_name)
+		plan = frappe.get_doc("SD YRP Sewing Plan", plan_name)
 		payload = get_data_entry_data(plan.supplier, plan.lot)
 		plan_data = payload["data"][plan.lot][plan.name]
 		colour = next(iter(plan_data["colours"].values()))
-		value = next(
-			row for row in colour["values"].values() if row.get("order_detail")
-		)
+		value = next(row for row in colour["values"].values() if row.get("order_detail"))
 		value["pre_final"] = 1
 		row_payload = {
 			"colour": colour["variant_colour"],
@@ -574,11 +528,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 			"Success",
 		)
 		self.assertEqual(
-			flt(
-				frappe.db.get_value(
-					'SD YRP Sewing Plan Order Detail', value["order_detail"], "pre_final"
-				)
-			),
+			flt(frappe.db.get_value("SD YRP Sewing Plan Order Detail", value["order_detail"], "pre_final")),
 			1,
 		)
 		self.assertEqual(
@@ -638,9 +588,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		)
 		self.assertTrue(entries)
 		entry_total = sum(
-			flt(colour["total"])
-			for entry in entries.values()
-			for colour in entry["details"].values()
+			flt(colour["total"]) for entry in entries.values() for colour in entry["details"].values()
 		)
 		expected_entry_total = flt(
 			frappe.db.sql(
@@ -700,7 +648,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		consumption = get_consumption_mapping_data(lot, supplier)
 		self.assertEqual(
 			consumption["ipd"],
-			frappe.db.get_value('SD YRP Lot', lot, "production_detail"),
+			frappe.db.get_value("SD YRP Lot", lot, "production_detail"),
 		)
 		self.assertIn("sections", consumption)
 		self.assertIn("cloth_acc_data", consumption)
@@ -709,8 +657,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		self.assertEqual(scr["status"], "success")
 		self.assertTrue(scr["derived_balances_omitted"])
 		scr_order_total = sum(
-			flt(group["type_wise_total"].get("Order Qty"))
-			for group in scr["data"].values()
+			flt(group["type_wise_total"].get("Order Qty")) for group in scr["data"].values()
 		)
 		expected_order_total = flt(
 			frappe.db.sql(
@@ -727,7 +674,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 
 		status = get_sp_status_summary(supplier)
 		self.assertTrue(status["derived_balances_omitted"])
-		self.assertEqual(status["header1"], ['Item', 'SD YRP Lot', "Colour", "Part"])
+		self.assertEqual(status["header1"], ["Item", "SD YRP Lot", "Colour", "Part"])
 
 	def test_all_sewing_view_providers_execute_against_migrated_data(self):
 		rows = frappe.db.sql(
@@ -742,19 +689,14 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		if not rows:
 			self.skipTest("Sewing provider parity requires migrated plans")
 		supplier, lot = rows[0]
-		production_detail = frappe.db.get_value('SD YRP Lot', lot, "production_detail")
+		production_detail = frappe.db.get_value("SD YRP Lot", lot, "production_detail")
 
 		options = get_item_summary_options(supplier)
 		self.assertIn(lot, options["lots"])
 		self.assertIn("groups", get_item_summary_data(supplier, lots=[lot]))
 		self.assertIn(
 			lot,
-			{
-				row[0]
-				for row in get_supplier_lots(
-					'SD YRP Lot', lot, "name", 0, 20, {"supplier": supplier}
-				)
-			},
+			{row[0] for row in get_supplier_lots("SD YRP Lot", lot, "name", 0, 20, {"supplier": supplier})},
 		)
 		self.assertIn(lot, {row["lot"] for row in get_the_lot(supplier)["lots"]})
 

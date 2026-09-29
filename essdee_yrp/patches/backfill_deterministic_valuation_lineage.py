@@ -9,7 +9,6 @@ from collections import defaultdict
 import frappe
 from frappe.utils import flt, get_datetime
 
-
 READINESS_REVIEW_KEYS = {
 	"contract_missing",
 	"wholly_unmapped_grn_deliverables",
@@ -53,17 +52,17 @@ def _readiness_needs_review(readiness):
 
 def _contract_available():
 	return bool(
-		frappe.db.exists("DocType", 'YRP Stock Valuation Production Link')
-		and frappe.db.has_column('YRP Stock Ledger Entry', "paired_stock_ledger_entry")
-		and frappe.db.has_column('SD YRP GRN Deliverable', "goods_received_note_item")
+		frappe.db.exists("DocType", "YRP Stock Valuation Production Link")
+		and frappe.db.has_column("YRP Stock Ledger Entry", "paired_stock_ledger_entry")
+		and frappe.db.has_column("SD YRP GRN Deliverable", "goods_received_note_item")
 	)
 
 
 def _pair_lot_transfer_sles():
 	rows = frappe.get_all(
-		'YRP Stock Ledger Entry',
+		"YRP Stock Ledger Entry",
 		filters={
-			"voucher_type": 'SD YRP Lot Transfer',
+			"voucher_type": "SD YRP Lot Transfer",
 			"is_cancelled": 0,
 			"paired_stock_ledger_entry": ["is", "not set"],
 		},
@@ -86,14 +85,14 @@ def _pair_lot_transfer_sles():
 		):
 			continue
 		frappe.db.set_value(
-			'YRP Stock Ledger Entry',
+			"YRP Stock Ledger Entry",
 			outgoing[0].name,
 			"paired_stock_ledger_entry",
 			incoming[0].name,
 			update_modified=False,
 		)
 		frappe.db.set_value(
-			'YRP Stock Ledger Entry',
+			"YRP Stock Ledger Entry",
 			incoming[0].name,
 			"paired_stock_ledger_entry",
 			outgoing[0].name,
@@ -109,10 +108,10 @@ def _backfill_single_output_grns():
 
 	dimension_fields = get_dimension_fieldnames()
 	for grn in frappe.get_all(
-		'YRP Goods Received Note',
+		"YRP Goods Received Note",
 		filters={
 			"docstatus": 1,
-			"against": 'YRP Work Order',
+			"against": "YRP Work Order",
 			"is_return": 0,
 			"is_rework": 0,
 		},
@@ -121,7 +120,7 @@ def _backfill_single_output_grns():
 	):
 		grn_name = grn.name
 		outputs = frappe.get_all(
-			'YRP Goods Received Note Item',
+			"YRP Goods Received Note Item",
 			filters={"parent": grn_name, "parentfield": "items"},
 			fields=["name", "item_variant"],
 			limit_page_length=0,
@@ -130,9 +129,9 @@ def _backfill_single_output_grns():
 			continue
 		output = outputs[0]
 		output_sles = frappe.get_all(
-			'YRP Stock Ledger Entry',
+			"YRP Stock Ledger Entry",
 			filters={
-				"voucher_type": 'YRP Goods Received Note',
+				"voucher_type": "YRP Goods Received Note",
 				"voucher_no": grn_name,
 				"voucher_detail_no": output.name,
 				"item": output.item_variant,
@@ -148,10 +147,10 @@ def _backfill_single_output_grns():
 
 		links = []
 		children = frappe.get_all(
-			'SD YRP GRN Deliverable',
+			"SD YRP GRN Deliverable",
 			filters={
 				"parent": grn_name,
-				"parenttype": 'YRP Goods Received Note',
+				"parenttype": "YRP Goods Received Note",
 				"parentfield": "grn_deliverables",
 			},
 			fields=[
@@ -176,23 +175,17 @@ def _backfill_single_output_grns():
 				# A mapped cancellation must reverse the exact Work Order bookkeeping
 				# row as well as the stock. Do not activate a partial historical route.
 				continue
-			consumption = _get_owned_consumption_sle(
-				grn_name, child, dimension_fields
-			)
+			consumption = _get_owned_consumption_sle(grn_name, child, dimension_fields)
 			if not consumption:
 				continue
 			consumption_sle = consumption.name
-			if not _has_base_compatible_production_posting_order(
-				output_sle, consumption
-			):
+			if not _has_base_compatible_production_posting_order(output_sle, consumption):
 				continue
-			stock_dimensions = {
-				fieldname: consumption.get(fieldname) for fieldname in dimension_fields
-			}
+			stock_dimensions = {fieldname: consumption.get(fieldname) for fieldname in dimension_fields}
 			material_value = abs(flt(consumption.stock_value_difference))
 			stock_qty = flt(child.stock_qty) or abs(flt(consumption.qty))
 			frappe.db.set_value(
-				'SD YRP GRN Deliverable',
+				"SD YRP GRN Deliverable",
 				child.name,
 				{
 					"goods_received_note_item": output.name,
@@ -216,7 +209,7 @@ def _backfill_single_output_grns():
 					"stock_dimensions": frappe.as_json(stock_dimensions),
 				}
 			)
-		register_production_links('YRP Goods Received Note', grn_name, links)
+		register_production_links("YRP Goods Received Note", grn_name, links)
 
 
 def _has_base_compatible_production_posting_order(output_sle, consumption_sle):
@@ -240,7 +233,7 @@ def _has_base_compatible_production_posting_order(output_sle, consumption_sle):
 def _get_owned_consumption_sle(grn_name, child, dimension_fields):
 	"""Return one active outgoing SLE owned by this exact legacy input row."""
 	filters = {
-		"voucher_type": 'YRP Goods Received Note',
+		"voucher_type": "YRP Goods Received Note",
 		"voucher_no": grn_name,
 		"voucher_detail_no": child.name,
 		"item": child.item_variant,
@@ -250,7 +243,7 @@ def _get_owned_consumption_sle(grn_name, child, dimension_fields):
 	if child.consumption_sle:
 		filters["name"] = child.consumption_sle
 	rows = frappe.get_all(
-		'YRP Stock Ledger Entry',
+		"YRP Stock Ledger Entry",
 		filters=filters,
 		fields=[
 			"name",
@@ -272,7 +265,7 @@ def _resolve_exact_work_order_deliverable(work_order, child, dimension_fields):
 	if not work_order or not child.item_variant:
 		return None
 	rows = frappe.get_all(
-		'YRP Work Order Deliverables',
+		"YRP Work Order Deliverables",
 		filters={"parent": work_order, "item_variant": child.item_variant},
 		fields=[
 			"name",
@@ -287,16 +280,12 @@ def _resolve_exact_work_order_deliverable(work_order, child, dimension_fields):
 		rows = [row for row in rows if row.uom == child.uom]
 	child_combination = _normal_json(child.set_combination)
 	if child_combination not in (None, "", "{}", {}):
-		rows = [
-			row
-			for row in rows
-			if _normal_json(row.set_combination) == child_combination
-		]
+		rows = [row for row in rows if _normal_json(row.set_combination) == child_combination]
 	raw_dimensions = child.stock_dimensions or {}
 	if isinstance(raw_dimensions, str):
 		try:
 			raw_dimensions = frappe.parse_json(raw_dimensions)
-		except (TypeError, ValueError):
+		except TypeError, ValueError:
 			return None
 	if not isinstance(raw_dimensions, dict):
 		return None
@@ -330,33 +319,23 @@ def get_valuation_lineage_readiness():
 		"wholly_unmapped_grn_deliverables": wholly_unmapped,
 		"partially_mapped_grn_deliverables": total - fully_mapped - wholly_unmapped,
 		"ambiguous_multi_output_unmapped_rows": _count_ambiguous_multi_output_rows(),
-		"unmapped_grn_deliverables": _count_submitted_grn_rows_missing(
-			"goods_received_note_item"
-		),
+		"unmapped_grn_deliverables": _count_submitted_grn_rows_missing("goods_received_note_item"),
 		"grn_deliverables_missing_work_order_deliverable": _count_submitted_grn_rows_missing(
 			"work_order_deliverable"
 		),
-		"grn_deliverables_missing_consumption_sle": _count_submitted_grn_rows_missing(
-			"consumption_sle"
-		),
-		"grn_deliverables_missing_output_sle": _count_submitted_grn_rows_missing(
-			"output_receipt_sle"
-		),
+		"grn_deliverables_missing_consumption_sle": _count_submitted_grn_rows_missing("consumption_sle"),
+		"grn_deliverables_missing_output_sle": _count_submitted_grn_rows_missing("output_receipt_sle"),
 		"unpaired_active_lot_transfer_sles": frappe.db.count(
-			'YRP Stock Ledger Entry',
+			"YRP Stock Ledger Entry",
 			filters={
-				"voucher_type": 'SD YRP Lot Transfer',
+				"voucher_type": "SD YRP Lot Transfer",
 				"is_cancelled": 0,
 				"paired_stock_ledger_entry": ["is", "not set"],
 			},
 		),
 		"invalid_goods_received_note_item_links": _count_invalid_grn_item_links(),
-		"invalid_consumption_sle_links": _count_invalid_sle_links(
-			"consumption_sle", "<"
-		),
-		"invalid_output_receipt_sle_links": _count_invalid_sle_links(
-			"output_receipt_sle", ">"
-		),
+		"invalid_consumption_sle_links": _count_invalid_sle_links("consumption_sle", "<"),
+		"invalid_output_receipt_sle_links": _count_invalid_sle_links("output_receipt_sle", ">"),
 	}
 
 

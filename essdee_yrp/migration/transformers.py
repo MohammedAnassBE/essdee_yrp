@@ -132,11 +132,9 @@ def essdee_debit_to_debit(
 ) -> Mapping[str, Any]:
 	against = document.get("against")
 	if against != "Work Order":
-		raise MigrationError(
-			f"Essdee Debit {document.get('name')} has unsupported against={against!r}"
-		)
+		raise MigrationError(f"Essdee Debit {document.get('name')} has unsupported against={against!r}")
 	output = _copy_common_fields(document, spec, plan)
-	output["doctype"] = 'YRP Debit'
+	output["doctype"] = "YRP Debit"
 	output["work_order"] = document.get("against_id")
 	if not output.get("work_order"):
 		raise MigrationError(f"Essdee Debit {document.get('name')} has no Work Order")
@@ -152,7 +150,7 @@ def ipd_process_to_f16(
 	output = _system_values(document)
 	output.update(
 		{
-			"doctype": 'YRP IPD Process',
+			"doctype": "YRP IPD Process",
 			"process_name": document.get("process_name"),
 			"in_stage": stage,
 			"out_stage": stage,
@@ -209,19 +207,13 @@ def derive_goods_received_note_fields(
 	result = dict(output)
 	result["from_warehouse"] = source.get("supplier")
 	result["to_warehouse"] = source.get("delivery_location")
-	item_lots = {
-		row.get("lot")
-		for row in source.get("items") or []
-		if row.get("lot")
-	}
+	item_lots = {row.get("lot") for row in source.get("items") or [] if row.get("lot")}
 	# The legacy header field was hidden and optional. Its item rows are the
 	# authoritative stock dimensions: 13,380 blank-header GRNs have one row Lot
 	# and 809 intentionally span several Lots. Populate the header only when all
 	# rows agree; multi-Lot GRNs retain their exact row dimensions and a blank
 	# historical header instead of receiving an invented value.
-	result["lot"] = source.get("lot") or (
-		next(iter(item_lots)) if len(item_lots) == 1 else None
-	)
+	result["lot"] = source.get("lot") or (next(iter(item_lots)) if len(item_lots) == 1 else None)
 	return result
 
 
@@ -249,9 +241,7 @@ def derive_purchase_order_fields(
 	result["total_qty"] = sum(float(row.get("qty") or 0) for row in items)
 	result["total_stock_qty"] = sum(float(row.get("stock_qty") or 0) for row in items)
 	result["total"] = sum(float(row.get("amount") or 0) for row in items)
-	result["total_discount"] = sum(
-		float(row.get("discount_amount") or 0) for row in items
-	)
+	result["total_discount"] = sum(float(row.get("discount_amount") or 0) for row in items)
 	result["total_tax"] = sum(float(row.get("tax_amount") or 0) for row in items)
 	result["grand_total"] = sum(float(row.get("total_amount") or 0) for row in items)
 	result["net_total"] = result["total"] - result["total_discount"]
@@ -259,26 +249,16 @@ def derive_purchase_order_fields(
 	result["conversion_rate"] = float(result.get("conversion_rate") or 1)
 	result["base_total"] = result["total"] * result["conversion_rate"]
 	result["base_net_total"] = result["net_total"] * result["conversion_rate"]
-	result["base_total_taxes_and_charges"] = (
-		result["total_tax"] * result["conversion_rate"]
-	)
+	result["base_total_taxes_and_charges"] = result["total_tax"] * result["conversion_rate"]
 	result["base_grand_total"] = result["grand_total"] * result["conversion_rate"]
 	received_qty = sum(float(row.get("received_qty") or 0) for row in items)
-	result["per_received"] = (
-		100 * received_qty / result["total_qty"] if result["total_qty"] else 0
-	)
-	item_lots = {
-		row.get("lot")
-		for row in source.get("items") or []
-		if row.get("lot")
-	}
+	result["per_received"] = 100 * received_qty / result["total_qty"] if result["total_qty"] else 0
+	item_lots = {row.get("lot") for row in source.get("items") or [] if row.get("lot")}
 	# The F16 operational header dimension was introduced after these records.
 	# Preserve an explicit legacy default; otherwise it is safe to infer the
 	# header only when every historical item row agrees on one Lot. Multi-lot
 	# Purchase Orders retain a blank header and their exact per-row dimensions.
-	result["lot"] = source.get("default_lot") or (
-		next(iter(item_lots)) if len(item_lots) == 1 else None
-	)
+	result["lot"] = source.get("default_lot") or (next(iter(item_lots)) if len(item_lots) == 1 else None)
 	return result
 
 
@@ -306,29 +286,17 @@ def derive_purchase_order_item_fields(
 	result["conversion_factor"] = result.get("conversion_factor") or 1.0
 	result["stock_qty"] = qty * float(result["conversion_factor"])
 	result["received_qty"] = max(
-		qty
-		- float(result.get("pending_quantity") or 0)
-		- float(result.get("cancelled_quantity") or 0),
+		qty - float(result.get("pending_quantity") or 0) - float(result.get("cancelled_quantity") or 0),
 		0,
 	)
-	result["amount"] = (
-		result.get("amount") if result.get("amount") is not None else amount
-	)
-	result["discount_amount"] = (
-		float(result["amount"]) * float(result.get("discount_percentage") or 0) / 100
-	)
+	result["amount"] = result.get("amount") if result.get("amount") is not None else amount
+	result["discount_amount"] = float(result["amount"]) * float(result.get("discount_percentage") or 0) / 100
 	result["tax_amount"] = (
-		(float(result["amount"]) - result["discount_amount"])
-		* float(result.get("tax") or 0)
-		/ 100
+		(float(result["amount"]) - result["discount_amount"]) * float(result.get("tax") or 0) / 100
 	)
-	result["total_amount"] = (
-		float(result["amount"]) - result["discount_amount"] + result["tax_amount"]
-	)
+	result["total_amount"] = float(result["amount"]) - result["discount_amount"] + result["tax_amount"]
 	result["base_rate"] = result.get("base_rate") if result.get("base_rate") is not None else rate
-	result["base_amount"] = (
-		result.get("base_amount") if result.get("base_amount") is not None else amount
-	)
+	result["base_amount"] = result.get("base_amount") if result.get("base_amount") is not None else amount
 	return result
 
 
@@ -387,7 +355,7 @@ def derive_purchase_invoice_fields(
 	}.get(result.get("against"), result.get("against"))
 	if not result.get("against"):
 		result["against"] = (
-			'YRP Work Order' if source.get("pi_work_order_billed_details") else 'Purchase Order'
+			"YRP Work Order" if source.get("pi_work_order_billed_details") else "Purchase Order"
 		)
 	mapped_items = list(result.get("items") or [])
 	commercial_rows = {}
@@ -429,7 +397,7 @@ def derive_purchase_invoice_fields(
 		commercial_row = commercial_rows.setdefault(
 			group_key,
 			{
-				"doctype": 'SD YRP Essdee Purchase Invoice Item',
+				"doctype": "SD YRP Essdee Purchase Invoice Item",
 				"item": target_row.get("item"),
 				"lot": lot,
 				"item_group": target_row.get("item_group"),
@@ -457,15 +425,13 @@ def derive_purchase_invoice_fields(
 				f"Purchase Invoice {source.get('name')} has conflicting expense heads "
 				f"for commercial group {group_key}"
 			)
-		commercial_row["expense_head"] = (
-			commercial_row.get("expense_head") or source_row.get("expense_head")
-		)
+		commercial_row["expense_head"] = commercial_row.get("expense_head") or source_row.get("expense_head")
 		commercial_row["qty"] += qty
 		commercial_row["amount"] += qty * rate
 
 	result["essdee_items"] = list(commercial_rows.values())
 	result["essdee_rate_table_source"] = "migrated_v1"
-	if result.get("against") == 'YRP Work Order':
+	if result.get("against") == "YRP Work Order":
 		# The F15 rows are commercial Process items, not physical valuation rows.
 		# Preserve them only in Essdee's visible table; the migration writer builds
 		# the base table from the invoice's exact linked GRNs before inserting it.
@@ -479,11 +445,7 @@ def derive_purchase_invoice_fields(
 
 def _legacy_purchase_invoice_source_rate(source_row, *, against):
 	source_rate = source_row.get("actual_rate")
-	if (
-		against == 'Purchase Order'
-		and not float(source_rate or 0)
-		and float(source_row.get("rate") or 0)
-	):
+	if against == "Purchase Order" and not float(source_rate or 0) and float(source_row.get("rate") or 0):
 		# Old PO invoices predate reliable actual_rate capture and retain its
 		# database default zero. Their non-zero row rate is the only historical
 		# material-rate value and must keep separately priced GRN groups distinct.
@@ -530,9 +492,7 @@ def remove_empty_ipd_process_placeholders(
 ) -> Mapping[str, Any]:
 	result = dict(output)
 	result["original_process_rows"] = deepcopy(source.get("ipd_processes") or [])
-	result["ipd_processes"] = [
-		row for row in result.get("ipd_processes") or [] if row.get("process_name")
-	]
+	result["ipd_processes"] = [row for row in result.get("ipd_processes") or [] if row.get("process_name")]
 	return result
 
 
@@ -561,20 +521,12 @@ def derive_finishing_plan_audit_fields(
 	modified_date = str(source.get("modified") or "")[:10] or None
 	if status == "OCR Requested":
 		result["fp_status"] = "Ready for Audit"
-		result["audit_requested_date"] = (
-			result.get("audit_requested_date") or modified_date
-		)
+		result["audit_requested_date"] = result.get("audit_requested_date") or modified_date
 	elif status == "Ready for Audit":
-		result["audit_requested_date"] = (
-			result.get("audit_requested_date") or modified_date
-		)
+		result["audit_requested_date"] = result.get("audit_requested_date") or modified_date
 	elif status == "Audit Completed":
-		result["audit_requested_date"] = (
-			result.get("audit_requested_date") or modified_date
-		)
-		result["audit_completed_date"] = (
-			result.get("audit_completed_date") or modified_date
-		)
+		result["audit_requested_date"] = result.get("audit_requested_date") or modified_date
+		result["audit_completed_date"] = result.get("audit_completed_date") or modified_date
 	return result
 
 
@@ -621,22 +573,14 @@ def _default_first_select_option(
 	if result.get(fieldname) not in (None, ""):
 		return result
 	field = next(
-		(
-			row
-			for row in spec.target_schema.get("fields") or []
-			if row.get("fieldname") == fieldname
-		),
+		(row for row in spec.target_schema.get("fields") or [] if row.get("fieldname") == fieldname),
 		None,
 	)
 	options = [
-		value.strip()
-		for value in str((field or {}).get("options") or "").splitlines()
-		if value.strip()
+		value.strip() for value in str((field or {}).get("options") or "").splitlines() if value.strip()
 	]
 	if (field or {}).get("fieldtype") != "Select" or not options:
-		raise MigrationError(
-			f"{spec.target}.{fieldname} has no schema-defined legacy Select option"
-		)
+		raise MigrationError(f"{spec.target}.{fieldname} has no schema-defined legacy Select option")
 	result[fieldname] = options[0]
 	return result
 
@@ -653,9 +597,7 @@ def derive_grn_deliverable_dimensions(
 	# The current production_api schema does not expose valuation-lineage fields,
 	# so historical rows normally remain blank. Preserve an explicit value when
 	# a newer source snapshot supplies it; never derive one from row order.
-	target_fields = {
-		row.get("fieldname") for row in spec.target_schema.get("fields") or []
-	}
+	target_fields = {row.get("fieldname") for row in spec.target_schema.get("fields") or []}
 	for fieldname in (
 		"goods_received_note_item",
 		"received_item_variant",
@@ -676,9 +618,7 @@ def _copy_common_fields(
 	plan: MigrationPlan,
 ) -> dict[str, Any]:
 	target_fields = {
-		row["fieldname"]
-		for row in spec.target_schema.get("fields") or []
-		if row.get("fieldname")
+		row["fieldname"] for row in spec.target_schema.get("fields") or [] if row.get("fieldname")
 	}
 	output = _system_values(document)
 	output["doctype"] = spec.target
@@ -697,12 +637,7 @@ def _copy_common_fields(
 
 
 def _system_values(document: Mapping[str, Any]) -> dict[str, Any]:
-	return {
-		fieldname: deepcopy(document[fieldname])
-		for fieldname in SYSTEM_FIELDS
-		if fieldname in document
-	}
-
+	return {fieldname: deepcopy(document[fieldname]) for fieldname in SYSTEM_FIELDS if fieldname in document}
 
 
 def sms_settings_with_roles(document, spec, plan):
@@ -725,7 +660,11 @@ def sms_settings_with_roles(document, spec, plan):
 		for key, value in row.items():
 			if key not in allowed and value not in (None, "", 0, False, [], {}):
 				raise MigrationError(f"Unmapped SMS role field Has Role.{key}")
-		for key, expected in (("parent", "SMS Settings"), ("parenttype", "SMS Settings"), ("parentfield", "allowed_roles")):
+		for key, expected in (
+			("parent", "SMS Settings"),
+			("parenttype", "SMS Settings"),
+			("parentfield", "allowed_roles"),
+		):
 			if row.get(key) != expected:
 				raise MigrationError(f"Invalid SMS role child {key}")
 	output["allowed_roles"] = deepcopy(roles)

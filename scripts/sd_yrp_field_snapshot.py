@@ -15,7 +15,6 @@ import sys
 from collections import deque
 from pathlib import Path
 
-
 TABLE_FIELD_TYPES = {"Table", "Table MultiSelect"}
 
 
@@ -94,8 +93,7 @@ def _field_stats(frappe, requests: list[dict]) -> list[dict]:
 		if where:
 			sample_where = f"({where}) and {sample_where}"
 		samples = frappe.db.sql(
-			f"select distinct cast({column} as char) from {table} "
-			f"where {sample_where} limit 5",
+			f"select distinct cast({column} as char) from {table} where {sample_where} limit 5",
 			pluck=True,
 		)
 		results.append(

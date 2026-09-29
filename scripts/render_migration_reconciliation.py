@@ -9,7 +9,6 @@ from pathlib import Path
 
 from audit_production_api_source_values import _connect
 
-
 # Reviewed code-change inventory only. Outcome counts always come from the
 # supplied independent audit, never from historical hand-written totals.
 CORRECTED_FIELDS = {
@@ -21,8 +20,14 @@ CORRECTED_FIELDS = {
 	"Lotwise Item Profit Qty Rate": {"ratio"},
 	"Item BOM Attribute Mapping": {"lot_template"},
 	"Item Production Detail": {"additional_cloth", "stiching_attribute_quantity"},
-	"Stock Settings": {"location_mapping", "sms_old_database_host", "sms_old_database_name",
-		"sms_old_database_port", "sms_old_database_user", "sms_old_database_password"},
+	"Stock Settings": {
+		"location_mapping",
+		"sms_old_database_host",
+		"sms_old_database_name",
+		"sms_old_database_port",
+		"sms_old_database_user",
+		"sms_old_database_password",
+	},
 	"Supplier": {"deparments"},
 	"Delivery Challan": {"ste_transferred", "total_delivered_qty"},
 	"Delivery Challan Item": {"delivered_quantity", "pending_quantity", "ste_delivered_quantity"},
@@ -42,7 +47,9 @@ def render(audit, live):
 		row["rows"] += route["source_rows"]
 		row["missing"] += route["missing_direct_rows"]
 		row["projected"] += route["special_projection_rows"]
-	doctype_rows = [{"doctype": dt, **row, "targets": sorted(row["targets"])} for dt, row in sorted(doctypes.items())]
+	doctype_rows = [
+		{"doctype": dt, **row, "targets": sorted(row["targets"])} for dt, row in sorted(doctypes.items())
+	]
 	checks = {
 		"Incomplete application audit scope": 0 if audit.get("complete_application_scope") is True else 1,
 		"Schema gap field routes": summary.get("schema_gap_routes"),
@@ -55,9 +62,15 @@ def render(audit, live):
 		"Missing direct row values": summary.get("missing_target_row_field_values"),
 		"Different stored values": summary.get("mismatched_field_values"),
 		"Rounded numeric values": summary.get("normalized_matches"),
-		"Source blank fills without independent evidence": summary.get("unverified_default_fills", summary.get("target_fills_from_source_blank")),
+		"Source blank fills without independent evidence": summary.get(
+			"unverified_default_fills", summary.get("target_fills_from_source_blank")
+		),
 		"Default fill count reconciliation": (
-			abs(summary.get("target_fills_from_source_blank", 0) - summary.get("verified_default_fills", 0) - summary.get("unverified_default_fills", 0))
+			abs(
+				summary.get("target_fills_from_source_blank", 0)
+				- summary.get("verified_default_fills", 0)
+				- summary.get("unverified_default_fills", 0)
+			)
 		),
 		"Credential value mismatches": summary.get("credential_value_mismatches"),
 		"Original IPD row archive mismatches": summary.get("raw_source_archive_mismatches"),
@@ -72,61 +85,119 @@ def render(audit, live):
 	retired = audit.get("retired_source_archives", {})
 	archives = dict(audit.get("raw_source_archives", {}) or {})
 	archives["tables"] = [
-		row
-		for row in archives.get("tables", [])
-		if row.get("source_parent") != "Purchase Invoice"
+		row for row in archives.get("tables", []) if row.get("source_parent") != "Purchase Invoice"
 	]
-	archives["mismatch_count"] = sum(
-		int(row.get("mismatch_count") or 0) for row in archives["tables"]
+	archives["mismatch_count"] = sum(int(row.get("mismatch_count") or 0) for row in archives["tables"])
+	unavailable_files = int(audit.get("attachments", {}).get("missing_source_blob_count") or 0) + len(
+		retired.get("missing_source_blobs", [])
 	)
-	unavailable_files = int(audit.get('attachments', {}).get('missing_source_blob_count') or 0) + len(retired.get("missing_source_blobs", []))
 	unavailable_files += int(audit.get("framework_history", {}).get("missing_blob_count") or 0)
 	keys_unavailable = audit.get("auth", {}).get("source_key_unavailable_rows", 0)
-	unindexed_references = int(audit.get('attachments', {}).get('missing_metadata_reference_count') or 0)
-	readiness = audit.get('valuation_lineage_readiness') or {}
-	unmapped = int(readiness.get('wholly_unmapped_grn_deliverables') or 0)
+	unindexed_references = int(audit.get("attachments", {}).get("missing_metadata_reference_count") or 0)
+	readiness = audit.get("valuation_lineage_readiness") or {}
+	unmapped = int(readiness.get("wholly_unmapped_grn_deliverables") or 0)
 	valuation_notice = (
-		f'Historical stock-valuation adjustments are not certified: {unmapped:,} GRN deliverable rows have no proven allocation links. See Archives & projections.'
-		if unmapped else 'Historical stock-valuation readiness is a separate check; see Archives & projections.'
-		if readiness else 'Historical stock-valuation readiness was not included in this audit.'
+		f"Historical stock-valuation adjustments are not certified: {unmapped:,} GRN deliverable rows have no proven allocation links. See Archives & projections."
+		if unmapped
+		else "Historical stock-valuation readiness is a separate check; see Archives & projections."
+		if readiness
+		else "Historical stock-valuation readiness was not included in this audit."
 	)
-	link_report = live.get('report', {}).get('links') or {}
+	link_report = live.get("report", {}).get("links") or {}
 	link_notice = (
 		f"Pre-existing unresolved source links retained: {int(link_report.get('audited_broken_link_values') or 0):,}; unexpected broken target links: {int(link_report.get('unexpected_broken_link_values') or 0):,}. See Method & limits."
-		if link_report else 'Built-in link verification details are not available yet.'
+		if link_report
+		else "Built-in link verification details are not available yet."
 	)
-	metrics = [("Source DocTypes", summary["source_doctypes"]), ("Source rows inspected", summary["source_rows_read"]),
-		("Field values inspected", summary["source_field_values_seen"]), ("Field routes", summary["field_routes"])]
-	cards = "".join(f'<div class="card"><strong>{value:,}</strong><span>{html.escape(label)}</span></div>' for label, value in metrics)
-	check_rows = "".join(f'<tr><td>{html.escape(label)}</td><td class="number">{value if value is not None else "Not run"}</td></tr>' for label, value in checks.items())
+	metrics = [
+		("Source DocTypes", summary["source_doctypes"]),
+		("Source rows inspected", summary["source_rows_read"]),
+		("Field values inspected", summary["source_field_values_seen"]),
+		("Field routes", summary["field_routes"]),
+	]
+	cards = "".join(
+		f'<div class="card"><strong>{value:,}</strong><span>{html.escape(label)}</span></div>'
+		for label, value in metrics
+	)
+	check_rows = "".join(
+		f'<tr><td>{html.escape(label)}</td><td class="number">{value if value is not None else "Not run"}</td></tr>'
+		for label, value in checks.items()
+	)
 	payload = {
-		"fields": fields, "doctypes": doctype_rows,
-		"corrections": [row for row in fields if row["source_field"] in CORRECTED_FIELDS.get(row["source_doctype"], set())],
-		"archives": archives, "retired": retired,
+		"fields": fields,
+		"doctypes": doctype_rows,
+		"corrections": [
+			row for row in fields if row["source_field"] in CORRECTED_FIELDS.get(row["source_doctype"], set())
+		],
+		"archives": archives,
+		"retired": retired,
 		"framework": audit.get("framework_history", {}),
-		"credentials": audit.get("auth", {}), "files": file_report,
+		"credentials": audit.get("auth", {}),
+		"files": file_report,
 		"attachments": audit.get("attachments", {}),
 		"physical_pi": audit.get("purchase_invoice_physical_grns", {}),
 		"reservations": audit.get("bin_reservations", {}),
-		"default_fills": {"total": summary.get("target_fills_from_source_blank"),
+		"default_fills": {
+			"total": summary.get("target_fills_from_source_blank"),
 			"verified": summary.get("verified_default_fills"),
 			"unverified": summary.get("unverified_default_fills"),
-			"fields": [{key: row.get(key) for key in ("source_doctype", "target_doctype", "context", "source_field", "target_fields", "target_filled_from_source_blank", "verified_default_fills", "default_fill_rule", "samples")}
-				for row in fields if row.get("target_filled_from_source_blank")]},
-		"debit": audit.get("debit_discriminator", {}), "live": live,
+			"fields": [
+				{
+					key: row.get(key)
+					for key in (
+						"source_doctype",
+						"target_doctype",
+						"context",
+						"source_field",
+						"target_fields",
+						"target_filled_from_source_blank",
+						"verified_default_fills",
+						"default_fill_rule",
+						"samples",
+					)
+				}
+				for row in fields
+				if row.get("target_filled_from_source_blank")
+			],
+		},
+		"debit": audit.get("debit_discriminator", {}),
+		"live": live,
 		"valuation_readiness": audit.get("valuation_lineage_readiness", {}),
-		"audit_provenance": audit.get("framework_audit_refresh", {"method": audit.get("method"), "generated_on": audit.get("generated_on")}),
+		"audit_provenance": audit.get(
+			"framework_audit_refresh",
+			{"method": audit.get("method"), "generated_on": audit.get("generated_on")},
+		),
 	}
-	data = json.dumps(payload, ensure_ascii=False, default=str).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
-	rendered = TEMPLATE.replace("__CARDS__", cards).replace("__CHECKS__", check_rows).replace(
-		"__GENERATED__", html.escape(audit["generated_on"])).replace("__SOURCE__", html.escape(audit["source"]["site"])).replace(
-		"__TARGET__", html.escape(audit["target"]["site"])).replace("__RESULT__", "Database comparison checks passed" if verified else "Database comparison needs review").replace(
-		"__GAPS__", f"{unavailable_files:,} attachment blobs unavailable/corrupt in the source snapshot; {keys_unavailable} credentials cannot be decrypted with its current key. App file references without corresponding source File records: {unindexed_references}; see attachment evidence.").replace(
-		"__LIVE_STATUS__", html.escape(str(live.get("status", "Not checked"))))
-	return rendered.replace("__VALUATION_NOTICE__", html.escape(valuation_notice)).replace("__LINK_NOTICE__", html.escape(link_notice)).replace("__DATA__", data)
+	data = (
+		json.dumps(payload, ensure_ascii=False, default=str)
+		.replace("<", "\\u003c")
+		.replace(">", "\\u003e")
+		.replace("&", "\\u0026")
+	)
+	rendered = (
+		TEMPLATE.replace("__CARDS__", cards)
+		.replace("__CHECKS__", check_rows)
+		.replace("__GENERATED__", html.escape(audit["generated_on"]))
+		.replace("__SOURCE__", html.escape(audit["source"]["site"]))
+		.replace("__TARGET__", html.escape(audit["target"]["site"]))
+		.replace(
+			"__RESULT__",
+			"Database comparison checks passed" if verified else "Database comparison needs review",
+		)
+		.replace(
+			"__GAPS__",
+			f"{unavailable_files:,} attachment blobs unavailable/corrupt in the source snapshot; {keys_unavailable} credentials cannot be decrypted with its current key. App file references without corresponding source File records: {unindexed_references}; see attachment evidence.",
+		)
+		.replace("__LIVE_STATUS__", html.escape(str(live.get("status", "Not checked"))))
+	)
+	return (
+		rendered.replace("__VALUATION_NOTICE__", html.escape(valuation_notice))
+		.replace("__LINK_NOTICE__", html.escape(link_notice))
+		.replace("__DATA__", data)
+	)
 
 
-TEMPLATE = r'''<!doctype html>
+TEMPLATE = r"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Production API migration reconciliation</title>
 <style>
@@ -174,7 +245,7 @@ document.getElementById('method').append(provenanceHeading,provenanceDetail);
 const numericNote=document.createElement('p');numericNote.id='builtin-numeric-note';numericNote.textContent='The built-in verifier compares transformed/generated values at target SQL precision and reports its numeric storage normalizations separately below. That counter is not the independent original-source rounding counter above. Original PI values are checked through the direct GRN and grouped operational tables; derived PI amounts also have a disclosed arithmetic/storage tolerance.';
 document.getElementById('live-detail').before(numericNote);
 for(const [id,value] of [['archive-detail',data.archives],['retired-detail',data.retired],['framework-detail',frameworkSummary],['debit-detail',data.debit],['attachment-detail',data.attachments],['file-detail',data.files],['live-detail',data.live]])document.getElementById(id).textContent=JSON.stringify(value,null,2);
-</script></body></html>'''
+</script></body></html>"""
 
 
 def main():
@@ -187,16 +258,49 @@ def main():
 	connection = _connect(Path(target["bench"]), target["site"])
 	try:
 		with connection.cursor() as cursor:
-			cursor.execute("SELECT name,status,last_action,report_json FROM `tabSD YRP MRP Data Migration` WHERE name=%s", (audit["migration_name"],))
+			cursor.execute(
+				"SELECT name,status,last_action,report_json FROM `tabSD YRP MRP Data Migration` WHERE name=%s",
+				(audit["migration_name"],),
+			)
 			row = cursor.fetchone()
 		if not row:
 			raise RuntimeError("Migration audit record not found")
 		report = json.loads(row.pop("report_json") or "{}")
-		live = {**row, "report": {key: report.get(key) for key in ("mode", "failed", "complete_source_preservation", "identities", "values", "orphan_values", "auth", "files", "stock", "links", "retired_tables", "framework_history", "series", "purchase_invoice_physical_projection", "purchase_order_dual_projection")}}
+		live = {
+			**row,
+			"report": {
+				key: report.get(key)
+				for key in (
+					"mode",
+					"failed",
+					"complete_source_preservation",
+					"identities",
+					"values",
+					"orphan_values",
+					"auth",
+					"files",
+					"stock",
+					"links",
+					"retired_tables",
+					"framework_history",
+					"series",
+					"purchase_invoice_physical_projection",
+					"purchase_order_dual_projection",
+				)
+			},
+		}
 	finally:
 		connection.close()
 	args.output.write_text(render(audit, live), encoding="utf-8")
-	print(json.dumps({"html": str(args.output), "audit_generated_on": audit["generated_on"], "migration_status": live["status"]}))
+	print(
+		json.dumps(
+			{
+				"html": str(args.output),
+				"audit_generated_on": audit["generated_on"],
+				"migration_status": live["status"],
+			}
+		)
+	)
 
 
 if __name__ == "__main__":

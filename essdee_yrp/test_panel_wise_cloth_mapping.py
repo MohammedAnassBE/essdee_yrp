@@ -6,12 +6,11 @@ from pathlib import Path
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from essdee_yrp.panel_wise_consumption import get_permitted_ipd
-
 from essdee_yrp.panel_wise_cloth_mapping import (
 	_merge_saved_matrix,
 	expand_panel_wise_cloth_mapping_matrix,
 )
+from essdee_yrp.panel_wise_consumption import get_permitted_ipd
 
 
 def _context():
@@ -56,16 +55,12 @@ def _matrix(cloth="Main Fabric"):
 
 class TestPanelWiseClothMapping(FrappeTestCase):
 	def test_matrix_endpoint_rejects_non_ipd_form_data(self):
-		with self.assertRaisesRegex(
-			frappe.ValidationError, "Only Item Production Detail"
-		):
+		with self.assertRaisesRegex(frappe.ValidationError, "Only Item Production Detail"):
 			get_permitted_ipd({"doctype": "User", "name": "Administrator"})
 
 	def test_desk_renderer_and_server_sync_are_wired(self):
 		app_path = Path(frappe.get_app_path("essdee_yrp"))
-		source = (app_path / "public/js/item_production_detail.js").read_text(
-			encoding="utf-8"
-		)
+		source = (app_path / "public/js/item_production_detail.js").read_text(encoding="utf-8")
 		plugins = (app_path / "public/js/vue_plugins.js").read_text(encoding="utf-8")
 		validations = (app_path / "ipd_validations.py").read_text(encoding="utf-8")
 		self.assertIn("render_panel_wise_cloth_mapping", source)
@@ -91,9 +86,7 @@ class TestPanelWiseClothMapping(FrappeTestCase):
 
 	def test_invalid_cloth_label_is_rejected(self):
 		with self.assertRaisesRegex(frappe.ValidationError, "Invalid Cloth label"):
-				expand_panel_wise_cloth_mapping_matrix(
-				_matrix(cloth="Unknown Fabric"), _context()
-			)
+			expand_panel_wise_cloth_mapping_matrix(_matrix(cloth="Unknown Fabric"), _context())
 
 	def test_saved_single_panels_are_preserved_when_they_are_grouped(self):
 		target = _matrix(cloth=None)
@@ -102,10 +95,12 @@ class TestPanelWiseClothMapping(FrappeTestCase):
 			"panels": [
 				{
 					"panel_values": [panel],
-					"rows": [{
-						"attribute_values": {},
-						"values": {"Black": {"cloth": "Main Fabric"}},
-					}],
+					"rows": [
+						{
+							"attribute_values": {},
+							"values": {"Black": {"cloth": "Main Fabric"}},
+						}
+					],
 				}
 				for panel in ("Front", "Back")
 			],

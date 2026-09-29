@@ -29,10 +29,10 @@ Item Master Manager, Production Planner, Merch User). `flags.ignore_validate` is
 still set (as the reference does) — that only skips the *values-completeness*
 check on a freshly-seeded doc with no `values` yet; it does not bypass perms.
 """
-from yrp import attribute_links as attribute_db
 
 import frappe
 from frappe import _
+from yrp import attribute_links as attribute_db
 
 
 def _bom_item_attribute_rows(bom_item):
@@ -42,7 +42,7 @@ def _bom_item_attribute_rows(bom_item):
 	"""
 	if not bom_item:
 		return []
-	item_doc = frappe.get_cached_doc('Item', bom_item)
+	item_doc = frappe.get_cached_doc("Item", bom_item)
 	return [{"attribute": a.attribute} for a in (item_doc.attributes or [])]
 
 
@@ -56,15 +56,13 @@ def _seed_columns(doc, primary_attribute, bom_item):
 	"""
 	bom_rows = _bom_item_attribute_rows(bom_item)
 	if not bom_rows:
-		frappe.throw(
-			_("BOM Item {0} has no attributes — it can't be attribute-mapped.").format(bom_item)
-		)
+		frappe.throw(_("BOM Item {0} has no attributes — it can't be attribute-mapped.").format(bom_item))
 	doc.set("item_attributes", [{"attribute": primary_attribute}])
 	doc.set("bom_item_attributes", bom_rows)
 
 
 def _assert_ipd_is_editable(ipd):
-	ipd_doc = frappe.get_doc('YRP Item Production Detail', ipd)
+	ipd_doc = frappe.get_doc("YRP Item Production Detail", ipd)
 	ipd_doc.check_permission("write")
 	if ipd_doc.approval_status == "Approved":
 		frappe.throw(_("Revert Approval before editing Item Production Detail {0}.").format(ipd))
@@ -100,33 +98,31 @@ def create_mapping(ipd, bom_item, bom_row=None):
 	# forged bom_row must not re-point another document's row.
 	if bom_row:
 		row_meta = attribute_db.get_value(
-			'YRP Item BOM', bom_row, ["attribute_mapping", "parent", "parenttype"], as_dict=True
+			"YRP Item BOM", bom_row, ["attribute_mapping", "parent", "parenttype"], as_dict=True
 		)
 		if not row_meta:
 			frappe.throw(_("Item BOM row {0} not found").format(bom_row))
-		if row_meta.parenttype != 'YRP Item Production Detail' or row_meta.parent != ipd:
+		if row_meta.parenttype != "YRP Item Production Detail" or row_meta.parent != ipd:
 			frappe.throw(_("Item BOM row {0} does not belong to IPD {1}").format(bom_row, ipd))
 		if row_meta.attribute_mapping:
 			return row_meta.attribute_mapping
 
 	primary = ipd_doc.primary_item_attribute
 	if not primary:
-		frappe.throw(
-			_("Set a Primary Item Attribute on the IPD before configuring an attribute-mapped BOM.")
-		)
+		frappe.throw(_("Set a Primary Item Attribute on the IPD before configuring an attribute-mapped BOM."))
 
-	doc = frappe.new_doc('YRP Item BOM Attribute Mapping')
+	doc = frappe.new_doc("YRP Item BOM Attribute Mapping")
 	doc.item_production_detail = ipd_doc.name
 	doc.item = ipd_doc.item
 	doc.bom_item = bom_item
-	doc.bom_uom = frappe.db.get_value('Item', bom_item, "stock_uom")
+	doc.bom_uom = frappe.db.get_value("Item", bom_item, "stock_uom")
 	_seed_columns(doc, primary, bom_item)
 	doc.flags.ignore_validate = True
 	doc.insert()
 
 	# Back-link inside the same transaction so create + link are atomic.
 	if bom_row:
-		attribute_db.set_value('YRP Item BOM', bom_row, "attribute_mapping", doc.name)
+		attribute_db.set_value("YRP Item BOM", bom_row, "attribute_mapping", doc.name)
 	return doc.name
 
 
@@ -135,14 +131,14 @@ def _owning_ipd_primary(mapping_name):
 	this mapping. Returns the attribute name or None.
 	"""
 	rows = attribute_db.get_all(
-		'YRP Item BOM',
-		filters={"attribute_mapping": mapping_name, "parenttype": 'YRP Item Production Detail'},
+		"YRP Item BOM",
+		filters={"attribute_mapping": mapping_name, "parenttype": "YRP Item Production Detail"},
 		fields=["parent"],
 		limit=1,
 	)
 	if not rows:
 		return None
-	return attribute_db.get_value('YRP Item Production Detail', rows[0].parent, "primary_item_attribute")
+	return attribute_db.get_value("YRP Item Production Detail", rows[0].parent, "primary_item_attribute")
 
 
 @frappe.whitelist()
@@ -157,7 +153,7 @@ def configure_columns(mapping):
 	"""
 	if not mapping:
 		frappe.throw(_("Mapping is required"))
-	doc = frappe.get_doc('YRP Item BOM Attribute Mapping', mapping)
+	doc = frappe.get_doc("YRP Item BOM Attribute Mapping", mapping)
 	if doc.item_attributes:
 		return {"name": doc.name, "changed": False}
 
@@ -171,7 +167,7 @@ def configure_columns(mapping):
 			)
 		)
 	owner = attribute_db.get_value(
-		'YRP Item BOM', {"attribute_mapping": mapping, "parenttype": 'YRP Item Production Detail'}, "parent"
+		"YRP Item BOM", {"attribute_mapping": mapping, "parenttype": "YRP Item Production Detail"}, "parent"
 	)
 	if owner:
 		_assert_ipd_is_editable(owner)

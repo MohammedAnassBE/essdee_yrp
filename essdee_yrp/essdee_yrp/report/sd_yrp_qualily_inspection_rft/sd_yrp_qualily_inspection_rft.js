@@ -40,7 +40,6 @@ frappe.query_reports["SD YRP Qualily Inspection RFT"] = {
 	],
 	"formatter": function (value, row, column, data, default_formatter) {
 		value = default_formatter(value, row, column, data);
-		console.log(column)
 		if (column.fieldname.includes('result')) {
 			if (data && data[column.fieldname] === 'Fail') {
 				value = "<span style='color:red'>" + value + "</span>";

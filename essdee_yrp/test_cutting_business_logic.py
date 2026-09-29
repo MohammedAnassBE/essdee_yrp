@@ -5,36 +5,19 @@ from unittest.mock import MagicMock, patch
 import frappe
 from frappe.tests import IntegrationTestCase, UnitTestCase
 from frappe.utils import flt, nowdate, nowtime
-
 from yrp.stock.save_stock_items import group_items_for_ui
 from yrp.stock.utils import get_stock_balance
-from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 	create_return_grn,
+)
+from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 	get_work_order_defaults as get_dc_work_order_defaults,
 )
 from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
 	get_work_order_defaults as get_grn_work_order_defaults,
 )
+from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
-from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet import (
-	_save_cutting_plan_cloth_usage,
-	_cutting_grn_consumed_rows,
-	_cutting_grn_output_rows,
-	cancel_cut_bundle,
-	create_cut_bundle_ledger,
-	create_grn_entry,
-	mark_labels_printed,
-	print_labels,
-	update_cloth_stock,
-)
-from essdee_yrp.cutting.reports import (
-	get_cut_sheet_report,
-	get_cutting_detail_report,
-	get_daily_production_report,
-	get_daily_production_summary_report,
-	get_multiccr,
-)
 from essdee_yrp.cutting.movement import (
 	_overlay_source_rows,
 	apply_transaction,
@@ -45,10 +28,33 @@ from essdee_yrp.cutting.movement import (
 	set_completion_cut_panel_movement,
 	validate_transaction_link,
 )
-from essdee_yrp.fabric_grn import _resolve_deliverable_source
-from essdee_yrp.overrides.delivery_challan import (
-	strip_generated_invalid_zero_placeholders,
-	strip_unselected_cpm_items,
+from essdee_yrp.cutting.reports import (
+	get_cut_sheet_report,
+	get_cutting_detail_report,
+	get_daily_production_report,
+	get_daily_production_summary_report,
+	get_multiccr,
+)
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_bundle_movement_ledger.sd_yrp_cut_bundle_movement_ledger import (
+	_collapsed_set_combination_key,
+	get_collapsed_previous_cbm_list,
+	get_cut_bundle_entry,
+	get_latest_cbml_for_variant,
+)
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_panel_movement.sd_yrp_cut_panel_movement import (
+	CutPanelMovement,
+	_latest_logical_bundle_rows,
+)
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet import (
+	_cutting_grn_consumed_rows,
+	_cutting_grn_output_rows,
+	_save_cutting_plan_cloth_usage,
+	cancel_cut_bundle,
+	create_cut_bundle_ledger,
+	create_grn_entry,
+	mark_labels_printed,
+	print_labels,
+	update_cloth_stock,
 )
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan import (
 	CuttingPlan,
@@ -57,15 +63,10 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan impor
 	create_balance_lot_transfer,
 	has_cls_grammage_approval_role,
 )
-from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_panel_movement.sd_yrp_cut_panel_movement import (
-	CutPanelMovement,
-	_latest_logical_bundle_rows,
-)
-from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_bundle_movement_ledger.sd_yrp_cut_bundle_movement_ledger import (
-	_collapsed_set_combination_key,
-	get_collapsed_previous_cbm_list,
-	get_cut_bundle_entry,
-	get_latest_cbml_for_variant,
+from essdee_yrp.fabric_grn import _resolve_deliverable_source
+from essdee_yrp.overrides.delivery_challan import (
+	strip_generated_invalid_zero_placeholders,
+	strip_unselected_cpm_items,
 )
 from essdee_yrp.setup import ensure_mrp_cancel_permissions
 
@@ -143,19 +144,16 @@ class TestCutBundleMovementTransactionFiltering(UnitTestCase):
 
 	def test_completion_inherits_authoritative_collapsed_bundle_context(self):
 		stock_entry = frappe._dict(
-			doctype='YRP Stock Entry',
+			doctype="YRP Stock Entry",
 			purpose="DC Completion",
-			against='YRP Delivery Challan',
+			against="YRP Delivery Challan",
 			against_id="DC-COLLAPSED",
 			cut_panel_movement="CPM-ALREADY-COPIED",
 			allow_non_bundle=0,
 		)
-		stock_entry.meta = frappe._dict(
-			get_field=lambda fieldname: fieldname == "allow_non_bundle"
-		)
+		stock_entry.meta = frappe._dict(get_field=lambda fieldname: fieldname == "allow_non_bundle")
 		against_meta = frappe._dict(
-			get_field=lambda fieldname: fieldname
-			in {"cut_panel_movement", "allow_non_bundle"}
+			get_field=lambda fieldname: fieldname in {"cut_panel_movement", "allow_non_bundle"}
 		)
 
 		with (
@@ -166,25 +164,20 @@ class TestCutBundleMovementTransactionFiltering(UnitTestCase):
 
 		self.assertEqual(stock_entry.cut_panel_movement, "CPM-ALREADY-COPIED")
 		self.assertEqual(stock_entry.allow_non_bundle, 1)
-		get_value.assert_called_once_with(
-			'YRP Delivery Challan', "DC-COLLAPSED", "allow_non_bundle"
-		)
+		get_value.assert_called_once_with("YRP Delivery Challan", "DC-COLLAPSED", "allow_non_bundle")
 
 	def test_completion_cannot_spoof_collapsed_bundle_mode(self):
 		stock_entry = frappe._dict(
-			doctype='YRP Stock Entry',
+			doctype="YRP Stock Entry",
 			purpose="GRN Completion",
-			against='YRP Goods Received Note',
+			against="YRP Goods Received Note",
 			against_id="GRN-EXACT",
 			cut_panel_movement="CPM-EXACT",
 			allow_non_bundle=1,
 		)
-		stock_entry.meta = frappe._dict(
-			get_field=lambda fieldname: fieldname == "allow_non_bundle"
-		)
+		stock_entry.meta = frappe._dict(get_field=lambda fieldname: fieldname == "allow_non_bundle")
 		against_meta = frappe._dict(
-			get_field=lambda fieldname: fieldname
-			in {"cut_panel_movement", "allow_non_bundle"}
+			get_field=lambda fieldname: fieldname in {"cut_panel_movement", "allow_non_bundle"}
 		)
 
 		with (
@@ -201,8 +194,7 @@ class TestCutBundleMovementTransactionFiltering(UnitTestCase):
 				name="opening",
 				cbm_key="bundle-1",
 				set_combination=(
-					'{"major_colour":"White","major_part":"Top",'
-					'"major_panel":"Top Front","is_set_item":1}'
+					'{"major_colour":"White","major_part":"Top","major_panel":"Top Front","is_set_item":1}'
 				),
 				posting_datetime="2026-08-26 10:00:00",
 				creation="2026-08-26 10:00:01",
@@ -248,7 +240,7 @@ class TestCutBundleMovementTransactionFiltering(UnitTestCase):
 
 	def _dc(self, name, items):
 		return frappe._dict(
-			doctype='YRP Delivery Challan',
+			doctype="YRP Delivery Challan",
 			name=name,
 			posting_date="2026-08-24",
 			posting_time="12:00:00",
@@ -263,9 +255,7 @@ class TestCutBundleMovementTransactionFiltering(UnitTestCase):
 		)
 
 	def test_sequential_split_dcs_move_only_their_transaction_panels(self):
-		printing_entries = self._entries(
-			self._dc("DC-PRINTING", [("VAR-LEFT", 10), ("VAR-RIGHT", 10)])
-		)
+		printing_entries = self._entries(self._dc("DC-PRINTING", [("VAR-LEFT", 10), ("VAR-RIGHT", 10)]))
 		self.assertEqual(
 			{entry["panel"] for entry in printing_entries},
 			{"Bottom Front Left", "Bottom Front Right"},
@@ -303,7 +293,7 @@ class TestCutBundleMovementTransactionFiltering(UnitTestCase):
 
 	def test_stock_entry_filter_does_not_require_set_combination_child_field(self):
 		doc = frappe._dict(
-			doctype='YRP Stock Entry',
+			doctype="YRP Stock Entry",
 			name="STE-SPLIT",
 			posting_date="2026-08-24",
 			posting_time="12:00:00",
@@ -338,7 +328,7 @@ class TestCutBundleMovementTransactionFiltering(UnitTestCase):
 			),
 			patch(f"{module}.apply_dimension_defaults"),
 		):
-			return get_grouped_movement_rows("CPM-COLLAPSED", 'YRP Delivery Challan')[2]
+			return get_grouped_movement_rows("CPM-COLLAPSED", "YRP Delivery Challan")[2]
 
 	def test_collapsed_cpm_quantity_is_already_physical_panel_stock(self):
 		rows = self._grouped_rows(
@@ -426,9 +416,7 @@ class TestCutBundleMovementTransactionFiltering(UnitTestCase):
 		)
 		self.assertNotEqual(
 			_collapsed_set_combination_key(work_order_combination),
-			_collapsed_set_combination_key(
-				{"major_colour": "Black", "major_part": "Top"}
-			),
+			_collapsed_set_combination_key({"major_colour": "Black", "major_part": "Top"}),
 		)
 
 	def test_collapsed_only_cpm_selection_survives_submit_filtering(self):
@@ -457,9 +445,7 @@ class TestCutBundleMovementTransactionFiltering(UnitTestCase):
 		)
 		CutPanelMovement.before_submit(doc)
 		self.assertEqual(len(doc.cut_panel_movement_json["collapsed_details"]), 1)
-		self.assertEqual(
-			doc.cut_panel_movement_json["collapsed_details"][0]["move_qty"], 3
-		)
+		self.assertEqual(doc.cut_panel_movement_json["collapsed_details"][0]["move_qty"], 3)
 
 	def test_overlay_keeps_only_nonzero_cpm_matches(self):
 		source_rows = [
@@ -475,17 +461,13 @@ class TestCutBundleMovementTransactionFiltering(UnitTestCase):
 				row_index=2,
 			)
 		]
-		rows = _overlay_source_rows(
-			source_rows, movement_rows, target_doctype='YRP Goods Received Note'
-		)
+		rows = _overlay_source_rows(source_rows, movement_rows, target_doctype="YRP Goods Received Note")
 		self.assertEqual(len(rows), 1)
 		self.assertEqual(rows[0].item_variant, "VAR-LEFT")
 		self.assertEqual(rows[0].quantity, 10)
 
 	def test_overlay_rejects_any_unmatched_selected_panel(self):
-		source_rows = [
-			frappe._dict(item_variant="VAR-LEFT", set_combination=self.combination)
-		]
+		source_rows = [frappe._dict(item_variant="VAR-LEFT", set_combination=self.combination)]
 		movement_rows = [
 			frappe._dict(
 				item_variant="VAR-LEFT",
@@ -502,27 +484,25 @@ class TestCutBundleMovementTransactionFiltering(UnitTestCase):
 			frappe.ValidationError,
 			"Some selected panels do not match",
 		):
-			_overlay_source_rows(
-				source_rows, movement_rows, target_doctype='YRP Goods Received Note'
-			)
+			_overlay_source_rows(source_rows, movement_rows, target_doctype="YRP Goods Received Note")
 
 	def test_cpm_delivery_challan_drops_generated_zero_size_placeholders(self):
 		doc = frappe.get_doc(
 			{
-				"doctype": 'YRP Delivery Challan',
+				"doctype": "YRP Delivery Challan",
 				"cut_panel_movement": "CPM-COLLAPSED",
 				"items": [
 					{
-						"doctype": 'YRP Delivery Challan Item',
+						"doctype": "YRP Delivery Challan Item",
 						"item_variant": "VAR-ZERO",
 						"qty": 0,
 						"ref_doctype": 0,
 					},
 					{
-						"doctype": 'YRP Delivery Challan Item',
+						"doctype": "YRP Delivery Challan Item",
 						"item_variant": "VAR-MOVED",
 						"qty": 10,
-						"ref_doctype": 'YRP Work Order Deliverables',
+						"ref_doctype": "YRP Work Order Deliverables",
 					},
 				],
 			}
@@ -532,27 +512,27 @@ class TestCutBundleMovementTransactionFiltering(UnitTestCase):
 
 		self.assertEqual(len(doc.items), 1)
 		self.assertEqual(doc.items[0].item_variant, "VAR-MOVED")
-		self.assertEqual(doc.items[0].ref_doctype, 'YRP Work Order Deliverables')
+		self.assertEqual(doc.items[0].ref_doctype, "YRP Work Order Deliverables")
 
 	def test_ordinary_delivery_challan_keeps_base_zero_rows(self):
 		doc = frappe.get_doc(
 			{
-				"doctype": 'YRP Delivery Challan',
+				"doctype": "YRP Delivery Challan",
 				"items": [
 					{
-						"doctype": 'YRP Delivery Challan Item',
+						"doctype": "YRP Delivery Challan Item",
 						"item_variant": "VAR-VALID-ZERO",
 						"qty": 0,
-						"ref_doctype": 'YRP Work Order Deliverables',
+						"ref_doctype": "YRP Work Order Deliverables",
 						"ref_docname": "VALID-ROW",
 					},
 					{
-						"doctype": 'YRP Delivery Challan Item',
+						"doctype": "YRP Delivery Challan Item",
 						"item_variant": "VAR-GENERATED-ZERO",
 						"qty": 0,
 						"ref_doctype": 0,
 						"ref_docname": 0,
-					}
+					},
 				],
 			}
 		)
@@ -562,17 +542,15 @@ class TestCutBundleMovementTransactionFiltering(UnitTestCase):
 
 		self.assertEqual(len(doc.items), 1)
 		self.assertEqual(doc.items[0].item_variant, "VAR-VALID-ZERO")
-		self.assertEqual(doc.items[0].ref_doctype, 'YRP Work Order Deliverables')
+		self.assertEqual(doc.items[0].ref_doctype, "YRP Work Order Deliverables")
 
 
 class TestCuttingBusinessLogic(IntegrationTestCase):
 	@staticmethod
 	def _allow_test_negative_stock(item_variant):
 		parent_item = get_parent_item(item_variant)
-		frappe.db.set_value(
-			'Item', parent_item, "allow_negative_stock", 1, update_modified=False
-		)
-		frappe.clear_document_cache('Item', parent_item)
+		frappe.db.set_value("Item", parent_item, "allow_negative_stock", 1, update_modified=False)
+		frappe.clear_document_cache("Item", parent_item)
 		return parent_item
 
 	@classmethod
@@ -601,8 +579,8 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		)
 		reconciliation = frappe.get_doc(
 			{
-				"doctype": 'YRP Stock Reconciliation',
-				"purpose": 'Stock Reconciliation',
+				"doctype": "YRP Stock Reconciliation",
+				"purpose": "Stock Reconciliation",
 				"posting_date": nowdate(),
 				"posting_time": nowtime(),
 				"default_warehouse": location,
@@ -631,10 +609,10 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 				set_combination=set_combination,
 			)
 			opening = flt(rows[0].quantity_after_transaction) if rows else 0
-		sequence = frappe.db.count('SD YRP Cut Bundle Movement Ledger') + 900000
+		sequence = frappe.db.count("SD YRP Cut Bundle Movement Ledger") + 900000
 		row = frappe.get_doc(
 			{
-				"doctype": 'SD YRP Cut Bundle Movement Ledger',
+				"doctype": "SD YRP Cut Bundle Movement Ledger",
 				"lot": lot,
 				"supplier": location,
 				"lay_no": 0 if collapsed else sequence,
@@ -644,7 +622,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 				"collapsed_bundle": int(collapsed),
 				"item_variant": item_variant,
 				"item": item,
-				"voucher_type": 'YRP Work Order',
+				"voucher_type": "YRP Work Order",
 				"voucher_no": work_order,
 				"size": size,
 				"colour": colour,
@@ -668,7 +646,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 			{
 				"doctype": doctype,
 				"parent": work_order,
-				"parenttype": 'YRP Work Order',
+				"parenttype": "YRP Work Order",
 				"parentfield": parentfield,
 				"docstatus": 1,
 				**values,
@@ -695,8 +673,8 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 	def test_f15_cutting_cancel_permissions_are_restored(self):
 		ensure_mrp_cancel_permissions()
 		for doctype, expected_submit in (
-			('SD YRP Cut Panel Movement', 0),
-			('SD YRP Cutting Marker', 1),
+			("SD YRP Cut Panel Movement", 0),
+			("SD YRP Cutting Marker", 1),
 		):
 			permission = frappe.db.get_value(
 				"Custom DocPerm",
@@ -785,12 +763,12 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		original_get_all = frappe.get_all
 
 		def get_doc(doctype, name):
-			if (doctype, name) == ('SD YRP Cutting Plan', "CP-TEST"):
+			if (doctype, name) == ("SD YRP Cutting Plan", "CP-TEST"):
 				return cutting_plan
 			return original_get_doc(doctype, name)
 
 		def get_all(doctype, *args, **kwargs):
-			if doctype == 'SD YRP Cutting LaySheet':
+			if doctype == "SD YRP Cutting LaySheet":
 				return [laysheet.name]
 			return original_get_all(doctype, *args, **kwargs)
 
@@ -812,16 +790,16 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 
 	def test_cutting_plan_creates_balance_lot_transfer_draft(self):
 		cutting_plan = "CP-2603-00030"
-		if not frappe.db.exists('SD YRP Cutting Plan', cutting_plan):
+		if not frappe.db.exists("SD YRP Cutting Plan", cutting_plan):
 			self.skipTest(f"Migrated Cutting Plan oracle {cutting_plan} is unavailable")
 		target_lot = frappe.db.get_value(
-			'SD YRP Lot', {"name": ["!=", "C0326-28"]}, "name", order_by="modified desc"
+			"SD YRP Lot", {"name": ["!=", "C0326-28"]}, "name", order_by="modified desc"
 		)
 		if not target_lot:
 			self.skipTest("A target Lot is unavailable")
 
 		name = create_balance_lot_transfer(cutting_plan, target_lot)
-		transfer = frappe.get_doc('SD YRP Lot Transfer', name)
+		transfer = frappe.get_doc("SD YRP Lot Transfer", name)
 		self.assertEqual(transfer.docstatus, 0)
 		self.assertEqual(transfer.comments, f"Balance cloth from Cutting Plan {cutting_plan}")
 		self.assertTrue(transfer.items)
@@ -832,28 +810,19 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		self.assertAlmostEqual(sum(flt(row.qty) for row in transfer.items), 0.2, places=3)
 
 	def test_grammage_approval_roles_are_installed_and_runtime_safe(self):
-		field = frappe.get_meta('SD YRP MRP Settings').get_field(
-			"cls_grammage_approval_roles"
-		)
+		field = frappe.get_meta("SD YRP MRP Settings").get_field("cls_grammage_approval_roles")
 		self.assertIsNotNone(field)
 		self.assertEqual(field.fieldtype, "Table")
-		self.assertEqual(field.options, 'SD YRP CLS Grammage Approval Role')
-		configured_roles = [
-			row.role
-			for row in frappe.get_single('SD YRP MRP Settings').get(field.fieldname)
-		]
+		self.assertEqual(field.options, "SD YRP CLS Grammage Approval Role")
+		configured_roles = [row.role for row in frappe.get_single("SD YRP MRP Settings").get(field.fieldname)]
 		self.assertEqual(len(configured_roles), len(set(configured_roles)))
-		self.assertTrue(
-			all(frappe.db.exists("Role", role) for role in configured_roles)
-		)
+		self.assertTrue(all(frappe.db.exists("Role", role) for role in configured_roles))
 		self.assertEqual(
 			can_change_approval_grammage(),
 			has_cls_grammage_approval_role(),
 		)
 
-	@patch(
-		"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.make_sl_entries"
-	)
+	@patch("essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.make_sl_entries")
 	@patch(
 		"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.get_table_entries",
 		return_value=[],
@@ -942,7 +911,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 			self.assertIn(function, frappe.whitelisted, method)
 			self.assertNotIn(function, frappe.guest_methods, method)
 
-		if not frappe.db.exists('YRP Work Order', "WO-2627-00714"):
+		if not frappe.db.exists("YRP Work Order", "WO-2627-00714"):
 			return
 		summary = frappe.get_attr("essdee_yrp.api.work_order.fetch_summary_details")(
 			"WO-2627-00714", "Flame Thermal Kids Set-7"
@@ -953,10 +922,10 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 
 	def test_recut_uses_f16_dimension_aware_stock_contract(self):
 		recut_name = "8dvt4000gs"
-		if not frappe.db.exists('SD YRP Recut and Print Panel', recut_name):
+		if not frappe.db.exists("SD YRP Recut and Print Panel", recut_name):
 			self.skipTest(f"Migrated Recut oracle {recut_name} is unavailable")
 
-		doc = frappe.get_doc('SD YRP Recut and Print Panel', recut_name)
+		doc = frappe.get_doc("SD YRP Recut and Print Panel", recut_name)
 		doc._set_cloth_variants_and_rates()
 		entries = doc._get_stock_ledger_entries()
 		self.assertEqual(len(entries), len(doc.recut_and_print_panel_details))
@@ -973,23 +942,19 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 	def test_cut_panel_movement_stock_entry_lifecycle(self):
 		movement_name = "CPM-2608-00220"
 		if not frappe.db.exists(
-			'SD YRP Cut Panel Movement',
+			"SD YRP Cut Panel Movement",
 			{"name": movement_name, "docstatus": 1, "against_id": ["is", "not set"]},
 		):
 			self.skipTest(f"Unlinked Cut Panel Movement oracle {movement_name} is unavailable")
 
-		build_defaults = frappe.get_attr(
-			"essdee_yrp.cutting.movement.build_stock_entry_defaults"
-		)
+		build_defaults = frappe.get_attr("essdee_yrp.cutting.movement.build_stock_entry_defaults")
 		defaults = build_defaults(movement_name)
 		for row in defaults["items"]:
 			parent_item = get_parent_item(row["item"])
-			frappe.db.set_value(
-				'Item', parent_item, "allow_negative_stock", 1, update_modified=False
-			)
-			frappe.clear_document_cache('Item', parent_item)
+			frappe.db.set_value("Item", parent_item, "allow_negative_stock", 1, update_modified=False)
+			frappe.clear_document_cache("Item", parent_item)
 
-		entry = frappe.new_doc('YRP Stock Entry')
+		entry = frappe.new_doc("YRP Stock Entry")
 		entry.purpose = defaults["purpose"]
 		entry.from_warehouse = defaults["from_warehouse"]
 		entry.from_supplier = defaults["from_supplier"]
@@ -1001,23 +966,23 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 
 		self.assertEqual(entry.docstatus, 1)
 		self.assertEqual(
-			frappe.db.get_value('SD YRP Cut Panel Movement', movement_name, "against_id"),
+			frappe.db.get_value("SD YRP Cut Panel Movement", movement_name, "against_id"),
 			entry.name,
 		)
 		self.assertTrue(
 			frappe.db.exists(
-				'YRP Stock Ledger Entry',
+				"YRP Stock Ledger Entry",
 				{
-					"voucher_type": 'YRP Stock Entry',
+					"voucher_type": "YRP Stock Entry",
 					"voucher_no": entry.name,
 					"is_cancelled": 0,
 				},
 			)
 		)
 		bundle_count = frappe.db.count(
-			'SD YRP Cut Bundle Movement Ledger',
+			"SD YRP Cut Bundle Movement Ledger",
 			filters={
-				"voucher_type": 'YRP Stock Entry',
+				"voucher_type": "YRP Stock Entry",
 				"voucher_no": entry.name,
 				"is_cancelled": 0,
 			},
@@ -1026,14 +991,12 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 
 		entry.cancel()
 		self.assertEqual(entry.docstatus, 2)
-		self.assertFalse(
-			frappe.db.get_value('SD YRP Cut Panel Movement', movement_name, "against_id")
-		)
+		self.assertFalse(frappe.db.get_value("SD YRP Cut Panel Movement", movement_name, "against_id"))
 		self.assertFalse(
 			frappe.db.exists(
-				'YRP Stock Ledger Entry',
+				"YRP Stock Ledger Entry",
 				{
-					"voucher_type": 'YRP Stock Entry',
+					"voucher_type": "YRP Stock Entry",
 					"voucher_no": entry.name,
 					"is_cancelled": 0,
 				},
@@ -1041,9 +1004,9 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		)
 		self.assertFalse(
 			frappe.db.exists(
-				'SD YRP Cut Bundle Movement Ledger',
+				"SD YRP Cut Bundle Movement Ledger",
 				{
-					"voucher_type": 'YRP Stock Entry',
+					"voucher_type": "YRP Stock Entry",
 					"voucher_no": entry.name,
 					"is_cancelled": 0,
 				},
@@ -1054,13 +1017,13 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		cpm_name = "CPM-2608-00224"
 		dc_name = "DC-2026-00008"
 		if not (
-			frappe.db.exists('SD YRP Cut Panel Movement', cpm_name)
-			and frappe.db.exists('YRP Delivery Challan', {"name": dc_name, "docstatus": 1})
+			frappe.db.exists("SD YRP Cut Panel Movement", cpm_name)
+			and frappe.db.exists("YRP Delivery Challan", {"name": dc_name, "docstatus": 1})
 		):
 			self.skipTest("Printing split-DC oracle is unavailable")
 
-		cpm = frappe.get_doc('SD YRP Cut Panel Movement', cpm_name)
-		dc = frappe.get_doc('YRP Delivery Challan', dc_name)
+		cpm = frappe.get_doc("SD YRP Cut Panel Movement", cpm_name)
+		dc = frappe.get_doc("YRP Delivery Challan", dc_name)
 		entries, _collapsed = get_cut_bundle_entry(cpm, dc, dc.from_location, -1)
 		self.assertEqual(
 			{entry["panel"] for entry in entries},
@@ -1068,24 +1031,22 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		)
 
 		ipd = frappe.get_cached_doc(
-			'YRP Item Production Detail',
-			frappe.db.get_value('SD YRP Lot', cpm.lot, "production_detail"),
+			"YRP Item Production Detail",
+			frappe.db.get_value("SD YRP Lot", cpm.lot, "production_detail"),
 		)
 		panel_quantities = {
-			row.stiching_attribute_value: flt(row.quantity)
-			for row in ipd.get("stiching_item_details") or []
+			row.stiching_attribute_value: flt(row.quantity) for row in ipd.get("stiching_item_details") or []
 		}
 		bundle_physical_qty = sum(
-			abs(flt(entry["quantity"])) * panel_quantities[entry["panel"]]
-			for entry in entries
+			abs(flt(entry["quantity"])) * panel_quantities[entry["panel"]] for entry in entries
 		)
 		stock_physical_qty = abs(
 			sum(
 				flt(quantity)
 				for quantity in frappe.get_all(
-					'YRP Stock Ledger Entry',
+					"YRP Stock Ledger Entry",
 					filters={
-						"voucher_type": 'YRP Delivery Challan',
+						"voucher_type": "YRP Delivery Challan",
 						"voucher_no": dc_name,
 						"warehouse": dc.from_warehouse,
 						"is_cancelled": 0,
@@ -1104,7 +1065,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		from_location = "S-0170"
 		printing_supplier = "Sri Krishna Printing"
 		if not frappe.db.exists(
-			'YRP Work Order',
+			"YRP Work Order",
 			{
 				"name": work_order_name,
 				"docstatus": 1,
@@ -1112,7 +1073,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 			},
 		):
 			self.skipTest("Printing Work Order oracle is unavailable")
-		if not frappe.get_meta('YRP Stock Entry').get_field("allow_non_bundle"):
+		if not frappe.get_meta("YRP Stock Entry").get_field("allow_non_bundle"):
 			self.fail("Stock Entry allow_non_bundle fixture is not installed")
 
 		combination = {
@@ -1135,7 +1096,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 			return sum(
 				flt(row.quantity)
 				for row in frappe.get_all(
-					'SD YRP Cut Bundle Movement Ledger',
+					"SD YRP Cut Bundle Movement Ledger",
 					filters={
 						"voucher_type": doctype,
 						"voucher_no": name,
@@ -1151,7 +1112,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 			return sum(
 				flt(quantity)
 				for quantity in frappe.get_all(
-					'YRP Stock Ledger Entry',
+					"YRP Stock Ledger Entry",
 					filters={
 						"voucher_type": doctype,
 						"voucher_no": name,
@@ -1176,12 +1137,12 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 				collapsed=True,
 			)
 		deliverable_name = frappe.db.get_value(
-			'YRP Work Order Deliverables',
+			"YRP Work Order Deliverables",
 			{"parent": work_order_name, "item_variant": variant},
 			"name",
 		)
 		frappe.db.set_value(
-			'YRP Work Order Deliverables',
+			"YRP Work Order Deliverables",
 			deliverable_name,
 			{"pending_quantity": 2, "stock_update": 9},
 			update_modified=False,
@@ -1202,27 +1163,25 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		dc_row.delivered_quantity = 1
 		dc_row.stock_qty = flt(dc_row.conversion_factor or 1)
 		dc_defaults["items"] = [dc_row]
-		dc_defaults["item_details"] = group_items_for_ui(
-			dc_defaults["items"], 'YRP Delivery Challan'
-		)
+		dc_defaults["item_details"] = group_items_for_ui(dc_defaults["items"], "YRP Delivery Challan")
 		dc_defaults["allow_non_bundle"] = 1
 		dc_defaults["work_order"] = work_order_name
-		work_order = frappe.get_doc('YRP Work Order', work_order_name)
+		work_order = frappe.get_doc("YRP Work Order", work_order_name)
 		dc_defaults["supplier_address"] = work_order.supplier_address
 		dc_defaults["supplier_address_details"] = work_order.supplier_address_details
 		dc_defaults["from_address"] = work_order.delivery_address
 		dc_defaults["from_address_details"] = work_order.delivery_address_details
-		dc = self._transaction_from_defaults('YRP Delivery Challan', dc_defaults)
+		dc = self._transaction_from_defaults("YRP Delivery Challan", dc_defaults)
 		dc.submit()
 		self.assertEqual(balance(from_location), start_from - 1)
 		self.assertEqual(balance(printing_supplier), start_supplier + 1)
-		self.assertEqual(voucher_qty('YRP Delivery Challan', dc.name, from_location), -1)
-		self.assertEqual(voucher_qty('YRP Delivery Challan', dc.name, printing_supplier), 1)
-		self.assertEqual(stock_qty('YRP Delivery Challan', dc.name, dc.from_warehouse), -1)
-		self.assertEqual(stock_qty('YRP Delivery Challan', dc.name, dc.to_warehouse), 1)
+		self.assertEqual(voucher_qty("YRP Delivery Challan", dc.name, from_location), -1)
+		self.assertEqual(voucher_qty("YRP Delivery Challan", dc.name, printing_supplier), 1)
+		self.assertEqual(stock_qty("YRP Delivery Challan", dc.name, dc.from_warehouse), -1)
+		self.assertEqual(stock_qty("YRP Delivery Challan", dc.name, dc.to_warehouse), 1)
 
 		frappe.db.set_value(
-			'YRP Work Order Receivables',
+			"YRP Work Order Receivables",
 			{"parent": work_order_name, "item_variant": variant},
 			"pending_quantity",
 			3,
@@ -1238,25 +1197,23 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		grn_row.quantity = 1
 		grn_row.stock_qty = flt(grn_row.conversion_factor or 1)
 		grn_defaults["items"] = [grn_row]
-		grn_defaults["item_details"] = group_items_for_ui(
-			grn_defaults["items"], 'YRP Goods Received Note'
-		)
+		grn_defaults["item_details"] = group_items_for_ui(grn_defaults["items"], "YRP Goods Received Note")
 		grn_defaults["delivery_challan"] = dc.name
 		grn_defaults["allow_non_bundle"] = 1
-		grn_defaults["against"] = 'YRP Work Order'
+		grn_defaults["against"] = "YRP Work Order"
 		grn_defaults["against_id"] = work_order_name
 		grn_defaults["supplier_address"] = work_order.supplier_address
 		grn_defaults["supplier_address_display"] = work_order.supplier_address_details
 		grn_defaults["delivery_address"] = work_order.delivery_address
 		grn_defaults["delivery_address_display"] = work_order.delivery_address_details
-		grn = self._transaction_from_defaults('YRP Goods Received Note', grn_defaults)
+		grn = self._transaction_from_defaults("YRP Goods Received Note", grn_defaults)
 		grn.submit()
 		self.assertEqual(balance(from_location), start_from)
 		self.assertEqual(balance(printing_supplier), start_supplier)
-		self.assertEqual(voucher_qty('YRP Goods Received Note', grn.name, printing_supplier), -1)
-		self.assertEqual(voucher_qty('YRP Goods Received Note', grn.name, from_location), 1)
-		self.assertEqual(stock_qty('YRP Goods Received Note', grn.name, grn.from_warehouse), -1)
-		self.assertEqual(stock_qty('YRP Goods Received Note', grn.name, grn.to_warehouse), 1)
+		self.assertEqual(voucher_qty("YRP Goods Received Note", grn.name, printing_supplier), -1)
+		self.assertEqual(voucher_qty("YRP Goods Received Note", grn.name, from_location), 1)
+		self.assertEqual(stock_qty("YRP Goods Received Note", grn.name, grn.from_warehouse), -1)
+		self.assertEqual(stock_qty("YRP Goods Received Note", grn.name, grn.to_warehouse), 1)
 
 		grn.cancel()
 		self.assertEqual(balance(from_location), start_from - 1)
@@ -1271,19 +1228,17 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 				}
 			],
 		)
-		return_grn = frappe.get_doc('YRP Goods Received Note', return_name)
+		return_grn = frappe.get_doc("YRP Goods Received Note", return_name)
 		self.assertEqual(return_grn.allow_non_bundle, 0)
 		return_grn.submit()
 		self.assertEqual(balance(from_location), start_from)
 		self.assertEqual(balance(printing_supplier), start_supplier)
-		self.assertEqual(
-			voucher_qty('YRP Goods Received Note', return_grn.name, printing_supplier), -1
-		)
-		self.assertEqual(voucher_qty('YRP Goods Received Note', return_grn.name, from_location), 1)
+		self.assertEqual(voucher_qty("YRP Goods Received Note", return_grn.name, printing_supplier), -1)
+		self.assertEqual(voucher_qty("YRP Goods Received Note", return_grn.name, from_location), 1)
 		self.assertEqual(
 			flt(
 				frappe.db.get_value(
-					'YRP Work Order Deliverables', dc.items[0].ref_docname, "pending_quantity"
+					"YRP Work Order Deliverables", dc.items[0].ref_docname, "pending_quantity"
 				)
 			),
 			2,
@@ -1301,7 +1256,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		redelivery_row.stock_qty = flt(redelivery_row.conversion_factor or 1)
 		redelivery_defaults["items"] = [redelivery_row]
 		redelivery_defaults["item_details"] = group_items_for_ui(
-			redelivery_defaults["items"], 'YRP Delivery Challan'
+			redelivery_defaults["items"], "YRP Delivery Challan"
 		)
 		redelivery_defaults["allow_non_bundle"] = 1
 		redelivery_defaults["work_order"] = work_order_name
@@ -1309,9 +1264,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		redelivery_defaults["supplier_address_details"] = work_order.supplier_address_details
 		redelivery_defaults["from_address"] = work_order.delivery_address
 		redelivery_defaults["from_address_details"] = work_order.delivery_address_details
-		redelivery = self._transaction_from_defaults(
-			'YRP Delivery Challan', redelivery_defaults
-		)
+		redelivery = self._transaction_from_defaults("YRP Delivery Challan", redelivery_defaults)
 		redelivery.submit()
 		self.assertEqual(balance(from_location), start_from - 1)
 		self.assertEqual(balance(printing_supplier), start_supplier + 1)
@@ -1338,14 +1291,14 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		self.assertEqual(balance(from_location), start_from)
 		self.assertEqual(balance(printing_supplier), start_supplier)
 		for doctype, name in (
-			('YRP Delivery Challan', dc.name),
-			('YRP Delivery Challan', redelivery.name),
-			('YRP Goods Received Note', grn.name),
-			('YRP Goods Received Note', return_grn.name),
+			("YRP Delivery Challan", dc.name),
+			("YRP Delivery Challan", redelivery.name),
+			("YRP Goods Received Note", grn.name),
+			("YRP Goods Received Note", return_grn.name),
 		):
 			self.assertFalse(
 				frappe.db.exists(
-					'SD YRP Cut Bundle Movement Ledger',
+					"SD YRP Cut Bundle Movement Ledger",
 					{
 						"voucher_type": doctype,
 						"voucher_no": name,
@@ -1358,10 +1311,10 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		from essdee_yrp.work_order_piece_tracking import rebuild_work_order_piece_tracking
 
 		work_order_name = "YRP-WO-2026-00040"
-		if not frappe.db.exists('YRP Work Order', work_order_name):
+		if not frappe.db.exists("YRP Work Order", work_order_name):
 			self.skipTest(f"Printing Work Order oracle {work_order_name} is unavailable")
 		row_name = frappe.db.get_value(
-			'YRP Work Order Deliverables',
+			"YRP Work Order Deliverables",
 			{"parent": work_order_name, "pending_quantity": 0},
 			"name",
 		)
@@ -1369,7 +1322,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 			self.skipTest("Printing Work Order has no fully delivered row")
 
 		frappe.db.set_value(
-			'YRP Work Order Deliverables',
+			"YRP Work Order Deliverables",
 			row_name,
 			"pending_quantity",
 			1,
@@ -1377,17 +1330,13 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		)
 		rebuild_work_order_piece_tracking(work_order_name, check_permission=False)
 		self.assertEqual(
-			flt(
-				frappe.db.get_value(
-					'YRP Work Order Deliverables', row_name, "pending_quantity"
-				)
-			),
+			flt(frappe.db.get_value("YRP Work Order Deliverables", row_name, "pending_quantity")),
 			1,
 		)
 
 	def test_collapsed_cbml_query_isolates_set_combinations(self):
 		seed_name = frappe.db.get_value(
-			'SD YRP Cut Bundle Movement Ledger',
+			"SD YRP Cut Bundle Movement Ledger",
 			{
 				"lot": "C0826-57",
 				"supplier": "S-0170",
@@ -1398,14 +1347,14 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		)
 		if not seed_name:
 			self.skipTest("Collapsed CBML oracle is unavailable")
-		seed = frappe.get_doc('SD YRP Cut Bundle Movement Ledger', seed_name)
+		seed = frappe.get_doc("SD YRP Cut Bundle Movement Ledger", seed_name)
 		other_combination = {
 			"major_colour": "CBML Isolation Test",
 			"major_part": "Top",
 		}
 		row = frappe.get_doc(
 			{
-				"doctype": 'SD YRP Cut Bundle Movement Ledger',
+				"doctype": "SD YRP Cut Bundle Movement Ledger",
 				"lot": seed.lot,
 				"supplier": seed.supplier,
 				"lay_no": 0,
@@ -1461,10 +1410,10 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		if not all(
 			frappe.db.exists(doctype, name)
 			for doctype, name in (
-				('YRP Work Order', work_order_name),
-				('Item', variant),
-				('Supplier', source),
-				('Supplier', target),
+				("YRP Work Order", work_order_name),
+				("Item", variant),
+				("Supplier", source),
+				("Supplier", target),
 			)
 		):
 			self.skipTest("Printing first-collapse oracle data is unavailable")
@@ -1481,21 +1430,17 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		)
 
 		latest_exact = []
-		for row in get_latest_cbml_for_variant(
-			source, lot, "45 cm", "Red", "Front", "Maze Capri Set R.N.S"
-		):
-			doc = frappe.get_doc('SD YRP Cut Bundle Movement Ledger', row.name)
-			if (
-				doc.panel == "Front"
-				and _collapsed_set_combination_key(doc.set_combination)
-				== _collapsed_set_combination_key(combination)
-			):
+		for row in get_latest_cbml_for_variant(source, lot, "45 cm", "Red", "Front", "Maze Capri Set R.N.S"):
+			doc = frappe.get_doc("SD YRP Cut Bundle Movement Ledger", row.name)
+			if doc.panel == "Front" and _collapsed_set_combination_key(
+				doc.set_combination
+			) == _collapsed_set_combination_key(combination):
 				latest_exact.append(doc)
 		if not latest_exact:
 			self.skipTest("No exact Front/Red bundles are available at S-0164")
 		self.assertFalse(
 			frappe.db.exists(
-				'SD YRP Cut Bundle Movement Ledger',
+				"SD YRP Cut Bundle Movement Ledger",
 				{
 					"lot": lot,
 					"supplier": source,
@@ -1532,19 +1477,17 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 			row.delivered_quantity = 1
 			row.stock_qty = flt(row.conversion_factor or 1)
 			defaults["items"] = [row]
-			defaults["item_details"] = group_items_for_ui(
-				defaults["items"], 'YRP Delivery Challan'
-			)
+			defaults["item_details"] = group_items_for_ui(defaults["items"], "YRP Delivery Challan")
 			defaults["work_order"] = work_order_name
 			defaults["from_location"] = source
 			defaults["from_warehouse"] = source
 			defaults["allow_non_bundle"] = 1
-			work_order = frappe.get_doc('YRP Work Order', work_order_name)
+			work_order = frappe.get_doc("YRP Work Order", work_order_name)
 			defaults["supplier_address"] = work_order.supplier_address
 			defaults["supplier_address_details"] = work_order.supplier_address_details
 			defaults["from_address"] = work_order.delivery_address
 			defaults["from_address_details"] = work_order.delivery_address_details
-			return self._transaction_from_defaults('YRP Delivery Challan', defaults)
+			return self._transaction_from_defaults("YRP Delivery Challan", defaults)
 
 		first = make_dc()
 		first.submit()
@@ -1576,9 +1519,9 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		for name in (first.name, second.name):
 			self.assertFalse(
 				frappe.db.exists(
-					'SD YRP Cut Bundle Movement Ledger',
+					"SD YRP Cut Bundle Movement Ledger",
 					{
-						"voucher_type": 'YRP Delivery Challan',
+						"voucher_type": "YRP Delivery Challan",
 						"voucher_no": name,
 						"is_cancelled": 0,
 					},
@@ -1595,10 +1538,10 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		if not all(
 			frappe.db.exists(doctype, name)
 			for doctype, name in (
-				('YRP Work Order', work_order_name),
-				('Item', variant),
-				('Supplier', source),
-				('Supplier', target),
+				("YRP Work Order", work_order_name),
+				("Item", variant),
+				("Supplier", source),
+				("Supplier", target),
 			)
 		):
 			self.skipTest("Printing exact-return oracle data is unavailable")
@@ -1615,10 +1558,8 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		)
 
 		exact = None
-		for row in get_latest_cbml_for_variant(
-			source, lot, "45 cm", "Red", "Front", "Maze Capri Set R.N.S"
-		):
-			candidate = frappe.get_doc('SD YRP Cut Bundle Movement Ledger', row.name)
+		for row in get_latest_cbml_for_variant(source, lot, "45 cm", "Red", "Front", "Maze Capri Set R.N.S"):
+			candidate = frappe.get_doc("SD YRP Cut Bundle Movement Ledger", row.name)
 			if (
 				candidate.panel == "Front"
 				and flt(candidate.quantity_after_transaction) > 0
@@ -1631,12 +1572,12 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 			self.skipTest("No exact Front/Red bundle is available at S-0164")
 		quantity = flt(exact.quantity_after_transaction)
 		deliverable_name, ordered_quantity = frappe.db.get_value(
-			'YRP Work Order Deliverables',
+			"YRP Work Order Deliverables",
 			{"parent": work_order_name, "item_variant": variant},
 			["name", "qty"],
 		)
 		frappe.db.set_value(
-			'YRP Work Order Deliverables',
+			"YRP Work Order Deliverables",
 			deliverable_name,
 			{
 				"pending_quantity": quantity,
@@ -1670,7 +1611,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 					}
 				},
 			}
-			cpm = frappe.new_doc('SD YRP Cut Panel Movement')
+			cpm = frappe.new_doc("SD YRP Cut Panel Movement")
 			cpm.lot = lot
 			cpm.item = "Maze Capri Set R.N.S"
 			cpm.from_warehouse = location
@@ -1682,12 +1623,10 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 			return cpm
 
 		outward_cpm = make_cpm(source)
-		dc_defaults = build_delivery_challan_defaults(
-			outward_cpm.name, work_order_name
-		)
+		dc_defaults = build_delivery_challan_defaults(outward_cpm.name, work_order_name)
 		dc_defaults["from_location"] = source
 		dc_defaults["from_warehouse"] = source
-		dc = self._transaction_from_defaults('YRP Delivery Challan', dc_defaults)
+		dc = self._transaction_from_defaults("YRP Delivery Challan", dc_defaults)
 		dc.submit()
 		self.assertEqual(sum(flt(row.delivered_quantity) for row in dc.items), quantity)
 
@@ -1701,7 +1640,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 				}
 			],
 		)
-		return_grn = frappe.get_doc('YRP Goods Received Note', return_name)
+		return_grn = frappe.get_doc("YRP Goods Received Note", return_name)
 		return_grn.cut_panel_movement = return_cpm.name
 		return_grn.save()
 		return_grn.submit()
@@ -1710,9 +1649,9 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 			sum(
 				flt(row.quantity)
 				for row in frappe.get_all(
-					'SD YRP Cut Bundle Movement Ledger',
+					"SD YRP Cut Bundle Movement Ledger",
 					filters={
-						"voucher_type": 'YRP Goods Received Note',
+						"voucher_type": "YRP Goods Received Note",
 						"voucher_no": return_grn.name,
 						"supplier": source,
 						"is_cancelled": 0,
@@ -1726,9 +1665,9 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 			sum(
 				flt(row.quantity)
 				for row in frappe.get_all(
-					'SD YRP Cut Bundle Movement Ledger',
+					"SD YRP Cut Bundle Movement Ledger",
 					filters={
-						"voucher_type": 'YRP Goods Received Note',
+						"voucher_type": "YRP Goods Received Note",
 						"voucher_no": return_grn.name,
 						"supplier": target,
 						"is_cancelled": 0,
@@ -1745,9 +1684,9 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		outward_cpm.cancel()
 		self.assertFalse(
 			frappe.db.exists(
-				'SD YRP Cut Bundle Movement Ledger',
+				"SD YRP Cut Bundle Movement Ledger",
 				{
-					"voucher_type": ["in", ['YRP Delivery Challan', 'YRP Goods Received Note']],
+					"voucher_type": ["in", ["YRP Delivery Challan", "YRP Goods Received Note"]],
 					"voucher_no": ["in", [dc.name, return_grn.name]],
 					"is_cancelled": 0,
 				},
@@ -1760,13 +1699,13 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 	def test_cut_panel_movement_allows_only_one_active_root_transaction(self):
 		movement_name = "CPM-2608-00220"
 		if not frappe.db.exists(
-			'SD YRP Cut Panel Movement',
+			"SD YRP Cut Panel Movement",
 			{"name": movement_name, "docstatus": 1, "against_id": ["is", "not set"]},
 		):
 			self.skipTest(f"Unlinked Cut Panel Movement oracle {movement_name} is unavailable")
 
 		defaults = build_stock_entry_defaults(movement_name)
-		entry = frappe.new_doc('YRP Stock Entry')
+		entry = frappe.new_doc("YRP Stock Entry")
 		entry.purpose = defaults["purpose"]
 		entry.from_warehouse = defaults["from_warehouse"]
 		entry.from_supplier = defaults["from_supplier"]
@@ -1782,7 +1721,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 			build_delivery_challan_defaults(movement_name, "WO-NOT-REACHED")
 
 		companion = frappe._dict(
-			doctype='YRP Stock Entry',
+			doctype="YRP Stock Entry",
 			name="STE-COMPLETION-TEST",
 			purpose="DC Completion",
 			cut_panel_movement=movement_name,
@@ -1794,12 +1733,12 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		movement_name = "CPM-2608-00220"
 		work_order_name = "WO-2627-00857"
 		if not frappe.db.exists(
-			'SD YRP Cut Panel Movement',
+			"SD YRP Cut Panel Movement",
 			{"name": movement_name, "docstatus": 1, "against_id": ["is", "not set"]},
 		):
 			self.skipTest(f"Unlinked Cut Panel Movement oracle {movement_name} is unavailable")
 		if not frappe.db.exists(
-			'YRP Work Order',
+			"YRP Work Order",
 			{
 				"name": work_order_name,
 				"docstatus": 1,
@@ -1808,9 +1747,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		):
 			self.skipTest(f"Open Work Order oracle {work_order_name} is unavailable")
 
-		movement, _ipd, rows = get_grouped_movement_rows(
-			movement_name, 'YRP Delivery Challan'
-		)
+		movement, _ipd, rows = get_grouped_movement_rows(movement_name, "YRP Delivery Challan")
 		for index, row in enumerate(rows):
 			qty = flt(row["qty"])
 			common = {
@@ -1825,33 +1762,29 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 				"set_combination": row["set_combination"],
 			}
 			self._insert_submitted_work_order_row(
-				'YRP Work Order Deliverables', "deliverables", work_order_name, common
+				"YRP Work Order Deliverables", "deliverables", work_order_name, common
 			)
 			self._insert_submitted_work_order_row(
-				'YRP Work Order Receivables', "receivables", work_order_name, common
+				"YRP Work Order Receivables", "receivables", work_order_name, common
 			)
-			parent_item = frappe.db.get_value(
-				'Item', row["item_variant"], "item"
-			)
-			frappe.db.set_value(
-				'Item', parent_item, "allow_negative_stock", 1, update_modified=False
-			)
-			frappe.clear_document_cache('Item', parent_item)
-		frappe.clear_document_cache('YRP Work Order', work_order_name)
+			parent_item = frappe.db.get_value("Item", row["item_variant"], "item")
+			frappe.db.set_value("Item", parent_item, "allow_negative_stock", 1, update_modified=False)
+			frappe.clear_document_cache("Item", parent_item)
+		frappe.clear_document_cache("YRP Work Order", work_order_name)
 
 		dc_defaults = build_delivery_challan_defaults(movement_name, work_order_name)
-		dc = self._transaction_from_defaults('YRP Delivery Challan', dc_defaults)
+		dc = self._transaction_from_defaults("YRP Delivery Challan", dc_defaults)
 		dc.submit()
 		self.assertEqual(dc.docstatus, 1)
 		self.assertEqual(
-			frappe.db.get_value('SD YRP Cut Panel Movement', movement_name, "against_id"),
+			frappe.db.get_value("SD YRP Cut Panel Movement", movement_name, "against_id"),
 			dc.name,
 		)
 		self.assertGreater(
 			frappe.db.count(
-				'SD YRP Cut Bundle Movement Ledger',
+				"SD YRP Cut Bundle Movement Ledger",
 				filters={
-					"voucher_type": 'YRP Delivery Challan',
+					"voucher_type": "YRP Delivery Challan",
 					"voucher_no": dc.name,
 					"is_cancelled": 0,
 				},
@@ -1859,12 +1792,10 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 			0,
 		)
 
-		incoming = frappe.new_doc('SD YRP Cut Panel Movement')
+		incoming = frappe.new_doc("SD YRP Cut Panel Movement")
 		incoming.lot = movement.lot
 		incoming.item = movement.item
-		incoming.from_warehouse = frappe.db.get_value(
-			'YRP Work Order', work_order_name, "supplier"
-		)
+		incoming.from_warehouse = frappe.db.get_value("YRP Work Order", work_order_name, "supplier")
 		incoming.movement_from_cutting = 0
 		incoming.posting_date = nowdate()
 		incoming.posting_time = nowtime()
@@ -1873,18 +1804,18 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		incoming.submit()
 
 		grn_defaults = build_goods_received_note_defaults(incoming.name, work_order_name)
-		grn = self._transaction_from_defaults('YRP Goods Received Note', grn_defaults)
+		grn = self._transaction_from_defaults("YRP Goods Received Note", grn_defaults)
 		grn.submit()
 		self.assertEqual(grn.docstatus, 1)
 		self.assertEqual(
-			frappe.db.get_value('SD YRP Cut Panel Movement', incoming.name, "against_id"),
+			frappe.db.get_value("SD YRP Cut Panel Movement", incoming.name, "against_id"),
 			grn.name,
 		)
 		self.assertGreater(
 			frappe.db.count(
-				'SD YRP Cut Bundle Movement Ledger',
+				"SD YRP Cut Bundle Movement Ledger",
 				filters={
-					"voucher_type": 'YRP Goods Received Note',
+					"voucher_type": "YRP Goods Received Note",
 					"voucher_no": grn.name,
 					"is_cancelled": 0,
 				},
@@ -1893,14 +1824,12 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		)
 
 		grn.cancel()
-		self.assertFalse(
-			frappe.db.get_value('SD YRP Cut Panel Movement', incoming.name, "against_id")
-		)
+		self.assertFalse(frappe.db.get_value("SD YRP Cut Panel Movement", incoming.name, "against_id"))
 		self.assertFalse(
 			frappe.db.exists(
-				'SD YRP Cut Bundle Movement Ledger',
+				"SD YRP Cut Bundle Movement Ledger",
 				{
-					"voucher_type": 'YRP Goods Received Note',
+					"voucher_type": "YRP Goods Received Note",
 					"voucher_no": grn.name,
 					"is_cancelled": 0,
 				},
@@ -1908,14 +1837,12 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		)
 		incoming.cancel()
 		dc.cancel()
-		self.assertFalse(
-			frappe.db.get_value('SD YRP Cut Panel Movement', movement_name, "against_id")
-		)
+		self.assertFalse(frappe.db.get_value("SD YRP Cut Panel Movement", movement_name, "against_id"))
 		self.assertFalse(
 			frappe.db.exists(
-				'SD YRP Cut Bundle Movement Ledger',
+				"SD YRP Cut Bundle Movement Ledger",
 				{
-					"voucher_type": 'YRP Delivery Challan',
+					"voucher_type": "YRP Delivery Challan",
 					"voucher_no": dc.name,
 					"is_cancelled": 0,
 				},
@@ -1926,12 +1853,12 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		movement_name = "CPM-2608-00220"
 		closed_work_order = "WO-2627-00778"
 		if not frappe.db.exists(
-			'SD YRP Cut Panel Movement',
+			"SD YRP Cut Panel Movement",
 			{"name": movement_name, "docstatus": 1, "against_id": ["is", "not set"]},
 		):
 			self.skipTest(f"Unlinked Cut Panel Movement oracle {movement_name} is unavailable")
 		if not frappe.db.exists(
-			'YRP Work Order',
+			"YRP Work Order",
 			{
 				"name": closed_work_order,
 				"lot": "C0426-34/1",
@@ -1958,7 +1885,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 	def test_allow_non_bundle_routes_collapsed_bundle_submit_and_cancel(self, update):
 		doc = frappe._dict(
 			{
-				"doctype": 'YRP Delivery Challan',
+				"doctype": "YRP Delivery Challan",
 				"name": "DC-COLLAPSED-TEST",
 				"lot": "LOT-COLLAPSED-TEST",
 				"allow_non_bundle": 1,
@@ -1972,11 +1899,11 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 			[(entry.args, entry.kwargs) for entry in update.call_args_list],
 			[
 				(
-					('YRP Delivery Challan', "DC-COLLAPSED-TEST", "on_submit"),
+					("YRP Delivery Challan", "DC-COLLAPSED-TEST", "on_submit"),
 					{"non_stich_process": False},
 				),
 				(
-					('YRP Delivery Challan', "DC-COLLAPSED-TEST", "on_cancel"),
+					("YRP Delivery Challan", "DC-COLLAPSED-TEST", "on_cancel"),
 					{"non_stich_process": False},
 				),
 			],
@@ -1985,7 +1912,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		update.reset_mock()
 		grn = frappe._dict(
 			{
-				"doctype": 'YRP Goods Received Note',
+				"doctype": "YRP Goods Received Note",
 				"name": "GRN-COLLAPSED-TEST",
 				"lot": "LOT-COLLAPSED-TEST",
 				"allow_non_bundle": 1,
@@ -1997,7 +1924,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		self.assertEqual(
 			(update.call_args.args, update.call_args.kwargs),
 			(
-				('YRP Goods Received Note', "GRN-COLLAPSED-TEST", "on_submit"),
+				("YRP Goods Received Note", "GRN-COLLAPSED-TEST", "on_submit"),
 				{"non_stich_process": True},
 			),
 		)
@@ -2036,7 +1963,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		}
 		movement = {"panels": [], "data": {}, "accessory_data": [], "is_set_item": 0}
 
-		doc = frappe.new_doc('SD YRP Cut Bundle Edit')
+		doc = frappe.new_doc("SD YRP Cut Bundle Edit")
 		doc.lot = lot
 		doc.item = row.item
 		doc.warehouse = warehouse
@@ -2050,14 +1977,14 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		doc.submit()
 
 		created = frappe.get_all(
-			'SD YRP Cut Bundle Movement Ledger',
+			"SD YRP Cut Bundle Movement Ledger",
 			filters={"transformed_from": doc.name, "is_cancelled": 0},
 			pluck="name",
 		)
 		self.assertTrue(created)
 		self.assertTrue(
 			frappe.db.exists(
-				'SD YRP Cut Bundle Movement Ledger',
+				"SD YRP Cut Bundle Movement Ledger",
 				{
 					"lot": lot,
 					"supplier": warehouse,
@@ -2075,13 +2002,13 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		doc.cancel()
 		self.assertFalse(
 			frappe.db.exists(
-				'SD YRP Cut Bundle Movement Ledger',
+				"SD YRP Cut Bundle Movement Ledger",
 				{"transformed_from": doc.name, "is_cancelled": 0},
 			)
 		)
 		self.assertTrue(
 			frappe.db.exists(
-				'SD YRP Cut Bundle Movement Ledger',
+				"SD YRP Cut Bundle Movement Ledger",
 				{
 					"lot": lot,
 					"supplier": warehouse,
@@ -2097,9 +2024,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		)
 
 	def test_cutting_reports_match_migrated_oracles(self):
-		if not frappe.db.exists(
-			'SD YRP Cutting LaySheet', {"bundle_generated_date": "2026-08-01"}
-		):
+		if not frappe.db.exists("SD YRP Cutting LaySheet", {"bundle_generated_date": "2026-08-01"}):
 			self.skipTest("Migrated Cutting report oracle is unavailable")
 
 		daily = get_daily_production_report("2026-08-01", "")
@@ -2157,21 +2082,21 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 
 	def test_migrated_cutting_laysheet_creates_f16_grn(self):
 		laysheet_name = "CLS-2608-00049"
-		if not frappe.db.exists('SD YRP Cutting LaySheet', laysheet_name):
+		if not frappe.db.exists("SD YRP Cutting LaySheet", laysheet_name):
 			self.skipTest(f"Migrated oracle {laysheet_name} is unavailable")
 
 		# This is a historical, unprinted draft from the migrated production
 		# snapshot. Later receipts have already reduced its Work Order pending and
 		# cloth balance. Restore only those prerequisites inside this test's
 		# rollback transaction; production validations remain fully active.
-		laysheet = frappe.get_doc('SD YRP Cutting LaySheet', laysheet_name)
+		laysheet = frappe.get_doc("SD YRP Cutting LaySheet", laysheet_name)
 		work_order_name, production_detail = frappe.db.get_value(
-			'SD YRP Cutting Plan',
+			"SD YRP Cutting Plan",
 			laysheet.cutting_plan,
 			["work_order", "production_detail"],
 		)
-		work_order = frappe.get_doc('YRP Work Order', work_order_name)
-		item = frappe.db.get_value('SD YRP Lot', laysheet.lot, "item")
+		work_order = frappe.get_doc("YRP Work Order", work_order_name)
+		item = frappe.db.get_value("SD YRP Lot", laysheet.lot, "item")
 		_unused_defaults, receipt_rows = _cutting_grn_output_rows(
 			laysheet,
 			work_order,
@@ -2180,7 +2105,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		)
 		for row in receipt_rows:
 			frappe.db.set_value(
-				'YRP Work Order Receivables',
+				"YRP Work Order Receivables",
 				row.ref_docname,
 				"pending_quantity",
 				max(float(row.pending_quantity or 0), float(row.quantity or 0)),
@@ -2189,29 +2114,27 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		for row in _cutting_grn_consumed_rows(laysheet):
 			parent_item = get_parent_item(row["item_variant"])
 			frappe.db.set_value(
-				'Item',
+				"Item",
 				parent_item,
 				"allow_negative_stock",
 				1,
 				update_modified=False,
 			)
-			frappe.clear_document_cache('Item', parent_item)
+			frappe.clear_document_cache("Item", parent_item)
 		pending_before = {
 			row.ref_docname: flt(
-				frappe.db.get_value(
-					'YRP Work Order Receivables', row.ref_docname, "pending_quantity"
-				)
+				frappe.db.get_value("YRP Work Order Receivables", row.ref_docname, "pending_quantity")
 			)
 			for row in receipt_rows
 		}
 
 		before = frappe.get_all(
-			'YRP Goods Received Note',
+			"YRP Goods Received Note",
 			filters={"cutting_laysheet": laysheet_name},
 			pluck="name",
 		)
 		grn_name = create_grn_entry(laysheet_name)
-		grn = frappe.get_doc('YRP Goods Received Note', grn_name)
+		grn = frappe.get_doc("YRP Goods Received Note", grn_name)
 
 		self.assertEqual(grn.docstatus, 1)
 		self.assertEqual(grn.cutting_laysheet, laysheet_name)
@@ -2225,19 +2148,15 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		self.assertNotIn(grn.name, before)
 		for row in grn.items:
 			self.assertAlmostEqual(
-				flt(
-					frappe.db.get_value(
-						'YRP Work Order Receivables', row.ref_docname, "pending_quantity"
-					)
-				),
+				flt(frappe.db.get_value("YRP Work Order Receivables", row.ref_docname, "pending_quantity")),
 				pending_before[row.ref_docname] - flt(row.quantity),
 				places=3,
 			)
 
 		active_sles = frappe.get_all(
-			'YRP Stock Ledger Entry',
+			"YRP Stock Ledger Entry",
 			filters={
-				"voucher_type": 'YRP Goods Received Note',
+				"voucher_type": "YRP Goods Received Note",
 				"voucher_no": grn.name,
 				"is_cancelled": 0,
 			},
@@ -2249,9 +2168,9 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		self.assertEqual(create_grn_entry(laysheet_name), grn.name)
 		self.assertEqual(
 			frappe.db.count(
-				'YRP Stock Ledger Entry',
+				"YRP Stock Ledger Entry",
 				filters={
-					"voucher_type": 'YRP Goods Received Note',
+					"voucher_type": "YRP Goods Received Note",
 					"voucher_no": grn.name,
 					"is_cancelled": 0,
 				},
@@ -2260,7 +2179,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		)
 
 		parent_state_before_retry = frappe.db.get_value(
-			'SD YRP Cutting Plan',
+			"SD YRP Cutting Plan",
 			laysheet.cutting_plan,
 			["completed_items_json", "incomplete_items_json"],
 		)
@@ -2279,7 +2198,7 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		)
 		self.assertEqual(
 			frappe.db.get_value(
-				'SD YRP Cutting Plan',
+				"SD YRP Cutting Plan",
 				laysheet.cutting_plan,
 				["completed_items_json", "incomplete_items_json"],
 			),
@@ -2302,9 +2221,9 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		)
 		create_cut_bundle_ledger(ledger_source)
 		bundle_count = frappe.db.count(
-			'SD YRP Cut Bundle Movement Ledger',
+			"SD YRP Cut Bundle Movement Ledger",
 			filters={
-				"voucher_type": 'SD YRP Cutting LaySheet',
+				"voucher_type": "SD YRP Cutting LaySheet",
 				"voucher_no": laysheet.name,
 				"is_cancelled": 0,
 			},
@@ -2313,9 +2232,9 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		create_cut_bundle_ledger(ledger_source)
 		self.assertEqual(
 			frappe.db.count(
-				'SD YRP Cut Bundle Movement Ledger',
+				"SD YRP Cut Bundle Movement Ledger",
 				filters={
-					"voucher_type": 'SD YRP Cutting LaySheet',
+					"voucher_type": "SD YRP Cutting LaySheet",
 					"voucher_no": laysheet.name,
 					"is_cancelled": 0,
 				},
@@ -2325,9 +2244,9 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		cancel_cut_bundle(ledger_source)
 		self.assertFalse(
 			frappe.db.exists(
-				'SD YRP Cut Bundle Movement Ledger',
+				"SD YRP Cut Bundle Movement Ledger",
 				{
-					"voucher_type": 'SD YRP Cutting LaySheet',
+					"voucher_type": "SD YRP Cutting LaySheet",
 					"voucher_no": laysheet.name,
 					"is_cancelled": 0,
 				},
@@ -2338,9 +2257,9 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		self.assertEqual(grn.docstatus, 2)
 		self.assertFalse(
 			frappe.db.exists(
-				'YRP Stock Ledger Entry',
+				"YRP Stock Ledger Entry",
 				{
-					"voucher_type": 'YRP Goods Received Note',
+					"voucher_type": "YRP Goods Received Note",
 					"voucher_no": grn.name,
 					"is_cancelled": 0,
 				},
@@ -2348,21 +2267,17 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 		)
 		for ref_docname, pending in pending_before.items():
 			self.assertAlmostEqual(
-				flt(
-					frappe.db.get_value(
-						'YRP Work Order Receivables', ref_docname, "pending_quantity"
-					)
-				),
+				flt(frappe.db.get_value("YRP Work Order Receivables", ref_docname, "pending_quantity")),
 				pending,
 				places=3,
 			)
 
 	def test_migrated_grn_consumption_resolves_legacy_deliverable(self):
 		grn_name = "GRN-2627-05036"
-		if not frappe.db.exists('YRP Goods Received Note', grn_name):
+		if not frappe.db.exists("YRP Goods Received Note", grn_name):
 			self.skipTest(f"Migrated oracle {grn_name} is unavailable")
-		grn = frappe.get_doc('YRP Goods Received Note', grn_name)
-		work_order = frappe.get_doc('YRP Work Order', grn.against_id)
+		grn = frappe.get_doc("YRP Goods Received Note", grn_name)
+		work_order = frappe.get_doc("YRP Work Order", grn.against_id)
 		deliverables = {row.name: row for row in work_order.deliverables}
 		legacy_row = grn.grn_deliverables[0]
 		self.assertFalse(legacy_row.work_order_deliverable)
@@ -2371,14 +2286,12 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 
 	def test_migrated_packing_grn_allows_stock_only_consumption_rows(self):
 		grn_name = "GRN-2627-05053"
-		if not frappe.db.exists('YRP Goods Received Note', grn_name):
+		if not frappe.db.exists("YRP Goods Received Note", grn_name):
 			self.skipTest(f"Migrated oracle {grn_name} is unavailable")
-		grn = frappe.get_doc('YRP Goods Received Note', grn_name)
+		grn = frappe.get_doc("YRP Goods Received Note", grn_name)
 		self.assertTrue(grn.includes_packing)
 		self.assertTrue(grn.grn_deliverables)
-		self.assertFalse(
-			any(row.work_order_deliverable for row in grn.grn_deliverables)
-		)
+		self.assertFalse(any(row.work_order_deliverable for row in grn.grn_deliverables))
 
 		from essdee_yrp.fabric_grn import on_cancel, on_submit
 
@@ -2401,7 +2314,7 @@ class TestCuttingPlanClothUsage(UnitTestCase):
 	def test_submit_generates_requirements_when_table_is_empty(self):
 		plan = CuttingPlan(
 			{
-				"doctype": 'SD YRP Cutting Plan',
+				"doctype": "SD YRP Cutting Plan",
 				"name": "CP-NEW",
 				"docstatus": 0,
 				"cutting_plan_cloth_details": [],
@@ -2430,9 +2343,7 @@ class TestCuttingPlanClothUsage(UnitTestCase):
 		):
 			plan.before_submit()
 
-		generate_requirements.assert_called_once_with(
-			plan, preserve_operational_values=False
-		)
+		generate_requirements.assert_called_once_with(plan, preserve_operational_values=False)
 		self.assertEqual(plan.cp_status, "Planned")
 
 	def test_regeneration_preserves_received_and_used_weights(self):
@@ -2466,7 +2377,7 @@ class TestCuttingPlanClothUsage(UnitTestCase):
 	def test_empty_submitted_plan_stays_planned(self):
 		plan = CuttingPlan(
 			{
-				"doctype": 'SD YRP Cutting Plan',
+				"doctype": "SD YRP Cutting Plan",
 				"name": "CP-EMPTY",
 				"docstatus": 1,
 				"cp_status": "Planned",
@@ -2483,11 +2394,9 @@ class TestCuttingPlanClothUsage(UnitTestCase):
 			plan.on_update_after_submit()
 
 		self.assertIn(
-			(('SD YRP Cutting Plan', "CP-EMPTY", "cp_status", "Planned"), {}),
+			(("SD YRP Cutting Plan", "CP-EMPTY", "cp_status", "Planned"), {}),
 			[(call.args, call.kwargs) for call in set_value.call_args_list],
 		)
 
 	def test_bundle_generation_persists_precise_cutting_plan_cloth_usage(self):
-		TestCuttingBusinessLogic._assert_bundle_generation_persists_precise_cutting_plan_cloth_usage(
-			self
-		)
+		TestCuttingBusinessLogic._assert_bundle_generation_persists_precise_cutting_plan_cloth_usage(self)

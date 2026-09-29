@@ -81,7 +81,6 @@ onMounted(() => {
 
 function load_data(data) {
     items.value = {};
-    console.log(data)
     Object.assign(items.value, data);
 }
 

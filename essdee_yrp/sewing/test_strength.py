@@ -43,9 +43,7 @@ class TestSewingWorkerStrength(FrappeTestCase):
 			patch.object(strength.frappe, "get_single") as get_single,
 		):
 			with self.assertRaises(frappe.PermissionError):
-				strength.get_worker_strength_report(
-					"2026-08-25", "08:00:00", "17:00:00"
-				)
+				strength.get_worker_strength_report("2026-08-25", "08:00:00", "17:00:00")
 
 		get_single.assert_not_called()
 
@@ -88,9 +86,7 @@ class TestSewingWorkerStrength(FrappeTestCase):
 				side_effect=[report_response, punch_response],
 			) as mock_get,
 		):
-			result = strength.get_worker_strength_report(
-				"2026-08-25", "08:00:00", "17:00:00"
-			)
+			result = strength.get_worker_strength_report("2026-08-25", "08:00:00", "17:00:00")
 
 		self.assertEqual(mock_get.call_count, 2)
 		request = mock_get.call_args_list[0]
@@ -98,9 +94,7 @@ class TestSewingWorkerStrength(FrappeTestCase):
 			request.args[0],
 			"https://hr.essdee.fit/api/method/frappe.desk.query_report.run",
 		)
-		self.assertEqual(
-			request.kwargs["headers"]["Authorization"], "token hr-key:hr-secret"
-		)
+		self.assertEqual(request.kwargs["headers"]["Authorization"], "token hr-key:hr-secret")
 		filters = frappe.parse_json(request.kwargs["params"]["filters"])
 		self.assertEqual(filters["shift_type"], ["Shift A", "Shift B"])
 		self.assertEqual(result["rows"], [{"department": "Sewing", "strength": 12}])
@@ -111,53 +105,35 @@ class TestSewingWorkerStrength(FrappeTestCase):
 		settings = FakeHRSettings(api_key="", api_secret="")
 		with patch.object(strength.frappe, "get_single", return_value=settings):
 			with self.assertRaisesRegex(frappe.ValidationError, "Configure the HR API"):
-				strength.get_worker_strength_report(
-					"2026-08-25", "08:00:00", "17:00:00"
-				)
+				strength.get_worker_strength_report("2026-08-25", "08:00:00", "17:00:00")
 
 	def test_report_requires_hr_site_url(self):
-		with patch.object(
-			strength.frappe, "get_single", return_value=FakeHRSettings(site_url="")
-		):
+		with patch.object(strength.frappe, "get_single", return_value=FakeHRSettings(site_url="")):
 			with self.assertRaisesRegex(frappe.ValidationError, "HR Site URL"):
-				strength.get_worker_strength_report(
-					"2026-08-25", "08:00:00", "17:00:00"
-				)
+				strength.get_worker_strength_report("2026-08-25", "08:00:00", "17:00:00")
 
 	def test_report_requires_configured_shifts(self):
-		with patch.object(
-			strength.frappe, "get_single", return_value=FakeHRSettings(shifts=[])
-		):
+		with patch.object(strength.frappe, "get_single", return_value=FakeHRSettings(shifts=[])):
 			with self.assertRaisesRegex(frappe.ValidationError, "at least one Shift"):
-				strength.get_worker_strength_report(
-					"2026-08-25", "08:00:00", "17:00:00"
-				)
+				strength.get_worker_strength_report("2026-08-25", "08:00:00", "17:00:00")
 
 	def test_report_rejects_invalid_hr_response(self):
 		response = MagicMock()
 		response.json.return_value = {"message": {"columns": []}}
 		with (
-			patch.object(
-				strength.frappe, "get_single", return_value=FakeHRSettings()
-			),
+			patch.object(strength.frappe, "get_single", return_value=FakeHRSettings()),
 			patch.object(strength.requests, "get", return_value=response),
 		):
 			with self.assertRaisesRegex(frappe.ValidationError, "invalid Workers Strength"):
-				strength.get_worker_strength_report(
-					"2026-08-25", "08:00:00", "17:00:00"
-				)
+				strength.get_worker_strength_report("2026-08-25", "08:00:00", "17:00:00")
 
 	def test_report_rejects_invalid_first_punch_response(self):
 		report_response = MagicMock()
-		report_response.json.return_value = {
-			"message": {"columns": [], "result": [], "add_total_row": 0}
-		}
+		report_response.json.return_value = {"message": {"columns": [], "result": [], "add_total_row": 0}}
 		punch_response = MagicMock()
 		punch_response.json.return_value = {"message": {"rows": None}}
 		with (
-			patch.object(
-				strength.frappe, "get_single", return_value=FakeHRSettings()
-			),
+			patch.object(strength.frappe, "get_single", return_value=FakeHRSettings()),
 			patch.object(
 				strength.requests,
 				"get",
@@ -165,6 +141,4 @@ class TestSewingWorkerStrength(FrappeTestCase):
 			),
 		):
 			with self.assertRaisesRegex(frappe.ValidationError, "first punch"):
-				strength.get_worker_strength_report(
-					"2026-08-25", "08:00:00", "17:00:00"
-				)
+				strength.get_worker_strength_report("2026-08-25", "08:00:00", "17:00:00")

@@ -24,16 +24,14 @@ def load_schema_index(*roots: str | Path) -> dict[str, dict[str, Any]]:
 		for path in sorted(root.rglob("*.json")):
 			try:
 				value = json.loads(path.read_text())
-			except (OSError, json.JSONDecodeError):
+			except OSError, json.JSONDecodeError:
 				continue
 			if not isinstance(value, dict) or value.get("doctype") != "DocType" or not value.get("name"):
 				continue
 			name = str(value["name"])
 			if name in index:
 				if _data_signature(index[name]) != _data_signature(value):
-					raise SchemaError(
-						f"conflicting DocType {name!r}: {locations[name]} and {path}"
-					)
+					raise SchemaError(f"conflicting DocType {name!r}: {locations[name]} and {path}")
 				continue
 			index[name] = value
 			locations[name] = path
@@ -135,12 +133,12 @@ def _coerce_property_value(value: Any, property_type: str | None) -> Any:
 	if property_type in {"Check", "Int"}:
 		try:
 			return int(value)
-		except (TypeError, ValueError):
+		except TypeError, ValueError:
 			return value
 	if property_type in {"Float", "Currency", "Percent"}:
 		try:
 			return float(value)
-		except (TypeError, ValueError):
+		except TypeError, ValueError:
 			return value
 	return value
 

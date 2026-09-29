@@ -5,9 +5,9 @@ are re-encrypted when the source key works; otherwise their exact ciphertext is
 preserved with an explicit source-key warning, never described as operational.
 """
 
+import json
 from collections import Counter, defaultdict
 from hmac import compare_digest
-import json
 
 import frappe
 from frappe.utils.password import get_decrypted_password, set_encrypted_password
@@ -28,7 +28,8 @@ def transform_orphan(row, plan):
 		raise MigrationError(f"Populated orphan context is ignored: {parent_spec.source}.{fieldname}")
 	target_child = parent_spec.table_option_map.get(fieldname)
 	return transform_document(
-		row, plan,
+		row,
+		plan,
 		_spec_override=_contextual_child_spec(row, plan, target_child) if target_child else None,
 	)
 
@@ -40,8 +41,7 @@ def auth_identity(row, plan):
 	if not spec or source_field in spec.ignored_fields:
 		raise MigrationError(f"Unmapped credential field {source_doctype}.{source_field}")
 	fieldname = spec.field_map.get(source_field, source_field)
-	field = next((f for f in spec.target_schema.get("fields", [])
-		if f.get("fieldname") == fieldname), None)
+	field = next((f for f in spec.target_schema.get("fields", []) if f.get("fieldname") == fieldname), None)
 	if not field or field.get("fieldtype") != "Password":
 		raise MigrationError(f"Missing target Password field {spec.target}.{fieldname}")
 	name = spec.target if spec.target_schema.get("issingle") else row.get("name")
@@ -74,7 +74,9 @@ def run_auth(plan, source, *, dry_run=False, verify=False):
 		if not is_single:
 			target_exists = bool(frappe.db.exists(doctype, name))
 			if source_orphan and target_exists:
-				raise MigrationError(f"Orphan source credential collides with target record: {doctype} {name}")
+				raise MigrationError(
+					f"Orphan source credential collides with target record: {doctype} {name}"
+				)
 			if not source_orphan and not target_exists:
 				raise MigrationError(f"Credential target record missing: {doctype} {name}")
 		# __Auth can legitimately outlive a deleted child. Preserve its value and
@@ -93,8 +95,10 @@ def run_auth(plan, source, *, dry_run=False, verify=False):
 					"SELECT password, encrypted FROM __Auth WHERE doctype=%s AND name=%s AND fieldname=%s",
 					(doctype, name, fieldname),
 				)
-				matches = bool(actual) and int(actual[0][1]) == int(row["encrypted"]) and compare_digest(
-					str(actual[0][0]).encode(), str(row["password"]).encode()
+				matches = (
+					bool(actual)
+					and int(actual[0][1]) == int(row["encrypted"])
+					and compare_digest(str(actual[0][0]).encode(), str(row["password"]).encode())
 				)
 			if not matches:
 				failures.append(f"Credential value mismatch: {doctype} {name}.{fieldname}")
@@ -107,8 +111,11 @@ def run_auth(plan, source, *, dry_run=False, verify=False):
 				(doctype, name, fieldname, row["password"], int(row["encrypted"])),
 			)
 	return {
-		**counts, "source_key_unavailable": unavailable, "source_orphans": orphans,
-		"source_orphan_count": len(orphans), "failures": failures,
+		**counts,
+		"source_key_unavailable": unavailable,
+		"source_orphans": orphans,
+		"source_orphan_count": len(orphans),
+		"failures": failures,
 		"status": "Failed" if failures else "Preserved; source key unavailable" if unavailable else "Pass",
 	}
 
@@ -124,25 +131,37 @@ def run_retired_archive(migration_name, source, *, dry_run=False, verify=False, 
 		if record.get("blob_issue"):
 			missing_blobs.append({"name": record["row"]["name"], "issue": record["blob_issue"]})
 		if len(records) > 10000:
-			raise MigrationError("Retired source archive exceeds 10,000 rows; review a bounded archive design before loading")
+			raise MigrationError(
+				"Retired source archive exceeds 10,000 rows; review a bounded archive design before loading"
+			)
 	encoded = json.dumps(records, sort_keys=True, separators=(",", ":"), default=str)
 	if missing_blobs and not (verify or allow_missing_files):
 		raise MigrationError(f"{len(missing_blobs)} retired attachment blobs are unavailable in the source")
 	failures = []
 	if verify:
-		stored = frappe.db.get_value('SD YRP MRP Data Migration', migration_name, "retired_source_rows_json")
+		stored = frappe.db.get_value("SD YRP MRP Data Migration", migration_name, "retired_source_rows_json")
 		try:
 			actual = json.loads(stored or "null") if isinstance(stored, str) else stored
-		except (ValueError, TypeError):
+		except ValueError, TypeError:
 			actual = None
 		if actual != records:
 			failures.append("Retired source-table archive differs from the frozen source")
 	elif not dry_run:
-		frappe.db.set_value('SD YRP MRP Data Migration', migration_name,
-			"retired_source_rows_json", encoded, update_modified=False)
-	return {"rows": len(records), "tables": dict(counts), "failures": failures,
-		"missing_blob_count": len(missing_blobs), "missing_blobs": missing_blobs,
-		"status": "Failed" if failures else "Pass"}
+		frappe.db.set_value(
+			"SD YRP MRP Data Migration",
+			migration_name,
+			"retired_source_rows_json",
+			encoded,
+			update_modified=False,
+		)
+	return {
+		"rows": len(records),
+		"tables": dict(counts),
+		"failures": failures,
+		"missing_blob_count": len(missing_blobs),
+		"missing_blobs": missing_blobs,
+		"status": "Failed" if failures else "Pass",
+	}
 
 
 def run_preservation(plan, source, *, migration_name, dry_run=False, allow_missing_files=False):
@@ -159,9 +178,7 @@ def run_preservation(plan, source, *, migration_name, dry_run=False, allow_missi
 		# Orphan child rows pass through the same Link normalization as rows that
 		# still belong to a migrated parent. Several historical attribute-mapping
 		# children outlived their parent and therefore cannot rely on parent context.
-		_apply_contextual_defaults(
-			document, plan.target_schemas[document["doctype"]], reference_data
-		)
+		_apply_contextual_defaults(document, plan.target_schemas[document["doctype"]], reference_data)
 		doctype = document["doctype"]
 		counts[doctype] += 1
 		if not dry_run:
@@ -172,14 +189,21 @@ def run_preservation(plan, source, *, migration_name, dry_run=False, allow_missi
 	for doctype, batch in batches.items():
 		target.upsert_batch(doctype, batch)
 	auth = run_auth(plan, source, dry_run=dry_run)
-	retired = run_retired_archive(migration_name, source, dry_run=dry_run, allow_missing_files=allow_missing_files)
+	retired = run_retired_archive(
+		migration_name, source, dry_run=dry_run, allow_missing_files=allow_missing_files
+	)
 	if not dry_run:
 		frappe.db.commit()
-	return {"orphan_children": dict(counts), "orphan_child_count": sum(counts.values()), "auth": auth, "retired_tables": retired}
+	return {
+		"orphan_children": dict(counts),
+		"orphan_child_count": sum(counts.values()),
+		"auth": auth,
+		"retired_tables": retired,
+	}
 
 
 def verify_orphan_values(plan, source):
-	from essdee_yrp.migration.live import _verify_transformed_value_batch, _apply_contextual_defaults
+	from essdee_yrp.migration.live import _apply_contextual_defaults, _verify_transformed_value_batch
 
 	reference_data = None
 
@@ -193,16 +217,14 @@ def verify_orphan_values(plan, source):
 			return
 		result = _verify_transformed_value_batch(batch, plan, **caches)
 		counts.update({key: result[key] for key in ("documents", "values")})
-		failures.extend(result["failures"][:max(0, 100 - len(failures))])
+		failures.extend(result["failures"][: max(0, 100 - len(failures))])
 		batch.clear()
 
 	for row in source.iter_orphan_children():
 		document = transform_orphan(row, plan)
 		if reference_data is None:
 			reference_data = source.reference_data()
-		_apply_contextual_defaults(
-			document, plan.target_schemas[document["doctype"]], reference_data
-		)
+		_apply_contextual_defaults(document, plan.target_schemas[document["doctype"]], reference_data)
 		batch.append(document)
 		if len(batch) >= 500:
 			flush()

@@ -3,7 +3,6 @@
 import frappe
 from frappe import _
 from frappe.utils import flt
-
 from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import DeliveryChallan
 
 
@@ -22,11 +21,7 @@ def strip_unselected_cpm_items(doc):
 		return
 	doc.set(
 		"items",
-		[
-			row
-			for row in (doc.get("items") or [])
-			if flt(row.get("qty") or row.get("delivered_quantity")) > 0
-		],
+		[row for row in (doc.get("items") or []) if flt(row.get("qty") or row.get("delivered_quantity")) > 0],
 	)
 
 
@@ -112,9 +107,7 @@ class EssdeeDeliveryChallan(DeliveryChallan):
 
 			self.set_onload(
 				"item_details",
-				_enable_zero_pending_excess_in_editor(
-					self.get_onload().get("item_details") or []
-				),
+				_enable_zero_pending_excess_in_editor(self.get_onload().get("item_details") or []),
 			)
 		return result
 

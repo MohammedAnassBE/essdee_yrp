@@ -13,7 +13,7 @@
                             </div>
                         </div>
                     </div>
-                     
+
                 </th>
             </tr>
             <tr v-for="(item, index) in items.items" :key="index">
@@ -56,7 +56,7 @@ function set_attributes() {
                         header_inputs[row] = createInput(row, 1000, null, true)
                     }
                 }
-                items.value.items[i][row] = input 
+                items.value.items[i][row] = input
             })
         }
     }
@@ -124,7 +124,7 @@ function createInput(attr, index, value, is_header){
     else if(fieldtype == 'Select'){
         df['options'] = items.value.select_list
     }
-    
+
     let input =  frappe.ui.form.make_control({
         parent: $(el).find(parent_class),
         df:df ,
@@ -195,7 +195,7 @@ function get_data(){
             }
             if(value == null || value == ""){
                 if(row != field || ind == -1){
-                    frappe.throw("Fill all the combinations")    
+                    frappe.throw("Fill all the combinations")
                 }
                 x.value.items[i][row] = null
             }

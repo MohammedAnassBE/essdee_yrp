@@ -23,10 +23,7 @@ from typing import Any
 
 from audit_production_api_source_values import _connect, _quote
 
-
-SENSITIVE_FIELD = re.compile(
-	r"(?:password|secret|token|api_key|credential|auth|^value$)", re.I
-)
+SENSITIVE_FIELD = re.compile(r"(?:password|secret|token|api_key|credential|auth|^value$)", re.I)
 ATTACH_FIELD_TYPES = {"Attach", "Attach Image"}
 
 
@@ -202,8 +199,7 @@ def _missing_child_parentage(payload, source_db, target_db) -> list[dict[str, An
 		missing_rows = [row for row in source_rows if str(row["name"]) not in target_names]
 		with source_db.cursor() as cursor:
 			cursor.execute(
-				"SELECT 1 FROM information_schema.tables "
-				"WHERE table_schema=DATABASE() AND table_name=%s",
+				"SELECT 1 FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=%s",
 				("tab" + parenttype,),
 			)
 			parent_has_table = bool(cursor.fetchone())
@@ -216,8 +212,7 @@ def _missing_child_parentage(payload, source_db, target_db) -> list[dict[str, An
 				placeholders = ",".join(["%s"] * len(batch))
 				with source_db.cursor() as cursor:
 					cursor.execute(
-						f"SELECT name FROM {_quote('tab' + parenttype)} "
-						f"WHERE name IN ({placeholders})",
+						f"SELECT name FROM {_quote('tab' + parenttype)} WHERE name IN ({placeholders})",
 						batch,
 					)
 					existing_parents.update(str(row["name"]) for row in cursor.fetchall())
@@ -275,9 +270,7 @@ def _pi_amount_changes(source_db, target_db) -> dict[str, Any]:
 		target_row = target.get(identity)
 		if target_row is None:
 			continue
-		if Decimal(str(source_row.get("amount") or 0)) != Decimal(
-			str(target_row.get("amount") or 0)
-		):
+		if Decimal(str(source_row.get("amount") or 0)) != Decimal(str(target_row.get("amount") or 0)):
 			differences.append((source_row, target_row))
 	by_tax: dict[str, dict[str, Any]] = defaultdict(
 		lambda: {"rows": 0, "source_amount": Decimal(0), "target_amount": Decimal(0)}
@@ -292,20 +285,14 @@ def _pi_amount_changes(source_db, target_db) -> dict[str, Any]:
 		"changed_rows": len(differences),
 		"target_equals_qty_times_rate": sum(
 			Decimal(str(target_row.get("amount") or 0))
-			== Decimal(str(source_row.get("qty") or 0))
-			* Decimal(str(source_row.get("rate") or 0))
+			== Decimal(str(source_row.get("qty") or 0)) * Decimal(str(source_row.get("rate") or 0))
 			for source_row, target_row in differences
 		),
-		"source_amount_total": str(
-			sum(Decimal(str(row.get("amount") or 0)) for row, _ in differences)
-		),
-		"target_amount_total": str(
-			sum(Decimal(str(row.get("amount") or 0)) for _, row in differences)
-		),
+		"source_amount_total": str(sum(Decimal(str(row.get("amount") or 0)) for row, _ in differences)),
+		"target_amount_total": str(sum(Decimal(str(row.get("amount") or 0)) for _, row in differences)),
 		"target_minus_source": str(
 			sum(
-				Decimal(str(target_row.get("amount") or 0))
-				- Decimal(str(source_row.get("amount") or 0))
+				Decimal(str(target_row.get("amount") or 0)) - Decimal(str(source_row.get("amount") or 0))
 				for source_row, target_row in differences
 			)
 		),
@@ -344,22 +331,14 @@ def _idx_checks(payload, source_db, target_db) -> list[dict[str, Any]]:
 			source_rows = list(cursor.fetchall())
 		source_names = {str(row["name"]) for row in source_rows}
 		with target_db.cursor() as cursor:
-			cursor.execute(
-				f"SELECT name, parent, idx FROM {_quote('tab' + target_doctype)}"
-			)
-			target_rows = [
-				row for row in cursor.fetchall() if str(row["name"]) in source_names
-			]
+			cursor.execute(f"SELECT name, parent, idx FROM {_quote('tab' + target_doctype)}")
+			target_rows = [row for row in cursor.fetchall() if str(row["name"]) in source_names]
 		source_groups: dict[str, list[tuple[int, str]]] = defaultdict(list)
 		target_groups: dict[str, list[tuple[int, str]]] = defaultdict(list)
 		for row in source_rows:
-			source_groups[str(row["parent"])].append(
-				(int(row.get("idx") or 0), str(row["name"]))
-			)
+			source_groups[str(row["parent"])].append((int(row.get("idx") or 0), str(row["name"])))
 		for row in target_rows:
-			target_groups[str(row["parent"])].append(
-				(int(row.get("idx") or 0), str(row["name"]))
-			)
+			target_groups[str(row["parent"])].append((int(row.get("idx") or 0), str(row["name"])))
 		changed_order = 0
 		missing_order_rows = 0
 		for parent, source_values in source_groups.items():
@@ -423,9 +402,7 @@ def _supplement(
 		"missing_child_rows": missing,
 		"missing_child_totals": {
 			"rows": sum(row["missing_rows"] for row in missing),
-			"attached_rows": sum(
-				row["attached_to_existing_source_parent"] for row in missing
-			),
+			"attached_rows": sum(row["attached_to_existing_source_parent"] for row in missing),
 			"orphan_rows": sum(row["orphan_source_rows"] for row in missing),
 			"schema_cells": sum(row["missing_schema_cells"] for row in missing),
 			"nonblank_cells": sum(row["missing_nonblank_cells"] for row in missing),
@@ -487,16 +464,12 @@ def _doctype_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
 			entry[key] += int(route.get(key) or 0)
 	for entry in grouped.values():
 		entry["target_doctypes"] = sorted(entry["target_doctypes"])
-		entry["status"] = (
-			"Missing rows" if entry["missing_direct_rows"] else "Pass / projected"
-		)
+		entry["status"] = "Missing rows" if entry["missing_direct_rows"] else "Pass / projected"
 	return sorted(grouped.values(), key=lambda row: row["source_doctype"])
 
 
 def _safe_json(value: Any) -> str:
-	return json.dumps(value, ensure_ascii=False, separators=(",", ":")).replace(
-		"</", "<\\/"
-	)
+	return json.dumps(value, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
 
 
 def _render(payload: dict[str, Any]) -> str:
@@ -546,7 +519,7 @@ h2 {{ font-size:22px; margin:0 0 12px }} h3 {{ margin:24px 0 8px }} .lead {{ col
 </style>
 </head>
 <body>
-<header><h1>Production API → ERP Now: exhaustive source-value audit</h1><p>Read-only audit of <code>mrp3.site</code> against <code>erp_now.site</code> · generated {html.escape(payload['generated_on'])}</p></header>
+<header><h1>Production API → ERP Now: exhaustive source-value audit</h1><p>Read-only audit of <code>mrp3.site</code> against <code>erp_now.site</code> · generated {html.escape(payload["generated_on"])}</p></header>
 <nav id="nav">
  <button data-tab="summary" class="active">Result</button><button data-tab="missing">Missing rows</button><button data-tab="changes">Changed values</button><button data-tab="auth">Passwords & files</button><button data-tab="doctypes">263 DocTypes</button><button data-tab="fields">Every field route</button><button data-tab="method">Method</button>
 </nav>
@@ -555,59 +528,59 @@ h2 {{ font-size:22px; margin:0 0 12px }} h3 {{ margin:24px 0 8px }} .lead {{ col
  <h2>Result: not lossless and not production-ready</h2>
  <div class="banner"><strong>The earlier “Verified” status is insufficient.</strong> This independent SQL comparison found source rows and stored values that the transformer-coupled verifier did not inspect. No migration or target data was changed by this audit.</div>
  <div class="grid">
-  <div class="card"><span class="big">{summary['source_doctypes']:,}</span><span class="label">source DocTypes audited</span></div>
-  <div class="card"><span class="big">{summary['source_rows_read']:,}</span><span class="label">source parent + child rows read</span></div>
-  <div class="card"><span class="big">{summary['source_field_values_seen']:,}</span><span class="label">source field values classified</span></div>
-  <div class="card"><span class="big blocker">{missing['rows']:,}</span><span class="label">source child rows absent</span></div>
-  <div class="card"><span class="big blocker">{pi_amount['changed_rows']:,}</span><span class="label">PI stored amounts changed</span></div>
-  <div class="card"><span class="big blocker">{auth['missing_expected_rows']:,}</span><span class="label">expected secret rows absent</span></div>
-  <div class="card"><span class="big review">{supplement['idx_totals']['changed_values']:,}</span><span class="label">stored child idx values normalized</span></div>
+  <div class="card"><span class="big">{summary["source_doctypes"]:,}</span><span class="label">source DocTypes audited</span></div>
+  <div class="card"><span class="big">{summary["source_rows_read"]:,}</span><span class="label">source parent + child rows read</span></div>
+  <div class="card"><span class="big">{summary["source_field_values_seen"]:,}</span><span class="label">source field values classified</span></div>
+  <div class="card"><span class="big blocker">{missing["rows"]:,}</span><span class="label">source child rows absent</span></div>
+  <div class="card"><span class="big blocker">{pi_amount["changed_rows"]:,}</span><span class="label">PI stored amounts changed</span></div>
+  <div class="card"><span class="big blocker">{auth["missing_expected_rows"]:,}</span><span class="label">expected secret rows absent</span></div>
+  <div class="card"><span class="big review">{supplement["idx_totals"]["changed_values"]:,}</span><span class="label">stored child idx values normalized</span></div>
   <div class="card"><span class="big blocker">{strict_mismatches:,}</span><span class="label">raw nonblank mismatch cells requiring action</span></div>
  </div>
  <h3>Raw mismatch total reconciled completely</h3>
  <div class="table"><table><thead><tr><th>Category</th><th>Stored cells</th><th>Meaning</th></tr></thead><tbody>
-  <tr><td>Missing child rows</td><td class="num">{missing['nonblank_cells']:,}</td><td>{missing['rows']:,} source rows are absent: {missing['attached_rows']:,} attached to valid parents and {missing['orphan_rows']:,} physical source orphans.</td></tr>
-  <tr><td>PI amount overwritten</td><td class="num">{pi_amount['changed_rows']:,}</td><td>Every changed target value equals <code>qty × rate</code>; stored source amount was not preserved.</td></tr>
+  <tr><td>Missing child rows</td><td class="num">{missing["nonblank_cells"]:,}</td><td>{missing["rows"]:,} source rows are absent: {missing["attached_rows"]:,} attached to valid parents and {missing["orphan_rows"]:,} physical source orphans.</td></tr>
+  <tr><td>PI amount overwritten</td><td class="num">{pi_amount["changed_rows"]:,}</td><td>Every changed target value equals <code>qty × rate</code>; stored source amount was not preserved.</td></tr>
   <tr><td>Attachment URL normalization</td><td class="num">12</td><td>URLs changed; source blob availability prevents complete byte certification.</td></tr>
-  <tr><td>Child index normalization</td><td class="num">{supplement['idx_totals']['changed_values']:,}</td><td>Exact <code>idx</code> values changed, but the relative sequence of retained rows did not change.</td></tr>
+  <tr><td>Child index normalization</td><td class="num">{supplement["idx_totals"]["changed_values"]:,}</td><td>Exact <code>idx</code> values changed, but the relative sequence of retained rows did not change.</td></tr>
   <tr><td>Approved DocType/Single renames</td><td class="num">2,799</td><td>2,662 PI <code>against</code> values and 137 Single-parent values changed to prefixed DocType identities.</td></tr>
-  <tr><th>Total raw mismatches</th><th class="num">{summary['mismatched_field_values']:,}</th><th>Exactly equals all categories above; there is no unexplained remainder.</th></tr>
+  <tr><th>Total raw mismatches</th><th class="num">{summary["mismatched_field_values"]:,}</th><th>Exactly equals all categories above; there is no unexplained remainder.</th></tr>
  </tbody></table></div>
  <h3>Immediate blockers</h3><ul>
-  <li>Restore or explicitly archive all {missing['rows']:,} missing source child rows. The {missing['attached_rows']:,} attached rows are unequivocal migration omissions.</li>
+  <li>Restore or explicitly archive all {missing["rows"]:,} missing source child rows. The {missing["attached_rows"]:,} attached rows are unequivocal migration omissions.</li>
   <li>Preserve the 646 source Purchase Invoice Item amounts instead of recomputing them.</li>
   <li>Migrate/re-enter the eight expected encrypted secrets without exposing plaintext; decide whether the one legacy Stock Settings password must be archived.</li>
   <li>Preserve <code>Bin.reserved_qty</code> under the same fieldname and label, including stale historical balances, while keeping Stock Reservation Entry authoritative for live enforcement.</li>
-  <li>Provide the source public/private file archive and require byte verification; the saved report found {files.get('audited_missing_blob_count', 0):,} missing attached blobs.</li>
+  <li>Provide the source public/private file archive and require byte verification; the saved report found {files.get("audited_missing_blob_count", 0):,} missing attached blobs.</li>
   <li>Run a new migration and independent audit only after these contract issues are fixed.</li>
  </ul>
- <div class="callout"><strong>Snapshot binding:</strong> the saved migration report and this source audit use snapshot <code>{html.escape(str(snapshot.get('snapshot_fingerprint') or 'unknown'))}</code>, with {snapshot.get('total_parent_records', 0):,} parent records. Therefore these omissions are in the same data snapshot that was previously marked “Verified”.</div>
+ <div class="callout"><strong>Snapshot binding:</strong> the saved migration report and this source audit use snapshot <code>{html.escape(str(snapshot.get("snapshot_fingerprint") or "unknown"))}</code>, with {snapshot.get("total_parent_records", 0):,} parent records. Therefore these omissions are in the same data snapshot that was previously marked “Verified”.</div>
 </section>
 
 <section id="missing" class="tab"><h2>Missing source child rows</h2><p class="lead">Attached rows belong to an existing source parent and should have been exported. Orphan rows physically exist in the source database but are invisible when verification walks only parent documents.</p><div id="missing-table"></div></section>
 
 <section id="changes" class="tab"><h2>Changed stored values</h2>
- <h3>Purchase Invoice Item amount</h3><div class="grid"><div class="card"><span class="big blocker">{pi_amount['changed_rows']:,}</span><span class="label">changed PO-side rows</span></div><div class="card"><span class="big">{html.escape(pi_amount['source_amount_total'])}</span><span class="label">source amount total for changed rows</span></div><div class="card"><span class="big">{html.escape(pi_amount['target_amount_total'])}</span><span class="label">target amount total</span></div><div class="card"><span class="big blocker">{html.escape(pi_amount['target_minus_source'])}</span><span class="label">target minus source</span></div></div>
- <p>All 646 target values equal <code>qty × rate</code>. The source amounts differ by a combined {html.escape(pi_amount['target_minus_source'])}; this is a real stored-value change, not numeric precision normalization. The Work Order grouped SD YRP projection independently passes with {pi['mismatch_count']} group mismatches.</p>
+ <h3>Purchase Invoice Item amount</h3><div class="grid"><div class="card"><span class="big blocker">{pi_amount["changed_rows"]:,}</span><span class="label">changed PO-side rows</span></div><div class="card"><span class="big">{html.escape(pi_amount["source_amount_total"])}</span><span class="label">source amount total for changed rows</span></div><div class="card"><span class="big">{html.escape(pi_amount["target_amount_total"])}</span><span class="label">target amount total</span></div><div class="card"><span class="big blocker">{html.escape(pi_amount["target_minus_source"])}</span><span class="label">target minus source</span></div></div>
+ <p>All 646 target values equal <code>qty × rate</code>. The source amounts differ by a combined {html.escape(pi_amount["target_minus_source"])}; this is a real stored-value change, not numeric precision normalization. The Work Order grouped SD YRP projection independently passes with {pi["mismatch_count"]} group mismatches.</p>
  <h3>Child idx normalization</h3><p>The migration recompressed gaps/duplicates in eight child contexts. All retained child identity sequences remained in the same visible order. Exact source <code>idx</code> values were nevertheless not preserved.</p><div id="idx-table"></div>
- <h3>Attachment URLs and bytes</h3><p>12 stored attachment URLs changed (6 Quality Inspection, 5 Signature, 1 Product Release). The source itself has an attachment metadata conflict for <code>Signature Sign-00005</code>: its field URL and its attached File records point to different files. Separately, only {files.get('verified_blob_count', 0):,} of {files.get('verified_file_count', 0):,} File metadata rows had locally verifiable bytes; {files.get('audited_missing_blob_count', 0):,} attached blobs are missing and {files.get('audited_orphan_attachment_count', 0):,} orphan File entries were omitted.</p>
+ <h3>Attachment URLs and bytes</h3><p>12 stored attachment URLs changed (6 Quality Inspection, 5 Signature, 1 Product Release). The source itself has an attachment metadata conflict for <code>Signature Sign-00005</code>: its field URL and its attached File records point to different files. Separately, only {files.get("verified_blob_count", 0):,} of {files.get("verified_file_count", 0):,} File metadata rows had locally verifiable bytes; {files.get("audited_missing_blob_count", 0):,} attached blobs are missing and {files.get("audited_orphan_attachment_count", 0):,} orphan File entries were omitted.</p>
  <h3>Bin reservation</h3><div class="grid"><div class="card"><span class="big">78,646</span><span class="label">source cached Bin total</span></div><div class="card"><span class="big">78,646</span><span class="label">target stored Bin total</span></div><div class="card"><span class="big">78,621</span><span class="label">source active SRE total</span></div><div class="card"><span class="big">78,621</span><span class="label">target active SRE total</span></div></div><p>All 437 non-zero <code>Bin.reserved_qty</code> rows are stored in visible <code>YRP Bin.reserved_qty</code> with their original identities and values. Stock Reservation Entry remains authoritative for live enforcement and synchronizes the displayed Bin balance when reservations change.</p>
 </section>
 
 <section id="auth" class="tab"><h2>Passwords, files, and verifier blind spots</h2><p class="lead">Secret values are never displayed. This compares only mapped <code>__Auth</code> identities and whether an encrypted value exists.</p><div id="auth-table"></div>
- <h3>Saved report vs independent audit</h3><div class="callout">Saved migration <code>{html.escape(str(saved.get('name') or 'none'))}</code> says <strong>{html.escape(str(saved.get('status') or 'unknown'))}</strong>. Its contract fingerprint is <code>{html.escape(str(snapshot.get('migration_contract_fingerprint') or 'unknown'))}</code>; the audit-time deployed contract fingerprint is <code>{html.escape(str(current_contract))}</code>. They differ, so the old “Verified” result is also stale against the deployed code. The old verifier generated expectations through the transformer, skipped secrets it could not obtain, and walked child rows through parent exports—so populated ignored fields, raw source orphans, and missing legacy child contexts could pass unseen.</div>
+ <h3>Saved report vs independent audit</h3><div class="callout">Saved migration <code>{html.escape(str(saved.get("name") or "none"))}</code> says <strong>{html.escape(str(saved.get("status") or "unknown"))}</strong>. Its contract fingerprint is <code>{html.escape(str(snapshot.get("migration_contract_fingerprint") or "unknown"))}</code>; the audit-time deployed contract fingerprint is <code>{html.escape(str(current_contract))}</code>. They differ, so the old “Verified” result is also stale against the deployed code. The old verifier generated expectations through the transformer, skipped secrets it could not obtain, and walked child rows through parent exports—so populated ignored fields, raw source orphans, and missing legacy child contexts could pass unseen.</div>
 </section>
 
 <section id="doctypes" class="tab"><h2>All source DocTypes</h2><div class="tools"><input id="doctype-search" placeholder="Search DocType or target"><select id="doctype-status"><option value="">All statuses</option><option>Missing rows</option><option>Pass / projected</option></select></div><div id="doctype-table"></div><div class="pager" id="doctype-pager"></div></section>
 
-<section id="fields" class="tab"><h2>Every source field route</h2><p class="lead">All {summary['field_routes']:,} context-specific routes are here, including stored/system fields, layout fields, tables, ignored fields, Password fields, transforms, defaults, and missing rows. Search and filter without loading a second file.</p><div class="tools"><input id="field-search" placeholder="Search DocType, field, context"><select id="field-severity"><option value="">All severities</option><option value="blocker">Blocker</option><option value="review">Review</option><option value="pass">Pass</option><option value="separate">Separate audit</option></select><select id="field-status"><option value="">All classifications</option></select></div><div id="field-table"></div><div class="pager" id="field-pager"></div></section>
+<section id="fields" class="tab"><h2>Every source field route</h2><p class="lead">All {summary["field_routes"]:,} context-specific routes are here, including stored/system fields, layout fields, tables, ignored fields, Password fields, transforms, defaults, and missing rows. Search and filter without loading a second file.</p><div class="tools"><input id="field-search" placeholder="Search DocType, field, context"><select id="field-severity"><option value="">All severities</option><option value="blocker">Blocker</option><option value="review">Review</option><option value="pass">Pass</option><option value="separate">Separate audit</option></select><select id="field-status"><option value="">All classifications</option></select></div><div id="field-table"></div><div class="pager" id="field-pager"></div></section>
 
-<section id="method" class="tab"><h2>Method and limits</h2><ul><li>Read source and target MariaDB tables directly by source identity in bounded batches.</li><li>Used the reviewed routing contract only to locate a target field; did not call <code>transform_document</code> to manufacture expected documents.</li><li>Audited 263 source DocTypes, 2,880 DocFields (including layout/table fields), {summary['field_routes']:,} context routes, {summary['source_rows_read']:,} source rows and {summary['source_field_values_seen']:,} schema value occurrences.</li><li>Discovered stored child contexts absent from current parent metadata, then audited their physical rows.</li><li>Compared Password rows by mapped <code>__Auth</code> identity without reading or printing plaintext.</li><li>Verified the PI grouped commercial projection independently by natural key; {pi['source_item_rows']:,} source rows become {pi['expected_group_rows']:,} groups with {pi['mismatch_count']} aggregate mismatches.</li><li>No source or target row was inserted, updated, deleted, submitted, cancelled, or migrated. No commit or push was performed.</li></ul>
+<section id="method" class="tab"><h2>Method and limits</h2><ul><li>Read source and target MariaDB tables directly by source identity in bounded batches.</li><li>Used the reviewed routing contract only to locate a target field; did not call <code>transform_document</code> to manufacture expected documents.</li><li>Audited 263 source DocTypes, 2,880 DocFields (including layout/table fields), {summary["field_routes"]:,} context routes, {summary["source_rows_read"]:,} source rows and {summary["source_field_values_seen"]:,} schema value occurrences.</li><li>Discovered stored child contexts absent from current parent metadata, then audited their physical rows.</li><li>Compared Password rows by mapped <code>__Auth</code> identity without reading or printing plaintext.</li><li>Verified the PI grouped commercial projection independently by natural key; {pi["source_item_rows"]:,} source rows become {pi["expected_group_rows"]:,} groups with {pi["mismatch_count"]} aggregate mismatches.</li><li>No source or target row was inserted, updated, deleted, submitted, cancelled, or migrated. No commit or push was performed.</li></ul>
  <div class="callout"><strong>Limitation:</strong> most source attachment blobs are absent from the local Frappe 15 clone, so byte-for-byte file preservation cannot be certified here. That is reported as a blocker, not treated as a pass.</div>
 </section>
 </main>
 <script>
-const data={_safe_json({'fields':payload['field_results'],'doctypes':doctypes,'missing':supplement['missing_child_rows'],'idx':supplement['idx_checks'],'auth':payload['auth']['rows']})};
+const data={_safe_json({"fields": payload["field_results"], "doctypes": doctypes, "missing": supplement["missing_child_rows"], "idx": supplement["idx_checks"], "auth": payload["auth"]["rows"]})};
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c]));
 const num=v=>Number(v||0).toLocaleString();
 document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{{document.querySelectorAll('#nav button,.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById(b.dataset.tab).classList.add('active')}});
@@ -641,12 +614,8 @@ def main() -> int:
 			source_db,
 			target_db,
 			current_contract_fingerprint=args.current_contract_fingerprint,
-			current_source_snapshot_fingerprint=(
-				args.current_source_snapshot_fingerprint
-			),
-			current_source_total_parent_records=(
-				args.current_source_total_parent_records
-			),
+			current_source_snapshot_fingerprint=(args.current_source_snapshot_fingerprint),
+			current_source_total_parent_records=(args.current_source_total_parent_records),
 		)
 	finally:
 		source_db.close()

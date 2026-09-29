@@ -2,8 +2,8 @@
 # For license information, please see license.txt
 
 import frappe
-
 from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
+
 
 def execute(filters=None):
 	filters = frappe._dict(filters or {})
@@ -11,29 +11,30 @@ def execute(filters=None):
 	data = get_data(filters)
 	return columns, data
 
+
 def get_data(filters):
 	filters = frappe._dict(filters or {})
 	d = {}
 	conditions = ""
 	if filters.from_date:
-		conditions += f" AND t2.posting_date >= %(from_date)s"
-		d['from_date'] = filters.from_date
+		conditions += " AND t2.posting_date >= %(from_date)s"
+		d["from_date"] = filters.from_date
 
 	if filters.to_date:
-		conditions += f" AND t2.posting_date <= %(to_date)s"
-		d['to_date'] = filters.to_date
+		conditions += " AND t2.posting_date <= %(to_date)s"
+		d["to_date"] = filters.to_date
 
 	if filters.lot:
-		conditions += f" AND t2.lot = %(lot)s"
-		d['lot'] = filters.lot
+		conditions += " AND t2.lot = %(lot)s"
+		d["lot"] = filters.lot
 
 	if filters.from_location:
-		conditions += f" AND t2.from_location = %(from_location)s"
-		d['from_location'] = filters.from_location
+		conditions += " AND t2.from_location = %(from_location)s"
+		d["from_location"] = filters.from_location
 
 	if filters.supplier:
-		conditions += f" AND t2.supplier = %(supplier)s"
-		d['supplier'] = filters.supplier
+		conditions += " AND t2.supplier = %(supplier)s"
+		d["supplier"] = filters.supplier
 
 	data = frappe.db.sql(
 		f"""
@@ -45,25 +46,64 @@ def get_data(filters):
 			JOIN `tabYRP Delivery Challan` as t2
 			ON t2.name = t1.parent
 			WHERE t1.docstatus = 1 AND t1.delivered_quantity > 0 {conditions}
-		""", d, as_dict=True
+		""",
+		d,
+		as_dict=True,
 	)
 	for row in data:
-		row['item'] = get_parent_item(row['item_variant'])
+		row["item"] = get_parent_item(row["item_variant"])
 
 	return data
 
+
 def get_columns():
 	return [
-		{"fieldname": "delivery_challan","fieldtype": "Link","options": 'YRP Delivery Challan',"label": "Delivery Challan", "width": 150},
-		{"fieldname": "from_location","fieldtype": "Link","options": 'Supplier',"label": "From Location", "width": 100},
-		{"fieldname": "from_location_name","fieldtype": "Data","label": "From Location Name", "width": 150},
-		{"fieldname": "supplier","fieldtype": "Link","options": 'Supplier',"label": "Supplier", "width": 100},
-		{"fieldname": "supplier_name","fieldtype": "Data","label": "Supplier Name", "width": 150},
-		{"fieldname": "lot","fieldtype": "Link","options": 'SD YRP Lot',"label": "Lot", "width": 100},
-		{"fieldname": "process_name","fieldtype": "Link","options": 'YRP Process',"label": "Process", "width": 100},
-		{"fieldname": "item","fieldtype": "Link","options": 'Item',"label": "Item", "width": 200},
-		{"fieldname": "item_variant","fieldtype": "Link","options": 'Item',"label": "Item Variant", "width": 200},
-		{"fieldname": "qty","fieldtype": "Float","label": "Qty", "width": 100},
-		{"fieldname": "received_type","fieldtype": "Link","options": 'YRP Received Type',"label": "Received Type", "width": 100},
-		{"fieldname": "uom","fieldtype": "Link","options": 'UOM',"label": "UOM", "width": 100},
+		{
+			"fieldname": "delivery_challan",
+			"fieldtype": "Link",
+			"options": "YRP Delivery Challan",
+			"label": "Delivery Challan",
+			"width": 150,
+		},
+		{
+			"fieldname": "from_location",
+			"fieldtype": "Link",
+			"options": "Supplier",
+			"label": "From Location",
+			"width": 100,
+		},
+		{"fieldname": "from_location_name", "fieldtype": "Data", "label": "From Location Name", "width": 150},
+		{
+			"fieldname": "supplier",
+			"fieldtype": "Link",
+			"options": "Supplier",
+			"label": "Supplier",
+			"width": 100,
+		},
+		{"fieldname": "supplier_name", "fieldtype": "Data", "label": "Supplier Name", "width": 150},
+		{"fieldname": "lot", "fieldtype": "Link", "options": "SD YRP Lot", "label": "Lot", "width": 100},
+		{
+			"fieldname": "process_name",
+			"fieldtype": "Link",
+			"options": "YRP Process",
+			"label": "Process",
+			"width": 100,
+		},
+		{"fieldname": "item", "fieldtype": "Link", "options": "Item", "label": "Item", "width": 200},
+		{
+			"fieldname": "item_variant",
+			"fieldtype": "Link",
+			"options": "Item",
+			"label": "Item Variant",
+			"width": 200,
+		},
+		{"fieldname": "qty", "fieldtype": "Float", "label": "Qty", "width": 100},
+		{
+			"fieldname": "received_type",
+			"fieldtype": "Link",
+			"options": "YRP Received Type",
+			"label": "Received Type",
+			"width": 100,
+		},
+		{"fieldname": "uom", "fieldtype": "Link", "options": "UOM", "label": "UOM", "width": 100},
 	]

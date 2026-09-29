@@ -1,38 +1,36 @@
 """Permission-aware Sewing Plan read models and operator updates."""
 
 from __future__ import annotations
-from yrp import attribute_links as attribute_db
-from yrp.attribute_links import value as _attribute_value
 
-from collections import defaultdict
 import re
+from collections import defaultdict
 
 import frappe
 from frappe import _
 from frappe.utils import cint, cstr, flt, getdate, today
-
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 from yrp.utils import get_variant_attr_details, update_if_string_instance
 from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
 	get_ipd_primary_values,
 )
 
-from essdee_yrp.sewing.entry import _entry_bucket, _variant_attributes
-from essdee_yrp.sewing.entry import get_data_entry_data
 from essdee_yrp.sewing.config import get_sewing_input_configuration
+from essdee_yrp.sewing.entry import _entry_bucket, _variant_attributes, get_data_entry_data
 
 
 def _plans(supplier, *, lots=None, items=None):
 	supplier = cstr(supplier).strip()
 	if not supplier:
 		frappe.throw(_("Sewing Unit is required."))
-	frappe.has_permission('SD YRP Sewing Plan', "read", throw=True)
+	frappe.has_permission("SD YRP Sewing Plan", "read", throw=True)
 	filters = {"supplier": supplier}
 	if lots:
 		filters["lot"] = ["in", list(lots)]
 	if items:
 		filters["item"] = ["in", list(items)]
 	return frappe.get_list(
-		'SD YRP Sewing Plan',
+		"SD YRP Sewing Plan",
 		filters=filters,
 		fields=["name", "lot", "item", "supplier", "work_order"],
 		limit_page_length=0,
@@ -42,7 +40,7 @@ def _plans(supplier, *, lots=None, items=None):
 def _entries(plans, *, entry_date=None, work_station=None, input_type=None):
 	if not plans:
 		return []
-	frappe.has_permission('SD YRP Sewing Plan Entry Detail', "read", throw=True)
+	frappe.has_permission("SD YRP Sewing Plan Entry Detail", "read", throw=True)
 	filters = {"sewing_plan": ["in", [row.name for row in plans]]}
 	if entry_date:
 		filters["entry_date"] = getdate(entry_date)
@@ -51,7 +49,7 @@ def _entries(plans, *, entry_date=None, work_station=None, input_type=None):
 	if input_type:
 		filters["input_type"] = input_type
 	return frappe.get_list(
-		'SD YRP Sewing Plan Entry Detail',
+		"SD YRP Sewing Plan Entry Detail",
 		filters=filters,
 		fields=[
 			"name",
@@ -71,10 +69,10 @@ def _details(entries):
 	if not entries:
 		return []
 	return frappe.get_all(
-		'SD YRP Sewing Plan Detail',
+		"SD YRP Sewing Plan Detail",
 		filters={
 			"parent": ["in", [row.name for row in entries]],
-			"parenttype": 'SD YRP Sewing Plan Entry Detail',
+			"parenttype": "SD YRP Sewing Plan Entry Detail",
 		},
 		fields=["parent", "item_variant", "set_combination", "quantity"],
 		limit_page_length=0,
@@ -85,7 +83,7 @@ def _metadata(plans):
 	lots = {
 		row.name: row
 		for row in attribute_db.get_all(
-			'SD YRP Lot',
+			"SD YRP Lot",
 			filters={"name": ["in", list({row.lot for row in plans if row.lot})]},
 			fields=["name", "item", "production_detail"],
 			limit_page_length=0,
@@ -95,7 +93,7 @@ def _metadata(plans):
 	ipds = {
 		row.name: row
 		for row in attribute_db.get_all(
-			'YRP Item Production Detail',
+			"YRP Item Production Detail",
 			filters={"name": ["in", list(ipd_names)]},
 			fields=[
 				"name",
@@ -133,7 +131,7 @@ def get_dashboard_data(supplier):
 	entry_map = {row.name: row for row in entries}
 	open_work_orders = set(
 		frappe.get_all(
-			'YRP Work Order',
+			"YRP Work Order",
 			filters={
 				"name": ["in", [row.work_order for row in plans if row.work_order]],
 				"open_status": "Open",
@@ -150,9 +148,7 @@ def get_dashboard_data(supplier):
 			totals[entry.input_type] += flt(row.quantity)
 	return [
 		{"input_type": input_type, "qty": quantity}
-		for input_type, quantity in sorted(
-			totals.items(), key=lambda value: (-value[1], value[0])
-		)
+		for input_type, quantity in sorted(totals.items(), key=lambda value: (-value[1], value[0]))
 	]
 
 
@@ -191,14 +187,13 @@ def get_sp_status_summary(supplier):
 						value = colour.get("inspection_total", {}).get("final_inspection")
 					else:
 						value = sum(
-							flt(size_values.get(key))
-							for size_values in (colour.get("values") or {}).values()
+							flt(size_values.get(key)) for size_values in (colour.get("values") or {}).values()
 						)
 					row[header] = flt(value)
 					totals[header] += flt(value)
 				data.append(row)
 	return {
-		"header1": ['Item', 'SD YRP Lot', "Colour", "Part"],
+		"header1": ["Item", "SD YRP Lot", "Colour", "Part"],
 		"header2": headers,
 		"header3": ["Work Order Status"],
 		"data": [totals, *data] if data else [],
@@ -223,7 +218,7 @@ def get_scr_data(supplier, lot):
 		return {"status": "failed", "message": _("Lot has no production detail."), "data": {}}
 
 	order_rows = frappe.get_all(
-		'SD YRP Sewing Plan Order Detail',
+		"SD YRP Sewing Plan Order Detail",
 		filters={"parent": ["in", list(plan_map)]},
 		fields=["parent", "item_variant", "set_combination", "quantity", "pre_final", "final_inspection"],
 		limit_page_length=0,
@@ -232,18 +227,18 @@ def get_scr_data(supplier, lot):
 	detail_rows = _details(entries)
 	entry_map = {row.name: row for row in entries}
 	work_order_names = [row.work_order for row in plans if row.work_order]
-	delivered_rows = frappe.get_all(
-		'YRP Work Order Calculated Item',
-		filters={"parent": ["in", work_order_names]},
-		fields=["parent", "item_variant", "set_combination", "delivered_quantity"],
-		limit_page_length=0,
-	) if work_order_names else []
+	delivered_rows = (
+		frappe.get_all(
+			"YRP Work Order Calculated Item",
+			filters={"parent": ["in", work_order_names]},
+			fields=["parent", "item_variant", "set_combination", "delivered_quantity"],
+			limit_page_length=0,
+		)
+		if work_order_names
+		else []
+	)
 	attributes = _variant_attributes(
-		{
-			row.item_variant
-			for row in [*order_rows, *detail_rows, *delivered_rows]
-			if row.item_variant
-		}
+		{row.item_variant for row in [*order_rows, *detail_rows, *delivered_rows] if row.item_variant}
 	)
 	data = {}
 	colours = []
@@ -266,9 +261,9 @@ def get_scr_data(supplier, lot):
 				"type_wise_total": {},
 			},
 		)
-		group["values"].setdefault(size, {})[header] = flt(
-			group["values"].get(size, {}).get(header)
-		) + flt(quantity)
+		group["values"].setdefault(size, {})[header] = flt(group["values"].get(size, {}).get(header)) + flt(
+			quantity
+		)
 		if work_station and re.match(r"sewing line\s+\d", cstr(work_station).strip(), re.I):
 			lines[colour].add(work_station)
 		if header not in observed_headers:
@@ -280,7 +275,7 @@ def get_scr_data(supplier, lot):
 		add(row, "Final Inspection", row.final_inspection)
 	for row in delivered_rows:
 		add(row, "Delivered Qty", row.delivered_quantity)
-	default_received_type = frappe.db.get_single_value('YRP Stock Settings', "default_received_type")
+	default_received_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
 	for row in detail_rows:
 		entry = entry_map[row.parent]
 		header = entry.input_type
@@ -316,9 +311,7 @@ def _natural_name_key(value):
 
 
 @frappe.whitelist()
-def get_sewing_plan_entries(
-	supplier, input_type=None, work_station=None, lot_name=None
-):
+def get_sewing_plan_entries(supplier, input_type=None, work_station=None, lot_name=None):
 	plans = _plans(supplier, lots=[lot_name] if lot_name else None)
 	entries = _entries(plans, work_station=work_station, input_type=input_type)
 	detail_rows = _details(entries)
@@ -328,13 +321,12 @@ def get_sewing_plan_entries(
 	by_entry = defaultdict(list)
 	for row in detail_rows:
 		by_entry[row.parent].append(row)
-	previous_days = cint(
-		frappe.db.get_single_value('SD YRP MRP Settings', "previous_day_entries")
-	)
-	cancellable_dates = {
-		row.entry_date
-		for row in frappe.db.sql(
-			"""
+	previous_days = cint(frappe.db.get_single_value("SD YRP MRP Settings", "previous_day_entries"))
+	cancellable_dates = (
+		{
+			row.entry_date
+			for row in frappe.db.sql(
+				"""
 				select entry.entry_date
 				from `tabSD YRP Sewing Plan Entry Detail` entry
 				join `tabSD YRP Sewing Plan` plan on plan.name = entry.sewing_plan
@@ -343,10 +335,13 @@ def get_sewing_plan_entries(
 				order by entry.entry_date desc
 				limit %s
 			""",
-			(supplier, previous_days),
-			as_dict=True,
-		)
-	} if previous_days else set()
+				(supplier, previous_days),
+				as_dict=True,
+			)
+		}
+		if previous_days
+		else set()
+	)
 
 	result = {}
 	for entry in entries:
@@ -368,10 +363,7 @@ def get_sewing_plan_entries(
 			"set_attr": ipd.set_item_attribute,
 			"is_cancellable": bool(
 				entry.entry_date in cancellable_dates
-				and
-				frappe.has_permission(
-					'SD YRP Sewing Plan Entry Detail', "delete", doc=entry.name
-				)
+				and frappe.has_permission("SD YRP Sewing Plan Entry Detail", "delete", doc=entry.name)
 			),
 			"entry_date": entry.entry_date,
 			"entry_time": entry.entry_time,
@@ -390,18 +382,14 @@ def get_sewing_plan_entries(
 					"total": 0,
 				},
 			)
-			group["values"][size] = flt(group["values"].get(size)) + flt(
-				row.quantity
-			)
+			group["values"][size] = flt(group["values"].get(size)) + flt(row.quantity)
 			group["total"] += flt(row.quantity)
 		result[entry.name] = value
 	return result
 
 
 @frappe.whitelist()
-def get_sewing_plan_dpr_data(
-	supplier, dpr_date, work_station=None, input_type=None
-):
+def get_sewing_plan_dpr_data(supplier, dpr_date, work_station=None, input_type=None):
 	plans = _plans(supplier)
 	entries = _entries(
 		plans,
@@ -459,7 +447,7 @@ def get_sewing_plan_dpr_data(
 	seen = set()
 	if entry_plan_names:
 		order_rows = frappe.get_all(
-			'SD YRP Sewing Plan Order Detail',
+			"SD YRP Sewing Plan Order Detail",
 			filters={"parent": ["in", list(entry_plan_names)], "fi_date": ["is", "not set"]},
 			fields=["parent", "item_variant", "set_combination"],
 			limit_page_length=0,
@@ -489,9 +477,7 @@ def get_sewing_plan_dpr_data(
 
 
 @frappe.whitelist()
-def get_monthly_summary_data(
-	supplier, start_date, end_date, input_type=None, show_grn=0
-):
+def get_monthly_summary_data(supplier, start_date, end_date, input_type=None, show_grn=0):
 	start_date = getdate(start_date)
 	end_date = getdate(end_date)
 	if start_date > end_date:
@@ -501,14 +487,14 @@ def get_monthly_summary_data(
 	lots, ipds = _metadata(plans)
 	rows = []
 	if cint(show_grn):
-		frappe.has_permission('YRP Goods Received Note', "read", throw=True)
+		frappe.has_permission("YRP Goods Received Note", "read", throw=True)
 		work_orders = [row.work_order for row in plans if row.work_order]
 		if work_orders:
 			grns = frappe.get_list(
-				'YRP Goods Received Note',
+				"YRP Goods Received Note",
 				filters={
 					"supplier": supplier,
-					"against": 'YRP Work Order',
+					"against": "YRP Work Order",
 					"against_id": ["in", work_orders],
 					"posting_date": ["between", [start_date, end_date]],
 					"docstatus": 1,
@@ -518,7 +504,7 @@ def get_monthly_summary_data(
 			)
 			grn_map = {row.name: row for row in grns}
 			for row in frappe.get_all(
-				'YRP Goods Received Note Item',
+				"YRP Goods Received Note Item",
 				filters={"parent": ["in", list(grn_map)]},
 				fields=["parent", "item_variant", "quantity"],
 				limit_page_length=0,
@@ -698,12 +684,16 @@ def get_fi_updates_data(supplier):
 	plans = _plans(supplier)
 	plan_map = {row.name: row for row in plans}
 	lots, ipds = _metadata(plans)
-	rows = frappe.get_all(
-		'SD YRP Sewing Plan Order Detail',
-		filters={"parent": ["in", list(plan_map)], "fi_date": ["is", "not set"]},
-		fields=["parent", "item_variant", "set_combination"],
-		limit_page_length=0,
-	) if plan_map else []
+	rows = (
+		frappe.get_all(
+			"SD YRP Sewing Plan Order Detail",
+			filters={"parent": ["in", list(plan_map)], "fi_date": ["is", "not set"]},
+			fields=["parent", "item_variant", "set_combination"],
+			limit_page_length=0,
+		)
+		if plan_map
+		else []
+	)
 	attributes = _variant_attributes({row.item_variant for row in rows})
 	seen = set()
 	data = []
@@ -740,19 +730,19 @@ def update_fi_dates(data):
 		if isinstance(row, dict) and row.get("sewing_plan"):
 			by_plan[row["sewing_plan"]].append(row)
 	for plan_name, updates in by_plan.items():
-		plan = frappe.get_doc('SD YRP Sewing Plan', plan_name)
+		plan = frappe.get_doc("SD YRP Sewing Plan", plan_name)
 		plan.check_permission("write")
-		lot = frappe.get_doc('SD YRP Lot', plan.lot)
-		ipd = frappe.get_doc('YRP Item Production Detail', lot.production_detail)
-		attributes = _variant_attributes(
-			{row.item_variant for row in plan.sewing_plan_order_details}
-		)
+		lot = frappe.get_doc("SD YRP Lot", plan.lot)
+		ipd = frappe.get_doc("YRP Item Production Detail", lot.production_detail)
+		attributes = _variant_attributes({row.item_variant for row in plan.sewing_plan_order_details})
 		for update in updates:
 			if update.get("lot") != plan.lot:
 				frappe.throw(_("Sewing Plan and Lot do not match."))
 			for row in plan.sewing_plan_order_details:
 				bucket, _size = _bucket(row, ipd, attributes)
-				if bucket["key"] == _attribute_value(update.get("colour")) and _attribute_value(bucket["part"]) == _attribute_value(update.get("part")):
+				if bucket["key"] == _attribute_value(update.get("colour")) and _attribute_value(
+					bucket["part"]
+				) == _attribute_value(update.get("part")):
 					row.fi_date = getdate(update["date"]) if update.get("date") else None
 		plan.save()
 	return _("Success")
@@ -784,12 +774,12 @@ def get_supplier_lots(doctype, txt, searchfield, start, page_len, filters):
 
 @frappe.whitelist()
 def get_consumption_mapping_data(lot, supplier=None):
-	frappe.has_permission('YRP Item Production Detail', "read", throw=True)
-	lot_doc = frappe.get_doc('SD YRP Lot', lot)
+	frappe.has_permission("YRP Item Production Detail", "read", throw=True)
+	lot_doc = frappe.get_doc("SD YRP Lot", lot)
 	lot_doc.check_permission("read")
 	if not lot_doc.production_detail:
 		return {"ipd": "", "sections": [], "cloth_acc_data": []}
-	ipd = frappe.get_doc('YRP Item Production Detail', lot_doc.production_detail)
+	ipd = frappe.get_doc("YRP Item Production Detail", lot_doc.production_detail)
 	process = ipd.get("stiching_process")
 	if not process:
 		return {"ipd": ipd.name, "sections": [], "cloth_acc_data": []}
@@ -798,23 +788,21 @@ def get_consumption_mapping_data(lot, supplier=None):
 	saved_cloth = {}
 	if supplier:
 		for plan_row in _plans(supplier, lots=[lot]):
-			plan = frappe.get_doc('SD YRP Sewing Plan', plan_row.name)
+			plan = frappe.get_doc("SD YRP Sewing Plan", plan_row.name)
 			for row in plan.consumption_details:
 				saved_qty[(row.item_name, cint(row.index))] = flt(row.consumption_qty)
 			for row in plan.cloth_accessory_consumption:
 				saved_cloth[cint(row.index)] = flt(row.consumption_weight)
 
 	bom_rows = [
-		row
-		for row in ipd.item_bom
-		if row.process_name == process and row.uom not in ("Nos", "Pieces")
+		row for row in ipd.item_bom if row.process_name == process and row.uom not in ("Nos", "Pieces")
 	]
 	mappings = [row.attribute_mapping for row in bom_rows if row.attribute_mapping]
 	values_by_mapping = defaultdict(list)
 	attributes_by_mapping = defaultdict(list)
 	if mappings:
 		for row in attribute_db.get_all(
-			'YRP Item BOM Attribute Mapping Value',
+			"YRP Item BOM Attribute Mapping Value",
 			filters={"parent": ["in", mappings]},
 			fields=["parent", "index", "type", "idx", "attribute", "attribute_value", "quantity"],
 			order_by="parent asc, index asc, idx asc",
@@ -822,7 +810,7 @@ def get_consumption_mapping_data(lot, supplier=None):
 		):
 			values_by_mapping[row.parent].append(row)
 		for row in frappe.get_all(
-			'YRP Item BOM Attribute Mapping Attribute',
+			"YRP Item BOM Attribute Mapping Attribute",
 			filters={"parent": ["in", mappings], "same_attribute": 0},
 			fields=["parent", "attribute"],
 			limit_page_length=0,
@@ -834,9 +822,7 @@ def get_consumption_mapping_data(lot, supplier=None):
 		mapping_rows = {}
 		column_names = []
 		for row in values_by_mapping.get(bom.attribute_mapping, []):
-			mapping = mapping_rows.setdefault(
-				cint(row.index), {"quantity": row.quantity, "values": {}}
-			)
+			mapping = mapping_rows.setdefault(cint(row.index), {"quantity": row.quantity, "values": {}})
 			key = f"{row.type}_{row.attribute}"
 			mapping["values"][key] = _attribute_value(row.attribute_value)
 			mapping["quantity"] = row.quantity
@@ -852,11 +838,11 @@ def get_consumption_mapping_data(lot, supplier=None):
 			for index, value in sorted(mapping_rows.items())
 		]
 		if not rows:
-			column_names = ['Item']
+			column_names = ["Item"]
 			rows = [
 				{
 					"index": 0,
-					"values": {'Item': bom.item},
+					"values": {"Item": bom.item},
 					"quantity": saved_qty.get((bom.item, 0), 0),
 					"item_bom_qty": flt(bom.qty_of_bom_item),
 				}
@@ -897,10 +883,10 @@ def get_consumption_mapping_data(lot, supplier=None):
 
 @frappe.whitelist()
 def get_sewing_consumption_print_data(ipd, lot=None):
-	lot = lot or attribute_db.get_value('SD YRP Lot', {"production_detail": ipd}, "name")
+	lot = lot or attribute_db.get_value("SD YRP Lot", {"production_detail": ipd}, "name")
 	if not lot:
 		return {"ipd": ipd, "lot": "", "supplier": "", "sections": [], "cloth_acc_data": []}
-	supplier = frappe.db.get_value('SD YRP Sewing Plan', {"lot": lot}, "supplier")
+	supplier = frappe.db.get_value("SD YRP Sewing Plan", {"lot": lot}, "supplier")
 	data = get_consumption_mapping_data(lot, supplier)
 	data.update({"lot": lot, "supplier": supplier})
 	return data
@@ -914,7 +900,7 @@ def save_consumption_data(supplier, lot, sections, cloth_acc_data=None):
 	if not plans:
 		frappe.throw(_("No Sewing Plan found for this Sewing Unit and Lot."))
 	for plan_row in plans:
-		plan = frappe.get_doc('SD YRP Sewing Plan', plan_row.name)
+		plan = frappe.get_doc("SD YRP Sewing Plan", plan_row.name)
 		plan.check_permission("write")
 		_set_consumption_details(plan, sections)
 		_set_cloth_accessory_details(plan, cloth_acc_data)
@@ -925,8 +911,7 @@ def save_consumption_data(supplier, lot, sections, cloth_acc_data=None):
 def _set_consumption_details(plan, sections):
 	plan.set("consumption_details", [])
 	variant_attributes = [
-		get_variant_attr_details(row.item_variant) or {}
-		for row in plan.sewing_plan_order_details
+		get_variant_attr_details(row.item_variant) or {} for row in plan.sewing_plan_order_details
 	]
 	for section in sections:
 		attributes_in_item = set(section.get("attribute_in_item") or [])
@@ -968,8 +953,7 @@ def _set_consumption_details(plan, sections):
 def _set_cloth_accessory_details(plan, groups):
 	plan.set("cloth_accessory_consumption", [])
 	variant_attributes = [
-		get_variant_attr_details(row.item_variant) or {}
-		for row in plan.sewing_plan_order_details
+		get_variant_attr_details(row.item_variant) or {} for row in plan.sewing_plan_order_details
 	]
 	for group in groups:
 		match_attributes = group.get("att_iv_check") or []

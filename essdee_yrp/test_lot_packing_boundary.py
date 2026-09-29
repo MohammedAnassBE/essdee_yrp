@@ -10,7 +10,7 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot import sd_yrp_lot as lot_controlle
 class FakePurchaseOrder(frappe._dict):
 	def __init__(self, **values):
 		super().__init__(values)
-		self.setdefault("doctype", 'Purchase Order')
+		self.setdefault("doctype", "Purchase Order")
 		self.setdefault("docstatus", 0)
 		self.setdefault("is_yrp_managed", 1)
 		self.setdefault("sd_lot", [])
@@ -57,10 +57,10 @@ class FakeLot(frappe._dict):
 class TestLotPackingBoundary(FrappeTestCase):
 	def test_boundary_fields_are_essdee_custom_fields(self):
 		expected = {
-			('Purchase Order', "default_lot"): ("Link", 'SD YRP Lot'),
-			('Purchase Order', "sd_lot"): ("Table", 'SD YRP Lot MultiSelect'),
-			('YRP Process', "includes_packing"): ("Check", None),
-			('YRP Work Order', "includes_packing"): ("Check", None),
+			("Purchase Order", "default_lot"): ("Link", "SD YRP Lot"),
+			("Purchase Order", "sd_lot"): ("Table", "SD YRP Lot MultiSelect"),
+			("YRP Process", "includes_packing"): ("Check", None),
+			("YRP Work Order", "includes_packing"): ("Check", None),
 		}
 		for (doctype, fieldname), (fieldtype, options) in expected.items():
 			custom_field = frappe.get_doc("Custom Field", f"{doctype}-{fieldname}")
@@ -71,17 +71,15 @@ class TestLotPackingBoundary(FrappeTestCase):
 
 		for fieldname in ("lot_details_section", "default_lot", "sd_lot"):
 			self.assertEqual(
-				frappe.get_meta('Purchase Order').get_field(fieldname).hidden,
+				frappe.get_meta("Purchase Order").get_field(fieldname).hidden,
 				1,
 				fieldname,
 			)
 
-		self.assertEqual(frappe.get_meta('SD YRP Lot MultiSelect').module, "Essdee YRP")
+		self.assertEqual(frappe.get_meta("SD YRP Lot MultiSelect").module, "Essdee YRP")
 
 	def test_linked_lots_are_deduplicated_and_defaulted(self):
-		doc = FakePurchaseOrder(
-			sd_lot=[frappe._dict(lot="LOT-A"), frappe._dict(lot="LOT-A")]
-		)
+		doc = FakePurchaseOrder(sd_lot=[frappe._dict(lot="LOT-A"), frappe._dict(lot="LOT-A")])
 		with (
 			patch.object(purchase_order_lots, "_lot_dimension_field", return_value=None),
 			patch.object(purchase_order_lots, "_check_lot_permission"),
@@ -110,7 +108,7 @@ class TestLotPackingBoundary(FrappeTestCase):
 	def test_grn_rejects_unlinked_configured_lot(self):
 		po = frappe._dict(sd_lot=[frappe._dict(lot="LOT-A")])
 		grn = frappe._dict(
-			against='Purchase Order',
+			against="Purchase Order",
 			against_id="PO-TEST",
 			items=[frappe._dict(lot="LOT-B")],
 		)
@@ -124,7 +122,7 @@ class TestLotPackingBoundary(FrappeTestCase):
 
 	def test_grn_accepts_allowed_or_unrestricted_lot(self):
 		grn = frappe._dict(
-			against='Purchase Order',
+			against="Purchase Order",
 			against_id="PO-TEST",
 			items=[frappe._dict(lot="LOT-A")],
 		)
@@ -192,7 +190,7 @@ class TestLotPackingBoundary(FrappeTestCase):
 		meta = frappe._dict(get_field=lambda fieldname: True)
 		grn = frappe._dict(process_name="PACKING", includes_packing=0, meta=meta)
 		stock_entry = frappe._dict(
-			against='YRP Goods Received Note',
+			against="YRP Goods Received Note",
 			against_id="GRN-1",
 			includes_packing=0,
 			meta=meta,
@@ -207,13 +205,9 @@ class TestLotPackingBoundary(FrappeTestCase):
 		self.assertEqual(stock_entry.includes_packing, 1)
 
 	def test_lot_bom_uses_permission_checked_saved_demands(self):
-		lot = FakeLot(
-			lot_order_details=[frappe._dict(item_variant="ITEM-SAVED", quantity=4)]
-		)
+		lot = FakeLot(lot_order_details=[frappe._dict(item_variant="ITEM-SAVED", quantity=4)])
 		bom = {
-			"major_deliverables": [
-				{"item_variant": "CLOTH-1", "required_qty": 2, "uom": "Kg"}
-			],
+			"major_deliverables": [{"item_variant": "CLOTH-1", "required_qty": 2, "uom": "Kg"}],
 			"accessories": [],
 		}
 		with (
@@ -262,9 +256,7 @@ class TestLotPackingBoundary(FrappeTestCase):
 		calculate.assert_not_called()
 
 	def test_order_items_cannot_be_recalculated_after_time_and_action(self):
-		lot = FakeLot(
-			lot_time_and_action_details=[frappe._dict(time_and_action="TNA-1")]
-		)
+		lot = FakeLot(lot_time_and_action_details=[frappe._dict(time_and_action="TNA-1")])
 		with (
 			patch.object(frappe, "get_doc", return_value=lot),
 			self.assertRaisesRegex(frappe.ValidationError, "after Time and Action"),

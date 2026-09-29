@@ -2,7 +2,6 @@
 # For license information, please see license.txt
 
 from __future__ import annotations
-from yrp.attribute_links import value as _attribute_value
 
 import json
 from itertools import groupby
@@ -11,7 +10,7 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cstr, flt
-
+from yrp.attribute_links import value as _attribute_value
 from yrp.stock.dimensions import (
 	apply_dimension_defaults,
 	get_dimension_fieldnames,
@@ -24,7 +23,6 @@ from yrp.yrp.doctype.yrp_item.yrp_item import (
 	get_parent_item,
 	get_variant,
 )
-
 
 VALUATION_RATE_PRECISION = 9
 
@@ -57,23 +55,17 @@ class SDYRPItemConversion(Document):
 	def validate(self):
 		if not self.warehouse:
 			frappe.throw(_("Location is mandatory"))
-		if not frappe.db.exists('Warehouse', self.warehouse):
-			frappe.throw(
-				_("Location {0} is not a Warehouse.").format(frappe.bold(self.warehouse))
-			)
+		if not frappe.db.exists("Warehouse", self.warehouse):
+			frappe.throw(_("Location {0} is not a Warehouse.").format(frappe.bold(self.warehouse)))
 		if not self.from_item:
 			frappe.throw(_("From Item is mandatory"))
 		if not self.to_item:
 			frappe.throw(_("To Item is mandatory"))
 
 		self.validate_single_item_rows()
-		self.validate_items(
-			"from_items", _("From Items"), self.from_item, rate_source="stock_valuation"
-		)
+		self.validate_items("from_items", _("From Items"), self.from_item, rate_source="stock_valuation")
 		self.set_single_target_rate()
-		self.validate_items(
-			"to_items", _("To Items"), self.to_item, rate_source="user"
-		)
+		self.validate_items("to_items", _("To Items"), self.to_item, rate_source="user")
 		self.calculate_totals()
 
 	def before_submit(self):
@@ -86,8 +78,8 @@ class SDYRPItemConversion(Document):
 
 	def before_cancel(self):
 		self.ignore_linked_doctypes = (
-			'YRP Stock Ledger Entry',
-			'YRP Repost Item Valuation',
+			"YRP Stock Ledger Entry",
+			"YRP Repost Item Valuation",
 		)
 		self.update_stock_ledger(cancel=True)
 
@@ -104,9 +96,7 @@ class SDYRPItemConversion(Document):
 		target_rows = [row for row in self.to_items if flt(row.qty) > 0]
 		from_value = sum(flt(row.amount) for row in self.from_items)
 		if len(target_rows) == 1 and from_value > 0:
-			target_rows[0].rate = flt(
-				from_value / flt(target_rows[0].qty), VALUATION_RATE_PRECISION
-			)
+			target_rows[0].rate = flt(from_value / flt(target_rows[0].qty), VALUATION_RATE_PRECISION)
 
 	def validate_items(self, table_field, table_label, expected_item, rate_source):
 		messages = []
@@ -124,9 +114,7 @@ class SDYRPItemConversion(Document):
 			if flt(row.qty) < 0:
 				messages.append(_("{0} Negative Quantity is not allowed").format(prefix))
 			if flt(row.rate) < 0:
-				messages.append(
-					_("{0} Negative Valuation Rate is not allowed").format(prefix)
-				)
+				messages.append(_("{0} Negative Valuation Rate is not allowed").format(prefix))
 
 			apply_item_uom(row, item_field="item")
 			row.stock_qty = flt(
@@ -137,9 +125,9 @@ class SDYRPItemConversion(Document):
 				row.rate = self.get_existing_valuation_rate(row)
 				if not flt(row.rate):
 					messages.append(
-						_(
-							"{0} Could not find an existing valuation rate for Item {1}."
-						).format(prefix, row.item)
+						_("{0} Could not find an existing valuation rate for Item {1}.").format(
+							prefix, row.item
+						)
 					)
 			if flt(row.qty) > 0 and not flt(row.rate) and rate_source == "user":
 				messages.append(_("{0} Rate is mandatory").format(prefix))
@@ -149,9 +137,7 @@ class SDYRPItemConversion(Document):
 				flt(row.rate) / (flt(row.conversion_factor) or 1),
 				VALUATION_RATE_PRECISION,
 			)
-			row.amount = flt(
-				flt(row.rate) * flt(row.qty), self.precision("amount", row)
-			)
+			row.amount = flt(flt(row.rate) * flt(row.qty), self.precision("amount", row))
 
 		if messages:
 			frappe.throw("<br>".join(messages), title=_("Item Conversion"))
@@ -176,9 +162,7 @@ class SDYRPItemConversion(Document):
 			return None
 
 	def get_existing_valuation_rate(self, row):
-		dimensions = {
-			fieldname: row.get(fieldname) for fieldname in get_dimension_fieldnames()
-		}
+		dimensions = {fieldname: row.get(fieldname) for fieldname in get_dimension_fieldnames()}
 		return get_stock_balance(
 			row.item,
 			self.warehouse,
@@ -206,9 +190,7 @@ class SDYRPItemConversion(Document):
 	def validate_valuation_match(self):
 		if flt(self.difference_amount, self.precision("difference_amount")):
 			frappe.throw(
-				_(
-					"From Items total ({0}) must match To Items total ({1}). Difference: {2}"
-				).format(
+				_("From Items total ({0}) must match To Items total ({1}). Difference: {2}").format(
 					self.from_total_amount,
 					self.to_total_amount,
 					self.difference_amount,
@@ -239,18 +221,18 @@ class SDYRPItemConversion(Document):
 		# transfer-pair rate is valid only for equal quantities, so value the input
 		# first and derive the output rate from the exact removed total value.
 		outgoing["_result_key"] = "item-conversion-input"
-		consumption = make_sl_entries(
-			[outgoing], return_details=True, force_inline=True
-		)["entries"]["item-conversion-input"]
+		consumption = make_sl_entries([outgoing], return_details=True, force_inline=True)["entries"][
+			"item-conversion-input"
+		]
 		output_stock_qty = flt(to_row.stock_qty)
 		if output_stock_qty <= 0:
 			frappe.throw(_("Converted output Stock Quantity must be greater than zero."))
 		output_stock_rate = flt(consumption["value"]) / output_stock_qty
 		incoming["rate"] = output_stock_rate
 		incoming["_result_key"] = "item-conversion-output"
-		receipt = make_sl_entries(
-			[incoming], return_details=True, force_inline=True
-		)["entries"]["item-conversion-output"]
+		receipt = make_sl_entries([incoming], return_details=True, force_inline=True)["entries"][
+			"item-conversion-output"
+		]
 		_persist_actual_conversion_values(
 			from_row,
 			to_row,
@@ -287,18 +269,13 @@ class SDYRPItemConversion(Document):
 					"input_quantity": flt(from_row.stock_qty),
 					"allocation_weight": flt(from_row.stock_qty),
 					"stock_dimensions": frappe.as_json(
-						{
-							fieldname: from_row.get(fieldname)
-							for fieldname in get_dimension_fieldnames()
-						}
+						{fieldname: from_row.get(fieldname) for fieldname in get_dimension_fieldnames()}
 					),
 				}
 			],
 		)
 
-	def get_sl_entry(
-		self, row, qty, rate, outgoing_rate=0, transfer_key=None, transfer_role=None
-	):
+	def get_sl_entry(self, row, qty, rate, outgoing_rate=0, transfer_key=None, transfer_role=None):
 		entry = frappe._dict(
 			item=row.item,
 			warehouse=self.warehouse,
@@ -325,9 +302,7 @@ class SDYRPItemConversion(Document):
 		enqueue_voucher_repost(self)
 
 
-def _persist_actual_conversion_values(
-	from_row, to_row, input_stock_rate, output_stock_rate, actual_value
-):
+def _persist_actual_conversion_values(from_row, to_row, input_stock_rate, output_stock_rate, actual_value):
 	for row, stock_rate in (
 		(from_row, input_stock_rate),
 		(to_row, output_stock_rate),
@@ -347,7 +322,7 @@ def _persist_actual_conversion_values(
 
 
 def _validate_warehouse_user(warehouse: str):
-	frappe.get_doc('Warehouse', warehouse).check_user_permission()
+	frappe.get_doc("Warehouse", warehouse).check_user_permission()
 
 
 @frappe.whitelist()
@@ -362,16 +337,14 @@ def get_item_conversion_valuation_rate(
 	posting_time=None,
 	dimensions=None,
 ):
-	frappe.has_permission('SD YRP Item Conversion', "read", throw=True)
+	frappe.has_permission("SD YRP Item Conversion", "read", throw=True)
 	attributes = frappe.parse_json(attributes) if isinstance(attributes, str) else attributes
 	attributes = attributes or {}
 	variant_name = get_variant(item, attributes)
 	if not variant_name or not warehouse:
 		return {"item_variant": variant_name, "qty": 0, "rate": 0}
 
-	dimension_values = (
-		frappe.parse_json(dimensions) if isinstance(dimensions, str) else dimensions
-	) or {}
+	dimension_values = (frappe.parse_json(dimensions) if isinstance(dimensions, str) else dimensions) or {}
 	if "lot" in get_dimension_fieldnames():
 		dimension_values["lot"] = lot
 	if "received_type" in get_dimension_fieldnames():
@@ -383,10 +356,7 @@ def get_item_conversion_valuation_rate(
 		posting_time=posting_time,
 		with_valuation_rate=True,
 		uom=uom,
-		**{
-			fieldname: dimension_values.get(fieldname)
-			for fieldname in get_dimension_fieldnames()
-		},
+		**{fieldname: dimension_values.get(fieldname) for fieldname in get_dimension_fieldnames()},
 	)
 	return {
 		"item_variant": variant_name,
@@ -399,12 +369,10 @@ def fetch_item_conversion_items(items) -> list[dict]:
 	rows = [row.as_dict() if hasattr(row, "as_dict") else dict(row) for row in items or []]
 	rows.sort(key=lambda row: row.get("row_index") or 0)
 	result = []
-	for _row_index, variants_iter in groupby(
-		rows, key=lambda row: row.get("row_index") or 0
-	):
+	for _row_index, variants_iter in groupby(rows, key=lambda row: row.get("row_index") or 0):
 		variants = list(variants_iter)
-		variant_doc = frappe.get_doc('Item', variants[0]["item"])
-		details = get_attribute_details((variant_doc.variant_of or variant_doc.name))
+		variant_doc = frappe.get_doc("Item", variants[0]["item"])
+		details = get_attribute_details(variant_doc.variant_of or variant_doc.name)
 		item = {
 			"name": (variant_doc.variant_of or variant_doc.name),
 			"lot": variants[0].get("lot"),
@@ -412,19 +380,17 @@ def fetch_item_conversion_items(items) -> list[dict]:
 			"primary_attribute": details.get("primary_attribute"),
 			"values": {},
 			"default_uom": variants[0].get("uom") or details.get("default_uom"),
-			"secondary_uom": variants[0].get("secondary_uom")
-			or details.get("secondary_uom"),
+			"secondary_uom": variants[0].get("secondary_uom") or details.get("secondary_uom"),
 			"received_type": variants[0].get("received_type"),
 			"remarks": variants[0].get("remarks"),
 		}
 		primary_attribute = details.get("primary_attribute")
 		if primary_attribute:
 			item["values"] = {
-				value: {"qty": 0, "rate": 0}
-				for value in details.get("primary_attribute_values") or []
+				value: {"qty": 0, "rate": 0} for value in details.get("primary_attribute_values") or []
 			}
 			for variant in variants:
-				current = frappe.get_doc('Item', variant["item"])
+				current = frappe.get_doc("Item", variant["item"])
 				primary_value = next(
 					(
 						_attribute_value(row.attribute_value)
@@ -481,9 +447,7 @@ def _conversion_value(row) -> dict:
 
 
 def save_item_conversion_items(item_details) -> list[dict]:
-	item_details = (
-		frappe.parse_json(item_details) if isinstance(item_details, str) else item_details
-	) or []
+	item_details = (frappe.parse_json(item_details) if isinstance(item_details, str) else item_details) or []
 	rows = []
 	row_index = 0
 	for table_index, group in enumerate(item_details):
@@ -510,8 +474,7 @@ def save_item_conversion_items(item_details) -> list[dict]:
 						"remarks": item.get("remarks"),
 						"received_type": item.get("received_type"),
 						"secondary_qty": flt(value.get("secondary_qty")),
-						"secondary_uom": value.get("secondary_uom")
-						or item.get("secondary_uom"),
+						"secondary_uom": value.get("secondary_uom") or item.get("secondary_uom"),
 						"set_combination": value.get("set_combination") or {},
 					}
 				)

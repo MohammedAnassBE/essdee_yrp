@@ -3,7 +3,6 @@
 import frappe
 import requests
 
-
 HR_WORKERS_STRENGTH_REPORT_PATH = "/api/method/frappe.desk.query_report.run"
 HR_WORKERS_STRENGTH_REPORT_NAME = "Workers Strength Report"
 HR_EMPLOYEE_FIRST_PUNCHES_PATH = (
@@ -14,7 +13,7 @@ HR_EMPLOYEE_FIRST_PUNCHES_PATH = (
 
 @frappe.whitelist()
 def get_worker_strength_report(report_date, from_time, to_time):
-	frappe.has_permission('SD YRP Sewing Plan', "read", throw=True)
+	frappe.has_permission("SD YRP Sewing Plan", "read", throw=True)
 	if not report_date:
 		frappe.throw("Date is mandatory")
 	if not from_time:
@@ -22,14 +21,10 @@ def get_worker_strength_report(report_date, from_time, to_time):
 	if not to_time:
 		frappe.throw("To Time is mandatory")
 
-	settings = frappe.get_single('SD YRP MRP Settings')
+	settings = frappe.get_single("SD YRP MRP Settings")
 	hr_site_url = (settings.get("hr_site_url") or "").strip().rstrip("/")
 	api_key = (settings.get("hr_api_key") or "").strip()
-	api_secret = (
-		settings.get_password("hr_api_secret")
-		if settings.get("hr_api_secret")
-		else None
-	)
+	api_secret = settings.get_password("hr_api_secret") if settings.get("hr_api_secret") else None
 	if not hr_site_url:
 		frappe.throw("Configure the HR Site URL in MRP Settings")
 	if not api_key or not api_secret:
@@ -77,9 +72,7 @@ def get_worker_strength_report(report_date, from_time, to_time):
 			"Verify the HR API credentials and try again."
 		)
 	except ValueError:
-		frappe.log_error(
-			frappe.get_traceback(), "Invalid HR Workers Strength Report Response"
-		)
+		frappe.log_error(frappe.get_traceback(), "Invalid HR Workers Strength Report Response")
 		frappe.throw("HR returned an invalid Workers Strength Report response")
 
 	report_data = payload.get("message") if isinstance(payload, dict) else None
@@ -107,13 +100,10 @@ def get_worker_strength_report(report_date, from_time, to_time):
 	except requests.RequestException:
 		frappe.log_error(frappe.get_traceback(), "HR Employee First Punch API Error")
 		frappe.throw(
-			"Unable to fetch employee first punches from HR. "
-			"Verify the HR API credentials and try again."
+			"Unable to fetch employee first punches from HR. Verify the HR API credentials and try again."
 		)
 	except ValueError:
-		frappe.log_error(
-			frappe.get_traceback(), "Invalid HR Employee First Punch Response"
-		)
+		frappe.log_error(frappe.get_traceback(), "Invalid HR Employee First Punch Response")
 		frappe.throw("HR returned an invalid employee first punch response")
 
 	punch_data = punch_payload.get("message") if isinstance(punch_payload, dict) else None

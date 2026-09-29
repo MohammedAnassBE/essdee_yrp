@@ -1,18 +1,17 @@
 """Essdee Lot/IPD adapters for the base YRP Process Cost DocType."""
-from yrp import attribute_links as attribute_db
-from yrp.attribute_links import value as _attribute_value
 
 import frappe
-from yrp.attribute_values import get_mapping_document
 from frappe import _
-
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
+from yrp.attribute_values import get_mapping_document
 from yrp.utils import update_if_string_instance
 
 
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def get_item_attributes(doctype, txt, searchfield, start, page_len, filters):
-	if doctype != 'Item Attribute':
+	if doctype != "Item Attribute":
 		return []
 	filters = frappe._dict(filters or {})
 	if not filters.item or not filters.lot or not filters.process:
@@ -26,8 +25,8 @@ def get_item_attributes(doctype, txt, searchfield, start, page_len, filters):
 	ipd_name = _resolve_ipd_name(filters.item, filters.lot, filters.process)
 	if not ipd_name:
 		return []
-	frappe.has_permission('YRP Item Production Detail', "read", doc=ipd_name, throw=True)
-	ipd = frappe.get_cached_doc('YRP Item Production Detail', ipd_name)
+	frappe.has_permission("YRP Item Production Detail", "read", doc=ipd_name, throw=True)
+	ipd = frappe.get_cached_doc("YRP Item Production Detail", ipd_name)
 	process_name = filters.process
 	attributes = []
 	if ipd.get("is_cloth_item"):
@@ -40,7 +39,7 @@ def get_item_attributes(doctype, txt, searchfield, start, page_len, filters):
 			attributes.append(ipd.set_item_attribute)
 	elif ipd.packing_process == process_name:
 		attributes = [ipd.primary_item_attribute]
-	elif not frappe.db.get_value('YRP Process', process_name, "is_group"):
+	elif not frappe.db.get_value("YRP Process", process_name, "is_group"):
 		for row in ipd.get("ipd_processes") or []:
 			if row.process_name != process_name:
 				continue
@@ -53,7 +52,7 @@ def get_item_attributes(doctype, txt, searchfield, start, page_len, filters):
 				attributes = [ipd.primary_item_attribute]
 			break
 	else:
-		item = frappe.get_cached_doc('Item', filters.item)
+		item = frappe.get_cached_doc("Item", filters.item)
 		attributes = [row.attribute for row in item.get("attributes") or []]
 
 	seen = set()
@@ -91,8 +90,8 @@ def get_pc_attribute_values(
 	ipd_name = _resolve_ipd_name(item, lot, process_name)
 	if not ipd_name:
 		frappe.throw(_("Lot {0} has no Item Production Detail.").format(lot))
-	frappe.has_permission('YRP Item Production Detail', "read", doc=ipd_name, throw=True)
-	ipd = frappe.get_cached_doc('YRP Item Production Detail', ipd_name)
+	frappe.has_permission("YRP Item Production Detail", "read", doc=ipd_name, throw=True)
+	ipd = frappe.get_cached_doc("YRP Item Production Detail", ipd_name)
 	mapping = next(
 		(
 			row.mapping
@@ -103,10 +102,10 @@ def get_pc_attribute_values(
 	)
 	if not mapping:
 		mapping = frappe.db.get_value(
-			'YRP Item Item Attribute',
+			"YRP Item Item Attribute",
 			{
 				"parent": ipd_name,
-				"parenttype": 'YRP Item Production Detail',
+				"parenttype": "YRP Item Production Detail",
 				"attribute": attribute,
 			},
 			"mapping",
@@ -124,17 +123,21 @@ def get_pc_attribute_values(
 		values = [_attribute_value(row.attribute_value) for row in mapping_doc.get("values") or []]
 
 	return [
-		{"attribute_value": attribute_db.link(value, attribute) if frappe.utils.cint(for_link) else value, "price": 0, "min_order_qty": 0}
+		{
+			"attribute_value": attribute_db.link(value, attribute) if frappe.utils.cint(for_link) else value,
+			"price": 0,
+			"min_order_qty": 0,
+		}
 		for value in dict.fromkeys(value for value in values if value)
 	]
 
 
 def _check_process_cost_permissions(*, item=None, lot=None, process_name=None):
-	frappe.has_permission('YRP Process Cost', "read", throw=True)
+	frappe.has_permission("YRP Process Cost", "read", throw=True)
 	for doctype, name in (
-		('Item', item),
-		('SD YRP Lot', lot),
-		('YRP Process', process_name),
+		("Item", item),
+		("SD YRP Lot", lot),
+		("YRP Process", process_name),
 	):
 		if name:
 			frappe.has_permission(doctype, "read", doc=name, throw=True)

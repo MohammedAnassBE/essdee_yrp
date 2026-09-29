@@ -11,10 +11,10 @@
                 <td>
                    <div style="display: flex;" v-for="x in items[item]" :key="x">
                         <div>{{x}}</div>
-                   </div> 
+                   </div>
                 </td>
-                <td> 
-                    <div class="cursor-pointer" @click="delete_item(item)" 
+                <td>
+                    <div class="cursor-pointer" @click="delete_item(item)"
 					v-html="frappe.utils.icon('delete', 'md', 'mr-1')"></div>
                 </td>
             </tr>
@@ -23,7 +23,7 @@
         <div class="panel-checks row p-4" style="display: flex; gap: 10px"></div>
         <button v-if="show_button1" class="btn btn-success" @click="create_inputs()"> Add Process</button>
         <button v-if="show_button2" class="btn btn-success" @click="add_process()">Add</button>
-    </div>    
+    </div>
 </template>
 <script setup>
 import {ref, onMounted} from 'vue';
@@ -126,7 +126,6 @@ function add_process(){
     if(!items.value){
         items.value = {}
     }
-    console.log(selected_panels.value)
     items.value[process_value] = selected_panels.value
     show_button2.value = false
     show_button1.value = true

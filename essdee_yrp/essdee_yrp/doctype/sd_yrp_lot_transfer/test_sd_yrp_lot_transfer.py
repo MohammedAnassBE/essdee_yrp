@@ -6,7 +6,7 @@ from frappe.tests import IntegrationTestCase
 
 class TestLotTransfer(IntegrationTestCase):
 	def test_posting_fields_require_edit_checkbox(self):
-		meta = frappe.get_meta('SD YRP Lot Transfer', cached=False)
+		meta = frappe.get_meta("SD YRP Lot Transfer", cached=False)
 		edit_control = meta.get_field("edit_posting_date_and_time")
 		posting_date = meta.get_field("posting_date")
 		posting_time = meta.get_field("posting_time")
@@ -17,19 +17,19 @@ class TestLotTransfer(IntegrationTestCase):
 		self.assertEqual(posting_time.read_only_depends_on, "eval: !doc.edit_posting_date_and_time")
 		self.assertTrue(posting_date.no_copy)
 		self.assertTrue(posting_time.no_copy)
-		self.assertEqual(meta.get_field("items").options, 'SD YRP Lot Transfer Item')
+		self.assertEqual(meta.get_field("items").options, "SD YRP Lot Transfer Item")
 		finishing_plan = meta.get_field("finishing_plan")
-		self.assertEqual(finishing_plan.options, 'SD YRP Finishing Plan')
+		self.assertEqual(finishing_plan.options, "SD YRP Finishing Plan")
 		self.assertTrue(finishing_plan.hidden)
 
-		item_meta = frappe.get_meta('SD YRP Lot Transfer Item', cached=False)
-		self.assertEqual(item_meta.get_field("warehouse").options, 'Warehouse')
+		item_meta = frappe.get_meta("SD YRP Lot Transfer Item", cached=False)
+		self.assertEqual(item_meta.get_field("warehouse").options, "Warehouse")
 		self.assertTrue(item_meta.get_field("warehouse").reqd)
-		self.assertEqual(item_meta.get_field("received_type").options, 'YRP Received Type')
+		self.assertEqual(item_meta.get_field("received_type").options, "YRP Received Type")
 		self.assertTrue(item_meta.get_field("received_type").reqd)
 
 	def test_valuation_lookup_passes_stock_dimensions_by_name(self):
-		transfer = frappe.new_doc('SD YRP Lot Transfer')
+		transfer = frappe.new_doc("SD YRP Lot Transfer")
 		transfer.posting_date = "2026-07-29"
 		transfer.posting_time = "12:34:56"
 		row = frappe._dict(
@@ -94,13 +94,13 @@ class TestLotTransfer(IntegrationTestCase):
 		self.assertEqual(row.amount, 260)
 
 	def test_submit_persists_actual_fifo_transfer_value(self):
-		transfer = frappe.new_doc('SD YRP Lot Transfer')
+		transfer = frappe.new_doc("SD YRP Lot Transfer")
 		transfer.name = "LT-ACTUAL-RATE"
 		transfer.docstatus = 1
 		transfer.posting_date = "2026-07-29"
 		transfer.posting_time = "12:34:56"
 		row = frappe._dict(
-			doctype='SD YRP Lot Transfer Item',
+			doctype="SD YRP Lot Transfer Item",
 			name="LT-ROW-1",
 			item="_Test Lot Transfer Variant",
 			from_lot="LOT-A",
@@ -136,7 +136,7 @@ class TestLotTransfer(IntegrationTestCase):
 		self.assertEqual(row.rate, 250)
 		self.assertEqual(row.amount, 500)
 		set_value.assert_called_once_with(
-			'SD YRP Lot Transfer Item',
+			"SD YRP Lot Transfer Item",
 			"LT-ROW-1",
 			{"stock_uom_rate": 125.0, "rate": 250.0, "amount": 500.0},
 			update_modified=False,

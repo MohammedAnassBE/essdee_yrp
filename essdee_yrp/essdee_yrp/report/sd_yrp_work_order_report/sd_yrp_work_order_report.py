@@ -1,11 +1,14 @@
 # Copyright (c) 2025, Essdee and contributors
 # For license information, please see license.txt
 
-import frappe, json
+import json
+
+import frappe
 from six import string_types
 
+
 def execute(filters=None):
-	types = frappe.db.get_single_value('SD YRP MRP Settings', "received_type_list")
+	types = frappe.db.get_single_value("SD YRP MRP Settings", "received_type_list")
 	received_types = types.split(",")
 	for t in received_types:
 		t = t.strip()
@@ -13,68 +16,76 @@ def execute(filters=None):
 	data = get_data(filters, received_types)
 	return columns, data
 
+
 def get_columns(received_types):
 	columns = [
-		{"fieldname":"work_order","fieldtype":"Link","options":'YRP Work Order',"label":"Work Order"},
-		{"fieldname":"wo_date","fieldtype":"Date","label":"WO Date"},
-		{"fieldname":"supplier","fieldtype":"Link","options":'Supplier',"label":"Supplier"},
-		{"fieldname":"supplier_name","fieldtype":"Data","label":"Supplier Name"},
-		{"fieldname":"lot","fieldtype":"Link","options":'SD YRP Lot',"label":"Lot"},
-		{"fieldname":"item","fieldtype":"Link","options":'Item',"label":"Item"},
-		{"fieldname":"wo_colours","fieldtype":"Data","label":"WO Colours"},
-		{"fieldname":"process_name","fieldtype":"Link","options":'YRP Process',"label":"Process"},
-		{"fieldname":"open_status","fieldtype":"Data","label":"WO Status"},
-		{"fieldname":"planned_quantity","fieldtype":"Int","label":"Pieces Planned"},
-		{"fieldname":"total_no_of_pieces_delivered","fieldtype":"Int","label":"Pieces Delivered"},
-		{"fieldname":"total_no_of_pieces_received","fieldtype":"Int","label":"Pieces Received"},
+		{"fieldname": "work_order", "fieldtype": "Link", "options": "YRP Work Order", "label": "Work Order"},
+		{"fieldname": "wo_date", "fieldtype": "Date", "label": "WO Date"},
+		{"fieldname": "supplier", "fieldtype": "Link", "options": "Supplier", "label": "Supplier"},
+		{"fieldname": "supplier_name", "fieldtype": "Data", "label": "Supplier Name"},
+		{"fieldname": "lot", "fieldtype": "Link", "options": "SD YRP Lot", "label": "Lot"},
+		{"fieldname": "item", "fieldtype": "Link", "options": "Item", "label": "Item"},
+		{"fieldname": "wo_colours", "fieldtype": "Data", "label": "WO Colours"},
+		{"fieldname": "process_name", "fieldtype": "Link", "options": "YRP Process", "label": "Process"},
+		{"fieldname": "open_status", "fieldtype": "Data", "label": "WO Status"},
+		{"fieldname": "planned_quantity", "fieldtype": "Int", "label": "Pieces Planned"},
+		{"fieldname": "total_no_of_pieces_delivered", "fieldtype": "Int", "label": "Pieces Delivered"},
+		{"fieldname": "total_no_of_pieces_received", "fieldtype": "Int", "label": "Pieces Received"},
 	]
 
 	for t in received_types:
 		x = t.replace(" ", "_")
 		columns.append(
-			{"fieldname": x,"fieldtype":"Int","label":t},
+			{"fieldname": x, "fieldtype": "Int", "label": t},
 		)
-	columns = columns + [
-		{"fieldname":"others", "fieldtype":"Int","label":"Others"},
-		{"fieldname":"pending","fieldtype":"Int","label":"Pending"},
-		{"fieldname":"billed_qty","fieldtype":"Float","label":"Billed Qty"},
-		{"fieldname":"first_dc_date","fieldtype":"Date","label":"First DC Date"},
-		{"fieldname":"last_dc_date","fieldtype":"Date","label":"Last DC Date"},
-		{"fieldname":"first_grn_date","fieldtype":"Date","label":"First GRN Date"},
-		{"fieldname":"last_grn_date","fieldtype":"Date","label":"Last GRN Date"},
+	columns = [
+		*columns,
+		{"fieldname": "others", "fieldtype": "Int", "label": "Others"},
+		{"fieldname": "pending", "fieldtype": "Int", "label": "Pending"},
+		{"fieldname": "billed_qty", "fieldtype": "Float", "label": "Billed Qty"},
+		{"fieldname": "first_dc_date", "fieldtype": "Date", "label": "First DC Date"},
+		{"fieldname": "last_dc_date", "fieldtype": "Date", "label": "Last DC Date"},
+		{"fieldname": "first_grn_date", "fieldtype": "Date", "label": "First GRN Date"},
+		{"fieldname": "last_grn_date", "fieldtype": "Date", "label": "Last GRN Date"},
 	]
 	return columns
 
+
 def get_data(filters, received_types):
-	doctype = frappe.qb.DocType('YRP Work Order')
+	doctype = frappe.qb.DocType("YRP Work Order")
 	based_on = filters.get("based_on") or "Date"
-	base_where = (doctype.docstatus == 1)
+	base_where = doctype.docstatus == 1
 	if based_on == "Date":
-		base_where &= (doctype.wo_date >= filters.get("from_date")) & (doctype.wo_date <= filters.get("to_date"))
+		base_where &= (doctype.wo_date >= filters.get("from_date")) & (
+			doctype.wo_date <= filters.get("to_date")
+		)
 
-	query = frappe.qb.from_(doctype).select(
-		doctype.name.as_("work_order"),
-		doctype.wo_date,
-		doctype.supplier,
-		doctype.supplier_name,
-		doctype.lot,
-		doctype.item,
-		doctype.wo_colours,
-		doctype.process_name,
-		doctype.open_status,
-		doctype.planned_quantity,
-		doctype.total_no_of_pieces_delivered,
-		doctype.total_no_of_pieces_received,
-		(doctype.total_no_of_pieces_received - doctype.total_no_of_pieces_delivered).as_("pending"),
-		doctype.first_dc_date,
-		doctype.last_dc_date,
-		doctype.first_grn_date,
-		doctype.last_grn_date,
-		doctype.received_types_json
-	).where(base_where)
+	query = (
+		frappe.qb.from_(doctype)
+		.select(
+			doctype.name.as_("work_order"),
+			doctype.wo_date,
+			doctype.supplier,
+			doctype.supplier_name,
+			doctype.lot,
+			doctype.item,
+			doctype.wo_colours,
+			doctype.process_name,
+			doctype.open_status,
+			doctype.planned_quantity,
+			doctype.total_no_of_pieces_delivered,
+			doctype.total_no_of_pieces_received,
+			(doctype.total_no_of_pieces_received - doctype.total_no_of_pieces_delivered).as_("pending"),
+			doctype.first_dc_date,
+			doctype.last_dc_date,
+			doctype.first_grn_date,
+			doctype.last_grn_date,
+			doctype.received_types_json,
+		)
+		.where(base_where)
+	)
 
-
-	if supplier := filters.get('supplier'):
+	if supplier := filters.get("supplier"):
 		query = query.where(doctype.supplier == supplier)
 	if process := filters.get("process_name"):
 		query = query.where(doctype.process_name == process)
@@ -93,7 +104,7 @@ def get_data(filters, received_types):
 
 	billed_map = {}
 	if result:
-		wo_names = [r['work_order'] for r in result]
+		wo_names = [r["work_order"] for r in result]
 		billed_rows = frappe.db.sql(
 			"""
 			SELECT parent, SUM(billed_qty) AS billed_qty
@@ -104,11 +115,11 @@ def get_data(filters, received_types):
 			{"names": tuple(wo_names)},
 			as_dict=True,
 		)
-		billed_map = {row['parent']: row['billed_qty'] or 0 for row in billed_rows}
+		billed_map = {row["parent"]: row["billed_qty"] or 0 for row in billed_rows}
 
 	for res in result:
-		res['billed_qty'] = billed_map.get(res['work_order'], 0)
-		received_json = res['received_types_json']
+		res["billed_qty"] = billed_map.get(res["work_order"], 0)
+		received_json = res["received_types_json"]
 		if isinstance(received_json, string_types):
 			received_json = json.loads(received_json)
 		others = 0
@@ -123,6 +134,6 @@ def get_data(filters, received_types):
 					x = t.replace(" ", "_")
 					res.update({x: 0})
 
-		res.update({"others":others})
+		res.update({"others": others})
 
 	return result

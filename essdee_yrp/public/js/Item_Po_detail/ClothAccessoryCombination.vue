@@ -120,7 +120,7 @@ function createInput(major_colour, index, value, type, is_header){
         }
         df['options'] = items.value.select_list
     }
-    
+
     let input =  frappe.ui.form.make_control({
         parent: $(el).find(parent_class),
         df:df ,
@@ -166,7 +166,7 @@ function get_data(){
             value = input
         }
         if(value == null || value == ""){
-            frappe.throw("Fill all the combinations")    
+            frappe.throw("Fill all the combinations")
         }
         else{
             x.value.items[i]['accessory_colour'] = value
@@ -183,7 +183,7 @@ function get_data(){
             frappe.throw("Some Cloths not in the Accessory Select List")
         }
         if(value2 == null || value2 == ""){
-            frappe.throw("Fill all the combinations")    
+            frappe.throw("Fill all the combinations")
         }
         else{
             x.value.items[i]['cloth_type'] = value2

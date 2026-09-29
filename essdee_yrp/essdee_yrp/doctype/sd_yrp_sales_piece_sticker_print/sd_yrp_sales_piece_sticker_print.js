@@ -124,8 +124,8 @@ function print_labels(frm, printer){
         callback: function(r){
             if(r.message){
                 let config = qz.configs.create(printer)
-                qz.print(config,[r.message]).then().catch((err)=>{
-                    console.log(err)
+                qz.print(config,[r.message]).then().catch((error)=>{
+                    frappe.msgprint(__("Printing failed: {0}", [error.message || error]));
                 })
             }
         }

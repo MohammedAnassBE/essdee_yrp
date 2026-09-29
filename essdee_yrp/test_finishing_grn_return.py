@@ -35,11 +35,9 @@ class TestFinishingGRNReturn(IntegrationTestCase):
 	def test_explicit_return_reference_must_match_its_item(self):
 		deliverable = _deliverable(item_variant="VAR-OTHER")
 		work_order = _doc(name="WO-1", deliverables=[deliverable])
-		row = _row(ref_doctype='YRP Work Order Deliverables', ref_docname=deliverable.name)
+		row = _row(ref_doctype="YRP Work Order Deliverables", ref_docname=deliverable.name)
 
-		with self.assertRaisesRegex(
-			frappe.ValidationError, "does not match the returned item"
-		):
+		with self.assertRaisesRegex(frappe.ValidationError, "does not match the returned item"):
 			_find_deliverable(work_order, row)
 
 	def test_unreferenced_duplicate_return_deliverables_are_rejected(self):
@@ -48,9 +46,7 @@ class TestFinishingGRNReturn(IntegrationTestCase):
 		second.name = "WO-DEL-2"
 		work_order = _doc(name="WO-1", deliverables=[first, second])
 
-		with self.assertRaisesRegex(
-			frappe.ValidationError, "matches multiple Work Order Deliverables"
-		):
+		with self.assertRaisesRegex(frappe.ValidationError, "matches multiple Work Order Deliverables"):
 			_find_deliverable(work_order, _row())
 
 	def test_return_targets_work_order_deliverable(self):
@@ -65,7 +61,7 @@ class TestFinishingGRNReturn(IntegrationTestCase):
 		):
 			_validate_return_quantities(grn)
 
-		self.assertEqual(row.ref_doctype, 'YRP Work Order Deliverables')
+		self.assertEqual(row.ref_doctype, "YRP Work Order Deliverables")
 		self.assertEqual(row.ref_docname, deliverable.name)
 
 	def test_return_submit_and_cancel_restore_deliverable_pending(self):
@@ -149,9 +145,7 @@ class TestFinishingGRNReturn(IntegrationTestCase):
 			"received_type": "Rejected",
 		},
 	)
-	def test_return_cancel_uses_persisted_sle_rate(
-		self, _sle, _default, _dimensions, last_rate
-	):
+	def test_return_cancel_uses_persisted_sle_rate(self, _sle, _default, _dimensions, last_rate):
 		grn = _doc(
 			from_warehouse="FINISHING-WH",
 			to_warehouse="FINISHING-WH",
@@ -198,8 +192,8 @@ def _doc(**values):
 def _return_grn(**values):
 	doc = EssdeeGoodsReceivedNote(
 		{
-			"doctype": 'YRP Goods Received Note',
-			"against": 'YRP Work Order',
+			"doctype": "YRP Goods Received Note",
+			"against": "YRP Work Order",
 			"against_id": "WO-1",
 			"is_return": 1,
 			"from_finishing": 1,

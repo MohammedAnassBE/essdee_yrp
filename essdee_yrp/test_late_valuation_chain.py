@@ -3,17 +3,16 @@ from unittest.mock import patch
 import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import flt
-
+from yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment.test_yrp_stock_valuation_adjustment import (
+	_stock_context,
+	_stock_entry,
+	_warehouse,
+)
 from yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment.yrp_stock_valuation_adjustment import (
 	create_adjustment,
 	create_reversal,
 	process_adjustment,
 	register_production_links,
-)
-from yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment.test_yrp_stock_valuation_adjustment import (
-	_stock_context,
-	_stock_entry,
-	_warehouse,
 )
 
 
@@ -33,13 +32,12 @@ def cleanup_u40_probe_artifacts():
 		pluck=True,
 	)
 	with patch(
-		"yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment."
-		"stock_valuation_adjustment.enqueue_adjustment"
+		"yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment.stock_valuation_adjustment.enqueue_adjustment"
 	):
 		for name in names:
-			for reversal in create_reversal('YRP Stock Entry', name):
+			for reversal in create_reversal("YRP Stock Entry", name):
 				reversal_state = frappe.db.get_value(
-					'YRP Stock Valuation Adjustment',
+					"YRP Stock Valuation Adjustment",
 					reversal,
 					["status", "reversal_of"],
 					as_dict=True,
@@ -48,21 +46,21 @@ def cleanup_u40_probe_artifacts():
 					reversal_state.status not in {"Completed", "Reversed"}
 					and reversal_state.reversal_of
 					and frappe.db.get_value(
-						'YRP Stock Valuation Adjustment', reversal_state.reversal_of, "status"
+						"YRP Stock Valuation Adjustment", reversal_state.reversal_of, "status"
 					)
 					== "Reversed"
 				):
 					# Repair only an interrupted test race where the reversal's
 					# final parent lock deadlocked after marking its original.
 					frappe.db.set_value(
-						'YRP Stock Valuation Adjustment',
+						"YRP Stock Valuation Adjustment",
 						reversal_state.reversal_of,
 						"status",
 						"Reversal Queued",
 					)
 				process_adjustment(reversal)
 	for name in names:
-		doc = frappe.get_doc('YRP Stock Entry', name)
+		doc = frappe.get_doc("YRP Stock Entry", name)
 		if doc.docstatus == 1:
 			doc.cancel()
 	return names
@@ -82,24 +80,21 @@ def cleanup_exact_valuation_test_artifacts(stock_entries):
 
 	docs = []
 	for name in names:
-		doc = frappe.get_doc('YRP Stock Entry', name)
+		doc = frappe.get_doc("YRP Stock Entry", name)
 		warehouses = [doc.from_warehouse, doc.to_warehouse]
 		warehouses = [warehouse for warehouse in warehouses if warehouse]
-		if not warehouses or any(
-			not warehouse.startswith("_Test Valuation ") for warehouse in warehouses
-		):
+		if not warehouses or any(not warehouse.startswith("_Test Valuation ") for warehouse in warehouses):
 			frappe.throw(f"Refusing cleanup for non-test Stock Entry {name}")
 		docs.append(doc)
 
 	with patch(
-		"yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment."
-		"stock_valuation_adjustment.enqueue_adjustment"
+		"yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment.stock_valuation_adjustment.enqueue_adjustment"
 	):
 		for name in names:
 			for original in frappe.get_all(
-				'YRP Stock Valuation Adjustment',
+				"YRP Stock Valuation Adjustment",
 				filters={
-					"source_doctype": 'YRP Stock Entry',
+					"source_doctype": "YRP Stock Entry",
 					"source_name": name,
 					"adjustment_type": ["!=", "Reversal"],
 					"docstatus": 1,
@@ -109,10 +104,11 @@ def cleanup_exact_valuation_test_artifacts(stock_entries):
 			):
 				if original.status not in {"Completed", "Reversal Queued", "Reversed"}:
 					process_adjustment(original.name)
-			for reversal in create_reversal('YRP Stock Entry', name):
-				if frappe.db.get_value(
-					'YRP Stock Valuation Adjustment', reversal, "status"
-				) not in {"Completed", "Reversed"}:
+			for reversal in create_reversal("YRP Stock Entry", name):
+				if frappe.db.get_value("YRP Stock Valuation Adjustment", reversal, "status") not in {
+					"Completed",
+					"Reversed",
+				}:
 					process_adjustment(reversal)
 
 	for doc in sorted(docs, key=lambda row: (row.creation, row.name), reverse=True):
@@ -141,7 +137,7 @@ class TestLateValuationChain(FrappeTestCase):
 
 	def _sle(self, voucher, positive):
 		return frappe.db.get_value(
-			'YRP Stock Ledger Entry',
+			"YRP Stock Ledger Entry",
 			{
 				"voucher_type": voucher.doctype,
 				"voucher_no": voucher.name,
@@ -219,16 +215,10 @@ class TestLateValuationChain(FrappeTestCase):
 
 	def _apply_difference(self, scenario, target_index, difference):
 		target = scenario["targets"][target_index]
-		source = (
-			scenario["source"]
-			if target_index == 0
-			else scenario["stages"][target_index - 1]["receipt"]
-		)
+		source = scenario["source"] if target_index == 0 else scenario["stages"][target_index - 1]["receipt"]
 		adjustment_kwargs = dict(
 			adjustment_type=(
-				"Purchase Invoice Rate Difference"
-				if target_index == 0
-				else "Work Order Excess Usage"
+				"Purchase Invoice Rate Difference" if target_index == 0 else "Work Order Excess Usage"
 			),
 			source_doctype=source.doctype,
 			source_name=source.name,
@@ -254,7 +244,7 @@ class TestLateValuationChain(FrappeTestCase):
 		self.assertEqual(create_adjustment(**adjustment_kwargs), adjustment)
 		process_adjustment(adjustment)
 		result = frappe.db.get_value(
-			'YRP Stock Valuation Adjustment',
+			"YRP Stock Valuation Adjustment",
 			adjustment,
 			[
 				"status",
@@ -276,17 +266,13 @@ class TestLateValuationChain(FrappeTestCase):
 		differences = (10, 1, 2, 3, 4)
 		adjustments = []
 		for target_index in order:
-			adjustments.append(
-				self._apply_difference(
-					scenario, target_index, differences[target_index]
-				)
-			)
+			adjustments.append(self._apply_difference(scenario, target_index, differences[target_index]))
 
 		expected_overlays = (10, 11, 13, 16, 20)
 		actual_overlays = []
 		for target, expected in zip(scenario["targets"], expected_overlays, strict=True):
 			values = frappe.db.get_value(
-				'YRP Stock Ledger Entry',
+				"YRP Stock Ledger Entry",
 				target.name,
 				["valuation_adjustment_value", "valuation_is_stale"],
 				as_dict=True,
@@ -297,13 +283,13 @@ class TestLateValuationChain(FrappeTestCase):
 
 		final_target = scenario["targets"][-1]
 		final_sle = frappe.db.get_value(
-			'YRP Stock Ledger Entry',
+			"YRP Stock Ledger Entry",
 			final_target.name,
 			["qty", "rate", "valuation_adjustment_value", "stock_value"],
 			as_dict=True,
 		)
 		final_bin = frappe.db.get_value(
-			'YRP Bin',
+			"YRP Bin",
 			{
 				"item_code": self.item,
 				"warehouse": scenario["final_warehouse"],
@@ -322,14 +308,12 @@ class TestLateValuationChain(FrappeTestCase):
 
 		for adjustment in adjustments:
 			entries = frappe.get_all(
-				'YRP Stock Valuation Propagation Entry',
+				"YRP Stock Valuation Propagation Entry",
 				filters={"adjustment": adjustment},
 				fields=["status", "entry_type", "difference", "remaining_difference"],
 			)
 			self.assertTrue(entries)
-			self.assertFalse(
-				[row for row in entries if row.status not in {"Applied", "Terminal"}]
-			)
+			self.assertFalse([row for row in entries if row.status not in {"Applied", "Terminal"}])
 
 		result = {
 			"overlays": actual_overlays,
@@ -357,11 +341,7 @@ class TestLateValuationChain(FrappeTestCase):
 					process_adjustment(reversal)
 		for target in scenario["targets"]:
 			self.assertAlmostEqual(
-				flt(
-					frappe.db.get_value(
-						'YRP Stock Ledger Entry', target.name, "valuation_adjustment_value"
-					)
-				),
+				flt(frappe.db.get_value("YRP Stock Ledger Entry", target.name, "valuation_adjustment_value")),
 				0,
 			)
 		for stage in reversed(scenario["stages"]):

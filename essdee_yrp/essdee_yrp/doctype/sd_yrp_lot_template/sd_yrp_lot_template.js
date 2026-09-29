@@ -30,7 +30,6 @@ frappe.ui.form.on('SD YRP Lot Template', {
 				},
 				callback: function(r) {
 					if (r.message) {
-						console.log(r.message);
 						let values = {
 							'primary_item_attribute': r.message.primary_attribute,
 							'item_attributes': r.message.attributes,

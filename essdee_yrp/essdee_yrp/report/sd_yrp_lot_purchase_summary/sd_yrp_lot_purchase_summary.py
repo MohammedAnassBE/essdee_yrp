@@ -14,8 +14,10 @@ def execute(filters=None):
 	data = compute(data, stock_data, pending_po_data)
 	return columns, data
 
+
 def get_key(item, lot):
 	return tuple([item, lot])
+
 
 def compute(data, stock_data, pending_po_data):
 	il_map = {}
@@ -71,87 +73,92 @@ def compute(data, stock_data, pending_po_data):
 		data.append(d)
 	return data
 
+
 def get_columns():
 	return [
 		{
-            "fieldname": "lot",
-            "label": "Lot",
-            "fieldtype": "Link",
-            "options": 'SD YRP Lot',
-            "width": 200,
-        },
+			"fieldname": "lot",
+			"label": "Lot",
+			"fieldtype": "Link",
+			"options": "SD YRP Lot",
+			"width": 200,
+		},
 		{
-            "fieldname": "parent_item",
-            "label": "Parent Item",
-            "fieldtype": "Link",
-            "options": 'Item',
-            "width": 200,
-        },
+			"fieldname": "parent_item",
+			"label": "Parent Item",
+			"fieldtype": "Link",
+			"options": "Item",
+			"width": 200,
+		},
 		{
-            "fieldname": "item",
-            "label": "Item",
-            "fieldtype": "Link",
-            "options": 'Item',
-            "width": 200,
-        },
+			"fieldname": "item",
+			"label": "Item",
+			"fieldtype": "Link",
+			"options": "Item",
+			"width": 200,
+		},
 		{
-            "fieldname": "required_qty",
-            "label": "Required Qty",
-            "fieldtype": "Float",
-            "width": 100,
-        },
+			"fieldname": "required_qty",
+			"label": "Required Qty",
+			"fieldtype": "Float",
+			"width": 100,
+		},
 		{
-            "fieldname": "stock_qty",
-            "label": "Stock Qty",
-            "fieldtype": "Float",
-            "width": 100,
-        },
+			"fieldname": "stock_qty",
+			"label": "Stock Qty",
+			"fieldtype": "Float",
+			"width": 100,
+		},
 		{
-            "fieldname": "po_pending_qty",
-            "label": "PO Pending Qty",
-            "fieldtype": "Float",
-            "width": 100,
-        },
+			"fieldname": "po_pending_qty",
+			"label": "PO Pending Qty",
+			"fieldtype": "Float",
+			"width": 100,
+		},
 		{
-            "fieldname": "po_draft_qty",
-            "label": "PO Draft Qty",
-            "fieldtype": "Float",
-            "width": 100,
-        },
+			"fieldname": "po_draft_qty",
+			"label": "PO Draft Qty",
+			"fieldtype": "Float",
+			"width": 100,
+		},
 	]
 
-def get_data(filters):
-	bom = frappe.qb.DocType('SD YRP Lot BOM')
-	item_variant = frappe.qb.DocType('Item')
-	query = frappe.qb.from_(bom).from_(item_variant).select(
-		bom.parent.as_('lot'),
-		bom.item_name.as_('item'),
-		Coalesce(item_variant.variant_of, item_variant.name).as_('parent_item'),
-		bom.required_qty,
-	).where(bom.item_name == item_variant.name)
 
-	if filters.get('lot'):
-		query = query.where(bom.parent == filters.get('lot'))
-	if filters.get('item'):
-		query = query.where(bom.item_name == filters.get('item'))
-	if filters.get('parent_item'):
+def get_data(filters):
+	bom = frappe.qb.DocType("SD YRP Lot BOM")
+	item_variant = frappe.qb.DocType("Item")
+	query = (
+		frappe.qb.from_(bom)
+		.from_(item_variant)
+		.select(
+			bom.parent.as_("lot"),
+			bom.item_name.as_("item"),
+			Coalesce(item_variant.variant_of, item_variant.name).as_("parent_item"),
+			bom.required_qty,
+		)
+		.where(bom.item_name == item_variant.name)
+	)
+
+	if filters.get("lot"):
+		query = query.where(bom.parent == filters.get("lot"))
+	if filters.get("item"):
+		query = query.where(bom.item_name == filters.get("item"))
+	if filters.get("parent_item"):
 		query = query.where(
-			(item_variant.variant_of == filters.get('parent_item'))
-			| ((item_variant.variant_of.isnull()) & (item_variant.name == filters.get('parent_item')))
+			(item_variant.variant_of == filters.get("parent_item"))
+			| ((item_variant.variant_of.isnull()) & (item_variant.name == filters.get("parent_item")))
 		)
 
 	return query.run(as_dict=True)
 
+
 def get_stock_data(filters):
-	sle = frappe.qb.DocType('YRP Stock Ledger Entry')
-	warehouse = frappe.qb.DocType('Warehouse')
-	item_variant = frappe.qb.DocType('Item')
+	sle = frappe.qb.DocType("YRP Stock Ledger Entry")
+	warehouse = frappe.qb.DocType("Warehouse")
+	item_variant = frappe.qb.DocType("Item")
 	query1 = (
 		frappe.qb.from_(sle)
-		.where(
-			(sle.docstatus < 2)
-			& (sle.is_cancelled == 0)
-		)
+		.where((sle.docstatus < 2) & (sle.is_cancelled == 0))
 		.groupby(sle.item)
 		.groupby(sle.warehouse)
 		.groupby(sle.lot)
@@ -163,18 +170,21 @@ def get_stock_data(filters):
 		)
 	)
 
-	if filters.get('lot'):
-		query1 = query1.where(sle.lot == filters.get('lot'))
+	if filters.get("lot"):
+		query1 = query1.where(sle.lot == filters.get("lot"))
 
 	query = (
-		frappe.qb.from_(sle).from_(query1).from_(warehouse).from_(item_variant)
+		frappe.qb.from_(sle)
+		.from_(query1)
+		.from_(warehouse)
+		.from_(item_variant)
 		.select(
 			sle.item,
-			Coalesce(item_variant.variant_of, item_variant.name).as_('parent_item'),
+			Coalesce(item_variant.variant_of, item_variant.name).as_("parent_item"),
 			sle.warehouse,
 			warehouse.warehouse_name,
 			sle.lot,
-			sle.qty_after_transaction.as_('qty')
+			sle.qty_after_transaction.as_("qty"),
 		)
 		.where(
 			(sle.item == query1.item)
@@ -185,29 +195,32 @@ def get_stock_data(filters):
 			& (sle.item == item_variant.name)
 		)
 	)
-	if filters.get('item'):
-		query = query.where(sle.item == filters.get('item'))
-	if filters.get('parent_item'):
+	if filters.get("item"):
+		query = query.where(sle.item == filters.get("item"))
+	if filters.get("parent_item"):
 		query = query.where(
-			(item_variant.variant_of == filters.get('parent_item'))
-			| ((item_variant.variant_of.isnull()) & (item_variant.name == filters.get('parent_item')))
+			(item_variant.variant_of == filters.get("parent_item"))
+			| ((item_variant.variant_of.isnull()) & (item_variant.name == filters.get("parent_item")))
 		)
 
 	d = query.run(as_dict=True)
 	return d
 
+
 def get_po_qty(filters, docstatus):
-	po = frappe.qb.DocType('Purchase Order')
-	po_item = frappe.qb.DocType('Purchase Order Item')
-	item_variant = frappe.qb.DocType('Item')
+	po = frappe.qb.DocType("Purchase Order")
+	po_item = frappe.qb.DocType("Purchase Order Item")
+	item_variant = frappe.qb.DocType("Item")
 
 	query = (
-		frappe.qb.from_(po).from_(po_item).from_(item_variant)
+		frappe.qb.from_(po)
+		.from_(po_item)
+		.from_(item_variant)
 		.where(
 			(po.name == po_item.parent)
 			& (po.docstatus == docstatus)
 			& (po.is_yrp_managed == 1)
-			& (po.open_status == 'Open')
+			& (po.open_status == "Open")
 			& (po_item.item_code == item_variant.name)
 		)
 		.groupby(po_item.item_code)
@@ -215,22 +228,22 @@ def get_po_qty(filters, docstatus):
 		.groupby(item_variant.variant_of)
 		.groupby(item_variant.name)
 		.select(
-			po_item.item_code.as_('item'),
+			po_item.item_code.as_("item"),
 			po_item.lot,
-			Coalesce(item_variant.variant_of, item_variant.name).as_('parent_item'),
-			Sum(po_item.pending_quantity).as_('qty')
+			Coalesce(item_variant.variant_of, item_variant.name).as_("parent_item"),
+			Sum(po_item.pending_quantity).as_("qty"),
 		)
 	)
 
-	if filters.get('lot'):
-		query = query.where(po_item.lot == filters.get('lot'))
-	if filters.get('item'):
-		query = query.where(po_item.item_code == filters.get('item'))
-	if filters.get('parent_item'):
+	if filters.get("lot"):
+		query = query.where(po_item.lot == filters.get("lot"))
+	if filters.get("item"):
+		query = query.where(po_item.item_code == filters.get("item"))
+	if filters.get("parent_item"):
 		query = query.where(
-			(item_variant.variant_of == filters.get('parent_item'))
-			| ((item_variant.variant_of.isnull()) & (item_variant.name == filters.get('parent_item')))
+			(item_variant.variant_of == filters.get("parent_item"))
+			| ((item_variant.variant_of.isnull()) & (item_variant.name == filters.get("parent_item")))
 		)
 
-	d = query.run(as_dict = True)
+	d = query.run(as_dict=True)
 	return d

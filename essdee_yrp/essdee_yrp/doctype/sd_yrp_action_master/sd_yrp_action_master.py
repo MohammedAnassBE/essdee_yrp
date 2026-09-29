@@ -1,11 +1,11 @@
-from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2024, Essdee and contributors
 # For license information, please see license.txt
-
 import frappe
-from frappe.utils import date_diff
 from frappe.model.document import Document
+from frappe.utils import date_diff
+from yrp.attribute_links import value as _attribute_value
 from yrp.utils import update_if_string_instance
+
 
 class SDYRPActionMaster(Document):
 	def autoname(self):
@@ -15,10 +15,7 @@ class SDYRPActionMaster(Document):
 		d = {}
 		previous_action = []
 		for row in self.details:
-			previous_action.append({
-				"option": row.action,
-				"id": row.action
-			})
+			previous_action.append({"option": row.action, "id": row.action})
 			d[row.action] = {
 				"action": row.action,
 				"lead_time": row.lead_time,
@@ -30,48 +27,65 @@ class SDYRPActionMaster(Document):
 
 		for row in self.action_master_dependent_details:
 			if row.action in d:
-				d[row.action]['dependent_action'].append(row.dependent_action)
+				d[row.action]["dependent_action"].append(row.dependent_action)
 
 		list_data = [d[key] for key in d]
-		self.set_onload("action_data", {
-			"data": list_data,
-			"previous": previous_action,
-		})
-
+		self.set_onload(
+			"action_data",
+			{
+				"data": list_data,
+				"previous": previous_action,
+			},
+		)
 
 	def before_validate(self):
 		self.quantity = str(self.min_qty) + " - " + str(self.max_qty)
-		if self.get('action_details'):
+		if self.get("action_details"):
 			action_details = update_if_string_instance(self.action_details)
 			details = []
 			dependent_details = []
 			for row in action_details:
-				details.append({
-					"action": row['action'],
-					"lead_time": row['lead_time'],
-					"department": row['department'],
-					"target": 0,
-					"merge_action": row['check_value'],
-					"one_colour_process": row['one_colour_process']
-				})
-				if len(row['dependent_action']) > 0:
-					for act in row['dependent_action']:
-						dependent_details.append({
-							"action": row['action'],
-							"dependent_action": act,
-						})
+				details.append(
+					{
+						"action": row["action"],
+						"lead_time": row["lead_time"],
+						"department": row["department"],
+						"target": 0,
+						"merge_action": row["check_value"],
+						"one_colour_process": row["one_colour_process"],
+					}
+				)
+				if len(row["dependent_action"]) > 0:
+					for act in row["dependent_action"]:
+						dependent_details.append(
+							{
+								"action": row["action"],
+								"dependent_action": act,
+							}
+						)
 			self.set("details", details)
 			self.set("action_master_dependent_details", dependent_details)
 
 	def before_save(self):
-		from essdee_yrp.essdee_yrp.doctype.sd_yrp_time_and_action.sd_yrp_time_and_action import get_t_and_a_preview_data
-		data = get_t_and_a_preview_data(frappe.utils.nowdate(), [{'colour': 'colour', 'master': self.name}], is_template=False, master_doc=self)
-		if len(_attribute_value(data['colour'])) > 0:
-			dispatch_date = _attribute_value(data['colour'])[len(_attribute_value(data['colour'])) - 1]['rescheduled_date']
+		from essdee_yrp.essdee_yrp.doctype.sd_yrp_time_and_action.sd_yrp_time_and_action import (
+			get_t_and_a_preview_data,
+		)
+
+		data = get_t_and_a_preview_data(
+			frappe.utils.nowdate(),
+			[{"colour": "colour", "master": self.name}],
+			is_template=False,
+			master_doc=self,
+		)
+		if len(_attribute_value(data["colour"])) > 0:
+			dispatch_date = _attribute_value(data["colour"])[len(_attribute_value(data["colour"])) - 1][
+				"rescheduled_date"
+			]
 			lead_time = date_diff(dispatch_date, frappe.utils.nowdate())
 			self.lead_time = lead_time
 		else:
 			self.lead_time = 0
+
 
 @frappe.whitelist()
 def get_action_master_details(master_list):
@@ -80,54 +94,56 @@ def get_action_master_details(master_list):
 	for item in master_list:
 		if not _attribute_value(item.get("colour")) or not item.get("master"):
 			frappe.throw("Colour and Action Master are required")
-		work_station[_attribute_value(item['colour'])] = {
-			"details": [],
-			"dependent_details": []
-		}
-		master_doc = frappe.get_doc('SD YRP Action Master',item['master'])
+		work_station[_attribute_value(item["colour"])] = {"details": [], "dependent_details": []}
+		master_doc = frappe.get_doc("SD YRP Action Master", item["master"])
 		master_doc.check_permission("read")
 		for action in master_doc.details:
 			action_data = action.as_dict()
-			capacity_planning = frappe.get_value('SD YRP Action',action_data['action'],"capacity_planning")
+			capacity_planning = frappe.get_value("SD YRP Action", action_data["action"], "capacity_planning")
 			if capacity_planning:
-				name_list = frappe.get_list('YRP Work Station', filters={"action":action_data["action"],"default":True},pluck = "name")
+				name_list = frappe.get_list(
+					"YRP Work Station",
+					filters={"action": action_data["action"], "default": True},
+					pluck="name",
+				)
 				if not name_list:
 					frappe.throw(f"There is no Work Station for Action {action_data['action']}")
 
-				action_data['work_station'] = frappe.get_value('YRP Work Station',name_list[0],"name")
-			action_data['master'] = item['master']
-			work_station[_attribute_value(item['colour'])]['details'].append(action_data)
+				action_data["work_station"] = frappe.get_value("YRP Work Station", name_list[0], "name")
+			action_data["master"] = item["master"]
+			work_station[_attribute_value(item["colour"])]["details"].append(action_data)
 
 		for row in master_doc.action_master_dependent_details:
-			work_station[_attribute_value(item['colour'])]['dependent_details'].append(row.as_dict())
+			work_station[_attribute_value(item["colour"])]["dependent_details"].append(row.as_dict())
 
 	return work_station
+
 
 @frappe.whitelist()
 def get_work_station(action):
 	rows = frappe.get_list(
-		'YRP Work Station',
+		"YRP Work Station",
 		filters={"action": action, "default": 1},
 		pluck="name",
 		limit=1,
 	)
 	return rows[0] if rows else None
 
+
 @frappe.whitelist()
 def create_master_template(doc_name):
-	master_doc = frappe.get_doc('SD YRP Action Master', doc_name)
+	master_doc = frappe.get_doc("SD YRP Action Master", doc_name)
 	master_doc.check_permission("read")
-	frappe.has_permission('SD YRP Action Master Template', "create", throw=True)
-	new_doc = frappe.new_doc('SD YRP Action Master Template')
+	frappe.has_permission("SD YRP Action Master Template", "create", throw=True)
+	new_doc = frappe.new_doc("SD YRP Action Master Template")
 	d = {
 		"fabric": master_doc.fabric,
 		"min_qty": master_doc.min_qty,
 		"max_qty": master_doc.max_qty,
 		"product_type": master_doc.product_type,
-		"fabric": master_doc.fabric,
 		"emblishment": master_doc.emblishment,
 		"description": master_doc.description,
-		"lead_time": master_doc.lead_time
+		"lead_time": master_doc.lead_time,
 	}
 	new_doc.update(d)
 	new_doc.set("details", master_doc.details)
@@ -135,10 +151,11 @@ def create_master_template(doc_name):
 	new_doc.insert()
 	return new_doc.name
 
+
 @frappe.whitelist()
 def get_template_details(template):
 	d = {}
-	doc = frappe.get_doc('SD YRP Action Master Template', template)
+	doc = frappe.get_doc("SD YRP Action Master Template", template)
 	doc.check_permission("read")
 	for row in doc.details:
 		d[row.action] = {
@@ -152,7 +169,7 @@ def get_template_details(template):
 
 	for row in doc.action_master_dependent_details:
 		if row.action in d:
-			d[row.action]['dependent_action'].append(row.dependent_action)
+			d[row.action]["dependent_action"].append(row.dependent_action)
 	list_data = [d[key] for key in d]
 
 	return list_data

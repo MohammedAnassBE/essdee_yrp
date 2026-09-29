@@ -56,7 +56,7 @@ function set_attributes() {
                         header_inputs[row] = createInput(row, 1000, null, true)
                     }
                 }
-                items.value.items[i][row] = input 
+                items.value.items[i][row] = input
             })
         }
     }
@@ -116,7 +116,7 @@ function createInput(attr, index, value, is_header){
 			}
         }
     }
-    
+
     let input =  frappe.ui.form.make_control({
         parent: $(el).find(parent_class),
         df:df ,
@@ -159,7 +159,7 @@ function get_data(){
                 value = input
             }
             if(value == null || value == ""){
-                frappe.throw("Fill all the combinations")    
+                frappe.throw("Fill all the combinations")
             }
             else{
                 x.value.items[i][row] = value

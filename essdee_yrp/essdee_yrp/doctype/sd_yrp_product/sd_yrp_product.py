@@ -2,7 +2,6 @@
 # For license information, please see license.txt
 
 from __future__ import annotations
-from yrp.attribute_links import value as _attribute_value
 
 import os
 import re
@@ -13,13 +12,13 @@ import pymupdf as fitz
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, cstr, get_url
-
+from yrp.attribute_links import value as _attribute_value
 
 PRODUCT_ATTACHMENT_FIELDS = {
-	'SD YRP Product': {"product_image", "top_image", "bottom_image", "front_image", "back_image"},
-	'SD YRP Product Colour Code': {"image"},
-	'SD YRP Product Image': {"image"},
-	'SD YRP Product Measurement': {"measurement_image"},
+	"SD YRP Product": {"product_image", "top_image", "bottom_image", "front_image", "back_image"},
+	"SD YRP Product Colour Code": {"image"},
+	"SD YRP Product Image": {"image"},
+	"SD YRP Product Measurement": {"measurement_image"},
 }
 PRODUCT_GRAPHIC_TABLES = {"product_designs", "product_box_details"}
 CHILD_IDENTITY_FIELDS = {
@@ -67,7 +66,7 @@ class SDYRPProduct(Document):
 		self.set_onload(
 			"costing_list",
 			frappe.get_list(
-				'SD YRP Lotwise Item Profit',
+				"SD YRP Lotwise Item Profit",
 				fields=[
 					"name",
 					"product",
@@ -83,9 +82,7 @@ class SDYRPProduct(Document):
 		colours = []
 		if self.is_set_item:
 			_validate_submitted_measurement(self.top_measurement, _("Top Measurement"))
-			_validate_submitted_measurement(
-				self.bottom_measurement, _("Bottom Measurement")
-			)
+			_validate_submitted_measurement(self.bottom_measurement, _("Bottom Measurement"))
 			for row in self.product_set_colours:
 				for colour in (row.top_colour, row.bottom_colour):
 					if colour and colour not in colours:
@@ -108,18 +105,14 @@ class SDYRPProduct(Document):
 			if payload is not None:
 				self.set(
 					table_field,
-					get_table_struct_data(
-						_parse_payload(payload), with_list=with_list, colour_list=colours
-					),
+					get_table_struct_data(_parse_payload(payload), with_list=with_list, colour_list=colours),
 				)
 
 	def _sync_measurement_descriptions(self):
 		self.is_cord = 0
 		rows = []
 		if self.is_set_item:
-			self.is_cord = int(
-				all(row.top_colour == row.bottom_colour for row in self.product_set_colours)
-			)
+			self.is_cord = int(all(row.top_colour == row.bottom_colour for row in self.product_set_colours))
 			rows.extend(_measurement_rows(self.top_measurement, "Top"))
 			rows.extend(_measurement_rows(self.bottom_measurement, "Bottom"))
 		else:
@@ -128,18 +121,15 @@ class SDYRPProduct(Document):
 
 
 def _validate_submitted_measurement(name: str | None, label: str):
-	if name and frappe.db.get_value('SD YRP Product Measurement', name, "docstatus") != 1:
+	if name and frappe.db.get_value("SD YRP Product Measurement", name, "docstatus") != 1:
 		frappe.throw(_("{0} is not submitted").format(label))
 
 
 def _measurement_rows(name: str | None, group: str) -> list[dict]:
 	if not name:
 		return []
-	doc = frappe.get_doc('SD YRP Product Measurement', name)
-	return [
-		{"description": row.description, "group": group}
-		for row in doc.product_measurement_descriptions
-	]
+	doc = frappe.get_doc("SD YRP Product Measurement", name)
+	return [{"description": row.description, "group": group} for row in doc.product_measurement_descriptions]
 
 
 def _parse_payload(value):
@@ -151,7 +141,7 @@ def get_table_onload_data(table, with_list: bool = False) -> list[dict]:
 	image_urls = (
 		dict(
 			frappe.get_all(
-				'SD YRP Product Image',
+				"SD YRP Product Image",
 				filters={"name": ["in", image_names]},
 				fields=["name", "image"],
 				as_list=True,
@@ -178,9 +168,7 @@ def get_table_onload_data(table, with_list: bool = False) -> list[dict]:
 	return result
 
 
-def get_table_struct_data(
-	data, with_list: bool = False, colour_list: list[str] | None = None
-) -> list[dict]:
+def get_table_struct_data(data, with_list: bool = False, colour_list: list[str] | None = None) -> list[dict]:
 	allowed_colours = set(colour_list or [])
 	result = []
 	for row in data or []:
@@ -258,13 +246,11 @@ def _requested_upload_type(product_name: str, filename: str) -> str:
 	return upload_type
 
 
-def _new_product_file(
-	product, filename: str, content: bytes, fieldname: str, is_private: int
-):
+def _new_product_file(product, filename: str, content: bytes, fieldname: str, is_private: int):
 	return frappe.get_doc(
 		{
 			"doctype": "File",
-			"attached_to_doctype": 'SD YRP Product',
+			"attached_to_doctype": "SD YRP Product",
 			"attached_to_name": product.name,
 			"attached_to_field": fieldname,
 			"folder": get_or_create_product_folder(product.name),
@@ -277,10 +263,10 @@ def _new_product_file(
 
 @frappe.whitelist()
 def upload_product_file():
-	product = _get_writable_doc('SD YRP Product', frappe.form_dict.docname)
+	product = _get_writable_doc("SD YRP Product", frappe.form_dict.docname)
 	content, original_filename = _uploaded_file_parts()
 	upload_type = _requested_upload_type(product.name, original_filename)
-	if not frappe.db.exists('SD YRP Product Upload Type', upload_type):
+	if not frappe.db.exists("SD YRP Product Upload Type", upload_type):
 		frappe.throw(_("Unknown Product Upload Type {0}.").format(frappe.bold(upload_type)))
 
 	version = (
@@ -295,12 +281,8 @@ def upload_product_file():
 		+ 1
 	)
 	extension = os.path.splitext(original_filename)[1]
-	filename = (
-		f"{_safe_fragment(product.name)}_{_safe_fragment(upload_type)}_{version}{extension}"
-	)
-	file_doc = _new_product_file(
-		product, filename, content, "file", frappe.form_dict.is_private
-	)
+	filename = f"{_safe_fragment(product.name)}_{_safe_fragment(upload_type)}_{version}{extension}"
+	file_doc = _new_product_file(product, filename, content, "file", frappe.form_dict.is_private)
 	product.append(
 		"product_file_versions",
 		{
@@ -318,15 +300,13 @@ def upload_product_file():
 
 @frappe.whitelist()
 def upload_graphics_file():
-	product = _get_writable_doc('SD YRP Product', frappe.form_dict.docname)
+	product = _get_writable_doc("SD YRP Product", frappe.form_dict.docname)
 	content, original_filename = _uploaded_file_parts()
 	upload_type = _requested_upload_type(product.name, original_filename)
 	table_name = "product_box_details" if frappe.form_dict.get("box_data") else "product_designs"
 	extension = os.path.splitext(original_filename)[1]
 	filename = f"{_safe_fragment(product.name)}_{_safe_fragment(upload_type)}{extension}"
-	file_doc = _new_product_file(
-		product, filename, content, table_name, frappe.form_dict.is_private
-	)
+	file_doc = _new_product_file(product, filename, content, table_name, frappe.form_dict.is_private)
 	product.append(
 		table_name,
 		{
@@ -343,43 +323,43 @@ def upload_graphics_file():
 def get_or_create_product_folder(product_name: str) -> str:
 	product_folder = _safe_fragment("product").lower()
 	doc_folder = _safe_fragment(product_name).lower()
-	parent_name = frappe.db.exists(
-		"File", {"file_name": product_folder, "is_folder": 1, "folder": "Home"}
-	)
+	parent_name = frappe.db.exists("File", {"file_name": product_folder, "is_folder": 1, "folder": "Home"})
 	if not parent_name:
-		parent_name = frappe.get_doc(
-			{
-				"doctype": "File",
-				"file_name": product_folder,
-				"is_folder": 1,
-				"folder": "Home",
-			}
-		).insert(ignore_permissions=True, ignore_if_duplicate=True).name
+		parent_name = (
+			frappe.get_doc(
+				{
+					"doctype": "File",
+					"file_name": product_folder,
+					"is_folder": 1,
+					"folder": "Home",
+				}
+			)
+			.insert(ignore_permissions=True, ignore_if_duplicate=True)
+			.name
+		)
 
-	folder_name = frappe.db.exists(
-		"File", {"file_name": doc_folder, "is_folder": 1, "folder": parent_name}
-	)
+	folder_name = frappe.db.exists("File", {"file_name": doc_folder, "is_folder": 1, "folder": parent_name})
 	if not folder_name:
-		folder_name = frappe.get_doc(
-			{
-				"doctype": "File",
-				"file_name": doc_folder,
-				"is_folder": 1,
-				"folder": parent_name,
-			}
-		).insert(ignore_permissions=True, ignore_if_duplicate=True).name
+		folder_name = (
+			frappe.get_doc(
+				{
+					"doctype": "File",
+					"file_name": doc_folder,
+					"is_folder": 1,
+					"folder": parent_name,
+				}
+			)
+			.insert(ignore_permissions=True, ignore_if_duplicate=True)
+			.name
+		)
 	return folder_name
 
 
 def get_latest_product_images(product_name: str) -> list:
-	product = frappe.get_doc('SD YRP Product', product_name)
+	product = frappe.get_doc("SD YRP Product", product_name)
 	product.check_permission("read")
 	latest_files = [group[0] for group in get_grouped_files(product.product_file_versions).values()]
-	return [
-		row
-		for row in latest_files
-		if (guess_type(row.filename)[0] or "").startswith("image/")
-	]
+	return [row for row in latest_files if (guess_type(row.filename)[0] or "").startswith("image/")]
 
 
 def get_grouped_files(files) -> dict:
@@ -393,9 +373,9 @@ def get_grouped_files(files) -> dict:
 
 @frappe.whitelist()
 def get_product_colour_codes(doctype: str, docname: str) -> dict:
-	if doctype != 'SD YRP Product':
+	if doctype != "SD YRP Product":
 		frappe.throw(_("Colour codes are available only for Product."))
-	doc = frappe.get_doc('SD YRP Product', docname)
+	doc = frappe.get_doc("SD YRP Product", docname)
 	doc.check_permission("read")
 	if doc.is_set_item:
 		return {
@@ -407,11 +387,7 @@ def get_product_colour_codes(doctype: str, docname: str) -> dict:
 			)
 			if colour
 		}
-	return {
-		row.product_colour: row.colour_code
-		for row in doc.product_colours
-		if row.product_colour
-	}
+	return {row.product_colour: row.colour_code for row in doc.product_colours if row.product_colour}
 
 
 @frappe.whitelist()
@@ -452,7 +428,7 @@ def delete_and_update_file(
 
 @frappe.whitelist()
 def remove_graphic_image(detail, docname: str):
-	product = _get_writable_doc('SD YRP Product', docname)
+	product = _get_writable_doc("SD YRP Product", docname)
 	data = _parse_payload(detail) or {}
 	row_name = data.get("name")
 	row = next(
@@ -471,7 +447,7 @@ def remove_graphic_image(detail, docname: str):
 	product.save()
 	if file_name and frappe.db.exists("File", file_name):
 		file_doc = frappe.get_doc("File", file_name)
-		_assert_file_attached_to(file_doc, 'SD YRP Product', product.name)
+		_assert_file_attached_to(file_doc, "SD YRP Product", product.name)
 		frappe.delete_doc("File", file_name, ignore_permissions=True)
 	return True
 
@@ -487,16 +463,18 @@ def _copy_release_attachment(file_name: str | None, release_name: str):
 	if not file_name:
 		return None
 	file_doc = frappe.get_doc("File", file_name)
-	_assert_file_attached_to(file_doc, 'SD YRP Product', frappe.db.get_value('SD YRP Product Release', release_name, "product"))
+	_assert_file_attached_to(
+		file_doc, "SD YRP Product", frappe.db.get_value("SD YRP Product Release", release_name, "product")
+	)
 	return file_doc.create_attachment_copy(
-		'SD YRP Product Release', release_name, "file", ignore_permissions=True
+		"SD YRP Product Release", release_name, "file", ignore_permissions=True
 	)
 
 
 @frappe.whitelist()
 def release_tech_pack(doc_name: str):
-	product = _get_writable_doc('SD YRP Product', doc_name)
-	frappe.has_permission('SD YRP Product Release', "create", throw=True)
+	product = _get_writable_doc("SD YRP Product", doc_name)
+	frappe.has_permission("SD YRP Product Release", "create", throw=True)
 	if product.is_set_item:
 		for row in product.product_trim_combination:
 			if not row.selected_colours:
@@ -512,7 +490,7 @@ def release_tech_pack(doc_name: str):
 					)
 				)
 
-	release = frappe.new_doc('SD YRP Product Release')
+	release = frappe.new_doc("SD YRP Product Release")
 	for fieldname in (
 		"is_cord",
 		"item_name",
@@ -581,10 +559,10 @@ def _validated_pdf(file_url: str, doctype: str, docname: str, fieldname: str):
 
 @frappe.whitelist()
 def process_pdf_to_images(file_url: str, docname: str, table_name: str):
-	product = _get_writable_doc('SD YRP Product', docname)
+	product = _get_writable_doc("SD YRP Product", docname)
 	if table_name not in PRODUCT_GRAPHIC_TABLES:
 		frappe.throw(_("Unsupported Product graphics table."))
-	file_doc, pdf = _validated_pdf(file_url, 'SD YRP Product', docname, table_name)
+	file_doc, pdf = _validated_pdf(file_url, "SD YRP Product", docname, table_name)
 	folder = get_or_create_product_folder(docname)
 	matrix = fitz.Matrix(2, 2)
 	for page_number, page in enumerate(pdf):
@@ -597,7 +575,7 @@ def process_pdf_to_images(file_url: str, docname: str, table_name: str):
 				"folder": folder,
 				"content": image,
 				"is_private": file_doc.is_private,
-				"attached_to_doctype": 'SD YRP Product',
+				"attached_to_doctype": "SD YRP Product",
 				"attached_to_name": docname,
 				"attached_to_field": table_name,
 			}
@@ -616,9 +594,7 @@ def process_pdf_to_images(file_url: str, docname: str, table_name: str):
 
 
 @frappe.whitelist()
-def process_single_page_pdf(
-	file_url: str, doctype: str, docname: str, fieldname: str
-):
+def process_single_page_pdf(file_url: str, doctype: str, docname: str, fieldname: str):
 	doc = _get_writable_doc(doctype, docname)
 	_validate_attachment_field(doctype, fieldname)
 	file_doc, pdf = _validated_pdf(file_url, doctype, docname, fieldname)

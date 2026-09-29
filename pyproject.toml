@@ -64,9 +64,17 @@ ignore = [
     "UP031", # Use format specifiers instead of percent format
     "UP032", # Use f-string instead of `format` call (translations)
     "UP037", # quoted annotations
-    "UP040", # Use type aliases instead of type annotations
+	"UP040", # Use type aliases instead of type annotations
+	"UP035", # Keep optimizer typing aliases without changing runtime annotation behavior
+	"UP047", # Type-parameter syntax is less compatible with Frappe's supported tooling
+	"RUF001", # User-facing strings intentionally use typographic symbols
+	"RUF002", # Docstrings intentionally use mathematical/typographic symbols
+	"RUF003", # Comments intentionally use mathematical/typographic symbols
 ]
 typing-modules = ["frappe.types.DF"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/test_*.py" = ["RUF012"]
 
 [tool.ruff.format]
 quote-style = "double"

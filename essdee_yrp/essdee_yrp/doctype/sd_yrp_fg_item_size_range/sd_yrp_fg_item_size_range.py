@@ -1,10 +1,9 @@
-from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2023, Essdee and contributors
 # For license information, please see license.txt
-
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from yrp.attribute_links import value as _attribute_value
 
 
 class SDYRPFGItemSizeRange(Document):
@@ -14,9 +13,11 @@ class SDYRPFGItemSizeRange(Document):
 
 
 def get_sizes(size_range: str) -> list[str]:
-	doc = frappe.get_doc('SD YRP FG Item Size Range', size_range)
+	doc = frappe.get_doc("SD YRP FG Item Size Range", size_range)
 	doc.check_permission("read")
-	return [_attribute_value(row.attribute_value) for row in doc.sizes if _attribute_value(row.attribute_value)]
+	return [
+		_attribute_value(row.attribute_value) for row in doc.sizes if _attribute_value(row.attribute_value)
+	]
 
 
 FGItemSizeRange = SDYRPFGItemSizeRange

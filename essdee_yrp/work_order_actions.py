@@ -7,14 +7,13 @@ Every mutating endpoint reloads the Work Order and rechecks permission/state.
 """
 
 from __future__ import annotations
-from yrp.attribute_links import value as _attribute_value
 
 from collections import defaultdict
 
 import frappe
 from frappe import _
 from frappe.utils import flt
-
+from yrp.attribute_links import value as _attribute_value
 from yrp.stock.save_stock_items import group_items_for_ui
 from yrp.utils import get_variant_attr_details, update_if_string_instance
 
@@ -22,25 +21,17 @@ from yrp.utils import get_variant_attr_details, update_if_string_instance
 def _processes(process_name: str | None) -> list[str]:
 	if not process_name:
 		return []
-	process = frappe.get_cached_doc('YRP Process', process_name)
+	process = frappe.get_cached_doc("YRP Process", process_name)
 	if not process.get("is_group"):
 		return [process_name]
-	return [
-		row.process_name
-		for row in process.get("process_details") or []
-		if row.process_name
-	]
+	return [row.process_name for row in process.get("process_details") or [] if row.process_name]
 
 
 def _open_submitted_work_order(work_order: str, permission: str = "read"):
-	doc = frappe.get_doc('YRP Work Order', work_order)
+	doc = frappe.get_doc("YRP Work Order", work_order)
 	doc.check_permission(permission)
 	if doc.docstatus != 1 or doc.open_status != "Open":
-		frappe.throw(
-			_("Work Order {0} must be submitted and open.").format(
-				frappe.bold(doc.name)
-			)
-		)
+		frappe.throw(_("Work Order {0} must be submitted and open.").format(frappe.bold(doc.name)))
 	return doc
 
 
@@ -52,34 +43,28 @@ def _can_create(doctype: str) -> bool:
 def get_work_order_action_context(work_order: str) -> dict:
 	"""Return state and permission-filtered actions for the Desk form."""
 
-	doc = frappe.get_doc('YRP Work Order', work_order)
+	doc = frappe.get_doc("YRP Work Order", work_order)
 	doc.check_permission("read")
 	is_open = doc.docstatus == 1 and doc.open_status == "Open"
 	can_write = bool(doc.has_permission("write"))
 	processes = _processes(doc.process_name)
 	ipd = (
-		frappe.get_cached_doc('YRP Item Production Detail', doc.production_detail)
+		frappe.get_cached_doc("YRP Item Production Detail", doc.production_detail)
 		if doc.production_detail
 		else None
 	)
 	is_cutting = bool(ipd and ipd.cutting_process in processes)
-	item_bom_processes = {
-		row.process_name for row in (ipd.get("item_bom") or []) if row.process_name
-	} if ipd else set()
-
-	sewing_plan = frappe.db.get_value(
-		'SD YRP Sewing Plan', {"work_order": doc.name}, "name"
+	item_bom_processes = (
+		{row.process_name for row in (ipd.get("item_bom") or []) if row.process_name} if ipd else set()
 	)
+
+	sewing_plan = frappe.db.get_value("SD YRP Sewing Plan", {"work_order": doc.name}, "name")
 	can_create_sewing_plan = False
 	if is_open and "System Manager" in frappe.get_roles(frappe.session.user):
 		from essdee_yrp.sewing.plan import _should_have_sewing_plan
 
 		can_create_sewing_plan = bool(
-			sewing_plan
-			or (
-				_can_create('SD YRP Sewing Plan')
-				and _should_have_sewing_plan(doc)
-			)
+			sewing_plan or (_can_create("SD YRP Sewing Plan") and _should_have_sewing_plan(doc))
 		)
 	material_issue_warehouse = None
 	if is_open and doc.supplier:
@@ -93,25 +78,18 @@ def get_work_order_action_context(work_order: str) -> dict:
 		"is_open": is_open,
 		"is_cutting": is_cutting,
 		"can_calculate_pieces": bool(
-			doc.docstatus == 1
-			and can_write
-			and "System Manager" in frappe.get_roles(frappe.session.user)
+			doc.docstatus == 1 and can_write and "System Manager" in frappe.get_roles(frappe.session.user)
 		),
 		"can_change_delivery_date": is_open and can_write,
 		"can_change_item": bool(
-			is_open
-			and can_write
-			and not doc.get("is_rework")
-			and item_bom_processes.intersection(processes)
+			is_open and can_write and not doc.get("is_rework") and item_bom_processes.intersection(processes)
 		),
-		"can_make_material_issue": is_open and _can_create('YRP Stock Entry'),
+		"can_make_material_issue": is_open and _can_create("YRP Stock Entry"),
 		"material_issue_warehouse": material_issue_warehouse,
-		"can_make_cutting_plan": is_open and is_cutting and _can_create('SD YRP Cutting Plan'),
-		"can_make_delivery_challan": is_open and _can_create('YRP Delivery Challan'),
-		"can_make_goods_received_note": is_open and _can_create('YRP Goods Received Note'),
-		"can_make_recut": bool(
-			is_open and not doc.get("is_rework") and _can_create('SD YRP WO Recut')
-		),
+		"can_make_cutting_plan": is_open and is_cutting and _can_create("SD YRP Cutting Plan"),
+		"can_make_delivery_challan": is_open and _can_create("YRP Delivery Challan"),
+		"can_make_goods_received_note": is_open and _can_create("YRP Goods Received Note"),
+		"can_make_recut": bool(is_open and not doc.get("is_rework") and _can_create("SD YRP WO Recut")),
 		"can_create_sewing_plan": can_create_sewing_plan,
 		"sewing_plan": sewing_plan,
 	}
@@ -150,7 +128,7 @@ def get_delivery_challan_defaults(
 	"""Prepare one unsaved DC from an open Work Order without browser races."""
 
 	doc = _open_submitted_work_order(work_order)
-	frappe.has_permission('YRP Delivery Challan', "create", throw=True)
+	frappe.has_permission("YRP Delivery Challan", "create", throw=True)
 	from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 		get_work_order_defaults,
 	)
@@ -160,9 +138,7 @@ def get_delivery_challan_defaults(
 		posting_date=posting_date,
 		posting_time=posting_time,
 	)
-	defaults["item_details"] = _enable_zero_pending_excess_in_editor(
-		defaults.get("item_details") or []
-	)
+	defaults["item_details"] = _enable_zero_pending_excess_in_editor(defaults.get("item_details") or [])
 	defaults.update(
 		{
 			"work_order": doc.name,
@@ -184,25 +160,19 @@ def get_delivery_challan_defaults(
 
 
 @frappe.whitelist()
-def get_goods_received_note_defaults(
-	work_order: str, delivery_challan: str | None = None
-) -> dict:
+def get_goods_received_note_defaults(work_order: str, delivery_challan: str | None = None) -> dict:
 	"""Prepare one unsaved GRN from an open Work Order without browser races."""
 
 	doc = _open_submitted_work_order(work_order)
-	frappe.has_permission('YRP Goods Received Note', "create", throw=True)
+	frappe.has_permission("YRP Goods Received Note", "create", throw=True)
 	from essdee_yrp.overrides.goods_received_note import (
 		get_work_order_defaults,
 	)
 
 	defaults = get_work_order_defaults(doc.name, delivery_challan)
-	default_received_type = frappe.db.get_single_value(
-		'YRP Stock Settings', "default_received_type"
-	)
+	default_received_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
 	if not default_received_type:
-		default_received_type = frappe.db.get_value(
-			'YRP Received Type', {"is_default": 1}, "name"
-		)
+		default_received_type = frappe.db.get_value("YRP Received Type", {"is_default": 1}, "name")
 	items = [
 		row
 		for row in (defaults.get("items") or [])
@@ -211,10 +181,10 @@ def get_goods_received_note_defaults(
 		or row.get("received_type") == default_received_type
 	]
 	defaults["items"] = items
-	defaults["item_details"] = group_items_for_ui(items, 'YRP Goods Received Note')
+	defaults["item_details"] = group_items_for_ui(items, "YRP Goods Received Note")
 	defaults.update(
 		{
-			"against": 'YRP Work Order',
+			"against": "YRP Work Order",
 			"against_id": doc.name,
 			"delivery_challan": delivery_challan or "",
 			"supplier_address": doc.supplier_address,
@@ -238,7 +208,7 @@ def get_wo_recut_defaults(work_order: str) -> dict:
 	"""
 
 	doc = _open_submitted_work_order(work_order)
-	frappe.has_permission('SD YRP WO Recut', "create", throw=True)
+	frappe.has_permission("SD YRP WO Recut", "create", throw=True)
 	if doc.get("is_rework"):
 		frappe.throw(_("A WO Recut cannot be created from a rework Work Order."))
 
@@ -251,42 +221,28 @@ def get_wo_recut_defaults(work_order: str) -> dict:
 				"item_variant": row.item_variant,
 				"qty": 0,
 				"table_index": row.table_index or 0,
-				"row_index": (
-					row.row_index
-					if row.row_index not in (None, "")
-					else f"recut-{index}"
-				),
+				"row_index": (row.row_index if row.row_index not in (None, "") else f"recut-{index}"),
 			}
 		)
 
 	if not rows:
-		frappe.throw(
-			_("Work Order {0} has no calculated SKU items for recut.").format(
-				frappe.bold(doc.name)
-			)
-		)
+		frappe.throw(_("Work Order {0} has no calculated SKU items for recut.").format(frappe.bold(doc.name)))
 
 	return {
 		"lot": doc.lot,
-		"item_details": group_items_for_ui(rows, 'YRP Work Order Deliverables'),
+		"item_details": group_items_for_ui(rows, "YRP Work Order Deliverables"),
 	}
 
 
 def _item_bom_rows(doc, ipd, processes):
-	return [
-		row
-		for row in ipd.get("item_bom") or []
-		if row.process_name in processes
-	]
+	return [row for row in ipd.get("item_bom") or [] if row.process_name in processes]
 
 
 def _variant_identity(item_variant: str) -> tuple[str, str]:
-	variant = frappe.get_cached_doc('Item', item_variant)
+	variant = frappe.get_cached_doc("Item", item_variant)
 	attributes = ", ".join(
 		f"{row.attribute}: {_attribute_value(row.attribute_value)}"
-		for row in sorted(
-			variant.get("attributes") or [], key=lambda row: row.attribute
-		)
+		for row in sorted(variant.get("attributes") or [], key=lambda row: row.attribute)
 	)
 	return (variant.variant_of or variant.name), attributes
 
@@ -361,30 +317,24 @@ def _work_order_demands(doc) -> list[dict]:
 def _expected_accessories(doc, ipd, processes) -> list[dict]:
 	from essdee_yrp.garment_work_order import _accessory_rows, _aggregate_rows
 
-	lot = frappe.get_cached_doc('SD YRP Lot', doc.lot)
-	return _aggregate_rows(
-		_accessory_rows(ipd, lot, _work_order_demands(doc), processes)
-	)
+	lot = frappe.get_cached_doc("SD YRP Lot", doc.lot)
+	return _aggregate_rows(_accessory_rows(ipd, lot, _work_order_demands(doc), processes))
 
 
 def _change_item_context(doc, selected=None) -> dict:
 	processes = _processes(doc.process_name)
-	ipd = frappe.get_cached_doc('YRP Item Production Detail', doc.production_detail)
+	ipd = frappe.get_cached_doc("YRP Item Production Detail", doc.production_detail)
 	bom_rows = _item_bom_rows(doc, ipd, processes)
 	bom_by_name = {row.name: row for row in bom_rows}
 	selected = set(selected or bom_by_name)
 	unknown = sorted(selected.difference(bom_by_name))
-	selected_templates = {
-		bom_by_name[name].item for name in selected if name in bom_by_name
-	}
+	selected_templates = {bom_by_name[name].item for name in selected if name in bom_by_name}
 	selection_by_template = defaultdict(list)
 	for name in selected:
 		if name in bom_by_name:
 			selection_by_template[bom_by_name[name].item].append(name)
 
-	cloth_templates = {
-		row.cloth for row in ipd.get("cloth_detail") or [] if row.cloth
-	}
+	cloth_templates = {row.cloth for row in ipd.get("cloth_detail") or [] if row.cloth}
 	current_by_template = defaultdict(list)
 	for row in doc.get("deliverables") or []:
 		if not row.get("is_calculated") or not row.item_variant:
@@ -427,12 +377,8 @@ def _change_item_context(doc, selected=None) -> dict:
 		current = current_by_template.get(template, [])
 		expected = expected_by_template.get(template, [])
 		selection_id = (selection_by_template.get(template) or [None])[0]
-		expected_by_variant = {
-			row["new_variant"]: row for row in expected
-		}
-		matching_variants = {
-			row["old_variant"] for row in current
-		}.intersection(expected_by_variant)
+		expected_by_variant = {row["new_variant"]: row for row in expected}
+		matching_variants = {row["old_variant"] for row in current}.intersection(expected_by_variant)
 		for old in current:
 			if old["old_variant"] not in matching_variants:
 				continue
@@ -448,17 +394,11 @@ def _change_item_context(doc, selected=None) -> dict:
 				}
 			)
 
-		remaining_current = [
-			row for row in current if row["old_variant"] not in matching_variants
-		]
+		remaining_current = [row for row in current if row["old_variant"] not in matching_variants]
 		remaining_expected = [
-			row
-			for variant, row in expected_by_variant.items()
-			if variant not in matching_variants
+			row for variant, row in expected_by_variant.items() if variant not in matching_variants
 		]
-		remaining_current_variants = {
-			row["old_variant"] for row in remaining_current
-		}
+		remaining_current_variants = {row["old_variant"] for row in remaining_current}
 		if len(remaining_current_variants) == len(remaining_expected) == 1:
 			new = remaining_expected[0]
 			for old in remaining_current:
@@ -482,7 +422,9 @@ def _change_item_context(doc, selected=None) -> dict:
 			if not remaining_expected
 			else _("Multiple rows are ambiguous; recalculate this Work Order in draft instead.")
 		)
-		for old in remaining_current or [{"row_name": selection_id, "old_variant": "", "old_qty": 0, "old_uom": ""}]:
+		for old in remaining_current or [
+			{"row_name": selection_id, "old_variant": "", "old_qty": 0, "old_uom": ""}
+		]:
 			changes.append(
 				{
 					**old,
@@ -567,7 +509,7 @@ def apply_bom_accessory_changes(work_order: str, selected) -> dict:
 			)
 			continue
 		frappe.db.set_value(
-			'YRP Work Order Deliverables',
+			"YRP Work Order Deliverables",
 			change["row_name"],
 			"item_variant",
 			change["new_variant"],

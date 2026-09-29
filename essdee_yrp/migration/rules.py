@@ -1,8 +1,8 @@
 """Reviewed Production API -> F16 naming and field rules.
 
-Only decisions already approved in ``docs/MRP_MIGRATION_CONTEXT.md`` belong
-here.  Unknown source fields remain blockers; the engine never silently drops
-them.
+This module is the reviewed source of truth for approved source-to-target
+mappings. Unknown source fields remain blockers; the engine never silently
+drops them.
 """
 
 from __future__ import annotations
@@ -10,15 +10,15 @@ from __future__ import annotations
 from essdee_yrp.migration.engine import DocTypeRule
 
 DOCTYPE_RENAMES = {
-	"Essdee Debit": 'YRP Debit',
-	"Essdee Raw Print Format": 'YRP ZPL Raw Print Format',
-	"Essdee Raw Print Format Detail": 'YRP ZPL Raw Print Format Detail',
-	"GRN Item Type": 'YRP Received Type',
-	"GRN Deliverable": 'SD YRP GRN Deliverable',
-	"Purchase Order Lot": 'SD YRP Lot MultiSelect',
-	"Stock Settings": 'YRP Stock Settings',
-	"Vendor Bill Tracking": 'YRP Bill Tracking',
-	"Vendor Bill Tracking Assignment Detail": 'YRP Bill Tracking Assignment Detail',
+	"Essdee Debit": "YRP Debit",
+	"Essdee Raw Print Format": "YRP ZPL Raw Print Format",
+	"Essdee Raw Print Format Detail": "YRP ZPL Raw Print Format Detail",
+	"GRN Item Type": "YRP Received Type",
+	"GRN Deliverable": "SD YRP GRN Deliverable",
+	"Purchase Order Lot": "SD YRP Lot MultiSelect",
+	"Stock Settings": "YRP Stock Settings",
+	"Vendor Bill Tracking": "YRP Bill Tracking",
+	"Vendor Bill Tracking Assignment Detail": "YRP Bill Tracking Assignment Detail",
 	"Bin": "YRP Bin",
 	"Delivery Challan": "YRP Delivery Challan",
 	"Delivery Challan Item": "YRP Delivery Challan Item",
@@ -82,40 +82,34 @@ RULES = {
 		allowed_type_changes=frozenset({("Int", "Data")}),
 	),
 	"Essdee Debit": DocTypeRule(
-		target='YRP Debit',
+		target="YRP Debit",
 		ignored_fields={
 			"against": "Validated as Work Order by the custom transformer",
 		},
 		custom_transformer="essdee_debit_to_debit",
 	),
 	"Essdee Raw Print Format": DocTypeRule(
-		target='YRP ZPL Raw Print Format',
+		target="YRP ZPL Raw Print Format",
 		field_map={"raw_print_format_details": "zpl_raw_print_format_details"},
 	),
-	"Essdee Raw Print Format Detail": DocTypeRule(target='YRP ZPL Raw Print Format Detail'),
-	"FG Stock Entry": DocTypeRule(
-		value_transformers={"warehouse": "supplier_to_warehouse"}
-	),
+	"Essdee Raw Print Format Detail": DocTypeRule(target="YRP ZPL Raw Print Format Detail"),
+	"FG Stock Entry": DocTypeRule(value_transformers={"warehouse": "supplier_to_warehouse"}),
 	"Finishing Plan": DocTypeRule(
 		post_transformer="derive_finishing_plan_audit_fields",
 	),
-	"Finishing Plan Old Lot Item": DocTypeRule(
-		value_transformers={"warehouse": "supplier_to_warehouse"}
-	),
+	"Finishing Plan Old Lot Item": DocTypeRule(value_transformers={"warehouse": "supplier_to_warehouse"}),
 	"Goods Received Note": DocTypeRule(
 		post_transformer="derive_goods_received_note_fields",
 	),
 	"GRN Deliverable": DocTypeRule(
-		target='SD YRP GRN Deliverable',
+		target="SD YRP GRN Deliverable",
 		post_transformer="derive_grn_deliverable_dimensions",
 	),
 	"GRN Item Type": DocTypeRule(
-		target='YRP Received Type',
+		target="YRP Received Type",
 		field_map={"grn_type": "received_type_name"},
 	),
-	"GRN Rework Item": DocTypeRule(
-		value_transformers={"warehouse": "supplier_to_warehouse"}
-	),
+	"GRN Rework Item": DocTypeRule(value_transformers={"warehouse": "supplier_to_warehouse"}),
 	"Item": DocTypeRule(
 		target="Item",
 		field_map={
@@ -154,28 +148,22 @@ RULES = {
 		allowed_type_changes=frozenset({("Data", "Link")}),
 		ignored_fields={"attribute_mapping_based_on": "Retired unused Item BOM field"},
 	),
-	"Item BOM Attribute Mapping": DocTypeRule(
-		allowed_type_changes=frozenset({("Data", "Link")})
-	),
+	"Item BOM Attribute Mapping": DocTypeRule(allowed_type_changes=frozenset({("Data", "Link")})),
 	"Item Production Detail": DocTypeRule(
 		allowed_type_changes=frozenset({("Data", "Link")}),
-		table_option_map={"item_attributes": 'YRP IPD Item Attribute'},
+		table_option_map={"item_attributes": "YRP IPD Item Attribute"},
 		post_transformer="remove_empty_ipd_process_placeholders",
 	),
 	"IPD Process": DocTypeRule(custom_transformer="ipd_process_to_f16"),
-	"Process Cost": DocTypeRule(ignored_fields={
-		"dependent_attribute": "Retired unused Process Cost field",
-		"dependent_attribute_values": "Retired unused Process Cost field",
-	}),
-	"Item Conversion": DocTypeRule(
-		value_transformers={"warehouse": "supplier_to_warehouse"}
+	"Process Cost": DocTypeRule(
+		ignored_fields={
+			"dependent_attribute": "Retired unused Process Cost field",
+			"dependent_attribute_values": "Retired unused Process Cost field",
+		}
 	),
-	"Lot Transfer Item": DocTypeRule(
-		value_transformers={"warehouse": "supplier_to_warehouse"}
-	),
-	"Lotwise Item Profit": DocTypeRule(
-		post_transformer="default_legacy_lot_costing_type"
-	),
+	"Item Conversion": DocTypeRule(value_transformers={"warehouse": "supplier_to_warehouse"}),
+	"Lot Transfer Item": DocTypeRule(value_transformers={"warehouse": "supplier_to_warehouse"}),
+	"Lotwise Item Profit": DocTypeRule(post_transformer="default_legacy_lot_costing_type"),
 	"MRP Settings": DocTypeRule(),
 	"Purchase Invoice": DocTypeRule(
 		extra_dependencies=frozenset({"Goods Received Note", "Work Order"}),
@@ -218,12 +206,8 @@ RULES = {
 		post_transformer="derive_process_fields",
 	),
 	"Product": DocTypeRule(post_transformer="derive_product_item_name"),
-	"Repost Item Valuation": DocTypeRule(
-		value_transformers={"warehouse": "supplier_to_warehouse"}
-	),
-	"Goods Received Note Item": DocTypeRule(
-		allowed_type_changes=frozenset({("Int", "Data")})
-	),
+	"Repost Item Valuation": DocTypeRule(value_transformers={"warehouse": "supplier_to_warehouse"}),
+	"Goods Received Note Item": DocTypeRule(allowed_type_changes=frozenset({("Int", "Data")})),
 	"Stock Entry": DocTypeRule(
 		allowed_type_changes=frozenset({("Select", "Link")}),
 		value_transformers={
@@ -233,17 +217,11 @@ RULES = {
 	),
 	"Stock Entry Detail": DocTypeRule(
 		post_transformer="derive_stock_entry_detail_reference",
-		allowed_type_changes=frozenset({("Data", "Dynamic Link")})
+		allowed_type_changes=frozenset({("Data", "Dynamic Link")}),
 	),
-	"Stock Ledger Entry": DocTypeRule(
-		value_transformers={"warehouse": "supplier_to_warehouse"}
-	),
-	"Stock Reconciliation": DocTypeRule(
-		value_transformers={"default_warehouse": "supplier_to_warehouse"}
-	),
-	"Stock Reconciliation Item": DocTypeRule(
-		value_transformers={"warehouse": "supplier_to_warehouse"}
-	),
+	"Stock Ledger Entry": DocTypeRule(value_transformers={"warehouse": "supplier_to_warehouse"}),
+	"Stock Reconciliation": DocTypeRule(value_transformers={"default_warehouse": "supplier_to_warehouse"}),
+	"Stock Reconciliation Item": DocTypeRule(value_transformers={"warehouse": "supplier_to_warehouse"}),
 	"Stock Reservation Entry": DocTypeRule(
 		allowed_type_changes=frozenset(
 			{
@@ -253,18 +231,14 @@ RULES = {
 		value_transformers={"warehouse": "supplier_to_warehouse"},
 	),
 	"Stock Settings": DocTypeRule(
-		target='YRP Stock Settings',
+		target="YRP Stock Settings",
 		field_map={"default_rejected_type": "default_rejected_received_type"},
 		value_transformers={"transit_warehouse": "supplier_to_warehouse"},
 	),
-	"Stock Update": DocTypeRule(
-		value_transformers={"warehouse": "supplier_to_warehouse"}
-	),
-	"Stiching Item Detail": DocTypeRule(
-		post_transformer="default_legacy_stitching_category"
-	),
+	"Stock Update": DocTypeRule(value_transformers={"warehouse": "supplier_to_warehouse"}),
+	"Stiching Item Detail": DocTypeRule(post_transformer="default_legacy_stitching_category"),
 	"Vendor Bill Tracking": DocTypeRule(
-		target='YRP Bill Tracking',
+		target="YRP Bill Tracking",
 		field_map={
 			"vendor_bill_tracking_history": "bill_tracking_history",
 			"purchase_invoice": "erp_purchase_invoice",
@@ -272,9 +246,7 @@ RULES = {
 		},
 		allowed_type_changes=frozenset({("Select", "Link"), ("Data", "Link")}),
 	),
-	"Vendor Bill Tracking Assignment Detail": DocTypeRule(
-		target='YRP Bill Tracking Assignment Detail'
-	),
+	"Vendor Bill Tracking Assignment Detail": DocTypeRule(target="YRP Bill Tracking Assignment Detail"),
 	"Work Order": DocTypeRule(field_map={"close_reason": "sd_close_reason"}),
 	"Work Order Deliverables": DocTypeRule(field_map={"item_type": "received_type"}),
 	"Work Order Receivables": DocTypeRule(),
@@ -290,12 +262,14 @@ def get_rule(source_doctype: str) -> DocTypeRule:
 		return rule
 	return DocTypeRule(target=DOCTYPE_RENAMES.get(source_doctype, source_doctype))
 
+
 # Attribute-value masters have scoped identities in YRP. Preserve the source
 # Link semantics while pointing every declared value field at the scoped master.
 def _register_attribute_value_links():
 	import json
 	from dataclasses import replace
 	from pathlib import Path
+
 	import yrp
 
 	registries = [

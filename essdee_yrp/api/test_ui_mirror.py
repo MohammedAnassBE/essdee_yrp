@@ -229,9 +229,7 @@ class TestStockEntryRateInputContract(IntegrationTestCase):
 	"""Positive Material Receipt rates must not fail native step validation."""
 
 	def test_rate_input_accepts_normal_decimal_values_without_relaxing_positive_minimum(self):
-		source = _read(
-			os.path.join(frappe.get_app_path("essdee_yrp"), "public", "js", "stock_entry.js")
-		)
+		source = _read(os.path.join(frappe.get_app_path("essdee_yrp"), "public", "js", "stock_entry.js"))
 		self.assertIn("allow_positive_material_receipt_rates(frm)", source)
 		self.assertIn("new MutationObserver(normalize)", source)
 		self.assertIn('input.step = "any"', source)
@@ -242,9 +240,7 @@ class TestWorkOrderReworkPermissionUI(IntegrationTestCase):
 	"""The rendered Create Rework action must mirror server create authority."""
 
 	def test_create_rework_is_removed_without_work_order_create_permission(self):
-		source = _read(
-			os.path.join(frappe.get_app_path("essdee_yrp"), "public", "js", "work_order.js")
-		)
+		source = _read(os.path.join(frappe.get_app_path("essdee_yrp"), "public", "js", "work_order.js"))
 		self.assertIn("hide_unavailable_rework_action(frm)", source)
 		self.assertIn('frappe.model.can_create("YRP Work Order")', source)
 		self.assertIn('frm.remove_custom_button(__("Create Rework"))', source)
@@ -258,9 +254,7 @@ class TestIPDEntryAutomationMirror(IntegrationTestCase):
 		super().setUpClass()
 		desk = os.path.join(frappe.get_app_path("essdee_yrp"), "public", "js")
 		web = os.path.join(_frontend_dir("essdee_yrp"), "views", "ipd")
-		cls.desk_panel = _read(
-			os.path.join(desk, "Item_Po_detail", "PanelWiseConsumptionMatrix.vue")
-		)
+		cls.desk_panel = _read(os.path.join(desk, "Item_Po_detail", "PanelWiseConsumptionMatrix.vue"))
 		cls.desk_ipd = _read(os.path.join(desk, "item_production_detail.js"))
 		cls.web_panel = _read(os.path.join(web, "PanelWiseConsumptionMatrix.vue"))
 		cls.web_stitching = _read(os.path.join(web, "StichingSection.vue"))
@@ -338,8 +332,7 @@ class TestDcWizardStepsEntry(IntegrationTestCase):
 		self.assertIn(
 			"return true",
 			on_save,
-			"onSave no longer signals a successful save — the wizard host cannot "
-			"tell success from a block",
+			"onSave no longer signals a successful save — the wizard host cannot tell success from a block",
 		)
 		self.assertIn(
 			"return false",
@@ -358,8 +351,7 @@ class TestDcWizardStepsEntry(IntegrationTestCase):
 		self.assertIn(
 			"return false",
 			guard,
-			"the firstMissingRequired guard must resolve false so the host reveals "
-			"the hidden form",
+			"the firstMissingRequired guard must resolve false so the host reveals the hidden form",
 		)
 		on_wizard = _balanced(self.host_src, r"async function onWizardSave\(\)\s*\{")
 		self.assertIsNotNone(
@@ -396,9 +388,7 @@ class TestUIClientMirror(IntegrationTestCase):
 		local = dict(re.findall(r'import\s+(\w+)\s+from\s+"\./([\w.]+\.vue)"', self.index_js))
 		engine_import = re.search(r'import\s*\{([^}]*)\}\s*from\s*"@/engine"', self.index_js)
 		engine_names = (
-			{n.strip() for n in engine_import.group(1).split(",") if n.strip()}
-			if engine_import
-			else set()
+			{n.strip() for n in engine_import.group(1).split(",") if n.strip()} if engine_import else set()
 		)
 		out = {}
 		for block_type, component in re.findall(
@@ -427,9 +417,7 @@ class TestUIClientMirror(IntegrationTestCase):
 			self.assertTrue(os.path.exists(component_file), component_file)
 			src = _strip_line_comments(_read(component_file))
 			client_props = _parse_object_keys(src, r"defineProps\s*\(\s*\{")
-			self.assertIsNotNone(
-				client_props, f"{component_file}: could not locate defineProps({{...}})"
-			)
+			self.assertIsNotNone(client_props, f"{component_file}: could not locate defineProps({{...}})")
 			client, server = set(client_props), set(BLOCK_PROP_KEYS[block_type])
 			self.assertEqual(
 				client - server,
@@ -547,9 +535,7 @@ class TestUIClientMirror(IntegrationTestCase):
 
 	def _parsed_array(self, name):
 		src = self._grammar_js()
-		literal = self._extract_braced(
-			src, rf"export\s+const\s+{name}\s*=\s*\[", open_ch="[", close_ch="]"
-		)
+		literal = self._extract_braced(src, rf"export\s+const\s+{name}\s*=\s*\[", open_ch="[", close_ch="]")
 		self.assertIsNotNone(literal, f"grammar.js: could not locate {name}")
 		return json.loads(_strip_line_comments(literal))
 
@@ -617,9 +603,7 @@ class TestUIClientMirror(IntegrationTestCase):
 		src_dir = _frontend_dir("essdee_yrp")
 		for rel in ("components/list/ListCards.vue", "components/list/ListKanban.vue"):
 			path = os.path.join(src_dir, rel)
-			props = _parse_object_keys(
-				_strip_line_comments(_read(path)), r"defineProps\s*\(\s*\{"
-			)
+			props = _parse_object_keys(_strip_line_comments(_read(path)), r"defineProps\s*\(\s*\{")
 			self.assertIn(
 				"cardTemplate",
 				props or [],
@@ -683,19 +667,12 @@ class TestCustomizationOwnership(IntegrationTestCase):
 				)
 			)
 		)
-		approval = next(
-			field for field in base_meta["fields"] if field.get("fieldname") == "approval_status"
-		)
+		approval = next(field for field in base_meta["fields"] if field.get("fieldname") == "approval_status")
 		self.assertEqual(approval["options"], "Not Approved\nApproved")
 
-		fixture = json.loads(
-			_read(frappe.get_app_path("essdee_yrp", "fixtures", "property_setter.json"))
-		)
+		fixture = json.loads(_read(frappe.get_app_path("essdee_yrp", "fixtures", "property_setter.json")))
 		self.assertFalse(
-			any(
-				row.get("name") == "Item Production Detail-approval_status-options"
-				for row in fixture
-			)
+			any(row.get("name") == "Item Production Detail-approval_status-options" for row in fixture)
 		)
 		self.assertNotIn(
 			'"Item Production Detail-approval_status-options"',

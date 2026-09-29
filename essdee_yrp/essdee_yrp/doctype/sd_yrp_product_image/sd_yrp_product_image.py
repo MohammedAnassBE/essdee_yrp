@@ -16,7 +16,7 @@ def get_image_list(query: str = "") -> list[dict]:
 
 	query = cstr(query).strip()
 	records = frappe.get_list(
-		'SD YRP Product Image',
+		"SD YRP Product Image",
 		filters={"name": ["like", f"%{query}%"]},
 		fields=["name", "image", "title_header"],
 		order_by="modified desc",

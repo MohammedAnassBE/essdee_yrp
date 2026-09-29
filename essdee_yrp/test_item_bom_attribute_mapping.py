@@ -74,9 +74,7 @@ class TestItemBOMAttributeMappingCustomization(FrappeTestCase):
 			)
 
 		ipd.check_permission.assert_called_once_with("read")
-		get_combination.assert_called_once_with(
-			"TEST-IPD-1", ["Colour", "Size"], "Cutting"
-		)
+		get_combination.assert_called_once_with("TEST-IPD-1", ["Colour", "Size"], "Cutting")
 		self.assertEqual(rows[0]["item_Colour"], "Navy")
 		self.assertEqual(rows[0]["item_Size"], "45 cm")
 
@@ -95,12 +93,11 @@ class TestItemBOMAttributeMappingCustomization(FrappeTestCase):
 
 	def test_desk_adapter_is_registered_in_essdee_only(self):
 		self.assertEqual(
-			hooks.doctype_js['YRP Item BOM Attribute Mapping'],
+			hooks.doctype_js["YRP Item BOM Attribute Mapping"],
 			"public/js/item_bom_attribute_mapping.js",
 		)
 		source = (
-			Path(frappe.get_app_path("essdee_yrp"))
-			/ "public/js/item_bom_attribute_mapping.js"
+			Path(frappe.get_app_path("essdee_yrp")) / "public/js/item_bom_attribute_mapping.js"
 		).read_text(encoding="utf-8")
 		self.assertIn("get_item_bom_mapping_combinations", source)
 		self.assertIn("frm.doc.item_production_detail", source)

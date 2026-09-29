@@ -1,21 +1,22 @@
 # Copyright (c) 2026, anas@essdee.fit and contributors
 # For license information, please see license.txt
 
-import frappe
-from frappe.tests import IntegrationTestCase
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from essdee_yrp.panel_wise_consumption import (
-	_blank_matrix,
-	_merge_cutting_rows,
-	expand_panel_wise_matrix,
-)
-from essdee_yrp.ipd_validations import validate_stiching_fields
+import frappe
+from frappe.tests import IntegrationTestCase
+
 from essdee_yrp.ipd_ui import (
 	DUPLICATE_IPD_SCALAR_FIELDS,
 	get_approval_roles,
 	revert_ipd_approval,
+)
+from essdee_yrp.ipd_validations import validate_stiching_fields
+from essdee_yrp.panel_wise_consumption import (
+	_blank_matrix,
+	_merge_cutting_rows,
+	expand_panel_wise_matrix,
 )
 
 
@@ -66,35 +67,35 @@ def _centre_panel_context():
 class TestPanelWiseConsumption(IntegrationTestCase):
 	def test_ipd_child_grids_expose_synced_values(self):
 		expected_columns = {
-			'SD YRP Stiching Item Detail': (
+			"SD YRP Stiching Item Detail": (
 				"stiching_attribute_value",
 				"set_item_attribute_value",
 				"quantity",
 				"category",
 				"is_default",
 			),
-			'SD YRP Item Production Detail Packing Attribute Detail': (
+			"SD YRP Item Production Detail Packing Attribute Detail": (
 				"attribute_value",
 				"quantity",
 			),
-			'SD YRP Item Production Detail Packing Size Detail': (
+			"SD YRP Item Production Detail Packing Size Detail": (
 				"attribute_value",
 				"quantity",
 			),
-			'SD YRP Item Production Detail Packing Assortment Attribute': ("attribute",),
-			'SD YRP Item Production Detail Cloth Detail': (
+			"SD YRP Item Production Detail Packing Assortment Attribute": ("attribute",),
+			"SD YRP Item Production Detail Cloth Detail": (
 				"name1",
 				"cloth",
 				"required_gsm",
 				"is_bom_item",
 			),
-			'SD YRP Item Production Detail Set Item Combination': (
+			"SD YRP Item Production Detail Set Item Combination": (
 				"index",
 				"major_attribute_value",
 				"set_item_attribute_value",
 				"attribute_value",
 			),
-			'SD YRP Cutting Attribute Detail': ("attribute",),
+			"SD YRP Cutting Attribute Detail": ("attribute",),
 		}
 		for doctype, fieldnames in expected_columns.items():
 			meta = frappe.get_meta(doctype)
@@ -114,30 +115,36 @@ class TestPanelWiseConsumption(IntegrationTestCase):
 			approved_by="approver@example.com",
 			check_permission=Mock(),
 		)
-		with patch(
-			"essdee_yrp.ipd_ui.get_approval_roles",
-			return_value=["Merchandising Manager", "System Manager"],
-		), patch.object(
-			frappe,
-			"get_roles",
-			return_value=["Merchandising Manager"],
-		), patch.object(
-			frappe,
-			"get_doc",
-			return_value=doc,
-		), patch.object(
-			frappe.db,
-			"set_value",
-		) as set_value, patch.object(
-			frappe,
-			"clear_document_cache",
+		with (
+			patch(
+				"essdee_yrp.ipd_ui.get_approval_roles",
+				return_value=["Merchandising Manager", "System Manager"],
+			),
+			patch.object(
+				frappe,
+				"get_roles",
+				return_value=["Merchandising Manager"],
+			),
+			patch.object(
+				frappe,
+				"get_doc",
+				return_value=doc,
+			),
+			patch.object(
+				frappe.db,
+				"set_value",
+			) as set_value,
+			patch.object(
+				frappe,
+				"clear_document_cache",
+			),
 		):
 			result = revert_ipd_approval("TEST-IPD")
 
 		self.assertEqual(result, {"status": "success"})
 		doc.check_permission.assert_called_once_with("write")
 		set_value.assert_called_once_with(
-			'YRP Item Production Detail',
+			"YRP Item Production Detail",
 			"TEST-IPD",
 			{"approval_status": "Not Approved", "approved_by": None},
 			update_modified=True,
@@ -205,9 +212,7 @@ class TestPanelWiseConsumption(IntegrationTestCase):
 				}
 
 		expanded = expand_panel_wise_matrix(matrix, context)
-		self.assertEqual(
-			expanded["attributes"], ["Size", "Panel", "Colour", "Dia", "Weight"]
-		)
+		self.assertEqual(expanded["attributes"], ["Size", "Panel", "Colour", "Dia", "Weight"])
 		self.assertEqual(len(expanded["items"]), 8)
 		self.assertEqual(
 			expanded["items"][0],

@@ -13,9 +13,9 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_bulk_lay_sheets import (
 
 class TestCuttingBulkLaySheets(FrappeTestCase):
 	def test_cbls_uses_naming_series_like_cutting_laysheet(self):
-		meta = frappe.get_meta('SD YRP Cutting Bulk Lay Sheets')
+		meta = frappe.get_meta("SD YRP Cutting Bulk Lay Sheets")
 		series_field = meta.get_field("naming_series")
-		doc = frappe.get_doc({"doctype": 'SD YRP Cutting Bulk Lay Sheets'})
+		doc = frappe.get_doc({"doctype": "SD YRP Cutting Bulk Lay Sheets"})
 		doc.autoname()
 
 		self.assertEqual(meta.autoname, "naming_series:")
@@ -26,7 +26,9 @@ class TestCuttingBulkLaySheets(FrappeTestCase):
 	def test_create_delivery_challan_submits_for_bulk_row(self):
 		bulk = frappe._dict(name="CBLS-TEST-1", posting_date="2026-08-21")
 		entry = frappe._dict(
-			name="CBLS-ROW-1", lot="LOT-SPLIT-1", work_order="WO-1",
+			name="CBLS-ROW-1",
+			lot="LOT-SPLIT-1",
+			work_order="WO-1",
 			delivery_challan=None,
 		)
 		data = {
@@ -44,7 +46,8 @@ class TestCuttingBulkLaySheets(FrappeTestCase):
 			patch.object(bulk_laysheets, "get_bulk_doc", return_value=bulk),
 			patch.object(bulk_laysheets, "get_entry", return_value=entry),
 			patch.object(
-				bulk_laysheets, "_validate_delivery_challan_naming_series",
+				bulk_laysheets,
+				"_validate_delivery_challan_naming_series",
 				return_value="DC-2627-",
 			),
 			patch.object(bulk_laysheets, "prepare_delivery_challan", return_value=data),
@@ -78,18 +81,22 @@ class TestCuttingBulkLaySheets(FrappeTestCase):
 	def test_create_bulk_delivery_challans_creates_every_pending_row(self):
 		rows = [
 			frappe._dict(
-				name="CBLS-ROW-1", lot="LOT-SPLIT-1", lot_transfer="LT-BULK-1",
+				name="CBLS-ROW-1",
+				lot="LOT-SPLIT-1",
+				lot_transfer="LT-BULK-1",
 				delivery_challan=None,
 			),
 			frappe._dict(
-				name="CBLS-ROW-2", lot="LOT-SPLIT-2", lot_transfer="LT-BULK-1",
+				name="CBLS-ROW-2",
+				lot="LOT-SPLIT-2",
+				lot_transfer="LT-BULK-1",
 				delivery_challan="DC-CANCELLED-1",
 			),
 		]
 		bulk = frappe._dict(name="CBLS-TEST-1", lot_details=rows)
 
 		def get_status(doctype, name):
-			if doctype == 'SD YRP Lot Transfer':
+			if doctype == "SD YRP Lot Transfer":
 				return 1
 			if name == "DC-CANCELLED-1":
 				return 2
@@ -98,37 +105,33 @@ class TestCuttingBulkLaySheets(FrappeTestCase):
 		with (
 			patch.object(bulk_laysheets, "get_bulk_doc", return_value=bulk),
 			patch.object(
-				bulk_laysheets, "_validate_delivery_challan_naming_series",
+				bulk_laysheets,
+				"_validate_delivery_challan_naming_series",
 				return_value="DC-2627-",
 			),
 			patch.object(bulk_laysheets, "get_docstatus", side_effect=get_status),
 			patch.object(
-				bulk_laysheets, "create_delivery_challan",
+				bulk_laysheets,
+				"create_delivery_challan",
 				side_effect=["DC-2627-001", "DC-2627-002"],
 			) as create_dc,
 			patch.object(bulk_laysheets, "refresh_bulk_status") as refresh_status,
 		):
-			result = bulk_laysheets.create_bulk_delivery_challans(
-				bulk.name, "DC-2627-", "TN 01 AB 1234"
-			)
+			result = bulk_laysheets.create_bulk_delivery_challans(bulk.name, "DC-2627-", "TN 01 AB 1234")
 
 		self.assertEqual(result["count"], 2)
-		self.assertEqual(
-			result["delivery_challans"], ["DC-2627-001", "DC-2627-002"]
-		)
+		self.assertEqual(result["delivery_challans"], ["DC-2627-001", "DC-2627-002"])
 		self.assertEqual(create_dc.call_count, 2)
-		create_dc.assert_any_call(
-			bulk.name, rows[0].name, "DC-2627-", "TN 01 AB 1234"
-		)
-		create_dc.assert_any_call(
-			bulk.name, rows[1].name, "DC-2627-", "TN 01 AB 1234"
-		)
+		create_dc.assert_any_call(bulk.name, rows[0].name, "DC-2627-", "TN 01 AB 1234")
+		create_dc.assert_any_call(bulk.name, rows[1].name, "DC-2627-", "TN 01 AB 1234")
 		refresh_status.assert_called_once_with(bulk.name)
 
 	def test_submit_delivery_challan_stays_scoped_to_bulk_row(self):
 		bulk = frappe._dict(name="CBLS-TEST-1")
 		entry = frappe._dict(
-			name="CBLS-ROW-1", lot="LOT-SPLIT-1", work_order="WO-1",
+			name="CBLS-ROW-1",
+			lot="LOT-SPLIT-1",
+			work_order="WO-1",
 			delivery_challan="DC-TEST-1",
 		)
 		dc = MagicMock()
@@ -154,17 +157,26 @@ class TestCuttingBulkLaySheets(FrappeTestCase):
 	def test_create_bulk_lot_transfer_links_one_transfer_to_every_row(self):
 		rows = [
 			frappe._dict(
-				name="CBLS-ROW-1", lot="LOT-SPLIT-1", cutting_laysheet="CLS-1",
-				lot_transfer=None, delivery_challan=None,
+				name="CBLS-ROW-1",
+				lot="LOT-SPLIT-1",
+				cutting_laysheet="CLS-1",
+				lot_transfer=None,
+				delivery_challan=None,
 			),
 			frappe._dict(
-				name="CBLS-ROW-2", lot="LOT-SPLIT-2", cutting_laysheet="CLS-2",
-				lot_transfer=None, delivery_challan=None,
+				name="CBLS-ROW-2",
+				lot="LOT-SPLIT-2",
+				cutting_laysheet="CLS-2",
+				lot_transfer=None,
+				delivery_challan=None,
 			),
 		]
 		bulk = frappe._dict(
-			name="CBLS-TEST-1", main_lot="LOT-MAIN", from_location="LOCATION-1",
-			posting_date="2026-08-21", lot_details=rows,
+			name="CBLS-TEST-1",
+			main_lot="LOT-MAIN",
+			from_location="LOCATION-1",
+			posting_date="2026-08-21",
+			lot_details=rows,
 		)
 		bulk._validate_lot_rows = MagicMock()
 		laysheets = {
@@ -176,18 +188,25 @@ class TestCuttingBulkLaySheets(FrappeTestCase):
 		transfer.flags = frappe._dict()
 
 		def build_items(laysheet, main_lot, target_lot, warehouse, received_type):
-			return [{
-				"item": f"FABRIC-{target_lot}", "qty": 5, "uom": "Kg",
-				"from_lot": main_lot, "to_lot": target_lot,
-				"warehouse": warehouse, "received_type": received_type,
-			}]
+			return [
+				{
+					"item": f"FABRIC-{target_lot}",
+					"qty": 5,
+					"uom": "Kg",
+					"from_lot": main_lot,
+					"to_lot": target_lot,
+					"warehouse": warehouse,
+					"received_type": received_type,
+				}
+			]
 
 		with (
 			patch.object(bulk_laysheets, "get_bulk_doc", return_value=bulk),
 			patch.object(bulk_laysheets, "get_shared_bulk_transfer_name", return_value=None),
 			patch.object(bulk_laysheets.frappe.db, "get_single_value", return_value="Accepted"),
 			patch.object(
-				bulk_laysheets.frappe, "get_doc",
+				bulk_laysheets.frappe,
+				"get_doc",
 				side_effect=lambda doctype, name: laysheets[name],
 			),
 			patch.object(bulk_laysheets, "build_lot_transfer_items", side_effect=build_items),
@@ -255,9 +274,7 @@ class TestCuttingBulkLaySheets(FrappeTestCase):
 			cutting_laysheet_details=[],
 			cutting_laysheet_accessory_details=[],
 			cutting_laysheet_manual_items=[],
-			cutting_laysheet_bundles=[
-				ChildRow({"bundle_no": 1, "part": "Front", "quantity": 12})
-			],
+			cutting_laysheet_bundles=[ChildRow({"bundle_no": 1, "part": "Front", "quantity": 12})],
 		)
 		with (
 			patch.object(bulk_laysheets, "get_entry_for_laysheet", return_value=entry),
@@ -282,12 +299,12 @@ class TestCuttingBulkLaySheets(FrappeTestCase):
 		)
 
 		def get_cached_value(doctype, name, fieldname):
-			if doctype == 'Item' and fieldname == "variant_of":
+			if doctype == "Item" and fieldname == "variant_of":
 				return {
 					"FABRIC-BEIGE-72": "FABRIC",
 					"RIB-BEIGE-33": "RIB",
 				}[name]
-			if doctype == 'Item' and fieldname == "stock_uom":
+			if doctype == "Item" and fieldname == "stock_uom":
 				return "Kg"
 			raise AssertionError((doctype, name, fieldname))
 

@@ -15,8 +15,8 @@ value is introduced).
 import json
 
 import frappe
-from yrp.attribute_values import get_mapping_document, get_mapping_values
 from frappe import _
+from yrp.attribute_values import get_mapping_document, get_mapping_values
 from yrp.yrp.doctype.yrp_item.yrp_item import ensure_global_attribute_values
 
 
@@ -38,7 +38,7 @@ def update_mapping_values(mapping, attribute_name, values):
 	if isinstance(values, str):
 		try:
 			values = json.loads(values)
-		except (TypeError, ValueError):
+		except TypeError, ValueError:
 			frappe.throw(_("Invalid `values` payload"))
 	if not isinstance(values, list):
 		frappe.throw(_("`values` must be a list"))

@@ -77,16 +77,16 @@ class MigrationPlannerTest(unittest.TestCase):
 		details = {row["source_doctype"]: row for row in self.payload["doctype_details"]}
 		self.assertEqual(details["SMS Settings"]["target_doctype"], "SMS Settings")
 		self.assertEqual(details["Department User"]["target_doctype"], "YRP Department User")
-		self.assertEqual(details["GRN Item Type"]["target_doctype"], 'YRP Received Type')
-		self.assertEqual(details["GRN Deliverable"]["target_doctype"], 'SD YRP GRN Deliverable')
-		self.assertEqual(details["Lot Transfer Item"]["target_doctype"], 'SD YRP Lot Transfer Item')
-		self.assertEqual(details["Stock Settings"]["target_doctype"], 'YRP Stock Settings')
-		self.assertEqual(details["Purchase Order Lot"]["target_doctype"], 'SD YRP Lot MultiSelect')
+		self.assertEqual(details["GRN Item Type"]["target_doctype"], "YRP Received Type")
+		self.assertEqual(details["GRN Deliverable"]["target_doctype"], "SD YRP GRN Deliverable")
+		self.assertEqual(details["Lot Transfer Item"]["target_doctype"], "SD YRP Lot Transfer Item")
+		self.assertEqual(details["Stock Settings"]["target_doctype"], "YRP Stock Settings")
+		self.assertEqual(details["Purchase Order Lot"]["target_doctype"], "SD YRP Lot MultiSelect")
 		self.assertEqual(
 			details["GRN Item Type"]["field_map"],
 			{"grn_type": "received_type_name"},
 		)
-		self.assertEqual(details["Vendor Bill Tracking"]["target_doctype"], 'YRP Bill Tracking')
+		self.assertEqual(details["Vendor Bill Tracking"]["target_doctype"], "YRP Bill Tracking")
 
 	def test_migration_targets_never_contain_a_redundant_yrp_segment(self):
 		targets = {row["target_doctype"] for row in self.payload["doctype_details"]}
@@ -102,13 +102,13 @@ class MigrationPlannerTest(unittest.TestCase):
 		self.assertEqual(
 			details["Item Production Detail"]["table_option_map"],
 			{
-				"item_attributes": 'YRP IPD Item Attribute',
-				"stiching_major_attribute_value": 'YRP Item Attribute Value',
-				"major_attribute_value": 'YRP Item Attribute Value',
-				"pack_in_stage": 'YRP Item Attribute Value',
-				"pack_out_stage": 'YRP Item Attribute Value',
-				"stiching_in_stage": 'YRP Item Attribute Value',
-				"stiching_out_stage": 'YRP Item Attribute Value',
+				"item_attributes": "YRP IPD Item Attribute",
+				"stiching_major_attribute_value": "YRP Item Attribute Value",
+				"major_attribute_value": "YRP Item Attribute Value",
+				"pack_in_stage": "YRP Item Attribute Value",
+				"pack_out_stage": "YRP Item Attribute Value",
+				"stiching_in_stage": "YRP Item Attribute Value",
+				"stiching_out_stage": "YRP Item Attribute Value",
 			},
 		)
 		self.assertEqual(
@@ -120,9 +120,7 @@ class MigrationPlannerTest(unittest.TestCase):
 			},
 		)
 		self.assertNotIn("description", details["Item"]["ignored_fields"])
-		self.assertNotIn(
-			"description", details["Item Production Detail"]["ignored_fields"]
-		)
+		self.assertNotIn("description", details["Item Production Detail"]["ignored_fields"])
 
 
 if __name__ == "__main__":

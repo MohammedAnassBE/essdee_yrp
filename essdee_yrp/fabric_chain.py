@@ -14,13 +14,13 @@ The row's own mapping roles are the fallback when a master is unmaintained.
 Identity steps stay in the ordered chain: a no-change Washing operation is real
 manufacturing work whose receipt must gate the next operation.
 
-Spec: docs/design/2026-07-04-fabric-chain-plan.md;
-generic model: docs/superpowers/specs/2026-07-07-fabric-process-commonization-design.md
+The generic model is documented in
+docs/superpowers/specs/2026-07-07-fabric-process-commonization-design.md.
 """
-from yrp.attribute_links import value as _attribute_value
 
 import frappe
 from frappe import _
+from yrp.attribute_links import value as _attribute_value
 
 from essdee_yrp.fabric_ipd import (
 	FABRIC_COLOUR_ATTRIBUTE,
@@ -70,10 +70,7 @@ def _step_shape(row):
 	# Change in a same-item row is a no-op, exclude the process from the tracked
 	# chain entirely.  Mixed rows still stay in the chain because their real
 	# groups build real matrices.
-	changes = [
-		m for m in (row.get("value_mappings") or [])
-		if m.get("role") == "Change"
-	]
+	changes = [m for m in (row.get("value_mappings") or []) if m.get("role") == "Change"]
 	in_item, out_item = row.get("input_item"), row.get("output_item")
 	if (
 		changes
@@ -88,10 +85,11 @@ def _step_shape(row):
 		return shape, attribute
 	# Fallback (master metadata unfilled): a Change entry => swap; an item-changing
 	# row with no Change => conversion; anything else => identity.
-	changed = list(dict.fromkeys(
-		m.get("attribute") for m in (row.get("value_mappings") or [])
-		if m.get("role") == "Change"
-	))
+	changed = list(
+		dict.fromkeys(
+			m.get("attribute") for m in (row.get("value_mappings") or []) if m.get("role") == "Change"
+		)
+	)
 	if len(changed) > 1:
 		return "multi_swap", changed
 	if changed:
@@ -124,9 +122,17 @@ def values_entering(ipd_doc, position, attribute):
 	steps = get_fabric_steps(ipd_doc)
 
 	if attribute == FABRIC_DIA_ATTRIBUTE:
-		values = [_attribute_value(r.dia) for r in ipd_doc.get("knitting_dia_details") or [] if _attribute_value(r.dia)]
+		values = [
+			_attribute_value(r.dia)
+			for r in ipd_doc.get("knitting_dia_details") or []
+			if _attribute_value(r.dia)
+		]
 	else:
-		values = [_attribute_value(r.from_colour) for r in ipd_doc.get("dyeing_colour_details") or [] if _attribute_value(r.from_colour)]
+		values = [
+			_attribute_value(r.from_colour)
+			for r in ipd_doc.get("dyeing_colour_details") or []
+			if _attribute_value(r.from_colour)
+		]
 	if not values:
 		values = get_ipd_attribute_values(ipd_doc, attribute)
 	values = list(dict.fromkeys(values))
@@ -154,11 +160,19 @@ def _step_swap_rows(ipd_doc, step):
 	"""from/to (+pin) rows of a swap step, from its classic tab table."""
 	if step["attribute"] == FABRIC_COLOUR_ATTRIBUTE:
 		return [
-			{"pin_value": _attribute_value(r.dia), "from_value": _attribute_value(r.from_colour), "to_value": _attribute_value(r.to_colour)}
+			{
+				"pin_value": _attribute_value(r.dia),
+				"from_value": _attribute_value(r.from_colour),
+				"to_value": _attribute_value(r.to_colour),
+			}
 			for r in ipd_doc.get("dyeing_colour_details") or []
 		]
 	return [
-		{"pin_value": _attribute_value(r.colour), "from_value": _attribute_value(r.from_dia), "to_value": _attribute_value(r.to_dia)}
+		{
+			"pin_value": _attribute_value(r.colour),
+			"from_value": _attribute_value(r.from_dia),
+			"to_value": _attribute_value(r.to_dia),
+		}
 		for r in ipd_doc.get("compacting_dia_details") or []
 	]
 
@@ -172,21 +186,21 @@ def final_combos(ipd_doc, has_colour=True):
 	if steps:
 		last = steps[-1]
 		matrix_names = frappe.get_all(
-			'YRP IPD Process Matrix',
+			"YRP IPD Process Matrix",
 			filters={"ipd": ipd_doc.name, "process_name": last["process_name"], "docstatus": ["<", 2]},
 			pluck="name",
 		)
 		combos = set()
 		for name in matrix_names:
-			matrix = frappe.get_doc('YRP IPD Process Matrix', name)
+			matrix = frappe.get_doc("YRP IPD Process Matrix", name)
 			if matrix.reference_item_variant:
-				variant = frappe.get_cached_doc(
-					'Item', matrix.reference_item_variant
+				variant = frappe.get_cached_doc("Item", matrix.reference_item_variant)
+				combos.add(
+					frozenset(
+						(row.attribute, _attribute_value(row.attribute_value))
+						for row in variant.get("attributes") or []
+					)
 				)
-				combos.add(frozenset(
-					(row.attribute, _attribute_value(row.attribute_value))
-					for row in variant.get("attributes") or []
-				))
 				continue
 			for _idx, group in matrix.get_combinations_grouped().items():
 				out = (group.get("output") or [{}])[0]
@@ -197,7 +211,7 @@ def final_combos(ipd_doc, has_colour=True):
 		# downstream dyeing matrix by design, so union those exact references
 		# into the reachable requirement choices.
 		for reference in frappe.get_all(
-			'YRP IPD Process Matrix',
+			"YRP IPD Process Matrix",
 			filters={
 				"ipd": ipd_doc.name,
 				"reference_item_variant": ["is", "set"],
@@ -205,11 +219,13 @@ def final_combos(ipd_doc, has_colour=True):
 			},
 			pluck="reference_item_variant",
 		):
-			variant = frappe.get_cached_doc('Item', reference)
-			combos.add(frozenset(
-				(row.attribute, _attribute_value(row.attribute_value))
-				for row in variant.get("attributes") or []
-			))
+			variant = frappe.get_cached_doc("Item", reference)
+			combos.add(
+				frozenset(
+					(row.attribute, _attribute_value(row.attribute_value))
+					for row in variant.get("attributes") or []
+				)
+			)
 		if combos:
 			return combos
 

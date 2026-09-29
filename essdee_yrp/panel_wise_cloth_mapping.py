@@ -5,14 +5,14 @@
 The compact matrix may contain blanks while an IPD is being prepared.
 ``cutting_cloths_json`` remains the canonical contract used by Lot and BOM flows.
 """
-from yrp import attribute_links as attribute_db
-from yrp.attribute_links import value as _attribute_value
 
 from itertools import product
 
 import frappe
-from yrp.attribute_values import get_mapping_document
 from frappe import _
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
+from yrp.attribute_values import get_mapping_document
 
 from essdee_yrp.panel_wise_consumption import (
 	_as_json,
@@ -21,11 +21,10 @@ from essdee_yrp.panel_wise_consumption import (
 	_group_packing_values,
 	_panel_values,
 	_unique,
-	get_permitted_ipd,
 	get_matrix_context,
+	get_permitted_ipd,
 	make_panel_wise_matrix,
 )
-
 
 SCHEMA_VERSION = 1
 SINGLE_VALUE_KEY = "__single__"
@@ -40,9 +39,7 @@ def _mapping_values(doc, attribute):
 
 
 def _cloth_attributes(doc, consumption_context):
-	attributes = _unique(
-		row.get("attribute") for row in doc.get("cloth_attributes") or []
-	)
+	attributes = _unique(row.get("attribute") for row in doc.get("cloth_attributes") or [])
 	if not attributes:
 		attributes = [
 			attribute
@@ -64,9 +61,7 @@ def get_cloth_matrix_context(doc):
 	packing_attribute = consumption_context["packing_attribute"]
 	primary_attribute = consumption_context["primary_attribute"]
 	other_attributes = [
-		attribute
-		for attribute in attributes
-		if attribute not in {panel_attribute, packing_attribute}
+		attribute for attribute in attributes if attribute not in {panel_attribute, packing_attribute}
 	]
 	attribute_values = {}
 	for attribute in other_attributes:
@@ -75,17 +70,11 @@ def get_cloth_matrix_context(doc):
 		else:
 			values = _mapping_values(doc, attribute)
 		if not values:
-			frappe.throw(
-				_("No values are configured for Cloth Mapping attribute {0}.").format(
-					attribute
-				)
-			)
+			frappe.throw(_("No values are configured for Cloth Mapping attribute {0}.").format(attribute))
 		attribute_values[attribute] = values
 
 	cloth_options = _unique(
-		row.get("name1")
-		for row in doc.get("cloth_detail") or []
-		if row.get("name1") and row.get("cloth")
+		row.get("name1") for row in doc.get("cloth_detail") or [] if row.get("name1") and row.get("cloth")
 	)
 	return {
 		"attributes": attributes,
@@ -105,7 +94,7 @@ def _row_combinations(context):
 	if not attributes:
 		return [{}]
 	return [
-		dict(zip(attributes, values))
+		dict(zip(attributes, values, strict=False))
 		for values in product(*(context["attribute_values"][attr] for attr in attributes))
 	]
 
@@ -123,9 +112,7 @@ def _blank_matrix(doc, context):
 				"panel_value": _group_label(_panel_values(group)),
 				"panel_values": _panel_values(group),
 				"packing_values": (
-					list(group.get("packing_values") or [])
-					if context["uses_packing"]
-					else [SINGLE_VALUE_KEY]
+					list(group.get("packing_values") or []) if context["uses_packing"] else [SINGLE_VALUE_KEY]
 				),
 			}
 			for group in consumption_matrix.get("panels") or []
@@ -158,10 +145,7 @@ def _blank_matrix(doc, context):
 				"rows": [
 					{
 						"attribute_values": dict(row),
-						"values": {
-							packing: {"cloth": None}
-							for packing in group["packing_values"]
-						},
+						"values": {packing: {"cloth": None} for packing in group["packing_values"]},
 					}
 					for row in rows
 				],
@@ -198,23 +182,12 @@ def _set_cloth(cell, cloth, description):
 def _merge_expanded_rows(matrix, cutting_cloths, context):
 	row_index = _matrix_indexes(matrix, context)
 	for item in _as_json(cutting_cloths).get("items") or []:
-		panel = (
-			item.get(context["panel_attribute"])
-			if context["uses_panel"]
-			else SINGLE_VALUE_KEY
-		)
-		row_values = {
-			attribute: item.get(attribute)
-			for attribute in context["other_attributes"]
-		}
+		panel = item.get(context["panel_attribute"]) if context["uses_panel"] else SINGLE_VALUE_KEY
+		row_values = {attribute: item.get(attribute) for attribute in context["other_attributes"]}
 		row = row_index.get((panel, _row_key(row_values, context)))
 		if not row:
 			continue
-		packing = (
-			item.get(context["packing_attribute"])
-			if context["uses_packing"]
-			else SINGLE_VALUE_KEY
-		)
+		packing = item.get(context["packing_attribute"]) if context["uses_packing"] else SINGLE_VALUE_KEY
 		cell = (row.get("values") or {}).get(packing)
 		if cell is not None:
 			_set_cloth(cell, item.get("Cloth"), " / ".join(filter(None, [panel, packing])))
@@ -224,9 +197,7 @@ def _merge_saved_matrix(matrix, saved, context):
 	saved = _as_json(saved)
 	if not saved or saved.get("attributes") != context["attributes"]:
 		return
-	target_groups = {
-		tuple(_panel_values(group)): group for group in matrix.get("panels") or []
-	}
+	target_groups = {tuple(_panel_values(group)): group for group in matrix.get("panels") or []}
 	if not context["uses_panel"]:
 		target_groups = {(): matrix["panels"][0]}
 	target_row_index = _matrix_indexes(matrix, context)
@@ -246,17 +217,11 @@ def _merge_saved_matrix(matrix, saved, context):
 			target_row = target_rows.get(row_key)
 			for packing, source_cell in (source_row.get("values") or {}).items():
 				if target_row and packing in target_row.get("values", {}):
-					target_row["values"][packing]["cloth"] = (
-						(source_cell or {}).get("cloth") or None
-					)
+					target_row["values"][packing]["cloth"] = (source_cell or {}).get("cloth") or None
 					continue
 				# Panel grouping may have changed after this draft was entered.
 				# Re-apply each old panel's value to the new shared/split target cell.
-				panel_keys = (
-					_panel_values(source_group)
-					if context["uses_panel"]
-					else [SINGLE_VALUE_KEY]
-				)
+				panel_keys = _panel_values(source_group) if context["uses_panel"] else [SINGLE_VALUE_KEY]
 				for panel in panel_keys:
 					regrouped_row = target_row_index.get((panel, row_key))
 					if regrouped_row and packing in regrouped_row.get("values", {}):
@@ -272,42 +237,26 @@ def make_panel_wise_cloth_mapping_matrix(doc, include_saved=True):
 	matrix = _blank_matrix(doc, context)
 	_merge_expanded_rows(matrix, doc.get("cutting_cloths_json"), context)
 	if include_saved:
-		_merge_saved_matrix(
-			matrix, doc.get("panel_wise_cloth_mapping_json"), context
-		)
+		_merge_saved_matrix(matrix, doc.get("panel_wise_cloth_mapping_json"), context)
 	return matrix, context
 
 
 def expand_panel_wise_cloth_mapping_matrix(matrix, context):
 	matrix = _as_json(matrix)
 	if matrix.get("attributes") != context["attributes"]:
-		frappe.throw(
-			_("The Cloth Mapping attributes changed. Reload the IPD and review the matrix.")
-		)
+		frappe.throw(_("The Cloth Mapping attributes changed. Reload the IPD and review the matrix."))
 	valid_cloths = set(context["cloth_options"])
 	seen_panels = set()
 	items = []
 	for group in matrix.get("panels") or []:
 		panel_values = _panel_values(group) if context["uses_panel"] else [None]
 		if context["uses_panel"]:
-			unknown = [
-				panel
-				for panel in panel_values
-				if panel not in context["consumption"]["panel_values"]
-			]
+			unknown = [panel for panel in panel_values if panel not in context["consumption"]["panel_values"]]
 			if unknown:
-				frappe.throw(
-					_("Unknown panel(s) in Cloth Mapping: {0}.").format(
-						", ".join(unknown)
-					)
-				)
+				frappe.throw(_("Unknown panel(s) in Cloth Mapping: {0}.").format(", ".join(unknown)))
 			duplicates = [panel for panel in panel_values if panel in seen_panels]
 			if duplicates:
-				frappe.throw(
-					_("Duplicate panel(s) in Cloth Mapping: {0}.").format(
-						", ".join(duplicates)
-					)
-				)
+				frappe.throw(_("Duplicate panel(s) in Cloth Mapping: {0}.").format(", ".join(duplicates)))
 			seen_panels.update(panel_values)
 		expected_packings = [SINGLE_VALUE_KEY]
 		if context["uses_packing"]:
@@ -320,19 +269,14 @@ def expand_panel_wise_cloth_mapping_matrix(matrix, context):
 			row_values = row.get("attribute_values") or {}
 			for packing, cell in (row.get("values") or {}).items():
 				if packing not in expected_packings:
-					frappe.throw(
-						_("Invalid colour column in Cloth Mapping: {0}.").format(packing)
-					)
+					frappe.throw(_("Invalid colour column in Cloth Mapping: {0}.").format(packing))
 				cloth = (cell or {}).get("cloth")
 				if not cloth:
 					continue
 				if cloth not in valid_cloths:
 					frappe.throw(_("Invalid Cloth label in Cloth Mapping: {0}.").format(cloth))
 				for panel in panel_values:
-					item = {
-						attribute: row_values.get(attribute)
-						for attribute in context["other_attributes"]
-					}
+					item = {attribute: row_values.get(attribute) for attribute in context["other_attributes"]}
 					if context["uses_panel"]:
 						item[context["panel_attribute"]] = panel
 					if context["uses_packing"]:
@@ -341,18 +285,12 @@ def expand_panel_wise_cloth_mapping_matrix(matrix, context):
 					items.append(item)
 
 	if context["uses_panel"]:
-		missing = [
-			panel
-			for panel in context["consumption"]["panel_values"]
-			if panel not in seen_panels
-		]
+		missing = [panel for panel in context["consumption"]["panel_values"] if panel not in seen_panels]
 		if missing:
-			frappe.throw(
-				_("Panel(s) missing from Cloth Mapping: {0}.").format(", ".join(missing))
-			)
+			frappe.throw(_("Panel(s) missing from Cloth Mapping: {0}.").format(", ".join(missing)))
 	return {
 		"combination_type": "Cloth",
-		"attributes": list(context["attributes"]) + ["Cloth"],
+		"attributes": [*list(context["attributes"]), "Cloth"],
 		"items": items,
 		"select_list": list(context["cloth_options"]),
 	}
@@ -378,10 +316,8 @@ def get_panel_wise_cloth_mapping_matrix(doc):
 	include_saved = True
 	if not doc.is_new() and doc.name:
 		stored_enabled = attribute_db.get_value(
-			'YRP Item Production Detail', doc.name, "enable_panel_wise_consumption_matrix"
+			"YRP Item Production Detail", doc.name, "enable_panel_wise_consumption_matrix"
 		)
 		include_saved = bool(stored_enabled)
-	matrix, _context = make_panel_wise_cloth_mapping_matrix(
-		doc, include_saved=include_saved
-	)
+	matrix, _context = make_panel_wise_cloth_mapping_matrix(doc, include_saved=include_saved)
 	return {"matrix": matrix}

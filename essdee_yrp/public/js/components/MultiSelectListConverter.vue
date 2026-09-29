@@ -34,12 +34,10 @@ let list = ref([])
 function convert_list(){
     if (list_type.value == 'List Type' && text_area_val.value){
         let result = text_area_val.value.split("\n").map(line => line.trim()).filter(line => line !== "");
-        console.log(result)
         list.value = result
     }
     else if(list_type.value == 'Comma Separated' && text_area_val.value){
         let result = text_area_val.value.split(",")
-        console.log(result)
         list.value = result
     }
 }

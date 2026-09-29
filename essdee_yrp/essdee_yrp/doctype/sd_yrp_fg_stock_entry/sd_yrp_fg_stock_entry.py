@@ -7,7 +7,6 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, cstr, flt
-
 from yrp.stock.dimensions import apply_dimension_defaults, get_dimension_fieldnames
 from yrp.stock.uom import apply_item_uom
 from yrp.stock.utils import get_stock_balance
@@ -18,10 +17,8 @@ class SDYRPFGStockEntry(Document):
 	def before_validate(self):
 		if not self.items:
 			frappe.throw(_("Add at least one item."))
-		if not frappe.db.exists('Warehouse', self.warehouse):
-			frappe.throw(
-				_("Location {0} is not a Warehouse.").format(frappe.bold(self.warehouse))
-			)
+		if not frappe.db.exists("Warehouse", self.warehouse):
+			frappe.throw(_("Location {0} is not a Warehouse.").format(frappe.bold(self.warehouse)))
 		apply_dimension_defaults(self.items)
 		for row in self.items:
 			self._prepare_row(row)
@@ -32,9 +29,7 @@ class SDYRPFGStockEntry(Document):
 		apply_item_uom(row, item_field="item_variant")
 		row.stock_qty = flt(row.qty) * flt(row.conversion_factor)
 		if not flt(row.rate):
-			dimensions = {
-				fieldname: row.get(fieldname) for fieldname in get_dimension_fieldnames()
-			}
+			dimensions = {fieldname: row.get(fieldname) for fieldname in get_dimension_fieldnames()}
 			row.rate = get_stock_balance(
 				row.item_variant,
 				self.warehouse,
@@ -48,9 +43,7 @@ class SDYRPFGStockEntry(Document):
 				row.rate = get_item_variant_price(row.item_variant, variant_uom=row.uom)
 		if not self.consumed and flt(row.rate) <= 0:
 			frappe.throw(
-				_("Row {0}: A positive valuation rate is required for stock receipt.").format(
-					row.idx
-				)
+				_("Row {0}: A positive valuation rate is required for stock receipt.").format(row.idx)
 			)
 
 	def before_submit(self):
@@ -58,7 +51,7 @@ class SDYRPFGStockEntry(Document):
 
 	def on_submit(self):
 		if self.yrp_stock_entry:
-			linked = frappe.get_doc('YRP Stock Entry', self.yrp_stock_entry)
+			linked = frappe.get_doc("YRP Stock Entry", self.yrp_stock_entry)
 			if linked.docstatus == 1 and linked.against_id == self.name:
 				return
 			frappe.throw(_("The linked YRP Stock Entry is not valid for this document."))
@@ -70,12 +63,12 @@ class SDYRPFGStockEntry(Document):
 
 	def before_cancel(self):
 		self.ignore_linked_doctypes = (
-			'YRP Stock Entry',
-			'YRP Stock Ledger Entry',
-			'YRP Repost Item Valuation',
+			"YRP Stock Entry",
+			"YRP Stock Ledger Entry",
+			"YRP Repost Item Valuation",
 		)
 		if self.yrp_stock_entry:
-			stock_entry = frappe.get_doc('YRP Stock Entry', self.yrp_stock_entry)
+			stock_entry = frappe.get_doc("YRP Stock Entry", self.yrp_stock_entry)
 			if stock_entry.docstatus == 1:
 				if stock_entry.against != self.doctype or stock_entry.against_id != self.name:
 					frappe.throw(_("The linked YRP Stock Entry belongs to another document."))
@@ -88,7 +81,7 @@ class SDYRPFGStockEntry(Document):
 		# Migrated F15 vouchers have direct SLEs and no generated Stock Entry.
 		# Cancel those through the F16 engine without restoring the legacy engine.
 		if frappe.db.exists(
-			'YRP Stock Ledger Entry',
+			"YRP Stock Ledger Entry",
 			{
 				"voucher_type": self.doctype,
 				"voucher_no": self.name,
@@ -98,8 +91,8 @@ class SDYRPFGStockEntry(Document):
 			self._cancel_migrated_ledger_entries()
 
 	def _make_yrp_stock_entry(self):
-		frappe.has_permission('YRP Stock Entry', "create", throw=True)
-		doc = frappe.new_doc('YRP Stock Entry')
+		frappe.has_permission("YRP Stock Entry", "create", throw=True)
+		doc = frappe.new_doc("YRP Stock Entry")
 		doc.purpose = "Material Consumed" if self.consumed else "Material Receipt"
 		doc.edit_posting_date_and_time = 1
 		doc.posting_date = self.posting_date
@@ -112,7 +105,7 @@ class SDYRPFGStockEntry(Document):
 		else:
 			doc.to_warehouse = self.warehouse
 
-		detail_meta = frappe.get_meta('YRP Stock Entry Detail')
+		detail_meta = frappe.get_meta("YRP Stock Entry Detail")
 		for source in self.items:
 			values = {
 				"item": source.item_variant,
@@ -141,12 +134,8 @@ class SDYRPFGStockEntry(Document):
 				voucher_detail_no=row.name,
 				uom=row.stock_uom,
 				qty=flt(row.stock_qty) * (-1 if self.consumed else 1),
-				rate=(flt(row.rate) / (flt(row.conversion_factor) or 1))
-				if not self.consumed
-				else 0,
-				outgoing_rate=(flt(row.rate) / (flt(row.conversion_factor) or 1))
-				if self.consumed
-				else 0,
+				rate=(flt(row.rate) / (flt(row.conversion_factor) or 1)) if not self.consumed else 0,
+				outgoing_rate=(flt(row.rate) / (flt(row.conversion_factor) or 1)) if self.consumed else 0,
 			)
 			for fieldname in get_dimension_fieldnames():
 				entry[fieldname] = row.get(fieldname)
@@ -156,7 +145,7 @@ class SDYRPFGStockEntry(Document):
 
 
 def _validate_warehouse_user(warehouse: str):
-	frappe.get_doc('Warehouse', warehouse).check_user_permission()
+	frappe.get_doc("Warehouse", warehouse).check_user_permission()
 
 
 def _parse_list(value):
@@ -180,8 +169,8 @@ def create_FG_ste(
 	supplier=None,
 	stock_entry=None,
 ):
-	frappe.has_permission('SD YRP FG Stock Entry', "create", throw=True)
-	doc = frappe.new_doc('SD YRP FG Stock Entry')
+	frappe.has_permission("SD YRP FG Stock Entry", "create", throw=True)
+	doc = frappe.new_doc("SD YRP FG Stock Entry")
 	doc.update(
 		{
 			"received_by": received_by,
@@ -197,7 +186,7 @@ def create_FG_ste(
 			"comments": comments,
 		}
 	)
-	detail_meta = frappe.get_meta('SD YRP FG Stock Entry Detail')
+	detail_meta = frappe.get_meta("SD YRP FG Stock Entry Detail")
 	for source in _parse_list(items_list):
 		row = {
 			"item_variant": source.get("item_variant"),
@@ -219,7 +208,7 @@ def create_FG_ste(
 
 @frappe.whitelist()
 def get_stock_entry_detail(stock_entry: str):
-	doc = frappe.get_doc('SD YRP FG Stock Entry', stock_entry)
+	doc = frappe.get_doc("SD YRP FG Stock Entry", stock_entry)
 	doc.check_permission("read")
 	items = []
 	groups = {}
@@ -257,7 +246,7 @@ def get_stock_entry_detail(stock_entry: str):
 
 @frappe.whitelist()
 def fg_stock_entry_cancel(stock_entry: str):
-	doc = frappe.get_doc('SD YRP FG Stock Entry', stock_entry)
+	doc = frappe.get_doc("SD YRP FG Stock Entry", stock_entry)
 	doc.check_permission("cancel")
 	doc.cancel()
 	return doc.name
@@ -265,22 +254,16 @@ def fg_stock_entry_cancel(stock_entry: str):
 
 @frappe.whitelist()
 def get_inward_stock(item, warehouselist=None, start_date=None, end_date=None):
-	return get_inward_outward_entry(
-		item, warehouselist, start_date, end_date, is_inward=True
-	)
+	return get_inward_outward_entry(item, warehouselist, start_date, end_date, is_inward=True)
 
 
 @frappe.whitelist()
 def get_outward_stock(item, warehouselist=None, start_date=None, end_date=None):
-	return get_inward_outward_entry(
-		item, warehouselist, start_date, end_date, is_inward=False
-	)
+	return get_inward_outward_entry(item, warehouselist, start_date, end_date, is_inward=False)
 
 
-def get_inward_outward_entry(
-	item, warehouselist=None, start_date=None, end_date=None, is_inward=True
-):
-	frappe.has_permission('SD YRP FG Stock Entry', "read", throw=True)
+def get_inward_outward_entry(item, warehouselist=None, start_date=None, end_date=None, is_inward=True):
+	frappe.has_permission("SD YRP FG Stock Entry", "read", throw=True)
 	warehouses = _parse_list(warehouselist)
 	filters = {"docstatus": 1, "consumed": 0 if is_inward else 1}
 	if warehouses:
@@ -290,7 +273,7 @@ def get_inward_outward_entry(
 			"between",
 			[f"{cstr(start_date)} 00:00:00", f"{cstr(end_date)} 23:59:59"],
 		]
-	parents = frappe.get_list('SD YRP FG Stock Entry', filters=filters, pluck="name")
+	parents = frappe.get_list("SD YRP FG Stock Entry", filters=filters, pluck="name")
 	if not parents:
 		return []
 	return frappe.db.sql(

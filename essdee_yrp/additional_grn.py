@@ -3,13 +3,12 @@
 import frappe
 from frappe import _
 from frappe.utils import flt
-
-from yrp.stock.save_stock_items import group_items_for_ui
 from yrp.stock.dimensions import apply_dimension_defaults
+from yrp.stock.save_stock_items import group_items_for_ui
 from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
 	_apply_dimension_values_to_rows,
-	_get_production_group_dimensions,
 	_find_matching_receivable,
+	_get_production_group_dimensions,
 	_get_received_type_options,
 	get_work_order_defaults,
 )
@@ -23,21 +22,34 @@ def get_defaults(work_order):
 	rows = []
 	for source in wo.receivables:
 		for received_type in [default_type or types[0]]:
-			rows.append(frappe._dict(
-				item_variant=source.item_variant, quantity=0, uom=source.uom,
-				pending_quantity=source.pending_quantity, max_receivable_quantity=-1,
-				ref_doctype=source.doctype, ref_docname=source.name,
-				table_index=source.table_index, row_index=f"{source.row_index}::{received_type}",
-				set_combination=source.set_combination, rate=source.cost,
-				received_type=received_type, lot=wo.get("lot"),
-			))
+			rows.append(
+				frappe._dict(
+					item_variant=source.item_variant,
+					quantity=0,
+					uom=source.uom,
+					pending_quantity=source.pending_quantity,
+					max_receivable_quantity=-1,
+					ref_doctype=source.doctype,
+					ref_docname=source.name,
+					table_index=source.table_index,
+					row_index=f"{source.row_index}::{received_type}",
+					set_combination=source.set_combination,
+					rate=source.cost,
+					received_type=received_type,
+					lot=wo.get("lot"),
+				)
+			)
 	_apply_dimension_values_to_rows(rows, _get_production_group_dimensions(wo))
 	apply_dimension_defaults(rows)
 	from essdee_yrp.overrides.goods_received_note import normalize_cutting_grn_row_indexes
 
 	rows = normalize_cutting_grn_row_indexes(rows)
-	defaults.update(items=rows, item_details=group_items_for_ui(rows, "YRP Goods Received Note"),
-		correction_items=[], correction_item_details=[])
+	defaults.update(
+		items=rows,
+		item_details=group_items_for_ui(rows, "YRP Goods Received Note"),
+		correction_items=[],
+		correction_item_details=[],
+	)
 	return defaults
 
 
@@ -50,7 +62,11 @@ def validate_receivables(grn):
 	for row in grn.items:
 		target = _find_matching_receivable(wo.receivables, row)
 		if not target:
-			frappe.throw(_("Row {0}: no matching Work Order Receivable found for {1}.").format(row.idx, row.item_variant))
+			frappe.throw(
+				_("Row {0}: no matching Work Order Receivable found for {1}.").format(
+					row.idx, row.item_variant
+				)
+			)
 		if flt(row.quantity) <= 0:
 			frappe.throw(_("Quantity must be greater than zero."))
 		row.ref_doctype = target.doctype

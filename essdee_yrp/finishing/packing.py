@@ -1,16 +1,16 @@
 """Physical box/piece calculations for Essdee Finishing Plans."""
-from yrp import attribute_links as attribute_db
-from yrp.attribute_links import value as _attribute_value
 
 import frappe
-from yrp.attribute_values import get_mapping_document
 from frappe.utils import cint, flt
-
-from essdee_yrp.dynamic_packing import LEGACY_BATCH_TRACKING_VERSION
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
+from yrp.attribute_values import get_mapping_document
 from yrp.utils import get_variant_attr_details, update_if_string_instance
 from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
 	get_ipd_primary_values,
 )
+
+from essdee_yrp.dynamic_packing import LEGACY_BATCH_TRACKING_VERSION
 
 
 def get_dynamic_packed_qty(finishing_doc, grn_names):
@@ -30,7 +30,7 @@ def get_dynamic_packed_qty(finishing_doc, grn_names):
 		data.sizes[size] = _empty_size_summary()
 
 	for grn_name in grn_names:
-		grn = frappe.get_doc('YRP Goods Received Note', grn_name)
+		grn = frappe.get_doc("YRP Goods Received Note", grn_name)
 		version = cint(grn.packing_calculation_version)
 		for batch in grn.get("packing_batches") or []:
 			ratio = update_if_string_instance(batch.ratio_json) or {}
@@ -68,14 +68,14 @@ def get_dynamic_packed_qty(finishing_doc, grn_names):
 
 def get_finishing_packing_summary(finishing_doc):
 	if isinstance(finishing_doc, str):
-		finishing_doc = frappe.get_doc('SD YRP Finishing Plan', finishing_doc)
+		finishing_doc = frappe.get_doc("SD YRP Finishing Plan", finishing_doc)
 
 	grn_names = []
 	if finishing_doc.work_order:
 		grn_names = frappe.get_all(
-			'YRP Goods Received Note',
+			"YRP Goods Received Note",
 			filters={
-				"against": 'YRP Work Order',
+				"against": "YRP Work Order",
 				"against_id": finishing_doc.work_order,
 				"lot": finishing_doc.lot,
 				"docstatus": 1,
@@ -105,10 +105,10 @@ def get_finishing_packing_summary(finishing_doc):
 @frappe.whitelist()
 def get_ipd_packing_config(lot):
 	"""Return the configuration used by Finishing packing entry dialogs."""
-	ipd_name = attribute_db.get_value('SD YRP Lot', lot, "production_detail")
+	ipd_name = attribute_db.get_value("SD YRP Lot", lot, "production_detail")
 	if not ipd_name:
 		frappe.throw(f"Lot {lot} has no Item Production Detail")
-	ipd = frappe.get_cached_doc('YRP Item Production Detail', ipd_name)
+	ipd = frappe.get_cached_doc("YRP Item Production Detail", ipd_name)
 	colours = []
 	for row in ipd.get("item_attributes") or []:
 		attribute = row.get("attribute") or row.get("item_attribute")
@@ -120,8 +120,7 @@ def get_ipd_packing_config(lot):
 		"based_on_other_attribute_mapping": ipd.based_on_other_attribute_mapping,
 		"packing_mode": ipd.packing_mode,
 		"dynamic_ratio_packing": bool(
-			ipd.based_on_other_attribute_mapping
-			and ipd.packing_mode == "Size Ratio Packing"
+			ipd.based_on_other_attribute_mapping and ipd.packing_mode == "Size Ratio Packing"
 		),
 		"packing_combo": ipd.packing_combo,
 		"primary_attribute": ipd.primary_item_attribute,
@@ -150,9 +149,7 @@ def prepare_dynamic_batch_dispatch(finishing_doc, dispatches):
 		seen.add(batch_row)
 		boxes = flt(request.get("box_quantity"))
 		if boxes <= 0 or boxes != int(boxes):
-			frappe.throw(
-				f"Dispatch boxes in row {index} should be a positive whole number"
-			)
+			frappe.throw(f"Dispatch boxes in row {index} should be a positive whole number")
 
 		locked = frappe.db.sql(
 			"""
@@ -167,11 +164,11 @@ def prepare_dynamic_batch_dispatch(finishing_doc, dispatches):
 		if not locked:
 			frappe.throw(f"Packing batch {batch_row} does not exist")
 		batch = locked[0]
-		grn = frappe.get_cached_doc('YRP Goods Received Note', batch.parent)
+		grn = frappe.get_cached_doc("YRP Goods Received Note", batch.parent)
 		version = cint(grn.packing_calculation_version)
 		if (
 			grn.docstatus != 1
-			or grn.against != 'YRP Work Order'
+			or grn.against != "YRP Work Order"
 			or grn.against_id != finishing_doc.work_order
 			or grn.lot != finishing_doc.lot
 			or version < LEGACY_BATCH_TRACKING_VERSION
@@ -181,23 +178,18 @@ def prepare_dynamic_batch_dispatch(finishing_doc, dispatches):
 		available = flt(batch.box_quantity) - flt(batch.dispatched_boxes)
 		if boxes > available:
 			frappe.throw(
-				f"Only {available:g} boxes are available in "
-				f"{grn.name} / {batch.batch_id or batch_row}"
+				f"Only {available:g} boxes are available in {grn.name} / {batch.batch_id or batch_row}"
 			)
 		ratio = update_if_string_instance(batch.ratio_json) or {}
-		size_pieces = {
-			size: int(boxes) * flt(per_box) for size, per_box in ratio.items()
-		}
+		size_pieces = {size: int(boxes) * flt(per_box) for size, per_box in ratio.items()}
 		box_uom, piece_uom = attribute_db.get_cached_value(
-			'SD YRP Lot', finishing_doc.lot, ["uom", "packing_uom"]
+			"SD YRP Lot", finishing_doc.lot, ["uom", "packing_uom"]
 		)
 		if version == LEGACY_BATCH_TRACKING_VERSION:
 			pieces_per_box = flt(batch.pieces_per_box)
 			if not pieces_per_box:
 				frappe.throw(f"Packing batch {batch_row} has no pieces-per-box value")
-			stock_quantities = {
-				size: pieces / pieces_per_box for size, pieces in size_pieces.items()
-			}
+			stock_quantities = {size: pieces / pieces_per_box for size, pieces in size_pieces.items()}
 			stock_uom = box_uom
 		else:
 			stock_quantities = dict(size_pieces)
@@ -223,12 +215,12 @@ def prepare_dynamic_batch_dispatch(finishing_doc, dispatches):
 def rebuild_finishing_packing_quantities(finishing_doc):
 	"""Idempotently rebuild plan quantities from all submitted packing GRNs."""
 	if isinstance(finishing_doc, str):
-		finishing_doc = frappe.get_doc('SD YRP Finishing Plan', finishing_doc)
+		finishing_doc = frappe.get_doc("SD YRP Finishing Plan", finishing_doc)
 
 	grns = frappe.get_all(
-		'YRP Goods Received Note',
+		"YRP Goods Received Note",
 		filters={
-			"against": 'YRP Work Order',
+			"against": "YRP Work Order",
 			"against_id": finishing_doc.work_order,
 			"lot": finishing_doc.lot,
 			"docstatus": 1,
@@ -244,14 +236,11 @@ def rebuild_finishing_packing_quantities(finishing_doc):
 		],
 	)
 	batch_tracked = any(
-		cint(grn.packing_calculation_version) >= LEGACY_BATCH_TRACKING_VERSION
-		for grn in grns
+		cint(grn.packing_calculation_version) >= LEGACY_BATCH_TRACKING_VERSION for grn in grns
 	)
 	if batch_tracked:
 		untracked = [
-			grn.name
-			for grn in grns
-			if cint(grn.packing_calculation_version) < LEGACY_BATCH_TRACKING_VERSION
+			grn.name for grn in grns if cint(grn.packing_calculation_version) < LEGACY_BATCH_TRACKING_VERSION
 		]
 		if untracked:
 			frappe.throw(
@@ -262,7 +251,7 @@ def rebuild_finishing_packing_quantities(finishing_doc):
 	quantities = {}
 	tracked_dispatched = {}
 	primary_attribute = attribute_db.get_cached_value(
-		'YRP Item Production Detail',
+		"YRP Item Production Detail",
 		finishing_doc.production_detail,
 		"primary_item_attribute",
 	)
@@ -278,7 +267,7 @@ def rebuild_finishing_packing_quantities(finishing_doc):
 
 		variant_by_size = {}
 		for item in frappe.get_all(
-			'YRP Goods Received Note Item',
+			"YRP Goods Received Note Item",
 			filters={"parent": grn.name, "docstatus": 1},
 			fields=["item_variant", "quantity"],
 		):
@@ -291,7 +280,7 @@ def rebuild_finishing_packing_quantities(finishing_doc):
 
 		if version >= LEGACY_BATCH_TRACKING_VERSION:
 			for batch in frappe.get_all(
-				'SD YRP GRN Packing Batch',
+				"SD YRP GRN Packing Batch",
 				filters={"parent": grn.name},
 				fields=["dispatched_boxes", "ratio_json"],
 			):
@@ -299,15 +288,11 @@ def rebuild_finishing_packing_quantities(finishing_doc):
 				for size, per_box in ratio.items():
 					item_variant = variant_by_size.get(size)
 					if item_variant:
-						tracked_dispatched[item_variant] = (
-							tracked_dispatched.get(item_variant, 0)
-							+ flt(batch.dispatched_boxes) * flt(per_box)
-						)
+						tracked_dispatched[item_variant] = tracked_dispatched.get(item_variant, 0) + flt(
+							batch.dispatched_boxes
+						) * flt(per_box)
 
-	existing = {
-		row.item_variant: row
-		for row in finishing_doc.get("finishing_plan_grn_details") or []
-	}
+	existing = {row.item_variant: row for row in finishing_doc.get("finishing_plan_grn_details") or []}
 	rows = []
 	for item_variant in dict.fromkeys([*existing, *quantities]):
 		rows.append(

@@ -7,14 +7,13 @@ from frappe import _
 from frappe.model import data_fieldtypes
 from frappe.utils import cint, flt, strip_html_tags
 
-
 DISALLOWED_FIELDTYPES = {"Dynamic Link", "Read Only"}
 
 # These parent fields have controller validations whose result depends on
 # related records. A direct db_set would bypass those guards, so targeted bulk
 # edits of them must use the normal document save path.
 CONTROLLER_VALIDATED_PARENT_FIELDS = {
-	'Item': {"allow_negative_stock", "stock_uom"},
+	"Item": {"allow_negative_stock", "stock_uom"},
 }
 
 
@@ -56,16 +55,14 @@ def _is_bulk_editable(df, allowed_permlevels):
 	)
 
 
-def _field_payload(df, *, is_child_field=False, child_doctype=None, parent_table_field=None, parent_table_label=None):
+def _field_payload(
+	df, *, is_child_field=False, child_doctype=None, parent_table_field=None, parent_table_label=None
+):
 	label = df.label or df.fieldname
 	if is_child_field and parent_table_label:
 		label = _("{0} ({1})").format(label, parent_table_label)
 	return {
-		"key": (
-			f"{child_doctype}:{parent_table_field}:{df.fieldname}"
-			if is_child_field
-			else df.fieldname
-		),
+		"key": (f"{child_doctype}:{parent_table_field}:{df.fieldname}" if is_child_field else df.fieldname),
 		"label": label,
 		"fieldname": df.fieldname,
 		"fieldtype": df.fieldtype,
@@ -158,6 +155,7 @@ def _validate_selected_value(field, value):
 
 def _clear_zero_link_values(doc):
 	"""Clean legacy optional Link placeholders before saving selected docs."""
+
 	def clear(target):
 		for df in target.meta.fields:
 			if df.fieldtype == "Link" and not cint(df.reqd) and target.get(df.fieldname) in ("", 0, "0"):
@@ -219,7 +217,7 @@ def bulk_update_field(doctype, docnames, fieldname, value=None, child_doctype=No
 		try:
 			doc = frappe.get_doc(doctype, name)
 			doc.check_permission("write")
-			if doctype == 'YRP Item Production Detail' and doc.get("approval_status") == "Approved":
+			if doctype == "YRP Item Production Detail" and doc.get("approval_status") == "Approved":
 				frappe.throw(_("Revert Approval before editing Item Production Detail {0}.").format(name))
 			if doc.docstatus == 2:
 				frappe.throw(_("Cancelled documents cannot be updated."))

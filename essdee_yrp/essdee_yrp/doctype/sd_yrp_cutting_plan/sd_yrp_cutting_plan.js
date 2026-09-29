@@ -167,9 +167,6 @@ frappe.ui.form.on("SD YRP Cutting Plan", {
                             },
                             freeze: true,
                             freeze_message: "Creating Recut",
-                            callback(r) {
-                                console.log("Inserted")
-                            }
                         })
                         d.hide()
                     }
@@ -199,9 +196,6 @@ frappe.ui.form.on("SD YRP Cutting Plan", {
                             },
                             freeze: true,
                             freeze_message: "Creating Print Panel",
-                            callback(r) {
-                                console.log("Inserted")
-                            }
                         })
                         d.hide()
                     }

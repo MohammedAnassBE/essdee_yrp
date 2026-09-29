@@ -44,47 +44,33 @@ def _validate_yarn_rows(rows, cloth_item=None):
 		if not yarn_item:
 			frappe.throw(_("Row {0}: select a Yarn Item.").format(row_number))
 		if yarn_item == cloth_item:
-			frappe.throw(
-				_("Row {0}: a Cloth Item cannot use itself as yarn.").format(row_number)
-			)
+			frappe.throw(_("Row {0}: a Cloth Item cannot use itself as yarn.").format(row_number))
 		if yarn_item in seen:
-			frappe.throw(
-				_("Row {0}: Yarn Item {1} is duplicated.").format(
-					row_number, yarn_item
-				)
-			)
+			frappe.throw(_("Row {0}: Yarn Item {1} is duplicated.").format(row_number, yarn_item))
 		if ratio <= 0:
-			frappe.throw(
-				_("Row {0}: Ratio must be greater than zero.").format(row_number)
-			)
-		if (
-			frappe.get_meta('Item').has_field("is_cloth_item")
-			and frappe.db.get_value('Item', yarn_item, "is_cloth_item")
+			frappe.throw(_("Row {0}: Ratio must be greater than zero.").format(row_number))
+		if frappe.get_meta("Item").has_field("is_cloth_item") and frappe.db.get_value(
+			"Item", yarn_item, "is_cloth_item"
 		):
 			frappe.throw(
-				_("Row {0}: Cloth Item {1} cannot be selected as yarn.").format(
-					row_number, yarn_item
-				)
+				_("Row {0}: Cloth Item {1} cannot be selected as yarn.").format(row_number, yarn_item)
 			)
-		attributes = set(frappe.get_all(
-			"Item Variant Attribute",
-			filters={"parent": yarn_item, "parenttype": "Item"},
-			pluck="attribute",
-		))
+		attributes = set(
+			frappe.get_all(
+				"Item Variant Attribute",
+				filters={"parent": yarn_item, "parenttype": "Item"},
+				pluck="attribute",
+			)
+		)
 		unsupported = sorted(attributes - {"Colour"})
 		if unsupported:
 			frappe.throw(
-				_(
-					"Row {0}: Yarn Item {1} may only use the Colour variant "
-					"attribute; remove {2}."
-				).format(row_number, yarn_item, ", ".join(unsupported))
+				_("Row {0}: Yarn Item {1} may only use the Colour variant attribute; remove {2}.").format(
+					row_number, yarn_item, ", ".join(unsupported)
+				)
 			)
 		seen.add(yarn_item)
 		total += ratio
 
 	if abs(total - 100.0) > 0.001:
-		frappe.throw(
-			_("Yarn Ratio total must be exactly 100%. Current total is {0}%.").format(
-				flt(total, 3)
-			)
-		)
+		frappe.throw(_("Yarn Ratio total must be exactly 100%. Current total is {0}%.").format(flt(total, 3)))

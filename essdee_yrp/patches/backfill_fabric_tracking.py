@@ -6,7 +6,7 @@ import frappe
 
 
 def execute():
-	if not frappe.db.has_column('YRP Work Order', "lot"):
+	if not frappe.db.has_column("YRP Work Order", "lot"):
 		return
 	from essdee_yrp.fabric_tracking import rebuild_fabric_tracking
 

@@ -18,7 +18,7 @@ import json
 import frappe
 from frappe import _
 
-SETTING_DOCTYPE = 'SD YRP Essdee Child Table View Setting'
+SETTING_DOCTYPE = "SD YRP Essdee Child Table View Setting"
 
 
 def _required(value, label):
@@ -35,7 +35,7 @@ def _parse_json_field(raw):
 		return None
 	try:
 		return json.loads(raw)
-	except (ValueError, TypeError):
+	except ValueError, TypeError:
 		return None
 
 
@@ -49,7 +49,7 @@ def _coerce_to_json_text(value, *, kind):
 	if isinstance(value, str):
 		try:
 			value = json.loads(value) if value.strip() else None
-		except (ValueError, TypeError):
+		except ValueError, TypeError:
 			value = None
 	if value is None:
 		value = [] if kind == "list" else {}

@@ -5,7 +5,6 @@ from frappe.tests import IntegrationTestCase
 
 from essdee_yrp import hooks
 
-
 PROPERTY_SETTER = "YRP Stock Reservation Entry-voucher_type-options"
 ESSDEE_VOUCHER_TYPES = "\nYRP Work Order\nYRP Stock Update\nPacking Slip"
 
@@ -36,7 +35,7 @@ class TestStockReservationEntryVoucherOptions(IntegrationTestCase):
 			fixture = json.load(source)
 
 		setter = next(row for row in fixture if row.get("name") == PROPERTY_SETTER)
-		self.assertEqual(setter["doc_type"], 'YRP Stock Reservation Entry')
+		self.assertEqual(setter["doc_type"], "YRP Stock Reservation Entry")
 		self.assertEqual(setter["field_name"], "voucher_type")
 		self.assertEqual(setter["property"], "options")
 		self.assertEqual(setter["value"], ESSDEE_VOUCHER_TYPES)
@@ -46,14 +45,14 @@ class TestStockReservationEntryVoucherOptions(IntegrationTestCase):
 		self.assertIn(PROPERTY_SETTER, allowed_names)
 
 	def test_live_meta_combines_base_field_and_essdee_options(self):
-		meta = frappe.get_meta('YRP Stock Reservation Entry', cached=False)
+		meta = frappe.get_meta("YRP Stock Reservation Entry", cached=False)
 		field = meta.get_field("voucher_type")
 		self.assertEqual(field.fieldtype, "Select")
 		self.assertEqual(field.options, ESSDEE_VOUCHER_TYPES)
 		self.assertEqual(meta.get_field("voucher_no").fieldtype, "Data")
 		self.assertFalse(meta.get_field("voucher_no").options)
 
-		for voucher_type in ('YRP Work Order', 'YRP Stock Update', "Packing Slip"):
-			doc = frappe.new_doc('YRP Stock Reservation Entry')
+		for voucher_type in ("YRP Work Order", "YRP Stock Update", "Packing Slip"):
+			doc = frappe.new_doc("YRP Stock Reservation Entry")
 			doc.voucher_type = voucher_type
 			doc._validate_selects()

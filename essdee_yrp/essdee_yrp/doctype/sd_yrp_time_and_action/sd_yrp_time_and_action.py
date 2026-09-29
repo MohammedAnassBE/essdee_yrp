@@ -1,14 +1,13 @@
-from yrp import attribute_links as attribute_db
-from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2024, Essdee and contributors
 # For license information, please see license.txt
-
 import math
 
 import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import add_days, date_diff, flt, getdate
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 from yrp.utils import update_if_string_instance
 
 
@@ -16,7 +15,7 @@ def get_events_len(date1, date2):
 	"""Count only holidays inside the open/closed scheduling interval."""
 
 	return frappe.db.count(
-		'Holiday',
+		"Holiday",
 		filters=[
 			["holiday_date", ">", getdate(date1)],
 			["holiday_date", "<=", getdate(date2)],
@@ -29,13 +28,14 @@ def get_next_date(day, lead_time):
 
 	date1 = getdate(day)
 	date2 = getdate(add_days(date1, int(lead_time or 0)))
-	for _ in range(3660):
+	for _attempt in range(3660):
 		events = get_events_len(date1, date2)
 		if not events:
 			return date2
 		date1 = date2
 		date2 = getdate(add_days(date2, events))
 	frappe.throw(_("Holiday calendar could not resolve the scheduled date."))
+
 
 class SDYRPTimeandAction(Document):
 	def before_validate(self):
@@ -56,38 +56,34 @@ class SDYRPTimeandAction(Document):
 				else:
 					item.dependent_action_date = None
 
+
 @frappe.whitelist()
 def get_time_and_action_details(docname):
-	doc = frappe.get_doc('SD YRP Time and Action',docname)
+	doc = frappe.get_doc("SD YRP Time and Action", docname)
 	doc.check_permission("read")
 	item_list = [item.as_dict() for item in doc.details]
 	status = doc.status
-	return {
-		"item_list" : item_list,
-		"status" : status
-	}
+	return {"item_list": item_list, "status": status}
+
 
 @frappe.whitelist()
 def revert_t_and_a(doc_name):
-	doc = frappe.get_doc('SD YRP Lot', doc_name)
+	doc = frappe.get_doc("SD YRP Lot", doc_name)
 	doc.check_permission("write")
-	t_and_a_list = [
-		row.time_and_action
-		for row in doc.lot_time_and_action_details
-		if row.time_and_action
-	]
+	t_and_a_list = [row.time_and_action for row in doc.lot_time_and_action_details if row.time_and_action]
 	for name in t_and_a_list:
-		time_and_action = frappe.get_doc('SD YRP Time and Action', name)
+		time_and_action = frappe.get_doc("SD YRP Time and Action", name)
 		time_and_action.check_permission("delete")
 	doc.set("lot_time_and_action_details", [])
 	doc.save()
 	for name in t_and_a_list:
-		frappe.delete_doc('SD YRP Time and Action', name)
+		frappe.delete_doc("SD YRP Time and Action", name)
 	return len(t_and_a_list)
+
 
 @frappe.whitelist()
 def make_complete(time_and_action):
-	t_and_a = frappe.get_doc('SD YRP Time and Action',time_and_action)
+	t_and_a = frappe.get_doc("SD YRP Time and Action", time_and_action)
 	t_and_a.check_permission("write")
 	check = True
 	for item in t_and_a.details:
@@ -100,6 +96,7 @@ def make_complete(time_and_action):
 	else:
 		frappe.msgprint("Not all the Actions are Completed")
 
+
 @frappe.whitelist()
 def get_t_and_a_preview_data(start_date, table, is_template=False, master_doc=None):
 	table = update_if_string_instance(table)
@@ -110,14 +107,14 @@ def get_t_and_a_preview_data(start_date, table, is_template=False, master_doc=No
 
 	for row in table:
 		if not master_doc:
-			doctype='SD YRP Action Master'
+			doctype = "SD YRP Action Master"
 			if is_template:
-				doctype = 'SD YRP Action Master Template'
-			doc = frappe.get_doc(doctype, row['master'])
+				doctype = "SD YRP Action Master Template"
+			doc = frappe.get_doc(doctype, row["master"])
 			doc.check_permission("read")
 		else:
 			doc = master_doc
-		doc_data[_attribute_value(row['colour'])] = doc
+		doc_data[_attribute_value(row["colour"])] = doc
 		day = start_date
 		action_completion_date = {}
 		dependent_action = build_dependent_action_map(doc)
@@ -125,14 +122,18 @@ def get_t_and_a_preview_data(start_date, table, is_template=False, master_doc=No
 		for data in doc.details:
 			if data.merge_action:
 				entry = merge_process.setdefault(data.action, {"count": 0, "lead_time": data.lead_time})
-				if entry['lead_time'] != data.lead_time:
+				if entry["lead_time"] != data.lead_time:
 					frappe.throw(f"Different Lead Times for Action {data.action}")
-				entry['count'] += 1
+				entry["count"] += 1
 
 			dependent_list = dependent_action.get(data.action)
 			if dependent_list:
-				dept, dep_date = get_latest_dependency_date(dependent_list, action_completion_date)
-				day = get_next_date(dep_date, data.lead_time) if dep_date else get_next_date(day, data.lead_time)
+				_dept, dep_date = get_latest_dependency_date(dependent_list, action_completion_date)
+				day = (
+					get_next_date(dep_date, data.lead_time)
+					if dep_date
+					else get_next_date(day, data.lead_time)
+				)
 			else:
 				day = get_next_date(day, data.lead_time)
 
@@ -140,12 +141,12 @@ def get_t_and_a_preview_data(start_date, table, is_template=False, master_doc=No
 			merge_process_date[data.action] = max(merge_process_date.get(data.action, day), day)
 
 	for act, info in merge_process.items():
-		if info['count'] != len(table):
+		if info["count"] != len(table):
 			frappe.throw(f"{act} is not a Merge Action in Action Master")
 
 	for row in table:
-		preview_data[_attribute_value(row['colour'])] = []
-		doc = doc_data[_attribute_value(row['colour'])]
+		preview_data[_attribute_value(row["colour"])] = []
+		doc = doc_data[_attribute_value(row["colour"])]
 		day = start_date
 		action_completion_date = {}
 		dependent_action = build_dependent_action_map(doc)
@@ -154,9 +155,9 @@ def get_t_and_a_preview_data(start_date, table, is_template=False, master_doc=No
 			dependent_list = dependent_action.get(data.action)
 			if dependent_list:
 				if data.merge_action:
-					dept, dep_date = get_latest_dependency_date(dependent_list, merge_process_date)
+					_dept, dep_date = get_latest_dependency_date(dependent_list, merge_process_date)
 				else:
-					dept, dep_date = get_latest_dependency_date(dependent_list, action_completion_date)
+					_dept, dep_date = get_latest_dependency_date(dependent_list, action_completion_date)
 				if dep_date:
 					day = get_next_date(dep_date, data.lead_time)
 				else:
@@ -175,15 +176,19 @@ def get_t_and_a_preview_data(start_date, table, is_template=False, master_doc=No
 				struct["work_station"] = data.work_station
 
 			action_completion_date[data.action] = day
-			preview_data[_attribute_value(row['colour'])].append(struct)
+			preview_data[_attribute_value(row["colour"])].append(struct)
 
 	return preview_data
 
+
 def get_latest_dependency_date(dependent_list, completion_dates):
-	valid_dates = [(dept, completion_dates.get(dept)) for dept in dependent_list if completion_dates.get(dept)]
+	valid_dates = [
+		(dept, completion_dates.get(dept)) for dept in dependent_list if completion_dates.get(dept)
+	]
 	if not valid_dates:
 		return None, None
 	return max(valid_dates, key=lambda x: x[1])
+
 
 def build_dependent_action_map(doc):
 	dependent_map = {}
@@ -191,25 +196,26 @@ def build_dependent_action_map(doc):
 		dependent_map.setdefault(d.action, []).append(d.dependent_action)
 	return dependent_map
 
+
 @frappe.whitelist()
-def create_time_and_action(lot, item_name, args , values, total_qty, items):
+def create_time_and_action(lot, item_name, args, values, total_qty, items):
 	args = update_if_string_instance(args)
 	values = update_if_string_instance(values)
-	lot_doc = frappe.get_doc('SD YRP Lot', lot)
+	lot_doc = frappe.get_doc("SD YRP Lot", lot)
 	lot_doc.check_permission("write")
-	frappe.has_permission('SD YRP Time and Action', "create", throw=True)
+	frappe.has_permission("SD YRP Time and Action", "create", throw=True)
 	if lot_doc.item != item_name:
 		frappe.throw(_("The selected Item does not belong to this Lot."))
 	if lot_doc.lot_time_and_action_details:
 		frappe.throw(_("Revert the existing Time and Action schedule first."))
 
-	sizes = args['sizes']
-	ratios = args['ratios']
-	combo = args['combo']
-	item_list = values['table']
+	sizes = args["sizes"]
+	ratios = args["ratios"]
+	combo = args["combo"]
+	item_list = values["table"]
 	if not item_list:
 		frappe.throw(_("Select at least one Action Master."))
-	start_date = values['start_date']
+	start_date = values["start_date"]
 	merge_process = {}
 	one_colour_prs = {}
 	merge_process_date = {}
@@ -224,33 +230,37 @@ def create_time_and_action(lot, item_name, args , values, total_qty, items):
 	trusted_items = get_action_master_details(item_list)
 	items = _apply_work_station_choices(trusted_items, items)
 	lot_items = []
-	for idx,item in enumerate(item_list):
+	for item in item_list:
 		dependent_action = {}
-		for d in items[_attribute_value(item['colour'])]['dependent_details']:
-			dependent_action.setdefault(d['action'], []).append(d['dependent_action'])
+		for d in items[_attribute_value(item["colour"])]["dependent_details"]:
+			dependent_action.setdefault(d["action"], []).append(d["dependent_action"])
 
 		action_completion_date = {}
 		day = start_date
-		for data in items[_attribute_value(item['colour'])]['details']:
-			if data['merge_action']:
-				entry = merge_process.setdefault(data['action'], {"count": 0, "lead_time": data['lead_time']})
-				if entry['lead_time'] != data['lead_time']:
+		for data in items[_attribute_value(item["colour"])]["details"]:
+			if data["merge_action"]:
+				entry = merge_process.setdefault(data["action"], {"count": 0, "lead_time": data["lead_time"]})
+				if entry["lead_time"] != data["lead_time"]:
 					frappe.throw(f"Different Lead Times for Action {data['action']}")
-				entry['count'] += 1
+				entry["count"] += 1
 
-			if data['one_colour_process']:
-				one_colour_prs.setdefault(data['action'], 0)
-				one_colour_prs[data['action']] += 1
+			if data["one_colour_process"]:
+				one_colour_prs.setdefault(data["action"], 0)
+				one_colour_prs[data["action"]] += 1
 
-			dependent_list = dependent_action.get(data['action'])
+			dependent_list = dependent_action.get(data["action"])
 			if dependent_list:
 				dept, dep_date = get_latest_dependency_date(dependent_list, action_completion_date)
-				day = get_next_date(dep_date, data['lead_time']) if dep_date else get_next_date(day, data['lead_time'])
+				day = (
+					get_next_date(dep_date, data["lead_time"])
+					if dep_date
+					else get_next_date(day, data["lead_time"])
+				)
 			else:
-				day = get_next_date(day, data['lead_time'])
+				day = get_next_date(day, data["lead_time"])
 
-			action_completion_date[data['action']] = day
-			merge_process_date[data['action']] = max(merge_process_date.get(data['action'], day), day)
+			action_completion_date[data["action"]] = day
+			merge_process_date[data["action"]] = max(merge_process_date.get(data["action"], day), day)
 
 	total_colour = len(item_list)
 	for act in one_colour_prs:
@@ -258,83 +268,86 @@ def create_time_and_action(lot, item_name, args , values, total_qty, items):
 			frappe.throw(f"Action {act} is not setted as One Colour Process in All Action Master")
 
 	for act in merge_process:
-		if merge_process[act]['count'] != total_colour:
+		if merge_process[act]["count"] != total_colour:
 			frappe.throw(f"Action {act} is not setted as Merge Process in All Action Master")
 
-	for idx,item in enumerate(item_list):
-		new_doc = frappe.new_doc('SD YRP Time and Action')
-		new_doc.update({
-			"lot":lot,
-			"item":item_name,
-			"sizes":sizes,
-			"colour":_attribute_value(item['colour']),
-			"master":item["master"],
-			"start_date":start_date,
-			"major_colour": item['major_colour']
-		})
+	for idx, item in enumerate(item_list):
+		new_doc = frappe.new_doc("SD YRP Time and Action")
+		new_doc.update(
+			{
+				"lot": lot,
+				"item": item_name,
+				"sizes": sizes,
+				"colour": _attribute_value(item["colour"]),
+				"master": item["master"],
+				"start_date": start_date,
+				"major_colour": item["major_colour"],
+			}
+		)
 		if combo:
-			new_doc.qty = math.ceil(flt(total_qty)/flt(combo))
+			new_doc.qty = math.ceil(flt(total_qty) / flt(combo))
 		else:
-			new_doc.qty = math.ceil(flt(total_qty)/flt(ratios[idx]))
+			new_doc.qty = math.ceil(flt(total_qty) / flt(ratios[idx]))
 
 		dependent_list = []
 		action_completion_date = {}
 		dependent_action = {}
-		for dept in items[_attribute_value(item['colour'])]['dependent_details']:
-			dependent_action.setdefault(dept['action'], []).append(dept['dependent_action'])
-			dependent_list.append({
-				"action": dept['action'],
-				"dependent_action": dept['dependent_action']
-			})
+		for dept in items[_attribute_value(item["colour"])]["dependent_details"]:
+			dependent_action.setdefault(dept["action"], []).append(dept["dependent_action"])
+			dependent_list.append({"action": dept["action"], "dependent_action": dept["dependent_action"]})
 
 		child_table = []
 		x = 1
 		day = start_date
 		day2 = start_date
-		for colour_item in items[_attribute_value(item['colour'])]['details']:
-			if dependent_action.get(colour_item['action']):
-				dependent_process_list = dependent_action.get(colour_item['action'])
-				if colour_item['merge_action']:
+		for colour_item in items[_attribute_value(item["colour"])]["details"]:
+			if dependent_action.get(colour_item["action"]):
+				dependent_process_list = dependent_action.get(colour_item["action"])
+				if colour_item["merge_action"]:
 					dept, dep_date = get_latest_dependency_date(dependent_process_list, merge_process_date)
 				else:
-					dept, dep_date = get_latest_dependency_date(dependent_process_list, action_completion_date)
+					dept, dep_date = get_latest_dependency_date(
+						dependent_process_list, action_completion_date
+					)
 				if dep_date:
-					day = get_next_date(dep_date, colour_item['lead_time'])
+					day = get_next_date(dep_date, colour_item["lead_time"])
 				else:
-					day = get_next_date(day, colour_item['lead_time'])
+					day = get_next_date(day, colour_item["lead_time"])
 			else:
-				day = get_next_date(day, colour_item['lead_time'])
+				day = get_next_date(day, colour_item["lead_time"])
 
 			struct = {
-				"action":colour_item['action'],
-				"lead_time":colour_item['lead_time'],
-				"department":colour_item['department'],
-				"date":day,
+				"action": colour_item["action"],
+				"lead_time": colour_item["lead_time"],
+				"department": colour_item["department"],
+				"date": day,
 				"planned_start_date": day,
-				"rescheduled_date":day,
-				"rescheduled_start_date":day,
-				"index2":x,
-				"merge_action": 1 if merge_process.get(colour_item['action']) else 0 ,
-				"one_colour_process": 1 if one_colour_prs.get(colour_item['action']) else 0
+				"rescheduled_date": day,
+				"rescheduled_start_date": day,
+				"index2": x,
+				"merge_action": 1 if merge_process.get(colour_item["action"]) else 0,
+				"one_colour_process": 1 if one_colour_prs.get(colour_item["action"]) else 0,
 			}
-			if colour_item.get('work_station'):
-				struct["work_station"] = colour_item['work_station']
+			if colour_item.get("work_station"):
+				struct["work_station"] = colour_item["work_station"]
 
-			action_completion_date[colour_item['action']] = day
-			day2 = get_next_date(day2, colour_item['lead_time']	)
+			action_completion_date[colour_item["action"]] = day
+			day2 = get_next_date(day2, colour_item["lead_time"])
 			x = x + 1
 			child_table.append(struct)
 
-		new_doc.set("details",child_table)
+		new_doc.set("details", child_table)
 		new_doc.set("dependent_details", dependent_list)
 		new_doc.set("end_date", day)
 		new_doc.insert()
-		lot_items.append({
-			"colour":_attribute_value(item['colour']),
-			"master":item["master"],
-			"time_and_action":new_doc.name,
-		})
-	lot_doc.set("lot_time_and_action_details",lot_items)
+		lot_items.append(
+			{
+				"colour": _attribute_value(item["colour"]),
+				"master": item["master"],
+				"time_and_action": new_doc.name,
+			}
+		)
+	lot_doc.set("lot_time_and_action_details", lot_items)
 	lot_doc.save()
 	return [row["time_and_action"] for row in lot_items]
 
@@ -350,9 +363,7 @@ def _apply_work_station_choices(trusted_items, browser_items):
 			work_station = provided.get(row.get("action"))
 			if not work_station:
 				continue
-			if frappe.db.get_value('YRP Work Station', work_station, "action") != row.get(
-				"action"
-			):
+			if frappe.db.get_value("YRP Work Station", work_station, "action") != row.get("action"):
 				frappe.throw(
 					_("Work Station {0} is not configured for Action {1}.").format(
 						frappe.bold(work_station), frappe.bold(row.get("action"))
@@ -361,16 +372,20 @@ def _apply_work_station_choices(trusted_items, browser_items):
 			row["work_station"] = work_station
 	return trusted_items
 
+
 @frappe.whitelist()
 def get_t_and_a_update_data(lot, item):
-	lot_doc = frappe.get_doc('SD YRP Lot', lot)
+	lot_doc = frappe.get_doc("SD YRP Lot", lot)
 	lot_doc.check_permission("read")
 	data = {}
-	data.setdefault(lot, {
-		"masters": {},
-		"performance": 0,
-		"over_all_delay": 0,
-	})
+	data.setdefault(
+		lot,
+		{
+			"masters": {},
+			"performance": 0,
+			"over_all_delay": 0,
+		},
+	)
 	t_and_a_list = frappe.db.sql(
 		"""
 			SELECT t1.time_and_action, t1.master FROM `tabSD YRP Lot Time and Action Detail` as t1 JOIN
@@ -391,17 +406,19 @@ def get_t_and_a_update_data(lot, item):
 	actual_date_details = {}
 	t_and_a_docs = {}
 	for master in masters:
-		data[lot]['masters'].setdefault(master, {"actions": [], "datas": []})
+		data[lot]["masters"].setdefault(master, {"actions": [], "datas": []})
 		for t_and_a in t_and_a_list:
 			if t_and_a.master == master:
-				doc = frappe.get_doc('SD YRP Time and Action', t_and_a.time_and_action)
+				doc = frappe.get_doc("SD YRP Time and Action", t_and_a.time_and_action)
 				doc.check_permission("read")
 				t_and_a_docs[t_and_a.time_and_action] = doc
 				for row in doc.details:
-					actual_date_details.setdefault(row.action, []).append(row.actual_date if row.actual_date else None)
+					actual_date_details.setdefault(row.action, []).append(
+						row.actual_date if row.actual_date else None
+					)
 
 	for master in masters:
-		data[lot]['masters'].setdefault(master, {"actions": [], "datas": []})
+		data[lot]["masters"].setdefault(master, {"actions": [], "datas": []})
 		for t_and_a in t_and_a_list:
 			if t_and_a.master == master:
 				doc = t_and_a_docs[t_and_a.time_and_action]
@@ -415,14 +432,14 @@ def get_t_and_a_update_data(lot, item):
 
 	merge_actions = {}
 	max_revised = 0
-	size_set_colour = frappe.get_value('SD YRP Lot', lot, "size_set_colour")
+	size_set_colour = frappe.get_value("SD YRP Lot", lot, "size_set_colour")
 	for master in masters:
-		data[lot]['masters'].setdefault(master, {"actions": [], "datas": []})
+		data[lot]["masters"].setdefault(master, {"actions": [], "datas": []})
 		for t_and_a in t_and_a_list:
 			if t_and_a.master == master:
 				doc = t_and_a_docs[t_and_a.time_and_action]
 				d = {
-					"item":doc.item,
+					"item": doc.item,
 					"master": doc.master,
 					"major_colour": doc.major_colour,
 					"revised_times": doc.revised,
@@ -442,10 +459,10 @@ def get_t_and_a_update_data(lot, item):
 
 				if doc.delay < max_delay:
 					max_delay = doc.delay
-				if not data[lot]['masters'][master]['actions']:
+				if not data[lot]["masters"][master]["actions"]:
 					for row in doc.details:
-						data[lot]['masters'][master]['actions'].append(row.action)
-				d['actions'] = []
+						data[lot]["masters"][master]["actions"].append(row.action)
+				d["actions"] = []
 				idx = 0
 				dependent_details = {}
 				for row in doc.dependent_details:
@@ -453,27 +470,30 @@ def get_t_and_a_update_data(lot, item):
 					dependent_details[row.action][row.dependent_action] = row.dependent_action_date
 				end_date = None
 				delay = False
-				d['rescheduled_details'] = {}
+				d["rescheduled_details"] = {}
 				for row in doc.details:
-					d['rescheduled_details'].setdefault(row.action, {
-						"planned": row.planned_start_date,
-						"freeze_date": row.date,
-						"rescheduled_dates": [],
-						"actual_date": row.actual_date,
-						"cumulative_delay": get_diff(row.date, row.actual_date) if row.actual_date else 0,
-						"reason": row.reason,
-						"performance": row.performance,
-						"date_diff": row.date_diff,
-						"actual_delay": row.actual_delay,
-					})
+					d["rescheduled_details"].setdefault(
+						row.action,
+						{
+							"planned": row.planned_start_date,
+							"freeze_date": row.date,
+							"rescheduled_dates": [],
+							"actual_date": row.actual_date,
+							"cumulative_delay": get_diff(row.date, row.actual_date) if row.actual_date else 0,
+							"reason": row.reason,
+							"performance": row.performance,
+							"date_diff": row.date_diff,
+							"actual_delay": row.actual_delay,
+						},
+					)
 					x = {
 						"planned_start_date": row.planned_start_date,
 						"action": row.action,
-						"department":row.department,
-						"date":row.date,
-						"rescheduled_date":row.rescheduled_date,
+						"department": row.department,
+						"date": row.date,
+						"rescheduled_date": row.rescheduled_date,
 						"one_colour_process": row.one_colour_process,
-						"actual_date":row.actual_date,
+						"actual_date": row.actual_date,
 						"cumulative_delay": get_diff(row.date, row.actual_date) if row.actual_date else 0,
 						"reason": row.reason,
 						"performance": row.performance,
@@ -482,11 +502,11 @@ def get_t_and_a_update_data(lot, item):
 						"index": idx,
 						"lead_time": row.lead_time,
 						"merge_action": row.merge_action,
-						"dependent_details": dependent_details.get(row.action, None)
+						"dependent_details": dependent_details.get(row.action, None),
 					}
 					if row.merge_action:
 						merge_actions.setdefault(row.action, [])
-						merge_actions[row.action].append(row.get('actual_date', None))
+						merge_actions[row.action].append(row.get("actual_date", None))
 
 					end_date = row.rescheduled_date
 					if row.rescheduled_date > row.date:
@@ -506,75 +526,75 @@ def get_t_and_a_update_data(lot, item):
 									dependent_completed = False
 									break
 						if dependent_completed and not row.actual_date:
-							x['enable_date'] = True
+							x["enable_date"] = True
 						else:
-							x['enable_date'] = False
+							x["enable_date"] = False
 					else:
 						if not row.actual_date:
-							x['enable_date'] = True
+							x["enable_date"] = True
 
 					if row.one_colour_process and doc.major_colour != size_set_colour:
-						x['enable_date'] = False
+						x["enable_date"] = False
 
-					d['actions'].append(x)
+					d["actions"].append(x)
 					idx = idx + 1
 
-				d['end_date'] = end_date
-				d['end_date_delay'] = delay
+				d["end_date"] = end_date
+				d["end_date_delay"] = delay
 				actions = {}
 				for row in doc.time_and_action_revised_dates:
-					d['rescheduled_details'].setdefault(row.action, [])
-					d['rescheduled_details'][row.action]['rescheduled_dates'].append(row.from_date)
+					d["rescheduled_details"].setdefault(row.action, [])
+					d["rescheduled_details"][row.action]["rescheduled_dates"].append(row.from_date)
 
-				for row in d['actions']:
-					actions.setdefault(row['action'], [])
-					if row['actual_date'] and row['dependent_details']:
-						for dept_act in row['dependent_details']:
-							actions[dept_act].append(row['action'])
+				for row in d["actions"]:
+					actions.setdefault(row["action"], [])
+					if row["actual_date"] and row["dependent_details"]:
+						for dept_act in row["dependent_details"]:
+							actions[dept_act].append(row["action"])
 
-				for row in d['actions']:
-					if row['actual_date'] and len(actions[row['action']]) == 0:
-						row['remove_date'] = True
+				for row in d["actions"]:
+					if row["actual_date"] and len(actions[row["action"]]) == 0:
+						row["remove_date"] = True
 					else:
-						row['remove_date'] = False
-				data[lot]['masters'][master]['datas'].append(d)
+						row["remove_date"] = False
+				data[lot]["masters"][master]["datas"].append(d)
 
 	not_completed = []
 	for act in merge_actions:
 		if None in merge_actions[act]:
 			not_completed.append(act)
 
-	for master in data[lot]['masters']:
-		for data_row in data[lot]['masters'][master]['datas']:
-			for row in data_row['actions']:
-				if not row.get('enable_date'):
+	for master in data[lot]["masters"]:
+		for data_row in data[lot]["masters"][master]["datas"]:
+			for row in data_row["actions"]:
+				if not row.get("enable_date"):
 					continue
-				if not row['enable_date'] or not row['dependent_details']:
+				if not row["enable_date"] or not row["dependent_details"]:
 					continue
-				for act in row['dependent_details']:
+				for act in row["dependent_details"]:
 					if act in not_completed:
-						row['enable_date'] = False
+						row["enable_date"] = False
 
-	data[lot]['performance'] = get_performance(max_delay)
-	data[lot]['over_all_delay'] = max_delay
-	based_on_delay = frappe.db.get_single_value('SD YRP T and A Settings', "ordering_based_on_delay")
+	data[lot]["performance"] = get_performance(max_delay)
+	data[lot]["over_all_delay"] = max_delay
+	based_on_delay = frappe.db.get_single_value("SD YRP T and A Settings", "ordering_based_on_delay")
 	if based_on_delay:
 		data = sort_by_delay(data)
 
-	t_and_a_settings = frappe.get_single('SD YRP T and A Settings')
+	t_and_a_settings = frappe.get_single("SD YRP T and A Settings")
 	user = frappe.session.user
 	department_data = frappe.db.sql(
 		"""
 			SELECT parent FROM `tabYRP Department User` WHERE user = %(user)s
-		""", {
-			"user": user
-		}, as_dict=True
+		""",
+		{"user": user},
+		as_dict=True,
 	)
 	departments = []
 	if department_data:
-		departments = [d['parent'] for d in department_data ]
+		departments = [d["parent"] for d in department_data]
 	return {
-		"data":data,
+		"data": data,
 		"role": t_and_a_settings.revised_date_approver_role,
 		"revised_limit": t_and_a_settings.revising_days_limit,
 		"max_revised": max_revised,
@@ -582,36 +602,40 @@ def get_t_and_a_update_data(lot, item):
 		"user": user,
 	}
 
+
 def sort_by_delay(data):
 	for lot in data:
-		for master in data[lot]['masters']:
-			data[lot]['masters'][master]['datas'].sort(key=lambda x: x['rescheduled_delay'])
+		for master in data[lot]["masters"]:
+			data[lot]["masters"][master]["datas"].sort(key=lambda x: x["rescheduled_delay"])
 	return data
 
+
 def get_diff(rescheduled_date, actual_date):
-	diff = date_diff(rescheduled_date,actual_date)
+	diff = date_diff(rescheduled_date, actual_date)
 	date1 = rescheduled_date
 	date2 = actual_date
 	if getdate(rescheduled_date) > getdate(actual_date):
 		date1 = actual_date
 		date2 = rescheduled_date
 
-	events2_len = get_events_len(date1,date2)
+	events2_len = get_events_len(date1, date2)
 	diff = diff + events2_len if diff < 0 else diff - events2_len
 	return diff
 
+
 def get_t_and_a_datediff(date, actual_date):
-	d = date_diff(date,actual_date)
+	d = date_diff(date, actual_date)
 	date1 = date
 	date2 = actual_date
 	if getdate(date1) > getdate(date2):
 		date1 = actual_date
 		date2 = date
 
-	events_len = get_events_len(date1,date2)
+	events_len = get_events_len(date1, date2)
 	d = d + events_len if d < 0 else d - events_len
 
 	return d
+
 
 def get_performance(diff):
 	perf = None
@@ -627,15 +651,16 @@ def get_performance(diff):
 		perf = 100
 	return perf
 
+
 @frappe.whitelist()
-def get_update_rescheduled_date(updated_date, key, updated_action, data_index, total_data, cur_index, lot, master):
+def get_update_rescheduled_date(
+	updated_date, key, updated_action, data_index, total_data, cur_index, lot, master
+):
 	client_data = update_if_string_instance(total_data)
-	requested_values, current_values, request_order = _collect_requested_updates(
-		client_data, lot, "read"
-	)
+	requested_values, current_values, request_order = _collect_requested_updates(client_data, lot, "read")
 	try:
 		requested = client_data[lot]["masters"][master]["datas"][int(data_index)]
-	except (KeyError, TypeError, IndexError, ValueError):
+	except KeyError, TypeError, IndexError, ValueError:
 		frappe.throw(_("The selected Time and Action row is no longer available."))
 	requested_name = requested.get("t_and_a")
 	request_key = (requested_name, updated_action)
@@ -643,9 +668,7 @@ def get_update_rescheduled_date(updated_date, key, updated_action, data_index, t
 		frappe.throw(_("The selected Time and Action row is no longer available."))
 	if key not in {"updated", "removed"}:
 		frappe.throw(_("Invalid Time and Action update operation."))
-	requested_values[request_key]["actual_date"] = (
-		str(getdate(updated_date)) if key == "updated" else None
-	)
+	requested_values[request_key]["actual_date"] = str(getdate(updated_date)) if key == "updated" else None
 	if key == "updated":
 		_validate_actual_date(updated_date)
 
@@ -653,7 +676,7 @@ def get_update_rescheduled_date(updated_date, key, updated_action, data_index, t
 	# permitted actual-date deltas.  This preserves a multi-edit browser draft
 	# without trusting its dependencies, lead times, rescheduled dates, or merge
 	# flags.
-	item = attribute_db.get_value('SD YRP Lot', lot, "item")
+	item = attribute_db.get_value("SD YRP Lot", lot, "item")
 	total_data = get_t_and_a_update_data(lot, item)["data"]
 	ordered = [entry for entry in request_order if entry != request_key]
 	ordered.append(request_key)
@@ -704,23 +727,36 @@ def _calculate_rescheduled_update(
 	if not server_location:
 		frappe.throw(_("The selected Time and Action row is no longer available."))
 	master, data_index, cur_index = server_location
-	sing_doc = frappe.get_single('SD YRP T and A Settings')
+	sing_doc = frappe.get_single("SD YRP T and A Settings")
 	if key == "updated":
 		if not sing_doc.override_previous_action_completion_date:
-			if total_data[lot]['masters'][master]['datas'][int(data_index)]['actions'][int(cur_index)]['dependent_details']:
+			if total_data[lot]["masters"][master]["datas"][int(data_index)]["actions"][int(cur_index)][
+				"dependent_details"
+			]:
 				greater_date = None
-				for act in total_data[lot]['masters'][master]['datas'][int(data_index)]['actions'][int(cur_index)]['dependent_details']:
+				for act in total_data[lot]["masters"][master]["datas"][int(data_index)]["actions"][
+					int(cur_index)
+				]["dependent_details"]:
 					if not greater_date:
-						greater_date = total_data[lot]['masters'][master]['datas'][int(data_index)]['actions'][int(cur_index)]['dependent_details'][act]
-					if total_data[lot]['masters'][master]['datas'][int(data_index)]['actions'][int(cur_index)]['dependent_details'][act] > greater_date:
-						greater_date = total_data[lot]['masters'][master]['datas'][int(data_index)]['actions'][int(cur_index)]['dependent_details'][act]
+						greater_date = total_data[lot]["masters"][master]["datas"][int(data_index)][
+							"actions"
+						][int(cur_index)]["dependent_details"][act]
+					if (
+						total_data[lot]["masters"][master]["datas"][int(data_index)]["actions"][
+							int(cur_index)
+						]["dependent_details"][act]
+						> greater_date
+					):
+						greater_date = total_data[lot]["masters"][master]["datas"][int(data_index)][
+							"actions"
+						][int(cur_index)]["dependent_details"][act]
 
 				if updated_date < greater_date:
 					year, mon, date = greater_date.split("-")
 					frappe.throw(f"Date Should be greater than {date}-{mon}-{year}")
 
 		today = frappe.utils.nowdate()
-		past_date = frappe.utils.add_days(today, sing_doc.update_last_n_dates*-1)
+		past_date = frappe.utils.add_days(today, sing_doc.update_last_n_dates * -1)
 		if updated_date < past_date:
 			frappe.throw("These dates are not allowed")
 		future_date = frappe.utils.add_days(today, sing_doc.update_future_n_dates)
@@ -728,76 +764,89 @@ def _calculate_rescheduled_update(
 			frappe.throw("These dates are not allowed")
 
 	if key == "updated":
-		total_data[lot]['masters'][master]['datas'][int(data_index)]['actions'][int(cur_index)]['actual_date'] = updated_date
+		total_data[lot]["masters"][master]["datas"][int(data_index)]["actions"][int(cur_index)][
+			"actual_date"
+		] = updated_date
 	else:
-		total_data[lot]['masters'][master]['datas'][int(data_index)]['actions'][int(cur_index)]['actual_date'] = None
+		total_data[lot]["masters"][master]["datas"][int(data_index)]["actions"][int(cur_index)][
+			"actual_date"
+		] = None
 
-	for master_val in total_data[lot]['masters']:
-		for data_row in total_data[lot]['masters'][master_val]['datas']:
-			for row in data_row['actions']:
-				actual_date_details.setdefault(row['action'], []).append(row['actual_date'] if row['actual_date'] else None)
-				rescheduled_date_details.setdefault(row['action'], []).append(row['rescheduled_date'] if row['rescheduled_date'] else None)
+	for master_val in total_data[lot]["masters"]:
+		for data_row in total_data[lot]["masters"][master_val]["datas"]:
+			for row in data_row["actions"]:
+				actual_date_details.setdefault(row["action"], []).append(
+					row["actual_date"] if row["actual_date"] else None
+				)
+				rescheduled_date_details.setdefault(row["action"], []).append(
+					row["rescheduled_date"] if row["rescheduled_date"] else None
+				)
 
-	size_set_colour = frappe.get_value('SD YRP Lot', lot, "size_set_colour")
-	for master_val in total_data[lot]['masters']:
-		for data_row in total_data[lot]['masters'][master_val]['datas']:
-			for row in data_row['actions']:
-				if not row['one_colour_process'] or not row['actual_date']:
+	size_set_colour = frappe.get_value("SD YRP Lot", lot, "size_set_colour")
+	for master_val in total_data[lot]["masters"]:
+		for data_row in total_data[lot]["masters"][master_val]["datas"]:
+			for row in data_row["actions"]:
+				if not row["one_colour_process"] or not row["actual_date"]:
 					continue
-				for idx, d in enumerate(actual_date_details[row['action']]):
-					if not d or d < row['actual_date']:
-						actual_date_details[row['action']][idx] = row['actual_date']
+				for idx, d in enumerate(actual_date_details[row["action"]]):
+					if not d or d < row["actual_date"]:
+						actual_date_details[row["action"]][idx] = row["actual_date"]
 
-				for idx, d in enumerate(rescheduled_date_details[row['action']]):
-					if not d or d < row['rescheduled_date']:
-						rescheduled_date_details[row['action']][idx] = row['rescheduled_date']
+				for idx, d in enumerate(rescheduled_date_details[row["action"]]):
+					if not d or d < row["rescheduled_date"]:
+						rescheduled_date_details[row["action"]][idx] = row["rescheduled_date"]
 
-	updated_colour = _attribute_value(total_data[lot]['masters'][master]['datas'][int(data_index)]['colour'])
+	updated_colour = _attribute_value(total_data[lot]["masters"][master]["datas"][int(data_index)]["colour"])
 	merge_actions = []
-	for master_val in total_data[lot]['masters']:
+	for master_val in total_data[lot]["masters"]:
 		index = -1
-		for data_row in total_data[lot]['masters'][master_val]['datas']:
+		for data_row in total_data[lot]["masters"][master_val]["datas"]:
 			index += 1
 			day = None
 			actions = {}
 			action_completion_date = {}
 			dependent_action = {}
-			for row in data_row['actions']:
-				if row['merge_action'] and row['action'] not in merge_actions:
-					merge_actions.append(row['action'])
+			for row in data_row["actions"]:
+				if row["merge_action"] and row["action"] not in merge_actions:
+					merge_actions.append(row["action"])
 
-				actions.setdefault(row['action'], [])
-				if row['actual_date'] and row['dependent_details']:
-					for dept_act in row['dependent_details']:
-						actions[dept_act].append(row['action'])
-				action_completion_date[row['action']] = row['actual_date'] if row['actual_date'] else row['rescheduled_date']
+				actions.setdefault(row["action"], [])
+				if row["actual_date"] and row["dependent_details"]:
+					for dept_act in row["dependent_details"]:
+						actions[dept_act].append(row["action"])
+				action_completion_date[row["action"]] = (
+					row["actual_date"] if row["actual_date"] else row["rescheduled_date"]
+				)
 
-				if row['dependent_details']:
-					dependent_action.setdefault(row['action'], {})
-					for dept_act in row['dependent_details']:
-						dependent_action[row['action']].setdefault(dept_act, None)
-						dependent_action[row['action']][dept_act] = row['dependent_details'][dept_act]
-						if dept_act == updated_action and _attribute_value(data_row['colour']) ==  updated_colour:
+				if row["dependent_details"]:
+					dependent_action.setdefault(row["action"], {})
+					for dept_act in row["dependent_details"]:
+						dependent_action[row["action"]].setdefault(dept_act, None)
+						dependent_action[row["action"]][dept_act] = row["dependent_details"][dept_act]
+						if (
+							dept_act == updated_action
+							and _attribute_value(data_row["colour"]) == updated_colour
+						):
 							dependency_value = updated_date if key == "updated" else None
-							dependent_action[row['action']][dept_act] = dependency_value
-							row['dependent_details'][dept_act] = dependency_value
+							dependent_action[row["action"]][dept_act] = dependency_value
+							row["dependent_details"][dept_act] = dependency_value
 
-			if _attribute_value(data_row['colour']) ==  updated_colour:
+			if _attribute_value(data_row["colour"]) == updated_colour:
 				action_completion_date[updated_action] = updated_date if key == "updated" else None
 
-			for row in data_row['actions']:
-				if row['actual_date'] and len(actions[row['action']]) == 0:
-					row['remove_date'] = True
+			for row in data_row["actions"]:
+				if row["actual_date"] and len(actions[row["action"]]) == 0:
+					row["remove_date"] = True
 				else:
-					row['remove_date'] = False
-				if row['actual_date']:
-					day = row['actual_date']
+					row["remove_date"] = False
+				if row["actual_date"]:
+					day = row["actual_date"]
 				else:
-					if row['merge_action']:
-						if row['dependent_details']:
+					if row["merge_action"]:
+						if row["dependent_details"]:
 							all_updated = True
 							greater_date = None
-							for dept_act in row['dependent_details']:
+							for dept_act in row["dependent_details"]:
 								for d in actual_date_details[dept_act]:
 									if d:
 										if not greater_date:
@@ -805,11 +854,11 @@ def _calculate_rescheduled_update(
 										if greater_date < d:
 											greater_date = d
 							if greater_date:
-								day = get_next_date(greater_date, row['lead_time'])
-								row['rescheduled_date'] = day
+								day = get_next_date(greater_date, row["lead_time"])
+								row["rescheduled_date"] = day
 							else:
 								greater_date = None
-								for dept_act in row['dependent_details']:
+								for dept_act in row["dependent_details"]:
 									for d in rescheduled_date_details[dept_act]:
 										if d:
 											if not greater_date:
@@ -818,25 +867,28 @@ def _calculate_rescheduled_update(
 												greater_date = d
 
 								if not greater_date:
-									row['rescheduled_date'] = row['date']
-									day = row['rescheduled_date']
+									row["rescheduled_date"] = row["date"]
+									day = row["rescheduled_date"]
 								else:
-									day = get_next_date(greater_date, row['lead_time'])
-									row['rescheduled_date'] = day
+									day = get_next_date(greater_date, row["lead_time"])
+									row["rescheduled_date"] = day
 						else:
-							row['rescheduled_date'] = row['date']
-							day = row['rescheduled_date']
+							row["rescheduled_date"] = row["date"]
+							day = row["rescheduled_date"]
 					else:
-						if dependent_action.get(row['action']):
+						if dependent_action.get(row["action"]):
 							d = None
 							dependent_last_action = None
-							for k in dependent_action[row['action']]:
+							for k in dependent_action[row["action"]]:
 								if not d:
 									dependent_last_action = k
-									d = dependent_action[row['action']][k]
+									d = dependent_action[row["action"]][k]
 								else:
-									if dependent_action[row['action']][k] and dependent_action[row['action']][k] > d:
-										d = dependent_action[row['action']][k]
+									if (
+										dependent_action[row["action"]][k]
+										and dependent_action[row["action"]][k] > d
+									):
+										d = dependent_action[row["action"]][k]
 										dependent_last_action = k
 
 							dependent = dependent_last_action
@@ -849,8 +901,8 @@ def _calculate_rescheduled_update(
 										if greater_date < d:
 											greater_date = d
 								if greater_date:
-									day = get_next_date(greater_date, row['lead_time'])
-									row['rescheduled_date'] = day
+									day = get_next_date(greater_date, row["lead_time"])
+									row["rescheduled_date"] = day
 								else:
 									greater_date = None
 									for d in rescheduled_date_details[dependent]:
@@ -861,130 +913,130 @@ def _calculate_rescheduled_update(
 												greater_date = d
 
 									if not greater_date:
-										row['rescheduled_date'] = row['date']
-										day = row['rescheduled_date']
+										row["rescheduled_date"] = row["date"]
+										day = row["rescheduled_date"]
 									else:
-										day = get_next_date(greater_date, row['lead_time'])
-										row['rescheduled_date'] = day
+										day = get_next_date(greater_date, row["lead_time"])
+										row["rescheduled_date"] = day
 							else:
-								day = get_next_date(action_completion_date[dependent], row['lead_time'])
+								day = get_next_date(action_completion_date[dependent], row["lead_time"])
 						else:
 							if not day:
-								day = row['date']
+								day = row["date"]
 							else:
-								day = get_next_date(day, row['lead_time'])
+								day = get_next_date(day, row["lead_time"])
 
-				action_completion_date[row['action']] = day
-				rescheduled_date_details[row['action']][index] = day
-				if not row['actual_date']:
-					row['rescheduled_date'] = day
+				action_completion_date[row["action"]] = day
+				rescheduled_date_details[row["action"]][index] = day
+				if not row["actual_date"]:
+					row["rescheduled_date"] = day
 				for act in dependent_action:
 					for dept_act in dependent_action[act]:
-						if dept_act == row['action']:
+						if dept_act == row["action"]:
 							dependent_action[act][dept_act] = day
 
-	one_colour = frappe.get_value('SD YRP Lot', lot, 'size_set_colour')
-	for master_val in total_data[lot]['masters']:
-		for data_row in total_data[lot]['masters'][master_val]['datas']:
+	one_colour = frappe.get_value("SD YRP Lot", lot, "size_set_colour")
+	for master_val in total_data[lot]["masters"]:
+		for data_row in total_data[lot]["masters"][master_val]["datas"]:
 			last_action = None
 			end_date_delay = None
 			last_row = data_row["actions"][-1]
-			delay = get_diff(last_row['rescheduled_date'], last_row['planned_start_date'])
+			delay = get_diff(last_row["rescheduled_date"], last_row["planned_start_date"])
 			if delay < 0:
 				end_date_delay = True
 			else:
 				end_date_delay = False
 
-			end_date = last_row['actual_date'] if last_row['actual_date'] else last_row['rescheduled_date']
+			end_date = last_row["actual_date"] if last_row["actual_date"] else last_row["rescheduled_date"]
 
 			performance = get_performance(delay)
-			rescheduled_delay = get_diff(last_row['rescheduled_date'], last_row['date'])
-			data_row['rescheduled_delay'] = rescheduled_delay
-			data_row['performance'] = performance
-			data_row['delay'] = delay
-			data_row['end_date'] = end_date
-			data_row['end_date_delay'] = end_date_delay
+			rescheduled_delay = get_diff(last_row["rescheduled_date"], last_row["date"])
+			data_row["rescheduled_delay"] = rescheduled_delay
+			data_row["performance"] = performance
+			data_row["delay"] = delay
+			data_row["end_date"] = end_date
+			data_row["end_date_delay"] = end_date_delay
 
-			for row in data_row['actions']:
-				if row['actual_date']:
-					row['date_diff'] = get_diff(row['rescheduled_date'], row['actual_date'])
-					row['performance'] = get_performance(row['date_diff'])
-					row['actual_delay'] = get_diff(row['planned_start_date'], row['actual_date'])
-					row['cumulative_delay'] = get_diff(row['date'], row['actual_date'])
-					row['enable_date'] = False
+			for row in data_row["actions"]:
+				if row["actual_date"]:
+					row["date_diff"] = get_diff(row["rescheduled_date"], row["actual_date"])
+					row["performance"] = get_performance(row["date_diff"])
+					row["actual_delay"] = get_diff(row["planned_start_date"], row["actual_date"])
+					row["cumulative_delay"] = get_diff(row["date"], row["actual_date"])
+					row["enable_date"] = False
 				else:
-					row['date_diff'] = 0
-					row['performance'] = 0
-					row['actual_delay'] = 0
-					row['cumulative_delay'] = 0
+					row["date_diff"] = 0
+					row["performance"] = 0
+					row["actual_delay"] = 0
+					row["cumulative_delay"] = 0
 					if not last_action:
-						last_action = row['action']
-					if row['one_colour_process']:
-						if data_row['major_colour'] == one_colour:
-							row['enable_date'] = True
+						last_action = row["action"]
+					if row["one_colour_process"]:
+						if data_row["major_colour"] == one_colour:
+							row["enable_date"] = True
 						else:
-							row['enable_date'] = False
+							row["enable_date"] = False
 
-					elif row['merge_action']:
-						if row['dependent_details']:
+					elif row["merge_action"]:
+						if row["dependent_details"]:
 							all_updated = True
-							for dept_act in row['dependent_details']:
+							for dept_act in row["dependent_details"]:
 								if None in actual_date_details[dept_act]:
 									all_updated = False
 									break
 							if all_updated:
-								row['enable_date'] = True
+								row["enable_date"] = True
 							else:
-								row['enable_date'] = False
+								row["enable_date"] = False
 						else:
-							row['enable_date'] = True
+							row["enable_date"] = True
 					else:
-						if row['dependent_details'] and not row['actual_date']:
+						if row["dependent_details"] and not row["actual_date"]:
 							included_merge = False
 							merge_list = []
-							for act in row['dependent_details']:
+							for act in row["dependent_details"]:
 								if act in merge_actions:
 									merge_list.append(act)
 									included_merge = True
 							if not included_merge:
 								enable = True
-								for act in row['dependent_details']:
-									if not row['dependent_details'][act]:
+								for act in row["dependent_details"]:
+									if not row["dependent_details"][act]:
 										enable = False
 										break
-								row['enable_date'] = enable
+								row["enable_date"] = enable
 							else:
 								enable = True
 								for act in merge_list:
 									if None in actual_date_details[act]:
 										enable = False
 										break
-								row['enable_date'] = enable
+								row["enable_date"] = enable
 
-						elif not row['dependent_details'] and not row['actual_date']:
-							row['enable_date'] = True
+						elif not row["dependent_details"] and not row["actual_date"]:
+							row["enable_date"] = True
 						else:
-							row['enable_date'] = False
-					if row['one_colour_process'] and data_row['major_colour'] != size_set_colour:
-						row['enable_date'] = False
+							row["enable_date"] = False
+					if row["one_colour_process"] and data_row["major_colour"] != size_set_colour:
+						row["enable_date"] = False
 
-			data_row['last_action'] = last_action
+			data_row["last_action"] = last_action
 
 	return {
-		"details": total_data[lot]['masters'][master]['datas'][int(data_index)]['actions'],
+		"details": total_data[lot]["masters"][master]["datas"][int(data_index)]["actions"],
 		"diff": delay,
-		"total_data": total_data
+		"total_data": total_data,
 	}
 
 
 def _linked_schedule_names(lot: str, permission_type: str) -> set[str]:
-	lot_doc = frappe.get_doc('SD YRP Lot', lot)
+	lot_doc = frappe.get_doc("SD YRP Lot", lot)
 	lot_doc.check_permission("read" if permission_type == "read" else "write")
 	names = set()
 	for row in lot_doc.lot_time_and_action_details:
 		if not row.time_and_action:
 			continue
-		doc = frappe.get_doc('SD YRP Time and Action', row.time_and_action)
+		doc = frappe.get_doc("SD YRP Time and Action", row.time_and_action)
 		if doc.status == "Completed":
 			continue
 		doc.check_permission(permission_type)
@@ -1018,9 +1070,7 @@ def _collect_requested_updates(data, lot, permission_type):
 			if key in requested:
 				frappe.throw(_("Duplicate Time and Action row in the update."))
 			requested[key] = {
-				"actual_date": (
-					str(getdate(action["actual_date"])) if action.get("actual_date") else None
-				),
+				"actual_date": (str(getdate(action["actual_date"])) if action.get("actual_date") else None),
 				"reason": action.get("reason"),
 			}
 			source_date = current_by_action[action["action"]].actual_date
@@ -1035,19 +1085,20 @@ def _apply_requested_reasons(total_data, lot, requested_values):
 		if not location:
 			frappe.throw(_("The selected Time and Action row is no longer available."))
 		master, data_index, action_index = location
-		total_data[lot]["masters"][master]["datas"][data_index]["actions"][
-			action_index
-		]["reason"] = values.get("reason")
+		total_data[lot]["masters"][master]["datas"][data_index]["actions"][action_index]["reason"] = (
+			values.get("reason")
+		)
 
 
 def _validate_actual_date(value):
 	actual_date = getdate(value)
-	settings = frappe.get_single('SD YRP T and A Settings')
+	settings = frappe.get_single("SD YRP T and A Settings")
 	today = getdate(frappe.utils.nowdate())
 	past_date = frappe.utils.add_days(today, -int(settings.update_last_n_dates or 0))
 	future_date = frappe.utils.add_days(today, int(settings.update_future_n_dates or 0))
 	if actual_date < past_date or actual_date > future_date:
 		frappe.throw(_("The selected actual date is outside the allowed range."))
+
 
 @frappe.whitelist()
 def update_t_and_a(data):
@@ -1067,10 +1118,8 @@ def update_t_and_a(data):
 	}
 	for lot in data:
 		lot_data = {lot: data[lot]}
-		requested, current, request_order = _collect_requested_updates(
-			lot_data, lot, "write"
-		)
-		item = attribute_db.get_value('SD YRP Lot', lot, "item")
+		requested, current, request_order = _collect_requested_updates(lot_data, lot, "write")
+		item = attribute_db.get_value("SD YRP Lot", lot, "item")
 		calculated = get_t_and_a_update_data(lot, item)["data"]
 		for schedule_action in request_order:
 			desired = requested[schedule_action]["actual_date"]
@@ -1089,15 +1138,11 @@ def update_t_and_a(data):
 
 		for master_data in calculated[lot]["masters"].values():
 			for schedule in master_data["datas"]:
-				doc = frappe.get_doc('SD YRP Time and Action', schedule["t_and_a"])
+				doc = frappe.get_doc("SD YRP Time and Action", schedule["t_and_a"])
 				doc.check_permission("write")
-				calculated_actions = {
-					action["action"]: action for action in schedule["actions"]
-				}
+				calculated_actions = {action["action"]: action for action in schedule["actions"]}
 				if set(calculated_actions) != {row.action for row in doc.details}:
-					frappe.throw(
-						_("Time and Action rows have changed. Refresh and try again.")
-					)
+					frappe.throw(_("Time and Action rows have changed. Refresh and try again."))
 				for child in doc.details:
 					values = calculated_actions[child.action]
 					for fieldname in mutable_fields:
@@ -1111,6 +1156,7 @@ def update_t_and_a(data):
 				doc.rescheduled_delay = get_diff(rescheduled, last_action["date"])
 				doc.end_date = last_action.get("actual_date") or rescheduled
 				doc.save()
+
 
 @frappe.whitelist()
 def revise_date(data, reason):
@@ -1153,7 +1199,7 @@ def _validated_schedule_rows(data, permission_type):
 				name = row.get("t_and_a")
 				if not name or name not in allowed or name in seen:
 					frappe.throw(_("Invalid Time and Action schedule in the update."))
-				doc = frappe.get_doc('SD YRP Time and Action', name)
+				doc = frappe.get_doc("SD YRP Time and Action", name)
 				doc.check_permission(permission_type)
 				if doc.master != master or doc.lot != lot:
 					frappe.throw(_("Time and Action schedule context has changed."))
@@ -1185,9 +1231,7 @@ def _validate_action_updates(doc, incoming_actions):
 		for fieldname in immutable_fields:
 			if str(row.get(fieldname) or "") != str(source.get(fieldname) or ""):
 				frappe.throw(_("Time and Action definition cannot be changed here."))
-		if row.get("actual_date") and str(row.get("actual_date")) != str(
-			source.actual_date or ""
-		):
+		if row.get("actual_date") and str(row.get("actual_date")) != str(source.actual_date or ""):
 			_validate_actual_date(row["actual_date"])
 
 

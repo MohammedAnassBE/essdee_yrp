@@ -1,17 +1,17 @@
 """Finishing inward drill-down and print-size validation."""
-from yrp import attribute_links as attribute_db
-from yrp.attribute_links import value as _attribute_value
 
 import frappe
-from yrp.attribute_values import get_mapping_values
 from frappe.utils import flt
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
+from yrp.attribute_values import get_mapping_values
+from yrp.utils import get_variant_attr_details, update_if_string_instance
 
 from essdee_yrp.finishing.parsing import json_object
 from essdee_yrp.finishing.rebuild import (
 	get_configured_cutting_process,
 	get_process_work_orders,
 )
-from yrp.utils import get_variant_attr_details, update_if_string_instance
 
 
 @frappe.whitelist()
@@ -21,30 +21,25 @@ def cache_selected_size(key, size, finishing_id):
 
 
 def check_eqi_status(print_size, finishing_id):
-	lot = frappe.db.get_value('SD YRP Finishing Plan', finishing_id, "lot")
-	process = frappe.db.get_single_value('SD YRP MRP Settings', "finishing_inward_process")
+	lot = frappe.db.get_value("SD YRP Finishing Plan", finishing_id, "lot")
+	process = frappe.db.get_single_value("SD YRP MRP Settings", "finishing_inward_process")
 	inspection = get_eqi_status(get_process_work_orders(process, lot))
 	failed_suppliers = []
 	for supplier, colours in inspection.items():
-		if any(
-			sizes.get(print_size) and sizes.get(print_size) != "Pass"
-			for sizes in colours.values()
-		):
+		if any(sizes.get(print_size) and sizes.get(print_size) != "Pass" for sizes in colours.values()):
 			failed_suppliers.append(supplier)
 	if failed_suppliers:
-		frappe.throw(
-			f"EQI not passed for Size {print_size}: {', '.join(failed_suppliers)}"
-		)
+		frappe.throw(f"EQI not passed for Size {print_size}: {', '.join(failed_suppliers)}")
 
 
 def get_eqi_status(work_orders):
 	if not work_orders:
 		return {}
 	inspection_names = frappe.get_all(
-		'SD YRP Essdee Quality Inspection',
+		"SD YRP Essdee Quality Inspection",
 		filters={
 			"docstatus": 1,
-			"against": 'YRP Work Order',
+			"against": "YRP Work Order",
 			"against_id": ["in", work_orders],
 		},
 		order_by="posting_date desc",
@@ -52,7 +47,7 @@ def get_eqi_status(work_orders):
 	)
 	result = {}
 	for name in inspection_names:
-		doc = frappe.get_doc('SD YRP Essdee Quality Inspection', name)
+		doc = frappe.get_doc("SD YRP Essdee Quality Inspection", name)
 		result.setdefault(doc.supplier_name, {})
 		for row in doc.get("essdee_quality_inspection_colours") or []:
 			if row.selected:
@@ -72,12 +67,12 @@ def get_finishing_plan_inward_details(key, lot):
 		return {}
 	frappe.cache().delete_value(cache_key)
 
-	settings = frappe.get_cached_doc('YRP Stock Settings')
+	settings = frappe.get_cached_doc("YRP Stock Settings")
 	rejected_type = settings.default_rejected_received_type
 	default_type = settings.default_received_type
-	process = frappe.db.get_single_value('SD YRP MRP Settings', "finishing_inward_process")
-	production_detail = attribute_db.get_value('SD YRP Lot', lot, "production_detail")
-	ipd = frappe.get_cached_doc('YRP Item Production Detail', production_detail)
+	process = frappe.db.get_single_value("SD YRP MRP Settings", "finishing_inward_process")
+	production_detail = attribute_db.get_value("SD YRP Lot", lot, "production_detail")
+	ipd = frappe.get_cached_doc("YRP Item Production Detail", production_detail)
 	result = {"data": {}}
 	received_types = [default_type]
 
@@ -85,7 +80,7 @@ def get_finishing_plan_inward_details(key, lot):
 		_add_inward_rows(
 			result["data"],
 			frappe.get_all(
-				'YRP Work Order Calculated Item',
+				"YRP Work Order Calculated Item",
 				filters={"parent": work_order},
 				fields=["*"],
 			),
@@ -102,7 +97,7 @@ def get_finishing_plan_inward_details(key, lot):
 		_add_inward_rows(
 			result["data"],
 			frappe.get_all(
-				'YRP Work Order Calculated Item',
+				"YRP Work Order Calculated Item",
 				filters={"parent": work_order},
 				fields=["*"],
 			),
@@ -157,9 +152,7 @@ def _add_inward_rows(
 			part_data["part_colours"].append(colour)
 			part_data["colours"][colour] = {"sewing_received": 0}
 			part_data["colour_type"][colour] = {"type_wise": {}}
-		for received_type, quantity in (
-			update_if_string_instance(row.received_type_json) or {}
-		).items():
+		for received_type, quantity in (update_if_string_instance(row.received_type_json) or {}).items():
 			if received_type == rejected_type:
 				continue
 			if received_type not in type_list:
@@ -182,7 +175,7 @@ def _add_inward_rows(
 def get_part_value(set_attribute, production_detail):
 	if not set_attribute or not production_detail:
 		return None
-	ipd = frappe.get_cached_doc('YRP Item Production Detail', production_detail)
+	ipd = frappe.get_cached_doc("YRP Item Production Detail", production_detail)
 	mapping = next(
 		(
 			row.mapping

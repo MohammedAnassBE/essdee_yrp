@@ -1,13 +1,12 @@
-from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2026, Essdee and contributors
 # For license information, please see license.txt
-
 from collections import defaultdict
 
 import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt, now_datetime, nowtime
+from yrp.attribute_links import value as _attribute_value
 from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 
@@ -45,11 +44,16 @@ class SDYRPCuttingBulkLaySheets(Document):
 			existing_rows = {
 				row.name: row
 				for row in frappe.get_all(
-					'SD YRP Cutting Bulk Lay Sheet Detail',
+					"SD YRP Cutting Bulk Lay Sheet Detail",
 					filters={"parent": self.name, "parenttype": self.doctype},
 					fields=[
-						"name", "lot", "cutting_plan", "cutting_marker",
-						"cutting_laysheet", "lot_transfer", "delivery_challan",
+						"name",
+						"lot",
+						"cutting_plan",
+						"cutting_marker",
+						"cutting_laysheet",
+						"lot_transfer",
+						"delivery_challan",
 					],
 				)
 			}
@@ -58,13 +62,11 @@ class SDYRPCuttingBulkLaySheets(Document):
 					("main_lot", "Main Stock Lot"),
 					("from_location", "Stock Location"),
 					("posting_date", "Posting Date"),
-					("cutting_spreader", 'SD YRP Cutting Spreader'),
-					("cutter", 'SD YRP Cutter'),
+					("cutting_spreader", "SD YRP Cutting Spreader"),
+					("cutter", "SD YRP Cutter"),
 				):
 					if old_setup and self.get(fieldname) != old_setup.get(fieldname):
-						frappe.throw(
-							_("{0} cannot change after Lay Sheets are created.").format(label)
-						)
+						frappe.throw(_("{0} cannot change after Lay Sheets are created.").format(label))
 
 		seen_lots = set()
 		seen_plans = set()
@@ -85,14 +87,12 @@ class SDYRPCuttingBulkLaySheets(Document):
 			if row.lot in seen_lots:
 				frappe.throw(_("Row {0}: Split Lot {1} is repeated.").format(row.idx, row.lot))
 			if row.cutting_plan in seen_plans:
-				frappe.throw(
-					_("Row {0}: Cutting Plan {1} is repeated.").format(row.idx, row.cutting_plan)
-				)
+				frappe.throw(_("Row {0}: Cutting Plan {1} is repeated.").format(row.idx, row.cutting_plan))
 			seen_lots.add(row.lot)
 			seen_plans.add(row.cutting_plan)
 
 			plan = frappe.db.get_value(
-				'SD YRP Cutting Plan',
+				"SD YRP Cutting Plan",
 				row.cutting_plan,
 				["lot", "work_order", "docstatus", "cp_status"],
 				as_dict=True,
@@ -108,10 +108,12 @@ class SDYRPCuttingBulkLaySheets(Document):
 			if plan.cp_status == "Completed":
 				frappe.throw(_("Row {0}: Cutting Plan {1} is completed.").format(row.idx, row.cutting_plan))
 			if not plan.work_order:
-				frappe.throw(_("Row {0}: Cutting Plan {1} has no Work Order.").format(row.idx, row.cutting_plan))
+				frappe.throw(
+					_("Row {0}: Cutting Plan {1} has no Work Order.").format(row.idx, row.cutting_plan)
+				)
 
 			marker = frappe.db.get_value(
-				'SD YRP Cutting Marker',
+				"SD YRP Cutting Marker",
 				row.cutting_marker,
 				["cutting_plan", "docstatus"],
 				as_dict=True,
@@ -130,8 +132,8 @@ class SDYRPCuttingBulkLaySheets(Document):
 			if old_row and old_row.cutting_laysheet:
 				for fieldname, label in (
 					("lot", "Split Lot"),
-					("cutting_plan", 'SD YRP Cutting Plan'),
-					("cutting_marker", 'SD YRP Cutting Marker'),
+					("cutting_plan", "SD YRP Cutting Plan"),
+					("cutting_marker", "SD YRP Cutting Marker"),
 				):
 					if row.get(fieldname) != old_row.get(fieldname):
 						frappe.throw(
@@ -147,13 +149,13 @@ class SDYRPCuttingBulkLaySheets(Document):
 		if not self.active_cutting_laysheet or not self.get("item_details"):
 			return
 		entry = get_entry_for_laysheet(self.name, self.active_cutting_laysheet)
-		if entry.lot_transfer and get_docstatus('SD YRP Lot Transfer', entry.lot_transfer) != 2:
+		if entry.lot_transfer and get_docstatus("SD YRP Lot Transfer", entry.lot_transfer) != 2:
 			frappe.throw(
 				_("Lay Sheet {0} cannot be edited after its Lot Transfer is created.").format(
 					self.active_cutting_laysheet
 				)
 			)
-		laysheet = frappe.get_doc('SD YRP Cutting LaySheet', self.active_cutting_laysheet)
+		laysheet = frappe.get_doc("SD YRP Cutting LaySheet", self.active_cutting_laysheet)
 		laysheet.item_details = self.item_details
 		laysheet.item_accessory_details = self.get("item_accessory_details") or "[]"
 		laysheet.save()
@@ -168,7 +170,7 @@ def get_docstatus(doctype, name):
 def get_entry_status(row):
 	if not row.cutting_laysheet:
 		return "Create Lay Sheet"
-	lay_status = frappe.db.get_value('SD YRP Cutting LaySheet', row.cutting_laysheet, "status")
+	lay_status = frappe.db.get_value("SD YRP Cutting LaySheet", row.cutting_laysheet, "status")
 	if not lay_status:
 		return "Lay Sheet Missing"
 	if lay_status == "Label Printed":
@@ -183,7 +185,7 @@ def get_entry_status(row):
 
 	if not row.lot_transfer:
 		return "Create Lot Transfer"
-	transfer_status = get_docstatus('SD YRP Lot Transfer', row.lot_transfer)
+	transfer_status = get_docstatus("SD YRP Lot Transfer", row.lot_transfer)
 	if transfer_status is None:
 		return "Lot Transfer Missing"
 	if transfer_status == 0:
@@ -193,7 +195,7 @@ def get_entry_status(row):
 
 	if not row.delivery_challan:
 		return "Make Delivery Challan"
-	dc_status = get_docstatus('YRP Delivery Challan', row.delivery_challan)
+	dc_status = get_docstatus("YRP Delivery Challan", row.delivery_challan)
 	if dc_status is None:
 		return "Delivery Challan Missing"
 	if dc_status == 0:
@@ -224,12 +226,10 @@ def get_laysheet_editor_data(bulk_name, laysheet_name):
 		fetch_manual_item_details,
 	)
 
-	laysheet = frappe.get_doc('SD YRP Cutting LaySheet', laysheet_name)
+	laysheet = frappe.get_doc("SD YRP Cutting LaySheet", laysheet_name)
 	manual_items = {}
 	if laysheet.is_manual_entry:
-		manual_items = fetch_manual_item_details(
-			laysheet.cutting_laysheet_manual_items, laysheet.name
-		)
+		manual_items = fetch_manual_item_details(laysheet.cutting_laysheet_manual_items, laysheet.name)
 	return {
 		"context": {
 			"name": laysheet.name,
@@ -242,22 +242,20 @@ def get_laysheet_editor_data(bulk_name, laysheet_name):
 			"docstatus": laysheet.docstatus,
 			"is_new": False,
 			"read_only": bool(
-				entry.lot_transfer and get_docstatus('SD YRP Lot Transfer', entry.lot_transfer) != 2
+				entry.lot_transfer and get_docstatus("SD YRP Lot Transfer", entry.lot_transfer) != 2
 			),
 		},
 		"item_details": {
 			"manual_items": manual_items,
 			"cloth_items": [row.as_dict() for row in laysheet.cutting_laysheet_details],
 		},
-		"item_accessories": [
-			row.as_dict() for row in laysheet.cutting_laysheet_accessory_details
-		],
+		"item_accessories": [row.as_dict() for row in laysheet.cutting_laysheet_accessory_details],
 		"bundles": [row.as_dict() for row in laysheet.cutting_laysheet_bundles],
 	}
 
 
 def get_bulk_doc(name):
-	doc = frappe.get_doc('SD YRP Cutting Bulk Lay Sheets', name)
+	doc = frappe.get_doc("SD YRP Cutting Bulk Lay Sheets", name)
 	doc.check_permission("write")
 	return doc
 
@@ -271,15 +269,22 @@ def get_entry(bulk_doc, detail_name):
 
 def get_entry_for_laysheet(bulk_name, laysheet_name):
 	entry = frappe.db.get_value(
-		'SD YRP Cutting Bulk Lay Sheet Detail',
+		"SD YRP Cutting Bulk Lay Sheet Detail",
 		{
 			"parent": bulk_name,
-			"parenttype": 'SD YRP Cutting Bulk Lay Sheets',
+			"parenttype": "SD YRP Cutting Bulk Lay Sheets",
 			"cutting_laysheet": laysheet_name,
 		},
 		[
-			"name", "parent", "lot", "cutting_plan", "cutting_marker", "work_order",
-			"cutting_laysheet", "lot_transfer", "delivery_challan",
+			"name",
+			"parent",
+			"lot",
+			"cutting_plan",
+			"cutting_marker",
+			"work_order",
+			"cutting_laysheet",
+			"lot_transfer",
+			"delivery_challan",
 		],
 		as_dict=True,
 	)
@@ -290,21 +295,21 @@ def get_entry_for_laysheet(bulk_name, laysheet_name):
 
 def refresh_bulk_status(bulk_name):
 	rows = frappe.get_all(
-		'SD YRP Cutting Bulk Lay Sheet Detail',
-		filters={"parent": bulk_name, "parenttype": 'SD YRP Cutting Bulk Lay Sheets'},
+		"SD YRP Cutting Bulk Lay Sheet Detail",
+		filters={"parent": bulk_name, "parenttype": "SD YRP Cutting Bulk Lay Sheets"},
 		fields=["name", "cutting_laysheet", "lot_transfer", "delivery_challan"],
 		order_by="idx",
 	)
 	for row in rows:
 		frappe.db.set_value(
-			'SD YRP Cutting Bulk Lay Sheet Detail',
+			"SD YRP Cutting Bulk Lay Sheet Detail",
 			row.name,
 			"status",
 			get_entry_status(row),
 			update_modified=False,
 		)
 	frappe.db.set_value(
-		'SD YRP Cutting Bulk Lay Sheets',
+		"SD YRP Cutting Bulk Lay Sheets",
 		bulk_name,
 		"status",
 		get_bulk_status(rows),
@@ -324,9 +329,9 @@ def create_laysheets(doc_name):
 	doc._validate_lot_rows()
 	created = []
 	for row in doc.lot_details:
-		if row.cutting_laysheet and frappe.db.exists('SD YRP Cutting LaySheet', row.cutting_laysheet):
+		if row.cutting_laysheet and frappe.db.exists("SD YRP Cutting LaySheet", row.cutting_laysheet):
 			continue
-		laysheet = frappe.new_doc('SD YRP Cutting LaySheet')
+		laysheet = frappe.new_doc("SD YRP Cutting LaySheet")
 		laysheet.cutting_plan = row.cutting_plan
 		laysheet.cutting_marker = row.cutting_marker
 		laysheet.cutting_spreader = doc.cutting_spreader
@@ -337,7 +342,7 @@ def create_laysheets(doc_name):
 		laysheet.cutting_bulk_lay_sheet_detail = row.name
 		laysheet.insert()
 		frappe.db.set_value(
-			'SD YRP Cutting Bulk Lay Sheet Detail',
+			"SD YRP Cutting Bulk Lay Sheet Detail",
 			row.name,
 			"cutting_laysheet",
 			laysheet.name,
@@ -346,15 +351,17 @@ def create_laysheets(doc_name):
 		created.append(laysheet.name)
 
 	if not doc.active_cutting_laysheet:
-		active = created[0] if created else frappe.db.get_value(
-			'SD YRP Cutting Bulk Lay Sheet Detail',
-			{"parent": doc.name, "cutting_laysheet": ["is", "set"]},
-			"cutting_laysheet",
+		active = (
+			created[0]
+			if created
+			else frappe.db.get_value(
+				"SD YRP Cutting Bulk Lay Sheet Detail",
+				{"parent": doc.name, "cutting_laysheet": ["is", "set"]},
+				"cutting_laysheet",
+			)
 		)
 		if active:
-			frappe.db.set_value(
-				'SD YRP Cutting Bulk Lay Sheets', doc.name, "active_cutting_laysheet", active
-			)
+			frappe.db.set_value("SD YRP Cutting Bulk Lay Sheets", doc.name, "active_cutting_laysheet", active)
 	refresh_bulk_status(doc.name)
 	return created
 
@@ -381,7 +388,7 @@ def build_lot_transfer_items(laysheet, main_lot, target_lot, warehouse, received
 	items = []
 	for item_variant, qty in sorted(quantities.items()):
 		item = get_parent_item(item_variant)
-		uom = frappe.get_cached_value('Item', item, "stock_uom")
+		uom = frappe.get_cached_value("Item", item, "stock_uom")
 		if not uom:
 			frappe.throw(_("Default UOM is not configured for Item {0}.").format(item))
 		idx = len(items)
@@ -431,9 +438,7 @@ def validate_source_stock(items, main_lot, reserved=None):
 			)
 	if shortages:
 		frappe.throw(
-			_("Insufficient stock in Main Stock Lot {0}:<br>{1}").format(
-				main_lot, "<br>".join(shortages)
-			)
+			_("Insufficient stock in Main Stock Lot {0}:<br>{1}").format(main_lot, "<br>".join(shortages))
 		)
 
 
@@ -443,36 +448,35 @@ def create_lot_transfer(doc_name, detail_name):
 	row = get_entry(doc, detail_name)
 	if not row.cutting_laysheet:
 		frappe.throw(_("Create the Lay Sheet first."))
-	if row.delivery_challan and get_docstatus('YRP Delivery Challan', row.delivery_challan) != 2:
+	if row.delivery_challan and get_docstatus("YRP Delivery Challan", row.delivery_challan) != 2:
 		frappe.throw(_("A Delivery Challan already exists for this row."))
-	if row.lot_transfer and get_docstatus('SD YRP Lot Transfer', row.lot_transfer) != 2:
+	if row.lot_transfer and get_docstatus("SD YRP Lot Transfer", row.lot_transfer) != 2:
 		return row.lot_transfer
 
-	laysheet = frappe.get_doc('SD YRP Cutting LaySheet', row.cutting_laysheet)
+	laysheet = frappe.get_doc("SD YRP Cutting LaySheet", row.cutting_laysheet)
 	if not laysheet.cutting_laysheet_bundles or laysheet.status not in (
-		"Bundles Generated", "Approval Pending"
+		"Bundles Generated",
+		"Approval Pending",
 	):
 		frappe.throw(_("Generate bundles before creating the Lot Transfer."))
-	received_type = frappe.db.get_single_value('YRP Stock Settings', "default_received_type")
-	items = build_lot_transfer_items(
-		laysheet, doc.main_lot, row.lot, doc.from_location, received_type
-	)
+	received_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
+	items = build_lot_transfer_items(laysheet, doc.main_lot, row.lot, doc.from_location, received_type)
 	draft_transfers = frappe.get_all(
-		'SD YRP Lot Transfer',
+		"SD YRP Lot Transfer",
 		filters={"cutting_bulk_lay_sheet": doc.name, "docstatus": 0},
 		pluck="name",
 	)
 	reserved = defaultdict(float)
 	if draft_transfers:
 		for transfer_row in frappe.get_all(
-			'SD YRP Lot Transfer Item',
+			"SD YRP Lot Transfer Item",
 			filters={"parent": ["in", draft_transfers], "from_lot": doc.main_lot},
 			fields=["item", "qty"],
 		):
 			reserved[transfer_row.item] += flt(transfer_row.qty)
 	validate_source_stock(items, doc.main_lot, reserved)
 
-	transfer = frappe.new_doc('SD YRP Lot Transfer')
+	transfer = frappe.new_doc("SD YRP Lot Transfer")
 	transfer.flags.allow_from_cutting_plan = True
 	transfer.posting_date = doc.posting_date
 	transfer.posting_time = nowtime()
@@ -484,7 +488,7 @@ def create_lot_transfer(doc_name, detail_name):
 	transfer.set("items", items)
 	transfer.save()
 	frappe.db.set_value(
-		'SD YRP Cutting Bulk Lay Sheet Detail',
+		"SD YRP Cutting Bulk Lay Sheet Detail",
 		row.name,
 		"lot_transfer",
 		transfer.name,
@@ -498,7 +502,7 @@ def get_shared_bulk_transfer_name(doc):
 	active_transfers = {
 		row.lot_transfer
 		for row in doc.lot_details
-		if row.lot_transfer and get_docstatus('SD YRP Lot Transfer', row.lot_transfer) != 2
+		if row.lot_transfer and get_docstatus("SD YRP Lot Transfer", row.lot_transfer) != 2
 	}
 	if not active_transfers:
 		return None
@@ -507,7 +511,9 @@ def get_shared_bulk_transfer_name(doc):
 	transfer_name = active_transfers.pop()
 	if any(row.lot_transfer != transfer_name for row in doc.lot_details):
 		frappe.throw(
-			_("Some split lots already have a Lot Transfer. Complete or cancel it before creating a bulk transfer.")
+			_(
+				"Some split lots already have a Lot Transfer. Complete or cancel it before creating a bulk transfer."
+			)
 		)
 	return transfer_name
 
@@ -520,22 +526,21 @@ def create_bulk_lot_transfer(doc_name):
 	if existing_transfer:
 		return existing_transfer
 
-	received_type = frappe.db.get_single_value('YRP Stock Settings', "default_received_type")
+	received_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
 	items = []
 	for row in doc.lot_details:
 		if not row.cutting_laysheet:
 			frappe.throw(_("Create the Lay Sheet for split Lot {0} first.").format(row.lot))
-		if row.delivery_challan and get_docstatus('YRP Delivery Challan', row.delivery_challan) != 2:
+		if row.delivery_challan and get_docstatus("YRP Delivery Challan", row.delivery_challan) != 2:
 			frappe.throw(_("Split Lot {0} already has a Delivery Challan.").format(row.lot))
-		laysheet = frappe.get_doc('SD YRP Cutting LaySheet', row.cutting_laysheet)
+		laysheet = frappe.get_doc("SD YRP Cutting LaySheet", row.cutting_laysheet)
 		if not laysheet.cutting_laysheet_bundles or laysheet.status not in (
-			"Bundles Generated", "Approval Pending"
+			"Bundles Generated",
+			"Approval Pending",
 		):
 			frappe.throw(_("Generate bundles for split Lot {0} first.").format(row.lot))
 		items.extend(
-			build_lot_transfer_items(
-				laysheet, doc.main_lot, row.lot, doc.from_location, received_type
-			)
+			build_lot_transfer_items(laysheet, doc.main_lot, row.lot, doc.from_location, received_type)
 		)
 
 	for idx, item in enumerate(items):
@@ -543,21 +548,21 @@ def create_bulk_lot_transfer(doc_name):
 		item["row_index"] = idx
 
 	draft_transfers = frappe.get_all(
-		'SD YRP Lot Transfer',
+		"SD YRP Lot Transfer",
 		filters={"cutting_bulk_lay_sheet": doc.name, "docstatus": 0},
 		pluck="name",
 	)
 	reserved = defaultdict(float)
 	if draft_transfers:
 		for transfer_row in frappe.get_all(
-			'SD YRP Lot Transfer Item',
+			"SD YRP Lot Transfer Item",
 			filters={"parent": ["in", draft_transfers], "from_lot": doc.main_lot},
 			fields=["item", "qty"],
 		):
 			reserved[transfer_row.item] += flt(transfer_row.qty)
 	validate_source_stock(items, doc.main_lot, reserved)
 
-	transfer = frappe.new_doc('SD YRP Lot Transfer')
+	transfer = frappe.new_doc("SD YRP Lot Transfer")
 	transfer.flags.allow_from_cutting_plan = True
 	transfer.posting_date = doc.posting_date
 	transfer.posting_time = nowtime()
@@ -568,7 +573,7 @@ def create_bulk_lot_transfer(doc_name):
 	transfer.save()
 	for row in doc.lot_details:
 		frappe.db.set_value(
-			'SD YRP Cutting Bulk Lay Sheet Detail',
+			"SD YRP Cutting Bulk Lay Sheet Detail",
 			row.name,
 			"lot_transfer",
 			transfer.name,
@@ -584,7 +589,7 @@ def submit_bulk_lot_transfer(doc_name):
 	transfer_name = get_shared_bulk_transfer_name(doc)
 	if not transfer_name:
 		frappe.throw(_("Create the Bulk Lot Transfer first."))
-	transfer = frappe.get_doc('SD YRP Lot Transfer', transfer_name)
+	transfer = frappe.get_doc("SD YRP Lot Transfer", transfer_name)
 	if transfer.cutting_bulk_lay_sheet != doc.name:
 		frappe.throw(_("Lot Transfer {0} is not linked to this Bulk Lay Sheet.").format(transfer.name))
 	if transfer.docstatus == 1:
@@ -601,9 +606,9 @@ def submit_bulk_lot_transfer(doc_name):
 def prepare_delivery_challan(doc_name, detail_name):
 	doc = get_bulk_doc(doc_name)
 	row = get_entry(doc, detail_name)
-	if row.delivery_challan and get_docstatus('YRP Delivery Challan', row.delivery_challan) != 2:
+	if row.delivery_challan and get_docstatus("YRP Delivery Challan", row.delivery_challan) != 2:
 		return {"existing_delivery_challan": row.delivery_challan}
-	if not row.lot_transfer or get_docstatus('SD YRP Lot Transfer', row.lot_transfer) != 1:
+	if not row.lot_transfer or get_docstatus("SD YRP Lot Transfer", row.lot_transfer) != 1:
 		frappe.throw(_("Submit the Lot Transfer before making the Delivery Challan."))
 
 	from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot_transfer.sd_yrp_lot_transfer import (
@@ -626,12 +631,14 @@ def get_delivery_challan_naming_series(doc_name):
 
 
 def _get_delivery_challan_naming_series_settings():
-	field = frappe.get_meta('YRP Delivery Challan').get_field("naming_series")
-	options = list(dict.fromkeys(
-		series.strip()
-		for series in ((field.options if field else "") or "").splitlines()
-		if series.strip()
-	))
+	field = frappe.get_meta("YRP Delivery Challan").get_field("naming_series")
+	options = list(
+		dict.fromkeys(
+			series.strip()
+			for series in ((field.options if field else "") or "").splitlines()
+			if series.strip()
+		)
+	)
 	if not options:
 		frappe.throw(_("Configure a Naming Series for Delivery Challan first."))
 
@@ -654,7 +661,7 @@ def _validate_delivery_challan_naming_series(naming_series):
 def create_delivery_challan(doc_name, detail_name, naming_series, vehicle_no):
 	doc = get_bulk_doc(doc_name)
 	row = get_entry(doc, detail_name)
-	if row.delivery_challan and get_docstatus('YRP Delivery Challan', row.delivery_challan) != 2:
+	if row.delivery_challan and get_docstatus("YRP Delivery Challan", row.delivery_challan) != 2:
 		return row.delivery_challan
 	naming_series = _validate_delivery_challan_naming_series(naming_series)
 	vehicle_no = (vehicle_no or "").strip()
@@ -664,18 +671,30 @@ def create_delivery_challan(doc_name, detail_name, naming_series, vehicle_no):
 	data = prepare_delivery_challan(doc.name, row.name)
 	if data.get("existing_delivery_challan"):
 		return data["existing_delivery_challan"]
-	dc = frappe.new_doc('YRP Delivery Challan')
+	dc = frappe.new_doc("YRP Delivery Challan")
 	dc.naming_series = naming_series
 	dc.posting_date = doc.posting_date
 	dc.posting_time = nowtime()
 	dc.actual_date = doc.posting_date
 	dc.vehicle_no = vehicle_no
 	for fieldname in (
-		"work_order", "lot", "item", "production_detail", "process_name",
-		"includes_packing", "is_internal_unit", "from_location", "from_address",
-		"from_address_details", "supplier", "supplier_name", "supplier_address",
-		"supplier_address_details", "cutting_bulk_lay_sheet",
-		"cutting_bulk_lay_sheet_detail", "comments",
+		"work_order",
+		"lot",
+		"item",
+		"production_detail",
+		"process_name",
+		"includes_packing",
+		"is_internal_unit",
+		"from_location",
+		"from_address",
+		"from_address_details",
+		"supplier",
+		"supplier_name",
+		"supplier_address",
+		"supplier_address_details",
+		"cutting_bulk_lay_sheet",
+		"cutting_bulk_lay_sheet_detail",
+		"comments",
 	):
 		dc.set(fieldname, data.get(fieldname))
 	dc.item_details = frappe.as_json(data["item_details"])
@@ -695,7 +714,7 @@ def create_bulk_delivery_challans(doc_name, naming_series, vehicle_no):
 
 	rows_to_create = []
 	for row in doc.lot_details:
-		dc_status = get_docstatus('YRP Delivery Challan', row.delivery_challan)
+		dc_status = get_docstatus("YRP Delivery Challan", row.delivery_challan)
 		if dc_status == 1:
 			continue
 		if dc_status == 0:
@@ -704,7 +723,7 @@ def create_bulk_delivery_challans(doc_name, naming_series, vehicle_no):
 					row.lot, row.delivery_challan
 				)
 			)
-		if not row.lot_transfer or get_docstatus('SD YRP Lot Transfer', row.lot_transfer) != 1:
+		if not row.lot_transfer or get_docstatus("SD YRP Lot Transfer", row.lot_transfer) != 1:
 			frappe.throw(
 				_("Submit the Lot Transfer for split Lot {0} before making Delivery Challans.").format(
 					row.lot
@@ -716,8 +735,7 @@ def create_bulk_delivery_challans(doc_name, naming_series, vehicle_no):
 		frappe.throw(_("All split Lots already have submitted Delivery Challans."))
 
 	delivery_challans = [
-		create_delivery_challan(doc.name, row.name, naming_series, vehicle_no)
-		for row in rows_to_create
+		create_delivery_challan(doc.name, row.name, naming_series, vehicle_no) for row in rows_to_create
 	]
 	refresh_bulk_status(doc.name)
 	return {
@@ -732,7 +750,7 @@ def submit_delivery_challan(doc_name, detail_name):
 	row = get_entry(doc, detail_name)
 	if not row.delivery_challan:
 		frappe.throw(_("Create the Delivery Challan first."))
-	dc = frappe.get_doc('YRP Delivery Challan', row.delivery_challan)
+	dc = frappe.get_doc("YRP Delivery Challan", row.delivery_challan)
 	if (
 		dc.cutting_bulk_lay_sheet != doc.name
 		or dc.cutting_bulk_lay_sheet_detail != row.name
@@ -755,7 +773,7 @@ def record_delivery_challan(doc, method=None):
 	if not doc.cutting_bulk_lay_sheet or not doc.cutting_bulk_lay_sheet_detail:
 		return
 	entry = frappe.db.get_value(
-		'SD YRP Cutting Bulk Lay Sheet Detail',
+		"SD YRP Cutting Bulk Lay Sheet Detail",
 		doc.cutting_bulk_lay_sheet_detail,
 		["parent", "work_order", "lot"],
 		as_dict=True,
@@ -765,7 +783,7 @@ def record_delivery_challan(doc, method=None):
 	if entry.work_order != doc.work_order or entry.lot != doc.lot:
 		frappe.throw(_("Delivery Challan Work Order or Lot does not match the bulk row."))
 	frappe.db.set_value(
-		'SD YRP Cutting Bulk Lay Sheet Detail',
+		"SD YRP Cutting Bulk Lay Sheet Detail",
 		doc.cutting_bulk_lay_sheet_detail,
 		"delivery_challan",
 		doc.name,
@@ -775,30 +793,30 @@ def record_delivery_challan(doc, method=None):
 
 
 def validate_bulk_print_prerequisites(laysheet_name):
-	laysheet = frappe.get_doc('SD YRP Cutting LaySheet', laysheet_name)
+	laysheet = frappe.get_doc("SD YRP Cutting LaySheet", laysheet_name)
 	if not laysheet.cutting_bulk_lay_sheet:
 		return None
 	entry = get_entry_for_laysheet(laysheet.cutting_bulk_lay_sheet, laysheet.name)
-	if not entry.lot_transfer or get_docstatus('SD YRP Lot Transfer', entry.lot_transfer) != 1:
+	if not entry.lot_transfer or get_docstatus("SD YRP Lot Transfer", entry.lot_transfer) != 1:
 		frappe.throw(_("Submit the linked Lot Transfer before printing labels."))
-	bulk = frappe.get_doc('SD YRP Cutting Bulk Lay Sheets', laysheet.cutting_bulk_lay_sheet)
-	transfer = frappe.get_doc('SD YRP Lot Transfer', entry.lot_transfer)
-	if (
-		transfer.cutting_bulk_lay_sheet != bulk.name
-		or (
-			transfer.cutting_bulk_lay_sheet_detail
-			and transfer.cutting_bulk_lay_sheet_detail != entry.name
-		)
+	bulk = frappe.get_doc("SD YRP Cutting Bulk Lay Sheets", laysheet.cutting_bulk_lay_sheet)
+	transfer = frappe.get_doc("SD YRP Lot Transfer", entry.lot_transfer)
+	if transfer.cutting_bulk_lay_sheet != bulk.name or (
+		transfer.cutting_bulk_lay_sheet_detail and transfer.cutting_bulk_lay_sheet_detail != entry.name
 	):
 		frappe.throw(_("The linked Lot Transfer does not match this bulk Lay Sheet."))
-	received_type = frappe.db.get_single_value('YRP Stock Settings', "default_received_type")
+	received_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
 	expected_items = build_lot_transfer_items(
 		laysheet, bulk.main_lot, entry.lot, bulk.from_location, received_type
 	)
 	expected = {
 		(
-			row["item"], row["from_lot"], row["to_lot"], row["warehouse"],
-			row["received_type"], row["uom"],
+			row["item"],
+			row["from_lot"],
+			row["to_lot"],
+			row["warehouse"],
+			row["received_type"],
+			row["uom"],
 		): flt(row["qty"], 3)
 		for row in expected_items
 	}
@@ -807,16 +825,20 @@ def validate_bulk_print_prerequisites(laysheet_name):
 		if row.to_lot != entry.lot:
 			continue
 		key = (
-			row.item, row.from_lot, row.to_lot, row.warehouse, row.received_type,
+			row.item,
+			row.from_lot,
+			row.to_lot,
+			row.warehouse,
+			row.received_type,
 			row.uom,
 		)
 		actual[key] += flt(row.qty, 3)
 	if expected != dict(actual):
 		frappe.throw(_("The submitted Lot Transfer items no longer match the Lay Sheet entries."))
-	if not entry.delivery_challan or get_docstatus('YRP Delivery Challan', entry.delivery_challan) != 1:
+	if not entry.delivery_challan or get_docstatus("YRP Delivery Challan", entry.delivery_challan) != 1:
 		frappe.throw(_("Submit the linked Delivery Challan before printing labels."))
 	dc = frappe.db.get_value(
-		'YRP Delivery Challan',
+		"YRP Delivery Challan",
 		entry.delivery_challan,
 		["work_order", "lot", "cutting_bulk_lay_sheet", "cutting_bulk_lay_sheet_detail"],
 		as_dict=True,
@@ -835,15 +857,18 @@ def validate_bulk_print_prerequisites(laysheet_name):
 def validate_cutting_plan_stock(laysheet):
 	required = defaultdict(float)
 	for row in laysheet.cutting_laysheet_details:
-		required[(_attribute_value(row.colour), row.cloth_type, _attribute_value(row.actual_dia))] += flt(row.weight) - flt(
-			row.balance_weight
-		)
+		required[(_attribute_value(row.colour), row.cloth_type, _attribute_value(row.actual_dia))] += flt(
+			row.weight
+		) - flt(row.balance_weight)
 	for row in laysheet.cutting_laysheet_accessory_details:
-		required[(_attribute_value(row.colour), row.cloth_type, _attribute_value(row.actual_dia))] += flt(row.weight)
+		required[(_attribute_value(row.colour), row.cloth_type, _attribute_value(row.actual_dia))] += flt(
+			row.weight
+		)
 
-	plan = frappe.get_doc('SD YRP Cutting Plan', laysheet.cutting_plan)
+	plan = frappe.get_doc("SD YRP Cutting Plan", laysheet.cutting_plan)
 	available = {
-		(_attribute_value(row.colour), row.cloth_type, _attribute_value(row.dia)): flt(row.weight) - flt(row.used_weight)
+		(_attribute_value(row.colour), row.cloth_type, _attribute_value(row.dia)): flt(row.weight)
+		- flt(row.used_weight)
 		for row in plan.cutting_plan_cloth_details
 	}
 	shortages = []
@@ -871,7 +896,7 @@ def get_label_print_context(doc_name, detail_name):
 	if not row.cutting_laysheet:
 		frappe.throw(_("Create the Lay Sheet first."))
 	validate_bulk_print_prerequisites(row.cutting_laysheet)
-	laysheet = frappe.get_doc('SD YRP Cutting LaySheet', row.cutting_laysheet)
+	laysheet = frappe.get_doc("SD YRP Cutting LaySheet", row.cutting_laysheet)
 	if not laysheet.cutting_laysheet_bundles:
 		frappe.throw(_("Generate bundles before printing labels."))
 	validate_cutting_plan_stock(laysheet)
@@ -919,7 +944,7 @@ def mark_labels_printed(doc_name, detail_name, goods_received_note=None):
 	doc = get_bulk_doc(doc_name)
 	row = get_entry(doc, detail_name)
 	validate_bulk_print_prerequisites(row.cutting_laysheet)
-	laysheet = frappe.get_doc('SD YRP Cutting LaySheet', row.cutting_laysheet)
+	laysheet = frappe.get_doc("SD YRP Cutting LaySheet", row.cutting_laysheet)
 	laysheet.printed_time = now_datetime()
 	laysheet.status = "Label Printed"
 	laysheet.goods_received_note = goods_received_note

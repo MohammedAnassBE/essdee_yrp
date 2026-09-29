@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 import io
+import json
 import tokenize
 import unittest
 from pathlib import Path
@@ -29,26 +29,26 @@ class MigrationDocTypeSchemaTest(unittest.TestCase):
 		for path in paths:
 			# Audit comments can name the backup that exposed a defect. Runtime
 			# literals/identifiers still must obtain connection identity from config.
-			contents = " ".join(token.string for token in tokenize.generate_tokens(
-				io.StringIO(path.read_text()).readline
-			) if token.type != tokenize.COMMENT)
+			contents = " ".join(
+				token.string
+				for token in tokenize.generate_tokens(io.StringIO(path.read_text()).readline)
+				if token.type != tokenize.COMMENT
+			)
 			for value in forbidden:
 				self.assertNotIn(value, contents, f"{value!r} is hardcoded in {path}")
 
 	def test_parent_is_essdee_owned_and_system_manager_only(self):
 		path = MIGRATION_ROOT / "sd_yrp_mrp_data_migration.json"
 		schema = json.loads(path.read_text())
-		self.assertEqual(schema["name"], 'SD YRP MRP Data Migration')
+		self.assertEqual(schema["name"], "SD YRP MRP Data Migration")
 		self.assertEqual(schema["module"], "Essdee YRP")
 		self.assertEqual([row["role"] for row in schema["permissions"]], ["System Manager"])
 		fields = {row["fieldname"]: row for row in schema["fields"]}
 		self.assertNotIn("source_bench", fields)
 		self.assertNotIn("default", fields["source_site"])
 		self.assertNotIn("default", fields["target_site"])
-		self.assertEqual(
-			fields["adapter_status"]["default"], "Configured Local-Bench Source"
-		)
-		self.assertEqual(fields["migration_details"]["options"], 'SD YRP MRP Data Migration Detail')
+		self.assertEqual(fields["adapter_status"]["default"], "Configured Local-Bench Source")
+		self.assertEqual(fields["migration_details"]["options"], "SD YRP MRP Data Migration Detail")
 		self.assertEqual(fields["allow_missing_source_blobs"]["default"], "0")
 		controller = (MIGRATION_ROOT / "sd_yrp_mrp_data_migration.py").read_text()
 		self.assertIn(
@@ -82,14 +82,12 @@ class MigrationDocTypeSchemaTest(unittest.TestCase):
 	def test_detail_is_read_only_child_audit_table(self):
 		path = MIGRATION_DETAIL_ROOT / "sd_yrp_mrp_data_migration_detail.json"
 		schema = json.loads(path.read_text())
-		self.assertEqual(schema["name"], 'SD YRP MRP Data Migration Detail')
+		self.assertEqual(schema["name"], "SD YRP MRP Data Migration Detail")
 		self.assertTrue(schema["istable"])
 		self.assertEqual(schema["module"], "Essdee YRP")
 		self.assertEqual(schema["permissions"], [])
 		data_fields = [
-			row
-			for row in schema["fields"]
-			if row["fieldtype"] not in {"Section Break", "Column Break"}
+			row for row in schema["fields"] if row["fieldtype"] not in {"Section Break", "Column Break"}
 		]
 		self.assertTrue(all(row.get("read_only") for row in data_fields))
 
@@ -97,8 +95,8 @@ class MigrationDocTypeSchemaTest(unittest.TestCase):
 		path = CUTTING_LAYSHEET_PLANNER_ROOT / "sd_yrp_cutting_laysheet_planner.json"
 		schema = json.loads(path.read_text())
 		fields = {row["fieldname"]: row for row in schema["fields"]}
-		self.assertEqual(fields["lot"]["options"], 'SD YRP Lot')
-		self.assertEqual(fields["item"]["options"], 'Item')
+		self.assertEqual(fields["lot"]["options"], "SD YRP Lot")
+		self.assertEqual(fields["item"]["options"], "Item")
 		self.assertEqual(fields["description"]["fieldtype"], "Small Text")
 		self.assertTrue(fields["description"]["reqd"])
 

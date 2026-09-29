@@ -1,8 +1,8 @@
 import frappe
 from frappe.tests import IntegrationTestCase
+from yrp.yrp.api.ui_metrics import get_calculation_registry, get_metric_registry
 
 from essdee_yrp import ui_registry
-from yrp.yrp.api.ui_metrics import get_calculation_registry, get_metric_registry
 
 
 class TestEssdeeUIRegistry(IntegrationTestCase):
@@ -23,7 +23,7 @@ class TestEssdeeUIRegistry(IntegrationTestCase):
 		self.assertEqual(spec["compute"](), len(names))
 		self.assertEqual(
 			spec["goto"](),
-			{"doctype": 'SD YRP Lot', "filters": [["name", "in", names]]},
+			{"doctype": "SD YRP Lot", "filters": [["name", "in", names]]},
 		)
 
 	def test_lot_balance_rejects_a_dangling_lot(self):

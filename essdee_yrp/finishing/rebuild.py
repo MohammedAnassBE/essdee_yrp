@@ -1,12 +1,12 @@
 """Idempotent Finishing Plan rebuild and supporting Desk read actions."""
-from yrp import attribute_links as attribute_db
 
 import frappe
 from frappe.utils import flt
+from yrp import attribute_links as attribute_db
+from yrp.utils import get_variant_attr_details, update_if_string_instance
 
 from essdee_yrp.finishing.parsing import json_object
 from essdee_yrp.finishing.status import apply_auto_fp_status
-from yrp.utils import get_variant_attr_details, update_if_string_instance
 
 
 def get_process_work_orders(process, lot):
@@ -14,13 +14,13 @@ def get_process_work_orders(process, lot):
 	if not process or not lot:
 		return []
 	process_names = frappe.get_all(
-		'YRP Process Details',
+		"YRP Process Details",
 		filters={"process_name": process},
 		pluck="parent",
 	)
 	process_names.append(process)
 	return frappe.get_all(
-		'YRP Work Order',
+		"YRP Work Order",
 		filters={
 			"lot": lot,
 			"docstatus": 1,
@@ -33,12 +33,12 @@ def get_process_work_orders(process, lot):
 
 @frappe.whitelist()
 def get_incomplete_transfer_docs(lot, doc_name):
-	finishing_process = frappe.db.get_single_value('SD YRP MRP Settings', "finishing_inward_process")
+	finishing_process = frappe.db.get_single_value("SD YRP MRP Settings", "finishing_inward_process")
 	if not finishing_process:
 		frappe.throw("Set Finishing Inward Process")
 	grns = _incomplete_transfer_grns(lot, finishing_process)
 	delivery_challans = frappe.get_all(
-		'YRP Delivery Challan',
+		"YRP Delivery Challan",
 		filters={
 			"docstatus": 1,
 			"includes_packing": 1,
@@ -48,7 +48,7 @@ def get_incomplete_transfer_docs(lot, doc_name):
 		},
 		pluck="name",
 	)
-	doc = frappe.get_doc('SD YRP Finishing Plan', doc_name)
+	doc = frappe.get_doc("SD YRP Finishing Plan", doc_name)
 	doc.check_permission("write")
 	doc.incomplete_transfer_grn_list = frappe.as_json(dict.fromkeys(grns, True))
 	doc.incomplete_transfer_dc_list = frappe.as_json(dict.fromkeys(delivery_challans, True))
@@ -59,7 +59,7 @@ def get_incomplete_transfer_docs(lot, doc_name):
 def _incomplete_transfer_grns(lot, finishing_process=None):
 	"""Replay submitted internal-unit GRNs instead of trusting a stale JSON cache."""
 	finishing_process = finishing_process or frappe.db.get_single_value(
-		'SD YRP MRP Settings', "finishing_inward_process"
+		"SD YRP MRP Settings", "finishing_inward_process"
 	)
 	if not finishing_process:
 		return []
@@ -67,10 +67,10 @@ def _incomplete_transfer_grns(lot, finishing_process=None):
 	if not work_orders:
 		return []
 	return frappe.get_all(
-		'YRP Goods Received Note',
+		"YRP Goods Received Note",
 		filters={
 			"docstatus": 1,
-			"against": 'YRP Work Order',
+			"against": "YRP Work Order",
 			"against_id": ["in", work_orders],
 			"lot": lot,
 			"is_internal_unit": 1,
@@ -85,22 +85,22 @@ def rebuild_finishing_plan(doc_name, *, check_permission=False):
 	# Load the parent and its child rows with the same locking read. Loading first
 	# and locking afterward leaves a stale repeatable-read snapshot when two
 	# completed Work Order calculations target the same plan concurrently.
-	doc = frappe.get_doc('SD YRP Finishing Plan', doc_name, for_update=True)
+	doc = frappe.get_doc("SD YRP Finishing Plan", doc_name, for_update=True)
 	if check_permission:
 		doc.check_permission("write")
-	work_order = frappe.get_doc('YRP Work Order', doc.work_order)
+	work_order = frappe.get_doc("YRP Work Order", doc.work_order)
 	default_type, rejected_type = _received_type_defaults()
 	items = {}
 	for row in work_order.get("work_order_calculated_items") or []:
 		key, combination = _row_key(row)
 		items.setdefault(key, _empty_finishing_row(row.item_variant, combination))
 
-	finishing_process = frappe.db.get_single_value('SD YRP MRP Settings', "finishing_inward_process")
+	finishing_process = frappe.db.get_single_value("SD YRP MRP Settings", "finishing_inward_process")
 	if not finishing_process:
 		frappe.throw("Set Finishing Inward Process")
 	for work_order_name in get_process_work_orders(finishing_process, doc.lot):
 		_process_work_order_quantities(
-			frappe.get_doc('YRP Work Order', work_order_name),
+			frappe.get_doc("YRP Work Order", work_order_name),
 			items,
 			default_type,
 			rejected_type,
@@ -111,7 +111,7 @@ def rebuild_finishing_plan(doc_name, *, check_permission=False):
 		lot=doc.lot,
 	)
 	for work_order_name in get_process_work_orders(cutting_process, doc.lot):
-		for row in frappe.get_doc('YRP Work Order', work_order_name).get("work_order_calculated_items") or []:
+		for row in frappe.get_doc("YRP Work Order", work_order_name).get("work_order_calculated_items") or []:
 			if flt(row.received_qty) <= 0:
 				continue
 			key, _combination = _row_key(row)
@@ -140,9 +140,7 @@ def rebuild_finishing_plan(doc_name, *, check_permission=False):
 					"item_variant": values["item_variant"],
 					"set_combination": values["set_combination"],
 					"quantity": values["rework_qty"],
-					"reworked_quantity": (
-						rework_values["reworked_quantity"] if rework_values else 0
-					),
+					"reworked_quantity": (rework_values["reworked_quantity"] if rework_values else 0),
 					"rejected_qty": rework_values["rejected_qty"] if rework_values else 0,
 				}
 			)
@@ -155,16 +153,14 @@ def rebuild_finishing_plan(doc_name, *, check_permission=False):
 
 def _sync_incomplete_grns(doc, finishing_process=None):
 	doc.incomplete_transfer_grn_list = frappe.as_json(
-		dict.fromkeys(
-			_incomplete_transfer_grns(doc.lot, finishing_process), True
-		)
+		dict.fromkeys(_incomplete_transfer_grns(doc.lot, finishing_process), True)
 	)
 
 
 def _sync_delivery_challans(doc):
 	"""Rebuild the FP's DC references from submitted stock documents."""
 	rows = frappe.get_all(
-		'YRP Delivery Challan',
+		"YRP Delivery Challan",
 		filters={
 			"lot": doc.lot,
 			"docstatus": 1,
@@ -179,20 +175,11 @@ def _sync_delivery_challans(doc):
 		],
 		order_by="creation asc",
 	)
-	doc.dc_list = frappe.as_json(
-		{
-			row.name: row.creation.strftime("%d-%m-%Y %H:%M:%S")
-			for row in rows
-		}
-	)
+	doc.dc_list = frappe.as_json({row.name: row.creation.strftime("%d-%m-%Y %H:%M:%S") for row in rows})
 	posting_dates = [row.posting_date for row in rows if row.posting_date]
 	doc.finishing_start_date = min(posting_dates) if posting_dates else None
 	doc.incomplete_transfer_dc_list = frappe.as_json(
-		{
-			row.name: True
-			for row in rows
-			if row.is_internal_unit and not row.transfer_complete
-		}
+		{row.name: True for row in rows if row.is_internal_unit and not row.transfer_complete}
 	)
 
 
@@ -213,11 +200,9 @@ def sync_finishing_plans_from_work_order(doc):
 	if doc.docstatus not in (1, 2) or doc.get("is_rework") or not doc.get("lot"):
 		return []
 
-	finishing_process = frappe.db.get_single_value(
-		'SD YRP MRP Settings', "finishing_inward_process"
-	)
+	finishing_process = frappe.db.get_single_value("SD YRP MRP Settings", "finishing_inward_process")
 	plans = frappe.get_all(
-		'SD YRP Finishing Plan',
+		"SD YRP Finishing Plan",
 		filters={"lot": doc.lot},
 		fields=["name", "production_detail"],
 		order_by="creation asc",
@@ -249,11 +234,11 @@ def _process_matches_configured(process_name, configured_process):
 		return False
 	if process_name == configured_process:
 		return True
-	if not frappe.db.get_value('YRP Process', process_name, "is_group"):
+	if not frappe.db.get_value("YRP Process", process_name, "is_group"):
 		return False
 	return bool(
 		frappe.db.exists(
-			'YRP Process Details',
+			"YRP Process Details",
 			{"parent": process_name, "process_name": configured_process},
 		)
 	)
@@ -269,9 +254,7 @@ def _process_work_order_quantities(work_order, items, default_type, rejected_typ
 		values = items[key]
 		values["delivered_quantity"] += flt(row.received_qty)
 		values["inward_quantity"] += flt(row.delivered_quantity)
-		for received_type, quantity in (
-			update_if_string_instance(row.received_type_json) or {}
-		).items():
+		for received_type, quantity in (update_if_string_instance(row.received_type_json) or {}).items():
 			quantity = flt(quantity)
 			values["received_types"][received_type] = (
 				values["received_types"].get(received_type, 0) + quantity
@@ -286,11 +269,9 @@ def _process_work_order_quantities(work_order, items, default_type, rejected_typ
 
 def _collect_rework(lot, items, default_type, rejected_type):
 	rework = {}
-	for name in frappe.get_all('SD YRP GRN Rework Item', filters={"lot": lot}, pluck="name"):
-		doc = frappe.get_doc('SD YRP GRN Rework Item', name)
-		from_finishing = frappe.db.get_value(
-			'YRP Goods Received Note', doc.grn_number, "from_finishing"
-		)
+	for name in frappe.get_all("SD YRP GRN Rework Item", filters={"lot": lot}, pluck="name"):
+		doc = frappe.get_doc("SD YRP GRN Rework Item", name)
+		from_finishing = frappe.db.get_value("YRP Goods Received Note", doc.grn_number, "from_finishing")
 		for row in doc.get("grn_rework_item_details") or []:
 			key, _combination = _row_key(row)
 			values = rework.setdefault(key, {"quantity": 0, "reworked_quantity": 0, "rejected_qty": 0})
@@ -313,16 +294,16 @@ def _collect_rework(lot, items, default_type, rejected_type):
 def _apply_rework_work_order_receipts(lot, items, rework, default_type, rejected_type):
 	"""Project submitted generic rework results without duplicating inward."""
 	rework_work_orders = frappe.get_all(
-		'YRP Work Order',
+		"YRP Work Order",
 		filters={"lot": lot, "docstatus": 1, "is_rework": 1},
 		pluck="name",
 	)
 	if not rework_work_orders:
 		return
 	rework_grns = frappe.get_all(
-		'YRP Goods Received Note',
+		"YRP Goods Received Note",
 		filters={
-			"against": 'YRP Work Order',
+			"against": "YRP Work Order",
 			"against_id": ["in", rework_work_orders],
 			"docstatus": 1,
 			"is_return": 0,
@@ -332,10 +313,10 @@ def _apply_rework_work_order_receipts(lot, items, rework, default_type, rejected
 	if not rework_grns:
 		return
 	receipt_rows = frappe.get_all(
-		'YRP Goods Received Note Item',
+		"YRP Goods Received Note Item",
 		filters={
 			"parent": ["in", rework_grns],
-			"parenttype": 'YRP Goods Received Note',
+			"parenttype": "YRP Goods Received Note",
 		},
 		fields=[
 			"item_variant",
@@ -345,9 +326,7 @@ def _apply_rework_work_order_receipts(lot, items, rework, default_type, rejected
 		],
 		limit_page_length=0,
 	)
-	_apply_rework_receipt_rows(
-		receipt_rows, items, rework, default_type, rejected_type
-	)
+	_apply_rework_receipt_rows(receipt_rows, items, rework, default_type, rejected_type)
 
 
 def _apply_rework_receipt_rows(rows, items, rework, default_type, rejected_type):
@@ -355,9 +334,7 @@ def _apply_rework_receipt_rows(rows, items, rework, default_type, rejected_type)
 		key, _combination = _row_key(row)
 		if key not in items:
 			continue
-		values = rework.setdefault(
-			key, {"quantity": 0, "reworked_quantity": 0, "rejected_qty": 0}
-		)
+		values = rework.setdefault(key, {"quantity": 0, "reworked_quantity": 0, "rejected_qty": 0})
 		received_type = row.get("received_type") or default_type
 		if received_type == default_type:
 			values["reworked_quantity"] += flt(row.quantity)
@@ -366,10 +343,10 @@ def _apply_rework_receipt_rows(rows, items, rework, default_type, rejected_type)
 
 
 def _apply_delivery_challans(doc, items):
-	for name in (update_if_string_instance(doc.dc_list) or {}):
-		if frappe.db.get_value('YRP Delivery Challan', name, "docstatus") != 1:
+	for name in update_if_string_instance(doc.dc_list) or {}:
+		if frappe.db.get_value("YRP Delivery Challan", name, "docstatus") != 1:
 			continue
-		delivery_challan = frappe.get_doc('YRP Delivery Challan', name)
+		delivery_challan = frappe.get_doc("YRP Delivery Challan", name)
 		for row in delivery_challan.get("items") or []:
 			key, _combination = _row_key(row)
 			if key not in items:
@@ -383,10 +360,10 @@ def _apply_delivery_challans(doc, items):
 
 
 def _apply_lot_transfers(doc, items):
-	for name in (update_if_string_instance(doc.lot_transfer_list) or {}):
-		if frappe.db.get_value('SD YRP Lot Transfer', name, "docstatus") != 1:
+	for name in update_if_string_instance(doc.lot_transfer_list) or {}:
+		if frappe.db.get_value("SD YRP Lot Transfer", name, "docstatus") != 1:
 			continue
-		for row in frappe.get_doc('SD YRP Lot Transfer', name).get("items") or []:
+		for row in frappe.get_doc("SD YRP Lot Transfer", name).get("items") or []:
 			key = _key(row.item, row.set_combination)
 			if key in items:
 				items[key]["lot_transferred"] += flt(row.qty)
@@ -396,9 +373,9 @@ def _apply_return_grns(doc, items, rework, default_type, rejected_type):
 	grns = set(update_if_string_instance(doc.return_grn_list) or {})
 	grns.update(update_if_string_instance(doc.pack_return_list) or {})
 	for name in grns:
-		if frappe.db.get_value('YRP Goods Received Note', name, "docstatus") != 1:
+		if frappe.db.get_value("YRP Goods Received Note", name, "docstatus") != 1:
 			continue
-		grn = frappe.get_doc('YRP Goods Received Note', name)
+		grn = frappe.get_doc("YRP Goods Received Note", name)
 		for row in grn.get("items") or []:
 			key, _combination = _row_key(row)
 			if key not in items:
@@ -418,10 +395,10 @@ def _apply_return_grns(doc, items, rework, default_type, rejected_type):
 
 
 def _apply_ironing_excess(doc, items):
-	for name in (update_if_string_instance(doc.ironing_excess_list) or {}):
-		if frappe.db.get_value('YRP Stock Entry', name, "docstatus") != 1:
+	for name in update_if_string_instance(doc.ironing_excess_list) or {}:
+		if frappe.db.get_value("YRP Stock Entry", name, "docstatus") != 1:
 			continue
-		for row in frappe.get_doc('YRP Stock Entry', name).get("items") or []:
+		for row in frappe.get_doc("YRP Stock Entry", name).get("items") or []:
 			key = _key(row.item, row.set_combination)
 			if key in items:
 				items[key]["ironing_excess"] += flt(row.qty)
@@ -488,21 +465,21 @@ def _key(item_variant, set_combination):
 
 
 def _received_type_defaults():
-	settings = frappe.get_cached_doc('YRP Stock Settings')
+	settings = frappe.get_cached_doc("YRP Stock Settings")
 	return settings.default_received_type, settings.default_rejected_received_type
 
 
 def get_configured_cutting_process(*, production_detail=None, lot=None):
 	if not production_detail and lot:
-		production_detail = attribute_db.get_value('SD YRP Lot', lot, "production_detail")
+		production_detail = attribute_db.get_value("SD YRP Lot", lot, "production_detail")
 	if production_detail:
 		process = attribute_db.get_cached_value(
-			'YRP Item Production Detail', production_detail, "cutting_process"
+			"YRP Item Production Detail", production_detail, "cutting_process"
 		)
 		if process:
 			return process
-	if frappe.get_meta('SD YRP MRP Settings').has_field("cutting_process"):
-		return frappe.db.get_single_value('SD YRP MRP Settings', "cutting_process") or "Cutting"
+	if frappe.get_meta("SD YRP MRP Settings").has_field("cutting_process"):
+		return frappe.db.get_single_value("SD YRP MRP Settings", "cutting_process") or "Cutting"
 	return "Cutting"
 
 

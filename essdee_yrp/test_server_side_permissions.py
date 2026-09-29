@@ -2,6 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import frappe
 from frappe.tests import IntegrationTestCase, UnitTestCase
+from yrp.yrp.doctype.yrp_inspection_entry import yrp_inspection_entry as inspection_entry
 
 from essdee_yrp import ipd_ui, production_order_workflow
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan_dispatch import (
@@ -13,7 +14,6 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_grn_rework_item import (
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_mrp_data_migration import (
 	sd_yrp_mrp_data_migration as mrp_data_migration,
 )
-from yrp.yrp.doctype.yrp_inspection_entry import yrp_inspection_entry as inspection_entry
 
 
 class TestServerSidePermissions(UnitTestCase):
@@ -137,9 +137,7 @@ class TestServerSidePermissions(UnitTestCase):
 			patch.object(finishing_plan_dispatch.frappe, "new_doc") as new_doc,
 		):
 			with self.assertRaises(frappe.PermissionError):
-				finishing_plan_dispatch.create_stock_dispatch(
-					"FPD-U43", "FROM-U43", "TO-U43", "TN-U43", 1
-				)
+				finishing_plan_dispatch.create_stock_dispatch("FPD-U43", "FROM-U43", "TO-U43", "TN-U43", 1)
 
 		dispatch.check_permission.assert_called_once_with("write")
 		new_doc.assert_not_called()
@@ -147,11 +145,9 @@ class TestServerSidePermissions(UnitTestCase):
 
 class TestActualRolelessSession(IntegrationTestCase):
 	def test_whitelisted_sensitive_actions_reject_an_actual_roleless_session(self):
-		grns = frappe.get_all(
-			'YRP Goods Received Note', filters={"docstatus": 1}, pluck="name", limit=1
-		)
+		grns = frappe.get_all("YRP Goods Received Note", filters={"docstatus": 1}, pluck="name", limit=1)
 		dispatches = frappe.get_all(
-			'SD YRP Finishing Plan Dispatch', filters={"docstatus": 1}, pluck="name", limit=1
+			"SD YRP Finishing Plan Dispatch", filters={"docstatus": 1}, pluck="name", limit=1
 		)
 		if not grns or not dispatches:
 			self.skipTest("Actual roleless checks run against migrated submitted records")

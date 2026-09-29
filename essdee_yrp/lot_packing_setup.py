@@ -2,9 +2,8 @@
 
 import frappe
 
-
 CUSTOM_FIELDS = {
-	'Purchase Order': [
+	"Purchase Order": [
 		{
 			"fieldname": "lot_details_section",
 			"fieldtype": "Section Break",
@@ -17,7 +16,7 @@ CUSTOM_FIELDS = {
 			"fieldname": "default_lot",
 			"fieldtype": "Link",
 			"label": "Default Lot",
-			"options": 'SD YRP Lot',
+			"options": "SD YRP Lot",
 			"insert_after": "lot_details_section",
 			"allow_on_submit": 1,
 			"hidden": 1,
@@ -27,14 +26,14 @@ CUSTOM_FIELDS = {
 			"fieldname": "sd_lot",
 			"fieldtype": "Table",
 			"label": "Linked Lots",
-			"options": 'SD YRP Lot MultiSelect',
+			"options": "SD YRP Lot MultiSelect",
 			"insert_after": "default_lot",
 			"allow_on_submit": 1,
 			"hidden": 1,
 			"module": "Essdee YRP",
 		},
 	],
-	'YRP Process': [
+	"YRP Process": [
 		{
 			"fieldname": "includes_packing",
 			"fieldtype": "Check",
@@ -44,7 +43,7 @@ CUSTOM_FIELDS = {
 			"module": "Essdee YRP",
 		},
 	],
-	'YRP Work Order': [
+	"YRP Work Order": [
 		{
 			"fieldname": "includes_packing",
 			"fieldtype": "Check",
@@ -69,9 +68,7 @@ def ensure_custom_fields():
 			if not frappe.get_meta(doctype).get_field(fieldname) or not frappe.db.exists(
 				"Custom Field", f"{doctype}-{fieldname}"
 			):
-				frappe.throw(
-					f"Essdee YRP Custom Field fixture is missing {doctype}.{fieldname}"
-				)
+				frappe.throw(f"Essdee YRP Custom Field fixture is missing {doctype}.{fieldname}")
 
 
 def migrate_legacy_purchase_order_lot_rows():
@@ -114,8 +111,8 @@ def migrate_legacy_purchase_order_lot_rows():
 			not row.parent
 			or not row.lot
 			or key in existing
-			or not frappe.db.exists('Purchase Order', row.parent)
-			or not frappe.db.exists('SD YRP Lot', row.lot)
+			or not frappe.db.exists("Purchase Order", row.parent)
+			or not frappe.db.exists("SD YRP Lot", row.lot)
 		):
 			skipped += 1
 			skipped_rows.append({"parent": row.parent, "lot": row.lot, "idx": row.idx})

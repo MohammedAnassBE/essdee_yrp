@@ -3,7 +3,6 @@
 import frappe
 from frappe import _
 from frappe.utils import flt, nowdate, nowtime
-
 from yrp.yrp.doctype.yrp_work_order.yrp_work_order import (
 	_apply_close_details,
 	_get_wo_close_approver_role,
@@ -11,7 +10,6 @@ from yrp.yrp.doctype.yrp_work_order.yrp_work_order import (
 	_stock_dimension_values,
 	_validate_wo_close,
 )
-
 
 QTY_TOLERANCE = 0.000001
 SD_CLOSE_REASONS = (
@@ -54,7 +52,7 @@ def close_work_order(
 		"SELECT name FROM `tabYRP Work Order` WHERE name=%s FOR UPDATE",
 		(work_order,),
 	)
-	doc = frappe.get_doc('YRP Work Order', work_order)
+	doc = frappe.get_doc("YRP Work Order", work_order)
 	doc.check_permission("write")
 	if doc.docstatus != 1:
 		frappe.throw(_("Only submitted Work Orders can be closed."))
@@ -64,11 +62,7 @@ def close_work_order(
 	if not _is_wo_close_manager(throw_if_missing=True):
 		if doc.open_status == "Close Request":
 			approver_role = _get_wo_close_approver_role()
-			frappe.throw(
-				_("Only users with role {0} can approve close requests.").format(
-					approver_role
-				)
-			)
+			frappe.throw(_("Only users with role {0} can approve close requests.").format(approver_role))
 		_apply_close_details(
 			doc,
 			"Close Request",
@@ -145,11 +139,7 @@ def close_work_order(
 				"posting_time": posting_time,
 				"qty": -reduce_stock_qty,
 				"rate": 0,
-				"outgoing_rate": flt(
-					row.valuation_rate
-					or row.rate
-					or bucket_balance["valuation_rate"]
-				),
+				"outgoing_rate": flt(row.valuation_rate or row.rate or bucket_balance["valuation_rate"]),
 				"is_cancelled": 0,
 				"_result_key": result_key,
 				**dimensions,
@@ -179,9 +169,7 @@ def close_work_order(
 			)
 		plan["ledger_detail"] = detail
 		_record_excess_usage(doc, plan)
-		plan["deliverable"].stock_update = flt(
-			plan["deliverable"].stock_update
-		) + flt(plan["quantity"])
+		plan["deliverable"].stock_update = flt(plan["deliverable"].stock_update) + flt(plan["quantity"])
 
 	_apply_close_details(doc, "Close", None, other_reason, close_remarks)
 	doc.sd_close_reason = selected_reason
@@ -208,16 +196,12 @@ def close_work_order(
 			value_share = (
 				flt(detail["value"]) - assigned_value
 				if is_last
-				else flt(detail["value"])
-				* flt(output["allocation_weight"])
-				/ weights
+				else flt(detail["value"]) * flt(output["allocation_weight"]) / weights
 			)
 			qty_share = (
 				flt(plan["stock_quantity"]) - assigned_qty
 				if is_last
-				else flt(plan["stock_quantity"])
-				* flt(output["allocation_weight"])
-				/ weights
+				else flt(plan["stock_quantity"]) * flt(output["allocation_weight"]) / weights
 			)
 			assigned_value += value_share
 			assigned_qty += qty_share
@@ -257,7 +241,7 @@ def close_work_order(
 		allocations=adjustment_allocations,
 		idempotency_key=f"{doc.doctype}:{doc.name}:close:1",
 	)
-	close_voucher_reservations('YRP Work Order', doc.name)
+	close_voucher_reservations("YRP Work Order", doc.name)
 	enqueue_voucher_repost(
 		frappe._dict(
 			doctype=doc.doctype,
@@ -268,9 +252,7 @@ def close_work_order(
 	)
 	return {
 		"status": "Close",
-		"deducted_qty": round(
-			sum(flt(plan["stock_quantity"]) for plan in excess_plans), 3
-		),
+		"deducted_qty": round(sum(flt(plan["stock_quantity"]) for plan in excess_plans), 3),
 	}
 
 
@@ -311,10 +293,7 @@ def _get_excess_output_allocations(work_order, deliverable, dimensions):
 	grouped = {}
 	for row in rows:
 		row_dimensions = frappe.parse_json(row.stock_dimensions or "{}")
-		if any(
-			(row_dimensions.get(key) or None) != (value or None)
-			for key, value in dimensions.items()
-		):
+		if any((row_dimensions.get(key) or None) != (value or None) for key, value in dimensions.items()):
 			continue
 		key = (
 			row.output_receipt_sle,
@@ -347,10 +326,10 @@ def _get_excess_output_allocations(work_order, deliverable, dimensions):
 def _get_owned_output_sle(output):
 	"""Load only the active GRN receipt proved by mapped output lineage."""
 	target = frappe.db.get_value(
-		'YRP Stock Ledger Entry',
+		"YRP Stock Ledger Entry",
 		{
 			"name": output["output_receipt_sle"],
-			"voucher_type": 'YRP Goods Received Note',
+			"voucher_type": "YRP Goods Received Note",
 			"voucher_no": output["output_voucher"],
 			"voucher_detail_no": output["output_detail"],
 			"item": output["output_item"],

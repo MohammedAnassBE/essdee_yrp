@@ -1,7 +1,6 @@
 // Copyright (c) 2023, Essdee and contributors
 // For license information, please see license.txt
 
-let total_count = 0;
 
 frappe.ui.form.on('SD YRP Lotwise Item Profit', {
 	setup: function(frm) {
@@ -49,7 +48,6 @@ frappe.ui.form.on('SD YRP Lotwise Item Profit', {
 				return;
 			}
 			if (frm.doc.lot_costing_type != "Costing") {
-				console.log("fetching lot")
 				fetch_lot_qty(frm);
 			}
 		});
@@ -161,14 +159,14 @@ frappe.ui.form.on('SD YRP Lotwise Item Profit', {
 	calculate_cloth_qty: function(frm) {
 		let cloth_group_weight = {}
 		$.each(frm.doc.piece_cloth_weight || [], function(i, v) {
-			if (cloth_group_weight.hasOwnProperty(v.cloth_group)){
+			if (Object.hasOwn(cloth_group_weight, v.cloth_group)){
 				cloth_group_weight[v.cloth_group] += (((v.weight || 0) / 1000) * get_size_qty(frm, frappe.yrp.attribute_value(v.size)))
 			} else {
 				cloth_group_weight[v.cloth_group] = (((v.weight || 0) / 1000) * get_size_qty(frm, frappe.yrp.attribute_value(v.size)))
 			}
 		})
 		$.each(frm.doc.cloth_value || [], function(i, v) {
-			if (cloth_group_weight.hasOwnProperty(v.yarn)) {
+			if (Object.hasOwn(cloth_group_weight, v.yarn)) {
 				v.qty = cloth_group_weight[v.yarn]
 			}
 		})
@@ -184,7 +182,6 @@ frappe.ui.form.on('SD YRP Lotwise Item Profit', {
 		if (!frm.doc.trade_discounts_template) return
 		frappe.db.get_doc("SD YRP Lotwise Item Profit Additional Cost Template", frm.doc.trade_discounts_template)
 			.then(result => {
-				console.log(result);
 				frm.doc.trade_discounts = []
 				$.each(result.value || [], function(i, v) {
 					frm.add_child('trade_discounts', {
@@ -202,7 +199,6 @@ frappe.ui.form.on('SD YRP Lotwise Item Profit', {
 		if (!frm.doc.other_costs_template) return
 		frappe.db.get_doc("SD YRP Lotwise Item Profit Additional Cost Template", frm.doc.other_costs_template)
 			.then(result => {
-				console.log(result);
 				frm.doc.other_costs = []
 				$.each(result.value || [], function(i, v) {
 					frm.add_child('other_costs', {
@@ -220,7 +216,6 @@ frappe.ui.form.on('SD YRP Lotwise Item Profit', {
 		if (!frm.doc.production_cost_template) return
 		frappe.db.get_doc("SD YRP Lotwise Item Profit Breakup Template", frm.doc.production_cost_template)
 			.then(result => {
-				console.log(result);
 				frm.doc.cmt = []
 				$.each(result.cmt || [], function(i, v) {
 					frm.add_child('cmt', {
@@ -253,7 +248,6 @@ frappe.ui.form.on('SD YRP Lotwise Item Profit', {
 });
 
 function fetch_lot_qty(frm) {
-	console.log("fetching lot qty")
 	let m = {
 		"Planned Qty": "qty",
 		"Cutting Qty": "cut_qty",
@@ -270,7 +264,6 @@ function fetch_lot_qty(frm) {
 		let data = r.message;
 		$.each(frm.doc.qty_rate_chart || [], function(i, v) {
 			if (data[frappe.yrp.attribute_value(frm.doc.qty_rate_chart[i].size)]) {
-				console.log(data[frappe.yrp.attribute_value(frm.doc.qty_rate_chart[i].size)]);
 				frm.doc.qty_rate_chart[i].qty = data[frappe.yrp.attribute_value(frm.doc.qty_rate_chart[i].size)];
 			}
 		});
@@ -294,20 +287,17 @@ function calculate_backwards_rate(frm, percent) {
 	// Calculate Groupwise avg_weight
 	let qty_groups = {};
 	$.each(frm.doc.qty_rate_chart || [], function(i, v) {
-		if (qty_groups.hasOwnProperty(v.group_index)) {
-			console.log('Qty', v.qty)
+		if (Object.hasOwn(qty_groups, v.group_index)) {
 			let cloth_group = qty_groups[v.group_index].cloth_group || {}
 			$.each(frm.doc.piece_cloth_weight || [], function(i, weight) {
-				if (frappe.yrp.attribute_value(v.size) == frappe.yrp.attribute_value(weight.size)) {
-					if (cloth_group.hasOwnProperty(weight.cloth_group)) {
-						console.log('Value', (weight.weight/1000 * v.qty))
-						cloth_group[weight.cloth_group] = {
+					if (frappe.yrp.attribute_value(v.size) == frappe.yrp.attribute_value(weight.size)) {
+						if (Object.hasOwn(cloth_group, weight.cloth_group)) {
+							cloth_group[weight.cloth_group] = {
 							'total_qty': cloth_group[weight.cloth_group].total_qty + v.qty,
 							'total_weight': cloth_group[weight.cloth_group].total_weight + (weight.weight/1000 * v.qty),
 						}
-					} else {
-						console.log("Shouldnt happen")
-						cloth_group[weight.cloth_group] = {
+						} else {
+							cloth_group[weight.cloth_group] = {
 							'total_qty': v.qty,
 							'total_weight': weight.weight/1000 * v.qty,
 						}
@@ -320,7 +310,7 @@ function calculate_backwards_rate(frm, percent) {
 			let cloth_group = {}
 			$.each(frm.doc.piece_cloth_weight || [], function(i, weight) {
 				if (frappe.yrp.attribute_value(v.size) == frappe.yrp.attribute_value(weight.size)) {
-					if (cloth_group.hasOwnProperty(weight.cloth_group)) {
+					if (Object.hasOwn(cloth_group, weight.cloth_group)) {
 						cloth_group[weight.cloth_group] = {
 							'total_qty': cloth_group[weight.cloth_group].total_qty + v.qty,
 							'total_weight': cloth_group[weight.cloth_group].total_weight + (weight.weight/1000 * v.qty),
@@ -338,8 +328,7 @@ function calculate_backwards_rate(frm, percent) {
 				cloth_group: cloth_group,
 			};
 		}
-		console.log(frappe.yrp.attribute_value(v.size), JSON.parse(JSON.stringify(qty_groups)))
-    })
+	    })
 	// Calculate avg rate of cloth used
 	let cloth_value = {};
 	$.each(frm.doc.cloth_value || [], function(i, v) {
@@ -372,36 +361,23 @@ function calculate_backwards_rate(frm, percent) {
 			extra_mu += v.rate;
 		}
 	})
-	console.log('qty_groups', qty_groups)
-	console.log('cloth_value', cloth_value)
-	console.log('extra_per_cost', extra_per_cost)
-	console.log('extra_mu', extra_mu)
-	console.log('total_md', total_md)
-
-	Object.entries(qty_groups).forEach(([k, v]) => {
-		console.log('Group index: ', k)
+	Object.values(qty_groups).forEach((v) => {
 		let total_cloth_value = 0;
 		$.each(v.cloth_group, function(k1, v1) {
 			let c_value = 0;
-			if (cloth_value.hasOwnProperty(k1)) {
+			if (Object.hasOwn(cloth_value, k1)) {
 				let avg_weight = 0;
 				if (v1.total_qty) {
 					avg_weight = v1.total_weight / v1.total_qty
 				}
-				console.log(k1, "Cloth Weight", avg_weight)
 				c_value = avg_weight * cloth_value[k1];
 			}
-			console.log(k1, "Cloth Value", c_value)
 			total_cloth_value += c_value;
 		})
-		console.log('Cloth Value Per Pcs', total_cloth_value)
 		let rate = total_cloth_value + cmt + pm + trims + extra_per_cost;
-		console.log('rate', rate)
 		rate += ((extra_mu/100) * rate);
-		console.log('rate', rate)
 
 		let final_rate = rate / (1 - (total_md/100));
-		console.log('final_rate', final_rate)
 
 		$.each(v.values || [], function(i, vi) {
 			vi.rate = final_rate;
@@ -519,7 +495,6 @@ function calculate_all(frm) {
 	calculate_total(frm);
 	refresh_fields(frm);
 	frm.dirty();
-	console.log(++total_count);
 }
 
 function calculate_qty_rate_chart(frm) {
@@ -602,8 +577,7 @@ function calculate_total(frm) {
 }
 
 function get_numeric_value(frm, key, fallback) {
-	return numeric_value(frm.doc, key, 0);
-	return Number(frm.doc[key]) || fallback || 0;
+	return numeric_value(frm.doc, key, fallback);
 }
 
 function numeric_value(data, key, fallback) {

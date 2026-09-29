@@ -1,39 +1,36 @@
-from yrp import attribute_links as attribute_db
-from yrp.attribute_links import value as _attribute_value
-from essdee_yrp.ipd_attribute_links import major_stitching_value
 # Copyright (c) 2025, Essdee and contributors
 # For license information, please see license.txt
-
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from yrp.utils import update_if_string_instance
+from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as _attribute_value
 from yrp.stock.utils import get_combine_datetime
+from yrp.utils import update_if_string_instance
+
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet import (
 	generate_random_string,
 	get_created_date,
 	get_timestamp_prefix,
 )
+from essdee_yrp.ipd_attribute_links import major_stitching_value
+
 
 class SDYRPCutBundleEdit(Document):
 	def onload(self):
-		onload_data = {
-			"json_data": {},
-			"inputs": [],
-			"outputs": []
-		}
+		onload_data = {"json_data": {}, "inputs": [], "outputs": []}
 		if self.cut_panel_movement_json:
-			onload_data['json_data'] = frappe.json.loads(self.cut_panel_movement_json)
+			onload_data["json_data"] = frappe.json.loads(self.cut_panel_movement_json)
 		if self.input_json:
-			onload_data['inputs'] = frappe.json.loads(self.input_json)
+			onload_data["inputs"] = frappe.json.loads(self.input_json)
 		if self.output_json:
-			onload_data['outputs'] = frappe.json.loads(self.output_json)
+			onload_data["outputs"] = frappe.json.loads(self.output_json)
 
 		if onload_data:
 			self.set_onload("movement_json", onload_data)
 
 	def before_validate(self):
-		if self.get('movement_data'):
+		if self.get("movement_data"):
 			self.cut_panel_movement_json = frappe.json.dumps(self.movement_data.get("bundles"))
 			self.input_json = frappe.json.dumps(self.movement_data.get("inputs"))
 			self.output_json = frappe.json.dumps(self.movement_data.get("outputs"))
@@ -47,7 +44,7 @@ class SDYRPCutBundleEdit(Document):
 
 		input_qty = self.get_json_panel_qty(self.input_json)
 		output_qty = self.get_json_panel_qty(self.output_json)
-		if(len(input_qty) != len(output_qty)):
+		if len(input_qty) != len(output_qty):
 			frappe.throw("Quantity Mismatch Between Input and Output")
 
 		for key in input_qty:
@@ -58,58 +55,58 @@ class SDYRPCutBundleEdit(Document):
 
 		datas = {}
 		json_data = update_if_string_instance(self.cut_panel_movement_json)
-		panels = json_data['panels']
-		is_set_item = json_data['is_set_item']
-		data = json_data['data']
+		panels = json_data["panels"]
+		is_set_item = json_data["is_set_item"]
+		data = json_data["data"]
 		for colour in data:
-			datas[colour] = {"part":_attribute_value(data[colour]['part']), 'data':[]}
-			for row in data[colour]['data']:
-				if row['bundle_moved']:
-					datas[colour]['data'].append(row)
+			datas[colour] = {"part": _attribute_value(data[colour]["part"]), "data": []}
+			for row in data[colour]["data"]:
+				if row["bundle_moved"]:
+					datas[colour]["data"].append(row)
 				else:
 					if is_set_item:
-						part = _attribute_value(data[colour]['part'])
+						part = _attribute_value(data[colour]["part"])
 						for panel in panels[part]:
-							x = panel+"_moved"
-							if panel in row and x in row and row[x] == True:
-								datas[colour]['data'].append(row)
+							x = panel + "_moved"
+							if panel in row and x in row and row[x]:
+								datas[colour]["data"].append(row)
 								break
 					else:
 						for panel in panels:
-							x = panel+"_moved"
-							if panel in row and x in row and row[x] == True:
-								datas[colour]['data'].append(row)
+							x = panel + "_moved"
+							if panel in row and x in row and row[x]:
+								datas[colour]["data"].append(row)
 								break
-		json_data['data'] = datas
-		accessory = json_data['accessory_data']
+		json_data["data"] = datas
+		accessory = json_data["accessory_data"]
 		if accessory:
 			accessories = []
 			for acc in accessory:
-				if acc['moved_weight'] > 0:
+				if acc["moved_weight"] > 0:
 					accessories.append(acc)
-			json_data['accessory_data'] = accessories
+			json_data["accessory_data"] = accessories
 
 		self.set("cut_panel_movement_json", frappe.json.dumps(json_data))
 
 	def before_cancel(self):
 		if self.printed_time:
 			frappe.throw(_("A Cut Bundle Edit cannot be cancelled after its labels are printed."))
-		self.ignore_linked_doctypes = ('SD YRP Cut Bundle Movement Ledger',)
+		self.ignore_linked_doctypes = ("SD YRP Cut Bundle Movement Ledger",)
 		posting_datetime = get_combine_datetime(self.posting_date, self.posting_time)
-		lot_hash = attribute_db.get_cached_value('SD YRP Lot', self.lot, "lot_hash_value")
-		item_hash = frappe.get_cached_value('Item', self.item, "item_hash_value")
+		lot_hash = attribute_db.get_cached_value("SD YRP Lot", self.lot, "lot_hash_value")
+		item_hash = frappe.get_cached_value("Item", self.item, "item_hash_value")
 		output_json = frappe.json.loads(self.output_json)
 		for row in output_json:
 			parts = [
 				str(lot_hash),
 				str(self.warehouse),
-				str(row['lay_no']),
-				str(row['bundle_no']),
-				str(row['shade']),
+				str(row["lay_no"]),
+				str(row["bundle_no"]),
+				str(row["shade"]),
 				str(item_hash),
-				str(_attribute_value(row['size'])),
-				str(_attribute_value(row['colour'])),
-				str(_attribute_value(row['panel'])),
+				str(_attribute_value(row["size"])),
+				str(_attribute_value(row["colour"])),
+				str(_attribute_value(row["panel"])),
 			]
 			key = "-".join(parts)
 			future = frappe.db.sql(
@@ -117,10 +114,12 @@ class SDYRPCutBundleEdit(Document):
 					SELECT name, quantity_after_transaction FROM `tabSD YRP Cut Bundle Movement Ledger`
 					WHERE cbm_key = %(key)s AND posting_datetime > %(datetime)s AND is_cancelled = 0 AND is_collapsed = 0
 					AND transformed = 0 ORDER BY posting_datetime DESC
-				""",{
+				""",
+				{
 					"key": key,
 					"datetime": posting_datetime,
-				}, as_dict=True
+				},
+				as_dict=True,
 			)
 			if future:
 				frappe.throw("Stock was moved")
@@ -133,24 +132,25 @@ class SDYRPCutBundleEdit(Document):
 				"user": frappe.session.user,
 				"docname": self.name,
 				"lot": self.lot,
-				"lay_no": row['lay_no'],
-				"bundle": row['bundle_no'],
-				"size": _attribute_value(row['size']),
-				"shade": row['shade'],
+				"lay_no": row["lay_no"],
+				"bundle": row["bundle_no"],
+				"size": _attribute_value(row["size"]),
+				"shade": row["shade"],
 				"item": self.item,
-				"panel": _attribute_value(row['panel']),
-				"colour": _attribute_value(row['colour']),
+				"panel": _attribute_value(row["panel"]),
+				"colour": _attribute_value(row["colour"]),
 			}
-			d['size'] = attribute_db.link(d['size'])
-			d['colour'] = attribute_db.link(d['colour'])
-			if row['is_collapsed']:
+			d["size"] = attribute_db.link(d["size"])
+			d["colour"] = attribute_db.link(d["colour"])
+			if row["is_collapsed"]:
 				frappe.db.sql(
 					"""
 						UPDATE `tabSD YRP Cut Bundle Movement Ledger` SET transformed = 0, modified = %(modified)s,
 						modified_by = %(user)s WHERE lot = %(lot)s AND is_cancelled = 0 AND is_collapsed = 0
 						AND collapsed_bundle = 1 AND lay_no = %(lay_no)s AND bundle_no = %(bundle)s AND size = %(size)s
 						AND colour = %(colour)s AND panel = %(panel)s AND shade = %(shade)s AND item = %(item)s
-					""", d
+					""",
+					d,
 				)
 			else:
 				frappe.db.sql(
@@ -159,28 +159,37 @@ class SDYRPCutBundleEdit(Document):
 						modified_by = %(user)s WHERE lot = %(lot)s AND is_cancelled = 0 AND is_collapsed = 0
 						AND collapsed_bundle = 0 AND lay_no = %(lay_no)s AND bundle_no = %(bundle)s AND size = %(size)s
 						AND colour = %(colour)s AND panel = %(panel)s AND shade = %(shade)s AND item = %(item)s
-					""", d
+					""",
+					d,
 				)
 
 		frappe.db.sql(
 			"""
 				UPDATE `tabSD YRP Cut Bundle Movement Ledger` SET is_cancelled = 1 ,modified = %(modified)s,
 				modified_by = %(user)s WHERE transformed_from = %(docname)s
-			""", {
+			""",
+			{
 				"modified": frappe.utils.now(),
 				"user": frappe.session.user,
 				"docname": self.name,
-			}
+			},
 		)
 
 	def on_submit(self):
 		input_json = frappe.json.loads(self.input_json)
-		lot_hash = attribute_db.get_cached_value('SD YRP Lot', self.lot, "lot_hash_value")
-		item_hash = frappe.get_cached_value('Item', self.item, "item_hash_value")
+		lot_hash = attribute_db.get_cached_value("SD YRP Lot", self.lot, "lot_hash_value")
+		item_hash = frappe.get_cached_value("Item", self.item, "item_hash_value")
 		for row in input_json:
 			parts = [
-				str(lot_hash), str(self.warehouse), str(row['lay_no']), str(row['bundle_no']),
-				str(row['shade']), str(item_hash), str(_attribute_value(row['size'])), str(_attribute_value(row['colour'])), str(_attribute_value(row['panel'])),
+				str(lot_hash),
+				str(self.warehouse),
+				str(row["lay_no"]),
+				str(row["bundle_no"]),
+				str(row["shade"]),
+				str(item_hash),
+				str(_attribute_value(row["size"])),
+				str(_attribute_value(row["colour"])),
+				str(_attribute_value(row["panel"])),
 			]
 			cbm_key = "-".join(parts)
 			d = {
@@ -188,24 +197,25 @@ class SDYRPCutBundleEdit(Document):
 				"user": frappe.session.user,
 				"docname": self.name,
 				"lot": self.lot,
-				"lay_no": row['lay_no'],
-				"bundle": row['bundle_no'],
-				"size": _attribute_value(row['size']),
-				"shade": row['shade'],
+				"lay_no": row["lay_no"],
+				"bundle": row["bundle_no"],
+				"size": _attribute_value(row["size"]),
+				"shade": row["shade"],
 				"item": self.item,
-				"panel": _attribute_value(row['panel']),
-				"colour": _attribute_value(row['colour']),
+				"panel": _attribute_value(row["panel"]),
+				"colour": _attribute_value(row["colour"]),
 				"cbm_key": cbm_key,
 			}
-			d['size'] = attribute_db.link(d['size'])
-			d['colour'] = attribute_db.link(d['colour'])
-			if row['is_collapsed']:
+			d["size"] = attribute_db.link(d["size"])
+			d["colour"] = attribute_db.link(d["colour"])
+			if row["is_collapsed"]:
 				frappe.db.sql(
 					"""
 						UPDATE `tabSD YRP Cut Bundle Movement Ledger` SET transformed = 1, modified = %(modified)s,
 						modified_by = %(user)s WHERE is_cancelled = 0
 						AND collapsed_bundle = 1 AND cbm_key = %(cbm_key)s
-					""", d
+					""",
+					d,
 				)
 			else:
 				frappe.db.sql(
@@ -213,7 +223,8 @@ class SDYRPCutBundleEdit(Document):
 						UPDATE `tabSD YRP Cut Bundle Movement Ledger` SET transformed = 1, modified = %(modified)s,
 						modified_by = %(user)s WHERE is_cancelled = 0
 						AND is_collapsed = 0 AND collapsed_bundle = 0 AND cbm_key = %(cbm_key)s
-					""", d
+					""",
+					d,
 				)
 		self.create_new_bundles(self.output_json)
 
@@ -224,25 +235,25 @@ class SDYRPCutBundleEdit(Document):
 
 	def create_new_bundle(self, row):
 		d = {
-			"lot" : self.lot,
-			"item" : self.item,
-			"size" : _attribute_value(row['size']),
-			"colour" : _attribute_value(row['colour']),
-			"panel" : _attribute_value(row['panel']),
-			"lay_no" : row['lay_no'],
-			"bundle_no" : row['bundle_no'],
-			"quantity" : row['qty'],
-			"supplier" : self.warehouse,
+			"lot": self.lot,
+			"item": self.item,
+			"size": _attribute_value(row["size"]),
+			"colour": _attribute_value(row["colour"]),
+			"panel": _attribute_value(row["panel"]),
+			"lay_no": row["lay_no"],
+			"bundle_no": row["bundle_no"],
+			"quantity": row["qty"],
+			"supplier": self.warehouse,
 			"posting_date": self.posting_date,
 			"posting_time": self.posting_time,
 			"voucher_type": self.doctype,
 			"voucher_no": self.name,
-			"shade": row['shade'],
-			"quantity_after_transaction": row['qty'],
-			"set_combination": frappe.json.dumps(row['set_combination']),
+			"shade": row["shade"],
+			"quantity_after_transaction": row["qty"],
+			"set_combination": frappe.json.dumps(row["set_combination"]),
 			"transformed_from": self.name,
 		}
-		d['doctype'] = 'SD YRP Cut Bundle Movement Ledger'
+		d["doctype"] = "SD YRP Cut Bundle Movement Ledger"
 		new_doc = frappe.get_doc(d)
 		new_doc.flags.ignore_permissions = 1
 		new_doc.set_posting_datetime()
@@ -253,18 +264,20 @@ class SDYRPCutBundleEdit(Document):
 		json_value = frappe.json.loads(json_value)
 		d = {}
 		for row in json_value:
-			panels = _attribute_value(row['panel']).split(",")
+			panels = _attribute_value(row["panel"]).split(",")
 			for panel in panels:
-				key = (_attribute_value(row['size']), _attribute_value(row['colour']), panel)
+				key = (_attribute_value(row["size"]), _attribute_value(row["colour"]), panel)
 				d.setdefault(key, 0)
-				d[key] += row['qty']
+				d[key] += row["qty"]
 		return d
+
 
 @frappe.whitelist()
 def get_major_colours(posting_date, posting_time, from_location, lot):
 	_require_manage_access(lot)
 	posting_datetime = get_combine_datetime(posting_date, posting_time)
-	cb_list = frappe.db.sql("""
+	cb_list = frappe.db.sql(
+		"""
 		SELECT cbml.name FROM `tabSD YRP Cut Bundle Movement Ledger` cbml
 			INNER JOIN (
 				SELECT cbm_key, MAX(posting_datetime) AS max_posting_datetime, lay_no FROM `tabSD YRP Cut Bundle Movement Ledger`
@@ -274,13 +287,16 @@ def get_major_colours(posting_date, posting_time, from_location, lot):
 		ON cbml.cbm_key = latest_cbml.cbm_key AND cbml.posting_datetime = latest_cbml.max_posting_datetime
 		WHERE cbml.posting_datetime <= %(datetime_value)s AND cbml.supplier = %(from_location)s
 		AND cbml.lot = %(lot)s ORDER BY latest_cbml.lay_no asc
-	""", {
-		"datetime_value": posting_datetime,
-		"from_location": from_location,
-		"lot": lot,
-	}, as_dict=True)
-	ipd = frappe.get_value('SD YRP Lot', lot, "production_detail")
-	ipd_doc = frappe.get_doc('YRP Item Production Detail', ipd)
+	""",
+		{
+			"datetime_value": posting_datetime,
+			"from_location": from_location,
+			"lot": lot,
+		},
+		as_dict=True,
+	)
+	ipd = frappe.get_value("SD YRP Lot", lot, "production_detail")
+	ipd_doc = frappe.get_doc("YRP Item Production Detail", ipd)
 	panels = []
 	for row in ipd_doc.stiching_item_details:
 		panels.append(_attribute_value(row.stiching_attribute_value))
@@ -291,7 +307,7 @@ def get_major_colours(posting_date, posting_time, from_location, lot):
 		frappe.throw("No Cut Bundle Movement Ledger Found for the warehouse")
 
 	for cb in cb_list:
-		cb_doc = frappe.get_doc('SD YRP Cut Bundle Movement Ledger', cb['name'])
+		cb_doc = frappe.get_doc("SD YRP Cut Bundle Movement Ledger", cb["name"])
 		if _attribute_value(cb_doc.size) not in sizes:
 			sizes.append(_attribute_value(cb_doc.size))
 
@@ -301,15 +317,22 @@ def get_major_colours(posting_date, posting_time, from_location, lot):
 			colours.append(major_colour)
 
 		if set_combination:
-			major_colour = set_combination['major_colour']
+			major_colour = set_combination["major_colour"]
 			parts = _attribute_value(cb_doc.panel)
 			if parts not in panels:
 				panels.append(parts)
 			if ipd_doc.is_set_item:
-				if set_combination.get('set_part'):
-					major_colour = "("+ major_colour +")" + set_combination["set_colour"] +"-"+set_combination.get('set_part')
+				if set_combination.get("set_part"):
+					major_colour = (
+						"("
+						+ major_colour
+						+ ")"
+						+ set_combination["set_colour"]
+						+ "-"
+						+ set_combination.get("set_part")
+					)
 				else:
-					major_colour = major_colour +"-"+set_combination.get('major_part')
+					major_colour = major_colour + "-" + set_combination.get("major_part")
 
 		if major_colour not in colours:
 			colours.append(major_colour)
@@ -320,19 +343,20 @@ def get_major_colours(posting_date, posting_time, from_location, lot):
 		"sizes": sizes,
 	}
 
+
 @frappe.whitelist()
 def get_major_set_colours(colour, panel, lot):
 	_require_manage_access(lot)
-	ipd = frappe.get_value('SD YRP Lot', lot, "production_detail")
-	ipd_doc = frappe.get_doc('YRP Item Production Detail', ipd)
+	ipd = frappe.get_value("SD YRP Lot", lot, "production_detail")
+	ipd_doc = frappe.get_doc("YRP Item Production Detail", ipd)
 	d = {
 		"is_set_item": ipd_doc.is_set_item,
 		"is_same_packing_attribute": ipd_doc.is_same_packing_attribute,
-		'major_panel' : major_stitching_value(ipd_doc)
+		"major_panel": major_stitching_value(ipd_doc),
 	}
 
 	if ipd_doc.is_set_item:
-		d['major_part'] = _attribute_value(ipd_doc.major_attribute_value)
+		d["major_part"] = _attribute_value(ipd_doc.major_attribute_value)
 		panel = panel.split(",")
 		panel = panel[0].strip()
 		part = None
@@ -347,27 +371,28 @@ def get_major_set_colours(colour, panel, lot):
 				break
 		if part == _attribute_value(ipd_doc.major_attribute_value):
 			if ipd_doc.is_same_packing_attribute:
-				d['major_colour'] = colour
+				d["major_colour"] = colour
 			else:
-				d['major_colour'] = None
+				d["major_colour"] = None
 		else:
-			d['set_part'] = part
-			d['set_panel'] = default_panel
+			d["set_part"] = part
+			d["set_panel"] = default_panel
 			if ipd_doc.is_same_packing_attribute:
-				d['set_colour'] = colour
+				d["set_colour"] = colour
 			else:
-				d['set_colour'] = None
+				d["set_colour"] = None
 	else:
 		if ipd_doc.is_same_packing_attribute:
-			d['major_colour'] = colour
+			d["major_colour"] = colour
 		else:
-			d['major_colour'] = None
+			d["major_colour"] = None
 
 	return d
 
+
 @frappe.whitelist()
 def print_labels(doctype, doc_name):
-	if doctype != 'SD YRP Cut Bundle Edit':
+	if doctype != "SD YRP Cut Bundle Edit":
 		frappe.throw(_("Only Cut Bundle Edit labels can be generated here."))
 	cbe_doc = frappe.get_doc(doctype, doc_name)
 	cbe_doc.check_permission("read")
@@ -401,14 +426,14 @@ def print_labels(doctype, doc_name):
 			^FO510,403^A0,40,40^FDQty^FS
 
 			^FO150,130^A0,40,40^FD: {cbe_doc.item}^FS
-			^FO150,195^A0,40,40^FD: {_attribute_value(item['panel'])}^FS
-			^FO150,267^A0,40,40^FD: {item['lay_no']}^FS
-			^FO150,335^A0,40,40^FD: {_attribute_value(item['colour'])}^FS
-			^FO150,403^A0,40,40^FD: {_attribute_value(item['size'])}^FS
+			^FO150,195^A0,40,40^FD: {_attribute_value(item["panel"])}^FS
+			^FO150,267^A0,40,40^FD: {item["lay_no"]}^FS
+			^FO150,335^A0,40,40^FD: {_attribute_value(item["colour"])}^FS
+			^FO150,403^A0,40,40^FD: {_attribute_value(item["size"])}^FS
 			^FO150,470^A0,40,40^FD: {cbe_doc.lot}^FS
-			^FO680,267^A0,40,40^FD: {item['bundle_no']}^FS
-			^FO610,335^A0,40,40^FD: {item['shade']}^FS
-			^FO610,403^A0,40,40^FD: {item['qty']}^FS
+			^FO680,267^A0,40,40^FD: {item["bundle_no"]}^FS
+			^FO610,335^A0,40,40^FD: {item["shade"]}^FS
+			^FO610,403^A0,40,40^FD: {item["qty"]}^FS
 
 			^BY2,1,60
 			^FO510,455^BC^FD{hash_value}^FS
@@ -421,12 +446,12 @@ def print_labels(doctype, doc_name):
 
 def _require_manage_access(lot):
 	if not (
-		frappe.has_permission('SD YRP Cut Bundle Edit', "create")
-		or frappe.has_permission('SD YRP Cut Bundle Edit', "write")
+		frappe.has_permission("SD YRP Cut Bundle Edit", "create")
+		or frappe.has_permission("SD YRP Cut Bundle Edit", "write")
 	):
 		frappe.throw(_("Not permitted to prepare a Cut Bundle Edit."), frappe.PermissionError)
-	frappe.get_doc('SD YRP Lot', lot).check_permission("read")
-	frappe.has_permission('SD YRP Cut Bundle Movement Ledger', "read", throw=True)
+	frappe.get_doc("SD YRP Lot", lot).check_permission("read")
+	frappe.has_permission("SD YRP Cut Bundle Movement Ledger", "read", throw=True)
 
 
 CutBundleEdit = SDYRPCutBundleEdit

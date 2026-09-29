@@ -14,7 +14,6 @@ from unittest.mock import patch
 from essdee_yrp import hooks, web_build
 from essdee_yrp.patches import prefix_owned_doctypes_and_reports
 
-
 PACKAGE_ROOT = Path(__file__).resolve().parent
 YRP_PACKAGE_ROOT = PACKAGE_ROOT.parents[1] / "yrp" / "yrp"
 OWNED_MODULES = {"Essdee YRP"}
@@ -27,7 +26,7 @@ LINK_FIELD_TYPES = {"Link", "Table", "Table MultiSelect"}
 def _load_json(path: Path):
 	try:
 		return json.loads(path.read_text())
-	except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+	except OSError, UnicodeDecodeError, json.JSONDecodeError:
 		return None
 
 
@@ -159,9 +158,7 @@ class TestNamespaceContract(unittest.TestCase):
 		doctypes = list(_owned_metadata("DocType"))
 		yrp_doctypes = list(_metadata(YRP_PACKAGE_ROOT, YRP_MODULES, "DocType"))
 		old_names = {name.removeprefix(PREFIX) for _path, _data, name in doctypes}
-		old_names.update(
-			name.removeprefix(YRP_PREFIX) for _path, _data, name in yrp_doctypes
-		)
+		old_names.update(name.removeprefix(YRP_PREFIX) for _path, _data, name in yrp_doctypes)
 		for _path, data, name in doctypes:
 			for field in data.get("fields") or []:
 				if field.get("fieldtype") not in LINK_FIELD_TYPES:
@@ -182,8 +179,7 @@ class TestNamespaceContract(unittest.TestCase):
 			aliases = {
 				(target.id, node.value.id)
 				for node in ast.walk(tree)
-				if isinstance(node, ast.Assign)
-				and isinstance(node.value, ast.Name)
+				if isinstance(node, ast.Assign) and isinstance(node.value, ast.Name)
 				for target in node.targets
 				if isinstance(target, ast.Name)
 			}
@@ -208,14 +204,9 @@ class TestNamespaceContract(unittest.TestCase):
 
 	def test_customization_fixture_references_never_use_an_old_name(self):
 		final_names = {name for _path, _data, name in _owned_metadata("DocType")}
-		final_names.update(
-			name
-			for _path, _data, name in _metadata(YRP_PACKAGE_ROOT, YRP_MODULES, "DocType")
-		)
+		final_names.update(name for _path, _data, name in _metadata(YRP_PACKAGE_ROOT, YRP_MODULES, "DocType"))
 		old_names = {
-			name.removeprefix(PREFIX)
-			if name.startswith(PREFIX)
-			else name.removeprefix(YRP_PREFIX)
+			name.removeprefix(PREFIX) if name.startswith(PREFIX) else name.removeprefix(YRP_PREFIX)
 			for name in final_names
 		}
 
@@ -249,14 +240,9 @@ class TestNamespaceContract(unittest.TestCase):
 
 	def test_embedded_layout_configs_use_namespaced_doctype_identities(self):
 		final_names = {name for _path, _data, name in _owned_metadata("DocType")}
-		final_names.update(
-			name
-			for _path, _data, name in _metadata(YRP_PACKAGE_ROOT, YRP_MODULES, "DocType")
-		)
+		final_names.update(name for _path, _data, name in _metadata(YRP_PACKAGE_ROOT, YRP_MODULES, "DocType"))
 		old_names = {
-			name.removeprefix(PREFIX)
-			if name.startswith(PREFIX)
-			else name.removeprefix(YRP_PREFIX)
+			name.removeprefix(PREFIX) if name.startswith(PREFIX) else name.removeprefix(YRP_PREFIX)
 			for name in final_names
 		}
 

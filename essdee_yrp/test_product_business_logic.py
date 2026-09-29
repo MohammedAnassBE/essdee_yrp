@@ -33,32 +33,28 @@ class TestProductBusinessLogic(IntegrationTestCase):
 		self.assertEqual(
 			PRODUCT_ATTACHMENT_FIELDS,
 			{
-				'SD YRP Product': {
+				"SD YRP Product": {
 					"product_image",
 					"top_image",
 					"bottom_image",
 					"front_image",
 					"back_image",
 				},
-				'SD YRP Product Colour Code': {"image"},
-				'SD YRP Product Image': {"image"},
-				'SD YRP Product Measurement': {"measurement_image"},
+				"SD YRP Product Colour Code": {"image"},
+				"SD YRP Product Image": {"image"},
+				"SD YRP Product Measurement": {"measurement_image"},
 			},
 		)
 
 	def test_attachment_owner_check_rejects_cross_document_file(self):
 		file_doc = _dict(
-			attached_to_doctype='SD YRP Product',
+			attached_to_doctype="SD YRP Product",
 			attached_to_name="STYLE-001",
 			attached_to_field="product_image",
 		)
-		_assert_file_attached_to(
-			file_doc, 'SD YRP Product', "STYLE-001", "product_image"
-		)
+		_assert_file_attached_to(file_doc, "SD YRP Product", "STYLE-001", "product_image")
 		with self.assertRaises(frappe.PermissionError):
-			_assert_file_attached_to(
-				file_doc, 'SD YRP Product', "STYLE-002", "product_image"
-			)
+			_assert_file_attached_to(file_doc, "SD YRP Product", "STYLE-002", "product_image")
 
 	def test_trim_colour_payload_discards_values_not_on_product(self):
 		rows = get_table_struct_data(
@@ -84,34 +80,30 @@ class TestProductBusinessLogic(IntegrationTestCase):
 			_dict(product_upload_type="Spec", version_number=2),
 		]
 		grouped = get_grouped_files(rows)
-		self.assertEqual(
-			[row.version_number for row in grouped["CAD"]], [3, 1]
-		)
+		self.assertEqual([row.version_number for row in grouped["CAD"]], [3, 1])
 
 	def test_existing_product_builds_product_development_onload(self):
-		names = frappe.get_all('SD YRP Product', pluck="name", limit=1)
+		names = frappe.get_all("SD YRP Product", pluck="name", limit=1)
 		if not names:
 			self.skipTest("Product onload parity runs after source data migration")
 		name = names[0]
-		doc = frappe.get_doc('SD YRP Product', name)
+		doc = frappe.get_doc("SD YRP Product", name)
 		doc.run_method("onload")
 		self.assertIn("costing_list", doc.get("__onload") or {})
 
 	def test_release_tech_pack_creates_versioned_snapshot(self):
-		product_names = frappe.get_all(
-			'SD YRP Product', filters={"is_set_item": 0}, pluck="name", limit=1
-		)
+		product_names = frappe.get_all("SD YRP Product", filters={"is_set_item": 0}, pluck="name", limit=1)
 		if not product_names:
 			self.skipTest("Tech-pack snapshot parity runs after source data migration")
 		product_name = product_names[0]
-		product = frappe.get_doc('SD YRP Product', product_name)
+		product = frappe.get_doc("SD YRP Product", product_name)
 		product.set("product_designs", [])
 		product.set("product_box_details", [])
 		product.save()
 		old_version = product.tech_pack_no or 0
 
 		release_name = release_tech_pack(product.name)
-		release = frappe.get_doc('SD YRP Product Release', release_name)
+		release = frappe.get_doc("SD YRP Product Release", release_name)
 		self.assertEqual(release.product, product.name)
 		self.assertEqual(release.tech_pack_no, old_version + 1)
 		product.reload()

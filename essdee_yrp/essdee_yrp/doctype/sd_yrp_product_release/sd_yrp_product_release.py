@@ -1,18 +1,15 @@
-from yrp.attribute_links import value as _attribute_value
 # Copyright (c) 2023, Essdee and contributors
 # For license information, please see license.txt
-
 import frappe
 from frappe.model.document import Document
 from frappe.utils import get_url
+from yrp.attribute_links import value as _attribute_value
 
 
 class SDYRPProductRelease(Document):
 	def onload(self):
 		if self.product_placement:
-			self.set_onload(
-				"placement_images", get_table_onload_data(self.product_placement)
-			)
+			self.set_onload("placement_images", get_table_onload_data(self.product_placement))
 		if self.trims:
 			self.set_onload("trims_images", get_table_onload_data(self.trims))
 		if self.product_trim_combination:
@@ -21,9 +18,7 @@ class SDYRPProductRelease(Document):
 				get_table_onload_data(self.product_trim_combination, with_list=True),
 			)
 		if self.product_accessories:
-			self.set_onload(
-				"accessory_images", get_table_onload_data(self.product_accessories)
-			)
+			self.set_onload("accessory_images", get_table_onload_data(self.product_accessories))
 		if self.product_measurement_descriptions:
 			measurement_details = {}
 			for row in self.product_measurement_descriptions:
@@ -33,14 +28,18 @@ class SDYRPProductRelease(Document):
 
 def get_table_onload_data(table, with_list: bool = False) -> list[dict]:
 	image_names = [row.product_image for row in table if row.product_image]
-	image_urls = dict(
-		frappe.get_all(
-			'SD YRP Product Image',
-			filters={"name": ["in", image_names]},
-			fields=["name", "image"],
-			as_list=True,
+	image_urls = (
+		dict(
+			frappe.get_all(
+				"SD YRP Product Image",
+				filters={"name": ["in", image_names]},
+				fields=["name", "image"],
+				as_list=True,
+			)
 		)
-	) if image_names else {}
+		if image_names
+		else {}
+	)
 	result = []
 	for row in table:
 		image = image_urls.get(row.product_image)
@@ -70,9 +69,7 @@ def get_tabel_struct_data(data, with_list: bool = False) -> list[dict]:
 			"title_header": row.get("image_title"),
 		}
 		if with_list:
-			value["selected_colours"] = ",".join(
-				row.get("selected_colours") or []
-			)
+			value["selected_colours"] = ",".join(row.get("selected_colours") or [])
 		result.append(value)
 	return result
 

@@ -25,11 +25,13 @@ from essdee_yrp.api.test_cloth_program import (
 )
 from essdee_yrp.api.work_order import (
     _consolidate_fabric_rows,
+    _hydrate_knitting_execution_defaults,
     _selected_lot_fabrics,
     calculate_fabric_deliverables,
     get_fabric_deliverable_context,
     get_work_order_selection_context,
 )
+from essdee_yrp.fabric_grn import _calculate_saved_work_order_inputs
 from essdee_yrp.fabric_reference import (
     get_reference_allocations,
     scale_reference_allocations,
@@ -152,6 +154,94 @@ class TestFabricRowConsolidation(TestCase):
                 25,
             ),
             {"Cloth-36-Grey": 10, "Cloth-36-Red": 15},
+        )
+
+    def test_reopened_knitting_contract_keeps_manual_yarn_quantities(self):
+        qty_rows = [{
+            "reference_item_variant": "Cloth-60-Greige",
+            "prefill": 120,
+            "knitting_inputs": [
+                {"item": "Yarn A", "attrs": {}, "qty_per_output": 0.6},
+                {"item": "Yarn B", "attrs": {}, "qty_per_output": 0.4},
+            ],
+        }]
+        work_order = frappe._dict(
+            receivables=[frappe._dict(
+                qty=100,
+                fabric_reference_variant="Cloth-60-Greige",
+            )],
+            deliverables=[
+                frappe._dict(
+                    item_variant="Yarn-A-Variant",
+                    qty=59,
+                    is_calculated=1,
+                    fabric_reference_variant="Cloth-60-Greige",
+                ),
+                frappe._dict(
+                    item_variant="Yarn-B-Variant",
+                    qty=41,
+                    is_calculated=1,
+                    fabric_reference_variant="Cloth-60-Greige",
+                ),
+            ],
+        )
+        variant_items = {
+            "Yarn-A-Variant": "Yarn A",
+            "Yarn-B-Variant": "Yarn B",
+        }
+
+        with (
+            patch(
+                "essdee_yrp.api.work_order.frappe.db.get_value",
+                side_effect=lambda _dt, name, _field: variant_items[name],
+            ),
+            patch("essdee_yrp.api.work_order._variant_attrs", return_value={}),
+            patch("essdee_yrp.api.work_order._item_attribute_names", return_value=[]),
+        ):
+            _hydrate_knitting_execution_defaults(qty_rows, work_order)
+
+        self.assertEqual(qty_rows[0]["prefill"], 100)
+        self.assertEqual(
+            [row["prefill"] for row in qty_rows[0]["knitting_inputs"]],
+            [59, 41],
+        )
+
+    def test_partial_grn_scales_saved_manual_knitting_contract(self):
+        work_order = frappe._dict(
+            receivables=[frappe._dict(
+                qty=100,
+                fabric_reference_variant="Cloth-60-Greige",
+            )],
+            deliverables=[
+                frappe._dict(
+                    item_variant="Yarn-A-Variant",
+                    qty=59,
+                    uom="Kg",
+                    is_calculated=1,
+                    fabric_reference_variant="Cloth-60-Greige",
+                ),
+                frappe._dict(
+                    item_variant="Yarn-B-Variant",
+                    qty=41,
+                    uom="Kg",
+                    is_calculated=1,
+                    fabric_reference_variant="Cloth-60-Greige",
+                ),
+            ],
+        )
+        rows = _calculate_saved_work_order_inputs(
+            work_order,
+            [{
+                "goods_received_note_item": "GRN-ROW-1",
+                "received_item_variant": "Cloth-Greige-Variant",
+                "reference_item_variant": "Cloth-60-Greige",
+                "qty": 40,
+            }],
+        )
+
+        self.assertEqual(
+            {row["item_variant"]: row["qty"] for row in rows},
+            {"Yarn-A-Variant": 23.6, "Yarn-B-Variant": 16.4},
         )
 
 
@@ -892,6 +982,9 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
         knitting = _ensure_process(f"_Test MY Knitting {suffix}", is_item_conversion=1)
         dyeing = _ensure_process(f"_Test MY Dyeing {suffix}")
         washing = _ensure_process(f"_Test MY Washing {suffix}")
+        frappe.db.set_single_value(
+            "IPD Settings", "default_knitting_process", knitting
+        )
 
         ipd = frappe.new_doc("Item Production Detail")
         ipd.item = cloth
@@ -1061,6 +1154,122 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
         self.assertEqual(wash_deliverable.item_variant, wash_receivable.item_variant)
         self.assertAlmostEqual(flt(wash_deliverable.qty), 12.0, places=3)
         self.assertAlmostEqual(flt(wash_receivable.qty), 12.0, places=3)
+
+    def test_manual_knitting_contract_drives_partial_grn_consumption(self):
+        from essdee_yrp.fabric_grn import before_validate as calculate_grn_consumption
+
+        ipd, v = self._make_ipd()
+        work_order = self._make_work_order(ipd, v, v["knitting"])
+        context = get_fabric_deliverable_context(work_order.name)
+        fabric = context["rows"][0]
+        route = fabric["qty_rows"][0]
+
+        self.assertTrue(fabric["manual_io"])
+        self.assertEqual(
+            [row["item"] for row in route["knitting_inputs"]],
+            [v["yarn_a"], v["yarn_b"]],
+        )
+        self.assertEqual(
+            [flt(row["qty_per_output"], 6) for row in route["knitting_inputs"]],
+            [0.2, flt(0.4 / 3.0, 6)],
+        )
+
+        result = calculate_fabric_deliverables(work_order.name, [{
+            "fabric_row": fabric["fabric_row"],
+            "colour": v["greige"],
+            "entries": [{
+                "key": route["key"],
+                "qty": 100,
+                "inputs": [
+                    {"key": route["knitting_inputs"][0]["key"], "qty": 59},
+                    {"key": route["knitting_inputs"][1]["key"], "qty": 41},
+                ],
+            }],
+        }])
+        self.assertEqual(result, {"deliverables": 2, "receivables": 1})
+
+        work_order.reload()
+        delivered = {
+            frappe.db.get_value("Item Variant", row.item_variant, "item"): flt(row.qty)
+            for row in work_order.deliverables
+            if row.is_calculated
+        }
+        self.assertEqual(delivered, {v["yarn_a"]: 59.0, v["yarn_b"]: 41.0})
+
+        # Treat both yarn rows as delivered. A 40% partial cloth receipt must
+        # consume the saved 59:41 Work Order contract, not the IPD's 60:40.
+        for row in work_order.deliverables:
+            if row.is_calculated:
+                row.db_set("pending_quantity", 0, update_modified=False)
+        work_order.reload()
+        receivable = work_order.receivables[0]
+        grn = frappe.new_doc("Goods Received Note")
+        grn.against = "Work Order"
+        grn.against_id = work_order.name
+        grn.append("items", {
+            "item_variant": receivable.item_variant,
+            "quantity": 40,
+            "uom": receivable.uom,
+            "ref_docname": receivable.name,
+        })
+        calculate_grn_consumption(grn)
+        consumed = {
+            frappe.db.get_value("Item Variant", row.item_variant, "item"):
+                flt(row.quantity)
+            for row in grn.grn_deliverables
+        }
+        self.assertAlmostEqual(consumed[v["yarn_a"]], 23.6, places=3)
+        self.assertAlmostEqual(consumed[v["yarn_b"]], 16.4, places=3)
+
+    def test_manual_knitting_contract_is_only_for_default_knitting_process(self):
+        ipd, v = self._make_ipd()
+        work_order = self._make_work_order(ipd, v, v["knitting"])
+        fabric = get_fabric_deliverable_context(work_order.name)["rows"][0]
+        self.assertTrue(fabric["manual_io"])
+
+        another_process = _ensure_process(
+            f"_Test Other Default Knitting {frappe.generate_hash(length=6)}",
+            is_item_conversion=1,
+        )
+        frappe.db.set_single_value(
+            "IPD Settings", "default_knitting_process", another_process
+        )
+        fabric = get_fabric_deliverable_context(work_order.name)["rows"][0]
+        self.assertFalse(fabric["manual_io"])
+
+        route = fabric["qty_rows"][0]
+        with self.assertRaisesRegex(
+            frappe.ValidationError, "allowed only for the Default Knitting Process"
+        ):
+            calculate_fabric_deliverables(work_order.name, [{
+                "fabric_row": fabric["fabric_row"],
+                "colour": v["greige"],
+                "entries": [{
+                    "key": route["key"],
+                    "qty": 10,
+                    "inputs": [{
+                        "key": route["knitting_inputs"][0]["key"],
+                        "qty": 10,
+                    }],
+                }],
+            }])
+
+    def test_manual_knitting_rejects_non_matrix_input(self):
+        ipd, v = self._make_ipd()
+        work_order = self._make_work_order(ipd, v, v["knitting"])
+        fabric = get_fabric_deliverable_context(work_order.name)["rows"][0]
+        route = fabric["qty_rows"][0]
+
+        with self.assertRaisesRegex(frappe.ValidationError, "not generated by this IPD matrix"):
+            calculate_fabric_deliverables(work_order.name, [{
+                "fabric_row": fabric["fabric_row"],
+                "colour": v["greige"],
+                "entries": [{
+                    "key": route["key"],
+                    "qty": 10,
+                    "inputs": [{"key": "input:999", "qty": 10}],
+                }],
+            }])
 
     def test_yarn_ratio_total_must_equal_100(self):
         ipd, _values = self._make_ipd()

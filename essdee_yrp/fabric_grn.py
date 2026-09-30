@@ -63,12 +63,26 @@ def calculate_consumption_plan(grn):
 	demands = _get_output_demands(grn, wo)
 	if not demands:
 		return []
-	rows = _calculate_consumed_rows(
-		ipd,
-		wo.process_name,
-		demands,
-		identity=bool(identity_row or (step and step.get("shape") == "identity")),
-	)
+	rows = None
+	# Use the same classification as the Work Order calculator. This includes
+	# both legacy ``knitting_process`` IPDs and generic cloth-recipe conversion
+	# rows; checking only the legacy field would lose a saved manual contract on
+	# newer IPDs.
+	from essdee_yrp.api.work_order import _step_kind
+
+	if _step_kind(ipd, step) == "knitting":
+		# A knitting Work Order is the saved execution agreement.  Its operator-
+		# entered yarn allocations can legitimately differ from the IPD recipe;
+		# scale that frozen contract for partial GRNs instead of consulting the
+		# current matrix again.
+		rows = _calculate_saved_work_order_inputs(wo, demands)
+	if rows is None:
+		rows = _calculate_consumed_rows(
+			ipd,
+			wo.process_name,
+			demands,
+			identity=bool(identity_row or (step and step.get("shape") == "identity")),
+		)
 	return _allocate_to_work_order_deliverables(rows, wo, grn)
 
 
@@ -182,6 +196,57 @@ def _calculate_consumed_rows(ipd, process_name, demands, identity=False):
 					or frappe.db.get_value("Item", bom_row["item"], "default_unit_of_measure"),
 				}
 			)
+	return _aggregate_rows(rows)
+
+
+def _calculate_saved_work_order_inputs(wo, demands):
+	"""Scale a knitting WO's saved route inputs for the received output.
+
+	Returns ``None`` for legacy Work Orders without complete allocation metadata,
+	allowing the caller to retain the historic IPD-matrix fallback.
+	"""
+	output_by_reference = defaultdict(float)
+	for row in wo.get("receivables") or []:
+		for reference, qty in get_reference_allocations(row, row.qty).items():
+			output_by_reference[reference] += flt(qty)
+
+	inputs_by_reference = defaultdict(list)
+	for row in wo.get("deliverables") or []:
+		if not row.get("is_calculated"):
+			continue
+		for reference, qty in get_reference_allocations(row, row.qty).items():
+			if flt(qty) <= 0:
+				continue
+			inputs_by_reference[reference].append({
+				"item_variant": row.item_variant,
+				"qty": flt(qty),
+				"uom": row.uom,
+			})
+
+	if not demands:
+		return []
+	for demand in demands:
+		reference = demand.get("reference_item_variant")
+		if (
+			not reference
+			or flt(output_by_reference.get(reference)) <= 0
+			or not inputs_by_reference.get(reference)
+		):
+			return None
+
+	rows = []
+	for demand in demands:
+		reference = demand["reference_item_variant"]
+		factor = flt(demand["qty"]) / flt(output_by_reference[reference])
+		for source in inputs_by_reference[reference]:
+			rows.append({
+				"goods_received_note_item": demand["goods_received_note_item"],
+				"received_item_variant": demand["received_item_variant"],
+				"reference_item_variant": reference,
+				"item_variant": source["item_variant"],
+				"qty": flt(source["qty"] * factor, 6),
+				"uom": source["uom"],
+			})
 	return _aggregate_rows(rows)
 
 

@@ -1,6 +1,12 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { createFabricEntries, isMultiColour, useFabricDeliverableContext } from "../src/composables/useFabricDeliverableContext.js"
+import {
+	collectManualKnittingContract,
+	createFabricEntries,
+	isMultiColour,
+	knittingInputRouteKey,
+	useFabricDeliverableContext,
+} from "../src/composables/useFabricDeliverableContext.js"
 
 const context = (qty, extra = {}) => ({
 	rows: [{ kind: "identity", qty_rows: [{ key: "Red-32", prefill: qty }], ...extra }],
@@ -52,6 +58,138 @@ test("legacy knitting only prefills its configured default colour and computes y
 	assert.deepEqual(entry.colourQtys, { Greige: [30], Navy: [null] })
 	assert.equal(entry.colour, null)
 	assert.equal(entry.yarnQty, 10)
+})
+
+test("manual knitting prefills each route's editable yarn contract", () => {
+	const [entry] = createFabricEntries({
+		rows: [{
+			kind: "knitting",
+			manual_io: true,
+			reference_routed: true,
+			qty_rows: [{
+			prefill: 100,
+			knitting_inputs: [
+				{ key: "input:0", qty_per_output: 0.6, prefill: 59 },
+				{ key: "input:1", qty_per_output: 0.4, prefill: 41 },
+			],
+			}],
+		}],
+	})
+	assert.deepEqual(
+		entry.knittingInputQtys[knittingInputRouteKey(0)],
+		[59, 41],
+	)
+	entry.knittingInputQtys[knittingInputRouteKey(0)][0] = 61
+	assert.equal(entry.qtys[0], 100)
+})
+
+test("manual knitting shows each physical deliverable and receivable only once", () => {
+	const row = {
+		kind: "knitting",
+		manual_io: true,
+		reference_routed: true,
+		has_colour: true,
+		cloth_item: "Finished Cloth",
+		qty_rows: [
+			{
+				key: "route:red",
+				prefill: 60,
+				out_attrs: { Dia: "36 Dia", Colour: "Red" },
+				knit_colour: "Greige",
+				knitting_inputs: [
+					{ key: "input:0", item: "Yarn A", attrs: { Colour: "Greige" }, uom: "Kg", qty_per_output: 0.59, prefill: 35.4 },
+					{ key: "input:1", item: "Yarn B", attrs: { Colour: "Greige" }, uom: "Kg", qty_per_output: 0.41, prefill: 24.6 },
+				],
+			},
+			{
+				key: "route:maroon",
+				prefill: 40,
+				out_attrs: { Dia: "36 Dia", Colour: "Maroon" },
+				knit_colour: "Greige",
+				knitting_inputs: [
+					{ key: "input:0", item: "Yarn A", attrs: { Colour: "Greige" }, uom: "Kg", qty_per_output: 0.59, prefill: 23.6 },
+					{ key: "input:1", item: "Yarn B", attrs: { Colour: "Greige" }, uom: "Kg", qty_per_output: 0.41, prefill: 16.4 },
+				],
+			},
+		],
+	}
+	const [entry] = createFabricEntries({ rows: [row] })
+
+	assert.equal(entry.manualReceivables.length, 1)
+	assert.equal(entry.manualReceivables[0].qty, 100)
+	assert.deepEqual(entry.manualReceivables[0].attrs, { Dia: "36 Dia", Colour: "Greige" })
+	assert.deepEqual(
+		entry.manualDeliverables.map((item) => [item.item, item.qty]),
+		[["Yarn A", 59], ["Yarn B", 41]],
+	)
+
+	entry.manualReceivables[0].qty = 80
+	entry.manualDeliverables[0].qty = 48
+	entry.manualDeliverables[1].qty = 32
+	const contract = collectManualKnittingContract(row, entry)
+	assert.deepEqual(contract.routes.map((route) => route.qty), [48, 32])
+	assert.deepEqual(
+		contract.routes.map((route) => route.manualInputs.map((input) => input.qty)),
+		[[28.8, 19.2], [19.2, 12.8]],
+	)
+	assert.deepEqual(contract.orphanDeliverables, [])
+})
+
+test("manual knitting rejects yarn totals with no physical fabric receivable", () => {
+	const row = {
+		kind: "knitting",
+		manual_io: true,
+		cloth_item: "Cloth",
+		qty_rows: [{
+			key: "route:1",
+			prefill: 0,
+			out_attrs: { Dia: "36 Dia" },
+			knitting_inputs: [{
+				key: "input:0", item: "Yarn", attrs: {}, uom: "Kg", qty_per_output: 1,
+			}],
+		}],
+	}
+	const [entry] = createFabricEntries({ rows: [row] })
+	entry.manualDeliverables[0].qty = 10
+	const contract = collectManualKnittingContract(row, entry)
+	assert.equal(contract.orphanDeliverables.length, 1)
+	assert.equal(contract.routes[0].qty, 0)
+})
+
+test("manual knitting keeps distinct IPD alternatives even when their planned quantity is zero", () => {
+	const [entry] = createFabricEntries({
+		rows: [{
+			kind: "knitting",
+			manual_io: true,
+			reference_routed: true,
+			has_colour: true,
+			cloth_item: "Cloth",
+			qty_rows: [
+				{
+					key: "planned",
+					prefill: 25,
+					out_attrs: { Dia: "34 Dia", Colour: "Greige" },
+					knit_colour: "Greige",
+					knitting_inputs: [{ key: "input:0", item: "Yarn", attrs: { Colour: "Greige" }, uom: "Kg", qty_per_output: 1 }],
+				},
+				{
+					key: "unused",
+					prefill: 0,
+					out_attrs: { Dia: "36 Dia", Colour: "Red" },
+					knit_colour: "Red",
+					knitting_inputs: [{ key: "input:0", item: "Yarn", attrs: { Colour: "Red" }, uom: "Kg", qty_per_output: 1 }],
+				},
+			],
+		}],
+	})
+	assert.deepEqual(entry.manualReceivables.map((item) => [item.attrs, item.qty]), [
+		[{ Dia: "34 Dia", Colour: "Greige" }, 25],
+		[{ Dia: "36 Dia", Colour: "Red" }, 0],
+	])
+	assert.deepEqual(entry.manualDeliverables.map((item) => [item.attrs, item.qty]), [
+		[{ Colour: "Greige" }, 25],
+		[{ Colour: "Red" }, 0],
+	])
 })
 
 test("many-colour legacy knitting keeps the single-colour fallback", () => {

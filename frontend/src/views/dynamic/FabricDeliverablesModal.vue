@@ -3,7 +3,7 @@
 		:visible="visible"
 		modal
 		class="fabric-calc-dialog"
-		:style="{ width: 'min(880px, calc(100vw - 32px))' }"
+		:style="{ width: 'min(960px, calc(100vw - 32px))' }"
 		:header="dialogHeader"
 		:closable="!applying && !loading"
 		:closeOnEscape="!applying && !loading"
@@ -29,9 +29,13 @@
 					<span>Unallocated source stock: {{ ctx.source_process.available }} kg across all source variants. Only compatible inputs can fill the rows below.</span>
 					<span>Return GRNs are excluded. Quantities remain editable and availability is checked again on Calculate.</span>
 				</template>
+				<template v-else-if="(ctx.rows || []).some((row) => row.manual_io)">
+					<strong>Available knitting inputs and outputs</strong>
+					<span>The IPD defines every yarn you can deliver and every fabric variant you can receive. Enter the required quantity against each item.</span>
+				</template>
 				<template v-else>
 					<strong>Planned quantities</strong>
-					<span>Knitting uses the saved Lot Cloth Program; later processes use their plan. Edit quantities, or use Fill Quantity to read an earlier process's submitted GRNs.</span>
+					<span>Edit the process quantities, or use Fill Quantity to read an earlier process's submitted GRNs.</span>
 				</template>
 			</div>
 			<div v-for="warning in ctx.warnings || []" :key="warning" class="fc-warning" role="status">{{ warning }}</div>
@@ -40,8 +44,12 @@
 					<span class="esd-card__title">{{ row.cloth_item }}</span>
 					<span class="fc-ipd esd-mono">{{ row.production_detail }}</span>
 				</header>
-				<div v-if="row.reference_routed" class="fc-note">
+				<div v-if="row.reference_routed && !row.manual_io" class="fc-note">
 					Enter quantities by <b>finished cloth Colour and Dia</b>. The IPD determines the consumed inputs and this process's output.
+				</div>
+				<div v-if="row.manual_io" class="fc-contract-note">
+					<strong>Enter deliverable and receivable quantities</strong>
+					<span>Left: inputs you can deliver. Right: outputs you can receive. Each IPD-valid physical variant appears once.</span>
 				</div>
 				<div v-if="(row.qty_rows || []).some((qr) => qr.source_shared)" class="fc-warning">
 					Some outputs share the same received input. Their quantities start at 0; allocate the shared quantity manually. Availability shown on those rows is shared, not additional stock for each row.
@@ -85,8 +93,78 @@
 					</div>
 				</template>
 
+				<!-- Match the Work Order itself: one physical deliverable/receivable
+				     row, with route allocations deliberately hidden from the operator. -->
+				<div v-if="row.manual_io" class="fc-contract-lists">
+					<section class="fc-contract-list fc-contract-list--send">
+						<header class="fc-contract-list-title">
+							<div>
+								<strong>Yarn Deliverables</strong>
+								<span>What you send</span>
+							</div>
+						</header>
+						<div class="fc-contract-list-head" aria-hidden="true">
+							<span>Item / Attributes</span>
+							<span>Quantity</span>
+						</div>
+						<label
+							v-for="item in entries[i].manualDeliverables || []"
+							:key="item.key"
+							class="fc-contract-item"
+						>
+							<span class="fc-contract-item-name">
+								<strong>{{ item.item }}</strong>
+								<small>{{ contractAttributeLabel(item.attrs) || 'No attributes' }}</small>
+							</span>
+							<span class="fc-contract-qty">
+								<InputNumber
+									v-model="item.qty"
+									:min="0"
+									:maxFractionDigits="3"
+									fluid
+									placeholder="0"
+								/>
+								<small>{{ item.uom || 'Kg' }}</small>
+							</span>
+						</label>
+					</section>
+
+					<section class="fc-contract-list fc-contract-list--receive">
+						<header class="fc-contract-list-title">
+							<div>
+								<strong>Fabric Receivables</strong>
+								<span>What you expect back</span>
+							</div>
+						</header>
+						<div class="fc-contract-list-head" aria-hidden="true">
+							<span>Item / Attributes</span>
+							<span>Quantity</span>
+						</div>
+						<label
+							v-for="item in entries[i].manualReceivables || []"
+							:key="item.key"
+							class="fc-contract-item"
+						>
+							<span class="fc-contract-item-name">
+								<strong>{{ item.item }}</strong>
+								<small>{{ contractAttributeLabel(item.attrs) || 'No attributes' }}</small>
+							</span>
+							<span class="fc-contract-qty">
+								<InputNumber
+									v-model="item.qty"
+									:min="0"
+									:maxFractionDigits="3"
+									fluid
+									placeholder="0"
+								/>
+								<small>{{ item.uom || 'Kg' }}</small>
+							</span>
+						</label>
+					</section>
+				</div>
+
 				<!-- Legacy knitting: one column per physical output colour. -->
-				<div v-if="isMultiColour(row)" class="fc-colour-grid">
+				<div v-else-if="isMultiColour(row)" class="fc-colour-grid">
 					<div v-for="colour in row.colour_options" :key="colour" class="fc-colour-col">
 						<div class="fc-colour-head">{{ colour }}</div>
 						<div v-for="(qr, j) in row.qty_rows || []" :key="qr.key" class="fc-field fc-field--tight">
@@ -97,7 +175,7 @@
 								:maxFractionDigits="3"
 								fluid
 								placeholder="0"
-								@update:modelValue="recomputeYarn(i)"
+								@update:modelValue="!row.manual_io && recomputeYarn(i)"
 							/>
 						</div>
 					</div>
@@ -145,13 +223,13 @@
 							:maxFractionDigits="3"
 							fluid
 							placeholder="0"
-							@update:modelValue="row.kind === 'knitting' && recomputeYarn(i)"
+							@update:modelValue="row.kind === 'knitting' && !row.manual_io && recomputeYarn(i)"
 						/>
 					</div>
 				</template>
 
 				<div
-					v-if="row.kind === 'knitting' && !row.reference_routed && (row.yarns || []).length === 1"
+					v-if="row.kind === 'knitting' && !row.manual_io && !row.reference_routed && (row.yarns || []).length === 1"
 					class="fc-field"
 				>
 					<label class="field-label">Yarn (deliverable) Kg</label>
@@ -163,7 +241,7 @@
 						placeholder="0"
 					/>
 				</div>
-				<div v-else-if="row.kind === 'knitting' && !row.reference_routed" class="fc-yarn-breakdown">
+				<div v-else-if="row.kind === 'knitting' && !row.manual_io && !row.reference_routed" class="fc-yarn-breakdown">
 					<div class="field-label">Calculated yarn deliverables</div>
 					<div v-for="yarn in row.yarns || []" :key="yarn.yarn_item" class="fc-yarn-line">
 						<span>{{ yarn.yarn_item }} · {{ yarn.ratio }}%</span>
@@ -230,8 +308,10 @@
  * contract 2026-07-08).
  *
  * Byte-faithful to the Desk reference (data contracts + branching):
- * - One quantity input per IPD Process Matrix group; every entry posts its
- *   matrix-group `key` so the server resolves the exact group (never by attrs).
+ * - Knitting shows the same consolidated physical deliverable/receivable rows
+ *   as the Work Order. Hidden matrix routes are restored proportionally on
+ *   submit, and every entry posts its opaque matrix-group `key`.
+ * - Other fabric processes keep one quantity input per IPD Process Matrix group.
  * - Legacy knitting: one column per physical output colour (≤ MAX_COLOUR_COLUMNS) with an
  *   input per dia, else a single-colour picker fallback (restricted Select
  *   when the server sent colour_options; otherwise the same link query the
@@ -256,7 +336,12 @@ import Button from "primevue/button"
 import LinkField from "@/components/LinkField.vue"
 import { callMethod, searchLink } from "@/api/client"
 import { useAppToast } from "@/composables/useToast"
-import { MAX_COLOUR_COLUMNS, isMultiColour, useFabricDeliverableContext } from "@/composables/useFabricDeliverableContext"
+import {
+	MAX_COLOUR_COLUMNS,
+	collectManualKnittingContract,
+	isMultiColour,
+	useFabricDeliverableContext,
+} from "@/composables/useFabricDeliverableContext"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
@@ -383,11 +468,16 @@ const layouts = computed(() => (ctx.value?.rows || []).map(sectionLayout))
 function collectInputs(i) {
 	const row = ctx.value.rows[i]
 	const entry = entries.value[i]
+	if (row.manual_io) return collectManualKnittingContract(row, entry).routes
 	const inputs = []
 	if (isMultiColour(row)) {
 		for (const colour of row.colour_options) {
 			;(row.qty_rows || []).forEach((qr, j) => {
-				inputs.push({ qty: Number(entry.colourQtys[colour][j]) || 0, qr, colour })
+				inputs.push({
+					qty: Number(entry.colourQtys[colour][j]) || 0,
+					qr,
+					colour,
+				})
 			})
 		}
 	} else {
@@ -400,6 +490,13 @@ function collectInputs(i) {
 		})
 	}
 	return inputs
+}
+
+function contractAttributeLabel(attrs) {
+	return Object.entries(attrs || {})
+		.filter(([, value]) => value)
+		.map(([attribute, value]) => `${attribute}: ${value}`)
+		.join(" · ")
 }
 
 // Non-blocking over-balance warning (production_api stance — knitting can
@@ -457,11 +554,40 @@ async function onApply() {
 	for (let i = 0; i < (ctx.value?.rows || []).length; i++) {
 		const row = ctx.value.rows[i]
 		const entry = entries.value[i]
+		const manualContract = row.manual_io
+			? collectManualKnittingContract(row, entry)
+			: null
+		if (manualContract?.orphanDeliverables.length) {
+			const item = manualContract.orphanDeliverables[0]
+			toast.warn(
+				"Fabric receivable required",
+				`Enter a fabric receivable quantity before sending ${item.item}.`,
+			)
+			return
+		}
 		const lines = []
-		for (const { qty, qr, colour } of collectInputs(i)) {
+		const inputRows = manualContract?.routes || collectInputs(i)
+		for (const { qty, qr, colour, manualInputs } of inputRows) {
+			if (row.manual_io && qty <= 0 && manualInputs.some((input) => input.qty > 0)) {
+				toast.warn(
+					"Expected cloth required",
+					`Enter the expected receivable quantity for ${qr.label}.`,
+				)
+				return
+			}
 			if (qty > 0) {
 				const line = { key: qr.key, out_attrs: qr.out_attrs, qty }
 				if (colour) line.colour = colour
+				if (row.manual_io) {
+					if (!manualInputs.some((input) => input.qty > 0)) {
+						toast.warn(
+							"Yarn quantity required",
+							`Enter at least one yarn deliverable for ${qr.label}.`,
+						)
+						return
+					}
+					line.inputs = manualInputs
+				}
 				lines.push(line)
 			}
 		}
@@ -476,7 +602,7 @@ async function onApply() {
 			// Desk parity (work_order.js fallback_colour): multi-colour rows post
 			// null — each line already carries its own line-level colour.
 			colour: isMultiColour(row) ? null : entry.colour || null,
-			yarn_qty: !row.reference_routed && (row.yarns || []).length === 1
+			yarn_qty: !row.manual_io && !row.reference_routed && (row.yarns || []).length === 1
 				? entry.yarnQty || null
 				: null,
 			entries: lines,
@@ -562,6 +688,103 @@ async function onApply() {
 	font-size: 12.5px;
 	color: var(--esd-muted);
 }
+.fc-contract-note {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	margin: 10px 14px;
+	padding: 10px 12px;
+	border: 1px solid var(--esd-line);
+	border-radius: 8px;
+	background: var(--esd-accent-50);
+	font-size: 12px;
+}
+.fc-contract-lists {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+	margin: 0 14px 14px;
+	align-items: start;
+}
+.fc-contract-list {
+	border: 1px solid var(--esd-line);
+	border-radius: 8px;
+	overflow: hidden;
+	background: var(--esd-card);
+}
+.fc-contract-list-title {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 11px 12px;
+	border-left: 4px solid var(--esd-accent);
+	background: var(--esd-accent-50);
+}
+.fc-contract-list--receive .fc-contract-list-title {
+	border-left-color: var(--esd-success, #2f855a);
+}
+.fc-contract-list-title div,
+.fc-contract-item-name {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+.fc-contract-list-title strong {
+	font-size: 13px;
+}
+.fc-contract-list-title span {
+	font-size: 11px;
+	color: var(--esd-muted);
+}
+.fc-contract-list-head,
+.fc-contract-item {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 130px;
+	gap: 12px;
+}
+.fc-contract-list-head {
+	padding: 7px 10px;
+	background: var(--esd-surface);
+	border-top: 1px solid var(--esd-line);
+	border-bottom: 1px solid var(--esd-line);
+	font-size: 10.5px;
+	font-weight: 650;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--esd-muted);
+}
+.fc-contract-item {
+	align-items: center;
+	padding: 10px;
+	cursor: text;
+}
+.fc-contract-item + .fc-contract-item {
+	border-top: 1px solid var(--esd-line);
+}
+.fc-contract-item-name strong {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--esd-text);
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
+.fc-contract-item-name small {
+	margin-top: 3px;
+	font-size: 11px;
+	color: var(--esd-muted);
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
+.fc-contract-qty {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 6px;
+}
+.fc-contract-qty small {
+	font-size: 11px;
+	color: var(--esd-muted);
+}
 .fc-field {
 	display: flex;
 	flex-direction: column;
@@ -615,5 +838,10 @@ async function onApply() {
 }
 .fc-field--tight {
 	padding: 6px 14px;
+}
+@media (max-width: 720px) {
+	.fc-contract-lists {
+		grid-template-columns: 1fr;
+	}
 }
 </style>

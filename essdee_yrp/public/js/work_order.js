@@ -328,6 +328,7 @@ function render_fabric_dialog(frm, ctx) {
 
 	const recompute_yarn = (i) => {
 		const row = ctx.rows[i];
+		if (row.manual_io) return;
 		let total = 0;
 		manifest.forEach((m) => {
 			if (m.row === i) total += flt(d.get_value(m.fieldname)) || 0;
@@ -344,8 +345,44 @@ function render_fabric_dialog(frm, ctx) {
 		d.set_value(`yarn_qty_${i}`, Math.round(total_yarn * 1000) / 1000);
 	};
 
+	const push_manual_inputs = (row, i, qr, j, colour, output_default) => {
+		if (!row.manual_io) return [];
+		fields.push({
+			fieldtype: "HTML",
+			options: `<div class="text-muted small" style="margin:4px 0 2px;font-weight:600;">${__("Yarn deliverables")}</div>`,
+		});
+		return (qr.knitting_inputs || []).map((input, k) => {
+			const colour_index = colour
+				? (row.colour_options || []).indexOf(colour)
+				: null;
+			const suffix = colour_index == null ? "" : `_c${colour_index}`;
+			const fieldname = `input_qty_${i}_${j}_${k}${suffix}`;
+			const attrs = Object.values(input.attrs || {}).filter(Boolean);
+			const label = [input.item, ...attrs].join(" · ");
+			const suggested = colour
+				? flt(output_default) * flt(input.qty_per_output)
+				: flt(input.prefill);
+			fields.push({
+				fieldtype: "Float",
+				label: `${label} (${input.uom || __("Qty")})`,
+				fieldname,
+				default: suggested || undefined,
+			});
+			return { key: input.key, fieldname, label };
+		});
+	};
+
 	ctx.rows.forEach((row, i) => {
 		fields.push({ fieldtype: "Section Break", label: `${row.cloth_item} (${row.production_detail})` });
+		if (row.manual_io) {
+			fields.push({
+				fieldtype: "HTML",
+				options: `<div class="alert alert-info small" style="margin-bottom:8px;">`
+					+ `<b>${__("Knitting execution contract")}</b><br>`
+					+ `${__("Enter the yarn you will deliver and the cloth quantity you expect back for every route. Items are restricted by the IPD matrix; quantities are editable.")}`
+					+ `</div>`,
+			});
+		}
 		if (row.kind === "identity" && row.treated_item && row.treated_item !== row.cloth_item) {
 			fields.push({
 				fieldtype: "HTML",
@@ -403,15 +440,20 @@ function render_fabric_dialog(frm, ctx) {
 				(row.qty_rows || []).forEach((qr, j) => {
 					const fieldname = `qty_${i}_${j}_c${ci}`;
 					const is_default_output = colour === row.greige_colour;
+					const output_default = is_default_output && qr.prefill ? qr.prefill : 0;
 					fields.push({
 						fieldtype: "Float", label: qr.label, fieldname,
-						default: is_default_output && qr.prefill ? qr.prefill : undefined,
+						default: output_default || undefined,
 						description: planning_description(row, qr),
 						onchange: () => recompute_yarn(i),
 					});
+					const manual_inputs = push_manual_inputs(
+						row, i, qr, j, colour, output_default
+					);
 					manifest.push({
 						fieldname, row: i, key: qr.key, out_attrs: qr.out_attrs,
 						colour, label: qr.label, balance: qr.balance, available: qr.available,
+						manual_inputs,
 					});
 				});
 			});
@@ -429,6 +471,9 @@ function render_fabric_dialog(frm, ctx) {
 					description: planning_description(row, qr),
 					onchange: row.kind === "knitting" ? () => recompute_yarn(i) : undefined,
 				});
+				const manual_inputs = push_manual_inputs(
+					row, i, qr, j, null, qr.prefill || 0
+				);
 				manifest.push({
 					fieldname, row: i, key: qr.key, out_attrs: qr.out_attrs,
 					colour: qr.knit_colour || null,
@@ -438,6 +483,7 @@ function render_fabric_dialog(frm, ctx) {
 					source_available: qr.source_available,
 					source_pool_key: qr.source_pool_key,
 					reference_item_variant: qr.reference_item_variant || null,
+					manual_inputs,
 				});
 			};
 
@@ -481,11 +527,11 @@ function render_fabric_dialog(frm, ctx) {
 			}
 		}
 
-		if (row.kind === "knitting" && !reference_routed && (row.yarns || []).length <= 1) {
+		if (row.kind === "knitting" && !row.manual_io && !reference_routed && (row.yarns || []).length <= 1) {
 			fields.push({
 				fieldtype: "Float", label: __("Yarn (deliverable) Kg"), fieldname: `yarn_qty_${i}`,
 			});
-		} else if (row.kind === "knitting" && !reference_routed) {
+		} else if (row.kind === "knitting" && !row.manual_io && !reference_routed) {
 			fields.push({
 				fieldtype: "Section Break",
 				label: __("Calculated Yarn Deliverables"),
@@ -509,14 +555,31 @@ function render_fabric_dialog(frm, ctx) {
 		primary_action(values) {
 			const rows = [];
 			let missing_colour = null;
+			let missing_output = null;
+			let missing_input = null;
 			ctx.rows.forEach((row, i) => {
 				const entries = [];
 				manifest.forEach((m) => {
 					if (m.row !== i) return;
 					const qty = flt(values[m.fieldname]);
+					const inputs = (m.manual_inputs || []).map((input) => ({
+						key: input.key,
+						qty: flt(values[input.fieldname]),
+					}));
+					if (!qty && inputs.some((input) => input.qty > 0)) {
+						missing_output = m.label;
+						return;
+					}
 					if (!qty || qty <= 0) return;
 					const line = { key: m.key, out_attrs: m.out_attrs, qty };
 					if (m.colour) line.colour = m.colour;
+					if (row.manual_io) {
+						if (!inputs.some((input) => input.qty > 0)) {
+							missing_input = m.label;
+							return;
+						}
+						line.inputs = inputs;
+					}
 					entries.push(line);
 				});
 				if (!entries.length) return;
@@ -530,12 +593,20 @@ function render_fabric_dialog(frm, ctx) {
 				rows.push({
 					fabric_row: row.fabric_row,
 					colour: fallback_colour,
-					yarn_qty: !row.reference_routed && (row.yarns || []).length <= 1
+					yarn_qty: !row.manual_io && !row.reference_routed && (row.yarns || []).length <= 1
 						? values[`yarn_qty_${i}`] || null
 						: null,
 					entries,
 				});
 			});
+			if (missing_output) {
+				frappe.msgprint(__("Enter the expected cloth quantity for {0}.", [missing_output]));
+				return;
+			}
+			if (missing_input) {
+				frappe.msgprint(__("Enter at least one yarn deliverable quantity for {0}.", [missing_input]));
+				return;
+			}
 			if (missing_colour) {
 				frappe.msgprint(__("Select the cloth Colour for {0}.", [missing_colour]));
 				return;

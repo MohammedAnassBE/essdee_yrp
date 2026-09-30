@@ -3,11 +3,12 @@
 
 """Fabric Work Order Calculate: popup context + calculation.
 
-The popup derives EVERYTHING from the IPD's auto-generated matrices; the user
-only enters quantities — one row per matrix group (user-locked 2026-07-03).
-Entered rows become `output_demand` for the base engine (`get_process_io`):
-deliverables are the engine's scaled inputs; receivables are the entered rows
-themselves (1:1 v1 — the Process master's waste/excess applies later)."""
+The IPD's auto-generated matrices define the legal input/output variants.  For
+knitting, the operator enters both sides of the execution contract (the yarns
+being delivered and the cloth expected back); the matrix quantities remain a
+prefill only.  Other fabric processes continue to accept output demand and
+derive their inputs from the matrix.
+"""
 
 import json
 import re
@@ -84,6 +85,18 @@ def _step_kind(ipd, step):
 	if step["shape"] == "identity":
 		return "identity"
 	return None
+
+
+def _is_default_knitting_process(process_name):
+	"""The operator-authored input/output contract belongs only to the
+	configured Default Knitting Process. Other knitting-like matrix steps retain
+	their normal recipe-derived calculation."""
+	return bool(
+		process_name
+		and process_name == frappe.db.get_single_value(
+			"IPD Settings", "default_knitting_process"
+		)
+	)
 
 
 def _conversion_process_row(ipd, process_name):
@@ -332,6 +345,7 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 	"""
 	wo = frappe.get_doc("Work Order", work_order)
 	wo.check_permission("read")
+	manual_knitting_process = _is_default_knitting_process(wo.process_name)
 	lot = _get_lot(wo)
 
 	rows = []
@@ -408,6 +422,8 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 				qty_row["knit_dia"] = (
 					qty_row.get("out_attrs") or {}
 				).get(FABRIC_DIA_ATTRIBUTE)
+		if row_kind == "knitting" and manual_knitting_process:
+			_hydrate_knitting_execution_defaults(qty_rows, wo)
 		# Knitting yarn + cloth-per-kg-yarn come from the matched generic row (its
 		# input_item / quantity_ratio) so a generic IPD with blank tab yarn_item /
 		# cloth_per_kg_yarn still resolves. The adapter fills the same values from
@@ -426,6 +442,9 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 			"treated_item": treated_item,
 			"production_detail": fabric.production_detail,
 			"kind": row_kind,
+			# Knitting is an operator-authored execution contract: matrices restrict
+			# the variants, but both yarn and cloth quantities remain editable.
+			"manual_io": row_kind == "knitting" and manual_knitting_process,
 			"reference_routed": reference_routed,
 			"ratio": (flt(kn_row.get("quantity_ratio")) if kn_row else flt(ipd.get("cloth_per_kg_yarn"))) or 1,
 			"has_colour": has_colour,
@@ -447,6 +466,65 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 		"source_process_options": source_options,
 		"source_process": selected_source,
 	}
+
+
+def _hydrate_knitting_execution_defaults(qty_rows, wo):
+	"""Prefer an untransacted Work Order's saved knitting contract on reopen.
+
+	The Lot program remains the default for a new Work Order.  Once Calculate has
+	stored an operator-entered contract, its per-route reference allocations are
+	the authoritative defaults until a DC/GRN starts moving stock.  Restore both
+	the expected cloth output and the actual yarn quantities; recomputing the yarn
+	from the IPD ratio here would silently turn an accepted 59/41 contract back
+	into (for example) its suggested 60/40 recipe when the popup is reopened.
+	"""
+	output_by_reference = {}
+	for row in wo.get("receivables") or []:
+		for reference, qty in get_reference_allocations(row, row.qty).items():
+			output_by_reference[reference] = (
+				output_by_reference.get(reference, 0) + flt(qty)
+			)
+
+	input_by_reference_and_variant = {}
+	input_references = set()
+	for row in wo.get("deliverables") or []:
+		if not row.get("is_calculated") or not row.get("item_variant"):
+			continue
+		item = frappe.db.get_value("Item Variant", row.item_variant, "item")
+		if not item:
+			continue
+		attrs = frozenset(_variant_attrs(row.item_variant).items())
+		for reference, qty in get_reference_allocations(row, row.qty).items():
+			input_references.add(reference)
+			key = (reference, item, attrs)
+			input_by_reference_and_variant[key] = (
+				input_by_reference_and_variant.get(key, 0) + flt(qty)
+			)
+
+	for qty_row in qty_rows:
+		reference = qty_row.get("reference_item_variant")
+		if reference and reference in output_by_reference:
+			qty_row["prefill"] = flt(output_by_reference[reference], 3)
+		for option in qty_row.get("knitting_inputs") or []:
+			declared = set(_item_attribute_names(option["item"]))
+			attrs = frozenset(
+				(key, value)
+				for key, value in (option.get("attrs") or {}).items()
+				if key in declared and value
+			)
+			saved_key = (reference, option["item"], attrs)
+			if reference in input_references:
+				# Zero is meaningful: a matrix-valid yarn can be intentionally left
+				# unused in the operator's execution contract.
+				option["prefill"] = flt(
+					input_by_reference_and_variant.get(saved_key), 3
+				)
+			else:
+				option["prefill"] = flt(
+					flt(qty_row.get("prefill"))
+					* flt(option.get("qty_per_output")),
+					3,
+				)
 
 
 def _add_planning_data(qty_rows, kind, lot, wo, fabric, ipd, step):
@@ -599,6 +677,13 @@ def _matrix_qty_rows(ipd, process_name, kind):
 			qty_rows.append({
 				"key": f"{name}:{group_index}",
 				"label": label,
+				# The knitting popup presents physical Work Order-style rows. Expose
+				# the real matrix output item/UOM so identical receivables can be
+				# consolidated without guessing from the finished-route reference.
+				"output_item": matrix.output_item or ipd.item,
+				"output_uom": out.get("uom") or frappe.db.get_value(
+					"Item", matrix.output_item or ipd.item, "default_unit_of_measure"
+				),
 				# section/row_label split the label for the popup's colour-section
 				# layout; `label` itself stays untouched (server API compat).
 				"section": section,
@@ -616,9 +701,15 @@ def _matrix_qty_rows(ipd, process_name, kind):
 						"attrs": row.get("attrs") or {},
 						"qty": flt(row.get("qty")),
 						"uom": row.get("uom"),
+						"wastage_pct": flt(row.get("wastage_pct")),
 					}
 					for row in inputs
 				],
+				"knitting_inputs": (
+					_knitting_input_options(matrix, group, ipd, flt(out.get("qty")) or 1)
+					if kind == "knitting"
+					else []
+				),
 				"yarns": [
 					{
 						"yarn_item": row.get("item") or matrix.input_item,
@@ -628,6 +719,53 @@ def _matrix_qty_rows(ipd, process_name, kind):
 				] if kind == "knitting" else [],
 			})
 	return qty_rows
+
+
+def _knitting_input_options(matrix, group, ipd, output_qty):
+	"""Return the exact matrix-valid yarn variants for one knitting route.
+
+	Several matrix rows may resolve to the same physical Item Variant.  Present
+	them once and add their suggested quantities, because the Work Order stores
+	one physical deliverable row while retaining route allocation metadata.
+	"""
+	output_qty = flt(output_qty)
+	if output_qty <= 0:
+		return []
+
+	options = []
+	by_identity = {}
+	for row in group.get("input") or []:
+		item = row.get("item") or matrix.input_item or ipd.item
+		attrs = dict(row.get("attrs") or {})
+		uom = row.get("uom") or frappe.db.get_value(
+			"Item", item, "default_unit_of_measure"
+		)
+		identity = (
+			item,
+			tuple(sorted(attrs.items())),
+			uom,
+		)
+		qty_per_output = (
+			flt(row.get("qty"))
+			* (1 + flt(row.get("wastage_pct")) / 100.0)
+			/ output_qty
+		)
+		option = by_identity.get(identity)
+		if option is None:
+			option = {
+				"key": f"input:{len(options)}",
+				"item": item,
+				"attrs": attrs,
+				"uom": uom,
+				"qty_per_output": 0.0,
+			}
+			by_identity[identity] = option
+			options.append(option)
+		option["qty_per_output"] += qty_per_output
+
+	for option in options:
+		option["qty_per_output"] = flt(option["qty_per_output"], 6)
+	return options
 
 
 def _identity_qty_rows(ipd, treated_item, identity_row=None):
@@ -1051,14 +1189,85 @@ def _get_work_order_selection_context(lot, process_name, check_permission=False)
 	}
 
 
+def _guard_untransacted_fabric_calculation(wo):
+	"""Do not replace an execution contract after a DC/GRN has used it."""
+	for row in wo.get("deliverables") or []:
+		if not row.get("is_calculated"):
+			continue
+		if (
+			flt(row.get("stock_update")) > 0.000001
+			or flt(row.get("qty")) - flt(row.get("pending_quantity")) > 0.000001
+		):
+			frappe.throw(_(
+				"Calculated fabric inputs have already moved on a Delivery Challan or "
+				"Goods Received Note. Cancel those transactions before recalculating."
+			))
+	for row in wo.get("receivables") or []:
+		if flt(row.get("qty")) - flt(row.get("pending_quantity")) > 0.000001:
+			frappe.throw(_(
+				"Fabric outputs have already been received. Cancel those Goods Received "
+				"Notes before recalculating."
+			))
+
+
+def _validated_manual_knitting_inputs(line, matrix, group, ipd):
+	"""Validate entered yarn quantities against one exact matrix group.
+
+	The client submits opaque option keys, never arbitrary Items or variants.
+	Quantities are intentionally not checked against the IPD ratios: the Work
+	Order is the physical execution agreement for this knitting trip.
+	"""
+	submitted = line.get("inputs")
+	if not isinstance(submitted, list):
+		frappe.throw(_("Knitting yarn inputs must be a list."))
+
+	out = (group.get("output") or [{}])[0]
+	allowed = {
+		row["key"]: row
+		for row in _knitting_input_options(
+			matrix, group, ipd, flt(out.get("qty")) or 1
+		)
+	}
+	result = []
+	seen = set()
+	for row in submitted:
+		key = row.get("key")
+		if key in seen:
+			frappe.throw(_("Duplicate knitting yarn input {0}.").format(key or ""))
+		seen.add(key)
+		option = allowed.get(key)
+		if not option:
+			frappe.throw(_(
+				"Yarn input {0} is not generated by this IPD matrix — reopen Calculate."
+			).format(key or ""))
+		qty = flt(row.get("qty"))
+		if qty < 0:
+			frappe.throw(_("Knitting yarn quantity cannot be negative."))
+		if qty <= 0:
+			continue
+		result.append({
+			**option,
+			"item_variant": _resolve_variant(
+				option["item"], option.get("attrs") or {}
+			),
+			"qty": qty,
+		})
+	if not result:
+		frappe.throw(_(
+			"Enter at least one yarn deliverable quantity for every knitting receivable."
+		))
+	return result
+
+
 @frappe.whitelist()
 def calculate_fabric_deliverables(
 	work_order, rows, modified=None, source_process=None
 ):
-	"""rows = [{fabric_row, colour?, yarn_qty?, entries: [{out_attrs, qty}]}].
+	"""Create Work Order fabric inputs/outputs from matrix-valid popup rows.
 
-	knitting:   entries = cloth kgs per dia; yarn deliverable computed by the
-	            engine via cloth_per_kg_yarn, overridable with yarn_qty.
+	knitting:   entries carry expected cloth qty plus explicit matrix-valid
+	            ``inputs`` (yarn quantities).  Missing ``inputs`` retains the
+	            legacy matrix-derived behaviour for older API clients.
 	dyeing:     entries = kgs per (dia, from->to colour) group, 1:1.
 	compacting: entries = kgs per (colour, from->to dia) group, 1:1.
 	Each entry carries the matrix group `key` ("<matrix>:<group_index>") the
@@ -1067,10 +1276,9 @@ def calculate_fabric_deliverables(
 	the same dia), and an attrs-based first-match would misroute the quantity
 	through the wrong group.
 
-	The entered qty is the OUTPUT program demand. Knitting program excess is already
-	included when Build Cloth Programs creates that qty, so Knitting ignores the
-	Process default_excess here. Other processes scale RECEIVABLE by their Process
-	wastage/excess. The DELIVERABLE (consumed input) is untouched by these values.
+	The entered qty is the OUTPUT program demand.  A knitting operator enters the
+	exact expected receipt, so Process wastage/excess never changes that quantity.
+	Other processes retain their Process wastage/excess scaling.
 
 	Receivables are minted on the STEP's real output item (matrix.output_item,
 	falling back to the Lot's cloth item) in that item's default UOM — a mid-chain
@@ -1090,6 +1298,7 @@ def calculate_fabric_deliverables(
 	default_received_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
 	if not default_received_type:
 		frappe.throw(_("Set Default Received Type in YRP Stock Settings first."))
+	manual_knitting_process = _is_default_knitting_process(wo.process_name)
 
 	# Knitting excess is already baked into the Lot program. Ignore the Process
 	# default_excess for that step so it is never added twice. Other processes
@@ -1103,6 +1312,7 @@ def calculate_fabric_deliverables(
 	source_demands = {}
 	matrix_cache = {}
 	uom_cache = {}
+	manual_guard_checked = False
 
 	def _default_uom(item):
 		if item not in uom_cache:
@@ -1133,8 +1343,26 @@ def calculate_fabric_deliverables(
 				kind = "identity"
 		if not kind:
 			frappe.throw(_("{0} is not a fabric process on IPD {1}.").format(wo.process_name, ipd.name))
-		recv_excess = 0 if kind == "knitting" else process_excess
-		recv_factor = 1 - recv_wastage / 100.0 + recv_excess / 100.0
+		is_knitting = kind == "knitting"
+		manual_knitting = is_knitting and manual_knitting_process
+		has_submitted_inputs = any(
+			"inputs" in line for line in (entry.get("entries") or [])
+		)
+		if is_knitting and has_submitted_inputs and not manual_knitting:
+			frappe.throw(_(
+				"Manual knitting input/output quantities are allowed only for the "
+				"Default Knitting Process configured in IPD Settings."
+			))
+		if manual_knitting and has_submitted_inputs:
+			if not manual_guard_checked:
+				_guard_untransacted_fabric_calculation(wo)
+				manual_guard_checked = True
+		recv_excess = 0 if is_knitting else process_excess
+		recv_factor = (
+			1.0
+			if is_knitting
+			else 1 - recv_wastage / 100.0 + recv_excess / 100.0
+		)
 		if recv_factor <= 0:
 			frappe.throw(_(
 				"Process {0}: wastage {1}% / excess {2}% give a non-positive "
@@ -1219,9 +1447,16 @@ def calculate_fabric_deliverables(
 		aggregated = {}
 		fabric_receivables = []
 		bom_demands = []
+		entry_uses_manual_inputs = False
 		for line in entry.get("entries") or []:
 			qty = flt(line.get("qty"))
+			if qty < 0:
+				frappe.throw(_("Receivable quantity cannot be negative."))
 			if qty <= 0:
+				if any(flt(row.get("qty")) > 0 for row in (line.get("inputs") or [])):
+					frappe.throw(_(
+						"Enter the expected knitting receivable quantity for every yarn delivery."
+					))
 				continue
 			line_colour = line.get("colour") or colour
 			matrix, group = _resolve_matrix_group(
@@ -1283,13 +1518,34 @@ def calculate_fabric_deliverables(
 				"reference_item_variant": reference_item_variant,
 			})
 
-			for inp in group.get("input") or []:
-				input_item = inp.get("item") or matrix.input_item or ipd.item
-				inp_qty = flt(inp.get("qty")) * scale * (1 + flt(inp.get("wastage_pct")) / 100.0)
-				variant = _resolve_variant(input_item, inp.get("attrs") or {})
-				key = (variant, inp.get("uom"), reference_item_variant or "")
-				aggregated.setdefault(key, {"item": input_item, "qty": 0.0})
-				aggregated[key]["qty"] += inp_qty
+			manual_inputs = None
+			if manual_knitting and "inputs" in line:
+				manual_inputs = _validated_manual_knitting_inputs(
+					line, matrix, group, ipd
+				)
+				entry_uses_manual_inputs = True
+
+			if manual_inputs is not None:
+				for inp in manual_inputs:
+					key = (
+						inp["item_variant"],
+						inp.get("uom"),
+						reference_item_variant or "",
+					)
+					aggregated.setdefault(
+						key, {"item": inp["item"], "qty": 0.0}
+					)
+					aggregated[key]["qty"] += flt(inp["qty"])
+			else:
+				for inp in group.get("input") or []:
+					input_item = inp.get("item") or matrix.input_item or ipd.item
+					inp_qty = flt(inp.get("qty")) * scale * (
+						1 + flt(inp.get("wastage_pct")) / 100.0
+					)
+					variant = _resolve_variant(input_item, inp.get("attrs") or {})
+					key = (variant, inp.get("uom"), reference_item_variant or "")
+					aggregated.setdefault(key, {"item": input_item, "qty": 0.0})
+					aggregated[key]["qty"] += inp_qty
 
 			# The receivable is the STEP's output item (a mid-chain conversion —
 			# grey yarn -> dyed yarn — produces the dyed yarn, NOT the Lot's cloth).
@@ -1309,7 +1565,12 @@ def calculate_fabric_deliverables(
 		# input. Valid while knitting matrices have exactly ONE resolved input
 		# variant; with more inputs the override is ignored.
 		yarn_override = flt(entry.get("yarn_qty"))
-		if kind == "knitting" and yarn_override > 0 and len(aggregated) == 1:
+		if (
+			kind == "knitting"
+			and not entry_uses_manual_inputs
+			and yarn_override > 0
+			and len(aggregated) == 1
+		):
 			next(iter(aggregated.values()))["qty"] = yarn_override
 
 		for (variant, uom, reference_item_variant), data in aggregated.items():

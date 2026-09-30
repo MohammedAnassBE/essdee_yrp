@@ -128,6 +128,20 @@
 					</template>
 				</Column>
 
+				<!-- Each received-type split becomes its own GRN child row. -->
+				<Column header="Comments" :style="{ minWidth: '210px' }">
+					<template #body="{ data: split }">
+						<InputText
+							v-if="editable"
+							v-model="split.entry.comments"
+							class="line-comment-input"
+							placeholder="Add row comment"
+							fluid
+						/>
+						<span v-else class="line-comment-read">{{ split.entry.comments || "—" }}</span>
+					</template>
+				</Column>
+
 				<!-- Pending / Allowed / Bal. (only on the first split row) -->
 				<Column header="Pending" :style="{ width: '74px' }">
 					<template #body="{ index }">
@@ -177,6 +191,7 @@ import DataTable from "primevue/datatable"
 import Column from "primevue/column"
 import Button from "primevue/button"
 import InputNumber from "primevue/inputnumber"
+import InputText from "primevue/inputtext"
 import Tooltip from "primevue/tooltip"
 import { callMethod } from "@/api/client"
 
@@ -432,6 +447,7 @@ function addSplit(row, rt) {
 			if (k !== row.key) continue
 			const clone = JSON.parse(JSON.stringify(entry))
 			clone.dimensions = { ...stripped, received_type: rt }
+			clone.comments = ""
 			clone.values = {}
 			for (const col of getColumns(group, entry)) {
 				const src = (entry.values || {})[col.key] || {}
@@ -562,6 +578,15 @@ defineExpose({ loadData, getItems, hasItems })
 .cell-ro {
 	display: block;
 	text-align: right;
+	color: var(--esd-ink-2);
+}
+.line-comment-input {
+	width: 100%;
+}
+.line-comment-read {
+	display: block;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
 	color: var(--esd-ink-2);
 }
 .txt-danger {

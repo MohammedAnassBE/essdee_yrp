@@ -164,6 +164,23 @@
 						<template #body="{ data }">{{ data.default_uom || "—" }}</template>
 					</Column>
 
+					<Column
+						v-if="showLineComments"
+						header="Comments"
+						:style="{ minWidth: '210px' }"
+					>
+						<template #body="{ data }">
+							<InputText
+								v-if="editable && !aggregateDisplay"
+								v-model="data.comments"
+								class="line-comment-input"
+								placeholder="Add row comment"
+								fluid
+							/>
+							<span v-else class="line-comment-read">{{ data.comments || "—" }}</span>
+						</template>
+					</Column>
+
 					<Column v-if="editable && !lockedItems" :style="{ width: '88px' }" bodyStyle="text-align:center">
 						<template #body="{ index }">
 							<Button
@@ -440,6 +457,7 @@ import DataTable from "primevue/datatable"
 import Column from "primevue/column"
 import Button from "primevue/button"
 import InputNumber from "primevue/inputnumber"
+import InputText from "primevue/inputtext"
 import AutoComplete from "primevue/autocomplete"
 import Select from "primevue/select"
 import ToggleSwitch from "primevue/toggleswitch"
@@ -475,6 +493,9 @@ const props = defineProps({
 	showDimensions: { type: Boolean, default: true },
 	// Optional grouped JSON to load on mount / when it changes (read-only view use).
 	initialData: { type: [Array, String, Object], default: null },
+	// DC / GRN opt-in: expose the existing child-row comments field directly
+	// even when the source controls which items are present.
+	showLineComments: { type: Boolean, default: false },
 	// true → render an "Allow Zero Valuation Rate" toggle in the add-form as a
 	// per-row entry field. Persisted on the item entry as
 	// `allow_zero_valuation_rate` (Frappe's escape hatch for opening-stock
@@ -1215,6 +1236,16 @@ defineExpose({ getItems, loadData, hasItems })
 .cell-ro {
 	display: block;
 	text-align: center;
+	color: var(--esd-ink-2);
+}
+.line-comment-input {
+	width: 100%;
+}
+.line-comment-read {
+	display: block;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	text-align: left;
 	color: var(--esd-ink-2);
 }
 .cell-extra {

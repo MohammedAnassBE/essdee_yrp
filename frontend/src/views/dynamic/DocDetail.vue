@@ -779,6 +779,7 @@
 						:cell-fields="pv.cellFields || []"
 						:show-allow-zero-rate="!!pv.showAllowZeroRate"
 						:show-secondary-toggle="!!pv.showSecondaryToggle"
+						:show-line-comments="!!pv.showLineComments"
 						:locked-items="!!pv.lockedItems"
 						:aggregate-display="!!pv.aggregateDisplay"
 						:show-dimensions="pv.showDimensions !== false"
@@ -1272,6 +1273,7 @@
 								:value-fields="pivotFor(ct.fieldname)?.valueFields || []"
 								:entry-fields="pivotFor(ct.fieldname)?.entryFields || []"
 								:cell-fields="pivotFor(ct.fieldname)?.cellFields || []"
+								:show-line-comments="!!pivotFor(ct.fieldname)?.showLineComments"
 								:aggregate-display="!!pivotFor(ct.fieldname)?.aggregateDisplay"
 								:initial-data="viewGrouped[ct.fieldname] || []"
 							/>
@@ -2490,6 +2492,7 @@ const STOCK_GROUPED_MAP = {
 		],
 		entryFields: ["stock_uom", "conversion_factor", "set_combination", "comments"],
 		showSecondaryToggle: true,
+		showLineComments: true,
 		// DC is always against a WO; items derive from the WO and the user
 		// only edits per-cell qty/rate/Sec Qty — no Add Item, no per-row
 		// delete/edit (preference 2026-05-29).
@@ -2508,6 +2511,7 @@ const STOCK_GROUPED_MAP = {
 			"delivery_challan_item", "set_combination", "comments",
 		],
 		showSecondaryToggle: true,
+		showLineComments: true,
 	}],
 	"Work Order": [
 		{

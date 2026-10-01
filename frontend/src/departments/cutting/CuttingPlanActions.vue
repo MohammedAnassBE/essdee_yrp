@@ -1,5 +1,5 @@
 <template>
-	<section class="plan-actions">
+	<section class="plan-actions plan-command-bar erp-command-bar" aria-label="Cutting Plan commands">
 		<div class="plan-actions__buttons">
 			<Button v-if="permissions.can_run_plan_actions" class="primary-command" label="Generate" icon="pi pi-sparkles" size="small" :loading="busy === 'generate'" @click="runPlanAction('generate')" />
 			<Button v-if="permissions.can_run_plan_actions" label="Fetch Received Cloth" icon="pi pi-download" text size="small" :loading="busy === 'fetch'" @click="runPlanAction('fetch')" />
@@ -297,17 +297,13 @@ function showFeedback(message, severity = "success") {
 	display: flex;
 	align-items: center;
 	min-width: 0;
-	padding: 6px;
-	background: linear-gradient(180deg, #f9fcfa 0%, #f3f8f5 100%);
-	border: 1px solid #dce8e1;
-	border-radius: 10px;
-	box-shadow: 0 1px 2px rgb(25 66 43 / 4%) inset;
+	padding: 4px 0;
 }
 
 .plan-actions__buttons {
 	display: flex;
 	align-items: center;
-	gap: 2px;
+	gap: 4px;
 	width: 100%;
 	min-width: 0;
 	overflow-x: auto;
@@ -316,14 +312,14 @@ function showFeedback(message, severity = "success") {
 
 .plan-actions__buttons :deep(.p-button) {
 	flex: 0 0 auto;
-	min-height: 34px;
-	padding: 0.42rem 0.48rem;
-	color: #405268;
-	background: rgb(255 255 255 / 72%);
+	min-height: var(--erp-control-height-compact);
+	padding: 0.4rem 0.52rem;
+	color: var(--erp-text-muted);
+	background: transparent;
 	border: 1px solid transparent;
-	border-radius: 7px;
-	font-size: 0.68rem;
-	font-weight: 600;
+	border-radius: var(--erp-control-radius);
+	font-size: var(--erp-font-size-min);
+	font-weight: 650;
 	box-shadow: none;
 }
 
@@ -332,23 +328,23 @@ function showFeedback(message, severity = "success") {
 }
 
 .plan-actions__buttons :deep(.p-button:not(.primary-command):hover) {
-	color: #126c4a;
-	background: #fff;
-	border-color: #cfe0d7;
-	box-shadow: 0 2px 6px rgb(33 78 54 / 6%);
+	color: var(--erp-accent-hover);
+	background: var(--erp-accent-soft);
+	border-color: color-mix(in srgb, var(--erp-accent) 20%, white);
+	box-shadow: none;
 }
 
 .plan-actions__buttons :deep(.primary-command.p-button) {
 	padding-inline: 0.7rem;
 	color: #fff;
-	background: linear-gradient(145deg, #10ae7b, #078a62);
-	border-color: #078a62;
-	box-shadow: 0 4px 10px rgb(7 138 98 / 20%);
+	background: var(--erp-accent);
+	border-color: var(--erp-accent);
+	box-shadow: 0 3px 10px color-mix(in srgb, var(--erp-accent) 18%, transparent);
 }
 
 .plan-actions__buttons :deep(.primary-command.p-button:hover) {
-	background: linear-gradient(145deg, #0ba574, #087b59);
-	border-color: #087b59;
+	background: var(--erp-accent-hover);
+	border-color: var(--erp-accent-hover);
 }
 
 .dialog-stack { display: grid; gap: 14px; }

@@ -52,8 +52,8 @@ export function assertNoBrowserErrors(errors) {
 	assert(errors.length === 0, `Browser errors detected:\n${errors.join("\n")}`)
 }
 
-export async function visibleTextBelowMinimum(page, minPx = 11) {
-	return page.locator("body *").evaluateAll((elements, minimum) => elements.flatMap((element) => {
+export async function visibleTextBelowMinimum(root, minPx = 11) {
+	return root.locator("*").evaluateAll((elements, minimum) => elements.flatMap((element) => {
 		if (!(element instanceof HTMLElement)) return []
 		if (element.matches("script, style, svg, path, .pi, [aria-hidden='true']")) return []
 		if (element.children.length) return []
@@ -255,11 +255,159 @@ async function listSuite(page, context) {
 	return { controlHeights, headerPosition, numericAlignment, longValueTreatment, tableContainment }
 }
 
+function groupItemCount(value) {
+	const groups = Array.isArray(value) ? value : value?.items ? [value] : Object.values(value || {})
+	return groups.reduce((total, group) => total + (group?.items?.length || 0), 0)
+}
+
+async function openPlan(page, predicate = () => true) {
+	const fixture = await findCuttingPlan(page.request, predicate)
+	await page.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(fixture.name)}`, { waitUntil: "domcontentloaded" })
+	await page.locator(".cutting-tabs").waitFor({ timeout: 20_000 })
+	return fixture
+}
+
+async function planFrameSuite(page, context) {
+	await page.setViewportSize({ width: 1600, height: 1000 })
+	const fixture = await openPlan(page, (data) =>
+		data.permissions?.can_read_marker &&
+		data.permissions?.can_read_laysheet &&
+		data.permissions?.can_read_movement &&
+		data.permissions?.can_read_stock_transfers,
+	)
+	await page.locator(".cutting-plan-frame").waitFor({ timeout: 5_000 })
+
+	const main = page.locator(".cutting-plan-frame > .common-form-view")
+	const sidebar = page.locator(".cutting-plan-frame > .operations-rail")
+	const [mainBox, sidebarBox] = await Promise.all([main.boundingBox(), sidebar.boundingBox()])
+	assert(mainBox && sidebarBox, "Cutting Plan main or sidebar surface is missing")
+	const widthRatio = mainBox.width / sidebarBox.width
+	assert(widthRatio >= 3.7 && widthRatio <= 4.3, `Cutting Plan is not an 80/20 split: ${widthRatio}`)
+
+	const recordId = page.locator(".form-toolbar__meta > small")
+	const status = page.locator(".form-toolbar__meta .cutting-plan-status")
+	const [recordBox, statusBox] = await Promise.all([recordId.boundingBox(), status.boundingBox()])
+	assert(recordBox && statusBox && Math.abs(recordBox.y - statusBox.y) < 8, "Status is not beside the record ID")
+	assert(await page.locator(".form-toolbar__actions .form-edit-button").count() === 1, "Edit is not a distinct header action")
+	assert(await page.locator(".plan-command-bar .primary-command").count() === 1, "Primary plan command is not identifiable")
+
+	const visibleTabs = page.locator(".cutting-tabs .p-tab:visible")
+	assert(await visibleTabs.count() === 5, "Expected five permission-visible Cutting Plan tabs")
+	const tabList = page.locator(".cutting-tabs .p-tablist")
+	const panels = page.locator(".cutting-tabs .p-tabpanels")
+	const tabTopBefore = (await tabList.boundingBox())?.y
+	const scrollResult = await panels.evaluate((element) => {
+		element.scrollTop = Math.min(420, Math.max(0, element.scrollHeight - element.clientHeight))
+		return { scrollTop: element.scrollTop, clientHeight: element.clientHeight, scrollHeight: element.scrollHeight }
+	})
+	const tabTopAfter = (await tabList.boundingBox())?.y
+	assert(tabTopBefore === tabTopAfter, "Tab list moves with active content")
+	assert(scrollResult.scrollHeight >= scrollResult.clientHeight, "Tab content has no bounded scroll region")
+	assert(await page.locator("html").evaluate((element) => element.scrollWidth <= element.clientWidth), "Cutting Plan has page-level horizontal overflow")
+
+	const loadingPage = await context.newPage()
+	try {
+		await loadingPage.route("**get_web_view_data*", async (route) => {
+			await new Promise((resolve) => setTimeout(resolve, 1_200))
+			await route.continue()
+		})
+		await loadingPage.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(fixture.name)}`, { waitUntil: "domcontentloaded" })
+		await loadingPage.locator(".p-tabpanel[data-p-active='true'] .loading-state").waitFor({ timeout: 20_000 })
+	} finally {
+		await loadingPage.close()
+	}
+
+	const errorPage = await context.newPage()
+	try {
+		await errorPage.route("**get_web_view_data*", (route) => route.fulfill({
+			status: 500,
+			contentType: "application/json",
+			body: JSON.stringify({ message: "Workspace unavailable" }),
+		}))
+		await errorPage.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(fixture.name)}`, { waitUntil: "domcontentloaded" })
+		await errorPage.locator(".p-tabpanel[data-p-active='true'] .p-message-error").waitFor({ timeout: 20_000 })
+	} finally {
+		await errorPage.close()
+	}
+
+	const readonlyPage = await context.newPage()
+	try {
+		await readonlyPage.route("**get_web_view_data*", (route) => route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({
+				message: {
+					...fixture.data,
+					permissions: { ...fixture.data.permissions, can_write: false },
+				},
+			}),
+		}))
+		await readonlyPage.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(fixture.name)}`, { waitUntil: "domcontentloaded" })
+		await readonlyPage.locator(".cutting-tabs").waitFor({ timeout: 20_000 })
+		assert(await readonlyPage.getByRole("button", { name: "Edit", exact: true }).count() === 0, "Read-only plan still shows Edit")
+		const actionGap = await readonlyPage.locator(".form-toolbar__actions").evaluate((element) => element.getBoundingClientRect().height)
+		assert(actionGap <= 40, "Read-only header leaves an empty action gap")
+	} finally {
+		await readonlyPage.close()
+	}
+
+	await page.setViewportSize({ width: 1050, height: 900 })
+	const [collapsedMain, collapsedSidebar] = await Promise.all([main.boundingBox(), sidebar.boundingBox()])
+	assert(
+		collapsedMain && collapsedSidebar && collapsedSidebar.y >= collapsedMain.y + collapsedMain.height - 1,
+		"Sidebar does not move below the main surface at 1050px",
+	)
+
+	return { plan: fixture.name, widthRatio, tabCount: await visibleTabs.count(), scrollResult }
+}
+
+async function planPrimaryTabsSuite(page) {
+	await page.setViewportSize({ width: 1600, height: 1000 })
+	const fixture = await openPlan(page, (data) => groupItemCount(data.planned_detail?.item_detail) > 0)
+
+	const detailColumns = page.locator(".detail-field-column")
+	assert(await detailColumns.count() === 2, "Details does not use two Desk-aligned columns")
+	const detailWidths = await detailColumns.evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().width))
+	assert(Math.abs(detailWidths[0] - detailWidths[1]) <= 2, `Details columns are unbalanced: ${detailWidths.join(", ")}`)
+	const detailLabels = await detailColumns.evaluateAll((elements) => elements.map((element) =>
+		Array.from(element.querySelectorAll(".form-field__label")).map((label) => label.textContent.replace("*", "").trim()),
+	))
+	assert(
+		JSON.stringify(detailLabels[0].slice(0, 4)) === JSON.stringify(["Is Manual Entry", "Lot", "Maximum No of Plys", "Lay No"]),
+		`Left Details column is not in Desk order: ${JSON.stringify(detailLabels[0])}`,
+	)
+	assert(detailLabels[1][0] === "Item", `Right Details column must start with Item: ${JSON.stringify(detailLabels[1])}`)
+
+	await page.getByRole("tab", { name: "Summary", exact: true }).click()
+	const summaryHeadings = await page.locator(".p-tabpanel[data-p-active='true'] .section-heading h3").allTextContents()
+	for (const heading of ["Completed Cut Quantity", "Excess Cut Quantity", "Recut Summary", "Print Panel Summary"]) {
+		assert(summaryHeadings.some((text) => text.includes(heading)), `Summary is missing ${heading}`)
+	}
+
+	await page.getByRole("tab", { name: "Planned Detail", exact: true }).click()
+	await page.locator(".planned-row").first().waitFor({ timeout: 10_000 })
+	assert(await page.locator(".planned-row").count() > 0, "Planned rows are not visually identified")
+	assert(await page.locator(".completed-row").count() > 0, "Completed rows are not visually identified")
+	const totalNumberStyle = await page.locator(".total-row .number-cell").first().evaluate((element) => getComputedStyle(element).fontVariantNumeric)
+	assert(totalNumberStyle.includes("tabular-nums"), "Totals do not use tabular numbers")
+	const longIdContainment = await page.locator(".data-table td").first().evaluate((element) => ({
+		overflowWrap: getComputedStyle(element).overflowWrap,
+		pageContained: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+	}))
+	assert(longIdContainment.overflowWrap === "anywhere" && longIdContainment.pageContained, "Long tabular IDs are not contained")
+	const undersizedText = await visibleTextBelowMinimum(page.locator(".cutting-plan-main"))
+	assert(undersizedText.length === 0, `Primary tabs contain text below 11px: ${JSON.stringify(undersizedText.slice(0, 8))}`)
+
+	return { plan: fixture.name, detailWidths, summaryHeadings, totalNumberStyle, longIdContainment }
+}
+
 const suites = {
 	tokens: tokensSuite,
 	shell: shellSuite,
 	"cutting-entry": cuttingEntrySuite,
 	list: listSuite,
+	"plan-frame": planFrameSuite,
+	"plan-primary-tabs": planPrimaryTabsSuite,
 }
 
 const browser = await chromium.launch({ headless: true })

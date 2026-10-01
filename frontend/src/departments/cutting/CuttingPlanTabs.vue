@@ -414,22 +414,23 @@ const RecutTable = defineComponent({
 }
 
 .cutting-tabs :deep(.p-tablist) {
-	position: relative;
-	z-index: 2;
+	position: sticky;
+	top: 0;
+	z-index: var(--erp-layer-sticky);
 	min-width: 0;
 	background: #fff;
 }
 
 .cutting-tabs :deep(.p-tablist-tab-list) {
-	gap: 8px;
-	padding: 0 4px;
+	gap: 18px;
+	padding: 0 2px;
 	background: transparent;
 	border-bottom: 1px solid #dbe6e0;
 }
 
 .cutting-tabs :deep(.p-tab) {
-	padding: 12px 15px 11px;
-	color: #5d6c76;
+	padding: 12px 2px 11px;
+	color: var(--erp-text-muted);
 	border-color: transparent;
 	font-size: 0.82rem;
 	font-weight: 680;
@@ -437,24 +438,24 @@ const RecutTable = defineComponent({
 }
 
 .cutting-tabs :deep(.p-tab:hover) {
-	color: #18704f;
-	background: #f8fbf9;
+	color: var(--erp-accent-hover);
+	background: transparent;
 }
 
 .cutting-tabs :deep(.p-tab-active) {
-	color: #087c57;
+	color: var(--erp-accent);
 	font-weight: 780;
 }
 
 .cutting-tabs :deep(.p-tablist-active-bar) {
 	height: 2px;
-	background: #0ca678;
+	background: var(--erp-accent);
 	border-radius: 2px 2px 0 0;
 }
 
 .cutting-tabs :deep(.p-tabpanels) {
 	min-height: 0;
-	padding: 12px 2px 2px;
+	padding: 12px 0 2px;
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	scrollbar-color: #9eb6aa transparent;
@@ -470,15 +471,15 @@ const RecutTable = defineComponent({
 
 .content-card {
 	overflow: hidden;
-	background: #fff;
-	border: 1px solid #dbe7e1;
-	border-radius: 12px;
-	box-shadow: 0 3px 12px rgb(28 70 48 / 4%);
+	background: var(--erp-surface);
+	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-panel-radius);
+	box-shadow: none;
 }
 
 .detail-fields-card {
 	padding: 14px 16px 15px;
-	background: linear-gradient(145deg, #fff 0%, #fcfefd 100%);
+	background: var(--erp-surface);
 }
 
 .detail-field-columns {
@@ -499,9 +500,9 @@ const RecutTable = defineComponent({
 }
 
 .detail-fields-card :deep(.form-field__label) {
-	color: #203247;
-	font-size: 0.77rem;
-	font-weight: 720;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-caption);
+	font-weight: 680;
 }
 
 .detail-fields-card :deep(.p-inputtext),
@@ -509,8 +510,8 @@ const RecutTable = defineComponent({
 .detail-fields-card :deep(.p-select-label) {
 	min-height: 36px;
 	padding: 7px 10px;
-	color: #38536f;
-	font-size: 0.82rem;
+	color: var(--erp-text);
+	font-size: 13px;
 	font-weight: 520;
 }
 
@@ -519,10 +520,10 @@ const RecutTable = defineComponent({
 .detail-fields-card :deep(.p-autocomplete.p-disabled .p-autocomplete-input),
 .detail-fields-card :deep(.p-select.p-disabled) {
 	opacity: 1;
-	color: #46627f;
-	background: linear-gradient(135deg, #f1f6fa, #e9f1f7);
-	border-color: #d6e2eb;
-	box-shadow: 0 1px 1px rgb(32 63 87 / 2%) inset;
+	color: #3f554b;
+	background: var(--erp-surface-muted);
+	border-color: var(--erp-border);
+	box-shadow: none;
 }
 
 .detail-fields-card :deep(.p-toggleswitch.p-disabled) {
@@ -544,8 +545,8 @@ const RecutTable = defineComponent({
 	gap: 12px;
 	min-height: 42px;
 	padding: 10px 14px;
-	background: linear-gradient(100deg, #f0f8f4 0%, #f8fbf9 100%);
-	border-bottom: 1px solid #dce8e2;
+	background: var(--erp-surface-soft);
+	border-bottom: 1px solid var(--erp-border);
 }
 
 .cutting-tabs :deep(.section-heading h3) {
@@ -553,13 +554,13 @@ const RecutTable = defineComponent({
 	align-items: center;
 	gap: 9px;
 	margin: 0;
-	color: #0d5f43;
+	color: var(--erp-text);
 	font-size: 0.91rem;
 	font-weight: 780;
 }
 
 .cutting-tabs :deep(.section-heading h3 i) {
-	color: #078f64;
+	color: var(--erp-accent);
 	font-size: 0.98rem;
 }
 
@@ -569,7 +570,7 @@ const RecutTable = defineComponent({
 	background: rgb(255 255 255 / 64%);
 	border: 1px solid #dfebe5;
 	border-radius: 999px;
-	font-size: 0.66rem;
+	font-size: var(--erp-font-size-min);
 	font-weight: 650;
 	white-space: nowrap;
 }
@@ -592,8 +593,8 @@ const RecutTable = defineComponent({
 	width: 100%;
 	min-width: 760px;
 	border-collapse: collapse;
-	color: #2f4358;
-	font-size: 0.77rem;
+	color: var(--erp-text);
+	font-size: 13px;
 	font-variant-numeric: tabular-nums;
 }
 
@@ -608,6 +609,7 @@ const RecutTable = defineComponent({
 	vertical-align: middle;
 	border-right: 1px solid #e3ebe7;
 	border-bottom: 1px solid #e3ebe7;
+	overflow-wrap: anywhere;
 }
 
 .cutting-tabs :deep(.data-table th:last-child),
@@ -622,10 +624,10 @@ const RecutTable = defineComponent({
 .cutting-tabs :deep(.data-table th) {
 	white-space: nowrap;
 	color: #475b59;
-	font-size: 0.68rem;
+	font-size: var(--erp-font-size-min);
 	font-weight: 780;
 	letter-spacing: 0.035em;
-	background: #f3f8f6;
+	background: var(--erp-surface-muted);
 }
 
 .cutting-tabs :deep(.data-table tbody tr:nth-child(even):not(.total-row) td) {

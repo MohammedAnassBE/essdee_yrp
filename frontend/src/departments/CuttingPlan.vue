@@ -8,7 +8,7 @@
 		flat
 		full-width
 	>
-		<div class="cutting-plan-layout erp-workspace" :class="{ 'cutting-plan-layout--without-sidebar': !showSidebar }">
+		<div class="cutting-plan-layout cutting-plan-frame erp-workspace" :class="{ 'cutting-plan-layout--without-sidebar': !showSidebar }">
 			<FormView
 				ref="formView"
 				doctype="SD YRP Cutting Plan"
@@ -158,7 +158,7 @@ function statusSeverity(status) {
 	display: grid;
 	grid-template-columns: minmax(0, 4fr) minmax(286px, 1fr);
 	align-items: stretch;
-	gap: 12px;
+	gap: var(--erp-space-3);
 	height: calc(100dvh - 97px);
 	min-height: 0;
 	overflow: hidden;
@@ -178,17 +178,18 @@ function statusSeverity(status) {
 	display: flex;
 	height: 100%;
 	min-height: 0;
-	padding: 14px 14px 12px;
-	background: rgb(255 255 255 / 96%);
-	border: 1px solid #dfe9e4;
-	border-radius: 14px;
-	box-shadow: 0 10px 32px rgb(30 74 51 / 7%);
+	padding: 14px;
+	background: var(--erp-surface);
+	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-panel-radius);
+	box-shadow: var(--erp-shadow-card);
 	flex-direction: column;
 }
 
 .cutting-plan-layout :deep(.form-toolbar) {
-	min-height: 54px;
-	padding: 0 0 10px;
+	min-height: 52px;
+	padding: 0 0 12px;
+	border-bottom: 1px solid var(--erp-border);
 }
 
 .cutting-plan-layout :deep(.form-toolbar__identity) {
@@ -196,9 +197,9 @@ function statusSeverity(status) {
 }
 
 .cutting-plan-layout :deep(.form-toolbar h2) {
-	color: #172b3f;
-	font-size: 1.48rem;
-	font-weight: 780;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-title);
+	font-weight: 760;
 	letter-spacing: -0.025em;
 	line-height: 1.05;
 }
@@ -208,26 +209,27 @@ function statusSeverity(status) {
 }
 
 .cutting-plan-layout :deep(.form-toolbar small) {
-	color: #6f8078;
-	font-size: 0.78rem;
-	font-weight: 550;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-caption);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
 }
 
 .cutting-plan-layout :deep(.form-toolbar__actions .p-button) {
-	min-height: 36px;
+	min-height: var(--erp-control-height);
 	padding: 0.52rem 0.86rem;
-	color: #35506a;
-	background: #fff;
-	border-color: #d7e2e9;
-	border-radius: 9px;
-	box-shadow: 0 1px 2px rgb(27 55 43 / 3%);
+	color: var(--erp-text);
+	background: var(--erp-surface);
+	border-color: var(--erp-border-strong);
+	border-radius: var(--erp-control-radius);
+	box-shadow: none;
 	font-weight: 650;
 }
 
 .cutting-plan-layout :deep(.form-toolbar__actions .p-button:hover) {
-	color: #136c4a;
-	background: #f7fbf9;
-	border-color: #b8d3c5;
+	color: var(--erp-accent-hover);
+	background: var(--erp-accent-soft);
+	border-color: color-mix(in srgb, var(--erp-accent) 35%, white);
 }
 
 .cutting-plan-main {
@@ -242,8 +244,8 @@ function statusSeverity(status) {
 
 :deep(.cutting-plan-status.p-tag) {
 	padding: 0.22rem 0.58rem;
-	border: 1px solid rgb(31 126 83 / 9%);
-	font-size: 0.68rem;
+	border: 1px solid color-mix(in srgb, var(--erp-accent) 14%, transparent);
+	font-size: var(--erp-font-size-min);
 	font-weight: 750;
 }
 

@@ -20,6 +20,7 @@
 				/>
 				<Button
 					v-if="mode === 'view' && !readonly"
+					class="form-edit-button"
 					icon="pi pi-pencil"
 					label="Edit"
 					severity="secondary"

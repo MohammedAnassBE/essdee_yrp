@@ -1,5 +1,5 @@
 <template>
-	<Dialog :visible="visible" modal dismissable-mask maximizable header="Create Delivery Challan from Work Order" class="erp-work-order-dc-dialog" :style="{ width: 'min(96vw, 1440px)' }" @update:visible="emit('update:visible', $event)">
+	<Dialog :visible="visible" modal dismissable-mask maximizable header="Create Delivery Challan from Work Order" class="erp-work-order-dc-dialog erp-entity-dialog" :style="{ width: 'min(96vw, 1440px)' }" @update:visible="emit('update:visible', $event)">
 		<div v-if="loading" class="erp-work-order-dc__loading"><Skeleton v-for="index in 5" :key="index" height="3rem" /></div>
 		<div v-else class="erp-work-order-dc">
 			<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
@@ -87,5 +87,60 @@ function clear(value) { for (const key of Object.keys(value)) delete value[key] 
 </script>
 
 <style scoped>
-.erp-work-order-dc,.erp-work-order-dc__loading{display:grid;gap:12px}.erp-work-order-dc__context{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:hidden;border:1px solid #dce7e1;border-radius:10px;background:#f8fbf9}.erp-work-order-dc__context>div{display:grid;gap:3px;padding:9px 12px;border-right:1px solid #e1e9e5}.erp-work-order-dc__context>div:last-child{border-right:0}.erp-work-order-dc__context span{color:#728078;font-size:.63rem;text-transform:uppercase}.erp-work-order-dc__context strong{overflow:hidden;color:#243d30;font-size:.77rem;text-overflow:ellipsis;white-space:nowrap}@media(max-width:680px){.erp-work-order-dc__context{grid-template-columns:1fr}.erp-work-order-dc__context>div{border-right:0;border-bottom:1px solid #e1e9e5}.erp-work-order-dc__context>div:last-child{border-bottom:0}}
+.erp-work-order-dc,
+.erp-work-order-dc__loading {
+	display: grid;
+	gap: var(--erp-space-3);
+}
+
+.erp-work-order-dc__context {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	overflow: hidden;
+	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-control-radius);
+	background: var(--erp-surface-soft);
+}
+
+.erp-work-order-dc__context > div {
+	display: grid;
+	gap: var(--erp-space-1);
+	padding: 10px var(--erp-space-3);
+	border-right: 1px solid var(--erp-border);
+}
+
+.erp-work-order-dc__context > div:last-child {
+	border-right: 0;
+}
+
+.erp-work-order-dc__context span {
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 700;
+	letter-spacing: 0.035em;
+	text-transform: uppercase;
+}
+
+.erp-work-order-dc__context strong {
+	overflow: hidden;
+	color: var(--erp-text);
+	font-size: 13px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+@media (max-width: 680px) {
+	.erp-work-order-dc__context {
+		grid-template-columns: 1fr;
+	}
+
+	.erp-work-order-dc__context > div {
+		border-right: 0;
+		border-bottom: 1px solid var(--erp-border);
+	}
+
+	.erp-work-order-dc__context > div:last-child {
+		border-bottom: 0;
+	}
+}
 </style>

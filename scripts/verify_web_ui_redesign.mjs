@@ -697,6 +697,149 @@ async function cpmSuite(page, context) {
 	return { plan: fixture.name, movementCount: renderedNames.length, movementTimes, matrixScroll, summaryBefore, summaryAfterBundle, summaryAfterPanel }
 }
 
+async function selectAutocompleteOption(page, field, value) {
+	const input = field.locator(".p-autocomplete-input")
+	await input.fill(value)
+	const option = page.locator(".p-autocomplete-option:visible").filter({ hasText: value }).first()
+	await option.waitFor({ timeout: 20_000 })
+	await option.click()
+}
+
+async function stockTransfersSuite(page, context) {
+	await page.setViewportSize({ width: 1600, height: 760 })
+	const fixture = await findCuttingPlan(page.request, (_, name) => name === "CP-2609-00042")
+	const cpmMethod = "essdee_yrp.cutting.web_workspace."
+	const workspace = await getMethodFixture(page.request, `${cpmMethod}get_workspace`, { cutting_plan: fixture.name })
+
+	await page.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(fixture.name)}`, { waitUntil: "domcontentloaded" })
+	await page.locator(".cutting-tabs").waitFor({ timeout: 20_000 })
+	await page.getByRole("tab", { name: "Stock Transfers", exact: true }).click()
+	const transfers = page.locator(".erp-transfer-workspace")
+	await transfers.getByRole("heading", { name: "Stock Transfers", exact: true }).waitFor({ timeout: 20_000 })
+
+	const operationCards = transfers.locator(".erp-activity-card")
+	assert(await operationCards.count() === 5, "Stock Transfers must expose exactly five operation cards")
+	assert(await transfers.locator(".p-tablist").count() === 0, "Duplicate operation tabs remain below the operation cards")
+	const operationLabels = ["Stock Entry", "Stock Update", "Stock Reconciliation", "Lot Transfer", "Delivery Challan"]
+	for (const label of operationLabels) {
+		assert(await operationCards.filter({ hasText: label }).count() === 1, `Operation card is missing ${label}`)
+	}
+
+	const stockEntryCard = operationCards.filter({ hasText: "Stock Entry" })
+	await stockEntryCard.click()
+	assert(await transfers.getByRole("heading", { name: "Stock Entry", exact: true }).count() === 0, "Active operation heading is duplicated")
+	const transactionCard = transfers.locator(".erp-transaction-card").first()
+	if (await transactionCard.count()) {
+		for (const selector of ["strong", "small", ".erp-status"]) assert(await transactionCard.locator(selector).count() > 0, `Transaction card is missing ${selector}`)
+		const transactionMeta = await transfers.locator(".erp-transaction-card small").allTextContents()
+		assert(transactionMeta.every((value) => /\d{2}-\d{2}-\d{4}/.test(value)), `Transaction dates are not clear: ${transactionMeta}`)
+	}
+	const workspaceUndersizedText = await visibleTextBelowMinimum(transfers)
+	assert(workspaceUndersizedText.length === 0, `Stock Transfers workspace contains text below 11px: ${JSON.stringify(workspaceUndersizedText.slice(0, 8))}`)
+
+	await transfers.getByRole("button", { name: "Plan Stock Entry", exact: true }).click()
+	const stockEntryDialog = page.getByRole("dialog", { name: "Create Stock Entry" })
+	await stockEntryDialog.waitFor()
+	const purpose = stockEntryDialog.locator(".erp-operation-fields .p-select")
+	assert(await purpose.count() === 1, "Stock Entry Purpose is not a Select")
+	await purpose.click()
+	const purposeOptions = await page.locator(".p-select-overlay:visible .p-select-option").allTextContents()
+	assert(JSON.stringify(purposeOptions) === JSON.stringify(["Material Issue", "Material Consumed", "Send to Warehouse"]), `Purpose options differ: ${purposeOptions}`)
+	await page.keyboard.press("Escape")
+
+	const itemField = stockEntryDialog.locator(".stock-composer__fields .common-field").filter({ hasText: "Item *" })
+	const getItemButton = stockEntryDialog.getByRole("button", { name: "Get Item", exact: true })
+	const [itemOrder, buttonOrder] = await Promise.all([
+		itemField.evaluate((element) => Array.from(element.parentElement.children).indexOf(element)),
+		getItemButton.evaluate((element) => Array.from(element.closest(".stock-composer__fields").children).indexOf(element.closest(".stock-composer__fetch"))),
+	])
+	assert(itemOrder < buttonOrder, "Item does not precede Get Item")
+	await selectAutocompleteOption(page, itemField, "Test Item 1")
+	await getItemButton.click()
+	await stockEntryDialog.locator(".stock-composer__attribute-grid").waitFor({ timeout: 20_000 })
+	const stageField = stockEntryDialog.locator(".stock-composer__attribute-grid .common-field").first()
+	await selectAutocompleteOption(page, stageField, "Pack")
+	await stockEntryDialog.locator(".stock-composer__quantity-grid").waitFor()
+	assert(await stockEntryDialog.locator(".stock-composer__quantity-cell").count() >= 2, "Primary attribute values are not separated into quantity columns")
+	assert(await stockEntryDialog.locator(".stock-composer__attribute-grid .common-field").count() >= 1, "Item attributes are not separated from primary values")
+	await stockEntryDialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
+
+	await operationCards.filter({ hasText: "Stock Update" }).click()
+	await transfers.getByRole("button", { name: "New Stock Update", exact: true }).click()
+	const updateDialog = page.getByRole("dialog", { name: "Create Stock Update" })
+	await updateDialog.waitFor()
+	const updateType = updateDialog.locator(".erp-operation-fields .p-select")
+	await updateType.click()
+	const updateOptions = await page.locator(".p-select-overlay:visible .p-select-option").allTextContents()
+	assert(updateOptions.includes("Add") && updateOptions.includes("Reduce"), `Stock Update does not support Add and Reduce: ${updateOptions}`)
+	await page.keyboard.press("Escape")
+	await updateDialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
+
+	await operationCards.filter({ hasText: "Stock Reconciliation" }).click()
+	await transfers.getByRole("button", { name: "New Reconciliation", exact: true }).click()
+	const reconciliationDialog = page.getByRole("dialog", { name: "Create Stock Reconciliation" })
+	await reconciliationDialog.waitFor()
+	const reconciliationItem = reconciliationDialog.locator(".stock-composer__fields .common-field").filter({ hasText: "Item *" })
+	await selectAutocompleteOption(page, reconciliationItem, "Test Item 1")
+	await reconciliationDialog.getByRole("button", { name: "Get Item", exact: true }).click()
+	await reconciliationDialog.locator(".stock-composer__attribute-grid").waitFor({ timeout: 20_000 })
+	await selectAutocompleteOption(page, reconciliationDialog.locator(".stock-composer__attribute-grid .common-field").first(), "Pack")
+	await reconciliationDialog.getByRole("button", { name: "OK · Add Item", exact: true }).click()
+	await reconciliationDialog.locator(".stock-composer__table-card").waitFor({ timeout: 10_000 })
+	assert(await reconciliationDialog.locator(".stock-composer__total").first().textContent() === "0", "Zero-quantity reconciliation was not staged")
+	const stagedItemTreatment = await reconciliationDialog.locator(".stock-composer tbody td > strong").first().evaluate((element) => {
+		const style = getComputedStyle(element)
+		return { overflow: style.overflow, textOverflow: style.textOverflow, whiteSpace: style.whiteSpace }
+	})
+	assert(stagedItemTreatment.overflow === "hidden" && stagedItemTreatment.textOverflow === "ellipsis", `Long staged item names are not contained: ${JSON.stringify(stagedItemTreatment)}`)
+	const scrollContract = await reconciliationDialog.evaluate((dialog) => {
+		const content = dialog.querySelector(".p-dialog-content")
+		const footer = dialog.querySelector(".p-dialog-footer")
+		return {
+			contentOverflow: getComputedStyle(content).overflowY,
+			footerVisible: footer.getBoundingClientRect().bottom <= dialog.getBoundingClientRect().bottom + 1,
+		}
+	})
+	assert(["auto", "scroll"].includes(scrollContract.contentOverflow) && scrollContract.footerVisible, `Stock dialog scroll contract failed: ${JSON.stringify(scrollContract)}`)
+	await reconciliationDialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
+
+	await operationCards.filter({ hasText: "Lot Transfer" }).click()
+	await transfers.getByRole("button", { name: "New Lot Transfer", exact: true }).click()
+	const lotDialog = page.getByRole("dialog", { name: "Create Lot Transfer" })
+	await lotDialog.waitFor()
+	assert(await lotDialog.getByText("From Lot *", { exact: true }).count() === 1 && await lotDialog.getByText("To Lot *", { exact: true }).count() === 1, "Lot Transfer does not expose from/to lot dimensions")
+	await lotDialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
+
+	await operationCards.filter({ hasText: "Delivery Challan" }).click()
+	assert(await transfers.getByRole("button", { name: "From CPM", exact: true }).count() === 1, "Movement-based Delivery Challan path is missing")
+	await transfers.getByRole("button", { name: "From Work Order", exact: true }).click()
+	const deliveryDialog = page.getByRole("dialog", { name: "Create Delivery Challan from Work Order" })
+	await deliveryDialog.waitFor()
+	await deliveryDialog.locator(".wo-delivery-matrix").first().waitFor({ timeout: 20_000 })
+	assert(await deliveryDialog.getByLabel("Delivery Quantity").count() > 0, "Work Order delivery does not expose quantity entry")
+	await deliveryDialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
+
+	const restrictedPage = await context.newPage()
+	try {
+		await restrictedPage.route("**cutting.web_workspace.get_workspace*", (route) => route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({ message: {
+				...workspace,
+				permissions: { ...workspace.permissions, stock_update: { ...workspace.permissions.stock_update, can_create: false } },
+			} }),
+		}))
+		await restrictedPage.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(fixture.name)}`, { waitUntil: "domcontentloaded" })
+		await restrictedPage.getByRole("tab", { name: "Stock Transfers", exact: true }).click()
+		await restrictedPage.locator(".erp-transfer-workspace .erp-activity-card").filter({ hasText: "Stock Update" }).click()
+		assert(await restrictedPage.getByRole("button", { name: "New Stock Update", exact: true }).count() === 0, "Disallowed Stock Update create action remains visible")
+	} finally {
+		await restrictedPage.close()
+	}
+
+	return { plan: fixture.name, operationLabels, purposeOptions, updateOptions, stagedItemTreatment, scrollContract }
+}
+
 const suites = {
 	tokens: tokensSuite,
 	shell: shellSuite,
@@ -707,6 +850,7 @@ const suites = {
 	sidebar: sidebarSuite,
 	"entity-dialogs": entityDialogsSuite,
 	cpm: cpmSuite,
+	"stock-transfers": stockTransfersSuite,
 }
 
 const browser = await chromium.launch({ headless: true })

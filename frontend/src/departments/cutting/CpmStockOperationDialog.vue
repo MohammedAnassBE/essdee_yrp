@@ -1,5 +1,5 @@
 <template>
-	<Dialog :visible="visible" modal dismissable-mask maximizable :header="title" class="erp-stock-dialog" :style="{ width: 'min(96vw, 1440px)' }" @update:visible="emit('update:visible', $event)">
+	<Dialog :visible="visible" modal dismissable-mask maximizable :header="title" class="erp-stock-dialog erp-entity-dialog" :style="{ width: 'min(96vw, 1440px)' }" @update:visible="emit('update:visible', $event)">
 		<div v-if="loading" class="erp-stock-loading"><Skeleton v-for="index in 6" :key="index" height="3rem" /></div>
 		<div v-else class="erp-stock-stack">
 			<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
@@ -119,5 +119,69 @@ function emptyForm() { return { purpose: "", to_warehouse: "", update_type: "" }
 </script>
 
 <style scoped>
-.erp-stock-loading,.erp-stock-stack{display:grid;gap:12px}.erp-stock-context{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:hidden;border:1px solid #dce7e1;border-radius:10px;background:#f8fbf9}.erp-stock-context>div{display:grid;gap:3px;padding:9px 12px;border-right:1px solid #e1e9e5}.erp-stock-context>div:last-child{border-right:0}.erp-stock-context span{color:#728078;font-size:.63rem;text-transform:uppercase}.erp-stock-context strong{overflow:hidden;color:#243d30;font-size:.77rem;text-overflow:ellipsis;white-space:nowrap}.erp-operation-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.erp-select-field{display:grid;gap:6px}.erp-select-field>span{color:#405047;font-size:.76rem;font-weight:650}@media(max-width:720px){.erp-operation-fields,.erp-stock-context{grid-template-columns:1fr}}
+.erp-stock-loading,
+.erp-stock-stack {
+	display: grid;
+	gap: var(--erp-space-3);
+}
+
+.erp-stock-context {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	overflow: hidden;
+	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-control-radius);
+	background: var(--erp-surface-soft);
+}
+
+.erp-stock-context > div {
+	display: grid;
+	gap: var(--erp-space-1);
+	padding: 10px var(--erp-space-3);
+	border-right: 1px solid var(--erp-border);
+}
+
+.erp-stock-context > div:last-child {
+	border-right: 0;
+}
+
+.erp-stock-context span {
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 700;
+	letter-spacing: 0.035em;
+	text-transform: uppercase;
+}
+
+.erp-stock-context strong {
+	overflow: hidden;
+	color: var(--erp-text);
+	font-size: 13px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.erp-operation-fields {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--erp-space-3);
+}
+
+.erp-select-field {
+	display: grid;
+	gap: 6px;
+}
+
+.erp-select-field > span {
+	color: #405047;
+	font-size: var(--erp-font-size-caption);
+	font-weight: 700;
+}
+
+@media (max-width: 720px) {
+	.erp-operation-fields,
+	.erp-stock-context {
+		grid-template-columns: 1fr;
+	}
+}
 </style>

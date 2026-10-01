@@ -1,6 +1,7 @@
 <template>
 	<Button
 		type="button"
+		class="document-print-button"
 		:label="label"
 		icon="pi pi-print"
 		severity="secondary"
@@ -61,5 +62,10 @@ function openPrint(format) {
 <style>
 .erp-print-menu {
 	z-index: 9999 !important;
+}
+
+.document-print-button.p-button {
+	min-height: var(--erp-control-height);
+	border-radius: var(--erp-control-radius);
 }
 </style>

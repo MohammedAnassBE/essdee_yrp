@@ -1,5 +1,5 @@
 <template>
-	<Dialog :visible="visible" modal dismissable-mask maximizable :header="record?.name ? `Cutting Marker · ${record.name}` : 'Create New Marker'" class="marker-dialog" @update:visible="emit('update:visible', $event)">
+	<Dialog :visible="visible" modal dismissable-mask maximizable :header="record?.name ? `Cutting Marker · ${record.name}` : 'Create New Marker'" class="marker-dialog erp-entity-dialog" @update:visible="emit('update:visible', $event)">
 		<div v-if="loading" class="marker-loading"><Skeleton v-for="index in 6" :key="index" height="3.2rem" /></div>
 		<div v-else class="marker-content">
 			<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
@@ -253,17 +253,17 @@ function markerMethod(name) {
 .document-status--submitted { color: #236441; background: #e3f5e9; }
 .document-status--cancelled { color: #9a3434; background: #fde8e8; }
 .modified-text { color: #7a867f; font-size: 0.7rem; }
-.marker-section { display: grid; gap: 12px; padding: 14px; border: 1px solid #e0e7e3; border-radius: 12px; background: #fff; }
-.marker-section h3 { margin: 0; color: #315f48; font-size: 0.9rem; }
-.marker-section small { color: #7a867f; font-size: 0.72rem; }
+.marker-section { display: grid; gap: 12px; padding: 14px; background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); }
+.marker-section h3 { margin: 0; color: var(--erp-text); font-size: 0.9rem; }
+.marker-section small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .marker-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; }
-.marker-fields label { display: grid; gap: 5px; color: #4b5951; font-size: 0.75rem; font-weight: 700; }
+.marker-fields label { display: grid; gap: 5px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 680; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .section-heading > div { display: grid; gap: 3px; }
 .table-scroll { overflow-x: auto; border: 1px solid #e2e8e4; border-radius: 9px; }
-.marker-table { width: 100%; min-width: 500px; border-collapse: collapse; font-size: 0.78rem; }
+.marker-table { width: 100%; min-width: 500px; border-collapse: collapse; font-size: 13px; }
 .marker-table th, .marker-table td { padding: 8px 10px; border-right: 1px solid #e4e9e6; border-bottom: 1px solid #e4e9e6; text-align: left; }
-.marker-table th { color: #4b5a51; background: #f6f9f7; font-size: 0.71rem; }
+.marker-table th { color: #4b5a51; background: var(--erp-surface-muted); font-size: var(--erp-font-size-min); }
 .marker-table tr:last-child td { border-bottom: 0; }
 .marker-table th:last-child, .marker-table td:last-child { border-right: 0; }
 .empty-note { display: grid; place-items: center; min-height: 64px; color: #7b8780; font-size: 0.77rem; background: #fafcfb; border: 1px dashed #dce4df; border-radius: 9px; }

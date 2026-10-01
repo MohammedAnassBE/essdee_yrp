@@ -31,7 +31,7 @@
 			<div v-if="loading" class="rail-loading"><Skeleton v-for="index in 3" :key="index" height="5.2rem" /></div>
 			<div v-else-if="filteredMarkers.length" class="rail-list">
 				<button v-for="marker in filteredMarkers" :key="marker.name" type="button" class="rail-card marker-card" @click="openMarker(marker.name)">
-					<div class="rail-card__top"><div><strong>{{ marker.marker_name || marker.name }}</strong><small>{{ marker.name }}</small></div><i class="pi pi-chevron-right"></i></div>
+					<div class="rail-card__top"><div><strong>{{ marker.marker_name || marker.name }}</strong><div class="marker-subline"><small>{{ marker.name }}</small><span class="marker-status" :class="`marker-status--${markerStatus(marker).toLowerCase()}`">{{ markerStatus(marker) }}</span></div></div><i class="pi pi-chevron-right"></i></div>
 					<div class="marker-metrics">
 						<span><small>Marker size</small><b>{{ decimal(marker.length, 3) }} m <i class="pi pi-times"></i> {{ decimal(marker.width, 3) }} in</b></span>
 						<span><small>Piece weight</small><b>{{ decimal(marker.required_piece_weight, 4) }} kg</b></span>
@@ -76,7 +76,7 @@
 			<div v-else-if="filteredLaySheets.length" class="rail-list">
 				<button v-for="sheet in filteredLaySheets" :key="sheet.name" type="button" class="rail-card laysheet-card" @click="openLaySheet(sheet.name)">
 					<div class="rail-card__top"><div class="lay-title"><span class="lay-number">{{ sheet.lay_no }}</span><div><strong>{{ sheet.marker_name || sheet.cutting_marker || 'Marker' }}</strong><div class="lay-subline"><small>{{ sheet.name }}</small><span class="lay-status" :class="statusClass(sheet.status)">{{ sheet.status || '—' }}</span></div></div></div><div class="card-tail"><i class="pi pi-chevron-right"></i></div></div>
-					<div class="lay-meta"><span><i class="pi pi-box"></i><span><small>Bundle date</small><b>{{ formatDate(sheet.bundle_generated_date, false, 'Not generated') }}</b></span></span><span><i class="pi pi-print"></i><span><small>Printed</small><b>{{ formatDate(sheet.printed_time, true, 'Not printed') }}</b></span></span></div>
+					<div class="lay-meta"><span><i class="pi pi-box"></i><span><small>Bundle date</small><b>{{ formatDate(sheet.bundle_generated_date, false, 'Not generated') }}</b></span></span><span class="print-state"><i class="pi pi-print"></i><span><small>Printed</small><b>{{ formatDate(sheet.printed_time, true, 'Not printed') }}</b></span></span></div>
 					<div class="panel-summary"><small>Marker panels</small><div class="panel-chips"><span v-for="panel in laySheetPanels(sheet)" :key="`${sheet.name}-${panel}`" :title="panel">{{ panel }}</span><em v-if="!laySheetPanels(sheet).length">No panels selected</em></div></div>
 				</button>
 			</div>
@@ -330,45 +330,54 @@ function formatDate(value, includeTime = false, fallback = "—") {
 function statusClass(status) {
 	return `lay-status--${String(status || "").toLowerCase().replaceAll(" ", "-")}`
 }
+
+function markerStatus(marker) {
+	return ["Draft", "Submitted", "Cancelled"][Number(marker?.docstatus || 0)] || "Draft"
+}
 </script>
 
 <style scoped>
 .operations-rail { position: sticky; top: 10px; display: grid; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 10px; min-width: 0; height: 100%; min-height: 0; }
 .operations-rail--single { grid-template-rows: minmax(0, 1fr); }
 .rail-error { position: absolute; z-index: 3; top: 4px; right: 4px; left: 4px; }
-.rail-section { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; overflow: hidden; background: rgb(255 255 255 / 96%); border: 1px solid #d9e7df; border-radius: 13px; box-shadow: 0 9px 28px rgb(25 69 45 / 7%); }
-.rail-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 52px; padding: 8px 10px 8px 14px; background: linear-gradient(100deg, #edf8f2, #fbfdfc); border-bottom: 1px solid #dce9e2; box-shadow: 0 1px 0 rgb(255 255 255 / 90%) inset; }
-.rail-heading h3 { display: flex; align-items: center; gap: 8px; margin: 0; color: #0e553d; font-size: 1rem; font-weight: 800; letter-spacing: -0.01em; }
-.rail-heading h3 span { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; color: #2d664c; background: #dceee5; border: 1px solid #d3e8dd; border-radius: 999px; font-size: 0.67rem; }
+.rail-section { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; overflow: hidden; background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); box-shadow: var(--erp-shadow-card); }
+.rail-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 52px; padding: 8px 10px 8px 14px; background: var(--erp-surface-soft); border-bottom: 1px solid var(--erp-border); }
+.rail-heading h3 { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--erp-text); font-size: 15px; font-weight: 760; letter-spacing: -0.01em; }
+.rail-heading h3 span { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; color: #2d664c; background: var(--erp-accent-soft); border: 1px solid #d3e8dd; border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); }
 .rail-heading__actions { display: flex; align-items: center; gap: 6px; }
-.rail-heading :deep(.p-button) { flex: 0 0 auto; min-height: 34px; padding: 0.42rem 0.66rem; color: #fff; background: linear-gradient(145deg, #12ad7c, #078b62); border-color: #078b62; border-radius: 9px; box-shadow: 0 4px 10px rgb(7 139 98 / 18%); font-size: 0.69rem; font-weight: 700; }
-.rail-heading :deep(.p-button:hover) { background: linear-gradient(145deg, #0ba575, #087d5b); border-color: #087d5b; }
+.rail-heading :deep(.p-button) { flex: 0 0 auto; min-height: var(--erp-control-height-compact); padding: 0.4rem 0.62rem; color: #fff; background: var(--erp-accent); border-color: var(--erp-accent); border-radius: var(--erp-control-radius); box-shadow: none; font-size: var(--erp-font-size-min); font-weight: 700; }
+.rail-heading :deep(.p-button:hover) { background: var(--erp-accent-hover); border-color: var(--erp-accent-hover); }
 .rail-heading :deep(.p-button:disabled) { opacity: 0.48; }
 .rail-heading :deep(.rail-filter-button.p-button) { width: 34px; min-width: 34px; padding: 0; color: #397059; background: #fff; border-color: #cbded4; box-shadow: 0 2px 7px rgb(35 70 50 / 5%); }
 .rail-heading :deep(.rail-filter-button.p-button:hover) { color: #086b4b; background: #eff9f4; border-color: #8fc5aa; }
 .rail-heading :deep(.rail-filter-button--active.p-button) { color: #fff; background: #147d5b; border-color: #147d5b; box-shadow: 0 3px 9px rgb(20 125 91 / 18%); }
 .rail-loading, .rail-list { display: grid; align-content: start; gap: 8px; min-height: 0; padding: 9px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #a5baaf transparent; }
-.rail-card { display: grid; gap: 8px; width: 100%; padding: 10px 11px; color: inherit; text-align: left; background: linear-gradient(145deg, #fff, #fbfdfc); border: 1px solid #dbe7e1; border-radius: 11px; cursor: pointer; box-shadow: 0 2px 8px rgb(35 70 50 / 4%); transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease; }
+.rail-card { display: grid; gap: 8px; width: 100%; padding: 10px 11px; color: inherit; text-align: left; background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); cursor: pointer; box-shadow: none; transition: border-color var(--erp-transition-fast), background var(--erp-transition-fast); }
 .marker-card { border-left: 3px solid #50bb8f; }
 .laysheet-card { border-left: 3px solid #2b8b66; }
-.rail-card:hover { border-color: #85bba1; box-shadow: 0 9px 20px rgb(35 89 59 / 10%); transform: translateY(-1px); }
+.rail-card:hover { background: var(--erp-surface-soft); border-color: #85bba1; box-shadow: none; }
 .rail-card:focus-visible { border-color: #49a87f; outline: 3px solid rgb(73 168 127 / 15%); }
 .rail-card__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .rail-card__top > div { display: grid; gap: 2px; min-width: 0; }
 .rail-card__top strong { overflow: hidden; color: #1d3146; font-size: 0.88rem; font-weight: 760; text-overflow: ellipsis; white-space: nowrap; }
-.rail-card__top small { overflow: hidden; color: #72817a; font-size: 0.69rem; font-weight: 560; text-overflow: ellipsis; white-space: nowrap; }
-.rail-card__top > i, .card-tail > i { display: inline-grid; place-items: center; flex: 0 0 auto; width: 24px; height: 24px; color: #4d7964; background: #edf6f1; border-radius: 999px; font-size: 0.68rem; }
+.rail-card__top small { overflow: hidden; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 560; text-overflow: ellipsis; white-space: nowrap; }
+.rail-card__top > i, .card-tail > i { display: inline-grid; place-items: center; flex: 0 0 auto; width: 24px; height: 24px; color: #4d7964; background: var(--erp-accent-soft); border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); }
+.marker-subline { display: flex !important; align-items: center; gap: 6px !important; min-width: 0; }
+.marker-subline small { flex: 1; min-width: 0; }
+.marker-status { flex: 0 0 auto; padding: 2px 6px; color: #725612; background: #fff4cf; border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); font-weight: 740; }
+.marker-status--submitted { color: #176344; background: #e2f4ea; }
+.marker-status--cancelled { color: #963d3d; background: #fce8e8; }
 .marker-metrics { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 5px; }
 .marker-metrics > span { display: grid; gap: 2px; min-width: 0; padding: 6px 7px; background: #f4f8f5; border: 1px solid #e5ede8; border-radius: 7px; }
-.marker-metrics small, .panel-summary > small, .lay-meta small { color: #708078; font-size: 0.61rem; font-weight: 760; letter-spacing: 0.035em; text-transform: uppercase; }
-.marker-metrics b { overflow: hidden; color: #2d4438; font-size: 0.71rem; font-weight: 720; text-overflow: ellipsis; white-space: nowrap; }
+.marker-metrics small, .panel-summary > small, .lay-meta small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: 0.025em; text-transform: uppercase; }
+.marker-metrics b { overflow: hidden; color: #2d4438; font-size: var(--erp-font-size-caption); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .marker-metrics i { margin: 0 1px; font-size: 0.48rem; }
 .panel-summary { display: grid; gap: 4px; }
 .panel-chips { display: flex; flex-wrap: wrap; gap: 4px; max-height: 42px; overflow: hidden; }
-.panel-chips span { max-width: 108px; overflow: hidden; padding: 3px 7px; color: #245d43; background: #e6f4ed; border: 1px solid #d6ebdf; border-radius: 999px; font-size: 0.64rem; font-weight: 680; text-overflow: ellipsis; white-space: nowrap; }
-.panel-chips em { color: #89958e; font-size: 0.67rem; font-style: normal; }
+.panel-chips span { max-width: 108px; overflow: hidden; padding: 3px 7px; color: #245d43; background: #e6f4ed; border: 1px solid #d6ebdf; border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); font-weight: 680; text-overflow: ellipsis; white-space: nowrap; }
+.panel-chips em { color: #89958e; font-size: var(--erp-font-size-min); font-style: normal; }
 .lay-title { display: flex !important; align-items: center; grid-template-columns: auto 1fr; gap: 8px !important; }
-.lay-number { display: inline-grid; place-items: center; flex: 0 0 auto; width: 33px; height: 33px; color: #fff; background: linear-gradient(145deg, #14865f, #096747); border-radius: 9px; box-shadow: 0 4px 9px rgb(22 110 76 / 18%); font-size: 0.78rem; font-weight: 850; }
+.lay-number { display: inline-grid; place-items: center; flex: 0 0 auto; width: 33px; height: 33px; color: #fff; background: var(--erp-accent); border-radius: var(--erp-control-radius); box-shadow: none; font-size: 13px; font-weight: 800; }
 .lay-title > div { display: grid; gap: 2px; min-width: 0; }
 .lay-subline { display: flex !important; align-items: center; gap: 6px !important; min-width: 0; }
 .lay-subline small { flex: 1; min-width: 0; }
@@ -377,8 +386,8 @@ function statusClass(status) {
 .lay-meta > span { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 6px 7px; background: #f4f8f5; border: 1px solid #e4ece7; border-radius: 7px; }
 .lay-meta > span > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-width: 0; }
 .lay-meta i { flex: 0 0 auto; color: #5f7f6c; font-size: 0.72rem; }
-.lay-meta b { overflow: hidden; color: #30483c; font-size: 0.68rem; font-weight: 720; text-overflow: ellipsis; white-space: nowrap; }
-.lay-status { padding: 3px 7px; color: #356046; background: #e7f2eb; border-radius: 999px; font-size: 0.61rem; font-weight: 750; white-space: nowrap; }
+.lay-meta b { overflow: hidden; color: #30483c; font-size: var(--erp-font-size-min); font-weight: 720; text-overflow: ellipsis; white-space: nowrap; }
+.lay-status { padding: 3px 7px; color: #356046; background: #e7f2eb; border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); font-weight: 750; white-space: nowrap; }
 .lay-status--started { color: #315f7a; background: #e5f2fa; }
 .lay-status--completed, .lay-status--label-printed { color: #2c6642; background: #e2f2e8; }
 .lay-status--bundles-generated { color: #63518a; background: #eee9f8; }

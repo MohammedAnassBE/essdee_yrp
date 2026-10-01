@@ -1,5 +1,5 @@
 <template>
-	<Dialog :visible="visible" modal dismissable-mask maximizable :header="sheet ? `Lay Sheet · ${sheet.name}` : 'Create Lay Sheet'" class="laysheet-dialog" @update:visible="emit('update:visible', $event)">
+	<Dialog :visible="visible" modal dismissable-mask maximizable :header="sheet ? `Lay Sheet · ${sheet.name}` : 'Create Lay Sheet'" class="laysheet-dialog erp-entity-dialog" @update:visible="emit('update:visible', $event)">
 		<div v-if="loading" class="laysheet-loading"><Skeleton v-for="index in 8" :key="index" height="3.2rem" /></div>
 		<div v-else-if="!sheet" class="laysheet-create">
 			<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
@@ -639,20 +639,20 @@ const DataBlock = defineComponent({
 <style scoped>
 .laysheet-loading { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .laysheet-create { display: grid; gap: 16px; }
-.create-intro { display: flex; align-items: center; gap: 11px; padding: 12px 14px; color: #315f48; background: #f2f8f4; border: 1px solid #dbe9e0; border-radius: 11px; }
+.create-intro { display: flex; align-items: center; gap: 11px; padding: 12px 14px; color: var(--erp-text); background: var(--erp-surface-soft); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); }
 .create-intro > i { font-size: 1.15rem; }
 .create-intro > div { display: grid; gap: 3px; }
 .create-intro strong { font-size: 0.86rem; }
-.create-intro span { color: #6d7c73; font-size: 0.72rem; }
+.create-intro span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .create-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; }
 .create-fields > label { display: grid; gap: 6px; color: #34413a; font-size: 0.8rem; font-weight: 650; }
 .laysheet-content { display: grid; gap: 14px; }
 .laysheet-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid #dfe7e2; border-radius: 11px; }
 .laysheet-summary > div { display: grid; gap: 4px; padding: 11px 13px; border-right: 1px solid #e3e9e5; }
 .laysheet-summary > div:last-child { border-right: 0; }
-.laysheet-summary span, .detail-grid span { color: #7b877f; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.035em; }
+.laysheet-summary span, .detail-grid span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 700; text-transform: uppercase; letter-spacing: 0.035em; }
 .laysheet-summary strong, .detail-grid strong { color: #233b2e; font-size: 0.82rem; }
-.status-pill { display: inline-flex; padding: 3px 7px; border-radius: 999px; color: #375b47; background: #e8f3ec; font-size: 0.68rem; }
+.status-pill { display: inline-flex; padding: 3px 7px; border-radius: var(--erp-pill-radius); color: #375b47; background: #e8f3ec; font-size: var(--erp-font-size-min); }
 .status-pill--cancelled { color: #983939; background: #fde7e7; }
 .status-pill--approval-pending { color: #8a5b0e; background: #fff0cb; }
 .detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid #e0e7e3; border-radius: 10px; overflow: hidden; }
@@ -660,12 +660,12 @@ const DataBlock = defineComponent({
 .data-block { display: grid; gap: 9px; margin-bottom: 14px; }
 .data-block header { display: flex; align-items: center; justify-content: space-between; }
 .data-block__title { display: flex; align-items: baseline; gap: 8px; }
-.data-block h3 { margin: 0; color: #315f48; font-size: 0.88rem; }
-.data-block header span { color: #7c8881; font-size: 0.7rem; }
+.data-block h3 { margin: 0; color: var(--erp-text); font-size: 0.88rem; }
+.data-block header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .table-scroll { overflow-x: auto; border: 1px solid #e1e7e3; border-radius: 9px; }
-.laysheet-table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 0.76rem; }
+.laysheet-table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 13px; }
 .laysheet-table th, .laysheet-table td { padding: 8px 9px; text-align: left; border-right: 1px solid #e4e9e6; border-bottom: 1px solid #e4e9e6; }
-.laysheet-table th { color: #4c5b52; background: #f6f9f7; font-size: 0.69rem; white-space: nowrap; }
+.laysheet-table th { color: #4c5b52; background: var(--erp-surface-muted); font-size: var(--erp-font-size-min); white-space: nowrap; }
 .laysheet-table tr:last-child td { border-bottom: 0; }
 .laysheet-table th:last-child, .laysheet-table td:last-child { border-right: 0; }
 .empty-data { display: grid; place-items: center; min-height: 70px; color: #7c8881; border: 1px dashed #dce4df; border-radius: 9px; font-size: 0.76rem; }
@@ -674,17 +674,17 @@ const DataBlock = defineComponent({
 .row-actions :deep(.p-button) { width: 1.8rem; height: 1.8rem; }
 .detail-editor { display: grid; gap: 13px; }
 .detail-editor__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 17px; }
-.detail-editor__grid label { display: grid; align-content: start; gap: 5px; color: #425047; font-size: 0.75rem; font-weight: 700; }
+.detail-editor__grid label { display: grid; align-content: start; gap: 5px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 680; }
 .detail-editor__wide { grid-column: 1 / -1; }
 .laysheet-content :deep(.data-block) { display: grid; gap: 9px; margin-bottom: 14px; }
 .laysheet-content :deep(.data-block header) { display: flex; align-items: center; justify-content: space-between; }
-.laysheet-content :deep(.data-block h3) { margin: 0; color: #315f48; font-size: 0.88rem; }
-.laysheet-content :deep(.data-block header span) { color: #7c8881; font-size: 0.7rem; }
+.laysheet-content :deep(.data-block h3) { margin: 0; color: var(--erp-text); font-size: 0.88rem; }
+.laysheet-content :deep(.data-block header span) { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .laysheet-content :deep(.table-scroll) { overflow-x: auto; border: 1px solid #e1e7e3; border-radius: 9px; }
-.laysheet-content :deep(.laysheet-table) { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 0.76rem; }
+.laysheet-content :deep(.laysheet-table) { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 13px; }
 .laysheet-content :deep(.laysheet-table th),
 .laysheet-content :deep(.laysheet-table td) { padding: 8px 9px; text-align: left; border-right: 1px solid #e4e9e6; border-bottom: 1px solid #e4e9e6; }
-.laysheet-content :deep(.laysheet-table th) { color: #4c5b52; background: #f6f9f7; font-size: 0.69rem; white-space: nowrap; }
+.laysheet-content :deep(.laysheet-table th) { color: #4c5b52; background: var(--erp-surface-muted); font-size: var(--erp-font-size-min); white-space: nowrap; }
 .laysheet-content :deep(.laysheet-table tr:last-child td) { border-bottom: 0; }
 .laysheet-content :deep(.laysheet-table th:last-child),
 .laysheet-content :deep(.laysheet-table td:last-child) { border-right: 0; }

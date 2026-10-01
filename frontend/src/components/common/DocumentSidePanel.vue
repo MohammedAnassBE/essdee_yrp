@@ -89,10 +89,10 @@ function openInDesk() {
 
 .side-panel-card {
 	overflow: hidden;
-	background: #fff;
-	border: 1px solid #e1e7e3;
-	border-radius: 14px;
-	box-shadow: 0 8px 24px rgb(24 53 39 / 5%);
+	background: var(--erp-surface);
+	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-panel-radius);
+	box-shadow: var(--erp-shadow-card);
 }
 
 .side-panel-card > header {
@@ -130,8 +130,8 @@ function openInDesk() {
 }
 
 .side-panel-row span {
-	color: #77827c;
-	font-size: 0.7rem;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
 }
 
 .side-panel-row strong {

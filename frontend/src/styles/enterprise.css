@@ -420,6 +420,27 @@
 	border-top: 1px solid var(--erp-border);
 }
 
+.erp-entity-dialog.p-dialog {
+	display: flex;
+	max-height: calc(100dvh - 32px);
+	flex-direction: column;
+}
+
+.erp-entity-dialog.p-dialog .p-dialog-header,
+.erp-entity-dialog.p-dialog .p-dialog-footer {
+	position: relative;
+	z-index: var(--erp-layer-content);
+	flex: 0 0 auto;
+	background: var(--erp-surface);
+}
+
+.erp-entity-dialog.p-dialog .p-dialog-content {
+	min-height: 0;
+	overflow-y: auto;
+	flex: 1 1 auto;
+	scrollbar-gutter: stable;
+}
+
 :where(.p-select-overlay, .p-autocomplete-overlay, .p-multiselect-overlay, .p-datepicker-panel) {
 	font-family: var(--erp-font-family);
 	font-size: 13px;

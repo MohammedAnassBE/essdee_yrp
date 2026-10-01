@@ -172,17 +172,20 @@ function columnWidth(column) {
 
 .child-table-field__header h3 {
 	margin: 0;
+	color: var(--erp-text);
 	font-size: 0.95rem;
 }
 
 .child-table-field__header small {
 	display: block;
 	margin-top: 4px;
-	color: #77827c;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
 }
 
 .child-table-field__table {
-	border-radius: 12px;
+	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-panel-radius);
 	overflow: hidden;
 }
 

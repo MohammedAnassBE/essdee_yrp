@@ -401,6 +401,178 @@ async function planPrimaryTabsSuite(page) {
 	return { plan: fixture.name, detailWidths, summaryHeadings, totalNumberStyle, longIdContainment }
 }
 
+async function findEditableLaySheet(request, fixture) {
+	const method = `${SITE}/api/method/essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.get_web_laysheet`
+	for (const summary of fixture.data.laysheets || []) {
+		const response = await request.get(method, {
+			params: { cutting_plan: fixture.name, cutting_laysheet: summary.name },
+		})
+		if (!response.ok()) continue
+		const sheet = (await response.json()).message || {}
+		if (sheet.permissions?.can_edit_details && sheet.cloth_details?.length) return sheet
+	}
+	throw new Error("No editable Lay Sheet with cloth details was found")
+}
+
+async function sidebarSuite(page, context) {
+	await page.setViewportSize({ width: 1600, height: 700 })
+	const fixture = await openPlan(page, (data) =>
+		data.markers?.length && data.laysheets?.length && data.permissions?.can_create_marker && data.permissions?.can_create_laysheet,
+	)
+	await page.locator(".marker-card").first().waitFor({ timeout: 20_000 })
+
+	const sections = page.locator(".operations-rail > .rail-section")
+	const sectionHeights = await sections.evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().height))
+	assert(sectionHeights.length === 2 && Math.abs(sectionHeights[0] - sectionHeights[1]) <= 2, `Rail sections are not 50/50: ${sectionHeights}`)
+	for (const sectionName of ["marker-section", "laysheet-section"]) {
+		const section = page.locator(`.${sectionName}`)
+		assert(await section.getByRole("button", { name: "Create New", exact: true }).count() === 1, `${sectionName} is missing Create New`)
+		assert(await section.locator(".rail-filter-button").count() === 1, `${sectionName} is missing its filter action`)
+	}
+
+	const marker = page.locator(".marker-card").first()
+	for (const selector of [".rail-card__top strong", ".rail-card__top small", ".marker-metrics", ".panel-summary", ".marker-status"]) {
+		assert(await marker.locator(selector).count() === 1, `Marker card is missing ${selector}`)
+	}
+	const laySheet = page.locator(".laysheet-card").first()
+	for (const selector of [".lay-number", ".rail-card__top strong", ".panel-summary", ".lay-meta", ".lay-status", ".print-state"]) {
+		assert(await laySheet.locator(selector).count() === 1, `Lay Sheet card is missing ${selector}`)
+	}
+	const displayedDates = await page.locator(".laysheet-card .lay-meta b").allTextContents()
+	const concreteDates = displayedDates.filter((value) => /\d/.test(value))
+	assert(concreteDates.every((value) => /^\d{2}-\d{2}-\d{4}(?: \d{2}:\d{2})?$/.test(value)), `Rail dates are not DD-MM-YYYY: ${concreteDates}`)
+	const longNameContainment = await marker.locator(".rail-card__top strong").evaluate((element) => ({
+		overflow: getComputedStyle(element).overflow,
+		textOverflow: getComputedStyle(element).textOverflow,
+		cardContained: element.closest(".rail-card").getBoundingClientRect().right <= element.closest(".rail-section").getBoundingClientRect().right + 1,
+	}))
+	assert(longNameContainment.overflow === "hidden" && longNameContainment.textOverflow === "ellipsis" && longNameContainment.cardContained, "Long rail names are not contained")
+	assert(await page.locator(".rail-heading").evaluateAll((elements) => elements.every((element) => element.getBoundingClientRect().height > 0)), "Rail headers disappear at 700px height")
+	const railUndersizedText = await visibleTextBelowMinimum(page.locator(".operations-rail"))
+	assert(railUndersizedText.length === 0, `Rail contains text below 11px: ${JSON.stringify(railUndersizedText.slice(0, 8))}`)
+
+	await page.locator(".marker-section .rail-filter-button").click()
+	const filterDialog = page.getByRole("dialog", { name: "Filters" })
+	await filterDialog.waitFor()
+	const filterRow = filterDialog.locator(".filter-row").first()
+	await filterRow.locator(".p-select").first().click()
+	await page.getByRole("option", { name: "Marker Name", exact: true }).click()
+	await filterRow.locator(".filter-row__value input").fill("__no_matching_marker__")
+	await filterDialog.getByRole("button", { name: "Apply Filters", exact: true }).click()
+	assert(await page.locator(".marker-section .rail-empty").isVisible(), "Filtered-empty marker state is missing")
+	assert(await page.locator(".marker-section .rail-filter-button--active").count() === 1, "Active marker filters are not visible")
+
+	const restrictedPage = await context.newPage()
+	try {
+		await restrictedPage.route("**get_web_view_data*", (route) => route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({ message: {
+				...fixture.data,
+				permissions: {
+					...fixture.data.permissions,
+					can_read_marker: false,
+					can_create_marker: false,
+					can_create_laysheet: false,
+				},
+			} }),
+		}))
+		await restrictedPage.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(fixture.name)}`, { waitUntil: "domcontentloaded" })
+		await restrictedPage.locator(".laysheet-section").waitFor({ timeout: 20_000 })
+		assert(await restrictedPage.locator(".marker-section").count() === 0, "Unreadable Markers section remains visible")
+		assert(await restrictedPage.locator(".laysheet-section .rail-filter-button").count() === 1, "Readable Lay Sheet filter is missing")
+		assert(await restrictedPage.locator(".laysheet-section").getByRole("button", { name: "Create New", exact: true }).count() === 0, "Disallowed Lay Sheet create action remains visible")
+	} finally {
+		await restrictedPage.close()
+	}
+
+	const emptyPage = await context.newPage()
+	try {
+		await emptyPage.route("**get_web_view_data*", (route) => route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({ message: { ...fixture.data, markers: [], laysheets: [] } }),
+		}))
+		await emptyPage.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(fixture.name)}`, { waitUntil: "domcontentloaded" })
+		await emptyPage.locator(".rail-empty").first().waitFor({ timeout: 20_000 })
+		assert(await emptyPage.locator(".rail-empty").count() === 2, "Rail does not show both deliberate empty states")
+	} finally {
+		await emptyPage.close()
+	}
+
+	return { plan: fixture.name, sectionHeights, concreteDates, longNameContainment }
+}
+
+async function entityDialogsSuite(page) {
+	await page.setViewportSize({ width: 1600, height: 760 })
+	const fixture = await openPlan(page, (data) => data.markers?.length && data.laysheets?.length)
+	await page.locator(".marker-card").first().waitFor({ timeout: 20_000 })
+	const initialUrl = page.url()
+
+	await page.locator(".marker-section").getByRole("button", { name: "Create New", exact: true }).click()
+	const markerDialog = page.getByRole("dialog", { name: "Create New Marker" })
+	await markerDialog.waitFor()
+	assert(page.url() === initialUrl, "Opening a marker dialog navigates away from the Cutting Plan")
+	await page.locator(".p-dialog-mask").click({ position: { x: 4, y: 4 } })
+	await markerDialog.waitFor({ state: "hidden" })
+
+	await page.locator(".laysheet-section").getByRole("button", { name: "Create New", exact: true }).click()
+	const createDialog = page.getByRole("dialog", { name: "Create Lay Sheet" })
+	await createDialog.waitFor()
+	assert(await createDialog.getByText(/Start Date|End Date|Started Date|Ended Date/i).count() === 0, "Lay Sheet creation exposes system date-time fields")
+	await createDialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
+
+	await page.locator(".marker-card").first().click()
+	const existingMarkerDialog = page.locator(".marker-dialog")
+	await existingMarkerDialog.waitFor()
+	const dialogScrollContract = await existingMarkerDialog.evaluate((dialog) => {
+		const content = dialog.querySelector(".p-dialog-content")
+		const footer = dialog.querySelector(".p-dialog-footer")
+		const dialogBox = dialog.getBoundingClientRect()
+		const footerBox = footer?.getBoundingClientRect()
+		return {
+			contentOverflow: content ? getComputedStyle(content).overflowY : "missing",
+			contentScrollable: content ? content.scrollHeight >= content.clientHeight : false,
+			footerVisible: Boolean(footerBox && footerBox.bottom <= dialogBox.bottom + 1),
+		}
+	})
+	assert(["auto", "scroll"].includes(dialogScrollContract.contentOverflow) && dialogScrollContract.contentScrollable && dialogScrollContract.footerVisible, `Marker dialog scroll contract failed: ${JSON.stringify(dialogScrollContract)}`)
+	const markerUndersizedText = await visibleTextBelowMinimum(existingMarkerDialog)
+	assert(markerUndersizedText.length === 0, `Marker dialog contains text below 11px: ${JSON.stringify(markerUndersizedText.slice(0, 8))}`)
+	await existingMarkerDialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
+
+	const sheet = await findEditableLaySheet(page.request, fixture)
+	await page.locator(".laysheet-card").filter({ hasText: sheet.name }).click()
+	const laySheetDialog = page.getByRole("dialog", { name: new RegExp(sheet.name) })
+	await laySheetDialog.waitFor()
+	await laySheetDialog.getByRole("tab", { name: "Cloth Details", exact: true }).click()
+	assert(await laySheetDialog.getByRole("button", { name: "Add Cloth", exact: true }).count() === 1, "Permitted Add Cloth action is missing")
+	assert(await laySheetDialog.getByRole("button", { name: "Add Accessory", exact: true }).count() === 1, "Permitted Add Accessory action is missing")
+	const laySheetUndersizedText = await visibleTextBelowMinimum(laySheetDialog)
+	assert(laySheetUndersizedText.length === 0, `Lay Sheet dialog contains text below 11px: ${JSON.stringify(laySheetUndersizedText.slice(0, 8))}`)
+
+	const rowsBefore = await laySheetDialog.locator(".editable-data-block").first().locator("tbody tr").count()
+	await page.route("**save_web_laysheet_details*", async (route) => {
+		const values = route.request().postDataJSON()
+		await route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({ message: {
+				...sheet,
+				cloth_details: values.cloth_details || [],
+				accessory_details: values.accessory_details || [],
+			} }),
+		})
+	})
+	page.once("dialog", (dialog) => dialog.accept())
+	await laySheetDialog.getByRole("button", { name: "Delete cloth" }).first().click()
+	await laySheetDialog.getByText("Cloth detail deleted.", { exact: true }).waitFor({ timeout: 10_000 })
+	const rowsAfter = await laySheetDialog.locator(".editable-data-block").first().locator("tbody tr").count()
+	assert(rowsAfter === rowsBefore - 1, `Delete success did not remove the rendered row: ${rowsBefore} -> ${rowsAfter}`)
+
+	return { plan: fixture.name, sheet: sheet.name, dialogScrollContract, rowsBefore, rowsAfter }
+}
+
 const suites = {
 	tokens: tokensSuite,
 	shell: shellSuite,
@@ -408,6 +580,8 @@ const suites = {
 	list: listSuite,
 	"plan-frame": planFrameSuite,
 	"plan-primary-tabs": planPrimaryTabsSuite,
+	sidebar: sidebarSuite,
+	"entity-dialogs": entityDialogsSuite,
 }
 
 const browser = await chromium.launch({ headless: true })

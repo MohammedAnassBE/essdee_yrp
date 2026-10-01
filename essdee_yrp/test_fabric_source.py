@@ -5,11 +5,12 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from essdee_yrp.api.test_cloth_program import _ensure_item
-from essdee_yrp.api.work_order import _resolve_variant
+from essdee_yrp.api.work_order import _merge_source_context, _resolve_variant
 from essdee_yrp.fabric_source import (
 	fill_from_source_grns,
 	get_source_availability,
 	get_source_process_options,
+	project_output_attributes,
 	validate_source_demands,
 )
 
@@ -29,7 +30,7 @@ def _row(colour, target):
 
 class TestFabricSourceProcesses(TestCase):
 	@patch("essdee_yrp.fabric_source.get_fabric_steps")
-	def test_only_earlier_steps_are_offered_immediate_first(self, get_steps):
+	def test_earlier_steps_are_offered_immediate_first(self, get_steps):
 		get_steps.return_value = [
 			{"position": 0, "process_name": "Knitting"},
 			{"position": 1, "process_name": "White Wash"},
@@ -46,6 +47,98 @@ class TestFabricSourceProcesses(TestCase):
 
 
 class TestFabricSourceFill(TestCase):
+	def test_compatible_multi_fabric_source_summaries_are_combined(self):
+		merged = _merge_source_context(
+			{
+				"value": "0::Knitting",
+				"process_name": "Knitting",
+				"received": 10,
+				"reserved": 2,
+				"available": 8,
+				"sources": [{"key": "GRNI-1::-"}],
+				"unmatched": ["Variant A"],
+			},
+			{
+				"value": "0::Knitting",
+				"process_name": "Knitting",
+				"received": 20,
+				"reserved": 5,
+				"available": 15,
+				"sources": [{"key": "GRNI-2::-"}],
+				"unmatched": ["Variant A", "Variant B"],
+			},
+		)
+
+		self.assertEqual(merged["received"], 30)
+		self.assertEqual(merged["reserved"], 7)
+		self.assertEqual(merged["available"], 23)
+		self.assertEqual(
+			[source["key"] for source in merged["sources"]],
+			["GRNI-1::-", "GRNI-2::-"],
+		)
+		self.assertEqual(merged["unmatched"], ["Variant A", "Variant B"])
+
+	def test_incompatible_multi_fabric_source_steps_are_rejected(self):
+		with self.assertRaisesRegex(
+			frappe.ValidationError, "different source-process steps"
+		):
+			_merge_source_context(
+				{"value": "0::Knitting"},
+				{"value": "1::Knitting"},
+			)
+
+	def test_multi_fabric_merge_is_unavailable_when_either_fabric_has_no_stock(self):
+		available = {
+			"value": "0::Knitting",
+			"received": 10,
+			"reserved": 2,
+			"available": 8,
+			"sources": [{"key": "GRNI-1::-"}],
+		}
+		unavailable = {
+			"value": "0::Knitting",
+			"received": 0,
+			"reserved": 0,
+			"available": 0,
+			"unavailable": True,
+			"sources": [],
+		}
+
+		for first, second in (
+			(available, unavailable),
+			(unavailable, available),
+		):
+			with self.subTest(first_unavailable=bool(first.get("unavailable"))):
+				merged = _merge_source_context(first, second)
+				self.assertTrue(merged["unavailable"])
+				self.assertEqual(merged["available"], 8)
+
+	def test_actual_dia_is_carried_until_a_matrix_explicitly_changes_it(self):
+		self.assertEqual(
+			project_output_attributes(
+				{"Dia": "22 Dia", "Colour": "Greige"},
+				{"Dia": "18 Dia", "Colour": "Greige"},
+				{"Dia": "18 Dia", "Colour": "Red"},
+			),
+			{"Dia": "22 Dia", "Colour": "Red"},
+		)
+		self.assertEqual(
+			project_output_attributes(
+				{"Dia": "22 Dia", "Colour": "Red"},
+				{"Dia": "18 Dia", "Colour": "Red"},
+				{"Dia": "18 Dia", "Colour": "Red"},
+			),
+			{"Dia": "22 Dia", "Colour": "Red"},
+		)
+		self.assertEqual(
+			project_output_attributes(
+				{"Dia": "22 Dia", "Colour": "Red"},
+				{"Dia": "18 Dia", "Colour": "Red"},
+				{"Dia": "16 Dia", "Colour": "Red"},
+			),
+			{"Dia": "16 Dia", "Colour": "Red"},
+		)
+
 	def _fill(self, rows, availability, variants):
 		with (
 			patch(
@@ -136,6 +229,40 @@ class TestFabricSourceFill(TestCase):
 		):
 			self._fill(rows, availability, variants)
 
+	@patch("essdee_yrp.fabric_source.get_source_availability")
+	@patch("essdee_yrp.fabric_source.resolve_source_process")
+	def test_allow_empty_returns_explicit_unavailable_context(
+		self, resolve, availability
+	):
+		resolve.return_value = {
+			"value": "0::Knitting",
+			"process_name": "Knitting",
+			"label": "Knitting",
+		}
+		availability.return_value = {
+			"received": {"Greige-32": 10},
+			"reserved": {"Greige-32": 10},
+			"net": {"Greige-32": 0},
+		}
+		rows = [_row("Greige", "Red")]
+
+		context = fill_from_source_grns(
+			rows,
+			lot="LOT-1",
+			ipd=frappe._dict(name="IPD-1", item="Test Cloth"),
+			current_process="Dyeing",
+			current_work_order="WO-2",
+			source_process="0::Knitting",
+			allow_empty=True,
+		)
+
+		self.assertTrue(context["unavailable"])
+		self.assertEqual(context["received"], 10)
+		self.assertEqual(context["reserved"], 10)
+		self.assertEqual(context["available"], 0)
+		self.assertEqual(rows[0]["prefill"], 0)
+		self.assertEqual(rows[0]["source_available"], 0)
+
 	@patch("essdee_yrp.fabric_source._rows_in_stock_uom")
 	@patch("essdee_yrp.fabric_source.get_source_availability")
 	@patch("essdee_yrp.fabric_source.resolve_source_process")
@@ -205,6 +332,7 @@ class TestFabricSourceTransactions(IntegrationTestCase):
 		grn.against_id = wo.name
 		grn.is_rework = is_rework
 		grn.is_return = is_return
+		grn.to_warehouse = self.warehouse
 		grn.db_insert()
 
 		item = frappe.new_doc("Goods Received Note Item")
@@ -216,6 +344,7 @@ class TestFabricSourceTransactions(IntegrationTestCase):
 		item.quantity = qty
 		item.stock_qty = qty
 		item.uom = "Kg"
+		item.received_type = "Accepted"
 		item.ref_doctype = "Work Order Receivables"
 		item.ref_docname = receivable.name
 		item.db_insert()
@@ -228,7 +357,13 @@ class TestFabricSourceTransactions(IntegrationTestCase):
 		self.lot = f"_Test Source Lot {suffix}"
 		self.ipd = f"_Test Source IPD {suffix}"
 		self.current = f"_Test Current WO {suffix}"
+		self.location = f"_Test Source Location {suffix}"
+		self.warehouse = f"_Test Source Warehouse {suffix}"
 		self.suffix = suffix
+		self.enterContext(patch(
+			"yrp.yrp.doctype.delivery_challan.delivery_challan._get_warehouse_for_supplier",
+			return_value=self.warehouse,
+		))
 
 	def test_submitted_grns_minus_same_source_work_order_reservations(self):
 		self._source_receipt(self.suffix, 100)
@@ -254,6 +389,8 @@ class TestFabricSourceTransactions(IntegrationTestCase):
 		reserved.qty = 35
 		reserved.uom = "Kg"
 		reserved.is_calculated = 1
+		reserved.source_grn = f"_Test Source GRN {self.suffix}"
+		reserved.source_grn_item = f"_Test Source GRNI {self.suffix}"
 		reserved.db_insert()
 
 		# A different downstream process selecting the same Knitting pool must
@@ -273,8 +410,11 @@ class TestFabricSourceTransactions(IntegrationTestCase):
 		other_reserved.parentfield = "deliverables"
 		other_reserved.item_variant = self.variant
 		other_reserved.qty = 25
+		other_reserved.pending_quantity = 15
 		other_reserved.uom = "Kg"
 		other_reserved.is_calculated = 1
+		other_reserved.source_grn = f"_Test Source GRN {self.suffix}"
+		other_reserved.source_grn_item = f"_Test Source GRNI {self.suffix}"
 		other_reserved.db_insert()
 
 		# A Work Order consuming the same physical variant from another source
@@ -305,10 +445,27 @@ class TestFabricSourceTransactions(IntegrationTestCase):
 			source_step="0::Knitting",
 			current_process="Dyeing",
 			current_work_order=self.current,
+			target_location=self.location,
 		)
 		self.assertEqual(available["received"], {self.variant: 120})
 		self.assertEqual(available["reserved"], {self.variant: 60})
 		self.assertEqual(available["net"], {self.variant: 60})
+
+		# Closing a downstream WO releases only unused plan; the quantity already
+		# delivered/consumed remains tied to its exact upstream receipt.
+		frappe.db.set_value("Work Order", other_target.name, "open_status", "Close")
+		available = get_source_availability(
+			lot=self.lot,
+			ipd=self.ipd,
+			cloth_item=self.item,
+			source_process="Knitting",
+			source_step="0::Knitting",
+			current_process="Dyeing",
+			current_work_order=self.current,
+			target_location=self.location,
+		)
+		self.assertEqual(available["reserved"], {self.variant: 45})
+		self.assertEqual(available["net"], {self.variant: 75})
 
 		# Cancelling the reserving WO releases the quantity without touching Lot.
 		frappe.db.set_value("Work Order", target.name, "docstatus", 2)
@@ -320,9 +477,10 @@ class TestFabricSourceTransactions(IntegrationTestCase):
 			source_step="0::Knitting",
 			current_process="Dyeing",
 			current_work_order=self.current,
+			target_location=self.location,
 		)
-		self.assertEqual(available["reserved"], {self.variant: 25})
-		self.assertEqual(available["net"], {self.variant: 95})
+		self.assertEqual(available["reserved"], {self.variant: 10})
+		self.assertEqual(available["net"], {self.variant: 110})
 
 		frappe.db.set_value("Work Order", other_target.name, "docstatus", 2)
 		available = get_source_availability(
@@ -333,5 +491,6 @@ class TestFabricSourceTransactions(IntegrationTestCase):
 			source_step="0::Knitting",
 			current_process="Dyeing",
 			current_work_order=self.current,
+			target_location=self.location,
 		)
 		self.assertEqual(available["net"], {self.variant: 120})

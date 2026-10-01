@@ -13,6 +13,9 @@ const ADDITIVE_FIELDS = new Set([
 const ROUTE_ONLY_FIELDS = new Set([
 	"fabric_reference_variant",
 	"fabric_reference_allocations",
+	"additional_parameters",
+	"source_grn",
+	"source_grn_item",
 	"row_index",
 	"table_index",
 ])
@@ -87,6 +90,9 @@ export function groupItemsForDisplay(groups) {
 				target = clone(source)
 				delete target.fabric_reference_variant
 				delete target.fabric_reference_allocations
+				delete target.additional_parameters
+				delete target.source_grn
+				delete target.source_grn_item
 				delete target.row_index
 				delete target.table_index
 				byIdentity.set(identity, target)

@@ -1,13 +1,113 @@
 # Copyright (c) 2026, anas@essdee.fit and contributors
 # For license information, please see license.txt
 
+import json
+
 import frappe
 from frappe import _
+from frappe.utils import cstr, flt
 
 
 def validate(doc, method=None):
 	set_includes_packing(doc)
 	validate_lot_process_selection(doc)
+	validate_fabric_execution_immutable(doc)
+	from essdee_yrp.fabric_source import validate_work_order_source_allocations
+
+	validate_work_order_source_allocations(doc)
+
+
+def before_update_after_submit(doc, method=None):
+	"""Submitted fabric execution contracts are immutable."""
+	validate_fabric_execution_immutable(doc)
+	from essdee_yrp.fabric_source import validate_work_order_source_allocations
+
+	validate_work_order_source_allocations(doc)
+
+
+def validate_fabric_execution_immutable(doc):
+	"""Only Calculate may replace generated input/output contract fields."""
+	if doc.flags.get("essdee_fabric_calculate") or doc.flags.get("essdee_fabric_lifecycle"):
+		return
+	previous = doc.get_doc_before_save()
+	if not previous:
+		return
+	previous_snapshot, previous_managed = _fabric_execution_snapshot(previous)
+	current_snapshot, current_managed = _fabric_execution_snapshot(doc)
+	if not (previous_managed or current_managed):
+		return
+	if previous_snapshot != current_snapshot:
+		frappe.throw(_(
+			"Calculated fabric deliverables and receivables can be changed only "
+			"through Calculate. Reopen the popup to rebuild the execution contract."
+		))
+
+
+def _fabric_execution_snapshot(doc):
+	def execution_key(row):
+		value = row.get("additional_parameters") or {}
+		if isinstance(value, str):
+			try:
+				value = frappe.parse_json(value)
+			except (TypeError, ValueError):
+				value = {}
+		return value.get("fabric_execution_key") if isinstance(value, dict) else None
+
+	managed = bool(doc.get("is_rework")) or any(
+		execution_key(row)
+		for table in ("deliverables", "receivables")
+		for row in (doc.get(table) or [])
+	)
+	rows = []
+	from yrp.stock.dimensions import get_dimension_fieldnames
+
+	dimension_fields = tuple(get_dimension_fieldnames())
+	fields = {
+		"deliverables": (
+			"item_variant", "qty", "uom", "pending_quantity", "stock_update",
+			"is_calculated", "set_combination",
+			"fabric_reference_variant", "fabric_reference_allocations",
+			"additional_parameters", "source_grn", "source_grn_item",
+		) + dimension_fields,
+		"receivables": (
+			"item_variant", "qty", "uom", "pending_quantity", "stock_update",
+			"set_combination", "fabric_reference_variant",
+			"fabric_reference_allocations", "additional_parameters",
+		) + dimension_fields,
+	}
+	for table, fieldnames in fields.items():
+		for row in doc.get(table) or []:
+			# Once any row belongs to a calculated fabric contract, snapshot the
+			# complete tables. Otherwise an unkeyed row could be appended without
+			# changing the protected execution subset.
+			if not managed:
+				continue
+			payload = {
+				"table": table,
+				"name": cstr(row.get("name") or ""),
+			}
+			for fieldname in fieldnames:
+				value = row.get(fieldname)
+				if fieldname in ("qty", "pending_quantity", "stock_update"):
+					value = flt(value, 6)
+				else:
+					value = cstr(value) if value is not None else ""
+				payload[fieldname] = value
+			rows.append(payload)
+	header = {
+		fieldname: cstr(doc.get(fieldname) or "")
+		for fieldname in (
+			"lot", "production_detail", "process_name", "item", "supplier",
+			"delivery_location", "fabric_source_process",
+			"fabric_source_process_step", "open_status", "is_rework",
+			"parent_wo", "rework_type",
+		)
+	}
+	return json.dumps(
+		{"header": header, "rows": rows},
+		sort_keys=True,
+		separators=(",", ":"),
+	), managed
 
 
 def set_includes_packing(doc):

@@ -79,6 +79,32 @@
 					</template>
 				</Column>
 
+				<Column v-if="actualDiaEnabled" header="Actual Dia" :style="{ width: '150px' }">
+					<template #body="{ index }">
+						<div v-if="index === 0" class="grn-dia-cell">
+							<Select
+								:modelValue="row.attributes?.Dia || null"
+								:options="diaOptions"
+								:disabled="!editable"
+								filter
+								fluid
+								placeholder="Select Dia"
+								@update:modelValue="onDiaChange(row, $event)"
+							/>
+							<Button
+								v-if="editable && canRemoveDia(row)"
+								icon="pi pi-trash"
+								text
+								rounded
+								severity="danger"
+								size="small"
+								v-tooltip.top="'Remove this Actual Dia row'"
+								@click="removeDia(row)"
+							/>
+						</div>
+					</template>
+				</Column>
+
 				<!-- Received Type + remove control -->
 				<Column header="Received Type" :style="{ width: '150px' }">
 					<template #body="{ data: split }">
@@ -164,20 +190,39 @@
 				</Column>
 
 				<!-- "+ Received Type" add controls under the table -->
-				<template #footer v-if="editable && unusedRTs(row).length">
+				<template #footer v-if="editable && (unusedRTs(row).length || unusedDias(row).length)">
 					<div class="grn-rt-add-row">
-						<span class="grn-rt-add-label">Add Received Type:</span>
-						<Button
-							v-for="rt in unusedRTs(row)"
-							:key="'add-' + rt"
-							:label="rt"
-							icon="pi pi-plus"
-							size="small"
-							severity="secondary"
-							outlined
-							class="grn-rt-add"
-							@click="addSplit(row, rt)"
-						/>
+						<template v-if="unusedRTs(row).length">
+							<span class="grn-rt-add-label">Add Received Type:</span>
+							<Button
+								v-for="rt in unusedRTs(row)"
+								:key="'add-' + rt"
+								:label="rt"
+								icon="pi pi-plus"
+								size="small"
+								severity="secondary"
+								outlined
+								class="grn-rt-add"
+								@click="addSplit(row, rt)"
+							/>
+						</template>
+						<template v-if="unusedDias(row).length">
+							<span class="grn-rt-add-label grn-dia-add-label">Add Actual Dia:</span>
+							<Select
+								v-model="diaSelections[row.key]"
+								:options="unusedDias(row)"
+								filter
+								class="grn-dia-select"
+								placeholder="Select Dia"
+							/>
+							<Button
+								label="Add Dia"
+								icon="pi pi-plus"
+								size="small"
+								:disabled="!diaSelections[row.key]"
+								@click="addDia(row, diaSelections[row.key])"
+							/>
+						</template>
 					</div>
 				</template>
 			</DataTable>
@@ -186,12 +231,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from "vue"
+import { ref, reactive, computed, onMounted, watch, nextTick } from "vue"
 import DataTable from "primevue/datatable"
 import Column from "primevue/column"
 import Button from "primevue/button"
 import InputNumber from "primevue/inputnumber"
 import InputText from "primevue/inputtext"
+import Select from "primevue/select"
 import Tooltip from "primevue/tooltip"
 import { callMethod } from "@/api/client"
 
@@ -201,6 +247,8 @@ const props = defineProps({
 	// false → read-only render (e.g. embedded in a view context). DocDetail only
 	// mounts this in edit/create, so default true.
 	editable: { type: Boolean, default: true },
+	workOrder: { type: String, default: "" },
+	actualDiaDisabled: { type: Boolean, default: false },
 })
 
 // Q6: emit `change` on genuine user edits so DocDetail's dirty guard sees grid
@@ -222,6 +270,10 @@ watch(
 const dimensions = ref([])
 // ── available received types for the "+RT" add buttons ──
 const availableRTs = ref([])
+const actualDiaEnabled = ref(false)
+const diaOptions = ref([])
+const diaSelections = reactive({})
+let actualDiaRequest = 0
 const defaultReceivedType = ref("")
 const receivedTypesReady = ref(false)
 
@@ -244,9 +296,33 @@ onMounted(async () => {
 	}
 	receivedTypesReady.value = true
 	compactLoadedSplits()
+	await loadActualDiaContext()
 	// Arm change-emit after initial state settles (a later external loadData re-arms).
 	nextTick(() => { changeArmed.value = true })
 })
+
+watch(
+	() => [props.workOrder, props.actualDiaDisabled],
+	loadActualDiaContext,
+)
+
+async function loadActualDiaContext() {
+	const request = ++actualDiaRequest
+	actualDiaEnabled.value = false
+	diaOptions.value = []
+	if (!props.workOrder || props.actualDiaDisabled) return
+	try {
+		const result = await callMethod("essdee_yrp.fabric_grn.get_actual_dia_context", {
+			work_order: props.workOrder,
+		})
+		if (request !== actualDiaRequest) return
+		actualDiaEnabled.value = !!result?.enabled
+		diaOptions.value = result?.dia_options || []
+	} catch (_) {
+		if (request !== actualDiaRequest) return
+		actualDiaEnabled.value = false
+	}
+}
 
 const dimensionLabels = computed(() => {
 	const out = {}
@@ -406,6 +482,25 @@ function allowedQty(row, key) {
 }
 
 function otherSplitQty(row, currentSplit, key) {
+	const reference = sourceReference(currentSplit.entry, key)
+	if (actualDiaEnabled.value && reference) {
+		let total = 0
+		for (const candidateRow of logicalRows.value) {
+			for (const candidate of candidateRow.splits) {
+				for (const column of candidateRow.columns) {
+					if (
+						candidateRow.key === row.key
+						&& candidate.receivedType === currentSplit?.receivedType
+						&& column.key === key
+					) continue
+					if (sourceReference(candidate.entry, column.key) === reference) {
+						total += qty(candidate.entry, column.key)
+					}
+				}
+			}
+		}
+		return total
+	}
 	let total = 0
 	for (const split of row.splits) {
 		// PrimeVue passes a proxied body-row object, so object identity is not
@@ -414,6 +509,26 @@ function otherSplitQty(row, currentSplit, key) {
 		total += qty(split.entry, key)
 	}
 	return total
+}
+
+function sourceReference(entry, key = "default") {
+	return valueDetail(entry, key).ref_docname || entry.ref_docname || ""
+}
+
+function rowReference(row) {
+	for (const split of row.splits || []) {
+		for (const column of row.columns || []) {
+			const reference = sourceReference(split.entry, column.key)
+			if (reference) return reference
+		}
+	}
+	return ""
+}
+
+function rowsForReference(row) {
+	const reference = rowReference(row)
+	if (!reference) return [row]
+	return logicalRows.value.filter((candidate) => rowReference(candidate) === reference)
 }
 
 // Clamp = max_receivable_quantity for the size minus the qty of the SAME size in
@@ -451,6 +566,12 @@ function rowAllowed(row) {
 }
 function rowBalance(row) {
 	row = logicalRows.value.find((candidate) => candidate.key === row?.key) || row
+	if (actualDiaEnabled.value && rowReference(row)) {
+		return rowAllowed(row) - rowsForReference(row).reduce(
+			(total, candidate) => total + rowReceived(candidate),
+			0,
+		)
+	}
 	return rowAllowed(row) - rowReceived(row)
 }
 
@@ -459,6 +580,63 @@ function unusedRTs(row) {
 	if (!availableRTs.value || !availableRTs.value.length) return []
 	const used = new Set(row.splits.map((s) => s.receivedType || ""))
 	return availableRTs.value.filter((rt) => !used.has(rt))
+}
+
+function unusedDias(row) {
+	if (!actualDiaEnabled.value) return []
+	const used = new Set(
+		rowsForReference(row).map((candidate) => candidate.attributes?.Dia).filter(Boolean),
+	)
+	return diaOptions.value.filter((dia) => !used.has(dia))
+}
+
+function onDiaChange(row, dia) {
+	if (!dia || !actualDiaEnabled.value) return
+	const duplicate = rowsForReference(row).some(
+		(candidate) => candidate !== row && candidate.attributes?.Dia === dia,
+	)
+	if (duplicate) return
+	for (const split of row.splits || []) {
+		if (!split.entry.attributes) split.entry.attributes = {}
+		split.entry.attributes.Dia = dia
+	}
+}
+
+function addDia(row, dia) {
+	if (!dia || !actualDiaEnabled.value || !row.splits?.length) return
+	for (const group of groups.value || []) {
+		const source = (group.items || []).find((entry) => entry === row.splits[0].entry)
+		if (!source) continue
+		const clone = JSON.parse(JSON.stringify(source))
+		clone.attributes = { ...(clone.attributes || {}), Dia: dia }
+		clone.comments = ""
+		// A different Actual Dia is a different logical stock row. Let the server
+		// assign a fresh row index; copying the source index would make the grouped
+		// editor collapse both variants again after reload.
+		delete clone.row_index
+		delete clone.table_index
+		clone.values = {}
+		for (const col of getColumns(group, source)) {
+			const src = (source.values || {})[col.key] || {}
+			clone.values[col.key] = { ...src, qty: 0 }
+		}
+		group.items.push(clone)
+		diaSelections[row.key] = null
+		return
+	}
+}
+
+function canRemoveDia(row) {
+	return rowsForReference(row).length > 1
+		&& row.splits.every((split) => splitTotal(split, row.columns) === 0)
+}
+
+function removeDia(row) {
+	if (!canRemoveDia(row)) return
+	const entries = new Set(row.splits.map((split) => split.entry))
+	for (const group of groups.value || []) {
+		group.items = (group.items || []).filter((entry) => !entries.has(entry))
+	}
 }
 
 function canRemoveSplit(row, split) {
@@ -648,6 +826,11 @@ defineExpose({ loadData, getItems, hasItems })
 .grn-rt-remove {
 	margin-left: 4px;
 }
+.grn-dia-cell {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
 
 .cell-num {
 	width: 100%;
@@ -690,6 +873,12 @@ defineExpose({ loadData, getItems, hasItems })
 	color: var(--esd-muted);
 	font-weight: 600;
 	margin-right: 4px;
+}
+.grn-dia-add-label {
+	margin-left: 12px;
+}
+.grn-dia-select {
+	min-width: 150px;
 }
 
 .grid-empty-state {

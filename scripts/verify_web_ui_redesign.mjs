@@ -99,8 +99,71 @@ async function tokensSuite(page) {
 	return contract
 }
 
+async function shellSuite(page) {
+	await page.setViewportSize({ width: 1600, height: 1000 })
+	await page.goto(`${SITE}/web/`, { waitUntil: "domcontentloaded" })
+	await page.locator(".department-card-link").first().waitFor({ timeout: 20_000 })
+
+	const destinations = page.locator(".department-card-link")
+	assert(await destinations.count() === 10, "Administrator must show ten department destinations")
+	assert(await page.getByText("Open workspace", { exact: true }).count() === 0, "Redundant workspace filler is visible")
+	assert(await page.locator("body").evaluate((body) => getComputedStyle(body).backgroundColor) === "rgb(244, 247, 245)", "Shell canvas is not stable")
+
+	await destinations.first().focus()
+	const focusVisible = await destinations.first().evaluate((element) => {
+		const style = getComputedStyle(element)
+		return style.outlineStyle !== "none" || style.boxShadow !== "none"
+	})
+	assert(focusVisible, "Department destinations have no visible keyboard focus")
+	assert((await visibleTextBelowMinimum(page)).length === 0, "Administrator contains visible text below 11px")
+
+	await page.setViewportSize({ width: 760, height: 900 })
+	const columnCount = await page.locator(".department-grid").evaluate((element) =>
+		getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length,
+	)
+	assert(columnCount === 1, "Administrator does not collapse to one column at 760px")
+
+	return { destinationCount: await destinations.count(), columnCount, focusVisible }
+}
+
+async function cuttingEntrySuite(page, context) {
+	await page.setViewportSize({ width: 1600, height: 1000 })
+	await page.goto(`${SITE}/web/cutting`, { waitUntil: "domcontentloaded" })
+	await page.locator(".workspace-grid").waitFor({ timeout: 20_000 })
+
+	const entries = page.locator(".workspace-card")
+	assert(await entries.count() === 2, "Cutting must show the two permitted destinations")
+	assert(await page.getByText("Manufacturing workspace", { exact: true }).count() === 0, "Decorative Cutting eyebrow is visible")
+	assert(await page.locator(".erp-page-header__description").count() === 0, "Cutting introductory paragraph is still visible")
+	assert(await page.locator(".workspace-card__label").count() === 0, "Redundant Cutting card category labels are visible")
+	assert((await visibleTextBelowMinimum(page)).length === 0, "Cutting entry contains visible text below 11px")
+
+	await page.setViewportSize({ width: 760, height: 900 })
+	const columnCount = await page.locator(".workspace-grid").evaluate((element) =>
+		getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length,
+	)
+	assert(columnCount === 1, "Cutting destinations do not collapse to one column at 760px")
+
+	const restrictedPage = await context.newPage()
+	try {
+		await restrictedPage.route("**/api/method/essdee_yrp.cutting.reports.get_report_permissions", (route) =>
+			route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: {} }) }),
+		)
+		await restrictedPage.goto(`${SITE}/web/cutting`, { waitUntil: "domcontentloaded" })
+		await restrictedPage.locator(".workspace-empty").waitFor({ timeout: 20_000 })
+		assert(await restrictedPage.locator(".workspace-card").count() === 0, "Restricted destinations remain visible")
+		assert(await restrictedPage.locator(".workspace-empty").isVisible(), "No-permission state is not visible")
+	} finally {
+		await restrictedPage.close()
+	}
+
+	return { entryCount: await entries.count(), columnCount }
+}
+
 const suites = {
 	tokens: tokensSuite,
+	shell: shellSuite,
+	"cutting-entry": cuttingEntrySuite,
 }
 
 const browser = await chromium.launch({ headless: true })

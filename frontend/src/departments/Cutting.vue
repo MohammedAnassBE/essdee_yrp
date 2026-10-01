@@ -1,13 +1,9 @@
 <template>
 	<DepartmentPage title="Cutting" accent="#0b8f65" :show-title="false" flat>
-		<section class="cutting-home erp-workspace" aria-labelledby="cutting-workspace-title">
+		<section class="cutting-home erp-workspace erp-workspace-entry" aria-labelledby="cutting-workspace-title">
 			<header class="erp-page-header">
 				<div>
-					<p class="erp-page-header__eyebrow">Manufacturing workspace</p>
 					<h1 id="cutting-workspace-title">Cutting</h1>
-					<p class="erp-page-header__description">
-						Plan and execute cutting operations, or open production reports for verified shop-floor analysis.
-					</p>
 				</div>
 			</header>
 
@@ -15,9 +11,8 @@
 				<RouterLink v-if="canReadPlans" class="workspace-card erp-card" to="/cutting/plans">
 					<span class="workspace-card__icon"><i class="pi pi-th-large" aria-hidden="true"></i></span>
 					<span class="workspace-card__body">
-						<span class="workspace-card__label">Operations</span>
 						<strong>Cutting Plans</strong>
-						<small>Plans, markers, lay sheets, cut panel movements and stock transactions.</small>
+						<small>Plans, markers, lay sheets and production movements.</small>
 					</span>
 					<i class="pi pi-arrow-right workspace-card__arrow" aria-hidden="true"></i>
 				</RouterLink>
@@ -25,9 +20,8 @@
 				<RouterLink v-if="canReadReports" class="workspace-card erp-card" to="/cutting/reports">
 					<span class="workspace-card__icon workspace-card__icon--reports"><i class="pi pi-chart-bar" aria-hidden="true"></i></span>
 					<span class="workspace-card__body">
-						<span class="workspace-card__label">Analytics</span>
 						<strong>Reports</strong>
-						<small>Daily production, cut sheets, Multi CCR, cutting details and stock balance.</small>
+						<small>Production, cut sheet, cutting detail and stock reports.</small>
 					</span>
 					<i class="pi pi-arrow-right workspace-card__arrow" aria-hidden="true"></i>
 				</RouterLink>
@@ -66,9 +60,9 @@ onMounted(async () => {
 
 <style scoped>
 .cutting-home {
-	max-width: 1060px;
+	max-width: 1120px;
 	margin: 0 auto;
-	padding: 28px 8px;
+	padding: 24px 8px;
 }
 
 .workspace-grid {
@@ -81,15 +75,15 @@ onMounted(async () => {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr) auto;
 	align-items: center;
-	min-height: 166px;
-	padding: 24px;
-	transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+	min-height: 144px;
+	padding: 22px;
+	transition: border-color var(--erp-transition-fast), box-shadow var(--erp-transition-fast), transform var(--erp-transition-fast);
 }
 
 .workspace-card:hover,
 .workspace-card:focus-visible {
-	border-color: #abd2bf;
-	box-shadow: 0 14px 36px rgb(25 68 46 / 12%);
+	border-color: color-mix(in srgb, var(--erp-accent) 38%, var(--erp-border));
+	box-shadow: 0 14px 34px rgb(30 64 48 / 11%);
 	transform: translateY(-2px);
 }
 
@@ -98,18 +92,18 @@ onMounted(async () => {
 	width: 52px;
 	height: 52px;
 	margin-right: 17px;
-	color: #087654;
+	color: var(--erp-accent);
 	font-size: 1.2rem;
-	background: #e4f5ec;
-	border: 1px solid #d1eadc;
-	border-radius: 13px;
+	background: var(--erp-accent-soft);
+	border: 1px solid color-mix(in srgb, var(--erp-accent) 16%, var(--erp-border));
+	border-radius: var(--erp-panel-radius);
 	place-items: center;
 }
 
 .workspace-card__icon--reports {
-	color: #2d638c;
-	background: #e9f2f8;
-	border-color: #d9e8f2;
+	color: var(--erp-accent);
+	background: var(--erp-accent-soft);
+	border-color: color-mix(in srgb, var(--erp-accent) 16%, var(--erp-border));
 }
 
 .workspace-card__body {
@@ -118,32 +112,23 @@ onMounted(async () => {
 	flex-direction: column;
 }
 
-.workspace-card__label {
-	margin-bottom: 6px;
-	color: #688076;
-	font-size: 0.68rem;
-	font-weight: 800;
-	letter-spacing: 0.09em;
-	text-transform: uppercase;
-}
-
 .workspace-card__body strong {
-	color: #1a3026;
+	color: var(--erp-text);
 	font-size: 1.15rem;
-	font-weight: 780;
+	font-weight: 720;
 }
 
 .workspace-card__body small {
 	max-width: 370px;
 	margin-top: 7px;
-	color: #6a7b73;
-	font-size: 0.8rem;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-caption);
 	line-height: 1.5;
 }
 
 .workspace-card__arrow {
 	margin-left: 14px;
-	color: #0b8f65;
+	color: var(--erp-accent);
 	font-size: 1rem;
 	transition: transform 160ms ease;
 }

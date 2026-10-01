@@ -6,7 +6,6 @@
 					<span class="department-card__mark" aria-hidden="true">{{ department.shortLabel }}</span>
 					<span class="department-card__content">
 						<strong>{{ department.label }}</strong>
-						<small>Open workspace</small>
 					</span>
 					<i class="pi pi-arrow-right department-card__arrow" aria-hidden="true"></i>
 				</div>

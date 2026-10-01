@@ -1,24 +1,26 @@
 <template>
 	<main
-		class="department-page"
+		class="department-page erp-page-shell"
 		:class="{
 			'department-page--flat': flat,
 			'department-page--full-width': fullWidth,
 		}"
 		:style="{ '--accent': accent }"
 	>
-		<RouterLink v-slot="{ navigate }" custom :to="backTo">
-			<Button
-				class="back-link"
-				icon="pi pi-arrow-left"
-				:label="backLabel"
-				severity="secondary"
-				text
-				@click="navigate"
-			/>
-		</RouterLink>
+		<nav class="department-page__nav erp-page-nav" :aria-label="`Back to ${backLabel}`">
+			<RouterLink v-slot="{ navigate }" custom :to="backTo">
+				<Button
+					class="back-link"
+					icon="pi pi-arrow-left"
+					:label="backLabel"
+					severity="secondary"
+					text
+					@click="navigate"
+				/>
+			</RouterLink>
+		</nav>
 		<Card
-			class="department-page__panel"
+			class="department-page__panel erp-page-surface"
 			:class="{ 'department-page__panel--flat': flat }"
 		>
 			<template #content>

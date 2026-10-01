@@ -1,5 +1,5 @@
 <template>
-	<div class="app-shell">
+	<div class="app-shell" data-ui="essdee-erp">
 		<RouterView />
 	</div>
 </template>

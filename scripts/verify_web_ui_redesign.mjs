@@ -573,6 +573,130 @@ async function entityDialogsSuite(page) {
 	return { plan: fixture.name, sheet: sheet.name, dialogScrollContract, rowsBefore, rowsAfter }
 }
 
+async function getMethodFixture(request, method, args) {
+	const response = await request.get(`${SITE}/api/method/${method}`, { params: args })
+	assert(response.ok(), `Unable to load fixture from ${method}`)
+	return (await response.json()).message || {}
+}
+
+async function cpmSuite(page, context) {
+	await page.setViewportSize({ width: 1600, height: 900 })
+	const fixture = await findCuttingPlan(page.request, (_, name) => name === "CP-2609-00007")
+	const cpmMethod = "essdee_yrp.cutting.web_workspace."
+	const workspace = await getMethodFixture(page.request, `${cpmMethod}get_workspace`, { cutting_plan: fixture.name })
+	const generated = await getMethodFixture(page.request, `${cpmMethod}generate_movement_bundles`, { cutting_plan: fixture.name })
+	generated.collapsed_details = [{
+		size: "8-9", colour: "White", panel: "Front", lay_no: 1, bundle_no: 1, quantity: 2, moved: false, move_qty: 0,
+	}]
+	generated.accessory_data = [{
+		cloth_name: "Accessory Fabric", cloth_type: "Folding", colour: "White", shade: "A", dia: "32 Dia", weight: 1, moved_weight: 0,
+	}]
+
+	await page.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(fixture.name)}`, { waitUntil: "domcontentloaded" })
+	await page.locator(".cutting-tabs").waitFor({ timeout: 20_000 })
+	await page.getByRole("tab", { name: "CPM", exact: true }).click()
+	const cpm = page.locator(".erp-cpm-workspace")
+	await cpm.getByRole("heading", { name: "Cut Panel Movement", exact: true }).waitFor({ timeout: 20_000 })
+	assert(await cpm.getByRole("heading", { name: "Cut Panel Movement", exact: true }).count() === 1, "CPM functional heading is duplicated")
+	for (const filler of ["Generate and move the bundles created by this cutting plan", "Bundle movement", "Cutting origin movement", "newest first"]) {
+		assert(await cpm.getByText(filler, { exact: false }).count() === 0, `CPM retains redundant copy: ${filler}`)
+	}
+
+	const cards = cpm.locator(".erp-record-card")
+	assert(await cards.count() === workspace.movements.length, "CPM movement card count differs from workspace data")
+	const firstCard = cards.first()
+	for (const selector of ["header strong", ".erp-status", ".erp-movement-time", ".erp-record-metrics"]) {
+		assert(await firstCard.locator(selector).count() === 1, `Movement card is missing ${selector}`)
+	}
+	const renderedNames = await cards.locator("header strong").allTextContents()
+	const expectedNames = [...workspace.movements]
+		.sort((left, right) => String(right.modified).localeCompare(String(left.modified)))
+		.map((movement) => movement.name)
+	assert(JSON.stringify(renderedNames) === JSON.stringify(expectedNames), `Movements are not newest first: ${renderedNames}`)
+	const movementTimes = await cards.locator(".erp-movement-time strong").allTextContents()
+	assert(movementTimes.every((value) => /^\d{2}-\d{2}-\d{4}(?: · \d{2}:\d{2})?$/.test(value)), `Movement dates are unclear: ${movementTimes}`)
+	const cpmUndersizedText = await visibleTextBelowMinimum(cpm)
+	assert(cpmUndersizedText.length === 0, `CPM workspace contains text below 11px: ${JSON.stringify(cpmUndersizedText.slice(0, 8))}`)
+
+	await page.route("**generate_movement_bundles*", (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: JSON.stringify({ message: generated }),
+	}))
+	const initialUrl = page.url()
+	await cpm.getByRole("button", { name: "Create Movement", exact: true }).click()
+	const dialog = page.getByRole("dialog", { name: "Create Cut Panel Movement" })
+	await dialog.waitFor()
+	assert(page.url() === initialUrl, "Create Movement navigates away from the Cutting Plan")
+	await dialog.getByRole("button", { name: "Generate Bundles", exact: true }).click()
+	await dialog.locator(".erp-bundle-matrix").first().waitFor({ timeout: 20_000 })
+
+	assert(await dialog.getByRole("heading", { name: "Collapsed bundles", exact: true }).count() === 1, "Collapsed selection section is missing")
+	assert(await dialog.getByRole("heading", { name: "Accessory fabric", exact: true }).count() === 1, "Accessory selection section is missing")
+	const matrixScroll = await dialog.locator(".erp-matrix-scroll").first().evaluate((element) => ({
+		clientWidth: element.clientWidth,
+		scrollWidth: element.scrollWidth,
+		overflowX: getComputedStyle(element).overflowX,
+	}))
+	assert(matrixScroll.scrollWidth >= matrixScroll.clientWidth && ["auto", "scroll"].includes(matrixScroll.overflowX), "CPM matrix does not preserve horizontal scrolling")
+
+	const selectionSummary = dialog.locator(".erp-selection-summary")
+	const summaryBefore = await selectionSummary.innerText()
+	const firstRow = dialog.locator(".erp-bundle-table tbody tr").first()
+	const rowCheckbox = firstRow.locator(".erp-row-check input")
+	const panelCheckboxes = firstRow.locator(".erp-panel-choice input")
+	assert(await rowCheckbox.count() === 1 && await panelCheckboxes.count() > 0, "Bundle and panel selectors are not independently available")
+	await rowCheckbox.click()
+	const summaryAfterBundle = await selectionSummary.innerText()
+	assert(summaryAfterBundle !== summaryBefore, "Selection totals did not update after selecting a bundle")
+	const columnCheckbox = dialog.locator(".erp-column-check input").first()
+	assert(await columnCheckbox.count() === 1, "Panel column selector is missing")
+	assert(!await columnCheckbox.isChecked(), "Selecting one bundle incorrectly selects the full panel column")
+	await panelCheckboxes.first().click()
+	const summaryAfterPanel = await selectionSummary.innerText()
+	assert(summaryAfterPanel !== summaryAfterBundle, "Selection totals did not update after changing an individual panel")
+	const dialogUndersizedText = await visibleTextBelowMinimum(dialog)
+	assert(dialogUndersizedText.length === 0, `CPM dialog contains text below 11px: ${JSON.stringify(dialogUndersizedText.slice(0, 8))}`)
+	await dialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
+
+	await firstCard.getByRole("button", { name: "View", exact: true }).click()
+	const readonlyDialog = page.getByRole("dialog", { name: new RegExp(workspace.movements[0].name) })
+	await readonlyDialog.waitFor()
+	assert(await readonlyDialog.getByRole("button", { name: "Save Draft", exact: true }).count() === 0, "Submitted movement still exposes Save Draft")
+	assert(await readonlyDialog.getByRole("button", { name: "Save & Submit", exact: true }).count() === 0, "Submitted movement still exposes Save & Submit")
+	await readonlyDialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
+
+	const statesPage = await context.newPage()
+	try {
+		const statePlan = await findCuttingPlan(statesPage.request, (_, name) => name === "CP-2609-00042")
+		const stateWorkspace = await getMethodFixture(statesPage.request, `${cpmMethod}get_workspace`, { cutting_plan: statePlan.name })
+		await statesPage.route("**cutting.web_workspace.get_workspace*", (route) => route.fulfill({
+			status: 200, contentType: "application/json", body: JSON.stringify({ message: stateWorkspace }),
+		}))
+		await statesPage.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(statePlan.name)}`, { waitUntil: "domcontentloaded" })
+		await statesPage.getByRole("tab", { name: "CPM", exact: true }).click()
+		await statesPage.locator(".erp-record-card").first().waitFor({ timeout: 20_000 })
+		const statuses = await statesPage.locator(".erp-record-card .erp-status").allTextContents()
+		assert(statuses.includes("Submitted") && statuses.includes("Cancelled"), `CPM state cards are incomplete: ${statuses}`)
+	} finally {
+		await statesPage.close()
+	}
+
+	const emptyPage = await context.newPage()
+	try {
+		await emptyPage.route("**cutting.web_workspace.get_workspace*", (route) => route.fulfill({
+			status: 200, contentType: "application/json", body: JSON.stringify({ message: { ...workspace, movements: [] } }),
+		}))
+		await emptyPage.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(fixture.name)}`, { waitUntil: "domcontentloaded" })
+		await emptyPage.getByRole("tab", { name: "CPM", exact: true }).click()
+		await emptyPage.getByText("No cut-panel movements yet", { exact: true }).waitFor({ timeout: 20_000 })
+	} finally {
+		await emptyPage.close()
+	}
+
+	return { plan: fixture.name, movementCount: renderedNames.length, movementTimes, matrixScroll, summaryBefore, summaryAfterBundle, summaryAfterPanel }
+}
+
 const suites = {
 	tokens: tokensSuite,
 	shell: shellSuite,
@@ -582,6 +706,7 @@ const suites = {
 	"plan-primary-tabs": planPrimaryTabsSuite,
 	sidebar: sidebarSuite,
 	"entity-dialogs": entityDialogsSuite,
+	cpm: cpmSuite,
 }
 
 const browser = await chromium.launch({ headless: true })

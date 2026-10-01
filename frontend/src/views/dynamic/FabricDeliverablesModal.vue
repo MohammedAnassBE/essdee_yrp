@@ -24,18 +24,37 @@
 
 		<div v-else class="fc-rows">
 			<div class="fc-source-note" role="status">
-				<template v-if="ctx.source_process">
+				<template v-if="ctx.source_process?.unavailable">
+					<strong>No predecessor stock available</strong>
+					<span>No unallocated submitted {{ ctx.source_process.label || ctx.source_process.process_name }} GRN quantity is available. Submit the predecessor GRN, then reopen this calculation.</span>
+				</template>
+				<template v-else-if="ctx.source_process">
 					<strong>Filled from {{ ctx.source_process.label || ctx.source_process.process_name }} GRNs</strong>
 					<span>Unallocated source stock: {{ ctx.source_process.available }} kg across all source variants. Only compatible inputs can fill the rows below.</span>
 					<span>Return GRNs are excluded. Quantities remain editable and availability is checked again on Calculate.</span>
+					<details v-if="(ctx.source_process.sources || []).length" class="fc-source-breakdown">
+						<summary>View GRN / supplier source breakdown</summary>
+						<div v-for="source in ctx.source_process.sources" :key="source.key" class="fc-source-line">
+							<span>
+								{{ source.grn }} · {{ source.supplier || 'No supplier' }}
+								<span v-if="source.warehouse"> · {{ source.warehouse }}</span>
+							</span>
+							<span>{{ source.item_variant }}</span>
+							<strong>{{ source.available }} / {{ source.received }} kg available</strong>
+						</div>
+					</details>
 				</template>
 				<template v-else-if="(ctx.rows || []).some((row) => row.manual_io)">
 					<strong>Available knitting inputs and outputs</strong>
 					<span>The IPD defines every yarn you can deliver and every fabric variant you can receive. Enter the required quantity against each item.</span>
 				</template>
+				<template v-else-if="(ctx.source_process_options || []).length">
+					<strong>Immediate predecessor stock</strong>
+					<span>Quantities are loaded from the immediately preceding process's submitted GRNs and checked again on Calculate.</span>
+				</template>
 				<template v-else>
 					<strong>Planned quantities</strong>
-					<span>Edit the process quantities, or use Fill Quantity to read an earlier process's submitted GRNs.</span>
+					<span>Edit the process quantities shown below.</span>
 				</template>
 			</div>
 			<div v-for="warning in ctx.warnings || []" :key="warning" class="fc-warning" role="status">{{ warning }}</div>
@@ -254,7 +273,7 @@
 		<template #footer>
 			<Button label="Cancel" severity="secondary" text :disabled="applying || loading" @click="emit('update:visible', false)" />
 			<Button
-				v-if="(ctx?.source_process_options || []).length"
+				v-if="(ctx?.source_process_options || []).length > 1"
 				label="Fill Quantity"
 				icon="pi pi-download"
 				severity="secondary"
@@ -266,7 +285,7 @@
 				label="Calculate"
 				icon="pi pi-calculator"
 				:loading="applying"
-				:disabled="loading"
+				:disabled="loading || ctx?.source_process?.unavailable"
 				@click="onApply"
 			/>
 		</template>
@@ -576,7 +595,13 @@ async function onApply() {
 				return
 			}
 			if (qty > 0) {
-				const line = { key: qr.key, out_attrs: qr.out_attrs, qty }
+				const line = {
+					key: qr.key,
+					matrix_key: qr.matrix_key || qr.key,
+					out_attrs: qr.out_attrs,
+					qty,
+				}
+				if (qr.source_bucket_key) line.source_bucket_key = qr.source_bucket_key
 				if (colour) line.colour = colour
 				if (row.manual_io) {
 					if (!manualInputs.some((input) => input.qty > 0)) {
@@ -644,6 +669,22 @@ async function onApply() {
 	border-radius: 8px;
 	background: var(--esd-accent-50);
 	font-size: 12.5px;
+}
+.fc-source-breakdown {
+	margin-top: 4px;
+	border-top: 1px solid var(--esd-line);
+	padding-top: 6px;
+}
+.fc-source-breakdown summary {
+	cursor: pointer;
+	font-weight: 600;
+}
+.fc-source-line {
+	display: grid;
+	grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) auto;
+	gap: 10px;
+	padding: 6px 0;
+	border-bottom: 1px solid var(--esd-line);
 }
 .fc-warning {
 	padding: 10px 14px;

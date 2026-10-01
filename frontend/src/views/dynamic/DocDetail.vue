@@ -768,6 +768,8 @@
 						v-if="useGrnSplit"
 						:ref="(el) => setGridRef(pv.childField, el)"
 						:editable="true"
+						:work-order="form.against_id || ''"
+						:actual-dia-disabled="!!(form.is_return || form.is_rework || form.additional_grn || form.includes_packing)"
 						@change="onGridChange"
 					/>
 					<StockItemGridEditor
@@ -3763,6 +3765,7 @@ const editableChildTables = computed(() => {
 		(f) =>
 			f.fieldtype === "Table" &&
 			!f.hidden &&
+			!f.read_only &&
 			!GROUPED_JSON_FIELDS.has(f.fieldname) &&
 			!CHILD_TABLE_EXCLUDE.has(f.fieldname) &&
 			// Honor depends_on on the CHILD-TABLE field itself (e.g. Process'
@@ -4636,9 +4639,15 @@ function childLinkSearchHandlerFor(col, row = null) {
 // path. Only the fields in stockPivots are affected; all others stay flat.
 function buildPayload() {
 	const payload = {}
+	const readOnlyFields = new Set(
+		(meta.value?.fields || [])
+			.filter((field) => field.read_only)
+			.map((field) => field.fieldname),
+	)
 	for (const [k, v] of Object.entries(form)) {
 		if (GROUPED_JSON_FIELDS.has(k)) continue
 		if (k === "__islocal") continue
+		if (readOnlyFields.has(k)) continue
 		payload[k] = v
 	}
 	// Ensure the grouped-JSON twins are NOT sent by default (extra safety).

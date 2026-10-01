@@ -16,12 +16,6 @@ from yrp.yrp.doctype.work_order.work_order import (
 QTY_TOLERANCE = 0.000001
 
 
-def _allow_fabric_lifecycle_save(doc):
-	if not getattr(doc, "flags", None):
-		doc.flags = frappe._dict()
-	doc.flags.essdee_fabric_lifecycle = True
-
-
 @frappe.whitelist()
 def close_work_order(
 	work_order,
@@ -69,15 +63,9 @@ def close_work_order(
 			close_other_reason,
 			close_remarks,
 		)
-		_allow_fabric_lifecycle_save(doc)
 		doc.save(ignore_permissions=True)
 		frappe.msgprint(_("Close Request has been submitted for approval."), alert=True)
 		return {"status": "Close Request", "deducted_qty": 0.0}
-
-	if doc.get("fabric_source_process"):
-		from essdee_yrp.fabric_source import _lock_source_transactions
-
-		_lock_source_transactions(doc.lot, doc.item, doc.fabric_source_process)
 
 	_validate_wo_close(doc)
 	warehouse = _get_warehouse_for_supplier(doc.supplier)
@@ -193,7 +181,6 @@ def close_work_order(
 	doc.closed_by = frappe.session.user
 	doc.is_delivered = 1
 	doc.total_quantity = 0
-	_allow_fabric_lifecycle_save(doc)
 	doc.save(ignore_permissions=True)
 
 	adjustment_allocations = []

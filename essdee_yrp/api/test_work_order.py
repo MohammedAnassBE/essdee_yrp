@@ -26,15 +26,12 @@ from essdee_yrp.api.test_cloth_program import (
 from essdee_yrp.api.work_order import (
     _consolidate_fabric_rows,
     _hydrate_knitting_execution_defaults,
-    _resolve_variant,
     _selected_lot_fabrics,
     calculate_fabric_deliverables,
     get_fabric_deliverable_context,
     get_work_order_selection_context,
 )
 from essdee_yrp.fabric_grn import _calculate_saved_work_order_inputs
-from essdee_yrp.fabric_source import validate_work_order_source_allocations
-from essdee_yrp.fabric_substitution import _rebuild_lot_fabric_conversions
 from essdee_yrp.fabric_reference import (
     get_reference_allocations,
     scale_reference_allocations,
@@ -77,45 +74,6 @@ def _ensure_default_received_type():
     frappe.db.set_single_value("YRP Stock Settings", "default_received_type", "Accepted")
 
 
-def _insert_projection_grn(work_order, receivable, rows):
-    name = f"TEST-GRN-{frappe.generate_hash(length=10)}"
-    grn = frappe.new_doc("Goods Received Note")
-    grn.name = name
-    grn.docstatus = 1
-    grn.against = "Work Order"
-    grn.against_id = work_order.name
-    grn.posting_date = nowdate()
-    grn.db_insert()
-    has_received_type = frappe.get_meta("Goods Received Note Item").has_field(
-        "received_type"
-    )
-    for item_variant, qty, received_type in rows:
-        item = frappe.new_doc("Goods Received Note Item")
-        item.parent = name
-        item.parenttype = "Goods Received Note"
-        item.parentfield = "items"
-        item.item_variant = item_variant
-        item.quantity = qty
-        item.stock_qty = qty
-        item.conversion_factor = 1
-        item.uom = "Kg"
-        item.stock_uom = "Kg"
-        item.ref_doctype = "Work Order Receivables"
-        item.ref_docname = receivable.name
-        if has_received_type:
-            item.received_type = received_type
-        item.db_insert()
-    return name
-
-
-def _variant_attribute(item_variant, attribute):
-    return next(
-        row.attribute_value
-        for row in frappe.get_cached_doc("Item Variant", item_variant).attributes
-        if row.attribute == attribute
-    )
-
-
 class TestSelectedLotFabrics(TestCase):
     def test_exact_production_detail_excludes_sibling_cloths(self):
         selected = frappe._dict(
@@ -152,110 +110,6 @@ class TestSelectedLotFabrics(TestCase):
 
         self.assertEqual(_selected_lot_fabrics(wo, lot), [selected])
 
-
-class TestReworkFabricCompatibility(TestCase):
-    def test_rework_work_order_bypasses_standard_exact_source_validation(self):
-        wo = frappe._dict(
-            docstatus=0,
-            is_rework=1,
-            parent_wo="WO-PARENT-1",
-            lot="LOT-1",
-            production_detail="IPD-1",
-            process_name="Dyeing",
-            delivery_location="LOC-1",
-            deliverables=[frappe._dict(
-                idx=1, qty=5, item_variant="CLOTH-ADAS", uom="Kg",
-                source_grn="GRN-1", source_grn_item="GRNI-1",
-                received_type="Adas", set_combination=None,
-            )],
-            receivables=[],
-            is_new=lambda: True,
-        )
-        source = {
-            "source_grn": "GRN-1", "source_grn_item": "GRNI-1",
-            "item_variant": "CLOTH-ADAS", "uom": "Kg",
-            "received_type": "Adas", "set_combination": None,
-            "warehouse": "WH-1", "available_qty": 5,
-            "dimensions": {"received_type": "Adas"},
-        }
-        with (
-            patch(
-                "yrp.yrp.doctype.work_order.work_order.get_rework_source_rows",
-                return_value=[source],
-            ),
-            patch(
-                "yrp.stock.dimensions.get_dimension_fieldnames",
-                return_value=["received_type"],
-            ),
-            patch(
-                "yrp.yrp.doctype.delivery_challan.delivery_challan._get_warehouse_for_supplier",
-                return_value="WH-1",
-            ),
-            patch("essdee_yrp.fabric_source.frappe.get_cached_doc") as get_ipd,
-        ):
-            validate_work_order_source_allocations(wo)
-        get_ipd.assert_not_called()
-
-    def test_forged_rework_source_is_rejected(self):
-        wo = frappe._dict(
-            docstatus=0,
-            is_rework=1,
-            parent_wo="WO-PARENT-1",
-            delivery_location="LOC-1",
-            deliverables=[frappe._dict(
-                idx=1, qty=5, item_variant="CLOTH-ACCEPTED", uom="Kg",
-                source_grn="GRN-1", source_grn_item="GRNI-ACCEPTED",
-                received_type="Accepted",
-            )],
-            receivables=[],
-            is_new=lambda: True,
-        )
-        with (
-            patch(
-                "yrp.yrp.doctype.work_order.work_order.get_rework_source_rows",
-                return_value=[],
-            ),
-            patch(
-                "yrp.stock.dimensions.get_dimension_fieldnames",
-                return_value=["received_type"],
-            ),
-            patch(
-                "yrp.yrp.doctype.delivery_challan.delivery_challan._get_warehouse_for_supplier",
-                return_value="WH-1",
-            ),
-            self.assertRaisesRegex(frappe.ValidationError, "not an eligible row"),
-        ):
-            validate_work_order_source_allocations(wo)
-
-    def test_calculated_contract_cannot_be_relabelled_as_rework(self):
-        wo = frappe._dict(
-            docstatus=0,
-            is_rework=1,
-            fabric_source_process="Knitting",
-            deliverables=[frappe._dict(
-                qty=5,
-                additional_parameters='{"fabric_execution_key":"execution-1"}',
-            )],
-            receivables=[],
-        )
-        with self.assertRaisesRegex(
-            frappe.ValidationError, "cannot be converted to Rework"
-        ):
-            validate_work_order_source_allocations(wo)
-
-    def test_calculate_rejects_rework_contract(self):
-        wo = frappe._dict(
-            name="WO-REWORK-1",
-            docstatus=0,
-            is_rework=1,
-            check_permission=lambda *_args, **_kwargs: None,
-        )
-        with (
-            patch("essdee_yrp.api.work_order.frappe.db.sql"),
-            patch("essdee_yrp.api.work_order.frappe.get_doc", return_value=wo),
-            self.assertRaisesRegex(frappe.ValidationError, "not available for rework"),
-        ):
-            calculate_fabric_deliverables(wo.name, [])
 
 class TestFabricRowConsolidation(TestCase):
     def test_same_physical_variant_is_stored_once_with_route_allocations(self):
@@ -512,20 +366,14 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
             {"Dia": self.dia, "Colour": self.red},
         )
 
-        # This unit isolates the planned identity matrix. Physical predecessor
-        # allocation is covered by test_fabric_source and the end-to-end flow.
-        with patch(
-            "essdee_yrp.fabric_source.get_source_process_options",
-            return_value=[],
-        ):
-            result = calculate_fabric_deliverables(wash_wo.name, [{
-                "fabric_row": wash_row["fabric_row"],
-                "entries": [{
-                    "key": qty_row["key"],
-                    "out_attrs": qty_row["out_attrs"],
-                    "qty": 12,
-                }],
-            }])
+        result = calculate_fabric_deliverables(wash_wo.name, [{
+            "fabric_row": wash_row["fabric_row"],
+            "entries": [{
+                "key": qty_row["key"],
+                "out_attrs": qty_row["out_attrs"],
+                "qty": 12,
+            }],
+        }])
         self.assertEqual(result, {"deliverables": 1, "receivables": 1})
         wash_wo.reload()
         deliverable = next(row for row in wash_wo.deliverables if row.is_calculated)
@@ -750,8 +598,7 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
             doc.item_tuple_attribute, str(tuple(sorted({"Colour": self.red}.items()))))
         self.assertEqual(_resolve_variant(self.cloth, {"Colour": self.red}), v)
 
-    @patch("essdee_yrp.fabric_source.get_source_process_options", return_value=[])
-    def test_identity_washing_keeps_routes_that_bypass_dyeing(self, _source_options):
+    def test_identity_washing_keeps_routes_that_bypass_dyeing(self):
         """Mixed yarn routes at two dias survive before/after Dyeing without
         offering stale intermediate colours or an IPD-wide cross product."""
         suffix = frappe.generate_hash(length=6)
@@ -1071,17 +918,13 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
             ],
         )
 
-        with patch(
-            "essdee_yrp.fabric_source.get_source_process_options",
-            return_value=[],
-        ):
-            compact_result = calculate_fabric_deliverables(
-                compact_work_order.name,
-                [{
-                    "fabric_row": compact_context["rows"][0]["fabric_row"],
-                    "entries": [{"key": compact_row["key"], "qty": 20}],
-                }],
-            )
+        compact_result = calculate_fabric_deliverables(
+            compact_work_order.name,
+            [{
+                "fabric_row": compact_context["rows"][0]["fabric_row"],
+                "entries": [{"key": compact_row["key"], "qty": 20}],
+            }],
+        )
         self.assertEqual(
             compact_result, {"deliverables": 1, "receivables": 1}
         )
@@ -1205,112 +1048,7 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
             "delivery_address": addr,
         }).insert(ignore_permissions=True)
 
-    def test_lot_conversion_rebuilds_from_all_submitted_knitting_grns(self):
-        ipd, v = self._make_ipd()
-        work_order = self._make_work_order(ipd, v, v["knitting"])
-        context = get_fabric_deliverable_context(work_order.name)
-        fabric = context["rows"][0]
-        route = fabric["qty_rows"][0]
-        calculate_fabric_deliverables(work_order.name, [{
-            "fabric_row": fabric["fabric_row"],
-            "colour": v["greige"],
-            "entries": [{"key": route["key"], "qty": 10}],
-        }])
-        work_order.reload()
-        receivable = work_order.receivables[0]
-
-        dia_a = _ensure_iav(
-            "Dia", f"_Test Actual A {frappe.generate_hash(length=6)}"
-        )
-        dia_b = _ensure_iav(
-            "Dia", f"_Test Actual B {frappe.generate_hash(length=6)}"
-        )
-        actual_a = _resolve_variant(v["cloth"], {
-            "Dia": dia_a, "Colour": v["greige"],
-        })
-        actual_b = _resolve_variant(v["cloth"], {
-            "Dia": dia_b, "Colour": v["greige"],
-        })
-
-        grn_a = _insert_projection_grn(
-            work_order, receivable, [(actual_a, 7, "Accepted")]
-        )
-        _insert_projection_grn(
-            work_order,
-            receivable,
-            [(actual_b, 3, "Accepted"), (actual_b, 100, "Rejected")],
-        )
-
-        # A historical WO with blank production_detail is resolved from the Lot's
-        # unique cloth IPD and must not abort or disappear from the full rebuild.
-        legacy_work_order = self._make_work_order(ipd, v, v["knitting"])
-        legacy_context = get_fabric_deliverable_context(legacy_work_order.name)
-        legacy_fabric = legacy_context["rows"][0]
-        legacy_route = legacy_fabric["qty_rows"][0]
-        calculate_fabric_deliverables(legacy_work_order.name, [{
-            "fabric_row": legacy_fabric["fabric_row"],
-            "colour": v["greige"],
-            "entries": [{"key": legacy_route["key"], "qty": 2}],
-        }])
-        legacy_work_order.reload()
-        legacy_receivable = legacy_work_order.receivables[0]
-        _insert_projection_grn(
-            legacy_work_order, legacy_receivable, [(actual_a, 2, "Accepted")]
-        )
-        frappe.db.set_value(
-            "Work Order", legacy_work_order.name, "production_detail", None
-        )
-
-        first = _rebuild_lot_fabric_conversions(work_order.lot)
-        second = _rebuild_lot_fabric_conversions(work_order.lot)
-        self.assertEqual(first["conversions"], second["conversions"])
-
-        rows = frappe.get_all(
-            "Lot Fabric Conversion",
-            filters={
-                "parent": work_order.lot,
-                "production_detail": ipd.name,
-                "received_type": "Accepted",
-            },
-            fields=["process_name", "from_item", "to_item", "to_qty"],
-        )
-        knitting = [row for row in rows if row.process_name == v["knitting"]]
-        self.assertEqual(
-            {row.to_item: flt(row.to_qty) for row in knitting},
-            {actual_a: 9.0, actual_b: 3.0},
-        )
-        dyeing = [row for row in rows if row.process_name == v["dyeing"]]
-        self.assertEqual(
-            {
-                _variant_attribute(row.to_item, "Dia"): flt(row.to_qty)
-                for row in dyeing
-            },
-            {dia_a: 9.0, dia_b: 3.0},
-        )
-        self.assertTrue(all(
-            _variant_attribute(row.to_item, "Colour") == v["red"]
-            for row in dyeing
-        ))
-        # Cancellation is a full current-state rebuild: only the still-submitted
-        # second GRN remains, and running the repair again adds no duplicates.
-        frappe.db.set_value("Goods Received Note", grn_a, "docstatus", 2)
-        _rebuild_lot_fabric_conversions(work_order.lot)
-        remaining = frappe.get_all(
-            "Lot Fabric Conversion",
-            filters={
-                "parent": work_order.lot,
-                "production_detail": ipd.name,
-                "process_name": v["knitting"],
-            },
-            fields=["to_item", "to_qty"],
-        )
-        self.assertEqual(
-            {row.to_item: flt(row.to_qty) for row in remaining},
-            {actual_a: 2.0, actual_b: 3.0},
-        )
-
-    @patch("essdee_yrp.fabric_source.get_source_process_options", return_value=[])
-    def test_multi_yarn_matrices_and_three_work_order_processes(self, _source_options):
+    def test_multi_yarn_matrices_and_three_work_order_processes(self):
         ipd, v = self._make_ipd()
 
         matrices = frappe.get_all(

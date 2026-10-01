@@ -168,9 +168,6 @@ function mount_calculated_work_order_editors(frm) {
 				aggregateRouteFields: [
 					"fabric_reference_variant",
 					"fabric_reference_allocations",
-					"additional_parameters",
-					"source_grn",
-					"source_grn_item",
 				],
 			},
 		);
@@ -328,15 +325,6 @@ function render_fabric_dialog(frm, ctx) {
 	// one record per qty input: drives collection, yarn total, overshoot check
 	const manifest = [];
 	let d = null;
-	if (ctx.source_process?.unavailable) {
-		fields.push({
-			fieldtype: "HTML",
-			options: `<div class="alert alert-warning small">`
-				+ `<b>${__("No predecessor stock available")}</b><br>`
-				+ `${__("Submit an unallocated {0} GRN, then reopen Calculate.", [ctx.source_process.label || ctx.source_process.process_name])}`
-				+ `</div>`,
-		});
-	}
 
 	const recompute_yarn = (i) => {
 		const row = ctx.rows[i];
@@ -463,10 +451,7 @@ function render_fabric_dialog(frm, ctx) {
 						row, i, qr, j, colour, output_default
 					);
 					manifest.push({
-						fieldname, row: i, key: qr.key,
-						matrix_key: qr.matrix_key || qr.key,
-						source_bucket_key: qr.source_bucket_key || null,
-						out_attrs: qr.out_attrs,
+						fieldname, row: i, key: qr.key, out_attrs: qr.out_attrs,
 						colour, label: qr.label, balance: qr.balance, available: qr.available,
 						manual_inputs,
 					});
@@ -490,10 +475,7 @@ function render_fabric_dialog(frm, ctx) {
 					row, i, qr, j, null, qr.prefill || 0
 				);
 				manifest.push({
-					fieldname, row: i, key: qr.key,
-					matrix_key: qr.matrix_key || qr.key,
-					source_bucket_key: qr.source_bucket_key || null,
-					out_attrs: qr.out_attrs,
+					fieldname, row: i, key: qr.key, out_attrs: qr.out_attrs,
 					colour: qr.knit_colour || null,
 					label: qr.label,
 					balance: qr.balance,
@@ -571,10 +553,6 @@ function render_fabric_dialog(frm, ctx) {
 		fields,
 		primary_action_label: __("Calculate"),
 		primary_action(values) {
-			if (ctx.source_process?.unavailable) {
-				frappe.msgprint(__("No submitted predecessor GRN stock is available."));
-				return;
-			}
 			const rows = [];
 			let missing_colour = null;
 			let missing_output = null;
@@ -593,13 +571,7 @@ function render_fabric_dialog(frm, ctx) {
 						return;
 					}
 					if (!qty || qty <= 0) return;
-					const line = {
-						key: m.key,
-						matrix_key: m.matrix_key || m.key,
-						out_attrs: m.out_attrs,
-						qty,
-					};
-					if (m.source_bucket_key) line.source_bucket_key = m.source_bucket_key;
+					const line = { key: m.key, out_attrs: m.out_attrs, qty };
 					if (m.colour) line.colour = m.colour;
 					if (row.manual_io) {
 						if (!inputs.some((input) => input.qty > 0)) {
@@ -664,7 +636,7 @@ function render_fabric_dialog(frm, ctx) {
 			});
 		},
 	};
-	if ((ctx.source_process_options || []).length > 1) {
+	if ((ctx.source_process_options || []).length) {
 		dialog_options.secondary_action_label = __("Fill Quantity");
 		dialog_options.secondary_action = () => {
 			const picker = new frappe.ui.Dialog({
@@ -690,7 +662,6 @@ function render_fabric_dialog(frm, ctx) {
 	}
 	d = new frappe.ui.Dialog(dialog_options);
 	d.show();
-	if (ctx.source_process?.unavailable) d.get_primary_btn().prop("disabled", true);
 	// Pre-filled balances must reflect in the auto yarn figure immediately,
 	// not only after the first manual edit.
 	ctx.rows.forEach((row, i) => {

@@ -11,12 +11,9 @@ frontend production build and the browser verification harness.
 """
 
 import os
-from unittest.mock import MagicMock, patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
-
-from essdee_yrp.api.lifecycle import cancel_document, submit_document
 
 
 def _app_root(app):
@@ -30,34 +27,6 @@ def _read(app, relative_path):
 
 
 class TestReviewRegressionContracts(IntegrationTestCase):
-	def test_web_lifecycle_calls_controller_methods_before_resource_lock(self):
-		source = _read("essdee_yrp", "frontend/src/api/client.js")
-		submit = source[source.index("export async function submitDoc") :]
-		submit = submit[: submit.index("export async function cancelDoc")]
-		cancel = source[source.index("export async function cancelDoc") :]
-		cancel = cancel[: cancel.index("export async function amendDoc")]
-		self.assertIn("essdee_yrp.api.lifecycle.submit_document", submit)
-		self.assertIn("essdee_yrp.api.lifecycle.cancel_document", cancel)
-		self.assertNotIn("/api/resource/", submit + cancel)
-
-	def test_web_lifecycle_endpoint_preserves_timestamp_and_public_controller(self):
-		doc = MagicMock()
-		doc.as_dict.return_value = {"name": "GRN-1"}
-		with patch("essdee_yrp.api.lifecycle.frappe.get_doc", return_value=doc):
-			self.assertEqual(
-				submit_document("Goods Received Note", "GRN-1", "2026-10-01 12:00:00"),
-				{"name": "GRN-1"},
-			)
-			doc.submit.assert_called_once_with()
-			self.assertEqual(doc.modified, "2026-10-01 12:00:00")
-
-		doc.reset_mock()
-		doc.as_dict.return_value = {"name": "GRN-1"}
-		with patch("essdee_yrp.api.lifecycle.frappe.get_doc", return_value=doc):
-			cancel_document("Goods Received Note", "GRN-1", "2026-10-01 12:05:00")
-			doc.cancel.assert_called_once_with()
-			self.assertEqual(doc.modified, "2026-10-01 12:05:00")
-
 	def test_filtered_prev_next_serializes_tuple_filters(self):
 		source = _read("essdee_yrp", "frontend/src/composables/useDocNav.js")
 		self.assertIn(

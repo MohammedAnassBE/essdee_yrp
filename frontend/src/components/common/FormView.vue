@@ -1,0 +1,788 @@
+<template>
+	<section class="common-form-view" :class="{ 'common-form-view--compact': compact }">
+		<header class="form-toolbar">
+			<div class="form-toolbar__identity">
+				<h2>{{ heading }}</h2>
+				<div class="form-toolbar__meta">
+					<small>{{ documentName ? documentName : `New ${doctype}` }}</small>
+					<slot name="header-meta" :doc="form" :meta="meta" :loading="loading" />
+				</div>
+			</div>
+			<div class="form-toolbar__actions">
+				<slot name="header-actions" :doc="form" :meta="meta" :loading="loading" :mode="mode" />
+				<Button
+					v-if="mode === 'edit' && (documentName || showCancel)"
+					label="Cancel"
+					severity="secondary"
+					text
+					:disabled="saving"
+					@click="cancelEditing"
+				/>
+				<Button
+					v-if="mode === 'view' && !readonly"
+					icon="pi pi-pencil"
+					label="Edit"
+					severity="secondary"
+					outlined
+					:disabled="loading"
+					@click="mode = 'edit'"
+				/>
+				<Button
+					v-else-if="mode === 'edit'"
+					icon="pi pi-save"
+					:label="documentName ? 'Save' : 'Create'"
+					:loading="saving"
+					:disabled="loading || readonly"
+					@click="save"
+				/>
+			</div>
+		</header>
+
+		<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
+		<Message v-if="success" severity="success" :closable="false">{{ success }}</Message>
+
+		<div v-if="loading" class="form-loading" aria-label="Loading form">
+			<Skeleton v-for="index in 8" :key="index" height="3rem" />
+		</div>
+
+		<form v-else-if="mode === 'edit'" class="form-body" @submit.prevent="save">
+			<div v-if="requiresPromptName" class="form-section">
+				<div class="form-section__columns">
+					<div class="form-section__column">
+						<FormField
+							:field="promptNameField"
+							:model-value="form.name"
+							:form="form"
+							required
+							:invalid="Boolean(fieldErrors.name)"
+							:error="fieldErrors.name || ''"
+							@update:model-value="setValue('name', $event)"
+						/>
+					</div>
+				</div>
+			</div>
+
+			<template v-for="tab in layout" :key="tab.key">
+				<h3 v-if="layout.length > 1 || tab.label" class="form-tab-title">
+					{{ tab.label || "Details" }}
+				</h3>
+				<section v-for="section in tab.sections" :key="section.key" class="form-section">
+					<header v-if="section.label" class="form-section__header">
+						<h3>{{ section.label }}</h3>
+					</header>
+					<div v-if="section.columns.some((column) => column.length)" class="form-section__columns">
+						<div
+							v-for="(column, columnIndex) in section.columns"
+							:key="columnIndex"
+							class="form-section__column"
+						>
+							<FormField
+								v-for="field in column"
+								:key="field.fieldname"
+								:field="field"
+								:model-value="form[field.fieldname]"
+								:form="form"
+								:disabled="readonly || isReadOnly(field)"
+								:required="isRequired(field)"
+								:invalid="Boolean(fieldErrors[field.fieldname])"
+								:error="fieldErrors[field.fieldname] || ''"
+								@update:model-value="setValue(field.fieldname, $event)"
+							/>
+						</div>
+					</div>
+
+					<ChildTableField
+						v-for="table in section.tables"
+						:key="table.fieldname"
+						:field="table"
+						:model-value="form[table.fieldname] || []"
+						:child-meta="metaByName[table.options]"
+						:disabled="readonly || isReadOnly(table)"
+						:errors="childErrors[table.fieldname] || {}"
+						@update:model-value="setValue(table.fieldname, $event)"
+					/>
+				</section>
+			</template>
+		</form>
+
+		<template v-else>
+			<slot name="view" :doc="form" :meta="meta">
+				<div class="form-read-view">
+					<template v-for="tab in layout" :key="tab.key">
+				<h3 v-if="layout.length > 1 || tab.label" class="form-tab-title">
+					{{ tab.label || "Details" }}
+				</h3>
+				<section v-for="section in tab.sections" :key="section.key" class="form-section view-section">
+					<header v-if="section.label" class="form-section__header">
+						<h3>{{ section.label }}</h3>
+					</header>
+					<div
+						v-if="viewAsFields && section.columns.some((column) => column.length)"
+						class="form-section__columns form-section__columns--read"
+					>
+						<div
+							v-for="(column, columnIndex) in section.columns"
+							:key="columnIndex"
+							class="form-section__column"
+						>
+							<FormField
+								v-for="field in column"
+								:key="field.fieldname"
+								:field="field"
+								:model-value="form[field.fieldname]"
+								:form="form"
+								disabled
+								:required="isRequired(field)"
+								:show-open-button="false"
+							/>
+						</div>
+					</div>
+					<div v-else-if="sectionFields(section).length" class="view-field-grid">
+						<div
+							v-for="field in sectionFields(section)"
+							:key="field.fieldname"
+							class="view-field"
+						>
+							<a
+								v-if="field.fieldtype === 'Link' && hasValue(form[field.fieldname])"
+								class="view-field__value view-field__link"
+								:href="deskDocumentUrl(field.options, form[field.fieldname])"
+								target="_blank"
+								rel="noopener"
+							>
+								{{ displayValue(form[field.fieldname], field) }}
+							</a>
+							<span v-else class="view-field__value">
+								{{ displayValue(form[field.fieldname], field) }}
+							</span>
+							<span class="view-field__label">{{ field.label || field.fieldname }}</span>
+						</div>
+					</div>
+
+					<section v-for="table in section.tables" :key="table.fieldname" class="view-table">
+						<header>
+							<h4>{{ table.label || table.fieldname }}</h4>
+							<span>{{ (form[table.fieldname] || []).length }} rows</span>
+						</header>
+						<DataTable
+							:value="form[table.fieldname] || []"
+							show-gridlines
+							striped-rows
+							scrollable
+							size="small"
+						>
+							<Column
+								v-for="column in childViewColumns(table)"
+								:key="column.fieldname"
+								:field="column.fieldname"
+								:header="column.label || column.fieldname"
+							>
+								<template #body="{ data }">
+									{{ displayValue(data[column.fieldname], column) }}
+								</template>
+							</Column>
+							<template #empty>
+								<div class="view-table__empty">No rows.</div>
+							</template>
+						</DataTable>
+					</section>
+				</section>
+					</template>
+				</div>
+			</slot>
+		</template>
+	</section>
+</template>
+
+<script setup>
+import Button from "primevue/button"
+import Column from "primevue/column"
+import DataTable from "primevue/datatable"
+import Message from "primevue/message"
+import Skeleton from "primevue/skeleton"
+import { computed, reactive, ref, watch } from "vue"
+
+import { createDoc, getDoc, getMeta, updateDoc } from "../../api/frappe.js"
+import ChildTableField from "./ChildTableField.vue"
+import FormField from "./FormField.vue"
+
+const props = defineProps({
+	doctype: { type: String, required: true },
+	name: { type: String, default: "" },
+	title: { type: String, default: "" },
+	initialValues: { type: Object, default: () => ({}) },
+	readonly: { type: Boolean, default: false },
+	excludeFields: { type: Array, default: () => [] },
+	includeFields: { type: Array, default: () => [] },
+	viewAsFields: { type: Boolean, default: false },
+	compact: { type: Boolean, default: false },
+	showCancel: { type: Boolean, default: false },
+	initialMode: {
+		type: String,
+		default: "auto",
+		validator: (value) => ["auto", "view", "edit"].includes(value),
+	},
+})
+
+const emit = defineEmits(["saved", "loaded", "cancel", "change"])
+
+const noValueFieldtypes = new Set([
+	"Section Break",
+	"Column Break",
+	"Tab Break",
+	"HTML",
+	"Button",
+	"Heading",
+	"Fold",
+	"Image",
+	"Attach Image",
+	"Signature",
+])
+
+const form = reactive({})
+const metas = ref([])
+const loading = ref(false)
+const saving = ref(false)
+const error = ref("")
+const success = ref("")
+const fieldErrors = reactive({})
+const childErrors = reactive({})
+const documentName = ref("")
+const mode = ref("edit")
+let cleanDocument = {}
+let loadSequence = 0
+
+const metaByName = computed(() =>
+	Object.fromEntries(metas.value.filter((meta) => meta?.name).map((meta) => [meta.name, meta])),
+)
+const meta = computed(() => metaByName.value[props.doctype] || metas.value[0] || null)
+const heading = computed(() => props.title || meta.value?.label || props.doctype)
+const requiresPromptName = computed(
+	() => !documentName.value && String(meta.value?.autoname || "").toLowerCase() === "prompt",
+)
+const promptNameField = {
+	fieldname: "name",
+	fieldtype: "Data",
+	label: "Name",
+	reqd: 1,
+}
+const excludedFields = computed(() => new Set(props.excludeFields))
+const includedFields = computed(() => new Set(props.includeFields))
+const layoutFieldtypes = new Set(["Section Break", "Column Break", "Tab Break"])
+
+const visibleFields = computed(() =>
+	(meta.value?.fields || []).filter(
+		(field) =>
+			field.fieldname &&
+			!field.hidden &&
+			!excludedFields.value.has(field.fieldname) &&
+			(!includedFields.value.size ||
+				layoutFieldtypes.has(field.fieldtype) ||
+				includedFields.value.has(field.fieldname)) &&
+			isVisible(field),
+	),
+)
+
+const layout = computed(() => buildLayout(visibleFields.value))
+
+watch(
+	() => [props.doctype, props.name],
+	() => load(),
+	{ immediate: true },
+)
+
+async function load() {
+	const sequence = ++loadSequence
+	loading.value = true
+	error.value = ""
+	success.value = ""
+	clearObject(fieldErrors)
+	clearObject(childErrors)
+	try {
+		const [loadedMetas, document] = await Promise.all([
+			getMeta(props.doctype),
+			props.name ? getDoc(props.doctype, props.name) : Promise.resolve(null),
+		])
+		if (sequence !== loadSequence) return
+		metas.value = loadedMetas
+		documentName.value = document?.name || ""
+		replaceForm(buildInitialValues(loadedMetas, document))
+		cleanDocument = clone(form)
+		mode.value = resolveInitialMode(Boolean(document))
+		emit("loaded", { doc: { ...form }, meta: meta.value })
+	} catch (reason) {
+		if (sequence !== loadSequence) return
+		error.value = reason.message || `Unable to load ${props.doctype}.`
+		replaceForm({})
+	} finally {
+		if (sequence === loadSequence) loading.value = false
+	}
+}
+
+function buildInitialValues(loadedMetas, document) {
+	if (document) return document
+	const parentMeta = loadedMetas.find((row) => row.name === props.doctype) || loadedMetas[0]
+	const values = {}
+	for (const field of parentMeta?.fields || []) {
+		if (!field.fieldname || noValueFieldtypes.has(field.fieldtype)) continue
+		if (["Table", "Table MultiSelect"].includes(field.fieldtype)) {
+			values[field.fieldname] = []
+		} else if (field.default !== undefined && field.default !== null) {
+			values[field.fieldname] = normaliseDefault(field)
+		}
+	}
+	return { ...values, ...props.initialValues }
+}
+
+function normaliseDefault(field) {
+	if (field.fieldtype === "Check") return Number(field.default) ? 1 : 0
+	return field.default
+}
+
+function replaceForm(values) {
+	clearObject(form)
+	Object.assign(form, values || {})
+}
+
+function clone(value) {
+	return JSON.parse(JSON.stringify(value || {}))
+}
+
+function resolveInitialMode(hasDocument) {
+	if (props.readonly) return "view"
+	if (props.initialMode !== "auto") return props.initialMode
+	return hasDocument ? "view" : "edit"
+}
+
+function cancelEditing() {
+	if (!documentName.value) {
+		emit("cancel")
+		return
+	}
+	replaceForm(cleanDocument)
+	clearObject(fieldErrors)
+	clearObject(childErrors)
+	error.value = ""
+	success.value = ""
+	mode.value = "view"
+}
+
+function clearObject(object) {
+	for (const key of Object.keys(object)) delete object[key]
+}
+
+function setValue(fieldname, value) {
+	form[fieldname] = value
+	delete fieldErrors[fieldname]
+	error.value = ""
+	success.value = ""
+	emit("change", { fieldname, value, doc: form })
+}
+
+function isVisible(field) {
+	return evaluateCondition(field.depends_on, true)
+}
+
+function isRequired(field) {
+	return Boolean(field.reqd) || evaluateCondition(field.mandatory_depends_on, false)
+}
+
+function isReadOnly(field) {
+	return Boolean(field.read_only) || evaluateCondition(field.read_only_depends_on, false)
+}
+
+function evaluateCondition(condition, fallback) {
+	if (!condition) return fallback
+	const expression = String(condition).replace(/^eval:/, "").trim()
+	const direct = expression.match(/^!?doc\.([A-Za-z0-9_]+)$/)
+	if (direct) {
+		const value = Boolean(form[direct[1]])
+		return expression.startsWith("!") ? !value : value
+	}
+	const fieldname = expression.match(/^[A-Za-z0-9_]+$/)?.[0]
+	if (fieldname) return Boolean(form[fieldname])
+
+	const comparison = expression.match(
+		/^doc\.([A-Za-z0-9_]+)\s*(===|==|!==|!=)\s*['"]([^'"]*)['"]$/,
+	)
+	if (comparison) {
+		const matches = String(form[comparison[1]] ?? "") === comparison[3]
+		return ["!=", "!=="].includes(comparison[2]) ? !matches : matches
+	}
+	return fallback
+}
+
+function buildLayout(fields) {
+	const tabs = []
+	let tab = createTab("", "main")
+	let section = createSection("", "main-section")
+	let column = section.columns[0]
+	tab.sections.push(section)
+	tabs.push(tab)
+
+	for (const field of fields) {
+		if (field.fieldtype === "Tab Break") {
+			tab = createTab(field.label || "Details", field.fieldname)
+			section = createSection("", `${field.fieldname}-section`)
+			column = section.columns[0]
+			tab.sections.push(section)
+			tabs.push(tab)
+			continue
+		}
+		if (field.fieldtype === "Section Break") {
+			section = createSection(field.label || "", field.fieldname)
+			column = section.columns[0]
+			tab.sections.push(section)
+			continue
+		}
+		if (field.fieldtype === "Column Break") {
+			column = []
+			section.columns.push(column)
+			continue
+		}
+		if (["Table", "Table MultiSelect"].includes(field.fieldtype)) {
+			section.tables.push(field)
+			continue
+		}
+		if (!noValueFieldtypes.has(field.fieldtype)) column.push(field)
+	}
+
+	return tabs
+		.map((currentTab) => ({
+			...currentTab,
+			sections: currentTab.sections.filter(
+				(currentSection) =>
+					currentSection.tables.length || currentSection.columns.some((fieldsInColumn) => fieldsInColumn.length),
+			),
+		}))
+		.filter((currentTab) => currentTab.sections.length)
+}
+
+function createTab(label, key) {
+	return { label, key, sections: [] }
+}
+
+function createSection(label, key) {
+	return { label, key, columns: [[]], tables: [] }
+}
+
+function sectionFields(section) {
+	return section.columns.flat()
+}
+
+function childViewColumns(table) {
+	const fields = (metaByName.value[table.options]?.fields || []).filter(
+		(field) => field.fieldname && !field.hidden && !noValueFieldtypes.has(field.fieldtype),
+	)
+	const preferred = fields.filter((field) => field.in_list_view || field.reqd)
+	return preferred.length ? preferred : fields.slice(0, 6)
+}
+
+function displayValue(value, field) {
+	if (value === null || value === undefined || value === "") return "—"
+	if (field.fieldtype === "Check") return Number(value) ? "Yes" : "No"
+	if (Array.isArray(value)) return value.join(", ")
+	if (typeof value === "object") return JSON.stringify(value)
+	return value
+}
+
+function deskDocumentUrl(doctype, name) {
+	const slug = String(doctype || "").toLowerCase().replaceAll(" ", "-")
+	return `/app/${encodeURIComponent(slug)}/${encodeURIComponent(name)}`
+}
+
+function validate() {
+	clearObject(fieldErrors)
+	clearObject(childErrors)
+	if (requiresPromptName.value && !hasValue(form.name)) fieldErrors.name = "Name is required."
+
+	for (const field of visibleFields.value) {
+		if (["Table", "Table MultiSelect"].includes(field.fieldtype)) {
+			validateChildTable(field)
+			continue
+		}
+		if (noValueFieldtypes.has(field.fieldtype) || !isRequired(field)) continue
+		if (!hasValue(form[field.fieldname])) {
+			fieldErrors[field.fieldname] = `${field.label || field.fieldname} is required.`
+		}
+	}
+	return !Object.keys(fieldErrors).length && !Object.keys(childErrors).length
+}
+
+function validateChildTable(table) {
+	const rows = form[table.fieldname] || []
+	if (isRequired(table) && !rows.length) {
+		fieldErrors[table.fieldname] = `${table.label || table.fieldname} requires at least one row.`
+		return
+	}
+	const errors = {}
+	const childMeta = metaByName.value[table.options]
+	for (const [rowIndex, row] of rows.entries()) {
+		for (const field of childMeta?.fields || []) {
+			if (!field.fieldname || field.hidden || !field.reqd || noValueFieldtypes.has(field.fieldtype)) continue
+			if (!hasValue(row[field.fieldname])) {
+				errors[`${rowIndex}.${field.fieldname}`] = `${field.label || field.fieldname} is required.`
+			}
+		}
+	}
+	if (Object.keys(errors).length) childErrors[table.fieldname] = errors
+}
+
+function hasValue(value) {
+	return value !== null && value !== undefined && value !== ""
+}
+
+function payload() {
+	const values = {}
+	for (const field of meta.value?.fields || []) {
+		if (!field.fieldname || noValueFieldtypes.has(field.fieldtype)) continue
+		if (Object.hasOwn(form, field.fieldname)) values[field.fieldname] = form[field.fieldname]
+	}
+	if (requiresPromptName.value && form.name) values.name = form.name
+	return values
+}
+
+async function save() {
+	if (loading.value || saving.value || props.readonly) return
+	error.value = ""
+	success.value = ""
+	if (!validate()) {
+		error.value = "Complete the required fields before saving."
+		return
+	}
+
+	saving.value = true
+	try {
+		const saved = documentName.value
+			? await updateDoc(props.doctype, documentName.value, payload())
+			: await createDoc(props.doctype, payload())
+		documentName.value = saved?.name || documentName.value
+		replaceForm(saved || form)
+		cleanDocument = clone(form)
+		mode.value = "view"
+		success.value = `${props.doctype} ${documentName.value || "document"} saved.`
+		emit("saved", saved)
+	} catch (reason) {
+		error.value = reason.message || `Unable to save ${props.doctype}.`
+	} finally {
+		saving.value = false
+	}
+}
+
+defineExpose({ save, reload: load, doc: form, mode })
+</script>
+
+<style scoped>
+.common-form-view {
+	display: grid;
+	gap: 16px;
+}
+
+.common-form-view--compact {
+	gap: 10px;
+}
+
+.form-toolbar,
+.form-toolbar__actions,
+.form-section__header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.form-toolbar h2 {
+	margin: 0;
+	font-size: 1.2rem;
+}
+
+.form-toolbar__identity {
+	display: grid;
+	gap: 2px;
+}
+
+.form-toolbar__meta {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 20px;
+}
+
+.form-toolbar small {
+	color: #77827c;
+}
+
+.form-loading {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 16px;
+}
+
+.form-body,
+.form-read-view {
+	display: grid;
+	gap: 14px;
+}
+
+.form-tab-title {
+	margin: 12px 0 0;
+	padding-bottom: 8px;
+	font-size: 1rem;
+	color: #397654;
+	border-bottom: 2px solid #dce9e1;
+}
+
+.form-section {
+	display: grid;
+	gap: 18px;
+	padding: 18px;
+	background: #fff;
+	border: 1px solid #e1e7e3;
+	border-radius: 14px;
+}
+
+.form-section__header h3 {
+	margin: 0;
+	font-size: 0.95rem;
+}
+
+.form-section__columns {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+	gap: 22px;
+}
+
+.form-section__column {
+	display: grid;
+	align-content: start;
+	gap: 16px;
+	min-width: 0;
+}
+
+.common-form-view--compact .form-body,
+.common-form-view--compact .form-read-view {
+	gap: 10px;
+}
+
+.common-form-view--compact .form-section {
+	gap: 12px;
+	padding: 14px 16px;
+}
+
+.common-form-view--compact .form-section__columns {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 28px;
+}
+
+.common-form-view--compact .form-section__column {
+	gap: 12px;
+}
+
+.common-form-view--compact :deep(.form-field) {
+	gap: 4px;
+}
+
+.common-form-view--compact :deep(.p-inputtext),
+.common-form-view--compact :deep(.p-inputnumber-input),
+.common-form-view--compact :deep(.p-select-label) {
+	min-height: 34px;
+	padding-block: 6px;
+}
+
+.view-field-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1px;
+	overflow: hidden;
+	background: #e6ebe8;
+	border: 1px solid #e6ebe8;
+	border-radius: 10px;
+}
+
+.view-field {
+	display: flex;
+	min-height: 74px;
+	padding: 13px 15px;
+	background: #fff;
+	flex-direction: column;
+	justify-content: center;
+}
+
+.view-field__value {
+	color: #1c2a22;
+	font-size: 0.94rem;
+	font-weight: 650;
+	overflow-wrap: anywhere;
+}
+
+.view-field__link {
+	color: #2f7652;
+	text-decoration: none;
+}
+
+.view-field__link:hover {
+	text-decoration: underline;
+}
+
+.view-field__label {
+	margin-top: 5px;
+	color: #77827c;
+	font-size: 0.7rem;
+	font-weight: 650;
+	letter-spacing: 0.035em;
+	text-transform: uppercase;
+}
+
+.view-table {
+	display: grid;
+	gap: 10px;
+}
+
+.view-table > header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.view-table h4 {
+	margin: 0;
+	font-size: 0.9rem;
+}
+
+.view-table header span {
+	color: #77827c;
+	font-size: 0.72rem;
+}
+
+.view-table__empty {
+	padding: 22px;
+	color: #77827c;
+	text-align: center;
+}
+
+@media (max-width: 700px) {
+	.form-toolbar {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.form-toolbar__actions {
+		width: 100%;
+		justify-content: flex-end;
+	}
+
+	.form-loading,
+	.form-section__columns,
+	.view-field-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.common-form-view--compact .form-section__columns {
+		grid-template-columns: 1fr;
+	}
+
+	.form-section {
+		padding: 14px;
+	}
+}
+</style>

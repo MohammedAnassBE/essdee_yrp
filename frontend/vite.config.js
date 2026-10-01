@@ -1,28 +1,10 @@
-import { defineConfig, searchForWorkspaceRoot } from "vite"
 import vue from "@vitejs/plugin-vue"
-import path from "path"
-import fs from "fs"
+import { defineConfig } from "vite"
 
 export default defineConfig({
+	plugins: [vue()],
 	server: {
 		port: 8082,
-		proxy: getProxyOptions(),
-		fs: {
-			// Absolute paths only — a bare relative fs.allow replaces Vite's
-			// default allow-list and can 403 src/ itself in dev (spec §6.2).
-			allow: [
-				searchForWorkspaceRoot(process.cwd()), // keep default root
-				path.resolve(__dirname, "../essdee_yrp/fixtures"), // fixture JSON import (spec §12.3)
-			],
-		},
-	},
-	plugins: [vue()],
-	resolve: {
-		alias: {
-			"@": path.resolve(__dirname, "src"),
-		},
-		// Keep one Vue/Pinia instance across the host and its local UI engine.
-		dedupe: ["vue", "pinia"],
 	},
 	build: {
 		outDir: "../essdee_yrp/public/frontend",
@@ -30,9 +12,6 @@ export default defineConfig({
 		target: "es2015",
 		rollupOptions: {
 			output: {
-				// Distinct entry prefix ("essdee-") so web.py can glob the entry
-				// unambiguously — Vite may emit a vendor chunk literally named
-				// "index", which would otherwise also match index-*.js.
 				entryFileNames: "assets/essdee-[hash].js",
 				chunkFileNames: "assets/[name]-[hash].js",
 				assetFileNames: "assets/[name]-[hash].[ext]",
@@ -40,36 +19,3 @@ export default defineConfig({
 		},
 	},
 })
-
-function getProxyOptions() {
-	const config = getCommonSiteConfig()
-	const webserver_port = config ? config.webserver_port : 8000
-	return {
-		"^/(app|login|api|assets|files|private)": {
-			target: `http://127.0.0.1:${webserver_port}`,
-			ws: true,
-			router: function (req) {
-				const site_name = req.headers.host.split(":")[0]
-				return `http://${site_name}:${webserver_port}`
-			},
-		},
-	}
-}
-
-function getCommonSiteConfig() {
-	let currentDir = path.resolve(".")
-	while (currentDir !== "/") {
-		if (
-			fs.existsSync(path.join(currentDir, "sites")) &&
-			fs.existsSync(path.join(currentDir, "apps"))
-		) {
-			let configPath = path.join(currentDir, "sites", "common_site_config.json")
-			if (fs.existsSync(configPath)) {
-				return JSON.parse(fs.readFileSync(configPath))
-			}
-			return null
-		}
-		currentDir = path.resolve(currentDir, "..")
-	}
-	return null
-}

@@ -1,18 +1,9 @@
 <template>
-	<Toast position="top-right" />
-	<ConfirmDialog />
-	<router-view />
+	<div class="app-shell">
+		<RouterView />
+	</div>
 </template>
 
 <script setup>
-import Toast from "primevue/toast"
-import ConfirmDialog from "primevue/confirmdialog"
+import { RouterView } from "vue-router"
 </script>
-
-<!-- Global (unscoped): Q19 placed the toast top-right; offset it below the 56px
-     topbar so a visible toast never overlaps the role chip + logout button. -->
-<style>
-.p-toast.p-toast-top-right {
-	top: 68px;
-}
-</style>

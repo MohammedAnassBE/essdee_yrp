@@ -638,7 +638,7 @@ defineExpose({ save, reload: load, doc: form, mode })
 	padding: 18px;
 	background: #fff;
 	border: 1px solid #e1e7e3;
-	border-radius: 14px;
+	border-radius: var(--erp-panel-radius);
 }
 
 .form-section__header h3 {
@@ -696,7 +696,7 @@ defineExpose({ save, reload: load, doc: form, mode })
 	overflow: hidden;
 	background: #e6ebe8;
 	border: 1px solid #e6ebe8;
-	border-radius: 10px;
+	border-radius: var(--erp-panel-radius);
 }
 
 .view-field {

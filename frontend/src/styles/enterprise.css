@@ -128,7 +128,7 @@
 	height: 20px;
 	padding: 0 7px;
 	color: #406154;
-	font-size: 0.68rem;
+	font-size: var(--erp-font-size-min);
 	font-weight: 750;
 	background: var(--erp-mint);
 	border: 1px solid #d7ebe0;
@@ -179,13 +179,13 @@
 .erp-data-table {
 	width: 100%;
 	border-collapse: collapse;
-	font-size: 0.78rem;
+	font-size: 13px;
 }
 
 .erp-data-table th {
 	padding: 9px 10px;
 	color: #53665d;
-	font-size: 0.67rem;
+	font-size: var(--erp-font-size-min);
 	font-weight: 800;
 	letter-spacing: 0.025em;
 	text-align: left;
@@ -221,7 +221,7 @@
 	min-height: 22px;
 	padding: 2px 8px;
 	color: #3b5a4c;
-	font-size: 0.67rem;
+	font-size: var(--erp-font-size-min);
 	font-weight: 800;
 	background: #edf3f0;
 	border-radius: var(--erp-pill-radius);
@@ -285,7 +285,7 @@
 	display: block;
 	margin-top: 5px;
 	color: var(--erp-text-muted);
-	font-size: 0.68rem;
+	font-size: var(--erp-font-size-min);
 	line-height: 1.35;
 }
 
@@ -311,6 +311,121 @@
 :where(button, a, input, select, textarea, [tabindex]):focus-visible {
 	outline: 2px solid color-mix(in srgb, var(--erp-accent) 70%, white);
 	outline-offset: 2px;
+}
+
+.app-shell .p-button {
+	min-height: var(--erp-control-height);
+	border-radius: var(--erp-control-radius);
+	font-family: var(--erp-font-family);
+	font-size: 13px;
+	font-weight: 650;
+	transition:
+		background var(--erp-transition-fast),
+		border-color var(--erp-transition-fast),
+		box-shadow var(--erp-transition-fast),
+		color var(--erp-transition-fast),
+		transform var(--erp-transition-fast);
+}
+
+.app-shell .p-button:not(:disabled):active {
+	transform: translateY(1px);
+}
+
+.app-shell .p-button.p-button-sm {
+	min-height: var(--erp-control-height-compact);
+	font-size: var(--erp-font-size-caption);
+}
+
+.app-shell :where(
+	.p-inputtext,
+	.p-inputnumber-input,
+	.p-select,
+	.p-multiselect,
+	.p-autocomplete-input,
+	.p-datepicker-input
+) {
+	min-height: var(--erp-control-height);
+	color: var(--erp-text);
+	font-family: var(--erp-font-family);
+	font-size: 13px;
+	background: var(--erp-surface);
+	border-color: var(--erp-border-strong);
+	border-radius: var(--erp-control-radius);
+	box-shadow: none;
+}
+
+.app-shell :where(.p-inputtext, .p-inputnumber-input, .p-autocomplete-input, .p-datepicker-input)::placeholder {
+	color: #76867e;
+	opacity: 1;
+}
+
+.app-shell :where(
+	.p-inputtext:focus,
+	.p-inputnumber:focus-within .p-inputnumber-input,
+	.p-select.p-focus,
+	.p-multiselect.p-focus,
+	.p-autocomplete:focus-within .p-autocomplete-input,
+	.p-datepicker:focus-within .p-datepicker-input
+) {
+	border-color: var(--erp-accent);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--erp-accent) 14%, transparent);
+}
+
+.app-shell :where(.p-select-label, .p-multiselect-label) {
+	display: flex;
+	align-items: center;
+	min-height: calc(var(--erp-control-height) - 2px);
+	padding-block: 6px;
+}
+
+.app-shell .p-message {
+	border-radius: var(--erp-control-radius);
+	font-size: 13px;
+}
+
+.app-shell .p-tag,
+.p-dialog .p-tag {
+	min-height: 22px;
+	font-size: var(--erp-font-size-min);
+	font-weight: 750;
+}
+
+.p-dialog {
+	overflow: hidden;
+	color: var(--erp-text);
+	font-family: var(--erp-font-family);
+	background: var(--erp-surface);
+	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-panel-radius);
+	box-shadow: var(--erp-shadow-dialog);
+}
+
+.p-dialog .p-dialog-header {
+	padding: 16px 18px 12px;
+	border-bottom: 1px solid var(--erp-border);
+}
+
+.p-dialog .p-dialog-title {
+	font-size: 17px;
+	font-weight: 720;
+	letter-spacing: -0.015em;
+}
+
+.p-dialog .p-dialog-content {
+	padding: 16px 18px;
+}
+
+.p-dialog .p-dialog-footer {
+	padding: 12px 18px 16px;
+	border-top: 1px solid var(--erp-border);
+}
+
+:where(.p-select-overlay, .p-autocomplete-overlay, .p-multiselect-overlay, .p-datepicker-panel) {
+	font-family: var(--erp-font-family);
+	font-size: 13px;
+	border-color: var(--erp-border);
+	border-radius: var(--erp-control-radius);
+	box-shadow: var(--erp-shadow-card);
 }
 
 @media (max-width: 760px) {

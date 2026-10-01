@@ -338,7 +338,7 @@ async function reset() {
 .column-section-head > span {
 	padding: 4px 8px;
 	color: var(--column-accent-dark);
-	font-size: 0.68rem;
+	font-size: var(--erp-font-size-min);
 	font-weight: 750;
 	background: var(--column-accent-soft);
 	border-radius: 999px;
@@ -491,7 +491,7 @@ async function reset() {
 .column-position {
 	color: #93a199;
 	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-	font-size: 0.67rem;
+	font-size: var(--erp-font-size-min);
 	font-weight: 750;
 	text-align: center;
 }
@@ -538,7 +538,7 @@ async function reset() {
 
 .column-empty span,
 .column-empty.compact {
-	font-size: 0.72rem;
+	font-size: var(--erp-font-size-caption);
 }
 
 .column-empty.compact {

@@ -144,21 +144,17 @@ function linkFilters(field) {
 <style scoped>
 .quick-filters {
 	display: grid;
-	gap: 10px;
-	padding: 14px 16px 15px;
-	background:
-		linear-gradient(135deg, color-mix(in srgb, var(--list-accent) 4%, white), rgb(255 255 255 / 96%));
-	border: 1px solid #dce6e1;
-	border-radius: 16px;
-	box-shadow:
-		inset 0 1px rgb(255 255 255 / 80%),
-		0 8px 24px rgb(24 53 39 / 5%);
+	gap: 8px;
+	padding: 12px;
+	background: var(--erp-surface-soft);
+	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-control-radius);
 }
 
 .quick-filters__grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-	gap: 12px;
+	gap: 10px;
 }
 
 .quick-filter-field {
@@ -169,23 +165,19 @@ function linkFilters(field) {
 
 .quick-filter-field > label {
 	color: #506159;
-	font-size: 0.7rem;
-	font-weight: 800;
-	letter-spacing: 0.055em;
-	text-transform: uppercase;
+	font-size: var(--erp-font-size-caption);
+	font-weight: 650;
 }
 
 .quick-filter-field :deep(.p-inputtext),
 .quick-filter-field :deep(.p-select),
 .quick-filter-field :deep(.p-autocomplete-input),
 .quick-filter-field :deep(.p-inputnumber-input) {
-	height: 40px;
-	background: rgb(255 255 255 / 94%);
-	border-color: #d6e1dc;
-	border-radius: 10px;
-	box-shadow:
-		inset 0 1px 1px rgb(15 23 42 / 2%),
-		0 1px 2px rgb(15 23 42 / 2%);
+	height: var(--erp-control-height);
+	background: var(--erp-surface);
+	border-color: var(--erp-border-strong);
+	border-radius: var(--erp-control-radius);
+	box-shadow: none;
 	transition:
 		border-color 160ms ease,
 		box-shadow 160ms ease;

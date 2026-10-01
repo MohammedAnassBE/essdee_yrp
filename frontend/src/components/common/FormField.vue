@@ -224,9 +224,9 @@ function parseLinkFilters(value) {
 }
 
 .form-field__label {
-	font-size: 0.8rem;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-caption);
 	font-weight: 650;
-	color: #34413a;
 }
 
 .form-field__required,
@@ -236,11 +236,11 @@ function parseLinkFilters(value) {
 
 .form-field__description,
 .form-field__error {
-	font-size: 0.74rem;
+	font-size: var(--erp-font-size-min);
 	line-height: 1.35;
 }
 
 .form-field__description {
-	color: #77827c;
+	color: var(--erp-text-muted);
 }
 </style>

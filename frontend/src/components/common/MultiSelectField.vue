@@ -52,13 +52,13 @@ defineEmits(["update:modelValue", "change"])
 }
 
 .common-field__label {
-	font-size: 0.8rem;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-caption);
 	font-weight: 650;
-	color: #34413a;
 }
 
 .common-field__help {
-	font-size: 0.75rem;
-	color: #77827c;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
 }
 </style>

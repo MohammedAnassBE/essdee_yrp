@@ -136,7 +136,11 @@
 		</div>
 
 		<div class="list-table-frame">
+			<div v-if="loading && !rows.length" class="list-loading" aria-label="Loading records">
+				<Skeleton v-for="index in 6" :key="index" class="list-loading-skeleton" height="42px" />
+			</div>
 			<DataTable
+				v-else
 				:value="rows"
 				v-model:selection="selectedRows"
 				:loading="loading"
@@ -163,6 +167,8 @@
 					:key="column.fieldname"
 					:field="column.fieldname"
 					:header="columnLabel(column)"
+					:header-class="isNumericColumn(column) ? 'list-number-column' : ''"
+					:body-class="isNumericColumn(column) ? 'list-number-column' : ''"
 					sortable
 				>
 					<template #body="{ data }">
@@ -309,6 +315,7 @@ import InputText from "primevue/inputtext"
 import Message from "primevue/message"
 import Paginator from "primevue/paginator"
 import Select from "primevue/select"
+import Skeleton from "primevue/skeleton"
 import { computed, onBeforeUnmount, ref, watch } from "vue"
 
 import {
@@ -1053,6 +1060,10 @@ function columnLabel(column) {
 	return props.columnLabels[column.fieldname] || column.label
 }
 
+function isNumericColumn(column) {
+	return ["Int", "Float", "Currency", "Percent"].includes(column?.fieldtype)
+}
+
 watch(search, () => {
 	if (searchTimer) clearTimeout(searchTimer)
 	searchTimer = setTimeout(() => {
@@ -1071,58 +1082,43 @@ defineExpose({ refresh: reload })
 
 <style scoped>
 .common-list-view {
-	--list-accent: var(--accent, #0d9488);
-	--list-accent-dark: color-mix(in srgb, var(--list-accent) 72%, #17211c);
+	--list-accent: var(--erp-accent);
+	--list-accent-dark: var(--erp-accent-hover);
 	--list-accent-soft: color-mix(in srgb, var(--list-accent) 9%, white);
-	--list-ink: #0f172a;
-	--list-muted: #64748b;
-	--list-line: #dfe7e3;
-	--list-surface: #fff;
+	--list-ink: var(--erp-text);
+	--list-muted: var(--erp-text-muted);
+	--list-line: var(--erp-border);
+	--list-surface: var(--erp-surface);
 
 	display: grid;
-	gap: 14px;
+	gap: 12px;
 	width: 100%;
-	padding: 18px;
-	background:
-		radial-gradient(circle at 4% 0%, color-mix(in srgb, var(--list-accent) 9%, transparent), transparent 23rem),
-		linear-gradient(145deg, rgb(255 255 255 / 98%), rgb(249 251 250 / 96%));
-	border: 1px solid rgb(210 221 215 / 86%);
-	border-radius: 24px;
-	box-shadow:
-		0 2px 5px rgb(15 23 42 / 3%),
-		0 24px 70px rgb(24 53 39 / 8%);
+	padding: 14px;
+	background: var(--list-surface);
+	border: 1px solid var(--list-line);
+	border-radius: var(--erp-panel-radius);
+	box-shadow: var(--erp-shadow-card);
 }
 
 .list-page-head {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 24px;
-	padding: 0 2px 2px;
+	gap: 16px;
+	padding: 0;
 }
 
 .list-title-block {
-	position: relative;
 	display: grid;
-	gap: 4px;
-	padding-left: 15px;
+	gap: 2px;
+	min-width: 160px;
 }
 
-.list-title-block::before {
-	position: absolute;
-	top: 3px;
-	bottom: 3px;
-	left: 0;
-	width: 4px;
-	background: linear-gradient(180deg, var(--list-accent), color-mix(in srgb, var(--list-accent) 48%, white));
-	border-radius: 999px;
-	box-shadow: 0 4px 14px color-mix(in srgb, var(--list-accent) 24%, transparent);
-	content: "";
-}
+.list-title-block::before { content: none; }
 
 .list-eyebrow {
 	color: var(--list-accent-dark);
-	font-size: 0.68rem;
+	font-size: var(--erp-font-size-min);
 	font-weight: 800;
 	letter-spacing: 0.13em;
 	text-transform: uppercase;
@@ -1131,10 +1127,10 @@ defineExpose({ refresh: reload })
 .list-title-block h2 {
 	margin: 0;
 	color: var(--list-ink);
-	font-size: clamp(1.65rem, 2.3vw, 2.08rem);
-	font-weight: 760;
-	letter-spacing: -0.035em;
-	line-height: 1.05;
+	font-size: 1.45rem;
+	font-weight: 740;
+	letter-spacing: -0.025em;
+	line-height: var(--erp-line-height-tight);
 }
 
 .list-title-block p {
@@ -1149,14 +1145,7 @@ defineExpose({ refresh: reload })
 	gap: 6px;
 	flex-wrap: wrap;
 	justify-content: flex-end;
-	padding: 5px;
-	background: rgb(255 255 255 / 80%);
-	border: 1px solid rgb(218 227 222 / 90%);
-	border-radius: 15px;
-	box-shadow:
-		0 1px 2px rgb(15 23 42 / 3%),
-		0 8px 24px rgb(24 53 39 / 5%);
-	backdrop-filter: blur(12px);
+	padding: 0;
 }
 
 .list-search {
@@ -1168,20 +1157,20 @@ defineExpose({ refresh: reload })
 
 .list-search > i {
 	position: absolute;
-	left: 12px;
+	left: 11px;
 	z-index: 1;
 	color: color-mix(in srgb, var(--list-accent) 55%, #94a3b8);
-	transition: color 160ms ease;
+	transition: color var(--erp-transition-fast);
 }
 
 .list-search :deep(input) {
 	width: min(278px, 27vw);
-	height: 40px;
+	height: var(--erp-control-height);
 	padding-left: 34px;
 	background: var(--list-surface);
 	border-color: var(--list-line);
-	border-radius: 10px;
-	box-shadow: inset 0 1px 1px rgb(15 23 42 / 2%);
+	border-radius: var(--erp-control-radius);
+	box-shadow: none;
 	transition:
 		border-color 160ms ease,
 		box-shadow 160ms ease;
@@ -1197,12 +1186,13 @@ defineExpose({ refresh: reload })
 }
 
 .list-toolbar__actions :deep(.p-button) {
-	min-height: 40px;
+	height: var(--erp-control-height);
+	min-height: var(--erp-control-height);
 	background: #fff;
 	border-color: var(--list-line);
-	border-radius: 10px;
+	border-radius: var(--erp-control-radius);
 	font-weight: 650;
-	box-shadow: 0 1px 2px rgb(15 23 42 / 2%);
+	box-shadow: none;
 	transition:
 		transform 150ms ease,
 		border-color 150ms ease,
@@ -1213,8 +1203,7 @@ defineExpose({ refresh: reload })
 .list-toolbar__actions :deep(.p-button:not(:disabled):hover) {
 	background: var(--list-accent-soft);
 	border-color: color-mix(in srgb, var(--list-accent) 34%, white);
-	box-shadow: 0 6px 16px rgb(24 53 39 / 8%);
-	transform: translateY(-1px);
+	box-shadow: 0 3px 10px rgb(24 53 39 / 7%);
 }
 
 .list-toolbar__actions :deep(.p-button:disabled) {
@@ -1237,10 +1226,9 @@ defineExpose({ refresh: reload })
 	justify-content: space-between;
 	gap: 12px;
 	padding: 11px 14px;
-	background: linear-gradient(135deg, var(--list-accent-soft), #fff);
+	background: var(--list-accent-soft);
 	border: 1px solid color-mix(in srgb, var(--list-accent) 25%, white);
-	border-radius: 14px;
-	box-shadow: 0 8px 22px color-mix(in srgb, var(--list-accent) 8%, transparent);
+	border-radius: var(--erp-control-radius);
 }
 
 .bulk-bar__summary,
@@ -1259,11 +1247,11 @@ defineExpose({ refresh: reload })
 .bulk-bar__summary span {
 	padding: 3px 7px;
 	color: var(--list-muted);
-	font-size: 0.68rem;
+	font-size: var(--erp-font-size-min);
 	font-weight: 700;
 	background: #fff;
 	border: 1px solid #dbe8e6;
-	border-radius: 999px;
+	border-radius: var(--erp-pill-radius);
 }
 
 .bulk-edit-form {
@@ -1308,12 +1296,9 @@ defineExpose({ refresh: reload })
 	gap: 5px;
 	overflow-x: auto;
 	padding: 6px;
-	background: linear-gradient(180deg, rgb(255 255 255 / 96%), #f9fbfa);
+	background: var(--erp-surface-soft);
 	border: 1px solid var(--list-line);
-	border-radius: 15px;
-	box-shadow:
-		0 1px 2px rgb(15 23 42 / 3%),
-		0 8px 24px rgb(24 53 39 / 4%);
+	border-radius: var(--erp-control-radius);
 	scrollbar-width: none;
 }
 
@@ -1334,7 +1319,7 @@ defineExpose({ refresh: reload })
 	font-weight: 660;
 	background: transparent;
 	border: 1px solid transparent;
-	border-radius: 10px;
+	border-radius: 7px;
 	cursor: pointer;
 	transition:
 		color 150ms ease,
@@ -1354,11 +1339,9 @@ defineExpose({ refresh: reload })
 
 .list-status-tab--active {
 	color: var(--list-accent-dark);
-	background: linear-gradient(145deg, color-mix(in srgb, var(--list-accent) 14%, white), #fff);
+	background: var(--erp-surface);
 	border-color: color-mix(in srgb, var(--list-accent) 34%, white);
-	box-shadow:
-		inset 0 0 0 1px rgb(255 255 255 / 58%),
-		0 5px 14px color-mix(in srgb, var(--list-accent) 10%, transparent);
+	box-shadow: 0 2px 8px color-mix(in srgb, var(--list-accent) 8%, transparent);
 }
 
 .list-status-tab__dot {
@@ -1388,11 +1371,11 @@ defineExpose({ refresh: reload })
 	min-width: 22px;
 	padding: 1px 6px;
 	color: #64748b;
-	font-size: 0.66rem;
+	font-size: var(--erp-font-size-min);
 	font-weight: 750;
 	text-align: center;
 	background: #f1f5f9;
-	border-radius: 999px;
+	border-radius: var(--erp-pill-radius);
 }
 
 .list-status-tab--active .list-status-tab__count {
@@ -1404,11 +1387,18 @@ defineExpose({ refresh: reload })
 	overflow: hidden;
 	background: var(--list-surface);
 	border: 1px solid #d9e3de;
-	border-top-color: color-mix(in srgb, var(--list-accent) 36%, #d9e3de);
-	border-radius: 18px;
-	box-shadow:
-		0 1px 3px rgb(15 23 42 / 4%),
-		0 16px 42px rgb(24 53 39 / 8%);
+	border-radius: var(--erp-panel-radius);
+}
+
+.list-loading {
+	display: grid;
+	gap: 1px;
+	padding: 1px;
+	background: var(--erp-border);
+}
+
+.list-loading-skeleton {
+	border-radius: 0;
 }
 
 :deep(.premium-list-table .p-datatable-table) {
@@ -1417,13 +1407,16 @@ defineExpose({ refresh: reload })
 }
 
 :deep(.premium-list-table .p-datatable-thead > tr > th) {
-	padding: 13px 16px;
+	position: sticky;
+	top: 0;
+	z-index: var(--erp-layer-sticky);
+	padding: 9px 12px;
 	color: #596b62;
-	font-size: 0.68rem;
+	font-size: var(--erp-font-size-min);
 	font-weight: 820;
 	letter-spacing: 0.075em;
 	text-transform: uppercase;
-	background: linear-gradient(180deg, #f8fbf9, #f2f6f4);
+	background: var(--erp-surface-muted);
 	border: 0;
 	border-bottom: 1px solid #dbe5e0;
 }
@@ -1440,9 +1433,9 @@ defineExpose({ refresh: reload })
 }
 
 :deep(.premium-list-table .p-datatable-tbody > tr > td) {
-	padding: 14px 16px;
+	padding: 10px 12px;
 	color: #334155;
-	font-size: 0.81rem;
+	font-size: 13px;
 	border: 0;
 	border-bottom: 1px solid #e8efeb;
 }
@@ -1487,10 +1480,10 @@ defineExpose({ refresh: reload })
 	width: 34px;
 	height: 30px;
 	color: #fff;
-	font-size: 0.61rem;
+	font-size: var(--erp-font-size-min);
 	font-weight: 850;
 	letter-spacing: 0.05em;
-	background: linear-gradient(145deg, var(--list-accent), var(--list-accent-dark));
+	background: var(--list-accent);
 	border: 1px solid color-mix(in srgb, var(--list-accent) 74%, black);
 	border-radius: 9px;
 	box-shadow: 0 5px 12px color-mix(in srgb, var(--list-accent) 22%, transparent);
@@ -1498,10 +1491,24 @@ defineExpose({ refresh: reload })
 }
 
 .list-document-cell strong {
+	display: block;
+	overflow: hidden;
+	max-width: min(26vw, 280px);
 	color: var(--list-ink);
 	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-	font-size: 0.79rem;
+	font-size: 13px;
 	font-weight: 740;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.list-link-value,
+.list-plain-value {
+	display: block;
+	overflow: hidden;
+	max-width: min(30vw, 340px);
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .list-link-value {
@@ -1519,6 +1526,11 @@ defineExpose({ refresh: reload })
 
 .list-plain-value {
 	color: #475569;
+}
+
+:deep(.list-number-column) {
+	font-variant-numeric: tabular-nums;
+	text-align: right !important;
 }
 
 .list-chevron-column {
@@ -1576,10 +1588,9 @@ defineExpose({ refresh: reload })
 	max-width: 100%;
 	margin: 0 auto;
 	padding: 6px;
-	background: rgb(255 255 255 / 88%);
+	background: var(--erp-surface);
 	border: 1px solid var(--list-line);
-	border-radius: 13px;
-	box-shadow: 0 6px 18px rgb(24 53 39 / 5%);
+	border-radius: var(--erp-control-radius);
 }
 
 :deep(.p-paginator-page),
@@ -1636,7 +1647,7 @@ defineExpose({ refresh: reload })
 @media (max-width: 850px) {
 	.common-list-view {
 		padding: 14px;
-		border-radius: 18px;
+		border-radius: var(--erp-panel-radius);
 	}
 
 	.list-page-head,

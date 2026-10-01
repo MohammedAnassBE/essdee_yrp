@@ -221,6 +221,6 @@ defineExpose({ focus })
 
 .link-field__option small {
 	color: #7b877f;
-	font-size: 0.67rem;
+	font-size: var(--erp-font-size-min);
 }
 </style>

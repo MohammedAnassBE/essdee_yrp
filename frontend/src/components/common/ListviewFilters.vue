@@ -633,20 +633,20 @@ function apply() {
 	gap: 10px;
 }
 
-.filter-column-headings { padding: 0 10px 7px; color: #697970; font-size: 0.67rem; font-weight: 800; letter-spacing: 0.055em; text-transform: uppercase; }
+.filter-column-headings { padding: 0 10px 7px; color: #697970; font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: 0.04em; text-transform: uppercase; }
 .filter-rows { display: grid; gap: 8px; max-height: min(54vh, 470px); margin-bottom: 8px; overflow-y: auto; scrollbar-width: thin; }
-.filter-row { align-items: start; padding: 10px; background: #fbfcfb; border: 1px solid #e0e8e4; border-radius: 11px; }
+.filter-row { align-items: start; padding: 10px; background: var(--erp-surface-soft); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
 .filter-row:focus-within { background: #fff; border-color: #a7cfbb; box-shadow: 0 0 0 3px rgb(20 125 91 / 7%); }
 .filter-control { display: grid; gap: 4px; min-width: 0; }
 .filter-control__mobile-label { display: none; }
 .filter-row__value { min-width: 0; }
-.filter-value-help { color: #7a8780; font-size: 0.67rem; line-height: 1.25; }
+.filter-value-help { color: #6b7b73; font-size: var(--erp-font-size-min); line-height: 1.35; }
 
 .filter-row :deep(.p-inputtext),
 .filter-row :deep(.p-select),
 .filter-row :deep(.p-autocomplete-input),
 .filter-row :deep(.p-inputnumber-input),
-.filter-row :deep(.p-multiselect) { min-height: 38px; border-color: #d5e0da; border-radius: 9px; }
+.filter-row :deep(.p-multiselect) { min-height: var(--erp-control-height); border-color: var(--erp-border-strong); border-radius: var(--erp-control-radius); }
 
 .filter-row :deep(.p-datepicker-input) { min-width: 0; }
 .filter-row :deep(.common-field) { gap: 0; }
@@ -661,6 +661,6 @@ function apply() {
 	.filter-row { grid-template-columns: 1fr auto; }
 	.filter-control { grid-column: 1 / -1; }
 	.filter-row > :deep(.p-button) { grid-column: 2; grid-row: 1; }
-	.filter-control__mobile-label { display: inline; color: #697970; font-size: 0.65rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
+	.filter-control__mobile-label { display: inline; color: #697970; font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: 0.04em; text-transform: uppercase; }
 }
 </style>

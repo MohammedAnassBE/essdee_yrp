@@ -840,6 +840,185 @@ async function stockTransfersSuite(page, context) {
 	return { plan: fixture.name, operationLabels, purposeOptions, updateOptions, stagedItemTreatment, scrollContract }
 }
 
+function productionReportFixture() {
+	return {
+		bundle_generated: 4,
+		label_printed: 3,
+		created: 2,
+		report_data: [{
+			style_no: "Flame Thermal Pyjama Womens Extra Long Enterprise Style Name",
+			lot_no: "LOT-2026-09-VERY-LONG-TRACEABILITY-NAME",
+			location: "Machine Cutting",
+			attributes: ["Colour"],
+			primary_attribute_values: ["S", "M"],
+			total_sum: 8,
+			total_planned_sum: 10,
+			total_received_sum: 8,
+			items: [{ attributes: { Colour: "Navy" }, cutter: "Cutter One", values: { S: 3, M: 5 }, total_qty: 8, planned: 10, cumulative: 8 }],
+		}],
+	}
+}
+
+function completionReportFixture() {
+	return [{
+		attributes: ["Colour"],
+		primary_attribute_values: ["S", "M"],
+		is_set_item: false,
+		stiching_attr: "panels",
+		panels: ["Front", "Back"],
+		total_qty: { S: 3, M: 2 },
+		items: [{ attributes: { Colour: "Navy" }, values: { S: 3, M: 2 }, total_qty: 5 }],
+	}]
+}
+
+async function reportsSuite(page) {
+	await page.setViewportSize({ width: 1600, height: 1000 })
+	const calls = { production: 0, cutSheet: 0, multiCcr: 0, detail: 0, stock: 0 }
+	let emptyStockResult = false
+	const production = productionReportFixture()
+	const completion = completionReportFixture()
+	const clothRows = [{ cloth_item_variant: "Fabric-Navy-68 Dia", cloth_type: "Main Fabric", colour: "Navy", dia: "68 Dia", required_weight: 4.2, weight: 5, used_weight: 4.1, balance_weight: 0.9 }]
+	const clothTotal = { required: 4.2, received: 5, used: 4.1, balance: 0.9 }
+
+	await page.route("**/api/method/essdee_yrp.cutting.reports.get_report_permissions*", (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: JSON.stringify({ message: {
+			"cutting-plans": true,
+			"daily-production": true,
+			"daily-cut-sheet": true,
+			"multi-ccr": true,
+			"cutting-detail": true,
+			"stock-balance": true,
+		} }),
+	}))
+	await page.route("**/api/method/essdee_yrp.cutting.reports.get_daily_production_report*", (route) => {
+		calls.production += 1
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: production }) })
+	})
+	await page.route("**/api/method/essdee_yrp.cutting.reports.get_cut_sheet_report*", (route) => {
+		calls.cutSheet += 1
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: [{
+			style_no: production.report_data[0].style_no,
+			lot_no: production.report_data[0].lot_no,
+			location: "Machine Cutting",
+			attributes: ["Colour"],
+			primary_attribute_values: ["S", "M"],
+			items: [{ attributes: { Colour: "Navy" }, cutter: "Cutter One", values: { S: { Front: 3, Back: 3 }, M: { Front: 2, Back: 2 } }, total_panel_qty: { Front: 5, Back: 5 } }],
+		}] }) })
+	})
+	await page.route("**/api/method/essdee_yrp.cutting.reports.get_multiccr*", (route) => {
+		calls.multiCcr += 1
+		const itemName = production.report_data[0].style_no
+		const lotName = production.report_data[0].lot_no
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: {
+			output_lots: [lotName],
+			output_items: [itemName],
+			item_data: { [itemName]: { total_qty: 5, completed_json: completion, cloth_details: clothRows, cloth_total: clothTotal, average_piece_weight_by_colour: { Navy: 0.1 }, average_required_weight_by_colour: { Navy: 0.11 } } },
+			data: { [lotName]: { item: itemName, total_qty: 5, completed_json: completion, cloth_details: clothRows, cloth_total: clothTotal, panel_groups: [{ panels: "Front, Back", cutting_plan: "CP-2609-00042", sizes: ["S", "M"], rows: [{ colour: "Navy", cloth_type: "Main Fabric", received_weight: 5, used_weight: 4.1, balance_weight: 0.9, sizes: { S: 3, M: 2 }, total_pieces: 5, piece_weight: 0.1, required_weight: 0.5 }], totals: { received_weight: 5, used_weight: 4.1, balance_weight: 0.9, sizes: { S: 3, M: 2 }, total_pieces: 5, piece_weight: 0.1, required_weight: 0.5 } }] } },
+		} }) })
+	})
+	await page.route("**/api/method/essdee_yrp.cutting.reports.get_cutting_detail_report*", (route) => {
+		calls.detail += 1
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: production }) })
+	})
+	await page.route("**/api/method/frappe.desk.query_report.run*", (route) => {
+		calls.stock += 1
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: {
+			columns: [
+				{ fieldname: "item_code", label: "Item", fieldtype: "Link" },
+				{ fieldname: "lot", label: "Lot", fieldtype: "Link" },
+				{ fieldname: "in_qty", label: "In Qty", fieldtype: "Float" },
+				{ fieldname: "out_qty", label: "Out Qty", fieldtype: "Float" },
+				{ fieldname: "bal_qty", label: "Balance Qty", fieldtype: "Float" },
+			],
+			result: emptyStockResult ? [] : [{ item_code: production.report_data[0].style_no, lot: production.report_data[0].lot_no, in_qty: 10, out_qty: 2, bal_qty: 8 }],
+		} }) })
+	})
+
+	async function assertSharedReportResult(shell, reportName) {
+		assert(await shell.locator(".report-metric").count() >= 4, `${reportName} summary strip is missing`)
+		const header = shell.locator("table thead th").first()
+		assert(await header.evaluate((element) => getComputedStyle(element).position) === "sticky", `${reportName} table headers are not sticky`)
+		const wrap = shell.locator(".erp-table-wrap, .production-table-wrap").first()
+		const containment = await wrap.evaluate((element) => ({ overflowX: getComputedStyle(element).overflowX, clientWidth: element.clientWidth, scrollWidth: element.scrollWidth }))
+		assert(["auto", "scroll"].includes(containment.overflowX) && containment.scrollWidth >= containment.clientWidth, `${reportName} table is not horizontally contained: ${JSON.stringify(containment)}`)
+		const undersized = await visibleTextBelowMinimum(shell)
+		assert(undersized.length === 0, `${reportName} contains text below 11px: ${JSON.stringify(undersized.slice(0, 12))}`)
+		return containment
+	}
+
+	await page.goto(`${SITE}/web/cutting/reports`, { waitUntil: "domcontentloaded" })
+	await page.locator(".report-tabs__list").waitFor({ timeout: 20_000 })
+	const tabs = page.getByRole("tab")
+	const expectedTabs = ["Daily Production", "Daily Cut Sheet", "Multi CCR", "Cutting Detail", "Stock Balance"]
+	assert(await tabs.count() === 5, `Expected five report tabs, found ${await tabs.count()}`)
+	assert(JSON.stringify(await tabs.allTextContents()) === JSON.stringify(expectedTabs), `Unexpected report tabs: ${await tabs.allTextContents()}`)
+	assert(await page.getByText("Manufacturing intelligence", { exact: true }).count() === 0, "Decorative reports introduction is visible")
+	assert(await page.locator(".report-shell h1, .report-shell h2").count() === 0, "Report title is duplicated inside the active tab")
+	assert(await page.locator(".report-tabs__list").evaluate((element) => getComputedStyle(element).position) === "sticky", "Report tabs are not fixed")
+
+	for (const tabName of expectedTabs) {
+		await tabs.filter({ hasText: tabName }).click()
+		const shell = page.locator(".report-shell:visible")
+		await shell.waitFor()
+		assert(await shell.getByText("Set the report filters", { exact: true }).isVisible(), `${tabName} does not have an intentional initial state`)
+		assert(await shell.getByRole("button", { name: "Generate", exact: true }).count() === 1, `${tabName} has no explicit Generate action`)
+	}
+	assert(Object.values(calls).every((count) => count === 0), `Reports requested data before Generate: ${JSON.stringify(calls)}`)
+
+	await tabs.filter({ hasText: "Daily Production" }).click()
+	let shell = page.locator(".report-shell:visible")
+	await shell.locator('input[type="date"]').fill("2026-09-24")
+	await shell.getByRole("button", { name: "Generate", exact: true }).click()
+	await shell.locator(".production-card").waitFor()
+	assert(await shell.getByText("24-09-2026", { exact: true }).count() >= 1, "Daily Production date is not DD-MM-YYYY")
+	assert(await shell.getByRole("button", { name: "Copy Report", exact: true }).count() === 1, "Daily Production Copy Report is missing")
+	await assertSharedReportResult(shell, "Daily Production")
+	const productionTotal = await shell.locator(".production-table tfoot td").first().evaluate((element) => ({ fontWeight: Number(getComputedStyle(element).fontWeight), background: getComputedStyle(element).backgroundColor }))
+	assert(productionTotal.fontWeight >= 700 && productionTotal.background !== "rgba(0, 0, 0, 0)", `Daily Production total row is not emphasized: ${JSON.stringify(productionTotal)}`)
+
+	const longNameTreatment = await shell.locator(".production-card__identity h3").evaluate((element) => {
+		const style = getComputedStyle(element)
+		return { overflow: style.overflow, textOverflow: style.textOverflow, whiteSpace: style.whiteSpace }
+	})
+	assert(longNameTreatment.overflow === "hidden" && longNameTreatment.textOverflow === "ellipsis", `Long report names are not contained: ${JSON.stringify(longNameTreatment)}`)
+
+	await tabs.filter({ hasText: "Daily Cut Sheet" }).click()
+	shell = page.locator(".report-shell:visible")
+	await shell.locator('input[type="date"]').fill("2026-09-24")
+	await shell.getByRole("button", { name: "Generate", exact: true }).click()
+	await shell.locator(".cut-sheet-card").waitFor()
+	assert(await shell.getByText("24-09-2026", { exact: true }).count() === 1, "Daily Cut Sheet date is not DD-MM-YYYY")
+	assert(await shell.getByRole("button", { name: "Copy Report", exact: true }).count() === 1, "Daily Cut Sheet Copy Report is missing")
+	await assertSharedReportResult(shell, "Daily Cut Sheet")
+
+	for (const tabName of ["Multi CCR", "Cutting Detail", "Stock Balance"]) {
+		await tabs.filter({ hasText: tabName }).click()
+		shell = page.locator(".report-shell:visible")
+		await shell.getByRole("button", { name: "Generate", exact: true }).click()
+		await shell.locator(".report-shell__results").waitFor()
+		assert(await shell.getByRole("button", { name: "Copy Report", exact: true }).count() === 0, `${tabName} unexpectedly exposes Copy Report`)
+		await assertSharedReportResult(shell, tabName)
+	}
+
+	assert(Object.values(calls).every((count) => count === 1), `Expected one request per report: ${JSON.stringify(calls)}`)
+	const activeShell = page.locator(".report-shell:visible")
+	const tableHeader = activeShell.locator("table thead th").first()
+	const numericCell = activeShell.locator("tbody .erp-number").first()
+	assert(await numericCell.evaluate((element) => getComputedStyle(element).textAlign) === "right", "Report numeric columns are not right aligned")
+	const tableContainment = await activeShell.locator(".erp-table-wrap").first().evaluate((element) => ({ overflowX: getComputedStyle(element).overflowX, clientWidth: element.clientWidth, scrollWidth: element.scrollWidth }))
+	assert(await tableHeader.evaluate((element) => getComputedStyle(element).position) === "sticky", "Stock Balance table header is not sticky")
+
+	emptyStockResult = true
+	await activeShell.getByRole("button", { name: "Reset", exact: true }).click()
+	await activeShell.getByRole("button", { name: "Generate", exact: true }).click()
+	await activeShell.getByText("No matching records", { exact: true }).waitFor()
+	assert(await activeShell.getByText("No matching records", { exact: true }).isVisible(), "Generated-empty report state is not intentional")
+
+	return { tabs: expectedTabs, calls, longNameTreatment, productionTotal, tableContainment }
+}
+
 const suites = {
 	tokens: tokensSuite,
 	shell: shellSuite,
@@ -851,6 +1030,7 @@ const suites = {
 	"entity-dialogs": entityDialogsSuite,
 	cpm: cpmSuite,
 	"stock-transfers": stockTransfersSuite,
+	reports: reportsSuite,
 }
 
 const browser = await chromium.launch({ headless: true })

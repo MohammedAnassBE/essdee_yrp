@@ -91,15 +91,71 @@ function reset() { Object.assign(filters, defaultFilters()); rows.value = []; co
 </script>
 
 <style scoped>
-.erp-field-label b { color: var(--erp-danger); }
-.stock-checks { display: grid; grid-column: span 2; grid-template-columns: repeat(2, minmax(145px, 1fr)); gap: 5px 16px; align-content: center; min-width: 330px; min-height: 36px; padding: 7px 10px; background: white; border: 1px solid var(--erp-border); border-radius: 7px; }
-.stock-checks label { display: flex; align-items: center; gap: 5px; color: #52645b; font-size: 0.65rem; white-space: nowrap; }
-.stock-checks input { accent-color: var(--erp-accent); }
-.stock-table-wrap { max-height: 58vh; }
-.stock-table { min-width: 1280px; }
-.stock-table thead { position: sticky; top: 0; z-index: 2; }
-.stock-in { color: var(--erp-accent) !important; font-weight: 800; }
-.stock-out { color: var(--erp-danger) !important; font-weight: 800; }
-.multiline-cell { white-space: pre-line; }
-@media (max-width: 760px) { .stock-checks { grid-column: span 1; min-width: 0; } }
+.erp-field-label b {
+	color: var(--erp-danger);
+}
+
+.stock-checks {
+	display: grid;
+	grid-column: span 2;
+	grid-template-columns: repeat(2, minmax(145px, 1fr));
+	min-width: 330px;
+	min-height: var(--erp-control-height);
+	align-content: center;
+	gap: 5px var(--erp-space-4);
+	padding: 7px 10px;
+	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-control-radius);
+	background: var(--erp-surface);
+}
+
+.stock-checks label {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	color: #52645b;
+	font-size: var(--erp-font-size-min);
+	white-space: nowrap;
+}
+
+.stock-checks input {
+	accent-color: var(--erp-accent);
+}
+
+.stock-table-wrap {
+	max-height: 58vh;
+}
+
+.stock-table {
+	min-width: 1280px;
+}
+
+.stock-table td span:not(.multiline-cell) {
+	display: block;
+	max-width: 300px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.stock-in {
+	color: var(--erp-accent) !important;
+	font-weight: 800;
+}
+
+.stock-out {
+	color: var(--erp-danger) !important;
+	font-weight: 800;
+}
+
+.multiline-cell {
+	white-space: pre-line;
+}
+
+@media (max-width: 760px) {
+	.stock-checks {
+		grid-column: span 1;
+		min-width: 0;
+	}
+}
 </style>

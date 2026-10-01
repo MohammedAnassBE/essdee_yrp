@@ -39,12 +39,49 @@ function averageFor(row, values) {
 </script>
 
 <style scoped>
-.completion-wrap + .completion-wrap { margin-top: 10px; }
-.completion-table { min-width: 760px; }
-.panel-strip { display: flex; align-items: center; gap: 6px; padding: 8px 10px; color: var(--erp-text-muted); font-size: 0.67rem; background: #fbfdfc; border-bottom: 1px solid var(--erp-border); }
-.panel-strip strong { color: var(--erp-text); }
-.panel-strip span, .panel-chip { display: inline-flex; padding: 2px 6px; color: #315e4c; font-size: 0.64rem; background: #e9f5ef; border-radius: 999px; }
-.panel-chip + .panel-chip { margin-left: 4px; }
-.cell-strong { font-weight: 800; }
-.completion-total td { font-weight: 800; background: #f0f7f3; }
+.completion-wrap + .completion-wrap {
+	margin-top: 10px;
+}
+
+.completion-table {
+	min-width: 760px;
+}
+
+.panel-strip {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: var(--erp-space-2) 10px;
+	border-bottom: 1px solid var(--erp-border);
+	background: var(--erp-surface-soft);
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+}
+
+.panel-strip strong {
+	color: var(--erp-text);
+}
+
+.panel-strip span,
+.panel-chip {
+	display: inline-flex;
+	padding: 2px 6px;
+	border-radius: var(--erp-pill-radius);
+	background: var(--erp-accent-soft);
+	color: #315e4c;
+	font-size: var(--erp-font-size-min);
+}
+
+.panel-chip + .panel-chip {
+	margin-left: var(--erp-space-1);
+}
+
+.cell-strong {
+	font-weight: 800;
+}
+
+.completion-total td {
+	background: #f0f7f3;
+	font-weight: 800;
+}
 </style>

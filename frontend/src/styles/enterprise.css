@@ -183,6 +183,9 @@
 }
 
 .erp-data-table th {
+	position: sticky;
+	z-index: var(--erp-layer-content);
+	top: 0;
 	padding: 9px 10px;
 	color: #53665d;
 	font-size: var(--erp-font-size-min);

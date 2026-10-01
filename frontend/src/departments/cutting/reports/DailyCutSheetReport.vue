@@ -96,17 +96,91 @@ function reset() {
 </script>
 
 <style scoped>
-.erp-field-label b { color: var(--erp-danger); }
-.cut-sheet-stack { display: grid; gap: 14px; }
-.cut-sheet-card { min-width: 0; overflow: hidden; border: 1px solid var(--erp-border); border-radius: 10px; }
-.cut-sheet-card__header { padding: 11px 13px; background: #fbfdfc; border-bottom: 1px solid var(--erp-border); }
-.cut-sheet-card__header span:not(.erp-count-badge) { display: block; margin-top: 3px; color: var(--erp-text-muted); font-size: 0.67rem; }
-.cut-sheet-card__table { border: 0; border-radius: 0; }
-.cut-sheet-table { min-width: 880px; }
-.cutter-chip { display: inline-flex; padding: 2px 6px; color: #315e4c; font-size: 0.65rem; background: #edf5f1; border-radius: 999px; }
-.panel-values { display: flex; min-width: 78px; flex-direction: column; gap: 2px; }
-.panel-values span { display: flex; justify-content: space-between; gap: 8px; color: #52645b; font-size: 0.68rem; }
-.panel-values b { color: var(--erp-text); font-weight: 700; }
-.panel-values i { color: #96a39d; font-style: normal; }
-.panel-values--total span { color: var(--erp-accent); font-weight: 750; }
+.erp-field-label b {
+	color: var(--erp-danger);
+}
+
+.cut-sheet-stack {
+	display: grid;
+	gap: var(--erp-space-3);
+}
+
+.cut-sheet-card {
+	min-width: 0;
+	overflow: hidden;
+	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-panel-radius);
+}
+
+.cut-sheet-card__header {
+	padding: 10px var(--erp-space-3);
+	border-bottom: 1px solid var(--erp-border);
+	background: var(--erp-surface-soft);
+}
+
+.cut-sheet-card__header h3 {
+	max-width: min(720px, 58vw);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.cut-sheet-card__header span:not(.erp-count-badge) {
+	display: block;
+	max-width: min(720px, 58vw);
+	margin-top: 3px;
+	overflow: hidden;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-caption);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.cut-sheet-card__table {
+	border: 0;
+	border-radius: 0;
+}
+
+.cut-sheet-table {
+	min-width: 880px;
+}
+
+.cutter-chip {
+	display: inline-flex;
+	padding: 2px 6px;
+	border-radius: var(--erp-pill-radius);
+	background: #edf5f1;
+	color: #315e4c;
+	font-size: var(--erp-font-size-min);
+}
+
+.panel-values {
+	display: flex;
+	min-width: 78px;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.panel-values span {
+	display: flex;
+	justify-content: space-between;
+	gap: var(--erp-space-2);
+	color: #52645b;
+	font-size: var(--erp-font-size-min);
+}
+
+.panel-values b {
+	color: var(--erp-text);
+	font-weight: 700;
+}
+
+.panel-values i {
+	color: #96a39d;
+	font-style: normal;
+}
+
+.panel-values--total span {
+	color: var(--erp-accent);
+	font-weight: 750;
+}
 </style>

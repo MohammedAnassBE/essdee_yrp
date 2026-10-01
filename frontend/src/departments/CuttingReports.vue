@@ -72,13 +72,55 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.cutting-reports { max-width: 1800px; margin: 0 auto; padding: 0 2px 20px; }
-.report-permission-loading { display: grid; gap: 10px; }
-.report-tabs { min-width: 0; }
-.report-tabs__list { position: sticky; top: 0; z-index: 8; background: var(--erp-bg); }
-.report-tabs :deep(.p-tab) { display: inline-flex; align-items: center; white-space: nowrap; }
-.report-tabs :deep(.p-tab i) { margin-right: 7px; font-size: 0.76rem; }
-.report-tabs__panels { padding: 10px 0 0; background: transparent; }
-.report-tabs__panels :deep(.p-tabpanel) { padding: 0; }
-@media (max-width: 820px) { .report-tabs__list { overflow-x: auto; } }
+.cutting-reports {
+	width: 100%;
+	max-width: 1800px;
+	min-width: 0;
+	margin: 0 auto;
+	padding: 0 2px var(--erp-space-5);
+}
+
+.report-permission-loading {
+	display: grid;
+	gap: 10px;
+}
+
+.report-tabs {
+	min-width: 0;
+}
+
+.report-tabs__list {
+	position: sticky;
+	z-index: var(--erp-layer-sticky);
+	top: 0;
+	background: var(--erp-bg);
+}
+
+.report-tabs :deep(.p-tab) {
+	display: inline-flex;
+	min-height: 44px;
+	align-items: center;
+	white-space: nowrap;
+}
+
+.report-tabs :deep(.p-tab i) {
+	margin-right: 7px;
+	font-size: var(--erp-font-size-caption);
+}
+
+.report-tabs__panels {
+	padding: var(--erp-space-3) 0 0;
+	background: transparent;
+}
+
+.report-tabs__panels :deep(.p-tabpanel) {
+	padding: 0;
+}
+
+@media (max-width: 820px) {
+	.report-tabs__list {
+		overflow-x: auto;
+		scrollbar-width: thin;
+	}
+}
 </style>

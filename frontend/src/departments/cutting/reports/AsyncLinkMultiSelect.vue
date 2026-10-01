@@ -69,7 +69,16 @@ async function complete(event) {
 </script>
 
 <style scoped>
-.async-multi { display: block; min-width: 0; }
-.async-multi :deep(.p-autocomplete-multiple) { min-height: 36px; }
-.async-multi :deep(.p-autocomplete-chip) { font-size: 0.7rem; }
+.async-multi {
+	display: block;
+	min-width: 0;
+}
+
+.async-multi :deep(.p-autocomplete-multiple) {
+	min-height: var(--erp-control-height);
+}
+
+.async-multi :deep(.p-autocomplete-chip) {
+	font-size: var(--erp-font-size-min);
+}
 </style>

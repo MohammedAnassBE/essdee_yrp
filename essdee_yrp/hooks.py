@@ -310,15 +310,10 @@ doc_events = {
 	"Work Order": {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
 		"validate": "essdee_yrp.work_order_hooks.validate",
-		"before_update_after_submit": "essdee_yrp.work_order_hooks.before_update_after_submit",
 	},
 	"Delivery Challan": {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
 		"before_validate": "essdee_yrp.delivery_challan_hooks.before_validate",
-		"validate": "essdee_yrp.delivery_challan_hooks.validate_exact_source_limits",
-		# Base before_submit locks the referenced WOD rows first; recheck under
-		# that lock so concurrent DCs cannot both consume one exact allocation.
-		"before_submit": "essdee_yrp.delivery_challan_hooks.validate_exact_source_limits",
 	},
 	"Work Order Correction": {
 		"before_submit": "essdee_yrp.work_order_correction_hooks.validate_correction_ipd_items"
@@ -377,7 +372,6 @@ doc_events = {
 # }
 
 override_doctype_class = {
-	"Delivery Challan": "essdee_yrp.overrides.delivery_challan.EssdeeDeliveryChallan",
 	"Goods Received Note": "essdee_yrp.overrides.goods_received_note.EssdeeGoodsReceivedNote",
 }
 
@@ -385,13 +379,6 @@ override_doctype_class = {
 # ------------------------------
 #
 override_whitelisted_methods = {
-	# Keep production_api's existing Cutting Plan button/API path. The Essdee
-	# adapter runs the base Generate flow and then expands planned cloth variants
-	# through the Lot's terminal-process actual-receipt projection.
-	"production_api.production_api.doctype.cutting_plan.cutting_plan.get_cloth1":
-		"essdee_yrp.cutting_plan.get_cloth1",
-	"yrp.yrp.doctype.inspection_entry.inspection_entry.convert_stock":
-		"essdee_yrp.inspection_entry.convert_stock",
 	# Base YRP's Desk button calls this path. Route it through the
 	# Essdee-owned close implementation so Desk and /web use one stock contract.
 	"yrp.yrp.doctype.work_order.work_order.update_stock":

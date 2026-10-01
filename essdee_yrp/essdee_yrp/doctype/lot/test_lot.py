@@ -7,70 +7,9 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from essdee_yrp.essdee_yrp.doctype.lot.lot import calculate_bom, get_ocr_details
-from essdee_yrp.fabric_program import SERVER_OWNED_TABLES, refresh_server_owned_tables
 
 
 class TestLot(FrappeTestCase):
-	def test_server_owned_refresh_locks_lot_before_reading_children(self):
-		lot = frappe._dict(name="LOT-1")
-		lot.flags = frappe._dict()
-		lot.is_new = lambda: False
-		lot.set = lambda fieldname, value: dict.__setitem__(lot, fieldname, value)
-		lot.append = lambda _fieldname, _value: None
-		with (
-			patch("essdee_yrp.fabric_program.frappe.db.sql") as lock,
-			patch(
-				"essdee_yrp.fabric_program.frappe.db.get_values", return_value=[]
-			) as get_values,
-		):
-			refresh_server_owned_tables(lot)
-			refresh_server_owned_tables(lot)
-
-		lock.assert_called_once_with(
-			"SELECT name FROM `tabLot` WHERE name = %s FOR UPDATE",
-			("LOT-1",),
-		)
-		self.assertEqual(get_values.call_count, len(SERVER_OWNED_TABLES) * 2)
-		self.assertTrue(all(
-			call.kwargs.get("for_update") is True
-			for call in get_values.call_args_list
-		))
-
-	def test_stale_lot_save_preserves_server_owned_fabric_conversions(self):
-		suffix = frappe.generate_hash(length=8)
-		lot = frappe.get_doc({
-			"doctype": "Lot",
-			"lot_name": f"_Test Conversion Refresh {suffix}",
-		}).insert(ignore_permissions=True)
-		stale = frappe.get_doc("Lot", lot.name)
-
-		row = frappe.new_doc("Lot Fabric Conversion")
-		row.parent = lot.name
-		row.parenttype = "Lot"
-		row.parentfield = "lot_fabric_conversions"
-		row.idx = 1
-		row.process_name = f"_Test Process {suffix}"
-		row.from_item = f"_Test Planned {suffix}"
-		row.to_item = f"_Test Actual {suffix}"
-		row.to_qty = 7
-		row.db_insert()
-
-		# Simulate a form opened before the GRN-side direct child insert. The Lot
-		# hook must reload the server-owned table before Frappe syncs children.
-		stale.flags.ignore_links = True
-		stale.save(ignore_permissions=True)
-		self.assertEqual(
-			frappe.db.get_value(
-				"Lot Fabric Conversion",
-				{
-					"parent": lot.name,
-					"parentfield": "lot_fabric_conversions",
-				},
-				"to_qty",
-			),
-			7,
-		)
-
 	def test_calculate_bom_uses_shared_matrix_engine_and_saves_lot(self):
 		lot = frappe._dict(
 			name="_Test Matrix Lot",

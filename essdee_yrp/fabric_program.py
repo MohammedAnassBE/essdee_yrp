@@ -612,7 +612,6 @@ def rebuild_plans_after_save(lot_doc):
 
 SERVER_OWNED_TABLES = (
 	("lot_fabric_step_ledger", "Lot Fabric Step Ledger"),
-	("lot_fabric_conversions", "Lot Fabric Conversion"),
 	("lot_colour_programs", "Lot Fabric Colour Program"),  # legacy, frozen
 )
 
@@ -627,23 +626,12 @@ def refresh_server_owned_tables(lot_doc):
 	always the truth."""
 	if lot_doc.is_new():
 		return
-	# Serialize a normal Lot save with GRN/Inspection conversion rebuilds before
-	# reading DB-owned children. Without this parent lock, a save could read the
-	# old snapshot, wait while a rebuild commits, then child-sync the old rows
-	# back over the new projection.
-	if not lot_doc.flags.get("essdee_server_owned_tables_locked"):
-		frappe.db.sql(
-			"SELECT name FROM `tabLot` WHERE name = %s FOR UPDATE",
-			(lot_doc.name,),
-		)
-		lot_doc.flags.essdee_server_owned_tables_locked = True
 	for parentfield, doctype in SERVER_OWNED_TABLES:
-		rows = frappe.db.get_values(
+		rows = frappe.get_all(
 			doctype,
 			filters={"parent": lot_doc.name, "parenttype": "Lot"},
-			fieldname="*",
+			fields=["*"],
 			order_by="idx asc, creation asc",
-			for_update=True,
 		)
 		lot_doc.set(parentfield, [])
 		for r in rows:

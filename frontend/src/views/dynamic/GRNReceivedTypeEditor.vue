@@ -60,7 +60,7 @@
 			:key="row.key"
 			class="grn-group"
 		>
-			<DataTable :value="row.splits" class="esd-table grn-dt" :rowHover="false" dataKey="key" :tableStyle="{ tableLayout: 'fixed', minWidth: '100%' }">
+			<DataTable :value="row.splits" class="esd-table grn-dt" :rowHover="false" dataKey="key" :tableStyle="{ tableLayout: 'fixed', minWidth: '780px' }">
 				<!-- S.No (rowspan-style: only shown on the first split) -->
 				<Column header="#" :style="{ width: '44px' }">
 					<template #body="{ index }">
@@ -106,7 +106,7 @@
 				</Column>
 
 				<!-- Received Type + remove control -->
-				<Column header="Received Type" :style="{ minWidth: '130px' }">
+				<Column header="Received Type" :style="{ width: '150px' }">
 					<template #body="{ data: split }">
 						<span class="grn-rt-name">{{ split.receivedType || "Received" }}</span>
 						<Button
@@ -274,6 +274,8 @@ const actualDiaEnabled = ref(false)
 const diaOptions = ref([])
 const diaSelections = reactive({})
 let actualDiaRequest = 0
+const defaultReceivedType = ref("")
+const receivedTypesReady = ref(false)
 
 onMounted(async () => {
 	try {
@@ -287,9 +289,13 @@ onMounted(async () => {
 			"yrp.yrp.doctype.goods_received_note.goods_received_note.get_rework_output_received_types",
 		)
 		availableRTs.value = (r && Array.isArray(r.received_types)) ? r.received_types : []
+		defaultReceivedType.value = r?.default_received_type || ""
 	} catch (_) {
 		availableRTs.value = []
+		defaultReceivedType.value = ""
 	}
+	receivedTypesReady.value = true
+	compactLoadedSplits()
 	await loadActualDiaContext()
 	// Arm change-emit after initial state settles (a later external loadData re-arms).
 	nextTick(() => { changeArmed.value = true })
@@ -336,10 +342,12 @@ const logicalRows = computed(() => {
 			const dimsNoType = stripReceivedType(entry.dimensions || {})
 			const attributes = entry.attributes || {}
 			const columns = getColumns(group, entry)
+			const setCombination = normalizedSetCombination(entry.set_combination)
 			const key = stableKey({
 				name: entry.name,
 				dimensions: dimsNoType,
 				attributes,
+				setCombination,
 				columns: columns.map((c) => c.key),
 			})
 			if (!byKey.has(key)) {
@@ -349,6 +357,7 @@ const logicalRows = computed(() => {
 					dimensions: dimsNoType,
 					dimensionFields: Object.keys(dimsNoType).filter((fn) => dimsNoType[fn]),
 					attributes,
+					setCombination,
 					attributeFields: Object.keys(attributes).filter((fn) => attributes[fn]),
 					columns,
 					defaultUom: entry.default_uom || "",
@@ -380,6 +389,18 @@ function stripReceivedType(dimsIn) {
 
 function receivedType(entry) {
 	return (entry.dimensions || {}).received_type || ""
+}
+
+function normalizedSetCombination(value) {
+	if (!value) return {}
+	if (typeof value === "string") {
+		try {
+			return JSON.parse(value)
+		} catch (_) {
+			return { value }
+		}
+	}
+	return value
 }
 
 function getColumns(group, entry) {
@@ -416,6 +437,11 @@ function rowMeta(row) {
 	for (const fn of row.attributeFields || []) {
 		const v = row.attributes[fn]
 		if (v) parts.push(v)
+	}
+	const setColour = row.setCombination?.major_colour
+	const setPart = row.setCombination?.major_part
+	if (setColour || setPart) {
+		parts.push(`Set: ${[setColour, setPart].filter(Boolean).join(" / ")}`)
 	}
 	return parts.join(" | ")
 }
@@ -462,7 +488,11 @@ function otherSplitQty(row, currentSplit, key) {
 		for (const candidateRow of logicalRows.value) {
 			for (const candidate of candidateRow.splits) {
 				for (const column of candidateRow.columns) {
-					if (candidate === currentSplit && column.key === key) continue
+					if (
+						candidateRow.key === row.key
+						&& candidate.receivedType === currentSplit?.receivedType
+						&& column.key === key
+					) continue
 					if (sourceReference(candidate.entry, column.key) === reference) {
 						total += qty(candidate.entry, column.key)
 					}
@@ -473,7 +503,9 @@ function otherSplitQty(row, currentSplit, key) {
 	}
 	let total = 0
 	for (const split of row.splits) {
-		if (split === currentSplit) continue
+		// PrimeVue passes a proxied body-row object, so object identity is not
+		// stable here. Received Type is unique within a logical item row.
+		if (split.receivedType === currentSplit?.receivedType) continue
 		total += qty(split.entry, key)
 	}
 	return total
@@ -506,10 +538,16 @@ function maxQty(row, split, key) {
 }
 
 function onQtyInput(row, split, key, value) {
-	const detail = valueDetail(split.entry, key)
+	// Resolve the current computed row/split before applying the clamp. DataTable
+	// can retain a stale/proxied slot object after another split changes.
+	const currentRow = logicalRows.value.find((candidate) => candidate.key === row.key) || row
+	const currentSplit = currentRow.splits.find(
+		(candidate) => candidate.receivedType === split.receivedType,
+	) || split
+	const detail = valueDetail(currentSplit.entry, key)
 	let next = toNumber(value)
 	if (next < 0) next = 0
-	const maxValue = maxQty(row, split, key)
+	const maxValue = maxQty(currentRow, currentSplit, key)
 	if (maxValue !== null && next > maxValue) next = maxValue
 	detail.qty = next
 }
@@ -527,6 +565,7 @@ function rowAllowed(row) {
 	return row.columns.reduce((t, c) => t + allowedQty(row, c.key), 0)
 }
 function rowBalance(row) {
+	row = logicalRows.value.find((candidate) => candidate.key === row?.key) || row
 	if (actualDiaEnabled.value && rowReference(row)) {
 		return rowAllowed(row) - rowsForReference(row).reduce(
 			(total, candidate) => total + rowReceived(candidate),
@@ -616,6 +655,7 @@ function addSplit(row, rt) {
 				name: entry.name,
 				dimensions: stripped,
 				attributes: entry.attributes || {},
+				setCombination: normalizedSetCombination(entry.set_combination),
 				columns: getColumns(group, entry).map((c) => c.key),
 			})
 			if (k !== row.key) continue
@@ -649,6 +689,50 @@ function formatQty(value) {
 	return n.toFixed(3).replace(/\.?0+$/, "")
 }
 
+// The defaults API pads each receivable with every configured Received Type.
+// Keep the configured default plus any split that already carries a quantity;
+// operators can add the remaining types from the table footer when needed.
+function compactGroups(data) {
+	const compacted = JSON.parse(JSON.stringify(data || []))
+	for (const group of compacted) {
+		const buckets = new Map()
+		for (const entry of group.items || []) {
+			const key = stableKey({
+				name: entry.name,
+				dimensions: stripReceivedType(entry.dimensions || {}),
+				attributes: entry.attributes || {},
+				setCombination: normalizedSetCombination(entry.set_combination),
+				columns: getColumns(group, entry).map((col) => col.key),
+			})
+			if (!buckets.has(key)) buckets.set(key, [])
+			buckets.get(key).push(entry)
+		}
+
+		const keep = new Set()
+		for (const entries of buckets.values()) {
+			for (const entry of entries) {
+				const hasQty = Object.values(entry.values || {}).some(
+					(value) => toNumber(value?.qty) > 0,
+				)
+				if (hasQty) keep.add(entry)
+			}
+			const preferred = entries.find(
+				(entry) => receivedType(entry) === defaultReceivedType.value,
+			)
+			keep.add(preferred || entries[0])
+		}
+		group.items = (group.items || []).filter((entry) => keep.has(entry))
+	}
+	return compacted
+}
+
+function compactLoadedSplits() {
+	if (!receivedTypesReady.value || !(groups.value || []).length) return
+	changeArmed.value = false
+	groups.value = compactGroups(groups.value)
+	nextTick(() => { changeArmed.value = true })
+}
+
 // ════════════════ PUBLIC API (same surface DocDetail drives) ════════════════
 // Rebuild internal `groups` from a saved grouped payload (array or JSON string).
 function loadData(grouped) {
@@ -665,7 +749,9 @@ function loadData(grouped) {
 		groups.value = []
 	} else {
 		// Deep clone so edits don't mutate the caller's onload object.
-		groups.value = JSON.parse(JSON.stringify(data))
+		groups.value = receivedTypesReady.value
+			? compactGroups(data)
+			: JSON.parse(JSON.stringify(data))
 	}
 	nextTick(() => { changeArmed.value = true })
 }
@@ -700,7 +786,8 @@ defineExpose({ loadData, getItems, hasItems })
 .grn-group {
 	border: 1px solid var(--esd-line);
 	border-radius: var(--radius-sm);
-	overflow: hidden;
+	overflow-x: auto;
+	overflow-y: hidden;
 }
 
 .grn-dt {

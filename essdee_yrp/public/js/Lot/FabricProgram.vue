@@ -17,7 +17,10 @@
 
 			<section class="fp-grid">
 				<div class="fp-table-wrap">
-					<table class="fp-table fp-matrix">
+					<table
+						class="fp-table fp-matrix"
+						:class="{ 'fp-matrix--compact': program_colour_columns(entry).length <= 2 }"
+					>
 						<thead>
 							<tr>
 								<th rowspan="2" class="fp-dia">{{ __("Dia") }}</th>
@@ -267,6 +270,10 @@ defineExpose({ load_data, get_data, get_requirement });
 .fp-matrix {
 	min-width: 680px;
 }
+.fp-matrix--compact {
+	width: min(680px, 100%);
+	min-width: 480px;
+}
 .fp-table th,
 .fp-table td {
 	border: 1px solid var(--border-color);
@@ -300,11 +307,16 @@ defineExpose({ load_data, get_data, get_requirement });
 }
 .fp-input {
 	width: 100%;
-	border: none;
-	background: transparent;
+	padding: 4px 6px;
+	border: 1px solid var(--border-color);
+	border-radius: 5px;
+	background: var(--control-bg, var(--fg-color));
+	font-variant-numeric: tabular-nums;
 	text-align: right;
 	outline: none;
 }
+.fp-input:hover { border-color: var(--gray-400); }
+.fp-input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px var(--gray-100); }
 .fp-none {
 	color: var(--text-muted);
 	text-align: center;

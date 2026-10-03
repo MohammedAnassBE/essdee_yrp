@@ -15,6 +15,16 @@ export function programDias(entry) {
 	)
 }
 
+export function programDiasWithQuantity(entry) {
+	const diasWithQuantity = new Set(
+		entry.program
+			.filter((row) => (Number(row.weight) || 0) !== 0)
+			.map(programDia)
+			.filter(Boolean),
+	)
+	return programDias(entry).filter((dia) => diasWithQuantity.has(dia))
+}
+
 export function programColourColumns(entry) {
 	const colours = [...new Set(entry.program.map(programColour).filter(Boolean))]
 		.sort((a, b) => String(a).localeCompare(String(b)))

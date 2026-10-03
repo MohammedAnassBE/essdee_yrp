@@ -68,6 +68,9 @@
   "lot_colour_programs",
   "lot_fabric_requirements",
   "lot_fabric_step_ledger",
+  "actual_dia_conversion_tab",
+  "actual_dia_conversion_html",
+  "lot_fabric_conversions",
   "ocr_detail_tab",
   "ocr_detail_html",
   "alternative_detail_tab",
@@ -476,6 +479,25 @@
    "hidden": 1,
    "label": "Fabric Step Ledger",
    "options": "Lot Fabric Step Ledger"
+  },
+  {
+   "fieldname": "actual_dia_conversion_tab",
+   "fieldtype": "Tab Break",
+   "label": "Actual Dia Conversion"
+  },
+  {
+   "fieldname": "actual_dia_conversion_html",
+   "fieldtype": "HTML",
+   "label": "Actual Dia Conversions"
+  },
+  {
+   "description": "Automatically rebuilt from all submitted Default Knitting Process GRNs for this Lot.",
+   "fieldname": "lot_fabric_conversions",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Actual Dia Conversions",
+   "options": "Lot Fabric Conversion",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,

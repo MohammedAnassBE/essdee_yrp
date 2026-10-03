@@ -11,7 +11,10 @@ import ColourYarnRecipeEditor from "./Item_Po_detail/ColourYarnRecipeEditor.vue"
 import FabricSwapDetail from "./Item_Po_detail/FabricSwapDetail.vue";
 import PanelWiseConsumptionMatrix from "./Item_Po_detail/PanelWiseConsumptionMatrix.vue";
 import LotOrderedDetail from "./ProductionOrder/LotOrderedDetail.vue";
+import LotOrder from "./Lot/LotOrder.vue";
+import OCRDetail from "./Lot/OCRDetail.vue";
 import FabricProgram from "./Lot/FabricProgram.vue";
+import ActualDiaConversions from "./Lot/ActualDiaConversions.vue";
 import FabricProcesses from "./Fabric/FabricProcesses.vue";
 import CutPlanItems from "./CuttingPlan/components/CutPlanItems.vue";
 import WorkOrderSummary from "./WorkOrder/WorkOrderSummary.vue";
@@ -240,6 +243,39 @@ frappe.production.ui.LotOrderedDetail = class {
 	}
 };
 
+frappe.production.ui.LotOrder = class {
+	constructor(wrapper) {
+		this.$wrapper = $(wrapper);
+		this.make_body();
+	}
+	make_body() {
+		const mounted = mount_component(LotOrder, this.$wrapper);
+		this.app = mounted.app;
+		this.vue = mounted.vue;
+	}
+	get_data() {
+		return JSON.parse(JSON.stringify(this.vue.list_item || []));
+	}
+	show_inputs() {
+		this.vue.show_add_items();
+	}
+	load_data(item_details) {
+		this.vue.load_data(JSON.parse(JSON.stringify(item_details || [])));
+	}
+};
+
+frappe.production.ui.OCRDetail = class {
+	constructor(wrapper) {
+		this.$wrapper = $(wrapper);
+		this.make_body();
+	}
+	make_body() {
+		const mounted = mount_component(OCRDetail, this.$wrapper);
+		this.app = mounted.app;
+		this.vue = mounted.vue;
+	}
+};
+
 frappe.production.ui.CutPlanItems = class {
 	constructor(wrapper) {
 		this.$wrapper = $(wrapper);
@@ -280,6 +316,21 @@ frappe.production.ui.FabricProgram = class {
 	}
 	get_requirement() {
 		return JSON.parse(JSON.stringify(this.vue.get_requirement()));
+	}
+};
+
+frappe.production.ui.ActualDiaConversions = class {
+	constructor(wrapper) {
+		this.$wrapper = $(wrapper);
+		this.make_body();
+	}
+	make_body() {
+		const mounted = mount_component(ActualDiaConversions, this.$wrapper);
+		this.app = mounted.app;
+		this.vue = mounted.vue;
+	}
+	load_data(rows) {
+		this.vue.load_data(JSON.parse(JSON.stringify(rows || [])));
 	}
 };
 

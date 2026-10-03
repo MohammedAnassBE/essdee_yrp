@@ -79,6 +79,32 @@
 					</template>
 				</Column>
 
+				<Column v-if="actualDiaEnabled" header="Actual Dia" :style="{ width: '150px' }">
+					<template #body="{ index }">
+						<div v-if="index === 0" class="grn-dia-cell">
+							<Select
+								:modelValue="row.attributes?.Dia || null"
+								:options="diaOptions"
+								:disabled="!editable"
+								filter
+								fluid
+								placeholder="Select Dia"
+								@update:modelValue="onDiaChange(row, $event)"
+							/>
+							<Button
+								v-if="editable && canRemoveDia(row)"
+								icon="pi pi-trash"
+								text
+								rounded
+								severity="danger"
+								size="small"
+								v-tooltip.top="'Remove this Actual Dia row'"
+								@click="removeDia(row)"
+							/>
+						</div>
+					</template>
+				</Column>
+
 				<!-- Received Type + remove control -->
 				<Column header="Received Type" :style="{ width: '150px' }">
 					<template #body="{ data: split }">
@@ -110,7 +136,7 @@
 							:modelValue="qty(split.entry, col.key)"
 							@update:modelValue="onQtyInput(row, split, col.key, $event)"
 							:min="0"
-							:max="maxQty(row, split, col.key)"
+							:max="allowExcess ? undefined : maxQty(row, split, col.key)"
 							:minFractionDigits="0"
 							:maxFractionDigits="3"
 							class="cell-num"
@@ -133,7 +159,8 @@
 					<template #body="{ data: split }">
 						<InputText
 							v-if="editable"
-							v-model="split.entry.comments"
+							:modelValue="split.entry.comments"
+							@update:modelValue="setGrnSplitComment(split, $event)"
 							class="line-comment-input"
 							placeholder="Add row comment"
 							fluid
@@ -164,20 +191,39 @@
 				</Column>
 
 				<!-- "+ Received Type" add controls under the table -->
-				<template #footer v-if="editable && unusedRTs(row).length">
+				<template #footer v-if="editable && (unusedRTs(row).length || unusedDias(row).length)">
 					<div class="grn-rt-add-row">
-						<span class="grn-rt-add-label">Add Received Type:</span>
-						<Button
-							v-for="rt in unusedRTs(row)"
-							:key="'add-' + rt"
-							:label="rt"
-							icon="pi pi-plus"
-							size="small"
-							severity="secondary"
-							outlined
-							class="grn-rt-add"
-							@click="addSplit(row, rt)"
-						/>
+						<template v-if="unusedRTs(row).length">
+							<span class="grn-rt-add-label">Add Received Type:</span>
+							<Button
+								v-for="rt in unusedRTs(row)"
+								:key="'add-' + rt"
+								:label="rt"
+								icon="pi pi-plus"
+								size="small"
+								severity="secondary"
+								outlined
+								class="grn-rt-add"
+								@click="addSplit(row, rt)"
+							/>
+						</template>
+						<template v-if="unusedDias(row).length">
+							<span class="grn-rt-add-label grn-dia-add-label">Add Actual Dia:</span>
+							<Select
+								v-model="diaSelections[row.key]"
+								:options="unusedDias(row)"
+								filter
+								class="grn-dia-select"
+								placeholder="Select Dia"
+							/>
+							<Button
+								label="Add Dia"
+								icon="pi pi-plus"
+								size="small"
+								:disabled="!diaSelections[row.key]"
+								@click="addDia(row, diaSelections[row.key])"
+							/>
+						</template>
 					</div>
 				</template>
 			</DataTable>
@@ -186,14 +232,28 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from "vue"
+import { ref, reactive, computed, onMounted, watch, nextTick } from "vue"
 import DataTable from "primevue/datatable"
 import Column from "primevue/column"
 import Button from "primevue/button"
 import InputNumber from "primevue/inputnumber"
 import InputText from "primevue/inputtext"
+import Select from "primevue/select"
 import Tooltip from "primevue/tooltip"
 import { callMethod } from "@/api/client"
+import {
+	addGrnActualDia,
+	addGrnReceivedType,
+	buildGrnLogicalRows,
+	compactGrnRouteSplits,
+	grnSplitReferenceKey,
+	normalizeGrnReceiptQuantity,
+	removeGrnRow,
+	removeGrnSplit,
+	setGrnRowDia,
+	setGrnSplitComment,
+	setGrnSplitQuantity,
+} from "@/engine/stock/grnRouteRows"
 
 const vTooltip = Tooltip
 
@@ -201,6 +261,8 @@ const props = defineProps({
 	// false → read-only render (e.g. embedded in a view context). DocDetail only
 	// mounts this in edit/create, so default true.
 	editable: { type: Boolean, default: true },
+	workOrder: { type: String, default: "" },
+	actualDiaDisabled: { type: Boolean, default: false },
 })
 
 // Q6: emit `change` on genuine user edits so DocDetail's dirty guard sees grid
@@ -222,6 +284,11 @@ watch(
 const dimensions = ref([])
 // ── available received types for the "+RT" add buttons ──
 const availableRTs = ref([])
+const actualDiaEnabled = ref(false)
+const allowExcess = computed(() => !props.actualDiaDisabled)
+const diaOptions = ref([])
+const diaSelections = reactive({})
+let actualDiaRequest = 0
 const defaultReceivedType = ref("")
 const receivedTypesReady = ref(false)
 
@@ -244,9 +311,33 @@ onMounted(async () => {
 	}
 	receivedTypesReady.value = true
 	compactLoadedSplits()
+	await loadActualDiaContext()
 	// Arm change-emit after initial state settles (a later external loadData re-arms).
 	nextTick(() => { changeArmed.value = true })
 })
+
+watch(
+	() => [props.workOrder, props.actualDiaDisabled],
+	loadActualDiaContext,
+)
+
+async function loadActualDiaContext() {
+	const request = ++actualDiaRequest
+	actualDiaEnabled.value = false
+	diaOptions.value = []
+	if (!props.workOrder || props.actualDiaDisabled) return
+	try {
+		const result = await callMethod("essdee_yrp.fabric_grn.get_actual_dia_context", {
+			work_order: props.workOrder,
+		})
+		if (request !== actualDiaRequest) return
+		actualDiaEnabled.value = !!result?.enabled
+		diaOptions.value = result?.dia_options || []
+	} catch (_) {
+		if (request !== actualDiaRequest) return
+		actualDiaEnabled.value = false
+	}
+}
 
 const dimensionLabels = computed(() => {
 	const out = {}
@@ -258,94 +349,7 @@ const dimensionLabels = computed(() => {
 // Collapse the grouped entries into logical rows keyed by parent item +
 // dimensions-minus-received_type + non-primary attributes + size columns. Each
 // distinct received_type for that key becomes one SPLIT row.
-const logicalRows = computed(() => {
-	const rows = []
-	const byKey = new Map()
-	for (const group of groups.value || []) {
-		for (const entry of group.items || []) {
-			const dimsNoType = stripReceivedType(entry.dimensions || {})
-			const attributes = entry.attributes || {}
-			const columns = getColumns(group, entry)
-			const setCombination = normalizedSetCombination(entry.set_combination)
-			const key = stableKey({
-				name: entry.name,
-				dimensions: dimsNoType,
-				attributes,
-				setCombination,
-				columns: columns.map((c) => c.key),
-			})
-			if (!byKey.has(key)) {
-				const row = {
-					key,
-					name: entry.name,
-					dimensions: dimsNoType,
-					dimensionFields: Object.keys(dimsNoType).filter((fn) => dimsNoType[fn]),
-					attributes,
-					setCombination,
-					attributeFields: Object.keys(attributes).filter((fn) => attributes[fn]),
-					columns,
-					defaultUom: entry.default_uom || "",
-					splits: [],
-				}
-				byKey.set(key, row)
-				rows.push(row)
-			}
-			byKey.get(key).splits.push({
-				key: `${key}::${receivedType(entry)}`,
-				receivedType: receivedType(entry),
-				entry,
-			})
-		}
-	}
-	for (const row of rows) {
-		row.splits.sort((a, b) => (a.receivedType || "").localeCompare(b.receivedType || ""))
-	}
-	return rows
-})
-
-function stripReceivedType(dimsIn) {
-	const out = {}
-	for (const [fn, v] of Object.entries(dimsIn || {})) {
-		if (fn !== "received_type") out[fn] = v
-	}
-	return out
-}
-
-function receivedType(entry) {
-	return (entry.dimensions || {}).received_type || ""
-}
-
-function normalizedSetCombination(value) {
-	if (!value) return {}
-	if (typeof value === "string") {
-		try {
-			return JSON.parse(value)
-		} catch (_) {
-			return { value }
-		}
-	}
-	return value
-}
-
-function getColumns(group, entry) {
-	const values = entry.values || {}
-	const primaryValues = group.primary_attribute_values || []
-	if (primaryValues.length && !Object.prototype.hasOwnProperty.call(values, "default")) {
-		return primaryValues.map((v) => ({ key: v, label: v }))
-	}
-	return [{ key: "default", label: "Qty" }]
-}
-
-function stableKey(value) {
-	return JSON.stringify(sortObject(value))
-}
-function sortObject(value) {
-	if (Array.isArray(value)) return value.map((i) => sortObject(i))
-	if (!value || typeof value !== "object") return value
-	const out = {}
-	for (const k of Object.keys(value).sort()) out[k] = sortObject(value[k])
-	return out
-}
+const logicalRows = computed(() => buildGrnLogicalRows(groups.value))
 
 function dimensionLabel(fieldname) {
 	if (dimensionLabels.value[fieldname]) return dimensionLabels.value[fieldname]
@@ -406,6 +410,25 @@ function allowedQty(row, key) {
 }
 
 function otherSplitQty(row, currentSplit, key) {
+	const reference = grnSplitReferenceKey(currentSplit, key)
+	if (actualDiaEnabled.value && reference) {
+		let total = 0
+		for (const candidateRow of logicalRows.value) {
+			for (const candidate of candidateRow.splits) {
+				for (const column of candidateRow.columns) {
+					if (
+						candidateRow.key === row.key
+						&& candidate.receivedType === currentSplit?.receivedType
+						&& column.key === key
+					) continue
+					if (grnSplitReferenceKey(candidate, column.key) === reference) {
+						total += qty(candidate.entry, column.key)
+					}
+				}
+			}
+		}
+		return total
+	}
 	let total = 0
 	for (const split of row.splits) {
 		// PrimeVue passes a proxied body-row object, so object identity is not
@@ -414,6 +437,22 @@ function otherSplitQty(row, currentSplit, key) {
 		total += qty(split.entry, key)
 	}
 	return total
+}
+
+function rowReference(row) {
+	for (const split of row.splits || []) {
+		for (const column of row.columns || []) {
+			const reference = grnSplitReferenceKey(split, column.key)
+			if (reference) return reference
+		}
+	}
+	return ""
+}
+
+function rowsForReference(row) {
+	const reference = rowReference(row)
+	if (!reference) return [row]
+	return logicalRows.value.filter((candidate) => rowReference(candidate) === reference)
 }
 
 // Clamp = max_receivable_quantity for the size minus the qty of the SAME size in
@@ -429,12 +468,13 @@ function onQtyInput(row, split, key, value) {
 	const currentSplit = currentRow.splits.find(
 		(candidate) => candidate.receivedType === split.receivedType,
 	) || split
-	const detail = valueDetail(currentSplit.entry, key)
-	let next = toNumber(value)
-	if (next < 0) next = 0
-	const maxValue = maxQty(currentRow, currentSplit, key)
-	if (maxValue !== null && next > maxValue) next = maxValue
-	detail.qty = next
+	const next = normalizeGrnReceiptQuantity(
+		value,
+		allowedQty(currentRow, key),
+		otherSplitQty(currentRow, currentSplit, key),
+		allowExcess.value,
+	)
+	setGrnSplitQuantity(currentSplit, key, next)
 }
 
 function splitTotal(split, columns) {
@@ -451,6 +491,12 @@ function rowAllowed(row) {
 }
 function rowBalance(row) {
 	row = logicalRows.value.find((candidate) => candidate.key === row?.key) || row
+	if (actualDiaEnabled.value && rowReference(row)) {
+		return rowAllowed(row) - rowsForReference(row).reduce(
+			(total, candidate) => total + rowReceived(candidate),
+			0,
+		)
+	}
 	return rowAllowed(row) - rowReceived(row)
 }
 
@@ -459,6 +505,39 @@ function unusedRTs(row) {
 	if (!availableRTs.value || !availableRTs.value.length) return []
 	const used = new Set(row.splits.map((s) => s.receivedType || ""))
 	return availableRTs.value.filter((rt) => !used.has(rt))
+}
+
+function unusedDias(row) {
+	if (!actualDiaEnabled.value) return []
+	const used = new Set(
+		rowsForReference(row).map((candidate) => candidate.attributes?.Dia).filter(Boolean),
+	)
+	return diaOptions.value.filter((dia) => !used.has(dia))
+}
+
+function onDiaChange(row, dia) {
+	if (!dia || !actualDiaEnabled.value) return
+	const duplicate = rowsForReference(row).some(
+		(candidate) => candidate !== row && candidate.attributes?.Dia === dia,
+	)
+	if (duplicate) return
+	setGrnRowDia(row, dia)
+}
+
+function addDia(row, dia) {
+	if (!dia || !actualDiaEnabled.value || !row.splits?.length) return
+	addGrnActualDia(groups.value, row, dia)
+	diaSelections[row.key] = null
+}
+
+function canRemoveDia(row) {
+	return rowsForReference(row).length > 1
+		&& row.splits.every((split) => splitTotal(split, row.columns) === 0)
+}
+
+function removeDia(row) {
+	if (!canRemoveDia(row)) return
+	removeGrnRow(groups.value, row)
 }
 
 function canRemoveSplit(row, split) {
@@ -470,39 +549,11 @@ function canRemoveSplit(row, split) {
 // Clone a template entry within the matching group, stamp the new received_type,
 // zero the qtys (value_fields preserved so they round-trip).
 function addSplit(row, rt) {
-	for (const group of groups.value || []) {
-		for (const entry of group.items || []) {
-			const stripped = stripReceivedType(entry.dimensions || {})
-			const k = stableKey({
-				name: entry.name,
-				dimensions: stripped,
-				attributes: entry.attributes || {},
-				setCombination: normalizedSetCombination(entry.set_combination),
-				columns: getColumns(group, entry).map((c) => c.key),
-			})
-			if (k !== row.key) continue
-			const clone = JSON.parse(JSON.stringify(entry))
-			clone.dimensions = { ...stripped, received_type: rt }
-			clone.comments = ""
-			clone.values = {}
-			for (const col of getColumns(group, entry)) {
-				const src = (entry.values || {})[col.key] || {}
-				clone.values[col.key] = { ...src, qty: 0 }
-			}
-			group.items.push(clone)
-			return
-		}
-	}
+	addGrnReceivedType(groups.value, row, rt)
 }
 
 function removeSplit(row, split) {
-	for (const group of groups.value || []) {
-		const idx = (group.items || []).indexOf(split.entry)
-		if (idx !== -1) {
-			group.items.splice(idx, 1)
-			return
-		}
-	}
+	removeGrnSplit(groups.value, split)
 }
 
 function formatQty(value) {
@@ -515,37 +566,7 @@ function formatQty(value) {
 // Keep the configured default plus any split that already carries a quantity;
 // operators can add the remaining types from the table footer when needed.
 function compactGroups(data) {
-	const compacted = JSON.parse(JSON.stringify(data || []))
-	for (const group of compacted) {
-		const buckets = new Map()
-		for (const entry of group.items || []) {
-			const key = stableKey({
-				name: entry.name,
-				dimensions: stripReceivedType(entry.dimensions || {}),
-				attributes: entry.attributes || {},
-				setCombination: normalizedSetCombination(entry.set_combination),
-				columns: getColumns(group, entry).map((col) => col.key),
-			})
-			if (!buckets.has(key)) buckets.set(key, [])
-			buckets.get(key).push(entry)
-		}
-
-		const keep = new Set()
-		for (const entries of buckets.values()) {
-			for (const entry of entries) {
-				const hasQty = Object.values(entry.values || {}).some(
-					(value) => toNumber(value?.qty) > 0,
-				)
-				if (hasQty) keep.add(entry)
-			}
-			const preferred = entries.find(
-				(entry) => receivedType(entry) === defaultReceivedType.value,
-			)
-			keep.add(preferred || entries[0])
-		}
-		group.items = (group.items || []).filter((entry) => keep.has(entry))
-	}
-	return compacted
+	return compactGrnRouteSplits(data, defaultReceivedType.value)
 }
 
 function compactLoadedSplits() {
@@ -584,7 +605,9 @@ function loadData(grouped) {
 // ungroup_items_from_ui skips zero-qty rows on save.
 function getItems() {
 	return JSON.parse(
-		JSON.stringify((groups.value || []).filter((g) => (g.items || []).length > 0)),
+		JSON.stringify(
+			compactGroups(groups.value).filter((g) => (g.items || []).length > 0),
+		),
 	)
 }
 
@@ -648,6 +671,11 @@ defineExpose({ loadData, getItems, hasItems })
 .grn-rt-remove {
 	margin-left: 4px;
 }
+.grn-dia-cell {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
 
 .cell-num {
 	width: 100%;
@@ -690,6 +718,12 @@ defineExpose({ loadData, getItems, hasItems })
 	color: var(--esd-muted);
 	font-weight: 600;
 	margin-right: 4px;
+}
+.grn-dia-add-label {
+	margin-left: 12px;
+}
+.grn-dia-select {
+	min-width: 150px;
 }
 
 .grid-empty-state {

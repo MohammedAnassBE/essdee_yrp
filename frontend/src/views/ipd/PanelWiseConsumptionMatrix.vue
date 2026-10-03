@@ -41,6 +41,15 @@
 						<th v-for="packing in currentPackingValues" :key="packing">
 							{{ packing }}
 							<small>Dia · kg / piece</small>
+							<Button
+								v-if="editing"
+								label="Fill column"
+								size="small"
+								severity="secondary"
+								text
+								class="pwc-column-fill"
+								@click="openColumnFill(packing)"
+							/>
 						</th>
 						<th v-if="editing" class="pwc-action">Action</th>
 					</tr>
@@ -50,15 +59,14 @@
 						<td class="pwc-primary-value">{{ row.primary_value }}</td>
 						<td v-for="packing in currentPackingValues" :key="packing">
 							<div v-if="editing" class="pwc-cell">
-								<LinkField
-									:model-value="cellFor(row, packing).dia || ''"
-									target-doctype="Item Attribute Value"
-									:filters="DIA_FILTERS"
-									:dropdown="false"
-									placeholder="Select Dia"
-									class="pwc-dia-link"
-									@item-select="(event) => setDia(row, packing, event.value)"
-								/>
+								<select
+									:value="cellFor(row, packing).dia || ''"
+									class="pwc-dia-select"
+									@change="setDia(row, packing, $event.target.value)"
+								>
+									<option value="" disabled>Select Dia</option>
+									<option v-for="dia in diaOptions" :key="dia" :value="dia">{{ dia }}</option>
+								</select>
 								<input
 									class="pwc-input pwc-weight"
 									type="text"
@@ -88,18 +96,42 @@
 			</table>
 		</div>
 	</div>
+
+	<Dialog
+		v-model:visible="columnFillVisible"
+		modal
+		:header="columnFillPacking ? `Fill ${columnFillPacking} column` : 'Fill column'"
+		:style="{ width: 'min(430px, 94vw)' }"
+	>
+		<div class="pwc-fill-form">
+			<label>
+				<span>Dia</span>
+				<select v-model="columnFillDia" class="pwc-dia-select">
+					<option value="" disabled>Select Dia</option>
+					<option v-for="dia in diaOptions" :key="dia" :value="dia">{{ dia }}</option>
+				</select>
+			</label>
+			<label>
+				<span>Consumption (kg / piece)</span>
+				<input v-model="columnFillWeight" type="text" inputmode="decimal" placeholder="0.0300" class="pwc-input" />
+			</label>
+		</div>
+		<template #footer>
+			<Button label="Cancel" severity="secondary" text @click="columnFillVisible = false" />
+			<Button label="Fill Column" :disabled="!columnFillDia || !columnFillWeight" @click="applyColumnFill" />
+		</template>
+	</Dialog>
 </template>
 
 <script setup>
 import { computed, ref, watch } from "vue"
 import Button from "primevue/button"
+import Dialog from "primevue/dialog"
 import Tooltip from "primevue/tooltip"
-import LinkField from "@/components/LinkField.vue"
 import { useAppToast } from "@/composables/useToast"
 
 const vTooltip = Tooltip
 const toast = useAppToast()
-const DIA_FILTERS = Object.freeze({ attribute_name: "Dia" })
 const props = defineProps({
 	matrix: { type: Object, default: null },
 	diaValues: { type: Array, default: () => [] },
@@ -110,6 +142,22 @@ const emit = defineEmits(["update:matrix"])
 const clone = (value) => (value ? JSON.parse(JSON.stringify(value)) : null)
 const localMatrix = ref(clone(props.matrix))
 const activePanel = ref("")
+const columnFillVisible = ref(false)
+const columnFillPacking = ref("")
+const columnFillDia = ref("")
+const columnFillWeight = ref("")
+
+const diaOptions = computed(() => {
+	const values = [...(props.diaValues || [])]
+	for (const panel of localMatrix.value?.panels || []) {
+		for (const row of panel.rows || []) {
+			for (const cell of Object.values(row.values || {})) {
+				if (cell?.dia && !values.includes(cell.dia)) values.push(cell.dia)
+			}
+		}
+	}
+	return values
+})
 
 watch(
 	() => props.matrix,
@@ -201,10 +249,35 @@ function copyFirstPackingToRow(row) {
 		return
 	}
 	for (const packing of currentPackingValues.value) {
-		row.values[packing] = { dia: source.dia, weight: source.weight }
+		const target = cellFor(row, packing)
+		target.dia = source.dia
+		target.weight = source.weight
 	}
 	commit()
 }
+
+function openColumnFill(packing) {
+	columnFillPacking.value = packing
+	columnFillDia.value = ""
+	columnFillWeight.value = ""
+	columnFillVisible.value = true
+}
+
+function applyColumnFill() {
+	const weight = parseWeight(columnFillWeight.value)
+	if (!columnFillDia.value || Number.isNaN(weight)) {
+		toast.error("Invalid values", "Select a Dia and enter a positive consumption, for example 0.0300.")
+		return
+	}
+	for (const row of currentPanel.value?.rows || []) {
+		const target = cellFor(row, columnFillPacking.value)
+		target.dia = columnFillDia.value
+		target.weight = weight
+	}
+	columnFillVisible.value = false
+	commit()
+}
+
 function copyFirstPackingToPanel() {
 	const first = currentPackingValues.value[0]
 	const missing = currentPanel.value.rows.find((row) => {
@@ -221,7 +294,9 @@ function copyFirstPackingToPanel() {
 	for (const row of currentPanel.value.rows) {
 		const source = cellFor(row, first)
 		for (const packing of currentPackingValues.value) {
-			row.values[packing] = { dia: source.dia, weight: source.weight }
+			const target = cellFor(row, packing)
+			target.dia = source.dia
+			target.weight = source.weight
 		}
 	}
 	commit()
@@ -357,14 +432,39 @@ function copyFirstPackingToPanel() {
 .pwc-dia {
 	width: 126px;
 }
-.pwc-dia-link {
+.pwc-dia-select {
+	box-sizing: border-box;
 	width: 100%;
 	min-width: 108px;
+	padding: 7px 9px;
+	border: 1px solid var(--esd-line);
+	border-radius: calc(var(--esd-radius) - 3px);
+	background: var(--esd-surface2);
+	color: var(--esd-text);
+	font: inherit;
+	font-size: 0.8rem;
+	outline: none;
 }
-.pwc-dia-link :deep(.link-field),
-.pwc-dia-link :deep(.p-autocomplete),
-.pwc-dia-link :deep(input) {
-	width: 100%;
+.pwc-dia-select:focus {
+	border-color: var(--esd-accent);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--esd-accent) 14%, transparent);
+}
+.pwc-column-fill {
+	display: block;
+	margin-top: 3px;
+	padding: 2px 0 !important;
+	font-size: 0.65rem !important;
+}
+.pwc-fill-form {
+	display: grid;
+	gap: 14px;
+}
+.pwc-fill-form label > span {
+	display: block;
+	margin-bottom: 6px;
+	color: var(--esd-muted);
+	font-size: 0.76rem;
+	font-weight: 650;
 }
 .pwc-action {
 	width: 82px;

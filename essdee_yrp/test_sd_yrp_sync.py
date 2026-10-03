@@ -15,9 +15,28 @@ from essdee_yrp.sd_yrp_sync import (
 	upsert_doc,
 )
 from essdee_yrp.setup import ensure_yrp_production_order_settings
+from yrp.yrp.doctype.goods_received_note.goods_received_note import (
+	get_rework_output_received_types,
+)
 
 
 class TestSDYRPSyncSetup(IntegrationTestCase):
+	def test_grn_received_type_options_include_essdee_classifications(self):
+		options = get_rework_output_received_types()["received_types"]
+
+		self.assertTrue({
+			"Accepted",
+			"Adas",
+			"Fabric Mistake",
+			"Fusing Mistake",
+			"Misstitch",
+			"Oil Mark",
+			"Other Mistake",
+			"Printing Mistake",
+			"Rejected",
+			"Shade Mistake",
+		}.issubset(options))
+
 	def test_grn_item_type_message_creates_received_type(self):
 		name = f"_Test Received Type {frappe.generate_hash(length=8)}"
 		self.assertIn("GRN Item Type", CONSUMER_DOCTYPES)

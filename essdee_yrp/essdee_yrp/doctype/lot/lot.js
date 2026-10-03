@@ -27,10 +27,12 @@ frappe.ui.form.on("Lot", {
 		});
 	},
 	refresh(frm) {
-		$(".layout-side-section").css("display", "none");
+		// Keep the wide Lot workspace without hiding sidebars on cached Desk forms.
+		frm.page.wrapper.find(".layout-side-section").css("display", "none");
 		// Mount first: unrelated legacy widgets later in refresh must never keep
 		// the persisted Cloth Program tab blank if one of them fails to render.
 		mount_cloth_program(frm)
+		mount_actual_dia_conversions(frm)
 		frm.page.add_menu_item(__("Calculate"), function () {
 			calculate_all(frm);
 		}, false, 'Ctrl+E', false);
@@ -106,6 +108,9 @@ frappe.ui.form.on("Lot", {
 				});
 			});
 		}
+		if (frm.item && frm.item.app) {
+			frm.item.app.unmount()
+		}
 		$(frm.fields_dict['items_html'].wrapper).html("")
 		frm.item = new frappe.production.ui.LotOrder(frm.fields_dict['items_html'].wrapper)
 		if (frm.doc.__onload && frm.doc.__onload.item_details) {
@@ -128,7 +133,7 @@ frappe.ui.form.on("Lot", {
 							frm.item.show_inputs()
 							frm.item.load_data(r.message)
 						}
-						cur_frm.dirty()
+						frm.dirty()
 					}
 				})
 			}
@@ -148,6 +153,10 @@ frappe.ui.form.on("Lot", {
 				}
 			})
 		}
+		if (frm.order_detail && frm.order_detail.app) {
+			frm.order_detail.app.unmount()
+		}
+		$(frm.fields_dict['lot_item_order_detail_html'].wrapper).html("")
 		frm.order_detail = new frappe.production.ui.CutPlanItems(frm.fields_dict['lot_item_order_detail_html'].wrapper)
 		if (frm.doc.__onload && frm.doc.__onload.order_item_details) {
 			frm.order_detail.load_data(frm.doc.__onload.order_item_details, 0);
@@ -168,10 +177,13 @@ frappe.ui.form.on("Lot", {
 		// 	}
 		// }
 		if (!frm.is_new() && frm.doc.item && frm.doc.production_detail) {
+			if (frm.ocr_detail && frm.ocr_detail.app) {
+				frm.ocr_detail.app.unmount()
+			}
 			$(frm.fields_dict['ocr_detail_html'].wrapper).html("")
-			new frappe.production.ui.OCRDetail(frm.fields_dict['ocr_detail_html'].wrapper)
+			frm.ocr_detail = new frappe.production.ui.OCRDetail(frm.fields_dict['ocr_detail_html'].wrapper)
 		}
-		if (frm.doc.has_transferred) {
+		if (frm.doc.has_transferred && frappe.production.ui.AlternativeDetail) {
 			new frappe.production.ui.AlternativeDetail(frm.fields_dict['alternative_html'].wrapper)
 		}
 	},
@@ -200,8 +212,10 @@ frappe.ui.form.on("Lot", {
 			let items = frm.item.get_data()
 			frm.doc['item_details'] = JSON.stringify(items)
 		}
-		let order_items = frm.order_detail.get_items()
-		frm.doc['order_item_details'] = JSON.stringify(order_items)
+		if (frm.order_detail) {
+			let order_items = frm.order_detail.get_items()
+			frm.doc['order_item_details'] = JSON.stringify(order_items)
+		}
 		// Guarded: an unmounted island must leave the transient fields absent so
 		// the server keeps the stored program/requirement rows untouched.
 		if (frm.fabric_program) {
@@ -313,6 +327,17 @@ function mount_cloth_program(frm) {
 			frm.fabric_program.load_data(r.message || []);
 		},
 	});
+}
+
+function mount_actual_dia_conversions(frm) {
+	const field = frm.fields_dict.actual_dia_conversion_html;
+	if (!field) return;
+	if (frm.actual_dia_conversions && frm.actual_dia_conversions.app) {
+		frm.actual_dia_conversions.app.unmount();
+	}
+	$(field.wrapper).html("");
+	frm.actual_dia_conversions = new frappe.production.ui.ActualDiaConversions(field.wrapper);
+	frm.actual_dia_conversions.load_data(frm.doc.lot_fabric_conversions || []);
 }
 
 

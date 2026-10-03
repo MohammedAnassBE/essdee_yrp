@@ -768,6 +768,8 @@
 						v-if="useGrnSplit"
 						:ref="(el) => setGridRef(pv.childField, el)"
 						:editable="true"
+						:work-order="form.against_id || ''"
+						:actual-dia-disabled="!!(form.is_return || form.is_rework || form.additional_grn || form.includes_packing)"
 						@change="onGridChange"
 					/>
 					<StockItemGridEditor
@@ -1400,6 +1402,9 @@
 								:initial-data="lotOnload.fabric_program_details ?? []"
 							/>
 						</TabPanel>
+						<TabPanel v-if="isLot" value="lot-actual-dia">
+							<LotActualDiaConversions :rows="doc.lot_fabric_conversions || []" />
+						</TabPanel>
 
 						<!-- ATTRIBUTE VALUES (Item) — Desk AttributeList.vue port -->
 						<TabPanel v-if="hasAttributeValuesEditor" value="attribute-values">
@@ -1655,6 +1660,7 @@ import WorkflowActions from "./WorkflowActions.vue"
 import LotOrderEditor from "./LotOrderEditor.vue"
 import LotOrderDetailGrid from "./LotOrderDetailGrid.vue"
 import LotFabricViews from "../fabric/LotFabricViews.vue"
+import LotActualDiaConversions from "../fabric/LotActualDiaConversions.vue"
 import ItemDependentAttributeEditor from "./ItemDependentAttributeEditor.vue"
 import ItemAttributeListView from "./ItemAttributeListView.vue"
 import LinkField from "@/components/LinkField.vue"
@@ -1669,7 +1675,11 @@ import SendWhatsAppModal from "./SendWhatsAppModal.vue"
 import DocMovableActions from "./DocMovableActions.vue"
 import DetailRelated from "@/components/detail/DetailRelated.vue"
 import WorkOrderSummary from "./WorkOrderSummary.vue"
-import { useUiConfigStore } from "@/engine"
+import {
+	countCalculatedItemsForDisplay,
+	countItemsForDisplay,
+	useUiConfigStore,
+} from "@/engine"
 
 const props = defineProps({
 	docRoute: { type: String, required: true },
@@ -2485,6 +2495,7 @@ const STOCK_GROUPED_MAP = {
 	"Delivery Challan": [{
 		childField: "items", groupedField: "item_details", ungroupKey: "Delivery Challan",
 		label: "Items",
+		aggregateDisplay: true,
 		valueFields: [
 			"rate", "valuation_rate", "pending_quantity", "delivered_quantity",
 			"received_quantity", "stock_qty", "amount", "ref_doctype", "ref_docname",
@@ -2501,6 +2512,7 @@ const STOCK_GROUPED_MAP = {
 	"Goods Received Note": [{
 		childField: "items", groupedField: "item_details", ungroupKey: "Goods Received Note",
 		label: "Items",
+		aggregateDisplay: true,
 		valueFields: [
 			"rate", "pending_quantity", "max_receivable_quantity", "stock_qty", "amount",
 			"ref_doctype", "ref_docname", "delivery_challan_item",
@@ -3763,6 +3775,7 @@ const editableChildTables = computed(() => {
 		(f) =>
 			f.fieldtype === "Table" &&
 			!f.hidden &&
+			!f.read_only &&
 			!GROUPED_JSON_FIELDS.has(f.fieldname) &&
 			!CHILD_TABLE_EXCLUDE.has(f.fieldname) &&
 			// Honor depends_on on the CHILD-TABLE field itself (e.g. Process'
@@ -4636,9 +4649,15 @@ function childLinkSearchHandlerFor(col, row = null) {
 // path. Only the fields in stockPivots are affected; all others stay flat.
 function buildPayload() {
 	const payload = {}
+	const readOnlyFields = new Set(
+		(meta.value?.fields || [])
+			.filter((field) => field.read_only)
+			.map((field) => field.fieldname),
+	)
 	for (const [k, v] of Object.entries(form)) {
 		if (GROUPED_JSON_FIELDS.has(k)) continue
 		if (k === "__islocal") continue
+		if (readOnlyFields.has(k)) continue
 		payload[k] = v
 	}
 	// Ensure the grouped-JSON twins are NOT sent by default (extra safety).
@@ -5082,9 +5101,10 @@ async function onDeliverablesCalculated(res) {
 	// PERSIST after a successful calculate on slow/big fan-outs.
 	staleNotice.value = false
 	await hydratePivotsForView()
+	const counts = countCalculatedItemsForDisplay(viewGrouped.value, res)
 	toast.success(
 		"Deliverables calculated",
-		`${res?.deliverables ?? 0} deliverable(s) and ${res?.receivables ?? 0} receivable(s).`,
+		`${counts.deliverables} deliverable(s) and ${counts.receivables} receivable(s).`,
 		6000,
 	)
 }
@@ -5540,7 +5560,9 @@ function rowsFor(ct) {
 function tabBadge(ct) {
 	if (pivotChildFields.value.has(ct.fieldname)) {
 		const groups = viewGrouped.value?.[ct.fieldname]
-		if (Array.isArray(groups)) return groups.reduce((n, g) => n + (g.items?.length || 0), 0)
+		if (Array.isArray(groups)) {
+			return countItemsForDisplay(groups, !!pivotFor(ct.fieldname)?.aggregateDisplay)
+		}
 	}
 	return rowsFor(ct).length
 }
@@ -5565,6 +5587,13 @@ const lotViewTabs = computed(() => {
 	}
 	pushTable("lot_fabric_details")
 	out.push({ value: "lot-fabric", label: "Cloth Program", badge: 0 })
+	out.push({
+		value: "lot-actual-dia",
+		label: "Actual Dia Conversion",
+		badge: (doc.value?.lot_fabric_conversions || []).filter(
+			(row) => row.from_item && row.to_item && row.from_item !== row.to_item,
+		).length,
+	})
 	out.push({ value: "lot-items", label: "Order Items", badge: 0 })
 	out.push({ value: "lot-order-details", label: "Order Details", badge: 0 })
 	for (const ct of tables) {

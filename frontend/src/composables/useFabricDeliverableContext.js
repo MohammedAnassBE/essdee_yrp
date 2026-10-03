@@ -8,6 +8,41 @@ export function isMultiColour(row) {
 		&& row.colour_options.length <= MAX_COLOUR_COLUMNS
 }
 
+const SECTIONABLE_FABRIC_KINDS = ["conversion", "dyeing", "compacting", "identity"]
+
+export function buildColourDiaLayout(row) {
+	const qtyRows = row.qty_rows || []
+	const sections = []
+	const bySection = new Map()
+	qtyRows.forEach((qr, j) => {
+		const sectionKey = qr.section == null ? " null" : String(qr.section)
+		let section = bySection.get(sectionKey)
+		if (!section) {
+			section = { name: qr.section, items: [], diaGroups: [] }
+			section._diaByName = new Map()
+			bySection.set(sectionKey, section)
+			sections.push(section)
+		}
+		const item = { qr, j }
+		section.items.push(item)
+		const diaName = qr.row_label || qr.label || "—"
+		let diaGroup = section._diaByName.get(diaName)
+		if (!diaGroup) {
+			diaGroup = { name: diaName, items: [] }
+			section._diaByName.set(diaName, diaGroup)
+			section.diaGroups.push(diaGroup)
+		}
+		diaGroup.items.push(item)
+	})
+	const sectionable = (SECTIONABLE_FABRIC_KINDS.includes(row.kind) || row.reference_routed)
+		&& (row.reference_routed || qtyRows.length > 6)
+		&& sections.length > 1
+		&& qtyRows.every((qr) => qr.section != null)
+	if (!sectionable) return null
+	sections.forEach((section) => delete section._diaByName)
+	return { sections, asColumns: sections.length <= MAX_COLOUR_COLUMNS }
+}
+
 export function knittingInputRouteKey(qtyRowIndex, colour = null) {
 	return `${qtyRowIndex}::${colour || ""}`
 }

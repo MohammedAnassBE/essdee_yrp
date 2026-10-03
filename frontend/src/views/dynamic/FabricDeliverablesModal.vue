@@ -23,19 +23,22 @@
 		</div>
 
 		<div v-else class="fc-rows">
-			<div class="fc-source-note" role="status">
-				<template v-if="ctx.source_process">
-					<strong>Filled from {{ ctx.source_process.label || ctx.source_process.process_name }} GRNs</strong>
-					<span>Unallocated source stock: {{ ctx.source_process.available }} kg across all source variants. Only compatible inputs can fill the rows below.</span>
-					<span>Return GRNs are excluded. Quantities remain editable and availability is checked again on Calculate.</span>
+			<div v-if="ctx.source_process?.unavailable || !ctx.source_process" class="fc-source-note" role="status">
+				<template v-if="ctx.source_process?.unavailable">
+					<strong>No predecessor stock available</strong>
+					<span>No unallocated submitted {{ ctx.source_process.label || ctx.source_process.process_name }} GRN quantity is available. Submit the predecessor GRN, then reopen this calculation.</span>
 				</template>
 				<template v-else-if="(ctx.rows || []).some((row) => row.manual_io)">
 					<strong>Available knitting inputs and outputs</strong>
 					<span>The IPD defines every yarn you can deliver and every fabric variant you can receive. Enter the required quantity against each item.</span>
 				</template>
+				<template v-else-if="(ctx.source_process_options || []).length">
+					<strong>Immediate predecessor stock</strong>
+					<span>Quantities are loaded from the immediately preceding process's submitted GRNs and checked again on Calculate.</span>
+				</template>
 				<template v-else>
 					<strong>Planned quantities</strong>
-					<span>Edit the process quantities, or use Fill Quantity to read an earlier process's submitted GRNs.</span>
+					<span>Edit the process quantities shown below.</span>
 				</template>
 			</div>
 			<div v-for="warning in ctx.warnings || []" :key="warning" class="fc-warning" role="status">{{ warning }}</div>
@@ -181,41 +184,65 @@
 					</div>
 				</div>
 
-				<!-- colour-section layout (2026-07-08): big multi-row popups group by
-				     the server's `section` (the Colour part of each rule) with the
-				     short `row_label` (the Dia part) on each input. ≤6 sections →
-				     one column per section; more → stacked section blocks. -->
-				<div
-					v-else-if="layouts[i]"
-					:class="layouts[i].asColumns ? 'fc-colour-grid' : 'fc-section-stack'"
-				>
-					<div
+				<!-- Colour is the primary card heading. Dia is the next visual group;
+				     duplicate source-stock rows sit below one Dia heading. -->
+				<div v-else-if="layouts[i]" class="fc-colour-card-grid">
+					<section
 						v-for="sec in layouts[i].sections"
 						:key="String(sec.name)"
-						:class="layouts[i].asColumns ? 'fc-colour-col' : 'fc-section-block'"
+						class="fc-colour-card"
 					>
-						<div class="fc-colour-head">{{ sec.name }}</div>
-						<div v-for="it in sec.items" :key="it.qr.key" class="fc-field fc-field--tight">
-							<label class="field-label">{{ it.qr.row_label || it.qr.label }}</label>
-							<small v-if="it.qr.source_available != null" class="fc-availability">
-								{{ it.qr.source_shared ? 'Shared capacity' : 'Available output' }}: {{ it.qr.source_available }} kg
-							</small>
-							<InputNumber
-								v-model="entries[i].qtys[it.j]"
-								:min="0"
-								:maxFractionDigits="3"
-								fluid
-								placeholder="0"
-							/>
-						</div>
-					</div>
+						<header class="fc-colour-card-head">
+							<span>
+								<small class="fc-colour-kicker">Colour</small>
+								<strong class="fc-colour-name">{{ sec.name }}</strong>
+							</span>
+							<small class="fc-entry-count">{{ sec.items.length }} entries</small>
+						</header>
+						<section v-for="dia in sec.diaGroups" :key="String(dia.name)" class="fc-dia-group">
+							<header class="fc-dia-head">
+								<span class="fc-dia-identity">
+									<small class="fc-dia-kicker">Dia</small>
+									<strong class="fc-dia-name">{{ dia.name }}</strong>
+								</span>
+								<small class="fc-dia-count">
+									{{ dia.items.length }} {{ dia.items.length === 1 ? 'entry' : 'entries' }}
+								</small>
+							</header>
+							<div class="fc-allocation-head" aria-hidden="true">
+								<span>{{ availabilityHeading(row) }}</span>
+								<span>Quantity to receive</span>
+							</div>
+							<div
+								v-for="(it, stockIndex) in dia.items"
+								:key="it.qr.key"
+								class="fc-allocation-row"
+							>
+								<span class="fc-available-output">
+									<strong>{{ availableOutputLabel(it.qr) }}</strong>
+									<small
+										v-if="dia.items.length > 1"
+										:title="sourceReferenceLabel(row, it.qr)"
+									>Stock {{ stockIndex + 1 }}</small>
+								</span>
+								<InputNumber
+									v-model="entries[i].qtys[it.j]"
+									:min="0"
+									:maxFractionDigits="3"
+									suffix=" Kg"
+									fluid
+									placeholder="0"
+								/>
+							</div>
+						</section>
+					</section>
 				</div>
 
 				<template v-else>
 					<div v-for="(qr, j) in row.qty_rows || []" :key="qr.key" class="fc-field">
 						<label class="field-label">{{ qr.label }}</label>
-						<small v-if="qr.source_available != null" class="fc-availability">
-							{{ qr.source_shared ? 'Shared capacity' : 'Available output' }}: {{ qr.source_available }} kg
+						<small v-if="sourceReferenceLabel(row, qr)" class="fc-source-ref">
+							{{ sourceReferenceLabel(row, qr) }}
 						</small>
 						<InputNumber
 							v-model="entries[i].qtys[j]"
@@ -254,7 +281,7 @@
 		<template #footer>
 			<Button label="Cancel" severity="secondary" text :disabled="applying || loading" @click="emit('update:visible', false)" />
 			<Button
-				v-if="(ctx?.source_process_options || []).length"
+				v-if="(ctx?.source_process_options || []).length > 1"
 				label="Fill Quantity"
 				icon="pi pi-download"
 				severity="secondary"
@@ -266,7 +293,7 @@
 				label="Calculate"
 				icon="pi pi-calculator"
 				:loading="applying"
-				:disabled="loading"
+				:disabled="loading || ctx?.source_process?.unavailable"
 				@click="onApply"
 			/>
 		</template>
@@ -337,7 +364,7 @@ import LinkField from "@/components/LinkField.vue"
 import { callMethod, searchLink } from "@/api/client"
 import { useAppToast } from "@/composables/useToast"
 import {
-	MAX_COLOUR_COLUMNS,
+	buildColourDiaLayout,
 	collectManualKnittingContract,
 	isMultiColour,
 	useFabricDeliverableContext,
@@ -353,6 +380,8 @@ const props = defineProps({
 	// the backend's stale-write guard (_guard_not_modified) rejects a concurrent edit.
 	modified: { type: String, default: null },
 })
+
+const QTY_EPSILON = 1e-9
 // "applying" fires right BEFORE the server write so the host can open its
 // realtime local-write suppression window (markLocalWrite) in time — the
 // doc_update echo can arrive mid-request, before "calculated" resolves, and
@@ -436,32 +465,23 @@ function needsColourPicker(row) {
 	return (row.qty_rows || []).some((qr) => !qr.knit_colour)
 }
 
-// Colour-section layout descriptor (mirrors the Desk's `sectionable` branch):
-// null = flat list. Sections keep server encounter order; each item keeps its
-// ORIGINAL qty_rows index j, so entry collection / payload are layout-blind.
-const SECTIONABLE_KINDS = ["conversion", "dyeing", "compacting", "identity"]
+const layouts = computed(() => (ctx.value?.rows || []).map(buildColourDiaLayout))
 
-function sectionLayout(row) {
-	const qtyRows = row.qty_rows || []
-	const sections = []
-	const bySection = {}
-	qtyRows.forEach((qr, j) => {
-		const key = qr.section == null ? " null" : String(qr.section)
-		if (!bySection[key]) {
-			bySection[key] = { name: qr.section, items: [] }
-			sections.push(bySection[key])
-		}
-		bySection[key].items.push({ qr, j })
-	})
-	const sectionable = (SECTIONABLE_KINDS.includes(row.kind) || row.reference_routed)
-		&& (row.reference_routed || qtyRows.length > 6)
-		&& sections.length > 1
-		&& qtyRows.every((qr) => qr.section != null)
-	if (!sectionable) return null
-	return { sections, asColumns: sections.length <= MAX_COLOUR_COLUMNS }
+function displayQty(value) {
+	const qty = Number(value)
+	if (!Number.isFinite(qty)) return "—"
+	return `${qty.toLocaleString(undefined, { maximumFractionDigits: 3 })} kg`
 }
 
-const layouts = computed(() => (ctx.value?.rows || []).map(sectionLayout))
+function availableOutputLabel(qr) {
+	return displayQty(qr.source_available ?? qr.balance ?? qr.prefill)
+}
+
+function availabilityHeading(row) {
+	return (row.qty_rows || []).some((qr) => qr.source_available != null)
+		? "Available output"
+		: "Planned quantity"
+}
 
 // Every rendered qty input of context row i, with its qty_row — one place that
 // knows both layouts, shared by the yarn total and the overshoot check.
@@ -499,34 +519,73 @@ function contractAttributeLabel(attrs) {
 		.join(" · ")
 }
 
-// Non-blocking over-balance warning (production_api stance — knitting can
-// legitimately over-deliver). Knitting and dyeing check the per-dia SUM of
-// the dialog's own inputs (colours share one dia's balance); compacting is
-// per row. Mirrors the Desk's warn_balance_overshoot.
+function sourceReferenceLabel(row, qr) {
+	if (!qr?.source_bucket_key) return ""
+	const route = `${qr.section || ""}|${qr.row_label || qr.label || ""}`
+	const duplicates = (row.qty_rows || []).filter((candidate) => (
+		candidate.source_bucket_key
+		&& `${candidate.section || ""}|${candidate.row_label || candidate.label || ""}` === route
+	))
+	if (duplicates.length < 2) return ""
+	const parts = [qr.source_grn || "Source GRN"]
+	if (qr.source_grn_row) parts.push(`row ${qr.source_grn_row}`)
+	if (qr.source_stock_available != null) {
+		parts.push(`${Number(qr.source_stock_available).toLocaleString()} kg available`)
+	}
+	return parts.join(" · ")
+}
+
+function appendSourceOvershoots(row, inputs, overs) {
+	const bySource = {}
+	inputs.forEach(({ qty, qr }) => {
+		const perOutput = Number(qr.source_stock_per_output)
+		const capacity = Number(qr.source_stock_available)
+		if (!qty || !qr.source_bucket_key || !(perOutput > 0) || !Number.isFinite(capacity)) return
+		if (!bySource[qr.source_bucket_key]) {
+			bySource[qr.source_bucket_key] = {
+				demand: 0,
+				capacity,
+				label: qr.source_grn || qr.source_bucket_key,
+			}
+		}
+		bySource[qr.source_bucket_key].demand += qty * perOutput
+	})
+	Object.values(bySource).forEach((source) => {
+		if (source.demand > source.capacity + QTY_EPSILON) {
+			overs.push(
+				`${row.cloth_item} · ${source.label}: ${source.demand.toFixed(3)} kg > ${source.capacity} kg available`,
+			)
+		}
+	})
+}
+
+// Non-blocking preview only. The server rechecks each exact GRN source on
+// Calculate and again when a DC is submitted.
 function warnBalanceOvershoot() {
 	const overs = []
 	;(ctx.value?.rows || []).forEach((row, i) => {
 		const inputs = collectInputs(i)
-		if (row.kind === "knitting" || row.kind === "dyeing") {
+		if (row.kind === "knitting") {
 			const perDia = {}
-			const limitLabel = row.kind === "knitting" ? "balance" : "previous stage available"
 			inputs.forEach(({ qty, qr }) => {
 				const dia = qr.reference_item_variant
 					|| (qr.out_attrs || {}).Dia
 					|| qr.label
-				const limit = row.kind === "knitting" ? qr.balance : qr.available
+				const limit = qr.balance
 				if (!perDia[dia]) perDia[dia] = { sum: 0, limit }
 				perDia[dia].sum += qty
 			})
 			Object.entries(perDia).forEach(([dia, agg]) => {
-				if (agg.limit != null && agg.sum > agg.limit + 0.001) {
-					overs.push(`${row.cloth_item} · ${dia}: ${agg.sum} > ${limitLabel} ${agg.limit}`)
+				if (agg.limit != null && agg.sum > agg.limit + QTY_EPSILON) {
+					overs.push(`${row.cloth_item} · ${dia}: ${agg.sum} > balance ${agg.limit}`)
 				}
 			})
-		} else if (row.kind === "compacting") {
+		} else if (inputs.some(({ qr }) => qr.source_bucket_key)) {
+			appendSourceOvershoots(row, inputs, overs)
+		} else if (row.kind === "dyeing" || row.kind === "compacting") {
 			inputs.forEach(({ qty, qr }) => {
-				if (qty && qr.available != null && qty > qr.available + 0.001) {
-					overs.push(`${row.cloth_item} · ${qr.label}: ${qty} > previous stage available ${qr.available}`)
+				if (qty && qr.source_available != null && qty > qr.source_available + QTY_EPSILON) {
+					overs.push(`${row.cloth_item} · ${qr.label}: ${qty} > previous stage available ${qr.source_available}`)
 				}
 			})
 		}
@@ -576,7 +635,13 @@ async function onApply() {
 				return
 			}
 			if (qty > 0) {
-				const line = { key: qr.key, out_attrs: qr.out_attrs, qty }
+				const line = {
+					key: qr.key,
+					matrix_key: qr.matrix_key || qr.key,
+					out_attrs: qr.out_attrs,
+					qty,
+				}
+				if (qr.source_bucket_key) line.source_bucket_key = qr.source_bucket_key
 				if (colour) line.colour = colour
 				if (row.manual_io) {
 					if (!manualInputs.some((input) => input.qty > 0)) {
@@ -645,6 +710,22 @@ async function onApply() {
 	background: var(--esd-accent-50);
 	font-size: 12.5px;
 }
+.fc-source-breakdown {
+	margin-top: 4px;
+	border-top: 1px solid var(--esd-line);
+	padding-top: 6px;
+}
+.fc-source-breakdown summary {
+	cursor: pointer;
+	font-weight: 600;
+}
+.fc-source-line {
+	display: grid;
+	grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) auto;
+	gap: 10px;
+	padding: 6px 0;
+	border-bottom: 1px solid var(--esd-line);
+}
 .fc-warning {
 	padding: 10px 14px;
 	background: var(--esd-warn-50);
@@ -654,6 +735,11 @@ async function onApply() {
 .fc-availability {
 	color: var(--esd-muted);
 	font-size: 11px;
+}
+.fc-source-ref {
+	color: var(--esd-muted);
+	font-size: 10.5px;
+	line-height: 1.25;
 }
 .fc-loading {
 	display: flex;
@@ -806,6 +892,130 @@ async function onApply() {
 	gap: 16px;
 	font-size: 12.5px;
 }
+.fc-colour-card-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+	gap: 12px;
+	padding: 12px 14px 14px;
+}
+.fc-colour-card {
+	min-width: 0;
+	overflow: hidden;
+	border: 1px solid var(--esd-line);
+	border-radius: 9px;
+	background: var(--esd-card);
+}
+.fc-colour-card-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 11px 12px;
+	border-bottom: 1px solid var(--esd-line);
+	background: var(--esd-slate-50);
+}
+.fc-colour-kicker,
+.fc-dia-kicker {
+	display: block;
+	color: var(--esd-muted);
+	font-size: 9px;
+	font-weight: 750;
+	letter-spacing: 0.12em;
+	line-height: 1.1;
+	text-transform: uppercase;
+}
+.fc-colour-name {
+	display: block;
+	margin-top: 2px;
+	color: var(--esd-ink);
+	font-size: 22px;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	line-height: 1.1;
+}
+.fc-entry-count,
+.fc-dia-count {
+	flex: 0 0 auto;
+	padding: 3px 7px;
+	border: 1px solid var(--esd-line);
+	border-radius: 999px;
+	color: var(--esd-muted);
+	background: var(--esd-card);
+	font-size: 9.5px;
+	font-weight: 650;
+}
+.fc-dia-group + .fc-dia-group {
+	border-top: 3px solid var(--esd-slate-50);
+}
+.fc-dia-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 9px 12px;
+	border-bottom: 1px solid var(--esd-line);
+	background: var(--esd-accent-50);
+}
+.fc-dia-identity {
+	display: flex;
+	align-items: baseline;
+	gap: 7px;
+}
+.fc-dia-kicker {
+	display: inline;
+	color: var(--esd-accent-700);
+}
+.fc-dia-name {
+	color: var(--esd-accent-700);
+	font-size: 17px;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+	line-height: 1;
+}
+.fc-dia-count {
+	border-color: color-mix(in srgb, var(--esd-accent) 25%, var(--esd-line));
+	color: var(--esd-accent-700);
+}
+.fc-allocation-head,
+.fc-allocation-row {
+	display: grid;
+	grid-template-columns: minmax(90px, 0.9fr) minmax(120px, 1.1fr);
+	align-items: center;
+	gap: 12px;
+}
+.fc-allocation-head {
+	padding: 7px 12px;
+	border-bottom: 1px solid var(--esd-line);
+	color: var(--esd-muted);
+	background: var(--esd-card);
+	font-size: 9px;
+	font-weight: 700;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+}
+.fc-allocation-row {
+	min-height: 54px;
+	padding: 8px 12px;
+}
+.fc-allocation-row + .fc-allocation-row {
+	border-top: 1px solid var(--esd-line);
+}
+.fc-available-output {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+.fc-available-output strong {
+	color: var(--esd-ink-2);
+	font-size: 12.5px;
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+}
+.fc-available-output small {
+	margin-top: 2px;
+	color: var(--esd-muted);
+	font-size: 10px;
+}
 /* one column per physical output colour / server section — wraps on small screens */
 .fc-colour-grid {
 	display: grid;
@@ -842,6 +1052,10 @@ async function onApply() {
 @media (max-width: 720px) {
 	.fc-contract-lists {
 		grid-template-columns: 1fr;
+	}
+	.fc-colour-card-grid {
+		grid-template-columns: 1fr;
+		padding-inline: 10px;
 	}
 }
 </style>

@@ -1,5 +1,5 @@
 <template>
-	<div v-if="matrix" class="pwc-card">
+	<div v-if="matrix" ref="matrixRoot" class="pwc-card">
 		<div class="pwc-head">
 			<h4>Panel-wise consumption matrix</h4>
 			<div class="pwc-progress">{{ completeCount }} / {{ totalCount }} complete</div>
@@ -41,26 +41,41 @@
 						<th v-for="packing in currentPackingValues" :key="packing">
 							{{ packing }}
 							<small>Dia · kg / piece</small>
+							<button
+								v-if="!locked"
+								type="button"
+								class="pwc-column-fill-button"
+								@click="fillConsumptionColumn(packing)"
+							>
+								Fill column
+							</button>
 						</th>
 						<th v-if="!locked" class="pwc-action">Action</th>
 					</tr>
 				</thead>
 				<tbody>
 					<tr
-						v-for="row in currentPanel.rows"
+						v-for="(row, rowIndex) in currentPanel.rows"
 						:key="`${currentPanel.panel_value}::${row.primary_value}`"
 					>
 						<td class="pwc-primary-value">{{ row.primary_value }}</td>
-						<td v-for="packing in currentPackingValues" :key="packing">
+						<td v-for="(packing, packingIndex) in currentPackingValues" :key="packing">
 							<div v-if="!locked" class="pwc-cell">
-								<div v-dia-link="cellFor(row, packing)" class="pwc-dia-link"></div>
+								<div
+									v-dia-link="{ cell: cellFor(row, packing), rowIndex, packingIndex }"
+									class="pwc-dia-link"
+								></div>
 								<input
 									class="form-control input-sm pwc-input pwc-weight"
 									type="text"
 									inputmode="decimal"
+									:data-pwc-row="rowIndex"
+									:data-pwc-column="packingIndex"
+									data-pwc-field="weight"
 									:value="formatKg(cellFor(row, packing).weight)"
 									placeholder="0.030"
 									@change="setWeight(row, packing, $event)"
+									@keydown="handleVerticalKeydown($event, rowIndex, packingIndex, 'weight')"
 								/>
 							</div>
 							<span v-else>
@@ -89,6 +104,7 @@
 import { computed, ref } from "vue";
 
 const matrix = ref(null);
+const matrixRoot = ref(null);
 const activePanel = ref("");
 const locked = ref(false);
 let diaControlSequence = 0;
@@ -140,7 +156,88 @@ function cellFor(row, packing) {
 	return row.values[packing];
 }
 
-function mountDiaLink(el, row) {
+function bindDiaMenuPosition(el) {
+	const input = el.querySelector("input");
+	const menu = el.querySelector(".awesomplete > ul");
+	if (!input || !menu) return () => {};
+
+	let animationFrame = null;
+	const positionMenu = () => {
+		if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+		animationFrame = requestAnimationFrame(() => {
+			animationFrame = null;
+			if (!input.isConnected || !menu.isConnected) return;
+
+			const rect = input.getBoundingClientRect();
+			const viewportWidth = document.documentElement.clientWidth;
+			const viewportHeight = document.documentElement.clientHeight;
+			const gap = 4;
+			const edge = 12;
+			const width = Math.min(
+				Math.max(rect.width, 220),
+				Math.max(120, viewportWidth - edge * 2)
+			);
+			const left = Math.min(
+				Math.max(rect.left, edge),
+				Math.max(edge, viewportWidth - width - edge)
+			);
+			const availableBelow = viewportHeight - rect.bottom - gap - edge;
+			const availableAbove = rect.top - gap - edge;
+			const openAbove = availableBelow < 160 && availableAbove > availableBelow;
+			const available = Math.max(80, openAbove ? availableAbove : availableBelow);
+			const maxHeight = Math.min(300, available);
+
+			menu.style.setProperty("position", "fixed", "important");
+			menu.style.setProperty("left", `${left}px`, "important");
+			menu.style.setProperty("right", "auto", "important");
+			menu.style.setProperty("width", `${width}px`, "important");
+			menu.style.setProperty("min-width", `${width}px`, "important");
+			menu.style.setProperty("max-width", `${width}px`, "important");
+			menu.style.setProperty("max-height", `${maxHeight}px`, "important");
+			menu.style.setProperty("overflow-y", "auto", "important");
+			menu.style.setProperty("z-index", "1060", "important");
+			if (openAbove) {
+				menu.style.setProperty("top", "auto", "important");
+				menu.style.setProperty("bottom", `${viewportHeight - rect.top + gap}px`, "important");
+			} else {
+				menu.style.setProperty("top", `${rect.bottom + gap}px`, "important");
+				menu.style.setProperty("bottom", "auto", "important");
+			}
+		});
+	};
+
+	for (const eventName of ["focus", "click", "input", "awesomplete-open"]) {
+		input.addEventListener(eventName, positionMenu);
+	}
+	window.addEventListener("scroll", positionMenu, true);
+	window.addEventListener("resize", positionMenu);
+
+	return () => {
+		if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+		for (const eventName of ["focus", "click", "input", "awesomplete-open"]) {
+			input.removeEventListener(eventName, positionMenu);
+		}
+		window.removeEventListener("scroll", positionMenu, true);
+		window.removeEventListener("resize", positionMenu);
+	};
+}
+
+function handleVerticalKeydown(event, rowIndex, packingIndex, fieldType) {
+	if (event.key !== "ArrowDown" || !(event.ctrlKey || event.shiftKey)) return;
+	event.preventDefault();
+	const targetRow = Number(rowIndex) + 1;
+	const target = [...(matrixRoot.value?.querySelectorAll("[data-pwc-field]") || [])].find(
+		(input) =>
+			input.dataset.pwcField === fieldType &&
+			Number(input.dataset.pwcRow) === targetRow &&
+			Number(input.dataset.pwcColumn) === Number(packingIndex)
+	);
+	target?.focus();
+	target?.select?.();
+}
+
+function mountDiaLink(el, bindingValue) {
+	const { cell, rowIndex, packingIndex } = bindingValue;
 	const control = frappe.ui.form.make_control({
 		parent: el,
 		df: {
@@ -158,32 +255,51 @@ function mountDiaLink(el, row) {
 	});
 	const state = {
 		control,
-		row,
+		cell,
+		rowIndex,
+		packingIndex,
 		initializing: true,
 		syncing: false,
 		syncSequence: 0,
 	};
 	el.__pwcDiaLink = state;
-	Promise.resolve(control.set_value(row.dia || "")).then(() => {
+	Promise.resolve(control.set_value(cell.dia || "")).then(() => {
 		if (el.__pwcDiaLink !== state) return;
 		state.initializing = false;
+		state.cleanupMenuPosition = bindDiaMenuPosition(el);
+		const input = el.querySelector("input");
+		if (input) {
+			input.dataset.pwcField = "dia";
+			input.dataset.pwcRow = String(state.rowIndex);
+			input.dataset.pwcColumn = String(state.packingIndex);
+			state.keydown = (event) =>
+				handleVerticalKeydown(event, state.rowIndex, state.packingIndex, "dia");
+			input.addEventListener("keydown", state.keydown, true);
+			state.input = input;
+		}
 		control.df.onchange = () => {
 			if (state.initializing || state.syncing) return;
 			const value = control.get_value() || null;
-			if (state.row.dia !== value) {
-				state.row.dia = value;
+			if (state.cell.dia !== value) {
+				state.cell.dia = value;
 				markDirty();
 			}
 		};
 	});
 }
 
-function syncDiaLink(el, row) {
+function syncDiaLink(el, bindingValue) {
 	const state = el.__pwcDiaLink;
 	if (!state) return;
 
-	state.row = row;
-	const value = row.dia || "";
+	state.cell = bindingValue.cell;
+	state.rowIndex = bindingValue.rowIndex;
+	state.packingIndex = bindingValue.packingIndex;
+	if (state.input) {
+		state.input.dataset.pwcRow = String(state.rowIndex);
+		state.input.dataset.pwcColumn = String(state.packingIndex);
+	}
+	const value = bindingValue.cell.dia || "";
 	if (state.control.get_value() === value) return;
 
 	const syncSequence = ++state.syncSequence;
@@ -204,6 +320,10 @@ const vDiaLink = {
 	},
 	beforeUnmount(el) {
 		if (el.__pwcDiaLink) {
+			el.__pwcDiaLink.cleanupMenuPosition?.();
+			if (el.__pwcDiaLink.input && el.__pwcDiaLink.keydown) {
+				el.__pwcDiaLink.input.removeEventListener("keydown", el.__pwcDiaLink.keydown, true);
+			}
 			el.__pwcDiaLink.control.df.onchange = null;
 			delete el.__pwcDiaLink;
 		}
@@ -248,9 +368,48 @@ function copyFirstColourToRow(row) {
 		return;
 	}
 	currentPackingValues.value.forEach((packing) => {
-		row.values[packing] = { dia: source.dia, weight: source.weight };
+		const target = cellFor(row, packing);
+		target.dia = source.dia;
+		target.weight = source.weight;
 	});
 	markDirty();
+}
+
+function fillConsumptionColumn(packing) {
+	if (!currentPanel.value) return;
+	const dialog = new frappe.ui.Dialog({
+		title: `Fill ${packing} column`,
+		fields: [
+			{
+				fieldtype: "Link",
+				fieldname: "dia",
+				label: "Dia",
+				options: "Item Attribute Value",
+				reqd: 1,
+				only_select: true,
+				get_query: () => ({ filters: { attribute_name: "Dia" } }),
+			},
+			{
+				fieldtype: "Float",
+				fieldname: "weight",
+				label: "Consumption (kg / piece)",
+				precision: 4,
+				reqd: 1,
+			},
+		],
+		primary_action_label: "Fill Column",
+		primary_action(values) {
+			const weight = parseWeight(values.weight);
+			currentPanel.value.rows.forEach((row) => {
+				const target = cellFor(row, packing);
+				target.dia = values.dia;
+				target.weight = weight;
+			});
+			dialog.hide();
+			markDirty();
+		},
+	});
+	dialog.show();
 }
 
 function copyFirstColourToPanel() {
@@ -268,7 +427,9 @@ function copyFirstColourToPanel() {
 	currentPanel.value.rows.forEach((row) => {
 		const source = cellFor(row, first);
 		currentPackingValues.value.forEach((packing) => {
-			row.values[packing] = { dia: source.dia, weight: source.weight };
+			const target = cellFor(row, packing);
+			target.dia = source.dia;
+			target.weight = source.weight;
 		});
 	});
 	markDirty();
@@ -380,7 +541,8 @@ defineExpose({ load_data, get_data });
 	font-size: 10px;
 }
 .pwc-copy-button,
-.pwc-fill-button {
+.pwc-fill-button,
+.pwc-column-fill-button {
 	border: 1px solid var(--border-color, #dfe3e8);
 	border-radius: 8px;
 	background: var(--card-bg, #fff);
@@ -398,10 +560,17 @@ defineExpose({ load_data, get_data });
 	white-space: nowrap;
 }
 .pwc-copy-button:hover,
-.pwc-fill-button:hover {
+.pwc-fill-button:hover,
+.pwc-column-fill-button:hover {
 	border-color: #75bdb3;
 	background: #eef9f7;
 	color: #0f766e;
+}
+.pwc-column-fill-button {
+	display: block;
+	margin-top: 6px;
+	padding: 4px 7px;
+	font-size: 10px;
 }
 .pwc-scroll {
 	overflow-x: auto;

@@ -49,3 +49,24 @@ test("standard Desk Work Order GRN enables excess entry without Actual Dia suppo
 
 	assert.equal(mounted, true)
 })
+
+test("Desk treats URL string zero flags as a standard Work Order GRN", () => {
+	const essdee_yrp = loadDeskScript({ enabled: false, dia_options: [] })
+	let mounted = false
+	essdee_yrp.mount_physical_grn_editor = () => { mounted = true }
+	const frm = {
+		doc: {
+			against: "Work Order",
+			against_id: "WO-DYE-1",
+			docstatus: 0,
+			is_return: "0",
+			is_rework: "0",
+			additional_grn: "0",
+			includes_packing: "0",
+		},
+	}
+
+	essdee_yrp.configure_actual_dia_button(frm)
+
+	assert.equal(mounted, true)
+})

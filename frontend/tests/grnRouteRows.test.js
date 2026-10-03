@@ -134,3 +134,18 @@ test("standard fabric GRN accepts an actual receipt above the Work Order allowan
 	assert.equal(grnRoutes.normalizeGrnReceiptQuantity(110, 100, 0, true), 110)
 	assert.equal(grnRoutes.normalizeGrnReceiptQuantity(110, 100, 0, false), 100)
 })
+
+test("Work Order route string zero flags keep excess receipt enabled", () => {
+	assert.equal(typeof grnRoutes.allowsWorkOrderGrnExcess, "function")
+	assert.equal(grnRoutes.allowsWorkOrderGrnExcess({
+		against: "Work Order",
+		is_return: "0",
+		is_rework: "0",
+		additional_grn: "0",
+		includes_packing: "0",
+	}), true)
+	assert.equal(grnRoutes.allowsWorkOrderGrnExcess({
+		against: "Work Order",
+		is_rework: "1",
+	}), false)
+})

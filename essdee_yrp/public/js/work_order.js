@@ -1,3 +1,6 @@
+const FABRIC_QTY_EPSILON = 1e-9;
+const FABRIC_COLOUR_CARDS_PER_ROW = 3;
+
 frappe.ui.form.on("Work Order", {
 	setup(frm) {
 		frm.set_df_property("production_detail", "read_only", 1);
@@ -168,6 +171,9 @@ function mount_calculated_work_order_editors(frm) {
 				aggregateRouteFields: [
 					"fabric_reference_variant",
 					"fabric_reference_allocations",
+					"additional_parameters",
+					"source_grn",
+					"source_grn_item",
 				],
 			},
 		);
@@ -237,52 +243,53 @@ function open_fabric_calculate(frm, source_process = null) {
 	});
 }
 
-// Non-blocking (production_api stance): over-balance warns, never blocks —
-// knitting can legitimately over-deliver. Knitting and dyeing check the
-// per-dia SUM of the dialog's own inputs (colours share one dia's balance).
+// Non-blocking preview only. The server rechecks each exact GRN source on
+// Calculate and again when a DC is submitted.
 function warn_balance_overshoot(ctx, manifest, values) {
 	const overs = [];
 	if (ctx.source_process) {
 		const pools = {};
 		manifest.forEach((m) => {
-			if (!m.source_pool_key) return;
-			if (!pools[m.source_pool_key]) {
-				pools[m.source_pool_key] = {
-					label: m.input_label || m.label,
-					sum: 0,
-					available: m.source_available,
+			if (!m.source_bucket_key || !m.source_stock_per_output) return;
+			if (!pools[m.source_bucket_key]) {
+				pools[m.source_bucket_key] = {
+					label: m.source_grn || m.input_label || m.label,
+					demand: 0,
+					available: m.source_stock_available,
 				};
 			}
-			pools[m.source_pool_key].sum += flt(values[m.fieldname]) || 0;
+			pools[m.source_bucket_key].demand += (
+				(flt(values[m.fieldname]) || 0) * flt(m.source_stock_per_output)
+			);
 		});
 		Object.values(pools).forEach((pool) => {
-			if (pool.available != null && pool.sum > pool.available + 0.001) {
+			if (pool.available != null && pool.demand > pool.available + FABRIC_QTY_EPSILON) {
 				overs.push(
-					`${pool.label}: ${pool.sum} > ${__("source GRN available")} ${pool.available}`
+					`${pool.label}: ${flt(pool.demand, 3)} Kg > ${__("source GRN available")} ${pool.available} Kg`
 				);
 			}
 		});
 	}
 	ctx.rows.forEach((row, i) => {
 		const fields = manifest.filter((m) => m.row === i);
-		if (row.kind === "knitting" || row.kind === "dyeing") {
+		if (row.kind === "knitting") {
 			const per_dia = {};
-			const limit_label = row.kind === "knitting" ? __("balance") : __("previous stage available");
 			fields.forEach((m) => {
 				const dia = m.reference_item_variant || (m.out_attrs || {}).Dia || m.label;
-				const limit = row.kind === "knitting" ? m.balance : m.available;
+				const limit = m.balance;
 				if (!per_dia[dia]) per_dia[dia] = { sum: 0, limit };
 				per_dia[dia].sum += flt(values[m.fieldname]) || 0;
 			});
 			Object.entries(per_dia).forEach(([dia, agg]) => {
-				if (agg.limit != null && agg.sum > agg.limit + 0.001) {
-					overs.push(`${row.cloth_item} · ${dia}: ${agg.sum} > ${limit_label} ${agg.limit}`);
+				if (agg.limit != null && agg.sum > agg.limit + FABRIC_QTY_EPSILON) {
+					overs.push(`${row.cloth_item} · ${dia}: ${agg.sum} > ${__("balance")} ${agg.limit}`);
 				}
 			});
-		} else if (row.kind === "compacting") {
+		} else if (!fields.some((m) => m.source_bucket_key)
+			&& (row.kind === "dyeing" || row.kind === "compacting")) {
 			fields.forEach((m) => {
 				const qty = flt(values[m.fieldname]);
-				if (qty && m.available != null && qty > m.available + 0.001) {
+				if (qty && m.available != null && qty > m.available + FABRIC_QTY_EPSILON) {
 					overs.push(`${row.cloth_item} · ${m.label}: ${qty} > ${__("previous stage available")} ${m.available}`);
 				}
 			});
@@ -305,11 +312,18 @@ const MAX_COLOUR_COLUMNS = 6;
 
 function planning_description(row, qty_row) {
 	if (qty_row.source_process) {
-		const message = `${__("Available from {0} GRNs", [qty_row.source_process])}: `
-			+ `${flt(qty_row.source_available || 0, 3)} ${__("Kg")}`;
-		return qty_row.source_shared
-			? `${message} · ${__("Shared input — allocate it across these rows")}`
-			: message;
+		const route = `${qty_row.section || ""}|${qty_row.row_label || qty_row.label || ""}`;
+		const duplicates = (row.qty_rows || []).filter((candidate) => (
+			candidate.source_bucket_key
+			&& `${candidate.section || ""}|${candidate.row_label || candidate.label || ""}` === route
+		));
+		if (duplicates.length < 2) return undefined;
+		const parts = [qty_row.source_grn || __("Source GRN")];
+		if (qty_row.source_grn_row) parts.push(__("row {0}", [qty_row.source_grn_row]));
+		if (qty_row.source_stock_available != null) {
+			parts.push(__("{0} Kg available", [qty_row.source_stock_available]));
+		}
+		return parts.join(" · ");
 	}
 	if (row.kind !== "knitting" || qty_row.program == null) return undefined;
 	const kg = (value) => `${flt(value || 0, 3)} ${__("Kg")}`;
@@ -320,11 +334,119 @@ function planning_description(row, qty_row) {
 	].join(" · ");
 }
 
+function build_colour_dia_sections(qty_rows) {
+	const sections = [];
+	const by_section = {};
+	(qty_rows || []).forEach((qr, j) => {
+		const section_key = qr.section == null ? "null" : String(qr.section);
+		if (!by_section[section_key]) {
+			by_section[section_key] = { name: qr.section, items: [], dia_groups: [], by_dia: {} };
+			sections.push(by_section[section_key]);
+		}
+		const section = by_section[section_key];
+		const item = [qr, j];
+		section.items.push(item);
+		const dia_name = qr.row_label || qr.label || "—";
+		if (!section.by_dia[dia_name]) {
+			section.by_dia[dia_name] = { name: dia_name, items: [] };
+			section.dia_groups.push(section.by_dia[dia_name]);
+		}
+		section.by_dia[dia_name].items.push(item);
+	});
+	sections.forEach((section) => delete section.by_dia);
+	return sections;
+}
+
+function fabric_available_output(qty_row) {
+	const qty = qty_row.source_available
+		?? qty_row.available
+		?? qty_row.balance
+		?? qty_row.prefill;
+	return qty == null ? "—" : `${flt(qty, 3)} ${__("Kg")}`;
+}
+
+function apply_fabric_dialog_hierarchy(dialog, quantity_fields) {
+	dialog.$wrapper.addClass("yrp-fabric-calc-dialog");
+	dialog.$wrapper.append(`
+		<style data-yrp-fabric-dialog-style>
+			.yrp-fabric-calc-dialog .form-column:has(.yrp-fabric-colour-head) {
+				border: 1px solid var(--border-color); border-radius: 9px; overflow: hidden;
+				padding-left: 0; padding-right: 0; margin-bottom: 12px;
+			}
+			.yrp-fabric-colour-head, .yrp-fabric-dia-head {
+				display: flex; align-items: center; justify-content: space-between; gap: 10px;
+			}
+			.yrp-fabric-colour-head {
+				padding: 11px 12px; border-bottom: 1px solid var(--border-color);
+				background: var(--subtle-accent, var(--control-bg));
+			}
+			.yrp-fabric-colour-kicker, .yrp-fabric-dia-kicker {
+				display: block; color: var(--text-muted); font-size: 9px; font-weight: 700;
+				letter-spacing: .12em; line-height: 1.1; text-transform: uppercase;
+			}
+			.yrp-fabric-colour-name {
+				display: block; margin-top: 2px; color: var(--text-color); font-size: 22px;
+				font-weight: 700; letter-spacing: -.02em; line-height: 1.1;
+			}
+			.yrp-fabric-entry-count, .yrp-fabric-dia-count {
+				padding: 3px 7px; border: 1px solid var(--border-color); border-radius: 999px;
+				color: var(--text-muted); background: var(--card-bg); font-size: 9.5px; font-weight: 600;
+			}
+			.yrp-fabric-dia-head {
+				padding: 9px 12px; border-top: 3px solid var(--subtle-accent, var(--control-bg));
+				border-bottom: 1px solid var(--border-color); background: var(--bg-light-gray);
+			}
+			.yrp-fabric-dia-identity { display: flex; align-items: baseline; gap: 7px; }
+			.yrp-fabric-dia-kicker { color: var(--primary); }
+			.yrp-fabric-dia-name { color: var(--primary); font-size: 17px; font-weight: 700; }
+			.yrp-fabric-allocation-head, .yrp-fabric-allocation-row {
+				display: grid !important; grid-template-columns: minmax(90px,.9fr) minmax(120px,1.1fr);
+				align-items: center; gap: 12px;
+			}
+			.yrp-fabric-allocation-head {
+				padding: 7px 12px; border-bottom: 1px solid var(--border-color); color: var(--text-muted);
+				font-size: 9px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+			}
+			.yrp-fabric-allocation-row {
+				min-height: 54px; padding: 8px 12px; margin: 0; border-bottom: 1px solid var(--border-color);
+			}
+			.yrp-fabric-allocation-row .form-group { margin-bottom: 0; }
+			.yrp-fabric-allocation-row .control-label { display: none; }
+			.yrp-fabric-available strong { display: block; color: var(--text-color); font-size: 12.5px; font-weight: 500; }
+			.yrp-fabric-available small { display: block; margin-top: 2px; color: var(--text-muted); font-size: 10px; }
+			@media (max-width: 767px) {
+				.yrp-fabric-allocation-head, .yrp-fabric-allocation-row { grid-template-columns: 1fr; }
+			}
+		</style>
+	`);
+	(quantity_fields || []).forEach((meta) => {
+		const field = dialog.fields_dict[meta.fieldname];
+		if (!field?.$wrapper) return;
+		const stock_label = meta.stock_count > 1
+			? `<small title="${frappe.utils.escape_html(meta.source_detail || "")}">${__("Stock")} ${meta.stock_index + 1}</small>`
+			: "";
+		field.$wrapper
+			.addClass("yrp-fabric-allocation-row")
+			.prepend(`<span class="yrp-fabric-available"><strong>${frappe.utils.escape_html(meta.available)}</strong>${stock_label}</span>`);
+		field.$wrapper.find(".control-label").text(__("Quantity to receive"));
+	});
+}
+
 function render_fabric_dialog(frm, ctx) {
 	const fields = [];
 	// one record per qty input: drives collection, yarn total, overshoot check
 	const manifest = [];
+	const styled_quantity_fields = [];
 	let d = null;
+	if (ctx.source_process?.unavailable) {
+		fields.push({
+			fieldtype: "HTML",
+			options: `<div class="alert alert-warning small">`
+				+ `<b>${__("No predecessor stock available")}</b><br>`
+				+ `${__("Submit an unallocated {0} GRN, then reopen Calculate.", [ctx.source_process.label || ctx.source_process.process_name])}`
+				+ `</div>`,
+		});
+	}
 
 	const recompute_yarn = (i) => {
 		const row = ctx.rows[i];
@@ -451,7 +573,10 @@ function render_fabric_dialog(frm, ctx) {
 						row, i, qr, j, colour, output_default
 					);
 					manifest.push({
-						fieldname, row: i, key: qr.key, out_attrs: qr.out_attrs,
+						fieldname, row: i, key: qr.key,
+						matrix_key: qr.matrix_key || qr.key,
+						source_bucket_key: qr.source_bucket_key || null,
+						out_attrs: qr.out_attrs,
 						colour, label: qr.label, balance: qr.balance, available: qr.available,
 						manual_inputs,
 					});
@@ -463,25 +588,40 @@ function render_fabric_dialog(frm, ctx) {
 			// The manifest entry is IDENTICAL in both layouts (fieldname keeps the
 			// original qty_rows index j) — only the visual arrangement differs, so
 			// the primary_action payload is unchanged.
-			const push_qty_field = (qr, j, label) => {
+			const push_qty_field = (qr, j, label, visual = null) => {
 				const fieldname = `qty_${i}_${j}`;
 				fields.push({
-					fieldtype: "Float", label, fieldname,
+					fieldtype: "Float", label: visual ? __("Quantity to receive") : label, fieldname,
 					default: qr.prefill || undefined,
-					description: planning_description(row, qr),
+					description: visual ? undefined : planning_description(row, qr),
 					onchange: row.kind === "knitting" ? () => recompute_yarn(i) : undefined,
 				});
+				if (visual) {
+					styled_quantity_fields.push({
+						fieldname,
+						available: fabric_available_output(qr),
+						stock_index: visual.stock_index,
+						stock_count: visual.stock_count,
+						source_detail: planning_description(row, qr),
+					});
+				}
 				const manual_inputs = push_manual_inputs(
 					row, i, qr, j, null, qr.prefill || 0
 				);
 				manifest.push({
-					fieldname, row: i, key: qr.key, out_attrs: qr.out_attrs,
+					fieldname, row: i, key: qr.key,
+					matrix_key: qr.matrix_key || qr.key,
+					source_bucket_key: qr.source_bucket_key || null,
+					out_attrs: qr.out_attrs,
 					colour: qr.knit_colour || null,
 					label: qr.label,
 					balance: qr.balance,
 					available: qr.source_available ?? qr.available,
 					source_available: qr.source_available,
 					source_pool_key: qr.source_pool_key,
+					source_grn: qr.source_grn,
+					source_stock_available: qr.source_stock_available,
+					source_stock_per_output: qr.source_stock_per_output,
 					reference_item_variant: qr.reference_item_variant || null,
 					manual_inputs,
 				});
@@ -491,16 +631,7 @@ function render_fabric_dialog(frm, ctx) {
 			// server's `section` (the Colour part of each rule) with the short
 			// `row_label` (the Dia part) on each input. Never for the knitting
 			// branch above, never for small/flat lists.
-			const sections = [];
-			const by_section = {};
-			qty_rows.forEach((qr, j) => {
-				const key = qr.section == null ? "null" : String(qr.section);
-				if (!by_section[key]) {
-					by_section[key] = { name: qr.section, items: [] };
-					sections.push(by_section[key]);
-				}
-				by_section[key].items.push([qr, j]);
-			});
+			const sections = build_colour_dia_sections(qty_rows);
 			const sectionable = (
 				["conversion", "dyeing", "compacting", "identity"].includes(row.kind)
 				|| reference_routed
@@ -510,18 +641,39 @@ function render_fabric_dialog(frm, ctx) {
 				&& qty_rows.every((qr) => qr.section != null);
 
 			if (sectionable) {
-				const as_columns = sections.length <= MAX_COLOUR_COLUMNS;
-				if (as_columns) fields.push({ fieldtype: "Section Break" });
 				sections.forEach((sec, si) => {
-					if (as_columns && si > 0) fields.push({ fieldtype: "Column Break" });
-					if (!as_columns) fields.push({ fieldtype: "Section Break" });
+					if (si % FABRIC_COLOUR_CARDS_PER_ROW === 0) {
+						fields.push({ fieldtype: "Section Break" });
+					} else {
+						fields.push({ fieldtype: "Column Break" });
+					}
 					fields.push({
 						fieldtype: "HTML",
-						options: `<div style="font-weight:600;margin-bottom:4px;">${frappe.utils.escape_html(sec.name)}</div>`,
+						options: `<div class="yrp-fabric-colour-head">`
+							+ `<span><small class="yrp-fabric-colour-kicker">${__("Colour")}</small>`
+							+ `<strong class="yrp-fabric-colour-name">${frappe.utils.escape_html(sec.name)}</strong></span>`
+							+ `<small class="yrp-fabric-entry-count">${sec.items.length} ${__("entries")}</small>`
+							+ `</div>`,
 					});
-					sec.items.forEach(([qr, j]) => push_qty_field(qr, j, qr.row_label || qr.label));
+					sec.dia_groups.forEach((dia) => {
+						fields.push({
+							fieldtype: "HTML",
+							options: `<div class="yrp-fabric-dia-head">`
+								+ `<span class="yrp-fabric-dia-identity"><small class="yrp-fabric-dia-kicker">${__("Dia")}</small>`
+								+ `<strong class="yrp-fabric-dia-name">${frappe.utils.escape_html(dia.name)}</strong></span>`
+								+ `<small class="yrp-fabric-dia-count">${dia.items.length} ${dia.items.length === 1 ? __("entry") : __("entries")}</small>`
+								+ `</div>`
+								+ `<div class="yrp-fabric-allocation-head"><span>${__("Available output")}</span><span>${__("Quantity to receive")}</span></div>`,
+						});
+						dia.items.forEach(([qr, j], stock_index) => push_qty_field(
+							qr,
+							j,
+							qr.row_label || qr.label,
+							{ stock_index, stock_count: dia.items.length },
+						));
+					});
 				});
-				if (as_columns) fields.push({ fieldtype: "Section Break" });
+				fields.push({ fieldtype: "Section Break" });
 			} else {
 				qty_rows.forEach((qr, j) => push_qty_field(qr, j, qr.label));
 			}
@@ -553,6 +705,10 @@ function render_fabric_dialog(frm, ctx) {
 		fields,
 		primary_action_label: __("Calculate"),
 		primary_action(values) {
+			if (ctx.source_process?.unavailable) {
+				frappe.msgprint(__("No submitted predecessor GRN stock is available."));
+				return;
+			}
 			const rows = [];
 			let missing_colour = null;
 			let missing_output = null;
@@ -571,7 +727,13 @@ function render_fabric_dialog(frm, ctx) {
 						return;
 					}
 					if (!qty || qty <= 0) return;
-					const line = { key: m.key, out_attrs: m.out_attrs, qty };
+					const line = {
+						key: m.key,
+						matrix_key: m.matrix_key || m.key,
+						out_attrs: m.out_attrs,
+						qty,
+					};
+					if (m.source_bucket_key) line.source_bucket_key = m.source_bucket_key;
 					if (m.colour) line.colour = m.colour;
 					if (row.manual_io) {
 						if (!inputs.some((input) => input.qty > 0)) {
@@ -636,7 +798,7 @@ function render_fabric_dialog(frm, ctx) {
 			});
 		},
 	};
-	if ((ctx.source_process_options || []).length) {
+	if ((ctx.source_process_options || []).length > 1) {
 		dialog_options.secondary_action_label = __("Fill Quantity");
 		dialog_options.secondary_action = () => {
 			const picker = new frappe.ui.Dialog({
@@ -662,6 +824,8 @@ function render_fabric_dialog(frm, ctx) {
 	}
 	d = new frappe.ui.Dialog(dialog_options);
 	d.show();
+	apply_fabric_dialog_hierarchy(d, styled_quantity_fields);
+	if (ctx.source_process?.unavailable) d.get_primary_btn().prop("disabled", true);
 	// Pre-filled balances must reflect in the auto yarn figure immediately,
 	// not only after the first manual edit.
 	ctx.rows.forEach((row, i) => {

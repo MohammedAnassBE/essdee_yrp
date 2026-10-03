@@ -187,11 +187,15 @@ class TestIPDEntryAutomationMirror(IntegrationTestCase):
 			self.web_panel,
 			r"function copyFirstPackingToPanel\(\)\s*\{",
 		)
-		self.assertIsNotNone(web_copy)
-		self.assertIn(
-			"row.values[packing] = { dia: source.dia, weight: source.weight }",
-			web_copy,
+		desk_copy = _balanced(
+			self.desk_panel,
+			r"function copyFirstColourToPanel\(\)\s*\{",
 		)
+		self.assertIsNotNone(desk_copy)
+		self.assertIsNotNone(web_copy)
+		for source in (desk_copy, web_copy):
+			self.assertIn("target.dia = source.dia", source)
+			self.assertIn("target.weight = source.weight", source)
 
 	def test_generated_stitching_rows_default_to_one_body(self):
 		self.assertIn("quantity: 1", self.desk_ipd)
@@ -643,6 +647,20 @@ class TestCustomizationOwnership(IntegrationTestCase):
 			'CutPlanItems from "./CuttingPlan/components/CutPlanItems.vue"',
 			_read(frappe.get_app_path("essdee_yrp", "public", "js", "vue_plugins.js")),
 		)
+
+	def test_lot_desk_components_are_owned_and_registered_by_essdee(self):
+		app_root = frappe.get_app_path("essdee_yrp")
+		plugins = _read(os.path.join(app_root, "public", "js", "vue_plugins.js"))
+		for component in ("LotOrder", "OCRDetail", "FabricProgram", "ActualDiaConversions"):
+			path = os.path.join(app_root, "public", "js", "Lot", f"{component}.vue")
+			self.assertTrue(os.path.exists(path), path)
+			self.assertIn(f'frappe.production.ui.{component} = class', plugins)
+
+		lot_script = _read(
+			os.path.join(app_root, "essdee_yrp", "doctype", "lot", "lot.js")
+		)
+		self.assertIn("frm.page.wrapper.find(\".layout-side-section\")", lot_script)
+		self.assertNotIn("$(\".layout-side-section\")", lot_script)
 
 	def test_cutting_approved_is_an_essdee_property_setter_only(self):
 		base_meta = json.loads(

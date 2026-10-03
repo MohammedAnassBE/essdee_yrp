@@ -38,7 +38,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							<tr v-for="dia in programDias(entry)" :key="dia">
+							<tr v-for="dia in displayedProgramDias(entry)" :key="dia">
 								<td class="lfv-dia">{{ dia }}</td>
 								<td
 									v-for="colour in programColourColumns(entry)"
@@ -60,7 +60,7 @@
 								</td>
 								<td class="lfv-num lfv-program">{{ programDiaTotal(entry, dia) }}</td>
 							</tr>
-							<tr v-if="!programDias(entry).length">
+							<tr v-if="!displayedProgramDias(entry).length">
 								<td :colspan="programColourColumns(entry).length + 2" class="lfv-none">
 									No saved cloth program yet — use Build Cloth Programs.
 								</td>
@@ -111,7 +111,7 @@
  * output Dia/Colour and final reference supplied by the server.
  */
 import { ref, watch } from "vue"
-import { programDia, programColour, roundKg, programDias, programColourColumns, programRow, serializeClothProgram } from "@/engine/lotClothProgram"
+import { programDia, programColour, roundKg, programDias, programDiasWithQuantity, programColourColumns, programRow, serializeClothProgram } from "@/engine/lotClothProgram"
 
 const props = defineProps({
 	initialData: { type: Array, default: null },
@@ -175,6 +175,10 @@ function planBadge(entry) {
 
 function programWeight(entry, dia, colour) {
 	return roundKg(programRow(entry, dia, colour)?.weight)
+}
+
+function displayedProgramDias(entry) {
+	return props.readonly ? programDiasWithQuantity(entry) : programDias(entry)
 }
 
 function setProgramWeight(entry, dia, colour, value) {

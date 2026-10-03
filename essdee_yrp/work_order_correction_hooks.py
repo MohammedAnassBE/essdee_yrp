@@ -12,6 +12,13 @@ def validate_correction_ipd_items(doc, method=None):
 	Item Production Detail: its item is valid only if it is the IPD's yarn item
 	or an item in the IPD's `item_bom` table. The Desk filters the Item link the
 	same way for Work Orders — this guards API/import paths. v1: deliverables only."""
+	if doc.get("work_order") and frappe.db.get_value(
+		"Work Order", doc.work_order, "fabric_source_process"
+	):
+		frappe.throw(_(
+			"Work Order Corrections are not allowed for an exact-source fabric Work "
+			"Order. Create a new Work Order from available predecessor GRNs."
+		))
 	ipd_name = doc.get("production_detail")
 	if not ipd_name:
 		return

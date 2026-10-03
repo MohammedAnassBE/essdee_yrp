@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { programDia, programColour, programDias, programColourColumns, programRow, serializeClothProgram } from "../src/engine/lotClothProgram.js"
+import { programDia, programColour, programDias, programDiasWithQuantity, programColourColumns, programRow, serializeClothProgram } from "../src/engine/lotClothProgram.js"
 
 const route = (finishedColour, finishedDia, weight) => ({
 	dia: "18 Dia", colour: "Greige", finished_colour: finishedColour, finished_dia: finishedDia,
@@ -28,6 +28,30 @@ test("editing a final-colour cell saves the original physical attributes and ref
 test("multiple dias sort numerically and do not duplicate a dia for different colours", () => {
 	const entry = { program: [route("Red", "22 Dia", 1), route("Red", "8 Dia", 2), route("Navy", "22 Dia", 3), route("Red", "18.5 Dia", 4)] }
 	assert.deepEqual(programDias(entry), ["8 Dia", "18.5 Dia", "22 Dia"])
+})
+
+test("read-only program views can omit dias whose every colour has zero quantity", () => {
+	const entry = {
+		program: [
+			route("Red", "26 Dia", 10),
+			route("Navy", "26 Dia", 0),
+			route("Red", "34 Dia", 0),
+			route("Navy", "34 Dia", 0),
+			route("Red", "36 Dia", 0),
+		],
+	}
+	assert.deepEqual(programDias(entry), ["26 Dia", "34 Dia", "36 Dia"])
+	assert.deepEqual(programDiasWithQuantity(entry), ["26 Dia"])
+})
+
+test("a dia remains visible when any one of its colours has a quantity", () => {
+	const entry = {
+		program: [
+			route("Red", "26 Dia", 0),
+			route("Navy", "26 Dia", 4.25),
+		],
+	}
+	assert.deepEqual(programDiasWithQuantity(entry), ["26 Dia"])
 })
 
 test("legacy rows without a finished reference still display and round-trip", () => {

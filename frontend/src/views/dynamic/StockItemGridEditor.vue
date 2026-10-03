@@ -105,8 +105,9 @@
 						>
 							<template #body="{ data }">
 								<InputNumber
-									v-if="editable && !aggregateDisplay && data.values[pv]"
-									v-model="data.values[pv].qty"
+									v-if="editable && data.values[pv]"
+									:model-value="data.values[pv].qty"
+									@update:model-value="setCommittedQty(data, pv, $event)"
 									:min="0"
 									:minFractionDigits="0"
 									:maxFractionDigits="3"
@@ -134,8 +135,9 @@
 						<Column header="Qty" :style="{ width: singleColWidth }">
 							<template #body="{ data }">
 								<InputNumber
-									v-if="editable && !aggregateDisplay && data.values.default"
-									v-model="data.values.default.qty"
+									v-if="editable && data.values.default"
+									:model-value="data.values.default.qty"
+									@update:model-value="setCommittedQty(data, 'default', $event)"
 									:min="0"
 									:minFractionDigits="0"
 									:maxFractionDigits="3"
@@ -171,8 +173,9 @@
 					>
 						<template #body="{ data }">
 							<InputText
-								v-if="editable && !aggregateDisplay"
-								v-model="data.comments"
+								v-if="editable"
+								:model-value="data.comments"
+								@update:model-value="setCommittedField(data, 'comments', $event)"
 								class="line-comment-input"
 								placeholder="Add row comment"
 								fluid
@@ -462,7 +465,13 @@ import AutoComplete from "primevue/autocomplete"
 import Select from "primevue/select"
 import ToggleSwitch from "primevue/toggleswitch"
 import Tooltip from "primevue/tooltip"
-import { groupItemsForDisplay } from "@/engine"
+import {
+	countItemsForDisplay,
+	groupItemsForDisplay,
+	sumItemQuantities,
+	setAggregatedCellQuantity,
+	setAggregatedItemField,
+} from "@/engine"
 import { callMethod, searchLink } from "@/api/client"
 import { useAppToast } from "@/composables/useToast"
 
@@ -519,7 +528,8 @@ const props = defineProps({
 	lockedItems: { type: Boolean, default: false },
 	// Calculated fabric WOs retain one source row per route reference for
 	// tracking, but present identical physical variants as one summed row.
-	// Display-only: getItems() continues returning the untouched source groups.
+	// Editable DC totals are distributed to those source rows; getItems() keeps
+	// returning their exact route-level grouped payload.
 	aggregateDisplay: { type: Boolean, default: false },
 	// dcEntry.qtyControl (Delivery Challan entry, item 5): how the primary qty
 	// inputs render. "input" (default) → today's plain field, byte-identical.
@@ -647,17 +657,9 @@ async function loadDimensions() {
 
 // ════════════════ DERIVED ════════════════
 const totalLogicalItems = computed(() =>
-	groups.value.reduce((n, g) => n + (g.items?.length || 0), 0),
+	countItemsForDisplay(groups.value, props.aggregateDisplay),
 )
-const totalQty = computed(() => {
-	let t = 0
-	for (const g of groups.value) {
-		for (const it of g.items || []) {
-			for (const v of Object.values(it.values || {})) t += Number(v?.qty) || 0
-		}
-	}
-	return t
-})
+const totalQty = computed(() => sumItemQuantities(groups.value))
 
 // cellFields entries flagged `editable: true` get a per-cell numeric input in
 // the add-form (rate, secondary_qty…). All cellFields are also shown stacked
@@ -670,6 +672,22 @@ const editableCellFields = computed(() => (props.cellFields || []).filter((cf) =
 // production_api DC `attr.secondary_qty > 0 && attr.secondary_uom` rule.
 function hasSecondary(cell) {
 	return !!cell && Number(cell.secondary_qty) > 0 && !!cell.secondary_uom
+}
+
+function setCommittedQty(item, primaryValue, value) {
+	if (props.aggregateDisplay) {
+		setAggregatedCellQuantity(item, primaryValue, value)
+		return
+	}
+	if (item?.values?.[primaryValue]) item.values[primaryValue].qty = Number(value) || 0
+}
+
+function setCommittedField(item, fieldname, value) {
+	if (props.aggregateDisplay) {
+		setAggregatedItemField(item, fieldname, value)
+		return
+	}
+	if (item) item[fieldname] = value
 }
 
 // Toggle handler for "Update Secondary": ON → fetch the picked item's

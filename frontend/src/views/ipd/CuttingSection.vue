@@ -164,6 +164,7 @@ import PanelWiseConsumptionMatrix from "./PanelWiseConsumptionMatrix.vue";
 import { callMethod } from "@/api/client";
 import { useAppToast } from "@/composables/useToast";
 import { mappingSearch, findBlankCell, stableStringify } from "./combinationCells";
+import { validatePanelWiseMatrix } from "./panelWiseMatrix";
 
 const props = defineProps({
 	doc: { type: Object, required: true },
@@ -380,17 +381,8 @@ function validate() {
 	if (badCloth.length) return `Row(s) ${badCloth.join(", ")}: name and cloth item are both required`;
 	if (panelWiseEnabled.value) {
 		if (panelError.value) return panelError.value;
-		if (!panelMatrix.value) return "Panel-wise consumption matrix is not loaded";
-		for (const panel of panelMatrix.value.panels || []) {
-			for (const row of panel.rows || []) {
-				if (!row.dia) return `Panel matrix: enter Dia for ${panel.panel_value}, ${row.primary_value}`;
-				for (const packing of panelMatrix.value.packing_values || []) {
-					if (!(Number(row.weights?.[packing]) > 0)) {
-						return `Panel matrix: enter consumption for ${panel.panel_value}, ${row.primary_value}, ${packing}`;
-					}
-				}
-			}
-		}
+		const matrixError = validatePanelWiseMatrix(panelMatrix.value);
+		if (matrixError) return matrixError;
 	}
 	for (const [label, grid] of [
 		["Cutting combination", cuttingGrid.value],

@@ -7,6 +7,7 @@ import {
 	knittingInputRouteKey,
 	useFabricDeliverableContext,
 } from "../src/composables/useFabricDeliverableContext.js"
+import * as fabricContext from "../src/composables/useFabricDeliverableContext.js"
 
 const context = (qty, extra = {}) => ({
 	rows: [{ kind: "identity", qty_rows: [{ key: "Red-32", prefill: qty }], ...extra }],
@@ -16,6 +17,31 @@ const deferred = () => {
 	const promise = new Promise((res, rej) => { resolve = res; reject = rej })
 	return { promise, resolve, reject }
 }
+
+test("colour-dia layout keeps one prominent Dia group for duplicate stock rows", () => {
+	assert.equal(typeof fabricContext.buildColourDiaLayout, "function")
+	const layout = fabricContext.buildColourDiaLayout({
+		kind: "dyeing",
+		reference_routed: true,
+		qty_rows: [
+			{ key: "grey-26-a", section: "Grey", row_label: "26 Dia" },
+			{ key: "grey-26-b", section: "Grey", row_label: "26 Dia" },
+			{ key: "grey-36", section: "Grey", row_label: "36 Dia" },
+			{ key: "navy-26", section: "Navy", row_label: "26 Dia" },
+		],
+	})
+
+	assert.deepEqual(
+		layout.sections.map((section) => ({
+			colour: section.name,
+			dias: section.diaGroups.map((group) => [group.name, group.items.map((item) => item.j)]),
+		})),
+		[
+			{ colour: "Grey", dias: [["26 Dia", [0, 1]], ["36 Dia", [2]]] },
+			{ colour: "Navy", dias: [["26 Dia", [3]]] },
+		],
+	)
+})
 
 test("keeps saved program quantities for each finished colour and dia, not greige columns", () => {
 	const row = {

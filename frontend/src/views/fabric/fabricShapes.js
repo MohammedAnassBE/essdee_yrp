@@ -31,6 +31,49 @@ export const esc = (v) =>
 		.replace(/>/g, "&gt;")
 		.replace(/"/g, "&quot;");
 
+export function buildActualDiaConversionView(rows, options = {}) {
+	const source = (Array.isArray(rows) ? rows : []).filter((row) => (
+		Number(row?.to_qty || 0) > 0
+		&& (!row?.received_type || row.received_type === "Accepted")
+	));
+	const search = String(options.search || "").trim().toLowerCase();
+	const process = String(options.process || "");
+	const includeUnchanged = Boolean(options.includeUnchanged);
+	const isChanged = (row) => Boolean(
+		row?.from_item && row?.to_item && row.from_item !== row.to_item,
+	);
+	const filteredRows = source.filter((row) => {
+		if (!includeUnchanged && !isChanged(row)) return false;
+		if (process && row.process_name !== process) return false;
+		if (!search) return true;
+		return [
+			row.process_name,
+			row.from_item,
+			row.to_item,
+			row.production_detail,
+		].some((value) => String(value || "").toLowerCase().includes(search));
+	});
+	const groups = [];
+	const byIpd = new Map();
+	for (const row of filteredRows) {
+		const key = row.production_detail || "";
+		if (!byIpd.has(key)) {
+			const group = { productionDetail: key, rows: [] };
+			byIpd.set(key, group);
+			groups.push(group);
+		}
+		byIpd.get(key).rows.push(row);
+	}
+	return {
+		rowCount: source.length,
+		changedCount: source.filter(isChanged).length,
+		processes: [...new Set(source.map((row) => row.process_name).filter(Boolean))]
+			.sort((left, right) => String(left).localeCompare(String(right))),
+		filteredRows,
+		groups,
+	};
+}
+
 // ---- shape / card display (Desk shapeOf / hasConversion / ratioLabel) ------
 
 export function shapeOf(step) {

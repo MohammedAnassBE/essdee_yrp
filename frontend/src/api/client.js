@@ -523,13 +523,11 @@ export async function searchAddressForParty(partyDoctype, partyName, txt) {
  * `update_after_submit`.
  */
 export async function submitDoc(doctype, name, modified) {
-  const body = { docstatus: 1 }
-  if (modified) body.modified = modified
-  const json = await request(
-    `/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(name)}`,
-    { method: 'PUT', body: JSON.stringify(body) },
-  )
-  return json.data
+  return callMethod('essdee_yrp.api.lifecycle.submit_document', {
+    doctype,
+    name,
+    modified: modified || null,
+  })
 }
 
 /**
@@ -537,13 +535,11 @@ export async function submitDoc(doctype, name, modified) {
  * Pass the loaded `modified` so a stale cancel is rejected, not silently applied.
  */
 export async function cancelDoc(doctype, name, modified) {
-  const body = { docstatus: 2 }
-  if (modified) body.modified = modified
-  const json = await request(
-    `/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(name)}`,
-    { method: 'PUT', body: JSON.stringify(body) },
-  )
-  return json.data
+  return callMethod('essdee_yrp.api.lifecycle.cancel_document', {
+    doctype,
+    name,
+    modified: modified || null,
+  })
 }
 
 /**

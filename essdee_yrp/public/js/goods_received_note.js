@@ -43,15 +43,21 @@ frappe.ui.form.on("Goods Received Note", {
 	},
 });
 
+essdee_yrp.grn_check_enabled = function (value) {
+	if (value === true || value === 1 || value === "1") return true;
+	if (typeof value !== "string") return false;
+	return ["true", "yes", "on"].includes(value.trim().toLowerCase());
+};
+
 essdee_yrp.configure_actual_dia_button = function (frm) {
 	frm._essdee_actual_dia = null;
 	if (
 		frm.doc.against !== "Work Order"
 		|| !frm.doc.against_id
-		|| frm.doc.is_return
-		|| frm.doc.is_rework
-		|| frm.doc.additional_grn
-		|| frm.doc.includes_packing
+		|| essdee_yrp.grn_check_enabled(frm.doc.is_return)
+		|| essdee_yrp.grn_check_enabled(frm.doc.is_rework)
+		|| essdee_yrp.grn_check_enabled(frm.doc.additional_grn)
+		|| essdee_yrp.grn_check_enabled(frm.doc.includes_packing)
 	) return;
 
 	frappe.call({
@@ -90,7 +96,7 @@ essdee_yrp.mount_physical_grn_editor = function (frm) {
 			allowCreate: false,
 			allowEdit: false,
 			allowRemove: false,
-			returnMode: Boolean(frm.doc.is_return),
+			returnMode: essdee_yrp.grn_check_enabled(frm.doc.is_return),
 			allowExcess: true,
 			aggregatePhysicalRows: true,
 		},

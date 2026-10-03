@@ -136,7 +136,7 @@
 							:modelValue="qty(split.entry, col.key)"
 							@update:modelValue="onQtyInput(row, split, col.key, $event)"
 							:min="0"
-							:max="allowExcess ? undefined : maxQty(row, split, col.key)"
+							:max="canReceiveExcess ? undefined : maxQty(row, split, col.key)"
 							:minFractionDigits="0"
 							:maxFractionDigits="3"
 							class="cell-num"
@@ -263,6 +263,7 @@ const props = defineProps({
 	editable: { type: Boolean, default: true },
 	workOrder: { type: String, default: "" },
 	actualDiaDisabled: { type: Boolean, default: false },
+	allowExcess: { type: Boolean, default: false },
 })
 
 // Q6: emit `change` on genuine user edits so DocDetail's dirty guard sees grid
@@ -285,7 +286,7 @@ const dimensions = ref([])
 // ── available received types for the "+RT" add buttons ──
 const availableRTs = ref([])
 const actualDiaEnabled = ref(false)
-const allowExcess = computed(() => !props.actualDiaDisabled)
+const canReceiveExcess = computed(() => props.allowExcess)
 const diaOptions = ref([])
 const diaSelections = reactive({})
 let actualDiaRequest = 0
@@ -472,7 +473,7 @@ function onQtyInput(row, split, key, value) {
 		value,
 		allowedQty(currentRow, key),
 		otherSplitQty(currentRow, currentSplit, key),
-		allowExcess.value,
+		canReceiveExcess.value,
 	)
 	setGrnSplitQuantity(currentSplit, key, next)
 }

@@ -769,7 +769,8 @@
 						:ref="(el) => setGridRef(pv.childField, el)"
 						:editable="true"
 						:work-order="form.against_id || ''"
-						:actual-dia-disabled="!!(form.is_return || form.is_rework || form.additional_grn || form.includes_packing)"
+						:actual-dia-disabled="!allowWorkOrderGrnExcess"
+						:allow-excess="allowWorkOrderGrnExcess"
 						@change="onGridChange"
 					/>
 					<StockItemGridEditor
@@ -1680,6 +1681,7 @@ import {
 	countItemsForDisplay,
 	useUiConfigStore,
 } from "@/engine"
+import { allowsWorkOrderGrnExcess } from "@/engine/stock/grnRouteRows"
 
 const props = defineProps({
 	docRoute: { type: String, required: true },
@@ -2745,6 +2747,13 @@ function navigateConnection(c) {
 const useGrnSplit = computed(
 	() => doctype.value === "Goods Received Note" && (form.against || doc.value?.against) === "Work Order",
 )
+const allowWorkOrderGrnExcess = computed(() => allowsWorkOrderGrnExcess({
+	against: form.against || doc.value?.against,
+	is_return: form.is_return,
+	is_rework: form.is_rework,
+	additional_grn: form.additional_grn,
+	includes_packing: form.includes_packing,
+}))
 
 // Per-section refs to the mounted grid editors (keyed by childField), so onSave
 // can pull each section's grouped JSON via getItems(). Plain object (not reactive)

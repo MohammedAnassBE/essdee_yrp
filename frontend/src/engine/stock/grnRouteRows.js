@@ -131,6 +131,22 @@ export function normalizeGrnReceiptQuantity(value, allowed, otherReceived, allow
 	)
 }
 
+function enabledCheckValue(value) {
+	if (value === true || value === 1 || value === "1") return true
+	if (typeof value !== "string") return false
+	return ["true", "yes", "on"].includes(value.trim().toLowerCase())
+}
+
+export function allowsWorkOrderGrnExcess(doc) {
+	if (doc?.against !== "Work Order") return false
+	return ![
+		"is_return",
+		"is_rework",
+		"additional_grn",
+		"includes_packing",
+	].some((fieldname) => enabledCheckValue(doc?.[fieldname]))
+}
+
 export function setGrnSplitQuantity(split, primaryValue, value) {
 	const cells = (split?.sourceEntries || [])
 		.map((entry) => ({ entry, detail: entry?.values?.[primaryValue] }))

@@ -6,7 +6,7 @@ from frappe.tests import IntegrationTestCase
 from essdee_yrp import hooks
 
 PROPERTY_SETTER = "YRP Stock Reservation Entry-voucher_type-options"
-ESSDEE_VOUCHER_TYPES = "\nYRP Work Order\nYRP Stock Update\nPacking Slip"
+ESSDEE_VOUCHER_TYPES = "\nYRP Work Order\nYRP Stock Update\nPacking Slip\nYRP Delivery Note"
 
 
 class TestStockReservationEntryVoucherOptions(IntegrationTestCase):
@@ -52,7 +52,7 @@ class TestStockReservationEntryVoucherOptions(IntegrationTestCase):
 		self.assertEqual(meta.get_field("voucher_no").fieldtype, "Data")
 		self.assertFalse(meta.get_field("voucher_no").options)
 
-		for voucher_type in ("YRP Work Order", "YRP Stock Update", "Packing Slip"):
+		for voucher_type in ("YRP Work Order", "YRP Stock Update", "Packing Slip", "YRP Delivery Note"):
 			doc = frappe.new_doc("YRP Stock Reservation Entry")
 			doc.voucher_type = voucher_type
 			doc._validate_selects()

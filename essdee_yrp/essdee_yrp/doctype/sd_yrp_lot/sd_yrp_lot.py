@@ -41,6 +41,7 @@ class SDYRPLot(Document):
 
 	def before_validate(self):
 		refresh_server_owned_tables(self)
+		preserve_lot_fabric_conversions(self)
 		validate_unique_fabric_cloths(self)
 		if self.get("fabric_program_details"):
 			save_fabric_program_details(self)
@@ -1431,3 +1432,26 @@ def calculate_bom(lot_name):
 
 
 Lot = SDYRPLot
+
+
+def preserve_lot_fabric_conversions(lot_doc):
+	"""Prevent stale Desk saves from deleting GRN-owned conversion rows."""
+	if lot_doc.is_new() or not lot_doc.meta.get_field("lot_fabric_conversions"):
+		return
+	rows = frappe.db.sql(
+		"""
+		SELECT *
+		FROM `tabSD YRP Lot Fabric Conversion`
+		WHERE parent = %(parent)s
+			AND parenttype = 'SD YRP Lot'
+			AND parentfield = 'lot_fabric_conversions'
+		ORDER BY idx, creation, name
+		FOR UPDATE
+		""",
+		{"parent": lot_doc.name},
+		as_dict=True,
+	)
+	lot_doc.set("lot_fabric_conversions", [])
+	for values in rows:
+		row = lot_doc.append("lot_fabric_conversions", {})
+		row.update(values)

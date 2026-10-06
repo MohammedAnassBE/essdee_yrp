@@ -76,6 +76,9 @@
   "lot_colour_programs",
   "lot_fabric_requirements",
   "lot_fabric_step_ledger",
+  "actual_dia_conversion_tab",
+  "actual_dia_conversion_html",
+  "lot_fabric_conversions",
   "ocr_detail_tab",
   "ocr_detail_html",
   "alternative_detail_tab",
@@ -529,6 +532,25 @@
    "fieldname": "cloth_program_tab",
    "fieldtype": "Tab Break",
    "label": "Cloth Program"
+  },
+  {
+   "fieldname": "actual_dia_conversion_tab",
+   "fieldtype": "Tab Break",
+   "label": "Actual Dia Conversions"
+  },
+  {
+   "fieldname": "actual_dia_conversion_html",
+   "fieldtype": "HTML",
+   "label": "Actual Dia Conversions"
+  },
+  {
+   "fieldname": "lot_fabric_conversions",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Lot Fabric Conversions",
+   "no_copy": 1,
+   "options": "SD YRP Lot Fabric Conversion",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,

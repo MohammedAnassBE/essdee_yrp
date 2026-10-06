@@ -1,6 +1,7 @@
 # Copyright (c) 2024, Essdee and Contributors
 # See license.txt
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -12,6 +13,17 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import Lot, calculate_b
 
 
 class TestLot(FrappeTestCase):
+	def test_actual_dia_conversion_fields_are_read_only_desk_state(self):
+		path = Path(__file__).with_name("sd_yrp_lot.json")
+		schema = json.loads(path.read_text(encoding="utf-8"))
+		fields = {row["fieldname"]: row for row in schema["fields"]}
+
+		self.assertEqual(fields["actual_dia_conversion_tab"]["fieldtype"], "Tab Break")
+		self.assertEqual(fields["actual_dia_conversion_html"]["fieldtype"], "HTML")
+		self.assertEqual(fields["lot_fabric_conversions"]["options"], "SD YRP Lot Fabric Conversion")
+		self.assertTrue(fields["lot_fabric_conversions"]["hidden"])
+		self.assertTrue(fields["lot_fabric_conversions"]["read_only"])
+
 	def test_piece_quantities_derive_read_only_box_quantities(self):
 		lot = SimpleNamespace(
 			production_detail="_Test Packing IPD",

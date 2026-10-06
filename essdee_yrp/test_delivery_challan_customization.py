@@ -1,4 +1,7 @@
+from contextlib import ExitStack
 from pathlib import Path
+import threading
+import traceback
 from unittest.mock import MagicMock, patch
 
 import frappe
@@ -14,6 +17,7 @@ from essdee_yrp.delivery_challan_hooks import (
 	create_return_grn,
 	sync_cutting_plan_received_cloth,
 )
+from essdee_yrp import delivery_challan_hooks as dc_hooks
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan import (
 	fetch_received_cloth,
 )
@@ -21,7 +25,547 @@ from essdee_yrp.item_matrix import normalize_item_matrix_row_indexes
 from essdee_yrp.overrides.delivery_challan import EssdeeDeliveryChallan
 
 
+class TestExactSourceDeliveryChallanConcurrency(FrappeTestCase):
+	"""Committed fixtures prove MariaDB current reads across real connections."""
+
+	def _insert_fixture(self, quantities=(6, 6)):
+		suffix = frappe.generate_hash(length=8)
+		production_detail, item = frappe.db.get_value(
+			"YRP Item Production Detail",
+			{"is_cloth_item": 1},
+			["name", "item"],
+		)
+		item_doc = frappe.get_doc("Item", item)
+		uom = item_doc.stock_uom
+		supplier = frappe.db.get_value("Supplier", {}, "name")
+		warehouse = frappe.db.get_value(
+			"Warehouse",
+			{"is_group": 0, "disabled": 0},
+			"name",
+		)
+		address = frappe.db.get_value("Address", {}, "name")
+		received_type = frappe.db.get_single_value(
+			"YRP Stock Settings", "default_received_type"
+		)
+		knitting = frappe.db.get_single_value(
+			"SD YRP IPD Settings", "default_knitting_process"
+		)
+		dyeing = frappe.db.get_single_value(
+			"SD YRP IPD Settings", "default_dyeing_process"
+		)
+		for label, value in {
+			"production detail": production_detail,
+			"item": item,
+			"supplier": supplier,
+			"warehouse": warehouse,
+			"address": address,
+			"received type": received_type,
+			"knitting process": knitting,
+			"dyeing process": dyeing,
+		}.items():
+			self.assertTrue(value, f"Missing test prerequisite: {label}")
+
+		lot = frappe.new_doc("SD YRP Lot")
+		lot.name = f"_Test Exact DC Lot {suffix}"
+		lot.lot_name = lot.name
+		lot.db_insert()
+
+		source_work_order = frappe.new_doc("YRP Work Order")
+		source_work_order.name = f"_Test Exact DC Source WO {suffix}"
+		source_work_order.docstatus = 1
+		source_work_order.naming_series = "WO-"
+		source_work_order.wo_date = frappe.utils.nowdate()
+		source_work_order.planned_start_date = frappe.utils.nowdate()
+		source_work_order.planned_end_date = frappe.utils.nowdate()
+		source_work_order.expected_delivery_date = frappe.utils.nowdate()
+		source_work_order.open_status = "Open"
+		source_work_order.cloth_execution_version = 1
+		source_work_order.lot = lot.name
+		source_work_order.production_detail = production_detail
+		source_work_order.process_name = knitting
+		source_work_order.item = item
+		source_work_order.supplier = supplier
+		source_work_order.delivery_location = supplier
+		source_work_order.supplier_address = address
+		source_work_order.delivery_address = address
+		source_work_order.db_insert()
+
+		receivable = frappe.new_doc("YRP Work Order Receivables")
+		receivable.name = f"_Test Exact DC WOR {suffix}"
+		receivable.parent = source_work_order.name
+		receivable.parenttype = "YRP Work Order"
+		receivable.parentfield = "receivables"
+		receivable.docstatus = 1
+		receivable.item_variant = item
+		receivable.qty = 10
+		receivable.pending_quantity = 0
+		receivable.uom = uom
+		receivable.additional_parameters = '{"f":"SOURCE-EXECUTION"}'
+		receivable.db_insert()
+
+		source_grn = frappe.new_doc("YRP Goods Received Note")
+		source_grn.name = f"_Test Exact DC GRN {suffix}"
+		source_grn.docstatus = 1
+		source_grn.against = "YRP Work Order"
+		source_grn.against_id = source_work_order.name
+		source_grn.to_warehouse = warehouse
+		source_grn.supplier = supplier
+		source_grn.db_insert()
+
+		source_item = frappe.new_doc("YRP Goods Received Note Item")
+		source_item.name = f"_Test Exact DC GRNI {suffix}"
+		source_item.parent = source_grn.name
+		source_item.parenttype = "YRP Goods Received Note"
+		source_item.parentfield = "items"
+		source_item.docstatus = 1
+		source_item.item_variant = item
+		source_item.quantity = 10
+		source_item.stock_qty = 10
+		source_item.uom = uom
+		source_item.stock_uom = uom
+		source_item.conversion_factor = 1
+		source_item.ref_doctype = "YRP Work Order Receivables"
+		source_item.ref_docname = receivable.name
+		if source_item.meta.get_field("lot"):
+			source_item.lot = lot.name
+		if source_item.meta.get_field("received_type"):
+			source_item.received_type = received_type
+		source_item.db_insert()
+
+		from essdee_yrp.fabric_source import prepare_source_pool
+
+		pool = prepare_source_pool(
+			lot.name,
+			production_detail,
+			knitting,
+		)
+		self.assertEqual(len(pool["buckets"]), 1)
+		bucket_key = next(iter(pool["buckets"]))
+
+		target_work_order = frappe.new_doc("YRP Work Order")
+		target_work_order.name = f"_Test Exact DC Target WO {suffix}"
+		target_work_order.docstatus = 1
+		target_work_order.naming_series = "WO-"
+		target_work_order.wo_date = frappe.utils.nowdate()
+		target_work_order.planned_start_date = frappe.utils.nowdate()
+		target_work_order.planned_end_date = frappe.utils.nowdate()
+		target_work_order.expected_delivery_date = frappe.utils.nowdate()
+		target_work_order.open_status = "Open"
+		target_work_order.cloth_execution_version = 1
+		target_work_order.lot = lot.name
+		target_work_order.production_detail = production_detail
+		target_work_order.process_name = dyeing
+		target_work_order.fabric_source_process = knitting
+		target_work_order.fabric_source_process_step = f"0::{knitting}"
+		target_work_order.item = item
+		target_work_order.supplier = supplier
+		target_work_order.delivery_location = supplier
+		target_work_order.supplier_address = address
+		target_work_order.delivery_address = address
+		target_work_order.db_insert()
+
+		deliverable = frappe.new_doc("YRP Work Order Deliverables")
+		deliverable.name = f"_Test Exact DC WOD {suffix}"
+		deliverable.parent = target_work_order.name
+		deliverable.parenttype = "YRP Work Order"
+		deliverable.parentfield = "deliverables"
+		deliverable.docstatus = 1
+		deliverable.item_variant = item
+		deliverable.qty = 10
+		deliverable.pending_quantity = 10
+		deliverable.uom = uom
+		deliverable.source_grn = source_grn.name
+		deliverable.source_grn_item = source_item.name
+		deliverable.is_calculated = 1
+		deliverable.additional_parameters = frappe.as_json(
+			{"f": "TARGET-EXECUTION", "s": bucket_key}
+		)
+		if deliverable.meta.get_field("lot"):
+			deliverable.lot = lot.name
+		if deliverable.meta.get_field("received_type"):
+			deliverable.received_type = received_type
+		deliverable.db_insert()
+
+		delivery_challans = []
+		for index, quantity in enumerate(quantities, 1):
+			dc = frappe.new_doc("YRP Delivery Challan")
+			dc.name = f"_Test Exact DC {suffix}-{index}"
+			dc.naming_series = "DC-.YYYY.-"
+			dc.work_order = target_work_order.name
+			dc.posting_date = frappe.utils.nowdate()
+			dc.posting_time = frappe.utils.nowtime()
+			dc.supplier = supplier
+			dc.from_location = supplier
+			dc.from_address = address
+			dc.supplier_address = address
+			dc.from_warehouse = warehouse
+			dc.to_warehouse = warehouse
+			dc.lot = lot.name
+			dc.process_name = dyeing
+			dc.production_detail = production_detail
+			dc.item = item
+			dc.append(
+				"items",
+				{
+					"item_variant": item,
+					"qty": quantity,
+					"delivered_quantity": quantity,
+					"uom": uom,
+					"stock_uom": uom,
+					"conversion_factor": 1,
+					"ref_doctype": "YRP Work Order Deliverables",
+					"ref_docname": deliverable.name,
+					"additional_parameters": deliverable.additional_parameters,
+					"lot": lot.name,
+					"received_type": received_type,
+				},
+			)
+			dc.db_insert()
+			for row in dc.items:
+				row.db_insert()
+			delivery_challans.append(dc.name)
+
+		frappe.db.commit()
+		return frappe._dict(
+			lot=lot.name,
+			source_work_order=source_work_order.name,
+			receivable=receivable.name,
+			source_grn=source_grn.name,
+			source_item=source_item.name,
+			target_work_order=target_work_order.name,
+			deliverable=deliverable.name,
+			delivery_challans=delivery_challans,
+		)
+
+	def _cleanup_fixture(self, fixture):
+		frappe.db.rollback()
+		for table, names in (
+			("YRP Delivery Challan Item", fixture.delivery_challans),
+			("YRP Delivery Challan", fixture.delivery_challans),
+			("YRP Work Order Deliverables", [fixture.deliverable]),
+			("YRP Work Order", [fixture.target_work_order]),
+			("YRP Goods Received Note Item", [fixture.source_item]),
+			("YRP Goods Received Note", [fixture.source_grn]),
+			("YRP Work Order Receivables", [fixture.receivable]),
+			("YRP Work Order", [fixture.source_work_order]),
+			("SD YRP Lot", [fixture.lot]),
+		):
+			if table == "YRP Delivery Challan Item":
+				frappe.db.delete(table, {"parent": ["in", names]})
+			else:
+				frappe.db.delete(table, {"name": ["in", names]})
+		frappe.db.commit()
+
+	def _dc_patches(self):
+		stack = ExitStack()
+		stack.enter_context(
+			patch.object(dc_hooks, "requires_exact_source_lifecycle", return_value=True)
+		)
+		for method in (
+			"validate_stock_available",
+			"make_stock_ledger_entries",
+			"make_repost_action",
+			"update_work_order_reservations",
+		):
+			stack.enter_context(patch.object(EssdeeDeliveryChallan, method, return_value=None))
+		# Piece tracking has its own committed concurrency suite. This fixture has
+		# no garment calculated-item projection; keep this test on DC source locks.
+		stack.enter_context(
+			patch(
+				"essdee_yrp.work_order_piece_tracking.rebuild_work_order_piece_tracking",
+				return_value={},
+			)
+		)
+		return stack
+
+	def _run_concurrent_submits(self, fixture):
+		barrier = threading.Barrier(2)
+		results = []
+		result_lock = threading.Lock()
+
+		def submit(name):
+			frappe.init(site="erp-migration-test.site")
+			frappe.connect()
+			frappe.set_user("Administrator")
+			try:
+				doc = frappe.get_doc("YRP Delivery Challan", name)
+				# Establish the old repeatable-read snapshot before either submit.
+				frappe.db.get_value(
+					"YRP Work Order Deliverables",
+					fixture.deliverable,
+					"pending_quantity",
+				)
+				barrier.wait(timeout=10)
+				doc.submit()
+				frappe.db.commit()
+				outcome = (name, "submitted", "")
+			except Exception as exc:
+				frappe.db.rollback()
+				outcome = (name, "failed", f"{exc}\n{traceback.format_exc()}")
+			finally:
+				frappe.destroy()
+			with result_lock:
+				results.append(outcome)
+
+		with self._dc_patches():
+			threads = [
+				threading.Thread(target=submit, args=(name,), daemon=True)
+				for name in fixture.delivery_challans
+			]
+			for thread in threads:
+				thread.start()
+			for thread in threads:
+				thread.join(timeout=20)
+			self.assertTrue(all(not thread.is_alive() for thread in threads), "DC submit deadlock")
+		return results
+
+	def test_concurrent_exact_dc_submits_use_post_lock_current_state(self):
+		fixture = self._insert_fixture()
+		try:
+			results = self._run_concurrent_submits(fixture)
+			submitted = [row for row in results if row[1] == "submitted"]
+			failed = [row for row in results if row[1] == "failed"]
+			self.assertEqual(len(submitted), 1, results)
+			self.assertEqual(len(failed), 1, results)
+			self.assertIn("exact source GRN row", failed[0][2])
+			self.assertEqual(
+				frappe.db.get_value(
+					"YRP Work Order Deliverables",
+					fixture.deliverable,
+					"pending_quantity",
+				),
+				4,
+			)
+		finally:
+			self._cleanup_fixture(fixture)
+
+	def test_overlapping_exact_dc_submits_finish_without_deadlock(self):
+		fixture = self._insert_fixture(quantities=(4, 4))
+		try:
+			results = self._run_concurrent_submits(fixture)
+			self.assertEqual([row[1] for row in results].count("submitted"), 2, results)
+			self.assertEqual(
+				frappe.db.get_value(
+					"YRP Work Order Deliverables",
+					fixture.deliverable,
+					"pending_quantity",
+				),
+				2,
+			)
+		finally:
+			self._cleanup_fixture(fixture)
+
+	def test_exact_dc_cancel_releases_bucket_for_next_dispatch(self):
+		fixture = self._insert_fixture()
+		first, second = fixture.delivery_challans
+		try:
+			with self._dc_patches():
+				frappe.get_doc("YRP Delivery Challan", first).submit()
+				frappe.db.commit()
+				with self.assertRaisesRegex(frappe.ValidationError, "exact source GRN row"):
+					frappe.get_doc("YRP Delivery Challan", second).submit()
+				frappe.db.rollback()
+				frappe.get_doc("YRP Delivery Challan", first).cancel()
+				frappe.db.commit()
+				frappe.get_doc("YRP Delivery Challan", second).submit()
+				frappe.db.commit()
+			self.assertEqual(
+				frappe.db.get_value(
+					"YRP Work Order Deliverables",
+					fixture.deliverable,
+					"pending_quantity",
+				),
+				4,
+			)
+		finally:
+			self._cleanup_fixture(fixture)
+
+
 class TestDeliveryChallanCustomization(FrappeTestCase):
+	def test_exact_dc_lot_lock_uses_work_order_authority(self):
+		doc = frappe._dict(
+			doctype="YRP Delivery Challan",
+			work_order="WO-EXACT-1",
+			lot="LOT-FORGED",
+		)
+
+		with (
+			patch.object(dc_hooks.frappe.db, "get_value", return_value="LOT-AUTHORITATIVE"),
+			patch.object(dc_hooks.frappe.db, "sql") as sql,
+		):
+			locked = dc_hooks.lock_transaction_lots(doc)
+
+		self.assertEqual(locked, "LOT-AUTHORITATIVE")
+		self.assertEqual(doc.lot, "LOT-AUTHORITATIVE")
+		self.assertEqual(sql.call_args.args[1], ("LOT-AUTHORITATIVE",))
+
+	def test_exact_dc_submit_updates_the_locked_current_pending_counter(self):
+		target = frappe._dict(
+			name="WOD-EXACT-1",
+			item_variant="CLOTH-ACTUAL-34",
+			set_combination={},
+			pending_quantity=6,
+		)
+		target.db_set = MagicMock()
+		work_order = frappe._dict(deliverables=[target])
+		work_order.set_status = MagicMock()
+		work_order.db_set = MagicMock()
+		doc = EssdeeDeliveryChallan(
+			{
+				"doctype": "YRP Delivery Challan",
+				"work_order": "WO-EXACT-1",
+				"items": [
+					{
+						"ref_doctype": "YRP Work Order Deliverables",
+						"ref_docname": target.name,
+						"item_variant": target.item_variant,
+						"set_combination": {},
+						"qty": 4,
+						"delivered_quantity": 4,
+					}
+				],
+			}
+		)
+		doc.flags.cloth_execution_locked_work_order = work_order
+
+		doc.update_work_order_deliverables()
+
+		self.assertEqual(target.pending_quantity, 2)
+		target.db_set.assert_called_once_with("pending_quantity", 2.0, update_modified=False)
+
+	def test_exact_dc_cancel_updates_the_locked_current_pending_counter(self):
+		target = frappe._dict(
+			name="WOD-EXACT-1",
+			item_variant="CLOTH-ACTUAL-34",
+			set_combination={},
+			pending_quantity=2,
+		)
+		target.db_set = MagicMock()
+		work_order = frappe._dict(deliverables=[target])
+		work_order.set_status = MagicMock()
+		work_order.db_set = MagicMock()
+		doc = EssdeeDeliveryChallan(
+			{
+				"doctype": "YRP Delivery Challan",
+				"work_order": "WO-EXACT-1",
+				"items": [
+					{
+						"ref_doctype": "YRP Work Order Deliverables",
+						"ref_docname": target.name,
+						"item_variant": target.item_variant,
+						"set_combination": {},
+						"qty": 4,
+						"delivered_quantity": 4,
+					}
+				],
+			}
+		)
+		doc.flags.cloth_execution_locked_work_order = work_order
+
+		doc.update_work_order_deliverables(cancel=True)
+
+		self.assertEqual(target.pending_quantity, 6)
+		target.db_set.assert_called_once_with("pending_quantity", 6.0, update_modified=False)
+
+	def test_exact_dc_validate_runs_after_all_base_validation(self):
+		doc = EssdeeDeliveryChallan({"doctype": "YRP Delivery Challan"})
+		events = []
+
+		with (
+			patch.object(
+				DeliveryChallan,
+				"validate",
+				autospec=True,
+				side_effect=lambda _doc: events.append("base"),
+			),
+			patch.object(
+				dc_hooks,
+				"validate_exact_source_limits",
+				side_effect=lambda _doc: events.append("exact"),
+			),
+		):
+			doc.validate()
+
+		self.assertEqual(events, ["base", "exact"])
+
+	def test_exact_dc_submit_locks_lot_before_base_lifecycle(self):
+		doc = EssdeeDeliveryChallan(
+			{"doctype": "YRP Delivery Challan", "work_order": "WO-EXACT-1"}
+		)
+		events = []
+
+		with (
+			patch.object(dc_hooks, "qualifies_cloth_transaction", return_value=True),
+			patch.object(
+				dc_hooks,
+				"lock_transaction_lots",
+				side_effect=lambda _doc: events.append("lot"),
+			),
+			patch.object(
+				DeliveryChallan,
+				"submit",
+				autospec=True,
+				side_effect=lambda target: events.append(
+					"base" if target.flags.cloth_execution_lot_locked else "unlocked"
+				),
+			),
+		):
+			doc.submit()
+
+		self.assertEqual(events, ["lot", "base"])
+
+	def test_exact_dc_cancel_locks_lot_before_base_lifecycle(self):
+		doc = EssdeeDeliveryChallan(
+			{"doctype": "YRP Delivery Challan", "work_order": "WO-EXACT-1"}
+		)
+		events = []
+
+		with (
+			patch.object(dc_hooks, "qualifies_cloth_transaction", return_value=True),
+			patch.object(
+				dc_hooks,
+				"lock_transaction_lots",
+				side_effect=lambda _doc: events.append("lot"),
+			),
+			patch.object(
+				DeliveryChallan,
+				"cancel",
+				autospec=True,
+				side_effect=lambda target: events.append(
+					"base" if target.flags.cloth_execution_lot_locked else "unlocked"
+				),
+			),
+		):
+			doc.cancel()
+
+		self.assertEqual(events, ["lot", "base"])
+
+	def test_exact_dc_before_submit_rejects_lifecycle_bypass(self):
+		doc = EssdeeDeliveryChallan(
+			{"doctype": "YRP Delivery Challan", "work_order": "WO-EXACT-1"}
+		)
+
+		with (
+			patch.object(dc_hooks, "qualifies_cloth_transaction", return_value=True),
+			self.assertRaisesRegex(frappe.ValidationError, "Lot lock"),
+		):
+			doc.before_submit()
+
+	def test_unqualified_dc_submit_keeps_base_lifecycle_unchanged(self):
+		doc = EssdeeDeliveryChallan(
+			{"doctype": "YRP Delivery Challan", "work_order": "WO-LEGACY-1"}
+		)
+
+		with (
+			patch.object(dc_hooks, "qualifies_cloth_transaction", return_value=False),
+			patch.object(DeliveryChallan, "submit", autospec=True) as base_submit,
+			patch.object(dc_hooks, "lock_transaction_lots") as lock_lots,
+		):
+			doc.submit()
+
+		base_submit.assert_called_once_with(doc)
+		lock_lots.assert_not_called()
+
 	def test_dc_submit_and_cancel_hooks_rebuild_linked_cutting_plans(self):
 		doc = frappe._dict(work_order="WO-CUTTING")
 		plan = frappe._dict(name="CP-1")

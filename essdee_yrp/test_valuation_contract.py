@@ -7,6 +7,7 @@ from frappe.tests import UnitTestCase
 from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import GoodsReceivedNote
 
 from essdee_yrp.api.work_order import _normalize_generated_uom_rows
+from essdee_yrp import delivery_challan_hooks as dc_hooks
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet import (
 	calculate_cutting_consumption_plan,
 )
@@ -53,6 +54,199 @@ from essdee_yrp.work_order_hooks import preserve_dynamic_packing_piece_uom
 
 
 class TestEssdeeValuationContract(UnitTestCase):
+	def _exact_dispatch_pool(self, available=10):
+		return {
+			"dimension_fields": ["lot", "received_type"],
+			"buckets": {
+				"SOURCE-BUCKET-1": {
+					"key": "SOURCE-BUCKET-1",
+					"source_grn": "GRN-SOURCE-1",
+					"source_grn_item": "GRN-SOURCE-ITEM-1",
+					"item_variant": "CLOTH-ACTUAL-34",
+					"source_warehouse": "SOURCE-WAREHOUSE-1",
+					"set_combination": {"colour": "Red"},
+					"stock_dimensions": {
+						"lot": "LOT-EXACT-1",
+						"received_type": "Accepted",
+					},
+					"remaining_stock_qty": available,
+				},
+			},
+		}
+
+	def _exact_dispatch_row(self, qty=4, **changes):
+		row = frappe._dict(
+			ref_doctype="YRP Work Order Deliverables",
+			ref_docname="WOD-EXACT-1",
+			item_variant="CLOTH-ACTUAL-34",
+			uom="Kg",
+			qty=qty,
+			delivered_quantity=qty,
+			stock_qty=qty,
+			conversion_factor=1,
+			source_grn="GRN-SOURCE-1",
+			source_grn_item="GRN-SOURCE-ITEM-1",
+			lot="LOT-EXACT-1",
+			received_type="Accepted",
+			set_combination={"colour": "Red"},
+			additional_parameters='{"s":"SOURCE-BUCKET-1","f":"FABRIC-1"}',
+		)
+		row.update(changes)
+		return row
+
+	def _exact_dispatch_target(self):
+		return frappe._dict(
+			name="WOD-EXACT-1",
+			parent="WO-EXACT-1",
+			item_variant="CLOTH-ACTUAL-34",
+			uom="Kg",
+			qty=10,
+			pending_quantity=10,
+			source_grn="GRN-SOURCE-1",
+			source_grn_item="GRN-SOURCE-ITEM-1",
+			lot="LOT-EXACT-1",
+			received_type="Accepted",
+			set_combination={"colour": "Red"},
+			additional_parameters='{"s":"SOURCE-BUCKET-1","f":"FABRIC-1"}',
+		)
+
+	def test_exact_dc_partial_dispatch_consumes_only_requested_stock(self):
+		pool = self._exact_dispatch_pool()
+
+		dc_hooks._consume_dispatch_source(pool, self._exact_dispatch_row(qty=4))
+
+		self.assertEqual(pool["buckets"]["SOURCE-BUCKET-1"]["remaining_stock_qty"], 6)
+
+	def test_exact_dc_aggregates_rows_before_consuming_one_bucket(self):
+		pool = self._exact_dispatch_pool()
+		doc = frappe._dict(
+			doctype="YRP Delivery Challan",
+			work_order="WO-EXACT-1",
+			items=[self._exact_dispatch_row(qty=4), self._exact_dispatch_row(qty=6)],
+			correction_items=[],
+		)
+
+		with (
+			patch.object(dc_hooks, "qualifies_cloth_transaction", return_value=True),
+			patch.object(dc_hooks, "_prepare_dispatch_source_pool", return_value=pool),
+			patch.object(dc_hooks.frappe.db, "sql", return_value=[self._exact_dispatch_target()]),
+			patch("yrp.stock.dimensions.get_dimension_fieldnames", return_value=["lot", "received_type"]),
+			patch.object(dc_hooks, "_conversion_factor", return_value=1),
+		):
+			dc_hooks.validate_exact_source_limits(doc)
+
+		self.assertEqual(pool["buckets"]["SOURCE-BUCKET-1"]["remaining_stock_qty"], 0)
+
+	def test_exact_dc_rejects_aggregate_over_dispatch(self):
+		pool = self._exact_dispatch_pool()
+		doc = frappe._dict(
+			doctype="YRP Delivery Challan",
+			work_order="WO-EXACT-1",
+			items=[self._exact_dispatch_row(qty=6), self._exact_dispatch_row(qty=5)],
+			correction_items=[],
+		)
+
+		with (
+			patch.object(dc_hooks, "qualifies_cloth_transaction", return_value=True),
+			patch.object(dc_hooks, "_prepare_dispatch_source_pool", return_value=pool),
+			patch.object(dc_hooks.frappe.db, "sql", return_value=[self._exact_dispatch_target()]),
+			patch("yrp.stock.dimensions.get_dimension_fieldnames", return_value=["lot", "received_type"]),
+			patch.object(dc_hooks, "_conversion_factor", return_value=1),
+			self.assertRaisesRegex(frappe.ValidationError, "only 10.*11.*Kg was requested"),
+		):
+			dc_hooks.validate_exact_source_limits(doc)
+
+	def test_exact_dc_rejects_changed_item(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "exact source Item changed"):
+			dc_hooks._consume_dispatch_source(
+				self._exact_dispatch_pool(),
+				self._exact_dispatch_row(item_variant="CLOTH-OTHER-34"),
+			)
+
+	def test_exact_dc_rejects_changed_source_grn_item(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "exact source GRN lineage changed"):
+			dc_hooks._consume_dispatch_source(
+				self._exact_dispatch_pool(),
+				self._exact_dispatch_row(source_grn_item="GRN-SOURCE-ITEM-OTHER"),
+			)
+
+	def test_exact_dc_rejects_non_default_received_type(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "stock dimension received_type changed"):
+			dc_hooks._consume_dispatch_source(
+				self._exact_dispatch_pool(),
+				self._exact_dispatch_row(received_type="Rejected"),
+			)
+
+	def test_exact_dc_rejects_changed_stock_dimension(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "stock dimension lot changed"):
+			dc_hooks._consume_dispatch_source(
+				self._exact_dispatch_pool(),
+				self._exact_dispatch_row(lot="LOT-OTHER"),
+			)
+
+	def test_exact_dc_rejects_changed_source_warehouse(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "source warehouse changed"):
+			dc_hooks._consume_dispatch_source(
+				self._exact_dispatch_pool(),
+				self._exact_dispatch_row(dispatch_warehouse="SOURCE-WAREHOUSE-OTHER"),
+			)
+
+	def test_exact_dc_rejects_correction_rows(self):
+		doc = frappe._dict(
+			doctype="YRP Delivery Challan",
+			work_order="WO-EXACT-1",
+			items=[self._exact_dispatch_row()],
+			correction_items=[frappe._dict(item_variant="CLOTH-ACTUAL-34", qty=1)],
+		)
+
+		with (
+			patch.object(dc_hooks, "qualifies_cloth_transaction", return_value=True),
+			self.assertRaisesRegex(frappe.ValidationError, "correction rows"),
+		):
+			dc_hooks.validate_exact_source_limits(doc)
+
+	def test_versioned_exact_dc_keeps_non_fabric_consumables_on_base_flow(self):
+		pool = self._exact_dispatch_pool()
+		pool["cloth_item"] = "CLOTH-TEMPLATE"
+		doc = frappe._dict(
+			doctype="YRP Delivery Challan",
+			work_order="WO-EXACT-1",
+			items=[
+				frappe._dict(
+					ref_doctype="YRP Work Order Deliverables",
+					ref_docname="WOD-CHEMICAL-1",
+					item_variant="DYE-CHEMICAL",
+					uom="Kg",
+					qty=2,
+					delivered_quantity=2,
+					set_combination={},
+					additional_parameters="{}",
+				)
+			],
+			correction_items=[],
+		)
+		target = frappe._dict(
+			name="WOD-CHEMICAL-1",
+			parent="WO-EXACT-1",
+			item_variant="DYE-CHEMICAL",
+			uom="Kg",
+			qty=2,
+			pending_quantity=2,
+			set_combination={},
+			additional_parameters="{}",
+		)
+
+		with (
+			patch.object(dc_hooks, "qualifies_cloth_transaction", return_value=True),
+			patch.object(dc_hooks, "_prepare_dispatch_source_pool", return_value=pool),
+			patch.object(dc_hooks.frappe.db, "sql", return_value=[target]),
+			patch("yrp.stock.dimensions.get_dimension_fieldnames", return_value=[]),
+			patch.object(dc_hooks, "_item_belongs_to_template", return_value=False, create=True),
+		):
+			dc_hooks.validate_exact_source_limits(doc)
+
+		self.assertEqual(pool["buckets"]["SOURCE-BUCKET-1"]["remaining_stock_qty"], 10)
+
 	@patch("essdee_yrp.rework_work_order.get_base_rework_source_rows")
 	@patch("essdee_yrp.rework_work_order.frappe.has_permission")
 	@patch("essdee_yrp.rework_work_order.frappe.get_doc")

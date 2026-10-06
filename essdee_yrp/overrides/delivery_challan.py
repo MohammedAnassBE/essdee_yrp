@@ -3,7 +3,10 @@
 import frappe
 from frappe import _
 from frappe.utils import flt
-from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import DeliveryChallan
+from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
+	DeliveryChallan,
+	_find_matching_row,
+)
 
 
 def strip_unselected_cpm_items(doc):
@@ -54,6 +57,109 @@ def strip_generated_invalid_zero_placeholders(doc):
 
 
 class EssdeeDeliveryChallan(DeliveryChallan):
+	def validate(self):
+		super().validate()
+		from essdee_yrp.delivery_challan_hooks import validate_exact_source_limits
+
+		validate_exact_source_limits(self)
+
+	def submit(self):
+		from essdee_yrp import delivery_challan_hooks
+
+		delivery_challan_hooks.sync_exact_source_contract(self)
+		if not delivery_challan_hooks.requires_exact_source_lifecycle(self):
+			return super().submit()
+		lot = delivery_challan_hooks.lock_transaction_lots(self)
+		self.flags.cloth_execution_lot_locked = lot or True
+		return super().submit()
+
+	def cancel(self):
+		from essdee_yrp import delivery_challan_hooks
+
+		if not delivery_challan_hooks.requires_exact_source_lifecycle(self):
+			return super().cancel()
+		lot = delivery_challan_hooks.lock_transaction_lots(self)
+		self.flags.cloth_execution_lot_locked = lot or True
+		return super().cancel()
+
+	def before_submit(self):
+		from essdee_yrp import delivery_challan_hooks
+
+		if delivery_challan_hooks.requires_exact_source_lifecycle(self):
+			if not self.flags.get("cloth_execution_lot_locked"):
+				frappe.throw(_("Versioned cloth Delivery Challan submit requires the Lot lock."))
+			delivery_challan_hooks.validate_exact_source_limits(self)
+			self._lock_current_work_order()
+		return super().before_submit()
+
+	def before_cancel(self):
+		from essdee_yrp import delivery_challan_hooks
+
+		if delivery_challan_hooks.requires_exact_source_lifecycle(self):
+			if not self.flags.get("cloth_execution_lot_locked"):
+				frappe.throw(_("Versioned cloth Delivery Challan cancel requires the Lot lock."))
+			self._lock_current_work_order()
+		return super().before_cancel()
+
+	def validate_against_work_order_pending(self):
+		work_order = self.flags.get("cloth_execution_locked_work_order")
+		if not work_order:
+			return super().validate_against_work_order_pending()
+		for row in self.get("items") or []:
+			target = _find_matching_row(
+				work_order.deliverables,
+				row,
+				"YRP Work Order Deliverables",
+			)
+			if not target:
+				frappe.throw(
+					_("Row {0}: no matching Work Order Deliverable found for {1}.").format(
+						row.idx, row.item_variant
+					)
+				)
+			row.ref_doctype = "YRP Work Order Deliverables"
+			row.ref_docname = target.name
+			row.pending_quantity = target.pending_quantity
+
+	def update_work_order_deliverables(self, cancel=False):
+		work_order = self.flags.get("cloth_execution_locked_work_order")
+		if not work_order:
+			return super().update_work_order_deliverables(cancel=cancel)
+		changed = False
+		for row in self.get("items") or []:
+			target = _find_matching_row(
+				work_order.deliverables,
+				row,
+				"YRP Work Order Deliverables",
+			)
+			if not target:
+				continue
+			quantity = flt(row.get("delivered_quantity") or row.get("qty"))
+			pending = (
+				flt(target.pending_quantity) + quantity
+				if cancel
+				else flt(target.pending_quantity) - quantity
+			)
+			target.pending_quantity = flt(pending)
+			target.db_set(
+				"pending_quantity",
+				target.pending_quantity,
+				update_modified=False,
+			)
+			changed = True
+		if changed:
+			work_order.set_status()
+			work_order.db_set("status", work_order.status, update_modified=False)
+			work_order.db_set("is_delivered", work_order.is_delivered, update_modified=False)
+
+	def _lock_current_work_order(self):
+		"""Keep pending validation and mutation on one current locked image."""
+		self.flags.cloth_execution_locked_work_order = frappe.get_doc(
+			"YRP Work Order",
+			self.work_order,
+			for_update=True,
+		)
+
 	def set_missing_values(self):
 		"""Keep the operator-selected DC source authoritative.
 

@@ -13,6 +13,7 @@
 					<InputText
 						v-model="search"
 						:placeholder="searchPlaceholder"
+						:aria-label="searchPlaceholder"
 						@keyup.enter="applySearch"
 					/>
 				</span>
@@ -66,6 +67,7 @@
 				type="button"
 				class="list-status-tab"
 				:class="{ 'list-status-tab--active': activeStatus === tab.value }"
+				:aria-pressed="activeStatus === tab.value"
 				@click="selectStatus(tab.value)"
 			>
 				<span v-if="tab.value" class="list-status-tab__dot" :class="statusTone(tab.value)"></span>
@@ -197,8 +199,16 @@
 					</template>
 				</Column>
 				<Column v-if="clickable" header="" class="list-chevron-column">
-					<template #body>
-						<i class="pi pi-chevron-right list-row-chevron" aria-hidden="true"></i>
+					<template #body="{ data }">
+						<button
+							type="button"
+							class="list-row-open"
+							:aria-label="`Open ${data.name || 'record'}`"
+							:title="`Open ${data.name || 'record'}`"
+							@click.stop="openRow(data)"
+						>
+							<i class="pi pi-chevron-right list-row-chevron" aria-hidden="true"></i>
+						</button>
 					</template>
 				</Column>
 				<template #empty>
@@ -1031,6 +1041,10 @@ function rowClicked(event) {
 	if (props.clickable) emit("row-click", event.data)
 }
 
+function openRow(row) {
+	if (props.clickable) emit("row-click", row)
+}
+
 function rowClass(row) {
 	const classes = ["premium-list-row"]
 	if (props.clickable) classes.push("premium-list-row--clickable")
@@ -1094,11 +1108,11 @@ defineExpose({ refresh: reload })
 	display: grid;
 	gap: 12px;
 	width: 100%;
-	padding: 14px;
-	background: var(--list-surface);
+	padding: 16px;
+	background: #fff;
 	border: 1px solid var(--list-line);
 	border-radius: var(--erp-panel-radius);
-	box-shadow: var(--erp-shadow-card);
+	box-shadow: 0 1px 2px rgb(24 53 39 / 4%), 0 10px 28px rgb(24 53 39 / 4%);
 }
 
 .list-page-head {
@@ -1352,6 +1366,16 @@ defineExpose({ refresh: reload })
 	transform: translateY(-1px);
 }
 
+.list-status-tab:focus-visible {
+	color: var(--list-accent-dark);
+	outline: 3px solid color-mix(in srgb, var(--list-accent) 18%, transparent);
+	outline-offset: 1px;
+}
+
+.list-status-tab:active {
+	transform: translateY(0);
+}
+
 .list-status-tab--active {
 	color: var(--list-accent-dark);
 	background: var(--erp-surface);
@@ -1401,8 +1425,9 @@ defineExpose({ refresh: reload })
 .list-table-frame {
 	overflow: hidden;
 	background: var(--list-surface);
-	border: 1px solid #d9e3de;
+	border: 1px solid var(--list-line);
 	border-radius: var(--erp-panel-radius);
+	box-shadow: inset 0 1px 0 rgb(255 255 255 / 72%);
 }
 
 .list-loading {
@@ -1460,7 +1485,7 @@ defineExpose({ refresh: reload })
 }
 
 :deep(.premium-list-table .p-datatable-tbody > tr:hover) {
-	background: color-mix(in srgb, var(--list-accent) 5%, white);
+	background: color-mix(in srgb, var(--list-accent) 4%, white);
 	box-shadow: inset 0 1px color-mix(in srgb, var(--list-accent) 8%, transparent), inset 0 -1px color-mix(in srgb, var(--list-accent) 8%, transparent);
 }
 
@@ -1552,6 +1577,38 @@ defineExpose({ refresh: reload })
 	width: 44px;
 }
 
+.list-row-open {
+	display: grid;
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	color: #64748b;
+	background: transparent;
+	border: 1px solid transparent;
+	border-radius: var(--erp-control-radius);
+	cursor: pointer;
+	place-items: center;
+	transition: 140ms ease;
+}
+
+.list-row-open:hover {
+	color: var(--list-accent-dark);
+	background: var(--list-accent-soft);
+	border-color: color-mix(in srgb, var(--list-accent) 22%, white);
+}
+
+.list-row-open:focus-visible {
+	color: var(--list-accent-dark);
+	background: #fff;
+	border-color: var(--list-accent);
+	outline: 3px solid color-mix(in srgb, var(--list-accent) 16%, transparent);
+	outline-offset: 1px;
+}
+
+.list-row-open:active {
+	transform: translateY(1px);
+}
+
 .list-row-chevron {
 	color: #94a3b8;
 	font-size: 0.72rem;
@@ -1565,6 +1622,11 @@ defineExpose({ refresh: reload })
 :deep(.premium-list-row--clickable:hover) .list-row-chevron {
 	color: var(--list-accent);
 	transform: translateX(2px);
+}
+
+:deep(.premium-list-row--clickable:has(.list-row-open:focus-visible)) {
+	background: color-mix(in srgb, var(--list-accent) 6%, white);
+	box-shadow: inset 3px 0 var(--list-accent);
 }
 
 .list-empty {

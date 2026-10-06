@@ -6,6 +6,7 @@
 
 				<LinkField
 					v-if="field.fieldtype === 'Link'"
+					:input-id="`quick-filter-${field.fieldname}`"
 					:model-value="modelValue[field.fieldname] || ''"
 					:doctype="field.options"
 					:filters="linkFilters(field)"
@@ -146,10 +147,11 @@ function linkFilters(field) {
 .quick-filters {
 	display: grid;
 	gap: 8px;
-	padding: 12px;
-	background: var(--erp-surface-soft);
+	padding: 10px 12px 12px;
+	background: #fff;
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-control-radius);
+	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
 }
 
 .quick-filters__grid {
@@ -165,9 +167,14 @@ function linkFilters(field) {
 }
 
 .quick-filter-field > label {
-	color: #506159;
+	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-caption);
-	font-weight: 650;
+	font-weight: 680;
+	transition: color var(--erp-transition-fast);
+}
+
+.quick-filter-field:focus-within > label {
+	color: var(--erp-accent-hover);
 }
 
 .quick-filter-field :deep(.p-inputtext),
@@ -175,7 +182,7 @@ function linkFilters(field) {
 .quick-filter-field :deep(.p-autocomplete-input),
 .quick-filter-field :deep(.p-inputnumber-input) {
 	height: var(--erp-control-height);
-	background: var(--erp-surface);
+	background: #fff;
 	border-color: var(--erp-border-strong);
 	border-radius: var(--erp-control-radius);
 	box-shadow: none;
@@ -188,8 +195,8 @@ function linkFilters(field) {
 .quick-filter-field :deep(.p-select.p-focus),
 .quick-filter-field :deep(.p-autocomplete:focus-within .p-inputtext),
 .quick-filter-field :deep(.p-inputnumber:focus-within .p-inputnumber-input) {
-	border-color: color-mix(in srgb, var(--list-accent) 48%, white);
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--list-accent) 11%, transparent);
+	border-color: var(--erp-accent);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--erp-accent) 11%, transparent);
 }
 
 @media (max-width: 600px) {

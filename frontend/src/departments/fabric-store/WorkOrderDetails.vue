@@ -47,13 +47,13 @@ function formatValue(field) {
 
 <style scoped>
 .work-order-details { display: grid; gap: var(--erp-space-3); }
-.work-order-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: hidden; }
+.work-order-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: hidden; border-color: color-mix(in srgb, var(--erp-border) 84%, white); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
 .work-order-field { display: grid; min-height: 58px; align-content: center; gap: 4px; padding: 10px 13px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
 .work-order-field:nth-child(2n) { border-right: 0; }
 .work-order-field span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .work-order-field strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
-.work-order-section { overflow: hidden; }
-.work-order-section > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 13px; background: var(--erp-surface-soft); border-bottom: 1px solid var(--erp-border); }
+.work-order-section { overflow: hidden; border-color: color-mix(in srgb, var(--erp-border) 84%, white); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
+.work-order-section > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 13px; border-bottom: 1px solid var(--erp-border); border-left: 3px solid color-mix(in srgb, var(--erp-accent) 68%, white); background: color-mix(in srgb, var(--erp-surface-soft) 78%, white); }
 .work-order-section > header div { display: grid; gap: 2px; }
 .work-order-section > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; text-transform: uppercase; }
 .work-order-section > header h2 { margin: 0; font-size: 14px; }

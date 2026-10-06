@@ -7,6 +7,7 @@
 
 		<LinkField
 			v-if="isLink"
+			:input-id="inputId"
 			:model-value="modelValue"
 			:doctype="linkDoctype"
 			:filters="linkFilters"
@@ -102,7 +103,7 @@
 		<small v-if="field.description" class="form-field__description">
 			{{ field.description }}
 		</small>
-		<small v-if="error" class="form-field__error">{{ error }}</small>
+		<small v-if="error" class="form-field__error" role="alert">{{ error }}</small>
 	</div>
 </template>
 
@@ -198,7 +199,13 @@ function parseLinkFilters(value) {
 .form-field__label {
 	color: var(--erp-text);
 	font-size: var(--erp-font-size-caption);
-	font-weight: 650;
+	font-weight: 680;
+	line-height: 1.25;
+	transition: color var(--erp-transition-fast);
+}
+
+.form-field:focus-within .form-field__label {
+	color: var(--erp-accent-hover);
 }
 
 .form-field__required,
@@ -214,5 +221,34 @@ function parseLinkFilters(value) {
 
 .form-field__description {
 	color: var(--erp-text-muted);
+}
+
+.form-field__error {
+	padding-left: 8px;
+	border-left: 2px solid var(--erp-danger);
+}
+
+.form-field :deep(.p-inputtext),
+.form-field :deep(.p-select),
+.form-field :deep(.p-inputnumber-input),
+.form-field :deep(.p-textarea) {
+	background: #fff;
+	border-color: var(--erp-border-strong);
+	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
+}
+
+.form-field :deep(.p-inputtext:enabled:hover),
+.form-field :deep(.p-select:not(.p-disabled):hover),
+.form-field :deep(.p-inputnumber:not(.p-disabled):hover .p-inputnumber-input),
+.form-field :deep(.p-textarea:enabled:hover) {
+	border-color: color-mix(in srgb, var(--erp-accent) 32%, var(--erp-border-strong));
+}
+
+.form-field :deep(.p-inputtext:focus),
+.form-field :deep(.p-select.p-focus),
+.form-field :deep(.p-inputnumber:focus-within .p-inputnumber-input),
+.form-field :deep(.p-textarea:focus) {
+	border-color: var(--erp-accent);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--erp-accent) 11%, transparent);
 }
 </style>

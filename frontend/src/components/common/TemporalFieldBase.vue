@@ -181,8 +181,12 @@ function pad(value) {
 .erp-date-time-field__label {
 	color: var(--erp-text);
 	font-size: var(--erp-font-size-caption);
-	font-weight: 650;
+	font-weight: 680;
 	line-height: 1.25;
+}
+
+.erp-date-time-field:focus-within .erp-date-time-field__label {
+	color: var(--erp-accent-hover);
 }
 
 .erp-date-time-field__label b,
@@ -207,7 +211,15 @@ function pad(value) {
 
 .erp-date-time-field :deep(.erp-date-time-picker .p-datepicker-input) {
 	min-width: 0;
+	background: #fff;
+	border-color: var(--erp-border-strong);
+	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
 	font-variant-numeric: tabular-nums;
+}
+
+.erp-date-time-field :deep(.erp-date-time-picker:focus-within .p-datepicker-input) {
+	border-color: var(--erp-accent);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--erp-accent) 11%, transparent);
 }
 
 .erp-date-time-field :deep(.erp-date-time-picker .p-datepicker-dropdown) {

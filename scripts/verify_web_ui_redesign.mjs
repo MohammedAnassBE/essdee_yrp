@@ -90,11 +90,11 @@ async function tokensSuite(page) {
 	})
 
 	assert(contract.fontFamily.includes("Segoe UI Variable"), "font token is missing")
-	assert(contract.controlRadius === "8px", "control radius is not locked")
-	assert(contract.panelRadius === "12px", "panel radius is not locked")
-	assert(contract.accent === "#0a7f5a", "emerald accent is not locked")
+	assert(contract.controlRadius === "9px", "control radius is not locked")
+	assert(contract.panelRadius === "14px", "panel radius is not locked")
+	assert(contract.accent === "#059669", "emerald accent is not locked")
 	assert(contract.minimumFontSize === "11px", "minimum text size is not locked")
-	assert(contract.canvas === "rgb(244, 247, 245)", "stable canvas color is not applied")
+	assert(contract.canvas === "rgb(247, 248, 250)", "stable canvas color is not applied")
 
 	return contract
 }
@@ -107,7 +107,7 @@ async function shellSuite(page) {
 	const destinations = page.locator(".department-card-link")
 	assert(await destinations.count() === 10, "Administrator must show ten department destinations")
 	assert(await page.getByText("Open workspace", { exact: true }).count() === 0, "Redundant workspace filler is visible")
-	assert(await page.locator("body").evaluate((body) => getComputedStyle(body).backgroundColor) === "rgb(244, 247, 245)", "Shell canvas is not stable")
+	assert(await page.locator("body").evaluate((body) => getComputedStyle(body).backgroundColor) === "rgb(247, 248, 250)", "Shell canvas is not stable")
 
 	await destinations.first().focus()
 	const focusVisible = await destinations.first().evaluate((element) => {
@@ -129,7 +129,7 @@ async function shellSuite(page) {
 async function cuttingEntrySuite(page, context) {
 	await page.setViewportSize({ width: 1600, height: 1000 })
 	await page.goto(`${SITE}/web/cutting`, { waitUntil: "domcontentloaded" })
-	await page.locator(".workspace-launcher__grid").waitFor({ timeout: 20_000 })
+	await page.locator(".workspace-launcher__card").first().waitFor({ timeout: 20_000 })
 
 	const entries = page.locator(".workspace-launcher__card")
 	assert(await entries.count() === 5, "Cutting must show the five permitted destinations")
@@ -181,7 +181,7 @@ async function listSuite(page, context) {
 		elements.map((element) => Math.round(element.getBoundingClientRect().height)),
 	)
 	assert(controlHeights.length >= 5, "Expected list command controls are missing")
-	assert(controlHeights.every((height) => height === 36), `List controls are not 36px: ${controlHeights.join(", ")}`)
+	assert(controlHeights.every((height) => height === 38), `List controls are not 38px: ${controlHeights.join(", ")}`)
 
 	const headerPosition = await page.locator(".premium-list-table .p-datatable-thead > tr > th").first().evaluate((element) =>
 		getComputedStyle(element).position,
@@ -333,6 +333,20 @@ async function planFrameSuite(page, context) {
 	assert(tabTopBefore === tabTopAfter, "Tab list moves with active content")
 	assert(scrollResult.scrollHeight >= scrollResult.clientHeight, "Tab content has no bounded scroll region")
 	assert(await page.locator("html").evaluate((element) => element.scrollWidth <= element.clientWidth), "Cutting Plan has page-level horizontal overflow")
+	const pageViewport = await page.locator("html").evaluate((element) => {
+		const layout = document.querySelector(".cutting-plan-layout")
+		const departmentPage = document.querySelector(".department-page")
+		return {
+			clientHeight: element.clientHeight,
+			scrollHeight: element.scrollHeight,
+			layout: layout ? layout.getBoundingClientRect().toJSON() : null,
+			departmentPage: departmentPage ? departmentPage.getBoundingClientRect().toJSON() : null,
+		}
+	})
+	assert(
+		pageViewport.scrollHeight <= pageViewport.clientHeight + 1,
+		`Cutting Plan leaks its bounded workspace into browser-level vertical scrolling: ${JSON.stringify(pageViewport)}`,
+	)
 
 	const loadingPage = await context.newPage()
 	try {
@@ -1377,9 +1391,9 @@ async function reportsSuite(page) {
 		}
 	})
 	assert(
-		panelContract.borderRadius === "12px"
+		panelContract.borderRadius === "14px"
 			&& panelContract.background === "rgb(255, 255, 255)"
-			&& panelContract.selectedBackground === "rgb(10, 127, 90)"
+			&& panelContract.selectedBackground === "rgb(5, 150, 105)"
 			&& panelContract.selectedColor === "rgb(255, 255, 255)"
 			&& panelContract.viewportContained,
 		`Shared date panel is not using the isolated ERP presentation: ${JSON.stringify(panelContract)}`,

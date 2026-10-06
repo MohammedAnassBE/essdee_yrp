@@ -13,6 +13,7 @@
 					class="back-link"
 					icon="pi pi-arrow-left"
 					:label="backLabel"
+					:aria-label="`Back to ${backLabel}`"
 					severity="secondary"
 					text
 					@click="navigate"

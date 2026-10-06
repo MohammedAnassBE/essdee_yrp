@@ -198,14 +198,14 @@ watch(() => props.name, load)
 </script>
 
 <style scoped>
-.purchase-order-editor { display: flex; width: 100%; min-height: calc(100dvh - 78px); flex-direction: column; gap: var(--erp-space-3); padding: var(--erp-space-4); }
-.purchase-order-editor__header { display: flex; align-items: center; justify-content: space-between; gap: var(--erp-space-4); padding-bottom: var(--erp-space-3); border-bottom: 1px solid var(--erp-border); }
+.purchase-order-editor { --purchase-order-editor-inline: clamp(14px, 1.5vw, 24px); display: flex; width: 100%; min-height: calc(100dvh - var(--erp-shell-header-height) - 78px); flex-direction: column; gap: var(--erp-space-3); padding: 0 var(--purchase-order-editor-inline) var(--erp-space-4); border-color: color-mix(in srgb, var(--erp-border) 84%, white); background: color-mix(in srgb, var(--erp-bg) 72%, white); }
+.purchase-order-editor__header { position: sticky; z-index: var(--erp-layer-sticky); top: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--erp-space-4); margin: 0 calc(0px - var(--purchase-order-editor-inline)); padding: 12px var(--purchase-order-editor-inline); border-top: 3px solid var(--erp-accent); border-bottom: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface) 96%, var(--erp-accent-soft)); box-shadow: 0 5px 16px rgb(28 61 45 / 5%); }
 .purchase-order-editor__header > div:first-child { display: grid; gap: 2px; }
 .purchase-order-editor__header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }
 .purchase-order-editor__header h1 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-title); letter-spacing: -.025em; }
 .purchase-order-editor__actions { display: flex; justify-content: flex-end; gap: var(--erp-space-2); flex-wrap: wrap; }
 .purchase-order-editor__loading, .purchase-order-editor__body { display: grid; min-width: 0; gap: var(--erp-space-3); }
-.purchase-order-editor__section { padding: var(--erp-space-4); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); }
+.purchase-order-editor__section { padding: clamp(14px, 1.4vw, 22px); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 8px 24px rgb(28 61 45 / 4%); }
 .purchase-order-editor__section h2 { margin: 0 0 var(--erp-space-3); color: var(--erp-text); font-size: var(--erp-font-size-section); }
 .purchase-order-editor__fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: var(--erp-space-3) var(--erp-space-4); }
 .purchase-order-editor__check { display: flex; min-height: var(--erp-control-height); align-items: center; gap: 8px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
@@ -213,5 +213,5 @@ watch(() => props.name, load)
 .purchase-order-editor__comments > span { color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; text-transform: none; letter-spacing: normal; }
 .purchase-order-editor__discard-copy { margin: 0; color: var(--erp-text-muted); line-height: 1.5; }
 @media (max-width: 900px) { .purchase-order-editor__header { align-items: flex-start; flex-direction: column; } .purchase-order-editor__actions { justify-content: flex-start; } .purchase-order-editor__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 600px) { .purchase-order-editor { padding: var(--erp-space-3); } .purchase-order-editor__section { padding: var(--erp-space-3); } .purchase-order-editor__fields { grid-template-columns: 1fr; } .purchase-order-editor__comments { grid-column: auto; } .purchase-order-editor__actions { width: 100%; } .purchase-order-editor__actions :deep(.p-button) { flex: 1; } }
+@media (max-width: 600px) { .purchase-order-editor { padding: 0 var(--erp-space-3) var(--erp-space-3); } .purchase-order-editor__header { align-items: stretch; margin: 0 calc(var(--erp-space-3) * -1); padding: 10px var(--erp-space-3); } .purchase-order-editor__section { padding: var(--erp-space-3); } .purchase-order-editor__fields { grid-template-columns: 1fr; } .purchase-order-editor__comments { grid-column: auto; } .purchase-order-editor__actions { width: 100%; } .purchase-order-editor__actions :deep(.p-button) { flex: 1; } }
 </style>

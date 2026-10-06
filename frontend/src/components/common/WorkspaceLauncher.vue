@@ -1,11 +1,19 @@
 <template>
-	<section class="workspace-launcher erp-workspace erp-workspace-entry" :aria-labelledby="headingId">
+	<section
+		class="workspace-launcher erp-workspace erp-workspace-entry"
+		:aria-labelledby="headingId"
+		:aria-busy="loading"
+	>
 		<header class="erp-page-header workspace-launcher__header">
-			<h1 :id="headingId">{{ title }}</h1>
+			<div>
+				<p class="erp-page-header__eyebrow">Department workspace</p>
+				<h1 :id="headingId">{{ title }}</h1>
+			</div>
 		</header>
 
 		<div v-if="loading" class="workspace-launcher__grid" aria-label="Loading workspaces">
-			<Skeleton v-for="index in skeletonCount" :key="index" height="144px" border-radius="12px" />
+			<span class="workspace-launcher__loading-status" role="status">Loading workspaces</span>
+			<Skeleton v-for="index in skeletonCount" :key="index" height="152px" border-radius="14px" />
 		</div>
 		<div v-else-if="items.length" class="workspace-launcher__grid">
 			<RouterLink
@@ -47,42 +55,62 @@ const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]
 
 <style scoped>
 .workspace-launcher {
-	max-width: 1120px;
+	max-width: 1180px;
 	margin: 0 auto;
-	padding: 24px 8px;
+	padding: clamp(24px, 4vw, 48px) 8px;
 }
+
+.workspace-launcher__header { margin-bottom: var(--erp-space-6); }
 
 .workspace-launcher__header h1 {
 	margin: 0;
 	color: var(--erp-text);
-	font-size: clamp(1.7rem, 2vw, 2rem);
-	font-weight: 780;
-	letter-spacing: -0.035em;
+	font-size: clamp(1.8rem, 3vw, 2.5rem);
+	font-weight: var(--erp-font-weight-bold);
+	letter-spacing: -0.04em;
 }
 
 .workspace-launcher__grid {
+	position: relative;
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 16px;
+	gap: var(--erp-space-4);
+}
+
+.workspace-launcher__loading-status {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
 }
 
 .workspace-launcher__card {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr) auto;
-	min-height: 144px;
-	padding: 22px;
+	min-height: 152px;
+	padding: 24px;
 	align-items: center;
-	transition: border-color var(--erp-transition-fast), box-shadow var(--erp-transition-fast), transform var(--erp-transition-fast);
+	box-shadow: var(--erp-shadow-xs);
+	transition: border-color var(--erp-transition-base), box-shadow var(--erp-transition-base), transform var(--erp-transition-base);
 }
 
 .workspace-launcher__card:hover,
 .workspace-launcher__card:focus-visible {
 	border-color: color-mix(in srgb, var(--erp-accent) 38%, var(--erp-border));
-	box-shadow: 0 14px 34px rgb(30 64 48 / 11%);
-	transform: translateY(-2px);
+	box-shadow: var(--erp-shadow-md);
+	transform: translateY(-3px);
 }
 
-.workspace-launcher__card:active { transform: translateY(0); }
+.workspace-launcher__card:focus-visible {
+	outline: 3px solid color-mix(in srgb, var(--erp-accent) 24%, transparent);
+	outline-offset: 2px;
+}
+
+.workspace-launcher__card:active { transform: translateY(-1px) scale(0.995); }
 
 .workspace-launcher__icon {
 	display: grid;
@@ -106,7 +134,7 @@ const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]
 .workspace-launcher__body strong {
 	color: var(--erp-text);
 	font-size: 1.15rem;
-	font-weight: 720;
+	font-weight: var(--erp-font-weight-semibold);
 }
 
 .workspace-launcher__body small {
@@ -142,7 +170,7 @@ const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]
 .workspace-launcher__empty strong { color: var(--erp-text); font-size: var(--erp-font-size-body); }
 
 @media (max-width: 760px) {
-	.workspace-launcher { padding: 16px 2px; }
+	.workspace-launcher { padding: 24px 2px; }
 	.workspace-launcher__grid { grid-template-columns: 1fr; }
 	.workspace-launcher__card { min-height: 138px; padding: 18px; }
 }

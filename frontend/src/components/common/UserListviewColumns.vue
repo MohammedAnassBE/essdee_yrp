@@ -289,10 +289,10 @@ async function reset() {
 
 <style scoped>
 .column-editor {
-	--column-accent: #0d9488;
-	--column-accent-dark: #0f766e;
-	--column-accent-soft: #e9f7f5;
-	--column-line: #dfe7e3;
+	--column-accent: var(--erp-accent);
+	--column-accent-dark: var(--erp-accent-hover);
+	--column-accent-soft: var(--erp-accent-soft);
+	--column-line: var(--erp-border);
 
 	display: grid;
 	grid-template-columns: minmax(240px, 0.8fr) minmax(320px, 1.2fr);
@@ -305,9 +305,10 @@ async function reset() {
 	display: flex;
 	min-width: 0;
 	padding: 14px;
-	background: #fbfcfb;
+	background: #fff;
 	border: 1px solid var(--column-line);
-	border-radius: 16px;
+	border-radius: var(--erp-panel-radius);
+	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
 	flex-direction: column;
 }
 
@@ -366,7 +367,16 @@ async function reset() {
 	height: 38px;
 	padding-left: 32px;
 	border-color: var(--column-line);
-	border-radius: 10px;
+	border-radius: var(--erp-control-radius);
+}
+
+.column-search:focus-within > i {
+	color: var(--column-accent-dark);
+}
+
+.column-search :deep(input:focus) {
+	border-color: var(--column-accent);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--column-accent) 11%, transparent);
 }
 
 .column-picker-list,
@@ -394,13 +404,18 @@ async function reset() {
 }
 
 .column-picker-row:hover {
-	background: #f7faf8;
+	background: #f8faf9;
 	border-color: #e4ebe7;
 }
 
 .column-picker-row--enabled {
 	background: var(--column-accent-soft);
 	border-color: #cfeae5;
+}
+
+.column-picker-row:focus-within {
+	border-color: var(--column-accent);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--column-accent) 10%, transparent);
 }
 
 .column-picker-row > span,

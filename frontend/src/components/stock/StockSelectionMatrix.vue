@@ -19,7 +19,7 @@
 								<td v-for="attribute in group.attributes || []" :key="attribute"><span class="selection-matrix__attribute">{{ row.attributes?.[attribute] || "—" }}</span></td>
 								<td v-for="value in primaryValues(group)" :key="value" class="selection-matrix__number">
 									<label v-if="cell(row, value).selection_key" class="selection-matrix__cell" :class="{ 'selection-matrix__cell--selected': isSelected(cell(row, value).selection_key) }">
-										<input type="checkbox" :checked="isSelected(cell(row, value).selection_key)" @change="toggle(cell(row, value).selection_key)" />
+										<input type="checkbox" :checked="isSelected(cell(row, value).selection_key)" :aria-label="`Select ${row.name}, ${valueLabel(group, value)}, quantity ${formatQty(cell(row, value).qty)}`" @change="toggle(cell(row, value).selection_key)" />
 										<strong>{{ formatQty(cell(row, value).qty) }}</strong>
 									</label>
 									<span v-else class="selection-matrix__missing">—</span>
@@ -55,6 +55,7 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-panel-radius);
 	background: var(--erp-surface);
+	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
 }
 
 .selection-matrix__header {
@@ -64,7 +65,7 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 	gap: var(--erp-space-4);
 	padding: 10px var(--erp-space-3);
 	border-bottom: 1px solid var(--erp-border);
-	background: var(--erp-surface-soft);
+	background: #f8faf9;
 }
 
 .selection-matrix__header > div:first-child {
@@ -117,7 +118,7 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 	overflow: auto;
 	gap: 10px;
 	padding: 10px;
-	background: var(--erp-surface-soft);
+	background: #f8faf9;
 }
 
 .selection-matrix__group {
@@ -125,6 +126,7 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-control-radius);
 	background: var(--erp-surface);
+	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
 }
 
 .selection-matrix__group > header {
@@ -175,7 +177,7 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 	top: 0;
 	padding: var(--erp-space-2) 9px;
 	border-bottom: 1px solid var(--erp-border-strong);
-	background: #eef5f1;
+	background: #f5f8f6;
 	color: #58675f;
 	font-size: var(--erp-font-size-min);
 	font-weight: 750;
@@ -194,6 +196,10 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 
 .selection-matrix tbody tr:last-child td {
 	border-bottom: 0;
+}
+
+.selection-matrix tbody tr:hover td {
+	background: color-mix(in srgb, var(--erp-accent) 3%, white);
 }
 
 .selection-matrix__index {
@@ -247,6 +253,13 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 	color: var(--erp-accent);
 }
 
+.selection-matrix__cell:focus-within {
+	border-color: var(--erp-accent);
+	background: var(--erp-accent-soft);
+	outline: 3px solid color-mix(in srgb, var(--erp-accent) 14%, transparent);
+	outline-offset: 1px;
+}
+
 .selection-matrix__cell input {
 	width: 13px;
 	height: 13px;
@@ -268,13 +281,22 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 }
 
 .selection-matrix__empty {
-	display: flex;
+	display: grid;
 	align-items: center;
 	justify-content: center;
-	gap: var(--erp-space-2);
-	padding: 32px;
+	justify-items: center;
+	gap: 7px;
+	min-height: 132px;
+	padding: 30px;
 	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-caption);
+	text-align: center;
+	background: #fff;
+}
+
+.selection-matrix__empty i {
+	color: var(--erp-accent);
+	font-size: 1.2rem;
 }
 
 @media (max-width: 700px) {

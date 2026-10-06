@@ -63,5 +63,5 @@ watch(() => [props.visible, props.name], ([visible, name], previous) => {
 </script>
 
 <style scoped>
-.related-document-workspace-dialog__unsupported { display: grid; justify-items: end; gap: var(--erp-space-3); padding: var(--erp-space-4); }
+.related-document-workspace-dialog__unsupported { display: grid; min-height: 180px; place-content: center; justify-items: center; gap: var(--erp-space-3); padding: var(--erp-space-4); text-align: center; background: color-mix(in srgb, var(--erp-surface-soft) 70%, white); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); }
 </style>

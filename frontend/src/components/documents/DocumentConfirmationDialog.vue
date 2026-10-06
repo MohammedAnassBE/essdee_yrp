@@ -23,7 +23,7 @@ const emit = defineEmits(["update:visible", "confirm"])
 </script>
 
 <style scoped>
-.document-confirmation-dialog { display: grid; grid-template-columns: auto 1fr; align-items: start; gap: 12px; padding: 4px 0; }
-.document-confirmation-dialog > i { display: grid; width: 34px; height: 34px; place-items: center; color: #b45309; border-radius: 50%; background: #fff7ed; }
-.document-confirmation-dialog p { margin: 4px 0 0; color: var(--erp-text-muted); line-height: 1.5; }
+.document-confirmation-dialog { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 14px; padding: 8px 0 4px; }
+.document-confirmation-dialog > i { display: grid; width: 40px; height: 40px; place-items: center; color: var(--erp-warning); border: 1px solid color-mix(in srgb, var(--erp-warning) 24%, white); border-radius: var(--erp-control-radius); background: color-mix(in srgb, var(--erp-warning) 9%, white); }
+.document-confirmation-dialog p { margin: 3px 0 0; color: var(--erp-text); font-size: 0.88rem; line-height: 1.55; }
 </style>

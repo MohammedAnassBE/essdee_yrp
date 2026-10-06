@@ -107,7 +107,7 @@ watch(() => props.name, load, { immediate: true })
 </script>
 
 <style scoped>
-.bulk-setup-editor { display: flex; min-height: calc(100dvh - 98px); padding: var(--erp-space-4); flex-direction: column; gap: var(--erp-space-3); }
+.bulk-setup-editor { display: flex; min-height: calc(100dvh - var(--erp-shell-header-height) - 98px); padding: var(--erp-space-4); flex-direction: column; gap: var(--erp-space-3); }
 .bulk-setup-editor__header, .bulk-setup-card > header, .bulk-lots-card > header { display: flex; align-items: center; justify-content: space-between; gap: var(--erp-space-3); }
 .bulk-setup-editor__header { padding-bottom: var(--erp-space-3); border-bottom: 1px solid var(--erp-border); }
 .bulk-setup-editor__header span, .section-kicker { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .045em; text-transform: uppercase; }

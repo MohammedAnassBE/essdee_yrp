@@ -115,7 +115,7 @@ watch(cuttingOrderId, initialise, { immediate: true })
 <style scoped>
 .order-probe { display: grid; gap: var(--erp-space-3); }
 .order-editor-route { width: 100%; max-width: 1800px; min-width: 0; margin: 0 auto; }
-.cutting-order-layout { display: grid; grid-template-columns: minmax(0, 4fr) minmax(286px, 1fr); align-items: stretch; gap: var(--erp-space-3); height: calc(100dvh - 97px); min-height: 0; overflow: hidden; }
+.cutting-order-layout { display: grid; grid-template-columns: minmax(0, 4fr) minmax(286px, 1fr); align-items: stretch; gap: var(--erp-space-3); height: calc(100dvh - var(--erp-shell-header-height) - 97px); min-height: 0; overflow: hidden; }
 .cutting-order-layout--without-sidebar { grid-template-columns: minmax(0, 1fr); }
 .cutting-order-main { display: flex; min-width: 0; min-height: 0; padding: 14px; flex-direction: column; gap: 8px; overflow: hidden; }
 .order-record-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 52px; padding-bottom: 12px; border-bottom: 1px solid var(--erp-border); }

@@ -187,14 +187,14 @@ watch(() => props.name, load)
 </script>
 
 <style scoped>
-.work-order-editor { display: flex; width: 100%; min-height: calc(100dvh - 78px); flex-direction: column; gap: var(--erp-space-3); padding: var(--erp-space-4); }
-.work-order-editor__header { display: flex; align-items: center; justify-content: space-between; gap: var(--erp-space-4); padding-bottom: var(--erp-space-3); border-bottom: 1px solid var(--erp-border); }
+.work-order-editor { --work-order-editor-inline: clamp(14px, 1.5vw, 24px); display: flex; width: 100%; min-height: calc(100dvh - var(--erp-shell-header-height) - 78px); flex-direction: column; gap: var(--erp-space-3); padding: 0 var(--work-order-editor-inline) var(--erp-space-4); border-color: color-mix(in srgb, var(--erp-border) 84%, white); background: color-mix(in srgb, var(--erp-bg) 72%, white); }
+.work-order-editor__header { position: sticky; z-index: var(--erp-layer-sticky); top: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--erp-space-4); margin: 0 calc(0px - var(--work-order-editor-inline)); padding: 12px var(--work-order-editor-inline); border-top: 3px solid var(--erp-accent); border-bottom: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface) 96%, var(--erp-accent-soft)); box-shadow: 0 5px 16px rgb(28 61 45 / 5%); }
 .work-order-editor__header > div:first-child { display: grid; gap: 2px; }
 .work-order-editor__header span, .work-order-editor__section > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }
-.work-order-editor__header h1 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-title); }
+.work-order-editor__header h1 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-title); letter-spacing: -.025em; }
 .work-order-editor__actions { display: flex; justify-content: flex-end; gap: var(--erp-space-2); flex-wrap: wrap; }
 .work-order-editor__loading, .work-order-editor__body { display: grid; min-width: 0; gap: var(--erp-space-3); }
-.work-order-editor__section { display: grid; gap: var(--erp-space-3); padding: var(--erp-space-4); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); }
+.work-order-editor__section { display: grid; gap: var(--erp-space-3); padding: clamp(14px, 1.4vw, 22px); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 8px 24px rgb(28 61 45 / 4%); }
 .work-order-editor__section > header { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
 .work-order-editor__section h2 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-section); }
 .work-order-editor__section small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
@@ -203,10 +203,10 @@ watch(() => props.name, load)
 .work-order-editor__check { display: flex; min-height: var(--erp-control-height); align-items: center; gap: 8px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
 .work-order-editor__comments { display: grid; grid-column: span 2; gap: 6px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
 .work-order-editor__calculated { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.work-order-editor__calculated > div { display: grid; gap: 3px; padding: 9px 11px; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.work-order-editor__calculated > div { display: grid; gap: 3px; padding: 9px 11px; border-left: 3px solid color-mix(in srgb, var(--erp-accent) 58%, white); background: var(--erp-surface-soft); border-radius: 0 var(--erp-control-radius) var(--erp-control-radius) 0; }
 .work-order-editor__calculated strong { overflow: hidden; font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
 .work-order-editor__calculated span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .work-order-editor__discard-copy { margin: 0; color: var(--erp-text-muted); line-height: 1.5; }
 @media (max-width: 900px) { .work-order-editor__header { align-items: flex-start; flex-direction: column; } .work-order-editor__fields, .work-order-editor__dimensions { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 620px) { .work-order-editor { padding: var(--erp-space-3); } .work-order-editor__section { padding: var(--erp-space-3); } .work-order-editor__fields, .work-order-editor__dimensions, .work-order-editor__calculated { grid-template-columns: 1fr; } .work-order-editor__comments { grid-column: auto; } .work-order-editor__actions { width: 100%; } .work-order-editor__actions :deep(.p-button) { flex: 1; } }
+@media (max-width: 620px) { .work-order-editor { padding: 0 var(--erp-space-3) var(--erp-space-3); } .work-order-editor__header { align-items: stretch; margin: 0 calc(var(--erp-space-3) * -1); padding: 10px var(--erp-space-3); } .work-order-editor__section { padding: var(--erp-space-3); } .work-order-editor__fields, .work-order-editor__dimensions, .work-order-editor__calculated { grid-template-columns: 1fr; } .work-order-editor__comments { grid-column: auto; } .work-order-editor__actions { width: 100%; } .work-order-editor__actions :deep(.p-button) { flex: 1; } }
 </style>

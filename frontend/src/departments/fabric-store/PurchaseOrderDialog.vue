@@ -126,12 +126,12 @@ function formatDate(value, includeTime = false) { const match = String(value || 
 .document-status { padding: 4px 9px; color: #546159; font-size: var(--erp-font-size-min); font-weight: 800; text-transform: uppercase; background: #eef2f0; border-radius: var(--erp-pill-radius); }
 .document-status--submitted { color: #087848; background: #ddf6e9; }
 .document-status--cancelled { color: #b42318; background: #fde8e8; }
-.purchase-order-detail-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.purchase-order-detail-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); box-shadow: 0 5px 16px rgb(28 61 45 / 4%); }
 .purchase-order-detail-grid > div { display: grid; min-height: 56px; align-content: center; gap: 4px; padding: 9px 11px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
 .purchase-order-detail-grid span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; }
 .purchase-order-detail-grid strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
 .purchase-order-detail-grid .purchase-order-detail-link { color: var(--erp-accent); }
-.purchase-order-empty { display: flex; align-items: center; gap: 10px; padding: 16px; color: var(--erp-text-muted); background: var(--erp-surface-soft); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.purchase-order-empty { display: flex; min-height: 112px; align-items: center; justify-content: center; gap: 10px; padding: 16px; color: var(--erp-text-muted); background: color-mix(in srgb, var(--erp-surface-soft) 72%, white); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); }
 .purchase-order-empty div { display: grid; gap: 2px; }
 .purchase-order-empty strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
 .purchase-order-empty span { font-size: var(--erp-font-size-min); }

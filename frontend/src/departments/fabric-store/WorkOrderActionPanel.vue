@@ -289,12 +289,12 @@ watch(() => props.visible, (value, previous) => { if (value && !previous) initia
 </script>
 
 <style scoped>
-.work-order-action-panel__body, .work-order-action-panel__loading { display: grid; gap: var(--erp-space-3); }
+.work-order-action-panel__body, .work-order-action-panel__loading { display: grid; gap: var(--erp-space-3); padding: 2px 1px; }
 .work-order-action-panel__fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--erp-space-3); }
 .work-order-action-panel__fields > label, .work-order-action-panel__field, .work-order-fabric-row__quantities label { display: grid; gap: 6px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
 .work-order-action-panel__wide { grid-column: 1 / -1; }
 .work-order-action-panel__check { display: flex !important; align-items: center; grid-column: 1 / -1; }
-.work-order-action-panel__table-wrap { overflow: auto; max-height: 58dvh; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.work-order-action-panel__table-wrap { overflow: auto; max-height: 58dvh; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); box-shadow: 0 5px 16px rgb(28 61 45 / 4%); }
 .work-order-action-panel__table-wrap table { min-width: 720px; }
 .work-order-garment-calculation { display: grid; gap: var(--erp-space-2); }
 .work-order-garment-calculation__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
@@ -306,22 +306,23 @@ watch(() => props.visible, (value, previous) => { if (value && !previous) initia
 .work-order-calculation-table__row--disabled { opacity: .55; }
 .work-order-calculation-table__total { color: var(--erp-accent); font-weight: 800; }
 .work-order-recut-groups { display: grid; gap: var(--erp-space-3); }
-.work-order-recut-group { display: grid; overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.work-order-recut-group { display: grid; overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); box-shadow: 0 4px 14px rgb(28 61 45 / 3%); }
 .work-order-recut-row { display: grid; grid-template-columns: minmax(180px, 1fr) repeat(auto-fit, minmax(110px, 150px)); align-items: end; gap: var(--erp-space-3); padding: var(--erp-space-3); border-bottom: 1px solid var(--erp-border); }
 .work-order-recut-row:last-child { border-bottom: 0; }
 .work-order-recut-row > div, .work-order-recut-row label { display: grid; gap: 4px; }
 .work-order-recut-row small, .work-order-recut-row label span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
-.work-order-fabric-row { display: grid; gap: var(--erp-space-3); padding: var(--erp-space-3); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.work-order-fabric-row { display: grid; gap: var(--erp-space-3); padding: var(--erp-space-3); border-left: 3px solid color-mix(in srgb, var(--erp-accent) 54%, white); background: color-mix(in srgb, var(--erp-surface-soft) 70%, white); border-radius: 0 var(--erp-control-radius) var(--erp-control-radius) 0; }
 .work-order-fabric-row > header { display: flex; justify-content: space-between; gap: 12px; }
 .work-order-fabric-row > header div { display: grid; gap: 2px; }
 .work-order-fabric-row > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .work-order-fabric-row__quantities { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--erp-space-3); }
 .work-order-fabric-row__yarns { display: flex; gap: 8px 14px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); flex-wrap: wrap; }
-.work-order-action-panel__existing { display: grid; gap: 6px; padding: var(--erp-space-3); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.work-order-action-panel__existing { display: grid; gap: 6px; padding: var(--erp-space-3); border-left: 3px solid var(--erp-border-strong); background: var(--erp-surface-soft); }
 .work-order-action-panel__existing h3 { margin: 0 0 4px; font-size: var(--erp-font-size-section); }
 .work-order-action-panel__existing div { display: flex; justify-content: space-between; gap: 10px; font-size: var(--erp-font-size-caption); }
 .work-order-change-items { display: grid; gap: 7px; }
-.work-order-change-items label { display: flex; align-items: center; gap: 9px; padding: 9px; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.work-order-change-items label { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-bottom: 1px solid var(--erp-border); background: var(--erp-surface); transition: background-color 160ms ease; }
+.work-order-change-items label:hover { background: color-mix(in srgb, var(--erp-accent-soft) 40%, white); }
 .work-order-change-items label > span { display: grid; gap: 2px; }
 .work-order-change-items small { color: var(--erp-text-muted); }
 .work-order-action-panel__copy { margin: 0; color: var(--erp-text-muted); line-height: 1.55; }

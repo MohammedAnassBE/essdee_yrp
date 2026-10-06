@@ -93,11 +93,13 @@ onBeforeUnmount(() => compactQuery?.removeEventListener("change", updateCompact)
 </script>
 
 <style scoped>
-.document-action-strip { display: flex; min-width: 0; align-items: center; gap: 2px; flex-wrap: nowrap; }
-.document-action-strip :deep(.p-button) { min-height: var(--erp-control-height); flex: 0 0 auto; white-space: nowrap; }
-.document-action-strip__primary { margin-right: 3px; }
+.document-action-strip { display: flex; min-width: 0; align-items: center; gap: 4px; flex-wrap: nowrap; }
+.document-action-strip :deep(.p-button) { min-height: var(--erp-control-height); flex: 0 0 auto; white-space: nowrap; border-radius: var(--erp-control-radius); }
+.document-action-strip :deep(.p-button:not(:disabled):active) { transform: translateY(1px); }
+.document-action-strip :deep(.p-button:focus-visible) { outline: 3px solid color-mix(in srgb, var(--erp-accent) 16%, transparent); outline-offset: 1px; }
+.document-action-strip__primary { margin-right: 2px; box-shadow: 0 3px 10px color-mix(in srgb, var(--erp-accent) 18%, transparent); }
 .document-action-strip__secondary :deep(.p-button-label),
 .document-action-strip__more :deep(.p-button-label) { font-weight: 650; }
 @media (max-width: 899px) { .document-action-strip__secondary { display: none; } }
-@media (max-width: 620px) { .document-action-strip { width: 100%; } .document-action-strip__primary { min-width: 0; flex: 1 1 auto !important; } }
+@media (max-width: 620px) { .document-action-strip { width: 100%; } .document-action-strip__primary { min-width: 0; flex: 1 1 auto !important; } .document-action-strip__more { flex: 0 0 auto; } }
 </style>

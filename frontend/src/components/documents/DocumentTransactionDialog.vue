@@ -153,31 +153,33 @@ defineExpose({ markDirty, reload: load })
 </script>
 
 <style scoped>
-.document-transaction-dialog__content { display: grid; max-height: 70vh; min-height: 180px; overflow-y: auto; gap: var(--erp-space-2); padding: 1px; scrollbar-gutter: stable; }
+.document-transaction-dialog__content { display: grid; max-height: 70vh; min-height: 180px; overflow-y: auto; gap: 10px; padding: 2px; scrollbar-gutter: stable; }
 .document-transaction-dialog__loading { display: grid; gap: var(--erp-space-2); }
 .document-transaction-dialog__status-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .document-transaction-dialog__status-row small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
-.document-status { padding: 4px 9px; color: #546159; font-size: var(--erp-font-size-min); font-weight: 800; text-transform: uppercase; background: #eef2f0; border-radius: var(--erp-pill-radius); }
-.document-status--submitted { color: #087848; background: #ddf6e9; }
-.document-status--cancelled { color: #b42318; background: #fde8e8; }
-.document-summary-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); overflow: hidden; background: var(--erp-accent-soft); border: 1px solid #c9e2d5; border-radius: var(--erp-control-radius); }
-.document-summary-metric { display: grid; min-height: 58px; align-content: center; gap: 2px; padding: 8px 12px; border-right: 1px solid #c9e2d5; }
+.document-status { padding: 4px 9px; color: #546159; font-size: var(--erp-font-size-min); font-weight: 800; text-transform: uppercase; background: #f1f3f2; border: 1px solid var(--erp-border); border-radius: var(--erp-pill-radius); }
+.document-status--submitted { color: var(--erp-accent-hover); background: var(--erp-accent-soft); border-color: color-mix(in srgb, var(--erp-accent) 22%, white); }
+.document-status--cancelled { color: #b42318; background: #fff1f1; border-color: #f4cccc; }
+.document-summary-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); overflow: hidden; background: #fff; border: 1px solid var(--erp-border-strong); border-radius: var(--erp-control-radius); box-shadow: inset 3px 0 0 var(--erp-accent), 0 1px 2px rgb(24 53 39 / 3%); }
+.document-summary-metric { display: grid; min-height: 58px; align-content: center; gap: 2px; padding: 8px 12px; border-right: 1px solid var(--erp-border); }
 .document-summary-metric:last-child { border-right: 0; }
 .document-summary-metric span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .document-summary-metric strong { color: var(--erp-accent-hover); font-size: 18px; font-weight: 780; font-variant-numeric: tabular-nums; }
-.document-detail-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; background: var(--erp-surface-soft); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
-.document-detail-grid > div { display: grid; min-height: 46px; align-content: center; gap: 2px; padding: 7px 10px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
+.document-detail-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; background: var(--erp-border); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); gap: 1px; }
+.document-detail-grid > div { display: grid; min-height: 48px; align-content: center; gap: 2px; padding: 7px 10px; background: #fff; }
 .document-detail-grid span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; text-transform: uppercase; }
 .document-detail-grid strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
 .document-detail-grid .document-detail-link { color: var(--erp-accent); }
-.document-items-unavailable { display: flex; align-items: center; gap: 10px; padding: 14px; color: var(--erp-text-muted); background: var(--erp-surface-soft); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.document-items-unavailable { display: flex; align-items: center; gap: 10px; padding: 14px; color: var(--erp-text-muted); background: color-mix(in srgb, var(--erp-warning) 7%, white); border: 1px solid color-mix(in srgb, var(--erp-warning) 24%, white); border-radius: var(--erp-control-radius); }
+.document-items-unavailable > i { color: var(--erp-warning); }
 .document-items-unavailable div { display: grid; gap: 2px; }
 .document-items-unavailable strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
 .document-items-unavailable span { font-size: var(--erp-font-size-min); }
 .document-transaction-dialog__footer { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: var(--erp-space-3); }
-.document-transaction-dialog__footer > div { display: flex; align-items: center; justify-content: flex-end; gap: var(--erp-space-2); }
+.document-transaction-dialog__footer > div { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.document-transaction-dialog__footer :deep(.p-button) { white-space: nowrap; }
 .dirty-close-copy { margin: 0; color: var(--erp-text-muted); line-height: 1.55; }
 @media (max-width: 900px) { .document-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 760px) { .document-transaction-dialog__footer { align-items: stretch; flex-direction: column; } .document-transaction-dialog__footer > div { flex-wrap: wrap; } }
+@media (max-width: 760px) { .document-transaction-dialog__footer { align-items: stretch; flex-direction: column; } .document-transaction-dialog__footer > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .document-transaction-dialog__footer :deep(.p-button) { width: 100%; } }
 @media (max-width: 480px) { .document-summary-strip, .document-detail-grid { grid-template-columns: 1fr; } .document-summary-metric { border-right: 0; border-bottom: 1px solid #c9e2d5; } .document-summary-metric:last-child { border-bottom: 0; } }
 </style>

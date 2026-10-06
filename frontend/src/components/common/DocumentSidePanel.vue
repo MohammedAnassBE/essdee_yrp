@@ -83,7 +83,7 @@ function openDocument() { router.push(webDocumentPath(props.doctype, props.doc.n
 .document-side-panel {
 	display: grid;
 	align-content: start;
-	gap: 14px;
+	gap: 12px;
 	position: sticky;
 	top: 10px;
 }
@@ -93,18 +93,18 @@ function openDocument() { router.push(webDocumentPath(props.doctype, props.doc.n
 	background: var(--erp-surface);
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-panel-radius);
-	box-shadow: var(--erp-shadow-card);
+	box-shadow: 0 1px 2px rgb(24 53 39 / 4%), 0 8px 22px rgb(24 53 39 / 3%);
 }
 
 .side-panel-card > header {
-	padding: 13px 15px;
-	color: #2f684b;
+	padding: 11px 14px;
+	color: var(--erp-accent-hover);
 	font-size: 0.76rem;
 	font-weight: 800;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
-	background: #f2f8f4;
-	border-bottom: 1px solid #e1e7e3;
+	background: #f8faf9;
+	border-bottom: 1px solid var(--erp-border);
 }
 
 .side-panel-loading,
@@ -122,7 +122,7 @@ function openDocument() { router.push(webDocumentPath(props.doctype, props.doc.n
 .side-panel-row {
 	display: grid;
 	gap: 3px;
-	padding: 10px 0;
+	padding: 9px 0;
 	border-bottom: 1px solid #edf0ee;
 }
 
@@ -138,7 +138,9 @@ function openDocument() { router.push(webDocumentPath(props.doctype, props.doc.n
 .side-panel-row strong {
 	overflow-wrap: anywhere;
 	font-size: 0.82rem;
-	font-weight: 650;
+	color: var(--erp-text);
+	font-weight: 680;
+	font-variant-numeric: tabular-nums;
 }
 
 .side-panel-card > :deep(.p-button) {
@@ -147,9 +149,14 @@ function openDocument() { router.push(webDocumentPath(props.doctype, props.doc.n
 }
 
 .side-panel-empty {
-	margin: 10px 0;
-	color: #77827c;
+	margin: 8px 0;
+	padding: 14px 10px;
+	color: var(--erp-text-muted);
 	font-size: 0.8rem;
+	text-align: center;
+	background: #fafcfb;
+	border: 1px dashed var(--erp-border-strong);
+	border-radius: var(--erp-control-radius);
 }
 
 @media (max-width: 900px) {

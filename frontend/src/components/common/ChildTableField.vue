@@ -61,7 +61,11 @@
 				</template>
 			</Column>
 			<template #empty>
-				<div class="child-table-field__empty">No rows added.</div>
+				<div class="child-table-field__empty">
+					<i class="pi pi-table" aria-hidden="true"></i>
+					<strong>No rows added</strong>
+					<span>Use Add Row to create the first line.</span>
+				</div>
 			</template>
 		</DataTable>
 	</section>
@@ -173,7 +177,8 @@ function columnWidth(column) {
 .child-table-field__header h3 {
 	margin: 0;
 	color: var(--erp-text);
-	font-size: 0.95rem;
+	font-size: 0.9rem;
+	font-weight: 740;
 }
 
 .child-table-field__header small {
@@ -184,9 +189,11 @@ function columnWidth(column) {
 }
 
 .child-table-field__table {
-	border: 1px solid var(--erp-border);
+	background: #fff;
+	border: 1px solid var(--erp-border-strong);
 	border-radius: var(--erp-panel-radius);
 	overflow: hidden;
+	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
 }
 
 .child-table-field__index {
@@ -195,12 +202,56 @@ function columnWidth(column) {
 }
 
 .child-table-field__empty {
-	padding: 24px;
-	color: #77827c;
+	display: grid;
+	justify-items: center;
+	gap: 4px;
+	padding: 34px 24px;
+	color: var(--erp-text-muted);
 	text-align: center;
 }
 
+.child-table-field__empty i {
+	margin-bottom: 4px;
+	color: var(--erp-accent);
+	font-size: 1.15rem;
+}
+
+.child-table-field__empty strong {
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-caption);
+}
+
+.child-table-field__empty span {
+	font-size: var(--erp-font-size-min);
+}
+
+.child-table-field__table :deep(.p-datatable-thead > tr > th) {
+	padding-block: 8px;
+	color: #53645b;
+	font-size: var(--erp-font-size-min);
+	font-weight: 800;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	background: #f7f9f8;
+}
+
 .child-table-field__table :deep(.p-datatable-tbody > tr > td) {
+	padding: 8px;
 	vertical-align: top;
+}
+
+.child-table-field__table :deep(.p-datatable-tbody > tr:hover) {
+	background: color-mix(in srgb, var(--erp-accent) 3%, white);
+}
+
+@media (max-width: 620px) {
+	.child-table-field__header {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.child-table-field__header :deep(.p-button) {
+		width: 100%;
+	}
 }
 </style>

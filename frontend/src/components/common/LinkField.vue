@@ -1,9 +1,10 @@
 <template>
-	<label class="common-field" :class="{ 'common-field--invalid': invalid }">
-		<span v-if="label" class="common-field__label">{{ label }}</span>
+	<div class="common-field" :class="{ 'common-field--invalid': invalid }">
+		<label v-if="label" class="common-field__label" :for="resolvedInputId">{{ label }}</label>
 		<span class="link-field__control">
 			<AutoComplete
 				ref="input"
+				:input-id="resolvedInputId"
 				:model-value="inputValue"
 				:suggestions="suggestions"
 				:option-label="optionLabel"
@@ -46,13 +47,13 @@
 			/>
 		</span>
 		<small v-if="helpText" class="common-field__help">{{ helpText }}</small>
-	</label>
+	</div>
 </template>
 
 <script setup>
 import AutoComplete from "primevue/autocomplete"
 import Button from "primevue/button"
-import { computed, ref, watch } from "vue"
+import { computed, ref, useId, watch } from "vue"
 
 import { searchLink } from "../../api/frappe.js"
 import { webDocumentPath } from "../../router/webDocumentRoutes.js"
@@ -62,6 +63,7 @@ const props = defineProps({
 	doctype: { type: String, required: true },
 	label: { type: String, default: "" },
 	placeholder: { type: String, default: "" },
+	inputId: { type: String, default: "" },
 	helpText: { type: String, default: "" },
 	filters: { type: Object, default: () => ({}) },
 	disabled: { type: Boolean, default: false },
@@ -79,6 +81,7 @@ const props = defineProps({
 const emit = defineEmits(["update:modelValue", "select", "clear"])
 
 const input = ref(null)
+const componentId = useId()
 const inputValue = ref(null)
 const suggestions = ref([])
 const searching = ref(false)
@@ -87,6 +90,7 @@ const committedLabel = ref("")
 let requestSequence = 0
 
 const optionLabel = computed(() => "label")
+const resolvedInputId = computed(() => props.inputId || `link-field-${componentId}`)
 
 watch(
 	() => props.modelValue,
@@ -180,9 +184,14 @@ defineExpose({ focus })
 }
 
 .common-field__label {
-	font-size: 0.8rem;
-	font-weight: 650;
-	color: #34413a;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-caption);
+	font-weight: 680;
+	transition: color var(--erp-transition-fast);
+}
+
+.common-field:focus-within .common-field__label {
+	color: var(--erp-accent-hover);
 }
 
 .common-field__help,
@@ -202,6 +211,26 @@ defineExpose({ focus })
 	min-width: 0;
 }
 
+.link-field__control :deep(.p-autocomplete-input) {
+	background: #fff;
+	border-color: var(--erp-border-strong);
+	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
+}
+
+.link-field__control :deep(.p-autocomplete:not(.p-disabled):hover .p-autocomplete-input) {
+	border-color: color-mix(in srgb, var(--erp-accent) 32%, var(--erp-border-strong));
+}
+
+.link-field__control :deep(.p-autocomplete:focus-within .p-autocomplete-input) {
+	border-color: var(--erp-accent);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--erp-accent) 11%, transparent);
+}
+
+.link-field__control :deep(.p-button:focus-visible) {
+	outline: 3px solid color-mix(in srgb, var(--erp-accent) 16%, transparent);
+	outline-offset: 1px;
+}
+
 .link-field__empty {
 	display: inline-flex;
 	align-items: center;
@@ -215,13 +244,13 @@ defineExpose({ focus })
 }
 
 .link-field__option strong {
-	color: #26372d;
+	color: var(--erp-text);
 	font-size: 0.78rem;
 	font-weight: 650;
 }
 
 .link-field__option small {
-	color: #7b877f;
+	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
 }
 </style>

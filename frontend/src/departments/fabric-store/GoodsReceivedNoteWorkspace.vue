@@ -583,32 +583,32 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 
 <style scoped>
 .goods-received-note-workspace { width: 100%; min-width: 0; }
-.goods-received-note-workspace--page { padding: 0 2px var(--erp-space-3); }
+.goods-received-note-workspace--page { max-width: 1840px; margin: 0 auto; padding: 0 clamp(2px, .7vw, 10px) var(--erp-space-3); }
 .goods-received-note-header__identity { display: flex; min-width: 0; align-items: center; gap: 12px; }
 .goods-received-note-header__identity > div:first-child { display: grid; min-width: 0; gap: 2px; }
-.goods-received-note-header__identity h1 { margin: 0; color: var(--erp-text); font-size: 18px; line-height: 1.2; }
+.goods-received-note-header__identity h1 { margin: 0; color: var(--erp-text); font-size: 19px; line-height: 1.15; letter-spacing: -.018em; }
 .goods-received-note-header__identity > div:first-child > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); font-weight: 700; }
 .goods-received-note-header__facts { display: flex; min-width: 0; align-items: center; gap: 16px; padding-left: 13px; border-left: 1px solid var(--erp-border); }
 .goods-received-note-header__facts > div { display: grid; min-width: 0; gap: 2px; }
 .goods-received-note-header__facts span, .goods-received-note-total span, .goods-received-note-transfer-progress > span, .goods-received-note-matrix__header span, .goods-received-note-special-context header span, .goods-received-note-related header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .goods-received-note-header__facts strong { overflow: hidden; max-width: 180px; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
 .goods-received-note-fields { display: grid; gap: 10px; }
-.goods-received-note-field-group { overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); }
-.goods-received-note-field-group > header { display: flex; min-height: 44px; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--erp-border); background: var(--erp-surface-soft); }
+.goods-received-note-field-group { overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
+.goods-received-note-field-group > header { display: flex; min-height: 44px; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--erp-border); border-left: 3px solid color-mix(in srgb, var(--erp-accent) 68%, white); background: color-mix(in srgb, var(--erp-surface-soft) 78%, white); }
 .goods-received-note-field-group > header span { color: var(--erp-accent); font-size: var(--erp-font-size-min); font-weight: 800; letter-spacing: .055em; text-transform: uppercase; }
 .goods-received-note-field-group > header h2 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-section); }
 .goods-received-note-field-group__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 12px; padding: 12px; }
 .goods-received-note-field-group__grid :deep(.form-field--wide) { grid-column: 1 / -1; }
-.goods-received-note-field-fact { display: grid; min-height: 52px; align-content: center; gap: 4px; padding: 8px 10px; border-bottom: 1px solid var(--erp-border); }
+.goods-received-note-field-fact { display: grid; min-height: 50px; align-content: center; gap: 4px; padding: 7px 10px; border-bottom: 1px solid color-mix(in srgb, var(--erp-border) 76%, white); }
 .goods-received-note-field-fact span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .goods-received-note-field-fact strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
-.goods-received-note-matrix { overflow: hidden; min-width: 0; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); }
+.goods-received-note-matrix { overflow: hidden; min-width: 0; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
 .goods-received-note-matrix__header { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--erp-border); background: var(--erp-surface-soft); }
 .goods-received-note-matrix__header > div { display: grid; gap: 2px; }
 .goods-received-note-matrix__header h2 { margin: 0; font-size: var(--erp-font-size-section); }
 .goods-received-note-matrix__header > strong { padding: 3px 8px; color: var(--erp-accent); font-size: var(--erp-font-size-min); background: var(--erp-accent-soft); border-radius: var(--erp-pill-radius); }
-.goods-received-note-matrix__stack { display: grid; gap: var(--erp-space-3); padding: var(--erp-space-3); background: var(--erp-surface-soft); }
-.goods-received-note-matrix__group { overflow: hidden; min-width: 0; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); }
+.goods-received-note-matrix__stack { display: grid; gap: var(--erp-space-3); padding: var(--erp-space-3); background: color-mix(in srgb, var(--erp-surface-soft) 66%, white); }
+.goods-received-note-matrix__group { overflow: hidden; min-width: 0; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); box-shadow: 0 3px 10px rgb(28 61 45 / 3%); }
 .goods-received-note-matrix__group > header { display: flex; min-height: 40px; align-items: center; padding: 7px 10px; border-bottom: 1px solid var(--erp-border); }
 .goods-received-note-matrix__group > header div { display: grid; gap: 2px; }
 .goods-received-note-matrix__group > header strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
@@ -628,7 +628,7 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 .goods-received-note-matrix__empty { display: grid; min-height: 140px; place-items: center; align-content: center; gap: 6px; color: var(--erp-text-muted); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); }
 .goods-received-note-total, .goods-received-note-transfer-progress { display: grid; min-height: 72px; align-content: center; gap: 4px; padding: 10px 12px; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); }
 .goods-received-note-total strong, .goods-received-note-transfer-progress strong { color: var(--erp-text); font-size: 18px; font-weight: 780; font-variant-numeric: tabular-nums; }
-.goods-received-note-total--primary { border-color: #c9e2d5; background: var(--erp-accent-soft); }
+.goods-received-note-total--primary { border-color: color-mix(in srgb, var(--erp-accent) 22%, var(--erp-border)); background: color-mix(in srgb, var(--erp-accent-soft) 76%, white); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--erp-accent) 76%, white); }
 .goods-received-note-total--primary strong { color: var(--erp-accent-hover); font-size: 21px; }
 .goods-received-note-transfer-progress > div { overflow: hidden; height: 6px; background: var(--erp-border); border-radius: var(--erp-pill-radius); }
 .goods-received-note-transfer-progress > div i { display: block; height: 100%; background: var(--erp-accent); transition: width .2s ease; }
@@ -642,7 +642,7 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 .goods-received-note-related small { color: var(--erp-text-muted); }
 @media (max-width: 1100px) { .goods-received-note-header__identity { align-items: flex-start; flex-wrap: wrap; } .goods-received-note-header__facts { width: 100%; padding: 8px 0 0; border-top: 1px solid var(--erp-border); border-left: 0; flex-wrap: wrap; } }
 @media (max-width: 900px) { .goods-received-note-field-group__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 620px) { .goods-received-note-field-group__grid { grid-template-columns: 1fr; } }
+@media (max-width: 620px) { .goods-received-note-workspace--page { padding-right: 0; padding-left: 0; } .goods-received-note-field-group__grid { grid-template-columns: 1fr; gap: 4px; padding: 10px; } .goods-received-note-field-fact { min-height: 46px; } .goods-received-note-matrix__stack { padding: var(--erp-space-2); } }
 :global(.fabric-action-dialog .p-dialog-content) { min-height: 0; }
 @media (max-width: 620px) { :global(.fabric-action-dialog) { width: 100vw !important; height: 100dvh !important; max-height: 100dvh !important; margin: 0; border-radius: 0; } :global(.fabric-action-dialog .p-dialog-content) { flex: 1; overflow-y: auto; } }
 </style>

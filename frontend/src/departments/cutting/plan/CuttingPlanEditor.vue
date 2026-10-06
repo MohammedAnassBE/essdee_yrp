@@ -254,7 +254,7 @@ watch(() => props.name, () => load())
 .cutting-plan-editor {
 	display: flex;
 	min-width: 0;
-	min-height: calc(100dvh - 98px);
+	min-height: calc(100dvh - var(--erp-shell-header-height) - 98px);
 	padding: var(--erp-space-4);
 	flex-direction: column;
 	gap: var(--erp-space-3);

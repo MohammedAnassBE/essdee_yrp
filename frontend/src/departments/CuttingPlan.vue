@@ -213,7 +213,7 @@ function statusSeverity(status) {
 	grid-template-columns: minmax(0, 4fr) minmax(286px, 1fr);
 	align-items: stretch;
 	gap: var(--erp-space-3);
-	height: calc(100dvh - 97px);
+	height: calc(100dvh - var(--erp-shell-header-height) - 97px);
 	min-height: 0;
 	overflow: hidden;
 }

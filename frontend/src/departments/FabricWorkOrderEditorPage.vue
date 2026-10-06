@@ -30,5 +30,6 @@ function cancel() {
 </script>
 
 <style scoped>
-.fabric-work-order-editor-page { width: 100%; max-width: 1900px; min-width: 0; margin: 0 auto; padding: 0 2px var(--erp-space-3); }
+.fabric-work-order-editor-page { width: 100%; max-width: 1840px; min-width: 0; margin: 0 auto; padding: 0 clamp(2px, .7vw, 10px) var(--erp-space-3); }
+@media (max-width: 620px) { .fabric-work-order-editor-page { padding-right: 0; padding-left: 0; } }
 </style>

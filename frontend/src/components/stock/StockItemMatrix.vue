@@ -146,6 +146,7 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-panel-radius);
 	background: var(--erp-surface);
+	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
 }
 
 .item-matrix__header {
@@ -155,7 +156,7 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 	gap: var(--erp-space-4);
 	padding: var(--erp-space-3) 14px;
 	border-bottom: 1px solid var(--erp-border);
-	background: var(--erp-surface-soft);
+	background: #f8faf9;
 }
 
 .item-matrix__eyebrow {
@@ -207,7 +208,7 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 	display: grid;
 	gap: 10px;
 	padding: 10px;
-	background: var(--erp-surface-soft);
+	background: #f8faf9;
 }
 
 .item-matrix__group {
@@ -215,6 +216,7 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-control-radius);
 	background: var(--erp-surface);
+	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
 }
 
 .item-matrix__group-header {
@@ -277,7 +279,7 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 	top: 0;
 	padding: var(--erp-space-2) 9px;
 	border-bottom: 1px solid var(--erp-border-strong);
-	background: #eef5f1;
+	background: #f5f8f6;
 	color: #58675f;
 	font-size: var(--erp-font-size-min);
 	font-weight: 750;
@@ -300,7 +302,7 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 }
 
 .item-matrix tbody tr:hover td {
-	background: #fbfdfc;
+	background: color-mix(in srgb, var(--erp-accent) 3%, white);
 }
 
 .item-matrix__index {
@@ -326,7 +328,7 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 	padding: 3px 7px;
 	border: 1px solid var(--erp-border);
 	border-radius: 6px;
-	background: var(--erp-surface-soft);
+	background: #f8faf9;
 	color: #40584b;
 	font-size: var(--erp-font-size-min);
 }
@@ -359,7 +361,8 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 
 	.item-matrix__counts {
 		width: 100%;
-		justify-content: space-between;
+		justify-content: flex-start;
+		flex-wrap: wrap;
 	}
 }
 </style>

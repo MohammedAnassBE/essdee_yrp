@@ -1,0 +1,8 @@
+{
+  "projectId": "501a2beb-6d2d-4255-b53f-cd09cca5f98b",
+  "projectUrl": "https://superdesign.dev/teams/91cbf80c-726b-46ce-a5fc-00fe7420f1fc/projects/501a2beb-6d2d-4255-b53f-cd09cca5f98b",
+  "baselineReferenceNodeId": "5650785c-45fc-402c-943f-41a84f61964e",
+  "status": "blocked-insufficient-credits",
+  "nextAction": "Create the faithful baseline draft, then branch two Bright Ledger variants when API credits are available.",
+  "designSystem": ".superdesign/design-system.md"
+}

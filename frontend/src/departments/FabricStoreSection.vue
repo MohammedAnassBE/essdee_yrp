@@ -59,11 +59,17 @@ watch(() => props.section, load)
 	max-width: 1800px;
 	min-width: 0;
 	margin: 0 auto;
-	padding: 0 2px var(--erp-space-5);
+	padding: 2px clamp(2px, .8vw, 12px) var(--erp-space-5);
 }
 
 .fabric-store-section__loading {
 	display: grid;
 	gap: var(--erp-space-3);
+	padding-top: 2px;
+}
+
+.fabric-store-section__loading :deep(.p-skeleton) {
+	border-radius: var(--erp-panel-radius);
+	background: color-mix(in srgb, var(--erp-surface-muted) 74%, white);
 }
 </style>

@@ -206,7 +206,7 @@ watch(() => props.name, load)
 </script>
 
 <style scoped>
-.cutting-order-editor { display: flex; min-width: 0; min-height: calc(100dvh - 98px); padding: var(--erp-space-4); flex-direction: column; gap: var(--erp-space-3); }
+.cutting-order-editor { display: flex; min-width: 0; min-height: calc(100dvh - var(--erp-shell-header-height) - 98px); padding: var(--erp-space-4); flex-direction: column; gap: var(--erp-space-3); }
 .order-editor-header { display: flex; align-items: center; justify-content: space-between; gap: var(--erp-space-3); padding-bottom: var(--erp-space-3); border-bottom: 1px solid var(--erp-border); }
 .order-editor-header > div:first-child { display: grid; gap: 3px; }
 .order-editor-header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 700; letter-spacing: 0.035em; text-transform: uppercase; }

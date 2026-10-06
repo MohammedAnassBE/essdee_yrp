@@ -453,6 +453,20 @@ async function workOrderSuite(page) {
 	const frame = page.locator(".fabric-work-order-frame")
 	await frame.waitFor({ timeout: 20_000 })
 	assert(await frame.locator(".fabric-document-workspace").count() === 1, "Work Order does not use the shared full-page document workspace")
+	const pageViewport = await page.locator("html").evaluate((element) => {
+		const workspace = document.querySelector(".fabric-document-workspace--page")
+		const departmentPage = document.querySelector(".department-page")
+		return {
+			clientHeight: element.clientHeight,
+			scrollHeight: element.scrollHeight,
+			workspace: workspace ? workspace.getBoundingClientRect().toJSON() : null,
+			departmentPage: departmentPage ? departmentPage.getBoundingClientRect().toJSON() : null,
+		}
+	})
+	assert(
+		pageViewport.scrollHeight <= pageViewport.clientHeight + 1,
+		`Work Order leaks its bounded workspace into browser-level vertical scrolling: ${JSON.stringify(pageViewport)}`,
+	)
 	const commandbar = frame.locator(".fabric-document-workspace__commandbar")
 	assert(await commandbar.count() === 1, "Work Order has no top document command strip")
 	assert(await commandbar.getByRole("button", { name: "Make DC", exact: true }).count() === 1, "Work Order Make DC is not in the top command strip")
@@ -688,6 +702,20 @@ async function workOrderSuite(page) {
 	await page.setViewportSize({ width: 390, height: 844 })
 	const bodyWidth = await page.locator("body").evaluate((element) => ({ clientWidth: element.clientWidth, scrollWidth: element.scrollWidth }))
 	assert(bodyWidth.clientWidth === bodyWidth.scrollWidth, `Work Order overflows on mobile: ${JSON.stringify(bodyWidth)}`)
+	const mobileViewport = await page.locator("html").evaluate((element) => {
+		const workspace = document.querySelector(".fabric-document-workspace--page")
+		const departmentPage = document.querySelector(".department-page")
+		return {
+			clientHeight: element.clientHeight,
+			scrollHeight: element.scrollHeight,
+			workspace: workspace?.getBoundingClientRect().toJSON(),
+			departmentPage: departmentPage?.getBoundingClientRect().toJSON(),
+		}
+	})
+	assert(
+		mobileViewport.scrollHeight <= mobileViewport.clientHeight + 1,
+		`Work Order leaks its bounded workspace into browser-level mobile scrolling: ${JSON.stringify(mobileViewport)}`,
+	)
 
 	return { desktopColumns: columns, railHeights, responsiveColumns }
 }
@@ -844,6 +872,7 @@ async function purchaseOrderSuite(page) {
 	await page.goto(`${SITE}/web/fabric-store/purchase-orders/PO-FAB-001`, { waitUntil: "domcontentloaded" })
 	const workspace = page.locator(".fabric-purchase-order-frame")
 	await workspace.waitFor()
+	await workspace.locator(".item-matrix").waitFor({ timeout: 20_000 })
 	assert(await workspace.locator(".item-matrix").count() === 1, "Purchase Order item matrix is missing")
 	assert(await workspace.locator(".item-matrix__price").filter({ hasText: /^Rate / }).count() > 0, "Purchase Order workspace hides item rates")
 	assert(await workspace.locator(".item-matrix__received").count() === 0, "Purchase Order item rows still show Received")
@@ -1423,6 +1452,7 @@ async function deliveryChallanSuite(page) {
 	await page.goto(`${SITE}/web/fabric-store/delivery-challans/new?work_order=WO-FAB-001`, { waitUntil: "domcontentloaded" })
 	const draftRoot = page.locator(".delivery-challan-workspace")
 	await draftRoot.waitFor({ timeout: 20_000 })
+	await draftRoot.locator('.delivery-challan-field-group[data-group="document"]').waitFor({ timeout: 20_000 })
 	assert(await draftRoot.locator('.delivery-challan-field-group[data-group="document"]').count() === 1, "Delivery Challan document fields are not grouped")
 	assert(await draftRoot.locator('.delivery-challan-field-group[data-group="movement"]').count() === 1, "Delivery Challan movement fields are not grouped")
 	const fromWarehouseField = draftRoot.locator(".form-field").filter({ hasText: "From Warehouse" })

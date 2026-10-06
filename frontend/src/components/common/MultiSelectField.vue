@@ -54,7 +54,27 @@ defineEmits(["update:modelValue", "change"])
 .common-field__label {
 	color: var(--erp-text);
 	font-size: var(--erp-font-size-caption);
-	font-weight: 650;
+	font-weight: 680;
+	transition: color var(--erp-transition-fast);
+}
+
+.common-field:focus-within .common-field__label {
+	color: var(--erp-accent-hover);
+}
+
+.common-field :deep(.p-multiselect) {
+	background: #fff;
+	border-color: var(--erp-border-strong);
+	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
+}
+
+.common-field :deep(.p-multiselect:not(.p-disabled):hover) {
+	border-color: color-mix(in srgb, var(--erp-accent) 32%, var(--erp-border-strong));
+}
+
+.common-field :deep(.p-multiselect.p-focus) {
+	border-color: var(--erp-accent);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--erp-accent) 11%, transparent);
 }
 
 .common-field__help {

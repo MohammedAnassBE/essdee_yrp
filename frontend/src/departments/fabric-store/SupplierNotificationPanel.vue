@@ -127,8 +127,8 @@ function send() {
 </script>
 
 <style scoped>
-.supplier-notification-panel { display: grid; overflow: hidden; gap: var(--erp-space-3); border: 1px solid #bfdccb; border-radius: var(--erp-control-radius); background: var(--erp-surface); }
-.supplier-notification-panel > header { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--erp-border); background: var(--erp-accent-soft); }
+.supplier-notification-panel { display: grid; overflow: hidden; gap: var(--erp-space-3); border: 1px solid color-mix(in srgb, var(--erp-accent) 20%, var(--erp-border)); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
+.supplier-notification-panel > header { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--erp-border); border-left: 3px solid var(--erp-accent); background: color-mix(in srgb, var(--erp-accent-soft) 72%, white); }
 .supplier-notification-panel > header > div { display: grid; gap: 2px; }
 .supplier-notification-panel > header span, .supplier-notification-panel__recipient span, .supplier-notification-panel__variable label span, .supplier-notification-panel__media > span, .supplier-notification-panel__preview > span, .supplier-notification-panel__variables > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .supplier-notification-panel > header h2 { margin: 0; font-size: var(--erp-font-size-section); }
@@ -145,7 +145,7 @@ function send() {
 .supplier-notification-panel__variables > p { margin: 0; padding: 12px; color: var(--erp-text-muted); }
 .supplier-notification-panel__media small { color: var(--erp-text-muted); }
 .supplier-notification-panel__preview { display: grid; gap: 6px; }
-.supplier-notification-panel__preview > div { max-width: 680px; padding: 10px 12px; color: #17251d; border-radius: 8px; background: #dcf8c6; }
+.supplier-notification-panel__preview > div { max-width: 680px; padding: 11px 13px; color: var(--erp-text); border: 1px solid color-mix(in srgb, var(--erp-accent) 18%, var(--erp-border)); border-radius: var(--erp-control-radius); background: color-mix(in srgb, var(--erp-accent-soft) 76%, white); }
 .supplier-notification-panel__preview p { margin: 0; white-space: pre-wrap; }
 .supplier-notification-panel__preview small { display: block; margin-top: 6px; color: #52665a; }
 .supplier-notification-panel > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 0 var(--erp-space-3) var(--erp-space-3); }

@@ -55,7 +55,7 @@ function statusTone(docstatus) { return Number(docstatus) === 1 ? "submitted" : 
 
 <style scoped>
 .work-order-activity-rail { display: grid; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: var(--erp-space-3); height: 100%; min-height: 0; }
-.work-order-activity-section { display: flex; min-height: 0; overflow: hidden; flex-direction: column; background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); box-shadow: var(--erp-shadow-sm); }
+.work-order-activity-section { display: flex; min-height: 0; overflow: hidden; flex-direction: column; background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
 .work-order-activity-section > header { display: flex; min-height: 49px; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 9px 7px 12px; background: var(--erp-surface-soft); border-bottom: 1px solid var(--erp-border); }
 .work-order-activity-section > header > div:first-child { display: flex; min-width: 0; align-items: center; gap: 7px; }
 .work-order-activity-section h2 { overflow: hidden; margin: 0; font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
@@ -67,9 +67,11 @@ function statusTone(docstatus) { return Number(docstatus) === 1 ? "submitted" : 
 .activity-filter i { position: absolute; left: 18px; color: var(--erp-text-muted); font-size: 11px; }
 .activity-filter input { width: 100%; min-height: 32px; padding: 0 9px 0 28px; color: var(--erp-text); font: inherit; font-size: var(--erp-font-size-min); background: var(--erp-surface); border: 1px solid var(--erp-border-strong); border-radius: 7px; outline: 0; }
 .activity-filter input:focus { border-color: var(--erp-accent); box-shadow: 0 0 0 2px rgb(10 127 90 / 12%); }
-.activity-list { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; scrollbar-gutter: stable; }
-.activity-card { position: relative; display: grid; width: 100%; gap: 5px; margin-bottom: 7px; padding: 10px 30px 10px 10px; color: inherit; font: inherit; text-align: left; background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); cursor: pointer; }
-.activity-card:hover { background: #f8fcfa; border-color: #b8d6c9; }
+.activity-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0; scrollbar-gutter: stable; }
+.activity-card { position: relative; display: grid; width: 100%; gap: 5px; margin: 0; padding: 11px 34px 11px 12px; color: inherit; font: inherit; text-align: left; background: var(--erp-surface); border: 0; border-bottom: 1px solid var(--erp-border); border-radius: 0; cursor: pointer; transition: background-color 160ms ease, padding-left 160ms ease; }
+.activity-card:last-of-type { border-bottom: 0; }
+.activity-card:hover { padding-left: 15px; background: color-mix(in srgb, var(--erp-accent-soft) 42%, white); }
+.activity-card:focus-visible { outline: 2px solid color-mix(in srgb, var(--erp-accent) 72%, white); outline-offset: -2px; }
 .activity-card__top { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; }
 .activity-card__top strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
 .activity-status { padding: 2px 6px; color: #5f6e66; font-size: var(--erp-font-size-min); font-weight: 800; text-transform: uppercase; background: #eef2f0; border-radius: var(--erp-pill-radius); }

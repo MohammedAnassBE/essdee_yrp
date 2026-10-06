@@ -69,3 +69,6 @@ frontend/.vite/
 frontend/dist/
 frontend/stats.html
 *.local
+
+# Superdesign upload intermediates; durable analysis and resume files remain tracked.
+.superdesign/tmp/

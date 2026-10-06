@@ -67,5 +67,22 @@ function openPrint(format) {
 .document-print-button.p-button {
 	min-height: var(--erp-control-height);
 	border-radius: var(--erp-control-radius);
+	background: #fff;
+	border-color: var(--erp-border-strong);
+	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
+}
+
+.document-print-button.p-button:not(:disabled):hover {
+	background: var(--erp-accent-soft);
+	border-color: color-mix(in srgb, var(--erp-accent) 28%, var(--erp-border));
+}
+
+.document-print-button.p-button:focus-visible {
+	outline: 3px solid color-mix(in srgb, var(--erp-accent) 16%, transparent);
+	outline-offset: 1px;
+}
+
+.document-print-button.p-button:not(:disabled):active {
+	transform: translateY(1px);
 }
 </style>

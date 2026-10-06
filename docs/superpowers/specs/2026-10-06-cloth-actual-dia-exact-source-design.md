@@ -194,7 +194,7 @@ Version boundaries are closed in both directions: a version-`0` WO rejects keyed
 
 ### 4. Lot conversion rebuild
 
-- Before GRN lifecycle writes, lock affected Lots in stable name order.
+- For a qualified GRN, the Essdee `submit()`/`cancel()` override locks affected Lots in stable name order before calling Frappe's base lifecycle, which then locks the GRN parent. A lifecycle guard rejects a qualified path that bypasses this entry point. The rebuild uses current locking reads (`FOR UPDATE`) for submitted GRN parents/rows and existing Lot conversion rows after the Lot lock; ordinary snapshot reads are not used for a post-lock decision.
 - On submitted default-Knitting GRN submit/cancel, rebuild the complete conversion table from all currently submitted eligible, execution-keyed Knitting GRNs for that Lot/IPD. Historical unkeyed GRNs are ignored.
 - Rebuild is idempotent and replaces server-owned rows atomically.
 - Eligible physical quantities use `YRP Stock Settings.default_received_type` and exact stock dimensions. Other Received Types are not normal production sources in this phase and continue through the current inspection/rework behaviour.
@@ -226,7 +226,9 @@ Version boundaries are closed in both directions: a version-`0` WO rejects keyed
 
 ## Cancellation and Concurrency
 
-- Lock order is deterministic: affected Lots, source GRN parents/rows, then target Work Order/DC/GRN documents as required by the current controllers.
+- Qualified DC/GRN controller `submit()` and `cancel()` overrides acquire affected Lots in stable name order before calling Frappe's base lifecycle. The base lifecycle then locks the transaction parent; custom code next locks source GRN parents/rows in stable name order and finally the existing Work Order deliverable/target rows. Work Order calculation enters the same shared order explicitly: Lot, source GRN parents, source GRN rows.
+- A lifecycle guard rejects qualified submit/cancel paths that did not acquire the Lot first. Unqualified and legacy documents call the existing base lifecycle directly.
+- This bench uses MariaDB `REPEATABLE-READ`; therefore every balance, submitted-consumption, receipt-list and conversion-row query that decides a result after waiting for a lock is itself a locking/current read (`FOR UPDATE`). A plain `SELECT` from the transaction's older consistent snapshot must never authorize dispatch, cancellation or a Lot conversion rebuild.
 - DC validation is repeated during submit while the relevant source rows are locked, preventing two DCs from both consuming the same balance.
 - Cancelling a DC releases availability implicitly because only submitted movement is counted.
 - Cancelling a source GRN is blocked when a submitted downstream DC/GRN consumes its physical source.
@@ -327,6 +329,7 @@ Run the existing current-branch tests covering Cloth Program, Work Order calcula
 - multiple partial DCs share the current locked counter;
 - cancelling a DC restores availability;
 - concurrent submissions exceeding one bucket allow at most the valid total;
+- a transaction that establishes an old consistent-read snapshot, waits for the Lot/source lock, and resumes after another commit still sees that commit through current locking reads;
 - current Essdee same-warehouse DC/GRN tests remain unchanged and passing.
 - PO and garment DC/GRN stock movement and positive-SLE shape remain byte-for-byte unchanged.
 

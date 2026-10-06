@@ -40,6 +40,7 @@ from essdee_yrp.overrides.goods_received_note import (
 	_new_consumption_plan_kind,
 	_set_dynamic_packing_piece_uom,
 	_validate_mapped_consumption_ownership,
+	_validate_versioned_cloth_receivables,
 )
 from essdee_yrp.patches.backfill_deterministic_valuation_lineage import (
 	_get_owned_consumption_sle,
@@ -54,6 +55,448 @@ from essdee_yrp.work_order_hooks import preserve_dynamic_packing_piece_uom
 
 
 class TestEssdeeValuationContract(UnitTestCase):
+	def test_actual_dia_allows_only_dia_to_change_on_versioned_default_knitting(self):
+		from essdee_yrp.fabric_grn import validate_actual_dia_rows
+
+		work_order = frappe._dict(
+			name="WO-KNIT-1",
+			process_name="Knitting",
+			cloth_execution_version=1,
+			receivables=[frappe._dict(name="WOR-1", item_variant="CLOTH-18-GREY")],
+		)
+		grn = frappe._dict(
+			against="YRP Work Order",
+			against_id=work_order.name,
+			items=[frappe._dict(idx=1, ref_docname="WOR-1", item_variant="CLOTH-22-GREY")],
+		)
+		with (
+			patch("essdee_yrp.fabric_grn.frappe.db.exists", return_value=True),
+			patch("essdee_yrp.fabric_grn.is_calculable_fabric_grn", return_value=True),
+			patch("essdee_yrp.fabric_grn.frappe.get_doc", return_value=work_order),
+			patch("essdee_yrp.fabric_grn.frappe.db.get_single_value", return_value="Knitting"),
+			patch("essdee_yrp.fabric_grn.get_parent_item", return_value="CLOTH"),
+			patch(
+				"essdee_yrp.fabric_grn._variant_attrs",
+				side_effect=[
+					{"Dia": "18 Dia", "Colour": "Grey"},
+					{"Dia": "22 Dia", "Colour": "Grey"},
+				],
+			),
+			patch("essdee_yrp.fabric_grn.frappe.get_all", return_value=["18 Dia", "22 Dia"]),
+		):
+			validate_actual_dia_rows(grn)
+
+	def test_actual_dia_rejects_every_change_except_dia(self):
+		from essdee_yrp.fabric_grn import validate_actual_dia_rows
+
+		work_order = frappe._dict(
+			name="WO-KNIT-1",
+			process_name="Knitting",
+			cloth_execution_version=1,
+			receivables=[frappe._dict(name="WOR-1", item_variant="CLOTH-18-GREY")],
+		)
+		base_grn = {
+			"against": "YRP Work Order",
+			"against_id": work_order.name,
+			"items": [frappe._dict(idx=1, ref_docname="WOR-1", item_variant="ACTUAL")],
+		}
+		cases = (
+			("OTHER", {"Dia": "22 Dia", "Colour": "Grey"}, "template"),
+			("CLOTH", {"Dia": "22 Dia", "Colour": "Red"}, "Colour"),
+			("CLOTH", {"Dia": "22 Dia", "Colour": "Grey", "Finish": "Soft"}, "Finish"),
+			("CLOTH", {"Colour": "Grey"}, "Dia"),
+		)
+		for actual_parent, actual_attrs, message in cases:
+			with self.subTest(message=message):
+				grn = frappe._dict(base_grn)
+				with (
+					patch("essdee_yrp.fabric_grn.frappe.db.exists", return_value=True),
+					patch("essdee_yrp.fabric_grn.is_calculable_fabric_grn", return_value=True),
+					patch("essdee_yrp.fabric_grn.frappe.get_doc", return_value=work_order),
+					patch("essdee_yrp.fabric_grn.frappe.db.get_single_value", return_value="Knitting"),
+					patch(
+						"essdee_yrp.fabric_grn.get_parent_item",
+						side_effect=["CLOTH", actual_parent],
+					),
+					patch(
+						"essdee_yrp.fabric_grn._variant_attrs",
+						side_effect=[
+							{"Dia": "18 Dia", "Colour": "Grey"},
+							actual_attrs,
+						],
+					),
+					patch("essdee_yrp.fabric_grn.frappe.get_all", return_value=["18 Dia", "22 Dia"]),
+					self.assertRaisesRegex(frappe.ValidationError, message),
+				):
+					validate_actual_dia_rows(grn)
+
+	def test_actual_dia_rejects_unknown_dia_value(self):
+		from essdee_yrp.fabric_grn import validate_actual_dia_rows
+
+		work_order = frappe._dict(
+			name="WO-KNIT-1",
+			process_name="Knitting",
+			cloth_execution_version=1,
+			receivables=[frappe._dict(name="WOR-1", item_variant="CLOTH-18-GREY")],
+		)
+		grn = frappe._dict(
+			against="YRP Work Order",
+			against_id=work_order.name,
+			items=[frappe._dict(idx=1, ref_docname="WOR-1", item_variant="CLOTH-UNKNOWN-GREY")],
+		)
+		with (
+			patch("essdee_yrp.fabric_grn.frappe.db.exists", return_value=True),
+			patch("essdee_yrp.fabric_grn.is_calculable_fabric_grn", return_value=True),
+			patch("essdee_yrp.fabric_grn.frappe.get_doc", return_value=work_order),
+			patch("essdee_yrp.fabric_grn.frappe.db.get_single_value", return_value="Knitting"),
+			patch("essdee_yrp.fabric_grn.get_parent_item", return_value="CLOTH"),
+			patch(
+				"essdee_yrp.fabric_grn._variant_attrs",
+				side_effect=[
+					{"Dia": "18 Dia", "Colour": "Grey"},
+					{"Dia": "Unknown Dia", "Colour": "Grey"},
+				],
+			),
+			patch("essdee_yrp.fabric_grn.frappe.get_all", return_value=["18 Dia", "22 Dia"]),
+			self.assertRaisesRegex(frappe.ValidationError, "valid Dia"),
+		):
+			validate_actual_dia_rows(grn)
+
+	def test_actual_dia_splits_get_distinct_physical_row_indexes(self):
+		from essdee_yrp.fabric_grn import _normalize_actual_dia_row_indexes
+
+		grn = frappe._dict(
+			items=[
+				frappe._dict(ref_docname=None, item_variant="LEGACY", received_type="Accepted", row_index="0"),
+				frappe._dict(ref_docname="WOR-1", item_variant="CLOTH-30", received_type="Accepted", row_index="fc-0"),
+				frappe._dict(ref_docname="WOR-1", item_variant="CLOTH-32", received_type="Accepted", row_index="fc-0"),
+				frappe._dict(ref_docname="WOR-1", item_variant="CLOTH-30", received_type="Rejected", row_index="fc-0"),
+				frappe._dict(ref_docname="WOR-2", item_variant="CLOTH-22", received_type="Accepted", row_index="fc-1"),
+			]
+		)
+
+		_normalize_actual_dia_row_indexes(
+			grn, {"WOR-1": frappe._dict(), "WOR-2": frappe._dict()}
+		)
+
+		self.assertEqual([row.row_index for row in grn.get("items")], ["0", "1", "2", "1", "3"])
+
+	def test_saved_execution_contract_scales_exact_inputs_for_actual_dia(self):
+		from essdee_yrp.fabric_grn import _calculate_saved_execution_inputs
+
+		parameters = '{"fabric_execution_key":"fabric-test"}'
+		work_order = frappe._dict(
+			receivables=[frappe._dict(qty=100, additional_parameters=parameters)],
+			deliverables=[
+				frappe._dict(name="WOD-A", item_variant="YARN-A", qty=59, uom="Kg", is_calculated=1, additional_parameters=parameters),
+				frappe._dict(name="WOD-B", item_variant="YARN-B", qty=41, uom="Kg", is_calculated=1, additional_parameters=parameters),
+			],
+		)
+		demands = [{
+			"goods_received_note_item": "ACTUAL-22",
+			"received_item_variant": "CLOTH-22",
+			"reference_item_variant": "CLOTH-18",
+			"execution_key": "fabric-test",
+			"qty": 40,
+		}]
+
+		rows = _calculate_saved_execution_inputs(work_order, demands)
+
+		self.assertEqual({row["item_variant"]: row["qty"] for row in rows}, {"YARN-A": 23.6, "YARN-B": 16.4})
+		self.assertEqual({row["work_order_deliverable"] for row in rows}, {"WOD-A", "WOD-B"})
+
+	def test_legacy_knitting_keeps_the_recipe_consumption_calculator(self):
+		from essdee_yrp.fabric_grn import calculate_consumption_plan
+
+		work_order = frappe._dict(
+			name="WO-LEGACY-KNITTING",
+			production_detail="IPD-1",
+			process_name="Knitting",
+			cloth_execution_version=0,
+		)
+		grn = frappe._dict(
+			against="YRP Work Order",
+			against_id=work_order.name,
+		)
+		legacy_rows = [{"item_variant": "YARN-LEGACY", "qty": 10}]
+		with (
+			patch("essdee_yrp.fabric_grn.is_calculable_fabric_grn", return_value=True),
+			patch("essdee_yrp.fabric_grn.frappe.get_cached_doc", return_value=frappe._dict()),
+			patch("essdee_yrp.fabric_grn.get_fabric_step", return_value={"shape": "matrix"}),
+			patch("essdee_yrp.fabric_grn._get_output_demands", return_value=[{"qty": 10}]),
+			patch("essdee_yrp.fabric_grn._calculate_saved_execution_inputs", return_value=None),
+			patch(
+				"essdee_yrp.fabric_grn._calculate_saved_work_order_inputs",
+				return_value=[{"item_variant": "YARN-SAVED", "qty": 10}],
+			),
+			patch("essdee_yrp.fabric_grn._calculate_consumed_rows", return_value=legacy_rows),
+			patch("essdee_yrp.fabric_grn._align_cloth_input_rounding", side_effect=lambda rows, *_args, **_kwargs: rows),
+			patch("essdee_yrp.fabric_grn._allocate_to_work_order_deliverables", side_effect=lambda rows, *_args: rows),
+			patch("essdee_yrp.api.work_order._step_kind", return_value="knitting"),
+		):
+			rows = calculate_consumption_plan(grn, work_order)
+
+		self.assertEqual(rows, legacy_rows)
+
+	def test_consumption_aggregation_keeps_exact_work_order_inputs_separate(self):
+		rows = [
+			{
+				"goods_received_note_item": "OUT-1",
+				"received_item_variant": "RED-CLOTH",
+				"work_order_deliverable": "WOD-A",
+				"item_variant": "YARN",
+				"qty": 2,
+				"uom": "Kg",
+			},
+			{
+				"goods_received_note_item": "OUT-1",
+				"received_item_variant": "RED-CLOTH",
+				"work_order_deliverable": "WOD-B",
+				"item_variant": "YARN",
+				"qty": 3,
+				"uom": "Kg",
+			},
+		]
+
+		result = _aggregate_rows(rows)
+
+		self.assertEqual(len(result), 2)
+		self.assertEqual(
+			{row["work_order_deliverable"]: row["qty"] for row in result},
+			{"WOD-A": 2.0, "WOD-B": 3.0},
+		)
+
+	def test_qualified_production_receipt_groups_identical_physical_outputs_once(self):
+		from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
+			_group_production_grn_receipts,
+		)
+
+		doc = frappe.get_doc(
+			{
+				"doctype": "YRP Goods Received Note",
+				"name": "GRN-GROUPED-PHYSICAL",
+				"posting_date": "2026-10-06",
+				"posting_time": "10:00:00",
+				"items": [
+					{
+						"doctype": "YRP Goods Received Note Item",
+						"name": "GRNI-1",
+						"item_variant": "CLOTH-30-NAVY",
+						"quantity": 10,
+						"stock_qty": 10,
+						"uom": "Kg",
+						"stock_uom": "Kg",
+						"rate": 12,
+					},
+					{
+						"doctype": "YRP Goods Received Note Item",
+						"name": "GRNI-2",
+						"item_variant": "CLOTH-30-NAVY",
+						"quantity": 8,
+						"stock_qty": 8,
+						"uom": "Kg",
+						"stock_uom": "Kg",
+						"rate": 15,
+					},
+				],
+			}
+		)
+		with patch("yrp.stock.dimensions.get_dimension_fieldnames", return_value=[]):
+			groups = _group_production_grn_receipts(doc, "TARGET-WH")
+
+		self.assertEqual(len(groups), 1)
+		self.assertEqual(groups[0]["item_rows"], ["GRNI-1", "GRNI-2"])
+		self.assertEqual(groups[0]["entry"]["qty"], 18)
+		self.assertAlmostEqual(groups[0]["entry"]["rate"], (10 * 12 + 8 * 15) / 18)
+
+	def test_versioned_knitting_submit_and_cancel_take_lot_lock_before_base_lifecycle(self):
+		doc = EssdeeGoodsReceivedNote(
+			{
+				"doctype": "YRP Goods Received Note",
+				"name": "GRN-KNIT-1",
+				"against": "YRP Work Order",
+				"against_id": "WO-KNIT-1",
+			}
+		)
+		with (
+			patch(
+				"essdee_yrp.overrides.goods_received_note._lock_versioned_cloth_lot",
+				return_value="LOT-1",
+			) as lock,
+			patch.object(GoodsReceivedNote, "submit", return_value=doc) as base_submit,
+		):
+			self.assertIs(doc.submit(), doc)
+			lock.assert_called_once_with(doc)
+			base_submit.assert_called_once_with()
+
+		with (
+			patch(
+				"essdee_yrp.overrides.goods_received_note._lock_versioned_cloth_lot",
+				return_value="LOT-1",
+			) as lock,
+			patch.object(GoodsReceivedNote, "cancel", return_value=doc) as base_cancel,
+		):
+			self.assertIs(doc.cancel(), doc)
+			lock.assert_called_once_with(doc, persisted=True)
+			base_cancel.assert_called_once_with()
+
+	def test_versioned_cloth_submit_enables_physical_grouping_and_actual_dia_validation(self):
+		doc = EssdeeGoodsReceivedNote(
+			{
+				"doctype": "YRP Goods Received Note",
+				"against": "YRP Work Order",
+				"against_id": "WO-KNIT-1",
+			}
+		)
+		doc.flags.cloth_execution_lot_locked = "LOT-1"
+		with (
+			patch("essdee_yrp.overrides.goods_received_note.qualifies_cloth_transaction", return_value=True),
+			patch("essdee_yrp.fabric_grn.validate_actual_dia_rows") as validate_actual,
+			patch("essdee_yrp.overrides.goods_received_note.validate_sewing_plan_quantity"),
+			patch("essdee_yrp.overrides.goods_received_note._lock_work_order"),
+			patch(
+				"essdee_yrp.overrides.goods_received_note.frappe.get_doc",
+				return_value=frappe._dict(name="WO-KNIT-1"),
+			),
+			patch("essdee_yrp.overrides.goods_received_note._new_consumption_plan_kind", return_value=None),
+			patch.object(GoodsReceivedNote, "before_submit") as base_submit,
+		):
+			doc.before_submit()
+
+		self.assertTrue(doc.flags.aggregate_physical_receipts)
+		validate_actual.assert_called_once_with(doc)
+		base_submit.assert_called_once_with()
+
+	def test_versioned_cloth_receipt_rejects_aggregate_over_process_allowance(self):
+		receivable = frappe._dict(
+			name="WOR-CLOTH-1",
+			item_variant="CLOTH-PLANNED",
+			qty=100,
+			pending_quantity=100,
+		)
+		work_order = frappe._dict(name="WO-CLOTH-1", receivables=[receivable])
+		grn = frappe._dict(
+			against_id=work_order.name,
+			items=[
+				frappe._dict(
+					idx=1,
+					ref_doctype="YRP Work Order Receivables",
+					ref_docname=receivable.name,
+					item_variant="CLOTH-ACTUAL-30",
+					quantity=60,
+				),
+				frappe._dict(
+					idx=2,
+					ref_doctype="YRP Work Order Receivables",
+					ref_docname=receivable.name,
+					item_variant="CLOTH-ACTUAL-32",
+					quantity=51,
+				),
+			],
+		)
+
+		with (
+			patch(
+				"essdee_yrp.overrides.goods_received_note._wo_excess_percentage",
+				return_value=10,
+				create=True,
+			),
+			self.assertRaisesRegex(frappe.ValidationError, "exceeds allowance 110"),
+		):
+			_validate_versioned_cloth_receivables(grn, work_order)
+
+	def test_versioned_cloth_receipt_exposes_remaining_process_allowance(self):
+		receivable = frappe._dict(
+			name="WOR-CLOTH-1",
+			item_variant="CLOTH-PLANNED",
+			qty=100,
+			pending_quantity=60,
+		)
+		work_order = frappe._dict(name="WO-CLOTH-1", receivables=[receivable])
+		row = frappe._dict(
+			idx=1,
+			ref_doctype="YRP Work Order Receivables",
+			ref_docname=receivable.name,
+			item_variant="CLOTH-ACTUAL-30",
+			quantity=70,
+		)
+		grn = frappe._dict(against_id=work_order.name, items=[row])
+
+		with patch(
+			"essdee_yrp.overrides.goods_received_note._wo_excess_percentage",
+			return_value=10,
+			create=True,
+		):
+			_validate_versioned_cloth_receivables(grn, work_order)
+
+		self.assertEqual(row.pending_quantity, 60)
+		self.assertAlmostEqual(row.max_receivable_quantity, 70)
+
+	def test_grouped_receipt_sle_lookup_uses_saved_output_lineage_for_every_row(self):
+		from yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment import (
+			yrp_stock_valuation_adjustment as valuation,
+		)
+
+		parent_meta = Mock()
+		parent_meta.get_field.return_value = frappe._dict(options="SD YRP GRN Deliverable")
+		child_meta = Mock()
+		child_meta.get_field.side_effect = lambda fieldname: (
+			frappe._dict(fieldname=fieldname)
+			if fieldname in {"goods_received_note_item", "output_receipt_sle"}
+			else None
+		)
+		with (
+			patch.object(
+				valuation.frappe.db,
+				"get_value",
+				side_effect=[None, "SLE-GROUPED-1"],
+			) as get_value,
+			patch.object(
+				valuation.frappe,
+				"get_meta",
+				side_effect=[parent_meta, child_meta],
+			),
+		):
+			self.assertEqual(
+				valuation.find_receipt_sle(
+					"YRP Goods Received Note", "GRN-1", "GRNI-SECOND"
+				),
+				"SLE-GROUPED-1",
+			)
+
+		self.assertEqual(get_value.call_count, 2)
+
+	def test_grouped_receipt_current_value_is_distributed_to_every_physical_row(self):
+		from yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment import (
+			yrp_stock_valuation_adjustment as valuation,
+		)
+
+		target = frappe._dict(
+			name="SLE-GROUPED-1",
+			voucher_type="YRP Goods Received Note",
+			voucher_no="GRN-1",
+			voucher_detail_no="GRNI-1",
+			qty=18,
+			rate=13.3333333333,
+		)
+		rows = [
+			frappe._dict(name="GRNI-1", stock_qty=10, quantity=10, rate=12),
+			frappe._dict(name="GRNI-2", stock_qty=8, quantity=8, rate=15),
+		]
+		with (
+			patch.object(valuation, "_grouped_grn_receipt_rows", return_value=rows),
+			patch.object(valuation.frappe, "get_meta") as get_meta,
+			patch.object(valuation.frappe.db, "get_value", return_value=20),
+			patch.object(valuation.frappe.db, "set_value") as set_value,
+		):
+			get_meta.return_value.get_field.return_value = True
+			valuation._update_receipt_current_value(target)
+
+		self.assertEqual(set_value.call_count, 2)
+		values = {call.args[1]: call.args[2] for call in set_value.call_args_list}
+		self.assertAlmostEqual(values["GRNI-1"]["current_valuation_value"], 130)
+		self.assertAlmostEqual(values["GRNI-2"]["current_valuation_value"], 130)
+
 	def _exact_dispatch_pool(self, available=10):
 		return {
 			"dimension_fields": ["lot", "received_type"],

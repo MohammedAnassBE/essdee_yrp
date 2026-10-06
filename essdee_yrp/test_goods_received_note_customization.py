@@ -75,6 +75,18 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		self.assertIn('options: "YRP Received Type"', source)
 		self.assertIn("essdee-grn-calc-qty", source)
 
+	def test_desk_knitting_grn_exposes_server_guarded_actual_dia_split(self):
+		from pathlib import Path
+
+		source = (Path(frappe.get_app_path("essdee_yrp")) / "public/js/goods_received_note.js").read_text(
+			encoding="utf-8"
+		)
+		self.assertIn("get_actual_dia_context", source)
+		self.assertIn('__("Add Actual Dia")', source)
+		self.assertIn("open_actual_dia_dialog", source)
+		self.assertIn("allowExcess: true", source)
+		self.assertIn("aggregatePhysicalRows: true", source)
+
 	def test_grn_calculate_replaces_only_the_selected_received_type(self):
 		rows = [
 			frappe._dict(

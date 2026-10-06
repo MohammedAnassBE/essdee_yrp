@@ -106,6 +106,27 @@ class TestLotFabricConversionSchema(unittest.TestCase):
 
 
 class TestActualDiaAllocation(unittest.TestCase):
+	@patch.object(frappe.db, "exists", side_effect=AssertionError("additional GRN queried a work order"))
+	def test_additional_grn_is_not_standard_knitting_context(self, _exists):
+		grn = frappe._dict(
+			against="YRP Work Order",
+			against_id="WO-KNIT-1",
+			additional_grn=1,
+		)
+
+		self.assertIsNone(fabric_substitution.get_default_knitting_grn_context(grn))
+
+	@patch("essdee_yrp.fabric_substitution._default_knitting_process", return_value="Knitting")
+	@patch.object(frappe.db, "sql")
+	def test_receipt_rebuild_query_excludes_additional_grns(self, sql, _process):
+		sql.side_effect = [
+			[frappe._dict(name="WO-KNIT-1", production_detail="IPD-1", item="CLOTH")],
+			[],
+		]
+
+		self.assertEqual(fabric_substitution._fetch_default_knitting_receipts("LOT-1"), [])
+		self.assertIn("IFNULL(additional_grn, 0) = 0", sql.call_args_list[1].args[0])
+
 	def test_knitting_conversion_rejects_parent_colour_extra_attribute_and_missing_dia(self):
 		cases = (
 			(

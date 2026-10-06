@@ -6,6 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
+
+from essdee_yrp.concurrency_test_support import commit_connection
 from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import DeliveryChallan
 
 from essdee_yrp import hooks
@@ -225,7 +227,7 @@ class TestExactSourceDeliveryChallanConcurrency(FrappeTestCase):
 				row.db_insert()
 			delivery_challans.append(dc.name)
 
-		frappe.db.commit()
+		commit_connection()
 		return frappe._dict(
 			lot=lot.name,
 			source_work_order=source_work_order.name,
@@ -254,7 +256,7 @@ class TestExactSourceDeliveryChallanConcurrency(FrappeTestCase):
 				frappe.db.delete(table, {"parent": ["in", names]})
 			else:
 				frappe.db.delete(table, {"name": ["in", names]})
-		frappe.db.commit()
+		commit_connection()
 
 	def _dc_patches(self):
 		stack = ExitStack()
@@ -297,7 +299,7 @@ class TestExactSourceDeliveryChallanConcurrency(FrappeTestCase):
 				)
 				barrier.wait(timeout=10)
 				doc.submit()
-				frappe.db.commit()
+				commit_connection()
 				outcome = (name, "submitted", "")
 			except Exception as exc:
 				frappe.db.rollback()
@@ -361,14 +363,14 @@ class TestExactSourceDeliveryChallanConcurrency(FrappeTestCase):
 		try:
 			with self._dc_patches():
 				frappe.get_doc("YRP Delivery Challan", first).submit()
-				frappe.db.commit()
+				commit_connection()
 				with self.assertRaisesRegex(frappe.ValidationError, "exact source GRN row"):
 					frappe.get_doc("YRP Delivery Challan", second).submit()
 				frappe.db.rollback()
 				frappe.get_doc("YRP Delivery Challan", first).cancel()
-				frappe.db.commit()
+				commit_connection()
 				frappe.get_doc("YRP Delivery Challan", second).submit()
-				frappe.db.commit()
+				commit_connection()
 			self.assertEqual(
 				frappe.db.get_value(
 					"YRP Work Order Deliverables",
@@ -376,6 +378,259 @@ class TestExactSourceDeliveryChallanConcurrency(FrappeTestCase):
 					"pending_quantity",
 				),
 				4,
+			)
+		finally:
+			self._cleanup_fixture(fixture)
+
+	def test_source_grn_cancel_and_exact_dc_submit_serialize_on_the_lot(self):
+		fixture = self._insert_fixture(quantities=(4,))
+		barrier = threading.Barrier(2)
+		results = []
+		result_lock = threading.Lock()
+
+		def record(outcome):
+			with result_lock:
+				results.append(outcome)
+
+		def cancel_source():
+			frappe.init(site="erp-migration-test.site")
+			frappe.connect()
+			frappe.set_user("Administrator")
+			try:
+				from essdee_yrp.overrides.goods_received_note import (
+					_guard_source_grn_allocations,
+					_lock_versioned_cloth_lot,
+					_lock_work_order,
+				)
+
+				doc = frappe.get_doc("YRP Goods Received Note", fixture.source_grn)
+				# Force the old snapshot before the shared Lot lock, as a Desk request can.
+				frappe.db.get_value(
+					"YRP Work Order Deliverables", fixture.deliverable, "pending_quantity"
+				)
+				barrier.wait(timeout=10)
+				_lock_versioned_cloth_lot(doc, persisted=True)
+				_lock_work_order(doc.against_id)
+				_guard_source_grn_allocations(doc)
+				frappe.db.set_value(
+					"YRP Goods Received Note", doc.name, "docstatus", 2, update_modified=False
+				)
+				commit_connection()
+				record(("cancel", "succeeded", ""))
+			except Exception as exc:
+				frappe.db.rollback()
+				record(("cancel", "failed", f"{exc}\n{traceback.format_exc()}"))
+			finally:
+				frappe.destroy()
+
+		def submit_dc():
+			frappe.init(site="erp-migration-test.site")
+			frappe.connect()
+			frappe.set_user("Administrator")
+			try:
+				doc = frappe.get_doc("YRP Delivery Challan", fixture.delivery_challans[0])
+				frappe.db.get_value(
+					"YRP Work Order Deliverables", fixture.deliverable, "pending_quantity"
+				)
+				barrier.wait(timeout=10)
+				doc.submit()
+				commit_connection()
+				record(("dc", "succeeded", ""))
+			except Exception as exc:
+				frappe.db.rollback()
+				record(("dc", "failed", f"{exc}\n{traceback.format_exc()}"))
+			finally:
+				frappe.destroy()
+
+		try:
+			with self._dc_patches():
+				threads = [
+					threading.Thread(target=cancel_source, daemon=True),
+					threading.Thread(target=submit_dc, daemon=True),
+				]
+				for thread in threads:
+					thread.start()
+				for thread in threads:
+					thread.join(timeout=20)
+				self.assertTrue(all(not thread.is_alive() for thread in threads), results)
+
+			self.assertEqual([row[1] for row in results].count("succeeded"), 1, results)
+			self.assertEqual([row[1] for row in results].count("failed"), 1, results)
+			failed = next(row for row in results if row[1] == "failed")
+			self.assertTrue(
+				"consumed by downstream" in failed[2]
+				or "source GRN row" in failed[2]
+				or "no longer available" in failed[2],
+				results,
+			)
+		finally:
+			# Restore the direct test cancellation marker before shared cleanup.
+			frappe.db.set_value(
+				"YRP Goods Received Note", fixture.source_grn, "docstatus", 1, update_modified=False
+			)
+			commit_connection()
+			self._cleanup_fixture(fixture)
+
+	def test_concurrent_knitting_grns_rebuild_from_post_lock_current_receipts(self):
+		fixture = self._insert_fixture(quantities=())
+		suffix = frappe.generate_hash(length=6)
+		grns = []
+		items = []
+		for index, quantity in enumerate((2, 3), 1):
+			grn = frappe.new_doc("YRP Goods Received Note")
+			grn.name = f"_Test Concurrent Knit GRN {suffix}-{index}"
+			grn.against = "YRP Work Order"
+			grn.against_id = fixture.source_work_order
+			grn.to_warehouse = frappe.db.get_value(
+				"YRP Goods Received Note", fixture.source_grn, "to_warehouse"
+			)
+			grn.db_insert()
+			item = frappe.new_doc("YRP Goods Received Note Item")
+			item.name = f"_Test Concurrent Knit GRNI {suffix}-{index}"
+			item.parent = grn.name
+			item.parenttype = "YRP Goods Received Note"
+			item.parentfield = "items"
+			item.item_variant, item.uom, item.stock_uom = frappe.db.get_value(
+				"YRP Goods Received Note Item",
+				fixture.source_item,
+				["item_variant", "uom", "stock_uom"],
+			)
+			item.quantity = quantity
+			item.stock_qty = quantity
+			item.conversion_factor = 1
+			item.ref_doctype = "YRP Work Order Receivables"
+			item.ref_docname = fixture.receivable
+			if item.meta.get_field("lot"):
+				item.lot = fixture.lot
+			if item.meta.get_field("received_type"):
+				item.received_type = frappe.db.get_single_value(
+					"YRP Stock Settings", "default_received_type"
+				)
+			item.db_insert()
+			grns.append(grn.name)
+			items.append(item.name)
+		commit_connection()
+
+		barrier = threading.Barrier(2)
+		counts = []
+		outcomes = []
+		result_lock = threading.Lock()
+
+		def rebuild(name):
+			frappe.init(site="erp-migration-test.site")
+			frappe.connect()
+			frappe.set_user("Administrator")
+			try:
+				from essdee_yrp.fabric_substitution import _rebuild_lot_fabric_conversions
+				from essdee_yrp.overrides.goods_received_note import _lock_versioned_cloth_lot
+
+				doc = frappe.get_doc("YRP Goods Received Note", name)
+				frappe.db.get_value("YRP Goods Received Note", fixture.source_grn, "docstatus")
+				barrier.wait(timeout=10)
+				_lock_versioned_cloth_lot(doc, persisted=True)
+				frappe.db.set_value(
+					"YRP Goods Received Note", name, "docstatus", 1, update_modified=False
+				)
+				_rebuild_lot_fabric_conversions(fixture.lot, already_locked=True)
+				commit_connection()
+				outcome = (name, "succeeded", "")
+			except Exception as exc:
+				frappe.db.rollback()
+				outcome = (name, "failed", f"{exc}\n{traceback.format_exc()}")
+			finally:
+				frappe.destroy()
+			with result_lock:
+				outcomes.append(outcome)
+
+		def capture(receipts, _process):
+			with result_lock:
+				counts.append(len(receipts))
+			return []
+
+		try:
+			with (
+				patch("essdee_yrp.fabric_substitution.build_conversion_rows", side_effect=capture),
+				patch("essdee_yrp.fabric_substitution._replace_conversion_rows"),
+			):
+				threads = [threading.Thread(target=rebuild, args=(name,), daemon=True) for name in grns]
+				for thread in threads:
+					thread.start()
+				for thread in threads:
+					thread.join(timeout=20)
+				self.assertTrue(all(not thread.is_alive() for thread in threads), outcomes)
+
+			self.assertEqual([row[1] for row in outcomes], ["succeeded", "succeeded"])
+			# The fixture already has one submitted receipt: first rebuild sees 2;
+			# the waiter must current-read all 3 after acquiring the Lot.
+			self.assertEqual(sorted(counts), [2, 3])
+		finally:
+			frappe.db.delete("YRP Goods Received Note Item", {"name": ["in", items]})
+			frappe.db.delete("YRP Goods Received Note", {"name": ["in", grns]})
+			commit_connection()
+			self._cleanup_fixture(fixture)
+
+	def test_concurrent_grn_pending_updates_use_post_lock_current_receivable(self):
+		fixture = self._insert_fixture(quantities=())
+		frappe.db.set_value(
+			"YRP Work Order Receivables",
+			fixture.receivable,
+			"pending_quantity",
+			10,
+			update_modified=False,
+		)
+		commit_connection()
+		barrier = threading.Barrier(2)
+		outcomes = []
+		result_lock = threading.Lock()
+
+		def receive(quantity):
+			frappe.init(site="erp-migration-test.site")
+			frappe.connect()
+			frappe.set_user("Administrator")
+			try:
+				from essdee_yrp.overrides.goods_received_note import (
+					_get_current_locked_work_order,
+					_lock_versioned_cloth_lot,
+					_lock_work_order,
+					_update_versioned_cloth_receivables,
+				)
+
+				doc = frappe.get_doc("YRP Goods Received Note", fixture.source_grn)
+				doc.items[0].quantity = quantity
+				# Freeze the old snapshot at 10 before either transaction takes the Lot.
+				frappe.db.get_value(
+					"YRP Work Order Receivables", fixture.receivable, "pending_quantity"
+				)
+				barrier.wait(timeout=10)
+				_lock_versioned_cloth_lot(doc, persisted=True)
+				_lock_work_order(doc.against_id)
+				current = _get_current_locked_work_order(doc.against_id)
+				_update_versioned_cloth_receivables(doc, current)
+				commit_connection()
+				outcome = (quantity, "succeeded", "")
+			except Exception as exc:
+				frappe.db.rollback()
+				outcome = (quantity, "failed", f"{exc}\n{traceback.format_exc()}")
+			finally:
+				frappe.destroy()
+			with result_lock:
+				outcomes.append(outcome)
+
+		try:
+			threads = [threading.Thread(target=receive, args=(qty,), daemon=True) for qty in (4, 3)]
+			for thread in threads:
+				thread.start()
+			for thread in threads:
+				thread.join(timeout=20)
+			self.assertTrue(all(not thread.is_alive() for thread in threads), outcomes)
+			self.assertEqual([row[1] for row in outcomes], ["succeeded", "succeeded"])
+			self.assertEqual(
+				frappe.utils.flt(
+					frappe.db.get_value(
+						"YRP Work Order Receivables", fixture.receivable, "pending_quantity"
+					)
+				),
+				3,
 			)
 		finally:
 			self._cleanup_fixture(fixture)

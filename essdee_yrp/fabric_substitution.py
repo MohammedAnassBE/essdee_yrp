@@ -144,7 +144,10 @@ def get_default_knitting_grn_context(grn):
 	"""Resolve the guarded Lot/IPD context for a versioned Knitting GRN."""
 	if grn.get("against") != "YRP Work Order" or not grn.get("against_id"):
 		return None
-	if any(grn.get(fieldname) for fieldname in ("is_return", "is_rework", "includes_packing")):
+	if any(
+		grn.get(fieldname)
+		for fieldname in ("is_return", "is_rework", "additional_grn", "includes_packing")
+	):
 		return None
 	if not frappe.db.exists("YRP Work Order", grn.against_id):
 		return None
@@ -265,6 +268,7 @@ def _fetch_default_knitting_receipts(lot):
 			AND against_id IN %(work_orders)s
 			AND IFNULL(is_return, 0) = 0
 			AND IFNULL(is_rework, 0) = 0
+			AND IFNULL(additional_grn, 0) = 0
 			AND IFNULL(includes_packing, 0) = 0
 		ORDER BY name
 		FOR UPDATE

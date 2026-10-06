@@ -12,17 +12,167 @@ from collections import defaultdict
 
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import cint, flt
 from yrp.attribute_links import value as _attribute_value
 from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 from essdee_yrp.fabric_chain import get_fabric_step
+from essdee_yrp.fabric_ipd import FABRIC_DIA_ATTRIBUTE
 from essdee_yrp.fabric_reference import (
 	get_reference_allocations,
 	scale_reference_allocations,
 )
 
 QTY_TOLERANCE = 0.000001
+
+
+@frappe.whitelist()
+def get_actual_dia_context(work_order):
+	"""Return the server-owned Actual Dia choices for versioned Knitting."""
+	if not work_order or not frappe.db.exists("YRP Work Order", work_order):
+		return {"enabled": False, "dia_options": []}
+	wo = frappe.get_doc("YRP Work Order", work_order)
+	wo.check_permission("read")
+	default_knitting = frappe.db.get_single_value(
+		"SD YRP IPD Settings", "default_knitting_process"
+	)
+	enabled = bool(
+		cint(wo.get("cloth_execution_version")) == 1
+		and wo.get("production_detail")
+		and wo.get("process_name") == default_knitting
+	)
+	return {
+		"enabled": enabled,
+		"attribute": FABRIC_DIA_ATTRIBUTE,
+		"dia_options": _configured_dia_values() if enabled else [],
+	}
+
+
+def _configured_dia_values():
+	return frappe.get_all(
+		"Item Attribute Value",
+		filters={"parent": FABRIC_DIA_ATTRIBUTE},
+		order_by="idx asc, name asc",
+		pluck="attribute_value",
+	)
+
+
+def get_saved_actual_dia_rows(grn, work_order):
+	"""Refresh limits on saved physical-Dia rows omitted by base draft rebuild."""
+	from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
+		_remaining_receivable_allowance,
+		_wo_excess_percentage,
+	)
+
+	receivables = {row.name: row for row in work_order.get("receivables") or []}
+	excess_pct = _wo_excess_percentage(work_order.name)
+	rows = []
+	for row in grn.get("items") or []:
+		source = receivables.get(row.get("ref_docname"))
+		if not source or row.get("item_variant") == source.item_variant:
+			continue
+		payload = row.as_dict() if callable(getattr(row, "as_dict", None)) else dict(row)
+		payload["pending_quantity"] = flt(source.pending_quantity)
+		payload["max_receivable_quantity"] = max(
+			flt(_remaining_receivable_allowance(source.qty, source.pending_quantity, excess_pct)),
+			0,
+		)
+		payload["rate"] = flt(source.cost)
+		rows.append(payload)
+	return rows
+
+
+def validate_actual_dia_rows(grn):
+	"""Permit only Dia to vary from a versioned default-Knitting receivable."""
+	if (
+		grn.get("against") != "YRP Work Order"
+		or not grn.get("against_id")
+		or not frappe.db.exists("YRP Work Order", grn.against_id)
+	):
+		return
+	wo = frappe.get_doc("YRP Work Order", grn.against_id)
+	if cint(wo.get("cloth_execution_version")) != 1:
+		return
+	receivables = {row.name: row for row in wo.get("receivables") or []}
+	default_knitting = frappe.db.get_single_value(
+		"SD YRP IPD Settings", "default_knitting_process"
+	)
+	actual_dia_enabled = bool(
+		cint(wo.get("cloth_execution_version")) == 1
+		and is_calculable_fabric_grn(grn)
+		and wo.get("process_name") == default_knitting
+	)
+	valid_dias = None
+	for row in grn.get("items") or []:
+		source = receivables.get(row.get("ref_docname"))
+		if not source or row.get("item_variant") == source.item_variant:
+			continue
+		if not actual_dia_enabled:
+			frappe.throw(
+				_(
+					"Row {0}: Actual Dia variance is allowed only on a standard GRN "
+					"for the versioned Default Knitting Process."
+				).format(row.idx)
+			)
+		expected_parent = get_parent_item(source.item_variant)
+		actual_parent = get_parent_item(row.item_variant)
+		if not expected_parent or actual_parent != expected_parent:
+			frappe.throw(
+				_("Row {0}: Actual Dia must remain on item template {1}.").format(
+					row.idx, expected_parent
+				)
+			)
+		expected_attrs = _variant_attrs(source.item_variant)
+		actual_attrs = _variant_attrs(row.item_variant)
+		if not actual_attrs.get(FABRIC_DIA_ATTRIBUTE):
+			frappe.throw(_("Row {0}: Actual Dia is required.").format(row.idx))
+		for attribute in set(expected_attrs) | set(actual_attrs):
+			if attribute == FABRIC_DIA_ATTRIBUTE:
+				continue
+			if expected_attrs.get(attribute) != actual_attrs.get(attribute):
+				frappe.throw(
+					_(
+						"Row {0}: only Dia may differ from the Work Order receivable; {1} changed."
+					).format(row.idx, attribute)
+				)
+		if valid_dias is None:
+			valid_dias = set(_configured_dia_values())
+		if actual_attrs[FABRIC_DIA_ATTRIBUTE] not in valid_dias:
+			frappe.throw(
+				_("Row {0}: {1} is not a valid Dia value.").format(
+					row.idx, actual_attrs[FABRIC_DIA_ATTRIBUTE]
+				)
+			)
+		if not expected_attrs.get(FABRIC_DIA_ATTRIBUTE):
+			frappe.throw(_("Row {0}: planned Item has no Dia.").format(row.idx))
+	if actual_dia_enabled:
+		_normalize_actual_dia_row_indexes(grn, receivables)
+
+
+def _normalize_actual_dia_row_indexes(grn, receivables):
+	"""Give each receivable/physical Item pair a stable Desk grouping row."""
+	rows = grn.get("items") or []
+	reserved = {
+		str(row.get("row_index"))
+		for row in rows
+		if (
+			row.get("ref_docname") not in receivables or not row.get("item_variant")
+		)
+		and row.get("row_index") not in (None, "")
+	}
+	indexes = {}
+	next_index = 0
+	for row in rows:
+		if row.get("ref_docname") not in receivables or not row.get("item_variant"):
+			continue
+		key = (row.ref_docname, row.item_variant)
+		if key not in indexes:
+			while str(next_index) in reserved:
+				next_index += 1
+			indexes[key] = str(next_index)
+			reserved.add(str(next_index))
+			next_index += 1
+		row.row_index = indexes[key]
 
 
 def before_validate(doc, method=None):
@@ -34,10 +184,16 @@ def before_validate(doc, method=None):
 
 def on_submit(doc, method=None):
 	_apply_consumption(doc, cancel=False)
+	from essdee_yrp.fabric_substitution import rebuild_lot_fabric_conversions_for_grn
+
+	rebuild_lot_fabric_conversions_for_grn(doc)
 
 
 def on_cancel(doc, method=None):
 	_apply_consumption(doc, cancel=True)
+	from essdee_yrp.fabric_substitution import rebuild_lot_fabric_conversions_for_grn
+
+	rebuild_lot_fabric_conversions_for_grn(doc)
 
 
 def is_calculable_fabric_grn(grn):
@@ -74,12 +230,12 @@ def is_calculable_fabric_grn(grn):
 _is_calculable_fabric_grn = is_calculable_fabric_grn
 
 
-def calculate_consumption_plan(grn):
+def calculate_consumption_plan(grn, work_order_doc=None):
 	"""Return exact, stock-UOM-normalized inputs for each positive output row."""
 	if not is_calculable_fabric_grn(grn):
 		return []
 
-	wo = frappe.get_doc("YRP Work Order", grn.against_id)
+	wo = work_order_doc or frappe.get_doc("YRP Work Order", grn.against_id)
 	ipd = frappe.get_cached_doc("YRP Item Production Detail", wo.production_detail)
 	step = get_fabric_step(ipd, wo.process_name)
 
@@ -92,15 +248,25 @@ def calculate_consumption_plan(grn):
 	demands = _get_output_demands(grn, wo)
 	if not demands:
 		return []
-	rows = _calculate_consumed_rows(
-		ipd,
-		wo.process_name,
-		demands,
-		identity=bool(identity_row or (step and step.get("shape") == "identity")),
-	)
-	rows = _align_cloth_input_rounding(
-		rows, wo, ipd, identity=bool(identity_row or (step and step.get("shape") == "identity"))
-	)
+	rows = _calculate_saved_execution_inputs(wo, demands)
+	if rows is None and step and cint(wo.get("cloth_execution_version")) == 1:
+		from essdee_yrp.api.work_order import _step_kind
+
+		if _step_kind(ipd, step) == "knitting":
+			rows = _calculate_saved_work_order_inputs(wo, demands)
+	if rows is None:
+		rows = _calculate_consumed_rows(
+			ipd,
+			wo.process_name,
+			demands,
+			identity=bool(identity_row or (step and step.get("shape") == "identity")),
+		)
+		rows = _align_cloth_input_rounding(
+			rows,
+			wo,
+			ipd,
+			identity=bool(identity_row or (step and step.get("shape") == "identity")),
+		)
 	return _allocate_to_work_order_deliverables(rows, wo, grn)
 
 
@@ -185,21 +351,13 @@ def _get_output_demands(grn, wo):
 		planned_allocations = get_reference_allocations(source, source.qty)
 		actual_allocations = scale_reference_allocations(planned_allocations, actual_qty)
 		physical_attrs = _variant_attrs(row.item_variant)
-		if actual_allocations:
-			for reference, qty in actual_allocations.items():
-				demands.append(
-					{
-						"goods_received_note_item": row.name,
-						"received_item_variant": row.item_variant,
-						"attrs": physical_attrs,
-						"qty": qty,
-						"item_variant": row.item_variant,
-						"reference_item_variant": reference,
-					}
-				)
-			continue
+		from essdee_yrp.cloth_execution import get_row_execution_parameters
 
-		reference = source.get("fabric_reference_variant")
+		reference = (
+			next(iter(actual_allocations))
+			if len(actual_allocations) == 1
+			else source.get("fabric_reference_variant")
+		)
 		demands.append(
 			{
 				"goods_received_note_item": row.name,
@@ -208,9 +366,142 @@ def _get_output_demands(grn, wo):
 				"qty": actual_qty,
 				"item_variant": row.item_variant,
 				"reference_item_variant": reference,
+				"reference_allocations": actual_allocations,
+				"execution_key": get_row_execution_parameters(source).get(
+					"fabric_execution_key"
+				),
 			}
 		)
 	return demands
+
+
+def _route_demands(demand):
+	"""Expose costing routes without multiplying the physical GRN output."""
+	allocations = demand.get("reference_allocations") or {}
+	if not allocations:
+		return [demand]
+	return [
+		{
+			**demand,
+			"qty": flt(qty),
+			"reference_item_variant": reference,
+		}
+		for reference, qty in allocations.items()
+		if flt(qty) > 0
+	]
+
+
+def _calculate_saved_execution_inputs(wo, demands):
+	"""Scale the exact saved execution inputs for each physical output row."""
+	from essdee_yrp.cloth_execution import get_row_execution_parameters
+
+	outputs = defaultdict(float)
+	for row in wo.get("receivables") or []:
+		key = get_row_execution_parameters(row).get("fabric_execution_key")
+		if key:
+			outputs[key] += flt(row.qty)
+	inputs = defaultdict(list)
+	for row in wo.get("deliverables") or []:
+		key = get_row_execution_parameters(row).get("fabric_execution_key")
+		if key and row.get("is_calculated"):
+			inputs[key].append(
+				{
+					"work_order_deliverable": row.name,
+					"item_variant": row.item_variant,
+					"qty": flt(row.qty),
+					"remaining_qty": max(flt(row.qty) - flt(row.stock_update), 0),
+					"uom": row.uom,
+				}
+			)
+	if not demands:
+		return []
+	for demand in demands:
+		key = demand.get("execution_key")
+		if not key or flt(outputs.get(key)) <= 0 or not inputs.get(key):
+			return None
+	rows = []
+	for demand in demands:
+		key = demand["execution_key"]
+		factor = flt(demand["qty"]) / flt(outputs[key])
+		for source in inputs[key]:
+			quantity = min(
+				flt(source["qty"] * factor, 6), flt(source["remaining_qty"])
+			)
+			if quantity <= QTY_TOLERANCE:
+				continue
+			source["remaining_qty"] -= quantity
+			rows.append(
+				{
+					"goods_received_note_item": demand["goods_received_note_item"],
+					"received_item_variant": demand["received_item_variant"],
+					"reference_item_variant": demand.get("reference_item_variant"),
+					"work_order_deliverable": source["work_order_deliverable"],
+					"item_variant": source["item_variant"],
+					"qty": flt(quantity, 6),
+					"uom": source["uom"],
+				}
+			)
+	return _aggregate_rows(rows)
+
+
+def _calculate_saved_work_order_inputs(wo, demands):
+	"""Scale a saved Knitting WO route contract for partial Actual-Dia GRNs."""
+	outputs = defaultdict(float)
+	for row in wo.get("receivables") or []:
+		for reference, qty in get_reference_allocations(row, row.qty).items():
+			outputs[reference] += flt(qty)
+	inputs = defaultdict(list)
+	for row in wo.get("deliverables") or []:
+		if not row.get("is_calculated"):
+			continue
+		for reference, qty in get_reference_allocations(row, row.qty).items():
+			if flt(qty) > 0:
+				inputs[reference].append(
+					{
+						"work_order_deliverable": row.name,
+						"item_variant": row.item_variant,
+						"qty": flt(qty),
+						"remaining_qty": max(
+							flt(qty)
+							- flt(row.stock_update)
+							* flt(qty)
+							/ (flt(row.qty) or flt(qty)),
+							0,
+						),
+						"uom": row.uom,
+					}
+				)
+	if not demands:
+		return []
+	for physical in demands:
+		for demand in _route_demands(physical):
+			reference = demand.get("reference_item_variant")
+			if not reference or flt(outputs.get(reference)) <= 0 or not inputs.get(reference):
+				return None
+	rows = []
+	for physical in demands:
+		for demand in _route_demands(physical):
+			reference = demand["reference_item_variant"]
+			factor = flt(demand["qty"]) / flt(outputs[reference])
+			for source in inputs[reference]:
+				quantity = min(
+					flt(source["qty"] * factor, 6), flt(source["remaining_qty"])
+				)
+				if quantity <= QTY_TOLERANCE:
+					continue
+				source["remaining_qty"] -= quantity
+				rows.append(
+					{
+						"goods_received_note_item": demand["goods_received_note_item"],
+						"received_item_variant": demand["received_item_variant"],
+						"reference_item_variant": reference,
+						"work_order_deliverable": source["work_order_deliverable"],
+						"item_variant": source["item_variant"],
+						"qty": flt(quantity, 6),
+						"uom": source["uom"],
+					}
+				)
+	return _aggregate_rows(rows)
 
 
 def _calculate_consumed_rows(ipd, process_name, demands, identity=False):
@@ -218,55 +509,59 @@ def _calculate_consumed_rows(ipd, process_name, demands, identity=False):
 	from yrp.yrp.utils.ipd_engine import get_consumables, get_process_io
 
 	rows = []
-	for demand in demands:
-		mapping = {
-			"goods_received_note_item": demand["goods_received_note_item"],
-			"received_item_variant": demand["received_item_variant"],
-			"reference_item_variant": demand.get("reference_item_variant"),
-		}
-		if identity:
-			parent_item = get_parent_item(demand["item_variant"])
-			rows.append(
-				{
-					**mapping,
-					"item_variant": demand["item_variant"],
-					"qty": demand["qty"],
-					"uom": frappe.db.get_value("Item", parent_item, "stock_uom"),
-				}
-			)
-		else:
-			# Calculate each output separately. Combining demands before calling the
-			# IPD engine loses the output identity required by mapped valuation.
-			for input_row in get_process_io(ipd.name, process_name, [demand])["inputs"]:
+	for physical_demand in demands:
+		for demand in _route_demands(physical_demand):
+			mapping = {
+				"goods_received_note_item": demand["goods_received_note_item"],
+				"received_item_variant": demand["received_item_variant"],
+				"reference_item_variant": demand.get("reference_item_variant"),
+			}
+			if identity:
+				parent_item = get_parent_item(demand["item_variant"])
 				rows.append(
 					{
 						**mapping,
-						"item_variant": _resolve_variant(input_row["item"], input_row.get("attrs") or {}),
-						"qty": input_row["qty"],
-						"uom": input_row.get("uom"),
+						"item_variant": demand["item_variant"],
+						"qty": demand["qty"],
+						"uom": frappe.db.get_value("Item", parent_item, "stock_uom"),
 					}
 				)
+			else:
+				# Calculate each output separately so exact valuation lineage survives.
+				for input_row in get_process_io(ipd.name, process_name, [demand])["inputs"]:
+					rows.append(
+						{
+							**mapping,
+							"item_variant": _resolve_variant(
+								input_row["item"], input_row.get("attrs") or {}
+							),
+							"qty": input_row["qty"],
+							"uom": input_row.get("uom"),
+						}
+					)
 
-		# Item BOM calculation is deliberately per output/reference demand. That
-		# preserves both route mapping and exact output valuation lineage.
-		reference = demand.get("reference_item_variant")
-		bom_attrs = _variant_attrs(reference) if reference else demand["attrs"]
-		for bom_row in get_consumables(
-			ipd.name,
-			demand["qty"],
-			variants=[{"attrs": bom_attrs, "qty": demand["qty"]}],
-			process_name=process_name,
-		):
-			if not bom_row.get("item") or flt(bom_row.get("qty")) <= 0:
-				continue
-			rows.append(
-				{
-					**mapping,
-					"item_variant": _resolve_variant(bom_row["item"], bom_row.get("attrs") or {}),
-					"qty": bom_row["qty"],
-					"uom": bom_row.get("uom") or frappe.db.get_value("Item", bom_row["item"], "stock_uom"),
-				}
-			)
+			# BOM calculation is per route demand without duplicating physical stock.
+			reference = demand.get("reference_item_variant")
+			bom_attrs = _variant_attrs(reference) if reference else demand["attrs"]
+			for bom_row in get_consumables(
+				ipd.name,
+				demand["qty"],
+				variants=[{"attrs": bom_attrs, "qty": demand["qty"]}],
+				process_name=process_name,
+			):
+				if not bom_row.get("item") or flt(bom_row.get("qty")) <= 0:
+					continue
+				rows.append(
+					{
+						**mapping,
+						"item_variant": _resolve_variant(
+							bom_row["item"], bom_row.get("attrs") or {}
+						),
+						"qty": bom_row["qty"],
+						"uom": bom_row.get("uom")
+						or frappe.db.get_value("Item", bom_row["item"], "stock_uom"),
+					}
+				)
 	return _aggregate_rows(rows)
 
 
@@ -275,6 +570,7 @@ def _aggregate_rows(rows):
 	for row in rows:
 		key = (
 			row["goods_received_note_item"],
+			row.get("work_order_deliverable"),
 			row["item_variant"],
 			row.get("uom"),
 			row.get("reference_item_variant"),
@@ -283,6 +579,7 @@ def _aggregate_rows(rows):
 			aggregated[key] = {
 				"goods_received_note_item": row["goods_received_note_item"],
 				"received_item_variant": row["received_item_variant"],
+				"work_order_deliverable": row.get("work_order_deliverable"),
 				"item_variant": row["item_variant"],
 				"qty": 0.0,
 				"uom": row.get("uom"),
@@ -332,7 +629,13 @@ def _allocate_to_work_order_deliverables(rows, wo, grn, *, exact_business_key=Fa
 		required_stock_qty = flt(required["qty"]) * (flt(conversion.get("conversion_factor")) or 1)
 		remaining_stock_qty = required_stock_qty
 		reference = required.get("reference_item_variant")
-		candidates = [item for item in available if item["row"].item_variant == required["item_variant"]]
+		exact_deliverable = required.get("work_order_deliverable")
+		candidates = [
+			item
+			for item in available
+			if item["row"].item_variant == required["item_variant"]
+			and (not exact_deliverable or item["row"].name == exact_deliverable)
+		]
 		if required.get("uom"):
 			candidates = [item for item in candidates if item["row"].uom == required["uom"]]
 		if "set_combination" in required:
@@ -466,7 +769,7 @@ def load_submitted_consumption_plan(grn):
 	return plan
 
 
-def apply_work_order_stock_update(work_order, plan, cancel=False):
+def apply_work_order_stock_update(work_order, plan, cancel=False, work_order_doc=None):
 	"""Apply mapped input quantities exactly once to their Work Order rows."""
 	if not plan:
 		return
@@ -474,7 +777,10 @@ def apply_work_order_stock_update(work_order, plan, cancel=False):
 		_update_work_order_status,
 	)
 
-	rows = {row.name: row for row in frappe.get_doc("YRP Work Order", work_order).get("deliverables") or []}
+	rows = {
+		row.name: row
+		for row in (work_order_doc or frappe.get_doc("YRP Work Order", work_order)).get("deliverables") or []
+	}
 	qty_by_row = defaultdict(float)
 	for item in plan:
 		row_name = item.get("work_order_deliverable")

@@ -15,6 +15,7 @@ import LotOrderedDetail from "./ProductionOrder/LotOrderedDetail.vue";
 import ProductionOrderEntry from "./ProductionOrder/components/ProductionOrderEntry.vue";
 import UpdatePrice from "./ProductionOrder/components/UpdatePrice.vue";
 import FabricProgram from "./Lot/FabricProgram.vue";
+import ActualDiaConversions from "./Lot/ActualDiaConversions.vue";
 import { LotOrderWrapper, OCRDetailWrapper } from "./Lot";
 import {
 	AlternativeDetailWrapper,
@@ -708,6 +709,18 @@ frappe.production.ui.FabricProgram = class {
 	}
 	get_requirement() {
 		return JSON.parse(JSON.stringify(this.vue.get_requirement()));
+	}
+};
+
+frappe.production.ui.ActualDiaConversions = class {
+	constructor(wrapper) {
+		this.$wrapper = $(wrapper);
+		const mounted = mount_component(ActualDiaConversions, this.$wrapper);
+		this.app = mounted.app;
+		this.vue = mounted.vue;
+	}
+	load_data(rows) {
+		this.vue.load_data(JSON.parse(JSON.stringify(rows || [])));
 	}
 };
 

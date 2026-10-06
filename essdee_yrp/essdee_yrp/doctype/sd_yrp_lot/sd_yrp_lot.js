@@ -29,6 +29,7 @@ frappe.ui.form.on("SD YRP Lot", {
 	refresh(frm) {
 		$(".layout-side-section").css("display", "none");
 		mount_cloth_program(frm);
+		mount_actual_dia_conversions(frm);
 		frappe.call({
 			method: "essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot.check_enabled_po",
 			callback: function (r) {
@@ -641,6 +642,15 @@ function mount_cloth_program(frm) {
 		});
 	};
 	load();
+}
+
+function mount_actual_dia_conversions(frm) {
+	const field = frm.fields_dict.actual_dia_conversion_html;
+	if (!field || !frappe.production.ui.ActualDiaConversions) return;
+	frm.actual_dia_conversions?.app?.unmount();
+	$(field.wrapper).empty();
+	frm.actual_dia_conversions = new frappe.production.ui.ActualDiaConversions(field.wrapper);
+	frm.actual_dia_conversions.load_data(frm.doc.lot_fabric_conversions || []);
 }
 
 

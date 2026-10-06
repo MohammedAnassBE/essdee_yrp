@@ -23,7 +23,14 @@ from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 	_sle_base,
 	_update_work_order_status,
 )
-from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import GoodsReceivedNote
+from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
+	GoodsReceivedNote,
+	_find_matching_receivable,
+	_remaining_receivable_allowance,
+	_wo_excess_percentage,
+)
+
+from essdee_yrp.cloth_execution import qualifies_cloth_transaction
 
 QTY_TOLERANCE = 0.0001
 
@@ -53,6 +60,28 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 			and not self.get("is_return")
 		):
 			display_rows = _selected_draft_receivable_rows(self, display_rows)
+			work_order = frappe.get_doc("YRP Work Order", self.against_id)
+			from essdee_yrp.fabric_grn import get_actual_dia_context, get_saved_actual_dia_rows
+
+			context = get_actual_dia_context(work_order.name)
+			actual_rows = (
+				get_saved_actual_dia_rows(self, work_order)
+				if context.get("enabled") and _is_standard_cloth_grn(self)
+				else []
+			)
+			if actual_rows:
+				actual_sources = {
+					row.get("ref_docname") for row in actual_rows if row.get("ref_docname")
+				}
+				display_rows = [
+					row
+					for row in display_rows
+					if not (
+						row.get("ref_docname") in actual_sources
+						and flt(row.get("quantity")) <= 0
+					)
+				]
+				display_rows.extend(actual_rows)
 		if self.get("includes_packing"):
 			# A fixed-ratio packing receipt can split one size across many Work
 			# Order Receivable references. Those rows must remain separate in the
@@ -92,6 +121,20 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 			),
 		)
 
+	def submit(self):
+		_lock_versioned_cloth_lot(self)
+		return super().submit()
+
+	def cancel(self):
+		_lock_versioned_cloth_lot(self, persisted=True)
+		return super().cancel()
+
+	def validate(self):
+		super().validate()
+		from essdee_yrp.fabric_grn import validate_actual_dia_rows
+
+		validate_actual_dia_rows(self)
+
 	def validate_against(self):
 		from essdee_yrp.sewing.closed_work_order import (
 			is_closed_sewing_grn,
@@ -123,6 +166,16 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 		_set_dynamic_packing_piece_uom(self)
 
 	def before_submit(self):
+		qualified_cloth = _requires_versioned_cloth_lifecycle(self)
+		if qualified_cloth:
+			if not self.flags.get("cloth_execution_lot_locked"):
+				frappe.throw(_("Versioned cloth GRN submit requires the Lot lock."))
+			self.flags.aggregate_physical_receipts = True
+			from essdee_yrp.fabric_grn import validate_actual_dia_rows
+
+			validate_actual_dia_rows(self)
+			if self.get("correction_items"):
+				frappe.throw(_("Versioned cloth GRNs do not support correction rows."))
 		if self.get("additional_grn"):
 			from essdee_yrp.additional_grn import validate_receivables, validate_submit_role
 
@@ -133,10 +186,22 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 			# One lock covers sewing caps, source-pending checks, deterministic plan
 			# calculation, and the later Work Order stock-update transition.
 			_lock_work_order(self.against_id)
+			if qualified_cloth:
+				self.flags.cloth_execution_locked_work_order = _get_current_locked_work_order(
+					self.against_id
+				)
 		validate_sewing_plan_quantity(self)
 		plan_kind = _new_consumption_plan_kind(self)
 		if plan_kind:
-			plan = _calculate_new_consumption_plan(self, plan_kind)
+			if plan_kind == "fabric" and qualified_cloth:
+				from essdee_yrp.fabric_grn import calculate_consumption_plan
+
+				plan = calculate_consumption_plan(
+					self,
+					work_order_doc=self.flags.cloth_execution_locked_work_order,
+				)
+			else:
+				plan = _calculate_new_consumption_plan(self, plan_kind)
 			if not plan and any(
 				flt(row.get("stock_qty") or row.get("quantity")) > 0 for row in self.get("items") or []
 			):
@@ -156,8 +221,19 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 		return super().before_submit()
 
 	def before_cancel(self):
-		if _has_complete_mapped_consumption(self):
+		qualified_cloth = _requires_versioned_cloth_lifecycle(self, persisted=True)
+		if qualified_cloth:
+			if not self.flags.get("cloth_execution_lot_locked"):
+				frappe.throw(_("Versioned cloth GRN cancel requires the Lot lock."))
+			self.flags.aggregate_physical_receipts = _submitted_receipts_are_grouped(self)
 			_lock_work_order(self.against_id)
+			self.flags.cloth_execution_locked_work_order = _get_current_locked_work_order(
+				self.against_id
+			)
+			_guard_source_grn_allocations(self)
+		if _has_complete_mapped_consumption(self):
+			if not qualified_cloth:
+				_lock_work_order(self.against_id)
 			_validate_mapped_consumption_ownership(self)
 			if frappe.db.get_value("YRP Work Order", self.against_id, "open_status") == "Close":
 				frappe.throw(
@@ -179,7 +255,10 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 		if apply_update:
 			from essdee_yrp.fabric_grn import apply_work_order_stock_update
 
-			apply_work_order_stock_update(self.against_id, plan)
+			kwargs = {}
+			if self.flags.get("cloth_execution_locked_work_order"):
+				kwargs["work_order_doc"] = self.flags.cloth_execution_locked_work_order
+			apply_work_order_stock_update(self.against_id, plan, **kwargs)
 		self._enqueue_repost_if_mapped()
 
 	def on_cancel(self):
@@ -191,7 +270,10 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 		if apply_update:
 			from essdee_yrp.fabric_grn import apply_work_order_stock_update
 
-			apply_work_order_stock_update(self.against_id, plan, cancel=True)
+			kwargs = {"cancel": True}
+			if self.flags.get("cloth_execution_locked_work_order"):
+				kwargs["work_order_doc"] = self.flags.cloth_execution_locked_work_order
+			apply_work_order_stock_update(self.against_id, plan, **kwargs)
 		self._enqueue_repost_if_mapped()
 
 	def validate_items(self):
@@ -224,11 +306,21 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 			from essdee_yrp.additional_grn import validate_receivables
 
 			return validate_receivables(self)
+		if self.flags.get("cloth_execution_locked_work_order"):
+			return _validate_versioned_cloth_receivables(
+				self, self.flags.cloth_execution_locked_work_order
+			)
 		if not self._is_essdee_return():
 			return super().validate_source_pending()
 		_validate_return_quantities(self)
 
 	def update_source_pending(self, cancel=False):
+		if self.flags.get("cloth_execution_locked_work_order"):
+			return _update_versioned_cloth_receivables(
+				self,
+				self.flags.cloth_execution_locked_work_order,
+				cancel=cancel,
+			)
 		if not self._is_essdee_return():
 			return super().update_source_pending(cancel=cancel)
 		_update_returned_deliverables(self, cancel=cancel)
@@ -264,6 +356,204 @@ def _lock_work_order(work_order):
 		"SELECT name FROM `tabYRP Work Order` WHERE name=%s FOR UPDATE",
 		(work_order,),
 	)
+
+
+def _is_standard_cloth_grn(doc):
+	return bool(
+		doc.get("against") == "YRP Work Order"
+		and doc.get("against_id")
+		and not any(
+			doc.get(fieldname)
+			for fieldname in (
+				"is_return",
+				"is_rework",
+				"additional_grn",
+				"includes_packing",
+				"from_closed_wo_sewing_details",
+			)
+		)
+	)
+
+
+def _requires_versioned_cloth_lifecycle(doc, *, persisted=False):
+	"""Classify new keyed transactions and their saved cancellation shape."""
+	if not _is_standard_cloth_grn(doc):
+		return False
+	try:
+		if qualifies_cloth_transaction(doc):
+			return True
+	except frappe.DoesNotExistError:
+		if not persisted:
+			return False
+	if not persisted:
+		return False
+	return cint(
+		frappe.db.get_value(
+			"YRP Work Order", doc.against_id, "cloth_execution_version"
+		)
+	) == 1
+
+
+def _lock_versioned_cloth_lot(doc, *, persisted=False):
+	"""Enter the shared Lot-first order for Knitting, Dyeing and Washing."""
+	if not _requires_versioned_cloth_lifecycle(doc, persisted=persisted):
+		return None
+	lot = frappe.db.get_value("YRP Work Order", doc.against_id, "lot")
+	if not lot:
+		frappe.throw(_("A versioned cloth Goods Received Note requires a Lot lock."))
+	frappe.db.sql(
+		"SELECT name FROM `tabSD YRP Lot` WHERE name=%s FOR UPDATE",
+		(lot,),
+	)
+	doc.flags.cloth_execution_lot_locked = lot
+	return lot
+
+
+def _get_current_locked_work_order(work_order):
+	"""Overlay current-read locked counters onto a possibly stale Desk document."""
+	doc = frappe.get_doc("YRP Work Order", work_order)
+	for table, fieldnames, rows in (
+		(
+			"YRP Work Order Deliverables",
+			("pending_quantity", "stock_update"),
+			doc.get("deliverables") or [],
+		),
+		(
+			"YRP Work Order Receivables",
+			("pending_quantity",),
+			doc.get("receivables") or [],
+		),
+	):
+		current = {
+			row.name: row
+			for row in frappe.db.sql(
+				f"""
+				SELECT name, {', '.join(fieldnames)}
+				FROM `tab{table}`
+				WHERE parent=%s
+				ORDER BY idx, name
+				FOR UPDATE
+				""",
+				(work_order,),
+				as_dict=True,
+			)
+		}
+		for row in rows:
+			values = current.get(row.name)
+			if values:
+				for fieldname in fieldnames:
+					row.set(fieldname, values.get(fieldname))
+	return doc
+
+
+def _submitted_receipts_are_grouped(grn):
+	"""Recover the immutable submitted receipt shape from saved output links."""
+	outputs_by_sle = defaultdict(set)
+	for row in grn.get("grn_deliverables") or []:
+		if row.get("output_receipt_sle") and row.get("goods_received_note_item"):
+			outputs_by_sle[row.output_receipt_sle].add(row.goods_received_note_item)
+	return any(len(outputs) > 1 for outputs in outputs_by_sle.values())
+
+
+def _validate_versioned_cloth_receivables(grn, work_order):
+	"""Validate aggregate physical receipt weight against process allowance."""
+	totals = defaultdict(float)
+	targets = {}
+	rows_by_target = defaultdict(list)
+	for row in grn.get("items") or []:
+		target = _find_matching_receivable(work_order.receivables, row)
+		if not target:
+			frappe.throw(
+				_("Row {0}: no matching Work Order Receivable found for {1}.").format(
+					row.idx, row.item_variant
+				)
+			)
+		row.ref_doctype = "YRP Work Order Receivables"
+		row.ref_docname = target.name
+		row.pending_quantity = target.pending_quantity
+		totals[target.name] += flt(row.quantity)
+		targets[target.name] = target
+		rows_by_target[target.name].append(row)
+
+	excess_pct = _wo_excess_percentage(grn.against_id)
+	for target_name, total_qty in totals.items():
+		target = targets[target_name]
+		ordered = flt(target.qty)
+		allowance = _remaining_receivable_allowance(
+			ordered, target.pending_quantity, excess_pct
+		)
+		if total_qty > allowance + QTY_TOLERANCE:
+			frappe.throw(
+				_(
+					"Received qty {0} exceeds allowance {1} for {2} "
+					"(ordered {3}, excess allowance {4}%)."
+				).format(
+					flt(total_qty),
+					flt(allowance),
+					target.item_variant,
+					ordered,
+					flt(excess_pct),
+				)
+			)
+		for row in rows_by_target[target_name]:
+			row.max_receivable_quantity = max(flt(allowance), 0)
+
+
+def _update_versioned_cloth_receivables(grn, work_order, *, cancel=False):
+	"""Apply every physical Dia split to the same current locked WO snapshot."""
+	totals = defaultdict(float)
+	for row in grn.get("items") or []:
+		target = _find_matching_receivable(work_order.receivables, row)
+		if target:
+			totals[target.name] += flt(row.quantity)
+	targets = {row.name: row for row in work_order.get("receivables") or []}
+	for name, qty in totals.items():
+		target = targets[name]
+		pending = (
+			flt(target.pending_quantity) + qty
+			if cancel
+			else flt(target.pending_quantity) - qty
+		)
+		target.pending_quantity = flt(pending)
+		target.db_set("pending_quantity", target.pending_quantity, update_modified=False)
+	if totals:
+		_update_work_order_status(work_order.name)
+
+
+def _guard_source_grn_allocations(grn):
+	"""Block source cancellation once a submitted downstream DC consumed it."""
+	item_names = [row.name for row in grn.get("items") or [] if row.get("name")]
+	if not item_names:
+		return
+	rows = frappe.db.sql(
+		"""
+		SELECT d.name, d.parent, d.source_grn_item, d.qty,
+			d.pending_quantity, d.stock_update
+		FROM `tabYRP Work Order Deliverables` d
+		JOIN `tabYRP Work Order` wo ON wo.name = d.parent
+		WHERE d.source_grn_item IN %(items)s
+			AND wo.docstatus = 1
+			AND wo.cloth_execution_version = 1
+		ORDER BY d.parent, d.idx, d.name
+		FOR UPDATE
+		""",
+		{"items": tuple(item_names)},
+		as_dict=True,
+	)
+	used = [
+		row
+		for row in rows
+		if flt(row.qty) - flt(row.pending_quantity) > QTY_TOLERANCE
+		or flt(row.stock_update) > QTY_TOLERANCE
+	]
+	if used:
+		first = used[0]
+		frappe.throw(
+			_(
+				"Cannot cancel Goods Received Note {0}: source row {1} is already "
+				"consumed by downstream Work Order {2}. Cancel the downstream flow first."
+			).format(grn.name, first.source_grn_item, first.parent)
+		)
 
 
 def _set_dynamic_packing_piece_uom(grn):

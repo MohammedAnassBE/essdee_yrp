@@ -79,8 +79,8 @@ def close_linked_production_order_if_all_lots_audited(lot):
 	return close_production_order_if_all_lots_audited(production_order)
 
 
-def auto_complete_ocr_after_30_days():
-	"""Complete OCR after an audited plan has remained open for over 30 days."""
+def auto_close_audited_finishing_plans_after_30_days():
+	"""Auto-close an audited plan after it has remained open for over 30 days."""
 	cutoff_date = add_days(today(), -30)
 	finishing_plans = frappe.get_all(
 		"SD YRP Finishing Plan",
@@ -95,9 +95,14 @@ def auto_complete_ocr_after_30_days():
 			"SD YRP Finishing Plan",
 			finishing_plan,
 			"fp_status",
-			"OCR Completed",
+			"Auto Closed",
 		)
 	return len(finishing_plans)
+
+
+def auto_complete_ocr_after_30_days():
+	"""Compatibility alias for the previous scheduler method name."""
+	return auto_close_audited_finishing_plans_after_30_days()
 
 
 @frappe.whitelist()
@@ -142,9 +147,12 @@ def complete_ocr(doc_name):
 	if "System Manager" not in frappe.get_roles():
 		frappe.throw(_("Only System Manager can complete OCR."))
 	plan = frappe.get_doc("SD YRP Finishing Plan", doc_name, for_update=True)
-	if plan.fp_status != "Audit Completed":
+	if plan.fp_status not in ("Audit Completed", "Auto Closed"):
 		frappe.throw(
-			_("OCR can be completed only after the audit is completed (current: {0}).").format(plan.fp_status)
+			_(
+				"OCR can be completed only after audit completion or automatic closure "
+				"(current: {0})."
+			).format(plan.fp_status)
 		)
 	plan.fp_status = "OCR Completed"
 	plan.save(ignore_permissions=True)

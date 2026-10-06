@@ -46,6 +46,7 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_panel_movement.sd_yrp_cut_panel_mo
 	_latest_logical_bundle_rows,
 )
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet import (
+	_attribute_row,
 	_cutting_grn_consumed_rows,
 	_cutting_grn_output_rows,
 	_save_cutting_plan_cloth_usage,
@@ -69,6 +70,28 @@ from essdee_yrp.overrides.delivery_challan import (
 	strip_unselected_cpm_items,
 )
 from essdee_yrp.setup import ensure_mrp_cancel_permissions
+
+
+class TestCuttingLaySheetWebProjection(UnitTestCase):
+	def test_material_row_exposes_template_item_for_low_dwell_grouping(self):
+		row = frappe._dict(
+			cloth_item_variant="FULLDULL-WICKING-60-WINE",
+			cloth_type="Main Fabric",
+			colour="Wine",
+			dia="60 Dia",
+		)
+		with patch(
+			"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.frappe.db.get_value",
+			return_value="Fulldull Fabric With Wicking New",
+		):
+			projected = _attribute_row(
+				row,
+				("colour", "dia"),
+				include_item_identity=True,
+			)
+
+		self.assertEqual(projected["item"], "Fulldull Fabric With Wicking New")
+		self.assertEqual(projected["cloth_type"], "Main Fabric")
 
 
 class TestCutBundleMovementTransactionFiltering(UnitTestCase):

@@ -1,8 +1,76 @@
+function setup_purchase_order_approval_actions(frm) {
+	if (
+		!frm.doc.is_yrp_managed ||
+		frm.doc.docstatus !== 0 ||
+		frm.doc.status !== "Pending Approval" ||
+		frm.is_new()
+	) {
+		return;
+	}
+
+	const isSystemManager = frappe.user.has_role("System Manager");
+	if (!isSystemManager) {
+		frm.page.btn_primary.hide();
+	}
+
+	frappe.call({
+		method: "essdee_yrp.purchase_order_approval.get_purchase_order_approval_state",
+		args: { name: frm.doc.name },
+		callback(response) {
+			const state = response.message || {};
+			if (
+				frappe.perm.has_perm("Purchase Order", 0, "create") &&
+				!state.live_request
+			) {
+				frm.add_custom_button(__("Send Request"), () => {
+					frappe.call({
+						method: "essdee_yrp.purchase_order_approval.send_purchase_order_request",
+						args: { name: frm.doc.name },
+						freeze: true,
+						callback(sendResponse) {
+							const result = sendResponse.message || {};
+							if (result.status === "Error") {
+								frappe.msgprint(result.error || __("Unable to send the Telegram request."));
+							}
+							frm.reload_doc();
+						},
+					});
+				});
+			}
+
+			if (!isSystemManager) {
+				return;
+			}
+			frm.add_custom_button(__("Approve PO"), () => {
+				frappe.confirm(__("Approve and submit this Purchase Order?"), () => {
+					frappe.call({
+						method: "essdee_yrp.purchase_order_approval.approve_purchase_order",
+						args: { name: frm.doc.name },
+						freeze: true,
+						callback() { frm.reload_doc(); },
+					});
+				});
+			});
+			frm.add_custom_button(__("Reject PO"), () => {
+				frappe.confirm(__("Reject this Purchase Order request?"), () => {
+					frappe.call({
+						method: "essdee_yrp.purchase_order_approval.reject_purchase_order",
+						args: { name: frm.doc.name },
+						freeze: true,
+						callback() { frm.reload_doc(); },
+					});
+				});
+			});
+		},
+	});
+}
+
 frappe.ui.form.on("Purchase Order", {
 	refresh(frm) {
 		if (!frm.doc.is_yrp_managed) {
 			return;
 		}
+		setup_purchase_order_approval_actions(frm);
 		if (frm.fields_dict.sd_lot) {
 			frm.set_df_property("sd_lot", "read_only", frm.doc.docstatus === 1 ? 1 : 0);
 		}

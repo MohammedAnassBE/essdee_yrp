@@ -24,6 +24,8 @@ MRP_SCHEMA_ROLES = (
 	"Brand QA User",
 	"CAD User",
 	"Cutting User",
+	"HR Manager",
+	"HR User",
 	"Merch Manager",
 	"Store Manager",
 	"T & A Admin",
@@ -86,6 +88,9 @@ def after_install():
 	ensure_mrp_schema_roles()
 	ensure_mrp_cancel_permissions()
 	ensure_yrp_production_order_settings()
+	from essdee_yrp.purchase_order_approval import ensure_purchase_order_approval_route
+
+	ensure_purchase_order_approval_route()
 
 
 def after_migrate():
@@ -113,6 +118,9 @@ def after_migrate():
 
 	backfill_legacy_commercial_items()
 	backfill_unprojected_work_order_drafts()
+	from essdee_yrp.purchase_order_approval import ensure_purchase_order_approval_route
+
+	ensure_purchase_order_approval_route()
 	build_web_spa()
 
 

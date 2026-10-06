@@ -7,9 +7,10 @@
 
 			<div class="marker-status-row">
 				<span class="document-status" :class="`document-status--${statusTone}`">{{ statusLabel }}</span>
-				<span v-if="record?.modified" class="modified-text">Updated {{ record.modified }}</span>
+				<span v-if="record?.modified" class="modified-text">Updated {{ formatDate(record.modified, true) }}</span>
 			</div>
 
+			<template v-if="canEdit">
 			<section class="marker-section">
 				<h3>Marker Details</h3>
 				<div class="marker-fields">
@@ -46,6 +47,31 @@
 					</div>
 				</div>
 			</section>
+			</template>
+
+			<template v-else-if="record">
+				<section class="marker-section marker-read-view">
+					<h3>Marker Details</h3>
+					<div class="marker-read-grid">
+						<div v-for="item in readOnlyDetails" :key="item.label"><span>{{ item.label }}</span><strong>{{ item.value }}</strong></div>
+					</div>
+				</section>
+				<section class="marker-section marker-read-view">
+					<div class="section-heading"><div><h3>Selected Panels</h3><small>{{ form.panels.length }} panels</small></div></div>
+					<div class="marker-chip-list"><span v-for="panel in form.panels" :key="panel">{{ panel }}</span></div>
+				</section>
+				<section class="marker-section marker-read-view">
+					<div class="section-heading"><div><h3>Size Ratios</h3><small>{{ form.selected_type === 'Machine' ? 'Ratio by size' : 'Ratio by size and panel' }}</small></div></div>
+					<div v-if="form.ratio_items.length" class="table-scroll">
+						<table class="marker-table"><thead><tr><th>Size</th><th v-if="form.selected_type === 'Manual'">Panel</th><th class="number-cell">Ratio</th></tr></thead><tbody><tr v-for="(row, index) in form.ratio_items" :key="`${row.size}-${row.panel || index}`"><td>{{ row.size }}</td><td v-if="form.selected_type === 'Manual'">{{ row.panel }}</td><td class="number-cell"><strong>{{ Number(row.ratio || 0).toFixed(1) }}</strong></td></tr></tbody></table>
+					</div>
+					<div v-else class="empty-note">No size ratios.</div>
+				</section>
+				<section v-if="form.group_items.length" class="marker-section marker-read-view">
+					<div class="section-heading"><div><h3>Panel Groups</h3><small>{{ form.group_items.length }} groups</small></div></div>
+					<div class="marker-group-summary"><div v-for="(group, index) in form.group_items" :key="group.id ?? index"><strong>Group {{ index + 1 }}</strong><span>{{ (group.selected || []).join(', ') || '—' }}</span></div></div>
+				</section>
+			</template>
 		</div>
 
 		<template #footer>
@@ -74,7 +100,9 @@ import DocumentPrintButton from "./DocumentPrintButton.vue"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
-	cuttingPlan: { type: String, required: true },
+	cuttingPlan: { type: String, default: "" },
+	parentDoctype: { type: String, default: "SD YRP Cutting Plan" },
+	parentName: { type: String, default: "" },
 	markerName: { type: String, default: "" },
 })
 const emit = defineEmits(["update:visible", "changed"])
@@ -87,14 +115,26 @@ const success = ref("")
 const record = ref(null)
 const context = ref({ panels: [], sizes: [] })
 const form = reactive(emptyForm())
+const resolvedParentName = computed(() => props.parentName || props.cuttingPlan)
+const resolvedParentField = computed(() => props.parentDoctype === "SD YRP Cutting Order" ? "cutting_order" : "cutting_plan")
+const parentArgs = computed(() => ({ [resolvedParentField.value]: resolvedParentName.value }))
 
 const canEdit = computed(() => record.value ? Boolean(record.value.permissions?.can_write) : Boolean(context.value.can_create))
 const canSubmit = computed(() => canEdit.value && Boolean(record.value ? record.value.permissions?.can_submit : context.value.can_submit))
 const statusLabel = computed(() => ["Draft", "Submitted", "Cancelled"][Number(record.value?.docstatus || 0)] || "Draft")
 const statusTone = computed(() => ["draft", "submitted", "cancelled"][Number(record.value?.docstatus || 0)] || "draft")
+const readOnlyDetails = computed(() => [
+	["Marker Name", form.marker_name],
+	["Select Type", form.selected_type],
+	["Length", `${formatNumber(form.length, 3)} m`],
+	["Width", `${formatNumber(form.width, 3)} in`],
+	["Total No Of Plys", display(form.total_no_of_plys)],
+	["Efficiency", form.efficiency === null ? "—" : `${formatNumber(form.efficiency, 2)}%`],
+	["Required Piece Weight", form.required_piece_weight === null ? "—" : `${formatNumber(form.required_piece_weight, 4)} kg`],
+].map(([label, value]) => ({ label, value })))
 
 watch(
-	() => [props.visible, props.markerName, props.cuttingPlan],
+	() => [props.visible, props.markerName, resolvedParentName.value],
 	([visible]) => { if (visible) load() },
 )
 
@@ -104,7 +144,7 @@ async function load() {
 	success.value = ""
 	try {
 		const data = await callMethod(markerMethod("get_web_marker"), {
-			cutting_plan: props.cuttingPlan,
+			...parentArgs.value,
 			marker: props.markerName || undefined,
 		})
 		record.value = data?.marker || null
@@ -130,7 +170,17 @@ function buildRatios() {
 			ratio: oldValues.get(`${size}|`) || oldRatioForSize(size),
 		}))
 	}
-	form.group_items = form.panels.map((panel, index) => ({ id: index, selected: [panel] }))
+	form.group_items = reconcileGroups(form.group_items, form.panels)
+}
+
+function reconcileGroups(groups, panels) {
+	const available = new Set(panels)
+	const kept = (groups || [])
+		.map((group, index) => ({ ...group, id: group.id ?? index, selected: (group.selected || []).filter((panel) => available.has(panel)) }))
+		.filter((group) => group.selected.length)
+	const assigned = new Set(kept.flatMap((group) => group.selected))
+	const additions = panels.filter((panel) => !assigned.has(panel)).map((panel, index) => ({ id: `new-${index}-${panel}`, selected: [panel] }))
+	return [...kept, ...additions]
 }
 
 function oldRatioForSize(size) {
@@ -149,10 +199,11 @@ async function save(submit) {
 	saveMode.value = submit ? "submit" : "draft"
 	try {
 		const saved = await callMethod(markerMethod("save_web_marker"), {
-			cutting_plan: props.cuttingPlan,
+			...parentArgs.value,
 			marker: record.value?.name || undefined,
 			values: form,
 			submit,
+			expected_modified: record.value?.modified || undefined,
 		})
 		record.value = saved
 		replaceForm(recordForm(saved))
@@ -173,7 +224,7 @@ async function cancelMarker() {
 	error.value = ""
 	try {
 		const changed = await callMethod(markerMethod("change_web_marker_status"), {
-			cutting_plan: props.cuttingPlan,
+			...parentArgs.value,
 			marker: record.value.name,
 			action: "cancel",
 		})
@@ -196,7 +247,7 @@ function validate() {
 		error.value = "Select at least one panel."
 		return false
 	}
-	if (!form.ratio_items.length || !form.ratio_items.some((row) => Number(row.ratio || 0) > 0)) {
+	if (!form.ratio_items.length || (!context.value.is_manual_entry && !form.ratio_items.some((row) => Number(row.ratio || 0) > 0))) {
 		error.value = "Build the ratios and enter the ratio values."
 		return false
 	}
@@ -239,6 +290,10 @@ function clone(value) {
 	return JSON.parse(JSON.stringify(value || []))
 }
 
+function display(value) { return value === null || value === undefined || value === "" ? "—" : value }
+function formatNumber(value, precision) { return value === null || value === undefined || value === "" ? "—" : Number(value).toLocaleString("en-IN", { minimumFractionDigits: precision, maximumFractionDigits: precision }) }
+function formatDate(value, includeTime = false) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/); if (!match) return value || "—"; const date = `${match[3]}-${match[2]}-${match[1]}`; return includeTime && match[4] ? `${date} · ${match[4]}:${match[5]}` : date }
+
 function markerMethod(name) {
 	return `essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_marker.sd_yrp_cutting_marker.${name}`
 }
@@ -269,10 +324,22 @@ function markerMethod(name) {
 .empty-note { display: grid; place-items: center; min-height: 64px; color: #7b8780; font-size: 0.77rem; background: #fafcfb; border: 1px dashed #dce4df; border-radius: 9px; }
 .group-list { display: grid; gap: 8px; }
 .group-row { display: grid; grid-template-columns: 72px minmax(0, 1fr) 38px; align-items: center; gap: 8px; color: #536158; font-size: 0.75rem; font-weight: 700; }
+.marker-read-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.marker-read-grid > div { display: grid; min-height: 58px; align-content: center; gap: 4px; padding: 10px 12px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
+.marker-read-grid span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; text-transform: uppercase; }
+.marker-read-grid strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); overflow-wrap: anywhere; }
+.marker-chip-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.marker-chip-list span { padding: 4px 9px; color: var(--erp-text); background: var(--erp-surface-soft); border: 1px solid var(--erp-border); border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); font-weight: 700; }
+.marker-group-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.marker-group-summary > div { display: grid; gap: 3px; padding: 9px 11px; background: var(--erp-surface-soft); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.marker-group-summary strong { color: var(--erp-accent-strong); font-size: var(--erp-font-size-min); text-transform: uppercase; }
+.marker-group-summary span { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
+.number-cell { text-align: right !important; font-variant-numeric: tabular-nums; }
 :global(.marker-dialog) { width: min(95vw, 1050px); }
 
 @media (max-width: 700px) {
 	.marker-loading, .marker-fields { grid-template-columns: 1fr; }
+	.marker-read-grid, .marker-group-summary { grid-template-columns: 1fr; }
 	.group-row { grid-template-columns: 1fr 38px; }
 	.group-row > span { grid-column: 1 / -1; }
 }

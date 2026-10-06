@@ -10,10 +10,7 @@
 		@reset="reset"
 	>
 		<template #filters>
-			<label>
-				<span class="erp-field-label">Date <b>*</b></span>
-				<input v-model="filters.date" type="date" required />
-			</label>
+			<DateField v-model="filters.date" label="Date" required />
 			<label>
 				<span class="erp-field-label">Cutting location</span>
 				<select v-model="filters.location">
@@ -62,8 +59,9 @@
 import { computed, reactive, ref } from "vue"
 
 import { getDailyCutSheetReport } from "../../../api/cuttingReports.js"
-import ReportShell from "./ReportShell.vue"
-import { attributeValue, errorMessage, formatDate, number, quantity, reportRowCount, todayIso } from "./reportUtils.js"
+import DateField from "../../../components/common/DateField.vue"
+import ReportShell from "../../../components/reports/ReportShell.vue"
+import { attributeValue, errorMessage, formatDate, number, quantity, reportRowCount, todayIso } from "../../../components/reports/reportUtils.js"
 
 const filters = reactive(defaultFilters())
 const rows = ref([])

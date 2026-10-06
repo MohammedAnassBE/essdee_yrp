@@ -21,21 +21,12 @@
 					</button>
 				</div>
 			</div>
-			<label v-if="!summaryMode">
-				<span class="erp-field-label">Date <b>*</b></span>
-				<input v-model="filters.date" type="date" required />
-			</label>
+			<DateField v-if="!summaryMode" v-model="filters.date" label="Date" required />
 			<template v-else>
 				<AsyncLinkMultiSelect v-model="filters.items" doctype="Item" label="Items" placeholder="Search items…" />
 				<AsyncLinkMultiSelect v-model="filters.lots" doctype="SD YRP Lot" label="Lots" placeholder="Search lots…" />
-				<label>
-					<span class="erp-field-label">From date</span>
-					<input v-model="filters.fromDate" type="date" />
-				</label>
-				<label>
-					<span class="erp-field-label">To date</span>
-					<input v-model="filters.toDate" type="date" />
-				</label>
+				<DateField v-model="filters.fromDate" label="From date" show-clear />
+				<DateField v-model="filters.toDate" label="To date" show-clear />
 			</template>
 			<label>
 				<span class="erp-field-label">Cutting location</span>
@@ -85,10 +76,11 @@
 import { computed, reactive, ref } from "vue"
 
 import { getDailyProductionReport, getDailyProductionSummary } from "../../../api/cuttingReports.js"
+import DateField from "../../../components/common/DateField.vue"
 import AsyncLinkMultiSelect from "./AsyncLinkMultiSelect.vue"
 import ProductionMatrix from "./ProductionMatrix.vue"
-import ReportShell from "./ReportShell.vue"
-import { errorMessage, formatDate, number, reportRowCount, todayIso } from "./reportUtils.js"
+import ReportShell from "../../../components/reports/ReportShell.vue"
+import { errorMessage, formatDate, number, reportRowCount, todayIso } from "../../../components/reports/reportUtils.js"
 
 const summaryMode = ref(false)
 const filters = reactive(defaultFilters())

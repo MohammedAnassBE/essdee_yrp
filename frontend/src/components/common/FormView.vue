@@ -147,7 +147,7 @@
 							<a
 								v-if="field.fieldtype === 'Link' && hasValue(form[field.fieldname])"
 								class="view-field__value view-field__link"
-								:href="deskDocumentUrl(field.options, form[field.fieldname])"
+								:href="webDocumentPath(field.options, form[field.fieldname])"
 								target="_blank"
 								rel="noopener"
 							>
@@ -204,6 +204,7 @@ import Skeleton from "primevue/skeleton"
 import { computed, reactive, ref, watch } from "vue"
 
 import { createDoc, getDoc, getMeta, updateDoc } from "../../api/frappe.js"
+import { webDocumentPath } from "../../router/webDocumentRoutes.js"
 import ChildTableField from "./ChildTableField.vue"
 import FormField from "./FormField.vue"
 
@@ -485,11 +486,6 @@ function displayValue(value, field) {
 	if (Array.isArray(value)) return value.join(", ")
 	if (typeof value === "object") return JSON.stringify(value)
 	return value
-}
-
-function deskDocumentUrl(doctype, name) {
-	const slug = String(doctype || "").toLowerCase().replaceAll(" ", "-")
-	return `/app/${encodeURIComponent(slug)}/${encodeURIComponent(name)}`
 }
 
 function validate() {

@@ -5,7 +5,7 @@
 			<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 			<div class="create-intro"><i class="pi pi-list-check"></i><div><strong>Start a new Lay Sheet</strong><span>Select the submitted marker and cutting team. System dates are recorded automatically.</span></div></div>
 			<div class="create-fields">
-				<LinkField v-model="createForm.cutting_marker" label="Cutting Marker *" help-text="Search by marker name or ID." doctype="SD YRP Cutting Marker" :filters="{ cutting_plan: cuttingPlan, docstatus: 1 }" :show-open-button="false" />
+				<LinkField v-model="createForm.cutting_marker" label="Cutting Marker *" help-text="Search by marker name or ID." doctype="SD YRP Cutting Marker" :filters="markerFilters" :show-open-button="false" />
 				<LinkField v-model="createForm.cutting_spreader" label="Cutting Spreader *" doctype="SD YRP Cutting Spreader" :show-open-button="false" />
 				<LinkField v-model="createForm.cutter" label="Cutter *" doctype="SD YRP Cutter" :show-open-button="false" />
 			</div>
@@ -31,12 +31,31 @@
 						<Message v-if="detailError" severity="error" :closable="false">{{ detailError }}</Message>
 						<section class="data-block editable-data-block">
 							<header><div class="data-block__title"><h3>Cloth Details</h3><span>{{ sheet.cloth_details?.length || 0 }} rows</span></div><Button v-if="canEditDetails" label="Add Cloth" icon="pi pi-plus" size="small" @click="openClothEditor()" /></header>
-							<div v-if="sheet.cloth_details?.length" class="table-scroll"><table class="laysheet-table"><thead><tr><th>S.No.</th><th v-for="item in clothColumns" :key="item.field">{{ item.label }}</th><th v-if="canEditDetails">Actions</th></tr></thead><tbody><tr v-for="(row, index) in sheet.cloth_details" :key="row.name || index"><td>{{ index + 1 }}</td><td v-for="item in clothColumns" :key="item.field">{{ item.format(row[item.field]) }}</td><td v-if="canEditDetails" class="row-actions"><Button icon="pi pi-pencil" severity="secondary" text rounded aria-label="Edit cloth" @click="openClothEditor(row, index)" /><Button icon="pi pi-trash" severity="danger" text rounded aria-label="Delete cloth" :loading="detailBusy === `cloth-${index}`" @click="deleteCloth(index)" /></td></tr></tbody></table></div>
+							<MaterialRequirementGroups
+								v-if="sheet.cloth_details?.length"
+								class="laysheet-material-groups--cloth"
+								:rows="sheet.cloth_details"
+								:columns="clothColumns"
+								:editable="canEditDetails"
+								:busy-key="detailBusy"
+								@edit="openClothEditor"
+								@delete="deleteCloth"
+							/>
 							<div v-else class="empty-data">No cloth details yet.</div>
 						</section>
 						<section class="data-block editable-data-block">
 							<header><div class="data-block__title"><h3>Accessory Details</h3><span>{{ sheet.accessory_details?.length || 0 }} rows</span></div><Button v-if="canEditDetails" label="Add Accessory" icon="pi pi-plus" size="small" :disabled="!editorAccessories.length" :title="editorAccessories.length ? 'Add accessory detail' : 'No cloth accessories are configured for this plan'" @click="openAccessoryEditor()" /></header>
-							<div v-if="sheet.accessory_details?.length" class="table-scroll"><table class="laysheet-table"><thead><tr><th>S.No.</th><th v-for="item in accessoryColumns" :key="item.field">{{ item.label }}</th><th v-if="canEditDetails">Actions</th></tr></thead><tbody><tr v-for="(row, index) in sheet.accessory_details" :key="row.name || index"><td>{{ index + 1 }}</td><td v-for="item in accessoryColumns" :key="item.field">{{ item.format(row[item.field]) }}</td><td v-if="canEditDetails" class="row-actions"><Button icon="pi pi-pencil" severity="secondary" text rounded aria-label="Edit accessory" @click="openAccessoryEditor(row, index)" /><Button icon="pi pi-trash" severity="danger" text rounded aria-label="Delete accessory" :loading="detailBusy === `accessory-${index}`" @click="deleteAccessory(index)" /></td></tr></tbody></table></div>
+							<MaterialRequirementGroups
+								v-if="sheet.accessory_details?.length"
+								class="laysheet-material-groups--accessory"
+								:rows="sheet.accessory_details"
+								:columns="accessoryColumns"
+								kind="accessory"
+								:editable="canEditDetails"
+								:busy-key="detailBusy"
+								@edit="openAccessoryEditor"
+								@delete="deleteAccessory"
+							/>
 							<div v-else class="empty-data">No accessory details yet.</div>
 						</section>
 					</TabPanel>
@@ -74,7 +93,7 @@
 	<Dialog v-model:visible="generateOpen" modal dismissable-mask header="Generate Bundles" class="laysheet-subdialog">
 		<div class="subdialog-stack">
 			<Message v-if="subdialogError" severity="error" :closable="false">{{ subdialogError }}</Message>
-			<label><span>Bundle Generated Date *</span><DatePicker v-model="bundleDate" date-format="yy-mm-dd" show-icon fluid /></label>
+			<DateField v-model="bundleDate" value-type="date" label="Bundle Generated Date" required />
 			<div class="generation-numbers">
 				<label v-if="!sheet?.is_manual_entry"><span>Maximum No of Plys *</span><InputNumber v-model="maximumPlys" :min="1" fluid /></label>
 				<label v-if="!sheet?.is_manual_entry"><span>Maximum Allow Percent *</span><InputNumber v-model="maximumAllow" :min="0" suffix="%" fluid /></label>
@@ -138,7 +157,6 @@
 
 <script setup>
 import Button from "primevue/button"
-import DatePicker from "primevue/datepicker"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
 import InputText from "primevue/inputtext"
@@ -155,12 +173,16 @@ import { computed, defineComponent, h, reactive, ref, watch } from "vue"
 
 import { callMethod } from "../../api/frappe.js"
 import { getQzPrinters, printQzRaw } from "../../api/qzPrinter.js"
+import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
+import MaterialRequirementGroups from "./shared/MaterialRequirementGroups.vue"
 
 const props = defineProps({
 	visible: Boolean,
-	cuttingPlan: { type: String, required: true },
+	cuttingPlan: { type: String, default: "" },
+	parentDoctype: { type: String, default: "SD YRP Cutting Plan" },
+	parentName: { type: String, default: "" },
 	laysheetName: { type: String, default: "" },
 	canCreate: { type: Boolean, default: false },
 })
@@ -195,14 +217,17 @@ const setFieldsSequence = ref(0)
 const accessoryEditorOpen = ref(false)
 const accessoryEditIndex = ref(-1)
 const accessoryForm = reactive(emptyAccessoryForm())
+const resolvedParentName = computed(() => props.parentName || props.cuttingPlan)
+const resolvedParentField = computed(() => props.parentDoctype === "SD YRP Cutting Order" ? "cutting_order" : "cutting_plan")
+const parentArgs = computed(() => ({ [resolvedParentField.value]: resolvedParentName.value }))
+const markerFilters = computed(() => ({ [resolvedParentField.value]: resolvedParentName.value, docstatus: 1 }))
 
 const detailRows = computed(() => {
 	const row = sheet.value || {}
 	return [
-		["Cutting Marker", row.cutting_marker], ["Marker Name", row.marker_name], ["Lay No", row.lay_no],
 		["Length (Meters)", number(row.length, 3)], ["Width (Inches)", number(row.width, 3)],
 		["Cutting Spreader", row.cutting_spreader], ["Cutter", row.cutter], ["Maximum No of Plys", row.maximum_no_of_plys], ["Maximum Allow Percentage", percent(row.maximum_allow_percentage)],
-		["Bundle Generated Date", row.bundle_generated_date], ["Printed Time", row.printed_time],
+		["Bundle Generated Date", formatDisplayDate(row.bundle_generated_date)], ["Printed Time", formatDisplayDate(row.printed_time, true)],
 		["No of Rolls", row.no_of_rolls], ["No of Bits", row.no_of_bits], ["Weight", number(row.weight, 3)], ["Accessory Weight", number(row.accessory_weight, 3)],
 		["End Bit Weight", number(row.end_bit_weight, 3)], ["Total Used Weight", number(row.total_used_weight, 3)], ["Total No of Pieces", row.total_no_of_pieces], ["Piece Weight", number(row.piece_weight, 4)],
 		["Required Piece Weight", number(row.required_pcs_weight, 4)], ["Approved By", row.approved_by], ["Goods Received Note", row.goods_received_note],
@@ -216,13 +241,28 @@ const visibleSetFields = computed(() => setFields.value.filter((field) => !field
 const clothDiaOptions = computed(() => diaOptions(clothForm.cloth_type))
 const accessoryDiaOptions = computed(() => diaOptions(accessoryForm.cloth_type))
 
-const clothColumns = [column("cloth_item_variant", "Cloth"), column("cloth_type", "Cloth Type"), column("colour", "Colour"), column("actual_dia", "Dia"), column("shade", "Shade"), column("weight", "Weight"), column("no_of_rolls", "Rolls"), column("no_of_bits", "Bits"), column("used_weight", "Used Weight"), column("balance_weight", "Balance Weight")]
-const accessoryColumns = [column("accessory", "Accessory"), column("cloth_item_variant", "Cloth"), column("cloth_type", "Cloth Type"), column("colour", "Colour"), column("actual_dia", "Dia"), column("shade", "Shade"), column("weight", "Weight"), column("no_of_rolls", "Rolls")]
+const clothColumns = [
+	column("colour", "Colour"),
+	column("actual_dia", "Dia"),
+	column("shade", "Shade"),
+	column("weight", "Weight", (value) => number(value, 3), true),
+	column("no_of_rolls", "Rolls", display, true),
+	column("no_of_bits", "Bits", display, true),
+	column("used_weight", "Used Weight", (value) => number(value, 3), true),
+	column("balance_weight", "Balance Weight", (value) => number(value, 3), true),
+]
+const accessoryColumns = [
+	column("colour", "Colour"),
+	column("actual_dia", "Dia"),
+	column("shade", "Shade"),
+	column("weight", "Weight", (value) => number(value, 3), true),
+	column("no_of_rolls", "Rolls", display, true),
+]
 const ratioColumns = [column("size", "Size"), column("panel", "Panel"), column("ratio", "Ratio")]
 const bundleColumns = [column("bundle_no", "Bundle No"), column("size", "Size"), column("colour", "Colour"), column("shade", "Shade"), column("part", "Panel"), column("quantity", "Quantity"), column("is_moved", "Moved", (value) => Number(value) ? "Yes" : "No")]
 
 watch(
-	() => [props.visible, props.laysheetName, props.cuttingPlan],
+	() => [props.visible, props.laysheetName, resolvedParentName.value],
 	([visible]) => {
 		if (!visible) return
 		if (props.laysheetName) load()
@@ -232,6 +272,7 @@ watch(
 
 function startCreate() {
 	sheet.value = null
+	activeTab.value = "details"
 	loading.value = false
 	busy.value = ""
 	error.value = ""
@@ -248,7 +289,7 @@ async function createLaySheet() {
 	busy.value = "create"
 	try {
 		sheet.value = await callMethod(laysheetMethod("create_web_laysheet"), {
-			cutting_plan: props.cuttingPlan,
+			...parentArgs.value,
 			values: createForm,
 		})
 		activeTab.value = "details"
@@ -416,7 +457,7 @@ async function deleteAccessory(index) {
 
 async function persistDetails(clothDetails, accessoryDetails, message) {
 	const saved = await callMethod(laysheetMethod("save_web_laysheet_details"), {
-		cutting_plan: props.cuttingPlan,
+		...parentArgs.value,
 		cutting_laysheet: sheet.value.name,
 		cloth_details: clothDetails,
 		accessory_details: accessoryDetails,
@@ -430,10 +471,11 @@ async function persistDetails(clothDetails, accessoryDetails, message) {
 
 async function load() {
 	loading.value = true
+	activeTab.value = "details"
 	error.value = ""
 	success.value = ""
 	try {
-		sheet.value = await callMethod(laysheetMethod("get_web_laysheet"), { cutting_plan: props.cuttingPlan, cutting_laysheet: props.laysheetName })
+		sheet.value = await callMethod(laysheetMethod("get_web_laysheet"), { ...parentArgs.value, cutting_laysheet: props.laysheetName })
 	} catch (reason) {
 		error.value = reason.message || "Unable to load the Cutting LaySheet."
 	} finally {
@@ -517,7 +559,7 @@ async function printLabels() {
 	try {
 		await callMethod(laysheetMethod("update_cutting_plan"), { cutting_laysheet: sheet.value.name, check_cp: true })
 		const result = await callMethod(laysheetMethod("print_labels"), {
-			print_items: [], lay_no: sheet.value.lay_no, doc_name: sheet.value.name, print_order: printOrder.value, cutting_plan: props.cuttingPlan,
+			print_items: [], lay_no: sheet.value.lay_no, doc_name: sheet.value.name, print_order: printOrder.value, ...parentArgs.value,
 		})
 		await printQzRaw(selectedPrinter.value, result.zpl)
 		await callMethod(laysheetMethod("mark_labels_printed"), { doc_name: sheet.value.name, grn: result.grn || undefined })
@@ -558,9 +600,10 @@ async function reloadChanged() {
 function display(value) { return value === null || value === undefined || value === "" ? "—" : value }
 function number(value, precision) { return value === null || value === undefined || value === "" ? "—" : Number(value).toFixed(precision) }
 function percent(value) { return value === null || value === undefined || value === "" ? "—" : `${Number(value)}%` }
-function column(field, label, format = display) { return { field, label, format } }
+function column(field, label, format = display, numeric = false) { return { field, label, format, numeric } }
 function parseDate(value) { if (!value) return null; const [year, month, day] = String(value).split("-").map(Number); return new Date(year, month - 1, day) }
 function formatDate(value) { const pad = (part) => String(part).padStart(2, "0"); return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}` }
+function formatDisplayDate(value, includeTime = false) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/); if (!match) return value || "—"; const date = `${match[3]}-${match[2]}-${match[1]}`; return includeTime && match[4] ? `${date} · ${match[4]}:${match[5]}` : date }
 function fieldOptions(field) {
 	if (Array.isArray(field?.options)) return field.options.filter((value) => value !== "")
 	return String(field?.options || "").split("\n").filter(Boolean)
@@ -661,7 +704,8 @@ const DataBlock = defineComponent({
 .data-block header { display: flex; align-items: center; justify-content: space-between; }
 .data-block__title { display: flex; align-items: baseline; gap: 8px; }
 .data-block h3 { margin: 0; color: var(--erp-text); font-size: 0.88rem; }
-.data-block header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
+.data-block__title > span,
+.data-block > header > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .table-scroll { overflow-x: auto; border: 1px solid #e1e7e3; border-radius: 9px; }
 .laysheet-table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 13px; }
 .laysheet-table th, .laysheet-table td { padding: 8px 9px; text-align: left; border-right: 1px solid #e4e9e6; border-bottom: 1px solid #e4e9e6; }
@@ -679,7 +723,8 @@ const DataBlock = defineComponent({
 .laysheet-content :deep(.data-block) { display: grid; gap: 9px; margin-bottom: 14px; }
 .laysheet-content :deep(.data-block header) { display: flex; align-items: center; justify-content: space-between; }
 .laysheet-content :deep(.data-block h3) { margin: 0; color: var(--erp-text); font-size: 0.88rem; }
-.laysheet-content :deep(.data-block header span) { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
+.laysheet-content :deep(.data-block__title > span),
+.laysheet-content :deep(.data-block > header > span) { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .laysheet-content :deep(.table-scroll) { overflow-x: auto; border: 1px solid #e1e7e3; border-radius: 9px; }
 .laysheet-content :deep(.laysheet-table) { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 13px; }
 .laysheet-content :deep(.laysheet-table th),
@@ -701,6 +746,8 @@ const DataBlock = defineComponent({
 :global(.laysheet-detail-dialog) { width: min(94vw, 820px); }
 
 .laysheet-content :deep(.p-tabpanels) { padding: 14px 0 0; }
+.laysheet-content :deep(.p-tablist) { position: sticky; top: -1px; z-index: var(--erp-layer-sticky); background: #fff; }
+.laysheet-content :deep(.p-tablist-tab-list) { background: #fff; }
 .laysheet-content :deep(.p-tab) { padding: 9px 13px; font-size: 0.76rem; }
 
 @media (max-width: 760px) {

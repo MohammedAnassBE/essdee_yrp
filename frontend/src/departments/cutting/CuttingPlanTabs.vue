@@ -57,46 +57,13 @@
 							<EmptyState v-if="!itemGroups.length" text="No planned quantities." />
 						</DataSection>
 
-						<DataSection title="Cloth Details" :count="data.cloth_details?.length || 0">
-							<div class="table-scroll">
-								<table class="data-table">
-									<thead>
-										<tr>
-											<th>S.No.</th><th>Cloth</th><th>Cloth Type</th><th>Colour</th><th>Dia</th>
-											<th>Required Weight</th><th>Received Weight</th><th>Used Weight</th><th>Balance Weight</th>
-										</tr>
-									</thead>
-									<tbody>
-										<tr v-for="(item, index) in data.cloth_details || []" :key="index">
-											<td>{{ index + 1 }}</td><td>{{ item.cloth_item_variant || "—" }}</td><td>{{ item.cloth_type || "—" }}</td>
-											<td>{{ item.colour || "—" }}</td><td>{{ item.dia || "—" }}</td><td class="number-cell">{{ weight(item.required_weight) }}</td>
-											<td class="number-cell">{{ weight(item.weight) }}</td><td class="number-cell">{{ weight(item.used_weight) }}</td>
-											<td class="number-cell">{{ weight(item.balance_weight) }}</td>
-										</tr>
-									</tbody>
-								</table>
-							</div>
+						<DataSection class="cloth-details-section" title="Cloth Details" :count="data.cloth_details?.length || 0">
+							<MaterialRequirementGroups v-if="data.cloth_details?.length" :rows="data.cloth_details" :columns="requirementColumns" />
 							<EmptyState v-if="!data.cloth_details?.length" text="No cloth details." />
 						</DataSection>
 
-						<DataSection title="Accessory Details" :count="data.accessory_details?.length || 0">
-							<div class="table-scroll">
-								<table class="data-table">
-									<thead>
-										<tr>
-											<th>S.No.</th><th>Accessory</th><th>Cloth</th><th>Cloth Type</th><th>Colour</th><th>Dia</th>
-											<th>Required Weight</th><th>Used Weight</th>
-										</tr>
-									</thead>
-									<tbody>
-										<tr v-for="(item, index) in data.accessory_details || []" :key="index">
-											<td>{{ index + 1 }}</td><td>{{ item.accessory || "—" }}</td><td>{{ item.cloth_item_variant || "—" }}</td>
-											<td>{{ item.cloth_type || "—" }}</td><td>{{ item.colour || "—" }}</td><td>{{ item.dia || "—" }}</td>
-											<td class="number-cell">{{ weight(item.required_weight) }}</td><td class="number-cell">{{ weight(item.used_weight) }}</td>
-										</tr>
-									</tbody>
-								</table>
-							</div>
+						<DataSection class="accessory-details-section" title="Accessory Details" :count="data.accessory_details?.length || 0">
+							<MaterialRequirementGroups v-if="data.accessory_details?.length" :rows="data.accessory_details" :columns="requirementColumns" kind="accessory" />
 							<EmptyState v-if="!data.accessory_details?.length" text="No accessory details." />
 						</DataSection>
 
@@ -123,20 +90,19 @@
 					<LoadingState v-if="loading" />
 					<Message v-else-if="error" severity="error" :closable="false">{{ error }}</Message>
 					<template v-else>
-						<DataSection title="Completed Cut Quantity" :count="completedItemCount" icon="pi pi-box">
+						<DataSection class="completed-quantity-section" title="Completed Cut Quantity" :count="completedItemCount" icon="pi pi-box">
 							<template v-for="(group, groupIndex) in completedGroups" :key="groupIndex">
 								<div v-if="panelNames(group).length" class="panel-strip"><strong>Panels</strong><span>{{ panelNames(group).join(", ") }}</span></div>
 								<div class="table-scroll">
 									<table class="data-table matrix-table">
-										<thead><tr><th>S.No.</th><th v-for="attribute in group.attributes || []" :key="attribute">{{ attribute }}</th><th v-for="value in group.primary_attribute_values || []" :key="value">{{ value }}</th><th>Total</th><th>Completed</th></tr></thead>
+										<thead><tr><th>S.No.</th><th v-for="attribute in group.attributes || []" :key="attribute">{{ attribute }}</th><th v-for="value in group.primary_attribute_values || []" :key="value">{{ value }}</th><th>Total</th></tr></thead>
 										<tbody>
 											<tr v-for="(item, itemIndex) in group.items || []" :key="itemIndex">
 												<td>{{ itemIndex + 1 }}</td><td v-for="attribute in group.attributes || []" :key="attribute">{{ displayAttribute(item, attribute) }}</td>
 												<td v-for="value in group.primary_attribute_values || []" :key="value" class="number-cell">{{ displayQuantity(item.values?.[value]) }}</td>
 												<td class="number-cell strong-cell">{{ rowTotal(item, group.primary_attribute_values) }}</td>
-												<td><i class="pi" :class="item.completed ? 'pi-check-circle complete-icon' : 'pi-circle incomplete-icon'"></i></td>
 											</tr>
-											<tr class="total-row"><td>Total</td><td v-for="attribute in group.attributes || []" :key="attribute"></td><td v-for="value in group.primary_attribute_values || []" :key="value" class="number-cell">{{ completedColumnTotal(group, value) }}</td><td></td><td></td></tr>
+											<tr class="total-row"><td>Total</td><td v-for="attribute in group.attributes || []" :key="attribute"></td><td v-for="value in group.primary_attribute_values || []" :key="value" class="number-cell">{{ completedColumnTotal(group, value) }}</td><td class="number-cell">{{ completedGrandTotal(group) }}</td></tr>
 										</tbody>
 									</table>
 								</div>
@@ -144,7 +110,7 @@
 							<EmptyState v-if="!completedGroups.length" text="No completed cut quantities." />
 						</DataSection>
 
-						<DataSection title="Excess Cut Quantity" :count="incompleteItemCount" icon="pi pi-share-alt">
+						<DataSection class="excess-quantity-section" title="Excess Cut Quantity" :count="incompleteItemCount" icon="pi pi-share-alt">
 							<div v-for="(group, groupIndex) in incompleteGroups" :key="groupIndex" class="table-scroll">
 								<table class="data-table matrix-table">
 									<thead><tr><th>S.No.</th><th v-for="attribute in group.attributes || []" :key="attribute">{{ attribute }}</th><th v-for="value in group.primary_attribute_values || []" :key="value">{{ value }}</th></tr></thead>
@@ -154,8 +120,10 @@
 							<EmptyState v-if="!incompleteGroups.length" text="No excess cut quantities." />
 						</DataSection>
 
-						<RecutTable title="Recut Summary" :items="data.recut_details" />
-						<RecutTable title="Print Panel Summary" :items="data.print_panel_details" print-panel />
+						<template v-if="canReadRecut">
+							<RecutTable title="Recut Summary" :items="data.recut_details" />
+							<RecutTable title="Print Panel Summary" :items="data.print_panel_details" print-panel />
+						</template>
 					</template>
 				</div>
 			</TabPanel>
@@ -212,6 +180,7 @@ import { computed, defineComponent, h, nextTick, ref, watch } from "vue"
 import FormField from "../../components/common/FormField.vue"
 import CuttingPlanCpm from "./CuttingPlanCpm.vue"
 import CuttingPlanStockTransfers from "./CuttingPlanStockTransfers.vue"
+import MaterialRequirementGroups from "./shared/MaterialRequirementGroups.vue"
 
 const props = defineProps({
 	doc: { type: Object, required: true },
@@ -227,41 +196,46 @@ const tabPanels = ref(null)
 const detailColumns = computed(() => [
 	[
 		"is_manual_entry",
-		"lot",
 		"maximum_no_of_plys",
-		"lay_no",
 		...(hasValue(props.doc.cutting_start_date) ? ["cutting_start_date"] : []),
-		"cp_status",
+		"cutting_location",
 		"no_of_colours",
+		...(hasValue(props.doc.open_status) ? ["open_status"] : []),
 	],
 	[
-		"item",
 		"maximum_allow_percent",
 		"piece_weight_tolerance",
-		"cutting_location",
 		...(hasValue(props.doc.cutting_end_date) ? ["cutting_end_date"] : []),
 		"work_order",
-		...(hasValue(props.doc.open_status) ? ["open_status"] : []),
 		"no_of_colours_completed",
 	],
 ])
 const fallbackLabels = {
-	is_manual_entry: "Is Manual Entry", lot: "Lot", maximum_no_of_plys: "Maximum No of Plys", lay_no: "Lay No",
-	cp_status: "CP Status", no_of_colours: "No of Colours", item: "Item", maximum_allow_percent: "Maximum Allow Percent",
+	is_manual_entry: "Is Manual Entry", maximum_no_of_plys: "Maximum No of Plys",
+	no_of_colours: "No of Colours", maximum_allow_percent: "Maximum Allow Percent",
 	piece_weight_tolerance: "Piece Weight Tolerance (kg)", cutting_location: "Cutting Location", work_order: "Work Order",
 	no_of_colours_completed: "No of Colours Completed",
 }
 
 const fieldsByName = computed(() => Object.fromEntries((props.meta?.fields || []).map((item) => [item.fieldname, item])))
 const itemGroups = computed(() => normaliseGroups(props.data.item_details))
-const completedGroups = computed(() => normaliseGroups(props.data.completed_items))
-const incompleteGroups = computed(() => normaliseGroups(props.data.incomplete_items))
+const completedGroups = computed(() => filterGroups(props.data.completed_items, (item) => Boolean(item.completed)))
+const incompleteGroups = computed(() => filterGroups(props.data.incomplete_items, hasExcess))
+const requirementColumns = [
+	{ field: "colour", label: "Colour" },
+	{ field: "dia", label: "Dia" },
+	{ field: "required_weight", label: "Required Weight", numeric: true, format: (value) => weight(value) },
+	{ field: "weight", label: "Received Weight", numeric: true, format: (value) => weight(value) },
+	{ field: "used_weight", label: "Used Weight", numeric: true, format: (value) => weight(value) },
+	{ field: "balance_weight", label: "Balance Weight", numeric: true, format: (value) => weight(value), cellClass: (row) => `requirement-balance ${balanceClass(row.balance_weight)}` },
+]
 const plannedItemCount = computed(() => countItems(itemGroups.value))
 const completedItemCount = computed(() => countItems(completedGroups.value))
 const incompleteItemCount = computed(() => countItems(incompleteGroups.value))
 const plannedSummaryCount = computed(() => countItems(props.data.planned_detail?.item_detail || []))
 const canReadMovement = computed(() => Boolean(props.data.permissions?.can_read_movement))
 const canReadStockTransfers = computed(() => Boolean(props.data.permissions?.can_read_stock_transfers))
+const canReadRecut = computed(() => Boolean(props.data.permissions?.can_read_recut))
 const availableTabs = computed(() => [
 	"details",
 	"summary",
@@ -285,6 +259,19 @@ function normaliseGroups(value) {
 	return []
 }
 
+function filterGroups(value, predicate) {
+	return normaliseGroups(value)
+		.map((group) => ({ ...group, items: (group.items || []).filter(predicate) }))
+		.filter((group) => group.items.length)
+}
+
+function hasExcess(item) {
+	return Object.values(item?.values || {}).some((value) => {
+		if (value && typeof value === "object") return Object.values(value).some((quantity) => numeric(quantity) > 0)
+		return numeric(value) > 0
+	})
+}
+
 function countItems(groups) {
 	return groups.reduce((total, group) => total + (group.items?.length || 0), 0)
 }
@@ -304,12 +291,15 @@ function displayQuantity(value, key) {
 }
 
 function rowTotal(item, primaryValues = []) {
-	if (!item.completed) return 0
 	return primaryValues.reduce((total, value) => total + numeric(item.values?.[value]), 0)
 }
 
 function completedColumnTotal(group, value) {
-	return (group.items || []).reduce((total, item) => total + (item.completed ? numeric(item.values?.[value]) : 0), 0)
+	return (group.items || []).reduce((total, item) => total + numeric(item.values?.[value]), 0)
+}
+
+function completedGrandTotal(group) {
+	return (group.primary_attribute_values || []).reduce((total, value) => total + completedColumnTotal(group, value), 0)
 }
 
 function panelNames(group) {
@@ -381,6 +371,13 @@ const LoadingState = defineComponent({
 		return () => h("div", { class: "loading-state" }, [1, 2, 3].map((key) => h(Skeleton, { key, height: "3.25rem" })))
 	},
 })
+
+function balanceClass(value) {
+	const balance = numeric(value)
+	if (balance < 0) return "requirement-balance--negative"
+	if (balance === 0) return "requirement-balance--zero"
+	return "requirement-balance--positive"
+}
 
 const RecutTable = defineComponent({
 	props: { title: String, items: { type: Object, default: () => ({}) }, printPanel: Boolean },
@@ -581,12 +578,138 @@ const RecutTable = defineComponent({
 	padding: 10px 12px 12px;
 }
 
+.requirement-groups {
+	display: grid;
+	gap: 10px;
+}
+
+.requirement-group {
+	overflow: hidden;
+	background: var(--erp-surface);
+	border: 1px solid #dce7e1;
+	border-radius: 9px;
+}
+
+.requirement-group__header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 14px;
+	min-height: 48px;
+	padding: 8px 10px 8px 12px;
+	background: #f6faf8;
+}
+
+.requirement-group__identity {
+	display: grid;
+	gap: 2px;
+	min-width: 0;
+}
+
+.requirement-group__identity strong {
+	overflow: hidden;
+	color: var(--erp-text);
+	font-size: 13px;
+	font-weight: 770;
+	line-height: 1.25;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.requirement-template {
+	overflow: hidden;
+	color: #64766d;
+	font-size: var(--erp-font-size-caption);
+	font-weight: 590;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.requirement-group__meta {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	flex: 0 0 auto;
+	gap: 6px;
+}
+
+.requirement-type,
+.requirement-count {
+	display: inline-flex;
+	align-items: center;
+	min-height: 24px;
+	padding: 3px 8px;
+	border-radius: var(--erp-pill-radius);
+	font-size: var(--erp-font-size-min);
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.requirement-type {
+	color: #176344;
+	background: #e7f4ed;
+	border: 1px solid #d5e9de;
+}
+
+.requirement-count {
+	color: #63736b;
+	background: #fff;
+	border: 1px solid #dce7e1;
+}
+
 .cutting-tabs :deep(.table-scroll) {
 	overflow-x: auto;
 	border: 1px solid #dfe8e3;
 	border-radius: 10px;
 	scrollbar-color: #b4c7bd transparent;
 	scrollbar-width: thin;
+}
+
+.cutting-tabs :deep(.requirement-table-scroll) {
+	border: 0;
+	border-top: 1px solid #dce7e1;
+	border-radius: 0;
+}
+
+.cutting-tabs :deep(.requirement-table) {
+	min-width: 690px;
+}
+
+.cutting-tabs :deep(.requirement-table th:first-child),
+.cutting-tabs :deep(.requirement-table td:first-child) {
+	width: 22%;
+}
+
+.cutting-tabs :deep(.requirement-table th:nth-child(2)),
+.cutting-tabs :deep(.requirement-table td:nth-child(2)) {
+	width: 12%;
+}
+
+.cutting-tabs :deep(.requirement-table th:nth-child(n + 3)) {
+	text-align: right;
+}
+
+.cutting-tabs :deep(.requirement-table .requirement-attribute) {
+	font-weight: 650;
+}
+
+.cutting-tabs :deep(.requirement-table .requirement-balance) {
+	font-weight: 780;
+}
+
+.cutting-tabs :deep(.requirement-table .requirement-balance--positive) {
+	color: #176344;
+	background: #f4faf7;
+}
+
+.cutting-tabs :deep(.requirement-table .requirement-balance--negative) {
+	color: #9b3535;
+	background: #fff7f7;
+}
+
+.cutting-tabs :deep(.requirement-table .requirement-balance--zero) {
+	color: #5f6f67;
+	background: #f8faf9;
 }
 
 .cutting-tabs :deep(.data-table) {
@@ -711,7 +834,7 @@ const RecutTable = defineComponent({
 
 .cutting-tabs :deep(.empty-state__copy small) {
 	color: #8a9891;
-	font-size: 0.67rem;
+	font-size: var(--erp-font-size-min);
 }
 
 .cutting-tabs :deep(.loading-state) {
@@ -764,6 +887,15 @@ const RecutTable = defineComponent({
 	.detail-field-columns {
 		grid-template-columns: 1fr;
 		gap: 10px;
+	}
+
+	.requirement-group__header {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.requirement-group__meta {
+		justify-content: flex-start;
 	}
 
 	.cutting-tabs :deep(.p-tab) {

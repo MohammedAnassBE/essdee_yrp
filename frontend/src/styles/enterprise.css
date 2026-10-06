@@ -330,6 +330,18 @@
 		transform var(--erp-transition-fast);
 }
 
+.app-shell .p-button:not(.p-button-secondary):not(.p-button-success):not(.p-button-info):not(.p-button-warn):not(.p-button-danger):not(.p-button-contrast):not(.p-button-outlined):not(.p-button-text):not(.p-button-link) {
+	color: #fff;
+	background: var(--erp-accent);
+	border-color: var(--erp-accent);
+}
+
+.app-shell .p-button:not(.p-button-secondary):not(.p-button-success):not(.p-button-info):not(.p-button-warn):not(.p-button-danger):not(.p-button-contrast):not(.p-button-outlined):not(.p-button-text):not(.p-button-link):not(:disabled):hover {
+	color: #fff;
+	background: var(--erp-accent-hover);
+	border-color: var(--erp-accent-hover);
+}
+
 .app-shell .p-button:not(:disabled):active {
 	transform: translateY(1px);
 }
@@ -345,7 +357,7 @@
 	.p-select,
 	.p-multiselect,
 	.p-autocomplete-input,
-	.p-datepicker-input
+	.erp-date-time-picker .p-datepicker-input
 ) {
 	min-height: var(--erp-control-height);
 	color: var(--erp-text);
@@ -357,7 +369,7 @@
 	box-shadow: none;
 }
 
-.app-shell :where(.p-inputtext, .p-inputnumber-input, .p-autocomplete-input, .p-datepicker-input)::placeholder {
+.app-shell :where(.p-inputtext, .p-inputnumber-input, .p-autocomplete-input, .erp-date-time-picker .p-datepicker-input)::placeholder {
 	color: #76867e;
 	opacity: 1;
 }
@@ -368,7 +380,7 @@
 	.p-select.p-focus,
 	.p-multiselect.p-focus,
 	.p-autocomplete:focus-within .p-autocomplete-input,
-	.p-datepicker:focus-within .p-datepicker-input
+	.erp-date-time-picker:focus-within .p-datepicker-input
 ) {
 	border-color: var(--erp-accent);
 	box-shadow: 0 0 0 3px color-mix(in srgb, var(--erp-accent) 14%, transparent);
@@ -444,12 +456,136 @@
 	scrollbar-gutter: stable;
 }
 
-:where(.p-select-overlay, .p-autocomplete-overlay, .p-multiselect-overlay, .p-datepicker-panel) {
+:where(.p-select-overlay, .p-autocomplete-overlay, .p-multiselect-overlay) {
 	font-family: var(--erp-font-family);
 	font-size: 13px;
 	border-color: var(--erp-border);
 	border-radius: var(--erp-control-radius);
 	box-shadow: var(--erp-shadow-card);
+}
+
+/* App-owned date/time overlay. Keep every rule under this panel class so
+   Frappe Desk date controls and unrelated PrimeVue calendars stay untouched. */
+.erp-date-time-panel.p-datepicker-panel {
+	width: min(22rem, calc(100vw - 24px));
+	padding: 10px;
+	color: var(--erp-text);
+	font-family: var(--erp-font-family);
+	font-size: 13px;
+	background: var(--erp-surface);
+	border: 1px solid var(--erp-border-strong);
+	border-radius: var(--erp-panel-radius);
+	box-shadow: var(--erp-shadow-dialog);
+}
+
+.erp-date-time-panel .p-datepicker-header {
+	padding: 3px 2px 9px;
+	background: transparent;
+	border-bottom: 1px solid var(--erp-border);
+}
+
+.erp-date-time-panel .p-datepicker-title {
+	gap: 3px;
+}
+
+.erp-date-time-panel .p-datepicker-select-month,
+.erp-date-time-panel .p-datepicker-select-year {
+	min-height: 30px;
+	padding: 4px 6px;
+	color: var(--erp-text);
+	font-size: 13px;
+	font-weight: 750;
+	border-radius: 6px;
+}
+
+.erp-date-time-panel .p-datepicker-prev-button,
+.erp-date-time-panel .p-datepicker-next-button {
+	width: 30px;
+	height: 30px;
+	color: var(--erp-text-muted);
+	border-radius: 7px;
+}
+
+.erp-date-time-panel .p-datepicker-prev-button:hover,
+.erp-date-time-panel .p-datepicker-next-button:hover,
+.erp-date-time-panel .p-datepicker-select-month:hover,
+.erp-date-time-panel .p-datepicker-select-year:hover {
+	color: var(--erp-accent);
+	background: var(--erp-accent-soft);
+}
+
+.erp-date-time-panel .p-datepicker-day-view {
+	margin-top: 6px;
+}
+
+.erp-date-time-panel .p-datepicker-weekday-cell {
+	padding: 3px;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 750;
+}
+
+.erp-date-time-panel .p-datepicker-day-cell {
+	padding: 2px;
+}
+
+.erp-date-time-panel .p-datepicker-day {
+	width: 32px;
+	height: 32px;
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+	border-radius: 7px;
+}
+
+.erp-date-time-panel.p-datepicker-panel .p-datepicker-day:not(.p-disabled):hover {
+	color: var(--erp-accent-hover);
+	background: var(--erp-accent-soft);
+}
+
+.erp-date-time-panel.p-datepicker-panel .p-datepicker-day.p-datepicker-day-selected {
+	color: #fff;
+	font-weight: 750;
+	background: var(--erp-accent);
+}
+
+.erp-date-time-panel.p-datepicker-panel .p-datepicker-day-cell.p-datepicker-today > .p-datepicker-day:not(.p-datepicker-day-selected) {
+	color: var(--erp-accent);
+	font-weight: 750;
+	box-shadow: inset 0 0 0 1px #9bcab7;
+}
+
+.erp-date-time-panel .p-datepicker-time-picker {
+	gap: 8px;
+	padding: 10px 4px 2px;
+	border-top: 1px solid var(--erp-border);
+}
+
+.erp-date-time-panel.p-datepicker-panel .p-datepicker-hour-picker > span,
+.erp-date-time-panel.p-datepicker-panel .p-datepicker-minute-picker > span,
+.erp-date-time-panel.p-datepicker-panel .p-datepicker-second-picker > span {
+	font-size: 14px;
+	font-weight: 750;
+	font-variant-numeric: tabular-nums;
+}
+
+.erp-date-time-panel .p-datepicker-buttonbar {
+	gap: 6px;
+	padding: 9px 2px 1px;
+	border-top: 1px solid var(--erp-border);
+}
+
+.erp-date-time-panel .p-datepicker-buttonbar .p-button {
+	min-height: 30px;
+	padding: 5px 9px;
+	color: var(--erp-accent);
+	font-size: 12px;
+	font-weight: 700;
+	border-radius: 7px;
+}
+
+.erp-date-time-panel :where(button, [tabindex]):focus-visible {
+	outline: 2px solid color-mix(in srgb, var(--erp-accent) 70%, white);
+	outline-offset: 2px;
 }
 
 @media (max-width: 760px) {
@@ -461,5 +597,32 @@
 
 	.erp-field-grid {
 		grid-template-columns: 1fr;
+	}
+}
+
+@media (max-width: 620px) {
+	.p-dialog.work-order-action-panel,
+	.p-dialog.related-document-workspace-dialog,
+	.p-dialog.fabric-action-dialog,
+	.p-dialog.fabric-stock-operation-dialog {
+		width: 100vw !important;
+		height: 100dvh !important;
+		max-height: 100dvh !important;
+		margin: 0 !important;
+		border-radius: 0 !important;
+	}
+
+	.p-dialog.work-order-action-panel .p-dialog-content,
+	.p-dialog.related-document-workspace-dialog .p-dialog-content,
+	.p-dialog.fabric-action-dialog .p-dialog-content,
+	.p-dialog.fabric-stock-operation-dialog .p-dialog-content {
+		min-height: 0;
+		flex: 1;
+		overflow-y: auto;
+	}
+
+	.related-document-workspace-dialog .fabric-document-workspace--embedded {
+		height: 100%;
+		min-height: 0;
 	}
 }

@@ -42,14 +42,15 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 			patch.object(
 				production_order_workflow,
 				"get_linked_lots",
-				return_value=["LOT-1", "LOT-2"],
+				return_value=["LOT-1", "LOT-2", "LOT-3"],
 			),
 			patch.object(
 				production_order_workflow.frappe,
 				"get_all",
 				return_value=[
 					_dict(lot="LOT-1", fp_status="Audit Completed"),
-					_dict(lot="LOT-2", fp_status="OCR Completed"),
+					_dict(lot="LOT-2", fp_status="Auto Closed"),
+					_dict(lot="LOT-3", fp_status="OCR Completed"),
 				],
 			),
 		):

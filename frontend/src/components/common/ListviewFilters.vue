@@ -101,40 +101,47 @@
 						show-clear
 						fluid
 					/>
-					<DatePicker
+					<DateTimeField
+						v-else-if="usesDateRangeEditor(row) && fieldFor(row)?.fieldtype === 'Datetime'"
+						v-model="row.value"
+						:aria-label="`${fieldFor(row)?.label || 'Date'} range`"
+						value-type="date"
+						selection-mode="range"
+						placeholder="DD-MM-YYYY - DD-MM-YYYY"
+						show-clear
+					/>
+					<DateField
 						v-else-if="usesDateRangeEditor(row)"
 						v-model="row.value"
+						:aria-label="`${fieldFor(row)?.label || 'Date'} range`"
+						value-type="date"
 						selection-mode="range"
-						:show-time="fieldFor(row)?.fieldtype === 'Datetime'"
-						:show-seconds="fieldFor(row)?.fieldtype === 'Datetime'"
-						hour-format="24"
-						date-format="yy-mm-dd"
-						placeholder="From – To"
-						show-icon
-						show-button-bar
-						fluid
+						placeholder="DD-MM-YYYY - DD-MM-YYYY"
+						show-clear
 					/>
-					<DatePicker
+					<DateTimeField
+						v-else-if="usesDateEditor(row) && fieldFor(row)?.fieldtype === 'Datetime'"
+						v-model="row.value"
+						:aria-label="fieldFor(row)?.label || 'Date'"
+						value-type="date"
+						placeholder="DD-MM-YYYY HH:MM:SS"
+						show-clear
+					/>
+					<DateField
 						v-else-if="usesDateEditor(row)"
 						v-model="row.value"
-						:show-time="fieldFor(row)?.fieldtype === 'Datetime'"
-						:show-seconds="fieldFor(row)?.fieldtype === 'Datetime'"
-						hour-format="24"
-						date-format="yy-mm-dd"
-						placeholder="Select date"
-						show-icon
-						show-button-bar
-						fluid
+						:aria-label="fieldFor(row)?.label || 'Date'"
+						value-type="date"
+						placeholder="DD-MM-YYYY"
+						show-clear
 					/>
-					<DatePicker
+					<TimeField
 						v-else-if="fieldFor(row)?.fieldtype === 'Time' && !usesDataEditor(row)"
 						v-model="row.value"
-						time-only
-						show-seconds
-						hour-format="24"
-						placeholder="Select time"
-						show-icon
-						fluid
+						:aria-label="fieldFor(row)?.label || 'Time'"
+						value-type="date"
+						placeholder="HH:MM:SS"
+						show-clear
 					/>
 					<InputNumber
 						v-else-if="usesNumberEditor(row)"
@@ -181,15 +188,17 @@
 
 <script setup>
 import Button from "primevue/button"
-import DatePicker from "primevue/datepicker"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
 import InputText from "primevue/inputtext"
 import Select from "primevue/select"
 import { computed, ref, watch } from "vue"
 
+import DateField from "./DateField.vue"
+import DateTimeField from "./DateTimeField.vue"
 import LinkField from "./LinkField.vue"
 import MultiSelectField from "./MultiSelectField.vue"
+import TimeField from "./TimeField.vue"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },

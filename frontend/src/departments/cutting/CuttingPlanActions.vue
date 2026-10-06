@@ -1,19 +1,57 @@
 <template>
-	<section class="plan-actions plan-command-bar erp-command-bar" aria-label="Cutting Plan commands">
-		<div class="plan-actions__buttons">
-			<Button v-if="permissions.can_run_plan_actions" class="primary-command" label="Generate" icon="pi pi-sparkles" size="small" :loading="busy === 'generate'" @click="runPlanAction('generate')" />
-			<Button v-if="permissions.can_run_plan_actions" label="Fetch Received Cloth" icon="pi pi-download" text size="small" :loading="busy === 'fetch'" @click="runPlanAction('fetch')" />
-			<Button v-if="permissions.can_run_plan_actions" label="Calculate LaySheets" icon="pi pi-calculator" text size="small" :loading="busy === 'calculate'" @click="runPlanAction('calculate')" />
-			<Button label="Get Completed" icon="pi pi-chart-bar" text size="small" @click="emit('show-summary')" />
-			<Button v-if="permissions.can_update_completed" label="Update Completed" icon="pi pi-check-square" text size="small" @click="openCompleted" />
-			<Button v-if="permissions.can_create_recut" label="Update Recut" icon="pi pi-replay" text size="small" @click="openRecut('Recut')" />
-			<Button v-if="permissions.can_create_recut" label="Update Print Panel" icon="pi pi-print" text size="small" @click="openRecut('Print Panel')" />
-			<Button v-if="permissions.can_create_lot_transfer" label="Lot Transfer" icon="pi pi-arrow-right-arrow-left" text size="small" @click="lotTransferOpen = true" />
-			<Button v-if="permissions.can_change_approval_grammage" label="Approval" icon="pi pi-shield" text size="small" @click="openApproval" />
-		</div>
-	</section>
+	<div v-if="hasActions" class="plan-actions" role="group" aria-label="Cutting Plan actions">
+		<Button
+			class="plan-actions-trigger"
+			label="More Actions"
+			icon="pi pi-chevron-down"
+			icon-pos="right"
+			severity="secondary"
+			outlined
+			:loading="Boolean(busy)"
+			aria-haspopup="menu"
+			aria-controls="cutting-plan-more-actions"
+			:aria-expanded="moreActionsOpen"
+			@click="toggleMoreActions"
+		/>
+		<Menu
+			id="cutting-plan-more-actions"
+			ref="moreActionsMenu"
+			:model="moreActionItems"
+			popup
+			:base-z-index="5000"
+			class="plan-actions-menu"
+			@show="moreActionsOpen = true"
+			@hide="moreActionsOpen = false"
+		/>
+	</div>
 
-	<Message v-if="feedback" :severity="feedbackSeverity" :closable="true" @close="feedback = ''">{{ feedback }}</Message>
+	<Teleport to="body">
+		<Message v-if="feedback" class="plan-action-feedback" :severity="feedbackSeverity" :closable="true" @close="feedback = ''">{{ feedback }}</Message>
+	</Teleport>
+
+	<Dialog v-model:visible="completedReportOpen" modal dismissable-mask maximizable header="Completed Cut Quantity" class="action-dialog action-dialog--wide completed-report-dialog">
+		<div ref="completedReportCapture" class="completed-report-capture">
+			<CuttingCompletedReport
+				:doc="doc"
+				:groups="data.completed_items"
+				:generated-at="completedReportGeneratedAt"
+			/>
+		</div>
+		<div
+			v-if="completedCopyFeedback"
+			class="completed-copy-feedback"
+			:class="{ 'completed-copy-feedback--error': completedCopyError }"
+			role="status"
+			aria-live="polite"
+		>
+			<i :class="completedCopyError ? 'pi pi-exclamation-circle' : 'pi pi-check-circle'" aria-hidden="true" />
+			{{ completedCopyFeedback }}
+		</div>
+		<template #footer>
+			<Button label="Close" severity="secondary" text @click="completedReportOpen = false" />
+			<Button label="Copy" icon="pi pi-copy" :loading="copyingCompleted" @click="copyCompletedReport" />
+		</template>
+	</Dialog>
 
 	<Dialog v-model:visible="completedOpen" modal dismissable-mask maximizable header="Update Completed Cut Quantity" class="action-dialog action-dialog--wide">
 		<div class="dialog-stack">
@@ -85,24 +123,33 @@ import Checkbox from "primevue/checkbox"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
 import InputText from "primevue/inputtext"
+import Menu from "primevue/menu"
 import Message from "primevue/message"
 import Select from "primevue/select"
 import { computed, reactive, ref } from "vue"
 
 import { callMethod } from "../../api/frappe.js"
 import LinkField from "../../components/common/LinkField.vue"
+import CuttingCompletedReport from "./CuttingCompletedReport.vue"
+import { copyElementAsImage } from "../../components/reports/copyElementAsImage.js"
 
 const props = defineProps({
 	doc: { type: Object, required: true },
 	data: { type: Object, default: () => ({}) },
 })
-const emit = defineEmits(["refresh", "show-summary"])
+const emit = defineEmits(["refresh"])
 
 const permissions = computed(() => props.data.permissions || {})
 const busy = ref("")
 const feedback = ref("")
 const feedbackSeverity = ref("success")
 const dialogError = ref("")
+const completedReportOpen = ref(false)
+const completedReportGeneratedAt = ref("")
+const completedReportCapture = ref(null)
+const copyingCompleted = ref(false)
+const completedCopyFeedback = ref("")
+const completedCopyError = ref(false)
 const completedOpen = ref(false)
 const completedDraft = ref([])
 const recutOpen = ref(false)
@@ -114,6 +161,41 @@ const lotTransferOpen = ref(false)
 const targetLot = ref("")
 const approvalOpen = ref(false)
 const approvalTolerance = ref(0)
+const moreActionsMenu = ref(null)
+const moreActionsOpen = ref(false)
+const moreActionItems = computed(() => {
+	const disabled = Boolean(busy.value)
+	const groups = [
+		permissions.value.can_run_plan_actions ? [
+			{ label: "Generate", icon: "pi pi-play", disabled, command: () => runPlanAction("generate") },
+			{ label: "Fetch Received Cloth", icon: "pi pi-download", disabled, command: () => runPlanAction("fetch") },
+			{ label: "Calculate LaySheets", icon: "pi pi-calculator", disabled, command: () => runPlanAction("calculate") },
+		] : [],
+		[
+			{ label: "Get Completed", icon: "pi pi-chart-bar", disabled, command: openCompletedReport },
+			permissions.value.can_update_completed
+				? { label: "Update Completed", icon: "pi pi-check-square", disabled, command: openCompleted }
+				: null,
+		].filter(Boolean),
+		[
+			permissions.value.can_create_recut
+				? { label: "Update Recut", icon: "pi pi-replay", disabled, command: () => openRecut("Recut") }
+				: null,
+			permissions.value.can_create_recut
+				? { label: "Update Print Panel", icon: "pi pi-print", disabled, command: () => openRecut("Print Panel") }
+				: null,
+			permissions.value.can_create_lot_transfer
+				? { label: "Lot Transfer", icon: "pi pi-arrow-right-arrow-left", disabled, command: () => { lotTransferOpen.value = true } }
+				: null,
+			permissions.value.can_change_approval_grammage
+				? { label: "Approval", icon: "pi pi-shield", disabled, command: openApproval }
+				: null,
+		].filter(Boolean),
+	].filter((group) => group.length)
+
+	return groups.flatMap((group, index) => index ? [{ separator: true }, ...group] : group)
+})
+const hasActions = computed(() => moreActionItems.value.some((item) => !item.separator))
 
 const methods = {
 	generate: ["get_cloth1", { cutting_plan: props.doc.name }, "Cloth details generated."],
@@ -134,6 +216,68 @@ async function runPlanAction(action) {
 	} finally {
 		busy.value = ""
 	}
+}
+
+function openCompletedReport() {
+	completedReportGeneratedAt.value = formatCompletionTimestamp(new Date())
+	completedCopyFeedback.value = ""
+	completedCopyError.value = false
+	completedReportOpen.value = true
+}
+
+async function copyCompletedReport() {
+	if (copyingCompleted.value) return
+	copyingCompleted.value = true
+	completedCopyFeedback.value = ""
+	completedCopyError.value = false
+	let exportCapture = null
+	try {
+		exportCapture = createCompletedReportExport(completedReportCapture.value)
+		await new Promise((resolve) => window.requestAnimationFrame(resolve))
+		await copyElementAsImage(exportCapture.element)
+		completedCopyFeedback.value = "Completed quantities copied to clipboard."
+	} catch (reason) {
+		completedCopyFeedback.value = reason?.message || "Unable to copy the completed quantities."
+		completedCopyError.value = true
+	} finally {
+		exportCapture?.host.remove()
+		copyingCompleted.value = false
+	}
+}
+
+function createCompletedReportExport(source) {
+	if (!source) throw new Error("Nothing available to copy.")
+	const tableWidths = Array.from(source.querySelectorAll(".completed-report__table-wrap"), (element) => element.scrollWidth)
+	const exportWidth = Math.max(source.clientWidth, source.scrollWidth, ...tableWidths)
+	const clone = source.cloneNode(true)
+	const host = document.createElement("div")
+	clone.classList.add("completed-report-capture--export")
+	Object.assign(clone.style, {
+		width: `${exportWidth}px`,
+		maxWidth: "none",
+	})
+	clone.querySelectorAll("[id]").forEach((element) => element.removeAttribute("id"))
+	clone.querySelectorAll("[aria-labelledby]").forEach((element) => element.removeAttribute("aria-labelledby"))
+	clone.querySelectorAll(".completed-report__table-wrap").forEach((element) => {
+		element.style.overflow = "visible"
+	})
+	host.className = "completed-report-export-host"
+	host.setAttribute("aria-hidden", "true")
+	Object.assign(host.style, {
+		position: "fixed",
+		left: "-100000px",
+		top: "0",
+		width: `${exportWidth}px`,
+		pointerEvents: "none",
+	})
+	host.appendChild(clone)
+	;(document.querySelector(".app-shell") || document.body).appendChild(host)
+	return { element: clone, host }
+}
+
+function formatCompletionTimestamp(value) {
+	const pad = (part) => String(part).padStart(2, "0")
+	return `${pad(value.getDate())}-${pad(value.getMonth() + 1)}-${value.getFullYear()} · ${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`
 }
 
 function openCompleted() {
@@ -290,6 +434,10 @@ function showFeedback(message, severity = "success") {
 	feedback.value = message
 	feedbackSeverity.value = severity
 }
+
+function toggleMoreActions(event) {
+	moreActionsMenu.value?.toggle(event)
+}
 </script>
 
 <style scoped>
@@ -297,54 +445,61 @@ function showFeedback(message, severity = "success") {
 	display: flex;
 	align-items: center;
 	min-width: 0;
-	padding: 4px 0;
 }
 
-.plan-actions__buttons {
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	width: 100%;
-	min-width: 0;
-	overflow-x: auto;
-	scrollbar-width: thin;
+.plan-actions :deep(.plan-actions-trigger.p-button:focus-visible) {
+	outline: 2px solid color-mix(in srgb, var(--erp-accent) 45%, white);
+	outline-offset: 2px;
 }
 
-.plan-actions__buttons :deep(.p-button) {
-	flex: 0 0 auto;
-	min-height: var(--erp-control-height-compact);
-	padding: 0.4rem 0.52rem;
+.plan-actions :deep(.plan-actions-trigger .p-button-label) {
+	white-space: nowrap;
+}
+
+.plan-action-feedback {
+	position: fixed;
+	z-index: 6100;
+	top: 72px;
+	left: 50%;
+	width: min(92vw, 560px);
+	margin: 0;
+	transform: translateX(-50%);
+	box-shadow: var(--erp-shadow-dialog);
+}
+
+:global(.plan-actions-menu.p-menu) {
+	width: 252px;
+	padding: 6px;
+	font-family: var(--erp-font-family);
+	font-size: var(--erp-font-size-caption);
+	background: var(--erp-surface);
+	border: 1px solid var(--erp-border-strong);
+	border-radius: var(--erp-panel-radius);
+	box-shadow: var(--erp-shadow-dialog);
+}
+
+:global(.plan-actions-menu .p-menu-item-content) {
+	border-radius: 7px;
+}
+
+:global(.plan-actions-menu .p-menu-item-link) {
+	gap: 9px;
+	padding: 9px 10px;
+	color: var(--erp-text);
+}
+
+:global(.plan-actions-menu .p-menu-item-icon) {
 	color: var(--erp-text-muted);
-	background: transparent;
-	border: 1px solid transparent;
-	border-radius: var(--erp-control-radius);
-	font-size: var(--erp-font-size-min);
-	font-weight: 650;
-	box-shadow: none;
+	font-size: 0.82rem;
 }
 
-.plan-actions__buttons :deep(.p-button-icon) {
-	font-size: 0.78rem;
-}
-
-.plan-actions__buttons :deep(.p-button:not(.primary-command):hover) {
-	color: var(--erp-accent-hover);
+:global(.plan-actions-menu .p-menu-item-content:hover) {
 	background: var(--erp-accent-soft);
-	border-color: color-mix(in srgb, var(--erp-accent) 20%, white);
-	box-shadow: none;
 }
 
-.plan-actions__buttons :deep(.primary-command.p-button) {
-	padding-inline: 0.7rem;
-	color: #fff;
-	background: var(--erp-accent);
-	border-color: var(--erp-accent);
-	box-shadow: 0 3px 10px color-mix(in srgb, var(--erp-accent) 18%, transparent);
-}
-
-.plan-actions__buttons :deep(.primary-command.p-button:hover) {
-	background: var(--erp-accent-hover);
-	border-color: var(--erp-accent-hover);
+:global(.plan-actions-menu .p-menu-separator) {
+	margin: 5px 4px;
+	border-color: var(--erp-border);
 }
 
 .dialog-stack { display: grid; gap: 14px; }
@@ -363,8 +518,27 @@ function showFeedback(message, severity = "success") {
 :global(.action-dialog) { width: min(94vw, 980px); }
 :global(.action-dialog--small) { width: min(92vw, 480px); }
 
+.completed-copy-feedback {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	margin-top: 10px;
+	padding: 8px 10px;
+	color: #176b4d;
+	background: #edf8f3;
+	border: 1px solid #b8e2ce;
+	border-radius: var(--erp-control-radius);
+	font-size: var(--erp-font-size-caption);
+	font-weight: 650;
+}
+
+.completed-copy-feedback--error {
+	color: #9f2f2f;
+	background: #fff3f3;
+	border-color: #efc4c4;
+}
+
 @media (max-width: 760px) {
-	.plan-actions__buttons { width: 100%; }
 	.recut-form { grid-template-columns: 1fr; }
 }
 </style>

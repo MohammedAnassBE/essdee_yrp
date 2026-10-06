@@ -7,6 +7,7 @@
 				<p v-if="subtitle">{{ subtitle }}</p>
 			</div>
 			<div class="list-toolbar__actions">
+				<slot name="toolbar-actions"></slot>
 				<span class="list-search">
 					<i class="pi pi-search" aria-hidden="true"></i>
 					<InputText
@@ -1204,6 +1205,20 @@ defineExpose({ refresh: reload })
 	background: var(--list-accent-soft);
 	border-color: color-mix(in srgb, var(--list-accent) 34%, white);
 	box-shadow: 0 3px 10px rgb(24 53 39 / 7%);
+}
+
+.list-toolbar__actions :deep(.p-button.list-primary-action) {
+	color: #fff;
+	background: var(--list-accent);
+	border-color: var(--list-accent);
+	box-shadow: 0 3px 9px color-mix(in srgb, var(--list-accent) 18%, transparent);
+}
+
+.list-toolbar__actions :deep(.p-button.list-primary-action:not(:disabled):hover) {
+	color: #fff;
+	background: var(--list-accent-dark);
+	border-color: var(--list-accent-dark);
+	box-shadow: 0 4px 12px color-mix(in srgb, var(--list-accent) 24%, transparent);
 }
 
 .list-toolbar__actions :deep(.p-button:disabled) {

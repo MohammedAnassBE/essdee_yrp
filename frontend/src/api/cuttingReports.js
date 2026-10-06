@@ -1,5 +1,7 @@
 import { callMethod } from "./frappe.js"
 
+export { getStockBalanceReport } from "./stockReports.js"
+
 const REPORTS_METHOD = "essdee_yrp.cutting.reports"
 
 export function getCuttingReportPermissions() {
@@ -28,15 +30,4 @@ export function getCuttingDetailReport(filters) {
 
 export function getMultiCcrReport(filters) {
 	return callMethod(`${REPORTS_METHOD}.get_multiccr`, filters)
-}
-
-export function getStockBalanceReport(filters) {
-	return callMethod("frappe.desk.query_report.run", {
-		report_name: "YRP Stock Balance",
-		filters: JSON.stringify(filters),
-		// The standalone workspace does not have Desk's prepared-report polling
-		// shell, so execute only after the user explicitly selects Generate.
-		ignore_prepared_report: true,
-		are_default_filters: true,
-	})
 }

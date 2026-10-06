@@ -83,6 +83,19 @@ class TestPrintFormatParity(IntegrationTestCase):
 				self.assertTrue(data["name"].startswith("Essdee "))
 				self.assertEqual(data["standard"], "Yes")
 
+	def test_web_print_registry_matches_migrated_formats(self):
+		from essdee_yrp.print_registry import DOCUMENT_PRINT_FORMATS
+
+		migrated = {
+			(data["doc_type"], data["name"])
+			for _path, data in self._formats()
+		}
+		for doctype, formats in DOCUMENT_PRINT_FORMATS.items():
+			for _label, print_format in formats:
+				with self.subTest(doctype=doctype, print_format=print_format):
+					if print_format != "Standard":
+						self.assertIn((doctype, print_format), migrated)
+
 	def test_jinja_helpers_are_registered(self):
 		jenv = frappe.get_jenv()
 		for path, data in self._formats():

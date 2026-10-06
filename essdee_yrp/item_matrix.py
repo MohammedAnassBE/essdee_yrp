@@ -12,11 +12,14 @@ from yrp.attribute_links import value as _attribute_value
 from yrp.stock.dimensions import get_dimension_fieldnames
 
 
-def normalize_item_matrix_row_indexes(rows):
+def normalize_item_matrix_row_indexes(rows, *, extra_group_fields=()):
 	"""Return rows grouped by logical item, excluding the primary attribute.
 
 	The function changes only copied display indexes. It does not mutate saved
-	child rows, quantities, references, or Stock Dimensions.
+	child rows, quantities, references, or Stock Dimensions. Consumers with
+	non-standard stock buckets (for example Lot Transfer's ``from_lot`` and
+	``to_lot`` fields) can add those fields as grouping boundaries without
+	duplicating the item/attribute projection.
 	"""
 	dimension_fields = get_dimension_fieldnames()
 	logical_indexes = {}
@@ -53,6 +56,7 @@ def normalize_item_matrix_row_indexes(rows):
 			# fills every row from the header default.
 			row.get("warehouse") or "",
 			row.get("received_type") or "",
+			tuple((fieldname, row.get(fieldname)) for fieldname in extra_group_fields),
 		)
 		if key not in logical_indexes:
 			logical_indexes[key] = len(logical_indexes)

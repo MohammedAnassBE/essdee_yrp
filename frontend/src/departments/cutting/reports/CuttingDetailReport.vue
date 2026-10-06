@@ -9,8 +9,8 @@
 		@reset="reset"
 	>
 		<template #filters>
-			<label><span class="erp-field-label">From date <b>*</b></span><input v-model="filters.startDate" type="date" required /></label>
-			<label><span class="erp-field-label">To date <b>*</b></span><input v-model="filters.endDate" type="date" required /></label>
+			<DateField v-model="filters.startDate" label="From date" required />
+			<DateField v-model="filters.endDate" label="To date" required />
 			<label>
 				<span class="erp-field-label">Cutting location</span>
 				<select v-model="filters.location"><option value="">All locations</option><option value="Machine Cutting">Machine Cutting</option><option value="Manual Cutting">Manual Cutting</option></select>
@@ -32,9 +32,10 @@
 import { computed, reactive, ref } from "vue"
 
 import { getCuttingDetailReport } from "../../../api/cuttingReports.js"
+import DateField from "../../../components/common/DateField.vue"
 import ProductionMatrix from "./ProductionMatrix.vue"
-import ReportShell from "./ReportShell.vue"
-import { errorMessage, firstDayOfMonthIso, number, reportRowCount, todayIso } from "./reportUtils.js"
+import ReportShell from "../../../components/reports/ReportShell.vue"
+import { errorMessage, firstDayOfMonthIso, number, reportRowCount, todayIso } from "../../../components/reports/reportUtils.js"
 
 const filters = reactive(defaultFilters())
 const report = ref(null)

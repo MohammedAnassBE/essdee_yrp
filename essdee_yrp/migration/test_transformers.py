@@ -76,6 +76,20 @@ class ReviewedTransformerTest(unittest.TestCase):
 		)
 		self.assertEqual((row["in_stage"], row["out_stage"]), ("Cut", "Cut"))
 
+	def test_bill_tracking_cancellation_statuses_are_preserved(self):
+		for status in ("Pending Approval", "Cancel Request Approved"):
+			with self.subTest(status=status):
+				row = transform_document(
+					{
+						"doctype": "Vendor Bill Tracking",
+						"name": f"VBT-{status}",
+						"form_status": status,
+					},
+					self.plan,
+				)
+				self.assertEqual(row["doctype"], "YRP Bill Tracking")
+				self.assertEqual(row["form_status"], status)
+
 	def test_essdee_debit_maps_only_work_order_documents(self):
 		row = transform_document(
 			{
@@ -118,6 +132,59 @@ class ReviewedTransformerTest(unittest.TestCase):
 		self.assertEqual(row["yrp_fulfillment_status"], "Partially Received")
 		self.assertEqual(row["open_status"], "Close")
 
+	def test_purchase_order_pending_approval_preserves_status_with_draft_fulfillment(self):
+		row = transform_document(
+			{
+				"doctype": "Purchase Order",
+				"name": "PO-PENDING",
+				"docstatus": 0,
+				"status": "Pending Approval",
+				"open_status": "Open",
+			},
+			self.plan,
+		)
+		self.assertEqual(row["status"], "Pending Approval")
+		self.assertEqual(row["yrp_fulfillment_status"], "Draft")
+
+	def test_purchase_order_telegram_route_survives_settings_migration(self):
+		row = transform_document(
+			{
+				"doctype": "Telegram Approval Settings",
+				"name": "Telegram Approval Settings",
+				"enabled": 1,
+				"routes": [
+					{
+						"doctype": "Telegram Approval Route",
+						"name": "PO-ROUTE",
+						"parent": "Telegram Approval Settings",
+						"parenttype": "Telegram Approval Settings",
+						"parentfield": "routes",
+						"enabled": 1,
+						"reference_doctype": "Purchase Order",
+						"process_type": "Field State",
+						"trigger_field": "status",
+						"trigger_value": "Pending Approval",
+						"group_chat_id": "-100123",
+						"approve_action": "Approve PO",
+						"reject_action": "Reject PO",
+						"target_field": "status",
+						"approve_value": "Ordered",
+						"reject_value": "Draft",
+						"approve_roles": "System Manager",
+						"reject_roles": "System Manager",
+					}
+				],
+			},
+			self.plan,
+		)
+		self.assertEqual(row["doctype"], "SD YRP Telegram Approval Settings")
+		route = row["routes"][0]
+		self.assertEqual(route["doctype"], "SD YRP Telegram Approval Route")
+		self.assertEqual(route["reference_doctype"], "Purchase Order")
+		self.assertEqual(route["group_chat_id"], "-100123")
+		self.assertEqual((route["approve_action"], route["reject_action"]), ("Approve PO", "Reject PO"))
+		self.assertEqual((route["approve_value"], route["reject_value"]), ("Ordered", "Draft"))
+
 	def test_finishing_audit_fields_and_accounts_role_are_migration_safe(self):
 		legacy = transform_document(
 			{
@@ -147,6 +214,20 @@ class ReviewedTransformerTest(unittest.TestCase):
 		)
 		self.assertEqual(current["audit_requested_date"], "2026-09-26")
 		self.assertEqual(current["audit_completed_date"], "2026-09-28")
+
+		auto_closed = transform_document(
+			{
+				"doctype": "Finishing Plan",
+				"name": "FP-AUTO-CLOSED",
+				"modified": "2026-09-30 12:00:00",
+				"fp_status": "Auto Closed",
+				"audit_requested_date": "2026-08-26",
+				"audit_completed_date": "2026-08-28",
+			},
+			self.plan,
+		)
+		self.assertEqual(auto_closed["fp_status"], "Auto Closed")
+		self.assertEqual(auto_closed["audit_completed_date"], "2026-08-28")
 
 		settings = transform_document(
 			{

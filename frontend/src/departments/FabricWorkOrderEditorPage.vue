@@ -1,0 +1,34 @@
+<template>
+	<DepartmentPage title="Work Order" accent="#0a7f5a" back-to="/fabric-store/work-orders" back-label="Work Orders" :show-title="false" flat full-width>
+		<div class="fabric-work-order-editor-page erp-workspace">
+			<WorkOrderEditor :key="`${workOrderId || 'new'}-${duplicateFrom}`" :name="workOrderId" :source="duplicateSource" @saved="saved" @cancel="cancel" />
+		</div>
+	</DepartmentPage>
+</template>
+
+<script setup>
+import { computed } from "vue"
+import { useRoute, useRouter } from "vue-router"
+
+import DepartmentPage from "../components/DepartmentPage.vue"
+import WorkOrderEditor from "./fabric-store/WorkOrderEditor.vue"
+
+const route = useRoute()
+const router = useRouter()
+const workOrderId = computed(() => String(route.params.workOrderId || ""))
+const duplicateFrom = computed(() => String(route.query.duplicate_from || ""))
+const duplicateSource = computed(() => duplicateFrom.value ? { duplicate_from: duplicateFrom.value } : {})
+
+function saved(record) {
+	if (!record?.name) return
+	router.replace({ name: "fabric-work-order", params: { workOrderId: record.name } })
+}
+function cancel() {
+	if (workOrderId.value) router.push({ name: "fabric-work-order", params: { workOrderId: workOrderId.value } })
+	else router.push({ name: "fabric-work-orders" })
+}
+</script>
+
+<style scoped>
+.fabric-work-order-editor-page { width: 100%; max-width: 1900px; min-width: 0; margin: 0 auto; padding: 0 2px var(--erp-space-3); }
+</style>

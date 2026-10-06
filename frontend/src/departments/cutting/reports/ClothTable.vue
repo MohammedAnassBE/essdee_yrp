@@ -11,7 +11,7 @@
 </template>
 
 <script setup>
-import { number } from "./reportUtils.js"
+import { number } from "../../../components/reports/reportUtils.js"
 defineProps({ rows: { type: Array, default: () => [] }, totals: { type: Object, default: null } })
 </script>
 

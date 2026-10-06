@@ -1,0 +1,63 @@
+<template>
+	<div class="work-order-details">
+		<section v-if="!matricesOnly && visibleDetails.length" class="work-order-fields erp-card" aria-label="Work Order details">
+			<div v-for="field in visibleDetails" :key="field.fieldname" class="work-order-field">
+				<span>{{ field.label }}</span>
+				<strong :title="String(formatValue(field))">{{ formatValue(field) }}</strong>
+			</div>
+		</section>
+
+		<section v-if="!fieldsOnly && deliverables.length" class="work-order-section erp-card">
+			<header><div><span>Inputs</span><h2>Deliverables</h2></div><span class="erp-count">{{ itemCount(deliverables) }} rows</span></header>
+			<WorkOrderItemMatrix :groups="deliverables" />
+		</section>
+		<section v-if="!fieldsOnly && receivables.length" class="work-order-section erp-card">
+			<header><div><span>Outputs</span><h2>Receivables</h2></div><span class="erp-count">{{ itemCount(receivables) }} rows</span></header>
+			<WorkOrderItemMatrix :groups="receivables" />
+		</section>
+	</div>
+</template>
+
+<script setup>
+import { computed } from "vue"
+
+import WorkOrderItemMatrix from "./WorkOrderItemMatrix.vue"
+
+const props = defineProps({
+	details: { type: Array, default: () => [] },
+	deliverables: { type: Array, default: () => [] },
+	receivables: { type: Array, default: () => [] },
+	fieldsOnly: { type: Boolean, default: false },
+	matricesOnly: { type: Boolean, default: false },
+})
+
+const visibleDetails = computed(() => props.details.filter((field) => !["supplier_name", "process_name", "item", "lot"].includes(field.fieldname)))
+
+function itemCount(groups) { return (groups || []).reduce((count, group) => count + (group.items?.length || 0), 0) }
+function formatValue(field) {
+	if (["Date", "Datetime"].includes(field.fieldtype) && field.value) {
+		const [year, month, day] = String(field.value).slice(0, 10).split("-")
+		if (day) return `${day}-${month}-${year}${field.fieldtype === "Datetime" ? ` · ${String(field.value).slice(11, 19)}` : ""}`
+	}
+	if (field.fieldtype === "Check") return Number(field.value) ? "Yes" : "No"
+	if (["Currency", "Float", "Int", "Percent"].includes(field.fieldtype)) return Number(field.value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })
+	return field.value ?? "—"
+}
+</script>
+
+<style scoped>
+.work-order-details { display: grid; gap: var(--erp-space-3); }
+.work-order-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: hidden; }
+.work-order-field { display: grid; min-height: 58px; align-content: center; gap: 4px; padding: 10px 13px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
+.work-order-field:nth-child(2n) { border-right: 0; }
+.work-order-field span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
+.work-order-field strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
+.work-order-section { overflow: hidden; }
+.work-order-section > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 13px; background: var(--erp-surface-soft); border-bottom: 1px solid var(--erp-border); }
+.work-order-section > header div { display: grid; gap: 2px; }
+.work-order-section > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; text-transform: uppercase; }
+.work-order-section > header h2 { margin: 0; font-size: 14px; }
+.work-order-section > :deep(.work-order-matrix-stack) { padding: var(--erp-space-3); }
+.erp-count { padding: 3px 8px; color: var(--erp-accent) !important; background: var(--erp-accent-soft); border-radius: var(--erp-pill-radius); white-space: nowrap; }
+@media (max-width: 620px) { .work-order-fields { grid-template-columns: 1fr; } .work-order-field { border-right: 0; } }
+</style>

@@ -1,14 +1,3 @@
-import AccessoryStore from "./AccessoryStore.vue"
-import CutPanelStore from "./CutPanelStore.vue"
-import Cutting from "./Cutting.vue"
-import FabricStore from "./FabricStore.vue"
-import Finishing from "./Finishing.vue"
-import Merch from "./Merch.vue"
-import Planning from "./Planning.vue"
-import Purchase from "./Purchase.vue"
-import Sales from "./Sales.vue"
-import Sewing from "./Sewing.vue"
-
 export const departments = [
 	{
 		key: "cutting",
@@ -16,7 +5,7 @@ export const departments = [
 		shortLabel: "CT",
 		path: "/cutting",
 		accent: "#e85d3f",
-		component: Cutting,
+		component: () => import("./Cutting.vue"),
 	},
 	{
 		key: "fabric-store",
@@ -24,7 +13,7 @@ export const departments = [
 		shortLabel: "FS",
 		path: "/fabric-store",
 		accent: "#2f7d68",
-		component: FabricStore,
+		component: () => import("./FabricStore.vue"),
 	},
 	{
 		key: "cut-panel-store",
@@ -32,7 +21,7 @@ export const departments = [
 		shortLabel: "CP",
 		path: "/cut-panel-store",
 		accent: "#315da8",
-		component: CutPanelStore,
+		component: () => import("./CutPanelStore.vue"),
 	},
 	{
 		key: "accessory-store",
@@ -40,7 +29,7 @@ export const departments = [
 		shortLabel: "AS",
 		path: "/accessory-store",
 		accent: "#8b5fbf",
-		component: AccessoryStore,
+		component: () => import("./AccessoryStore.vue"),
 	},
 	{
 		key: "sewing",
@@ -48,7 +37,7 @@ export const departments = [
 		shortLabel: "SW",
 		path: "/sewing",
 		accent: "#c64b73",
-		component: Sewing,
+		component: () => import("./Sewing.vue"),
 	},
 	{
 		key: "finishing",
@@ -56,7 +45,7 @@ export const departments = [
 		shortLabel: "FN",
 		path: "/finishing",
 		accent: "#087c91",
-		component: Finishing,
+		component: () => import("./Finishing.vue"),
 	},
 	{
 		key: "merch",
@@ -64,7 +53,7 @@ export const departments = [
 		shortLabel: "MR",
 		path: "/merch",
 		accent: "#a26a13",
-		component: Merch,
+		component: () => import("./Merch.vue"),
 	},
 	{
 		key: "purchase",
@@ -72,7 +61,7 @@ export const departments = [
 		shortLabel: "PU",
 		path: "/purchase",
 		accent: "#536f2d",
-		component: Purchase,
+		component: () => import("./Purchase.vue"),
 	},
 	{
 		key: "sales",
@@ -80,7 +69,7 @@ export const departments = [
 		shortLabel: "SA",
 		path: "/sales",
 		accent: "#b7493f",
-		component: Sales,
+		component: () => import("./Sales.vue"),
 	},
 	{
 		key: "planning",
@@ -88,6 +77,6 @@ export const departments = [
 		shortLabel: "PL",
 		path: "/planning",
 		accent: "#5257a6",
-		component: Planning,
+		component: () => import("./Planning.vue"),
 	},
 ]

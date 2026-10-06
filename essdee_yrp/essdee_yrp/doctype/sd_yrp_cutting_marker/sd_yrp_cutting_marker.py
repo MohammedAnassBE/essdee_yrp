@@ -279,4 +279,201 @@ def get_panels_and_size(lot=None, cutting_plan=None, cutting_order=None):
 	}
 
 
+def _web_marker_payload(doc):
+	from essdee_yrp.print_registry import get_document_print_formats
+
+	doc.run_method("onload")
+	marker_detail = (doc.get("__onload") or {}).get("marker_detail") or {}
+	return {
+		"name": doc.name,
+		"docstatus": doc.docstatus,
+		"modified": doc.modified,
+		"marker_name": doc.marker_name,
+		"length": doc.length,
+		"width": doc.width,
+		"total_no_of_plys": doc.total_no_of_plys,
+		"efficiency": doc.efficiency,
+		"required_piece_weight": doc.required_piece_weight,
+		"selected_type": doc.selected_type or "Machine",
+		"calculated_parts": doc.calculated_parts,
+		"panels": [part.strip() for part in (doc.calculated_parts or "").split(",") if part.strip()],
+		"ratio_items": marker_detail.get("cutting_marker_ratios") or [],
+		"group_items": marker_detail.get("cutting_marker_groups") or [],
+		"print_formats": get_document_print_formats(doc),
+		"permissions": {
+			"can_write": bool(doc.docstatus == 0 and doc.has_permission("write")),
+			"can_submit": bool(doc.docstatus == 0 and doc.has_permission("submit")),
+			"can_cancel": bool(doc.docstatus == 1 and doc.has_permission("cancel")),
+			"can_print": bool(doc.has_permission("print")),
+		},
+	}
+
+
+def _web_parent(cutting_plan=None, cutting_order=None):
+	if cutting_order:
+		doc = frappe.get_doc("SD YRP Cutting Order", cutting_order)
+		return doc, "SD YRP Cutting Order", cutting_order, "cutting_order"
+	if cutting_plan:
+		doc = frappe.get_doc("SD YRP Cutting Plan", cutting_plan)
+		return doc, "SD YRP Cutting Plan", cutting_plan, "cutting_plan"
+	frappe.throw("Cutting Plan or Cutting Order is required")
+
+
+def _web_parent_can_start(parent_doc, parent_field):
+	if parent_doc.docstatus != 1:
+		return False
+	if parent_field == "cutting_plan":
+		return parent_doc.cp_status != "Planned"
+	return parent_doc.co_status != "Completed"
+
+
+@frappe.whitelist()
+def get_web_marker(cutting_plan=None, marker=None, cutting_order=None):
+	parent_doc, _parent_dt, parent_name, parent_field = _web_parent(cutting_plan, cutting_order)
+	parent_doc.check_permission("read")
+	context = get_panels_and_size(
+		lot=parent_doc.get("lot"),
+		cutting_plan=cutting_plan,
+		cutting_order=cutting_order,
+	)
+	context["panels"] = [row.get("part") for row in context.get("panels") or [] if row.get("part")]
+	context["is_manual_entry"] = bool(parent_doc.get("is_manual_entry"))
+	context["can_create"] = bool(
+		_web_parent_can_start(parent_doc, parent_field)
+		and frappe.has_permission("SD YRP Cutting Marker", "create")
+	)
+	context["can_submit"] = bool(frappe.has_permission("SD YRP Cutting Marker", "submit"))
+	if not marker:
+		return {"marker": None, "context": context}
+
+	doc = frappe.get_doc("SD YRP Cutting Marker", marker)
+	doc.check_permission("read")
+	if doc.get(parent_field) != parent_name:
+		frappe.throw(f"This Cutting Marker does not belong to the selected {parent_doc.doctype}")
+	return {"marker": _web_marker_payload(doc), "context": context}
+
+
+@frappe.whitelist()
+def save_web_marker(
+	cutting_plan=None,
+	values=None,
+	marker=None,
+	submit=False,
+	cutting_order=None,
+	expected_modified=None,
+):
+	parent_doc, parent_dt, parent_name, parent_field = _web_parent(cutting_plan, cutting_order)
+	parent_doc.check_permission("read")
+	if not _web_parent_can_start(parent_doc, parent_field):
+		frappe.throw(f"The {parent_dt} is not available for a new or updated marker")
+
+	values = frappe.parse_json(values) if isinstance(values, string_types) else values
+	values = values or {}
+	if marker:
+		doc = frappe.get_doc("SD YRP Cutting Marker", marker)
+		doc.check_permission("write")
+		if expected_modified and str(doc.modified) != str(expected_modified):
+			frappe.throw(
+				"This Cutting Marker changed after it was opened. Reload it and try again.",
+				frappe.TimestampMismatchError,
+			)
+		if doc.get(parent_field) != parent_name:
+			frappe.throw(f"This Cutting Marker does not belong to the selected {parent_dt}")
+		if doc.docstatus != 0:
+			frappe.throw("Only a Draft Cutting Marker can be edited")
+	else:
+		frappe.has_permission("SD YRP Cutting Marker", "create", throw=True)
+		doc = frappe.new_doc("SD YRP Cutting Marker")
+		doc.set(parent_field, parent_name)
+
+	allowed_fields = (
+		"marker_name",
+		"length",
+		"width",
+		"total_no_of_plys",
+		"efficiency",
+		"required_piece_weight",
+	)
+	for fieldname in allowed_fields:
+		if fieldname in values:
+			setattr(doc, fieldname, values.get(fieldname))
+
+	selected_type = values.get("selected_type") or "Machine"
+	if selected_type not in ("Machine", "Manual"):
+		frappe.throw("Select Type must be Machine or Manual")
+	available_panels = {
+		row.get("part")
+		for row in calculate_parts(cutting_plan=cutting_plan, cutting_order=cutting_order) or []
+		if row.get("part")
+	}
+	panels = [str(part).strip() for part in values.get("panels") or [] if str(part).strip()]
+	if not panels:
+		frappe.throw("Select at least one panel")
+	invalid_panels = sorted(set(panels) - available_panels)
+	if invalid_panels:
+		frappe.throw(f"Invalid panel(s): {', '.join(invalid_panels)}")
+
+	ratio_items = values.get("ratio_items") or []
+	available_sizes = set(get_primary_sizes(parent_dt, parent_name))
+	expected_ratio_keys = (
+		{(size, panel) for size in available_sizes for panel in panels}
+		if selected_type == "Manual"
+		else {(size, None) for size in available_sizes}
+	)
+	ratio_keys = []
+	for row in ratio_items:
+		size = row.get("size")
+		panel = row.get("panel") if selected_type == "Manual" else None
+		ratio_keys.append((size, panel))
+	if set(ratio_keys) != expected_ratio_keys or len(ratio_keys) != len(set(ratio_keys)):
+		frappe.throw("The marker ratios must contain every available size exactly once")
+	if not parent_doc.get("is_manual_entry") and not any(frappe.utils.flt(row.get("ratio")) > 0 for row in ratio_items):
+		frappe.throw("Enter the Ratio Values")
+	if selected_type == "Manual":
+		for row in ratio_items:
+			if row.get("panel") not in panels:
+				frappe.throw(f"Ratio panel {row.get('panel')} is not selected")
+
+	group_items = values.get("group_items") or [
+		{"id": index, "selected": [panel]} for index, panel in enumerate(panels)
+	]
+	grouped_panels = [panel for row in group_items for panel in row.get("selected") or []]
+	if sorted(grouped_panels) != sorted(panels) or len(grouped_panels) != len(set(grouped_panels)):
+		frappe.throw("Each selected panel must belong to exactly one group")
+
+	doc.selected_type = selected_type
+	doc.calculated_parts = ",".join(panels)
+	doc.marker_details = {
+		"ratio_items": ratio_items,
+		"group_items": group_items,
+	}
+	doc.save()
+	if frappe.utils.sbool(submit):
+		doc.check_permission("submit")
+		doc.submit()
+	return _web_marker_payload(doc)
+
+
+@frappe.whitelist()
+def change_web_marker_status(cutting_plan=None, marker=None, action=None, cutting_order=None):
+	parent_doc, parent_dt, parent_name, parent_field = _web_parent(cutting_plan, cutting_order)
+	parent_doc.check_permission("read")
+	doc = frappe.get_doc("SD YRP Cutting Marker", marker)
+	if doc.get(parent_field) != parent_name:
+		frappe.throw(f"This Cutting Marker does not belong to the selected {parent_dt}")
+	if action == "submit":
+		doc.check_permission("submit")
+		if doc.docstatus != 0:
+			frappe.throw("Only a Draft Cutting Marker can be submitted")
+		doc.submit()
+	elif action == "cancel":
+		doc.check_permission("cancel")
+		if doc.docstatus != 1:
+			frappe.throw("Only a Submitted Cutting Marker can be cancelled")
+		doc.cancel()
+	else:
+		frappe.throw("Unsupported Cutting Marker action")
+	return _web_marker_payload(doc)
+
+
 CuttingMarker = SDYRPCuttingMarker

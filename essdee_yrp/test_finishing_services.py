@@ -377,6 +377,24 @@ class TestFinishingServices(IntegrationTestCase):
 		self.assertEqual(plan.fp_status, "OCR Completed")
 		close_order.assert_called_once_with("LOT-1")
 
+	@patch("essdee_yrp.finishing.closure.frappe.get_doc")
+	def test_complete_ocr_accepts_auto_closed_plan(self, get_doc):
+		plan = _doc(name="FP-1", fp_status="Auto Closed", lot="LOT-1")
+		get_doc.return_value = plan
+
+		with (
+			patch.object(closure.frappe, "get_roles", return_value=["System Manager"]),
+			patch.object(
+				closure,
+				"close_linked_production_order_if_all_lots_audited",
+			) as close_order,
+		):
+			result = complete_ocr("FP-1")
+
+		self.assertEqual(result, {"fp_status": "OCR Completed"})
+		self.assertEqual(plan.fp_status, "OCR Completed")
+		close_order.assert_called_once_with("LOT-1")
+
 	def test_audit_request_and_completion_capture_dates(self):
 		plan = _doc(
 			name="FP-1",
@@ -407,7 +425,7 @@ class TestFinishingServices(IntegrationTestCase):
 		self.assertEqual(plan.audit_completed_date, "2026-09-29")
 		close_order.assert_called_once_with("LOT-1")
 
-	def test_daily_job_uses_only_audit_completed_date_older_than_30_days(self):
+	def test_daily_job_auto_closes_audits_older_than_30_days(self):
 		with (
 			patch.object(closure, "today", return_value="2026-09-28"),
 			patch.object(
@@ -417,7 +435,10 @@ class TestFinishingServices(IntegrationTestCase):
 			) as get_all,
 			patch.object(closure.frappe.db, "set_value") as set_value,
 		):
-			self.assertEqual(closure.auto_complete_ocr_after_30_days(), 1)
+			self.assertEqual(
+				closure.auto_close_audited_finishing_plans_after_30_days(),
+				1,
+			)
 		get_all.assert_called_once_with(
 			"SD YRP Finishing Plan",
 			filters={
@@ -426,7 +447,12 @@ class TestFinishingServices(IntegrationTestCase):
 			},
 			pluck="name",
 		)
-		set_value.assert_called_once_with("SD YRP Finishing Plan", "FP-OLD", "fp_status", "OCR Completed")
+		set_value.assert_called_once_with(
+			"SD YRP Finishing Plan",
+			"FP-OLD",
+			"fp_status",
+			"Auto Closed",
+		)
 
 	def test_destination_receipts_are_derived_from_source_history(self):
 		destination = _doc(

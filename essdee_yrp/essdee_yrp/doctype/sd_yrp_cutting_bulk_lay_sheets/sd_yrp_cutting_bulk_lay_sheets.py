@@ -224,15 +224,21 @@ def get_laysheet_editor_data(bulk_name, laysheet_name):
 	entry = get_entry_for_laysheet(bulk_name, laysheet_name)
 	from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet import (
 		fetch_manual_item_details,
+		get_select_attributes,
 	)
 
 	laysheet = frappe.get_doc("SD YRP Cutting LaySheet", laysheet_name)
 	manual_items = {}
 	if laysheet.is_manual_entry:
 		manual_items = fetch_manual_item_details(laysheet.cutting_laysheet_manual_items, laysheet.name)
+	attributes = get_select_attributes(
+		cutting_plan=laysheet.cutting_plan,
+		cutting_order=laysheet.cutting_order,
+	)
 	return {
 		"context": {
 			"name": laysheet.name,
+			"modified": laysheet.modified,
 			"cutting_plan": laysheet.cutting_plan,
 			"cutting_order": laysheet.cutting_order,
 			"cutting_marker": laysheet.cutting_marker,
@@ -251,6 +257,15 @@ def get_laysheet_editor_data(bulk_name, laysheet_name):
 		},
 		"item_accessories": [row.as_dict() for row in laysheet.cutting_laysheet_accessory_details],
 		"bundles": [row.as_dict() for row in laysheet.cutting_laysheet_bundles],
+		"editor": {
+			"attributes": {
+				"cloth_type": sorted(attributes.get("cloth_type") or []),
+				"colour": sorted(attributes.get("colour") or []),
+				"dia": sorted(attributes.get("dia") or []),
+				"part": sorted(attributes.get("part") or []),
+				"cloth_type_dia_map": attributes.get("cloth_type_dia_map") or {},
+			},
+		},
 	}
 
 
@@ -895,8 +910,10 @@ def get_label_print_context(doc_name, detail_name):
 	row = get_entry(doc, detail_name)
 	if not row.cutting_laysheet:
 		frappe.throw(_("Create the Lay Sheet first."))
-	validate_bulk_print_prerequisites(row.cutting_laysheet)
 	laysheet = frappe.get_doc("SD YRP Cutting LaySheet", row.cutting_laysheet)
+	laysheet.check_permission("write")
+	laysheet.check_permission("print")
+	validate_bulk_print_prerequisites(row.cutting_laysheet)
 	if not laysheet.cutting_laysheet_bundles:
 		frappe.throw(_("Generate bundles before printing labels."))
 	validate_cutting_plan_stock(laysheet)
@@ -943,14 +960,17 @@ def approve_laysheet_grammage(doc_name, detail_name):
 def mark_labels_printed(doc_name, detail_name, goods_received_note=None):
 	doc = get_bulk_doc(doc_name)
 	row = get_entry(doc, detail_name)
-	validate_bulk_print_prerequisites(row.cutting_laysheet)
 	laysheet = frappe.get_doc("SD YRP Cutting LaySheet", row.cutting_laysheet)
-	laysheet.printed_time = now_datetime()
-	laysheet.status = "Label Printed"
-	laysheet.goods_received_note = goods_received_note
-	laysheet.save()
+	laysheet.check_permission("write")
+	laysheet.check_permission("print")
+	validate_bulk_print_prerequisites(row.cutting_laysheet)
+	from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet import (
+		mark_labels_printed as complete_laysheet_label_print,
+	)
+
+	result = complete_laysheet_label_print(row.cutting_laysheet, goods_received_note)
 	refresh_bulk_status(doc.name)
-	return laysheet.name
+	return result
 
 
 CuttingBulkLaySheets = SDYRPCuttingBulkLaySheets

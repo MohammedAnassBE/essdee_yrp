@@ -34,6 +34,7 @@ from essdee_yrp.hooks import override_doctype_class, override_whitelisted_method
 from essdee_yrp.overrides.goods_received_note import (
 	EssdeeGoodsReceivedNote,
 	_claim_mapped_stock_update_transition,
+	_empty_consumption_plan_message,
 	_has_complete_mapped_consumption,
 	_new_consumption_plan_kind,
 	_set_dynamic_packing_piece_uom,
@@ -283,7 +284,16 @@ class TestEssdeeValuationContract(UnitTestCase):
 				"doctype": "YRP Goods Received Note",
 				"against": "YRP Work Order",
 				"against_id": "WO-1",
-				"items": [{"item_variant": "OUTPUT-1", "quantity": 1}],
+				"process_name": "Cutting",
+				"production_detail": "IPD-1",
+				"items": [
+					{
+						"idx": 1,
+						"item_variant": "OUTPUT-RED-45",
+						"quantity": 1,
+						"stock_dimensions": json.dumps({"colour": "Red", "size": "45 cm"}),
+					}
+				],
 			}
 		)
 		with (
@@ -299,9 +309,55 @@ class TestEssdeeValuationContract(UnitTestCase):
 			),
 			patch.object(GoodsReceivedNote, "before_submit") as base_submit,
 		):
-			with self.assertRaisesRegex(frappe.ValidationError, "No deterministic fabric"):
+			with self.assertRaises(frappe.ValidationError) as raised:
 				doc.before_submit()
+		message = str(raised.exception)
+		for expected in (
+			"OUTPUT-RED-45",
+			"Colour Red",
+			"Size 45 cm",
+			"qty 1",
+			"Work Order WO-1",
+			"process Cutting",
+			"Item Production Detail IPD-1",
+			"Expected:",
+			"Actual:",
+			"Fix:",
+			"Calculate",
+		):
+			self.assertIn(expected, message)
 		base_submit.assert_not_called()
+
+	def test_empty_plan_guidance_matches_the_selected_planner(self):
+		grn = frappe._dict(
+			against_id="WO-1",
+			process_name="Cutting",
+			production_detail="IPD-1",
+			items=[
+				frappe._dict(
+					idx=1,
+					item_variant="OUTPUT-RED-45",
+					quantity=2,
+					stock_dimensions='{"colour":"Red","size":"45 cm"}',
+				)
+			],
+		)
+
+		cases = {
+			"cutting": ("positive used cloth or accessory weights", "actual used cloth and accessory weights"),
+			"packing": ("packing BOM", "packing setup"),
+			"identity": ("Work Order deliverable input", "Work Order deliverable mapping"),
+			"stitching": ("stitching input", "receivable references"),
+			"fabric": ("process input mapping", "input mapping"),
+		}
+		for planner, expected_fragments in cases.items():
+			with self.subTest(planner=planner):
+				message = _empty_consumption_plan_message(grn, planner)
+				for expected in expected_fragments:
+					self.assertIn(expected, message)
+				self.assertIn("OUTPUT-RED-45", message)
+				self.assertIn("Colour Red", message)
+				self.assertIn("Size 45 cm", message)
 
 	def test_cutting_plan_is_selected_before_generic_fabric_planner(self):
 		doc = frappe._dict(

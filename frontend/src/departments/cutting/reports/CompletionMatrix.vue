@@ -20,7 +20,7 @@
 </template>
 
 <script setup>
-import { attributeValue, number, quantity, rowColour } from "./reportUtils.js"
+import { attributeValue, number, quantity, rowColour } from "../../../components/reports/reportUtils.js"
 
 const props = defineProps({
 	groups: { type: Array, default: () => [] },

@@ -19,11 +19,34 @@ from yrp.yrp.doctype.yrp_work_order.yrp_work_order import (
 class EssdeeWorkOrder(WorkOrder):
 	"""Split garment rates by panel type before falling back to base YRP."""
 
+	def save(self, *args, **kwargs):
+		# Every existing versioned cloth write enters the shared lock order before
+		# Frappe locks the parent row inside Document.save(). Re-locking this Lot in
+		# source validation is safe and keeps the invariant explicit per transaction.
+		if (
+			not self.is_new()
+			and int(self.get("cloth_execution_version") or 0) == 1
+			and self.get("lot")
+		):
+			frappe.db.sql(
+				"SELECT name FROM `tabSD YRP Lot` WHERE name = %s FOR UPDATE",
+				(self.lot,),
+			)
+		return super().save(*args, **kwargs)
+
 	def before_insert(self):
 		from essdee_yrp.cloth_execution import stamp_cloth_execution_version
 
 		stamp_cloth_execution_version(self)
 		parent = getattr(super(), "before_insert", None)
+		if parent:
+			return parent()
+
+	def before_update_after_submit(self):
+		from essdee_yrp.work_order_hooks import validate_fabric_execution_immutable
+
+		validate_fabric_execution_immutable(self)
+		parent = getattr(super(), "before_update_after_submit", None)
 		if parent:
 			return parent()
 

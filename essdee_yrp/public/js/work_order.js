@@ -924,6 +924,7 @@ function render_fabric_dialog(frm, ctx) {
 
 	const recompute_yarn = (i) => {
 		const row = ctx.rows[i];
+		if (row.manual_io) return;
 		let total = 0;
 		manifest.forEach((m) => {
 			if (m.row === i) total += flt(d.get_value(m.fieldname)) || 0;
@@ -939,9 +940,30 @@ function render_fabric_dialog(frm, ctx) {
 		}
 		d.set_value(`yarn_qty_${i}`, Math.round(total_yarn * 1000) / 1000);
 	};
+	const push_manual_inputs = (row, i, qr, j, outputDefault) => {
+		if (!row.manual_io) return [];
+		return (qr.knitting_inputs || []).map((input, k) => {
+			const fieldname = `input_qty_${i}_${j}_${k}`;
+			const attrs = Object.values(input.attrs || {}).filter(Boolean);
+			fields.push({
+				fieldtype: "Float",
+				label: [input.item, ...attrs].join(" · "),
+				fieldname,
+				default: (input.prefill ?? (flt(outputDefault) * flt(input.qty_per_output))) || undefined,
+				description: input.uom || __("Quantity"),
+			});
+			return { key: input.key, fieldname };
+		});
+	};
 
 	ctx.rows.forEach((row, i) => {
 		fields.push({ fieldtype: "Section Break", label: `${row.cloth_item} (${row.production_detail})` });
+		if (row.manual_io) {
+			fields.push({
+				fieldtype: "HTML",
+				options: `<div class="alert alert-info small">${__("Enter the yarn quantities to deliver and the cloth quantity expected back for each knitting route.")}</div>`,
+			});
+		}
 		if (row.kind === "identity" && row.treated_item && row.treated_item !== row.cloth_item) {
 			fields.push({
 				fieldtype: "HTML",
@@ -1008,9 +1030,15 @@ function render_fabric_dialog(frm, ctx) {
 						description: planning_description(row, qr),
 						onchange: () => recompute_yarn(i),
 					});
+					const manualInputs = push_manual_inputs(row, i, qr, j, is_default_output ? qr.prefill : 0);
 					manifest.push({
-						fieldname, row: i, key: qr.key, out_attrs: qr.out_attrs,
+						fieldname, row: i, key: qr.key,
+						matrix_key: qr.matrix_key || qr.key,
+						source_bucket_key: qr.source_bucket_key || null,
+						source_mode: qr.source_mode || null,
+						out_attrs: qr.out_attrs,
 						colour, label: qr.label, balance: qr.balance, available: qr.available,
+						manual_inputs: manualInputs,
 					});
 				});
 			});
@@ -1025,18 +1053,32 @@ function render_fabric_dialog(frm, ctx) {
 				fields.push({
 					fieldtype: "Float", label, fieldname,
 					default: qr.prefill || undefined,
-					description: planning_description(row, qr),
+					description: planning_description(
+						row,
+						qr,
+						cint(frm.doc.cloth_execution_version) === 1,
+					),
 					onchange: row.kind === "knitting" ? () => recompute_yarn(i) : undefined,
 				});
+				const manualInputs = push_manual_inputs(row, i, qr, j, qr.prefill || 0);
 				manifest.push({
-					fieldname, row: i, key: qr.key, out_attrs: qr.out_attrs,
+					fieldname, row: i, key: qr.key,
+					matrix_key: qr.matrix_key || qr.key,
+					source_bucket_key: qr.source_bucket_key || null,
+					source_mode: qr.source_mode || null,
+					out_attrs: qr.out_attrs,
 					colour: qr.knit_colour || null,
 					label: qr.label,
 					balance: qr.balance,
 					available: qr.source_available ?? qr.available,
 					source_available: qr.source_available,
 					source_pool_key: qr.source_pool_key,
+					source_grn: qr.source_grn,
+					source_grn_row: qr.source_grn_row,
+					source_stock_available: qr.source_stock_available,
+					source_stock_per_output: qr.source_stock_per_output,
 					reference_item_variant: qr.reference_item_variant || null,
+					manual_inputs: manualInputs,
 				});
 			};
 
@@ -1080,11 +1122,11 @@ function render_fabric_dialog(frm, ctx) {
 			}
 		}
 
-		if (row.kind === "knitting" && !reference_routed && (row.yarns || []).length <= 1) {
+		if (row.kind === "knitting" && !row.manual_io && !reference_routed && (row.yarns || []).length <= 1) {
 			fields.push({
 				fieldtype: "Float", label: __("Yarn (deliverable) Kg"), fieldname: `yarn_qty_${i}`,
 			});
-		} else if (row.kind === "knitting" && !reference_routed) {
+		} else if (row.kind === "knitting" && !row.manual_io && !reference_routed) {
 			fields.push({
 				fieldtype: "Section Break",
 				label: __("Calculated Yarn Deliverables"),
@@ -1108,14 +1150,38 @@ function render_fabric_dialog(frm, ctx) {
 		primary_action(values) {
 			const rows = [];
 			let missing_colour = null;
+			let missing_output = null;
+			let missing_input = null;
 			ctx.rows.forEach((row, i) => {
 				const entries = [];
 				manifest.forEach((m) => {
 					if (m.row !== i) return;
 					const qty = flt(values[m.fieldname]);
+					const inputs = (m.manual_inputs || []).map((input) => ({
+						key: input.key,
+						qty: flt(values[input.fieldname]),
+					}));
+					if ((!qty || qty <= 0) && inputs.some((input) => input.qty > 0)) {
+						missing_output = m.label;
+						return;
+					}
 					if (!qty || qty <= 0) return;
-					const line = { key: m.key, out_attrs: m.out_attrs, qty };
+					const line = {
+						key: m.key,
+						matrix_key: m.matrix_key || m.key,
+						out_attrs: m.out_attrs,
+						qty,
+					};
+					if (m.source_bucket_key) line.source_bucket_key = m.source_bucket_key;
+					if (m.source_mode) line.source_mode = m.source_mode;
 					if (frappe.yrp.attribute_value(m.colour)) line.colour = frappe.yrp.attribute_value(m.colour);
+					if (row.manual_io) {
+						if (!inputs.some((input) => input.qty > 0)) {
+							missing_input = m.label;
+							return;
+						}
+						line.inputs = inputs;
+					}
 					entries.push(line);
 				});
 				if (!entries.length) return;
@@ -1129,12 +1195,20 @@ function render_fabric_dialog(frm, ctx) {
 				rows.push({
 					fabric_row: row.fabric_row,
 					colour: fallback_colour,
-					yarn_qty: !row.reference_routed && (row.yarns || []).length <= 1
+					yarn_qty: !row.manual_io && !row.reference_routed && (row.yarns || []).length <= 1
 						? values[`yarn_qty_${i}`] || null
 						: null,
 					entries,
 				});
 			});
+			if (missing_output) {
+				frappe.msgprint(__("Enter the expected cloth quantity for {0}.", [missing_output]));
+				return;
+			}
+			if (missing_input) {
+				frappe.msgprint(__("Enter at least one yarn deliverable quantity for {0}.", [missing_input]));
+				return;
+			}
 			if (missing_colour) {
 				frappe.msgprint(__("Select the cloth Colour for {0}.", [missing_colour]));
 				return;
@@ -1196,8 +1270,17 @@ function render_fabric_dialog(frm, ctx) {
 	});
 }
 
-function planning_description(row, qty_row) {
+function planning_description(row, qty_row, show_exact_source = false) {
 	if (qty_row.source_process) {
+		if (show_exact_source && qty_row.source_bucket_key) {
+			return [
+				qty_row.source_grn || __("Source GRN"),
+				qty_row.source_grn_row ? __("row {0}", [qty_row.source_grn_row]) : null,
+				qty_row.source_stock_available != null
+					? __("{0} Kg available", [flt(qty_row.source_stock_available, 3)])
+					: null,
+			].filter(Boolean).join(" · ");
+		}
 		const message = `${__("Available from {0} GRNs", [qty_row.source_process])}: `
 			+ `${flt(qty_row.source_available || 0, 3)} ${__("Kg")}`;
 		return qty_row.source_shared

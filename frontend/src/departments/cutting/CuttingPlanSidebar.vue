@@ -22,8 +22,8 @@
 						icon="pi pi-plus"
 						label="Create New"
 						size="small"
-						:disabled="!permissions.can_start_marker"
-						:title="permissions.can_start_marker ? 'Create a new marker' : 'This Cutting Plan is not ready for a new marker'"
+						:disabled="!canStartMarker"
+						:title="canStartMarker ? 'Create a new marker' : `This ${parentLabel} is not ready for a new marker`"
 						@click="openMarker('')"
 					/>
 				</div>
@@ -41,7 +41,7 @@
 			</div>
 			<div v-else class="rail-empty">
 				<i class="pi" :class="markerFilters.length && markers.length ? 'pi-filter-slash' : 'pi-vector'"></i>
-				<span>{{ markerFilters.length && markers.length ? 'No markers match the applied filters.' : 'No markers for this Cutting Plan.' }}</span>
+				<span>{{ markerFilters.length && markers.length ? 'No markers match the applied filters.' : `No markers for this ${parentLabel}.` }}</span>
 				<Button v-if="markerFilters.length && markers.length" label="Clear filters" severity="secondary" text size="small" @click="markerFilters = []" />
 			</div>
 		</section>
@@ -66,23 +66,47 @@
 						icon="pi pi-plus"
 						label="Create New"
 						size="small"
-						:disabled="!permissions.can_start_laysheet"
-						:title="permissions.can_start_laysheet ? 'Create a new Lay Sheet' : 'This Cutting Plan is not ready for a new Lay Sheet'"
+						:disabled="!canStartLaySheet"
+						:title="canStartLaySheet ? 'Create a new Lay Sheet' : `This ${parentLabel} is not ready for a new Lay Sheet`"
 						@click="openLaySheet('')"
 					/>
 				</div>
 			</header>
 			<div v-if="loading" class="rail-loading"><Skeleton v-for="index in 3" :key="index" height="4.5rem" /></div>
 			<div v-else-if="filteredLaySheets.length" class="rail-list">
-				<button v-for="sheet in filteredLaySheets" :key="sheet.name" type="button" class="rail-card laysheet-card" @click="openLaySheet(sheet.name)">
-					<div class="rail-card__top"><div class="lay-title"><span class="lay-number">{{ sheet.lay_no }}</span><div><strong>{{ sheet.marker_name || sheet.cutting_marker || 'Marker' }}</strong><div class="lay-subline"><small>{{ sheet.name }}</small><span class="lay-status" :class="statusClass(sheet.status)">{{ sheet.status || '—' }}</span></div></div></div><div class="card-tail"><i class="pi pi-chevron-right"></i></div></div>
-					<div class="lay-meta"><span><i class="pi pi-box"></i><span><small>Bundle date</small><b>{{ formatDate(sheet.bundle_generated_date, false, 'Not generated') }}</b></span></span><span class="print-state"><i class="pi pi-print"></i><span><small>Printed</small><b>{{ formatDate(sheet.printed_time, true, 'Not printed') }}</b></span></span></div>
+				<button
+					v-for="sheet in filteredLaySheets"
+					:key="sheet.name"
+					type="button"
+					class="rail-card laysheet-card"
+					:class="laySheetCardClass(sheet.status)"
+					@click="openLaySheet(sheet.name)"
+				>
+					<div class="rail-card__top">
+						<div class="lay-title">
+							<span class="lay-number">{{ sheet.lay_no }}</span>
+							<div>
+								<strong>{{ sheet.marker_name || sheet.cutting_marker || "Marker" }}</strong>
+								<div class="lay-subline">
+									<small>{{ sheet.name }}</small>
+								</div>
+							</div>
+						</div>
+						<div class="card-tail">
+							<span class="lay-status lay-status--prominent" :class="statusClass(sheet.status)">{{ sheet.status || "Status unavailable" }}</span>
+							<i class="pi pi-chevron-right"></i>
+						</div>
+					</div>
+					<div class="lay-meta">
+						<span><i class="pi pi-box"></i><span><small>Bundle date</small><b>{{ formatDate(sheet.bundle_generated_date, false, "Not generated") }}</b></span></span>
+						<span v-if="sheet.printed_time" class="print-state"><i class="pi pi-print"></i><span><small>Printed on</small><b>{{ formatDate(sheet.printed_time, true) }}</b></span></span>
+					</div>
 					<div class="panel-summary"><small>Marker panels</small><div class="panel-chips"><span v-for="panel in laySheetPanels(sheet)" :key="`${sheet.name}-${panel}`" :title="panel">{{ panel }}</span><em v-if="!laySheetPanels(sheet).length">No panels selected</em></div></div>
 				</button>
 			</div>
 			<div v-else class="rail-empty">
 				<i class="pi" :class="laySheetFilters.length && laysheets.length ? 'pi-filter-slash' : 'pi-list'"></i>
-				<span>{{ laySheetFilters.length && laysheets.length ? 'No Lay Sheets match the applied filters.' : 'No Lay Sheets for this Cutting Plan.' }}</span>
+				<span>{{ laySheetFilters.length && laysheets.length ? 'No Lay Sheets match the applied filters.' : `No Lay Sheets for this ${parentLabel}.` }}</span>
 				<Button v-if="laySheetFilters.length && laysheets.length" label="Clear filters" severity="secondary" text size="small" @click="laySheetFilters = []" />
 			</div>
 		</section>
@@ -90,8 +114,8 @@
 		<ListviewFilters v-model:visible="markerFiltersOpen" v-model="markerFilters" :fields="markerFilterFields" @apply="markerFilters = $event" />
 		<ListviewFilters v-model:visible="laySheetFiltersOpen" v-model="laySheetFilters" :fields="laySheetFilterFields" @apply="laySheetFilters = $event" />
 
-		<CuttingMarkerDialog v-if="permissions.can_read_marker" v-model:visible="markerOpen" :cutting-plan="cuttingPlan" :marker-name="selectedMarker" @changed="changed" />
-		<CuttingLaySheetDialog v-if="permissions.can_read_laysheet" v-model:visible="laysheetOpen" :cutting-plan="cuttingPlan" :laysheet-name="selectedLaySheet" :can-create="Boolean(permissions.can_create_laysheet)" @changed="changed" />
+		<CuttingMarkerDialog v-if="permissions.can_read_marker" v-model:visible="markerOpen" :parent-doctype="resolvedParentDoctype" :parent-name="resolvedParentName" :marker-name="selectedMarker" @changed="changed" />
+		<CuttingLaySheetDialog v-if="permissions.can_read_laysheet" v-model:visible="laysheetOpen" :parent-doctype="resolvedParentDoctype" :parent-name="resolvedParentName" :laysheet-name="selectedLaySheet" :can-create="Boolean(permissions.can_create_laysheet)" @changed="changed" />
 	</aside>
 </template>
 
@@ -106,7 +130,10 @@ import CuttingLaySheetDialog from "./CuttingLaySheetDialog.vue"
 import CuttingMarkerDialog from "./CuttingMarkerDialog.vue"
 
 const props = defineProps({
-	cuttingPlan: { type: String, required: true },
+	cuttingPlan: { type: String, default: "" },
+	parentDoctype: { type: String, default: "SD YRP Cutting Plan" },
+	parentName: { type: String, default: "" },
+	parentField: { type: String, default: "" },
 	data: { type: Object, default: () => ({}) },
 	loading: Boolean,
 	error: { type: String, default: "" },
@@ -124,6 +151,12 @@ const laySheetFilters = ref([])
 const markers = computed(() => props.data.markers || [])
 const laysheets = computed(() => props.data.laysheets || [])
 const permissions = computed(() => props.data.permissions || {})
+const resolvedParentName = computed(() => props.parentName || props.cuttingPlan)
+const resolvedParentDoctype = computed(() => props.parentDoctype || "SD YRP Cutting Plan")
+const resolvedParentField = computed(() => props.parentField || (resolvedParentDoctype.value === "SD YRP Cutting Order" ? "cutting_order" : "cutting_plan"))
+const parentLabel = computed(() => resolvedParentDoctype.value === "SD YRP Cutting Order" ? "Cutting Order" : "Cutting Plan")
+const canStartMarker = computed(() => permissions.value.can_start_marker ?? permissions.value.can_create_marker)
+const canStartLaySheet = computed(() => permissions.value.can_start_laysheet ?? permissions.value.can_create_laysheet)
 const visibleSectionCount = computed(() => Number(Boolean(permissions.value.can_read_marker)) + Number(Boolean(permissions.value.can_read_laysheet)))
 const markersByName = computed(() => new Map(markers.value.map((marker) => [marker.name, marker])))
 const markerFilterFields = computed(() => [
@@ -133,7 +166,7 @@ const markerFilterFields = computed(() => [
 		label: "Marker ID",
 		fieldtype: "Link",
 		options: "SD YRP Cutting Marker",
-		link_filters: { cutting_plan: props.cuttingPlan },
+		link_filters: { [resolvedParentField.value]: resolvedParentName.value },
 	},
 	{ fieldname: "length", label: "Length", fieldtype: "Float", precision: 3 },
 	{ fieldname: "width", label: "Width", fieldtype: "Float", precision: 3 },
@@ -148,7 +181,7 @@ const laySheetFilterFields = computed(() => [
 		label: "Marker ID",
 		fieldtype: "Link",
 		options: "SD YRP Cutting Marker",
-		link_filters: { cutting_plan: props.cuttingPlan },
+		link_filters: { [resolvedParentField.value]: resolvedParentName.value },
 	},
 	{
 		fieldname: "status",
@@ -193,6 +226,10 @@ function markerValue(marker, fieldname) {
 function laySheetValue(sheet, fieldname) {
 	if (fieldname === "panels") return laySheetPanels(sheet).join(", ")
 	return sheet[fieldname]
+}
+
+function laySheetCardClass(status) {
+	return `laysheet-card--status-${statusSlug(status)}`
 }
 
 function matchesFilters(record, filters, valueFor) {
@@ -328,7 +365,11 @@ function formatDate(value, includeTime = false, fallback = "—") {
 }
 
 function statusClass(status) {
-	return `lay-status--${String(status || "").toLowerCase().replaceAll(" ", "-")}`
+	return `lay-status--${statusSlug(status)}`
+}
+
+function statusSlug(status) {
+	return String(status || "unknown").toLowerCase().replaceAll(" ", "-")
 }
 
 function markerStatus(marker) {
@@ -354,7 +395,12 @@ function markerStatus(marker) {
 .rail-loading, .rail-list { display: grid; align-content: start; gap: 8px; min-height: 0; padding: 9px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #a5baaf transparent; }
 .rail-card { display: grid; gap: 8px; width: 100%; padding: 10px 11px; color: inherit; text-align: left; background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); cursor: pointer; box-shadow: none; transition: border-color var(--erp-transition-fast), background var(--erp-transition-fast); }
 .marker-card { border-left: 3px solid #50bb8f; }
-.laysheet-card { border-left: 3px solid #2b8b66; }
+.laysheet-card { border-left: 4px solid #628da8; }
+.laysheet-card--status-completed,
+.laysheet-card--status-label-printed { border-left-color: #24865f; }
+.laysheet-card--status-bundles-generated { border-left-color: #7962a2; }
+.laysheet-card--status-approval-pending { border-left-color: #d19a32; }
+.laysheet-card--status-cancelled { border-left-color: #c66565; }
 .rail-card:hover { background: var(--erp-surface-soft); border-color: #85bba1; box-shadow: none; }
 .rail-card:focus-visible { border-color: #49a87f; outline: 3px solid rgb(73 168 127 / 15%); }
 .rail-card__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -388,11 +434,12 @@ function markerStatus(marker) {
 .lay-meta i { flex: 0 0 auto; color: #5f7f6c; font-size: 0.72rem; }
 .lay-meta b { overflow: hidden; color: #30483c; font-size: var(--erp-font-size-min); font-weight: 720; text-overflow: ellipsis; white-space: nowrap; }
 .lay-status { padding: 3px 7px; color: #356046; background: #e7f2eb; border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); font-weight: 750; white-space: nowrap; }
+.lay-status--prominent { min-height: 25px; padding: 5px 8px; border: 1px solid transparent; font-size: 12px; font-weight: 800; line-height: 1; }
 .lay-status--started { color: #315f7a; background: #e5f2fa; }
-.lay-status--completed, .lay-status--label-printed { color: #2c6642; background: #e2f2e8; }
-.lay-status--bundles-generated { color: #63518a; background: #eee9f8; }
-.lay-status--cancelled { color: #963d3d; background: #fce8e8; }
-.lay-status--approval-pending { color: #875b12; background: #fff1ca; }
+.lay-status--completed, .lay-status--label-printed { color: #216241; background: #dff2e7; border-color: #c6e4d2; }
+.lay-status--bundles-generated { color: #5f4b85; background: #eee9f8; border-color: #ded4f0; }
+.lay-status--cancelled { color: #963d3d; background: #fce8e8; border-color: #efcece; }
+.lay-status--approval-pending { color: #7c5511; background: #fff1ca; border-color: #efd891; }
 .rail-empty { display: grid; place-items: center; align-content: center; gap: 8px; min-height: 0; padding: 18px; color: #76857c; text-align: center; font-size: 0.77rem; }
 .rail-empty i { display: inline-grid; place-items: center; width: 34px; height: 34px; color: #567262; background: #edf4f0; border-radius: 50%; font-size: 1rem; }
 .rail-empty :deep(.p-button) { color: #0d7655; font-size: 0.72rem; }

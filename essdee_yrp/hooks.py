@@ -47,6 +47,7 @@ fixtures = [
 				"in",
 				[
 					"YRP Item Production Detail-main-field_order",
+					"YRP Bill Tracking-form_status-options",
 					"YRP Work Order-naming_series-options",
 					"YRP Work Order-naming_series-default",
 					"YRP Delivery Challan-from_location-fetch_from",
@@ -81,6 +82,7 @@ fixtures = [
 					"YRP Process Cost-item-fetch_if_empty",
 					"Purchase Order-naming_series-options",
 					"Purchase Order-naming_series-default",
+					"Purchase Order-status-options",
 					"YRP Purchase Invoice-naming_series-options",
 					"YRP Purchase Invoice-naming_series-default",
 					"YRP Purchase Invoice Item-item_group-reqd",
@@ -97,9 +99,9 @@ fixtures = [
 			],
 		],
 	},
-	# /web role grants: base yrp leaves IPD System-Manager-only and Terms and
-	# Condition without floor-role write — the /web UI needs both usable by the
-	# floor roles, granted as Custom DocPerm (base yrp stays untouched).
+	# App-owned grants: keep the /web floor DocTypes usable and give System
+	# Manager the native Purchase Order submit permission required by approval.
+	# These are Custom DocPerm rows so base ERPNext and yrp stay untouched.
 	{
 		"dt": "Custom DocPerm",
 		"filters": [
@@ -107,6 +109,7 @@ fixtures = [
 				"parent",
 				"in",
 				[
+					"Purchase Order",
 					"YRP Item Production Detail",
 					"YRP Terms and Condition",
 					"SD YRP Sewing Plan Entry Detail",
@@ -375,6 +378,10 @@ after_build = "essdee_yrp.web_build.build_web_spa"
 # Hook on document methods and events
 
 doc_events = {
+	"*": {
+		"on_update": "essdee_yrp.telegram_approval.service.handle_document_event",
+		"on_update_after_submit": "essdee_yrp.telegram_approval.service.handle_document_event",
+	},
 	"YRP Process Cost": {"before_validate": "essdee_yrp.process_cost.before_validate"},
 	"YRP Process": {"validate": "essdee_yrp.process_validations.validate"},
 	"YRP Production Order": {
@@ -391,6 +398,9 @@ doc_events = {
 	},
 	"Purchase Order": {
 		"before_validate": "essdee_yrp.purchase_order_lots.sync_linked_lots",
+		"before_save": "essdee_yrp.purchase_order_approval.apply_draft_approval_status",
+		"before_submit": "essdee_yrp.purchase_order_approval.validate_approval_submit",
+		"on_submit": "essdee_yrp.purchase_order_approval.finalize_purchase_order_submission",
 	},
 	"Item": {
 		"validate": "essdee_yrp.item_validations.validate",
@@ -522,7 +532,9 @@ doc_events = {
 
 scheduler_events = {
 	"cron": {
-		"0 0 * * *": ["essdee_yrp.finishing.closure.auto_complete_ocr_after_30_days"],
+		"0 0 * * *": [
+			"essdee_yrp.finishing.closure.auto_close_audited_finishing_plans_after_30_days"
+		],
 	},
 	# 	"all": [
 	# 		"essdee_yrp.tasks.all"
@@ -558,6 +570,7 @@ scheduler_events = {
 # Finishing return transaction (is_return), including its two-warehouse stock
 # movement and Work Order Deliverable reversal.
 override_doctype_class = {
+	"YRP Bill Tracking": "essdee_yrp.overrides.bill_tracking.EssdeeYRPBillTracking",
 	"YRP Delivery Challan": "essdee_yrp.overrides.delivery_challan.EssdeeDeliveryChallan",
 	"YRP Goods Received Note": "essdee_yrp.overrides.goods_received_note.EssdeeGoodsReceivedNote",
 	"YRP Item Production Detail": "essdee_yrp.overrides.item_production_detail.EssdeeItemProductionDetail",
@@ -569,6 +582,7 @@ override_doctype_class = {
 # ------------------------------
 #
 override_whitelisted_methods = {
+	"yrp.yrp.doctype.yrp_bill_tracking.yrp_bill_tracking.cancel_vendor_bill": "essdee_yrp.overrides.bill_tracking.cancel_vendor_bill",
 	# ERP's existing PI hooks call the production_api-era Bill Tracking routes.
 	# Keep those stable while adapting their ERP PI name to F16's local PI Link.
 	"production_api.production_api.doctype.vendor_bill_tracking.vendor_bill_tracking.close_vendor_bill": "essdee_yrp.erp_purchase_invoice.close_bill_tracking_from_erp",

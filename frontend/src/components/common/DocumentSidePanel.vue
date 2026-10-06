@@ -36,12 +36,12 @@
 			</div>
 			<Button
 				v-if="showDeskButton"
-				label="Open in Desk"
+				label="Open document"
 				icon="pi pi-external-link"
 				severity="secondary"
 				outlined
 				fluid
-				@click="openInDesk"
+				@click="openDocument"
 			/>
 		</section>
 
@@ -53,6 +53,9 @@
 import Button from "primevue/button"
 import Skeleton from "primevue/skeleton"
 import { computed } from "vue"
+import { useRouter } from "vue-router"
+
+import { webDocumentPath } from "../../router/webDocumentRoutes.js"
 
 const props = defineProps({
 	doctype: { type: String, required: true },
@@ -61,6 +64,7 @@ const props = defineProps({
 	loading: { type: Boolean, default: false },
 	showDeskButton: { type: Boolean, default: true },
 })
+const router = useRouter()
 
 const visibleItems = computed(() => props.items.filter((item) => item.fieldname))
 
@@ -72,10 +76,7 @@ function display(item) {
 	return value
 }
 
-function openInDesk() {
-	const slug = props.doctype.toLowerCase().replaceAll(" ", "-")
-	window.open(`/app/${encodeURIComponent(slug)}/${encodeURIComponent(props.doc.name)}`, "_blank", "noopener")
-}
+function openDocument() { router.push(webDocumentPath(props.doctype, props.doc.name).replace(/^\/web(?=\/)/, "")) }
 </script>
 
 <style scoped>

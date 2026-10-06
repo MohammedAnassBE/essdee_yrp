@@ -79,8 +79,10 @@ def calculate_grn_receivables(
 		quantity = flt(output.get("qty"))
 		if quantity <= 0:
 			continue
-		target = _match_calculated_receivable(work_order, output)
-		desired_by_receivable[target.name] = flt(desired_by_receivable.get(target.name)) + quantity
+		for target, allocated_quantity in _allocate_calculated_receivables(work_order, output):
+			desired_by_receivable[target.name] = (
+				flt(desired_by_receivable.get(target.name)) + allocated_quantity
+			)
 
 	from yrp.stock.dimensions import apply_dimension_defaults
 	from yrp.stock.save_stock_items import group_items_for_ui
@@ -276,7 +278,7 @@ def _validated_grn_demands(work_order, ipd, rows):
 	return demands
 
 
-def _match_calculated_receivable(work_order, output):
+def _matching_calculated_receivables(work_order, output):
 	from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import _normal_json
 
 	candidates = [
@@ -292,13 +294,52 @@ def _match_calculated_receivable(work_order, output):
 		exact = [row for row in candidates if cstr(row.get(fieldname)) == cstr(value)]
 		if exact:
 			candidates = exact
-	if len(candidates) != 1:
+	return sorted(
+		candidates,
+		key=lambda row: (cint(row.get("idx")), cstr(row.get("name"))),
+	)
+
+
+def _allocate_calculated_receivables(work_order, output):
+	"""Allocate one calculated SKU output across matching WO receivable rows.
+
+	A Work Order can legitimately contain multiple logical rows with the same
+	variant and dimensions (for example repeated panel requirements).  Desk
+	calculation consumes those rows in document order; treating that situation as
+	an ambiguity prevents partial receipts.  Allocate only up to each row's live
+	pending quantity and report a useful shortage when the output is too large.
+	"""
+	candidates = _matching_calculated_receivables(work_order, output)
+	if not candidates:
 		frappe.throw(
-			_("Calculated output {0} matches {1} Work Order Receivable rows; expected exactly one.").format(
-				output.get("item_variant"), len(candidates)
+			_("No pending Work Order receivable matches calculated item {0}.").format(
+				output.get("item_variant")
 			)
 		)
-	return candidates[0]
+
+	requested = flt(output.get("qty"))
+	pending_total = sum(max(flt(row.get("pending_quantity")), 0) for row in candidates)
+	if requested > pending_total + QTY_TOLERANCE:
+		frappe.throw(
+			_("Only {0} is pending for {1} in Work Order {2}; the calculation requested {3}.").format(
+				round(pending_total, 6),
+				output.get("item_variant"),
+				work_order.get("name") or "",
+				round(requested, 6),
+			)
+		)
+
+	remaining = requested
+	allocations = []
+	for target in candidates:
+		available = max(flt(target.get("pending_quantity")), 0)
+		quantity = round(min(remaining, available), 6)
+		if quantity > QTY_TOLERANCE:
+			allocations.append((target, quantity))
+			remaining = round(remaining - quantity, 6)
+		if remaining <= QTY_TOLERANCE:
+			break
+	return allocations
 
 
 def _apply_calculated_receivable_quantities(rows, desired_by_receivable, received_type):

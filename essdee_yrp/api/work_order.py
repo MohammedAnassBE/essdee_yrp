@@ -10,6 +10,7 @@ deliverables are the engine's scaled inputs; receivables are the entered rows
 themselves (1:1 v1 — the Process master's waste/excess applies later)."""
 
 import json
+import hashlib
 import re
 from itertools import groupby
 
@@ -86,6 +87,16 @@ def _step_kind(ipd, step):
 	if step["shape"] == "identity":
 		return "identity"
 	return None
+
+
+def _is_default_knitting_process(process_name):
+	return bool(
+		process_name
+		and process_name
+		== frappe.db.get_single_value(
+			"SD YRP IPD Settings", "default_knitting_process"
+		)
+	)
 
 
 def _conversion_process_row(ipd, process_name):
@@ -205,6 +216,144 @@ def _consolidate_fabric_rows(rows, child_doctype, supports_allocations=None):
 	return grouped
 
 
+def _consolidate_default_knitting_rows(rows, child_doctype, supports_allocations=None):
+	"""Collapse route-only knitting rows into one physical stock contract.
+
+	The per-route keys used while calculating must not split an otherwise
+	identical yarn or Greige-cloth row. Route weights remain in the existing
+	allocation JSON, then the consolidated physical row receives one stable key.
+	"""
+	if not rows:
+		return []
+	if supports_allocations is None:
+		supports_allocations = frappe.db.has_column(
+			child_doctype, "fabric_reference_allocations"
+		)
+	if not supports_allocations:
+		return [row.as_dict() if hasattr(row, "as_dict") else dict(row) for row in rows]
+
+	physical_rows = []
+	for row in rows:
+		payload = row.as_dict() if hasattr(row, "as_dict") else dict(row)
+		payload = dict(payload)
+		payload.pop("additional_parameters", None)
+		physical_rows.append(payload)
+
+	grouped = _consolidate_fabric_rows(
+		physical_rows,
+		child_doctype,
+		supports_allocations=True,
+	)
+	for row in grouped:
+		references = sorted(get_reference_allocations(row, row.get("qty")))
+		execution_key = _fabric_execution_key(
+			"default-knitting",
+			row.get("item_variant"),
+			row.get("uom"),
+			row.get("received_type"),
+			row.get("set_combination"),
+			*references,
+		)
+		row["additional_parameters"] = _execution_parameters(
+			execution_key,
+			_fabric_execution_key("default-knitting-route", *references),
+		)
+	return grouped
+
+
+def _fabric_execution_key(*parts):
+	"""Return a stable opaque identity for one generated execution row."""
+	raw = "|".join(cstr(part or "") for part in parts)
+	return f"fabric-{hashlib.sha1(raw.encode()).hexdigest()[:24]}"
+
+
+def _compact_matrix_key(matrix_key):
+	"""Fit an arbitrary matrix/group name inside the inherited Data field."""
+	value = cstr(matrix_key or "")
+	if value.startswith("matrix-") and len(value) == 31:
+		return value
+	return f"matrix-{hashlib.sha1(value.encode()).hexdigest()[:24]}"
+
+
+def _execution_parameters(execution_key, matrix_key, source_bucket_key=None):
+	"""Serialize execution metadata within ``additional_parameters`` (Data 140)."""
+	values = {
+		"f": cstr(execution_key),
+		"m": _compact_matrix_key(matrix_key),
+	}
+	if source_bucket_key:
+		values["s"] = cstr(source_bucket_key)
+	encoded = json.dumps(values, separators=(",", ":"))
+	if len(encoded) > 140:
+		frappe.throw(_("Fabric execution metadata exceeds the Work Order field limit."))
+	return encoded
+
+
+def _guard_untransacted_fabric_calculation(wo):
+	"""Prevent replacement after any calculated input/output has moved."""
+	for row in wo.get("deliverables") or []:
+		if not row.get("is_calculated"):
+			continue
+		if (
+			flt(row.get("stock_update")) > 0.000001
+			or flt(row.get("qty")) - flt(row.get("pending_quantity")) > 0.000001
+		):
+			frappe.throw(
+				_(
+					"Calculated fabric inputs have already moved on a Delivery Challan or "
+					"Goods Received Note. Cancel those transactions before recalculating."
+				)
+			)
+	for row in wo.get("receivables") or []:
+		if flt(row.get("qty")) - flt(row.get("pending_quantity")) > 0.000001:
+			frappe.throw(
+				_(
+					"Fabric outputs have already been received. Cancel those Goods Received "
+					"Notes before recalculating."
+				)
+			)
+
+
+def _lock_calculation_target(work_order):
+	"""Lock a versioned calculation in the shared Lot -> Work Order order."""
+	version_expression = (
+		"IFNULL(cloth_execution_version, 0)"
+		if frappe.db.has_column("YRP Work Order", "cloth_execution_version")
+		else "0"
+	)
+	rows = frappe.db.sql(
+		f"""
+		SELECT lot, {version_expression}
+		FROM `tabYRP Work Order`
+		WHERE name = %s
+		""",
+		(work_order,),
+	)
+	if not rows:
+		frappe.throw(_("Work Order {0} does not exist.").format(work_order))
+	lot, version = rows[0]
+	if int(version or 0) == 1 and lot:
+		frappe.db.sql(
+			"SELECT name FROM `tabSD YRP Lot` WHERE name = %s FOR UPDATE",
+			(lot,),
+		)
+	locked = frappe.db.sql(
+		f"""
+		SELECT lot, {version_expression}
+		FROM `tabYRP Work Order`
+		WHERE name = %s
+		FOR UPDATE
+		""",
+		(work_order,),
+	)
+	if not locked:
+		frappe.throw(_("Work Order {0} no longer exists.").format(work_order))
+	locked_lot, locked_version = locked[0]
+	if int(version or 0) == 1 and (locked_lot != lot or int(locked_version or 0) != 1):
+		frappe.throw(_("Work Order changed while Calculate was starting. Reopen it and try again."))
+	return locked_lot, int(locked_version or 0)
+
+
 @frappe.whitelist()
 def get_fabric_deliverable_context(work_order, source_process=None):
 	"""Popup context for this WO's selected Lot fabric and process.
@@ -214,6 +363,12 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 	"""
 	wo = frappe.get_doc("YRP Work Order", work_order)
 	wo.check_permission("read")
+	from essdee_yrp.cloth_execution import is_versioned_cloth_work_order
+
+	versioned_execution = is_versioned_cloth_work_order(wo)
+	manual_knitting_process = versioned_execution and _is_default_knitting_process(
+		wo.process_name
+	)
 	lot = _get_lot(wo)
 
 	rows = []
@@ -256,14 +411,22 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 			row_source_options = get_source_process_options(ipd, wo.process_name)
 			if not source_options:
 				source_options = row_source_options
-			if source_process:
+			selected_source_step = source_process
+			if versioned_execution and not selected_source_step and row_source_options:
+				saved_step = wo.get("fabric_source_process_step")
+				selected_source_step = (
+					saved_step
+					if any(option["value"] == saved_step for option in row_source_options)
+					else row_source_options[0]["value"]
+				)
+			if selected_source_step:
 				selected_source = fill_from_source_grns(
 					qty_rows,
 					lot=lot.name,
 					ipd=ipd,
 					current_process=wo.process_name,
 					current_work_order=wo.name,
-					source_process=source_process,
+					source_process=selected_source_step,
 				)
 				if selected_source.get("unmatched"):
 					warnings.append(
@@ -285,6 +448,8 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 				# process means the helper returns the target colour itself.
 				qty_row["knit_colour"] = get_knitting_output_colour(ipd, target_colour, target_dia)
 				qty_row["knit_dia"] = (qty_row.get("out_attrs") or {}).get(FABRIC_DIA_ATTRIBUTE)
+		if row_kind == "knitting" and manual_knitting_process:
+			_hydrate_knitting_execution_defaults(qty_rows, wo)
 		# Knitting yarn + cloth-per-kg-yarn come from the matched generic row (its
 		# input_item / quantity_ratio) so a generic IPD with blank tab yarn_item /
 		# cloth_per_kg_yarn still resolves. The adapter fills the same values from
@@ -307,6 +472,7 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 				"treated_item": treated_item,
 				"production_detail": fabric.production_detail,
 				"kind": row_kind,
+				"manual_io": row_kind == "knitting" and manual_knitting_process,
 				"reference_routed": reference_routed,
 				"ratio": (flt(kn_row.get("quantity_ratio")) if kn_row else flt(ipd.get("cloth_per_kg_yarn")))
 				or 1,
@@ -487,6 +653,9 @@ def _matrix_qty_rows(ipd, process_name, kind):
 				{
 					"key": f"{name}:{group_index}",
 					"label": label,
+					"output_item": matrix.output_item or ipd.item,
+					"output_uom": out.get("uom")
+					or frappe.db.get_value("Item", matrix.output_item or ipd.item, "stock_uom"),
 					# section/row_label split the label for the popup's colour-section
 					# layout; `label` itself stays untouched (server API compat).
 					"section": section,
@@ -504,9 +673,15 @@ def _matrix_qty_rows(ipd, process_name, kind):
 							"attrs": row.get("attrs") or {},
 							"qty": flt(row.get("qty")),
 							"uom": row.get("uom"),
+							"wastage_pct": flt(row.get("wastage_pct")),
 						}
 						for row in inputs
 					],
+					"knitting_inputs": (
+						_knitting_input_options(matrix, group, ipd, flt(out.get("qty")) or 1)
+						if kind == "knitting"
+						else []
+					),
 					"yarns": [
 						{
 							"yarn_item": row.get("item") or matrix.input_item,
@@ -519,6 +694,129 @@ def _matrix_qty_rows(ipd, process_name, kind):
 				}
 			)
 	return qty_rows
+
+
+def _knitting_input_options(matrix, group, ipd, output_qty):
+	"""Expose each matrix-valid physical yarn once for operator quantities."""
+	output_qty = flt(output_qty)
+	if output_qty <= 0:
+		return []
+	options = []
+	by_identity = {}
+	for row in group.get("input") or []:
+		item = row.get("item") or matrix.input_item or ipd.item
+		attrs = dict(row.get("attrs") or {})
+		uom = row.get("uom") or frappe.db.get_value("Item", item, "stock_uom")
+		identity = (item, tuple(sorted(attrs.items())), uom)
+		option = by_identity.get(identity)
+		if option is None:
+			option = {
+				"key": f"input:{len(options)}",
+				"item": item,
+				"attrs": attrs,
+				"uom": uom,
+				"qty_per_output": 0.0,
+			}
+			by_identity[identity] = option
+			options.append(option)
+		option["qty_per_output"] += (
+			flt(row.get("qty"))
+			* (1 + flt(row.get("wastage_pct")) / 100.0)
+			/ output_qty
+		)
+	for option in options:
+		option["qty_per_output"] = flt(option["qty_per_output"], 6)
+	return options
+
+
+def _hydrate_knitting_execution_defaults(qty_rows, wo):
+	"""Restore an untransacted Work Order's saved manual yarn/cloth contract."""
+	output_by_reference = {}
+	for row in wo.get("receivables") or []:
+		for reference, qty in get_reference_allocations(row, row.get("qty")).items():
+			output_by_reference[reference] = output_by_reference.get(reference, 0) + flt(qty)
+
+	input_by_reference_and_variant = {}
+	input_references = set()
+	for row in wo.get("deliverables") or []:
+		if not row.get("is_calculated") or not row.get("item_variant"):
+			continue
+		item = (
+			frappe.db.get_value("Item", row.item_variant, "variant_of")
+			or row.item_variant
+		)
+		attrs = frozenset(_variant_attrs(row.item_variant).items())
+		for reference, qty in get_reference_allocations(row, row.get("qty")).items():
+			input_references.add(reference)
+			key = (reference, item, attrs)
+			input_by_reference_and_variant[key] = (
+				input_by_reference_and_variant.get(key, 0) + flt(qty)
+			)
+
+	for qty_row in qty_rows:
+		reference = qty_row.get("reference_item_variant")
+		if reference and reference in output_by_reference:
+			qty_row["prefill"] = flt(output_by_reference[reference], 3)
+		for option in qty_row.get("knitting_inputs") or []:
+			declared = set(_item_attribute_names(option["item"]))
+			attrs = frozenset(
+				(key, value)
+				for key, value in (option.get("attrs") or {}).items()
+				if key in declared and value
+			)
+			saved_key = (reference, option["item"], attrs)
+			if reference in input_references:
+				option["prefill"] = flt(input_by_reference_and_variant.get(saved_key), 3)
+			else:
+				option["prefill"] = flt(
+					flt(qty_row.get("prefill")) * flt(option.get("qty_per_output")),
+					3,
+				)
+
+
+def _validated_manual_knitting_inputs(line, matrix, group, ipd):
+	"""Accept quantities only for opaque input options derived from the matrix."""
+	submitted = line.get("inputs")
+	if not isinstance(submitted, list):
+		frappe.throw(_("Knitting yarn inputs must be a list."))
+	out = (group.get("output") or [{}])[0]
+	allowed = {
+		row["key"]: row
+		for row in _knitting_input_options(
+			matrix, group, ipd, flt(out.get("qty")) or 1
+		)
+	}
+	result = []
+	seen = set()
+	for row in submitted:
+		key = row.get("key")
+		if key in seen:
+			frappe.throw(_("Duplicate knitting yarn input {0}.").format(key or ""))
+		seen.add(key)
+		option = allowed.get(key)
+		if not option:
+			frappe.throw(
+				_("Yarn input {0} is not generated by this IPD matrix — reopen Calculate.").format(
+					key or ""
+				)
+			)
+		qty = flt(row.get("qty"))
+		if qty < 0:
+			frappe.throw(_("Knitting yarn quantity cannot be negative."))
+		if qty <= 0:
+			continue
+		result.append(
+			{
+				**option,
+				"item_variant": _resolve_variant(option["item"], option.get("attrs") or {}),
+				"qty": qty,
+			}
+		)
+	if not result:
+		frappe.throw(
+			_("Enter at least one yarn deliverable quantity for every knitting receivable.")
+		)
+	return result
 
 
 def _identity_qty_rows(ipd, treated_item, identity_row=None):
@@ -959,6 +1257,91 @@ def _get_work_order_selection_context(lot, process_name, check_permission=False)
 	}
 
 
+def _exact_source_bucket(source, line, matrix_key, reference_item_variant):
+	from essdee_yrp.fabric_source import _execution_key
+
+	pool = (source.get("selected") or {}).get("pool") or {}
+	bucket_key = line.get("source_bucket_key")
+	bucket = (pool.get("buckets") or {}).get(bucket_key)
+	if not bucket:
+		frappe.throw(_("The selected source GRN row is no longer available. Reopen Calculate."))
+	if (
+		not pool.get("physical_knitting_source")
+		and reference_item_variant
+		and (bucket.get("reference_item_variant") or None)
+		!= (reference_item_variant or None)
+	):
+		frappe.throw(_("The exact source route changed. Reopen Calculate."))
+	expected_key = _execution_key(
+		bucket_key, matrix_key, bucket.get("reference_item_variant")
+	)
+	if line.get("key") != expected_key:
+		frappe.throw(_("The exact source route identity changed. Reopen Calculate."))
+	return bucket, expected_key
+
+
+def _source_principal(group, matrix, ipd, bucket):
+	"""Resolve the one matrix input represented by an actual source receipt."""
+	from essdee_yrp.fabric_source import _matches_input
+
+	item_variant = bucket.get("item_variant")
+	variant = {
+		"item": frappe.get_cached_value("Item", item_variant, "variant_of") or item_variant,
+		"attrs": _variant_attrs(item_variant),
+	}
+	matches = []
+	for index, inp in enumerate(group.get("input") or []):
+		spec = {
+			"item": inp.get("item") or matrix.input_item or ipd.item,
+			"attrs": inp.get("attrs") or {},
+		}
+		if _matches_input(variant, spec, allow_dia_variance=True):
+			matches.append((index, inp))
+	if len(matches) != 1:
+		frappe.throw(
+			_("Source GRN item {0} does not resolve to one matrix input. Reopen Calculate.").format(
+				bucket.get("source_grn_item")
+			)
+		)
+	return matches[0]
+
+
+def _project_exact_output(
+	lot,
+	ipd,
+	process_name,
+	route_item,
+	output_item,
+	planned_input_attrs,
+	planned_output_attrs,
+	actual_attrs,
+):
+	from essdee_yrp.fabric_source import project_output_attributes
+	from essdee_yrp.fabric_substitution import (
+		get_process_conversion_index,
+		resolve_process_conversion,
+	)
+
+	projected_attrs = project_output_attributes(
+		actual_attrs, planned_input_attrs, planned_output_attrs
+	)
+	planned_item = _resolve_variant(output_item, planned_output_attrs)
+	projected_item = _resolve_variant(output_item, projected_attrs)
+	index = get_process_conversion_index(
+		lot,
+		process_name=process_name,
+		production_detail=ipd.name,
+		for_update=True,
+	)
+	projected_item = resolve_process_conversion(
+		index,
+		route_item=route_item,
+		planned_item=planned_item,
+		projected_item=projected_item,
+	)
+	return projected_item, _variant_attrs(projected_item)
+
+
 @frappe.whitelist()
 def calculate_fabric_deliverables(work_order, rows, modified=None, source_process=None):
 	"""rows = [{fabric_row, colour?, yarn_qty?, entries: [{out_attrs, qty}]}].
@@ -984,11 +1367,22 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 	For knitting/dyeing/compacting the matrix output_item IS the cloth item, so
 	their behaviour is unchanged."""
 	rows = frappe.parse_json(rows) if isinstance(rows, str) else rows
+	_lock_calculation_target(work_order)
 	wo = frappe.get_doc("YRP Work Order", work_order)
 	wo.check_permission("write")
 	_guard_not_modified(wo, modified)
 	if wo.docstatus != 0:
 		frappe.throw(_("Calculate can only update a draft Work Order."))
+	_guard_untransacted_fabric_calculation(wo)
+	first_calculation = not any(
+		row.get("is_calculated") for row in wo.get("deliverables") or []
+	) and not bool(wo.get("receivables"))
+	from essdee_yrp.cloth_execution import is_versioned_cloth_work_order
+
+	versioned_execution = is_versioned_cloth_work_order(wo)
+	manual_knitting_process = versioned_execution and _is_default_knitting_process(
+		wo.process_name
+	)
 
 	lot = _get_lot(wo)
 	fabric_rows = {f.name: f for f in _selected_lot_fabrics(wo, lot)}
@@ -1030,15 +1424,57 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 				)
 			frappe.throw(_("Unknown Lot fabric row {0}.").format(entry.get("fabric_row")))
 		ipd = frappe.get_cached_doc("YRP Item Production Detail", fabric.production_detail)
+		from essdee_yrp.fabric_source import get_source_process_options
+
+		source_options = get_source_process_options(ipd, wo.process_name)
+		if versioned_execution and source_options and not source_process:
+			frappe.throw(
+				_(
+					"Process {0} must use submitted stock from its immediate predecessor. "
+					"Reopen Calculate to refresh the exact source rows."
+				).format(wo.process_name)
+			)
 		if source_process:
-			source_demands.setdefault(
+			source = source_demands.setdefault(
 				ipd.name,
 				{
 					"ipd": ipd,
 					"cloth_item": fabric.cloth_item,
 					"rows": [],
+					"selected": None,
+					"selection_mode": None,
 				},
 			)
+			positive_lines = [
+				line
+				for line in entry.get("entries") or []
+				if flt(line.get("qty")) > 0
+			]
+			bucket_keys = [line.get("source_bucket_key") for line in positive_lines]
+			if any(bucket_keys) and not all(bucket_keys):
+				frappe.throw(_("Cloth source selection cannot contain mixed keyed and legacy rows."))
+			selection_mode = "exact" if bucket_keys and all(bucket_keys) else "legacy"
+			if source["selection_mode"] and source["selection_mode"] != selection_mode:
+				frappe.throw(_("Cloth source selection cannot contain mixed keyed and legacy rows."))
+			source["selection_mode"] = selection_mode
+			if selection_mode == "exact" and source["selected"] is None:
+				from essdee_yrp.fabric_source import validate_source_demands
+
+				source["selected"] = validate_source_demands(
+					[
+						{
+							"qty": line.get("qty"),
+							"source_bucket_key": line.get("source_bucket_key"),
+						}
+						for line in positive_lines
+					],
+					lot=lot.name,
+					ipd=ipd,
+					cloth_item=fabric.cloth_item,
+					current_process=wo.process_name,
+					current_work_order=wo.name,
+					source_process=source_process,
+				)
 		kind = _step_kind(ipd, get_fabric_step(ipd, wo.process_name))
 		identity_row = get_identity_process_row(ipd, wo.process_name) if kind == "identity" else None
 		if not kind:
@@ -1072,8 +1508,9 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 				qty = flt(line.get("qty"))
 				if qty <= 0:
 					continue
+				matrix_key = line.get("matrix_key") or line.get("key")
 				out_attrs = dict(line.get("out_attrs") or {})
-				identity_qty_row = allowed_by_key.get(line.get("key"))
+				identity_qty_row = allowed_by_key.get(matrix_key)
 				if not identity_qty_row:
 					matches = allowed_by_attrs.get(frozenset(out_attrs.items())) or []
 					identity_qty_row = matches[0] if len(matches) == 1 else None
@@ -1083,35 +1520,91 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 							out_attrs or treated_item, ipd.name
 						)
 					)
-				variant = _resolve_variant(treated_item, out_attrs)
 				reference = identity_qty_row.get("reference_item_variant")
+				input_variant = _resolve_variant(treated_item, out_attrs)
+				output_variant = input_variant
+				source_bucket = None
+				parameters = None
+				source = source_demands.get(ipd.name)
+				if source and source.get("selection_mode") == "exact":
+					from essdee_yrp.fabric_source import consume_source_bucket
+					from yrp.stock.utils import get_conversion_factor
+
+					line_reference = line.get("reference_item_variant") or reference
+					source_bucket, execution_key = _exact_source_bucket(
+						source, line, matrix_key, line_reference
+					)
+					reference = source_bucket.get("reference_item_variant") or reference
+					input_variant = source_bucket["item_variant"]
+					output_variant, out_attrs = _project_exact_output(
+						lot.name,
+						ipd,
+						wo.process_name,
+						reference,
+						treated_item,
+						identity_qty_row.get("in_attrs") or {},
+						identity_qty_row.get("out_attrs") or {},
+						_variant_attrs(input_variant),
+					)
+					factor = flt(
+						(get_conversion_factor(input_variant, treated_uom) or {}).get(
+							"conversion_factor"
+						)
+					) or 1
+					consume_source_bucket(
+						source["selected"]["pool"],
+						line.get("source_bucket_key"),
+						qty * factor,
+					)
+					parameters = _execution_parameters(
+						execution_key, matrix_key, line.get("source_bucket_key")
+					)
 				principal = {
-					"item_variant": variant,
+					"item_variant": input_variant,
 					"qty": qty,
 					"uom": treated_uom,
 					"pending_quantity": qty,
-					"received_type": default_received_type,
+					"received_type": (
+						source_bucket.get("received_type") if source_bucket else default_received_type
+					),
 					"is_calculated": 1,
 					"fabric_reference_variant": reference,
 				}
+				if parameters:
+					principal["additional_parameters"] = parameters
+				if source_bucket:
+					principal.update(
+						{
+							"source_grn": source_bucket.get("source_grn"),
+							"source_grn_item": source_bucket.get("source_grn_item"),
+							"set_combination": source_bucket.get("set_combination"),
+							**(source_bucket.get("stock_dimensions") or {}),
+						}
+					)
 				deliverables.append(principal)
 				if source_process:
 					source_demands[ipd.name]["rows"].append(principal)
 				recv_qty = flt(qty * recv_factor, 3)
-				receivables.append(
-					{
-						"item_variant": variant,
+				receivable = {
+						"item_variant": output_variant,
 						"qty": recv_qty,
 						"uom": treated_uom,
 						"pending_quantity": recv_qty,
 						"fabric_reference_variant": reference,
 					}
-				)
+				if parameters:
+					receivable["additional_parameters"] = parameters
+				receivables.append(receivable)
 				identity_bom_demands.append(
 					{
 						"attrs": out_attrs,
 						"qty": qty,
-						"reference_item_variant": reference or variant,
+						"reference_item_variant": reference or output_variant,
+						"additional_parameters": (
+							_execution_parameters(execution_key, matrix_key)
+							if parameters
+							else None
+						),
 					}
 				)
 			_append_bom_deliverables(
@@ -1139,12 +1632,20 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 		aggregated = {}
 		fabric_receivables = []
 		bom_demands = []
+		entry_uses_manual_inputs = False
 		for line in entry.get("entries") or []:
 			qty = flt(line.get("qty"))
+			if qty < 0:
+				frappe.throw(_("Receivable quantity cannot be negative."))
 			if qty <= 0:
+				if any(flt(row.get("qty")) > 0 for row in line.get("inputs") or []):
+					frappe.throw(
+						_("Enter the expected knitting receivable quantity for every yarn delivery.")
+					)
 				continue
 			line_colour = _attribute_value(line.get("colour")) or colour
-			matrix, group = _resolve_matrix_group(matrix_cache, line.get("key"), ipd, wo.process_name)
+			matrix_key = line.get("matrix_key") or line.get("key")
+			matrix, group = _resolve_matrix_group(matrix_cache, matrix_key, ipd, wo.process_name)
 			if kind == "knitting" and has_colour:
 				if matrix.reference_item_variant:
 					reference = frappe.get_cached_doc("Item", matrix.reference_item_variant)
@@ -1188,6 +1689,39 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 			if kind == "knitting" and line_colour and has_colour:
 				out_attrs[FABRIC_COLOUR_ATTRIBUTE] = line_colour
 			recv_item = matrix.output_item or fabric.cloth_item
+			source = source_demands.get(ipd.name)
+			source_bucket = None
+			source_input_index = None
+			execution_key = None
+			parameters = None
+			if source and source.get("selection_mode") == "exact":
+				source_bucket, execution_key = _exact_source_bucket(
+					source, line, matrix_key, reference_item_variant
+				)
+				source_input_index, source_input = _source_principal(
+					group, matrix, ipd, source_bucket
+				)
+				_projected_item, out_attrs = _project_exact_output(
+					lot.name,
+					ipd,
+					wo.process_name,
+					reference_item_variant,
+					recv_item,
+					source_input.get("attrs") or {},
+					out_combo.get("attrs") or {},
+					_variant_attrs(source_bucket["item_variant"]),
+				)
+				parameters = _execution_parameters(
+					execution_key, matrix_key, line.get("source_bucket_key")
+				)
+			elif versioned_execution and not source_process:
+				execution_key = _fabric_execution_key(
+					fabric.name,
+					matrix_key,
+					reference_item_variant,
+					line_colour,
+				)
+				parameters = _execution_parameters(execution_key, matrix_key)
 			if not reference_item_variant:
 				reference_item_variant = _resolve_variant(recv_item, out_attrs)
 			reference_attrs = _variant_attrs(reference_item_variant) if reference_item_variant else out_attrs
@@ -1196,30 +1730,110 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 					"attrs": reference_attrs,
 					"qty": qty,
 					"reference_item_variant": reference_item_variant,
+					"additional_parameters": (
+						_execution_parameters(execution_key, matrix_key)
+						if parameters
+						else None
+					),
 				}
 			)
 
-			for inp in group.get("input") or []:
-				input_item = inp.get("item") or matrix.input_item or ipd.item
-				inp_qty = flt(inp.get("qty")) * scale * (1 + flt(inp.get("wastage_pct")) / 100.0)
-				variant = _resolve_variant(input_item, inp.get("attrs") or {})
-				key = (variant, inp.get("uom"), reference_item_variant or "")
-				aggregated.setdefault(key, {"item": input_item, "qty": 0.0})
-				aggregated[key]["qty"] += inp_qty
+			manual_inputs = None
+			if manual_knitting_process and "inputs" in line:
+				manual_inputs = _validated_manual_knitting_inputs(line, matrix, group, ipd)
+				entry_uses_manual_inputs = True
+
+			if manual_inputs is not None:
+				for inp in manual_inputs:
+					key = (
+						inp["item_variant"],
+						inp.get("uom"),
+						reference_item_variant or "",
+						execution_key or "",
+						"",
+					)
+					aggregated.setdefault(
+						key,
+						{
+							"item": inp["item"],
+							"qty": 0.0,
+							"additional_parameters": parameters,
+						},
+					)
+					aggregated[key]["qty"] += flt(inp["qty"])
+			else:
+				for input_index, inp in enumerate(group.get("input") or []):
+					from yrp.stock.utils import get_conversion_factor
+
+					input_item = inp.get("item") or matrix.input_item or ipd.item
+					inp_qty = flt(inp.get("qty")) * scale * (
+						1 + flt(inp.get("wastage_pct")) / 100.0
+					)
+					is_source_input = bool(
+						source_bucket and input_index == source_input_index
+					)
+					variant = (
+						source_bucket["item_variant"]
+						if is_source_input
+						else _resolve_variant(input_item, inp.get("attrs") or {})
+					)
+					source_item = source_bucket.get("source_grn_item") if is_source_input else ""
+					row_parameters = parameters if (is_source_input or not source_process) else None
+					key = (
+						variant,
+						inp.get("uom"),
+						reference_item_variant or "",
+						execution_key if row_parameters else "",
+						source_item or "",
+					)
+					aggregated.setdefault(
+						key,
+						{
+							"item": input_item,
+							"qty": 0.0,
+							"additional_parameters": row_parameters,
+							"source_grn": source_bucket.get("source_grn") if is_source_input else None,
+							"source_grn_item": source_item or None,
+							"source_received_type": (
+								source_bucket.get("received_type") if is_source_input else None
+							),
+							"source_set_combination": (
+								source_bucket.get("set_combination") if is_source_input else None
+							),
+							"source_stock_dimensions": (
+								source_bucket.get("stock_dimensions") if is_source_input else None
+							),
+						},
+					)
+					aggregated[key]["qty"] += inp_qty
+					if is_source_input:
+						from essdee_yrp.fabric_source import consume_source_bucket
+
+						factor = flt(
+							(get_conversion_factor(variant, inp.get("uom")) or {}).get(
+								"conversion_factor"
+							)
+						) or 1
+						consume_source_bucket(
+							source["selected"]["pool"],
+							line.get("source_bucket_key"),
+							inp_qty * factor,
+						)
 
 			# The receivable is the STEP's output item (a mid-chain conversion —
 			# grey yarn -> dyed yarn — produces the dyed yarn, NOT the Lot's cloth).
 			# For knitting/dyeing/compacting matrices output_item IS the cloth item.
 			recv_qty = flt(qty * recv_factor, 3)
-			fabric_receivables.append(
-				{
+			receivable = {
 					"item_variant": _resolve_variant(recv_item, out_attrs),
 					"qty": recv_qty,
 					"uom": _default_uom(recv_item),
 					"pending_quantity": recv_qty,
 					"fabric_reference_variant": reference_item_variant,
 				}
-			)
+			if parameters:
+				receivable["additional_parameters"] = parameters
+			fabric_receivables.append(receivable)
 		if not fabric_receivables:
 			continue
 
@@ -1227,22 +1841,47 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 		# input. Valid while knitting matrices have exactly ONE resolved input
 		# variant; with more inputs the override is ignored.
 		yarn_override = flt(entry.get("yarn_qty"))
-		if kind == "knitting" and yarn_override > 0 and len(aggregated) == 1:
+		if (
+			kind == "knitting"
+			and not entry_uses_manual_inputs
+			and yarn_override > 0
+			and len(aggregated) == 1
+		):
 			next(iter(aggregated.values()))["qty"] = yarn_override
 
-		for (variant, uom, reference_item_variant), data in aggregated.items():
+		for (
+			variant,
+			uom,
+			reference_item_variant,
+			_execution_key_value,
+			_source_item,
+		), data in aggregated.items():
 			qty = flt(data["qty"], 3)
 			principal = {
 				"item_variant": variant,
 				"qty": qty,
 				"uom": uom or _default_uom(data["item"]),
 				"pending_quantity": qty,
-				"received_type": default_received_type,
+				"received_type": data.get("source_received_type") or default_received_type,
 				"is_calculated": 1,
 				"fabric_reference_variant": reference_item_variant or None,
 			}
+			if data.get("additional_parameters"):
+				principal["additional_parameters"] = data["additional_parameters"]
+			if data.get("source_grn_item"):
+				principal.update(
+					{
+						"source_grn": data.get("source_grn"),
+						"source_grn_item": data.get("source_grn_item"),
+						"set_combination": data.get("source_set_combination"),
+						**(data.get("source_stock_dimensions") or {}),
+					}
+				)
 			deliverables.append(principal)
-			if source_process:
+			if source_process and (
+				source_demands[ipd.name].get("selection_mode") == "legacy"
+				or principal.get("source_grn_item")
+			):
 				source_demands[ipd.name]["rows"].append(principal)
 
 		# Item BOM rows are process consumables in addition to the matrix's
@@ -1268,6 +1907,7 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 		receivables,
 		source_demands=source_demands,
 		source_process=source_process,
+		first_calculation=first_calculation,
 	)
 
 
@@ -1279,6 +1919,7 @@ def _save_calculated_fabric_rows(
 	*,
 	source_demands,
 	source_process,
+	first_calculation,
 ):
 	"""Normalize, consolidate, and persist calculated Work Order rows."""
 	# Base YRP now treats transaction UOM as Item master data. Preserve the
@@ -1289,21 +1930,44 @@ def _save_calculated_fabric_rows(
 
 	selected_source = None
 	if source_process:
+		from essdee_yrp.cloth_execution import resolve_downstream_execution_version
 		from essdee_yrp.fabric_source import validate_source_demands
 
+		source_rows = []
+		source_modes = set()
 		for source in source_demands.values():
-			selected_source = validate_source_demands(
-				source["rows"],
-				lot=lot.name,
-				ipd=source["ipd"],
-				cloth_item=source["cloth_item"],
-				current_process=wo.process_name,
-				current_work_order=wo.name,
-				source_process=source_process,
-			)
+			selected = source.get("selected")
+			if selected is None:
+				selected = validate_source_demands(
+					source["rows"],
+					lot=lot.name,
+					ipd=source["ipd"],
+					cloth_item=source["cloth_item"],
+					current_process=wo.process_name,
+					current_work_order=wo.name,
+					source_process=source_process,
+				)
+			source["selected"] = selected
+			selected_source = selected
+			source_modes.add(selected.get("source_mode"))
+			source_rows.extend(source["rows"])
+		if len(source_modes) > 1:
+			frappe.throw(_("Cloth source selection cannot contain mixed keyed and legacy rows."))
+		resolve_downstream_execution_version(
+			wo,
+			source_rows,
+			first_calculation=first_calculation,
+		)
 
-	deliverables = _consolidate_fabric_rows(deliverables, "YRP Work Order Deliverables")
-	receivables = _consolidate_fabric_rows(receivables, "YRP Work Order Receivables")
+	from essdee_yrp.cloth_execution import is_versioned_cloth_work_order
+
+	consolidate_rows = (
+		_consolidate_default_knitting_rows
+		if is_versioned_cloth_work_order(wo) and _is_default_knitting_process(wo.process_name)
+		else _consolidate_fabric_rows
+	)
+	deliverables = consolidate_rows(deliverables, "YRP Work Order Deliverables")
+	receivables = consolidate_rows(receivables, "YRP Work Order Receivables")
 
 	# Every calculated row is its OWN logical row for the Vue item editors —
 	# group_items_for_ui buckets by row_index, and rows without one collapse
@@ -1332,6 +1996,7 @@ def _save_calculated_fabric_rows(
 		wo.fabric_source_process = selected_source["process_name"] if selected_source else None
 	if wo.meta.get_field("fabric_source_process_step"):
 		wo.fabric_source_process_step = selected_source["value"] if selected_source else None
+	wo.flags.essdee_fabric_calculate = True
 	wo.save()
 
 	return {"deliverables": len(deliverables), "receivables": len(receivables)}
@@ -1393,6 +2058,7 @@ def _append_bom_deliverables(
 					"received_type": default_received_type,
 					"is_calculated": 1,
 					"fabric_reference_variant": (demand.get("reference_item_variant") or None),
+					"additional_parameters": demand.get("additional_parameters"),
 				}
 			)
 

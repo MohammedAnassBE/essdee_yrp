@@ -99,7 +99,7 @@
 </template>
 
 <script setup>
-import { attributeValue, number, pending, quantity } from "./reportUtils.js"
+import { attributeValue, number, pending, quantity } from "../../../components/reports/reportUtils.js"
 
 defineProps({ groups: { type: Array, default: () => [] } })
 

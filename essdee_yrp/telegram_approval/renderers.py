@@ -1,0 +1,116 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+
+import frappe
+from frappe.utils import flt, format_date, fmt_money
+
+
+MAX_MESSAGE_LENGTH = 3900
+MessageContextProvider = Callable[[object], dict]
+
+
+def render_message(doc, route: frappe._dict) -> str:
+	context = get_message_context(doc, route)
+	if route.get("message_template"):
+		message = frappe.render_template(route.message_template, context).strip()
+	else:
+		message = render_generic(doc, route)
+	return _truncate_message(message)
+
+
+def get_message_context(doc, route):
+	context = {
+		"doc": doc,
+		"route": route,
+		"format_currency": _format_currency,
+		"format_date": format_date,
+		"format_qty": _format_qty,
+	}
+	provider = MESSAGE_CONTEXT_PROVIDERS.get(doc.doctype)
+	if provider:
+		context.update(provider(doc))
+	return context
+
+
+def get_purchase_order_context(doc):
+	return {
+		"purchase_order_items": [
+			frappe._dict(
+				{
+					"item": row.get("item_code") or "-",
+					"qty": flt(row.get("qty")),
+					"lot": row.get("lot"),
+					"rate": flt(row.get("rate")),
+				}
+			)
+			for row in (doc.get("items") or [])
+		]
+	}
+
+
+def get_purchase_invoice_context(doc):
+	work_order_rows = list(doc.get("pi_work_order_billed_details") or [])
+	work_orders = list(dict.fromkeys(row.work_order for row in work_order_rows if row.work_order))
+	return {
+		"summary": frappe._dict(
+			{
+				"debit_amount": _get_purchase_invoice_debit_amount(doc, work_orders),
+				"total_amount": flt(doc.get("total")),
+				"total_delivered": sum(flt(row.total_delivered) for row in work_order_rows),
+				"total_received": sum(flt(row.total_received) for row in work_order_rows),
+				"work_orders": ", ".join(work_orders) if work_orders else "Not applicable",
+			}
+		)
+	}
+
+
+def render_generic(doc, route):
+	return "\n".join(
+		[
+			"APPROVAL REQUIRED",
+			"─────────────────",
+			f"Document: {doc.doctype}",
+			f"Name: {doc.name}",
+			f"State: {route.trigger_value}",
+			f"Requested by: {doc.modified_by}",
+		]
+	)
+
+
+def _format_qty(value):
+	number = flt(value)
+	return f"{number:,.2f}".rstrip("0").rstrip(".")
+
+
+def _format_currency(value):
+	currency = frappe.defaults.get_global_default("currency")
+	return fmt_money(value, currency=currency)
+
+
+def _get_purchase_invoice_debit_amount(doc, work_orders):
+	debit_rows = list(doc.get("purchase_invoice_debit_details") or [])
+	if debit_rows:
+		return sum(flt(row.debit_value) for row in debit_rows)
+	if not work_orders:
+		return 0
+	debits = frappe.get_all(
+		"Essdee Debit",
+		filters={"against": "YRP Work Order", "against_id": ["in", work_orders], "docstatus": 1},
+		fields=["debit_value"],
+		limit_page_length=0,
+	)
+	return sum(flt(row.debit_value) for row in debits)
+
+
+def _truncate_message(message):
+	if len(message) <= MAX_MESSAGE_LENGTH:
+		return message
+	suffix = "\n... Open the document to view the remaining details."
+	return f"{message[: MAX_MESSAGE_LENGTH - len(suffix)].rstrip()}{suffix}"
+
+
+MESSAGE_CONTEXT_PROVIDERS: dict[str, MessageContextProvider] = {
+	"Purchase Order": get_purchase_order_context,
+	"YRP Purchase Invoice": get_purchase_invoice_context,
+}

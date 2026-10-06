@@ -21,8 +21,10 @@ def fetch_from_old_lot(doc_name):
 	"""Return current sibling-lot loose balances without persisting UI rows."""
 	doc = frappe.get_doc("SD YRP Finishing Plan", doc_name)
 	doc.check_permission("write")
-	if doc.fp_status == "OCR Completed":
-		frappe.throw("Fetch Items is disabled for Finishing Plans in OCR Completed status.")
+	if doc.fp_status in ("Auto Closed", "OCR Completed"):
+		frappe.throw(
+			f"Fetch Items is disabled for Finishing Plans in {doc.fp_status} status."
+		)
 	ipd = frappe.get_cached_doc("YRP Item Production Detail", doc.production_detail)
 	current_colours = {
 		get_variant_attr_details(row.item_variant).get(ipd.packing_attribute)

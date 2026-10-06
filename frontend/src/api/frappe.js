@@ -154,6 +154,24 @@ export async function searchLink(
 	return Array.isArray(rows) ? rows : []
 }
 
+export async function searchLinkedDocument(
+	doctype,
+	linkDoctype,
+	linkName,
+	text = "",
+	pageLength = 20,
+) {
+	if (!doctype || !linkDoctype || !linkName) return []
+	const rows = await callMethod("essdee_yrp.api.link_search.linked_document_search", {
+		doctype,
+		link_doctype: linkDoctype,
+		link_name: linkName,
+		txt: text,
+		page_length: pageLength,
+	})
+	return Array.isArray(rows) ? rows : []
+}
+
 export async function getBulkEditFields(doctype) {
 	const fields = await callMethod("essdee_yrp.api.bulk_edit.get_bulk_edit_fields", { doctype })
 	return Array.isArray(fields) ? fields : []

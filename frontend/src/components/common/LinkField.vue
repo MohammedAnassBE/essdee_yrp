@@ -55,6 +55,7 @@ import Button from "primevue/button"
 import { computed, ref, watch } from "vue"
 
 import { searchLink } from "../../api/frappe.js"
+import { webDocumentPath } from "../../router/webDocumentRoutes.js"
 
 const props = defineProps({
 	modelValue: { type: [String, Number], default: "" },
@@ -160,7 +161,7 @@ function openRecord() {
 		props.openHandler(props.doctype, props.modelValue)
 		return
 	}
-	const route = `/app/${encodeURIComponent(props.doctype.toLowerCase().replaceAll(" ", "-"))}/${encodeURIComponent(props.modelValue)}`
+	const route = webDocumentPath(props.doctype, props.modelValue)
 	window.open(route, "_blank", "noopener")
 }
 

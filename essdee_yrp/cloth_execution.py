@@ -79,7 +79,21 @@ def get_row_execution_parameters(row):
 		value = frappe.parse_json(value)
 	except (TypeError, ValueError):
 		return {}
-	return value if isinstance(value, dict) else {}
+	if not isinstance(value, dict):
+		return {}
+	# New rows use short JSON keys because the inherited field is Data(140).
+	# Readers expose the descriptive contract names to every caller and retain
+	# compatibility with historical/full-key dictionaries.
+	aliases = {
+		"f": "fabric_execution_key",
+		"m": "matrix_key",
+		"s": "source_bucket_key",
+	}
+	result = {key: item for key, item in value.items() if key not in aliases}
+	for short, full in aliases.items():
+		if short in value and full not in result:
+			result[full] = value[short]
+	return result
 
 
 def has_fabric_execution_key(row):

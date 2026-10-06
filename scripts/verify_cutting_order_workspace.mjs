@@ -1,0 +1,230 @@
+#!/usr/bin/env node
+
+import { createRequire } from "node:module"
+import { readFileSync } from "node:fs"
+
+const require = createRequire("/home/anas/.claude/playwright/package.json")
+const { chromium } = require("playwright")
+
+const SITE = "http://erp-migration-test.site:8001"
+const [username, password] = readFileSync("/home/anas/.frappe-debug-creds-mrp3", "utf8").trim().split("\n")
+const ORDER = "**/api/method/essdee_yrp.cutting.order_workspace.*"
+const DETAIL = "**/api/method/essdee_yrp.cutting.order_detail_editor.*"
+
+function assert(condition, message) {
+	if (!condition) throw new Error(message)
+}
+
+const groups = [{
+	attributes: ["Colour"],
+	primary_attribute: "Size",
+	primary_attribute_values: ["S", "M"],
+	items: [{
+		_row_key: "g0:r0",
+		name: "STYLE-001",
+		attributes: { Colour: "Navy" },
+		item_keys: { major_colour: "Navy" },
+		values: { S: { qty: 12 }, M: { qty: 14 } },
+		total_qty: 26,
+	}],
+	size_wise_total: { S: 12, M: 14 },
+	total_sum: 26,
+}]
+
+function editorPayload({ name = null, docstatus = 0 } = {}) {
+	return {
+		record: {
+			name,
+			docstatus,
+			modified: name ? "2026-10-03 12:00:00" : null,
+			cutting_order_detail: "CO-STYLE-001-1",
+			status: docstatus === 1 ? "Submitted" : "Draft",
+			cutting_location: "Machine Cutting",
+			item: "STYLE-001",
+			maximum_no_of_plys: 100,
+			maximum_allow_percent: 10,
+			lay_no: 2,
+		},
+		detail: { name: "CO-STYLE-001-1", item: "STYLE-001", colours: ["Navy"], sizes: ["S", "M"], parts: [], is_set_item: false },
+		matrix: { groups },
+		permissions: { can_read: true, can_create: true, can_write: docstatus === 0, can_submit: docstatus === 0, can_cancel: docstatus === 1, can_amend: false, can_print: true },
+		options: { cutting_locations: ["Machine Cutting", "Manual Cutting"] },
+	}
+}
+
+function detailPayload() {
+	return {
+		record: {
+			name: "CO-STYLE-001-1", modified: "2026-10-03 11:00:00", item: "STYLE-001", version: 1,
+			primary_attribute: "Size", packing_attribute: "Colour", stiching_attribute: "Panel",
+			attribute_no: 1, is_set_item: 0, set_item_attribute: "Part", major_attribute_value: "", major_panel_value: "Top", is_same_colour: 0,
+		},
+		attributes: [{ _row_key: "attr-1", attribute: "Size", mapping: "MAP-SIZE", values: ["S", "M"] }],
+		colours: [{ _row_key: "colour-1", attribute_value: "Navy" }],
+		panels: [{ _row_key: "panel-1", stiching_attribute_value: "Top", set_item_attribute_value: "", quantity: 1, is_default: 0 }],
+		cloth_details: [],
+		set_item_combination: { attributes: [], values: [] },
+		stiching_combination: { attributes: ["Top"], values: [{ major_attribute: "Navy", val: { Top: "Navy" } }] },
+		permissions: { can_read: true, can_create: true, can_write: true },
+	}
+}
+
+function workspacePayload() {
+	return {
+		...editorPayload({ name: "CTO-WEB-00001", docstatus: 1 }),
+		details: [
+			{ fieldname: "cutting_order_detail", label: "Cutting Order Detail", value: "CO-STYLE-001-1" },
+			{ fieldname: "item", label: "Item", value: "STYLE-001" },
+			{ fieldname: "maximum_no_of_plys", label: "Maximum No of Plys", value: 100 },
+			{ fieldname: "maximum_allow_percent", label: "Maximum Allow Percent", value: 10 },
+			{ fieldname: "cutting_location", label: "Cutting Location", value: "Machine Cutting" },
+			{ fieldname: "lay_no", label: "Lay No", value: 2 },
+		],
+		completed_items: { attributes: ["Colour"], primary_attribute_values: ["S", "M"], items: [{ attributes: { Colour: "Navy" }, values: { S: 12, M: 14 }, completed: true }] },
+		incomplete_items: { attributes: ["Colour"], primary_attribute_values: ["S", "M"], items: [] },
+		planned_detail: { item_detail: [] },
+		markers: [{ name: "CM-00001", marker_name: "Navy Marker", length: 4.2, width: 62, required_piece_weight: 0.12, calculated_parts: "Top", docstatus: 1 }],
+		laysheets: [{ name: "CLS-00001", lay_no: 2, cutting_marker: "CM-00001", marker_name: "Navy Marker", status: "Bundles Generated", bundle_generated_date: "2026-10-03", printed_time: null }],
+		permissions: { can_read: true, can_create: true, can_write: false, can_submit: false, can_cancel: true, can_amend: false, can_print: true, can_read_marker: true, can_create_marker: true, can_read_laysheet: true, can_create_laysheet: true },
+		actions: { can_calculate_laysheets: true, can_get_completed: true, can_update_completed: true },
+		print_formats: [{ label: "Cutting Order", value: "Essdee Cutting Order" }],
+	}
+}
+
+const browser = await chromium.launch({ headless: true })
+const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+const page = await context.newPage()
+const errors = []
+let saved = false
+let submitted = false
+let savedBody = null
+page.on("pageerror", (error) => errors.push(`page: ${error.message}`))
+page.on("console", (message) => { if (message.type() === "error") errors.push(`console: ${message.text()}`) })
+
+await page.goto(`${SITE}/login`, { waitUntil: "domcontentloaded" })
+await page.fill("#login_email", username.trim())
+await page.fill("#login_password", password.trim())
+await Promise.all([
+	page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 20_000 }).catch(() => {}),
+	page.click(".btn-login, button[type=submit]"),
+])
+
+await page.route("**/api/method/essdee_yrp.cutting.web_capabilities.get_capabilities*", (route) => route.fulfill({
+	status: 200, contentType: "application/json", body: JSON.stringify({ message: {
+		"cutting-plans": { can_read: false, can_create: false },
+		"cutting-orders": { can_read: true, can_create: true },
+		"bulk-lay-sheets": { can_read: false, can_create: false },
+		"lay-sheet-planner": { can_read: false, can_create: false },
+		reports: { can_read: false, can_create: false },
+	} }),
+}))
+await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => route.fulfill({
+	status: 200, contentType: "application/json", body: JSON.stringify({ docs: [{ name: "SD YRP Cutting Order", is_submittable: 1, fields: [
+		{ fieldname: "cutting_order_detail", label: "Cutting Order Detail", fieldtype: "Link", options: "SD YRP Cutting Order Detail", in_list_view: 1 },
+		{ fieldname: "item", label: "Item", fieldtype: "Data", in_list_view: 1 },
+		{ fieldname: "co_status", label: "Status", fieldtype: "Select", in_list_view: 1 },
+	] }] }),
+}))
+await page.route("**/api/method/yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.get_user_listview*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }) }))
+await page.route("**/api/method/frappe.desk.reportview.get_count*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: 1 }) }))
+await page.route("**/api/resource/SD%20YRP%20Cutting%20Order*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: [{ name: "CTO-WEB-00001", cutting_order_detail: "CO-STYLE-001-1", item: "STYLE-001", co_status: "Submitted", modified: "2026-10-03 12:00:00" }] }) }))
+await page.route("**/api/method/essdee_yrp.api.link_search.link_search*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: [{ name: "CO-STYLE-001-1", label: "CO-STYLE-001-1 · STYLE-001" }] }) }))
+await page.route("**/api/method/essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_marker.sd_yrp_cutting_marker.get_web_marker*", (route) => route.fulfill({
+	status: 200, contentType: "application/json", body: JSON.stringify({ message: {
+		marker: { name: "CM-00001", docstatus: 1, marker_name: "Navy Marker", length: 4.2, width: 62, required_piece_weight: 0.12, selected_type: "Machine", panels: ["Top"], ratio_items: [{ size: "S", ratio: 1 }, { size: "M", ratio: 1 }], group_items: [{ id: 1, selected: ["Top"] }], permissions: { can_write: false, can_submit: false, can_cancel: false, can_print: false } },
+		context: { panels: ["Top"], sizes: ["S", "M"], can_create: true, can_submit: true },
+	} }),
+}))
+await page.route("**/api/method/essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet.get_web_laysheet*", (route) => route.fulfill({
+	status: 200, contentType: "application/json", body: JSON.stringify({ message: {
+		name: "CLS-00001", docstatus: 0, cutting_order: "CTO-WEB-00001", cutting_marker: "CM-00001", marker_name: "Navy Marker", lay_no: 2, status: "Bundles Generated", ratios: [], cloth_details: [], accessory_details: [], bundles: [], permissions: { can_write: false, can_edit_details: false, can_generate: false, can_print_labels: false, can_cancel: false, can_print_laysheet: false },
+	} }),
+}))
+await page.route(DETAIL, async (route) => {
+	await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: detailPayload() }) })
+})
+await page.route(ORDER, async (route) => {
+	const url = route.request().url()
+	const body = JSON.parse(route.request().postData() || "{}")
+	if (url.includes("get_order_workspace")) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: workspacePayload() }) })
+	if (url.includes("save_order")) {
+		saved = true
+		submitted = Boolean(body.submit)
+		savedBody = body
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: editorPayload({ name: "CTO-WEB-00001", docstatus: submitted ? 1 : 0 }) }) })
+	}
+	return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: editorPayload({ name: saved || body.cutting_order ? "CTO-WEB-00001" : null, docstatus: submitted ? 1 : 0 }) }) })
+})
+
+await page.goto(`${SITE}/web/cutting/orders`, { waitUntil: "domcontentloaded" })
+await page.getByRole("button", { name: "Create Cutting Order", exact: true }).waitFor({ timeout: 20_000 })
+assert(await page.getByRole("button", { name: "Create Cutting Order", exact: true }).evaluate((element) => element.classList.contains("list-primary-action")), "Cutting Order create action is not styled as the list primary action")
+await page.getByRole("button", { name: "Create Cutting Order", exact: true }).click()
+await page.waitForURL("**/web/cutting/orders/new")
+await page.getByRole("heading", { name: "New Cutting Order", exact: true }).waitFor({ timeout: 20_000 })
+await page.getByRole("button", { name: "Create Detail", exact: true }).click()
+const detailDialog = page.getByRole("dialog", { name: "Cutting Order Detail" })
+await detailDialog.waitFor()
+assert(await detailDialog.locator(".p-dialog-maximize-button").count() === 1, "Detail editor is not maximizable")
+await detailDialog.getByRole("button", { name: "Save Detail", exact: true }).click()
+await detailDialog.locator("button").filter({ hasText: "Close" }).click()
+
+const firstQuantity = page.locator(".quantity-cell input").first()
+await firstQuantity.fill("18")
+await page.getByRole("button", { name: "Save Draft", exact: true }).click()
+await page.waitForURL("**/web/cutting/orders/CTO-WEB-00001")
+await page.getByRole("heading", { name: "Edit Cutting Order", exact: true }).waitFor()
+assert(savedBody?.values?.item_details?.[0]?.items?.[0]?._row_key === "g0:r0", "Order save lost the authoritative matrix identity")
+assert(!page.url().includes("/app/"), "Cutting Order redirected to Desk")
+await page.getByRole("button", { name: "Save & Submit", exact: true }).click()
+await page.getByRole("heading", { name: "Cutting Order", exact: true }).waitFor({ timeout: 20_000 })
+
+await page.goto(`${SITE}/web/cutting/orders/CTO-WEB-00001`, { waitUntil: "domcontentloaded" })
+await page.getByRole("heading", { name: "Cutting Order", exact: true }).waitFor({ timeout: 20_000 })
+assert(await page.locator(".cutting-order-layout").count() === 1, "Cutting Order 80/20 workspace is missing")
+const [mainBox, railBox] = await Promise.all([
+	page.locator(".cutting-order-main").boundingBox(),
+	page.locator(".operations-rail").boundingBox(),
+])
+assert(mainBox && railBox, "Cutting Order main or parent rail is missing")
+const widthRatio = mainBox.width / railBox.width
+assert(widthRatio >= 3.7 && widthRatio <= 4.3, `Cutting Order is not an 80/20 split: ${widthRatio}`)
+for (const tab of ["Details", "Summary", "Planned Detail"]) assert(await page.getByRole("tab", { name: tab, exact: true }).count() === 1, `${tab} tab is missing`)
+const tabContract = await page.locator(".cutting-order-tabs").evaluate((element) => {
+	const list = element.querySelector(".p-tablist")
+	const panels = element.querySelector(".p-tabpanels")
+	return { listTop: list?.getBoundingClientRect().top, panelsTop: panels?.getBoundingClientRect().top, overflowY: panels ? getComputedStyle(panels).overflowY : "" }
+})
+assert(tabContract.listTop < tabContract.panelsTop && tabContract.overflowY === "auto", `Cutting Order tabs are not fixed above the scroll area: ${JSON.stringify(tabContract)}`)
+assert(await page.locator(".order-header-fact--detail").getByText("CO-STYLE-001-1", { exact: true }).count() === 1, "Cutting Order Detail is not promoted to the header")
+assert(await page.locator(".order-header-fact--item").getByText("STYLE-001", { exact: true }).count() === 1, "Cutting Order Item is not promoted to the header")
+assert(await page.locator(".order-command-bar").count() === 0, "Cutting Order still renders the separate action strip")
+assert(await page.locator(".order-detail-card").getByText("Cutting Order Detail", { exact: true }).count() === 0, "Cutting Order Detail is duplicated in the Details tab")
+assert(await page.locator(".order-detail-card").getByText("Item", { exact: true }).count() === 0, "Item is duplicated in the Details tab")
+const quantitySectionStyle = await page.locator(".data-section__header").first().evaluate((element) => ({ display: getComputedStyle(element).display, background: getComputedStyle(element).backgroundColor }))
+assert(quantitySectionStyle.display === "flex" && quantitySectionStyle.background !== "rgba(0, 0, 0, 0)", `Cutting Order quantity section lost its card hierarchy: ${JSON.stringify(quantitySectionStyle)}`)
+const quantityHeaderBackground = await page.locator(".data-table th").first().evaluate((element) => getComputedStyle(element).backgroundColor)
+assert(quantityHeaderBackground !== "rgba(0, 0, 0, 0)", "Cutting Order quantity table header is visually unstructured")
+await page.getByRole("button", { name: "More Actions", exact: true }).click()
+for (const action of ["Calculate LaySheets", "Get Completed", "Update Completed"]) assert(await page.getByRole("menuitem", { name: action, exact: true }).count() === 1, `${action} action is missing from More Actions`)
+assert(await page.getByRole("button", { name: "Copy", exact: true }).count() === 0, "Completed report opened unexpectedly")
+await page.getByRole("menuitem", { name: "Get Completed", exact: true }).click()
+const completedDialog = page.getByRole("dialog", { name: "Completed Cut Quantity" })
+await completedDialog.getByRole("button", { name: "Copy", exact: true }).waitFor()
+await completedDialog.locator("button").filter({ hasText: "Close" }).click()
+assert(await page.getByRole("button", { name: "Filter markers" }).count() === 1, "Marker filters are missing")
+assert(await page.getByRole("button", { name: "Filter Lay Sheets" }).count() === 1, "Lay Sheet filters are missing")
+const workspaceUrl = page.url()
+await page.locator(".marker-card").first().click()
+await page.locator(".marker-dialog").waitFor()
+assert(page.url() === workspaceUrl, "Opening an Order marker navigated away from the workspace")
+await page.keyboard.press("Escape")
+await page.locator(".laysheet-card").first().click()
+await page.locator(".laysheet-dialog").waitFor()
+assert(page.url() === workspaceUrl, "Opening an Order Lay Sheet navigated away from the workspace")
+await page.keyboard.press("Escape")
+assert(await page.getByRole("button", { name: "Print" }).count() >= 1, "Cutting Order print action is missing")
+assert(errors.length === 0, `Browser errors: ${JSON.stringify(errors)}`)
+
+console.log(JSON.stringify({ passed: true, workspace: "CTO-WEB-00001", detail: "CO-STYLE-001-1", matrixRows: 1, widthRatio }, null, 2))
+await browser.close()

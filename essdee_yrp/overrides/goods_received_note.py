@@ -140,12 +140,7 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 			if not plan and any(
 				flt(row.get("stock_qty") or row.get("quantity")) > 0 for row in self.get("items") or []
 			):
-				frappe.throw(
-					_(
-						"No deterministic {0} consumption plan was found for this receipt. "
-						"Correct the Work Order/IPD mapping before submitting."
-					).format(plan_kind)
-				)
+				frappe.throw(_empty_consumption_plan_message(self, plan_kind))
 			from essdee_yrp.fabric_grn import populate_grn_deliverables
 
 			populate_grn_deliverables(self, plan)
@@ -356,6 +351,97 @@ def _calculate_new_consumption_plan(grn, plan_kind):
 	from essdee_yrp.fabric_grn import calculate_consumption_plan
 
 	return calculate_consumption_plan(grn)
+
+
+def _empty_consumption_plan_message(grn, plan_kind: str) -> str:
+	"""Explain an empty deterministic plan in operator language.
+
+	This validation is intentionally self-contained: it reports the exact receipt
+	rows and source context that are still on screen, so a user can repair the
+	Work Order/IPD mapping without interpreting planner internals.
+	"""
+
+	received = []
+	for position, row in enumerate(grn.get("items") or [], start=1):
+		quantity = flt(row.get("stock_qty") or row.get("quantity"))
+		if quantity <= 0:
+			continue
+		dimensions = row.get("stock_dimensions") or {}
+		if isinstance(dimensions, str):
+			try:
+				dimensions = json.loads(dimensions)
+			except (TypeError, ValueError):
+				dimensions = {}
+		dimension_text = ", ".join(
+			f"{str(key).replace('_', ' ').title()} {value}"
+			for key, value in (dimensions or {}).items()
+			if value not in (None, "")
+		)
+		identity = row.get("item_variant") or row.get("item") or "item not set"
+		details = f", {dimension_text}" if dimension_text else ""
+		received.append(f"row {row.get('idx') or position}: {identity}{details}, qty {quantity:g}")
+
+	process = grn.get("process_name") or "not set"
+	production_detail = grn.get("production_detail") or "not set"
+	planner = str(plan_kind or "mapped").replace("_", " ")
+	guidance = {
+		"cutting": (
+			f"a submitted Cutting Lay Sheet for Work Order {grn.get('against_id') or 'not set'} with positive used cloth or accessory weights",
+			"the selected Cutting Lay Sheet has no positive consumed cloth or accessory rows to allocate",
+			"open the selected Cutting Lay Sheet, record its actual used cloth and accessory weights, then recalculate the lay sheet and this receipt",
+		),
+		"packing": (
+			f"a packing BOM and packing setup in Item Production Detail {production_detail} that covers every received output",
+			"the packing setup could not resolve all received outputs to their garment and accessory inputs",
+			"review the packing setup, assortment and packing BOM mappings, then click Calculate again",
+		),
+		"identity": (
+			"one exact Work Order deliverable input for each received identity item, plus any configured accessory inputs",
+			"the receipt was not recognized as an identity receipt with positive rows that map to Work Order deliverables",
+			"correct the received item, dimensions, and Work Order deliverable mapping, then click Calculate again",
+		),
+		"stitching": (
+			"one exact Work Order receivable plus its stitching input rows for each received garment",
+			"the received garments could not be matched uniquely to their receivable references and stitching inputs",
+			"correct the Work Order receivable references and stitching input mapping, then click Calculate again",
+		),
+		"fabric": (
+			f"a process input mapping for {process} in Item Production Detail {production_detail}",
+			"none of the Work Order input rows matched every received item and stock dimension",
+			"select the correct source and Item Production Detail, correct the process input mapping, then click Calculate again",
+		),
+	}
+	if planner == "fabric" and str(process).strip().lower() == "cutting":
+		expected, actual, fix = (
+			f"a Cutting Lay Sheet source, or a process input mapping for Cutting in Item Production Detail {production_detail}",
+			"neither a matching Cutting Lay Sheet output nor a matching Work Order input row was found",
+			"select the correct Cutting Lay Sheet or correct the Cutting process input mapping, then click Calculate again",
+		)
+	else:
+		expected, actual, fix = guidance.get(
+			planner,
+			(
+				f"an input route for process {process} in Item Production Detail {production_detail}",
+				"no configured Work Order input route matched these received items",
+				"review the source and process mapping, then click Calculate again",
+			),
+		)
+
+	return _(
+		"Cannot submit this GRN. No deterministic {planner} consumption route was found. "
+		"Received: {received}. Context: Work Order {work_order}, process {process}, "
+		"Item Production Detail {production_detail}. Expected: {expected}. "
+		"Actual: {actual}. Fix: {fix}, then submit again."
+	).format(
+		planner=planner,
+		received="; ".join(received) or "no positive received rows",
+		work_order=grn.get("against_id") or "not set",
+		process=process,
+		production_detail=production_detail,
+		expected=expected,
+		actual=actual,
+		fix=fix,
+	)
 
 
 def _has_complete_mapped_consumption(grn):

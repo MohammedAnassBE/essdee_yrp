@@ -1183,7 +1183,7 @@ def _project_receipt_buckets(
 		for qty_row in qty_rows:
 			row_reference = qty_row.get("reference_item_variant") or None
 			bucket_reference = bucket.get("reference_item_variant") or None
-			if bucket_reference and row_reference != bucket_reference:
+			if bucket_reference and row_reference and row_reference != bucket_reference:
 				continue
 			for input_index, spec in enumerate(qty_row.get("input_specs") or []):
 				if _matches_input(variant, spec, allow_dia_variance=True):
@@ -1244,6 +1244,8 @@ def _project_receipt_buckets(
 					"key": execution_key,
 					"matrix_key": matrix_key,
 					"execution_key": execution_key,
+					"reference_item_variant": bucket.get("reference_item_variant")
+					or qty_row.get("reference_item_variant"),
 					"in_attrs": actual_attrs,
 					"out_attrs": projected_attrs,
 					"projected_item_variant": projected_item,
@@ -1274,7 +1276,9 @@ def _project_receipt_buckets(
 
 
 def _execution_key(bucket_key, matrix_key, reference):
-	raw = f"{bucket_key}|{matrix_key}|{reference or ''}"
+	from essdee_yrp.api.work_order import _compact_matrix_key
+
+	raw = f"{bucket_key}|{_compact_matrix_key(matrix_key)}|{reference or ''}"
 	return f"fabric-{hashlib.sha1(raw.encode()).hexdigest()[:24]}"
 
 
@@ -1408,7 +1412,10 @@ def validate_work_order_source_allocations(work_order):
 	for row in calculated_rows:
 		if _item_belongs_to_template(row.get("item_variant"), ipd.item):
 			material_rows.append(row)
-		elif _row_has_execution_contract(row) or row.get("source_grn_item"):
+		elif (
+			get_row_execution_parameters(row).get("source_bucket_key")
+			or row.get("source_grn_item")
+		):
 			frappe.throw(
 				_("A non-cloth consumable cannot carry exact fabric source lineage.")
 			)

@@ -1,0 +1,807 @@
+<template>
+	<div class="stock-composer">
+		<section v-if="!readOnly" class="stock-composer__builder">
+			<header class="stock-composer__heading">
+				<div>
+					<span class="stock-composer__eyebrow">Item builder</span>
+					<h3>Stock dimensions &amp; item</h3>
+				</div>
+				<span class="stock-composer__step">1 · Select &nbsp; 2 · Get Item &nbsp; 3 · Add</span>
+			</header>
+
+			<div class="stock-composer__fields">
+				<LinkField
+					v-for="dimension in dimensions"
+					:key="dimension.fieldname"
+					v-model="dimensionValues[dimension.fieldname]"
+					:label="`${dimension.label}${dimension.mandatory ? ' *' : ''}`"
+					:doctype="dimension.options"
+					:filters="dimension.filters || {}"
+					:disabled="lockedDimensions.includes(dimension.fieldname)"
+					:show-clear="!lockedDimensions.includes(dimension.fieldname)"
+					:show-open-button="false"
+				/>
+				<LinkField
+					:model-value="itemName"
+					label="Item *"
+					doctype="Item"
+					:filters="editor.item_filters || { is_stock_item: 1, disabled: 0 }"
+					:show-open-button="false"
+					@update:model-value="setItem"
+				/>
+				<div class="stock-composer__fetch">
+					<Button label="Get Item" icon="pi pi-search" :loading="fetching" :disabled="!itemName" @click="fetchItem" />
+				</div>
+			</div>
+
+			<Message v-if="editorError" severity="error" :closable="false">{{ editorError }}</Message>
+
+			<div v-if="itemSchema" class="stock-composer__attributes">
+				<div class="stock-composer__item-strip">
+					<div><span>Selected item</span><strong>{{ itemSchema.item }}</strong></div>
+					<div><span>Stock UOM</span><strong>{{ activeUom || "—" }}</strong></div>
+					<div v-if="activePrimary"><span>Quantity grid</span><strong>{{ activePrimary }}</strong></div>
+				</div>
+
+				<div v-if="dependentAttribute || nonPrimaryAttributes.length" class="stock-composer__attribute-grid">
+					<LinkField
+						v-if="dependentAttribute"
+						:model-value="attributeValues[dependentAttribute] || ''"
+						:label="`${dependentAttribute} *`"
+						doctype="Item Attribute Value"
+						:search-handler="(text) => searchAttribute(dependentAttribute, text)"
+						:show-open-button="false"
+						@update:model-value="setAttribute(dependentAttribute, $event)"
+					/>
+					<LinkField
+						v-for="attribute in nonPrimaryAttributes"
+						:key="attribute"
+						:model-value="attributeValues[attribute] || ''"
+						:label="`${attribute} *`"
+						doctype="Item Attribute Value"
+						:search-handler="(text) => searchAttribute(attribute, text)"
+						:show-open-button="false"
+						@update:model-value="setAttribute(attribute, $event)"
+					/>
+				</div>
+
+				<div class="stock-composer__quantity-card">
+					<header>
+						<div><h4>{{ activePrimary ? `${activePrimary} quantities` : quantityLabel }}</h4><p>{{ quantityHelp }}</p></div>
+						<span>{{ activeUom || "UOM" }}</span>
+					</header>
+					<div v-if="activePrimaryValues.length" class="stock-composer__quantity-grid">
+						<label v-for="value in activePrimaryValues" :key="value" class="stock-composer__quantity-cell">
+							<strong>{{ value }}</strong>
+							<span>{{ quantityLabel }}</span>
+							<input v-model.number="quantities[value]" type="number" min="0" step="0.001" @input="quantityTouched[value] = true" />
+							<template v-if="itemSchema.secondary_uom && operation === 'stock_entry'">
+								<span>{{ itemSchema.secondary_uom }}</span>
+								<input v-model.number="secondaryQuantities[value]" type="number" min="0" step="0.001" />
+							</template>
+						</label>
+					</div>
+					<div v-else class="stock-composer__single-quantity">
+						<label><span>{{ quantityLabel }} *</span><input v-model.number="quantities.default" type="number" min="0" step="0.001" @input="quantityTouched.default = true" /></label>
+						<label v-if="itemSchema.secondary_uom && operation === 'stock_entry'"><span>Secondary Qty · {{ itemSchema.secondary_uom }}</span><input v-model.number="secondaryQuantities.default" type="number" min="0" step="0.001" /></label>
+					</div>
+				</div>
+
+				<div class="stock-composer__builder-footer">
+					<label v-if="operation === 'stock_reconciliation'" class="stock-composer__check"><input v-model="allowZeroValuation" type="checkbox" /><span>Allow zero valuation when no prior rate exists</span></label>
+					<span v-else></span>
+					<div>
+						<Button v-if="editing" label="Cancel Edit" severity="secondary" text size="small" @click="resetEditor" />
+						<Button :label="editing ? 'Update Item' : 'OK · Add Item'" :icon="editing ? 'pi pi-check' : 'pi pi-plus'" size="small" :loading="preparing" :disabled="preparing" @click="stageItem" />
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<section class="stock-composer__staged">
+			<header class="stock-composer__heading">
+				<div><span class="stock-composer__eyebrow">Transaction lines</span><h3>Added items</h3></div>
+				<span class="stock-composer__count">{{ rowCount }} {{ rowCount === 1 ? "item" : "items" }}</span>
+			</header>
+
+			<div v-if="groups.length" class="stock-composer__tables">
+				<div v-for="(group, groupIndex) in groups" :key="groupKey(group, groupIndex)" class="stock-composer__table-card">
+					<div class="stock-composer__table-title"><strong>{{ group.primary_attribute ? `${group.primary_attribute} matrix` : "Quantity" }}</strong><span>{{ group.items.length }} {{ group.items.length === 1 ? "row" : "rows" }}</span></div>
+					<div class="stock-composer__table-scroll">
+						<table>
+							<thead><tr><th>#</th><th>Item</th><th v-for="dimension in dimensions" :key="dimension.fieldname">{{ dimension.label }}</th><th v-for="attribute in group.attributes" :key="attribute">{{ attribute }}</th><th v-for="value in group.primary_attribute_values" :key="value" class="stock-composer__number">{{ value }}</th><th v-if="!group.primary_attribute">{{ quantityLabel }}</th><th class="stock-composer__number">Total</th><th>UOM</th><th v-if="!readOnly"></th></tr></thead>
+								<tbody><tr v-for="(row, itemIndex) in group.items" :key="`${row.name}-${itemIndex}`"><td>{{ itemIndex + 1 }}</td><td><strong>{{ row.name }}</strong></td><td v-for="dimension in dimensions" :key="dimension.fieldname">{{ row.dimensions?.[dimension.fieldname] || "—" }}</td><td v-for="attribute in group.attributes" :key="attribute">{{ row.attributes?.[attribute] || "—" }}</td><td v-for="value in group.primary_attribute_values" :key="value" class="stock-composer__number stock-composer__metric"><strong>{{ formatQty(row.values?.[value]?.qty) }}</strong><template v-if="operation === 'purchase_order'"><span class="stock-composer__price">Rate {{ formatMoney(row.values?.[value]?.rate) }}</span><span class="stock-composer__price">Amount {{ formatMoney(cellAmount(row.values?.[value])) }}</span></template></td><td v-if="!group.primary_attribute" class="stock-composer__number stock-composer__metric"><strong>{{ formatQty(row.values?.default?.qty) }}</strong><template v-if="operation === 'purchase_order'"><span class="stock-composer__price">Rate {{ formatMoney(row.values?.default?.rate) }}</span><span class="stock-composer__price">Amount {{ formatMoney(cellAmount(row.values?.default)) }}</span></template></td><td class="stock-composer__number stock-composer__total stock-composer__metric"><strong>{{ formatQty(rowTotal(row)) }}</strong><span v-if="operation === 'purchase_order'" class="stock-composer__price">Amount {{ formatMoney(rowAmount(row)) }}</span></td><td>{{ row.default_uom || "—" }}</td><td v-if="!readOnly"><div class="stock-composer__actions"><button type="button" title="Edit item" @click="editItem(groupIndex, itemIndex)"><i class="pi pi-pencil"></i></button><button type="button" title="Delete item" class="stock-composer__delete" @click="removeItem(groupIndex, itemIndex)"><i class="pi pi-trash"></i></button></div></td></tr></tbody>
+						</table>
+					</div>
+				</div>
+			</div>
+			<div v-else class="stock-composer__empty"><i class="pi pi-box"></i><div><strong>No items added</strong><span>Set the stock dimensions, fetch an item, enter its attribute quantities, and click OK.</span></div></div>
+		</section>
+	</div>
+</template>
+
+<script setup>
+import Button from "primevue/button"
+import Message from "primevue/message"
+import { computed, reactive, ref, watch } from "vue"
+
+import LinkField from "../../components/common/LinkField.vue"
+
+const props = defineProps({
+	modelValue: { type: Array, default: () => [] },
+	operation: { type: String, required: true },
+	purpose: { type: String, default: "" },
+	updateType: { type: String, default: "" },
+	editor: { type: Object, required: true },
+	schemaLoader: { type: Function, required: true },
+	rowPreparer: { type: Function, default: null },
+	currency: { type: String, default: "" },
+	readOnly: { type: Boolean, default: false },
+})
+const emit = defineEmits(["update:modelValue", "dirty"])
+
+const groups = ref(clone(props.modelValue))
+const itemName = ref("")
+const itemSchema = ref(null)
+const fetching = ref(false)
+const editorError = ref("")
+const dimensionValues = reactive({})
+const attributeValues = reactive({})
+const quantities = reactive({ default: 0 })
+const quantityTouched = reactive({ default: false })
+const secondaryQuantities = reactive({ default: 0 })
+const allowZeroValuation = ref(false)
+const editing = ref(null)
+const preparing = ref(false)
+
+const dimensions = computed(() => props.editor.dimensions || [])
+const lockedDimensions = computed(() => {
+	const locked = props.editor.locked_dimensions
+		|| dimensions.value.filter((dimension) => dimension.locked).map((dimension) => dimension.fieldname)
+	return locked
+})
+const dependentAttribute = computed(() => itemSchema.value?.dependent_attribute || "")
+const activeStage = computed(() => {
+	if (!dependentAttribute.value) return null
+	return itemSchema.value?.dependent_attribute_details?.attr_list?.[attributeValues[dependentAttribute.value]] || null
+})
+const activePrimary = computed(() => activeStage.value?.primary_attribute ?? itemSchema.value?.primary_attribute ?? "")
+const activePrimaryValues = computed(() => activeStage.value?.primary_attribute_values ?? itemSchema.value?.primary_attribute_values ?? [])
+const activeUom = computed(() => activeStage.value?.uom || itemSchema.value?.default_uom || "")
+const applicableAttributes = computed(() => activeStage.value?.attributes || itemSchema.value?.attributes || [])
+const nonPrimaryAttributes = computed(() => applicableAttributes.value.filter((attribute) => attribute !== activePrimary.value && attribute !== dependentAttribute.value))
+const quantityLabel = computed(() => {
+	if (props.operation === "stock_reconciliation") return "Counted Qty"
+	if (props.operation === "stock_update") return `${props.updateType || "Update"} Qty`
+	if (props.operation === "lot_transfer") return "Transfer Qty"
+	return "Quantity"
+})
+const quantityHelp = computed(() => {
+	if (props.operation === "stock_reconciliation") return "Enter the counted closing quantity. Zero is valid."
+	if (props.operation === "stock_update") return `Enter the quantity to ${String(props.updateType || "update").toLowerCase()}.`
+	if (props.operation === "lot_transfer") return "Enter the quantity to move from the source lot to the selected target lot."
+	return "Enter quantity against each applicable item value."
+})
+const rowCount = computed(() => groups.value.reduce((total, group) => total + (group.items?.length || 0), 0))
+
+watch(() => props.modelValue, (value) => { if (JSON.stringify(value || []) !== JSON.stringify(groups.value)) groups.value = clone(value || []) }, { deep: true })
+watch(() => [props.editor, props.operation], resetAll, { immediate: true })
+
+function resetAll() {
+	groups.value = clone(props.modelValue || [])
+	resetEditor()
+}
+
+function resetDimensions() {
+	for (const key of Object.keys(dimensionValues)) delete dimensionValues[key]
+	const defaults = props.editor.default_dimensions || props.editor.defaults?.dimensions
+		|| Object.fromEntries(dimensions.value.filter((dimension) => dimension.default_value).map((dimension) => [dimension.fieldname, dimension.default_value]))
+	Object.assign(dimensionValues, clone(defaults || {}))
+}
+
+function resetEditor() {
+	resetDimensions()
+	itemName.value = ""
+	itemSchema.value = null
+	editing.value = null
+	allowZeroValuation.value = false
+	editorError.value = ""
+	clearReactive(attributeValues)
+	clearReactive(quantities)
+	clearReactive(quantityTouched)
+	clearReactive(secondaryQuantities)
+	quantities.default = props.operation === "stock_reconciliation" ? null : 0
+	quantityTouched.default = false
+	secondaryQuantities.default = 0
+}
+
+function setItem(value) {
+	itemName.value = value || ""
+	itemSchema.value = null
+	clearReactive(attributeValues)
+}
+
+async function fetchItem() {
+	if (!itemName.value) return
+	fetching.value = true
+	editorError.value = ""
+	try {
+		itemSchema.value = await props.schemaLoader(props.operation, itemName.value)
+		itemName.value = itemSchema.value?.item || itemName.value
+		clearReactive(attributeValues)
+		prepareQuantities()
+	} catch (error) {
+		editorError.value = error.message || "Unable to get the item attributes."
+	} finally {
+		fetching.value = false
+	}
+}
+
+function prepareQuantities(existing = null) {
+	clearReactive(quantities)
+	clearReactive(quantityTouched)
+	clearReactive(secondaryQuantities)
+	const values = activePrimaryValues.value.length ? activePrimaryValues.value : ["default"]
+	for (const value of values) {
+		const hasExistingValue = Boolean(existing && Object.prototype.hasOwnProperty.call(existing, value))
+		quantities[value] = hasExistingValue
+			? Number(existing[value]?.qty || 0)
+			: props.operation === "stock_reconciliation" ? null : 0
+		quantityTouched[value] = hasExistingValue
+		secondaryQuantities[value] = Number(existing?.[value]?.secondary_qty || 0)
+	}
+}
+
+function setAttribute(attribute, value) {
+	attributeValues[attribute] = value || ""
+	if (attribute === dependentAttribute.value) {
+		for (const key of Object.keys(attributeValues)) if (key !== attribute) delete attributeValues[key]
+		prepareQuantities()
+	}
+}
+
+function searchAttribute(attribute, text) {
+	const needle = String(text || "").toLowerCase()
+	return (itemSchema.value?.attribute_values?.[attribute] || [])
+		.filter((value) => !needle || String(value).toLowerCase().includes(needle))
+		.map((value) => ({ name: value, label: value }))
+}
+
+async function stageItem() {
+	editorError.value = ""
+	for (const dimension of dimensions.value) {
+		if (dimension.mandatory && !dimensionValues[dimension.fieldname]) return fail(`${dimension.label} is required.`)
+	}
+	if (!itemSchema.value) return fail("Click Get Item before adding the row.")
+	if (dependentAttribute.value && !attributeValues[dependentAttribute.value]) return fail(`${dependentAttribute.value} is required.`)
+	for (const attribute of nonPrimaryAttributes.value) if (!attributeValues[attribute]) return fail(`${attribute} is required.`)
+
+	const valueKeys = activePrimaryValues.value.length ? activePrimaryValues.value : ["default"]
+	const values = {}
+	let total = 0
+	for (const value of valueKeys) {
+		if (props.operation === "stock_reconciliation" && !quantityTouched[value]) continue
+		const qty = Number(quantities[value] || 0)
+		if (qty < 0) return fail("Quantity cannot be negative.")
+		total += qty
+		values[value] = { qty, rate: 0 }
+		if (itemSchema.value.secondary_uom && props.operation === "stock_entry") {
+			values[value].secondary_qty = Number(secondaryQuantities[value] || 0)
+			values[value].secondary_uom = itemSchema.value.secondary_uom
+		}
+	}
+	if (props.operation === "stock_reconciliation" && !Object.keys(values).length) return fail("Enter at least one counted quantity. Zero is valid.")
+	if (props.operation !== "stock_reconciliation" && total <= 0) return fail("Enter a quantity greater than zero.")
+
+	const row = {
+		name: itemSchema.value.item,
+		dimensions: clone(dimensionValues),
+		attributes: Object.fromEntries(Object.entries(attributeValues).filter(([, value]) => value)),
+		primary_attribute: activePrimary.value,
+		values,
+		default_uom: activeUom.value,
+		secondary_uom: itemSchema.value.secondary_uom || "",
+		allow_zero_valuation_rate: props.operation === "stock_reconciliation" ? allowZeroValuation.value : false,
+	}
+	if (props.operation === "lot_transfer") Object.assign(row, clone(dimensionValues))
+	if (props.rowPreparer) {
+		preparing.value = true
+		try {
+			const prepared = await props.rowPreparer(clone(row))
+			if (prepared) Object.assign(row, prepared)
+		} catch (error) {
+			return fail(error?.message || "Unable to prepare this item.")
+		} finally {
+			preparing.value = false
+		}
+	}
+	const groupShape = {
+		attributes: [...new Set([dependentAttribute.value, ...nonPrimaryAttributes.value].filter(Boolean))],
+		primary_attribute: activePrimary.value,
+		dependent_attribute: dependentAttribute.value,
+		dependent_attribute_details: clone(itemSchema.value.dependent_attribute_details || {}),
+		primary_attribute_values: clone(activePrimaryValues.value),
+	}
+
+	if (editing.value) {
+		const old = editing.value
+		groups.value[old.groupIndex].items.splice(old.itemIndex, 1)
+		if (!groups.value[old.groupIndex].items.length) groups.value.splice(old.groupIndex, 1)
+	}
+	let group = groups.value.find((candidate) => sameGroup(candidate, groupShape))
+	if (!group) {
+		group = { ...groupShape, items: [] }
+		groups.value.push(group)
+	}
+	group.items.push(row)
+	commit()
+	resetEditor()
+}
+
+async function editItem(groupIndex, itemIndex) {
+	const group = groups.value[groupIndex]
+	const row = clone(group.items[itemIndex])
+	editing.value = { groupIndex, itemIndex }
+	Object.assign(dimensionValues, row.dimensions || {})
+	itemName.value = row.name
+	editorError.value = ""
+	fetching.value = true
+	try {
+		itemSchema.value = await props.schemaLoader(props.operation, row.name)
+		clearReactive(attributeValues)
+		Object.assign(attributeValues, row.attributes || {})
+		allowZeroValuation.value = Boolean(row.allow_zero_valuation_rate)
+		prepareQuantities(row.values || {})
+	} catch (error) {
+		editorError.value = error.message || "Unable to edit this item."
+	} finally {
+		fetching.value = false
+	}
+}
+
+function removeItem(groupIndex, itemIndex) {
+	groups.value[groupIndex].items.splice(itemIndex, 1)
+	if (!groups.value[groupIndex].items.length) groups.value.splice(groupIndex, 1)
+	commit()
+	if (editing.value?.groupIndex === groupIndex && editing.value?.itemIndex === itemIndex) resetEditor()
+}
+
+function commit() {
+	const value = clone(groups.value)
+	emit("update:modelValue", value)
+	emit("dirty")
+}
+
+function sameGroup(left, right) {
+	return left.primary_attribute === right.primary_attribute
+		&& left.dependent_attribute === right.dependent_attribute
+		&& JSON.stringify([...(left.attributes || [])].sort()) === JSON.stringify([...(right.attributes || [])].sort())
+		&& JSON.stringify([...(left.primary_attribute_values || [])].sort()) === JSON.stringify([...(right.primary_attribute_values || [])].sort())
+}
+
+function groupKey(group, index) { return `${group.primary_attribute || "default"}-${(group.attributes || []).join("-")}-${index}` }
+function rowTotal(row) { return Object.values(row.values || {}).reduce((sum, value) => sum + Number(value?.qty || 0), 0) }
+function cellAmount(value) { return Number(value?.total_amount ?? value?.amount ?? (Number(value?.qty || 0) * Number(value?.rate || 0))) }
+function rowAmount(row) { return Object.values(row.values || {}).reduce((sum, value) => sum + cellAmount(value), 0) }
+function formatQty(value) { return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 3 }) }
+function formatMoney(value) { return `${props.currency ? `${props.currency} ` : ""}${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}` }
+function fail(message) { editorError.value = message; return false }
+function clearReactive(value) { for (const key of Object.keys(value)) delete value[key] }
+function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray(value) ? [] : {}))) }
+</script>
+
+<style scoped>
+.stock-composer {
+	display: grid;
+	gap: var(--erp-space-3);
+}
+
+.stock-composer__builder,
+.stock-composer__staged {
+	overflow: hidden;
+	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-panel-radius);
+	background: var(--erp-surface);
+}
+
+.stock-composer__heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--erp-space-3);
+	padding: 10px var(--erp-space-3);
+	border-bottom: 1px solid var(--erp-border);
+	background: var(--erp-surface-soft);
+}
+
+.stock-composer__heading h3 {
+	margin: 2px 0 0;
+	color: var(--erp-text);
+	font-size: 14px;
+	font-weight: 750;
+}
+
+.stock-composer__eyebrow {
+	color: var(--erp-accent);
+	font-size: var(--erp-font-size-min);
+	font-weight: 800;
+	letter-spacing: 0.055em;
+	text-transform: uppercase;
+}
+
+.stock-composer__step {
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-caption);
+}
+
+.stock-composer__count {
+	padding: 3px var(--erp-space-2);
+	border-radius: var(--erp-pill-radius);
+	background: var(--erp-accent-soft);
+	color: var(--erp-accent);
+	font-size: var(--erp-font-size-min);
+	font-weight: 750;
+}
+
+.stock-composer__fields {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 10px;
+	padding: var(--erp-space-3);
+}
+
+.stock-composer__fetch {
+	display: flex;
+	align-items: flex-end;
+}
+
+.stock-composer__fetch :deep(.p-button) {
+	width: 100%;
+}
+
+.stock-composer__attributes {
+	display: grid;
+	gap: var(--erp-space-3);
+	padding: 0 var(--erp-space-3) var(--erp-space-3);
+}
+
+.stock-composer__item-strip {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	overflow: hidden;
+	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-control-radius);
+	background: var(--erp-surface-soft);
+}
+
+.stock-composer__item-strip > div {
+	display: grid;
+	gap: 2px;
+	padding: 9px 11px;
+	border-right: 1px solid var(--erp-border);
+}
+
+.stock-composer__item-strip > div:last-child {
+	border-right: 0;
+}
+
+.stock-composer__item-strip span {
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 700;
+	text-transform: uppercase;
+}
+
+.stock-composer__item-strip strong {
+	overflow: hidden;
+	color: var(--erp-text);
+	font-size: 13px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.stock-composer__attribute-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.stock-composer__quantity-card {
+	overflow: hidden;
+	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-control-radius);
+}
+
+.stock-composer__quantity-card > header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 9px 11px;
+	border-bottom: 1px solid var(--erp-border);
+	background: var(--erp-surface-soft);
+}
+
+.stock-composer__quantity-card h4 {
+	margin: 0;
+	color: var(--erp-text);
+	font-size: 13px;
+}
+
+.stock-composer__quantity-card p {
+	margin: 2px 0 0;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+}
+
+.stock-composer__quantity-card > header > span {
+	padding: 3px 7px;
+	border-radius: 6px;
+	background: var(--erp-accent-soft);
+	color: var(--erp-accent);
+	font-size: var(--erp-font-size-min);
+	font-weight: 700;
+}
+
+.stock-composer__quantity-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+}
+
+.stock-composer__quantity-cell {
+	display: grid;
+	gap: var(--erp-space-1);
+	padding: 9px;
+	border-right: 1px solid #e5ece8;
+	border-bottom: 1px solid #e5ece8;
+}
+
+.stock-composer__quantity-cell strong {
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-caption);
+}
+
+.stock-composer__quantity-cell span,
+.stock-composer__single-quantity span {
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+}
+
+.stock-composer input[type="number"] {
+	width: 100%;
+	height: var(--erp-control-height-compact);
+	padding: 5px 7px;
+	border: 1px solid var(--erp-border-strong);
+	border-radius: 6px;
+	background: var(--erp-surface);
+	color: var(--erp-text);
+	font: inherit;
+	font-size: 13px;
+	font-variant-numeric: tabular-nums;
+}
+
+.stock-composer input[type="number"]:focus {
+	border-color: var(--erp-accent);
+	outline: 2px solid color-mix(in srgb, var(--erp-accent) 12%, transparent);
+}
+
+.stock-composer__single-quantity {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 220px));
+	gap: 10px;
+	padding: 10px;
+}
+
+.stock-composer__single-quantity label {
+	display: grid;
+	gap: var(--erp-space-1);
+}
+
+.stock-composer__builder-footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--erp-space-3);
+}
+
+.stock-composer__builder-footer > div {
+	display: flex;
+	gap: 7px;
+}
+
+.stock-composer__check {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-caption);
+}
+
+.stock-composer__check input {
+	accent-color: var(--erp-accent);
+}
+
+.stock-composer__tables {
+	display: grid;
+	gap: 10px;
+	padding: 10px;
+	background: var(--erp-surface-soft);
+}
+
+.stock-composer__table-card {
+	overflow: hidden;
+	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-control-radius);
+	background: var(--erp-surface);
+}
+
+.stock-composer__table-title {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: var(--erp-space-2) 10px;
+	border-bottom: 1px solid var(--erp-border);
+}
+
+.stock-composer__table-title strong {
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-caption);
+}
+
+.stock-composer__table-title span {
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+}
+
+.stock-composer__table-scroll {
+	max-height: 260px;
+	overflow: auto;
+}
+
+.stock-composer table {
+	width: 100%;
+	min-width: 780px;
+	border-collapse: collapse;
+	font-size: var(--erp-font-size-caption);
+}
+
+.stock-composer th {
+	position: sticky;
+	top: 0;
+	padding: 7px var(--erp-space-2);
+	border-bottom: 1px solid var(--erp-border-strong);
+	background: #f1f6f3;
+	color: #59675f;
+	font-size: var(--erp-font-size-min);
+	font-weight: 750;
+	letter-spacing: 0.02em;
+	text-align: left;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+
+.stock-composer td {
+	padding: 7px var(--erp-space-2);
+	border-top: 1px solid #e7edea;
+	color: #374a40;
+	white-space: nowrap;
+}
+
+.stock-composer td > strong {
+	display: block;
+	max-width: 260px;
+	overflow: hidden;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-caption);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.stock-composer__number {
+	font-variant-numeric: tabular-nums;
+	text-align: right !important;
+}
+
+.stock-composer__metric > strong,
+.stock-composer__price {
+	display: block;
+}
+
+.stock-composer__price {
+	margin-top: 2px;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 650;
+}
+
+.stock-composer__total {
+	color: var(--erp-accent) !important;
+	font-weight: 750;
+}
+
+.stock-composer__actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 2px;
+}
+
+.stock-composer__actions button {
+	display: grid;
+	width: 28px;
+	height: 28px;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: #557065;
+	place-items: center;
+}
+
+.stock-composer__actions button:hover {
+	background: var(--erp-accent-soft);
+	color: var(--erp-accent);
+}
+
+.stock-composer__actions .stock-composer__delete:hover {
+	background: #fff0f0;
+	color: var(--erp-danger);
+}
+
+.stock-composer__empty {
+	display: flex;
+	min-height: 108px;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	padding: 22px;
+	color: var(--erp-text-muted);
+}
+
+.stock-composer__empty > i {
+	display: grid;
+	width: 36px;
+	height: 36px;
+	border-radius: var(--erp-control-radius);
+	background: var(--erp-accent-soft);
+	color: var(--erp-accent);
+	place-items: center;
+}
+
+.stock-composer__empty > div {
+	display: grid;
+	gap: 2px;
+}
+
+.stock-composer__empty strong {
+	color: #3d5046;
+	font-size: 13px;
+}
+
+.stock-composer__empty span {
+	font-size: var(--erp-font-size-caption);
+}
+
+@media (max-width: 980px) {
+	.stock-composer__fields,
+	.stock-composer__attribute-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 620px) {
+	.stock-composer__fields,
+	.stock-composer__attribute-grid,
+	.stock-composer__item-strip,
+	.stock-composer__single-quantity {
+		grid-template-columns: 1fr;
+	}
+
+	.stock-composer__builder-footer,
+	.stock-composer__heading {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.stock-composer__builder-footer > div {
+		justify-content: flex-end;
+	}
+}
+</style>

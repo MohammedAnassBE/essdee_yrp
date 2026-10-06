@@ -81,8 +81,8 @@ import LinkField from "../../../components/common/LinkField.vue"
 import AsyncLinkMultiSelect from "./AsyncLinkMultiSelect.vue"
 import ClothTable from "./ClothTable.vue"
 import CompletionMatrix from "./CompletionMatrix.vue"
-import ReportShell from "./ReportShell.vue"
-import { errorMessage, number, quantity } from "./reportUtils.js"
+import ReportShell from "../../../components/reports/ReportShell.vue"
+import { errorMessage, number, quantity } from "../../../components/reports/reportUtils.js"
 
 const filters = reactive(defaultFilters())
 const selected = reactive({ lots: [], items: [] })

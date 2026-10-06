@@ -152,7 +152,7 @@ const MatrixTable = {
 
 // Fetch remains available so every transfer can refresh the current balance.
 const show_fetch_button = computed(() => {
-    if (cur_frm.doc.fp_status === "OCR Completed") return false
+    if (["Auto Closed", "OCR Completed"].includes(cur_frm.doc.fp_status)) return false
     return true
 })
 
@@ -187,7 +187,7 @@ function fetch_items(freeze = true, show_empty_message = true){
     })
 }
 
-if (cur_frm.doc.fp_status !== "OCR Completed") {
+if (!["Auto Closed", "OCR Completed"].includes(cur_frm.doc.fp_status)) {
     fetch_items(false, false)
 }
 

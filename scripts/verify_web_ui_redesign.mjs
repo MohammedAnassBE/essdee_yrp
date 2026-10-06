@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createRequire } from "node:module"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 
 const require = createRequire("/home/anas/.claude/playwright/package.json")
 const { chromium } = require("playwright")
@@ -129,30 +129,36 @@ async function shellSuite(page) {
 async function cuttingEntrySuite(page, context) {
 	await page.setViewportSize({ width: 1600, height: 1000 })
 	await page.goto(`${SITE}/web/cutting`, { waitUntil: "domcontentloaded" })
-	await page.locator(".workspace-grid").waitFor({ timeout: 20_000 })
+	await page.locator(".workspace-launcher__grid").waitFor({ timeout: 20_000 })
 
-	const entries = page.locator(".workspace-card")
-	assert(await entries.count() === 2, "Cutting must show the two permitted destinations")
+	const entries = page.locator(".workspace-launcher__card")
+	assert(await entries.count() === 5, "Cutting must show the five permitted destinations")
 	assert(await page.getByText("Manufacturing workspace", { exact: true }).count() === 0, "Decorative Cutting eyebrow is visible")
 	assert(await page.locator(".erp-page-header__description").count() === 0, "Cutting introductory paragraph is still visible")
 	assert(await page.locator(".workspace-card__label").count() === 0, "Redundant Cutting card category labels are visible")
 	assert((await visibleTextBelowMinimum(page)).length === 0, "Cutting entry contains visible text below 11px")
 
 	await page.setViewportSize({ width: 760, height: 900 })
-	const columnCount = await page.locator(".workspace-grid").evaluate((element) =>
+	const columnCount = await page.locator(".workspace-launcher__grid").evaluate((element) =>
 		getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length,
 	)
 	assert(columnCount === 1, "Cutting destinations do not collapse to one column at 760px")
 
 	const restrictedPage = await context.newPage()
 	try {
-		await restrictedPage.route("**/api/method/essdee_yrp.cutting.reports.get_report_permissions", (route) =>
-			route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: {} }) }),
+		await restrictedPage.route("**/api/method/essdee_yrp.cutting.web_capabilities.get_capabilities*", (route) =>
+			route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: {
+				"cutting-plans": { can_read: false, can_create: false },
+				"cutting-orders": { can_read: false, can_create: false },
+				"bulk-lay-sheets": { can_read: false, can_create: false },
+				"lay-sheet-planner": { can_read: false, can_create: false },
+				reports: { can_read: false, can_create: false },
+			} }) }),
 		)
 		await restrictedPage.goto(`${SITE}/web/cutting`, { waitUntil: "domcontentloaded" })
-		await restrictedPage.locator(".workspace-empty").waitFor({ timeout: 20_000 })
-		assert(await restrictedPage.locator(".workspace-card").count() === 0, "Restricted destinations remain visible")
-		assert(await restrictedPage.locator(".workspace-empty").isVisible(), "No-permission state is not visible")
+		await restrictedPage.locator(".workspace-launcher__empty").waitFor({ timeout: 20_000 })
+		assert(await restrictedPage.locator(".workspace-launcher__card").count() === 0, "Restricted destinations remain visible")
+		assert(await restrictedPage.locator(".workspace-launcher__empty").isVisible(), "No-permission state is not visible")
 	} finally {
 		await restrictedPage.close()
 	}
@@ -256,8 +262,14 @@ async function listSuite(page, context) {
 }
 
 function groupItemCount(value) {
-	const groups = Array.isArray(value) ? value : value?.items ? [value] : Object.values(value || {})
+	const groups = normaliseItemGroups(value)
 	return groups.reduce((total, group) => total + (group?.items?.length || 0), 0)
+}
+
+function normaliseItemGroups(value) {
+	if (Array.isArray(value)) return value.filter((group) => group?.items)
+	if (value?.items) return [value]
+	return Object.values(value || {}).filter((group) => group?.items)
 }
 
 async function openPlan(page, predicate = () => true) {
@@ -288,8 +300,25 @@ async function planFrameSuite(page, context) {
 	const status = page.locator(".form-toolbar__meta .cutting-plan-status")
 	const [recordBox, statusBox] = await Promise.all([recordId.boundingBox(), status.boundingBox()])
 	assert(recordBox && statusBox && Math.abs(recordBox.y - statusBox.y) < 8, "Status is not beside the record ID")
+	const headerFactLabels = await page.locator(".cutting-plan-header-fact small").allTextContents()
+	assert(
+		JSON.stringify(headerFactLabels) === JSON.stringify(["Lot", "Item"]),
+		`Cutting Plan identity facts are incomplete or out of order: ${JSON.stringify(headerFactLabels)}`,
+	)
+	assert(
+		await page.locator(".cutting-plan-header-fact strong").evaluateAll((elements) =>
+			elements.every((element) => Boolean(element.textContent.trim()) && element.getBoundingClientRect().width > 0),
+		),
+		"Lot and Item values are not immediately scannable in the header",
+	)
+	const headerFactType = await page.locator(".cutting-plan-header-fact").first().evaluate((element) => ({
+		label: Number.parseFloat(getComputedStyle(element.querySelector("small")).fontSize),
+		value: Number.parseFloat(getComputedStyle(element.querySelector("strong")).fontSize),
+	}))
+	assert(headerFactType.label >= 11.5 && headerFactType.value >= 13.5, `Lot and Item header facts are too small: ${JSON.stringify(headerFactType)}`)
+	await page.locator(".form-toolbar__actions .form-edit-button").waitFor({ timeout: 20_000 })
 	assert(await page.locator(".form-toolbar__actions .form-edit-button").count() === 1, "Edit is not a distinct header action")
-	assert(await page.locator(".plan-command-bar .primary-command").count() === 1, "Primary plan command is not identifiable")
+	assert(await page.locator(".form-toolbar__actions").getByRole("button", { name: "More Actions", exact: true }).count() === 1, "Cutting Plan workflow actions are not available in the header")
 
 	const visibleTabs = page.locator(".cutting-tabs .p-tab:visible")
 	assert(await visibleTabs.count() === 5, "Expected five permission-visible Cutting Plan tabs")
@@ -361,9 +390,229 @@ async function planFrameSuite(page, context) {
 	return { plan: fixture.name, widthRatio, tabCount: await visibleTabs.count(), scrollResult }
 }
 
+async function planActionsSuite(page, context) {
+	await page.setViewportSize({ width: 1600, height: 1000 })
+	const fixture = await openPlan(page, (data) =>
+		data.permissions?.can_run_plan_actions
+		&& groupItemCount(data.completed_items) > 0
+		&& normaliseItemGroups(data.completed_items).some((group) => group.is_set_item && (group.items || []).some((item) => item.completed))
+		&& (
+			data.permissions?.can_create_recut
+			|| data.permissions?.can_create_lot_transfer
+			|| data.permissions?.can_change_approval_grammage
+		),
+	)
+	const headerActions = page.locator(".form-toolbar__actions")
+	const moreActions = headerActions.getByRole("button", { name: "More Actions", exact: true })
+	await moreActions.waitFor({ timeout: 20_000 })
+	assert(await page.locator(".plan-command-bar").count() === 0, "The obsolete Cutting Plan action strip is still rendered")
+	assert(await page.locator(".cutting-plan-main").evaluate((element) => getComputedStyle(element).gridTemplateRows.split(" ").length === 1), "The removed action strip still reserves a layout row")
+
+	const printButton = headerActions.getByRole("button", { name: "Print", exact: true })
+	const editButton = headerActions.getByRole("button", { name: "Edit", exact: true })
+	const [printBox, moreBox, editBox] = await Promise.all([printButton.boundingBox(), moreActions.boundingBox(), editButton.boundingBox()])
+	assert(
+		printBox && moreBox && editBox
+			&& Math.abs(printBox.y - moreBox.y) <= 3
+			&& Math.abs(moreBox.y - editBox.y) <= 3
+			&& printBox.x < moreBox.x
+			&& moreBox.x < editBox.x,
+		`More Actions is not placed between Print and Edit: ${JSON.stringify({ printBox, moreBox, editBox })}`,
+	)
+
+	await moreActions.click()
+	const expectedMenuActions = [
+		["Generate", fixture.data.permissions?.can_run_plan_actions],
+		["Fetch Received Cloth", fixture.data.permissions?.can_run_plan_actions],
+		["Calculate LaySheets", fixture.data.permissions?.can_run_plan_actions],
+		["Get Completed", true],
+		["Update Completed", fixture.data.permissions?.can_update_completed],
+		["Update Recut", fixture.data.permissions?.can_create_recut],
+		["Update Print Panel", fixture.data.permissions?.can_create_recut],
+		["Lot Transfer", fixture.data.permissions?.can_create_lot_transfer],
+		["Approval", fixture.data.permissions?.can_change_approval_grammage],
+	].filter(([, allowed]) => allowed).map(([label]) => label)
+	const menuActionLabels = await page.locator(".plan-actions-menu:visible .p-menu-item-link").allTextContents()
+	assert(
+		JSON.stringify(menuActionLabels.map((label) => label.trim())) === JSON.stringify(expectedMenuActions),
+		`More Actions does not contain every permitted command in workflow order: ${JSON.stringify(menuActionLabels)}`,
+	)
+	await page.keyboard.press("Escape")
+
+	const completedGroups = normaliseItemGroups(fixture.data.completed_items)
+	const expectedCompletedRows = completedGroups.reduce(
+		(total, group) => total + (group.items || []).filter((item) => item.completed).length,
+		0,
+	)
+	const summaryTab = page.getByRole("tab", { name: "Summary", exact: true })
+	assert(await summaryTab.getAttribute("aria-selected") !== "true", "Summary must not be active before Get Completed")
+	await moreActions.click()
+	await page.getByRole("menuitem", { name: "Get Completed", exact: true }).click()
+	const completedDialog = page.getByRole("dialog", { name: "Completed Cut Quantity", exact: true })
+	await completedDialog.waitFor({ timeout: 10_000 })
+	assert(await summaryTab.getAttribute("aria-selected") !== "true", "Get Completed still redirects to the Summary tab")
+	const reportMeta = completedDialog.locator(".completed-report__meta")
+	assert(await reportMeta.getByText("Lot", { exact: true }).count() === 1, "Get Completed report is missing Lot metadata")
+	assert(await reportMeta.getByText("Item", { exact: true }).count() === 1, "Get Completed report is missing Item metadata")
+	assert(await reportMeta.getByText("Generated", { exact: true }).count() === 1, "Get Completed report is missing generated time")
+	assert(
+		/^\d{2}-\d{2}-\d{4} \u00b7 \d{2}:\d{2}:\d{2}$/.test((await completedDialog.locator(".completed-report__generated").textContent())?.trim() || ""),
+		"Get Completed report does not use a clear date-time format",
+	)
+	assert(await completedDialog.locator(".completed-report__item-row").count() === expectedCompletedRows, "Get Completed report includes incomplete rows or omits completed rows")
+	assert(await completedDialog.locator("input, .p-checkbox").count() === 0, "Get Completed report is editable")
+	assert(await completedDialog.locator(".completed-report__total-row").count() > 0, "Get Completed report has no completion totals")
+	assert(await completedDialog.getByRole("button", { name: "Copy", exact: true }).count() === 1, "Get Completed report has no Copy action")
+
+	const setGroup = completedGroups.find((group) => group.is_set_item && (group.items || []).some((item) => item.completed))
+	const firstCompletedSetItem = setGroup.items.find((item) => item.completed)
+	const partAttribute = setGroup.set_item_attr || firstCompletedSetItem.set_attr
+	const completedPart = firstCompletedSetItem.attributes?.[partAttribute]
+	const partItems = setGroup.items.filter((item) => item.completed && item.attributes?.[partAttribute] === completedPart)
+	const partSection = completedDialog.locator(".completed-report__group").filter({ hasText: completedPart }).first()
+	assert(
+		await partSection.locator(".completed-report__panels").count() === 0,
+		`Set-item report exposes panel details for ${completedPart}, unlike the production_api report`,
+	)
+	const expectedPartTotals = [
+		...(setGroup.primary_attribute_values || []).map((value) => partItems.reduce((total, item) => total + Number(item.values?.[value] || 0), 0)),
+		partItems.reduce((total, item) => total + (setGroup.primary_attribute_values || []).reduce((sum, value) => sum + Number(item.values?.[value] || 0), 0), 0),
+	].map(String)
+	assert(
+		JSON.stringify(await partSection.locator(".completed-report__total-row .number-cell").allTextContents()) === JSON.stringify(expectedPartTotals),
+		`Set-item completion totals are incorrect for ${completedPart}`,
+	)
+	for (const table of await completedDialog.locator(".completed-report__table").all()) {
+		const labelledBy = await table.getAttribute("aria-labelledby")
+		assert(labelledBy && await completedDialog.locator(`#${labelledBy}`).count() === 1, "Completed quantity table has no programmatic section name")
+	}
+
+	await page.setViewportSize({ width: 700, height: 760 })
+	const mediumDialogContract = await completedDialog.evaluate((dialog) => {
+		const box = dialog.getBoundingClientRect()
+		const content = dialog.querySelector(".p-dialog-content")
+		const footer = dialog.querySelector(".p-dialog-footer")
+		return {
+			contained: box.left >= 0 && box.right <= window.innerWidth,
+			contentOverflow: getComputedStyle(content).overflowY,
+			footerVisible: footer.getBoundingClientRect().bottom <= box.bottom + 1,
+		}
+	})
+	assert(
+		mediumDialogContract.contained && ["auto", "scroll"].includes(mediumDialogContract.contentOverflow) && mediumDialogContract.footerVisible,
+		`Get Completed dialog breaks at 700px: ${JSON.stringify(mediumDialogContract)}`,
+	)
+
+	await page.setViewportSize({ width: 390, height: 844 })
+	const capture = completedDialog.locator(".completed-report-capture")
+	await capture.waitFor()
+	const captureContract = await completedDialog.evaluate((dialog) => {
+		const captureElement = dialog.querySelector(".completed-report-capture")
+		const tableWraps = Array.from(dialog.querySelectorAll(".completed-report__table-wrap"))
+		const box = dialog.getBoundingClientRect()
+		return {
+			dialogContained: box.left >= 0 && box.right <= window.innerWidth,
+			captureWidth: captureElement?.clientWidth || 0,
+			widestTable: Math.max(0, ...tableWraps.map((element) => element.scrollWidth)),
+			tablesScrollable: tableWraps.every((element) => ["auto", "scroll"].includes(getComputedStyle(element).overflowX)),
+		}
+	})
+	assert(captureContract.dialogContained && captureContract.tablesScrollable, `Get Completed dialog is not contained on mobile: ${JSON.stringify(captureContract)}`)
+	assert(captureContract.widestTable > captureContract.captureWidth, `Mobile fixture does not exercise a horizontally wide completion matrix: ${JSON.stringify(captureContract)}`)
+	await page.evaluate(() => {
+		window.__completedCopyDimensions = null
+		class TestClipboardItem {
+			constructor(items) { this.items = items }
+		}
+		Object.defineProperty(window, "ClipboardItem", { configurable: true, value: TestClipboardItem })
+		Object.defineProperty(navigator, "clipboard", {
+			configurable: true,
+			value: {
+				async write(items) {
+					const image = await createImageBitmap(items[0].items["image/png"])
+					const canvas = document.createElement("canvas")
+					canvas.width = image.width
+					canvas.height = image.height
+					const context = canvas.getContext("2d")
+					context.drawImage(image, 0, 0)
+					const pixels = context.getImageData(0, 0, image.width, image.height).data
+					let nonWhitePixels = 0
+					for (let index = 0; index < pixels.length; index += 4) {
+						if (pixels[index + 3] && (pixels[index] < 250 || pixels[index + 1] < 250 || pixels[index + 2] < 250)) nonWhitePixels += 1
+					}
+					window.__completedCopyDimensions = { width: image.width, height: image.height, nonWhitePixels }
+					image.close()
+				},
+			},
+		})
+	})
+	await completedDialog.getByRole("button", { name: "Copy", exact: true }).click()
+	await completedDialog.getByText("Completed quantities copied to clipboard.", { exact: true }).waitFor({ timeout: 20_000 })
+	const copiedDimensions = await page.evaluate(() => window.__completedCopyDimensions)
+	assert(copiedDimensions?.width >= captureContract.widestTable, `Copied completion report truncates wide columns: ${JSON.stringify({ copiedDimensions, captureContract })}`)
+	assert(copiedDimensions?.nonWhitePixels > 500, `Copied completion report is blank: ${JSON.stringify(copiedDimensions)}`)
+	await completedDialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
+	await page.setViewportSize({ width: 1600, height: 1000 })
+
+	await page.setViewportSize({ width: 900, height: 760 })
+	const compactHeaderContract = await headerActions.evaluate((element) => ({
+		height: element.getBoundingClientRect().height,
+		contained: element.getBoundingClientRect().right <= document.documentElement.clientWidth,
+	}))
+	assert(compactHeaderContract.height <= 40 && compactHeaderContract.contained, `Header actions do not stay compact at 900px: ${JSON.stringify(compactHeaderContract)}`)
+	assert(await page.locator("html").evaluate((element) => element.scrollWidth <= element.clientWidth), "Action toolbar causes page-level horizontal overflow")
+
+	const normalFixture = await findCuttingPlan(page.request, (data) =>
+		normaliseItemGroups(data.completed_items).some((group) => !group.is_set_item && (group.items || []).some((item) => item.completed)),
+	)
+	await page.setViewportSize({ width: 1600, height: 1000 })
+	await Promise.all([
+		page.waitForResponse((response) => response.url().includes("get_web_view_data") && response.ok(), { timeout: 20_000 }),
+		page.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(normalFixture.name)}`, { waitUntil: "domcontentloaded" }),
+	])
+	await page.locator(".form-toolbar__actions").getByRole("button", { name: "More Actions", exact: true }).click()
+	await page.getByRole("menuitem", { name: "Get Completed", exact: true }).click()
+	const normalDialog = page.getByRole("dialog", { name: "Completed Cut Quantity", exact: true })
+	await normalDialog.waitFor({ timeout: 10_000 })
+	const normalGroup = normaliseItemGroups(normalFixture.data.completed_items).find((group) => !group.is_set_item && (group.items || []).some((item) => item.completed))
+	const normalPanels = Array.from(normalGroup?.[normalGroup.stiching_attr] || [])
+	assert(
+		JSON.stringify(await normalDialog.locator(".completed-report__panel").allTextContents()) === JSON.stringify(normalPanels),
+		"Normal-item completion report does not show its panels",
+	)
+	assert(
+		await normalDialog.locator(".completed-report__item-row").count() === (normalGroup.items || []).filter((item) => item.completed).length,
+		"Normal-item completion report includes incomplete rows or omits completed rows",
+	)
+	await normalDialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
+
+	const emptyPage = await context.newPage()
+	try {
+		await emptyPage.route("**get_web_view_data*", (route) => route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({ message: { ...normalFixture.data, completed_items: [] } }),
+		}))
+		await emptyPage.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(normalFixture.name)}`, { waitUntil: "domcontentloaded" })
+		await emptyPage.locator(".form-toolbar__actions").getByRole("button", { name: "More Actions", exact: true }).click()
+		await emptyPage.getByRole("menuitem", { name: "Get Completed", exact: true }).click()
+		const emptyDialog = emptyPage.getByRole("dialog", { name: "Completed Cut Quantity", exact: true })
+		await emptyDialog.getByText("No completed cut quantities", { exact: true }).waitFor({ timeout: 10_000 })
+		assert(await emptyDialog.locator(".completed-report__table").count() === 0, "Empty Get Completed report renders an empty matrix")
+	} finally {
+		await emptyPage.close()
+	}
+
+	return { plan: fixture.name, normalPlan: normalFixture.name, menuActions: expectedMenuActions, compactHeaderContract, copiedDimensions }
+}
+
 async function planPrimaryTabsSuite(page) {
 	await page.setViewportSize({ width: 1600, height: 1000 })
-	const fixture = await openPlan(page, (data) => groupItemCount(data.planned_detail?.item_detail) > 0)
+	const fixture = await openPlan(page, (data) =>
+		groupItemCount(data.planned_detail?.item_detail) > 0 &&
+		(data.cloth_details?.length || 0) > 0 &&
+		(data.accessory_details?.length || 0) > 0,
+	)
 
 	const detailColumns = page.locator(".detail-field-column")
 	assert(await detailColumns.count() === 2, "Details does not use two Desk-aligned columns")
@@ -372,17 +621,54 @@ async function planPrimaryTabsSuite(page) {
 	const detailLabels = await detailColumns.evaluateAll((elements) => elements.map((element) =>
 		Array.from(element.querySelectorAll(".form-field__label")).map((label) => label.textContent.replace("*", "").trim()),
 	))
-	assert(
-		JSON.stringify(detailLabels[0].slice(0, 4)) === JSON.stringify(["Is Manual Entry", "Lot", "Maximum No of Plys", "Lay No"]),
-		`Left Details column is not in Desk order: ${JSON.stringify(detailLabels[0])}`,
-	)
-	assert(detailLabels[1][0] === "Item", `Right Details column must start with Item: ${JSON.stringify(detailLabels[1])}`)
+	const flatDetailLabels = detailLabels.flat()
+	for (const removedLabel of ["Lot", "Item", "CP Status", "Lay No"]) {
+		assert(!flatDetailLabels.includes(removedLabel), `${removedLabel} is duplicated in the Details tab`)
+	}
+	for (const retainedLabel of ["Is Manual Entry", "Maximum No of Plys", "Maximum Allow Percent", "Piece Weight Tolerance (kg)", "Cutting Location", "Work Order", "No of Colours", "No of Colours Completed"]) {
+		assert(flatDetailLabels.includes(retainedLabel), `Details is missing ${retainedLabel}`)
+	}
+
+	await page.locator(".cloth-requirement-group").first().waitFor({ timeout: 20_000 })
+	const expectedClothGroups = new Set((fixture.data.cloth_details || []).map((row) => `${row.item || ""}\u0000${row.cloth_type || ""}`)).size
+	const expectedAccessoryGroups = new Set((fixture.data.accessory_details || []).map((row) => `${row.accessory || ""}\u0000${row.item || ""}\u0000${row.cloth_type || ""}`)).size
+	assert(await page.locator(".cloth-requirement-group").count() === expectedClothGroups, "Cloth rows are not grouped by template item and cloth type")
+	assert(await page.locator(".accessory-requirement-group").count() === expectedAccessoryGroups, "Accessory rows are not grouped by accessory, template item, and cloth type")
+	for (const sectionClass of ["cloth-details-section", "accessory-details-section"]) {
+		const section = page.locator(`.${sectionClass}`)
+		assert(await section.locator(".requirement-group__identity small").count() === 0, `${sectionClass} repeats an explanatory identity label`)
+		const headings = await section.locator(".requirement-table th").first().locator("xpath=../th").allTextContents()
+		assert(
+			JSON.stringify(headings.map((label) => label.trim())) === JSON.stringify(["Colour", "Dia", "Required Weight", "Received Weight", "Used Weight", "Balance Weight"]),
+			`${sectionClass} does not expose the low-dwell weight columns: ${JSON.stringify(headings)}`,
+		)
+		assert(await section.getByRole("columnheader", { name: "Cloth", exact: true }).count() === 0, `${sectionClass} still repeats the full variant name`)
+	}
 
 	await page.getByRole("tab", { name: "Summary", exact: true }).click()
 	const summaryHeadings = await page.locator(".p-tabpanel[data-p-active='true'] .section-heading h3").allTextContents()
 	for (const heading of ["Completed Cut Quantity", "Excess Cut Quantity", "Recut Summary", "Print Panel Summary"]) {
 		assert(summaryHeadings.some((text) => text.includes(heading)), `Summary is missing ${heading}`)
 	}
+	const expectedCompletedSummaryRows = normaliseItemGroups(fixture.data.completed_items).reduce(
+		(total, group) => total + (group.items || []).filter((item) => item.completed).length,
+		0,
+	)
+	assert(
+		await page.locator(".completed-quantity-section tbody tr:not(.total-row)").count() === expectedCompletedSummaryRows,
+		"Completed Cut Quantity shows incomplete rows or omits completed rows",
+	)
+	const expectedExcessRows = normaliseItemGroups(fixture.data.incomplete_items).reduce(
+		(total, group) => total + (group.items || []).filter((item) => Object.values(item.values || {}).some((value) => {
+			if (value && typeof value === "object") return Object.values(value).some((quantity) => Number(quantity || 0) > 0)
+			return Number(value || 0) > 0
+		})).length,
+		0,
+	)
+	assert(
+		await page.locator(".excess-quantity-section tbody tr").count() === expectedExcessRows,
+		"Excess Cut Quantity includes rows with no excess quantity or omits valid rows",
+	)
 
 	await page.getByRole("tab", { name: "Planned Detail", exact: true }).click()
 	await page.locator(".planned-row").first().waitFor({ timeout: 10_000 })
@@ -435,9 +721,25 @@ async function sidebarSuite(page, context) {
 		assert(await marker.locator(selector).count() === 1, `Marker card is missing ${selector}`)
 	}
 	const laySheet = page.locator(".laysheet-card").first()
-	for (const selector of [".lay-number", ".rail-card__top strong", ".panel-summary", ".lay-meta", ".lay-status", ".print-state"]) {
+	for (const selector of [".lay-number", ".rail-card__top strong", ".panel-summary", ".lay-meta", ".lay-status--prominent"]) {
 		assert(await laySheet.locator(selector).count() === 1, `Lay Sheet card is missing ${selector}`)
 	}
+	const statusSignals = await page.locator(".laysheet-card").evaluateAll((cards) => cards.map((card) => {
+		const status = card.querySelector(".lay-status--prominent")
+		return {
+			label: status?.textContent.trim(),
+			fontSize: status ? Number.parseFloat(getComputedStyle(status).fontSize) : 0,
+			cardClass: Array.from(card.classList).find((name) => name.startsWith("laysheet-card--status-")),
+		}
+	}))
+	assert(
+		statusSignals.every((signal) => signal.label && signal.fontSize >= 12 && signal.cardClass),
+		`Lay Sheet workflow status is not prominent and contrasted: ${JSON.stringify(statusSignals)}`,
+	)
+	assert(await page.getByText("Label Pending", { exact: true }).count() === 0, "Lay Sheet cards still invent a Label Pending state")
+	assert(await page.locator(".print-status-badge").count() === 0, "Lay Sheet cards still render a redundant print-state badge")
+	const printMetaValues = await page.locator(".laysheet-card .print-state b").allTextContents()
+	assert(printMetaValues.every((value) => /^\d{2}-\d{2}-\d{4} \d{2}:\d{2}$/.test(value.trim())), `Lay Sheet print metadata contains a synthetic state: ${JSON.stringify(printMetaValues)}`)
 	const displayedDates = await page.locator(".laysheet-card .lay-meta b").allTextContents()
 	const concreteDates = displayedDates.filter((value) => /\d/.test(value))
 	assert(concreteDates.every((value) => /^\d{2}-\d{2}-\d{4}(?: \d{2}:\d{2})?$/.test(value)), `Rail dates are not DD-MM-YYYY: ${concreteDates}`)
@@ -472,6 +774,7 @@ async function sidebarSuite(page, context) {
 				permissions: {
 					...fixture.data.permissions,
 					can_read_marker: false,
+					can_read_recut: false,
 					can_create_marker: false,
 					can_create_laysheet: false,
 				},
@@ -482,6 +785,9 @@ async function sidebarSuite(page, context) {
 		assert(await restrictedPage.locator(".marker-section").count() === 0, "Unreadable Markers section remains visible")
 		assert(await restrictedPage.locator(".laysheet-section .rail-filter-button").count() === 1, "Readable Lay Sheet filter is missing")
 		assert(await restrictedPage.locator(".laysheet-section").getByRole("button", { name: "Create New", exact: true }).count() === 0, "Disallowed Lay Sheet create action remains visible")
+		await restrictedPage.getByRole("tab", { name: "Summary", exact: true }).click()
+		assert(await restrictedPage.getByRole("heading", { name: "Recut Summary", exact: true }).count() === 0, "Unreadable Recut Summary remains visible")
+		assert(await restrictedPage.getByRole("heading", { name: "Print Panel Summary", exact: true }).count() === 0, "Unreadable Print Panel Summary remains visible")
 	} finally {
 		await restrictedPage.close()
 	}
@@ -504,8 +810,23 @@ async function sidebarSuite(page, context) {
 }
 
 async function entityDialogsSuite(page) {
-	await page.setViewportSize({ width: 1600, height: 760 })
-	const fixture = await openPlan(page, (data) => data.markers?.length && data.laysheets?.length)
+	await page.setViewportSize({ width: 1600, height: 700 })
+	let editableLaySheet = null
+	const fixture = await openPlan(page, async (data, name) => {
+		if (!(
+			data.markers?.length
+			&& data.laysheets?.length
+			&& data.permissions?.can_start_marker
+			&& data.permissions?.can_start_laysheet
+		)) return false
+
+		try {
+			editableLaySheet = await findEditableLaySheet(page.request, { name, data })
+			return true
+		} catch {
+			return false
+		}
+	})
 	await page.locator(".marker-card").first().waitFor({ timeout: 20_000 })
 	const initialUrl = page.url()
 
@@ -539,15 +860,51 @@ async function entityDialogsSuite(page) {
 	assert(["auto", "scroll"].includes(dialogScrollContract.contentOverflow) && dialogScrollContract.contentScrollable && dialogScrollContract.footerVisible, `Marker dialog scroll contract failed: ${JSON.stringify(dialogScrollContract)}`)
 	const markerUndersizedText = await visibleTextBelowMinimum(existingMarkerDialog)
 	assert(markerUndersizedText.length === 0, `Marker dialog contains text below 11px: ${JSON.stringify(markerUndersizedText.slice(0, 8))}`)
+	if (await existingMarkerDialog.getByText("Submitted", { exact: true }).count()) {
+		assert(await existingMarkerDialog.locator("input:disabled, .p-disabled input").count() === 0, "Submitted Marker is rendered as a disabled editor instead of a readable view")
+		assert(
+			/^Updated \d{2}-\d{2}-\d{4} · \d{2}:\d{2}$/.test((await existingMarkerDialog.locator(".modified-text").textContent())?.trim() || ""),
+			"Marker modified time is not formatted for users",
+		)
+	}
 	await existingMarkerDialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
 
-	const sheet = await findEditableLaySheet(page.request, fixture)
+	const sheet = editableLaySheet
+	assert(sheet, "The selected dialog fixture has no editable Lay Sheet")
 	await page.locator(".laysheet-card").filter({ hasText: sheet.name }).click()
 	const laySheetDialog = page.getByRole("dialog", { name: new RegExp(sheet.name) })
 	await laySheetDialog.waitFor()
+	const laySheetTabList = laySheetDialog.locator(".p-tablist")
+	assert(await laySheetTabList.evaluate((element) => getComputedStyle(element).position) === "sticky", "Lay Sheet tabs do not remain fixed while dialog data scrolls")
+	await laySheetDialog.getByRole("tab", { name: "Details", exact: true }).click()
+	for (const duplicateLabel of ["Cutting Marker", "Marker Name", "Lay No"]) {
+		assert(await laySheetDialog.locator(".detail-grid > div > span").filter({ hasText: new RegExp(`^${duplicateLabel}$`) }).count() === 0, `Lay Sheet Details repeats ${duplicateLabel} already shown in the identity header`)
+	}
 	await laySheetDialog.getByRole("tab", { name: "Cloth Details", exact: true }).click()
 	assert(await laySheetDialog.getByRole("button", { name: "Add Cloth", exact: true }).count() === 1, "Permitted Add Cloth action is missing")
 	assert(await laySheetDialog.getByRole("button", { name: "Add Accessory", exact: true }).count() === 1, "Permitted Add Accessory action is missing")
+	const materialActionColours = await laySheetDialog.getByRole("button", { name: /Add Cloth|Add Accessory/ }).evaluateAll((buttons) => buttons.map((button) => {
+		const buttonColour = getComputedStyle(button).color
+		const label = button.querySelector(".p-button-label")
+		const icon = button.querySelector(".p-button-icon")
+		return {
+			label: button.textContent.trim(),
+			buttonColour,
+			labelColour: label ? getComputedStyle(label).color : buttonColour,
+			iconColour: icon ? getComputedStyle(icon).color : buttonColour,
+		}
+	}))
+	assert(
+		materialActionColours.every(({ buttonColour, labelColour, iconColour }) => labelColour === buttonColour && iconColour === buttonColour),
+		`Lay Sheet material action text/icon does not inherit the button contrast colour: ${JSON.stringify(materialActionColours)}`,
+	)
+	const expectedLaySheetClothGroups = new Set((sheet.cloth_details || []).map((row) => `${row.item || row.cloth_item_variant || ""}\u0000${row.cloth_type || ""}`)).size
+	const laySheetClothGroups = laySheetDialog.locator(".laysheet-material-groups--cloth .material-requirement-group")
+	assert(await laySheetClothGroups.count() === expectedLaySheetClothGroups, "Lay Sheet cloth rows are not grouped by Item and Cloth Type")
+	assert(await laySheetDialog.locator(".laysheet-material-groups--cloth").getByRole("columnheader", { name: "Cloth", exact: true }).count() === 0, "Lay Sheet repeats the full cloth variant in every row")
+	assert(await laySheetDialog.locator(".laysheet-material-groups--cloth").getByRole("columnheader", { name: "Cloth Type", exact: true }).count() === 0, "Lay Sheet repeats Cloth Type in every row")
+	const laySheetTableScrolls = await laySheetDialog.locator(".material-requirement-table-wrap").evaluateAll((elements) => elements.map((element) => ({ clientHeight: element.clientHeight, scrollHeight: element.scrollHeight })))
+	assert(laySheetTableScrolls.every(({ clientHeight, scrollHeight }) => scrollHeight <= clientHeight + 1), `Lay Sheet material tables have nested vertical scrolling: ${JSON.stringify(laySheetTableScrolls)}`)
 	const laySheetUndersizedText = await visibleTextBelowMinimum(laySheetDialog)
 	assert(laySheetUndersizedText.length === 0, `Lay Sheet dialog contains text below 11px: ${JSON.stringify(laySheetUndersizedText.slice(0, 8))}`)
 
@@ -741,6 +1098,7 @@ async function stockTransfersSuite(page, context) {
 	const stockEntryDialog = page.getByRole("dialog", { name: "Create Stock Entry" })
 	await stockEntryDialog.waitFor()
 	const purpose = stockEntryDialog.locator(".erp-operation-fields .p-select")
+	await purpose.waitFor({ timeout: 20_000 })
 	assert(await purpose.count() === 1, "Stock Entry Purpose is not a Select")
 	await purpose.click()
 	const purposeOptions = await page.locator(".p-select-overlay:visible .p-select-option").allTextContents()
@@ -769,6 +1127,7 @@ async function stockTransfersSuite(page, context) {
 	const updateDialog = page.getByRole("dialog", { name: "Create Stock Update" })
 	await updateDialog.waitFor()
 	const updateType = updateDialog.locator(".erp-operation-fields .p-select")
+	await updateType.waitFor({ timeout: 20_000 })
 	await updateType.click()
 	const updateOptions = await page.locator(".p-select-overlay:visible .p-select-option").allTextContents()
 	assert(updateOptions.includes("Add") && updateOptions.includes("Reduce"), `Stock Update does not support Add and Reduce: ${updateOptions}`)
@@ -784,6 +1143,7 @@ async function stockTransfersSuite(page, context) {
 	await reconciliationDialog.getByRole("button", { name: "Get Item", exact: true }).click()
 	await reconciliationDialog.locator(".stock-composer__attribute-grid").waitFor({ timeout: 20_000 })
 	await selectAutocompleteOption(page, reconciliationDialog.locator(".stock-composer__attribute-grid .common-field").first(), "Pack")
+	await reconciliationDialog.locator(".stock-composer__quantity-grid input").first().fill("0")
 	await reconciliationDialog.getByRole("button", { name: "OK · Add Item", exact: true }).click()
 	await reconciliationDialog.locator(".stock-composer__table-card").waitFor({ timeout: 10_000 })
 	assert(await reconciliationDialog.locator(".stock-composer__total").first().textContent() === "0", "Zero-quantity reconciliation was not staged")
@@ -807,6 +1167,7 @@ async function stockTransfersSuite(page, context) {
 	await transfers.getByRole("button", { name: "New Lot Transfer", exact: true }).click()
 	const lotDialog = page.getByRole("dialog", { name: "Create Lot Transfer" })
 	await lotDialog.waitFor()
+	await lotDialog.getByText("From Lot *", { exact: true }).waitFor({ timeout: 20_000 })
 	assert(await lotDialog.getByText("From Lot *", { exact: true }).count() === 1 && await lotDialog.getByText("To Lot *", { exact: true }).count() === 1, "Lot Transfer does not expose from/to lot dimensions")
 	await lotDialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
 
@@ -872,8 +1233,27 @@ function completionReportFixture() {
 }
 
 async function reportsSuite(page) {
+	const sharedStockReportPath = "frontend/src/components/reports/StockBalanceReport.vue"
+	const sharedStockApiPath = "frontend/src/api/stockReports.js"
+	assert(existsSync(sharedStockReportPath), "Stock Balance is not a shared report component")
+	assert(existsSync(sharedStockApiPath), "Stock Balance API is not shared outside Cutting")
+	const cuttingReportsSource = readFileSync("frontend/src/departments/CuttingReports.vue", "utf8")
+	const sharedStockSource = readFileSync(sharedStockReportPath, "utf8")
+	const sharedStockApiSource = readFileSync(sharedStockApiPath, "utf8")
+	assert(
+		cuttingReportsSource.includes('../components/reports/StockBalanceReport.vue'),
+		"Cutting does not consume the shared Stock Balance component",
+	)
+	assert(sharedStockSource.includes('DateField'), "Shared Stock Balance does not use the custom Date field")
+	assert(sharedStockSource.includes('@generate="generate"'), "Shared Stock Balance is not generated on command")
+	for (const filterName of ["from_date", "to_date", "parent_item", "remove_zero_balance_item", "show_variant_attributes", "show_stock_ageing_data", "show_inward_date_split"]) {
+		assert(sharedStockSource.includes(filterName), `Shared Stock Balance changed API filter ${filterName}`)
+	}
+	assert(sharedStockApiSource.includes('report_name: "YRP Stock Balance"'), "Shared Stock Balance API changed the report contract")
+
 	await page.setViewportSize({ width: 1600, height: 1000 })
 	const calls = { production: 0, cutSheet: 0, multiCcr: 0, detail: 0, stock: 0 }
+	const requestedDates = { production: "", cutSheet: "" }
 	let emptyStockResult = false
 	const production = productionReportFixture()
 	const completion = completionReportFixture()
@@ -894,10 +1274,12 @@ async function reportsSuite(page) {
 	}))
 	await page.route("**/api/method/essdee_yrp.cutting.reports.get_daily_production_report*", (route) => {
 		calls.production += 1
+		requestedDates.production = JSON.parse(route.request().postData() || "{}").date || ""
 		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: production }) })
 	})
 	await page.route("**/api/method/essdee_yrp.cutting.reports.get_cut_sheet_report*", (route) => {
 		calls.cutSheet += 1
+		requestedDates.cutSheet = JSON.parse(route.request().postData() || "{}").date || ""
 		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: [{
 			style_no: production.report_data[0].style_no,
 			lot_no: production.report_data[0].lot_no,
@@ -962,6 +1344,7 @@ async function reportsSuite(page) {
 		await tabs.filter({ hasText: tabName }).click()
 		const shell = page.locator(".report-shell:visible")
 		await shell.waitFor()
+		assert(await shell.locator('input[type="date"], input[type="time"], input[type="datetime-local"]').count() === 0, `${tabName} still uses a browser-native date or time input`)
 		assert(await shell.getByText("Set the report filters", { exact: true }).isVisible(), `${tabName} does not have an intentional initial state`)
 		assert(await shell.getByRole("button", { name: "Generate", exact: true }).count() === 1, `${tabName} has no explicit Generate action`)
 	}
@@ -969,9 +1352,44 @@ async function reportsSuite(page) {
 
 	await tabs.filter({ hasText: "Daily Production" }).click()
 	let shell = page.locator(".report-shell:visible")
-	await shell.locator('input[type="date"]').fill("2026-09-24")
+	const productionDate = shell.getByRole("combobox", { name: "Date", exact: true })
+	assert(await productionDate.count() === 1, "Daily Production does not expose an accessible shared date picker")
+	const expectedToday = await page.evaluate(() => {
+		const today = new Date()
+		const pad = (value) => String(value).padStart(2, "0")
+		return `${pad(today.getDate())}-${pad(today.getMonth() + 1)}-${today.getFullYear()}`
+	})
+	assert(await productionDate.inputValue() === expectedToday, `Daily Production date does not default to today in DD-MM-YYYY format: ${await productionDate.inputValue()}`)
+	await productionDate.click()
+	const datePanel = page.locator(".erp-date-time-panel:visible")
+	await datePanel.waitFor()
+	const panelContract = await datePanel.evaluate((element) => {
+		const style = getComputedStyle(element)
+		const selected = element.querySelector(".p-datepicker-day-selected")
+		const selectedStyle = selected ? getComputedStyle(selected) : null
+		const rect = element.getBoundingClientRect()
+		return {
+			borderRadius: style.borderRadius,
+			background: style.backgroundColor,
+			selectedBackground: selectedStyle?.backgroundColor || "",
+			selectedColor: selectedStyle?.color || "",
+			viewportContained: rect.left >= 0 && rect.right <= window.innerWidth,
+		}
+	})
+	assert(
+		panelContract.borderRadius === "12px"
+			&& panelContract.background === "rgb(255, 255, 255)"
+			&& panelContract.selectedBackground === "rgb(10, 127, 90)"
+			&& panelContract.selectedColor === "rgb(255, 255, 255)"
+			&& panelContract.viewportContained,
+		`Shared date panel is not using the isolated ERP presentation: ${JSON.stringify(panelContract)}`,
+	)
+	await page.keyboard.press("Escape")
+	await productionDate.fill("24-09-2026")
+	await productionDate.press("Tab")
 	await shell.getByRole("button", { name: "Generate", exact: true }).click()
 	await shell.locator(".production-card").waitFor()
+	assert(requestedDates.production === "2026-09-24", `Daily Production changed the API date contract: ${requestedDates.production}`)
 	assert(await shell.getByText("24-09-2026", { exact: true }).count() >= 1, "Daily Production date is not DD-MM-YYYY")
 	assert(await shell.getByRole("button", { name: "Copy Report", exact: true }).count() === 1, "Daily Production Copy Report is missing")
 	await assertSharedReportResult(shell, "Daily Production")
@@ -986,9 +1404,13 @@ async function reportsSuite(page) {
 
 	await tabs.filter({ hasText: "Daily Cut Sheet" }).click()
 	shell = page.locator(".report-shell:visible")
-	await shell.locator('input[type="date"]').fill("2026-09-24")
+	const cutSheetDate = shell.getByRole("combobox", { name: "Date", exact: true })
+	assert(await cutSheetDate.count() === 1, "Daily Cut Sheet does not expose an accessible shared date picker")
+	await cutSheetDate.fill("24-09-2026")
+	await cutSheetDate.press("Tab")
 	await shell.getByRole("button", { name: "Generate", exact: true }).click()
 	await shell.locator(".cut-sheet-card").waitFor()
+	assert(requestedDates.cutSheet === "2026-09-24", `Daily Cut Sheet changed the API date contract: ${requestedDates.cutSheet}`)
 	assert(await shell.getByText("24-09-2026", { exact: true }).count() === 1, "Daily Cut Sheet date is not DD-MM-YYYY")
 	assert(await shell.getByRole("button", { name: "Copy Report", exact: true }).count() === 1, "Daily Cut Sheet Copy Report is missing")
 	await assertSharedReportResult(shell, "Daily Cut Sheet")
@@ -1016,7 +1438,89 @@ async function reportsSuite(page) {
 	await activeShell.getByText("No matching records", { exact: true }).waitFor()
 	assert(await activeShell.getByText("No matching records", { exact: true }).isVisible(), "Generated-empty report state is not intentional")
 
-	return { tabs: expectedTabs, calls, longNameTreatment, productionTotal, tableContainment }
+	return { tabs: expectedTabs, calls, requestedDates, panelContract, longNameTreatment, productionTotal, tableContainment }
+}
+
+async function responsiveAuditSuite(page) {
+	const fixture = await findCuttingPlan(page.request)
+	const routes = [
+		"/",
+		"/cutting",
+		"/fabric-store",
+		"/cut-panel-store",
+		"/accessory-store",
+		"/sewing",
+		"/finishing",
+		"/merch",
+		"/purchase",
+		"/sales",
+		"/planning",
+		"/cutting/plans",
+		"/cutting/reports",
+		`/cutting/plans/${encodeURIComponent(fixture.name)}`,
+	]
+	const viewports = [
+		{ width: 1600, height: 1000 },
+		{ width: 1280, height: 800 },
+		{ width: 900, height: 760 },
+		{ width: 390, height: 844 },
+	]
+	const audited = []
+
+	for (const viewport of viewports) {
+		await page.setViewportSize(viewport)
+		for (const path of routes) {
+			await page.goto(`${SITE}/web${path}`, { waitUntil: "domcontentloaded" })
+			await page.locator(".app-shell").waitFor({ timeout: 20_000 })
+			if (path === "/cutting/plans") await page.locator(".premium-list-table, .list-empty").first().waitFor({ timeout: 20_000 })
+			if (path === "/cutting/reports") await page.locator(".report-tabs__list").waitFor({ timeout: 20_000 })
+			if (path.includes("/cutting/plans/")) await page.locator(".cutting-plan-frame").waitFor({ timeout: 20_000 })
+
+			const bodyWidth = await page.locator("body").evaluate((element) => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }))
+			assert(bodyWidth.scrollWidth === bodyWidth.clientWidth, `${path} overflows at ${viewport.width}px: ${JSON.stringify(bodyWidth)}`)
+
+			const undersized = await visibleTextBelowMinimum(page)
+			assert(undersized.length === 0, `${path} has text below 11px at ${viewport.width}px: ${JSON.stringify(undersized.slice(0, 8))}`)
+
+			await page.keyboard.press("Tab")
+			const focusState = await page.evaluate(() => {
+				const active = document.activeElement
+				if (!active || active === document.body) return { visible: false, element: "body" }
+				const style = getComputedStyle(active)
+				return {
+					visible: style.outlineStyle !== "none" || style.boxShadow !== "none",
+					element: `${active.tagName.toLowerCase()}.${String(active.className || "").replaceAll(" ", ".")}`,
+					outlineStyle: style.outlineStyle,
+					boxShadow: style.boxShadow,
+				}
+			})
+			assert(focusState.visible, `${path} has no visible keyboard focus at ${viewport.width}px: ${JSON.stringify(focusState)}`)
+			audited.push(`${viewport.width}x${viewport.height}:${path}`)
+		}
+	}
+
+	await page.setViewportSize({ width: 1600, height: 1000 })
+	await page.goto(`${SITE}/web/cutting/reports`, { waitUntil: "domcontentloaded" })
+	await page.locator(".report-tabs__list").waitFor({ timeout: 20_000 })
+	const reportStickyContract = await page.evaluate(() => {
+		const tabs = document.querySelector(".report-tabs__list")
+		const panels = document.querySelector(".report-tabs__panels")
+		return { tabsBottom: tabs?.getBoundingClientRect().bottom || 0, panelsTop: panels?.getBoundingClientRect().top || 0 }
+	})
+	assert(reportStickyContract.tabsBottom <= reportStickyContract.panelsTop + 1, `Report tabs overlap content: ${JSON.stringify(reportStickyContract)}`)
+
+	await page.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(fixture.name)}`, { waitUntil: "domcontentloaded" })
+	await page.locator(".cutting-plan-frame").waitFor({ timeout: 20_000 })
+	await page.locator(".cutting-tabs .p-tablist").waitFor({ timeout: 20_000 })
+	const planStickyContract = await page.evaluate(() => {
+		const tabs = document.querySelector(".cutting-tabs .p-tablist")
+		const panels = document.querySelector(".cutting-tabs .p-tabpanels")
+		return { tabsBottom: tabs?.getBoundingClientRect().bottom || 0, panelsTop: panels?.getBoundingClientRect().top || 0 }
+	})
+	assert(planStickyContract.tabsBottom > 0 && planStickyContract.panelsTop > 0 && planStickyContract.tabsBottom <= planStickyContract.panelsTop + 1, `Cutting Plan tabs overlap content: ${JSON.stringify(planStickyContract)}`)
+	const statusText = await page.locator(".cutting-plan-status:visible, .marker-status:visible, .lay-status:visible, .erp-status:visible").allTextContents()
+	assert(statusText.length > 0 && statusText.every((value) => value.trim()), `Status meaning is not available as text: ${JSON.stringify(statusText)}`)
+	return { routeCount: routes.length, viewportCount: viewports.length, fixture: fixture.name, reportStickyContract, planStickyContract }
 }
 
 const suites = {
@@ -1025,33 +1529,40 @@ const suites = {
 	"cutting-entry": cuttingEntrySuite,
 	list: listSuite,
 	"plan-frame": planFrameSuite,
+	"plan-actions": planActionsSuite,
 	"plan-primary-tabs": planPrimaryTabsSuite,
 	sidebar: sidebarSuite,
 	"entity-dialogs": entityDialogsSuite,
 	cpm: cpmSuite,
 	"stock-transfers": stockTransfersSuite,
 	reports: reportsSuite,
+	"responsive-audit": responsiveAuditSuite,
 }
 
 const browser = await chromium.launch({ headless: true })
 const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } })
-const page = await context.newPage()
-const errors = []
-
-page.on("pageerror", (error) => errors.push(`page: ${error.message}`))
-page.on("console", (message) => {
-	if (message.type() === "error") errors.push(`console: ${message.text()}`)
-})
 
 try {
-	await login(page)
+	const loginPage = await context.newPage()
+	await login(loginPage)
+	await loginPage.close()
 	const selectedSuites = suite === "all" ? Object.keys(suites) : [suite]
 	const results = {}
 	for (const suiteName of selectedSuites) {
 		assert(suites[suiteName], `Unknown suite: ${suiteName}`)
-		results[suiteName] = await suites[suiteName](page, context)
+		const page = await context.newPage()
+		const errors = []
+		page.on("pageerror", (error) => errors.push(`page: ${error.message}`))
+		page.on("console", (message) => {
+			if (message.type() === "error") errors.push(`console: ${message.text()}`)
+		})
+		try {
+			results[suiteName] = await suites[suiteName](page, context)
+			assertNoBrowserErrors(errors)
+		} finally {
+			await page.close()
+		}
 	}
-	assertNoBrowserErrors(errors)
 	console.log(JSON.stringify({ passed: true, suites: results }, null, 2))
 } finally {
 	await browser.close()

@@ -1,7 +1,10 @@
 # Copyright (c) 2026, anas@essdee.fit and contributors
 # For license information, please see license.txt
+import json
+
 import frappe
 from frappe import _
+from frappe.utils import cstr, flt
 from yrp import attribute_links as attribute_db
 from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
@@ -36,6 +39,123 @@ def validate(doc, method=None):
 	set_includes_packing(doc)
 	preserve_dynamic_packing_piece_uom(doc)
 	validate_lot_process_selection(doc)
+	if doc.is_new():
+		from essdee_yrp.cloth_execution import stamp_cloth_execution_version
+
+		# API/import callers can reach validation with Production Detail derived
+		# by the hook above, after controller.before_insert had no value to stamp.
+		stamp_cloth_execution_version(doc)
+	validate_fabric_execution_immutable(doc)
+	# Draft reservations must still be current when their execution contract is
+	# saved. Submitted lifecycle updates are protected by immutability and are
+	# rechecked by the DC/GRN authority instead of trapping a valid submitted WO
+	# after another Work Order consumes later stock.
+	if int(doc.get("docstatus") or 0) == 0:
+		from essdee_yrp.fabric_source import validate_work_order_source_allocations
+
+		validate_work_order_source_allocations(doc)
+
+
+def before_update_after_submit(doc, method=None):
+	"""Protect the saved physical execution contract after submission."""
+	del method
+	validate_fabric_execution_immutable(doc)
+
+
+def validate_fabric_execution_immutable(doc):
+	"""Allow generated contract changes only through Calculate/lifecycle code."""
+	flags = doc.flags or frappe._dict()
+	if flags.get("essdee_fabric_calculate") or flags.get("essdee_fabric_lifecycle"):
+		return
+	previous = doc.get_doc_before_save()
+	if not previous:
+		return
+	previous_snapshot, previous_managed = _fabric_execution_snapshot(previous)
+	current_snapshot, current_managed = _fabric_execution_snapshot(doc)
+	if not (previous_managed or current_managed):
+		return
+	if previous_snapshot != current_snapshot:
+		frappe.throw(
+			_(
+				"Calculated fabric deliverables and receivables can be changed only "
+				"through Calculate. Reopen the popup to rebuild the execution contract."
+			)
+		)
+
+
+def _fabric_execution_snapshot(doc):
+	from essdee_yrp.cloth_execution import get_row_execution_parameters
+	from yrp.stock.dimensions import get_dimension_fieldnames
+
+	managed = any(
+		get_row_execution_parameters(row).get("fabric_execution_key")
+		for table in ("deliverables", "receivables")
+		for row in (doc.get(table) or [])
+	)
+	dimension_fields = tuple(get_dimension_fieldnames())
+	fields = {
+		"deliverables": (
+			"item_variant",
+			"qty",
+			"uom",
+			"is_calculated",
+			"received_type",
+			"set_combination",
+			"fabric_reference_variant",
+			"fabric_reference_allocations",
+			"additional_parameters",
+			"source_grn",
+			"source_grn_item",
+		) + dimension_fields,
+		"receivables": (
+			"item_variant",
+			"qty",
+			"uom",
+			"set_combination",
+			"fabric_reference_variant",
+			"fabric_reference_allocations",
+			"additional_parameters",
+		) + dimension_fields,
+	}
+	rows = []
+	if managed:
+		for table, fieldnames in fields.items():
+			for row in doc.get(table) or []:
+				payload = {"table": table}
+				for fieldname in fieldnames:
+					value = row.get(fieldname)
+					if fieldname == "qty":
+						value = flt(value, 6)
+					else:
+						value = cstr(value) if value is not None else ""
+					payload[fieldname] = value
+				rows.append(payload)
+		rows.sort(key=lambda row: json.dumps(row, sort_keys=True, separators=(",", ":")))
+	header = {
+		fieldname: cstr(doc.get(fieldname) or "")
+		for fieldname in (
+			"lot",
+			"production_detail",
+			"process_name",
+			"item",
+			"supplier",
+			"delivery_location",
+			"fabric_source_process",
+			"fabric_source_process_step",
+			"cloth_execution_version",
+			"is_rework",
+			"parent_wo",
+			"rework_type",
+		)
+	}
+	return (
+		json.dumps(
+			{"header": header, "rows": rows},
+			sort_keys=True,
+			separators=(",", ":"),
+		),
+		managed,
+	)
 
 
 def preserve_dynamic_packing_piece_uom(doc):

@@ -569,7 +569,9 @@ def get_actual_dia_factors(lot, production_detail, planned_item):
 	return build_actual_dia_factors(rows, planned_qty)
 
 
-def get_process_conversion_index(lot, process_name=None, production_detail=None):
+def get_process_conversion_index(
+	lot, process_name=None, production_detail=None, *, for_update=False
+):
 	filters = {
 		"parent": lot,
 		"parenttype": "SD YRP Lot",
@@ -579,11 +581,33 @@ def get_process_conversion_index(lot, process_name=None, production_detail=None)
 		filters["process_name"] = process_name
 	if production_detail:
 		filters["production_detail"] = production_detail
-	rows = frappe.get_all(
-		"SD YRP Lot Fabric Conversion",
-		filters=filters,
-		fields=["route_item", "planned_item", "actual_item", "actual_quantity"],
-	)
+	if for_update:
+		conditions = [
+			"parent = %(parent)s",
+			"parenttype = %(parenttype)s",
+			"parentfield = %(parentfield)s",
+		]
+		if process_name:
+			conditions.append("process_name = %(process_name)s")
+		if production_detail:
+			conditions.append("production_detail = %(production_detail)s")
+		rows = frappe.db.sql(
+			f"""
+			SELECT route_item, planned_item, actual_item, actual_quantity
+			FROM `tabSD YRP Lot Fabric Conversion`
+			WHERE {' AND '.join(conditions)}
+			ORDER BY name
+			FOR UPDATE
+			""",
+			filters,
+			as_dict=True,
+		)
+	else:
+		rows = frappe.get_all(
+			"SD YRP Lot Fabric Conversion",
+			filters=filters,
+			fields=["route_item", "planned_item", "actual_item", "actual_quantity"],
+		)
 	index = defaultdict(dict)
 	for row in rows:
 		key = (row.route_item or "", row.planned_item)

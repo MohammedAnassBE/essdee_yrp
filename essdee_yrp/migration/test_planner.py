@@ -97,6 +97,32 @@ class MigrationPlannerTest(unittest.TestCase):
 		self.assertEqual(self.payload["issue_count"], 0)
 		self.assertEqual(self.payload["issues"], [])
 
+	def test_bill_tracking_target_accepts_cancellation_workflow_statuses(self):
+		fields = {
+			field["fieldname"]: field
+			for field in self.plan.target_schemas["YRP Bill Tracking"]["fields"]
+		}
+		options = fields["form_status"]["options"].splitlines()
+		self.assertIn("Pending Approval", options)
+		self.assertIn("Cancel Request Approved", options)
+
+	def test_purchase_order_target_accepts_pending_approval_and_route_is_ready(self):
+		fields = {
+			field["fieldname"]: field
+			for field in self.plan.target_schemas["Purchase Order"]["fields"]
+		}
+		self.assertEqual(fields["status"]["options"].splitlines().count("Pending Approval"), 1)
+		details = {row["source_doctype"]: row for row in self.payload["doctype_details"]}
+		self.assertEqual(
+			details["Telegram Approval Settings"]["target_doctype"],
+			"SD YRP Telegram Approval Settings",
+		)
+		self.assertEqual(
+			details["Telegram Approval Route"]["target_doctype"],
+			"SD YRP Telegram Approval Route",
+		)
+		self.assertTrue(self.plan.ready, self.plan.issues)
+
 	def test_contextual_and_value_mappings_are_auditable(self):
 		details = {row["source_doctype"]: row for row in self.payload["doctype_details"]}
 		self.assertEqual(

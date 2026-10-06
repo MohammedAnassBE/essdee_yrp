@@ -226,16 +226,22 @@ def derive_purchase_order_fields(
 ) -> Mapping[str, Any]:
 	result = dict(output)
 	result["is_yrp_managed"] = 1
-	fulfilment_status = {
-		"Delivered": "Received",
-		"Partially Delivered": "Partially Received",
-	}.get(source.get("status"), source.get("status") or "Draft")
+	source_status = source.get("status") or "Draft"
+	if source_status == "Pending Approval":
+		fulfilment_status = "Draft"
+		standard_status = "Pending Approval"
+	else:
+		fulfilment_status = {
+			"Delivered": "Received",
+			"Partially Delivered": "Partially Received",
+		}.get(source_status, source_status)
+		standard_status = {
+			"Ordered": "To Receive",
+			"Partially Received": "To Receive",
+			"Received": "Completed",
+		}.get(fulfilment_status, fulfilment_status)
 	result["yrp_fulfillment_status"] = fulfilment_status
-	result["status"] = {
-		"Ordered": "To Receive",
-		"Partially Received": "To Receive",
-		"Received": "Completed",
-	}.get(fulfilment_status, fulfilment_status)
+	result["status"] = standard_status
 
 	items = result.get("items") or []
 	result["total_qty"] = sum(float(row.get("qty") or 0) for row in items)
@@ -524,7 +530,7 @@ def derive_finishing_plan_audit_fields(
 		result["audit_requested_date"] = result.get("audit_requested_date") or modified_date
 	elif status == "Ready for Audit":
 		result["audit_requested_date"] = result.get("audit_requested_date") or modified_date
-	elif status == "Audit Completed":
+	elif status in ("Audit Completed", "Auto Closed"):
 		result["audit_requested_date"] = result.get("audit_requested_date") or modified_date
 		result["audit_completed_date"] = result.get("audit_completed_date") or modified_date
 	return result

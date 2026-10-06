@@ -1,0 +1,377 @@
+<template>
+	<DepartmentPage title="Purchase Order" accent="#0a7f5a" back-to="/fabric-store/purchase-orders" back-label="Purchase Orders" :show-title="false" flat full-width>
+		<section class="fabric-purchase-order-frame">
+			<FabricDocumentWorkspace
+				doctype="Purchase Order"
+				title="Purchase Order"
+				:workspace="workspace"
+				:loading="loading"
+				:error="error || actionError"
+				:acting="acting"
+				:show-lifecycle-actions="false"
+				@reload="loadWorkspace(true)"
+				@action="runWorkspaceAction"
+			>
+				<template #header="{ record }">
+					<div class="purchase-order-page__identity">
+						<div><h1>Purchase Order</h1><span>{{ record.name }}</span></div>
+						<Tag :value="record.status || statusLabel(record.docstatus)" :severity="statusSeverity" rounded />
+						<div class="purchase-order-page__facts">
+							<div><span>Supplier</span><strong>{{ record.supplier_name || record.supplier || "—" }}</strong></div>
+							<div><span>Order date</span><strong>{{ formatDate(record.transaction_date) }}</strong></div>
+							<div><span>Grand total</span><strong>{{ formatAmount(record.grand_total, record.currency) }}</strong></div>
+						</div>
+					</div>
+				</template>
+
+				<template #header-actions>
+					<DocumentActionStrip :actions="purchaseOrderActions" />
+				</template>
+
+				<template #fields>
+					<section v-if="visibleFields.length" class="purchase-order-page__details" aria-label="Purchase Order details">
+						<div v-for="field in visibleFields" :key="field.fieldname"><span>{{ field.label }}</span><strong>{{ formatField(field) }}</strong></div>
+					</section>
+				</template>
+
+				<template #matrix>
+					<StockItemMatrix v-if="itemGroups.length" :groups="itemGroups" doctype="Purchase Order" :physical-row-count="workspace.item_row_count || 0" :currency="workspace.record?.currency || ''" group-by-item show-pricing show-fulfillment :show-received="false" :show-amount="false" pricing-before-fulfillment />
+					<div v-else-if="!loading" class="purchase-order-page__empty"><i class="pi pi-inbox" /><div><strong>No item details</strong><span>This Purchase Order has no grouped item quantities.</span></div></div>
+				</template>
+
+				<template #rail>
+					<section v-if="relatedDocuments.length" class="purchase-order-related" aria-label="Related Purchase Order documents">
+						<header><span>Related documents</span><strong>{{ relatedDocuments.length }}</strong></header>
+						<button v-for="row in relatedDocuments" :key="`${row.doctype}-${row.name}`" type="button" @click="openRelated(row.doctype, {}, row.name)">
+							<div><strong>{{ row.name }}</strong><span>{{ row.label }}</span></div><Tag :value="statusLabel(row.docstatus)" :severity="Number(row.docstatus) === 1 ? 'info' : Number(row.docstatus) === 2 ? 'danger' : 'secondary'" rounded /><i class="pi pi-chevron-right" />
+						</button>
+					</section>
+					<div v-for="total in workspace.totals || []" :key="total.fieldname" class="purchase-order-page__total">
+						<span>{{ total.label }}</span><strong>{{ formatTotal(total) }}</strong>
+					</div>
+				</template>
+
+				<template #panel>
+					<Message v-if="workspace.grn && !workspace.grn.can_create && workspace.grn.reason" severity="secondary" :closable="false">{{ workspace.grn.reason }}</Message>
+				</template>
+			</FabricDocumentWorkspace>
+		</section>
+
+		<RelatedDocumentWorkspaceDialog
+			v-model:visible="relatedVisible"
+			:doctype="relatedDoctype"
+			:name="relatedName"
+			:source-context="relatedSourceContext"
+			@changed="relatedChanged"
+			@closed="relatedVisible = false"
+		/>
+		<DocumentConfirmationDialog v-model:visible="lifecycleConfirmVisible" :title="lifecycleConfirmTitle" :message="lifecycleConfirmMessage" :confirm-label="lifecycleConfirmLabel" :busy="Boolean(acting)" @confirm="confirmLifecycleAction" />
+
+		<Dialog v-model:visible="lotEditorVisible" modal header="Manage Linked Lots" class="fabric-action-dialog" :style="{ width: 'min(620px, calc(100vw - 24px))' }">
+			<div class="purchase-order-lots">
+				<div class="purchase-order-lots__list">
+					<span v-for="lot in lotDraft" :key="lot" class="purchase-order-lots__chip">{{ lot }}<Button icon="pi pi-times" severity="secondary" text rounded :aria-label="`Remove ${lot}`" @click="removeLot(lot)" /></span>
+					<span v-if="!lotDraft.length" class="purchase-order-lots__empty">No Lots linked</span>
+				</div>
+				<div class="purchase-order-lots__add"><LinkField v-model="lotCandidate" label="Add Lot" doctype="SD YRP Lot" :show-open-button="false" /><Button label="Add" severity="secondary" outlined :disabled="!lotCandidate || lotDraft.includes(lotCandidate)" @click="addLot" /></div>
+				<label class="purchase-order-lots__reason" for="purchase-order-lot-reason"><span>Reason *</span><Textarea id="purchase-order-lot-reason" v-model="lotReason" aria-label="Reason *" rows="3" auto-resize fluid /></label>
+			</div>
+			<template #footer><Button label="Cancel" severity="secondary" text @click="lotEditorVisible = false" /><Button label="Save Changes" icon="pi pi-save" :disabled="!lotChanged || !lotReason.trim()" :loading="acting === 'update_linked_lots'" @click="saveLinkedLots" /></template>
+		</Dialog>
+
+		<Dialog v-model:visible="deliverySourceVisible" modal header="Create Delivery Challan" class="fabric-action-dialog" :style="{ width: 'min(520px, calc(100vw - 24px))' }">
+			<div class="purchase-order-dc-source"><LinkField v-model="deliveryWorkOrder" label="Work Order *" doctype="YRP Work Order" :filters="{ docstatus: 1 }" :show-open-button="false" help-text="The Purchase Order remains the traceability source." /></div>
+			<template #footer><Button label="Cancel" severity="secondary" text @click="deliverySourceVisible = false" /><Button label="Continue" icon="pi pi-arrow-right" :disabled="!deliveryWorkOrder" @click="openDeliveryChallan" /></template>
+		</Dialog>
+		<Dialog v-model:visible="rejectVisible" modal header="Reject Purchase Order" class="fabric-action-dialog" :closable="acting !== 'reject'" :dismissable-mask="false" :style="{ width: 'min(520px, calc(100vw - 24px))' }">
+			<div class="purchase-order-rejection">
+				<Message severity="warn" :closable="false">This returns the Purchase Order to Draft and records the reason in its audit trail.</Message>
+				<label for="purchase-order-rejection-reason"><span>Rejection reason *</span><Textarea id="purchase-order-rejection-reason" v-model="rejectReason" aria-label="Rejection reason *" rows="4" auto-resize fluid autofocus /></label>
+				<Message v-if="rejectError" severity="error" :closable="false">{{ rejectError }}</Message>
+			</div>
+			<template #footer><Button label="Keep Pending" severity="secondary" text :disabled="acting === 'reject'" @click="rejectVisible = false" /><Button label="Reject Purchase Order" icon="pi pi-times-circle" severity="danger" :disabled="!rejectReason.trim()" :loading="acting === 'reject'" @click="submitRejection" /></template>
+		</Dialog>
+		<Dialog :visible="Boolean(notificationPreparation)" modal header="Send supplier notification" class="fabric-action-dialog" :closable="!acting" :style="{ width: 'min(760px, calc(100vw - 24px))' }" @update:visible="handleNotificationVisibility">
+			<SupplierNotificationPanel v-if="notificationPreparation" :preparation="notificationPreparation" :document-values="notificationValues" :acting="acting" :error="notificationError" @send="sendNotification" @close="closeNotification" />
+		</Dialog>
+	</DepartmentPage>
+</template>
+
+<script setup>
+import Button from "primevue/button"
+import Dialog from "primevue/dialog"
+import Message from "primevue/message"
+import Tag from "primevue/tag"
+import Textarea from "primevue/textarea"
+import { computed, onMounted, ref, watch } from "vue"
+import { useRoute, useRouter } from "vue-router"
+
+import { changeFabricStoreDocumentStatus, executePurchaseOrderCommand, getPurchaseOrderWorkspace } from "../api/fabricStore.js"
+import DepartmentPage from "../components/DepartmentPage.vue"
+import LinkField from "../components/common/LinkField.vue"
+import DocumentActionStrip from "../components/documents/DocumentActionStrip.vue"
+import DocumentConfirmationDialog from "../components/documents/DocumentConfirmationDialog.vue"
+import StockItemMatrix from "../components/stock/StockItemMatrix.vue"
+import { hasDocumentDisplayValue } from "../utils/documentValues.js"
+import FabricDocumentWorkspace from "./fabric-store/FabricDocumentWorkspace.vue"
+import RelatedDocumentWorkspaceDialog from "./fabric-store/RelatedDocumentWorkspaceDialog.vue"
+import SupplierNotificationPanel from "./fabric-store/SupplierNotificationPanel.vue"
+
+const route = useRoute()
+const router = useRouter()
+const loading = ref(true)
+const refreshing = ref(false)
+const acting = ref("")
+const error = ref("")
+const actionError = ref("")
+const workspace = ref({})
+const relatedVisible = ref(false)
+const relatedDoctype = ref("YRP Goods Received Note")
+const relatedName = ref("")
+const relatedSourceContext = ref({})
+const lotEditorVisible = ref(false)
+const lotOriginal = ref([])
+const lotDraft = ref([])
+const lotCandidate = ref("")
+const lotReason = ref("")
+const deliverySourceVisible = ref(false)
+const deliveryWorkOrder = ref("")
+const rejectVisible = ref(false)
+const rejectReason = ref("")
+const rejectError = ref("")
+const notificationPreparation = ref(null)
+const notificationError = ref("")
+const lifecycleConfirmVisible = ref(false)
+const pendingLifecycleCommand = ref("")
+const headerFieldnames = new Set(["supplier", "supplier_name", "transaction_date", "total", "grand_total", "currency"])
+const visibleFields = computed(() => (workspace.value.fields?.length ? workspace.value.fields : workspace.value.details || []).filter((field) => !field.hidden && !headerFieldnames.has(field.fieldname) && hasDocumentDisplayValue(field.value)))
+const itemGroups = computed(() => workspace.value.matrices?.items || workspace.value.item_groups || [])
+const relatedDocuments = computed(() => [
+	...(workspace.value.related?.delivery_challans || []).map((row) => ({ ...row, doctype: "YRP Delivery Challan", label: "Delivery Challan" })),
+	...(workspace.value.related?.goods_received_notes || []).map((row) => ({ ...row, doctype: "YRP Goods Received Note", label: "Goods Received Note" })),
+])
+const capabilities = computed(() => workspace.value.capabilities || {})
+const purchaseOrderActions = computed(() => {
+	const busy = Boolean(acting.value)
+	const actions = []
+	const add = (key, fallback, icon, command, options = {}) => {
+		if (!capabilities.value[key]) return
+		actions.push({
+			key, label: capabilityLabel(key, fallback), icon, command,
+			disabled: busy, loading: acting.value === key,
+			menuOnly: Boolean(options.menuOnly),
+		})
+	}
+	add("create_goods_received_note", "Create GRN", "pi pi-plus", () => openRelated("YRP Goods Received Note", capabilities.value.create_goods_received_note.source_context))
+	add("approve", "Approve PO", "pi pi-check-circle", () => runDomainCommand("approve"))
+	add("send_approval_request", "Send Request", "pi pi-send", () => runDomainCommand("send_approval_request"))
+	add("close", "Close", "pi pi-lock", () => requestLifecycleAction("close"))
+	add("reopen", "Reopen", "pi pi-lock-open", () => runDomainCommand("reopen"))
+	add("update_linked_lots", "Manage Linked Lots", "pi pi-link", openLotEditor)
+	add("save", "Edit", "pi pi-pencil", editPurchaseOrder)
+	add("submit", "Submit", "pi pi-check", () => changeStatus("submit"))
+	add("cancel", "Cancel Document", "pi pi-ban", () => requestLifecycleAction("cancel"), { menuOnly: true })
+	add("amend", "Amend", "pi pi-copy", () => requestLifecycleAction("amend"), { menuOnly: true })
+	if (workspace.value.permissions?.can_create) actions.push({ key: "duplicate", label: "Duplicate", icon: "pi pi-clone", command: duplicatePurchaseOrder, disabled: busy, loading: false, menuOnly: true })
+	add("reject", "Reject PO", "pi pi-times-circle", beginRejection, { menuOnly: true })
+	add("create_delivery_challan", "Create Delivery Challan", "pi pi-truck", beginDeliveryChallan, { menuOnly: true })
+	add("refresh_status", "Refresh Status", "pi pi-sync", () => runDomainCommand("refresh_status"), { menuOnly: true })
+	add("prepare_sms", "Send SMS", "pi pi-envelope", () => prepareNotification("sms"), { menuOnly: true })
+	add("prepare_whatsapp", "Send WhatsApp", "pi pi-comments", () => prepareNotification("whatsapp"), { menuOnly: true })
+	const primaryKey = capabilities.value.approve ? "approve"
+		: capabilities.value.send_approval_request ? "send_approval_request"
+			: capabilities.value.create_goods_received_note ? "create_goods_received_note"
+				: capabilities.value.submit ? "submit" : capabilities.value.amend ? "amend" : ""
+	return actions.map((action) => ({ ...action, primary: action.key === primaryKey }))
+})
+const statusSeverity = computed(() => {
+	if (Number(workspace.value.record?.docstatus) === 2 || ["Cancelled", "Closed"].includes(workspace.value.record?.status)) return "danger"
+	if (workspace.value.record?.status === "Completed") return "success"
+	if (String(workspace.value.record?.status || "").startsWith("To ")) return "warn"
+	return Number(workspace.value.record?.docstatus) === 1 ? "info" : "secondary"
+})
+const lotChanged = computed(() => JSON.stringify([...lotOriginal.value].sort()) !== JSON.stringify([...lotDraft.value].sort()))
+const notificationValues = computed(() => ({
+	...(workspace.value.record || {}),
+	...Object.fromEntries((workspace.value.fields || []).map((field) => [field.fieldname, field.value])),
+}))
+
+async function loadWorkspace(isRefresh = false) {
+	if (isRefresh) refreshing.value = true
+	else loading.value = true
+	error.value = ""
+	try {
+		workspace.value = await getPurchaseOrderWorkspace(route.params.purchaseOrderId) || {}
+		notificationPreparation.value = null
+		notificationError.value = ""
+	}
+	catch (reason) { error.value = reason?.message || "Unable to load this Purchase Order." }
+	finally { loading.value = false; refreshing.value = false }
+}
+function capabilityLabel(name, fallback) { return capabilities.value[name]?.label || fallback }
+async function runWorkspaceAction(action) {
+	if (action === "save") return editPurchaseOrder()
+	if (["cancel", "amend"].includes(action)) return requestLifecycleAction(action)
+	if (action === "submit") return changeStatus(action)
+	return runDomainCommand(action)
+}
+async function runDomainCommand(command, payload = {}) {
+	acting.value = command
+	actionError.value = ""
+	try {
+		workspace.value = await executePurchaseOrderCommand(workspace.value.record.name, command, payload, workspace.value.record.modified) || {}
+		notificationPreparation.value = null
+		notificationError.value = ""
+		return true
+	}
+	catch (reason) { actionError.value = reason?.message || `Unable to ${command.replaceAll("_", " ")} this Purchase Order.`; return false }
+	finally { acting.value = "" }
+}
+async function prepareNotification(channel) {
+	acting.value = `prepare_${channel}`
+	notificationError.value = ""
+	actionError.value = ""
+	try {
+		const result = await executePurchaseOrderCommand(workspace.value.record.name, `prepare_${channel}`, {}, workspace.value.record.modified)
+		if (result?.context) notificationPreparation.value = result
+		else actionError.value = `No ${channel === "sms" ? "SMS" : "WhatsApp"} notification context is available.`
+	} catch (reason) { notificationError.value = reason?.message || `Unable to prepare ${channel === "sms" ? "SMS" : "WhatsApp"}.`; actionError.value = notificationError.value }
+	finally { acting.value = "" }
+}
+async function sendNotification({ channel, payload }) {
+	acting.value = `send_${channel}`
+	notificationError.value = ""
+	try {
+		const result = await executePurchaseOrderCommand(workspace.value.record.name, `send_${channel}`, payload, workspace.value.record.modified)
+		if (result?.result?.ok) notificationPreparation.value = null
+		else notificationError.value = result?.result?.error || `Unable to send ${channel === "sms" ? "SMS" : "WhatsApp"}.`
+	} catch (reason) { notificationError.value = reason?.message || `Unable to send ${channel === "sms" ? "SMS" : "WhatsApp"}.` }
+	finally { acting.value = "" }
+}
+function closeNotification() { notificationPreparation.value = null; notificationError.value = "" }
+function handleNotificationVisibility(visible) { if (!visible) closeNotification() }
+async function changeStatus(action) {
+	acting.value = action
+	actionError.value = ""
+	try {
+		const changed = await changeFabricStoreDocumentStatus("Purchase Order", workspace.value.record.name, action, workspace.value.record.modified)
+		const name = changed?.record?.name || workspace.value.record.name
+		if (name !== route.params.purchaseOrderId) await router.replace({ name: "fabric-purchase-order", params: { purchaseOrderId: name } })
+		else await loadWorkspace(true)
+	} catch (reason) { actionError.value = reason?.message || `Unable to ${action} this Purchase Order.` }
+	finally { acting.value = "" }
+}
+const lifecycleConfirmTitle = computed(() => pendingLifecycleCommand.value === "cancel" ? "Cancel Purchase Order?" : pendingLifecycleCommand.value === "close" ? "Close Purchase Order?" : "Amend Purchase Order?")
+const lifecycleConfirmLabel = computed(() => pendingLifecycleCommand.value === "cancel" ? "Cancel Purchase Order" : pendingLifecycleCommand.value === "close" ? "Close Purchase Order" : "Create Amendment")
+const lifecycleConfirmMessage = computed(() => pendingLifecycleCommand.value === "cancel" ? `Cancel ${workspace.value.record?.name}? This keeps the document for audit but stops further processing.` : pendingLifecycleCommand.value === "close" ? `Close ${workspace.value.record?.name}? No further receipts can be created until it is reopened.` : `Create a new draft amendment from ${workspace.value.record?.name}?`)
+function requestLifecycleAction(command) { pendingLifecycleCommand.value = command; lifecycleConfirmVisible.value = true }
+async function confirmLifecycleAction() { const command = pendingLifecycleCommand.value; lifecycleConfirmVisible.value = false; pendingLifecycleCommand.value = ""; if (command === "close") await runDomainCommand(command); else if (command) await changeStatus(command) }
+function editPurchaseOrder() { router.push({ name: "fabric-purchase-order-edit", params: { purchaseOrderId: workspace.value.record.name } }) }
+function duplicatePurchaseOrder() { router.push({ name: "fabric-purchase-order-new", query: { duplicate_from: workspace.value.record.name } }) }
+function openRelated(doctype, sourceContext = {}, name = "") {
+	relatedDoctype.value = doctype
+	relatedName.value = name
+	relatedSourceContext.value = { ...(sourceContext || {}) }
+	relatedVisible.value = true
+}
+async function relatedChanged() { await loadWorkspace(true) }
+function openLotEditor() {
+	lotOriginal.value = [...(workspace.value.linked_lots || [])]
+	lotDraft.value = [...lotOriginal.value]
+	lotCandidate.value = ""
+	lotReason.value = ""
+	lotEditorVisible.value = true
+}
+function removeLot(lot) { lotDraft.value = lotDraft.value.filter((value) => value !== lot) }
+function addLot() {
+	if (lotCandidate.value && !lotDraft.value.includes(lotCandidate.value)) lotDraft.value = [...lotDraft.value, lotCandidate.value]
+	lotCandidate.value = ""
+}
+async function saveLinkedLots() {
+	const original = new Set(lotOriginal.value)
+	const desired = new Set(lotDraft.value)
+	await runDomainCommand("update_linked_lots", {
+		add_lots: lotDraft.value.filter((lot) => !original.has(lot)),
+		remove_lots: lotOriginal.value.filter((lot) => !desired.has(lot)),
+		comment: lotReason.value,
+	})
+	if (!actionError.value) lotEditorVisible.value = false
+}
+function beginDeliveryChallan() { deliveryWorkOrder.value = ""; deliverySourceVisible.value = true }
+function openDeliveryChallan() {
+	deliverySourceVisible.value = false
+	openRelated("YRP Delivery Challan", { ...(capabilities.value.create_delivery_challan?.source_context || {}), work_order: deliveryWorkOrder.value })
+}
+function beginRejection() {
+	rejectReason.value = ""
+	rejectError.value = ""
+	rejectVisible.value = true
+}
+async function submitRejection() {
+	rejectError.value = ""
+	const succeeded = await runDomainCommand("reject", { reason: rejectReason.value.trim() })
+	if (succeeded) rejectVisible.value = false
+	else rejectError.value = actionError.value
+}
+function statusLabel(docstatus) { return Number(docstatus) === 1 ? "Submitted" : Number(docstatus) === 2 ? "Cancelled" : "Draft" }
+function formatDate(value) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/); return match ? `${match[3]}-${match[2]}-${match[1]}` : value || "—" }
+function formatAmount(value, currency = "") { return `${currency ? `${currency} ` : ""}${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}` }
+function formatField(field) {
+	if (["Date", "Datetime"].includes(field.fieldtype)) return formatDate(field.value)
+	if (["Currency", "Float", "Int", "Percent"].includes(field.fieldtype)) return Number(field.value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })
+	if (field.fieldtype === "Check") return Number(field.value) ? "Yes" : "No"
+	return field.value === null || field.value === undefined || field.value === "" ? "—" : String(field.value)
+}
+function formatTotal(total) {
+	if (total.fieldname === "total_qty") return Number(total.value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })
+	return formatAmount(total.value, workspace.value.record?.currency)
+}
+
+onMounted(() => loadWorkspace())
+watch(() => route.params.purchaseOrderId, () => loadWorkspace())
+</script>
+
+<style scoped>
+.fabric-purchase-order-frame { width: 100%; max-width: 1900px; min-width: 0; margin: 0 auto var(--erp-space-3); }
+.purchase-order-page__identity { display: flex; min-width: 0; align-items: center; gap: 12px; }
+.purchase-order-page__identity > div:first-child { display: grid; gap: 2px; }
+.purchase-order-page__identity h1 { margin: 0; color: var(--erp-text); font-size: 18px; line-height: 1.2; }
+.purchase-order-page__identity > div:first-child > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); font-weight: 700; font-variant-numeric: tabular-nums; }
+.purchase-order-page__facts { display: flex; min-width: 0; align-items: center; gap: 18px; padding-left: 14px; border-left: 1px solid var(--erp-border); }
+.purchase-order-page__facts > div { display: grid; min-width: 0; gap: 2px; }
+.purchase-order-page__facts span, .purchase-order-page__details span, .purchase-order-page__total span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
+.purchase-order-page__facts strong { overflow: hidden; max-width: 220px; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.purchase-order-page__details { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); }
+.purchase-order-page__details > div { display: grid; min-height: 58px; align-content: center; gap: 4px; padding: 9px 12px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
+.purchase-order-page__details strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
+.purchase-order-page__total { display: grid; min-height: 72px; align-content: center; gap: 4px; padding: 10px 12px; border: 1px solid #c9e2d5; border-radius: var(--erp-control-radius); background: var(--erp-accent-soft); }
+.purchase-order-page__total strong { color: var(--erp-accent-hover); font-size: 18px; font-weight: 780; font-variant-numeric: tabular-nums; }
+.purchase-order-related { display: grid; overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); }
+.purchase-order-related > header { display: flex; min-height: 40px; align-items: center; justify-content: space-between; padding: 7px 10px; border-bottom: 1px solid var(--erp-border); background: var(--erp-surface-soft); }
+.purchase-order-related > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
+.purchase-order-related > header strong { color: var(--erp-accent); font-size: var(--erp-font-size-caption); }
+.purchase-order-related > button { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 9px 10px; color: inherit; font: inherit; text-align: left; border: 0; border-bottom: 1px solid var(--erp-border); background: transparent; cursor: pointer; }
+.purchase-order-related > button:last-child { border-bottom: 0; }
+.purchase-order-related > button:hover { background: var(--erp-surface-soft); }
+.purchase-order-related > button > div { display: grid; min-width: 0; gap: 2px; }
+.purchase-order-related > button > div strong { overflow: hidden; font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
+.purchase-order-related > button > div span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
+.purchase-order-related > button > i { color: var(--erp-text-muted); font-size: 10px; }
+.purchase-order-page__empty { display: flex; align-items: center; gap: 10px; padding: 18px; color: var(--erp-text-muted); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); }
+.purchase-order-page__empty div { display: grid; gap: 2px; }
+.purchase-order-page__empty strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
+.purchase-order-page__empty span { font-size: var(--erp-font-size-min); }
+.purchase-order-lots { display: grid; gap: var(--erp-space-3); }
+.purchase-order-lots__list { display: flex; min-height: 42px; align-items: center; gap: 7px; flex-wrap: wrap; }
+.purchase-order-lots__chip { display: inline-flex; align-items: center; gap: 2px; padding-left: 10px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 700; border: 1px solid var(--erp-border); border-radius: var(--erp-pill-radius); background: var(--erp-surface-soft); }
+.purchase-order-lots__empty { color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
+.purchase-order-lots__add { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 8px; }
+.purchase-order-lots__reason { display: grid; gap: 6px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
+.purchase-order-dc-source { padding: 2px 0; }
+.purchase-order-rejection { display: grid; gap: var(--erp-space-3); }
+.purchase-order-rejection label { display: grid; gap: 6px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
+@media (max-width: 1100px) { .purchase-order-page__identity { align-items: flex-start; flex-wrap: wrap; } .purchase-order-page__details { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 650px) { .purchase-order-page__identity { width: 100%; } .purchase-order-page__facts { width: 100%; padding: 8px 0 0; border-top: 1px solid var(--erp-border); border-left: 0; flex-wrap: wrap; } .purchase-order-page__details { grid-template-columns: 1fr; } .purchase-order-lots__add { grid-template-columns: 1fr; } }
+:global(.fabric-action-dialog .p-dialog-content) { min-height: 0; }
+@media (max-width: 620px) { :global(.fabric-action-dialog) { width: 100vw !important; height: 100dvh !important; max-height: 100dvh !important; margin: 0; border-radius: 0; } :global(.fabric-action-dialog .p-dialog-content) { flex: 1; overflow-y: auto; } }
+</style>

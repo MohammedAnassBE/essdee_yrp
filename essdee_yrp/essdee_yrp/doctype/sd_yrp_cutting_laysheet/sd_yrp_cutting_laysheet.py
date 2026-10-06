@@ -698,6 +698,257 @@ def get_parts(cutting_marker):
 	return panel_list
 
 
+def _attribute_row(row, fields, *, include_item_identity=False):
+	as_dict = getattr(row, "as_dict", None)
+	result = as_dict() if callable(as_dict) else dict(row)
+	for fieldname in fields:
+		if result.get(fieldname):
+			result[fieldname] = _attribute_value(result[fieldname])
+	if include_item_identity:
+		variant = result.get("cloth_item_variant")
+		result["item"] = (
+			result.get("cloth_item")
+			or result.get("item")
+			or (frappe.db.get_value("Item", variant, "variant_of") if variant else None)
+			or variant
+		)
+	return result
+
+
+def _web_laysheet_parent(cutting_plan=None, cutting_order=None):
+	if cutting_order:
+		doc = frappe.get_doc("SD YRP Cutting Order", cutting_order)
+		return doc, "SD YRP Cutting Order", cutting_order, "cutting_order"
+	if cutting_plan:
+		doc = frappe.get_doc("SD YRP Cutting Plan", cutting_plan)
+		return doc, "SD YRP Cutting Plan", cutting_plan, "cutting_plan"
+	frappe.throw("Cutting Plan or Cutting Order is required")
+
+
+def _web_parent_accepts_laysheet(parent_doc, parent_field):
+	if parent_doc.docstatus != 1:
+		return False
+	if parent_field == "cutting_plan":
+		return parent_doc.cp_status not in ("Planned", "Completed")
+	return parent_doc.co_status != "Completed"
+
+
+@frappe.whitelist()
+def get_web_laysheet(cutting_plan=None, cutting_laysheet=None, cutting_order=None):
+	from essdee_yrp.print_registry import get_document_print_formats
+
+	parent_doc, parent_dt, parent_name, parent_field = _web_laysheet_parent(cutting_plan, cutting_order)
+	parent_doc.check_permission("read")
+	doc = frappe.get_doc("SD YRP Cutting LaySheet", cutting_laysheet)
+	doc.check_permission("read")
+	if doc.get(parent_field) != parent_name:
+		frappe.throw(f"This Cutting LaySheet does not belong to the selected {parent_dt}")
+
+	details = {
+		fieldname: doc.get(fieldname)
+		for fieldname in (
+			"name",
+			"docstatus",
+			"modified",
+			"cutting_plan",
+			"cutting_order",
+			"lot",
+			"cutting_marker",
+			"marker_name",
+			"item",
+			"lay_no",
+			"length",
+			"width",
+			"cutting_spreader",
+			"cutter",
+			"maximum_no_of_plys",
+			"maximum_allow_percentage",
+			"start_datetime",
+			"end_datetime",
+			"posting_date",
+			"posting_time",
+			"bundle_generated_date",
+			"printed_time",
+			"status",
+			"approved_by",
+			"no_of_rolls",
+			"weight",
+			"accessory_weight",
+			"required_pcs_weight",
+			"total_no_of_pieces",
+			"no_of_bits",
+			"end_bit_weight",
+			"total_used_weight",
+			"piece_weight",
+			"goods_received_note",
+			"calculated_parts",
+			"selected_type",
+			"reverted",
+			"is_manual_entry",
+			"is_set_item",
+		)
+	}
+	details["ratios"] = fetch_marker_details(doc.cutting_marker_ratios, doc.selected_type)
+	details["cloth_details"] = [
+		_attribute_row(row, ("colour", "dia", "actual_dia"), include_item_identity=True)
+		for row in doc.cutting_laysheet_details
+	]
+	details["accessory_details"] = [
+		_attribute_row(row, ("colour", "dia", "actual_dia"), include_item_identity=True)
+		for row in doc.cutting_laysheet_accessory_details
+	]
+	details["bundles"] = [
+		_attribute_row(row, ("size", "colour")) for row in doc.cutting_laysheet_bundles
+	]
+	details["print_formats"] = get_document_print_formats(doc)
+
+	can_write = bool(doc.has_permission("write"))
+	can_print = bool(doc.has_permission("print"))
+	has_details = bool(doc.cutting_laysheet_details) or bool(doc.is_manual_entry)
+	can_generate = bool(
+		can_write
+		and doc.status in ("Completed", "Bundles Generated")
+		and has_details
+		and (not doc.bundle_generated_date or getdate(doc.bundle_generated_date) == getdate(nowdate()))
+	)
+	roles = set(frappe.get_roles())
+	can_edit_details = bool(
+		can_write and doc.docstatus != 2 and doc.status not in ("Approval Pending", "Label Printed", "Cancelled")
+	)
+	details["permissions"] = {
+		"can_write": can_write,
+		"can_edit_details": can_edit_details,
+		"can_generate": can_generate,
+		"can_print_labels": bool(
+			can_write
+			and doc.status == "Bundles Generated"
+			and doc.cutting_laysheet_bundles
+			and not doc.goods_received_note
+		),
+		"can_approve": bool(can_write and doc.status == "Approval Pending" and can_approve_grammage()),
+		"can_cancel": bool(can_write and doc.status != "Cancelled" and "System Manager" in roles),
+		"can_revert_labels": bool(
+			can_write and doc.status == "Label Printed" and "System Manager" in roles
+		),
+		"can_restore_labels": bool(
+			can_write
+			and doc.status == "Bundles Generated"
+			and doc.reverted
+			and "System Manager" in roles
+		),
+		"can_print_movement_chart": bool(
+			can_print and doc.status in ("Bundles Generated", "Label Printed")
+		),
+		"can_print_laysheet": bool(can_print and doc.status != "Cancelled"),
+	}
+	if can_edit_details:
+		attributes = get_select_attributes(cutting_plan=cutting_plan, cutting_order=cutting_order)
+		details["editor"] = {
+			"attributes": {
+				"cloth_type": sorted(attributes.get("cloth_type") or []),
+				"colour": sorted(attributes.get("colour") or []),
+				"dia": sorted(attributes.get("dia") or []),
+				"part": sorted(attributes.get("part") or []),
+				"cloth_type_dia_map": attributes.get("cloth_type_dia_map") or {},
+			},
+			"accessories": get_cloth_accessories(cutting_plan=cutting_plan, cutting_order=cutting_order),
+		}
+	return details
+
+
+@frappe.whitelist()
+def create_web_laysheet(cutting_plan=None, values=None, cutting_order=None):
+	"""Create the LaySheet shell used by a Cutting parent web popup."""
+	parent_doc, parent_dt, parent_name, parent_field = _web_laysheet_parent(cutting_plan, cutting_order)
+	parent_doc.check_permission("read")
+	frappe.has_permission("SD YRP Cutting LaySheet", "create", throw=True)
+	if not _web_parent_accepts_laysheet(parent_doc, parent_field):
+		frappe.throw(f"The {parent_dt} is not available for a new Lay Sheet")
+
+	values = frappe.parse_json(values) if isinstance(values, string_types) else values
+	values = values or {}
+	marker_name = values.get("cutting_marker")
+	if not marker_name:
+		frappe.throw("Select a Cutting Marker")
+
+	marker_doc = frappe.get_doc("SD YRP Cutting Marker", marker_name)
+	marker_doc.check_permission("read")
+	if marker_doc.docstatus != 1 or marker_doc.get(parent_field) != parent_name:
+		frappe.throw(f"Select a submitted Cutting Marker against this {parent_dt}")
+
+	for doctype, fieldname, label in (
+		("SD YRP Cutting Spreader", "cutting_spreader", "Cutting Spreader"),
+		("SD YRP Cutter", "cutter", "Cutter"),
+	):
+		name = values.get(fieldname)
+		if not name:
+			frappe.throw(f"Select {label}")
+		linked_doc = frappe.get_doc(doctype, name)
+		linked_doc.check_permission("read")
+
+	doc = frappe.new_doc("SD YRP Cutting LaySheet")
+	doc.set(parent_field, parent_name)
+	doc.cutting_marker = marker_doc.name
+	doc.marker_name = marker_doc.marker_name
+	doc.length = marker_doc.length
+	doc.width = marker_doc.width
+	doc.required_pcs_weight = marker_doc.required_piece_weight
+	doc.cutting_spreader = values.get("cutting_spreader")
+	doc.cutter = values.get("cutter")
+	doc.insert()
+	return get_web_laysheet(cutting_plan, doc.name, cutting_order=cutting_order)
+
+
+@frappe.whitelist()
+def save_web_laysheet_details(
+	cutting_plan=None,
+	cutting_laysheet=None,
+	cloth_details=None,
+	accessory_details=None,
+	modified=None,
+	cutting_order=None,
+):
+	"""Save the popup's cloth and accessory editors through normal LaySheet validation."""
+	parent_doc, parent_dt, parent_name, parent_field = _web_laysheet_parent(cutting_plan, cutting_order)
+	parent_doc.check_permission("read")
+	doc = frappe.get_doc("SD YRP Cutting LaySheet", cutting_laysheet)
+	doc.check_permission("write")
+	if doc.get(parent_field) != parent_name:
+		frappe.throw(f"This Cutting LaySheet does not belong to the selected {parent_dt}")
+	if doc.docstatus == 2 or doc.status in ("Approval Pending", "Label Printed", "Cancelled"):
+		frappe.throw(f"Cloth details cannot be changed while the Lay Sheet is {doc.status}")
+	cloth_details = frappe.parse_json(cloth_details) if isinstance(cloth_details, string_types) else cloth_details
+	accessory_details = (
+		frappe.parse_json(accessory_details)
+		if isinstance(accessory_details, string_types)
+		else accessory_details
+	)
+	cloth_details = cloth_details or []
+	accessory_details = accessory_details or []
+	if not isinstance(cloth_details, list) or not isinstance(accessory_details, list):
+		frappe.throw("Cloth and accessory details must be row lists")
+
+	_lock_cutting_laysheet(doc.name)
+	doc.reload()
+	if modified and str(doc.modified) != str(modified):
+		frappe.throw("This Lay Sheet changed after it was opened. Reload it and try again.")
+	doc.item_details = {
+		"cloth_items": cloth_details,
+		"manual_items": fetch_manual_item_details(doc.cutting_laysheet_manual_items, doc.name)
+		if doc.is_manual_entry
+		else {},
+	}
+	if accessory_details:
+		doc.item_accessory_details = accessory_details
+	else:
+		# before_validate intentionally ignores a falsy pseudo-field. Clear the
+		# child table explicitly so deleting the final accessory row is persisted.
+		doc.set("cutting_laysheet_accessory_details", [])
+		doc.item_accessory_details = None
+	doc.save()
+	return get_web_laysheet(cutting_plan, doc.name, cutting_order=cutting_order)
+
+
 def _save_cutting_plan_cloth_usage(laysheet_doc, cutting_plan):
 	cloth = {}
 	accessory_cloth = {}
@@ -1082,6 +1333,7 @@ def get_cloth_accessories(cutting_plan=None, cutting_order=None):
 def print_labels(print_items, lay_no, doc_name, print_order, cutting_plan=None, cutting_order=None):
 	cls = frappe.get_doc("SD YRP Cutting LaySheet", doc_name)
 	cls.check_permission("write")
+	cls.check_permission("print")
 	_lock_cutting_laysheet(doc_name)
 	cls.reload()
 	if cls.status != "Bundles Generated":
@@ -1257,6 +1509,7 @@ def mark_labels_printed(doc_name, grn=None):
 	"""Confirm the client-side printer success through a server-owned transition."""
 	doc = frappe.get_doc("SD YRP Cutting LaySheet", doc_name)
 	doc.check_permission("write")
+	doc.check_permission("print")
 	_lock_cutting_laysheet(doc_name)
 	doc.reload()
 	if doc.status != "Bundles Generated":
@@ -1365,7 +1618,7 @@ def get_bundle_items(cutting_laysheet):
 	bundles = []
 	for item in doc.cutting_laysheet_bundles:
 		if item.bundle_no not in bundles:
-			items.append(item.as_dict())
+			items.append(_attribute_row(item, ("size",)))
 			bundles.append(item.bundle_no)
 	return items
 
@@ -1487,7 +1740,7 @@ def update_cutting_plan(cutting_laysheet, check_cp=False):
 						alter_incomplete_items[d["major_colour"]][d["major_part"]][
 							_attribute_value(item.size)
 						][part] += qty
-					except KeyError, TypeError:
+					except (KeyError, TypeError):
 						secondary_part = stich_details[part]
 						alter_incomplete_items[d["major_colour"]][secondary_part][
 							_attribute_value(item.size)

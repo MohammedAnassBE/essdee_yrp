@@ -10,6 +10,7 @@
 			:model-value="modelValue"
 			:doctype="linkDoctype"
 			:filters="linkFilters"
+			:search-handler="searchHandler"
 			:disabled="isDisabled"
 			:invalid="invalid"
 			:show-open-button="showOpenButton"
@@ -46,29 +47,35 @@
 			fluid
 			@update:model-value="updateValue"
 		/>
-		<DatePicker
+		<DateField
 			v-else-if="field.fieldtype === 'Date'"
 			:input-id="inputId"
-			:model-value="dateValue"
+			:model-value="modelValue"
+			:aria-label="field.label || field.fieldname"
 			:disabled="isDisabled"
 			:invalid="invalid"
-			date-format="yy-mm-dd"
-			show-icon
-			fluid
-			@update:model-value="updateDate"
+			:required="required"
+			@update:model-value="updateValue"
 		/>
-		<DatePicker
+		<DateTimeField
 			v-else-if="field.fieldtype === 'Datetime'"
 			:input-id="inputId"
-			:model-value="dateValue"
+			:model-value="modelValue"
+			:aria-label="field.label || field.fieldname"
 			:disabled="isDisabled"
 			:invalid="invalid"
-			date-format="yy-mm-dd"
-			show-time
-			show-seconds
-			show-icon
-			fluid
-			@update:model-value="updateDatetime"
+			:required="required"
+			@update:model-value="updateValue"
+		/>
+		<TimeField
+			v-else-if="field.fieldtype === 'Time'"
+			:input-id="inputId"
+			:model-value="modelValue"
+			:aria-label="field.label || field.fieldname"
+			:disabled="isDisabled"
+			:invalid="invalid"
+			:required="required"
+			@update:model-value="updateValue"
 		/>
 		<Textarea
 			v-else-if="isTextArea"
@@ -100,7 +107,6 @@
 </template>
 
 <script setup>
-import DatePicker from "primevue/datepicker"
 import InputNumber from "primevue/inputnumber"
 import InputText from "primevue/inputtext"
 import Select from "primevue/select"
@@ -108,7 +114,10 @@ import Textarea from "primevue/textarea"
 import ToggleSwitch from "primevue/toggleswitch"
 import { computed } from "vue"
 
+import DateField from "./DateField.vue"
+import DateTimeField from "./DateTimeField.vue"
 import LinkField from "./LinkField.vue"
+import TimeField from "./TimeField.vue"
 
 const props = defineProps({
 	field: { type: Object, required: true },
@@ -120,6 +129,7 @@ const props = defineProps({
 	error: { type: String, default: "" },
 	showLabel: { type: Boolean, default: true },
 	showOpenButton: { type: Boolean, default: true },
+	searchHandler: { type: Function, default: null },
 })
 
 const emit = defineEmits(["update:modelValue", "change"])
@@ -159,49 +169,11 @@ const selectOptions = computed(() =>
 		.map((option) => option.trim())
 		.filter(Boolean),
 )
-const dateValue = computed(() => parseDate(props.modelValue))
 const linkFilters = computed(() => parseLinkFilters(props.field.link_filters))
 
 function updateValue(value) {
 	emit("update:modelValue", value)
 	emit("change", value)
-}
-
-function updateDate(value) {
-	updateValue(value ? formatDate(value) : "")
-}
-
-function updateDatetime(value) {
-	updateValue(value ? `${formatDate(value)} ${formatTime(value)}` : "")
-}
-
-function parseDate(value) {
-	if (value instanceof Date) return value
-	if (!value) return null
-	const match = String(value).match(
-		/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/,
-	)
-	if (!match) return null
-	return new Date(
-		Number(match[1]),
-		Number(match[2]) - 1,
-		Number(match[3]),
-		Number(match[4] || 0),
-		Number(match[5] || 0),
-		Number(match[6] || 0),
-	)
-}
-
-function pad(value) {
-	return String(value).padStart(2, "0")
-}
-
-function formatDate(value) {
-	return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
-}
-
-function formatTime(value) {
-	return `${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`
 }
 
 function parseLinkFilters(value) {

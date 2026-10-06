@@ -40,11 +40,11 @@ import { computed, onMounted, ref } from "vue"
 
 import { getCuttingReportPermissions } from "../api/cuttingReports.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
+import StockBalanceReport from "../components/reports/StockBalanceReport.vue"
 import CuttingDetailReport from "./cutting/reports/CuttingDetailReport.vue"
 import DailyCutSheetReport from "./cutting/reports/DailyCutSheetReport.vue"
 import DailyProductionReport from "./cutting/reports/DailyProductionReport.vue"
 import MultiCCRReport from "./cutting/reports/MultiCCRReport.vue"
-import StockBalanceReport from "./cutting/reports/StockBalanceReport.vue"
 
 const activeTab = ref("")
 const loadingPermissions = ref(true)

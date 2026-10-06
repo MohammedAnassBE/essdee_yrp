@@ -1206,6 +1206,11 @@ def create_balance_lot_transfer(cutting_plan, to_lot):
 	lot_transfer.comments = _("Balance cloth from Cutting Plan {0}").format(cp_doc.name)
 	lot_transfer.set("items", items)
 	lot_transfer.insert()
+	# Keep the web Cutting workspace audit trail complete even when the
+	# established header action creates the balance-cloth transfer.
+	from essdee_yrp.cutting.web_workspace import _append_transaction_link
+
+	_append_transaction_link(cp_doc, lot_transfer)
 	return lot_transfer.name
 
 
@@ -1236,6 +1241,7 @@ def create_recut_print_panel(cutting_plan, type, item_details):
 @frappe.whitelist()
 def get_recut_print_panel_details(cutting_plan, type):
 	frappe.get_doc("SD YRP Cutting Plan", cutting_plan).check_permission("read")
+	frappe.has_permission("SD YRP Recut and Print Panel", "read", throw=True)
 	doc_list = frappe.get_all(
 		"SD YRP Recut and Print Panel",
 		filters={"cutting_plan": cutting_plan, "docstatus": 1, "type": type},
@@ -1269,6 +1275,169 @@ def get_recut_print_panel_details(cutting_plan, type):
 				items[key]["panel_count"] += row.panel_count
 				items[key]["no_of_rolls"] += row.no_of_rolls
 	return items
+
+
+@frappe.whitelist()
+def get_web_view_data(cutting_plan):
+	"""Return the permission-checked data rendered by the Cutting Plan web tabs."""
+	cutting_plan_doc = frappe.get_doc("SD YRP Cutting Plan", cutting_plan)
+	cutting_plan_doc.check_permission("read")
+
+	planned_detail = {}
+	if cutting_plan_doc.work_order:
+		from essdee_yrp.api.work_order import fetch_summary_details
+
+		planned_detail = fetch_summary_details(
+			cutting_plan_doc.work_order,
+			cutting_plan_doc.production_detail,
+		)
+
+	from essdee_yrp.print_registry import get_document_print_formats
+
+	permissions = _get_web_cutting_plan_permissions(cutting_plan_doc)
+	can_read_recut = permissions["can_read_recut"]
+
+	return {
+		"item_details": fetch_order_item_details(
+			cutting_plan_doc.items,
+			cutting_plan_doc.production_detail,
+		)
+		or [],
+		"cloth_details": fetch_cloth_details(cutting_plan_doc.cutting_plan_cloth_details),
+		"accessory_details": fetch_cloth_details(cutting_plan_doc.cutting_plan_accessory_details),
+		"grammage_change_logs": [row.as_dict() for row in cutting_plan_doc.grammage_change_logs],
+		"completed_items": update_if_string_instance(cutting_plan_doc.completed_items_json),
+		"incomplete_items": update_if_string_instance(cutting_plan_doc.incomplete_items_json),
+		"recut_details": get_recut_print_panel_details(cutting_plan, "Recut") if can_read_recut else {},
+		"print_panel_details": get_recut_print_panel_details(cutting_plan, "Print Panel") if can_read_recut else {},
+		"planned_detail": planned_detail,
+		"markers": _get_web_cutting_markers(cutting_plan_doc),
+		"laysheets": _get_web_cutting_laysheets(cutting_plan_doc),
+		"permissions": permissions,
+		"print_formats": get_document_print_formats(cutting_plan_doc),
+	}
+
+
+def _get_web_cutting_markers(cutting_plan_doc):
+	if not frappe.has_permission("SD YRP Cutting Marker", "read"):
+		return []
+	return frappe.get_list(
+		"SD YRP Cutting Marker",
+		filters={"cutting_plan": cutting_plan_doc.name},
+		fields=[
+			"name",
+			"marker_name",
+			"length",
+			"width",
+			"required_piece_weight",
+			"calculated_parts",
+			"docstatus",
+			"modified",
+		],
+		order_by="modified desc",
+		limit_page_length=500,
+	)
+
+
+def _get_web_cutting_laysheets(cutting_plan_doc):
+	if not frappe.has_permission("SD YRP Cutting LaySheet", "read"):
+		return []
+	return frappe.get_list(
+		"SD YRP Cutting LaySheet",
+		filters={"cutting_plan": cutting_plan_doc.name},
+		fields=[
+			"name",
+			"lay_no",
+			"cutting_marker",
+			"marker_name",
+			"status",
+			"bundle_generated_date",
+			"printed_time",
+			"docstatus",
+			"modified",
+		],
+		order_by="modified desc",
+		limit_page_length=500,
+	)
+
+
+def _get_web_cutting_plan_permissions(cutting_plan_doc):
+	can_write = bool(cutting_plan_doc.has_permission("write"))
+	is_active = cutting_plan_doc.docstatus != 2
+	is_submitted = cutting_plan_doc.docstatus == 1
+	can_read_marker = bool(frappe.has_permission("SD YRP Cutting Marker", "read"))
+	can_read_laysheet = bool(frappe.has_permission("SD YRP Cutting LaySheet", "read"))
+	can_read_movement = bool(frappe.has_permission("SD YRP Cut Panel Movement", "read"))
+	can_read_recut = bool(frappe.has_permission("SD YRP Recut and Print Panel", "read"))
+	stock_transfer_doctypes = (
+		"YRP Stock Entry",
+		"YRP Stock Update",
+		"YRP Stock Reconciliation",
+		"SD YRP Lot Transfer",
+		"YRP Delivery Challan",
+	)
+	can_create_recut = frappe.has_permission("SD YRP Recut and Print Panel", "create")
+	can_create_marker = frappe.has_permission("SD YRP Cutting Marker", "create")
+	can_create_laysheet = frappe.has_permission("SD YRP Cutting LaySheet", "create")
+	return {
+		"can_write": can_write,
+		"can_print": bool(cutting_plan_doc.has_permission("print")),
+		"can_read_marker": can_read_marker,
+		"can_read_laysheet": can_read_laysheet,
+		"can_read_movement": can_read_movement,
+		"can_read_recut": can_read_recut,
+		"can_read_stock_transfers": any(
+			frappe.has_permission(doctype, "read") for doctype in stock_transfer_doctypes
+		),
+		"can_run_plan_actions": can_write and is_active and is_submitted,
+		"can_update_completed": can_write and is_active and is_submitted,
+		"can_create_recut": bool(can_write and is_active and is_submitted and can_create_recut),
+		"can_create_lot_transfer": bool(
+			is_submitted and frappe.has_permission("SD YRP Lot Transfer", "create")
+		),
+		"can_change_approval_grammage": bool(
+			is_submitted and can_write and has_cls_grammage_approval_role()
+		),
+		# Keep authorised actions visible in the rail. State gates are returned
+		# separately so the UI can explain why an action is temporarily disabled.
+		"can_create_marker": bool(can_create_marker),
+		"can_start_marker": bool(
+			can_create_marker and is_submitted and cutting_plan_doc.cp_status != "Planned"
+		),
+		"can_create_laysheet": bool(can_create_laysheet),
+		"can_start_laysheet": bool(
+			can_create_laysheet
+			and is_submitted
+			and cutting_plan_doc.cp_status not in ("Planned", "Completed")
+		),
+	}
+
+
+@frappe.whitelist()
+def update_web_completed_items(cutting_plan, completed_items):
+	"""Update only completion flags; quantities remain owned by the saved plan."""
+	cutting_plan_doc = _get_submitted_cutting_plan(cutting_plan)
+	current = update_if_string_instance(cutting_plan_doc.completed_items_json)
+	incoming = update_if_string_instance(completed_items)
+	current_groups = current if isinstance(current, list) else [current]
+	incoming_groups = incoming if isinstance(incoming, list) else [incoming]
+
+	if len(current_groups) != len(incoming_groups):
+		frappe.throw(_("The completed quantity structure changed. Reload and try again."))
+
+	for group_index, current_group in enumerate(current_groups):
+		if not isinstance(current_group, dict) or not isinstance(incoming_groups[group_index], dict):
+			frappe.throw(_("The completed quantity structure is invalid. Reload and try again."))
+		current_rows = current_group.get("items") or []
+		incoming_rows = incoming_groups[group_index].get("items") or []
+		if len(current_rows) != len(incoming_rows):
+			frappe.throw(_("The completed quantity rows changed. Reload and try again."))
+		for row_index, current_row in enumerate(current_rows):
+			current_row["completed"] = bool(incoming_rows[row_index].get("completed"))
+
+	cutting_plan_doc.completed_items_json = current_groups if isinstance(current, list) else current_groups[0]
+	cutting_plan_doc.save()
+	return update_if_string_instance(cutting_plan_doc.completed_items_json)
 
 
 CuttingPlan = SDYRPCuttingPlan

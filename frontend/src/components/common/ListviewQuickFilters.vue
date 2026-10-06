@@ -37,16 +37,32 @@
 					fluid
 					@update:model-value="update(field, $event)"
 				/>
-				<DatePicker
-					v-else-if="['Date', 'Datetime'].includes(field.fieldtype)"
+				<DateField
+					v-else-if="field.fieldtype === 'Date'"
 					:input-id="`quick-filter-${field.fieldname}`"
-					:model-value="dateValue(modelValue[field.fieldname])"
+					:model-value="modelValue[field.fieldname] || ''"
+					:aria-label="field.label"
 					:placeholder="`All ${field.label}`"
-					date-format="yy-mm-dd"
-					show-icon
-					show-button-bar
-					fluid
-					@update:model-value="updateDate(field, $event)"
+					show-clear
+					@update:model-value="update(field, $event)"
+				/>
+				<DateTimeField
+					v-else-if="field.fieldtype === 'Datetime'"
+					:input-id="`quick-filter-${field.fieldname}`"
+					:model-value="modelValue[field.fieldname] || ''"
+					:aria-label="field.label"
+					:placeholder="`All ${field.label}`"
+					show-clear
+					@update:model-value="update(field, $event)"
+				/>
+				<TimeField
+					v-else-if="field.fieldtype === 'Time'"
+					:input-id="`quick-filter-${field.fieldname}`"
+					:model-value="modelValue[field.fieldname] || ''"
+					:aria-label="field.label"
+					:placeholder="`All ${field.label}`"
+					show-clear
+					@update:model-value="update(field, $event)"
 				/>
 				<InputNumber
 					v-else-if="numberTypes.has(field.fieldtype)"
@@ -71,11 +87,13 @@
 </template>
 
 <script setup>
-import DatePicker from "primevue/datepicker"
 import InputNumber from "primevue/inputnumber"
 import InputText from "primevue/inputtext"
 import Select from "primevue/select"
+import DateField from "./DateField.vue"
+import DateTimeField from "./DateTimeField.vue"
 import LinkField from "./LinkField.vue"
+import TimeField from "./TimeField.vue"
 
 const props = defineProps({
 	modelValue: { type: Object, default: () => ({}) },
@@ -111,23 +129,6 @@ function numberValue(value) {
 	if (!hasValue(value)) return null
 	const number = Number(value)
 	return Number.isFinite(number) ? number : null
-}
-
-function dateValue(value) {
-	if (value instanceof Date) return value
-	if (!value) return null
-	const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/)
-	if (!match) return null
-	return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
-}
-
-function updateDate(field, value) {
-	if (!value) {
-		update(field, "")
-		return
-	}
-	const pad = (part) => String(part).padStart(2, "0")
-	update(field, `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`)
 }
 
 function linkFilters(field) {

@@ -68,19 +68,23 @@ def _match_fields(meta, label_field):
 
 
 @frappe.whitelist()
-def link_search(doctype, txt="", filters=None, page_length=20):
+def link_search(doctype, txt="", filters=None, page_length=20, match_visible_only=False):
 	"""Search `doctype` by name + title/search fields. Returns [{name, label}].
 
 	`filters` (AND) narrow the result set (e.g. attribute_name for Item Attribute
-	Value); the typed `txt` is matched as an OR across name + the match fields. The
-	`label` is the doctype's human title field when it has one, else the `name`.
+	Value). List-filter pickers set ``match_visible_only`` so typed text is matched
+	only against values shown in the menu (name/title); this prevents a Lot search
+	for ``TE`` from returning unrelated-looking IDs merely because their hidden
+	Item search field contains ``Vest``. Form links retain Frappe-style matching
+	against configured search fields. The `label` is the doctype's human title
+	field when it has one, else the `name`.
 	"""
 	if not doctype:
 		return []
 	if isinstance(filters, str):
 		try:
 			filters = json.loads(filters)
-		except TypeError, ValueError:
+		except (TypeError, ValueError):
 			filters = {}
 	filters = filters or {}
 	if doctype == "Item Attribute Value":
@@ -89,6 +93,8 @@ def link_search(doctype, txt="", filters=None, page_length=20):
 	meta = frappe.get_meta(doctype)
 	label_field = _label_field(meta)
 	match_fields = _match_fields(meta, label_field)
+	if match_visible_only:
+		match_fields = [label_field] if label_field else []
 	txt = (txt or "").strip()
 
 	# Fetch name + the label field (when there is a distinct human title).
@@ -104,7 +110,7 @@ def link_search(doctype, txt="", filters=None, page_length=20):
 
 	try:
 		page_len = int(page_length or 20)
-	except TypeError, ValueError:
+	except (TypeError, ValueError):
 		page_len = 20
 	rows = frappe.get_list(
 		doctype,
@@ -119,6 +125,73 @@ def link_search(doctype, txt="", filters=None, page_length=20):
 		label = (r.get(label_field) if label_field else None) or r["name"]
 		out.append({"name": r["name"], "label": label})
 	return out
+
+
+@frappe.whitelist()
+def linked_document_search(
+	doctype,
+	link_doctype,
+	link_name,
+	txt="",
+	page_length=20,
+):
+	"""Search Address/Contact records linked to one selected document.
+
+	Addresses and Contacts are connected through Dynamic Link child rows, so a
+	regular Link filter cannot express the Desk query.  Resolve the relationship
+	server-side, then intersect it through ``get_list`` so normal read permission
+	and user permissions still apply to the returned records.
+	"""
+	if doctype not in {"Address", "Contact"} or not link_doctype or not link_name:
+		return []
+	if not frappe.has_permission(doctype, ptype="read") or not frappe.has_permission(
+		link_doctype, ptype="read"
+	):
+		return []
+
+	linked_names = frappe.get_all(
+		"Dynamic Link",
+		filters={
+			"parenttype": doctype,
+			"link_doctype": link_doctype,
+			"link_name": link_name,
+		},
+		pluck="parent",
+		limit_page_length=0,
+	)
+	linked_names = list(dict.fromkeys(linked_names))
+	if not linked_names:
+		return []
+
+	meta = frappe.get_meta(doctype)
+	label_field = _label_field(meta)
+	match_fields = _match_fields(meta, label_field)
+	text = (txt or "").strip()
+	or_filters = None
+	if text:
+		like = f"%{text}%"
+		or_filters = [["name", "like", like]] + [
+			[fieldname, "like", like] for fieldname in match_fields
+		]
+	try:
+		page_len = max(1, int(page_length or 20))
+	except (TypeError, ValueError):
+		page_len = 20
+	rows = frappe.get_list(
+		doctype,
+		filters={"name": ["in", linked_names]},
+		or_filters=or_filters,
+		fields=["name"] + ([label_field] if label_field else []),
+		limit_page_length=page_len,
+		order_by="modified desc",
+	)
+	return [
+		{
+			"name": row.name,
+			"label": (row.get(label_field) if label_field else None) or row.name,
+		}
+		for row in rows
+	]
 
 
 def _search_item_attribute_values(txt, filters, page_length):
@@ -136,7 +209,7 @@ def _search_item_attribute_values(txt, filters, page_length):
 	frappe.get_doc("Item Attribute", attribute).check_permission("read")
 	try:
 		page_len = max(1, int(page_length or 20))
-	except TypeError, ValueError:
+	except (TypeError, ValueError):
 		page_len = 20
 	needle = (txt or "").strip().casefold()
 	values = [

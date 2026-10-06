@@ -41,6 +41,7 @@ ASSET_BASE = "/assets/essdee_yrp/frontend/"
 # permission lists for exactly these candidates using the authoritative
 # frappe.has_permission() so every SPA gate hides what the user truly can't access.
 WEB_DOCTYPES = (
+	"SD YRP Cutting Plan",
 	"SD YRP Lot",
 	"YRP Work Order",
 	"YRP Work Order Correction",

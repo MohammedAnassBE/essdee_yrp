@@ -182,3 +182,17 @@ class TestClothExecutionVersionBoundary(unittest.TestCase):
 		self.assertFalse(
 			has_fabric_execution_key(frappe._dict(additional_parameters='{"fabric_execution_key":""}'))
 		)
+
+	def test_execution_parameter_reader_expands_compact_persisted_keys(self):
+		self.assertEqual(
+			get_row_execution_parameters(
+				frappe._dict(
+					additional_parameters='{"f":"fabric-123","m":"matrix-123","s":"source-123"}'
+				)
+			),
+			{
+				"fabric_execution_key": "fabric-123",
+				"matrix_key": "matrix-123",
+				"source_bucket_key": "source-123",
+			},
+		)

@@ -180,7 +180,7 @@ Version boundaries are closed in both directions: a version-`0` WO rejects keyed
 - Existing DC creation remains the entry path.
 - Source rows carry their existing Work Order child reference and stock dimensions.
 - DC submission remains the stock-allocation authority. Draft Work Orders do not reserve source quantities.
-- Same-warehouse handling is permitted only for versioned qualifying cloth Work Order movements through the Essdee controller; all base, Purchase Order and unrelated movements keep their current restriction.
+- Preserve the current Essdee same-warehouse DC/GRN override exactly as it behaves before this feature. P0 adds no new same-warehouse rule and does not tighten the existing one.
 
 ### 3. Knitting GRN and Actual Dia
 
@@ -261,12 +261,11 @@ No `/web` components, routes or frontend engine changes are part of this phase.
 
 Only generic corrections proven necessary by the reference flow are included:
 
-1. permit same-warehouse DC and Work Order GRN movements only through the Essdee controller after the linked WO passes the new qualification helper; base and unqualified Work Order movements retain their current restriction;
-2. group production GRN positive receipts by physical Item and all stock dimensions while preserving row-to-SLE lineage;
-3. support Desk GRN physical-row aggregation and excess entry only when the Essdee qualification helper marks the Work Order GRN as a new keyed cloth execution; ordinary base editors remain unchanged;
-4. normalize only absolute stock residues below `1e-9` to zero before negative-stock rejection. This generic numerical correction is the sole allowed behaviour change outside qualifying cloth transactions.
+1. group production GRN positive receipts by physical Item and all stock dimensions while preserving row-to-SLE lineage;
+2. support Desk GRN physical-row aggregation and excess entry only when the Essdee qualification helper marks the Work Order GRN as a new keyed cloth execution; ordinary base editors remain unchanged;
+3. normalize only absolute stock residues below `1e-9` to zero before negative-stock rejection. This generic numerical correction is the sole allowed behaviour change outside qualifying cloth transactions.
 
-Same-warehouse bypass and physical SLE grouping are activated only for a qualifying versioned cloth transaction through the Essdee controller boundary; generic garment/PO/other Work Order GRN validation and SLE shape remain unchanged. These changes require focused base-YRP regression tests, and generic base helpers must not import Essdee doctypes.
+The current Essdee same-warehouse override is baseline behaviour and remains untouched. Physical SLE grouping is activated only for a qualifying versioned cloth transaction through the Essdee controller boundary; generic garment/PO/other Work Order GRN SLE shape remains unchanged. These changes require focused base-YRP regression tests, and generic base helpers must not import Essdee doctypes.
 
 ## Error Handling
 
@@ -328,7 +327,7 @@ Run the existing current-branch tests covering Cloth Program, Work Order calcula
 - multiple partial DCs share the current locked counter;
 - cancelling a DC restores availability;
 - concurrent submissions exceeding one bucket allow at most the valid total;
-- same-warehouse versioned cloth Work Order DC succeeds while blank-version garment and other Work Order validation is unchanged.
+- current Essdee same-warehouse DC/GRN tests remain unchanged and passing.
 - PO and garment DC/GRN stock movement and positive-SLE shape remain byte-for-byte unchanged.
 
 ### GRN and valuation tests

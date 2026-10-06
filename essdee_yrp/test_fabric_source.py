@@ -414,6 +414,55 @@ class TestExactFabricSourceBuckets(TestCase):
 	@patch("essdee_yrp.api.work_order._variant_attrs", return_value={"Dia": "32", "Colour": "Red"})
 	@patch("essdee_yrp.api.work_order._resolve_variant", return_value="CLOTH-32-RED")
 	@patch("essdee_yrp.fabric_source._conversion_factor", return_value=1)
+	def test_explicit_route_bucket_does_not_also_project_to_blank_route(
+		self, _factor, _resolve, _attrs, _conversion
+	):
+		base = {
+			"matrix_key": "ROUTE",
+			"input_specs": [
+				{
+					"item": "CLOTH",
+					"attrs": {"Dia": "32", "Colour": "Red"},
+					"qty": 1,
+					"uom": "Kg",
+				}
+			],
+			"output_item": "CLOTH",
+			"output_qty": 1,
+			"out_attrs": {"Dia": "32", "Colour": "Red"},
+		}
+		rows = [
+			{**base, "key": "EXPLICIT", "reference_item_variant": "FINAL-RED"},
+			{**base, "key": "BLANK", "matrix_key": "BLANK", "reference_item_variant": None},
+		]
+		bucket = {
+			"key": "SOURCE",
+			"source_grn": "GRN-1",
+			"source_grn_item": "ROW-1",
+			"item_variant": "CLOTH-32-RED",
+			"reference_item_variant": "FINAL-RED",
+			"available_stock_qty": 10,
+			"received_stock_qty": 10,
+		}
+
+		fabric_source._project_receipt_buckets(
+			rows,
+			[bucket],
+			{
+				"CLOTH-32-RED": {
+					"item": "CLOTH",
+					"attrs": {"Dia": "32", "Colour": "Red"},
+				}
+			},
+		)
+
+		self.assertEqual(len(rows), 1)
+		self.assertEqual(rows[0]["matrix_key"], "ROUTE")
+
+	@patch("essdee_yrp.fabric_substitution.resolve_process_conversion", side_effect=lambda _i, **k: k["projected_item"])
+	@patch("essdee_yrp.api.work_order._variant_attrs", return_value={"Dia": "32", "Colour": "Red"})
+	@patch("essdee_yrp.api.work_order._resolve_variant", return_value="CLOTH-32-RED")
+	@patch("essdee_yrp.fabric_source._conversion_factor", return_value=1)
 	def test_popup_prefill_rounds_down_without_overconsuming_source(
 		self, _factor, _resolve, _attrs, _conversion
 	):

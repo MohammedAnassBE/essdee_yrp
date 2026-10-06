@@ -738,13 +738,17 @@ def _hydrate_knitting_execution_defaults(qty_rows, wo):
 
 	input_by_reference_and_variant = {}
 	input_references = set()
+	item_templates = {}
 	for row in wo.get("deliverables") or []:
 		if not row.get("is_calculated") or not row.get("item_variant"):
 			continue
-		item = (
-			frappe.db.get_value("Item", row.item_variant, "variant_of")
-			or row.item_variant
-		)
+		item = item_templates.get(row.item_variant)
+		if item is None:
+			item = (
+				frappe.db.get_value("Item", row.item_variant, "variant_of")
+				or row.item_variant
+			)
+			item_templates[row.item_variant] = item
 		attrs = frozenset(_variant_attrs(row.item_variant).items())
 		for reference, qty in get_reference_allocations(row, row.get("qty")).items():
 			input_references.add(reference)
@@ -1367,19 +1371,22 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 	For knitting/dyeing/compacting the matrix output_item IS the cloth item, so
 	their behaviour is unchanged."""
 	rows = frappe.parse_json(rows) if isinstance(rows, str) else rows
+	permission_doc = frappe.get_doc("YRP Work Order", work_order)
+	permission_doc.check_permission("write")
 	_lock_calculation_target(work_order)
 	wo = frappe.get_doc("YRP Work Order", work_order)
 	wo.check_permission("write")
 	_guard_not_modified(wo, modified)
 	if wo.docstatus != 0:
 		frappe.throw(_("Calculate can only update a draft Work Order."))
-	_guard_untransacted_fabric_calculation(wo)
 	first_calculation = not any(
 		row.get("is_calculated") for row in wo.get("deliverables") or []
 	) and not bool(wo.get("receivables"))
 	from essdee_yrp.cloth_execution import is_versioned_cloth_work_order
 
 	versioned_execution = is_versioned_cloth_work_order(wo)
+	if versioned_execution:
+		_guard_untransacted_fabric_calculation(wo)
 	manual_knitting_process = versioned_execution and _is_default_knitting_process(
 		wo.process_name
 	)
@@ -1586,12 +1593,12 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 					source_demands[ipd.name]["rows"].append(principal)
 				recv_qty = flt(qty * recv_factor, 3)
 				receivable = {
-						"item_variant": output_variant,
-						"qty": recv_qty,
-						"uom": treated_uom,
-						"pending_quantity": recv_qty,
-						"fabric_reference_variant": reference,
-					}
+					"item_variant": output_variant,
+					"qty": recv_qty,
+					"uom": treated_uom,
+					"pending_quantity": recv_qty,
+					"fabric_reference_variant": reference,
+				}
 				if parameters:
 					receivable["additional_parameters"] = parameters
 				receivables.append(receivable)
@@ -1689,6 +1696,11 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 			if kind == "knitting" and line_colour and has_colour:
 				out_attrs[FABRIC_COLOUR_ATTRIBUTE] = line_colour
 			recv_item = matrix.output_item or fabric.cloth_item
+			# Route ownership follows the planned matrix/Cloth Program Item. Exact
+			# source projection may replace Dia in ``out_attrs`` with the physical
+			# Actual Dia, but that must not rewrite the route reference itself.
+			if not reference_item_variant:
+				reference_item_variant = _resolve_variant(recv_item, out_attrs)
 			source = source_demands.get(ipd.name)
 			source_bucket = None
 			source_input_index = None
@@ -1722,8 +1734,6 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 					line_colour,
 				)
 				parameters = _execution_parameters(execution_key, matrix_key)
-			if not reference_item_variant:
-				reference_item_variant = _resolve_variant(recv_item, out_attrs)
 			reference_attrs = _variant_attrs(reference_item_variant) if reference_item_variant else out_attrs
 			bom_demands.append(
 				{
@@ -1825,12 +1835,12 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 			# For knitting/dyeing/compacting matrices output_item IS the cloth item.
 			recv_qty = flt(qty * recv_factor, 3)
 			receivable = {
-					"item_variant": _resolve_variant(recv_item, out_attrs),
-					"qty": recv_qty,
-					"uom": _default_uom(recv_item),
-					"pending_quantity": recv_qty,
-					"fabric_reference_variant": reference_item_variant,
-				}
+				"item_variant": _resolve_variant(recv_item, out_attrs),
+				"qty": recv_qty,
+				"uom": _default_uom(recv_item),
+				"pending_quantity": recv_qty,
+				"fabric_reference_variant": reference_item_variant,
+			}
 			if parameters:
 				receivable["additional_parameters"] = parameters
 			fabric_receivables.append(receivable)

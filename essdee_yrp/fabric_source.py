@@ -1180,10 +1180,19 @@ def _project_receipt_buckets(
 			unmatched.append(bucket.get("item_variant"))
 			continue
 		matches = []
+		bucket_reference = bucket.get("reference_item_variant") or None
+		has_explicit_bucket_route = bool(
+			bucket_reference
+			and any(
+				(qty_row.get("reference_item_variant") or None) == bucket_reference
+				for qty_row in qty_rows
+			)
+		)
 		for qty_row in qty_rows:
 			row_reference = qty_row.get("reference_item_variant") or None
-			bucket_reference = bucket.get("reference_item_variant") or None
 			if bucket_reference and row_reference and row_reference != bucket_reference:
+				continue
+			if bucket_reference and not row_reference and has_explicit_bucket_route:
 				continue
 			for input_index, spec in enumerate(qty_row.get("input_specs") or []):
 				if _matches_input(variant, spec, allow_dia_variance=True):

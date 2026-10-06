@@ -56,12 +56,6 @@ def validate(doc, method=None):
 		validate_work_order_source_allocations(doc)
 
 
-def before_update_after_submit(doc, method=None):
-	"""Protect the saved physical execution contract after submission."""
-	del method
-	validate_fabric_execution_immutable(doc)
-
-
 def validate_fabric_execution_immutable(doc):
 	"""Allow generated contract changes only through Calculate/lifecycle code."""
 	flags = doc.flags or frappe._dict()
@@ -138,8 +132,6 @@ def _fabric_execution_snapshot(doc):
 			"production_detail",
 			"process_name",
 			"item",
-			"supplier",
-			"delivery_location",
 			"fabric_source_process",
 			"fabric_source_process_step",
 			"cloth_execution_version",

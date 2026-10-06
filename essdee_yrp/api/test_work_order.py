@@ -554,6 +554,7 @@ class TestFabricExecutionContract(TestCase):
 			production_detail="IPD-1",
 			process_name="Dyeing",
 			item="CLOTH",
+			supplier="OLD-SUPPLIER",
 			cloth_execution_version=1,
 			open_status=None,
 			deliverables=[
@@ -572,6 +573,7 @@ class TestFabricExecutionContract(TestCase):
 		current = frappe._dict(previous.copy())
 		current.flags = frappe._dict()
 		current.open_status = "Close"
+		current.supplier = "NEW-SUPPLIER"
 		current.deliverables = [frappe._dict(previous.deliverables[0].copy())]
 		current.deliverables[0].pending_quantity = 4
 		current.deliverables[0].stock_update = 6

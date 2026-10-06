@@ -90,6 +90,26 @@ class TestClothExecutionRoute(unittest.TestCase):
 
 		self.assertEqual(work_order.cloth_execution_version, 1)
 
+	@patch("essdee_yrp.cloth_execution.get_supported_execution_route")
+	@patch("essdee_yrp.cloth_execution.frappe.get_cached_doc")
+	def test_rework_work_order_is_never_stamped_version_one(self, get_cached_doc, supported_route):
+		get_cached_doc.return_value = frappe._dict(name="IPD-CLOTH")
+		supported_route.return_value = {
+			"knitting": _step("KNIT-PROCESS", "conversion", position=0),
+			"dyeing": _step("DYE-PROCESS", "swap", "Colour", 1),
+			"washing": _step("WASH-PROCESS", "identity", position=2),
+		}
+		work_order = frappe._dict(
+			production_detail="IPD-CLOTH",
+			process_name="DYE-PROCESS",
+			is_rework=1,
+			cloth_execution_version=0,
+		)
+
+		stamp_cloth_execution_version(work_order)
+
+		self.assertEqual(work_order.cloth_execution_version, 0)
+
 
 class TestClothExecutionVersionBoundary(unittest.TestCase):
 	def test_existing_zero_version_never_upgrades_on_recalculate(self):

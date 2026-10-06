@@ -57,7 +57,11 @@ def _is_colour_dyeing_step(step, default_dyeing_process):
 def stamp_cloth_execution_version(doc, method=None):
 	"""Stamp only newly inserted Work Orders in the supported route prefix."""
 	del method
-	if cint(doc.get("cloth_execution_version")) or not doc.get("production_detail"):
+	if (
+		cint(doc.get("cloth_execution_version"))
+		or doc.get("is_rework")
+		or not doc.get("production_detail")
+	):
 		return
 	ipd = frappe.get_cached_doc("YRP Item Production Detail", doc.production_detail)
 	route = get_supported_execution_route(ipd)

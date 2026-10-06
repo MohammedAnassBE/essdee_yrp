@@ -16842,5 +16842,21 @@
   "translatable": 0,
   "unique": 0,
   "width": null
+ },
+ {
+  "allow_on_submit": 0,
+  "default": "0",
+  "doctype": "Custom Field",
+  "dt": "YRP Work Order",
+  "fieldname": "cloth_execution_version",
+  "fieldtype": "Int",
+  "hidden": 1,
+  "insert_after": "fabric_source_process_step",
+  "is_system_generated": 1,
+  "label": "Cloth Execution Version",
+  "module": "Essdee YRP",
+  "name": "YRP Work Order-cloth_execution_version",
+  "no_copy": 1,
+  "read_only": 1
  }
 ]

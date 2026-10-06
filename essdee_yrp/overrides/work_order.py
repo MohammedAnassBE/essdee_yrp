@@ -19,6 +19,14 @@ from yrp.yrp.doctype.yrp_work_order.yrp_work_order import (
 class EssdeeWorkOrder(WorkOrder):
 	"""Split garment rates by panel type before falling back to base YRP."""
 
+	def before_insert(self):
+		from essdee_yrp.cloth_execution import stamp_cloth_execution_version
+
+		stamp_cloth_execution_version(self)
+		parent = getattr(super(), "before_insert", None)
+		if parent:
+			return parent()
+
 	def get_submit_readiness_issues(self):
 		issues = super().get_submit_readiness_issues()
 		if not self.get("includes_packing"):

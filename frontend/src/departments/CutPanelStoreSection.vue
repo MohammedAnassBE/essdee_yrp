@@ -1,0 +1,81 @@
+<template>
+	<DepartmentPage :title="definition.label" accent="#0a7f5a" back-to="/cut-panel-store" back-label="Cut Panel Store" :show-title="false" flat full-width>
+		<section class="cut-panel-store-section erp-workspace" :aria-label="definition.label">
+			<div v-if="loading" class="cut-panel-store-section__loading">
+				<Skeleton height="76px" />
+				<Skeleton height="420px" />
+			</div>
+			<Message v-else-if="error" severity="error" :closable="false">{{ error }}</Message>
+			<Message v-else-if="!capability" severity="warn" :closable="false">You do not have permission to view {{ definition.label }}.</Message>
+			<div v-else class="erp-empty-state cut-panel-store-section__empty">
+				<i :class="definition.icon" aria-hidden="true" />
+				<strong>{{ definition.label }}</strong>
+				<span>No records are available yet.</span>
+			</div>
+		</section>
+	</DepartmentPage>
+</template>
+
+<script setup>
+import Message from "primevue/message"
+import Skeleton from "primevue/skeleton"
+import { computed, onMounted, ref, watch } from "vue"
+
+import { getCutPanelStoreCapabilities } from "../api/cutPanelStore.js"
+import DepartmentPage from "../components/DepartmentPage.vue"
+
+const props = defineProps({ section: { type: String, required: true } })
+const definitions = {
+	movements: { label: "Cut Panel Movement", icon: "pi pi-arrow-right-arrow-left" },
+	work_orders: { label: "Work Orders", icon: "pi pi-briefcase" },
+	cut_bundle_edits: { label: "Cut Bundle Edit", icon: "pi pi-pencil" },
+	box_stickers: { label: "Box Sticker Print", icon: "pi pi-tags" },
+	excel_stickers: { label: "Excel Sticker Print", icon: "pi pi-file-excel" },
+	reports: { label: "Reports", icon: "pi pi-chart-bar" },
+}
+const definition = computed(() => definitions[props.section] || definitions.movements)
+const capability = ref(null)
+const loading = ref(true)
+const error = ref("")
+
+async function load() {
+	loading.value = true
+	error.value = ""
+	try {
+		const payload = await getCutPanelStoreCapabilities() || {}
+		capability.value = payload.sections?.[props.section] || null
+	} catch (reason) {
+		error.value = reason?.message || `Unable to load ${definition.value.label}.`
+	} finally {
+		loading.value = false
+	}
+}
+
+onMounted(load)
+watch(() => props.section, load)
+</script>
+
+<style scoped>
+.cut-panel-store-section {
+	width: 100%;
+	max-width: 1800px;
+	min-width: 0;
+	margin: 0 auto;
+	padding: 2px clamp(2px, .8vw, 12px) var(--erp-space-5);
+}
+
+.cut-panel-store-section__loading {
+	display: grid;
+	gap: var(--erp-space-3);
+	padding-top: 2px;
+}
+
+.cut-panel-store-section__loading :deep(.p-skeleton) {
+	border-radius: var(--erp-panel-radius);
+	background: color-mix(in srgb, var(--erp-surface-muted) 74%, white);
+}
+
+.cut-panel-store-section__empty {
+	min-height: 360px;
+}
+</style>

@@ -24,6 +24,7 @@ const FabricWorkOrderEditorPage = () => import("../departments/FabricWorkOrderEd
 const FabricDeliveryChallan = () => import("../departments/FabricDeliveryChallan.vue")
 const FabricGoodsReceivedNote = () => import("../departments/FabricGoodsReceivedNote.vue")
 const FabricStoreSection = () => import("../departments/FabricStoreSection.vue")
+const CutPanelStoreSection = () => import("../departments/CutPanelStoreSection.vue")
 
 const routes = [
 	{
@@ -113,6 +114,42 @@ const routes = [
 		name: "fabric-work-orders",
 		component: FabricStoreSection,
 		props: { section: "work_orders" },
+	},
+	{
+		path: "/cut-panel-store/movements",
+		name: "cut-panel-movements",
+		component: CutPanelStoreSection,
+		props: { section: "movements" },
+	},
+	{
+		path: "/cut-panel-store/work-orders",
+		name: "cut-panel-work-orders",
+		component: CutPanelStoreSection,
+		props: { section: "work_orders" },
+	},
+	{
+		path: "/cut-panel-store/cut-bundle-edits",
+		name: "cut-panel-cut-bundle-edits",
+		component: CutPanelStoreSection,
+		props: { section: "cut_bundle_edits" },
+	},
+	{
+		path: "/cut-panel-store/box-sticker-prints",
+		name: "cut-panel-box-stickers",
+		component: CutPanelStoreSection,
+		props: { section: "box_stickers" },
+	},
+	{
+		path: "/cut-panel-store/excel-sticker-prints",
+		name: "cut-panel-excel-stickers",
+		component: CutPanelStoreSection,
+		props: { section: "excel_stickers" },
+	},
+	{
+		path: "/cut-panel-store/reports",
+		name: "cut-panel-reports",
+		component: CutPanelStoreSection,
+		props: { section: "reports" },
 	},
 	{
 		path: "/fabric-store/purchase-orders",

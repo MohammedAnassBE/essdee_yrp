@@ -19,7 +19,10 @@ const routes = [
 	"/cutting/lay-sheet-planner", "/cutting/lay-sheet-planner/new",
 	"/cutting/reports", "/fabric-store", "/fabric-store/work-orders",
 	"/fabric-store/purchase-orders", "/fabric-store/purchase-orders/new", "/fabric-store/stock-transfers", "/fabric-store/reports",
-	"/cut-panel-store", "/accessory-store", "/sewing", "/finishing", "/merch", "/purchase", "/sales", "/planning",
+	"/cut-panel-store", "/cut-panel-store/movements", "/cut-panel-store/work-orders",
+	"/cut-panel-store/cut-bundle-edits", "/cut-panel-store/box-sticker-prints",
+	"/cut-panel-store/excel-sticker-prints", "/cut-panel-store/reports",
+	"/accessory-store", "/sewing", "/finishing", "/merch", "/purchase", "/sales", "/planning",
 ]
 
 function assert(condition, message) {

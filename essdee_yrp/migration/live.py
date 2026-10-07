@@ -3146,6 +3146,10 @@ def _finalize_target_setup_state() -> dict[str, Any]:
 	item_attribute_value_dependencies = _ensure_standard_item_attribute_value_pairs()
 	production_order_settings_changed = ensure_yrp_production_order_settings()
 	validate_yrp_settings_for_production_order()
+	# The migrated Item Attributes now exist; the install-time seed waited for them.
+	from essdee_yrp.patches.seed_default_dia_attribute import execute as seed_default_dia_attribute
+
+	seed_default_dia_attribute()
 	for app_name in SETUP_WIZARD_APPS:
 		frappe.db.set_value(
 			"Installed Application",

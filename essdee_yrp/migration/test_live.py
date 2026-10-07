@@ -552,9 +552,11 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 					"added_pairs": 2,
 				},
 			) as ensure_item_attribute_value_pairs,
+			patch("essdee_yrp.patches.seed_default_dia_attribute.execute") as seed_default_dia_attribute,
 		):
 			result = _finalize_target_setup_state()
 		self.assertEqual(result["status"], "Pass")
+		seed_default_dia_attribute.assert_called_once_with()
 		self.assertEqual(set_value.call_count, 2)
 		disable_future_access.assert_called_once_with()
 		set_single.assert_called_once_with("System Settings", "default_app", "erpnext")

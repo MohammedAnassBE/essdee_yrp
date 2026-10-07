@@ -2065,7 +2065,7 @@ def _emit_reference_variants_and_cut_panels(frappe):
 		if isinstance(payload, str) and payload:
 			try:
 				payload = json.loads(payload)
-			except TypeError, ValueError:
+			except (TypeError, ValueError):
 				payload = None
 		names = _collect_reference_names(payload) if payload else set()
 		ledger_names_by_movement[row.name] = names

@@ -35,6 +35,8 @@ packages = []
 [tool.ruff]
 line-length = 110
 target-version = "py314"
+# Bridge scripts run inside the Frappe-15 source bench (Python 3.10).
+per-file-target-version = { "scripts/f15_*.py" = "py310" }
 
 [tool.ruff.lint]
 select = [

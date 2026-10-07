@@ -3,8 +3,9 @@
 
 Warehouse is resolved server-side from the supplier (mrp GRN delivery_location, a
 Supplier docname; the mrp->yrp sync gives it a 1:1 Warehouse named after the supplier).
-Every row carries the mrp lot and received_type="Accepted". item_variant, lot,
-warehouse, and the "Accepted" Received Type must already exist on yrp (no auto-create).
+Every row carries the mrp lot and may carry its own received_type. item_variant,
+lot, warehouse, and every effective Received Type must already exist on yrp
+(no auto-create). Old payloads use the configured default Received Type.
 Both create and cancel are idempotent on `source_grn`.
 """
 
@@ -99,11 +100,43 @@ def receive_grn_transfer(payload):
 						", ".join(map(str, missing_lot))
 					),
 				}
-			if not frappe.db.exists("YRP Received Type", "Accepted"):
+			default_received_type = frappe.db.get_single_value(
+				"YRP Stock Settings", "default_received_type"
+			)
+			normalized_items = []
+			rows_without_received_type = []
+			for idx, row in enumerate(items, start=1):
+				received_type = row.get("received_type")
+				if isinstance(received_type, str):
+					received_type = received_type.strip()
+				if not received_type:
+					received_type = default_received_type
+				if not received_type:
+					rows_without_received_type.append(str(idx))
+				normalized_items.append({**row, "received_type": received_type})
+			if rows_without_received_type:
 				return {
 					"ok": False,
-					"error": _("Received Type 'Accepted' is missing on essdee_yrp. Nothing was transferred."),
+					"error": _(
+						"Received Type is required on rows {0}, and Default Received Type "
+						"is not configured in YRP Stock Settings. Nothing was transferred."
+					).format(", ".join(rows_without_received_type)),
 				}
+			missing_received_types = sorted(
+				{
+					row["received_type"]
+					for row in normalized_items
+					if not frappe.db.exists("YRP Received Type", row["received_type"])
+				}
+			)
+			if missing_received_types:
+				return {
+					"ok": False,
+					"error": _(
+						"Received Types missing on essdee_yrp: {0}. Nothing was transferred."
+					).format(", ".join(map(str, missing_received_types))),
+				}
+			items = normalized_items
 
 			se = frappe.new_doc("YRP Stock Entry")
 			se.purpose = "Material Receipt"
@@ -131,7 +164,7 @@ def receive_grn_transfer(payload):
 						"qty": flt(r.get("qty")),
 						"uom": r.get("uom") or None,
 						"lot": r["lot"],
-						"received_type": "Accepted",
+						"received_type": r["received_type"],
 						"conversion_factor": 1.0,
 						"rate": flt(r.get("rate")) if r.get("rate") is not None else 0,
 						"row_index": idx,

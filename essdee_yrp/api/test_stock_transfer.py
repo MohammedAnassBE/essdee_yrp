@@ -16,7 +16,19 @@ from frappe.utils import flt
 
 from essdee_yrp.api.stock_transfer import cancel_grn_transfer, receive_grn_transfer
 
-TEST_GRNS = ("GRN-TEST-0001", "GRN-NEVER-EXISTED", "GRN-TEST-DUP", "GRN-TEST-MULTI", "GRN-TEST-UIGRID")
+TEST_GRNS = (
+	"GRN-TEST-0001",
+	"GRN-NEVER-EXISTED",
+	"GRN-TEST-DUP",
+	"GRN-TEST-MULTI",
+	"GRN-TEST-UIGRID",
+	"GRN-TEST-REJECTED",
+	"GRN-TEST-MIXED",
+	"GRN-TEST-DEFAULT-RT",
+	"GRN-TEST-BLANK-RT",
+	"GRN-TEST-NO-DEFAULT-RT",
+	"GRN-TEST-INVALID-RT",
+)
 
 
 class TestReceiveGrnTransfer(IntegrationTestCase):
@@ -144,6 +156,112 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
 		self.assertEqual(se.items[0].received_type, "Accepted")
 		self.assertEqual(se.items[0].conversion_factor, 1.0)
 		self.assertEqual(frappe.db.get_value("YRP Stock Entry", se.name, "source_grn"), "GRN-TEST-0001")
+
+	def test_explicit_rejected_received_type_is_preserved_in_stock_and_ledger(self):
+		payload = self._payload(source_grn="GRN-TEST-REJECTED")
+		payload["items"][0]["received_type"] = "Rejected"
+
+		result = receive_grn_transfer(payload)
+
+		self.assertTrue(result["ok"], result)
+		stock_entry = frappe.get_doc("YRP Stock Entry", result["stock_entry"])
+		self.assertEqual(stock_entry.items[0].received_type, "Rejected")
+		ledger_types = frappe.get_all(
+			"YRP Stock Ledger Entry",
+			filters={
+				"voucher_type": "YRP Stock Entry",
+				"voucher_no": stock_entry.name,
+				"is_cancelled": 0,
+			},
+			pluck="received_type",
+		)
+		self.assertEqual(set(ledger_types), {"Rejected"})
+
+	def test_mixed_received_types_remain_separate_in_one_stock_entry(self):
+		base = self._payload(source_grn="GRN-TEST-MIXED")["items"][0]
+		items = [
+			{**base, "qty": 3, "received_type": "Accepted"},
+			{**base, "qty": 2, "received_type": "Rejected"},
+		]
+
+		result = receive_grn_transfer(
+			self._payload(source_grn="GRN-TEST-MIXED", items=items)
+		)
+
+		self.assertTrue(result["ok"], result)
+		stock_entry = frappe.get_doc("YRP Stock Entry", result["stock_entry"])
+		self.assertEqual(
+			[(row.received_type, flt(row.qty)) for row in stock_entry.items],
+			[("Accepted", 3), ("Rejected", 2)],
+		)
+		ledger_types = frappe.get_all(
+			"YRP Stock Ledger Entry",
+			filters={
+				"voucher_type": "YRP Stock Entry",
+				"voucher_no": stock_entry.name,
+				"is_cancelled": 0,
+			},
+			pluck="received_type",
+		)
+		self.assertEqual(set(ledger_types), {"Accepted", "Rejected"})
+
+	def test_missing_received_type_uses_configured_default(self):
+		payload = self._payload(source_grn="GRN-TEST-DEFAULT-RT")
+		payload["items"][0].pop("received_type")
+
+		result = receive_grn_transfer(payload)
+
+		self.assertTrue(result["ok"], result)
+		stock_entry = frappe.get_doc("YRP Stock Entry", result["stock_entry"])
+		self.assertEqual(stock_entry.items[0].received_type, "Accepted")
+
+	def test_blank_received_type_uses_configured_default(self):
+		payload = self._payload(source_grn="GRN-TEST-BLANK-RT")
+		payload["items"][0]["received_type"] = "   "
+
+		result = receive_grn_transfer(payload)
+
+		self.assertTrue(result["ok"], result)
+		stock_entry = frappe.get_doc("YRP Stock Entry", result["stock_entry"])
+		self.assertEqual(stock_entry.items[0].received_type, "Accepted")
+
+	def test_missing_received_type_rejects_when_no_default_is_configured(self):
+		original = frappe.db.get_single_value(
+			"YRP Stock Settings", "default_received_type"
+		)
+		payload = self._payload(source_grn="GRN-TEST-NO-DEFAULT-RT")
+		payload["items"][0].pop("received_type")
+		try:
+			frappe.db.set_single_value(
+				"YRP Stock Settings", "default_received_type", None
+			)
+			result = receive_grn_transfer(payload)
+		finally:
+			frappe.db.set_single_value(
+				"YRP Stock Settings", "default_received_type", original
+			)
+
+		self.assertFalse(result["ok"])
+		self.assertIn("Default Received Type", result["error"])
+		self.assertFalse(
+			frappe.db.exists(
+				"YRP Stock Entry", {"source_grn": "GRN-TEST-NO-DEFAULT-RT"}
+			)
+		)
+
+	def test_unknown_received_type_rejects_without_creating_stock_entry(self):
+		payload = self._payload(source_grn="GRN-TEST-INVALID-RT")
+		payload["items"][0]["received_type"] = "Not A Real Received Type"
+
+		result = receive_grn_transfer(payload)
+
+		self.assertFalse(result["ok"])
+		self.assertIn("Not A Real Received Type", result["error"])
+		self.assertFalse(
+			frappe.db.exists(
+				"YRP Stock Entry", {"source_grn": "GRN-TEST-INVALID-RT"}
+			)
+		)
 
 	def test_multi_row_grn_makes_one_se_holding_all_rows(self):
 		"""A GRN with N item rows transfers as exactly ONE Material Receipt whose

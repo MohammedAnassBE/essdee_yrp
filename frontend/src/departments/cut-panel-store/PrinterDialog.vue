@@ -4,6 +4,7 @@
 		modal
 		:dismissable-mask="false"
 		:closable="!busy"
+		:close-on-escape="!busy"
 		header="Print Labels"
 		class="cut-panel-printer-dialog"
 		:style="{ width: 'min(520px, calc(100vw - 24px))' }"
@@ -13,12 +14,13 @@
 			<div v-if="loading" class="printer-dialog__loading"><i class="pi pi-spin pi-spinner" /><span>Connecting to QZ Tray and finding printers…</span></div>
 			<template v-else>
 				<label><span>Printer *</span><Select v-model="selected" :options="printers" filter fluid placeholder="Select printer" /></label>
+				<label v-if="showResolution"><span>Printer Resolution *</span><Select v-model="selectedResolution" :options="resolutions" fluid placeholder="Select resolution" /></label>
 				<small v-if="error" role="alert">{{ error }}</small>
 			</template>
 		</div>
 		<template #footer>
 			<Button label="Close" severity="secondary" text :disabled="busy" @click="emit('update:visible', false)" />
-			<Button label="Print" icon="pi pi-print" :loading="busy" :disabled="loading || !selected" @click="emit('confirm', selected)" />
+			<Button :label="confirmLabel" icon="pi pi-print" :loading="busy" :disabled="loading || !selected || (showResolution && !selectedResolution)" @click="confirm" />
 		</template>
 	</Dialog>
 </template>
@@ -31,29 +33,63 @@ import { ref, watch } from "vue"
 
 import { getQzPrinters } from "../../api/qzPrinter.js"
 
-const props = defineProps({ visible: Boolean, busy: Boolean })
-const emit = defineEmits(["update:visible", "confirm"])
+const props = defineProps({
+	visible: Boolean,
+	busy: Boolean,
+	showResolution: { type: Boolean, default: false },
+	resolutions: { type: Array, default: () => ["200dpi", "300dpi"] },
+	defaultResolution: { type: String, default: "300dpi" },
+	filterPrinters: { type: Function, default: null },
+	confirmLabel: { type: String, default: "Print" },
+})
+const emit = defineEmits(["update:visible", "confirm", "error"])
 const loading = ref(false)
 const printers = ref([])
 const selected = ref("")
+const selectedResolution = ref("")
 const error = ref("")
+let loadSequence = 0
 
-watch(() => props.visible, (visible) => { if (visible) loadPrinters() })
+watch(() => props.visible, (visible) => {
+	if (visible) loadPrinters()
+	else {
+		loadSequence += 1
+		loading.value = false
+	}
+})
 
 async function loadPrinters() {
+	const sequence = ++loadSequence
 	loading.value = true; error.value = ""; printers.value = []; selected.value = ""
+	selectedResolution.value = props.resolutions.includes(props.defaultResolution) ? props.defaultResolution : props.resolutions[0] || ""
 	try {
-		printers.value = await getQzPrinters()
+		const detected = await getQzPrinters()
+		if (sequence !== loadSequence || !props.visible) return
+		const available = props.filterPrinters ? await props.filterPrinters(detected) : detected
+		if (sequence !== loadSequence || !props.visible) return
+		printers.value = Array.isArray(available) ? available : []
 		selected.value = printers.value[0] || ""
-	} catch (reason) { error.value = reason.message || "Unable to load printers." }
-	finally { loading.value = false }
+		if (!printers.value.length) {
+			error.value = props.filterPrinters ? "No configured label printer is available." : "No label printer is available."
+			emit("error", error.value)
+		}
+	} catch (reason) {
+		if (sequence !== loadSequence || !props.visible) return
+		error.value = reason.message || "Unable to load printers."
+		emit("error", error.value)
+	}
+	finally { if (sequence === loadSequence) loading.value = false }
+}
+
+function confirm() {
+	emit("confirm", props.showResolution ? { printer: selected.value, printerType: selectedResolution.value } : selected.value)
 }
 </script>
 
 <style scoped>
-.printer-dialog__content { display: grid; min-height: 86px; gap: 10px; }
+.printer-dialog__content { display: grid; min-height: 86px; gap: 12px; }
 .printer-dialog__content label { display: grid; gap: 7px; }
 .printer-dialog__content label > span { color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 700; }
-.printer-dialog__content small { color: var(--p-red-600); font-size: var(--erp-font-size-caption); }
+.printer-dialog__content small { color: var(--erp-danger); font-size: var(--erp-font-size-caption); }
 .printer-dialog__loading { display: flex; align-items: center; justify-content: center; gap: 9px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 </style>

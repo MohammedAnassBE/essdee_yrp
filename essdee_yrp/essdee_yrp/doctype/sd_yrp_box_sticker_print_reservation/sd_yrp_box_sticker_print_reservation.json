@@ -1,0 +1,99 @@
+{
+ "actions": [],
+ "autoname": "field:request_id",
+ "creation": "2026-10-07 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "request_id",
+  "box_sticker_print",
+  "requested_by",
+  "state",
+  "printer_type",
+  "expected_modified",
+  "fingerprint",
+  "payload_json",
+  "zpl"
+ ],
+ "fields": [
+  {
+   "fieldname": "request_id",
+   "fieldtype": "Data",
+   "label": "Request ID",
+   "read_only": 1,
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "box_sticker_print",
+   "fieldtype": "Link",
+   "label": "Box Sticker Print",
+   "options": "SD YRP Box Sticker Print",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "requested_by",
+   "fieldtype": "Link",
+   "label": "Requested By",
+   "options": "User",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "state",
+   "fieldtype": "Select",
+   "label": "State",
+   "options": "Preparing\nActive\nConfirmed\nRolled Back",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "printer_type",
+   "fieldtype": "Data",
+   "label": "Printer Type",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "expected_modified",
+   "fieldtype": "Data",
+   "label": "Expected Modified",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "fingerprint",
+   "fieldtype": "Data",
+   "label": "Fingerprint",
+   "read_only": 1,
+   "reqd": 1,
+   "unique": 0
+  },
+  {
+   "fieldname": "payload_json",
+   "fieldtype": "Long Text",
+   "label": "Payload JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "zpl",
+   "fieldtype": "Long Text",
+   "label": "ZPL",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-07 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Essdee YRP",
+ "name": "SD YRP Box Sticker Print Reservation",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

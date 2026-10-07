@@ -104,6 +104,20 @@ async function launcherSuite(page) {
 	state.error = "Capability service unavailable"
 	await page.goto(`${SITE}/web/cut-panel-store/box-sticker-prints`, { waitUntil: "domcontentloaded" })
 	await page.getByText("Capability service unavailable", { exact: true }).waitFor({ timeout: 20_000 })
+
+	state.error = ""
+	for (const width of [1600, 1280, 900, 390]) {
+		await page.setViewportSize({ width, height: width === 390 ? 844 : 900 })
+		await page.goto(`${SITE}/web/cut-panel-store`, { waitUntil: "domcontentloaded" })
+		await launcher.waitFor({ timeout: 20_000 })
+		await cards.nth(sectionDefinitions.length - 1).waitFor({ timeout: 20_000 })
+		const geometry = await launcher.evaluate((element) => {
+			const rect = element.getBoundingClientRect()
+			return { left: rect.left, right: rect.right, viewport: window.innerWidth, pageWidth: document.documentElement.scrollWidth }
+		})
+		assert(geometry.left >= 0 && geometry.right <= geometry.viewport + 1, `Launcher escapes ${width}px viewport: ${JSON.stringify(geometry)}`)
+		assert(geometry.pageWidth <= geometry.viewport + 1, `Launcher creates horizontal overflow at ${width}px: ${JSON.stringify(geometry)}`)
+	}
 }
 
 function movementFixture() {
@@ -438,12 +452,670 @@ async function cutBundleEditSuite(page) {
 	assert(source.includes("Add output") && source.includes("Split panels"), "Cut Bundle Edit omits output add/split actions")
 }
 
+function boxStickerRows(printedQuantity = 0) {
+	return [
+		{ name: "BSP-ROW-S", size: "S", mrp: 125, quantity: 10, printed_quantity: printedQuantity, allow_excess_quantity: 0, allow_excess_percentage: 10, allowed_quantity: 11, remaining_quantity: 11 - printedQuantity },
+		{ name: "BSP-ROW-M", size: "M", mrp: 135, quantity: 5, printed_quantity: 0, allow_excess_quantity: 1, allow_excess_percentage: 0, allowed_quantity: null, remaining_quantity: null },
+	]
+}
+
+function boxStickerRecord({ name = "BSP-CP-1", docstatus = 1, printedQuantity = 0, fgItem = "FG-CP-1", displayName = "Finished Shirt", modified = "2026-10-07 14:00:00" } = {}) {
+	const permissions = docstatus === 0
+		? { can_write: true, can_submit: true, can_cancel: false, can_print: false }
+		: docstatus === 1
+			? { can_write: false, can_submit: false, can_cancel: true, can_print: true }
+			: { can_write: false, can_submit: false, can_cancel: false, can_print: false }
+	return {
+		doctype: "SD YRP Box Sticker Print", name, docstatus,
+		status: ({ 0: "Draft", 1: "Submitted", 2: "Cancelled" })[docstatus],
+		lot: name === "BSP-NEW" ? "LOT-NEW" : "LOT-CP-1", fg_item: fgItem, size: "Trial", use_item_name: 0, display_name: displayName,
+		print_format: "BOX-LABEL", piece_per_box: 10, modified,
+		rows: boxStickerRows(printedQuantity), permissions,
+	}
+}
+
+async function mockBoxStickerWorkspace(page) {
+	let activeRecord = boxStickerRecord({ name: "BSP-NEW", docstatus: 0, fgItem: "FG-NEW", displayName: "New Shirt", modified: "2026-10-07 14:10:00" })
+	let pendingPrintedQuantity = 0
+	let sourcePreviewCount = 0
+	let saveCount = 0
+	let submitCount = 0
+	let cancelCount = 0
+	let reserveCount = 0
+	let recoveryCount = 0
+	let confirmCount = 0
+	let rollbackCount = 0
+	let failNextReserve = false
+	let failNextConfirm = false
+	let failNextRollback = false
+	let activeReservation = null
+	const reserveRequestIds = []
+	let lastSave = null
+	await page.addInitScript(() => {
+		window.sha256 = () => "signature"
+		window.__boxQzPrintCount = 0
+		window.qz = {
+			api: { setPromiseType() {}, setSha256Type() {} }, websocket: { isActive: () => true, connect: async () => {} },
+			printers: { find: async () => ["Zebra ZD220", "Office Laser"] }, configs: { create: (printer) => ({ printer }) }, print: async () => { window.__boxQzPrintCount += 1; return true },
+		}
+	})
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.web_workspace.get_capabilities*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: capabilities }) }))
+	await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ docs: [{ name: "SD YRP Box Sticker Print", is_submittable: 1, fields: [
+			{ fieldname: "lot", label: "Lot", fieldtype: "Link", options: "SD YRP Lot", in_list_view: 1 },
+			{ fieldname: "fg_item", label: "Item", fieldtype: "Link", options: "SD YRP FG Item Master", in_list_view: 1 },
+			{ fieldname: "print_format", label: "Print Format", fieldtype: "Link", options: "YRP ZPL Raw Print Format", in_list_view: 1 },
+		] }] }),
+	}))
+	await page.route("**/api/method/yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.get_user_listview*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }) }))
+	await page.route("**/api/method/frappe.desk.reportview.get_count*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: 1 }) }))
+	await page.route("**/api/resource/SD%20YRP%20Box%20Sticker%20Print*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: [{ name: "BSP-CP-1", lot: "LOT-CP-1", fg_item: "FG-CP-1", print_format: "BOX-LABEL", docstatus: 1, modified: "2026-10-07 14:00:00" }] }) }))
+	await page.route("**/api/method/essdee_yrp.api.link_search.link_search*", (route) => {
+		const { doctype } = route.request().postDataJSON()
+		const rows = doctype === "SD YRP FG Item Master"
+			? [{ name: "FG-NEW", label: "New Shirt" }]
+			: doctype === "SD YRP Lot"
+				? [{ name: "LOT-NEW", label: "LOT-NEW" }]
+				: [{ name: "BOX-LABEL", label: "BOX-LABEL" }]
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: rows }) })
+	})
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.box_sticker_workspace.get_box_sticker_editor*", (route) => {
+		const { name = "" } = route.request().postDataJSON()
+		const record = name === "BSP-CP-1" ? boxStickerRecord() : name === "BSP-NEW" ? activeRecord : null
+		const payload = record
+			? { context: { lot: record.lot, fg_item: record.fg_item, display_name: record.display_name }, defaults: {}, permissions: { can_create: true }, record }
+			: {
+				context: { lot: "LOT-NEW", fg_item: "FG-OLD", display_name: "Old Shirt" },
+				defaults: { lot: "LOT-NEW", fg_item: "FG-OLD", size: "", use_item_name: 0, print_format: "BOX-LABEL", rows: boxStickerRows() },
+				permissions: { can_create: true }, record: null,
+			}
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: payload }) })
+	})
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.box_sticker_workspace.preview_box_sticker_source*", (route) => {
+		sourcePreviewCount += 1
+		const { fg_item: fgItem } = route.request().postDataJSON()
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: {
+			context: { lot: "LOT-NEW", fg_item: fgItem, display_name: fgItem === "FG-NEW" ? "New Shirt" : "Old Shirt" },
+			rows: boxStickerRows(), defaults: {},
+		} }) })
+	})
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.box_sticker_workspace.save_box_sticker*", (route) => {
+		saveCount += 1
+		lastSave = route.request().postDataJSON()
+		activeRecord = boxStickerRecord({ name: "BSP-NEW", docstatus: 0, fgItem: lastSave.values.fg_item, displayName: "New Shirt", modified: "2026-10-07 14:10:00" })
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: activeRecord }) })
+	})
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.box_sticker_workspace.execute_box_sticker_command*", (route) => {
+		const { command } = route.request().postDataJSON()
+		if (command === "submit") {
+			submitCount += 1
+			activeRecord = boxStickerRecord({ name: "BSP-NEW", docstatus: 1, fgItem: "FG-NEW", displayName: "New Shirt", modified: "2026-10-07 14:20:00" })
+		} else if (command === "cancel") {
+			cancelCount += 1
+			activeRecord = boxStickerRecord({ name: "BSP-NEW", docstatus: 2, printedQuantity: activeRecord.rows[0].printed_quantity, fgItem: "FG-NEW", displayName: "New Shirt", modified: "2026-10-07 14:40:00" })
+		}
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: activeRecord }) })
+	})
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.box_sticker_workspace.get_box_sticker_preview*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: { image_url: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==", code: "^XA^XZ", width: 4, height: 6 } }) }))
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.box_sticker_workspace.get_configured_box_sticker_printers*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: ["Zebra ZD220"] }) }))
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.box_sticker_workspace.reserve_box_sticker_print*", (route) => {
+		reserveCount += 1
+		const { request_id: requestId, rows } = route.request().postDataJSON()
+		reserveRequestIds.push(requestId)
+		pendingPrintedQuantity = activeRecord.rows[0].printed_quantity + Number(rows.find((row) => row.doc_name === "BSP-ROW-S")?.quantity || 0)
+		activeReservation = { requestId, reservation: `BOX-TOKEN-${reserveCount}`, state: "Active", zpl: "^XA^XZ" }
+		if (failNextReserve) {
+			failNextReserve = false
+			return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "Reservation response was interrupted" }) })
+		}
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: { reservation: activeReservation.reservation, zpl: activeReservation.zpl, raw: activeReservation.zpl, expected_modified: activeRecord.modified, record: activeRecord } }) })
+	})
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.box_sticker_workspace.get_box_sticker_print_recovery*", (route) => {
+		recoveryCount += 1
+		const { request_id: requestId } = route.request().postDataJSON()
+		if (!activeReservation || activeReservation.requestId !== requestId) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: { state: "Missing", reservation: requestId } }) })
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: { ...activeReservation, raw: activeReservation.zpl, record: activeRecord } }) })
+	})
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.box_sticker_workspace.confirm_box_sticker_print*", (route) => {
+		confirmCount += 1
+		if (failNextConfirm) {
+			failNextConfirm = false
+			return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "Confirmation response was interrupted" }) })
+		}
+		activeRecord = boxStickerRecord({ name: "BSP-NEW", docstatus: 1, printedQuantity: pendingPrintedQuantity, fgItem: "FG-NEW", displayName: "New Shirt", modified: "2026-10-07 14:30:00" })
+		if (activeReservation) activeReservation.state = "Confirmed"
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: { confirmed: true, already_confirmed: false, reservation: activeReservation?.reservation, record: activeRecord } }) })
+	})
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.box_sticker_workspace.rollback_box_sticker_print*", (route) => {
+		rollbackCount += 1
+		if (failNextRollback) {
+			failNextRollback = false
+			return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "Rollback response was interrupted" }) })
+		}
+		pendingPrintedQuantity = activeRecord.rows[0].printed_quantity
+		if (activeReservation) activeReservation.state = "Rolled Back"
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: { rolled_back: true, already_rolled_back: false, reservation: activeReservation?.reservation, record: activeRecord } }) })
+	})
+	return {
+		sourcePreviewCount: () => sourcePreviewCount,
+		saveCount: () => saveCount,
+		submitCount: () => submitCount,
+		cancelCount: () => cancelCount,
+		reserveCount: () => reserveCount,
+		recoveryCount: () => recoveryCount,
+		confirmCount: () => confirmCount,
+		rollbackCount: () => rollbackCount,
+		reserveRequestIds: () => [...reserveRequestIds],
+		failNextReserve: () => { failNextReserve = true },
+		failNextConfirm: () => { failNextConfirm = true },
+		failNextRollback: () => { failNextRollback = true },
+		lastSave: () => lastSave,
+	}
+}
+
+async function enterPrimeNumber(page, input, value) {
+	await input.click()
+	await input.press("Control+A")
+	await page.keyboard.type(String(value))
+	await input.press("Tab")
+}
+
+async function boxStickerSuite(page) {
+	await page.setViewportSize({ width: 1440, height: 900 })
+	const calls = await mockBoxStickerWorkspace(page)
+	await page.goto(`${SITE}/web/cut-panel-store/box-sticker-prints`, { waitUntil: "domcontentloaded" })
+	const list = page.locator(".box-sticker-prints .common-list-view")
+	await list.waitFor({ timeout: 20_000 })
+	const headers = (await list.getByRole("columnheader").allTextContents()).map((label) => label.trim())
+	for (const label of ["Lot", "Item", "Print Format", "Status"]) assert(headers.includes(label), `Box Sticker list omits ${label}; headers=${JSON.stringify(headers)}`)
+	assert(await page.getByRole("button", { name: "Create Box Sticker Print", exact: true }).count() === 1, "Box Sticker create action is missing")
+	await list.getByText("BSP-CP-1", { exact: true }).click()
+	const dialog = page.locator(".box-sticker-print-dialog:visible")
+	await dialog.waitFor({ timeout: 20_000 })
+	assert(await dialog.locator(".p-dialog-maximize-button").count() === 1, "Box Sticker popup is not maximizable")
+	for (const label of ["Lot", "FG Item", "Size", "Print Format", "Use Item Name", "Display Name"]) assert(await dialog.getByText(label, { exact: true }).count() >= 1, `Box Sticker editor omits ${label}`)
+	assert(await dialog.getByRole("region", { name: "Box Sticker quantities" }).count() === 1, "Box Sticker size table is missing")
+	assert(await dialog.getByRole("img", { name: /Label preview/ }).count() === 1, "Box Sticker preview image is missing")
+	assert(await dialog.getByRole("button", { name: "Print Labels", exact: true }).isDisabled(), "Zero print quantity must keep Print Labels disabled")
+	await dialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
+	await dialog.waitFor({ state: "hidden" })
+
+	await page.getByRole("button", { name: "Create Box Sticker Print", exact: true }).click()
+	await dialog.waitFor({ timeout: 20_000 })
+	await dialog.getByText("Draft", { exact: true }).waitFor()
+	assert(await dialog.getByRole("button", { name: "Save", exact: true }).count() === 1, "New Box Sticker draft does not expose Save")
+	assert(await dialog.getByRole("button", { name: "Print Labels", exact: true }).count() === 0, "Draft Box Sticker exposes printing")
+	await dialog.locator(".box-sticker-field input").fill("Dirty close check")
+	await dialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
+	let confirmation = page.locator(".document-confirmation-shell:visible")
+	await confirmation.getByText("Discard unsaved changes?", { exact: true }).waitFor()
+	assert(await dialog.count() === 1, "Dirty close dismissed the Box Sticker dialog without confirmation")
+	await confirmation.getByRole("button", { name: "Keep Document", exact: true }).click()
+	await confirmation.waitFor({ state: "hidden" })
+
+	await dialog.getByRole("button", { name: "Show FG Item options", exact: true }).click()
+	await page.locator(".p-autocomplete-option").filter({ hasText: "New Shirt" }).click()
+	confirmation = page.locator(".document-confirmation-shell:visible")
+	await confirmation.getByText("Replace size rows?", { exact: true }).waitFor()
+	await confirmation.getByRole("button", { name: "Replace Rows", exact: true }).click()
+	await dialog.getByText("New Shirt", { exact: true }).waitFor()
+	assert(await dialog.getByText("Old Shirt", { exact: true }).count() === 0, "Display Name remained stale after changing FG Item")
+	assert(calls.sourcePreviewCount() === 1, `FG Item change refreshed source ${calls.sourcePreviewCount()} times instead of once`)
+
+	const quantityControl = dialog.getByRole("spinbutton", { name: "Total quantity for S" })
+	const excessControl = dialog.getByRole("spinbutton", { name: "Excess percentage for S" })
+	assert(await quantityControl.isEnabled(), "Draft total quantity control is disabled")
+	assert(await excessControl.isEnabled(), "Draft excess percentage control is disabled")
+	assert(await dialog.getByRole("checkbox", { name: "Allow excess for S" }).isDisabled(), "Server-owned Allow Excess control is editable")
+	assert(await dialog.getByRole("spinbutton", { name: "Excess percentage for M" }).isDisabled(), "Unlimited row exposes an irrelevant excess percentage")
+	assert(await dialog.getByRole("spinbutton", { name: "Print quantity for S" }).isDisabled(), "Draft print quantity is editable")
+	assert(await dialog.getByText("Unlimited", { exact: true }).count() === 2, "Unlimited authoritative limits are not rendered explicitly")
+	await enterPrimeNumber(page, quantityControl, 12)
+	await dialog.getByRole("button", { name: "Fetch Size Rows", exact: true }).click()
+	confirmation = page.locator(".document-confirmation-shell:visible")
+	await confirmation.getByRole("button", { name: "Refresh Rows", exact: true }).click()
+	await page.waitForFunction(() => document.querySelector('[aria-label="Total quantity for S"]')?.value === "10")
+	assert(calls.sourcePreviewCount() === 2, `Explicit source refresh called the server ${calls.sourcePreviewCount()} times in total`)
+
+	await dialog.getByRole("button", { name: "Save", exact: true }).click()
+	await dialog.getByText("BSP-NEW", { exact: false }).waitFor()
+	assert(calls.saveCount() === 1, `Draft save ran ${calls.saveCount()} times`)
+	const savedRows = calls.lastSave()?.values?.rows || []
+	assert(savedRows.length === 2, "Draft save omitted authoritative size rows")
+	assert(savedRows.every((row) => !("mrp" in row) && !("printed_quantity" in row) && !("allow_excess_quantity" in row)), "Draft save sent server-owned row fields")
+	await dialog.getByRole("button", { name: "Submit", exact: true }).click()
+	confirmation = page.locator(".document-confirmation-shell:visible")
+	await confirmation.getByRole("button", { name: "Submit", exact: true }).click()
+	await dialog.getByText("Submitted", { exact: true }).waitFor()
+	assert(calls.submitCount() === 1, `Submit command ran ${calls.submitCount()} times`)
+	const printButton = dialog.getByRole("button", { name: "Print Labels", exact: true })
+	assert(await printButton.isDisabled(), "Zero print quantity enabled Print Labels after submit")
+
+	await page.setViewportSize({ width: 390, height: 844 })
+	const geometry = await dialog.evaluate((element) => {
+		const rect = element.getBoundingClientRect()
+		const table = element.querySelector(".box-sticker-table-wrap")?.getBoundingClientRect()
+		return { left: rect.left, right: rect.right, tableLeft: table?.left, tableRight: table?.right, viewport: window.innerWidth }
+	})
+	assert(geometry.left >= 0 && geometry.right <= geometry.viewport + 1, `Box Sticker popup escapes mobile viewport: ${JSON.stringify(geometry)}`)
+	assert(geometry.tableLeft >= geometry.left && geometry.tableRight <= geometry.right + 1, `Box Sticker table is not contained on mobile: ${JSON.stringify(geometry)}`)
+	await page.setViewportSize({ width: 1440, height: 900 })
+
+	let quantity = dialog.getByRole("spinbutton", { name: "Print quantity for S" })
+	await enterPrimeNumber(page, quantity, 3)
+	await printButton.waitFor()
+	assert(await printButton.isEnabled(), "Positive print quantity did not enable Print Labels")
+	calls.failNextReserve()
+	await printButton.click()
+	let printer = page.locator(".cut-panel-printer-dialog:visible")
+	await printer.waitFor()
+	await printer.getByText("Zebra ZD220", { exact: true }).waitFor({ timeout: 20_000 })
+	assert(await printer.getByText("Zebra ZD220", { exact: true }).count() >= 1, "Configured Box Sticker printer is missing")
+	assert(await printer.getByText("Office Laser", { exact: true }).count() === 0, "Unconfigured QZ printer was exposed")
+	assert(await printer.getByText(/^Printer Resolution/).count() === 1, "Box Sticker resolution selection is missing")
+	await printer.getByRole("button", { name: "Print", exact: true }).click()
+	let errorDialog = page.locator(".document-error-dialog:visible")
+	await errorDialog.waitFor({ timeout: 20_000 })
+	assert(calls.reserveCount() === 1 && calls.confirmCount() === 0 && calls.rollbackCount() === 0, "Ambiguous reserve failure advanced the print transaction")
+	await errorDialog.getByRole("button", { name: "OK", exact: true }).click()
+	await dialog.getByRole("button", { name: "Print Labels", exact: true }).waitFor({ state: "detached" })
+	const resumePrint = dialog.getByRole("button", { name: "Resume Print", exact: true })
+	await resumePrint.waitFor()
+	calls.failNextConfirm()
+	await resumePrint.click()
+	errorDialog = page.locator(".document-error-dialog:visible")
+	await errorDialog.waitFor({ timeout: 20_000 })
+	assert(calls.reserveCount() === 1 && calls.recoveryCount() === 1 && calls.confirmCount() === 1 && calls.rollbackCount() === 0, "Interrupted reservation recovery did not reuse the durable reservation")
+	assert(await page.evaluate(() => window.__boxQzPrintCount) === 1, "The successful QZ job was not counted exactly once")
+	const pendingConfirmations = await page.evaluate(() => Object.fromEntries(Object.entries(window.sessionStorage).filter(([key]) => key.startsWith("essdee-yrp:box-sticker-confirmation:"))))
+	assert(Object.keys(pendingConfirmations).length === 1, `Ambiguous confirmation was not persisted for safe recovery: ${JSON.stringify(pendingConfirmations)}`)
+	await errorDialog.getByRole("button", { name: "OK", exact: true }).click()
+	await dialog.getByRole("button", { name: "Print Labels", exact: true }).waitFor({ state: "detached" })
+	assert(await dialog.getByRole("button", { name: "Print Labels", exact: true }).count() === 0, "Print Labels remains available while confirmation is pending")
+	const retryConfirmation = dialog.getByRole("button", { name: "Retry Confirmation", exact: true })
+	await retryConfirmation.waitFor()
+	await retryConfirmation.click()
+	await dialog.getByText("Printed 3", { exact: false }).waitFor()
+	const successfulRequestIds = calls.reserveRequestIds()
+	assert(successfulRequestIds.length === 1 && successfulRequestIds[0], `Interrupted reserve created a second request: ${JSON.stringify(successfulRequestIds)}`)
+	assert(await page.evaluate(() => window.__boxQzPrintCount) === 1, "Retry Confirmation physically printed the labels again")
+	assert(calls.reserveCount() === 1 && calls.confirmCount() === 2 && calls.rollbackCount() === 0, `Successful Box Sticker recovery counts are reserve=${calls.reserveCount()}, confirm=${calls.confirmCount()}, rollback=${calls.rollbackCount()}`)
+
+	quantity = dialog.getByRole("spinbutton", { name: "Print quantity for S" })
+	await enterPrimeNumber(page, quantity, 2)
+	assert(await printButton.isEnabled(), "Second positive print quantity did not enable Print Labels")
+	await page.evaluate(() => { window.qz.print = async () => { throw new Error("QZ rejected job") } })
+	calls.failNextRollback()
+	await printButton.click()
+	printer = page.locator(".cut-panel-printer-dialog:visible")
+	await printer.waitFor()
+	await printer.getByText("Zebra ZD220", { exact: true }).waitFor({ timeout: 20_000 })
+	await printer.getByRole("button", { name: "Print", exact: true }).click()
+	errorDialog = page.locator(".document-error-dialog:visible")
+	await errorDialog.waitFor({ timeout: 20_000 })
+	assert(calls.reserveCount() === 2, `Expected two reserve attempts, got ${calls.reserveCount()}`)
+	assert(calls.confirmCount() === 2, `QZ failure unexpectedly added a confirmation; total=${calls.confirmCount()}`)
+	assert(calls.rollbackCount() === 1, `QZ failure made ${calls.rollbackCount()} initial rollback attempts instead of once`)
+	assert(calls.reserveRequestIds()[1] !== successfulRequestIds[0], "A new print intent reused the cleared request_id")
+	await errorDialog.getByRole("button", { name: "OK", exact: true }).click()
+	assert(await dialog.getByRole("button", { name: "Print Labels", exact: true }).count() === 0, "Print Labels is available while rollback is pending")
+	const retryRollback = dialog.getByRole("button", { name: "Retry Rollback", exact: true })
+	await retryRollback.waitFor()
+	await retryRollback.click()
+	assert(calls.rollbackCount() === 2, `Retry Rollback ran ${calls.rollbackCount()} total rollback attempts instead of two`)
+	await printButton.waitFor()
+
+	await dialog.getByRole("button", { name: "Cancel Document", exact: true }).click()
+	confirmation = page.locator(".document-confirmation-shell:visible")
+	await confirmation.getByRole("button", { name: "Cancel Document", exact: true }).click()
+	await dialog.getByText("Cancelled", { exact: true }).waitFor()
+	assert(calls.cancelCount() === 1, `Cancel command ran ${calls.cancelCount()} times`)
+	assert(await dialog.getByRole("button", { name: "Print Labels", exact: true }).count() === 0, "Cancelled Box Sticker remains printable")
+
+	await dialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
+	await dialog.waitFor({ state: "hidden" })
+	await page.evaluate(() => {
+		window.sessionStorage.setItem("essdee-yrp:box-sticker-confirmation:BSP-CP-1", JSON.stringify({
+			document: "BSP-CP-1", requestId: "request-manual-1234", reservation: "BOX-TOKEN-MANUAL",
+			phase: "printing", rows: [{ doc_name: "BSP-ROW-S", quantity: 1 }],
+			printer: "Zebra ZD220", printerType: "300dpi", expectedModified: "2026-10-07 14:00:00",
+		}))
+	})
+	await list.getByText("BSP-CP-1", { exact: true }).click()
+	await dialog.waitFor({ timeout: 20_000 })
+	await dialog.getByRole("button", { name: "Confirm Printed", exact: true }).click()
+	confirmation = page.locator(".document-confirmation-shell:visible")
+	await confirmation.getByText("Were the labels printed?", { exact: true }).waitFor()
+	await confirmation.getByText(/cannot be undone/).waitFor()
+	assert(calls.confirmCount() === 2, "Confirm Printed mutated the reservation before application confirmation")
+	await confirmation.getByRole("button", { name: "Go Back", exact: true }).click()
+	await dialog.getByRole("button", { name: "Release Reservation", exact: true }).click()
+	confirmation = page.locator(".document-confirmation-shell:visible")
+	await confirmation.getByText("Were the labels not printed?", { exact: true }).waitFor()
+	await confirmation.getByText(/restores the reserved printed quantities/).waitFor()
+	assert(calls.rollbackCount() === 2, "Release Reservation mutated quantities before application confirmation")
+	await confirmation.getByRole("button", { name: "Go Back", exact: true }).click()
+	await page.evaluate(() => window.sessionStorage.removeItem("essdee-yrp:box-sticker-confirmation:BSP-CP-1"))
+	const source = readFileSync(new URL("../frontend/src/departments/cut-panel-store/BoxStickerPrintDialog.vue", import.meta.url), "utf8")
+	assert(source.includes("DocumentErrorDialog") && !source.includes("window.confirm"), "Box Sticker errors/confirmations do not use application dialogs")
+}
+
+function excelStickerRecord({ name = "ESP-CP-1", docstatus = 1, modified = "2026-10-07 15:00:00" } = {}) {
+	const submitted = docstatus === 1
+	return {
+		doctype: "YRP Excel Sticker Print",
+		name,
+		docstatus,
+		status: ({ 0: "Draft", 1: "Submitted", 2: "Cancelled" })[docstatus],
+		excel_file: "/private/files/stickers.xlsx",
+		print_format: "EXCEL-LABEL",
+		modified,
+		row_count: submitted ? 2 : 0,
+		columns: submitted ? ["sku", "description", "print_quantity"] : [],
+		sample_rows: submitted ? [
+			{ sku: "SKU-001", description: "Navy / M", print_quantity: 3 },
+			{ sku: "SKU-002", description: "Green / L", print_quantity: 1 },
+		] : [],
+		sample: {
+			columns: submitted ? ["sku", "description", "print_quantity"] : [],
+			rows: submitted ? [
+				{ sku: "SKU-001", description: "Navy / M", print_quantity: 3 },
+				{ sku: "SKU-002", description: "Green / L", print_quantity: 1 },
+			] : [],
+			truncated: false,
+		},
+		permissions: docstatus === 0
+			? { can_write: true, can_submit: true, can_cancel: false, can_print: false }
+			: docstatus === 1
+				? { can_write: false, can_submit: false, can_cancel: false, can_print: true }
+				: { can_write: false, can_submit: false, can_cancel: false, can_print: false },
+	}
+}
+
+async function mockExcelStickerWorkspace(page) {
+	let activeRecord = excelStickerRecord({ name: "ESP-NEW", docstatus: 0, modified: "2026-10-07 15:10:00" })
+	let uploadCount = 0
+	let saveCount = 0
+	let submitCount = 0
+	let printDataCount = 0
+	let lastUpload = null
+	let lastSave = null
+	let lastPrintData = null
+	let failNextSubmit = false
+	await page.addInitScript(() => {
+		window.sha256 = () => "signature"
+		window.__excelQzPrintCount = 0
+		window.qz = {
+			api: { setPromiseType() {}, setSha256Type() {} },
+			websocket: { isActive: () => true, connect: async () => {} },
+			printers: { find: async () => ["Zebra ZD220", "Excel Office Printer"] },
+			configs: { create: (printer) => ({ printer }) },
+			print: async () => { window.__excelQzPrintCount += 1; return true },
+		}
+	})
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.web_workspace.get_capabilities*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: capabilities }) }))
+	await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ docs: [{ name: "YRP Excel Sticker Print", is_submittable: 1, fields: [
+			{ fieldname: "excel_file", label: "Excel File", fieldtype: "Attach", in_list_view: 1 },
+			{ fieldname: "print_format", label: "Print Format", fieldtype: "Link", options: "YRP ZPL Raw Print Format", in_list_view: 1 },
+			{ fieldname: "modified", label: "Modified", fieldtype: "Datetime", in_list_view: 1 },
+		] }] }),
+	}))
+	await page.route("**/api/method/yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.get_user_listview*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }) }))
+	await page.route("**/api/method/frappe.desk.reportview.get_count*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: 1 }) }))
+	await page.route("**/api/resource/YRP%20Excel%20Sticker%20Print*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: [{ name: "ESP-CP-1", excel_file: "/private/files/stickers.xlsx", print_format: "EXCEL-LABEL", docstatus: 1, modified: "2026-10-07 15:00:00" }] }) }))
+	await page.route("**/api/method/essdee_yrp.api.link_search.link_search*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: [{ name: "EXCEL-LABEL", label: "EXCEL-LABEL" }] }) }))
+	await page.route("**/api/method/upload_file*", async (route) => {
+		uploadCount += 1
+		lastUpload = {
+			headers: route.request().headers(),
+			body: route.request().postDataBuffer()?.toString("utf8") || "",
+		}
+		await new Promise((resolve) => setTimeout(resolve, 450))
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: {
+			name: "FILE-EXCEL-1", file_name: "stickers.xlsx", file_url: "/private/files/stickers.xlsx", is_private: 1,
+		} }) })
+	})
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.excel_sticker_workspace.get_excel_sticker_editor*", (route) => {
+		const { name = "" } = route.request().postDataJSON()
+		const record = name === "ESP-CP-1" ? excelStickerRecord() : name === "ESP-NEW" ? activeRecord : null
+		const payload = record
+			? { record, defaults: { excel_file: record.excel_file, print_format: record.print_format }, permissions: record.permissions }
+			: {
+				record: null,
+				defaults: { excel_file: null, print_format: "EXCEL-LABEL", temporary_name: "new-yrp-excel-sticker-print-TESTTOKEN" },
+				upload: { doctype: "YRP Excel Sticker Print", docname: "new-yrp-excel-sticker-print-TESTTOKEN", fieldname: "excel_file", is_private: 1 },
+				permissions: { can_create: true, can_write: false, can_submit: false, can_cancel: false, can_print: false },
+			}
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: payload }) })
+	})
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.excel_sticker_workspace.save_excel_sticker*", (route) => {
+		saveCount += 1
+		lastSave = route.request().postDataJSON()
+		activeRecord = excelStickerRecord({ name: "ESP-NEW", docstatus: 0, modified: "2026-10-07 15:10:00" })
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: activeRecord }) })
+	})
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.excel_sticker_workspace.execute_excel_sticker_command*", (route) => {
+		const { command } = route.request().postDataJSON()
+		if (command === "submit") {
+			submitCount += 1
+			if (failNextSubmit) {
+				failNextSubmit = false
+				return route.fulfill({ status: 422, contentType: "application/json", body: JSON.stringify({ _server_messages: JSON.stringify([JSON.stringify({ message: "The Excel workbook could not be read. Upload a valid .xlsx file." })]) }) })
+			}
+			activeRecord = excelStickerRecord({ name: "ESP-NEW", docstatus: 1, modified: "2026-10-07 15:20:00" })
+		}
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: activeRecord }) })
+	})
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.excel_sticker_workspace.get_excel_sticker_preview*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: {
+		image_url: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==", code: "^XA^XZ", width: 4, height: 6,
+	} }) }))
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.excel_sticker_workspace.get_excel_sticker_print_data*", (route) => {
+		printDataCount += 1
+		lastPrintData = route.request().postDataJSON()
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: "^XA^FO10,10^FDExcel label^FS^XZ" }) })
+	})
+	return {
+		uploadCount: () => uploadCount,
+		saveCount: () => saveCount,
+		submitCount: () => submitCount,
+		printDataCount: () => printDataCount,
+		lastUpload: () => lastUpload,
+		lastSave: () => lastSave,
+		lastPrintData: () => lastPrintData,
+		failNextSubmit: () => { failNextSubmit = true },
+	}
+}
+
+async function excelStickerSuite(page) {
+	await page.setViewportSize({ width: 1440, height: 900 })
+	const calls = await mockExcelStickerWorkspace(page)
+	await page.goto(`${SITE}/web/cut-panel-store/excel-sticker-prints`, { waitUntil: "domcontentloaded" })
+	const list = page.locator(".excel-sticker-prints .common-list-view")
+	await list.waitFor({ timeout: 20_000 })
+	const headers = (await list.getByRole("columnheader").allTextContents()).map((label) => label.trim())
+	for (const label of ["Excel File", "Print Format", "Status", "Modified"]) assert(headers.includes(label), `Excel Sticker list omits ${label}; headers=${JSON.stringify(headers)}`)
+	assert(await page.getByRole("button", { name: "Create Excel Sticker Print", exact: true }).count() === 1, "Excel Sticker create action is missing")
+
+	await list.getByText("ESP-CP-1", { exact: true }).click()
+	const dialog = page.locator(".excel-sticker-print-dialog:visible")
+	await dialog.waitFor({ timeout: 20_000 })
+	assert(await dialog.locator(".p-dialog-maximize-button").count() === 1, "Excel Sticker popup is not maximizable")
+	assert(await dialog.getByText("2 rows", { exact: true }).count() >= 1, "Submitted Excel row count is missing")
+	for (const label of ["sku", "description", "print_quantity"]) assert(await dialog.getByRole("columnheader", { name: label, exact: true }).count() === 1, `Excel sample omits ${label}`)
+	assert(await dialog.getByRole("img", { name: /Label preview/ }).count() === 1, "Submitted Excel preview image is missing")
+	assert(await dialog.getByRole("button", { name: "Print Labels", exact: true }).count() === 1, "Submitted Excel document is not printable")
+	assert(await dialog.getByRole("button", { name: "Cancel Document", exact: true }).count() === 0, "Excel Sticker exposes cancellation that its authoritative DocType does not permit")
+	await dialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
+	await dialog.waitFor({ state: "hidden" })
+
+	await page.getByRole("button", { name: "Create Excel Sticker Print", exact: true }).click()
+	await dialog.waitFor({ timeout: 20_000 })
+	assert(await dialog.getByText("Excel File", { exact: true }).count() >= 1, "Excel File control is missing")
+	assert(await dialog.getByText("Print Format", { exact: true }).count() >= 1, "Print Format control is missing")
+	const saveButton = dialog.getByRole("button", { name: "Save", exact: true })
+	assert(await saveButton.isDisabled(), "New Excel Sticker can be saved before upload")
+	const fileInput = dialog.locator('input[type="file"]')
+	const uploadPromise = fileInput.setInputFiles({ name: "stickers.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: Buffer.from("mock xlsx") })
+	await dialog.locator(".excel-upload__progress").waitFor({ timeout: 5_000 })
+	assert(await saveButton.isDisabled(), "Save remained enabled while Excel upload was in progress")
+	await uploadPromise
+	await dialog.locator(".excel-upload-field__control strong").getByText("stickers.xlsx", { exact: true }).waitFor()
+	assert(calls.uploadCount() === 1, `Excel file uploaded ${calls.uploadCount()} times`)
+	const upload = calls.lastUpload()
+	assert(String(upload.headers["content-type"] || "").startsWith("multipart/form-data; boundary="), `Excel upload did not use multipart FormData: ${JSON.stringify(upload.headers)}`)
+	assert(upload.headers["x-frappe-csrf-token"] !== undefined, "Excel upload omitted the CSRF header")
+	for (const value of ["YRP Excel Sticker Print", "new-yrp-excel-sticker-print-TESTTOKEN", "excel_file"]) assert(upload.body.includes(value), `Excel upload omitted ${value}`)
+	assert(upload.body.includes('name="is_private"') && upload.body.includes("1"), "Excel upload was not private")
+
+	await saveButton.click()
+	await dialog.getByText(/ESP-NEW/).waitFor()
+	assert(calls.saveCount() === 1, `Excel draft save ran ${calls.saveCount()} times`)
+	assert(calls.lastSave()?.values?.temporary_name === "new-yrp-excel-sticker-print-TESTTOKEN", "Excel draft save omitted its server-issued temporary name")
+	assert(calls.lastSave()?.values?.excel_file === "/private/files/stickers.xlsx", "Excel draft save omitted the uploaded private file URL")
+
+	calls.failNextSubmit()
+	await dialog.getByRole("button", { name: "Submit", exact: true }).click()
+	let confirmation = page.locator(".document-confirmation-shell:visible")
+	await confirmation.getByRole("button", { name: "Submit", exact: true }).click()
+	let errorDialog = page.locator(".document-error-dialog:visible")
+	await errorDialog.getByText("The Excel workbook could not be read. Upload a valid .xlsx file.", { exact: true }).waitFor()
+	assert(calls.submitCount() === 1, "Malformed Excel submit did not reach the lifecycle endpoint")
+	assert(await dialog.getByText("Draft", { exact: true }).count() >= 1, "Malformed submit did not preserve the saved Draft")
+	assert(await dialog.getByText("stickers.xlsx", { exact: true }).count() >= 1, "Malformed submit discarded the uploaded file")
+	await errorDialog.getByRole("button", { name: "OK", exact: true }).click()
+
+	await dialog.getByRole("button", { name: "Submit", exact: true }).click()
+	confirmation = page.locator(".document-confirmation-shell:visible")
+	await confirmation.getByRole("button", { name: "Submit", exact: true }).click()
+	await dialog.getByText("Submitted", { exact: true }).waitFor()
+	assert(calls.submitCount() === 2, `Excel submit retried ${calls.submitCount()} total times`)
+	await dialog.getByLabel("Excel data sample").getByText("2 rows", { exact: true }).waitFor()
+
+	await page.setViewportSize({ width: 390, height: 844 })
+	const geometry = await dialog.evaluate((element) => {
+		const rect = element.getBoundingClientRect()
+		const table = element.querySelector(".excel-sticker-sample__wrap")?.getBoundingClientRect()
+		return { left: rect.left, right: rect.right, tableLeft: table?.left, tableRight: table?.right, viewport: window.innerWidth }
+	})
+	assert(geometry.left >= 0 && geometry.right <= geometry.viewport + 1, `Excel Sticker popup escapes mobile viewport: ${JSON.stringify(geometry)}`)
+	assert(geometry.tableLeft >= geometry.left && geometry.tableRight <= geometry.right + 1, `Excel sample is not contained on mobile: ${JSON.stringify(geometry)}`)
+	await page.setViewportSize({ width: 1440, height: 900 })
+
+	await dialog.getByRole("button", { name: "Print Labels", exact: true }).click()
+	const printer = page.locator(".cut-panel-printer-dialog:visible")
+	await printer.waitFor()
+	assert(await printer.getByText(/^Printer Resolution/).count() === 1, "Excel Sticker resolution selection is missing")
+	await printer.getByRole("button", { name: "Print", exact: true }).click()
+	await printer.waitFor({ state: "hidden" })
+	assert(calls.printDataCount() === 1, `Excel print data requested ${calls.printDataCount()} times`)
+	assert(calls.lastPrintData()?.printer_type === "300dpi", `Excel print used the wrong resolution: ${JSON.stringify(calls.lastPrintData())}`)
+	assert(await page.evaluate(() => window.__excelQzPrintCount) === 1, "Excel ZPL was not sent to QZ exactly once")
+
+	const apiSource = readFileSync(new URL("../frontend/src/api/frappe.js", import.meta.url), "utf8")
+	const source = readFileSync(new URL("../frontend/src/departments/cut-panel-store/ExcelStickerPrintDialog.vue", import.meta.url), "utf8")
+	assert(apiSource.includes("FormData") && apiSource.includes("withCredentials") && !apiSource.includes('multipart/form-data"'), "Upload helper does not preserve the browser-generated multipart boundary")
+	assert(source.includes("DocumentErrorDialog") && source.includes("DocumentConfirmationDialog") && !source.includes("window.confirm"), "Excel Sticker errors/confirmations do not use application dialogs")
+}
+
+async function reportSuite(page) {
+	await page.setViewportSize({ width: 1440, height: 900 })
+	const reportCapabilities = structuredClone(capabilities)
+	reportCapabilities.sections.reports = {
+		label: "Reports",
+		can_read: true,
+		can_create: false,
+		reports: {
+			stock_balance: { label: "Stock Balance", can_read: true },
+			cut_bundle_balance: { label: "Cut Bundle Balance", can_read: true },
+		},
+	}
+	let stockRuns = 0
+	let bundleRuns = 0
+	let lastBundleFilters = null
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.web_workspace.get_capabilities*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: reportCapabilities }),
+	}))
+	await page.route("**/api/method/essdee_yrp.api.link_search.link_search*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }),
+	}))
+	await page.route("**/api/method/frappe.desk.query_report.run*", (route) => {
+		stockRuns += 1
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: {
+			columns: [
+				{ fieldname: "item_code", label: "Item", fieldtype: "Link" },
+				{ fieldname: "warehouse", label: "Warehouse", fieldtype: "Link" },
+				{ fieldname: "bal_qty", label: "Balance Qty", fieldtype: "Float" },
+			],
+			result: [{ item_code: "CUT-PANEL-1", warehouse: "CUT-PANEL-STORE", bal_qty: 24 }],
+		} }) })
+	})
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.report_workspace.get_cut_bundle_balance*", (route) => {
+		bundleRuns += 1
+		lastBundleFilters = route.request().postDataJSON()?.filters
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: {
+			columns: [
+				{ fieldname: "name", label: "Name", fieldtype: "Link" },
+				{ fieldname: "lot", label: "Lot", fieldtype: "Link" },
+				{ fieldname: "supplier_name", label: "Supplier Name", fieldtype: "Data" },
+				{ fieldname: "item", label: "Item", fieldtype: "Link" },
+				{ fieldname: "size", label: "Size", fieldtype: "Data" },
+				{ fieldname: "colour", label: "Colour", fieldtype: "Data" },
+				{ fieldname: "panel", label: "Panel", fieldtype: "Data" },
+				{ fieldname: "qty", label: "Quantity", fieldtype: "Int" },
+			],
+			result: [
+				{ name: "CBML-1", lot: "LOT-CP-1", supplier_name: "Cut Panel Unit", item: "SHIRT-1", size: "M", colour: "Navy", panel: "Front", qty: 18 },
+				{ name: "CBML-2", lot: "LOT-CP-1", supplier_name: "Cut Panel Unit", item: "SHIRT-1", size: "L", colour: "Navy", panel: "Back", qty: 12 },
+			],
+			summary: { rows: 2, quantity: 30 },
+		} }) })
+	})
+
+	await page.goto(`${SITE}/web/cut-panel-store/reports`, { waitUntil: "domcontentloaded" })
+	const reports = page.locator(".cut-panel-store-reports")
+	await reports.waitFor({ timeout: 20_000 })
+	const tabs = reports.getByRole("tab")
+	assert(await tabs.count() === 2, `Expected exactly two Cut Panel Store report tabs, got ${await tabs.count()}`)
+	const stockTab = tabs.filter({ hasText: "Stock Balance" })
+	const bundleTab = tabs.filter({ hasText: "Cut Bundle Balance" })
+	assert(await stockTab.count() === 1, "Stock Balance tab is missing")
+	assert(await bundleTab.count() === 1, "Cut Bundle Balance tab is missing")
+	await reports.getByLabel("Stock Balance").getByRole("button", { name: "Generate", exact: true }).click()
+	await reports.getByText("CUT-PANEL-1", { exact: true }).waitFor()
+	assert(stockRuns === 1, `Stock Balance ran ${stockRuns} times instead of once`)
+
+	await bundleTab.click()
+	const bundleReport = reports.getByLabel("Cut Bundle Balance")
+	await bundleReport.getByRole("button", { name: "Generate", exact: true }).click()
+	await bundleReport.getByText("CBML-1", { exact: true }).waitFor()
+	assert(bundleRuns === 1, `Cut Bundle Balance ran ${bundleRuns} times instead of once`)
+	assert(JSON.stringify(lastBundleFilters) === JSON.stringify({ lot: "", supplier: "" }), `Unexpected Cut Bundle filters: ${JSON.stringify(lastBundleFilters)}`)
+	assert(await bundleReport.getByText("30", { exact: true }).count() >= 1, "Cut Bundle quantity metric is missing")
+	for (const column of ["Name", "Lot", "Supplier Name", "Item", "Size", "Colour", "Panel", "Quantity"]) {
+		assert(await bundleReport.getByRole("columnheader", { name: column, exact: true }).count() === 1, `Cut Bundle table omits ${column}`)
+	}
+
+	await page.setViewportSize({ width: 390, height: 844 })
+	const geometry = await reports.evaluate((element) => {
+		const rect = element.getBoundingClientRect()
+		const table = element.querySelector(".cut-bundle-balance__table-wrap")?.getBoundingClientRect()
+		return { left: rect.left, right: rect.right, tableLeft: table?.left, tableRight: table?.right, viewport: window.innerWidth, pageWidth: document.documentElement.scrollWidth }
+	})
+	assert(geometry.left >= 0 && geometry.right <= geometry.viewport + 1, `Reports workspace escapes mobile viewport: ${JSON.stringify(geometry)}`)
+	assert(geometry.tableLeft >= geometry.left && geometry.tableRight <= geometry.right + 1, `Cut Bundle table is not contained on mobile: ${JSON.stringify(geometry)}`)
+	assert(geometry.pageWidth <= geometry.viewport + 1, `Reports create page-level horizontal overflow: ${JSON.stringify(geometry)}`)
+}
+
 const suites = {
 	launcher: launcherSuite,
 	movements: movementSuite,
 	"movement-transactions": movementTransactionSuite,
 	"work-orders": workOrdersSuite,
 	"cut-bundle-edit": cutBundleEditSuite,
+	"box-stickers": boxStickerSuite,
+	"excel-stickers": excelStickerSuite,
+	reports: reportSuite,
 }
 
 const browser = await chromium.launch({ headless: true })

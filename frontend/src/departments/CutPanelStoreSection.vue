@@ -26,7 +26,10 @@ import { getCutPanelStoreCapabilities } from "../api/cutPanelStore.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import CutPanelMovements from "./cut-panel-store/CutPanelMovements.vue"
 import CutBundleEdits from "./cut-panel-store/CutBundleEdits.vue"
+import BoxStickerPrints from "./cut-panel-store/BoxStickerPrints.vue"
 import FabricWorkOrders from "./fabric-store/FabricWorkOrders.vue"
+import ExcelStickerPrints from "./cut-panel-store/ExcelStickerPrints.vue"
+import CutPanelStoreReports from "./cut-panel-store/CutPanelStoreReports.vue"
 
 const props = defineProps({ section: { type: String, required: true } })
 const definitions = {
@@ -38,9 +41,9 @@ const definitions = {
 		componentProps: { viewRouteName: "cut-panel-work-order", newRouteName: "cut-panel-work-order-new" },
 	},
 	cut_bundle_edits: { label: "Cut Bundle Edit", icon: "pi pi-pencil", component: CutBundleEdits },
-	box_stickers: { label: "Box Sticker Print", icon: "pi pi-tags" },
-	excel_stickers: { label: "Excel Sticker Print", icon: "pi pi-file-excel" },
-	reports: { label: "Reports", icon: "pi pi-chart-bar" },
+	box_stickers: { label: "Box Sticker Print", icon: "pi pi-tags", component: BoxStickerPrints },
+	excel_stickers: { label: "Excel Sticker Print", icon: "pi pi-file-excel", component: ExcelStickerPrints },
+	reports: { label: "Reports", icon: "pi pi-chart-bar", component: CutPanelStoreReports },
 }
 const definition = computed(() => definitions[props.section] || definitions.movements)
 const capability = ref(null)

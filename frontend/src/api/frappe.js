@@ -46,6 +46,71 @@ export async function callMethod(method, args = {}) {
 	return payload.message
 }
 
+export function uploadFile(file, options = {}) {
+	if (!(file instanceof File)) return Promise.reject(new Error("Choose a file to upload."))
+	const {
+		doctype = "",
+		docname = "",
+		fieldname = "",
+		isPrivate = 1,
+		onProgress = null,
+		signal = null,
+	} = options
+
+	return new Promise((resolve, reject) => {
+		const form = new FormData()
+		form.append("file", file, file.name)
+		form.append("is_private", isPrivate ? "1" : "0")
+		if (doctype) form.append("doctype", doctype)
+		if (docname) form.append("docname", docname)
+		if (fieldname) form.append("fieldname", fieldname)
+
+		const xhr = new XMLHttpRequest()
+		let settled = false
+		const finish = (callback, value) => {
+			if (settled) return
+			settled = true
+			signal?.removeEventListener?.("abort", abort)
+			callback(value)
+		}
+		const abort = () => {
+			xhr.abort()
+			finish(reject, new DOMException("Upload cancelled.", "AbortError"))
+		}
+
+		xhr.open("POST", "/api/method/upload_file")
+		xhr.withCredentials = true
+		xhr.setRequestHeader("Accept", "application/json")
+		xhr.setRequestHeader("X-Frappe-CSRF-Token", csrfToken())
+		xhr.upload.addEventListener("progress", (event) => {
+			if (!event.lengthComputable || typeof onProgress !== "function") return
+			onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)))
+		})
+		xhr.addEventListener("load", () => {
+			let payload = {}
+			try { payload = xhr.responseText ? JSON.parse(xhr.responseText) : {} } catch { /* handled below */ }
+			if (xhr.status === 401) {
+				window.location.assign(`/login?redirect-to=${encodeURIComponent(window.location.pathname)}`)
+				finish(reject, new Error("Your session has expired."))
+				return
+			}
+			if (xhr.status < 200 || xhr.status >= 300 || payload.exc) {
+				finish(reject, new Error(extractServerMessage(payload, "The file could not be uploaded. Please try again.")))
+				return
+			}
+			if (typeof onProgress === "function") onProgress(100)
+			finish(resolve, payload.message || payload.data || payload)
+		})
+		xhr.addEventListener("error", () => finish(reject, new Error("The file upload was interrupted. Check your connection and try again.")))
+		xhr.addEventListener("abort", () => finish(reject, new DOMException("Upload cancelled.", "AbortError")))
+		if (signal?.aborted) abort()
+		else {
+			signal?.addEventListener?.("abort", abort, { once: true })
+			xhr.send(form)
+		}
+	})
+}
+
 export async function getMeta(doctype) {
 	const payload = await request(
 		`/api/method/frappe.desk.form.load.getdoctype?doctype=${encodeURIComponent(doctype)}`,

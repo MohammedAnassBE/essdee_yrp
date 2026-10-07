@@ -94,8 +94,9 @@ def get_print_format(doc, print_items, printer_type):
 		prepared.append((item, printed, labels))
 
 	templates = ""
+	dpi = 300 if printer_type == "300dpi" else 203
 	for item, printed, labels in prepared:
-		templates += get_template(doc, item, raw_code, label_count, doc.fg_item)
+		templates += get_template(doc, item, raw_code, label_count, doc.fg_item, dpi=dpi)
 		attribute_db.set_value(
 			"SD YRP Box Sticker Print Detail",
 			item["doc_name"],
@@ -105,7 +106,7 @@ def get_print_format(doc, print_items, printer_type):
 	return templates
 
 
-def get_template(doc, item, raw_code, label_count, fg_item):
+def get_template(doc, item, raw_code, label_count, fg_item, *, dpi=203):
 	box_mrp = "{:.2f}".format((doc.piece_per_box or 0) * float(item["mrp"]))
 	mrp = "{:.2f}".format(float(item["mrp"]))
 	print_quantity = math.ceil(int(item["quantity"]) / int(label_count))
@@ -124,7 +125,7 @@ def get_template(doc, item, raw_code, label_count, fg_item):
 			"piece_size": _attribute_value(item["size"]),
 			"mfdate": f"{mfd_year}/{doc.lot}",
 			"mfdateyear": mfd_year,
-			"dpi": 203,
+			"dpi": dpi,
 		},
 	)
 
@@ -183,6 +184,7 @@ def get_raw_code(doc_name):
 			_raw_code(print_format, "300dpi"),
 			print_format.labels_per_row,
 			doc.fg_item,
+			dpi=300,
 		),
 		"height": print_format.height,
 		"width": print_format.width,

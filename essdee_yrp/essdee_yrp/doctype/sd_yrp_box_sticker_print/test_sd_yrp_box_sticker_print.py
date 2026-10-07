@@ -83,6 +83,21 @@ class TestBoxStickerPrint(unittest.TestCase):
 		self.assertIn("body: result.code", client)
 		self.assertNotIn("encodeURIComponent(result.code)", client)
 
+	def test_template_uses_the_selected_printer_dpi(self):
+		doc = SimpleNamespace(piece_per_box=10, use_item_name=1, lot="LOT-1")
+		with patch.object(box_sticker_print.frappe, "render_template", return_value="ZPL") as render:
+			result = box_sticker_print.get_template(
+				doc,
+				{"quantity": 2, "mrp": 125, "size": "M"},
+				"{{ dpi }}",
+				1,
+				"FG-1",
+				dpi=300,
+			)
+
+		self.assertEqual(result, "ZPL")
+		self.assertEqual(render.call_args.args[1]["dpi"], 300)
+
 	def test_save_does_not_refetch_or_overwrite_mrp(self):
 		doc = SimpleNamespace(
 			box_sticker_print_details=[_dict(size="S", quantity=1, allow_excess_quantity=0, mrp=999)]

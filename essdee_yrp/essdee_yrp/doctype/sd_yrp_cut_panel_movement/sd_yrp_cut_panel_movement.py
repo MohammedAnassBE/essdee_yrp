@@ -267,6 +267,30 @@ def get_cut_bundle_unmoved_data(
 	get_collapsed=False,
 ):
 	_check_unmoved_access(from_location, lot)
+	return _get_cut_bundle_unmoved_data(
+		from_location,
+		lot,
+		posting_date,
+		posting_time,
+		movement_from_cutting,
+		cutting_plan=cutting_plan,
+		bundle_colour=bundle_colour,
+		get_collapsed=get_collapsed,
+	)
+
+
+def _get_cut_bundle_unmoved_data(
+	from_location,
+	lot,
+	posting_date,
+	posting_time,
+	movement_from_cutting,
+	cutting_plan=None,
+	bundle_colour=None,
+	get_collapsed=False,
+):
+	"""Build the authoritative bundle projection after the caller checks access."""
+
 	if cutting_plan:
 		plan = frappe.get_doc("SD YRP Cutting Plan", cutting_plan)
 		plan.check_permission("read")

@@ -25,6 +25,7 @@ import { computed, onMounted, ref, watch } from "vue"
 import { getCutPanelStoreCapabilities } from "../api/cutPanelStore.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import CutPanelMovements from "./cut-panel-store/CutPanelMovements.vue"
+import CutBundleEdits from "./cut-panel-store/CutBundleEdits.vue"
 import FabricWorkOrders from "./fabric-store/FabricWorkOrders.vue"
 
 const props = defineProps({ section: { type: String, required: true } })
@@ -36,7 +37,7 @@ const definitions = {
 		component: FabricWorkOrders,
 		componentProps: { viewRouteName: "cut-panel-work-order", newRouteName: "cut-panel-work-order-new" },
 	},
-	cut_bundle_edits: { label: "Cut Bundle Edit", icon: "pi pi-pencil" },
+	cut_bundle_edits: { label: "Cut Bundle Edit", icon: "pi pi-pencil", component: CutBundleEdits },
 	box_stickers: { label: "Box Sticker Print", icon: "pi pi-tags" },
 	excel_stickers: { label: "Excel Sticker Print", icon: "pi pi-file-excel" },
 	reports: { label: "Reports", icon: "pi pi-chart-bar" },

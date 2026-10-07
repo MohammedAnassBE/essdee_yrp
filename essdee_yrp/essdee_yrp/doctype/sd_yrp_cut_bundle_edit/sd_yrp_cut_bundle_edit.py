@@ -179,6 +179,14 @@ class SDYRPCutBundleEdit(Document):
 		input_json = frappe.json.loads(self.input_json)
 		lot_hash = attribute_db.get_cached_value("SD YRP Lot", self.lot, "lot_hash_value")
 		item_hash = frappe.get_cached_value("Item", self.item, "item_hash_value")
+		input_json = sorted(
+			input_json,
+			key=lambda row: (
+				row.get("lay_no"), row.get("bundle_no"), str(_attribute_value(row.get("size"))),
+				str(_attribute_value(row.get("colour"))), str(_attribute_value(row.get("panel"))), str(row.get("shade")),
+			),
+		)
+		prepared = []
 		for row in input_json:
 			parts = [
 				str(lot_hash),
@@ -209,10 +217,35 @@ class SDYRPCutBundleEdit(Document):
 			d["size"] = attribute_db.link(d["size"])
 			d["colour"] = attribute_db.link(d["colour"])
 			if row["is_collapsed"]:
+				locked = frappe.db.sql(
+					"""
+						SELECT name FROM `tabSD YRP Cut Bundle Movement Ledger`
+						WHERE is_cancelled = 0 AND transformed = 0
+						AND collapsed_bundle = 1 AND cbm_key = %(cbm_key)s
+						FOR UPDATE
+					""",
+					d,
+				)
+			else:
+				locked = frappe.db.sql(
+					"""
+						SELECT name FROM `tabSD YRP Cut Bundle Movement Ledger`
+						WHERE is_cancelled = 0 AND transformed = 0 AND is_collapsed = 0
+						AND collapsed_bundle = 0 AND cbm_key = %(cbm_key)s
+						FOR UPDATE
+					""",
+					d,
+				)
+			if not locked:
+				frappe.throw(_("Bundle stock changed while this edit was being submitted. Fetch bundles again."))
+			prepared.append((row, d))
+
+		for row, d in prepared:
+			if row["is_collapsed"]:
 				frappe.db.sql(
 					"""
 						UPDATE `tabSD YRP Cut Bundle Movement Ledger` SET transformed = 1, modified = %(modified)s,
-						modified_by = %(user)s WHERE is_cancelled = 0
+						modified_by = %(user)s WHERE is_cancelled = 0 AND transformed = 0
 						AND collapsed_bundle = 1 AND cbm_key = %(cbm_key)s
 					""",
 					d,
@@ -221,7 +254,7 @@ class SDYRPCutBundleEdit(Document):
 				frappe.db.sql(
 					"""
 						UPDATE `tabSD YRP Cut Bundle Movement Ledger` SET transformed = 1, modified = %(modified)s,
-						modified_by = %(user)s WHERE is_cancelled = 0
+						modified_by = %(user)s WHERE is_cancelled = 0 AND transformed = 0
 						AND is_collapsed = 0 AND collapsed_bundle = 0 AND cbm_key = %(cbm_key)s
 					""",
 					d,

@@ -382,6 +382,7 @@ const props = defineProps({
 	statusField: { type: String, default: "" },
 	statusOptions: { type: Array, default: () => [] },
 	viewportBounded: { type: Boolean, default: false },
+	allowBulkActions: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(["row-click", "loaded"])
@@ -470,8 +471,8 @@ let searchTimer = null
 let quickFilterTimer = null
 const quickFilterDelay = 1000
 
-const eligibleFields = computed(() =>
-	metaFields.value
+const eligibleFields = computed(() => [
+	...metaFields.value
 		.filter((field) => field.fieldname && !field.hidden && !excludedFieldtypes.has(field.fieldtype))
 		.map((field) => ({
 			fieldname: field.fieldname,
@@ -484,7 +485,11 @@ const eligibleFields = computed(() =>
 			inListView: Boolean(field.in_list_view),
 			inStandardFilter: Boolean(field.in_standard_filter),
 		})),
-)
+	...(Number(doctypeMeta.value?.is_submittable) ? [{
+		fieldname: "docstatus", fieldtype: "Int", label: "Document Status", options: "", doctype: props.doctype,
+		inListView: false, inStandardFilter: false,
+	}] : []),
+])
 
 function isFilterableField(field) {
 	return Boolean(
@@ -537,7 +542,7 @@ const canBulkEdit = computed(() => hasDoctypePermission("write"))
 const canBulkSubmit = computed(() => hasDoctypePermission("submit"))
 const canBulkCancel = computed(() => hasDoctypePermission("cancel"))
 const showBulkSelection = computed(
-	() => canBulkEdit.value || (isSubmittable.value && (canBulkSubmit.value || canBulkCancel.value)),
+	() => props.allowBulkActions && (canBulkEdit.value || (isSubmittable.value && (canBulkSubmit.value || canBulkCancel.value))),
 )
 const showBulkBar = computed(() => showBulkSelection.value && selectedRows.value.length > 0)
 const selectedDraftRows = computed(() =>

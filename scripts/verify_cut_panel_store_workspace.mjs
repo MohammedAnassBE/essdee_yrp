@@ -340,11 +340,110 @@ async function workOrdersSuite(page) {
 	assert(editorSource.includes("listRouteName") && editorSource.includes("viewRouteName"), "Shared Work Order editor is not route-context aware")
 }
 
+function cutBundleEditorFixture() {
+	const row = { lay_no: 1, bundle_no: 7, qty: 10, panel: "Front", set_combination: {}, shade: "A", size: "M", colour: "Navy", is_collapsed: false }
+	return {
+		context: { lot: "LOT-CP-1", warehouse: "CUT-STORE", item: "ITEM-CP-1" },
+		defaults: { lot: "LOT-CP-1", warehouse: "CUT-STORE", item: "ITEM-CP-1", posting_date: "2026-10-07", posting_time: "12:00:00", selected_colour: "Navy" },
+		permissions: { can_create: true, can_write: false, can_submit: false, can_cancel: true, can_print: true },
+		record: {
+			name: "CBE-CP-1", docstatus: 1, status: "Submitted", lot: "LOT-CP-1", warehouse: "CUT-STORE", item: "ITEM-CP-1", colour: "Navy",
+			posting_date: "2026-10-07", posting_time: "12:00:00", printed_time: null, modified: "2026-10-07 12:00:00",
+			inputs: [row], outputs: [{ ...row, bundle_no: 8 }], permissions: { can_write: false, can_submit: false, can_cancel: true, can_print: true },
+		},
+	}
+}
+
+async function mockCutBundleWorkspace(page) {
+	await page.addInitScript(() => {
+		window.sha256 = () => "signature"
+		window.qz = {
+			api: { setPromiseType() {}, setSha256Type() {} },
+			websocket: { isActive: () => true, connect: async () => {} },
+			printers: { find: async () => ["Zebra ZD220", "Zebra ZT230"] },
+			configs: { create: (printer) => ({ printer }) },
+			print: async () => true,
+		}
+	})
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.web_workspace.get_capabilities*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: capabilities }),
+	}))
+	await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: JSON.stringify({ docs: [{ name: "SD YRP Cut Bundle Edit", is_submittable: 1, fields: [
+			{ fieldname: "lot", label: "Lot", fieldtype: "Link", options: "SD YRP Lot", in_list_view: 1 },
+			{ fieldname: "item", label: "Item", fieldtype: "Link", options: "Item", in_list_view: 1 },
+			{ fieldname: "warehouse", label: "Warehouse", fieldtype: "Link", options: "Supplier", in_list_view: 1 },
+			{ fieldname: "posting_date", label: "Posting Date", fieldtype: "Date", in_list_view: 1 },
+			{ fieldname: "printed_time", label: "Printed Time", fieldtype: "Datetime", in_list_view: 1 },
+		] }] }),
+	}))
+	await page.route("**/api/method/yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.get_user_listview*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }),
+	}))
+	await page.route("**/api/method/frappe.desk.reportview.get_count*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: 1 }),
+	}))
+	await page.route("**/api/resource/SD%20YRP%20Cut%20Bundle%20Edit*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ data: [{ name: "CBE-CP-1", lot: "LOT-CP-1", item: "ITEM-CP-1", warehouse: "CUT-STORE", posting_date: "2026-10-07", printed_time: null, docstatus: 1, modified: "2026-10-07 12:00:00" }] }),
+	}))
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.cut_bundle_workspace.get_cut_bundle_editor*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: cutBundleEditorFixture() }),
+	}))
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.cut_bundle_workspace.get_cut_bundle_print_data*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: { name: "CBE-CP-1", printer: "Zebra ZD220", zpl: "^XA^XZ", expected_modified: "2026-10-07 12:00:00", confirmation_token: "TOKEN" } }),
+	}))
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.cut_bundle_workspace.confirm_cut_bundle_print*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: { ...cutBundleEditorFixture().record, printed_time: "2026-10-07 12:30:00", permissions: { can_print: false } } }),
+	}))
+}
+
+async function cutBundleEditSuite(page) {
+	await page.setViewportSize({ width: 1440, height: 900 })
+	await mockCutBundleWorkspace(page)
+	await page.goto(`${SITE}/web/cut-panel-store/cut-bundle-edits`, { waitUntil: "domcontentloaded" })
+	const list = page.locator(".cut-bundle-edits .common-list-view")
+	await list.waitFor({ timeout: 20_000 })
+	for (const label of ["Lot", "Item", "Warehouse", "Posting Date", "Printed Time", "Status"]) {
+		assert(await list.getByRole("columnheader", { name: label, exact: true }).count() === 1, `Cut Bundle Edit list omits ${label}`)
+	}
+	assert(await page.getByRole("button", { name: "Create Cut Bundle Edit", exact: true }).count() === 1, "Cut Bundle Edit create action is missing")
+	assert(await list.locator(".p-selection-column").count() === 0, "Cut Bundle Edit exposes unsafe generic bulk actions")
+	await list.getByText("CBE-CP-1", { exact: true }).click()
+	const dialog = page.locator(".cut-bundle-edit-dialog:visible")
+	await dialog.waitFor({ timeout: 20_000 })
+	assert(await dialog.locator(".p-dialog-maximize-button").count() === 1, "Cut Bundle Edit popup is not maximizable")
+	for (const label of ["Lot", "Warehouse", "Item", "Posting Date", "Posting Time", "Colour"]) {
+		assert(await dialog.getByText(label, { exact: true }).count() >= 1, `Cut Bundle Edit omits ${label}`)
+	}
+	assert(await dialog.getByRole("region", { name: "Input bundles" }).count() === 1, "Cut Bundle Edit input table is missing")
+	assert(await dialog.getByRole("region", { name: "Output bundles" }).count() === 1, "Cut Bundle Edit output table is missing")
+	assert(await dialog.getByRole("button", { name: "Cancel Document", exact: true }).count() === 1, "Cut Bundle Edit cancel action is missing")
+	await dialog.getByRole("button", { name: "Print Labels", exact: true }).click()
+	const printer = page.locator(".cut-panel-printer-dialog:visible")
+	await printer.waitFor()
+	assert(await printer.getByText("Zebra ZD220", { exact: true }).count() >= 1, "QZ printers were not loaded")
+	await printer.getByRole("button", { name: "Print", exact: true }).click()
+	await dialog.getByText("07-10-2026 12:30", { exact: false }).waitFor()
+
+	await page.setViewportSize({ width: 390, height: 844 })
+	const geometry = await dialog.evaluate((element) => {
+		const rect = element.getBoundingClientRect()
+		return { left: rect.left, right: rect.right, viewport: window.innerWidth }
+	})
+	assert(geometry.left >= 0 && geometry.right <= geometry.viewport + 1, `Cut Bundle Edit popup escapes mobile viewport: ${JSON.stringify(geometry)}`)
+	const source = readFileSync(new URL("../frontend/src/departments/cut-panel-store/CutBundleEditDialog.vue", import.meta.url), "utf8")
+	assert(source.includes("DocumentErrorDialog"), "Cut Bundle Edit errors do not use the shared popup")
+	assert(source.includes("Add output") && source.includes("Split panels"), "Cut Bundle Edit omits output add/split actions")
+}
+
 const suites = {
 	launcher: launcherSuite,
 	movements: movementSuite,
 	"movement-transactions": movementTransactionSuite,
 	"work-orders": workOrdersSuite,
+	"cut-bundle-edit": cutBundleEditSuite,
 }
 
 const browser = await chromium.launch({ headless: true })

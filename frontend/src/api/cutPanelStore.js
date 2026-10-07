@@ -2,6 +2,7 @@ import { callMethod } from "./frappe.js"
 
 const WORKSPACE_METHOD = "essdee_yrp.cut_panel_store.web_workspace"
 const MOVEMENT_METHOD = "essdee_yrp.cut_panel_store.movement_workspace"
+const CUT_BUNDLE_METHOD = "essdee_yrp.cut_panel_store.cut_bundle_workspace"
 
 export function getCutPanelStoreCapabilities() {
 	return callMethod(`${WORKSPACE_METHOD}.get_capabilities`)
@@ -49,5 +50,45 @@ export function createCutPanelMovementTransaction(name, operation, values = {}, 
 		operation,
 		values,
 		submit,
+	})
+}
+
+export function getCutBundleEditor(name = "", source = {}) {
+	return callMethod(`${CUT_BUNDLE_METHOD}.get_cut_bundle_editor`, {
+		name: name || undefined,
+		source: Object.keys(source || {}).length ? source : undefined,
+	})
+}
+
+export function previewCutBundleSource(lot, warehouse, values = {}, name = "") {
+	return callMethod(`${CUT_BUNDLE_METHOD}.preview_cut_bundle_source`, { lot, warehouse, values, name: name || undefined })
+}
+
+export function saveCutBundle(values, options = {}) {
+	return callMethod(`${CUT_BUNDLE_METHOD}.save_cut_bundle`, {
+		values,
+		name: options.name || undefined,
+		submit: Boolean(options.submit),
+		expected_modified: options.expectedModified || undefined,
+	})
+}
+
+export function executeCutBundleCommand(name, command, expectedModified = "") {
+	return callMethod(`${CUT_BUNDLE_METHOD}.execute_cut_bundle_command`, {
+		name,
+		command,
+		expected_modified: expectedModified || undefined,
+	})
+}
+
+export function getCutBundlePrintData(name, printer) {
+	return callMethod(`${CUT_BUNDLE_METHOD}.get_cut_bundle_print_data`, { name, printer })
+}
+
+export function confirmCutBundlePrint(name, expectedModified = "", confirmationToken = "") {
+	return callMethod(`${CUT_BUNDLE_METHOD}.confirm_cut_bundle_print`, {
+		name,
+		expected_modified: expectedModified || undefined,
+		confirmation_token: confirmationToken || undefined,
 	})
 }

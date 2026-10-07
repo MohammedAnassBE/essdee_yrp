@@ -16,7 +16,7 @@ from itertools import groupby
 
 import frappe
 from frappe import _
-from frappe.utils import cstr, flt
+from frappe.utils import cint, cstr, flt
 from yrp.attribute_links import value as _attribute_value
 
 from essdee_yrp.fabric_chain import get_fabric_step, get_fabric_steps
@@ -157,6 +157,212 @@ _CHILD_ADDITIVE_FIELDS = {
 	"cancelled_quantity",
 	"total_cost",
 }
+
+
+@frappe.whitelist()
+def get_work_order_summary(work_order):
+	"""Return the additive Desk movement, debit and posted-value read model."""
+	wo = frappe.get_doc("YRP Work Order", work_order)
+	wo.check_permission("read")
+	deliverables = _summarise_work_order_movements(
+		wo.get("deliverables") or [],
+		include_source=True,
+	)
+	receivables = _summarise_work_order_movements(wo.get("receivables") or [])
+	debits = _get_work_order_debit_summary(wo.name)
+	return {
+		"work_order": wo.name,
+		"deliverables": deliverables,
+		"receivables": receivables,
+		"debits": debits,
+		"debit_total": flt(
+			sum(
+				flt(row.get("debit_value"))
+				for row in debits
+				if cint(row.get("docstatus")) == 1
+			),
+			6,
+		),
+		"planned_process_cost": receivables["planned_process_cost"],
+		"valuation": _get_work_order_valuation_summary(wo.name),
+	}
+
+
+def _summarise_work_order_movements(source_rows, *, include_source=False):
+	"""Summarise saved WO child balances without combining unlike sources/UOMs."""
+	rows = [
+		row.as_dict() if callable(getattr(row, "as_dict", None)) else dict(row)
+		for row in source_rows
+	]
+	variants = sorted(
+		{row.get("item_variant") for row in rows if row.get("item_variant")}
+	)
+	item_meta = {}
+	attrs_by_variant = {}
+	if variants:
+		for item in frappe.get_all(
+			"Item",
+			filters={"name": ["in", variants]},
+			fields=["name", "item_name", "variant_of"],
+		):
+			item_meta[item.name] = item
+		for attr in frappe.get_all(
+			"Item Variant Attribute",
+			filters={"parent": ["in", variants], "parenttype": "Item"},
+			fields=["parent", "attribute", "attribute_value", "idx"],
+			order_by="parent asc, idx asc",
+		):
+			attrs_by_variant.setdefault(attr.parent, []).append(
+				{
+					"attribute": attr.attribute,
+					"value": _attribute_value(attr.attribute_value),
+				}
+			)
+
+	grouped = {}
+	for source in rows:
+		variant = source.get("item_variant")
+		uom = source.get("uom") or ""
+		source_identity = (
+			(
+				source.get("source_grn") or "",
+				source.get("source_grn_item") or "",
+				source.get("received_type") or "",
+			)
+			if include_source
+			else ()
+		)
+		key = (variant, uom, *source_identity)
+		item = item_meta.get(variant) or frappe._dict()
+		row = grouped.setdefault(
+			key,
+			{
+				"item": item.get("variant_of") or item.get("item_name") or variant,
+				"item_name": item.get("item_name") or variant,
+				"item_variant": variant,
+				"attributes": attrs_by_variant.get(variant, []),
+				"uom": uom,
+				"source_grn": source.get("source_grn") if include_source else None,
+				"source_grn_item": (
+					source.get("source_grn_item") if include_source else None
+				),
+				"received_type": source.get("received_type") if include_source else None,
+				"planned_qty": 0.0,
+				"actual_qty": 0.0,
+				"pending_qty": 0.0,
+				"planned_process_cost": 0.0,
+			},
+		)
+		planned = flt(source.get("qty"))
+		pending = max(flt(source.get("pending_quantity")), 0)
+		row["planned_qty"] += planned
+		row["actual_qty"] += max(planned - pending, 0)
+		row["pending_qty"] += pending
+		row["planned_process_cost"] += flt(source.get("total_cost"))
+
+	result_rows = []
+	totals_by_uom = {}
+	planned_process_cost = 0.0
+	for row in grouped.values():
+		for fieldname in ("planned_qty", "actual_qty", "pending_qty"):
+			row[fieldname] = flt(row[fieldname], 3)
+		row["planned_process_cost"] = flt(row["planned_process_cost"], 6)
+		planned_process_cost += row["planned_process_cost"]
+		result_rows.append(row)
+		totals = totals_by_uom.setdefault(
+			row["uom"],
+			{
+				"uom": row["uom"],
+				"planned_qty": 0.0,
+				"actual_qty": 0.0,
+				"pending_qty": 0.0,
+			},
+		)
+		for fieldname in ("planned_qty", "actual_qty", "pending_qty"):
+			totals[fieldname] += row[fieldname]
+
+	for totals in totals_by_uom.values():
+		for fieldname in ("planned_qty", "actual_qty", "pending_qty"):
+			totals[fieldname] = flt(totals[fieldname], 3)
+	result_rows.sort(
+		key=lambda row: (
+			row["item"] or "",
+			row["item_variant"] or "",
+			row["uom"] or "",
+			row.get("source_grn") or "",
+			row.get("source_grn_item") or "",
+			row.get("received_type") or "",
+		)
+	)
+	return {
+		"rows": result_rows,
+		"totals": sorted(
+			totals_by_uom.values(),
+			key=lambda row: row["uom"] or "",
+		),
+		"planned_process_cost": flt(planned_process_cost, 6),
+	}
+
+
+def _get_work_order_debit_summary(work_order):
+	if not frappe.db.exists("DocType", "YRP Debit") or not frappe.has_permission(
+		"YRP Debit", "read"
+	):
+		return []
+	rows = frappe.get_list(
+		"YRP Debit",
+		filters={"work_order": work_order},
+		fields=[
+			"name",
+			"debit_no",
+			"debit_type",
+			"debit_value",
+			"reason",
+			"status",
+			"docstatus",
+		],
+		order_by="creation asc",
+		limit_page_length=0,
+	)
+	for row in rows:
+		if row.docstatus == 2:
+			row.status = "Cancelled"
+		elif row.docstatus == 0:
+			row.status = "Draft"
+	return rows
+
+
+def _get_work_order_valuation_summary(work_order):
+	rows = frappe.db.sql(
+		"""
+		SELECT
+			SUM(
+				CASE WHEN sle.stock_value_difference < 0
+				THEN ABS(sle.stock_value_difference) ELSE 0 END
+			) AS input_value,
+			SUM(
+				CASE WHEN sle.stock_value_difference > 0
+				THEN sle.stock_value_difference ELSE 0 END
+			) AS output_value
+		FROM `tabYRP Stock Ledger Entry` sle
+		JOIN `tabYRP Goods Received Note` grn ON grn.name = sle.voucher_no
+		WHERE sle.voucher_type = 'YRP Goods Received Note'
+			AND IFNULL(sle.is_cancelled, 0) = 0
+			AND grn.docstatus = 1
+			AND grn.against = 'YRP Work Order'
+			AND grn.against_id = %(work_order)s
+		""",
+		{"work_order": work_order},
+		as_dict=True,
+	)
+	row = rows[0] if rows else frappe._dict()
+	input_value = flt(row.get("input_value"), 6)
+	output_value = flt(row.get("output_value"), 6)
+	return {
+		"input_value": input_value,
+		"process_value": flt(output_value - input_value, 6),
+		"output_value": output_value,
+	}
 
 
 def _consolidate_fabric_rows(rows, child_doctype, supports_allocations=None):

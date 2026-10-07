@@ -171,6 +171,8 @@ const openGRNDialog = async () => {
             return
         }
 
+        await frappe.model.with_doctype('YRP Goods Received Note')
+        const namingSeries = frappe.meta.get_docfield('YRP Goods Received Note', 'naming_series')
         const today = frappe.datetime.get_today()
         const dialog = new frappe.ui.Dialog({
             title: `Create GRN - ${details.work_order}`,
@@ -192,6 +194,14 @@ const openGRNDialog = async () => {
                 {
                     fieldtype: 'Section Break',
                     label: 'GRN Details',
+                },
+                {
+                    fieldtype: 'Select',
+                    fieldname: 'naming_series',
+                    label: 'Naming Series',
+                    options: namingSeries.options,
+                    default: namingSeries.default,
+                    reqd: 1,
                 },
                 {
                     fieldtype: 'Check',
@@ -293,6 +303,7 @@ const openGRNDialog = async () => {
                 dialog.disable_primary_action()
                 try {
                     const headerValues = {
+                        naming_series: values.naming_series,
                         edit_posting_date_and_time: values.edit_posting_date_and_time,
                         posting_date: values.posting_date,
                         posting_time: values.posting_time,

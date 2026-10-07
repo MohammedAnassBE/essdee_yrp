@@ -431,7 +431,7 @@ def ensure_yrp_production_order_settings():
 	syncing and every linked Lot then fails with a misleading missing-dependency
 	error.
 
-	The function is idempotent and preserves additional configured attributes.
+	Only unset values are seeded; an existing configuration is never overwritten.
 	On a brand-new site it waits until the synced Size/Stage/Pack masters exist;
 	the first Production Order message calls it again before validation.
 	"""
@@ -455,29 +455,20 @@ def ensure_yrp_production_order_settings():
 
 	settings = frappe.get_doc("YRP Settings")
 	changed = False
-	grid_row = None
-	for row in settings.production_order_attributes or []:
-		if row.attribute == PRODUCTION_ORDER_GRID_ATTRIBUTE:
-			grid_row = row
-		should_be_grid = row.attribute == PRODUCTION_ORDER_GRID_ATTRIBUTE
-		if bool(row.is_grid_attribute) != should_be_grid:
-			row.is_grid_attribute = should_be_grid
-			changed = True
-
-	if grid_row is None:
-		settings.append(
-			"production_order_attributes",
-			{
-				"attribute": PRODUCTION_ORDER_GRID_ATTRIBUTE,
-				"is_grid_attribute": 1,
-			},
-		)
+	attributes = settings.production_order_attributes or []
+	if not any(row.is_grid_attribute for row in attributes):
+		grid_rows = [row for row in attributes if row.attribute == PRODUCTION_ORDER_GRID_ATTRIBUTE]
+		if grid_rows:
+			grid_rows[0].is_grid_attribute = 1
+		else:
+			settings.append(
+				"production_order_attributes",
+				{"attribute": PRODUCTION_ORDER_GRID_ATTRIBUTE, "is_grid_attribute": 1},
+			)
 		changed = True
 
-	if settings.po_dependent_attribute != PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE:
+	if not settings.po_dependent_attribute:
 		settings.po_dependent_attribute = PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE
-		changed = True
-	if settings.po_dependent_attribute_value != PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE:
 		settings.po_dependent_attribute_value = PRODUCTION_ORDER_DEPENDENT_ATTRIBUTE_VALUE
 		changed = True
 

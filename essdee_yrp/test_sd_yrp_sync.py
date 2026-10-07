@@ -305,3 +305,31 @@ class TestSDYRPSyncSetup(IntegrationTestCase):
 
 			self.assertFalse(ensure_yrp_production_order_settings())
 			save.assert_called_once_with(ignore_permissions=True)
+
+	def test_configured_production_order_settings_are_never_overwritten(self):
+		settings = frappe.get_doc(
+			{
+				"doctype": "YRP Settings",
+				"production_order_attributes": [
+					{"attribute": "Colour", "is_grid_attribute": 1},
+					{"attribute": PRODUCTION_ORDER_GRID_ATTRIBUTE, "is_grid_attribute": 0},
+				],
+				"po_dependent_attribute": "Colour",
+				"po_dependent_attribute_value": "Red",
+			}
+		)
+
+		with (
+			patch.object(frappe.db, "exists", return_value=True),
+			patch.object(frappe, "get_doc", return_value=settings),
+			patch.object(settings, "save") as save,
+		):
+			self.assertFalse(ensure_yrp_production_order_settings())
+
+		save.assert_not_called()
+		self.assertEqual(
+			[(row.attribute, row.is_grid_attribute) for row in settings.production_order_attributes],
+			[("Colour", 1), (PRODUCTION_ORDER_GRID_ATTRIBUTE, 0)],
+		)
+		self.assertEqual(settings.po_dependent_attribute, "Colour")
+		self.assertEqual(settings.po_dependent_attribute_value, "Red")

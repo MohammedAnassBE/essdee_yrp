@@ -306,10 +306,12 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 			frappe.db.get_value("YRP Work Order Receivables", selected["ref_docname"], "pending_quantity")
 		)
 
+		naming_series = frappe.get_meta("YRP Goods Received Note").get_field("naming_series").default
 		result = create_closed_work_order_grn(
 			work_order=work_order.name,
 			supplier=work_order.supplier,
 			values={
+				"naming_series": naming_series,
 				"posting_date": nowdate(),
 				"posting_time": nowtime(),
 				"delivery_date": nowdate(),
@@ -322,6 +324,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		grn = frappe.get_doc("YRP Goods Received Note", result["name"])
 
 		self.assertEqual(grn.docstatus, 1)
+		self.assertEqual(grn.naming_series, naming_series)
 		self.assertEqual(grn.from_closed_wo_sewing_details, 1)
 		self.assertEqual(grn.against_id, work_order.name)
 		self.assertEqual(grn.lot, work_order.lot)
@@ -374,6 +377,25 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 				},
 			)
 		)
+
+	def test_closed_work_order_grn_rejects_unknown_naming_series(self):
+		work_order = self._closed_work_order()
+		details = get_closed_work_order_grn_details(work_order.name, work_order.supplier)
+		item_details, _selected = self._one_quantity(details["item_details"])
+
+		with self.assertRaises(frappe.ValidationError) as raised:
+			create_closed_work_order_grn(
+				work_order=work_order.name,
+				supplier=work_order.supplier,
+				values={
+					"naming_series": "UNKNOWN-GRN-",
+					"supplier_document_no": "SEWING-CLOSED-WO-TEST",
+					"vehicle_no": "TEST-VEHICLE",
+				},
+				item_details=item_details,
+			)
+
+		self.assertIn("UNKNOWN-GRN-", str(raised.exception))
 
 	def test_migrated_sewing_plans_match_work_order_calculated_items(self):
 		plans = frappe.get_all("SD YRP Sewing Plan", fields=["name", "work_order"], limit=500)

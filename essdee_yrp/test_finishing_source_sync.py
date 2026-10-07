@@ -6,6 +6,7 @@ from frappe.tests import IntegrationTestCase
 from essdee_yrp.finishing.rebuild import (
 	_process_matches_configured,
 	_sync_incomplete_grns,
+	get_configured_cutting_process,
 	sync_finishing_plans_from_work_order,
 )
 
@@ -134,6 +135,14 @@ class TestFinishingSourceSync(IntegrationTestCase):
 		_sync_incomplete_grns(doc, "Stitching")
 
 		self.assertEqual(frappe.parse_json(doc.incomplete_transfer_grn_list), {})
+
+	@patch("essdee_yrp.finishing.rebuild.frappe.db.get_single_value", return_value=None)
+	@patch("essdee_yrp.finishing.rebuild.attribute_db.get_cached_value", return_value=None)
+	def test_unset_cutting_process_fails_instead_of_assuming_cutting(self, _ipd_process, _settings_process):
+		with self.assertRaises(frappe.ValidationError) as raised:
+			get_configured_cutting_process(production_detail="IPD-1")
+
+		self.assertIn("Set Cutting Process", str(raised.exception))
 
 
 def _work_order(**values):

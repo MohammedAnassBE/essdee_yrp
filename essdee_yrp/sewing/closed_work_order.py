@@ -117,6 +117,7 @@ def create_closed_work_order_grn(
 	# consuming the same pending quantity.
 	doc = _get_closed_sewing_work_order(work_order, supplier, for_update=True)
 	values = _json_object(values)
+	naming_series = _validate_grn_naming_series(values.get("naming_series"))
 	rows = ungroup_items_from_ui(item_details, "YRP Goods Received Note")
 	rows = _normalize_selected_rows(doc, rows)
 
@@ -135,7 +136,7 @@ def create_closed_work_order_grn(
 	grn = frappe.new_doc("YRP Goods Received Note")
 	grn.update(
 		{
-			"naming_series": "GRN-",
+			"naming_series": naming_series,
 			"against": "YRP Work Order",
 			"against_id": doc.name,
 			"supplier": doc.supplier,
@@ -163,6 +164,16 @@ def create_closed_work_order_grn(
 	grn.insert()
 	grn.submit()
 	return {"name": grn.name, "docstatus": grn.docstatus}
+
+
+def _validate_grn_naming_series(naming_series) -> str:
+	naming_series = cstr(naming_series).strip()
+	options = frappe.get_meta("YRP Goods Received Note").get_naming_series_options()
+	if not naming_series or naming_series not in options:
+		frappe.throw(
+			_("Naming Series {0} is not valid for Goods Received Note.").format(frappe.bold(naming_series))
+		)
+	return naming_series
 
 
 def _get_closed_sewing_work_order(

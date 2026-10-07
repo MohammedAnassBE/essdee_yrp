@@ -212,6 +212,56 @@ class TestActualDiaAllocation(unittest.TestCase):
 		self.assertEqual(fabric_substitution._fetch_default_knitting_receipts("LOT-1"), [])
 		self.assertIn("IFNULL(additional_grn, 0) = 0", sql.call_args_list[1].args[0])
 
+	@patch(
+		"essdee_yrp.fabric_source._accepted_inspection_adjustments",
+		return_value={"GRN-ITEM-ACCEPTED": -30, "GRN-ITEM-REJECTED": 15},
+	)
+	@patch("essdee_yrp.fabric_substitution._default_received_type", return_value="Accepted")
+	@patch("essdee_yrp.fabric_substitution._default_knitting_process", return_value="Knitting")
+	@patch.object(frappe.db, "sql")
+	def test_lot_receipts_use_effective_accepted_inspection_quantity(
+		self, sql, _process, _received_type, adjustments
+	):
+		def receipt(name, received_type, stock_qty):
+			return frappe._dict(
+				source_grn=f"GRN-{name}",
+				source_grn_item=f"GRN-ITEM-{name}",
+				actual_item=f"CLOTH-{name}",
+				stock_qty=stock_qty,
+				quantity=stock_qty,
+				conversion_factor=1,
+				uom="Kg",
+				stock_uom="Kg",
+				received_type=received_type,
+				production_detail="IPD-1",
+				cloth_item="CLOTH",
+				planned_item="CLOTH-PLANNED",
+				planned_qty=100,
+				route_item="CLOTH-ROUTE",
+				additional_parameters={"fabric_execution_key": f"fabric-{name}"},
+			)
+
+		sql.side_effect = [
+			[frappe._dict(name="WO-KNIT-1", production_detail="IPD-1", item="CLOTH")],
+			["GRN-ACCEPTED", "GRN-REJECTED"],
+			[
+				receipt("ACCEPTED", "Accepted", 100),
+				receipt("REJECTED", "Rejected", 40),
+			],
+		]
+
+		rows = fabric_substitution._fetch_default_knitting_receipts("LOT-1")
+
+		self.assertEqual(
+			[(row.source_grn_item, row.stock_qty, row.received_type) for row in rows],
+			[
+				("GRN-ITEM-ACCEPTED", 70, "Accepted"),
+				("GRN-ITEM-REJECTED", 15, "Accepted"),
+			],
+		)
+		adjustments.assert_called_once()
+		self.assertTrue(adjustments.call_args.kwargs["for_update"])
+
 	def test_knitting_conversion_rejects_parent_colour_extra_attribute_and_missing_dia(self):
 		cases = (
 			(

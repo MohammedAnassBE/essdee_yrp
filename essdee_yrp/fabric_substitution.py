@@ -313,18 +313,26 @@ def _fetch_default_knitting_receipts(lot):
 		as_dict=True,
 	)
 	default_received_type = _default_received_type()
+	from essdee_yrp.fabric_source import (
+		_accepted_inspection_adjustments,
+		_normalise_accepted_receipts,
+	)
+
+	keyed_rows = [row for row in rows if has_fabric_execution_key(row)]
+	rows = _normalise_accepted_receipts(
+		keyed_rows,
+		_accepted_inspection_adjustments(keyed_rows, for_update=True),
+		default_received_type=default_received_type,
+	)
 	result = []
 	for row in rows:
 		parameters = get_row_execution_parameters(row)
 		execution_key = parameters.get("fabric_execution_key")
-		received_type = row.received_type or default_received_type
-		quantity = flt(row.stock_qty, 6) or (
-			flt(row.quantity, 6) * (flt(row.conversion_factor, 6) or 1)
-		)
-		if not execution_key or received_type != default_received_type or quantity <= QTY_TOLERANCE:
+		quantity = flt(row.stock_qty, 6)
+		if not execution_key or quantity <= QTY_TOLERANCE:
 			continue
 		row.fabric_execution_key = execution_key
-		row.received_type = received_type
+		row.received_type = default_received_type
 		row.stock_qty = quantity
 		result.append(row)
 	return result

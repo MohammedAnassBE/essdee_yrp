@@ -165,6 +165,83 @@ class TestExactFabricSourceBuckets(TestCase):
 			"mixed",
 		)
 
+	@patch.object(frappe.db, "get_single_value", return_value="Accepted")
+	@patch.object(frappe.db, "sql")
+	def test_inspection_adjustments_group_active_accepted_sles_by_exact_source(
+		self, sql, _get_single
+	):
+		sql.return_value = [
+			frappe._dict(source_grn_item="ROW-1", accepted_delta=-7),
+			frappe._dict(source_grn_item="ROW-2", accepted_delta=3),
+		]
+
+		result = fabric_source._accepted_inspection_adjustments(
+			[self._receipt("ROW-1", 10), self._receipt("ROW-2", 10)],
+			for_update=True,
+		)
+
+		self.assertEqual(result, {"ROW-1": -7, "ROW-2": 3})
+		query = sql.call_args.args[0]
+		self.assertIn("tabYRP Stock Ledger Entry", query)
+		self.assertIn("tabYRP Inspection Entry Item", query)
+		self.assertIn("tabYRP Inspection Entry", query)
+		self.assertIn("IFNULL(ie.is_converted, 0) = 1", query)
+		self.assertIn("IFNULL(sle.is_cancelled, 0) = 0", query)
+		self.assertIn("FOR UPDATE", query)
+		self.assertEqual(
+			sql.call_args.args[1]["source_items"],
+			("ROW-1", "ROW-2"),
+		)
+
+	@patch.object(frappe.db, "get_single_value", return_value="Accepted")
+	@patch.object(frappe.db, "sql", return_value=[])
+	def test_inspection_adjustment_preview_is_not_a_locking_read(self, sql, _get_single):
+		fabric_source._accepted_inspection_adjustments(
+			[self._receipt("ROW-1", 10)],
+			for_update=False,
+		)
+
+		self.assertNotIn("FOR UPDATE", sql.call_args.args[0])
+
+	def test_effective_accepted_receipts_apply_exact_inspection_deltas(self):
+		rows = fabric_source._normalise_accepted_receipts(
+			[
+				self._receipt("ACCEPTED", 100),
+				self._receipt("REJECTED", 40, received_type="Rejected"),
+				self._receipt("OTHER", 25, received_type="Oil Mark"),
+			],
+			{
+				"ACCEPTED": -25,
+				"REJECTED": 15,
+				"OTHER": 0,
+			},
+			default_received_type="Accepted",
+		)
+
+		self.assertEqual(
+			[(row.source_grn_item, row.stock_qty, row.received_type) for row in rows],
+			[
+				("ACCEPTED", 75, "Accepted"),
+				("REJECTED", 15, "Accepted"),
+			],
+		)
+		self.assertEqual(
+			rows[1].additional_parameters,
+			{"fabric_execution_key": "fabric-REJECTED"},
+		)
+
+	def test_effective_accepted_receipts_do_not_cross_same_item_source_rows(self):
+		rows = fabric_source._normalise_accepted_receipts(
+			[self._receipt("ROW-1", 30), self._receipt("ROW-2", 30)],
+			{"ROW-1": -30},
+			default_received_type="Accepted",
+		)
+
+		self.assertEqual(
+			[(row.source_grn_item, row.stock_qty) for row in rows],
+			[("ROW-2", 30)],
+		)
+
 	@patch("essdee_yrp.fabric_source._build_source_buckets", return_value=[])
 	@patch("yrp.stock.dimensions.assert_safe_fieldname")
 	@patch(
@@ -203,12 +280,23 @@ class TestExactFabricSourceBuckets(TestCase):
 		queries = [entry.args[0] for entry in sql.call_args_list]
 		self.assertIn("tabSD YRP Lot", queries[0])
 		self.assertTrue(all("FOR UPDATE" in query for query in queries))
-		self.assertIn("ORDER BY grn.name", queries[1])
-		self.assertIn("ORDER BY grn.name, item.idx, item.name", queries[2])
-		self.assertIn("ORDER BY item.parent, item.idx, item.name", queries[3])
-		self.assertNotIn("JOIN `tabYRP Work Order` target_wo", queries[3])
-		self.assertIn("item.docstatus", queries[3])
-		self.assertIn("tabSD YRP Lot", queries[4])
+		grn_query = next(query for query in queries if "SELECT grn.name" in query)
+		receipt_query = next(
+			query for query in queries if "tabYRP Goods Received Note Item" in query
+		)
+		inspection_query = next(
+			query for query in queries if "tabYRP Inspection Entry Item" in query
+		)
+		consumption_query = next(
+			query for query in queries if "tabYRP Work Order Deliverables" in query
+		)
+		self.assertIn("ORDER BY grn.name", grn_query)
+		self.assertIn("ORDER BY grn.name, item.idx, item.name", receipt_query)
+		self.assertIn("GROUP BY iei.ref_docname", inspection_query)
+		self.assertIn("ORDER BY item.parent, item.idx, item.name", consumption_query)
+		self.assertNotIn("JOIN `tabYRP Work Order` target_wo", consumption_query)
+		self.assertIn("item.docstatus", consumption_query)
+		self.assertEqual(sum("tabSD YRP Lot" in query for query in queries), 2)
 		self.assertEqual(build_buckets.call_count, 2)
 
 	@patch("essdee_yrp.fabric_source._build_source_buckets", return_value=[])

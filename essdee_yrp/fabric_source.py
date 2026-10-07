@@ -448,6 +448,94 @@ def _uses_exact_source_pool(work_order):
 	)
 
 
+def _accepted_inspection_adjustments(received_rows, *, for_update=False):
+	"""Return the active Accepted-bin SLE delta keyed by exact GRN child row."""
+	source_items = sorted(
+		{
+			row.get("source_grn_item")
+			for row in received_rows or []
+			if row.get("source_grn_item")
+		}
+	)
+	if not source_items:
+		return {}
+	default_received_type = frappe.db.get_single_value(
+		"YRP Stock Settings", "default_received_type"
+	)
+	if not default_received_type:
+		return {}
+	locking = "FOR UPDATE" if for_update else ""
+	rows = frappe.db.sql(
+		f"""
+		SELECT iei.ref_docname AS source_grn_item,
+			SUM(sle.qty) AS accepted_delta
+		FROM `tabYRP Stock Ledger Entry` sle
+		JOIN `tabYRP Inspection Entry Item` iei
+			ON iei.name = sle.voucher_detail_no
+		JOIN `tabYRP Inspection Entry` ie
+			ON ie.name = iei.parent
+			AND ie.name = sle.voucher_no
+		WHERE sle.voucher_type = 'YRP Inspection Entry'
+			AND IFNULL(sle.is_cancelled, 0) = 0
+			AND sle.received_type = %(default_received_type)s
+			AND sle.item = iei.item_variant
+			AND sle.warehouse = iei.warehouse
+			AND ie.docstatus = 1
+			AND IFNULL(ie.is_converted, 0) = 1
+			AND iei.parenttype = 'YRP Inspection Entry'
+			AND iei.ref_doctype = 'YRP Goods Received Note Item'
+			AND iei.ref_docname IN %(source_items)s
+		GROUP BY iei.ref_docname
+		{locking}
+		""",
+		{
+			"default_received_type": default_received_type,
+			"source_items": tuple(source_items),
+		},
+		as_dict=True,
+	)
+	return {
+		row.source_grn_item: flt(row.accepted_delta, 6)
+		for row in rows
+	}
+
+
+def _normalise_accepted_receipts(
+	received_rows,
+	inspection_adjustments,
+	*,
+	default_received_type,
+):
+	"""Project original receipt rows into their current effective Accepted qty."""
+	normalised = []
+	for row in received_rows or []:
+		received_type = row.get("received_type") or default_received_type
+		original_stock_qty = flt(row.get("stock_qty"), 6)
+		if original_stock_qty <= ZERO_QTY_EPSILON:
+			original_stock_qty = flt(row.get("quantity"), 6) * (
+				flt(row.get("conversion_factor"), 6)
+				or _conversion_factor(row.get("item_variant") or row.get("actual_item"), row.get("uom"))
+			)
+		accepted_stock_qty = (
+			original_stock_qty if received_type == default_received_type else 0
+		)
+		accepted_stock_qty = flt(
+			max(
+				accepted_stock_qty
+				+ flt(inspection_adjustments.get(row.get("source_grn_item")), 6),
+				0,
+			),
+			6,
+		)
+		if accepted_stock_qty <= ZERO_QTY_EPSILON:
+			continue
+		effective = frappe._dict(dict(row))
+		effective.stock_qty = accepted_stock_qty
+		effective.received_type = default_received_type
+		normalised.append(effective)
+	return normalised
+
+
 def prepare_source_pool(
 	lot,
 	production_detail,
@@ -563,11 +651,19 @@ def prepare_source_pool(
 	source_mode = _classify_source_receipts(
 		receipt_rows, default_received_type
 	)
-	keyed_receipts = [
+	candidate_receipts = [
 		row
 		for row in receipt_rows
-		if _is_eligible_exact_receipt(row, default_received_type)
+		if _is_versioned_keyed_receipt(row)
 	]
+	keyed_receipts = _normalise_accepted_receipts(
+		candidate_receipts,
+		_accepted_inspection_adjustments(
+			candidate_receipts,
+			for_update=for_update,
+		),
+		default_received_type=default_received_type,
+	)
 	source_items = sorted(
 		{
 			row.source_grn_item
@@ -635,10 +731,16 @@ def prepare_source_pool(
 
 def _is_eligible_exact_receipt(row, default_received_type):
 	return bool(
-		cint(row.get("cloth_execution_version")) == 1
-		and has_fabric_execution_key(row)
+		_is_versioned_keyed_receipt(row)
 		and (row.get("received_type") or default_received_type)
 		== default_received_type
+	)
+
+
+def _is_versioned_keyed_receipt(row):
+	return bool(
+		cint(row.get("cloth_execution_version")) == 1
+		and has_fabric_execution_key(row)
 	)
 
 

@@ -233,7 +233,7 @@ const primaryTotals = new Set(["total_delivered_qty", "stock_value", "total_valu
 const headerFieldnames = new Set(["process_name", "item", "lot", "supplier_name", "from_location_name"])
 const sourceOwnedFieldnames = new Set(["from_finishing", "cutting_bulk_lay_sheet", "cutting_bulk_lay_sheet_detail", "cut_panel_movement", "loose_piece_dc", "pack_piece_dc"])
 const presentationHiddenFieldnames = new Set(["received_type"])
-const afterMatrixFieldnames = new Set(["is_internal_unit", "includes_packing", "additional_goods_value", "ste_transferred", "is_rework"])
+const afterMatrixFieldnames = new Set(["is_internal_unit", "includes_packing", "additional_goods_value", "ste_transferred", "ste_transferred_percent", "is_rework"])
 
 const capabilities = computed(() => workspace.value.capabilities || {})
 const deliveryChallanActions = computed(() => {

@@ -1814,9 +1814,10 @@ async function deliveryChallanSuite(page) {
 	assert(await draftRoot.locator(".delivery-challan-matrix__group > header span").count() === 0, "Delivery Challan repeats Lot below every item title")
 	const dcTail = draftRoot.locator(".delivery-challan-after-matrix")
 	assert(await dcTail.count() === 1, "Delivery Challan final fields are not placed below Delivery quantities")
-	for (const label of ["Is Internal Unit", "Includes Packing", "Additional Goods Value", "STE Transferred", "Is Rework"]) {
+	for (const label of ["Is Internal Unit", "Includes Packing", "Additional Goods Value", "STE Transferred", "STE Transferred (%)", "Is Rework"]) {
 		assert(await dcTail.getByText(label, { exact: true }).count() === 1, `Delivery Challan final field is missing: ${label}`)
 	}
+	assert(await draftRoot.locator('.delivery-challan-field-group[data-group="transfer"]').getByText("STE Transferred (%)", { exact: true }).count() === 0, "Delivery Challan still places STE Transferred (%) above the table")
 	const dcMatrixBox = await draftRoot.locator(".fabric-document-workspace__matrix").boundingBox()
 	const dcTailBox = await dcTail.boundingBox()
 	assert(dcMatrixBox && dcTailBox && dcTailBox.y >= dcMatrixBox.y + dcMatrixBox.height, `Delivery Challan final fields are not below the table: ${JSON.stringify({ dcMatrixBox, dcTailBox })}`)

@@ -55,6 +55,7 @@ import CutPanelMovementBundle from "./Cut_Panel_Movement/components/CutPanelMove
 import CutBundleEdit from "./Cut_Bundle_Edit/components/CutBundleEdit.vue";
 import QualityInspection from "./Quality/QualityInspection.vue";
 import WOSummary from "./WorkOrder/components/WoSummary.vue";
+import WorkOrderSummary from "./WorkOrder/components/WorkOrderSummary.vue";
 import ReworkPage from "./WorkOrder/components/ReworkPage.vue";
 import { SewingPlanWrapper } from "./SewingPlan";
 import ActionDetail from "./ActionMaster/ActionDetail.vue";
@@ -654,6 +655,18 @@ frappe.production.ui.WOSummary = class {
 			JSON.parse(JSON.stringify(delivered_items || [])),
 			options,
 		);
+	}
+};
+
+frappe.production.ui.EssdeeWorkOrderSummary = class {
+	constructor(wrapper) {
+		this.$wrapper = $(wrapper);
+		const mounted = mount_component(WorkOrderSummary, this.$wrapper);
+		this.app = mounted.app;
+		this.vue = mounted.vue;
+	}
+	load_data(payload) {
+		this.vue.load_data(JSON.parse(JSON.stringify(payload || {})));
 	}
 };
 

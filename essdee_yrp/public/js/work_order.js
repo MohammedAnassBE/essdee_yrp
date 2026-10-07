@@ -604,40 +604,27 @@ function mount_work_order_summary(frm) {
 
 	const request = (frm._essdee_summary_request || 0) + 1;
 	frm._essdee_summary_request = request;
-	if (frm.is_new() || frm.doc.docstatus !== 1 || frm.doc.is_rework) return;
+	if (frm.is_new()) return;
 
 	$wrapper.html(`<p class="text-muted" style="padding:12px 0;">${__("Loading Work Order summary...")}</p>`);
+	const work_order = frm.doc.name;
 	frappe.call({
-		method: "essdee_yrp.api.work_order.fetch_summary_details",
-		args: {
-			doc_name: frm.doc.name,
-			production_detail: frm.doc.production_detail,
-		},
+		method: "essdee_yrp.api.work_order.get_work_order_summary",
+		args: { work_order },
 		callback(r) {
-			if (request !== frm._essdee_summary_request) return;
+			if (request !== frm._essdee_summary_request || frm.doc.name !== work_order) return;
 			const result = r.message || {};
-			const rows = result.item_detail || [];
 			$wrapper.empty();
-			if (!rows.length) {
-				$wrapper.html(
-					`<div class="alert alert-info">${__("No Work Order Calculated Item rows are available for this summary.")}</div>`,
-				);
-				return;
-			}
-			if (!frappe.production?.ui?.WOSummary) {
+			if (!frappe.production?.ui?.EssdeeWorkOrderSummary) {
 				$wrapper.html(
 					`<div class="alert alert-danger">${__("Work Order summary component is unavailable. Refresh after rebuilding Essdee assets.")}</div>`,
 				);
 				return;
 			}
-			frm._essdee_work_order_summary = new frappe.production.ui.WOSummary(
+			frm._essdee_work_order_summary = new frappe.production.ui.EssdeeWorkOrderSummary(
 				$wrapper,
 			);
-			frm._essdee_work_order_summary.load_data(
-				rows,
-				result.deliverables || [],
-				{ doctype: "YRP Work Order" },
-			);
+			frm._essdee_work_order_summary.load_data(result);
 			$wrapper.css("overflow-x", "auto");
 		},
 		error() {

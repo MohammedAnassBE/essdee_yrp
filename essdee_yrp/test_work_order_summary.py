@@ -1,5 +1,6 @@
 import inspect
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import frappe
@@ -221,3 +222,17 @@ class TestWorkOrderSummaryReadModel(unittest.TestCase):
 			list(inspect.signature(work_order.fetch_summary_details).parameters),
 			["doc_name", "production_detail"],
 		)
+
+	def test_desk_summary_uses_additive_component_and_keeps_legacy_registration(self):
+		app_path = Path(frappe.get_app_path("essdee_yrp"))
+		work_order_js = (app_path / "public/js/work_order.js").read_text(encoding="utf-8")
+		plugins = (app_path / "public/js/vue_plugins.js").read_text(encoding="utf-8")
+
+		self.assertIn("essdee_yrp.api.work_order.get_work_order_summary", work_order_js)
+		self.assertIn("frappe.production.ui.EssdeeWorkOrderSummary", work_order_js)
+		self.assertIn(
+			'import WorkOrderSummary from "./WorkOrder/components/WorkOrderSummary.vue";',
+			plugins,
+		)
+		self.assertIn("frappe.production.ui.EssdeeWorkOrderSummary = class", plugins)
+		self.assertIn("frappe.production.ui.WOSummary = class", plugins)

@@ -9,6 +9,9 @@ const { chromium } = require("playwright")
 const SITE = process.env.SITE || "http://erp-migration-test.site:8001"
 const CREDENTIALS = "/home/anas/.frappe-debug-creds-mrp3"
 const WORK_ORDER = process.argv[2] || "YRP-WO-2026-00022"
+const EXPECTED = process.env.EXPECTED_SUMMARY
+	? JSON.parse(process.env.EXPECTED_SUMMARY)
+	: {}
 
 function assert(condition, message) {
 	if (!condition) throw new Error(message)
@@ -103,6 +106,24 @@ try {
 	assert(state.tables.every((table) => table.painted), `A summary table is not painted: ${JSON.stringify(state.tables)}`)
 	assert(state.typePills.length > 0, "Received Type did not render")
 	assert(state.valuation.length === 3, `Valuation flow is incomplete: ${JSON.stringify(state.valuation)}`)
+	if (Object.hasOwn(EXPECTED, "sourceLinks")) {
+		assert(
+			state.sourceLinks === EXPECTED.sourceLinks,
+			`Expected ${EXPECTED.sourceLinks} source links, got ${state.sourceLinks}`,
+		)
+	}
+	if (EXPECTED.receivedTypes) {
+		assert(
+			JSON.stringify(state.typePills) === JSON.stringify(EXPECTED.receivedTypes),
+			`Received Types differ: ${JSON.stringify(state.typePills)}`,
+		)
+	}
+	if (EXPECTED.valuation) {
+		assert(
+			JSON.stringify(state.valuation) === JSON.stringify(EXPECTED.valuation),
+			`Valuation differs: ${JSON.stringify(state.valuation)}`,
+		)
+	}
 	assert(summaryFailures.length === 0, `Summary request failures: ${JSON.stringify(summaryFailures)}`)
 	assert(pageErrors.length === 0, `Desk page errors: ${JSON.stringify(pageErrors)}`)
 

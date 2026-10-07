@@ -197,6 +197,47 @@ def _lock_lot(lot):
 	)
 
 
+def lock_lots_for_default_knitting_grns(grn_names):
+	"""Lock versioned default-Knitting Lots before Inspection touches GRNs."""
+	grn_names = sorted(set(grn_names or []))
+	if not grn_names:
+		return []
+	process_name = _default_knitting_process()
+	if not process_name:
+		return []
+	lots = frappe.db.sql(
+		"""
+		SELECT DISTINCT wo.lot
+		FROM `tabYRP Goods Received Note` grn
+		JOIN `tabYRP Work Order` wo ON wo.name = grn.against_id
+		WHERE grn.name IN %(grn_names)s
+			AND grn.docstatus = 1
+			AND grn.against = 'YRP Work Order'
+			AND IFNULL(grn.is_return, 0) = 0
+			AND IFNULL(grn.is_rework, 0) = 0
+			AND IFNULL(grn.additional_grn, 0) = 0
+			AND IFNULL(grn.includes_packing, 0) = 0
+			AND wo.process_name = %(process_name)s
+			AND wo.cloth_execution_version = 1
+			AND IFNULL(wo.lot, '') != ''
+		ORDER BY wo.lot
+		""",
+		{
+			"grn_names": tuple(grn_names),
+			"process_name": process_name,
+		},
+		pluck=True,
+	)
+	lots = sorted(set(lots))
+	if lots:
+		frappe.db.sql(
+			"SELECT name FROM `tabSD YRP Lot` "
+			"WHERE name IN %(lots)s ORDER BY name FOR UPDATE",
+			{"lots": tuple(lots)},
+		)
+	return lots
+
+
 def rebuild_lot_fabric_conversions_for_grn(grn):
 	context = get_default_knitting_grn_context(grn)
 	if not context:

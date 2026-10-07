@@ -382,6 +382,32 @@ class TestActualDiaAllocation(unittest.TestCase):
 
 
 class TestLotFabricConversionRebuild(unittest.TestCase):
+	@patch("essdee_yrp.fabric_substitution._default_knitting_process", return_value="Knitting")
+	@patch.object(frappe.db, "sql")
+	def test_inspection_lot_lock_uses_versioned_default_knitting_grns(
+		self, sql, _process
+	):
+		sql.side_effect = [["LOT-B", "LOT-A", "LOT-A"], []]
+
+		lots = fabric_substitution.lock_lots_for_default_knitting_grns(
+			["GRN-2", "GRN-1", "GRN-1"]
+		)
+
+		self.assertEqual(lots, ["LOT-A", "LOT-B"])
+		discovery_query = sql.call_args_list[0].args[0]
+		self.assertIn("tabYRP Goods Received Note", discovery_query)
+		self.assertIn("tabYRP Work Order", discovery_query)
+		self.assertIn("wo.cloth_execution_version = 1", discovery_query)
+		self.assertIn("IFNULL(grn.additional_grn, 0) = 0", discovery_query)
+		self.assertEqual(
+			sql.call_args_list[0].args[1]["grn_names"],
+			("GRN-1", "GRN-2"),
+		)
+		lock_query = sql.call_args_list[1].args[0]
+		self.assertIn("tabSD YRP Lot", lock_query)
+		self.assertIn("ORDER BY name FOR UPDATE", lock_query)
+		self.assertEqual(sql.call_args_list[1].args[1]["lots"], ("LOT-A", "LOT-B"))
+
 	@patch("essdee_yrp.fabric_substitution._project_receipt_group")
 	@patch("essdee_yrp.fabric_substitution.frappe.get_cached_doc")
 	def test_projection_is_deterministic_for_identical_receipts(self, get_cached_doc, project):

@@ -600,6 +600,9 @@ override_whitelisted_methods = {
 	# Internal-unit GRNs live in Transit Warehouse until Complete Transfer;
 	# inspection must classify the bin that actually holds the stock.
 	"yrp.yrp.doctype.yrp_inspection_entry.yrp_inspection_entry.get_initial_payload": "essdee_yrp.overrides.inspection_entry.get_initial_payload",
+	# Reclassifying exact cloth receipts must update their Lot projections under
+	# the same Lot -> source GRN -> Inspection lock order as normal execution.
+	"yrp.yrp.doctype.yrp_inspection_entry.yrp_inspection_entry.convert_stock": "essdee_yrp.overrides.inspection_entry.convert_stock",
 	# Migrated garment receivables may have one saved row_index per size.
 	# Normalize copied GRN defaults so the editable matrix renders one logical
 	# SKU row with all sizes, without rewriting the Work Order source rows.

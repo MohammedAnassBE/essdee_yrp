@@ -36,3 +36,4 @@ essdee_yrp.patches.link_default_knitting_colour
 essdee_yrp.patches.link_remaining_attribute_values
 essdee_yrp.patches.add_cloth_execution_lock_indexes
 essdee_yrp.patches.add_cloth_source_row_index
+essdee_yrp.patches.seed_role_settings

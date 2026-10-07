@@ -6,16 +6,19 @@ const CANCEL_APPROVED_STATUS = "Cancel Request Approved";
 const CANCEL_REQUESTABLE_STATUSES = ["Open", "Assigned", "Reopen", "Amended"];
 
 frappe.ui.form.on("YRP Bill Tracking", {
-	refresh(frm) {
+	async refresh(frm) {
 		if (frm.is_new() || frm.doc.docstatus !== 1) return;
 
 		frm.remove_custom_button(__("Cancel"));
+		const permissions = await frappe.xcall(
+			"yrp.yrp.doctype.yrp_bill_tracking.yrp_bill_tracking.get_role_permissions"
+		);
 		if (is_cancellation_status(frm.doc.form_status)) {
 			remove_conflicting_actions(frm);
 		} else {
-			configure_purchase_invoice_actions(frm);
+			configure_purchase_invoice_actions(frm, permissions);
 		}
-		configure_cancellation_action(frm);
+		configure_cancellation_action(frm, permissions);
 	},
 });
 
@@ -34,13 +37,11 @@ function remove_conflicting_actions(frm) {
 	}
 }
 
-function configure_purchase_invoice_actions(frm) {
+function configure_purchase_invoice_actions(frm, permissions) {
 	const has_yrp_invoice = Boolean(frm.doc.purchase_invoice);
 	const has_erp_invoice = Boolean(frm.doc.erp_purchase_invoice);
-	const can_create_invoice =
-		frappe.user.has_role("Accounts Manager") || frappe.user.has_role("Accounts User");
 
-	if (!has_yrp_invoice && !has_erp_invoice && can_create_invoice) {
+	if (!has_yrp_invoice && !has_erp_invoice && permissions.can_create_invoice) {
 		frm.add_custom_button(__("Create YRP Purchase Invoice"), () => {
 			const invoice = frappe.model.get_new_doc("YRP Purchase Invoice");
 			invoice.supplier = frm.doc.supplier;
@@ -59,10 +60,10 @@ function configure_purchase_invoice_actions(frm) {
 	}
 }
 
-function configure_cancellation_action(frm) {
+function configure_cancellation_action(frm, permissions) {
 	if (frm.doc.purchase_invoice || frm.doc.erp_purchase_invoice) return;
 
-	if (CANCEL_REQUESTABLE_STATUSES.includes(frm.doc.form_status) && frappe.user.has_role("HR User")) {
+	if (CANCEL_REQUESTABLE_STATUSES.includes(frm.doc.form_status) && permissions.can_request_cancel) {
 		frm.add_custom_button(__("Request for Cancel"), () => {
 			call_cancel_transition(
 				frm,
@@ -73,7 +74,7 @@ function configure_cancellation_action(frm) {
 		return;
 	}
 
-	if (frm.doc.form_status === CANCEL_PENDING_STATUS && frappe.user.has_role("HR Manager")) {
+	if (frm.doc.form_status === CANCEL_PENDING_STATUS && permissions.can_approve_cancel) {
 		frm.add_custom_button(__("Approve Cancel Request"), () => {
 			call_cancel_transition(
 				frm,
@@ -84,7 +85,7 @@ function configure_cancellation_action(frm) {
 		return;
 	}
 
-	if (frm.doc.form_status === CANCEL_APPROVED_STATUS && frappe.user.has_role("HR User")) {
+	if (frm.doc.form_status === CANCEL_APPROVED_STATUS && permissions.can_request_cancel) {
 		frm.add_custom_button(__("Cancel"), () => show_cancel_dialog(frm));
 	}
 }

@@ -39,6 +39,7 @@
   "column_break_boig",
   "merchandising_manager_role",
   "merch_user_role",
+  "production_planner_role",
   "vendor_bill_tracking_section",
   "enable_vendor_bill_no_unique_restriction",
   "enable_grn_document_no_unique_restriction",
@@ -375,6 +376,13 @@
    "options": "Role"
   },
   {
+   "default": "Production Planner",
+   "fieldname": "production_planner_role",
+   "fieldtype": "Link",
+   "label": "Production Planner Role",
+   "options": "Role"
+  },
+  {
    "fieldname": "cutting_plan_section",
    "fieldtype": "Section Break",
    "label": "Cutting Plan"
@@ -592,7 +600,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-09-28 15:37:39.890569",
+ "modified": "2026-10-07 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP MRP Settings",

@@ -197,6 +197,22 @@ class TestFabricStorePurchaseOrder(TestCase):
 		for capability in ["send_approval_request", "approve", "reject"]:
 			self.assertIn(capability, workspace["capabilities"])
 
+	def test_close_capability_follows_configured_manager_role(self):
+		doc = self.make_document()
+		for roles, eligible in ((["Stock User"], True), (["Purchase Manager"], False)):
+			with (
+				patch("yrp.attribute_links.get_single_value", return_value="Stock User"),
+				patch("essdee_yrp.fabric_store.documents.purchase_order.frappe.get_roles", return_value=roles),
+				patch("essdee_yrp.fabric_store.documents.purchase_order.frappe.has_permission", return_value=True),
+				patch(
+					"essdee_yrp.fabric_store.documents.purchase_order.get_supplier_notification_capabilities",
+					return_value={"sms": False, "whatsapp": False},
+				),
+			):
+				capabilities = _capability_candidates(doc, {}, {})
+
+			self.assertEqual(capabilities["close"]["eligible"], eligible)
+
 	def test_live_request_and_missing_approver_role_remove_approval_actions(self):
 		doc = self.make_document(docstatus=0, status="Pending Approval")
 		with (

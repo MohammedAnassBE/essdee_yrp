@@ -434,7 +434,7 @@ function prompt_purchase_order_link_reason(frm, options) {
 	);
 }
 
-function setup_time_and_action(frm) {
+async function setup_time_and_action(frm) {
 	if (!frm.fields_dict.time_and_action_html || !frm.fields_dict.time_and_action_report_html) {
 		return
 	}
@@ -449,7 +449,8 @@ function setup_time_and_action(frm) {
 		frm.time_action_report = new frappe.production.ui.TimeActionReport(
 			frm.fields_dict.time_and_action_report_html.wrapper
 		)
-		if (frappe.user.has_role("T & A Admin")) {
+		const admin_role = await frappe.db.get_single_value("SD YRP T and A Settings", "t_and_a_admin_role")
+		if (admin_role && frappe.user.has_role(admin_role)) {
 			frm.add_custom_button(__("Revert T & A"), () => {
 				frappe.confirm(__("Revert this Lot's Time and Action schedule?"), () => {
 					frappe.call({

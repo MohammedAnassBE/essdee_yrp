@@ -144,9 +144,7 @@ const IconFI = () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '
 const IconMonthlySummary = () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24', class: 'w-full h-full text-current' }, [h('rect', { x: '3', y: '4', width: '18', height: '18', rx: '2', ry: '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2.5' }), h('line', { x1: '16', y1: '2', x2: '16', y2: '6', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2.5' }), h('line', { x1: '8', y1: '2', x2: '8', y2: '6', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2.5' }), h('line', { x1: '3', y1: '10', x2: '21', y2: '10', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2.5' })])
 const IconItemSummary = () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24', class: 'w-full h-full text-current' }, [h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2.5', d: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01' })])
 
-const hasProductionPlannerRole = computed(() => {
-    return frappe.user.has_role('Production Planner') || frappe.user.has_role('System Manager')
-})
+const hasProductionPlannerRole = ref(frappe.user.has_role('System Manager'))
 
 const tabs = computed(() => {
     const baseTabs = [
@@ -175,8 +173,10 @@ const supplier_field_wrapper = ref(null)
 const sample_doc = ref({})
 let supplier = null
 
-onMounted(() => {
+onMounted(async () => {
     initSupplierField()
+    const plannerRole = await frappe.db.get_single_value('SD YRP MRP Settings', 'production_planner_role')
+    hasProductionPlannerRole.value ||= Boolean(plannerRole && frappe.user.has_role(plannerRole))
 })
 
 function initSupplierField() {

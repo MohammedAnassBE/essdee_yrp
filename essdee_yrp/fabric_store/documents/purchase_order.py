@@ -15,6 +15,7 @@ from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
 from yrp.yrp.doctype.yrp_purchase_order.yrp_purchase_order import (
 	YRPPurchaseOrderMixin,
 	close_purchase_order,
+	get_purchase_order_manager_roles,
 	refresh_status,
 	reopen_purchase_order,
 )
@@ -224,7 +225,7 @@ def _goods_receipt_capability(doc, adapter=None) -> dict:
 def _capability_candidates(doc, approval: Mapping, grn: Mapping, adapter=None) -> dict[str, dict]:
 	docstatus = cint(doc.docstatus)
 	roles = set(frappe.get_roles())
-	is_manager = bool(roles.intersection({"Purchase Manager", "System Manager"}))
+	is_manager = bool(roles.intersection(get_purchase_order_manager_roles()))
 	is_approver = SYSTEM_MANAGER_ROLE in roles
 	is_managed = bool(doc.get("is_yrp_managed"))
 	is_open = doc.get("open_status") != "Close"

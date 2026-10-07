@@ -4,9 +4,12 @@ const vm = require("node:vm");
 
 const scriptPath = __dirname + "/bill_tracking.js";
 
-function loadFormScript(roles = []) {
+const PERMISSIONS_METHOD = "yrp.yrp.doctype.yrp_bill_tracking.yrp_bill_tracking.get_role_permissions";
+
+function loadFormScript(permissions = {}) {
 	let handlers;
 	const calls = [];
+	const xcalls = [];
 	const confirmations = [];
 	const dialogs = [];
 	const context = {
@@ -24,7 +27,11 @@ function loadFormScript(roles = []) {
 					hide() {}
 				},
 			},
-			user: { has_role: (role) => roles.includes(role) },
+			user: { has_role: () => true },
+			async xcall(method) {
+				xcalls.push(method);
+				return permissions;
+			},
 			confirm(message, action) {
 				confirmations.push(message);
 				action();
@@ -38,7 +45,7 @@ function loadFormScript(roles = []) {
 		},
 	};
 	vm.runInNewContext(fs.readFileSync(scriptPath, "utf8"), context, { filename: scriptPath });
-	return { handlers, calls, confirmations, dialogs };
+	return { handlers, calls, xcalls, confirmations, dialogs };
 }
 
 function makeForm(formStatus) {
@@ -66,8 +73,8 @@ function makeForm(formStatus) {
 	};
 }
 
-async function render(status, roles) {
-	const runtime = loadFormScript(roles);
+async function render(status, permissions) {
+	const runtime = loadFormScript(permissions);
 	const frm = makeForm(status);
 	await runtime.handlers.refresh(frm);
 	return { ...runtime, frm };
@@ -75,7 +82,7 @@ async function render(status, roles) {
 
 (async () => {
 	{
-		const { frm, calls, confirmations } = await render("Open", ["HR User"]);
+		const { frm, calls, confirmations } = await render("Open", { can_request_cancel: true });
 		assert.deepEqual(new Set(frm.buttons.keys()), new Set([
 			"Assign",
 			"Create ERP Purchase Invoice",
@@ -90,7 +97,7 @@ async function render(status, roles) {
 	}
 
 	{
-		const { frm, calls } = await render("Pending Approval", ["HR Manager"]);
+		const { frm, calls } = await render("Pending Approval", { can_approve_cancel: true });
 		assert.deepEqual([...frm.buttons.keys()], ["Approve Cancel Request"]);
 		frm.buttons.get("Approve Cancel Request")();
 		assert.equal(calls.at(-1).method, "essdee_yrp.overrides.bill_tracking.approve_bill_cancellation");
@@ -98,7 +105,7 @@ async function render(status, roles) {
 	}
 
 	{
-		const { frm, dialogs, calls } = await render("Cancel Request Approved", ["HR User"]);
+		const { frm, dialogs, calls } = await render("Cancel Request Approved", { can_request_cancel: true });
 		assert.deepEqual([...frm.buttons.keys()], ["Cancel"]);
 		frm.buttons.get("Cancel")();
 		assert.equal(dialogs.length, 1);
@@ -111,8 +118,28 @@ async function render(status, roles) {
 	}
 
 	{
-		const { frm } = await render("Cancel Request Approved", ["HR Manager"]);
+		const { frm } = await render("Cancel Request Approved", { can_approve_cancel: true });
 		assert.deepEqual([...frm.buttons.keys()], []);
+	}
+
+	{
+		const { frm, xcalls } = await render("Open", { can_create_invoice: true });
+		assert.deepEqual(xcalls, [PERMISSIONS_METHOD]);
+		assert.deepEqual(new Set(frm.buttons.keys()), new Set([
+			"Assign",
+			"Create ERP Purchase Invoice",
+			"Bill Received",
+			"Create YRP Purchase Invoice",
+		]));
+	}
+
+	{
+		const { frm } = await render("Open", {});
+		assert.deepEqual(new Set(frm.buttons.keys()), new Set([
+			"Assign",
+			"Create ERP Purchase Invoice",
+			"Bill Received",
+		]));
 	}
 
 	console.log("Essdee YRP Bill Tracking UI behavior tests passed");

@@ -6,7 +6,7 @@
 			<Message v-if="success" severity="success" :closable="false">{{ success }}</Message>
 
 			<div class="marker-status-row">
-				<span class="document-status" :class="`document-status--${statusTone}`">{{ statusLabel }}</span>
+				<DocumentStatusBadge :docstatus="record?.docstatus" :label="statusLabel" />
 				<span v-if="record?.modified" class="modified-text">Updated {{ formatDate(record.modified, true) }}</span>
 			</div>
 
@@ -32,7 +32,7 @@
 			<section class="marker-section">
 				<div class="section-heading"><div><h3>Size Ratios</h3><small>{{ form.selected_type === 'Machine' ? 'One ratio per size, applied to all selected panels.' : 'Set the ratio for every size and panel.' }}</small></div></div>
 				<div v-if="form.ratio_items.length" class="table-scroll" role="region" tabindex="0" aria-label="Editable marker size ratios">
-					<table class="marker-table"><thead><tr><th>Size</th><th v-if="form.selected_type === 'Manual'">Panel</th><th>Ratio</th></tr></thead><tbody><tr v-for="(row, index) in form.ratio_items" :key="`${row.size}-${row.panel || index}`"><td>{{ row.size }}</td><td v-if="form.selected_type === 'Manual'">{{ row.panel }}</td><td><InputNumber v-model="row.ratio" :min="0" :step="0.5" :min-fraction-digits="1" :max-fraction-digits="1" :disabled="!canEdit" fluid /></td></tr></tbody></table>
+					<table class="marker-table"><thead><tr><th>Size</th><th v-if="form.selected_type === 'Manual'">Panel</th><th>Ratio</th></tr></thead><tbody><tr v-for="(row, index) in form.ratio_items" :key="`${row.size}-${row.panel || index}`"><td>{{ row.size }}</td><td v-if="form.selected_type === 'Manual'">{{ row.panel }}</td><td><InputNumber v-model="row.ratio" :aria-label="`Ratio for ${row.size}${row.panel ? ` · ${row.panel}` : ''}`" :min="0" :step="0.5" :min-fraction-digits="1" :max-fraction-digits="1" :disabled="!canEdit" fluid /></td></tr></tbody></table>
 				</div>
 				<div v-else class="empty-note">Select panels, then build the size ratios.</div>
 			</section>
@@ -42,8 +42,8 @@
 				<div class="group-list">
 					<div v-for="(group, index) in form.group_items" :key="group.id ?? index" class="group-row">
 						<span>Group {{ index + 1 }}</span>
-						<MultiSelect v-model="group.selected" :options="form.panels" display="chip" :disabled="!canEdit" fluid />
-						<Button v-if="canEdit" icon="pi pi-trash" severity="danger" text rounded aria-label="Remove group" @click="form.group_items.splice(index, 1)" />
+						<MultiSelect v-model="group.selected" :aria-label="`Panels for group ${index + 1}`" :options="form.panels" display="chip" :disabled="!canEdit" fluid />
+						<Button v-if="canEdit" icon="pi pi-trash" severity="danger" text rounded :aria-label="`Remove group ${index + 1}`" @click="form.group_items.splice(index, 1)" />
 					</div>
 				</div>
 			</section>
@@ -78,10 +78,10 @@
 			<Button label="Close" severity="secondary" text :disabled="saving" @click="emit('update:visible', false)" />
 			<DocumentPrintButton v-if="record?.permissions?.can_print" doctype="SD YRP Cutting Marker" :name="record.name" :formats="record.print_formats || []" :disabled="saving" />
 			<Button v-if="record?.permissions?.can_cancel" label="Cancel Marker" icon="pi pi-ban" severity="danger" outlined :loading="saving" @click="cancelMarker" />
-			<Button v-if="canEdit" label="Save Draft" icon="pi pi-save" severity="secondary" outlined :loading="saving && saveMode === 'draft'" @click="save(false)" />
-			<Button v-if="canSubmit" label="Save & Submit" icon="pi pi-check" :loading="saving && saveMode === 'submit'" @click="save(true)" />
+			<DocumentSaveButton :show-save="canEdit" :show-submit="canSubmit" :loading="saving" @save="save(false)" @submit="save(true)" />
 		</template>
 	</Dialog>
+	<DocumentErrorDialog :message="actionError" title="Cutting Marker action failed" @dismiss="actionError = ''" />
 </template>
 
 <script setup>
@@ -98,6 +98,9 @@ import { computed, reactive, ref, watch } from "vue"
 import { callMethod } from "../../api/frappe.js"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
+import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
+import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
@@ -113,6 +116,7 @@ const loading = ref(false)
 const saving = ref(false)
 const saveMode = ref("")
 const error = ref("")
+const actionError = ref("")
 const success = ref("")
 const record = ref(null)
 const context = ref({ panels: [], sizes: [] })
@@ -124,7 +128,6 @@ const parentArgs = computed(() => ({ [resolvedParentField.value]: resolvedParent
 const canEdit = computed(() => record.value ? Boolean(record.value.permissions?.can_write) : Boolean(context.value.can_create))
 const canSubmit = computed(() => canEdit.value && Boolean(record.value ? record.value.permissions?.can_submit : context.value.can_submit))
 const statusLabel = computed(() => ["Draft", "Submitted", "Cancelled"][Number(record.value?.docstatus || 0)] || "Draft")
-const statusTone = computed(() => ["draft", "submitted", "cancelled"][Number(record.value?.docstatus || 0)] || "draft")
 const readOnlyDetails = computed(() => [
 	["Marker Name", form.marker_name],
 	["Select Type", form.selected_type],
@@ -143,6 +146,7 @@ watch(
 async function load() {
 	loading.value = true
 	error.value = ""
+	actionError.value = ""
 	success.value = ""
 	try {
 		const data = await callMethod(markerMethod("get_web_marker"), {
@@ -213,7 +217,7 @@ async function save(submit) {
 		emit("changed", saved)
 		if (submit) emit("update:visible", false)
 	} catch (reason) {
-		error.value = reason.message || "Unable to save the Cutting Marker."
+		actionError.value = reason.message || "Unable to save the Cutting Marker."
 	} finally {
 		saving.value = false
 		saveMode.value = ""
@@ -243,7 +247,7 @@ async function performCancelMarker() {
 		emit("changed", changed)
 		emit("update:visible", false)
 	} catch (reason) {
-		error.value = reason.message || "Unable to cancel the Cutting Marker."
+		actionError.value = reason.message || "Unable to cancel the Cutting Marker."
 	} finally {
 		saving.value = false
 	}

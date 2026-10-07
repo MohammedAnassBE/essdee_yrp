@@ -5,7 +5,6 @@
 			<Button icon="pi pi-times" severity="secondary" text rounded aria-label="Close inspection" :disabled="Boolean(acting)" @click="emit('close')" />
 		</header>
 
-		<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 		<Message v-if="context.reason" severity="warn" :closable="false">{{ context.reason }}</Message>
 
 		<div class="inspection-entry-panel__fields">
@@ -47,6 +46,7 @@
 			</div>
 		</footer>
 	</section>
+	<DocumentErrorDialog :message="error" title="Inspection Entry could not be saved" />
 </template>
 
 <script setup>
@@ -58,6 +58,7 @@ import Textarea from "primevue/textarea"
 import { computed, reactive, ref, watch } from "vue"
 
 import DateField from "../../components/common/DateField.vue"
+import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import TimeField from "../../components/common/TimeField.vue"
 

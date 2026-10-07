@@ -15,7 +15,7 @@
 			</div>
 		</div>
 		<PlannerOrderMatrix :rows="form.order_details" :editable="editable" @update:rows="form.order_details = $event" />
-		<div v-if="editable && isNew" class="planner-inputs__footer"><Button label="Save Draft" icon="pi pi-save" :loading="saving" :disabled="!canSave" @click="emitSave" /></div>
+		<div v-if="editable && isNew" class="planner-inputs__footer"><Button label="Save" icon="pi pi-save" :loading="saving" :disabled="!canSave" @click="emitSave" /></div>
 	</section>
 </template>
 

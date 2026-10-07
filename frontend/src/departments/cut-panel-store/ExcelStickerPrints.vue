@@ -16,7 +16,7 @@
 			@row-click="openPrint"
 		>
 			<template #cell-docstatus="{ value }">
-				<span class="excel-sticker-status" :class="`excel-sticker-status--${value}`">{{ statusLabel(value) }}</span>
+				<DocumentStatusBadge :docstatus="value" />
 			</template>
 			<template #toolbar-actions>
 				<Button v-if="capability.can_create" label="Create Excel Sticker Print" icon="pi pi-plus" @click="createPrint" />
@@ -36,6 +36,7 @@ import Button from "primevue/button"
 import { ref } from "vue"
 
 import ListView from "../../components/common/ListView.vue"
+import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import ExcelStickerPrintDialog from "./ExcelStickerPrintDialog.vue"
 
 defineProps({ capability: { type: Object, required: true } })
@@ -44,10 +45,6 @@ const listView = ref(null)
 const dialogVisible = ref(false)
 const selectedName = ref("")
 const defaultColumns = ["excel_file", "print_format", "docstatus", "modified"]
-
-function statusLabel(value) {
-	return ({ 0: "Draft", 1: "Submitted", 2: "Cancelled" })[Number(value)] || "Unknown"
-}
 
 function createPrint() {
 	selectedName.value = ""
@@ -67,7 +64,4 @@ async function changed() {
 
 <style scoped>
 .excel-sticker-prints { min-width: 0; }
-.excel-sticker-status { display: inline-flex; padding: 3px 8px; border-radius: var(--erp-pill-radius); background: var(--erp-surface-muted); color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 760; }
-.excel-sticker-status--1 { background: var(--erp-accent-soft); color: var(--erp-accent-hover); }
-.excel-sticker-status--2 { background: var(--erp-danger-soft); color: var(--erp-danger); }
 </style>

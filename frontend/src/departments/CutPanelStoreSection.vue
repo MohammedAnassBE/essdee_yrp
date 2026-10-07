@@ -5,7 +5,7 @@
 				<Skeleton height="76px" />
 				<Skeleton height="420px" />
 			</div>
-			<Message v-else-if="error" severity="error" :closable="false">{{ error }}</Message>
+			<WorkspaceLoadError v-else-if="error" :message="error" :loading="loading" @retry="load" />
 			<Message v-else-if="!capability" severity="warn" :closable="false">You do not have permission to view {{ definition.label }}.</Message>
 			<component v-else-if="definition.component" :is="definition.component" :capability="capability" v-bind="definition.componentProps || {}" />
 			<div v-else class="erp-empty-state cut-panel-store-section__empty">
@@ -24,6 +24,7 @@ import { computed, onMounted, ref, watch } from "vue"
 
 import { getCutPanelStoreCapabilities } from "../api/cutPanelStore.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
+import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import CutPanelMovements from "./cut-panel-store/CutPanelMovements.vue"
 import CutBundleEdits from "./cut-panel-store/CutBundleEdits.vue"
 import BoxStickerPrints from "./cut-panel-store/BoxStickerPrints.vue"
@@ -73,7 +74,7 @@ watch(() => props.section, load)
 	max-width: 1800px;
 	min-width: 0;
 	margin: 0 auto;
-	padding: 2px clamp(2px, .8vw, 12px) var(--erp-space-5);
+	padding: 2px 0 var(--erp-space-5);
 }
 
 .cut-panel-store-section__loading {

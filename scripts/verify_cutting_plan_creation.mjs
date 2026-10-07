@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs"
 const require = createRequire("/home/anas/.claude/playwright/package.json")
 const { chromium } = require("playwright")
 
-const SITE = "http://erp-migration-test.site:8001"
+const SITE = process.env.ESSDEE_TEST_SITE || "http://erp-migration-test.site:8001"
 const [username, password] = readFileSync("/home/anas/.frappe-debug-creds-mrp3", "utf8").trim().split("\n")
 const EDITOR = "**/api/method/essdee_yrp.cutting.plan_editor.get_editor*"
 const LOAD_LOT = "**/api/method/essdee_yrp.cutting.plan_editor.load_lot_items*"
@@ -80,6 +80,7 @@ await Promise.all([
 	page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 20_000 }).catch(() => {}),
 	page.click(".btn-login, button[type=submit]"),
 ])
+errors.length = 0
 
 await page.route("**/api/method/essdee_yrp.cutting.web_capabilities.get_capabilities*", (route) => route.fulfill({
 	status: 200,
@@ -145,9 +146,9 @@ await page.getByRole("button", { name: "Create Cutting Plan", exact: true }).cli
 await page.waitForURL("**/web/cutting/plans/new")
 await page.getByRole("heading", { name: "New Cutting Plan", exact: true }).waitFor({ timeout: 20_000 })
 assert(await page.locator("input[type=date], input[type=time], input[type=datetime-local]").count() === 0, "Cutting Plan editor uses native temporal inputs")
-const disabledSaveDraft = page.getByRole("button", { name: "Save Draft", exact: true })
-assert(await disabledSaveDraft.isDisabled(), "Incomplete Cutting Plan unexpectedly enables Save Draft")
-const disabledSaveStyle = await disabledSaveDraft.evaluate((button) => ({ background: getComputedStyle(button).backgroundColor, color: getComputedStyle(button).color }))
+const disabledSave = page.getByRole("button", { name: "Save", exact: true })
+assert(await disabledSave.isDisabled(), "Incomplete Cutting Plan unexpectedly enables Save")
+const disabledSaveStyle = await disabledSave.evaluate((button) => ({ background: getComputedStyle(button).backgroundColor, color: getComputedStyle(button).color }))
 assert(disabledSaveStyle.background !== "rgb(4, 120, 87)" && disabledSaveStyle.color !== "rgb(255, 255, 255)", `Disabled primary action still looks enabled: ${JSON.stringify(disabledSaveStyle)}`)
 
 const lotField = page.locator(".cutting-plan-editor__field").filter({ hasText: "Lot" })
@@ -155,25 +156,29 @@ await lotField.locator(".p-autocomplete-input").fill("LOT")
 	await page.locator(".p-autocomplete-option").filter({ hasText: "LOT-001" }).click()
 	await page.getByRole("columnheader", { name: "S", exact: true }).waitFor()
 	assert(await page.locator(".quantity-attribute").filter({ hasText: "Navy" }).count() >= 1, "Lot matrix did not render the authoritative colour row")
-	const enabledSubmit = page.getByRole("button", { name: "Save & Submit", exact: true })
-	assert(!(await enabledSubmit.isDisabled()), "Complete Cutting Plan does not enable Save & Submit")
-	await page.waitForFunction(() => [...document.querySelectorAll("button")].some((button) => button.textContent?.trim().includes("Save & Submit") && getComputedStyle(button).backgroundColor === "rgb(4, 120, 87)"))
-	const enabledSubmitStyle = await enabledSubmit.evaluate((button) => ({ background: getComputedStyle(button).backgroundColor, color: getComputedStyle(button).color }))
-	assert(enabledSubmitStyle.background === "rgb(4, 120, 87)" && enabledSubmitStyle.color === "rgb(255, 255, 255)", `Enabled primary action lost its visual hierarchy: ${JSON.stringify(enabledSubmitStyle)}`)
+	const enabledSave = page.getByRole("button", { name: "Save", exact: true })
+	const saveOptions = page.getByRole("button", { name: "Save options", exact: true })
+	assert(!(await enabledSave.isDisabled()) && !(await saveOptions.isDisabled()), "Complete Cutting Plan does not enable the Frappe-style save menu")
+	await page.waitForFunction(() => [...document.querySelectorAll("button")].some((button) => button.textContent?.trim() === "Save" && getComputedStyle(button).backgroundColor === "rgb(4, 120, 87)"))
+	const enabledSaveStyle = await enabledSave.evaluate((button) => ({ background: getComputedStyle(button).backgroundColor, color: getComputedStyle(button).color }))
+	assert(enabledSaveStyle.background === "rgb(4, 120, 87)" && enabledSaveStyle.color === "rgb(255, 255, 255)", `Enabled primary action lost its visual hierarchy: ${JSON.stringify(enabledSaveStyle)}`)
 
-	await page.getByRole("button", { name: "Save Draft", exact: true }).click()
+	await enabledSave.click()
 await page.waitForURL("**/web/cutting/plans/CP-WEB-NEW")
 await page.getByRole("heading", { name: "Edit Cutting Plan", exact: true }).waitFor({ timeout: 20_000 })
 assert(savedBody?.submit === false, `Draft save sent an unexpected lifecycle action: ${JSON.stringify(savedBody)}`)
 assert(savedBody?.values?.item_details?.[0]?.items?.[0]?._row_key === "g0:r0", "Draft save lost the authoritative row key")
 assert(!page.url().includes("/app/"), "Cutting Plan creation redirected to Desk")
-assert(await page.getByRole("button", { name: "Save & Submit", exact: true }).count() === 1, "Permitted Save & Submit is missing")
+assert(await page.getByRole("button", { name: "Save options", exact: true }).count() === 1, "Permitted Save & Submit menu is missing")
+await page.getByRole("button", { name: "Save options", exact: true }).click()
+assert(await page.getByRole("menuitem", { name: "Save & Submit", exact: true }).count() === 1, "Permitted Save & Submit action is missing")
+await page.keyboard.press("Escape")
 
 canSubmit = false
 saved = false
 await page.goto(`${SITE}/web/cutting/plans/new`, { waitUntil: "domcontentloaded" })
 await page.getByRole("heading", { name: "New Cutting Plan", exact: true }).waitFor()
-assert(await page.getByRole("button", { name: "Save & Submit", exact: true }).count() === 0, "Save & Submit ignores submit permission")
+assert(await page.getByRole("button", { name: "Save options", exact: true }).count() === 0, "Save & Submit ignores submit permission")
 
 const plies = page.getByLabel("Maximum No of Plys")
 await plies.fill("110")

@@ -217,9 +217,9 @@ a {
 }
 
 .administrator-page {
-	width: min(1240px, calc(100% - 64px));
+	width: min(1360px, calc(100% - 64px));
 	margin: 0 auto;
-	padding: clamp(40px, 6vw, 72px) 0 64px;
+	padding: clamp(36px, 4.5vw, 56px) 0 56px;
 }
 
 .administrator-page__header {
@@ -228,7 +228,7 @@ a {
 	align-items: end;
 	justify-content: space-between;
 	gap: var(--erp-space-6);
-	margin-bottom: var(--erp-space-7);
+	margin-bottom: var(--erp-space-6);
 }
 
 .administrator-page__eyebrow {
@@ -243,7 +243,7 @@ a {
 .administrator-page__header h1 {
 	margin: 0;
 	color: var(--erp-text);
-	font-size: clamp(2rem, 4vw, 3.25rem);
+	font-size: clamp(2rem, 3.4vw, 3rem);
 	font-weight: var(--erp-font-weight-bold);
 	line-height: 1.05;
 	letter-spacing: -0.048em;
@@ -296,8 +296,8 @@ a {
 
 .department-grid {
 	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: var(--erp-space-4);
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: var(--erp-space-3);
 }
 
 .department-card-link {
@@ -310,7 +310,7 @@ a {
 .department-card {
 	--accent: var(--erp-accent);
 	position: relative;
-	min-height: 126px;
+	min-height: 96px;
 	overflow: hidden;
 	background: var(--erp-surface-raised);
 	border: 1px solid var(--erp-border);
@@ -344,7 +344,7 @@ a {
 .department-card .p-card-content {
 	display: flex;
 	align-items: center;
-	padding: 22px 24px;
+	padding: 16px 18px;
 }
 
 .department-card__layout {
@@ -354,20 +354,17 @@ a {
 	width: 100%;
 }
 
-.department-card-link:hover,
 .department-card-link:focus-visible {
 	box-shadow: var(--erp-shadow-md);
 	outline: none;
-	transform: translateY(-3px);
+	transform: translateY(-2px);
 }
 
-.department-card-link:hover .department-card,
 .department-card-link:focus-visible .department-card {
 	border-color: color-mix(in srgb, var(--accent) 38%, var(--erp-border));
 	box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 7%, transparent);
 }
 
-.department-card-link:hover .department-card::before,
 .department-card-link:focus-visible .department-card::before {
 	opacity: 1;
 }
@@ -385,15 +382,15 @@ a {
 
 .department-card__mark {
 	display: grid;
-	width: 48px;
-	height: 48px;
+	width: 44px;
+	height: 44px;
 	margin-right: var(--erp-space-4);
 	color: white;
 	font-size: var(--erp-font-size-caption);
 	font-weight: var(--erp-font-weight-bold);
 	letter-spacing: 0.07em;
 	background: var(--accent);
-	border-radius: 13px;
+	border-radius: 12px;
 	box-shadow: 0 5px 14px color-mix(in srgb, var(--accent) 20%, transparent);
 	place-items: center;
 }
@@ -429,10 +426,34 @@ a {
 	transition: background var(--erp-transition-fast), transform var(--erp-transition-base);
 }
 
-.department-card-link:hover .department-card__arrow,
 .department-card-link:focus-visible .department-card__arrow {
 	background: color-mix(in srgb, var(--accent) 13%, white);
 	transform: translateX(3px);
+}
+
+@media (hover: hover) {
+	.department-card-link:hover {
+		box-shadow: var(--erp-shadow-md);
+		transform: translateY(-2px);
+	}
+
+	.department-card-link:hover .department-card {
+		border-color: color-mix(in srgb, var(--accent) 38%, var(--erp-border));
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 7%, transparent);
+	}
+
+	.department-card-link:hover .department-card::before { opacity: 1; }
+
+	.department-card-link:hover .department-card__arrow {
+		background: color-mix(in srgb, var(--accent) 13%, white);
+		transform: translateX(3px);
+	}
+}
+
+@media (max-width: 1120px) {
+	.department-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
 }
 
 .department-page {
@@ -546,7 +567,7 @@ a {
 	}
 
 	.administrator-page {
-		width: min(100% - 28px, 1240px);
+		width: min(100% - 28px, 1360px);
 		padding: 36px 0 44px;
 	}
 
@@ -590,12 +611,24 @@ a {
 	}
 
 	.department-card {
-		min-height: 112px;
+		min-height: 96px;
 		border-radius: var(--erp-panel-radius);
 	}
 
 	.department-card .p-card-content {
-		padding: 18px 20px;
+		padding: 16px 18px;
+	}
+}
+
+@media (max-width: 1024px), (pointer: coarse) {
+	.app-topbar__home {
+		min-width: 44px;
+		min-height: 44px;
+	}
+
+	.app-brand {
+		min-width: 44px;
+		min-height: 44px;
 	}
 }
 
@@ -607,24 +640,92 @@ a {
 	}
 
 	.app-topbar__home {
-		width: 38px;
+		width: 44px;
+		min-height: 44px;
 		justify-content: center;
 		padding: 0;
 	}
 
+	.app-brand {
+		min-width: 44px;
+		min-height: 44px;
+		justify-content: flex-start;
+	}
+
 	.administrator-page {
 		width: calc(100% - 24px);
-		padding-top: 30px;
+		padding: 22px 0 28px;
+	}
+
+	.administrator-page__header {
+		gap: 12px;
+		margin-bottom: 18px;
 	}
 
 	.administrator-page__header h1 {
-		font-size: clamp(2rem, 12vw, 2.65rem);
+		font-size: clamp(1.85rem, 8.7vw, 2.25rem);
+	}
+
+	.administrator-page__description {
+		display: none;
+	}
+
+	.administrator-page__summary {
+		min-height: 32px;
+	}
+
+	.administrator-page__section-header {
+		margin-bottom: 10px;
+	}
+
+	.department-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 10px;
+	}
+
+	.department-card {
+		min-height: 104px;
+	}
+
+	.department-card::before {
+		top: 14px;
+		bottom: 14px;
+	}
+
+	.department-card .p-card-content {
+		padding: 12px;
+	}
+
+	.department-card__layout {
+		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-rows: auto 1fr;
+		align-items: start;
+		row-gap: 8px;
 	}
 
 	.department-card__mark {
 		width: 44px;
 		height: 44px;
-		margin-right: var(--erp-space-3);
+		margin-right: 0;
+	}
+
+	.department-card__content {
+		grid-column: 1 / -1;
+		grid-row: 2;
+		align-self: end;
+	}
+
+	.department-card__content strong {
+		font-size: 14px;
+		line-height: 1.25;
+		white-space: normal;
+	}
+
+	.department-card__arrow {
+		grid-column: 2;
+		grid-row: 1;
+		align-self: center;
+		margin-left: 0;
 	}
 }
 
@@ -636,6 +737,17 @@ a {
 	.app-shell *,
 	.app-shell *::before,
 	.app-shell *::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+
+	.p-dialog-mask,
+	.p-dialog-mask *,
+	.p-dialog-mask *::before,
+	.p-dialog-mask *::after,
+	.p-toast,
+	.p-toast * {
 		animation-duration: 0.01ms !important;
 		animation-iteration-count: 1 !important;
 		transition-duration: 0.01ms !important;

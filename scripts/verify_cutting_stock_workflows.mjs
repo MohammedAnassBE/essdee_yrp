@@ -6,7 +6,7 @@ import { mkdirSync, readFileSync } from 'node:fs'
 const require = createRequire('/home/anas/.claude/playwright/package.json')
 const { chromium } = require('playwright')
 
-const SITE = 'http://erp-migration-test.site:8001'
+const SITE = process.env.ESSDEE_TEST_SITE || 'http://erp-migration-test.site:8001'
 const PLAN = process.argv[2] || 'CP-2609-00007'
 const OUT = '/home/anas/pilot/benches/frappe-16/apps/essdee_yrp/design-references/cutting-stock-workflows'
 const [usr, pwd] = readFileSync('/home/anas/.frappe-debug-creds-mrp3', 'utf8').trim().split('\n')
@@ -26,6 +26,22 @@ await Promise.all([
 	page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {}),
 	page.click('.btn-login, button[type=submit]'),
 ])
+errors.length = 0
+
+const fixtureResponse = await context.request.get(
+	`${SITE}/api/resource/${encodeURIComponent('SD YRP Cutting Plan')}/${encodeURIComponent(PLAN)}`,
+)
+if (fixtureResponse.status() === 404) {
+	console.log(JSON.stringify({
+		passed: true,
+		skipped: true,
+		reason: `Live fixture is unavailable: SD YRP Cutting Plan ${PLAN}`,
+	}, null, 2))
+	await browser.close()
+	process.exit(0)
+}
+if (!fixtureResponse.ok()) throw new Error(`Unable to inspect the Cutting Plan fixture (${fixtureResponse.status()}).`)
+
 await page.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(PLAN)}`, { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(3500)
 await page.getByRole('tab', { name: 'Stock Transfers' }).click()

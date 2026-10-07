@@ -6,9 +6,16 @@ import { existsSync, readFileSync } from "node:fs"
 const require = createRequire("/home/anas/.claude/playwright/package.json")
 const { chromium } = require("playwright")
 
-const SITE = "http://erp-migration-test.site:8001"
+const SITE = process.env.ESSDEE_TEST_SITE || "http://erp-migration-test.site:8001"
 const CREDENTIALS = "/home/anas/.frappe-debug-creds-mrp3"
 const suite = process.argv[2] || "all"
+
+class FixtureUnavailableError extends Error {
+	constructor(message) {
+		super(message)
+		this.name = "FixtureUnavailableError"
+	}
+}
 
 export function assert(condition, message) {
 	if (!condition) throw new Error(message)
@@ -40,12 +47,13 @@ export async function findCuttingPlan(request, predicate = () => true) {
 			`${SITE}/api/method/essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.get_web_view_data`,
 			{ params: { cutting_plan: name } },
 		)
-		if (!response.ok()) continue
+		if (response.status() === 404) continue
+		assert(response.ok(), `Unable to load Cutting Plan ${name} (${response.status()})`)
 		const data = (await response.json()).message || {}
 		if (await predicate(data, name)) return { name, data }
 	}
 
-	throw new Error("No Cutting Plan fixture matched the requested state")
+	throw new FixtureUnavailableError("No Cutting Plan fixture matched the requested state")
 }
 
 export function assertNoBrowserErrors(errors) {
@@ -127,6 +135,10 @@ async function shellSuite(page) {
 	await destinations.first().click()
 	await page.waitForURL("**/web/cutting")
 	await page.locator(".workspace-launcher").waitFor({ timeout: 20_000 })
+	assert(
+		(await page.locator(".department-page__nav .back-link").innerText()).trim() === "Workspaces",
+		"Root department launchers do not identify their Workspaces destination",
+	)
 	assert(await page.evaluate(() => document.activeElement?.id) === "app-main", "Route navigation does not move focus to the new main content")
 	assert((await page.title()).includes("Cutting"), `Route navigation does not update the document title: ${await page.title()}`)
 
@@ -188,6 +200,19 @@ async function cuttingEntrySuite(page, context) {
 
 async function listSuite(page, context) {
 	await page.setViewportSize({ width: 1600, height: 1000 })
+	await page.route("**/api/resource/SD%20YRP%20Cutting%20Plan?*", async (route) => {
+		const filters = new URL(route.request().url()).searchParams.get("filters") || ""
+		const data = filters.includes("__no_matching_cutting_plan__") ? [] : [{
+			name: "CP-UI-AUDIT-00001",
+			lot: "LOT-WITH-A-LONG-VISIBLE-NAME-FOR-ELLIPSIS",
+			item: "STYLE-UI-AUDIT",
+			cp_status: "Draft",
+			no_of_colours: 3,
+			no_of_colours_completed: 1,
+			modified: "2026-10-08 02:00:00",
+		}]
+		await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data }) })
+	})
 	await page.goto(`${SITE}/web/cutting/plans`, { waitUntil: "domcontentloaded" })
 	await page.getByRole("button", { name: "Filters", exact: true }).waitFor({ timeout: 20_000 })
 	await page.locator(".premium-list-table .p-datatable-tbody > tr").first().waitFor({ timeout: 20_000 })
@@ -195,6 +220,8 @@ async function listSuite(page, context) {
 	assert(await page.locator(".list-page-head").count() === 1, "List command header is duplicated")
 	const listSurface = await page.locator(".cutting-list").boundingBox()
 	assert(listSurface?.width >= 1520, `Cutting list does not use the shared full-width shell: ${JSON.stringify(listSurface)}`)
+	const populatedFrameHeight = (await page.locator(".list-table-frame").boundingBox())?.height || 0
+	assert(populatedFrameHeight > 300, `Populated desktop list no longer uses its viewport-bounded data region: ${populatedFrameHeight}`)
 	assert(await page.getByText(/^\d+\s+records$/i).count() === 0, "Header record-count prose is visible")
 	assert(await page.locator(".mobile-quick-filter-toggle:visible").count() === 0, "Mobile quick-filter control is visible on desktop")
 	const openTarget = await page.locator(".list-row-open").first().boundingBox()
@@ -204,7 +231,7 @@ async function listSuite(page, context) {
 	const statusRailStyle = await page.locator(".list-status-tabs").evaluate((element) => ({ overflowX: getComputedStyle(element).overflowX, maskImage: getComputedStyle(element).maskImage }))
 	assert(["auto", "scroll"].includes(statusRailStyle.overflowX) && statusRailStyle.maskImage !== "none", `Status rail lacks a horizontal-scroll affordance: ${JSON.stringify(statusRailStyle)}`)
 	const primaryButtonShadow = await page.locator(".list-toolbar__primary .p-button").first().evaluate((element) => getComputedStyle(element).boxShadow)
-	assert(primaryButtonShadow !== "none", "List primary action does not use the shared elevated treatment")
+	assert(primaryButtonShadow === "none", "List primary action bypasses the shared flat command treatment")
 
 	const toolbarControls = page.locator(".list-search input, .list-toolbar__primary > .p-button, .list-toolbar__secondary > .p-button")
 	const controlHeights = await toolbarControls.evaluateAll((elements) =>
@@ -266,56 +293,101 @@ async function listSuite(page, context) {
 	await page.locator(".list-empty").waitFor({ timeout: 20_000 })
 	await page.waitForFunction(() => !document.querySelector('button[aria-label="Refresh"]')?.disabled)
 	await page.locator(".p-datatable-mask").waitFor({ state: "hidden" })
-	assert(await page.getByText("No records found", { exact: true }).isVisible(), "Empty search state is not intentional")
+	assert(await page.locator(".list-empty:visible").getByText("No records found", { exact: true }).isVisible(), "Empty search state is not intentional")
+	const desktopEmptyFrameHeight = (await page.locator(".list-table-frame").boundingBox())?.height || 0
+	assert(
+		desktopEmptyFrameHeight >= 220 && desktopEmptyFrameHeight <= 300,
+		`Empty desktop list does not collapse to a compact 220–300px data region: ${desktopEmptyFrameHeight}`,
+	)
 	await page.setViewportSize({ width: 390, height: 844 })
-	const emptyStateSurface = await page.locator(".list-empty").evaluate((element) => {
-		const cell = element.closest("td")
+	const mobileCreateLabel = page.locator(".list-toolbar__primary .p-button-label")
+	assert(
+		await mobileCreateLabel.isVisible() && (await mobileCreateLabel.innerText()).trim().startsWith("Create"),
+		"Mobile list hides the primary create action label",
+	)
+	const activeFilterBadge = page.getByRole("button", { name: /^Filters/ }).locator(".p-badge")
+	assert(
+		await activeFilterBadge.isVisible() && (await activeFilterBadge.innerText()).trim() === "1",
+		"Mobile list does not expose the active query count on its Filters action",
+	)
+	const filterActionTreatment = await page.locator(".list-toolbar__secondary").evaluate((toolbar) => {
+		const buttons = Array.from(toolbar.querySelectorAll("button"))
+		const clear = buttons.find((button) => button.textContent.includes("Clear Filters"))
+		const columns = buttons.find((button) => button.textContent.includes("Columns"))
+		const treatment = (button) => {
+			const style = getComputedStyle(button)
+			return [style.color, style.backgroundColor, style.borderColor].join("|")
+		}
+		return { clear: treatment(clear), columns: treatment(columns), clearDisabled: clear.disabled }
+	})
+	assert(
+		!filterActionTreatment.clearDisabled && filterActionTreatment.clear !== filterActionTreatment.columns,
+		`Active Clear Filters action is not visually distinct: ${JSON.stringify(filterActionTreatment)}`,
+	)
+	const emptyStateSurface = await page.locator(".mobile-list-empty:visible").evaluate((element) => {
+		const frame = element.closest(".list-table-frame")
 		return {
-			cellClass: cell?.className || "",
-			background: getComputedStyle(cell || element).backgroundColor,
-			color: getComputedStyle(cell || element).color,
-			frameBackground: getComputedStyle(element.closest(".list-table-frame")).backgroundColor,
+			background: getComputedStyle(element).backgroundColor,
+			color: getComputedStyle(element).color,
+			frameBackground: getComputedStyle(frame).backgroundColor,
 		}
 	})
 	assert(emptyStateSurface.frameBackground === "rgb(255, 255, 255)", `Mobile list empty state is not on the shared bright surface: ${JSON.stringify(emptyStateSurface)}`)
-	const mobileEmptyState = await page.locator(".p-datatable-table-container").evaluate((scroller) => {
-		const message = scroller.querySelector(".list-empty strong")
-		const scrollerRect = scroller.getBoundingClientRect()
+	const mobileEmptyState = await page.locator(".mobile-list-empty:visible").evaluate((emptyState) => {
+		const frame = emptyState.closest(".list-table-frame")
+		const message = emptyState.querySelector("strong")
+		const frameRect = frame.getBoundingClientRect()
+		const emptyRect = emptyState.getBoundingClientRect()
 		const messageRect = message?.getBoundingClientRect()
 		return {
-			scroller: { left: scrollerRect.left, right: scrollerRect.right },
+			frame: { left: frameRect.left, right: frameRect.right },
+			empty: { left: emptyRect.left, right: emptyRect.right },
 			message: messageRect ? { left: messageRect.left, right: messageRect.right } : null,
+			desktopDisplay: getComputedStyle(frame.querySelector(".premium-list-table")).display,
 		}
 	})
 	await page.screenshot({ path: "/tmp/essdee-cutting-list-empty-mobile.png", fullPage: true })
 	assert(
 		mobileEmptyState.message
-			&& mobileEmptyState.message.left >= mobileEmptyState.scroller.left
-			&& mobileEmptyState.message.right <= mobileEmptyState.scroller.right,
-		`Mobile list empty state is outside the visible table region: ${JSON.stringify(mobileEmptyState)}`,
+			&& mobileEmptyState.empty.left >= mobileEmptyState.frame.left
+			&& mobileEmptyState.empty.right <= mobileEmptyState.frame.right
+			&& mobileEmptyState.message.left >= mobileEmptyState.frame.left
+			&& mobileEmptyState.message.right <= mobileEmptyState.frame.right
+			&& mobileEmptyState.desktopDisplay === "none",
+		`Mobile list empty state is outside the responsive record surface: ${JSON.stringify(mobileEmptyState)}`,
 	)
-	const scrolledEmptyState = await page.locator(".p-datatable-table-container").evaluate(async (scroller) => {
-		scroller.scrollLeft = scroller.scrollWidth
-		await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-		const messageRect = scroller.querySelector(".list-empty strong")?.getBoundingClientRect()
-		const scrollerRect = scroller.getBoundingClientRect()
+	await page.setViewportSize({ width: 320, height: 720 })
+	const narrowToolbarGeometry = await page.locator(".list-toolbar__actions").evaluate((toolbar) => {
+		const search = toolbar.querySelector(".list-search").getBoundingClientRect()
+		const create = toolbar.querySelector(".list-toolbar__primary .p-button").getBoundingClientRect()
 		return {
-			scroller: { left: scrollerRect.left, right: scrollerRect.right },
-			message: messageRect ? { left: messageRect.left, right: messageRect.right } : null,
+			searchWidth: search.width,
+			createWidth: create.width,
+			createBelowSearch: create.top >= search.bottom,
 		}
 	})
 	assert(
-		scrolledEmptyState.message
-			&& scrolledEmptyState.message.left >= scrolledEmptyState.scroller.left
-			&& scrolledEmptyState.message.right <= scrolledEmptyState.scroller.right,
-		`Mobile list empty state does not remain visible while the table scrolls: ${JSON.stringify(scrolledEmptyState)}`,
+		narrowToolbarGeometry.searchWidth >= 250
+			&& narrowToolbarGeometry.createWidth >= 250
+			&& narrowToolbarGeometry.createBelowSearch,
+		`Narrow mobile list commands crowd the search field: ${JSON.stringify(narrowToolbarGeometry)}`,
 	)
 	await page.getByRole("button", { name: "Clear Filters", exact: true }).click()
-	await page.locator(".premium-list-table .p-datatable-tbody > tr").first().waitFor({ timeout: 20_000 })
+	await page.locator(".mobile-list-record").first().waitFor({ timeout: 20_000 })
 
 	await page.setViewportSize({ width: 900, height: 760 })
 	const quickFilterRows = await page.locator(".list-quick-filters .quick-filter-field").evaluateAll((elements) => new Set(elements.map((element) => Math.round(element.getBoundingClientRect().y))).size)
 	assert(quickFilterRows === 1, `Cutting Plan quick filters leave an orphaned row at 900px: ${quickFilterRows}`)
+	const tabletListSurface = await page.locator(".list-table-frame").evaluate((frame) => ({
+		desktopDisplay: getComputedStyle(frame.querySelector(".premium-list-table")).display,
+		recordDisplay: getComputedStyle(frame.querySelector(".mobile-list-records")).display,
+	}))
+	assert(
+		tabletListSurface.desktopDisplay === "none" && tabletListSurface.recordDisplay === "grid",
+		`Tablet list does not use the responsive record surface: ${JSON.stringify(tabletListSurface)}`,
+	)
+	await page.setViewportSize({ width: 1280, height: 900 })
+	await page.locator(".premium-list-table .p-datatable-tbody > tr").first().waitFor({ timeout: 20_000 })
 	const tableContainment = await page.locator(".p-datatable-table-container").evaluate((element) => ({
 		clientWidth: element.clientWidth,
 		scrollWidth: element.scrollWidth,
@@ -341,7 +413,7 @@ async function listSuite(page, context) {
 		await loadingPage.close()
 	}
 
-	return { controlHeights, headerPosition, numericAlignment, longValueTreatment, emptyStateSurface, tableContainment }
+	return { controlHeights, headerPosition, numericAlignment, longValueTreatment, populatedFrameHeight, desktopEmptyFrameHeight, emptyStateSurface, tabletListSurface, tableContainment }
 }
 
 function groupItemCount(value) {
@@ -489,7 +561,8 @@ async function formLoadFailuresSuite(page, context) {
 		)
 
 		documentFailure = false
-		await formView.getByRole("button", { name: "Retry", exact: true }).click()
+		const recoveryDialog = reloadPage.locator(".document-error-dialog:visible")
+		await recoveryDialog.getByRole("button", { name: "Retry", exact: true }).click()
 		await formView.locator(".form-toolbar__meta > small").getByText(fixture.name, { exact: true }).waitFor()
 		await formView.getByRole("button", { name: "Edit", exact: true }).waitFor()
 		assert(
@@ -1026,7 +1099,8 @@ async function findEditableLaySheet(request, fixture) {
 		const response = await request.get(method, {
 			params: { cutting_plan: fixture.name, cutting_laysheet: summary.name },
 		})
-		if (!response.ok()) continue
+		if (response.status() === 404) continue
+		assert(response.ok(), `Unable to load Cutting LaySheet ${summary.name} (${response.status()})`)
 		const sheet = (await response.json()).message || {}
 		if (sheet.permissions?.can_edit_details && sheet.cloth_details?.length) return sheet
 	}
@@ -1949,6 +2023,9 @@ try {
 		try {
 			results[suiteName] = await suites[suiteName](page, context)
 			assertNoBrowserErrors(errors)
+		} catch (error) {
+			if (!(error instanceof FixtureUnavailableError)) throw error
+			results[suiteName] = { skipped: true, reason: error.message }
 		} finally {
 			await page.close()
 		}

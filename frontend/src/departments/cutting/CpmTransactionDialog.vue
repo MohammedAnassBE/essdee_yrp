@@ -1,9 +1,8 @@
 <template>
-	<Dialog :visible="visible" modal dismissable-mask maximizable :header="record ? `${record.doctype} · ${record.name}` : 'Transaction'" class="erp-transaction-dialog erp-entity-dialog" :style="{ width: 'min(1180px, 96vw)' }" @update:visible="emit('update:visible', $event)">
+	<Dialog :visible="visible" modal dismissable-mask maximizable :header="record ? `${record.doctype} · ${record.name}` : 'Transaction'" class="erp-transaction-dialog erp-entity-dialog erp-dialog--lg" @update:visible="emit('update:visible', $event)">
 		<div v-if="loading" class="erp-transaction-loading"><Skeleton v-for="index in 5" :key="index" height="3rem" /></div>
 		<div v-else class="erp-transaction-detail">
-			<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
-			<div v-if="record" class="erp-transaction-status"><span class="erp-status" :class="`erp-status--${record.status?.toLowerCase()}`">{{ record.status }}</span><small>Updated {{ formatDate(record.modified, true) }}</small></div>
+			<div v-if="record" class="erp-transaction-status"><DocumentStatusBadge :docstatus="record.docstatus" :label="record.status" /><small>Updated {{ formatDate(record.modified, true) }}</small></div>
 			<section v-if="record?.details?.length" class="erp-detail-grid"><div v-for="row in record.details" :key="row.fieldname"><span>{{ row.label }}</span><strong>{{ display(row.value) }}</strong></div></section>
 			<StockItemMatrix v-if="record?.item_groups?.length" :groups="record.item_groups" :doctype="record.doctype" :physical-row-count="record.item_row_count || 0" />
 			<section v-else-if="record?.item_row_count" class="erp-items-empty"><i class="pi pi-exclamation-circle"></i><div><strong>Item matrix unavailable</strong><span>The transaction has item rows, but their parent-item attributes could not be resolved.</span></div></section>
@@ -15,16 +14,18 @@
 			<Button v-if="record?.permissions?.can_submit" label="Submit" icon="pi pi-check" :loading="saving" @click="changeStatus('submit')" />
 		</template>
 	</Dialog>
+	<DocumentErrorDialog :message="error" title="Transaction could not be updated" />
 </template>
 
 <script setup>
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
-import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 import { ref, watch } from "vue"
 
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
+import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { changeLinkedTransactionStatus, getLinkedTransaction } from "./cpmApi.js"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
 import StockItemMatrix from "./StockItemMatrix.vue"

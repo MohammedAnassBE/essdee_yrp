@@ -1,8 +1,10 @@
 <template>
 	<DepartmentPage title="LaySheet Planner" accent="#059669" back-to="/cutting" back-label="Cutting" :show-title="false" flat full-width>
 		<div class="cutting-list erp-workspace">
+			<WorkspaceLoadError v-if="loadError" :message="loadError" :loading="loadingCapability" @retry="load" />
+			<WorkspaceLoadError v-else-if="capability && !capability.can_read" title="LaySheet Planner unavailable" message="You do not have permission to view LaySheet Planner documents." :retryable="false" />
 			<ListView
-				v-if="capability"
+				v-else-if="capability?.can_read"
 				doctype="SD YRP Cutting Laysheet Planner"
 				title="LaySheet Planner"
 				search-placeholder="Search LaySheet Plans…"
@@ -20,7 +22,7 @@
 					<Button v-if="capability.can_create" class="list-primary-action" label="Create LaySheet Plan" icon="pi pi-plus" @click="createPlan" />
 				</template>
 				<template #cell-optimization_status="{ value }">
-					<Tag :value="value || 'Not Started'" :severity="statusSeverity(value)" rounded />
+					<DocumentStatusBadge :label="value || 'Not Started'" />
 				</template>
 			</ListView>
 		</div>
@@ -29,16 +31,19 @@
 
 <script setup>
 import Button from "primevue/button"
-import Tag from "primevue/tag"
 import { onMounted, ref } from "vue"
 import { useRouter } from "vue-router"
 
 import { getCuttingCapabilities } from "../api/cuttingWorkspaces.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import ListView from "../components/common/ListView.vue"
+import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
+import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
 
 const router = useRouter()
 const capability = ref(null)
+const loadError = ref("")
+const loadingCapability = ref(true)
 const defaultColumns = ["description", "lot", "item", "optimization_status", "selected_strategy", "modified"]
 const statusOptions = ["Not Started", "Queued", "Running", "Completed", "Failed"]
 
@@ -50,17 +55,21 @@ function createPlan() {
 	router.push("/cutting/lay-sheet-planner/new")
 }
 
-function statusSeverity(status) {
-	if (status === "Completed") return "success"
-	if (status === "Failed") return "danger"
-	if (["Queued", "Running"].includes(status)) return "info"
-	return "secondary"
+async function load() {
+	loadingCapability.value = true
+	loadError.value = ""
+	try {
+		const capabilities = await getCuttingCapabilities()
+		capability.value = capabilities?.["lay-sheet-planner"] || { can_read: false, can_create: false }
+	} catch (reason) {
+		capability.value = null
+		loadError.value = reason?.message || "Unable to load LaySheet Planner."
+	} finally {
+		loadingCapability.value = false
+	}
 }
 
-onMounted(async () => {
-	const capabilities = await getCuttingCapabilities()
-	capability.value = capabilities?.["lay-sheet-planner"] || { can_read: false, can_create: false }
-})
+onMounted(load)
 </script>
 
 <style scoped>

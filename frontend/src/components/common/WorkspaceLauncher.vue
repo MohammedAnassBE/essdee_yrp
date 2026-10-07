@@ -13,7 +13,7 @@
 
 		<div v-if="loading" class="workspace-launcher__grid" aria-label="Loading workspaces">
 			<span class="workspace-launcher__loading-status" role="status">Loading workspaces</span>
-			<Skeleton v-for="index in skeletonCount" :key="index" height="152px" border-radius="14px" />
+			<Skeleton v-for="index in skeletonCount" :key="index" height="124px" border-radius="14px" />
 		</div>
 		<div v-else-if="items.length" class="workspace-launcher__grid">
 			<RouterLink
@@ -55,7 +55,7 @@ const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]
 
 <style scoped>
 .workspace-launcher {
-	max-width: 1180px;
+	max-width: 1320px;
 	margin: 0 auto;
 	padding: clamp(24px, 4vw, 48px) 8px;
 }
@@ -91,21 +91,16 @@ const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]
 .workspace-launcher__card {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr) auto;
-	min-height: 152px;
-	padding: 24px;
+	min-height: 124px;
+	padding: 20px;
 	align-items: center;
 	box-shadow: var(--erp-shadow-xs);
 	transition: border-color var(--erp-transition-base), box-shadow var(--erp-transition-base), transform var(--erp-transition-base);
 }
 
-.workspace-launcher__card:hover,
 .workspace-launcher__card:focus-visible {
 	border-color: color-mix(in srgb, var(--erp-accent) 38%, var(--erp-border));
 	box-shadow: var(--erp-shadow-md);
-	transform: translateY(-3px);
-}
-
-.workspace-launcher__card:focus-visible {
 	outline: 3px solid color-mix(in srgb, var(--erp-accent) 24%, transparent);
 	outline-offset: 2px;
 }
@@ -114,9 +109,9 @@ const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]
 
 .workspace-launcher__icon {
 	display: grid;
-	width: 52px;
-	height: 52px;
-	margin-right: 17px;
+	width: 44px;
+	height: 44px;
+	margin-right: 15px;
 	color: var(--erp-accent);
 	font-size: 1.2rem;
 	background: var(--erp-accent-soft);
@@ -127,8 +122,10 @@ const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]
 
 .workspace-launcher__body {
 	display: flex;
+	min-height: 69px;
 	min-width: 0;
 	flex-direction: column;
+	justify-content: center;
 }
 
 .workspace-launcher__body strong {
@@ -152,9 +149,20 @@ const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]
 	transition: transform var(--erp-transition-fast);
 }
 
-.workspace-launcher__card:hover .workspace-launcher__arrow,
 .workspace-launcher__card:focus-visible .workspace-launcher__arrow {
 	transform: translateX(3px);
+}
+
+@media (hover: hover) {
+	.workspace-launcher__card:hover {
+		border-color: color-mix(in srgb, var(--erp-accent) 38%, var(--erp-border));
+		box-shadow: var(--erp-shadow-md);
+		transform: translateY(-2px);
+	}
+
+	.workspace-launcher__card:hover .workspace-launcher__arrow {
+		transform: translateX(3px);
+	}
 }
 
 .workspace-launcher__empty {
@@ -172,7 +180,50 @@ const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]
 @media (max-width: 760px) {
 	.workspace-launcher { padding: 24px 2px; }
 	.workspace-launcher__grid { grid-template-columns: 1fr; }
-	.workspace-launcher__card { min-height: 138px; padding: 18px; }
+	.workspace-launcher__card { min-height: 108px; padding: 14px; }
+	.workspace-launcher__body small {
+		display: -webkit-box;
+		overflow: hidden;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+	}
+}
+
+@media (max-width: 600px) {
+	.workspace-launcher__header { margin-bottom: var(--erp-space-4); }
+	.workspace-launcher__grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 10px;
+	}
+	.workspace-launcher__card {
+		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-rows: auto 1fr;
+		min-height: 104px;
+		padding: 12px;
+		align-items: start;
+		row-gap: 8px;
+	}
+	.workspace-launcher__icon {
+		margin-right: 0;
+	}
+	.workspace-launcher__body {
+		grid-column: 1 / -1;
+		grid-row: 2;
+		min-height: 0;
+		align-self: end;
+		justify-content: flex-end;
+	}
+	.workspace-launcher__body strong {
+		font-size: 14px;
+		line-height: 1.25;
+	}
+	.workspace-launcher__body small { display: none; }
+	.workspace-launcher__arrow {
+		grid-column: 2;
+		grid-row: 1;
+		align-self: center;
+		margin-left: 0;
+	}
 }
 
 @media (min-width: 761px) and (max-width: 1040px) {

@@ -6,7 +6,11 @@
 					<span class="stock-composer__eyebrow">Item builder</span>
 					<h3>Stock dimensions &amp; item</h3>
 				</div>
-				<span class="stock-composer__step">1 · Select &nbsp; 2 · Get Item &nbsp; 3 · Add</span>
+				<span class="stock-composer__step" aria-label="Steps: Select, Get Item, Add">
+					<span><b class="stock-composer__step-number">1</b>Select</span>
+					<span><b class="stock-composer__step-number">2</b>Get Item</span>
+					<span><b class="stock-composer__step-number">3</b>Add</span>
+				</span>
 			</header>
 
 			<div class="stock-composer__fields">
@@ -432,8 +436,31 @@ function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray
 }
 
 .stock-composer__step {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
 	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-caption);
+}
+
+.stock-composer__step > span {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	white-space: nowrap;
+}
+
+.stock-composer__step-number {
+	display: grid;
+	width: 19px;
+	height: 19px;
+	color: var(--erp-accent-dark);
+	font-size: var(--erp-font-size-min);
+	font-weight: 800;
+	background: var(--erp-accent-soft);
+	border: 1px solid color-mix(in srgb, var(--erp-accent) 18%, var(--erp-border));
+	border-radius: 50%;
+	place-items: center;
 }
 
 .stock-composer__count {
@@ -844,6 +871,11 @@ function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray
 	.stock-composer__heading {
 		align-items: stretch;
 		flex-direction: column;
+	}
+
+	.stock-composer__step {
+		justify-content: space-between;
+		gap: 7px;
 	}
 
 	.stock-composer__builder-footer > div {

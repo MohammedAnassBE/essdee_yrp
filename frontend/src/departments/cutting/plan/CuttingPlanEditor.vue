@@ -6,17 +6,18 @@
 				<h1>{{ name ? "Edit Cutting Plan" : "New Cutting Plan" }}</h1>
 			</div>
 			<div class="cutting-plan-editor__actions erp-editor-actions">
-				<Button label="Cancel" severity="secondary" text :disabled="saving" @click="emit('cancel')" />
-				<Button label="Save Draft" icon="pi pi-save" severity="secondary" outlined :loading="saving === 'draft'" :disabled="busy || !canSave" @click="save(false)" />
-				<Button v-if="permissions.can_submit" label="Save & Submit" icon="pi pi-check" :loading="saving === 'submit'" :disabled="busy || !canSave" @click="save(true)" />
+				<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="saving" @click="emit('cancel')" />
+				<DocumentSaveButton :show-submit="permissions.can_submit" :loading="Boolean(saving)" :disabled="busy || !canSave" @save="save(false)" @submit="save(true)" />
 			</div>
 		</header>
 
-		<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
+		<DocumentErrorDialog :message="loadFailed ? '' : error" title="Cutting Plan could not be completed" @dismiss="error = ''" />
 		<div v-if="loading" class="cutting-plan-editor__loading">
 			<Skeleton height="160px" />
 			<Skeleton height="280px" />
 		</div>
+
+		<WorkspaceLoadError v-else-if="loadFailed" title="Cutting Plan editor unavailable" :message="error" @retry="load" />
 
 		<div v-else class="cutting-plan-editor__body">
 			<section class="cutting-plan-editor__section">
@@ -58,7 +59,7 @@
 			</section>
 		</div>
 
-		<Dialog v-model:visible="discardVisible" header="Discard unsaved changes?" modal :closable="false" :style="{ width: 'min(440px, calc(100vw - 32px))' }">
+		<Dialog v-model:visible="discardVisible" class="erp-dialog--sm" header="Discard unsaved changes?" modal :closable="false">
 			<p class="cutting-plan-editor__discard-copy">Your unsaved Cutting Plan changes will be lost.</p>
 			<template #footer>
 				<Button label="Keep Editing" severity="secondary" text @click="keepEditing" />
@@ -74,7 +75,6 @@ import Checkbox from "primevue/checkbox"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
 import InputText from "primevue/inputtext"
-import Message from "primevue/message"
 import Select from "primevue/select"
 import Skeleton from "primevue/skeleton"
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
@@ -82,6 +82,9 @@ import { onBeforeRouteLeave } from "vue-router"
 
 import { getCuttingPlanEditor, loadCuttingPlanLot, saveCuttingPlan } from "../../../api/cuttingPlanEditor.js"
 import LinkField from "../../../components/common/LinkField.vue"
+import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
+import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
+import DocumentSaveButton from "../../../components/documents/DocumentSaveButton.vue"
 import CuttingQuantityMatrix from "../shared/CuttingQuantityMatrix.vue"
 
 const props = defineProps({
@@ -100,6 +103,7 @@ const loading = ref(true)
 const loadingLot = ref(false)
 const saving = ref("")
 const error = ref("")
+const hasLoaded = ref(false)
 const cleanSignature = ref("")
 const discardVisible = ref(false)
 let pendingNavigation = null
@@ -120,6 +124,7 @@ const signature = computed(() => JSON.stringify({
 	groups: groups.value,
 }))
 const dirty = computed(() => !loading.value && signature.value !== cleanSignature.value)
+const loadFailed = computed(() => Boolean(error.value && !hasLoaded.value))
 
 function clone(value) {
 	return JSON.parse(JSON.stringify(value ?? null))
@@ -134,6 +139,7 @@ function applyPayload(payload) {
 	Object.assign(options, payload?.options || {})
 	modified.value = record.modified || ""
 	cleanSignature.value = signature.value
+	hasLoaded.value = true
 	emit("loaded", payload)
 }
 

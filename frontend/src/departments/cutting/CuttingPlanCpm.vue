@@ -1,7 +1,7 @@
 <template>
 	<section ref="root" class="erp-cpm-workspace">
 		<div v-if="loading && !loaded" class="erp-workspace-loading"><Skeleton v-for="index in 6" :key="index" height="4.8rem" /></div>
-		<Message v-else-if="error && !loaded" severity="error" :closable="false">{{ error }}</Message>
+		<WorkspaceLoadError v-else-if="error && !loaded" title="Cut Panel Movement unavailable" :message="error" :loading="loading" @retry="load(true)" />
 		<template v-else-if="loaded">
 			<header class="erp-workspace-header">
 				<h2>Cut Panel Movement</h2>
@@ -14,7 +14,7 @@
 				<div class="erp-panel-heading"><h3>Movements</h3><Button v-if="workspace.permissions?.movement?.can_create" label="Create Movement" icon="pi pi-plus" size="small" @click="openMovement('')" /></div>
 				<div v-if="workspace.movements?.length" class="erp-record-grid">
 					<article v-for="movement in workspace.movements" :key="movement.name" class="erp-record-card">
-						<header><strong>{{ movement.name }}</strong><span class="erp-status" :class="statusClass(movement.status)">{{ movement.status }}</span></header>
+						<header><strong>{{ movement.name }}</strong><DocumentStatusBadge :docstatus="movement.docstatus" :label="movement.status" /></header>
 						<div class="erp-movement-time"><i class="pi pi-clock"></i><div><small>Movement date &amp; time</small><strong>{{ movementDateTime(movement) }}</strong></div></div>
 						<div class="erp-record-metrics"><span><small>Exact bundles</small><b>{{ movement.totals?.exact_bundles || 0 }}</b></span><span><small>Panels</small><b>{{ movement.totals?.selected_panels || 0 }}</b></span><span><small>Collapsed</small><b>{{ movement.totals?.collapsed_rows || 0 }}</b></span><span><small>Accessories</small><b>{{ movement.totals?.accessory_rows || 0 }}</b></span></div>
 						<div v-if="movement.against_id || movement.active_root_transactions?.length" class="erp-linked-note"><i class="pi pi-link"></i><span>{{ movement.against_id ? `${movement.against} · ${movement.against_id}` : `${movement.active_root_transactions[0].doctype} · ${movement.active_root_transactions[0].name}` }}</span></div>
@@ -35,7 +35,9 @@ import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 import { nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 
+import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import CpmMovementDialog from "./CpmMovementDialog.vue"
+import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { getCpmWorkspace } from "./cpmApi.js"
 
 const props = defineProps({ cuttingPlan: { type: String, required: true } })
@@ -83,7 +85,6 @@ async function load(force = false) {
 
 function openMovement(name) { selectedMovement.value = name; movementOpen.value = true }
 async function changed(value) { await load(true); emit("changed", value) }
-function statusClass(status) { return `erp-status--${String(status || "").toLowerCase()}` }
 function formatDate(value, includeTime = false) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/); if (!match) return value || "—"; const date = `${match[3]}-${match[2]}-${match[1]}`; return includeTime && match[4] ? `${date} · ${match[4]}:${match[5]}` : date }
 function formatTime(value) { const match = String(value || "").match(/^(\d{1,2}):(\d{2})/); return match ? `${match[1].padStart(2, "0")}:${match[2]}` : "" }
 function movementDateTime(movement) { const date = formatDate(movement.movement_date || movement.posting_date); const time = formatTime(movement.posting_time); return time ? `${date} · ${time}` : formatDate(movement.modified, true) }
@@ -106,9 +107,6 @@ defineExpose({ load, activate: () => load(true) })
 .erp-movement-time > div { display: grid; gap: 1px; }
 .erp-movement-time small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; }
 .erp-movement-time strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); font-variant-numeric: tabular-nums; }
-.erp-status { display: inline-flex; width: max-content; padding: 3px 8px; color: var(--erp-text-secondary); font-size: var(--erp-font-size-min); font-style: normal; font-weight: 750; text-transform: uppercase; background: var(--erp-surface-muted); border-radius: var(--erp-pill-radius); }
-.erp-status--submitted { color: var(--erp-accent-dark); background: var(--erp-success-soft); }
-.erp-status--cancelled { color: var(--erp-danger); background: var(--erp-danger-soft); }
 .erp-record-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; background: var(--erp-surface-soft); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
 .erp-record-metrics span { display: grid; gap: 2px; padding: 8px; border-right: 1px solid var(--erp-border); }
 .erp-record-metrics span:last-child { border-right: 0; }

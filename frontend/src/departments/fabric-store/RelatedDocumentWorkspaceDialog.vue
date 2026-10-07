@@ -6,8 +6,7 @@
 		:closable="!domainComponent"
 		:close-on-escape="!domainComponent"
 		:header="dialogTitle"
-		class="related-document-workspace-dialog erp-entity-dialog"
-		:style="{ width: 'min(96vw, 1540px)' }"
+		class="related-document-workspace-dialog erp-entity-dialog erp-dialog--xl"
 		:content-style="{ padding: 0, overflow: 'hidden', scrollbarGutter: 'auto' }"
 		@update:visible="requestVisibility"
 	>

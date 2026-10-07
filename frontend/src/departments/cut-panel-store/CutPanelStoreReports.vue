@@ -43,6 +43,6 @@ watch(visibleTabs, (available) => {
 </script>
 
 <style scoped>
-.cut-panel-store-reports{min-width:0}.cut-panel-store-reports__tabs{min-width:0}.cut-panel-store-reports__tab-list{position:sticky;z-index:var(--erp-layer-sticky);top:0;background:var(--erp-bg)}.cut-panel-store-reports__tabs :deep(.p-tab){display:inline-flex;align-items:center;gap:7px;padding:10px 14px;font-size:13px}.cut-panel-store-reports__panels{padding:12px 0 0;background:transparent}.cut-panel-store-reports__panels :deep(.p-tabpanel){padding:0}
-@media(max-width:600px){.cut-panel-store-reports__tabs :deep(.p-tab){padding:9px 10px}.cut-panel-store-reports__panels{padding-top:8px}}
+.cut-panel-store-reports{min-width:0}.cut-panel-store-reports__tabs{min-width:0}.cut-panel-store-reports__tab-list{position:sticky;z-index:var(--erp-layer-sticky);top:var(--erp-shell-header-height);background:var(--erp-bg)}.cut-panel-store-reports__tabs :deep(.p-tab){display:inline-flex;align-items:center;gap:7px;padding:10px 14px;font-size:13px}.cut-panel-store-reports__panels{padding:12px 0 0;background:transparent}.cut-panel-store-reports__panels :deep(.p-tabpanel){padding:0}
+@media(max-width:600px){.cut-panel-store-reports__tabs :deep(.p-tab){min-height:44px;padding:9px 10px}.cut-panel-store-reports__tab-list{overflow-x:auto;overscroll-behavior-x:contain}.cut-panel-store-reports__panels{padding-top:8px}}
 </style>

@@ -15,7 +15,7 @@
 				<template #header="{ record }">
 					<div class="purchase-order-page__identity">
 						<div><h1>Purchase Order</h1><span>{{ record.name }}</span></div>
-						<Tag :value="record.status || statusLabel(record.docstatus)" :severity="statusSeverity" rounded />
+						<DocumentStatusBadge :docstatus="record.docstatus" :label="record.status || statusLabel(record.docstatus)" />
 						<div class="purchase-order-page__facts" role="region" aria-label="Purchase Order context" tabindex="0">
 							<div><span>Supplier</span><strong :title="record.supplier_name || record.supplier || '—'">{{ record.supplier_name || record.supplier || "—" }}</strong></div>
 							<div><span>Order date</span><strong>{{ formatDate(record.transaction_date) }}</strong></div>
@@ -30,7 +30,7 @@
 
 				<template #fields>
 					<section v-if="visibleFields.length" class="purchase-order-page__details" aria-label="Purchase Order details">
-						<div v-for="field in visibleFields" :key="field.fieldname"><span>{{ field.label }}</span><strong>{{ formatField(field) }}</strong></div>
+						<div v-for="field in visibleFields" :key="field.fieldname" :class="{ 'purchase-order-page__detail--wide': isWide(field) }" :data-field="field.fieldname"><span>{{ field.label }}</span><strong :title="String(formatField(field))">{{ formatField(field) }}</strong></div>
 					</section>
 				</template>
 
@@ -43,11 +43,13 @@
 					<section v-if="relatedDocuments.length" class="purchase-order-related" aria-label="Related Purchase Order documents">
 						<header><span>Related documents</span><strong>{{ relatedDocuments.length }}</strong></header>
 						<button v-for="row in relatedDocuments" :key="`${row.doctype}-${row.name}`" type="button" @click="openRelated(row.doctype, {}, row.name)">
-							<div><strong>{{ row.name }}</strong><span>{{ row.label }}</span></div><Tag :value="statusLabel(row.docstatus)" :severity="Number(row.docstatus) === 1 ? 'info' : Number(row.docstatus) === 2 ? 'danger' : 'secondary'" rounded /><i class="pi pi-chevron-right" />
+							<div><strong>{{ row.name }}</strong><span>{{ row.label }}</span></div><DocumentStatusBadge :docstatus="row.docstatus" :label="statusLabel(row.docstatus)" /><i class="pi pi-chevron-right" />
 						</button>
 					</section>
-					<div v-for="total in workspace.totals || []" :key="total.fieldname" class="purchase-order-page__total" :class="{ 'purchase-order-page__total--primary': primaryTotalFieldnames.has(total.fieldname) }">
-						<span>{{ total.label }}</span><strong>{{ formatTotal(total) }}</strong>
+					<div class="purchase-order-page__totals">
+						<div v-for="total in workspace.totals || []" :key="total.fieldname" class="purchase-order-page__total" :class="{ 'purchase-order-page__total--primary': primaryTotalFieldnames.has(total.fieldname) }">
+							<span>{{ total.label }}</span><strong>{{ formatTotal(total) }}</strong>
+						</div>
 					</div>
 				</template>
 
@@ -67,7 +69,7 @@
 		/>
 		<DocumentConfirmationDialog v-model:visible="lifecycleConfirmVisible" :title="lifecycleConfirmTitle" :message="lifecycleConfirmMessage" :confirm-label="lifecycleConfirmLabel" :busy="Boolean(acting)" @confirm="confirmLifecycleAction" />
 
-		<Dialog v-model:visible="lotEditorVisible" modal header="Manage Linked Lots" class="fabric-action-dialog" :style="{ width: 'min(620px, calc(100vw - 24px))' }">
+		<Dialog v-model:visible="lotEditorVisible" modal header="Manage Linked Lots" class="fabric-action-dialog erp-dialog--md">
 			<div class="purchase-order-lots">
 				<div class="purchase-order-lots__list">
 					<span v-for="lot in lotDraft" :key="lot" class="purchase-order-lots__chip">{{ lot }}<Button icon="pi pi-times" severity="secondary" text rounded :aria-label="`Remove ${lot}`" @click="removeLot(lot)" /></span>
@@ -79,18 +81,18 @@
 			<template #footer><Button label="Cancel" severity="secondary" text @click="lotEditorVisible = false" /><Button label="Save Changes" icon="pi pi-save" :disabled="!lotChanged || !lotReason.trim()" :loading="acting === 'update_linked_lots'" @click="saveLinkedLots" /></template>
 		</Dialog>
 
-		<Dialog v-model:visible="deliverySourceVisible" modal header="Create Delivery Challan" class="fabric-action-dialog" :style="{ width: 'min(520px, calc(100vw - 24px))' }">
+		<Dialog v-model:visible="deliverySourceVisible" modal header="Create Delivery Challan" class="fabric-action-dialog erp-dialog--sm">
 			<div class="purchase-order-dc-source"><LinkField v-model="deliveryWorkOrder" label="Work Order *" doctype="YRP Work Order" :filters="{ docstatus: 1 }" :show-open-button="false" help-text="The Purchase Order remains the traceability source." /></div>
 			<template #footer><Button label="Cancel" severity="secondary" text @click="deliverySourceVisible = false" /><Button label="Continue" icon="pi pi-arrow-right" :disabled="!deliveryWorkOrder" @click="openDeliveryChallan" /></template>
 		</Dialog>
-		<Dialog v-model:visible="rejectVisible" modal header="Reject Purchase Order" class="fabric-action-dialog" :closable="acting !== 'reject'" :dismissable-mask="false" :style="{ width: 'min(520px, calc(100vw - 24px))' }">
+		<Dialog v-model:visible="rejectVisible" modal header="Reject Purchase Order" class="fabric-action-dialog erp-dialog--sm" :closable="acting !== 'reject'" :dismissable-mask="false">
 			<div class="purchase-order-rejection">
 				<Message severity="warn" :closable="false">This returns the Purchase Order to Draft and records the reason in its audit trail.</Message>
 				<label for="purchase-order-rejection-reason"><span>Rejection reason *</span><Textarea id="purchase-order-rejection-reason" v-model="rejectReason" aria-label="Rejection reason *" rows="4" auto-resize fluid autofocus /></label>
 			</div>
 			<template #footer><Button label="Keep Pending" severity="secondary" text :disabled="acting === 'reject'" @click="rejectVisible = false" /><Button label="Reject Purchase Order" icon="pi pi-times-circle" severity="danger" :disabled="!rejectReason.trim()" :loading="acting === 'reject'" @click="submitRejection" /></template>
 		</Dialog>
-		<Dialog :visible="Boolean(notificationPreparation)" modal header="Send supplier notification" class="fabric-action-dialog" :closable="!acting" :style="{ width: 'min(760px, calc(100vw - 24px))' }" @update:visible="handleNotificationVisibility">
+		<Dialog :visible="Boolean(notificationPreparation)" modal header="Send supplier notification" class="fabric-action-dialog erp-dialog--md" :closable="!acting" @update:visible="handleNotificationVisibility">
 			<SupplierNotificationPanel v-if="notificationPreparation" :preparation="notificationPreparation" :document-values="notificationValues" :acting="acting" :error="notificationError" @send="sendNotification" @close="closeNotification" />
 		</Dialog>
 	</DepartmentPage>
@@ -100,9 +102,8 @@
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import Message from "primevue/message"
-import Tag from "primevue/tag"
 import Textarea from "primevue/textarea"
-import { computed, onMounted, ref, watch } from "vue"
+import { computed, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import { changeFabricStoreDocumentStatus, executePurchaseOrderCommand, getPurchaseOrderWorkspace } from "../api/fabricStore.js"
@@ -110,8 +111,9 @@ import DepartmentPage from "../components/DepartmentPage.vue"
 import LinkField from "../components/common/LinkField.vue"
 import DocumentActionStrip from "../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../components/documents/DocumentConfirmationDialog.vue"
+import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
 import StockItemMatrix from "../components/stock/StockItemMatrix.vue"
-import { hasDocumentDisplayValue } from "../utils/documentValues.js"
+import { hasDocumentDisplayValue, plainTextFromHtml } from "../utils/documentValues.js"
 import FabricDocumentWorkspace from "./fabric-store/FabricDocumentWorkspace.vue"
 import RelatedDocumentWorkspaceDialog from "./fabric-store/RelatedDocumentWorkspaceDialog.vue"
 import SupplierNotificationPanel from "./fabric-store/SupplierNotificationPanel.vue"
@@ -142,6 +144,8 @@ const notificationPreparation = ref(null)
 const notificationError = ref("")
 const lifecycleConfirmVisible = ref(false)
 const pendingLifecycleCommand = ref("")
+let loadSequence = 0
+let actionSequence = 0
 const headerFieldnames = new Set(["supplier", "supplier_name", "transaction_date", "total", "grand_total", "currency"])
 const visibleFields = computed(() => (workspace.value.fields?.length ? workspace.value.fields : workspace.value.details || []).filter((field) => !field.hidden && !headerFieldnames.has(field.fieldname) && hasDocumentDisplayValue(field.value)))
 const itemGroups = computed(() => workspace.value.matrices?.items || workspace.value.item_groups || [])
@@ -183,12 +187,6 @@ const purchaseOrderActions = computed(() => {
 				: capabilities.value.submit ? "submit" : capabilities.value.amend ? "amend" : ""
 	return actions.map((action) => ({ ...action, primary: action.key === primaryKey }))
 })
-const statusSeverity = computed(() => {
-	if (Number(workspace.value.record?.docstatus) === 2 || ["Cancelled", "Closed"].includes(workspace.value.record?.status)) return "danger"
-	if (workspace.value.record?.status === "Completed") return "success"
-	if (String(workspace.value.record?.status || "").startsWith("To ")) return "warn"
-	return Number(workspace.value.record?.docstatus) === 1 ? "info" : "secondary"
-})
 const lotChanged = computed(() => JSON.stringify([...lotOriginal.value].sort()) !== JSON.stringify([...lotDraft.value].sort()))
 const notificationValues = computed(() => ({
 	...(workspace.value.record || {}),
@@ -196,16 +194,54 @@ const notificationValues = computed(() => ({
 }))
 
 async function loadWorkspace(isRefresh = false) {
-	if (isRefresh) refreshing.value = true
-	else loading.value = true
-	error.value = ""
-	try {
-		workspace.value = await getPurchaseOrderWorkspace(route.params.purchaseOrderId) || {}
+	const requestedId = String(route.params.purchaseOrderId || "")
+	const sequence = ++loadSequence
+	actionSequence += 1
+	if (isRefresh) {
+		refreshing.value = true
+		acting.value = "reload"
+	}
+	else {
+		acting.value = ""
+		loading.value = true
+		workspace.value = {}
+		actionError.value = ""
+		relatedVisible.value = false
+		relatedName.value = ""
+		relatedSourceContext.value = {}
+		lotEditorVisible.value = false
+		lotOriginal.value = []
+		lotDraft.value = []
+		lotCandidate.value = ""
+		lotReason.value = ""
+		deliverySourceVisible.value = false
+		deliveryWorkOrder.value = ""
+		rejectVisible.value = false
+		rejectReason.value = ""
 		notificationPreparation.value = null
 		notificationError.value = ""
+		lifecycleConfirmVisible.value = false
+		pendingLifecycleCommand.value = ""
 	}
-	catch (reason) { error.value = reason?.message || "Unable to load this Purchase Order." }
-	finally { loading.value = false; refreshing.value = false }
+	error.value = ""
+	try {
+		const data = await getPurchaseOrderWorkspace(requestedId) || {}
+		if (sequence === loadSequence && requestedId === String(route.params.purchaseOrderId || "")) {
+			workspace.value = data
+			notificationPreparation.value = null
+			notificationError.value = ""
+		}
+	}
+	catch (reason) {
+		if (sequence === loadSequence) error.value = reason?.message || "Unable to load this Purchase Order."
+	}
+	finally {
+		if (sequence === loadSequence) {
+			loading.value = false
+			refreshing.value = false
+			if (acting.value === "reload") acting.value = ""
+		}
+	}
 }
 function capabilityLabel(name, fallback) { return capabilities.value[name]?.label || fallback }
 async function runWorkspaceAction(action) {
@@ -215,51 +251,68 @@ async function runWorkspaceAction(action) {
 	return runDomainCommand(action)
 }
 async function runDomainCommand(command, payload = {}) {
+	const requestedId = String(route.params.purchaseOrderId || "")
+	const source = workspace.value.record
+	const sequence = ++actionSequence
 	acting.value = command
 	actionError.value = ""
 	try {
-		workspace.value = await executePurchaseOrderCommand(workspace.value.record.name, command, payload, workspace.value.record.modified) || {}
+		const result = await executePurchaseOrderCommand(source.name, command, payload, source.modified) || {}
+		if (sequence !== actionSequence || requestedId !== String(route.params.purchaseOrderId || "")) return false
+		workspace.value = result
 		notificationPreparation.value = null
 		notificationError.value = ""
 		return true
 	}
-	catch (reason) { actionError.value = reason?.message || `Unable to ${command.replaceAll("_", " ")} this Purchase Order.`; return false }
-	finally { acting.value = "" }
+	catch (reason) { if (sequence === actionSequence && requestedId === String(route.params.purchaseOrderId || "")) actionError.value = reason?.message || `Unable to ${command.replaceAll("_", " ")} this Purchase Order.`; return false }
+	finally { if (sequence === actionSequence) acting.value = "" }
 }
 async function prepareNotification(channel) {
+	const requestedId = String(route.params.purchaseOrderId || "")
+	const source = workspace.value.record
+	const sequence = ++actionSequence
 	acting.value = `prepare_${channel}`
 	notificationError.value = ""
 	actionError.value = ""
 	try {
-		const result = await executePurchaseOrderCommand(workspace.value.record.name, `prepare_${channel}`, {}, workspace.value.record.modified)
+		const result = await executePurchaseOrderCommand(source.name, `prepare_${channel}`, {}, source.modified)
+		if (sequence !== actionSequence || requestedId !== String(route.params.purchaseOrderId || "")) return
 		if (result?.context) notificationPreparation.value = result
 		else actionError.value = `No ${channel === "sms" ? "SMS" : "WhatsApp"} notification context is available.`
-	} catch (reason) { actionError.value = reason?.message || `Unable to prepare ${channel === "sms" ? "SMS" : "WhatsApp"}.` }
-	finally { acting.value = "" }
+	} catch (reason) { if (sequence === actionSequence && requestedId === String(route.params.purchaseOrderId || "")) actionError.value = reason?.message || `Unable to prepare ${channel === "sms" ? "SMS" : "WhatsApp"}.` }
+	finally { if (sequence === actionSequence) acting.value = "" }
 }
 async function sendNotification({ channel, payload }) {
+	const requestedId = String(route.params.purchaseOrderId || "")
+	const source = workspace.value.record
+	const sequence = ++actionSequence
 	acting.value = `send_${channel}`
 	notificationError.value = ""
 	actionError.value = ""
 	try {
-		const result = await executePurchaseOrderCommand(workspace.value.record.name, `send_${channel}`, payload, workspace.value.record.modified)
+		const result = await executePurchaseOrderCommand(source.name, `send_${channel}`, payload, source.modified)
+		if (sequence !== actionSequence || requestedId !== String(route.params.purchaseOrderId || "")) return
 		if (result?.result?.ok) notificationPreparation.value = null
 		else actionError.value = result?.result?.error || `Unable to send ${channel === "sms" ? "SMS" : "WhatsApp"}.`
-	} catch (reason) { actionError.value = reason?.message || `Unable to send ${channel === "sms" ? "SMS" : "WhatsApp"}.` }
-	finally { acting.value = "" }
+	} catch (reason) { if (sequence === actionSequence && requestedId === String(route.params.purchaseOrderId || "")) actionError.value = reason?.message || `Unable to send ${channel === "sms" ? "SMS" : "WhatsApp"}.` }
+	finally { if (sequence === actionSequence) acting.value = "" }
 }
 function closeNotification() { notificationPreparation.value = null; notificationError.value = "" }
 function handleNotificationVisibility(visible) { if (!visible) closeNotification() }
 async function changeStatus(action) {
+	const requestedId = String(route.params.purchaseOrderId || "")
+	const source = workspace.value.record
+	const sequence = ++actionSequence
 	acting.value = action
 	actionError.value = ""
 	try {
-		const changed = await changeFabricStoreDocumentStatus("Purchase Order", workspace.value.record.name, action, workspace.value.record.modified)
-		const name = changed?.record?.name || workspace.value.record.name
-		if (name !== route.params.purchaseOrderId) await router.replace({ name: "fabric-purchase-order", params: { purchaseOrderId: name } })
+		const changed = await changeFabricStoreDocumentStatus("Purchase Order", source.name, action, source.modified)
+		if (sequence !== actionSequence || requestedId !== String(route.params.purchaseOrderId || "")) return
+		const name = changed?.record?.name || source.name
+		if (name !== requestedId) await router.replace({ name: "fabric-purchase-order", params: { purchaseOrderId: name } })
 		else await loadWorkspace(true)
-	} catch (reason) { actionError.value = reason?.message || `Unable to ${action} this Purchase Order.` }
-	finally { acting.value = "" }
+	} catch (reason) { if (sequence === actionSequence && requestedId === String(route.params.purchaseOrderId || "")) actionError.value = reason?.message || `Unable to ${action} this Purchase Order.` }
+	finally { if (sequence === actionSequence) acting.value = "" }
 }
 const lifecycleConfirmTitle = computed(() => pendingLifecycleCommand.value === "cancel" ? "Cancel Purchase Order?" : pendingLifecycleCommand.value === "close" ? "Close Purchase Order?" : "Amend Purchase Order?")
 const lifecycleConfirmLabel = computed(() => pendingLifecycleCommand.value === "cancel" ? "Cancel Purchase Order" : pendingLifecycleCommand.value === "close" ? "Close Purchase Order" : "Create Amendment")
@@ -313,19 +366,20 @@ async function submitRejection() {
 function statusLabel(docstatus) { return Number(docstatus) === 1 ? "Submitted" : Number(docstatus) === 2 ? "Cancelled" : "Draft" }
 function formatDate(value) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/); return match ? `${match[3]}-${match[2]}-${match[1]}` : value || "—" }
 function formatAmount(value, currency = "") { return `${currency ? `${currency} ` : ""}${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}` }
+const multilineFieldtypes = new Set(["Small Text", "Text", "Long Text", "Text Editor", "Code"])
+function isWide(field) { return multilineFieldtypes.has(field.fieldtype) && /address|comments?|notes?|remarks?|terms?/i.test(field.fieldname) }
 function formatField(field) {
 	if (["Date", "Datetime"].includes(field.fieldtype)) return formatDate(field.value)
 	if (["Currency", "Float", "Int", "Percent"].includes(field.fieldtype)) return Number(field.value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })
 	if (field.fieldtype === "Check") return Number(field.value) ? "Yes" : "No"
-	return field.value === null || field.value === undefined || field.value === "" ? "—" : String(field.value)
+	return field.value === null || field.value === undefined || field.value === "" ? "—" : plainTextFromHtml(field.value)
 }
 function formatTotal(total) {
 	if (total.fieldname === "total_qty") return Number(total.value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })
 	return formatAmount(total.value, workspace.value.record?.currency)
 }
 
-onMounted(() => loadWorkspace())
-watch(() => route.params.purchaseOrderId, () => loadWorkspace())
+watch(() => route.params.purchaseOrderId, () => loadWorkspace(false), { immediate: true })
 </script>
 
 <style scoped>
@@ -339,9 +393,13 @@ watch(() => route.params.purchaseOrderId, () => loadWorkspace())
 .purchase-order-page__facts span, .purchase-order-page__details span, .purchase-order-page__total span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .purchase-order-page__facts strong { overflow: hidden; max-width: 220px; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .purchase-order-page__details { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
-.purchase-order-page__details > div { display: grid; min-height: 58px; align-content: center; gap: 4px; padding: 9px 12px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
+.purchase-order-page__details > div { display: grid; min-width: 0; min-height: 58px; align-content: center; gap: 4px; padding: 9px 12px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
+.purchase-order-page__detail--wide { grid-column: span 2; }
 .purchase-order-page__details strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
-.purchase-order-page__total { display: grid; min-height: 70px; align-content: center; gap: 4px; padding: 10px 12px; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); box-shadow: none; }
+.purchase-order-page__detail--wide strong { min-width: 0; overflow: visible; line-height: 1.35; overflow-wrap: anywhere; text-overflow: clip; white-space: pre-line; }
+.purchase-order-page__totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; overflow: hidden; background: var(--erp-border); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.purchase-order-page__total { display: grid; min-height: 58px; align-content: center; gap: 3px; padding: 8px 10px; border: 0; border-radius: 0; background: var(--erp-surface); box-shadow: none; }
+.purchase-order-page__total:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .purchase-order-page__total--primary { border-color: color-mix(in srgb, var(--erp-accent) 22%, var(--erp-border)); background: color-mix(in srgb, var(--erp-accent-soft) 62%, white); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--erp-accent) 72%, white); }
 .purchase-order-page__total strong { color: var(--erp-accent-hover); font-size: 18px; font-weight: 780; font-variant-numeric: tabular-nums; }
 .purchase-order-related { display: grid; overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
@@ -371,8 +429,8 @@ watch(() => route.params.purchaseOrderId, () => loadWorkspace())
 .purchase-order-rejection { display: grid; gap: var(--erp-space-3); }
 .purchase-order-rejection label { display: grid; gap: 6px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
 @media (max-width: 1100px) { .purchase-order-page__identity { align-items: flex-start; flex-wrap: wrap; } .purchase-order-page__details { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 900px) { .purchase-order-related, .purchase-order-page__total:last-child { grid-column: 1 / -1; } }
-@media (max-width: 650px) { .fabric-purchase-order-frame { margin-bottom: 0; padding: 0; } .purchase-order-page__identity { width: 100%; } .purchase-order-page__facts { width: 100%; overflow-x: auto; padding: 8px 18px 0 0; border-top: 1px solid var(--erp-border); border-left: 0; flex-wrap: nowrap; scrollbar-width: thin; -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); } .purchase-order-page__facts:focus-visible { outline: 2px solid var(--erp-accent); outline-offset: 2px; } .purchase-order-page__facts > div { flex: 0 0 auto; } .purchase-order-page__details { grid-template-columns: 1fr; } .purchase-order-lots__add { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .purchase-order-related, .purchase-order-page__totals { grid-column: 1 / -1; } }
+@media (max-width: 650px) { .fabric-purchase-order-frame { margin-bottom: 0; padding: 0; } .purchase-order-page__identity { width: 100%; } .purchase-order-page__facts { width: 100%; overflow-x: auto; padding: 8px 18px 0 0; border-top: 1px solid var(--erp-border); border-left: 0; flex-wrap: nowrap; scrollbar-width: thin; -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); } .purchase-order-page__facts:focus-visible { outline: 2px solid var(--erp-accent); outline-offset: 2px; } .purchase-order-page__facts > div { flex: 0 0 auto; } .purchase-order-page__details { grid-template-columns: repeat(2, minmax(0, 1fr)); } .purchase-order-page__details > div { min-height: 48px; padding: 8px 10px; } .purchase-order-lots__add { grid-template-columns: 1fr; } }
 :global(.fabric-action-dialog .p-dialog-content) { min-height: 0; }
 @media (max-width: 620px) { :global(.fabric-action-dialog) { width: 100vw !important; height: 100dvh !important; max-height: 100dvh !important; margin: 0; border-radius: 0; } :global(.fabric-action-dialog .p-dialog-content) { flex: 1; overflow-y: auto; } }
 </style>

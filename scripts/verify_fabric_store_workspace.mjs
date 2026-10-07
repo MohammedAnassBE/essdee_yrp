@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from "node:fs"
 const require = createRequire("/home/anas/.claude/playwright/package.json")
 const { chromium } = require("playwright")
 
-const SITE = "http://erp-migration-test.site:8001"
+const SITE = process.env.ESSDEE_TEST_SITE || "http://erp-migration-test.site:8001"
 const CREDENTIALS = "/home/anas/.frappe-debug-creds-mrp3"
 const suite = process.argv[2] || "all"
 
@@ -56,6 +56,18 @@ async function login(page) {
 		page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 20_000 }).catch(() => {}),
 		page.click(".btn-login, button[type=submit]"),
 	])
+}
+
+async function missingLiveFixtures(page, fixtures) {
+	const missing = []
+	for (const [doctype, name] of fixtures) {
+		const response = await page.context().request.get(
+			`${SITE}/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(name)}`,
+		)
+		if (response.status() === 404) missing.push(`${doctype} ${name}`)
+		else assert(response.ok(), `Unable to inspect live fixture ${doctype} ${name} (${response.status()})`)
+	}
+	return missing
 }
 
 const capabilities = {
@@ -203,10 +215,14 @@ async function shellSuite(page) {
 		assert(await page.getByRole("button", { name: label, exact: true }).count() >= 1, `Work Order ${label} action is missing`)
 	}
 	assert(await page.getByRole("button", { name: "Create Work Order", exact: true }).count() === 0, "Work Order list exposes Create without create permission")
+	const workOrderStatusSelect = page.getByRole("combobox", { name: "Status filter" })
+	assert(await workOrderStatusSelect.count() === 1, "Work Order status filters do not collapse into the compact selector")
+	await workOrderStatusSelect.click()
 	for (const status of ["Draft", "Submitted", "Partially Received", "Fully Received", "Closed", "Cancelled"]) {
-		assert(await page.getByRole("button", { name: new RegExp(`^${status}\\s`) }).count() === 1, `Work Order status filters omit ${status}`)
+		assert(await page.getByRole("option", { name: new RegExp(`^${status}\\s`) }).count() === 1, `Work Order status filters omit ${status}`)
 	}
-	assert(await page.getByRole("button", { name: /^In Progress\s/ }).count() === 0, "Work Order status filters still expose an unsupported status")
+	assert(await page.getByRole("option", { name: /^In Progress\s/ }).count() === 0, "Work Order status filters still expose an unsupported status")
+	await page.keyboard.press("Escape")
 	const workOrderListRequests = listRequests.filter((request) => request.kind === "list" && request.doctype === "YRP Work Order")
 	assert(
 		workOrderListRequests.length > 0 && workOrderListRequests.every((request) => Array.isArray(request.filters) && request.filters.length === 0),
@@ -215,17 +231,17 @@ async function shellSuite(page) {
 	await page.setViewportSize({ width: 320, height: 568 })
 	const shortMobileList = await page.locator(".fabric-work-orders .common-list-view").evaluate((list) => {
 		const frame = list.querySelector(".list-table-frame")
-		const table = list.querySelector(".p-datatable-table-container")
+		const records = list.querySelector(".mobile-list-records")
 		return {
 			listOverflowY: getComputedStyle(list).overflowY,
 			frameHeight: frame?.getBoundingClientRect().height || 0,
-			tableHeight: table?.getBoundingClientRect().height || 0,
+			recordsHeight: records?.getBoundingClientRect().height || 0,
 		}
 	})
 	assert(
-		["auto", "scroll"].includes(shortMobileList.listOverflowY)
-			&& shortMobileList.frameHeight >= 250
-			&& shortMobileList.tableHeight >= 200,
+		shortMobileList.listOverflowY === "visible"
+			&& shortMobileList.frameHeight >= shortMobileList.recordsHeight
+			&& shortMobileList.recordsHeight >= 150,
 		`Short mobile viewport collapses the record list: ${JSON.stringify(shortMobileList)}`,
 	)
 	await page.setViewportSize({ width: 390, height: 844 })
@@ -233,35 +249,34 @@ async function shellSuite(page) {
 	await workOrderMobileQuickFilters.click()
 	await page.locator(".fabric-work-orders .list-quick-filters").waitFor()
 	const expandedMobileList = await page.locator(".fabric-work-orders .common-list-view").evaluate((list) => {
-		const status = list.querySelector(".list-status-tabs")
+		const statusSelect = list.querySelector(".list-status-select")
 		const frame = list.querySelector(".list-table-frame")
-		const table = list.querySelector(".p-datatable-table-container")
+		const records = list.querySelector(".mobile-list-records")
 		return {
 			listOverflowY: getComputedStyle(list).overflowY,
-			statusClientHeight: status?.clientHeight || 0,
-			statusScrollHeight: status?.scrollHeight || 0,
+			statusSelectHeight: statusSelect?.getBoundingClientRect().height || 0,
 			frameHeight: frame?.getBoundingClientRect().height || 0,
-			tableHeight: table?.getBoundingClientRect().height || 0,
+			recordsHeight: records?.getBoundingClientRect().height || 0,
 		}
 	})
 	assert(
-		["auto", "scroll"].includes(expandedMobileList.listOverflowY)
-			&& expandedMobileList.statusClientHeight >= expandedMobileList.statusScrollHeight
-			&& expandedMobileList.frameHeight >= 250
-			&& expandedMobileList.tableHeight > 0,
+		expandedMobileList.listOverflowY === "visible"
+			&& expandedMobileList.statusSelectHeight >= 44
+			&& expandedMobileList.frameHeight >= expandedMobileList.recordsHeight
+			&& expandedMobileList.recordsHeight > 0,
 		`Expanded mobile quick filters make status tabs or records inaccessible: ${JSON.stringify(expandedMobileList)}`,
 	)
 	await workOrderMobileQuickFilters.click()
 	await page.setViewportSize({ width: 1600, height: 1000 })
 
-	await page.getByText("WO-FAB-001", { exact: true }).click()
+	await page.locator(".fabric-work-orders .premium-list-table").getByText("WO-FAB-001", { exact: true }).click()
 	await page.waitForURL("**/web/fabric-store/work-orders/WO-FAB-001")
 	assert(page.url().endsWith("/web/fabric-store/work-orders/WO-FAB-001"), "Work Order did not navigate to its routed workspace")
 
 	await page.goto(`${SITE}/web/fabric-store/purchase-orders`, { waitUntil: "domcontentloaded" })
 	await page.getByRole("button", { name: "Create Purchase Order", exact: true }).waitFor()
 	assert(await page.getByRole("button", { name: "Create Purchase Order", exact: true }).count() === 1, "Purchase Order list does not expose the permission-controlled create action")
-	await page.getByText("PO-FAB-001", { exact: true }).waitFor({ timeout: 20_000 })
+	await page.locator(".premium-list-table").getByText("PO-FAB-001", { exact: true }).waitFor({ timeout: 20_000 })
 	const formattedDateCount = await page.getByText("03-10-2026", { exact: true }).count()
 	const formattedCurrencyCount = await page.getByText("INR 12,000", { exact: true }).count()
 	assert(formattedDateCount >= 1, `Purchase Order list does not format dates like its document view (found ${formattedDateCount})`)
@@ -271,12 +286,15 @@ async function shellSuite(page) {
 	await mobileQuickFilters.waitFor()
 	assert(await mobileQuickFilters.getAttribute("aria-expanded") === "false", "Mobile quick filters are expanded by default")
 	assert(!(await page.locator(".list-quick-filters").isVisible()), "Mobile quick filters consume the first viewport while collapsed")
-	const mobileFirstRow = await page.getByText("PO-FAB-001", { exact: true }).boundingBox()
+	const mobileFirstRow = await page.locator(".mobile-list-records").getByText("PO-FAB-001", { exact: true }).boundingBox()
 	assert(mobileFirstRow && mobileFirstRow.y < 844, `Mobile Purchase Order rows start below the first viewport: ${JSON.stringify(mobileFirstRow)}`)
 	const mobileCreateBox = await page.getByRole("button", { name: "Create Purchase Order", exact: true }).boundingBox()
-	assert(mobileCreateBox && mobileCreateBox.width <= 48, `Mobile primary list action is not compact: ${JSON.stringify(mobileCreateBox)}`)
+	assert(
+		mobileCreateBox && mobileCreateBox.width >= 250 && mobileCreateBox.width <= 360,
+		`Mobile primary list action is not a clear full-width command: ${JSON.stringify(mobileCreateBox)}`,
+	)
 	await page.setViewportSize({ width: 1600, height: 1000 })
-	await page.getByText("PO-FAB-001", { exact: true }).click()
+	await page.locator(".premium-list-table").getByText("PO-FAB-001", { exact: true }).click()
 	await page.waitForURL("**/web/fabric-store/purchase-orders/PO-FAB-001")
 	await page.locator(".fabric-purchase-order-frame").waitFor()
 	assert(await page.locator(".fabric-purchase-order-frame").count() === 1, "Purchase Order did not navigate to its routed workspace")
@@ -288,18 +306,105 @@ async function shellSuite(page) {
 	assert(await stock.getByRole("tab").count() === 0, "Stock Transfers repeat a second tab strip")
 	assert(await stock.locator(".common-list-view").count() === 1, "Stock Transfers render more than one active list")
 	await stock.getByRole("button", { name: /Stock Update/ }).click()
-	await stock.getByText("STU-FAB-001", { exact: true }).waitFor()
+	await stock.locator(".premium-list-table").getByText("STU-FAB-001", { exact: true }).waitFor()
 
 	await page.goto(`${SITE}/web/fabric-store/reports`, { waitUntil: "domcontentloaded" })
 	await page.locator(".fabric-reports .report-shell").waitFor({ timeout: 20_000 })
 	assert(await page.locator(".fabric-reports .report-shell").count() === 1, "Fabric Store does not reuse the shared Stock Balance report")
+	assert(await page.getByRole("heading", { name: "Stock Balance", exact: true }).count() === 1, "Fabric Store report has no visible report identity")
 	assert(await page.locator(".fabric-reports input[type=date]").count() === 0, "Fabric Store report uses a native date input")
 	await page.setViewportSize({ width: 1280, height: 800 })
 	await assertNoPageOverflow(page, "Fabric Store at 1280px")
 	await page.setViewportSize({ width: 390, height: 844 })
 	await assertNoPageOverflow(page, "Fabric Store at 390px")
+	const reportCheckTargets = await page.locator(".stock-checks label").evaluateAll((labels) => labels.map((label) => label.getBoundingClientRect().height))
+	assert(reportCheckTargets.length === 4 && reportCheckTargets.every((height) => height >= 43.9), `Stock report checkbox targets are too small: ${JSON.stringify(reportCheckTargets)}`)
 
 	return { cards: expectedCards, listRequestCount: listRequests.length, focusVisible }
+}
+
+async function mobileRecordDetailsSuite(page) {
+	await page.setViewportSize({ width: 390, height: 844 })
+	await mockWorkspace(page, [])
+	const workOrderWorkspaceRoute = "**/api/method/essdee_yrp.fabric_store.web_workspace.get_work_order_workspace*"
+	const purchaseOrderWorkspaceRoute = "**/api/method/essdee_yrp.fabric_store.web_workspace.get_purchase_order_workspace*"
+	const fields = [
+		{ fieldname: "packing_instructions", label: "Packing Instructions", fieldtype: "Small Text", value: "Fold in pairs" },
+		{ fieldname: "handling_instructions", label: "Handling Instructions", fieldtype: "Small Text", value: "Keep dry" },
+		{ fieldname: "supplier_address_display", label: "Supplier Address Details", fieldtype: "Small Text", value: "Line one<br>Line two" },
+		{ fieldname: "comments", label: "Comments", fieldtype: "Small Text", value: "Keep the finished cartons away from the loading bay until collection." },
+		{ fieldname: "special_note", label: "Special Note", fieldtype: "Long Text", value: "UNINTERRUPTEDMOBILERECORDREFERENCETHATMUSTWRAPINSIDETHEDETAILGRIDWITHOUTCLIPPINGORHORIZONTALOVERFLOW" },
+	]
+	const measureFacts = (root, fieldSelector) => root.evaluate((element, selector) => {
+		const rows = [...element.querySelectorAll(selector)]
+		const byLabel = (label) => {
+			const row = rows.find((candidate) => candidate.querySelector("span")?.textContent?.trim() === label)
+			if (!row) return null
+			const value = row.querySelector("strong")
+			return {
+				...row.getBoundingClientRect().toJSON(),
+				valueClientWidth: value?.clientWidth || 0,
+				valueScrollWidth: value?.scrollWidth || 0,
+				valueText: value?.textContent || "",
+			}
+		}
+		return {
+			columns: getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length,
+			packing: byLabel("Packing Instructions"),
+			handling: byLabel("Handling Instructions"),
+			address: byLabel("Supplier Address Details"),
+			comments: byLabel("Comments"),
+			note: byLabel("Special Note"),
+		}
+	}, fieldSelector)
+	const assertCompactFacts = (geometry, label) => assert(
+		geometry.columns === 2
+			&& geometry.packing
+			&& geometry.handling
+			&& Math.abs(geometry.packing.y - geometry.handling.y) < 2
+			&& geometry.address?.width > geometry.packing.width * 1.7
+			&& geometry.address.valueText === "Line one\nLine two"
+			&& geometry.comments?.width > geometry.packing.width * 1.7
+			&& geometry.note?.width > geometry.packing.width * 1.7
+			&& geometry.note.valueScrollWidth <= geometry.note.valueClientWidth + 1,
+		`${label} mobile facts do not retain paired compact fields with only long address/comment rows spanning: ${JSON.stringify(geometry)}`,
+	)
+
+	await page.unroute(workOrderWorkspaceRoute)
+	await page.route(workOrderWorkspaceRoute, (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: JSON.stringify({ message: {
+			record: { doctype: "YRP Work Order", name: "WO-MOBILE-001", docstatus: 1, status: "Open", supplier: "FABRIC-STORE", supplier_name: "Fabric Store" },
+			fields, totals: [], matrices: { deliverables: [], receivables: [] }, summary: {}, related: {},
+			permissions: { can_read: true }, capabilities: {}, related_permissions: {}, print_formats: [],
+		} }),
+	}))
+	await page.goto(`${SITE}/web/fabric-store/work-orders/WO-MOBILE-001`, { waitUntil: "domcontentloaded" })
+	const workOrderFacts = page.locator(".work-order-fields")
+	await workOrderFacts.waitFor({ timeout: 20_000 })
+	const workOrderGeometry = await measureFacts(workOrderFacts, ":scope > .work-order-field")
+	assertCompactFacts(workOrderGeometry, "Work Order")
+	await assertNoPageOverflow(page, "Work Order record at 390px")
+
+	await page.unroute(purchaseOrderWorkspaceRoute)
+	await page.route(purchaseOrderWorkspaceRoute, (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: JSON.stringify({ message: {
+			record: { doctype: "Purchase Order", name: "PO-MOBILE-001", docstatus: 1, status: "To Receive", supplier: "SUPPLIER-001", supplier_name: "Fabric Supplier", transaction_date: "2026-10-03", grand_total: 12000, currency: "INR" },
+			fields, totals: [], matrices: { items: [] }, related: {},
+			permissions: { can_read: true }, capabilities: {}, print_formats: [], grn: {},
+		} }),
+	}))
+	await page.goto(`${SITE}/web/fabric-store/purchase-orders/PO-MOBILE-001`, { waitUntil: "domcontentloaded" })
+	const purchaseOrderFacts = page.locator(".purchase-order-page__details")
+	await purchaseOrderFacts.waitFor({ timeout: 20_000 })
+	const purchaseOrderGeometry = await measureFacts(purchaseOrderFacts, ":scope > div")
+	assertCompactFacts(purchaseOrderGeometry, "Purchase Order")
+	await assertNoPageOverflow(page, "Purchase Order record at 390px")
+
+	return { workOrder: workOrderGeometry, purchaseOrder: purchaseOrderGeometry }
 }
 
 function workOrderGroup() {
@@ -760,19 +865,22 @@ async function workOrderSuite(page) {
 	await page.locator(".fabric-work-order-frame").waitFor()
 	await commandbar.getByRole("button", { name: "More", exact: true }).click()
 	await page.locator(".document-action-menu:visible").getByText("Change Delivery Date", { exact: true }).click()
-	const actionPanel = page.getByRole("dialog", { name: "Change Delivery Date" })
+	const actionPanel = page.getByRole("dialog", { name: "Change Delivery Date", exact: true })
 	await actionPanel.waitFor()
 	await actionPanel.getByLabel(/Delivery date/).fill("12-10-2026")
 	await actionPanel.getByLabel(/Reason/).fill("Customer requested a revised date")
 	await actionPanel.getByRole("button", { name: "Change Delivery Date", exact: true }).click()
-	await actionPanel.getByText("The delivery date could not be updated.", { exact: true }).waitFor()
+	const actionError = page.getByRole("dialog", { name: "Change Delivery Date could not be completed", exact: true })
+	await actionError.getByText("The delivery date could not be updated.", { exact: true }).waitFor()
 	assert(await actionPanel.getByLabel(/Delivery date/).inputValue() === "12-10-2026", "Work Order action error discarded the entered delivery date")
 	assert(await actionPanel.getByLabel(/Reason/).inputValue() === "Customer requested a revised date", "Work Order action error discarded the entered reason")
 	assert(workOrderCommand?.command === "change_delivery_date", `Work Order action did not use the named command service: ${JSON.stringify(workOrderCommand)}`)
+	await actionError.getByRole("button", { name: "OK", exact: true }).click()
 	await page.keyboard.press("Escape")
 	const discardFailedAction = page.getByRole("dialog", { name: "Discard action changes?" })
 	await discardFailedAction.waitFor()
-	assert(await actionPanel.count() === 1, "Work Order action error values were discarded without confirmation")
+	const activeActionPanelCount = await page.locator(".work-order-action-panel:visible").count()
+	assert(activeActionPanelCount === 1, `Work Order action error values were discarded without confirmation (active panels: ${activeActionPanelCount})`)
 	await discardFailedAction.getByRole("button", { name: "Discard Changes", exact: true }).click()
 	await actionPanel.waitFor({ state: "detached" })
 
@@ -781,7 +889,7 @@ async function workOrderSuite(page) {
 	const materialIssueDialog = page.getByRole("dialog", { name: "Create Stock Entry" })
 	await materialIssueDialog.waitFor()
 	assert((await materialIssueDialog.locator(".fabric-select-field").filter({ hasText: "Purpose" }).locator(".p-select-label").textContent()).trim() === "Material Issue", "WO Material Issue popup did not preserve its source purpose")
-	await materialIssueDialog.getByRole("button", { name: "Save Draft", exact: true }).click()
+	await materialIssueDialog.getByRole("button", { name: "Save", exact: true }).click()
 	await materialIssueDialog.waitFor({ state: "detached" })
 	assert(stockOperationSave?.values?.against_id === "WO-FAB-001" && stockOperationSave?.values?.purpose === "Material Issue", `WO Material Issue lost its source context: ${JSON.stringify(stockOperationSave)}`)
 
@@ -866,6 +974,9 @@ async function workOrderSuite(page) {
 	assert(await page.getByRole("button", { name: "Save", exact: true }).count() === 1, "Work Order new route does not expose the permission-controlled Save action")
 	assert(await page.getByRole("button", { name: "Save & Submit", exact: true }).count() === 0, "New Work Order exposes Save & Submit without submit permission")
 	await page.setViewportSize({ width: 390, height: 844 })
+	const workOrderMobileHeader = await page.locator(".work-order-editor__header").evaluate((element) => ({ height: element.getBoundingClientRect().height, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }))
+	assert(workOrderMobileHeader.height <= 60 && workOrderMobileHeader.scrollWidth === workOrderMobileHeader.clientWidth, `Work Order mobile header is oversized or overflows: ${JSON.stringify(workOrderMobileHeader)}`)
+	assert(await page.locator(".work-order-editor__matrix-prompt").count() === 1 && await page.locator(".work-order-editor__matrix-section").count() === 0, "Blank Work Order still renders empty quantity matrices")
 	const workOrderScheduleBoxes = await page.locator(".work-order-editor__schedule-field").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().toJSON()))
 	assert(workOrderScheduleBoxes.length === 4 && Math.abs(workOrderScheduleBoxes[0].bottom - workOrderScheduleBoxes[1].bottom) < 2 && Math.abs(workOrderScheduleBoxes[2].bottom - workOrderScheduleBoxes[3].bottom) < 2, `Work Order planning dates do not use compact paired mobile rows: ${JSON.stringify(workOrderScheduleBoxes)}`)
 	await page.setViewportSize({ width: 1600, height: 1000 })
@@ -873,10 +984,9 @@ async function workOrderSuite(page) {
 	await page.goto(`${SITE}/web/fabric-store/work-orders/WO-EDITOR-LOAD-ERROR/edit`, { waitUntil: "domcontentloaded" })
 	const failedEditor = page.locator(".work-order-editor")
 	await failedEditor.getByText("Work Order could not be loaded", { exact: true }).waitFor()
-	const workOrderLoadError = page.getByRole("dialog", { name: "Work Order could not be loaded" })
-	await workOrderLoadError.getByText("Work Order editor is temporarily unavailable.", { exact: true }).waitFor()
+	await failedEditor.getByText("Work Order editor is temporarily unavailable.", { exact: true }).waitFor()
+	assert(await page.getByRole("dialog", { name: "Work Order could not be loaded" }).count() === 0, "Failed Work Order load duplicates the same error in a popup")
 	assert(await failedEditor.locator(".work-order-editor__body").count() === 0, "Failed Work Order load leaves an unusable empty form visible")
-	await workOrderLoadError.getByRole("button", { name: "OK", exact: true }).click()
 	await failedEditor.getByRole("button", { name: "Retry", exact: true }).click()
 	await failedEditor.getByRole("heading", { name: "Edit Work Order", exact: true }).waitFor()
 	assert(workOrderEditorLoadFailures === 2, `Work Order Retry did not reload exactly once: ${workOrderEditorLoadFailures}`)
@@ -1166,6 +1276,7 @@ async function purchaseOrderSuite(page) {
 	currentDocstatus = 0
 	await page.reload({ waitUntil: "domcontentloaded" })
 	await page.locator(".fabric-purchase-order-frame").waitFor()
+	await page.getByRole("button", { name: "Send Request", exact: true }).waitFor()
 	assert(await page.getByRole("button", { name: "Send Request", exact: true }).count() === 1, "Pending PO without a live request does not expose Send Request")
 	assert(await page.getByRole("button", { name: "Approve PO", exact: true }).count() === 0, "Non-approver PO state exposes Approve")
 	assert(await page.getByRole("button", { name: "Submit", exact: true }).count() === 0, "Pending PO exposes unauthorized Submit")
@@ -1174,6 +1285,7 @@ async function purchaseOrderSuite(page) {
 	purchaseOrderMode = "approver"
 	await page.reload({ waitUntil: "domcontentloaded" })
 	await page.locator(".fabric-purchase-order-frame").waitFor()
+	await page.getByRole("button", { name: "Approve PO", exact: true }).waitFor()
 	assert(await page.getByRole("button", { name: "Send Request", exact: true }).count() === 0, "PO with a live request still exposes Send Request")
 	assert(await page.getByRole("button", { name: "Approve PO", exact: true }).count() === 1, "Approver PO state does not expose Approve")
 	await page.getByRole("button", { name: "More", exact: true }).click()
@@ -1205,6 +1317,15 @@ async function purchaseOrderSuite(page) {
 	await page.waitForURL("**/web/fabric-store/purchase-orders/PO-FAB-002")
 	await workspace.getByText("Draft", { exact: true }).waitFor()
 	assert(lifecycleAction === "amend", "Purchase Order amend action did not run")
+	await page.setViewportSize({ width: 390, height: 844 })
+	const mobilePurchaseOrderButtonState = await workspace.locator(".fabric-document-workspace__commandbar").evaluate((element) => ({
+		innerWidth: window.innerWidth,
+		compact: window.matchMedia("(max-width: 899px)").matches,
+		buttons: [...element.querySelectorAll("button")].map((button) => ({ text: button.textContent?.trim(), label: button.getAttribute("aria-label"), className: button.className, display: getComputedStyle(button).display })),
+	}))
+	assert(await workspace.getByRole("button", { name: "More", exact: true }).count() === 1, `Draft Purchase Order hides its secondary actions on mobile: ${JSON.stringify(mobilePurchaseOrderButtonState)}`)
+	const mobilePurchaseOrderActions = await workspace.locator(".fabric-document-workspace__commandbar").evaluate((element) => ({ clientWidth: element.clientWidth, scrollWidth: element.scrollWidth }))
+	assert(mobilePurchaseOrderActions.scrollWidth <= mobilePurchaseOrderActions.clientWidth + 1, `Draft Purchase Order actions require horizontal scrolling: ${JSON.stringify(mobilePurchaseOrderActions)}`)
 
 	await page.goto(`${SITE}/web/fabric-store/purchase-orders`, { waitUntil: "domcontentloaded" })
 	await page.getByRole("button", { name: "Create Purchase Order", exact: true }).click()
@@ -1212,8 +1333,17 @@ async function purchaseOrderSuite(page) {
 	const purchaseOrderEditor = page.locator(".purchase-order-editor")
 	await purchaseOrderEditor.waitFor()
 	await page.setViewportSize({ width: 390, height: 844 })
+	const purchaseOrderMobileHeader = await page.locator(".purchase-order-editor__header").evaluate((element) => ({ height: element.getBoundingClientRect().height, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }))
+	assert(purchaseOrderMobileHeader.height <= 60 && purchaseOrderMobileHeader.scrollWidth === purchaseOrderMobileHeader.clientWidth, `Purchase Order mobile header is oversized or overflows: ${JSON.stringify(purchaseOrderMobileHeader)}`)
+	const companyInput = purchaseOrderEditor.getByRole("combobox", { name: "Company", exact: true })
+	const companyValue = await companyInput.inputValue()
+	assert(!companyValue || await companyInput.getAttribute("title") === companyValue, "Committed Company LinkField value has no full-value title affordance")
 	const purchaseOrderDateBoxes = await page.locator(".purchase-order-editor__date").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().toJSON()))
 	assert(purchaseOrderDateBoxes.length === 2 && Math.abs(purchaseOrderDateBoxes[0].y - purchaseOrderDateBoxes[1].y) < 2, `Purchase Order dates do not use one compact mobile row: ${JSON.stringify(purchaseOrderDateBoxes)}`)
+	await page.setViewportSize({ width: 320, height: 568 })
+	const narrowPurchaseOrderDateBoxes = await page.locator(".purchase-order-editor__date").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().toJSON()))
+	assert(narrowPurchaseOrderDateBoxes.length === 2 && Math.abs(narrowPurchaseOrderDateBoxes[0].y - narrowPurchaseOrderDateBoxes[1].y) >= 40 && narrowPurchaseOrderDateBoxes.every((box) => box.width >= 220), `Purchase Order dates are truncated instead of stacking on narrow phones: ${JSON.stringify(narrowPurchaseOrderDateBoxes)}`)
+	assert(await purchaseOrderEditor.locator(".stock-composer__step-number").count() === 3, "Purchase Order item builder does not expose the three workflow steps clearly")
 	await page.setViewportSize({ width: 1600, height: 1000 })
 	for (const label of ["Supplier *", "Delivery warehouse *"]) {
 		assert(await purchaseOrderEditor.getByRole("combobox", { name: label, exact: true }).getAttribute("aria-required") === "true", `Purchase Order editor does not expose ${label} as required to assistive technology`)
@@ -1307,10 +1437,9 @@ async function purchaseOrderSuite(page) {
 	await page.goto(`${SITE}/web/fabric-store/purchase-orders/PO-EDITOR-LOAD-ERROR/edit`, { waitUntil: "domcontentloaded" })
 	const failedEditor = page.locator(".purchase-order-editor")
 	await failedEditor.getByText("Purchase Order could not be loaded", { exact: true }).waitFor()
-	const purchaseOrderLoadError = page.getByRole("dialog", { name: "Purchase Order could not be loaded" })
-	await purchaseOrderLoadError.getByText("Purchase Order editor is temporarily unavailable.", { exact: true }).waitFor()
+	await failedEditor.getByText("Purchase Order editor is temporarily unavailable.", { exact: true }).waitFor()
+	assert(await page.getByRole("dialog", { name: "Purchase Order could not be loaded" }).count() === 0, "Failed Purchase Order load duplicates the same error in a popup")
 	assert(await failedEditor.locator(".purchase-order-editor__body").count() === 0, "Failed Purchase Order load leaves an unusable empty form visible")
-	await purchaseOrderLoadError.getByRole("button", { name: "OK", exact: true }).click()
 	await failedEditor.getByRole("button", { name: "Retry", exact: true }).click()
 	await failedEditor.getByRole("heading", { name: "Edit Purchase Order", exact: true }).waitFor()
 	assert(purchaseOrderEditorLoadFailures === 2, `Purchase Order Retry did not reload exactly once: ${purchaseOrderEditorLoadFailures}`)
@@ -1392,11 +1521,12 @@ async function stockTransfersSuite(page) {
 	const quantity = entryDialog.locator(".stock-composer__single-quantity input").first()
 	await quantity.fill("2")
 	await entryDialog.getByRole("button", { name: "OK · Add Item", exact: true }).click()
-	await entryDialog.getByRole("button", { name: "Save & Submit", exact: true }).click()
+	await entryDialog.getByRole("button", { name: "Save options", exact: true }).click()
+	await page.getByRole("menuitem", { name: "Save & Submit", exact: true }).click()
 	await entryDialog.waitFor({ state: "hidden" })
 	assert(savedTransaction?.operation === "stock_entry" && savedTransaction?.submit === true, `Fabric Stock Entry save payload is wrong: ${JSON.stringify(savedTransaction)}`)
 
-	await transfers.getByText("STE-FAB-001", { exact: true }).click()
+	await transfers.locator(".premium-list-table").getByText("STE-FAB-001", { exact: true }).click()
 	const existingEditor = page.getByRole("dialog", { name: /Edit Stock Entry.*STE-FAB-001/ })
 	await existingEditor.waitFor()
 	await existingEditor.locator(".p-dialog-close-button").click()
@@ -1413,7 +1543,7 @@ async function stockTransfersSuite(page) {
 	const countedCells = reconciliationDialog.locator(".stock-composer__quantity-grid input")
 	await countedCells.first().fill("0")
 	await reconciliationDialog.getByRole("button", { name: "OK · Add Item", exact: true }).click()
-	await reconciliationDialog.getByRole("button", { name: "Save Draft", exact: true }).click()
+	await reconciliationDialog.getByRole("button", { name: "Save", exact: true }).click()
 	await reconciliationDialog.waitFor({ state: "hidden" })
 	const reconciliationSave = savedTransactions.findLast((entry) => entry.operation === "stock_reconciliation")
 	const reconciliationValues = reconciliationSave?.values?.item_details?.[0]?.items?.[0]?.values || {}
@@ -1445,7 +1575,7 @@ async function stockTransfersSuite(page) {
 	await lotDialog.getByRole("button", { name: "Get Item", exact: true }).click()
 	await lotDialog.locator(".stock-composer__single-quantity input").first().fill("2")
 	await lotDialog.getByRole("button", { name: "OK · Add Item", exact: true }).click()
-	await lotDialog.getByRole("button", { name: "Save Draft", exact: true }).click()
+	await lotDialog.getByRole("button", { name: "Save", exact: true }).click()
 	await lotDialog.waitFor({ state: "hidden" })
 	const lotSave = savedTransactions.findLast((entry) => entry.operation === "lot_transfer")
 	const lotRow = lotSave?.values?.item_details?.[0]?.items?.[0] || {}
@@ -1481,10 +1611,11 @@ async function documentDialogSuite(page) {
 	})
 
 	await page.goto(`${SITE}/web/fabric-store/stock-transfers`, { waitUntil: "domcontentloaded" })
-	await page.getByText("STE-FAB-001", { exact: true }).click()
+	await page.locator(".premium-list-table").getByText("STE-FAB-001", { exact: true }).click()
 	const dialog = page.getByRole("dialog", { name: /YRP Stock Entry.*STE-FAB-001/ })
 	await dialog.waitFor()
-	assert(await dialog.locator(".document-transaction-dialog__content").evaluate((element) => ["auto", "scroll"].includes(getComputedStyle(element).overflowY)), "Document dialog content is not scroll-contained")
+	assert(await dialog.locator(".p-dialog-content").evaluate((element) => ["auto", "scroll"].includes(getComputedStyle(element).overflowY)), "Document dialog does not have a single scroll-contained content owner")
+	assert(await dialog.locator(".document-transaction-dialog__content").evaluate((element) => getComputedStyle(element).overflowY === "visible"), "Document dialog content still creates a nested vertical scrollbar")
 	assert(await dialog.getByRole("button", { name: "Submit", exact: true }).count() === 0, "Submitted document exposes Submit")
 	assert(await dialog.getByRole("button", { name: "Cancel Document", exact: true }).count() === 1, "Submitted Cancel action is missing")
 	assert(await dialog.getByRole("button", { name: "Print", exact: true }).count() === 1, "Permitted Print action is missing")
@@ -1890,13 +2021,12 @@ async function deliveryChallanSuite(page) {
 	const failedLoadRoot = page.locator(".delivery-challan-workspace")
 	await failedLoadRoot.getByText("DC-FAB-001", { exact: true }).waitFor()
 	await navigateWithinSpa(page, "/web/fabric-store/delivery-challans/DC-LOAD-ERROR")
-	const deliveryLoadError = page.getByRole("dialog", { name: "Delivery Challan could not be completed" })
-	await deliveryLoadError.getByText("Delivery Challan could not be loaded.", { exact: true }).waitFor()
+	await failedLoadRoot.getByText("Delivery Challan could not be loaded.", { exact: true }).waitFor()
+	assert(await page.getByRole("dialog", { name: "Delivery Challan could not be completed" }).count() === 0, "Failed Delivery Challan load duplicates the same error in a popup")
 	assert(await failedLoadRoot.getByText("DC-FAB-001", { exact: true }).count() === 0, "Failed in-place Delivery Challan load retained the previous document identity")
 	assert(await failedLoadRoot.locator(".delivery-challan-field-group, .delivery-challan-matrix").count() === 0, "Failed in-place Delivery Challan load retained the previous form or matrices")
 	assert(await failedLoadRoot.getByRole("button", { name: /Complete Transfer|Return/, exact: true }).count() === 0, "Failed in-place Delivery Challan load retained the previous capabilities")
 	assert(await failedLoadRoot.getByText("Draft", { exact: true }).count() === 0, "Failed Delivery Challan load fabricates a Draft state")
-	await deliveryLoadError.getByRole("button", { name: "OK", exact: true }).click()
 	await failedLoadRoot.getByRole("button", { name: "Retry", exact: true }).click()
 	await failedLoadRoot.locator('.delivery-challan-field-group[data-group="document"]').waitFor()
 	await failedLoadRoot.getByText("DC-LOAD-ERROR", { exact: true }).waitFor()
@@ -2255,13 +2385,12 @@ async function goodsReceivedNoteSuite(page) {
 	const failedLoadRoot = page.locator(".goods-received-note-workspace")
 	await failedLoadRoot.getByText("GRN-FAB-001", { exact: true }).waitFor()
 	await navigateWithinSpa(page, "/web/fabric-store/goods-received-notes/GRN-LOAD-ERROR")
-	const grnLoadError = page.getByRole("dialog", { name: "Goods Received Note could not be completed" })
-	await grnLoadError.getByText("Goods Received Note could not be loaded.", { exact: true }).waitFor()
+	await failedLoadRoot.getByText("Goods Received Note could not be loaded.", { exact: true }).waitFor()
+	assert(await page.getByRole("dialog", { name: "Goods Received Note could not be completed" }).count() === 0, "Failed GRN load duplicates the same error in a popup")
 	assert(await failedLoadRoot.getByText("GRN-FAB-001", { exact: true }).count() === 0, "Failed in-place GRN load retained the previous document identity")
 	assert(await failedLoadRoot.locator(".goods-received-note-field-group, .goods-received-note-matrix").count() === 0, "Failed in-place GRN load retained the previous form or matrices")
 	assert(await failedLoadRoot.getByRole("button", { name: /Calculate|Submit/, exact: true }).count() === 0, "Failed in-place GRN load retained the previous capabilities")
 	assert(await failedLoadRoot.getByText("Draft", { exact: true }).count() === 0, "Failed GRN load fabricates a Draft state")
-	await grnLoadError.getByRole("button", { name: "OK", exact: true }).click()
 	await failedLoadRoot.getByRole("button", { name: "Retry", exact: true }).click()
 	await failedLoadRoot.locator('.goods-received-note-field-group[data-group="posting"]').waitFor()
 	await failedLoadRoot.getByText("GRN-LOAD-ERROR", { exact: true }).waitFor()
@@ -2275,7 +2404,12 @@ async function goodsReceivedNoteSuite(page) {
 	assert(existingMobileRail.height <= 82 && existingMobileRail.scrollWidth > existingMobileRail.clientWidth && ["auto", "scroll"].includes(existingMobileRail.overflowX) && existingMobileRail.tabIndex === 0 && existingMobileRail.maskImage !== "none", `Existing GRN totals are not an accessible compact ribbon: ${JSON.stringify(existingMobileRail)}`)
 	await page.setViewportSize({ width: 1600, height: 1000 })
 	await draftRoot.locator("#field-comments-value").fill("Unsaved local edit")
-	assert(await draftRoot.getByRole("button", { name: "Calculate", exact: true }).isDisabled(), "Dirty GRN still allows saved-draft Calculate to discard local edits")
+	const dirtyCalculate = draftRoot.locator(".document-action-strip__primary").filter({ hasText: "Calculate" })
+	await page.waitForFunction(() => Array.from(document.querySelectorAll(".goods-received-note-workspace .document-action-strip__primary")).some((button) => button.textContent?.includes("Calculate") && button.getAttribute("aria-disabled") === "true"))
+	const dirtyCalculateState = await dirtyCalculate.evaluateAll((buttons) => buttons.map((button) => ({ ariaDisabled: button.getAttribute("aria-disabled"), disabled: button.disabled, label: button.getAttribute("aria-label"), text: button.textContent })))
+	assert(dirtyCalculateState.length === 1 && dirtyCalculateState[0].ariaDisabled === "true" && !dirtyCalculateState[0].disabled, `Dirty GRN Calculate is not focusable while exposing its unavailable state: ${JSON.stringify(dirtyCalculateState)}`)
+	await dirtyCalculate.focus()
+	await draftRoot.getByText("Save the Goods Received Note before calculating.", { exact: true }).waitFor()
 	await page.goto(`${SITE}/web/fabric-store/goods-received-notes/GRN-FAB-001`, { waitUntil: "domcontentloaded" })
 	await draftRoot.waitFor()
 	const clickGrnAction = async (label) => {
@@ -2499,13 +2633,17 @@ async function statesSuite(page) {
 	const errorPage = await context.newPage()
 	try {
 		await mockWorkspace(errorPage, [])
-		await errorPage.route("**/api/method/essdee_yrp.fabric_store.web_workspace.get_capabilities*", (route) => route.fulfill({
-			status: 500,
-			contentType: "application/json",
-			body: JSON.stringify({ message: "Fabric workspace unavailable" }),
+		let capabilityFailed = true
+		await errorPage.route("**/api/method/essdee_yrp.fabric_store.web_workspace.get_capabilities*", (route) => route.fulfill(capabilityFailed ? {
+			status: 500, contentType: "application/json", body: JSON.stringify({ message: "Fabric workspace unavailable" }),
+		} : {
+			status: 200, contentType: "application/json", body: JSON.stringify({ message: capabilities }),
 		}))
 		await errorPage.goto(`${SITE}/web/fabric-store`, { waitUntil: "domcontentloaded" })
 		await errorPage.getByText("Fabric workspace unavailable", { exact: true }).waitFor()
+		capabilityFailed = false
+		await errorPage.getByRole("button", { name: "Retry", exact: true }).click()
+		await errorPage.locator(".workspace-launcher__card").first().waitFor()
 		results.error = true
 	} finally {
 		await errorPage.close()
@@ -2520,7 +2658,7 @@ async function statesSuite(page) {
 			body: JSON.stringify({ data: [] }),
 		}))
 		await emptyPage.goto(`${SITE}/web/fabric-store/work-orders`, { waitUntil: "domcontentloaded" })
-		await emptyPage.getByLabel("Work Orders").getByText("No records found", { exact: true }).waitFor()
+		await emptyPage.locator(".premium-list-table").getByText("No records found", { exact: true }).waitFor()
 		results.empty = true
 	} finally {
 		await emptyPage.close()
@@ -2540,7 +2678,7 @@ async function statesSuite(page) {
 		await permissionPage.goto(`${SITE}/web/fabric-store/stock-transfers`, { waitUntil: "domcontentloaded" })
 		const transfers = permissionPage.locator(".fabric-stock-transfers")
 		await transfers.getByRole("button", { name: /Stock Update/ }).click()
-		await transfers.getByText("STU-FAB-001", { exact: true }).waitFor()
+		await transfers.locator(".premium-list-table").getByText("STU-FAB-001", { exact: true }).waitFor()
 		assert(await transfers.getByRole("button", { name: "Create New", exact: true }).count() === 0, "Create New ignores the operation's create permission")
 		await permissionPage.goto(`${SITE}/web/fabric-store/purchase-orders`, { waitUntil: "domcontentloaded" })
 		await permissionPage.locator(".fabric-purchase-orders .common-list-view").waitFor()
@@ -2554,6 +2692,16 @@ async function statesSuite(page) {
 }
 
 async function liveDuplicateSuite(page) {
+	const missing = await missingLiveFixtures(page, [
+		["YRP Work Order", "YRP-WO-2026-00016"],
+		["Purchase Order", "YRP-PO-2026-00002"],
+		["YRP Goods Received Note", "YRP-GRN-2026-00037"],
+		["YRP Delivery Challan", "DC-2026-00036"],
+	])
+	if (missing.length) {
+		return { skipped: true, reason: `Live fixtures are unavailable: ${missing.join(", ")}` }
+	}
+
 	const duplicateFromMenu = async (root) => {
 		await root.getByRole("button", { name: "More", exact: true }).click()
 		await page.locator(".document-action-menu:visible").getByText("Duplicate", { exact: true }).click()
@@ -2596,6 +2744,11 @@ async function liveDuplicateSuite(page) {
 }
 
 async function liveCompletedPurchaseOrderSuite(page) {
+	const missing = await missingLiveFixtures(page, [["Purchase Order", "PO-2627-0968"]])
+	if (missing.length) {
+		return { skipped: true, reason: `Live fixture is unavailable: ${missing[0]}` }
+	}
+
 	await page.goto(`${SITE}/web/fabric-store/purchase-orders/PO-2627-0968`, { waitUntil: "domcontentloaded" })
 	const root = page.locator(".fabric-purchase-order-frame")
 	await root.waitFor({ timeout: 20_000 })
@@ -2609,7 +2762,7 @@ async function liveCompletedPurchaseOrderSuite(page) {
 	return { purchaseOrder: "PO-2627-0968", goodsReceivedNotes: 2 }
 }
 
-const suites = { parity: paritySuite, shell: shellSuite, documents: documentsSuite, "work-order": workOrderSuite, "purchase-order": purchaseOrderSuite, "delivery-challan": deliveryChallanSuite, "goods-received-note": goodsReceivedNoteSuite, "stock-transfers": stockTransfersSuite, "document-dialog": documentDialogSuite, states: statesSuite, "live-duplicate": liveDuplicateSuite, "live-completed-purchase-order": liveCompletedPurchaseOrderSuite }
+const suites = { parity: paritySuite, shell: shellSuite, "mobile-record-details": mobileRecordDetailsSuite, documents: documentsSuite, "work-order": workOrderSuite, "purchase-order": purchaseOrderSuite, "delivery-challan": deliveryChallanSuite, "goods-received-note": goodsReceivedNoteSuite, "stock-transfers": stockTransfersSuite, "document-dialog": documentDialogSuite, states: statesSuite, "live-duplicate": liveDuplicateSuite, "live-completed-purchase-order": liveCompletedPurchaseOrderSuite }
 const browser = await chromium.launch({ headless: true })
 const context = await browser.newContext()
 

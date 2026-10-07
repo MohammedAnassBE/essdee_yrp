@@ -1,8 +1,7 @@
 <template>
-	<Dialog :visible="visible" modal dismissable-mask maximizable :header="title" class="erp-stock-dialog erp-entity-dialog" :style="{ width: 'min(96vw, 1440px)' }" @update:visible="emit('update:visible', $event)">
+	<Dialog :visible="visible" modal dismissable-mask maximizable :header="title" class="erp-stock-dialog erp-entity-dialog erp-dialog--xl" @update:visible="emit('update:visible', $event)">
 		<div v-if="loading" class="erp-stock-loading"><Skeleton v-for="index in 6" :key="index" height="3rem" /></div>
 		<div v-else class="erp-stock-stack">
-			<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 			<div class="erp-stock-context">
 				<div><span>Cutting Plan</span><strong>{{ stock.context?.cutting_plan || cuttingPlan }}</strong></div>
 				<div><span>Lot</span><strong>{{ stock.context?.lot || "—" }}</strong></div>
@@ -22,21 +21,22 @@
 
 		<template #footer>
 			<Button label="Close" severity="secondary" text :disabled="saving" @click="emit('update:visible', false)" />
-			<Button v-if="permissions.can_create" label="Save Draft" icon="pi pi-save" severity="secondary" outlined :disabled="!canSave" :loading="saving && saveMode === 'draft'" @click="save(false)" />
-			<Button v-if="permissions.can_create && permissions.can_submit" label="Save & Submit" icon="pi pi-check" :disabled="!canSave" :loading="saving && saveMode === 'submit'" @click="save(true)" />
+			<DocumentSaveButton :show-save="permissions.can_create" :show-submit="permissions.can_create && permissions.can_submit" :disabled="!canSave" :loading="saving" @save="save(false)" @submit="save(true)" />
 		</template>
 	</Dialog>
+	<DocumentErrorDialog :message="error" :title="`${title} could not be completed`" />
 </template>
 
 <script setup>
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
-import Message from "primevue/message"
 import Select from "primevue/select"
 import Skeleton from "primevue/skeleton"
 import { computed, reactive, ref, watch } from "vue"
 
 import LinkField from "../../components/common/LinkField.vue"
+import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
 import StockItemComposer from "./StockItemComposer.vue"
 import { getStockOperationEditor, saveStockOperation } from "./cpmApi.js"
 

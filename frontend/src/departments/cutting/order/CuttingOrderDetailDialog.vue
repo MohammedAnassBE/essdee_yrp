@@ -39,7 +39,7 @@
 						</section>
 						<section class="detail-section">
 							<header><div><h3>Item Attributes</h3><small>Attribute mappings and their available values.</small></div><Button v-if="canEdit" label="Add Attribute" icon="pi pi-plus" text size="small" @click="addAttribute" /></header>
-							<div class="table-scroll" role="region" tabindex="0" aria-label="Item attribute mappings"><table class="detail-table"><thead><tr><th>Attribute</th><th>Mapping</th><th>Values (comma separated)</th><th v-if="canEdit"></th></tr></thead><tbody><tr v-for="(row, index) in attributes" :key="row._row_key || index"><td><InputText v-model="row.attribute" :disabled="!canEdit || Boolean(row._row_key && !row._row_key.startsWith('new:'))" fluid /></td><td>{{ row.mapping || "Created on save" }}</td><td><InputText v-model="row.valuesText" :disabled="!canEdit" fluid /></td><td v-if="canEdit"><Button icon="pi pi-trash" severity="danger" text rounded aria-label="Remove attribute" @click="attributes.splice(index, 1)" /></td></tr></tbody></table></div>
+							<div class="table-scroll" role="region" tabindex="0" aria-label="Item attribute mappings"><table class="detail-table"><thead><tr><th>Attribute</th><th>Mapping</th><th>Values (comma separated)</th><th v-if="canEdit"></th></tr></thead><tbody><tr v-for="(row, index) in attributes" :key="row._row_key || index"><td><InputText v-model="row.attribute" :aria-label="`Attribute row ${index + 1}`" :disabled="!canEdit || Boolean(row._row_key && !row._row_key.startsWith('new:'))" fluid /></td><td>{{ row.mapping || "Created on save" }}</td><td><InputText v-model="row.valuesText" :aria-label="`Values for attribute row ${index + 1}`" :disabled="!canEdit" fluid /></td><td v-if="canEdit"><Button icon="pi pi-trash" severity="danger" text rounded :aria-label="`Remove attribute row ${index + 1}`" @click="attributes.splice(index, 1)" /></td></tr></tbody></table></div>
 							<div v-if="!attributes.length" class="detail-empty">Save the item once to load its default attributes.</div>
 						</section>
 					</TabPanel>
@@ -47,21 +47,21 @@
 					<TabPanel value="colours">
 						<RowEditor title="Colour Values" add-label="Add Colour" :editable="canEdit" :rows="colours" @add="colours.push({ attribute_value: '' })" @remove="colours.splice($event, 1)">
 							<template #header><th>Colour</th></template>
-							<template #row="{ row }"><td><InputText v-model="row.attribute_value" :disabled="!canEdit" fluid /></td></template>
+							<template #row="{ row, index }"><td><InputText v-model="row.attribute_value" :aria-label="`Colour row ${index + 1}`" :disabled="!canEdit" fluid /></td></template>
 						</RowEditor>
 					</TabPanel>
 
 					<TabPanel value="panels">
 						<RowEditor title="Panel Details" add-label="Add Panel" :editable="canEdit" :rows="panels" @add="panels.push({ stiching_attribute_value: '', set_item_attribute_value: '', quantity: 1, is_default: 0 })" @remove="panels.splice($event, 1)">
 							<template #header><th>Panel</th><th v-if="form.is_set_item">Part</th><th>Quantity</th><th v-if="form.is_set_item">Default</th></template>
-							<template #row="{ row }"><td><InputText v-model="row.stiching_attribute_value" :disabled="!canEdit" fluid /></td><td v-if="form.is_set_item"><InputText v-model="row.set_item_attribute_value" :disabled="!canEdit" fluid /></td><td><InputNumber v-model="row.quantity" :min="1" :disabled="!canEdit" fluid /></td><td v-if="form.is_set_item"><Checkbox v-model="row.is_default" binary :true-value="1" :false-value="0" :disabled="!canEdit" /></td></template>
+							<template #row="{ row, index }"><td><InputText v-model="row.stiching_attribute_value" :aria-label="`Panel row ${index + 1}`" :disabled="!canEdit" fluid /></td><td v-if="form.is_set_item"><InputText v-model="row.set_item_attribute_value" :aria-label="`Part for panel row ${index + 1}`" :disabled="!canEdit" fluid /></td><td><InputNumber v-model="row.quantity" :aria-label="`Quantity for panel row ${index + 1}`" :min="1" :disabled="!canEdit" fluid /></td><td v-if="form.is_set_item"><Checkbox v-model="row.is_default" binary :true-value="1" :false-value="0" :disabled="!canEdit" :aria-label="`Use panel row ${index + 1} as default`" /></td></template>
 						</RowEditor>
 					</TabPanel>
 
 					<TabPanel value="cloth">
 						<RowEditor title="Cloth Details" add-label="Add Cloth" :editable="canEdit" :rows="clothDetails" @add="clothDetails.push({ name1: '', dia: [], diaText: '' })" @remove="clothDetails.splice($event, 1)">
 							<template #header><th>Cloth Type</th><th>Dia (comma separated)</th></template>
-							<template #row="{ row }"><td><InputText v-model="row.name1" :disabled="!canEdit" fluid /></td><td><InputText v-model="row.diaText" :disabled="!canEdit" fluid /></td></template>
+							<template #row="{ row, index }"><td><InputText v-model="row.name1" :aria-label="`Cloth type row ${index + 1}`" :disabled="!canEdit" fluid /></td><td><InputText v-model="row.diaText" :aria-label="`Dia values for cloth row ${index + 1}`" :disabled="!canEdit" fluid /></td></template>
 						</RowEditor>
 					</TabPanel>
 
@@ -81,10 +81,11 @@
 		</template>
 	</Dialog>
 
-	<Dialog v-model:visible="discardVisible" header="Discard unsaved changes?" modal :closable="false" :style="{ width: 'min(440px, calc(100vw - 32px))' }">
+	<Dialog v-model:visible="discardVisible" class="erp-dialog--sm" header="Discard unsaved changes?" modal :closable="false">
 		<p class="discard-copy">Your Cutting Order Detail changes will be lost.</p>
 		<template #footer><Button label="Keep Editing" severity="secondary" text @click="discardVisible = false" /><Button label="Discard Changes" severity="danger" @click="discard" /></template>
 	</Dialog>
+	<DocumentErrorDialog :message="actionError" title="Cutting Order Detail could not be saved" @dismiss="actionError = ''" />
 </template>
 
 <script setup>
@@ -104,6 +105,7 @@ import Tag from "primevue/tag"
 import { computed, defineComponent, h, reactive, ref, watch } from "vue"
 
 import { getCuttingOrderDetail, saveCuttingOrderDetail } from "../../../api/cuttingOrder.js"
+import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 
 const props = defineProps({ visible: Boolean, name: { type: String, default: "" }, item: { type: String, default: "" } })
 const emit = defineEmits(["update:visible", "saved"])
@@ -111,6 +113,7 @@ const activeTab = ref("setup")
 const loading = ref(false)
 const saving = ref(false)
 const error = ref("")
+const actionError = ref("")
 const discardVisible = ref(false)
 const pendingClose = ref(false)
 const form = reactive(emptyForm())
@@ -131,6 +134,7 @@ watch(() => [props.visible, props.name], ([visible]) => { if (visible) load() })
 async function load() {
 	loading.value = true
 	error.value = ""
+	actionError.value = ""
 	try { applyPayload(await getCuttingOrderDetail(props.name, props.item)) }
 	catch (reason) { error.value = reason?.message || "Unable to load the Cutting Order Detail." }
 	finally { loading.value = false; cleanSignature.value = signature.value }
@@ -155,7 +159,7 @@ async function save() {
 		const payload = await saveCuttingOrderDetail(payloadValues(), { name: form.name, expectedModified: form.modified })
 		applyPayload(payload)
 		emit("saved", payload)
-	} catch (reason) { error.value = reason?.message || "Unable to save the Cutting Order Detail." }
+	} catch (reason) { actionError.value = reason?.message || "Unable to save the Cutting Order Detail." }
 	finally { saving.value = false }
 }
 
@@ -202,7 +206,7 @@ const RowEditor = defineComponent({
 			h("header", [h("h3", componentProps.title), componentProps.editable ? h(Button, { label: componentProps.addLabel, icon: "pi pi-plus", text: true, size: "small", onClick: () => childEmit("add") }) : null]),
 			componentProps.rows.length ? h("div", { class: "table-scroll", role: "region", tabindex: 0, "aria-label": componentProps.title }, h("table", { class: "detail-table" }, [
 				h("thead", h("tr", [h("th", "S.No."), slots.header?.(), componentProps.editable ? h("th") : null])),
-				h("tbody", componentProps.rows.map((row, index) => h("tr", { key: row._row_key || index }, [h("td", index + 1), slots.row?.({ row, index }), componentProps.editable ? h("td", h(Button, { icon: "pi pi-trash", severity: "danger", text: true, rounded: true, "aria-label": "Remove row", onClick: () => childEmit("remove", index) })) : null]))),
+				h("tbody", componentProps.rows.map((row, index) => h("tr", { key: row._row_key || index }, [h("td", index + 1), slots.row?.({ row, index }), componentProps.editable ? h("td", h(Button, { icon: "pi pi-trash", severity: "danger", text: true, rounded: true, "aria-label": `Remove ${componentProps.title || "detail"} row ${index + 1}`, onClick: () => childEmit("remove", index) })) : null]))),
 			])) : h("div", { class: "detail-empty" }, `No ${String(componentProps.title || "rows").toLowerCase()} yet.`),
 		])
 	},
@@ -217,7 +221,7 @@ const CombinationMatrix = defineComponent({
 				h("thead", h("tr", [h("th", "Major Value"), ...(componentProps.model.attributes || []).map((attribute) => h("th", attribute))])),
 				h("tbody", componentProps.model.values.map((row, index) => h("tr", { key: `${row.major_attribute}-${index}` }, [
 					h("td", row.major_attribute),
-					...(componentProps.model.attributes || []).map((attribute) => h("td", componentProps.editable ? h(InputText, { modelValue: row.val?.[attribute] || "", "onUpdate:modelValue": (value) => { row.val ||= {}; row.val[attribute] = value }, fluid: true }) : (row.val?.[attribute] || "—"))),
+					...(componentProps.model.attributes || []).map((attribute) => h("td", componentProps.editable ? h(InputText, { modelValue: row.val?.[attribute] || "", "aria-label": `${attribute} for ${row.major_attribute || `combination row ${index + 1}`}`, "onUpdate:modelValue": (value) => { row.val ||= {}; row.val[attribute] = value }, fluid: true }) : (row.val?.[attribute] || "—"))),
 				]))),
 			])) : h("div", { class: "detail-empty" }, "No combinations generated."),
 		])

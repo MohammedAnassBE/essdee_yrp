@@ -5,7 +5,6 @@
 			<Button icon="pi pi-times" severity="secondary" text rounded aria-label="Close calculation" :disabled="Boolean(acting)" @click="emit('close')" />
 		</header>
 
-		<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 		<div class="grn-calculate-panel__toolbar">
 			<div class="grn-calculate-panel__received-type">
 				<LinkField v-model="receivedType" label="Received Type *" doctype="YRP Received Type" :show-open-button="false" :disabled="Boolean(acting)" />
@@ -16,7 +15,7 @@
 			</div>
 		</div>
 
-		<div class="erp-table-wrap grn-calculate-panel__matrix">
+		<div class="erp-table-wrap grn-calculate-panel__matrix" role="region" tabindex="0" aria-label="Goods Received Note receivable quantities">
 			<table class="erp-data-table">
 				<thead>
 					<tr>
@@ -28,12 +27,13 @@
 				</thead>
 				<tbody>
 					<tr v-for="(row, rowIndex) in rows" :key="rowIndex" :class="{ 'grn-calculate-panel__row--inactive': !row.selected }">
-						<td class="grn-calculate-panel__select"><Checkbox v-model="row.selected" binary :input-id="`grn-calculate-row-${rowIndex}`" :disabled="Boolean(acting)" /></td>
+						<td class="grn-calculate-panel__select"><Checkbox v-model="row.selected" binary :input-id="`grn-calculate-row-${rowIndex}`" :aria-label="`Use receipt calculation row ${rowIndex + 1}`" :disabled="Boolean(acting)" /></td>
 						<td v-for="attribute in context.display_attributes || []" :key="attribute">{{ row.attributes?.[attribute] || "—" }}</td>
 						<td v-for="value in primaryValues" :key="value" class="erp-number grn-calculate-panel__quantity">
 								<InputNumber
 									v-if="row.values?.[value]"
 									v-model="row.values[value].qty"
+									:aria-label="quantityInputLabel(row, rowIndex, value)"
 									:min="0"
 									:max="Number(row.values[value].available_qty || 0)"
 									:max-fraction-digits="3"
@@ -61,16 +61,17 @@
 			<Button label="Apply Calculation" icon="pi pi-calculator" :loading="acting === 'calculate'" :disabled="!canApply" @click="apply" />
 		</footer>
 	</section>
+	<DocumentErrorDialog :message="error" title="Goods Received Note could not be calculated" />
 </template>
 
 <script setup>
 import Button from "primevue/button"
 import Checkbox from "primevue/checkbox"
 import InputNumber from "primevue/inputnumber"
-import Message from "primevue/message"
 import { computed, ref, watch } from "vue"
 
 import LinkField from "../../components/common/LinkField.vue"
+import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 
 const props = defineProps({
 	context: { type: Object, default: () => ({}) },
@@ -97,6 +98,11 @@ function rowTotal(row) {
 }
 function columnTotal(value) { return rows.value.reduce((total, row) => total + (row.selected ? Number(row.values?.[value]?.qty || 0) : 0), 0) }
 function quantityHeading(value) { return value === "default" || !props.context.primary_attribute ? "Receive" : value }
+function quantityInputLabel(row, rowIndex, value) {
+	const attributes = (props.context.display_attributes || []).map((attribute) => row.attributes?.[attribute]).filter(Boolean).join(", ")
+	const quantity = value === "default" ? "receive quantity" : `${value} receive quantity`
+	return `${quantity} for ${attributes || `row ${rowIndex + 1}`}`
+}
 function formatQty(value) { return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 }) }
 function apply() {
 	const selectedRows = []
@@ -133,4 +139,5 @@ function clone(value) { return JSON.parse(JSON.stringify(value || [])) }
 .grn-calculate-panel__grand-total strong { color: var(--erp-accent); font-size: 17px; }
 .grn-calculate-panel footer { padding: 0 var(--erp-space-3) var(--erp-space-3); justify-content: flex-end; }
 @media (max-width: 620px) { .grn-calculate-panel__toolbar { align-items: stretch; flex-direction: column; } .grn-calculate-panel__selection-actions { justify-content: flex-start; } }
+@media (max-width: 1024px), (pointer: coarse) { .grn-calculate-panel :deep(.p-button) { min-width: 44px; min-height: 44px; } .grn-calculate-panel__quantity :deep(.p-inputnumber-input) { height: 44px; min-height: 44px; } }
 </style>

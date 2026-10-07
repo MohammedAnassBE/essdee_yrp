@@ -17,7 +17,7 @@
 			<div class="laysheet-summary">
 				<div><span>Lay No</span><strong>{{ sheet.lay_no ?? '—' }}</strong></div>
 				<div><span>Marker</span><strong>{{ sheet.marker_name || sheet.cutting_marker || '—' }}</strong></div>
-				<div><span>Status</span><strong><span class="status-pill" :class="statusClass">{{ sheet.status || '—' }}</span></strong></div>
+				<div><span>Status</span><strong><DocumentStatusBadge :docstatus="sheet.docstatus" :label="sheet.status || 'Draft'" /></strong></div>
 				<div><span>Bundles</span><strong>{{ sheet.bundles?.length || 0 }}</strong></div>
 			</div>
 
@@ -98,7 +98,7 @@
 				<label v-if="!sheet?.is_manual_entry"><span>Maximum No of Plys *</span><InputNumber v-model="maximumPlys" :min="1" fluid /></label>
 				<label v-if="!sheet?.is_manual_entry"><span>Maximum Allow Percent *</span><InputNumber v-model="maximumAllow" :min="0" suffix="%" fluid /></label>
 			</div>
-			<div class="table-scroll" role="region" tabindex="0" aria-label="Bundle generation groups"><table class="laysheet-table"><thead><tr><th>Panel</th><th>Bundle Group</th></tr></thead><tbody><tr v-for="(row, index) in generationParts" :key="row.part"><td>{{ row.part }}</td><td><InputNumber v-model="row.value" :min="1" :disabled="busy === 'generate'" fluid /></td></tr></tbody></table></div>
+			<div class="table-scroll" role="region" tabindex="0" aria-label="Bundle generation groups"><table class="laysheet-table"><thead><tr><th>Panel</th><th>Bundle Group</th></tr></thead><tbody><tr v-for="(row, index) in generationParts" :key="row.part"><td>{{ row.part }}</td><td><InputNumber v-model="row.value" :aria-label="`Bundle group for ${row.part || `panel ${index + 1}`}`" :min="1" :disabled="busy === 'generate'" fluid /></td></tr></tbody></table></div>
 		</div>
 		<template #footer><Button label="Close" severity="secondary" text @click="generateOpen = false" /><Button label="Generate" icon="pi pi-box" :loading="busy === 'generate'" @click="generateBundles" /></template>
 	</Dialog>
@@ -153,6 +153,7 @@
 		</div>
 		<template #footer><Button label="Close" severity="secondary" text :disabled="detailBusy === 'accessory-save'" @click="accessoryEditorOpen = false" /><Button :label="accessoryEditIndex < 0 ? 'Add Accessory' : 'Update Accessory'" icon="pi pi-check" :loading="detailBusy === 'accessory-save'" @click="saveAccessory" /></template>
 	</Dialog>
+	<DocumentErrorDialog :message="actionError" title="Cutting Lay Sheet action failed" @dismiss="actionError = ''" />
 </template>
 
 <script setup>
@@ -175,6 +176,8 @@ import { callMethod } from "../../api/frappe.js"
 import { getQzPrinters, printQzRaw } from "../../api/qzPrinter.js"
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
+import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
 import MaterialRequirementGroups from "./shared/MaterialRequirementGroups.vue"
@@ -193,6 +196,7 @@ const confirmAction = useActionConfirmation()
 const loading = ref(false)
 const busy = ref("")
 const error = ref("")
+const actionError = ref("")
 const success = ref("")
 const sheet = ref(null)
 const activeTab = ref("details")
@@ -219,6 +223,7 @@ const setFieldsSequence = ref(0)
 const accessoryEditorOpen = ref(false)
 const accessoryEditIndex = ref(-1)
 const accessoryForm = reactive(emptyAccessoryForm())
+let loadSequence = 0
 const resolvedParentName = computed(() => props.parentName || props.cuttingPlan)
 const resolvedParentField = computed(() => props.parentDoctype === "SD YRP Cutting Order" ? "cutting_order" : "cutting_plan")
 const parentArgs = computed(() => ({ [resolvedParentField.value]: resolvedParentName.value }))
@@ -235,7 +240,6 @@ const detailRows = computed(() => {
 		["Required Piece Weight", number(row.required_pcs_weight, 4)], ["Approved By", row.approved_by], ["Goods Received Note", row.goods_received_note],
 	].map(([label, value]) => ({ label, value }))
 })
-const statusClass = computed(() => `status-pill--${String(sheet.value?.status || "").toLowerCase().replaceAll(" ", "-")}`)
 const canEditDetails = computed(() => Boolean(sheet.value?.permissions?.can_edit_details))
 const editorAttributes = computed(() => sheet.value?.editor?.attributes || { cloth_type: [], colour: [], dia: [], cloth_type_dia_map: {} })
 const editorAccessories = computed(() => sheet.value?.editor?.accessories || [])
@@ -266,18 +270,24 @@ const bundleColumns = [column("bundle_no", "Bundle No"), column("size", "Size"),
 watch(
 	() => [props.visible, props.laysheetName, resolvedParentName.value],
 	([visible]) => {
-		if (!visible) return
+		if (!visible) {
+			loadSequence += 1
+			loading.value = false
+			return
+		}
 		if (props.laysheetName) load()
 		else startCreate()
 	},
 )
 
 function startCreate() {
+	loadSequence += 1
 	sheet.value = null
 	activeTab.value = "details"
 	loading.value = false
 	busy.value = ""
 	error.value = ""
+	actionError.value = ""
 	success.value = ""
 	Object.assign(createForm, emptyCreateForm())
 }
@@ -298,7 +308,7 @@ async function createLaySheet() {
 		success.value = "Lay Sheet created."
 		emit("changed", sheet.value)
 	} catch (reason) {
-		error.value = reason.message || "Unable to create the Cutting LaySheet."
+		actionError.value = reason.message || "Unable to create the Cutting LaySheet."
 	} finally {
 		busy.value = ""
 	}
@@ -399,7 +409,7 @@ async function saveCloth() {
 		await persistDetails(rows, (sheet.value.accessory_details || []).map(accessoryRow), clothEditIndex.value < 0 ? "Cloth detail added." : "Cloth detail updated.")
 		clothEditorOpen.value = false
 	} catch (reason) {
-		editorError.value = reason.message || "Unable to save the cloth detail."
+		actionError.value = reason.message || "Unable to save the cloth detail."
 	} finally {
 		detailBusy.value = ""
 	}
@@ -421,7 +431,7 @@ async function saveAccessory() {
 		await persistDetails((sheet.value.cloth_details || []).map(clothRow), rows, accessoryEditIndex.value < 0 ? "Accessory detail added." : "Accessory detail updated.")
 		accessoryEditorOpen.value = false
 	} catch (reason) {
-		editorError.value = reason.message || "Unable to save the accessory detail."
+		actionError.value = reason.message || "Unable to save the accessory detail."
 	} finally {
 		detailBusy.value = ""
 	}
@@ -446,7 +456,7 @@ async function deleteClothConfirmed(index) {
 		rows.splice(index, 1)
 		await persistDetails(rows, (sheet.value.accessory_details || []).map(accessoryRow), "Cloth detail deleted.")
 	} catch (reason) {
-		detailError.value = reason.message || "Unable to delete the cloth detail."
+		actionError.value = reason.message || "Unable to delete the cloth detail."
 	} finally {
 		detailBusy.value = ""
 	}
@@ -471,7 +481,7 @@ async function deleteAccessoryConfirmed(index) {
 		rows.splice(index, 1)
 		await persistDetails((sheet.value.cloth_details || []).map(clothRow), rows, "Accessory detail deleted.")
 	} catch (reason) {
-		detailError.value = reason.message || "Unable to delete the accessory detail."
+		actionError.value = reason.message || "Unable to delete the accessory detail."
 	} finally {
 		detailBusy.value = ""
 	}
@@ -492,16 +502,23 @@ async function persistDetails(clothDetails, accessoryDetails, message) {
 }
 
 async function load() {
+	const sequence = ++loadSequence
+	const requestedName = props.laysheetName
+	const requestedParent = { ...parentArgs.value }
 	loading.value = true
+	sheet.value = null
 	activeTab.value = "details"
 	error.value = ""
+	actionError.value = ""
 	success.value = ""
 	try {
-		sheet.value = await callMethod(laysheetMethod("get_web_laysheet"), { ...parentArgs.value, cutting_laysheet: props.laysheetName })
+		const data = await callMethod(laysheetMethod("get_web_laysheet"), { ...requestedParent, cutting_laysheet: requestedName })
+		if (sequence !== loadSequence || !props.visible || requestedName !== props.laysheetName) return
+		sheet.value = data
 	} catch (reason) {
-		error.value = reason.message || "Unable to load the Cutting LaySheet."
+		if (sequence === loadSequence && props.visible && requestedName === props.laysheetName) error.value = reason.message || "Unable to load the Cutting LaySheet."
 	} finally {
-		loading.value = false
+		if (sequence === loadSequence && requestedName === props.laysheetName) loading.value = false
 	}
 }
 
@@ -540,7 +557,7 @@ async function generateBundles() {
 		success.value = "Bundles generated."
 		await reloadChanged()
 	} catch (reason) {
-		subdialogError.value = reason.message || "Unable to generate bundles."
+		actionError.value = reason.message || "Unable to generate bundles."
 	} finally {
 		busy.value = ""
 	}
@@ -558,7 +575,7 @@ async function openPrinter() {
 			return
 		}
 	} catch (reason) {
-		error.value = reason.message || "Unable to validate grammage approval."
+		actionError.value = reason.message || "Unable to validate grammage approval."
 		return
 	}
 
@@ -566,10 +583,10 @@ async function openPrinter() {
 	loadingPrinters.value = true
 	subdialogError.value = ""
 	selectedPrinter.value = ""
-	try {
-		printers.value = await getQzPrinters()
-	} catch (reason) {
-		subdialogError.value = reason.message || "Unable to connect to QZ Tray."
+		try {
+			printers.value = await getQzPrinters()
+		} catch (reason) {
+			actionError.value = reason.message || "Unable to connect to QZ Tray."
 	} finally {
 		loadingPrinters.value = false
 	}
@@ -589,7 +606,7 @@ async function printLabels() {
 		success.value = "Labels sent to the printer."
 		await reloadChanged()
 	} catch (reason) {
-		subdialogError.value = reason.message || "Label printing failed. The LaySheet can be retried."
+		actionError.value = reason.message || "Label printing failed. The LaySheet can be retried."
 	} finally {
 		busy.value = ""
 	}
@@ -603,7 +620,7 @@ async function runStatusAction(method, action) {
 		success.value = action === "approve" ? "Grammage approved." : "LaySheet status updated."
 		await reloadChanged()
 	} catch (reason) {
-		error.value = reason.message || "Unable to update the LaySheet."
+		actionError.value = reason.message || "Unable to update the LaySheet."
 	} finally {
 		busy.value = ""
 	}
@@ -722,9 +739,6 @@ const DataBlock = defineComponent({
 .laysheet-summary > div:last-child { border-right: 0; }
 .laysheet-summary span, .detail-grid span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 700; text-transform: uppercase; letter-spacing: 0.035em; }
 .laysheet-summary strong, .detail-grid strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
-.status-pill { display: inline-flex; padding: 3px 7px; border-radius: var(--erp-pill-radius); color: var(--erp-accent-dark); background: var(--erp-success-soft); font-size: var(--erp-font-size-min); }
-.status-pill--cancelled { color: var(--erp-danger); background: var(--erp-danger-soft); }
-.status-pill--approval-pending { color: var(--erp-warning); background: var(--erp-warning-soft); }
 .detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); overflow: hidden; }
 .detail-grid > div { display: grid; gap: 5px; min-height: 65px; padding: 11px 13px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
 .data-block { display: grid; gap: 9px; margin-bottom: 14px; }
@@ -795,6 +809,6 @@ const DataBlock = defineComponent({
 	.laysheet-footer__primary { width: 100%; justify-content: flex-end; }
 	.laysheet-content :deep(.p-tab) { flex: 0 0 auto; }
 	.laysheet-content :deep(.table-scroll), .table-scroll { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); }
-	.row-actions :deep(.p-button) { width: 2.25rem; height: 2.25rem; }
+	.row-actions :deep(.p-button) { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
 }
 </style>

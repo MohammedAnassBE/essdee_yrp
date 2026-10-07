@@ -18,7 +18,7 @@
 			<template #header="{ record }">
 				<div class="goods-received-note-header__identity" :class="{ 'goods-received-note-header__identity--embedded': presentation === 'embedded' }">
 					<div v-if="presentation !== 'embedded'" class="goods-received-note-header__title"><h1>Goods Received Note</h1><span>{{ record.name || duplicateLabel || (loading && name ? "Loading…" : error && name ? name : "New document") }}</span></div>
-					<Tag v-if="hasWorkspace && presentation !== 'embedded'" :value="record.status || statusLabel(record.docstatus)" :severity="statusSeverity" rounded />
+					<DocumentStatusBadge v-if="hasWorkspace && presentation !== 'embedded'" :docstatus="record.docstatus" :label="record.status || statusLabel(record.docstatus)" />
 					<div v-if="headerFacts.length" class="goods-received-note-header__facts" role="region" aria-label="Goods Received Note context" tabindex="0">
 						<div v-for="fact in headerFacts" :key="fact.label"><span>{{ fact.label }}</span><strong :title="String(fact.value)">{{ fact.value }}</strong></div>
 					</div>
@@ -144,6 +144,7 @@
 			</template>
 
 			<template #rail>
+				<div class="goods-received-note-totals fabric-document-workspace__metric-group">
 				<div
 					v-for="total in visibleTotals"
 					:key="total.fieldname"
@@ -151,6 +152,7 @@
 					:class="{ 'goods-received-note-total--primary': primaryTotals.has(total.fieldname) && totalIsPositive(total) }"
 				>
 					<span>{{ total.label }}</span><strong>{{ formatTotal(total) }}</strong>
+				</div>
 				</div>
 				<div v-if="workspace.record?.is_internal_unit" class="goods-received-note-transfer-progress">
 					<span>Internal transfer</span><strong>{{ transferPercent }}%</strong>
@@ -171,13 +173,13 @@
 			</template>
 		</FabricDocumentWorkspace>
 
-		<Dialog v-model:visible="calculationOpen" modal header="Calculate Goods Received Note" class="fabric-action-dialog fabric-action-dialog--wide" :closable="!acting" :style="{ width: 'min(1040px, calc(100vw - 24px))' }">
+		<Dialog v-model:visible="calculationOpen" modal header="Calculate Goods Received Note" class="fabric-action-dialog fabric-action-dialog--wide erp-dialog--lg" :closable="!acting">
 			<GrnCalculatePanel :context="calculationContext" :acting="acting" :error="panelError" @apply="calculate" @close="closeCalculation" />
 		</Dialog>
-		<Dialog v-model:visible="inspectionOpen" modal header="Create Inspection Entry" class="fabric-action-dialog fabric-action-dialog--wide" :closable="!acting" :style="{ width: 'min(1120px, calc(100vw - 24px))' }">
+		<Dialog v-model:visible="inspectionOpen" modal header="Create Inspection Entry" class="fabric-action-dialog fabric-action-dialog--wide erp-dialog--lg" :closable="!acting">
 			<InspectionEntryPanel :context="workspace.inspection || {}" :acting="acting" :error="panelError" @save="saveInspection" @close="closeInspection" />
 		</Dialog>
-		<Dialog :visible="Boolean(notificationPreparation)" modal header="Send supplier notification" class="fabric-action-dialog" :closable="!acting" :style="{ width: 'min(760px, calc(100vw - 24px))' }" @update:visible="handleNotificationVisibility">
+		<Dialog :visible="Boolean(notificationPreparation)" modal header="Send supplier notification" class="fabric-action-dialog erp-dialog--md" :closable="!acting" @update:visible="handleNotificationVisibility">
 			<SupplierNotificationPanel v-if="notificationPreparation" :preparation="notificationPreparation" :document-values="notificationValues" :acting="acting" :error="notificationError" @send="sendNotification" @close="closeNotification" />
 		</Dialog>
 		<FabricStockOperationDialog v-model:visible="completionEntryOpen" operation="stock_entry" :name="completionEntryName" @changed="completionEntryChanged" />
@@ -189,7 +191,6 @@
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
-import Tag from "primevue/tag"
 import { useToast } from "primevue/usetoast"
 import { computed, onMounted, reactive, ref, watch } from "vue"
 import { useRouter } from "vue-router"
@@ -206,6 +207,7 @@ import { searchLinkedDocument } from "../../api/frappe.js"
 import FormField from "../../components/common/FormField.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
+import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { hasDocumentDisplayValue, plainTextFromHtml } from "../../utils/documentValues.js"
 import FabricDocumentWorkspace from "./FabricDocumentWorkspace.vue"
 import FabricStockOperationDialog from "./FabricStockOperationDialog.vue"
@@ -241,6 +243,8 @@ const completionEntryName = ref("")
 const lifecycleConfirmVisible = ref(false)
 const pendingLifecycleCommand = ref("")
 const form = reactive({})
+let loadSequence = 0
+let actionSequence = 0
 const primaryTotals = new Set(["total_received_quantity", "total", "grand_total", "total_receivable_cost"])
 const headerFieldnames = new Set(["against", "against_id", "delivery_challan", "process_name", "item", "supplier", "supplier_name"])
 const sourceFieldnames = new Set(["against", "against_id", "delivery_challan"])
@@ -332,31 +336,48 @@ const headerFacts = computed(() => [
 	["Item", workspace.value.record?.item || form.item],
 	["Supplier", workspace.value.record?.supplier_name || workspace.value.record?.supplier || form.supplier],
 ].filter(([, value]) => value).map(([label, value]) => ({ label, value })))
-const statusSeverity = computed(() => {
-	const record = workspace.value.record || {}
-	if (Number(record.docstatus) === 2 || record.status === "Cancelled") return "danger"
-	if (record.transfer_complete) return "success"
-	return Number(record.docstatus) === 1 ? "info" : "secondary"
-})
 const transferPercent = computed(() => Math.max(0, Math.min(100, Number(workspace.value.record?.ste_transferred_percent || (workspace.value.record?.transfer_complete ? 100 : 0)))))
 const inspectionEntries = computed(() => workspace.value.inspection?.entries || workspace.value.related?.inspection_entries || [])
 const notificationValues = computed(() => ({ ...(workspace.value.record || {}), ...form }))
 
 async function load(refresh = false) {
-	if (refresh) acting.value = "reload"
-	else loading.value = true
-	error.value = ""
+	const sequence = ++loadSequence
+	actionSequence += 1
 	const requestedName = props.name || currentName.value
+	const requestedRouteName = props.name
+	const requestedSource = JSON.stringify(props.sourceContext || {})
+	const requestedContext = clone(props.sourceContext || {})
+	if (refresh) acting.value = "reload"
+	else {
+		loading.value = true
+		clearWorkspaceState(requestedName)
+	}
+	error.value = ""
 	try {
-		currentName.value = requestedName
-		applyWorkspace(await getGoodsReceivedNoteWorkspace(currentName.value, props.sourceContext) || {})
+		const nextWorkspace = await getGoodsReceivedNoteWorkspace(requestedName, requestedContext) || {}
+		if (loadIsStale(sequence, requestedName, requestedRouteName, requestedSource)) return
+		applyWorkspace(nextWorkspace)
 	} catch (reason) {
+		if (loadIsStale(sequence, requestedName, requestedRouteName, requestedSource)) return
 		clearWorkspaceState(requestedName)
 		error.value = reason?.message || "Unable to load this Goods Received Note."
 	} finally {
-		loading.value = false
-		acting.value = ""
+		if (!loadIsStale(sequence, requestedName, requestedRouteName, requestedSource)) {
+			loading.value = false
+			acting.value = ""
+		}
 	}
+}
+
+function loadIsStale(sequence, requestedName, requestedRouteName, requestedSource) {
+	return sequence !== loadSequence
+		|| requestedRouteName !== props.name
+		|| (Boolean(requestedRouteName) && requestedName !== props.name)
+		|| requestedSource !== JSON.stringify(props.sourceContext || {})
+}
+
+function actionIsStale(sequence, requestedRouteName) {
+	return sequence !== actionSequence || requestedRouteName !== props.name
 }
 
 function clearWorkspaceState(name = "") {
@@ -380,6 +401,11 @@ function applyWorkspace(nextWorkspace) {
 	for (const key of Object.keys(form)) delete form[key]
 	Object.assign(form, clone(workspace.value.values || {}))
 	for (const field of workspace.value.fields || []) if (!(field.fieldname in form)) form[field.fieldname] = field.value
+	if (!workspace.value.record?.name) {
+		const defaults = currentPostingDefaults()
+		if (!form.posting_date) form.posting_date = defaults.date
+		if (!form.posting_time) form.posting_time = defaults.time
+	}
 	itemGroups.value = normalizeGroups(workspace.value.matrices?.items || workspace.value.item_groups || [])
 	correctionGroups.value = clone(workspace.value.matrices?.correction_items || workspace.value.correction_item_groups || [])
 	for (const correction of correctionGroups.value) correction.item_details = normalizeGroups(correction.item_details || [])
@@ -414,18 +440,27 @@ async function duplicateGoodsReceivedNote() {
 	}
 	acting.value = "duplicate"
 	error.value = ""
+	const sequence = ++actionSequence
+	const requestedRouteName = props.name
+	const duplicateFrom = currentName.value
 	try {
-		applyWorkspace(await getGoodsReceivedNoteWorkspace("", { duplicate_from: currentName.value }) || {})
+		const nextWorkspace = await getGoodsReceivedNoteWorkspace("", { duplicate_from: duplicateFrom }) || {}
+		if (actionIsStale(sequence, requestedRouteName)) return
+		applyWorkspace(nextWorkspace)
 		dirty.value = true
 		emit("changed", workspace.value)
 	} catch (reason) {
+		if (actionIsStale(sequence, requestedRouteName)) return
 		error.value = reason?.message || "Unable to duplicate this Goods Received Note."
 	} finally {
-		acting.value = ""
+		if (!actionIsStale(sequence, requestedRouteName)) acting.value = ""
 	}
 }
 
 async function save(submit) {
+	const sequence = ++actionSequence
+	const requestedRouteName = props.name
+	const requestedName = currentName.value
 	acting.value = submit ? "submit" : "save"
 	error.value = ""
 	try {
@@ -433,28 +468,35 @@ async function save(submit) {
 			...clone(form),
 			item_details: clone(itemGroups.value),
 			correction_item_details: clone(correctionGroups.value),
-		}, { name: currentName.value, submit, expectedModified: workspace.value.record?.modified })
+		}, { name: requestedName, submit, expectedModified: workspace.value.record?.modified })
+		if (actionIsStale(sequence, requestedRouteName)) return
 		applyWorkspace(saved || {})
 		toast.add({ severity: "success", summary: submit ? "Goods Received Note submitted" : "Goods Received Note saved", detail: workspace.value.record?.name || "Your changes are saved.", life: 3500 })
 		emit("changed", workspace.value)
 	} catch (reason) {
+		if (actionIsStale(sequence, requestedRouteName)) return
 		error.value = reason?.message || `Unable to ${submit ? "submit" : "save"} this Goods Received Note.`
-	} finally { acting.value = "" }
+	} finally { if (!actionIsStale(sequence, requestedRouteName)) acting.value = "" }
 }
 
 async function runCommand(command, payload = {}, destructive = false) {
 	if (!currentName.value) return null
+	const sequence = ++actionSequence
+	const requestedRouteName = props.name
+	const requestedName = currentName.value
 	acting.value = command
 	error.value = ""
 	try {
-		const result = await executeGoodsReceivedNoteCommand(currentName.value, command, payload, workspace.value.record?.modified)
+		const result = await executeGoodsReceivedNoteCommand(requestedName, command, payload, workspace.value.record?.modified)
+		if (actionIsStale(sequence, requestedRouteName)) return null
 		const updated = result?.workspace || result
 		if (updated?.record) { applyWorkspace(updated); emit("changed", workspace.value) }
 		return result
 	} catch (reason) {
+		if (actionIsStale(sequence, requestedRouteName)) return null
 		error.value = reason?.message || `Unable to ${command.replaceAll("_", " ")} this Goods Received Note.`
 		return null
-	} finally { acting.value = "" }
+	} finally { if (!actionIsStale(sequence, requestedRouteName)) acting.value = "" }
 }
 const lifecycleConfirmTitle = computed(() => pendingLifecycleCommand.value === "cancel" ? "Cancel Goods Received Note?" : "Amend Goods Received Note?")
 const lifecycleConfirmLabel = computed(() => pendingLifecycleCommand.value === "cancel" ? "Cancel GRN" : "Create Amendment")
@@ -464,11 +506,18 @@ async function confirmLifecycleAction() { const command = pendingLifecycleComman
 
 async function openCalculation() {
 	if (!currentName.value || !capabilities.value.calculate || dirty.value) return
+	const sequence = ++actionSequence
+	const requestedRouteName = props.name
+	const requestedName = currentName.value
 	acting.value = "load_calculation"
 	panelError.value = ""
-	try { calculationContext.value = await getGoodsReceivedNoteCalculation(currentName.value) || {}; calculationOpen.value = true; inspectionOpen.value = false }
-	catch (reason) { error.value = reason?.message || "Unable to load the Goods Received Note calculation." }
-	finally { acting.value = "" }
+	try {
+		const context = await getGoodsReceivedNoteCalculation(requestedName) || {}
+		if (actionIsStale(sequence, requestedRouteName)) return
+		calculationContext.value = context; calculationOpen.value = true; inspectionOpen.value = false
+	} catch (reason) {
+		if (!actionIsStale(sequence, requestedRouteName)) error.value = reason?.message || "Unable to load the Goods Received Note calculation."
+	} finally { if (!actionIsStale(sequence, requestedRouteName)) acting.value = "" }
 }
 async function calculate(payload) {
 	if (!capabilities.value.calculate || dirty.value) {
@@ -477,30 +526,40 @@ async function calculate(payload) {
 			: "Calculate is no longer available for this Goods Received Note."
 		return
 	}
+	const sequence = ++actionSequence
+	const requestedRouteName = props.name
+	const requestedName = currentName.value
+	const expectedModified = calculationContext.value.modified
 	acting.value = "calculate"
 	panelError.value = ""
 	error.value = ""
 	try {
-		const result = await calculateGoodsReceivedNote(currentName.value, payload.rows, payload.received_type, calculationContext.value.modified)
+		const result = await calculateGoodsReceivedNote(requestedName, payload.rows, payload.received_type, expectedModified)
+		if (actionIsStale(sequence, requestedRouteName)) return
 		applyWorkspace(result?.workspace || result || {})
 		calculationOpen.value = false
 		emit("changed", workspace.value)
-	} catch (reason) { error.value = reason?.message || "Unable to calculate this Goods Received Note." }
-	finally { acting.value = "" }
+	} catch (reason) { if (!actionIsStale(sequence, requestedRouteName)) error.value = reason?.message || "Unable to calculate this Goods Received Note." }
+	finally { if (!actionIsStale(sequence, requestedRouteName)) acting.value = "" }
 }
 function closeCalculation() { calculationOpen.value = false; panelError.value = "" }
 function closeInspection() { inspectionOpen.value = false; panelError.value = "" }
 async function saveInspection({ values, submit }) {
+	const sequence = ++actionSequence
+	const requestedRouteName = props.name
+	const requestedName = currentName.value
+	const expectedModified = workspace.value.record?.modified
 	acting.value = submit ? "inspection_submit" : "inspection_save"
 	panelError.value = ""
 	error.value = ""
 	try {
-		const result = await saveGoodsReceivedNoteInspection(currentName.value, values, { submit, expectedModified: workspace.value.record?.modified })
+		const result = await saveGoodsReceivedNoteInspection(requestedName, values, { submit, expectedModified })
+		if (actionIsStale(sequence, requestedRouteName)) return
 		applyWorkspace(result?.workspace || result || {})
 		inspectionOpen.value = false
 		emit("changed", workspace.value)
-	} catch (reason) { error.value = reason?.message || "Unable to save this Inspection Entry." }
-	finally { acting.value = "" }
+	} catch (reason) { if (!actionIsStale(sequence, requestedRouteName)) error.value = reason?.message || "Unable to save this Inspection Entry." }
+	finally { if (!actionIsStale(sequence, requestedRouteName)) acting.value = "" }
 }
 async function completeTransfer() {
 	const result = await runCommand("complete_transfer")
@@ -630,13 +689,21 @@ function identityValue(row, column) {
 	const value = column.source === "dimensions" ? row.dimensions?.[column.key] : (row.attributes?.[column.key] ?? row[column.key])
 	return value === null || value === undefined || value === "" ? "—" : String(value)
 }
+function currentPostingDefaults() {
+	const now = new Date()
+	const pad = (value) => String(value).padStart(2, "0")
+	return {
+		date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+		time: `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`,
+	}
+}
 
 onMounted(() => load())
 watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, source], previous) => {
 	if (!previous || name === previous[0] && source === previous[1]) return
-	currentName.value = name || ""
-	calculationOpen.value = false
-	inspectionOpen.value = false
+	loadSequence += 1
+	actionSequence += 1
+	clearWorkspaceState(name || "")
 	load()
 })
 </script>
@@ -699,6 +766,8 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 .goods-received-note-matrix__total, .goods-received-note-matrix__value { color: var(--erp-accent-dark); font-weight: 800; }
 .goods-received-note-matrix__empty { display: grid; min-height: 140px; place-items: center; align-content: center; gap: 6px; color: var(--erp-text-muted); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); }
 .goods-received-note-total, .goods-received-note-transfer-progress { display: grid; min-height: 58px; align-content: center; gap: 2px; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--erp-border); border-radius: 0; background: var(--erp-surface); }
+.goods-received-note-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--erp-border); }
+.goods-received-note-totals .goods-received-note-total { min-height: 56px; border-bottom: 0; }
 .goods-received-note-total:last-child, .goods-received-note-transfer-progress:last-child { border-bottom: 0; }
 .goods-received-note-total strong, .goods-received-note-transfer-progress strong { color: var(--erp-text); font-size: 18px; font-weight: 780; font-variant-numeric: tabular-nums; }
 .goods-received-note-total--primary { background: color-mix(in srgb, var(--erp-accent-soft) 76%, white); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--erp-accent) 76%, white); }

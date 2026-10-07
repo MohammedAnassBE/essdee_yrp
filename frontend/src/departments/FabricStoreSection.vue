@@ -5,7 +5,7 @@
 				<Skeleton height="76px" />
 				<Skeleton height="420px" />
 			</div>
-			<Message v-else-if="error" severity="error" :closable="false">{{ error }}</Message>
+			<WorkspaceLoadError v-else-if="error" :message="error" :loading="loading" @retry="load" />
 			<Message v-else-if="!capability" severity="warn" :closable="false">You do not have permission to view {{ definition.label }}.</Message>
 			<component v-else :is="definition.component" :capability="capability" />
 		</section>
@@ -19,6 +19,7 @@ import { computed, onMounted, ref, watch } from "vue"
 
 import { getFabricStoreCapabilities } from "../api/fabricStore.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
+import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import FabricPurchaseOrders from "./fabric-store/FabricPurchaseOrders.vue"
 import FabricReports from "./fabric-store/FabricReports.vue"
 import FabricStockTransfers from "./fabric-store/FabricStockTransfers.vue"
@@ -59,7 +60,7 @@ watch(() => props.section, load)
 	max-width: 1800px;
 	min-width: 0;
 	margin: 0 auto;
-	padding: 2px clamp(2px, .8vw, 12px) var(--erp-space-5);
+	padding: 2px 0 var(--erp-space-5);
 }
 
 .fabric-store-section__loading {

@@ -5,7 +5,7 @@
 				<template #header="{ record }">
 					<div class="work-order-page__identity">
 						<div><h1>Work Order</h1><span>{{ record.name }}</span></div>
-						<Tag :value="record.status || statusLabel(record.docstatus)" :severity="statusSeverity" rounded />
+						<DocumentStatusBadge :docstatus="record.docstatus" :label="record.status || statusLabel(record.docstatus)" />
 						<div v-if="headerFacts.length" class="work-order-header__facts" role="region" aria-label="Work Order context" tabindex="0">
 							<div v-for="fact in headerFacts" :key="fact.label"><span>{{ fact.label }}</span><strong :title="String(fact.value)">{{ fact.value }}</strong></div>
 						</div>
@@ -38,7 +38,7 @@
 		<RelatedDocumentWorkspaceDialog v-model:visible="relatedVisible" :doctype="relatedDoctype" :name="relatedName" :source-context="relatedSourceContext" @changed="relatedChanged" @closed="relatedVisible = false" />
 		<DocumentConfirmationDialog v-model:visible="lifecycleConfirmVisible" :title="lifecycleConfirmTitle" :message="lifecycleConfirmMessage" :confirm-label="lifecycleConfirmLabel" :busy="Boolean(acting)" @confirm="confirmLifecycleAction" />
 		<FabricStockOperationDialog v-model:visible="materialIssueVisible" operation="stock_entry" :source-context="materialIssueContext" @changed="materialIssueChanged" />
-		<Dialog v-model:visible="grnSourceVisible" modal header="Create Goods Received Note" class="fabric-action-dialog" :dismissable-mask="false" :style="{ width: 'min(560px, calc(100vw - 24px))' }">
+		<Dialog v-model:visible="grnSourceVisible" modal header="Create Goods Received Note" class="fabric-action-dialog erp-dialog--md" :dismissable-mask="false">
 			<div class="work-order-grn-source">
 				<Message severity="secondary" :closable="false">{{ grnRequiresDeliveryChallan ? "This rework Work Order requires a submitted Delivery Challan." : "Choose the Delivery Challan being received, or continue without one when this receipt is not tied to a dispatch." }}</Message>
 				<LinkField v-model="grnDeliveryChallan" :label="grnRequiresDeliveryChallan ? 'Delivery Challan *' : 'Delivery Challan'" doctype="YRP Delivery Challan" :filters="{ work_order: workspace.record?.name, docstatus: 1 }" :show-open-button="false" show-clear />
@@ -57,8 +57,7 @@ import TabList from "primevue/tablist"
 import TabPanel from "primevue/tabpanel"
 import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
-import Tag from "primevue/tag"
-import { computed, onMounted, ref, watch } from "vue"
+import { computed, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import { executeWorkOrderCommand, getWorkOrderEditor, getWorkOrderWorkspace } from "../api/fabricStore.js"
@@ -66,6 +65,7 @@ import DepartmentPage from "../components/DepartmentPage.vue"
 import LinkField from "../components/common/LinkField.vue"
 import DocumentActionStrip from "../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../components/documents/DocumentConfirmationDialog.vue"
+import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
 import { webDocumentPath } from "../router/webDocumentRoutes.js"
 import { hasDocumentDisplayValue } from "../utils/documentValues.js"
 import FabricDocumentWorkspace from "./fabric-store/FabricDocumentWorkspace.vue"
@@ -95,6 +95,7 @@ const workspace = ref({})
 const actionVisible = ref(false)
 const actionMode = ref("")
 const actionEditor = ref({})
+const actionSourceId = ref("")
 const relatedVisible = ref(false)
 const relatedDoctype = ref("YRP Delivery Challan")
 const relatedName = ref("")
@@ -106,6 +107,8 @@ const grnDeliveryChallan = ref("")
 const grnRequiresDeliveryChallan = ref(false)
 const lifecycleConfirmVisible = ref(false)
 const pendingLifecycleCommand = ref("")
+let loadSequence = 0
+let actionSequence = 0
 const headerFieldnames = new Set(["supplier", "supplier_name", "process_name", "item", "lot"])
 
 const capabilities = computed(() => workspace.value.capabilities || {})
@@ -137,13 +140,6 @@ const showSummary = computed(() => Boolean(
 	&& !workspace.value.record?.is_rework
 	&& (workspace.value.summary?.item_detail?.length || workspace.value.summary?.deliverables?.length),
 ))
-const statusSeverity = computed(() => {
-	const record = workspace.value.record || {}
-	if (Number(record.docstatus) === 2 || ["Cancelled", "Closed"].includes(record.status) || record.open_status === "Close") return "danger"
-	if (["Completed", "Fully Received"].includes(record.status)) return "success"
-	if (String(record.status || "").startsWith("Partially") || record.open_status === "Close Request") return "warn"
-	return Number(record.docstatus) === 1 ? "info" : "secondary"
-})
 const workOrderActions = computed(() => {
 	const busy = Boolean(acting.value)
 	const actions = []
@@ -198,12 +194,40 @@ const workOrderActions = computed(() => {
 })
 
 async function loadWorkspace(refresh = false) {
+	const requestedId = String(route.params.workOrderId || "")
+	const sequence = ++loadSequence
+	actionSequence += 1
+	if (!refresh) {
+		acting.value = ""
+		actionVisible.value = false
+		actionSourceId.value = ""
+		relatedVisible.value = false
+		relatedName.value = ""
+		relatedSourceContext.value = {}
+		materialIssueVisible.value = false
+		materialIssueContext.value = {}
+		grnSourceVisible.value = false
+		grnDeliveryChallan.value = ""
+		lifecycleConfirmVisible.value = false
+		pendingLifecycleCommand.value = ""
+	}
 	if (!refresh) loading.value = true
 	else acting.value = "reload"
 	error.value = ""
-	try { workspace.value = await getWorkOrderWorkspace(route.params.workOrderId) || {} }
-	catch (reason) { error.value = reason?.message || "Unable to load this Work Order." }
-	finally { loading.value = false; acting.value = "" }
+	if (!refresh) {
+		workspace.value = {}
+		actionError.value = ""
+	}
+	try {
+		const data = await getWorkOrderWorkspace(requestedId) || {}
+		if (sequence === loadSequence && requestedId === String(route.params.workOrderId || "")) workspace.value = data
+	}
+	catch (reason) {
+		if (sequence === loadSequence) error.value = reason?.message || "Unable to load this Work Order."
+	}
+	finally {
+		if (sequence === loadSequence) { loading.value = false; acting.value = "" }
+	}
 }
 function capabilityLabel(name, fallback) { return capabilities.value[name]?.label || fallback }
 function statusLabel(docstatus) { return Number(docstatus) === 1 ? "Submitted" : Number(docstatus) === 2 ? "Cancelled" : "Draft" }
@@ -217,22 +241,40 @@ async function runWorkspaceAction(action) { if (action === "save") return editWo
 function requestLifecycleAction(command) { pendingLifecycleCommand.value = command; lifecycleConfirmVisible.value = true }
 async function confirmLifecycleAction() { const command = pendingLifecycleCommand.value; lifecycleConfirmVisible.value = false; pendingLifecycleCommand.value = ""; if (command) await runLifecycleAction(command) }
 async function runLifecycleAction(command) {
+	const requestedId = String(route.params.workOrderId || "")
+	const source = workspace.value.record
+	const sequence = ++actionSequence
 	acting.value = command; actionError.value = ""
-	try { const result = await executeWorkOrderCommand(workspace.value.record.name, command, {}, workspace.value.record.modified) || {}; const name = result.record?.name || workspace.value.record.name; workspace.value = result; if (name !== route.params.workOrderId) await router.replace({ name: props.viewRouteName, params: { workOrderId: name } }) }
-	catch (reason) { actionError.value = reason?.message || `Unable to ${command} this Work Order.` }
-	finally { acting.value = "" }
+	try {
+		const result = await executeWorkOrderCommand(source.name, command, {}, source.modified) || {}
+		if (sequence !== actionSequence || requestedId !== String(route.params.workOrderId || "")) return
+		const name = result.record?.name || source.name
+		workspace.value = result
+		if (name !== requestedId) await router.replace({ name: props.viewRouteName, params: { workOrderId: name } })
+	}
+	catch (reason) { if (sequence === actionSequence && requestedId === String(route.params.workOrderId || "")) actionError.value = reason?.message || `Unable to ${command} this Work Order.` }
+	finally { if (sequence === actionSequence) acting.value = "" }
 }
 async function openAction(mode) {
 	actionError.value = ""
+	actionSourceId.value = String(route.params.workOrderId || "")
 	if (["calculate_garment", "calculate_fabric"].includes(mode)) {
+		const requestedId = actionSourceId.value
+		const sequence = ++actionSequence
 		acting.value = mode
-		try { actionEditor.value = await getWorkOrderEditor(workspace.value.record.name) || {} }
-		catch (reason) { actionError.value = reason?.message || "Unable to load the Work Order calculation."; return }
-		finally { acting.value = "" }
+		try {
+			const result = await getWorkOrderEditor(workspace.value.record.name) || {}
+			if (sequence !== actionSequence || requestedId !== String(route.params.workOrderId || "")) return
+			actionEditor.value = result
+		}
+		catch (reason) { if (sequence === actionSequence && requestedId === String(route.params.workOrderId || "")) actionError.value = reason?.message || "Unable to load the Work Order calculation."; return }
+		finally { if (sequence === actionSequence) acting.value = "" }
 	} else actionEditor.value = {}
+	if (actionSourceId.value !== String(route.params.workOrderId || "")) return
 	actionMode.value = mode; actionVisible.value = true
 }
 async function actionChanged(result) {
+	if (actionSourceId.value && actionSourceId.value !== String(route.params.workOrderId || "")) return
 	if (!result?.record) return loadWorkspace(true)
 	const resultName = result.record.name
 	workspace.value = result
@@ -265,8 +307,7 @@ function openGoodsReceivedNote() {
 }
 function openSewingPlan() { const name = capabilities.value.open_sewing_plan?.name; if (name) router.push(webDocumentPath("SD YRP Sewing Plan", name).replace(/^\/web(?=\/)/, "")) }
 
-onMounted(() => loadWorkspace())
-watch(() => route.params.workOrderId, () => loadWorkspace())
+watch(() => route.params.workOrderId, () => loadWorkspace(false), { immediate: true })
 </script>
 
 <style scoped>

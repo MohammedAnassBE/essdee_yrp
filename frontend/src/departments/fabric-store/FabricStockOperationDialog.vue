@@ -5,13 +5,11 @@
 		:dismissable-mask="false"
 		maximizable
 		:header="title"
-		class="fabric-stock-operation-dialog erp-entity-dialog"
-		:style="{ width: 'min(96vw, 1440px)' }"
+		class="fabric-stock-operation-dialog erp-entity-dialog erp-dialog--xl"
 		@update:visible="requestVisibility"
 	>
 		<div v-if="loading" class="fabric-stock-loading"><Skeleton v-for="index in 6" :key="index" height="3rem" /></div>
 		<div v-else class="fabric-stock-stack">
-			<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 			<section class="fabric-operation-fields">
 				<label v-if="operation === 'stock_entry'" class="fabric-select-field"><span>Purpose *</span><Select v-model="form.purpose" :options="editor.purpose_options || []" :disabled="editor.purpose_locked" placeholder="Select purpose" fluid @change="markDirty" /></label>
 				<label v-if="operation === 'stock_reconciliation'" class="fabric-select-field"><span>Purpose *</span><Select v-model="form.purpose" :options="editor.purpose_options || []" placeholder="Select purpose" fluid @change="markDirty" /></label>
@@ -42,16 +40,16 @@
 		<template #footer>
 			<div class="fabric-stock-footer">
 				<Button label="Close" severity="secondary" text :disabled="saving" @click="requestVisibility(false)" />
-				<div><Button v-if="!editor.protected_completion && (editor.permissions?.can_create || editor.permissions?.can_write)" label="Save Draft" icon="pi pi-save" severity="secondary" outlined :disabled="!canSave" :loading="saving && saveMode === 'draft'" @click="save(false)" /><Button v-if="editor.permissions?.can_submit" :label="editor.protected_completion ? 'Submit Completion' : 'Save & Submit'" icon="pi pi-check" :disabled="!canSave" :loading="saving && saveMode === 'submit'" @click="save(true)" /></div>
+				<div><DocumentSaveButton :show-save="!editor.protected_completion && (editor.permissions?.can_create || editor.permissions?.can_write)" :show-submit="Boolean(editor.permissions?.can_submit)" :submit-label="editor.protected_completion ? 'Submit Completion' : 'Save & Submit'" :disabled="!canSave" :loading="saving" @save="save(false)" @submit="save(true)" /></div>
 			</div>
 		</template>
 	</Dialog>
+	<DocumentErrorDialog :message="error" :title="`${title} could not be completed`" @dismiss="error = ''" />
 </template>
 
 <script setup>
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
-import Message from "primevue/message"
 import Select from "primevue/select"
 import Skeleton from "primevue/skeleton"
 import { computed, reactive, ref, watch } from "vue"
@@ -59,6 +57,8 @@ import { computed, reactive, ref, watch } from "vue"
 import { getFabricStockItemSchema, getFabricStockOperationEditor, saveFabricStockOperation } from "../../api/fabricStore.js"
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
+import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
 import TimeField from "../../components/common/TimeField.vue"
 import StockItemComposer from "../../components/stock/StockItemComposer.vue"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
@@ -145,12 +145,19 @@ function clone(value) { return JSON.parse(JSON.stringify(value || [])) }
 
 <style scoped>
 .fabric-stock-loading, .fabric-stock-stack { display: grid; gap: var(--erp-space-3); }
-.fabric-stock-stack { max-height: 72vh; overflow-y: auto; padding: 1px; scrollbar-gutter: stable; }
+.fabric-stock-stack { overflow-y: visible; padding: 1px; }
 .fabric-operation-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--erp-space-3); }
 .fabric-select-field { display: grid; align-content: start; gap: 6px; }
 .fabric-select-field > span { color: #405047; font-size: var(--erp-font-size-caption); font-weight: 700; }
 .fabric-stock-footer { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; }
 .fabric-stock-footer > div { display: flex; gap: 8px; }
 @media (max-width: 860px) { .fabric-operation-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .fabric-operation-fields { grid-template-columns: 1fr; } .fabric-stock-footer { align-items: stretch; flex-direction: column; } .fabric-stock-footer > div { display: grid; grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) {
+	.fabric-operation-fields { grid-template-columns: 1fr; }
+	.fabric-stock-footer { align-items: stretch; flex-direction: column; }
+	.fabric-stock-footer > div { display: grid; grid-template-columns: 1fr; }
+	.fabric-stock-footer > :deep(.p-button),
+	.fabric-stock-footer > div,
+	.fabric-stock-footer > div :deep(.document-save-button) { width: 100%; }
+}
 </style>

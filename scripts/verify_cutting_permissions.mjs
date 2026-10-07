@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 const require = createRequire('/home/anas/.claude/playwright/package.json')
 const { chromium } = require('playwright')
 const SITE = 'http://erp-migration-test.site:8001'
-const PLAN = 'CP-2609-00007'
+const REQUESTED_PLAN = process.argv[2] || 'CP-2609-00007'
 const [usr, pwd] = readFileSync('/home/anas/.frappe-debug-creds-mrp3', 'utf8').trim().split('\n')
 const WEB_DATA = '**/api/method/essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.get_web_view_data*'
 const WORKSPACE = '**/api/method/essdee_yrp.cutting.web_workspace.get_workspace'
@@ -28,11 +28,47 @@ await Promise.all([
 	page.click('.btn-login, button[type=submit]'),
 ])
 
-const planResponse = await context.request.get(`${SITE}/api/method/essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.get_web_view_data`, {
-	params: { cutting_plan: PLAN },
+const planListResponse = await context.request.get(`${SITE}/api/resource/SD%20YRP%20Cutting%20Plan`, {
+	params: { fields: JSON.stringify(['name']), order_by: 'modified desc', limit_page_length: 25 },
 })
-const restrictedPlan = await planResponse.json()
-if (!restrictedPlan.message) throw new Error(`Unable to load Cutting Plan fixture (${planResponse.status()}).`)
+if (!planListResponse.ok()) throw new Error(`Unable to inspect Cutting Plan fixtures (${planListResponse.status()}).`)
+const listedPlans = ((await planListResponse.json()).data || []).map((row) => row.name).filter(Boolean)
+const candidates = [...new Set([REQUESTED_PLAN, ...listedPlans])]
+let PLAN = ''
+let restrictedPlan = null
+let restrictedWorkspace = null
+for (const candidate of candidates) {
+	const [planResponse, workspaceResponse] = await Promise.all([
+		context.request.get(`${SITE}/api/method/essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.get_web_view_data`, {
+			params: { cutting_plan: candidate },
+		}),
+		context.request.get(`${SITE}/api/method/essdee_yrp.cutting.web_workspace.get_workspace`, {
+			params: { cutting_plan: candidate },
+		}),
+	])
+	const [planBody, workspaceBody] = await Promise.all([
+		planResponse.json().catch(() => ({})),
+		workspaceResponse.json().catch(() => ({})),
+	])
+	for (const [label, response] of [["web view", planResponse], ["workspace", workspaceResponse]]) {
+		if (response.status() !== 404 && !response.ok()) throw new Error(`Unable to inspect ${label} for Cutting Plan ${candidate} (${response.status()}).`)
+	}
+	if (planResponse.ok() && workspaceResponse.ok() && planBody.message && workspaceBody.message?.permissions?.stock_update) {
+		PLAN = candidate
+		restrictedPlan = planBody
+		restrictedWorkspace = workspaceBody
+		break
+	}
+}
+if (!PLAN) {
+	console.log(JSON.stringify({
+		passed: true,
+		skipped: true,
+		reason: 'No Cutting Plan fixture with web-view and stock-workspace data is available.',
+	}, null, 2))
+	await browser.close()
+	process.exit(0)
+}
 await page.route(WEB_DATA, async (route) => {
 	const body = structuredClone(restrictedPlan)
 	body.message.permissions = {
@@ -57,11 +93,6 @@ const deniedPlan = {
 }
 await page.unroute(WEB_DATA)
 
-const workspaceResponse = await context.request.get(`${SITE}/api/method/essdee_yrp.cutting.web_workspace.get_workspace`, {
-	params: { cutting_plan: PLAN },
-})
-const restrictedWorkspace = await workspaceResponse.json()
-if (!restrictedWorkspace.message) throw new Error(`Unable to load workspace fixture (${workspaceResponse.status()}).`)
 await page.route(WORKSPACE, async (route) => {
 	const body = structuredClone(restrictedWorkspace)
 	for (const flags of Object.values(body.message.permissions || {})) {

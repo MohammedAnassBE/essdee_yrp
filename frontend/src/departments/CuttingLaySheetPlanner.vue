@@ -2,17 +2,18 @@
 	<DepartmentPage title="LaySheet Planner" accent="#059669" back-to="/cutting/lay-sheet-planner" back-label="LaySheet Planner" :show-title="false" flat full-width>
 		<div class="planner-workspace erp-workspace">
 			<div v-if="loading && !payload.record" class="planner-workspace__loading"><Skeleton height="76px" /><Skeleton height="520px" /></div>
+			<WorkspaceLoadError v-else-if="error && !record.name" title="LaySheet Planner unavailable" :message="error" :loading="loading" @retry="load" />
 			<template v-else>
 				<header class="planner-record-header erp-card">
 					<div class="planner-record-identity">
 						<div class="planner-record-title"><h1>LaySheet Planner</h1><span>{{ plannerName }}</span></div>
 						<div class="planner-record-meta">
-							<Tag :value="record.optimization_status || 'Not Started'" :severity="statusSeverity(record.optimization_status)" rounded />
+							<DocumentStatusBadge :label="record.optimization_status || 'Not Started'" />
 							<span class="planner-header-fact planner-header-fact--lot" :title="record.lot || 'No Lot'"><small>Lot</small><strong>{{ record.lot || "—" }}</strong></span>
 							<span class="planner-header-fact planner-header-fact--item" :title="record.item || 'No Item'"><small>Item</small><strong>{{ record.item || "—" }}</strong></span>
 						</div>
 					</div>
-					<div class="planner-record-actions"><Button v-if="activeTab === 'inputs' && actions.can_edit_inputs" label="Save Inputs" icon="pi pi-save" severity="secondary" outlined :loading="saving" :disabled="saving || !plannerInputs?.canSave" @click="plannerInputs?.save()" /><Button v-if="actions.can_optimize" :label="actions.can_retry ? 'Retry Optimization' : results.successful?.length ? 'Re-optimize' : 'Optimize'" icon="pi pi-calculator" :loading="optimizing" @click="optimize" /><Button icon="pi pi-refresh" aria-label="Refresh LaySheet Plan" severity="secondary" text rounded :loading="loading" @click="load" /></div>
+					<div class="planner-record-actions"><Button v-if="activeTab === 'inputs' && actions.can_edit_inputs" label="Save Inputs" icon="pi pi-save" severity="secondary" outlined :loading="saving" :disabled="actionBusy || !plannerInputs?.canSave" @click="plannerInputs?.save()" /><Button v-if="actions.can_optimize" :label="actions.can_retry ? 'Retry Optimization' : results.successful?.length ? 'Re-optimize' : 'Optimize'" icon="pi pi-calculator" :loading="optimizing" :disabled="actionBusy" @click="optimize" /><Button icon="pi pi-refresh" aria-label="Refresh LaySheet Plan" severity="secondary" text rounded :loading="loading" :disabled="actionBusy" @click="load" /></div>
 				</header>
 				<Message v-if="error || optimizationFailure" severity="error" :closable="false">{{ error || optimizationFailure }}</Message>
 				<Tabs v-model:value="activeTab" class="planner-tabs erp-card" :class="{ 'planner-tabs--plan': activeTab === 'plan' }">
@@ -26,7 +27,7 @@
 								:selected="record.selected_strategy"
 								:result="selectedResult"
 								:tolerance="Number(record.tolerance_pct || 3)"
-								:can-select="actions.can_select_result"
+								:can-select="actions.can_select_result && !actionBusy"
 								:selecting="selecting"
 								@select="selectStrategy"
 							/>
@@ -35,6 +36,7 @@
 				</Tabs>
 			</template>
 		</div>
+		<DocumentErrorDialog :message="actionError" title="LaySheet Planner action failed" @dismiss="actionError = ''" />
 	</DepartmentPage>
 </template>
 
@@ -47,12 +49,14 @@ import TabList from "primevue/tablist"
 import TabPanel from "primevue/tabpanel"
 import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
-import Tag from "primevue/tag"
 import { computed, onBeforeUnmount, ref, watch } from "vue"
 import { useRoute } from "vue-router"
 
 import { getLaySheetOptimizationStatus, getLaySheetPlannerEditor, saveLaySheetPlanner, selectLaySheetStrategy, startLaySheetOptimization } from "../api/cuttingLaySheetPlanner.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
+import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
+import DocumentErrorDialog from "../components/documents/DocumentErrorDialog.vue"
+import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
 import PlannerInputs from "./cutting/planner/PlannerInputs.vue"
 import PlannerPlanWorkspace from "./cutting/planner/PlannerPlanWorkspace.vue"
 
@@ -64,15 +68,18 @@ const saving = ref(false)
 const optimizing = ref(false)
 const selecting = ref("")
 const error = ref("")
+const actionError = ref("")
 const activeTab = ref("inputs")
 const plannerInputs = ref(null)
 let pollTimer = null
 let loadSequence = 0
+let actionSequence = 0
 let disposed = false
 let initializedPlanner = ""
 const record = computed(() => payload.value.record || {})
 const results = computed(() => payload.value.results || { successful: [], failed: [] })
 const actions = computed(() => payload.value.actions || {})
+const actionBusy = computed(() => saving.value || optimizing.value || Boolean(selecting.value))
 const optimizationFailure = computed(() => record.value.optimization_status === "Failed" ? record.value.optimization_error || "No feasible lay plan was found." : "")
 const selectedResult = computed(() => {
 	const successful = results.value.successful || []
@@ -86,35 +93,52 @@ const selectedResult = computed(() => {
 function stopPolling() { if (pollTimer) clearTimeout(pollTimer); pollTimer = null }
 async function load() {
 	stopPolling()
-	const sequence = ++loadSequence; loading.value = true; error.value = ""
+	const sequence = ++loadSequence
+	actionSequence += 1
+	const requestedPlanner = plannerName.value
+	loading.value = true; error.value = ""
 	try {
-		const next = await getLaySheetPlannerEditor(plannerName.value)
-		if (sequence !== loadSequence) return
+		const next = await getLaySheetPlannerEditor(requestedPlanner)
+		if (sequence !== loadSequence || requestedPlanner !== plannerName.value) return
 		payload.value = next || {}
-		if (initializedPlanner !== plannerName.value) {
+		if (initializedPlanner !== requestedPlanner) {
 			activeTab.value = next?.results?.successful?.length ? "plan" : "inputs"
-			initializedPlanner = plannerName.value
+			initializedPlanner = requestedPlanner
 		}
 		if (next?.actions?.should_poll) schedulePoll(600)
 	}
-	catch (reason) { if (sequence === loadSequence) error.value = reason?.message || "Unable to load LaySheet Planner." }
-	finally { if (sequence === loadSequence) loading.value = false }
+	catch (reason) { if (sequence === loadSequence && requestedPlanner === plannerName.value) error.value = reason?.message || "Unable to load LaySheet Planner." }
+	finally { if (sequence === loadSequence && requestedPlanner === plannerName.value) loading.value = false }
+}
+function actionIsStale(sequence, requestedPlanner, requestedLoadSequence) {
+	return disposed || sequence !== actionSequence || requestedLoadSequence !== loadSequence || requestedPlanner !== plannerName.value
 }
 async function saveInputs(values) {
-	saving.value = true; error.value = ""
-	try { payload.value = await saveLaySheetPlanner(values, { name: plannerName.value, expectedModified: record.value.modified }) }
-	catch (reason) { error.value = reason?.message || "Unable to save Planner inputs." }
-	finally { saving.value = false }
+	const sequence = ++actionSequence
+	const requestedPlanner = plannerName.value
+	const requestedLoadSequence = loadSequence
+	const expectedModified = record.value.modified
+	saving.value = true; actionError.value = ""
+	try {
+		const next = await saveLaySheetPlanner(values, { name: requestedPlanner, expectedModified })
+		if (!actionIsStale(sequence, requestedPlanner, requestedLoadSequence)) payload.value = next
+	} catch (reason) { if (!actionIsStale(sequence, requestedPlanner, requestedLoadSequence)) actionError.value = reason?.message || "Unable to save Planner inputs." }
+	finally { if (!actionIsStale(sequence, requestedPlanner, requestedLoadSequence)) saving.value = false }
 }
 async function optimize() {
 	if (optimizing.value || !actions.value.can_optimize) return
-	optimizing.value = true; error.value = ""
+	const sequence = ++actionSequence
+	const requestedPlanner = plannerName.value
+	const requestedLoadSequence = loadSequence
+	const expectedModified = record.value.modified
+	optimizing.value = true; actionError.value = ""
 	try {
-		const status = await startLaySheetOptimization(plannerName.value, record.value.modified)
+		const status = await startLaySheetOptimization(requestedPlanner, expectedModified)
+		if (actionIsStale(sequence, requestedPlanner, requestedLoadSequence)) return
 		applyStatus(status); activeTab.value = "plan"
 		if (status?.actions?.should_poll || ["Queued", "Running"].includes(status?.status)) schedulePoll(500)
-	} catch (reason) { error.value = reason?.message || "Unable to start lay optimization." }
-	finally { optimizing.value = false }
+	} catch (reason) { if (!actionIsStale(sequence, requestedPlanner, requestedLoadSequence)) actionError.value = reason?.message || "Unable to start lay optimization." }
+	finally { if (!actionIsStale(sequence, requestedPlanner, requestedLoadSequence)) optimizing.value = false }
 }
 function schedulePoll(delay = 1000) { stopPolling(); pollTimer = setTimeout(poll, delay) }
 async function poll() {
@@ -142,14 +166,19 @@ function applyStatus(status) {
 	}
 }
 async function selectStrategy(strategy) {
-	selecting.value = strategy; error.value = ""
-	try { payload.value = await selectLaySheetStrategy(plannerName.value, strategy, record.value.modified) }
-	catch (reason) { error.value = reason?.message || "Unable to select this strategy." }
-	finally { selecting.value = "" }
+	const sequence = ++actionSequence
+	const requestedPlanner = plannerName.value
+	const requestedLoadSequence = loadSequence
+	const expectedModified = record.value.modified
+	selecting.value = strategy; actionError.value = ""
+	try {
+		const next = await selectLaySheetStrategy(requestedPlanner, strategy, expectedModified)
+		if (!actionIsStale(sequence, requestedPlanner, requestedLoadSequence)) payload.value = next
+	} catch (reason) { if (!actionIsStale(sequence, requestedPlanner, requestedLoadSequence)) actionError.value = reason?.message || "Unable to select this strategy." }
+	finally { if (!actionIsStale(sequence, requestedPlanner, requestedLoadSequence)) selecting.value = "" }
 }
-function statusSeverity(status) { if (status === "Completed") return "success"; if (status === "Failed") return "danger"; if (["Queued", "Running"].includes(status)) return "info"; return "secondary" }
-watch(plannerName, () => { disposed = false; initializedPlanner = ""; activeTab.value = "inputs"; load() }, { immediate: true })
-onBeforeUnmount(() => { disposed = true; loadSequence += 1; stopPolling() })
+watch(plannerName, () => { disposed = false; initializedPlanner = ""; activeTab.value = "inputs"; payload.value = {}; saving.value = false; optimizing.value = false; selecting.value = ""; load() }, { immediate: true })
+onBeforeUnmount(() => { disposed = true; loadSequence += 1; actionSequence += 1; stopPolling() })
 </script>
 
 <style scoped>
@@ -157,7 +186,7 @@ onBeforeUnmount(() => { disposed = true; loadSequence += 1; stopPolling() })
 .planner-tabs { display: flex; min-height: 0; flex: 1; overflow: hidden; flex-direction: column; }.planner-tabs :deep(.p-tablist) { flex: 0 0 auto; background: var(--erp-surface-soft); border-bottom: 1px solid var(--erp-border); }.planner-tabs :deep(.p-tablist-tab-list) { padding: 0 12px; gap: 8px; background: transparent; border: 0; }.planner-tabs :deep(.p-tab) { min-height: 48px; padding: 0 11px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); font-weight: 680; }.planner-tabs :deep(.p-tab-active) { color: var(--erp-accent-dark); }.planner-tabs :deep(.p-tablist-active-bar) { height: 2px; background: var(--erp-accent); }.planner-tabs :deep(.p-tabpanels) { min-height: 0; padding: 0; flex: 1; overflow-y: auto; background: var(--erp-surface); }.planner-tabs :deep(.p-tabpanel) { min-height: 100%; }
 .planner-tabs--plan :deep(.p-tabpanels), .planner-tabs--plan :deep(.p-tabpanel) { overflow: hidden; }
 .planner-tabs--plan :deep(.p-tabpanel) { height: 100%; min-height: 0; }
-@media (max-width: 700px) { .planner-tabs--plan :deep(.p-tabpanels) { overflow-y: auto; }.planner-tabs--plan :deep(.p-tabpanel) { height: auto; min-height: 100%; overflow: visible; } }
-@media (max-width: 700px) { .planner-workspace { height: auto; min-height: calc(100dvh - var(--erp-shell-header-height) - 82px); overflow: visible; }.planner-record-header { align-items: flex-start; flex-direction: column; }.planner-tabs { min-height: 660px; }.planner-record-actions { width: 100%; } }
+@media (max-width: 700px) { .planner-tabs--plan :deep(.p-tabpanels), .planner-tabs--plan :deep(.p-tabpanel) { height: auto; min-height: 0; overflow-y: visible; } }
+@media (max-width: 700px) { .planner-workspace { height: auto; min-height: calc(100dvh - var(--erp-shell-header-height) - 82px); overflow: visible; }.planner-record-header { align-items: flex-start; flex-direction: column; }.planner-tabs { min-height: 0; overflow: visible; }.planner-record-actions { width: 100%; } }
 @media (max-width: 650px) { .planner-record-identity { align-items: flex-start; flex-direction: column; }.planner-record-meta { flex-wrap: wrap; }.planner-header-fact:first-of-type { padding-left: 0; border-left: 0; } }
 </style>

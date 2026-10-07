@@ -445,7 +445,13 @@ function markerStatus(marker) {
 
 @media (max-width: 1050px) {
 	.operations-rail { position: static; grid-template-rows: none; grid-template-columns: repeat(2, minmax(0, 1fr)); height: auto; }
-	.rail-section { max-height: 430px; }
+	.rail-section { max-height: none; overflow: visible; }
+	.rail-loading, .rail-list { overflow-y: visible; overscroll-behavior: auto; }
+}
+
+@media (max-width: 1050px), (pointer: coarse) {
+	.rail-heading :deep(.p-button) { min-width: 44px; min-height: 44px; }
+	.rail-heading :deep(.rail-filter-button.p-button) { width: 44px; min-width: 44px; }
 }
 
 @media (max-width: 650px) {

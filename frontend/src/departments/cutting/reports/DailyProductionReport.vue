@@ -21,14 +21,14 @@
 					</button>
 				</div>
 			</div>
-			<DateField v-if="!summaryMode" v-model="filters.date" label="Date" required />
+			<DateField v-if="!summaryMode" v-model="filters.date" class="production-report-filter" label="Date" required />
 			<template v-else>
-				<AsyncLinkMultiSelect v-model="filters.items" doctype="Item" label="Items" placeholder="Search items…" />
-				<AsyncLinkMultiSelect v-model="filters.lots" doctype="SD YRP Lot" label="Lots" placeholder="Search lots…" />
-				<DateField v-model="filters.fromDate" label="From date" show-clear />
-				<DateField v-model="filters.toDate" label="To date" show-clear />
+				<AsyncLinkMultiSelect v-model="filters.items" class="production-report-filter" doctype="Item" label="Items" placeholder="Search items…" />
+				<AsyncLinkMultiSelect v-model="filters.lots" class="production-report-filter" doctype="SD YRP Lot" label="Lots" placeholder="Search lots…" />
+				<DateField v-model="filters.fromDate" class="production-report-filter" label="From date" show-clear />
+				<DateField v-model="filters.toDate" class="production-report-filter" label="To date" show-clear />
 			</template>
-			<label>
+			<label class="production-report-filter">
 				<span class="erp-field-label">Cutting location</span>
 				<select v-model="filters.location">
 					<option value="">All locations</option>
@@ -401,10 +401,16 @@ function reset() {
 }
 
 @media (max-width: 700px) {
+	.report-mode button { min-height: 44px; }
 	.production-results-heading,
 	.summary-day__header {
 		align-items: stretch;
 		flex-direction: column;
 	}
+}
+
+@media (max-width: 430px) {
+	.report-mode,
+	.production-report-filter { grid-column: 1 / -1; }
 }
 </style>

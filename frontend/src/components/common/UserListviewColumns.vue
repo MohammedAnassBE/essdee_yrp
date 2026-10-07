@@ -3,7 +3,7 @@
 		:visible="visible"
 		modal
 		header="Customize Columns"
-		:style="{ width: 'min(58rem, calc(100vw - 24px))' }"
+		class="erp-dialog--lg"
 		@update:visible="$emit('update:visible', $event)"
 	>
 		<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>

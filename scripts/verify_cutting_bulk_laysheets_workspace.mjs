@@ -30,7 +30,7 @@ async function visibleTextBelowMinimum(page, minPx = 11) {
 }
 
 const rows = [
-	{ name: "ROW-1", idx: 1, lot: "LOT-SPLIT-1", cutting_plan: "CP-001", cutting_marker: "CM-001", work_order: "WO-001", cutting_laysheet: "CLS-001", lot_transfer: null, delivery_challan: null, status: "Ready to Generate", actions: { can_activate: true, can_generate_bundles: true, can_create_lot_transfer: false, can_submit_lot_transfer: false, can_create_delivery_challan: false, can_submit_delivery_challan: false, can_approve_grammage: false, can_print_labels: false } },
+	{ name: "ROW-1", idx: 1, lot: "LOT-SPLIT-1", cutting_plan: "CP-001", cutting_marker: "CM-001", work_order: "WO-001", cutting_laysheet: "CLS-001", lot_transfer: "LT-001", delivery_challan: null, status: "Ready to Generate", actions: { can_activate: true, can_generate_bundles: true, can_create_lot_transfer: false, can_submit_lot_transfer: true, can_create_delivery_challan: false, can_submit_delivery_challan: false, can_approve_grammage: false, can_print_labels: true } },
 	{ name: "ROW-2", idx: 2, lot: "LOT-SPLIT-2", cutting_plan: "CP-002", cutting_marker: "CM-002", work_order: "WO-002", cutting_laysheet: "CLS-002", lot_transfer: null, delivery_challan: null, status: "Enter Lay Details", actions: { can_activate: true, can_generate_bundles: false, can_create_lot_transfer: false, can_submit_lot_transfer: false, can_create_delivery_challan: false, can_submit_delivery_challan: false, can_approve_grammage: false, can_print_labels: false } },
 ]
 
@@ -76,6 +76,9 @@ const page = await context.newPage()
 const errors = []
 let active = "CLS-001"
 let saveBody = null
+let delayNextSave = false
+let delayNextActivation = false
+const workflowCalls = []
 page.on("pageerror", (error) => errors.push(`page: ${error.message}`))
 page.on("console", (message) => { if (message.type() === "error") errors.push(`console: ${message.text()}`) })
 
@@ -99,13 +102,18 @@ await page.route("**/api/method/essdee_yrp.cutting.web_capabilities.get_capabili
 await page.route(API, async (route) => {
 	const url = route.request().url()
 	const body = JSON.parse(route.request().postData() || "{}")
+	workflowCalls.push({ url, body })
 	if (url.includes("get_editor")) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: editorPayload(body.name || null) }) })
 	if (url.includes("get_workspace")) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: workspacePayload(active) }) })
 	if (url.includes("save")) {
 		saveBody = body
+		if (delayNextSave) { delayNextSave = false; await new Promise((resolve) => setTimeout(resolve, 300)) }
 		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: workspacePayload(active) }) })
 	}
-	if (url.includes("set_active_laysheet")) active = body.cutting_laysheet
+	if (url.includes("set_active_laysheet")) {
+		if (delayNextActivation) { delayNextActivation = false; await new Promise((resolve) => setTimeout(resolve, 250)) }
+		active = body.cutting_laysheet
+	}
 	return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: { result: "OK", workspace: workspacePayload(active) } }) })
 })
 
@@ -141,8 +149,27 @@ assert(widthRatio >= 3.6 && widthRatio <= 4.4, `Bulk workspace is not an 80/20 s
 assert(await page.locator(".bulk-workflow-card").count() === 2, "Workflow cards are missing")
 assert(await page.getByText("Cloth Details", { exact: true }).count() === 1, "Active LaySheet editor is missing")
 assert(await page.getByText("Generated Bundles", { exact: true }).count() === 1, "Bundle table is missing")
+await page.getByRole("button", { name: "Delete cloth row 1", exact: true }).click()
+delayNextSave = true
+const autosaveResponse = page.waitForResponse((response) => response.url().includes("save_active_editor"))
+await page.getByRole("button", { name: "Print Labels", exact: true }).click()
+await page.waitForFunction(() => document.querySelector('[aria-label="Refresh Bulk LaySheets"]')?.disabled)
+assert(await page.getByRole("button", { name: "Add Cloth", exact: true }).isDisabled(), "Bulk editor remains mutable while an action autosaves")
+assert((await page.locator(".bulk-workflow-card").evaluateAll((cards) => cards.map((card) => card.tabIndex))).every((tabIndex) => tabIndex === -1), "Bulk rail remains actionable while preparing a dialog")
+await autosaveResponse
+await page.getByRole("dialog", { name: /Print Labels/ }).waitFor()
+await page.getByRole("dialog", { name: /Print Labels/ }).locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
+delayNextActivation = true
+const activationResponse = page.waitForResponse((response) => response.url().includes("set_active_laysheet"))
 await page.locator(".bulk-workflow-card").nth(1).click()
+const refreshBulk = page.getByRole("button", { name: "Refresh Bulk LaySheets", exact: true })
+await page.waitForFunction(() => document.querySelector('[aria-label="Refresh Bulk LaySheets"]')?.disabled)
+assert(await refreshBulk.isDisabled(), "Bulk refresh remains active while a rail action is pending")
+const busyCardTabs = await page.locator(".bulk-workflow-card").evaluateAll((cards) => cards.map((card) => card.tabIndex))
+assert(busyCardTabs.every((tabIndex) => tabIndex === -1), `Bulk rail cards remain keyboard-actionable while busy: ${JSON.stringify(busyCardTabs)}`)
+await activationResponse
 await page.getByText("CLS-002", { exact: true }).waitFor()
+await page.waitForFunction(() => !document.querySelector('[aria-label="Refresh Bulk LaySheets"]')?.disabled)
 assert(!page.url().includes("/app/"), "Bulk workflow navigated to Desk")
 
 const responsiveLayouts = {}
@@ -156,6 +183,20 @@ for (const viewport of [{ width: 1600, height: 1000 }, { width: 1280, height: 80
 	assert(columns === (viewport.width <= 1100 ? 1 : 2), `Bulk workspace column collapse is incorrect at ${viewport.width}px: ${columns}`)
 	responsiveLayouts[viewport.width] = columns
 }
+await page.setViewportSize({ width: 1440, height: 900 })
+const submitCallsBeforeStaleConfirmation = workflowCalls.filter(({ url }) => url.includes("submit_lot_transfer")).length
+await page.getByRole("button", { name: "Submit Transfer", exact: true }).click()
+const staleConfirmation = page.getByRole("alertdialog", { name: "Submit Lot Transfer?", exact: true })
+await staleConfirmation.waitFor()
+await page.evaluate(() => {
+	window.history.pushState({}, "", "/web/cutting/bulk-lay-sheets/CBLS-WEB-00002")
+	window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }))
+})
+await page.getByText("CBLS-WEB-00002", { exact: true }).waitFor()
+await staleConfirmation.getByRole("button", { name: "Submit Transfer", exact: true }).click()
+await page.waitForTimeout(250)
+const submitCallsAfterStaleConfirmation = workflowCalls.filter(({ url }) => url.includes("submit_lot_transfer")).length
+assert(submitCallsAfterStaleConfirmation === submitCallsBeforeStaleConfirmation, "A stale confirmation submitted a Lot Transfer after Bulk LaySheets navigation")
 assert(errors.length === 0, `Browser errors: ${JSON.stringify(errors)}`)
 
 console.log(JSON.stringify({ passed: true, workspace: "CBLS-WEB-00001", rows: 2, widthRatio, responsiveLayouts }, null, 2))

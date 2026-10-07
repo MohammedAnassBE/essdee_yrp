@@ -4,7 +4,6 @@
 			<div><span>Return</span><h2>Select return quantities</h2></div>
 			<strong>{{ formatQty(selectedQuantity) }} selected</strong>
 		</header>
-		<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 
 		<div class="delivery-challan-return-panel__controls">
 			<LinkField
@@ -30,7 +29,7 @@
 			/>
 		</div>
 
-		<div v-if="rows.length" class="erp-table-wrap delivery-challan-return-panel__table">
+		<div v-if="rows.length" class="erp-table-wrap delivery-challan-return-panel__table" role="region" tabindex="0" aria-label="Delivery Challan return quantities">
 			<table class="erp-data-table">
 				<thead>
 					<tr>
@@ -50,6 +49,7 @@
 						<td class="erp-number">
 							<InputNumber
 								v-model="row.return_quantity"
+								:aria-label="`Return quantity for ${row.item_variant || row.item || `item ${index + 1}`}`"
 								:min="0"
 								:max="Number(row.returnable_quantity || 0)"
 								:max-fraction-digits="3"
@@ -68,16 +68,17 @@
 			<Button label="Create Return GRN" icon="pi pi-replay" :disabled="!canCreate" :loading="acting === 'return'" @click="createReturn" />
 		</footer>
 	</section>
+	<DocumentErrorDialog :message="error" title="Delivery Challan return could not be created" />
 </template>
 
 <script setup>
 import Button from "primevue/button"
 import InputNumber from "primevue/inputnumber"
-import Message from "primevue/message"
 import ToggleSwitch from "primevue/toggleswitch"
 import { computed, ref, watch } from "vue"
 
 import LinkField from "../../components/common/LinkField.vue"
+import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 
 const props = defineProps({
 	context: { type: Object, default: () => ({}) },
@@ -144,4 +145,5 @@ function clone(value) { return JSON.parse(JSON.stringify(value || [])) }
 .delivery-challan-return-panel footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: var(--erp-space-3); }
 @media (max-width: 900px) { .delivery-challan-return-panel__controls { grid-template-columns: 1fr; } }
 @media (max-width: 560px) { .delivery-challan-return-panel footer { align-items: stretch; flex-direction: column; } }
+@media (max-width: 1024px), (pointer: coarse) { .delivery-challan-return-panel :deep(.p-button) { min-width: 44px; min-height: 44px; } .delivery-challan-return-panel__table :deep(.p-inputnumber-input) { height: 44px; min-height: 44px; } }
 </style>

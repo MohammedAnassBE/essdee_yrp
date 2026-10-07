@@ -26,8 +26,9 @@
 	</div>
 
 	<Teleport to="body">
-		<Message v-if="feedback" class="order-action-feedback" :severity="feedbackSeverity" closable @close="feedback = ''">{{ feedback }}</Message>
+		<Message v-if="feedback" class="order-action-feedback" severity="success" closable @close="feedback = ''">{{ feedback }}</Message>
 	</Teleport>
+	<DocumentErrorDialog :message="actionError" title="Cutting Order action failed" @dismiss="actionError = ''" />
 
 	<Dialog v-model:visible="reportOpen" modal dismissable-mask maximizable header="Completed Cut Quantity" class="action-dialog action-dialog--wide completed-report-dialog">
 		<div ref="capture" class="completed-report-capture">
@@ -39,8 +40,8 @@
 
 	<Dialog v-model:visible="editorOpen" modal dismissable-mask maximizable header="Update Completed Cut Quantity" class="action-dialog action-dialog--wide">
 		<div class="completed-editor">
-			<div v-for="(group, groupIndex) in completedDraft" :key="groupIndex" class="completed-table-wrap">
-				<table><thead><tr><th>S.No.</th><th v-for="attribute in group.attributes || inferredAttributes(group)" :key="attribute">{{ attribute }}</th><th v-for="size in group.primary_attribute_values || []" :key="size">{{ size }}</th><th>Completed</th></tr></thead><tbody><tr v-for="(row, rowIndex) in group.items || []" :key="rowIndex"><td>{{ rowIndex + 1 }}</td><td v-for="attribute in group.attributes || inferredAttributes(group)" :key="attribute">{{ row.attributes?.[attribute] || '—' }}</td><td v-for="size in group.primary_attribute_values || []" :key="size">{{ quantity(row.values?.[size]) }}</td><td><Checkbox v-model="row.completed" binary /></td></tr></tbody></table>
+			<div v-for="(group, groupIndex) in completedDraft" :key="groupIndex" class="completed-table-wrap" role="region" tabindex="0" :aria-label="`Completed cut quantities group ${groupIndex + 1}`">
+				<table><thead><tr><th>S.No.</th><th v-for="attribute in group.attributes || inferredAttributes(group)" :key="attribute">{{ attribute }}</th><th v-for="size in group.primary_attribute_values || []" :key="size">{{ size }}</th><th>Completed</th></tr></thead><tbody><tr v-for="(row, rowIndex) in group.items || []" :key="rowIndex"><td>{{ rowIndex + 1 }}</td><td v-for="attribute in group.attributes || inferredAttributes(group)" :key="attribute">{{ row.attributes?.[attribute] || '—' }}</td><td v-for="size in group.primary_attribute_values || []" :key="size">{{ quantity(row.values?.[size]) }}</td><td><Checkbox v-model="row.completed" binary :aria-label="`Mark completed cut quantity row ${rowIndex + 1} in group ${groupIndex + 1}`" /></td></tr></tbody></table>
 			</div>
 		</div>
 		<template #footer><Button label="Close" severity="secondary" text @click="editorOpen = false" /><Button label="Save Completed" icon="pi pi-check" :loading="busy === 'completed'" @click="saveCompleted" /></template>
@@ -58,13 +59,14 @@ import { computed, ref } from "vue"
 import { callMethod } from "../../../api/frappe.js"
 import { updateCuttingOrderCompleted } from "../../../api/cuttingOrder.js"
 import { copyElementAsImage } from "../../../components/reports/copyElementAsImage.js"
+import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import CuttingCompletedReport from "../CuttingCompletedReport.vue"
 
 const props = defineProps({ doc: { type: Object, required: true }, data: { type: Object, default: () => ({}) } })
 const emit = defineEmits(["refresh"])
 const busy = ref("")
 const feedback = ref("")
-const feedbackSeverity = ref("success")
+const actionError = ref("")
 const reportOpen = ref(false)
 const generatedAt = ref("")
 const capture = ref(null)
@@ -88,12 +90,12 @@ const moreActionItems = computed(() => {
 const hasActions = computed(() => moreActionItems.value.length > 0)
 
 async function calculate() {
-	busy.value = "calculate"; feedback.value = ""
+	busy.value = "calculate"; feedback.value = ""; actionError.value = ""
 	try {
 		await callMethod("essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_order.sd_yrp_cutting_order.calculate_laysheets", { cutting_order: props.doc.name })
 		feedback.value = "LaySheet calculation queued."
 		emit("refresh")
-	} catch (reason) { feedback.value = reason?.message || "Unable to calculate LaySheets."; feedbackSeverity.value = "error" }
+	} catch (reason) { actionError.value = reason?.message || "Unable to calculate LaySheets." }
 	finally { busy.value = "" }
 }
 
@@ -105,11 +107,11 @@ function openCompletedReport() {
 function openCompletedEditor() { completedDraft.value = clone(normaliseGroups(props.data.completed_items)); editorOpen.value = true }
 
 async function saveCompleted() {
-	busy.value = "completed"; feedback.value = ""
+	busy.value = "completed"; feedback.value = ""; actionError.value = ""
 	try {
 		await updateCuttingOrderCompleted(props.doc.name, completedDraft.value, props.doc.modified)
-		editorOpen.value = false; feedbackSeverity.value = "success"; feedback.value = "Completed quantities updated."; emit("refresh")
-	} catch (reason) { feedbackSeverity.value = "error"; feedback.value = reason?.message || "Unable to update completed quantities." }
+		editorOpen.value = false; feedback.value = "Completed quantities updated."; emit("refresh")
+	} catch (reason) { actionError.value = reason?.message || "Unable to update completed quantities." }
 	finally { busy.value = "" }
 }
 
@@ -145,6 +147,7 @@ function toggleMoreActions(event) { moreActionsMenu.value?.toggle(event) }
 :global(.order-actions-menu .p-menu-item-content:hover) { background: var(--erp-accent-soft); }
 .completed-editor { display: grid; gap: 12px; }
 .completed-table-wrap { overflow: auto; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); }
+.completed-table-wrap:focus-visible { outline: 2px solid var(--erp-accent-dark); outline-offset: 2px; }
 .completed-table-wrap table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: var(--erp-font-size-caption); }
 .completed-table-wrap th, .completed-table-wrap td { padding: 8px 10px; text-align: left; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
 .completed-table-wrap th { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); background: var(--erp-surface-muted); }

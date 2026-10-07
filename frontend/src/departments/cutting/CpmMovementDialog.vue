@@ -2,11 +2,12 @@
 	<Dialog
 		:visible="visible"
 		modal
-		dismissable-mask
+		:dismissable-mask="!busy"
 		maximizable
-		:style="{ width: 'min(96vw, 1500px)' }"
+		:closable="!busy"
+		:close-on-escape="!busy"
 		:header="record?.name ? `Cut Panel Movement · ${record.name}` : 'Create Cut Panel Movement'"
-		class="erp-cpm-dialog erp-entity-dialog"
+		class="erp-cpm-dialog erp-entity-dialog erp-dialog--xl"
 		@update:visible="emit('update:visible', $event)"
 	>
 		<div v-if="loading" class="erp-dialog-loading"><Skeleton v-for="index in 7" :key="index" height="3.25rem" /></div>
@@ -17,7 +18,7 @@
 				<div><span>Item</span><strong>{{ editor.context?.item || "—" }}</strong></div>
 				<div><span>From Location</span><strong>{{ editor.context?.source_supplier || "—" }}</strong></div>
 				<div><span>Warehouse</span><strong>{{ editor.context?.source_warehouse || "—" }}</strong></div>
-				<div><span>Status</span><strong><em class="erp-status" :class="statusClass">{{ status }}</em></strong></div>
+				<div><span>Status</span><strong><DocumentStatusBadge :docstatus="record?.docstatus" :label="status" /></strong></div>
 			</section>
 			<CutPanelMovementEditor
 				ref="movementEditor"
@@ -40,8 +41,7 @@
 					<Button label="Close" severity="secondary" text :disabled="saving" @click="emit('update:visible', false)" />
 					<DocumentPrintButton v-if="record?.permissions?.can_print" doctype="SD YRP Cut Panel Movement" :name="record.name" :formats="record.print_formats || []" :disabled="saving" />
 					<Button v-if="record?.permissions?.can_cancel" label="Cancel Movement" icon="pi pi-ban" severity="danger" outlined :loading="saving && saveMode === 'cancel'" @click="cancelMovement" />
-					<Button v-if="canEdit" label="Save Draft" icon="pi pi-save" severity="secondary" outlined :disabled="!generated" :loading="saving && saveMode === 'draft'" @click="save(false)" />
-					<Button v-if="canSubmit" label="Save & Submit" icon="pi pi-check" :disabled="!hasSelection" :loading="saving && saveMode === 'submit'" @click="save(true)" />
+					<DocumentSaveButton :show-save="canEdit" :show-submit="canSubmit" :save-disabled="!generated" :submit-disabled="!hasSelection" :loading="saving" @save="save(false)" @submit="save(true)" />
 				</div>
 			</div>
 		</template>
@@ -57,8 +57,10 @@ import Skeleton from "primevue/skeleton"
 import { computed, reactive, ref, watch } from "vue"
 
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import CutPanelMovementEditor from "./CutPanelMovementEditor.vue"
+import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
 import { changeMovementStatus, generateMovementBundles, getMovementEditor, saveMovement } from "./cpmApi.js"
 
@@ -75,43 +77,97 @@ const error = ref("")
 const success = ref("")
 const editor = reactive({ context: {}, defaults: {}, permissions: {}, record: null })
 const movementData = reactive(emptyMovement())
+let loadSequence = 0
+let actionSequence = 0
 const record = computed(() => editor.record)
 const canEdit = computed(() => record.value ? Boolean(record.value.permissions?.can_write) : Boolean(editor.permissions?.can_create))
 const canSubmit = computed(() => canEdit.value && Boolean(record.value ? record.value.permissions?.can_submit : editor.permissions?.can_submit))
 const status = computed(() => record.value?.status || "Draft")
-const statusClass = computed(() => `erp-status--${status.value.toLowerCase()}`)
 const generated = computed(() => hasGenerated.value)
 const hasSelection = computed(() => Boolean(movementEditor.value?.hasSelection))
 const selectionSummaryText = computed(() => movementEditor.value?.selectionSummaryText || "")
+const busy = computed(() => saving.value || generating.value)
 
-watch(() => [props.visible, props.movement, props.cuttingPlan], ([visible]) => { if (visible) load() })
+watch(() => [props.visible, props.movement, props.cuttingPlan], ([visible]) => {
+	if (visible) load()
+	else {
+		loadSequence += 1
+		actionSequence += 1
+		loading.value = false
+		saving.value = false
+		generating.value = false
+	}
+})
 
 async function load() {
+	const sequence = ++loadSequence
+	actionSequence += 1
+	const requestedMovement = props.movement
+	const requestedCuttingPlan = props.cuttingPlan
 	loading.value = true; error.value = ""; success.value = ""; hasGenerated.value = false
+	for (const key of Object.keys(editor)) delete editor[key]
+	Object.assign(editor, { context: {}, defaults: {}, permissions: {}, record: null })
+	replaceMovement({})
 	try {
-		const data = await getMovementEditor(props.cuttingPlan, props.movement)
+		const data = await getMovementEditor(requestedCuttingPlan, requestedMovement)
+		if (loadIsStale(sequence, requestedMovement, requestedCuttingPlan)) return
 		Object.assign(editor, data || {})
 		replaceMovement(data?.movement_data || data?.record?.movement_data || {})
 		hasGenerated.value = Boolean(data?.record)
-	} catch (reason) { error.value = reason.message || "Unable to load the Cut Panel Movement." } finally { loading.value = false }
+	} catch (reason) {
+		if (!loadIsStale(sequence, requestedMovement, requestedCuttingPlan)) error.value = reason.message || "Unable to load the Cut Panel Movement."
+	} finally {
+		if (!loadIsStale(sequence, requestedMovement, requestedCuttingPlan)) loading.value = false
+	}
+}
+
+function loadIsStale(sequence, requestedMovement, requestedCuttingPlan) {
+	return sequence !== loadSequence || !props.visible || requestedMovement !== props.movement || requestedCuttingPlan !== props.cuttingPlan
+}
+
+function actionIsStale(sequence, requestedMovement, requestedCuttingPlan, requestedLoadSequence) {
+	return sequence !== actionSequence || requestedLoadSequence !== loadSequence || !props.visible || requestedMovement !== props.movement || requestedCuttingPlan !== props.cuttingPlan
 }
 
 async function generateBundles() {
+	const sequence = ++actionSequence
+	const requestedMovement = props.movement
+	const requestedCuttingPlan = props.cuttingPlan
+	const requestedLoadSequence = loadSequence
+	const postingDate = editor.defaults?.posting_date
+	const postingTime = editor.defaults?.posting_time
 	generating.value = true; error.value = ""
 	try {
-		const data = await generateMovementBundles(props.cuttingPlan, editor.defaults?.posting_date, editor.defaults?.posting_time)
+		const data = await generateMovementBundles(requestedCuttingPlan, postingDate, postingTime)
+		if (actionIsStale(sequence, requestedMovement, requestedCuttingPlan, requestedLoadSequence)) return
 		replaceMovement(data || {}); hasGenerated.value = true
-	} catch (reason) { error.value = reason.message || "Unable to generate the available bundles." } finally { generating.value = false }
+	} catch (reason) {
+		if (!actionIsStale(sequence, requestedMovement, requestedCuttingPlan, requestedLoadSequence)) error.value = reason.message || "Unable to generate the available bundles."
+	} finally {
+		if (!actionIsStale(sequence, requestedMovement, requestedCuttingPlan, requestedLoadSequence)) generating.value = false
+	}
 }
 
 async function save(submit) {
 	if (submit && !hasSelection.value) { error.value = "Select at least one bundle, panel, collapsed quantity, or accessory weight."; return }
+	const sequence = ++actionSequence
+	const requestedMovement = props.movement
+	const requestedCuttingPlan = props.cuttingPlan
+	const requestedLoadSequence = loadSequence
+	const requestedRecord = record.value?.name
+	const expectedModified = record.value?.modified
+	const request = { ...editor.defaults, movement_data: clone(movementData) }
 	saving.value = true; saveMode.value = submit ? "submit" : "draft"; error.value = ""; success.value = ""
 	try {
-		const saved = await saveMovement(props.cuttingPlan, { ...editor.defaults, movement_data: clone(movementData) }, record.value?.name, submit, record.value?.modified)
+		const saved = await saveMovement(requestedCuttingPlan, request, requestedRecord, submit, expectedModified)
+		if (actionIsStale(sequence, requestedMovement, requestedCuttingPlan, requestedLoadSequence)) return
 		editor.record = saved; replaceMovement(saved.movement_data || {}); success.value = submit ? "Cut Panel Movement submitted." : "Draft movement saved."; emit("changed", saved)
 		if (submit) emit("update:visible", false)
-	} catch (reason) { error.value = reason.message || "Unable to save the Cut Panel Movement." } finally { saving.value = false; saveMode.value = "" }
+	} catch (reason) {
+		if (!actionIsStale(sequence, requestedMovement, requestedCuttingPlan, requestedLoadSequence)) error.value = reason.message || "Unable to save the Cut Panel Movement."
+	} finally {
+		if (!actionIsStale(sequence, requestedMovement, requestedCuttingPlan, requestedLoadSequence)) { saving.value = false; saveMode.value = "" }
+	}
 }
 
 async function cancelMovement() {
@@ -119,10 +175,21 @@ async function cancelMovement() {
 }
 
 async function performCancelMovement() {
+	const sequence = ++actionSequence
+	const requestedMovement = props.movement
+	const requestedCuttingPlan = props.cuttingPlan
+	const requestedLoadSequence = loadSequence
+	const requestedRecord = record.value?.name
 	saving.value = true; saveMode.value = "cancel"; error.value = ""
-	try { const changed = await changeMovementStatus(props.cuttingPlan, record.value.name, "cancel"); editor.record = changed; emit("changed", changed); emit("update:visible", false) }
-	catch (reason) { error.value = reason.message || "Unable to cancel the Cut Panel Movement." }
-	finally { saving.value = false; saveMode.value = "" }
+	try {
+		const changed = await changeMovementStatus(requestedCuttingPlan, requestedRecord, "cancel")
+		if (actionIsStale(sequence, requestedMovement, requestedCuttingPlan, requestedLoadSequence)) return
+		editor.record = changed; emit("changed", changed); emit("update:visible", false)
+	} catch (reason) {
+		if (!actionIsStale(sequence, requestedMovement, requestedCuttingPlan, requestedLoadSequence)) error.value = reason.message || "Unable to cancel the Cut Panel Movement."
+	} finally {
+		if (!actionIsStale(sequence, requestedMovement, requestedCuttingPlan, requestedLoadSequence)) { saving.value = false; saveMode.value = "" }
+	}
 }
 
 function replaceMovement(value) { Object.assign(movementData, emptyMovement(), clone(value)) }

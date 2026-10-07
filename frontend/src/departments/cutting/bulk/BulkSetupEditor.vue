@@ -3,13 +3,14 @@
 		<header class="bulk-setup-editor__header erp-editor-header">
 			<div><span>{{ name || "New document" }}</span><h1>{{ name ? "Edit Bulk LaySheets" : "New Bulk LaySheets" }}</h1></div>
 			<div class="bulk-setup-editor__actions erp-editor-actions">
-				<Button label="Cancel" severity="secondary" text :disabled="busy" @click="emit('cancel')" />
+				<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="emit('cancel')" />
 				<Button label="Save Setup" icon="pi pi-save" :loading="saving" :disabled="busy || !canSave" @click="saveSetup" />
 			</div>
 		</header>
-		<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
+		<WorkspaceLoadError v-if="loadFailed" title="Bulk setup unavailable" :message="error" @retry="load" />
+		<Message v-else-if="error" severity="error" :closable="false">{{ error }}</Message>
 		<div v-if="loading" class="bulk-setup-editor__loading"><Skeleton height="150px" /><Skeleton height="320px" /></div>
-		<div v-else class="bulk-setup-editor__body">
+		<div v-else-if="!loadFailed" class="bulk-setup-editor__body">
 			<section class="bulk-setup-card">
 				<header><div><span class="section-kicker">Stock source</span><h2>Bulk setup</h2></div><Tag v-if="setupLocked" value="Locked after LaySheet creation" severity="secondary" rounded /></header>
 				<div class="bulk-setup-fields">
@@ -38,6 +39,7 @@
 			</section>
 		</div>
 	</section>
+	<DocumentErrorDialog :message="actionError" title="Bulk setup could not be saved" @dismiss="actionError = ''" />
 </template>
 
 <script setup>
@@ -50,6 +52,8 @@ import { computed, reactive, ref, watch } from "vue"
 import { getBulkLaySheetsEditor, saveBulkLaySheets } from "../../../api/cuttingBulkLaySheets.js"
 import DateField from "../../../components/common/DateField.vue"
 import LinkField from "../../../components/common/LinkField.vue"
+import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
+import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 
 const props = defineProps({ name: { type: String, default: "" }, initialPayload: { type: Object, default: null } })
 const emit = defineEmits(["saved", "cancel", "loaded"])
@@ -60,9 +64,12 @@ const setupLocked = ref(false)
 const loading = ref(true)
 const saving = ref(false)
 const error = ref("")
+const hasLoaded = ref(false)
+const actionError = ref("")
 let rowSequence = 0
 
 const busy = computed(() => loading.value || saving.value)
+const loadFailed = computed(() => Boolean(error.value && !hasLoaded.value))
 const canSave = computed(() => {
 	const permitted = props.name ? permissions.can_write : permissions.can_create
 	return Boolean(permitted && form.main_lot && form.from_location && form.posting_date && form.cutting_spreader && form.cutter && form.lot_details.length && form.lot_details.every((row) => row.lot && row.cutting_plan && row.cutting_marker))
@@ -77,6 +84,7 @@ function applyPayload(payload) {
 	Object.assign(permissions, payload?.permissions || {})
 	modified.value = record.modified || ""
 	setupLocked.value = Boolean(payload?.setup_locked)
+	hasLoaded.value = true
 	emit("loaded", payload)
 }
 async function load() {
@@ -91,7 +99,7 @@ function clearRowLot(row, clearLot = true) { if (clearLot) row.lot = ""; row.cut
 function planFilters(row) { return { lot: row.lot || "", docstatus: 1, cp_status: ["!=", "Completed"] } }
 function markerFilters(row) { return { cutting_plan: row.cutting_plan || "", docstatus: 1 } }
 async function saveSetup() {
-	saving.value = true; error.value = ""
+	saving.value = true; actionError.value = ""
 	try {
 		const payload = await saveBulkLaySheets({
 			main_lot: form.main_lot, from_location: form.from_location, posting_date: form.posting_date,
@@ -99,7 +107,7 @@ async function saveSetup() {
 			lot_details: form.lot_details.map(({ _row_key, ...row }) => ({ ...row, name: row.name || undefined })),
 		}, { name: props.name, expectedModified: modified.value })
 		emit("saved", payload)
-	} catch (reason) { error.value = reason?.message || "Unable to save Bulk LaySheets setup." }
+	} catch (reason) { actionError.value = reason?.message || "Unable to save Bulk LaySheets setup." }
 	finally { saving.value = false }
 }
 

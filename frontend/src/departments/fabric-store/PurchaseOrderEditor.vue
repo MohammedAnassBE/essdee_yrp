@@ -3,14 +3,17 @@
 		<header class="purchase-order-editor__header erp-editor-header">
 			<div><span>{{ name || (duplicateFrom ? `Duplicate of ${duplicateFrom}` : "New document") }}</span><h1>{{ name ? "Edit Purchase Order" : "New Purchase Order" }}</h1></div>
 			<div class="purchase-order-editor__actions erp-editor-actions">
-				<Button label="Cancel" severity="secondary" text :disabled="busy" @click="requestCancel" />
+				<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="requestCancel" />
 				<Button v-if="canDraft" label="Save" icon="pi pi-save" :loading="saving === 'draft'" :disabled="busy || !canSave" @click="save(false)" />
 			</div>
 		</header>
 
-		<DocumentErrorDialog :message="error" :title="`Purchase Order could not be ${loadFailed ? 'loaded' : 'saved'}`" />
+		<DocumentErrorDialog
+			:message="loadFailed ? '' : error"
+			title="Purchase Order could not be saved"
+		/>
 		<div v-if="loading" class="purchase-order-editor__loading" role="status" aria-live="polite" aria-label="Loading Purchase Order editor"><Skeleton height="160px" /><Skeleton height="420px" /></div>
-		<section v-else-if="loadFailed" class="purchase-order-editor__recovery" role="alert"><i class="pi pi-cloud-times" aria-hidden="true" /><div><strong>Purchase Order could not be loaded</strong><span>Close the error message, then try loading the document again.</span></div><Button label="Retry" icon="pi pi-refresh" severity="secondary" outlined @click="load" /></section>
+		<section v-else-if="loadFailed" class="purchase-order-editor__recovery" role="alert"><i class="pi pi-cloud-times" aria-hidden="true" /><div><strong>Purchase Order could not be loaded</strong><span>{{ error || "Try loading the Purchase Order again." }}</span></div><Button label="Retry" icon="pi pi-refresh" severity="secondary" outlined @click="load" /></section>
 		<div v-else class="purchase-order-editor__body">
 			<section class="purchase-order-editor__section">
 				<header><h2>Order details</h2></header>
@@ -40,7 +43,7 @@
 			/>
 		</div>
 
-		<Dialog v-model:visible="discardVisible" header="Discard unsaved changes?" modal :closable="false" :style="{ width: 'min(440px, calc(100vw - 32px))' }">
+		<Dialog v-model:visible="discardVisible" class="erp-dialog--sm" header="Discard unsaved changes?" modal :closable="false">
 			<p class="purchase-order-editor__discard-copy">Your unsaved Purchase Order changes will be lost.</p>
 			<template #footer><Button label="Keep Editing" severity="secondary" text @click="keepEditing" /><Button label="Discard Changes" severity="danger" @click="discardChanges" /></template>
 		</Dialog>
@@ -259,10 +262,10 @@ watch(() => props.name, load)
 
 <style scoped>
 .purchase-order-editor { --purchase-order-editor-inline: clamp(14px, 1.5vw, 24px); display: flex; width: 100%; min-height: calc(100dvh - var(--erp-shell-header-height) - 78px); flex-direction: column; gap: var(--erp-space-3); padding: 0 var(--purchase-order-editor-inline) var(--erp-space-4); border-color: color-mix(in srgb, var(--erp-border) 84%, white); background: color-mix(in srgb, var(--erp-bg) 72%, white); }
-.purchase-order-editor__header { position: sticky; z-index: var(--erp-layer-sticky); top: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--erp-space-4); margin: 0 calc(0px - var(--purchase-order-editor-inline)); padding: 12px var(--purchase-order-editor-inline); border-top: 3px solid var(--erp-accent); border-bottom: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface) 96%, var(--erp-accent-soft)); box-shadow: 0 5px 16px rgb(28 61 45 / 5%); }
+.purchase-order-editor__header { position: sticky; z-index: var(--erp-layer-sticky); top: var(--erp-shell-header-height); display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: var(--erp-space-4); margin: 0 calc(0px - var(--purchase-order-editor-inline)); padding: 7px var(--purchase-order-editor-inline); border-top: 3px solid var(--erp-accent); border-bottom: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface) 96%, var(--erp-accent-soft)); box-shadow: 0 5px 16px rgb(28 61 45 / 5%); }
 .purchase-order-editor__header > div:first-child { display: grid; gap: 2px; }
 .purchase-order-editor__header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }
-.purchase-order-editor__header h1 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-title); letter-spacing: -.025em; }
+.purchase-order-editor__header h1 { margin: 0; color: var(--erp-text); font-size: 19px; line-height: 1.15; letter-spacing: -.018em; }
 .purchase-order-editor__actions { display: flex; justify-content: flex-end; gap: var(--erp-space-2); flex-wrap: wrap; }
 .purchase-order-editor__loading, .purchase-order-editor__body { display: grid; min-width: 0; gap: var(--erp-space-3); }
 .purchase-order-editor__recovery { display: grid; min-height: 220px; place-content: center; justify-items: center; gap: 10px; padding: var(--erp-space-6); color: var(--erp-text-muted); text-align: center; border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-panel-radius); background: var(--erp-surface); }
@@ -276,5 +279,6 @@ watch(() => props.name, load)
 .purchase-order-editor__discard-copy { margin: 0; color: var(--erp-text-muted); line-height: 1.5; }
 @media (max-width: 1100px) { .purchase-order-editor__fields { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .purchase-order-editor__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 600px) { .purchase-order-editor { padding: 0 var(--erp-space-3) var(--erp-space-3); } .purchase-order-editor__header { align-items: stretch; flex-direction: column; margin: 0 calc(var(--erp-space-3) * -1); padding: 10px var(--erp-space-3); } .purchase-order-editor__actions { justify-content: flex-start; } .purchase-order-editor__section { padding: var(--erp-space-3); } .purchase-order-editor__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .purchase-order-editor__fields > :not(.purchase-order-editor__date) { grid-column: 1 / -1; } .purchase-order-editor__date :deep(.p-datepicker-input) { padding-inline: 8px; font-size: 13px; } .purchase-order-editor__date :deep(.p-datepicker-dropdown) { width: 32px; min-width: 32px; } .purchase-order-editor__comments { grid-column: auto; } .purchase-order-editor__actions { width: 100%; } .purchase-order-editor__actions :deep(.p-button) { flex: 1; } }
+@media (max-width: 600px) { .purchase-order-editor { padding: 0 var(--erp-space-3) var(--erp-space-3); } .purchase-order-editor__header { min-height: 55px; align-items: center; flex-direction: row; gap: 8px; margin: 0 calc(var(--erp-space-3) * -1); padding: 4px var(--erp-space-3); } .purchase-order-editor__header > div:first-child { min-width: 0; flex: 1 1 auto; } .purchase-order-editor__header > div:first-child > span { display: none; } .purchase-order-editor__header h1 { overflow: hidden; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; } .purchase-order-editor__section { padding: var(--erp-space-3); } .purchase-order-editor__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .purchase-order-editor__fields > :not(.purchase-order-editor__date) { grid-column: 1 / -1; } .purchase-order-editor__date :deep(.p-datepicker-input) { padding-inline: 8px; font-size: 13px; } .purchase-order-editor__date :deep(.p-datepicker-dropdown) { width: 44px; min-width: 44px; } .purchase-order-editor__comments { grid-column: auto; } .purchase-order-editor__actions { width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; } .purchase-order-editor__actions :deep(.p-button) { min-width: 0; min-height: 44px; flex: 0 1 auto; padding-inline: 8px; font-size: 12px; } }
+@media (max-width: 340px) { .purchase-order-editor__fields { grid-template-columns: 1fr; } .purchase-order-editor__date { grid-column: 1 / -1; } }
 </style>

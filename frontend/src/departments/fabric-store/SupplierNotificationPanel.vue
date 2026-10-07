@@ -4,7 +4,6 @@
 			<div><span>Supplier notification</span><h2>Send {{ channelLabel }}</h2></div>
 			<Button icon="pi pi-times" severity="secondary" text rounded aria-label="Close notification" :disabled="Boolean(acting)" @click="emit('close')" />
 		</header>
-		<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 
 		<div class="supplier-notification-panel__recipient">
 			<div><span>Supplier</span><strong>{{ context.supplier || "—" }}</strong></div>
@@ -39,14 +38,16 @@
 			<Button :label="`Send ${channelLabel}`" :icon="channel === 'sms' ? 'pi pi-envelope' : 'pi pi-comments'" :loading="acting === `send_${channel}`" :disabled="!canSend" @click="send" />
 		</footer>
 	</section>
+	<DocumentErrorDialog :message="error" :title="`${channelLabel} could not be sent`" />
 </template>
 
 <script setup>
 import Button from "primevue/button"
 import InputText from "primevue/inputtext"
-import Message from "primevue/message"
 import Select from "primevue/select"
 import { computed, ref, watch } from "vue"
+
+import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 
 const props = defineProps({
 	preparation: { type: Object, required: true },

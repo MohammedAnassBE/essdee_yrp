@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs"
 const require = createRequire("/home/anas/.claude/playwright/package.json")
 const { chromium } = require("playwright")
 
-const SITE = "http://erp-migration-test.site:8001"
+const SITE = process.env.ESSDEE_TEST_SITE || "http://erp-migration-test.site:8001"
 const [username, password] = readFileSync("/home/anas/.frappe-debug-creds-mrp3", "utf8").trim().split("\n")
 const ORDER = "**/api/method/essdee_yrp.cutting.order_workspace.*"
 const DETAIL = "**/api/method/essdee_yrp.cutting.order_detail_editor.*"
@@ -98,6 +98,13 @@ const errors = []
 let saved = false
 let submitted = false
 let savedBody = null
+let failLifecycle = true
+let delayLifecycle = false
+let releaseDelayedLifecycle = null
+let markDelayedLifecycleStarted = null
+let lifecycleRequests = 0
+const lifecycleRequestBodies = []
+const delayedLifecycleStarted = new Promise((resolve) => { markDelayedLifecycleStarted = resolve })
 page.on("pageerror", (error) => errors.push(`page: ${error.message}`))
 page.on("console", (message) => { if (message.type() === "error") errors.push(`console: ${message.text()}`) })
 
@@ -108,6 +115,7 @@ await Promise.all([
 	page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 20_000 }).catch(() => {}),
 	page.click(".btn-login, button[type=submit]"),
 ])
+errors.length = 0
 
 await page.route("**/api/method/essdee_yrp.cutting.web_capabilities.get_capabilities*", (route) => route.fulfill({
 	status: 200, contentType: "application/json", body: JSON.stringify({ message: {
@@ -147,6 +155,16 @@ await page.route(ORDER, async (route) => {
 	const url = route.request().url()
 	const body = JSON.parse(route.request().postData() || "{}")
 	if (url.includes("get_order_workspace")) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: workspacePayload() }) })
+	if (url.includes("change_order_status")) { lifecycleRequests += 1; lifecycleRequestBodies.push(body) }
+	if (url.includes("change_order_status") && failLifecycle) {
+		failLifecycle = false
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ exc: "ValidationError", message: "The Cutting Order cannot be cancelled yet." }) })
+	}
+	if (url.includes("change_order_status") && delayLifecycle) {
+		markDelayedLifecycleStarted()
+		await new Promise((resolve) => { releaseDelayedLifecycle = resolve })
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: editorPayload({ name: "CTO-WEB-00001", docstatus: 2 }) }) })
+	}
 	if (url.includes("save_order")) {
 		saved = true
 		submitted = Boolean(body.submit)
@@ -172,13 +190,19 @@ await detailDialog.locator("button").filter({ hasText: "Close" }).click()
 
 const firstQuantity = page.locator(".quantity-cell input").first()
 await firstQuantity.fill("18")
-await page.getByRole("button", { name: "Save Draft", exact: true }).click()
+await page.getByRole("button", { name: "Save", exact: true }).click()
 await page.waitForURL("**/web/cutting/orders/CTO-WEB-00001")
 await page.getByRole("heading", { name: "Edit Cutting Order", exact: true }).waitFor()
 assert(savedBody?.values?.item_details?.[0]?.items?.[0]?._row_key === "g0:r0", "Order save lost the authoritative matrix identity")
 assert(!page.url().includes("/app/"), "Cutting Order redirected to Desk")
-await page.getByRole("button", { name: "Save & Submit", exact: true }).click()
-await page.getByRole("heading", { name: "Cutting Order", exact: true }).waitFor({ timeout: 20_000 })
+await page.getByRole("button", { name: "Save options", exact: true }).click()
+await page.getByRole("menuitem", { name: "Save & Submit", exact: true }).click()
+try {
+	await page.getByRole("heading", { name: "Cutting Order", exact: true }).waitFor({ timeout: 20_000 })
+} catch (reason) {
+	await page.screenshot({ path: "/tmp/essdee-cutting-order-submit-timeout.png", fullPage: true })
+	throw new Error(`Cutting Order did not leave the editor after submit: ${JSON.stringify({ url: page.url(), headings: await page.getByRole("heading").allTextContents(), errors })}`, { cause: reason })
+}
 
 await page.goto(`${SITE}/web/cutting/orders/CTO-WEB-00001`, { waitUntil: "domcontentloaded" })
 await page.getByRole("heading", { name: "Cutting Order", exact: true }).waitFor({ timeout: 20_000 })
@@ -228,6 +252,13 @@ assert(page.url() === workspaceUrl, "Opening an Order Lay Sheet navigated away f
 await page.keyboard.press("Escape")
 await laySheetDialog.waitFor({ state: "hidden" })
 assert(await page.getByRole("button", { name: "Print" }).count() >= 1, "Cutting Order print action is missing")
+await page.getByRole("button", { name: "Cancel", exact: true }).click()
+const cancellationConfirm = page.getByRole("alertdialog", { name: "Cancel Cutting Order?", exact: true })
+await cancellationConfirm.getByRole("button", { name: "Cancel Cutting Order", exact: true }).click()
+const lifecycleError = page.getByRole("dialog", { name: "Cutting Order action failed", exact: true })
+await lifecycleError.getByText("The Cutting Order cannot be cancelled yet.", { exact: true }).waitFor()
+assert(await page.getByRole("heading", { name: "Cutting Order", exact: true }).count() === 1, "Failed cancellation replaced the Cutting Order workspace")
+await lifecycleError.getByRole("button", { name: "OK", exact: true }).click()
 
 await page.setViewportSize({ width: 900, height: 760 })
 const tabletTitle = await page.getByRole("heading", { name: "Cutting Order", exact: true }).evaluate((element) => {
@@ -238,8 +269,49 @@ const tabletTitle = await page.getByRole("heading", { name: "Cutting Order", exa
 		whiteSpace: style.whiteSpace,
 	}
 })
+const tabletHeader = await page.locator(".order-record-header").evaluate((element) => {
+	const identity = element.querySelector(".order-record-identity")?.getBoundingClientRect()
+	const actions = element.querySelector(".order-record-actions")?.getBoundingClientRect()
+	return {
+		flexDirection: getComputedStyle(element).flexDirection,
+		identity: identity?.toJSON(),
+		actions: actions?.toJSON(),
+	}
+})
 await page.screenshot({ path: "/tmp/essdee-cutting-order-tablet.png", fullPage: true })
 assert(tabletTitle.height <= tabletTitle.lineHeight * 1.25, `Cutting Order heading wraps at tablet width: ${JSON.stringify(tabletTitle)}`)
+assert(tabletHeader.flexDirection === "column" && tabletHeader.actions?.y >= tabletHeader.identity?.bottom, `Cutting Order tablet identity and actions still compete in one row: ${JSON.stringify(tabletHeader)}`)
+
+delayLifecycle = true
+await page.getByRole("button", { name: "Cancel", exact: true }).click()
+await page.getByRole("alertdialog", { name: "Cancel Cutting Order?", exact: true }).getByRole("button", { name: "Cancel Cutting Order", exact: true }).click()
+await delayedLifecycleStarted
+await page.evaluate(() => {
+	window.history.pushState({}, "", "/web/cutting/orders")
+	window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }))
+})
+await page.waitForURL((url) => url.pathname === "/web/cutting/orders")
+await page.getByRole("button", { name: "Create Cutting Order", exact: true }).waitFor()
+const delayedLifecycleResponse = page.waitForResponse((response) => response.url().includes("change_order_status"))
+releaseDelayedLifecycle()
+await delayedLifecycleResponse
+await page.waitForTimeout(250)
+assert(new URL(page.url()).pathname === "/web/cutting/orders", `A stale lifecycle response navigated back to the old Cutting Order: ${page.url()}`)
+
+await page.goto(`${SITE}/web/cutting/orders/CTO-WEB-00001`, { waitUntil: "domcontentloaded" })
+await page.getByRole("heading", { name: "Cutting Order", exact: true }).waitFor()
+const requestsBeforeStaleConfirmation = lifecycleRequests
+await page.getByRole("button", { name: "Cancel", exact: true }).click()
+const staleConfirmation = page.getByRole("alertdialog", { name: "Cancel Cutting Order?", exact: true })
+await staleConfirmation.waitFor()
+await page.evaluate(() => {
+	window.history.pushState({}, "", "/web/cutting/orders")
+	window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }))
+})
+await page.getByRole("button", { name: "Create Cutting Order", exact: true }).waitFor()
+await staleConfirmation.getByRole("button", { name: "Cancel Cutting Order", exact: true }).click()
+await page.waitForTimeout(250)
+assert(lifecycleRequests === requestsBeforeStaleConfirmation, `A stale confirmation acted after navigation: ${JSON.stringify(lifecycleRequestBodies)}`)
 assert(errors.length === 0, `Browser errors: ${JSON.stringify(errors)}`)
 
 console.log(JSON.stringify({ passed: true, workspace: "CTO-WEB-00001", detail: "CO-STYLE-001-1", matrixRows: 1, widthRatio, tabletTitle }, null, 2))

@@ -1,6 +1,6 @@
 <template>
 	<RouterLink class="department-card-link" :to="department.path">
-		<Card class="department-card" :style="{ '--accent': department.accent }">
+		<Card class="department-card">
 			<template #content>
 				<div class="department-card__layout">
 					<span class="department-card__mark" aria-hidden="true">{{ department.shortLabel }}</span>

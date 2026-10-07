@@ -75,11 +75,14 @@ const defaultControl = {
 await chooseField("Lot")
 const lotControlIsLink = await row.locator(".p-autocomplete").count() === 1
 const lotInput = row.locator(".p-autocomplete input")
-await lotInput.fill("TE")
+const unmatchedLotSearch = "__missing-lot__"
+await lotInput.fill(unmatchedLotSearch)
 await page.waitForTimeout(700)
 const lotOptions = await page.locator(".p-autocomplete-option:visible").allTextContents()
-const lotSearchOnlyMatchesVisibleText = lotOptions.length > 0
-	&& lotOptions.every((text) => text.toLocaleLowerCase().includes("te"))
+const lotEmptyState = await page.locator(".link-field__empty:visible").allTextContents()
+const lotSearchOnlyMatchesVisibleText = lotOptions.length
+	? lotOptions.every((text) => text.toLocaleLowerCase().includes(unmatchedLotSearch.toLocaleLowerCase()))
+	: lotEmptyState.some((text) => text.includes("No SD YRP Lot found"))
 
 await chooseField("Item")
 await row.locator(".p-autocomplete input").fill("Flame")
@@ -142,17 +145,131 @@ const isOptions = await (async () => {
 await chooseCondition("In")
 const multiValueHelp = await row.locator(".filter-value-help").textContent()
 
+const fieldBeforeEmptySearch = await row.locator(".p-select-label").first().textContent()
+
 await row.locator(".p-select").first().click()
 const fieldOverlay = page.locator(".p-select-overlay:visible")
 await fieldOverlay.locator("input").fill("(")
 const childFieldOptions = await fieldOverlay.locator(".p-select-option").count()
 await page.keyboard.press("Escape")
+await page.waitForTimeout(50)
+const fieldAfterEmptySearch = await row.locator(".p-select-label").first().textContent()
 
-await chooseField("Lot")
-await row.locator(".p-autocomplete input").fill("TE")
-await page.waitForTimeout(700)
-const selectedLotOption = page.locator(".p-autocomplete-option:visible").first()
-const selectedLotLabel = await selectedLotOption.textContent()
+// Re-selecting the already-active field is a no-op in PrimeVue, so the user's
+// current condition is intentionally preserved. Restore Equals explicitly
+// before exercising the single-value LinkField path.
+await chooseCondition("Equals")
+const fieldAfterConditionRestore = await row.locator(".p-select-label").first().textContent()
+
+const partialResults = {
+	temporalComponentContract,
+	defaultControl,
+	lotControlIsLink,
+	lotSearchOnlyMatchesVisibleText,
+	lotEmptyState,
+	itemLinkFilters: itemFilters,
+	statusControlIsSelect,
+	statusInControlIsMultiSelect,
+	checkConditionLabels,
+	checkValueLabels,
+	dateCondition,
+	dateRangeControl,
+	datetimeManualInputLocked,
+	datetimeTriggerLabel,
+	datetimePanelLabel,
+	timespanControlIsSelect,
+	dateInControlIsText,
+	numericControl,
+	isOptions,
+	multiValueHelp,
+	childFieldOptions,
+	fieldBeforeEmptySearch,
+	fieldAfterEmptySearch,
+	fieldAfterConditionRestore,
+}
+const partialPassed = defaultControl.field === "ID"
+	&& temporalComponentContract
+	&& defaultControl.condition === "Equals"
+	&& defaultControl.isLink
+	&& lotControlIsLink
+	&& lotSearchOnlyMatchesVisibleText
+	&& Number(itemFilters?.has_variants) === 1
+	&& statusControlIsSelect
+	&& statusInControlIsMultiSelect
+	&& checkConditionLabels.filter((value) => ["Equals", "Not Equals", "Like", "Not Like", "In", "Not In", "Is", "Greater Than", "Less Than", "Greater Than or Equal To", "Less Than or Equal To", "Between", "Timespan"].includes(value)).length === 1
+	&& checkValueLabels.some((value) => value.includes("Yes"))
+	&& checkValueLabels.some((value) => value.includes("No"))
+	&& dateCondition === "Between"
+	&& dateRangeControl
+	&& datetimeManualInputLocked
+	&& datetimeTriggerLabel === "Choose date and time"
+	&& datetimePanelLabel === "Choose date and time"
+	&& timespanControlIsSelect
+	&& dateInControlIsText
+	&& numericControl
+	&& isOptions.some((value) => value.includes("Set"))
+	&& isOptions.some((value) => value.includes("Not Set"))
+	&& multiValueHelp?.includes("commas")
+	&& childFieldOptions > 0
+	&& fieldBeforeEmptySearch === "Lot"
+	&& fieldAfterEmptySearch === "Lot"
+	&& fieldAfterConditionRestore === "Lot"
+	&& errors.length === 0
+
+const lotFixtureResponse = await context.request.get(`${SITE}/api/resource/SD%20YRP%20Lot`, {
+	params: { fields: JSON.stringify(["name"]), order_by: "modified desc", limit_page_length: 1 },
+})
+if (!lotFixtureResponse.ok()) {
+	throw new Error(`Unable to inspect SD YRP Lot fixtures (${lotFixtureResponse.status()}).`)
+}
+const availableLotLabel = (await lotFixtureResponse.json()).data?.[0]?.name || ""
+if (!availableLotLabel) {
+	console.log(JSON.stringify({
+		passed: partialPassed,
+		skipped: true,
+		reason: "Core filter controls passed; fixture-dependent apply/sidebar checks skipped because no SD YRP Lot exists.",
+		...partialResults,
+		errors,
+	}, null, 2))
+	await browser.close()
+	process.exit(partialPassed ? 0 : 1)
+}
+const lotSearchText = availableLotLabel.slice(0, Math.min(6, availableLotLabel.length))
+const finalLotInput = row.locator(".p-autocomplete input")
+await finalLotInput.click()
+await finalLotInput.fill("")
+const finalLotSearch = page.waitForResponse((response) =>
+	response.request().method() === "POST"
+	&& response.url().includes("essdee_yrp.api.link_search.link_search")
+	&& (() => {
+		try {
+			const body = JSON.parse(response.request().postData() || "{}")
+			const args = typeof body.args === "string" ? JSON.parse(body.args) : (body.args || body)
+			return args.txt === lotSearchText
+		} catch {
+			return false
+		}
+	})(),
+)
+await finalLotInput.pressSequentially(lotSearchText, { delay: 40 })
+const finalLotResponse = await finalLotSearch
+const finalLotPayload = await finalLotResponse.json().catch(() => ({}))
+const selectedLotOption = page.locator(".p-autocomplete-overlay:visible .p-autocomplete-option").first()
+let selectedLotLabel = ""
+try {
+	selectedLotLabel = await selectedLotOption.textContent({ timeout: 5000 })
+} catch (error) {
+	throw new Error(`Lot autocomplete did not render its result: ${JSON.stringify({
+		fieldBeforeEmptySearch,
+		fieldAfterEmptySearch,
+		fieldAfterConditionRestore,
+		field: await row.locator(".p-select-label").first().textContent(),
+		condition: await row.locator(".p-select-label").nth(1).textContent(),
+		input: await finalLotInput.inputValue(),
+		response: finalLotPayload,
+		emptyState: await page.locator(".p-autocomplete-empty-message:visible, .link-field__empty:visible").allTextContents(),
+	})}`, { cause: error })
+}
 await selectedLotOption.click()
 const listReload = page.waitForResponse((response) =>
 	response.request().method() === "GET"
@@ -185,13 +302,19 @@ const appliedChildFilter = filtersWithChild.find((filter) => filter[0] === "SD Y
 const planList = await context.request.get(`${SITE}/api/resource/SD%20YRP%20Cutting%20Plan`, {
 	params: { fields: JSON.stringify(["name"]), order_by: "modified desc", limit_page_length: 100 },
 })
+if (!planList.ok()) {
+	throw new Error(`Cutting Plan fixture list failed with HTTP ${planList.status()}.`)
+}
 let sidebarFixture = null
 for (const { name } of (await planList.json()).data || []) {
 	const response = await context.request.get(
 		`${SITE}/api/method/essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.get_web_view_data`,
 		{ params: { cutting_plan: name } },
 	)
-	if (!response.ok()) continue
+	if (response.status() === 404) continue
+	if (!response.ok()) {
+		throw new Error(`Cutting Plan ${name} fixture lookup failed with HTTP ${response.status()}.`)
+	}
 	const data = (await response.json()).message || {}
 	if (data.markers?.length && data.laysheets?.length) {
 		sidebarFixture = { name, data }
@@ -288,6 +411,9 @@ const passed = defaultControl.field === "ID"
 	&& isOptions.some((value) => value.includes("Not Set"))
 	&& multiValueHelp?.includes("commas")
 	&& childFieldOptions > 0
+	&& fieldBeforeEmptySearch === "Lot"
+	&& fieldAfterEmptySearch === "Lot"
+	&& fieldAfterConditionRestore === "Lot"
 	&& appliedLotFilter?.[1] === "="
 	&& appliedLotFilter?.[2]
 	&& listResponse.ok()

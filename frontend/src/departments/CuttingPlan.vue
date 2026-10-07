@@ -20,6 +20,9 @@
 				@cancel="router.push('/cutting/plans')"
 			/>
 		</div>
+		<div v-else-if="workspaceError && !workspaceReady" class="cutting-plan-probe erp-workspace">
+			<WorkspaceLoadError title="Cutting Plan unavailable" :message="workspaceError" :loading="workspaceLoading" @retry="retryWorkspace" />
+		</div>
 		<div v-else class="cutting-plan-layout cutting-plan-frame erp-workspace" :class="{ 'cutting-plan-layout--without-sidebar': !showSidebar }">
 			<FormView
 				ref="formView"
@@ -31,16 +34,15 @@
 				:include-fields="detailFields"
 				compact
 				@loaded="documentLoaded"
-				@saved="documentLoaded"
+				@saved="documentSaved"
 			>
 				<template #header-meta="{ doc }">
 					<div class="cutting-plan-header-meta">
-						<Tag
+						<DocumentStatusBadge
 							v-if="doc.cp_status"
 							class="cutting-plan-status"
-							:value="doc.cp_status"
-							:severity="statusSeverity(doc.cp_status)"
-							rounded
+							:docstatus="doc.docstatus"
+							:label="doc.cp_status"
 						/>
 						<span class="cutting-plan-header-fact cutting-plan-header-fact--lot" :title="doc.lot || 'No Lot'">
 							<small>Lot</small>
@@ -68,12 +70,15 @@
 				</template>
 				<template #view="{ doc, meta }">
 					<div class="cutting-plan-main">
+						<Message v-if="workspaceError" severity="error" :closable="false">
+							<div class="cutting-plan-workspace-error"><span>{{ workspaceError }}</span><Button label="Retry" icon="pi pi-refresh" severity="danger" outlined size="small" :loading="workspaceLoading" @click="retryWorkspace" /></div>
+						</Message>
 						<CuttingPlanTabs
 							:doc="doc"
 							:meta="meta"
 							:data="workspaceData"
 							:loading="workspaceLoading"
-							:error="workspaceError"
+							:error="''"
 							@refresh="refreshPage"
 						/>
 					</div>
@@ -85,7 +90,7 @@
 				:cutting-plan="cuttingPlanId"
 				:data="workspaceData"
 				:loading="workspaceLoading"
-				:error="workspaceError"
+				:error="''"
 				@refresh="refreshPage"
 			/>
 		</div>
@@ -94,7 +99,8 @@
 
 <script setup>
 import Skeleton from "primevue/skeleton"
-import Tag from "primevue/tag"
+import Message from "primevue/message"
+import Button from "primevue/button"
 import { computed, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
@@ -102,6 +108,8 @@ import { getCuttingPlanEditor } from "../api/cuttingPlanEditor.js"
 import { callMethod } from "../api/frappe.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import FormView from "../components/common/FormView.vue"
+import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
+import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
 import CuttingPlanActions from "./cutting/CuttingPlanActions.vue"
 import DocumentPrintButton from "./cutting/DocumentPrintButton.vue"
 import CuttingPlanSidebar from "./cutting/CuttingPlanSidebar.vue"
@@ -120,8 +128,12 @@ const showDraftEditor = computed(() => Boolean(
 const workspaceData = ref({})
 const workspaceLoading = ref(true)
 const workspaceError = ref("")
+const workspaceReady = ref(false)
+const currentDocument = ref(null)
 const formView = ref(null)
 let loadSequence = 0
+let probeSequence = 0
+let suppressNextLoaded = false
 const showSidebar = computed(() => Boolean(
 	workspaceLoading.value
 	|| workspaceData.value.permissions?.can_read_marker
@@ -142,18 +154,30 @@ const detailFields = [
 	"no_of_colours_completed",
 ]
 
-async function documentLoaded(payload) {
+async function documentLoaded(payload, force = false) {
 	const document = payload?.doc || payload
 	if (!document?.name) return
+	if (!force && suppressNextLoaded && currentDocument.value?.name === document.name) {
+		suppressNextLoaded = false
+		currentDocument.value = document
+		return
+	}
+	const remountsFormAfterSuccess = force && !workspaceReady.value && Boolean(workspaceError.value)
+	currentDocument.value = document
 	const sequence = ++loadSequence
 	workspaceLoading.value = true
-	workspaceError.value = ""
+	if (workspaceReady.value) workspaceError.value = ""
 	try {
 		const data = await callMethod(
 			"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.get_web_view_data",
 			{ cutting_plan: document.name },
 		)
-		if (sequence === loadSequence) workspaceData.value = data || {}
+		if (sequence === loadSequence) {
+			workspaceData.value = data || {}
+			workspaceReady.value = true
+			if (remountsFormAfterSuccess) suppressNextLoaded = true
+			workspaceError.value = ""
+		}
 	} catch (reason) {
 		if (sequence === loadSequence) workspaceError.value = reason.message || "Unable to load Cutting Plan details."
 	} finally {
@@ -161,19 +185,36 @@ async function documentLoaded(payload) {
 	}
 }
 
+function documentSaved(payload) { return documentLoaded(payload, true) }
+
+function retryWorkspace() {
+	if (currentDocument.value?.name) return documentLoaded(currentDocument.value, true)
+	formView.value?.reload()
+}
+
 function refreshPage() {
 	formView.value?.reload()
 }
 
 async function probeEditor() {
+	const sequence = ++probeSequence
+	const requestedId = cuttingPlanId.value
+	loadSequence += 1
 	checkingEditor.value = true
 	editorProbe.value = null
+	workspaceData.value = {}
+	workspaceError.value = ""
+	workspaceReady.value = false
+	currentDocument.value = null
+	suppressNextLoaded = false
 	try {
-		editorProbe.value = await getCuttingPlanEditor(cuttingPlanId.value)
+		const data = await getCuttingPlanEditor(requestedId)
+		if (sequence !== probeSequence || requestedId !== cuttingPlanId.value) return
+		editorProbe.value = data
 	} catch {
 		// FormView remains the read-only fallback and will expose its own load error.
 	} finally {
-		checkingEditor.value = false
+		if (sequence === probeSequence && requestedId === cuttingPlanId.value) checkingEditor.value = false
 	}
 }
 
@@ -186,19 +227,23 @@ function editorSaved(record) {
 
 watch(cuttingPlanId, probeEditor, { immediate: true })
 
-function statusSeverity(status) {
-	if (status === "Completed") return "success"
-	if (["Fabric Partially Received", "Partially Completed"].includes(status)) return "warn"
-	if (status === "Cut Panel Dispatch Pending") return "danger"
-	if (["Ready to Cut", "Cutting In Progress"].includes(status)) return "info"
-	return "secondary"
-}
 </script>
 
 <style scoped>
 .cutting-plan-probe {
 	display: grid;
 	gap: var(--erp-space-3);
+}
+
+.cutting-plan-workspace-error {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--erp-space-3);
+}
+
+@media (max-width: 620px) {
+	.cutting-plan-workspace-error { align-items: stretch; flex-direction: column; }
 }
 
 .cutting-plan-editor-route {

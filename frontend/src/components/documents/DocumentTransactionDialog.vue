@@ -5,16 +5,14 @@
 		dismissable-mask
 		maximizable
 		:header="dialogTitle"
-		class="document-transaction-dialog erp-entity-dialog"
-		:style="{ width: 'min(1180px, calc(100vw - 24px))' }"
+		class="document-transaction-dialog erp-entity-dialog erp-dialog--lg"
 		@update:visible="requestVisibility"
 	>
 		<div class="document-transaction-dialog__content">
 			<div v-if="loading" class="document-transaction-dialog__loading"><Skeleton v-for="index in 5" :key="index" height="3rem" /></div>
 			<template v-else>
-				<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 				<div v-if="payload.record" class="document-transaction-dialog__status-row">
-					<span class="document-status" :class="`document-status--${statusTone}`">{{ payload.record.status }}</span>
+					<DocumentStatusBadge :docstatus="payload.record.docstatus" :label="payload.record.status" />
 					<small>Updated {{ formatDate(payload.record.modified, true) }}</small>
 				</div>
 				<section v-if="summaryDetails.length" class="document-summary-strip" aria-label="Document totals">
@@ -43,8 +41,9 @@
 			</div>
 		</template>
 	</Dialog>
+	<DocumentErrorDialog :message="error" :title="`${dialogTitle} could not be completed`" @dismiss="error = ''" />
 
-	<Dialog v-model:visible="closeConfirmationVisible" modal header="Discard changes?" :style="{ width: 'min(440px, calc(100vw - 32px))' }">
+	<Dialog v-model:visible="closeConfirmationVisible" class="erp-dialog--sm" modal header="Discard changes?">
 		<p class="dirty-close-copy">This document has unsaved changes. Close it and discard those changes?</p>
 		<template #footer><Button label="Keep Editing" severity="secondary" text @click="closeConfirmationVisible = false" /><Button label="Discard Changes" severity="danger" @click="closeNow" /></template>
 	</Dialog>
@@ -53,14 +52,15 @@
 <script setup>
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
-import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 import { computed, ref, watch } from "vue"
 
 import { changeFabricStoreDocumentStatus, completeWorkOrderDocumentTransfer, getFabricStoreDocument } from "../../api/fabricStore.js"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import StockItemMatrix from "../stock/StockItemMatrix.vue"
+import DocumentErrorDialog from "./DocumentErrorDialog.vue"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
+import DocumentStatusBadge from "./DocumentStatusBadge.vue"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
@@ -79,7 +79,6 @@ const payload = ref({})
 const dirty = ref(false)
 const closeConfirmationVisible = ref(false)
 const dialogTitle = computed(() => `${payload.value.record?.doctype || props.doctype}${payload.value.record?.name || props.name ? ` · ${payload.value.record?.name || props.name}` : ""}`)
-const statusTone = computed(() => Number(payload.value.record?.docstatus) === 1 ? "submitted" : Number(payload.value.record?.docstatus) === 2 ? "cancelled" : "draft")
 const summaryFieldnames = computed(() => payload.value.record?.doctype === "YRP Delivery Challan"
 	? new Set(["total_delivered_qty", "stock_value"])
 	: payload.value.record?.doctype === "YRP Goods Received Note"
@@ -170,7 +169,7 @@ defineExpose({ markDirty, reload: load })
 </script>
 
 <style scoped>
-.document-transaction-dialog__content { display: grid; max-height: 70vh; min-height: 180px; overflow-y: auto; gap: 10px; padding: 2px; scrollbar-gutter: stable; }
+.document-transaction-dialog__content { display: grid; min-height: 180px; overflow-y: visible; gap: 10px; padding: 2px; }
 .document-transaction-dialog__loading { display: grid; gap: var(--erp-space-2); }
 .document-transaction-dialog__status-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .document-transaction-dialog__status-row small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }

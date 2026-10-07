@@ -3,9 +3,10 @@
 		:visible="visible"
 		modal
 		:header="title"
-		class="document-error-dialog"
+		class="document-error-dialog erp-dialog--sm"
 		:dismissable-mask="false"
-		:style="{ width: 'min(520px, calc(100vw - 28px))' }"
+		@show="focusPrimaryAction"
+		@hide="restoreFocus"
 		@update:visible="setVisible"
 	>
 		<div class="document-error-dialog__body" role="alert" aria-live="assertive">
@@ -13,8 +14,8 @@
 			<div><strong>{{ summary }}</strong><p>{{ message }}</p></div>
 		</div>
 		<template #footer>
-			<Button v-if="retryLabel" :label="retryLabel" icon="pi pi-refresh" severity="secondary" outlined @click="retry" />
-			<Button label="OK" autofocus @click="close" />
+			<Button v-if="retryLabel" label="Dismiss" severity="secondary" text @click="close" />
+			<Button ref="primaryAction" :label="retryLabel || 'OK'" :icon="retryLabel ? 'pi pi-refresh' : undefined" autofocus @click="retryLabel ? retry() : close()" />
 		</template>
 	</Dialog>
 </template>
@@ -22,7 +23,7 @@
 <script setup>
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
-import { ref, watch } from "vue"
+import { nextTick, ref, watch } from "vue"
 
 const props = defineProps({
 	message: { type: String, default: "" },
@@ -32,8 +33,32 @@ const props = defineProps({
 })
 const emit = defineEmits(["dismiss", "retry"])
 const visible = ref(Boolean(props.message))
+const primaryAction = ref(null)
+let focusOrigin = null
+let focusOriginId = ""
 
-watch(() => props.message, (message) => { visible.value = Boolean(message) })
+watch(() => props.message, (message) => {
+	if (message && typeof document !== "undefined") {
+		focusOrigin = document.activeElement instanceof HTMLElement ? document.activeElement : null
+		focusOriginId = focusOrigin?.id || ""
+	}
+	visible.value = Boolean(message)
+})
+
+function focusPrimaryAction() {
+	const focus = () => (primaryAction.value?.$el || primaryAction.value)?.focus?.()
+	focus()
+	nextTick(() => window.requestAnimationFrame(focus))
+}
+
+function restoreFocus() {
+	const origin = focusOrigin
+	const originId = focusOriginId
+	const focus = () => (origin?.isConnected ? origin : originId ? document.getElementById(originId) : null)?.focus?.()
+	nextTick(() => window.requestAnimationFrame(() => window.requestAnimationFrame(focus)))
+	focusOrigin = null
+	focusOriginId = ""
+}
 
 function setVisible(value) {
 	visible.value = value

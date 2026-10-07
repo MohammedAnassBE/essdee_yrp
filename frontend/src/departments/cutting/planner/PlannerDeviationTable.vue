@@ -1,7 +1,7 @@
 <template>
 	<section class="planner-deviation">
 		<header><div><span>Order accuracy</span><h3>Size Deviation</h3></div><Tag :value="`${sizes.length} sizes`" severity="secondary" rounded /></header>
-		<div class="planner-deviation__scroll"><table><thead><tr><th>Size</th><th class="numeric">Order</th><th class="numeric">Cut</th><th class="numeric">Difference</th><th class="numeric">Deviation</th><th>Result</th></tr></thead><tbody><tr v-for="size in sizes" :key="size"><td><strong>{{ size }}</strong></td><td class="numeric">{{ perSize[size].order }}</td><td class="numeric">{{ perSize[size].cut }}</td><td class="numeric" :class="diffClass(perSize[size].diff)">{{ signed(perSize[size].diff) }}</td><td class="numeric">{{ number(perSize[size].pct) }}%</td><td><Tag :value="status(perSize[size])" :severity="severity(perSize[size])" rounded /></td></tr></tbody></table></div>
+		<div class="planner-deviation__scroll" role="region" tabindex="0" aria-label="Size deviation results"><table><thead><tr><th>Size</th><th class="numeric">Order</th><th class="numeric">Cut</th><th class="numeric">Difference</th><th class="numeric">Deviation</th><th>Result</th></tr></thead><tbody><tr v-for="size in sizes" :key="size"><td><strong>{{ size }}</strong></td><td class="numeric">{{ perSize[size].order }}</td><td class="numeric">{{ perSize[size].cut }}</td><td class="numeric" :class="diffClass(perSize[size].diff)">{{ signed(perSize[size].diff) }}</td><td class="numeric">{{ number(perSize[size].pct) }}%</td><td><Tag :value="status(perSize[size])" :severity="severity(perSize[size])" rounded /></td></tr></tbody></table></div>
 	</section>
 </template>
 

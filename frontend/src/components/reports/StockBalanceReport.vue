@@ -11,17 +11,22 @@
 		<template #filters>
 			<DateField v-model="filters.fromDate" label="From date" required />
 			<DateField v-model="filters.toDate" label="To date" required />
-			<LinkField v-model="filters.item" doctype="Item" label="Item variant" placeholder="Search variant…" :show-open-button="false" show-clear />
-			<LinkField v-model="filters.parentItem" doctype="Item" label="Item" placeholder="Search item…" :filters="{ has_variants: 1 }" :show-open-button="false" show-clear />
-			<LinkField v-model="filters.warehouse" doctype="Warehouse" label="Warehouse" placeholder="Search warehouse…" :show-open-button="false" show-clear />
-			<LinkField v-model="filters.lot" doctype="SD YRP Lot" label="Lot" placeholder="Search lot…" :show-open-button="false" show-clear />
-			<LinkField v-model="filters.receivedType" doctype="YRP Received Type" label="Received type" placeholder="Search received type…" :show-open-button="false" show-clear />
-			<div class="stock-checks">
-				<label><input v-model="filters.removeZero" type="checkbox" /> Remove zero balance</label>
-				<label><input v-model="filters.showAttributes" type="checkbox" /> Variant attributes</label>
-				<label><input v-model="filters.showAgeing" type="checkbox" /> Stock ageing</label>
-				<label><input v-model="filters.showInwardSplit" type="checkbox" /> Inward date split</label>
-			</div>
+			<details class="stock-advanced" :open="advancedOpen" @toggle="advancedOpen = $event.currentTarget.open">
+				<summary><span>More filters</span><small>{{ optionalFilterCount ? `${optionalFilterCount} active` : "Optional" }}</small><i class="pi pi-chevron-down" /></summary>
+				<div class="stock-advanced__grid">
+					<LinkField v-model="filters.item" class="stock-link-filter" doctype="Item" label="Item variant" placeholder="Search variant…" :show-open-button="false" show-clear />
+					<LinkField v-model="filters.parentItem" class="stock-link-filter" doctype="Item" label="Item" placeholder="Search item…" :filters="{ has_variants: 1 }" :show-open-button="false" show-clear />
+					<LinkField v-model="filters.warehouse" class="stock-link-filter" doctype="Warehouse" label="Warehouse" placeholder="Search warehouse…" :show-open-button="false" show-clear />
+					<LinkField v-model="filters.lot" class="stock-link-filter" doctype="SD YRP Lot" label="Lot" placeholder="Search lot…" :show-open-button="false" show-clear />
+					<LinkField v-model="filters.receivedType" class="stock-link-filter" doctype="YRP Received Type" label="Received type" placeholder="Search received type…" :show-open-button="false" show-clear />
+					<div class="stock-checks">
+						<label><input v-model="filters.removeZero" type="checkbox" /> Remove zero balance</label>
+						<label><input v-model="filters.showAttributes" type="checkbox" /> Variant attributes</label>
+						<label><input v-model="filters.showAgeing" type="checkbox" /> Stock ageing</label>
+						<label><input v-model="filters.showInwardSplit" type="checkbox" /> Inward date split</label>
+					</div>
+				</div>
+			</details>
 		</template>
 
 		<template #metrics>
@@ -31,7 +36,7 @@
 			<div class="report-metric"><i class="pi pi-arrow-up-right" /><div><span>Out quantity</span><strong>{{ number(totals.outQty, 3) }}</strong></div></div>
 		</template>
 
-		<div class="erp-table-wrap stock-table-wrap">
+		<div class="erp-table-wrap stock-table-wrap" role="region" aria-label="Stock Balance results" tabindex="0">
 			<table class="erp-data-table stock-table">
 				<thead><tr><th v-for="column in columns" :key="column.fieldname" :class="numericColumn(column) ? 'erp-number' : ''">{{ column.label || column.fieldname }}</th></tr></thead>
 				<tbody>
@@ -59,9 +64,12 @@ const columns = ref([])
 const loading = ref(false)
 const generated = ref(false)
 const error = ref("")
+const advancedOpen = ref(typeof window === "undefined" || !window.matchMedia("(max-width: 430px)").matches)
 const totals = computed(() => rows.value.reduce((out, row) => {
 	out.balanceQty += Number(row.bal_qty || 0); out.inQty += Number(row.in_qty || 0); out.outQty += Number(row.out_qty || 0); return out
 }, { balanceQty: 0, inQty: 0, outQty: 0 }))
+const optionalFilterCount = computed(() => [filters.item, filters.parentItem, filters.warehouse, filters.lot, filters.receivedType].filter(Boolean).length
+	+ Number(filters.showAttributes) + Number(filters.showAgeing) + Number(filters.showInwardSplit))
 
 function defaultFilters() {
 	return { fromDate: oneMonthAgoIso(), toDate: todayIso(), item: "", parentItem: "", warehouse: "", lot: "", receivedType: "", removeZero: true, showAttributes: false, showAgeing: false, showInwardSplit: false }
@@ -123,8 +131,19 @@ function reset() { Object.assign(filters, defaultFilters()); rows.value = []; co
 	accent-color: var(--erp-accent);
 }
 
-.stock-table-wrap {
-	max-height: 58vh;
+.stock-advanced {
+	display: block;
+	grid-column: 1 / -1;
+}
+
+.stock-advanced__grid {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: var(--erp-space-2) var(--erp-space-3);
+}
+
+.stock-advanced summary {
+	display: none;
 }
 
 .stock-table {
@@ -153,9 +172,71 @@ function reset() { Object.assign(filters, defaultFilters()); rows.value = []; co
 	white-space: pre-line;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 800px) {
+	.stock-advanced__grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
 	.stock-checks {
-		grid-column: span 1;
+		grid-column: 1 / -1;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		min-width: 0;
+		gap: 6px var(--erp-space-2);
+	}
+
+	.stock-checks label {
+		min-width: 0;
+		min-height: 44px;
+		white-space: normal;
+	}
+
+	.stock-checks input {
+		width: 17px;
+		height: 17px;
+		flex: 0 0 auto;
+	}
+}
+
+@media (max-width: 430px) {
+	.stock-advanced {
+		grid-column: 1 / -1;
+		padding: 0 10px;
+		border: 1px solid var(--erp-border);
+		border-radius: var(--erp-control-radius);
+		background: var(--erp-surface);
+	}
+
+	.stock-advanced summary {
+		display: flex;
+		min-height: 44px;
+		align-items: center;
+		gap: 8px;
+		color: var(--erp-text);
+		font-size: var(--erp-font-size-caption);
+		font-weight: 750;
+		cursor: pointer;
+		list-style: none;
+	}
+
+	.stock-advanced summary::-webkit-details-marker { display: none; }
+	.stock-advanced summary small { margin-left: auto; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 650; }
+	.stock-advanced summary i { color: var(--erp-text-muted); font-size: 11px; transition: transform 140ms ease; }
+	.stock-advanced[open] summary i { transform: rotate(180deg); }
+
+	.stock-advanced__grid {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: var(--erp-space-2);
+		padding: 0 0 10px;
+	}
+
+	.stock-advanced:not([open]) > .stock-advanced__grid {
+		display: none;
+	}
+
+	.stock-checks {
+		grid-column: 1;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		min-width: 0;
 	}
 }

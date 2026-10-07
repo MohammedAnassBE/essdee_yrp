@@ -1,7 +1,6 @@
 <template>
 	<Dialog :visible="visible" modal dismissable-mask :header="title" class="erp-movement-transaction-dialog erp-entity-dialog" @update:visible="emit('update:visible', $event)">
 		<div class="erp-movement-transaction">
-			<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 			<label v-if="movements.length" class="erp-movement-field"><span>Cut Panel Movement *</span><Select v-model="selectedMovementName" :options="movements" option-label="name" option-value="name" placeholder="Select a submitted movement" fluid /></label>
 			<div v-if="chosenMovement" class="erp-transaction-source"><i class="pi pi-box"></i><div><span>Cut Panel Movement</span><strong>{{ chosenMovement.name }}</strong><small>{{ chosenMovement.totals?.exact_bundles || 0 }} bundles · {{ chosenMovement.totals?.selected_panels || 0 }} panels · {{ chosenMovement.totals?.collapsed_rows || 0 }} collapsed rows · {{ chosenMovement.totals?.accessory_rows || 0 }} accessories</small></div></div>
 			<template v-if="operation === 'stock_entry'">
@@ -14,20 +13,21 @@
 		</div>
 		<template #footer>
 			<Button label="Close" severity="secondary" text :disabled="saving" @click="emit('update:visible', false)" />
-			<Button v-if="permissions.can_create" label="Save Draft" icon="pi pi-save" severity="secondary" outlined :disabled="!canSave" :loading="saving && saveMode === 'draft'" @click="save(false)" />
-			<Button v-if="permissions.can_create && permissions.can_submit" label="Save & Submit" icon="pi pi-check" :disabled="!canSave" :loading="saving && saveMode === 'submit'" @click="save(true)" />
+			<DocumentSaveButton :show-save="permissions.can_create" :show-submit="permissions.can_create && permissions.can_submit" :disabled="!canSave" :loading="saving" @save="save(false)" @submit="save(true)" />
 		</template>
 	</Dialog>
+	<DocumentErrorDialog :message="error" :title="`${title} could not be completed`" />
 </template>
 
 <script setup>
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
-import Message from "primevue/message"
 import Select from "primevue/select"
 import { computed, reactive, ref, watch } from "vue"
 
 import LinkField from "../../components/common/LinkField.vue"
+import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
 import { createMovementTransaction } from "./cpmApi.js"
 
 const props = defineProps({

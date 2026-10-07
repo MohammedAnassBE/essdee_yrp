@@ -128,6 +128,7 @@ const CompletionTable = defineComponent({
 .cutting-order-tabs :deep(.data-section__header i) { color: var(--erp-accent); }
 .cutting-order-tabs :deep(.data-section__header > span) { padding: 3px 7px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 700; background: var(--erp-surface-muted); border: 1px solid var(--erp-border); border-radius: var(--erp-pill-radius); }
 .cutting-order-tabs :deep(.data-section__body) { display: grid; gap: 10px; padding: 10px; }
+@media (max-width: 1050px) { .cutting-order-tabs :deep(.p-tabpanels) { overflow-y: visible; } }
 .cutting-order-tabs :deep(.table-scroll) { max-width: 100%; overflow: auto; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
 .cutting-order-tabs :deep(.data-table) { width: 100%; min-width: 720px; border-collapse: collapse; font-size: var(--erp-font-size-caption); }
 .cutting-order-tabs :deep(.data-table th), .cutting-order-tabs :deep(.data-table td) { padding: 8px 9px; text-align: left; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }

@@ -7,23 +7,40 @@ const require = createRequire("/home/anas/.claude/playwright/package.json")
 const { chromium } = require("playwright")
 const SITE = "http://erp-migration-test.site:8001"
 const [username, password] = readFileSync("/home/anas/.frappe-debug-creds-mrp3", "utf8").trim().split("\n")
-const viewports = process.argv.includes("--all-widths")
-	? [{ width: 1600, height: 1000 }, { width: 1280, height: 900 }, { width: 900, height: 900 }, { width: 390, height: 844 }]
-	: [{ width: 1600, height: 1000 }]
+const widthsArgument = process.argv.find((argument) => argument.startsWith("--widths="))?.split("=")[1]
+const requestedWidths = widthsArgument?.split(",").map(Number).filter((width) => Number.isFinite(width) && width >= 280)
+const viewportHeight = (width) => width <= 320 ? 568 : width <= 390 ? 844 : width <= 1280 ? 900 : 1000
+const viewports = requestedWidths?.length
+	? requestedWidths.map((width) => ({ width, height: viewportHeight(width) }))
+	: process.argv.includes("--all-widths")
+		? [
+			{ width: 1600, height: 1000 },
+			{ width: 1366, height: 768 },
+			{ width: 1280, height: 900 },
+			{ width: 900, height: 900 },
+			{ width: 768, height: 1024 },
+			{ width: 390, height: 844 },
+			{ width: 320, height: 568 },
+		]
+		: [{ width: 1600, height: 1000 }]
 const screenshotDirectory = process.argv.includes("--screenshots") ? "/tmp/essdee-web-ui-review" : ""
 if (screenshotDirectory) mkdirSync(screenshotDirectory, { recursive: true })
-const routes = [
+const defaultRoutes = [
 	"/", "/cutting", "/cutting/plans", "/cutting/plans/new",
 	"/cutting/orders", "/cutting/orders/new",
 	"/cutting/bulk-lay-sheets", "/cutting/bulk-lay-sheets/new",
 	"/cutting/lay-sheet-planner", "/cutting/lay-sheet-planner/new",
-	"/cutting/reports", "/fabric-store", "/fabric-store/work-orders",
+	"/cutting/reports", "/fabric-store", "/fabric-store/work-orders", "/fabric-store/work-orders/new",
 	"/fabric-store/purchase-orders", "/fabric-store/purchase-orders/new", "/fabric-store/stock-transfers", "/fabric-store/reports",
 	"/cut-panel-store", "/cut-panel-store/movements", "/cut-panel-store/work-orders",
 	"/cut-panel-store/cut-bundle-edits", "/cut-panel-store/box-sticker-prints",
 	"/cut-panel-store/excel-sticker-prints", "/cut-panel-store/reports",
 	"/accessory-store", "/sewing", "/finishing", "/merch", "/purchase", "/sales", "/planning",
 ]
+const routesArgument = process.argv.find((argument) => argument.startsWith("--routes="))?.split("=")[1]
+const routes = routesArgument
+	? routesArgument.split(",").map((route) => route.trim()).filter(Boolean)
+	: [...defaultRoutes]
 
 function assert(condition, message) {
 	if (!condition) throw new Error(message)
@@ -43,7 +60,7 @@ await Promise.all([
 	page.click(".btn-login, button[type=submit]"),
 ])
 
-for (const [doctype, routePrefix] of [
+for (const [doctype, routePrefix] of routesArgument ? [] : [
 	["SD YRP Cutting Plan", "/cutting/plans"],
 	["SD YRP Cutting Order", "/cutting/orders"],
 	["SD YRP Cutting Bulk Lay Sheets", "/cutting/bulk-lay-sheets"],
@@ -64,7 +81,17 @@ for (const viewport of viewports) {
 	await page.setViewportSize(viewport)
 	for (const route of routes) {
 		await page.goto(`${SITE}/web${route}`, { waitUntil: "domcontentloaded" })
-		await page.locator(".app-shell").waitFor({ timeout: 20_000 })
+		try {
+			await page.locator(".app-shell").waitFor({ timeout: 20_000 })
+		} catch (error) {
+			audits.push({
+				route,
+				viewport: viewport.width,
+				loadFailure: error?.message || "Application shell did not load.",
+				finalUrl: page.url(),
+			})
+			continue
+		}
 		await page.locator(".p-skeleton:visible").first().waitFor({ state: "hidden", timeout: 5_000 }).catch(() => {})
 		await page.waitForTimeout(500)
 		if (screenshotDirectory) {
@@ -135,7 +162,7 @@ for (const viewport of viewports) {
 }
 
 await browser.close()
-const failures = audits.filter((audit) => audit.bodyOverflow > 1 || audit.undersizedText.length || audit.buttonColourMismatches.length || audit.buttonContrastFailures.length)
+const failures = audits.filter((audit) => audit.loadFailure || audit.bodyOverflow > 1 || audit.undersizedText?.length || audit.buttonColourMismatches?.length || audit.buttonContrastFailures?.length)
 console.log(JSON.stringify({ passed: failures.length === 0 && browserErrors.length === 0, audited: audits.length, failures, browserErrors }, null, 2))
 assert(browserErrors.length === 0, `Browser errors: ${browserErrors.join("; ")}`)
 assert(failures.length === 0, `${failures.length} route/viewport combinations violate the UI contract`)

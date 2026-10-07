@@ -3,15 +3,18 @@
 		<header class="work-order-editor__header erp-editor-header">
 			<div><span>{{ name || (duplicateFrom ? `Duplicate of ${duplicateFrom}` : "New document") }}</span><h1>{{ name ? "Edit Work Order" : "New Work Order" }}</h1></div>
 			<div class="work-order-editor__actions erp-editor-actions">
-				<Button label="Cancel" severity="secondary" text :disabled="busy" @click="requestCancel" />
+				<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="requestCancel" />
 				<Button v-if="calculationMode" :label="calculationLabel" icon="pi pi-calculator" severity="secondary" outlined :disabled="busy" @click="openCalculation" />
 				<Button v-if="canDraft" label="Save" icon="pi pi-save" :loading="saving === 'draft'" :disabled="busy || !canSave" @click="save(false)" />
 			</div>
 		</header>
 
-		<DocumentErrorDialog :message="error" :title="`Work Order could not be ${loadFailed ? 'loaded' : 'saved'}`" />
+		<DocumentErrorDialog
+			:message="loadFailed ? '' : error"
+			title="Work Order could not be saved"
+		/>
 		<div v-if="loading" class="work-order-editor__loading" role="status" aria-live="polite" aria-label="Loading Work Order editor"><Skeleton height="170px" /><Skeleton height="420px" /></div>
-		<section v-else-if="loadFailed" class="work-order-editor__recovery" role="alert"><i class="pi pi-cloud-times" aria-hidden="true" /><div><strong>Work Order could not be loaded</strong><span>Close the error message, then try loading the document again.</span></div><Button label="Retry" icon="pi pi-refresh" severity="secondary" outlined @click="load" /></section>
+		<section v-else-if="loadFailed" class="work-order-editor__recovery" role="alert"><i class="pi pi-cloud-times" aria-hidden="true" /><div><strong>Work Order could not be loaded</strong><span>{{ error || "Try loading the Work Order again." }}</span></div><Button label="Retry" icon="pi pi-refresh" severity="secondary" outlined @click="load" /></section>
 		<div v-else class="work-order-editor__body">
 			<section class="work-order-editor__section">
 				<header><div><span>Setup</span><h2>Work Order details</h2></div><small>Process, Item and Lot define the calculation source.</small></header>
@@ -41,14 +44,20 @@
 				</div>
 			</section>
 
-			<section class="work-order-editor__section work-order-editor__matrix-section"><header><div><span>Inputs</span><h2>Deliverables</h2></div><small>Calculated rows remain grouped through the Work Order controller.</small></header><WorkOrderItemMatrix :groups="deliverableDetails" /></section>
-			<section v-if="!noReceivables" class="work-order-editor__section work-order-editor__matrix-section"><header><div><span>Outputs</span><h2>Receivables</h2></div></header><WorkOrderItemMatrix :groups="receivableDetails" /></section>
+			<template v-if="showMatrices">
+				<section class="work-order-editor__section work-order-editor__matrix-section"><header><div><span>Inputs</span><h2>Deliverables</h2></div><small>Calculated rows remain grouped through the Work Order controller.</small></header><WorkOrderItemMatrix :groups="deliverableDetails" /></section>
+				<section v-if="!noReceivables" class="work-order-editor__section work-order-editor__matrix-section"><header><div><span>Outputs</span><h2>Receivables</h2></div></header><WorkOrderItemMatrix :groups="receivableDetails" /></section>
+			</template>
+			<section v-else class="work-order-editor__matrix-prompt">
+				<i class="pi pi-calculator" aria-hidden="true"></i>
+				<div><strong>Item rows will appear after setup</strong><span>Select the process, lot and item to prepare the Work Order quantities.</span></div>
+			</section>
 			<section v-if="editor.calculated_items?.length" class="work-order-editor__section"><header><div><span>Source-owned</span><h2>Calculated items</h2></div><small>{{ editor.calculated_items.length }} rows</small></header><div class="work-order-editor__calculated"><div v-for="(row, index) in editor.calculated_items" :key="row.name || index"><strong>{{ row.item_variant || row.item || row.name }}</strong><span>{{ calculatedRowText(row) }}</span></div></div></section>
 		</div>
 
 		<WorkOrderActionPanel v-model:visible="actionVisible" :mode="calculationMode" :work-order="{ name, modified: editor.modified }" :editor="editor" @changed="calculationChanged" />
 		<DocumentConfirmationDialog v-model:visible="sourceConfirmVisible" :title="sourceConfirmTitle" :message="sourceConfirmMessage" cancel-label="Keep Current Value" confirm-label="Clear Rows & Continue" :busy="saving === 'source'" :return-focus-selector="sourceReturnFocusSelector" @update:visible="sourceConfirmationVisibilityChanged" @confirm="confirmSourceChange" />
-		<Dialog v-model:visible="discardVisible" header="Discard unsaved changes?" modal :closable="false" :style="{ width: 'min(440px, calc(100vw - 32px))' }"><p class="work-order-editor__discard-copy">Your unsaved Work Order changes will be lost.</p><template #footer><Button label="Keep Editing" severity="secondary" text @click="keepEditing" /><Button label="Discard Changes" severity="danger" @click="discardChanges" /></template></Dialog>
+		<Dialog v-model:visible="discardVisible" class="erp-dialog--sm" header="Discard unsaved changes?" modal :closable="false"><p class="work-order-editor__discard-copy">Your unsaved Work Order changes will be lost.</p><template #footer><Button label="Keep Editing" severity="secondary" text @click="keepEditing" /><Button label="Discard Changes" severity="danger" @click="discardChanges" /></template></Dialog>
 	</section>
 </template>
 
@@ -107,6 +116,7 @@ const canSave = computed(() => {
 })
 const hasRows = computed(() => deliverableDetails.value.some((group) => group.items?.length) && (noReceivables.value || receivableDetails.value.some((group) => group.items?.length)))
 const calculationMode = computed(() => editor.value.calculation_contexts?.fabric ? "calculate_fabric" : editor.value.calculation_contexts?.garment ? "calculate_garment" : "")
+const showMatrices = computed(() => hasRows.value || Boolean(calculationMode.value))
 const calculationLabel = computed(() => calculationMode.value === "calculate_fabric" ? "Calculate Fabric Deliverables" : "Calculate Items")
 const duplicateFrom = computed(() => String(props.source?.duplicate_from || ""))
 const sourceConfirmTitle = computed(() => `Change ${pendingSourceChange.value?.label || "source"}?`)
@@ -246,10 +256,10 @@ watch(() => props.name, load)
 
 <style scoped>
 .work-order-editor { --work-order-editor-inline: clamp(14px, 1.5vw, 24px); display: flex; width: 100%; min-height: calc(100dvh - var(--erp-shell-header-height) - 78px); flex-direction: column; gap: var(--erp-space-3); padding: 0 var(--work-order-editor-inline) var(--erp-space-4); border-color: color-mix(in srgb, var(--erp-border) 84%, white); background: color-mix(in srgb, var(--erp-bg) 72%, white); }
-.work-order-editor__header { position: sticky; z-index: var(--erp-layer-sticky); top: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--erp-space-4); margin: 0 calc(0px - var(--work-order-editor-inline)); padding: 12px var(--work-order-editor-inline); border-top: 3px solid var(--erp-accent); border-bottom: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface) 96%, var(--erp-accent-soft)); box-shadow: 0 5px 16px rgb(28 61 45 / 5%); }
+.work-order-editor__header { position: sticky; z-index: var(--erp-layer-sticky); top: var(--erp-shell-header-height); display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: var(--erp-space-4); margin: 0 calc(0px - var(--work-order-editor-inline)); padding: 7px var(--work-order-editor-inline); border-top: 3px solid var(--erp-accent); border-bottom: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface) 96%, var(--erp-accent-soft)); box-shadow: 0 5px 16px rgb(28 61 45 / 5%); }
 .work-order-editor__header > div:first-child { display: grid; gap: 2px; }
 .work-order-editor__header span, .work-order-editor__section > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }
-.work-order-editor__header h1 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-title); letter-spacing: -.025em; }
+.work-order-editor__header h1 { margin: 0; color: var(--erp-text); font-size: 19px; line-height: 1.15; letter-spacing: -.018em; }
 .work-order-editor__actions { display: flex; justify-content: flex-end; gap: var(--erp-space-2); flex-wrap: wrap; }
 .work-order-editor__loading, .work-order-editor__body { display: grid; min-width: 0; gap: var(--erp-space-3); }
 .work-order-editor__recovery { display: grid; min-height: 220px; place-content: center; justify-items: center; gap: 10px; padding: var(--erp-space-6); color: var(--erp-text-muted); text-align: center; border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-panel-radius); background: var(--erp-surface); }
@@ -270,8 +280,13 @@ watch(() => props.name, load)
 .work-order-editor__calculated > div { display: grid; gap: 3px; padding: 9px 11px; border-left: 3px solid color-mix(in srgb, var(--erp-accent) 58%, white); background: var(--erp-surface-soft); border-radius: 0 var(--erp-control-radius) var(--erp-control-radius) 0; }
 .work-order-editor__calculated strong { overflow: hidden; font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
 .work-order-editor__calculated span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
+.work-order-editor__matrix-prompt { display: flex; min-height: 82px; align-items: center; gap: 12px; padding: 14px 16px; color: var(--erp-text-muted); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-panel-radius); background: color-mix(in srgb, var(--erp-surface-soft) 78%, white); }
+.work-order-editor__matrix-prompt > i { display: grid; width: 38px; height: 38px; flex: 0 0 auto; color: var(--erp-accent); background: var(--erp-accent-soft); border-radius: var(--erp-control-radius); place-items: center; }
+.work-order-editor__matrix-prompt > div { display: grid; gap: 3px; }
+.work-order-editor__matrix-prompt strong { color: var(--erp-text); font-size: var(--erp-font-size-body); }
+.work-order-editor__matrix-prompt span { font-size: var(--erp-font-size-caption); }
 .work-order-editor__discard-copy { margin: 0; color: var(--erp-text-muted); line-height: 1.5; }
 @media (max-width: 1180px) { .work-order-editor__fields, .work-order-editor__dimensions { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .work-order-editor__fields, .work-order-editor__dimensions { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 620px) { .work-order-editor { padding: 0 var(--erp-space-3) var(--erp-space-3); } .work-order-editor__header { align-items: stretch; flex-direction: column; margin: 0 calc(var(--erp-space-3) * -1); padding: 10px var(--erp-space-3); } .work-order-editor__section { padding: var(--erp-space-3); } .work-order-editor__section > header small { display: none; } .work-order-editor__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .work-order-editor__fields > :not(.work-order-editor__schedule-field) { grid-column: 1 / -1; } .work-order-editor__schedule-field :deep(.p-datepicker-input) { padding-inline: 8px; font-size: 13px; } .work-order-editor__schedule-field :deep(.p-datepicker-dropdown) { width: 32px; min-width: 32px; } .work-order-editor__dimensions, .work-order-editor__calculated { grid-template-columns: 1fr; } .work-order-editor__comments { grid-column: auto; } .work-order-editor__actions { width: 100%; } .work-order-editor__actions :deep(.p-button) { flex: 1; } }
+@media (max-width: 620px) { .work-order-editor { padding: 0 var(--erp-space-3) var(--erp-space-3); } .work-order-editor__header { min-height: 55px; align-items: center; flex-direction: row; gap: 8px; margin: 0 calc(var(--erp-space-3) * -1); padding: 4px var(--erp-space-3); } .work-order-editor__header > div:first-child { min-width: 0; flex: 1 1 auto; } .work-order-editor__header > div:first-child > span { display: none; } .work-order-editor__header h1 { overflow: hidden; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; } .work-order-editor__section { padding: var(--erp-space-3); } .work-order-editor__section > header small { display: none; } .work-order-editor__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .work-order-editor__fields > :not(.work-order-editor__schedule-field) { grid-column: 1 / -1; } .work-order-editor__schedule-field :deep(.p-datepicker-input) { padding-inline: 8px; font-size: 13px; } .work-order-editor__schedule-field :deep(.p-datepicker-dropdown) { width: 44px; min-width: 44px; } .work-order-editor__dimensions, .work-order-editor__calculated { grid-template-columns: 1fr; } .work-order-editor__comments { grid-column: auto; } .work-order-editor__actions { width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; } .work-order-editor__actions :deep(.p-button) { min-width: 0; min-height: 44px; flex: 0 1 auto; padding-inline: 8px; font-size: 12px; } }
 </style>

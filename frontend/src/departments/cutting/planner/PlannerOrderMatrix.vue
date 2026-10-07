@@ -51,4 +51,8 @@ function update(index, field, value) { const rows = cloneRows(); rows[index][fie
 	.planner-order-matrix th:nth-child(4) { width: 42px; }
 	.row-actions { width: 42px; }
 }
+@media (max-width: 1024px), (pointer: coarse) {
+	.planner-order-matrix > header :deep(.p-button), .row-actions :deep(.p-button) { min-width: 44px; min-height: 44px; }
+	.planner-order-matrix :deep(.p-inputtext), .planner-order-matrix :deep(.p-inputnumber-input) { height: 44px; min-height: 44px; }
+}
 </style>

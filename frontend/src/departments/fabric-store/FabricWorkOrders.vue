@@ -19,7 +19,7 @@
 				<Button v-if="capability.can_create" label="Create Work Order" icon="pi pi-plus" @click="createWorkOrder" />
 			</template>
 			<template #cell-status="{ value }">
-				<Tag :value="value || 'Draft'" :severity="statusSeverity(value)" rounded />
+				<DocumentStatusBadge :label="value || 'Draft'" />
 			</template>
 		</ListView>
 	</div>
@@ -27,10 +27,10 @@
 
 <script setup>
 import Button from "primevue/button"
-import Tag from "primevue/tag"
 import { useRouter } from "vue-router"
 
 import ListView from "../../components/common/ListView.vue"
+import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 
 const props = defineProps({
 	capability: { type: Object, required: true },
@@ -62,11 +62,4 @@ function openWorkOrder(row) {
 
 function createWorkOrder() { router.push({ name: props.newRouteName }) }
 
-function statusSeverity(status) {
-	if (["Fully Delivered", "Fully Received", "Fully Billed", "Closed"].includes(status)) return "success"
-	if (status === "Cancelled") return "danger"
-	if (["Partially Delivered", "Partially Received", "Partially Billed", "Close Request", "Draft"].includes(status)) return "warn"
-	if (status === "Submitted") return "info"
-	return "secondary"
-}
 </script>

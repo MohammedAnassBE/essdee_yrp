@@ -8,7 +8,7 @@
 				</div>
 				<span>{{ section.items.length }} {{ section.items.length === 1 ? "combination" : "combinations" }}</span>
 			</header>
-			<div class="erp-table-wrap work-order-item-matrix__scroll">
+			<div class="erp-table-wrap work-order-item-matrix__scroll" role="region" tabindex="0" :aria-label="`${section.name || 'Work Order item'} quantities`">
 				<table class="erp-data-table work-order-item-matrix__table">
 					<thead>
 						<tr v-if="mode === 'items' && !hasPrimaryBreakdown(section.group)">

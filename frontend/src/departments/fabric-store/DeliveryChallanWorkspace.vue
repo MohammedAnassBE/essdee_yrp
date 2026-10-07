@@ -18,7 +18,7 @@
 			<template #header="{ record }">
 				<div class="delivery-challan-header__identity" :class="{ 'delivery-challan-header__identity--embedded': presentation === 'embedded' }">
 					<div v-if="presentation !== 'embedded'" class="delivery-challan-header__title"><h1>Delivery Challan</h1><span>{{ record.name || duplicateLabel || (loading && name ? "Loading…" : error && name ? name : "New document") }}</span></div>
-					<Tag v-if="hasWorkspace && presentation !== 'embedded'" :value="record.status || statusLabel(record.docstatus)" :severity="statusSeverity" rounded />
+					<DocumentStatusBadge v-if="hasWorkspace && presentation !== 'embedded'" :docstatus="record.docstatus" :label="record.status || statusLabel(record.docstatus)" />
 					<div v-if="headerFacts.length" class="delivery-challan-header__facts" role="region" aria-label="Delivery Challan context" tabindex="0">
 						<div v-for="fact in headerFacts" :key="fact.label"><span>{{ fact.label }}</span><strong :title="String(fact.value)">{{ fact.value }}</strong></div>
 					</div>
@@ -136,6 +136,7 @@
 			</template>
 
 			<template #rail>
+				<div class="delivery-challan-totals fabric-document-workspace__metric-group">
 				<div
 					v-for="total in visibleTotals"
 					:key="total.fieldname"
@@ -143,6 +144,7 @@
 					:class="{ 'delivery-challan-total--primary': primaryTotals.has(total.fieldname) && totalIsPositive(total) }"
 				>
 					<span>{{ total.label }}</span><strong>{{ formatTotal(total) }}</strong>
+				</div>
 				</div>
 				<div v-if="workspace.record?.is_internal_unit" class="delivery-challan-transfer-progress">
 					<span>Internal transfer</span><strong>{{ transferPercent }}%</strong>
@@ -159,10 +161,10 @@
 			</template>
 		</FabricDocumentWorkspace>
 
-		<Dialog v-model:visible="returnOpen" modal header="Return Delivery Challan" class="fabric-action-dialog" :closable="!acting" :style="{ width: 'min(980px, calc(100vw - 24px))' }">
+		<Dialog v-model:visible="returnOpen" modal header="Return Delivery Challan" class="fabric-action-dialog erp-dialog--lg" :closable="!acting">
 			<DeliveryChallanReturnPanel :context="workspace.return_context || {}" :acting="acting" :error="returnError" @create="createReturn" @close="closeReturn" />
 		</Dialog>
-		<Dialog :visible="Boolean(notificationPreparation)" modal header="Send supplier notification" class="fabric-action-dialog" :closable="!acting" :style="{ width: 'min(760px, calc(100vw - 24px))' }" @update:visible="handleNotificationVisibility">
+		<Dialog :visible="Boolean(notificationPreparation)" modal header="Send supplier notification" class="fabric-action-dialog erp-dialog--md" :closable="!acting" @update:visible="handleNotificationVisibility">
 			<SupplierNotificationPanel v-if="notificationPreparation" :preparation="notificationPreparation" :document-values="notificationValues" :acting="acting" :error="notificationError" @send="sendNotification" @close="closeNotification" />
 		</Dialog>
 		<FabricStockOperationDialog v-model:visible="completionEntryOpen" operation="stock_entry" :name="completionEntryName" @changed="completionEntryChanged" />
@@ -176,7 +178,6 @@
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
-import Tag from "primevue/tag"
 import { useToast } from "primevue/usetoast"
 import { computed, onMounted, reactive, ref, watch } from "vue"
 import { useRouter } from "vue-router"
@@ -191,6 +192,7 @@ import { searchLinkedDocument } from "../../api/frappe.js"
 import FormField from "../../components/common/FormField.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
+import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { hasDocumentDisplayValue, plainTextFromHtml } from "../../utils/documentValues.js"
 import DeliveryChallanReturnPanel from "./DeliveryChallanReturnPanel.vue"
 import FabricDocumentWorkspace from "./FabricDocumentWorkspace.vue"
@@ -229,6 +231,8 @@ const pendingLifecycleCommand = ref("")
 const sourceConfirmVisible = ref(false)
 const pendingSourceWorkOrder = ref(null)
 const form = reactive({})
+let loadSequence = 0
+let actionSequence = 0
 const primaryTotals = new Set(["total_delivered_qty", "stock_value", "total_value"])
 const headerFieldnames = new Set(["process_name", "item", "lot", "supplier_name", "from_location_name"])
 const sourceOwnedFieldnames = new Set(["from_finishing", "cutting_bulk_lay_sheet", "cutting_bulk_lay_sheet_detail", "cut_panel_movement", "loose_piece_dc", "pack_piece_dc"])
@@ -320,30 +324,47 @@ const headerFacts = computed(() => [
 	["Item", workspace.value.record?.item || form.item],
 	["Lot", workspace.value.record?.lot || form.lot],
 ].filter(([, value]) => value).map(([label, value]) => ({ label, value })))
-const statusSeverity = computed(() => {
-	const record = workspace.value.record || {}
-	if (Number(record.docstatus) === 2 || record.status === "Cancelled") return "danger"
-	if (record.transfer_complete) return "success"
-	return Number(record.docstatus) === 1 ? "info" : "secondary"
-})
 const transferPercent = computed(() => Math.max(0, Math.min(100, Number(workspace.value.record?.ste_transferred_percent || (workspace.value.record?.transfer_complete ? 100 : 0)))))
 const notificationValues = computed(() => ({ ...(workspace.value.record || {}), ...form }))
 
 async function load(refresh = false) {
-	if (refresh) acting.value = "reload"
-	else loading.value = true
-	error.value = ""
+	const sequence = ++loadSequence
+	actionSequence += 1
 	const requestedName = props.name || currentName.value
+	const requestedRouteName = props.name
+	const requestedSource = JSON.stringify(props.sourceContext || {})
+	const requestedContext = clone(props.sourceContext || {})
+	if (refresh) acting.value = "reload"
+	else {
+		loading.value = true
+		clearWorkspaceState(requestedName)
+	}
+	error.value = ""
 	try {
-		currentName.value = requestedName
-		applyWorkspace(await getDeliveryChallanWorkspace(currentName.value, props.sourceContext) || {})
+		const nextWorkspace = await getDeliveryChallanWorkspace(requestedName, requestedContext) || {}
+		if (loadIsStale(sequence, requestedName, requestedRouteName, requestedSource)) return
+		applyWorkspace(nextWorkspace)
 	} catch (reason) {
+		if (loadIsStale(sequence, requestedName, requestedRouteName, requestedSource)) return
 		clearWorkspaceState(requestedName)
 		error.value = reason?.message || "Unable to load this Delivery Challan."
 	} finally {
-		loading.value = false
-		acting.value = ""
+		if (!loadIsStale(sequence, requestedName, requestedRouteName, requestedSource)) {
+			loading.value = false
+			acting.value = ""
+		}
 	}
+}
+
+function loadIsStale(sequence, requestedName, requestedRouteName, requestedSource) {
+	return sequence !== loadSequence
+		|| requestedRouteName !== props.name
+		|| (Boolean(requestedRouteName) && requestedName !== props.name)
+		|| requestedSource !== JSON.stringify(props.sourceContext || {})
+}
+
+function actionIsStale(sequence, requestedRouteName) {
+	return sequence !== actionSequence || requestedRouteName !== props.name
 }
 
 function clearWorkspaceState(name = "") {
@@ -369,6 +390,11 @@ function applyWorkspace(nextWorkspace) {
 	}
 	for (const dimension of workspace.value.dimensions || []) {
 		if (!(dimension.fieldname in form)) form[dimension.fieldname] = dimension.value
+	}
+	if (!workspace.value.record?.name) {
+		const defaults = currentPostingDefaults()
+		if (!form.posting_date) form.posting_date = defaults.date
+		if (!form.posting_time) form.posting_time = defaults.time
 	}
 	if (!form.from_location) {
 		form.from_warehouse = ""
@@ -432,16 +458,21 @@ async function applySourceChange(value) {
 	markDirty()
 }
 async function previewSource(value) {
+	const sequence = ++actionSequence
+	const requestedRouteName = props.name
+	const request = { ...form, work_order: value }
 	acting.value = "preview_source"
 	error.value = ""
 	try {
-		const preview = await previewDeliveryChallanSource(value, { ...form, work_order: value })
+		const preview = await previewDeliveryChallanSource(value, request)
+		if (actionIsStale(sequence, requestedRouteName)) return
 		applyWorkspace(preview || {})
 	} catch (reason) {
+		if (actionIsStale(sequence, requestedRouteName)) return
 		error.value = reason?.message || "Unable to refresh Delivery Challan defaults."
 		sourceFieldRevision.value += 1
 	} finally {
-		acting.value = ""
+		if (!actionIsStale(sequence, requestedRouteName)) acting.value = ""
 	}
 }
 async function confirmSourceChange() {
@@ -471,18 +502,27 @@ async function duplicateDeliveryChallan() {
 	}
 	acting.value = "duplicate"
 	error.value = ""
+	const sequence = ++actionSequence
+	const requestedRouteName = props.name
+	const duplicateFrom = currentName.value
 	try {
-		applyWorkspace(await getDeliveryChallanWorkspace("", { duplicate_from: currentName.value }) || {})
+		const nextWorkspace = await getDeliveryChallanWorkspace("", { duplicate_from: duplicateFrom }) || {}
+		if (actionIsStale(sequence, requestedRouteName)) return
+		applyWorkspace(nextWorkspace)
 		dirty.value = true
 		emit("changed", workspace.value)
 	} catch (reason) {
+		if (actionIsStale(sequence, requestedRouteName)) return
 		error.value = reason?.message || "Unable to duplicate this Delivery Challan."
 	} finally {
-		acting.value = ""
+		if (!actionIsStale(sequence, requestedRouteName)) acting.value = ""
 	}
 }
 
 async function save(submit) {
+	const sequence = ++actionSequence
+	const requestedRouteName = props.name
+	const requestedName = currentName.value
 	acting.value = submit ? "submit" : "save"
 	error.value = ""
 	try {
@@ -491,26 +531,32 @@ async function save(submit) {
 			item_details: clone(itemGroups.value),
 			correction_item_details: clone(correctionGroups.value),
 		}, {
-			name: currentName.value,
+			name: requestedName,
 			submit,
 			expectedModified: workspace.value.record?.modified,
 		})
+		if (actionIsStale(sequence, requestedRouteName)) return
 		applyWorkspace(saved || {})
 		toast.add({ severity: "success", summary: submit ? "Delivery Challan submitted" : "Delivery Challan saved", detail: workspace.value.record?.name || "Your changes are saved.", life: 3500 })
 		emit("changed", workspace.value)
 	} catch (reason) {
+		if (actionIsStale(sequence, requestedRouteName)) return
 		error.value = reason?.message || `Unable to ${submit ? "submit" : "save"} this Delivery Challan.`
 	} finally {
-		acting.value = ""
+		if (!actionIsStale(sequence, requestedRouteName)) acting.value = ""
 	}
 }
 
 async function runCommand(command, payload = {}, destructive = false) {
 	if (!currentName.value) return
+	const sequence = ++actionSequence
+	const requestedRouteName = props.name
+	const requestedName = currentName.value
 	acting.value = command
 	error.value = ""
 	try {
-		const result = await executeDeliveryChallanCommand(currentName.value, command, payload, workspace.value.record?.modified)
+		const result = await executeDeliveryChallanCommand(requestedName, command, payload, workspace.value.record?.modified)
+		if (actionIsStale(sequence, requestedRouteName)) return null
 		const updated = result?.workspace || result
 		if (updated?.record) {
 			applyWorkspace(updated)
@@ -518,10 +564,11 @@ async function runCommand(command, payload = {}, destructive = false) {
 		}
 		return result
 	} catch (reason) {
+		if (actionIsStale(sequence, requestedRouteName)) return null
 		error.value = reason?.message || `Unable to ${command.replaceAll("_", " ")} this Delivery Challan.`
 		return null
 	} finally {
-		acting.value = ""
+		if (!actionIsStale(sequence, requestedRouteName)) acting.value = ""
 	}
 }
 const lifecycleConfirmTitle = computed(() => pendingLifecycleCommand.value === "cancel" ? "Cancel Delivery Challan?" : "Amend Delivery Challan?")
@@ -540,7 +587,7 @@ async function createReturn(payload) {
 			createdReturnOpen.value = true
 		}
 	}
-	else returnError.value = error.value || "Unable to create the return Goods Received Note."
+	else if (error.value) returnError.value = error.value
 }
 function closeReturn() { returnOpen.value = false; returnError.value = "" }
 async function completeTransfer() {
@@ -682,11 +729,21 @@ function identityValue(row, column) {
 	const value = column.source === "dimensions" ? row.dimensions?.[column.key] : row.attributes?.[column.key]
 	return value === null || value === undefined || value === "" ? "—" : String(value)
 }
+function currentPostingDefaults() {
+	const now = new Date()
+	const pad = (value) => String(value).padStart(2, "0")
+	return {
+		date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+		time: `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`,
+	}
+}
 
 onMounted(() => load())
 watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, source], previous) => {
 	if (!previous || name === previous[0] && source === previous[1]) return
-	currentName.value = name || ""
+	loadSequence += 1
+	actionSequence += 1
+	clearWorkspaceState(name || "")
 	load()
 })
 </script>
@@ -748,6 +805,8 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 .delivery-challan-matrix__total { color: var(--erp-accent); font-weight: 800; }
 .delivery-challan-matrix__empty { display: grid; min-height: 140px; place-items: center; align-content: center; gap: 6px; color: var(--erp-text-muted); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); }
 .delivery-challan-total, .delivery-challan-transfer-progress { display: grid; min-height: 58px; align-content: center; gap: 2px; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--erp-border); border-radius: 0; background: var(--erp-surface); }
+.delivery-challan-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--erp-border); }
+.delivery-challan-totals .delivery-challan-total { min-height: 56px; border-bottom: 0; }
 .delivery-challan-total:last-child, .delivery-challan-transfer-progress:last-child { border-bottom: 0; }
 .delivery-challan-total strong, .delivery-challan-transfer-progress strong { color: var(--erp-text); font-size: 18px; font-weight: 780; font-variant-numeric: tabular-nums; }
 .delivery-challan-total--primary { background: color-mix(in srgb, var(--erp-accent-soft) 76%, white); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--erp-accent) 76%, white); }

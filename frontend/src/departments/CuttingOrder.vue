@@ -4,13 +4,16 @@
 		<div v-else-if="showDraftEditor" class="order-editor-route erp-workspace">
 			<CuttingOrderEditor :name="cuttingOrderId" :initial-payload="editorProbe" @saved="editorSaved" @cancel="router.push('/cutting/orders')" />
 		</div>
+		<div v-else-if="workspaceError && !workspaceReady" class="order-probe erp-workspace">
+			<WorkspaceLoadError title="Cutting Order unavailable" :message="workspaceError" @retry="initialise" />
+		</div>
 		<div v-else class="cutting-order-layout erp-workspace" :class="{ 'cutting-order-layout--without-sidebar': !showSidebar }">
-			<main class="cutting-order-main erp-card">
+			<section class="cutting-order-main erp-card" aria-label="Cutting Order details">
 				<header class="order-record-header">
 					<div class="order-record-identity">
 						<div class="order-record-title"><h1>Cutting Order</h1><span>{{ cuttingOrderId }}</span></div>
 						<div class="order-record-meta">
-							<Tag :value="record.status || 'Draft'" :severity="statusSeverity(record.status)" rounded />
+							<DocumentStatusBadge :docstatus="record.docstatus" :label="record.status || 'Draft'" />
 							<span class="order-header-fact order-header-fact--detail" :title="record.cutting_order_detail || 'No Cutting Order Detail'">
 								<small>Order Detail</small><strong>{{ record.cutting_order_detail || "—" }}</strong>
 							</span>
@@ -27,8 +30,8 @@
 					</div>
 				</header>
 				<Message v-if="workspaceError" severity="error" :closable="false">{{ workspaceError }}</Message>
-				<CuttingOrderTabs :data="workspace" :loading="workspaceLoading" :error="workspaceError" />
-			</main>
+				<CuttingOrderTabs :data="workspace" :loading="workspaceLoading" error="" />
+			</section>
 			<CuttingParentSidebar
 				v-if="showSidebar"
 				parent-doctype="SD YRP Cutting Order"
@@ -36,10 +39,11 @@
 				parent-field="cutting_order"
 				:data="workspace"
 				:loading="workspaceLoading"
-				:error="workspaceError"
+				error=""
 				@refresh="loadWorkspace"
 			/>
 		</div>
+		<DocumentErrorDialog :message="actionError" title="Cutting Order action failed" @dismiss="actionError = ''" />
 	</DepartmentPage>
 </template>
 
@@ -47,12 +51,14 @@
 import Button from "primevue/button"
 import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
-import Tag from "primevue/tag"
-import { computed, ref, watch } from "vue"
+import { computed, onBeforeUnmount, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import { changeCuttingOrderStatus, getCuttingOrderEditor, getCuttingOrderWorkspace } from "../api/cuttingOrder.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
+import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
+import DocumentErrorDialog from "../components/documents/DocumentErrorDialog.vue"
+import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
 import { useActionConfirmation } from "../utils/useActionConfirmation.js"
 import CuttingOrderActions from "./cutting/order/CuttingOrderActions.vue"
 import CuttingOrderEditor from "./cutting/order/CuttingOrderEditor.vue"
@@ -69,27 +75,55 @@ const editorProbe = ref(null)
 const workspace = ref({})
 const workspaceLoading = ref(true)
 const workspaceError = ref("")
+const actionError = ref("")
 const lifecycleBusy = ref("")
 let loadSequence = 0
+let initialiseSequence = 0
+let lifecycleSequence = 0
+let disposed = false
 const showDraftEditor = computed(() => Boolean(editorProbe.value?.record?.docstatus === 0 && editorProbe.value?.permissions?.can_write))
 const record = computed(() => workspace.value.record || editorProbe.value?.record || {})
+const workspaceReady = computed(() => Boolean(workspace.value.record?.name))
 const showSidebar = computed(() => Boolean(workspaceLoading.value || workspace.value.permissions?.can_read_marker || workspace.value.permissions?.can_read_laysheet))
 
 async function initialise() {
+	const sequence = ++initialiseSequence
+	const requestedId = cuttingOrderId.value
+	loadSequence += 1
+	lifecycleSequence += 1
 	checking.value = true
+	lifecycleBusy.value = ""
 	editorProbe.value = null
-	try { editorProbe.value = await getCuttingOrderEditor(cuttingOrderId.value) }
-	catch (reason) { workspaceError.value = reason?.message || "Unable to load the Cutting Order." }
-	finally { checking.value = false }
-	if (!showDraftEditor.value) await loadWorkspace()
+	workspace.value = {}
+	workspaceLoading.value = true
+	workspaceError.value = ""
+	actionError.value = ""
+	try {
+		const data = await getCuttingOrderEditor(requestedId)
+		if (sequence !== initialiseSequence || requestedId !== cuttingOrderId.value) return
+		editorProbe.value = data
+		checking.value = false
+		if (!(data?.record?.docstatus === 0 && data?.permissions?.can_write)) await loadWorkspace(requestedId)
+	} catch (reason) {
+		if (sequence !== initialiseSequence || requestedId !== cuttingOrderId.value) return
+		workspaceError.value = reason?.message || "Unable to load the Cutting Order."
+		workspaceLoading.value = false
+	} finally {
+		if (sequence === initialiseSequence && requestedId === cuttingOrderId.value) checking.value = false
+	}
 }
 
-async function loadWorkspace() {
+async function loadWorkspace(requestedId = cuttingOrderId.value) {
 	const sequence = ++loadSequence
 	workspaceLoading.value = true; workspaceError.value = ""
-	try { const data = await getCuttingOrderWorkspace(cuttingOrderId.value); if (sequence === loadSequence) workspace.value = data || {} }
-	catch (reason) { if (sequence === loadSequence) workspaceError.value = reason?.message || "Unable to load Cutting Order details." }
-	finally { if (sequence === loadSequence) workspaceLoading.value = false }
+	try {
+		const data = await getCuttingOrderWorkspace(requestedId)
+		if (sequence === loadSequence && requestedId === cuttingOrderId.value) workspace.value = data || {}
+	} catch (reason) {
+		if (sequence === loadSequence && requestedId === cuttingOrderId.value) workspaceError.value = reason?.message || "Unable to load Cutting Order details."
+	} finally {
+		if (sequence === loadSequence && requestedId === cuttingOrderId.value) workspaceLoading.value = false
+	}
 }
 
 async function editorSaved(saved) {
@@ -98,29 +132,41 @@ async function editorSaved(saved) {
 }
 
 async function changeStatus(action) {
+	const requestedId = cuttingOrderId.value
+	const expectedModified = record.value.modified
 	if (action === "cancel") return confirmAction({
 		header: "Cancel Cutting Order?",
-		message: `Cancel Cutting Order ${cuttingOrderId.value}? This changes the document status and cannot be undone here.`,
+		message: `Cancel Cutting Order ${requestedId}? This changes the document status and cannot be undone here.`,
 		acceptLabel: "Cancel Cutting Order",
-		accept: () => performStatusChange(action),
+		accept: () => performStatusChange(action, requestedId, expectedModified),
 	})
-	return performStatusChange(action)
+	return performStatusChange(action, requestedId, expectedModified)
 }
 
-async function performStatusChange(action) {
-	lifecycleBusy.value = action; workspaceError.value = ""
+async function performStatusChange(action, requestedId = cuttingOrderId.value, expectedModified = record.value.modified) {
+	if (disposed || requestedId !== cuttingOrderId.value) return
+	const sequence = ++lifecycleSequence
+	lifecycleBusy.value = action; actionError.value = ""
 	try {
-		const payload = await changeCuttingOrderStatus(cuttingOrderId.value, action, record.value.modified)
-		const name = payload?.record?.name || cuttingOrderId.value
-		if (name !== cuttingOrderId.value) return router.replace({ name: "cutting-order", params: { cuttingOrderId: name } })
+		const payload = await changeCuttingOrderStatus(requestedId, action, expectedModified)
+		if (lifecycleActionIsStale(sequence, requestedId)) return
+		const name = payload?.record?.name || requestedId
+		if (name !== requestedId) return router.replace({ name: "cutting-order", params: { cuttingOrderId: name } })
 		editorProbe.value = payload
-		await loadWorkspace()
-	} catch (reason) { workspaceError.value = reason?.message || `Unable to ${action} the Cutting Order.` }
-	finally { lifecycleBusy.value = "" }
+		await loadWorkspace(requestedId)
+	} catch (reason) {
+		if (!lifecycleActionIsStale(sequence, requestedId)) actionError.value = reason?.message || `Unable to ${action} the Cutting Order.`
+	} finally {
+		if (!lifecycleActionIsStale(sequence, requestedId)) lifecycleBusy.value = ""
+	}
 }
 
-function statusSeverity(status) { if (status === "Completed") return "success"; if (status === "Partially Completed") return "warn"; if (status === "Cutting In Progress") return "info"; if (status === "Cancelled") return "danger"; return "secondary" }
+function lifecycleActionIsStale(sequence, requestedId) {
+	return disposed || sequence !== lifecycleSequence || requestedId !== cuttingOrderId.value
+}
+
 watch(cuttingOrderId, initialise, { immediate: true })
+onBeforeUnmount(() => { disposed = true; lifecycleSequence += 1; loadSequence += 1; initialiseSequence += 1 })
 </script>
 
 <style scoped>
@@ -140,7 +186,7 @@ watch(cuttingOrderId, initialise, { immediate: true })
 .order-header-fact strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 730; text-overflow: ellipsis; white-space: nowrap; }
 .order-header-fact--item { max-width: 280px; }
 .order-record-actions { display: flex; align-items: center; gap: 7px; }
-@media (max-width: 1050px) { .cutting-order-layout { grid-template-columns: 1fr; height: auto; overflow: visible; } .cutting-order-main { min-height: 760px; overflow: visible; } }
-@media (max-width: 850px) { .order-record-header { align-items: stretch; flex-direction: column; } .order-record-actions { flex-wrap: wrap; } }
+@media (max-width: 1050px) { .cutting-order-layout { grid-template-columns: 1fr; height: auto; overflow: visible; } .cutting-order-main { min-height: 0; overflow: visible; } .order-record-header { align-items: stretch; flex-direction: column; } }
+@media (max-width: 850px) { .order-record-actions { flex-wrap: wrap; } }
 @media (max-width: 650px) { .order-record-identity { align-items: flex-start; flex-direction: column; } .order-record-meta { flex-wrap: wrap; } .order-header-fact:first-of-type { padding-left: 0; border-left: 0; } }
 </style>

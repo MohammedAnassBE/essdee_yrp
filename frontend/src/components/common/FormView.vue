@@ -41,7 +41,10 @@
 			</div>
 		</header>
 
-		<DocumentErrorDialog :message="error" :title="`${heading} could not be ${loadFailed ? 'loaded' : 'saved'}`" />
+		<DocumentErrorDialog
+			:message="loadFailed ? '' : error"
+			:title="`${heading} could not be saved`"
+		/>
 		<Message v-if="success" severity="success" :closable="false">{{ success }}</Message>
 
 		<div v-if="loading" class="form-loading" role="status" aria-live="polite" aria-label="Loading form">
@@ -49,7 +52,7 @@
 		</div>
 		<section v-else-if="loadFailed" class="form-load-error" role="alert">
 			<i class="pi pi-cloud-times" aria-hidden="true" />
-				<div><strong>{{ heading }} could not be loaded</strong><span>Close the error message, then try loading the document again.</span></div>
+			<div><strong>{{ heading }} could not be loaded</strong><span>{{ error || "Try loading the document again." }}</span></div>
 			<Button label="Retry" icon="pi pi-refresh" severity="secondary" outlined @click="load" />
 		</section>
 
@@ -150,7 +153,9 @@
 							v-for="field in sectionFields(section)"
 							:key="field.fieldname"
 							class="view-field"
+							:class="{ 'view-field--wide': isWideReadField(field) }"
 						>
+							<span class="view-field__label">{{ field.label || field.fieldname }}</span>
 							<a
 								v-if="field.fieldtype === 'Link' && hasValue(form[field.fieldname])"
 								class="view-field__value view-field__link"
@@ -163,7 +168,6 @@
 							<span v-else class="view-field__value">
 								{{ displayValue(form[field.fieldname], field) }}
 							</span>
-							<span class="view-field__label">{{ field.label || field.fieldname }}</span>
 						</div>
 					</div>
 
@@ -174,10 +178,9 @@
 						</header>
 						<DataTable
 							:value="form[table.fieldname] || []"
-							show-gridlines
-							striped-rows
 							scrollable
 							size="small"
+							:pt="{ tableContainer: { tabindex: 0, role: 'region', 'aria-label': `${table.label || table.fieldname} rows` } }"
 						>
 							<Column
 								v-for="column in childViewColumns(table)"
@@ -498,6 +501,11 @@ function sectionFields(section) {
 	return section.columns.flat()
 }
 
+function isWideReadField(field) {
+	if (["Text", "Small Text", "Long Text", "Text Editor", "Code", "Markdown"].includes(field.fieldtype)) return true
+	return /(?:address details|comments?|description|terms?(?: and)? conditions?)/i.test(`${field.label || ""} ${field.fieldname || ""}`)
+}
+
 function childViewColumns(table) {
 	const fields = (metaByName.value[table.options]?.fields || []).filter(
 		(field) => field.fieldname && !field.hidden && !noValueFieldtypes.has(field.fieldtype),
@@ -706,7 +714,7 @@ defineExpose({ save, reload: load, doc: form, mode })
 	background: var(--erp-surface);
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-panel-radius);
-	box-shadow: var(--erp-shadow-xs);
+	box-shadow: none;
 }
 
 .form-section__header h3 {
@@ -761,7 +769,8 @@ defineExpose({ save, reload: load, doc: form, mode })
 
 .view-field-grid {
 	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	grid-auto-flow: dense;
 	gap: 1px;
 	overflow: hidden;
 	background: var(--erp-border);
@@ -771,16 +780,20 @@ defineExpose({ save, reload: load, doc: form, mode })
 
 .view-field {
 	display: flex;
-	min-height: 68px;
-	padding: 11px 14px;
+	min-height: 54px;
+	padding: 9px 12px;
 	background: var(--erp-surface);
 	flex-direction: column;
 	justify-content: center;
 }
 
+.view-field--wide {
+	grid-column: span 2;
+}
+
 .view-field__value {
 	color: var(--erp-text);
-	font-size: 0.94rem;
+	font-size: var(--erp-font-size-table);
 	font-weight: 650;
 	overflow-wrap: anywhere;
 	white-space: pre-line;
@@ -803,12 +816,11 @@ defineExpose({ save, reload: load, doc: form, mode })
 }
 
 .view-field__label {
-	margin-top: 5px;
+	margin-bottom: 3px;
 	color: var(--erp-text-muted);
-	font-size: 0.7rem;
+	font-size: var(--erp-font-size-min);
 	font-weight: 650;
-	letter-spacing: 0.035em;
-	text-transform: uppercase;
+	letter-spacing: 0.015em;
 }
 
 .view-table {
@@ -838,6 +850,12 @@ defineExpose({ save, reload: load, doc: form, mode })
 	text-align: center;
 }
 
+@media (max-width: 1100px) {
+	.view-field-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
 @media (max-width: 700px) {
 	.form-toolbar {
 		align-items: flex-start;
@@ -858,6 +876,10 @@ defineExpose({ save, reload: load, doc: form, mode })
 	.form-section__columns,
 	.view-field-grid {
 		grid-template-columns: 1fr;
+	}
+
+	.view-field--wide {
+		grid-column: span 1;
 	}
 
 	.common-form-view--compact .form-section__columns {

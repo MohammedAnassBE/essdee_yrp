@@ -60,7 +60,7 @@
 				<div class="table-scroll" role="region" tabindex="0" :aria-label="`Completed cut quantity group ${groupIndex + 1}`">
 					<table class="action-table">
 						<thead><tr><th>S.No.</th><th v-for="attribute in group.attributes || []" :key="attribute">{{ attribute }}</th><th v-for="size in group.primary_attribute_values || []" :key="size">{{ size }}</th><th>Completed</th></tr></thead>
-						<tbody><tr v-for="(row, rowIndex) in group.items || []" :key="rowIndex"><td>{{ rowIndex + 1 }}</td><td v-for="attribute in group.attributes || []" :key="attribute">{{ row.attributes?.[attribute] || '—' }}</td><td v-for="size in group.primary_attribute_values || []" :key="size">{{ quantity(row.values?.[size]) }}</td><td><Checkbox v-model="row.completed" binary /></td></tr></tbody>
+						<tbody><tr v-for="(row, rowIndex) in group.items || []" :key="rowIndex"><td>{{ rowIndex + 1 }}</td><td v-for="attribute in group.attributes || []" :key="attribute">{{ row.attributes?.[attribute] || '—' }}</td><td v-for="size in group.primary_attribute_values || []" :key="size">{{ quantity(row.values?.[size]) }}</td><td><Checkbox v-model="row.completed" binary :aria-label="`Mark completed cut quantity row ${rowIndex + 1} in group ${groupIndex + 1}`" /></td></tr></tbody>
 					</table>
 				</div>
 			</div>
@@ -73,7 +73,6 @@
 
 	<Dialog v-model:visible="recutOpen" modal dismissable-mask :header="recutType === 'Print Panel' ? 'Add Print Panel Details' : 'Add Recut Fabric Details'" class="action-dialog action-dialog--wide">
 		<div class="dialog-stack">
-			<Message v-if="dialogError" severity="error" :closable="false">{{ dialogError }}</Message>
 			<div class="recut-form">
 				<label><span>Cloth Type</span><Select v-model="recutForm.cloth_type" :options="recutOptions.cloth_type" fluid /></label>
 				<label><span>Colour</span><Select v-model="recutForm.colour" :options="recutOptions.colour" filter fluid /></label>
@@ -96,7 +95,6 @@
 
 	<Dialog v-model:visible="lotTransferOpen" modal dismissable-mask header="Create Lot Transfer" class="action-dialog action-dialog--small">
 		<div class="dialog-stack">
-			<Message v-if="dialogError" severity="error" :closable="false">{{ dialogError }}</Message>
 			<label class="dialog-field"><span>Target Lot</span><LinkField v-model="targetLot" doctype="SD YRP Lot" :filters="{ name: ['!=', doc.lot] }" /></label>
 		</div>
 		<template #footer>
@@ -107,7 +105,6 @@
 
 	<Dialog v-model:visible="approvalOpen" modal dismissable-mask header="Change Approval Grammage" class="action-dialog action-dialog--small">
 		<div class="dialog-stack">
-			<Message v-if="dialogError" severity="error" :closable="false">{{ dialogError }}</Message>
 			<label class="dialog-field"><span>Grammage Allowance (kg)</span><InputNumber v-model="approvalTolerance" :min="0.0001" :min-fraction-digits="4" :max-fraction-digits="4" fluid /></label>
 		</div>
 		<template #footer>
@@ -115,6 +112,7 @@
 			<Button label="Update" icon="pi pi-check" :disabled="!approvalTolerance" :loading="busy === 'approval'" @click="saveApproval" />
 		</template>
 	</Dialog>
+	<DocumentErrorDialog :message="dialogError" title="Cutting Plan action failed" @dismiss="dialogError = ''" />
 </template>
 
 <script setup>
@@ -130,6 +128,7 @@ import { computed, reactive, ref } from "vue"
 
 import { callMethod } from "../../api/frappe.js"
 import LinkField from "../../components/common/LinkField.vue"
+import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import CuttingCompletedReport from "./CuttingCompletedReport.vue"
 import { copyElementAsImage } from "../../components/reports/copyElementAsImage.js"
 
@@ -212,7 +211,7 @@ async function runPlanAction(action) {
 		showFeedback(success)
 		emit("refresh")
 	} catch (reason) {
-		showFeedback(reason.message || "Unable to complete the action.", "error")
+		dialogError.value = reason.message || "Unable to complete the action."
 	} finally {
 		busy.value = ""
 	}
@@ -237,8 +236,7 @@ async function copyCompletedReport() {
 		await copyElementAsImage(exportCapture.element)
 		completedCopyFeedback.value = "Completed quantities copied to clipboard."
 	} catch (reason) {
-		completedCopyFeedback.value = reason?.message || "Unable to copy the completed quantities."
-		completedCopyError.value = true
+		dialogError.value = reason?.message || "Unable to copy the completed quantities."
 	} finally {
 		exportCapture?.host.remove()
 		copyingCompleted.value = false
@@ -296,7 +294,7 @@ async function saveCompleted() {
 		showFeedback("Completed quantities updated.")
 		emit("refresh")
 	} catch (reason) {
-		showFeedback(reason.message || "Unable to update completed quantities.", "error")
+		dialogError.value = reason.message || "Unable to update completed quantities."
 	} finally {
 		busy.value = ""
 	}

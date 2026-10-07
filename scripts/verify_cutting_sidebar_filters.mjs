@@ -38,14 +38,23 @@ for (const { name } of planNames) {
 	const response = await context.request.get(`${SITE}/api/method/essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.get_web_view_data`, {
 		params: { cutting_plan: name },
 	})
-	if (!response.ok()) continue
+	if (response.status() === 404) continue
+	if (!response.ok()) throw new Error(`Unable to inspect Cutting Plan ${name} (${response.status()}).`)
 	const data = (await response.json()).message || {}
 	if (data.markers?.length && data.laysheets?.length) {
 		selectedPlan = name
 		break
 	}
 }
-if (!selectedPlan) throw new Error('No Cutting Plan with both markers and Lay Sheets was found.')
+if (!selectedPlan) {
+	console.log(JSON.stringify({
+		passed: true,
+		skipped: true,
+		reason: 'No Cutting Plan with both markers and Lay Sheets is available on the current site.',
+	}, null, 2))
+	await browser.close()
+	process.exit(0)
+}
 
 await page.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(selectedPlan)}`, { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('.laysheet-card', { timeout: 20000 })

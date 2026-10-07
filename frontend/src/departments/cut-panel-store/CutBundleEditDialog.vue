@@ -6,15 +6,14 @@
 		:dismissable-mask="false"
 		:closable="!busy"
 		:close-on-escape="!busy"
-		:style="{ width: 'min(96vw, 1540px)' }"
 		:header="record?.name ? `Cut Bundle Edit · ${record.name}` : 'New Cut Bundle Edit'"
-		class="cut-bundle-edit-dialog erp-entity-dialog"
+		class="cut-bundle-edit-dialog erp-entity-dialog erp-dialog--xl"
 		@update:visible="visibilityChanged"
 	>
 		<div v-if="loading" class="cut-bundle-dialog__loading"><Skeleton v-for="index in 7" :key="index" height="3rem" /></div>
 		<div v-else class="cut-bundle-dialog__body">
 			<section class="cut-bundle-document-card">
-				<header><span>DOCUMENT</span><h3>Bundle transformation</h3><em>{{ record?.status || "Draft" }}</em></header>
+				<header><span>DOCUMENT</span><h3>Bundle transformation</h3><DocumentStatusBadge :docstatus="record?.docstatus" :label="record?.status || 'Draft'" /></header>
 				<div class="cut-bundle-document-grid">
 					<LinkField v-model="form.lot" label="Lot" doctype="SD YRP Lot" required :disabled="Boolean(record) || busy" @update:model-value="sourceChanged" />
 					<LinkField v-model="form.warehouse" label="Warehouse" doctype="Supplier" required :disabled="Boolean(record) || busy" @update:model-value="sourceChanged" />
@@ -29,9 +28,9 @@
 
 			<section v-if="canEdit && availableRows.length" class="cut-bundle-source-card" aria-label="Available bundles">
 				<header><div><span>SOURCE STOCK</span><h3>Select input bundles</h3></div><strong>{{ selectedKeys.size }} selected</strong></header>
-				<div class="cut-bundle-table-scroll">
+				<div class="cut-bundle-table-scroll" tabindex="0" role="region" aria-label="Available input bundles">
 					<table><thead><tr><th>Select</th><th>Lay / Bundle</th><th>Colour</th><th>Size</th><th>Panel</th><th>Shade</th><th>Qty</th></tr></thead>
-					<tbody><tr v-for="row in availableRows" :key="row.key"><td><input type="checkbox" :checked="selectedKeys.has(row.key)" @change="toggleInput(row)" /></td><td>{{ row.lay_no }} / {{ row.bundle_no }}</td><td>{{ row.colour }}</td><td>{{ row.size }}</td><td>{{ row.panel }}</td><td>{{ row.shade || '—' }}</td><td>{{ formatNumber(row.qty) }}</td></tr></tbody></table>
+					<tbody><tr v-for="row in availableRows" :key="row.key"><td><label class="cut-bundle-check"><input type="checkbox" :checked="selectedKeys.has(row.key)" :aria-label="`Select bundle ${row.bundle_no}, panel ${row.panel}`" @change="toggleInput(row)" /></label></td><td>{{ row.lay_no }} / {{ row.bundle_no }}</td><td>{{ row.colour }}</td><td>{{ row.size }}</td><td>{{ row.panel }}</td><td>{{ row.shade || '—' }}</td><td>{{ formatNumber(row.qty) }}</td></tr></tbody></table>
 				</div>
 				<footer><Button label="Use Selected Bundles" icon="pi pi-arrow-down" severity="secondary" :disabled="!selectedKeys.size" @click="useSelectedBundles" /></footer>
 			</section>
@@ -84,6 +83,7 @@ import LinkField from "../../components/common/LinkField.vue"
 import TimeField from "../../components/common/TimeField.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import PrinterDialog from "./PrinterDialog.vue"
 
 const BundleTable = defineComponent({
@@ -92,17 +92,18 @@ const BundleTable = defineComponent({
 	setup(props, { emit }) {
 		const cell = (row, field, index, type = "text") => {
 			if (!props.editable) return String(row[field] ?? "—")
-			if (["colour", "size", "panel"].includes(field)) return h(Select, { modelValue: row[field], options: props.choices?.[`${field}s`] || [], fluid: true, "onUpdate:modelValue": (value) => emit("update", { index, field, value }) })
-			return h("input", { type, value: row[field], min: type === "number" ? 1 : undefined, required: field === "shade", onInput: (event) => emit("update", { index, field, value: type === "number" ? Number(event.target.value) : event.target.value }) })
+			const fieldLabel = `${field.replaceAll("_", " ")} for output bundle ${index + 1}`
+			if (["colour", "size", "panel"].includes(field)) return h(Select, { modelValue: row[field], options: props.choices?.[`${field}s`] || [], fluid: true, "aria-label": fieldLabel, "onUpdate:modelValue": (value) => emit("update", { index, field, value }) })
+			return h("input", { type, value: row[field], min: type === "number" ? 1 : undefined, required: field === "shade", "aria-label": fieldLabel, onInput: (event) => emit("update", { index, field, value: type === "number" ? Number(event.target.value) : event.target.value }) })
 		}
 		return () => h("section", { class: "cut-bundle-table-card", role: "region", "aria-label": props.title }, [
 			h("header", [h("div", [h("span", props.eyebrow), h("h3", props.title)]), h("div", { class: "cut-bundle-table-actions" }, [h("strong", `${props.rows?.length || 0} bundles`), ...(props.editable ? [h("button", { type: "button", onClick: () => emit("split") }, [h("i", { class: "pi pi-arrows-h" }), " Split panels"]), h("button", { type: "button", onClick: () => emit("add") }, [h("i", { class: "pi pi-plus" }), " Add output"])] : [])])]),
-			h("div", { class: "cut-bundle-table-scroll" }, [h("table", [
+			h("div", { class: "cut-bundle-table-scroll", tabindex: 0, role: "region", "aria-label": `${props.title} table` }, [h("table", [
 				h("thead", [h("tr", ["Lay", "Bundle", "Colour", "Size", "Panel", "Shade", "Qty", ...(props.editable ? [""] : [])].map((label) => h("th", label)))]),
 				h("tbody", (props.rows || []).map((row, index) => h("tr", { key: `${row.lay_no}-${row.bundle_no}-${row.panel}-${index}` }, [
 					h("td", [cell(row, "lay_no", index, "number")]), h("td", [cell(row, "bundle_no", index, "number")]), h("td", [cell(row, "colour", index)]),
 					h("td", [cell(row, "size", index)]), h("td", [cell(row, "panel", index)]), h("td", [cell(row, "shade", index)]), h("td", [cell(row, "qty", index, "number")]),
-					...(props.editable ? [h("td", [h("button", { type: "button", class: "cut-bundle-remove", title: "Remove output bundle", onClick: () => emit("remove", index) }, [h("i", { class: "pi pi-trash" })])])] : []),
+					...(props.editable ? [h("td", [h("button", { type: "button", class: "cut-bundle-remove", title: `Remove output bundle ${index + 1}`, "aria-label": `Remove output bundle ${index + 1}`, onClick: () => emit("remove", index) }, [h("i", { class: "pi pi-trash", "aria-hidden": "true" })])])] : []),
 				]))),
 			])]),
 		])
@@ -126,6 +127,9 @@ const inputs = ref([])
 const outputs = ref([])
 const selectedKeys = ref(new Set())
 const dirty = ref(false)
+let loadSequence = 0
+let previewSequence = 0
+let actionSequence = 0
 const record = computed(() => editor.record)
 const busy = computed(() => Boolean(acting.value))
 const canEdit = computed(() => record.value ? Boolean(record.value.permissions?.can_write) : Boolean(editor.permissions?.can_create))
@@ -136,36 +140,81 @@ const quantitySummary = computed(() => `Input ${formatNumber(totalQty(inputs.val
 const confirmationTitle = computed(() => pendingCommand.value === "close" ? "Discard unsaved changes?" : pendingCommand.value === "cancel" ? "Cancel Cut Bundle Edit?" : "Submit Cut Bundle Edit?")
 const confirmationMessage = computed(() => pendingCommand.value === "close" ? "Your unsaved bundle changes will be lost." : pendingCommand.value === "cancel" ? `Cancel ${record.value?.name}?` : `Submit ${record.value?.name}? Bundle stock will be checked again.`)
 
-watch(() => [props.visible, props.documentName], ([visible]) => { if (visible) load() })
+watch(() => [props.visible, props.documentName], ([visible]) => {
+	if (visible) load()
+	else {
+		loadSequence += 1
+		previewSequence += 1
+		actionSequence += 1
+		loading.value = false
+		acting.value = ""
+	}
+})
 
 async function load() {
+	const sequence = ++loadSequence
+	const requestedDocumentName = props.documentName
+	previewSequence += 1
+	actionSequence += 1
 	loading.value = true; error.value = ""; previewed.value = false; selectedKeys.value = new Set()
+	resetLoadedState()
 	try {
-		const payload = await getCutBundleEditor(props.documentName)
+		const payload = await getCutBundleEditor(requestedDocumentName)
+		if (loadIsStale(sequence, requestedDocumentName)) return
 		Object.assign(editor, payload || {})
 		Object.assign(form, payload?.defaults || {}, payload?.record || {})
 		form.selected_colour = payload?.record?.colour || payload?.defaults?.selected_colour || ""
 		inputs.value = clone(payload?.record?.inputs || [])
 		outputs.value = clone(payload?.record?.outputs || [])
-		if (payload?.record?.docstatus === 0) await preview()
-		dirty.value = false
-	} catch (reason) { error.value = reason.message || "Unable to load the Cut Bundle Edit." }
-	finally { loading.value = false }
+		if (payload?.record?.docstatus === 0) await preview(sequence, requestedDocumentName)
+		if (!loadIsStale(sequence, requestedDocumentName)) dirty.value = false
+	} catch (reason) {
+		if (!loadIsStale(sequence, requestedDocumentName)) error.value = reason.message || "Unable to load the Cut Bundle Edit."
+	} finally {
+		if (!loadIsStale(sequence, requestedDocumentName)) loading.value = false
+	}
+}
+
+function loadIsStale(sequence, requestedDocumentName) {
+	return sequence !== loadSequence || !props.visible || requestedDocumentName !== props.documentName
+}
+
+function actionIsStale(sequence, requestedDocumentName, requestedLoadSequence) {
+	return sequence !== actionSequence || requestedLoadSequence !== loadSequence || !props.visible || requestedDocumentName !== props.documentName
+}
+
+function resetLoadedState() {
+	for (const key of Object.keys(editor)) delete editor[key]
+	Object.assign(editor, { context: {}, permissions: {}, record: null })
+	Object.assign(form, { lot: "", warehouse: "", item: "", posting_date: "", posting_time: "", selected_colour: "" })
+	Object.assign(choices, { colours: [], sizes: [], panels: [] })
+	available.value = {}
+	inputs.value = []
+	outputs.value = []
+	selectedKeys.value = new Set()
+	dirty.value = false
+	acting.value = ""
 }
 
 function sourceChanged() { dirty.value = true; form.selected_colour = ""; Object.assign(choices, { colours: [], sizes: [], panels: [] }); available.value = {}; inputs.value = []; outputs.value = []; selectedKeys.value = new Set(); previewed.value = false }
 function colourChanged() { dirty.value = true; available.value = {}; selectedKeys.value = new Set(); inputs.value = []; outputs.value = []; if (form.selected_colour) preview() }
 
-async function preview() {
+async function preview(parentLoadSequence = loadSequence, requestedDocumentName = props.documentName) {
+	const sequence = ++previewSequence
+	const request = { lot: form.lot, warehouse: form.warehouse, posting_date: form.posting_date, posting_time: form.posting_time, selected_colour: form.selected_colour, record: record.value?.name }
 	acting.value = "preview"; error.value = ""
 	try {
-		const payload = await previewCutBundleSource(form.lot, form.warehouse, { posting_date: form.posting_date, posting_time: form.posting_time, selected_colour: form.selected_colour }, record.value?.name)
+		const payload = await previewCutBundleSource(request.lot, request.warehouse, { posting_date: request.posting_date, posting_time: request.posting_time, selected_colour: request.selected_colour }, request.record)
+		if (sequence !== previewSequence || loadIsStale(parentLoadSequence, requestedDocumentName)) return
 		Object.assign(editor.context, payload?.context || {})
 		Object.assign(choices, payload?.choices || {})
 		available.value = payload?.available || {}
 		previewed.value = true
-	} catch (reason) { error.value = reason.message || "Unable to fetch available bundles." }
-	finally { acting.value = "" }
+	} catch (reason) {
+		if (sequence === previewSequence && !loadIsStale(parentLoadSequence, requestedDocumentName)) error.value = reason.message || "Unable to fetch available bundles."
+	} finally {
+		if (sequence === previewSequence && !loadIsStale(parentLoadSequence, requestedDocumentName)) acting.value = ""
+	}
 }
 
 function toggleInput(row) {
@@ -185,12 +234,22 @@ function updateOutput({ index, field, value }) { outputs.value[index] = { ...out
 function removeOutput(index) { outputs.value.splice(index, 1); dirty.value = true }
 
 async function save() {
+	const sequence = ++actionSequence
+	const requestedDocumentName = props.documentName
+	const requestedLoadSequence = loadSequence
+	const requestedRecord = record.value?.name
+	const expectedModified = record.value?.modified
+	const request = { ...form, inputs: clone(inputs.value), outputs: clone(outputs.value) }
 	acting.value = "save"; error.value = ""
 	try {
-		const saved = await saveCutBundle({ ...form, inputs: clone(inputs.value), outputs: clone(outputs.value) }, { name: record.value?.name, expectedModified: record.value?.modified })
+		const saved = await saveCutBundle(request, { name: requestedRecord, expectedModified })
+		if (actionIsStale(sequence, requestedDocumentName, requestedLoadSequence)) return
 		applyRecord(saved); emit("changed", saved)
-	} catch (reason) { error.value = reason.message || "Unable to save the Cut Bundle Edit." }
-	finally { acting.value = "" }
+	} catch (reason) {
+		if (!actionIsStale(sequence, requestedDocumentName, requestedLoadSequence)) error.value = reason.message || "Unable to save the Cut Bundle Edit."
+	} finally {
+		if (!actionIsStale(sequence, requestedDocumentName, requestedLoadSequence)) acting.value = ""
+	}
 }
 
 function requestCommand(command) { pendingCommand.value = command; confirmationVisible.value = true }
@@ -199,24 +258,42 @@ function visibilityChanged(value) { if (value) emit("update:visible", true); els
 async function confirmCommand() {
 	const command = pendingCommand.value
 	if (command === "close") { dirty.value = false; confirmationVisible.value = false; pendingCommand.value = ""; emit("update:visible", false); return }
+	const sequence = ++actionSequence
+	const requestedDocumentName = props.documentName
+	const requestedLoadSequence = loadSequence
+	const requestedRecord = record.value?.name
+	const expectedModified = record.value?.modified
 	acting.value = command; error.value = ""; confirmationVisible.value = false
 	try {
-		const changed = await executeCutBundleCommand(record.value.name, command, record.value.modified)
+		const changed = await executeCutBundleCommand(requestedRecord, command, expectedModified)
+		if (actionIsStale(sequence, requestedDocumentName, requestedLoadSequence)) return
 		applyRecord(changed); emit("changed", changed)
-	} catch (reason) { error.value = reason.message || `Unable to ${command} the Cut Bundle Edit.` }
-	finally { acting.value = ""; pendingCommand.value = "" }
+	} catch (reason) {
+		if (!actionIsStale(sequence, requestedDocumentName, requestedLoadSequence)) error.value = reason.message || `Unable to ${command} the Cut Bundle Edit.`
+	} finally {
+		if (!actionIsStale(sequence, requestedDocumentName, requestedLoadSequence)) { acting.value = ""; pendingCommand.value = "" }
+	}
 }
 
 async function printLabels(printer) {
+	const sequence = ++actionSequence
+	const requestedDocumentName = props.documentName
+	const requestedLoadSequence = loadSequence
+	const requestedRecord = record.value?.name
 	acting.value = "print"; error.value = ""; let labelsSent = false
 	try {
-		const printData = await getCutBundlePrintData(record.value.name, printer)
+		const printData = await getCutBundlePrintData(requestedRecord, printer)
+		if (actionIsStale(sequence, requestedDocumentName, requestedLoadSequence)) return
 		await printQzRaw(printer, printData.zpl)
 		labelsSent = true
-		const changed = await confirmCutBundlePrint(record.value.name, printData.expected_modified, printData.confirmation_token)
+		const changed = await confirmCutBundlePrint(requestedRecord, printData.expected_modified, printData.confirmation_token)
+		if (actionIsStale(sequence, requestedDocumentName, requestedLoadSequence)) return
 		applyRecord(changed); printerVisible.value = false; emit("changed", changed)
-	} catch (reason) { printerVisible.value = false; error.value = labelsSent ? "Labels were sent to the printer, but the document status could not be updated. Do not print again; reopen this document and verify Printed Time." : reason.message || "Labels were not printed." }
-	finally { acting.value = "" }
+	} catch (reason) {
+		if (!actionIsStale(sequence, requestedDocumentName, requestedLoadSequence)) { printerVisible.value = false; error.value = labelsSent ? "Labels were sent to the printer, but the document status could not be updated. Do not print again; reopen this document and verify Printed Time." : reason.message || "Labels were not printed." }
+	} finally {
+		if (!actionIsStale(sequence, requestedDocumentName, requestedLoadSequence)) acting.value = ""
+	}
 }
 
 function applyRecord(value) { editor.record = value; inputs.value = clone(value?.inputs || inputs.value); outputs.value = clone(value?.outputs || outputs.value); Object.assign(form, value || {}); form.selected_colour = value?.colour || form.selected_colour; dirty.value = false }
@@ -247,8 +324,8 @@ function formatDateTime(value) { if (!value) return ""; const [date, time = ""] 
 </script>
 
 <style scoped>
-.cut-bundle-dialog__loading,.cut-bundle-dialog__body{display:grid;gap:12px}.cut-bundle-document-card,.cut-bundle-source-card,.cut-bundle-table-card{overflow:hidden;border:1px solid var(--erp-border);border-radius:var(--erp-panel-radius);background:var(--erp-surface)}.cut-bundle-document-card>header,.cut-bundle-source-card>header,.cut-bundle-table-card>header{display:flex;align-items:center;gap:9px;padding:10px 12px;border-bottom:1px solid var(--erp-border);background:var(--erp-surface-soft)}.cut-bundle-document-card>header span,.cut-bundle-source-card>header span,.cut-bundle-table-card>header span{color:var(--erp-accent-hover);font-size:var(--erp-font-size-min);font-weight:800;letter-spacing:.08em}.cut-bundle-document-card h3,.cut-bundle-source-card h3,.cut-bundle-table-card h3{margin:0;color:var(--erp-text);font-size:.95rem}.cut-bundle-document-card>header em,.cut-bundle-source-card>header>strong,.cut-bundle-table-card>header>strong{margin-left:auto;color:var(--erp-text-muted);font-size:var(--erp-font-size-caption);font-style:normal}.cut-bundle-source-card>header>div,.cut-bundle-table-card>header>div{display:flex;align-items:center;gap:9px}.cut-bundle-document-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end;gap:12px;padding:12px}.cut-bundle-context,.cut-bundle-select{display:grid;gap:7px}.cut-bundle-context span,.cut-bundle-select>span{color:var(--erp-text);font-size:var(--erp-font-size-caption);font-weight:700}.cut-bundle-context strong{display:flex;align-items:center;min-height:40px;padding:0 11px;border:1px solid var(--erp-border);border-radius:var(--erp-control-radius);background:var(--erp-surface-muted);color:var(--erp-text-secondary);font-size:13px}.cut-bundle-source-card footer{display:flex;justify-content:flex-end;padding:9px 12px;border-top:1px solid var(--erp-border)}.cut-bundle-comparison{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.cut-bundle-table-scroll{max-width:100%;overflow:auto}.cut-bundle-table-scroll table{width:100%;min-width:720px;border-collapse:collapse}.cut-bundle-table-scroll th{padding:8px 10px;border-bottom:1px solid var(--erp-border);background:var(--erp-surface-muted);color:var(--erp-text-muted);font-size:10px;text-align:left;text-transform:uppercase}.cut-bundle-table-scroll td{padding:8px 10px;border-bottom:1px solid var(--erp-border-subtle);color:var(--erp-text-secondary);font-size:12px}.cut-bundle-table-scroll tbody tr:last-child td{border-bottom:0}.cut-bundle-table-scroll input[type='text'],.cut-bundle-table-scroll input[type='number']{width:100%;min-width:72px;padding:6px 7px;border:1px solid var(--erp-border);border-radius:6px;color:var(--erp-text);background:var(--erp-surface)}.cut-bundle-remove{border:0;background:transparent;color:var(--p-red-500);cursor:pointer}.cut-bundle-empty{padding:38px;border:1px dashed var(--erp-border-strong);border-radius:var(--erp-panel-radius);color:var(--erp-text-muted);text-align:center}.cut-bundle-dialog__footer{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%}.cut-bundle-dialog__footer>span{color:var(--erp-text-muted);font-size:var(--erp-font-size-caption)}.cut-bundle-dialog__footer>div{display:flex;gap:8px}
-.cut-bundle-table-actions{display:flex;align-items:center;gap:7px;margin-left:auto}.cut-bundle-table-actions strong{color:var(--erp-text-muted);font-size:var(--erp-font-size-caption);font-weight:700}.cut-bundle-table-actions button{display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border:1px solid var(--erp-border);border-radius:6px;background:var(--erp-surface);color:var(--erp-accent-hover);font-size:var(--erp-font-size-min);font-weight:750;cursor:pointer}.cut-bundle-table-actions button:hover{border-color:var(--erp-accent);background:var(--erp-accent-soft)}
-@media(max-width:1050px){.cut-bundle-document-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cut-bundle-comparison{grid-template-columns:1fr}}
+.cut-bundle-dialog__loading,.cut-bundle-dialog__body{display:grid;gap:12px}.cut-bundle-document-card,.cut-bundle-source-card,.cut-bundle-table-card{overflow:hidden;border:1px solid var(--erp-border);border-radius:var(--erp-panel-radius);background:var(--erp-surface)}.cut-bundle-document-card>header,.cut-bundle-source-card>header,.cut-bundle-table-card>header{display:flex;align-items:center;gap:9px;padding:10px 12px;border-bottom:1px solid var(--erp-border);background:var(--erp-surface-soft)}.cut-bundle-document-card>header span,.cut-bundle-source-card>header span,.cut-bundle-table-card>header span{color:var(--erp-accent-hover);font-size:var(--erp-font-size-min);font-weight:800;letter-spacing:.08em}.cut-bundle-document-card h3,.cut-bundle-source-card h3,.cut-bundle-table-card h3{margin:0;color:var(--erp-text);font-size:.95rem}.cut-bundle-document-card>header em,.cut-bundle-source-card>header>strong,.cut-bundle-table-card>header>strong{margin-left:auto;color:var(--erp-text-muted);font-size:var(--erp-font-size-caption);font-style:normal}.cut-bundle-source-card>header>div,.cut-bundle-table-card>header>div{display:flex;align-items:center;gap:9px}.cut-bundle-document-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end;gap:12px;padding:12px}.cut-bundle-context,.cut-bundle-select{display:grid;gap:7px}.cut-bundle-context span,.cut-bundle-select>span{color:var(--erp-text);font-size:var(--erp-font-size-caption);font-weight:700}.cut-bundle-context strong{display:block;min-height:auto;padding:2px 0 7px;border:0;border-bottom:1px solid var(--erp-border);border-radius:0;background:transparent;color:var(--erp-text);font-size:13px;font-weight:750}.cut-bundle-source-card footer{display:flex;justify-content:flex-end;padding:9px 12px;border-top:1px solid var(--erp-border)}.cut-bundle-comparison{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.cut-bundle-table-scroll{max-width:100%;overflow:auto}.cut-bundle-table-scroll table{width:100%;min-width:720px;border-collapse:collapse}.cut-bundle-table-scroll th{padding:var(--erp-table-cell-pad-y) var(--erp-table-cell-pad-x);border-bottom:1px solid var(--erp-border);background:var(--erp-surface-muted);color:var(--erp-text-muted);font-size:var(--erp-font-size-min);text-align:left;text-transform:uppercase}.cut-bundle-table-scroll td{padding:var(--erp-table-cell-pad-y) var(--erp-table-cell-pad-x);border-bottom:1px solid var(--erp-border-subtle);color:var(--erp-text-secondary);font-size:var(--erp-font-size-table)}.cut-bundle-table-scroll tbody tr:last-child td{border-bottom:0}.cut-bundle-table-scroll input[type='text'],.cut-bundle-table-scroll input[type='number']{width:100%;min-width:72px;padding:6px 7px;border:1px solid var(--erp-border);border-radius:6px;color:var(--erp-text);background:var(--erp-surface)}.cut-bundle-remove{border:0;background:transparent;color:var(--p-red-500);cursor:pointer}.cut-bundle-empty{padding:38px;border:1px dashed var(--erp-border-strong);border-radius:var(--erp-panel-radius);color:var(--erp-text-muted);text-align:center}.cut-bundle-dialog__footer{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%}.cut-bundle-dialog__footer>span{color:var(--erp-text-muted);font-size:var(--erp-font-size-caption)}.cut-bundle-dialog__footer>div{display:flex;gap:8px}
+.cut-bundle-check{display:grid;min-width:44px;height:44px;place-items:center}.cut-bundle-check input{width:18px;height:18px;margin:0;accent-color:var(--erp-accent)}.cut-bundle-remove{display:grid;min-width:44px;height:44px;padding:0;place-items:center}.cut-bundle-table-actions{display:flex;align-items:center;gap:7px;margin-left:auto}.cut-bundle-table-actions strong{color:var(--erp-text-muted);font-size:var(--erp-font-size-caption);font-weight:700}.cut-bundle-table-actions button{display:inline-flex;align-items:center;min-height:36px;gap:5px;padding:5px 8px;border:1px solid var(--erp-border);border-radius:6px;background:var(--erp-surface);color:var(--erp-accent-hover);font-size:var(--erp-font-size-min);font-weight:750;cursor:pointer}.cut-bundle-table-actions button:hover{border-color:var(--erp-accent);background:var(--erp-accent-soft)}
+@media(max-width:1050px),(pointer:coarse){.cut-bundle-document-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cut-bundle-comparison{grid-template-columns:1fr}.cut-bundle-table-actions button,.cut-bundle-document-grid>:deep(.p-button),.cut-bundle-source-card footer :deep(.p-button){min-height:44px}}
 @media(max-width:600px){.cut-bundle-document-grid{grid-template-columns:1fr}.cut-bundle-dialog__footer{align-items:stretch;flex-direction:column}.cut-bundle-dialog__footer>div{justify-content:flex-end;flex-wrap:wrap}}
 </style>

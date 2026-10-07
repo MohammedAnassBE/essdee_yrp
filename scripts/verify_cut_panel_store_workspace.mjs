@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs"
 
 const require = createRequire("/home/anas/.claude/playwright/package.json")
 const { chromium } = require("playwright")
-const SITE = "http://erp-migration-test.site:8001"
+const SITE = process.env.ESSDEE_TEST_SITE || "http://erp-migration-test.site:8001"
 const CREDENTIALS = "/home/anas/.frappe-debug-creds-mrp3"
 const suite = process.argv[2] || "all"
 
@@ -104,8 +104,12 @@ async function launcherSuite(page) {
 	state.error = "Capability service unavailable"
 	await page.goto(`${SITE}/web/cut-panel-store/box-sticker-prints`, { waitUntil: "domcontentloaded" })
 	await page.getByText("Capability service unavailable", { exact: true }).waitFor({ timeout: 20_000 })
+	const retry = page.getByRole("button", { name: "Retry", exact: true })
+	assert(await retry.count() === 1, "Capability failure has no retry action")
 
 	state.error = ""
+	await retry.click()
+	await page.locator(".box-sticker-prints .common-list-view").waitFor({ timeout: 20_000 })
 	for (const width of [1600, 1280, 900, 390]) {
 		await page.setViewportSize({ width, height: width === 390 ? 844 : 900 })
 		await page.goto(`${SITE}/web/cut-panel-store`, { waitUntil: "domcontentloaded" })
@@ -195,6 +199,7 @@ async function movementSuite(page) {
 	const list = page.locator(".cut-panel-movements .common-list-view")
 	await list.waitFor({ timeout: 20_000 })
 	assert(await page.getByRole("button", { name: "Create Movement", exact: true }).count() === 1, "Create Movement is missing")
+	await list.getByRole("columnheader", { name: "Lot", exact: true }).waitFor({ timeout: 20_000 })
 	for (const label of ["Lot", "Item", "From Warehouse", "Against", "Against ID", "Movement Date"]) {
 		assert(await list.getByRole("columnheader", { name: label, exact: true }).count() === 1, `Movement list omits ${label}`)
 	}
@@ -252,7 +257,12 @@ async function movementTransactionSuite(page) {
 	}
 	await mockMovementWorkspace(page, { editor: submittedMovementFixture(), linked })
 	await page.goto(`${SITE}/web/cut-panel-store/movements`, { waitUntil: "domcontentloaded" })
-	await page.getByText("CPM-1", { exact: true }).click()
+	const movementList = page.locator(".cut-panel-movements .common-list-view")
+	await movementList.waitFor({ timeout: 20_000 })
+	assert(await movementList.locator(".list-load-error").count() === 0, `Movement list failed to load: ${await movementList.textContent()}`)
+	const movementRow = movementList.locator(".premium-list-table").getByText("CPM-1", { exact: true })
+	assert(await movementRow.count() === 1, `Submitted movement row is missing: ${await movementList.textContent()}`)
+	await movementRow.click()
 	const dialog = page.locator(".erp-cut-panel-movement-dialog:visible")
 	await dialog.waitFor({ timeout: 20_000 })
 	const layout = dialog.locator(".cut-panel-movement-layout")
@@ -276,6 +286,7 @@ async function movementTransactionSuite(page) {
 	await rail.getByRole("button", { name: "Create Delivery Challan", exact: true }).click()
 	const chooser = page.locator(".cut-panel-transaction-create-dialog:visible")
 	await chooser.waitFor()
+	await chooser.getByText("WO-CP-1", { exact: true }).waitFor({ timeout: 20_000 })
 	assert(await chooser.getByText("WO-CP-1", { exact: true }).count() === 1, "DC creation does not offer same-Lot Work Orders")
 
 	await page.setViewportSize({ width: 760, height: 900 })
@@ -337,7 +348,7 @@ async function workOrdersSuite(page) {
 	const list = page.locator(".cut-panel-store-section .fabric-work-orders .common-list-view")
 	await list.waitFor({ timeout: 20_000 })
 	assert(await page.getByRole("button", { name: "Create Work Order", exact: true }).count() === 1, "Cut Panel Work Orders omit the permission-aware create action")
-	await list.getByText("WO-CP-ROUTE-1", { exact: true }).click()
+	await list.locator(".premium-list-table").getByText("WO-CP-ROUTE-1", { exact: true }).click()
 	await page.waitForURL("**/web/cut-panel-store/work-orders/WO-CP-ROUTE-1")
 	await page.locator(".fabric-work-order-frame").waitFor({ timeout: 20_000 })
 	assert(page.url().endsWith("/web/cut-panel-store/work-orders/WO-CP-ROUTE-1"), "Cut Panel Work Order escaped to the Fabric Store route")
@@ -424,15 +435,16 @@ async function cutBundleEditSuite(page) {
 	}
 	assert(await page.getByRole("button", { name: "Create Cut Bundle Edit", exact: true }).count() === 1, "Cut Bundle Edit create action is missing")
 	assert(await list.locator(".p-selection-column").count() === 0, "Cut Bundle Edit exposes unsafe generic bulk actions")
-	await list.getByText("CBE-CP-1", { exact: true }).click()
+	await list.locator(".premium-list-table").getByText("CBE-CP-1", { exact: true }).click()
 	const dialog = page.locator(".cut-bundle-edit-dialog:visible")
 	await dialog.waitFor({ timeout: 20_000 })
 	assert(await dialog.locator(".p-dialog-maximize-button").count() === 1, "Cut Bundle Edit popup is not maximizable")
 	for (const label of ["Lot", "Warehouse", "Item", "Posting Date", "Posting Time", "Colour"]) {
 		assert(await dialog.getByText(label, { exact: true }).count() >= 1, `Cut Bundle Edit omits ${label}`)
 	}
-	assert(await dialog.getByRole("region", { name: "Input bundles" }).count() === 1, "Cut Bundle Edit input table is missing")
-	assert(await dialog.getByRole("region", { name: "Output bundles" }).count() === 1, "Cut Bundle Edit output table is missing")
+	await dialog.getByRole("region", { name: "Input bundles", exact: true }).waitFor({ timeout: 20_000 })
+	assert(await dialog.getByRole("region", { name: "Input bundles", exact: true }).count() === 1, "Cut Bundle Edit input table is missing")
+	assert(await dialog.getByRole("region", { name: "Output bundles", exact: true }).count() === 1, "Cut Bundle Edit output table is missing")
 	assert(await dialog.getByRole("button", { name: "Cancel Document", exact: true }).count() === 1, "Cut Bundle Edit cancel action is missing")
 	await dialog.getByRole("button", { name: "Print Labels", exact: true }).click()
 	const printer = page.locator(".cut-panel-printer-dialog:visible")
@@ -629,7 +641,14 @@ async function boxStickerSuite(page) {
 	const headers = (await list.getByRole("columnheader").allTextContents()).map((label) => label.trim())
 	for (const label of ["Lot", "Item", "Print Format", "Status"]) assert(headers.includes(label), `Box Sticker list omits ${label}; headers=${JSON.stringify(headers)}`)
 	assert(await page.getByRole("button", { name: "Create Box Sticker Print", exact: true }).count() === 1, "Box Sticker create action is missing")
-	await list.getByText("BSP-CP-1", { exact: true }).click()
+	await page.setViewportSize({ width: 390, height: 844 })
+	const mobileRecord = list.locator(".mobile-list-record").filter({ hasText: "BSP-CP-1" })
+	await mobileRecord.waitFor()
+	assert(await mobileRecord.getByText("Submitted", { exact: true }).count() === 1, "Mobile Box Sticker card bypassed the document-status renderer")
+	const mobileOpen = mobileRecord.getByRole("button", { name: "Open BSP-CP-1", exact: true })
+	assert(await mobileOpen.count() === 1, "Mobile Box Sticker card has no accessible open action")
+	await mobileOpen.click()
+	await page.setViewportSize({ width: 1440, height: 900 })
 	const dialog = page.locator(".box-sticker-print-dialog:visible")
 	await dialog.waitFor({ timeout: 20_000 })
 	assert(await dialog.locator(".p-dialog-maximize-button").count() === 1, "Box Sticker popup is not maximizable")
@@ -781,7 +800,7 @@ async function boxStickerSuite(page) {
 			printer: "Zebra ZD220", printerType: "300dpi", expectedModified: "2026-10-07 14:00:00",
 		}))
 	})
-	await list.getByText("BSP-CP-1", { exact: true }).click()
+	await list.locator(".premium-list-table").getByText("BSP-CP-1", { exact: true }).click()
 	await dialog.waitFor({ timeout: 20_000 })
 	await dialog.getByRole("button", { name: "Confirm Printed", exact: true }).click()
 	confirmation = page.locator(".document-confirmation-shell:visible")
@@ -937,7 +956,7 @@ async function excelStickerSuite(page) {
 	for (const label of ["Excel File", "Print Format", "Status", "Modified"]) assert(headers.includes(label), `Excel Sticker list omits ${label}; headers=${JSON.stringify(headers)}`)
 	assert(await page.getByRole("button", { name: "Create Excel Sticker Print", exact: true }).count() === 1, "Excel Sticker create action is missing")
 
-	await list.getByText("ESP-CP-1", { exact: true }).click()
+	await list.locator(".premium-list-table").getByText("ESP-CP-1", { exact: true }).click()
 	const dialog = page.locator(".excel-sticker-print-dialog:visible")
 	await dialog.waitFor({ timeout: 20_000 })
 	assert(await dialog.locator(".p-dialog-maximize-button").count() === 1, "Excel Sticker popup is not maximizable")
@@ -1127,7 +1146,10 @@ page.on("pageerror", (error) => browserErrors.push(error.message))
 try {
 	await login(page)
 	if (suite === "all") {
-		for (const run of Object.values(suites)) await run(page)
+		for (const run of Object.values(suites)) {
+			await page.unrouteAll({ behavior: "wait" })
+			await run(page)
+		}
 	} else {
 		assert(suites[suite], `Unknown Cut Panel Store verification suite: ${suite}`)
 		await suites[suite](page)

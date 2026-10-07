@@ -1,7 +1,7 @@
 <template>
 	<section ref="root" class="erp-transfer-workspace">
 		<div v-if="loading && !loaded" class="erp-workspace-loading"><Skeleton v-for="index in 5" :key="index" height="4.6rem" /></div>
-		<Message v-else-if="error && !loaded" severity="error" :closable="false">{{ error }}</Message>
+		<WorkspaceLoadError v-else-if="error && !loaded" title="Stock Transfers unavailable" :message="error" :loading="loading" @retry="load(true)" />
 		<template v-else-if="loaded">
 			<header class="erp-workspace-header">
 				<h2>Stock Transfers</h2>
@@ -27,7 +27,7 @@
 
 				<div v-if="activeTransactions.length" class="erp-transaction-list">
 					<button v-for="record in activeTransactions" :key="record.name" type="button" class="erp-transaction-card" @click="openTransaction(record)">
-						<i :class="activeItem.icon"></i><span><strong>{{ record.name }}</strong><small>{{ record.purpose || record.update_type || activeItem.label }} · {{ formatDate(record.modified, true) }}</small></span><em class="erp-status" :class="statusClass(record.status)">{{ record.status }}</em><i class="pi pi-chevron-right"></i>
+						<i :class="activeItem.icon"></i><span><strong>{{ record.name }}</strong><small>{{ record.purpose || record.update_type || activeItem.label }} · {{ formatDate(record.modified, true) }}</small></span><DocumentStatusBadge :docstatus="record.docstatus" :label="record.status" /><i class="pi pi-chevron-right"></i>
 					</button>
 				</div>
 				<div v-else class="erp-empty-state"><i :class="activeItem.icon"></i><strong>No {{ activeItem.label.toLowerCase() }} records</strong><span>{{ activeItem.emptyText }}</span></div>
@@ -48,9 +48,11 @@ import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 
+import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import CpmMovementTransactionDialog from "./CpmMovementTransactionDialog.vue"
 import CpmStockOperationDialog from "./CpmStockOperationDialog.vue"
 import CpmTransactionDialog from "./CpmTransactionDialog.vue"
+import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import WorkOrderDeliveryDialog from "./WorkOrderDeliveryDialog.vue"
 import { getCpmWorkspace } from "./cpmApi.js"
 
@@ -125,7 +127,6 @@ function openStockOperation(operation) { selectedOperation.value = operation; st
 function openMovementTransaction(movement, operation) { movementTransactionSource.value = movement; movementTransactionOperation.value = operation; movementTransactionOpen.value = true }
 function openTransaction(record) { selectedTransaction.value = record; transactionOpen.value = true }
 async function changed(value) { await load(true); emit("changed", value) }
-function statusClass(status) { return `erp-status--${String(status || "").toLowerCase()}` }
 function formatDate(value, includeTime = false) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/); if (!match) return value || "—"; const date = `${match[3]}-${match[2]}-${match[1]}`; return includeTime && match[4] ? `${date} ${match[4]}:${match[5]}` : date }
 
 defineExpose({ load, activate: () => load(true) })
@@ -188,7 +189,7 @@ defineExpose({ load, activate: () => load(true) })
 
 .erp-activity-card:hover,
 .erp-activity-card--active {
-	border-color: #8fcbb0;
+	border-color: var(--erp-accent-border);
 	background: var(--erp-mint);
 }
 
@@ -248,7 +249,7 @@ defineExpose({ load, activate: () => load(true) })
 }
 
 .erp-transaction-card:hover {
-	border-color: #9bcdb4;
+	border-color: var(--erp-accent-border);
 	background: var(--erp-surface-soft);
 }
 
@@ -275,7 +276,7 @@ defineExpose({ load, activate: () => load(true) })
 }
 
 .erp-transaction-card > i:last-child {
-	color: #91a098;
+	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-caption);
 }
 
@@ -287,7 +288,7 @@ defineExpose({ load, activate: () => load(true) })
 	padding: 2px var(--erp-space-2);
 	border-radius: var(--erp-pill-radius);
 	background: var(--erp-surface-muted);
-	color: #56635c;
+	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
 	font-style: normal;
 	font-weight: 800;
@@ -295,13 +296,13 @@ defineExpose({ load, activate: () => load(true) })
 }
 
 .erp-status--submitted {
-	background: #ddf6e9;
-	color: #087848;
+	background: var(--erp-success-soft);
+	color: var(--erp-success);
 }
 
 .erp-status--cancelled {
-	background: #fde8e8;
-	color: #b42318;
+	background: var(--erp-danger-soft);
+	color: var(--erp-danger);
 }
 
 .erp-empty-state {

@@ -33,7 +33,7 @@
 					</div>
 				</header>
 
-				<div class="completed-report__table-wrap">
+				<div class="completed-report__table-wrap" role="region" tabindex="0" :aria-labelledby="`completed-report-section-${sectionIndex}`">
 					<table class="completed-report__table" :aria-labelledby="`completed-report-section-${sectionIndex}`">
 						<thead>
 							<tr>

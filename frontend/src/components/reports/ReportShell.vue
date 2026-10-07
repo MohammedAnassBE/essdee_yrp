@@ -2,7 +2,7 @@
 	<section ref="reportRoot" class="report-shell erp-card" :aria-label="title">
 		<form class="report-shell__filters" @submit.prevent="$emit('generate')">
 			<div class="report-filter-grid"><slot name="filters" /></div>
-			<div class="report-shell__commands erp-command-bar">
+			<div class="report-shell__commands erp-command-bar" :class="{ 'report-shell__commands--with-copy': copyable }">
 				<Button
 					type="submit"
 					label="Generate"
@@ -281,6 +281,10 @@ onBeforeUnmount(() => window.clearTimeout(noticeTimer))
 		flex-direction: column;
 	}
 
+	.report-filter-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
 	.report-shell__commands {
 		width: 100%;
 	}
@@ -288,5 +292,37 @@ onBeforeUnmount(() => window.clearTimeout(noticeTimer))
 	.report-shell__commands :deep(.p-button) {
 		flex: 1;
 	}
+}
+
+@media (max-width: 360px) {
+	.report-filter-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.report-shell__commands {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.report-shell__commands :deep(.p-button) {
+		width: 100%;
+		min-width: 0;
+		min-height: 44px;
+	}
+
+	.report-shell__commands--with-copy :deep(.p-button:first-child) {
+		grid-column: 1 / -1;
+	}
+
+	.report-shell__copy-button {
+		min-width: 0;
+	}
+}
+
+@media (min-width: 361px) and (max-width: 430px) {
+	.report-shell__commands { gap: 6px; }
+	.report-shell__commands :deep(.p-button) { padding-inline: 8px; font-size: 12px; }
+	.report-shell__commands :deep(.p-button-label) { white-space: nowrap; }
+	.report-shell__copy-button { min-width: 0; }
 }
 </style>

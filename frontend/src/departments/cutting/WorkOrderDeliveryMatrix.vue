@@ -127,8 +127,7 @@ function attributeText(row, group) {
 }
 
 .wo-delivery-matrix__scroll {
-	max-height: 320px;
-	overflow: auto;
+	overflow-x: auto;
 }
 
 .wo-delivery-matrix__scroll:focus-visible {

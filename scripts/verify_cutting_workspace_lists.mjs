@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs"
 const require = createRequire("/home/anas/.claude/playwright/package.json")
 const { chromium } = require("playwright")
 
-const SITE = "http://erp-migration-test.site:8001"
+const SITE = process.env.ESSDEE_TEST_SITE || "http://erp-migration-test.site:8001"
 const CREDENTIALS = "/home/anas/.frappe-debug-creds-mrp3"
 
 function assert(condition, message) {
@@ -58,6 +58,7 @@ let capabilities = Object.fromEntries([
 	"lay-sheet-planner",
 	"reports",
 ].map((key) => [key, { can_read: true, can_create: key !== "reports" }]))
+let capabilityFailure = ""
 
 const browser = await chromium.launch({ headless: true })
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
@@ -66,10 +67,16 @@ const errors = []
 const listRequests = []
 page.on("pageerror", (error) => errors.push(`page: ${error.message}`))
 page.on("console", (message) => { if (message.type() === "error") errors.push(`console: ${message.text()}`) })
+page.on("response", (response) => { if (response.status() >= 500) errors.push(`http ${response.status()}: ${response.url()}`) })
 
 await login(page)
+errors.length = 0
 
-await page.route("**/api/method/essdee_yrp.cutting.web_capabilities.get_capabilities*", (route) => route.fulfill({
+await page.route("**/api/method/essdee_yrp.cutting.web_capabilities.get_capabilities*", (route) => route.fulfill(capabilityFailure ? {
+	status: 503,
+	contentType: "application/json",
+	body: JSON.stringify({ message: capabilityFailure }),
+} : {
 	status: 200,
 	contentType: "application/json",
 	body: JSON.stringify({ message: capabilities }),
@@ -129,6 +136,17 @@ await page.locator(".workspace-launcher__grid").waitFor()
 assert(await page.getByText("Cutting Orders", { exact: true }).count() === 0, "Unreadable Cutting Orders destination is still visible")
 capabilities = { ...capabilities, "cutting-orders": { can_read: true, can_create: true } }
 
+const capabilityFailureErrorStart = errors.length
+capabilityFailure = "Cutting workspace temporarily unavailable"
+await page.reload({ waitUntil: "domcontentloaded" })
+await page.getByText("Cutting workspace temporarily unavailable", { exact: true }).waitFor({ timeout: 20_000 })
+const retry = page.getByRole("button", { name: "Retry", exact: true })
+assert(await retry.count() === 1, "Cutting capability failure has no retry action")
+capabilityFailure = ""
+await retry.click()
+await page.locator(".workspace-launcher__card").first().waitFor({ timeout: 20_000 })
+errors.splice(capabilityFailureErrorStart)
+
 const lists = [
 	{ path: "plans", title: "Cutting Plans", doctype: "SD YRP Cutting Plan", row: "CP-WEB-001", create: "Create Cutting Plan" },
 	{ path: "orders", title: "Cutting Orders", doctype: "SD YRP Cutting Order", row: "CO-WEB-001", create: "Create Cutting Order" },
@@ -149,7 +167,8 @@ for (const list of lists) {
 		assert(createStyle.backgroundColor !== "rgb(255, 255, 255)", `Create Cutting Plan still looks secondary: ${JSON.stringify(createStyle)}`)
 		assert(createStyle.color === "rgb(255, 255, 255)", `Create Cutting Plan does not have primary-action contrast: ${JSON.stringify(createStyle)}`)
 	}
-	assert(await page.getByText(list.row, { exact: true }).count() === 1, `${list.title} row did not render`)
+	assert(await page.locator(".premium-list-table").getByText(list.row, { exact: true }).count() === 1, `${list.title} desktop row did not render`)
+	assert(await page.locator(".mobile-list-records").getByText(list.row, { exact: true }).count() === 1, `${list.title} mobile record did not render`)
 	assert(await page.locator(".list-row-chevron").count() === 1, `${list.title} rows are not clickable`)
 	const request = listRequests.find((entry) => entry.doctype === list.doctype)
 	assert(request?.orderBy === "modified desc", `${list.title} is not newest-first: ${JSON.stringify(request)}`)
@@ -157,16 +176,34 @@ for (const list of lists) {
 }
 
 await page.goto(`${SITE}/web/cutting/plans`, { waitUntil: "domcontentloaded" })
-await page.getByText("CP-WEB-001", { exact: true }).click()
+await page.locator(".premium-list-table").getByText("CP-WEB-001", { exact: true }).click()
 await page.waitForURL("**/web/cutting/plans/CP-WEB-001")
 assert(!page.url().includes("/app/"), "Cutting Plan row redirected to Desk")
 
 await page.goto(`${SITE}/web/cutting/orders`, { waitUntil: "domcontentloaded" })
+await page.locator(".common-list-view").waitFor({ state: "visible", timeout: 20_000 })
 await page.setViewportSize({ width: 1280, height: 800 })
 await assertContained(page, "Cutting Order list at 1280px")
+await page.setViewportSize({ width: 900, height: 760 })
+await assertContained(page, "Cutting Order list at 900px")
+const tabletSurface = await page.evaluate(() => ({
+	desktopTable: document.querySelector(".premium-list-table") ? getComputedStyle(document.querySelector(".premium-list-table")).display : "absent",
+	mobileRecords: document.querySelector(".mobile-list-records") ? getComputedStyle(document.querySelector(".mobile-list-records")).display : "absent",
+}))
+assert(tabletSurface.desktopTable === "none" && tabletSurface.mobileRecords !== "none" && tabletSurface.mobileRecords !== "absent", `Tablet list does not switch to readable record cards: ${JSON.stringify(tabletSurface)}`)
 await page.setViewportSize({ width: 390, height: 844 })
 await assertContained(page, "Cutting Order list at 390px")
+const mobileSurface = await page.evaluate(() => ({
+	desktopTable: document.querySelector(".premium-list-table") ? getComputedStyle(document.querySelector(".premium-list-table")).display : "absent",
+	mobileRecords: document.querySelector(".mobile-list-records") ? getComputedStyle(document.querySelector(".mobile-list-records")).display : "absent",
+	statusTabs: document.querySelector(".list-status-tabs") ? getComputedStyle(document.querySelector(".list-status-tabs")).display : "absent",
+	statusSelect: document.querySelector(".list-status-select") ? getComputedStyle(document.querySelector(".list-status-select")).display : "absent",
+	searchHeight: document.querySelector(".list-search input")?.getBoundingClientRect().height || 0,
+}))
+assert(mobileSurface.desktopTable === "none", `Desktop table remains visible or is missing on mobile: ${JSON.stringify(mobileSurface)}`)
+assert(mobileSurface.mobileRecords !== "none" && mobileSurface.mobileRecords !== "absent", `Mobile records are hidden or missing: ${JSON.stringify(mobileSurface)}`)
+assert(mobileSurface.searchHeight >= 44, `Mobile search control misses the 44px touch target: ${JSON.stringify(mobileSurface)}`)
 
 assert(errors.length === 0, `Browser errors: ${JSON.stringify(errors)}`)
-console.log(JSON.stringify({ passed: true, cardLabels, lists: lists.map((list) => list.title), listRequests }, null, 2))
+console.log(JSON.stringify({ passed: true, cardLabels, lists: lists.map((list) => list.title), listRequests, tabletSurface, mobileSurface }, null, 2))
 await browser.close()

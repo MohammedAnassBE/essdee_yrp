@@ -4,8 +4,7 @@
 		modal
 		dismissable-mask
 		header="Filters"
-		class="list-filter-dialog"
-		:style="{ width: '64rem', maxWidth: 'calc(100vw - 24px)' }"
+		class="list-filter-dialog erp-dialog--lg"
 		@update:visible="$emit('update:visible', $event)"
 	>
 		<div class="filter-column-headings" aria-hidden="true">
@@ -20,14 +19,15 @@
 				<label class="filter-control">
 					<span class="filter-control__mobile-label">Field</span>
 					<Select
-						v-model="row.fieldKey"
+						:model-value="row.fieldKey"
 						:options="fieldOptions"
 						option-label="displayLabel"
 						option-value="key"
 						placeholder="Select field"
 						filter
+						reset-filter-on-hide
 						fluid
-						@change="fieldChanged(row)"
+						@update:model-value="fieldValueChanged(row, $event)"
 					/>
 				</label>
 
@@ -322,6 +322,7 @@ function rowFromFilter(filter) {
 	const row = {
 		id: ++nextId,
 		fieldKey: field?.key || fieldKey(doctype, fieldname),
+		committedFieldKey: field?.key || fieldKey(doctype, fieldname),
 		operator: operator || defaultOperator(field),
 		value: null,
 	}
@@ -350,8 +351,22 @@ function defaultOperator(field) {
 
 function fieldChanged(row) {
 	const field = fieldFor(row)
+	if (!field) {
+		row.fieldKey = row.committedFieldKey || defaultField()?.key || ""
+		return
+	}
+	row.committedFieldKey = field.key
 	row.operator = defaultOperator(field)
 	row.value = defaultValue(row)
+}
+
+function fieldValueChanged(row, value) {
+	// PrimeVue can emit an empty value when a filtered Select overlay is
+	// dismissed with no matching options. That is a search dismissal, not an
+	// intentional field change, so retain the last committed field.
+	if (!value) return
+	row.fieldKey = value
+	fieldChanged(row)
 }
 
 function operatorChanged(row) {
@@ -500,6 +515,7 @@ function add(field = defaultField()) {
 	const row = {
 		id: ++nextId,
 		fieldKey: field?.key || "",
+		committedFieldKey: field?.key || "",
 		operator: defaultOperator(field),
 		value: null,
 	}

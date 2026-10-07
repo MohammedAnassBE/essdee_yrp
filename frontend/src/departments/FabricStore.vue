@@ -1,6 +1,6 @@
 <template>
 	<DepartmentPage title="Fabric Store" accent="#0a7f5a" :show-title="false" flat>
-		<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
+		<WorkspaceLoadError v-if="error" :message="error" :loading="loading" @retry="load" />
 		<WorkspaceLauncher
 			v-else
 			title="Fabric Store"
@@ -12,12 +12,12 @@
 </template>
 
 <script setup>
-import Message from "primevue/message"
 import { computed, onMounted, ref } from "vue"
 
 import { getFabricStoreCapabilities } from "../api/fabricStore.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import WorkspaceLauncher from "../components/common/WorkspaceLauncher.vue"
+import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 
 const loading = ref(true)
 const error = ref("")
@@ -30,7 +30,9 @@ const workspaces = [
 ]
 const visibleWorkspaces = computed(() => workspaces.filter((workspace) => sections.value[workspace.key]))
 
-onMounted(async () => {
+async function load() {
+	loading.value = true
+	error.value = ""
 	try {
 		const payload = await getFabricStoreCapabilities() || {}
 		sections.value = payload.sections || {}
@@ -39,5 +41,7 @@ onMounted(async () => {
 	} finally {
 		loading.value = false
 	}
-})
+}
+
+onMounted(load)
 </script>

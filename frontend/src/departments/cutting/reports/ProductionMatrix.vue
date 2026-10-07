@@ -39,7 +39,7 @@
 				<span class="erp-count-badge">{{ group.items?.length || 0 }} rows</span>
 			</div>
 
-			<div class="production-table-wrap">
+			<div class="production-table-wrap" role="region" :aria-label="`${group.style_no || 'Unspecified item'} production matrix`" tabindex="0">
 				<table class="production-table">
 					<thead>
 						<tr class="production-table__bands">
@@ -174,7 +174,7 @@ function signed(value) {
 	flex: 0 0 auto;
 	color: var(--erp-accent);
 	background: var(--erp-accent-soft);
-	border: 1px solid #d0eadc;
+	border: 1px solid var(--erp-accent-border);
 	border-radius: var(--erp-control-radius);
 	place-items: center;
 }
@@ -221,7 +221,7 @@ function signed(value) {
 }
 
 .production-card__meta i {
-	color: #799188;
+	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
 }
 
@@ -251,13 +251,13 @@ function signed(value) {
 .production-total strong {
 	display: block;
 	margin-top: 2px;
-	color: #2b4237;
+	color: var(--erp-text-secondary);
 	font-size: 13px;
 	font-variant-numeric: tabular-nums;
 }
 
 .production-total--accent {
-	border-color: #c5e6d5;
+	border-color: var(--erp-accent-border);
 	background: var(--erp-mint);
 }
 
@@ -278,7 +278,7 @@ function signed(value) {
 	align-items: center;
 	gap: var(--erp-space-3);
 	padding: var(--erp-space-2) var(--erp-space-3);
-	border-bottom: 1px solid #e6eeea;
+	border-bottom: 1px solid var(--erp-border-subtle);
 	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
 }
@@ -309,12 +309,17 @@ function signed(value) {
 	scrollbar-gutter: stable;
 }
 
+.production-table-wrap:focus-visible {
+	outline: 2px solid color-mix(in srgb, var(--erp-accent) 56%, white);
+	outline-offset: -2px;
+}
+
 .production-table {
 	width: 100%;
 	min-width: 1060px;
 	border-collapse: separate;
 	border-spacing: 0;
-	color: #30453c;
+	color: var(--erp-text-secondary);
 	font-size: var(--erp-font-size-caption);
 }
 
@@ -323,10 +328,10 @@ function signed(value) {
 	z-index: 2;
 	top: 0;
 	padding: var(--erp-space-2) 9px;
-	border-right: 1px solid #e3ebe7;
+	border-right: 1px solid var(--erp-border-subtle);
 	border-bottom: 1px solid var(--erp-border-strong);
-	background: #f5f8f6;
-	color: #53665d;
+	background: var(--erp-surface-muted);
+	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
 	font-weight: 800;
 	letter-spacing: 0.025em;
@@ -344,7 +349,7 @@ function signed(value) {
 	z-index: 3;
 	padding-top: 7px;
 	padding-bottom: 7px;
-	color: #5d7167;
+	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
 	text-align: center;
 }
@@ -359,41 +364,41 @@ function signed(value) {
 }
 
 .production-table__size-band {
-	color: #176d50 !important;
-	background: #edf7f2 !important;
+	color: var(--erp-accent-dark) !important;
+	background: var(--erp-accent-soft) !important;
 }
 
 .production-table__comparison-band {
-	color: #44657e !important;
-	background: #f0f5f8 !important;
+	color: var(--erp-info) !important;
+	background: var(--erp-info-soft) !important;
 }
 
 .production-table td {
 	min-height: 42px;
 	padding: 9px;
-	border-right: 1px solid #edf2ef;
-	border-bottom: 1px solid #e8efeb;
+	border-right: 1px solid var(--erp-border-subtle);
+	border-bottom: 1px solid var(--erp-border-subtle);
 	vertical-align: middle;
 }
 
 .production-table tbody tr:nth-child(even) td {
-	background: #fcfdfd;
+	background: var(--erp-surface);
 }
 
 .production-table tbody tr:hover td {
-	background: #f8fbf9;
+	background: var(--erp-surface-hover);
 }
 
 .production-table__serial {
 	width: 38px;
-	color: #89978f;
+	color: var(--erp-text-muted);
 	text-align: center !important;
 }
 
 .production-table__attribute {
 	min-width: 105px;
-	color: #2e4439;
-	font-weight: 650;
+	color: var(--erp-text-secondary);
+	font-weight: var(--erp-font-weight-semibold);
 }
 
 .production-table__number {
@@ -404,8 +409,8 @@ function signed(value) {
 
 .production-table__size {
 	min-width: 66px;
-	background: #f2f8f5 !important;
-	color: #27634d !important;
+	background: var(--erp-accent-soft) !important;
+	color: var(--erp-accent-dark) !important;
 	text-align: right !important;
 }
 
@@ -414,22 +419,22 @@ function signed(value) {
 }
 
 .production-table__size-cell > strong {
-	color: #1e3c30;
+	color: var(--erp-text-secondary);
 	font-size: var(--erp-font-size-caption);
 }
 
 .production-table__today {
-	background: #f1faf5 !important;
+	background: var(--erp-success-soft) !important;
 	color: var(--erp-accent) !important;
 }
 
 .production-table__strong {
 	font-size: 13px;
-	font-weight: 850;
+	font-weight: var(--erp-font-weight-bold);
 }
 
 .cell-empty {
-	color: #a0aaa5;
+	color: var(--erp-text-muted);
 }
 
 .cutter-chip {
@@ -437,10 +442,10 @@ function signed(value) {
 	align-items: center;
 	gap: 4px;
 	padding: 3px 7px;
-	border: 1px solid #dcebe4;
+	border: 1px solid var(--erp-accent-border);
 	border-radius: var(--erp-pill-radius);
-	background: #edf5f1;
-	color: #315e4c;
+	background: var(--erp-accent-soft);
+	color: var(--erp-accent-dark);
 	font-size: var(--erp-font-size-min);
 	font-weight: 700;
 	white-space: nowrap;
@@ -461,30 +466,30 @@ function signed(value) {
 }
 
 .variance--negative {
-	background: #fff0f1;
-	color: #ad3440;
+	background: var(--erp-danger-soft);
+	color: var(--erp-danger);
 }
 
 .variance--positive {
-	background: #e9f7f0;
+	background: var(--erp-success-soft);
 	color: var(--erp-accent);
 }
 
 .variance--neutral {
-	background: #f0f3f1;
-	color: #617169;
+	background: var(--erp-surface-muted);
+	color: var(--erp-text-muted);
 }
 
 .production-table tfoot td {
 	padding: 9px;
-	border-top: 1px solid #cfe0d7;
-	border-right: 1px solid #dce8e1;
-	background: #edf6f1;
+	border-top: 1px solid var(--erp-accent-border);
+	border-right: 1px solid var(--erp-border-subtle);
+	background: var(--erp-accent-soft);
 	font-weight: 800;
 }
 
 .production-table__total-label {
-	color: #25463a;
+	color: var(--erp-accent-dark);
 	font-size: var(--erp-font-size-min);
 	letter-spacing: 0.03em;
 	text-transform: uppercase;

@@ -4,12 +4,17 @@
 		:class="{ 'work-order-activity-rail--empty': isEmpty }"
 		aria-label="Work Order activity"
 	>
-		<section v-for="section in sections" :key="section.key" class="work-order-activity-section">
+		<section
+			v-for="section in sections"
+			:key="section.key"
+			class="work-order-activity-section"
+			:class="{ 'work-order-activity-section--expanded': expandedSections[section.key] || queries[section.key].trim() }"
+		>
 			<header>
 				<div><h2 :title="section.label">{{ section.label }}</h2><span>{{ section.rows.length }}</span></div>
 				<div class="activity-actions">
 					<Button v-if="section.rows.length" :aria-label="`Filter ${section.label}`" :aria-expanded="filtersOpen[section.key]" icon="pi pi-filter" severity="secondary" text rounded size="small" @click="filtersOpen[section.key] = !filtersOpen[section.key]" />
-					<Button v-if="section.permissions.can_create" label="New" aria-label="Create New" icon="pi pi-plus" size="small" @click="$emit('create', section.key)" />
+					<Button v-if="section.permissions.can_create" label="New" :aria-label="`Create ${section.label}`" icon="pi pi-plus" size="small" @click="$emit('create', section.key)" />
 				</div>
 			</header>
 			<div v-if="filtersOpen[section.key]" class="activity-filter">
@@ -17,13 +22,30 @@
 				<input v-model="queries[section.key]" type="search" :aria-label="`Search ${section.label}`" placeholder="Filter by ID, item, lot…" />
 			</div>
 			<div class="activity-list">
-				<button v-for="row in filteredRows(section)" :key="row.name" type="button" class="activity-card" @click="$emit('open', { type: section.key, row })">
-					<div class="activity-card__top"><strong>{{ row.name }}</strong><span :class="`activity-status activity-status--${statusTone(row.docstatus)}`">{{ row.status }}</span></div>
+				<button
+					v-for="(row, rowIndex) in filteredRows(section)"
+					:key="row.name"
+					type="button"
+					class="activity-card"
+					:class="{ 'activity-card--mobile-overflow': rowIndex >= mobilePreviewLimit && !queries[section.key].trim() }"
+					@click="$emit('open', { type: section.key, row })"
+				>
+					<div class="activity-card__top"><strong>{{ row.name }}</strong><DocumentStatusBadge :docstatus="row.docstatus" :label="row.status" /></div>
 					<span v-if="row.item || row.lot" class="activity-card__context">{{ [row.item, row.lot].filter(Boolean).join(" · ") }}</span>
 					<div class="activity-card__meta"><span><i class="pi pi-calendar" /> {{ formatDate(row.posting_date) }}</span><span><i class="pi pi-clock" /> {{ formatTime(row.posting_time) }}</span></div>
 					<i class="pi pi-chevron-right activity-card__chevron" />
 				</button>
 				<div v-if="!filteredRows(section).length" class="activity-empty"><i class="pi pi-inbox" /><span>No records</span></div>
+				<Button
+					v-if="filteredRows(section).length > mobilePreviewLimit && !queries[section.key].trim()"
+					class="activity-mobile-toggle"
+					severity="secondary"
+					text
+					:icon="expandedSections[section.key] ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
+					:label="expandedSections[section.key] ? 'Show fewer' : `Show all ${filteredRows(section).length}`"
+					:aria-expanded="expandedSections[section.key]"
+					@click="expandedSections[section.key] = !expandedSections[section.key]"
+				/>
 			</div>
 		</section>
 	</aside>
@@ -32,6 +54,7 @@
 <script setup>
 import Button from "primevue/button"
 import { computed, reactive } from "vue"
+import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 
 const props = defineProps({
 	deliveryChallans: { type: Array, default: () => [] },
@@ -42,6 +65,8 @@ defineEmits(["create", "open"])
 
 const filtersOpen = reactive({ delivery_challan: false, goods_received_note: false })
 const queries = reactive({ delivery_challan: "", goods_received_note: "" })
+const expandedSections = reactive({ delivery_challan: false, goods_received_note: false })
+const mobilePreviewLimit = 3
 const sections = computed(() => [
 	{ key: "delivery_challan", label: "Delivery Challans", rows: props.deliveryChallans, permissions: props.permissions.delivery_challan || {} },
 	{ key: "goods_received_note", label: "Goods Received Notes", rows: props.goodsReceivedNotes, permissions: props.permissions.goods_received_note || {} },
@@ -55,7 +80,6 @@ function filteredRows(section) {
 }
 function formatDate(value) { if (!value) return "—"; const [year, month, day] = String(value).slice(0, 10).split("-"); return day ? `${day}-${month}-${year}` : value }
 function formatTime(value) { return value ? String(value).slice(0, 5) : "—" }
-function statusTone(docstatus) { return Number(docstatus) === 1 ? "submitted" : Number(docstatus) === 2 ? "cancelled" : "draft" }
 </script>
 
 <style scoped>
@@ -66,7 +90,7 @@ function statusTone(docstatus) { return Number(docstatus) === 1 ? "submitted" : 
 .work-order-activity-section h2 { overflow: hidden; margin: 0; font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
 .work-order-activity-section header span { display: inline-grid; min-width: 21px; height: 21px; padding: 0 6px; place-items: center; color: var(--erp-accent); font-size: var(--erp-font-size-min); font-weight: 800; background: var(--erp-accent-soft); border-radius: var(--erp-pill-radius); }
 .activity-actions { display: flex; align-items: center; gap: 3px; }
-.activity-actions :deep(.p-button) { min-height: 31px; }
+.activity-actions :deep(.p-button) { min-height: 36px; }
 .activity-actions :deep(.p-button-label) { font-size: var(--erp-font-size-min); white-space: nowrap; }
 .activity-filter { position: relative; display: flex; align-items: center; padding: 7px 9px; border-bottom: 1px solid var(--erp-border); }
 .activity-filter i { position: absolute; left: 18px; color: var(--erp-text-muted); font-size: 11px; }
@@ -79,17 +103,30 @@ function statusTone(docstatus) { return Number(docstatus) === 1 ? "submitted" : 
 .activity-card:focus-visible { outline: 2px solid color-mix(in srgb, var(--erp-accent) 72%, white); outline-offset: -2px; }
 .activity-card__top { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; }
 .activity-card__top strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
-.activity-status { padding: 2px 6px; color: #5f6e66; font-size: var(--erp-font-size-min); font-weight: 800; text-transform: uppercase; background: #eef2f0; border-radius: var(--erp-pill-radius); }
-.activity-status--submitted { color: #087744; background: #e1f6eb; }
-.activity-status--cancelled { color: #b42318; background: #fde8e8; }
+.activity-status { padding: 2px 6px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: var(--erp-font-weight-bold); text-transform: uppercase; background: var(--erp-surface-muted); border-radius: var(--erp-pill-radius); }
+.activity-status--submitted { color: var(--erp-success); background: var(--erp-success-soft); }
+.activity-status--cancelled { color: var(--erp-danger); background: var(--erp-danger-soft); }
 .activity-card__context { overflow: hidden; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); text-overflow: ellipsis; white-space: nowrap; }
 .activity-card__meta { display: flex; align-items: center; gap: 10px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .activity-card__meta span { display: inline-flex; align-items: center; gap: 4px; }
 .activity-card__meta i { font-size: 10px; }
-.activity-card__chevron { position: absolute; top: 50%; right: 10px; color: #84978e; font-size: 11px; transform: translateY(-50%); }
+.activity-card__chevron { position: absolute; top: 50%; right: 10px; color: var(--erp-text-muted); font-size: 11px; transform: translateY(-50%); }
 .activity-empty { display: grid; min-height: 100px; place-items: center; align-content: center; gap: 6px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
-@media (max-width: 1024px) { .work-order-activity-rail { grid-template-rows: minmax(280px, 1fr); grid-template-columns: repeat(2, minmax(0, 1fr)); height: 360px; } }
-@media (max-width: 620px) { .work-order-activity-rail { grid-template-rows: repeat(2, minmax(260px, 1fr)); grid-template-columns: 1fr; height: 600px; } .activity-actions :deep(.p-button-label) { display: none; } }
-@media (max-width: 1024px) { .work-order-activity-rail--empty { grid-template-rows: auto; height: auto; } }
-@media (max-width: 620px) { .work-order-activity-rail--empty { grid-template-rows: repeat(2, auto); height: auto; } .work-order-activity-rail--empty .activity-empty { min-height: 76px; } }
+.activity-mobile-toggle { display: none; }
+@media (max-width: 1024px), (pointer: coarse) { .activity-actions :deep(.p-button) { min-width: 44px; min-height: 44px; } .activity-filter input { min-height: 44px; } }
+@media (max-width: 900px) {
+	.work-order-activity-rail { grid-template-rows: auto; grid-template-columns: repeat(2, minmax(0, 1fr)); height: auto; }
+	.work-order-activity-section { overflow: visible; }
+	.activity-list { overflow-y: visible; }
+	.work-order-activity-rail--empty { grid-template-rows: auto; height: auto; }
+}
+@media (max-width: 620px) {
+	.work-order-activity-rail { grid-template-columns: 1fr; }
+	.activity-actions :deep(.p-button-label) { display: none; }
+	.work-order-activity-rail--empty { grid-template-rows: repeat(2, auto); height: auto; }
+	.work-order-activity-rail--empty .activity-empty { min-height: 76px; }
+	.activity-card--mobile-overflow { display: none; }
+	.work-order-activity-section--expanded .activity-card--mobile-overflow { display: grid; }
+	.activity-mobile-toggle { display: flex; width: 100%; min-height: 44px; justify-content: center; border-top: 1px solid var(--erp-border); border-radius: 0; }
+}
 </style>

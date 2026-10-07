@@ -66,7 +66,7 @@ defineProps({
 	},
 	backLabel: {
 		type: String,
-		default: "Administrator",
+		default: "Workspaces",
 	},
 })
 </script>

@@ -8,6 +8,7 @@
 		</div>
 		<template #footer><Button label="Close" severity="secondary" text :disabled="saving" @click="emit('update:visible', false)" /><Button :label="bulkMode ? 'Create & Submit All' : 'Create & Submit'" icon="pi pi-check" :loading="saving" :disabled="!namingSeries || !vehicleNo.trim()" @click="save" /></template>
 	</Dialog>
+	<DocumentErrorDialog :message="actionError" title="Delivery Challan could not be created" @dismiss="actionError = ''" />
 </template>
 
 <script setup>
@@ -19,19 +20,21 @@ import Select from "primevue/select"
 import { ref, watch } from "vue"
 
 import { createAllBulkDeliveries, createBulkRowDelivery, getBulkDeliverySetup } from "../../../api/cuttingBulkLaySheets.js"
+import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 
 const props = defineProps({ visible: Boolean, bulkName: { type: String, required: true }, row: { type: Object, default: null }, bulkMode: Boolean })
 const emit = defineEmits(["update:visible", "saved"])
 const loading = ref(false)
 const saving = ref(false)
 const error = ref("")
+const actionError = ref("")
 const options = ref([])
 const namingSeries = ref("")
 const vehicleNo = ref("")
 
 watch(() => props.visible, async (visible) => {
 	if (!visible) return
-	loading.value = true; error.value = ""; vehicleNo.value = ""
+	loading.value = true; error.value = ""; actionError.value = ""; vehicleNo.value = ""
 	try { const payload = await getBulkDeliverySetup(props.bulkName); options.value = payload?.options || []; namingSeries.value = payload?.default || options.value[0] || "" }
 	catch (reason) { error.value = reason?.message || "Unable to load Delivery Challan setup." }
 	finally { loading.value = false }
@@ -43,7 +46,7 @@ async function save() {
 			? await createAllBulkDeliveries(props.bulkName, namingSeries.value, vehicleNo.value.trim())
 			: await createBulkRowDelivery(props.bulkName, props.row.name, namingSeries.value, vehicleNo.value.trim())
 		emit("saved", payload); emit("update:visible", false)
-	} catch (reason) { error.value = reason?.message || "Unable to create Delivery Challan." }
+	} catch (reason) { actionError.value = reason?.message || "Unable to create Delivery Challan." }
 	finally { saving.value = false }
 }
 </script>

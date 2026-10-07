@@ -33,7 +33,7 @@
 				<template #empty>
 					<span class="link-field__empty" role="status" aria-live="polite">
 						<i v-if="searching" class="pi pi-spin pi-spinner" />
-						{{ searching ? "Searching…" : searchError || "No matches" }}
+						{{ emptyStateMessage }}
 					</span>
 				</template>
 			</AutoComplete>
@@ -79,6 +79,8 @@ const props = defineProps({
 	required: { type: Boolean, default: false },
 	ariaLabel: { type: String, default: "" },
 	ariaDescribedby: { type: String, default: "" },
+	emptyMessage: { type: String, default: "" },
+	dependencyMessage: { type: String, default: "Select the related field first" },
 	searchHandler: { type: Function, default: null },
 	openHandler: { type: Function, default: null },
 })
@@ -96,6 +98,15 @@ let requestSequence = 0
 
 const optionLabel = computed(() => "label")
 const resolvedInputId = computed(() => props.inputId || `link-field-${componentId}`)
+const hasIncompleteFilters = computed(() => Object.keys(props.filters || {}).length > 0
+	&& Object.values(props.filters || {}).some((value) => value === "" || value === null || value === undefined))
+const emptyStateMessage = computed(() => {
+	if (searching.value) return "Searching…"
+	if (searchError.value) return searchError.value
+	if (hasIncompleteFilters.value) return props.dependencyMessage
+	if (props.emptyMessage) return props.emptyMessage
+	return `No ${props.doctype || "records"} found`
+})
 const autocompletePt = computed(() => ({
 	dropdown: {
 		"aria-label": `Show ${props.ariaLabel || props.label || props.doctype || "record"} options`,
@@ -103,6 +114,7 @@ const autocompletePt = computed(() => ({
 	},
 	pcInputText: {
 		root: {
+			title: committedLabel.value || String(props.modelValue || "") || undefined,
 			required: props.required || undefined,
 			"aria-required": props.required ? "true" : undefined,
 			"aria-describedby": props.ariaDescribedby || undefined,
@@ -230,6 +242,10 @@ defineExpose({ focus })
 }
 
 .link-field__control :deep(.p-autocomplete-input) {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	background: var(--erp-surface);
 	border-color: var(--erp-border-strong);
 	box-shadow: var(--erp-shadow-xs);

@@ -18,8 +18,6 @@
 
 		<DataTable
 			:value="modelValue"
-			show-gridlines
-			striped-rows
 			scrollable
 			size="small"
 			class="child-table-field__table"
@@ -229,7 +227,7 @@ function columnWidth(column) {
 }
 
 .child-table-field__table :deep(.p-datatable-thead > tr > th) {
-	padding-block: 8px;
+	padding: var(--erp-table-cell-pad-y) var(--erp-table-cell-pad-x);
 	color: var(--erp-text-secondary);
 	font-size: var(--erp-font-size-min);
 	font-weight: 800;
@@ -239,7 +237,8 @@ function columnWidth(column) {
 }
 
 .child-table-field__table :deep(.p-datatable-tbody > tr > td) {
-	padding: 8px;
+	padding: var(--erp-table-cell-pad-y) var(--erp-table-cell-pad-x);
+	border-bottom: 1px solid var(--erp-border-subtle);
 	vertical-align: top;
 }
 

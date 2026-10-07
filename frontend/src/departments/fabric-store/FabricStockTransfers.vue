@@ -26,6 +26,7 @@
 			:row-mark="activeDefinition.mark"
 			:min-table-width="activeDefinition.minWidth"
 			:default-columns="activeDefinition.columns"
+			viewport-bounded
 			clickable
 			@row-click="openDocument"
 		>
@@ -123,6 +124,17 @@ function documentChanged() { listView.value?.refresh?.(true) }
 	min-width: 0;
 }
 
+@media (min-width: 1025px) {
+	.fabric-stock-transfers {
+		height: calc(100dvh - var(--erp-shell-header-height) - 80px);
+		min-height: 0;
+		overflow: hidden;
+		grid-template-rows: auto minmax(0, 1fr);
+	}
+
+	.fabric-stock-transfers :deep(.common-list-view--viewport-bounded) { height: 100%; }
+}
+
 .stock-operation-grid {
 	display: grid;
 	grid-template-columns: repeat(4, minmax(150px, 1fr));
@@ -162,6 +174,7 @@ function documentChanged() { listView.value?.refresh?.(true) }
 }
 
 @media (max-width: 520px) {
-	.stock-operation-grid { grid-template-columns: 1fr; }
+	.stock-operation-grid { gap: 7px; }
+	.stock-operation-card { min-height: 44px; padding: 0 9px; font-size: 0.72rem; line-height: 1.15; }
 }
 </style>

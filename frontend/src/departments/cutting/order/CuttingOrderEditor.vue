@@ -3,14 +3,14 @@
 		<header class="order-editor-header erp-editor-header">
 			<div><span>{{ name || "New document" }}</span><h1>{{ name ? "Edit Cutting Order" : "New Cutting Order" }}</h1></div>
 			<div class="order-editor-actions erp-editor-actions">
-				<Button label="Cancel" severity="secondary" text :disabled="busy" @click="emit('cancel')" />
-				<Button label="Save Draft" icon="pi pi-save" severity="secondary" outlined :loading="saving === 'draft'" :disabled="busy || !canSave" @click="save(false)" />
-				<Button v-if="permissions.can_submit" label="Save & Submit" icon="pi pi-check" :loading="saving === 'submit'" :disabled="busy || !canSave" @click="save(true)" />
+				<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="emit('cancel')" />
+				<DocumentSaveButton :show-submit="permissions.can_submit" :loading="Boolean(saving)" :disabled="busy || !canSave" @save="save(false)" @submit="save(true)" />
 			</div>
 		</header>
 
-		<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
+		<DocumentErrorDialog :message="loadFailed ? '' : error" title="Cutting Order could not be completed" @dismiss="error = ''" />
 		<div v-if="loading" class="order-editor-loading"><Skeleton height="150px" /><Skeleton height="280px" /></div>
+		<WorkspaceLoadError v-else-if="loadFailed" title="Cutting Order editor unavailable" :message="error" @retry="load" />
 		<div v-else class="order-editor-body">
 			<section class="order-editor-section">
 				<header><h2>Order Details</h2></header>
@@ -23,8 +23,8 @@
 							<Button v-if="form.cutting_order_detail && detailPermissions.can_write" label="Edit Detail" icon="pi pi-pencil" severity="secondary" text :disabled="busy" @click="openDetail(form.cutting_order_detail)" />
 						</div>
 					</div>
-					<div class="order-editor-field"><label>Item</label><InputText v-model="form.item" disabled fluid /></div>
-					<div class="order-editor-field"><label>Cutting Location</label><Select v-model="form.cutting_location" :options="options.cutting_locations || []" :disabled="busy" show-clear fluid /></div>
+					<div class="order-editor-field"><label>Item</label><InputText v-model="form.item" placeholder="Item filled from detail" disabled fluid /></div>
+					<div class="order-editor-field"><label>Cutting Location</label><Select v-model="form.cutting_location" :options="options.cutting_locations || []" placeholder="Select Cutting Location" :disabled="busy" show-clear fluid /></div>
 					<div class="order-editor-field"><label>Maximum No of Plys <span>*</span></label><InputNumber v-model="form.maximum_no_of_plys" :min="1" :use-grouping="false" :disabled="busy" fluid /></div>
 					<div class="order-editor-field"><label>Maximum Allow Percent</label><InputNumber v-model="form.maximum_allow_percent" suffix="%" :min="0" :max="100" :max-fraction-digits="2" :use-grouping="false" :disabled="busy" fluid /></div>
 				</div>
@@ -36,7 +36,7 @@
 		</div>
 
 		<CuttingOrderDetailDialog v-model:visible="detailOpen" :name="selectedDetail" :item="form.item" @saved="detailSaved" />
-		<Dialog v-model:visible="discardVisible" header="Discard unsaved changes?" modal :closable="false" :style="{ width: 'min(440px, calc(100vw - 32px))' }">
+		<Dialog v-model:visible="discardVisible" class="erp-dialog--sm" header="Discard unsaved changes?" modal :closable="false">
 			<p class="discard-copy">Your unsaved Cutting Order changes will be lost.</p>
 			<template #footer><Button label="Keep Editing" severity="secondary" text @click="keepEditing" /><Button label="Discard Changes" severity="danger" @click="discardChanges" /></template>
 		</Dialog>
@@ -48,7 +48,6 @@ import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
 import InputText from "primevue/inputtext"
-import Message from "primevue/message"
 import Select from "primevue/select"
 import Skeleton from "primevue/skeleton"
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
@@ -56,6 +55,9 @@ import { onBeforeRouteLeave } from "vue-router"
 
 import { getCuttingOrderDetail, getCuttingOrderEditor, saveCuttingOrder } from "../../../api/cuttingOrder.js"
 import LinkField from "../../../components/common/LinkField.vue"
+import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
+import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
+import DocumentSaveButton from "../../../components/documents/DocumentSaveButton.vue"
 import CuttingQuantityMatrix from "../shared/CuttingQuantityMatrix.vue"
 import CuttingOrderDetailDialog from "./CuttingOrderDetailDialog.vue"
 
@@ -71,6 +73,7 @@ const loading = ref(true)
 const loadingDetail = ref(false)
 const saving = ref("")
 const error = ref("")
+const hasLoaded = ref(false)
 const cleanSignature = ref("")
 const detailOpen = ref(false)
 const selectedDetail = ref("")
@@ -83,6 +86,7 @@ const busy = computed(() => loading.value || loadingDetail.value || Boolean(savi
 const canSave = computed(() => Boolean(form.cutting_order_detail && groups.value.length && form.maximum_no_of_plys) && (props.name ? permissions.can_write : permissions.can_create))
 const signature = computed(() => JSON.stringify({ form, groups: groups.value }))
 const dirty = computed(() => !loading.value && signature.value !== cleanSignature.value)
+const loadFailed = computed(() => Boolean(error.value && !hasLoaded.value))
 
 function clone(value) { return JSON.parse(JSON.stringify(value ?? null)) }
 
@@ -97,6 +101,7 @@ function applyPayload(payload, { preserveQuantities = false } = {}) {
 	modified.value = record.modified || ""
 	if (payload?.detail) Object.assign(detailPermissions, { can_create: false, can_write: true })
 	loadedDetail.value = payload?.detail?.name || record.cutting_order_detail || ""
+	hasLoaded.value = true
 	emit("loaded", payload)
 }
 

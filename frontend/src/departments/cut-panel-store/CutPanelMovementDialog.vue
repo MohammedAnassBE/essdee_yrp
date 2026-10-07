@@ -4,17 +4,18 @@
 		modal
 		maximizable
 		:dismissable-mask="false"
-		:style="{ width: 'min(96vw, 1540px)' }"
+		:closable="!busy"
+		:close-on-escape="!busy"
 		:header="record?.name ? `Cut Panel Movement · ${record.name}` : 'New Cut Panel Movement'"
-		class="erp-cut-panel-movement-dialog erp-entity-dialog"
+		class="erp-cut-panel-movement-dialog erp-entity-dialog erp-dialog--xl"
 		@update:visible="emit('update:visible', $event)"
 	>
 		<div v-if="loading" class="movement-dialog__loading"><Skeleton v-for="index in 7" :key="index" height="3rem" /></div>
 		<div v-else class="movement-dialog__body">
 			<div class="cut-panel-movement-layout" :class="{ 'cut-panel-movement-layout--without-rail': !record }">
-				<main class="cut-panel-movement-layout__main">
+				<div class="cut-panel-movement-layout__main">
 					<section class="movement-document-card">
-						<header><span>DOCUMENT</span><h3>Movement source & posting</h3><em>{{ record?.status || "Draft" }}</em></header>
+						<header><span>DOCUMENT</span><h3>Movement source & posting</h3><DocumentStatusBadge :docstatus="record?.docstatus" :label="record?.status || 'Draft'" /></header>
 						<div class="movement-document-grid">
 							<LinkField v-model="form.lot" doctype="SD YRP Lot" label="Lot" required :disabled="Boolean(record) || busy" @update:model-value="sourceChanged" />
 							<LinkField v-model="form.from_warehouse" doctype="Supplier" label="From Warehouse" required :disabled="Boolean(record) || busy" @update:model-value="sourceChanged" />
@@ -37,11 +38,12 @@
 						@update:model-value="replaceMovement"
 						@generate="generateBundles"
 					/>
-				</main>
+				</div>
 				<CutPanelMovementRail
 					v-if="record"
 					:linked="linked"
 					:loading="linkedLoading"
+					:busy="busy"
 					@refresh="loadLinked"
 					@create="openTransactionCreator"
 					@open-document="openLinkedDocument"
@@ -67,8 +69,7 @@
 		modal
 		:dismissable-mask="false"
 		:header="transactionCreateTitle"
-		class="cut-panel-transaction-create-dialog erp-entity-dialog"
-		:style="{ width: 'min(94vw, 620px)' }"
+		class="cut-panel-transaction-create-dialog erp-entity-dialog erp-dialog--md"
 	>
 		<div class="transaction-create-content">
 			<div class="transaction-create-source"><span>Cut Panel Movement</span><strong>{{ record?.name }}</strong><small>{{ editor.context?.lot }} · {{ editor.context?.item }}</small></div>
@@ -77,7 +78,7 @@
 				<div class="transaction-work-order-heading"><span>Submitted Work Orders for this Lot</span><strong>{{ workOrders.length }}</strong></div>
 				<div v-if="workOrdersLoading" class="transaction-work-order-loading"><Skeleton v-for="index in 3" :key="index" height="3.5rem" /></div>
 				<div v-else-if="workOrders.length" class="transaction-work-orders">
-					<button v-for="workOrder in workOrders" :key="workOrder.name" type="button" :class="{ selected: transactionForm.work_order === workOrder.name }" @click="transactionForm.work_order = workOrder.name">
+					<button v-for="workOrder in workOrders" :key="workOrder.name" type="button" :class="{ selected: transactionForm.work_order === workOrder.name }" :aria-pressed="transactionForm.work_order === workOrder.name" @click="transactionForm.work_order = workOrder.name">
 						<span><strong>{{ workOrder.name }}</strong><i v-if="transactionForm.work_order === workOrder.name" class="pi pi-check-circle" /></span>
 						<small>{{ [workOrder.item, workOrder.supplier].filter(Boolean).join(' · ') || editor.context?.lot }}</small>
 					</button>
@@ -119,6 +120,7 @@ import LinkField from "../../components/common/LinkField.vue"
 import TimeField from "../../components/common/TimeField.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import CutPanelMovementEditor from "../cutting/CutPanelMovementEditor.vue"
 import FabricStockOperationDialog from "../fabric-store/FabricStockOperationDialog.vue"
 import RelatedDocumentWorkspaceDialog from "../fabric-store/RelatedDocumentWorkspaceDialog.vue"
@@ -148,6 +150,8 @@ const stockDocumentVisible = ref(false)
 const relatedDocumentVisible = ref(false)
 const linkedDocumentDoctype = ref("")
 const linkedDocumentName = ref("")
+let loadSequence = 0
+let actionSequence = 0
 const record = computed(() => editor.record)
 const busy = computed(() => Boolean(acting.value))
 const canEdit = computed(() => record.value ? Boolean(record.value.permissions?.can_write) : Boolean(editor.permissions?.can_create))
@@ -158,73 +162,156 @@ const transactionCreateTitle = computed(() => `Create ${transactionLabels[create
 const transactionCreateButtonLabel = computed(() => `Create ${transactionLabels[createOperation.value] || "Document"}`)
 const canCreateTransaction = computed(() => createOperation.value === "stock_entry" ? Boolean(transactionForm.to_warehouse) : Boolean(transactionForm.work_order))
 
-watch(() => [props.visible, props.movement], ([visible]) => { if (visible) load() })
+watch(() => [props.visible, props.movement], ([visible]) => {
+	if (visible) load()
+	else {
+		loadSequence += 1
+		actionSequence += 1
+		loading.value = false
+		linkedLoading.value = false
+		acting.value = ""
+		creatingTransaction.value = false
+		workOrdersLoading.value = false
+	}
+})
 
 async function load() {
+	const sequence = ++loadSequence
+	actionSequence += 1
+	const requestedMovement = props.movement
 	loading.value = true; error.value = ""; generated.value = false
+	resetLoadedState()
 	try {
-		const payload = await getCutPanelMovementEditor(props.movement)
+		const payload = await getCutPanelMovementEditor(requestedMovement)
+		if (loadIsStale(sequence, requestedMovement)) return
 		Object.assign(editor, payload || {})
 		Object.assign(form, payload?.defaults || {})
 		form.edit_posting_date_and_time = Boolean(form.edit_posting_date_and_time)
 		replaceMovement(payload?.movement_data || payload?.record?.movement_data || {})
 		generated.value = Boolean(payload?.record)
-		if (payload?.record?.name) await loadLinked()
+		if (payload?.record?.name) await loadLinked(sequence, payload.record.name)
 		else Object.assign(linked, { sections: {}, actions: {} })
-	} catch (reason) { error.value = reason.message || "Unable to load the Cut Panel Movement." } finally { loading.value = false }
+	} catch (reason) {
+		if (!loadIsStale(sequence, requestedMovement)) error.value = reason.message || "Unable to load the Cut Panel Movement."
+	} finally {
+		if (!loadIsStale(sequence, requestedMovement)) loading.value = false
+	}
+}
+
+function loadIsStale(sequence, requestedMovement) {
+	return sequence !== loadSequence || !props.visible || requestedMovement !== props.movement
+}
+
+function actionIsStale(sequence, requestedMovement, requestedLoadSequence) {
+	return sequence !== actionSequence || requestedLoadSequence !== loadSequence || !props.visible || requestedMovement !== props.movement
+}
+
+function resetLoadedState() {
+	for (const key of Object.keys(editor)) delete editor[key]
+	Object.assign(editor, { context: {}, permissions: {}, record: null })
+	Object.assign(form, { lot: "", from_warehouse: "", posting_date: "", posting_time: "", edit_posting_date_and_time: false })
+	replaceMovement({})
+	Object.assign(linked, { sections: {}, actions: {} })
+	transactionCreateVisible.value = false
+	stockDocumentVisible.value = false
+	relatedDocumentVisible.value = false
 }
 
 function sourceChanged() { generated.value = false; replaceMovement({}) }
 
 async function generateBundles() {
+	const sequence = ++actionSequence
+	const requestedMovement = props.movement
+	const requestedLoadSequence = loadSequence
+	const request = { ...form }
 	acting.value = "generate"; error.value = ""
 	try {
-		const payload = await generateCutPanelMovementBundles({ ...form })
+		const payload = await generateCutPanelMovementBundles(request)
+		if (actionIsStale(sequence, requestedMovement, requestedLoadSequence)) return
 		replaceMovement(payload || {}); generated.value = true
-	} catch (reason) { error.value = reason.message || "Unable to generate the available bundles." } finally { acting.value = "" }
+	} catch (reason) {
+		if (!actionIsStale(sequence, requestedMovement, requestedLoadSequence)) error.value = reason.message || "Unable to generate the available bundles."
+	} finally {
+		if (!actionIsStale(sequence, requestedMovement, requestedLoadSequence)) acting.value = ""
+	}
 }
 
 async function save() {
+	const sequence = ++actionSequence
+	const requestedMovement = props.movement
+	const requestedLoadSequence = loadSequence
+	const request = { ...form, movement_data: clone(movementData) }
+	const requestedRecord = record.value?.name
+	const expectedModified = record.value?.modified
 	acting.value = "save"; error.value = ""
 	try {
-		const saved = await saveCutPanelMovement({ ...form, movement_data: clone(movementData) }, { name: record.value?.name, expectedModified: record.value?.modified })
+		const saved = await saveCutPanelMovement(request, { name: requestedRecord, expectedModified })
+		if (actionIsStale(sequence, requestedMovement, requestedLoadSequence)) return
 		editor.record = saved; Object.assign(editor.context, { lot: saved.lot, item: saved.item, source_supplier: saved.from_warehouse }); replaceMovement(saved.movement_data || {}); generated.value = true; await loadLinked(); emit("changed", saved)
-	} catch (reason) { error.value = reason.message || "Unable to save the Cut Panel Movement." } finally { acting.value = "" }
+	} catch (reason) {
+		if (!actionIsStale(sequence, requestedMovement, requestedLoadSequence)) error.value = reason.message || "Unable to save the Cut Panel Movement."
+	} finally {
+		if (!actionIsStale(sequence, requestedMovement, requestedLoadSequence)) acting.value = ""
+	}
 	}
 
-async function loadLinked() {
-	if (!record.value?.name) return
+async function loadLinked(parentSequence = loadSequence, requestedRecord = record.value?.name) {
+	if (!requestedRecord) return
 	linkedLoading.value = true
-	try { Object.assign(linked, await getCutPanelMovementLinkedDocuments(record.value.name) || { sections: {}, actions: {} }) }
-	catch (reason) { error.value = reason.message || "Unable to load linked movement documents." }
-	finally { linkedLoading.value = false }
+	try {
+		const nextLinked = await getCutPanelMovementLinkedDocuments(requestedRecord) || { sections: {}, actions: {} }
+		if (parentSequence !== loadSequence || !props.visible || requestedRecord !== record.value?.name) return
+		Object.assign(linked, nextLinked)
+	} catch (reason) {
+		if (parentSequence === loadSequence && props.visible && requestedRecord === record.value?.name) error.value = reason.message || "Unable to load linked movement documents."
+	} finally {
+		if (parentSequence === loadSequence && props.visible && requestedRecord === record.value?.name) linkedLoading.value = false
+	}
 }
 
 async function openTransactionCreator(operation) {
+	if (busy.value) return
 	createOperation.value = operation
 	transactionForm.to_warehouse = ""
 	transactionForm.work_order = ""
 	workOrders.value = []
 	transactionCreateVisible.value = true
 	if (operation === "stock_entry") return
+	const sequence = ++actionSequence
+	const requestedMovement = props.movement
+	const requestedLoadSequence = loadSequence
+	const requestedRecord = record.value.name
 	workOrdersLoading.value = true
-	try { workOrders.value = await getCutPanelMovementWorkOrders(record.value.name) || [] }
-	catch (reason) { transactionCreateVisible.value = false; error.value = reason.message || "Unable to load Work Orders for this movement." }
-	finally { workOrdersLoading.value = false }
+	try {
+		const nextWorkOrders = await getCutPanelMovementWorkOrders(requestedRecord) || []
+		if (actionIsStale(sequence, requestedMovement, requestedLoadSequence) || requestedRecord !== record.value?.name) return
+		workOrders.value = nextWorkOrders
+	} catch (reason) {
+		if (!actionIsStale(sequence, requestedMovement, requestedLoadSequence)) { transactionCreateVisible.value = false; error.value = reason.message || "Unable to load Work Orders for this movement." }
+	} finally {
+		if (!actionIsStale(sequence, requestedMovement, requestedLoadSequence)) workOrdersLoading.value = false
+	}
 }
 
 async function createTransaction() {
 	if (!canCreateTransaction.value || !record.value?.name) return
+	const sequence = ++actionSequence
+	const requestedMovement = props.movement
+	const requestedLoadSequence = loadSequence
+	const requestedRecord = record.value.name
+	const requestedOperation = createOperation.value
+	const request = { ...transactionForm }
 	creatingTransaction.value = true
 	try {
-		const result = await createCutPanelMovementTransaction(record.value.name, createOperation.value, { ...transactionForm })
+		const result = await createCutPanelMovementTransaction(requestedRecord, requestedOperation, request)
+		if (actionIsStale(sequence, requestedMovement, requestedLoadSequence) || requestedRecord !== record.value?.name) return
 		transactionCreateVisible.value = false
 		Object.assign(linked, result?.linked_documents || { sections: {}, actions: {} })
 		emit("changed", result?.record)
 		openLinkedDocument(result?.record)
 	} catch (reason) {
-		error.value = reason.message || `Unable to create the ${transactionLabels[createOperation.value] || "movement transaction"}.`
-	} finally { creatingTransaction.value = false }
+		if (!actionIsStale(sequence, requestedMovement, requestedLoadSequence)) error.value = reason.message || `Unable to create the ${transactionLabels[requestedOperation] || "movement transaction"}.`
+	} finally { if (!actionIsStale(sequence, requestedMovement, requestedLoadSequence)) creatingTransaction.value = false }
 }
 
 function openLinkedDocument(document) {
@@ -242,12 +329,22 @@ async function linkedDocumentChanged() {
 
 function requestCommand(command) { pendingCommand.value = command; confirmationVisible.value = true }
 async function confirmCommand() {
+	const sequence = ++actionSequence
+	const requestedMovement = props.movement
+	const requestedLoadSequence = loadSequence
+	const requestedRecord = record.value?.name
+	const expectedModified = record.value?.modified
 	const command = pendingCommand.value; acting.value = command; error.value = ""
 	try {
-		const changed = await executeCutPanelMovementCommand(record.value.name, command, record.value.modified)
+		const changed = await executeCutPanelMovementCommand(requestedRecord, command, expectedModified)
+		if (actionIsStale(sequence, requestedMovement, requestedLoadSequence) || requestedRecord !== record.value?.name) return
 		editor.record = changed; replaceMovement(changed.movement_data || movementData); confirmationVisible.value = false; emit("changed", changed)
 		if (command === "cancel" || command === "submit") emit("update:visible", false)
-	} catch (reason) { error.value = reason.message || `Unable to ${command} the Cut Panel Movement.` } finally { acting.value = ""; pendingCommand.value = "" }
+	} catch (reason) {
+		if (!actionIsStale(sequence, requestedMovement, requestedLoadSequence)) error.value = reason.message || `Unable to ${command} the Cut Panel Movement.`
+	} finally {
+		if (!actionIsStale(sequence, requestedMovement, requestedLoadSequence)) { acting.value = ""; pendingCommand.value = "" }
+	}
 }
 
 function replaceMovement(value) { Object.assign(movementData, emptyMovement(), clone(value)) }
@@ -256,7 +353,7 @@ function clone(value) { return JSON.parse(JSON.stringify(value || {})) }
 </script>
 
 <style scoped>
-.movement-dialog__loading,.movement-dialog__body,.cut-panel-movement-layout__main{display:grid;gap:12px}.cut-panel-movement-layout{display:grid;grid-template-columns:minmax(0,4fr) minmax(230px,1fr);gap:12px;align-items:start}.cut-panel-movement-layout--without-rail{grid-template-columns:minmax(0,1fr)}.cut-panel-movement-layout__main{min-width:0}.movement-document-card{overflow:hidden;border:1px solid var(--erp-border);border-radius:var(--erp-panel-radius);background:var(--erp-surface)}.movement-document-card>header{display:flex;align-items:center;gap:9px;padding:11px 13px;border-bottom:1px solid var(--erp-border);background:var(--erp-surface-soft)}.movement-document-card>header span{color:var(--erp-accent-hover);font-size:var(--erp-font-size-min);font-weight:800;letter-spacing:.09em}.movement-document-card>header h3{margin:0;color:var(--erp-text);font-size:.96rem}.movement-document-card>header em{margin-left:auto;color:var(--erp-text-muted);font-size:var(--erp-font-size-caption);font-style:normal}.movement-document-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;padding:13px}.movement-context-value,.movement-toggle{display:grid;align-content:start;gap:7px}.movement-context-value span,.movement-toggle span{color:var(--erp-text);font-size:var(--erp-font-size-caption);font-weight:680}.movement-context-value strong{display:flex;align-items:center;min-height:40px;padding:0 12px;border:1px solid var(--erp-border);border-radius:var(--erp-control-radius);background:var(--erp-surface-muted);color:var(--erp-text-secondary);font-size:13px}.movement-toggle{justify-items:start}.movement-dialog__footer{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%}.movement-dialog__footer>span{color:var(--erp-text-muted);font-size:var(--erp-font-size-caption)}.movement-dialog__footer>div{display:flex;gap:8px}.transaction-create-content{display:grid;gap:13px}.transaction-create-source{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;padding:12px;border:1px solid var(--erp-border);border-radius:var(--erp-control-radius);background:var(--erp-surface-soft)}.transaction-create-source span{grid-row:span 2;color:var(--erp-accent-hover);font-size:10px;font-weight:800;letter-spacing:.07em;writing-mode:vertical-rl}.transaction-create-source strong{color:var(--erp-text);font-size:13px}.transaction-create-source small{color:var(--erp-text-muted);font-size:11px}.transaction-work-order-heading{display:flex;justify-content:space-between;color:var(--erp-text-secondary);font-size:12px;font-weight:700}.transaction-work-order-heading strong{color:var(--erp-accent-hover)}.transaction-work-order-loading,.transaction-work-orders{display:grid;gap:7px;max-height:280px;overflow-y:auto}.transaction-work-orders button{display:grid;gap:3px;padding:10px 11px;border:1px solid var(--erp-border);border-radius:var(--erp-control-radius);background:var(--erp-surface);color:var(--erp-text);text-align:left;cursor:pointer}.transaction-work-orders button:hover,.transaction-work-orders button.selected{border-color:var(--erp-accent);background:var(--erp-accent-soft)}.transaction-work-orders button>span{display:flex;align-items:center;justify-content:space-between}.transaction-work-orders button i{color:var(--erp-accent)}.transaction-work-orders button small,.transaction-work-orders-empty{color:var(--erp-text-muted);font-size:11px}.transaction-work-orders-empty{padding:18px;border:1px dashed var(--erp-border-strong);border-radius:var(--erp-control-radius);text-align:center}
+.movement-dialog__loading,.movement-dialog__body,.cut-panel-movement-layout__main{display:grid;gap:12px}.cut-panel-movement-layout{display:grid;grid-template-columns:minmax(0,4fr) minmax(230px,1fr);gap:12px;align-items:start}.cut-panel-movement-layout--without-rail{grid-template-columns:minmax(0,1fr)}.cut-panel-movement-layout__main{min-width:0}.movement-document-card{overflow:hidden;border:1px solid var(--erp-border);border-radius:var(--erp-panel-radius);background:var(--erp-surface)}.movement-document-card>header{display:flex;align-items:center;gap:9px;padding:11px 13px;border-bottom:1px solid var(--erp-border);background:var(--erp-surface-soft)}.movement-document-card>header span{color:var(--erp-accent-hover);font-size:var(--erp-font-size-min);font-weight:800;letter-spacing:.09em}.movement-document-card>header h3{margin:0;color:var(--erp-text);font-size:.96rem}.movement-document-card>header em{margin-left:auto;color:var(--erp-text-muted);font-size:var(--erp-font-size-caption);font-style:normal}.movement-document-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;padding:13px}.movement-context-value,.movement-toggle{display:grid;align-content:start;gap:7px}.movement-context-value span,.movement-toggle span{color:var(--erp-text);font-size:var(--erp-font-size-caption);font-weight:680}.movement-context-value strong{display:block;min-height:auto;padding:2px 0 7px;border:0;border-bottom:1px solid var(--erp-border);border-radius:0;background:transparent;color:var(--erp-text);font-size:13px;font-weight:750}.movement-toggle{justify-items:start}.movement-dialog__footer{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%}.movement-dialog__footer>span{color:var(--erp-text-muted);font-size:var(--erp-font-size-caption)}.movement-dialog__footer>div{display:flex;gap:8px}.transaction-create-content{display:grid;gap:13px}.transaction-create-source{display:grid;grid-template-columns:minmax(0,1fr);gap:3px 10px;padding:12px;border:1px solid var(--erp-border);border-radius:var(--erp-control-radius);background:var(--erp-surface-soft)}.transaction-create-source span{grid-row:auto;color:var(--erp-accent-hover);font-size:var(--erp-font-size-min);font-weight:800;letter-spacing:.07em;writing-mode:horizontal-tb}.transaction-create-source strong{color:var(--erp-text);font-size:13px}.transaction-create-source small{color:var(--erp-text-muted);font-size:11px}.transaction-work-order-heading{display:flex;justify-content:space-between;color:var(--erp-text-secondary);font-size:12px;font-weight:700}.transaction-work-order-heading strong{color:var(--erp-accent-hover)}.transaction-work-order-loading,.transaction-work-orders{display:grid;gap:7px}.transaction-work-orders button{display:grid;min-height:52px;gap:3px;padding:10px 11px;border:1px solid var(--erp-border);border-radius:var(--erp-control-radius);background:var(--erp-surface);color:var(--erp-text);text-align:left;cursor:pointer}.transaction-work-orders button:hover,.transaction-work-orders button.selected{border-color:var(--erp-accent);background:var(--erp-accent-soft)}.transaction-work-orders button>span{display:flex;align-items:center;justify-content:space-between}.transaction-work-orders button i{color:var(--erp-accent)}.transaction-work-orders button small,.transaction-work-orders-empty{color:var(--erp-text-muted);font-size:11px}.transaction-work-orders-empty{padding:18px;border:1px dashed var(--erp-border-strong);border-radius:var(--erp-control-radius);text-align:center}
 @media(max-width:1050px){.cut-panel-movement-layout{grid-template-columns:minmax(0,1fr)}.movement-document-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.movement-document-grid{grid-template-columns:1fr}.movement-dialog__footer{align-items:stretch;flex-direction:column}.movement-dialog__footer>div{justify-content:flex-end;flex-wrap:wrap}}
 </style>

@@ -10,8 +10,20 @@
 	>
 		<section class="cutting-reports erp-workspace" aria-label="Cutting Reports">
 			<div v-if="loadingPermissions" class="report-permission-loading"><Skeleton height="3rem" /><Skeleton height="14rem" /></div>
-			<Message v-else-if="permissionError" severity="error" :closable="false">{{ permissionError }}</Message>
+			<WorkspaceLoadError v-else-if="permissionError" title="Reports could not be loaded" :message="permissionError" :loading="loadingPermissions" @retry="load" />
 			<Tabs v-else-if="visibleTabs.length" v-model:value="activeTab" class="erp-tabs report-tabs">
+				<div class="report-tabs__mobile">
+					<label for="cutting-report-select">Report</label>
+					<Select
+						v-model="activeTab"
+						input-id="cutting-report-select"
+						:options="visibleTabs"
+						option-label="label"
+						option-value="value"
+						placeholder="Choose a report"
+						fluid
+					/>
+				</div>
 				<TabList class="report-tabs__list">
 					<Tab v-for="tab in visibleTabs" :key="tab.value" :value="tab.value"><i :class="tab.icon" /><span>{{ tab.label }}</span></Tab>
 				</TabList>
@@ -30,6 +42,7 @@
 
 <script setup>
 import Message from "primevue/message"
+import Select from "primevue/select"
 import Skeleton from "primevue/skeleton"
 import Tab from "primevue/tab"
 import TabList from "primevue/tablist"
@@ -40,6 +53,7 @@ import { computed, onMounted, ref } from "vue"
 
 import { getCuttingReportPermissions } from "../api/cuttingReports.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
+import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import StockBalanceReport from "../components/reports/StockBalanceReport.vue"
 import CuttingDetailReport from "./cutting/reports/CuttingDetailReport.vue"
 import DailyCutSheetReport from "./cutting/reports/DailyCutSheetReport.vue"
@@ -59,16 +73,21 @@ const tabs = [
 ]
 const visibleTabs = computed(() => tabs.filter((tab) => reportPermissions.value[tab.value]))
 
-onMounted(async () => {
+async function load() {
+	loadingPermissions.value = true
+	permissionError.value = ""
 	try {
 		reportPermissions.value = await getCuttingReportPermissions() || {}
 		activeTab.value = visibleTabs.value[0]?.value || ""
 	} catch (reason) {
-		permissionError.value = reason.message || "Unable to load report permissions."
+		reportPermissions.value = {}
+		permissionError.value = reason?.message || "Unable to load report permissions."
 	} finally {
 		loadingPermissions.value = false
 	}
-})
+}
+
+onMounted(load)
 </script>
 
 <style scoped>
@@ -89,10 +108,14 @@ onMounted(async () => {
 	min-width: 0;
 }
 
+.report-tabs__mobile {
+	display: none;
+}
+
 .report-tabs__list {
 	position: sticky;
 	z-index: var(--erp-layer-sticky);
-	top: 0;
+	top: var(--erp-shell-header-height);
 	background: var(--erp-bg);
 }
 
@@ -117,10 +140,29 @@ onMounted(async () => {
 	padding: 0;
 }
 
-@media (max-width: 820px) {
+@media (max-width: 700px) {
+	.report-tabs__mobile {
+		position: sticky;
+		z-index: var(--erp-layer-sticky);
+		top: var(--erp-shell-header-height);
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		align-items: center;
+		gap: 6px;
+		padding: var(--erp-space-2) 0;
+		background: var(--erp-bg);
+	}
+
+	.report-tabs__mobile label {
+		color: var(--erp-text-muted);
+		font-size: var(--erp-font-size-min);
+		font-weight: 750;
+		letter-spacing: 0.035em;
+		text-transform: uppercase;
+	}
+
 	.report-tabs__list {
-		overflow-x: auto;
-		scrollbar-width: thin;
+		display: none;
 	}
 }
 </style>

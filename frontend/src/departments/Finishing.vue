@@ -1,7 +1,10 @@
 <template>
-	<DepartmentPage title="Finishing" accent="#087c91" />
+	<DepartmentPage title="Finishing" accent="#059669" :show-title="false" flat full-width>
+		<WorkspacePlaceholder title="Finishing" icon="pi pi-check-circle" />
+	</DepartmentPage>
 </template>
 
 <script setup>
 import DepartmentPage from "../components/DepartmentPage.vue"
+import WorkspacePlaceholder from "../components/common/WorkspacePlaceholder.vue"
 </script>

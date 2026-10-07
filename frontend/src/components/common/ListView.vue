@@ -1,9 +1,16 @@
 <template>
-	<section class="common-list-view" :class="{ 'common-list-view--viewport-bounded': viewportBounded, 'common-list-view--filters-open': mobileQuickFiltersOpen }">
+	<section
+		class="common-list-view"
+		:class="{
+			'common-list-view--viewport-bounded': viewportBounded,
+			'common-list-view--empty': isEmptyResult,
+			'common-list-view--filters-open': mobileQuickFiltersOpen,
+		}"
+	>
 		<header class="list-page-head">
 			<div class="list-title-block">
 				<span v-if="eyebrow" class="list-eyebrow">{{ eyebrow }}</span>
-				<h2>{{ title || doctype }}</h2>
+				<h1>{{ title || doctype }}</h1>
 				<p v-if="subtitle">{{ subtitle }}</p>
 			</div>
 			<div class="list-toolbar__actions">
@@ -19,11 +26,13 @@
 				</span>
 				<div class="list-toolbar__secondary">
 					<Button
+						class="list-filter-action"
+						:class="{ 'list-filter-action--active': activeFilterCount }"
 						icon="pi pi-filter"
 						label="Filters"
 						severity="secondary"
 						outlined
-						:badge="advancedFilters.length ? String(advancedFilters.length) : undefined"
+						:badge="activeFilterCount ? String(activeFilterCount) : undefined"
 						@click="showFilters = true"
 					/>
 					<Button
@@ -44,6 +53,8 @@
 						@click="refresh"
 					/>
 					<Button
+						class="list-clear-filter-action"
+						:class="{ 'list-clear-filter-action--active': hasActiveQuery }"
 						icon="pi pi-filter-slash"
 						label="Clear Filters"
 						severity="secondary"
@@ -59,7 +70,8 @@
 			v-if="standardFilterFields.length"
 			type="button"
 			class="mobile-quick-filter-toggle"
-			aria-label="Quick filters"
+			:class="{ 'mobile-quick-filter-toggle--active': activeQuickFilterCount }"
+			:aria-label="activeQuickFilterCount ? `Quick filters, ${activeQuickFilterCount} active` : 'Quick filters'"
 			:aria-expanded="mobileQuickFiltersOpen"
 			@click="mobileQuickFiltersOpen = !mobileQuickFiltersOpen"
 		>
@@ -77,7 +89,12 @@
 			@change="quickFiltersChanged"
 		/>
 
-		<nav v-if="statusTabs.length" class="list-status-tabs" aria-label="Status filters" tabindex="0">
+		<nav
+			v-if="statusTabs.length"
+			class="list-status-tabs"
+			:class="{ 'list-status-tabs--many': statusTabs.length > 6 }"
+			aria-label="Status filters"
+		>
 			<button
 				v-for="tab in statusTabs"
 				:key="tab.value || '__all__'"
@@ -92,8 +109,32 @@
 				<span class="list-status-tab__count">{{ tab.count }}</span>
 			</button>
 		</nav>
+		<label
+			v-if="statusTabs.length"
+			class="list-status-select"
+			:class="{ 'list-status-select--many': statusTabs.length > 6 }"
+		>
+			<span>Status</span>
+			<Select
+				:model-value="activeStatus"
+				:options="statusSelectOptions"
+				option-label="label"
+				option-value="value"
+				:placeholder="statusSelectOptions[0]?.label || 'All statuses'"
+				aria-label="Status filter"
+				fluid
+				@update:model-value="selectStatus"
+			/>
+		</label>
 
-		<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
+		<div v-if="error" class="list-load-error" role="alert">
+			<span class="list-load-error__icon" aria-hidden="true"><i class="pi pi-exclamation-circle"></i></span>
+			<div>
+				<strong>Unable to load {{ title || doctype }}</strong>
+				<span>{{ error }}</span>
+			</div>
+			<Button label="Retry" icon="pi pi-refresh" severity="danger" outlined :loading="loading" @click="retryLoad" />
+		</div>
 		<Message v-if="bulkNotice" severity="success" closable @close="bulkNotice = ''">
 			{{ bulkNotice }}
 		</Message>
@@ -155,7 +196,7 @@
 			</div>
 		</div>
 
-		<div class="list-table-frame">
+		<div v-if="!error" class="list-table-frame">
 			<div v-if="loading && !rows.length" class="list-loading" aria-label="Loading records">
 				<Skeleton v-for="index in 6" :key="index" class="list-loading-skeleton" height="42px" />
 			</div>
@@ -195,7 +236,6 @@
 					<template #body="{ data }">
 						<slot :name="`cell-${column.fieldname}`" :row="data" :value="data[column.fieldname]">
 							<div v-if="column.fieldname === 'name'" class="list-document-cell">
-								<span class="list-document-cell__mark">{{ rowMark }}</span>
 								<strong :title="displayValue(data[column.fieldname], column, data)">{{ displayValue(data[column.fieldname], column, data) }}</strong>
 							</div>
 							<span
@@ -234,14 +274,53 @@
 					<div class="list-empty">
 						<span class="list-empty__icon"><i class="pi pi-inbox" aria-hidden="true"></i></span>
 						<strong>No records found</strong>
-						<span>Try changing the search or filters.</span>
+						<span>{{ hasActiveQuery ? 'Try changing the search or filters.' : `No ${title || doctype} records are available yet.` }}</span>
 					</div>
 				</template>
 			</DataTable>
+			<div v-if="rows.length" class="mobile-list-records" role="list" :aria-label="`${title || doctype} records`">
+				<article
+					v-for="row in rows"
+					:key="row.name"
+					class="mobile-list-record"
+					role="listitem"
+				>
+					<header :class="{ 'mobile-list-record__header--without-selection': !showBulkSelection }">
+						<label v-if="showBulkSelection" class="mobile-list-record__select" @click.stop>
+							<input type="checkbox" :checked="isRowSelected(row)" :aria-label="`Select ${row.name || 'record'}`" @change="toggleMobileSelection(row, $event)" />
+						</label>
+						<div class="mobile-list-record__identity">
+							<span>{{ columnLabel(mobileColumns[0]) }}</span>
+							<slot :name="`cell-${mobileColumns[0]?.fieldname}`" :row="row" :value="row[mobileColumns[0]?.fieldname]">
+								<strong>{{ displayValue(row[mobileColumns[0]?.fieldname], mobileColumns[0], row) }}</strong>
+							</slot>
+						</div>
+						<button v-if="clickable" type="button" class="mobile-list-record__open" :aria-label="`Open ${row.name || 'record'}`" @click="openRow(row)">
+							<i class="pi pi-chevron-right" aria-hidden="true"></i>
+						</button>
+					</header>
+					<div v-if="mobileColumns.length > 1" class="mobile-list-record__facts">
+						<div v-for="column in mobileColumns.slice(1)" :key="column.fieldname">
+							<span>{{ columnLabel(column) }}</span>
+							<slot :name="`cell-${column.fieldname}`" :row="row" :value="row[column.fieldname]">
+								<strong>{{ displayValue(row[column.fieldname], column, row) }}</strong>
+							</slot>
+						</div>
+					</div>
+					<div v-if="$slots.actions" class="mobile-list-record__actions" @click.stop>
+						<slot name="actions" :row="row"></slot>
+					</div>
+				</article>
+			</div>
+			<div v-else-if="!loading" class="mobile-list-empty">
+				<span class="list-empty__icon"><i class="pi pi-inbox" aria-hidden="true"></i></span>
+				<strong>No records found</strong>
+				<span>{{ hasActiveQuery ? 'Try changing the search or filters.' : `No ${title || doctype} records are available yet.` }}</span>
+			</div>
 		</div>
 
 		<Paginator
-			v-if="total > pageSize"
+			v-if="!error && total > pageSize"
 			:first="first"
 			:rows="pageSize"
 			:total-records="total"
@@ -267,7 +346,7 @@
 			v-model:visible="showBulkEdit"
 			header="Bulk Edit"
 			modal
-			:style="{ width: 'min(560px, calc(100vw - 32px))' }"
+			class="erp-dialog--md"
 		>
 			<div class="bulk-edit-form">
 				<div class="bulk-edit-selection">{{ selectedRows.length }} records selected</div>
@@ -316,7 +395,7 @@
 			v-model:visible="showBulkConfirm"
 			:header="bulkConfirmTitle"
 			modal
-			:style="{ width: 'min(480px, calc(100vw - 32px))' }"
+			class="erp-dialog--sm"
 		>
 			<p class="bulk-confirm-copy">{{ bulkConfirmMessage }}</p>
 			<template #footer>
@@ -443,6 +522,7 @@ const sortOrder = ref(props.defaultOrderBy.toLowerCase().endsWith(" asc") ? 1 : 
 const metaFields = ref([])
 const metaDocuments = ref([])
 const doctypeMeta = ref(null)
+const metadataReady = ref(false)
 const userColumns = ref(null)
 const advancedFilters = ref([])
 const quickFilters = ref({})
@@ -534,7 +614,17 @@ const hasActiveQuery = computed(
 	),
 )
 const activeQuickFilterCount = computed(() =>
-	Object.values(quickFilters.value).filter((value) => hasFilterValue(value)).length,
+	standardFilterFields.value.filter((field) => hasFilterValue(quickFilters.value[field.fieldname])).length,
+)
+const activeFilterCount = computed(() => {
+	const statusIsSeparate = Boolean(
+		activeStatus.value &&
+		!standardFilterFields.value.some((field) => field.fieldname === props.statusField),
+	)
+	return Number(Boolean(appliedSearch.value)) + advancedFilters.value.length + activeQuickFilterCount.value + Number(statusIsSeparate)
+})
+const isEmptyResult = computed(() =>
+	metadataReady.value && !loading.value && !error.value && rows.value.length === 0,
 )
 
 const isSubmittable = computed(() => Boolean(Number(doctypeMeta.value?.is_submittable)))
@@ -605,6 +695,15 @@ const activeColumns = computed(() => [
 	{ fieldname: "name", fieldtype: "Data", label: "Name" },
 	...columnOptions.value.filter((column) => column.enabled && column.fieldname !== "name"),
 ])
+const mobileColumns = computed(() => {
+	const columns = activeColumns.value
+	if (columns.length <= 4) return columns
+	const primary = columns[0]
+	const statusFields = new Set([props.statusField, "docstatus", "status", "workflow_state"].filter(Boolean))
+	const status = columns.find((column) => statusFields.has(column.fieldname))
+	const facts = columns.slice(1).filter((column) => column !== status).slice(0, status ? 2 : 3)
+	return [primary, ...facts, ...(status ? [status] : [])].filter(Boolean)
+})
 
 const activeCurrencyFields = computed(() => {
 	const availableFields = new Set(metaFields.value.map((field) => field.fieldname).filter(Boolean))
@@ -674,6 +773,11 @@ const statusTabs = computed(() => {
 	]
 })
 
+const statusSelectOptions = computed(() => statusTabs.value.map((tab) => ({
+	...tab,
+	label: `${tab.label} (${tab.count})`,
+})))
+
 watch(
 	() => [props.doctype, JSON.stringify(props.filters)],
 	() => initialise(),
@@ -732,6 +836,7 @@ async function initialise() {
 	const sequence = ++loadSequence
 	loading.value = true
 	error.value = ""
+	metadataReady.value = false
 	first.value = 0
 	advancedFilters.value = []
 	quickFilters.value = {}
@@ -751,6 +856,7 @@ async function initialise() {
 		metaDocuments.value = metas
 		metaFields.value = meta?.fields || []
 		userColumns.value = savedColumns
+		metadataReady.value = true
 		await Promise.all([loadRows(sequence), loadStatusCounts(sequence)])
 	} catch (reason) {
 		if (sequence !== loadSequence) return
@@ -905,6 +1011,10 @@ function refresh() {
 	return reload(true)
 }
 
+function retryLoad() {
+	return metadataReady.value ? refresh() : initialise()
+}
+
 function clearFilters() {
 	if (quickFilterTimer) {
 		clearTimeout(quickFilterTimer)
@@ -922,6 +1032,15 @@ function clearFilters() {
 
 function clearSelection() {
 	selectedRows.value = []
+}
+
+function isRowSelected(row) {
+	return selectedRows.value.some((selected) => selected.name === row.name)
+}
+
+function toggleMobileSelection(row, event) {
+	if (event.target.checked) selectedRows.value = [...selectedRows.value.filter((selected) => selected.name !== row.name), row]
+	else selectedRows.value = selectedRows.value.filter((selected) => selected.name !== row.name)
 }
 
 function titleForMessage() {
@@ -1164,11 +1283,11 @@ defineExpose({ refresh: reload })
 	display: grid;
 	gap: 12px;
 	width: 100%;
-	padding: 16px;
-	background: var(--list-surface);
-	border: 1px solid var(--list-line);
-	border-radius: var(--erp-panel-radius);
-	box-shadow: var(--erp-shadow-sm);
+	padding: 10px;
+	background: transparent;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
 }
 
 .common-list-view--viewport-bounded {
@@ -1201,6 +1320,19 @@ defineExpose({ refresh: reload })
 	flex: 1 1 auto;
 }
 
+@media (min-width: 1025px) {
+	.common-list-view--viewport-bounded.common-list-view--empty {
+		height: auto;
+		overflow: visible;
+	}
+
+	.common-list-view--viewport-bounded.common-list-view--empty .list-table-frame {
+		height: 252px;
+		min-height: 252px;
+		flex: none;
+	}
+}
+
 .list-page-head {
 	display: flex;
 	align-items: center;
@@ -1225,7 +1357,7 @@ defineExpose({ refresh: reload })
 	text-transform: uppercase;
 }
 
-.list-title-block h2 {
+.list-title-block h1 {
 	margin: 0;
 	color: var(--list-ink);
 	font-size: 1.45rem;
@@ -1316,12 +1448,24 @@ defineExpose({ refresh: reload })
 	box-shadow: var(--erp-shadow-xs);
 }
 
+.list-toolbar__actions :deep(.p-button.list-filter-action--active) {
+	color: var(--list-accent-dark);
+	background: var(--list-accent-soft);
+	border-color: color-mix(in srgb, var(--list-accent) 38%, white);
+}
+
+.list-toolbar__actions :deep(.p-button.list-clear-filter-action--active) {
+	color: var(--erp-danger);
+	background: var(--erp-danger-soft);
+	border-color: color-mix(in srgb, var(--erp-danger) 28%, white);
+}
+
 .list-toolbar__actions :deep(.p-button.list-primary-action),
 .list-toolbar__primary :deep(.p-button) {
 	color: #fff;
 	background: var(--list-accent);
 	border-color: var(--list-accent);
-	box-shadow: 0 3px 9px color-mix(in srgb, var(--list-accent) 18%, transparent);
+	box-shadow: none;
 }
 
 .list-toolbar__actions :deep(.p-button.list-primary-action:not(:disabled):hover),
@@ -1329,13 +1473,39 @@ defineExpose({ refresh: reload })
 	color: #fff;
 	background: var(--list-accent-dark);
 	border-color: var(--list-accent-dark);
-	box-shadow: 0 4px 12px color-mix(in srgb, var(--list-accent) 24%, transparent);
+	box-shadow: var(--erp-shadow-xs);
 }
 
 .bulk-message {
 	display: grid;
 	gap: 4px;
 }
+
+.list-load-error {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 12px;
+	padding: 11px 12px;
+	color: var(--erp-text-secondary);
+	background: var(--erp-danger-soft);
+	border: 1px solid color-mix(in srgb, var(--erp-danger) 24%, white);
+	border-radius: var(--erp-control-radius);
+}
+
+.list-load-error__icon {
+	display: grid;
+	width: 34px;
+	height: 34px;
+	color: var(--erp-danger);
+	background: var(--erp-surface);
+	border-radius: 50%;
+	place-items: center;
+}
+
+.list-load-error > div { display: grid; gap: 2px; min-width: 0; }
+.list-load-error strong { color: var(--erp-text); font-size: var(--erp-font-size-table); }
+.list-load-error > div > span { overflow-wrap: anywhere; font-size: var(--erp-font-size-caption); }
 
 .bulk-message span {
 	font-size: 0.78rem;
@@ -1435,6 +1605,25 @@ defineExpose({ refresh: reload })
 	outline-offset: 2px;
 }
 
+.list-status-select {
+	display: none;
+	width: min(100%, 320px);
+	gap: 5px;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 700;
+	letter-spacing: .04em;
+	text-transform: uppercase;
+}
+
+.list-status-select--many {
+	display: grid;
+}
+
+.list-status-tabs--many {
+	display: none;
+}
+
 .list-status-tab {
 	display: inline-flex;
 	align-items: center;
@@ -1463,7 +1652,6 @@ defineExpose({ refresh: reload })
 	background: var(--erp-surface);
 	border-color: var(--erp-border);
 	box-shadow: var(--erp-shadow-sm);
-	transform: translateY(-1px);
 }
 
 .list-status-tab:focus-visible {
@@ -1556,6 +1744,11 @@ defineExpose({ refresh: reload })
 	border-radius: 0;
 }
 
+.mobile-list-records,
+.mobile-list-empty {
+	display: none;
+}
+
 :deep(.premium-list-table .p-datatable-table) {
 	border-collapse: separate;
 	border-spacing: 0;
@@ -1565,7 +1758,7 @@ defineExpose({ refresh: reload })
 	position: sticky;
 	top: 0;
 	z-index: var(--erp-layer-sticky);
-	padding: 9px 12px;
+	padding: var(--erp-table-cell-pad-y) var(--erp-table-cell-pad-x);
 	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
 	font-weight: 820;
@@ -1583,12 +1776,8 @@ defineExpose({ refresh: reload })
 		box-shadow 140ms ease;
 }
 
-:deep(.premium-list-table .p-datatable-tbody > tr:nth-child(even)) {
-	background: var(--erp-surface-soft);
-}
-
 :deep(.premium-list-table .p-datatable-tbody > tr > td) {
-	padding: 10px 12px;
+	padding: var(--erp-table-cell-pad-y) var(--erp-table-cell-pad-x);
 	color: var(--erp-text-secondary);
 	font-size: 13px;
 	border: 0;
@@ -1602,6 +1791,12 @@ defineExpose({ refresh: reload })
 :deep(.premium-list-table .p-datatable-tbody > tr:hover) {
 	background: color-mix(in srgb, var(--list-accent) 4%, white);
 	box-shadow: inset 0 1px color-mix(in srgb, var(--list-accent) 8%, transparent), inset 0 -1px color-mix(in srgb, var(--list-accent) 8%, transparent);
+}
+
+:deep(.premium-list-table .p-datatable-tbody > tr.p-datatable-empty-message),
+:deep(.premium-list-table .p-datatable-tbody > tr.p-datatable-empty-message:hover) {
+	background: var(--erp-surface);
+	box-shadow: none;
 }
 
 :deep(.premium-list-table .p-datatable-tbody > tr.p-datatable-row-selected) {
@@ -1627,22 +1822,6 @@ defineExpose({ refresh: reload })
 .list-document-cell {
 	display: flex;
 	align-items: center;
-	gap: 10px;
-}
-
-.list-document-cell__mark {
-	display: inline-grid;
-	width: 34px;
-	height: 30px;
-	color: #fff;
-	font-size: var(--erp-font-size-min);
-	font-weight: 850;
-	letter-spacing: 0.05em;
-	background: var(--list-accent);
-	border: 1px solid color-mix(in srgb, var(--list-accent) 74%, black);
-	border-radius: 9px;
-	box-shadow: 0 5px 12px color-mix(in srgb, var(--list-accent) 22%, transparent);
-	place-items: center;
 }
 
 .list-document-cell strong {
@@ -1748,7 +1927,11 @@ defineExpose({ refresh: reload })
 
 :deep(.premium-list-row--clickable:hover) .list-row-chevron {
 	color: var(--list-accent);
-	transform: translateX(2px);
+}
+
+@media (hover: hover) {
+	.list-status-tab:hover { transform: translateY(-1px); }
+	:deep(.premium-list-row--clickable:hover) .list-row-chevron { transform: translateX(2px); }
 }
 
 :deep(.premium-list-row--clickable:has(.list-row-open:focus-visible)) {
@@ -1856,22 +2039,185 @@ defineExpose({ refresh: reload })
 	}
 }
 
-@media (max-width: 850px) {
+@media (max-width: 1024px) {
 	.common-list-view {
-		padding: 14px;
-		border-radius: var(--erp-panel-radius);
+		padding: 8px;
 	}
 
 	.common-list-view--viewport-bounded {
-		height: calc(100dvh - var(--erp-shell-header-height) - 76px);
-		min-height: 0;
-		overflow-y: auto;
+		height: auto;
+		min-height: calc(100dvh - var(--erp-shell-header-height) - 76px);
+		overflow: visible;
 	}
 
 	.common-list-view--viewport-bounded .list-table-frame,
 	.common-list-view--viewport-bounded.common-list-view--filters-open .list-table-frame {
-		min-height: min(360px, 55dvh);
-		flex: 1 0 min(360px, 55dvh);
+		min-height: 0;
+		flex: none;
+	}
+
+	.common-list-view--viewport-bounded :deep(.premium-list-table) {
+		height: auto;
+	}
+
+	.common-list-view--viewport-bounded :deep(.premium-list-table .p-datatable-table-container) {
+		overflow-x: auto;
+		overflow-y: visible;
+	}
+
+	.list-table-frame {
+		overflow: visible;
+	}
+
+	.list-status-tabs {
+		display: none;
+	}
+
+	.list-status-select {
+		display: grid;
+		width: 100%;
+	}
+
+	.list-table-frame::after {
+		display: none;
+	}
+
+	.common-list-view--viewport-bounded :deep(.premium-list-table),
+	:global(.premium-list-table) {
+		display: none;
+	}
+
+	.mobile-list-records,
+	.mobile-list-empty {
+		display: grid;
+	}
+
+	.mobile-list-record {
+		display: grid;
+		gap: 10px;
+		min-width: 0;
+		padding: 12px;
+		background: var(--erp-surface);
+		border-bottom: 1px solid var(--erp-border-subtle);
+	}
+
+	.list-load-error {
+		grid-template-columns: auto minmax(0, 1fr);
+	}
+
+	.list-load-error :deep(.p-button) {
+		grid-column: 1 / -1;
+		width: 100%;
+		min-height: 44px;
+	}
+
+	.mobile-list-record:last-child {
+		border-bottom: 0;
+	}
+
+	.mobile-list-record > header {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		align-items: center;
+		gap: 10px;
+	}
+
+	.mobile-list-record__header--without-selection {
+		grid-template-columns: minmax(0, 1fr) auto !important;
+	}
+
+	.mobile-list-record__open {
+		display: inline-grid;
+		width: 44px;
+		height: 44px;
+		padding: 0;
+		border: 0;
+		border-radius: var(--erp-control-radius);
+		background: transparent;
+		color: var(--erp-text-muted);
+		font-size: 12px;
+		cursor: pointer;
+		place-items: center;
+	}
+
+	.mobile-list-record__open:hover {
+		background: var(--erp-surface-hover);
+		color: var(--erp-accent-dark);
+	}
+
+	.mobile-list-record__select {
+		display: grid;
+		width: 44px;
+		height: 44px;
+		cursor: pointer;
+		place-items: center;
+	}
+
+	.mobile-list-record__select input {
+		width: 18px;
+		height: 18px;
+		accent-color: var(--erp-accent);
+	}
+
+	.mobile-list-record__identity,
+	.mobile-list-record__facts > div {
+		display: grid;
+		min-width: 0;
+		gap: 2px;
+	}
+
+	.mobile-list-record__identity span,
+	.mobile-list-record__facts span {
+		color: var(--erp-text-muted);
+		font-size: var(--erp-font-size-min);
+		font-weight: 700;
+		letter-spacing: .025em;
+		text-transform: uppercase;
+	}
+
+	.mobile-list-record__identity strong,
+	.mobile-list-record__facts strong {
+		overflow: hidden;
+		color: var(--erp-text);
+		font-size: var(--erp-font-size-table);
+		font-weight: 650;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.mobile-list-record__identity strong {
+		color: var(--erp-accent-dark);
+		font-size: 14px;
+	}
+
+	.mobile-list-record__facts {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 8px;
+	}
+
+	.mobile-list-record__actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 6px;
+		padding-top: 2px;
+	}
+
+	.mobile-list-record__actions :deep(.p-button) {
+		min-width: 44px;
+		min-height: 44px;
+	}
+
+	.mobile-list-empty {
+		justify-items: center;
+		gap: 6px;
+		padding: 44px 16px;
+		color: var(--erp-text-muted);
+		text-align: center;
+	}
+
+	.mobile-list-empty strong {
+		color: var(--erp-text);
 	}
 
 	.list-page-head {
@@ -1881,7 +2227,7 @@ defineExpose({ refresh: reload })
 
 	.list-toolbar__actions {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) 44px;
+		grid-template-columns: minmax(0, 1fr) auto;
 		gap: 8px;
 		justify-content: stretch;
 		padding: 0;
@@ -1919,23 +2265,13 @@ defineExpose({ refresh: reload })
 	.list-toolbar__secondary :deep(.p-button) {
 		justify-content: center;
 		width: 100%;
+		min-height: 44px;
 	}
 
 	.list-toolbar__primary :deep(.p-button) {
-		min-width: 44px;
-		padding-inline: 0;
-	}
-
-	.list-toolbar__primary :deep(.p-button-label) {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		padding: 0;
-		margin: -1px;
-		overflow: hidden;
-		clip: rect(0, 0, 0, 0);
-		white-space: nowrap;
-		border: 0;
+		width: auto;
+		min-width: max-content;
+		padding-inline: 14px;
 	}
 
 	.mobile-quick-filter-toggle {
@@ -1943,7 +2279,7 @@ defineExpose({ refresh: reload })
 		align-items: center;
 		justify-content: space-between;
 		gap: 8px;
-		min-height: 38px;
+		min-height: 44px;
 		padding: 0 12px;
 		color: var(--list-muted);
 		background: var(--erp-surface);
@@ -1969,6 +2305,12 @@ defineExpose({ refresh: reload })
 		border-radius: 999px;
 	}
 
+	.mobile-quick-filter-toggle--active {
+		color: var(--list-accent-dark);
+		background: var(--list-accent-soft);
+		border-color: color-mix(in srgb, var(--list-accent) 38%, white);
+	}
+
 	.list-quick-filters {
 		display: none;
 	}
@@ -1986,10 +2328,18 @@ defineExpose({ refresh: reload })
 	.bulk-bar__actions :deep(.p-button) {
 		justify-content: center;
 		width: 100%;
+		min-height: 44px;
+	}
+
+	.list-status-tab {
+		min-height: 44px;
 	}
 }
 
 @media (max-width: 540px) {
+	.mobile-list-record__facts {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
 	.list-toolbar__secondary :deep(.p-button-label) {
 		position: absolute;
 		width: 1px;
@@ -2005,6 +2355,26 @@ defineExpose({ refresh: reload })
 	.list-toolbar__secondary :deep(.p-button) {
 		min-width: 44px;
 		padding-inline: 0;
+	}
+}
+
+@media (max-width: 420px) {
+	.list-toolbar__actions {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.list-search,
+	.list-toolbar__primary,
+	.list-toolbar__secondary {
+		grid-column: 1;
+	}
+
+	.list-search { grid-row: 1; }
+	.list-toolbar__primary { grid-row: 2; }
+	.list-toolbar__secondary { grid-row: 3; }
+
+	.list-toolbar__primary :deep(.p-button) {
+		width: 100%;
 	}
 }
 </style>

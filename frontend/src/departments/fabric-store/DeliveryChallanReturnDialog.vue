@@ -4,14 +4,12 @@
 		modal
 		dismissable-mask
 		:header="`Return Items from ${deliveryChallan}`"
-		class="dc-return-dialog erp-entity-dialog"
-		:style="{ width: 'min(1120px, calc(100vw - 24px))' }"
+		class="dc-return-dialog erp-entity-dialog erp-dialog--lg"
 		@update:visible="requestVisibility"
 	>
 		<div class="dc-return-content">
 			<div v-if="loading" class="dc-return-loading"><Skeleton v-for="index in 4" :key="index" height="3rem" /></div>
 			<template v-else>
-				<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 				<div class="dc-return-context">
 					<div><span>Delivery Challan</span><strong>{{ deliveryChallan }}</strong></div>
 					<div><span>Selected quantity</span><strong>{{ formatQty(selectedQuantity) }}</strong></div>
@@ -24,7 +22,7 @@
 					:show-open-button="false"
 					show-clear
 				/>
-				<div class="erp-table-wrap dc-return-table">
+				<div class="erp-table-wrap dc-return-table" role="region" tabindex="0" aria-label="Returnable Delivery Challan quantities">
 					<table class="erp-data-table">
 						<thead><tr><th>Item Variant</th><th>UOM</th><th class="erp-number">DC Qty</th><th class="erp-number">Consumed</th><th class="erp-number">Returned</th><th class="erp-number">Returnable</th><th class="erp-number">Return Qty</th></tr></thead>
 						<tbody>
@@ -35,7 +33,7 @@
 								<td class="erp-number">{{ formatQty(row.consumed_quantity) }}</td>
 								<td class="erp-number">{{ formatQty(row.already_returned) }}</td>
 								<td class="erp-number dc-return-available">{{ formatQty(row.returnable_quantity) }}</td>
-								<td class="erp-number"><InputNumber v-model="row.return_quantity" :min="0" :max="Number(row.returnable_quantity || 0)" :max-fraction-digits="3" fluid /></td>
+								<td class="erp-number"><InputNumber v-model="row.return_quantity" :aria-label="`Return quantity for ${row.item_variant || 'item'}`" :min="0" :max="Number(row.returnable_quantity || 0)" :max-fraction-digits="3" fluid /></td>
 							</tr>
 						</tbody>
 					</table>
@@ -50,18 +48,19 @@
 			</div>
 		</template>
 	</Dialog>
+	<DocumentErrorDialog :message="error" title="Delivery Challan return could not be completed" @dismiss="error = ''" />
 </template>
 
 <script setup>
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
-import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 import { computed, ref, watch } from "vue"
 
 import { createDeliveryChallanReturn, getDeliveryChallanReturnEditor } from "../../api/fabricStore.js"
 import LinkField from "../../components/common/LinkField.vue"
+import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
@@ -117,7 +116,7 @@ function clone(value) { return JSON.parse(JSON.stringify(value || [])) }
 
 <style scoped>
 .dc-return-content, .dc-return-loading { display: grid; gap: var(--erp-space-3); }
-.dc-return-content { max-height: 68vh; min-height: 180px; overflow-y: auto; padding: 2px 1px; scrollbar-gutter: stable; }
+.dc-return-content { min-height: 180px; overflow-y: visible; padding: 2px 1px; }
 .dc-return-context { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: hidden; background: color-mix(in srgb, var(--erp-surface-soft) 76%, white); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
 .dc-return-context > div { display: grid; gap: 3px; padding: 9px 12px; border-right: 1px solid var(--erp-border); }
 .dc-return-context > div:last-child { border-right: 0; }
@@ -131,4 +130,5 @@ function clone(value) { return JSON.parse(JSON.stringify(value || [])) }
 .dc-return-empty { display: grid; min-height: 140px; place-items: center; align-content: center; gap: 7px; color: var(--erp-text-muted); }
 .dc-return-footer { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: var(--erp-space-3); }
 @media (max-width: 560px) { .dc-return-context { grid-template-columns: 1fr; } .dc-return-footer { align-items: stretch; flex-direction: column; } }
+@media (max-width: 1024px), (pointer: coarse) { .dc-return-table :deep(.p-inputnumber-input) { height: 44px; min-height: 44px; } }
 </style>

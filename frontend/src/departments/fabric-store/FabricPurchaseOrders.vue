@@ -23,7 +23,7 @@
 				/>
 			</template>
 			<template #cell-status="{ value }">
-				<Tag :value="value || 'Draft'" :severity="statusSeverity(value)" rounded />
+				<DocumentStatusBadge :label="value || 'Draft'" />
 			</template>
 		</ListView>
 	</div>
@@ -31,10 +31,10 @@
 
 <script setup>
 import Button from "primevue/button"
-import Tag from "primevue/tag"
 import { useRouter } from "vue-router"
 
 import ListView from "../../components/common/ListView.vue"
+import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 
 defineProps({ capability: { type: Object, required: true } })
 
@@ -49,10 +49,4 @@ function openPurchaseOrder(row) {
 
 function createPurchaseOrder() { router.push({ name: "fabric-purchase-order-new" }) }
 
-function statusSeverity(status) {
-	if (status === "Completed") return "success"
-	if (["Cancelled", "Closed"].includes(status)) return "danger"
-	if (String(status || "").startsWith("To ")) return "warn"
-	return "secondary"
-}
 </script>

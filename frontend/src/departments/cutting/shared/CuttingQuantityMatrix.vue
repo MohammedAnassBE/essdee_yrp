@@ -130,6 +130,7 @@ function updateQuantity(rowKey, size, value) {
 }
 
 .cutting-quantity-matrix__count {
+	flex: 0 0 auto;
 	padding: 4px 9px;
 	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
@@ -137,6 +138,7 @@ function updateQuantity(rowKey, size, value) {
 	background: var(--erp-surface-muted);
 	border: 1px solid var(--erp-border);
 	border-radius: 999px;
+	white-space: nowrap;
 }
 
 .cutting-quantity-matrix__empty {

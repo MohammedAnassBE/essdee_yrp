@@ -15,15 +15,17 @@
 				@select="$emit('select', $event)"
 			/>
 		</section>
-		<main class="planner-plan-workspace__result"><PlannerLayPlan :result="result" :tolerance="tolerance" /></main>
+		<section v-if="hasPlanContext" class="planner-plan-workspace__result" aria-label="Selected LaySheet plan"><PlannerLayPlan :result="result" :tolerance="tolerance" /></section>
 	</section>
 </template>
 
 <script setup>
+import { computed } from "vue"
+
 import PlannerLayPlan from "./PlannerLayPlan.vue"
 import PlannerStrategies from "./PlannerStrategies.vue"
 
-defineProps({
+const props = defineProps({
 	successful: { type: Array, default: () => [] },
 	failed: { type: Array, default: () => [] },
 	selected: { type: String, default: "" },
@@ -32,6 +34,8 @@ defineProps({
 	canSelect: Boolean,
 	selecting: { type: String, default: "" },
 })
+
+const hasPlanContext = computed(() => Boolean(props.successful.length || props.failed.length || props.result))
 
 defineEmits(["select"])
 </script>
@@ -48,6 +52,6 @@ defineEmits(["select"])
 @media (max-width: 700px) {
 	.planner-plan-workspace { height: auto; min-height: 100%; overflow: visible; grid-template-columns: 1fr; }
 	.planner-plan-workspace__result { min-height: auto; overflow: visible; }
-	.planner-plan-workspace__strategies { min-height: 260px; max-height: min(46dvh, 420px); overflow-y: auto; border-right: 0; border-bottom: 1px solid var(--erp-border); }
+	.planner-plan-workspace__strategies { min-height: 0; max-height: none; overflow-y: visible; border-right: 0; border-bottom: 1px solid var(--erp-border); }
 }
 </style>

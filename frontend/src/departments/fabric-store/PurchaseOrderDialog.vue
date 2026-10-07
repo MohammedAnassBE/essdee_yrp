@@ -5,16 +5,14 @@
 		dismissable-mask
 		maximizable
 		:header="dialogTitle"
-		class="purchase-order-dialog erp-entity-dialog"
-		:style="{ width: 'min(1220px, calc(100vw - 24px))' }"
+		class="purchase-order-dialog erp-entity-dialog erp-dialog--lg"
 		@update:visible="requestVisibility"
 	>
 		<div class="purchase-order-dialog__content">
 			<div v-if="loading" class="purchase-order-loading"><Skeleton v-for="index in 6" :key="index" height="3rem" /></div>
 			<template v-else>
-				<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 				<div v-if="payload.record" class="purchase-order-status-row">
-					<div><span class="document-status" :class="`document-status--${statusTone}`">{{ payload.record.status }}</span><strong>{{ payload.record.supplier_name || payload.record.supplier || "—" }}</strong></div>
+					<div><DocumentStatusBadge :docstatus="payload.record.docstatus" :label="payload.record.status" /><strong>{{ payload.record.supplier_name || payload.record.supplier || "—" }}</strong></div>
 					<small>Updated {{ formatDate(payload.record.modified, true) }}</small>
 				</div>
 				<section v-if="payload.details?.length" class="purchase-order-detail-grid">
@@ -39,6 +37,7 @@
 			</div>
 		</template>
 	</Dialog>
+	<DocumentErrorDialog :message="error" :title="`${dialogTitle} could not be completed`" @dismiss="error = ''" />
 
 	<RelatedDocumentWorkspaceDialog
 		v-model:visible="grnVisible"
@@ -56,7 +55,9 @@ import Skeleton from "primevue/skeleton"
 import { computed, ref, watch } from "vue"
 
 import { changeFabricStoreDocumentStatus, getPurchaseOrderWorkspace } from "../../api/fabricStore.js"
+import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
+import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import StockItemMatrix from "../../components/stock/StockItemMatrix.vue"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import RelatedDocumentWorkspaceDialog from "./RelatedDocumentWorkspaceDialog.vue"
@@ -75,7 +76,6 @@ const error = ref("")
 const payload = ref({})
 const grnVisible = ref(false)
 const dialogTitle = computed(() => `Purchase Order${currentName.value ? ` · ${currentName.value}` : ""}`)
-const statusTone = computed(() => Number(payload.value.record?.docstatus) === 1 ? "submitted" : Number(payload.value.record?.docstatus) === 2 ? "cancelled" : "draft")
 
 watch(() => [props.visible, props.purchaseOrder], ([visible, purchaseOrder]) => {
 	if (!visible || !purchaseOrder) return
@@ -134,15 +134,15 @@ function formatDate(value, includeTime = false) { const match = String(value || 
 </script>
 
 <style scoped>
-.purchase-order-dialog__content { display: grid; max-height: 70vh; min-height: 240px; overflow-y: auto; gap: var(--erp-space-3); padding: 1px; scrollbar-gutter: stable; }
+.purchase-order-dialog__content { display: grid; min-height: 240px; overflow-y: visible; gap: var(--erp-space-3); padding: 1px; }
 .purchase-order-loading { display: grid; gap: var(--erp-space-2); }
 .purchase-order-status-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .purchase-order-status-row > div { display: flex; align-items: center; gap: 10px; }
 .purchase-order-status-row > div > strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
 .purchase-order-status-row small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
-.document-status { padding: 4px 9px; color: #546159; font-size: var(--erp-font-size-min); font-weight: 800; text-transform: uppercase; background: #eef2f0; border-radius: var(--erp-pill-radius); }
-.document-status--submitted { color: #087848; background: #ddf6e9; }
-.document-status--cancelled { color: #b42318; background: #fde8e8; }
+.document-status { padding: 4px 9px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: var(--erp-font-weight-bold); text-transform: uppercase; background: var(--erp-surface-muted); border-radius: var(--erp-pill-radius); }
+.document-status--submitted { color: var(--erp-success); background: var(--erp-success-soft); }
+.document-status--cancelled { color: var(--erp-danger); background: var(--erp-danger-soft); }
 .purchase-order-detail-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); box-shadow: 0 5px 16px rgb(28 61 45 / 4%); }
 .purchase-order-detail-grid > div { display: grid; min-height: 56px; align-content: center; gap: 4px; padding: 9px 11px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
 .purchase-order-detail-grid span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; }

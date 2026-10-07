@@ -4,22 +4,21 @@
 		modal
 		:dismissable-mask="false"
 		:header="title"
-		class="work-order-action-panel"
-		:style="{ width: panelWidth }"
+		class="work-order-action-panel erp-entity-dialog"
+		:class="largePanel ? 'erp-dialog--lg' : 'erp-dialog--md'"
 		@update:visible="requestVisibility"
 	>
 		<div :data-mode="mode" class="work-order-action-panel__body">
-			<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 			<div v-if="loading" class="work-order-action-panel__loading"><Skeleton height="74px" /><Skeleton height="180px" /></div>
 
 			<template v-else-if="mode === 'calculate_garment'">
 				<Message v-if="!garmentMatrixRows.length" severity="secondary" :closable="false">The Lot has no items available for this calculation.</Message>
 				<div v-else class="work-order-garment-calculation">
 					<div class="work-order-garment-calculation__toolbar"><span>Select the combinations to calculate, then adjust quantities if required.</span><div><Button label="Select all" size="small" severity="secondary" outlined @click="setAllGarmentRows(true)" /><Button label="Unselect all" size="small" severity="secondary" text @click="setAllGarmentRows(false)" /></div></div>
-					<div class="work-order-action-panel__table-wrap">
+					<div class="work-order-action-panel__table-wrap" role="region" tabindex="0" aria-label="Garment calculation quantities">
 						<table class="erp-data-table work-order-calculation-table">
 							<thead><tr><th class="work-order-calculation-table__use">Use</th><th v-for="attribute in garmentDisplayAttributes" :key="attribute">{{ attribute }}</th><th v-for="value in garmentPrimaryValues" :key="value" class="erp-number">{{ value === "default" ? "Quantity" : value }}</th><th class="erp-number">Total</th></tr></thead>
-							<tbody><tr v-for="(row, rowIndex) in garmentMatrixRows" :key="row.key || rowIndex" :class="{ 'work-order-calculation-table__row--disabled': !row.selected }"><td><Checkbox v-model="row.selected" binary /></td><td v-for="attribute in garmentDisplayAttributes" :key="attribute">{{ row.attributes?.[attribute] || "—" }}</td><td v-for="value in garmentPrimaryValues" :key="value" class="erp-number work-order-calculation-table__quantity"><template v-if="row.values?.[value]"><InputNumber v-model="row.values[value].qty" :min="0" :max="Number(row.values[value].available_qty || 0)" :max-fraction-digits="3" :disabled="!row.selected" fluid /><small>Available {{ number(row.values[value].available_qty) }}</small></template><span v-else>—</span></td><td class="erp-number work-order-calculation-table__total">{{ number(garmentRowTotal(row)) }}</td></tr></tbody>
+							<tbody><tr v-for="(row, rowIndex) in garmentMatrixRows" :key="row.key || rowIndex" :class="{ 'work-order-calculation-table__row--disabled': !row.selected }"><td><Checkbox v-model="row.selected" binary :aria-label="`Use garment row ${rowIndex + 1}: ${attributeText(row.attributes) || row.key || 'item'}`" /></td><td v-for="attribute in garmentDisplayAttributes" :key="attribute">{{ row.attributes?.[attribute] || "—" }}</td><td v-for="value in garmentPrimaryValues" :key="value" class="erp-number work-order-calculation-table__quantity"><template v-if="row.values?.[value]"><InputNumber v-model="row.values[value].qty" :aria-label="`${value === 'default' ? 'Quantity' : value} for ${attributeText(row.attributes) || row.key || `garment row ${rowIndex + 1}`}`" :min="0" :max="Number(row.values[value].available_qty || 0)" :max-fraction-digits="3" :disabled="!row.selected" fluid /><small>Available {{ number(row.values[value].available_qty) }}</small></template><span v-else>—</span></td><td class="erp-number work-order-calculation-table__total">{{ number(garmentRowTotal(row)) }}</td></tr></tbody>
 							<tfoot><tr><th :colspan="1 + garmentDisplayAttributes.length">Column totals</th><th v-for="value in garmentPrimaryValues" :key="value" class="erp-number">{{ number(garmentColumnTotal(value)) }}</th><th class="erp-number">{{ number(garmentGrandTotal) }}</th></tr></tfoot>
 						</table>
 					</div>
@@ -31,11 +30,11 @@
 				<Message v-for="warning in fabricContext.warnings || []" :key="warning" severity="warn" :closable="false">{{ warning }}</Message>
 				<div v-for="row in fabricRows" :key="row.fabric_row" class="work-order-fabric-row">
 					<header><div><strong>{{ row.cloth_item || row.treated_item }}</strong><span>{{ row.kind }}</span></div><span>{{ row.production_detail }}</span></header>
-					<div v-if="row.has_colour && !row.multi_colour && !row.reference_routed" class="work-order-action-panel__field"><label>Cloth colour</label><Select v-model="row.colour" :options="row.colour_options || []" show-clear fluid /></div>
-					<div v-if="row.kind === 'knitting' && !row.reference_routed && (row.yarns || []).length <= 1" class="work-order-action-panel__field"><label>Yarn deliverable quantity</label><InputNumber v-model="row.yarn_qty" :min="0" :max-fraction-digits="3" fluid /></div>
+					<div v-if="row.has_colour && !row.multi_colour && !row.reference_routed" class="work-order-action-panel__field"><label>Cloth colour</label><Select v-model="row.colour" :aria-label="`Cloth colour for ${row.cloth_item || row.treated_item || 'fabric row'}`" :options="row.colour_options || []" show-clear fluid /></div>
+					<div v-if="row.kind === 'knitting' && !row.reference_routed && (row.yarns || []).length <= 1" class="work-order-action-panel__field"><label>Yarn deliverable quantity</label><InputNumber v-model="row.yarn_qty" :aria-label="`Yarn deliverable quantity for ${row.cloth_item || row.treated_item || 'fabric row'}`" :min="0" :max-fraction-digits="3" fluid /></div>
 					<div v-else-if="row.kind === 'knitting' && !row.reference_routed && row.yarns?.length" class="work-order-fabric-row__yarns"><span>Calculated yarn deliverables</span><strong v-for="yarn in row.yarns" :key="yarn.yarn_item">{{ yarn.yarn_item }} · {{ number(yarn.ratio) }}%</strong></div>
 					<div class="work-order-fabric-row__quantities">
-						<label v-for="entry in row.entries" :key="entry.input_key"><span>{{ entry.display_label || entry.label || attributeText(entry.out_attrs) || entry.key }}</span><InputNumber v-model="entry.qty" :min="0" :max-fraction-digits="3" fluid /></label>
+						<label v-for="entry in row.entries" :key="entry.input_key"><span>{{ entry.display_label || entry.label || attributeText(entry.out_attrs) || entry.key }}</span><InputNumber v-model="entry.qty" :aria-label="`${entry.display_label || entry.label || attributeText(entry.out_attrs) || entry.key} quantity for ${row.cloth_item || row.treated_item || 'fabric row'}`" :min="0" :max-fraction-digits="3" fluid /></label>
 					</div>
 				</div>
 			</template>
@@ -57,7 +56,7 @@
 
 			<template v-else-if="mode === 'create_rework'">
 				<div class="work-order-action-panel__fields"><label><span>Supplier type</span><Select v-model="draft.supplier_type" :options="['Same Supplier', 'Different Supplier']" fluid /></label><LinkField v-if="draft.supplier_type === 'Different Supplier'" v-model="draft.supplier" label="Supplier *" doctype="Supplier" :show-open-button="false" /></div>
-				<div class="work-order-action-panel__table-wrap"><table class="erp-data-table"><thead><tr><th>Source</th><th>Item</th><th>Stock context</th><th class="erp-number">Available</th><th class="erp-number">Rework quantity</th></tr></thead><tbody><tr v-for="row in reworkRows" :key="row.source_key"><td>{{ row.source_label || row.source_key }}</td><td>{{ row.item_variant }}</td><td>{{ reworkContext(row) }}</td><td class="erp-number">{{ number(row.available_qty) }}</td><td><InputNumber v-model="row.qty" :min="0" :max="Number(row.available_qty || 0)" :max-fraction-digits="3" fluid /></td></tr></tbody></table></div>
+				<div class="work-order-action-panel__table-wrap" role="region" tabindex="0" aria-label="Rework quantities"><table class="erp-data-table"><thead><tr><th>Source</th><th>Item</th><th>Stock context</th><th class="erp-number">Available</th><th class="erp-number">Rework quantity</th></tr></thead><tbody><tr v-for="(row, rowIndex) in reworkRows" :key="row.source_key"><td>{{ row.source_label || row.source_key }}</td><td>{{ row.item_variant }}</td><td>{{ reworkContext(row) }}</td><td class="erp-number">{{ number(row.available_qty) }}</td><td><InputNumber v-model="row.qty" :aria-label="`Rework quantity for ${row.item_variant || row.source_label || `row ${rowIndex + 1}`}`" :min="0" :max="Number(row.available_qty || 0)" :max-fraction-digits="3" fluid /></td></tr></tbody></table></div>
 			</template>
 
 			<template v-else-if="mode === 'create_recut'">
@@ -66,7 +65,7 @@
 					<section v-for="(group, groupIndex) in recutGroups" :key="groupIndex" class="work-order-recut-group">
 						<div v-for="(row, rowIndex) in group.items || []" :key="row.item_variant || row.name || rowIndex" class="work-order-recut-row">
 							<div><strong>{{ row.item_variant || row.name }}</strong><small>{{ attributeText(row.attributes) }}</small></div>
-							<label v-for="value in primaryValues(group)" :key="value"><span>{{ value === 'default' ? 'Quantity' : value }}</span><InputNumber v-model="row.values[value].qty" :min="0" :max-fraction-digits="3" fluid /></label>
+							<label v-for="value in primaryValues(group)" :key="value"><span>{{ value === 'default' ? 'Quantity' : value }}</span><InputNumber v-model="row.values[value].qty" :aria-label="`${value === 'default' ? 'Quantity' : value} for ${row.item_variant || row.name || `recut row ${rowIndex + 1}`}`" :min="0" :max-fraction-digits="3" fluid /></label>
 						</div>
 					</section>
 				</div>
@@ -98,7 +97,8 @@
 			<Button :label="submitLabel" icon="pi pi-check" :disabled="!canSubmit || busy" :loading="Boolean(acting && acting !== 'preview_change_item')" @click="submit" />
 		</template>
 	</Dialog>
-	<Dialog v-model:visible="discardVisible" modal header="Discard action changes?" :closable="false" :style="{ width: 'min(440px, calc(100vw - 24px))' }">
+	<DocumentErrorDialog :message="error" :title="`${title} could not be completed`" @dismiss="error = ''" />
+	<Dialog v-model:visible="discardVisible" class="erp-dialog--sm" modal header="Discard action changes?" :closable="false">
 		<p class="work-order-action-panel__copy">This action has unsaved changes. Close it and discard those values?</p>
 		<template #footer><Button label="Keep Editing" severity="secondary" text @click="discardVisible = false" /><Button label="Discard Changes" severity="danger" @click="discardAction" /></template>
 	</Dialog>
@@ -119,6 +119,7 @@ import { computed, reactive, ref, watch } from "vue"
 import { executeWorkOrderCommand, getWorkOrderFabricCalculationContext } from "../../api/fabricStore.js"
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
+import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
@@ -157,7 +158,7 @@ const titles = {
 	change_delivery_date: "Change Delivery Date", change_item: "Change Item",
 }
 const title = computed(() => titles[props.mode] || "Work Order Action")
-const panelWidth = computed(() => ["calculate_garment", "calculate_fabric", "create_rework", "change_item"].includes(props.mode) ? "min(94vw, 1080px)" : "min(620px, calc(100vw - 24px))")
+const largePanel = computed(() => ["calculate_garment", "calculate_fabric", "create_rework", "change_item"].includes(props.mode))
 const busy = computed(() => loading.value || Boolean(acting.value))
 const isCloseMode = computed(() => ["close", "request_close", "approve_close"].includes(props.mode))
 const actionLabels = {
@@ -294,7 +295,8 @@ watch(() => props.visible, (value, previous) => { if (value && !previous) initia
 .work-order-action-panel__fields > label, .work-order-action-panel__field, .work-order-fabric-row__quantities label { display: grid; gap: 6px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
 .work-order-action-panel__wide { grid-column: 1 / -1; }
 .work-order-action-panel__check { display: flex !important; align-items: center; grid-column: 1 / -1; }
-.work-order-action-panel__table-wrap { overflow: auto; max-height: 58dvh; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); box-shadow: 0 5px 16px rgb(28 61 45 / 4%); }
+.work-order-action-panel__table-wrap { overflow-x: auto; overflow-y: visible; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); box-shadow: 0 5px 16px rgb(28 61 45 / 4%); }
+.work-order-action-panel__table-wrap:focus-visible { outline: 2px solid var(--erp-accent-dark); outline-offset: 2px; }
 .work-order-action-panel__table-wrap table { min-width: 720px; }
 .work-order-garment-calculation { display: grid; gap: var(--erp-space-2); }
 .work-order-garment-calculation__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
@@ -327,4 +329,8 @@ watch(() => props.visible, (value, previous) => { if (value && !previous) initia
 .work-order-change-items small { color: var(--erp-text-muted); }
 .work-order-action-panel__copy { margin: 0; color: var(--erp-text-muted); line-height: 1.55; }
 @media (max-width: 700px) { .work-order-action-panel__fields, .work-order-fabric-row__quantities { grid-template-columns: 1fr; } .work-order-action-panel__wide { grid-column: auto; } }
+@media (max-width: 1024px), (pointer: coarse) {
+	.work-order-garment-calculation__toolbar :deep(.p-button), .work-order-action-panel__existing :deep(.p-button) { min-height: 44px; }
+	.work-order-action-panel__body :deep(.p-inputnumber-input) { height: 44px; min-height: 44px; }
+}
 </style>

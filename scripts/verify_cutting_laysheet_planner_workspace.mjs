@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs"
 
 const require = createRequire("/home/anas/.claude/playwright/package.json")
 const { chromium } = require("playwright")
-const SITE = "http://erp-migration-test.site:8001"
+const SITE = process.env.ESSDEE_TEST_SITE || "http://erp-migration-test.site:8001"
 const [username, password] = readFileSync("/home/anas/.frappe-debug-creds-mrp3", "utf8").trim().split("\n")
 const API = "**/api/method/essdee_yrp.cutting.planner_workspace.*"
 
@@ -78,6 +78,8 @@ let polls = 0
 let savedValues = null
 let selected = ""
 let allowEditInputs = true
+let failNextSave = false
+let delayNextSave = false
 page.on("pageerror", (error) => errors.push(`page: ${error.message}`))
 page.on("console", (message) => { if (message.type() === "error") errors.push(`console: ${message.text()}`) })
 
@@ -85,6 +87,7 @@ await page.goto(`${SITE}/login`, { waitUntil: "domcontentloaded" })
 await page.fill("#login_email", username.trim())
 await page.fill("#login_password", password.trim())
 await Promise.all([page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 20_000 }).catch(() => {}), page.click(".btn-login, button[type=submit]")])
+errors.length = 0
 await page.route("**/api/method/essdee_yrp.api.link_search.link_search*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: [{ name: "LOT-001", label: "LOT-001" }, { name: "STYLE-001", label: "STYLE-001" }] }) }))
 await page.route(API, async (route) => {
 	const url = route.request().url()
@@ -93,7 +96,15 @@ await page.route(API, async (route) => {
 		const message = body.name ? payload(state) : { ...payload("Not Started", null), record: { ...payload("Not Started", null).record, name: null, modified: null, lot: "", item: "", description: "", max_plies: null, max_pieces: null, order_details: [] }, actions: { can_edit_inputs: allowEditInputs, can_optimize: false, can_retry: false, can_select_result: false, should_poll: false } }
 		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message }) })
 	}
-	if (url.includes("save")) { savedValues = body.values; state = "Not Started"; return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: payload(state) }) }) }
+	if (url.includes("save")) {
+		if (failNextSave) {
+			failNextSave = false
+			return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ exc: "ValidationError", message: "Planner inputs could not be saved." }) })
+		}
+		if (delayNextSave) { delayNextSave = false; await new Promise((resolve) => setTimeout(resolve, 250)) }
+		savedValues = body.values; state = "Not Started"
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: payload(state) }) })
+	}
 	if (url.includes("start_optimization")) { state = "Queued"; polls = 0; return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: { status: "Queued", actions: { should_poll: true, can_optimize: false } } }) }) }
 	if (url.includes("get_status")) { polls += 1; state = polls === 1 ? "Running" : "Completed"; return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: { status: state, terminal: state === "Completed", modified: "2026-10-03 12:00:00", error_message: "", actions: { should_poll: state === "Running", can_optimize: state === "Completed" } } }) }) }
 	if (url.includes("select_result")) { selected = body.strategy; const next = payload("Completed"); next.record.selected_strategy = selected; return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: next }) }) }
@@ -159,6 +170,11 @@ assert(compactOrderTable.sizeWidth <= 250, `Size inputs are still excessively wi
 assert(compactOrderTable.quantityWidth <= 220, `Quantity inputs are still excessively wide: ${JSON.stringify(compactOrderTable)}`)
 assert(compactOrderTable.maxInputHeight <= 34, `Order Details inputs are still taller than compact controls: ${JSON.stringify(compactOrderTable)}`)
 await page.setViewportSize({ width: 390, height: 844 })
+const mobileEditorHeader = await page.locator(".planner-new > header").evaluate((element) => ({ height: element.getBoundingClientRect().height, clientWidth: element.clientWidth, scrollWidth: element.scrollWidth }))
+assert(mobileEditorHeader.height >= 80 && mobileEditorHeader.height <= 96 && mobileEditorHeader.clientWidth === mobileEditorHeader.scrollWidth, `LaySheet Planner mobile header does not preserve the compact two-row action layout: ${JSON.stringify(mobileEditorHeader)}`)
+assert(await page.locator(".planner-new > header h1").innerText() === "New LaySheet Plan", "LaySheet Planner mobile header truncates its document title")
+assert(await page.locator(".planner-new > header").getByRole("button", { name: "Cancel", exact: true }).isVisible(), "LaySheet Planner mobile header hides the Cancel label")
+assert(await page.locator(".planner-new > header").getByRole("button", { name: "Save", exact: true }).isVisible(), "LaySheet Planner mobile header hides the Save label")
 const mobileOrderTable = await page.locator(".planner-order-table-wrap").evaluate((element) => {
 	const quantity = element.querySelector(".p-inputnumber-input")?.getBoundingClientRect()
 	const bounds = element.getBoundingClientRect()
@@ -179,7 +195,7 @@ const mobileOrderTable = await page.locator(".planner-order-table-wrap").evaluat
 assert(mobileOrderTable.scrollWidth <= mobileOrderTable.clientWidth + 1 && mobileOrderTable.quantityVisible, `Mobile Order Details hides quantity editing offscreen: ${JSON.stringify(mobileOrderTable)}`)
 assert(mobileOrderTable.role === "region" && mobileOrderTable.tabIndex === 0 && Boolean(mobileOrderTable.ariaLabel), `Mobile Order Details is not an accessible editing region: ${JSON.stringify(mobileOrderTable)}`)
 await page.setViewportSize({ width: 1280, height: 800 })
-await page.getByRole("button", { name: "Save Draft", exact: true }).click()
+await page.getByRole("button", { name: "Save", exact: true }).click()
 await page.waitForURL("**/web/cutting/lay-sheet-planner/CLP-2026-00001")
 await page.getByRole("heading", { name: "LaySheet Planner", exact: true }).waitFor({ timeout: 20_000 })
 assert(savedValues?.order_details?.length === 2, "Planner did not save explicit size rows")
@@ -191,16 +207,33 @@ assert(await headerSaveInputs.count() === 1, "Save Inputs is not available in th
 assert(await page.locator(".planner-inputs__footer").count() === 0, "Save Inputs is still rendered at the bottom of the Inputs tab")
 assert(await headerSaveInputs.isEnabled(), "Valid planner inputs do not enable the header Save Inputs action")
 await page.getByLabel("Description *").fill("Saved from the planner header")
+failNextSave = true
+await headerSaveInputs.click()
+const saveErrorDialog = page.getByRole("dialog", { name: "LaySheet Planner action failed", exact: true })
+await saveErrorDialog.getByText("Planner inputs could not be saved.", { exact: true }).waitFor()
+assert(await page.getByLabel("Description *").inputValue() === "Saved from the planner header", "Planner save failure discarded the user's inputs")
+await saveErrorDialog.getByRole("button", { name: "OK", exact: true }).click()
 const headerSaveResponse = page.waitForResponse((response) => response.url().includes("cutting.planner_workspace.save"))
 await headerSaveInputs.click()
 await headerSaveResponse
 assert(savedValues?.description === "Saved from the planner header", "The header Save Inputs action did not submit the current form")
 
+await page.getByLabel("Description *").fill("Concurrent action guard")
+delayNextSave = true
+const delayedSaveResponse = page.waitForResponse((response) => response.url().includes("cutting.planner_workspace.save"))
+await headerSaveInputs.click()
+const refreshPlanner = page.getByRole("button", { name: "Refresh LaySheet Plan", exact: true })
+await page.waitForFunction(() => document.querySelector('[aria-label="Refresh LaySheet Plan"]')?.disabled)
+assert(await refreshPlanner.isDisabled(), "Planner refresh remains active while Save Inputs is pending")
+await delayedSaveResponse
+await page.waitForFunction(() => !document.querySelector('[aria-label="Refresh LaySheet Plan"]')?.disabled)
+assert(await refreshPlanner.isEnabled(), "Planner refresh did not recover after Save Inputs completed")
+
 for (const tab of ["Inputs", "Plan"]) assert(await page.getByRole("tab", { name: tab, exact: true }).count() === 1, `${tab} tab is missing`)
 assert(await page.getByRole("tab", { name: "Strategies", exact: true }).count() === 0, "Strategies still requires a separate tab")
 assert(await page.getByRole("tab", { name: "Lay Plan", exact: true }).count() === 0, "Lay Plan still requires a separate tab")
 await page.getByRole("button", { name: "Optimize", exact: true }).click()
-const statusBadge = page.locator(".planner-record-meta .p-tag")
+const statusBadge = page.locator(".planner-record-meta .document-status-badge")
 await statusBadge.getByText("Queued", { exact: true }).waitFor()
 await statusBadge.getByText("Running", { exact: true }).waitFor({ timeout: 5_000 }).catch(() => {})
 await statusBadge.getByText("Completed", { exact: true }).waitFor({ timeout: 8_000 })
@@ -293,13 +326,13 @@ for (const viewport of [{ width: 1600, height: 1000 }, { width: 1280, height: 80
 	responsiveLayouts[viewport.width] = summaryColumns
 	if (viewport.width === 390) {
 		const mobileStrategies = await page.locator(".planner-plan-workspace__strategies").evaluate((element) => ({ clientHeight: element.clientHeight, scrollHeight: element.scrollHeight, overflowY: getComputedStyle(element).overflowY }))
-		assert(mobileStrategies.clientHeight <= 420 && mobileStrategies.scrollHeight > mobileStrategies.clientHeight && ["auto", "scroll"].includes(mobileStrategies.overflowY), `Mobile strategies still create an excessive page scroll: ${JSON.stringify(mobileStrategies)}`)
+		assert(mobileStrategies.clientHeight === mobileStrategies.scrollHeight && mobileStrategies.overflowY === "visible", `Mobile strategies still create a nested vertical scroll: ${JSON.stringify(mobileStrategies)}`)
 	}
 }
 allowEditInputs = false
 await page.goto(`${SITE}/web/cutting/lay-sheet-planner/new`, { waitUntil: "domcontentloaded" })
 await page.getByRole("heading", { name: "New LaySheet Plan", exact: true }).waitFor({ timeout: 20_000 })
-assert(await page.getByRole("button", { name: "Save Draft", exact: true }).count() === 0, "Planner renders Save Draft without input-edit permission")
+assert(await page.getByRole("button", { name: "Save", exact: true }).count() === 0, "Planner renders Save without input-edit permission")
 assert(errors.length === 0, `Browser errors: ${JSON.stringify(errors)}`)
 
 console.log(JSON.stringify({ passed: true, planner: "CLP-2026-00001", polls, selected, matrixOverflow, responsiveLayouts }, null, 2))

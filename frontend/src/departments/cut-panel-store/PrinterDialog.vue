@@ -6,8 +6,7 @@
 		:closable="!busy"
 		:close-on-escape="!busy"
 		header="Print Labels"
-		class="cut-panel-printer-dialog"
-		:style="{ width: 'min(520px, calc(100vw - 24px))' }"
+		class="cut-panel-printer-dialog erp-dialog--sm"
 		@update:visible="emit('update:visible', $event)"
 	>
 		<div class="printer-dialog__content">

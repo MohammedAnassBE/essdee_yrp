@@ -11,6 +11,7 @@
 		</div>
 		<template #footer><Button label="Close" severity="secondary" text :disabled="printing" @click="emit('update:visible', false)" /><Button v-if="context && !context.approval_required" label="Print" icon="pi pi-print" :loading="printing" :disabled="!printer" @click="print" /></template>
 	</Dialog>
+	<DocumentErrorDialog :message="actionError" title="Labels could not be printed" @dismiss="actionError = ''" />
 </template>
 
 <script setup>
@@ -22,12 +23,14 @@ import { ref, watch } from "vue"
 
 import { completeBulkLabelPrint, getBulkPrintContext, prepareBulkLabels } from "../../../api/cuttingBulkLaySheets.js"
 import { getQzPrinters, printQzRaw } from "../../../api/qzPrinter.js"
+import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 
 const props = defineProps({ visible: Boolean, bulkName: { type: String, required: true }, row: { type: Object, default: null } })
 const emit = defineEmits(["update:visible", "printed"])
 const loading = ref(false)
 const printing = ref(false)
 const error = ref("")
+const actionError = ref("")
 const context = ref(null)
 const printers = ref([])
 const printer = ref("")
@@ -35,7 +38,7 @@ const printOrder = ref("Panel")
 
 watch(() => props.visible, async (visible) => {
 	if (!visible || !props.row) return
-	loading.value = true; error.value = ""; context.value = null; printers.value = []; printer.value = ""
+	loading.value = true; error.value = ""; actionError.value = ""; context.value = null; printers.value = []; printer.value = ""
 	try {
 		context.value = await getBulkPrintContext(props.bulkName, props.row.name)
 		if (!context.value?.approval_required) { printers.value = await getQzPrinters(); printer.value = printers.value[0] || "" }
@@ -49,7 +52,7 @@ async function print() {
 		await printQzRaw(printer.value, result.zpl)
 		const payload = await completeBulkLabelPrint(props.bulkName, props.row.name, result.grn)
 		emit("printed", payload); emit("update:visible", false)
-	} catch (reason) { error.value = reason?.message || "Unable to print labels." }
+	} catch (reason) { actionError.value = reason?.message || "Unable to print labels." }
 	finally { printing.value = false }
 }
 function number(value) { return Number(value || 0).toFixed(4) }

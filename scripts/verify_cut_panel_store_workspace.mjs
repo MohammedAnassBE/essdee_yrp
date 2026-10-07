@@ -106,8 +106,106 @@ async function launcherSuite(page) {
 	await page.getByText("Capability service unavailable", { exact: true }).waitFor({ timeout: 20_000 })
 }
 
+function movementFixture() {
+	return {
+		context: { lot: "LOT-CP-1", item: "ITEM-CP-1", source_supplier: "CUT-STORE", source_warehouse: "CUT-WH" },
+		defaults: { lot: "LOT-CP-1", from_warehouse: "CUT-STORE", posting_date: "2026-10-07", posting_time: "10:30:00", edit_posting_date_and_time: 1 },
+		permissions: { can_create: true, can_submit: true },
+		record: null,
+		movement_data: { panels: [], data: {}, collapsed_details: [], accessory_data: [], is_set_item: 0 },
+	}
+}
+
+function generatedMovementFixture() {
+	return {
+		panels: ["Front"],
+		is_set_item: 0,
+		data: { Navy: { part: null, data: [{ lay_no: 1, bundle_no: 2, size: "M", shade: "A", Front: 10, Front_moved: false, bundle_moved: false }] } },
+		collapsed_details: [{ colour: "Navy", size: "L", panel: "Back", shade: "A", lay_no: 3, bundle_no: 4, quantity: 6, moved: false, move_qty: 0 }],
+		accessory_data: [{ cloth_name: "Tape", cloth_type: "Accessory", colour: "Navy", shade: "A", dia: "10 mm", weight: 4, moved_weight: 0 }],
+	}
+}
+
+async function mockMovementWorkspace(page) {
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.web_workspace.get_capabilities*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: capabilities }),
+	}))
+	await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: JSON.stringify({ docs: [{
+			name: "SD YRP Cut Panel Movement",
+			is_submittable: 1,
+			fields: [
+				{ fieldname: "lot", label: "Lot", fieldtype: "Link", options: "SD YRP Lot", in_list_view: 1, in_standard_filter: 1 },
+				{ fieldname: "item", label: "Item", fieldtype: "Link", options: "Item", in_list_view: 1 },
+				{ fieldname: "from_warehouse", label: "From Warehouse", fieldtype: "Link", options: "Supplier", in_list_view: 1 },
+				{ fieldname: "against", label: "Against", fieldtype: "Select", in_list_view: 1 },
+				{ fieldname: "against_id", label: "Against ID", fieldtype: "Dynamic Link", options: "against", in_list_view: 1 },
+				{ fieldname: "movement_date", label: "Movement Date", fieldtype: "Date", in_list_view: 1 },
+			],
+		}] }),
+	}))
+	await page.route("**/api/method/yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.get_user_listview*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }),
+	}))
+	await page.route("**/api/method/frappe.desk.reportview.get_count*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: 1 }),
+	}))
+	await page.route("**/api/resource/SD%20YRP%20Cut%20Panel%20Movement*", (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: JSON.stringify({ data: [{ name: "CPM-1", lot: "LOT-CP-1", item: "ITEM-CP-1", from_warehouse: "CUT-STORE", against: "", against_id: "", movement_date: "2026-10-07", docstatus: 0, modified: "2026-10-07 10:00:00" }] }),
+	}))
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.movement_workspace.get_movement_editor*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: movementFixture() }),
+	}))
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.movement_workspace.generate_movement_bundles*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: generatedMovementFixture() }),
+	}))
+	await page.route("**/api/method/essdee_yrp.api.link_search.link_search*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }),
+	}))
+}
+
+async function movementSuite(page) {
+	await mockMovementWorkspace(page)
+	await page.goto(`${SITE}/web/cut-panel-store/movements`, { waitUntil: "domcontentloaded" })
+	const list = page.locator(".cut-panel-movements .common-list-view")
+	await list.waitFor({ timeout: 20_000 })
+	assert(await page.getByRole("button", { name: "Create Movement", exact: true }).count() === 1, "Create Movement is missing")
+	for (const label of ["Lot", "Item", "From Warehouse", "Against", "Against ID", "Movement Date"]) {
+		assert(await list.getByRole("columnheader", { name: label, exact: true }).count() === 1, `Movement list omits ${label}`)
+	}
+
+	await page.getByRole("button", { name: "Create Movement", exact: true }).click()
+	const dialog = page.locator(".erp-cut-panel-movement-dialog:visible")
+	await dialog.waitFor({ timeout: 20_000 })
+	assert(await dialog.locator(".p-dialog-maximize-button").count() === 1, "Movement popup is not maximizable")
+	for (const label of ["Lot", "From Warehouse", "Posting Date", "Posting Time", "Edit Posting Date and Time"]) {
+		const labelledControl = await dialog.getByLabel(label, { exact: false }).count()
+		const visibleLabel = await dialog.getByText(label, { exact: true }).count()
+		assert(labelledControl >= 1 || visibleLabel >= 1, `Movement editor omits ${label}`)
+	}
+	assert(await dialog.getByRole("button", { name: "Save", exact: true }).count() === 1, "Movement editor must have one primary Save action")
+	await dialog.getByRole("button", { name: "Generate Bundles", exact: true }).click()
+	await dialog.locator(".erp-bundle-matrix").waitFor()
+	assert(await dialog.getByRole("region", { name: "Collapsed bundle quantities" }).count() === 1, "Collapsed movement matrix is missing")
+	assert(await dialog.getByRole("region", { name: "Accessory fabric quantities" }).count() === 1, "Accessory movement matrix is missing")
+
+	const before = await dialog.locator("input").first().inputValue().catch(() => "")
+	await page.setViewportSize({ width: 390, height: 844 })
+	const geometry = await dialog.evaluate((element) => {
+		const rect = element.getBoundingClientRect()
+		return { left: rect.left, right: rect.right, width: rect.width, viewport: window.innerWidth }
+	})
+	assert(geometry.left >= 0 && geometry.right <= geometry.viewport + 1, `Movement popup escapes the mobile viewport: ${JSON.stringify(geometry)}`)
+	assert(await dialog.locator("input").first().inputValue().catch(() => "") === before, "Responsive layout discarded unsaved movement values")
+}
+
 const suites = {
 	launcher: launcherSuite,
+	movements: movementSuite,
 }
 
 const browser = await chromium.launch({ headless: true })

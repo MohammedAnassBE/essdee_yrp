@@ -7,6 +7,7 @@
 			</div>
 			<Message v-else-if="error" severity="error" :closable="false">{{ error }}</Message>
 			<Message v-else-if="!capability" severity="warn" :closable="false">You do not have permission to view {{ definition.label }}.</Message>
+			<component v-else-if="definition.component" :is="definition.component" :capability="capability" />
 			<div v-else class="erp-empty-state cut-panel-store-section__empty">
 				<i :class="definition.icon" aria-hidden="true" />
 				<strong>{{ definition.label }}</strong>
@@ -23,10 +24,11 @@ import { computed, onMounted, ref, watch } from "vue"
 
 import { getCutPanelStoreCapabilities } from "../api/cutPanelStore.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
+import CutPanelMovements from "./cut-panel-store/CutPanelMovements.vue"
 
 const props = defineProps({ section: { type: String, required: true } })
 const definitions = {
-	movements: { label: "Cut Panel Movement", icon: "pi pi-arrow-right-arrow-left" },
+	movements: { label: "Cut Panel Movement", icon: "pi pi-arrow-right-arrow-left", component: CutPanelMovements },
 	work_orders: { label: "Work Orders", icon: "pi pi-briefcase" },
 	cut_bundle_edits: { label: "Cut Bundle Edit", icon: "pi pi-pencil" },
 	box_stickers: { label: "Box Sticker Print", icon: "pi pi-tags" },

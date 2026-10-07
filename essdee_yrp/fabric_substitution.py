@@ -162,7 +162,8 @@ def get_default_knitting_grn_context(grn):
 	route = get_supported_execution_route(ipd)
 	if not route or work_order.process_name != route["knitting"]["process_name"]:
 		return None
-	receivables = [row for row in work_order.get("receivables") or [] if row.get("is_calculated")]
+	# Receivables have no is_calculated flag; execution keys mark calculator rows.
+	receivables = work_order.get("receivables") or []
 	if not receivables or not all(has_fabric_execution_key(row) for row in receivables):
 		return None
 	return frappe._dict(

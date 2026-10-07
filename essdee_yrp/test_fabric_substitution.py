@@ -106,6 +106,91 @@ class TestLotFabricConversionSchema(unittest.TestCase):
 
 
 class TestActualDiaAllocation(unittest.TestCase):
+	@patch("essdee_yrp.fabric_substitution.get_supported_execution_route")
+	@patch.object(frappe, "get_cached_doc")
+	@patch.object(frappe.db, "exists", return_value=True)
+	def test_standard_knitting_context_accepts_keyed_receivable_without_calculated_field(
+		self, _exists, get_cached_doc, get_route
+	):
+		work_order = frappe._dict(
+			name="WO-KNIT-1",
+			lot="LOT-1",
+			production_detail="IPD-1",
+			item="CLOTH",
+			process_name="Knitting",
+			cloth_execution_version=1,
+			receivables=[
+				frappe._dict(
+					additional_parameters='{"f":"fabric-key","m":"matrix-key"}'
+				)
+			],
+		)
+		ipd = frappe._dict(name="IPD-1")
+		get_cached_doc.side_effect = [work_order, ipd]
+		get_route.return_value = {
+			"knitting": {"process_name": "Knitting"},
+			"dyeing": {"process_name": "Dyeing"},
+			"washing": {"process_name": "Washing"},
+		}
+		grn = frappe._dict(
+			against="YRP Work Order",
+			against_id=work_order.name,
+			is_return=0,
+			is_rework=0,
+			additional_grn=0,
+			includes_packing=0,
+		)
+
+		context = fabric_substitution.get_default_knitting_grn_context(grn)
+
+		self.assertEqual(context.lot, "LOT-1")
+		self.assertEqual(context.work_order, "WO-KNIT-1")
+		get_route.assert_called_once_with(ipd)
+
+	@patch("essdee_yrp.fabric_substitution.get_supported_execution_route")
+	@patch.object(frappe, "get_cached_doc")
+	@patch.object(frappe.db, "exists", return_value=True)
+	def test_standard_knitting_context_rejects_incomplete_receivable_contracts(
+		self, _exists, get_cached_doc, get_route
+	):
+		work_order = frappe._dict(
+			name="WO-KNIT-1",
+			lot="LOT-1",
+			production_detail="IPD-1",
+			item="CLOTH",
+			process_name="Knitting",
+			cloth_execution_version=1,
+		)
+		ipd = frappe._dict(name="IPD-1")
+		get_route.return_value = {
+			"knitting": {"process_name": "Knitting"},
+			"dyeing": {"process_name": "Dyeing"},
+			"washing": {"process_name": "Washing"},
+		}
+		grn = frappe._dict(
+			against="YRP Work Order",
+			against_id=work_order.name,
+			is_return=0,
+			is_rework=0,
+			additional_grn=0,
+			includes_packing=0,
+		)
+
+		for receivables in (
+			[],
+			[
+				frappe._dict(additional_parameters='{"f":"fabric-key"}'),
+				frappe._dict(additional_parameters=""),
+			],
+		):
+			with self.subTest(receivables=receivables):
+				work_order.receivables = receivables
+				get_cached_doc.side_effect = [work_order, ipd]
+				self.assertIsNone(
+					fabric_substitution.get_default_knitting_grn_context(grn)
+				)
+		get_route.assert_called_with(ipd)
+
 	@patch.object(frappe.db, "exists", side_effect=AssertionError("additional GRN queried a work order"))
 	def test_additional_grn_is_not_standard_knitting_context(self, _exists):
 		grn = frappe._dict(

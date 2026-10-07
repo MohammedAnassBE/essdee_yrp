@@ -8,9 +8,9 @@
 			</div>
 		</header>
 
-		<Message v-if="error && !loadFailed" severity="error" :closable="false">{{ error }}</Message>
+		<DocumentErrorDialog :message="error" :title="`Purchase Order could not be ${loadFailed ? 'loaded' : 'saved'}`" />
 		<div v-if="loading" class="purchase-order-editor__loading" role="status" aria-live="polite" aria-label="Loading Purchase Order editor"><Skeleton height="160px" /><Skeleton height="420px" /></div>
-		<section v-else-if="loadFailed" class="purchase-order-editor__recovery" role="alert"><i class="pi pi-cloud-times" aria-hidden="true" /><div><strong>Purchase Order could not be loaded</strong><span>{{ error }}</span></div><Button label="Retry" icon="pi pi-refresh" severity="secondary" outlined @click="load" /></section>
+		<section v-else-if="loadFailed" class="purchase-order-editor__recovery" role="alert"><i class="pi pi-cloud-times" aria-hidden="true" /><div><strong>Purchase Order could not be loaded</strong><span>Close the error message, then try loading the document again.</span></div><Button label="Retry" icon="pi pi-refresh" severity="secondary" outlined @click="load" /></section>
 		<div v-else class="purchase-order-editor__body">
 			<section class="purchase-order-editor__section">
 				<header><h2>Order details</h2></header>
@@ -35,6 +35,7 @@
 				:schema-loader="loadItemSchema"
 				:row-preparer="prepareItemPrice"
 				:currency="form.currency"
+				natural-table-flow
 				@dirty="markDirty"
 			/>
 		</div>
@@ -51,7 +52,6 @@
 import Button from "primevue/button"
 import Checkbox from "primevue/checkbox"
 import Dialog from "primevue/dialog"
-import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 import Textarea from "primevue/textarea"
 import { useToast } from "primevue/usetoast"
@@ -62,6 +62,7 @@ import { getPurchaseOrderEditor, getPurchaseOrderItemPrice, getPurchaseOrderItem
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
+import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import StockItemComposer from "../../components/stock/StockItemComposer.vue"
 
 const props = defineProps({ name: { type: String, default: "" }, source: { type: Object, default: () => ({}) } })
@@ -218,7 +219,7 @@ async function save(submit) {
 		allowNavigation = true
 		toast.add({ severity: "success", summary: submit ? "Purchase Order submitted" : "Purchase Order saved", detail: record.name || "Your changes are saved.", life: 3500 })
 		emit("saved", record)
-	} catch (reason) { const message = reason?.message || "Unable to save this Purchase Order."; error.value = message; toast.add({ severity: "error", summary: "Purchase Order was not saved", detail: message, life: 6500 }) }
+	} catch (reason) { error.value = reason?.message || "Unable to save this Purchase Order." }
 	finally { saving.value = "" }
 }
 

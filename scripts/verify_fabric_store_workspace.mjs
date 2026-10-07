@@ -873,7 +873,10 @@ async function workOrderSuite(page) {
 	await page.goto(`${SITE}/web/fabric-store/work-orders/WO-EDITOR-LOAD-ERROR/edit`, { waitUntil: "domcontentloaded" })
 	const failedEditor = page.locator(".work-order-editor")
 	await failedEditor.getByText("Work Order could not be loaded", { exact: true }).waitFor()
+	const workOrderLoadError = page.getByRole("dialog", { name: "Work Order could not be loaded" })
+	await workOrderLoadError.getByText("Work Order editor is temporarily unavailable.", { exact: true }).waitFor()
 	assert(await failedEditor.locator(".work-order-editor__body").count() === 0, "Failed Work Order load leaves an unusable empty form visible")
+	await workOrderLoadError.getByRole("button", { name: "OK", exact: true }).click()
 	await failedEditor.getByRole("button", { name: "Retry", exact: true }).click()
 	await failedEditor.getByRole("heading", { name: "Edit Work Order", exact: true }).waitFor()
 	assert(workOrderEditorLoadFailures === 2, `Work Order Retry did not reload exactly once: ${workOrderEditorLoadFailures}`)
@@ -939,6 +942,7 @@ async function purchaseOrderSuite(page) {
 	let currentDocstatus = 1
 	let workspaceLoads = 0
 	let purchaseOrderSave = null
+	let purchaseOrderSaveAttempts = 0
 	let lifecycleAction = ""
 	let purchaseOrderCommand = null
 	let purchaseOrderMode = "submitted"
@@ -1057,7 +1061,13 @@ async function purchaseOrderSuite(page) {
 		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: resolvedPurchaseOrderPrice }) })
 	})
 	await page.route("**/api/method/essdee_yrp.fabric_store.web_workspace.save_purchase_order", (route) => {
+		purchaseOrderSaveAttempts += 1
 		purchaseOrderSave = requestBody(route)
+		if (purchaseOrderSaveAttempts === 1) return route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({ exc: "ValidationError", exception: "frappe.exceptions.ValidationError: Delivery warehouse is no longer available." }),
+		})
 		currentName = "PO-FAB-NEW"
 		currentDocstatus = purchaseOrderSave.submit ? 1 : 0
 		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: purchaseOrderPayload() }) })
@@ -1091,6 +1101,9 @@ async function purchaseOrderSuite(page) {
 	assert(await workspace.locator(".item-matrix__received").count() === 0, "Purchase Order item rows still show Received")
 	assert(await workspace.locator(".item-matrix__price").filter({ hasText: /^Amount / }).count() === 0, "Purchase Order item rows still show Amount")
 	assert(await workspace.locator(".item-matrix__pending").count() > 0, "Purchase Order item rows hide Pending")
+	assert(await workspace.locator(".item-matrix__group-header small").count() === 0, "Purchase Order repeats Lot below item titles")
+	assert(await workspace.locator(".item-matrix__scroll th").filter({ hasText: /^Lot$/ }).count() > 0, "Purchase Order does not show Lot as a table column")
+	assert(await workspace.locator(".item-matrix__scroll td").filter({ hasText: /^LOT-001$/ }).count() > 0, "Purchase Order Lot column has no values")
 	assert(await workspace.getByText(/Pending -/).count() === 0, "Purchase Order exposes a negative pending quantity")
 	assert(await workspace.getByText(/Over-received 1/).count() >= 1, "Purchase Order does not explain over-received quantities")
 	const purchaseMatrixScroller = workspace.locator(".item-matrix__scroll").first()
@@ -1216,6 +1229,12 @@ async function purchaseOrderSuite(page) {
 	await purchaseOrderEditor.locator(".stock-composer__quantity-grid input").first().fill("2")
 	await purchaseOrderEditor.getByRole("button", { name: "OK · Add Item", exact: true }).click()
 	await purchaseOrderEditor.locator(".stock-composer__price").getByText("Rate INR 125", { exact: true }).waitFor()
+	const purchaseEditorTableFlow = await purchaseOrderEditor.locator(".stock-composer__table-scroll").evaluate((element) => ({
+		maxHeight: getComputedStyle(element).maxHeight,
+		clientHeight: element.clientHeight,
+		scrollHeight: element.scrollHeight,
+	}))
+	assert(purchaseEditorTableFlow.maxHeight === "none" && purchaseEditorTableFlow.scrollHeight <= purchaseEditorTableFlow.clientHeight + 1, `Purchase Order Added items still uses a nested vertical scroller: ${JSON.stringify(purchaseEditorTableFlow)}`)
 	const supplierField = purchaseOrderEditor.locator(".common-field").filter({ hasText: "Supplier *" })
 	await selectAutocompleteOption(page, supplierField, "TEST-VALUE")
 	const purchaseOrderSourceDialog = page.getByRole("dialog", { name: "Change Supplier?" })
@@ -1243,6 +1262,13 @@ async function purchaseOrderSuite(page) {
 	await purchaseOrderEditor.locator(".stock-composer__price").getByText("Rate INR 125", { exact: true }).first().waitFor()
 	assert(purchaseOrderPriceRequests.at(-1)?.supplier === "SUPPLIER-001", `Purchase Order repriced with the wrong Supplier: ${JSON.stringify(purchaseOrderPriceRequests.at(-1))}`)
 	assert(await purchaseOrderEditor.getByRole("button", { name: "Save & Submit", exact: true }).count() === 0, "Purchase Order editor still exposes Save & Submit")
+	await purchaseOrderEditor.getByRole("button", { name: "Save", exact: true }).click()
+	const purchaseSaveError = page.getByRole("dialog", { name: "Purchase Order could not be saved" })
+	await purchaseSaveError.getByText("Delivery warehouse is no longer available.", { exact: true }).waitFor()
+	assert(await purchaseOrderEditor.locator(".p-message-error").count() === 0, "Purchase Order duplicates the save error inline")
+	assert(await page.locator(".p-toast-message-error").count() === 0, "Purchase Order duplicates the save error as a toast")
+	assert(await page.getByText("Request failed with status 500", { exact: true }).count() === 0, "Purchase Order hides the server validation behind a generic status")
+	await purchaseSaveError.getByRole("button", { name: "OK", exact: true }).click()
 	await purchaseOrderEditor.getByRole("button", { name: "Save", exact: true }).click()
 	await page.waitForURL("**/web/fabric-store/purchase-orders/PO-FAB-NEW")
 	assert(purchaseOrderSave?.submit === false, `Purchase Order editor did not save a Draft first: ${JSON.stringify(purchaseOrderSave)}`)
@@ -1281,11 +1307,14 @@ async function purchaseOrderSuite(page) {
 	await page.goto(`${SITE}/web/fabric-store/purchase-orders/PO-EDITOR-LOAD-ERROR/edit`, { waitUntil: "domcontentloaded" })
 	const failedEditor = page.locator(".purchase-order-editor")
 	await failedEditor.getByText("Purchase Order could not be loaded", { exact: true }).waitFor()
+	const purchaseOrderLoadError = page.getByRole("dialog", { name: "Purchase Order could not be loaded" })
+	await purchaseOrderLoadError.getByText("Purchase Order editor is temporarily unavailable.", { exact: true }).waitFor()
 	assert(await failedEditor.locator(".purchase-order-editor__body").count() === 0, "Failed Purchase Order load leaves an unusable empty form visible")
+	await purchaseOrderLoadError.getByRole("button", { name: "OK", exact: true }).click()
 	await failedEditor.getByRole("button", { name: "Retry", exact: true }).click()
 	await failedEditor.getByRole("heading", { name: "Edit Purchase Order", exact: true }).waitFor()
 	assert(purchaseOrderEditorLoadFailures === 2, `Purchase Order Retry did not reload exactly once: ${purchaseOrderEditorLoadFailures}`)
-	return { workspaceLoads, lifecycleAction, purchaseOrderCreated: currentName }
+	return { workspaceLoads, lifecycleAction, purchaseOrderCreated: currentName, purchaseOrderSaveAttempts }
 }
 
 async function stockTransfersSuite(page) {
@@ -1584,7 +1613,7 @@ async function deliveryChallanSuite(page) {
 	const fields = [
 		{ fieldname: "work_order", label: "Work Order", fieldtype: "Link", options: "YRP Work Order", value: "WO-FAB-001", reqd: true },
 		{ fieldname: "posting_date", label: "Posting Date", fieldtype: "Date", value: "2026-10-06", reqd: true, read_only_depends_on: "eval: !doc.edit_posting_date_and_time" },
-		{ fieldname: "posting_time", label: "Posting Time", fieldtype: "Time", value: "10:30:00", reqd: true, read_only_depends_on: "eval: !doc.edit_posting_date_and_time" },
+		{ fieldname: "posting_time", label: "Posting Time", fieldtype: "Time", value: "10:30:00.123456", reqd: true, read_only_depends_on: "eval: !doc.edit_posting_date_and_time" },
 		{ fieldname: "edit_posting_date_and_time", label: "Edit Posting Date and Time", fieldtype: "Check", value: 0, depends_on: "eval:doc.docstatus==0" },
 		{ fieldname: "from_location", label: "From Location", fieldtype: "Link", options: "Supplier", value: "" },
 		{ fieldname: "supplier", label: "Receiver", fieldtype: "Link", options: "Supplier", value: "CUTTING-UNIT" },
@@ -1592,8 +1621,17 @@ async function deliveryChallanSuite(page) {
 		{ fieldname: "to_warehouse", label: "To Warehouse", fieldtype: "Link", options: "Warehouse", value: "CUTTING-WH" },
 		{ fieldname: "from_address", label: "From Address", fieldtype: "Link", options: "Address", value: "" },
 		{ fieldname: "supplier_address", label: "Receiver Address", fieldtype: "Link", options: "Address", value: "CUTTING-UNIT-Billing" },
+		{ fieldname: "supplier_address_details", label: "Receiver Address Details", fieldtype: "Small Text", value: "Line one<br>Line two", read_only: true },
 		{ fieldname: "vehicle_no", label: "Vehicle No", fieldtype: "Data", value: "TN-01-AA-1001" },
 		{ fieldname: "comments", label: "Comments", fieldtype: "Small Text", value: "" },
+		{ fieldname: "allow_non_bundle", label: "Allow Non Bundle", fieldtype: "Check", value: 0 },
+		{ fieldname: "is_rework", label: "Is Rework", fieldtype: "Check", value: 0 },
+		{ fieldname: "includes_packing", label: "Includes Packing", fieldtype: "Check", value: 0 },
+		{ fieldname: "additional_goods_value", label: "Additional Goods Value", fieldtype: "Currency", value: 15 },
+		{ fieldname: "is_internal_unit", label: "Is Internal Unit", fieldtype: "Check", value: 0 },
+		{ fieldname: "transfer_complete", label: "Transfer Complete", fieldtype: "Check", value: 0 },
+		{ fieldname: "ste_transferred", label: "STE Transferred", fieldtype: "Float", value: 0, read_only: true },
+		{ fieldname: "ste_transferred_percent", label: "STE Transferred (%)", fieldtype: "Percent", value: 0, read_only: true },
 	]
 	const draftPayload = (name = null) => ({
 		record: {
@@ -1728,6 +1766,7 @@ async function deliveryChallanSuite(page) {
 	await draftRoot.locator('.delivery-challan-field-group[data-group="document"]').waitFor({ timeout: 20_000 })
 	assert(await draftRoot.locator('.delivery-challan-field-group[data-group="document"]').count() === 1, "Delivery Challan document fields are not grouped")
 	assert(await draftRoot.locator('.delivery-challan-field-group[data-group="movement"]').count() === 1, "Delivery Challan movement fields are not grouped")
+	assert(await draftRoot.locator('.delivery-challan-field-group[data-group="document"]').getByText("Allow Non Bundle", { exact: true }).count() === 1, "Allow Non Bundle is not kept in Document & posting")
 	const dcMovementLabels = (await draftRoot.locator('.delivery-challan-field-group[data-group="movement"] .form-field__label').allTextContents()).map((label) => label.replace("*", "").trim())
 	assert(JSON.stringify(dcMovementLabels.slice(0, 6)) === JSON.stringify(["From Location", "From Warehouse", "From Address", "Receiver", "To Warehouse", "Receiver Address"]), `Delivery Challan route fields do not follow their dependencies: ${JSON.stringify(dcMovementLabels)}`)
 	const fromWarehouseField = draftRoot.locator(".form-field").filter({ hasText: "From Warehouse" })
@@ -1770,8 +1809,18 @@ async function deliveryChallanSuite(page) {
 	const postingToggle = draftRoot.locator(".form-field").filter({ hasText: "Edit Posting Date and Time" }).locator(".p-toggleswitch")
 	await postingToggle.click()
 	assert(!await draftRoot.getByLabel("Posting Date", { exact: true }).isDisabled(), "Posting Date remains disabled after its dependency is enabled")
-	const receivedType = draftRoot.locator(".form-field").filter({ hasText: "Received Type" }).locator(".p-autocomplete-input")
-	assert(await receivedType.inputValue() === "Accepted", "Dynamic stock dimension did not hydrate its authoritative value")
+	assert(await draftRoot.locator(".form-field").filter({ hasText: "Received Type" }).count() === 0, "Delivery Challan still shows the global Received Type field")
+	assert(await draftRoot.getByLabel("Posting Time", { exact: true }).inputValue() === "10:30:00", "Delivery Challan does not display Frappe's fractional posting time")
+	assert(await draftRoot.locator(".delivery-challan-matrix__group > header span").count() === 0, "Delivery Challan repeats Lot below every item title")
+	const dcTail = draftRoot.locator(".delivery-challan-after-matrix")
+	assert(await dcTail.count() === 1, "Delivery Challan final fields are not placed below Delivery quantities")
+	for (const label of ["Is Internal Unit", "Includes Packing", "Additional Goods Value", "STE Transferred", "Is Rework"]) {
+		assert(await dcTail.getByText(label, { exact: true }).count() === 1, `Delivery Challan final field is missing: ${label}`)
+	}
+	const dcMatrixBox = await draftRoot.locator(".fabric-document-workspace__matrix").boundingBox()
+	const dcTailBox = await dcTail.boundingBox()
+	assert(dcMatrixBox && dcTailBox && dcTailBox.y >= dcMatrixBox.y + dcMatrixBox.height, `Delivery Challan final fields are not below the table: ${JSON.stringify({ dcMatrixBox, dcTailBox })}`)
+	assert(await draftRoot.locator(".form-field").filter({ hasText: "Receiver Address Details" }).locator("textarea").inputValue() === "Line one\nLine two", "Delivery Challan address details expose raw <br> tags")
 	assert(await draftRoot.locator(".delivery-challan-total--primary").filter({ hasText: "Total Delivered Quantity" }).count() === 1, "Delivered quantity is not highlighted")
 	assert(await draftRoot.locator(".delivery-challan-total--primary").filter({ hasText: "Stock Value" }).count() === 1, "Stock value is not highlighted")
 
@@ -1804,10 +1853,13 @@ async function deliveryChallanSuite(page) {
 	await quantityInput.fill("7")
 	await draftRoot.locator("#field-vehicle_no-value").fill("TN-KEEP")
 	await draftRoot.getByRole("button", { name: "Save", exact: true }).click()
-	await draftRoot.getByText("Stock is no longer available.", { exact: true }).waitFor()
+	const deliveryErrorDialog = page.getByRole("dialog", { name: "Delivery Challan could not be completed" })
+	await deliveryErrorDialog.getByText("Stock is no longer available.", { exact: true }).waitFor()
+	assert(await draftRoot.locator(".p-message-error").count() === 0, "Delivery Challan duplicates the save error inline")
 	assert(savePayload?.values?.received_type === "Accepted", `Delivery Challan save omitted its stock dimension: ${JSON.stringify(savePayload)}`)
 	assert(await quantityInput.inputValue() === "7", "Failed Delivery Challan save discarded an entered quantity")
 	assert(await draftRoot.locator("#field-vehicle_no-value").inputValue() === "TN-KEEP", "Failed Delivery Challan save discarded an entered header value")
+	await deliveryErrorDialog.getByRole("button", { name: "OK", exact: true }).click()
 
 	const workOrderField = draftRoot.locator(".form-field").filter({ hasText: "Work Order" })
 	await workOrderField.locator(".p-autocomplete-input").fill("")
@@ -1837,11 +1889,13 @@ async function deliveryChallanSuite(page) {
 	const failedLoadRoot = page.locator(".delivery-challan-workspace")
 	await failedLoadRoot.getByText("DC-FAB-001", { exact: true }).waitFor()
 	await navigateWithinSpa(page, "/web/fabric-store/delivery-challans/DC-LOAD-ERROR")
-	await failedLoadRoot.getByText("Delivery Challan could not be loaded.", { exact: true }).waitFor()
+	const deliveryLoadError = page.getByRole("dialog", { name: "Delivery Challan could not be completed" })
+	await deliveryLoadError.getByText("Delivery Challan could not be loaded.", { exact: true }).waitFor()
 	assert(await failedLoadRoot.getByText("DC-FAB-001", { exact: true }).count() === 0, "Failed in-place Delivery Challan load retained the previous document identity")
 	assert(await failedLoadRoot.locator(".delivery-challan-field-group, .delivery-challan-matrix").count() === 0, "Failed in-place Delivery Challan load retained the previous form or matrices")
 	assert(await failedLoadRoot.getByRole("button", { name: /Complete Transfer|Return/, exact: true }).count() === 0, "Failed in-place Delivery Challan load retained the previous capabilities")
 	assert(await failedLoadRoot.getByText("Draft", { exact: true }).count() === 0, "Failed Delivery Challan load fabricates a Draft state")
+	await deliveryLoadError.getByRole("button", { name: "OK", exact: true }).click()
 	await failedLoadRoot.getByRole("button", { name: "Retry", exact: true }).click()
 	await failedLoadRoot.locator('.delivery-challan-field-group[data-group="document"]').waitFor()
 	await failedLoadRoot.getByText("DC-LOAD-ERROR", { exact: true }).waitFor()
@@ -1961,7 +2015,7 @@ async function goodsReceivedNoteSuite(page) {
 		{ fieldname: "delivery_challan", label: "Delivery Challan", fieldtype: "Link", options: "YRP Delivery Challan", value: "DC-FAB-001", read_only: true },
 		{ fieldname: "naming_series", label: "Series", fieldtype: "Select", options: "YRP-GRN-.YYYY.-", value: "YRP-GRN-.YYYY.-", reqd: true },
 		{ fieldname: "posting_date", label: "Posting Date", fieldtype: "Date", value: "2026-10-06", reqd: true },
-		{ fieldname: "posting_time", label: "Posting Time", fieldtype: "Time", value: "10:30:00", reqd: true },
+		{ fieldname: "posting_time", label: "Posting Time", fieldtype: "Time", value: "10:30:00.654321", reqd: true },
 		{ fieldname: "edit_posting_date_and_time", label: "Edit Posting Date and Time", fieldtype: "Check", value: 0 },
 		{ fieldname: "production_detail", label: "Production Detail", fieldtype: "Link", options: "YRP Item Production Detail", value: "IPD-001", read_only: true },
 		{ fieldname: "delivery_location", label: "Delivery Location", fieldtype: "Link", options: "Supplier", value: "FABRIC-STORE" },
@@ -1972,6 +2026,7 @@ async function goodsReceivedNoteSuite(page) {
 		{ fieldname: "to_warehouse", label: "To Warehouse", fieldtype: "Link", options: "Warehouse", value: "Stores - E" },
 		{ fieldname: "billing_address", label: "Billing Address", fieldtype: "Link", options: "Address", value: "FABRIC-STORE-Billing" },
 		{ fieldname: "supplier_address", label: "Supplier Address", fieldtype: "Link", options: "Address", value: "SUPPLIER-Billing" },
+		{ fieldname: "supplier_address_display", label: "Supplier Address Details", fieldtype: "Small Text", value: "D No 15<br>Tiruppur &amp; Tamil Nadu", read_only: true },
 		{ fieldname: "contact_person", label: "Supplier Contact", fieldtype: "Link", options: "Contact", value: "SUPPLIER-CONTACT" },
 		{ fieldname: "delivery_address", label: "Delivery Address", fieldtype: "Link", options: "Address", value: "FABRIC-STORE-Billing" },
 		{ fieldname: "dc_no", label: "DC No", fieldtype: "Data", value: "DC-22" },
@@ -2051,7 +2106,7 @@ async function goodsReceivedNoteSuite(page) {
 	let parentLoads = 0
 	let submitAttempts = 0
 	let loadRetryCalls = 0
-	const mismatchMessage = "Cannot submit row 1 (GARMENT-001-NAVY, Colour Navy, Size S): expected an input mapped by process Stitching in Item Production Detail IPD-001 for Work Order WO-FAB-001; actual received quantity is 2 with no matching input row. Fix: correct the Work Order/IPD mapping, click Calculate, and submit again."
+	const mismatchMessage = "Cannot submit this GRN because GARMENT-001-NAVY (Colour Navy, Size S, quantity 2) is not an expected Stitching input for Work Order WO-FAB-001 and Production Detail IPD-001. Open the Work Order, add or correct this item, colour, and size under the Stitching inputs, then click Calculate and submit again."
 	await page.route("**/api/method/essdee_yrp.api.link_search.link_search*", (route) => {
 		const body = requestBody(route)
 		const name = body.doctype === "YRP Received Type" ? (body.txt || "Rejected") : body.doctype === "YRP Work Order" ? "WO-FAB-002" : "TEST-VALUE"
@@ -2141,14 +2196,17 @@ async function goodsReceivedNoteSuite(page) {
 	await page.goto(`${SITE}/web/fabric-store/goods-received-notes/new?work_order=WO-FAB-001`, { waitUntil: "domcontentloaded" })
 	const newRoot = page.locator(".goods-received-note-workspace")
 	await newRoot.waitFor({ timeout: 20_000 })
-	await newRoot.locator('.goods-received-note-field-group[data-group="source"]').waitFor({ timeout: 20_000 })
-	for (const group of ["source", "posting", "movement", "supplier-document", "addresses", "charges", "transfer"]) {
+	await newRoot.locator('.goods-received-note-field-group[data-group="posting"]').waitFor({ timeout: 20_000 })
+	for (const group of ["posting", "movement", "supplier-document", "addresses"]) {
 		assert(await newRoot.locator(`.goods-received-note-field-group[data-group="${group}"]`).count() === 1, `GRN fields are missing the ${group} group`)
 	}
-	const grnSourceLabels = (await newRoot.locator('.goods-received-note-field-group[data-group="source"] .form-field__label').allTextContents()).map((label) => label.replace("*", "").trim())
-	assert(JSON.stringify(grnSourceLabels.slice(0, 3)) === JSON.stringify(["Source Type", "Source Document", "Delivery Challan"]), `GRN source fields are buried, technical, or out of order: ${JSON.stringify(grnSourceLabels)}`)
+	assert(await newRoot.locator('.goods-received-note-field-group[data-group="source"]').count() === 0, "GRN still renders its redundant Receipt source section")
+	for (const label of ["Source Type", "Source Document", "Delivery Challan", "Production Detail"]) {
+		assert(await newRoot.locator(".form-field").filter({ hasText: label }).count() === 0, `GRN still renders redundant field: ${label}`)
+	}
 	const grnPostingLabels = (await newRoot.locator('.goods-received-note-field-group[data-group="posting"] .form-field__label').allTextContents()).map((label) => label.replace("*", "").trim())
 	assert(JSON.stringify(grnPostingLabels.slice(0, 4)) === JSON.stringify(["Series", "Posting Date", "Posting Time", "Edit Posting Date and Time"]), `GRN posting fields do not follow the entry sequence: ${JSON.stringify(grnPostingLabels)}`)
+	assert(await newRoot.getByLabel("Posting Time", { exact: true }).inputValue() === "10:30:00", "GRN does not display Frappe's fractional posting time")
 	assert(await newRoot.locator(".goods-received-note-matrix--items").count() === 1, "WO GRN receivable matrix is missing")
 	assert(await newRoot.locator(".goods-received-note-matrix--corrections").count() === 1, "WO GRN correction matrix is missing")
 	const receiptQuantityInput = newRoot.locator(".goods-received-note-matrix--items .p-inputnumber-input").first()
@@ -2159,6 +2217,16 @@ async function goodsReceivedNoteSuite(page) {
 	assert(await newRoot.getByRole("button", { name: "Calculate", exact: true }).count() === 0, "Unsaved GRN exposes Calculate")
 	assert(await newRoot.locator(".goods-received-note-total--primary").filter({ hasText: "Total Received Quantity" }).count() === 1, "Received quantity is not highlighted")
 	assert(await newRoot.locator(".goods-received-note-total--primary").filter({ hasText: "Grand Total" }).count() === 1, "GRN value is not highlighted")
+	assert(await newRoot.locator(".goods-received-note-matrix__group > header span").count() === 0, "GRN repeats Lot below every item title")
+	const grnTail = newRoot.locator(".goods-received-note-after-matrix")
+	assert(await grnTail.count() === 1, "GRN final fields are not placed below Received quantities")
+	for (const label of ["Freight Charges", "Comments", "Is Internal Unit", "Transfer Complete", "STE Transferred", "STE Transferred (%)"]) {
+		assert(await grnTail.getByText(label, { exact: true }).count() === 1, `GRN final field is missing: ${label}`)
+	}
+	const grnMatrixBox = await newRoot.locator(".fabric-document-workspace__matrix").boundingBox()
+	const grnTailBox = await grnTail.boundingBox()
+	assert(grnMatrixBox && grnTailBox && grnTailBox.y >= grnMatrixBox.y + grnMatrixBox.height, `GRN final fields are not below the table: ${JSON.stringify({ grnMatrixBox, grnTailBox })}`)
+	assert(await newRoot.locator(".form-field").filter({ hasText: "Supplier Address Details" }).locator("textarea").inputValue() === "D No 15\nTiruppur & Tamil Nadu", "GRN address details expose raw <br> tags")
 
 
 	await page.setViewportSize({ width: 900, height: 760 })
@@ -2186,13 +2254,15 @@ async function goodsReceivedNoteSuite(page) {
 	const failedLoadRoot = page.locator(".goods-received-note-workspace")
 	await failedLoadRoot.getByText("GRN-FAB-001", { exact: true }).waitFor()
 	await navigateWithinSpa(page, "/web/fabric-store/goods-received-notes/GRN-LOAD-ERROR")
-	await failedLoadRoot.getByText("Goods Received Note could not be loaded.", { exact: true }).waitFor()
+	const grnLoadError = page.getByRole("dialog", { name: "Goods Received Note could not be completed" })
+	await grnLoadError.getByText("Goods Received Note could not be loaded.", { exact: true }).waitFor()
 	assert(await failedLoadRoot.getByText("GRN-FAB-001", { exact: true }).count() === 0, "Failed in-place GRN load retained the previous document identity")
 	assert(await failedLoadRoot.locator(".goods-received-note-field-group, .goods-received-note-matrix").count() === 0, "Failed in-place GRN load retained the previous form or matrices")
 	assert(await failedLoadRoot.getByRole("button", { name: /Calculate|Submit/, exact: true }).count() === 0, "Failed in-place GRN load retained the previous capabilities")
 	assert(await failedLoadRoot.getByText("Draft", { exact: true }).count() === 0, "Failed GRN load fabricates a Draft state")
+	await grnLoadError.getByRole("button", { name: "OK", exact: true }).click()
 	await failedLoadRoot.getByRole("button", { name: "Retry", exact: true }).click()
-	await failedLoadRoot.locator('.goods-received-note-field-group[data-group="source"]').waitFor()
+	await failedLoadRoot.locator('.goods-received-note-field-group[data-group="posting"]').waitFor()
 	await failedLoadRoot.getByText("GRN-LOAD-ERROR", { exact: true }).waitFor()
 	assert(loadRetryCalls === 2, `GRN Retry did not replay the failed request: ${loadRetryCalls}`)
 
@@ -2246,9 +2316,12 @@ async function goodsReceivedNoteSuite(page) {
 	const calculatedQty = calculatePanel.locator(".grn-calculate-panel__quantity .p-inputnumber-input").first()
 	await calculatedQty.fill("2")
 	await calculatePanel.getByRole("button", { name: "Apply Calculation", exact: true }).click()
-	await calculatePanel.getByText("Calculated quantities became stale.", { exact: true }).waitFor()
+	const grnCalculateError = page.getByRole("dialog", { name: "Goods Received Note could not be completed" })
+	await grnCalculateError.getByText("Calculated quantities became stale.", { exact: true }).waitFor()
+	assert(await calculatePanel.locator(".p-message-error").count() === 0, "GRN Calculate duplicates its server error inline")
 	assert(await calculatedQty.inputValue() === "2", "Failed Calculate discarded an entered quantity")
 	assert(await calculatePanel.locator(".grn-calculate-panel__received-type .p-autocomplete-input").inputValue() === "Rejected", "Failed Calculate discarded Received Type")
+	await grnCalculateError.getByRole("button", { name: "OK", exact: true }).click()
 	await calculatePanel.getByRole("button", { name: "Apply Calculation", exact: true }).click()
 	await calculatePanel.waitFor({ state: "detached" })
 	assert(calculateRequest?.received_type === "Rejected" && calculateRequest?.expected_modified === "2026-10-06 11:01:00" && calculateRequest?.rows?.some((row) => row.source_row === "WOCI-001" && row.qty === 2), `Calculate request is incomplete: ${JSON.stringify(calculateRequest)}`)
@@ -2260,6 +2333,7 @@ async function goodsReceivedNoteSuite(page) {
 	await page.waitForFunction(() => !document.querySelector('.goods-received-note-workspace button[aria-label="Save"]')?.disabled)
 	await draftRoot.getByRole("button", { name: "Save", exact: true }).click()
 	assert(saveRequest?.values?.item_details?.[0]?.items?.[0]?.dimensions?.received_type === "Rejected", `Ordinary save omitted the calculated split: ${JSON.stringify(saveRequest)}`)
+	assert(saveRequest?.values?.against === "YRP Work Order" && saveRequest?.values?.against_id === "WO-FAB-001" && saveRequest?.values?.production_detail === "IPD-001", `Hidden GRN source values were dropped from save: ${JSON.stringify(saveRequest)}`)
 	assert(await draftRoot.getByText("Rejected", { exact: true }).count() >= 1, "Save discarded the calculated Received Type split")
 	await draftRoot.getByRole("button", { name: "Calculate", exact: true }).click()
 	const reopenedCalculation = page.getByRole("dialog", { name: "Calculate Goods Received Note" })
@@ -2267,8 +2341,11 @@ async function goodsReceivedNoteSuite(page) {
 	await reopenedCalculation.locator(".grn-calculate-panel").getByRole("button", { name: "Close", exact: true }).click()
 	await reopenedCalculation.waitFor({ state: "detached" })
 	await draftRoot.getByRole("button", { name: "Submit", exact: true }).click()
-	await draftRoot.getByText(mismatchMessage, { exact: true }).waitFor()
+	const grnSubmitError = page.getByRole("dialog", { name: "Goods Received Note could not be completed" })
+	await grnSubmitError.getByText(mismatchMessage, { exact: true }).waitFor()
+	assert(await draftRoot.locator(".p-message-error").count() === 0, "GRN duplicates the submit error inline")
 	assert(await draftRoot.locator("#field-comments-value").inputValue() === "Keep calculated split", "Failed GRN submit discarded edited fields")
+	await grnSubmitError.getByRole("button", { name: "OK", exact: true }).click()
 	await draftRoot.getByRole("button", { name: "Submit", exact: true }).click()
 	assert(await draftRoot.getByRole("button", { name: "Apply Calculation", exact: true }).count() === 0, "Submitted GRN retains an actionable Calculate panel")
 

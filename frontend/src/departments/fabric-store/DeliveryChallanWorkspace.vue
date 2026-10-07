@@ -6,7 +6,7 @@
 			:workspace="workspace"
 			:presentation="presentation"
 			:loading="loading"
-			:error="hasWorkspace ? '' : error"
+			:error="error"
 			:dirty="dirty"
 			:acting="acting"
 			:show-lifecycle-actions="false"
@@ -30,7 +30,6 @@
 			</template>
 
 			<template #fields>
-				<Message v-if="error && hasWorkspace" severity="error" :closable="false">{{ error }}</Message>
 				<section v-if="visibleFields.length" class="delivery-challan-fields" aria-label="Delivery Challan fields">
 					<section v-for="group in primaryFieldGroups" :key="group.key" class="delivery-challan-field-group" :data-group="group.key">
 						<header><span>{{ group.eyebrow }}</span><h2>{{ group.label }}</h2></header>
@@ -87,7 +86,7 @@
 					</header>
 					<div class="delivery-challan-matrix__stack">
 						<article v-for="section in itemSections(block.groups)" :key="section.key" class="delivery-challan-matrix__group">
-							<header><div><strong>{{ section.name || "Unspecified item" }}</strong><span v-if="section.lot">{{ section.lot }}</span></div></header>
+							<header><div><strong>{{ section.name || "Unspecified item" }}</strong></div></header>
 							<div class="erp-table-wrap delivery-challan-matrix__scroll" tabindex="0" role="region" :aria-label="`Delivery quantities for ${section.name || 'item'}`">
 								<table class="erp-data-table">
 									<thead><tr>
@@ -122,7 +121,18 @@
 						</article>
 					</div>
 				</section>
-				<div v-if="!matrixBlocks.length" class="delivery-challan-matrix__empty"><i class="pi pi-inbox" /><span>No Delivery Challan item rows are available.</span></div>
+					<div v-if="!matrixBlocks.length" class="delivery-challan-matrix__empty"><i class="pi pi-inbox" /><span>No Delivery Challan item rows are available.</span></div>
+			</template>
+
+			<template #after-matrix>
+				<div v-if="afterMatrixFields.length" class="delivery-challan-after-matrix" aria-label="Delivery Challan final details">
+					<template v-if="canEdit">
+						<FormField v-for="field in afterMatrixFields" :key="`after-${fieldKey(field)}`" :field="field" :model-value="form[field.fieldname]" :form="form" :required="Boolean(field.reqd || field.mandatory)" compact :search-handler="linkSearchHandler(field)" @update:model-value="setField(field.fieldname, $event)" />
+					</template>
+					<template v-else>
+						<div v-for="field in afterMatrixFields" :key="`after-fact-${field.fieldname}`" class="delivery-challan-after-matrix__fact"><span>{{ field.label }}</span><strong>{{ formatFieldValue(field) }}</strong></div>
+					</template>
+				</div>
 			</template>
 
 			<template #rail>
@@ -166,7 +176,6 @@
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
-import Message from "primevue/message"
 import Tag from "primevue/tag"
 import { useToast } from "primevue/usetoast"
 import { computed, onMounted, reactive, ref, watch } from "vue"
@@ -182,7 +191,7 @@ import { searchLinkedDocument } from "../../api/frappe.js"
 import FormField from "../../components/common/FormField.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
-import { hasDocumentDisplayValue } from "../../utils/documentValues.js"
+import { hasDocumentDisplayValue, plainTextFromHtml } from "../../utils/documentValues.js"
 import DeliveryChallanReturnPanel from "./DeliveryChallanReturnPanel.vue"
 import FabricDocumentWorkspace from "./FabricDocumentWorkspace.vue"
 import FabricStockOperationDialog from "./FabricStockOperationDialog.vue"
@@ -223,6 +232,8 @@ const form = reactive({})
 const primaryTotals = new Set(["total_delivered_qty", "stock_value", "total_value"])
 const headerFieldnames = new Set(["process_name", "item", "lot", "supplier_name", "from_location_name"])
 const sourceOwnedFieldnames = new Set(["from_finishing", "cutting_bulk_lay_sheet", "cutting_bulk_lay_sheet_detail", "cut_panel_movement", "loose_piece_dc", "pack_piece_dc"])
+const presentationHiddenFieldnames = new Set(["received_type"])
+const afterMatrixFieldnames = new Set(["is_internal_unit", "includes_packing", "additional_goods_value", "ste_transferred", "is_rework"])
 
 const capabilities = computed(() => workspace.value.capabilities || {})
 const deliveryChallanActions = computed(() => {
@@ -257,7 +268,7 @@ const canEditMatrix = computed(() => canEdit.value && !workspace.value.special_s
 const visibleFields = computed(() => {
 	const result = new Map()
 	for (const source of [...(workspace.value.fields || []), ...(workspace.value.dimensions || [])]) {
-		if (!source?.fieldname || source.hidden || sourceOwnedFieldnames.has(source.fieldname)) continue
+		if (!source?.fieldname || source.hidden || sourceOwnedFieldnames.has(source.fieldname) || presentationHiddenFieldnames.has(source.fieldname)) continue
 		if (source.depends_on && !evaluateCondition(source.depends_on, true)) continue
 		if (headerFieldnames.has(source.fieldname)) continue
 		if (source.fieldname === "work_order" && currentName.value) continue
@@ -281,11 +292,15 @@ const visibleFields = computed(() => {
 })
 const fieldGroups = computed(() => {
 	const groups = new Map(dcFieldGroups.map((group) => [group.key, { ...group, fields: [] }]))
-	for (const field of visibleFields.value) (groups.get(fieldGroupKey(field.fieldname)) || groups.get("additional")).fields.push(field)
+	for (const field of visibleFields.value) {
+		if (afterMatrixFieldnames.has(field.fieldname)) continue
+		;(groups.get(fieldGroupKey(field.fieldname)) || groups.get("additional")).fields.push(field)
+	}
 	return [...groups.values()].filter((group) => group.fields.length)
 })
 const primaryFieldGroups = computed(() => fieldGroups.value.filter((group) => ["document", "movement"].includes(group.key)))
 const secondaryFieldGroups = computed(() => fieldGroups.value.filter((group) => !["document", "movement"].includes(group.key)))
+const afterMatrixFields = computed(() => visibleFields.value.filter((field) => afterMatrixFieldnames.has(field.fieldname)))
 const matrixBlocks = computed(() => {
 	const blocks = []
 	if (itemGroups.value.length) blocks.push({ key: "items", kind: "items", title: "Delivery quantities", groups: itemGroups.value })
@@ -551,9 +566,9 @@ async function prepareNotification(command) {
 async function sendNotification({ channel, payload }) {
 	notificationError.value = ""
 	const result = await runCommand(`send_${channel}`, payload)
-	if (!result) { notificationError.value = error.value; return }
+	if (!result) return
 	if (result.result?.ok) notificationPreparation.value = null
-	else notificationError.value = result.result?.error || `Unable to send ${channel === "sms" ? "SMS" : "WhatsApp"}.`
+	else error.value = result.result?.error || `Unable to send ${channel === "sms" ? "SMS" : "WhatsApp"}.`
 }
 function closeNotification() { notificationPreparation.value = null; notificationError.value = "" }
 function handleNotificationVisibility(visible) { if (!visible) closeNotification() }
@@ -568,10 +583,10 @@ const dcFieldGroups = [
 	{ key: "additional", eyebrow: "Additional", label: "Additional details" },
 ]
 const dcGroupFields = {
-	document: ["naming_series", "work_order", "purchase_order", "posting_date", "posting_time", "edit_posting_date_and_time", "actual_date", "production_detail", "is_rework"],
+	document: ["naming_series", "work_order", "purchase_order", "posting_date", "posting_time", "edit_posting_date_and_time", "actual_date", "production_detail", "allow_non_bundle"],
 	movement: ["from_location", "from_warehouse", "from_address", "from_address_details", "supplier", "to_warehouse", "supplier_address", "supplier_address_details"],
 	logistics: ["vehicle_no", "supplier_document_no", "letter_head", "comments"],
-	controls: ["includes_packing", "allow_non_bundle", "additional_goods_value"],
+	controls: ["includes_packing", "additional_goods_value"],
 	transfer: ["is_internal_unit", "transfer_complete", "ste_transferred", "ste_transferred_percent"],
 }
 const dcFieldOrder = Object.values(dcGroupFields).flat()
@@ -627,7 +642,7 @@ function formatFieldValue(field) {
 	}
 	if (field.fieldtype === "Check") return Number(value) ? "Yes" : "No"
 	if (["Currency", "Float", "Int", "Percent"].includes(field.fieldtype)) return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })
-	return value === null || value === undefined || value === "" ? "—" : String(value)
+	return value === null || value === undefined || value === "" ? "—" : plainTextFromHtml(value)
 }
 function titleCase(value) { return String(value || "").replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase()) }
 function clone(value) { return JSON.parse(JSON.stringify(value || {})) }
@@ -678,6 +693,12 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 
 <style scoped>
 .delivery-challan-workspace { width: 100%; min-width: 0; }
+.delivery-challan-after-matrix { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: end; gap: 10px 14px; padding: 2px; }
+.delivery-challan-after-matrix__fact { display: grid; min-width: 0; gap: 3px; padding: 8px 2px; border-bottom: 1px solid var(--erp-border); }
+.delivery-challan-after-matrix__fact span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
+.delivery-challan-after-matrix__fact strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); line-height: 1.4; white-space: pre-line; overflow-wrap: anywhere; }
+@media (max-width: 1100px) { .delivery-challan-after-matrix { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .delivery-challan-after-matrix { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .delivery-challan-workspace--page { max-width: 1840px; margin: 0 auto; padding: 0 clamp(2px, .7vw, 10px) var(--erp-space-3); }
 .delivery-challan-header__identity { display: flex; min-width: 0; align-items: center; gap: 12px; }
 .delivery-challan-header__title { display: grid; min-width: 0; gap: 2px; }

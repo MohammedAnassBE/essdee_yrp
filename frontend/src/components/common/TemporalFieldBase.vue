@@ -49,6 +49,8 @@
 import DatePicker from "primevue/datepicker"
 import { computed, useId } from "vue"
 
+import { normaliseFrappeTime } from "../../utils/documentValues.js"
+
 const props = defineProps({
 	modelValue: { type: [String, Date, Array], default: "" },
 	mode: {
@@ -145,7 +147,8 @@ function parseValue(value) {
 	if (!text) return null
 
 	if (props.mode === "time") {
-		const match = text.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/)
+		const normalized = normaliseFrappeTime(text)
+		const match = normalized.match(/^(\d{2}):(\d{2}):(\d{2})$/)
 		if (!match) return null
 		const result = new Date()
 		result.setHours(Number(match[1]), Number(match[2]), Number(match[3] || 0), 0)

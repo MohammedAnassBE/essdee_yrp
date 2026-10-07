@@ -1,3 +1,5 @@
+import { extractServerMessage } from "./errorMessages.js"
+
 function csrfToken() {
 	return window.csrf_token || window.frappe?.csrf_token || ""
 }
@@ -10,26 +12,6 @@ function queryString(params) {
 	}
 	const value = query.toString()
 	return value ? `?${value}` : ""
-}
-
-function serverMessage(payload, fallback) {
-	if (payload?._server_messages) {
-		try {
-			const messages = JSON.parse(payload._server_messages)
-				.map((entry) => {
-					try {
-						return JSON.parse(entry).message
-					} catch {
-						return entry
-					}
-				})
-				.filter(Boolean)
-			if (messages.length) return messages.join("\n")
-		} catch {
-			// The normal message below remains the safe fallback.
-		}
-	}
-	return payload?.message || fallback
 }
 
 async function request(url, options = {}) {
@@ -51,7 +33,7 @@ async function request(url, options = {}) {
 
 	const payload = response.status === 204 ? {} : await response.json().catch(() => ({}))
 	if (!response.ok || payload.exc) {
-		throw new Error(serverMessage(payload, `Request failed with status ${response.status}`))
+		throw new Error(extractServerMessage(payload, "The server could not complete this action. Please try again. If the problem continues, contact your administrator."))
 	}
 	return payload
 }

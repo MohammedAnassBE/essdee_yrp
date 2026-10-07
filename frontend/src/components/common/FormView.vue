@@ -41,7 +41,7 @@
 			</div>
 		</header>
 
-		<Message v-if="error && !loadFailed" severity="error" :closable="false">{{ error }}</Message>
+		<DocumentErrorDialog :message="error" :title="`${heading} could not be ${loadFailed ? 'loaded' : 'saved'}`" />
 		<Message v-if="success" severity="success" :closable="false">{{ success }}</Message>
 
 		<div v-if="loading" class="form-loading" role="status" aria-live="polite" aria-label="Loading form">
@@ -49,7 +49,7 @@
 		</div>
 		<section v-else-if="loadFailed" class="form-load-error" role="alert">
 			<i class="pi pi-cloud-times" aria-hidden="true" />
-			<div><strong>{{ heading }} could not be loaded</strong><span>{{ error }}</span></div>
+				<div><strong>{{ heading }} could not be loaded</strong><span>Close the error message, then try loading the document again.</span></div>
 			<Button label="Retry" icon="pi pi-refresh" severity="secondary" outlined @click="load" />
 		</section>
 
@@ -208,13 +208,14 @@ import Column from "primevue/column"
 import DataTable from "primevue/datatable"
 import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
-import { useToast } from "primevue/usetoast"
 import { computed, reactive, ref, watch } from "vue"
 
 import { createDoc, getDoc, getMeta, updateDoc } from "../../api/frappe.js"
 import { webDocumentPath } from "../../router/webDocumentRoutes.js"
 import ChildTableField from "./ChildTableField.vue"
 import FormField from "./FormField.vue"
+import DocumentErrorDialog from "../documents/DocumentErrorDialog.vue"
+import { plainTextFromHtml } from "../../utils/documentValues.js"
 
 const props = defineProps({
 	doctype: { type: String, required: true },
@@ -235,7 +236,6 @@ const props = defineProps({
 })
 
 const emit = defineEmits(["saved", "loaded", "cancel", "change"])
-const toast = useToast()
 
 const noValueFieldtypes = new Set([
 	"Section Break",
@@ -354,7 +354,17 @@ function buildInitialValues(loadedMetas, document) {
 
 function normaliseDefault(field) {
 	if (field.fieldtype === "Check") return Number(field.default) ? 1 : 0
+	if (field.fieldtype === "Date" && String(field.default).toLowerCase() === "today") return localDateValue(new Date())
+	if (field.fieldtype === "Time" && String(field.default).toLowerCase() === "now") return localTimeValue(new Date())
 	return field.default
+}
+
+function localDateValue(value) {
+	return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`
+}
+
+function localTimeValue(value) {
+	return `${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}:${String(value.getSeconds()).padStart(2, "0")}`
 }
 
 function replaceForm(values) {
@@ -501,7 +511,7 @@ function displayValue(value, field) {
 	if (field.fieldtype === "Check") return Number(value) ? "Yes" : "No"
 	if (Array.isArray(value)) return value.join(", ")
 	if (typeof value === "object") return JSON.stringify(value)
-	return value
+	return typeof value === "string" ? plainTextFromHtml(value) : value
 }
 
 function validate() {
@@ -560,8 +570,7 @@ async function save() {
 	error.value = ""
 	success.value = ""
 	if (!validate()) {
-		error.value = "Complete the required fields before saving."
-		toast.add({ severity: "error", summary: `${heading.value} was not saved`, detail: error.value, life: 5000 })
+		error.value = ""
 		return
 	}
 
@@ -578,7 +587,6 @@ async function save() {
 		emit("saved", saved)
 	} catch (reason) {
 		error.value = reason.message || `Unable to save ${props.doctype}.`
-		toast.add({ severity: "error", summary: `${heading.value} was not saved`, detail: error.value, life: 6500 })
 	} finally {
 		saving.value = false
 	}
@@ -775,6 +783,7 @@ defineExpose({ save, reload: load, doc: form, mode })
 	font-size: 0.94rem;
 	font-weight: 650;
 	overflow-wrap: anywhere;
+	white-space: pre-line;
 }
 
 .view-field__link {

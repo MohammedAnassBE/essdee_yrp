@@ -9,9 +9,9 @@
 			</div>
 		</header>
 
-		<Message v-if="error && !loadFailed" severity="error" :closable="false">{{ error }}</Message>
+		<DocumentErrorDialog :message="error" :title="`Work Order could not be ${loadFailed ? 'loaded' : 'saved'}`" />
 		<div v-if="loading" class="work-order-editor__loading" role="status" aria-live="polite" aria-label="Loading Work Order editor"><Skeleton height="170px" /><Skeleton height="420px" /></div>
-		<section v-else-if="loadFailed" class="work-order-editor__recovery" role="alert"><i class="pi pi-cloud-times" aria-hidden="true" /><div><strong>Work Order could not be loaded</strong><span>{{ error }}</span></div><Button label="Retry" icon="pi pi-refresh" severity="secondary" outlined @click="load" /></section>
+		<section v-else-if="loadFailed" class="work-order-editor__recovery" role="alert"><i class="pi pi-cloud-times" aria-hidden="true" /><div><strong>Work Order could not be loaded</strong><span>Close the error message, then try loading the document again.</span></div><Button label="Retry" icon="pi pi-refresh" severity="secondary" outlined @click="load" /></section>
 		<div v-else class="work-order-editor__body">
 			<section class="work-order-editor__section">
 				<header><div><span>Setup</span><h2>Work Order details</h2></div><small>Process, Item and Lot define the calculation source.</small></header>
@@ -56,7 +56,6 @@
 import Button from "primevue/button"
 import Checkbox from "primevue/checkbox"
 import Dialog from "primevue/dialog"
-import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 import Textarea from "primevue/textarea"
 import { useToast } from "primevue/usetoast"
@@ -68,6 +67,7 @@ import { searchLinkedDocument } from "../../api/frappe.js"
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
+import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import WorkOrderActionPanel from "./WorkOrderActionPanel.vue"
 import WorkOrderItemMatrix from "./WorkOrderItemMatrix.vue"
 
@@ -229,7 +229,7 @@ async function save(submit) {
 		dirty.value = false; allowNavigation = true
 		toast.add({ severity: "success", summary: submit ? "Work Order submitted" : "Work Order saved", detail: record.name || "Your changes are saved.", life: 3500 })
 		emit("saved", record)
-	} catch (reason) { const message = reason?.message || "Unable to save this Work Order."; error.value = message; toast.add({ severity: "error", summary: "Work Order was not saved", detail: message, life: 6500 }) }
+	} catch (reason) { error.value = reason?.message || "Unable to save this Work Order." }
 	finally { saving.value = "" }
 }
 function requestCancel() { if (!dirty.value) return emit("cancel"); pendingCancel.value = true; discardVisible.value = true }

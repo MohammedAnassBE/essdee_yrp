@@ -957,12 +957,14 @@ class TestEssdeeValuationContract(UnitTestCase):
 			"Work Order WO-1",
 			"process Cutting",
 			"Item Production Detail IPD-1",
-			"Expected:",
-			"Actual:",
-			"Fix:",
+			"Why this GRN is blocked:",
+			"Expected from the Work Order:",
+			"How to fix:",
 			"Calculate",
 		):
 			self.assertIn(expected, message)
+		self.assertNotIn("deterministic", message.lower())
+		self.assertNotIn("consumption route", message.lower())
 		base_submit.assert_not_called()
 
 	def test_empty_plan_guidance_matches_the_selected_planner(self):

@@ -718,12 +718,11 @@ def _empty_consumption_plan_message(grn, plan_kind: str) -> str:
 		)
 
 	return _(
-		"Cannot submit this GRN. No deterministic {planner} consumption route was found. "
-		"Received: {received}. Context: Work Order {work_order}, process {process}, "
-		"Item Production Detail {production_detail}. Expected: {expected}. "
-		"Actual: {actual}. Fix: {fix}, then submit again."
+		"Cannot submit this GRN because its received items are not expected by the selected Work Order setup. "
+		"Received on this GRN: {received}. Work Order details: Work Order {work_order}, process {process}, "
+		"Item Production Detail {production_detail}. Why this GRN is blocked: {actual}. "
+		"Expected from the Work Order: {expected}. How to fix: {fix}, then submit again."
 	).format(
-		planner=planner,
 		received="; ".join(received) or "no positive received rows",
 		work_order=grn.get("against_id") or "not set",
 		process=process,

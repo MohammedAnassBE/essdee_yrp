@@ -17,7 +17,7 @@
 					<div>
 						<i v-if="!groupByItem" class="pi pi-th-large"></i>
 						<strong>{{ groupByItem ? group.itemIdentity : group.primary_attribute ? `${group.primary_attribute} matrix` : "Quantity" }}</strong>
-						<small v-if="groupByItem && group.itemLot">{{ group.itemLot }}</small>
+						<small v-if="groupByItem && group.itemLot && !showLotColumn">{{ group.itemLot }}</small>
 					</div>
 					<span>{{ group.items?.length || 0 }} {{ group.items?.length === 1 ? "row" : "rows" }}</span>
 				</header>
@@ -69,6 +69,7 @@ const props = defineProps({
 	doctype: { type: String, default: "" },
 	physicalRowCount: { type: Number, default: 0 },
 	groupByItem: { type: Boolean, default: false },
+	showLotColumn: { type: Boolean, default: false },
 	showPricing: { type: Boolean, default: false },
 	showFulfillment: { type: Boolean, default: false },
 	showReceived: { type: Boolean, default: true },
@@ -117,7 +118,7 @@ function contextColumns(group) {
 		return (group.items || []).some((row) => row[key] !== null && row[key] !== undefined && row[key] !== "")
 	})
 	return [...dimensionKeys, ...extras]
-		.filter((key) => !(props.groupByItem && key === "lot"))
+		.filter((key) => !(props.groupByItem && key === "lot" && !props.showLotColumn))
 		.map((key) => ({ key, label: fieldLabels[key] || titleCase(key), dimension: dimensionKeys.includes(key) }))
 }
 

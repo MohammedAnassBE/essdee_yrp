@@ -64,11 +64,12 @@
 			<Skeleton height="18rem" />
 		</div>
 		<div v-else class="fabric-document-workspace__content" tabindex="0" role="region" :aria-label="`${title} document content`">
-			<div v-if="error" class="fabric-document-workspace__error" role="alert">
-				<Message severity="error" :closable="false">{{ error }}</Message>
+			<div v-if="error && !hasWorkspace" class="fabric-document-workspace__error-recovery">
+				<i class="pi pi-cloud-times" aria-hidden="true" />
+				<div><strong>{{ title }} could not be loaded</strong><span>Close the error message, then try loading the document again.</span></div>
 				<Button label="Retry" icon="pi pi-refresh" severity="secondary" outlined :loading="acting === 'reload'" @click="emit('reload')" />
 			</div>
-			<template v-if="!error || record.name">
+			<template v-if="hasWorkspace">
 				<div class="fabric-document-workspace__columns">
 					<aside class="fabric-document-workspace__rail" aria-label="Document totals and context" :tabindex="compactMobileRail ? 0 : undefined">
 						<slot name="rail" :workspace="workspace">
@@ -88,6 +89,9 @@
 						<section v-if="$slots.matrix" class="fabric-document-workspace__matrix">
 							<slot name="matrix" :workspace="workspace" />
 						</section>
+						<div v-if="$slots['after-matrix']" class="fabric-document-workspace__after-matrix">
+							<slot name="after-matrix" :workspace="workspace" />
+						</div>
 					</main>
 				</div>
 				<section v-if="$slots.panel" class="fabric-document-workspace__panel">
@@ -97,6 +101,8 @@
 		</div>
 
 	</section>
+
+	<DocumentErrorDialog :message="error" :title="`${title} could not be completed`" />
 
 	<Dialog v-model:visible="discardVisible" modal header="Discard unsaved changes?" :closable="false" :style="{ width: 'min(440px, calc(100vw - 32px))' }">
 		<p class="fabric-document-workspace__discard-copy">This document has unsaved changes. Close it and discard those changes?</p>
@@ -110,13 +116,13 @@
 <script setup>
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
-import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 import Tag from "primevue/tag"
 import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 import { onBeforeRouteLeave } from "vue-router"
 
 import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
+import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 
 const props = defineProps({
 	doctype: { type: String, required: true },
@@ -136,6 +142,7 @@ const discardVisible = ref(false)
 let pendingNavigation = null
 const record = computed(() => props.workspace.record || {})
 const capabilities = computed(() => props.workspace.capabilities || {})
+const hasWorkspace = computed(() => Boolean(Object.keys(props.workspace || {}).length))
 const canPrint = computed(() => Boolean(record.value.name && props.workspace.permissions?.can_print))
 const statusSeverity = computed(() => {
 	if (Number(record.value.docstatus) === 2 || ["Cancelled", "Closed"].includes(record.value.status)) return "danger"
@@ -201,10 +208,13 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", beforeUnload))
 .fabric-document-workspace__loading, .fabric-document-workspace__content { min-height: 0; flex: 1; padding: clamp(10px, 1.2vw, 18px); background: color-mix(in srgb, var(--erp-bg) 80%, white); }
 .fabric-document-workspace__loading { display: grid; align-content: start; gap: var(--erp-space-3); }
 .fabric-document-workspace__content { overflow-y: auto; scrollbar-gutter: stable; }
-.fabric-document-workspace__error { display: flex; align-items: center; justify-content: space-between; gap: var(--erp-space-3); }
-.fabric-document-workspace__error :deep(.p-message) { min-width: 0; flex: 1; margin: 0; }
+.fabric-document-workspace__error-recovery { display: grid; min-height: 230px; align-content: center; justify-items: center; gap: 9px; padding: var(--erp-space-5); color: var(--erp-text-muted); text-align: center; border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-panel-radius); background: var(--erp-surface); }
+.fabric-document-workspace__error-recovery > i { color: var(--erp-danger); font-size: 25px; }
+.fabric-document-workspace__error-recovery > div { display: grid; gap: 4px; }
+.fabric-document-workspace__error-recovery strong { color: var(--erp-text); }
+.fabric-document-workspace__error-recovery span { font-size: var(--erp-font-size-caption); }
 .fabric-document-workspace__columns { display: grid; grid-template-areas: "main rail"; grid-template-columns: minmax(0, 1fr) minmax(260px, 288px); align-items: start; gap: clamp(12px, 1.3vw, 20px); }
-.fabric-document-workspace__main, .fabric-document-workspace__fields, .fabric-document-workspace__matrix, .fabric-document-workspace__secondary-fields, .fabric-document-workspace__rail, .fabric-document-workspace__panel { display: grid; min-width: 0; gap: var(--erp-space-3); }
+.fabric-document-workspace__main, .fabric-document-workspace__fields, .fabric-document-workspace__matrix, .fabric-document-workspace__secondary-fields, .fabric-document-workspace__after-matrix, .fabric-document-workspace__rail, .fabric-document-workspace__panel { display: grid; min-width: 0; gap: var(--erp-space-3); }
 .fabric-document-workspace__main { grid-area: main; }
 .fabric-document-workspace__rail { position: sticky; top: 0; align-content: start; gap: 0; overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); }
 .fabric-document-workspace__rail { grid-area: rail; }
@@ -223,6 +233,6 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", beforeUnload))
 	.fabric-document-workspace--compact-mobile-rail .fabric-document-workspace__rail:focus-visible { outline: 2px solid var(--erp-accent-dark); outline-offset: 2px; }
 	.fabric-document-workspace--compact-mobile-rail .fabric-document-workspace__rail > * { box-sizing: border-box; width: clamp(168px, 42vw, 220px); height: 76px; min-height: 76px; flex: 0 0 auto; border-right: 1px solid var(--erp-border); border-bottom: 0; scroll-snap-align: start; }
 }
-@media (max-width: 620px) { .fabric-document-workspace--page { height: calc(100dvh - var(--erp-shell-header-height) - 76px); min-height: 0; border-right: 0; border-left: 0; border-radius: 0; } .fabric-document-workspace--embedded { height: 100%; min-height: 0; } .fabric-document-workspace__header { min-height: 56px; padding: 9px var(--erp-space-3); } .fabric-document-workspace__commandbar { align-items: center; gap: 4px; padding: 7px var(--erp-space-3); flex-wrap: nowrap; overflow: hidden; } .fabric-document-workspace__domain-actions, .fabric-document-workspace__lifecycle-actions { width: auto; min-width: 0; justify-content: flex-start; margin-left: 0; } .fabric-document-workspace__domain-actions { overflow: hidden; flex: 1 1 auto; } .fabric-document-workspace__lifecycle-actions { gap: 2px; flex: 0 0 auto; } .fabric-document-workspace__lifecycle-actions :deep(.document-print-button) { width: var(--erp-control-height); padding-inline: 0; } .fabric-document-workspace__lifecycle-actions :deep(.document-print-button .p-button-label) { display: none; } .fabric-document-workspace__content { padding: var(--erp-space-2); } .fabric-document-workspace__error { align-items: stretch; flex-direction: column; } .fabric-document-workspace__error :deep(.p-button) { align-self: flex-start; } }
+@media (max-width: 620px) { .fabric-document-workspace--page { height: calc(100dvh - var(--erp-shell-header-height) - 76px); min-height: 0; border-right: 0; border-left: 0; border-radius: 0; } .fabric-document-workspace--embedded { height: 100%; min-height: 0; } .fabric-document-workspace__header { min-height: 56px; padding: 9px var(--erp-space-3); } .fabric-document-workspace__commandbar { align-items: center; gap: 4px; padding: 7px var(--erp-space-3); flex-wrap: nowrap; overflow: hidden; } .fabric-document-workspace__domain-actions, .fabric-document-workspace__lifecycle-actions { width: auto; min-width: 0; justify-content: flex-start; margin-left: 0; } .fabric-document-workspace__domain-actions { overflow: hidden; flex: 1 1 auto; } .fabric-document-workspace__lifecycle-actions { gap: 2px; flex: 0 0 auto; } .fabric-document-workspace__lifecycle-actions :deep(.document-print-button) { width: var(--erp-control-height); padding-inline: 0; } .fabric-document-workspace__lifecycle-actions :deep(.document-print-button .p-button-label) { display: none; } .fabric-document-workspace__content { padding: var(--erp-space-2); } }
 @media (prefers-reduced-motion: reduce) { .fabric-document-workspace__commandbar :deep(.p-button) { transition: none; } .fabric-document-workspace__commandbar :deep(.p-button:active:not(:disabled)) { transform: none; } }
 </style>

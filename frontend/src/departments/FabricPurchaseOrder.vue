@@ -35,7 +35,7 @@
 				</template>
 
 				<template #matrix>
-					<StockItemMatrix v-if="itemGroups.length" :groups="itemGroups" doctype="Purchase Order" :physical-row-count="workspace.item_row_count || 0" :currency="workspace.record?.currency || ''" group-by-item show-pricing show-fulfillment :show-received="false" :show-amount="false" pricing-before-fulfillment />
+					<StockItemMatrix v-if="itemGroups.length" :groups="itemGroups" doctype="Purchase Order" :physical-row-count="workspace.item_row_count || 0" :currency="workspace.record?.currency || ''" group-by-item show-lot-column show-pricing show-fulfillment :show-received="false" :show-amount="false" pricing-before-fulfillment />
 					<div v-else-if="!loading" class="purchase-order-page__empty"><i class="pi pi-inbox" /><div><strong>No item details</strong><span>This Purchase Order has no grouped item quantities.</span></div></div>
 				</template>
 
@@ -87,7 +87,6 @@
 			<div class="purchase-order-rejection">
 				<Message severity="warn" :closable="false">This returns the Purchase Order to Draft and records the reason in its audit trail.</Message>
 				<label for="purchase-order-rejection-reason"><span>Rejection reason *</span><Textarea id="purchase-order-rejection-reason" v-model="rejectReason" aria-label="Rejection reason *" rows="4" auto-resize fluid autofocus /></label>
-				<Message v-if="rejectError" severity="error" :closable="false">{{ rejectError }}</Message>
 			</div>
 			<template #footer><Button label="Keep Pending" severity="secondary" text :disabled="acting === 'reject'" @click="rejectVisible = false" /><Button label="Reject Purchase Order" icon="pi pi-times-circle" severity="danger" :disabled="!rejectReason.trim()" :loading="acting === 'reject'" @click="submitRejection" /></template>
 		</Dialog>
@@ -139,7 +138,6 @@ const deliverySourceVisible = ref(false)
 const deliveryWorkOrder = ref("")
 const rejectVisible = ref(false)
 const rejectReason = ref("")
-const rejectError = ref("")
 const notificationPreparation = ref(null)
 const notificationError = ref("")
 const lifecycleConfirmVisible = ref(false)
@@ -236,17 +234,18 @@ async function prepareNotification(channel) {
 		const result = await executePurchaseOrderCommand(workspace.value.record.name, `prepare_${channel}`, {}, workspace.value.record.modified)
 		if (result?.context) notificationPreparation.value = result
 		else actionError.value = `No ${channel === "sms" ? "SMS" : "WhatsApp"} notification context is available.`
-	} catch (reason) { notificationError.value = reason?.message || `Unable to prepare ${channel === "sms" ? "SMS" : "WhatsApp"}.`; actionError.value = notificationError.value }
+	} catch (reason) { actionError.value = reason?.message || `Unable to prepare ${channel === "sms" ? "SMS" : "WhatsApp"}.` }
 	finally { acting.value = "" }
 }
 async function sendNotification({ channel, payload }) {
 	acting.value = `send_${channel}`
 	notificationError.value = ""
+	actionError.value = ""
 	try {
 		const result = await executePurchaseOrderCommand(workspace.value.record.name, `send_${channel}`, payload, workspace.value.record.modified)
 		if (result?.result?.ok) notificationPreparation.value = null
-		else notificationError.value = result?.result?.error || `Unable to send ${channel === "sms" ? "SMS" : "WhatsApp"}.`
-	} catch (reason) { notificationError.value = reason?.message || `Unable to send ${channel === "sms" ? "SMS" : "WhatsApp"}.` }
+		else actionError.value = result?.result?.error || `Unable to send ${channel === "sms" ? "SMS" : "WhatsApp"}.`
+	} catch (reason) { actionError.value = reason?.message || `Unable to send ${channel === "sms" ? "SMS" : "WhatsApp"}.` }
 	finally { acting.value = "" }
 }
 function closeNotification() { notificationPreparation.value = null; notificationError.value = "" }
@@ -305,14 +304,11 @@ function openDeliveryChallan() {
 }
 function beginRejection() {
 	rejectReason.value = ""
-	rejectError.value = ""
 	rejectVisible.value = true
 }
 async function submitRejection() {
-	rejectError.value = ""
 	const succeeded = await runDomainCommand("reject", { reason: rejectReason.value.trim() })
 	if (succeeded) rejectVisible.value = false
-	else rejectError.value = actionError.value
 }
 function statusLabel(docstatus) { return Number(docstatus) === 1 ? "Submitted" : Number(docstatus) === 2 ? "Cancelled" : "Draft" }
 function formatDate(value) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/); return match ? `${match[3]}-${match[2]}-${match[1]}` : value || "—" }

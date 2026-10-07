@@ -1,5 +1,5 @@
 <template>
-	<div class="stock-composer">
+	<div class="stock-composer" :class="{ 'stock-composer--natural-table-flow': naturalTableFlow }">
 		<section v-if="!readOnly" class="stock-composer__builder">
 			<header class="stock-composer__heading">
 				<div>
@@ -137,6 +137,7 @@ const props = defineProps({
 	rowPreparer: { type: Function, default: null },
 	currency: { type: String, default: "" },
 	readOnly: { type: Boolean, default: false },
+	naturalTableFlow: { type: Boolean, default: false },
 })
 const emit = defineEmits(["update:modelValue", "dirty"])
 
@@ -666,6 +667,12 @@ function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray
 .stock-composer__table-scroll {
 	max-height: 260px;
 	overflow: auto;
+}
+
+.stock-composer--natural-table-flow .stock-composer__table-scroll {
+	max-height: none;
+	overflow-x: auto;
+	overflow-y: visible;
 }
 
 .stock-composer__table-scroll:focus-visible {

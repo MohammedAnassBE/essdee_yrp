@@ -98,7 +98,7 @@
 		<Textarea
 			v-else-if="isTextArea"
 			:id="inputId"
-			:model-value="modelValue ?? ''"
+			:model-value="textAreaValue"
 			:disabled="isDisabled"
 			:invalid="invalid"
 			:required="required"
@@ -143,6 +143,8 @@ import Select from "primevue/select"
 import Textarea from "primevue/textarea"
 import ToggleSwitch from "primevue/toggleswitch"
 import { computed } from "vue"
+
+import { plainTextFromHtml } from "../../utils/documentValues.js"
 
 import DateField from "./DateField.vue"
 import DateTimeField from "./DateTimeField.vue"
@@ -209,6 +211,9 @@ const isWide = computed(() => isTextArea.value)
 const textAreaRows = computed(() => props.compact
 	? (props.field.fieldtype === "Small Text" ? 2 : 3)
 	: (props.field.fieldtype === "Small Text" ? 3 : 5))
+const textAreaValue = computed(() => isDisabled.value && typeof props.modelValue === "string"
+	? plainTextFromHtml(props.modelValue)
+	: (props.modelValue ?? ""))
 const numberValue = computed(() => {
 	if (props.modelValue === "" || props.modelValue === null || props.modelValue === undefined) return null
 	const value = Number(props.modelValue)

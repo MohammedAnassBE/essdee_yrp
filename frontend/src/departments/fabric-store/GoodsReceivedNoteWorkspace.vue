@@ -6,7 +6,7 @@
 			:workspace="workspace"
 			:presentation="presentation"
 			:loading="loading"
-			:error="hasWorkspace ? '' : error"
+			:error="error"
 			:dirty="dirty"
 			:acting="acting"
 			:show-lifecycle-actions="false"
@@ -30,7 +30,6 @@
 			</template>
 
 			<template #fields>
-				<Message v-if="error && hasWorkspace" severity="error" :closable="false">{{ error }}</Message>
 				<section v-if="visibleFields.length" class="goods-received-note-fields" aria-label="Goods Received Note fields">
 					<section v-for="group in primaryFieldGroups" :key="group.key" class="goods-received-note-field-group" :data-group="group.key">
 						<header><span>{{ group.eyebrow }}</span><h2>{{ group.label }}</h2></header>
@@ -87,7 +86,7 @@
 					</header>
 					<div class="goods-received-note-matrix__stack">
 						<article v-for="section in itemSections(block.groups)" :key="section.key" class="goods-received-note-matrix__group">
-							<header><div><strong>{{ section.name || "Unspecified item" }}</strong><span v-if="section.lot">{{ section.lot }}</span></div></header>
+							<header><div><strong>{{ section.name || "Unspecified item" }}</strong></div></header>
 							<div class="erp-table-wrap goods-received-note-matrix__scroll" tabindex="0" role="region" :aria-label="`Receipt quantities for ${section.name || 'item'}`">
 								<table class="erp-data-table">
 									<thead><tr>
@@ -130,7 +129,18 @@
 						</article>
 					</div>
 				</section>
-				<div v-if="!matrixBlocks.length" class="goods-received-note-matrix__empty"><i class="pi pi-inbox" /><span>No Goods Received Note item rows are available.</span></div>
+					<div v-if="!matrixBlocks.length" class="goods-received-note-matrix__empty"><i class="pi pi-inbox" /><span>No Goods Received Note item rows are available.</span></div>
+			</template>
+
+			<template #after-matrix>
+				<div v-if="afterMatrixFields.length" class="goods-received-note-after-matrix" aria-label="Goods Received Note final details">
+					<template v-if="canEdit">
+						<FormField v-for="field in afterMatrixFields" :key="`after-${fieldKey(field)}`" :class="{ 'goods-received-note-after-matrix__wide': field.fieldname === 'comments' }" :field="field" :model-value="form[field.fieldname]" :form="form" :required="Boolean(field.reqd || field.mandatory)" compact :search-handler="linkSearchHandler(field)" @update:model-value="setField(field.fieldname, $event)" />
+					</template>
+					<template v-else>
+						<div v-for="field in afterMatrixFields" :key="`after-fact-${field.fieldname}`" class="goods-received-note-after-matrix__fact" :class="{ 'goods-received-note-after-matrix__wide': field.fieldname === 'comments' }"><span>{{ field.label }}</span><strong>{{ formatFieldValue(field) }}</strong></div>
+					</template>
+				</div>
 			</template>
 
 			<template #rail>
@@ -179,7 +189,6 @@
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
-import Message from "primevue/message"
 import Tag from "primevue/tag"
 import { useToast } from "primevue/usetoast"
 import { computed, onMounted, reactive, ref, watch } from "vue"
@@ -197,7 +206,7 @@ import { searchLinkedDocument } from "../../api/frappe.js"
 import FormField from "../../components/common/FormField.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
-import { hasDocumentDisplayValue } from "../../utils/documentValues.js"
+import { hasDocumentDisplayValue, plainTextFromHtml } from "../../utils/documentValues.js"
 import FabricDocumentWorkspace from "./FabricDocumentWorkspace.vue"
 import FabricStockOperationDialog from "./FabricStockOperationDialog.vue"
 import GrnCalculatePanel from "./GrnCalculatePanel.vue"
@@ -237,6 +246,8 @@ const headerFieldnames = new Set(["against", "against_id", "delivery_challan", "
 const sourceFieldnames = new Set(["against", "against_id", "delivery_challan"])
 const fieldLabelOverrides = { against: "Source Type", against_id: "Source Document" }
 const sourceOwnedFieldnames = new Set(["is_return", "is_rework", "additional_grn", "allow_non_bundle", "includes_packing", "cutting_laysheet", "cut_panel_movement", "from_closed_wo_sewing_details", "from_finishing", "is_manual_entry", "is_pack", "avoid_sewing_plan_qty"])
+const presentationHiddenFieldnames = new Set(["against", "against_id", "delivery_challan", "production_detail"])
+const afterMatrixFieldnames = new Set(["freight_charges", "comments", "is_internal_unit", "transfer_complete", "ste_transferred", "ste_transferred_percent"])
 
 const capabilities = computed(() => workspace.value.capabilities || {})
 const goodsReceivedNoteActions = computed(() => {
@@ -276,7 +287,7 @@ const canEditMatrix = computed(() => canEdit.value && !workspace.value.special_s
 const visibleFields = computed(() => {
 	const result = new Map()
 	for (const source of workspace.value.fields || []) {
-		if (!source?.fieldname || source.hidden || sourceOwnedFieldnames.has(source.fieldname)) continue
+		if (!source?.fieldname || source.hidden || sourceOwnedFieldnames.has(source.fieldname) || presentationHiddenFieldnames.has(source.fieldname)) continue
 		if (source.depends_on && !evaluateCondition(source.depends_on, true)) continue
 		if (headerFieldnames.has(source.fieldname) && (!sourceFieldnames.has(source.fieldname) || currentName.value)) continue
 		if (result.has(source.fieldname)) continue
@@ -293,11 +304,15 @@ const visibleFields = computed(() => {
 })
 const fieldGroups = computed(() => {
 	const groups = new Map(grnFieldGroups.map((group) => [group.key, { ...group, fields: [] }]))
-	for (const field of visibleFields.value) (groups.get(fieldGroupKey(field.fieldname)) || groups.get("additional")).fields.push(field)
+	for (const field of visibleFields.value) {
+		if (afterMatrixFieldnames.has(field.fieldname)) continue
+		;(groups.get(fieldGroupKey(field.fieldname)) || groups.get("additional")).fields.push(field)
+	}
 	return [...groups.values()].filter((group) => group.fields.length)
 })
-const primaryFieldGroups = computed(() => fieldGroups.value.filter((group) => ["source", "posting", "movement"].includes(group.key)))
-const secondaryFieldGroups = computed(() => fieldGroups.value.filter((group) => !["source", "posting", "movement"].includes(group.key)))
+const primaryFieldGroups = computed(() => fieldGroups.value.filter((group) => ["posting", "movement"].includes(group.key)))
+const secondaryFieldGroups = computed(() => fieldGroups.value.filter((group) => !["posting", "movement"].includes(group.key)))
+const afterMatrixFields = computed(() => visibleFields.value.filter((field) => afterMatrixFieldnames.has(field.fieldname)))
 const matrixBlocks = computed(() => {
 	const blocks = []
 	if (itemGroups.value.length) blocks.push({ key: "items", kind: "items", title: "Received quantities", groups: itemGroups.value })
@@ -464,12 +479,13 @@ async function calculate(payload) {
 	}
 	acting.value = "calculate"
 	panelError.value = ""
+	error.value = ""
 	try {
 		const result = await calculateGoodsReceivedNote(currentName.value, payload.rows, payload.received_type, calculationContext.value.modified)
 		applyWorkspace(result?.workspace || result || {})
 		calculationOpen.value = false
 		emit("changed", workspace.value)
-	} catch (reason) { panelError.value = reason?.message || "Unable to calculate this Goods Received Note." }
+	} catch (reason) { error.value = reason?.message || "Unable to calculate this Goods Received Note." }
 	finally { acting.value = "" }
 }
 function closeCalculation() { calculationOpen.value = false; panelError.value = "" }
@@ -477,12 +493,13 @@ function closeInspection() { inspectionOpen.value = false; panelError.value = ""
 async function saveInspection({ values, submit }) {
 	acting.value = submit ? "inspection_submit" : "inspection_save"
 	panelError.value = ""
+	error.value = ""
 	try {
 		const result = await saveGoodsReceivedNoteInspection(currentName.value, values, { submit, expectedModified: workspace.value.record?.modified })
 		applyWorkspace(result?.workspace || result || {})
 		inspectionOpen.value = false
 		emit("changed", workspace.value)
-	} catch (reason) { panelError.value = reason?.message || "Unable to save this Inspection Entry." }
+	} catch (reason) { error.value = reason?.message || "Unable to save this Inspection Entry." }
 	finally { acting.value = "" }
 }
 async function completeTransfer() {
@@ -504,9 +521,9 @@ async function prepareNotification(command) {
 async function sendNotification({ channel, payload }) {
 	notificationError.value = ""
 	const result = await runCommand(`send_${channel}`, payload)
-	if (!result) { notificationError.value = error.value; return }
+	if (!result) return
 	if (result.result?.ok) notificationPreparation.value = null
-	else notificationError.value = result.result?.error || `Unable to send ${channel === "sms" ? "SMS" : "WhatsApp"}.`
+	else error.value = result.result?.error || `Unable to send ${channel === "sms" ? "SMS" : "WhatsApp"}.`
 }
 function closeNotification() { notificationPreparation.value = null; notificationError.value = "" }
 function handleNotificationVisibility(visible) { if (!visible) closeNotification() }
@@ -580,7 +597,7 @@ function formatFieldValue(field) {
 	}
 	if (field.fieldtype === "Check") return Number(value) ? "Yes" : "No"
 	if (["Currency", "Float", "Int", "Percent"].includes(field.fieldtype)) return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })
-	return value === null || value === undefined || value === "" ? "—" : String(value)
+	return value === null || value === undefined || value === "" ? "—" : plainTextFromHtml(value)
 }
 function titleCase(value) { return String(value || "").replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase()) }
 function clone(value) { return JSON.parse(JSON.stringify(value || {})) }
@@ -626,6 +643,13 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 
 <style scoped>
 .goods-received-note-workspace { width: 100%; min-width: 0; }
+.goods-received-note-after-matrix { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 10px 14px; padding: 2px; }
+.goods-received-note-after-matrix__wide { grid-column: span 2; }
+.goods-received-note-after-matrix__fact { display: grid; min-width: 0; gap: 3px; padding: 8px 2px; border-bottom: 1px solid var(--erp-border); }
+.goods-received-note-after-matrix__fact span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
+.goods-received-note-after-matrix__fact strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); line-height: 1.4; white-space: pre-line; overflow-wrap: anywhere; }
+@media (max-width: 1000px) { .goods-received-note-after-matrix { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .goods-received-note-after-matrix { grid-template-columns: 1fr; } .goods-received-note-after-matrix__wide { grid-column: auto; } }
 .goods-received-note-workspace--page { max-width: 1840px; margin: 0 auto; padding: 0 clamp(2px, .7vw, 10px) var(--erp-space-3); }
 .goods-received-note-header__identity { display: flex; min-width: 0; align-items: center; gap: 12px; }
 .goods-received-note-header__title { display: grid; min-width: 0; gap: 2px; }

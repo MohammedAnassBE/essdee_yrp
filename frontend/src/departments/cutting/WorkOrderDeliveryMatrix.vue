@@ -11,15 +11,15 @@
 						<thead>
 							<tr>
 								<th>Item</th>
-								<th v-for="attribute in group.attributes || []" :key="attribute">{{ attribute }}</th>
+								<th v-for="attribute in group.attributes || []" :key="attribute" class="wo-delivery-matrix__attribute-column">{{ attribute }}</th>
 								<th v-for="value in valueColumns(group)" :key="value" class="wo-delivery-matrix__qty">{{ value === "default" ? "Quantity" : value }}</th>
 								<th class="wo-delivery-matrix__qty">Entered</th>
 							</tr>
 						</thead>
 						<tbody>
 							<tr v-for="(row, rowIndex) in group.items || []" :key="`${row.name}-${rowIndex}`">
-								<td><strong>{{ row.name }}</strong><small v-if="dimensionText(row)">{{ dimensionText(row) }}</small></td>
-								<td v-for="attribute in group.attributes || []" :key="attribute">{{ row.attributes?.[attribute] || "—" }}</td>
+								<td><strong>{{ row.name }}</strong><small v-if="dimensionText(row)">{{ dimensionText(row) }}</small><small v-if="attributeText(row, group)" class="wo-delivery-matrix__mobile-attributes">{{ attributeText(row, group) }}</small></td>
+								<td v-for="attribute in group.attributes || []" :key="attribute" class="wo-delivery-matrix__attribute-column">{{ row.attributes?.[attribute] || "—" }}</td>
 								<td v-for="value in valueColumns(group)" :key="value" class="wo-delivery-matrix__qty">
 									<div v-if="cell(row, value)?.ref_docname && !['0', 0].includes(cell(row, value)?.ref_docname)" class="wo-delivery-matrix__cell">
 										<small>Pending {{ formatQty(cell(row, value)?.pending_quantity) }}</small>
@@ -61,6 +61,9 @@ function formatQty(value) { return Number(value || 0).toLocaleString(undefined, 
 function groupKey(group, index) { return `${group.primary_attribute || "quantity"}-${(group.attributes || []).join("-")}-${index}` }
 function dimensionText(row) {
 	return Object.values(row.dimensions || {}).filter(Boolean).join(" · ")
+}
+function attributeText(row, group) {
+	return (group.attributes || []).map((attribute) => row.attributes?.[attribute]).filter(Boolean).join(" · ")
 }
 </script>
 
@@ -188,6 +191,23 @@ function dimensionText(row) {
 		-webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%);
 		mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%);
 	}
+
+	.wo-delivery-matrix__attribute-column {
+		display: none;
+	}
+
+	.wo-delivery-matrix table {
+		min-width: max(560px, 100%);
+	}
+
+	.wo-delivery-matrix th:first-child,
+	.wo-delivery-matrix td:first-child {
+		width: 170px;
+		min-width: 170px;
+		max-width: 170px;
+		overflow: hidden;
+	}
+
 }
 
 .wo-delivery-matrix td:first-child strong,
@@ -205,6 +225,19 @@ function dimensionText(row) {
 	margin-top: 2px;
 	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
+}
+
+.wo-delivery-matrix__mobile-attributes {
+	display: none !important;
+}
+
+@media (max-width: 620px) {
+	.wo-delivery-matrix__mobile-attributes {
+		display: block !important;
+		max-width: 165px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
 }
 
 .wo-delivery-matrix__qty {
@@ -235,6 +268,12 @@ function dimensionText(row) {
 .wo-delivery-matrix__cell input:focus {
 	border-color: var(--erp-accent);
 	outline: 2px solid color-mix(in srgb, var(--erp-accent) 12%, transparent);
+}
+
+@media (max-width: 620px) {
+	.wo-delivery-matrix__cell {
+		justify-items: start;
+	}
 }
 
 .wo-delivery-matrix__total {

@@ -73,7 +73,9 @@ defineExpose({ canSave, save: emitSave })
 }
 @media (max-width: 620px) {
 	.planner-inputs { padding: var(--erp-space-3); }
-	.planner-inputs__context, .planner-inputs__constraints { grid-template-columns: 1fr; }
+	.planner-inputs__context { grid-template-columns: 1fr; }
+	.planner-inputs__constraints { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.planner-field--description, .planner-check { grid-column: auto; }
+	.planner-check { grid-column: 1 / -1; }
 }
 </style>

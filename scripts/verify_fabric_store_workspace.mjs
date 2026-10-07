@@ -180,6 +180,25 @@ async function shellSuite(page) {
 	const workOrderListCount = await page.locator(".fabric-work-orders .common-list-view").count()
 	const focusedWorkspaceText = (await page.locator("main").innerText()).slice(0, 500)
 	assert(workOrderListCount === 1, `Work Orders do not use the common ListView. URL=${page.url()} content=${JSON.stringify(focusedWorkspaceText)}`)
+	const workOrderListGeometry = await page.locator(".fabric-work-orders .common-list-view").evaluate((list) => {
+		const frame = list.querySelector(".list-table-frame")
+		const tableRoot = list.querySelector(".premium-list-table")
+		const tableContainer = list.querySelector(".p-datatable-table-container")
+		return {
+			viewportBounded: list.classList.contains("common-list-view--viewport-bounded"),
+			height: list.getBoundingClientRect().height,
+			frameHeight: frame?.getBoundingClientRect().height || 0,
+			tableHeight: tableRoot?.getBoundingClientRect().height || 0,
+			overflowY: tableContainer ? getComputedStyle(tableContainer).overflowY : "missing",
+		}
+	})
+	assert(
+		workOrderListGeometry.viewportBounded
+			&& workOrderListGeometry.height < 900
+			&& workOrderListGeometry.tableHeight <= workOrderListGeometry.frameHeight + 1
+			&& ["auto", "scroll"].includes(workOrderListGeometry.overflowY),
+		`Work Order list does not keep records in a bounded dashboard scroller: ${JSON.stringify(workOrderListGeometry)}`,
+	)
 	for (const label of ["Filters", "Columns", "Clear Filters"]) {
 		assert(await page.getByRole("button", { name: label, exact: true }).count() >= 1, `Work Order ${label} action is missing`)
 	}
@@ -193,6 +212,47 @@ async function shellSuite(page) {
 		workOrderListRequests.length > 0 && workOrderListRequests.every((request) => Array.isArray(request.filters) && request.filters.length === 0),
 		`Work Order row requests contain an implicit Fabric Store filter: ${JSON.stringify(workOrderListRequests)}`,
 	)
+	await page.setViewportSize({ width: 320, height: 568 })
+	const shortMobileList = await page.locator(".fabric-work-orders .common-list-view").evaluate((list) => {
+		const frame = list.querySelector(".list-table-frame")
+		const table = list.querySelector(".p-datatable-table-container")
+		return {
+			listOverflowY: getComputedStyle(list).overflowY,
+			frameHeight: frame?.getBoundingClientRect().height || 0,
+			tableHeight: table?.getBoundingClientRect().height || 0,
+		}
+	})
+	assert(
+		["auto", "scroll"].includes(shortMobileList.listOverflowY)
+			&& shortMobileList.frameHeight >= 250
+			&& shortMobileList.tableHeight >= 200,
+		`Short mobile viewport collapses the record list: ${JSON.stringify(shortMobileList)}`,
+	)
+	await page.setViewportSize({ width: 390, height: 844 })
+	const workOrderMobileQuickFilters = page.getByRole("button", { name: "Quick filters", exact: true })
+	await workOrderMobileQuickFilters.click()
+	await page.locator(".fabric-work-orders .list-quick-filters").waitFor()
+	const expandedMobileList = await page.locator(".fabric-work-orders .common-list-view").evaluate((list) => {
+		const status = list.querySelector(".list-status-tabs")
+		const frame = list.querySelector(".list-table-frame")
+		const table = list.querySelector(".p-datatable-table-container")
+		return {
+			listOverflowY: getComputedStyle(list).overflowY,
+			statusClientHeight: status?.clientHeight || 0,
+			statusScrollHeight: status?.scrollHeight || 0,
+			frameHeight: frame?.getBoundingClientRect().height || 0,
+			tableHeight: table?.getBoundingClientRect().height || 0,
+		}
+	})
+	assert(
+		["auto", "scroll"].includes(expandedMobileList.listOverflowY)
+			&& expandedMobileList.statusClientHeight >= expandedMobileList.statusScrollHeight
+			&& expandedMobileList.frameHeight >= 250
+			&& expandedMobileList.tableHeight > 0,
+		`Expanded mobile quick filters make status tabs or records inaccessible: ${JSON.stringify(expandedMobileList)}`,
+	)
+	await workOrderMobileQuickFilters.click()
+	await page.setViewportSize({ width: 1600, height: 1000 })
 
 	await page.getByText("WO-FAB-001", { exact: true }).click()
 	await page.waitForURL("**/web/fabric-store/work-orders/WO-FAB-001")
@@ -201,6 +261,7 @@ async function shellSuite(page) {
 	await page.goto(`${SITE}/web/fabric-store/purchase-orders`, { waitUntil: "domcontentloaded" })
 	await page.getByRole("button", { name: "Create Purchase Order", exact: true }).waitFor()
 	assert(await page.getByRole("button", { name: "Create Purchase Order", exact: true }).count() === 1, "Purchase Order list does not expose the permission-controlled create action")
+	await page.getByText("PO-FAB-001", { exact: true }).waitFor({ timeout: 20_000 })
 	const formattedDateCount = await page.getByText("03-10-2026", { exact: true }).count()
 	const formattedCurrencyCount = await page.getByText("INR 12,000", { exact: true }).count()
 	assert(formattedDateCount >= 1, `Purchase Order list does not format dates like its document view (found ${formattedDateCount})`)
@@ -429,7 +490,10 @@ async function workOrderSuite(page) {
 		const body = requestBody(route)
 		const name = body.name || ""
 		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: {
-			record: { doctype, name, docstatus: 0, status: "Draft", modified: "2026-10-03 12:00:00" },
+				record: {
+					doctype, name, docstatus: 0, status: "Draft", modified: "2026-10-03 12:00:00",
+					work_order: "WO-FAB-001", process_name: "Knitting", item: "STYLE-001", lot: "LOT-001", supplier: "FABRIC-STORE",
+				},
 			fields: [{ fieldname: "posting_date", label: "Posting Date", fieldtype: "Date", value: "2026-10-03" }], totals: [], matrices: {}, related: {},
 			permissions: { can_read: true, can_create: !name, can_write: Boolean(name), can_submit: false, can_print: false }, capabilities: {}, print_formats: [], root,
 		} }) })
@@ -611,14 +675,44 @@ async function workOrderSuite(page) {
 
 	const parentUrl = page.url()
 	await page.getByRole("button", { name: "Make DC", exact: true }).click()
-	let relatedDialog = page.getByRole("dialog", { name: /YRP Delivery Challan.*New/ })
+	let relatedDialog = page.getByRole("dialog", { name: /Delivery Challan.*New/ })
 	await relatedDialog.waitFor()
 	assert(await relatedDialog.locator(".delivery-challan-workspace").count() === 1, "WO does not launch the shared Delivery Challan workspace")
 	assert(await relatedDialog.locator(".p-dialog-maximize-button").count() === 1, "WO Delivery Challan workspace is not maximizable")
 	assert(page.url() === parentUrl, "Opening a Work Order Delivery Challan navigated away from the parent")
 	assert(await relatedDialog.getByRole("button", { name: "Submit", exact: true }).count() === 0, "Embedded Delivery Challan exposes unauthorized Submit")
+	const embeddedFactsLayout = await relatedDialog.locator(".delivery-challan-header__facts").evaluate((element) => {
+		const items = [...element.children].map((child) => child.getBoundingClientRect())
+		const header = element.closest(".fabric-document-workspace__header")?.getBoundingClientRect()
+		return {
+			display: getComputedStyle(element).display,
+			headerHeight: header?.height || 0,
+			itemTops: items.map((item) => Math.round(item.top)),
+		}
+	})
+	assert(
+		embeddedFactsLayout.display === "flex"
+			&& embeddedFactsLayout.headerHeight <= 58
+			&& new Set(embeddedFactsLayout.itemTops).size === 1,
+		`Embedded Delivery Challan facts are not a compact horizontal identity strip: ${JSON.stringify(embeddedFactsLayout)}`,
+	)
 	await page.setViewportSize({ width: 390, height: 844 })
 	assert(await relatedDialog.locator(".delivery-challan-header__identity h1").count() === 0, "Embedded Delivery Challan repeats the outer dialog title")
+	const embeddedMobileFill = await relatedDialog.evaluate((dialog) => {
+		const content = dialog.querySelector(".p-dialog-content")?.getBoundingClientRect()
+		const workspace = dialog.querySelector(".fabric-document-workspace--embedded")?.getBoundingClientRect()
+		return {
+			contentHeight: content?.height || 0,
+			workspaceHeight: workspace?.height || 0,
+			contentWidth: content?.width || 0,
+			workspaceWidth: workspace?.width || 0,
+		}
+	})
+	assert(
+		Math.abs(embeddedMobileFill.contentHeight - embeddedMobileFill.workspaceHeight) <= 2
+			&& Math.abs(embeddedMobileFill.contentWidth - embeddedMobileFill.workspaceWidth) <= 2,
+		`Embedded Delivery Challan leaves dead space inside the mobile dialog: ${JSON.stringify(embeddedMobileFill)}`,
+	)
 	const embeddedHeader = await relatedDialog.locator(".fabric-document-workspace__header").boundingBox()
 	const embeddedFirstField = await relatedDialog.locator(".delivery-challan-field-group .form-field").first().boundingBox()
 	assert(embeddedHeader?.height <= 58 && embeddedFirstField?.y < 340, `Embedded Delivery Challan wastes mobile space before its first field: ${JSON.stringify({ embeddedHeader, embeddedFirstField })}`)
@@ -641,14 +735,14 @@ async function workOrderSuite(page) {
 	await grnSourceDialog.waitFor()
 	assert(await grnSourceDialog.getByRole("combobox", { name: "Delivery Challan", exact: true }).inputValue() === "DC-002", "WO GRN chooser did not preselect its only submitted Delivery Challan")
 	await grnSourceDialog.getByRole("button", { name: "Continue to GRN", exact: true }).click()
-	relatedDialog = page.getByRole("dialog", { name: /YRP Goods Received Note.*New/ })
+	relatedDialog = page.getByRole("dialog", { name: /Goods Received Note.*New/ })
 	await relatedDialog.waitFor()
 	assert(await relatedDialog.locator(".goods-received-note-workspace").count() === 1, "WO does not launch the shared GRN workspace")
 	assert(page.url() === parentUrl, "Opening a Work Order GRN navigated away from the parent")
 	await relatedDialog.getByRole("button", { name: "Close workspace", exact: true }).click()
 
 	await railSections.first().getByText("DC-002", { exact: true }).click()
-	relatedDialog = page.getByRole("dialog", { name: /YRP Delivery Challan.*DC-002/ })
+	relatedDialog = page.getByRole("dialog", { name: /Delivery Challan.*DC-002/ })
 	await relatedDialog.waitFor()
 	assert(await relatedDialog.locator(".delivery-challan-workspace").count() === 1, "Existing related documents do not reuse the embedded domain workspace")
 	assert(page.url() === parentUrl, "Opening an existing Work Order document navigated away from the parent")
@@ -771,6 +865,10 @@ async function workOrderSuite(page) {
 	assert(await page.getByRole("heading", { name: "New Work Order", exact: true }).count() === 1, "Work Order new route does not render the editor")
 	assert(await page.getByRole("button", { name: "Save", exact: true }).count() === 1, "Work Order new route does not expose the permission-controlled Save action")
 	assert(await page.getByRole("button", { name: "Save & Submit", exact: true }).count() === 0, "New Work Order exposes Save & Submit without submit permission")
+	await page.setViewportSize({ width: 390, height: 844 })
+	const workOrderScheduleBoxes = await page.locator(".work-order-editor__schedule-field").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().toJSON()))
+	assert(workOrderScheduleBoxes.length === 4 && Math.abs(workOrderScheduleBoxes[0].bottom - workOrderScheduleBoxes[1].bottom) < 2 && Math.abs(workOrderScheduleBoxes[2].bottom - workOrderScheduleBoxes[3].bottom) < 2, `Work Order planning dates do not use compact paired mobile rows: ${JSON.stringify(workOrderScheduleBoxes)}`)
+	await page.setViewportSize({ width: 1600, height: 1000 })
 
 	await page.goto(`${SITE}/web/fabric-store/work-orders/WO-EDITOR-LOAD-ERROR/edit`, { waitUntil: "domcontentloaded" })
 	const failedEditor = page.locator(".work-order-editor")
@@ -791,6 +889,23 @@ async function workOrderSuite(page) {
 	await page.setViewportSize({ width: 390, height: 844 })
 	const bodyWidth = await page.locator("body").evaluate((element) => ({ clientWidth: element.clientWidth, scrollWidth: element.scrollWidth }))
 	assert(bodyWidth.clientWidth === bodyWidth.scrollWidth, `Work Order overflows on mobile: ${JSON.stringify(bodyWidth)}`)
+	const mobileDocumentChrome = await page.locator(".fabric-document-workspace--page").evaluate((workspace) => {
+		const header = workspace.querySelector(".fabric-document-workspace__header")
+		const facts = workspace.querySelector(".work-order-header__facts")
+		const commandbar = workspace.querySelector(".fabric-document-workspace__commandbar")
+		return {
+			headerHeight: header?.getBoundingClientRect().height || 0,
+			factsHeight: facts?.getBoundingClientRect().height || 0,
+			commandClientWidth: commandbar?.clientWidth || 0,
+			commandScrollWidth: commandbar?.scrollWidth || 0,
+		}
+	})
+	assert(
+		mobileDocumentChrome.headerHeight <= 128
+			&& mobileDocumentChrome.factsHeight <= 48
+			&& mobileDocumentChrome.commandScrollWidth <= mobileDocumentChrome.commandClientWidth + 1,
+		`Work Order mobile chrome consumes or clips the document viewport: ${JSON.stringify(mobileDocumentChrome)}`,
+	)
 	const mobileViewport = await page.locator("html").evaluate((element) => {
 		const workspace = document.querySelector(".fabric-document-workspace--page")
 		const departmentPage = document.querySelector(".department-page")
@@ -1027,7 +1142,7 @@ async function purchaseOrderSuite(page) {
 
 	const parentUrl = page.url()
 	await workspace.getByRole("button", { name: "Create GRN", exact: true }).click()
-	const relatedDialog = page.getByRole("dialog", { name: /YRP Goods Received Note.*New/ })
+	const relatedDialog = page.getByRole("dialog", { name: /Goods Received Note.*New/ })
 	await relatedDialog.waitFor()
 	assert(await relatedDialog.locator(".goods-received-note-workspace").count() === 1, "PO does not launch the reusable GRN workspace")
 	assert(await relatedDialog.locator(".p-dialog-maximize-button").count() === 1, "PO GRN workspace is not maximizable")
@@ -1083,6 +1198,10 @@ async function purchaseOrderSuite(page) {
 	await page.waitForURL("**/web/fabric-store/purchase-orders/new")
 	const purchaseOrderEditor = page.locator(".purchase-order-editor")
 	await purchaseOrderEditor.waitFor()
+	await page.setViewportSize({ width: 390, height: 844 })
+	const purchaseOrderDateBoxes = await page.locator(".purchase-order-editor__date").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().toJSON()))
+	assert(purchaseOrderDateBoxes.length === 2 && Math.abs(purchaseOrderDateBoxes[0].y - purchaseOrderDateBoxes[1].y) < 2, `Purchase Order dates do not use one compact mobile row: ${JSON.stringify(purchaseOrderDateBoxes)}`)
+	await page.setViewportSize({ width: 1600, height: 1000 })
 	for (const label of ["Supplier *", "Delivery warehouse *"]) {
 		assert(await purchaseOrderEditor.getByRole("combobox", { name: label, exact: true }).getAttribute("aria-required") === "true", `Purchase Order editor does not expose ${label} as required to assistive technology`)
 	}
@@ -1659,7 +1778,9 @@ async function deliveryChallanSuite(page) {
 	await page.setViewportSize({ width: 900, height: 760 })
 	const tabletRail = await draftRoot.locator(".fabric-document-workspace__rail").boundingBox()
 	const tabletMain = await draftRoot.locator(".fabric-document-workspace__main").boundingBox()
+	const tabletHeader = await draftRoot.locator(".fabric-document-workspace__header").boundingBox()
 	assert(tabletRail && tabletMain && tabletMain.y < tabletRail.y, `New Delivery Challan front-loads totals before its tablet form: ${JSON.stringify({ tabletRail, tabletMain })}`)
+	assert(tabletHeader?.height <= 76, `Delivery Challan header wraps unnecessarily at tablet width: ${JSON.stringify(tabletHeader)}`)
 	await page.setViewportSize({ width: 390, height: 844 })
 	const mobileRail = await draftRoot.locator(".fabric-document-workspace__rail").evaluate((element) => ({ tabIndex: element.tabIndex, maskImage: getComputedStyle(element).maskImage }))
 	const mobileNewRailBox = await draftRoot.locator(".fabric-document-workspace__rail").boundingBox()
@@ -1667,6 +1788,8 @@ async function deliveryChallanSuite(page) {
 	assert(mobileNewMainBox && mobileNewRailBox && mobileNewMainBox.y < mobileNewRailBox.y && mobileRail.tabIndex === -1 && mobileRail.maskImage === "none", `New Delivery Challan totals should follow the form instead of using the existing-document ribbon: ${JSON.stringify({ mobileNewMainBox, mobileNewRailBox, mobileRail })}`)
 	const mobileFacts = await draftRoot.locator(".delivery-challan-header__facts").boundingBox()
 	assert(mobileFacts?.width >= 280, `Delivery Challan mobile header facts are clipped: ${JSON.stringify(mobileFacts)}`)
+	const mobileDocumentHeader = await draftRoot.locator(".fabric-document-workspace__header").boundingBox()
+	assert(mobileDocumentHeader?.height <= 128 && mobileFacts?.height <= 48, `Delivery Challan mobile identity wastes vertical space: ${JSON.stringify({ mobileDocumentHeader, mobileFacts })}`)
 	const mobileCommandbar = await draftRoot.locator(".fabric-document-workspace__commandbar").boundingBox()
 	assert(mobileCommandbar?.height <= 64, `Delivery Challan mobile command bar wraps unnecessarily: ${JSON.stringify(mobileCommandbar)}`)
 	assert(await draftRoot.locator(".document-action-strip__primary").getByText("Save", { exact: true }).count() === 1, "Delivery Challan hides Save inside More on mobile")
@@ -1756,7 +1879,7 @@ async function deliveryChallanSuite(page) {
 	await returnDialog.getByRole("button", { name: "Create Return GRN", exact: true }).click()
 	await returnDialog.waitFor({ state: "detached" })
 	assert(command?.command === "return" && command.payload?.items?.[0]?.return_quantity === 2 && command.payload?.return_whole_bundles === 1 && command.payload?.cut_panel_movement === "TEST-VALUE", `Delivery Challan return payload is incomplete: ${JSON.stringify(command)}`)
-	const createdReturnDialog = page.getByRole("dialog", { name: /YRP Goods Received Note.*GRN-RETURN-001/ })
+	const createdReturnDialog = page.getByRole("dialog", { name: /Goods Received Note.*GRN-RETURN-001/ })
 	await createdReturnDialog.waitFor()
 	assert(await createdReturnDialog.locator(".goods-received-note-workspace").count() === 1, "Created return GRN is hidden after Delivery Challan return")
 	await createdReturnDialog.getByRole("button", { name: "Close workspace", exact: true }).click()
@@ -1834,7 +1957,7 @@ async function goodsReceivedNoteSuite(page) {
 	correctionGroup.items[0].values.S.qty = 1
 	const fields = [
 		{ fieldname: "against", label: "Against", fieldtype: "Select", options: "YRP Work Order\nPurchase Order", value: "YRP Work Order", read_only: true },
-		{ fieldname: "against_id", label: "Source Document", fieldtype: "Dynamic Link", options: "against", value: "WO-FAB-001", read_only: true },
+		{ fieldname: "against_id", label: "Against ID", fieldtype: "Dynamic Link", options: "against", value: "WO-FAB-001", read_only: true },
 		{ fieldname: "delivery_challan", label: "Delivery Challan", fieldtype: "Link", options: "YRP Delivery Challan", value: "DC-FAB-001", read_only: true },
 		{ fieldname: "naming_series", label: "Series", fieldtype: "Select", options: "YRP-GRN-.YYYY.-", value: "YRP-GRN-.YYYY.-", reqd: true },
 		{ fieldname: "posting_date", label: "Posting Date", fieldtype: "Date", value: "2026-10-06", reqd: true },
@@ -2023,7 +2146,7 @@ async function goodsReceivedNoteSuite(page) {
 		assert(await newRoot.locator(`.goods-received-note-field-group[data-group="${group}"]`).count() === 1, `GRN fields are missing the ${group} group`)
 	}
 	const grnSourceLabels = (await newRoot.locator('.goods-received-note-field-group[data-group="source"] .form-field__label').allTextContents()).map((label) => label.replace("*", "").trim())
-	assert(JSON.stringify(grnSourceLabels.slice(0, 3)) === JSON.stringify(["Against", "Source Document", "Delivery Challan"]), `GRN source fields are buried or out of order: ${JSON.stringify(grnSourceLabels)}`)
+	assert(JSON.stringify(grnSourceLabels.slice(0, 3)) === JSON.stringify(["Source Type", "Source Document", "Delivery Challan"]), `GRN source fields are buried, technical, or out of order: ${JSON.stringify(grnSourceLabels)}`)
 	const grnPostingLabels = (await newRoot.locator('.goods-received-note-field-group[data-group="posting"] .form-field__label').allTextContents()).map((label) => label.replace("*", "").trim())
 	assert(JSON.stringify(grnPostingLabels.slice(0, 4)) === JSON.stringify(["Series", "Posting Date", "Posting Time", "Edit Posting Date and Time"]), `GRN posting fields do not follow the entry sequence: ${JSON.stringify(grnPostingLabels)}`)
 	assert(await newRoot.locator(".goods-received-note-matrix--items").count() === 1, "WO GRN receivable matrix is missing")
@@ -2041,7 +2164,9 @@ async function goodsReceivedNoteSuite(page) {
 	await page.setViewportSize({ width: 900, height: 760 })
 	const tabletRail = await newRoot.locator(".fabric-document-workspace__rail").boundingBox()
 	const tabletMain = await newRoot.locator(".fabric-document-workspace__main").boundingBox()
+	const tabletHeader = await newRoot.locator(".fabric-document-workspace__header").boundingBox()
 	assert(tabletRail && tabletMain && tabletMain.y < tabletRail.y, `New GRN front-loads totals before its tablet form: ${JSON.stringify({ tabletRail, tabletMain })}`)
+	assert(tabletHeader?.height <= 76, `GRN header wraps unnecessarily at tablet width: ${JSON.stringify(tabletHeader)}`)
 	await page.setViewportSize({ width: 390, height: 844 })
 	const mobileRail = await newRoot.locator(".fabric-document-workspace__rail").evaluate((element) => ({ tabIndex: element.tabIndex, maskImage: getComputedStyle(element).maskImage }))
 	const mobileNewRailBox = await newRoot.locator(".fabric-document-workspace__rail").boundingBox()
@@ -2049,6 +2174,8 @@ async function goodsReceivedNoteSuite(page) {
 	assert(mobileNewMainBox && mobileNewRailBox && mobileNewMainBox.y < mobileNewRailBox.y && mobileRail.tabIndex === -1 && mobileRail.maskImage === "none", `New GRN totals should follow the form instead of using the existing-document ribbon: ${JSON.stringify({ mobileNewMainBox, mobileNewRailBox, mobileRail })}`)
 	const mobileFacts = await newRoot.locator(".goods-received-note-header__facts").boundingBox()
 	assert(mobileFacts?.width >= 280, `GRN mobile header facts are clipped: ${JSON.stringify(mobileFacts)}`)
+	const mobileDocumentHeader = await newRoot.locator(".fabric-document-workspace__header").boundingBox()
+	assert(mobileDocumentHeader?.height <= 128 && mobileFacts?.height <= 48, `GRN mobile identity wastes vertical space: ${JSON.stringify({ mobileDocumentHeader, mobileFacts })}`)
 	const mobileCommandbar = await newRoot.locator(".fabric-document-workspace__commandbar").boundingBox()
 	assert(mobileCommandbar?.height <= 64, `GRN mobile command bar wraps unnecessarily: ${JSON.stringify(mobileCommandbar)}`)
 	assert(await newRoot.locator(".document-action-strip__primary").getByText("Save", { exact: true }).count() === 1, "GRN hides Save inside More on mobile")
@@ -2148,6 +2275,7 @@ async function goodsReceivedNoteSuite(page) {
 	await page.goto(`${SITE}/web/fabric-store/goods-received-notes/GRN-PO-001`, { waitUntil: "domcontentloaded" })
 	const poRoot = page.locator(".goods-received-note-workspace")
 	await poRoot.waitFor()
+	await poRoot.getByText("PO-FAB-001", { exact: true }).first().waitFor({ timeout: 20_000 })
 	assert(await poRoot.getByText("PO-FAB-001", { exact: true }).count() >= 1, "PO GRN does not show its authoritative source")
 	assert(await poRoot.getByRole("button", { name: "Calculate", exact: true }).count() === 0, "PO GRN exposes WO-only Calculate")
 

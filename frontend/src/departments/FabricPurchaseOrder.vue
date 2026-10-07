@@ -16,8 +16,8 @@
 					<div class="purchase-order-page__identity">
 						<div><h1>Purchase Order</h1><span>{{ record.name }}</span></div>
 						<Tag :value="record.status || statusLabel(record.docstatus)" :severity="statusSeverity" rounded />
-						<div class="purchase-order-page__facts">
-							<div><span>Supplier</span><strong>{{ record.supplier_name || record.supplier || "—" }}</strong></div>
+						<div class="purchase-order-page__facts" role="region" aria-label="Purchase Order context" tabindex="0">
+							<div><span>Supplier</span><strong :title="record.supplier_name || record.supplier || '—'">{{ record.supplier_name || record.supplier || "—" }}</strong></div>
 							<div><span>Order date</span><strong>{{ formatDate(record.transaction_date) }}</strong></div>
 							<div><span>Grand total</span><strong>{{ formatAmount(record.grand_total, record.currency) }}</strong></div>
 						</div>
@@ -376,7 +376,7 @@ watch(() => route.params.purchaseOrderId, () => loadWorkspace())
 .purchase-order-rejection label { display: grid; gap: 6px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
 @media (max-width: 1100px) { .purchase-order-page__identity { align-items: flex-start; flex-wrap: wrap; } .purchase-order-page__details { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .purchase-order-related, .purchase-order-page__total:last-child { grid-column: 1 / -1; } }
-@media (max-width: 650px) { .fabric-purchase-order-frame { margin-bottom: 0; padding: 0; } .purchase-order-page__identity { width: 100%; } .purchase-order-page__facts { width: 100%; padding: 8px 0 0; border-top: 1px solid var(--erp-border); border-left: 0; flex-wrap: wrap; } .purchase-order-page__details { grid-template-columns: 1fr; } .purchase-order-lots__add { grid-template-columns: 1fr; } }
+@media (max-width: 650px) { .fabric-purchase-order-frame { margin-bottom: 0; padding: 0; } .purchase-order-page__identity { width: 100%; } .purchase-order-page__facts { width: 100%; overflow-x: auto; padding: 8px 18px 0 0; border-top: 1px solid var(--erp-border); border-left: 0; flex-wrap: nowrap; scrollbar-width: thin; -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); } .purchase-order-page__facts:focus-visible { outline: 2px solid var(--erp-accent); outline-offset: 2px; } .purchase-order-page__facts > div { flex: 0 0 auto; } .purchase-order-page__details { grid-template-columns: 1fr; } .purchase-order-lots__add { grid-template-columns: 1fr; } }
 :global(.fabric-action-dialog .p-dialog-content) { min-height: 0; }
 @media (max-width: 620px) { :global(.fabric-action-dialog) { width: 100vw !important; height: 100dvh !important; max-height: 100dvh !important; margin: 0; border-radius: 0; } :global(.fabric-action-dialog .p-dialog-content) { flex: 1; overflow-y: auto; } }
 </style>

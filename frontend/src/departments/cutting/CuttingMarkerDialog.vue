@@ -351,7 +351,8 @@ function markerMethod(name) {
 
 @media (max-width: 700px) {
 	.marker-loading, .marker-fields { grid-template-columns: 1fr; }
-	.marker-read-grid, .marker-group-summary { grid-template-columns: 1fr; }
+	.marker-read-grid, .marker-group-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.marker-read-grid > div { min-height: 50px; padding: 8px 9px; }
 	.group-row { grid-template-columns: 1fr 38px; }
 	.group-row > span { grid-column: 1 / -1; }
 	.table-scroll { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); }

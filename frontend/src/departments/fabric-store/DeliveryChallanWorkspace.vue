@@ -17,10 +17,10 @@
 		>
 			<template #header="{ record }">
 				<div class="delivery-challan-header__identity" :class="{ 'delivery-challan-header__identity--embedded': presentation === 'embedded' }">
-					<div v-if="presentation !== 'embedded'"><h1>Delivery Challan</h1><span>{{ record.name || duplicateLabel || (loading && name ? "Loading…" : error && name ? name : "New document") }}</span></div>
+					<div v-if="presentation !== 'embedded'" class="delivery-challan-header__title"><h1>Delivery Challan</h1><span>{{ record.name || duplicateLabel || (loading && name ? "Loading…" : error && name ? name : "New document") }}</span></div>
 					<Tag v-if="hasWorkspace && presentation !== 'embedded'" :value="record.status || statusLabel(record.docstatus)" :severity="statusSeverity" rounded />
-					<div v-if="headerFacts.length" class="delivery-challan-header__facts">
-						<div v-for="fact in headerFacts" :key="fact.label"><span>{{ fact.label }}</span><strong>{{ fact.value }}</strong></div>
+					<div v-if="headerFacts.length" class="delivery-challan-header__facts" role="region" aria-label="Delivery Challan context" tabindex="0">
+						<div v-for="fact in headerFacts" :key="fact.label"><span>{{ fact.label }}</span><strong :title="String(fact.value)">{{ fact.value }}</strong></div>
 					</div>
 				</div>
 			</template>
@@ -34,7 +34,7 @@
 				<section v-if="visibleFields.length" class="delivery-challan-fields" aria-label="Delivery Challan fields">
 					<section v-for="group in primaryFieldGroups" :key="group.key" class="delivery-challan-field-group" :data-group="group.key">
 						<header><span>{{ group.eyebrow }}</span><h2>{{ group.label }}</h2></header>
-						<div class="delivery-challan-field-group__grid">
+						<div class="delivery-challan-field-group__grid" :class="{ 'delivery-challan-field-group__grid--facts': !canEdit }">
 							<template v-if="canEdit">
 								<FormField
 									v-for="field in group.fields"
@@ -62,7 +62,7 @@
 				<section v-if="secondaryFieldGroups.length" class="delivery-challan-fields delivery-challan-fields--secondary" aria-label="Additional Delivery Challan fields">
 					<section v-for="group in secondaryFieldGroups" :key="group.key" class="delivery-challan-field-group" :data-group="group.key">
 						<header><span>{{ group.eyebrow }}</span><h2>{{ group.label }}</h2></header>
-						<div class="delivery-challan-field-group__grid">
+						<div class="delivery-challan-field-group__grid" :class="{ 'delivery-challan-field-group__grid--facts': !canEdit }">
 							<template v-if="canEdit">
 								<FormField v-for="field in group.fields" :key="fieldKey(field)" :field="field" :model-value="form[field.fieldname]" :form="form" :required="Boolean(field.reqd || field.mandatory)" compact :search-handler="linkSearchHandler(field)" @update:model-value="setField(field.fieldname, $event)" />
 							</template>
@@ -680,9 +680,9 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 .delivery-challan-workspace { width: 100%; min-width: 0; }
 .delivery-challan-workspace--page { max-width: 1840px; margin: 0 auto; padding: 0 clamp(2px, .7vw, 10px) var(--erp-space-3); }
 .delivery-challan-header__identity { display: flex; min-width: 0; align-items: center; gap: 12px; }
-.delivery-challan-header__identity > div:first-child { display: grid; min-width: 0; gap: 2px; }
+.delivery-challan-header__title { display: grid; min-width: 0; gap: 2px; }
 .delivery-challan-header__identity h1 { margin: 0; color: var(--erp-text); font-size: 19px; line-height: 1.15; letter-spacing: -.018em; }
-.delivery-challan-header__identity > div:first-child > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); font-weight: 700; }
+.delivery-challan-header__title > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); font-weight: 700; }
 .delivery-challan-header__facts { display: flex; min-width: 0; flex: 1; align-items: center; gap: 16px; padding-left: 13px; border-left: 1px solid var(--erp-border); }
 .delivery-challan-header__facts > div { display: grid; min-width: 0; gap: 2px; flex: 0 1 auto; }
 .delivery-challan-header__facts span, .delivery-challan-total span, .delivery-challan-transfer-progress > span, .delivery-challan-matrix__header span, .delivery-challan-special-context header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
@@ -746,10 +746,11 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 	.delivery-challan-fields--secondary .delivery-challan-field-group:last-child:nth-child(odd) { grid-column: 1 / -1; border-right: 0; }
 	.delivery-challan-fields--secondary .delivery-challan-field-group__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-@media (max-width: 760px) { .delivery-challan-header__identity { align-items: flex-start; flex-wrap: wrap; } .delivery-challan-header__facts { width: 100%; flex: 1 0 100%; gap: 8px 14px; padding: 8px 0 0; border-top: 1px solid var(--erp-border); border-left: 0; flex-wrap: wrap; } .delivery-challan-header__identity--embedded { align-items: center; flex-wrap: nowrap; } .delivery-challan-header__identity--embedded .delivery-challan-header__facts { width: auto; padding-top: 0; border-top: 0; flex: 1 1 auto; flex-wrap: nowrap; } }
+@media (max-width: 1100px) { .delivery-challan-header__facts { overflow-x: auto; padding-right: 18px; flex-wrap: nowrap; scrollbar-width: thin; -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); } .delivery-challan-header__facts:focus-visible { outline: 2px solid var(--erp-accent); outline-offset: 2px; } .delivery-challan-header__facts > div { flex: 0 0 auto; } }
+@media (max-width: 760px) { .delivery-challan-header__identity { align-items: flex-start; flex-wrap: wrap; } .delivery-challan-header__facts { width: 100%; flex: 1 0 100%; gap: 8px 14px; padding: 8px 18px 0 0; border-top: 1px solid var(--erp-border); border-left: 0; } .delivery-challan-header__identity--embedded { align-items: center; flex-wrap: nowrap; } .delivery-challan-header__identity--embedded .delivery-challan-header__facts { width: auto; padding-top: 0; border-top: 0; flex: 1 1 auto; } }
 @media (max-width: 1200px) { .delivery-challan-field-group__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .delivery-challan-field-group__grid, .delivery-challan-field-group[data-group="movement"] .delivery-challan-field-group__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 620px) { .delivery-challan-workspace--page { padding-right: 0; padding-left: 0; } .delivery-challan-field-group__grid, .delivery-challan-field-group[data-group="movement"] .delivery-challan-field-group__grid { grid-template-columns: 1fr; gap: 4px; padding: 10px; } .delivery-challan-field-fact { min-height: 46px; } .delivery-challan-matrix__stack { padding: var(--erp-space-2); } }
+@media (max-width: 620px) { .delivery-challan-workspace--page { padding-right: 0; padding-left: 0; } .delivery-challan-field-group__grid, .delivery-challan-field-group[data-group="movement"] .delivery-challan-field-group__grid { grid-template-columns: 1fr; gap: 4px; padding: 10px; } .delivery-challan-field-group__grid--facts, .delivery-challan-field-group[data-group="movement"] .delivery-challan-field-group__grid--facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } .delivery-challan-field-fact { min-height: 46px; padding: 6px 8px; } .delivery-challan-matrix__stack { padding: var(--erp-space-2); } }
 :global(.fabric-action-dialog .p-dialog-content) { min-height: 0; }
 @media (max-width: 620px) { :global(.fabric-action-dialog) { width: 100vw !important; height: 100dvh !important; max-height: 100dvh !important; margin: 0; border-radius: 0; } :global(.fabric-action-dialog .p-dialog-content) { flex: 1; overflow-y: auto; } }
 </style>

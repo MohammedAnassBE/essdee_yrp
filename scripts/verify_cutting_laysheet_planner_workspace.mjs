@@ -77,6 +77,7 @@ let state = "Not Started"
 let polls = 0
 let savedValues = null
 let selected = ""
+let allowEditInputs = true
 page.on("pageerror", (error) => errors.push(`page: ${error.message}`))
 page.on("console", (message) => { if (message.type() === "error") errors.push(`console: ${message.text()}`) })
 
@@ -89,7 +90,7 @@ await page.route(API, async (route) => {
 	const url = route.request().url()
 	const body = JSON.parse(route.request().postData() || "{}")
 	if (url.includes("get_editor")) {
-		const message = body.name ? payload(state) : { ...payload("Not Started", null), record: { ...payload("Not Started", null).record, name: null, modified: null, lot: "", item: "", description: "", max_plies: null, max_pieces: null, order_details: [] }, actions: { can_edit_inputs: true, can_optimize: false, can_retry: false, can_select_result: false, should_poll: false } }
+		const message = body.name ? payload(state) : { ...payload("Not Started", null), record: { ...payload("Not Started", null).record, name: null, modified: null, lot: "", item: "", description: "", max_plies: null, max_pieces: null, order_details: [] }, actions: { can_edit_inputs: allowEditInputs, can_optimize: false, can_retry: false, can_select_result: false, should_poll: false } }
 		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message }) })
 	}
 	if (url.includes("save")) { savedValues = body.values; state = "Not Started"; return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: payload(state) }) }) }
@@ -295,6 +296,10 @@ for (const viewport of [{ width: 1600, height: 1000 }, { width: 1280, height: 80
 		assert(mobileStrategies.clientHeight <= 420 && mobileStrategies.scrollHeight > mobileStrategies.clientHeight && ["auto", "scroll"].includes(mobileStrategies.overflowY), `Mobile strategies still create an excessive page scroll: ${JSON.stringify(mobileStrategies)}`)
 	}
 }
+allowEditInputs = false
+await page.goto(`${SITE}/web/cutting/lay-sheet-planner/new`, { waitUntil: "domcontentloaded" })
+await page.getByRole("heading", { name: "New LaySheet Plan", exact: true }).waitFor({ timeout: 20_000 })
+assert(await page.getByRole("button", { name: "Save Draft", exact: true }).count() === 0, "Planner renders Save Draft without input-edit permission")
 assert(errors.length === 0, `Browser errors: ${JSON.stringify(errors)}`)
 
 console.log(JSON.stringify({ passed: true, planner: "CLP-2026-00001", polls, selected, matrixOverflow, responsiveLayouts }, null, 2))

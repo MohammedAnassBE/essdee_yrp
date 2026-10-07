@@ -18,10 +18,10 @@
 					<small>Updated {{ formatDate(payload.record.modified, true) }}</small>
 				</div>
 				<section v-if="summaryDetails.length" class="document-summary-strip" aria-label="Document totals">
-					<div v-for="field in summaryDetails" :key="field.fieldname" class="document-summary-metric"><span>{{ field.label }}</span><strong>{{ formatField(field) }}</strong></div>
+					<div v-for="field in summaryDetails" :key="field.fieldname" class="document-summary-metric"><span>{{ field.label }}</span><strong :title="formatField(field)">{{ formatField(field) }}</strong></div>
 				</section>
 				<section v-if="visibleDetails.length" class="document-detail-grid">
-					<div v-for="field in visibleDetails" :key="field.fieldname"><span>{{ field.label }}</span><strong :class="{ 'document-detail-link': field.fieldtype === 'Link' }">{{ formatField(field) }}</strong></div>
+					<div v-for="field in visibleDetails" :key="field.fieldname"><span>{{ field.label }}</span><strong :class="{ 'document-detail-link': field.fieldtype === 'Link' }" :title="formatField(field)">{{ formatField(field) }}</strong></div>
 				</section>
 				<StockItemMatrix v-if="payload.item_groups?.length" :groups="payload.item_groups" :doctype="payload.record?.doctype" :physical-row-count="payload.item_row_count || 0" :group-by-item="Boolean(payload.context?.work_order)" />
 				<div v-else-if="payload.item_row_count" class="document-items-unavailable"><i class="pi pi-exclamation-circle" /><div><strong>Item matrix unavailable</strong><span>The item variants could not be grouped for display.</span></div></div>
@@ -198,5 +198,5 @@ defineExpose({ markDirty, reload: load })
 .dirty-close-copy { margin: 0; color: var(--erp-text-muted); line-height: 1.55; }
 @media (max-width: 900px) { .document-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .document-transaction-dialog__footer { align-items: stretch; flex-direction: column; } .document-transaction-dialog__footer > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .document-transaction-dialog__footer :deep(.p-button) { width: 100%; } }
-@media (max-width: 480px) { .document-summary-strip, .document-detail-grid { grid-template-columns: 1fr; } .document-summary-metric { border-right: 0; border-bottom: 1px solid var(--erp-border); } .document-summary-metric:last-child { border-bottom: 0; } }
+@media (max-width: 480px) { .document-summary-strip, .document-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .document-summary-metric { min-height: 52px; padding: 7px 9px; } .document-detail-grid > div { min-height: 46px; padding: 6px 8px; } }
 </style>

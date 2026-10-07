@@ -6,8 +6,8 @@
 					<div class="work-order-page__identity">
 						<div><h1>Work Order</h1><span>{{ record.name }}</span></div>
 						<Tag :value="record.status || statusLabel(record.docstatus)" :severity="statusSeverity" rounded />
-						<div v-if="headerFacts.length" class="work-order-header__facts">
-							<div v-for="fact in headerFacts" :key="fact.label"><span>{{ fact.label }}</span><strong>{{ fact.value }}</strong></div>
+						<div v-if="headerFacts.length" class="work-order-header__facts" role="region" aria-label="Work Order context" tabindex="0">
+							<div v-for="fact in headerFacts" :key="fact.label"><span>{{ fact.label }}</span><strong :title="String(fact.value)">{{ fact.value }}</strong></div>
 						</div>
 					</div>
 				</template>
@@ -281,5 +281,5 @@ watch(() => route.params.workOrderId, () => loadWorkspace())
 .work-order-grn-source { display: grid; gap: var(--erp-space-3); }
 @media (max-width: 1100px) { .work-order-page__identity { align-items: flex-start; flex-wrap: wrap; } }
 @media (max-width: 900px) { .work-order-page__totals, :deep(.work-order-activity-rail) { grid-column: 1 / -1; } }
-@media (max-width: 650px) { .fabric-work-order-frame { margin-bottom: 0; padding: 0; } .work-order-page__identity { width: 100%; } .work-order-header__facts { width: 100%; padding: 8px 0 0; border-top: 1px solid var(--erp-border); border-left: 0; flex-wrap: wrap; } .work-order-page__totals { grid-template-columns: repeat(2, minmax(0, 1fr)); } .work-order-panels { padding: var(--erp-space-2); } }
+@media (max-width: 650px) { .fabric-work-order-frame { margin-bottom: 0; padding: 0; } .work-order-page__identity { width: 100%; } .work-order-header__facts { width: 100%; overflow-x: auto; padding: 8px 18px 0 0; border-top: 1px solid var(--erp-border); border-left: 0; flex-wrap: nowrap; scrollbar-width: thin; -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); } .work-order-header__facts:focus-visible { outline: 2px solid var(--erp-accent); outline-offset: 2px; } .work-order-header__facts > div { flex: 0 0 auto; } .work-order-page__totals { grid-template-columns: repeat(2, minmax(0, 1fr)); } .work-order-panels { padding: var(--erp-space-2); } }
 </style>

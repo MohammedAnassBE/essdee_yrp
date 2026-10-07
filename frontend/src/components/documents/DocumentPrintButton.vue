@@ -3,6 +3,7 @@
 		type="button"
 		class="document-print-button"
 		:label="label"
+		:aria-label="label"
 		icon="pi pi-print"
 		severity="secondary"
 		outlined

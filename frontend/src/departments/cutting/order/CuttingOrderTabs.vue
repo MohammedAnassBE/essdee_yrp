@@ -38,7 +38,7 @@
 					<LoadingState v-if="loading" />
 					<Message v-else-if="error" severity="error" :closable="false">{{ error }}</Message>
 					<DataSection v-else title="Planned vs Completed" :count="rowCount(plannedGroups)" icon="pi pi-chart-bar">
-						<div v-for="(group, groupIndex) in plannedGroups" :key="groupIndex" class="table-scroll">
+						<div v-for="(group, groupIndex) in plannedGroups" :key="groupIndex" class="table-scroll" role="region" tabindex="0" :aria-label="`Planned versus completed quantities group ${groupIndex + 1}`">
 							<table class="data-table planned-table">
 								<thead><tr><th>S.No.</th><th v-for="attribute in groupAttributes(group)" :key="attribute">{{ attribute }}</th><th>Details</th><th v-for="size in sizes(group)" :key="size">{{ size }}</th><th>Total</th></tr></thead>
 								<tbody>
@@ -95,7 +95,7 @@ const DataSection = defineComponent({
 
 const QuantityTable = defineComponent({
 	props: { group: Object },
-	setup(componentProps) { return () => h("div", { class: "table-scroll" }, h("table", { class: "data-table" }, [
+	setup(componentProps) { return () => h("div", { class: "table-scroll", role: "region", tabindex: 0, "aria-label": "Planned quantities" }, h("table", { class: "data-table" }, [
 		h("thead", h("tr", [h("th", "S.No."), ...groupAttributes(componentProps.group).map((attribute) => h("th", attribute)), ...sizes(componentProps.group).map((size) => h("th", { class: "number-cell" }, size)), h("th", { class: "number-cell" }, "Total")])),
 		h("tbody", (componentProps.group.items || []).map((row, index) => h("tr", { key: row._row_key || index }, [h("td", index + 1), ...groupAttributes(componentProps.group).map((attribute) => h("td", row.attributes?.[attribute] || "—")), ...sizes(componentProps.group).map((size) => h("td", { class: "number-cell" }, numeric(valueTotal(row.values?.[size])))), h("td", { class: "number-cell strong-cell" }, numeric(rowTotal(row, componentProps.group)))]))),
 	])) },
@@ -103,7 +103,7 @@ const QuantityTable = defineComponent({
 
 const CompletionTable = defineComponent({
 	props: { group: Object, completed: Boolean },
-	setup(componentProps) { return () => h("div", { class: "table-scroll" }, h("table", { class: "data-table" }, [
+	setup(componentProps) { return () => h("div", { class: "table-scroll", role: "region", tabindex: 0, "aria-label": componentProps.completed ? "Completed cut quantities" : "Excess cut quantities" }, h("table", { class: "data-table" }, [
 		h("thead", h("tr", [h("th", "S.No."), ...groupAttributes(componentProps.group).map((attribute) => h("th", attribute)), ...sizes(componentProps.group).map((size) => h("th", { class: "number-cell" }, size)), h("th", { class: "number-cell" }, "Total"), componentProps.completed ? h("th", "Status") : null])),
 		h("tbody", (componentProps.group.items || []).map((row, index) => h("tr", { key: index }, [h("td", index + 1), ...groupAttributes(componentProps.group).map((attribute) => h("td", row.attributes?.[attribute] || "—")), ...sizes(componentProps.group).map((size) => h("td", { class: "number-cell" }, numeric(valueTotal(row.values?.[size])))), h("td", { class: "number-cell strong-cell" }, numeric(rowTotal(row, componentProps.group))), componentProps.completed ? h("td", h("span", { class: ["completion-state", row.completed ? "completion-state--done" : ""] }, [h("i", { class: row.completed ? "pi pi-check-circle" : "pi pi-circle" }), row.completed ? "Completed" : "Open"])) : null]))),
 	])) },
@@ -147,5 +147,6 @@ const CompletionTable = defineComponent({
 .cutting-order-tabs :deep(.empty-state) { display: grid; min-height: 100px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); place-items: center; align-content: center; gap: 8px; }
 .cutting-order-tabs :deep(.empty-state i) { color: var(--erp-accent); font-size: 1.1rem; }
 .cutting-order-tabs :deep(.loading-state) { display: grid; gap: 10px; }
-@media (max-width: 780px) { .order-detail-card { grid-template-columns: 1fr; } .order-detail-field, .order-detail-field:nth-child(3n), .order-detail-field:nth-last-child(-n + 3) { border-right: 0; border-bottom: 1px solid var(--erp-border); } .order-detail-field:last-child { border-bottom: 0; } }
+@media (max-width: 780px) { .order-detail-card { grid-template-columns: repeat(2, minmax(0, 1fr)); } .order-detail-field, .order-detail-field:nth-child(3n), .order-detail-field:nth-last-child(-n + 3) { border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); } .order-detail-field:nth-child(2n) { border-right: 0; } .order-detail-field:last-child, .order-detail-field:nth-last-child(2):nth-child(odd) { border-bottom: 0; } .cutting-order-tabs :deep(.table-scroll) { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); } }
+@media (max-width: 420px) { .order-detail-field { padding: 9px 10px; } }
 </style>

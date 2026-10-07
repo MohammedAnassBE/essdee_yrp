@@ -17,10 +17,10 @@
 		>
 			<template #header="{ record }">
 				<div class="goods-received-note-header__identity" :class="{ 'goods-received-note-header__identity--embedded': presentation === 'embedded' }">
-					<div v-if="presentation !== 'embedded'"><h1>Goods Received Note</h1><span>{{ record.name || duplicateLabel || (loading && name ? "Loading…" : error && name ? name : "New document") }}</span></div>
+					<div v-if="presentation !== 'embedded'" class="goods-received-note-header__title"><h1>Goods Received Note</h1><span>{{ record.name || duplicateLabel || (loading && name ? "Loading…" : error && name ? name : "New document") }}</span></div>
 					<Tag v-if="hasWorkspace && presentation !== 'embedded'" :value="record.status || statusLabel(record.docstatus)" :severity="statusSeverity" rounded />
-					<div v-if="headerFacts.length" class="goods-received-note-header__facts">
-						<div v-for="fact in headerFacts" :key="fact.label"><span>{{ fact.label }}</span><strong>{{ fact.value }}</strong></div>
+					<div v-if="headerFacts.length" class="goods-received-note-header__facts" role="region" aria-label="Goods Received Note context" tabindex="0">
+						<div v-for="fact in headerFacts" :key="fact.label"><span>{{ fact.label }}</span><strong :title="String(fact.value)">{{ fact.value }}</strong></div>
 					</div>
 				</div>
 			</template>
@@ -34,7 +34,7 @@
 				<section v-if="visibleFields.length" class="goods-received-note-fields" aria-label="Goods Received Note fields">
 					<section v-for="group in primaryFieldGroups" :key="group.key" class="goods-received-note-field-group" :data-group="group.key">
 						<header><span>{{ group.eyebrow }}</span><h2>{{ group.label }}</h2></header>
-						<div class="goods-received-note-field-group__grid">
+						<div class="goods-received-note-field-group__grid" :class="{ 'goods-received-note-field-group__grid--facts': !canEdit }">
 							<template v-if="canEdit">
 								<FormField
 									v-for="field in group.fields"
@@ -62,7 +62,7 @@
 				<section v-if="secondaryFieldGroups.length" class="goods-received-note-fields goods-received-note-fields--secondary" aria-label="Additional Goods Received Note fields">
 					<section v-for="group in secondaryFieldGroups" :key="group.key" class="goods-received-note-field-group" :data-group="group.key">
 						<header><span>{{ group.eyebrow }}</span><h2>{{ group.label }}</h2></header>
-						<div class="goods-received-note-field-group__grid">
+						<div class="goods-received-note-field-group__grid" :class="{ 'goods-received-note-field-group__grid--facts': !canEdit }">
 							<template v-if="canEdit">
 								<FormField v-for="field in group.fields" :key="fieldKey(field)" :field="field" :model-value="form[field.fieldname]" :form="form" :required="Boolean(field.reqd || field.mandatory)" compact :search-handler="linkSearchHandler(field)" @update:model-value="setField(field.fieldname, $event)" />
 							</template>
@@ -235,6 +235,7 @@ const form = reactive({})
 const primaryTotals = new Set(["total_received_quantity", "total", "grand_total", "total_receivable_cost"])
 const headerFieldnames = new Set(["against", "against_id", "delivery_challan", "process_name", "item", "supplier", "supplier_name"])
 const sourceFieldnames = new Set(["against", "against_id", "delivery_challan"])
+const fieldLabelOverrides = { against: "Source Type", against_id: "Source Document" }
 const sourceOwnedFieldnames = new Set(["is_return", "is_rework", "additional_grn", "allow_non_bundle", "includes_packing", "cutting_laysheet", "cut_panel_movement", "from_closed_wo_sewing_details", "from_finishing", "is_manual_entry", "is_pack", "avoid_sewing_plan_qty"])
 
 const capabilities = computed(() => workspace.value.capabilities || {})
@@ -281,6 +282,7 @@ const visibleFields = computed(() => {
 		if (result.has(source.fieldname)) continue
 		const field = {
 			...source,
+			label: fieldLabelOverrides[source.fieldname] || source.label,
 			reqd: Boolean(source.reqd || source.mandatory || evaluateCondition(source.mandatory_depends_on)),
 			read_only: Boolean(source.read_only || evaluateCondition(source.read_only_depends_on)),
 		}
@@ -626,9 +628,9 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 .goods-received-note-workspace { width: 100%; min-width: 0; }
 .goods-received-note-workspace--page { max-width: 1840px; margin: 0 auto; padding: 0 clamp(2px, .7vw, 10px) var(--erp-space-3); }
 .goods-received-note-header__identity { display: flex; min-width: 0; align-items: center; gap: 12px; }
-.goods-received-note-header__identity > div:first-child { display: grid; min-width: 0; gap: 2px; }
+.goods-received-note-header__title { display: grid; min-width: 0; gap: 2px; }
 .goods-received-note-header__identity h1 { margin: 0; color: var(--erp-text); font-size: 19px; line-height: 1.15; letter-spacing: -.018em; }
-.goods-received-note-header__identity > div:first-child > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); font-weight: 700; }
+.goods-received-note-header__title > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); font-weight: 700; }
 .goods-received-note-header__facts { display: flex; min-width: 0; flex: 1; align-items: center; gap: 16px; padding-left: 13px; border-left: 1px solid var(--erp-border); }
 .goods-received-note-header__facts > div { display: grid; min-width: 0; gap: 2px; flex: 0 1 auto; }
 .goods-received-note-header__facts span, .goods-received-note-total span, .goods-received-note-transfer-progress > span, .goods-received-note-matrix__header span, .goods-received-note-special-context header span, .goods-received-note-related header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
@@ -694,10 +696,11 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 	.goods-received-note-fields--secondary .goods-received-note-field-group:last-child:nth-child(odd) { grid-column: 1 / -1; border-right: 0; }
 	.goods-received-note-fields--secondary .goods-received-note-field-group__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-@media (max-width: 760px) { .goods-received-note-header__identity { align-items: flex-start; flex-wrap: wrap; } .goods-received-note-header__facts { width: 100%; flex: 1 0 100%; gap: 8px 14px; padding: 8px 0 0; border-top: 1px solid var(--erp-border); border-left: 0; flex-wrap: wrap; } .goods-received-note-header__identity--embedded { align-items: center; flex-wrap: nowrap; } .goods-received-note-header__identity--embedded .goods-received-note-header__facts { width: auto; padding-top: 0; border-top: 0; flex: 1 1 auto; flex-wrap: nowrap; } }
+@media (max-width: 1100px) { .goods-received-note-header__facts { overflow-x: auto; padding-right: 18px; flex-wrap: nowrap; scrollbar-width: thin; -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); } .goods-received-note-header__facts:focus-visible { outline: 2px solid var(--erp-accent); outline-offset: 2px; } .goods-received-note-header__facts > div { flex: 0 0 auto; } }
+@media (max-width: 760px) { .goods-received-note-header__identity { align-items: flex-start; flex-wrap: wrap; } .goods-received-note-header__facts { width: 100%; flex: 1 0 100%; gap: 8px 14px; padding: 8px 18px 0 0; border-top: 1px solid var(--erp-border); border-left: 0; } .goods-received-note-header__identity--embedded { align-items: center; flex-wrap: nowrap; } .goods-received-note-header__identity--embedded .goods-received-note-header__facts { width: auto; padding-top: 0; border-top: 0; flex: 1 1 auto; } }
 @media (max-width: 1200px) { .goods-received-note-field-group__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .goods-received-note-field-group__grid, .goods-received-note-field-group[data-group="movement"] .goods-received-note-field-group__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 620px) { .goods-received-note-workspace--page { padding-right: 0; padding-left: 0; } .goods-received-note-field-group__grid, .goods-received-note-field-group[data-group="movement"] .goods-received-note-field-group__grid { grid-template-columns: 1fr; gap: 4px; padding: 10px; } .goods-received-note-field-fact { min-height: 46px; } .goods-received-note-matrix__stack { padding: var(--erp-space-2); } }
+@media (max-width: 620px) { .goods-received-note-workspace--page { padding-right: 0; padding-left: 0; } .goods-received-note-field-group__grid, .goods-received-note-field-group[data-group="movement"] .goods-received-note-field-group__grid { grid-template-columns: 1fr; gap: 4px; padding: 10px; } .goods-received-note-field-group__grid--facts, .goods-received-note-field-group[data-group="movement"] .goods-received-note-field-group__grid--facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } .goods-received-note-field-fact { min-height: 46px; padding: 6px 8px; } .goods-received-note-matrix__stack { padding: var(--erp-space-2); } }
 :global(.fabric-action-dialog .p-dialog-content) { min-height: 0; }
 @media (max-width: 620px) { :global(.fabric-action-dialog) { width: 100vw !important; height: 100dvh !important; max-height: 100dvh !important; margin: 0; border-radius: 0; } :global(.fabric-action-dialog .p-dialog-content) { flex: 1; overflow-y: auto; } }
 </style>

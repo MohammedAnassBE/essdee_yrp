@@ -1,5 +1,5 @@
 <template>
-	<section class="common-list-view">
+	<section class="common-list-view" :class="{ 'common-list-view--viewport-bounded': viewportBounded, 'common-list-view--filters-open': mobileQuickFiltersOpen }">
 		<header class="list-page-head">
 			<div class="list-title-block">
 				<span v-if="eyebrow" class="list-eyebrow">{{ eyebrow }}</span>
@@ -77,7 +77,7 @@
 			@change="quickFiltersChanged"
 		/>
 
-		<nav v-if="statusTabs.length" class="list-status-tabs" aria-label="Status filters">
+		<nav v-if="statusTabs.length" class="list-status-tabs" aria-label="Status filters" tabindex="0">
 			<button
 				v-for="tab in statusTabs"
 				:key="tab.value || '__all__'"
@@ -381,6 +381,7 @@ const props = defineProps({
 	clickable: { type: Boolean, default: true },
 	statusField: { type: String, default: "" },
 	statusOptions: { type: Array, default: () => [] },
+	viewportBounded: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(["row-click", "loaded"])
@@ -1165,6 +1166,36 @@ defineExpose({ refresh: reload })
 	box-shadow: var(--erp-shadow-sm);
 }
 
+.common-list-view--viewport-bounded {
+	display: flex;
+	height: calc(100dvh - var(--erp-shell-header-height) - 94px);
+	min-height: 0;
+	overflow: hidden;
+	flex-direction: column;
+}
+
+.common-list-view--viewport-bounded > :not(.list-table-frame) {
+	flex: 0 0 auto;
+}
+
+.common-list-view--viewport-bounded .list-table-frame {
+	min-height: 0;
+	flex: 1 1 auto;
+}
+
+.common-list-view--viewport-bounded :deep(.premium-list-table) {
+	display: flex;
+	height: 100%;
+	min-height: 0;
+	flex-direction: column;
+}
+
+.common-list-view--viewport-bounded :deep(.premium-list-table .p-datatable-table-container) {
+	min-height: 0;
+	overflow: auto;
+	flex: 1 1 auto;
+}
+
 .list-page-head {
 	display: flex;
 	align-items: center;
@@ -1387,10 +1418,16 @@ defineExpose({ refresh: reload })
 	-webkit-mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
 	mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
 	scrollbar-width: none;
+	flex-shrink: 0;
 }
 
 .list-status-tabs::-webkit-scrollbar {
 	display: none;
+}
+
+.list-status-tabs:focus-visible {
+	outline: 2px solid color-mix(in srgb, var(--erp-accent) 34%, transparent);
+	outline-offset: 2px;
 }
 
 .list-status-tab {
@@ -1818,6 +1855,18 @@ defineExpose({ refresh: reload })
 	.common-list-view {
 		padding: 14px;
 		border-radius: var(--erp-panel-radius);
+	}
+
+	.common-list-view--viewport-bounded {
+		height: calc(100dvh - var(--erp-shell-header-height) - 76px);
+		min-height: 0;
+		overflow-y: auto;
+	}
+
+	.common-list-view--viewport-bounded .list-table-frame,
+	.common-list-view--viewport-bounded.common-list-view--filters-open .list-table-frame {
+		min-height: min(360px, 55dvh);
+		flex: 1 0 min(360px, 55dvh);
 	}
 
 	.list-page-head {

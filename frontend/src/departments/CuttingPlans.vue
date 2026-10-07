@@ -14,6 +14,7 @@
 				status-field="cp_status"
 				:status-options="statusOptions"
 				:default-columns="defaultColumns"
+				viewport-bounded
 				clickable
 				@row-click="openCuttingPlan"
 			>

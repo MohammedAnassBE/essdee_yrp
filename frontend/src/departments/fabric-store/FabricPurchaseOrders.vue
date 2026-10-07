@@ -10,6 +10,7 @@
 			status-field="status"
 			:status-options="statusOptions"
 			:default-columns="defaultColumns"
+			viewport-bounded
 			clickable
 			@row-click="openPurchaseOrder"
 		>

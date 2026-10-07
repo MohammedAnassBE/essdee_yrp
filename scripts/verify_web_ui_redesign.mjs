@@ -1214,6 +1214,11 @@ async function entityDialogsSuite(page) {
 			"Marker modified time is not formatted for users",
 		)
 	}
+	await page.setViewportSize({ width: 390, height: 844 })
+	const markerMobileColumns = await existingMarkerDialog.locator(".marker-read-grid").evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length)
+	assert(markerMobileColumns === 2, `Marker facts do not retain a compact two-column mobile grid: ${markerMobileColumns}`)
+	assert(await existingMarkerDialog.getByRole("button", { name: "Maximize dialog", exact: true }).isHidden(), "Redundant dialog maximize control remains visible on mobile")
+	await page.setViewportSize({ width: 1600, height: 700 })
 	await existingMarkerDialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
 
 	const sheet = editableLaySheet
@@ -1289,8 +1294,11 @@ async function entityDialogsSuite(page) {
 		return { width: box.width, height: box.height, x: box.x, y: box.y, borderRadius: getComputedStyle(element).borderRadius }
 	})
 	assert(mobileEntityDialog.width === 390 && mobileEntityDialog.height === 844 && mobileEntityDialog.x === 0 && mobileEntityDialog.y === 0 && mobileEntityDialog.borderRadius === "0px", `Cutting entity dialog does not use the shared mobile surface: ${JSON.stringify(mobileEntityDialog)}`)
+	await laySheetDialog.getByRole("tab", { name: "Details", exact: true }).click()
+	const laySheetMobileColumns = await laySheetDialog.locator(".detail-grid").evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length)
+	assert(laySheetMobileColumns === 2, `Lay Sheet facts do not retain a compact two-column mobile grid: ${laySheetMobileColumns}`)
 
-	return { plan: fixture.name, sheet: sheet.name, dialogScrollContract, rowsBefore, rowsAfter }
+	return { plan: fixture.name, sheet: sheet.name, dialogScrollContract, rowsBefore, rowsAfter, markerMobileColumns, laySheetMobileColumns }
 }
 
 async function getMethodFixture(request, method, args) {
@@ -1547,6 +1555,17 @@ async function stockTransfersSuite(page, context) {
 	await deliveryDialog.waitFor()
 	await deliveryDialog.locator(".wo-delivery-matrix").first().waitFor({ timeout: 20_000 })
 	assert(await deliveryDialog.getByLabel("Delivery Quantity").count() > 0, "Work Order delivery does not expose quantity entry")
+	await page.setViewportSize({ width: 390, height: 844 })
+	const mobileDeliveryEntry = await deliveryDialog.locator(".wo-delivery-matrix__scroll").first().evaluate((scroller) => {
+		const input = scroller.querySelector('input[aria-label="Delivery Quantity"]')
+		const scrollerBox = scroller.getBoundingClientRect()
+		const inputBox = input?.getBoundingClientRect()
+		return { scroller: scrollerBox.toJSON(), input: inputBox?.toJSON(), scrollLeft: scroller.scrollLeft }
+	})
+	assert(mobileDeliveryEntry.input && mobileDeliveryEntry.scrollLeft === 0 && mobileDeliveryEntry.input.left >= mobileDeliveryEntry.scroller.left && mobileDeliveryEntry.input.right <= mobileDeliveryEntry.scroller.right, `The first Work Order delivery input starts off-screen on mobile: ${JSON.stringify(mobileDeliveryEntry)}`)
+	const mobileDeliveryAttributes = await deliveryDialog.locator(".wo-delivery-matrix__mobile-attributes").first().evaluate((element) => ({ display: getComputedStyle(element).display, text: element.textContent?.trim() }))
+	assert(mobileDeliveryAttributes.display !== "none" && mobileDeliveryAttributes.text, `Hidden Work Order delivery attributes are not summarized on mobile: ${JSON.stringify(mobileDeliveryAttributes)}`)
+	await page.setViewportSize({ width: 1600, height: 900 })
 	await deliveryDialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
 
 	const restrictedPage = await context.newPage()

@@ -422,13 +422,13 @@
 		transform var(--erp-transition-fast);
 }
 
-:is(.app-shell, .p-dialog) .p-button:not(.p-button-secondary):not(.p-button-success):not(.p-button-info):not(.p-button-warn):not(.p-button-danger):not(.p-button-contrast):not(.p-button-outlined):not(.p-button-text):not(.p-button-link) {
+:is(.app-shell, .p-dialog) .p-button:not(:disabled):not(.p-button-secondary):not(.p-button-success):not(.p-button-info):not(.p-button-warn):not(.p-button-danger):not(.p-button-contrast):not(.p-button-outlined):not(.p-button-text):not(.p-button-link) {
 	color: #fff;
 	background: var(--erp-accent-hover);
 	border-color: var(--erp-accent-hover);
 }
 
-:is(.app-shell, .p-dialog) .p-button:not(.p-button-secondary):not(.p-button-success):not(.p-button-info):not(.p-button-warn):not(.p-button-danger):not(.p-button-contrast):not(.p-button-outlined):not(.p-button-text):not(.p-button-link):not(:disabled):hover {
+:is(.app-shell, .p-dialog) .p-button:not(:disabled):not(.p-button-secondary):not(.p-button-success):not(.p-button-info):not(.p-button-warn):not(.p-button-danger):not(.p-button-contrast):not(.p-button-outlined):not(.p-button-text):not(.p-button-link):hover {
 	color: #fff;
 	background: var(--erp-accent-dark);
 	border-color: var(--erp-accent-dark);
@@ -811,6 +811,27 @@
 		min-height: 0;
 		flex: 1;
 		overflow-y: auto;
+	}
+
+	.p-dialog.erp-entity-dialog .p-dialog-header {
+		min-width: 0;
+		align-items: flex-start;
+		gap: 8px;
+		padding: 12px;
+	}
+
+	.p-dialog.erp-entity-dialog .p-dialog-title {
+		min-width: 0;
+		line-height: 1.3;
+		overflow-wrap: anywhere;
+	}
+
+	.p-dialog.erp-entity-dialog .p-dialog-header-actions {
+		flex: 0 0 auto;
+	}
+
+	.p-dialog.erp-entity-dialog .p-dialog-maximize-button {
+		display: none;
 	}
 
 	.related-document-workspace-dialog .fabric-document-workspace--embedded {

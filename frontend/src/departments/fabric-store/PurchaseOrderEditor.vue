@@ -16,8 +16,8 @@
 				<header><h2>Order details</h2></header>
 				<div class="purchase-order-editor__fields">
 					<LinkField input-id="field-supplier-value" :key="`supplier-${sourceRevision}`" :model-value="form.supplier" label="Supplier *" doctype="Supplier" required :filters="{ disabled: 0 }" :show-open-button="false" show-clear :disabled="busy" @update:model-value="changeSupplier" />
-					<DateField v-model="form.transaction_date" label="Order date" required :disabled="busy" @update:model-value="markDirty" />
-					<DateField v-model="form.schedule_date" label="Required by" required :disabled="busy" @update:model-value="markDirty" />
+					<DateField v-model="form.transaction_date" class="purchase-order-editor__date" label="Order date" required :disabled="busy" @update:model-value="markDirty" />
+					<DateField v-model="form.schedule_date" class="purchase-order-editor__date" label="Required by" required :disabled="busy" @update:model-value="markDirty" />
 					<LinkField v-model="form.company" label="Company" doctype="Company" :show-open-button="false" show-clear :disabled="busy" @update:model-value="markDirty" />
 					<label class="purchase-order-editor__check"><Checkbox v-model="deliverToSupplier" binary input-id="po-deliver-to-supplier" :disabled="busy" @change="deliveryModeChanged" /><span>Deliver to supplier</span></label>
 					<LinkField :model-value="form.default_delivery_location" label="Delivery location" doctype="Supplier" :filters="deliveryLocationFilters" :show-open-button="false" show-clear :disabled="busy" @update:model-value="changeDeliveryLocation" />
@@ -275,5 +275,5 @@ watch(() => props.name, load)
 .purchase-order-editor__discard-copy { margin: 0; color: var(--erp-text-muted); line-height: 1.5; }
 @media (max-width: 1100px) { .purchase-order-editor__fields { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .purchase-order-editor__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 600px) { .purchase-order-editor { padding: 0 var(--erp-space-3) var(--erp-space-3); } .purchase-order-editor__header { align-items: stretch; flex-direction: column; margin: 0 calc(var(--erp-space-3) * -1); padding: 10px var(--erp-space-3); } .purchase-order-editor__actions { justify-content: flex-start; } .purchase-order-editor__section { padding: var(--erp-space-3); } .purchase-order-editor__fields { grid-template-columns: 1fr; } .purchase-order-editor__comments { grid-column: auto; } .purchase-order-editor__actions { width: 100%; } .purchase-order-editor__actions :deep(.p-button) { flex: 1; } }
+@media (max-width: 600px) { .purchase-order-editor { padding: 0 var(--erp-space-3) var(--erp-space-3); } .purchase-order-editor__header { align-items: stretch; flex-direction: column; margin: 0 calc(var(--erp-space-3) * -1); padding: 10px var(--erp-space-3); } .purchase-order-editor__actions { justify-content: flex-start; } .purchase-order-editor__section { padding: var(--erp-space-3); } .purchase-order-editor__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .purchase-order-editor__fields > :not(.purchase-order-editor__date) { grid-column: 1 / -1; } .purchase-order-editor__date :deep(.p-datepicker-input) { padding-inline: 8px; font-size: 13px; } .purchase-order-editor__date :deep(.p-datepicker-dropdown) { width: 32px; min-width: 32px; } .purchase-order-editor__comments { grid-column: auto; } .purchase-order-editor__actions { width: 100%; } .purchase-order-editor__actions :deep(.p-button) { flex: 1; } }
 </style>

@@ -8,7 +8,7 @@
 		:header="dialogTitle"
 		class="related-document-workspace-dialog erp-entity-dialog"
 		:style="{ width: 'min(96vw, 1540px)' }"
-		:content-style="{ padding: 0, overflow: 'hidden' }"
+		:content-style="{ padding: 0, overflow: 'hidden', scrollbarGutter: 'auto' }"
 		@update:visible="requestVisibility"
 	>
 		<component
@@ -47,9 +47,13 @@ const components = {
 	"YRP Delivery Challan": FabricDeliveryChallan,
 	"YRP Goods Received Note": FabricGoodsReceivedNote,
 }
+const documentLabels = {
+	"YRP Delivery Challan": "Delivery Challan",
+	"YRP Goods Received Note": "Goods Received Note",
+}
 const domainComponent = computed(() => components[props.doctype] || null)
 const displayName = ref(props.name)
-const dialogTitle = computed(() => `${props.doctype || "Related document"}${displayName.value ? ` · ${displayName.value}` : " · New"}`)
+const dialogTitle = computed(() => `${documentLabels[props.doctype] || props.doctype || "Related document"}${displayName.value ? ` · ${displayName.value}` : " · New"}`)
 
 function requestVisibility(value) { if (!value) close() }
 function close() { emit("update:visible", false); emit("closed") }
@@ -63,5 +67,12 @@ watch(() => [props.visible, props.name], ([visible, name], previous) => {
 </script>
 
 <style scoped>
+:global(.related-document-workspace-dialog .p-dialog-content) { display: flex; min-height: 0; flex-direction: column; }
 .related-document-workspace-dialog__unsupported { display: grid; min-height: 180px; place-content: center; justify-items: center; gap: var(--erp-space-3); padding: var(--erp-space-4); text-align: center; background: color-mix(in srgb, var(--erp-surface-soft) 70%, white); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); }
+@media (max-width: 620px) {
+	:global(.related-document-workspace-dialog .p-dialog-content) { position: relative; display: block; }
+	:global(.related-document-workspace-dialog .delivery-challan-workspace--embedded),
+	:global(.related-document-workspace-dialog .goods-received-note-workspace--embedded) { position: absolute; inset: 0; display: flex; width: auto; min-height: 0; flex-direction: column; }
+	:global(.related-document-workspace-dialog .p-dialog-maximize-button) { display: none; }
+}
 </style>

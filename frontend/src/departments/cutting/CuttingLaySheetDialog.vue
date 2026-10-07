@@ -787,10 +787,12 @@ const DataBlock = defineComponent({
 	.detail-editor__grid { grid-template-columns: 1fr; }
 	.detail-editor__wide { grid-column: auto; }
 	.laysheet-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-	.detail-grid { grid-template-columns: 1fr; }
+	.detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.detail-grid > div { min-height: 52px; padding: 8px 9px; }
 	.generation-numbers { grid-template-columns: 1fr; }
 	.laysheet-footer { align-items: stretch; flex-direction: column; }
-	.laysheet-footer__secondary, .laysheet-footer__primary { justify-content: flex-end; }
+	.laysheet-footer__secondary { justify-content: flex-start; }
+	.laysheet-footer__primary { width: 100%; justify-content: flex-end; }
 	.laysheet-content :deep(.p-tab) { flex: 0 0 auto; }
 	.laysheet-content :deep(.table-scroll), .table-scroll { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); }
 	.row-actions :deep(.p-button) { width: 2.25rem; height: 2.25rem; }

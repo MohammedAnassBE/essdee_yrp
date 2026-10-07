@@ -11,6 +11,7 @@
 			:status-options="statusOptions"
 			:default-columns="defaultColumns"
 			:column-labels="columnLabels"
+			viewport-bounded
 			clickable
 			@row-click="openWorkOrder"
 		>

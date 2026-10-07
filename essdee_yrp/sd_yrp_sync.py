@@ -7,6 +7,8 @@ from frappe.model import no_value_fields
 from frappe.model.rename_doc import rename_doc
 from yrp.attribute_links import value as _attribute_value
 
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_colour_attribute
+
 SD_YRP_TOPIC = "sd_yrp_master"
 
 LEGACY_DOCTYPE_ALIASES = {
@@ -718,7 +720,7 @@ def map_ipd_colour_yarn_row(row, source_context=None):
 	)
 	validate_required_link("Item", row.get("cloth_item"), row_context)
 	validate_required_link("Item", row.get("yarn_item"), row_context)
-	validate_required_attribute_value("Colour", row.get("colour"), row_context)
+	validate_required_attribute_value(get_colour_attribute(), row.get("colour"), row_context)
 	return filter_child_row(
 		{
 			"doctype": "SD YRP IPD Colour Yarn Ratio",

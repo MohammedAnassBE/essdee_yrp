@@ -347,7 +347,7 @@ function mountDiaLink(el, bindingValue) {
 			placeholder: __("Select Dia"),
 			get_query: () => ({
 				query: "yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values",
-				params: { attribute: "Dia" },
+				params: { attribute: essdee_yrp.get_dia_attribute() },
 			}),
 		},
 		render_input: true,
@@ -486,7 +486,7 @@ function fillConsumptionColumn(packing) {
 				reqd: 1,
 				get_query: () => ({
 					query: "yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values",
-					params: { attribute: "Dia" },
+					params: { attribute: essdee_yrp.get_dia_attribute() },
 				}),
 			},
 			{

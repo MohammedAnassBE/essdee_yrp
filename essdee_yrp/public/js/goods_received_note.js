@@ -199,7 +199,7 @@ essdee_yrp.open_actual_dia_dialog = function (frm) {
 
 essdee_yrp.append_actual_dia_row = function (source, dia, quantity) {
 	const clone = JSON.parse(JSON.stringify(source.entry));
-	clone.attributes = { ...(clone.attributes || {}), Dia: dia };
+	clone.attributes = { ...(clone.attributes || {}), [essdee_yrp.get_dia_attribute()]: dia };
 	clone.comments = "";
 	delete clone.row_index;
 	delete clone.table_index;
@@ -255,8 +255,9 @@ essdee_yrp.actual_dia_remaining = function (groups, reference) {
 };
 
 essdee_yrp.actual_dia_exists = function (groups, reference, dia) {
+	const dia_attribute = essdee_yrp.get_dia_attribute();
 	return essdee_yrp.actual_dia_cells(groups, reference).some(
-		({ entry }) => (entry.attributes || {}).Dia === dia,
+		({ entry }) => (entry.attributes || {})[dia_attribute] === dia,
 	);
 };
 

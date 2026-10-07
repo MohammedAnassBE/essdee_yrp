@@ -23,8 +23,11 @@ from frappe.utils import escape_html, flt, now_datetime
 from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
 
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import (
+	get_colour_attribute,
+	get_dia_attribute,
+)
 from essdee_yrp.fabric_chain import get_fabric_steps
-from essdee_yrp.fabric_ipd import FABRIC_COLOUR_ATTRIBUTE, FABRIC_DIA_ATTRIBUTE
 from essdee_yrp.ipd_validations import is_cloth_ipd
 
 
@@ -78,22 +81,22 @@ def _route_bypasses_step(ipd_doc, step, reference_item_variant, combo):
 		)
 	attributes = step.get("attribute")
 	attributes = attributes if isinstance(attributes, (list, tuple)) else [attributes]
-	if FABRIC_COLOUR_ATTRIBUTE in attributes and FABRIC_DIA_ATTRIBUTE in attributes:
+	if get_colour_attribute() in attributes and get_dia_attribute() in attributes:
 		# A same-colour multi-swap may still perform required Dia work.
 		return False
 
 	attrs = _reference_attrs(reference_item_variant) or dict(combo)
-	if FABRIC_DIA_ATTRIBUTE in attributes:
-		finished_dia = attrs.get(FABRIC_DIA_ATTRIBUTE)
-		finished_colour = attrs.get(FABRIC_COLOUR_ATTRIBUTE)
+	if get_dia_attribute() in attributes:
+		finished_dia = attrs.get(get_dia_attribute())
+		finished_colour = attrs.get(get_colour_attribute())
 		if not finished_dia:
 			return False
 		from essdee_yrp.fabric_program import get_knitting_output_dia
 
 		return get_knitting_output_dia(ipd_doc, finished_colour, finished_dia) == finished_dia
-	if FABRIC_COLOUR_ATTRIBUTE not in attributes:
+	if get_colour_attribute() not in attributes:
 		return False
-	finished_colour = attrs.get(FABRIC_COLOUR_ATTRIBUTE)
+	finished_colour = attrs.get(get_colour_attribute())
 	if not finished_colour:
 		return False
 	from essdee_yrp.fabric_program import get_knitting_output_colour
@@ -101,7 +104,7 @@ def _route_bypasses_step(ipd_doc, step, reference_item_variant, combo):
 	knitting_output = get_knitting_output_colour(
 		ipd_doc,
 		finished_colour,
-		attrs.get(FABRIC_DIA_ATTRIBUTE),
+		attrs.get(get_dia_attribute()),
 	)
 	return bool(knitting_output and knitting_output == finished_colour)
 
@@ -275,9 +278,9 @@ def build_fabric_plan(lot_doc, fabric_row, raise_on_unreachable=True, ipd_doc=No
 	)
 	requirement = {}
 	for row in requirement_rows:
-		attrs = {FABRIC_DIA_ATTRIBUTE: _attribute_value(row.dia)}
+		attrs = {get_dia_attribute(): _attribute_value(row.dia)}
 		if _attribute_value(row.colour):
-			attrs[FABRIC_COLOUR_ATTRIBUTE] = _attribute_value(row.colour)
+			attrs[get_colour_attribute()] = _attribute_value(row.colour)
 		reference_item_variant = ""
 		if ipd.get("colour_yarn_recipes"):
 			from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
@@ -338,8 +341,8 @@ def _write_plan_rows(lot_doc, cloth_item, step_plans):
 			key = (
 				plan["process_name"],
 				"Output",
-				attrs.get(FABRIC_DIA_ATTRIBUTE) or "",
-				attrs.get(FABRIC_COLOUR_ATTRIBUTE) or "",
+				attrs.get(get_dia_attribute()) or "",
+				attrs.get(get_colour_attribute()) or "",
 				reference_item_variant,
 			)
 			wanted[key] = wanted.get(key, 0) + kg
@@ -352,8 +355,8 @@ def _write_plan_rows(lot_doc, cloth_item, step_plans):
 			key = (
 				first["process_name"],
 				"Input",
-				attrs.get(FABRIC_DIA_ATTRIBUTE) or "",
-				attrs.get(FABRIC_COLOUR_ATTRIBUTE) or "",
+				attrs.get(get_dia_attribute()) or "",
+				attrs.get(get_colour_attribute()) or "",
 				reference_item_variant,
 			)
 			wanted[key] = wanted.get(key, 0) + kg
@@ -402,7 +405,7 @@ def _preseed_knitting_program(lot_doc, cloth_item, step_plans):
 	per_reference = {}
 	for plan_key, kg in conversion["outputs"].items():
 		reference_item_variant, combo = _split_plan_key(plan_key)
-		dia = dict(combo).get(FABRIC_DIA_ATTRIBUTE)
+		dia = dict(combo).get(get_dia_attribute())
 		if dia:
 			key = (dia, reference_item_variant)
 			per_reference[key] = per_reference.get(key, 0) + kg
@@ -418,7 +421,7 @@ def _preseed_knitting_program(lot_doc, cloth_item, step_plans):
 		kg = flt(kg, 3)
 		row = program_rows.get((dia, reference_item_variant))
 		reference_attrs = _reference_attrs(reference_item_variant)
-		colour = reference_attrs.get(FABRIC_COLOUR_ATTRIBUTE)
+		colour = reference_attrs.get(get_colour_attribute())
 		if row is None:
 			inserted += 1
 			new_row = frappe.new_doc("SD YRP Lot Fabric Program")
@@ -530,7 +533,7 @@ def _plan_headline(step_plans):
 	per_dia = {}
 	for plan_key, kg in first["outputs"].items():
 		_reference_item_variant, combo = _split_plan_key(plan_key)
-		dia = dict(combo).get(FABRIC_DIA_ATTRIBUTE)
+		dia = dict(combo).get(get_dia_attribute())
 		if dia:
 			per_dia[dia] = per_dia.get(dia, 0) + kg
 	parts.extend(f"{escape_html(d)} {flt(kg, 2)} kg" for d, kg in list(per_dia.items())[:6])

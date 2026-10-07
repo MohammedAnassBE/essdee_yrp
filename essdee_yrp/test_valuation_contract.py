@@ -74,6 +74,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 			patch("essdee_yrp.fabric_grn.is_calculable_fabric_grn", return_value=True),
 			patch("essdee_yrp.fabric_grn.frappe.get_doc", return_value=work_order),
 			patch("essdee_yrp.fabric_grn.frappe.db.get_single_value", return_value="Knitting"),
+			patch("essdee_yrp.fabric_grn.get_dia_attribute", return_value="Dia"),
 			patch("essdee_yrp.fabric_grn.get_parent_item", return_value="CLOTH"),
 			patch(
 				"essdee_yrp.fabric_grn._variant_attrs",
@@ -114,6 +115,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 					patch("essdee_yrp.fabric_grn.is_calculable_fabric_grn", return_value=True),
 					patch("essdee_yrp.fabric_grn.frappe.get_doc", return_value=work_order),
 					patch("essdee_yrp.fabric_grn.frappe.db.get_single_value", return_value="Knitting"),
+					patch("essdee_yrp.fabric_grn.get_dia_attribute", return_value="Dia"),
 					patch(
 						"essdee_yrp.fabric_grn.get_parent_item",
 						side_effect=["CLOTH", actual_parent],
@@ -149,6 +151,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 			patch("essdee_yrp.fabric_grn.is_calculable_fabric_grn", return_value=True),
 			patch("essdee_yrp.fabric_grn.frappe.get_doc", return_value=work_order),
 			patch("essdee_yrp.fabric_grn.frappe.db.get_single_value", return_value="Knitting"),
+			patch("essdee_yrp.fabric_grn.get_dia_attribute", return_value="Dia"),
 			patch("essdee_yrp.fabric_grn.get_parent_item", return_value="CLOTH"),
 			patch(
 				"essdee_yrp.fabric_grn._variant_attrs",

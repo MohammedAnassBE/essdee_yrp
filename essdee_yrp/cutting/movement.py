@@ -30,6 +30,8 @@ from yrp.yrp.doctype.yrp_item_dependent_attribute_mapping.yrp_item_dependent_att
 	get_dependent_attribute_details,
 )
 
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_dia_attribute
+
 _COMPLETION_PURPOSES = {"DC Completion", "GRN Completion"}
 _ROOT_TRANSACTION_DOCTYPES = (
 	"YRP Stock Entry",
@@ -316,7 +318,7 @@ def get_grouped_movement_rows(doc_name, target_doctype, *, allow_linked=False):
 			cloth_item,
 			{
 				ipd_doc.packing_attribute: _attribute_value(accessory.get("colour")),
-				"Dia": _attribute_value(accessory.get("dia")),
+				get_dia_attribute(): _attribute_value(accessory.get("dia")),
 			},
 		)
 		accessory_uom = frappe.db.get_value("Item", cloth_item, "stock_uom")

@@ -22,9 +22,9 @@ import frappe
 from frappe import _
 from yrp.attribute_links import value as _attribute_value
 
-from essdee_yrp.fabric_ipd import (
-	FABRIC_COLOUR_ATTRIBUTE,
-	FABRIC_DIA_ATTRIBUTE,
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import (
+	get_colour_attribute,
+	get_dia_attribute,
 )
 
 
@@ -121,7 +121,7 @@ def values_entering(ipd_doc, position, attribute):
 
 	steps = get_fabric_steps(ipd_doc)
 
-	if attribute == FABRIC_DIA_ATTRIBUTE:
+	if attribute == get_dia_attribute():
 		values = [
 			_attribute_value(r.dia)
 			for r in ipd_doc.get("knitting_dia_details") or []
@@ -158,7 +158,7 @@ def values_entering(ipd_doc, position, attribute):
 
 def _step_swap_rows(ipd_doc, step):
 	"""from/to (+pin) rows of a swap step, from its classic tab table."""
-	if step["attribute"] == FABRIC_COLOUR_ATTRIBUTE:
+	if step["attribute"] == get_colour_attribute():
 		return [
 			{
 				"pin_value": _attribute_value(r.dia),
@@ -230,14 +230,14 @@ def final_combos(ipd_doc, has_colour=True):
 			return combos
 
 	position = len(steps)
-	dias = values_entering(ipd_doc, position, FABRIC_DIA_ATTRIBUTE)
-	colours = values_entering(ipd_doc, position, FABRIC_COLOUR_ATTRIBUTE) if has_colour else [None]
+	dias = values_entering(ipd_doc, position, get_dia_attribute())
+	colours = values_entering(ipd_doc, position, get_colour_attribute()) if has_colour else [None]
 	combos = set()
 	for dia in dias:
 		for colour in colours:
-			attrs = {FABRIC_DIA_ATTRIBUTE: dia}
+			attrs = {get_dia_attribute(): dia}
 			if colour:
-				attrs[FABRIC_COLOUR_ATTRIBUTE] = colour
+				attrs[get_colour_attribute()] = colour
 			combos.add(frozenset(attrs.items()))
 	return combos
 

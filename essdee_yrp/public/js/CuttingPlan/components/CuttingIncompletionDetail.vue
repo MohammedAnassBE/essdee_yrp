@@ -19,8 +19,8 @@
                             <td v-for="(k, idx) in i.attributes" :key="idx">
                                 {{j.attributes[k]}}
                                 <span v-if="version == 'V2' || version == 'V3'">
-                                    <span v-if="k == 'Colour' && j.is_set_item && j.attributes[j.set_attr] != j.major_attr_value && j.attributes[k]">({{ j.item_keys['major_colour'] }})</span>
-                                    <span v-else-if="k == 'Colour' && !j.is_set_item && j.attributes[k] != j.item_keys['major_colour'] && j.attributes[k]">({{ j.item_keys['major_colour'] }})</span>
+                                    <span v-if="k == colour_attribute && j.is_set_item && j.attributes[j.set_attr] != j.major_attr_value && j.attributes[k]">({{ j.item_keys['major_colour'] }})</span>
+                                    <span v-else-if="k == colour_attribute && !j.is_set_item && j.attributes[k] != j.item_keys['major_colour'] && j.attributes[k]">({{ j.item_keys['major_colour'] }})</span>
                                 </span>
                             </td>
                             <td v-for="(k, idx) in i.primary_attribute_values" :key="idx">
@@ -40,6 +40,8 @@
 
 <script setup>
 import {ref} from 'vue';
+
+const colour_attribute = essdee_yrp.get_colour_attribute();
 
 let items = ref(null)
 let version = cur_frm.doc.version

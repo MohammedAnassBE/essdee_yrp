@@ -23,9 +23,9 @@ from frappe.utils import flt
 from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
 
-from essdee_yrp.fabric_ipd import (
-	FABRIC_COLOUR_ATTRIBUTE,
-	FABRIC_DIA_ATTRIBUTE,
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import (
+	get_colour_attribute,
+	get_dia_attribute,
 )
 from essdee_yrp.fabric_reference import (
 	get_reference_allocations,
@@ -209,14 +209,14 @@ def _grn_deltas_for_cloth(grn, cloth_item, with_colour, with_reference=False):
 	deltas = {}
 	for row in grn.get("items") or []:
 		info = attrs.get(row.item_variant)
-		if not info or not info.get(FABRIC_DIA_ATTRIBUTE):
+		if not info or not info.get(get_dia_attribute()):
 			continue
 		if with_colour:
 			# Colour is OPTIONAL — a dia-only cloth (no Colour attribute) must
 			# still track; its ledger rows just carry a blank colour
-			key = (info[FABRIC_DIA_ATTRIBUTE], info.get(FABRIC_COLOUR_ATTRIBUTE) or "")
+			key = (info[get_dia_attribute()], info.get(get_colour_attribute()) or "")
 		else:
-			key = (info[FABRIC_DIA_ATTRIBUTE],)
+			key = (info[get_dia_attribute()],)
 		# stock_qty = quantity × conversion_factor in the stock UOM (kg for cloth).
 		actual_qty = flt(row.stock_qty) or flt(row.quantity)
 		if with_reference:
@@ -247,8 +247,8 @@ def _variant_attribute_map(variant_names, cloth_item):
 		{
 			"variants": variant_names,
 			"item": cloth_item,
-			"dia": FABRIC_DIA_ATTRIBUTE,
-			"colour": FABRIC_COLOUR_ATTRIBUTE,
+			"dia": get_dia_attribute(),
+			"colour": get_colour_attribute(),
 		},
 		as_dict=True,
 	)
@@ -305,7 +305,7 @@ def _bump_program_rows(lot, parentfield, child_doctype, cloth_item, deltas, sign
 						(
 							_attribute_value(a.attribute_value)
 							for a in ref.get("attributes") or []
-							if a.attribute == FABRIC_COLOUR_ATTRIBUTE
+							if a.attribute == get_colour_attribute()
 						),
 						None,
 					)
@@ -372,7 +372,7 @@ def get_produced_by_dia(lot, process_name, cloth_item, exclude_wo=None):
 		process_name,
 		cloth_item,
 		exclude_wo,
-		attributes=(FABRIC_DIA_ATTRIBUTE,),
+		attributes=(get_dia_attribute(),),
 	)
 
 
@@ -435,7 +435,7 @@ def get_produced_by_dia_colour(
 		process_name,
 		cloth_item,
 		exclude_wo,
-		attributes=(FABRIC_DIA_ATTRIBUTE, FABRIC_COLOUR_ATTRIBUTE),
+		attributes=(get_dia_attribute(), get_colour_attribute()),
 		reference_item_variant=reference_item_variant,
 	)
 
@@ -448,7 +448,7 @@ def get_consumed_by_dia(lot, process_name, cloth_item, exclude_wo=None):
 		process_name,
 		cloth_item,
 		exclude_wo,
-		attributes=(FABRIC_DIA_ATTRIBUTE,),
+		attributes=(get_dia_attribute(),),
 		calculated_only=True,
 	)
 
@@ -468,7 +468,7 @@ def get_consumed_by_dia_colour(
 		process_name,
 		cloth_item,
 		exclude_wo,
-		attributes=(FABRIC_DIA_ATTRIBUTE, FABRIC_COLOUR_ATTRIBUTE),
+		attributes=(get_dia_attribute(), get_colour_attribute()),
 		calculated_only=True,
 		reference_item_variant=reference_item_variant,
 	)

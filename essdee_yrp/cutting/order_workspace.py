@@ -14,8 +14,8 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_order.sd_yrp_cutting_order imp
 	get_cutting_order_detail_data,
 	get_cutting_order_planned_vs_actual,
 )
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_colour_attribute
 from essdee_yrp.print_registry import get_document_print_formats
-
 
 DOCTYPE = "SD YRP Cutting Order"
 DETAIL_DOCTYPE = "SD YRP Cutting Order Detail"
@@ -71,9 +71,10 @@ def _build_detail_matrix(detail):
 	rows = detail.get("items") if detail.get("is_set_item") else [
 		{"colour": colour} for colour in (detail.get("colours") or [])
 	]
+	colour_attribute = get_colour_attribute()
 	items = []
 	for index, row in enumerate(rows or []):
-		attributes = {"Colour": row.get("colour")}
+		attributes = {colour_attribute: row.get("colour")}
 		item_keys = {"major_colour": row.get("major_colour") or row.get("colour")}
 		if detail.get("is_set_item"):
 			attributes["Part"] = row.get("part")
@@ -91,7 +92,7 @@ def _build_detail_matrix(detail):
 		)
 	return [
 		{
-			"attributes": ["Colour"] + (["Part"] if detail.get("is_set_item") else []),
+			"attributes": [colour_attribute] + (["Part"] if detail.get("is_set_item") else []),
 			"primary_attribute": "Size",
 			"primary_attribute_values": sizes,
 			"is_set_item": bool(detail.get("is_set_item")),
@@ -163,10 +164,12 @@ def _overlay_native_quantities(matrix, native):
 	for row in items:
 		key = (row.get("colour"), row.get("part"), row.get("major_colour") or row.get("colour"))
 		by_identity[key] = row.get("quantities") or {}
+	colour_attribute = get_colour_attribute()
 	for row in matrix[0].get("items") or []:
 		attrs = row.get("attributes") or {}
 		keys = row.get("item_keys") or {}
-		key = (attrs.get("Colour"), attrs.get("Part"), keys.get("major_colour") or attrs.get("Colour"))
+		colour = attrs.get(colour_attribute)
+		key = (colour, attrs.get("Part"), keys.get("major_colour") or colour)
 		quantities = by_identity.get(key, {})
 		for size in row.get("values") or {}:
 			row["values"][size] = {"qty": flt(quantities.get(size))}
@@ -175,11 +178,12 @@ def _overlay_native_quantities(matrix, native):
 
 def _matrix_to_native(matrix, detail):
 	rows = []
+	colour_attribute = get_colour_attribute()
 	for row in matrix[0].get("items") or []:
 		attributes = row.get("attributes") or {}
 		item_keys = row.get("item_keys") or {}
 		entry = {
-			"colour": attributes.get("Colour"),
+			"colour": attributes.get(colour_attribute),
 			"quantities": {
 				size: flt(value.get("qty") if isinstance(value, dict) else value)
 				for size, value in (row.get("values") or {}).items()
@@ -187,7 +191,7 @@ def _matrix_to_native(matrix, detail):
 		}
 		if detail.get("is_set_item"):
 			entry["part"] = attributes.get("Part")
-			entry["major_colour"] = item_keys.get("major_colour") or attributes.get("Colour")
+			entry["major_colour"] = item_keys.get("major_colour") or attributes.get(colour_attribute)
 		rows.append(entry)
 	return {
 		"is_set_item": bool(detail.get("is_set_item")),

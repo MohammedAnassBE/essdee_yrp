@@ -41,6 +41,7 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_bundle_movement_ledger.sd_yrp_cut_
 	make_cut_bundle_ledger,
 )
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_marker.sd_yrp_cutting_marker import fetch_marker_details
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_dia_attribute
 from essdee_yrp.fabric_requirement import get_stich_details, get_stitching_combination
 from essdee_yrp.ipd_attribute_links import major_stitching_value
 
@@ -452,7 +453,7 @@ def save_item_details(items, cutting_plan, calculated_parts, is_manual_entry, cu
 	for item in items:
 		attributes = {}
 		attributes[ipd_doc.packing_attribute] = _attribute_value(item["colour"])
-		attributes["Dia"] = _attribute_value(item["dia"])
+		attributes[get_dia_attribute()] = _attribute_value(item["dia"])
 		cloth_name = None
 		variant = None
 		if not is_co:
@@ -551,7 +552,7 @@ def save_accessory_details(items, cutting_plan, cutting_order=None):
 	for item in items:
 		attributes = {}
 		attributes[ipd_doc.packing_attribute] = _attribute_value(item["colour"])
-		attributes["Dia"] = _attribute_value(item["dia"])
+		attributes[get_dia_attribute()] = _attribute_value(item["dia"])
 		cloth_name = None
 		variant = None
 		if not is_co:
@@ -2454,7 +2455,7 @@ def get_table_entries(cls_table, ipd_doc, warehouse, lot, doc_name, received_typ
 		if _attribute_value(item.dia) != _attribute_value(item.actual_dia):
 			attributes = {}
 			attributes[ipd_doc.packing_attribute] = _attribute_value(item.colour)
-			attributes["Dia"] = _attribute_value(item.actual_dia)
+			attributes[get_dia_attribute()] = _attribute_value(item.actual_dia)
 			cloth_name = None
 			for cloth in ipd_doc.cloth_detail:
 				if cloth.name1 == item.cloth_type:

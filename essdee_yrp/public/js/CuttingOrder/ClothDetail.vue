@@ -80,7 +80,7 @@ function handleClickOutside(e) {
 function fetch_dia_options() {
     frappe.call({
         method: 'yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values',
-        args: { attribute: 'Dia' },
+        args: { attribute: essdee_yrp.get_dia_attribute() },
         callback: function(r) {
             if (r.message) {
                 allDiaValues.value = r.message;

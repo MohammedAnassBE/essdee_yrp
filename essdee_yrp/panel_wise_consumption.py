@@ -17,6 +17,8 @@ from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
 from yrp.attribute_values import get_mapping_document
 
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_dia_attribute
+
 SCHEMA_VERSION = 4
 PANEL_COLOUR_SCHEMA_VERSION = 2
 CELL_SCHEMA_VERSION = 3
@@ -559,7 +561,7 @@ def sync_panel_wise_consumption_matrix(doc):
 	expanded = expand_panel_wise_matrix(matrix, context, require_complete=False)
 	from yrp.yrp.doctype.yrp_item.yrp_item import get_global_attribute_values
 
-	valid_dias = set(get_global_attribute_values("Dia"))
+	valid_dias = set(get_global_attribute_values(get_dia_attribute()))
 	matrix_dias = _unique(
 		_attribute_value(cell.get("dia"))
 		for panel in matrix.get("panels") or []
@@ -604,7 +606,7 @@ def get_panel_wise_consumption_matrix(doc):
 	matrix, context = make_panel_wise_matrix(doc, include_saved=include_saved)
 	from yrp.yrp.doctype.yrp_item.yrp_item import get_global_attribute_values
 
-	dia_values = get_global_attribute_values("Dia")
+	dia_values = get_global_attribute_values(get_dia_attribute())
 	dia_values = sorted(_unique(dia_values), key=_natural_key)
 	for panel in matrix["panels"]:
 		for row in panel["rows"]:

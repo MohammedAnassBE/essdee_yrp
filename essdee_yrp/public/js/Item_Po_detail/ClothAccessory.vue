@@ -112,7 +112,7 @@ function createInput(attr, index, value, is_header){
 		df['get_query'] = function(){
 			return {
 				query: 'yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values',
-				params: { attribute: 'Dia' },
+				params: { attribute: essdee_yrp.get_dia_attribute() },
 			}
         }
     }

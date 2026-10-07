@@ -15,7 +15,7 @@
 							<td v-for="attr in i.attributes" :key="attr">
                                 {{ j.attributes[attr] }}
                                 <span v-if="version == 'V2' || version == 'V3'">
-                                    <span v-if="attr == 'Colour' && j.is_set_item && j.attributes[j.set_attr] != j.major_attr_value">({{ j.item_keys['major_colour'] }})</span>
+                                    <span v-if="attr == colour_attribute && j.is_set_item && j.attributes[j.set_attr] != j.major_attr_value">({{ j.item_keys['major_colour'] }})</span>
                                 </span>
                             </td>
 							<td v-for="attr in i.primary_attribute_values" :key="attr">
@@ -42,7 +42,7 @@
                         <td v-for="attr in i.attributes" :key="attr">
                             {{ j.attributes[attr] }}
                             <span v-if="version == 'V2' || version == 'V3'">
-                                <span v-if="attr == 'Colour' && j.is_set_item && j.attributes[j.set_attr] != j.major_attr_value">({{ j.item_keys['major_colour'] }})</span>
+                                <span v-if="attr == colour_attribute && j.is_set_item && j.attributes[j.set_attr] != j.major_attr_value">({{ j.item_keys['major_colour'] }})</span>
                             </span>
                         </td>
                         <td v-for="attr in i.primary_attribute_values" :key="attr">
@@ -59,6 +59,8 @@
 
 <script setup>
 import {ref, onMounted} from 'vue';
+
+const colour_attribute = essdee_yrp.get_colour_attribute();
 
 let items = ref(null)
 let show_title = ref(false)

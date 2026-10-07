@@ -34,9 +34,11 @@ from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
 
 from essdee_yrp.api.work_order import _guard_not_modified
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import (
+	get_colour_attribute,
+	get_dia_attribute,
+)
 from essdee_yrp.fabric_ipd import (
-	FABRIC_COLOUR_ATTRIBUTE,
-	FABRIC_DIA_ATTRIBUTE,
 	build_cloth_conversion_rule_mappings,
 	synthesize_fabric_processes_from_tabs,
 )
@@ -149,14 +151,14 @@ def _validate_yarn_colour(yarn_item, yarn_colour, row_label):
 	stock item.
 	"""
 	attributes = _item_variant_attributes(yarn_item)
-	unsupported = sorted(attributes - {FABRIC_COLOUR_ATTRIBUTE})
+	unsupported = sorted(attributes - {get_colour_attribute()})
 	if unsupported:
 		frappe.throw(
 			_("{0}: Yarn Item {1} may only use the Colour variant attribute; remove {2}.").format(
 				row_label, yarn_item, ", ".join(unsupported)
 			)
 		)
-	has_colour_attribute = FABRIC_COLOUR_ATTRIBUTE in attributes
+	has_colour_attribute = get_colour_attribute() in attributes
 	yarn_colour = (yarn_colour or "").strip()
 	if has_colour_attribute and not yarn_colour:
 		frappe.throw(_("{0}: select the Yarn Colour for {1}.").format(row_label, yarn_item))
@@ -166,7 +168,7 @@ def _validate_yarn_colour(yarn_item, yarn_colour, row_label):
 		frappe.throw(
 			_("{0}: Yarn Item {1} does not define the Colour attribute.").format(row_label, yarn_item)
 		)
-	if not has_attribute_value(FABRIC_COLOUR_ATTRIBUTE, yarn_colour):
+	if not has_attribute_value(get_colour_attribute(), yarn_colour):
 		frappe.throw(_("{0}: {1} is not a Colour attribute value.").format(row_label, yarn_colour))
 	return yarn_colour
 
@@ -185,7 +187,7 @@ def _normalize_colour_flags(selection, fieldname, label, required_colours):
 			frappe.throw(_("{0} row {1}: {2} is not required for this Lot.").format(label, index, colour))
 		if colour in normalised:
 			frappe.throw(_("Duplicate {0} Colour {1}.").format(label, colour))
-		if not has_attribute_value(FABRIC_COLOUR_ATTRIBUTE, colour):
+		if not has_attribute_value(get_colour_attribute(), colour):
 			frappe.throw(_("{0} is not a Colour attribute value.").format(colour))
 		normalised.append(colour)
 	return [colour for colour in required if colour in normalised]
@@ -224,7 +226,7 @@ def _derive_colour_yarn_recipes(item_yarns, required_colours, dyed_colours, sour
 			yarn_item = yarn["yarn_item"]
 			attributes = _item_variant_attributes(yarn_item)
 			yarn_colour = None
-			if FABRIC_COLOUR_ATTRIBUTE in attributes:
+			if get_colour_attribute() in attributes:
 				source_colour = sources.get(colour) or non_dyed_colour
 				yarn_colour = colour if colour in dyed else source_colour
 				if not yarn_colour:
@@ -372,8 +374,8 @@ def _normalize_knitting_output_colours(selection, required_colours):
 			)
 		if colour in output_by_colour:
 			frappe.throw(_("Knitting output row {0}: duplicate Finished Colour {1}.").format(index, colour))
-		if not has_attribute_value("Colour", output_colour):
-			frappe.throw(_("{0} is not a Colour attribute value.").format(output_colour))
+		if not has_attribute_value(get_colour_attribute(), output_colour):
+			frappe.throw(_("{0} is not a {1} attribute value.").format(output_colour, get_colour_attribute()))
 		output_by_colour[colour] = output_colour
 
 	missing = [colour for colour in required_colours if colour not in output_by_colour]
@@ -452,10 +454,10 @@ def _normalize_fabric_routes(selection, required_routes):
 		if not knitting_dia or not knitting_colour:
 			frappe.throw(_("Fabric route row {0}: select both Knitting Output Dia and Colour.").format(index))
 		for value, attribute in (
-			(final_dia, "Dia"),
-			(knitting_dia, "Dia"),
-			(final_colour, "Colour"),
-			(knitting_colour, "Colour"),
+			(final_dia, get_dia_attribute()),
+			(knitting_dia, get_dia_attribute()),
+			(final_colour, get_colour_attribute()),
+			(knitting_colour, get_colour_attribute()),
 		):
 			if not has_attribute_value(attribute, value):
 				frappe.throw(_("{0} is not a {1} attribute value.").format(value, attribute))
@@ -620,7 +622,7 @@ def _get_compacting_references_by_cloth(item_production_detail):
 		return None
 
 	source = frappe.get_doc("SD YRP IPD Compacting", source_name)
-	if source.get("packing_attribute") != FABRIC_COLOUR_ATTRIBUTE:
+	if source.get("packing_attribute") != get_colour_attribute():
 		frappe.throw(
 			_(
 				"IPD Compacting {0} uses packing attribute {1}. Cloth IPD "
@@ -1126,8 +1128,8 @@ def _program_final_route(row):
 			value.attribute: _attribute_value(value.attribute_value)
 			for value in variant.get("attributes") or []
 		}
-		final_dia = attrs.get(FABRIC_DIA_ATTRIBUTE) or final_dia
-		final_colour = attrs.get(FABRIC_COLOUR_ATTRIBUTE) or final_colour
+		final_dia = attrs.get(get_dia_attribute()) or final_dia
+		final_colour = attrs.get(get_colour_attribute()) or final_colour
 	return row.get("cloth_item"), final_dia, final_colour
 
 

@@ -4,8 +4,11 @@ import frappe
 from frappe import _
 from frappe.utils import cint
 
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import (
+	get_colour_attribute,
+	get_dia_attribute,
+)
 from essdee_yrp.fabric_chain import get_fabric_steps
-from essdee_yrp.fabric_ipd import FABRIC_COLOUR_ATTRIBUTE, FABRIC_DIA_ATTRIBUTE
 
 CLOTH_EXECUTION_VERSION = 1
 
@@ -39,19 +42,19 @@ def get_supported_execution_route(ipd_doc):
 def _is_colour_dyeing_step(step, default_dyeing_process):
 	shape = step.get("shape")
 	attribute = step.get("attribute")
-	if shape == "swap" and attribute == FABRIC_COLOUR_ATTRIBUTE:
+	if shape == "swap" and attribute == get_colour_attribute():
 		return True
-	if shape == "multi_swap" and FABRIC_COLOUR_ATTRIBUTE in (attribute or []):
+	if shape == "multi_swap" and get_colour_attribute() in (attribute or []):
 		return True
 	# Old Process masters can lack shape metadata. Never use this fallback for
 	# an explicit non-colour transformation such as Compacting/Dia change.
 	if step.get("process_name") != default_dyeing_process:
 		return False
-	if shape == "swap" and attribute and attribute != FABRIC_COLOUR_ATTRIBUTE:
+	if shape == "swap" and attribute and attribute != get_colour_attribute():
 		return False
-	if shape == "multi_swap" and attribute and FABRIC_COLOUR_ATTRIBUTE not in attribute:
+	if shape == "multi_swap" and attribute and get_colour_attribute() not in attribute:
 		return False
-	return attribute != FABRIC_DIA_ATTRIBUTE
+	return attribute != get_dia_attribute()
 
 
 def stamp_cloth_execution_version(doc, method=None):

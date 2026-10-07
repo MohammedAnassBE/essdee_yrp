@@ -21,6 +21,7 @@
   "default_pack_in_stage",
   "column_break_vbai",
   "default_packing_attribute",
+  "default_dia_attribute",
   "default_pack_out_stage",
   "default_loose_piece_stage",
   "stitching_details_section",
@@ -153,6 +154,12 @@
    "reqd": 1
   },
   {
+   "fieldname": "default_dia_attribute",
+   "fieldtype": "Link",
+   "label": "Default Dia Attribute",
+   "options": "Item Attribute"
+  },
+  {
    "fieldname": "default_stitching_attribute",
    "fieldtype": "Link",
    "label": "Default Stitching Attribute",
@@ -204,7 +211,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-09-25 15:12:33.705488",
+ "modified": "2026-10-07 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP IPD Settings",

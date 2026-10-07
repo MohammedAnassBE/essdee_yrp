@@ -18,6 +18,7 @@ from yrp.utils import get_variant_attr_details, update_if_string_instance
 from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_or_create_variant, get_parent_item
 from yrp.yrp.utils.ipd_engine import calculate_major_deliverables
 
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_dia_attribute
 from essdee_yrp.fabric_requirement import (
 	calculate_accessory,
 	get_cloth_combination,
@@ -543,7 +544,7 @@ def _cutting_accessory_outputs(ipd, demands):
 				cloth_item,
 				{
 					ipd.packing_attribute: _attribute_value(requirement["colour"]),
-					"Dia": _attribute_value(requirement["dia"]),
+					get_dia_attribute(): _attribute_value(requirement["dia"]),
 				},
 			)
 			rows.append(

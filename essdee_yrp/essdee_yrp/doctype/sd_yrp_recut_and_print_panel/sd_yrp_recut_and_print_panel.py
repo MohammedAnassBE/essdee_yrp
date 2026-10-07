@@ -15,6 +15,8 @@ from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 )
 from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
 
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_dia_attribute
+
 
 class SDYRPRecutandPrintPanel(Document):
 	def before_validate(self):
@@ -93,7 +95,7 @@ class SDYRPRecutandPrintPanel(Document):
 				)
 			row.item_variant = get_or_create_variant(
 				template,
-				{"Dia": _attribute_value(row.dia), packing_attribute: _attribute_value(row.colour)},
+				{get_dia_attribute(): _attribute_value(row.dia), packing_attribute: _attribute_value(row.colour)},
 			)
 			uom = resolve_item_uom(row.item_variant)
 			row.uom = uom.uom

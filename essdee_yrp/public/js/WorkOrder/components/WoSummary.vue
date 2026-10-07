@@ -125,8 +125,8 @@
                                 <td>{{ j.lot }}</td>
                                 <td v-for="attr in i.attributes" :key="attr">
                                     {{ j.attributes[attr] }}
-                                    <span v-if="attr == 'Colour' && j.is_set_item && j.attributes[j.set_attr] != j.major_attr_value && j.attributes[attr]">({{ j.item_keys['major_colour'] }})</span>
-                                    <span v-else-if="attr == 'Colour' && !j.is_set_item && j.attributes[attr] != j.item_keys['major_colour'] && j.attributes[attr]">({{ j.item_keys['major_colour'] }})</span>
+                                    <span v-if="attr == colour_attribute && j.is_set_item && j.attributes[j.set_attr] != j.major_attr_value && j.attributes[attr]">({{ j.item_keys['major_colour'] }})</span>
+                                    <span v-else-if="attr == colour_attribute && !j.is_set_item && j.attributes[attr] != j.item_keys['major_colour'] && j.attributes[attr]">({{ j.item_keys['major_colour'] }})</span>
                                 </td>
                                 <td v-for="attr in i.primary_attribute_values" :key="attr">
                                     <div v-if='j.values[attr]?.pending_qty < 0'>
@@ -171,6 +171,8 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
+
+const colour_attribute = essdee_yrp.get_colour_attribute();
 
 let is_manual = ref(true);
 let items = ref([]);

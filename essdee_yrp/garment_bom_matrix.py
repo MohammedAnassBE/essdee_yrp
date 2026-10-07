@@ -17,6 +17,7 @@ from frappe import _
 from frappe.utils import flt
 from yrp.attribute_links import value as _attribute_value
 
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_dia_attribute
 from essdee_yrp.fabric_requirement import (
 	_validate_garment_ipd,
 	calculate_cloth,
@@ -127,7 +128,7 @@ def _get_variant_cloth_rows(ipd, item_variant):
 			continue
 		attrs = {
 			ipd.packing_attribute: _attribute_value(requirement["colour"]),
-			"Dia": _attribute_value(requirement["dia"]),
+			get_dia_attribute(): _attribute_value(requirement["dia"]),
 		}
 		key = (cloth_item, tuple(sorted(attrs.items())))
 		aggregated[key] += flt(requirement["quantity"])

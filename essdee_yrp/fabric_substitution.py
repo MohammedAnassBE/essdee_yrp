@@ -14,7 +14,10 @@ from essdee_yrp.cloth_execution import (
 	get_supported_execution_route,
 	has_fabric_execution_key,
 )
-from essdee_yrp.fabric_ipd import FABRIC_DIA_ATTRIBUTE
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import (
+	get_colour_attribute,
+	get_dia_attribute,
+)
 
 QTY_TOLERANCE = 0.000001
 
@@ -46,8 +49,8 @@ def get_planned_knitting_output_totals(lot_doc, production_detail, cloth_item):
 			if row.get("reference_item_variant")
 			else {}
 		)
-		final_dia = final_attrs.get(FABRIC_DIA_ATTRIBUTE) or attribute_value(row.get("dia"))
-		final_colour = final_attrs.get("Colour") or attribute_value(row.get("colour"))
+		final_dia = final_attrs.get(get_dia_attribute()) or attribute_value(row.get("dia"))
+		final_colour = final_attrs.get(get_colour_attribute()) or attribute_value(row.get("colour"))
 		route = next(
 			(
 				candidate
@@ -61,9 +64,9 @@ def get_planned_knitting_output_totals(lot_doc, production_detail, cloth_item):
 		colour = (route and route.get("knitting_output_colour")) or get_knitting_output_colour(
 			ipd, final_colour, final_dia
 		)
-		attrs = {FABRIC_DIA_ATTRIBUTE: physical_dia}
+		attrs = {get_dia_attribute(): physical_dia}
 		if colour:
-			attrs["Colour"] = colour
+			attrs[get_colour_attribute()] = colour
 		variant = _resolve_variant(cloth_item, attrs)
 		totals[variant] += flt(row.get("weight"), 6)
 	return {
@@ -549,12 +552,12 @@ def _validate_knitting_variance(planned_item, actual_item):
 				actual_item, planned["item"]
 			)
 		)
-	if not planned["attrs"].get(FABRIC_DIA_ATTRIBUTE):
+	if not planned["attrs"].get(get_dia_attribute()):
 		frappe.throw(_("Planned knitting Item {0} has no Dia.").format(planned_item))
-	if not actual["attrs"].get(FABRIC_DIA_ATTRIBUTE):
+	if not actual["attrs"].get(get_dia_attribute()):
 		frappe.throw(_("Actual knitting Item {0} has no Dia.").format(actual_item))
 	for attribute in set(planned["attrs"]) | set(actual["attrs"]):
-		if attribute == FABRIC_DIA_ATTRIBUTE:
+		if attribute == get_dia_attribute():
 			continue
 		if planned["attrs"].get(attribute) != actual["attrs"].get(attribute):
 			frappe.throw(

@@ -22,8 +22,8 @@ from essdee_yrp.cloth_execution import (
 	has_fabric_execution_key,
 	is_versioned_cloth_work_order,
 )
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_dia_attribute
 from essdee_yrp.fabric_chain import get_fabric_steps
-from essdee_yrp.fabric_ipd import FABRIC_DIA_ATTRIBUTE
 from essdee_yrp.fabric_reference import (
 	get_reference_allocations,
 	scale_reference_allocations,
@@ -1030,7 +1030,7 @@ def _matches_input(variant, spec, allow_dia_variance=False):
 	expected = {key: value for key, value in (spec.get("attrs") or {}).items() if value}
 	actual = variant.get("attrs") or {}
 	if allow_dia_variance:
-		expected.pop(FABRIC_DIA_ATTRIBUTE, None)
+		expected.pop(get_dia_attribute(), None)
 	return all(actual.get(key) == value for key, value in expected.items())
 
 

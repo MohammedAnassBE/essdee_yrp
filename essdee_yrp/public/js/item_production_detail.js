@@ -129,22 +129,22 @@ function add_ipd_process_matrix_button(frm) {
 frappe.ui.form.on("YRP Item Production Detail", {
 	setup:function(frm) {
 		frm.trigger("declarations")
-		frm.set_query("dia", "knitting_dia_details", () => ({ filters: { attribute_name: "Dia" } }));
-		frm.set_query("from_colour", "dyeing_colour_details", () => ({ filters: { attribute_name: "Colour" } }));
-		frm.set_query("to_colour", "dyeing_colour_details", () => ({ filters: { attribute_name: "Colour" } }));
-		frm.set_query("from_dia", "compacting_dia_details", () => ({ filters: { attribute_name: "Dia" } }));
-		frm.set_query("to_dia", "compacting_dia_details", () => ({ filters: { attribute_name: "Dia" } }));
-		frm.set_query("colour", "colour_yarn_recipes", () => ({ filters: { attribute_name: "Colour" } }));
-		frm.set_query("yarn_colour", "colour_yarn_recipes", () => ({ filters: { attribute_name: "Colour" } }));
+		frm.set_query("dia", "knitting_dia_details", () => ({ filters: { attribute_name: essdee_yrp.get_dia_attribute() } }));
+		frm.set_query("from_colour", "dyeing_colour_details", () => ({ filters: { attribute_name: essdee_yrp.get_colour_attribute() } }));
+		frm.set_query("to_colour", "dyeing_colour_details", () => ({ filters: { attribute_name: essdee_yrp.get_colour_attribute() } }));
+		frm.set_query("from_dia", "compacting_dia_details", () => ({ filters: { attribute_name: essdee_yrp.get_dia_attribute() } }));
+		frm.set_query("to_dia", "compacting_dia_details", () => ({ filters: { attribute_name: essdee_yrp.get_dia_attribute() } }));
+		frm.set_query("colour", "colour_yarn_recipes", () => ({ filters: { attribute_name: essdee_yrp.get_colour_attribute() } }));
+		frm.set_query("yarn_colour", "colour_yarn_recipes", () => ({ filters: { attribute_name: essdee_yrp.get_colour_attribute() } }));
 		frm.set_query("cloth_item", "colour_yarn_recipes", () => {
 			const cloths = frm.doc.is_cloth_item
 				? [frm.doc.item]
 				: (frm.doc.cloth_detail || []).map((row) => row.cloth).filter(Boolean);
 			return cloths.length ? { filters: { name: ["in", cloths] } } : {};
 		});
-		frm.set_query("colour", "compacting_reference_details", () => ({ filters: { attribute_name: "Colour" } }));
-		frm.set_query("input_dia", "compacting_reference_details", () => ({ filters: { attribute_name: "Dia" } }));
-		frm.set_query("compacting_dia", "compacting_reference_details", () => ({ filters: { attribute_name: "Dia" } }));
+		frm.set_query("colour", "compacting_reference_details", () => ({ filters: { attribute_name: essdee_yrp.get_colour_attribute() } }));
+		frm.set_query("input_dia", "compacting_reference_details", () => ({ filters: { attribute_name: essdee_yrp.get_dia_attribute() } }));
+		frm.set_query("compacting_dia", "compacting_reference_details", () => ({ filters: { attribute_name: essdee_yrp.get_dia_attribute() } }));
 		const setAttributeQuery = (doc)=>{
 			const attributes = (doc.item_attributes || []).map(attr => attr.attribute)
 			return { filters: { name: ["in", attributes] } };
@@ -1306,10 +1306,12 @@ function compacting_route_pairs(frm) {
 		add_pair(frappe.yrp.attribute_value(row.finished_colour) || "", frappe.yrp.attribute_value(row.finished_dia) || "");
 	});
 	if (!pairs.length) {
+		const colour_attribute = essdee_yrp.get_colour_attribute();
+		const dia_attribute = essdee_yrp.get_dia_attribute();
 		const mappings = frm.doc.fabric_value_mappings || [];
 		const introduced_dias = [...new Set(
 			mappings
-				.filter((row) => row.attribute === "Dia" && row.role === "Introduce")
+				.filter((row) => row.attribute === dia_attribute && row.role === "Introduce")
 				.map((row) => row.to_value)
 				.filter(Boolean),
 		)];
@@ -1322,12 +1324,12 @@ function compacting_route_pairs(frm) {
 		groups.forEach((rows) => {
 			const colour_entry = rows.find(
 				(row) =>
-					row.attribute === "Colour" &&
+					row.attribute === colour_attribute &&
 					["Change", "Introduce"].includes(row.role),
 			);
 			const dia_entry = rows.find(
 				(row) =>
-					row.attribute === "Dia" &&
+					row.attribute === dia_attribute &&
 					["Change", "Pin", "Introduce"].includes(row.role),
 			);
 			const colour = colour_entry?.to_value || colour_entry?.from_value || "";
@@ -1517,7 +1519,7 @@ function fill_selected_compacting_dia(frm) {
 				reqd: 1,
 				get_query: () => ({
 					query: "yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values",
-					params: { attribute: "Dia" },
+					params: { attribute: essdee_yrp.get_dia_attribute() },
 				}),
 			},
 		],
@@ -1549,24 +1551,24 @@ const FABRIC_SWAP_WIDGETS = {
 		html_field: "dyeing_colour_matrix_html",
 		checkbox_field: "dia_wise_colour_change",
 		table_field: "dyeing_colour_details",
-		pin_field: "dia", pin_attribute: "Dia", pin_label: "Dia",
+		pin_field: "dia", get pin_attribute() { return essdee_yrp.get_dia_attribute(); }, pin_label: "Dia",
 		from_field: "from_colour", to_field: "to_colour",
-		value_attribute: "Colour", value_label: "Colour",
+		get value_attribute() { return essdee_yrp.get_colour_attribute(); }, value_label: "Colour",
 	},
 	compacting: {
 		html_field: "compacting_dia_matrix_html",
 		checkbox_field: "colour_wise_dia_change",
 		table_field: "compacting_dia_details",
-		pin_field: "colour", pin_attribute: "Colour", pin_label: "Colour",
+		pin_field: "colour", get pin_attribute() { return essdee_yrp.get_colour_attribute(); }, pin_label: "Colour",
 		from_field: "from_dia", to_field: "to_dia",
-		value_attribute: "Dia", value_label: "Dia",
+		get value_attribute() { return essdee_yrp.get_dia_attribute(); }, value_label: "Dia",
 	},
 };
 
 frappe.ui.form.on("YRP Item Production Detail", {
 	setup(frm) {
-		frm.set_query("dia", "dyeing_colour_details", () => ({ filters: { attribute_name: "Dia" } }));
-		frm.set_query("colour", "compacting_dia_details", () => ({ filters: { attribute_name: "Colour" } }));
+		frm.set_query("dia", "dyeing_colour_details", () => ({ filters: { attribute_name: essdee_yrp.get_dia_attribute() } }));
+		frm.set_query("colour", "compacting_dia_details", () => ({ filters: { attribute_name: essdee_yrp.get_colour_attribute() } }));
 	},
 	refresh(frm) {
 		frm.trigger("render_fabric_swap_widgets");

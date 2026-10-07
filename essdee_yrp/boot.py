@@ -1,13 +1,22 @@
-"""Read-only Desk boot compatibility for the host application."""
+"""Read-only Desk boot data for the host application."""
 
 import json
 
+import frappe
 from frappe.core.doctype.session_default_settings.session_default_settings import (
 	get_session_default_values,
 )
 
 
 def boot_session(bootinfo):
+	set_session_defaults(bootinfo)
+	bootinfo["essdee_yrp_ipd_attributes"] = {
+		"colour": frappe.db.get_single_value("SD YRP IPD Settings", "default_packing_attribute"),
+		"dia": frappe.db.get_single_value("SD YRP IPD Settings", "default_dia_attribute"),
+	}
+
+
+def set_session_defaults(bootinfo):
 	"""Provide real user defaults before Frappe's sidebar evaluates its menu.
 
 	The toolbar fetches these asynchronously too, but SidebarHeader can run

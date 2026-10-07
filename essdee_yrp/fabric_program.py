@@ -23,7 +23,10 @@ from frappe.utils import escape_html, flt
 from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
 
-from essdee_yrp.fabric_ipd import FABRIC_COLOUR_ATTRIBUTE, FABRIC_DIA_ATTRIBUTE
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import (
+	get_colour_attribute,
+	get_dia_attribute,
+)
 from essdee_yrp.ipd_validations import get_ipd_attribute_values
 
 
@@ -107,8 +110,8 @@ def _program_row_payload(ipd, row):
 			value.attribute: _attribute_value(value.attribute_value)
 			for value in variant.get("attributes") or []
 		}
-	final_dia = final_attrs.get(FABRIC_DIA_ATTRIBUTE) or _attribute_value(row.dia)
-	final_colour = final_attrs.get(FABRIC_COLOUR_ATTRIBUTE) or _attribute_value(row.get("colour"))
+	final_dia = final_attrs.get(get_dia_attribute()) or _attribute_value(row.dia)
+	final_colour = final_attrs.get(get_colour_attribute()) or _attribute_value(row.get("colour"))
 	route = next(
 		(
 			candidate
@@ -162,10 +165,10 @@ def _final_options(ipd):
 	dias, colours = [], []
 	for combo in final_combos(ipd):
 		attrs = dict(combo)
-		if attrs.get(FABRIC_DIA_ATTRIBUTE):
-			dias.append(attrs[FABRIC_DIA_ATTRIBUTE])
-		if attrs.get(FABRIC_COLOUR_ATTRIBUTE):
-			colours.append(attrs[FABRIC_COLOUR_ATTRIBUTE])
+		if attrs.get(get_dia_attribute()):
+			dias.append(attrs[get_dia_attribute()])
+		if attrs.get(get_colour_attribute()):
+			colours.append(attrs[get_colour_attribute()])
 	return {
 		"dias": sorted(set(dias)),
 		"colours": sorted(set(colours)),
@@ -205,7 +208,7 @@ def _ledger_steps(ipd, cloth_item, ledger_rows):
 def _ipd_dias(ipd):
 	dias = [_attribute_value(r.dia) for r in ipd.get("knitting_dia_details") or [] if _attribute_value(r.dia)]
 	if not dias:
-		dias = get_ipd_attribute_values(ipd, FABRIC_DIA_ATTRIBUTE)
+		dias = get_ipd_attribute_values(ipd, get_dia_attribute())
 	return list(dict.fromkeys(dias))
 
 
@@ -216,7 +219,7 @@ def _ipd_target_colours(ipd):
 		if _attribute_value(r.to_colour)
 	]
 	if not colours:
-		colours = get_ipd_attribute_values(ipd, FABRIC_COLOUR_ATTRIBUTE)
+		colours = get_ipd_attribute_values(ipd, get_colour_attribute())
 	return list(dict.fromkeys(colours))
 
 
@@ -246,7 +249,7 @@ def _first_colour_change_rows(ipd):
 		for mapping in process_row.get("value_mappings") or []:
 			grouped.setdefault(mapping.get("mapping_index"), []).append(mapping)
 		has_colour_change = any(
-			mapping.get("role") == "Change" and mapping.get("attribute") == FABRIC_COLOUR_ATTRIBUTE
+			mapping.get("role") == "Change" and mapping.get("attribute") == get_colour_attribute()
 			for mappings in grouped.values()
 			for mapping in mappings
 		)
@@ -259,7 +262,7 @@ def _first_colour_change_rows(ipd):
 				(
 					mapping
 					for mapping in mappings
-					if mapping.get("role") == "Change" and mapping.get("attribute") == FABRIC_COLOUR_ATTRIBUTE
+					if mapping.get("role") == "Change" and mapping.get("attribute") == get_colour_attribute()
 				),
 				None,
 			)
@@ -270,7 +273,7 @@ def _first_colour_change_rows(ipd):
 					mapping.get("from_value")
 					for mapping in mappings
 					if mapping.get("role") == "Pin"
-					and mapping.get("attribute") == FABRIC_DIA_ATTRIBUTE
+					and mapping.get("attribute") == get_dia_attribute()
 					and mapping.get("from_value")
 				),
 				None,
@@ -422,7 +425,7 @@ def _greige_colour_options(ipd):
 	# slices the FULL row list [:dye_pos]. Safe because every step before the first
 	# Colour swap is a Colour no-op in the walk (identity/knitting/dia-swap all pass
 	# Colour through unchanged), so the short slice yields the same seed set.
-	return list(dict.fromkeys(values_entering(ipd, dye_pos, FABRIC_COLOUR_ATTRIBUTE)))
+	return list(dict.fromkeys(values_entering(ipd, dye_pos, get_colour_attribute())))
 
 
 def _first_colour_swap_position(steps):
@@ -430,7 +433,7 @@ def _first_colour_swap_position(steps):
 		if step["shape"] in ("swap", "multi_swap"):
 			attrs = step["attribute"]
 			attrs = attrs if isinstance(attrs, (list, tuple)) else [attrs]
-			if FABRIC_COLOUR_ATTRIBUTE in attrs:
+			if get_colour_attribute() in attrs:
 				return step["position"]
 	return None
 
@@ -509,13 +512,13 @@ def save_fabric_program_details(lot_doc):
 				continue
 			if weight < 0:
 				frappe.throw(_("Fabric program: negative weight for {0} / {1}.").format(cloth, dia))
-			_validate_attribute_value(attr_cache, dia, FABRIC_DIA_ATTRIBUTE)
+			_validate_attribute_value(attr_cache, dia, get_dia_attribute())
 			if not reference_item_variant and colour:
 				from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
 
 				reference_item_variant = get_or_create_variant(
 					cloth,
-					{FABRIC_DIA_ATTRIBUTE: dia, FABRIC_COLOUR_ATTRIBUTE: colour},
+					{get_dia_attribute(): dia, get_colour_attribute(): colour},
 				)
 			key = (cloth, dia, reference_item_variant or "")
 			if key in seen_program:
@@ -545,7 +548,7 @@ def save_fabric_program_details(lot_doc):
 					(
 						_attribute_value(a.attribute_value)
 						for a in ref.get("attributes") or []
-						if a.attribute == FABRIC_COLOUR_ATTRIBUTE
+						if a.attribute == get_colour_attribute()
 					),
 					None,
 				)
@@ -598,18 +601,18 @@ def save_fabric_requirement_details(lot_doc):
 				continue
 			if weight < 0:
 				frappe.throw(_("Requirement: negative weight for {0} / {1}.").format(cloth, dia))
-			_validate_attribute_value(attr_cache, dia, FABRIC_DIA_ATTRIBUTE)
+			_validate_attribute_value(attr_cache, dia, get_dia_attribute())
 			if colour:
-				_validate_attribute_value(attr_cache, colour, FABRIC_COLOUR_ATTRIBUTE)
+				_validate_attribute_value(attr_cache, colour, get_colour_attribute())
 			key = (cloth, dia, colour or "")
 			if key in seen:
 				frappe.throw(
 					_("Requirement: duplicate row {0} / {1} / {2}.").format(cloth, dia, colour or "")
 				)
 			seen.add(key)
-			attrs = {FABRIC_DIA_ATTRIBUTE: dia}
+			attrs = {get_dia_attribute(): dia}
 			if colour:
-				attrs[FABRIC_COLOUR_ATTRIBUTE] = colour
+				attrs[get_colour_attribute()] = colour
 			if reachable and frozenset(attrs.items()) not in reachable:
 				unreachable.append(f"{escape_html(cloth)}: {escape_html(colour or '')} / {escape_html(dia)}")
 				continue

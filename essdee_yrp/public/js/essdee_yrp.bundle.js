@@ -1,6 +1,7 @@
 import "./vue_plugins";
 import "./supplier_notification";
 import "./supplier_whatsapp";
+import "./ipd_attributes";
 import { install_json_formatter } from "./json_format";
 
 frappe.provide("frappe.yrp.work_order");

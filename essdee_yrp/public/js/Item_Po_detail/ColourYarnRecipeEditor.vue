@@ -313,7 +313,7 @@ function mount_controls() {
 			`.cyr-colour-${group.key}`,
 			frappe.yrp.attribute_value(group.colour),
 			"Item Attribute Value",
-			{ attribute_name: "Colour" },
+			{ attribute_name: essdee_yrp.get_colour_attribute() },
 			__("Select finished colour"),
 			(value) => {
 				group.colour = value || "";
@@ -339,7 +339,7 @@ function mount_controls() {
 				`.cyr-yarn-colour-${yarn.key}`,
 				frappe.yrp.attribute_value(yarn.yarn_colour),
 				"Item Attribute Value",
-				{ attribute_name: "Colour" },
+				{ attribute_name: essdee_yrp.get_colour_attribute() },
 				__("Select yarn colour"),
 				(value) => {
 					yarn.yarn_colour = value || "";

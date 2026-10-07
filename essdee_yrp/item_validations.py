@@ -4,6 +4,8 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_colour_attribute
+
 
 def validate(doc, method=None):
 	"""Require a complete reusable yarn recipe whenever Item is a cloth."""
@@ -62,11 +64,12 @@ def _validate_yarn_rows(rows, cloth_item=None):
 				pluck="attribute",
 			)
 		)
-		unsupported = sorted(attributes - {"Colour"})
+		colour_attribute = get_colour_attribute()
+		unsupported = sorted(attributes - {colour_attribute})
 		if unsupported:
 			frappe.throw(
-				_("Row {0}: Yarn Item {1} may only use the Colour variant attribute; remove {2}.").format(
-					row_number, yarn_item, ", ".join(unsupported)
+				_("Row {0}: Yarn Item {1} may only use the {2} variant attribute; remove {3}.").format(
+					row_number, yarn_item, colour_attribute, ", ".join(unsupported)
 				)
 			)
 		seen.add(yarn_item)

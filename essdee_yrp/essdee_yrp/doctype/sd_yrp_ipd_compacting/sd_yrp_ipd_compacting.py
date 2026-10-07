@@ -7,6 +7,8 @@ from frappe import _
 from frappe.model.document import Document
 from yrp.attribute_links import value as _attribute_value
 
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_dia_attribute
+
 COMPACTING_KEY_FIELDS = ("cloth_item", "packing_attribute_value", "input_dia")
 
 
@@ -179,7 +181,7 @@ def _validate_dia_values(rows):
 		return
 	from yrp.yrp.doctype.yrp_item.yrp_item import get_global_attribute_values
 
-	valid = set(get_global_attribute_values("Dia")) & dias
+	valid = set(get_global_attribute_values(get_dia_attribute())) & dias
 	if invalid := sorted(dias - valid):
 		frappe.throw(_("Invalid Dia value(s): {0}.").format(", ".join(invalid)))
 

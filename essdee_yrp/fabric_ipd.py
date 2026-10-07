@@ -4,10 +4,11 @@ import frappe
 from frappe.utils import flt
 from yrp.attribute_links import value as _attribute_value
 
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import (
+	get_colour_attribute,
+	get_dia_attribute,
+)
 from essdee_yrp.ipd_validations import is_cloth_ipd
-
-FABRIC_DIA_ATTRIBUTE = "Dia"
-FABRIC_COLOUR_ATTRIBUTE = "Colour"
 
 # (ipd process-link fieldname, kind)
 FABRIC_PROCESS_FIELDS = (
@@ -21,11 +22,12 @@ FABRIC_PROCESS_FIELDS = (
 # (2026-06-25 design: the Process owns the reusable shape, the IPD supplies
 # the values). conversion -> Process.is_item_conversion; swap -> the attribute
 # in Process.value_change_attributes.
-FABRIC_KIND_SHAPES = {
-	"knitting": {"is_item_conversion": 1},
-	"dyeing": {"swap_attribute": FABRIC_COLOUR_ATTRIBUTE},
-	"compacting": {"swap_attribute": FABRIC_DIA_ATTRIBUTE},
-}
+def get_fabric_kind_shapes():
+	return {
+		"knitting": {"is_item_conversion": 1},
+		"dyeing": {"swap_attribute": get_colour_attribute()},
+		"compacting": {"swap_attribute": get_dia_attribute()},
+	}
 
 
 def get_fabric_process_kind(ipd_doc, process_name):
@@ -133,12 +135,13 @@ def validate_fabric_process_shapes(doc):
 	on its Process master — the master is the reusable template, the IPD only
 	supplies values. Warns (never blocks) so unmaintained masters keep working."""
 	problems = []
+	kind_shapes = get_fabric_kind_shapes()
 	for fieldname, kind in FABRIC_PROCESS_FIELDS:
 		process_name = doc.get(fieldname)
 		if not process_name:
 			continue
 		shape, attribute = get_process_shape(process_name)
-		expected = FABRIC_KIND_SHAPES[kind]
+		expected = kind_shapes[kind]
 		if expected.get("is_item_conversion") and shape != "conversion":
 			problems.append(
 				frappe._("{0}: tick Item Conversion on the Process master (yarn → cloth).").format(
@@ -275,28 +278,28 @@ def ensure_cloth_item_attributes(doc, method=None):
 		return
 	needed = []
 	if doc.get("knitting_process") or doc.get("compacting_process"):
-		needed.append(FABRIC_DIA_ATTRIBUTE)
+		needed.append(get_dia_attribute())
 	if doc.get("dyeing_process"):
-		needed.append(FABRIC_COLOUR_ATTRIBUTE)
+		needed.append(get_colour_attribute())
 	# Dia-wise dyeing rows reference Dia; colour-wise compacting rows reference Colour.
 	if doc.get("dia_wise_colour_change") or any(
 		_attribute_value(row.get("dia")) for row in doc.get("dyeing_colour_details") or []
 	):
-		needed.append(FABRIC_DIA_ATTRIBUTE)
+		needed.append(get_dia_attribute())
 	if doc.get("colour_wise_dia_change") or any(
 		_attribute_value(row.get("colour")) for row in doc.get("compacting_dia_details") or []
 	):
-		needed.append(FABRIC_COLOUR_ATTRIBUTE)
+		needed.append(get_colour_attribute())
 	for process_row in get_fabric_process_rows(doc):
 		for mapping in process_row.get("value_mappings") or []:
-			if mapping.get("attribute") in (FABRIC_DIA_ATTRIBUTE, FABRIC_COLOUR_ATTRIBUTE) and mapping.get(
+			if mapping.get("attribute") in (get_dia_attribute(), get_colour_attribute()) and mapping.get(
 				"role"
 			) in ("Change", "Introduce", "Consume", "Pin"):
 				needed.append(mapping.get("attribute"))
 	if doc.get("colour_yarn_recipes"):
-		needed.append(FABRIC_COLOUR_ATTRIBUTE)
+		needed.append(get_colour_attribute())
 	if doc.get("fabric_routes"):
-		needed.extend((FABRIC_DIA_ATTRIBUTE, FABRIC_COLOUR_ATTRIBUTE))
+		needed.extend((get_dia_attribute(), get_colour_attribute()))
 	have = {row.attribute for row in doc.get("item_attributes") or []}
 	for attribute in dict.fromkeys(needed):
 		if attribute not in have:
@@ -397,8 +400,8 @@ def reconcile_fabric_route_processes(doc):
 	managed_pairs = [
 		(process, attribute)
 		for process, attribute in (
-			(doc.get("dyeing_process"), FABRIC_COLOUR_ATTRIBUTE),
-			(doc.get("compacting_process"), FABRIC_DIA_ATTRIBUTE),
+			(doc.get("dyeing_process"), get_colour_attribute()),
+			(doc.get("compacting_process"), get_dia_attribute()),
 		)
 		if process
 	]
@@ -418,9 +421,7 @@ def reconcile_fabric_route_processes(doc):
 				if not attribute:
 					continue
 				before, after = part["before"], part["after"]
-				pin_attribute = (
-					FABRIC_DIA_ATTRIBUTE if attribute == FABRIC_COLOUR_ATTRIBUTE else FABRIC_COLOUR_ATTRIBUTE
-				)
+				pin_attribute = _pinned_fabric_attribute(attribute)
 				transition = (
 					before.get("attrs", {}).get(attribute),
 					after.get("attrs", {}).get(attribute),
@@ -440,7 +441,7 @@ def reconcile_fabric_route_processes(doc):
 				# A same-Dia route does not need a Compacting declaration. Colour
 				# no-ops are retained because legacy knitting-output readers use the
 				# Dyeing table to identify direct-colour routes.
-				if attribute == FABRIC_DIA_ATTRIBUTE and transition[0] == transition[1]:
+				if attribute == get_dia_attribute() and transition[0] == transition[1]:
 					continue
 				if transition not in resolved[process]:
 					resolved[process].append(transition)
@@ -458,9 +459,7 @@ def reconcile_fabric_route_processes(doc):
 	doc.set("fabric_value_mappings", preserved)
 	for sequence, process in managed_sequences.items():
 		attribute = managed[process]
-		pin_attribute = (
-			FABRIC_DIA_ATTRIBUTE if attribute == FABRIC_COLOUR_ATTRIBUTE else FABRIC_COLOUR_ATTRIBUTE
-		)
+		pin_attribute = _pinned_fabric_attribute(attribute)
 		for mapping_index, (from_value, to_value, pin_value) in enumerate(resolved[process]):
 			doc.append(
 				"fabric_value_mappings",
@@ -505,6 +504,12 @@ def reconcile_fabric_route_processes(doc):
 		)
 
 
+def _pinned_fabric_attribute(changed_attribute):
+	"""The fabric attribute held constant while the other one changes."""
+	colour_attribute = get_colour_attribute()
+	return get_dia_attribute() if changed_attribute == colour_attribute else colour_attribute
+
+
 def _solve_authored_fabric_routes(doc, rows, route, managed):
 	"""Return every equally best first->last path for an exact route.
 
@@ -516,15 +521,15 @@ def _solve_authored_fabric_routes(doc, rows, route, managed):
 	start = {
 		"item": doc.item,
 		"attrs": {
-			FABRIC_DIA_ATTRIBUTE: _attribute_value(route.knitting_output_dia),
-			FABRIC_COLOUR_ATTRIBUTE: _attribute_value(route.knitting_output_colour),
+			get_dia_attribute(): _attribute_value(route.knitting_output_dia),
+			get_colour_attribute(): _attribute_value(route.knitting_output_colour),
 		},
 	}
 	target = {
 		"item": doc.item,
 		"attrs": {
-			FABRIC_DIA_ATTRIBUTE: _attribute_value(route.finished_dia),
-			FABRIC_COLOUR_ATTRIBUTE: _attribute_value(route.finished_colour),
+			get_dia_attribute(): _attribute_value(route.finished_dia),
+			get_colour_attribute(): _attribute_value(route.finished_colour),
 		},
 	}
 	operations = [row for row in rows if not is_cloth_recipe_conversion(doc, row)]
@@ -542,7 +547,7 @@ def _solve_authored_fabric_routes(doc, rows, route, managed):
 				]
 			)
 		)
-		for attribute in (FABRIC_DIA_ATTRIBUTE, FABRIC_COLOUR_ATTRIBUTE)
+		for attribute in (get_dia_attribute(), get_colour_attribute())
 	}
 
 	# state key -> (custom transitions applied, equally-best paths)
@@ -774,10 +779,10 @@ def build_cloth_conversion_rule_mappings(doc, row):
 	if not routes or not doc.get("colour_yarn_recipes"):
 		return None
 
-	unsupported_inputs = set(input_attributes) - {FABRIC_COLOUR_ATTRIBUTE}
+	unsupported_inputs = set(input_attributes) - {get_colour_attribute()}
 	unsupported_outputs = set(output_attributes) - {
-		FABRIC_DIA_ATTRIBUTE,
-		FABRIC_COLOUR_ATTRIBUTE,
+		get_dia_attribute(),
+		get_colour_attribute(),
 	}
 	if unsupported_inputs or unsupported_outputs:
 		unsupported = ", ".join(sorted(unsupported_inputs | unsupported_outputs))
@@ -811,7 +816,7 @@ def build_cloth_conversion_rule_mappings(doc, row):
 				if _attribute_value(recipe.get("yarn_colour"))
 			)
 		)
-		if FABRIC_COLOUR_ATTRIBUTE in input_attributes:
+		if get_colour_attribute() in input_attributes:
 			if not consumed_colours:
 				frappe.throw(
 					frappe._(
@@ -837,11 +842,11 @@ def build_cloth_conversion_rule_mappings(doc, row):
 				)
 
 		input_values = {
-			FABRIC_COLOUR_ATTRIBUTE: (consumed_colours[0] if consumed_colours else None),
+			get_colour_attribute(): (consumed_colours[0] if consumed_colours else None),
 		}
 		output_values = {
-			FABRIC_DIA_ATTRIBUTE: _attribute_value(route.get("knitting_output_dia")),
-			FABRIC_COLOUR_ATTRIBUTE: _attribute_value(route.get("knitting_output_colour")),
+			get_dia_attribute(): _attribute_value(route.get("knitting_output_dia")),
+			get_colour_attribute(): _attribute_value(route.get("knitting_output_colour")),
 		}
 		rule = (
 			tuple((attr, input_values.get(attr)) for attr in input_attributes),
@@ -970,7 +975,7 @@ def synthesize_fabric_processes_from_tabs(doc):
 				frappe._dict(
 					{
 						"mapping_index": idx,
-						"attribute": FABRIC_DIA_ATTRIBUTE,
+						"attribute": get_dia_attribute(),
 						"role": "Introduce",
 						"from_value": None,
 						"to_value": _attribute_value(row.get("dia")),
@@ -997,7 +1002,7 @@ def synthesize_fabric_processes_from_tabs(doc):
 				frappe._dict(
 					{
 						"mapping_index": idx,
-						"attribute": FABRIC_COLOUR_ATTRIBUTE,
+						"attribute": get_colour_attribute(),
 						"role": "Change",
 						"from_value": _attribute_value(row.get("from_colour")),
 						"to_value": _attribute_value(row.get("to_colour")),
@@ -1014,7 +1019,7 @@ def synthesize_fabric_processes_from_tabs(doc):
 				frappe._dict(
 					{
 						"mapping_index": idx,
-						"attribute": FABRIC_DIA_ATTRIBUTE,
+						"attribute": get_dia_attribute(),
 						"role": "Pin",
 						"from_value": dia,
 						"to_value": dia,
@@ -1041,7 +1046,7 @@ def synthesize_fabric_processes_from_tabs(doc):
 				frappe._dict(
 					{
 						"mapping_index": idx,
-						"attribute": FABRIC_DIA_ATTRIBUTE,
+						"attribute": get_dia_attribute(),
 						"role": "Change",
 						"from_value": _attribute_value(row.get("from_dia")),
 						"to_value": _attribute_value(row.get("to_dia")),
@@ -1054,7 +1059,7 @@ def synthesize_fabric_processes_from_tabs(doc):
 				frappe._dict(
 					{
 						"mapping_index": idx,
-						"attribute": FABRIC_COLOUR_ATTRIBUTE,
+						"attribute": get_colour_attribute(),
 						"role": "Pin",
 						"from_value": colour,
 						"to_value": colour,
@@ -1237,8 +1242,8 @@ def _validate_exact_route_reachability(doc):
 	matrix_cache = {}
 	for row in routes:
 		attrs = {
-			FABRIC_DIA_ATTRIBUTE: _attribute_value(row.finished_dia),
-			FABRIC_COLOUR_ATTRIBUTE: _attribute_value(row.finished_colour),
+			get_dia_attribute(): _attribute_value(row.finished_dia),
+			get_colour_attribute(): _attribute_value(row.finished_colour),
 		}
 		reference = get_or_create_variant(doc.item, attrs)
 		_step_plans, unreachable = solve_chain_backward(
@@ -1335,21 +1340,21 @@ def _colour_recipe_conversion_targets(doc):
 	for position, process_row in enumerate(get_fabric_process_rows(doc)):
 		groups = _group_by_mapping_index(_entries(process_row))
 		has_colour_change = any(
-			entry.get("role") == "Change" and entry.get("attribute") == FABRIC_COLOUR_ATTRIBUTE
+			entry.get("role") == "Change" and entry.get("attribute") == get_colour_attribute()
 			for _mapping_index, entries in groups
 			for entry in entries
 		)
 		if not has_colour_change:
 			continue
 
-		entering_dias = values_entering(doc, position, FABRIC_DIA_ATTRIBUTE)
+		entering_dias = values_entering(doc, position, get_dia_attribute())
 		for _mapping_index, entries in groups:
 			colour_change = next(
 				(
 					entry
 					for entry in entries
 					if entry.get("role") == "Change"
-					and entry.get("attribute") == FABRIC_COLOUR_ATTRIBUTE
+					and entry.get("attribute") == get_colour_attribute()
 					and entry.get("to_value")
 				),
 				None,
@@ -1361,7 +1366,7 @@ def _colour_recipe_conversion_targets(doc):
 					entry
 					for entry in entries
 					if entry.get("role") == "Change"
-					and entry.get("attribute") == FABRIC_DIA_ATTRIBUTE
+					and entry.get("attribute") == get_dia_attribute()
 					and entry.get("to_value")
 				),
 				None,
@@ -1371,7 +1376,7 @@ def _colour_recipe_conversion_targets(doc):
 					entry.get("from_value")
 					for entry in entries
 					if entry.get("role") == "Pin"
-					and entry.get("attribute") == FABRIC_DIA_ATTRIBUTE
+					and entry.get("attribute") == get_dia_attribute()
 					and entry.get("from_value")
 				),
 				None,
@@ -1409,7 +1414,7 @@ def _colour_recipe_conversion_targets(doc):
 			for process_row in get_fabric_process_rows(doc)
 			for entry in _entries(process_row)
 			if entry.get("role") == "Introduce"
-			and entry.get("attribute") == FABRIC_DIA_ATTRIBUTE
+			and entry.get("attribute") == get_dia_attribute()
 			and entry.get("to_value")
 		]
 		if not dias:
@@ -1421,7 +1426,7 @@ def _colour_recipe_conversion_targets(doc):
 		if not dias:
 			from essdee_yrp.ipd_validations import get_ipd_attribute_values
 
-			dias = get_ipd_attribute_values(doc, FABRIC_DIA_ATTRIBUTE)
+			dias = get_ipd_attribute_values(doc, get_dia_attribute())
 		colours = [
 			_attribute_value(r.colour)
 			for r in doc.get("colour_yarn_recipes") or []
@@ -1451,8 +1456,8 @@ def build_colour_recipe_conversion_matrices(doc, row, uom):
 		matrix.reference_item_variant = get_or_create_variant(
 			doc.item,
 			{
-				FABRIC_DIA_ATTRIBUTE: final_dia,
-				FABRIC_COLOUR_ATTRIBUTE: colour,
+				get_dia_attribute(): final_dia,
+				get_colour_attribute(): colour,
 			},
 		)
 		matrix.output_item = row.get("output_item") or doc.item
@@ -1462,10 +1467,10 @@ def build_colour_recipe_conversion_matrices(doc, row, uom):
 		input_items = list(dict.fromkeys(yarn.item for yarn in inputs if yarn.item))
 		matrix.input_item = input_items[0] if len(input_items) == 1 else None
 		if any(_attribute_value(yarn.colour) for yarn in inputs):
-			matrix.append("input_attributes", {"attribute": FABRIC_COLOUR_ATTRIBUTE})
-		matrix.append("output_attributes", {"attribute": FABRIC_DIA_ATTRIBUTE})
+			matrix.append("input_attributes", {"attribute": get_colour_attribute()})
+		matrix.append("output_attributes", {"attribute": get_dia_attribute()})
 		if conversion_colour:
-			matrix.append("output_attributes", {"attribute": FABRIC_COLOUR_ATTRIBUTE})
+			matrix.append("output_attributes", {"attribute": get_colour_attribute()})
 		for combo_index, yarn in enumerate(inputs):
 			matrix.append(
 				"combinations",
@@ -1487,7 +1492,7 @@ def build_colour_recipe_conversion_matrices(doc, row, uom):
 						"group_index": 0,
 						"side": "Input",
 						"combo_index": combo_index,
-						"attribute": FABRIC_COLOUR_ATTRIBUTE,
+						"attribute": get_colour_attribute(),
 						"attribute_value": _attribute_value(yarn.colour),
 					},
 				)
@@ -1510,7 +1515,7 @@ def build_colour_recipe_conversion_matrices(doc, row, uom):
 				"group_index": 0,
 				"side": "Output",
 				"combo_index": 0,
-				"attribute": FABRIC_DIA_ATTRIBUTE,
+				"attribute": get_dia_attribute(),
 				"attribute_value": conversion_dia,
 			},
 		)
@@ -1521,7 +1526,7 @@ def build_colour_recipe_conversion_matrices(doc, row, uom):
 					"group_index": 0,
 					"side": "Output",
 					"combo_index": 0,
-					"attribute": FABRIC_COLOUR_ATTRIBUTE,
+					"attribute": get_colour_attribute(),
 					"attribute_value": conversion_colour,
 				},
 			)
@@ -1617,8 +1622,8 @@ def _clone_route_matrix(doc, base_matrix, group, route):
 	matrix.reference_item_variant = get_or_create_variant(
 		doc.item,
 		{
-			FABRIC_DIA_ATTRIBUTE: _attribute_value(route.finished_dia),
-			FABRIC_COLOUR_ATTRIBUTE: _attribute_value(route.finished_colour),
+			get_dia_attribute(): _attribute_value(route.finished_dia),
+			get_colour_attribute(): _attribute_value(route.finished_colour),
 		},
 	)
 	for attribute in dict.fromkeys(attribute for combo in inputs for attribute in (combo.get("attrs") or {})):

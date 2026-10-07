@@ -4,7 +4,7 @@
 frappe.ui.form.on("SD YRP IPD Settings", {
 	setup(frm) {
 		frm.set_query("default_knitting_output_colour", () => ({
-			filters: { attribute_name: "Colour" },
+			filters: { attribute_name: frm.doc.default_packing_attribute },
 		}));
 	},
 });

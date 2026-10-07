@@ -16,7 +16,7 @@ function detail(qty, pending, allowed, reference) {
 function entry({ dia = "30", receivedType = "Accepted", qty = 0, pending = 0, allowed = 0, reference }) {
 	return {
 		name: "KNIT-CLOTH",
-		attributes: { Colour: "Navy", Dia: dia },
+		attributes: { Colour: "Navy", Width: dia },
 		dimensions: { received_type: receivedType },
 		set_combination: {},
 		values: { default: detail(qty, pending, allowed, reference) },
@@ -29,7 +29,7 @@ function loadGrnFormHelpers() {
 		__: (value) => value,
 		flt: (value) => Number(value || 0),
 		format_number: String,
-		essdee_yrp: {},
+		essdee_yrp: { get_dia_attribute: () => "Width" },
 		frappe: { ui: { form: { on() {} } } },
 	};
 	const sourcePath = path.join(__dirname, "goods_received_note.js");
@@ -72,7 +72,7 @@ function loadGrnFormHelpers() {
 		const source = { group, entry: planned, valueKey: "default", reference: "WOR-1" };
 		const actual = grnHelpers.append_actual_dia_row(source, "32", 6);
 		assert.equal(group.items.length, 2, "Actual Dia creates a physical split row");
-		assert.equal(actual.attributes.Dia, "32");
+		assert.equal(actual.attributes.Width, "32");
 		assert.equal(actual.values.default.qty, 6);
 		assert.equal(actual.values.default.ref_docname, "WOR-1", "exact receivable lineage is retained");
 		assert.equal(actual.row_index, undefined);

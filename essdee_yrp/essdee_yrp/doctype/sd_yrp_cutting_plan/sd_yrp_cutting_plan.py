@@ -17,6 +17,7 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_layshe
 	_save_laysheet_terminal_transition,
 	update_cutting_plan,
 )
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_dia_attribute
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import fetch_order_item_details
 from essdee_yrp.fabric_requirement import calculate_cloth, get_cloth_combination, get_stitching_combination
 
@@ -245,7 +246,7 @@ class SDYRPCuttingPlan(Document):
 						cloth_detail[c1["cloth_type"]],
 						{
 							ipd_doc.packing_attribute: _attribute_value(c1["colour"]),
-							"Dia": _attribute_value(c1["dia"]),
+							get_dia_attribute(): _attribute_value(c1["dia"]),
 						},
 					)
 					if variant not in cloth_details[colour]:
@@ -553,7 +554,7 @@ def _build_cloth_requirement_rows(cutting_plan_doc):
 
 	required_cloth_details = []
 	for k in cloth_details:
-		attributes = {ipd_doc.packing_attribute: k[1], "Dia": k[2]}
+		attributes = {ipd_doc.packing_attribute: k[1], get_dia_attribute(): k[2]}
 		item_name = cloth_detail[k[0]]
 		cloth_name = get_or_create_variant(item_name, attributes)
 		required_cloth_details.append(
@@ -578,7 +579,7 @@ def _build_cloth_requirement_rows(cutting_plan_doc):
 
 	required_accessory_details = []
 	for k in accessory_detail:
-		attributes = {ipd_doc.packing_attribute: k[1], "Dia": k[2]}
+		attributes = {ipd_doc.packing_attribute: k[1], get_dia_attribute(): k[2]}
 		item_name = cloth_detail[k[0]]
 		cloth_name = get_or_create_variant(item_name, attributes)
 		required_accessory_details.append(

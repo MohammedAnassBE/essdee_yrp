@@ -19,10 +19,12 @@ from frappe import _
 from frappe.utils import cint, cstr, flt
 from yrp.attribute_links import value as _attribute_value
 
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import (
+	get_colour_attribute,
+	get_dia_attribute,
+)
 from essdee_yrp.fabric_chain import get_fabric_step, get_fabric_steps
 from essdee_yrp.fabric_ipd import (
-	FABRIC_COLOUR_ATTRIBUTE,
-	FABRIC_DIA_ATTRIBUTE,
 	get_fabric_process_rows,
 	get_identity_process_row,
 	get_yarn_ratio_inputs,
@@ -83,7 +85,7 @@ def _step_kind(ipd, step):
 	if step["shape"] in ("swap", "multi_swap"):
 		attrs = step["attribute"]
 		attrs = attrs if isinstance(attrs, (list, tuple)) else [attrs]
-		return "dyeing" if FABRIC_COLOUR_ATTRIBUTE in attrs else "compacting"
+		return "dyeing" if get_colour_attribute() in attrs else "compacting"
 	if step["shape"] == "identity":
 		return "identity"
 	return None
@@ -606,7 +608,7 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 			# One stale IPD must not block the other fabrics' calculation.
 			warnings.append(str(e))
 			continue
-		has_colour = _item_has_attribute(fabric.cloth_item, FABRIC_COLOUR_ATTRIBUTE)
+		has_colour = _item_has_attribute(fabric.cloth_item, get_colour_attribute())
 		if step:
 			_add_planning_data(qty_rows, row_kind, lot, wo, fabric, ipd, step)
 			from essdee_yrp.fabric_source import (
@@ -647,13 +649,13 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 		if reference_routed:
 			for qty_row in qty_rows:
 				target_attrs = qty_row.get("target_attrs") or {}
-				target_colour = target_attrs.get(FABRIC_COLOUR_ATTRIBUTE)
-				target_dia = target_attrs.get(FABRIC_DIA_ATTRIBUTE)
+				target_colour = target_attrs.get(get_colour_attribute())
+				target_dia = target_attrs.get(get_dia_attribute())
 				# Knitting output colour is route-specific: the first Colour
 				# change's input for this final (Colour, Dia).  No colour-changing
 				# process means the helper returns the target colour itself.
 				qty_row["knit_colour"] = get_knitting_output_colour(ipd, target_colour, target_dia)
-				qty_row["knit_dia"] = (qty_row.get("out_attrs") or {}).get(FABRIC_DIA_ATTRIBUTE)
+				qty_row["knit_dia"] = (qty_row.get("out_attrs") or {}).get(get_dia_attribute())
 		if row_kind == "knitting" and manual_knitting_process:
 			_hydrate_knitting_execution_defaults(qty_rows, wo)
 		# Knitting yarn + cloth-per-kg-yarn come from the matched generic row (its
@@ -688,7 +690,7 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 				if (row_kind == "knitting" and has_colour)
 				else [],
 				"colour_mapping": (
-					get_attribute_mapping(ipd, FABRIC_COLOUR_ATTRIBUTE)
+					get_attribute_mapping(ipd, get_colour_attribute())
 					if (row_kind == "knitting" and has_colour)
 					else None
 				),
@@ -731,7 +733,7 @@ def _add_planning_data(qty_rows, kind, lot, wo, fabric, ipd, step):
 		}
 		ordered = get_produced_by_reference(lot.name, wo.process_name, cloth, exclude_wo=wo.name)
 		for qr in qty_rows:
-			dia = (qr.get("out_attrs") or {}).get(FABRIC_DIA_ATTRIBUTE)
+			dia = (qr.get("out_attrs") or {}).get(get_dia_attribute())
 			reference = qr.get("reference_item_variant") or ""
 			row = program_rows.get((dia, reference))
 			if not row and not reference:
@@ -788,7 +790,7 @@ def _add_planning_data(qty_rows, kind, lot, wo, fabric, ipd, step):
 		planned = planned_cache[reference_filter]
 		ordered_out = ordered_cache[reference_filter]
 
-		out_key = (out_attrs.get(FABRIC_DIA_ATTRIBUTE) or "", out_attrs.get(FABRIC_COLOUR_ATTRIBUTE) or "")
+		out_key = (out_attrs.get(get_dia_attribute()) or "", out_attrs.get(get_colour_attribute()) or "")
 		plan = flt(planned.get(out_key))
 		already = flt(ordered_out.get((out_key[0] or None, out_key[1] or None)) or ordered_out.get(out_key))
 		is_alternative = (
@@ -850,8 +852,8 @@ def _matrix_qty_rows(ipd, process_name, kind):
 			label = _group_label(kind, in_attrs, out_attrs)
 			section, row_label = _section_and_row_label(in_attrs, out_attrs, label)
 			if kind == "knitting" and reference_attrs:
-				section = reference_attrs.get(FABRIC_COLOUR_ATTRIBUTE)
-				row_label = reference_attrs.get(FABRIC_DIA_ATTRIBUTE) or label
+				section = reference_attrs.get(get_colour_attribute())
+				row_label = reference_attrs.get(get_dia_attribute()) or label
 				label = " · ".join(value for value in (section, row_label) if value)
 			inputs = group.get("input") or []
 			input_total = sum(flt(row.get("qty")) for row in inputs) or 1
@@ -1054,7 +1056,7 @@ def _identity_qty_rows(ipd, treated_item, identity_row=None):
 				"({2}) cannot be derived from this IPD."
 			).format(ipd.name, treated_item, ", ".join(declared))
 		)
-	unsupported = [a for a in declared if a not in (FABRIC_DIA_ATTRIBUTE, FABRIC_COLOUR_ATTRIBUTE)]
+	unsupported = [a for a in declared if a not in (get_dia_attribute(), get_colour_attribute())]
 	if unsupported:
 		frappe.throw(
 			_(
@@ -1065,12 +1067,12 @@ def _identity_qty_rows(ipd, treated_item, identity_row=None):
 
 	combo_rows = _identity_combos_from_prev_step(ipd, treated_item, identity_row, declared)
 	if combo_rows is None:
-		has_dia = FABRIC_DIA_ATTRIBUTE in declared
-		has_colour = FABRIC_COLOUR_ATTRIBUTE in declared
+		has_dia = get_dia_attribute() in declared
+		has_colour = get_colour_attribute() in declared
 		# UNION derivation: without a chain position, offer every dia/colour the
 		# IPD knows (extra rows are harmless blanks; missing rows are a hard stop).
-		dias = _identity_attr_values(ipd, FABRIC_DIA_ATTRIBUTE) if has_dia else []
-		colours = _identity_attr_values(ipd, FABRIC_COLOUR_ATTRIBUTE) if has_colour else []
+		dias = _identity_attr_values(ipd, get_dia_attribute()) if has_dia else []
+		colours = _identity_attr_values(ipd, get_colour_attribute()) if has_colour else []
 		if (has_dia and not dias) or (has_colour and not colours):
 			frappe.throw(
 				_(
@@ -1078,17 +1080,17 @@ def _identity_qty_rows(ipd, treated_item, identity_row=None):
 					"the IPD's attribute mapping values."
 				).format(
 					ipd.name,
-					FABRIC_DIA_ATTRIBUTE if (has_dia and not dias) else FABRIC_COLOUR_ATTRIBUTE,
+					get_dia_attribute() if (has_dia and not dias) else get_colour_attribute(),
 					treated_item,
 				)
 			)
 
 		if dias and colours:
-			combos = [{FABRIC_DIA_ATTRIBUTE: d, FABRIC_COLOUR_ATTRIBUTE: c} for d in dias for c in colours]
+			combos = [{get_dia_attribute(): d, get_colour_attribute(): c} for d in dias for c in colours]
 		elif dias:
-			combos = [{FABRIC_DIA_ATTRIBUTE: d} for d in dias]
+			combos = [{get_dia_attribute(): d} for d in dias]
 		elif colours:
-			combos = [{FABRIC_COLOUR_ATTRIBUTE: c} for c in colours]
+			combos = [{get_colour_attribute(): c} for c in colours]
 		else:
 			combos = [{}]
 		combo_rows = [{"attrs": combo, "reference_item_variant": None} for combo in combos]
@@ -1096,8 +1098,8 @@ def _identity_qty_rows(ipd, treated_item, identity_row=None):
 	# Floor-friendly order: colour groups together, dias numerically inside.
 	combo_rows.sort(
 		key=lambda row: (
-			(row.get("attrs") or {}).get(FABRIC_COLOUR_ATTRIBUTE) or "",
-			_dia_sort_key((row.get("attrs") or {}).get(FABRIC_DIA_ATTRIBUTE)),
+			(row.get("attrs") or {}).get(get_colour_attribute()) or "",
+			_dia_sort_key((row.get("attrs") or {}).get(get_dia_attribute())),
 			row.get("reference_item_variant") or "",
 		)
 	)
@@ -1110,11 +1112,11 @@ def _identity_qty_rows(ipd, treated_item, identity_row=None):
 		label = " · ".join(v or "?" for v in combo.values()) or treated_item
 		section, row_label = _section_and_row_label(combo, combo, label)
 		if reference and target_attrs != combo:
-			physical_colour = combo.get(FABRIC_COLOUR_ATTRIBUTE) or "?"
-			target_colour = target_attrs.get(FABRIC_COLOUR_ATTRIBUTE) or "?"
+			physical_colour = combo.get(get_colour_attribute()) or "?"
+			target_colour = target_attrs.get(get_colour_attribute()) or "?"
 			section = _("{0} · for finished {1}").format(physical_colour, target_colour)
-			physical_dia = combo.get(FABRIC_DIA_ATTRIBUTE)
-			target_dia = target_attrs.get(FABRIC_DIA_ATTRIBUTE)
+			physical_dia = combo.get(get_dia_attribute())
+			target_dia = target_attrs.get(get_dia_attribute())
 			if physical_dia and target_dia and physical_dia != target_dia:
 				row_label = _("{0} · finished {1}").format(physical_dia, target_dia)
 		rows.append(
@@ -1176,8 +1178,8 @@ def _identity_combos_from_prev_step(ipd, treated_item, identity_row, declared):
 					reference = _resolve_variant(
 						ipd.item,
 						{
-							FABRIC_DIA_ATTRIBUTE: _attribute_value(route.finished_dia),
-							FABRIC_COLOUR_ATTRIBUTE: _attribute_value(route.finished_colour),
+							get_dia_attribute(): _attribute_value(route.finished_dia),
+							get_colour_attribute(): _attribute_value(route.finished_colour),
 						},
 					)
 					key = (reference, frozenset(attrs.items()))
@@ -1245,7 +1247,7 @@ def _ordered_combo(attrs):
 	"""Stable display order for a variant combo: Dia, then Colour, then the rest
 	alphabetically — keeps identity labels ("14 Dia · Black") byte-identical to
 	the pre-fix union derivation."""
-	rank = {FABRIC_DIA_ATTRIBUTE: 0, FABRIC_COLOUR_ATTRIBUTE: 1}
+	rank = {get_dia_attribute(): 0, get_colour_attribute(): 1}
 	return {a: attrs[a] for a in sorted(attrs, key=lambda a: (rank.get(a, 2), a))}
 
 
@@ -1272,7 +1274,7 @@ def _identity_attr_values(ipd, attribute):
 
 def _group_label(kind, in_attrs, out_attrs):
 	if kind == "knitting":
-		return out_attrs.get(FABRIC_DIA_ATTRIBUTE) or "?"
+		return out_attrs.get(get_dia_attribute()) or "?"
 	if kind == "conversion":
 		# One rule per group: consumed combo -> produced combo (the two sides carry
 		# different attribute vocabularies — Consume/Introduce). A pair identical
@@ -1299,11 +1301,11 @@ def _group_label(kind, in_attrs, out_attrs):
 			+ " · ".join(out_attrs.get(a) or "?" for a in sorted(out_attrs))
 		)
 	if kind == "dyeing":
-		dia = out_attrs.get(FABRIC_DIA_ATTRIBUTE)
-		swap = f"{in_attrs.get(FABRIC_COLOUR_ATTRIBUTE)} → {out_attrs.get(FABRIC_COLOUR_ATTRIBUTE)}"
+		dia = out_attrs.get(get_dia_attribute())
+		swap = f"{in_attrs.get(get_colour_attribute())} → {out_attrs.get(get_colour_attribute())}"
 		return f"{dia}: {swap}" if dia else swap
-	colour = out_attrs.get(FABRIC_COLOUR_ATTRIBUTE)
-	swap = f"{in_attrs.get(FABRIC_DIA_ATTRIBUTE)} → {out_attrs.get(FABRIC_DIA_ATTRIBUTE)}"
+	colour = out_attrs.get(get_colour_attribute())
+	swap = f"{in_attrs.get(get_dia_attribute())} → {out_attrs.get(get_dia_attribute())}"
 	return f"{colour}: {swap}" if colour else swap
 
 
@@ -1330,11 +1332,11 @@ def _section_and_row_label(in_attrs, out_attrs, label):
 	dicts — no process names involved."""
 	names = set(in_attrs) | set(out_attrs)
 	section = (
-		_sided_label(in_attrs, out_attrs, [FABRIC_COLOUR_ATTRIBUTE])
-		if FABRIC_COLOUR_ATTRIBUTE in names
+		_sided_label(in_attrs, out_attrs, [get_colour_attribute()])
+		if get_colour_attribute() in names
 		else None
 	)
-	row_label = _sided_label(in_attrs, out_attrs, names - {FABRIC_COLOUR_ATTRIBUTE})
+	row_label = _sided_label(in_attrs, out_attrs, names - {get_colour_attribute()})
 	return section, row_label or label
 
 
@@ -1358,12 +1360,12 @@ def _knit_colour_options(ipd):
 	]
 	if recipe_colours:
 		return list(dict.fromkeys(recipe_colours))
-	values = get_ipd_attribute_values(ipd, FABRIC_COLOUR_ATTRIBUTE)
+	values = get_ipd_attribute_values(ipd, get_colour_attribute())
 	if values:
 		return values
 	from yrp.yrp.doctype.yrp_item.yrp_item import get_global_attribute_values
 
-	return get_global_attribute_values(FABRIC_COLOUR_ATTRIBUTE)
+	return get_global_attribute_values(get_colour_attribute())
 
 
 @frappe.whitelist()
@@ -1740,8 +1742,9 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 				parameters = None
 				source = source_demands.get(ipd.name)
 				if source and source.get("selection_mode") == "exact":
-					from essdee_yrp.fabric_source import consume_source_bucket
 					from yrp.stock.utils import get_conversion_factor
+
+					from essdee_yrp.fabric_source import consume_source_bucket
 
 					line_reference = line.get("reference_item_variant") or reference
 					source_bucket, execution_key = _exact_source_bucket(
@@ -1829,7 +1832,7 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 			)
 			continue
 
-		has_colour = _item_has_attribute(fabric.cloth_item, FABRIC_COLOUR_ATTRIBUTE)
+		has_colour = _item_has_attribute(fabric.cloth_item, get_colour_attribute())
 		colour = _attribute_value(entry.get("colour"))
 		valid_colours = None
 		if kind == "knitting":
@@ -1868,8 +1871,8 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 					}
 					expected_colour = get_knitting_output_colour(
 						ipd,
-						target_attrs.get(FABRIC_COLOUR_ATTRIBUTE),
-						target_attrs.get(FABRIC_DIA_ATTRIBUTE),
+						target_attrs.get(get_colour_attribute()),
+						target_attrs.get(get_dia_attribute()),
 					)
 					if line_colour and line_colour != expected_colour:
 						frappe.throw(
@@ -1877,8 +1880,8 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 								"Knitting route {0} / {1} must receive colour {2}, "
 								"not {3}. Reopen the Calculate popup."
 							).format(
-								target_attrs.get(FABRIC_COLOUR_ATTRIBUTE),
-								target_attrs.get(FABRIC_DIA_ATTRIBUTE),
+								target_attrs.get(get_colour_attribute()),
+								target_attrs.get(get_dia_attribute()),
 								expected_colour,
 								line_colour,
 							)
@@ -1900,7 +1903,7 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 			scale = qty / out_qty
 			out_attrs = dict(out_combo.get("attrs") or {})
 			if kind == "knitting" and line_colour and has_colour:
-				out_attrs[FABRIC_COLOUR_ATTRIBUTE] = line_colour
+				out_attrs[get_colour_attribute()] = line_colour
 			recv_item = matrix.output_item or fabric.cloth_item
 			# Route ownership follows the planned matrix/Cloth Program Item. Exact
 			# source projection may replace Dia in ``out_attrs`` with the physical

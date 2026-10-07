@@ -867,9 +867,10 @@ function warn_balance_overshoot(ctx, manifest, values) {
 		const fields = manifest.filter((m) => m.row === i);
 		if (row.kind === "knitting" || row.kind === "dyeing") {
 			const per_dia = {};
+			const dia_attribute = essdee_yrp.get_dia_attribute();
 			const limit_label = row.kind === "knitting" ? __("balance") : __("previous stage available");
 			fields.forEach((m) => {
-				const dia = m.reference_item_variant || (m.out_attrs || {}).Dia || m.label;
+				const dia = m.reference_item_variant || (m.out_attrs || {})[dia_attribute] || m.label;
 				const limit = row.kind === "knitting" ? m.balance : m.available;
 				if (!per_dia[dia]) per_dia[dia] = { sum: 0, limit };
 				per_dia[dia].sum += flt(values[m.fieldname]) || 0;
@@ -992,7 +993,7 @@ function render_fabric_dialog(frm, ctx) {
 							}
 							: {
 								query: "yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values",
-								params: { attribute: "Colour" },
+								params: { attribute: essdee_yrp.get_colour_attribute() },
 							};
 					},
 				});

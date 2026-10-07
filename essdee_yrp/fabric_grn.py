@@ -16,8 +16,8 @@ from frappe.utils import cint, flt
 from yrp.attribute_links import value as _attribute_value
 from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_dia_attribute
 from essdee_yrp.fabric_chain import get_fabric_step
-from essdee_yrp.fabric_ipd import FABRIC_DIA_ATTRIBUTE
 from essdee_yrp.fabric_reference import (
 	get_reference_allocations,
 	scale_reference_allocations,
@@ -43,7 +43,7 @@ def get_actual_dia_context(work_order):
 	)
 	return {
 		"enabled": enabled,
-		"attribute": FABRIC_DIA_ATTRIBUTE,
+		"attribute": get_dia_attribute(),
 		"dia_options": _configured_dia_values() if enabled else [],
 	}
 
@@ -51,7 +51,7 @@ def get_actual_dia_context(work_order):
 def _configured_dia_values():
 	return frappe.get_all(
 		"Item Attribute Value",
-		filters={"parent": FABRIC_DIA_ATTRIBUTE},
+		filters={"parent": get_dia_attribute()},
 		order_by="idx asc, name asc",
 		pluck="attribute_value",
 	)
@@ -124,10 +124,10 @@ def validate_actual_dia_rows(grn):
 			)
 		expected_attrs = _variant_attrs(source.item_variant)
 		actual_attrs = _variant_attrs(row.item_variant)
-		if not actual_attrs.get(FABRIC_DIA_ATTRIBUTE):
+		if not actual_attrs.get(get_dia_attribute()):
 			frappe.throw(_("Row {0}: Actual Dia is required.").format(row.idx))
 		for attribute in set(expected_attrs) | set(actual_attrs):
-			if attribute == FABRIC_DIA_ATTRIBUTE:
+			if attribute == get_dia_attribute():
 				continue
 			if expected_attrs.get(attribute) != actual_attrs.get(attribute):
 				frappe.throw(
@@ -137,13 +137,13 @@ def validate_actual_dia_rows(grn):
 				)
 		if valid_dias is None:
 			valid_dias = set(_configured_dia_values())
-		if actual_attrs[FABRIC_DIA_ATTRIBUTE] not in valid_dias:
+		if actual_attrs[get_dia_attribute()] not in valid_dias:
 			frappe.throw(
 				_("Row {0}: {1} is not a valid Dia value.").format(
-					row.idx, actual_attrs[FABRIC_DIA_ATTRIBUTE]
+					row.idx, actual_attrs[get_dia_attribute()]
 				)
 			)
-		if not expected_attrs.get(FABRIC_DIA_ATTRIBUTE):
+		if not expected_attrs.get(get_dia_attribute()):
 			frappe.throw(_("Row {0}: planned Item has no Dia.").format(row.idx))
 	if actual_dia_enabled:
 		_normalize_actual_dia_row_indexes(grn, receivables)

@@ -12,6 +12,11 @@ from yrp.yrp.doctype.yrp_item_dependent_attribute_mapping.yrp_item_dependent_att
 	get_dependent_attribute_details,
 )
 
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import (
+	get_colour_attribute,
+	get_dia_attribute,
+)
+
 
 def is_cloth_ipd(doc):
 	"""Cloth-item IPDs skip every garment validation/mutation in this module."""
@@ -226,15 +231,17 @@ def validate_colour_yarn_recipes(doc):
 		frappe.throw("Colour-wise Yarn Recipes belong only to generated cloth production details.")
 	groups = {}
 	seen = set()
+	colour_attribute = get_colour_attribute()
 	for row in rows:
 		if row.cloth_item != doc.item:
 			frappe.throw(
 				f"Row {row.idx} of Colour-wise Yarn Recipes: Cloth Item must be "
 				f"the cloth IPD item ({doc.item})."
 			)
-		if not has_attribute_value("Colour", _attribute_value(row.colour)):
+		if not has_attribute_value(colour_attribute, _attribute_value(row.colour)):
 			frappe.throw(
-				f"Row {row.idx} of Colour-wise Yarn Recipes: {_attribute_value(row.colour)} is not a Colour value."
+				f"Row {row.idx} of Colour-wise Yarn Recipes: {_attribute_value(row.colour)} "
+				f"is not a {colour_attribute} value."
 			)
 		key = (row.cloth_item, _attribute_value(row.colour))
 		row_key = (*key, row.yarn_item)
@@ -257,14 +264,14 @@ def validate_colour_yarn_recipes(doc):
 				pluck="attribute",
 			)
 		)
-		unsupported = sorted(attributes - {"Colour"})
+		unsupported = sorted(attributes - {colour_attribute})
 		if unsupported:
 			frappe.throw(
 				f"Row {row.idx} of Colour-wise Yarn Recipes: Yarn Item "
-				f"{row.yarn_item} may only use the Colour variant attribute; "
+				f"{row.yarn_item} may only use the {colour_attribute} variant attribute; "
 				f"remove {', '.join(unsupported)}."
 			)
-		has_colour_attribute = "Colour" in attributes
+		has_colour_attribute = colour_attribute in attributes
 		if has_colour_attribute and not _attribute_value(row.get("yarn_colour")):
 			frappe.throw(
 				f"Row {row.idx} of Colour-wise Yarn Recipes: Yarn Item "
@@ -274,12 +281,12 @@ def validate_colour_yarn_recipes(doc):
 			if not has_colour_attribute:
 				frappe.throw(
 					f"Row {row.idx} of Colour-wise Yarn Recipes: Yarn Item "
-					f"{row.yarn_item} does not define the Colour attribute."
+					f"{row.yarn_item} does not define the {colour_attribute} attribute."
 				)
-			if not has_attribute_value("Colour", _attribute_value(row.yarn_colour)):
+			if not has_attribute_value(colour_attribute, _attribute_value(row.yarn_colour)):
 				frappe.throw(
 					f"Row {row.idx} of Colour-wise Yarn Recipes: "
-					f"{_attribute_value(row.yarn_colour)} is not a Colour value."
+					f"{_attribute_value(row.yarn_colour)} is not a {colour_attribute} value."
 				)
 		groups[key] = groups.get(key, 0) + ratio
 	for (cloth, colour), total in groups.items():
@@ -308,15 +315,11 @@ def sync_cloth_attribute_mapping_values(doc):
 	Colour used by that definition; it must not remain as two empty mapping
 	shells after automatic IPD creation.
 	"""
-	from essdee_yrp.fabric_ipd import (
-		FABRIC_COLOUR_ATTRIBUTE,
-		FABRIC_DIA_ATTRIBUTE,
-		get_fabric_process_rows,
-	)
+	from essdee_yrp.fabric_ipd import get_fabric_process_rows
 
 	values = {
-		FABRIC_DIA_ATTRIBUTE: [],
-		FABRIC_COLOUR_ATTRIBUTE: [],
+		get_dia_attribute(): [],
+		get_colour_attribute(): [],
 	}
 
 	def add(attribute, value):
@@ -324,28 +327,28 @@ def sync_cloth_attribute_mapping_values(doc):
 			values[attribute].append(value)
 
 	for row in doc.get("fabric_routes") or []:
-		add(FABRIC_DIA_ATTRIBUTE, _attribute_value(row.get("finished_dia")))
-		add(FABRIC_DIA_ATTRIBUTE, _attribute_value(row.get("knitting_output_dia")))
-		add(FABRIC_COLOUR_ATTRIBUTE, _attribute_value(row.get("finished_colour")))
-		add(FABRIC_COLOUR_ATTRIBUTE, _attribute_value(row.get("knitting_output_colour")))
+		add(get_dia_attribute(), _attribute_value(row.get("finished_dia")))
+		add(get_dia_attribute(), _attribute_value(row.get("knitting_output_dia")))
+		add(get_colour_attribute(), _attribute_value(row.get("finished_colour")))
+		add(get_colour_attribute(), _attribute_value(row.get("knitting_output_colour")))
 
 	for row in doc.get("colour_yarn_recipes") or []:
-		add(FABRIC_COLOUR_ATTRIBUTE, _attribute_value(row.get("colour")))
+		add(get_colour_attribute(), _attribute_value(row.get("colour")))
 
 	for row in doc.get("knitting_dia_details") or []:
-		add(FABRIC_DIA_ATTRIBUTE, _attribute_value(row.get("dia")))
+		add(get_dia_attribute(), _attribute_value(row.get("dia")))
 	for row in doc.get("dyeing_colour_details") or []:
-		add(FABRIC_DIA_ATTRIBUTE, _attribute_value(row.get("dia")))
-		add(FABRIC_COLOUR_ATTRIBUTE, _attribute_value(row.get("from_colour")))
-		add(FABRIC_COLOUR_ATTRIBUTE, _attribute_value(row.get("to_colour")))
+		add(get_dia_attribute(), _attribute_value(row.get("dia")))
+		add(get_colour_attribute(), _attribute_value(row.get("from_colour")))
+		add(get_colour_attribute(), _attribute_value(row.get("to_colour")))
 	for row in doc.get("compacting_dia_details") or []:
-		add(FABRIC_COLOUR_ATTRIBUTE, _attribute_value(row.get("colour")))
-		add(FABRIC_DIA_ATTRIBUTE, _attribute_value(row.get("from_dia")))
-		add(FABRIC_DIA_ATTRIBUTE, _attribute_value(row.get("to_dia")))
+		add(get_colour_attribute(), _attribute_value(row.get("colour")))
+		add(get_dia_attribute(), _attribute_value(row.get("from_dia")))
+		add(get_dia_attribute(), _attribute_value(row.get("to_dia")))
 	for row in doc.get("compacting_reference_details") or []:
-		add(FABRIC_COLOUR_ATTRIBUTE, _attribute_value(row.get("colour")))
-		add(FABRIC_DIA_ATTRIBUTE, _attribute_value(row.get("input_dia")))
-		add(FABRIC_DIA_ATTRIBUTE, _attribute_value(row.get("compacting_dia")))
+		add(get_colour_attribute(), _attribute_value(row.get("colour")))
+		add(get_dia_attribute(), _attribute_value(row.get("input_dia")))
+		add(get_dia_attribute(), _attribute_value(row.get("compacting_dia")))
 
 	for process in get_fabric_process_rows(doc):
 		for mapping in process.get("value_mappings") or []:
@@ -473,6 +476,7 @@ def validate_fabric_routes(doc):
 	if not routes:
 		return
 	seen = set()
+	colour_attribute, dia_attribute = get_colour_attribute(), get_dia_attribute()
 	recipe_colours = {
 		_attribute_value(row.colour)
 		for row in doc.get("colour_yarn_recipes") or []
@@ -480,10 +484,10 @@ def validate_fabric_routes(doc):
 	}
 	for row in routes:
 		values = (
-			(_attribute_value(row.finished_colour), "Colour", "Finished Colour"),
-			(_attribute_value(row.knitting_output_colour), "Colour", "Knitting Output Colour"),
-			(_attribute_value(row.finished_dia), "Dia", "Finished Dia"),
-			(_attribute_value(row.knitting_output_dia), "Dia", "Knitting Output Dia"),
+			(_attribute_value(row.finished_colour), colour_attribute, "Finished Colour"),
+			(_attribute_value(row.knitting_output_colour), colour_attribute, "Knitting Output Colour"),
+			(_attribute_value(row.finished_dia), dia_attribute, "Finished Dia"),
+			(_attribute_value(row.knitting_output_dia), dia_attribute, "Knitting Output Dia"),
 		)
 		for value, attribute, label in values:
 			if not value:
@@ -533,11 +537,11 @@ def validate_fabric_routes(doc):
 		if not isinstance(attributes, (list, tuple)):
 			attributes = [attributes]
 		change_attributes.update(attributes)
-	if needs_dyeing and "Colour" not in change_attributes:
+	if needs_dyeing and colour_attribute not in change_attributes:
 		frappe.throw(
 			"Fabric Routes whose knitting and finished colours differ need a Colour-changing Fabric Process."
 		)
-	if needs_compacting and "Dia" not in change_attributes:
+	if needs_compacting and dia_attribute not in change_attributes:
 		frappe.throw(
 			"Fabric Routes whose knitting and finished Dias differ need a Dia-changing Fabric Process."
 		)
@@ -550,10 +554,11 @@ def validate_compacting_references(doc):
 	Colour is the override/special-case form.
 	"""
 	seen = set()
+	colour_attribute, dia_attribute = get_colour_attribute(), get_dia_attribute()
 	for row in doc.get("compacting_reference_details") or []:
 		for fieldname, attribute, label in (
-			("input_dia", "Dia", "Knitting/Input Dia"),
-			("compacting_dia", "Dia", "Compacting Dia"),
+			("input_dia", dia_attribute, "Knitting/Input Dia"),
+			("compacting_dia", dia_attribute, "Compacting Dia"),
 		):
 			value = _attribute_value(row.get(fieldname))
 			if not value:
@@ -563,11 +568,11 @@ def validate_compacting_references(doc):
 					f"Row {row.idx} of Compacting Reference Details: {value} is not a {attribute} value."
 				)
 		if _attribute_value(row.get("colour")) and not has_attribute_value(
-			"Colour", _attribute_value(row.get("colour"))
+			colour_attribute, _attribute_value(row.get("colour"))
 		):
 			frappe.throw(
 				f"Row {row.idx} of Compacting Details: "
-				f"{_attribute_value(row.get('colour'))} is not a Colour value."
+				f"{_attribute_value(row.get('colour'))} is not a {colour_attribute} value."
 			)
 		key = (
 			_attribute_value(row.colour),

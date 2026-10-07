@@ -197,20 +197,30 @@ def _lock_lot(lot):
 	)
 
 
-def lock_lots_for_default_knitting_grns(grn_names):
-	"""Lock versioned default-Knitting Lots before Inspection touches GRNs."""
-	grn_names = sorted(set(grn_names or []))
-	if not grn_names:
+def get_default_knitting_lots_for_grn_items(grn_item_names):
+	"""Resolve Lot projections from the exact keyed GRN children being inspected."""
+	grn_item_names = sorted(set(grn_item_names or []))
+	if not grn_item_names:
 		return []
 	process_name = _default_knitting_process()
 	if not process_name:
 		return []
-	lots = frappe.db.sql(
+	rows = frappe.db.sql(
 		"""
-		SELECT DISTINCT wo.lot
-		FROM `tabYRP Goods Received Note` grn
+		SELECT item.name AS source_grn_item,
+			wo.lot,
+			receivable.additional_parameters
+		FROM `tabYRP Goods Received Note Item` item
+		JOIN `tabYRP Goods Received Note` grn
+			ON grn.name = item.parent
+			AND item.parenttype = 'YRP Goods Received Note'
 		JOIN `tabYRP Work Order` wo ON wo.name = grn.against_id
-		WHERE grn.name IN %(grn_names)s
+		JOIN `tabYRP Work Order Receivables` receivable
+			ON receivable.name = item.ref_docname
+			AND receivable.parent = wo.name
+			AND receivable.parenttype = 'YRP Work Order'
+		WHERE item.name IN %(grn_items)s
+			AND item.ref_doctype = 'YRP Work Order Receivables'
 			AND grn.docstatus = 1
 			AND grn.against = 'YRP Work Order'
 			AND IFNULL(grn.is_return, 0) = 0
@@ -220,15 +230,20 @@ def lock_lots_for_default_knitting_grns(grn_names):
 			AND wo.process_name = %(process_name)s
 			AND wo.cloth_execution_version = 1
 			AND IFNULL(wo.lot, '') != ''
-		ORDER BY wo.lot
+		ORDER BY item.name
 		""",
 		{
-			"grn_names": tuple(grn_names),
+			"grn_items": tuple(grn_item_names),
 			"process_name": process_name,
 		},
-		pluck=True,
+		as_dict=True,
 	)
-	lots = sorted(set(lots))
+	return sorted({row.lot for row in rows if row.lot and has_fabric_execution_key(row)})
+
+
+def lock_lots_for_default_knitting_grn_items(grn_item_names):
+	"""Lock only Lots reached through the exact keyed GRN children."""
+	lots = get_default_knitting_lots_for_grn_items(grn_item_names)
 	if lots:
 		frappe.db.sql(
 			"SELECT name FROM `tabSD YRP Lot` "

@@ -73,14 +73,31 @@ def convert_stock(name):
 			_("Inspection Entry {0} must be submitted before converting stock.").format(name)
 		)
 	conversion_lots = []
+	source_grns = []
+	source_items = []
+	source_against_id = None
 	if doc.get("against") == "YRP Goods Received Note":
 		from essdee_yrp.fabric_substitution import (
-			lock_lots_for_default_knitting_grns,
+			get_default_knitting_lots_for_grn_items,
+			lock_lots_for_default_knitting_grn_items,
 		)
 
-		source_grns = _source_grn_names(doc)
-		conversion_lots = lock_lots_for_default_knitting_grns(source_grns)
+		source_against_id = doc.get("against_id")
+		source_items = _source_grn_item_names(doc)
+		source_grns = _source_grn_names(doc, source_items)
+		conversion_lots = lock_lots_for_default_knitting_grn_items(source_items)
 		_lock_source_grns(source_grns)
+		_lock_source_grn_items(source_items)
+		# Re-read exact child ownership and keyed eligibility after its parent and
+		# child locks. A stale/forged reference must never select a Lot rebuild.
+		_source_grn_names(doc, source_items)
+		current_lots = get_default_knitting_lots_for_grn_items(source_items)
+		if current_lots != conversion_lots:
+			frappe.throw(
+				_("The cloth source lineage changed while Inspection Entry {0} was converting.").format(
+					name
+				)
+			)
 
 	# This must be a current locking reload. A plain consistent read after waiting
 	# on Lot/GRN locks could let two requests both observe an unconverted document.
@@ -94,6 +111,8 @@ def convert_stock(name):
 		frappe.throw(_("Inspection Entry {0} has already converted stock.").format(name))
 	if current_status == "Cancelled":
 		frappe.throw(_("Inspection Entry {0} is cancelled and cannot convert stock.").format(name))
+	if source_against_id:
+		_validate_locked_inspection_source(doc, source_against_id, source_items)
 
 	from yrp.stock.stock_ledger import enqueue_voucher_repost, make_sl_entries
 
@@ -112,8 +131,8 @@ def convert_stock(name):
 	return {"status": "Converted", "is_converted": 1}
 
 
-def _source_grn_names(doc):
-	source_items = sorted(
+def _source_grn_item_names(doc):
+	return sorted(
 		{
 			row.get("ref_docname")
 			for row in doc.get("items") or []
@@ -121,14 +140,48 @@ def _source_grn_names(doc):
 			and row.get("ref_docname")
 		}
 	)
+
+
+def _source_grn_names(doc, source_items):
 	if not source_items:
 		return []
 	parents = frappe.get_all(
 		"YRP Goods Received Note Item",
 		filters={"name": ["in", source_items]},
-		fields=["name", "parent"],
+		fields=["name", "parent", "parenttype"],
 	)
-	return sorted({row.parent for row in parents if row.parent})
+	by_name = {row.name: row for row in parents}
+	missing = [source_item for source_item in source_items if source_item not in by_name]
+	if missing:
+		frappe.throw(
+			_("Goods Received Note source rows no longer exist: {0}.").format(
+				", ".join(missing)
+			)
+		)
+	expected_grn = doc.get("against_id")
+	for source_item in source_items:
+		row = by_name[source_item]
+		if row.parenttype != "YRP Goods Received Note" or row.parent != expected_grn:
+			frappe.throw(
+				_(
+					"Goods Received Note source row {0} does not belong to Goods Received Note {1}."
+				).format(source_item, expected_grn)
+			)
+	return [expected_grn]
+
+
+def _validate_locked_inspection_source(doc, expected_grn, expected_items):
+	current_items = _source_grn_item_names(doc)
+	if (
+		doc.get("against") != "YRP Goods Received Note"
+		or doc.get("against_id") != expected_grn
+		or current_items != expected_items
+	):
+		frappe.throw(
+			_("Inspection Entry {0} source lineage changed while stock was converting.").format(
+				doc.name
+			)
+		)
 
 
 def _lock_source_grns(grn_names):
@@ -138,4 +191,14 @@ def _lock_source_grns(grn_names):
 			"SELECT name FROM `tabYRP Goods Received Note` "
 			"WHERE name IN %(names)s ORDER BY name FOR UPDATE",
 			{"names": tuple(grn_names)},
+		)
+
+
+def _lock_source_grn_items(grn_item_names):
+	grn_item_names = sorted(set(grn_item_names or []))
+	if grn_item_names:
+		frappe.db.sql(
+			"SELECT name FROM `tabYRP Goods Received Note Item` "
+			"WHERE name IN %(names)s ORDER BY name FOR UPDATE",
+			{"names": tuple(grn_item_names)},
 		)

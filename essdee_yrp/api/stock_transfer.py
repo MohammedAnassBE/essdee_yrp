@@ -122,19 +122,21 @@ def receive_grn_transfer(payload):
 						"is not configured in YRP Stock Settings. Nothing was transferred."
 					).format(", ".join(rows_without_received_type)),
 				}
-			missing_received_types = sorted(
-				{
-					row["received_type"]
-					for row in normalized_items
-					if not frappe.db.exists("YRP Received Type", row["received_type"])
-				}
-			)
+			missing_received_types = {}
+			for idx, row in enumerate(normalized_items, start=1):
+				received_type = row["received_type"]
+				if not frappe.db.exists("YRP Received Type", received_type):
+					missing_received_types.setdefault(received_type, []).append(str(idx))
 			if missing_received_types:
+				details = "; ".join(
+					_("{0} (row {1})").format(received_type, ", ".join(rows))
+					for received_type, rows in sorted(missing_received_types.items())
+				)
 				return {
 					"ok": False,
 					"error": _(
 						"Received Types missing on essdee_yrp: {0}. Nothing was transferred."
-					).format(", ".join(map(str, missing_received_types))),
+					).format(details),
 				}
 			items = normalized_items
 

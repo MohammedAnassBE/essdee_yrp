@@ -159,7 +159,14 @@ class TestWorkOrderSummaryReadModel(unittest.TestCase):
 			{"rows": ["issued"], "totals": [], "planned_process_cost": 0},
 			{"rows": ["received"], "totals": [], "planned_process_cost": 250},
 		]
-		debits.return_value = [frappe._dict(name="WOD-1", debit_value=30, docstatus=1)]
+		debits.return_value = [
+			frappe._dict(
+				name="WOD-1", debit_value=30, docstatus=1, status="Approved"
+			),
+			frappe._dict(
+				name="WOD-2", debit_value=90, docstatus=1, status="Debit Requested"
+			),
+		]
 		valuation.return_value = {"input_value": 100, "process_value": 40, "output_value": 140}
 
 		result = work_order.get_work_order_summary("YRP-WO-1")

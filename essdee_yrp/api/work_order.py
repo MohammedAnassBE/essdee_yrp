@@ -179,7 +179,7 @@ def get_work_order_summary(work_order):
 			sum(
 				flt(row.get("debit_value"))
 				for row in debits
-				if cint(row.get("docstatus")) == 1
+				if cint(row.get("docstatus")) == 1 and row.get("status") == "Approved"
 			),
 			6,
 		),

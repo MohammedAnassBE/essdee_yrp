@@ -384,24 +384,45 @@ class TestActualDiaAllocation(unittest.TestCase):
 class TestLotFabricConversionRebuild(unittest.TestCase):
 	@patch("essdee_yrp.fabric_substitution._default_knitting_process", return_value="Knitting")
 	@patch.object(frappe.db, "sql")
-	def test_inspection_lot_lock_uses_versioned_default_knitting_grns(
+	def test_inspection_lot_lock_uses_only_exact_keyed_grn_children(
 		self, sql, _process
 	):
-		sql.side_effect = [["LOT-B", "LOT-A", "LOT-A"], []]
+		sql.side_effect = [
+			[
+				frappe._dict(
+					source_grn_item="GRN-ITEM-2",
+					lot="LOT-B",
+					additional_parameters={"fabric_execution_key": "key-2"},
+				),
+				frappe._dict(
+					source_grn_item="GRN-ITEM-1",
+					lot="LOT-A",
+					additional_parameters={"fabric_execution_key": "key-1"},
+				),
+				frappe._dict(
+					source_grn_item="GRN-ITEM-LEGACY",
+					lot="LOT-Z",
+					additional_parameters={},
+				),
+			],
+			[],
+		]
 
-		lots = fabric_substitution.lock_lots_for_default_knitting_grns(
-			["GRN-2", "GRN-1", "GRN-1"]
+		lots = fabric_substitution.lock_lots_for_default_knitting_grn_items(
+			["GRN-ITEM-2", "GRN-ITEM-1", "GRN-ITEM-LEGACY"]
 		)
 
 		self.assertEqual(lots, ["LOT-A", "LOT-B"])
 		discovery_query = sql.call_args_list[0].args[0]
 		self.assertIn("tabYRP Goods Received Note", discovery_query)
+		self.assertIn("tabYRP Goods Received Note Item", discovery_query)
+		self.assertIn("tabYRP Work Order Receivables", discovery_query)
 		self.assertIn("tabYRP Work Order", discovery_query)
 		self.assertIn("wo.cloth_execution_version = 1", discovery_query)
 		self.assertIn("IFNULL(grn.additional_grn, 0) = 0", discovery_query)
 		self.assertEqual(
-			sql.call_args_list[0].args[1]["grn_names"],
-			("GRN-1", "GRN-2"),
+			sql.call_args_list[0].args[1]["grn_items"],
+			("GRN-ITEM-1", "GRN-ITEM-2", "GRN-ITEM-LEGACY"),
 		)
 		lock_query = sql.call_args_list[1].args[0]
 		self.assertIn("tabSD YRP Lot", lock_query)

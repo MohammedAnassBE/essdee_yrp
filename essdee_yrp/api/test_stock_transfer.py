@@ -257,6 +257,7 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
 
 		self.assertFalse(result["ok"])
 		self.assertIn("Not A Real Received Type", result["error"])
+		self.assertIn("row 1", result["error"])
 		self.assertFalse(
 			frappe.db.exists(
 				"YRP Stock Entry", {"source_grn": "GRN-TEST-INVALID-RT"}

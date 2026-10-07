@@ -28,6 +28,8 @@ yrp_ui_actions = [
 	"cancel_doc",
 ]
 yrp_stock_item_entry_fields = ["essdee_yrp.stock_item_extensions.get_entry_fields"]
+# Documents whose fields scope attribute Links on rows that reference them.
+yrp_attribute_link_context = {"lot": "SD YRP Lot", "cutting_plan": "SD YRP Cutting Plan"}
 
 fixtures = [
 	# Export only fields explicitly owned by this customization app. A patch

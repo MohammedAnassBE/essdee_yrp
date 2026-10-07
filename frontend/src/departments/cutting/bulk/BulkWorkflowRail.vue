@@ -6,7 +6,7 @@
 				v-for="row in rows" :key="row.name"
 				class="bulk-workflow-card" :class="{ 'bulk-workflow-card--active': row.cutting_laysheet === activeLaySheet }"
 				:tabindex="row.actions?.can_activate ? 0 : -1" :role="row.actions?.can_activate ? 'button' : undefined"
-				@click="select(row)" @keydown.enter.prevent="select(row)"
+				@click="select(row)" @keydown.enter.prevent="select(row)" @keydown.space.prevent="select(row)"
 			>
 				<header><div class="bulk-workflow-card__title"><span>{{ String(row.idx || 0).padStart(2, '0') }}</span><div><strong>{{ row.lot }}</strong><small>{{ row.cutting_laysheet || "LaySheet not created" }}</small></div></div><Tag :value="row.status" :severity="statusSeverity(row.status)" rounded /></header>
 				<dl><div><dt>Plan</dt><dd>{{ row.cutting_plan || "—" }}</dd></div><div><dt>Marker</dt><dd>{{ row.cutting_marker || "—" }}</dd></div><div><dt>Work Order</dt><dd>{{ row.work_order || "—" }}</dd></div></dl>

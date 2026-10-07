@@ -25,6 +25,7 @@ function saved(record) {
 }
 function cancel() {
 	if (workOrderId.value) router.push({ name: "fabric-work-order", params: { workOrderId: workOrderId.value } })
+	else if (duplicateFrom.value) router.push({ name: "fabric-work-order", params: { workOrderId: duplicateFrom.value } })
 	else router.push({ name: "fabric-work-orders" })
 }
 </script>

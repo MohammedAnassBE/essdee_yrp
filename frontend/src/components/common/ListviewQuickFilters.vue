@@ -148,10 +148,10 @@ function linkFilters(field) {
 	display: grid;
 	gap: 8px;
 	padding: 10px 12px 12px;
-	background: #fff;
+	background: var(--erp-surface);
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-control-radius);
-	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
+	box-shadow: var(--erp-shadow-xs);
 }
 
 .quick-filters__grid {
@@ -182,7 +182,7 @@ function linkFilters(field) {
 .quick-filter-field :deep(.p-autocomplete-input),
 .quick-filter-field :deep(.p-inputnumber-input) {
 	height: var(--erp-control-height);
-	background: #fff;
+	background: var(--erp-surface);
 	border-color: var(--erp-border-strong);
 	border-radius: var(--erp-control-radius);
 	box-shadow: none;
@@ -197,6 +197,12 @@ function linkFilters(field) {
 .quick-filter-field :deep(.p-inputnumber:focus-within .p-inputnumber-input) {
 	border-color: var(--erp-accent);
 	box-shadow: 0 0 0 3px color-mix(in srgb, var(--erp-accent) 11%, transparent);
+}
+
+@media (min-width: 800px) and (max-width: 950px) {
+	.quick-filters__grid {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
 }
 
 @media (max-width: 600px) {

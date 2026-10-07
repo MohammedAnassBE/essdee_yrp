@@ -4,6 +4,7 @@ import { createApp } from "vue"
 import ConfirmationService from "primevue/confirmationservice"
 import PrimeVue from "primevue/config"
 import ToastService from "primevue/toastservice"
+import "@fontsource-variable/inter"
 import "primeicons/primeicons.css"
 
 import App from "./App.vue"
@@ -53,6 +54,14 @@ createApp(App)
 			preset: EssdeeAura,
 			options: {
 				darkModeSelector: false,
+			},
+		},
+		pt: {
+			dialog: {
+				pcMaximizeButton: ({ state }) => {
+					const label = state.maximized ? "Restore dialog" : "Maximize dialog"
+					return { root: { "aria-label": label, title: label } }
+				},
 			},
 		},
 	})

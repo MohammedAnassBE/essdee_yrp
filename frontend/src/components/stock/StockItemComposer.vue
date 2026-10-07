@@ -107,7 +107,7 @@
 			<div v-if="groups.length" class="stock-composer__tables">
 				<div v-for="(group, groupIndex) in groups" :key="groupKey(group, groupIndex)" class="stock-composer__table-card">
 					<div class="stock-composer__table-title"><strong>{{ group.primary_attribute ? `${group.primary_attribute} matrix` : "Quantity" }}</strong><span>{{ group.items.length }} {{ group.items.length === 1 ? "row" : "rows" }}</span></div>
-					<div class="stock-composer__table-scroll">
+					<div class="stock-composer__table-scroll" tabindex="0" role="region" :aria-label="`${group.name || group.item || 'Added items'} table`">
 						<table>
 							<thead><tr><th>#</th><th>Item</th><th v-for="dimension in dimensions" :key="dimension.fieldname">{{ dimension.label }}</th><th v-for="attribute in group.attributes" :key="attribute">{{ attribute }}</th><th v-for="value in group.primary_attribute_values" :key="value" class="stock-composer__number">{{ value }}</th><th v-if="!group.primary_attribute">{{ quantityLabel }}</th><th class="stock-composer__number">Total</th><th>UOM</th><th v-if="!readOnly"></th></tr></thead>
 								<tbody><tr v-for="(row, itemIndex) in group.items" :key="`${row.name}-${itemIndex}`"><td>{{ itemIndex + 1 }}</td><td><strong>{{ row.name }}</strong></td><td v-for="dimension in dimensions" :key="dimension.fieldname">{{ row.dimensions?.[dimension.fieldname] || "—" }}</td><td v-for="attribute in group.attributes" :key="attribute">{{ row.attributes?.[attribute] || "—" }}</td><td v-for="value in group.primary_attribute_values" :key="value" class="stock-composer__number stock-composer__metric"><strong>{{ formatQty(row.values?.[value]?.qty) }}</strong><template v-if="operation === 'purchase_order'"><span class="stock-composer__price">Rate {{ formatMoney(row.values?.[value]?.rate) }}</span><span class="stock-composer__price">Amount {{ formatMoney(cellAmount(row.values?.[value])) }}</span></template></td><td v-if="!group.primary_attribute" class="stock-composer__number stock-composer__metric"><strong>{{ formatQty(row.values?.default?.qty) }}</strong><template v-if="operation === 'purchase_order'"><span class="stock-composer__price">Rate {{ formatMoney(row.values?.default?.rate) }}</span><span class="stock-composer__price">Amount {{ formatMoney(cellAmount(row.values?.default)) }}</span></template></td><td class="stock-composer__number stock-composer__total stock-composer__metric"><strong>{{ formatQty(rowTotal(row)) }}</strong><span v-if="operation === 'purchase_order'" class="stock-composer__price">Amount {{ formatMoney(rowAmount(row)) }}</span></td><td>{{ row.default_uom || "—" }}</td><td v-if="!readOnly"><div class="stock-composer__actions"><button type="button" title="Edit item" :aria-label="`Edit ${row.name}`" @click="editItem(groupIndex, itemIndex)"><i class="pi pi-pencil" aria-hidden="true"></i></button><button type="button" title="Delete item" :aria-label="`Delete ${row.name}`" class="stock-composer__delete" @click="removeItem(groupIndex, itemIndex)"><i class="pi pi-trash" aria-hidden="true"></i></button></div></td></tr></tbody>
@@ -402,7 +402,7 @@ function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-panel-radius);
 	background: var(--erp-surface);
-	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
+	box-shadow: var(--erp-shadow-xs);
 }
 
 .stock-composer__heading {
@@ -412,7 +412,7 @@ function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray
 	gap: var(--erp-space-3);
 	padding: 10px var(--erp-space-3);
 	border-bottom: 1px solid var(--erp-border);
-	background: #f8faf9;
+	background: var(--erp-surface-soft);
 }
 
 .stock-composer__heading h3 {
@@ -423,7 +423,7 @@ function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray
 }
 
 .stock-composer__eyebrow {
-	color: var(--erp-accent);
+	color: var(--erp-accent-dark);
 	font-size: var(--erp-font-size-min);
 	font-weight: 800;
 	letter-spacing: 0.055em;
@@ -472,8 +472,8 @@ function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray
 	overflow: hidden;
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-control-radius);
-	background: #fff;
-	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
+	background: var(--erp-surface);
+	box-shadow: var(--erp-shadow-xs);
 }
 
 .stock-composer__item-strip > div {
@@ -512,8 +512,8 @@ function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray
 	overflow: hidden;
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-control-radius);
-	background: #fff;
-	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
+	background: var(--erp-surface);
+	box-shadow: var(--erp-shadow-xs);
 }
 
 .stock-composer__quantity-card > header {
@@ -522,7 +522,7 @@ function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray
 	justify-content: space-between;
 	padding: 9px 11px;
 	border-bottom: 1px solid var(--erp-border);
-	background: #f8faf9;
+	background: var(--erp-surface-soft);
 }
 
 .stock-composer__quantity-card h4 {
@@ -555,8 +555,8 @@ function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray
 	display: grid;
 	gap: var(--erp-space-1);
 	padding: 8px;
-	border-right: 1px solid #e5ece8;
-	border-bottom: 1px solid #e5ece8;
+	border-right: 1px solid var(--erp-border-subtle);
+	border-bottom: 1px solid var(--erp-border-subtle);
 }
 
 .stock-composer__quantity-cell:focus-within {
@@ -635,7 +635,7 @@ function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray
 	display: grid;
 	gap: 10px;
 	padding: 10px;
-	background: #f8faf9;
+	background: var(--erp-surface-soft);
 }
 
 .stock-composer__table-card {
@@ -668,6 +668,18 @@ function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray
 	overflow: auto;
 }
 
+.stock-composer__table-scroll:focus-visible {
+	outline: 2px solid var(--erp-accent-dark);
+	outline-offset: -2px;
+}
+
+@media (max-width: 900px) {
+	.stock-composer__table-scroll {
+		-webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%);
+		mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%);
+	}
+}
+
 .stock-composer table {
 	width: 100%;
 	min-width: 780px;
@@ -680,8 +692,8 @@ function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray
 	top: 0;
 	padding: 7px var(--erp-space-2);
 	border-bottom: 1px solid var(--erp-border-strong);
-	background: #f6f8f7;
-	color: #59675f;
+	background: var(--erp-surface-muted);
+	color: var(--erp-text-secondary);
 	font-size: var(--erp-font-size-min);
 	font-weight: 750;
 	letter-spacing: 0.02em;
@@ -692,8 +704,8 @@ function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray
 
 .stock-composer td {
 	padding: 7px var(--erp-space-2);
-	border-top: 1px solid #e7edea;
-	color: #374a40;
+	border-top: 1px solid var(--erp-border-subtle);
+	color: var(--erp-text-secondary);
 	white-space: nowrap;
 }
 
@@ -741,12 +753,12 @@ function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray
 
 .stock-composer__actions button {
 	display: grid;
-	width: 28px;
-	height: 28px;
+	width: 36px;
+	height: 36px;
 	border: 0;
 	border-radius: 6px;
 	background: transparent;
-	color: #557065;
+	color: var(--erp-text-muted);
 	place-items: center;
 }
 
@@ -767,7 +779,7 @@ function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray
 }
 
 .stock-composer__actions .stock-composer__delete:hover {
-	background: #fff0f0;
+	background: var(--erp-danger-soft);
 	color: var(--erp-danger);
 }
 
@@ -779,7 +791,7 @@ function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray
 	gap: 10px;
 	padding: 28px 22px;
 	color: var(--erp-text-muted);
-	background: #fff;
+	background: var(--erp-surface);
 }
 
 .stock-composer__empty > i {
@@ -798,7 +810,7 @@ function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray
 }
 
 .stock-composer__empty strong {
-	color: #3d5046;
+	color: var(--erp-text-secondary);
 	font-size: 13px;
 }
 

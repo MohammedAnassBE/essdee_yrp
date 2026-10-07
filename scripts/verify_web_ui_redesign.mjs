@@ -75,6 +75,8 @@ export async function visibleTextBelowMinimum(root, minPx = 11) {
 }
 
 async function tokensSuite(page) {
+	const mainSource = readFileSync(new URL("../frontend/src/main.js", import.meta.url), "utf8")
+	assert(mainSource.includes('@fontsource-variable/inter'), "The declared Inter UI font is not shipped with the application")
 	await page.goto(`${SITE}/web/`, { waitUntil: "domcontentloaded" })
 	await page.locator(".app-shell").waitFor({ timeout: 20_000 })
 	const contract = await page.locator(".app-shell").evaluate((element) => {
@@ -122,8 +124,26 @@ async function shellSuite(page) {
 		getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length,
 	)
 	assert(columnCount === 1, "Administrator does not collapse to one column at 760px")
+	await destinations.first().click()
+	await page.waitForURL("**/web/cutting")
+	await page.locator(".workspace-launcher").waitFor({ timeout: 20_000 })
+	assert(await page.evaluate(() => document.activeElement?.id) === "app-main", "Route navigation does not move focus to the new main content")
+	assert((await page.title()).includes("Cutting"), `Route navigation does not update the document title: ${await page.title()}`)
 
-	return { destinationCount: await destinations.count(), columnCount, focusVisible }
+	await page.goto(`${SITE}/web/fabric-store`, { waitUntil: "domcontentloaded" })
+	const flatPanel = page.locator(".department-page__panel--flat")
+	await flatPanel.waitFor({ timeout: 20_000 })
+	const flatSurface = await flatPanel.evaluate((element) => {
+		const style = getComputedStyle(element)
+		return { background: style.backgroundColor, radius: style.borderRadius, shadow: style.boxShadow }
+	})
+	assert(flatSurface.background === "rgba(0, 0, 0, 0)", `Flat department surface is opaque: ${JSON.stringify(flatSurface)}`)
+	assert(flatSurface.radius === "0px" && flatSurface.shadow === "none", `Flat department surface retains generic card chrome: ${JSON.stringify(flatSurface)}`)
+
+	await page.setViewportSize({ width: 390, height: 844 })
+	assert(await page.locator(".app-topbar__home").getAttribute("aria-label") === "Workspaces", "Mobile Workspaces link has no persistent accessible name")
+
+	return { destinationCount: 10, columnCount, focusVisible, flatSurface }
 }
 
 async function cuttingEntrySuite(page, context) {
@@ -173,10 +193,20 @@ async function listSuite(page, context) {
 	await page.locator(".premium-list-table .p-datatable-tbody > tr").first().waitFor({ timeout: 20_000 })
 
 	assert(await page.locator(".list-page-head").count() === 1, "List command header is duplicated")
+	const listSurface = await page.locator(".cutting-list").boundingBox()
+	assert(listSurface?.width >= 1520, `Cutting list does not use the shared full-width shell: ${JSON.stringify(listSurface)}`)
 	assert(await page.getByText(/^\d+\s+records$/i).count() === 0, "Header record-count prose is visible")
-	assert(await page.getByText("Quick filters", { exact: true }).count() === 0, "Quick-filter explanation is visible")
+	assert(await page.locator(".mobile-quick-filter-toggle:visible").count() === 0, "Mobile quick-filter control is visible on desktop")
+	const openTarget = await page.locator(".list-row-open").first().boundingBox()
+	assert(openTarget?.width >= 36 && openTarget?.height >= 36, `List open action has a small pointer target: ${JSON.stringify(openTarget)}`)
+	const selectionTargets = await page.locator(".premium-list-table .p-checkbox").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().toJSON()))
+	assert(selectionTargets.every(({ width, height }) => width >= 36 && height >= 36), `List selection controls have small pointer targets: ${JSON.stringify(selectionTargets)}`)
+	const statusRailStyle = await page.locator(".list-status-tabs").evaluate((element) => ({ overflowX: getComputedStyle(element).overflowX, maskImage: getComputedStyle(element).maskImage }))
+	assert(["auto", "scroll"].includes(statusRailStyle.overflowX) && statusRailStyle.maskImage !== "none", `Status rail lacks a horizontal-scroll affordance: ${JSON.stringify(statusRailStyle)}`)
+	const primaryButtonShadow = await page.locator(".list-toolbar__primary .p-button").first().evaluate((element) => getComputedStyle(element).boxShadow)
+	assert(primaryButtonShadow !== "none", "List primary action does not use the shared elevated treatment")
 
-	const toolbarControls = page.locator(".list-search input, .list-toolbar__actions > .p-button")
+	const toolbarControls = page.locator(".list-search input, .list-toolbar__primary > .p-button, .list-toolbar__secondary > .p-button")
 	const controlHeights = await toolbarControls.evaluateAll((elements) =>
 		elements.map((element) => Math.round(element.getBoundingClientRect().height)),
 	)
@@ -218,12 +248,14 @@ async function listSuite(page, context) {
 	})
 	assert(filterFocusVisible, "Filter controls have no visible keyboard focus")
 	await page.keyboard.press("Escape")
+	await filterDialog.waitFor({ state: "hidden" })
 
 	await page.getByRole("button", { name: "Columns", exact: true }).click()
 	const columnDialog = page.getByRole("dialog", { name: "Customize Columns" })
 	await columnDialog.waitFor()
 	assert(await columnDialog.locator(".column-drag-handle").count() > 0, "Column editor has no drag handles")
 	await columnDialog.getByRole("button", { name: "Cancel", exact: true }).click()
+	await columnDialog.waitFor({ state: "hidden" })
 
 	const undersizedText = await visibleTextBelowMinimum(page)
 	assert(undersizedText.length === 0, `List contains text below 11px: ${JSON.stringify(undersizedText.slice(0, 8))}`)
@@ -232,18 +264,69 @@ async function listSuite(page, context) {
 	await search.fill("__no_matching_cutting_plan__")
 	await search.press("Enter")
 	await page.locator(".list-empty").waitFor({ timeout: 20_000 })
+	await page.waitForFunction(() => !document.querySelector('button[aria-label="Refresh"]')?.disabled)
+	await page.locator(".p-datatable-mask").waitFor({ state: "hidden" })
 	assert(await page.getByText("No records found", { exact: true }).isVisible(), "Empty search state is not intentional")
+	await page.setViewportSize({ width: 390, height: 844 })
+	const emptyStateSurface = await page.locator(".list-empty").evaluate((element) => {
+		const cell = element.closest("td")
+		return {
+			cellClass: cell?.className || "",
+			background: getComputedStyle(cell || element).backgroundColor,
+			color: getComputedStyle(cell || element).color,
+			frameBackground: getComputedStyle(element.closest(".list-table-frame")).backgroundColor,
+		}
+	})
+	assert(emptyStateSurface.frameBackground === "rgb(255, 255, 255)", `Mobile list empty state is not on the shared bright surface: ${JSON.stringify(emptyStateSurface)}`)
+	const mobileEmptyState = await page.locator(".p-datatable-table-container").evaluate((scroller) => {
+		const message = scroller.querySelector(".list-empty strong")
+		const scrollerRect = scroller.getBoundingClientRect()
+		const messageRect = message?.getBoundingClientRect()
+		return {
+			scroller: { left: scrollerRect.left, right: scrollerRect.right },
+			message: messageRect ? { left: messageRect.left, right: messageRect.right } : null,
+		}
+	})
+	await page.screenshot({ path: "/tmp/essdee-cutting-list-empty-mobile.png", fullPage: true })
+	assert(
+		mobileEmptyState.message
+			&& mobileEmptyState.message.left >= mobileEmptyState.scroller.left
+			&& mobileEmptyState.message.right <= mobileEmptyState.scroller.right,
+		`Mobile list empty state is outside the visible table region: ${JSON.stringify(mobileEmptyState)}`,
+	)
+	const scrolledEmptyState = await page.locator(".p-datatable-table-container").evaluate(async (scroller) => {
+		scroller.scrollLeft = scroller.scrollWidth
+		await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+		const messageRect = scroller.querySelector(".list-empty strong")?.getBoundingClientRect()
+		const scrollerRect = scroller.getBoundingClientRect()
+		return {
+			scroller: { left: scrollerRect.left, right: scrollerRect.right },
+			message: messageRect ? { left: messageRect.left, right: messageRect.right } : null,
+		}
+	})
+	assert(
+		scrolledEmptyState.message
+			&& scrolledEmptyState.message.left >= scrolledEmptyState.scroller.left
+			&& scrolledEmptyState.message.right <= scrolledEmptyState.scroller.right,
+		`Mobile list empty state does not remain visible while the table scrolls: ${JSON.stringify(scrolledEmptyState)}`,
+	)
 	await page.getByRole("button", { name: "Clear Filters", exact: true }).click()
 	await page.locator(".premium-list-table .p-datatable-tbody > tr").first().waitFor({ timeout: 20_000 })
 
 	await page.setViewportSize({ width: 900, height: 760 })
+	const quickFilterRows = await page.locator(".list-quick-filters .quick-filter-field").evaluateAll((elements) => new Set(elements.map((element) => Math.round(element.getBoundingClientRect().y))).size)
+	assert(quickFilterRows === 1, `Cutting Plan quick filters leave an orphaned row at 900px: ${quickFilterRows}`)
 	const tableContainment = await page.locator(".p-datatable-table-container").evaluate((element) => ({
 		clientWidth: element.clientWidth,
 		scrollWidth: element.scrollWidth,
 		overflowX: getComputedStyle(element).overflowX,
+		role: element.getAttribute("role"),
+		tabIndex: element.tabIndex,
+		ariaLabel: element.getAttribute("aria-label"),
 	}))
 	assert(tableContainment.scrollWidth >= tableContainment.clientWidth, "List table does not retain horizontal containment")
 	assert(["auto", "scroll"].includes(tableContainment.overflowX), "List table cannot scroll horizontally")
+	assert(tableContainment.role === "region" && tableContainment.tabIndex === 0 && Boolean(tableContainment.ariaLabel), `List table scroller is not a named keyboard region: ${JSON.stringify(tableContainment)}`)
 
 	const loadingPage = await context.newPage()
 	try {
@@ -258,7 +341,7 @@ async function listSuite(page, context) {
 		await loadingPage.close()
 	}
 
-	return { controlHeights, headerPosition, numericAlignment, longValueTreatment, tableContainment }
+	return { controlHeights, headerPosition, numericAlignment, longValueTreatment, emptyStateSurface, tableContainment }
 }
 
 function groupItemCount(value) {
@@ -279,6 +362,232 @@ async function openPlan(page, predicate = () => true) {
 	return fixture
 }
 
+async function invokeFormViewMethod(formView, method) {
+	await formView.evaluate(async (element, methodName) => {
+		const appContainer = Array.from(document.querySelectorAll("*")).find((candidate) => candidate.__vue_app__)
+		const root = appContainer?.__vue_app__?._instance || appContainer?._vnode?.component
+		const queue = root ? [root] : []
+		const visited = new Set()
+		const componentChain = []
+		const enqueueVNode = (vnode) => {
+			if (!vnode || typeof vnode !== "object") return
+			if (Array.isArray(vnode)) {
+				for (const child of vnode) enqueueVNode(child)
+				return
+			}
+			if (vnode.component) queue.push(vnode.component)
+			if (Array.isArray(vnode.children)) enqueueVNode(vnode.children)
+			if (vnode.suspense?.activeBranch) enqueueVNode(vnode.suspense.activeBranch)
+		}
+		let instance = null
+		while (queue.length) {
+			const candidate = queue.shift()
+			if (!candidate || visited.has(candidate)) continue
+			visited.add(candidate)
+			componentChain.push({
+				name: candidate.type?.name || candidate.type?.__name || "anonymous",
+				exposed: Object.keys(candidate.exposed || {}),
+			})
+			if (candidate.exposed?.[methodName] && candidate.subTree?.el === element) {
+				instance = candidate
+				break
+			}
+			enqueueVNode(candidate.subTree)
+		}
+		if (!instance) throw new Error(`FormView does not expose ${methodName}(): ${JSON.stringify({ appContainer: appContainer?.id || null, appKeys: Object.keys(appContainer?.__vue_app__ || {}), componentChain })}`)
+		await instance.exposed[methodName]()
+	}, method)
+}
+
+async function formLoadFailuresSuite(page, context) {
+	await page.setViewportSize({ width: 1600, height: 1000 })
+	const fixture = await findCuttingPlan(page.request)
+	let metadataFailure = true
+	let createMutations = 0
+
+	await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => {
+		if (!metadataFailure) return route.continue()
+		return route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({ exc: "MetadataUnavailable", message: "Metadata unavailable" }),
+		})
+	})
+	await page.route("**/api/resource/**", (route) => {
+		if (!decodeURIComponent(route.request().url()).includes("/api/resource/SD YRP Cutting Plan")) return route.continue()
+		if (route.request().method() === "GET") return route.continue()
+		createMutations += 1
+		return route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({ data: { name: "UNEXPECTED-FORM-CREATE" } }),
+		})
+	})
+
+	await page.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(fixture.name)}`, { waitUntil: "domcontentloaded" })
+	const failedInitialForm = page.locator(".cutting-plan-frame > .common-form-view")
+	await failedInitialForm.locator(".form-load-error").waitFor({ timeout: 20_000 })
+	const initialActions = await failedInitialForm.locator(".form-toolbar__actions button").allTextContents()
+	const initialFailureMessage = await failedInitialForm.locator(".form-load-error").innerText()
+	await invokeFormViewMethod(failedInitialForm, "save")
+	await page.waitForTimeout(100)
+	assert(initialActions.length === 0, `Metadata load failure exposes form actions: ${JSON.stringify(initialActions)}`)
+	assert(createMutations === 0, `Programmatic save created a document after metadata load failure: ${createMutations}`)
+	assert(
+		await failedInitialForm.locator(".form-load-error").innerText() === initialFailureMessage,
+		"Programmatic save replaced the metadata load error state",
+	)
+
+	const reloadPage = await context.newPage()
+	let documentFailure = false
+	let reloadMutations = 0
+	try {
+		await reloadPage.route("**/api/resource/**", (route) => {
+			const request = route.request()
+			if (!decodeURIComponent(request.url()).includes("/api/resource/SD YRP Cutting Plan")) return route.continue()
+			if (request.method() === "GET" && documentFailure) {
+				return route.fulfill({
+					status: 200,
+					contentType: "application/json",
+					body: JSON.stringify({ exc: "DocumentUnavailable", message: "Document unavailable" }),
+				})
+			}
+			if (request.method() === "GET") return route.continue()
+			reloadMutations += 1
+			return route.fulfill({
+				status: 200,
+				contentType: "application/json",
+				body: JSON.stringify({ data: { name: fixture.name } }),
+			})
+		})
+		await reloadPage.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(fixture.name)}`, { waitUntil: "domcontentloaded" })
+		const formView = reloadPage.locator(".cutting-plan-frame > .common-form-view")
+		await formView.getByRole("button", { name: "Edit", exact: true }).waitFor({ timeout: 20_000 })
+		await formView.getByRole("button", { name: "Edit", exact: true }).click()
+		await formView.getByRole("button", { name: "Save", exact: true }).waitFor()
+
+		documentFailure = true
+		await invokeFormViewMethod(formView, "reload")
+		await formView.locator(".form-load-error").waitFor()
+		const failedReloadActions = await formView.locator(".form-toolbar__actions button").allTextContents()
+		const failedReloadIdentity = (await formView.locator(".form-toolbar__meta > small").innerText()).trim()
+		const reloadFailureMessage = await formView.locator(".form-load-error").innerText()
+		const toastCountBeforeSave = await reloadPage.locator(".p-toast-message").count()
+		await invokeFormViewMethod(formView, "save")
+		await reloadPage.waitForTimeout(100)
+
+		assert(failedReloadActions.length === 0, `Document reload failure leaves stale actions: ${JSON.stringify(failedReloadActions)}`)
+		assert(failedReloadIdentity !== fixture.name, `Document reload failure leaves stale record identity: ${failedReloadIdentity}`)
+		assert(reloadMutations === 0, `Programmatic save mutated a document after document load failure: ${reloadMutations}`)
+		assert(
+			await formView.locator(".form-load-error").innerText() === reloadFailureMessage,
+			"Programmatic save replaced the document load error state",
+		)
+		assert(
+			await reloadPage.locator(".p-toast-message").count() === toastCountBeforeSave,
+			"Programmatic save emitted validation feedback after document load failure",
+		)
+
+		documentFailure = false
+		await formView.getByRole("button", { name: "Retry", exact: true }).click()
+		await formView.locator(".form-toolbar__meta > small").getByText(fixture.name, { exact: true }).waitFor()
+		await formView.getByRole("button", { name: "Edit", exact: true }).waitFor()
+		assert(
+			(await formView.locator(".form-toolbar__meta > small").innerText()).trim() === fixture.name,
+			"Retry did not restore the loaded document identity",
+		)
+	} finally {
+		await reloadPage.close()
+	}
+
+	return { plan: fixture.name, metadataFailureGuarded: true, documentFailureGuarded: true }
+}
+
+async function formFieldAccessibilitySuite(page) {
+	await page.setViewportSize({ width: 1600, height: 1000 })
+	const fixtureName = "A11Y-FORM-CONTROLS"
+	const fields = [
+		{ fieldname: "is_manual_entry", label: "Required Toggle", fieldtype: "Check", reqd: 1, description: "Choose whether entry is manual." },
+		{ fieldname: "no_of_colours", label: "Required Select", fieldtype: "Select", options: "One\nTwo", reqd: 1, description: "Choose one option." },
+		{ fieldname: "maximum_no_of_plys", label: "Required Number", fieldtype: "Int", reqd: 1, description: "Enter a whole number." },
+		{ fieldname: "cutting_start_date", label: "Required Date", fieldtype: "Date", reqd: 1, description: "Choose a date." },
+		{ fieldname: "cutting_location", label: "Required Datetime", fieldtype: "Datetime", reqd: 1, description: "Choose a date and time." },
+		{ fieldname: "cutting_end_date", label: "Required Time", fieldtype: "Time", reqd: 1, description: "Choose a time." },
+	]
+	let mutationCalls = 0
+
+	await page.route("**/api/method/essdee_yrp.cutting.plan_editor.get_editor*", (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: JSON.stringify({ message: { record: { name: fixtureName, docstatus: 1 }, permissions: { can_write: true } } }),
+	}))
+	await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: JSON.stringify({ docs: [{ name: "SD YRP Cutting Plan", label: "Cutting Plan", fields }] }),
+	}))
+	await page.route("**/api/resource/**", (route) => {
+		if (!decodeURIComponent(route.request().url()).includes(`/api/resource/SD YRP Cutting Plan/${fixtureName}`)) return route.continue()
+		if (route.request().method() === "GET") {
+			return route.fulfill({
+				status: 200,
+				contentType: "application/json",
+				body: JSON.stringify({ data: { name: fixtureName, docstatus: 1 } }),
+			})
+		}
+		mutationCalls += 1
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: { name: fixtureName } }) })
+	})
+	await page.route("**get_web_view_data*", (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: JSON.stringify({ message: { permissions: { can_write: true } } }),
+	}))
+
+	await page.goto(`${SITE}/web/cutting/plans/${fixtureName}`, { waitUntil: "domcontentloaded" })
+	const formView = page.locator(".cutting-plan-frame > .common-form-view")
+	await formView.getByRole("button", { name: "Edit", exact: true }).waitFor({ timeout: 20_000 })
+	await formView.getByRole("button", { name: "Edit", exact: true }).click()
+	await formView.getByRole("button", { name: "Save", exact: true }).click()
+
+	const controls = [
+		{ label: "Required Toggle", selector: ".p-toggleswitch-input", nativeRequired: true },
+		{ label: "Required Select", selector: ".p-select-label", nativeRequired: false },
+		{ label: "Required Number", selector: ".p-inputnumber-input", nativeRequired: true },
+		{ label: "Required Date", selector: ".p-datepicker-input", nativeRequired: true },
+		{ label: "Required Datetime", selector: ".p-datepicker-input", nativeRequired: true },
+		{ label: "Required Time", selector: ".p-datepicker-input", nativeRequired: true },
+	]
+	const contracts = {}
+	for (const control of controls) {
+		const field = formView.locator(".form-field").filter({ hasText: control.label }).first()
+		await field.locator(".form-field__error").waitFor()
+		contracts[control.label] = await field.locator(control.selector).evaluate((element, expectsNativeRequired) => {
+			const describedBy = element.getAttribute("aria-describedby") || ""
+			const descriptionIds = describedBy.split(/\s+/).filter(Boolean)
+			return {
+				tag: element.tagName.toLowerCase(),
+				required: element.hasAttribute("required"),
+				expectsNativeRequired,
+				ariaRequired: element.getAttribute("aria-required"),
+				ariaInvalid: element.getAttribute("aria-invalid"),
+				describedBy,
+				descriptions: descriptionIds.map((id) => document.getElementById(id)?.textContent?.trim() || ""),
+			}
+		}, control.nativeRequired)
+	}
+
+	for (const [label, contract] of Object.entries(contracts)) {
+		assert(contract.ariaRequired === "true", `${label} focus target is not aria-required: ${JSON.stringify(contract)}`)
+		assert(contract.ariaInvalid === "true", `${label} focus target is not aria-invalid: ${JSON.stringify(contract)}`)
+		assert(contract.descriptions.length === 2 && contract.descriptions.every(Boolean), `${label} focus target does not reference help and error text: ${JSON.stringify(contract)}`)
+		if (contract.expectsNativeRequired) assert(contract.required, `${label} focus target is missing native required support: ${JSON.stringify(contract)}`)
+	}
+	assert(mutationCalls === 0, `Invalid FormField controls allowed a document mutation: ${mutationCalls}`)
+
+	return { fixture: fixtureName, contracts }
+}
+
 async function planFrameSuite(page, context) {
 	await page.setViewportSize({ width: 1600, height: 1000 })
 	const fixture = await openPlan(page, (data) =>
@@ -295,6 +604,10 @@ async function planFrameSuite(page, context) {
 	assert(mainBox && sidebarBox, "Cutting Plan main or sidebar surface is missing")
 	const widthRatio = mainBox.width / sidebarBox.width
 	assert(widthRatio >= 3.7 && widthRatio <= 4.3, `Cutting Plan is not an 80/20 split: ${widthRatio}`)
+	const recordFrameStyle = await main.evaluate((element) => ({ padding: getComputedStyle(element).padding, overflow: getComputedStyle(element).overflow }))
+	const toolbarStyle = await main.locator(".form-toolbar").evaluate((element) => ({ borderRadius: getComputedStyle(element).borderRadius, boxShadow: getComputedStyle(element).boxShadow, borderTopWidth: getComputedStyle(element).borderTopWidth }))
+	assert(recordFrameStyle.padding === "0px" && recordFrameStyle.overflow === "hidden", `Cutting Plan still nests a padded record card: ${JSON.stringify(recordFrameStyle)}`)
+	assert(toolbarStyle.borderRadius === "0px" && toolbarStyle.boxShadow === "none" && toolbarStyle.borderTopWidth === "3px", `Cutting Plan toolbar still renders as a nested card: ${JSON.stringify(toolbarStyle)}`)
 
 	const recordId = page.locator(".form-toolbar__meta > small")
 	const status = page.locator(".form-toolbar__meta .cutting-plan-status")
@@ -400,6 +713,14 @@ async function planFrameSuite(page, context) {
 		collapsedMain && collapsedSidebar && collapsedSidebar.y >= collapsedMain.y + collapsedMain.height - 1,
 		"Sidebar does not move below the main surface at 1050px",
 	)
+
+	await page.setViewportSize({ width: 390, height: 844 })
+	const recordIdentity = await page.locator(".form-toolbar__meta > small").first().evaluate((element) => ({
+		text: element.textContent.trim(),
+		height: element.getBoundingClientRect().height,
+		whiteSpace: getComputedStyle(element).whiteSpace,
+	}))
+	assert(recordIdentity.whiteSpace === "nowrap" && recordIdentity.height <= 22, `Cutting Plan identity wraps into fragments on mobile: ${JSON.stringify(recordIdentity)}`)
 
 	return { plan: fixture.name, widthRatio, tabCount: await visibleTabs.count(), scrollResult }
 }
@@ -628,14 +949,12 @@ async function planPrimaryTabsSuite(page) {
 		(data.accessory_details?.length || 0) > 0,
 	)
 
-	const detailColumns = page.locator(".detail-field-column")
-	assert(await detailColumns.count() === 2, "Details does not use two Desk-aligned columns")
-	const detailWidths = await detailColumns.evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().width))
-	assert(Math.abs(detailWidths[0] - detailWidths[1]) <= 2, `Details columns are unbalanced: ${detailWidths.join(", ")}`)
-	const detailLabels = await detailColumns.evaluateAll((elements) => elements.map((element) =>
-		Array.from(element.querySelectorAll(".form-field__label")).map((label) => label.textContent.replace("*", "").trim()),
-	))
-	const flatDetailLabels = detailLabels.flat()
+	const detailGrid = page.locator(".detail-read-grid")
+	assert(await detailGrid.count() === 1, "Details does not use the compact read-only information grid")
+	assert(await detailGrid.locator("input, button, .p-select").count() === 0, "Details still presents read-only values as disabled form controls")
+	const detailColumnCount = await detailGrid.evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length)
+	assert(detailColumnCount === 4, `Details does not use a dense four-column desktop grid: ${detailColumnCount}`)
+	const flatDetailLabels = await detailGrid.locator(".detail-read-field > span").allTextContents()
 	for (const removedLabel of ["Lot", "Item", "CP Status", "Lay No"]) {
 		assert(!flatDetailLabels.includes(removedLabel), `${removedLabel} is duplicated in the Details tab`)
 	}
@@ -698,7 +1017,7 @@ async function planPrimaryTabsSuite(page) {
 	const undersizedText = await visibleTextBelowMinimum(page.locator(".cutting-plan-main"))
 	assert(undersizedText.length === 0, `Primary tabs contain text below 11px: ${JSON.stringify(undersizedText.slice(0, 8))}`)
 
-	return { plan: fixture.name, detailWidths, summaryHeadings, totalNumberStyle, longIdContainment }
+	return { plan: fixture.name, detailColumnCount, summaryHeadings, totalNumberStyle, longIdContainment }
 }
 
 async function findEditableLaySheet(request, fixture) {
@@ -847,6 +1166,13 @@ async function entityDialogsSuite(page) {
 	await page.locator(".marker-section").getByRole("button", { name: "Create New", exact: true }).click()
 	const markerDialog = page.getByRole("dialog", { name: "Create New Marker" })
 	await markerDialog.waitFor()
+	const markerMaximize = markerDialog.getByRole("button", { name: "Maximize dialog", exact: true })
+	assert(await markerMaximize.count() === 1, "Marker dialog maximize control has no accessible name")
+	assert(await markerMaximize.getAttribute("title") === "Maximize dialog", "Marker dialog maximize control has no visible tooltip")
+	await markerMaximize.click()
+	const markerRestore = markerDialog.getByRole("button", { name: "Restore dialog", exact: true })
+	assert(await markerRestore.count() === 1, "Maximized Marker dialog does not expose a Restore dialog control")
+	await markerRestore.click()
 	assert(page.url() === initialUrl, "Opening a marker dialog navigates away from the Cutting Plan")
 	await page.locator(".p-dialog-mask").click({ position: { x: 4, y: 4 } })
 	await markerDialog.waitFor({ state: "hidden" })
@@ -854,6 +1180,13 @@ async function entityDialogsSuite(page) {
 	await page.locator(".laysheet-section").getByRole("button", { name: "Create New", exact: true }).click()
 	const createDialog = page.getByRole("dialog", { name: "Create Lay Sheet" })
 	await createDialog.waitFor()
+	const laySheetMaximize = createDialog.getByRole("button", { name: "Maximize dialog", exact: true })
+	assert(await laySheetMaximize.count() === 1, "Lay Sheet dialog maximize control has no accessible name")
+	assert(await laySheetMaximize.getAttribute("title") === "Maximize dialog", "Lay Sheet dialog maximize control has no visible tooltip")
+	await laySheetMaximize.click()
+	const laySheetRestore = createDialog.getByRole("button", { name: "Restore dialog", exact: true })
+	assert(await laySheetRestore.count() === 1, "Maximized Lay Sheet dialog does not expose a Restore dialog control")
+	await laySheetRestore.click()
 	assert(await createDialog.getByText(/Start Date|End Date|Started Date|Ended Date/i).count() === 0, "Lay Sheet creation exposes system date-time fields")
 	await createDialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
 
@@ -919,6 +1252,8 @@ async function entityDialogsSuite(page) {
 	assert(await laySheetDialog.locator(".laysheet-material-groups--cloth").getByRole("columnheader", { name: "Cloth Type", exact: true }).count() === 0, "Lay Sheet repeats Cloth Type in every row")
 	const laySheetTableScrolls = await laySheetDialog.locator(".material-requirement-table-wrap").evaluateAll((elements) => elements.map((element) => ({ clientHeight: element.clientHeight, scrollHeight: element.scrollHeight })))
 	assert(laySheetTableScrolls.every(({ clientHeight, scrollHeight }) => scrollHeight <= clientHeight + 1), `Lay Sheet material tables have nested vertical scrolling: ${JSON.stringify(laySheetTableScrolls)}`)
+	const laySheetScrollSemantics = await laySheetDialog.locator(".material-requirement-table-wrap").evaluateAll((elements) => elements.map((element) => ({ role: element.getAttribute("role"), tabIndex: element.tabIndex, label: element.getAttribute("aria-label") })))
+	assert(laySheetScrollSemantics.every(({ role, tabIndex, label }) => role === "region" && tabIndex === 0 && Boolean(label)), `Lay Sheet material tables are not named keyboard-scroll regions: ${JSON.stringify(laySheetScrollSemantics)}`)
 	const laySheetUndersizedText = await visibleTextBelowMinimum(laySheetDialog)
 	assert(laySheetUndersizedText.length === 0, `Lay Sheet dialog contains text below 11px: ${JSON.stringify(laySheetUndersizedText.slice(0, 8))}`)
 
@@ -935,11 +1270,25 @@ async function entityDialogsSuite(page) {
 			} }),
 		})
 	})
-	page.once("dialog", (dialog) => dialog.accept())
 	await laySheetDialog.getByRole("button", { name: "Delete cloth" }).first().click()
+	const deleteClothConfirmation = page.getByRole("alertdialog", { name: "Delete cloth detail?" })
+	await deleteClothConfirmation.waitFor()
+	const keepClothButton = deleteClothConfirmation.getByRole("button", { name: "Keep Cloth", exact: true })
+	assert(await keepClothButton.evaluate((element) => element === document.activeElement), "Lay Sheet delete confirmation does not focus its safe action")
+	assert(await laySheetDialog.locator(".editable-data-block").first().locator("tbody tr").count() === rowsBefore, "Lay Sheet delete ran before confirmation")
+	await deleteClothConfirmation.getByRole("button", { name: "Delete Cloth", exact: true }).click()
 	await laySheetDialog.getByText("Cloth detail deleted.", { exact: true }).waitFor({ timeout: 10_000 })
 	const rowsAfter = await laySheetDialog.locator(".editable-data-block").first().locator("tbody tr").count()
 	assert(rowsAfter === rowsBefore - 1, `Delete success did not remove the rendered row: ${rowsBefore} -> ${rowsAfter}`)
+	await page.setViewportSize({ width: 390, height: 844 })
+	const laySheetMobileOverflow = await laySheetDialog.locator(".p-dialog-content").evaluate((element) => ({ clientWidth: element.clientWidth, scrollWidth: element.scrollWidth }))
+	assert(laySheetMobileOverflow.scrollWidth <= laySheetMobileOverflow.clientWidth + 1, `Lay Sheet tab strip leaks horizontal overflow into the mobile dialog: ${JSON.stringify(laySheetMobileOverflow)}`)
+	assert(await laySheetDialog.getByRole("tab", { name: "Bundles", exact: true }).count() === 1, "Lay Sheet Bundles tab is clipped on mobile")
+	const mobileEntityDialog = await laySheetDialog.evaluate((element) => {
+		const box = element.getBoundingClientRect()
+		return { width: box.width, height: box.height, x: box.x, y: box.y, borderRadius: getComputedStyle(element).borderRadius }
+	})
+	assert(mobileEntityDialog.width === 390 && mobileEntityDialog.height === 844 && mobileEntityDialog.x === 0 && mobileEntityDialog.y === 0 && mobileEntityDialog.borderRadius === "0px", `Cutting entity dialog does not use the shared mobile surface: ${JSON.stringify(mobileEntityDialog)}`)
 
 	return { plan: fixture.name, sheet: sheet.name, dialogScrollContract, rowsBefore, rowsAfter }
 }
@@ -1008,8 +1357,14 @@ async function cpmSuite(page, context) {
 		clientWidth: element.clientWidth,
 		scrollWidth: element.scrollWidth,
 		overflowX: getComputedStyle(element).overflowX,
+		role: element.getAttribute("role"),
+		tabIndex: element.tabIndex,
+		label: element.getAttribute("aria-label"),
 	}))
 	assert(matrixScroll.scrollWidth >= matrixScroll.clientWidth && ["auto", "scroll"].includes(matrixScroll.overflowX), "CPM matrix does not preserve horizontal scrolling")
+	assert(matrixScroll.role === "region" && matrixScroll.tabIndex === 0 && Boolean(matrixScroll.label), `CPM matrix is not a named keyboard-scroll region: ${JSON.stringify(matrixScroll)}`)
+	const secondaryScrollSemantics = await dialog.locator(".erp-table-scroll").evaluateAll((elements) => elements.map((element) => ({ role: element.getAttribute("role"), tabIndex: element.tabIndex, label: element.getAttribute("aria-label") })))
+	assert(secondaryScrollSemantics.every(({ role, tabIndex, label }) => role === "region" && tabIndex === 0 && Boolean(label)), `CPM secondary tables are not named keyboard-scroll regions: ${JSON.stringify(secondaryScrollSemantics)}`)
 
 	const selectionSummary = dialog.locator(".erp-selection-summary")
 	const summaryBefore = await selectionSummary.innerText()
@@ -1542,6 +1897,8 @@ const suites = {
 	shell: shellSuite,
 	"cutting-entry": cuttingEntrySuite,
 	list: listSuite,
+	"form-field-a11y": formFieldAccessibilitySuite,
+	"form-load-failures": formLoadFailuresSuite,
 	"plan-frame": planFrameSuite,
 	"plan-actions": planActionsSuite,
 	"plan-primary-tabs": planPrimaryTabsSuite,

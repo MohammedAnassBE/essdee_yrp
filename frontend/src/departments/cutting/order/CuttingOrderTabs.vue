@@ -135,17 +135,17 @@ const CompletionTable = defineComponent({
 .cutting-order-tabs :deep(.data-table th:last-child), .cutting-order-tabs :deep(.data-table td:last-child) { border-right: 0; }
 .cutting-order-tabs :deep(.data-table tr:last-child td) { border-bottom: 0; }
 .cutting-order-tabs :deep(.number-cell) { text-align: right !important; font-variant-numeric: tabular-nums; }
-.cutting-order-tabs :deep(.strong-cell) { color: #145d43; font-weight: 770; }
+.cutting-order-tabs :deep(.strong-cell) { color: var(--erp-accent-hover); font-weight: 770; }
 .cutting-order-tabs :deep(.completion-state) { display: inline-flex; align-items: center; gap: 5px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 700; }
-.cutting-order-tabs :deep(.completion-state--done) { color: var(--erp-accent); }
-.planned-row { background: #fbfcfb; }
-.completed-row { background: #f2f8f5; }
-.total-row td { color: #29483a; font-weight: 760; background: #eaf5ef; }
+.cutting-order-tabs :deep(.completion-state--done) { color: var(--erp-accent-dark); }
+.planned-row { background: var(--erp-surface-soft); }
+.completed-row { background: var(--erp-success-soft); }
+.total-row td { color: var(--erp-text); font-weight: 760; background: var(--erp-accent-soft); }
 .detail-kind { display: inline-flex; align-items: center; gap: 6px; font-size: var(--erp-font-size-min); font-weight: 720; }
-.detail-kind i { width: 7px; height: 7px; background: #8c9b93; border-radius: 50%; }
-.detail-kind--completed i { background: var(--erp-accent); }
+.detail-kind i { width: 7px; height: 7px; background: var(--erp-text-muted); border-radius: 50%; }
+.detail-kind--completed i { background: var(--erp-success); }
 .cutting-order-tabs :deep(.empty-state) { display: grid; min-height: 100px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); place-items: center; align-content: center; gap: 8px; }
-.cutting-order-tabs :deep(.empty-state i) { color: #6d8a79; font-size: 1.1rem; }
+.cutting-order-tabs :deep(.empty-state i) { color: var(--erp-accent); font-size: 1.1rem; }
 .cutting-order-tabs :deep(.loading-state) { display: grid; gap: 10px; }
 @media (max-width: 780px) { .order-detail-card { grid-template-columns: 1fr; } .order-detail-field, .order-detail-field:nth-child(3n), .order-detail-field:nth-last-child(-n + 3) { border-right: 0; border-bottom: 1px solid var(--erp-border); } .order-detail-field:last-child { border-bottom: 0; } }
 </style>

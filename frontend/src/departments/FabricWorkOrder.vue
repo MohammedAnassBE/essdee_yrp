@@ -276,7 +276,7 @@ watch(() => route.params.workOrderId, () => loadWorkspace())
 .work-order-panels { padding: var(--erp-space-3); background: color-mix(in srgb, var(--erp-bg) 72%, white); }
 .work-order-panels :deep(.p-tabpanel) { padding: 0; }
 .work-order-page__totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
-.work-order-page__total { display: grid; min-height: 66px; align-content: center; gap: 3px; padding: 9px 11px; border: 1px solid color-mix(in srgb, var(--erp-accent) 20%, var(--erp-border)); border-radius: var(--erp-control-radius); background: color-mix(in srgb, var(--erp-accent-soft) 76%, white); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--erp-accent) 76%, white); }
+.work-order-page__total { display: grid; min-height: 66px; align-content: center; gap: 3px; padding: 9px 11px; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--erp-accent) 58%, white); }
 .work-order-page__total strong { color: var(--erp-accent-hover); font-size: 17px; font-weight: 780; }
 .work-order-grn-source { display: grid; gap: var(--erp-space-3); }
 @media (max-width: 1100px) { .work-order-page__identity { align-items: flex-start; flex-wrap: wrap; } }

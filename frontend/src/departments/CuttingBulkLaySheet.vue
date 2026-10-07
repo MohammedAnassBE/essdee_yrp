@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Bulk LaySheets" accent="#079669" back-to="/cutting/bulk-lay-sheets" back-label="Bulk LaySheets" :show-title="false" flat full-width>
+	<DepartmentPage title="Bulk LaySheets" accent="#059669" back-to="/cutting/bulk-lay-sheets" back-label="Bulk LaySheets" :show-title="false" flat full-width>
 		<div class="bulk-workspace erp-workspace">
 			<div v-if="loading && !workspace.record" class="bulk-workspace__loading"><Skeleton height="76px" /><Skeleton height="560px" /></div>
 			<template v-else>
@@ -67,6 +67,7 @@ import {
 } from "../api/cuttingBulkLaySheets.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import DateField from "../components/common/DateField.vue"
+import { useActionConfirmation } from "../utils/useActionConfirmation.js"
 import BulkActions from "./cutting/bulk/BulkActions.vue"
 import BulkActiveLaySheet from "./cutting/bulk/BulkActiveLaySheet.vue"
 import BulkBundleTable from "./cutting/bulk/BulkBundleTable.vue"
@@ -76,6 +77,7 @@ import BulkSetupEditor from "./cutting/bulk/BulkSetupEditor.vue"
 import BulkWorkflowRail from "./cutting/bulk/BulkWorkflowRail.vue"
 
 const route = useRoute()
+const confirmAction = useActionConfirmation()
 const bulkName = computed(() => String(route.params.bulkLaySheetsId || ""))
 const workspace = ref({})
 const loading = ref(true)
@@ -122,16 +124,40 @@ async function withAction(key, action, success) {
 async function runBulkAction(action) {
 	if (action === "create-laysheets") return withAction(action, () => createBulkLaySheets(bulkName.value), "LaySheets created.")
 	if (action === "create-bulk-transfer") return withAction(action, () => createSharedBulkTransfer(bulkName.value), "Bulk Lot Transfer created.")
-	if (action === "submit-bulk-transfer") { if (!window.confirm("Submit the shared Lot Transfer?")) return; return withAction(action, () => submitSharedBulkTransfer(bulkName.value), "Bulk Lot Transfer submitted.") }
+	if (action === "submit-bulk-transfer") return confirmAction({
+		header: "Submit shared Lot Transfer?",
+		message: "Submit the shared Lot Transfer? This finalizes the document.",
+		acceptLabel: "Submit Transfer",
+		rejectLabel: "Keep Draft",
+		acceptSeverity: "primary",
+		acceptIcon: "pi pi-check",
+		accept: () => withAction(action, () => submitSharedBulkTransfer(bulkName.value), "Bulk Lot Transfer submitted."),
+	})
 	if (action === "create-bulk-dc") { await persistActive(); actionRow.value = null; bulkDelivery.value = true; deliveryOpen.value = true }
 }
 async function runRowAction({ action, row }) {
 	actionRow.value = row
 	if (action === "generate") return openGenerate(row)
 	if (action === "create-transfer") return withAction(`${action}:${row.name}`, () => createBulkRowTransfer(bulkName.value, row.name), `Lot Transfer created for ${row.lot}.`)
-	if (action === "submit-transfer") { if (!window.confirm(`Submit Lot Transfer ${row.lot_transfer}?`)) return; return withAction(`${action}:${row.name}`, () => submitBulkRowTransfer(bulkName.value, row.name), `Lot Transfer submitted for ${row.lot}.`) }
+	if (action === "submit-transfer") return confirmAction({
+		header: "Submit Lot Transfer?",
+		message: `Submit Lot Transfer ${row.lot_transfer}? This finalizes the document.`,
+		acceptLabel: "Submit Transfer",
+		rejectLabel: "Keep Draft",
+		acceptSeverity: "primary",
+		acceptIcon: "pi pi-check",
+		accept: () => withAction(`${action}:${row.name}`, () => submitBulkRowTransfer(bulkName.value, row.name), `Lot Transfer submitted for ${row.lot}.`),
+	})
 	if (action === "create-dc") { await persistActive(); bulkDelivery.value = false; deliveryOpen.value = true; return }
-	if (action === "submit-dc") { if (!window.confirm(`Submit Delivery Challan ${row.delivery_challan}?`)) return; return withAction(`${action}:${row.name}`, () => submitBulkRowDelivery(bulkName.value, row.name), `Delivery Challan submitted for ${row.lot}.`) }
+	if (action === "submit-dc") return confirmAction({
+		header: "Submit Delivery Challan?",
+		message: `Submit Delivery Challan ${row.delivery_challan}? This finalizes the document.`,
+		acceptLabel: "Submit Delivery Challan",
+		rejectLabel: "Keep Draft",
+		acceptSeverity: "primary",
+		acceptIcon: "pi pi-check",
+		accept: () => withAction(`${action}:${row.name}`, () => submitBulkRowDelivery(bulkName.value, row.name), `Delivery Challan submitted for ${row.lot}.`),
+	})
 	if (action === "approve") return withAction(`${action}:${row.name}`, () => approveBulkGrammage(bulkName.value, row.name), `Grammage approved for ${row.lot}.`)
 	if (action === "print") { await persistActive(); printOpen.value = true }
 }

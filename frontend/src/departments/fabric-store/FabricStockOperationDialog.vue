@@ -61,6 +61,7 @@ import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import TimeField from "../../components/common/TimeField.vue"
 import StockItemComposer from "../../components/stock/StockItemComposer.vue"
+import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
@@ -70,6 +71,7 @@ const props = defineProps({
 	sourceContext: { type: Object, default: () => ({}) },
 })
 const emit = defineEmits(["update:visible", "changed"])
+const confirmAction = useActionConfirmation()
 
 const labels = { stock_entry: "Stock Entry", stock_reconciliation: "Stock Reconciliation", stock_update: "Stock Update", lot_transfer: "Lot Transfer" }
 const loading = ref(false)
@@ -127,7 +129,14 @@ async function save(submit) {
 }
 function requestVisibility(value) {
 	if (value) return
-	if (dirty.value && !window.confirm("Discard the unsaved stock document changes?")) return
+	if (dirty.value) return confirmAction({
+		header: "Discard stock document changes?",
+		message: "Discard the unsaved stock document changes? This cannot be undone.",
+		acceptLabel: "Discard Changes",
+		rejectLabel: "Keep Editing",
+		acceptIcon: "pi pi-trash",
+		accept: () => emit("update:visible", false),
+	})
 	emit("update:visible", false)
 }
 function emptyForm() { return { purpose: "", update_type: "", from_warehouse: "", to_warehouse: "", default_warehouse: "", default_supplier: "", warehouse: "", supplier: "", posting_date: "", posting_time: "", edit_posting_date_and_time: 0, comments: "" } }

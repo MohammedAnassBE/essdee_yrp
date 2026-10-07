@@ -39,7 +39,7 @@
 						</section>
 						<section class="detail-section">
 							<header><div><h3>Item Attributes</h3><small>Attribute mappings and their available values.</small></div><Button v-if="canEdit" label="Add Attribute" icon="pi pi-plus" text size="small" @click="addAttribute" /></header>
-							<div class="table-scroll"><table class="detail-table"><thead><tr><th>Attribute</th><th>Mapping</th><th>Values (comma separated)</th><th v-if="canEdit"></th></tr></thead><tbody><tr v-for="(row, index) in attributes" :key="row._row_key || index"><td><InputText v-model="row.attribute" :disabled="!canEdit || Boolean(row._row_key && !row._row_key.startsWith('new:'))" fluid /></td><td>{{ row.mapping || "Created on save" }}</td><td><InputText v-model="row.valuesText" :disabled="!canEdit" fluid /></td><td v-if="canEdit"><Button icon="pi pi-trash" severity="danger" text rounded aria-label="Remove attribute" @click="attributes.splice(index, 1)" /></td></tr></tbody></table></div>
+							<div class="table-scroll" role="region" tabindex="0" aria-label="Item attribute mappings"><table class="detail-table"><thead><tr><th>Attribute</th><th>Mapping</th><th>Values (comma separated)</th><th v-if="canEdit"></th></tr></thead><tbody><tr v-for="(row, index) in attributes" :key="row._row_key || index"><td><InputText v-model="row.attribute" :disabled="!canEdit || Boolean(row._row_key && !row._row_key.startsWith('new:'))" fluid /></td><td>{{ row.mapping || "Created on save" }}</td><td><InputText v-model="row.valuesText" :disabled="!canEdit" fluid /></td><td v-if="canEdit"><Button icon="pi pi-trash" severity="danger" text rounded aria-label="Remove attribute" @click="attributes.splice(index, 1)" /></td></tr></tbody></table></div>
 							<div v-if="!attributes.length" class="detail-empty">Save the item once to load its default attributes.</div>
 						</section>
 					</TabPanel>
@@ -200,7 +200,7 @@ const RowEditor = defineComponent({
 	setup(componentProps, { slots, emit: childEmit }) {
 		return () => h("section", { class: "detail-section row-editor" }, [
 			h("header", [h("h3", componentProps.title), componentProps.editable ? h(Button, { label: componentProps.addLabel, icon: "pi pi-plus", text: true, size: "small", onClick: () => childEmit("add") }) : null]),
-			componentProps.rows.length ? h("div", { class: "table-scroll" }, h("table", { class: "detail-table" }, [
+			componentProps.rows.length ? h("div", { class: "table-scroll", role: "region", tabindex: 0, "aria-label": componentProps.title }, h("table", { class: "detail-table" }, [
 				h("thead", h("tr", [h("th", "S.No."), slots.header?.(), componentProps.editable ? h("th") : null])),
 				h("tbody", componentProps.rows.map((row, index) => h("tr", { key: row._row_key || index }, [h("td", index + 1), slots.row?.({ row, index }), componentProps.editable ? h("td", h(Button, { icon: "pi pi-trash", severity: "danger", text: true, rounded: true, "aria-label": "Remove row", onClick: () => childEmit("remove", index) })) : null]))),
 			])) : h("div", { class: "detail-empty" }, `No ${String(componentProps.title || "rows").toLowerCase()} yet.`),
@@ -213,7 +213,7 @@ const CombinationMatrix = defineComponent({
 	setup(componentProps) {
 		return () => h("section", { class: "detail-section combination-section" }, [
 			h("header", h("h3", componentProps.title)),
-			componentProps.model?.values?.length ? h("div", { class: "table-scroll" }, h("table", { class: "detail-table combination-table" }, [
+			componentProps.model?.values?.length ? h("div", { class: "table-scroll", role: "region", tabindex: 0, "aria-label": componentProps.title }, h("table", { class: "detail-table combination-table" }, [
 				h("thead", h("tr", [h("th", "Major Value"), ...(componentProps.model.attributes || []).map((attribute) => h("th", attribute))])),
 				h("tbody", componentProps.model.values.map((row, index) => h("tr", { key: `${row.major_attribute}-${index}` }, [
 					h("td", row.major_attribute),
@@ -243,6 +243,7 @@ const CombinationMatrix = defineComponent({
 .detail-fields label { display: grid; gap: 5px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 680; }
 .detail-fields .check-field { display: flex; align-items: center; gap: 8px; min-height: var(--erp-control-height); padding-top: 20px; }
 .table-scroll { max-width: 100%; overflow: auto; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.table-scroll:focus-visible { outline: 2px solid var(--erp-accent-dark); outline-offset: -2px; }
 .detail-table { width: 100%; min-width: 680px; border-collapse: collapse; font-size: var(--erp-font-size-caption); }
 .detail-table th, .detail-table td { padding: 8px 9px; text-align: left; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
 .detail-table th { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; background: var(--erp-surface-muted); }
@@ -254,5 +255,5 @@ const CombinationMatrix = defineComponent({
 .combination-actions { display: flex; margin-bottom: 12px; justify-content: flex-end; }
 .discard-copy { margin: 0; color: var(--erp-text-muted); }
 :global(.cutting-order-detail-dialog) { width: min(96vw, 1180px); }
-@media (max-width: 800px) { .detail-fields, .detail-loading { grid-template-columns: 1fr; } }
+@media (max-width: 800px) { .detail-fields, .detail-loading { grid-template-columns: 1fr; } .table-scroll { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); } }
 </style>

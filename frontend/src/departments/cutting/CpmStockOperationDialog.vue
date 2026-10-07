@@ -173,7 +173,7 @@ function emptyForm() { return { purpose: "", to_warehouse: "", update_type: "" }
 }
 
 .erp-select-field > span {
-	color: #405047;
+	color: var(--erp-text-secondary);
 	font-size: var(--erp-font-size-caption);
 	font-weight: 700;
 }

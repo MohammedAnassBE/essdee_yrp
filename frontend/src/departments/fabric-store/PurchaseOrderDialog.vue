@@ -58,6 +58,7 @@ import { computed, ref, watch } from "vue"
 import { changeFabricStoreDocumentStatus, getPurchaseOrderWorkspace } from "../../api/fabricStore.js"
 import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
 import StockItemMatrix from "../../components/stock/StockItemMatrix.vue"
+import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import RelatedDocumentWorkspaceDialog from "./RelatedDocumentWorkspaceDialog.vue"
 
 const props = defineProps({
@@ -65,6 +66,7 @@ const props = defineProps({
 	purchaseOrder: { type: String, default: "" },
 })
 const emit = defineEmits(["update:visible", "changed"])
+const confirmAction = useActionConfirmation()
 
 const currentName = ref("")
 const loading = ref(false)
@@ -90,7 +92,22 @@ async function load() {
 }
 
 async function changeStatus(action) {
-	if (["cancel", "amend"].includes(action) && !window.confirm(`${action === "cancel" ? "Cancel" : "Amend"} ${currentName.value}?`)) return
+	if (["cancel", "amend"].includes(action)) {
+		const actionLabel = action === "cancel" ? "Cancel" : "Amend"
+		return confirmAction({
+			header: `${actionLabel} Purchase Order?`,
+			message: action === "cancel"
+				? `Cancel Purchase Order ${currentName.value}? This changes the document status and may affect linked work.`
+				: `Create an amended draft from Purchase Order ${currentName.value}?`,
+			acceptLabel: `${actionLabel} Document`,
+			acceptIcon: action === "cancel" ? "pi pi-ban" : "pi pi-copy",
+			accept: () => performStatusChange(action),
+		})
+	}
+	return performStatusChange(action)
+}
+
+async function performStatusChange(action) {
 	acting.value = action
 	error.value = ""
 	try {

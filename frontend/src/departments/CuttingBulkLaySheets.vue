@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Bulk LaySheets" accent="#0b8f65" back-to="/cutting" back-label="Cutting" :show-title="false" flat>
+	<DepartmentPage title="Bulk LaySheets" accent="#059669" back-to="/cutting" back-label="Cutting" :show-title="false" flat full-width>
 		<div class="cutting-list erp-workspace">
 			<ListView
 				v-if="capability"

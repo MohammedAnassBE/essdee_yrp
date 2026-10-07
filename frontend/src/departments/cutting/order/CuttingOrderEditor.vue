@@ -1,8 +1,8 @@
 <template>
-	<section class="cutting-order-editor erp-card" aria-label="Cutting Order editor">
-		<header class="order-editor-header">
+	<section class="cutting-order-editor erp-card erp-editor-shell" aria-label="Cutting Order editor">
+		<header class="order-editor-header erp-editor-header">
 			<div><span>{{ name || "New document" }}</span><h1>{{ name ? "Edit Cutting Order" : "New Cutting Order" }}</h1></div>
-			<div class="order-editor-actions">
+			<div class="order-editor-actions erp-editor-actions">
 				<Button label="Cancel" severity="secondary" text :disabled="busy" @click="emit('cancel')" />
 				<Button label="Save Draft" icon="pi pi-save" severity="secondary" outlined :loading="saving === 'draft'" :disabled="busy || !canSave" @click="save(false)" />
 				<Button v-if="permissions.can_submit" label="Save & Submit" icon="pi pi-check" :loading="saving === 'submit'" :disabled="busy || !canSave" @click="save(true)" />
@@ -19,8 +19,8 @@
 						<label>Cutting Order Detail <span>*</span></label>
 						<div class="detail-selector">
 							<LinkField v-model="form.cutting_order_detail" doctype="SD YRP Cutting Order Detail" :show-open-button="false" :disabled="busy" show-clear @select="detailSelected" @clear="clearDetail" />
-							<Button v-if="detailPermissions.can_create" label="Create Detail" icon="pi pi-plus" severity="secondary" outlined @click="openDetail('')" />
-							<Button v-if="form.cutting_order_detail && detailPermissions.can_write" label="Edit Detail" icon="pi pi-pencil" severity="secondary" text @click="openDetail(form.cutting_order_detail)" />
+							<Button v-if="detailPermissions.can_create" label="Create Detail" icon="pi pi-plus" severity="secondary" outlined :disabled="busy" @click="openDetail('')" />
+							<Button v-if="form.cutting_order_detail && detailPermissions.can_write" label="Edit Detail" icon="pi pi-pencil" severity="secondary" text :disabled="busy" @click="openDetail(form.cutting_order_detail)" />
 						</div>
 					</div>
 					<div class="order-editor-field"><label>Item</label><InputText v-model="form.item" disabled fluid /></div>
@@ -206,12 +206,9 @@ watch(() => props.name, load)
 </script>
 
 <style scoped>
-.cutting-order-editor { display: flex; min-width: 0; min-height: calc(100dvh - var(--erp-shell-header-height) - 98px); padding: var(--erp-space-4); flex-direction: column; gap: var(--erp-space-3); }
-.order-editor-header { display: flex; align-items: center; justify-content: space-between; gap: var(--erp-space-3); padding-bottom: var(--erp-space-3); border-bottom: 1px solid var(--erp-border); }
-.order-editor-header > div:first-child { display: grid; gap: 3px; }
+.cutting-order-editor { display: flex; min-width: 0; min-height: calc(100dvh - var(--erp-shell-header-height) - 98px); flex-direction: column; gap: var(--erp-space-3); }
 .order-editor-header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 700; letter-spacing: 0.035em; text-transform: uppercase; }
 .order-editor-header h1 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-title); letter-spacing: -0.025em; }
-.order-editor-actions { display: flex; align-items: center; gap: 8px; }
 .order-editor-loading, .order-editor-body { display: grid; gap: var(--erp-space-3); min-width: 0; }
 .order-editor-section { display: grid; gap: var(--erp-space-3); padding: var(--erp-space-3); background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); }
 .order-editor-section > header { padding-bottom: 8px; border-bottom: 1px solid var(--erp-border); }
@@ -223,5 +220,5 @@ watch(() => props.name, load)
 .order-editor-field > label span { color: var(--p-red-500); }
 .detail-selector { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; gap: 8px; }
 .discard-copy { margin: 0; color: var(--erp-text-muted); }
-@media (max-width: 760px) { .order-editor-header { align-items: stretch; flex-direction: column; } .order-editor-actions { flex-wrap: wrap; } .order-editor-fields { grid-template-columns: 1fr; } .detail-selector { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .order-editor-fields { grid-template-columns: 1fr; } .detail-selector { grid-template-columns: 1fr; } }
 </style>

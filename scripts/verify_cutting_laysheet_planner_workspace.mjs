@@ -157,6 +157,27 @@ assert(compactOrderTable.rowHeight <= 46, `Order Details rows still contain exce
 assert(compactOrderTable.sizeWidth <= 250, `Size inputs are still excessively wide: ${JSON.stringify(compactOrderTable)}`)
 assert(compactOrderTable.quantityWidth <= 220, `Quantity inputs are still excessively wide: ${JSON.stringify(compactOrderTable)}`)
 assert(compactOrderTable.maxInputHeight <= 34, `Order Details inputs are still taller than compact controls: ${JSON.stringify(compactOrderTable)}`)
+await page.setViewportSize({ width: 390, height: 844 })
+const mobileOrderTable = await page.locator(".planner-order-table-wrap").evaluate((element) => {
+	const quantity = element.querySelector(".p-inputnumber-input")?.getBoundingClientRect()
+	const bounds = element.getBoundingClientRect()
+	const table = element.querySelector("table")
+	const firstRow = element.querySelector("tbody tr")
+	return {
+		clientWidth: element.clientWidth,
+		scrollWidth: element.scrollWidth,
+		tableClientWidth: table?.clientWidth,
+		tableScrollWidth: table?.scrollWidth,
+		cellWidths: firstRow ? [...firstRow.children].map((cell) => ({ width: cell.getBoundingClientRect().width, clientWidth: cell.clientWidth, scrollWidth: cell.scrollWidth })) : [],
+		role: element.getAttribute("role"),
+		tabIndex: element.tabIndex,
+		ariaLabel: element.getAttribute("aria-label"),
+		quantityVisible: Boolean(quantity && quantity.left >= bounds.left - 1 && quantity.right <= bounds.right + 1),
+	}
+})
+assert(mobileOrderTable.scrollWidth <= mobileOrderTable.clientWidth + 1 && mobileOrderTable.quantityVisible, `Mobile Order Details hides quantity editing offscreen: ${JSON.stringify(mobileOrderTable)}`)
+assert(mobileOrderTable.role === "region" && mobileOrderTable.tabIndex === 0 && Boolean(mobileOrderTable.ariaLabel), `Mobile Order Details is not an accessible editing region: ${JSON.stringify(mobileOrderTable)}`)
+await page.setViewportSize({ width: 1280, height: 800 })
 await page.getByRole("button", { name: "Save Draft", exact: true }).click()
 await page.waitForURL("**/web/cutting/lay-sheet-planner/CLP-2026-00001")
 await page.getByRole("heading", { name: "LaySheet Planner", exact: true }).waitFor({ timeout: 20_000 })
@@ -186,6 +207,8 @@ assert(await page.getByRole("tab", { name: "Plan", exact: true }).getAttribute("
 assert(await page.locator(".planner-strategy-card").count() === 8, "Strategy outcomes are missing")
 await page.getByText("Detailed Lay Plan", { exact: true }).waitFor()
 assert(await page.locator(".planner-lay-plan__header h2").textContent() === "Direct Integer Search", "The selected strategy and its lay plan are not visible together")
+const selectedStrategyCard = page.locator(".planner-strategy-card--selected").first()
+assert(await selectedStrategyCard.getAttribute("aria-disabled") === "true" && await selectedStrategyCard.getAttribute("tabindex") === "-1", "Selected planner strategy remains exposed as an actionable control")
 await page.setViewportSize({ width: 1280, height: 700 })
 const planTabPanels = page.locator(".planner-tabs .p-tabpanels")
 const strategyPane = page.locator(".planner-plan-workspace__strategies")
@@ -215,12 +238,38 @@ assert(await planTabPanels.evaluate((element) => element.scrollTop) === 0, "Inde
 const strategyPanelBox = await page.locator(".planner-plan-workspace__strategies").boundingBox()
 const resultPanelBox = await page.locator(".planner-plan-workspace__result").boundingBox()
 assert(strategyPanelBox && resultPanelBox && strategyPanelBox.x < resultPanelBox.x, "Planner does not use the Desk-style strategy-left/result-right layout")
-await page.getByText("Minimum Deviation", { exact: true }).click()
+
+await page.setViewportSize({ width: 900, height: 760 })
+const tabletPlanLayout = await page.evaluate(() => {
+	const metrics = (selector) => {
+		const element = document.querySelector(selector)
+		const box = element.getBoundingClientRect()
+		return { x: box.x, y: box.y, clientHeight: element.clientHeight, scrollHeight: element.scrollHeight, overflowY: getComputedStyle(element).overflowY }
+	}
+	return {
+		tabs: metrics(".planner-tabs .p-tabpanels"),
+		strategies: metrics(".planner-plan-workspace__strategies"),
+		result: metrics(".planner-plan-workspace__result"),
+	}
+})
+assert(tabletPlanLayout.strategies.x < tabletPlanLayout.result.x, `Planner stacks Strategies above the result at tablet width: ${JSON.stringify(tabletPlanLayout)}`)
+assert(tabletPlanLayout.tabs.overflowY === "hidden", `Planner tab owns tablet scrolling: ${JSON.stringify(tabletPlanLayout)}`)
+assert(["auto", "scroll"].includes(tabletPlanLayout.strategies.overflowY) && ["auto", "scroll"].includes(tabletPlanLayout.result.overflowY), `Planner panes are not independently scrollable at tablet width: ${JSON.stringify(tabletPlanLayout)}`)
+
+await page.setViewportSize({ width: 1280, height: 700 })
+const keyboardStrategy = page.locator(".planner-strategy-card").filter({ has: page.getByRole("heading", { name: "Minimum Deviation", exact: true }) })
+assert(await keyboardStrategy.getAttribute("aria-disabled") === "false" && await keyboardStrategy.getAttribute("tabindex") === "0", "Selectable planner strategy lacks enabled button semantics")
+await keyboardStrategy.focus()
+const selectionResponse = page.waitForResponse((response) => response.url().includes("select_result") && response.request().method() === "POST")
+await page.keyboard.press("Space")
+await selectionResponse
 assert(selected === "minimum_deviation", "Strategy selection was not persisted")
 await page.locator(".planner-lay-plan__header h2").getByText("Minimum Deviation", { exact: true }).waitFor()
 assert(await page.getByText("Size Deviation", { exact: true }).count() === 1, "Deviation analysis is missing")
 const matrixOverflow = await page.locator(".planner-lay-table-wrap").evaluate((element) => getComputedStyle(element).overflowX)
 assert(["auto", "scroll"].includes(matrixOverflow), `Lay matrix is not horizontally contained: ${matrixOverflow}`)
+const matrixRegion = await page.locator(".planner-lay-table-wrap").evaluate((element) => ({ role: element.getAttribute("role"), tabIndex: element.tabIndex, ariaLabel: element.getAttribute("aria-label") }))
+assert(matrixRegion.role === "region" && matrixRegion.tabIndex === 0 && Boolean(matrixRegion.ariaLabel), `Lay matrix is not a named keyboard-scrollable region: ${JSON.stringify(matrixRegion)}`)
 
 state = "Failed"
 await page.reload({ waitUntil: "domcontentloaded" })
@@ -241,6 +290,10 @@ for (const viewport of [{ width: 1600, height: 1000 }, { width: 1280, height: 80
 	assert(undersized.length === 0, `Planner workspace has text below 11px at ${viewport.width}px: ${JSON.stringify(undersized.slice(0, 8))}`)
 	const summaryColumns = await page.locator(".planner-summary-grid").evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length)
 	responsiveLayouts[viewport.width] = summaryColumns
+	if (viewport.width === 390) {
+		const mobileStrategies = await page.locator(".planner-plan-workspace__strategies").evaluate((element) => ({ clientHeight: element.clientHeight, scrollHeight: element.scrollHeight, overflowY: getComputedStyle(element).overflowY }))
+		assert(mobileStrategies.clientHeight <= 420 && mobileStrategies.scrollHeight > mobileStrategies.clientHeight && ["auto", "scroll"].includes(mobileStrategies.overflowY), `Mobile strategies still create an excessive page scroll: ${JSON.stringify(mobileStrategies)}`)
+	}
 }
 assert(errors.length === 0, `Browser errors: ${JSON.stringify(errors)}`)
 

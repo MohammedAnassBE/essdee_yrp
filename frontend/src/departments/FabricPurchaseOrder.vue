@@ -46,7 +46,7 @@
 							<div><strong>{{ row.name }}</strong><span>{{ row.label }}</span></div><Tag :value="statusLabel(row.docstatus)" :severity="Number(row.docstatus) === 1 ? 'info' : Number(row.docstatus) === 2 ? 'danger' : 'secondary'" rounded /><i class="pi pi-chevron-right" />
 						</button>
 					</section>
-					<div v-for="total in workspace.totals || []" :key="total.fieldname" class="purchase-order-page__total">
+					<div v-for="total in workspace.totals || []" :key="total.fieldname" class="purchase-order-page__total" :class="{ 'purchase-order-page__total--primary': primaryTotalFieldnames.has(total.fieldname) }">
 						<span>{{ total.label }}</span><strong>{{ formatTotal(total) }}</strong>
 					</div>
 				</template>
@@ -119,6 +119,7 @@ import SupplierNotificationPanel from "./fabric-store/SupplierNotificationPanel.
 
 const route = useRoute()
 const router = useRouter()
+const primaryTotalFieldnames = new Set(["total_qty", "grand_total"])
 const loading = ref(true)
 const refreshing = ref(false)
 const acting = ref("")
@@ -344,12 +345,13 @@ watch(() => route.params.purchaseOrderId, () => loadWorkspace())
 .purchase-order-page__details { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
 .purchase-order-page__details > div { display: grid; min-height: 58px; align-content: center; gap: 4px; padding: 9px 12px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
 .purchase-order-page__details strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
-.purchase-order-page__total { display: grid; min-height: 70px; align-content: center; gap: 4px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--erp-accent) 20%, var(--erp-border)); border-radius: var(--erp-control-radius); background: color-mix(in srgb, var(--erp-accent-soft) 76%, white); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--erp-accent) 76%, white); }
+.purchase-order-page__total { display: grid; min-height: 70px; align-content: center; gap: 4px; padding: 10px 12px; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); box-shadow: none; }
+.purchase-order-page__total--primary { border-color: color-mix(in srgb, var(--erp-accent) 22%, var(--erp-border)); background: color-mix(in srgb, var(--erp-accent-soft) 62%, white); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--erp-accent) 72%, white); }
 .purchase-order-page__total strong { color: var(--erp-accent-hover); font-size: 18px; font-weight: 780; font-variant-numeric: tabular-nums; }
 .purchase-order-related { display: grid; overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
 .purchase-order-related > header { display: flex; min-height: 40px; align-items: center; justify-content: space-between; padding: 7px 10px; border-bottom: 1px solid var(--erp-border); background: var(--erp-surface-soft); }
 .purchase-order-related > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
-.purchase-order-related > header strong { color: var(--erp-accent); font-size: var(--erp-font-size-caption); }
+.purchase-order-related > header strong { color: var(--erp-accent-dark); font-size: var(--erp-font-size-caption); }
 .purchase-order-related > button { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 9px 10px; color: inherit; font: inherit; text-align: left; border: 0; border-bottom: 1px solid var(--erp-border); background: transparent; cursor: pointer; }
 .purchase-order-related > button:last-child { border-bottom: 0; }
 .purchase-order-related > button { transition: background-color 160ms ease, padding-left 160ms ease; }
@@ -373,7 +375,7 @@ watch(() => route.params.purchaseOrderId, () => loadWorkspace())
 .purchase-order-rejection { display: grid; gap: var(--erp-space-3); }
 .purchase-order-rejection label { display: grid; gap: 6px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
 @media (max-width: 1100px) { .purchase-order-page__identity { align-items: flex-start; flex-wrap: wrap; } .purchase-order-page__details { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 900px) { .purchase-order-related { grid-column: 1 / -1; } }
+@media (max-width: 900px) { .purchase-order-related, .purchase-order-page__total:last-child { grid-column: 1 / -1; } }
 @media (max-width: 650px) { .fabric-purchase-order-frame { margin-bottom: 0; padding: 0; } .purchase-order-page__identity { width: 100%; } .purchase-order-page__facts { width: 100%; padding: 8px 0 0; border-top: 1px solid var(--erp-border); border-left: 0; flex-wrap: wrap; } .purchase-order-page__details { grid-template-columns: 1fr; } .purchase-order-lots__add { grid-template-columns: 1fr; } }
 :global(.fabric-action-dialog .p-dialog-content) { min-height: 0; }
 @media (max-width: 620px) { :global(.fabric-action-dialog) { width: 100vw !important; height: 100dvh !important; max-height: 100dvh !important; margin: 0; border-radius: 0; } :global(.fabric-action-dialog .p-dialog-content) { flex: 1; overflow-y: auto; } }

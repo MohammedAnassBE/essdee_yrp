@@ -12,18 +12,10 @@
 			<TabPanel value="details">
 				<div class="tab-stack">
 					<section class="content-card detail-fields-card erp-card">
-						<div class="detail-field-columns">
-							<div v-for="(column, columnIndex) in detailColumns" :key="columnIndex" class="detail-field-column">
-								<FormField
-									v-for="fieldname in column"
-									:key="fieldname"
-									:field="field(fieldname)"
-									:model-value="doc[fieldname]"
-									:form="doc"
-									disabled
-									:required="Boolean(field(fieldname).reqd)"
-									:show-open-button="false"
-								/>
+						<div class="detail-read-grid" aria-label="Cutting Plan details">
+							<div v-for="fieldname in detailFieldnames" :key="fieldname" class="detail-read-field">
+								<span>{{ field(fieldname).label }}</span>
+								<strong :class="{ 'detail-read-field__boolean': field(fieldname).fieldtype === 'Check' }">{{ detailValue(fieldname) }}</strong>
 							</div>
 						</div>
 					</section>
@@ -32,7 +24,7 @@
 					<Message v-else-if="error" severity="error" :closable="false">{{ error }}</Message>
 					<template v-else>
 						<DataSection title="Lot Planned Quantity" :count="plannedItemCount">
-							<div v-for="(group, groupIndex) in itemGroups" :key="groupIndex" class="table-scroll">
+							<div v-for="(group, groupIndex) in itemGroups" :key="groupIndex" class="table-scroll" role="region" tabindex="0" :aria-label="`Lot planned quantity group ${groupIndex + 1}`">
 								<table class="data-table matrix-table">
 									<thead>
 										<tr>
@@ -68,7 +60,7 @@
 						</DataSection>
 
 						<DataSection title="Grammage Change Log" :count="data.grammage_change_logs?.length || 0">
-							<div class="table-scroll">
+							<div class="table-scroll" role="region" tabindex="0" aria-label="Grammage change log">
 								<table class="data-table">
 									<thead><tr><th>S.No.</th><th>From Grammage Allowance (kg)</th><th>To Grammage Allowance (kg)</th><th>Changed By</th><th>Changed On</th></tr></thead>
 									<tbody>
@@ -93,7 +85,7 @@
 						<DataSection class="completed-quantity-section" title="Completed Cut Quantity" :count="completedItemCount" icon="pi pi-box">
 							<template v-for="(group, groupIndex) in completedGroups" :key="groupIndex">
 								<div v-if="panelNames(group).length" class="panel-strip"><strong>Panels</strong><span>{{ panelNames(group).join(", ") }}</span></div>
-								<div class="table-scroll">
+								<div class="table-scroll" role="region" tabindex="0" :aria-label="`Completed cut quantity group ${groupIndex + 1}`">
 									<table class="data-table matrix-table">
 										<thead><tr><th>S.No.</th><th v-for="attribute in group.attributes || []" :key="attribute">{{ attribute }}</th><th v-for="value in group.primary_attribute_values || []" :key="value">{{ value }}</th><th>Total</th></tr></thead>
 										<tbody>
@@ -111,7 +103,7 @@
 						</DataSection>
 
 						<DataSection class="excess-quantity-section" title="Excess Cut Quantity" :count="incompleteItemCount" icon="pi pi-share-alt">
-							<div v-for="(group, groupIndex) in incompleteGroups" :key="groupIndex" class="table-scroll">
+							<div v-for="(group, groupIndex) in incompleteGroups" :key="groupIndex" class="table-scroll" role="region" tabindex="0" :aria-label="`Excess cut quantity group ${groupIndex + 1}`">
 								<table class="data-table matrix-table">
 									<thead><tr><th>S.No.</th><th v-for="attribute in group.attributes || []" :key="attribute">{{ attribute }}</th><th v-for="value in group.primary_attribute_values || []" :key="value">{{ value }}</th></tr></thead>
 									<tbody><tr v-for="(item, itemIndex) in group.items || []" :key="itemIndex"><td>{{ itemIndex + 1 }}</td><td v-for="attribute in group.attributes || []" :key="attribute">{{ displayAttribute(item, attribute) }}</td><td v-for="value in group.primary_attribute_values || []" :key="value">{{ excessValue(item.values?.[value]) }}</td></tr></tbody>
@@ -137,7 +129,7 @@
 					</Message>
 					<template v-else>
 						<DataSection title="Work Order Summary" :count="plannedSummaryCount" icon="pi pi-chart-bar">
-							<div v-for="(group, groupIndex) in data.planned_detail?.item_detail || []" :key="groupIndex" class="table-scroll">
+							<div v-for="(group, groupIndex) in data.planned_detail?.item_detail || []" :key="groupIndex" class="table-scroll" role="region" tabindex="0" :aria-label="`Work Order summary group ${groupIndex + 1}`">
 								<table class="data-table matrix-table">
 									<thead><tr><th>S.No.</th><th>{{ group.pack_attr || "Item" }}</th><th v-if="group.is_set_item">{{ group.set_attr }}</th><th>Details</th><th v-for="value in group.primary_attribute_values || []" :key="value">{{ value }}</th><th>Total</th></tr></thead>
 									<tbody>
@@ -177,7 +169,6 @@ import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
 import { computed, defineComponent, h, nextTick, ref, watch } from "vue"
 
-import FormField from "../../components/common/FormField.vue"
 import CuttingPlanCpm from "./CuttingPlanCpm.vue"
 import CuttingPlanStockTransfers from "./CuttingPlanStockTransfers.vue"
 import MaterialRequirementGroups from "./shared/MaterialRequirementGroups.vue"
@@ -193,22 +184,18 @@ const emit = defineEmits(["refresh"])
 
 const activeTab = ref("details")
 const tabPanels = ref(null)
-const detailColumns = computed(() => [
-	[
-		"is_manual_entry",
-		"maximum_no_of_plys",
-		...(hasValue(props.doc.cutting_start_date) ? ["cutting_start_date"] : []),
-		"cutting_location",
-		"no_of_colours",
-		...(hasValue(props.doc.open_status) ? ["open_status"] : []),
-	],
-	[
-		"maximum_allow_percent",
-		"piece_weight_tolerance",
-		...(hasValue(props.doc.cutting_end_date) ? ["cutting_end_date"] : []),
-		"work_order",
-		"no_of_colours_completed",
-	],
+const detailFieldnames = computed(() => [
+	"is_manual_entry",
+	"maximum_no_of_plys",
+	"maximum_allow_percent",
+	"piece_weight_tolerance",
+	...(hasValue(props.doc.cutting_start_date) ? ["cutting_start_date"] : []),
+	...(hasValue(props.doc.cutting_end_date) ? ["cutting_end_date"] : []),
+	"cutting_location",
+	"work_order",
+	"no_of_colours",
+	"no_of_colours_completed",
+	...(hasValue(props.doc.open_status) ? ["open_status"] : []),
 ])
 const fallbackLabels = {
 	is_manual_entry: "Is Manual Entry", maximum_no_of_plys: "Maximum No of Plys",
@@ -246,6 +233,20 @@ const availableTabs = computed(() => [
 
 function field(fieldname) {
 	return fieldsByName.value[fieldname] || { fieldname, label: fallbackLabels[fieldname] || fieldname, fieldtype: "Data" }
+}
+
+function detailValue(fieldname) {
+	const metadata = field(fieldname)
+	const value = props.doc[fieldname]
+	if (metadata.fieldtype === "Check") return Number(value) ? "Yes" : "No"
+	if (!hasValue(value)) return "—"
+	if (["Date", "Datetime"].includes(metadata.fieldtype)) {
+		const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/)
+		if (match) return `${match[3]}-${match[2]}-${match[1]}${match[4] ? ` · ${match[4]}:${match[5]}` : ""}`
+	}
+	if (metadata.fieldtype === "Percent") return `${Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}%`
+	if (["Int", "Float", "Currency"].includes(metadata.fieldtype) && Number.isFinite(Number(value))) return Number(value).toLocaleString(undefined, { maximumFractionDigits: 4 })
+	return String(value)
 }
 
 function hasValue(value) {
@@ -390,7 +391,7 @@ const RecutTable = defineComponent({
 				icon: tableProps.printPanel ? "pi pi-print" : "pi pi-replay",
 			}, {
 				default: () => rows.length
-					? h("div", { class: "table-scroll" }, [h("table", { class: "data-table" }, [
+					? h("div", { class: "table-scroll", role: "region", tabindex: 0, "aria-label": tableProps.title }, [h("table", { class: "data-table" }, [
 						h("thead", [h("tr", ["S.No.", "Cloth Type", "Colour", "Dia", "Shade", "Weight in Kg", "No of Rolls", ...(tableProps.printPanel ? ["Panel Count"] : [])].map((label) => h("th", label)))]),
 						h("tbody", rows.map((row, index) => h("tr", [h("td", index + 1), h("td", row.cloth_type || "—"), h("td", row.colour || "—"), h("td", row.dia || "—"), h("td", row.shade || "—"), h("td", weight(row.weight)), h("td", numeric(row.no_of_rolls)), ...(tableProps.printPanel ? [h("td", numeric(row.panel_count))] : [])]))),
 					])])
@@ -415,14 +416,14 @@ const RecutTable = defineComponent({
 	top: 0;
 	z-index: var(--erp-layer-sticky);
 	min-width: 0;
-	background: #fff;
+	background: var(--erp-surface);
 }
 
 .cutting-tabs :deep(.p-tablist-tab-list) {
 	gap: 18px;
 	padding: 0 2px;
 	background: transparent;
-	border-bottom: 1px solid #dbe6e0;
+	border-bottom: 1px solid var(--erp-border);
 }
 
 .cutting-tabs :deep(.p-tab) {
@@ -455,7 +456,7 @@ const RecutTable = defineComponent({
 	padding: 12px 0 2px;
 	overflow-y: auto;
 	overscroll-behavior: contain;
-	scrollbar-color: #9eb6aa transparent;
+	scrollbar-color: var(--erp-border-strong) transparent;
 	scrollbar-width: thin;
 	background: transparent;
 }
@@ -475,65 +476,30 @@ const RecutTable = defineComponent({
 }
 
 .detail-fields-card {
-	padding: 14px 16px 15px;
+	overflow: hidden;
 	background: var(--erp-surface);
 }
 
-.detail-field-columns {
+.detail-read-grid {
 	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 26px;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 1px;
+	background: var(--erp-border);
 }
 
-.detail-field-column {
+.detail-read-field {
 	display: grid;
-	align-content: start;
-	gap: 10px;
-	min-width: 0;
-}
-
-.detail-fields-card :deep(.form-field) {
+	align-content: center;
 	gap: 5px;
+	min-width: 0;
+	min-height: 62px;
+	padding: 10px 13px;
+	background: var(--erp-surface);
 }
 
-.detail-fields-card :deep(.form-field__label) {
-	color: var(--erp-text);
-	font-size: var(--erp-font-size-caption);
-	font-weight: 680;
-}
-
-.detail-fields-card :deep(.p-inputtext),
-.detail-fields-card :deep(.p-inputnumber-input),
-.detail-fields-card :deep(.p-select-label) {
-	min-height: 36px;
-	padding: 7px 10px;
-	color: var(--erp-text);
-	font-size: 13px;
-	font-weight: 520;
-}
-
-.detail-fields-card :deep(.p-inputtext:disabled),
-.detail-fields-card :deep(.p-inputnumber-input:disabled),
-.detail-fields-card :deep(.p-autocomplete.p-disabled .p-autocomplete-input),
-.detail-fields-card :deep(.p-select.p-disabled) {
-	opacity: 1;
-	color: #3f554b;
-	background: var(--erp-surface-muted);
-	border-color: var(--erp-border);
-	box-shadow: none;
-}
-
-.detail-fields-card :deep(.p-toggleswitch.p-disabled) {
-	opacity: 1;
-}
-
-.detail-fields-card :deep(.p-autocomplete-dropdown) {
-	display: none;
-}
-
-.detail-fields-card :deep(.p-autocomplete-input) {
-	border-radius: 6px;
-}
+.detail-read-field > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 760; letter-spacing: .045em; text-transform: uppercase; }
+.detail-read-field > strong { overflow: hidden; color: var(--erp-text); font-size: 13px; font-weight: 680; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.detail-read-field__boolean { width: max-content; padding: 2px 7px; color: var(--erp-accent-dark) !important; background: var(--erp-accent-soft); border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min) !important; }
 
 .cutting-tabs :deep(.section-heading) {
 	display: flex;
@@ -563,9 +529,9 @@ const RecutTable = defineComponent({
 
 .cutting-tabs :deep(.section-heading .row-count) {
 	padding: 3px 7px;
-	color: #657870;
-	background: rgb(255 255 255 / 64%);
-	border: 1px solid #dfebe5;
+	color: var(--erp-text-muted);
+	background: var(--erp-surface);
+	border: 1px solid var(--erp-border);
 	border-radius: 999px;
 	font-size: var(--erp-font-size-min);
 	font-weight: 650;
@@ -586,7 +552,7 @@ const RecutTable = defineComponent({
 .requirement-group {
 	overflow: hidden;
 	background: var(--erp-surface);
-	border: 1px solid #dce7e1;
+	border: 1px solid var(--erp-border);
 	border-radius: 9px;
 }
 
@@ -597,7 +563,8 @@ const RecutTable = defineComponent({
 	gap: 14px;
 	min-height: 48px;
 	padding: 8px 10px 8px 12px;
-	background: #f6faf8;
+	background: var(--erp-surface-soft);
+	border-bottom: 1px solid var(--erp-border);
 }
 
 .requirement-group__identity {
@@ -618,7 +585,7 @@ const RecutTable = defineComponent({
 
 .requirement-template {
 	overflow: hidden;
-	color: #64766d;
+	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-caption);
 	font-weight: 590;
 	text-overflow: ellipsis;
@@ -646,28 +613,33 @@ const RecutTable = defineComponent({
 }
 
 .requirement-type {
-	color: #176344;
-	background: #e7f4ed;
-	border: 1px solid #d5e9de;
+	color: var(--erp-accent-hover);
+	background: var(--erp-accent-soft);
+	border: 1px solid var(--erp-accent-border);
 }
 
 .requirement-count {
-	color: #63736b;
-	background: #fff;
-	border: 1px solid #dce7e1;
+	color: var(--erp-text-muted);
+	background: var(--erp-surface);
+	border: 1px solid var(--erp-border);
 }
 
 .cutting-tabs :deep(.table-scroll) {
 	overflow-x: auto;
-	border: 1px solid #dfe8e3;
+	border: 1px solid var(--erp-border);
 	border-radius: 10px;
-	scrollbar-color: #b4c7bd transparent;
+	scrollbar-color: var(--erp-border-strong) transparent;
 	scrollbar-width: thin;
+}
+
+.cutting-tabs :deep(.table-scroll:focus-visible) {
+	outline: 2px solid var(--erp-accent-dark);
+	outline-offset: -2px;
 }
 
 .cutting-tabs :deep(.requirement-table-scroll) {
 	border: 0;
-	border-top: 1px solid #dce7e1;
+	border-top: 1px solid var(--erp-border);
 	border-radius: 0;
 }
 
@@ -698,18 +670,18 @@ const RecutTable = defineComponent({
 }
 
 .cutting-tabs :deep(.requirement-table .requirement-balance--positive) {
-	color: #176344;
-	background: #f4faf7;
+	color: var(--erp-accent-dark);
+	background: var(--erp-success-soft);
 }
 
 .cutting-tabs :deep(.requirement-table .requirement-balance--negative) {
-	color: #9b3535;
-	background: #fff7f7;
+	color: var(--erp-danger);
+	background: var(--erp-danger-soft);
 }
 
 .cutting-tabs :deep(.requirement-table .requirement-balance--zero) {
-	color: #5f6f67;
-	background: #f8faf9;
+	color: var(--erp-text-muted);
+	background: var(--erp-surface-soft);
 }
 
 .cutting-tabs :deep(.data-table) {
@@ -730,8 +702,8 @@ const RecutTable = defineComponent({
 	padding: 8px 10px;
 	text-align: left;
 	vertical-align: middle;
-	border-right: 1px solid #e3ebe7;
-	border-bottom: 1px solid #e3ebe7;
+	border-right: 1px solid var(--erp-border);
+	border-bottom: 1px solid var(--erp-border);
 	overflow-wrap: anywhere;
 }
 
@@ -746,7 +718,7 @@ const RecutTable = defineComponent({
 
 .cutting-tabs :deep(.data-table th) {
 	white-space: nowrap;
-	color: #475b59;
+	color: var(--erp-text-secondary);
 	font-size: var(--erp-font-size-min);
 	font-weight: 780;
 	letter-spacing: 0.035em;
@@ -754,11 +726,11 @@ const RecutTable = defineComponent({
 }
 
 .cutting-tabs :deep(.data-table tbody tr:nth-child(even):not(.total-row) td) {
-	background: #fbfdfc;
+	background: var(--erp-surface-soft);
 }
 
 .cutting-tabs :deep(.data-table tbody tr:hover:not(.total-row) td) {
-	background: #f6faf8;
+	background: var(--erp-surface-hover);
 }
 
 .cutting-tabs :deep(.number-cell) {
@@ -768,13 +740,13 @@ const RecutTable = defineComponent({
 
 .cutting-tabs :deep(.strong-cell),
 .cutting-tabs :deep(.total-row td) {
-	color: #20364d;
+	color: var(--erp-text);
 	font-weight: 780;
 }
 
 .cutting-tabs :deep(.total-row td) {
-	background: #edf7f2;
-	border-color: #d8e8df;
+	background: var(--erp-accent-soft);
+	border-color: var(--erp-accent-border);
 }
 
 .panel-strip {
@@ -782,23 +754,23 @@ const RecutTable = defineComponent({
 	align-items: center;
 	gap: 8px;
 	padding: 8px 10px;
-	color: #465c54;
+	color: var(--erp-text-muted);
 	font-size: 0.75rem;
-	background: #f6faf8;
-	border: 1px solid #dfe9e4;
+	background: var(--erp-surface-soft);
+	border: 1px solid var(--erp-border);
 	border-radius: 8px;
 }
 
 .panel-strip strong {
-	color: #176b4c;
+	color: var(--erp-accent-hover);
 }
 
 .complete-icon {
-	color: #2f7d57;
+	color: var(--erp-success);
 }
 
 .incomplete-icon {
-	color: #adb7b1;
+	color: var(--erp-text-subtle);
 }
 
 .cutting-tabs :deep(.empty-state) {
@@ -809,15 +781,15 @@ const RecutTable = defineComponent({
 	gap: 10px;
 	min-height: 62px;
 	padding: 12px;
-	color: #7b8780;
-	background: #fcfefd;
-	border: 1px dashed #d9e6df;
+	color: var(--erp-text-muted);
+	background: var(--erp-surface-soft);
+	border: 1px dashed var(--erp-border-strong);
 	border-radius: 9px;
 	font-size: 0.76rem;
 }
 
 .cutting-tabs :deep(.empty-state > i) {
-	color: #4f7462;
+	color: var(--erp-accent);
 	font-size: 1rem;
 }
 
@@ -827,13 +799,13 @@ const RecutTable = defineComponent({
 }
 
 .cutting-tabs :deep(.empty-state__copy strong) {
-	color: #40534a;
+	color: var(--erp-text);
 	font-size: 0.76rem;
 	font-weight: 650;
 }
 
 .cutting-tabs :deep(.empty-state__copy small) {
-	color: #8a9891;
+	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
 }
 
@@ -858,17 +830,17 @@ const RecutTable = defineComponent({
 }
 
 .detail-kind--planned i {
-	background: #45bf96;
-	box-shadow: 0 0 0 3px #e8f7f1;
+	background: var(--erp-success);
+	box-shadow: 0 0 0 3px var(--erp-success-soft);
 }
 
 .detail-kind--completed i {
-	background: #91a8bd;
-	box-shadow: 0 0 0 3px #eef2f6;
+	background: var(--erp-info);
+	box-shadow: 0 0 0 3px var(--erp-info-soft);
 }
 
 .completed-row td {
-	background: #f8fafc !important;
+	background: var(--erp-surface-muted) !important;
 }
 
 @media (max-width: 1050px) {
@@ -881,12 +853,15 @@ const RecutTable = defineComponent({
 		padding-inline: 0;
 		overflow: visible;
 	}
+
+	.detail-read-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
 }
 
 @media (max-width: 780px) {
-	.detail-field-columns {
+	.detail-read-grid {
 		grid-template-columns: 1fr;
-		gap: 10px;
 	}
 
 	.requirement-group__header {
@@ -899,8 +874,17 @@ const RecutTable = defineComponent({
 	}
 
 	.cutting-tabs :deep(.p-tab) {
-		padding-inline: 10px;
-		font-size: 0.78rem;
+		padding-inline: 8px;
+		font-size: var(--erp-font-size-caption);
+	}
+
+	.cutting-tabs :deep(.p-tablist-tab-list) {
+		gap: 8px;
+	}
+
+	.cutting-tabs :deep(.table-scroll) {
+		-webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%);
+		mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%);
 	}
 }
 </style>

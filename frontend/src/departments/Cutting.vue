@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Cutting" accent="#0b8f65" :show-title="false" flat>
+	<DepartmentPage title="Cutting" accent="#059669" :show-title="false" flat>
 		<WorkspaceLauncher title="Cutting" :items="visibleWorkspaces" :loading="loadingPermissions" empty-text="No permitted Cutting workspaces" :skeleton-count="5" />
 	</DepartmentPage>
 </template>

@@ -1,11 +1,11 @@
 <template>
-	<section class="cutting-plan-editor erp-card" aria-label="Cutting Plan editor">
-		<header class="cutting-plan-editor__header">
+	<section class="cutting-plan-editor erp-card erp-editor-shell" aria-label="Cutting Plan editor">
+		<header class="cutting-plan-editor__header erp-editor-header">
 			<div>
 				<span class="cutting-plan-editor__eyebrow">{{ name ? name : "New document" }}</span>
 				<h1>{{ name ? "Edit Cutting Plan" : "New Cutting Plan" }}</h1>
 			</div>
-			<div class="cutting-plan-editor__actions">
+			<div class="cutting-plan-editor__actions erp-editor-actions">
 				<Button label="Cancel" severity="secondary" text :disabled="saving" @click="emit('cancel')" />
 				<Button label="Save Draft" icon="pi pi-save" severity="secondary" outlined :loading="saving === 'draft'" :disabled="busy || !canSave" @click="save(false)" />
 				<Button v-if="permissions.can_submit" label="Save & Submit" icon="pi pi-check" :loading="saving === 'submit'" :disabled="busy || !canSave" @click="save(true)" />
@@ -23,7 +23,7 @@
 				<header><h2>Plan Details</h2></header>
 				<div class="cutting-plan-editor__fields">
 					<label class="cutting-plan-editor__check">
-						<Checkbox v-model="form.is_manual_entry" binary :true-value="1" :false-value="0" input-id="cp-manual-entry" />
+						<Checkbox v-model="form.is_manual_entry" binary :true-value="1" :false-value="0" input-id="cp-manual-entry" :disabled="busy" />
 						<span>Is Manual Entry</span>
 					</label>
 					<div class="cutting-plan-editor__field cutting-plan-editor__field--wide">
@@ -255,23 +255,12 @@ watch(() => props.name, () => load())
 	display: flex;
 	min-width: 0;
 	min-height: calc(100dvh - var(--erp-shell-header-height) - 98px);
-	padding: var(--erp-space-4);
 	flex-direction: column;
 	gap: var(--erp-space-3);
 }
 
-.cutting-plan-editor__header {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--erp-space-4);
-	padding-bottom: var(--erp-space-3);
-	border-bottom: 1px solid var(--erp-border);
-}
-
 .cutting-plan-editor__eyebrow { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: 0.04em; text-transform: uppercase; }
 .cutting-plan-editor__header h1 { margin: 3px 0 0; color: var(--erp-text); font-size: var(--erp-font-size-title); font-weight: 780; letter-spacing: -0.025em; }
-.cutting-plan-editor__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--erp-space-2); }
 .cutting-plan-editor__body { display: grid; gap: var(--erp-space-3); min-width: 0; }
 .cutting-plan-editor__loading { display: grid; gap: var(--erp-space-3); }
 .cutting-plan-editor__section { padding: var(--erp-space-4); background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); }
@@ -286,13 +275,10 @@ watch(() => props.name, () => load())
 .cutting-plan-editor__discard-copy { margin: 0; color: var(--erp-text-muted); line-height: 1.55; }
 
 @media (max-width: 900px) {
-	.cutting-plan-editor__header { align-items: flex-start; flex-direction: column; }
-	.cutting-plan-editor__actions { width: 100%; justify-content: flex-start; }
 	.cutting-plan-editor__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 600px) {
-	.cutting-plan-editor { padding: var(--erp-space-3); }
 	.cutting-plan-editor__section { padding: var(--erp-space-3); }
 	.cutting-plan-editor__fields { grid-template-columns: 1fr; }
 	.cutting-plan-editor__field--wide { grid-column: auto; }

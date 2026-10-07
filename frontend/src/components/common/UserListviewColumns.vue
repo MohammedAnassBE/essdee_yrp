@@ -51,7 +51,7 @@
 				<div class="column-section-head">
 					<div>
 						<strong id="column-order-title">Column order</strong>
-						<small>Drag a row to place it anywhere</small>
+						<small>Drag, or press Alt + ↑ / ↓ to move</small>
 					</div>
 					<i class="pi pi-arrows-v" aria-hidden="true"></i>
 				</div>
@@ -83,8 +83,9 @@
 							class="column-drag-handle"
 							role="button"
 							tabindex="0"
+							aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
 							:aria-label="`Reorder ${column.label}, position ${index + 1} of ${visibleColumns.length}`"
-							:title="`Drag ${column.label} to reorder`"
+							:title="`Drag ${column.label}, or press Alt + Up or Alt + Down, to reorder`"
 							@keydown.alt.up.prevent="moveColumn(index, -1)"
 							@keydown.alt.down.prevent="moveColumn(index, 1)"
 						>
@@ -305,10 +306,10 @@ async function reset() {
 	display: flex;
 	min-width: 0;
 	padding: 14px;
-	background: #fff;
+	background: var(--erp-surface);
 	border: 1px solid var(--column-line);
 	border-radius: var(--erp-panel-radius);
-	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
+	box-shadow: var(--erp-shadow-xs);
 	flex-direction: column;
 }
 
@@ -327,12 +328,12 @@ async function reset() {
 }
 
 .column-section-head strong {
-	color: #17231d;
+	color: var(--erp-text);
 	font-size: 0.88rem;
 }
 
 .column-section-head small {
-	color: #758079;
+	color: var(--erp-text-muted);
 	font-size: 0.7rem;
 }
 
@@ -360,7 +361,7 @@ async function reset() {
 	position: absolute;
 	left: 11px;
 	z-index: 1;
-	color: #94a3b8;
+	color: var(--erp-text-muted);
 }
 
 .column-search :deep(input) {
@@ -384,10 +385,10 @@ async function reset() {
 	overflow-y: auto;
 	height: 23.5rem;
 	padding: 4px;
-	background: #fff;
-	border: 1px solid #e4ebe7;
+	background: var(--erp-surface);
+	border: 1px solid var(--erp-border);
 	border-radius: 12px;
-	scrollbar-color: #cbd8d1 transparent;
+	scrollbar-color: var(--erp-border-strong) transparent;
 	scrollbar-width: thin;
 }
 
@@ -404,13 +405,13 @@ async function reset() {
 }
 
 .column-picker-row:hover {
-	background: #f8faf9;
-	border-color: #e4ebe7;
+	background: var(--erp-surface-soft);
+	border-color: var(--erp-border);
 }
 
 .column-picker-row--enabled {
 	background: var(--column-accent-soft);
-	border-color: #cfeae5;
+	border-color: var(--erp-accent-border);
 }
 
 .column-picker-row:focus-within {
@@ -428,7 +429,7 @@ async function reset() {
 .column-picker-row strong,
 .column-order-label strong {
 	overflow: hidden;
-	color: #26352e;
+	color: var(--erp-text-secondary);
 	font-size: 0.79rem;
 	font-weight: 680;
 	text-overflow: ellipsis;
@@ -445,7 +446,7 @@ async function reset() {
 }
 
 .column-order-list--dragging {
-	background: linear-gradient(180deg, #fff, var(--column-accent-soft));
+	background: linear-gradient(180deg, var(--erp-surface), var(--column-accent-soft));
 }
 
 .column-order-row {
@@ -456,10 +457,10 @@ async function reset() {
 	gap: 8px;
 	min-height: 50px;
 	padding: 7px 8px;
-	background: #fff;
-	border: 1px solid #dfe8e3;
+	background: var(--erp-surface);
+	border: 1px solid var(--erp-border);
 	border-radius: 11px;
-	box-shadow: 0 2px 7px rgb(24 53 39 / 4%);
+	box-shadow: var(--erp-shadow-xs);
 	cursor: grab;
 	transition:
 		opacity 120ms ease,
@@ -469,8 +470,8 @@ async function reset() {
 }
 
 .column-order-row:hover {
-	border-color: #c7d9d1;
-	box-shadow: 0 6px 16px rgb(24 53 39 / 8%);
+	border-color: var(--erp-accent-border);
+	box-shadow: var(--erp-shadow-sm);
 	transform: translateY(-1px);
 }
 
@@ -504,7 +505,7 @@ async function reset() {
 }
 
 .column-position {
-	color: #93a199;
+	color: var(--erp-text-muted);
 	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 	font-size: var(--erp-font-size-min);
 	font-weight: 750;
@@ -515,9 +516,9 @@ async function reset() {
 	display: grid;
 	width: 28px;
 	height: 32px;
-	color: #7a8981;
-	background: #f2f6f4;
-	border: 1px solid #e0e8e4;
+	color: var(--erp-text-muted);
+	background: var(--erp-surface-muted);
+	border: 1px solid var(--erp-border);
 	border-radius: 8px;
 	cursor: grab;
 	place-items: center;
@@ -536,7 +537,7 @@ async function reset() {
 	gap: 6px;
 	min-height: 100%;
 	padding: 24px;
-	color: #7b8981;
+	color: var(--erp-text-muted);
 	text-align: center;
 }
 
@@ -547,7 +548,7 @@ async function reset() {
 }
 
 .column-empty strong {
-	color: #34443b;
+	color: var(--erp-text-secondary);
 	font-size: 0.82rem;
 }
 

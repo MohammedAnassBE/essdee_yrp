@@ -14,6 +14,8 @@
 				:dropdown="dropdown"
 				:delay="delay"
 				:show-clear="showClear"
+				:aria-label="ariaLabel || label || undefined"
+				:pt="autocompletePt"
 				force-selection
 				fluid
 				@complete="complete"
@@ -29,7 +31,7 @@
 					</span>
 				</template>
 				<template #empty>
-					<span class="link-field__empty">
+					<span class="link-field__empty" role="status" aria-live="polite">
 						<i v-if="searching" class="pi pi-spin pi-spinner" />
 						{{ searching ? "Searching…" : searchError || "No matches" }}
 					</span>
@@ -74,6 +76,9 @@ const props = defineProps({
 	matchVisibleOnly: { type: Boolean, default: false },
 	showClear: { type: Boolean, default: false },
 	showOpenButton: { type: Boolean, default: true },
+	required: { type: Boolean, default: false },
+	ariaLabel: { type: String, default: "" },
+	ariaDescribedby: { type: String, default: "" },
 	searchHandler: { type: Function, default: null },
 	openHandler: { type: Function, default: null },
 })
@@ -91,6 +96,19 @@ let requestSequence = 0
 
 const optionLabel = computed(() => "label")
 const resolvedInputId = computed(() => props.inputId || `link-field-${componentId}`)
+const autocompletePt = computed(() => ({
+	dropdown: {
+		"aria-label": `Show ${props.ariaLabel || props.label || props.doctype || "record"} options`,
+		title: `Show ${props.ariaLabel || props.label || props.doctype || "record"} options`,
+	},
+	pcInputText: {
+		root: {
+			required: props.required || undefined,
+			"aria-required": props.required ? "true" : undefined,
+			"aria-describedby": props.ariaDescribedby || undefined,
+		},
+	},
+}))
 
 watch(
 	() => props.modelValue,
@@ -197,7 +215,7 @@ defineExpose({ focus })
 .common-field__help,
 .link-field__empty {
 	font-size: 0.75rem;
-	color: #77827c;
+	color: var(--erp-text-muted);
 }
 
 .link-field__control {
@@ -212,9 +230,9 @@ defineExpose({ focus })
 }
 
 .link-field__control :deep(.p-autocomplete-input) {
-	background: #fff;
+	background: var(--erp-surface);
 	border-color: var(--erp-border-strong);
-	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
+	box-shadow: var(--erp-shadow-xs);
 }
 
 .link-field__control :deep(.p-autocomplete:not(.p-disabled):hover .p-autocomplete-input) {

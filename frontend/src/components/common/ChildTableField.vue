@@ -23,6 +23,7 @@
 			scrollable
 			size="small"
 			class="child-table-field__table"
+			:pt="{ tableContainer: { tabindex: 0, role: 'region', 'aria-label': `${field.label || field.fieldname} rows` } }"
 		>
 			<Column header="#" frozen class="child-table-field__index">
 				<template #body="{ index }">{{ index + 1 }}</template>
@@ -44,6 +45,8 @@
 						:error="errors[`${index}.${column.fieldname}`] || ''"
 						:show-label="false"
 						:show-open-button="false"
+						:input-id="`${field.fieldname}-${index + 1}-${column.fieldname}`"
+						:aria-label="`${column.label || column.fieldname}, row ${index + 1}`"
 						@update:model-value="setCell(index, column.fieldname, $event)"
 					/>
 				</template>
@@ -189,11 +192,11 @@ function columnWidth(column) {
 }
 
 .child-table-field__table {
-	background: #fff;
+	background: var(--erp-surface);
 	border: 1px solid var(--erp-border-strong);
 	border-radius: var(--erp-panel-radius);
 	overflow: hidden;
-	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
+	box-shadow: var(--erp-shadow-xs);
 }
 
 .child-table-field__index {
@@ -227,12 +230,12 @@ function columnWidth(column) {
 
 .child-table-field__table :deep(.p-datatable-thead > tr > th) {
 	padding-block: 8px;
-	color: #53645b;
+	color: var(--erp-text-secondary);
 	font-size: var(--erp-font-size-min);
 	font-weight: 800;
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
-	background: #f7f9f8;
+	background: var(--erp-surface-muted);
 }
 
 .child-table-field__table :deep(.p-datatable-tbody > tr > td) {
@@ -244,7 +247,16 @@ function columnWidth(column) {
 	background: color-mix(in srgb, var(--erp-accent) 3%, white);
 }
 
+.child-table-field__table :deep(.p-datatable-table-container:focus-visible) {
+	outline: 2px solid var(--erp-accent-dark);
+	outline-offset: -2px;
+}
+
 @media (max-width: 620px) {
+	.child-table-field__table :deep(.p-datatable-table-container) {
+		-webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%);
+		mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%);
+	}
 	.child-table-field__header {
 		align-items: stretch;
 		flex-direction: column;

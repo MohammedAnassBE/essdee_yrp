@@ -40,8 +40,8 @@
 			@update:model-value="updateValue"
 			@blur="emit('blur', $event)"
 		/>
-		<small v-if="helpText" class="erp-date-time-field__help">{{ helpText }}</small>
-		<small v-if="error" class="erp-date-time-field__error" role="alert">{{ error }}</small>
+		<small v-if="helpText" :id="helpId" class="erp-date-time-field__help">{{ helpText }}</small>
+		<small v-if="error" :id="errorId" class="erp-date-time-field__error" role="alert">{{ error }}</small>
 	</div>
 </template>
 
@@ -68,6 +68,7 @@ const props = defineProps({
 	},
 	label: { type: String, default: "" },
 	ariaLabel: { type: String, default: "" },
+	ariaDescribedby: { type: String, default: "" },
 	inputId: { type: String, default: "" },
 	placeholder: { type: String, default: "" },
 	helpText: { type: String, default: "" },
@@ -89,6 +90,13 @@ const emit = defineEmits(["update:modelValue", "change", "blur"])
 const componentId = useId()
 const resolvedInputId = computed(() => props.inputId || `erp-temporal-${componentId}`)
 const labelId = computed(() => `${resolvedInputId.value}-label`)
+const helpId = computed(() => `${resolvedInputId.value}-help`)
+const errorId = computed(() => `${resolvedInputId.value}-error`)
+const describedBy = computed(() => [
+	props.ariaDescribedby,
+	props.helpText ? helpId.value : "",
+	props.error ? errorId.value : "",
+].filter(Boolean).join(" ") || undefined)
 const dateFormat = computed(() => "dd-mm-yy")
 const allowsManualInput = computed(() => props.manualInput && props.mode === "date")
 const pickerActionLabel = computed(() => {
@@ -101,6 +109,14 @@ const pickerPt = computed(() => ({
 	dropdown: {
 		"aria-label": pickerActionLabel.value,
 		title: pickerActionLabel.value,
+	},
+	pcInputText: {
+		root: {
+			required: props.required || undefined,
+			"aria-required": props.required ? "true" : undefined,
+			"aria-describedby": describedBy.value,
+			"aria-invalid": props.invalid ? "true" : undefined,
+		},
 	},
 }))
 const resolvedPlaceholder = computed(() => {
@@ -211,29 +227,31 @@ function pad(value) {
 
 .erp-date-time-field :deep(.erp-date-time-picker .p-datepicker-input) {
 	min-width: 0;
-	background: #fff;
+	background: var(--erp-surface);
 	border-color: var(--erp-border-strong);
-	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
+	box-shadow: var(--erp-shadow-xs);
 	font-variant-numeric: tabular-nums;
 }
 
 .erp-date-time-field :deep(.erp-date-time-picker:focus-within .p-datepicker-input) {
 	border-color: var(--erp-accent);
 	box-shadow: 0 0 0 3px color-mix(in srgb, var(--erp-accent) 11%, transparent);
+	outline: 2px solid var(--erp-accent-dark);
+	outline-offset: -2px;
 }
 
 .erp-date-time-field :deep(.erp-date-time-picker .p-datepicker-dropdown) {
 	width: var(--erp-control-height);
 	min-width: var(--erp-control-height);
 	color: var(--erp-accent);
-	background: #f1f7f4;
+	background: var(--erp-accent-soft);
 	border-color: var(--erp-border-strong);
 	border-left: 0;
 }
 
 .erp-date-time-field :deep(.erp-date-time-picker .p-datepicker-dropdown:hover) {
 	color: var(--erp-accent-hover);
-	background: #e7f2ed;
+	background: color-mix(in srgb, var(--erp-accent-soft) 72%, var(--erp-accent-border));
 }
 
 .erp-date-time-field :deep(.erp-date-time-picker .p-datepicker-dropdown:active) {
@@ -245,7 +263,4 @@ function pad(value) {
 	border-color: var(--erp-danger);
 }
 
-.erp-date-time-field--disabled {
-	opacity: 0.72;
-}
 </style>

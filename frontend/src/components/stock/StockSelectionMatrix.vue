@@ -8,7 +8,7 @@
 		<div v-if="groups.length" class="selection-matrix__groups">
 			<article v-for="(group, groupIndex) in groups" :key="groupKey(group, groupIndex)" class="selection-matrix__group">
 				<header><div><i class="pi pi-th-large"></i><strong>{{ group.primary_attribute ? `${group.primary_attribute} matrix` : "Quantity" }}</strong></div><span>{{ group.items?.length || 0 }} rows</span></header>
-				<div class="selection-matrix__scroll">
+				<div class="selection-matrix__scroll" role="region" tabindex="0" :aria-label="`Available stock group ${groupIndex + 1}`">
 					<table>
 						<thead><tr><th>#</th><th>Item</th><th>Lot</th><th>Received Type</th><th v-for="attribute in group.attributes || []" :key="attribute">{{ attribute }}</th><th v-for="value in primaryValues(group)" :key="value" class="selection-matrix__number">{{ valueLabel(group, value) }}</th><th v-if="group.primary_attribute" class="selection-matrix__number">Available</th><th>UOM</th></tr></thead>
 						<tbody>
@@ -55,7 +55,7 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-panel-radius);
 	background: var(--erp-surface);
-	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
+	box-shadow: var(--erp-shadow-xs);
 }
 
 .selection-matrix__header {
@@ -65,7 +65,7 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 	gap: var(--erp-space-4);
 	padding: 10px var(--erp-space-3);
 	border-bottom: 1px solid var(--erp-border);
-	background: #f8faf9;
+	background: var(--erp-surface-soft);
 }
 
 .selection-matrix__header > div:first-child {
@@ -118,7 +118,7 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 	overflow: auto;
 	gap: 10px;
 	padding: 10px;
-	background: #f8faf9;
+	background: var(--erp-surface-soft);
 }
 
 .selection-matrix__group {
@@ -126,7 +126,7 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-control-radius);
 	background: var(--erp-surface);
-	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
+	box-shadow: var(--erp-shadow-xs);
 }
 
 .selection-matrix__group > header {
@@ -163,6 +163,11 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 	overflow: auto;
 }
 
+.selection-matrix__scroll:focus-visible {
+	outline: 2px solid var(--erp-accent-dark);
+	outline-offset: -2px;
+}
+
 .selection-matrix table {
 	width: 100%;
 	min-width: 840px;
@@ -177,8 +182,8 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 	top: 0;
 	padding: var(--erp-space-2) 9px;
 	border-bottom: 1px solid var(--erp-border-strong);
-	background: #f5f8f6;
-	color: #58675f;
+	background: var(--erp-surface-muted);
+	color: var(--erp-text-secondary);
 	font-size: var(--erp-font-size-min);
 	font-weight: 750;
 	text-align: left;
@@ -188,8 +193,8 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 
 .selection-matrix td {
 	padding: var(--erp-space-2) 9px;
-	border-bottom: 1px solid #e7edea;
-	color: #374a40;
+	border-bottom: 1px solid var(--erp-border-subtle);
+	color: var(--erp-text-secondary);
 	vertical-align: middle;
 	white-space: nowrap;
 }
@@ -203,7 +208,7 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 }
 
 .selection-matrix__index {
-	color: #88948d !important;
+	color: var(--erp-text-muted) !important;
 	text-align: center;
 }
 
@@ -248,7 +253,7 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 
 .selection-matrix__cell:hover,
 .selection-matrix__cell--selected {
-	border-color: #70bd98;
+	border-color: var(--erp-accent-border);
 	background: var(--erp-mint);
 	color: var(--erp-accent);
 }
@@ -272,7 +277,7 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 }
 
 .selection-matrix__missing {
-	color: #a0aaa4;
+	color: var(--erp-text-muted);
 }
 
 .selection-matrix__total {
@@ -291,7 +296,7 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-caption);
 	text-align: center;
-	background: #fff;
+	background: var(--erp-surface);
 }
 
 .selection-matrix__empty i {
@@ -300,6 +305,11 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 }
 
 @media (max-width: 700px) {
+	.selection-matrix__scroll {
+		-webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%);
+		mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%);
+	}
+
 	.selection-matrix__header {
 		align-items: flex-start;
 		flex-direction: column;

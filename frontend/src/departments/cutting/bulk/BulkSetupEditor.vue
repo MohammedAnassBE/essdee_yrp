@@ -1,8 +1,8 @@
 <template>
-	<section class="bulk-setup-editor erp-card" aria-label="Bulk LaySheets setup editor">
-		<header class="bulk-setup-editor__header">
+	<section class="bulk-setup-editor erp-card erp-editor-shell" aria-label="Bulk LaySheets setup editor">
+		<header class="bulk-setup-editor__header erp-editor-header">
 			<div><span>{{ name || "New document" }}</span><h1>{{ name ? "Edit Bulk LaySheets" : "New Bulk LaySheets" }}</h1></div>
-			<div class="bulk-setup-editor__actions">
+			<div class="bulk-setup-editor__actions erp-editor-actions">
 				<Button label="Cancel" severity="secondary" text :disabled="busy" @click="emit('cancel')" />
 				<Button label="Save Setup" icon="pi pi-save" :loading="saving" :disabled="busy || !canSave" @click="saveSetup" />
 			</div>
@@ -23,7 +23,7 @@
 
 			<section class="bulk-lots-card">
 				<header><div><span class="section-kicker">Production split</span><h2>Split Lots</h2></div><Button label="Add Split Lot" icon="pi pi-plus" size="small" severity="secondary" outlined :disabled="busy" @click="addRow" /></header>
-				<div v-if="form.lot_details.length" class="bulk-lots-table-wrap">
+				<div v-if="form.lot_details.length" class="bulk-lots-table-wrap" role="region" tabindex="0" aria-label="Split Lot setup">
 					<table class="bulk-lots-table"><thead><tr><th class="sequence-column">#</th><th>Split Lot</th><th>Cutting Plan</th><th>Cutting Marker</th><th class="actions-column">Actions</th></tr></thead><tbody>
 						<tr v-for="(row, index) in form.lot_details" :key="row._row_key" class="bulk-setup-row">
 							<td><span class="row-number">{{ index + 1 }}</span></td>
@@ -107,23 +107,22 @@ watch(() => props.name, load, { immediate: true })
 </script>
 
 <style scoped>
-.bulk-setup-editor { display: flex; min-height: calc(100dvh - var(--erp-shell-header-height) - 98px); padding: var(--erp-space-4); flex-direction: column; gap: var(--erp-space-3); }
-.bulk-setup-editor__header, .bulk-setup-card > header, .bulk-lots-card > header { display: flex; align-items: center; justify-content: space-between; gap: var(--erp-space-3); }
-.bulk-setup-editor__header { padding-bottom: var(--erp-space-3); border-bottom: 1px solid var(--erp-border); }
+.bulk-setup-editor { display: flex; min-height: calc(100dvh - var(--erp-shell-header-height) - 98px); flex-direction: column; gap: var(--erp-space-3); }
+.bulk-setup-card > header, .bulk-lots-card > header { display: flex; align-items: center; justify-content: space-between; gap: var(--erp-space-3); }
 .bulk-setup-editor__header span, .section-kicker { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .045em; text-transform: uppercase; }
 .bulk-setup-editor__header h1 { margin: 3px 0 0; color: var(--erp-text); font-size: var(--erp-font-size-title); letter-spacing: -.025em; }
-.bulk-setup-editor__actions { display: flex; gap: var(--erp-space-2); }
 .bulk-setup-editor__loading, .bulk-setup-editor__body { display: grid; gap: var(--erp-space-3); }
 .bulk-setup-card, .bulk-lots-card { padding: var(--erp-space-4); background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); }
 .bulk-setup-card h2, .bulk-lots-card h2 { margin: 3px 0 0; color: var(--erp-text); font-size: var(--erp-font-size-section); }
 .bulk-setup-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--erp-space-3); margin-top: var(--erp-space-4); }
 .bulk-lots-table-wrap { margin-top: var(--erp-space-3); overflow: auto; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.bulk-lots-table-wrap:focus-visible { outline: 2px solid var(--erp-accent-dark); outline-offset: -2px; }
 .bulk-lots-table { width: 100%; min-width: 980px; border-collapse: collapse; }
 .bulk-lots-table th { padding: 9px 10px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); text-align: left; background: var(--erp-surface-muted); border-bottom: 1px solid var(--erp-border); }
 .bulk-lots-table td { padding: 9px 10px; vertical-align: middle; border-bottom: 1px solid var(--erp-border); }
 .bulk-lots-table tbody tr:last-child td { border-bottom: 0; }
 .sequence-column { width: 44px; }.actions-column { width: 64px; text-align: center !important; }.row-number { display: inline-grid; width: 24px; height: 24px; place-items: center; color: var(--erp-accent); font-size: var(--erp-font-size-min); font-weight: 760; background: var(--erp-accent-soft); border-radius: 50%; }
 .bulk-lots-empty { display: grid; min-height: 190px; margin-top: var(--erp-space-3); place-content: center; justify-items: center; gap: 7px; color: var(--erp-text-muted); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); }.bulk-lots-empty i { color: var(--erp-accent); font-size: 1.5rem; }.bulk-lots-empty strong { color: var(--erp-text); }
-@media (max-width: 900px) { .bulk-setup-editor__header { align-items: flex-start; flex-direction: column; }.bulk-setup-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 620px) { .bulk-setup-editor { padding: var(--erp-space-3); }.bulk-setup-card, .bulk-lots-card { padding: var(--erp-space-3); }.bulk-setup-fields { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .bulk-setup-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .bulk-setup-card, .bulk-lots-card { padding: var(--erp-space-3); }.bulk-setup-fields { grid-template-columns: 1fr; }.bulk-lots-table-wrap { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); } }
 </style>

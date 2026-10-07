@@ -4,7 +4,7 @@ export const departments = [
 		label: "Cutting",
 		shortLabel: "CT",
 		path: "/cutting",
-		accent: "#e85d3f",
+		accent: "#059669",
 		component: () => import("./Cutting.vue"),
 	},
 	{

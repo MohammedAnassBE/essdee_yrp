@@ -57,7 +57,7 @@
 		<div class="dialog-stack">
 			<div v-for="(group, groupIndex) in completedDraft" :key="groupIndex" class="dialog-table-wrap">
 				<div v-if="panelNames(group).length" class="panel-note"><strong>Panels</strong> {{ panelNames(group).join(", ") }}</div>
-				<div class="table-scroll">
+				<div class="table-scroll" role="region" tabindex="0" :aria-label="`Completed cut quantity group ${groupIndex + 1}`">
 					<table class="action-table">
 						<thead><tr><th>S.No.</th><th v-for="attribute in group.attributes || []" :key="attribute">{{ attribute }}</th><th v-for="size in group.primary_attribute_values || []" :key="size">{{ size }}</th><th>Completed</th></tr></thead>
 						<tbody><tr v-for="(row, rowIndex) in group.items || []" :key="rowIndex"><td>{{ rowIndex + 1 }}</td><td v-for="attribute in group.attributes || []" :key="attribute">{{ row.attributes?.[attribute] || '—' }}</td><td v-for="size in group.primary_attribute_values || []" :key="size">{{ quantity(row.values?.[size]) }}</td><td><Checkbox v-model="row.completed" binary /></td></tr></tbody>
@@ -84,7 +84,7 @@
 				<label v-if="recutType === 'Print Panel'"><span>Panel Count</span><InputNumber v-model="recutForm.panel_count" :min="0" fluid /></label>
 				<div class="recut-form__button"><Button label="Add Item" icon="pi pi-plus" outlined @click="addRecutRow" /></div>
 			</div>
-			<div v-if="recutRows.length" class="table-scroll">
+			<div v-if="recutRows.length" class="table-scroll" role="region" tabindex="0" :aria-label="recutType === 'Print Panel' ? 'Print panel rows' : 'Recut fabric rows'">
 				<table class="action-table"><thead><tr><th>S.No.</th><th>Cloth Type</th><th>Colour</th><th>Dia</th><th>Shade</th><th>Weight</th><th>Rolls</th><th v-if="recutType === 'Print Panel'">Panel Count</th><th></th></tr></thead><tbody><tr v-for="(row, index) in recutRows" :key="index"><td>{{ index + 1 }}</td><td>{{ row.cloth_type }}</td><td>{{ row.colour }}</td><td>{{ row.dia }}</td><td>{{ row.shade }}</td><td>{{ row.weight }}</td><td>{{ row.no_of_rolls }}</td><td v-if="recutType === 'Print Panel'">{{ row.panel_count }}</td><td><Button icon="pi pi-trash" severity="danger" text rounded aria-label="Remove row" @click="recutRows.splice(index, 1)" /></td></tr></tbody></table>
 			</div>
 		</div>
@@ -504,15 +504,16 @@ function toggleMoreActions(event) {
 
 .dialog-stack { display: grid; gap: 14px; }
 .dialog-table-wrap { display: grid; gap: 8px; }
-.panel-note { color: #59675f; font-size: 0.78rem; }
-.table-scroll { overflow-x: auto; border: 1px solid #e0e7e3; border-radius: 9px; }
-.action-table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 0.78rem; }
-.action-table th, .action-table td { padding: 8px 10px; border-right: 1px solid #e4e9e6; border-bottom: 1px solid #e4e9e6; text-align: left; }
-.action-table th { color: #4d5d54; background: #f6f9f7; font-size: 0.71rem; white-space: nowrap; }
+.panel-note { color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
+.table-scroll { overflow-x: auto; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.table-scroll:focus-visible { outline: 2px solid var(--erp-accent-dark); outline-offset: -2px; }
+.action-table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: var(--erp-font-size-caption); }
+.action-table th, .action-table td { padding: 8px 10px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); text-align: left; }
+.action-table th { color: var(--erp-text-secondary); background: var(--erp-surface-muted); font-size: var(--erp-font-size-min); white-space: nowrap; }
 .action-table tr:last-child td { border-bottom: 0; }
 .action-table th:last-child, .action-table td:last-child { border-right: 0; }
 .recut-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.recut-form label, .dialog-field { display: grid; gap: 5px; color: #4c5a52; font-size: 0.76rem; font-weight: 700; }
+.recut-form label, .dialog-field { display: grid; gap: 5px; color: var(--erp-text-secondary); font-size: var(--erp-font-size-caption); font-weight: 700; }
 .recut-form__button { display: flex; align-items: end; }
 
 :global(.action-dialog) { width: min(94vw, 980px); }
@@ -524,21 +525,22 @@ function toggleMoreActions(event) {
 	gap: 7px;
 	margin-top: 10px;
 	padding: 8px 10px;
-	color: #176b4d;
-	background: #edf8f3;
-	border: 1px solid #b8e2ce;
+	color: var(--erp-accent-dark);
+	background: var(--erp-success-soft);
+	border: 1px solid var(--erp-accent-border);
 	border-radius: var(--erp-control-radius);
 	font-size: var(--erp-font-size-caption);
 	font-weight: 650;
 }
 
 .completed-copy-feedback--error {
-	color: #9f2f2f;
-	background: #fff3f3;
-	border-color: #efc4c4;
+	color: var(--erp-danger);
+	background: var(--erp-danger-soft);
+	border-color: color-mix(in srgb, var(--erp-danger) 28%, var(--erp-border));
 }
 
 @media (max-width: 760px) {
 	.recut-form { grid-template-columns: 1fr; }
+	.table-scroll { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); }
 }
 </style>

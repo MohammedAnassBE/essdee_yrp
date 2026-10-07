@@ -7,7 +7,7 @@
 				<p v-if="subtitle">{{ subtitle }}</p>
 			</div>
 			<div class="list-toolbar__actions">
-				<slot name="toolbar-actions"></slot>
+				<div class="list-toolbar__primary"><slot name="toolbar-actions"></slot></div>
 				<span class="list-search">
 					<i class="pi pi-search" aria-hidden="true"></i>
 					<InputText
@@ -17,45 +17,62 @@
 						@keyup.enter="applySearch"
 					/>
 				</span>
-				<Button
-					icon="pi pi-filter"
-					label="Filters"
-					severity="secondary"
-					outlined
-					:badge="advancedFilters.length ? String(advancedFilters.length) : undefined"
-					@click="showFilters = true"
-				/>
-				<Button
-					icon="pi pi-sliders-h"
-					label="Columns"
-					severity="secondary"
-					outlined
-					@click="showColumns = true"
-				/>
-				<Button
-					icon="pi pi-refresh"
-					label="Refresh"
-					severity="secondary"
-					text
-					rounded
-					aria-label="Refresh"
-					:loading="loading"
-					@click="refresh"
-				/>
-				<Button
-					icon="pi pi-filter-slash"
-					label="Clear Filters"
-					severity="secondary"
-					outlined
-					:disabled="!hasActiveQuery"
-					@click="clearFilters"
-				/>
+				<div class="list-toolbar__secondary">
+					<Button
+						icon="pi pi-filter"
+						label="Filters"
+						severity="secondary"
+						outlined
+						:badge="advancedFilters.length ? String(advancedFilters.length) : undefined"
+						@click="showFilters = true"
+					/>
+					<Button
+						icon="pi pi-sliders-h"
+						label="Columns"
+						severity="secondary"
+						outlined
+						@click="showColumns = true"
+					/>
+					<Button
+						icon="pi pi-refresh"
+						label="Refresh"
+						severity="secondary"
+						text
+						rounded
+						aria-label="Refresh"
+						:loading="loading"
+						@click="refresh"
+					/>
+					<Button
+						icon="pi pi-filter-slash"
+						label="Clear Filters"
+						severity="secondary"
+						outlined
+						:disabled="!hasActiveQuery"
+						@click="clearFilters"
+					/>
+				</div>
 			</div>
 		</header>
+
+		<button
+			v-if="standardFilterFields.length"
+			type="button"
+			class="mobile-quick-filter-toggle"
+			aria-label="Quick filters"
+			:aria-expanded="mobileQuickFiltersOpen"
+			@click="mobileQuickFiltersOpen = !mobileQuickFiltersOpen"
+		>
+			<span><i class="pi pi-sliders-h" aria-hidden="true"></i> Quick filters</span>
+			<span v-if="activeQuickFilterCount" class="mobile-quick-filter-toggle__count">{{ activeQuickFilterCount }}</span>
+			<i class="pi" :class="mobileQuickFiltersOpen ? 'pi-chevron-up' : 'pi-chevron-down'" aria-hidden="true"></i>
+		</button>
 
 		<ListviewQuickFilters
 			v-if="standardFilterFields.length"
 			v-model="quickFilters"
+			class="list-quick-filters"
+			:class="{ 'list-quick-filters--open': mobileQuickFiltersOpen }"
 			:fields="standardFilterFields"
 			@change="quickFiltersChanged"
 		/>
@@ -154,6 +171,7 @@
 				lazy
 				row-hover
 				scrollable
+				:pt="{ tableContainer: { tabindex: 0, role: 'region', 'aria-label': `${title || doctype} records` } }"
 				:table-style="{ minWidth: minTableWidth }"
 				:row-class="rowClass"
 				@sort="sortChanged"
@@ -178,17 +196,18 @@
 						<slot :name="`cell-${column.fieldname}`" :row="data" :value="data[column.fieldname]">
 							<div v-if="column.fieldname === 'name'" class="list-document-cell">
 								<span class="list-document-cell__mark">{{ rowMark }}</span>
-								<strong>{{ displayValue(data[column.fieldname], column) }}</strong>
+								<strong :title="displayValue(data[column.fieldname], column, data)">{{ displayValue(data[column.fieldname], column, data) }}</strong>
 							</div>
 							<span
 								v-else-if="column.fieldtype === 'Link'"
 								class="list-link-value"
 								:class="`list-link-value--${column.fieldname}`"
+								:title="displayValue(data[column.fieldname], column, data)"
 							>
-								{{ displayValue(data[column.fieldname], column) }}
+								{{ displayValue(data[column.fieldname], column, data) }}
 							</span>
-							<span v-else class="list-plain-value">
-								{{ displayValue(data[column.fieldname], column) }}
+							<span v-else class="list-plain-value" :title="displayValue(data[column.fieldname], column, data)">
+								{{ displayValue(data[column.fieldname], column, data) }}
 							</span>
 						</slot>
 					</template>
@@ -426,6 +445,7 @@ const userColumns = ref(null)
 const advancedFilters = ref([])
 const quickFilters = ref({})
 const appliedQuickFilters = ref({})
+const mobileQuickFiltersOpen = ref(false)
 const showColumns = ref(false)
 const showFilters = ref(false)
 const activeStatus = ref("")
@@ -507,6 +527,9 @@ const hasActiveQuery = computed(
 		Object.values(quickFilters.value).some((value) => hasFilterValue(value)),
 	),
 )
+const activeQuickFilterCount = computed(() =>
+	Object.values(quickFilters.value).filter((value) => hasFilterValue(value)).length,
+)
 
 const isSubmittable = computed(() => Boolean(Number(doctypeMeta.value?.is_submittable)))
 const canBulkEdit = computed(() => hasDoctypePermission("write"))
@@ -577,6 +600,16 @@ const activeColumns = computed(() => [
 	...columnOptions.value.filter((column) => column.enabled && column.fieldname !== "name"),
 ])
 
+const activeCurrencyFields = computed(() => {
+	const availableFields = new Set(metaFields.value.map((field) => field.fieldname).filter(Boolean))
+	return activeColumns.value.flatMap((column) => {
+		if (column.fieldtype !== "Currency") return []
+		const reference = String(column.options || "").trim()
+		if (reference && availableFields.has(reference)) return [reference]
+		return availableFields.has("currency") ? ["currency"] : []
+	})
+})
+
 const filterFields = computed(() => {
 	const metaByName = new Map(metaDocuments.value.map((meta) => [meta.name, meta]))
 	const parentFields = [
@@ -617,6 +650,7 @@ const filterFields = computed(() => {
 const fetchFields = computed(() => [
 	...new Set([
 		...activeColumns.value.map((column) => column.fieldname),
+		...activeCurrencyFields.value,
 		...(props.statusField ? [props.statusField] : []),
 		...(isSubmittable.value ? ["docstatus", "modified"] : []),
 	]),
@@ -1056,17 +1090,33 @@ function rowClass(row) {
 
 function statusTone(status) {
 	const value = String(status || "").toLowerCase()
-	if (value.includes("completed") && !value.includes("partially")) return "success"
-	if (value.includes("pending") || value.includes("cancel") || value.includes("reject")) return "danger"
-	if (value.includes("partial") || value.includes("draft")) return "warning"
-	if (value.includes("progress") || value.includes("ready") || value.includes("planned")) return "info"
+	if (["completed", "fully", "closed"].some((token) => value.includes(token)) && !value.includes("partially")) return "success"
+	if (value.includes("pending") || value.includes("cancel") || value.includes("reject") || value.includes("overdue")) return "danger"
+	if (value.includes("partial") || value.includes("draft") || value.startsWith("to ") || value.includes("close request")) return "warning"
+	if (value.includes("submitted") || value.includes("progress") || value.includes("ready") || value.includes("planned")) return "info"
 	return "neutral"
 }
 
-function displayValue(value, column) {
+function displayValue(value, column, row = {}) {
 	if (value === null || value === undefined || value === "") return "—"
 	if (column.fieldtype === "Check") return Number(value) ? "Yes" : "No"
 	if (Array.isArray(value)) return value.join(", ")
+	if (["Date", "Datetime"].includes(column.fieldtype)) {
+		const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/)
+		if (match) {
+			const date = `${match[3]}-${match[2]}-${match[1]}`
+			return column.fieldtype === "Datetime" && match[4] ? `${date} · ${match[4]}:${match[5]}` : date
+		}
+	}
+	if (column.fieldtype === "Currency") {
+		const currency = row?.[column.options] || row?.currency || ""
+		const amount = Number(value).toLocaleString("en-IN", { maximumFractionDigits: 2 })
+		return currency ? `${currency} ${amount}` : amount
+	}
+	if (["Int", "Float"].includes(column.fieldtype) && Number.isFinite(Number(value))) {
+		return Number(value).toLocaleString("en-IN", { maximumFractionDigits: column.fieldtype === "Int" ? 0 : 3 })
+	}
+	if (column.fieldtype === "Percent" && Number.isFinite(Number(value))) return `${Number(value).toLocaleString("en-IN", { maximumFractionDigits: 2 })}%`
 	return value
 }
 
@@ -1109,10 +1159,10 @@ defineExpose({ refresh: reload })
 	gap: 12px;
 	width: 100%;
 	padding: 16px;
-	background: #fff;
+	background: var(--list-surface);
 	border: 1px solid var(--list-line);
 	border-radius: var(--erp-panel-radius);
-	box-shadow: 0 1px 2px rgb(24 53 39 / 4%), 0 10px 28px rgb(24 53 39 / 4%);
+	box-shadow: var(--erp-shadow-sm);
 }
 
 .list-page-head {
@@ -1163,6 +1213,15 @@ defineExpose({ refresh: reload })
 	padding: 0;
 }
 
+.list-toolbar__primary,
+.list-toolbar__secondary {
+	display: contents;
+}
+
+.mobile-quick-filter-toggle {
+	display: none;
+}
+
 .list-search {
 	position: relative;
 	display: flex;
@@ -1174,7 +1233,7 @@ defineExpose({ refresh: reload })
 	position: absolute;
 	left: 11px;
 	z-index: 1;
-	color: color-mix(in srgb, var(--list-accent) 55%, #94a3b8);
+	color: color-mix(in srgb, var(--list-accent) 55%, var(--erp-text-muted));
 	transition: color var(--erp-transition-fast);
 }
 
@@ -1203,7 +1262,7 @@ defineExpose({ refresh: reload })
 .list-toolbar__actions :deep(.p-button) {
 	height: var(--erp-control-height);
 	min-height: var(--erp-control-height);
-	background: #fff;
+	background: var(--erp-surface);
 	border-color: var(--list-line);
 	border-radius: var(--erp-control-radius);
 	font-weight: 650;
@@ -1218,26 +1277,23 @@ defineExpose({ refresh: reload })
 .list-toolbar__actions :deep(.p-button:not(:disabled):hover) {
 	background: var(--list-accent-soft);
 	border-color: color-mix(in srgb, var(--list-accent) 34%, white);
-	box-shadow: 0 3px 10px rgb(24 53 39 / 7%);
+	box-shadow: var(--erp-shadow-xs);
 }
 
-.list-toolbar__actions :deep(.p-button.list-primary-action) {
+.list-toolbar__actions :deep(.p-button.list-primary-action),
+.list-toolbar__primary :deep(.p-button) {
 	color: #fff;
 	background: var(--list-accent);
 	border-color: var(--list-accent);
 	box-shadow: 0 3px 9px color-mix(in srgb, var(--list-accent) 18%, transparent);
 }
 
-.list-toolbar__actions :deep(.p-button.list-primary-action:not(:disabled):hover) {
+.list-toolbar__actions :deep(.p-button.list-primary-action:not(:disabled):hover),
+.list-toolbar__primary :deep(.p-button:not(:disabled):hover) {
 	color: #fff;
 	background: var(--list-accent-dark);
 	border-color: var(--list-accent-dark);
 	box-shadow: 0 4px 12px color-mix(in srgb, var(--list-accent) 24%, transparent);
-}
-
-.list-toolbar__actions :deep(.p-button:disabled) {
-	background: #f8faf9;
-	box-shadow: none;
 }
 
 .bulk-message {
@@ -1278,8 +1334,8 @@ defineExpose({ refresh: reload })
 	color: var(--list-muted);
 	font-size: var(--erp-font-size-min);
 	font-weight: 700;
-	background: #fff;
-	border: 1px solid #dbe8e6;
+	background: var(--erp-surface);
+	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-pill-radius);
 }
 
@@ -1301,7 +1357,7 @@ defineExpose({ refresh: reload })
 .bulk-edit-field {
 	display: grid;
 	gap: 6px;
-	color: #34413a;
+	color: var(--erp-text-secondary);
 	font-size: 0.8rem;
 	font-weight: 650;
 }
@@ -1314,7 +1370,7 @@ defineExpose({ refresh: reload })
 
 .bulk-confirm-copy {
 	margin: 0;
-	color: #475569;
+	color: var(--erp-text-secondary);
 	font-size: 0.88rem;
 	line-height: 1.55;
 }
@@ -1328,6 +1384,8 @@ defineExpose({ refresh: reload })
 	background: var(--erp-surface-soft);
 	border: 1px solid var(--list-line);
 	border-radius: var(--erp-control-radius);
+	-webkit-mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
+	mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
 	scrollbar-width: none;
 }
 
@@ -1360,15 +1418,15 @@ defineExpose({ refresh: reload })
 
 .list-status-tab:hover {
 	color: var(--list-ink);
-	background: #fff;
-	border-color: #e7ece9;
-	box-shadow: 0 3px 10px rgb(15 23 42 / 5%);
+	background: var(--erp-surface);
+	border-color: var(--erp-border);
+	box-shadow: var(--erp-shadow-sm);
 	transform: translateY(-1px);
 }
 
 .list-status-tab:focus-visible {
 	color: var(--list-accent-dark);
-	outline: 3px solid color-mix(in srgb, var(--list-accent) 18%, transparent);
+	outline: 2px solid var(--erp-accent-dark);
 	outline-offset: 1px;
 }
 
@@ -1386,48 +1444,63 @@ defineExpose({ refresh: reload })
 .list-status-tab__dot {
 	width: 7px;
 	height: 7px;
-	background: #94a3b8;
+	background: var(--erp-text-muted);
 	border-radius: 50%;
 }
 
 .list-status-tab__dot.success {
-	background: #059669;
+	background: var(--erp-success);
 }
 
 .list-status-tab__dot.danger {
-	background: #e11d48;
+	background: var(--erp-danger);
 }
 
 .list-status-tab__dot.warning {
-	background: #d97706;
+	background: var(--erp-attention);
 }
 
 .list-status-tab__dot.info {
-	background: #2563eb;
+	background: var(--erp-info);
 }
 
 .list-status-tab__count {
 	min-width: 22px;
 	padding: 1px 6px;
-	color: #64748b;
+	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
 	font-weight: 750;
 	text-align: center;
-	background: #f1f5f9;
+	background: var(--erp-surface-muted);
 	border-radius: var(--erp-pill-radius);
 }
 
 .list-status-tab--active .list-status-tab__count {
 	color: var(--list-accent-dark);
-	background: #fff;
+	background: var(--erp-surface);
 }
 
 .list-table-frame {
+	position: relative;
 	overflow: hidden;
 	background: var(--list-surface);
 	border: 1px solid var(--list-line);
 	border-radius: var(--erp-panel-radius);
 	box-shadow: inset 0 1px 0 rgb(255 255 255 / 72%);
+}
+
+@media (max-width: 900px) {
+	.list-table-frame::after {
+		position: absolute;
+		z-index: calc(var(--erp-layer-sticky) + 1);
+		top: 0;
+		right: 0;
+		bottom: 0;
+		width: 15px;
+		background: linear-gradient(to right, transparent, rgb(16 24 40 / 8%));
+		content: "";
+		pointer-events: none;
+	}
 }
 
 .list-loading {
@@ -1451,33 +1524,33 @@ defineExpose({ refresh: reload })
 	top: 0;
 	z-index: var(--erp-layer-sticky);
 	padding: 9px 12px;
-	color: #596b62;
+	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
 	font-weight: 820;
 	letter-spacing: 0.075em;
 	text-transform: uppercase;
 	background: var(--erp-surface-muted);
 	border: 0;
-	border-bottom: 1px solid #dbe5e0;
+	border-bottom: 1px solid var(--erp-border);
 }
 
 :deep(.premium-list-table .p-datatable-tbody > tr) {
-	background: #fff;
+	background: var(--erp-surface);
 	transition:
 		background 140ms ease,
 		box-shadow 140ms ease;
 }
 
 :deep(.premium-list-table .p-datatable-tbody > tr:nth-child(even)) {
-	background: #fcfdfd;
+	background: var(--erp-surface-soft);
 }
 
 :deep(.premium-list-table .p-datatable-tbody > tr > td) {
 	padding: 10px 12px;
-	color: #334155;
+	color: var(--erp-text-secondary);
 	font-size: 13px;
 	border: 0;
-	border-bottom: 1px solid #e8efeb;
+	border-bottom: 1px solid var(--erp-border-subtle);
 }
 
 :deep(.premium-list-table .p-datatable-tbody > tr:last-child > td) {
@@ -1494,19 +1567,19 @@ defineExpose({ refresh: reload })
 }
 
 :deep(.premium-list-row--success > td:first-child) {
-	box-shadow: inset 4px 0 #059669;
+	box-shadow: inset 4px 0 var(--erp-success);
 }
 
 :deep(.premium-list-row--danger > td:first-child) {
-	box-shadow: inset 4px 0 #e11d48;
+	box-shadow: inset 4px 0 var(--erp-danger);
 }
 
 :deep(.premium-list-row--warning > td:first-child) {
-	box-shadow: inset 4px 0 #d97706;
+	box-shadow: inset 4px 0 var(--erp-attention);
 }
 
 :deep(.premium-list-row--info > td:first-child) {
-	box-shadow: inset 4px 0 #2563eb;
+	box-shadow: inset 4px 0 var(--erp-info);
 }
 
 .list-document-cell {
@@ -1552,7 +1625,7 @@ defineExpose({ refresh: reload })
 }
 
 .list-link-value {
-	color: #2c3b34;
+	color: var(--erp-text-secondary);
 	font-weight: 680;
 }
 
@@ -1565,7 +1638,7 @@ defineExpose({ refresh: reload })
 }
 
 .list-plain-value {
-	color: #475569;
+	color: var(--erp-text-secondary);
 }
 
 :deep(.list-number-column) {
@@ -1579,16 +1652,28 @@ defineExpose({ refresh: reload })
 
 .list-row-open {
 	display: grid;
-	width: 30px;
-	height: 30px;
+	width: 36px;
+	height: 36px;
 	padding: 0;
-	color: #64748b;
+	color: var(--erp-text-muted);
 	background: transparent;
 	border: 1px solid transparent;
 	border-radius: var(--erp-control-radius);
 	cursor: pointer;
 	place-items: center;
 	transition: 140ms ease;
+}
+
+:deep(.premium-list-table .p-checkbox) {
+	display: grid;
+	width: 36px;
+	height: 36px;
+	place-items: center;
+}
+
+:deep(.premium-list-table .p-checkbox-box) {
+	width: 20px;
+	height: 20px;
 }
 
 .list-row-open:hover {
@@ -1599,7 +1684,7 @@ defineExpose({ refresh: reload })
 
 .list-row-open:focus-visible {
 	color: var(--list-accent-dark);
-	background: #fff;
+	background: var(--erp-surface);
 	border-color: var(--list-accent);
 	outline: 3px solid color-mix(in srgb, var(--list-accent) 16%, transparent);
 	outline-offset: 1px;
@@ -1610,7 +1695,7 @@ defineExpose({ refresh: reload })
 }
 
 .list-row-chevron {
-	color: #94a3b8;
+	color: var(--erp-text-muted);
 	font-size: 0.72rem;
 	transition: 130ms ease;
 }
@@ -1629,11 +1714,19 @@ defineExpose({ refresh: reload })
 	box-shadow: inset 3px 0 var(--list-accent);
 }
 
+:deep(.premium-list-table .p-datatable-table-container) {
+	container-type: inline-size;
+}
+
 .list-empty {
+	position: sticky;
+	left: 0;
 	display: flex;
 	align-items: center;
 	flex-direction: column;
 	gap: 6px;
+	box-sizing: border-box;
+	width: 100cqi;
 	padding: 58px 16px;
 	color: var(--list-muted);
 	text-align: center;
@@ -1690,9 +1783,9 @@ defineExpose({ refresh: reload })
 }
 
 :deep(.premium-list-table .p-checkbox-box) {
-	border-color: #c9d6d0;
+	border-color: var(--erp-border-strong);
 	border-radius: 6px;
-	box-shadow: 0 1px 2px rgb(15 23 42 / 3%);
+	box-shadow: var(--erp-shadow-xs);
 }
 
 :deep(.premium-list-table .p-checkbox-checked .p-checkbox-box) {
@@ -1727,28 +1820,107 @@ defineExpose({ refresh: reload })
 		border-radius: var(--erp-panel-radius);
 	}
 
-	.list-page-head,
-	.list-toolbar__actions {
+	.list-page-head {
 		align-items: stretch;
 		flex-direction: column;
 	}
 
 	.list-toolbar__actions {
-		justify-content: flex-start;
-		padding: 6px;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 44px;
+		gap: 8px;
+		justify-content: stretch;
+		padding: 0;
+	}
+
+	.list-toolbar__primary {
+		display: flex;
+		grid-column: 2;
+		grid-row: 1;
+	}
+
+	.list-toolbar__primary:empty {
+		display: none;
+	}
+
+	.list-toolbar__secondary {
+		display: grid;
+		grid-column: 1 / -1;
+		grid-row: 2;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 6px;
 	}
 
 	.list-search :deep(input) {
 		width: 100%;
 	}
 
-	.list-search,
-	.list-toolbar__actions :deep(.p-button) {
+	.list-search {
+		grid-column: 1;
+		grid-row: 1;
 		width: 100%;
 	}
 
-	.list-toolbar__actions :deep(.p-button) {
+	.list-toolbar__primary :deep(.p-button),
+	.list-toolbar__secondary :deep(.p-button) {
 		justify-content: center;
+		width: 100%;
+	}
+
+	.list-toolbar__primary :deep(.p-button) {
+		min-width: 44px;
+		padding-inline: 0;
+	}
+
+	.list-toolbar__primary :deep(.p-button-label) {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	.mobile-quick-filter-toggle {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		min-height: 38px;
+		padding: 0 12px;
+		color: var(--list-muted);
+		background: var(--erp-surface);
+		border: 1px solid var(--list-line);
+		border-radius: var(--erp-control-radius);
+		font: inherit;
+		font-size: 0.78rem;
+		font-weight: 650;
+		text-align: left;
+	}
+
+	.mobile-quick-filter-toggle > span:first-child {
+		display: inline-flex;
+		align-items: center;
+		gap: 7px;
+	}
+
+	.mobile-quick-filter-toggle__count {
+		margin-left: auto;
+		padding: 1px 7px;
+		color: var(--list-accent-dark);
+		background: var(--list-accent-soft);
+		border-radius: 999px;
+	}
+
+	.list-quick-filters {
+		display: none;
+	}
+
+	.list-quick-filters--open {
+		display: block;
 	}
 
 	.bulk-bar,
@@ -1760,6 +1932,25 @@ defineExpose({ refresh: reload })
 	.bulk-bar__actions :deep(.p-button) {
 		justify-content: center;
 		width: 100%;
+	}
+}
+
+@media (max-width: 540px) {
+	.list-toolbar__secondary :deep(.p-button-label) {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	.list-toolbar__secondary :deep(.p-button) {
+		min-width: 44px;
+		padding-inline: 0;
 	}
 }
 </style>

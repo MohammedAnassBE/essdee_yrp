@@ -93,7 +93,7 @@ function openDocument() { router.push(webDocumentPath(props.doctype, props.doc.n
 	background: var(--erp-surface);
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-panel-radius);
-	box-shadow: 0 1px 2px rgb(24 53 39 / 4%), 0 8px 22px rgb(24 53 39 / 3%);
+	box-shadow: var(--erp-shadow-sm);
 }
 
 .side-panel-card > header {
@@ -103,7 +103,7 @@ function openDocument() { router.push(webDocumentPath(props.doctype, props.doc.n
 	font-weight: 800;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
-	background: #f8faf9;
+	background: var(--erp-surface-soft);
 	border-bottom: 1px solid var(--erp-border);
 }
 
@@ -123,7 +123,7 @@ function openDocument() { router.push(webDocumentPath(props.doctype, props.doc.n
 	display: grid;
 	gap: 3px;
 	padding: 9px 0;
-	border-bottom: 1px solid #edf0ee;
+	border-bottom: 1px solid var(--erp-border-subtle);
 }
 
 .side-panel-row:last-child {
@@ -154,7 +154,7 @@ function openDocument() { router.push(webDocumentPath(props.doctype, props.doc.n
 	color: var(--erp-text-muted);
 	font-size: 0.8rem;
 	text-align: center;
-	background: #fafcfb;
+	background: var(--erp-surface-soft);
 	border: 1px dashed var(--erp-border-strong);
 	border-radius: var(--erp-control-radius);
 }

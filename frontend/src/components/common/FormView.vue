@@ -1,5 +1,5 @@
 <template>
-	<section class="common-form-view" :class="{ 'common-form-view--compact': compact }">
+	<section class="common-form-view" :class="{ 'common-form-view--compact': compact }" :aria-busy="loading">
 		<header class="form-toolbar">
 			<div class="form-toolbar__identity">
 				<h2>{{ heading }}</h2>
@@ -9,42 +9,49 @@
 				</div>
 			</div>
 			<div class="form-toolbar__actions">
-				<slot name="header-actions" :doc="form" :meta="meta" :loading="loading" :mode="mode" />
-				<Button
-					v-if="mode === 'edit' && (documentName || showCancel)"
-					label="Cancel"
-					severity="secondary"
-					text
-					:disabled="saving"
-					@click="cancelEditing"
-				/>
-				<Button
-					v-if="mode === 'view' && !readonly"
-					class="form-edit-button"
-					icon="pi pi-pencil"
-					label="Edit"
-					severity="secondary"
-					outlined
-					:disabled="loading"
-					@click="mode = 'edit'"
-				/>
-				<Button
-					v-else-if="mode === 'edit'"
-					icon="pi pi-save"
-					:label="documentName ? 'Save' : 'Create'"
-					:loading="saving"
-					:disabled="loading || readonly"
-					@click="save"
-				/>
+				<template v-if="!loadFailed">
+					<slot name="header-actions" :doc="form" :meta="meta" :loading="loading" :mode="mode" />
+					<Button
+						v-if="mode === 'edit' && (documentName || showCancel)"
+						label="Cancel"
+						severity="secondary"
+						text
+						:disabled="saving"
+						@click="cancelEditing"
+					/>
+					<Button
+						v-if="mode === 'view' && !readonly"
+						class="form-edit-button"
+						icon="pi pi-pencil"
+						label="Edit"
+						severity="secondary"
+						outlined
+						:disabled="loading"
+						@click="mode = 'edit'"
+					/>
+					<Button
+						v-else-if="mode === 'edit'"
+						icon="pi pi-save"
+						:label="documentName ? 'Save' : 'Create'"
+						:loading="saving"
+						:disabled="loading || readonly"
+						@click="save"
+					/>
+				</template>
 			</div>
 		</header>
 
-		<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
+		<Message v-if="error && !loadFailed" severity="error" :closable="false">{{ error }}</Message>
 		<Message v-if="success" severity="success" :closable="false">{{ success }}</Message>
 
-		<div v-if="loading" class="form-loading" aria-label="Loading form">
+		<div v-if="loading" class="form-loading" role="status" aria-live="polite" aria-label="Loading form">
 			<Skeleton v-for="index in 8" :key="index" height="3rem" />
 		</div>
+		<section v-else-if="loadFailed" class="form-load-error" role="alert">
+			<i class="pi pi-cloud-times" aria-hidden="true" />
+			<div><strong>{{ heading }} could not be loaded</strong><span>{{ error }}</span></div>
+			<Button label="Retry" icon="pi pi-refresh" severity="secondary" outlined @click="load" />
+		</section>
 
 		<form v-else-if="mode === 'edit'" class="form-body" @submit.prevent="save">
 			<div v-if="requiresPromptName" class="form-section">
@@ -201,6 +208,7 @@ import Column from "primevue/column"
 import DataTable from "primevue/datatable"
 import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
+import { useToast } from "primevue/usetoast"
 import { computed, reactive, ref, watch } from "vue"
 
 import { createDoc, getDoc, getMeta, updateDoc } from "../../api/frappe.js"
@@ -227,6 +235,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(["saved", "loaded", "cancel", "change"])
+const toast = useToast()
 
 const noValueFieldtypes = new Set([
 	"Section Break",
@@ -246,6 +255,7 @@ const metas = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const error = ref("")
+const loadFailed = ref(false)
 const success = ref("")
 const fieldErrors = reactive({})
 const childErrors = reactive({})
@@ -296,6 +306,7 @@ watch(
 async function load() {
 	const sequence = ++loadSequence
 	loading.value = true
+	loadFailed.value = false
 	error.value = ""
 	success.value = ""
 	clearObject(fieldErrors)
@@ -314,8 +325,13 @@ async function load() {
 		emit("loaded", { doc: { ...form }, meta: meta.value })
 	} catch (reason) {
 		if (sequence !== loadSequence) return
+		loadFailed.value = true
 		error.value = reason.message || `Unable to load ${props.doctype}.`
+		metas.value = []
+		documentName.value = ""
 		replaceForm({})
+		cleanDocument = {}
+		mode.value = "view"
 	} finally {
 		if (sequence === loadSequence) loading.value = false
 	}
@@ -540,11 +556,12 @@ function payload() {
 }
 
 async function save() {
-	if (loading.value || saving.value || props.readonly) return
+	if (loading.value || saving.value || loadFailed.value || props.readonly || !meta.value) return
 	error.value = ""
 	success.value = ""
 	if (!validate()) {
 		error.value = "Complete the required fields before saving."
+		toast.add({ severity: "error", summary: `${heading.value} was not saved`, detail: error.value, life: 5000 })
 		return
 	}
 
@@ -561,6 +578,7 @@ async function save() {
 		emit("saved", saved)
 	} catch (reason) {
 		error.value = reason.message || `Unable to save ${props.doctype}.`
+		toast.add({ severity: "error", summary: `${heading.value} was not saved`, detail: error.value, life: 6500 })
 	} finally {
 		saving.value = false
 	}
@@ -591,10 +609,10 @@ defineExpose({ save, reload: load, doc: form, mode })
 .form-toolbar {
 	min-height: 58px;
 	padding: 10px 12px 10px 16px;
-	background: #fff;
+	background: var(--erp-surface);
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-panel-radius);
-	box-shadow: 0 1px 2px rgb(24 53 39 / 4%);
+	box-shadow: var(--erp-shadow-xs);
 }
 
 .form-toolbar h2 {
@@ -638,6 +656,25 @@ defineExpose({ save, reload: load, doc: form, mode })
 	gap: 16px;
 }
 
+.form-load-error {
+	display: grid;
+	min-height: 220px;
+	padding: var(--erp-space-6);
+	place-content: center;
+	justify-items: center;
+	gap: 10px;
+	color: var(--erp-text-muted);
+	text-align: center;
+	background: var(--erp-surface);
+	border: 1px dashed var(--erp-border-strong);
+	border-radius: var(--erp-panel-radius);
+}
+
+.form-load-error > i { color: var(--erp-danger); font-size: 24px; }
+.form-load-error > div { display: grid; gap: 4px; }
+.form-load-error strong { color: var(--erp-text); }
+.form-load-error span { max-width: 520px; font-size: var(--erp-font-size-caption); }
+
 .form-body,
 .form-read-view {
 	display: grid;
@@ -658,10 +695,10 @@ defineExpose({ save, reload: load, doc: form, mode })
 	display: grid;
 	gap: 15px;
 	padding: 16px;
-	background: #fff;
+	background: var(--erp-surface);
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-panel-radius);
-	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
+	box-shadow: var(--erp-shadow-xs);
 }
 
 .form-section__header h3 {
@@ -728,20 +765,20 @@ defineExpose({ save, reload: load, doc: form, mode })
 	display: flex;
 	min-height: 68px;
 	padding: 11px 14px;
-	background: #fff;
+	background: var(--erp-surface);
 	flex-direction: column;
 	justify-content: center;
 }
 
 .view-field__value {
-	color: #1c2a22;
+	color: var(--erp-text);
 	font-size: 0.94rem;
 	font-weight: 650;
 	overflow-wrap: anywhere;
 }
 
 .view-field__link {
-	color: #2f7652;
+	color: var(--erp-accent-hover);
 	text-decoration: none;
 }
 
@@ -752,13 +789,13 @@ defineExpose({ save, reload: load, doc: form, mode })
 
 .view-field__link:focus-visible {
 	border-radius: 3px;
-	outline: 3px solid color-mix(in srgb, var(--erp-accent) 16%, transparent);
+	outline: 2px solid var(--erp-accent-dark);
 	outline-offset: 2px;
 }
 
 .view-field__label {
 	margin-top: 5px;
-	color: #77827c;
+	color: var(--erp-text-muted);
 	font-size: 0.7rem;
 	font-weight: 650;
 	letter-spacing: 0.035em;
@@ -782,13 +819,13 @@ defineExpose({ save, reload: load, doc: form, mode })
 }
 
 .view-table header span {
-	color: #77827c;
+	color: var(--erp-text-muted);
 	font-size: 0.72rem;
 }
 
 .view-table__empty {
 	padding: 22px;
-	color: #77827c;
+	color: var(--erp-text-muted);
 	text-align: center;
 }
 

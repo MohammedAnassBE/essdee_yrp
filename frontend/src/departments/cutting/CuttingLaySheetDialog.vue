@@ -98,7 +98,7 @@
 				<label v-if="!sheet?.is_manual_entry"><span>Maximum No of Plys *</span><InputNumber v-model="maximumPlys" :min="1" fluid /></label>
 				<label v-if="!sheet?.is_manual_entry"><span>Maximum Allow Percent *</span><InputNumber v-model="maximumAllow" :min="0" suffix="%" fluid /></label>
 			</div>
-			<div class="table-scroll"><table class="laysheet-table"><thead><tr><th>Panel</th><th>Bundle Group</th></tr></thead><tbody><tr v-for="(row, index) in generationParts" :key="row.part"><td>{{ row.part }}</td><td><InputNumber v-model="row.value" :min="1" :disabled="busy === 'generate'" fluid /></td></tr></tbody></table></div>
+			<div class="table-scroll" role="region" tabindex="0" aria-label="Bundle generation groups"><table class="laysheet-table"><thead><tr><th>Panel</th><th>Bundle Group</th></tr></thead><tbody><tr v-for="(row, index) in generationParts" :key="row.part"><td>{{ row.part }}</td><td><InputNumber v-model="row.value" :min="1" :disabled="busy === 'generate'" fluid /></td></tr></tbody></table></div>
 		</div>
 		<template #footer><Button label="Close" severity="secondary" text @click="generateOpen = false" /><Button label="Generate" icon="pi pi-box" :loading="busy === 'generate'" @click="generateBundles" /></template>
 	</Dialog>
@@ -175,6 +175,7 @@ import { callMethod } from "../../api/frappe.js"
 import { getQzPrinters, printQzRaw } from "../../api/qzPrinter.js"
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
+import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
 import MaterialRequirementGroups from "./shared/MaterialRequirementGroups.vue"
 
@@ -187,6 +188,7 @@ const props = defineProps({
 	canCreate: { type: Boolean, default: false },
 })
 const emit = defineEmits(["update:visible", "changed"])
+const confirmAction = useActionConfirmation()
 
 const loading = ref(false)
 const busy = ref("")
@@ -426,7 +428,17 @@ async function saveAccessory() {
 }
 
 async function deleteCloth(index) {
-	if (!window.confirm("Delete this cloth detail?")) return
+	return confirmAction({
+		header: "Delete cloth detail?",
+		message: "Delete this cloth detail? This removes it from the Lay Sheet.",
+		acceptLabel: "Delete Cloth",
+		rejectLabel: "Keep Cloth",
+		acceptIcon: "pi pi-trash",
+		accept: () => deleteClothConfirmed(index),
+	})
+}
+
+async function deleteClothConfirmed(index) {
 	detailBusy.value = `cloth-${index}`
 	detailError.value = ""
 	try {
@@ -441,7 +453,17 @@ async function deleteCloth(index) {
 }
 
 async function deleteAccessory(index) {
-	if (!window.confirm("Delete this accessory detail?")) return
+	return confirmAction({
+		header: "Delete accessory detail?",
+		message: "Delete this accessory detail? This removes it from the Lay Sheet.",
+		acceptLabel: "Delete Accessory",
+		rejectLabel: "Keep Accessory",
+		acceptIcon: "pi pi-trash",
+		accept: () => deleteAccessoryConfirmed(index),
+	})
+}
+
+async function deleteAccessoryConfirmed(index) {
 	detailBusy.value = `accessory-${index}`
 	detailError.value = ""
 	try {
@@ -588,8 +610,13 @@ async function runStatusAction(method, action) {
 }
 
 async function cancelLaySheet() {
-	if (!window.confirm(`Cancel Cutting LaySheet ${sheet.value.name}?`)) return
-	await runStatusAction("cancel_laysheet", "cancel")
+	return confirmAction({
+		header: "Cancel Cutting LaySheet?",
+		message: `Cancel Cutting LaySheet ${sheet.value.name}? This changes the document status and cannot be undone here.`,
+		acceptLabel: "Cancel Lay Sheet",
+		acceptIcon: "pi pi-ban",
+		accept: () => runStatusAction("cancel_laysheet", "cancel"),
+	})
 }
 
 async function reloadChanged() {
@@ -669,7 +696,7 @@ const DataBlock = defineComponent({
 		return () => h("section", { class: "data-block" }, [
 			h("header", [h("h3", blockProps.title), h("span", `${blockProps.rows.length} rows`)]),
 			blockProps.rows.length
-				? h("div", { class: "table-scroll" }, [h("table", { class: "laysheet-table" }, [
+				? h("div", { class: "table-scroll", role: "region", tabindex: 0, "aria-label": blockProps.title }, [h("table", { class: "laysheet-table" }, [
 					h("thead", [h("tr", [h("th", "S.No."), ...blockProps.columns.map((item) => h("th", item.label))])]),
 					h("tbody", blockProps.rows.map((row, index) => h("tr", [h("td", index + 1), ...blockProps.columns.map((item) => h("td", item.format(row[item.field]))) ]))),
 				])])
@@ -688,31 +715,32 @@ const DataBlock = defineComponent({
 .create-intro strong { font-size: 0.86rem; }
 .create-intro span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .create-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; }
-.create-fields > label { display: grid; gap: 6px; color: #34413a; font-size: 0.8rem; font-weight: 650; }
-.laysheet-content { display: grid; gap: 14px; }
-.laysheet-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid #dfe7e2; border-radius: 11px; }
-.laysheet-summary > div { display: grid; gap: 4px; padding: 11px 13px; border-right: 1px solid #e3e9e5; }
+.create-fields > label { display: grid; gap: 6px; color: var(--erp-text-secondary); font-size: var(--erp-font-size-caption); font-weight: 650; }
+.laysheet-content { display: grid; gap: 14px; min-width: 0; max-width: 100%; }
+.laysheet-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); }
+.laysheet-summary > div { display: grid; gap: 4px; padding: 11px 13px; border-right: 1px solid var(--erp-border); }
 .laysheet-summary > div:last-child { border-right: 0; }
 .laysheet-summary span, .detail-grid span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 700; text-transform: uppercase; letter-spacing: 0.035em; }
-.laysheet-summary strong, .detail-grid strong { color: #233b2e; font-size: 0.82rem; }
-.status-pill { display: inline-flex; padding: 3px 7px; border-radius: var(--erp-pill-radius); color: #375b47; background: #e8f3ec; font-size: var(--erp-font-size-min); }
-.status-pill--cancelled { color: #983939; background: #fde7e7; }
-.status-pill--approval-pending { color: #8a5b0e; background: #fff0cb; }
-.detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid #e0e7e3; border-radius: 10px; overflow: hidden; }
-.detail-grid > div { display: grid; gap: 5px; min-height: 65px; padding: 11px 13px; border-right: 1px solid #e5eae7; border-bottom: 1px solid #e5eae7; }
+.laysheet-summary strong, .detail-grid strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
+.status-pill { display: inline-flex; padding: 3px 7px; border-radius: var(--erp-pill-radius); color: var(--erp-accent-dark); background: var(--erp-success-soft); font-size: var(--erp-font-size-min); }
+.status-pill--cancelled { color: var(--erp-danger); background: var(--erp-danger-soft); }
+.status-pill--approval-pending { color: var(--erp-warning); background: var(--erp-warning-soft); }
+.detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); overflow: hidden; }
+.detail-grid > div { display: grid; gap: 5px; min-height: 65px; padding: 11px 13px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
 .data-block { display: grid; gap: 9px; margin-bottom: 14px; }
 .data-block header { display: flex; align-items: center; justify-content: space-between; }
 .data-block__title { display: flex; align-items: baseline; gap: 8px; }
-.data-block h3 { margin: 0; color: var(--erp-text); font-size: 0.88rem; }
+.data-block h3 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-section); }
 .data-block__title > span,
 .data-block > header > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
-.table-scroll { overflow-x: auto; border: 1px solid #e1e7e3; border-radius: 9px; }
+.table-scroll { overflow-x: auto; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.table-scroll:focus-visible { outline: 2px solid var(--erp-accent-dark); outline-offset: -2px; }
 .laysheet-table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 13px; }
-.laysheet-table th, .laysheet-table td { padding: 8px 9px; text-align: left; border-right: 1px solid #e4e9e6; border-bottom: 1px solid #e4e9e6; }
-.laysheet-table th { color: #4c5b52; background: var(--erp-surface-muted); font-size: var(--erp-font-size-min); white-space: nowrap; }
+.laysheet-table th, .laysheet-table td { padding: 8px 9px; text-align: left; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
+.laysheet-table th { color: var(--erp-text-secondary); background: var(--erp-surface-muted); font-size: var(--erp-font-size-min); white-space: nowrap; }
 .laysheet-table tr:last-child td { border-bottom: 0; }
 .laysheet-table th:last-child, .laysheet-table td:last-child { border-right: 0; }
-.empty-data { display: grid; place-items: center; min-height: 70px; color: #7c8881; border: 1px dashed #dce4df; border-radius: 9px; font-size: 0.76rem; }
+.empty-data { display: grid; place-items: center; min-height: 70px; color: var(--erp-text-muted); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); font-size: var(--erp-font-size-caption); }
 .editable-data-block :deep(.p-button) { flex: 0 0 auto; }
 .row-actions { display: flex; align-items: center; gap: 2px; white-space: nowrap; }
 .row-actions :deep(.p-button) { width: 1.8rem; height: 1.8rem; }
@@ -722,33 +750,37 @@ const DataBlock = defineComponent({
 .detail-editor__wide { grid-column: 1 / -1; }
 .laysheet-content :deep(.data-block) { display: grid; gap: 9px; margin-bottom: 14px; }
 .laysheet-content :deep(.data-block header) { display: flex; align-items: center; justify-content: space-between; }
-.laysheet-content :deep(.data-block h3) { margin: 0; color: var(--erp-text); font-size: 0.88rem; }
+.laysheet-content :deep(.data-block h3) { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-section); }
 .laysheet-content :deep(.data-block__title > span),
 .laysheet-content :deep(.data-block > header > span) { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
-.laysheet-content :deep(.table-scroll) { overflow-x: auto; border: 1px solid #e1e7e3; border-radius: 9px; }
+.laysheet-content :deep(.table-scroll) { overflow-x: auto; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.laysheet-content :deep(.table-scroll:focus-visible) { outline: 2px solid var(--erp-accent-dark); outline-offset: -2px; }
 .laysheet-content :deep(.laysheet-table) { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 13px; }
 .laysheet-content :deep(.laysheet-table th),
-.laysheet-content :deep(.laysheet-table td) { padding: 8px 9px; text-align: left; border-right: 1px solid #e4e9e6; border-bottom: 1px solid #e4e9e6; }
-.laysheet-content :deep(.laysheet-table th) { color: #4c5b52; background: var(--erp-surface-muted); font-size: var(--erp-font-size-min); white-space: nowrap; }
+.laysheet-content :deep(.laysheet-table td) { padding: 8px 9px; text-align: left; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
+.laysheet-content :deep(.laysheet-table th) { color: var(--erp-text-secondary); background: var(--erp-surface-muted); font-size: var(--erp-font-size-min); white-space: nowrap; }
 .laysheet-content :deep(.laysheet-table tr:last-child td) { border-bottom: 0; }
 .laysheet-content :deep(.laysheet-table th:last-child),
 .laysheet-content :deep(.laysheet-table td:last-child) { border-right: 0; }
-.laysheet-content :deep(.empty-data) { display: grid; place-items: center; min-height: 70px; color: #7c8881; border: 1px dashed #dce4df; border-radius: 9px; font-size: 0.76rem; }
+.laysheet-content :deep(.empty-data) { display: grid; place-items: center; min-height: 70px; color: var(--erp-text-muted); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); font-size: var(--erp-font-size-caption); }
 .laysheet-footer, .laysheet-footer__secondary, .laysheet-footer__primary { display: flex; align-items: center; gap: 4px; }
 .laysheet-footer { width: 100%; justify-content: space-between; }
 .laysheet-footer__primary { justify-content: flex-end; flex-wrap: wrap; }
 .subdialog-stack { display: grid; gap: 14px; }
-.subdialog-stack label { display: grid; gap: 5px; color: #4d5b53; font-size: 0.75rem; font-weight: 700; }
+.subdialog-stack label { display: grid; gap: 5px; color: var(--erp-text-secondary); font-size: var(--erp-font-size-caption); font-weight: 700; }
 .generation-numbers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.printer-loading { display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 90px; color: #627068; font-size: 0.78rem; }
+.printer-loading { display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 90px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 :global(.laysheet-dialog) { width: min(96vw, 1250px); }
 :global(.laysheet-subdialog) { width: min(94vw, 680px); }
 :global(.laysheet-detail-dialog) { width: min(94vw, 820px); }
 
 .laysheet-content :deep(.p-tabpanels) { padding: 14px 0 0; }
-.laysheet-content :deep(.p-tablist) { position: sticky; top: -1px; z-index: var(--erp-layer-sticky); background: #fff; }
-.laysheet-content :deep(.p-tablist-tab-list) { background: #fff; }
-.laysheet-content :deep(.p-tab) { padding: 9px 13px; font-size: 0.76rem; }
+.laysheet-content :deep(.p-tabs) { min-width: 0; max-width: 100%; }
+.laysheet-content :deep(.p-tablist) { position: sticky; top: -1px; z-index: var(--erp-layer-sticky); min-width: 0; max-width: 100%; overflow: hidden; background: var(--erp-surface); }
+.laysheet-content :deep(.p-tablist-content) { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.laysheet-content :deep(.p-tablist-content::-webkit-scrollbar) { display: none; }
+.laysheet-content :deep(.p-tablist-tab-list) { width: max-content; min-width: 100%; background: var(--erp-surface); }
+.laysheet-content :deep(.p-tab) { padding: 9px 13px; font-size: var(--erp-font-size-caption); }
 
 @media (max-width: 760px) {
 	.create-fields { grid-template-columns: 1fr; }
@@ -759,5 +791,8 @@ const DataBlock = defineComponent({
 	.generation-numbers { grid-template-columns: 1fr; }
 	.laysheet-footer { align-items: stretch; flex-direction: column; }
 	.laysheet-footer__secondary, .laysheet-footer__primary { justify-content: flex-end; }
+	.laysheet-content :deep(.p-tab) { flex: 0 0 auto; }
+	.laysheet-content :deep(.table-scroll), .table-scroll { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); }
+	.row-actions :deep(.p-button) { width: 2.25rem; height: 2.25rem; }
 }
 </style>

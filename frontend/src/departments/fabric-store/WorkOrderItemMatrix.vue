@@ -230,4 +230,10 @@ function money(value) {
 .work-order-matrix-empty i { color: #8ca39a; font-size: 20px; }
 .work-order-matrix-empty strong { font-size: var(--erp-font-size-caption); }
 .work-order-matrix-empty span { font-size: var(--erp-font-size-min); }
+@media (max-width: 620px) {
+	.work-order-matrix-empty { min-height: 78px; padding: 12px; }
+	.work-order-matrix-empty div { grid-template-columns: auto 1fr; align-items: center; justify-items: start; column-gap: 9px; }
+	.work-order-matrix-empty i { grid-row: 1 / span 2; }
+	.work-order-matrix-empty span { text-align: left; }
+}
 </style>

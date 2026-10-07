@@ -8,7 +8,7 @@ const { chromium } = require('playwright')
 const SITE = 'http://erp-migration-test.site:8001'
 const PLAN = 'CP-2609-00007'
 const [usr, pwd] = readFileSync('/home/anas/.frappe-debug-creds-mrp3', 'utf8').trim().split('\n')
-const WEB_DATA = '**/api/method/essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.get_web_view_data'
+const WEB_DATA = '**/api/method/essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.get_web_view_data*'
 const WORKSPACE = '**/api/method/essdee_yrp.cutting.web_workspace.get_workspace'
 const REPORT_PERMISSIONS = '**/api/method/essdee_yrp.cutting.reports.get_report_permissions'
 const CUTTING_CAPABILITIES = '**/api/method/essdee_yrp.cutting.web_capabilities.get_capabilities*'
@@ -28,9 +28,13 @@ await Promise.all([
 	page.click('.btn-login, button[type=submit]'),
 ])
 
+const planResponse = await context.request.get(`${SITE}/api/method/essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.get_web_view_data`, {
+	params: { cutting_plan: PLAN },
+})
+const restrictedPlan = await planResponse.json()
+if (!restrictedPlan.message) throw new Error(`Unable to load Cutting Plan fixture (${planResponse.status()}).`)
 await page.route(WEB_DATA, async (route) => {
-	const response = await route.fetch()
-	const body = await response.json()
+	const body = structuredClone(restrictedPlan)
 	body.message.permissions = {
 		...body.message.permissions,
 		can_write: false,
@@ -40,7 +44,7 @@ await page.route(WEB_DATA, async (route) => {
 		can_read_movement: false,
 		can_read_stock_transfers: false,
 	}
-	await route.fulfill({ response, json: body })
+	await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
 })
 await page.goto(`${SITE}/web/cutting/plans/${PLAN}`, { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(1800)
@@ -92,8 +96,8 @@ await page.route(CUTTING_CAPABILITIES, async (route) => {
 	})
 })
 await page.goto(`${SITE}/web/cutting`, { waitUntil: 'domcontentloaded' })
-await page.locator('.workspace-grid').waitFor()
-const capabilityCards = await page.locator('.workspace-card strong').allTextContents()
+await page.locator('.workspace-launcher__grid').waitFor()
+const capabilityCards = await page.locator('.workspace-launcher__card strong').allTextContents()
 
 await page.route(REPORT_PERMISSIONS, async (route) => {
 	await route.fulfill({

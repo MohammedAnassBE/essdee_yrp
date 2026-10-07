@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="LaySheet Planner" accent="#079669" back-to="/cutting/lay-sheet-planner" back-label="LaySheet Planner" :show-title="false" flat full-width>
+	<DepartmentPage title="LaySheet Planner" accent="#059669" back-to="/cutting/lay-sheet-planner" back-label="LaySheet Planner" :show-title="false" flat full-width>
 		<div class="planner-workspace erp-workspace">
 			<div v-if="loading && !payload.record" class="planner-workspace__loading"><Skeleton height="76px" /><Skeleton height="520px" /></div>
 			<template v-else>
@@ -157,7 +157,7 @@ onBeforeUnmount(() => { disposed = true; loadSequence += 1; stopPolling() })
 .planner-tabs { display: flex; min-height: 0; flex: 1; overflow: hidden; flex-direction: column; }.planner-tabs :deep(.p-tablist) { flex: 0 0 auto; background: var(--erp-surface-soft); border-bottom: 1px solid var(--erp-border); }.planner-tabs :deep(.p-tablist-tab-list) { padding: 0 12px; gap: 8px; background: transparent; border: 0; }.planner-tabs :deep(.p-tab) { min-height: 48px; padding: 0 11px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); font-weight: 680; }.planner-tabs :deep(.p-tab-active) { color: var(--erp-accent-dark); }.planner-tabs :deep(.p-tablist-active-bar) { height: 2px; background: var(--erp-accent); }.planner-tabs :deep(.p-tabpanels) { min-height: 0; padding: 0; flex: 1; overflow-y: auto; background: var(--erp-surface); }.planner-tabs :deep(.p-tabpanel) { min-height: 100%; }
 .planner-tabs--plan :deep(.p-tabpanels), .planner-tabs--plan :deep(.p-tabpanel) { overflow: hidden; }
 .planner-tabs--plan :deep(.p-tabpanel) { height: 100%; min-height: 0; }
-@media (max-width: 1050px) { .planner-tabs--plan :deep(.p-tabpanels) { overflow-y: auto; }.planner-tabs--plan :deep(.p-tabpanel) { height: auto; min-height: 100%; overflow: visible; } }
-@media (max-width: 850px) { .planner-workspace { height: auto; min-height: calc(100dvh - var(--erp-shell-header-height) - 82px); overflow: visible; }.planner-record-header { align-items: flex-start; flex-direction: column; }.planner-tabs { min-height: 660px; }.planner-record-actions { width: 100%; } }
+@media (max-width: 700px) { .planner-tabs--plan :deep(.p-tabpanels) { overflow-y: auto; }.planner-tabs--plan :deep(.p-tabpanel) { height: auto; min-height: 100%; overflow: visible; } }
+@media (max-width: 700px) { .planner-workspace { height: auto; min-height: calc(100dvh - var(--erp-shell-header-height) - 82px); overflow: visible; }.planner-record-header { align-items: flex-start; flex-direction: column; }.planner-tabs { min-height: 660px; }.planner-record-actions { width: 100%; } }
 @media (max-width: 650px) { .planner-record-identity { align-items: flex-start; flex-direction: column; }.planner-record-meta { flex-wrap: wrap; }.planner-header-fact:first-of-type { padding-left: 0; border-left: 0; } }
 </style>

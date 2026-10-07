@@ -36,7 +36,19 @@ defineProps({ capability: { type: Object, required: true } })
 const router = useRouter()
 const defaultColumns = ["supplier", "item", "lot", "status"]
 const columnLabels = { supplier: "Supplier / Location" }
-const statusOptions = ["Open", "In Progress", "Completed", "Stopped", "Cancelled"]
+const statusOptions = [
+	"Draft",
+	"Submitted",
+	"Partially Delivered",
+	"Fully Delivered",
+	"Partially Received",
+	"Fully Received",
+	"Partially Billed",
+	"Fully Billed",
+	"Close Request",
+	"Closed",
+	"Cancelled",
+]
 
 function openWorkOrder(row) {
 	if (!row?.name) return
@@ -46,9 +58,10 @@ function openWorkOrder(row) {
 function createWorkOrder() { router.push({ name: "fabric-work-order-new" }) }
 
 function statusSeverity(status) {
-	if (status === "Completed") return "success"
-	if (["Stopped", "Cancelled"].includes(status)) return "danger"
-	if (status === "In Progress") return "info"
+	if (["Fully Delivered", "Fully Received", "Fully Billed", "Closed"].includes(status)) return "success"
+	if (status === "Cancelled") return "danger"
+	if (["Partially Delivered", "Partially Received", "Partially Billed", "Close Request", "Draft"].includes(status)) return "warn"
+	if (status === "Submitted") return "info"
 	return "secondary"
 }
 </script>

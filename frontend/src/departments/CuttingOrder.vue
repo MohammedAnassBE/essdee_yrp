@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Cutting Order" accent="#079669" back-to="/cutting/orders" back-label="Cutting Orders" :show-title="false" flat full-width>
+	<DepartmentPage title="Cutting Order" accent="#059669" back-to="/cutting/orders" back-label="Cutting Orders" :show-title="false" flat full-width>
 		<div v-if="checking" class="order-probe erp-workspace" aria-label="Loading Cutting Order"><Skeleton height="76px" /><Skeleton height="420px" /></div>
 		<div v-else-if="showDraftEditor" class="order-editor-route erp-workspace">
 			<CuttingOrderEditor :name="cuttingOrderId" :initial-payload="editorProbe" @saved="editorSaved" @cancel="router.push('/cutting/orders')" />
@@ -53,6 +53,7 @@ import { useRoute, useRouter } from "vue-router"
 
 import { changeCuttingOrderStatus, getCuttingOrderEditor, getCuttingOrderWorkspace } from "../api/cuttingOrder.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
+import { useActionConfirmation } from "../utils/useActionConfirmation.js"
 import CuttingOrderActions from "./cutting/order/CuttingOrderActions.vue"
 import CuttingOrderEditor from "./cutting/order/CuttingOrderEditor.vue"
 import CuttingOrderTabs from "./cutting/order/CuttingOrderTabs.vue"
@@ -61,6 +62,7 @@ import DocumentPrintButton from "./cutting/DocumentPrintButton.vue"
 
 const route = useRoute()
 const router = useRouter()
+const confirmAction = useActionConfirmation()
 const cuttingOrderId = computed(() => String(route.params.cuttingOrderId || ""))
 const checking = ref(true)
 const editorProbe = ref(null)
@@ -96,7 +98,16 @@ async function editorSaved(saved) {
 }
 
 async function changeStatus(action) {
-	if (action === "cancel" && !window.confirm(`Cancel Cutting Order ${cuttingOrderId.value}?`)) return
+	if (action === "cancel") return confirmAction({
+		header: "Cancel Cutting Order?",
+		message: `Cancel Cutting Order ${cuttingOrderId.value}? This changes the document status and cannot be undone here.`,
+		acceptLabel: "Cancel Cutting Order",
+		accept: () => performStatusChange(action),
+	})
+	return performStatusChange(action)
+}
+
+async function performStatusChange(action) {
 	lifecycleBusy.value = action; workspaceError.value = ""
 	try {
 		const payload = await changeCuttingOrderStatus(cuttingOrderId.value, action, record.value.modified)
@@ -121,7 +132,7 @@ watch(cuttingOrderId, initialise, { immediate: true })
 .order-record-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 52px; padding-bottom: 12px; border-bottom: 1px solid var(--erp-border); }
 .order-record-identity { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .order-record-title { display: grid; gap: 3px; min-width: 0; }
-.order-record-identity h1 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-title); font-weight: 760; letter-spacing: -0.025em; line-height: 1.05; }
+.order-record-identity h1 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-title); font-weight: 760; letter-spacing: -0.025em; line-height: 1.05; white-space: nowrap; }
 .order-record-title > span { overflow: hidden; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
 .order-record-meta { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .order-header-fact { display: grid; gap: 2px; min-width: 112px; max-width: 230px; padding-left: 12px; border-left: 1px solid var(--erp-border); }

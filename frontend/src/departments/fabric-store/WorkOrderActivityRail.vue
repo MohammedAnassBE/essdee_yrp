@@ -1,10 +1,14 @@
 <template>
-	<aside class="work-order-activity-rail" aria-label="Work Order activity">
+	<aside
+		class="work-order-activity-rail"
+		:class="{ 'work-order-activity-rail--empty': isEmpty }"
+		aria-label="Work Order activity"
+	>
 		<section v-for="section in sections" :key="section.key" class="work-order-activity-section">
 			<header>
 				<div><h2 :title="section.label">{{ section.label }}</h2><span>{{ section.rows.length }}</span></div>
 				<div class="activity-actions">
-					<Button :aria-label="`Filter ${section.label}`" icon="pi pi-filter" severity="secondary" text rounded size="small" @click="filtersOpen[section.key] = !filtersOpen[section.key]" />
+					<Button v-if="section.rows.length" :aria-label="`Filter ${section.label}`" :aria-expanded="filtersOpen[section.key]" icon="pi pi-filter" severity="secondary" text rounded size="small" @click="filtersOpen[section.key] = !filtersOpen[section.key]" />
 					<Button v-if="section.permissions.can_create" label="New" aria-label="Create New" icon="pi pi-plus" size="small" @click="$emit('create', section.key)" />
 				</div>
 			</header>
@@ -42,6 +46,7 @@ const sections = computed(() => [
 	{ key: "delivery_challan", label: "Delivery Challans", rows: props.deliveryChallans, permissions: props.permissions.delivery_challan || {} },
 	{ key: "goods_received_note", label: "Goods Received Notes", rows: props.goodsReceivedNotes, permissions: props.permissions.goods_received_note || {} },
 ].filter((section) => section.permissions.can_read !== false))
+const isEmpty = computed(() => sections.value.every((section) => !filteredRows(section).length))
 
 function filteredRows(section) {
 	const query = queries[section.key].trim().toLowerCase()
@@ -85,4 +90,6 @@ function statusTone(docstatus) { return Number(docstatus) === 1 ? "submitted" : 
 .activity-empty { display: grid; min-height: 100px; place-items: center; align-content: center; gap: 6px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 @media (max-width: 1024px) { .work-order-activity-rail { grid-template-rows: minmax(280px, 1fr); grid-template-columns: repeat(2, minmax(0, 1fr)); height: 360px; } }
 @media (max-width: 620px) { .work-order-activity-rail { grid-template-rows: repeat(2, minmax(260px, 1fr)); grid-template-columns: 1fr; height: 600px; } .activity-actions :deep(.p-button-label) { display: none; } }
+@media (max-width: 1024px) { .work-order-activity-rail--empty { grid-template-rows: auto; height: auto; } }
+@media (max-width: 620px) { .work-order-activity-rail--empty { grid-template-rows: repeat(2, auto); height: auto; } .work-order-activity-rail--empty .activity-empty { min-height: 76px; } }
 </style>

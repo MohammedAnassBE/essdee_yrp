@@ -6,7 +6,7 @@
 		</header>
 		<div v-if="groups.length" class="wo-delivery-matrix__groups">
 			<div v-for="(group, groupIndex) in groups" :key="groupKey(group, groupIndex)" class="wo-delivery-matrix__card">
-				<div class="wo-delivery-matrix__scroll">
+				<div class="wo-delivery-matrix__scroll" role="region" tabindex="0" :aria-label="`${title} group ${groupIndex + 1}`">
 					<table>
 						<thead>
 							<tr>
@@ -128,6 +128,11 @@ function dimensionText(row) {
 	overflow: auto;
 }
 
+.wo-delivery-matrix__scroll:focus-visible {
+	outline: 2px solid var(--erp-accent-dark);
+	outline-offset: -2px;
+}
+
 .wo-delivery-matrix table {
 	width: 100%;
 	min-width: 760px;
@@ -140,9 +145,9 @@ function dimensionText(row) {
 	z-index: 1;
 	top: 0;
 	padding: 7px var(--erp-space-2);
-	background: #f1f6f3;
+	background: var(--erp-surface-muted);
 	border-bottom: 1px solid var(--erp-border-strong);
-	color: #59675f;
+	color: var(--erp-text-secondary);
 	font-size: var(--erp-font-size-min);
 	font-weight: 750;
 	letter-spacing: 0.02em;
@@ -153,14 +158,36 @@ function dimensionText(row) {
 
 .wo-delivery-matrix td {
 	padding: var(--erp-space-2);
-	border-top: 1px solid #e7edea;
-	color: #374a40;
+	border-top: 1px solid var(--erp-border);
+	color: var(--erp-text-secondary);
 	vertical-align: middle;
 	white-space: nowrap;
 }
 
 .wo-delivery-matrix td:first-child {
 	min-width: 170px;
+}
+
+@media (max-width: 620px) {
+	.wo-delivery-matrix__groups {
+		gap: 0;
+		padding: 0;
+		background: var(--erp-surface);
+	}
+
+	.wo-delivery-matrix__card {
+		border: 0;
+		border-radius: 0;
+	}
+
+	.wo-delivery-matrix__card + .wo-delivery-matrix__card {
+		border-top: 1px solid var(--erp-border);
+	}
+
+	.wo-delivery-matrix__scroll {
+		-webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%);
+		mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%);
+	}
 }
 
 .wo-delivery-matrix td:first-child strong,

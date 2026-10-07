@@ -59,7 +59,7 @@ async function workspaceChanged(workspace) {
 }
 function compactSource(source) {
 	return Object.fromEntries(
-		["work_order", "purchase_order", "delivery_challan", "against", "against_id"]
+		["work_order", "purchase_order", "delivery_challan", "against", "against_id", "duplicate_from"]
 			.filter((key) => source?.[key])
 			.map((key) => [key, String(source[key])]),
 	)

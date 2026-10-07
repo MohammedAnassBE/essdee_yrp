@@ -25,6 +25,7 @@ function saved(record) {
 }
 function cancel() {
 	if (purchaseOrderId.value) router.push({ name: "fabric-purchase-order", params: { purchaseOrderId: purchaseOrderId.value } })
+	else if (duplicateFrom.value) router.push({ name: "fabric-purchase-order", params: { purchaseOrderId: duplicateFrom.value } })
 	else router.push({ name: "fabric-purchase-orders" })
 }
 </script>

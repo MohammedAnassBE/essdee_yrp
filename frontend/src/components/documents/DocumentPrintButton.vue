@@ -67,9 +67,9 @@ function openPrint(format) {
 .document-print-button.p-button {
 	min-height: var(--erp-control-height);
 	border-radius: var(--erp-control-radius);
-	background: #fff;
+	background: var(--erp-surface);
 	border-color: var(--erp-border-strong);
-	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
+	box-shadow: var(--erp-shadow-xs);
 }
 
 .document-print-button.p-button:not(:disabled):hover {

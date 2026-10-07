@@ -1,6 +1,6 @@
 <template>
 	<div class="form-field" :class="{ 'form-field--wide': isWide }">
-		<label v-if="showLabel" class="form-field__label" :for="inputId">
+		<label v-if="showLabel" :id="labelId" class="form-field__label" :for="inputId">
 			{{ field.label || field.fieldname }}
 			<span v-if="required" class="form-field__required" aria-hidden="true">*</span>
 		</label>
@@ -14,6 +14,9 @@
 			:search-handler="searchHandler"
 			:disabled="isDisabled"
 			:invalid="invalid"
+			:required="required"
+			:aria-label="accessibleLabel"
+			:aria-describedby="describedBy"
 			:show-open-button="showOpenButton"
 			@update:model-value="updateValue"
 		/>
@@ -22,6 +25,10 @@
 			:input-id="inputId"
 			:model-value="Boolean(Number(modelValue))"
 			:disabled="isDisabled"
+			:invalid="invalid"
+			:aria-labelledby="showLabel ? labelId : undefined"
+			:aria-label="showLabel ? undefined : accessibleLabel"
+			:pt="toggleSwitchPt"
 			@update:model-value="updateValue($event ? 1 : 0)"
 		/>
 		<Select
@@ -31,6 +38,9 @@
 			:options="selectOptions"
 			:disabled="isDisabled"
 			:invalid="invalid"
+			:aria-labelledby="showLabel ? labelId : undefined"
+			:aria-label="showLabel ? undefined : accessibleLabel"
+			:pt="selectPt"
 			show-clear
 			fluid
 			@update:model-value="updateValue"
@@ -41,6 +51,10 @@
 			:model-value="numberValue"
 			:disabled="isDisabled"
 			:invalid="invalid"
+			:required="required"
+			:aria-labelledby="showLabel ? labelId : undefined"
+			:aria-label="showLabel ? undefined : accessibleLabel"
+			:pt="inputNumberPt"
 			:min-fraction-digits="minimumFractionDigits"
 			:max-fraction-digits="maximumFractionDigits"
 			:suffix="field.fieldtype === 'Percent' ? '%' : undefined"
@@ -52,30 +66,33 @@
 			v-else-if="field.fieldtype === 'Date'"
 			:input-id="inputId"
 			:model-value="modelValue"
-			:aria-label="field.label || field.fieldname"
+			:aria-label="accessibleLabel"
 			:disabled="isDisabled"
 			:invalid="invalid"
 			:required="required"
+			:aria-describedby="describedBy"
 			@update:model-value="updateValue"
 		/>
 		<DateTimeField
 			v-else-if="field.fieldtype === 'Datetime'"
 			:input-id="inputId"
 			:model-value="modelValue"
-			:aria-label="field.label || field.fieldname"
+			:aria-label="accessibleLabel"
 			:disabled="isDisabled"
 			:invalid="invalid"
 			:required="required"
+			:aria-describedby="describedBy"
 			@update:model-value="updateValue"
 		/>
 		<TimeField
 			v-else-if="field.fieldtype === 'Time'"
 			:input-id="inputId"
 			:model-value="modelValue"
-			:aria-label="field.label || field.fieldname"
+			:aria-label="accessibleLabel"
 			:disabled="isDisabled"
 			:invalid="invalid"
 			:required="required"
+			:aria-describedby="describedBy"
 			@update:model-value="updateValue"
 		/>
 		<Textarea
@@ -84,7 +101,13 @@
 			:model-value="modelValue ?? ''"
 			:disabled="isDisabled"
 			:invalid="invalid"
-			:rows="field.fieldtype === 'Small Text' ? 3 : 5"
+			:required="required"
+			:aria-required="required ? 'true' : undefined"
+			:aria-labelledby="showLabel ? labelId : undefined"
+			:aria-label="showLabel ? undefined : accessibleLabel"
+			:aria-describedby="describedBy"
+			:aria-invalid="invalid || undefined"
+			:rows="textAreaRows"
 			auto-resize
 			fluid
 			@update:model-value="updateValue"
@@ -96,14 +119,20 @@
 			:type="field.fieldtype === 'Password' ? 'password' : 'text'"
 			:disabled="isDisabled"
 			:invalid="invalid"
+			:required="required"
+			:aria-required="required ? 'true' : undefined"
+			:aria-labelledby="showLabel ? labelId : undefined"
+			:aria-label="showLabel ? undefined : accessibleLabel"
+			:aria-describedby="describedBy"
+			:aria-invalid="invalid || undefined"
 			fluid
 			@update:model-value="updateValue"
 		/>
 
-		<small v-if="field.description" class="form-field__description">
+		<small v-if="field.description" :id="descriptionId" class="form-field__description">
 			{{ field.description }}
 		</small>
-		<small v-if="error" class="form-field__error" role="alert">{{ error }}</small>
+		<small v-if="error" :id="errorId" class="form-field__error" role="alert">{{ error }}</small>
 	</div>
 </template>
 
@@ -130,12 +159,40 @@ const props = defineProps({
 	error: { type: String, default: "" },
 	showLabel: { type: Boolean, default: true },
 	showOpenButton: { type: Boolean, default: true },
+	inputId: { type: String, default: "" },
+	ariaLabel: { type: String, default: "" },
+	compact: { type: Boolean, default: false },
 	searchHandler: { type: Function, default: null },
 })
 
 const emit = defineEmits(["update:modelValue", "change"])
 
-const inputId = computed(() => `field-${props.field.fieldname}-${props.field.idx || "value"}`)
+const inputId = computed(() => props.inputId || `field-${props.field.fieldname}-${props.field.idx || "value"}`)
+const labelId = computed(() => `${inputId.value}-label`)
+const accessibleLabel = computed(() => props.ariaLabel || props.field.label || props.field.fieldname)
+const descriptionId = computed(() => `${inputId.value}-description`)
+const errorId = computed(() => `${inputId.value}-error`)
+const describedBy = computed(() => [props.field.description ? descriptionId.value : "", props.error ? errorId.value : ""].filter(Boolean).join(" ") || undefined)
+const focusableControlAria = computed(() => ({
+	"aria-required": props.required ? "true" : undefined,
+	"aria-describedby": describedBy.value,
+	"aria-invalid": props.invalid ? "true" : undefined,
+}))
+const toggleSwitchPt = computed(() => ({
+	input: {
+		...focusableControlAria.value,
+		required: props.required || undefined,
+	},
+}))
+const selectPt = computed(() => ({ label: focusableControlAria.value }))
+const inputNumberPt = computed(() => ({
+	pcInputText: {
+		root: {
+			...focusableControlAria.value,
+			required: props.required || undefined,
+		},
+	},
+}))
 const isDisabled = computed(() => props.disabled || Boolean(props.field.read_only))
 const isLink = computed(() => ["Link", "Dynamic Link"].includes(props.field.fieldtype))
 const linkDoctype = computed(() => {
@@ -149,6 +206,9 @@ const isTextArea = computed(() =>
 	["Small Text", "Text", "Long Text", "Text Editor", "Code"].includes(props.field.fieldtype),
 )
 const isWide = computed(() => isTextArea.value)
+const textAreaRows = computed(() => props.compact
+	? (props.field.fieldtype === "Small Text" ? 2 : 3)
+	: (props.field.fieldtype === "Small Text" ? 3 : 5))
 const numberValue = computed(() => {
 	if (props.modelValue === "" || props.modelValue === null || props.modelValue === undefined) return null
 	const value = Number(props.modelValue)
@@ -210,7 +270,7 @@ function parseLinkFilters(value) {
 
 .form-field__required,
 .form-field__error {
-	color: #c24145;
+	color: var(--erp-danger);
 }
 
 .form-field__description,
@@ -232,9 +292,9 @@ function parseLinkFilters(value) {
 .form-field :deep(.p-select),
 .form-field :deep(.p-inputnumber-input),
 .form-field :deep(.p-textarea) {
-	background: #fff;
+	background: var(--erp-surface);
 	border-color: var(--erp-border-strong);
-	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
+	box-shadow: var(--erp-shadow-xs);
 }
 
 .form-field :deep(.p-inputtext:enabled:hover),

@@ -14,7 +14,7 @@
 		</div>
 
 		<article v-for="(group, groupIndex) in groups" v-else :key="groupIndex" class="quantity-group">
-			<div class="quantity-table-scroll">
+			<div class="quantity-table-scroll" role="region" tabindex="0" :aria-label="`Planned quantities group ${groupIndex + 1}`">
 				<table>
 					<thead>
 						<tr>
@@ -155,6 +155,7 @@ function updateQuantity(rowKey, size, value) {
 .cutting-quantity-matrix__empty strong { font-size: var(--erp-font-size-caption); }
 .quantity-group { min-width: 0; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); overflow: hidden; }
 .quantity-table-scroll { max-width: 100%; overflow: auto; }
+.quantity-table-scroll:focus-visible { outline: 2px solid var(--erp-accent-dark); outline-offset: -2px; }
 table { width: 100%; min-width: 780px; border-collapse: collapse; font-size: var(--erp-font-size-caption); }
 th, td { min-width: 108px; padding: 9px 10px; text-align: right; border-bottom: 1px solid var(--erp-border); }
 thead th { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; background: var(--erp-surface-muted); }
@@ -162,10 +163,11 @@ thead th { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); fo
 thead .quantity-row-heading { z-index: 2; background: var(--erp-surface-muted); }
 .quantity-row-heading > strong { display: block; overflow: hidden; color: var(--erp-text); text-overflow: ellipsis; white-space: nowrap; }
 .quantity-attributes { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
-.quantity-attribute { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; color: #355246; background: #eff7f3; border: 1px solid #d7e9e0; border-radius: 999px; font-size: var(--erp-font-size-min); font-weight: 650; }
-.quantity-attribute small { color: #718078; font-size: inherit; font-weight: 600; }
+.quantity-attribute { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; color: var(--erp-accent-hover); background: var(--erp-accent-soft); border: 1px solid var(--erp-accent-border); border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); font-weight: 650; }
+.quantity-attribute small { color: var(--erp-text-muted); font-size: inherit; font-weight: 600; }
 .quantity-cell :deep(.p-inputnumber-input) { height: 34px; text-align: right; }
-.quantity-total { color: var(--erp-accent); font-weight: 780; font-variant-numeric: tabular-nums; }
-tfoot th, tfoot td { color: #29483a; font-weight: 760; background: #edf7f2; border-bottom: 0; }
+.quantity-total { color: var(--erp-accent-dark); font-weight: 780; font-variant-numeric: tabular-nums; }
+tfoot th, tfoot td { color: var(--erp-text); font-weight: 760; background: var(--erp-accent-soft); border-bottom: 0; }
 tfoot th { text-align: left; }
+@media (max-width: 780px) { .quantity-table-scroll { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); } }
 </style>

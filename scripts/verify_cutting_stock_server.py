@@ -5,6 +5,7 @@ the database transaction back so the verification leaves no business records.
 """
 
 import json
+from pathlib import Path
 
 import frappe
 
@@ -28,7 +29,9 @@ def item_details(dimensions):
 	]
 
 
-frappe.init(site=SITE)
+BENCH_SITES = Path(__file__).resolve().parents[3] / "sites"
+
+frappe.init(site=SITE, sites_path=BENCH_SITES)
 frappe.connect()
 frappe.set_user("Administrator")
 try:

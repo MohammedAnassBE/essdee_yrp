@@ -24,12 +24,14 @@ import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 import { ref, watch } from "vue"
 
+import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import { changeLinkedTransactionStatus, getLinkedTransaction } from "./cpmApi.js"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
 import StockItemMatrix from "./StockItemMatrix.vue"
 
 const props = defineProps({ visible: Boolean, cuttingPlan: { type: String, required: true }, transaction: { type: Object, default: null } })
 const emit = defineEmits(["update:visible", "changed"])
+const confirmAction = useActionConfirmation()
 const record = ref(null)
 const loading = ref(false)
 const saving = ref(false)
@@ -51,7 +53,17 @@ async function load() {
 }
 
 async function changeStatus(action) {
-	if (action === "cancel" && !window.confirm(`Cancel ${record.value.doctype} ${record.value.name}?`)) return
+	if (action === "cancel") return confirmAction({
+		header: `Cancel ${record.value.doctype}?`,
+		message: `Cancel ${record.value.doctype} ${record.value.name}? This changes the document status and cannot be undone here.`,
+		acceptLabel: "Cancel Document",
+		acceptIcon: "pi pi-ban",
+		accept: () => performStatusChange(action),
+	})
+	return performStatusChange(action)
+}
+
+async function performStatusChange(action) {
 	saving.value = true
 	error.value = ""
 	try {
@@ -69,5 +81,5 @@ function formatDate(value, includeTime = false) { const match = String(value || 
 </script>
 
 <style scoped>
-.erp-transaction-loading,.erp-transaction-detail{display:grid;gap:14px}.erp-transaction-status{display:flex;align-items:center;justify-content:space-between}.erp-transaction-status small{color:var(--erp-text-muted);font-size:var(--erp-font-size-min)}.erp-status{padding:4px 9px;border-radius:var(--erp-pill-radius);background:#eef2f0;color:#546159;font-size:var(--erp-font-size-min);font-weight:700;text-transform:uppercase}.erp-status--submitted{background:#ddf6e9;color:#087848}.erp-status--cancelled{background:#fde8e8;color:#b42318}.erp-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:hidden;border:1px solid var(--erp-border);border-radius:var(--erp-panel-radius)}.erp-detail-grid>div{display:grid;gap:4px;padding:11px 13px;border-right:1px solid var(--erp-border);border-bottom:1px solid var(--erp-border)}.erp-detail-grid span{color:var(--erp-text-muted);font-size:var(--erp-font-size-min);text-transform:uppercase}.erp-detail-grid strong{overflow:hidden;color:var(--erp-text);font-size:13px;text-overflow:ellipsis}.erp-items-empty{display:flex;align-items:center;gap:10px;padding:16px;border:1px solid var(--erp-border);border-radius:var(--erp-control-radius);background:var(--erp-surface-soft);color:var(--erp-text-muted)}.erp-items-empty>i{color:#c17a16}.erp-items-empty>div{display:grid;gap:2px}.erp-items-empty strong{color:var(--erp-text);font-size:var(--erp-font-size-caption)}.erp-items-empty span{font-size:var(--erp-font-size-min)}@media(max-width:750px){.erp-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.erp-transaction-loading,.erp-transaction-detail{display:grid;gap:14px}.erp-transaction-status{display:flex;align-items:center;justify-content:space-between}.erp-transaction-status small{color:var(--erp-text-muted);font-size:var(--erp-font-size-min)}.erp-status{padding:4px 9px;border-radius:var(--erp-pill-radius);background:var(--erp-surface-muted);color:var(--erp-text-secondary);font-size:var(--erp-font-size-min);font-weight:700;text-transform:uppercase}.erp-status--submitted{background:var(--erp-success-soft);color:var(--erp-accent-dark)}.erp-status--cancelled{background:var(--erp-danger-soft);color:var(--erp-danger)}.erp-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:hidden;border:1px solid var(--erp-border);border-radius:var(--erp-panel-radius)}.erp-detail-grid>div{display:grid;gap:4px;padding:11px 13px;border-right:1px solid var(--erp-border);border-bottom:1px solid var(--erp-border)}.erp-detail-grid span{color:var(--erp-text-muted);font-size:var(--erp-font-size-min);text-transform:uppercase}.erp-detail-grid strong{overflow:hidden;color:var(--erp-text);font-size:13px;text-overflow:ellipsis}.erp-items-empty{display:flex;align-items:center;gap:10px;padding:16px;border:1px solid var(--erp-border);border-radius:var(--erp-control-radius);background:var(--erp-surface-soft);color:var(--erp-text-muted)}.erp-items-empty>i{color:var(--erp-warning)}.erp-items-empty>div{display:grid;gap:2px}.erp-items-empty strong{color:var(--erp-text);font-size:var(--erp-font-size-caption)}.erp-items-empty span{font-size:var(--erp-font-size-min)}@media(max-width:750px){.erp-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>

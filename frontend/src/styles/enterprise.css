@@ -29,7 +29,7 @@
 	--erp-text: #101828;
 	--erp-text-secondary: #344054;
 	--erp-text-muted: #667085;
-	--erp-text-subtle: #8a94a6;
+	--erp-text-subtle: #667085;
 
 	/* A single emerald ramp carries brand, selection, and primary action states. */
 	--erp-emerald-50: #ecfdf5;
@@ -116,7 +116,7 @@
 
 .erp-page-header__eyebrow {
 	margin: 0 0 var(--erp-space-1);
-	color: var(--erp-accent);
+	color: var(--erp-accent-hover);
 	font-size: 0.7rem;
 	font-weight: var(--erp-font-weight-bold);
 	letter-spacing: 0.12em;
@@ -152,6 +152,42 @@
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-radius-lg);
 	box-shadow: var(--erp-shadow-sm);
+}
+
+.erp-editor-shell {
+	--erp-editor-inline: clamp(14px, 1.5vw, 24px);
+	padding: 0 var(--erp-editor-inline) var(--erp-space-4);
+	border-color: color-mix(in srgb, var(--erp-border) 84%, white);
+	background: color-mix(in srgb, var(--erp-bg) 72%, white);
+}
+
+.erp-editor-header {
+	position: sticky;
+	z-index: var(--erp-layer-sticky);
+	top: 0;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--erp-space-4);
+	margin: 0 calc(0px - var(--erp-editor-inline));
+	padding: 12px var(--erp-editor-inline);
+	border-top: 3px solid var(--erp-accent);
+	border-bottom: 1px solid var(--erp-border);
+	background: color-mix(in srgb, var(--erp-surface) 96%, var(--erp-accent-soft));
+	box-shadow: 0 5px 16px rgb(28 61 45 / 5%);
+}
+
+.erp-editor-header > div:first-child {
+	display: grid;
+	gap: 2px;
+}
+
+.erp-editor-actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: var(--erp-space-2);
+	flex-wrap: wrap;
 }
 
 .erp-section-header {
@@ -204,6 +240,12 @@
 
 .erp-tabs .p-tab-active {
 	color: var(--erp-accent);
+}
+
+:is(.app-shell, .p-dialog) .p-tab:focus-visible {
+	outline: 2px solid var(--erp-accent-dark) !important;
+	outline-offset: -2px !important;
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--erp-accent) 22%, transparent) !important;
 }
 
 .erp-tabs .p-tablist-active-bar {
@@ -352,21 +394,21 @@
 
 .erp-action-button--primary.p-button {
 	color: white;
-	background: var(--erp-accent);
-	border-color: var(--erp-accent);
-}
-
-.erp-action-button--primary.p-button:hover {
 	background: var(--erp-accent-hover);
 	border-color: var(--erp-accent-hover);
 }
 
+.erp-action-button--primary.p-button:hover {
+	background: var(--erp-accent-dark);
+	border-color: var(--erp-accent-dark);
+}
+
 :where(button, a, input, select, textarea, [tabindex]):focus-visible {
-	outline: 3px solid color-mix(in srgb, var(--erp-accent) 28%, transparent);
+	outline: 2px solid var(--erp-accent-dark);
 	outline-offset: 2px;
 }
 
-.app-shell .p-button {
+:is(.app-shell, .p-dialog) .p-button {
 	min-height: var(--erp-control-height);
 	border-radius: var(--erp-control-radius);
 	font-family: var(--erp-font-family);
@@ -380,29 +422,44 @@
 		transform var(--erp-transition-fast);
 }
 
-.app-shell .p-button:not(.p-button-secondary):not(.p-button-success):not(.p-button-info):not(.p-button-warn):not(.p-button-danger):not(.p-button-contrast):not(.p-button-outlined):not(.p-button-text):not(.p-button-link) {
-	color: #fff;
-	background: var(--erp-accent);
-	border-color: var(--erp-accent);
-}
-
-.app-shell .p-button:not(.p-button-secondary):not(.p-button-success):not(.p-button-info):not(.p-button-warn):not(.p-button-danger):not(.p-button-contrast):not(.p-button-outlined):not(.p-button-text):not(.p-button-link):not(:disabled):hover {
+:is(.app-shell, .p-dialog) .p-button:not(.p-button-secondary):not(.p-button-success):not(.p-button-info):not(.p-button-warn):not(.p-button-danger):not(.p-button-contrast):not(.p-button-outlined):not(.p-button-text):not(.p-button-link) {
 	color: #fff;
 	background: var(--erp-accent-hover);
 	border-color: var(--erp-accent-hover);
 }
 
-.app-shell .p-button:not(:disabled):active {
+:is(.app-shell, .p-dialog) .p-button:not(.p-button-secondary):not(.p-button-success):not(.p-button-info):not(.p-button-warn):not(.p-button-danger):not(.p-button-contrast):not(.p-button-outlined):not(.p-button-text):not(.p-button-link):not(:disabled):hover {
+	color: #fff;
+	background: var(--erp-accent-dark);
+	border-color: var(--erp-accent-dark);
+}
+
+:is(.app-shell, .p-dialog) .p-button:not(:disabled):active {
 	transform: translateY(1px);
 	transition-duration: 70ms;
 }
 
-.app-shell .p-button.p-button-sm {
+:is(.app-shell, .p-dialog) .p-button:disabled {
+	opacity: 1;
+	color: #98a2b3;
+	background: var(--erp-surface-muted);
+	border-color: var(--erp-border);
+	box-shadow: none;
+	cursor: not-allowed;
+	transform: none;
+}
+
+:is(.app-shell, .p-dialog) .p-button:is(.p-button-text, .p-button-link):disabled {
+	background: transparent;
+	border-color: transparent;
+}
+
+:is(.app-shell, .p-dialog) .p-button.p-button-sm {
 	min-height: var(--erp-control-height-compact);
 	font-size: var(--erp-font-size-caption);
 }
 
-.app-shell :where(
+:is(.app-shell, .p-dialog) :where(
 	.p-inputtext,
 	.p-inputnumber-input,
 	.p-select,
@@ -420,12 +477,46 @@
 	box-shadow: none;
 }
 
-.app-shell :where(.p-inputtext, .p-inputnumber-input, .p-autocomplete-input, .erp-date-time-picker .p-datepicker-input)::placeholder {
+:is(.app-shell, .p-dialog) :where(.p-inputtext, .p-inputnumber-input, .p-autocomplete-input, .erp-date-time-picker .p-datepicker-input)::placeholder {
 	color: var(--erp-text-subtle);
 	opacity: 1;
 }
 
-.app-shell :where(
+:is(.app-shell, .p-dialog) :where(
+	.p-inputtext:disabled,
+	.p-inputnumber-input:disabled,
+	.p-autocomplete.p-disabled .p-autocomplete-input,
+	.erp-date-time-picker.p-disabled .p-datepicker-input,
+	.erp-date-time-picker .p-datepicker-input:disabled
+) {
+	opacity: 1;
+	color: var(--erp-text-muted);
+	-webkit-text-fill-color: var(--erp-text-muted);
+	background: var(--erp-surface-muted);
+	border-color: var(--erp-border);
+	box-shadow: none;
+	cursor: not-allowed;
+}
+
+:is(.app-shell, .p-dialog) :where(.p-select.p-disabled, .p-multiselect.p-disabled, .p-autocomplete.p-disabled) {
+	opacity: 1;
+	color: var(--erp-text-muted);
+	background: var(--erp-surface-muted);
+	border-color: var(--erp-border);
+	box-shadow: none;
+	cursor: not-allowed;
+}
+
+:is(.app-shell, .p-dialog) :where(.p-select.p-disabled .p-select-label, .p-multiselect.p-disabled .p-multiselect-label) {
+	color: var(--erp-text-muted);
+}
+
+:is(.app-shell, .p-dialog) .p-toggleswitch.p-disabled {
+	opacity: 1;
+	cursor: not-allowed;
+}
+
+:is(.app-shell, .p-dialog) :where(
 	.p-inputtext:focus,
 	.p-inputnumber:focus-within .p-inputnumber-input,
 	.p-select.p-focus,
@@ -437,19 +528,19 @@
 	box-shadow: 0 0 0 3px color-mix(in srgb, var(--erp-accent) 14%, transparent);
 }
 
-.app-shell :where(.p-select-label, .p-multiselect-label) {
+:is(.app-shell, .p-dialog) :where(.p-select-label, .p-multiselect-label) {
 	display: flex;
 	align-items: center;
 	min-height: calc(var(--erp-control-height) - 2px);
 	padding-block: 6px;
 }
 
-.app-shell .p-message {
+:is(.app-shell, .p-dialog) .p-message {
 	border-radius: var(--erp-control-radius);
 	font-size: 13px;
 }
 
-.app-shell .p-tag,
+:is(.app-shell, .p-dialog) .p-tag,
 .p-dialog .p-tag {
 	min-height: 22px;
 	font-size: var(--erp-font-size-min);
@@ -676,10 +767,34 @@
 }
 
 @media (max-width: 620px) {
+	.erp-editor-shell {
+		padding: 0 var(--erp-space-3) var(--erp-space-3);
+	}
+
+	.erp-editor-header {
+		align-items: stretch;
+		flex-direction: column;
+		margin: 0 calc(var(--erp-space-3) * -1);
+		padding: 10px var(--erp-space-3);
+	}
+
+	.erp-editor-actions {
+		width: 100%;
+		justify-content: flex-start;
+	}
+
+	.erp-editor-actions > .p-button {
+		flex: 1 1 136px;
+	}
+
 	.p-dialog.work-order-action-panel,
 	.p-dialog.related-document-workspace-dialog,
 	.p-dialog.fabric-action-dialog,
-	.p-dialog.fabric-stock-operation-dialog {
+	.p-dialog.fabric-stock-operation-dialog,
+	.p-dialog.action-dialog,
+	.p-dialog.erp-entity-dialog {
+		display: flex;
+		flex-direction: column;
 		width: 100vw !important;
 		height: 100dvh !important;
 		max-height: 100dvh !important;
@@ -690,7 +805,9 @@
 	.p-dialog.work-order-action-panel .p-dialog-content,
 	.p-dialog.related-document-workspace-dialog .p-dialog-content,
 	.p-dialog.fabric-action-dialog .p-dialog-content,
-	.p-dialog.fabric-stock-operation-dialog .p-dialog-content {
+	.p-dialog.fabric-stock-operation-dialog .p-dialog-content,
+	.p-dialog.action-dialog .p-dialog-content,
+	.p-dialog.erp-entity-dialog .p-dialog-content {
 		min-height: 0;
 		flex: 1;
 		overflow-y: auto;
@@ -699,5 +816,23 @@
 	.related-document-workspace-dialog .fabric-document-workspace--embedded {
 		height: 100%;
 		min-height: 0;
+	}
+
+	.p-dialog.erp-entity-dialog .p-dialog-footer,
+	.p-dialog.action-dialog .p-dialog-footer {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		padding: 10px 12px 12px;
+	}
+
+	.p-dialog.erp-entity-dialog .p-dialog-footer > .p-button,
+	.p-dialog.action-dialog .p-dialog-footer > .p-button {
+		flex: 1 1 136px;
+	}
+
+	.p-dialog.erp-entity-dialog .p-dialog-footer > :only-child,
+	.p-dialog.action-dialog .p-dialog-footer > :only-child {
+		width: 100%;
 	}
 }

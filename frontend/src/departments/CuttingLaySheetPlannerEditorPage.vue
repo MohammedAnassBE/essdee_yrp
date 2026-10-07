@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="LaySheet Planner" accent="#079669" back-to="/cutting/lay-sheet-planner" back-label="LaySheet Planner" :show-title="false" flat full-width>
+	<DepartmentPage title="LaySheet Planner" accent="#059669" back-to="/cutting/lay-sheet-planner" back-label="LaySheet Planner" :show-title="false" flat full-width>
 		<section class="planner-new erp-workspace erp-card">
 			<header><div><span>New document</span><h1>New LaySheet Plan</h1></div><Button label="Cancel" severity="secondary" text :disabled="saving" @click="router.push('/cutting/lay-sheet-planner')" /></header>
 			<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>

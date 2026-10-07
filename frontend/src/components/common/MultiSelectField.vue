@@ -63,9 +63,9 @@ defineEmits(["update:modelValue", "change"])
 }
 
 .common-field :deep(.p-multiselect) {
-	background: #fff;
+	background: var(--erp-surface);
 	border-color: var(--erp-border-strong);
-	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
+	box-shadow: var(--erp-shadow-xs);
 }
 
 .common-field :deep(.p-multiselect:not(.p-disabled):hover) {

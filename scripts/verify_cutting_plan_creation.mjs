@@ -168,12 +168,12 @@ assert(await page.getByRole("button", { name: "Save & Submit", exact: true }).co
 
 const plies = page.getByLabel("Maximum No of Plys")
 await plies.fill("110")
-await page.getByRole("button", { name: "Cutting Plans", exact: true }).click()
+await page.getByRole("button", { name: "Back to Cutting Plans", exact: true }).click()
 const discardDialog = page.getByRole("dialog", { name: "Discard unsaved changes?" })
 await discardDialog.waitFor()
 await discardDialog.getByRole("button", { name: "Keep Editing", exact: true }).click()
 assert(page.url().endsWith("/web/cutting/plans/new"), "Dirty editor navigated away without confirmation")
-await page.getByRole("button", { name: "Cutting Plans", exact: true }).click()
+await page.getByRole("button", { name: "Back to Cutting Plans", exact: true }).click()
 await discardDialog.getByRole("button", { name: "Discard Changes", exact: true }).click()
 await page.waitForURL("**/web/cutting/plans")
 

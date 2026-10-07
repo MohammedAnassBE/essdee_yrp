@@ -22,7 +22,7 @@
 					<span>{{ group.items?.length || 0 }} {{ group.items?.length === 1 ? "row" : "rows" }}</span>
 				</header>
 
-				<div class="item-matrix__scroll">
+				<div class="item-matrix__scroll" tabindex="0" role="region" :aria-label="`${groupByItem ? group.itemIdentity || 'Item' : 'Item'} quantity matrix`">
 					<table>
 						<thead>
 							<tr>
@@ -31,7 +31,7 @@
 								<th v-for="column in contextColumns(group)" :key="column.key">{{ column.label }}</th>
 								<th v-for="attribute in group.attributes || []" :key="attribute">{{ attribute }}</th>
 								<th v-for="value in primaryValues(group)" :key="value" class="item-matrix__number">{{ primaryValueLabel(group, value) }}</th>
-								<th class="item-matrix__number">Total</th>
+								<th v-if="showTotalColumn(group)" class="item-matrix__number">Total</th>
 								<th>UOM</th>
 							</tr>
 						</thead>
@@ -45,12 +45,12 @@
 									<strong>{{ formatQty(row.values?.[value]?.qty) }}</strong>
 									<small v-if="secondaryQty(row.values?.[value])">{{ formatQty(row.values[value].secondary_qty) }} {{ row.values[value].secondary_uom || row.secondary_uom }}</small>
 									<small v-if="showFulfillment && showReceived && hasFulfillment(row.values?.[value])" class="item-matrix__received">Received {{ formatQty(receivedQty(row.values[value])) }}</small>
-									<small v-if="showFulfillment && !pricingBeforeFulfillment && hasFulfillment(row.values?.[value])" class="item-matrix__pending">Pending {{ formatQty(pendingQty(row.values[value])) }}</small>
+									<small v-if="showFulfillment && !pricingBeforeFulfillment && hasFulfillment(row.values?.[value])" class="item-matrix__pending">{{ fulfillmentLabel(row.values[value]) }}</small>
 									<small v-if="showPricing" class="item-matrix__price">Rate {{ formatMoney(row.values?.[value]?.rate) }}</small>
 									<small v-if="showPricing && showAmount" class="item-matrix__price">Amount {{ formatMoney(cellAmount(row.values?.[value])) }}</small>
-									<small v-if="showFulfillment && pricingBeforeFulfillment && hasFulfillment(row.values?.[value])" class="item-matrix__pending">Pending {{ formatQty(pendingQty(row.values[value])) }}</small>
+									<small v-if="showFulfillment && pricingBeforeFulfillment && hasFulfillment(row.values?.[value])" class="item-matrix__pending">{{ fulfillmentLabel(row.values[value]) }}</small>
 								</td>
-								<td class="item-matrix__number item-matrix__total item-matrix__qty"><strong>{{ formatQty(rowTotal(row)) }}</strong><small v-if="showFulfillment && showReceived && rowHasFulfillment(row)" class="item-matrix__received">Received {{ formatQty(rowMetricTotal(row, receivedQty)) }}</small><small v-if="showFulfillment && rowHasFulfillment(row)" class="item-matrix__pending">Pending {{ formatQty(rowMetricTotal(row, pendingQty)) }}</small><small v-if="showPricing && showAmount" class="item-matrix__price">Amount {{ formatMoney(rowAmount(row)) }}</small></td>
+								<td v-if="showTotalColumn(group)" class="item-matrix__number item-matrix__total item-matrix__qty"><strong>{{ formatQty(rowTotal(row)) }}</strong><small v-if="showFulfillment && showReceived && rowHasFulfillment(row)" class="item-matrix__received">Received {{ formatQty(rowMetricTotal(row, receivedQty)) }}</small><small v-if="showFulfillment && rowHasFulfillment(row)" class="item-matrix__pending">{{ fulfillmentTotalLabel(row) }}</small><small v-if="showPricing && showAmount" class="item-matrix__price">Amount {{ formatMoney(rowAmount(row)) }}</small></td>
 								<td><span class="item-matrix__uom">{{ row.default_uom || "—" }}</span></td>
 							</tr>
 						</tbody>
@@ -124,6 +124,7 @@ function contextColumns(group) {
 function contextValue(row, column) { return column.dimension ? row.dimensions?.[column.key] : row[column.key] }
 function primaryValues(group) { return group.primary_attribute ? (group.primary_attribute_values || []) : ["default"] }
 function primaryValueLabel(group, value) { return group.primary_attribute ? value : "Quantity" }
+function showTotalColumn(group) { return primaryValues(group).length > 1 }
 function rowTotal(row) { return Object.values(row.values || {}).reduce((total, value) => total + Number(value?.qty || 0), 0) }
 function cellAmount(value) { return Number(value?.total_amount ?? value?.amount ?? (Number(value?.qty || 0) * Number(value?.rate || 0))) }
 function rowAmount(row) { return Object.values(row.values || {}).reduce((total, value) => total + cellAmount(value), 0) }
@@ -131,6 +132,8 @@ function hasFulfillment(value) { return value && ["received_qty", "received_quan
 function rowHasFulfillment(row) { return Object.values(row.values || {}).some(hasFulfillment) }
 function receivedQty(value) { return Number(value?.received_qty ?? value?.received_quantity ?? 0) }
 function pendingQty(value) { return Number(value?.pending_qty ?? value?.pending_quantity ?? 0) }
+function fulfillmentLabel(value) { const quantity = pendingQty(value); return quantity < 0 ? `Over-received ${formatQty(Math.abs(quantity))}` : `Pending ${formatQty(quantity)}` }
+function fulfillmentTotalLabel(row) { const quantity = rowMetricTotal(row, pendingQty); return quantity < 0 ? `Over-received ${formatQty(Math.abs(quantity))}` : `Pending ${formatQty(quantity)}` }
 function rowMetricTotal(row, getter) { return Object.values(row.values || {}).reduce((total, value) => total + getter(value), 0) }
 function secondaryQty(value) { return Number(value?.secondary_qty || 0) !== 0 }
 function display(value) { return value === null || value === undefined || value === "" ? "—" : String(value) }
@@ -146,7 +149,7 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-panel-radius);
 	background: var(--erp-surface);
-	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
+	box-shadow: var(--erp-shadow-xs);
 }
 
 .item-matrix__header {
@@ -156,11 +159,11 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 	gap: var(--erp-space-4);
 	padding: var(--erp-space-3) 14px;
 	border-bottom: 1px solid var(--erp-border);
-	background: #f8faf9;
+	background: var(--erp-surface-soft);
 }
 
 .item-matrix__eyebrow {
-	color: var(--erp-accent);
+	color: var(--erp-accent-dark);
 	font-size: var(--erp-font-size-min);
 	font-weight: 800;
 	letter-spacing: 0.055em;
@@ -198,17 +201,17 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 }
 
 .item-matrix__price {
-	color: #53675d !important;
+	color: var(--erp-text-secondary) !important;
 	font-weight: 650;
 }
-.item-matrix__received { color: var(--erp-accent) !important; font-weight: 700; }
-.item-matrix__pending { color: #765b20 !important; font-weight: 700; }
+.item-matrix__received { color: var(--erp-accent-dark) !important; font-weight: 700; }
+.item-matrix__pending { color: var(--erp-attention-text) !important; font-weight: 700; }
 
 .item-matrix__body {
 	display: grid;
 	gap: 10px;
 	padding: 10px;
-	background: #f8faf9;
+	background: var(--erp-surface-soft);
 }
 
 .item-matrix__group {
@@ -216,7 +219,7 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-control-radius);
 	background: var(--erp-surface);
-	box-shadow: 0 1px 2px rgb(24 53 39 / 3%);
+	box-shadow: var(--erp-shadow-xs);
 }
 
 .item-matrix__group-header {
@@ -279,8 +282,8 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 	top: 0;
 	padding: var(--erp-space-2) 9px;
 	border-bottom: 1px solid var(--erp-border-strong);
-	background: #f5f8f6;
-	color: #58675f;
+	background: var(--erp-surface-muted);
+	color: var(--erp-text-secondary);
 	font-size: var(--erp-font-size-min);
 	font-weight: 750;
 	letter-spacing: 0.025em;
@@ -291,8 +294,8 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 
 .item-matrix td {
 	padding: 9px;
-	border-bottom: 1px solid #e7edea;
-	color: #374a40;
+	border-bottom: 1px solid var(--erp-border-subtle);
+	color: var(--erp-text-secondary);
 	vertical-align: middle;
 	white-space: nowrap;
 }
@@ -307,7 +310,7 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 
 .item-matrix__index {
 	width: 36px;
-	color: #859189 !important;
+	color: var(--erp-text-muted) !important;
 	text-align: center !important;
 }
 
@@ -328,8 +331,8 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 	padding: 3px 7px;
 	border: 1px solid var(--erp-border);
 	border-radius: 6px;
-	background: #f8faf9;
-	color: #40584b;
+	background: var(--erp-surface-soft);
+	color: var(--erp-text-secondary);
 	font-size: var(--erp-font-size-min);
 }
 
@@ -339,7 +342,7 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 }
 
 .item-matrix__qty strong {
-	color: #283e32;
+	color: var(--erp-text);
 	font-weight: 700;
 }
 

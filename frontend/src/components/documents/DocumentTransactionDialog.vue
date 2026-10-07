@@ -58,6 +58,7 @@ import Skeleton from "primevue/skeleton"
 import { computed, ref, watch } from "vue"
 
 import { changeFabricStoreDocumentStatus, completeWorkOrderDocumentTransfer, getFabricStoreDocument } from "../../api/fabricStore.js"
+import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import StockItemMatrix from "../stock/StockItemMatrix.vue"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
 
@@ -69,6 +70,7 @@ const props = defineProps({
 	showEdit: { type: Boolean, default: true },
 })
 const emit = defineEmits(["update:visible", "changed", "amended", "edit", "return", "replacement"])
+const confirmAction = useActionConfirmation()
 
 const loading = ref(false)
 const acting = ref("")
@@ -103,7 +105,22 @@ async function load() {
 }
 
 async function changeStatus(action) {
-	if (["cancel", "amend"].includes(action) && !window.confirm(`${action === "cancel" ? "Cancel" : "Amend"} ${payload.value.record?.name}?`)) return
+	if (["cancel", "amend"].includes(action)) {
+		const actionLabel = action === "cancel" ? "Cancel" : "Amend"
+		return confirmAction({
+			header: `${actionLabel} ${payload.value.record?.doctype}?`,
+			message: action === "cancel"
+				? `Cancel ${payload.value.record?.doctype} ${payload.value.record?.name}? This changes the document status and may affect linked work.`
+				: `Create an amended draft from ${payload.value.record?.doctype} ${payload.value.record?.name}?`,
+			acceptLabel: `${actionLabel} Document`,
+			acceptIcon: action === "cancel" ? "pi pi-ban" : "pi pi-copy",
+			accept: () => performStatusChange(action),
+		})
+	}
+	return performStatusChange(action)
+}
+
+async function performStatusChange(action) {
 	acting.value = action
 	error.value = ""
 	try {
@@ -157,16 +174,16 @@ defineExpose({ markDirty, reload: load })
 .document-transaction-dialog__loading { display: grid; gap: var(--erp-space-2); }
 .document-transaction-dialog__status-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .document-transaction-dialog__status-row small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
-.document-status { padding: 4px 9px; color: #546159; font-size: var(--erp-font-size-min); font-weight: 800; text-transform: uppercase; background: #f1f3f2; border: 1px solid var(--erp-border); border-radius: var(--erp-pill-radius); }
+.document-status { padding: 4px 9px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 800; text-transform: uppercase; background: var(--erp-surface-muted); border: 1px solid var(--erp-border); border-radius: var(--erp-pill-radius); }
 .document-status--submitted { color: var(--erp-accent-hover); background: var(--erp-accent-soft); border-color: color-mix(in srgb, var(--erp-accent) 22%, white); }
-.document-status--cancelled { color: #b42318; background: #fff1f1; border-color: #f4cccc; }
-.document-summary-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); overflow: hidden; background: #fff; border: 1px solid var(--erp-border-strong); border-radius: var(--erp-control-radius); box-shadow: inset 3px 0 0 var(--erp-accent), 0 1px 2px rgb(24 53 39 / 3%); }
+.document-status--cancelled { color: var(--erp-danger); background: var(--erp-danger-soft); border-color: color-mix(in srgb, var(--erp-danger) 28%, var(--erp-border)); }
+.document-summary-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); overflow: hidden; background: var(--erp-surface); border: 1px solid var(--erp-border-strong); border-radius: var(--erp-control-radius); box-shadow: inset 3px 0 0 var(--erp-accent), var(--erp-shadow-xs); }
 .document-summary-metric { display: grid; min-height: 58px; align-content: center; gap: 2px; padding: 8px 12px; border-right: 1px solid var(--erp-border); }
 .document-summary-metric:last-child { border-right: 0; }
 .document-summary-metric span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .document-summary-metric strong { color: var(--erp-accent-hover); font-size: 18px; font-weight: 780; font-variant-numeric: tabular-nums; }
 .document-detail-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; background: var(--erp-border); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); gap: 1px; }
-.document-detail-grid > div { display: grid; min-height: 48px; align-content: center; gap: 2px; padding: 7px 10px; background: #fff; }
+.document-detail-grid > div { display: grid; min-height: 48px; align-content: center; gap: 2px; padding: 7px 10px; background: var(--erp-surface); }
 .document-detail-grid span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; text-transform: uppercase; }
 .document-detail-grid strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
 .document-detail-grid .document-detail-link { color: var(--erp-accent); }
@@ -181,5 +198,5 @@ defineExpose({ markDirty, reload: load })
 .dirty-close-copy { margin: 0; color: var(--erp-text-muted); line-height: 1.55; }
 @media (max-width: 900px) { .document-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .document-transaction-dialog__footer { align-items: stretch; flex-direction: column; } .document-transaction-dialog__footer > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .document-transaction-dialog__footer :deep(.p-button) { width: 100%; } }
-@media (max-width: 480px) { .document-summary-strip, .document-detail-grid { grid-template-columns: 1fr; } .document-summary-metric { border-right: 0; border-bottom: 1px solid #c9e2d5; } .document-summary-metric:last-child { border-bottom: 0; } }
+@media (max-width: 480px) { .document-summary-strip, .document-detail-grid { grid-template-columns: 1fr; } .document-summary-metric { border-right: 0; border-bottom: 1px solid var(--erp-border); } .document-summary-metric:last-child { border-bottom: 0; } }
 </style>

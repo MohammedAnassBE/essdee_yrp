@@ -304,7 +304,7 @@ watch(() => props.visible, (value, previous) => { if (value && !previous) initia
 .work-order-calculation-table__quantity small { display: block; margin-top: 3px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .work-order-calculation-table__quantity :deep(.p-inputnumber-input) { height: 32px; padding: 5px 8px; text-align: right; }
 .work-order-calculation-table__row--disabled { opacity: .55; }
-.work-order-calculation-table__total { color: var(--erp-accent); font-weight: 800; }
+.work-order-calculation-table__total { color: var(--erp-accent-dark); font-weight: 800; }
 .work-order-recut-groups { display: grid; gap: var(--erp-space-3); }
 .work-order-recut-group { display: grid; overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); box-shadow: 0 4px 14px rgb(28 61 45 / 3%); }
 .work-order-recut-row { display: grid; grid-template-columns: minmax(180px, 1fr) repeat(auto-fit, minmax(110px, 150px)); align-items: end; gap: var(--erp-space-3); padding: var(--erp-space-3); border-bottom: 1px solid var(--erp-border); }

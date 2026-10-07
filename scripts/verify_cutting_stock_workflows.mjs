@@ -32,6 +32,8 @@ await page.getByRole('tab', { name: 'Stock Transfers' }).click()
 await page.waitForTimeout(1800)
 
 async function screenshot(name) {
+	// Capture the resting interface, not PrimeVue's dialog entrance frame.
+	await page.waitForTimeout(350)
 	const path = `${OUT}/${name}.png`
 	await page.screenshot({ path, fullPage: true })
 	return path

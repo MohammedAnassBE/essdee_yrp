@@ -15,7 +15,7 @@
 				<span v-if="activeDepartment" class="app-topbar__context" aria-current="page">
 					{{ activeDepartment.label }}
 				</span>
-				<RouterLink class="app-topbar__home" to="/">
+				<RouterLink class="app-topbar__home" to="/" aria-label="Workspaces">
 					<i class="pi pi-th-large" aria-hidden="true" />
 					<span>Workspaces</span>
 				</RouterLink>
@@ -38,7 +38,7 @@
 <script setup>
 import ConfirmDialog from "primevue/confirmdialog"
 import Toast from "primevue/toast"
-import { computed } from "vue"
+import { computed, nextTick, watch } from "vue"
 import { RouterLink, RouterView, useRoute } from "vue-router"
 
 import { departments } from "./departments/registry.js"
@@ -49,5 +49,22 @@ const activeDepartment = computed(() =>
 		(department) =>
 			route.path === department.path || route.path.startsWith(`${department.path}/`),
 	),
+)
+
+function routeTitle() {
+	if (route.name === "administrator") return "Workspaces"
+	if (activeDepartment.value && route.path === activeDepartment.value.path) return activeDepartment.value.label
+	const name = String(route.name || "Essdee YRP")
+	return name.split("-").filter(Boolean).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ")
+}
+
+watch(
+	() => route.path,
+	async () => {
+		document.title = `${routeTitle()} · Essdee YRP`
+		await nextTick()
+		window.requestAnimationFrame(() => document.getElementById("app-main")?.focus({ preventScroll: true }))
+	},
+	{ immediate: true },
 )
 </script>

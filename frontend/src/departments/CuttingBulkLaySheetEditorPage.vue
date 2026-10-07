@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Bulk LaySheets" accent="#079669" back-to="/cutting/bulk-lay-sheets" back-label="Bulk LaySheets" :show-title="false" flat full-width>
+	<DepartmentPage title="Bulk LaySheets" accent="#059669" back-to="/cutting/bulk-lay-sheets" back-label="Bulk LaySheets" :show-title="false" flat full-width>
 		<div class="bulk-editor-page erp-workspace"><BulkSetupEditor @saved="saved" @cancel="router.push('/cutting/bulk-lay-sheets')" /></div>
 	</DepartmentPage>
 </template>

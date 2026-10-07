@@ -106,9 +106,9 @@ defineExpose({ load, activate: () => load(true) })
 .erp-movement-time > div { display: grid; gap: 1px; }
 .erp-movement-time small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; }
 .erp-movement-time strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); font-variant-numeric: tabular-nums; }
-.erp-status { display: inline-flex; width: max-content; padding: 3px 8px; color: #56635c; font-size: var(--erp-font-size-min); font-style: normal; font-weight: 750; text-transform: uppercase; background: #eef2f0; border-radius: var(--erp-pill-radius); }
-.erp-status--submitted { color: #087848; background: #ddf6e9; }
-.erp-status--cancelled { color: #b42318; background: #fde8e8; }
+.erp-status { display: inline-flex; width: max-content; padding: 3px 8px; color: var(--erp-text-secondary); font-size: var(--erp-font-size-min); font-style: normal; font-weight: 750; text-transform: uppercase; background: var(--erp-surface-muted); border-radius: var(--erp-pill-radius); }
+.erp-status--submitted { color: var(--erp-accent-dark); background: var(--erp-success-soft); }
+.erp-status--cancelled { color: var(--erp-danger); background: var(--erp-danger-soft); }
 .erp-record-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; background: var(--erp-surface-soft); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
 .erp-record-metrics span { display: grid; gap: 2px; padding: 8px; border-right: 1px solid var(--erp-border); }
 .erp-record-metrics span:last-child { border-right: 0; }

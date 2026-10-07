@@ -166,6 +166,7 @@ await page.getByRole("button", { name: "Create Detail", exact: true }).click()
 const detailDialog = page.getByRole("dialog", { name: "Cutting Order Detail" })
 await detailDialog.waitFor()
 assert(await detailDialog.locator(".p-dialog-maximize-button").count() === 1, "Detail editor is not maximizable")
+assert(await detailDialog.getByRole("button", { name: "Maximize dialog", exact: true }).count() === 1, "Detail editor maximize control has no accessible name")
 await detailDialog.getByRole("button", { name: "Save Detail", exact: true }).click()
 await detailDialog.locator("button").filter({ hasText: "Close" }).click()
 
@@ -211,6 +212,7 @@ assert(await page.getByRole("button", { name: "Copy", exact: true }).count() ===
 await page.getByRole("menuitem", { name: "Get Completed", exact: true }).click()
 const completedDialog = page.getByRole("dialog", { name: "Completed Cut Quantity" })
 await completedDialog.getByRole("button", { name: "Copy", exact: true }).waitFor()
+assert(await completedDialog.getByRole("button", { name: "Maximize dialog", exact: true }).count() === 1, "Completed Cut Quantity maximize control has no accessible name")
 await completedDialog.locator("button").filter({ hasText: "Close" }).click()
 assert(await page.getByRole("button", { name: "Filter markers" }).count() === 1, "Marker filters are missing")
 assert(await page.getByRole("button", { name: "Filter Lay Sheets" }).count() === 1, "Lay Sheet filters are missing")
@@ -220,11 +222,25 @@ await page.locator(".marker-dialog").waitFor()
 assert(page.url() === workspaceUrl, "Opening an Order marker navigated away from the workspace")
 await page.keyboard.press("Escape")
 await page.locator(".laysheet-card").first().click()
-await page.locator(".laysheet-dialog").waitFor()
+const laySheetDialog = page.locator(".laysheet-dialog")
+await laySheetDialog.waitFor()
 assert(page.url() === workspaceUrl, "Opening an Order Lay Sheet navigated away from the workspace")
 await page.keyboard.press("Escape")
+await laySheetDialog.waitFor({ state: "hidden" })
 assert(await page.getByRole("button", { name: "Print" }).count() >= 1, "Cutting Order print action is missing")
+
+await page.setViewportSize({ width: 900, height: 760 })
+const tabletTitle = await page.getByRole("heading", { name: "Cutting Order", exact: true }).evaluate((element) => {
+	const style = getComputedStyle(element)
+	return {
+		height: element.getBoundingClientRect().height,
+		lineHeight: Number.parseFloat(style.lineHeight),
+		whiteSpace: style.whiteSpace,
+	}
+})
+await page.screenshot({ path: "/tmp/essdee-cutting-order-tablet.png", fullPage: true })
+assert(tabletTitle.height <= tabletTitle.lineHeight * 1.25, `Cutting Order heading wraps at tablet width: ${JSON.stringify(tabletTitle)}`)
 assert(errors.length === 0, `Browser errors: ${JSON.stringify(errors)}`)
 
-console.log(JSON.stringify({ passed: true, workspace: "CTO-WEB-00001", detail: "CO-STYLE-001-1", matrixRows: 1, widthRatio }, null, 2))
+console.log(JSON.stringify({ passed: true, workspace: "CTO-WEB-00001", detail: "CO-STYLE-001-1", matrixRows: 1, widthRatio, tabletTitle }, null, 2))
 await browser.close()

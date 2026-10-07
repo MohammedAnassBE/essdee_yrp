@@ -45,9 +45,9 @@ defineEmits(["select"])
 .planner-plan-workspace__strategies :deep(.planner-strategies) { padding: 10px; }
 .planner-plan-workspace__result { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 
-@media (max-width: 1050px) {
+@media (max-width: 700px) {
 	.planner-plan-workspace { height: auto; min-height: 100%; overflow: visible; grid-template-columns: 1fr; }
-	.planner-plan-workspace__strategies, .planner-plan-workspace__result { min-height: auto; overflow: visible; }
-	.planner-plan-workspace__strategies { border-right: 0; border-bottom: 1px solid var(--erp-border); }
+	.planner-plan-workspace__result { min-height: auto; overflow: visible; }
+	.planner-plan-workspace__strategies { min-height: 260px; max-height: min(46dvh, 420px); overflow-y: auto; border-right: 0; border-bottom: 1px solid var(--erp-border); }
 }
 </style>

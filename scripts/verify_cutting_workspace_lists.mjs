@@ -119,13 +119,13 @@ await page.route("**/api/resource/**", (route) => {
 })
 
 await page.goto(`${SITE}/web/cutting`, { waitUntil: "domcontentloaded" })
-await page.locator(".workspace-grid").waitFor({ timeout: 20_000 })
-const cardLabels = await page.locator(".workspace-card strong").allTextContents()
+await page.locator(".workspace-launcher__grid").waitFor({ timeout: 20_000 })
+const cardLabels = await page.locator(".workspace-launcher__card strong").allTextContents()
 assert(JSON.stringify(cardLabels) === JSON.stringify(["Cutting Plans", "Cutting Orders", "Bulk LaySheets", "LaySheet Planner", "Reports"]), `Unexpected Cutting destinations: ${JSON.stringify(cardLabels)}`)
 
 capabilities = { ...capabilities, "cutting-orders": { can_read: false, can_create: true } }
 await page.reload({ waitUntil: "domcontentloaded" })
-await page.locator(".workspace-grid").waitFor()
+await page.locator(".workspace-launcher__grid").waitFor()
 assert(await page.getByText("Cutting Orders", { exact: true }).count() === 0, "Unreadable Cutting Orders destination is still visible")
 capabilities = { ...capabilities, "cutting-orders": { can_read: true, can_create: true } }
 

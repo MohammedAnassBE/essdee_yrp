@@ -1,7 +1,7 @@
 <template>
 	<DepartmentPage
 		title="Cutting Plan"
-		accent="#079669"
+		accent="#059669"
 		back-to="/cutting/plans"
 		back-label="Cutting Plans"
 		:show-title="false"
@@ -232,18 +232,24 @@ function statusSeverity(status) {
 	display: flex;
 	height: 100%;
 	min-height: 0;
-	padding: 14px;
+	overflow: hidden;
+	padding: 0;
 	background: var(--erp-surface);
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-panel-radius);
-	box-shadow: var(--erp-shadow-card);
+	box-shadow: 0 12px 32px rgb(28 61 45 / 6%);
 	flex-direction: column;
 }
 
 .cutting-plan-layout :deep(.form-toolbar) {
-	min-height: 52px;
-	padding: 0 0 12px;
+	min-height: 64px;
+	padding: 10px 14px;
+	background: color-mix(in srgb, var(--erp-surface) 96%, var(--erp-accent-soft));
+	border: 0;
+	border-top: 3px solid var(--erp-accent);
 	border-bottom: 1px solid var(--erp-border);
+	border-radius: 0;
+	box-shadow: none;
 }
 
 .cutting-plan-layout :deep(.form-toolbar__identity) {
@@ -262,6 +268,11 @@ function statusSeverity(status) {
 .cutting-plan-layout :deep(.form-toolbar__meta) {
 	gap: 9px;
 	min-width: 0;
+}
+
+.cutting-plan-layout :deep(.form-toolbar__meta > small) {
+	flex: 0 0 auto;
+	white-space: nowrap;
 }
 
 .cutting-plan-layout :deep(.form-toolbar small) {
@@ -295,6 +306,7 @@ function statusSeverity(status) {
 	min-width: 0;
 	min-height: 0;
 	overflow: hidden;
+	padding: 14px;
 }
 
 :deep(.cutting-plan-status.p-tag) {
@@ -358,12 +370,13 @@ function statusSeverity(status) {
 	.cutting-plan-layout > :first-child,
 	.cutting-plan-layout :deep(.common-form-view) {
 		height: auto;
-		padding: 12px;
+		padding: 0;
 	}
 
 	.cutting-plan-main {
 		display: grid;
 		overflow: visible;
+		padding: 12px;
 	}
 }
 

@@ -31,7 +31,7 @@
 
 			<section class="marker-section">
 				<div class="section-heading"><div><h3>Size Ratios</h3><small>{{ form.selected_type === 'Machine' ? 'One ratio per size, applied to all selected panels.' : 'Set the ratio for every size and panel.' }}</small></div></div>
-				<div v-if="form.ratio_items.length" class="table-scroll">
+				<div v-if="form.ratio_items.length" class="table-scroll" role="region" tabindex="0" aria-label="Editable marker size ratios">
 					<table class="marker-table"><thead><tr><th>Size</th><th v-if="form.selected_type === 'Manual'">Panel</th><th>Ratio</th></tr></thead><tbody><tr v-for="(row, index) in form.ratio_items" :key="`${row.size}-${row.panel || index}`"><td>{{ row.size }}</td><td v-if="form.selected_type === 'Manual'">{{ row.panel }}</td><td><InputNumber v-model="row.ratio" :min="0" :step="0.5" :min-fraction-digits="1" :max-fraction-digits="1" :disabled="!canEdit" fluid /></td></tr></tbody></table>
 				</div>
 				<div v-else class="empty-note">Select panels, then build the size ratios.</div>
@@ -62,7 +62,7 @@
 				</section>
 				<section class="marker-section marker-read-view">
 					<div class="section-heading"><div><h3>Size Ratios</h3><small>{{ form.selected_type === 'Machine' ? 'Ratio by size' : 'Ratio by size and panel' }}</small></div></div>
-					<div v-if="form.ratio_items.length" class="table-scroll">
+					<div v-if="form.ratio_items.length" class="table-scroll" role="region" tabindex="0" aria-label="Marker size ratios">
 						<table class="marker-table"><thead><tr><th>Size</th><th v-if="form.selected_type === 'Manual'">Panel</th><th class="number-cell">Ratio</th></tr></thead><tbody><tr v-for="(row, index) in form.ratio_items" :key="`${row.size}-${row.panel || index}`"><td>{{ row.size }}</td><td v-if="form.selected_type === 'Manual'">{{ row.panel }}</td><td class="number-cell"><strong>{{ Number(row.ratio || 0).toFixed(1) }}</strong></td></tr></tbody></table>
 					</div>
 					<div v-else class="empty-note">No size ratios.</div>
@@ -96,6 +96,7 @@ import Skeleton from "primevue/skeleton"
 import { computed, reactive, ref, watch } from "vue"
 
 import { callMethod } from "../../api/frappe.js"
+import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
 
 const props = defineProps({
@@ -106,6 +107,7 @@ const props = defineProps({
 	markerName: { type: String, default: "" },
 })
 const emit = defineEmits(["update:visible", "changed"])
+const confirmAction = useActionConfirmation()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -219,7 +221,16 @@ async function save(submit) {
 }
 
 async function cancelMarker() {
-	if (!window.confirm(`Cancel Cutting Marker ${record.value?.name}?`)) return
+	return confirmAction({
+		header: "Cancel Cutting Marker?",
+		message: `Cancel Cutting Marker ${record.value?.name}? This changes the document status and cannot be undone here.`,
+		acceptLabel: "Cancel Marker",
+		acceptIcon: "pi pi-ban",
+		accept: performCancelMarker,
+	})
+}
+
+async function performCancelMarker() {
 	saving.value = true
 	error.value = ""
 	try {
@@ -303,27 +314,28 @@ function markerMethod(name) {
 .marker-loading { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .marker-content { display: grid; gap: 14px; }
 .marker-status-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.document-status { padding: 4px 9px; border-radius: 999px; font-size: 0.7rem; font-weight: 800; }
-.document-status--draft { color: #705913; background: #fff7cf; }
-.document-status--submitted { color: #236441; background: #e3f5e9; }
-.document-status--cancelled { color: #9a3434; background: #fde8e8; }
-.modified-text { color: #7a867f; font-size: 0.7rem; }
+.document-status { padding: 4px 9px; border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); font-weight: 800; }
+.document-status--draft { color: var(--erp-warning); background: var(--erp-warning-soft); }
+.document-status--submitted { color: var(--erp-accent-dark); background: var(--erp-success-soft); }
+.document-status--cancelled { color: var(--erp-danger); background: var(--erp-danger-soft); }
+.modified-text { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .marker-section { display: grid; gap: 12px; padding: 14px; background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); }
-.marker-section h3 { margin: 0; color: var(--erp-text); font-size: 0.9rem; }
+.marker-section h3 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-section); }
 .marker-section small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .marker-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; }
 .marker-fields label { display: grid; gap: 5px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 680; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .section-heading > div { display: grid; gap: 3px; }
-.table-scroll { overflow-x: auto; border: 1px solid #e2e8e4; border-radius: 9px; }
+.table-scroll { overflow-x: auto; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.table-scroll:focus-visible { outline: 2px solid var(--erp-accent-dark); outline-offset: -2px; }
 .marker-table { width: 100%; min-width: 500px; border-collapse: collapse; font-size: 13px; }
-.marker-table th, .marker-table td { padding: 8px 10px; border-right: 1px solid #e4e9e6; border-bottom: 1px solid #e4e9e6; text-align: left; }
-.marker-table th { color: #4b5a51; background: var(--erp-surface-muted); font-size: var(--erp-font-size-min); }
+.marker-table th, .marker-table td { padding: 8px 10px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); text-align: left; }
+.marker-table th { color: var(--erp-text-secondary); background: var(--erp-surface-muted); font-size: var(--erp-font-size-min); }
 .marker-table tr:last-child td { border-bottom: 0; }
 .marker-table th:last-child, .marker-table td:last-child { border-right: 0; }
-.empty-note { display: grid; place-items: center; min-height: 64px; color: #7b8780; font-size: 0.77rem; background: #fafcfb; border: 1px dashed #dce4df; border-radius: 9px; }
+.empty-note { display: grid; place-items: center; min-height: 64px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); background: var(--erp-surface-soft); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); }
 .group-list { display: grid; gap: 8px; }
-.group-row { display: grid; grid-template-columns: 72px minmax(0, 1fr) 38px; align-items: center; gap: 8px; color: #536158; font-size: 0.75rem; font-weight: 700; }
+.group-row { display: grid; grid-template-columns: 72px minmax(0, 1fr) 38px; align-items: center; gap: 8px; color: var(--erp-text-secondary); font-size: var(--erp-font-size-caption); font-weight: 700; }
 .marker-read-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
 .marker-read-grid > div { display: grid; min-height: 58px; align-content: center; gap: 4px; padding: 10px 12px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
 .marker-read-grid span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; text-transform: uppercase; }
@@ -342,5 +354,6 @@ function markerMethod(name) {
 	.marker-read-grid, .marker-group-summary { grid-template-columns: 1fr; }
 	.group-row { grid-template-columns: 1fr 38px; }
 	.group-row > span { grid-column: 1 / -1; }
+	.table-scroll { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); }
 }
 </style>

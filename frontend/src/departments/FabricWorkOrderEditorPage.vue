@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Work Order" accent="#0a7f5a" back-to="/fabric-store/work-orders" back-label="Work Orders" :show-title="false" flat full-width>
+	<DepartmentPage title="Work Order" accent="#0a7f5a" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width>
 		<div class="fabric-work-order-editor-page erp-workspace">
 			<WorkOrderEditor :key="`${workOrderId || 'new'}-${duplicateFrom}`" :name="workOrderId" :source="duplicateSource" @saved="saved" @cancel="cancel" />
 		</div>
@@ -13,6 +13,13 @@ import { useRoute, useRouter } from "vue-router"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import WorkOrderEditor from "./fabric-store/WorkOrderEditor.vue"
 
+const props = defineProps({
+	backTo: { type: String, default: "/fabric-store/work-orders" },
+	backLabel: { type: String, default: "Work Orders" },
+	listRouteName: { type: String, default: "fabric-work-orders" },
+	viewRouteName: { type: String, default: "fabric-work-order" },
+})
+
 const route = useRoute()
 const router = useRouter()
 const workOrderId = computed(() => String(route.params.workOrderId || ""))
@@ -21,12 +28,12 @@ const duplicateSource = computed(() => duplicateFrom.value ? { duplicate_from: d
 
 function saved(record) {
 	if (!record?.name) return
-	router.replace({ name: "fabric-work-order", params: { workOrderId: record.name } })
+	router.replace({ name: props.viewRouteName, params: { workOrderId: record.name } })
 }
 function cancel() {
-	if (workOrderId.value) router.push({ name: "fabric-work-order", params: { workOrderId: workOrderId.value } })
-	else if (duplicateFrom.value) router.push({ name: "fabric-work-order", params: { workOrderId: duplicateFrom.value } })
-	else router.push({ name: "fabric-work-orders" })
+	if (workOrderId.value) router.push({ name: props.viewRouteName, params: { workOrderId: workOrderId.value } })
+	else if (duplicateFrom.value) router.push({ name: props.viewRouteName, params: { workOrderId: duplicateFrom.value } })
+	else router.push({ name: props.listRouteName })
 }
 </script>
 

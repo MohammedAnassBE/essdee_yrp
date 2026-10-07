@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Work Order" accent="#0a7f5a" back-to="/fabric-store/work-orders" back-label="Work Orders" :show-title="false" flat full-width>
+	<DepartmentPage title="Work Order" accent="#0a7f5a" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width>
 		<section class="fabric-work-order-frame">
 			<FabricDocumentWorkspace doctype="YRP Work Order" title="Work Order" :workspace="workspace" :loading="loading" :error="error || actionError" :acting="acting" :show-lifecycle-actions="false" @reload="loadWorkspace(true)" @action="runWorkspaceAction">
 				<template #header="{ record }">
@@ -75,6 +75,14 @@ import WorkOrderActionPanel from "./fabric-store/WorkOrderActionPanel.vue"
 import WorkOrderActivityRail from "./fabric-store/WorkOrderActivityRail.vue"
 import WorkOrderDetails from "./fabric-store/WorkOrderDetails.vue"
 import WorkOrderSummary from "./fabric-store/WorkOrderSummary.vue"
+
+const props = defineProps({
+	backTo: { type: String, default: "/fabric-store/work-orders" },
+	backLabel: { type: String, default: "Work Orders" },
+	viewRouteName: { type: String, default: "fabric-work-order" },
+	newRouteName: { type: String, default: "fabric-work-order-new" },
+	editRouteName: { type: String, default: "fabric-work-order-edit" },
+})
 
 const route = useRoute()
 const router = useRouter()
@@ -200,8 +208,8 @@ async function loadWorkspace(refresh = false) {
 function capabilityLabel(name, fallback) { return capabilities.value[name]?.label || fallback }
 function statusLabel(docstatus) { return Number(docstatus) === 1 ? "Submitted" : Number(docstatus) === 2 ? "Cancelled" : "Draft" }
 function formatNumber(value) { return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 }) }
-function editWorkOrder() { router.push({ name: "fabric-work-order-edit", params: { workOrderId: workspace.value.record.name } }) }
-function duplicateWorkOrder() { router.push({ name: "fabric-work-order-new", query: { duplicate_from: workspace.value.record.name } }) }
+function editWorkOrder() { router.push({ name: props.editRouteName, params: { workOrderId: workspace.value.record.name } }) }
+function duplicateWorkOrder() { router.push({ name: props.newRouteName, query: { duplicate_from: workspace.value.record.name } }) }
 const lifecycleConfirmTitle = computed(() => pendingLifecycleCommand.value === "cancel" ? "Cancel Work Order?" : "Amend Work Order?")
 const lifecycleConfirmLabel = computed(() => pendingLifecycleCommand.value === "cancel" ? "Cancel Work Order" : "Create Amendment")
 const lifecycleConfirmMessage = computed(() => pendingLifecycleCommand.value === "cancel" ? `Cancel ${workspace.value.record?.name}? This keeps the document for audit but stops further processing.` : `Create a new draft amendment from ${workspace.value.record?.name}?`)
@@ -210,7 +218,7 @@ function requestLifecycleAction(command) { pendingLifecycleCommand.value = comma
 async function confirmLifecycleAction() { const command = pendingLifecycleCommand.value; lifecycleConfirmVisible.value = false; pendingLifecycleCommand.value = ""; if (command) await runLifecycleAction(command) }
 async function runLifecycleAction(command) {
 	acting.value = command; actionError.value = ""
-	try { const result = await executeWorkOrderCommand(workspace.value.record.name, command, {}, workspace.value.record.modified) || {}; const name = result.record?.name || workspace.value.record.name; workspace.value = result; if (name !== route.params.workOrderId) await router.replace({ name: "fabric-work-order", params: { workOrderId: name } }) }
+	try { const result = await executeWorkOrderCommand(workspace.value.record.name, command, {}, workspace.value.record.modified) || {}; const name = result.record?.name || workspace.value.record.name; workspace.value = result; if (name !== route.params.workOrderId) await router.replace({ name: props.viewRouteName, params: { workOrderId: name } }) }
 	catch (reason) { actionError.value = reason?.message || `Unable to ${command} this Work Order.` }
 	finally { acting.value = "" }
 }
@@ -228,7 +236,7 @@ async function actionChanged(result) {
 	if (!result?.record) return loadWorkspace(true)
 	const resultName = result.record.name
 	workspace.value = result
-	if (resultName && resultName !== route.params.workOrderId) await router.replace({ name: "fabric-work-order", params: { workOrderId: resultName } })
+	if (resultName && resultName !== route.params.workOrderId) await router.replace({ name: props.viewRouteName, params: { workOrderId: resultName } })
 }
 function openRelated(doctype, name = "", sourceContext = {}) { relatedDoctype.value = doctype; relatedName.value = name; relatedSourceContext.value = { ...(sourceContext || {}) }; relatedVisible.value = true }
 function createRelated(type) {

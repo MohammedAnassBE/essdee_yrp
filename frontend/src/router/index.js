@@ -128,6 +128,40 @@ const routes = [
 		props: { section: "work_orders" },
 	},
 	{
+		path: "/cut-panel-store/work-orders/new",
+		name: "cut-panel-work-order-new",
+		component: FabricWorkOrderEditorPage,
+		props: {
+			backTo: "/cut-panel-store/work-orders",
+			backLabel: "Work Orders",
+			listRouteName: "cut-panel-work-orders",
+			viewRouteName: "cut-panel-work-order",
+		},
+	},
+	{
+		path: "/cut-panel-store/work-orders/:workOrderId/edit",
+		name: "cut-panel-work-order-edit",
+		component: FabricWorkOrderEditorPage,
+		props: {
+			backTo: "/cut-panel-store/work-orders",
+			backLabel: "Work Orders",
+			listRouteName: "cut-panel-work-orders",
+			viewRouteName: "cut-panel-work-order",
+		},
+	},
+	{
+		path: "/cut-panel-store/work-orders/:workOrderId",
+		name: "cut-panel-work-order",
+		component: FabricWorkOrder,
+		props: {
+			backTo: "/cut-panel-store/work-orders",
+			backLabel: "Work Orders",
+			viewRouteName: "cut-panel-work-order",
+			newRouteName: "cut-panel-work-order-new",
+			editRouteName: "cut-panel-work-order-edit",
+		},
+	},
+	{
 		path: "/cut-panel-store/cut-bundle-edits",
 		name: "cut-panel-cut-bundle-edits",
 		component: CutPanelStoreSection,

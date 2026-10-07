@@ -32,7 +32,11 @@ import { useRouter } from "vue-router"
 
 import ListView from "../../components/common/ListView.vue"
 
-defineProps({ capability: { type: Object, required: true } })
+const props = defineProps({
+	capability: { type: Object, required: true },
+	viewRouteName: { type: String, default: "fabric-work-order" },
+	newRouteName: { type: String, default: "fabric-work-order-new" },
+})
 
 const router = useRouter()
 const defaultColumns = ["supplier", "item", "lot", "status"]
@@ -53,10 +57,10 @@ const statusOptions = [
 
 function openWorkOrder(row) {
 	if (!row?.name) return
-	router.push({ name: "fabric-work-order", params: { workOrderId: row.name } })
+	router.push({ name: props.viewRouteName, params: { workOrderId: row.name } })
 }
 
-function createWorkOrder() { router.push({ name: "fabric-work-order-new" }) }
+function createWorkOrder() { router.push({ name: props.newRouteName }) }
 
 function statusSeverity(status) {
 	if (["Fully Delivered", "Fully Received", "Fully Billed", "Closed"].includes(status)) return "success"

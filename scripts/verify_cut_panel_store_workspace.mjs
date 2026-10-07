@@ -279,10 +279,72 @@ async function movementTransactionSuite(page) {
 	assert(railSource.includes("emit('open-document'"), "Movement rail rows do not open their linked documents")
 }
 
+async function workOrdersSuite(page) {
+	await page.setViewportSize({ width: 1440, height: 900 })
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.web_workspace.get_capabilities*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: capabilities }),
+	}))
+	await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: JSON.stringify({ docs: [{
+			name: "YRP Work Order",
+			is_submittable: 1,
+			fields: [
+				{ fieldname: "supplier", label: "Supplier", fieldtype: "Link", options: "Supplier", in_list_view: 1 },
+				{ fieldname: "item", label: "Item", fieldtype: "Link", options: "Item", in_list_view: 1 },
+				{ fieldname: "lot", label: "Lot", fieldtype: "Link", options: "SD YRP Lot", in_list_view: 1 },
+				{ fieldname: "status", label: "Status", fieldtype: "Data", in_list_view: 1 },
+			],
+		}] }),
+	}))
+	await page.route("**/api/method/yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.get_user_listview*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }),
+	}))
+	await page.route("**/api/method/frappe.desk.reportview.get_count*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: 1 }),
+	}))
+	await page.route("**/api/resource/YRP%20Work%20Order*", (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: JSON.stringify({ data: [{ name: "WO-CP-ROUTE-1", supplier: "CUT-PANEL-STORE", item: "ITEM-CP-1", lot: "LOT-CP-1", status: "Submitted", docstatus: 1, modified: "2026-10-07 12:00:00" }] }),
+	}))
+	await page.route("**/api/method/essdee_yrp.fabric_store.web_workspace.get_work_order_workspace*", (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: JSON.stringify({ message: {
+			record: { doctype: "YRP Work Order", name: "WO-CP-ROUTE-1", supplier: "CUT-PANEL-STORE", item: "ITEM-CP-1", lot: "LOT-CP-1", status: "Submitted", docstatus: 1 },
+			fields: [], dimensions: [], matrices: { deliverables: [], receivables: [] }, related: { delivery_challans: [], goods_received_notes: [] },
+			capabilities: {}, permissions: { can_read: true, can_create: true }, related_permissions: {}, totals: [], summary: {},
+		} }),
+	}))
+
+	await page.goto(`${SITE}/web/cut-panel-store/work-orders`, { waitUntil: "domcontentloaded" })
+	const list = page.locator(".cut-panel-store-section .fabric-work-orders .common-list-view")
+	await list.waitFor({ timeout: 20_000 })
+	assert(await page.getByRole("button", { name: "Create Work Order", exact: true }).count() === 1, "Cut Panel Work Orders omit the permission-aware create action")
+	await list.getByText("WO-CP-ROUTE-1", { exact: true }).click()
+	await page.waitForURL("**/web/cut-panel-store/work-orders/WO-CP-ROUTE-1")
+	await page.locator(".fabric-work-order-frame").waitFor({ timeout: 20_000 })
+	assert(page.url().endsWith("/web/cut-panel-store/work-orders/WO-CP-ROUTE-1"), "Cut Panel Work Order escaped to the Fabric Store route")
+
+	const routerSource = readFileSync(new URL("../frontend/src/router/index.js", import.meta.url), "utf8")
+	const listSource = readFileSync(new URL("../frontend/src/departments/fabric-store/FabricWorkOrders.vue", import.meta.url), "utf8")
+	const viewSource = readFileSync(new URL("../frontend/src/departments/FabricWorkOrder.vue", import.meta.url), "utf8")
+	const editorSource = readFileSync(new URL("../frontend/src/departments/FabricWorkOrderEditorPage.vue", import.meta.url), "utf8")
+	for (const routeName of ["cut-panel-work-order-new", "cut-panel-work-order-edit", "cut-panel-work-order"]) {
+		assert(routerSource.includes(`name: "${routeName}"`), `Router omits ${routeName}`)
+	}
+	assert(listSource.includes("viewRouteName") && listSource.includes("newRouteName"), "Shared Work Order list is not route-context aware")
+	assert(viewSource.includes("editRouteName") && viewSource.includes("newRouteName") && viewSource.includes("viewRouteName"), "Shared Work Order view is not route-context aware")
+	assert(editorSource.includes("listRouteName") && editorSource.includes("viewRouteName"), "Shared Work Order editor is not route-context aware")
+}
+
 const suites = {
 	launcher: launcherSuite,
 	movements: movementSuite,
 	"movement-transactions": movementTransactionSuite,
+	"work-orders": workOrdersSuite,
 }
 
 const browser = await chromium.launch({ headless: true })

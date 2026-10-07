@@ -126,7 +126,7 @@ function generatedMovementFixture() {
 	}
 }
 
-async function mockMovementWorkspace(page) {
+async function mockMovementWorkspace(page, options = {}) {
 	await page.route("**/api/method/essdee_yrp.cut_panel_store.web_workspace.get_capabilities*", (route) => route.fulfill({
 		status: 200, contentType: "application/json", body: JSON.stringify({ message: capabilities }),
 	}))
@@ -158,7 +158,7 @@ async function mockMovementWorkspace(page) {
 		body: JSON.stringify({ data: [{ name: "CPM-1", lot: "LOT-CP-1", item: "ITEM-CP-1", from_warehouse: "CUT-STORE", against: "", against_id: "", movement_date: "2026-10-07", docstatus: 0, modified: "2026-10-07 10:00:00" }] }),
 	}))
 	await page.route("**/api/method/essdee_yrp.cut_panel_store.movement_workspace.get_movement_editor*", (route) => route.fulfill({
-		status: 200, contentType: "application/json", body: JSON.stringify({ message: movementFixture() }),
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: options.editor || movementFixture() }),
 	}))
 	await page.route("**/api/method/essdee_yrp.cut_panel_store.movement_workspace.generate_movement_bundles*", (route) => route.fulfill({
 		status: 200, contentType: "application/json", body: JSON.stringify({ message: generatedMovementFixture() }),
@@ -166,9 +166,16 @@ async function mockMovementWorkspace(page) {
 	await page.route("**/api/method/essdee_yrp.api.link_search.link_search*", (route) => route.fulfill({
 		status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }),
 	}))
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.movement_workspace.get_movement_linked_documents*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: options.linked || { sections: {}, actions: {} } }),
+	}))
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.movement_workspace.get_movement_work_orders*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: [{ name: "WO-CP-1", lot: "LOT-CP-1", item: "ITEM-CP-1", supplier: "CUT-STORE" }] }),
+	}))
 }
 
 async function movementSuite(page) {
+	await page.setViewportSize({ width: 1440, height: 900 })
 	await mockMovementWorkspace(page)
 	await page.goto(`${SITE}/web/cut-panel-store/movements`, { waitUntil: "domcontentloaded" })
 	const list = page.locator(".cut-panel-movements .common-list-view")
@@ -203,9 +210,79 @@ async function movementSuite(page) {
 	assert(await dialog.locator("input").first().inputValue().catch(() => "") === before, "Responsive layout discarded unsaved movement values")
 }
 
+function submittedMovementFixture() {
+	const fixture = movementFixture()
+	fixture.record = {
+		name: "CPM-1", docstatus: 1, status: "Submitted", modified: "2026-10-07 10:00:00",
+		lot: "LOT-CP-1", item: "ITEM-CP-1", from_warehouse: "CUT-STORE",
+		permissions: { can_write: false, can_submit: false, can_cancel: true, can_print: true },
+		movement_data: generatedMovementFixture(),
+	}
+	fixture.movement_data = generatedMovementFixture()
+	return fixture
+}
+
+async function movementTransactionSuite(page) {
+	await page.setViewportSize({ width: 1440, height: 900 })
+	const linked = {
+		sections: {
+			stock_entries: [{ doctype: "YRP Stock Entry", name: "STE-CP-1", status: "Cancelled", docstatus: 2, posting_date: "2026-10-07", posting_time: "10:00:00" }],
+			delivery_challans: [{ doctype: "YRP Delivery Challan", name: "DC-CP-1", status: "Submitted", docstatus: 1, posting_date: "2026-10-07", posting_time: "10:15:00" }],
+			goods_received_notes: [{ doctype: "YRP Goods Received Note", name: "GRN-CP-1", status: "Draft", docstatus: 0, posting_date: "2026-10-07", posting_time: "10:30:00" }],
+		},
+		actions: {
+			stock_entry: { label: "Create Stock Entry", eligible: true, can_create: true },
+			delivery_challan: { label: "Create Delivery Challan", eligible: true, can_create: true },
+			goods_received_note: { label: "Create Goods Received Note", eligible: true, can_create: true },
+		},
+	}
+	await mockMovementWorkspace(page, { editor: submittedMovementFixture(), linked })
+	await page.goto(`${SITE}/web/cut-panel-store/movements`, { waitUntil: "domcontentloaded" })
+	await page.getByText("CPM-1", { exact: true }).click()
+	const dialog = page.locator(".erp-cut-panel-movement-dialog:visible")
+	await dialog.waitFor({ timeout: 20_000 })
+	const layout = dialog.locator(".cut-panel-movement-layout")
+	const rail = dialog.locator(".cut-panel-movement-rail")
+	await rail.waitFor({ timeout: 20_000 })
+	const ratio = await layout.evaluate((element) => {
+		const children = [...element.children]
+		return children[0].getBoundingClientRect().width / children[1].getBoundingClientRect().width
+	})
+	assert(ratio >= 3.2 && ratio <= 5.2, `Movement workspace is not approximately 80/20: ${ratio}`)
+	for (const label of ["Stock Entries", "Delivery Challans", "Goods Received Notes"]) {
+		assert(await rail.getByText(label, { exact: true }).count() >= 1, `Movement rail omits ${label}: ${await rail.textContent()}`)
+	}
+	for (const label of ["Create Stock Entry", "Create Delivery Challan", "Create Goods Received Note"]) {
+		assert(await rail.getByRole("button", { name: label, exact: true }).count() === 1, `Movement rail omits ${label}`)
+	}
+	assert(await rail.getByText("STE-CP-1", { exact: true }).count() === 1, "Stock Entry history is missing")
+	assert(await rail.getByText("DC-CP-1", { exact: true }).count() === 1, "Delivery Challan history is missing")
+	assert(await rail.getByText("GRN-CP-1", { exact: true }).count() === 1, "Goods Received Note history is missing")
+
+	await rail.getByRole("button", { name: "Create Delivery Challan", exact: true }).click()
+	const chooser = page.locator(".cut-panel-transaction-create-dialog:visible")
+	await chooser.waitFor()
+	assert(await chooser.getByText("WO-CP-1", { exact: true }).count() === 1, "DC creation does not offer same-Lot Work Orders")
+
+	await page.setViewportSize({ width: 760, height: 900 })
+	const stacked = await layout.evaluate((element) => {
+		const [main, side] = [...element.children].map((child) => child.getBoundingClientRect())
+		return side.top >= main.bottom - 1
+	})
+	assert(stacked, "Movement linked rail does not move below the editor on a narrow viewport")
+
+	const dialogSource = readFileSync(new URL("../frontend/src/departments/cut-panel-store/CutPanelMovementDialog.vue", import.meta.url), "utf8")
+	const railSource = readFileSync(new URL("../frontend/src/departments/cut-panel-store/CutPanelMovementRail.vue", import.meta.url), "utf8")
+	assert(dialogSource.includes("RelatedDocumentWorkspaceDialog"), "Movement dialog does not reuse the complete Fabric DC/GRN workspace")
+	assert(dialogSource.includes("FabricStockOperationDialog"), "Movement dialog does not reuse the complete Stock Entry workspace")
+	assert(dialogSource.includes("DocumentErrorDialog"), "Movement transaction errors do not use the shared popup")
+	assert(railSource.includes("emit('open-document'"), "Movement rail rows do not open their linked documents")
+}
+
 const suites = {
 	launcher: launcherSuite,
 	movements: movementSuite,
+	"movement-transactions": movementTransactionSuite,
 }
 
 const browser = await chromium.launch({ headless: true })

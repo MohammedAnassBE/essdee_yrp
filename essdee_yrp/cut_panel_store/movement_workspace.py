@@ -20,12 +20,33 @@ from essdee_yrp.cutting.web_workspace import (
 	_movement_payload as _cutting_movement_payload,
 	_validate_movement_data,
 )
+from essdee_yrp.cutting.movement import (
+	build_delivery_challan_defaults,
+	build_goods_received_note_defaults,
+	build_stock_entry_defaults,
+	get_active_root_transactions,
+)
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_panel_movement.sd_yrp_cut_panel_movement import (
 	get_cut_bundle_unmoved_data,
 	get_total,
 )
 
 MOVEMENT_DOCTYPE = "SD YRP Cut Panel Movement"
+MOVEMENT_TRANSACTION_DOCTYPES = {
+	"stock_entry": "YRP Stock Entry",
+	"delivery_challan": "YRP Delivery Challan",
+	"goods_received_note": "YRP Goods Received Note",
+}
+MOVEMENT_TRANSACTION_SECTIONS = {
+	"stock_entry": "stock_entries",
+	"delivery_challan": "delivery_challans",
+	"goods_received_note": "goods_received_notes",
+}
+MOVEMENT_TRANSACTION_LABELS = {
+	"stock_entry": _("Stock Entry"),
+	"delivery_challan": _("Delivery Challan"),
+	"goods_received_note": _("Goods Received Note"),
+}
 
 
 def _empty_movement_data() -> dict:
@@ -263,3 +284,182 @@ def execute_movement_command(name, command, expected_modified=None) -> dict:
 	else:
 		frappe.throw(_("Unsupported Cut Panel Movement command."))
 	return _movement_payload(doc, include_data=True)
+
+
+def _status_label(docstatus) -> str:
+	return {0: _("Draft"), 1: _("Submitted"), 2: _("Cancelled")}.get(cint(docstatus), _("Unknown"))
+
+
+def _document_permission(doc, ptype: str) -> bool:
+	checker = getattr(doc, "has_permission", None)
+	return bool(checker(ptype)) if callable(checker) else bool(frappe.has_permission(doc.doctype, ptype=ptype, doc=doc))
+
+
+def _transaction_record(doc) -> dict:
+	return {
+		"doctype": doc.doctype,
+		"name": doc.name,
+		"docstatus": cint(doc.docstatus),
+		"status": _status_label(doc.docstatus),
+		"posting_date": doc.get("posting_date"),
+		"posting_time": doc.get("posting_time"),
+		"purpose": doc.get("purpose"),
+		"work_order": doc.get("work_order") or doc.get("against_id"),
+		"modified": doc.get("modified"),
+		"permissions": {
+			"can_submit": bool(cint(doc.docstatus) == 0 and _document_permission(doc, "submit")),
+			"can_cancel": bool(cint(doc.docstatus) == 1 and _document_permission(doc, "cancel")),
+			"can_print": _document_permission(doc, "print"),
+		},
+	}
+
+
+def _get_submitted_movement(name: str):
+	doc = frappe.get_doc(MOVEMENT_DOCTYPE, name)
+	doc.check_permission("read")
+	if cint(doc.docstatus) != 1:
+		frappe.throw(_("Submit Cut Panel Movement {0} before creating a transaction.").format(doc.name))
+	return doc
+
+
+def _active_root_error(movement, active_roots) -> str:
+	if not active_roots:
+		return ""
+	owner = active_roots[0]
+	return _(
+		"Cut Panel Movement {0} is already used by active {1} {2}. "
+		"Cancel or delete that transaction before creating another one."
+	).format(movement.name, owner.doctype, owner.name)
+
+
+def _linked_document_names(doctype: str, movement_name: str) -> list[str]:
+	filters = {"cut_panel_movement": movement_name}
+	if doctype == "YRP Stock Entry":
+		filters["purpose"] = ["not in", ("Complete Delivery Challan", "Complete Goods Received Note")]
+	return frappe.get_list(
+		doctype,
+		filters=filters,
+		pluck="name",
+		order_by="modified desc",
+		limit_page_length=500,
+	)
+
+
+@frappe.whitelist()
+def get_movement_linked_documents(name: str) -> dict:
+	"""Return permission-filtered transaction history and authoritative create actions."""
+
+	movement = frappe.get_doc(MOVEMENT_DOCTYPE, name)
+	movement.check_permission("read")
+	active_roots = get_active_root_transactions(movement.name) if cint(movement.docstatus) == 1 else []
+	active_record = None
+	active_error = _("This movement already has an active transaction. Cancel or delete it before creating another one.") if active_roots else ""
+	if active_roots and frappe.has_permission(active_roots[0].doctype, ptype="read"):
+		active_doc = frappe.get_doc(active_roots[0].doctype, active_roots[0].name)
+		if _document_permission(active_doc, "read"):
+			active_record = _transaction_record(active_doc)
+			active_error = _active_root_error(movement, active_roots)
+	sections = {}
+	actions = {}
+	for operation, doctype in MOVEMENT_TRANSACTION_DOCTYPES.items():
+		if not frappe.has_permission(doctype, ptype="read"):
+			continue
+		rows = []
+		for document_name in _linked_document_names(doctype, movement.name):
+			doc = frappe.get_doc(doctype, document_name)
+			if _document_permission(doc, "read"):
+				rows.append(_transaction_record(doc))
+		rows.sort(key=lambda row: str(row.get("modified") or ""), reverse=True)
+		sections[MOVEMENT_TRANSACTION_SECTIONS[operation]] = rows
+		can_create = bool(frappe.has_permission(doctype, ptype="create"))
+		actions[operation] = {
+			"label": _("Create {0}").format(MOVEMENT_TRANSACTION_LABELS[operation]),
+			"doctype": doctype,
+			"can_create": can_create,
+			"eligible": bool(cint(movement.docstatus) == 1 and can_create and not active_roots),
+			"reason": active_error or (
+				_("Submit the Cut Panel Movement first.") if cint(movement.docstatus) != 1 else ""
+			),
+		}
+	return {
+		"movement": {"name": movement.name, "docstatus": cint(movement.docstatus), "lot": movement.lot},
+		"sections": sections,
+		"actions": actions,
+		"active_root": active_record,
+	}
+
+
+@frappe.whitelist()
+def get_movement_work_orders(name: str, txt: str = "") -> list[dict]:
+	"""Return submitted, readable Work Orders for exactly the movement Lot."""
+
+	movement = frappe.get_doc(MOVEMENT_DOCTYPE, name)
+	movement.check_permission("read")
+	frappe.has_permission("YRP Work Order", ptype="read", throw=True)
+	filters = {"docstatus": 1, "lot": movement.lot}
+	if txt:
+		filters["name"] = ["like", f"%{txt}%"]
+	return [
+		dict(row)
+		for row in frappe.get_list(
+			"YRP Work Order",
+			filters=filters,
+			fields=["name", "supplier", "process", "item", "production_detail", "lot", "modified"],
+			order_by="modified desc",
+			limit_page_length=50,
+		)
+	]
+
+
+def _validated_work_order(movement, work_order_name: str):
+	if not work_order_name:
+		frappe.throw(_("Select a Work Order for this transaction."))
+	work_order = frappe.get_doc("YRP Work Order", work_order_name)
+	work_order.check_permission("read")
+	if cint(work_order.docstatus) != 1:
+		frappe.throw(_("Work Order {0} must be submitted.").format(work_order.name))
+	if work_order.lot != movement.lot:
+		frappe.throw(_("Work Order {0} does not belong to Lot {1}.").format(work_order.name, movement.lot))
+	return work_order
+
+
+@frappe.whitelist()
+def create_movement_transaction(name: str, operation: str, values=None, submit=False) -> dict:
+	"""Create one authoritative root transaction from a submitted movement."""
+
+	if operation not in MOVEMENT_TRANSACTION_DOCTYPES:
+		frappe.throw(_("Unsupported Cut Panel Movement transaction."))
+	movement = _get_submitted_movement(name)
+	doctype = MOVEMENT_TRANSACTION_DOCTYPES[operation]
+	frappe.has_permission(doctype, ptype="create", throw=True)
+	active_roots = get_active_root_transactions(movement.name)
+	if active_roots:
+		frappe.throw(_active_root_error(movement, active_roots))
+	values = parse_json_object(values)
+
+	if operation == "stock_entry":
+		defaults = build_stock_entry_defaults(movement.name)
+		to_warehouse = values.get("to_warehouse")
+		if not to_warehouse:
+			frappe.throw(_("To Warehouse is required."))
+	else:
+		work_order = _validated_work_order(movement, values.get("work_order"))
+		defaults = (
+			build_delivery_challan_defaults(movement.name, work_order.name)
+			if operation == "delivery_challan"
+			else build_goods_received_note_defaults(movement.name, work_order.name)
+		)
+
+	doc = frappe.new_doc(doctype)
+	doc.update(defaults)
+	if operation == "stock_entry":
+		doc.to_warehouse = to_warehouse
+	if values.get("comments") is not None and doc.meta.get_field("comments"):
+		doc.comments = values.get("comments")
+	doc.insert()
+	if cint(submit):
+		doc.submit()
+	return {
+		"record": _transaction_record(doc),
+		"linked_documents": get_movement_linked_documents(movement.name),
+	}

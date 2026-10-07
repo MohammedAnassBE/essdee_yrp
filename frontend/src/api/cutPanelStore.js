@@ -34,3 +34,20 @@ export function executeCutPanelMovementCommand(name, command, expectedModified =
 		expected_modified: expectedModified || undefined,
 	})
 }
+
+export function getCutPanelMovementLinkedDocuments(name) {
+	return callMethod(`${MOVEMENT_METHOD}.get_movement_linked_documents`, { name })
+}
+
+export function getCutPanelMovementWorkOrders(name, txt = "") {
+	return callMethod(`${MOVEMENT_METHOD}.get_movement_work_orders`, { name, txt })
+}
+
+export function createCutPanelMovementTransaction(name, operation, values = {}, submit = false) {
+	return callMethod(`${MOVEMENT_METHOD}.create_movement_transaction`, {
+		name,
+		operation,
+		values,
+		submit,
+	})
+}

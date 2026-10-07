@@ -1,7 +1,7 @@
 # Cloth Post-P0 Corrections Design
 
 **Date:** 2026-10-07  
-**Status:** Conversation design approved; written-spec review pending  
+**Status:** Conversation design and written specification approved
 **Target bench:** `frappe-16`  
 **Target site:** `erp-migration-test.site`  
 **Reference bench:** `frappe-16-yrp`, `essdee_yrp` develop branch

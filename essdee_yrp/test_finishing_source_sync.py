@@ -142,7 +142,19 @@ class TestFinishingSourceSync(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError) as raised:
 			get_configured_cutting_process(production_detail="IPD-1")
 
-		self.assertIn("Set Cutting Process", str(raised.exception))
+		self.assertIn("Set Default Cutting Process in SD YRP IPD Settings", str(raised.exception))
+
+	@patch("essdee_yrp.finishing.rebuild.attribute_db.get_cached_value", return_value=None)
+	def test_ipd_without_cutting_process_uses_ipd_settings_default(self, _ipd_process):
+		settings = {("SD YRP IPD Settings", "default_cutting_process"): "Configured Cutting"}
+		with patch(
+			"essdee_yrp.finishing.rebuild.frappe.db.get_single_value",
+			side_effect=lambda doctype, fieldname, *args, **kwargs: settings.get((doctype, fieldname)),
+		):
+			self.assertEqual(
+				get_configured_cutting_process(production_detail="IPD-1"),
+				"Configured Cutting",
+			)
 
 
 def _work_order(**values):

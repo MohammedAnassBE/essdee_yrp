@@ -478,10 +478,10 @@ def get_configured_cutting_process(*, production_detail=None, lot=None):
 		process = attribute_db.get_cached_value(
 			"YRP Item Production Detail", production_detail, "cutting_process"
 		)
-	if not process and frappe.get_meta("SD YRP MRP Settings").has_field("cutting_process"):
-		process = frappe.db.get_single_value("SD YRP MRP Settings", "cutting_process")
 	if not process:
-		frappe.throw(_("Set Cutting Process in MRP Settings"))
+		process = frappe.db.get_single_value("SD YRP IPD Settings", "default_cutting_process")
+	if not process:
+		frappe.throw(_("Set Default Cutting Process in SD YRP IPD Settings"))
 	return process
 
 

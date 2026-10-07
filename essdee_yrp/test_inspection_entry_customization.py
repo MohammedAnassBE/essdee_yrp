@@ -116,15 +116,25 @@ class TestInspectionEntryCustomization(FrappeTestCase):
 
 	@patch.object(frappe.db, "sql")
 	def test_source_grn_children_are_locked_in_stable_order(self, sql):
-		inspection_override._lock_source_grn_items(
+		sql.return_value = [
+			frappe._dict(
+				name="GRN-ITEM-1",
+				parent="GRN-1",
+				parenttype="YRP Goods Received Note",
+			)
+		]
+
+		rows = inspection_override._lock_source_grn_items(
 			["GRN-ITEM-2", "GRN-ITEM-1", "GRN-ITEM-1"]
 		)
 
 		self.assertIn("ORDER BY name FOR UPDATE", sql.call_args.args[0])
+		self.assertTrue(sql.call_args.kwargs["as_dict"])
 		self.assertEqual(
 			sql.call_args.args[1],
 			{"names": ("GRN-ITEM-1", "GRN-ITEM-2")},
 		)
+		self.assertEqual(rows, sql.return_value)
 
 	@patch("yrp.stock.stock_ledger.enqueue_voucher_repost")
 	@patch("yrp.stock.stock_ledger.make_sl_entries")
@@ -187,8 +197,17 @@ class TestInspectionEntryCustomization(FrappeTestCase):
 		get_doc.side_effect = load_doc
 		lock_lots.side_effect = lambda names: events.append("lots") or ["LOT-1"]
 		lock_grns.side_effect = lambda names: events.append("grns")
-		lock_items.side_effect = lambda names: events.append("items")
-		current_lots.side_effect = lambda names: events.append("revalidate") or ["LOT-1"]
+		locked_source_rows = [
+			frappe._dict(
+				name="GRN-ITEM-1",
+				parent="GRN-1",
+				parenttype="YRP Goods Received Note",
+			)
+		]
+		lock_items.side_effect = lambda names: events.append("items") or locked_source_rows
+		current_lots.side_effect = (
+			lambda names, **kwargs: events.append("revalidate") or ["LOT-1"]
+		)
 		make_entries.side_effect = lambda entries: events.append("ledger")
 		enqueue.side_effect = lambda doc: events.append("repost")
 		rebuild.side_effect = lambda lot, **kwargs: events.append("rebuild")
@@ -216,13 +235,64 @@ class TestInspectionEntryCustomization(FrappeTestCase):
 		self.assertIs(source_items.call_args_list[0].args[0], discovery)
 		self.assertIs(source_items.call_args_list[1].args[0], locked)
 		self.assertEqual(source_names.call_count, 2)
-		for call in source_names.call_args_list:
-			self.assertEqual(call.args, (discovery, ["GRN-ITEM-1"]))
+		self.assertEqual(source_names.call_args_list[0].args, (discovery, ["GRN-ITEM-1"]))
+		self.assertEqual(source_names.call_args_list[1].args, (discovery, ["GRN-ITEM-1"]))
+		self.assertEqual(
+			source_names.call_args_list[1].kwargs,
+			{"source_rows": locked_source_rows},
+		)
 		lock_lots.assert_called_once_with(["GRN-ITEM-1"])
 		lock_grns.assert_called_once_with(["GRN-1"])
 		lock_items.assert_called_once_with(["GRN-ITEM-1"])
-		current_lots.assert_called_once_with(["GRN-ITEM-1"])
+		current_lots.assert_called_once_with(["GRN-ITEM-1"], for_update=True)
 		rebuild.assert_called_once_with("LOT-1", already_locked=True)
+
+	def test_convert_stock_rejects_changed_post_lock_lot_qualification_before_ledger(self):
+		discovery = frappe._dict(
+			docstatus=1,
+			against="YRP Goods Received Note",
+			against_id="GRN-1",
+			items=[],
+		)
+		locked_rows = [
+			frappe._dict(
+				name="GRN-ITEM-1",
+				parent="GRN-1",
+				parenttype="YRP Goods Received Note",
+			)
+		]
+		with (
+			patch.object(inspection_override, "_approver_role", return_value="Stock Manager"),
+			patch.object(frappe, "get_roles", return_value=["Stock Manager"]),
+			patch.object(frappe, "get_doc", return_value=discovery) as get_doc,
+			patch.object(
+				inspection_override,
+				"_source_grn_item_names",
+				return_value=["GRN-ITEM-1"],
+			),
+			patch.object(inspection_override, "_source_grn_names", return_value=["GRN-1"]),
+			patch.object(inspection_override, "_lock_source_grns"),
+			patch.object(
+				inspection_override,
+				"_lock_source_grn_items",
+				return_value=locked_rows,
+			),
+			patch(
+				"essdee_yrp.fabric_substitution.lock_lots_for_default_knitting_grn_items",
+				return_value=["LOT-1"],
+			),
+			patch(
+				"essdee_yrp.fabric_substitution.get_default_knitting_lots_for_grn_items",
+				return_value=[],
+			) as current_lots,
+			patch("yrp.stock.stock_ledger.make_sl_entries") as make_entries,
+		):
+			with self.assertRaisesRegex(frappe.ValidationError, "source lineage changed"):
+				inspection_override.convert_stock("INSPECTION-1")
+
+		current_lots.assert_called_once_with(["GRN-ITEM-1"], for_update=True)
+		self.assertEqual(get_doc.call_count, 1)
+		make_entries.assert_not_called()
 
 	@patch("yrp.stock.stock_ledger.enqueue_voucher_repost")
 	@patch("yrp.stock.stock_ledger.make_sl_entries")

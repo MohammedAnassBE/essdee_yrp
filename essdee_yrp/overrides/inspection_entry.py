@@ -87,11 +87,14 @@ def convert_stock(name):
 		source_grns = _source_grn_names(doc, source_items)
 		conversion_lots = lock_lots_for_default_knitting_grn_items(source_items)
 		_lock_source_grns(source_grns)
-		_lock_source_grn_items(source_items)
+		locked_source_rows = _lock_source_grn_items(source_items)
 		# Re-read exact child ownership and keyed eligibility after its parent and
 		# child locks. A stale/forged reference must never select a Lot rebuild.
-		_source_grn_names(doc, source_items)
-		current_lots = get_default_knitting_lots_for_grn_items(source_items)
+		_source_grn_names(doc, source_items, source_rows=locked_source_rows)
+		current_lots = get_default_knitting_lots_for_grn_items(
+			source_items,
+			for_update=True,
+		)
 		if current_lots != conversion_lots:
 			frappe.throw(
 				_("The cloth source lineage changed while Inspection Entry {0} was converting.").format(
@@ -142,14 +145,16 @@ def _source_grn_item_names(doc):
 	)
 
 
-def _source_grn_names(doc, source_items):
+def _source_grn_names(doc, source_items, *, source_rows=None):
 	if not source_items:
 		return []
-	parents = frappe.get_all(
-		"YRP Goods Received Note Item",
-		filters={"name": ["in", source_items]},
-		fields=["name", "parent", "parenttype"],
-	)
+	parents = source_rows
+	if parents is None:
+		parents = frappe.get_all(
+			"YRP Goods Received Note Item",
+			filters={"name": ["in", source_items]},
+			fields=["name", "parent", "parenttype"],
+		)
 	by_name = {row.name: row for row in parents}
 	missing = [source_item for source_item in source_items if source_item not in by_name]
 	if missing:
@@ -197,8 +202,10 @@ def _lock_source_grns(grn_names):
 def _lock_source_grn_items(grn_item_names):
 	grn_item_names = sorted(set(grn_item_names or []))
 	if grn_item_names:
-		frappe.db.sql(
-			"SELECT name FROM `tabYRP Goods Received Note Item` "
+		return frappe.db.sql(
+			"SELECT name, parent, parenttype FROM `tabYRP Goods Received Note Item` "
 			"WHERE name IN %(names)s ORDER BY name FOR UPDATE",
 			{"names": tuple(grn_item_names)},
+			as_dict=True,
 		)
+	return []

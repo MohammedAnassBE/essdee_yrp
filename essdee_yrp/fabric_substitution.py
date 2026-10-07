@@ -197,7 +197,7 @@ def _lock_lot(lot):
 	)
 
 
-def get_default_knitting_lots_for_grn_items(grn_item_names):
+def get_default_knitting_lots_for_grn_items(grn_item_names, *, for_update=False):
 	"""Resolve Lot projections from the exact keyed GRN children being inspected."""
 	grn_item_names = sorted(set(grn_item_names or []))
 	if not grn_item_names:
@@ -205,8 +205,9 @@ def get_default_knitting_lots_for_grn_items(grn_item_names):
 	process_name = _default_knitting_process()
 	if not process_name:
 		return []
+	lock_clause = "FOR UPDATE" if for_update else ""
 	rows = frappe.db.sql(
-		"""
+		f"""
 		SELECT item.name AS source_grn_item,
 			wo.lot,
 			receivable.additional_parameters
@@ -231,6 +232,7 @@ def get_default_knitting_lots_for_grn_items(grn_item_names):
 			AND wo.cloth_execution_version = 1
 			AND IFNULL(wo.lot, '') != ''
 		ORDER BY item.name
+		{lock_clause}
 		""",
 		{
 			"grn_items": tuple(grn_item_names),

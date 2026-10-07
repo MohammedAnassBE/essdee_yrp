@@ -429,6 +429,20 @@ class TestLotFabricConversionRebuild(unittest.TestCase):
 		self.assertIn("ORDER BY name FOR UPDATE", lock_query)
 		self.assertEqual(sql.call_args_list[1].args[1]["lots"], ("LOT-A", "LOT-B"))
 
+	@patch("essdee_yrp.fabric_substitution._default_knitting_process", return_value="Knitting")
+	@patch.object(frappe.db, "sql", return_value=[])
+	def test_post_lock_grn_child_qualification_is_a_current_locking_read(
+		self, sql, _process
+	):
+		fabric_substitution.get_default_knitting_lots_for_grn_items(
+			["GRN-ITEM-1"],
+			for_update=True,
+		)
+
+		query = sql.call_args.args[0]
+		self.assertIn("ORDER BY item.name", query)
+		self.assertRegex(query, r"ORDER BY item\.name\s+FOR UPDATE")
+
 	@patch("essdee_yrp.fabric_substitution._project_receipt_group")
 	@patch("essdee_yrp.fabric_substitution.frappe.get_cached_doc")
 	def test_projection_is_deterministic_for_identical_receipts(self, get_cached_doc, project):

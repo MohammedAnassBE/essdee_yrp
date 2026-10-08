@@ -49,6 +49,25 @@ export function useDocumentListNavigation({ currentName, disabled }) {
 		activeState = null
 	}
 
+	function applyAdjacent(adjacent) {
+		previousName.value = adjacent.previousName
+		previousModified.value = adjacent.previousModified
+		nextName.value = adjacent.nextName
+		nextModified.value = adjacent.nextModified
+		changed.value = adjacent.changed
+	}
+
+	async function fetchAdjacent(reference, state) {
+		const rows = await getList(state.doctype, {
+			fields: ["name", "modified"],
+			filters: state.filters,
+			orderBy: state.orderBy,
+			start: adjacentWindowStart(reference.index),
+			pageLength: 3,
+		})
+		return resolveAdjacentNames({ reference, rows })
+	}
+
 	async function load() {
 		const sequence = ++loadSequence
 		const name = String(toValue(currentName) || "")
@@ -65,20 +84,9 @@ export function useDocumentListNavigation({ currentName, disabled }) {
 		activeState = state
 		loading.value = true
 		try {
-			const rows = await getList(state.doctype, {
-				fields: ["name", "modified"],
-				filters: state.filters,
-				orderBy: state.orderBy,
-				start: adjacentWindowStart(reference.index),
-				pageLength: 3,
-			})
+			const adjacent = await fetchAdjacent(reference, state)
 			if (disposed || sequence !== loadSequence) return
-			const adjacent = resolveAdjacentNames({ reference, rows })
-			previousName.value = adjacent.previousName
-			previousModified.value = adjacent.previousModified
-			nextName.value = adjacent.nextName
-			nextModified.value = adjacent.nextModified
-			changed.value = adjacent.changed
+			applyAdjacent(adjacent)
 		} catch (reason) {
 			if (disposed || sequence !== loadSequence) return
 			error.value = reason?.message || "Unable to load list navigation."
@@ -87,31 +95,50 @@ export function useDocumentListNavigation({ currentName, disabled }) {
 		}
 	}
 
-	async function go(name, modified, offset) {
-		if (!name || navigationDisabled.value || !activeReference || !activeState || typeof window === "undefined") return false
-		const index = Math.max(0, Number(activeReference.index || 0) + offset)
-		const pageSize = Math.max(1, Number(activeState.pageSize) || 20)
-		const state = {
-			...activeState,
-			globalIndex: index,
-			pageStart: Math.floor(index / pageSize) * pageSize,
+	async function go(offset) {
+		if (navigationDisabled.value || !activeReference || !activeState || typeof window === "undefined") return false
+		const sequence = ++loadSequence
+		const sourceReference = activeReference
+		const sourceState = activeState
+		loading.value = true
+		try {
+			const adjacent = await fetchAdjacent(sourceReference, sourceState)
+			if (disposed || sequence !== loadSequence) return false
+			applyAdjacent(adjacent)
+			if (adjacent.changed) return false
+
+			const name = offset < 0 ? adjacent.previousName : adjacent.nextName
+			const modified = offset < 0 ? adjacent.previousModified : adjacent.nextModified
+			if (!name || !modified) return false
+			const index = Math.max(0, Number(sourceReference.index || 0) + offset)
+			const pageSize = Math.max(1, Number(sourceState.pageSize) || 20)
+			const state = {
+				...sourceState,
+				globalIndex: index,
+				pageStart: Math.floor(index / pageSize) * pageSize,
+			}
+			const stateKey = writeNavigationState(window.sessionStorage, state)
+			const reference = {
+				...sourceReference,
+				stateKey,
+				index,
+				currentName: name,
+				currentModified: modified,
+			}
+			await router.replace({
+				name: reference.targetRouteName,
+				params: { ...route.params, [state.targetParamName]: name },
+				query: route.query,
+				hash: route.hash,
+				state: { essdeeListNavigation: reference },
+			})
+			return true
+		} catch (reason) {
+			if (!disposed && sequence === loadSequence) error.value = reason?.message || "Unable to load list navigation."
+			return false
+		} finally {
+			if (!disposed && sequence === loadSequence) loading.value = false
 		}
-		const stateKey = writeNavigationState(window.sessionStorage, state)
-		const reference = {
-			...activeReference,
-			stateKey,
-			index,
-			currentName: name,
-			currentModified: modified,
-		}
-		await router.replace({
-			name: reference.targetRouteName,
-			params: { ...route.params, [state.targetParamName]: name },
-			query: route.query,
-			hash: route.hash,
-			state: { essdeeListNavigation: reference },
-		})
-		return true
 	}
 
 	watch(
@@ -134,7 +161,7 @@ export function useDocumentListNavigation({ currentName, disabled }) {
 		hasContext,
 		sourceFullPath,
 		navigationDisabled,
-		goPrevious: () => go(previousName.value, previousModified.value, -1),
-		goNext: () => go(nextName.value, nextModified.value, 1),
+		goPrevious: () => go(-1),
+		goNext: () => go(1),
 	}
 }

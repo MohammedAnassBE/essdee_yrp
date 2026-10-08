@@ -2108,14 +2108,16 @@ async function listNavigationSuite(page) {
 		const orderBy = url.searchParams.get("order_by") || ""
 		requests.push({ start, pageLength, filters, orderBy })
 		if (pageLength === 3 && navigationMode === "error") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ exc: "Navigation unavailable" }) })
-		const shiftedStart = pageLength === 3 && navigationMode === "changed" ? start + 1 : start
+		const shiftedStart = pageLength === 3 && navigationMode === "shifted" ? start + 1 : start
 		const length = Math.max(0, Math.min(pageLength, 41 - shiftedStart))
 		const data = Array.from({ length }, (_, offset) => ({
 			name: `CP-NAV-${String(shiftedStart + offset + 1).padStart(3, "0")}`,
 			lot: "LOT-NAV",
 			item: "ITEM-NAV",
 			cp_status: "Draft",
-			modified: "2026-10-08 10:00:00",
+			modified: pageLength === 3 && navigationMode === "modified" && offset === 1
+				? "2026-10-08 11:00:00"
+				: "2026-10-08 10:00:00",
 		}))
 		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data }) })
 	})
@@ -2237,10 +2239,10 @@ async function listNavigationSuite(page) {
 	await page.waitForTimeout(250)
 	assert(!await page.getByRole("button", { name: "Next Cutting Plan", exact: true }).isDisabled(), `Boundary record did not resolve its next neighbor: ${JSON.stringify({ boundary, requests: requests.slice(-4) })}`)
 
-	navigationMode = "changed"
+	navigationMode = "modified"
 	await page.getByRole("button", { name: "Next Cutting Plan", exact: true }).click()
-	await page.waitForURL("**/web/cutting/plans/CP-NAV-022")
 	await page.getByText("List changed — return to list", { exact: true }).waitFor()
+	assert(page.url().endsWith("/web/cutting/plans/CP-NAV-021"), "Externally modified current document navigated using stale neighbors")
 	assert(await page.getByRole("button", { name: "Previous Cutting Plan", exact: true }).isDisabled(), "Changed list leaves Previous active")
 	assert(await page.getByRole("button", { name: "Next Cutting Plan", exact: true }).isDisabled(), "Changed list leaves Next active")
 

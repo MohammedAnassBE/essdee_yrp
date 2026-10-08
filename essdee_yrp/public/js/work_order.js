@@ -904,6 +904,16 @@ function warn_balance_overshoot(ctx, manifest, values) {
 // WO, 2026-07-04) — each (dia × colour) input becomes its own entry line.
 const MAX_COLOUR_COLUMNS = 6;
 
+// Dialog defaults also fire onchange; only a changed cloth qty resets its yarn inputs.
+function knitting_input_updates(entry, qty) {
+	if (!entry || flt(qty) === flt(entry.cloth_qty)) return [];
+	entry.cloth_qty = flt(qty);
+	return (entry.manual_inputs || []).map((input) => [
+		input.fieldname,
+		Math.round(flt(qty) * flt(input.qty_per_output) * 1000) / 1000,
+	]);
+}
+
 function render_fabric_dialog(frm, ctx) {
 	const fields = [];
 	// one record per qty input: drives collection, yarn total, overshoot check
@@ -928,6 +938,13 @@ function render_fabric_dialog(frm, ctx) {
 		}
 		d.set_value(`yarn_qty_${i}`, Math.round(total_yarn * 1000) / 1000);
 	};
+	const recompute_knitting = (i, fieldname) => {
+		recompute_yarn(i);
+		const entry = manifest.find((m) => m.fieldname === fieldname);
+		knitting_input_updates(entry, d.get_value(fieldname)).forEach(([input, qty]) => {
+			d.set_value(input, qty);
+		});
+	};
 	const push_manual_inputs = (row, i, qr, j, outputDefault) => {
 		if (!row.manual_io) return [];
 		return (qr.knitting_inputs || []).map((input, k) => {
@@ -940,7 +957,7 @@ function render_fabric_dialog(frm, ctx) {
 				default: (input.prefill ?? (flt(outputDefault) * flt(input.qty_per_output))) || undefined,
 				description: input.uom || __("Quantity"),
 			});
-			return { key: input.key, fieldname };
+			return { key: input.key, fieldname, qty_per_output: input.qty_per_output };
 		});
 	};
 
@@ -1016,7 +1033,7 @@ function render_fabric_dialog(frm, ctx) {
 						fieldtype: "Float", label: qr.label, fieldname,
 						default: is_default_output && qr.prefill ? qr.prefill : undefined,
 						description: planning_description(row, qr),
-						onchange: () => recompute_yarn(i),
+						onchange: () => recompute_knitting(i, fieldname),
 					});
 					const manualInputs = push_manual_inputs(row, i, qr, j, is_default_output ? qr.prefill : 0);
 					manifest.push({
@@ -1026,6 +1043,7 @@ function render_fabric_dialog(frm, ctx) {
 						source_mode: qr.source_mode || null,
 						out_attrs: qr.out_attrs,
 						colour, label: qr.label, balance: qr.balance, available: qr.available,
+						cloth_qty: is_default_output ? flt(qr.prefill) : 0,
 						manual_inputs: manualInputs,
 					});
 				});
@@ -1046,7 +1064,7 @@ function render_fabric_dialog(frm, ctx) {
 						qr,
 						cint(frm.doc.cloth_execution_version) === 1,
 					),
-					onchange: row.kind === "knitting" ? () => recompute_yarn(i) : undefined,
+					onchange: row.kind === "knitting" ? () => recompute_knitting(i, fieldname) : undefined,
 				});
 				const manualInputs = push_manual_inputs(row, i, qr, j, qr.prefill || 0);
 				manifest.push({
@@ -1066,6 +1084,7 @@ function render_fabric_dialog(frm, ctx) {
 					source_stock_available: qr.source_stock_available,
 					source_stock_per_output: qr.source_stock_per_output,
 					reference_item_variant: qr.reference_item_variant || null,
+					cloth_qty: flt(qr.prefill),
 					manual_inputs: manualInputs,
 				});
 			};

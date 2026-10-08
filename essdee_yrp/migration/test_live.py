@@ -45,7 +45,6 @@ from essdee_yrp.migration.live import (
 	_include_reset_generated_audit_scope,
 	_is_verified_attachment_url,
 	_mark_reset_started,
-	_merge_aliased_supplier_children,
 	_migration_contract_fingerprint,
 	_migration_generated_identity_allowances,
 	_migration_physical_target_doctypes,
@@ -64,12 +63,14 @@ from essdee_yrp.migration.live import (
 	_supplier_alias_siblings,
 	_target_reset_counts,
 	_target_reset_file_names,
+	_transform_source_document,
 	_validate_configured_default_contract,
 	_validate_external_references,
 	_validate_required_target_values,
 	_validate_target_migration_prerequisites,
 	_verified_attachment_url_relocations,
 	_verify_approved_frappe_data,
+	_verify_source_values,
 	_verify_target_setup_state,
 	_verify_transformed_value_batch,
 	enqueue_job,
@@ -2039,37 +2040,35 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 		self.assertEqual(bill["supplier"], "Sivan Motors Works")
 		self.assertEqual(bill["warehouse"], "Sivan Motors Works")
 
-	def test_suppliers_merged_into_one_target_keep_every_source_department_row(self):
+	def _merged_supplier_fixture(self):
+		old = {
+			"doctype": "Supplier",
+			"name": "S-0092",
+			"modified": "2023-08-26 14:58:00.692512",
+			"disabled": 1,
+			"gstin": None,
+			"deparments": [{"doctype": "Supplier Department", "name": "ab11481237", "idx": 1}],
+		}
+		new = {
+			"doctype": "Supplier",
+			"name": "CHANCHAL TAPES",
+			"modified": "2025-07-01 13:12:22.468783",
+			"disabled": 0,
+			"gstin": "33BKVPS2685F1ZK",
+			"deparments": [{"doctype": "Supplier Department", "name": "87f9972a99", "idx": 1}],
+		}
 		references = {
 			"supplier_aliases": {
-				"S-0004": "SRI RAJESWARI GALAXY",
-				"SRI RAJESWARI GALAXY": "SRI RAJESWARI GALAXY",
+				"S-0092": "CHANCHAL TAPES",
+				"CHANCHAL TAPES": "CHANCHAL TAPES",
 				"LONE SUPPLIER": "LONE SUPPLIER",
 			}
 		}
-		siblings = _supplier_alias_siblings(references)
-		self.assertEqual(
-			siblings,
-			{"S-0004": ["SRI RAJESWARI GALAXY"], "SRI RAJESWARI GALAXY": ["S-0004"]},
-		)
-		source = Mock()
-		source.iter_documents.return_value = [
-			{
-				"doctype": "Supplier",
-				"name": "SRI RAJESWARI GALAXY",
-				"deparments": [{"doctype": "Supplier Department", "name": "31fb91afe4", "idx": 1}],
-			}
-		]
 		plan = SimpleNamespace(
 			target_schemas={
 				"Supplier": {"fields": [{"fieldname": "deparments", "fieldtype": "Table MultiSelect"}]}
 			}
 		)
-		document = {
-			"doctype": "Supplier",
-			"name": "SRI RAJESWARI GALAXY",
-			"deparments": [{"doctype": "YRP Supplier Department", "name": "8096b97a5b", "idx": 1}],
-		}
 
 		def transform(source_document, _plan):
 			return {
@@ -2079,12 +2078,62 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 				],
 			}
 
-		with patch("essdee_yrp.migration.live.transform_document", side_effect=transform):
-			_merge_aliased_supplier_children(document, siblings["S-0004"], source, plan)
+		return old, new, references, plan, transform
 
-		source.iter_documents.assert_called_once_with("Supplier", names=["SRI RAJESWARI GALAXY"])
-		self.assertEqual([row["name"] for row in document["deparments"]], ["8096b97a5b", "31fb91afe4"])
-		self.assertEqual({row["doctype"] for row in document["deparments"]}, {"YRP Supplier Department"})
+	def test_merged_suppliers_take_newest_parent_and_every_department_row(self):
+		old, new, references, plan, transform = self._merged_supplier_fixture()
+		siblings = _supplier_alias_siblings(references)
+		self.assertEqual(siblings, {"S-0092": ["CHANCHAL TAPES"], "CHANCHAL TAPES": ["S-0092"]})
+		results = []
+		for current, other in ((old, new), (new, old)):
+			source = Mock()
+			source.iter_documents.return_value = [other]
+			with patch("essdee_yrp.migration.live.transform_document", side_effect=transform):
+				results.append(_transform_source_document("Supplier", current, siblings, source, plan))
+			source.iter_documents.assert_called_once_with("Supplier", names=[other["name"]])
+		self.assertEqual(results[0], results[1])
+		self.assertEqual(results[0]["name"], "CHANCHAL TAPES")
+		self.assertEqual((results[0]["disabled"], results[0]["gstin"]), (0, "33BKVPS2685F1ZK"))
+		self.assertEqual([row["name"] for row in results[0]["deparments"]], ["87f9972a99", "ab11481237"])
+
+	def test_unmerged_documents_are_transformed_alone(self):
+		old, _new, references, plan, transform = self._merged_supplier_fixture()
+		source = Mock()
+		with patch("essdee_yrp.migration.live.transform_document", side_effect=transform):
+			result = _transform_source_document(
+				"YRP Bill Tracking", old, _supplier_alias_siblings(references), source, plan
+			)
+		source.iter_documents.assert_not_called()
+		self.assertEqual(result["name"], "S-0092")
+
+	def test_value_audit_compares_merged_supplier_with_newest_source(self):
+		old, new, references, plan, transform = self._merged_supplier_fixture()
+		plan.parent_doctypes = ("Supplier",)
+		plan.specs = {"Supplier": SimpleNamespace(target="Supplier")}
+		source = Mock()
+		source.reference_data.return_value = references
+		source.iter_documents.side_effect = lambda _doctype, **kwargs: [new] if kwargs.get("names") else [old]
+		audit = Mock(
+			return_value={
+				"documents": 1,
+				"values": 1,
+				"skipped_password_values": 0,
+				"normalized_attachment_urls": [],
+				"normalized_numeric_values": [],
+				"failures": [],
+			}
+		)
+		with ExitStack() as stack:
+			stack.enter_context(patch("essdee_yrp.migration.live.transform_document", side_effect=transform))
+			stack.enter_context(patch("essdee_yrp.migration.live._verified_attachment_url_relocations"))
+			stack.enter_context(
+				patch("essdee_yrp.migration.live._resolve_and_validate_required_target_values")
+			)
+			stack.enter_context(patch("essdee_yrp.migration.live._update_progress"))
+			stack.enter_context(patch("essdee_yrp.migration.live._verify_transformed_value_batch", audit))
+			_verify_source_values(plan, source, "MIG-1")
+		[expected] = audit.call_args.args[0]
+		self.assertEqual((expected["disabled"], expected["gstin"]), (0, "33BKVPS2685F1ZK"))
 
 	def test_stitching_major_value_uses_source_master_attribute_identity(self):
 		from yrp.attribute_value_identity import attribute_value_name

@@ -2408,7 +2408,9 @@ def _run_documents(
 			batch_size=batch_size,
 		):
 			try:
-				target_document = transform_document(source_document, plan)
+				target_document = _transform_source_document(
+					doctype, source_document, supplier_siblings, source, plan
+				)
 				_apply_target_owned_configuration_boundary(doctype, target_document)
 				preserved_required_values += _resolve_and_validate_required_target_values(
 					target_document,
@@ -2416,8 +2418,6 @@ def _run_documents(
 					historical_required_blanks,
 					reference_data,
 				)
-				if siblings := supplier_siblings.get(str(source_document.get("name"))):
-					_merge_aliased_supplier_children(target_document, siblings, source, plan)
 			except Exception as exc:
 				failed.append(f"{doctype}:{source_document.get('name')}: {exc}")
 				if len(failed) >= 100:
@@ -3941,29 +3941,41 @@ def _supplier_alias_siblings(reference_data: Mapping[str, Any]) -> dict[str, lis
 	}
 
 
-def _merge_aliased_supplier_children(
-	target_document: dict[str, Any],
-	siblings: list[str],
+def _transform_source_document(
+	doctype: str,
+	source_document: dict[str, Any],
+	supplier_siblings: Mapping[str, list[str]],
 	source: F15SourceBridge,
 	plan: MigrationPlan,
-) -> None:
-	"""Union child rows of every source Supplier merged into one target Supplier.
+) -> dict[str, Any]:
+	"""Transform one source document; merged Suppliers become one deterministic row.
 
-	Each write replaces the target child tables, so a sibling written in a later
-	batch would otherwise delete the rows of the one written before it.
+	Several source Suppliers can alias one target Supplier. Every write replaces
+	that row, so each one carries the newest source parent and the union of all
+	sibling child rows instead of whichever sibling happened to be written last.
 	"""
 
+	siblings = supplier_siblings.get(str(source_document.get("name"))) if doctype == "Supplier" else None
+	if not siblings:
+		return transform_document(source_document, plan)
+	group = sorted(
+		[source_document, *source.iter_documents("Supplier", names=siblings)],
+		key=lambda document: (str(document.get("modified") or ""), str(document.get("name"))),
+		reverse=True,
+	)
+	target_document = transform_document(group[0], plan)
 	table_fields = [
 		str(field["fieldname"])
 		for field in plan.target_schemas["Supplier"].get("fields") or []
 		if field.get("fieldtype") in TABLE_FIELD_TYPES
 	]
-	for sibling in source.iter_documents("Supplier", names=siblings):
+	for sibling in group[1:]:
 		sibling_document = transform_document(sibling, plan)
 		for fieldname in table_fields:
 			rows = sibling_document.get(fieldname) or []
 			if rows:
 				target_document.setdefault(fieldname, []).extend(rows)
+	return target_document
 
 
 def _flush_batch(
@@ -4760,6 +4772,7 @@ def _verify_source_values(
 	"""
 
 	reference_data = source.reference_data()
+	supplier_siblings = _supplier_alias_siblings(reference_data)
 	attachment_url_relocations = _verified_attachment_url_relocations(plan, source)
 	columns_cache: dict[str, set[str]] = {}
 	fieldtypes_cache: dict[str, dict[str, str]] = {}
@@ -4784,7 +4797,9 @@ def _verify_source_values(
 		doctype_attachment_urls = 0
 		doctype_numeric_values = 0
 		for source_document in source.iter_documents(source_doctype, batch_size=effective_batch_size):
-			target_document = transform_document(source_document, plan)
+			target_document = _transform_source_document(
+				source_doctype, source_document, supplier_siblings, source, plan
+			)
 			_apply_target_owned_configuration_boundary(source_doctype, target_document)
 			_resolve_and_validate_required_target_values(
 				target_document,

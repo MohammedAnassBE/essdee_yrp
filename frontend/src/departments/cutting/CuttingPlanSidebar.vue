@@ -14,7 +14,9 @@
 						outlined
 						size="small"
 						aria-label="Expand Markers"
+						:title="markerListOpen && !markerListSuspended ? 'Markers list is expanded' : 'Expand Markers'"
 						aria-haspopup="dialog"
+						:aria-expanded="markerListOpen && !markerListSuspended"
 						aria-controls="cutting-marker-related-list"
 						@click="openExpandedList('marker')"
 					/>
@@ -70,7 +72,9 @@
 						outlined
 						size="small"
 						aria-label="Expand Lay Sheets"
+						:title="laySheetListOpen && !laySheetListSuspended ? 'Lay Sheets list is expanded' : 'Expand Lay Sheets'"
 						aria-haspopup="dialog"
+						:aria-expanded="laySheetListOpen && !laySheetListSuspended"
 						aria-controls="cutting-laysheet-related-list"
 						@click="openExpandedList('laysheet')"
 					/>
@@ -141,6 +145,7 @@
 			v-if="permissions.can_read_marker"
 			v-model:visible="markerListOpen"
 			v-model:filters="expandedMarkerFilters"
+			:suspended="markerListSuspended"
 			title="Markers"
 			doctype="SD YRP Cutting Marker"
 			dialog-id="cutting-marker-related-list"
@@ -155,6 +160,7 @@
 			v-if="permissions.can_read_laysheet"
 			v-model:visible="laySheetListOpen"
 			v-model:filters="expandedLaySheetFilters"
+			:suspended="laySheetListSuspended"
 			title="Lay Sheets"
 			doctype="SD YRP Cutting LaySheet"
 			dialog-id="cutting-laysheet-related-list"
@@ -205,6 +211,8 @@ const markerFilters = ref([])
 const laySheetFilters = ref([])
 const markerListOpen = ref(false)
 const laySheetListOpen = ref(false)
+const markerListSuspended = ref(false)
+const laySheetListSuspended = ref(false)
 const expandedMarkerFilters = ref([])
 const expandedLaySheetFilters = ref([])
 const expandedRecordOrigin = ref("")
@@ -284,22 +292,24 @@ function safeRailFilters(filters, fields) {
 function openExpandedList(type) {
 	if (type === "marker") {
 		expandedMarkerFilters.value = safeRailFilters(markerFilters.value, markerFilterFields.value)
+		markerListSuspended.value = false
 		markerListOpen.value = true
 		return
 	}
 	expandedLaySheetFilters.value = safeRailFilters(laySheetFilters.value, laySheetFilterFields.value)
+	laySheetListSuspended.value = false
 	laySheetListOpen.value = true
 }
 
 function openMarkerFromExpanded(row) {
 	expandedRecordOrigin.value = "marker"
-	markerListOpen.value = false
+	markerListSuspended.value = true
 	openMarker(row?.name || "")
 }
 
 function openLaySheetFromExpanded(row) {
 	expandedRecordOrigin.value = "laysheet"
-	laySheetListOpen.value = false
+	laySheetListSuspended.value = true
 	openLaySheet(row?.name || "")
 }
 
@@ -310,13 +320,18 @@ function recordDialogVisibilityChanged(type, visible) {
 
 function reopenExpandedList(type) {
 	expandedRecordOrigin.value = ""
-	if (type === "marker") markerListOpen.value = true
-	else laySheetListOpen.value = true
+	if (type === "marker") markerListSuspended.value = false
+	else laySheetListSuspended.value = false
 }
 
 function expandedListClosed(type) {
-	if (type === "marker") markerFilters.value = safeRailFilters(expandedMarkerFilters.value, markerFilterFields.value)
-	else laySheetFilters.value = safeRailFilters(expandedLaySheetFilters.value, laySheetFilterFields.value)
+	if (type === "marker") {
+		markerListSuspended.value = false
+		markerFilters.value = safeRailFilters(expandedMarkerFilters.value, markerFilterFields.value)
+	} else {
+		laySheetListSuspended.value = false
+		laySheetFilters.value = safeRailFilters(expandedLaySheetFilters.value, laySheetFilterFields.value)
+	}
 	if (expandedRecordOrigin.value === type) return
 	nextTick(() => (type === "marker" ? markerExpandButton.value : laySheetExpandButton.value)?.$el?.focus?.())
 }

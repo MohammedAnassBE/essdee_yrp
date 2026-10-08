@@ -4,8 +4,9 @@
 		modal
 		dismissable-mask
 		:header="title"
-		class="related-records-dialog"
+		:class="['related-records-dialog', { 'related-records-dialog--suspended': suspended }]"
 		:aria-label="title"
+		:aria-hidden="suspended ? 'true' : undefined"
 		:pt="dialogId ? { root: { id: dialogId } } : undefined"
 		@hide="emit('closed')"
 	>
@@ -45,6 +46,7 @@ defineProps({
 	statusOptions: { type: Array, default: () => [] },
 	rowMark: { type: String, default: "DOC" },
 	dialogId: { type: String, default: "" },
+	suspended: { type: Boolean, default: false },
 })
 
 const visible = defineModel("visible", { type: Boolean, default: false })
@@ -62,6 +64,11 @@ function openRow(row) {
 	width: min(96vw, 1480px);
 	max-height: 92dvh;
 	flex-direction: column;
+}
+
+.related-records-dialog--suspended.p-dialog {
+	visibility: hidden;
+	pointer-events: none;
 }
 
 .related-records-dialog .p-dialog-content {

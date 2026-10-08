@@ -1,16 +1,23 @@
 #!/usr/bin/env node
 
 import { createRequire } from "node:module"
-import { readFileSync } from "node:fs"
+import { mkdirSync, readFileSync } from "node:fs"
+import { resolve } from "node:path"
 
 const require = createRequire("/home/anas/.claude/playwright/package.json")
 const { chromium } = require("playwright")
 
 const SITE = process.env.ESSDEE_TEST_SITE || "http://erp-migration-test.site:8001"
 const CREDENTIALS = "/home/anas/.frappe-debug-creds-mrp3"
+const CAPTURE_DIR = process.env.ESSDEE_CAPTURE_DIR ? resolve(process.env.ESSDEE_CAPTURE_DIR) : ""
+if (CAPTURE_DIR) mkdirSync(CAPTURE_DIR, { recursive: true })
 
 function assert(condition, message) {
 	if (!condition) throw new Error(message)
+}
+
+async function capture(page, name) {
+	if (CAPTURE_DIR) await page.screenshot({ path: resolve(CAPTURE_DIR, name), fullPage: true })
 }
 
 async function login(page) {
@@ -81,6 +88,16 @@ async function cuttingSuite(page) {
 	const markerSection = page.locator(".marker-section")
 	const laySheetSection = page.locator(".laysheet-section")
 	await markerSection.getByRole("button", { name: "Expand Markers", exact: true }).waitFor({ timeout: 20_000 })
+	if (CAPTURE_DIR) {
+		await page.goto(`${SITE}/web/cutting/plans`, { waitUntil: "domcontentloaded" })
+		await page.locator(".list-row-open").first().waitFor({ timeout: 20_000 })
+		await page.locator(".list-row-open").first().click()
+		await page.locator(".cutting-plan-frame").waitFor({ timeout: 20_000 })
+		await page.locator(".operations-rail").waitFor({ timeout: 20_000 })
+		await capture(page, "01-cutting-plan-navigation-and-expand.png")
+		await page.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(fixture.name)}`, { waitUntil: "domcontentloaded" })
+		await markerSection.getByRole("button", { name: "Expand Markers", exact: true }).waitFor({ timeout: 20_000 })
+	}
 
 	for (const [section, expandLabel, filterLabel] of [
 		[markerSection, "Expand Markers", "Filter markers"],
@@ -96,10 +113,15 @@ async function cuttingSuite(page) {
 	let dialog = page.getByRole("dialog", { name: "Markers", exact: true })
 	await dialog.waitFor({ timeout: 20_000 })
 	await dialog.locator(".premium-list-table .p-datatable-tbody > tr").first().waitFor({ timeout: 20_000 })
+	await capture(page, "02-expanded-markers-list.png")
 	assert(await dialog.locator(".inline-page-navigation").count() === 0, "Expanded Marker list exposes page navigation")
 	assert(await dialog.locator(".p-selection-column").count() === 0, "Expanded Marker list exposes bulk selection")
 	assert(listRequests.some((entry) => entry.doctype === "SD YRP Cutting Marker" && entry.filters.some((filter) => filter[0] === "cutting_plan" && filter[2] === fixture.name)), `Marker request omitted cutting_plan=${fixture.name}: ${JSON.stringify(listRequests)}`)
 
+	const markerSearch = String(fixture.data.markers[0].name)
+	await dialog.locator(".list-search input").fill(markerSearch)
+	await dialog.locator(".list-search input").press("Enter")
+	await dialog.getByText(markerSearch, { exact: true }).first().waitFor({ timeout: 20_000 })
 	await dialog.locator(".list-row-open").first().click()
 	const markerRecord = page.getByRole("dialog", { name: /Cutting Marker ·/ }).first()
 	await markerRecord.waitFor({ timeout: 20_000 })
@@ -107,6 +129,7 @@ async function cuttingSuite(page) {
 	await markerRecord.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
 	dialog = page.getByRole("dialog", { name: "Markers", exact: true })
 	await dialog.waitFor({ timeout: 20_000 })
+	assert(await dialog.locator(".list-search input").inputValue() === markerSearch, "Expanded Marker search was lost after record handoff")
 	await dialog.locator(".p-dialog-close-button").click()
 	await markerExpand.focus()
 	assert(await markerExpand.evaluate((element) => document.activeElement === element), "Marker Expand did not regain focus")
@@ -139,6 +162,15 @@ async function workOrderSuite(page) {
 		assert(await page.getByRole("button", { name: "Expand Goods Received Notes", exact: true }).count() === 1, `${department} Work Order omits GRN Expand`)
 	}
 
+	if (CAPTURE_DIR) {
+		await page.goto(`${SITE}/web/fabric-store/work-orders`, { waitUntil: "domcontentloaded" })
+		await page.locator(".list-row-open").first().waitFor({ timeout: 20_000 })
+		await page.locator(".list-row-open").first().click()
+		await page.locator(".fabric-work-order-frame").waitFor({ timeout: 20_000 })
+		await page.locator(".work-order-tabs").waitFor({ timeout: 20_000 })
+		await page.locator(".work-order-activity-rail").waitFor({ timeout: 20_000 })
+		await capture(page, "03-work-order-navigation-and-expand.png")
+	}
 	await page.goto(`${SITE}/web/fabric-store/work-orders/${encodeURIComponent(fixture.name)}`, { waitUntil: "domcontentloaded" })
 	const dcExpand = page.getByRole("button", { name: "Expand Delivery Challans", exact: true })
 	await dcExpand.waitFor({ timeout: 20_000 })
@@ -146,6 +178,7 @@ async function workOrderSuite(page) {
 	let dialog = page.getByRole("dialog", { name: "Delivery Challans", exact: true })
 	await dialog.waitFor({ timeout: 20_000 })
 	await dialog.locator(".premium-list-table .p-datatable-tbody > tr").first().waitFor({ timeout: 20_000 })
+	await capture(page, "04-expanded-delivery-challans-list.png")
 	assert(listRequests.some((entry) => entry.doctype === "YRP Delivery Challan" && entry.filters.some((filter) => filter[0] === "work_order" && filter[2] === fixture.name)), `DC request omitted work_order=${fixture.name}: ${JSON.stringify(listRequests)}`)
 	await dialog.locator(".list-row-open").first().click()
 	const recordDialog = page.getByRole("dialog", { name: /Delivery Challan ·/ }).first()

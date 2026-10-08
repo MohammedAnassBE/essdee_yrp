@@ -29,6 +29,7 @@ for (const contract of [
 	':navigation-enabled="false"',
 	':allow-bulk-actions="false"',
 	'@row-click="openRow"',
+	'related-records-dialog--suspended',
 ]) {
 	assert(dialog.includes(contract), `RelatedRecordsDialog omits ${contract}`)
 }
@@ -42,12 +43,15 @@ assert(cuttingSidebar.includes('aria-label="Expand Markers"'), "Marker Expand ac
 assert(cuttingSidebar.includes('aria-label="Expand Lay Sheets"'), "Lay Sheet Expand action is missing")
 assert(cuttingSidebar.includes("resolvedParentField"), "Cutting expansion does not resolve the parent filter")
 assert(cuttingSidebar.includes("reopenExpandedList"), "Cutting record handoff cannot return to the expanded list")
+assert(cuttingSidebar.includes(':suspended="markerListSuspended"'), "Marker list state is not retained during record handoff")
+assert(cuttingSidebar.includes(':suspended="laySheetListSuspended"'), "Lay Sheet list state is not retained during record handoff")
 
 assert(workOrderRail.includes("RelatedRecordsDialog"), "Work Order related lists do not use the shared dialog")
 assert(workOrderRail.includes("Expand ${section.label}"), "Work Order Expand action is missing")
 assert(workOrderRail.includes('work_order: props.workOrder'), "Delivery Challan expansion omits its exact Work Order filter")
 assert(workOrderRail.includes('against: "YRP Work Order"'), "GRN expansion omits its against filter")
 assert(workOrderRail.includes("reopenExpanded"), "Work Order rail does not expose record handoff restoration")
+assert(workOrderRail.includes(':suspended="expandedSuspended.delivery_challan"'), "Work Order expanded-list state is not retained during record handoff")
 assert(workOrder.includes("activityRail.value?.reopenExpanded"), "Work Order record dialog does not return to its expanded list")
 
 console.log("Related records dialog contract verified.")

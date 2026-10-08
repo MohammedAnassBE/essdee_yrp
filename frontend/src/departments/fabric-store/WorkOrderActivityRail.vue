@@ -17,7 +17,9 @@
 						:ref="(element) => setExpandButton(section.key, element)"
 						class="activity-expand-button"
 						:aria-label="`Expand ${section.label}`"
+						:title="expandedVisible[section.key] && !expandedSuspended[section.key] ? `${section.label} list is expanded` : `Expand ${section.label}`"
 						aria-haspopup="dialog"
+						:aria-expanded="expandedVisible[section.key] && !expandedSuspended[section.key]"
 						:aria-controls="`${section.key}-expanded-list`"
 						icon="pi pi-window-maximize"
 						severity="secondary"
@@ -67,6 +69,7 @@
 		v-if="canReadDeliveryChallan"
 		v-model:visible="expandedVisible.delivery_challan"
 		v-model:filters="expandedFilters.delivery_challan"
+		:suspended="expandedSuspended.delivery_challan"
 		title="Delivery Challans"
 		doctype="YRP Delivery Challan"
 		dialog-id="delivery_challan-expanded-list"
@@ -81,6 +84,7 @@
 		v-if="canReadGoodsReceivedNote"
 		v-model:visible="expandedVisible.goods_received_note"
 		v-model:filters="expandedFilters.goods_received_note"
+		:suspended="expandedSuspended.goods_received_note"
 		title="Goods Received Notes"
 		doctype="YRP Goods Received Note"
 		dialog-id="goods_received_note-expanded-list"
@@ -111,6 +115,7 @@ const filtersOpen = reactive({ delivery_challan: false, goods_received_note: fal
 const queries = reactive({ delivery_challan: "", goods_received_note: "" })
 const expandedSections = reactive({ delivery_challan: false, goods_received_note: false })
 const expandedVisible = reactive({ delivery_challan: false, goods_received_note: false })
+const expandedSuspended = reactive({ delivery_challan: false, goods_received_note: false })
 const expandedFilters = reactive({ delivery_challan: [], goods_received_note: [] })
 const expandedOrigin = ref("")
 const expandButtons = new Map()
@@ -135,12 +140,13 @@ function setExpandButton(type, element) {
 }
 
 function openExpanded(type) {
+	expandedSuspended[type] = false
 	expandedVisible[type] = true
 }
 
 function openExpandedRow(type, row) {
 	expandedOrigin.value = type
-	expandedVisible[type] = false
+	expandedSuspended[type] = true
 	emit("open", { type, row })
 }
 
@@ -153,7 +159,7 @@ function reopenExpanded() {
 	const type = expandedOrigin.value
 	if (!type) return false
 	expandedOrigin.value = ""
-	expandedVisible[type] = true
+	expandedSuspended[type] = false
 	return true
 }
 
@@ -168,6 +174,8 @@ function formatTime(value) { return value ? String(value).slice(0, 5) : "—" }
 watch(() => props.workOrder, () => {
 	expandedVisible.delivery_challan = false
 	expandedVisible.goods_received_note = false
+	expandedSuspended.delivery_challan = false
+	expandedSuspended.goods_received_note = false
 	expandedFilters.delivery_challan = []
 	expandedFilters.goods_received_note = []
 	expandedOrigin.value = ""

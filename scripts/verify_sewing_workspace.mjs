@@ -258,12 +258,162 @@ window.app = createApp({ setup() {
 	} finally { await page.close(); await server.close() }
 }
 
-assert(["launcher", "all"].includes(suite), `Unknown Sewing suite: ${suite}`)
+// Render the actual route component, PrimeVue controls and API adapter. Only
+// network boundaries are mocked: removing a tab, row ID, lock or reload breaks
+// an observable assertion below.
+async function planEntrySuite(browser) {
+	const harness = `
+import { createApp } from 'vue';
+import { createRouter, createMemoryHistory, RouterView } from 'vue-router';
+import PrimeVue from 'primevue/config';
+import Aura from '@primeuix/themes/aura';
+import SewingPlans from '/src/departments/sewing/SewingPlans.vue';
+import '@fontsource-variable/inter'; import 'primeicons/primeicons.css';
+import '/src/styles/main.css'; import '/src/styles/enterprise.css';
+const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/sewing/plans', component: SewingPlans }] });
+await router.push('/sewing/plans?supplier=UNIT-A'); window.router = router;
+createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options: { darkModeSelector: false } } }).mount('#app');`
+	const server = await createServer({
+		root: fileURLToPath(new URL("../frontend", import.meta.url)), server: { host: "127.0.0.1", port: 0 },
+		plugins: [{ name: "sewing-plan-verifier", resolveId(id) { if (id === "/__plan-test.js") return "\0plan-test" }, load(id) { if (id === "\0plan-test") return harness }, configureServer(server) { server.middlewares.use((req, res, next) => { if (req.url !== "/__plan-test") return next(); res.setHeader("Content-Type", "text/html"); res.end('<!doctype html><html><body><div id="app"></div><script type="module" src="/__plan-test.js"></script></body></html>') }) } }],
+	})
+	await server.listen()
+	const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+	page.setDefaultTimeout(10_000)
+	const requests = [], errors = []
+	const sizes = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL"]
+	function plan(name = "PLAN-A") { return { details: { item: "T-Shirt", lot: "LOT-A", supplier: "UNIT-A", work_order: "WO-A", work_order_status: "Open", primary_values: sizes }, colours: { Navy: { colour: "Navy", variant_colour: "Navy", part: null, set_combination: { major_colour: "Navy" }, values: Object.fromEntries(sizes.map((size, i) => [size, { order_detail: `${name}-ROW-${i}`, item_variant: `UNTRUSTED-${size}`, order_qty: 100, sewing_in: 20, sewing_in_remaining: 80, data_entry: 0, pre_final: 2, final_inspection: 1 }])) } } } }
+	const entry = { data: { "LOT-A": { "PLAN-A": plan(), "PLAN-OTHER": plan("PLAN-OTHER") } }, input_types: ["Sewing In", "Sewing Out"], diff: { sewing_in: "order_qty", sewing_out: "sewing_in" }, allowances: { sewing_in: 5, sewing_out: 0 }, default_received_type: "" }
+	const state = { dashboard: [{ input_type: "Sewing In", qty: 40 }, { input_type: "Sewing Out", qty: 15 }], dashboardError: "", dashboardDelay: 250, dashboardHold: null, entryError: "", entryHold: null, submitError: "", submitDelay: 0, loads: 0, authoritativeQty: 20 }
+	page.on("pageerror", e => errors.push(e.message))
+	await page.route("**/api/method/**", async route => {
+		const method = route.request().url().split("/api/method/")[1], args = JSON.parse(route.request().postData() || "{}")
+		requests.push({ method, args })
+		let value = null, error = ""
+		if (method.endsWith("get_capabilities")) value = { ...capabilities, plan_actions: { entry: { ...flags, can_create: true }, plan: { ...flags, can_write: true } } }
+		else if (method.endsWith("get_dashboard_data")) { value = structuredClone(state.dashboard); error = state.dashboardError; if (state.dashboardHold) { const hold = state.dashboardHold; state.dashboardHold = null; await hold } else await new Promise(r => setTimeout(r, state.dashboardDelay)) }
+		else if (method.endsWith("get_data_entry_data")) { state.loads++; value = structuredClone(entry); error = state.entryError; value.data["LOT-A"]["PLAN-A"].colours.Navy.values.XS.sewing_in = state.authoritativeQty; if (args.supplier === "UNIT-B") value.data = {}; if (state.entryHold) { const hold = state.entryHold; state.entryHold = null; await hold } }
+		else if (method.endsWith("submit_data_entry_log")) { await new Promise(r => setTimeout(r, state.submitDelay)); value = "ENTRY-SAVED"; error = state.submitError; if (!error) state.authoritativeQty += Number(args.payload.quantities.colours.Navy.values.XS.data_entry) }
+		else if (method.endsWith("update_sewing_plan_data")) value = "Success"
+		else if (method.endsWith("link_search")) value = [{ name: args.doctype === "YRP Work Station" ? "Sewing Line 1" : "Good", label: args.doctype === "YRP Work Station" ? "Sewing Line 1" : "Good" }]
+		else throw new Error(`Unexpected plan request: ${method}`)
+		await route.fulfill({ status: error ? 417 : 200, contentType: "application/json", body: JSON.stringify(error ? { _server_messages: JSON.stringify([JSON.stringify({ message: error })]), exc: "ValidationError" } : { message: value }) })
+	})
+	const select = async (name, option) => { await page.getByRole("combobox", { name, exact: true }).click(); await page.getByRole("option", { name: option, exact: true }).click() }
+	const closeError = async (text) => { await page.locator(".document-error-dialog").getByText(text, { exact: false }).waitFor(); await page.getByRole("button", { name: "OK", exact: true }).click(); await page.locator(".document-error-dialog").waitFor({ state: "hidden" }) }
+	try {
+		await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/__plan-test`)
+		await page.getByRole("tab", { name: "Dashboard", exact: true }).waitFor()
+		assert(JSON.stringify(await page.getByRole("tab").allTextContents()) === JSON.stringify(["Dashboard", "Data Entry", "Entries", "Consumption", "Closed Work Order GRN"]), "Plan workspace must expose exactly the five approved tabs")
+		await page.getByRole("status").filter({ hasText: "Loading dashboard" }).waitFor()
+		await page.getByRole("row").filter({ hasText: "Sewing In" }).waitFor()
+		assert((await page.getByRole("row").filter({ hasText: "Sewing In" }).innerText()).includes("40"), "Dashboard lost configured stage quantities")
+		assert(!requests.some(r => r.method.endsWith("get_data_entry_data")), "Inactive Data Entry fetched")
+		if (process.env.ESSDEE_SEWING_SCREENSHOTS) for (const width of [390, 1280]) { await page.setViewportSize({ width, height: 900 }); await noOverflow(page, `Dashboard ${width}`); await page.screenshot({ path: `${process.env.ESSDEE_SEWING_SCREENSHOTS}/sewing-dashboard-${width}.png`, fullPage: true, animations: "disabled" }) }
+		state.dashboard = []; await page.getByRole("button", { name: "Refresh dashboard" }).click(); await page.getByText("No input quantities for open Work Orders.", { exact: true }).waitFor()
+		state.dashboardError = "Dashboard unavailable"; await page.getByRole("button", { name: "Refresh dashboard" }).click(); await page.getByText(state.dashboardError, { exact: true }).waitFor()
+		state.dashboardError = ""; state.dashboard = [{ input_type: "Sewing In", qty: 41 }]; await page.getByRole("button", { name: "Retry", exact: true }).click(); await page.getByRole("cell", { name: "41", exact: true }).waitFor()
+		const before = requests.length
+		for (const name of ["Entries", "Consumption", "Closed Work Order GRN"]) { await page.getByRole("tab", { name, exact: true }).click(); await page.getByText(`${name} is not loaded yet.`, { exact: true }).waitFor(); assert(await page.locator("[data-sewing-plan-tab]").count() === 1, "Inactive tab still mounted") }
+		assert(requests.length === before, "Future tabs issued requests")
+		state.entryError = "Entry data unavailable"
+		await page.getByRole("tab", { name: "Data Entry", exact: true }).click()
+		await page.getByText(state.entryError, { exact: true }).waitFor()
+		state.entryError = ""; await page.getByRole("button", { name: "Retry", exact: true }).click()
+		await page.getByRole("combobox", { name: "Sewing Plan", exact: true }).waitFor()
+		assert(await page.locator("[data-sewing-plan-tab]").count() === 1, "Data Entry mounted alongside another tab")
+		assert(requests.some(r => r.method.endsWith("get_data_entry_data") && r.args.supplier === "UNIT-A"), "Data Entry is not Supplier scoped")
+		await page.getByRole("combobox", { name: "Lot", exact: true }).click(); assert(JSON.stringify(await page.getByRole("option").allTextContents()) === JSON.stringify(["LOT-A"]), "Lot choices must come from current Supplier data"); await page.getByRole("option", { name: "LOT-A", exact: true }).click()
+		await select("Sewing Plan", "PLAN-A")
+		const quantity = page.getByRole("spinbutton", { name: "Navy XS Entry quantity", exact: true })
+		await quantity.fill("7")
+		await select("Sewing Plan", "PLAN-OTHER"); await quantity.fill("11"); await select("Sewing Plan", "PLAN-A")
+		assert(await quantity.inputValue() === "7", "Changing plans lost the selected plan's edit")
+		await page.getByRole("tab", { name: "Entries", exact: true }).click(); await page.getByRole("tab", { name: "Data Entry", exact: true }).click(); await quantity.waitFor()
+		assert(await page.getByRole("combobox", { name: "Sewing Plan", exact: true }).textContent() === "PLAN-A", "Inactive-tab remount lost plan filter")
+		await quantity.fill("7")
+		await page.getByRole("button", { name: "Save entry", exact: true }).click(); await closeError("Complete all required entry fields.")
+		assert(await quantity.inputValue() === "7", "Required-field validation lost quantity")
+		await select("Input Type", "Sewing In")
+		for (const [name, value] of [["Work Station", "Sewing Line 1"], ["Received Type", "Good"]]) { await page.getByRole("combobox", { name, exact: true }).fill(value); await page.getByRole("option", { name: value, exact: true }).click() }
+		await page.getByRole("tab", { name: "Entries", exact: true }).click(); await page.getByRole("tab", { name: "Data Entry", exact: true }).click(); await quantity.waitFor()
+		assert(await page.getByRole("combobox", { name: "Work Station", exact: true }).inputValue() === "Sewing Line 1", "Inactive-tab remount lost entry filters")
+		assert(await page.getByRole("combobox", { name: "Date", exact: true }).inputValue(), "Date control is missing")
+		assert(await page.getByRole("combobox", { name: "Time", exact: true }).inputValue(), "Time control is missing")
+		await quantity.fill("-1"); await page.getByRole("button", { name: "Save entry", exact: true }).click(); await closeError("Quantities must be finite and non-negative."); assert(await quantity.inputValue() === "-1", "Negative validation lost edit")
+		state.submitError = "Only 3 remains from Order Qty after allowance."
+		const beforeRejectionLoads = state.loads
+		await quantity.fill("500"); await page.getByRole("button", { name: "Save entry", exact: true }).click(); await closeError(state.submitError); assert(await quantity.inputValue() === "500", "Server rejection lost edit")
+		assert(state.loads === beforeRejectionLoads + 1, "Acknowledged server rejection must refresh authoritative context and preserve edits")
+		const rejected = requests.filter(r => r.method.endsWith("submit_data_entry_log")).at(-1).args.payload
+		assert(rejected.quantities.colours.Navy.values.XS.order_detail === "PLAN-A-ROW-0", "Save lost authoritative order_detail")
+		assert(!JSON.stringify(rejected).includes("item_variant") && !JSON.stringify(rejected).includes("UNTRUSTED"), "Browser-authored variant identity sent")
+		assert(["plan", "input_type", "work_station", "received_type", "date", "time", "supplier"].every(k => rejected[k]), "Required controls absent from payload")
+		await quantity.fill("7")
+		for (const width of [390, 900, 1600, 1280]) { await page.setViewportSize({ width, height: 900 }); await noOverflow(page, `Data Entry ${width}`); assert(await quantity.inputValue() === "7", "Resize lost quantity"); if (width === 390) assert(await page.getByRole("region", { name: "PLAN-A quantity matrix", exact: true }).evaluate(el => el.scrollWidth > el.clientWidth), "Matrix must own narrow overflow"); if (process.env.ESSDEE_SEWING_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SEWING_SCREENSHOTS}/sewing-entry-${width}.png`, fullPage: true }) }
+		state.submitError = ""; state.submitDelay = 500
+		const count = requests.filter(r => r.method.endsWith("submit_data_entry_log")).length, loads = state.loads
+		await page.getByRole("button", { name: "Save entry", exact: true }).click()
+		assert(await page.getByRole("button", { name: "Save entry", exact: true }).isDisabled(), "Save not locked in flight")
+		await page.getByRole("button", { name: "Save entry", exact: true }).evaluate(el => { el.click(); el.click() })
+		await page.getByText("Entry saved.", { exact: true }).waitFor()
+		assert(requests.filter(r => r.method.endsWith("submit_data_entry_log")).length === count + 1, "Double submission escaped lock")
+		assert(state.loads === loads + 1 && requests.filter(r => r.method.endsWith("get_data_entry_data")).at(-1).args.lot === "LOT-A", "Saved plan was not authoritatively reloaded")
+		assert(await quantity.inputValue() === "0", "Successful save did not reset entry quantities")
+		assert((await page.getByRole("region", { name: "PLAN-A quantity matrix", exact: true }).innerText()).includes("27"), "Authoritative stage values were not rendered after save")
+		state.entryError = "Saved plan refresh unavailable"
+		await quantity.fill("1"); await page.getByRole("button", { name: "Save entry", exact: true }).click(); await page.getByText("Entry saved. Refresh the plan before recording more quantities.", { exact: true }).waitFor()
+		assert(await page.getByRole("button", { name: "Save entry", exact: true }).isDisabled(), "Reload failure must block further writes until authoritative refresh")
+		state.entryError = ""; await page.getByRole("button", { name: "Refresh data entry" }).click(); await page.getByRole("button", { name: "Save entry", exact: true }).waitFor({ state: "visible" }); await page.waitForFunction(() => !document.querySelector('button[aria-label="Save entry"]').disabled)
+		await select("Inspection Type", "Pre Final")
+		await page.getByRole("spinbutton", { name: "Navy XS Inspection quantity", exact: true }).fill("9")
+		await page.getByRole("button", { name: "Update inspection", exact: true }).click(); await page.getByText("Inspection updated.", { exact: true }).waitFor()
+		await select("Inspection Type", "Final Inspection")
+		await page.getByRole("button", { name: "Revert inspection", exact: true }).click(); await page.getByText("Inspection reverted.", { exact: true }).waitFor()
+		const updates = requests.filter(r => r.method.endsWith("update_sewing_plan_data")).map(r => r.args.payload)
+		assert(updates.length === 2 && updates[0].inspection_type === "pre_final" && updates[0].action === "update" && updates[1].inspection_type === "final_inspection" && updates[1].action === "revert", "Inspection update/revert contract mismatch")
+		await page.evaluate(() => window.router.replace('/sewing/plans?supplier=UNIT-B&tab=data-entry'))
+		await page.getByText("No Sewing Plans for this Sewing Unit.", { exact: true }).waitFor()
+		await page.getByRole("combobox", { name: "Lot", exact: true }).click(); assert(await page.getByRole("option", { name: "LOT-A", exact: true }).count() === 0, "Old Supplier Lots leaked")
+		let releaseEntry
+		state.entryHold = new Promise(resolve => { releaseEntry = resolve })
+		const entryCount = requests.filter(r => r.method.endsWith("get_data_entry_data")).length
+		await page.evaluate(() => window.router.replace('/sewing/plans?supplier=UNIT-A&tab=data-entry'))
+		await page.waitForFunction(() => document.querySelector('[data-sewing-plan-tab="data-entry"][aria-busy="true"]'))
+		while (requests.filter(r => r.method.endsWith("get_data_entry_data")).length === entryCount) await page.waitForTimeout(10)
+		await page.evaluate(() => window.router.replace('/sewing/plans?supplier=UNIT-B&tab=data-entry'))
+		await page.getByText("No Sewing Plans for this Sewing Unit.", { exact: true }).waitFor()
+		const oldEntry = page.waitForResponse(response => response.url().endsWith("get_data_entry_data") && response.request().postDataJSON().supplier === "UNIT-A")
+		releaseEntry(); await oldEntry
+		assert(await page.getByText("No Sewing Plans for this Sewing Unit.", { exact: true }).isVisible(), "Delayed old Supplier entry data overwrote current Supplier")
+		let releaseDashboard
+		state.dashboardHold = new Promise(resolve => { releaseDashboard = resolve }); state.dashboard = [{ input_type: "Old A stage", qty: 3 }]
+		const dashboardCount = requests.filter(r => r.method.endsWith("get_dashboard_data")).length
+		await page.evaluate(() => window.router.replace('/sewing/plans?supplier=UNIT-A&tab=dashboard'))
+		while (requests.filter(r => r.method.endsWith("get_dashboard_data")).length === dashboardCount) await page.waitForTimeout(10)
+		state.dashboard = [{ input_type: "Current B stage", qty: 99 }]
+		await page.evaluate(() => window.router.replace('/sewing/plans?supplier=UNIT-B&tab=dashboard'))
+		await page.getByRole("row").filter({ hasText: "Current B stage" }).waitFor()
+		const oldDashboard = page.waitForResponse(response => response.url().endsWith("get_dashboard_data") && response.request().postDataJSON().supplier === "UNIT-A")
+		releaseDashboard(); await oldDashboard
+		assert(await page.getByRole("row").filter({ hasText: "Old A stage" }).count() === 0, "Delayed old Supplier dashboard overwrote current Supplier")
+		assert(errors.length === 0, `Browser errors: ${errors.join("; ")}`)
+		console.log("PASS plan-entry: five active-only tabs, dashboard states/retry/refresh, Supplier Lots, required controls, trusted-row payload, preserved validation/server rejection, submit lock, authoritative reload/recovery, restricted inspection actions, stale Supplier rejection, tab-filter retention, four contained viewports with resize retention")
+	} catch (reason) {
+		console.error("Plan-entry browser diagnostics:", JSON.stringify({ errors, body: (await page.locator("body").innerText()).slice(0, 1500) }))
+		throw reason
+	} finally { await page.close(); await server.close() }
+}
+
+assert(["launcher", "plan-entry", "all"].includes(suite), `Unknown Sewing suite: ${suite}`)
 const browser = await chromium.launch({ headless: true })
 try {
-	const page = await browser.newPage()
-	page.setDefaultTimeout(20_000)
-	await login(page)
-	await launcherSuite(page)
-	await contextSuite(browser)
+	if (suite !== "plan-entry") {
+		const page = await browser.newPage()
+		page.setDefaultTimeout(20_000)
+		await login(page)
+		await launcherSuite(page)
+		await contextSuite(browser)
+	}
+	if (suite !== "launcher") await planEntrySuite(browser)
 } finally { await browser.close() }

@@ -99,6 +99,23 @@ await page.route("**/api/method/essdee_yrp.api.link_search.link_search*", async 
 	await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: names.map((name) => ({ name, label: name })) }) })
 })
 await page.route("**/api/method/essdee_yrp.cutting.web_capabilities.get_capabilities*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: { "bulk-lay-sheets": { can_read: true, can_create: true } } }) }))
+await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => route.fulfill({
+	status: 200,
+	contentType: "application/json",
+	body: JSON.stringify({ docs: [{ name: "SD YRP Cutting Bulk Lay Sheets", fields: [
+		{ fieldname: "main_lot", label: "Main Lot", fieldtype: "Link", in_list_view: 1 },
+		{ fieldname: "from_location", label: "From Location", fieldtype: "Link", in_list_view: 1 },
+		{ fieldname: "posting_date", label: "Posting Date", fieldtype: "Date", in_list_view: 1 },
+		{ fieldname: "status", label: "Status", fieldtype: "Select", options: "Setup\nIn Progress", in_list_view: 1 },
+	] }] }),
+}))
+await page.route("**/api/method/yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.get_user_listview*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }) }))
+await page.route("**/api/method/frappe.desk.reportview.get_count*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: 1 }) }))
+await page.route("**/api/resource/SD%20YRP%20Cutting%20Bulk%20Lay%20Sheets?*", (route) => route.fulfill({
+	status: 200,
+	contentType: "application/json",
+	body: JSON.stringify({ data: [{ name: "CBLS-WEB-00001", main_lot: "LOT-MAIN", from_location: "CUTTING", posting_date: "2026-10-03", status: "In Progress" }] }),
+}))
 await page.route(API, async (route) => {
 	const url = route.request().url()
 	const body = JSON.parse(route.request().postData() || "{}")
@@ -116,6 +133,18 @@ await page.route(API, async (route) => {
 	}
 	return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: { result: "OK", workspace: workspacePayload(active) } }) })
 })
+
+await page.goto(`${SITE}/web/cutting/bulk-lay-sheets`, { waitUntil: "domcontentloaded" })
+await page.locator(".premium-list-table").getByText("CBLS-WEB-00001", { exact: true }).waitFor({ timeout: 20_000 })
+await page.locator(".premium-list-table").getByText("CBLS-WEB-00001", { exact: true }).click()
+await page.waitForURL("**/web/cutting/bulk-lay-sheets/CBLS-WEB-00001")
+const listNavigation = await page.evaluate(() => {
+	const reference = window.history.state?.essdeeListNavigation || null
+	const state = reference?.stateKey ? JSON.parse(sessionStorage.getItem(reference.stateKey) || "null") : null
+	return { reference, state }
+})
+assert(listNavigation.reference?.currentName === "CBLS-WEB-00001", `Bulk LaySheets row omitted its navigation reference: ${JSON.stringify(listNavigation)}`)
+assert(listNavigation.state?.targetRouteName === "cutting-bulk-lay-sheet" && listNavigation.state?.targetParamName === "bulkLaySheetsId", `Bulk LaySheets snapshot omitted its routed destination: ${JSON.stringify(listNavigation)}`)
 
 await page.goto(`${SITE}/web/cutting/bulk-lay-sheets/new`, { waitUntil: "domcontentloaded" })
 await page.getByRole("heading", { name: "New Bulk LaySheets", exact: true }).waitFor({ timeout: 20_000 })

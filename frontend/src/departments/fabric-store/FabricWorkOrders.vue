@@ -31,6 +31,7 @@ import { useRouter } from "vue-router"
 
 import ListView from "../../components/common/ListView.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
+import { openListDocument } from "../../router/listDocumentNavigation.js"
 
 const props = defineProps({
 	capability: { type: Object, required: true },
@@ -55,9 +56,8 @@ const statusOptions = [
 	"Cancelled",
 ]
 
-function openWorkOrder(row) {
-	if (!row?.name) return
-	router.push({ name: props.viewRouteName, params: { workOrderId: row.name } })
+function openWorkOrder(row, snapshot) {
+	return openListDocument(router, row, snapshot, { routeName: props.viewRouteName, paramName: "workOrderId" })
 }
 
 function createWorkOrder() { router.push({ name: props.newRouteName }) }

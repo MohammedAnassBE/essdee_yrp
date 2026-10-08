@@ -39,6 +39,7 @@ import DepartmentPage from "../components/DepartmentPage.vue"
 import ListView from "../components/common/ListView.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
+import { openListDocument } from "../router/listDocumentNavigation.js"
 
 const router = useRouter()
 const capability = ref(null)
@@ -47,8 +48,8 @@ const loadingCapability = ref(true)
 const defaultColumns = ["cutting_order_detail", "item", "co_status", "lay_no", "cutting_location"]
 const statusOptions = ["Draft", "Submitted", "Cutting In Progress", "Partially Completed", "Completed"]
 
-function openCuttingOrder(row) {
-	if (row?.name) router.push(`/cutting/orders/${encodeURIComponent(row.name)}`)
+function openCuttingOrder(row, snapshot) {
+	return openListDocument(router, row, snapshot, { routeName: "cutting-order", paramName: "cuttingOrderId" })
 }
 
 function createCuttingOrder() {

@@ -39,6 +39,7 @@ import DepartmentPage from "../components/DepartmentPage.vue"
 import ListView from "../components/common/ListView.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
+import { openListDocument } from "../router/listDocumentNavigation.js"
 
 const router = useRouter()
 const capability = ref(null)
@@ -47,8 +48,8 @@ const loadingCapability = ref(true)
 const defaultColumns = ["main_lot", "from_location", "posting_date", "status"]
 const statusOptions = ["Setup", "Lay Sheets Created", "In Progress", "Ready to Print", "Completed"]
 
-function openBulkLaySheets(row) {
-	if (row?.name) router.push(`/cutting/bulk-lay-sheets/${encodeURIComponent(row.name)}`)
+function openBulkLaySheets(row, snapshot) {
+	return openListDocument(router, row, snapshot, { routeName: "cutting-bulk-lay-sheet", paramName: "bulkLaySheetsId" })
 }
 
 function createBulkLaySheets() {

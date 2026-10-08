@@ -1986,6 +1986,117 @@ async function responsiveAuditSuite(page) {
 	return { routeCount: routes.length, viewportCount: viewports.length, fixture: fixture.name, reportStickyContract, planStickyContract }
 }
 
+async function listNavigationSuite(page) {
+	const requests = []
+	await page.route("**/api/method/essdee_yrp.cutting.web_capabilities.get_capabilities*", (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: JSON.stringify({ message: { "cutting-plans": { can_read: true, can_create: false } } }),
+	}))
+	await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: JSON.stringify({ docs: [{
+			name: "SD YRP Cutting Plan",
+			is_submittable: 0,
+			fields: [
+				{ fieldname: "lot", label: "Lot", fieldtype: "Link", in_list_view: 1, in_standard_filter: 1 },
+				{ fieldname: "item", label: "Item", fieldtype: "Link", in_list_view: 1 },
+				{ fieldname: "cp_status", label: "Status", fieldtype: "Select", options: "Draft\nPlanned", in_list_view: 1 },
+				{ fieldname: "modified", label: "Modified", fieldtype: "Datetime" },
+			],
+		}] }),
+	}))
+	await page.route("**/api/method/yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.get_user_listview*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }),
+	}))
+	await page.route("**/api/method/frappe.desk.reportview.get_count*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: 41 }),
+	}))
+	await page.route("**/api/resource/SD%20YRP%20Cutting%20Plan?*", (route) => {
+		const url = new URL(route.request().url())
+		const start = Number(url.searchParams.get("limit_start") || 0)
+		const filters = JSON.parse(url.searchParams.get("filters") || "[]")
+		const orderBy = url.searchParams.get("order_by") || ""
+		requests.push({ start, filters, orderBy })
+		const data = Array.from({ length: 20 }, (_, offset) => ({
+			name: `CP-NAV-${String(start + offset + 1).padStart(3, "0")}`,
+			lot: "LOT-NAV",
+			item: "ITEM-NAV",
+			cp_status: "Draft",
+			modified: "2026-10-08 10:00:00",
+		}))
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data }) })
+	})
+	await page.route("**/api/method/essdee_yrp.cutting.plan_editor.get_editor*", (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: JSON.stringify({ message: { record: { name: "CP-NAV-001", docstatus: 1 }, permissions: { can_write: false } } }),
+	}))
+	await page.route("**/api/resource/SD%20YRP%20Cutting%20Plan/CP-NAV-001*", (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: JSON.stringify({ data: { name: "CP-NAV-001", docstatus: 1, cp_status: "Draft", lot: "LOT-NAV", item: "ITEM-NAV" } }),
+	}))
+	await page.route("**get_web_view_data*", (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: JSON.stringify({ message: { permissions: { can_write: false, can_read_marker: false, can_read_laysheet: false } } }),
+	}))
+
+	await page.setViewportSize({ width: 1600, height: 1000 })
+	await page.goto(`${SITE}/web/cutting/plans`, { waitUntil: "domcontentloaded" })
+	await page.locator(".premium-list-table .p-datatable-tbody > tr").first().waitFor({ timeout: 20_000 })
+	await page.getByRole("button", { name: /^Draft\s/ }).click()
+	await page.locator(".list-search input").fill("APPLIED")
+	await page.locator(".list-search input").press("Enter")
+	await page.locator(".premium-list-table .p-datatable-tbody > tr").first().waitFor()
+	await page.evaluate(() => {
+		const input = document.querySelector(".list-search input")
+		const row = document.querySelector(".premium-list-table .p-datatable-tbody > tr")
+		input.value = "DRAFT-NOT-APPLIED"
+		input.dispatchEvent(new Event("input", { bubbles: true }))
+		row.click()
+	})
+	await page.waitForURL("**/web/cutting/plans/CP-NAV-001")
+	await page.locator(".common-list-view").waitFor({ state: "detached", timeout: 20_000 })
+
+	const desktop = await page.evaluate(() => {
+		const reference = window.history.state?.essdeeListNavigation || null
+		const state = reference?.stateKey ? JSON.parse(sessionStorage.getItem(reference.stateKey) || "null") : null
+		return { reference, state }
+	})
+	assert(desktop.reference?.currentName === "CP-NAV-001", `Desktop row activation omitted its navigation reference: ${JSON.stringify(desktop)}`)
+	assert(desktop.state?.sourceRouteName === "cutting-plans", `Desktop snapshot omitted its source route: ${JSON.stringify(desktop)}`)
+	assert(desktop.state?.sourceFullPath === "/cutting/plans", `Desktop snapshot omitted its router source path: ${JSON.stringify(desktop)}`)
+	assert(desktop.state?.doctype === "SD YRP Cutting Plan", `Desktop snapshot omitted its DocType: ${JSON.stringify(desktop)}`)
+	assert(desktop.state?.orderBy === "modified desc, name desc", `Desktop snapshot is not deterministic: ${JSON.stringify(desktop)}`)
+	assert(desktop.state?.pageStart === 0 && desktop.state?.pageSize === 20 && desktop.state?.globalIndex === 0 && desktop.state?.total === 41, `Desktop snapshot omitted paging context: ${JSON.stringify(desktop)}`)
+	assert(desktop.state?.filters?.some((filter) => filter[0] === "name" && filter[2] === "%APPLIED%"), `Applied search is absent from the snapshot: ${JSON.stringify(desktop)}`)
+	assert(!JSON.stringify(desktop.state?.filters || []).includes("DRAFT-NOT-APPLIED"), `Unapplied search leaked into the snapshot: ${JSON.stringify(desktop)}`)
+	assert(requests.some((request) => request.orderBy === "modified desc, name desc"), `List request did not use deterministic ordering: ${JSON.stringify(requests)}`)
+
+	const requestsBeforeBack = requests.length
+	await page.goBack({ waitUntil: "domcontentloaded" })
+	await page.locator(".premium-list-table .p-datatable-tbody > tr").first().waitFor({ timeout: 20_000 })
+	const restored = await page.evaluate(() => {
+		const keys = Object.keys(sessionStorage).filter((key) => key.includes("list-navigation"))
+		return {
+			url: `${location.pathname}${location.search}`,
+			input: document.querySelector(".list-search input")?.value || "",
+			keys,
+			states: Object.fromEntries(keys.map((key) => [key, JSON.parse(sessionStorage.getItem(key) || "null")])),
+			history: history.state,
+		}
+	})
+	restored.requestsBeforeBack = requestsBeforeBack
+	restored.requestsAfterBack = requests.length
+	assert(restored.input === "APPLIED", `Returning to the list did not restore the applied search: ${JSON.stringify(restored)}`)
+	assert(await page.getByRole("button", { name: /^Draft\s/ }).getAttribute("aria-pressed") === "true", "Returning to the list did not restore status")
+
+	return { desktop, requestCount: requests.length }
+}
+
 const suites = {
 	tokens: tokensSuite,
 	shell: shellSuite,
@@ -2002,6 +2113,7 @@ const suites = {
 	"stock-transfers": stockTransfersSuite,
 	reports: reportsSuite,
 	"responsive-audit": responsiveAuditSuite,
+	"list-navigation": listNavigationSuite,
 }
 
 const browser = await chromium.launch({ headless: true })

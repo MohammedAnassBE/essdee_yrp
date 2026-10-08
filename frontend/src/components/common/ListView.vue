@@ -424,6 +424,7 @@ import Paginator from "primevue/paginator"
 import Select from "primevue/select"
 import Skeleton from "primevue/skeleton"
 import { computed, onBeforeUnmount, ref, watch } from "vue"
+import { useRoute } from "vue-router"
 
 import {
 	bulkUpdateField,
@@ -439,6 +440,12 @@ import FormField from "./FormField.vue"
 import ListviewFilters from "./ListviewFilters.vue"
 import ListviewQuickFilters from "./ListviewQuickFilters.vue"
 import UserListviewColumns from "./UserListviewColumns.vue"
+import {
+	createListNavigationState,
+	deterministicOrder,
+	navigationStorageKey,
+	readNavigationState,
+} from "../../utils/listNavigation.js"
 
 const props = defineProps({
 	doctype: { type: String, required: true },
@@ -460,9 +467,11 @@ const props = defineProps({
 	statusOptions: { type: Array, default: () => [] },
 	viewportBounded: { type: Boolean, default: false },
 	allowBulkActions: { type: Boolean, default: true },
+	navigationEnabled: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(["row-click", "loaded"])
+const route = useRoute()
 
 const excludedFieldtypes = new Set([
 	"Section Break",
@@ -548,6 +557,7 @@ let loadSequence = 0
 let searchTimer = null
 let quickFilterTimer = null
 const quickFilterDelay = 1000
+let restoredNavigationKey = ""
 
 const eligibleFields = computed(() => [
 	...metaFields.value
@@ -867,6 +877,7 @@ async function initialise() {
 	quickFilters.value = {}
 	appliedQuickFilters.value = {}
 	activeStatus.value = ""
+	restoreNavigationState()
 	clearSelection()
 	bulkNotice.value = ""
 	bulkError.value = null
@@ -931,7 +942,7 @@ async function loadRows(existingSequence = null) {
 	error.value = ""
 	try {
 		const filters = allFilters()
-		const orderBy = `${sortField.value} ${sortOrder.value === 1 ? "asc" : "desc"}`
+		const orderBy = deterministicOrder(sortField.value, sortOrder.value === 1 ? "asc" : "desc")
 		const [data, count] = await Promise.all([
 			getList(props.doctype, {
 				fields: fetchFields.value,
@@ -1222,11 +1233,55 @@ async function runBulkAction(action, candidates) {
 function rowClicked(event) {
 	const target = event?.originalEvent?.target
 	if (target?.closest?.(".p-checkbox, .p-selection-column, button, a, input, textarea, select")) return
-	if (props.clickable) emit("row-click", event.data)
+	if (props.clickable) emit("row-click", event.data, navigationSnapshot(event.data))
 }
 
 function openRow(row) {
-	if (props.clickable) emit("row-click", row)
+	if (props.clickable) emit("row-click", row, navigationSnapshot(row))
+}
+
+function navigationSnapshot(row) {
+	if (!props.navigationEnabled || !route.name) return null
+	const rowIndex = rows.value.findIndex((candidate) => candidate === row || candidate?.name === row?.name)
+	if (rowIndex < 0) return null
+	const direction = sortOrder.value === 1 ? "asc" : "desc"
+	return createListNavigationState({
+		sourceRouteName: String(route.name),
+		sourceFullPath: route.fullPath,
+		doctype: props.doctype,
+		filters: allFilters(),
+		baseFilters: baseFilters(),
+		advancedFilters: advancedFilters.value,
+		quickFilters: appliedQuickFilters.value,
+		status: activeStatus.value,
+		search: appliedSearch.value,
+		sortField: sortField.value,
+		sortOrder: direction,
+		orderBy: deterministicOrder(sortField.value, direction),
+		pageStart: first.value,
+		pageSize: pageSize.value,
+		globalIndex: first.value + rowIndex,
+		total: total.value,
+	})
+}
+
+function restoreNavigationState() {
+	if (!props.navigationEnabled || !route.name || typeof window === "undefined") return
+	const key = navigationStorageKey(String(route.name), props.doctype)
+	if (restoredNavigationKey === key) return
+	const state = readNavigationState(window.sessionStorage, key)
+	if (!state || state.sourceRouteName !== String(route.name) || state.doctype !== props.doctype) return
+	restoredNavigationKey = key
+	search.value = state.search
+	appliedSearch.value = state.search
+	advancedFilters.value = state.advancedFilters
+	quickFilters.value = { ...state.quickFilters }
+	appliedQuickFilters.value = { ...state.quickFilters }
+	activeStatus.value = state.status
+	first.value = state.pageStart
+	pageSize.value = state.pageSize
+	sortField.value = state.sortField
+	sortOrder.value = state.sortOrder === "asc" ? 1 : -1
 }
 
 function rowClass(row) {

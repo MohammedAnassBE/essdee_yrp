@@ -35,6 +35,7 @@ import { useRouter } from "vue-router"
 
 import ListView from "../../components/common/ListView.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
+import { openListDocument } from "../../router/listDocumentNavigation.js"
 
 const props = defineProps({
 	capability: { type: Object, required: true },
@@ -46,9 +47,8 @@ const router = useRouter()
 const defaultColumns = ["supplier", "transaction_date", "status", "grand_total"]
 const statusOptions = ["Draft", "To Receive and Bill", "To Receive", "To Bill", "Completed", "Cancelled", "Closed"]
 
-function openPurchaseOrder(row) {
-	if (!row?.name) return
-	router.push({ name: props.viewRouteName, params: { purchaseOrderId: row.name } })
+function openPurchaseOrder(row, snapshot) {
+	return openListDocument(router, row, snapshot, { routeName: props.viewRouteName, paramName: "purchaseOrderId" })
 }
 
 function createPurchaseOrder() { router.push({ name: props.newRouteName }) }

@@ -2880,7 +2880,31 @@ async function liveCompletedPurchaseOrderSuite(page) {
 	return { purchaseOrder: "PO-2627-0968", goodsReceivedNotes: 2 }
 }
 
-const suites = { parity: paritySuite, shell: shellSuite, "accessory-store": accessoryStoreSuite, "mobile-record-details": mobileRecordDetailsSuite, documents: documentsSuite, "work-order": workOrderSuite, "purchase-order": purchaseOrderSuite, "delivery-challan": deliveryChallanSuite, "goods-received-note": goodsReceivedNoteSuite, "stock-transfers": stockTransfersSuite, "document-dialog": documentDialogSuite, states: statesSuite, "live-duplicate": liveDuplicateSuite, "live-completed-purchase-order": liveCompletedPurchaseOrderSuite }
+async function listNavigationSuite(page) {
+	const listRequests = []
+	await mockWorkspace(page, listRequests)
+	await page.setViewportSize({ width: 390, height: 844 })
+	await page.goto(`${SITE}/web/fabric-store/work-orders`, { waitUntil: "domcontentloaded" })
+	const mobileRow = page.locator(".fabric-work-orders .mobile-list-record").first()
+	await mobileRow.waitFor({ timeout: 20_000 })
+	await mobileRow.getByRole("button", { name: "Open WO-FAB-001" }).click()
+	await page.waitForURL("**/web/fabric-store/work-orders/WO-FAB-001")
+
+	const captured = await page.evaluate(() => {
+		const reference = window.history.state?.essdeeListNavigation || null
+		const state = reference?.stateKey ? JSON.parse(sessionStorage.getItem(reference.stateKey) || "null") : null
+		return { reference, state }
+	})
+	assert(captured.reference?.currentName === "WO-FAB-001", `Mobile row activation omitted its navigation reference: ${JSON.stringify(captured)}`)
+	assert(captured.state?.sourceRouteName === "fabric-work-orders", `Mobile snapshot omitted its source route: ${JSON.stringify(captured)}`)
+	assert(captured.state?.targetRouteName === "fabric-work-order" && captured.state?.targetParamName === "workOrderId", `Mobile snapshot omitted its configured destination: ${JSON.stringify(captured)}`)
+	assert(captured.state?.orderBy === "modified desc, name desc", `Mobile snapshot is not deterministic: ${JSON.stringify(captured)}`)
+	assert(captured.state?.globalIndex === 0 && captured.state?.pageStart === 0 && captured.state?.pageSize === 20, `Mobile snapshot omitted paging context: ${JSON.stringify(captured)}`)
+
+	return { captured, listRequestCount: listRequests.length }
+}
+
+const suites = { parity: paritySuite, shell: shellSuite, "accessory-store": accessoryStoreSuite, "mobile-record-details": mobileRecordDetailsSuite, documents: documentsSuite, "work-order": workOrderSuite, "purchase-order": purchaseOrderSuite, "delivery-challan": deliveryChallanSuite, "goods-received-note": goodsReceivedNoteSuite, "stock-transfers": stockTransfersSuite, "document-dialog": documentDialogSuite, states: statesSuite, "live-duplicate": liveDuplicateSuite, "live-completed-purchase-order": liveCompletedPurchaseOrderSuite, "list-navigation": listNavigationSuite }
 const browser = await chromium.launch({ headless: true })
 const context = await browser.newContext()
 

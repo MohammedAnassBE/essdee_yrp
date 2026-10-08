@@ -41,6 +41,7 @@ import DepartmentPage from "../components/DepartmentPage.vue"
 import ListView from "../components/common/ListView.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
+import { openListDocument } from "../router/listDocumentNavigation.js"
 
 const router = useRouter()
 const capability = ref(null)
@@ -51,8 +52,8 @@ const columnLabels = { cp_status: "Status", no_of_colours: "Colours", no_of_colo
 const linkFilters = { item: { has_variants: 1 } }
 const statusOptions = ["Draft", "Planned", "Fabric Partially Received", "Ready to Cut", "Cutting In Progress", "Partially Completed", "Completed", "Cut Panel Dispatch Pending"]
 
-function openCuttingPlan(row) {
-	if (row?.name) router.push({ name: "cutting-plan", params: { cuttingPlanId: row.name } })
+function openCuttingPlan(row, snapshot) {
+	return openListDocument(router, row, snapshot, { routeName: "cutting-plan", paramName: "cuttingPlanId" })
 }
 
 function createCuttingPlan() {

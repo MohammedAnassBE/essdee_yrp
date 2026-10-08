@@ -16,13 +16,30 @@ export function navigationStorageKey(sourceRouteName, doctype) {
 		.join(":")
 }
 
+function cloneJson(value, fallback) {
+	try {
+		return JSON.parse(JSON.stringify(value))
+	} catch {
+		return fallback
+	}
+}
+
 export function createListNavigationState(input = {}) {
 	return {
 		version: LIST_NAVIGATION_VERSION,
 		sourceRouteName: String(input.sourceRouteName || ""),
 		sourceFullPath: String(input.sourceFullPath || ""),
 		doctype: String(input.doctype || ""),
-		filters: Array.isArray(input.filters) ? structuredClone(input.filters) : [],
+		filters: Array.isArray(input.filters) ? cloneJson(input.filters, []) : [],
+		baseFilters: Array.isArray(input.baseFilters) ? cloneJson(input.baseFilters, []) : [],
+		advancedFilters: Array.isArray(input.advancedFilters) ? cloneJson(input.advancedFilters, []) : [],
+		quickFilters: input.quickFilters && typeof input.quickFilters === "object"
+			? cloneJson(input.quickFilters, {})
+			: {},
+		status: input.status ?? "",
+		search: String(input.search || ""),
+		sortField: String(input.sortField || "modified"),
+		sortOrder: normalizedDirection(input.sortOrder),
 		orderBy: String(input.orderBy || deterministicOrder()),
 		pageStart: Math.max(0, Number(input.pageStart) || 0),
 		pageSize: Math.max(1, Number(input.pageSize) || 20),

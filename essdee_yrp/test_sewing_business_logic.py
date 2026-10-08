@@ -674,6 +674,14 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		work_order = self._closed_work_order()
 		details = get_closed_work_order_grn_details(work_order.name, work_order.supplier)
 		item_details, selected = self._one_quantity(details["item_details"])
+		# Match the web editor's F16 structural identifiers, selections and refs.
+		# Stock fields are absent; only the locked server source can supply them.
+		item_details = [{"items": [{"name": row["name"], "attributes": row.get("attributes"),
+			"primary_attribute": row.get("primary_attribute"),
+			"dimensions": {"received_type": row.get("dimensions", {}).get("received_type")},
+			"values": {key: {field: cell.get(field) for field in ("qty", "ref_doctype", "ref_docname")}
+				for key, cell in row.get("values", {}).items()},
+		} for row in group["items"]]} for group in item_details]
 		pending_before = flt(
 			frappe.db.get_value("YRP Work Order Receivables", selected["ref_docname"], "pending_quantity")
 		)
@@ -768,6 +776,52 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 			)
 
 		self.assertIn("UNKNOWN-GRN-", str(raised.exception))
+
+	def test_closed_work_order_picker_excludes_foreign_open_and_draft(self):
+		"""Removing any Supplier/status predicate must expose the altered fixture."""
+		work_order = self._closed_work_order()
+		def search(supplier):
+			return {row[0] for row in get_closed_sewing_work_orders(
+				"YRP Work Order", work_order.name, "name", 0, 100, {"supplier": supplier}
+			)}
+		self.assertIn(work_order.name, search(work_order.supplier))
+		self.assertNotIn(work_order.name, search("SEWING-FOREIGN-SUPPLIER"))
+		with self.assertRaises(frappe.ValidationError):
+			get_closed_work_order_grn_details(work_order.name, "SEWING-FOREIGN-SUPPLIER")
+		for changed in ({"open_status": "Open"}, {"docstatus": 0}):
+			frappe.db.savepoint("closed_picker")
+			try:
+				frappe.db.set_value("YRP Work Order", work_order.name, changed)
+				self.assertNotIn(work_order.name, search(work_order.supplier))
+				with self.assertRaises(frappe.ValidationError):
+					get_closed_work_order_grn_details(work_order.name, work_order.supplier)
+			finally:
+				frappe.db.rollback(save_point="closed_picker")
+
+	def test_closed_work_order_grn_discards_browser_tampering(self):
+		"""Exercise grouped unflattening and real insert/submit, not only normalization."""
+		from yrp.stock.save_stock_items import group_items_for_ui
+		work_order = self._closed_work_order()
+		details = get_closed_work_order_grn_details(work_order.name, work_order.supplier)
+		groups, selected = self._one_quantity(details["item_details"])
+		trusted = next(row for row in details["items"] if row["ref_docname"] == selected["ref_docname"]
+			and row.get("received_type") == selected["received_type"])
+		# A valid foreign Item gets through F16 ungrouping, so this proves the
+		# closed-WO service discards the resulting item identity as well as rate/UOM.
+		foreign_item = next(row.item_variant for row in work_order.receivables if row.item_variant != trusted["item_variant"])
+		groups = group_items_for_ui([{"item_variant": foreign_item, "quantity": 1, "uom": "ATTACKER-UOM",
+			"lot": "ATTACKER-LOT", "received_type": selected["received_type"], "rate": 999999,
+			"ref_doctype": "YRP Work Order Receivables", "ref_docname": selected["ref_docname"]}], "YRP Goods Received Note")
+		result = create_closed_work_order_grn(work_order.name, work_order.supplier, {
+			"naming_series": frappe.get_meta("YRP Goods Received Note").get_field("naming_series").default,
+			"supplier_document_no": "TASK7-TAMPER", "vehicle_no": "TASK7-VEHICLE",
+		}, groups)
+		grn = frappe.get_doc("YRP Goods Received Note", result["name"])
+		self.assertEqual(grn.docstatus, 1)
+		self.assertEqual(grn.items[0].item_variant, trusted["item_variant"])
+		self.assertEqual(grn.items[0].uom, trusted["uom"])
+		self.assertEqual(flt(grn.items[0].rate), flt(trusted["rate"]))
+		self.assertEqual(grn.items[0].lot, work_order.lot)
 
 	def test_migrated_sewing_plans_match_work_order_calculated_items(self):
 		plans = frappe.get_all("SD YRP Sewing Plan", fields=["name", "work_order"], limit=500)
@@ -1128,6 +1182,127 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 			quantity = row.get("quantity") if row.get("quantity") is not None else row.get("qty")
 			out[key] = flt(out.get(key)) + flt(quantity)
 		return out
+
+
+class TestSewingClosedGrnConcurrency(IntegrationTestCase):
+	def test_closed_work_order_grn_rejects_concurrent_duplicate(self):
+		"""Two real connections compete for one committed receivable balance."""
+		from essdee_yrp.sewing import closed_work_order as service
+		site, sites_path = frappe.local.site, frappe.local.sites_path
+		source = TestSewingBusinessLogic()._closed_work_order()
+		fixture = source.as_dict()
+		name = f"SEWING-GRN-RACE-{frappe.generate_hash(length=12)}"
+		series = frappe.get_meta("YRP Goods Received Note").get_field("naming_series").default
+		first_locked, second_attempting = threading.Event(), threading.Event()
+		progress = threading.local()
+		results, balances = [], {}
+		database_class, original_get = type(frappe.local.db), service._get_closed_sewing_work_order
+		original_sql = database_class.sql
+
+		def connection(operation):
+			frappe.init(site, sites_path=sites_path)
+			frappe.connect()
+			frappe.flags.in_test = True
+			frappe.set_user("Administrator")
+			try:
+				return operation()
+			finally:
+				frappe.db.rollback()
+				frappe.destroy()
+
+		def setup():
+			clone = frappe.get_doc(copy.deepcopy(fixture))
+			clone.name = name
+			# Copy the migrated, valid source links without recalculating a new WO.
+			# Only the isolated receivable quantity differs from the source.
+			clone.set("receivables", [next(row for row in clone.receivables if flt(row.pending_quantity) > 0)])
+			clone.receivables[0].qty = 1
+			clone.receivables[0].pending_quantity = 1
+			clone.db_insert()
+			for row in clone.get_all_children():
+				row.name = frappe.generate_hash(length=16)
+				row.parent = name
+				row.db_insert()
+			plan = frappe.get_doc({"doctype": "SD YRP Sewing Plan", "supplier": clone.supplier,
+				"work_order": name, "naming_series": "SP-2526-"}).insert()
+			frappe.get_doc({"doctype": "SD YRP Sewing Plan Entry Detail", "sewing_plan": plan.name,
+				"entry_date": nowdate(), "input_type": frappe.db.get_single_value("SD YRP MRP Settings", "type_wise_diff_summary"),
+				"sewing_plan_details": [{"item_variant": clone.receivables[0].item_variant, "quantity": 100}]}).insert()
+			frappe.db.commit()
+			groups = service.get_closed_work_order_grn_details(name, clone.supplier)["item_details"]
+			groups, selected = TestSewingBusinessLogic()._one_quantity(groups)
+			for group in groups:
+				for row in group["items"]:
+					for cell in row["values"].values():
+						if cell["qty"]:
+							# Consume the complete allowance, including any configured excess.
+							cell["qty"] = cell["max_receivable_quantity"]
+			return clone.supplier, groups, selected
+
+		def observe_sql(database, query, *args, **kwargs):
+			if getattr(progress, "request", None) == "second" and isinstance(query, str) \
+				and "tabYRP Work Order`" in query and "for update" in query.lower():
+				second_attempting.set()
+			return original_sql(database, query, *args, **kwargs)
+
+		def observe_lock(*args, **kwargs):
+			doc = original_get(*args, **kwargs)
+			if kwargs.get("for_update"):
+				balances[progress.request] = flt(doc.receivables[0].pending_quantity)
+				if progress.request == "first":
+					first_locked.set()
+					self.assertTrue(second_attempting.wait(10), "Second connection never competed for the WO lock")
+			return doc
+
+		def create(label, supplier, groups):
+			progress.request = label
+			if label == "second":
+				self.assertTrue(first_locked.wait(10))
+			try:
+				result = service.create_closed_work_order_grn(name, supplier, {
+					"naming_series": series, "supplier_document_no": "TASK7-RACE", "vehicle_no": "TASK7-RACE",
+				}, copy.deepcopy(groups))
+				results.append(result["name"])
+				frappe.db.commit()
+				return "submitted"
+			except frappe.ValidationError as reason:
+				print(f"Closed GRN {label} rejection: {reason}")
+				return "rejected"
+
+		def cleanup():
+			for grn_name in results:
+				grn = frappe.get_doc("YRP Goods Received Note", grn_name)
+				if grn.docstatus == 1:
+					grn.cancel()
+				frappe.delete_doc("YRP Goods Received Note", grn_name, force=True)
+				frappe.db.delete("YRP Stock Ledger Entry", {"voucher_type": "YRP Goods Received Note", "voucher_no": grn_name})
+			for plan_name in frappe.get_all("SD YRP Sewing Plan", filters={"work_order": name}, pluck="name"):
+				for entry_name in frappe.get_all("SD YRP Sewing Plan Entry Detail", filters={"sewing_plan": plan_name}, pluck="name"):
+					frappe.db.delete("SD YRP Sewing Plan Detail", {"parent": entry_name})
+				frappe.db.delete("SD YRP Sewing Plan Entry Detail", {"sewing_plan": plan_name})
+			frappe.db.delete("SD YRP Sewing Plan", {"work_order": name})
+			clone = frappe.get_doc("YRP Work Order", name)
+			for field in clone.meta.get_table_fields():
+				frappe.db.delete(field.options, {"parent": name, "parenttype": "YRP Work Order"})
+			frappe.db.delete("YRP Work Order", {"name": name})
+			frappe.db.commit()
+
+		with ThreadPoolExecutor(max_workers=2) as executor:
+			try:
+				supplier, groups, selected = executor.submit(connection, setup).result(30)
+				with patch.object(database_class, "sql", new=observe_sql), \
+					patch.object(service, "_get_closed_sewing_work_order", new=observe_lock):
+					first = executor.submit(connection, lambda: create("first", supplier, groups))
+					second = executor.submit(connection, lambda: create("second", supplier, groups))
+					self.assertEqual([first.result(30), second.result(30)], ["submitted", "rejected"])
+				self.assertEqual(balances["first"], 1)
+				self.assertLessEqual(balances["second"], 0)
+				self.assertEqual(len(results), 1)
+				self.assertEqual(executor.submit(connection, lambda: frappe.db.count(
+					"YRP Goods Received Note", {"against_id": name, "docstatus": 1})).result(30), 1)
+				print(f"Closed GRN race: first pending={balances['first']}, second locked pending={balances['second']}; one submitted, one rejected")
+			finally:
+				executor.submit(connection, cleanup).result(30)
 
 
 class TestSewingCancellationConcurrency(IntegrationTestCase):

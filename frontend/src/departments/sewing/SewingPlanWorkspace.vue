@@ -14,6 +14,7 @@
 					<SewingDataEntry v-else-if="active === 'data-entry'" :filters="entryFilters" :actions="capabilities.plan_actions" />
 					<SewingEntries v-else-if="active === 'entries'" :state="entriesState" :mutate="cancelEntry" />
 					<SewingConsumption v-else-if="active === 'consumption'" :state="consumptionState" :actions="capabilities.plan_actions" :mutate="saveConsumption" />
+					<SewingClosedWorkOrderGrn v-else-if="active === 'closed-work-order-grn'" :state="closedGrnState" :actions="capabilities.plan_actions" :mutate="createClosedGrn" />
 					<div v-else :data-sewing-plan-tab="active" class="erp-empty-state" role="status">{{ tabs.find(tab => tab.value === active).label }} is not loaded yet.</div>
 				</TabPanel>
 			</TabPanels>
@@ -30,13 +31,14 @@ import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
 import { computed, defineAsyncComponent, reactive } from "vue"
 import { useRoute, useRouter } from "vue-router"
-import { cancelSewingEntry, saveSewingConsumption } from "../../api/sewing.js"
+import { cancelSewingEntry, createClosedWorkOrderGrn, saveSewingConsumption } from "../../api/sewing.js"
 import { useSewingContext } from "./useSewingContext.js"
 
 const SewingDashboard = defineAsyncComponent(() => import("./plan/SewingDashboard.vue"))
 const SewingDataEntry = defineAsyncComponent(() => import("./plan/SewingDataEntry.vue"))
 const SewingEntries = defineAsyncComponent(() => import("./plan/SewingEntries.vue"))
 const SewingConsumption = defineAsyncComponent(() => import("./plan/SewingConsumption.vue"))
+const SewingClosedWorkOrderGrn = defineAsyncComponent(() => import("./plan/SewingClosedWorkOrderGrn.vue"))
 defineProps({ capabilities: { type: Object, default: () => ({}) } })
 const route = useRoute(), router = useRouter()
 const { supplier, beginRequest } = useSewingContext()
@@ -57,6 +59,7 @@ const entryFilters = reactive({ lot: "", plan: "", inputType: "", workStation: "
 // mounting inactive tabs. Mutation locks and recovery survive a tab switch too.
 const entriesState = reactive({ filters: { workStation: "", inputType: "", lot: "" }, busy: false, refreshRequired: false, operationVersion: 0, operation: null })
 const consumptionState = reactive({ lot: "", data: null, busy: false, refreshRequired: false, loadError: "", operationVersion: 0, operation: null })
+const closedGrnState = reactive({ workOrder: "", data: null, values: {}, namingField: null, busy: false, refreshRequired: false, loadError: "", result: null, operationVersion: 0, operation: null })
 
 // The Supplier-keyed shell owns the entire write lifetime. Tab unmounts may
 // invalidate reads, but must not discard a write's acknowledgement or failure.
@@ -83,6 +86,16 @@ function cancelEntry(docId) {
 }
 function saveConsumption(payload) {
 	return mutate(consumptionState, { kind: "consumption", supplier: payload.supplier, lot: payload.lot }, () => saveSewingConsumption(payload.supplier, payload.lot, payload.sections, payload.cloth_acc_data), "Unable to save consumption.")
+}
+function createClosedGrn(payload) {
+	return mutate(closedGrnState, { kind: "closed-grn", supplier: payload.supplier, workOrder: payload.work_order }, async () => {
+		const result = await createClosedWorkOrderGrn(payload)
+		// Acknowledgement belongs to the shell, including after the editor unmounts.
+		closedGrnState.result = result
+		closedGrnState.workOrder = ""
+		closedGrnState.data = null
+		closedGrnState.values = {}
+	}, "Unable to create this Goods Received Note.")
 }
 </script>
 

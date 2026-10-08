@@ -1,7 +1,8 @@
-import { callMethod } from "./frappe.js"
+import { callMethod, getMeta } from "./frappe.js"
 
 const WORKSPACE_METHOD = "essdee_yrp.sewing.web_workspace"
 const PLAN_METHOD = "essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan"
+const CLOSED_WO_METHOD = "essdee_yrp.sewing.closed_work_order"
 
 export function getSewingCapabilities() {
 	return callMethod(`${WORKSPACE_METHOD}.get_capabilities`)
@@ -47,4 +48,27 @@ export function getSewingConsumption(supplier, lot) {
 
 export function saveSewingConsumption(supplier, lot, sections, clothAccData) {
 	return callMethod(`${PLAN_METHOD}.save_consumption_data`, { supplier, lot, sections, cloth_acc_data: clothAccData })
+}
+
+export async function getClosedSewingWorkOrders(supplier, text = "") {
+	if (!supplier) return []
+	const rows = await callMethod(`${CLOSED_WO_METHOD}.get_closed_sewing_work_orders`, {
+		doctype: "YRP Work Order", txt: text, searchfield: "name", start: 0, page_len: 20, filters: { supplier },
+	})
+	return (rows || []).map(([name, lot, item, process]) => ({ name, label: name, lot, item, process }))
+}
+
+export function getClosedWorkOrderGrnDetails(workOrder, supplier) {
+	return callMethod(`${CLOSED_WO_METHOD}.get_closed_work_order_grn_details`, { work_order: workOrder, supplier })
+}
+
+export function createClosedWorkOrderGrn(payload) {
+	return callMethod(`${CLOSED_WO_METHOD}.create_closed_work_order_grn`, payload)
+}
+
+export async function getClosedGrnNamingField() {
+	const docs = await getMeta("YRP Goods Received Note")
+	const field = docs.find(doc => doc.name === "YRP Goods Received Note")?.fields?.find(field => field.fieldname === "naming_series")
+	if (!field) throw new Error("Goods Received Note naming series could not be loaded.")
+	return field
 }

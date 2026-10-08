@@ -270,7 +270,7 @@ import Aura from '@primeuix/themes/aura';
 import SewingPlans from '/src/departments/sewing/SewingPlans.vue';
 import '@fontsource-variable/inter'; import 'primeicons/primeicons.css';
 import '/src/styles/main.css'; import '/src/styles/enterprise.css';
-const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/sewing/plans', component: SewingPlans }] });
+const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/sewing/plans', component: SewingPlans }, { path: '/sewing', component: { render: () => null } }] });
 await router.push('/sewing/plans?supplier=UNIT-A'); window.router = router;
 createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options: { darkModeSelector: false } } }).mount('#app');`
 	const server = await createServer({
@@ -319,8 +319,9 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		state.dashboardError = "Dashboard unavailable"; await page.getByRole("button", { name: "Refresh dashboard" }).click(); await page.getByText(state.dashboardError, { exact: true }).waitFor()
 		state.dashboardError = ""; state.dashboard = [{ input_type: "Sewing In", qty: 41 }]; await page.getByRole("button", { name: "Retry", exact: true }).click(); await page.getByRole("cell", { name: "41", exact: true }).waitFor()
 		const before = requests.length
-		for (const name of ["Closed Work Order GRN"]) { await page.getByRole("tab", { name, exact: true }).click(); await page.getByText(`${name} is not loaded yet.`, { exact: true }).waitFor(); assert(await page.locator("[data-sewing-plan-tab]").count() === 1, "Inactive tab still mounted") }
-		assert(requests.length === before, "Future tabs issued requests")
+		await page.getByRole("tab", { name: "Closed Work Order GRN", exact: true }).click(); await page.getByRole("combobox", { name: "Closed Work Order", exact: true }).waitFor()
+		assert(await page.locator("[data-sewing-plan-tab]").count() === 1, "Inactive tab still mounted")
+		assert(requests.length === before, "Closed GRN fetched without Work Order selection")
 		state.entryError = "Entry data unavailable"
 		await page.getByRole("tab", { name: "Data Entry", exact: true }).click()
 		await page.getByText(state.entryError, { exact: true }).waitFor()
@@ -693,7 +694,119 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 	} finally { await page.close(); await server.close() }
 }
 
-assert(["launcher", "plan-entry", "entries-consumption", "entries-consumption-settlement", "all"].includes(suite), `Unknown Sewing suite: ${suite}`)
+async function closedGrnSuite(browser) {
+	const harness = `
+import { createApp } from 'vue'; import { createRouter, createMemoryHistory, RouterView } from 'vue-router';
+import PrimeVue from 'primevue/config'; import Aura from '@primeuix/themes/aura';
+import SewingPlans from '/src/departments/sewing/SewingPlans.vue';
+import '@fontsource-variable/inter'; import 'primeicons/primeicons.css'; import '/src/styles/main.css'; import '/src/styles/enterprise.css';
+const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/sewing/plans', component: SewingPlans }, { path: '/sewing', component: { render: () => null } }] });
+await router.push('/sewing/plans?supplier=UNIT-A&tab=closed-work-order-grn'); window.router = router;
+createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options: { darkModeSelector: false } } }).mount('#app');`
+	const server = await createServer({ root: fileURLToPath(new URL("../frontend", import.meta.url)), server: { host: "127.0.0.1", port: 0 }, plugins: [{
+		name: "closed-grn-verifier", resolveId(id) { if (id === "/__closed-grn.js") return "\0closed-grn" }, load(id) { if (id === "\0closed-grn") return harness },
+		configureServer(server) { server.middlewares.use((req, res, next) => { if (req.url !== "/__closed-grn") return next(); res.setHeader("Content-Type", "text/html"); res.end('<!doctype html><html><body><div id="app"></div><script type="module" src="/__closed-grn.js"></script></body></html>') }) },
+	}] })
+	await server.listen()
+	const page = await browser.newPage({ viewport: { width: 1280, height: 900 } }); page.setDefaultTimeout(10_000)
+	const requests = [], errors = [], warnings = [], sizes = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"]
+	const state = { create: true, submit: true, error: "", reloadError: "", hold: null, detailsHold: null, searchHold: null, saved: 0 }
+	const groups = [{ primary_attribute: "Size", primary_attribute_values: sizes, attributes: ["Colour", "Part"], items: ["Good", "Reject"].map(type => ({ name: "T-Shirt", primary_attribute: "Size", attributes: { Colour: "Navy", Part: "Body" }, default_uom: "Nos", dimensions: { received_type: type, lot: "LOT-A" }, values: Object.fromEntries(sizes.map(size => [size, { qty: 0, pending_quantity: 10, max_receivable_quantity: 10.5, rate: 123, ref_doctype: "YRP Work Order Receivables", ref_docname: `ROW-${size}` }])) })) }]
+	page.on("pageerror", e => errors.push(e.message)); page.on("console", m => { if (m.type() === "warning") warnings.push(m.text()) })
+	await page.route("**/api/method/**", async route => {
+		const method = new URL(route.request().url()).pathname.split("/api/method/")[1], args = JSON.parse(route.request().postData() || "{}")
+		requests.push({ method, args }); let value = null, error = ""
+		if (method.endsWith("get_capabilities")) value = { ...capabilities, plan_actions: { goods_received_note: { ...flags, can_create: state.create, can_submit: state.submit } } }
+		else if (method.endsWith("getdoctype")) return route.fulfill({ contentType: "application/json", body: JSON.stringify({ docs: [{ name: "YRP Goods Received Note", fields: [{ fieldname: "naming_series", fieldtype: "Select", label: "Naming Series", options: "GRN-2627-\nGRN-TEST-", default: "GRN-2627-", reqd: 1 }] }] }) })
+		else if (method.endsWith("get_closed_sewing_work_orders")) { value = [[args.filters.supplier === "UNIT-A" ? "WO-A" : "WO-B", "LOT-A", "T-Shirt", "Sewing"]]; error = state.reloadError; if (state.searchHold) { const hold = state.searchHold; state.searchHold = null; await hold } }
+		else if (method.endsWith("get_closed_work_order_grn_details")) { value = { work_order: args.work_order, supplier: args.supplier, lot: args.supplier === "UNIT-A" ? "LOT-A" : "LOT-B", item: "T-Shirt", process: "Sewing", has_pending_items: true, item_details: structuredClone(groups) }; if (state.detailsHold) { const hold = state.detailsHold; state.detailsHold = null; await hold } }
+		else if (method.endsWith("create_closed_work_order_grn")) { if (state.hold) { const hold = state.hold; state.hold = null; await hold } error = state.error; if (!error) value = { name: `GRN-SAVED-${++state.saved}`, docstatus: 1 } }
+		else if (method.endsWith("get_sewing_plan_entries")) value = {}
+		else if (method.endsWith("link_search")) value = []
+		else throw new Error(`Unexpected Closed GRN request: ${method}`)
+		return route.fulfill({ status: error ? 417 : 200, contentType: "application/json", body: JSON.stringify(error ? { _server_messages: JSON.stringify([JSON.stringify({ message: error })]), exc: "ValidationError" } : { message: value }) })
+	})
+	const count = suffix => requests.filter(r => r.method.endsWith(suffix)).length
+	const picker = () => page.getByRole("combobox", { name: "Closed Work Order", exact: true })
+	const qty = () => page.getByRole("spinbutton", { name: "Good row 1 XS received quantity", exact: true })
+	const action = () => page.getByRole("button", { name: "Create & Submit GRN", exact: true })
+	const selectWo = async (name = "WO-A") => { await picker().fill(name); await page.getByRole("option", { name, exact: true }).click(); await qty().waitFor() }
+	const tab = name => page.evaluate(name => window.router.replace({ query: { ...window.router.currentRoute.value.query, tab: name } }), name)
+	const fill = async () => { await selectWo(); await page.getByRole("textbox", { name: "Supplier Document Number", exact: true }).fill("SUP-007"); await page.getByRole("textbox", { name: "Vehicle Number", exact: true }).fill("KA-01-1234"); await page.getByRole("textbox", { name: "DC Number", exact: true }).fill("DC-007"); await page.getByRole("textbox", { name: "Comments", exact: true }).fill("Keep this receipt draft"); await qty().fill("2") }
+	const closeError = async text => { await page.locator(".document-error-dialog").getByText(text, { exact: false }).waitFor(); await page.getByRole("button", { name: "OK", exact: true }).click(); await page.locator(".document-error-dialog").waitFor({ state: "hidden" }) }
+	try {
+		await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/__closed-grn`)
+		await picker().waitFor()
+		assert(count("get_closed_work_order_grn_details") === 0, "Closed GRN fetched without selected WO")
+		await fill()
+		await qty().fill("-1"); await action().click(); await closeError("Enter a finite, non-negative quantity")
+		assert(count("create_closed_work_order_grn") === 0, "Invalid negative quantity reached the server")
+		await qty().fill("2")
+		const entered = await page.locator('.closed-grn-editor input, .closed-grn-editor textarea').evaluateAll(elements => elements.map(el => [el.id, el.value]))
+		for (const label of ["Naming Series", "Posting Date", "Posting Time", "Delivery Date", "Supplier Document Number", "Supplier Document Date", "Vehicle Number", "DC Number", "Comments"]) assert(await page.getByRole(/Series|Date|Time/.test(label) ? "combobox" : "textbox", { name: label, exact: true }).count() === 1, `Missing closed GRN field: ${label}`)
+		assert((await page.locator(".closed-grn-editor").innerText()).includes("Received Type"), "Received Type buckets absent")
+		assert(requests.some(r => r.method.endsWith("get_closed_sewing_work_orders") && r.args.filters.supplier === "UNIT-A"), "Closed WO picker lost Supplier filter")
+		for (const width of [390, 900, 1280, 1600]) {
+			await page.setViewportSize({ width, height: 900 }); await noOverflow(page, `Closed GRN ${width}`)
+			if (width === 390) assert(await page.locator(".closed-grn-editor__scroll").first().evaluate(el => el.scrollWidth > el.clientWidth && getComputedStyle(el).overflowX === "auto"), "Closed GRN matrix overflow is not contained")
+			if (process.env.ESSDEE_SEWING_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SEWING_SCREENSHOTS}/sewing-closed-grn-${width}.png`, fullPage: true, animations: "disabled" })
+		}
+		state.error = "Supplier reference rejected"; await action().click(); await closeError(state.error)
+		assert(JSON.stringify(await page.locator('.closed-grn-editor input, .closed-grn-editor textarea').evaluateAll(elements => elements.map(el => [el.id, el.value]))) === JSON.stringify(entered), "Server rejection changed one or more receipt fields")
+		assert(await qty().inputValue() === "2" && await page.getByRole("textbox", { name: "Comments", exact: true }).inputValue() === "Keep this receipt draft" && await page.getByRole("textbox", { name: "Supplier Document Number", exact: true }).inputValue() === "SUP-007", "Server rejection discarded entered GRN values")
+		const payload = requests.find(r => r.method.endsWith("create_closed_work_order_grn")).args
+		assert(payload.work_order === "WO-A" && payload.supplier === "UNIT-A", "Receipt submitted with wrong scope")
+		const serialized = JSON.stringify(payload.item_details)
+		for (const forbidden of ['"rate"', '"default_uom"', '"lot"', '"item_variant"', '"max_receivable_quantity"']) assert(!serialized.includes(forbidden), `Receipt payload trusts ${forbidden}`)
+		assert(payload.item_details[0].items[0].values.XS.ref_docname === "ROW-XS" && payload.item_details[0].items[0].values.XS.qty === 2 && payload.item_details[0].items[0].dimensions.received_type === "Good", "Grouped contract lost reference, quantity or Received Type")
+		state.error = ""; let release; state.hold = new Promise(r => release = r)
+		const before = count("create_closed_work_order_grn"), pending = page.waitForRequest(r => r.url().endsWith("create_closed_work_order_grn"))
+		await action().click(); await pending; await action().evaluate(el => { el.click(); el.click() })
+		assert(await action().isDisabled() && count("create_closed_work_order_grn") === before + 1, "Double click created duplicate GRNs")
+		state.reloadError = "Eligibility unavailable"; release()
+		await page.getByText(/GRN-SAVED-1.*Submitted/).waitFor()
+		await page.getByText(state.reloadError, { exact: true }).waitFor()
+		assert(await qty().count() === 0 && await picker().inputValue() === "", "Acknowledged GRN did not reset editor")
+		assert(await picker().isDisabled(), "Acknowledged receipt reload failure invites duplicate creation")
+		state.reloadError = ""; await page.getByRole("button", { name: "Refresh closed Work Orders", exact: true }).click(); await fill()
+		state.error = "Inactive rejection"; state.hold = new Promise(r => release = r)
+		const rejected = page.waitForRequest(r => r.url().endsWith("create_closed_work_order_grn")); await action().click(); await rejected; await tab("entries"); await page.locator('[data-sewing-plan-tab="entries"]').waitFor()
+		const reads = count("get_closed_sewing_work_orders"); const settled = page.waitForResponse(r => r.url().endsWith("create_closed_work_order_grn")); release(); await settled
+		assert(count("get_closed_sewing_work_orders") === reads, "Inactive write fetched receipt records")
+		await tab("closed-work-order-grn"); await closeError(state.error); assert(await qty().inputValue() === "2", "Inactive rejection lost draft")
+		state.error = ""; state.hold = new Promise(r => release = r); const pendingSuccess = page.waitForRequest(r => r.url().endsWith("create_closed_work_order_grn")); await action().click(); await pendingSuccess
+		await tab("entries"); await page.locator('[data-sewing-plan-tab="entries"]').waitFor(); const beforeSuccess = count("get_closed_sewing_work_orders"); const success = page.waitForResponse(r => r.url().endsWith("create_closed_work_order_grn")); release(); await success
+		assert(count("get_closed_sewing_work_orders") === beforeSuccess, "Inactive acknowledgement fetched receipt records")
+		await tab("closed-work-order-grn"); await page.getByText(/GRN-SAVED-2.*Submitted/).waitFor(); assert(await qty().count() === 0, "Inactive successful GRN retained resubmittable editor")
+		await page.getByRole("button", { name: "Refresh closed Work Orders", exact: true }).click()
+		let releaseDetails; state.detailsHold = new Promise(r => releaseDetails = r)
+		const oldDetail = page.waitForRequest(r => r.url().endsWith("get_closed_work_order_grn_details")); await picker().fill("WO-A"); await page.getByRole("option", { name: "WO-A", exact: true }).click(); await oldDetail
+		await page.evaluate(() => window.router.replace('/sewing/plans?supplier=UNIT-B&tab=closed-work-order-grn')); await picker().waitFor(); await selectWo("WO-B")
+		const oldResponse = page.waitForResponse(r => r.url().endsWith("get_closed_work_order_grn_details") && r.request().postDataJSON().supplier === "UNIT-A"); releaseDetails(); await oldResponse
+		assert(await picker().inputValue() === "WO-B" && await page.getByText("LOT-B", { exact: true }).count() > 0, "Old Supplier detail overwrote new Supplier")
+		let releaseSearch; state.searchHold = new Promise(r => releaseSearch = r)
+		const staleSearch = page.waitForRequest(r => r.url().endsWith("get_closed_sewing_work_orders") && r.postDataJSON().filters.supplier === "UNIT-B")
+		await picker().fill("WO"); await staleSearch
+		await page.evaluate(() => window.router.replace('/sewing/plans?supplier=UNIT-A&tab=closed-work-order-grn')); await picker().waitFor(); await fill()
+		const searchResponse = page.waitForResponse(r => r.url().endsWith("get_closed_sewing_work_orders") && r.request().postDataJSON().filters.supplier === "UNIT-B"); releaseSearch(); await searchResponse
+		assert(await picker().inputValue() === "WO-A" && await page.getByRole("option", { name: "WO-B", exact: true }).count() === 0, "Delayed Supplier lookup leaked into current picker")
+		state.hold = new Promise(r => release = r); const departingWrite = page.waitForRequest(r => r.url().endsWith("create_closed_work_order_grn")); await action().click(); await departingWrite
+		await page.evaluate(() => window.router.replace('/sewing/plans?supplier=UNIT-B&tab=closed-work-order-grn')); await picker().waitFor()
+		const departingResponse = page.waitForResponse(r => r.url().endsWith("create_closed_work_order_grn")); release(); await departingResponse
+		assert(await page.getByText(/GRN-SAVED-3/).count() === 0 && await picker().inputValue() === "", "Old Supplier receipt acknowledgement leaked into new Supplier")
+		for (const permissions of [[false, true], [true, false]]) {
+			[state.create, state.submit] = permissions; await page.reload(); await selectWo()
+			assert(await action().isDisabled() && await qty().isDisabled(), `GRN creation needs both permissions: ${permissions}`)
+		}
+		await page.evaluate(() => window.router.replace('/sewing/plans?tab=closed-work-order-grn')); await page.getByText("Select a Sewing Unit to view Sewing Plan.", { exact: true }).waitFor()
+		const withoutScope = requests.length; await page.waitForTimeout(350); assert(requests.length === withoutScope, "Missing Supplier issued Closed GRN requests")
+		assert(errors.length === 0 && warnings.length === 0, `Closed GRN browser issues: ${[...errors, ...warnings].join("; ")}`)
+		console.log("PASS closed-grn: scoped picker, grouped references-only payload, required posting/reference fields, both permissions, popup draft retention, double click lock, acknowledged ID/status and reload recovery, inactive rejection/success settlement, Supplier stale-details guard, four contained viewports")
+	} catch (reason) { console.error("Closed GRN diagnostics:", JSON.stringify({ errors, warnings, body: (await page.locator("body").innerText()).slice(0, 2200) })); throw reason }
+	finally { await page.close(); await server.close() }
+}
+
+assert(["launcher", "plan-entry", "entries-consumption", "entries-consumption-settlement", "closed-grn", "all"].includes(suite), `Unknown Sewing suite: ${suite}`)
 const browser = await chromium.launch({ headless: true })
 try {
 	if (suite === "launcher" || suite === "all") {
@@ -706,4 +819,5 @@ try {
 	if (suite === "plan-entry" || suite === "all") await planEntrySuite(browser)
 	if (suite === "entries-consumption" || suite === "all") await entriesConsumptionSuite(browser)
 	if (suite === "entries-consumption-settlement") await entriesConsumptionSuite(browser, process.argv[3] || "all")
+	if (suite === "closed-grn" || suite === "all") await closedGrnSuite(browser)
 } finally { await browser.close() }

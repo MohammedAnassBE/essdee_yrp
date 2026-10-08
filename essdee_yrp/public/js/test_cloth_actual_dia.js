@@ -23,6 +23,28 @@ function entry({ dia = "30", receivedType = "Accepted", qty = 0, pending = 0, al
 	};
 }
 
+class FakeDialog {
+	constructor(options) {
+		FakeDialog.last = this;
+		this.values = {};
+		this.fields_dict = {};
+		for (const df of options.fields) {
+			this.fields_dict[df.fieldname] = { df, $wrapper: { html() {} } };
+		}
+	}
+
+	set_value(fieldname, value) {
+		this.values[fieldname] = value;
+		this.fields_dict[fieldname].df.onchange?.();
+	}
+
+	get_value(fieldname) {
+		return this.values[fieldname];
+	}
+
+	show() {}
+}
+
 function loadGrnFormHelpers() {
 	const context = {
 		console,
@@ -30,7 +52,7 @@ function loadGrnFormHelpers() {
 		flt: (value) => Number(value || 0),
 		format_number: String,
 		essdee_yrp: { get_dia_attribute: () => "Width" },
-		frappe: { ui: { form: { on() {} } } },
+		frappe: { ui: { form: { on() {} }, Dialog: FakeDialog } },
 	};
 	const sourcePath = path.join(__dirname, "goods_received_note.js");
 	vm.runInNewContext(fs.readFileSync(sourcePath, "utf8"), context, { filename: sourcePath });
@@ -145,6 +167,21 @@ function loadGrnFormHelpers() {
 		assert.equal(split.entry, original, "default mode preserves the original row object");
 		assert.equal(setSplitQuantity(split, "default", 8, { maxValue: 5 }), 5);
 		assert.equal(original.values.default.qty, 5, "default mode keeps the existing quantity cap");
+	}
+
+	{
+		const first = entry({ dia: "30", qty: 10, pending: 10, allowed: 10, reference: "WOR-1" });
+		const second = entry({ dia: "32", qty: 0, pending: 7, allowed: 7, reference: "WOR-2" });
+		const groups = [{ primary_attribute_values: [], items: [first, second] }];
+		grnHelpers.open_actual_dia_dialog({
+			_essdee_actual_dia: { enabled: true, dia_options: ["30", "32"] },
+			itemEditor: { get_items: () => groups },
+		});
+		const dialog = FakeDialog.last;
+		assert.equal(dialog.get_value("qty"), 0, "a fully received first receivable defaults to zero");
+		dialog.set_value("source", grnHelpers.actual_dia_sources(groups)[1].label);
+		assert.equal(dialog.get_value("qty"), 7, "switching receivable defaults to its remaining quantity");
+		assert.equal(dialog.get_value("dia"), "30", "switching receivable defaults to a Dia it does not have");
 	}
 
 	{

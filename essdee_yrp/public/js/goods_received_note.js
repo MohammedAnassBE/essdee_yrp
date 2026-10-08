@@ -175,7 +175,7 @@ essdee_yrp.open_actual_dia_dialog = function (frm) {
 		},
 	});
 
-	const updateAvailability = () => {
+	const applySourceDefaults = () => {
 		const source = byLabel.get(dialog.get_value("source"));
 		const remaining = source ? essdee_yrp.actual_dia_remaining(groups, source.reference) : 0;
 		dialog.fields_dict.availability.$wrapper.html(
@@ -183,17 +183,17 @@ essdee_yrp.open_actual_dia_dialog = function (frm) {
 				? `<div class="alert alert-info mb-0">${__("Planned remaining quantity")}: <b>${format_number(remaining)}</b> · ${__("excess receipt is allowed")}</div>`
 				: "",
 		);
+		if (!source) return;
+		dialog.set_value(
+			"dia",
+			frm._essdee_actual_dia.dia_options.find(
+				(dia) => !essdee_yrp.actual_dia_exists(groups, source.reference, dia),
+			) || "",
+		);
+		dialog.set_value("qty", remaining);
 	};
-	dialog.fields_dict.source.df.onchange = updateAvailability;
+	dialog.fields_dict.source.df.onchange = applySourceDefaults;
 	dialog.set_value("source", sources[0].label);
-	dialog.set_value(
-		"dia",
-		frm._essdee_actual_dia.dia_options.find(
-			(dia) => !essdee_yrp.actual_dia_exists(groups, sources[0].reference, dia),
-		) || "",
-	);
-	dialog.set_value("qty", essdee_yrp.actual_dia_remaining(groups, sources[0].reference));
-	updateAvailability();
 	dialog.show();
 };
 

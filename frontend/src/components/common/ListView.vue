@@ -92,7 +92,6 @@
 		<nav
 			v-if="statusTabs.length"
 			class="list-status-tabs"
-			:class="{ 'list-status-tabs--many': statusTabs.length > 6 }"
 			aria-label="Status filters"
 		>
 			<button
@@ -104,7 +103,7 @@
 				:aria-pressed="activeStatus === tab.value"
 				@click="selectStatus(tab.value)"
 			>
-				<span v-if="tab.value" class="list-status-tab__dot" :class="statusTone(tab.value)"></span>
+				<span v-if="tab.value !== ''" class="list-status-tab__dot" :class="statusTone(tab.label)"></span>
 				{{ tab.label }}
 				<span class="list-status-tab__count">{{ tab.count }}</span>
 			</button>
@@ -112,7 +111,6 @@
 		<label
 			v-if="statusTabs.length"
 			class="list-status-select"
-			:class="{ 'list-status-select--many': statusTabs.length > 6 }"
 		>
 			<span>Status</span>
 			<Select
@@ -616,10 +614,31 @@ const hasActiveQuery = computed(
 const activeQuickFilterCount = computed(() =>
 	standardFilterFields.value.filter((field) => hasFilterValue(quickFilters.value[field.fieldname])).length,
 )
+const isSubmittable = computed(() => Boolean(Number(doctypeMeta.value?.is_submittable)))
+const effectiveStatusField = computed(() => {
+	if (props.statusField) return props.statusField
+	const selectableStatus = ["status", "workflow_state"]
+		.map((fieldname) => metaFields.value.find((field) => field.fieldname === fieldname))
+		.find((field) => field?.fieldtype === "Select" && selectFieldOptions(field).length)
+	if (selectableStatus) return selectableStatus.fieldname
+	return isSubmittable.value ? "docstatus" : ""
+})
+const effectiveStatusOptions = computed(() => {
+	if (props.statusOptions.length) return props.statusOptions
+	if (effectiveStatusField.value === "docstatus") {
+		return [
+			{ label: "Draft", value: "0" },
+			{ label: "Submitted", value: "1" },
+			{ label: "Cancelled", value: "2" },
+		]
+	}
+	const field = metaFields.value.find((candidate) => candidate.fieldname === effectiveStatusField.value)
+	return selectFieldOptions(field)
+})
 const activeFilterCount = computed(() => {
 	const statusIsSeparate = Boolean(
-		activeStatus.value &&
-		!standardFilterFields.value.some((field) => field.fieldname === props.statusField),
+		hasFilterValue(activeStatus.value) &&
+		!standardFilterFields.value.some((field) => field.fieldname === effectiveStatusField.value),
 	)
 	return Number(Boolean(appliedSearch.value)) + advancedFilters.value.length + activeQuickFilterCount.value + Number(statusIsSeparate)
 })
@@ -627,7 +646,6 @@ const isEmptyResult = computed(() =>
 	metadataReady.value && !loading.value && !error.value && rows.value.length === 0,
 )
 
-const isSubmittable = computed(() => Boolean(Number(doctypeMeta.value?.is_submittable)))
 const canBulkEdit = computed(() => hasDoctypePermission("write"))
 const canBulkSubmit = computed(() => hasDoctypePermission("submit"))
 const canBulkCancel = computed(() => hasDoctypePermission("cancel"))
@@ -699,7 +717,7 @@ const mobileColumns = computed(() => {
 	const columns = activeColumns.value
 	if (columns.length <= 4) return columns
 	const primary = columns[0]
-	const statusFields = new Set([props.statusField, "docstatus", "status", "workflow_state"].filter(Boolean))
+	const statusFields = new Set([effectiveStatusField.value, "docstatus", "status", "workflow_state"].filter(Boolean))
 	const status = columns.find((column) => statusFields.has(column.fieldname))
 	const facts = columns.slice(1).filter((column) => column !== status).slice(0, status ? 2 : 3)
 	return [primary, ...facts, ...(status ? [status] : [])].filter(Boolean)
@@ -756,16 +774,16 @@ const fetchFields = computed(() => [
 	...new Set([
 		...activeColumns.value.map((column) => column.fieldname),
 		...activeCurrencyFields.value,
-		...(props.statusField ? [props.statusField] : []),
+		...(effectiveStatusField.value ? [effectiveStatusField.value] : []),
 		...(isSubmittable.value ? ["docstatus", "modified"] : []),
 	]),
 ])
 
 const statusTabs = computed(() => {
-	if (!props.statusField || !props.statusOptions.length) return []
+	if (!effectiveStatusField.value || !effectiveStatusOptions.value.length) return []
 	return [
 		{ label: "All", value: "", count: statusCounts.value.__all__ ?? total.value },
-		...props.statusOptions.map((option) => {
+		...effectiveStatusOptions.value.map((option) => {
 			const value = typeof option === "string" ? option : option.value
 			const label = typeof option === "string" ? option : option.label
 			return { label, value, count: statusCounts.value[value] ?? 0 }
@@ -797,6 +815,13 @@ function hasFilterValue(value) {
 	return value !== null && value !== undefined && value !== ""
 }
 
+function selectFieldOptions(field) {
+	return String(field?.options || "")
+		.split("\n")
+		.map((option) => option.trim())
+		.filter(Boolean)
+}
+
 function hasDoctypePermission(action) {
 	const user = window.frappe?.boot?.user || {}
 	const sessionUser = window.frappe?.session?.user || user.name || user.email
@@ -807,7 +832,7 @@ function hasDoctypePermission(action) {
 
 function quickFilterTuples({ excludeStatus = false } = {}) {
 	return standardFilterFields.value.flatMap((field) => {
-		if (excludeStatus && field.fieldname === props.statusField) return []
+		if (excludeStatus && field.fieldname === effectiveStatusField.value) return []
 		const value = appliedQuickFilters.value[field.fieldname]
 		return hasFilterValue(value) ? [[field.fieldname, "=", value]] : []
 	})
@@ -816,11 +841,11 @@ function quickFilterTuples({ excludeStatus = false } = {}) {
 function allFilters() {
 	const filters = [...baseFilters(), ...advancedFilters.value, ...quickFilterTuples()]
 	if (
-		props.statusField &&
-		activeStatus.value &&
-		!standardFilterFields.value.some((field) => field.fieldname === props.statusField)
+		effectiveStatusField.value &&
+		hasFilterValue(activeStatus.value) &&
+		!standardFilterFields.value.some((field) => field.fieldname === effectiveStatusField.value)
 	) {
-		filters.push([props.statusField, "=", activeStatus.value])
+		filters.push([effectiveStatusField.value, "=", activeStatus.value])
 	}
 	if (appliedSearch.value.trim()) {
 		filters.push(["name", "like", `%${appliedSearch.value.trim()}%`])
@@ -870,7 +895,7 @@ async function initialise() {
 }
 
 async function loadStatusCounts(existingSequence = loadSequence) {
-	if (!props.statusField || !props.statusOptions.length) {
+	if (!effectiveStatusField.value || !effectiveStatusOptions.value.length) {
 		statusCounts.value = {}
 		return
 	}
@@ -881,13 +906,13 @@ async function loadStatusCounts(existingSequence = loadSequence) {
 	]
 	if (appliedSearch.value.trim()) filters.push(["name", "like", `%${appliedSearch.value.trim()}%`])
 	try {
-		const values = props.statusOptions.map((option) =>
+		const values = effectiveStatusOptions.value.map((option) =>
 			typeof option === "string" ? option : option.value,
 		)
 		const counts = await Promise.all([
 			getCount(props.doctype, filters),
 			...values.map((value) =>
-				getCount(props.doctype, [...filters, [props.statusField, "=", value]]),
+				getCount(props.doctype, [...filters, [effectiveStatusField.value, "=", value]]),
 			),
 		])
 		if (existingSequence !== loadSequence) return
@@ -979,12 +1004,12 @@ function selectStatus(value) {
 	if (activeStatus.value === value) return
 	activeStatus.value = value
 	const values = { ...quickFilters.value }
-	if (hasFilterValue(value)) values[props.statusField] = value
-	else delete values[props.statusField]
+	if (hasFilterValue(value)) values[effectiveStatusField.value] = value
+	else delete values[effectiveStatusField.value]
 	quickFilters.value = values
 	const appliedValues = { ...appliedQuickFilters.value }
-	if (hasFilterValue(value)) appliedValues[props.statusField] = value
-	else delete appliedValues[props.statusField]
+	if (hasFilterValue(value)) appliedValues[effectiveStatusField.value] = value
+	else delete appliedValues[effectiveStatusField.value]
 	appliedQuickFilters.value = appliedValues
 	first.value = 0
 	reload()
@@ -992,9 +1017,9 @@ function selectStatus(value) {
 
 function quickFiltersChanged({ values, field }) {
 	quickFilters.value = values
-	if (!field || field.fieldname === props.statusField) {
-		activeStatus.value = hasFilterValue(values[props.statusField])
-			? values[props.statusField]
+	if (!field || field.fieldname === effectiveStatusField.value) {
+		activeStatus.value = hasFilterValue(values[effectiveStatusField.value])
+			? values[effectiveStatusField.value]
 			: ""
 	}
 	first.value = 0
@@ -1207,8 +1232,11 @@ function openRow(row) {
 function rowClass(row) {
 	const classes = ["premium-list-row"]
 	if (props.clickable) classes.push("premium-list-row--clickable")
-	if (props.statusField && row?.[props.statusField]) {
-		classes.push(`premium-list-row--${statusTone(row[props.statusField])}`)
+	if (effectiveStatusField.value && hasFilterValue(row?.[effectiveStatusField.value])) {
+		const value = row[effectiveStatusField.value]
+		const option = effectiveStatusOptions.value.find((candidate) => String(typeof candidate === "string" ? candidate : candidate.value) === String(value))
+		const label = typeof option === "string" ? option : option?.label
+		classes.push(`premium-list-row--${statusTone(label || value)}`)
 	}
 	return classes.join(" ")
 }
@@ -1614,14 +1642,6 @@ defineExpose({ refresh: reload })
 	font-weight: 700;
 	letter-spacing: .04em;
 	text-transform: uppercase;
-}
-
-.list-status-select--many {
-	display: grid;
-}
-
-.list-status-tabs--many {
-	display: none;
 }
 
 .list-status-tab {

@@ -433,6 +433,11 @@ async function cutBundleEditSuite(page) {
 	for (const label of ["Lot", "Item", "Warehouse", "Posting Date", "Printed Time", "Status"]) {
 		assert(await list.getByRole("columnheader", { name: label, exact: true }).count() === 1, `Cut Bundle Edit list omits ${label}`)
 	}
+	const statusTabs = list.getByRole("navigation", { name: "Status filters" })
+	assert(await statusTabs.isVisible(), "Cut Bundle Edit list does not infer document status tabs")
+	for (const status of ["All", "Draft", "Submitted", "Cancelled"]) {
+		assert(await statusTabs.getByRole("button", { name: new RegExp(`^${status}\\s`) }).count() === 1, `Cut Bundle Edit status filters omit ${status}`)
+	}
 	assert(await page.getByRole("button", { name: "Create Cut Bundle Edit", exact: true }).count() === 1, "Cut Bundle Edit create action is missing")
 	assert(await list.locator(".p-selection-column").count() === 0, "Cut Bundle Edit exposes unsafe generic bulk actions")
 	await list.locator(".premium-list-table").getByText("CBE-CP-1", { exact: true }).click()

@@ -215,14 +215,13 @@ async function shellSuite(page) {
 		assert(await page.getByRole("button", { name: label, exact: true }).count() >= 1, `Work Order ${label} action is missing`)
 	}
 	assert(await page.getByRole("button", { name: "Create Work Order", exact: true }).count() === 0, "Work Order list exposes Create without create permission")
-	const workOrderStatusSelect = page.getByRole("combobox", { name: "Status filter" })
-	assert(await workOrderStatusSelect.count() === 1, "Work Order status filters do not collapse into the compact selector")
-	await workOrderStatusSelect.click()
+	const workOrderStatusTabs = page.getByRole("navigation", { name: "Status filters" })
+	assert(await workOrderStatusTabs.count() === 1 && await workOrderStatusTabs.isVisible(), "Work Order status tabs are not visible on desktop")
 	for (const status of ["Draft", "Submitted", "Partially Received", "Fully Received", "Closed", "Cancelled"]) {
-		assert(await page.getByRole("option", { name: new RegExp(`^${status}\\s`) }).count() === 1, `Work Order status filters omit ${status}`)
+		assert(await workOrderStatusTabs.getByRole("button", { name: new RegExp(`^${status}\\s`) }).count() === 1, `Work Order status filters omit ${status}`)
 	}
-	assert(await page.getByRole("option", { name: /^In Progress\s/ }).count() === 0, "Work Order status filters still expose an unsupported status")
-	await page.keyboard.press("Escape")
+	assert(await workOrderStatusTabs.getByRole("button", { name: /^In Progress\s/ }).count() === 0, "Work Order status filters still expose an unsupported status")
+	assert(!(await page.getByRole("combobox", { name: "Status filter" }).isVisible()), "Work Order mobile status selector is visible on desktop")
 	const workOrderListRequests = listRequests.filter((request) => request.kind === "list" && request.doctype === "YRP Work Order")
 	assert(
 		workOrderListRequests.length > 0 && workOrderListRequests.every((request) => Array.isArray(request.filters) && request.filters.length === 0),

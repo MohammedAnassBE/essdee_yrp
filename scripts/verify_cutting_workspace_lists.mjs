@@ -169,6 +169,12 @@ for (const list of lists) {
 	}
 	assert(await page.locator(".premium-list-table").getByText(list.row, { exact: true }).count() === 1, `${list.title} desktop row did not render`)
 	assert(await page.locator(".mobile-list-records").getByText(list.row, { exact: true }).count() === 1, `${list.title} mobile record did not render`)
+	const desktopStatusFilters = await page.evaluate(() => ({
+		tabs: document.querySelector(".list-status-tabs") ? getComputedStyle(document.querySelector(".list-status-tabs")).display : "absent",
+		select: document.querySelector(".list-status-select") ? getComputedStyle(document.querySelector(".list-status-select")).display : "absent",
+	}))
+	assert(desktopStatusFilters.tabs !== "none" && desktopStatusFilters.tabs !== "absent", `${list.title} does not show status tabs on desktop: ${JSON.stringify(desktopStatusFilters)}`)
+	assert(desktopStatusFilters.select === "none", `${list.title} shows the mobile status selector on desktop: ${JSON.stringify(desktopStatusFilters)}`)
 	assert(await page.locator(".list-row-chevron").count() === 1, `${list.title} rows are not clickable`)
 	const request = listRequests.find((entry) => entry.doctype === list.doctype)
 	assert(request?.orderBy === "modified desc", `${list.title} is not newest-first: ${JSON.stringify(request)}`)
@@ -202,6 +208,8 @@ const mobileSurface = await page.evaluate(() => ({
 }))
 assert(mobileSurface.desktopTable === "none", `Desktop table remains visible or is missing on mobile: ${JSON.stringify(mobileSurface)}`)
 assert(mobileSurface.mobileRecords !== "none" && mobileSurface.mobileRecords !== "absent", `Mobile records are hidden or missing: ${JSON.stringify(mobileSurface)}`)
+assert(mobileSurface.statusTabs === "none", `Desktop status tabs remain visible on mobile: ${JSON.stringify(mobileSurface)}`)
+assert(mobileSurface.statusSelect !== "none" && mobileSurface.statusSelect !== "absent", `Mobile status selector is hidden or missing: ${JSON.stringify(mobileSurface)}`)
 assert(mobileSurface.searchHeight >= 44, `Mobile search control misses the 44px touch target: ${JSON.stringify(mobileSurface)}`)
 
 assert(errors.length === 0, `Browser errors: ${JSON.stringify(errors)}`)

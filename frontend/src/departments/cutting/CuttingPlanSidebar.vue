@@ -101,7 +101,6 @@
 						<span><i class="pi pi-box"></i><span><small>Bundle date</small><b>{{ formatDate(sheet.bundle_generated_date, false, "Not generated") }}</b></span></span>
 						<span v-if="sheet.printed_time" class="print-state"><i class="pi pi-print"></i><span><small>Printed on</small><b>{{ formatDate(sheet.printed_time, true) }}</b></span></span>
 					</div>
-					<div class="panel-summary"><small>Marker panels</small><div class="panel-chips"><span v-for="panel in laySheetPanels(sheet)" :key="`${sheet.name}-${panel}`" :title="panel">{{ panel }}</span><em v-if="!laySheetPanels(sheet).length">No panels selected</em></div></div>
 				</button>
 			</div>
 			<div v-else class="rail-empty">

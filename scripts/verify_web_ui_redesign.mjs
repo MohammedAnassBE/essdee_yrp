@@ -1128,9 +1128,10 @@ async function sidebarSuite(page, context) {
 		assert(await marker.locator(selector).count() === 1, `Marker card is missing ${selector}`)
 	}
 	const laySheet = page.locator(".laysheet-card").first()
-	for (const selector of [".lay-number", ".rail-card__top strong", ".panel-summary", ".lay-meta", ".lay-status--prominent"]) {
+	for (const selector of [".lay-number", ".rail-card__top strong", ".lay-meta", ".lay-status--prominent"]) {
 		assert(await laySheet.locator(selector).count() === 1, `Lay Sheet card is missing ${selector}`)
 	}
+	assert(await laySheet.locator(".panel-summary").count() === 0, "Lay Sheet cards still repeat Marker Panels")
 	const statusSignals = await page.locator(".laysheet-card").evaluateAll((cards) => cards.map((card) => {
 		const status = card.querySelector(".lay-status--prominent")
 		return {

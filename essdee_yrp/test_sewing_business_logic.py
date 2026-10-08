@@ -378,6 +378,42 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			get_sewing_consumption_print_data("UNRELATED-IPD", plan.lot, plan.supplier)
 
+	def test_actual_restricted_user_cannot_mutate_sewing_workspace(self):
+		"""All-role read/report access must not grant operational write access."""
+		from essdee_yrp.sewing.web_workspace import get_capabilities
+
+		plan, _payload, _data = self._data_entry_plan()
+		user = f"sewing-restricted-{frappe.generate_hash(length=10)}@example.com"
+		frappe.get_doc({
+			"doctype": "User", "email": user, "first_name": "Sewing Restricted",
+			"enabled": 1, "user_type": "System User", "send_welcome_email": 0,
+		}).insert(ignore_permissions=True)
+		previous_user = frappe.session.user
+		try:
+			frappe.set_user(user)
+			self.assertTrue(frappe.has_permission("SD YRP Sewing Plan", "read"))
+			capabilities = get_capabilities()
+			self.assertEqual(set(capabilities["sections"]), {"plans", "reports", "attendance"})
+			for action in capabilities["plan_actions"].values():
+				for flag in ("can_create", "can_write", "can_delete", "can_submit"):
+					self.assertFalse(action[flag])
+			checks = {
+				"entries": lambda: get_sewing_plan_entries(plan.supplier),
+				"entry creation": lambda: submit_data_entry_log({"plan": plan.name}),
+				"inspection update": lambda: update_sewing_plan_data({"supplier": plan.supplier, "lot": plan.lot, "plan": plan.name, "inspection_type": "pre_final", "action": "update", "rows": []}),
+				"consumption save": lambda: save_consumption_data(plan.supplier, plan.lot, [], []),
+				"receipt creation": lambda: create_closed_work_order_grn(plan.work_order, plan.supplier, {}, []),
+			}
+			for label, action in checks.items():
+				with self.subTest(action=label), self.assertRaises(frappe.PermissionError):
+					action()
+			self.assertEqual(get_closed_sewing_work_orders(
+				"YRP Work Order", "", "name", 0, 20, {"supplier": plan.supplier},
+			), [])
+		finally:
+			frappe.set_user(previous_user)
+			frappe.delete_doc("User", user, force=True, ignore_permissions=True)
+
 	def test_current_state_entries_cannot_exceed_predecessor_balance(self):
 		plan = self._mutation_plan()
 		row = plan.sewing_plan_order_details[0]

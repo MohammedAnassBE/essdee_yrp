@@ -48,6 +48,37 @@ async function noOverflow(page, label) {
 	assert(geometry.page <= geometry.viewport + 1, `${label} page overflow: ${JSON.stringify(geometry)}`)
 }
 
+// A dialog must keep both its message and acknowledgement reachable at every
+// supported width. A page-only overflow check misses clipped fixed overlays.
+async function dialogGeometry(page, label, selector = ".document-error-dialog") {
+	const dialog = page.locator(selector)
+	await dialog.waitFor()
+	for (const width of [1600, 1280, 900, 390]) {
+		await page.setViewportSize({ width, height: 900 })
+		await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+		await noOverflow(page, `${label} dialog ${width}`)
+		const geometry = await dialog.evaluate(element => {
+			const box = element.getBoundingClientRect()
+			return { left: box.left, right: box.right, top: box.top, bottom: box.bottom, width: innerWidth, height: innerHeight, scroll: element.scrollWidth, client: element.clientWidth }
+		})
+		assert(geometry.left >= -1 && geometry.right <= geometry.width + 1 && geometry.top >= -1 && geometry.bottom <= geometry.height + 1 && geometry.scroll <= geometry.client + 1, `${label} dialog clipped at ${width}: ${JSON.stringify(geometry)}`)
+		assert(await dialog.getByRole("button").evaluateAll(buttons => buttons.every(button => { const box = button.getBoundingClientRect(); return box.width > 0 && box.bottom <= innerHeight && box.right <= innerWidth })), `${label} dialog action unreachable at ${width}`)
+		if (process.env.ESSDEE_SEWING_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SEWING_SCREENSHOTS}/sewing-${label}-dialog-${width}.png`, fullPage: true, animations: "disabled" })
+	}
+	await page.setViewportSize({ width: 1280, height: 900 })
+}
+
+async function readableReportDates(page, label) {
+	const clipped = await page.locator(".report-filter-grid .erp-date-time-field input").evaluateAll(inputs => inputs.flatMap(input => {
+		const style = getComputedStyle(input), canvas = document.createElement("canvas"), context = canvas.getContext("2d")
+		context.font = style.font
+		const text = input.value || input.placeholder
+		const available = input.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+		return context.measureText(text).width > available + 1 ? [{ field: input.getAttribute("aria-label") || input.id, text, available, needed: context.measureText(text).width }] : []
+	}))
+	assert(!clipped.length, `${label} date text clipped: ${JSON.stringify(clipped)}`)
+}
+
 // These browser tests catch missing/wrong cards, capability leaks, missing retry,
 // unfiltered Supplier searches, lost route context, eager data loads and overflow.
 async function launcherSuite(page) {
@@ -314,7 +345,8 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		await page.getByRole("row").filter({ hasText: "Sewing In" }).waitFor()
 		assert((await page.getByRole("row").filter({ hasText: "Sewing In" }).innerText()).includes("40"), "Dashboard lost configured stage quantities")
 		assert(!requests.some(r => r.method.endsWith("get_data_entry_data")), "Inactive Data Entry fetched")
-		if (process.env.ESSDEE_SEWING_SCREENSHOTS) for (const width of [390, 1280]) { await page.setViewportSize({ width, height: 900 }); await noOverflow(page, `Dashboard ${width}`); await page.screenshot({ path: `${process.env.ESSDEE_SEWING_SCREENSHOTS}/sewing-dashboard-${width}.png`, fullPage: true, animations: "disabled" }) }
+		for (const width of [1600, 1280, 900, 390]) { await page.setViewportSize({ width, height: 900 }); await noOverflow(page, `Dashboard ${width}`); if (process.env.ESSDEE_SEWING_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SEWING_SCREENSHOTS}/sewing-dashboard-${width}.png`, fullPage: true, animations: "disabled" }) }
+		await page.setViewportSize({ width: 1280, height: 900 })
 		state.dashboard = []; await page.getByRole("button", { name: "Refresh dashboard" }).click(); await page.getByText("No input quantities for open Work Orders.", { exact: true }).waitFor()
 		state.dashboardError = "Dashboard unavailable"; await page.getByRole("button", { name: "Refresh dashboard" }).click(); await page.getByText(state.dashboardError, { exact: true }).waitFor()
 		state.dashboardError = ""; state.dashboard = [{ input_type: "Sewing In", qty: 41 }]; await page.getByRole("button", { name: "Retry", exact: true }).click(); await page.getByRole("cell", { name: "41", exact: true }).waitFor()
@@ -357,6 +389,11 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		assert(["plan", "input_type", "work_station", "received_type", "date", "time", "supplier"].every(k => rejected[k]), "Required controls absent from payload")
 		await quantity.fill("7")
 		for (const width of [390, 900, 1600, 1280]) { await page.setViewportSize({ width, height: 900 }); await noOverflow(page, `Data Entry ${width}`); assert(await quantity.inputValue() === "7", "Resize lost quantity"); if (width === 390) assert(await page.getByRole("region", { name: "PLAN-A quantity matrix", exact: true }).evaluate(el => el.scrollWidth > el.clientWidth), "Matrix must own narrow overflow"); if (process.env.ESSDEE_SEWING_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SEWING_SCREENSHOTS}/sewing-entry-${width}.png`, fullPage: true }) }
+		const unsavedRequests = requests.filter(request => /submit_data_entry_log|update_sewing_plan_data/.test(request.method)).length
+		await select("Inspection Type", "Final Inspection")
+		assert(await quantity.inputValue() === "7", "Changing inspection view discarded unsaved entry quantity")
+		await select("Inspection Type", "Pre Final")
+		assert(await quantity.inputValue() === "7" && requests.filter(request => /submit_data_entry_log|update_sewing_plan_data/.test(request.method)).length === unsavedRequests, "Non-destructive view switch saved or discarded entry draft")
 		state.submitError = ""; state.submitDelay = 800
 		const count = requests.filter(r => r.method.endsWith("submit_data_entry_log")).length, loads = state.loads
 		// Retyping a selected Link schedules PrimeVue's 300ms completion. Save
@@ -569,6 +606,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		assert(JSON.stringify(filters) === JSON.stringify({ supplier: "UNIT-A", work_station: "Line 1", input_type: "Sewing In", lot_name: "LOT-A" }), `Wrong Entries filters: ${JSON.stringify(filters)}`)
 		await page.getByRole("button", { name: "Cancel ENTRY-A", exact: true }).click()
 		await page.locator(".document-confirmation-shell").waitFor()
+		await dialogGeometry(page, "entry-confirmation", ".document-confirmation-shell")
 		assert(count("cancel_sewing_plan_entry") === 0, "Cancel bypassed shared confirmation")
 		await page.getByRole("button", { name: "Keep entry", exact: true }).click()
 		assert(await page.locator("[data-entry-id='ENTRY-A']").count() === 1, "Dismissed cancel removed entry")
@@ -751,7 +789,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 			if (width === 390) assert(await page.locator(".closed-grn-editor__scroll").first().evaluate(el => el.scrollWidth > el.clientWidth && getComputedStyle(el).overflowX === "auto"), "Closed GRN matrix overflow is not contained")
 			if (process.env.ESSDEE_SEWING_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SEWING_SCREENSHOTS}/sewing-closed-grn-${width}.png`, fullPage: true, animations: "disabled" })
 		}
-		state.error = "Supplier reference rejected"; await action().click(); await closeError(state.error)
+		state.error = "Supplier reference rejected"; await action().click(); await dialogGeometry(page, "closed-grn"); await closeError(state.error)
 		assert(JSON.stringify(await page.locator('.closed-grn-editor input, .closed-grn-editor textarea').evaluateAll(elements => elements.map(el => [el.id, el.value]))) === JSON.stringify(entered), "Server rejection changed one or more receipt fields")
 		assert(await qty().inputValue() === "2" && await page.getByRole("textbox", { name: "Comments", exact: true }).inputValue() === "Keep this receipt draft" && await page.getByRole("textbox", { name: "Supplier Document Number", exact: true }).inputValue() === "SUP-007", "Server rejection discarded entered GRN values")
 		const payload = requests.find(r => r.method.endsWith("create_closed_work_order_grn")).args
@@ -874,6 +912,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		for (const width of [390, 900, 1280, 1600]) {
 			await page.setViewportSize({ width, height: width === 390 ? 500 : 900 })
 			await noOverflow(page, `${name} ${width}`)
+			await readableReportDates(page, `${name} ${width}`)
 			const clipped = await page.locator(".report-shell__commands .p-button").evaluateAll(buttons => buttons.filter(button => { const label = button.querySelector('.p-button-label'); return label && (label.getBoundingClientRect().right > button.getBoundingClientRect().right + 1 || label.scrollWidth > label.clientWidth + 1) }).map(button => button.textContent))
 			assert(!clipped.length, `${name} ${width} clips report actions: ${clipped.join(', ')}`)
 			assert(await page.locator(`[data-sewing-report='${name}'] .sewing-report-matrix`).first().evaluate(el => getComputedStyle(el.querySelector('thead th')).position === 'sticky'), `${name} header is not sticky`)
@@ -1034,6 +1073,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		await page.evaluate(async () => { await document.fonts.ready; await Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {}))) })
 		for (const width of [390, 900, 1280, 1600]) {
 			await page.setViewportSize({ width, height: width === 390 ? 500 : 900 }); await noOverflow(page, `${name} ${width}`)
+			await readableReportDates(page, `${name} ${width}`)
 			const clipped = await page.locator('.report-shell__commands .p-button').evaluateAll(buttons => buttons.filter(button => { const label = button.querySelector('.p-button-label'); return label && (label.scrollWidth > label.clientWidth + 1 || label.getBoundingClientRect().right > button.getBoundingClientRect().right + 1) }).map(button => button.textContent))
 			assert(!clipped.length, `${name} ${width} clips actions: ${clipped}`)
 			const matrix = page.locator('.sewing-report-matrix').first()
@@ -1198,7 +1238,159 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 	} finally { await page.close(); await server.close() }
 }
 
-assert(["launcher", "plan-entry", "entries-consumption", "entries-consumption-settlement", "closed-grn", "primary-reports", "summary-reports", "attendance", "all"].includes(suite), `Unknown Sewing suite: ${suite}`)
+// A continuous journey through the built application catches wiring defects
+// between cards/routes that isolated view harnesses cannot see. Individual suites
+// above retain the populated matrices, mutation races and detailed contracts.
+async function integratedSuite(browser) {
+	const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+	page.setDefaultTimeout(15_000)
+	await login(page)
+	const requests = [], errors = []
+	page.on("pageerror", error => errors.push(error.message))
+	const state = { hrError: true }
+	const responses = {
+		get_dashboard_data: [{ input_type: "Sewing In", qty: 42 }],
+		get_data_entry_data: { data: {}, input_types: [], diff: {}, allowances: {} },
+		get_sewing_plan_entries: {},
+		get_supplier_lots: [["LOT-INTEGRATION", "Shirt"]],
+		get_consumption_mapping_data: { ipd: "IPD-INTEGRATION", sections: [], cloth_acc_data: [] },
+		get_closed_sewing_work_orders: [["WO-INTEGRATION", "LOT-INTEGRATION", "Shirt", "Sewing"]],
+		get_closed_work_order_grn_details: { work_order: "WO-INTEGRATION", supplier: "UNIT-A", lot: "LOT-INTEGRATION", item: "Shirt", process: "Sewing", has_pending_items: false, item_details: [] },
+		get_sp_status_summary: { header1: [], header2: [], header3: [], data: [] },
+		get_sewing_plan_dpr_data: { date: "2026-10-08", status: "success", blocked: false, pending_fi: [], headers: [], dpr_data: {} },
+		get_scr_data: { colours: [], headers: [], data: {}, primary_values: [] },
+		get_monthly_summary_data: { styles: [], rows: [], grand_total: {} },
+		get_item_summary_options: { lots: ["LOT-INTEGRATION"], items: ["Shirt"] },
+		get_item_summary_data: { groups: [] },
+		get_worker_strength_report: { columns: [], rows: [], employee_punches: [], shifts: [], add_total_row: 0 },
+	}
+	await page.route("**/api/method/**", async route => {
+		const method = new URL(route.request().url()).pathname.split("/api/method/")[1], key = method.split(".").at(-1), args = JSON.parse(route.request().postData() || "{}")
+		if (key === "get_capabilities") return route.fulfill({ json: { message: capabilities } })
+		if (key === "link_search") { const name = args.doctype === "Supplier" ? "UNIT-A" : "LOT-INTEGRATION"; return route.fulfill({ json: { message: [{ name, label: name }] } }) }
+		if (key === "getdoctype") return route.fulfill({ json: { docs: [{ name: "YRP Goods Received Note", fields: [{ fieldname: "naming_series", fieldtype: "Select", label: "Naming Series", options: "GRN-TEST-", default: "GRN-TEST-", reqd: 1 }] }] } })
+		if (!Object.hasOwn(responses, key)) {
+			assert(!method.includes("sewing"), `Uncovered integrated Sewing request: ${method}`)
+			return route.continue()
+		}
+		requests.push({ key, args })
+		if (key !== "get_worker_strength_report") assert((args.supplier || args.filters?.supplier) === "UNIT-A", `Integrated request missing Supplier: ${key}`)
+		if (key === "get_worker_strength_report" && state.hrError) return route.fulfill({ status: 417, json: { _server_messages: JSON.stringify([JSON.stringify({ title: "HR connection timed out", message: "HR is unavailable. Try again shortly." })]), exc: "ValidationError" } })
+		return route.fulfill({ json: { message: responses[key] } })
+	})
+	const count = key => requests.filter(request => request.key === key).length
+	const choose = async (label, option) => { await page.getByRole("combobox", { name: label, exact: true }).focus(); await page.keyboard.press("Space"); await page.getByRole("option", { name: option, exact: true }).click() }
+	const tab = async (label, key, kind = "plan") => {
+		await page.getByRole("tab", { name: label, exact: true }).click()
+		await page.locator(`[data-sewing-${kind === "plan" ? "plan-tab" : "report"}='${key}']`).waitFor()
+		assert(await page.locator(`[data-sewing-${kind === "plan" ? "plan-tab" : "report"}]`).count() === 1, `Integrated inactive ${kind} mounted`)
+	}
+	const setDate = async label => { const field = page.getByRole("combobox", { name: label, exact: true }); await field.fill("08-10-2026"); await field.press("Tab") }
+	const generate = async key => { const before = count(key), response = page.waitForResponse(response => response.url().endsWith(key)); await page.getByRole("button", { name: "Generate", exact: true }).click(); await response; assert(count(key) === before + 1, `Integrated Generate failed/duplicated: ${key}`) }
+	const forbidden = async () => {
+		const labels = await page.locator(".sewing-workspace-shell [role='tab'], .sewing-workspace-shell label, .sewing-workspace-shell option").allTextContents()
+		for (const text of ["FI Updates", "Input/Output", "Input Pending", "Output Pending", "HR Department", "HR Location", "Designation", "Employee"]) assert(!labels.some(label => label.trim() === text), `Excluded Sewing control: ${text}`)
+	}
+	try {
+		await navigate(page, "/web/sewing")
+		await page.locator(".workspace-launcher__card").nth(2).waitFor()
+		await selectUnit(page, "UNIT-A")
+		assert(requests.length === 0, "Launcher eagerly requested Sewing data")
+		await page.getByRole("link", { name: /^Sewing Plan/ }).click()
+		await page.getByRole("cell", { name: "42", exact: true }).waitFor()
+		assert(requests.length === 1 && count("get_dashboard_data") === 1, "Plan card fetched inactive views")
+		await page.getByRole("button", { name: "Refresh dashboard", exact: true }).click()
+		await page.waitForFunction(() => document.querySelector('[data-sewing-plan-tab="dashboard"][aria-busy="false"]'))
+		assert(count("get_dashboard_data") === 2, "Dashboard refresh failed")
+		await tab("Data Entry", "data-entry")
+		await page.getByText("No Sewing Plans for this Sewing Unit.", { exact: true }).waitFor()
+		await tab("Entries", "entries")
+		await page.getByRole("combobox", { name: "Lot", exact: true }).fill("LOT-INTEGRATION")
+		await page.getByRole("option", { name: "LOT-INTEGRATION", exact: true }).click()
+		await tab("Consumption", "consumption")
+		assert(count("get_consumption_mapping_data") === 0, "Consumption fetched before Lot selection")
+		await page.getByRole("combobox", { name: "Lot", exact: true }).fill("LOT-INTEGRATION")
+		await page.getByRole("option", { name: "LOT-INTEGRATION", exact: true }).click()
+		await page.getByText("No consumption mappings for this Lot.", { exact: true }).waitFor()
+		await tab("Entries", "entries")
+		assert(await page.getByRole("combobox", { name: "Lot", exact: true }).inputValue() === "LOT-INTEGRATION", "Integrated tab switch loses entry filter")
+		await tab("Closed Work Order GRN", "closed-work-order-grn")
+		assert(count("get_closed_work_order_grn_details") === 0, "Receipt fetched before Work Order selection")
+		await page.getByRole("combobox", { name: "Closed Work Order", exact: true }).fill("WO-INTEGRATION")
+		await page.getByRole("option", { name: "WO-INTEGRATION", exact: true }).click()
+		await page.getByText("No pending receivable quantities for this Work Order.", { exact: true }).waitFor()
+		await forbidden()
+		await page.getByRole("button", { name: "Back to Sewing", exact: true }).click()
+		await page.getByRole("link", { name: /^Reports/ }).click()
+		await page.locator('[data-sewing-report="status-summary"]').waitFor()
+		await page.locator('.report-shell[aria-busy="false"]').waitFor()
+		assert(count("get_sp_status_summary") === 1 && count("get_sewing_plan_dpr_data") === 0 && count("get_scr_data") === 0 && count("get_monthly_summary_data") === 0 && count("get_item_summary_options") === 0, "Reports card eagerly fetched inactive reports")
+		await tab("DPR", "dpr", "report"); await setDate("DPR Date"); await generate("get_sewing_plan_dpr_data")
+		await tab("SCR", "scr", "report")
+		await page.getByRole("combobox", { name: "Lot", exact: true }).fill("LOT-INTEGRATION"); await page.getByRole("option", { name: "LOT-INTEGRATION", exact: true }).click(); await generate("get_scr_data")
+		await tab("DPR", "dpr", "report")
+		assert(await page.getByRole("combobox", { name: "DPR Date", exact: true }).inputValue() === "08-10-2026", "Integrated report switch loses date")
+		await tab("Monthly Summary", "monthly-summary", "report"); await setDate("From Date"); await setDate("To Date"); await page.getByRole("checkbox", { name: "GRN mode", exact: true }).check(); await generate("get_monthly_summary_data")
+		await tab("Item Summary", "item-summary", "report"); await choose("Lot", "LOT-INTEGRATION"); await page.keyboard.press("Escape"); await generate("get_item_summary_data")
+		await forbidden()
+		const direct = new URL(page.url()).pathname + new URL(page.url()).search
+		await page.reload({ waitUntil: "domcontentloaded" }); await page.locator('[data-sewing-report="item-summary"]').waitFor()
+		assert(new URL(page.url()).pathname + new URL(page.url()).search === direct && await page.getByRole("combobox", { name: "Sewing Unit", exact: true }).inputValue() === "UNIT-A", "Report reload loses unit/tab")
+		await page.getByRole("button", { name: "Back to Sewing", exact: true }).click()
+		await page.getByRole("link", { name: /^Attendance Report/ }).click(); await page.locator('[data-attendance-strength]').waitFor()
+		assert(count("get_worker_strength_report") === 0 && await page.getByRole("combobox", { name: "Sewing Unit", exact: true }).count() === 0, "Attendance eagerly fetched or inherited Supplier")
+		await setDate("Date")
+		for (const label of ["From Time", "To Time"]) { const input = page.getByRole("combobox", { name: label, exact: true }); await input.click(); await page.locator(`#${await input.getAttribute("aria-controls")}`).getByRole("button", { name: "Next Hour", exact: true }).click(); await page.keyboard.press("Escape") }
+		await generate("get_worker_strength_report"); await dialogGeometry(page, "hr-unavailable")
+		await page.getByRole("button", { name: "OK", exact: true }).click()
+		assert(await page.getByRole("combobox", { name: "Date", exact: true }).inputValue() === "08-10-2026", "HR error discarded filter")
+		state.hrError = false; await generate("get_worker_strength_report"); await page.getByText("No matching records", { exact: true }).waitFor(); await forbidden()
+		await page.goBack(); await page.locator(".workspace-launcher__card").nth(2).waitFor()
+		await navigate(page, direct); await page.locator('[data-sewing-report="item-summary"]').waitFor()
+		assert(await page.getByRole("combobox", { name: "Sewing Unit", exact: true }).inputValue() === "UNIT-A", "Direct reports URL loses Supplier")
+		for (const key of Object.keys(responses)) assert(count(key) > 0, `Integrated journey omitted endpoint: ${key}`)
+		assert(errors.length === 0, `Integrated browser errors: ${errors.join("; ")}`)
+		console.log("PASS integrated: built-app Unit selection and all three cards, all ten scoped tabs and global Attendance, active-only requests, refresh/reload/back/direct routes, retained filters, HR popup recovery, excluded controls absent, four-width HR/GRN dialog geometry")
+	} catch (reason) { console.error("Integrated diagnostics:", JSON.stringify({ url: page.url(), errors, requests: requests.map(request => request.key), body: (await page.locator("body").innerText()).slice(0, 1400) })); throw reason }
+	finally { await page.close() }
+}
+
+// Optional read-only migrated-data inspection. It deliberately does not submit
+// entries, receipts, consumption or an external HR report.
+async function liveSuite(browser) {
+	const supplier = process.env.ESSDEE_SEWING_LIVE_SUPPLIER
+	assert(supplier, "live requires ESSDEE_SEWING_LIVE_SUPPLIER from the test site")
+	const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+	page.setDefaultTimeout(20_000)
+	const errors = [], reads = []
+	page.on("pageerror", error => errors.push(error.message))
+	page.on("response", response => { if (/get_dashboard_data|get_data_entry_data|get_sp_status_summary/.test(response.url())) reads.push({ method: response.url().split(".").at(-1), status: response.status() }) })
+	try {
+		await login(page)
+		for (const [name, path, ready] of [
+			["launcher", `/web/sewing?supplier=${encodeURIComponent(supplier)}`, ".workspace-launcher__card"],
+			["dashboard", `/web/sewing/plans?supplier=${encodeURIComponent(supplier)}`, '[data-sewing-plan-tab="dashboard"][aria-busy="false"]'],
+			["entry", `/web/sewing/plans?supplier=${encodeURIComponent(supplier)}&tab=data-entry`, '[data-sewing-plan-tab="data-entry"][aria-busy="false"]'],
+			["status", `/web/sewing/reports?supplier=${encodeURIComponent(supplier)}`, '.report-shell[aria-busy="false"]'],
+			["attendance", "/web/sewing/attendance", "[data-attendance-strength]"],
+		]) {
+			await navigate(page, path); await page.locator(ready).first().waitFor()
+			if (name === "entry") { const plans = page.getByRole("combobox", { name: "Sewing Plan", exact: true }); if (await plans.count()) { await plans.click(); await page.getByRole("option").first().click() } }
+			for (const width of [1600, 1280, 900, 390]) {
+				await page.setViewportSize({ width, height: 900 }); await noOverflow(page, `Migrated ${name} ${width}`)
+				assert(!/Traceback \(most recent call last\)/.test(await page.locator(".sewing-workspace-shell").innerText()), `Raw error on migrated ${name}`)
+				if (process.env.ESSDEE_SEWING_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SEWING_SCREENSHOTS}/sewing-live-${name}-${width}.png`, fullPage: true, animations: "disabled" })
+			}
+			await page.setViewportSize({ width: 1280, height: 900 })
+		}
+		assert(reads.length >= 3 && reads.every(read => read.status === 200), `Migrated read failure: ${JSON.stringify(reads)}`)
+		assert(errors.length === 0, `Migrated browser errors: ${errors.join("; ")}`)
+		console.log(`PASS live: read-only migrated Supplier ${supplier}, launcher/dashboard/entry/status/attendance, 20 viewport checks; ${JSON.stringify(reads)}; no business mutation or HR call`)
+	} catch (reason) { console.error("Live diagnostics:", JSON.stringify({ url: page.url(), errors, reads, body: (await page.locator("body").innerText()).slice(0, 1400) })); throw reason }
+	finally { await page.close() }
+}
+
+assert(["launcher", "plan-entry", "entries-consumption", "entries-consumption-settlement", "closed-grn", "primary-reports", "summary-reports", "attendance", "integrated", "live", "all"].includes(suite), `Unknown Sewing suite: ${suite}`)
 const browser = await chromium.launch({ headless: true })
 try {
 	if (suite === "launcher" || suite === "all") {
@@ -1215,4 +1407,6 @@ try {
 	if (suite === "primary-reports" || suite === "all") await primaryReportsSuite(browser)
 	if (suite === "summary-reports" || suite === "all") await summaryReportsSuite(browser)
 	if (suite === "attendance" || suite === "all") await attendanceSuite(browser)
+	if (suite === "integrated" || suite === "all") await integratedSuite(browser)
+	if (suite === "live") await liveSuite(browser)
 } finally { await browser.close() }

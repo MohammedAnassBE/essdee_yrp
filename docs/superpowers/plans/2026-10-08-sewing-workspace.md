@@ -578,7 +578,7 @@ git commit -m "feat: add attendance strength report"
 - Consumes: all prior tasks.
 - Produces: one passing `all` browser suite, a production bundle, and recorded verification evidence.
 
-- [ ] **Step 1: Extend the integrated browser suite**
+- [x] **Step 1: Extend the integrated browser suite**
 
 Add an `all` flow that:
 
@@ -589,7 +589,7 @@ Add an `all` flow that:
 - edits an unsaved quantity, resizes, switches a non-destructive view state, and proves the value remains;
 - confirms no excluded tab/control text appears.
 
-- [ ] **Step 2: Run the complete backend regression set**
+- [x] **Step 2: Run the complete backend regression set**
 
 Run:
 
@@ -604,6 +604,8 @@ Expected: all PASS with no skips caused by code errors; migrated-data skips, if 
 
 - [ ] **Step 3: Run complete frontend verification**
 
+Verification executed in Task 11: Sewing `all`, production build, and the 37-route audit pass. The premium verifier remains nonzero with `AccessoryStore still renders as an oversized blank page`, exactly as the approved ledger ruling requires; this success checkbox remains open rather than representing that baseline as passing.
+
 Run:
 
 ```bash
@@ -615,7 +617,9 @@ node scripts/audit_web_ui_contract.mjs
 
 Expected: all commands exit 0; no page-level overflow or raw error presentation.
 
-- [ ] **Step 4: Inspect the built routes manually**
+- [x] **Step 4: Inspect the built routes manually**
+
+Inspected migrated test-site Supplier `S-0172` through read-only built launcher, Dashboard, Data Entry, Status Summary and Attendance routes at 1600/1280/900/390 px, plus populated controlled-fixture matrices/reports/dialog screenshots. Restricted-account and mutation safety use transactional test fixtures; HR failures use mocked external boundaries. No production site or live business mutation was used.
 
 Verify representative real data at:
 
@@ -628,9 +632,11 @@ Check permissions with one restricted user, a stale/concurrent Data Entry reject
 
 - [ ] **Step 5: Request final code review and address findings**
 
+Controller-owned whole-branch review remains outstanding after Task 11; the integration implementer does not dispatch this gate.
+
 Use the requesting-code-review workflow against the design, this plan, and the complete branch diff. Re-run the smallest affected suite after each fix, then repeat Steps 2–3.
 
-- [ ] **Step 6: Commit final integration fixes**
+- [x] **Step 6: Commit final integration fixes**
 
 ```bash
 git add frontend/src essdee_yrp/sewing essdee_yrp/test_sewing_*.py scripts/verify_sewing_workspace.mjs docs/superpowers/plans/2026-10-08-sewing-workspace.md

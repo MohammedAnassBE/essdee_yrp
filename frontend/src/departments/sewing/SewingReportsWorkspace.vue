@@ -70,6 +70,7 @@ const itemFilters = reactive({ lots: [], items: [] })
 	.sewing-reports-workspace__mobile { display: grid; gap: 6px; font-size: var(--erp-font-size-caption); font-weight: 650; }
 }
 @media (max-width: 430px) {
+	.sewing-reports-workspace :deep(.report-filter-grid .erp-date-time-field) { grid-column: 1 / -1; }
 	.sewing-reports-workspace :deep(.report-shell__commands) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.sewing-reports-workspace :deep(.report-shell__commands .p-button:first-child) { grid-column: 1 / -1; }
 	.sewing-reports-workspace :deep(.report-shell__commands .p-button) { width: 100%; min-width: 0; min-height: 44px; }

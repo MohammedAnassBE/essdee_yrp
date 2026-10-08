@@ -11,7 +11,8 @@
 				<SewingStatusSummary v-else-if="active === 'status-summary'" :filters="statusFilters" />
 				<SewingDpr v-else-if="active === 'dpr'" :filters="dprFilters" />
 				<SewingScr v-else-if="active === 'scr'" :filters="scrFilters" />
-				<p v-else class="erp-empty-state" role="status">{{ tabs.find(tab => tab.value === active).label }} is not loaded yet.</p>
+				<SewingMonthlySummary v-else-if="active === 'monthly-summary'" :filters="monthlyFilters" />
+				<SewingItemSummary v-else-if="active === 'item-summary'" :filters="itemFilters" />
 			</TabPanel></TabPanels>
 		</Tabs>
 	</section>
@@ -31,6 +32,8 @@ import { useRoute, useRouter } from "vue-router"
 const SewingStatusSummary = defineAsyncComponent(() => import("./reports/SewingStatusSummary.vue"))
 const SewingDpr = defineAsyncComponent(() => import("./reports/SewingDpr.vue"))
 const SewingScr = defineAsyncComponent(() => import("./reports/SewingScr.vue"))
+const SewingMonthlySummary = defineAsyncComponent(() => import("./reports/SewingMonthlySummary.vue"))
+const SewingItemSummary = defineAsyncComponent(() => import("./reports/SewingItemSummary.vue"))
 const props = defineProps({ capabilities: { type: Object, required: true } })
 const route = useRoute(), router = useRouter()
 const tabs = [
@@ -53,6 +56,8 @@ const allowed = computed(() => {
 const statusFilters = reactive({ lot: [], item: [], colour: [], part: [], fromDate: "", toDate: "" })
 const dprFilters = reactive({ mode: "daily", date: "", fromDate: "", toDate: "", workStation: "", inputType: "" })
 const scrFilters = reactive({ lot: "", colours: [] })
+const monthlyFilters = reactive({ fromDate: "", toDate: "", inputType: "", showGrn: false })
+const itemFilters = reactive({ lots: [], items: [] })
 </script>
 
 <style scoped>

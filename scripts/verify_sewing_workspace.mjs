@@ -981,7 +981,121 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 	} finally { await page.close(); await server.close() }
 }
 
-assert(["launcher", "plan-entry", "entries-consumption", "entries-consumption-settlement", "closed-grn", "primary-reports", "all"].includes(suite), `Unknown Sewing suite: ${suite}`)
+// Catches skipped validation, changed server order/totals, lost filters, eager
+// report fetches, unsafe array payloads and stale Supplier/options responses.
+async function summaryReportsSuite(browser) {
+	const harness = `
+import { createApp } from 'vue'; import { createRouter, createMemoryHistory, RouterView } from 'vue-router';
+import PrimeVue from 'primevue/config'; import Aura from '@primeuix/themes/aura';
+import SewingReports from '/src/departments/sewing/SewingReports.vue';
+import '@fontsource-variable/inter'; import 'primeicons/primeicons.css'; import '/src/styles/main.css'; import '/src/styles/enterprise.css';
+const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/sewing/reports', component: SewingReports }, { path: '/sewing', component: { render: () => null } }] });
+await router.push('/sewing/reports?supplier=UNIT-A&tab=monthly-summary'); window.router = router;
+createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options: { darkModeSelector: false } } }).mount('#app');`
+	const server = await createServer({ root: fileURLToPath(new URL("../frontend", import.meta.url)), server: { host: "127.0.0.1", port: 0 }, plugins: [{
+		name: "summary-reports-verifier", resolveId(id) { if (id === "/__summary.js") return "\0summary" }, load(id) { if (id === "\0summary") return harness },
+		configureServer(server) { server.middlewares.use((req, res, next) => { if (req.url !== "/__summary") return next(); res.setHeader("Content-Type", "text/html"); res.end('<!doctype html><html><body><div id="app"></div><script type="module" src="/__summary.js"></script></body></html>') }) },
+	}] })
+	await server.listen()
+	const page = await browser.newPage({ viewport: { width: 1280, height: 900 } }); page.setDefaultTimeout(10_000)
+	const requests = [], errors = [], warnings = []
+	page.on("pageerror", error => errors.push(error.message)); page.on("console", message => { if (message.type() === "warning") warnings.push(message.text()) })
+	const lot = 'LOT-A, "One"', item = 'Style & 1'
+	const styles = ["Zebra (Back)", "Alpha", "Shirt", "Trouser", "Jacket", "Vest", "Dress", "Polo", "Tunic", "Coat"]
+	const monthly = { styles, rows: [{ date: "2026-10-09", "Zebra (Back)": 3, Alpha: 5, total: 79 }, { date: "2026-10-08", "Zebra (Back)": 6, Alpha: 4, total: 91 }], grand_total: { "Zebra (Back)": 121, Alpha: 142, total: 903 } }
+	const summary = { groups: [
+		{ item, lot, headers: ["XL", "S", "M", "L", "2XL", "3XL", "4XL", "5XL"], has_part: 1, rows: [{ date: "2026-10-09", input_type: "Sewing Out", work_station: "Line 3", colour: "Navy", part: "Back", values: { XL: 2, S: 3 }, total: 89 }, { date: "2026-10-08", input_type: "Sewing In", work_station: "Line 1", colour: "Red", part: "Front", values: { XL: 9, S: 7 }, total: 97 }] },
+		{ item: "Alpha", lot: "LOT-Z", headers: ["M"], has_part: 0, rows: [{ date: "2026-10-07", input_type: "Checking", work_station: "Line 2", colour: "Olive", part: "", values: { M: 11 }, total: 117 }] },
+	] }
+	const state = { error: "", optionsError: "", monthlyHold: null, itemHold: null, optionsHold: null, options: { lots: [lot, "LOT-REMOVE"], items: [item, "ITEM-REMOVE"] } }
+	await page.route("**/api/method/**", async route => {
+		const method = route.request().url().split("/api/method/")[1], args = JSON.parse(route.request().postData() || "{}"); requests.push({ method, args })
+		let value, error = "", hold
+		if (method.endsWith("get_capabilities")) value = capabilities
+		else if (method.endsWith("get_monthly_summary_data")) { value = args.supplier === "UNIT-B" ? { styles: [], rows: [], grand_total: {} } : monthly; error = state.error; hold = state.monthlyHold; state.monthlyHold = null }
+		else if (method.endsWith("get_item_summary_options")) { value = args.supplier === "UNIT-B" ? { lots: ["LOT-B"], items: ["ITEM-B"] } : structuredClone(state.options); error = state.optionsError; hold = state.optionsHold; state.optionsHold = null }
+		else if (method.endsWith("get_item_summary_data")) { value = args.supplier === "UNIT-B" ? { groups: [] } : summary; error = state.error; hold = state.itemHold; state.itemHold = null }
+		else if (method.endsWith("link_search")) value = [{ name: "Sewing Out", label: "Sewing Out" }]
+		else throw new Error(`Unexpected summary report request: ${method}`)
+		if (hold) await hold
+		await route.fulfill({ status: error ? 417 : 200, contentType: "application/json", body: JSON.stringify(error ? { _server_messages: JSON.stringify([JSON.stringify({ message: error })]), exc: "ValidationError" } : { message: value }) })
+	})
+	const count = suffix => requests.filter(request => request.method.endsWith(suffix)).length
+	const last = suffix => requests.filter(request => request.method.endsWith(suffix)).at(-1)?.args
+	const generate = () => page.getByRole("button", { name: "Generate", exact: true }).click()
+	const tab = name => page.getByRole("tab", { name, exact: true }).click()
+	const unit = supplier => page.evaluate(supplier => window.router.replace({ query: { ...window.router.currentRoute.value.query, supplier } }), supplier)
+	const dismiss = async text => { const dialog = page.getByRole("dialog").filter({ has: page.getByText(text, { exact: true }) }); await dialog.getByText(text, { exact: true }).waitFor(); assert(await dialog.count() === 1, "Summary error opened duplicate error popups"); await dialog.getByRole("button", { name: "OK", exact: true }).click(); await dialog.waitFor({ state: "hidden" }); await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))) }
+	const date = async (label, value) => { const input = page.getByRole("combobox", { name: label, exact: true }); await input.fill(value); await input.press("Tab"); assert(await input.inputValue() === value, `${label} edit was lost`) }
+	const open = async label => { const input = page.getByRole("combobox", { name: label, exact: true }); await page.waitForFunction(el => !el.disabled, await input.elementHandle()); await input.focus(); await page.keyboard.press("Space") }
+	const close = async () => { await page.keyboard.press("Escape"); await page.locator('.p-multiselect-overlay').waitFor({ state: 'hidden' }) }
+	const pick = async (label, option) => { await open(label); await page.getByRole("option", { name: option, exact: true }).click(); await close() }
+	const responsive = async name => {
+		await page.evaluate(async () => { await document.fonts.ready; await Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {}))) })
+		for (const width of [390, 900, 1280, 1600]) {
+			await page.setViewportSize({ width, height: width === 390 ? 500 : 900 }); await noOverflow(page, `${name} ${width}`)
+			const clipped = await page.locator('.report-shell__commands .p-button').evaluateAll(buttons => buttons.filter(button => { const label = button.querySelector('.p-button-label'); return label && (label.scrollWidth > label.clientWidth + 1 || label.getBoundingClientRect().right > button.getBoundingClientRect().right + 1) }).map(button => button.textContent))
+			assert(!clipped.length, `${name} ${width} clips actions: ${clipped}`)
+			const matrix = page.locator('.sewing-report-matrix').first()
+			assert(await matrix.evaluate(el => getComputedStyle(el.querySelector('thead th')).position === 'sticky'), `${name} headers are not sticky`)
+			if (width === 390) assert(await matrix.evaluate(el => { el.scrollLeft = 100; return el.scrollLeft > 0 }), `${name} narrow matrix cannot scroll horizontally`)
+			if (process.env.ESSDEE_SEWING_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SEWING_SCREENSHOTS}/sewing-${name}-${width}.png`, fullPage: true, animations: "disabled" })
+		}
+		await page.setViewportSize({ width: 1280, height: 900 })
+	}
+	try {
+		await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/__summary`)
+		await page.locator("[data-sewing-destination='reports']").waitFor()
+		assert(await page.getByRole("tab").count() === 5, "Summary extension changed report tab count")
+		await page.locator("[data-sewing-report='monthly-summary']").waitFor()
+		assert(count("get_monthly_summary_data") === 0 && count("get_item_summary_options") === 0 && count("get_item_summary_data") === 0, "Summary reports fetched before activation/Generate")
+		await generate(); await dismiss("Choose From Date and To Date."); assert(count("get_monthly_summary_data") === 0, "Missing dates sent a monthly request")
+		await date("From Date", "09-10-2026"); await date("To Date", "08-10-2026"); await generate(); await dismiss("From Date cannot be after To Date."); assert(count("get_monthly_summary_data") === 0, "Reversed dates sent a monthly request")
+		await date("From Date", "08-10-2026"); await date("To Date", "09-10-2026"); await generate(); await dismiss("Choose an Input Type or enable GRN mode."); assert(count("get_monthly_summary_data") === 0, "Non-GRN omitted required Input Type")
+		await page.getByRole("combobox", { name: "Input Type", exact: true }).fill("Sewing"); await page.getByRole("option", { name: "Sewing Out", exact: true }).click(); await generate()
+		await page.locator("[data-sewing-report='monthly-summary'] tbody tr").first().waitFor()
+		assert(JSON.stringify(last("get_monthly_summary_data")) === JSON.stringify({ supplier: "UNIT-A", start_date: "2026-10-08", end_date: "2026-10-09", input_type: "Sewing Out", show_grn: 0 }), "Monthly request has wrong filters")
+		assert(JSON.stringify(await page.locator('.sewing-report-matrix thead th').allTextContents()) === JSON.stringify(["Date", ...styles, "Total"]), "Monthly styles reordered")
+		assert((await page.locator('.sewing-report-matrix tbody tr').first().innerText()).includes("2026-10-09") && (await page.locator('.sewing-report-matrix tbody tr').first().innerText()).endsWith("79"), "Monthly rows/totals reordered or derived")
+		assert((await page.locator('.sewing-report-matrix tfoot').innerText()).includes("903"), "Monthly grand total derived instead of server value")
+		await responsive("monthly-summary")
+		await page.getByRole("button", { name: "Reset", exact: true }).click(); assert(await page.locator('.sewing-report-matrix').count() === 0 && await page.getByRole("combobox", { name: "From Date", exact: true }).inputValue() === "", "Monthly Reset retained results/filters")
+		await date("From Date", "08-10-2026"); await date("To Date", "09-10-2026"); await page.getByRole("checkbox", { name: "GRN mode", exact: true }).check(); await generate(); await page.locator('.sewing-report-matrix').waitFor()
+		assert(last("get_monthly_summary_data").show_grn === 1 && last("get_monthly_summary_data").input_type === "", "GRN mode required Input Type or sent wrong mode")
+		state.error = "Monthly access changed."; await generate(); await dismiss(state.error); assert(await page.getByRole("checkbox", { name: "GRN mode", exact: true }).isChecked(), "Monthly error lost mode")
+		assert(await page.getByRole("combobox", { name: "From Date", exact: true }).inputValue() === "08-10-2026" && await page.locator('.sewing-report-matrix').count() === 1, "Monthly error lost dates/results")
+		state.error = ""; let releaseMonthly; state.monthlyHold = new Promise(resolve => { releaseMonthly = resolve }); await generate(); await page.getByText("Refreshing report. Previously generated values remain visible.", { exact: true }).waitFor()
+		assert(await page.locator('.sewing-report-matrix tbody tr').count() === 2 && await page.getByRole("button", { name: "Reset", exact: true }).isDisabled() && await page.getByRole("button", { name: "Copy Report", exact: true }).isDisabled(), "Monthly refresh lost results/action locks")
+		await tab("Item Summary"); releaseMonthly(); await page.locator("[data-sewing-report='item-summary']").waitFor(); await page.waitForFunction(() => !document.querySelector('[aria-label="Lot"]')?.disabled)
+		await generate(); await dismiss("Select at least one Lot or Item."); assert(count("get_item_summary_data") === 0, "Item report fetched without selections")
+		await pick("Lot", lot); await pick("Item", item); assert(count("get_item_summary_data") === 0, "Item selection generated a report without explicit Generate"); await generate(); await page.locator('.sewing-report-matrix').first().waitFor()
+		assert(JSON.stringify(last("get_item_summary_data")) === JSON.stringify({ supplier: "UNIT-A", lots: [lot], items: [item] }), "Lot/Item intersection arrays not passed safely together")
+		assert(JSON.stringify(await page.getByRole('heading', { level: 2 }).allTextContents()) === JSON.stringify([`${item} · ${lot}`, 'Alpha · LOT-Z']), "Item result groups reordered")
+		assert(JSON.stringify(await page.locator('.sewing-report-matrix').first().locator('thead th').allTextContents()) === JSON.stringify(["Date", "Input Type", "Work Station", "Colour", "Part", "XL", "S", "M", "L", "2XL", "3XL", "4XL", "5XL", "Total"]), "Item dimensions/size order lost")
+		assert((await page.locator('.sewing-report-matrix').first().locator('tbody tr').first().innerText()).endsWith("89") && (await page.locator('.sewing-report-matrix').nth(1).innerText()).includes("117"), "Item totals derived or groups omitted")
+		assert(!((await page.locator('.sewing-report-matrix').nth(1).locator('thead').innerText()).includes("Part")), "Non-set Item displays a Part column")
+		await responsive("item-summary")
+		state.error = "Item access changed."; await generate(); await dismiss(state.error); assert((await page.locator('[data-sewing-report="item-summary"] .p-multiselect').first().innerText()).includes(lot), "Item error lost Lot filter")
+		state.error = ""; const monthlyCount = count("get_monthly_summary_data"); await generate(); await page.locator('.report-shell[aria-busy="false"]').waitFor(); assert(count("get_monthly_summary_data") === monthlyCount, "Item retry fetched inactive Monthly"); assert(JSON.stringify(last("get_item_summary_data")) === JSON.stringify({ supplier: "UNIT-A", lots: [lot], items: [item] }), "Item retry discarded intersection filters")
+		let releaseItem; state.itemHold = new Promise(resolve => { releaseItem = resolve }); await generate(); await page.getByText("Refreshing report. Previously generated values remain visible.", { exact: true }).waitFor(); assert(await page.locator('.sewing-report-matrix').count() === 2, "Item refresh blanks useful matrices"); await tab("Monthly Summary"); releaseItem()
+		assert(await page.getByRole("checkbox", { name: "GRN mode", exact: true }).isChecked() && await page.getByRole("combobox", { name: "To Date", exact: true }).inputValue() === "09-10-2026", "Monthly filters lost across tab switch")
+		state.options = { lots: ["LOT-NEW"], items: [item] }; await tab("Item Summary"); await open("Lot"); await page.getByRole("option", { name: "LOT-NEW", exact: true }).waitFor(); assert(await page.getByRole("option", { name: lot, exact: true }).count() === 0, "Invalid option remains"); await close()
+		await generate(); await page.locator('.sewing-report-matrix').first().waitFor(); assert(JSON.stringify(last("get_item_summary_data").lots) === "[]" && JSON.stringify(last("get_item_summary_data").items) === JSON.stringify([item]), "Invalid Lot selection not cleared or valid Item lost")
+		await page.getByRole("button", { name: "Reset", exact: true }).click(); await pick("Lot", "LOT-NEW"); await generate(); await page.locator('.sewing-report-matrix').first().waitFor(); assert(JSON.stringify(last("get_item_summary_data").items) === "[]", "Lot-only selection omitted or stale Item retained")
+		await tab("Monthly Summary"); let releaseOptions; state.optionsHold = new Promise(resolve => { releaseOptions = resolve }); await tab("Item Summary"); const optionsCount = count("get_item_summary_options"); await page.waitForFunction(() => document.querySelector('[data-sewing-report="item-summary"]'))
+		await unit("UNIT-B"); await open("Lot"); await page.getByRole("option", { name: "LOT-B", exact: true }).waitFor(); await close(); releaseOptions(); await page.waitForTimeout(150)
+		await open("Lot"); assert(await page.getByRole("option", { name: "LOT-B", exact: true }).count() === 1 && await page.getByRole("option", { name: "LOT-NEW", exact: true }).count() === 0, "Late Supplier A options overwrote B"); await close()
+		assert(count("get_item_summary_options") > optionsCount && last("get_item_summary_options").supplier === "UNIT-B", "Supplier change did not reload options")
+		await generate(); await dismiss("Select at least one Lot or Item."); await pick("Lot", "LOT-B"); await generate(); await page.getByText("No matching records", { exact: true }).waitFor(); assert(last("get_item_summary_data").supplier === "UNIT-B", "Item report leaked Supplier scope")
+		await unit("UNIT-A"); await pick("Lot", "LOT-NEW"); await generate(); await page.locator('.sewing-report-matrix').first().waitFor(); let releaseStaleItem; state.itemHold = new Promise(resolve => { releaseStaleItem = resolve }); await generate(); await page.getByText("Refreshing report. Previously generated values remain visible.", { exact: true }).waitFor(); await unit("UNIT-B"); await pick("Lot", "LOT-B"); await generate(); await page.getByText("No matching records", { exact: true }).waitFor(); releaseStaleItem(); await page.waitForTimeout(150); assert(await page.locator('.sewing-report-matrix').count() === 0, "Late Item data overwrote Supplier B")
+		await tab("Monthly Summary"); await date("From Date", "08-10-2026"); await date("To Date", "09-10-2026"); await page.getByRole("checkbox", { name: "GRN mode", exact: true }).check(); await unit("UNIT-A"); await date("From Date", "08-10-2026"); await date("To Date", "09-10-2026"); await page.getByRole("checkbox", { name: "GRN mode", exact: true }).check(); let releaseStaleMonthly; state.monthlyHold = new Promise(resolve => { releaseStaleMonthly = resolve }); await generate(); await page.locator('.report-shell__loading').waitFor(); await unit("UNIT-B"); releaseStaleMonthly(); await page.waitForTimeout(150); assert(await page.locator('.sewing-report-matrix').count() === 0, "Late Monthly data overwrote Supplier B")
+		state.optionsError = "Item options unavailable."; await tab("Item Summary"); await dismiss(state.optionsError); assert(await page.getByRole("button", { name: "Generate", exact: true }).isEnabled(), "Options failure left report locked"); state.optionsError = ""; await generate(); await open("Lot"); await page.getByRole("option", { name: "LOT-B", exact: true }).waitFor(); await close(); assert(count("get_monthly_summary_data") === monthlyCount + 1, "Options retry fetched inactive Monthly")
+		assert(errors.length === 0 && warnings.length === 0, `Summary errors/warnings: ${[...errors, ...warnings].join('\n')}`)
+		console.log("PASS summary-reports: lazy summaries, Monthly dates/Input Type/GRN validation, server order and grand total, Item options reload/pruning/stale protection, required/intersection/individual array filters, grouped matrices and authoritative totals, retained errors/results/filter state, active-only retries, Supplier data races, eight responsive/sticky/scroll checks")
+	} finally { await page.close(); await server.close() }
+}
+
+assert(["launcher", "plan-entry", "entries-consumption", "entries-consumption-settlement", "closed-grn", "primary-reports", "summary-reports", "all"].includes(suite), `Unknown Sewing suite: ${suite}`)
 const browser = await chromium.launch({ headless: true })
 try {
 	if (suite === "launcher" || suite === "all") {
@@ -996,4 +1110,5 @@ try {
 	if (suite === "entries-consumption-settlement") await entriesConsumptionSuite(browser, process.argv[3] || "all")
 	if (suite === "closed-grn" || suite === "all") await closedGrnSuite(browser)
 	if (suite === "primary-reports" || suite === "all") await primaryReportsSuite(browser)
+	if (suite === "summary-reports" || suite === "all") await summaryReportsSuite(browser)
 } finally { await browser.close() }

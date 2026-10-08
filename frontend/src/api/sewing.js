@@ -27,6 +27,21 @@ export function getSewingScr(supplier, lot) {
 	return callMethod(`${PLAN_METHOD}.get_scr_data`, { supplier, lot })
 }
 
+export function getSewingMonthlySummary(supplier, filters) {
+	return callMethod(`${PLAN_METHOD}.get_monthly_summary_data`, {
+		supplier, start_date: filters.fromDate, end_date: filters.toDate,
+		input_type: filters.inputType || "", show_grn: filters.showGrn ? 1 : 0,
+	})
+}
+
+export function getSewingItemSummaryOptions(supplier) {
+	return callMethod(`${PLAN_METHOD}.get_item_summary_options`, { supplier })
+}
+
+export function getSewingItemSummary(supplier, filters) {
+	return callMethod(`${PLAN_METHOD}.get_item_summary_data`, { supplier, lots: [...filters.lots], items: [...filters.items] })
+}
+
 export function getSewingDataEntry(supplier, lot = "") {
 	return callMethod(`${PLAN_METHOD}.get_data_entry_data`, { supplier, lot })
 }

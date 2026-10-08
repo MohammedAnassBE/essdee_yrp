@@ -13,6 +13,19 @@
 			<header>
 				<div><h2 :title="section.label">{{ section.label }}</h2><span>{{ section.rows.length }}</span></div>
 				<div class="activity-actions">
+					<Button
+						:ref="(element) => setExpandButton(section.key, element)"
+						class="activity-expand-button"
+						:aria-label="`Expand ${section.label}`"
+						aria-haspopup="dialog"
+						:aria-controls="`${section.key}-expanded-list`"
+						icon="pi pi-window-maximize"
+						severity="secondary"
+						text
+						rounded
+						size="small"
+						@click="openExpanded(section.key)"
+					/>
 					<Button v-if="section.rows.length" :aria-label="`Filter ${section.label}`" :aria-expanded="filtersOpen[section.key]" icon="pi pi-filter" severity="secondary" text rounded size="small" @click="filtersOpen[section.key] = !filtersOpen[section.key]" />
 					<Button v-if="section.permissions.can_create" label="New" :aria-label="`Create ${section.label}`" icon="pi pi-plus" size="small" @click="$emit('create', section.key)" />
 				</div>
@@ -49,29 +62,100 @@
 			</div>
 		</section>
 	</aside>
+
+	<RelatedRecordsDialog
+		v-if="canReadDeliveryChallan"
+		v-model:visible="expandedVisible.delivery_challan"
+		v-model:filters="expandedFilters.delivery_challan"
+		title="Delivery Challans"
+		doctype="YRP Delivery Challan"
+		dialog-id="delivery_challan-expanded-list"
+		:base-filters="deliveryChallanBaseFilters"
+		:default-columns="deliveryChallanColumns"
+		:column-labels="deliveryChallanLabels"
+		row-mark="DC"
+		@open="openExpandedRow('delivery_challan', $event)"
+		@closed="expandedClosed('delivery_challan')"
+	/>
+	<RelatedRecordsDialog
+		v-if="canReadGoodsReceivedNote"
+		v-model:visible="expandedVisible.goods_received_note"
+		v-model:filters="expandedFilters.goods_received_note"
+		title="Goods Received Notes"
+		doctype="YRP Goods Received Note"
+		dialog-id="goods_received_note-expanded-list"
+		:base-filters="goodsReceivedNoteBaseFilters"
+		:default-columns="goodsReceivedNoteColumns"
+		:column-labels="goodsReceivedNoteLabels"
+		row-mark="GRN"
+		@open="openExpandedRow('goods_received_note', $event)"
+		@closed="expandedClosed('goods_received_note')"
+	/>
 </template>
 
 <script setup>
 import Button from "primevue/button"
-import { computed, reactive } from "vue"
+import { computed, nextTick, reactive, ref, watch } from "vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
+import RelatedRecordsDialog from "../../components/documents/RelatedRecordsDialog.vue"
 
 const props = defineProps({
 	deliveryChallans: { type: Array, default: () => [] },
 	goodsReceivedNotes: { type: Array, default: () => [] },
 	permissions: { type: Object, default: () => ({}) },
+	workOrder: { type: String, required: true },
 })
-defineEmits(["create", "open"])
+const emit = defineEmits(["create", "open"])
 
 const filtersOpen = reactive({ delivery_challan: false, goods_received_note: false })
 const queries = reactive({ delivery_challan: "", goods_received_note: "" })
 const expandedSections = reactive({ delivery_challan: false, goods_received_note: false })
+const expandedVisible = reactive({ delivery_challan: false, goods_received_note: false })
+const expandedFilters = reactive({ delivery_challan: [], goods_received_note: [] })
+const expandedOrigin = ref("")
+const expandButtons = new Map()
 const mobilePreviewLimit = 3
 const sections = computed(() => [
 	{ key: "delivery_challan", label: "Delivery Challans", rows: props.deliveryChallans, permissions: props.permissions.delivery_challan || {} },
 	{ key: "goods_received_note", label: "Goods Received Notes", rows: props.goodsReceivedNotes, permissions: props.permissions.goods_received_note || {} },
 ].filter((section) => section.permissions.can_read !== false))
 const isEmpty = computed(() => sections.value.every((section) => !filteredRows(section).length))
+const canReadDeliveryChallan = computed(() => props.permissions.delivery_challan?.can_read !== false)
+const canReadGoodsReceivedNote = computed(() => props.permissions.goods_received_note?.can_read !== false)
+const deliveryChallanBaseFilters = computed(() => ({ work_order: props.workOrder }))
+const goodsReceivedNoteBaseFilters = computed(() => ({ against: "YRP Work Order", against_id: props.workOrder }))
+const deliveryChallanColumns = ["work_order", "item", "lot", "posting_date", "posting_time", "docstatus"]
+const deliveryChallanLabels = { work_order: "Work Order", posting_date: "Posting Date", posting_time: "Posting Time" }
+const goodsReceivedNoteColumns = ["against_id", "item", "lot", "posting_date", "posting_time", "docstatus"]
+const goodsReceivedNoteLabels = { against_id: "Work Order", posting_date: "Posting Date", posting_time: "Posting Time" }
+
+function setExpandButton(type, element) {
+	if (element) expandButtons.set(type, element)
+	else expandButtons.delete(type)
+}
+
+function openExpanded(type) {
+	expandedVisible[type] = true
+}
+
+function openExpandedRow(type, row) {
+	expandedOrigin.value = type
+	expandedVisible[type] = false
+	emit("open", { type, row })
+}
+
+function expandedClosed(type) {
+	if (expandedOrigin.value === type) return
+	nextTick(() => expandButtons.get(type)?.$el?.focus?.())
+}
+
+function reopenExpanded() {
+	const type = expandedOrigin.value
+	if (!type) return false
+	expandedOrigin.value = ""
+	expandedVisible[type] = true
+	return true
+}
 
 function filteredRows(section) {
 	const query = queries[section.key].trim().toLowerCase()
@@ -80,6 +164,16 @@ function filteredRows(section) {
 }
 function formatDate(value) { if (!value) return "—"; const [year, month, day] = String(value).slice(0, 10).split("-"); return day ? `${day}-${month}-${year}` : value }
 function formatTime(value) { return value ? String(value).slice(0, 5) : "—" }
+
+watch(() => props.workOrder, () => {
+	expandedVisible.delivery_challan = false
+	expandedVisible.goods_received_note = false
+	expandedFilters.delivery_challan = []
+	expandedFilters.goods_received_note = []
+	expandedOrigin.value = ""
+})
+
+defineExpose({ reopenExpanded })
 </script>
 
 <style scoped>

@@ -28,14 +28,14 @@
 
 				<template #rail>
 					<div v-if="workspace.totals?.length" class="work-order-page__totals"><div v-for="total in workspace.totals" :key="total.fieldname" class="work-order-page__total"><span>{{ total.label }}</span><strong>{{ formatNumber(total.value) }}</strong></div></div>
-					<WorkOrderActivityRail :delivery-challans="deliveryChallans" :goods-received-notes="goodsReceivedNotes" :permissions="workspace.related_permissions || {}" @create="createRelated" @open="openRelatedRow" />
+					<WorkOrderActivityRail ref="activityRail" :work-order="workspace.record?.name || ''" :delivery-challans="deliveryChallans" :goods-received-notes="goodsReceivedNotes" :permissions="workspace.related_permissions || {}" @create="createRelated" @open="openRelatedRow" />
 				</template>
 
 			</FabricDocumentWorkspace>
 		</section>
 
 		<WorkOrderActionPanel v-model:visible="actionVisible" :mode="actionMode" :work-order="workspace.record || {}" :editor="actionEditor" @changed="actionChanged" />
-		<RelatedDocumentWorkspaceDialog v-model:visible="relatedVisible" :doctype="relatedDoctype" :name="relatedName" :source-context="relatedSourceContext" @changed="relatedChanged" @closed="relatedVisible = false" />
+		<RelatedDocumentWorkspaceDialog v-model:visible="relatedVisible" :doctype="relatedDoctype" :name="relatedName" :source-context="relatedSourceContext" @changed="relatedChanged" @closed="relatedClosed" />
 		<DocumentConfirmationDialog v-model:visible="lifecycleConfirmVisible" :title="lifecycleConfirmTitle" :message="lifecycleConfirmMessage" :confirm-label="lifecycleConfirmLabel" :busy="Boolean(acting)" @confirm="confirmLifecycleAction" />
 		<FabricStockOperationDialog v-model:visible="materialIssueVisible" operation="stock_entry" :source-context="materialIssueContext" @changed="materialIssueChanged" />
 		<Dialog v-model:visible="grnSourceVisible" modal header="Create Goods Received Note" class="fabric-action-dialog erp-dialog--md" :dismissable-mask="false">
@@ -57,7 +57,7 @@ import TabList from "primevue/tablist"
 import TabPanel from "primevue/tabpanel"
 import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
-import { computed, ref, watch } from "vue"
+import { computed, nextTick, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import { executeWorkOrderCommand, getWorkOrderEditor, getWorkOrderWorkspace } from "../api/fabricStore.js"
@@ -101,6 +101,7 @@ const relatedVisible = ref(false)
 const relatedDoctype = ref("YRP Delivery Challan")
 const relatedName = ref("")
 const relatedSourceContext = ref({})
+const activityRail = ref(null)
 const materialIssueVisible = ref(false)
 const materialIssueContext = ref({})
 const grnSourceVisible = ref(false)
@@ -289,6 +290,10 @@ function createRelated(type) {
 }
 function openRelatedRow({ type, row }) { openRelated(type === "delivery_challan" ? "YRP Delivery Challan" : "YRP Goods Received Note", row.name) }
 async function relatedChanged() { await loadWorkspace(true) }
+function relatedClosed() {
+	relatedVisible.value = false
+	nextTick(() => activityRail.value?.reopenExpanded?.())
+}
 function openCuttingPlan() { router.push({ name: "cutting-plan-new", query: capabilities.value.create_cutting_plan?.source_context || {} }) }
 function openMaterialIssue() { materialIssueContext.value = { ...(capabilities.value.create_material_issue?.source_context || {}) }; materialIssueVisible.value = true }
 async function materialIssueChanged() { materialIssueVisible.value = false; await loadWorkspace(true) }

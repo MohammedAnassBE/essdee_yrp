@@ -1,6 +1,7 @@
 """Authoritative Sewing reports: batch facts once, then assemble in memory."""
 
 from collections import defaultdict
+from datetime import date as date_type
 
 import frappe
 from frappe import _
@@ -306,9 +307,30 @@ def _assemble_status(snapshot, calculated, attributes, settings, default_receive
 	)
 
 
+def _report_date(value, label):
+	"""Require an explicit date without Frappe's empty-input or zero-date fallback."""
+	title = _("Invalid DPR Date")
+	if value is None or (isinstance(value, str) and not value.strip()):
+		frappe.throw(_("{0} is required.").format(_(label)), title=title)
+	parsed = None
+	if isinstance(value, str | date_type):
+		previous_mute = frappe.flags.mute_messages
+		try:
+			# Replace parser errors with one plain, field-specific business message.
+			frappe.flags.mute_messages = True
+			parsed = getdate(value)
+		except frappe.ValidationError, ValueError, TypeError, OverflowError:
+			pass
+		finally:
+			frappe.flags.mute_messages = previous_mute
+	if parsed is None:
+		frappe.throw(_("Enter a valid {0}.").format(_(label)), title=title)
+	return parsed
+
+
 def daily_dpr(supplier, dpr_date, work_station=None, input_type=None):
 	plans = _report_plans(supplier)
-	date = getdate(dpr_date)
+	date = _report_date(dpr_date, "DPR Date")
 	snapshot = _snapshot(
 		plans, from_date=date, to_date=date, work_station=work_station, input_type=input_type
 	)
@@ -317,7 +339,8 @@ def daily_dpr(supplier, dpr_date, work_station=None, input_type=None):
 
 def dpr_summary(supplier, from_date, to_date, work_station=None, input_type=None):
 	plans = _report_plans(supplier)
-	start, end = getdate(from_date), getdate(to_date)
+	start = _report_date(from_date, "From Date")
+	end = _report_date(to_date, "To Date")
 	if start > end:
 		frappe.throw(_("From Date cannot be after To Date."))
 	snapshot = _snapshot(

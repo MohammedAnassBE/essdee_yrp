@@ -334,6 +334,41 @@ class TestSewingReports(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			self._summary(self.supplier, "2090-01-04", "2090-01-01")
 
+	def _assert_invalid_dpr_date(self, endpoint, args, label):
+		message_count = len(frappe.local.message_log)
+		try:
+			endpoint(*args)
+		except Exception as exc:
+			self.assertIsInstance(exc, frappe.ValidationError)
+			self.assertIn(label, str(exc))
+			self.assertNotIn("<", str(exc))
+			self.assertEqual(len(frappe.local.message_log), message_count + 1)
+			self.assertEqual(frappe.local.message_log[-1].title, "Invalid DPR Date")
+		else:
+			self.fail(f"Invalid {label} must raise business validation")
+
+	def test_dpr_range_rejects_missing_zero_and_malformed_bounds_explicitly(self):
+		for label, index in (("From Date", 1), ("To Date", 2)):
+			for invalid in (None, "", " ", "0000-00-00", "not-a-date", "2090-02-30"):
+				with self.subTest(bound=label, value=invalid):
+					args = [self.supplier, "2090-01-01", "2090-01-04"]
+					args[index] = invalid
+					self._assert_invalid_dpr_date(self._summary, args, label)
+
+	def test_daily_dpr_rejects_missing_zero_and_malformed_dates_explicitly(self):
+		for invalid in (None, "", " ", "0000-00-00", "not-a-date", "2090-02-30"):
+			with self.subTest(value=invalid):
+				self._assert_invalid_dpr_date(
+					api.get_sewing_plan_dpr_data, (self.supplier, invalid), "DPR Date"
+				)
+
+	def test_dpr_range_includes_the_upper_bound_and_excludes_the_following_day(self):
+		self._entry(self.plan, "Line Output", "2090-01-05", 17)
+		self._entry(self.plan, "Line Output", "2090-01-06", 19)
+		result = self._summary(self.supplier, "2090-01-04", "2090-01-05")
+		self.assertEqual([row["date"] for row in result["reports"]], ["2090-01-04", "2090-01-05"])
+		self.assertEqual([self._dpr_total(row) for row in result["reports"]], [30, 17])
+
 	def test_dpr_range_contains_each_applicable_date_and_filters(self):
 		result = self._summary(self.supplier, "2090-01-01", "2090-01-05")
 		self.assertEqual(result["pending_fi"], [])

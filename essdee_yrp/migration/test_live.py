@@ -45,6 +45,7 @@ from essdee_yrp.migration.live import (
 	_include_reset_generated_audit_scope,
 	_is_verified_attachment_url,
 	_mark_reset_started,
+	_merge_aliased_supplier_children,
 	_migration_contract_fingerprint,
 	_migration_generated_identity_allowances,
 	_migration_physical_target_doctypes,
@@ -60,6 +61,7 @@ from essdee_yrp.migration.live import (
 	_same_migrated_value,
 	_source_broken_link_manifest,
 	_source_snapshot,
+	_supplier_alias_siblings,
 	_target_reset_counts,
 	_target_reset_file_names,
 	_validate_configured_default_contract,
@@ -2036,6 +2038,53 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			)
 		self.assertEqual(bill["supplier"], "Sivan Motors Works")
 		self.assertEqual(bill["warehouse"], "Sivan Motors Works")
+
+	def test_suppliers_merged_into_one_target_keep_every_source_department_row(self):
+		references = {
+			"supplier_aliases": {
+				"S-0004": "SRI RAJESWARI GALAXY",
+				"SRI RAJESWARI GALAXY": "SRI RAJESWARI GALAXY",
+				"LONE SUPPLIER": "LONE SUPPLIER",
+			}
+		}
+		siblings = _supplier_alias_siblings(references)
+		self.assertEqual(
+			siblings,
+			{"S-0004": ["SRI RAJESWARI GALAXY"], "SRI RAJESWARI GALAXY": ["S-0004"]},
+		)
+		source = Mock()
+		source.iter_documents.return_value = [
+			{
+				"doctype": "Supplier",
+				"name": "SRI RAJESWARI GALAXY",
+				"deparments": [{"doctype": "Supplier Department", "name": "31fb91afe4", "idx": 1}],
+			}
+		]
+		plan = SimpleNamespace(
+			target_schemas={
+				"Supplier": {"fields": [{"fieldname": "deparments", "fieldtype": "Table MultiSelect"}]}
+			}
+		)
+		document = {
+			"doctype": "Supplier",
+			"name": "SRI RAJESWARI GALAXY",
+			"deparments": [{"doctype": "YRP Supplier Department", "name": "8096b97a5b", "idx": 1}],
+		}
+
+		def transform(source_document, _plan):
+			return {
+				**source_document,
+				"deparments": [
+					{**row, "doctype": "YRP Supplier Department"} for row in source_document["deparments"]
+				],
+			}
+
+		with patch("essdee_yrp.migration.live.transform_document", side_effect=transform):
+			_merge_aliased_supplier_children(document, siblings["S-0004"], source, plan)
+
+		source.iter_documents.assert_called_once_with("Supplier", names=["SRI RAJESWARI GALAXY"])
+		self.assertEqual([row["name"] for row in document["deparments"]], ["8096b97a5b", "31fb91afe4"])
+		self.assertEqual({row["doctype"] for row in document["deparments"]}, {"YRP Supplier Department"})
 
 	def test_stitching_major_value_uses_source_master_attribute_identity(self):
 		from yrp.attribute_value_identity import attribute_value_name

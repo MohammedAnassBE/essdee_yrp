@@ -2395,6 +2395,7 @@ def _run_documents(
 	)
 	processed_total += int(approved_frappe_data["processed"])
 
+	supplier_siblings = _supplier_alias_siblings(reference_data)
 	for doctype in plan.parent_doctypes:
 		spec = plan.specs[doctype]
 		state = checkpoint["doctypes"].get(doctype) or {}
@@ -2415,6 +2416,8 @@ def _run_documents(
 					historical_required_blanks,
 					reference_data,
 				)
+				if siblings := supplier_siblings.get(str(source_document.get("name"))):
+					_merge_aliased_supplier_children(target_document, siblings, source, plan)
 			except Exception as exc:
 				failed.append(f"{doctype}:{source_document.get('name')}: {exc}")
 				if len(failed) >= 100:
@@ -3922,6 +3925,45 @@ def _relocate_migrated_file_urls(
 			f"AND child.{_quote_identifier(url_field)}=%s",
 			(file_url, source_file_name, source_url),
 		)
+
+
+def _supplier_alias_siblings(reference_data: Mapping[str, Any]) -> dict[str, list[str]]:
+	"""Map each source Supplier to the other source Suppliers sharing its target."""
+
+	by_target: dict[str, list[str]] = {}
+	for source_name, target_name in (reference_data.get("supplier_aliases") or {}).items():
+		by_target.setdefault(str(target_name), []).append(str(source_name))
+	return {
+		name: sorted(other for other in names if other != name)
+		for names in by_target.values()
+		if len(names) > 1
+		for name in names
+	}
+
+
+def _merge_aliased_supplier_children(
+	target_document: dict[str, Any],
+	siblings: list[str],
+	source: F15SourceBridge,
+	plan: MigrationPlan,
+) -> None:
+	"""Union child rows of every source Supplier merged into one target Supplier.
+
+	Each write replaces the target child tables, so a sibling written in a later
+	batch would otherwise delete the rows of the one written before it.
+	"""
+
+	table_fields = [
+		str(field["fieldname"])
+		for field in plan.target_schemas["Supplier"].get("fields") or []
+		if field.get("fieldtype") in TABLE_FIELD_TYPES
+	]
+	for sibling in source.iter_documents("Supplier", names=siblings):
+		sibling_document = transform_document(sibling, plan)
+		for fieldname in table_fields:
+			rows = sibling_document.get(fieldname) or []
+			if rows:
+				target_document.setdefault(fieldname, []).extend(rows)
 
 
 def _flush_batch(

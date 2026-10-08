@@ -154,51 +154,9 @@ def get_dashboard_data(supplier):
 
 @frappe.whitelist()
 def get_sp_status_summary(supplier):
-	"""Return the live, raw Sewing stage matrix for open Work Orders.
+	from essdee_yrp.sewing.reporting import status_summary
 
-	F15 also calculated configured balance/status columns from the omitted
-	``sewing_plan_input_orders`` rows. F16 deliberately exposes persisted facts
-	only: ordered, each installed input type, and inspection quantities.
-	"""
-
-	payload = get_data_entry_data(supplier)
-	headers = ["Order Qty", *payload.get("input_types", []), "Pre Final", "Final Inspection"]
-	data = []
-	totals = {header: 0 for header in headers}
-	for lot, plans in (payload.get("data") or {}).items():
-		for plan_name, plan in plans.items():
-			details = plan.get("details") or {}
-			if details.get("work_order_status") != "Open":
-				continue
-			for colour in (plan.get("colours") or {}).values():
-				row = {
-					"item": details.get("item"),
-					"lot": lot,
-					"sewing_plan": plan_name,
-					"colour": _attribute_value(colour.get("colour")),
-					"part": _attribute_value(colour.get("part")),
-					"work_order_status": details.get("work_order_status"),
-				}
-				for header in headers:
-					key = header.lower().replace(" ", "_")
-					if header == "Pre Final":
-						value = colour.get("inspection_total", {}).get("pre_final")
-					elif header == "Final Inspection":
-						value = colour.get("inspection_total", {}).get("final_inspection")
-					else:
-						value = sum(
-							flt(size_values.get(key)) for size_values in (colour.get("values") or {}).values()
-						)
-					row[header] = flt(value)
-					totals[header] += flt(value)
-				data.append(row)
-	return {
-		"header1": ["Item", "SD YRP Lot", "Colour", "Part"],
-		"header2": headers,
-		"header3": ["Work Order Status"],
-		"data": [totals, *data] if data else [],
-		"derived_balances_omitted": True,
-	}
+	return status_summary(supplier)
 
 
 @frappe.whitelist()
@@ -390,90 +348,16 @@ def get_sewing_plan_entries(supplier, input_type=None, work_station=None, lot_na
 
 @frappe.whitelist()
 def get_sewing_plan_dpr_data(supplier, dpr_date, work_station=None, input_type=None):
-	plans = _plans(supplier)
-	entries = _entries(
-		plans,
-		entry_date=dpr_date,
-		work_station=work_station,
-		input_type=input_type,
-	)
-	detail_rows = _details(entries)
-	plan_map = {row.name: row for row in plans}
-	entry_map = {row.name: row for row in entries}
-	lots, ipds = _metadata(plans)
-	attributes = _variant_attributes({row.item_variant for row in detail_rows})
-	dpr_data = {}
+	from essdee_yrp.sewing.reporting import daily_dpr
 
-	for row in detail_rows:
-		entry = entry_map[row.parent]
-		plan = plan_map.get(entry.sewing_plan)
-		lot = lots.get(plan.lot) if plan else None
-		ipd = ipds.get(lot.production_detail) if lot else None
-		if not plan or not ipd:
-			continue
-		bucket, size = _bucket(row, ipd, attributes)
-		lot_data = dpr_data.setdefault(entry.input_type, {}).setdefault(
-			plan.lot,
-			{
-				"details": {},
-				"is_set_item": ipd.is_set_item,
-				"pack_attr": ipd.packing_attribute,
-				"set_attr": ipd.set_item_attribute,
-				"item": plan.item,
-				"primary_values": get_ipd_primary_values(ipd.name),
-			},
-		)
-		group = (
-			lot_data["details"]
-			.setdefault(entry.work_station or "-", {})
-			.setdefault(entry.received_type or "-", {})
-			.setdefault(
-				bucket["key"],
-				{
-					"values": {},
-					"part": _attribute_value(bucket["part"]),
-					"colour": bucket["key"],
-					"variant_colour": bucket["variant_colour"],
-					"set_combination": bucket["set_combination"],
-					"total": 0,
-				},
-			)
-		)
-		group["values"][size] = flt(group["values"].get(size)) + flt(row.quantity)
-		group["total"] += flt(row.quantity)
+	return daily_dpr(supplier, dpr_date, work_station, input_type)
 
-	entry_plan_names = {row.sewing_plan for row in entries}
-	pending_fi = []
-	seen = set()
-	if entry_plan_names:
-		order_rows = frappe.get_all(
-			"SD YRP Sewing Plan Order Detail",
-			filters={"parent": ["in", list(entry_plan_names)], "fi_date": ["is", "not set"]},
-			fields=["parent", "item_variant", "set_combination"],
-			limit_page_length=0,
-		)
-		order_attributes = _variant_attributes({row.item_variant for row in order_rows})
-		for row in order_rows:
-			plan = plan_map.get(row.parent)
-			lot = lots.get(plan.lot) if plan else None
-			ipd = ipds.get(lot.production_detail) if lot else None
-			if not plan or not ipd:
-				continue
-			bucket, _size = _bucket(row, ipd, order_attributes)
-			key = (plan.lot, bucket["key"], _attribute_value(bucket["part"]))
-			if key in seen:
-				continue
-			seen.add(key)
-			pending_fi.append(
-				{"lot": plan.lot, "colour": bucket["key"], "part": _attribute_value(bucket["part"])}
-			)
 
-	headers = _input_types([row.input_type for row in entries])
-	return {
-		"headers": headers,
-		"dpr_data": {} if pending_fi else dpr_data,
-		"pending_fi": pending_fi,
-	}
+@frappe.whitelist()
+def get_sewing_plan_dpr_summary(supplier, from_date, to_date, work_station=None, input_type=None):
+	from essdee_yrp.sewing.reporting import dpr_summary
+
+	return dpr_summary(supplier, from_date, to_date, work_station, input_type)
 
 
 @frappe.whitelist()

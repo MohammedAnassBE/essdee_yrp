@@ -273,6 +273,17 @@ def submit_data_entry_log(payload) -> str:
 
 	plan_name = cstr(payload.get("plan")).strip()
 	plan = frappe.get_doc("SD YRP Sewing Plan", plan_name)
+	supplier = plan.supplier
+	_lock_mutation_supplier(supplier)
+	locked_plan = frappe.db.sql(
+		"select name, supplier from `tabSD YRP Sewing Plan` where name = %s for update",
+		plan.name,
+		as_dict=True,
+	)
+	if not locked_plan or locked_plan[0].supplier != supplier:
+		_mutation_scope_changed()
+	plan.flags.for_update = True
+	plan.reload()
 	plan.check_permission("read")
 	input_type = _required_link(payload, "input_type", "SD YRP Sewing Plan Input Type")
 	configuration = {row.input_type: row for row in get_sewing_input_configuration()}
@@ -289,10 +300,6 @@ def submit_data_entry_log(payload) -> str:
 	rows = _trusted_entry_rows(plan, quantities)
 	if not rows:
 		frappe.throw(_("Enter a quantity for at least one Sewing Plan item."))
-	frappe.db.sql(
-		"select name from `tabSD YRP Sewing Plan` where name = %s for update",
-		plan.name,
-	)
 	_validate_input_sequence(plan, configuration[input_type], rows)
 
 	entry = frappe.new_doc("SD YRP Sewing Plan Entry Detail")
@@ -319,36 +326,78 @@ def cancel_sewing_plan_entry(doc_id: str) -> None:
 	entry.delete()
 
 
+def _mutation_scope_changed() -> None:
+	frappe.throw(
+		_("The Sewing Unit scope changed while acquiring locks. Refresh and retry."),
+		title=_("Sewing Mutation Blocked"),
+	)
+
+
+def _lock_mutation_supplier(supplier) -> None:
+	# Common first lock for submit and cancel. Never acquire another Supplier
+	# after locking plans/entries: a drifted scope must instead be retried.
+	if not supplier or not frappe.db.sql(
+		"select name from `tabSupplier` where name = %s for update", supplier
+	):
+		_mutation_scope_changed()
+
+
 def _assert_entry_cancellable(entry) -> None:
 	"""Repeat the Supplier's distinct-date eligibility and effective permission checks."""
-	# Use the same parent-before-entry lock order as data entry submissions.
-	frappe.db.sql(
-		"select name from `tabSD YRP Sewing Plan` where name = %s for update",
-		entry.sewing_plan,
+	# This preliminary read identifies only a candidate scope. Do not lock the
+	# target first: two different targets would then acquire overlapping locks.
+	scope = frappe.db.sql(
+		"""
+			select plan.supplier
+			from `tabSD YRP Sewing Plan Entry Detail` entry
+			join `tabSD YRP Sewing Plan` plan on plan.name = entry.sewing_plan
+			where entry.name = %s
+		""",
+		entry.name,
+		as_dict=True,
 	)
+	supplier = scope[0].supplier if scope else None
+	_lock_mutation_supplier(supplier)
+	# These indexed locking reads see commits made while waiting for Supplier,
+	# unlike a repeatable-read snapshot. FORCE INDEX avoids full-table locks
+	# even when the optimizer estimates a small table is cheaper to scan.
+	# Supplier -> sorted plans -> sorted entries is shared with submission.
+	plan_rows = frappe.db.sql(
+		"""
+			select name, supplier from `tabSD YRP Sewing Plan`
+			force index (supplier_index)
+			where supplier = %s order by name for update
+		""",
+		supplier,
+		as_dict=True,
+	)
+	plan_suppliers = {row.name: row.supplier for row in plan_rows}
+	entry_rows = (
+		frappe.db.sql(
+			"""
+				select name, sewing_plan, entry_date
+				from `tabSD YRP Sewing Plan Entry Detail`
+				force index (sewing_plan_index)
+				where sewing_plan in %(plans)s order by name for update
+			""",
+			{"plans": tuple(plan_suppliers)},
+			as_dict=True,
+		)
+		if plan_suppliers
+		else []
+	)
+	locked_target = next((row for row in entry_rows if row.name == entry.name), None)
+	if not locked_target or plan_suppliers.get(locked_target.sewing_plan) != supplier:
+		_mutation_scope_changed()
+	# The target is now locked inside the verified scope; this reload cannot
+	# acquire another Supplier's plan and supplies current fields to permission checks.
 	entry.flags.for_update = True
 	entry.reload()
 	entry.check_permission("delete")
 	previous_days = cint(frappe.db.get_single_value("SD YRP MRP Settings", "previous_day_entries"))
-	supplier = frappe.db.get_value("SD YRP Sewing Plan", entry.sewing_plan, "supplier", for_update=True)
-	cancellable_dates = set()
-	if supplier and previous_days > 0:
-		cancellable_dates = {
-			getdate(row.entry_date)
-			for row in frappe.db.sql(
-				"""
-					select distinct entry.entry_date
-					from `tabSD YRP Sewing Plan Entry Detail` entry
-					join `tabSD YRP Sewing Plan` plan on plan.name = entry.sewing_plan
-					where plan.supplier = %s and entry.entry_date is not null
-					order by entry.entry_date desc
-					limit %s
-					for update
-				""",
-				(supplier, previous_days),
-				as_dict=True,
-			)
-		}
+	cancellable_dates = sorted(
+		{getdate(row.entry_date) for row in entry_rows if row.entry_date}, reverse=True
+	)[: max(0, previous_days)]
 	if not entry.entry_date or getdate(entry.entry_date) not in cancellable_dates:
 		frappe.throw(
 			_("This entry is outside the configured cancellation dates for its Sewing Unit."),

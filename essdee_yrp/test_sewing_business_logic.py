@@ -1,10 +1,12 @@
 import copy
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
 import frappe
 from frappe.share import add_docshare
 from frappe.tests import IntegrationTestCase
-from frappe.utils import flt, getdate, nowdate, nowtime
+from frappe.utils import add_days, cint, flt, getdate, nowdate, nowtime
 
 from essdee_yrp.sewing.closed_work_order import (
 	_closed_work_order_receivable_rows,
@@ -152,6 +154,59 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		self.assertEqual(getdate(stale.entry_date), getdate("2090-01-07"))
 		cancel_sewing_plan_entry(entry.name)
 		self.assertFalse(frappe.db.exists(entry.doctype, entry.name))
+
+	def test_cancellation_retries_when_supplier_scope_changes_before_lock(self):
+		plan = self._mutation_plan()
+		other = self._mutation_plan()
+		entry = self._mutation_entry(plan, "2090-01-05")
+		frappe.db.set_single_value("SD YRP MRP Settings", "previous_day_entries", 1)
+		original_sql = frappe.db.sql
+		moved = False
+
+		def move_before_first_plan_lock(query, *args, **kwargs):
+			nonlocal moved
+			if (
+				not moved
+				and isinstance(query, str)
+				and "from `tabSD YRP Sewing Plan`" in query
+				and "for update" in query.lower()
+			):
+				moved = True
+				frappe.db.set_value(plan.doctype, plan.name, "supplier", other.supplier)
+			return original_sql(query, *args, **kwargs)
+
+		with patch.object(frappe.db, "sql", side_effect=move_before_first_plan_lock):
+			with self.assertRaisesRegex(frappe.ValidationError, "retry"):
+				cancel_sewing_plan_entry(entry.name)
+		self.assertTrue(frappe.db.exists(entry.doctype, entry.name))
+
+	def test_sewing_mutation_scope_fields_are_indexed(self):
+		for doctype, field in (
+			("SD YRP Sewing Plan", "supplier"),
+			("SD YRP Sewing Plan Entry Detail", "sewing_plan"),
+		):
+			with self.subTest(doctype=doctype):
+				self.assertTrue(frappe.get_meta(doctype).get_field(field).search_index)
+				indexes = frappe.db.sql(f"show index from `tab{doctype}`", as_dict=True)
+				self.assertTrue(any(row.Column_name == field and row.Seq_in_index == 1 for row in indexes))
+
+	def test_submission_retries_when_supplier_scope_changes_before_plan_lock(self):
+		plan = self._mutation_plan()
+		other = self._mutation_plan()
+		original_sql = frappe.db.sql
+		moved = False
+
+		def move_before_plan_lock(query, *args, **kwargs):
+			nonlocal moved
+			if not moved and "from `tabSD YRP Sewing Plan`" in str(query) and "for update" in str(query):
+				moved = True
+				frappe.db.set_value(plan.doctype, plan.name, "supplier", other.supplier)
+			return original_sql(query, *args, **kwargs)
+
+		with patch.object(frappe.db, "sql", side_effect=move_before_plan_lock):
+			with self.assertRaisesRegex(frappe.ValidationError, "retry"):
+				submit_data_entry_log({"plan": plan.name})
+		self.assertFalse(frappe.db.exists("SD YRP Sewing Plan Entry Detail", {"sewing_plan": plan.name}))
 
 	def _consumption_writer(self, plan, *, roles=()):
 		user = f"sewing-consumption-{frappe.generate_hash(length=10)}@example.com"
@@ -334,7 +389,18 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 			"work_station": frappe.get_all("YRP Work Station", pluck="name", limit=1)[0],
 			"quantities": {"colours": {"test": {"values": {"test": selected}}}},
 		}
-		submit_data_entry_log(payload)
+		original_sql = frappe.db.sql
+		locks = []
+
+		def record_locks(query, *args, **kwargs):
+			if isinstance(query, str) and "for update" in query.lower():
+				locks.append(query)
+			return original_sql(query, *args, **kwargs)
+
+		with patch.object(frappe.db, "sql", side_effect=record_locks):
+			submit_data_entry_log(payload)
+		self.assertIn("from `tabSupplier` where name =", locks[0])
+		self.assertIn("from `tabSD YRP Sewing Plan`", locks[1])
 		payload["input_type"] = "Line Output"
 		selected["data_entry"] = 8
 		first = submit_data_entry_log(copy.deepcopy(payload))
@@ -1060,3 +1126,121 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 			quantity = row.get("quantity") if row.get("quantity") is not None else row.get("qty")
 			out[key] = flt(out.get(key)) + flt(quantity)
 		return out
+
+
+class TestSewingCancellationConcurrency(IntegrationTestCase):
+	# A separate class transaction prevents prior savepoint rollbacks retaining
+	# InnoDB gap locks that would block these independently committed fixtures.
+	def test_concurrent_cancellations_serialize_supplier_scope(self):
+		"""Two real request transactions cancel different plans and always roll back."""
+		site, sites_path = frappe.local.site, frappe.local.sites_path
+		previous_days = cint(frappe.db.get_single_value("SD YRP MRP Settings", "previous_day_entries"))
+		self.assertGreater(previous_days, 0)
+		suffix = frappe.generate_hash(length=12)
+		supplier = f"Sewing concurrent {suffix}"
+		plans = [f"SEWING-CONCURRENT-{suffix}-A", f"SEWING-CONCURRENT-{suffix}-B"]
+		entries = [f"SEWING-CONCURRENT-{suffix}-ENTRY-A", f"SEWING-CONCURRENT-{suffix}-ENTRY-B"]
+		old_entry = f"SEWING-CONCURRENT-{suffix}-OLD"
+		latest_date = add_days("2090-01-01", previous_days)
+
+		def connection(operation):
+			frappe.init(site, sites_path=sites_path)
+			frappe.connect()
+			frappe.flags.in_test = True
+			try:
+				return operation()
+			finally:
+				frappe.db.rollback()
+				frappe.destroy()
+
+		def setup():
+			group = frappe.get_all("Supplier Group", filters={"is_group": 0}, pluck="name", limit=1)[0]
+			frappe.get_doc(
+				{"doctype": "Supplier", "supplier_name": supplier, "supplier_group": group, "supplier_type": "Company"}
+			).insert(set_name=supplier)
+			for name in plans:
+				frappe.get_doc(
+					{"doctype": "SD YRP Sewing Plan", "naming_series": "SP-2526-", "supplier": supplier}
+				).insert(set_name=name)
+			for name, plan in zip(entries, plans, strict=True):
+				frappe.get_doc(
+					{"doctype": "SD YRP Sewing Plan Entry Detail", "sewing_plan": plan, "entry_date": latest_date}
+				).insert(set_name=name)
+			for index in range(previous_days):
+				frappe.get_doc(
+					{
+						"doctype": "SD YRP Sewing Plan Entry Detail",
+						"sewing_plan": plans[0],
+						"entry_date": add_days("2090-01-01", index),
+					}
+				).insert(set_name=f"SEWING-CONCURRENT-{suffix}-DATE-{index}")
+			frappe.get_doc(
+				{"doctype": "SD YRP Sewing Plan Entry Detail", "sewing_plan": plans[0], "entry_date": "2080-01-01"}
+			).insert(set_name=old_entry)
+			frappe.db.commit()
+
+		def cleanup():
+			# Exact unique fixture names; no audit rows or global naming counters are created.
+			frappe.db.delete("SD YRP Sewing Plan Entry Detail", {"sewing_plan": ["in", plans]})
+			frappe.db.delete("SD YRP Sewing Plan", {"name": ["in", plans]})
+			frappe.db.delete("Supplier", {"name": supplier})
+			frappe.db.commit()
+
+		start = threading.Barrier(2)
+		supplier_overlap = threading.Barrier(2)
+		legacy_overlap = threading.Barrier(2)
+		progress = threading.local()
+		database_class = type(frappe.local.db)
+		original_sql = database_class.sql
+
+		def overlap_legacy_date_read(database, query, *args, **kwargs):
+			# Force the former ordering defect after both requests own their target locks.
+			# Every query still executes against MariaDB; no rows or safety checks are mocked.
+			if isinstance(query, str) and "for update" in query.lower():
+				progress.locks.append(query)
+				if "from `tabSupplier` where name =" in query and not progress.supplier_attempted:
+					progress.supplier_attempted = True
+					supplier_overlap.wait(timeout=10)
+			if (
+				isinstance(query, str)
+				and "select distinct entry.entry_date" in query.lower()
+				and not getattr(progress, "overlapped", False)
+			):
+				progress.overlapped = True
+				legacy_overlap.wait(timeout=10)
+			return original_sql(database, query, *args, **kwargs)
+
+		def cancel(name):
+			progress.overlapped = False
+			progress.locks = []
+			progress.supplier_attempted = False
+			start.wait(timeout=10)
+			cancel_sewing_plan_entry(name)
+			self.assertIn("from `tabSupplier` where name =", progress.locks[0])
+			self.assertIn("from `tabSD YRP Sewing Plan`", progress.locks[1])
+			self.assertIn("from `tabSD YRP Sewing Plan Entry Detail`", progress.locks[2])
+			deleted = not frappe.db.exists("SD YRP Sewing Plan Entry Detail", name)
+			try:
+				cancel_sewing_plan_entry(old_entry)
+			except frappe.ValidationError:
+				blocked = bool(frappe.db.exists("SD YRP Sewing Plan Entry Detail", old_entry))
+			else:
+				blocked = False
+			return deleted, blocked
+
+		with ThreadPoolExecutor(max_workers=2) as executor:
+			try:
+				executor.submit(connection, setup).result(timeout=30)
+				with patch.object(database_class, "sql", new=overlap_legacy_date_read):
+					requests = [executor.submit(connection, lambda name=name: cancel(name)) for name in entries]
+					outcomes = [request.result(timeout=30) for request in requests]
+				self.assertEqual(outcomes, [(True, True), (True, True)])
+				self.assertEqual(
+					executor.submit(
+						connection,
+						lambda: [bool(frappe.db.exists("SD YRP Sewing Plan Entry Detail", name)) for name in entries],
+					).result(timeout=30),
+					[True, True],
+				)
+			finally:
+				executor.submit(connection, cleanup).result(timeout=30)

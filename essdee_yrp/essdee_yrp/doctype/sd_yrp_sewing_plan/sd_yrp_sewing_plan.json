@@ -45,7 +45,8 @@
    "fieldname": "supplier",
    "fieldtype": "Link",
    "label": "Supplier",
-   "options": "Supplier"
+   "options": "Supplier",
+   "search_index": 1
   },
   {
    "fetch_from": "work_order.supplier_address",

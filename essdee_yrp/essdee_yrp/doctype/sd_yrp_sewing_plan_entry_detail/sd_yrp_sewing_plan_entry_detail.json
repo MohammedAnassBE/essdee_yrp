@@ -28,7 +28,8 @@
    "fieldname": "sewing_plan",
    "fieldtype": "Link",
    "label": "Sewing Plan",
-   "options": "SD YRP Sewing Plan"
+   "options": "SD YRP Sewing Plan",
+   "search_index": 1
   },
   {
    "fieldname": "input_type",

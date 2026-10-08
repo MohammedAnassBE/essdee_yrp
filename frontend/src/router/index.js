@@ -25,6 +25,9 @@ const FabricDeliveryChallan = () => import("../departments/FabricDeliveryChallan
 const FabricGoodsReceivedNote = () => import("../departments/FabricGoodsReceivedNote.vue")
 const FabricStoreSection = () => import("../departments/FabricStoreSection.vue")
 const CutPanelStoreSection = () => import("../departments/CutPanelStoreSection.vue")
+const SewingPlans = () => import("../departments/sewing/SewingPlans.vue")
+const SewingReports = () => import("../departments/sewing/SewingReports.vue")
+const SewingAttendance = () => import("../departments/sewing/SewingAttendance.vue")
 
 const routes = [
 	{
@@ -37,6 +40,9 @@ const routes = [
 		name: department.key,
 		component: department.component,
 	})),
+	{ path: "/sewing/plans", name: "sewing-plans", component: SewingPlans },
+	{ path: "/sewing/reports", name: "sewing-reports", component: SewingReports },
+	{ path: "/sewing/attendance", name: "sewing-attendance", component: SewingAttendance },
 	{
 		path: "/cutting/plans",
 		name: "cutting-plans",

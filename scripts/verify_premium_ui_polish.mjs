@@ -97,7 +97,7 @@ const cuttingQuantityMatrix = read("../frontend/src/departments/cutting/shared/C
 const stockItemComposer = read("../frontend/src/components/stock/StockItemComposer.vue")
 const listviewFilters = read("../frontend/src/components/common/ListviewFilters.vue")
 const workspacePlaceholder = read("../frontend/src/components/common/WorkspacePlaceholder.vue")
-const unfinishedDepartmentPages = ["AccessoryStore", "Sewing", "Finishing", "Merch", "Purchase", "Sales", "Planning"]
+const unfinishedDepartmentPages = ["AccessoryStore", "Finishing", "Merch", "Purchase", "Sales", "Planning"]
 	.map((name) => [name, read(`../frontend/src/departments/${name}.vue`)])
 
 assert(enterprise.includes("--erp-shell-header-height: 56px"), "Compact shell header token is missing")

@@ -282,9 +282,9 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 	page.setDefaultTimeout(10_000)
 	const requests = [], errors = []
 	const sizes = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL"]
-	function plan(name = "PLAN-A") { return { details: { item: "T-Shirt", lot: "LOT-A", supplier: "UNIT-A", work_order: "WO-A", work_order_status: "Open", primary_values: sizes }, colours: { Navy: { colour: "Navy", variant_colour: "Navy", part: null, set_combination: { major_colour: "Navy" }, values: Object.fromEntries(sizes.map((size, i) => [size, { order_detail: `${name}-ROW-${i}`, item_variant: `UNTRUSTED-${size}`, order_qty: 100, sewing_in: 20, sewing_in_remaining: 80, data_entry: 0, pre_final: 2, final_inspection: 1 }])) } } } }
+	function plan(name = "PLAN-A") { return { details: { item: "T-Shirt", lot: "LOT-A", supplier: "UNIT-A", work_order: "WO-A", work_order_status: "Open", primary_values: sizes }, colours: { Navy: { colour: "Navy", variant_colour: "Navy", part: null, set_combination: { major_colour: "Navy" }, values: Object.fromEntries(sizes.map((size, i) => [size, { order_detail: `${name}-ROW-${i}`, item_variant: `UNTRUSTED-${size}`, order_qty: 100, sewing_in: 20, sewing_in_remaining: 80, data_entry: 0, pre_final: 2, final_inspection: 2 }])) } } } }
 	const entry = { data: { "LOT-A": { "PLAN-A": plan(), "PLAN-OTHER": plan("PLAN-OTHER") } }, input_types: ["Sewing In", "Sewing Out"], diff: { sewing_in: "order_qty", sewing_out: "sewing_in" }, allowances: { sewing_in: 5, sewing_out: 0 }, default_received_type: "" }
-	const state = { dashboard: [{ input_type: "Sewing In", qty: 40 }, { input_type: "Sewing Out", qty: 15 }], dashboardError: "", dashboardDelay: 250, dashboardHold: null, entryError: "", entryHold: null, submitError: "", submitDelay: 0, loads: 0, authoritativeQty: 20 }
+	const state = { dashboard: [{ input_type: "Sewing In", qty: 40 }, { input_type: "Sewing Out", qty: 15 }], dashboardError: "", dashboardDelay: 250, dashboardHold: null, entryError: "", entryHold: null, submitError: "", inspectionError: "", submitDelay: 0, loads: 0, authoritativeQty: 20 }
 	page.on("pageerror", e => errors.push(e.message))
 	await page.route("**/api/method/**", async route => {
 		const method = route.request().url().split("/api/method/")[1], args = JSON.parse(route.request().postData() || "{}")
@@ -294,7 +294,11 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		else if (method.endsWith("get_dashboard_data")) { value = structuredClone(state.dashboard); error = state.dashboardError; if (state.dashboardHold) { const hold = state.dashboardHold; state.dashboardHold = null; await hold } else await new Promise(r => setTimeout(r, state.dashboardDelay)) }
 		else if (method.endsWith("get_data_entry_data")) { state.loads++; value = structuredClone(entry); error = state.entryError; value.data["LOT-A"]["PLAN-A"].colours.Navy.values.XS.sewing_in = state.authoritativeQty; if (args.supplier === "UNIT-B") value.data = {}; if (state.entryHold) { const hold = state.entryHold; state.entryHold = null; await hold } }
 		else if (method.endsWith("submit_data_entry_log")) { await new Promise(r => setTimeout(r, state.submitDelay)); value = "ENTRY-SAVED"; error = state.submitError; if (!error) state.authoritativeQty += Number(args.payload.quantities.colours.Navy.values.XS.data_entry) }
-		else if (method.endsWith("update_sewing_plan_data")) value = "Success"
+		else if (method.endsWith("update_sewing_plan_data")) {
+			value = "Success"; error = state.inspectionError
+			const { lot, plan: planName, inspection_type: type, action, rows } = args.payload
+			if (!error) for (const row of rows) for (const [size, quantities] of Object.entries(row.qty)) entry.data[lot][planName].colours[row.colour].values[size][type] = action === "revert" ? 0 : quantities[type]
+		}
 		else if (method.endsWith("link_search")) value = [{ name: args.doctype === "YRP Work Station" ? "Sewing Line 1" : "Good", label: args.doctype === "YRP Work Station" ? "Sewing Line 1" : "Good" }]
 		else throw new Error(`Unexpected plan request: ${method}`)
 		await route.fulfill({ status: error ? 417 : 200, contentType: "application/json", body: JSON.stringify(error ? { _server_messages: JSON.stringify([JSON.stringify({ message: error })]), exc: "ValidationError" } : { message: value }) })
@@ -351,12 +355,16 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		assert(["plan", "input_type", "work_station", "received_type", "date", "time", "supplier"].every(k => rejected[k]), "Required controls absent from payload")
 		await quantity.fill("7")
 		for (const width of [390, 900, 1600, 1280]) { await page.setViewportSize({ width, height: 900 }); await noOverflow(page, `Data Entry ${width}`); assert(await quantity.inputValue() === "7", "Resize lost quantity"); if (width === 390) assert(await page.getByRole("region", { name: "PLAN-A quantity matrix", exact: true }).evaluate(el => el.scrollWidth > el.clientWidth), "Matrix must own narrow overflow"); if (process.env.ESSDEE_SEWING_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SEWING_SCREENSHOTS}/sewing-entry-${width}.png`, fullPage: true }) }
-		state.submitError = ""; state.submitDelay = 500
+		state.submitError = ""; state.submitDelay = 800
 		const count = requests.filter(r => r.method.endsWith("submit_data_entry_log")).length, loads = state.loads
+		// Retyping a selected Link schedules PrimeVue's 300ms completion. Save
+		// starts before that timer fires and completes after it: a lookup must
+		// never invalidate the acknowledged write or invite a duplicate save.
+		await page.getByRole("combobox", { name: "Work Station", exact: true }).fill("Sewing Line 1")
 		await page.getByRole("button", { name: "Save entry", exact: true }).click()
 		assert(await page.getByRole("button", { name: "Save entry", exact: true }).isDisabled(), "Save not locked in flight")
 		await page.getByRole("button", { name: "Save entry", exact: true }).evaluate(el => { el.click(); el.click() })
-		await page.getByText("Entry saved.", { exact: true }).waitFor()
+		await page.getByText("Entry saved.", { exact: true }).waitFor({ timeout: 2500 }).catch(() => { throw new Error("Delayed Link lookup discarded acknowledged Save: missing authoritative reload/success") })
 		assert(requests.filter(r => r.method.endsWith("submit_data_entry_log")).length === count + 1, "Double submission escaped lock")
 		assert(state.loads === loads + 1 && requests.filter(r => r.method.endsWith("get_data_entry_data")).at(-1).args.lot === "LOT-A", "Saved plan was not authoritatively reloaded")
 		assert(await quantity.inputValue() === "0", "Successful save did not reset entry quantities")
@@ -368,10 +376,26 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		await select("Inspection Type", "Pre Final")
 		await page.getByRole("spinbutton", { name: "Navy XS Inspection quantity", exact: true }).fill("9")
 		await page.getByRole("button", { name: "Update inspection", exact: true }).click(); await page.getByText("Inspection updated.", { exact: true }).waitFor()
+		assert(await page.getByRole("spinbutton", { name: "Navy XS Inspection quantity", exact: true }).inputValue() === "9", "Inspection update did not render authoritative total")
 		await select("Inspection Type", "Final Inspection")
-		await page.getByRole("button", { name: "Revert inspection", exact: true }).click(); await page.getByText("Inspection reverted.", { exact: true }).waitFor()
+		const inspection = page.getByRole("spinbutton", { name: "Navy XS Inspection quantity", exact: true })
+		assert(await inspection.inputValue() === "2", "Inspection recovery fixture needs the saved 2-unit total")
+		state.entryError = "Inspection recovery unavailable"
+		await page.getByRole("button", { name: "Revert inspection", exact: true }).click(); await page.getByText("Inspection reverted. Refresh the plan before recording more quantities.", { exact: true }).waitFor()
+		assert(await page.getByRole("button", { name: "Update inspection", exact: true }).isDisabled(), "Failed inspection refresh re-enabled stale Update draft")
+		state.entryError = ""; await page.getByRole("button", { name: "Refresh data entry" }).click()
+		await page.waitForFunction(() => !document.querySelector('button[aria-label="Update inspection"]').disabled)
+		assert(await inspection.inputValue() === "0", "Acknowledged inspection revert recovery retained stale 2-unit draft instead of server zero")
+		assert(requests.filter(r => r.method.endsWith("get_data_entry_data")).at(-1).args.lot === "LOT-A", "Inspection recovery lost acknowledged Supplier/Lot scope")
 		const updates = requests.filter(r => r.method.endsWith("update_sewing_plan_data")).map(r => r.args.payload)
 		assert(updates.length === 2 && updates[0].inspection_type === "pre_final" && updates[0].action === "update" && updates[1].inspection_type === "final_inspection" && updates[1].action === "revert", "Inspection update/revert contract mismatch")
+		await inspection.fill("5"); state.inspectionError = "Inspection update rejected"
+		await page.getByRole("button", { name: "Update inspection", exact: true }).click(); await closeError(state.inspectionError)
+		assert(await inspection.inputValue() === "5", "Rejected inspection acknowledgement discarded user edit")
+		state.inspectionError = ""; state.entryError = "Ordinary refresh unavailable"
+		await page.getByRole("button", { name: "Refresh data entry" }).click(); await page.locator(".p-message").filter({ hasText: state.entryError }).waitFor()
+		assert(await inspection.inputValue() === "5", "Ordinary load error discarded unsaved inspection edit")
+		state.entryError = ""
 		await page.evaluate(() => window.router.replace('/sewing/plans?supplier=UNIT-B&tab=data-entry'))
 		await page.getByText("No Sewing Plans for this Sewing Unit.", { exact: true }).waitFor()
 		await page.getByRole("combobox", { name: "Lot", exact: true }).click(); assert(await page.getByRole("option", { name: "LOT-A", exact: true }).count() === 0, "Old Supplier Lots leaked")
@@ -398,7 +422,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		releaseDashboard(); await oldDashboard
 		assert(await page.getByRole("row").filter({ hasText: "Old A stage" }).count() === 0, "Delayed old Supplier dashboard overwrote current Supplier")
 		assert(errors.length === 0, `Browser errors: ${errors.join("; ")}`)
-		console.log("PASS plan-entry: five active-only tabs, dashboard states/retry/refresh, Supplier Lots, required controls, trusted-row payload, preserved validation/server rejection, submit lock, authoritative reload/recovery, restricted inspection actions, stale Supplier rejection, tab-filter retention, four contained viewports with resize retention")
+		console.log("PASS plan-entry: five active-only tabs, dashboard states/retry/refresh, Supplier Lots, required controls, trusted-row payload, preserved validation/server rejection, delayed Link/save isolation, submit lock, authoritative reload/recovery, inspection revert recovery and rejected-edit retention, restricted inspection actions, stale Supplier rejection, tab-filter retention, four contained viewports with resize retention")
 	} catch (reason) {
 		console.error("Plan-entry browser diagnostics:", JSON.stringify({ errors, body: (await page.locator("body").innerText()).slice(0, 1500) }))
 		throw reason

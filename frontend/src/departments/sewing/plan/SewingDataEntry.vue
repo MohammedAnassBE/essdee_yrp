@@ -59,12 +59,14 @@ import SewingQuantityMatrix from "../components/SewingQuantityMatrix.vue"
 import { useSewingContext } from "../useSewingContext.js"
 
 const props = defineProps({ filters: { type: Object, required: true }, actions: { type: Object, default: () => ({}) } })
-const { supplier, beginRequest, isCurrent } = useSewingContext()
+const { supplier, requestGeneration, beginRequest, isCurrent } = useSewingContext()
 const response = ref({}), loaded = ref(false), loading = ref(false), loadError = ref(""), busy = ref(false), error = ref(""), success = ref(""), attempted = ref(false)
 const entryDrafts = ref({}), inspectionDrafts = ref({})
 const refreshRequired = ref(false)
 let rejectedPlan = null
+let acknowledgedPlan = null
 let mounted = true
+const searchSequences = new Map()
 const canCreate = computed(() => Boolean(props.actions?.entry?.can_create))
 const canWrite = computed(() => Boolean(props.actions?.plan?.can_write))
 const lots = computed(() => Object.keys(response.value.data || {}))
@@ -93,24 +95,39 @@ watch([currentPlan, () => props.filters.inspectionType], initializeInspection)
 watch(() => props.filters.lot, () => { if (!plans.value.some(plan => plan.name === props.filters.plan)) props.filters.plan = "" })
 
 async function search(doctype, text) {
-	const generation = beginRequest()
+	// A delayed AutoComplete timer can fire after Save disables the control.
+	// Lookups observe the business/scope generation; they never advance it.
+	if (!mounted || busy.value || loading.value) return []
+	const generation = requestGeneration.value
+	const selectedSupplier = supplier.value
+	const sequence = (searchSequences.get(doctype) || 0) + 1
+	searchSequences.set(doctype, sequence)
 	const rows = await searchLink(doctype, text)
-	return mounted && isCurrent(generation) ? rows : []
+	return mounted && !busy.value && !loading.value && selectedSupplier === supplier.value
+		&& isCurrent(generation) && searchSequences.get(doctype) === sequence ? rows : []
 }
 
 async function load(savedPlan = "", savedLot = "", resetInspection = true) {
 	if (!supplier.value) return false
+	// Acknowledged writes remain tied to their plan until authoritative recovery
+	// succeeds, including when the operator retries with the Refresh button.
+	const targetPlan = savedPlan || acknowledgedPlan?.plan || ""
+	const targetLot = savedLot || acknowledgedPlan?.lot || ""
 	const generation = beginRequest()
 	loading.value = true; loadError.value = ""
 	try {
-		const data = await getSewingDataEntry(supplier.value, savedLot)
+		const data = await getSewingDataEntry(supplier.value, targetLot)
 		if (!mounted || !isCurrent(generation)) return false
-		if (savedPlan) {
-			const authoritative = data?.data?.[savedLot]?.[savedPlan]
+		if (targetPlan) {
+			const authoritative = data?.data?.[targetLot]?.[targetPlan]
 			if (!authoritative) throw new Error("The saved plan is no longer available. Refresh to view current Sewing Plans.")
-			response.value.data[savedLot][savedPlan] = authoritative
+			response.value.data[targetLot][targetPlan] = authoritative
 			// Refresh only this plan's business records and inspection drafts.
-			if (resetInspection) for (const type of inspectionTypes) delete inspectionDrafts.value[`${savedPlan}:${type.value}`]
+			if (resetInspection) for (const type of inspectionTypes) delete inspectionDrafts.value[`${targetPlan}:${type.value}`]
+			if (acknowledgedPlan?.plan === targetPlan && acknowledgedPlan.lot === targetLot) {
+				for (const type of inspectionTypes) inspectionDrafts.value[`${targetPlan}:${type.value}`] = Object.fromEntries(values(authoritative).map(value => [value.order_detail, value[type.value] || 0]))
+				acknowledgedPlan = null
+			}
 			initializeInspection()
 		} else {
 			response.value = data || {}
@@ -162,6 +179,7 @@ async function mutate(request, plan, lot, message, resetEntry = false) {
 	try {
 		await request()
 		if (!mounted || !isCurrent(generation)) return
+		acknowledgedPlan = { plan, lot }
 		refreshRequired.value = true
 		if (resetEntry) entryDrafts.value[plan] = {}
 		const refreshed = await load(plan, lot)

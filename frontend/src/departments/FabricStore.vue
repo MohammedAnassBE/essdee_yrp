@@ -1,12 +1,12 @@
 <template>
-	<DepartmentPage title="Fabric Store" accent="#0a7f5a" :show-title="false" flat>
+	<DepartmentPage :title="storeName" accent="#0a7f5a" :show-title="false" flat>
 		<WorkspaceLoadError v-if="error" :message="error" :loading="loading" @retry="load" />
 		<WorkspaceLauncher
 			v-else
-			title="Fabric Store"
+			:title="storeName"
 			:items="visibleWorkspaces"
 			:loading="loading"
-			empty-text="No permitted Fabric Store workspaces"
+			:empty-text="`No permitted ${storeName} workspaces`"
 		/>
 	</DepartmentPage>
 </template>
@@ -19,16 +19,20 @@ import DepartmentPage from "../components/DepartmentPage.vue"
 import WorkspaceLauncher from "../components/common/WorkspaceLauncher.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 
+const props = defineProps({
+	storeName: { type: String, default: "Fabric Store" },
+	basePath: { type: String, default: "/fabric-store" },
+})
 const loading = ref(true)
 const error = ref("")
 const sections = ref({})
-const workspaces = [
-	{ key: "work_orders", label: "Work Orders", description: "Review production requirements, deliveries and receipts.", icon: "pi pi-briefcase", to: "/fabric-store/work-orders" },
-	{ key: "purchase_orders", label: "Purchase Orders", description: "Review purchase quantities and create Goods Received Notes.", icon: "pi pi-shopping-cart", to: "/fabric-store/purchase-orders" },
-	{ key: "stock_transfers", label: "Stock Transfers", description: "Create and review store stock movements and reconciliations.", icon: "pi pi-arrow-right-arrow-left", to: "/fabric-store/stock-transfers" },
-	{ key: "reports", label: "Reports", description: "Generate the current stock balance for store locations.", icon: "pi pi-chart-bar", to: "/fabric-store/reports" },
-]
-const visibleWorkspaces = computed(() => workspaces.filter((workspace) => sections.value[workspace.key]))
+const workspaces = computed(() => [
+	{ key: "work_orders", label: "Work Orders", description: "Review production requirements, deliveries and receipts.", icon: "pi pi-briefcase", to: `${props.basePath}/work-orders` },
+	{ key: "purchase_orders", label: "Purchase Orders", description: "Review purchase quantities and create Goods Received Notes.", icon: "pi pi-shopping-cart", to: `${props.basePath}/purchase-orders` },
+	{ key: "stock_transfers", label: "Stock Transfers", description: "Create and review store stock movements and reconciliations.", icon: "pi pi-arrow-right-arrow-left", to: `${props.basePath}/stock-transfers` },
+	{ key: "reports", label: "Reports", description: "Generate the current stock balance for store locations.", icon: "pi pi-chart-bar", to: `${props.basePath}/reports` },
+])
+const visibleWorkspaces = computed(() => workspaces.value.filter((workspace) => sections.value[workspace.key]))
 
 async function load() {
 	loading.value = true
@@ -37,7 +41,7 @@ async function load() {
 		const payload = await getFabricStoreCapabilities() || {}
 		sections.value = payload.sections || {}
 	} catch (reason) {
-		error.value = reason?.message || "Unable to load the Fabric Store workspace."
+		error.value = reason?.message || `Unable to load the ${props.storeName} workspace.`
 	} finally {
 		loading.value = false
 	}

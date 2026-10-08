@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Purchase Order" accent="#0a7f5a" back-to="/fabric-store/purchase-orders" back-label="Purchase Orders" :show-title="false" flat full-width>
+	<DepartmentPage title="Purchase Order" accent="#0a7f5a" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width>
 		<div class="fabric-purchase-order-editor-page erp-workspace">
 			<PurchaseOrderEditor :key="`${purchaseOrderId || 'new'}-${duplicateFrom}`" :name="purchaseOrderId" :source="duplicateSource" @saved="saved" @cancel="cancel" />
 		</div>
@@ -13,6 +13,13 @@ import { useRoute, useRouter } from "vue-router"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import PurchaseOrderEditor from "./fabric-store/PurchaseOrderEditor.vue"
 
+const props = defineProps({
+	backTo: { type: String, default: "/fabric-store/purchase-orders" },
+	backLabel: { type: String, default: "Purchase Orders" },
+	listRouteName: { type: String, default: "fabric-purchase-orders" },
+	viewRouteName: { type: String, default: "fabric-purchase-order" },
+})
+
 const route = useRoute()
 const router = useRouter()
 const purchaseOrderId = computed(() => String(route.params.purchaseOrderId || ""))
@@ -21,12 +28,12 @@ const duplicateSource = computed(() => duplicateFrom.value ? { duplicate_from: d
 
 function saved(record) {
 	if (!record?.name) return
-	router.replace({ name: "fabric-purchase-order", params: { purchaseOrderId: record.name } })
+	router.replace({ name: props.viewRouteName, params: { purchaseOrderId: record.name } })
 }
 function cancel() {
-	if (purchaseOrderId.value) router.push({ name: "fabric-purchase-order", params: { purchaseOrderId: purchaseOrderId.value } })
-	else if (duplicateFrom.value) router.push({ name: "fabric-purchase-order", params: { purchaseOrderId: duplicateFrom.value } })
-	else router.push({ name: "fabric-purchase-orders" })
+	if (purchaseOrderId.value) router.push({ name: props.viewRouteName, params: { purchaseOrderId: purchaseOrderId.value } })
+	else if (duplicateFrom.value) router.push({ name: props.viewRouteName, params: { purchaseOrderId: duplicateFrom.value } })
+	else router.push({ name: props.listRouteName })
 }
 </script>
 

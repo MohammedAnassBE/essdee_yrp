@@ -3,8 +3,8 @@
 		v-if="presentation === 'page'"
 		title="Delivery Challan"
 		accent="#0a7f5a"
-		back-to="/fabric-store/work-orders"
-		back-label="Work Orders"
+		:back-to="backTo"
+		:back-label="backLabel"
 		:show-title="false"
 		flat
 		full-width
@@ -14,6 +14,7 @@
 			<DeliveryChallanWorkspace
 				:name="documentName"
 				:source-context="resolvedSourceContext"
+				:duplicate-route-name="duplicateRouteName"
 				@changed="workspaceChanged"
 				@closed="emit('closed')"
 			/>
@@ -24,6 +25,7 @@
 		presentation="embedded"
 		:name="documentName"
 		:source-context="resolvedSourceContext"
+		:duplicate-route-name="duplicateRouteName"
 		@changed="workspaceChanged"
 		@closed="emit('closed')"
 	/>
@@ -40,6 +42,10 @@ const props = defineProps({
 	presentation: { type: String, default: "page" },
 	name: { type: String, default: "" },
 	sourceContext: { type: Object, default: () => ({}) },
+	backTo: { type: String, default: "/fabric-store/work-orders" },
+	backLabel: { type: String, default: "Work Orders" },
+	viewRouteName: { type: String, default: "fabric-delivery-challan" },
+	duplicateRouteName: { type: String, default: "fabric-delivery-challan-new" },
 })
 const emit = defineEmits(["changed", "closed"])
 const route = useRoute()
@@ -54,7 +60,7 @@ async function workspaceChanged(workspace) {
 	emit("changed", workspace)
 	const name = workspace?.record?.name
 	if (props.presentation === "page" && name && name !== route.params.deliveryChallanId) {
-		await router.replace({ name: "fabric-delivery-challan", params: { deliveryChallanId: name } })
+		await router.replace({ name: props.viewRouteName, params: { deliveryChallanId: name } })
 	}
 }
 function compactSource(source) {

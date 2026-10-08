@@ -36,7 +36,11 @@ import { useRouter } from "vue-router"
 import ListView from "../../components/common/ListView.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 
-defineProps({ capability: { type: Object, required: true } })
+const props = defineProps({
+	capability: { type: Object, required: true },
+	viewRouteName: { type: String, default: "fabric-purchase-order" },
+	newRouteName: { type: String, default: "fabric-purchase-order-new" },
+})
 
 const router = useRouter()
 const defaultColumns = ["supplier", "transaction_date", "status", "grand_total"]
@@ -44,9 +48,9 @@ const statusOptions = ["Draft", "To Receive and Bill", "To Receive", "To Bill", 
 
 function openPurchaseOrder(row) {
 	if (!row?.name) return
-	router.push({ name: "fabric-purchase-order", params: { purchaseOrderId: row.name } })
+	router.push({ name: props.viewRouteName, params: { purchaseOrderId: row.name } })
 }
 
-function createPurchaseOrder() { router.push({ name: "fabric-purchase-order-new" }) }
+function createPurchaseOrder() { router.push({ name: props.newRouteName }) }
 
 </script>

@@ -219,6 +219,7 @@ const props = defineProps({
 	presentation: { type: String, default: "page" },
 	name: { type: String, default: "" },
 	sourceContext: { type: Object, default: () => ({}) },
+	duplicateRouteName: { type: String, default: "fabric-goods-received-note-new" },
 })
 const emit = defineEmits(["changed", "closed"])
 const router = useRouter()
@@ -435,7 +436,7 @@ async function runWorkspaceAction(action) {
 async function duplicateGoodsReceivedNote() {
 	if (!currentName.value || !workspace.value.permissions?.can_create) return
 	if (props.presentation === "page") {
-		await router.push({ name: "fabric-goods-received-note-new", query: { duplicate_from: currentName.value } })
+		await router.push({ name: props.duplicateRouteName, query: { duplicate_from: currentName.value } })
 		return
 	}
 	acting.value = "duplicate"

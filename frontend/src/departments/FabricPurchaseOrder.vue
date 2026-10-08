@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Purchase Order" accent="#0a7f5a" back-to="/fabric-store/purchase-orders" back-label="Purchase Orders" :show-title="false" flat full-width>
+	<DepartmentPage title="Purchase Order" accent="#0a7f5a" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width>
 		<section class="fabric-purchase-order-frame">
 			<FabricDocumentWorkspace
 				doctype="Purchase Order"
@@ -117,6 +117,14 @@ import { hasDocumentDisplayValue, plainTextFromHtml } from "../utils/documentVal
 import FabricDocumentWorkspace from "./fabric-store/FabricDocumentWorkspace.vue"
 import RelatedDocumentWorkspaceDialog from "./fabric-store/RelatedDocumentWorkspaceDialog.vue"
 import SupplierNotificationPanel from "./fabric-store/SupplierNotificationPanel.vue"
+
+const props = defineProps({
+	backTo: { type: String, default: "/fabric-store/purchase-orders" },
+	backLabel: { type: String, default: "Purchase Orders" },
+	viewRouteName: { type: String, default: "fabric-purchase-order" },
+	newRouteName: { type: String, default: "fabric-purchase-order-new" },
+	editRouteName: { type: String, default: "fabric-purchase-order-edit" },
+})
 
 const route = useRoute()
 const router = useRouter()
@@ -309,7 +317,7 @@ async function changeStatus(action) {
 		const changed = await changeFabricStoreDocumentStatus("Purchase Order", source.name, action, source.modified)
 		if (sequence !== actionSequence || requestedId !== String(route.params.purchaseOrderId || "")) return
 		const name = changed?.record?.name || source.name
-		if (name !== requestedId) await router.replace({ name: "fabric-purchase-order", params: { purchaseOrderId: name } })
+		if (name !== requestedId) await router.replace({ name: props.viewRouteName, params: { purchaseOrderId: name } })
 		else await loadWorkspace(true)
 	} catch (reason) { if (sequence === actionSequence && requestedId === String(route.params.purchaseOrderId || "")) actionError.value = reason?.message || `Unable to ${action} this Purchase Order.` }
 	finally { if (sequence === actionSequence) acting.value = "" }
@@ -319,8 +327,8 @@ const lifecycleConfirmLabel = computed(() => pendingLifecycleCommand.value === "
 const lifecycleConfirmMessage = computed(() => pendingLifecycleCommand.value === "cancel" ? `Cancel ${workspace.value.record?.name}? This keeps the document for audit but stops further processing.` : pendingLifecycleCommand.value === "close" ? `Close ${workspace.value.record?.name}? No further receipts can be created until it is reopened.` : `Create a new draft amendment from ${workspace.value.record?.name}?`)
 function requestLifecycleAction(command) { pendingLifecycleCommand.value = command; lifecycleConfirmVisible.value = true }
 async function confirmLifecycleAction() { const command = pendingLifecycleCommand.value; lifecycleConfirmVisible.value = false; pendingLifecycleCommand.value = ""; if (command === "close") await runDomainCommand(command); else if (command) await changeStatus(command) }
-function editPurchaseOrder() { router.push({ name: "fabric-purchase-order-edit", params: { purchaseOrderId: workspace.value.record.name } }) }
-function duplicatePurchaseOrder() { router.push({ name: "fabric-purchase-order-new", query: { duplicate_from: workspace.value.record.name } }) }
+function editPurchaseOrder() { router.push({ name: props.editRouteName, params: { purchaseOrderId: workspace.value.record.name } }) }
+function duplicatePurchaseOrder() { router.push({ name: props.newRouteName, query: { duplicate_from: workspace.value.record.name } }) }
 function openRelated(doctype, sourceContext = {}, name = "") {
 	relatedDoctype.value = doctype
 	relatedName.value = name

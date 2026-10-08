@@ -322,6 +322,60 @@ async function shellSuite(page) {
 	return { cards: expectedCards, listRequestCount: listRequests.length, focusVisible }
 }
 
+async function accessoryStoreSuite(page) {
+	const listRequests = []
+	await mockWorkspace(page, listRequests)
+	await page.setViewportSize({ width: 1600, height: 1000 })
+	await page.goto(`${SITE}/web/accessory-store`, { waitUntil: "domcontentloaded" })
+	const launcher = page.locator(".workspace-launcher")
+	await launcher.waitFor({ timeout: 20_000 })
+
+	const expectedCards = ["Work Orders", "Purchase Orders", "Stock Transfers", "Reports"]
+	const cards = launcher.locator(".workspace-launcher__card")
+	await cards.nth(expectedCards.length - 1).waitFor()
+	assert(JSON.stringify((await cards.locator("strong").allTextContents()).map((label) => label.trim())) === JSON.stringify(expectedCards), `Unexpected Accessory Store cards: ${JSON.stringify(await cards.locator("strong").allTextContents())}`)
+	for (const [label, path] of [
+		["Work Orders", "/web/accessory-store/work-orders"],
+		["Purchase Orders", "/web/accessory-store/purchase-orders"],
+		["Stock Transfers", "/web/accessory-store/stock-transfers"],
+		["Reports", "/web/accessory-store/reports"],
+	]) {
+		assert(await launcher.getByRole("link", { name: new RegExp(`^${label}`) }).getAttribute("href") === path, `${label} points outside Accessory Store`)
+	}
+
+	await launcher.getByRole("link", { name: /^Work Orders/ }).click()
+	await page.waitForURL("**/web/accessory-store/work-orders")
+	const workOrders = page.locator(".fabric-work-orders .common-list-view")
+	await workOrders.waitFor({ timeout: 20_000 })
+	await workOrders.locator(".premium-list-table").getByText("WO-FAB-001", { exact: true }).click()
+	await page.waitForURL("**/web/accessory-store/work-orders/WO-FAB-001")
+	await page.locator(".fabric-work-order-frame").waitFor({ timeout: 20_000 })
+
+	await page.goto(`${SITE}/web/accessory-store/purchase-orders`, { waitUntil: "domcontentloaded" })
+	const purchaseOrders = page.locator(".fabric-purchase-orders .common-list-view")
+	await purchaseOrders.waitFor({ timeout: 20_000 })
+	await purchaseOrders.locator(".premium-list-table").getByText("PO-FAB-001", { exact: true }).click()
+	await page.waitForURL("**/web/accessory-store/purchase-orders/PO-FAB-001")
+	await page.locator(".fabric-purchase-order-frame").waitFor({ timeout: 20_000 })
+
+	for (const [path, selector] of [
+		["stock-transfers", ".fabric-stock-transfers"],
+		["reports", ".fabric-reports .report-shell"],
+	]) {
+		await page.goto(`${SITE}/web/accessory-store/${path}`, { waitUntil: "domcontentloaded" })
+		await page.locator(selector).waitFor({ timeout: 20_000 })
+		assert(page.url().includes(`/web/accessory-store/${path}`), `${path} escaped Accessory Store`)
+	}
+
+	const sharedDoctypes = new Set(listRequests.filter((request) => request.kind === "list").map((request) => request.doctype))
+	for (const doctype of ["YRP Work Order", "Purchase Order", "YRP Stock Entry"]) {
+		assert(sharedDoctypes.has(doctype), `Accessory Store did not load shared ${doctype} data`)
+	}
+	assert(listRequests.filter((request) => request.kind === "list").every((request) => Array.isArray(request.filters) && request.filters.length === 0), `Accessory Store adds store-specific data filters: ${JSON.stringify(listRequests)}`)
+
+	return { cards: expectedCards, sharedDoctypes: [...sharedDoctypes] }
+}
+
 async function mobileRecordDetailsSuite(page) {
 	await page.setViewportSize({ width: 390, height: 844 })
 	await mockWorkspace(page, [])
@@ -2826,7 +2880,7 @@ async function liveCompletedPurchaseOrderSuite(page) {
 	return { purchaseOrder: "PO-2627-0968", goodsReceivedNotes: 2 }
 }
 
-const suites = { parity: paritySuite, shell: shellSuite, "mobile-record-details": mobileRecordDetailsSuite, documents: documentsSuite, "work-order": workOrderSuite, "purchase-order": purchaseOrderSuite, "delivery-challan": deliveryChallanSuite, "goods-received-note": goodsReceivedNoteSuite, "stock-transfers": stockTransfersSuite, "document-dialog": documentDialogSuite, states: statesSuite, "live-duplicate": liveDuplicateSuite, "live-completed-purchase-order": liveCompletedPurchaseOrderSuite }
+const suites = { parity: paritySuite, shell: shellSuite, "accessory-store": accessoryStoreSuite, "mobile-record-details": mobileRecordDetailsSuite, documents: documentsSuite, "work-order": workOrderSuite, "purchase-order": purchaseOrderSuite, "delivery-challan": deliveryChallanSuite, "goods-received-note": goodsReceivedNoteSuite, "stock-transfers": stockTransfersSuite, "document-dialog": documentDialogSuite, states: statesSuite, "live-duplicate": liveDuplicateSuite, "live-completed-purchase-order": liveCompletedPurchaseOrderSuite }
 const browser = await chromium.launch({ headless: true })
 const context = await browser.newContext()
 

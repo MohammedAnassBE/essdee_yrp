@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage :title="definition.label" accent="#0a7f5a" back-to="/fabric-store" back-label="Fabric Store" :show-title="false" flat full-width>
+	<DepartmentPage :title="definition.label" accent="#0a7f5a" :back-to="basePath" :back-label="storeName" :show-title="false" flat full-width>
 		<section class="fabric-store-section erp-workspace" :aria-label="definition.label">
 			<div v-if="loading" class="fabric-store-section__loading">
 				<Skeleton height="76px" />
@@ -7,7 +7,7 @@
 			</div>
 			<WorkspaceLoadError v-else-if="error" :message="error" :loading="loading" @retry="load" />
 			<Message v-else-if="!capability" severity="warn" :closable="false">You do not have permission to view {{ definition.label }}.</Message>
-			<component v-else :is="definition.component" :capability="capability" />
+			<component v-else :is="definition.component" v-bind="sectionProps" />
 		</section>
 	</DepartmentPage>
 </template>
@@ -25,7 +25,15 @@ import FabricReports from "./fabric-store/FabricReports.vue"
 import FabricStockTransfers from "./fabric-store/FabricStockTransfers.vue"
 import FabricWorkOrders from "./fabric-store/FabricWorkOrders.vue"
 
-const props = defineProps({ section: { type: String, required: true } })
+const props = defineProps({
+	section: { type: String, required: true },
+	storeName: { type: String, default: "Fabric Store" },
+	basePath: { type: String, default: "/fabric-store" },
+	workOrderViewRouteName: { type: String, default: "fabric-work-order" },
+	workOrderNewRouteName: { type: String, default: "fabric-work-order-new" },
+	purchaseOrderViewRouteName: { type: String, default: "fabric-purchase-order" },
+	purchaseOrderNewRouteName: { type: String, default: "fabric-purchase-order-new" },
+})
 const definitions = {
 	work_orders: { label: "Work Orders", component: FabricWorkOrders },
 	purchase_orders: { label: "Purchase Orders", component: FabricPurchaseOrders },
@@ -34,6 +42,17 @@ const definitions = {
 }
 const definition = computed(() => definitions[props.section] || definitions.work_orders)
 const capability = ref(null)
+const sectionProps = computed(() => ({
+	capability: capability.value,
+	...(props.section === "work_orders" ? {
+		viewRouteName: props.workOrderViewRouteName,
+		newRouteName: props.workOrderNewRouteName,
+	} : {}),
+	...(props.section === "purchase_orders" ? {
+		viewRouteName: props.purchaseOrderViewRouteName,
+		newRouteName: props.purchaseOrderNewRouteName,
+	} : {}),
+}))
 const loading = ref(true)
 const error = ref("")
 

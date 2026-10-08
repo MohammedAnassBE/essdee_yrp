@@ -11,6 +11,7 @@ import { computed } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import DepartmentPage from "../components/DepartmentPage.vue"
+import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
 import CuttingPlanEditor from "./cutting/plan/CuttingPlanEditor.vue"
 
 const route = useRoute()
@@ -21,7 +22,7 @@ const source = computed(() => Object.fromEntries(
 
 function saved(record) {
 	if (!record?.name) return
-	router.replace({ name: "cutting-plan", params: { cuttingPlanId: record.name } })
+	router.replace({ name: "cutting-plan", params: { cuttingPlanId: record.name }, state: preserveListNavigationState(record.name) })
 }
 </script>
 

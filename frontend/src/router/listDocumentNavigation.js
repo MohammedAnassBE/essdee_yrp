@@ -27,3 +27,15 @@ export function openListDocument(router, row, snapshot, { routeName, paramName }
 		state: { essdeeListNavigation: reference },
 	})
 }
+
+export function preserveListNavigationState(currentName = "") {
+	if (typeof window === "undefined") return undefined
+	const reference = window.history.state?.essdeeListNavigation
+	if (!reference || typeof reference !== "object") return undefined
+	return {
+		essdeeListNavigation: {
+			...reference,
+			currentName: String(currentName || reference.currentName || ""),
+		},
+	}
+}

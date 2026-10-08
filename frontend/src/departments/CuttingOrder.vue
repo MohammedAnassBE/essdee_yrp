@@ -10,7 +10,13 @@
 		<div v-else class="cutting-order-layout erp-workspace" :class="{ 'cutting-order-layout--without-sidebar': !showSidebar }">
 			<section class="cutting-order-main erp-card" aria-label="Cutting Order details">
 				<header class="order-record-header">
-					<InlinePageNavigation title-target="cutting-order-title" />
+					<InlinePageNavigation
+						title-target="cutting-order-title"
+						show-document-navigation
+						:current-name="cuttingOrderId"
+						document-label="Cutting Order"
+						:navigation-disabled="workspaceLoading || Boolean(lifecycleBusy)"
+					/>
 					<div class="order-record-identity">
 						<div class="order-record-title"><h1 id="cutting-order-title">Cutting Order</h1><span>{{ cuttingOrderId }}</span></div>
 						<div class="order-record-meta">
@@ -61,6 +67,7 @@ import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import DocumentErrorDialog from "../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
 import InlinePageNavigation from "../components/navigation/InlinePageNavigation.vue"
+import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
 import { useActionConfirmation } from "../utils/useActionConfirmation.js"
 import CuttingOrderActions from "./cutting/order/CuttingOrderActions.vue"
 import CuttingOrderEditor from "./cutting/order/CuttingOrderEditor.vue"
@@ -153,7 +160,7 @@ async function performStatusChange(action, requestedId = cuttingOrderId.value, e
 		const payload = await changeCuttingOrderStatus(requestedId, action, expectedModified)
 		if (lifecycleActionIsStale(sequence, requestedId)) return
 		const name = payload?.record?.name || requestedId
-		if (name !== requestedId) return router.replace({ name: "cutting-order", params: { cuttingOrderId: name } })
+		if (name !== requestedId) return router.replace({ name: "cutting-order", params: { cuttingOrderId: name }, state: preserveListNavigationState(name) })
 		editorProbe.value = payload
 		await loadWorkspace(requestedId)
 	} catch (reason) {

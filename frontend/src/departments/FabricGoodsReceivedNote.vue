@@ -37,6 +37,7 @@ import { computed } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import DepartmentPage from "../components/DepartmentPage.vue"
+import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
 import GoodsReceivedNoteWorkspace from "./fabric-store/GoodsReceivedNoteWorkspace.vue"
 
 const props = defineProps({
@@ -61,7 +62,7 @@ async function workspaceChanged(workspace) {
 	emit("changed", workspace)
 	const name = workspace?.record?.name
 	if (props.presentation === "page" && name && name !== route.params.goodsReceivedNoteId) {
-		await router.replace({ name: props.viewRouteName, params: { goodsReceivedNoteId: name } })
+		await router.replace({ name: props.viewRouteName, params: { goodsReceivedNoteId: name }, state: preserveListNavigationState(name) })
 	}
 }
 function compactSource(source) {

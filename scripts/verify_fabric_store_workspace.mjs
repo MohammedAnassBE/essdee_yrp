@@ -2908,6 +2908,10 @@ async function listNavigationSuite(page) {
 	assert(captured.state?.targetRouteName === "fabric-work-order" && captured.state?.targetParamName === "workOrderId", `Mobile snapshot omitted its configured destination: ${JSON.stringify(captured)}`)
 	assert(captured.state?.orderBy === "modified desc, name desc", `Mobile snapshot is not deterministic: ${JSON.stringify(captured)}`)
 	assert(captured.state?.globalIndex === 0 && captured.state?.pageStart === 0 && captured.state?.pageSize === 20, `Mobile snapshot omitted paging context: ${JSON.stringify(captured)}`)
+	const previous = page.getByRole("button", { name: "Previous Work Order", exact: true })
+	const next = page.getByRole("button", { name: "Next Work Order", exact: true })
+	await previous.waitFor({ timeout: 20_000 })
+	assert(await previous.isDisabled() && await next.isDisabled(), "Single-result Work Order navigation exposes a stale neighbor")
 
 	return { captured, listRequestCount: listRequests.length }
 }

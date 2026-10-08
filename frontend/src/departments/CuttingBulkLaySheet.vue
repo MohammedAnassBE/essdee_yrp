@@ -5,7 +5,13 @@
 			<WorkspaceLoadError v-else-if="error && !record.name" title="Bulk LaySheets unavailable" :message="error" :loading="loading" @retry="loadWorkspace" />
 			<template v-else>
 				<header class="bulk-record-header erp-card">
-					<InlinePageNavigation title-target="bulk-laysheets-title" />
+					<InlinePageNavigation
+						title-target="bulk-laysheets-title"
+						show-document-navigation
+						:current-name="bulkName"
+						document-label="Bulk LaySheet"
+						:navigation-disabled="loading || Boolean(busy) || editSetupOpen || activeEditorDirty"
+					/>
 					<div class="bulk-record-identity">
 						<div class="bulk-record-title"><h1 id="bulk-laysheets-title">Bulk LaySheets</h1><span>{{ bulkName }}</span></div>
 						<div class="bulk-record-meta">
@@ -26,7 +32,7 @@
 				<div class="bulk-workspace-layout">
 					<section class="bulk-workspace-main" aria-label="Active bulk LaySheet">
 						<div class="bulk-workspace-main__scroll">
-							<BulkActiveLaySheet ref="activeEditor" :bulk-name="bulkName" :row="activeRow" :data="workspace.active_laysheet" :modified="workspace.active_laysheet?.context?.modified" :can-write="workspace.permissions?.laysheet?.can_write" :busy="Boolean(busy)" @saved="applyWorkspace" />
+							<BulkActiveLaySheet ref="activeEditor" :bulk-name="bulkName" :row="activeRow" :data="workspace.active_laysheet" :modified="workspace.active_laysheet?.context?.modified" :can-write="workspace.permissions?.laysheet?.can_write" :busy="Boolean(busy)" @saved="applyWorkspace" @dirty-change="activeEditorDirty = $event" />
 							<BulkBundleTable :rows="workspace.bundles || []" />
 						</div>
 					</section>
@@ -91,6 +97,7 @@ const actionError = ref("")
 const feedback = ref("")
 const busy = ref("")
 const activeEditor = ref(null)
+const activeEditorDirty = ref(false)
 const editSetupOpen = ref(false)
 const generateOpen = ref(false)
 const deliveryOpen = ref(false)
@@ -252,6 +259,7 @@ function setupSaved(payload) { applyWorkspace(payload); editSetupOpen.value = fa
 function today() { const value = new Date(); const pad = (part) => String(part).padStart(2, "0"); return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}` }
 function formatDate(value) { if (!value) return ""; const [year, month, day] = String(value).split("-"); return day && month && year ? `${day}-${month}-${year}` : value }
 watch(bulkName, () => {
+	activeEditorDirty.value = false
 	workspace.value = {}
 	busy.value = ""
 	actionError.value = ""

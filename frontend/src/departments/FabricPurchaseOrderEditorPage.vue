@@ -11,6 +11,7 @@ import { computed } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import DepartmentPage from "../components/DepartmentPage.vue"
+import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
 import PurchaseOrderEditor from "./fabric-store/PurchaseOrderEditor.vue"
 
 const props = defineProps({
@@ -28,7 +29,7 @@ const duplicateSource = computed(() => duplicateFrom.value ? { duplicate_from: d
 
 function saved(record) {
 	if (!record?.name) return
-	router.replace({ name: props.viewRouteName, params: { purchaseOrderId: record.name } })
+	router.replace({ name: props.viewRouteName, params: { purchaseOrderId: record.name }, state: preserveListNavigationState(record.name) })
 }
 function cancel() {
 	if (purchaseOrderId.value) router.push({ name: props.viewRouteName, params: { purchaseOrderId: purchaseOrderId.value } })

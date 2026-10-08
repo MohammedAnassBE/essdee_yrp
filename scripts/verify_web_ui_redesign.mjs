@@ -1993,6 +1993,7 @@ async function responsiveAuditSuite(page) {
 
 async function listNavigationSuite(page) {
 	const requests = []
+	let navigationMode = "normal"
 	await page.route("**/api/method/essdee_yrp.cutting.web_capabilities.get_capabilities*", (route) => route.fulfill({
 		status: 200,
 		contentType: "application/json",
@@ -2021,11 +2022,15 @@ async function listNavigationSuite(page) {
 	await page.route("**/api/resource/SD%20YRP%20Cutting%20Plan?*", (route) => {
 		const url = new URL(route.request().url())
 		const start = Number(url.searchParams.get("limit_start") || 0)
+		const pageLength = Number(url.searchParams.get("limit_page_length") || 20)
 		const filters = JSON.parse(url.searchParams.get("filters") || "[]")
 		const orderBy = url.searchParams.get("order_by") || ""
-		requests.push({ start, filters, orderBy })
-		const data = Array.from({ length: 20 }, (_, offset) => ({
-			name: `CP-NAV-${String(start + offset + 1).padStart(3, "0")}`,
+		requests.push({ start, pageLength, filters, orderBy })
+		if (pageLength === 3 && navigationMode === "error") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ exc: "Navigation unavailable" }) })
+		const shiftedStart = pageLength === 3 && navigationMode === "changed" ? start + 1 : start
+		const length = Math.max(0, Math.min(pageLength, 41 - shiftedStart))
+		const data = Array.from({ length }, (_, offset) => ({
+			name: `CP-NAV-${String(shiftedStart + offset + 1).padStart(3, "0")}`,
 			lot: "LOT-NAV",
 			item: "ITEM-NAV",
 			cp_status: "Draft",
@@ -2033,20 +2038,27 @@ async function listNavigationSuite(page) {
 		}))
 		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data }) })
 	})
-	await page.route("**/api/method/essdee_yrp.cutting.plan_editor.get_editor*", (route) => route.fulfill({
-		status: 200,
-		contentType: "application/json",
-		body: JSON.stringify({ message: { record: { name: "CP-NAV-001", docstatus: 1 }, permissions: { can_write: false } } }),
-	}))
-	await page.route("**/api/resource/SD%20YRP%20Cutting%20Plan/CP-NAV-001*", (route) => route.fulfill({
-		status: 200,
-		contentType: "application/json",
-		body: JSON.stringify({ data: { name: "CP-NAV-001", docstatus: 1, cp_status: "Draft", lot: "LOT-NAV", item: "ITEM-NAV" } }),
-	}))
+	await page.route("**/api/method/essdee_yrp.cutting.plan_editor.get_editor*", (route) => {
+		const body = JSON.parse(route.request().postData() || "{}")
+		const name = String(body.cutting_plan || "CP-NAV-001")
+		return route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({ message: { record: { name, docstatus: 1 }, permissions: { can_write: false } } }),
+		})
+	})
+	await page.route(/\/api\/resource\/SD%20YRP%20Cutting%20Plan\/CP-NAV-\d+/, (route) => {
+		const name = decodeURIComponent(new URL(route.request().url()).pathname.split("/").at(-1))
+		return route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({ data: { name, docstatus: 1, cp_status: "Draft", lot: "LOT-NAV", item: "ITEM-NAV" } }),
+		})
+	})
 	await page.route("**get_web_view_data*", (route) => route.fulfill({
 		status: 200,
 		contentType: "application/json",
-		body: JSON.stringify({ message: { permissions: { can_write: false, can_read_marker: false, can_read_laysheet: false } } }),
+		body: JSON.stringify({ message: { permissions: { can_write: true, can_read_marker: false, can_read_laysheet: false } } }),
 	}))
 
 	await page.setViewportSize({ width: 1600, height: 1000 })
@@ -2074,6 +2086,35 @@ async function listNavigationSuite(page) {
 	assert(desktop.reference?.currentName === "CP-NAV-001", `Desktop row activation omitted its navigation reference: ${JSON.stringify(desktop)}`)
 	assert(await page.locator(".department-page__nav").count() === 0, "Saved Cutting Plan retains the standalone Back row")
 	assert(await page.locator(".form-toolbar .inline-page-navigation__back[aria-label='Back to Cutting Plans']").count() === 1, "Saved Cutting Plan has no inline Back control beside its title")
+	assert(await page.getByRole("button", { name: "Previous Cutting Plan", exact: true }).count() === 1, "Filtered document Previous control is missing")
+	assert(await page.getByRole("button", { name: "Next Cutting Plan", exact: true }).count() === 1, "Filtered document Next control is missing")
+	const previousButton = page.getByRole("button", { name: "Previous Cutting Plan", exact: true })
+	const nextButton = page.getByRole("button", { name: "Next Cutting Plan", exact: true })
+	await nextButton.waitFor()
+	assert(await previousButton.isDisabled(), "First filtered record enables Previous")
+	assert(!await nextButton.isDisabled(), "First filtered record disables Next")
+	const historyLengthBeforeNext = await page.evaluate(() => history.length)
+	await nextButton.click()
+	await page.waitForURL("**/web/cutting/plans/CP-NAV-002")
+	await page.getByText("CP-NAV-002", { exact: true }).waitFor()
+	const moved = await page.evaluate(() => ({
+		historyLength: history.length,
+		reference: history.state?.essdeeListNavigation,
+		focusedId: document.activeElement?.id || "",
+	}))
+	assert(moved.historyLength === historyLengthBeforeNext, `Next pushed a history entry instead of replacing it: ${JSON.stringify(moved)}`)
+	assert(moved.reference?.currentName === "CP-NAV-002" && moved.reference?.index === 1, `Next lost its list reference: ${JSON.stringify(moved)}`)
+	assert(moved.focusedId === "sd-yrp-cutting-plan-form-title", `Next did not transfer focus to the document heading: ${JSON.stringify(moved)}`)
+	assert(!await previousButton.isDisabled() && !await nextButton.isDisabled(), "Middle filtered record does not expose both directions")
+
+	await page.getByRole("button", { name: "Edit", exact: true }).click()
+	assert(await previousButton.isDisabled() && await nextButton.isDisabled(), "Previous/Next remain active while the document is editing")
+	await page.getByRole("button", { name: "Cancel", exact: true }).click()
+	assert(!await previousButton.isDisabled() && !await nextButton.isDisabled(), "Previous/Next did not recover after cancelling edit mode")
+
+	await previousButton.click()
+	await page.waitForURL("**/web/cutting/plans/CP-NAV-001")
+	await page.getByText("CP-NAV-001", { exact: true }).waitFor()
 	assert(desktop.state?.sourceRouteName === "cutting-plans", `Desktop snapshot omitted its source route: ${JSON.stringify(desktop)}`)
 	assert(desktop.state?.sourceFullPath === "/cutting/plans", `Desktop snapshot omitted its router source path: ${JSON.stringify(desktop)}`)
 	assert(desktop.state?.doctype === "SD YRP Cutting Plan", `Desktop snapshot omitted its DocType: ${JSON.stringify(desktop)}`)
@@ -2100,6 +2141,44 @@ async function listNavigationSuite(page) {
 	restored.requestsAfterBack = requests.length
 	assert(restored.input === "APPLIED", `Returning to the list did not restore the applied search: ${JSON.stringify(restored)}`)
 	assert(await page.getByRole("button", { name: /^Draft\s/ }).getAttribute("aria-pressed") === "true", "Returning to the list did not restore status")
+
+	const twentiethRow = page.locator(".premium-list-table .p-datatable-tbody > tr").nth(19)
+	await twentiethRow.getByText("CP-NAV-020", { exact: true }).click()
+	await page.waitForURL("**/web/cutting/plans/CP-NAV-020")
+	await page.getByRole("button", { name: "Next Cutting Plan", exact: true }).click()
+	await page.waitForURL("**/web/cutting/plans/CP-NAV-021")
+	const boundary = await page.evaluate(() => {
+		const reference = history.state?.essdeeListNavigation
+		const state = reference?.stateKey ? JSON.parse(sessionStorage.getItem(reference.stateKey) || "null") : null
+		return { reference, state }
+	})
+	assert(boundary.reference?.index === 20 && boundary.state?.pageStart === 20, `Next did not cross the server page boundary safely: ${JSON.stringify(boundary)}`)
+	await page.waitForTimeout(250)
+	assert(!await page.getByRole("button", { name: "Next Cutting Plan", exact: true }).isDisabled(), `Boundary record did not resolve its next neighbor: ${JSON.stringify({ boundary, requests: requests.slice(-4) })}`)
+
+	navigationMode = "changed"
+	await page.getByRole("button", { name: "Next Cutting Plan", exact: true }).click()
+	await page.waitForURL("**/web/cutting/plans/CP-NAV-022")
+	await page.getByText("List changed — return to list", { exact: true }).waitFor()
+	assert(await page.getByRole("button", { name: "Previous Cutting Plan", exact: true }).isDisabled(), "Changed list leaves Previous active")
+	assert(await page.getByRole("button", { name: "Next Cutting Plan", exact: true }).isDisabled(), "Changed list leaves Next active")
+
+	navigationMode = "normal"
+	await page.goBack({ waitUntil: "domcontentloaded" })
+	await page.locator(".premium-list-table .p-datatable-tbody > tr").first().waitFor({ timeout: 20_000 })
+	assert(await page.locator(".premium-list-table .p-datatable-tbody > tr").first().getByText("CP-NAV-021", { exact: true }).count() === 1, "Browser Back did not restore the page containing the moved document")
+
+	navigationMode = "error"
+	await page.locator(".premium-list-table .p-datatable-tbody > tr").first().click()
+	await page.waitForURL("**/web/cutting/plans/CP-NAV-021")
+	await page.getByText("Navigation unavailable", { exact: true }).waitFor()
+	assert(page.url().endsWith("/web/cutting/plans/CP-NAV-021"), "Navigation load failure moved away from the current document")
+
+	navigationMode = "normal"
+	await page.goto(`${SITE}/web/cutting/plans/CP-NAV-005`, { waitUntil: "domcontentloaded" })
+	await page.getByText("CP-NAV-005", { exact: true }).waitFor()
+	assert(await page.locator(".inline-page-navigation__documents").count() === 0, "Direct-linked document exposes stale Previous/Next controls")
+	assert(await page.locator(".form-toolbar .inline-page-navigation__back[aria-label='Back to Cutting Plans']").count() === 1, "Direct-linked document lost its Back control")
 
 	await page.goto(`${SITE}/web/cutting/plans/new`, { waitUntil: "domcontentloaded" })
 	await page.locator(".department-page__nav .back-link").waitFor({ timeout: 20_000 })

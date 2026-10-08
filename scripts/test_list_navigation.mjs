@@ -11,6 +11,7 @@ import {
 	resolveAdjacentNames,
 	writeNavigationState,
 } from "../frontend/src/utils/listNavigation.js"
+import { preserveListNavigationState } from "../frontend/src/router/listDocumentNavigation.js"
 
 class MemoryStorage {
 	#values = new Map()
@@ -101,5 +102,14 @@ assert.deepEqual(
 		reason: "List changed — return to list",
 	},
 )
+
+global.window = { history: { state: { essdeeListNavigation: middleReference, unrelated: "kept" } } }
+assert.deepEqual(
+	preserveListNavigationState("CP-023-RENAMED"),
+	{ essdeeListNavigation: { ...middleReference, currentName: "CP-023-RENAMED" } },
+)
+global.window.history.state = { unrelated: "kept" }
+assert.equal(preserveListNavigationState("CP-023"), undefined)
+delete global.window
 
 console.log("List navigation state verified.")

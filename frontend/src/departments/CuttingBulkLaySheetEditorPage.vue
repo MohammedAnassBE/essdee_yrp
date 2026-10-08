@@ -8,12 +8,13 @@
 import { useRouter } from "vue-router"
 
 import DepartmentPage from "../components/DepartmentPage.vue"
+import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
 import BulkSetupEditor from "./cutting/bulk/BulkSetupEditor.vue"
 
 const router = useRouter()
 function saved(payload) {
 	const name = payload?.record?.name
-	if (name) router.replace({ name: "cutting-bulk-lay-sheet", params: { bulkLaySheetsId: name } })
+	if (name) router.replace({ name: "cutting-bulk-lay-sheet", params: { bulkLaySheetsId: name }, state: preserveListNavigationState(name) })
 }
 </script>
 

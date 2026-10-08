@@ -66,6 +66,7 @@ import LinkField from "../components/common/LinkField.vue"
 import DocumentActionStrip from "../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../components/documents/DocumentConfirmationDialog.vue"
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
+import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
 import { webDocumentPath } from "../router/webDocumentRoutes.js"
 import { hasDocumentDisplayValue } from "../utils/documentValues.js"
 import FabricDocumentWorkspace from "./fabric-store/FabricDocumentWorkspace.vue"
@@ -250,7 +251,7 @@ async function runLifecycleAction(command) {
 		if (sequence !== actionSequence || requestedId !== String(route.params.workOrderId || "")) return
 		const name = result.record?.name || source.name
 		workspace.value = result
-		if (name !== requestedId) await router.replace({ name: props.viewRouteName, params: { workOrderId: name } })
+		if (name !== requestedId) await router.replace({ name: props.viewRouteName, params: { workOrderId: name }, state: preserveListNavigationState(name) })
 	}
 	catch (reason) { if (sequence === actionSequence && requestedId === String(route.params.workOrderId || "")) actionError.value = reason?.message || `Unable to ${command} this Work Order.` }
 	finally { if (sequence === actionSequence) acting.value = "" }
@@ -278,7 +279,7 @@ async function actionChanged(result) {
 	if (!result?.record) return loadWorkspace(true)
 	const resultName = result.record.name
 	workspace.value = result
-	if (resultName && resultName !== route.params.workOrderId) await router.replace({ name: props.viewRouteName, params: { workOrderId: resultName } })
+	if (resultName && resultName !== route.params.workOrderId) await router.replace({ name: props.viewRouteName, params: { workOrderId: resultName }, state: preserveListNavigationState(resultName) })
 }
 function openRelated(doctype, name = "", sourceContext = {}) { relatedDoctype.value = doctype; relatedName.value = name; relatedSourceContext.value = { ...(sourceContext || {}) }; relatedVisible.value = true }
 function createRelated(type) {

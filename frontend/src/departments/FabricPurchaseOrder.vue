@@ -114,6 +114,7 @@ import DocumentConfirmationDialog from "../components/documents/DocumentConfirma
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
 import StockItemMatrix from "../components/stock/StockItemMatrix.vue"
 import { hasDocumentDisplayValue, plainTextFromHtml } from "../utils/documentValues.js"
+import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
 import FabricDocumentWorkspace from "./fabric-store/FabricDocumentWorkspace.vue"
 import RelatedDocumentWorkspaceDialog from "./fabric-store/RelatedDocumentWorkspaceDialog.vue"
 import SupplierNotificationPanel from "./fabric-store/SupplierNotificationPanel.vue"
@@ -317,7 +318,7 @@ async function changeStatus(action) {
 		const changed = await changeFabricStoreDocumentStatus("Purchase Order", source.name, action, source.modified)
 		if (sequence !== actionSequence || requestedId !== String(route.params.purchaseOrderId || "")) return
 		const name = changed?.record?.name || source.name
-		if (name !== requestedId) await router.replace({ name: props.viewRouteName, params: { purchaseOrderId: name } })
+		if (name !== requestedId) await router.replace({ name: props.viewRouteName, params: { purchaseOrderId: name }, state: preserveListNavigationState(name) })
 		else await loadWorkspace(true)
 	} catch (reason) { if (sequence === actionSequence && requestedId === String(route.params.purchaseOrderId || "")) actionError.value = reason?.message || `Unable to ${action} this Purchase Order.` }
 	finally { if (sequence === actionSequence) acting.value = "" }

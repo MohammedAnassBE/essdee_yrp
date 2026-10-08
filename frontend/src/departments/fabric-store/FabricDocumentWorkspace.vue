@@ -6,7 +6,14 @@
 	>
 		<div class="fabric-document-workspace__chrome">
 		<header class="fabric-document-workspace__header">
-			<InlinePageNavigation v-if="presentation === 'page'" :title-target="headingId" />
+			<InlinePageNavigation
+				v-if="presentation === 'page'"
+				:title-target="headingId"
+				:show-document-navigation="Boolean(record.name)"
+				:current-name="record.name || ''"
+				:document-label="title"
+				:navigation-disabled="dirty || Boolean(acting) || Boolean(capabilities.save)"
+			/>
 			<slot name="header" :record="record" :workspace="workspace" :heading-id="headingId">
 				<div class="fabric-document-workspace__identity">
 					<div>

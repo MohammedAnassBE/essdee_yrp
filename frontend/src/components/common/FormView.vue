@@ -1,7 +1,13 @@
 <template>
 	<section class="common-form-view" :class="{ 'common-form-view--compact': compact }" :aria-busy="loading">
 		<header class="form-toolbar">
-			<InlinePageNavigation :title-target="headingId" />
+			<InlinePageNavigation
+				:title-target="headingId"
+				:show-document-navigation="Boolean(documentName)"
+				:current-name="documentName"
+				:document-label="heading"
+				:navigation-disabled="mode === 'edit' || saving || loading"
+			/>
 			<div class="form-toolbar__identity">
 				<h2 :id="headingId">{{ heading }}</h2>
 				<div class="form-toolbar__meta">

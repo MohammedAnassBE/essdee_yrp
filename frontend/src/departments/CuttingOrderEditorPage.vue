@@ -10,11 +10,12 @@
 import { useRouter } from "vue-router"
 
 import DepartmentPage from "../components/DepartmentPage.vue"
+import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
 import CuttingOrderEditor from "./cutting/order/CuttingOrderEditor.vue"
 
 const router = useRouter()
 function saved(record) {
-	if (record?.name) router.replace({ name: "cutting-order", params: { cuttingOrderId: record.name } })
+	if (record?.name) router.replace({ name: "cutting-order", params: { cuttingOrderId: record.name }, state: preserveListNavigationState(record.name) })
 }
 </script>
 

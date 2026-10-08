@@ -711,9 +711,8 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 def _add_planning_data(qty_rows, kind, lot, wo, fabric, ipd, step):
 	"""Stamp program/plan/ordered/available/prefill onto each popup qty row.
 
-	Knitting prefill comes directly from the saved Lot Fabric Program. Ordered
-	and balance remain advisory context/warnings; they never replace the owner's
-	saved Colour x Dia program in the input. Other steps prefill from the
+	Knitting prefills the saved Lot Fabric Program's remaining balance; ordering
+	beyond it stays a non-blocking popup warning. Other steps prefill from the
 	back-computed PLAN when one exists (else 0 for swaps, per the 2026-07-04
 	decision). Actual availability is deliberately not read from the Lot: the
 	Fill Quantity action derives it live from submitted GRNs."""
@@ -743,15 +742,13 @@ def _add_planning_data(qty_rows, kind, lot, wo, fabric, ipd, step):
 				)
 			program = flt(row.weight) if row else 0
 			already = flt(ordered.get(reference))
+			balance = max(program - already, 0)
 			qr.update(
 				{
 					"program": program,
 					"ordered": already,
-					"balance": max(program - already, 0),
-					# The operator asked for the persisted Cloth Program itself to be
-					# prefilled. `balance` is still shown and over-ordering remains a
-					# non-blocking warning in the popup.
-					"prefill": program,
+					"balance": balance,
+					"prefill": balance,
 				}
 			)
 		return

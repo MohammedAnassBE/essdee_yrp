@@ -1300,9 +1300,8 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
 		}
 		self.assertEqual(delivered_templates, {yarn_a, yarn_b})
 
-		# The Lot's saved Cloth Program—not its remaining balance—is the popup
-		# input source. A later draft therefore still pre-fills 30/20 while the
-		# already-calculated first WO makes both advisory balances zero.
+		# A later draft pre-fills only the remaining balance, which the
+		# already-calculated first WO has used up.
 		next_work_order = frappe.get_doc(
 			{
 				"doctype": "YRP Work Order",
@@ -1321,9 +1320,9 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
 			qty_row["target_attrs"]["Colour"]: qty_row for qty_row in next_context["rows"][0]["qty_rows"]
 		}
 		self.assertEqual(next_routes[self.red]["balance"], 0)
-		self.assertEqual(next_routes[self.red]["prefill"], 30)
+		self.assertEqual(next_routes[self.red]["prefill"], 0)
 		self.assertEqual(next_routes[grey_melange]["balance"], 0)
-		self.assertEqual(next_routes[grey_melange]["prefill"], 20)
+		self.assertEqual(next_routes[grey_melange]["prefill"], 0)
 
 		# The direct GMEL route is absent from the Dyeing popup entirely. Only
 		# the Greige -> Red route needs a dyeing Work Order.

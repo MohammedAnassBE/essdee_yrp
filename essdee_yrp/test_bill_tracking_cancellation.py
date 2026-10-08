@@ -10,6 +10,10 @@ from essdee_yrp.overrides import bill_tracking as bill_api
 
 
 PROPERTY_SETTER_NAME = "YRP Bill Tracking-form_status-options"
+SEEDED_ROLE_SETTINGS = {
+	"bill_tracking_cancel_request_role": "HR User",
+	"bill_tracking_cancel_approver_role": "HR Manager",
+}
 
 
 class TestBillTrackingCancellationMetadata(unittest.TestCase):
@@ -113,13 +117,16 @@ class _FakeBillTracking(bill_api.EssdeeYRPBillTracking):
 
 
 class TestBillTrackingCancellationStateMachine(unittest.TestCase):
-	def call_as(self, roles, doc, method, *args):
+	def call_as(self, roles, doc, method, *args, settings=SEEDED_ROLE_SETTINGS):
 		previous_db = getattr(frappe.local, "db", None)
 		previous_flags = getattr(frappe.local, "flags", None)
 		previous_message_log = getattr(frappe.local, "message_log", None)
 		previous_session = getattr(frappe.local, "session", None)
 		frappe.local.db = MagicMock()
 		frappe.local.db.get_value.return_value = doc.name
+		frappe.local.db.get_single_value.side_effect = lambda doctype, fieldname, *_args, **_kwargs: (
+			settings.get(fieldname) if doctype == "YRP Settings" else None
+		)
 		frappe.local.flags = frappe._dict(in_test=True, mute_messages=True)
 		frappe.local.message_log = []
 		frappe.local.session = frappe._dict(user="hr-user@example.com")
@@ -226,6 +233,25 @@ class TestBillTrackingCancellationStateMachine(unittest.TestCase):
 				)
 				with self.assertRaises(frappe.ValidationError):
 					self.call_as(["HR User"], doc, bill_api.cancel_vendor_bill, "duplicate")
+
+	def test_cancellation_roles_follow_yrp_settings(self):
+		settings = {
+			"bill_tracking_cancel_request_role": "Stock User",
+			"bill_tracking_cancel_approver_role": "Stock Manager",
+		}
+		doc = _FakeBillTracking()
+		with self.assertRaises(frappe.PermissionError):
+			self.call_as(["HR User"], doc, bill_api.request_bill_cancellation, settings=settings)
+		self.call_as(["Stock User"], doc, bill_api.request_bill_cancellation, settings=settings)
+		with self.assertRaises(frappe.PermissionError):
+			self.call_as(["HR Manager"], doc, bill_api.approve_bill_cancellation, settings=settings)
+		self.call_as(["Stock Manager"], doc, bill_api.approve_bill_cancellation, settings=settings)
+		self.call_as(["Stock User"], doc, bill_api.cancel_vendor_bill, "duplicate", settings=settings)
+		self.assertEqual(doc.docstatus, 2)
+
+	def test_unset_cancellation_role_denies_everyone(self):
+		with self.assertRaises(frappe.PermissionError):
+			self.call_as(["HR User"], _FakeBillTracking(), bill_api.request_bill_cancellation, settings={})
 
 	def test_approved_hr_user_cancels_with_base_history(self):
 		doc = _FakeBillTracking(form_status="Cancel Request Approved")

@@ -6,6 +6,7 @@
 		:header="title"
 		class="related-records-dialog"
 		:aria-label="title"
+		:pt="dialogId ? { root: { id: dialogId } } : undefined"
 		@hide="emit('closed')"
 	>
 		<div class="related-records-dialog__body">
@@ -43,6 +44,7 @@ defineProps({
 	statusField: { type: String, default: "" },
 	statusOptions: { type: Array, default: () => [] },
 	rowMark: { type: String, default: "DOC" },
+	dialogId: { type: String, default: "" },
 })
 
 const visible = defineModel("visible", { type: Boolean, default: false })

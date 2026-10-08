@@ -7,6 +7,18 @@
 				<h3>Markers <span>{{ filteredCount(markers.length, filteredMarkers.length, markerFilters.length) }}</span></h3>
 				<div class="rail-heading__actions">
 					<Button
+						ref="markerExpandButton"
+						class="rail-expand-button"
+						icon="pi pi-window-maximize"
+						severity="secondary"
+						outlined
+						size="small"
+						aria-label="Expand Markers"
+						aria-haspopup="dialog"
+						aria-controls="cutting-marker-related-list"
+						@click="openExpandedList('marker')"
+					/>
+					<Button
 						class="rail-filter-button"
 						:class="{ 'rail-filter-button--active': markerFilters.length }"
 						icon="pi pi-filter"
@@ -50,6 +62,18 @@
 			<header class="rail-heading">
 				<h3>Lay Sheets <span>{{ filteredCount(laysheets.length, filteredLaySheets.length, laySheetFilters.length) }}</span></h3>
 				<div class="rail-heading__actions">
+					<Button
+						ref="laySheetExpandButton"
+						class="rail-expand-button"
+						icon="pi pi-window-maximize"
+						severity="secondary"
+						outlined
+						size="small"
+						aria-label="Expand Lay Sheets"
+						aria-haspopup="dialog"
+						aria-controls="cutting-laysheet-related-list"
+						@click="openExpandedList('laysheet')"
+					/>
 					<Button
 						class="rail-filter-button"
 						:class="{ 'rail-filter-button--active': laySheetFilters.length }"
@@ -113,8 +137,39 @@
 		<ListviewFilters v-model:visible="markerFiltersOpen" v-model="markerFilters" :fields="markerFilterFields" @apply="markerFilters = $event" />
 		<ListviewFilters v-model:visible="laySheetFiltersOpen" v-model="laySheetFilters" :fields="laySheetFilterFields" @apply="laySheetFilters = $event" />
 
-		<CuttingMarkerDialog v-if="permissions.can_read_marker" v-model:visible="markerOpen" :parent-doctype="resolvedParentDoctype" :parent-name="resolvedParentName" :marker-name="selectedMarker" @changed="changed" />
-		<CuttingLaySheetDialog v-if="permissions.can_read_laysheet" v-model:visible="laysheetOpen" :parent-doctype="resolvedParentDoctype" :parent-name="resolvedParentName" :laysheet-name="selectedLaySheet" :can-create="Boolean(permissions.can_create_laysheet)" @changed="changed" />
+		<RelatedRecordsDialog
+			v-if="permissions.can_read_marker"
+			v-model:visible="markerListOpen"
+			v-model:filters="expandedMarkerFilters"
+			title="Markers"
+			doctype="SD YRP Cutting Marker"
+			dialog-id="cutting-marker-related-list"
+			:base-filters="expandedBaseFilters"
+			:default-columns="markerListColumns"
+			:column-labels="markerListLabels"
+			row-mark="CM"
+			@open="openMarkerFromExpanded"
+			@closed="expandedListClosed('marker')"
+		/>
+		<RelatedRecordsDialog
+			v-if="permissions.can_read_laysheet"
+			v-model:visible="laySheetListOpen"
+			v-model:filters="expandedLaySheetFilters"
+			title="Lay Sheets"
+			doctype="SD YRP Cutting LaySheet"
+			dialog-id="cutting-laysheet-related-list"
+			:base-filters="expandedBaseFilters"
+			:default-columns="laySheetListColumns"
+			:column-labels="laySheetListLabels"
+			status-field="status"
+			:status-options="laySheetStatusOptions"
+			row-mark="CLS"
+			@open="openLaySheetFromExpanded"
+			@closed="expandedListClosed('laysheet')"
+		/>
+
+		<CuttingMarkerDialog v-if="permissions.can_read_marker" v-model:visible="markerOpen" :parent-doctype="resolvedParentDoctype" :parent-name="resolvedParentName" :marker-name="selectedMarker" @update:visible="recordDialogVisibilityChanged('marker', $event)" @changed="changed" />
+		<CuttingLaySheetDialog v-if="permissions.can_read_laysheet" v-model:visible="laysheetOpen" :parent-doctype="resolvedParentDoctype" :parent-name="resolvedParentName" :laysheet-name="selectedLaySheet" :can-create="Boolean(permissions.can_create_laysheet)" @update:visible="recordDialogVisibilityChanged('laysheet', $event)" @changed="changed" />
 	</aside>
 </template>
 
@@ -122,9 +177,10 @@
 import Button from "primevue/button"
 import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
-import { computed, ref } from "vue"
+import { computed, nextTick, ref } from "vue"
 
 import ListviewFilters from "../../components/common/ListviewFilters.vue"
+import RelatedRecordsDialog from "../../components/documents/RelatedRecordsDialog.vue"
 import CuttingLaySheetDialog from "./CuttingLaySheetDialog.vue"
 import CuttingMarkerDialog from "./CuttingMarkerDialog.vue"
 
@@ -147,6 +203,13 @@ const markerFiltersOpen = ref(false)
 const laySheetFiltersOpen = ref(false)
 const markerFilters = ref([])
 const laySheetFilters = ref([])
+const markerListOpen = ref(false)
+const laySheetListOpen = ref(false)
+const expandedMarkerFilters = ref([])
+const expandedLaySheetFilters = ref([])
+const expandedRecordOrigin = ref("")
+const markerExpandButton = ref(null)
+const laySheetExpandButton = ref(null)
 const markers = computed(() => props.data.markers || [])
 const laysheets = computed(() => props.data.laysheets || [])
 const permissions = computed(() => props.data.permissions || {})
@@ -157,6 +220,12 @@ const parentLabel = computed(() => resolvedParentDoctype.value === "SD YRP Cutti
 const canStartMarker = computed(() => permissions.value.can_start_marker ?? permissions.value.can_create_marker)
 const canStartLaySheet = computed(() => permissions.value.can_start_laysheet ?? permissions.value.can_create_laysheet)
 const visibleSectionCount = computed(() => Number(Boolean(permissions.value.can_read_marker)) + Number(Boolean(permissions.value.can_read_laysheet)))
+const expandedBaseFilters = computed(() => ({ [resolvedParentField.value]: resolvedParentName.value }))
+const markerListColumns = ["marker_name", "selected_type", "length", "width", "required_piece_weight", "docstatus"]
+const markerListLabels = { marker_name: "Marker", selected_type: "Type", required_piece_weight: "Piece Weight" }
+const laySheetListColumns = ["lay_no", "cutting_marker", "status", "bundle_generated_date", "printed_time"]
+const laySheetListLabels = { lay_no: "Lay No", cutting_marker: "Marker", bundle_generated_date: "Bundle Date", printed_time: "Printed" }
+const laySheetStatusOptions = ["Started", "Completed", "Bundles Generated", "Approval Pending", "Label Printed", "Cancelled"]
 const markersByName = computed(() => new Map(markers.value.map((marker) => [marker.name, marker])))
 const markerFilterFields = computed(() => [
 	{ fieldname: "marker_name", label: "Marker Name", fieldtype: "Data" },
@@ -203,6 +272,53 @@ function openMarker(name) {
 function openLaySheet(name) {
 	selectedLaySheet.value = name
 	laysheetOpen.value = true
+}
+
+function safeRailFilters(filters, fields) {
+	const allowed = new Set(fields.map((field) => field.fieldname))
+	return (filters || [])
+		.filter((filter) => Array.isArray(filter) && filter.length === 3 && allowed.has(filter[0]) && filter[0] !== "panels")
+		.map((filter) => [...filter])
+}
+
+function openExpandedList(type) {
+	if (type === "marker") {
+		expandedMarkerFilters.value = safeRailFilters(markerFilters.value, markerFilterFields.value)
+		markerListOpen.value = true
+		return
+	}
+	expandedLaySheetFilters.value = safeRailFilters(laySheetFilters.value, laySheetFilterFields.value)
+	laySheetListOpen.value = true
+}
+
+function openMarkerFromExpanded(row) {
+	expandedRecordOrigin.value = "marker"
+	markerListOpen.value = false
+	openMarker(row?.name || "")
+}
+
+function openLaySheetFromExpanded(row) {
+	expandedRecordOrigin.value = "laysheet"
+	laySheetListOpen.value = false
+	openLaySheet(row?.name || "")
+}
+
+function recordDialogVisibilityChanged(type, visible) {
+	if (visible || expandedRecordOrigin.value !== type) return
+	nextTick(() => reopenExpandedList(type))
+}
+
+function reopenExpandedList(type) {
+	expandedRecordOrigin.value = ""
+	if (type === "marker") markerListOpen.value = true
+	else laySheetListOpen.value = true
+}
+
+function expandedListClosed(type) {
+	if (type === "marker") markerFilters.value = safeRailFilters(expandedMarkerFilters.value, markerFilterFields.value)
+	else laySheetFilters.value = safeRailFilters(expandedLaySheetFilters.value, laySheetFilterFields.value)
+	if (expandedRecordOrigin.value === type) return
+	nextTick(() => (type === "marker" ? markerExpandButton.value : laySheetExpandButton.value)?.$el?.focus?.())
 }
 
 function changed() {
@@ -388,8 +504,8 @@ function markerStatus(marker) {
 .rail-heading :deep(.p-button) { flex: 0 0 auto; min-height: var(--erp-control-height-compact); padding: 0.4rem 0.62rem; color: #fff; background: var(--erp-accent-hover); border-color: var(--erp-accent-hover); border-radius: var(--erp-control-radius); box-shadow: none; font-size: var(--erp-font-size-min); font-weight: 700; }
 .rail-heading :deep(.p-button:hover) { background: var(--erp-accent-dark); border-color: var(--erp-accent-dark); }
 .rail-heading :deep(.p-button:disabled) { opacity: 0.48; }
-.rail-heading :deep(.rail-filter-button.p-button) { width: 34px; min-width: 34px; padding: 0; color: var(--erp-text-secondary); background: var(--erp-surface); border-color: var(--erp-border-strong); box-shadow: var(--erp-shadow-xs); }
-.rail-heading :deep(.rail-filter-button.p-button:hover) { color: var(--erp-accent-hover); background: var(--erp-accent-soft); border-color: var(--erp-accent-border); }
+.rail-heading :deep(.rail-filter-button.p-button), .rail-heading :deep(.rail-expand-button.p-button) { width: 34px; min-width: 34px; padding: 0; color: var(--erp-text-secondary); background: var(--erp-surface); border-color: var(--erp-border-strong); box-shadow: var(--erp-shadow-xs); }
+.rail-heading :deep(.rail-filter-button.p-button:hover), .rail-heading :deep(.rail-expand-button.p-button:hover) { color: var(--erp-accent-hover); background: var(--erp-accent-soft); border-color: var(--erp-accent-border); }
 .rail-heading :deep(.rail-filter-button--active.p-button) { color: #fff; background: var(--erp-accent-hover); border-color: var(--erp-accent-hover); box-shadow: var(--erp-shadow-xs); }
 .rail-loading, .rail-list { display: grid; align-content: start; gap: 8px; min-height: 0; padding: 9px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--erp-border-strong) transparent; }
 .rail-card { display: grid; gap: 8px; width: 100%; padding: 10px 11px; color: inherit; text-align: left; background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); cursor: pointer; box-shadow: none; transition: border-color var(--erp-transition-fast), background var(--erp-transition-fast); }
@@ -451,6 +567,7 @@ function markerStatus(marker) {
 @media (max-width: 1050px), (pointer: coarse) {
 	.rail-heading :deep(.p-button) { min-width: 44px; min-height: 44px; }
 	.rail-heading :deep(.rail-filter-button.p-button) { width: 44px; min-width: 44px; }
+	.rail-heading :deep(.rail-expand-button.p-button) { width: 44px; min-width: 44px; }
 }
 
 @media (max-width: 650px) {

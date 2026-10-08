@@ -1,11 +1,10 @@
 <template>
-	<SewingWorkspaceShell title="Reports" section="reports" v-slot="{ supplier }">
-		<section data-sewing-destination="reports" aria-label="Sewing Reports workspace">
-			<p class="erp-empty-state">Sewing Unit: {{ supplier }}</p>
-		</section>
+	<SewingWorkspaceShell title="Reports" section="reports" v-slot="{ supplier, capabilities }">
+		<SewingReportsWorkspace :key="supplier" :capabilities="capabilities" />
 	</SewingWorkspaceShell>
 </template>
 
 <script setup>
 import SewingWorkspaceShell from "./SewingWorkspaceShell.vue"
+import SewingReportsWorkspace from "./SewingReportsWorkspace.vue"
 </script>

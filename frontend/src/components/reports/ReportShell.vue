@@ -1,5 +1,5 @@
 <template>
-	<section ref="reportRoot" class="report-shell erp-card" :aria-label="title">
+	<section ref="reportRoot" class="report-shell erp-card" :aria-label="title" :aria-busy="loading">
 		<form class="report-shell__filters" @submit.prevent="$emit('generate')">
 			<div class="report-filter-grid"><slot name="filters" /></div>
 			<div class="report-shell__commands erp-command-bar" :class="{ 'report-shell__commands--with-copy': copyable }">
@@ -49,7 +49,8 @@
 			{{ error }}
 		</Message>
 
-		<div v-if="loading" class="report-shell__loading" aria-live="polite">
+		<p v-if="loading && keepResultsWhileLoading && generated" class="report-shell__refreshing" role="status">Refreshing report. Previously generated values remain visible.</p>
+		<div v-if="loading && !(keepResultsWhileLoading && generated)" class="report-shell__loading" aria-live="polite">
 			<Skeleton width="100%" height="62px" border-radius="10px" />
 			<Skeleton width="100%" height="210px" border-radius="10px" />
 		</div>
@@ -89,6 +90,7 @@ defineProps({
 	error: { type: String, default: "" },
 	hasResults: { type: Boolean, default: false },
 	copyable: { type: Boolean, default: false },
+	keepResultsWhileLoading: { type: Boolean, default: false },
 })
 
 defineEmits(["generate", "reset"])
@@ -200,6 +202,13 @@ onBeforeUnmount(() => window.clearTimeout(noticeTimer))
 	display: grid;
 	gap: var(--erp-space-3);
 	padding: var(--erp-space-5);
+}
+
+.report-shell__refreshing {
+	margin: 0;
+	padding: var(--erp-space-3) var(--erp-space-4) 0;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-caption);
 }
 
 .report-shell__empty {

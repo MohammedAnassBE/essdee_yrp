@@ -806,7 +806,182 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 	finally { await page.close(); await server.close() }
 }
 
-assert(["launcher", "plan-entry", "entries-consumption", "entries-consumption-settlement", "closed-grn", "all"].includes(suite), `Unknown Sewing suite: ${suite}`)
+// Catch missing active-report gating, wrong request contracts, locally invented
+// balances, lost filters, hidden FI blockers, stale unit results and overflow.
+async function primaryReportsSuite(browser) {
+	const harness = `
+import { createApp, h } from 'vue';
+import { createRouter, createMemoryHistory, RouterView, useRoute } from 'vue-router';
+import PrimeVue from 'primevue/config'; import Aura from '@primeuix/themes/aura';
+import SewingReports from '/src/departments/sewing/SewingReports.vue';
+import ReportShell from '/src/components/reports/ReportShell.vue';
+import '@fontsource-variable/inter'; import 'primeicons/primeicons.css';
+import '/src/styles/main.css'; import '/src/styles/enterprise.css';
+const ShellLoadingFixture = { setup() { const route = useRoute(); return () => h(ReportShell, { title: 'Shared loading fixture', generated: true, loading: true, hasResults: true, ...(route.query.keep === 'yes' ? { keepResultsWhileLoading: true } : {}) }, () => h('p', 'Prior report rows')) } };
+const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/sewing/reports', component: SewingReports }, { path: '/sewing', component: { render: () => null } }, { path: '/report-shell', component: ShellLoadingFixture }] });
+await router.push('/sewing/reports?supplier=UNIT-A'); window.router = router;
+createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options: { darkModeSelector: false } } }).mount('#app');`
+	const server = await createServer({ root: fileURLToPath(new URL("../frontend", import.meta.url)), server: { host: "127.0.0.1", port: 0 }, plugins: [{
+		name: "primary-reports-verifier", resolveId(id) { if (id === "/__reports.js") return "\0reports" }, load(id) { if (id === "\0reports") return harness },
+		configureServer(server) { server.middlewares.use((req, res, next) => { if (req.url !== "/__reports") return next(); res.setHeader("Content-Type", "text/html"); res.end('<!doctype html><html><body><div id="app"></div><script type="module" src="/__reports.js"></script></body></html>') }) },
+	}] })
+	await server.listen()
+	const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+	page.setDefaultTimeout(10_000)
+	const requests = [], errors = [], warnings = []
+	page.on("pageerror", e => errors.push(e.message))
+	page.on("console", m => { if (m.type() === "warning") warnings.push(m.text()) })
+	const headers = ["Order Qty", "Delivered Qty", "Sewing In", "Sewing Out", "Checking Reject", "Pre Final", "Final Inspection", "GRN Qty", "Line Stock", "Checking Stock", "GRN Pending"]
+	const status = { header1: ["Item", "SD YRP Lot", "Colour", "Part", "FI Date", "Input Date", "Last Sewing Output", "Total Running Days"], header2: headers, header3: ["Ready for Checking", "Work Order Status"], data: [
+		{ is_total: true, "Order Qty": 300, "Line Stock": -71 },
+		{ item: "Shirt", lot: "LOT-A", colour: "Navy", part: "Front", input_date: "2026-10-01", "FI Date": "2026-09-30", "Input Date": "2026-10-01", "Last Sewing Output": "2026-10-05", "Total Running Days": 4, "Order Qty": 100, "Delivered Qty": 90, "Sewing In": 80, "Sewing Out": 60, "Checking Reject": 5, "Pre Final": 25, "Final Inspection": 20, "GRN Qty": 35, "Line Stock": -37, "Checking Stock": -15, "GRN Pending": 25, "Ready for Checking": "Under Checking", "Work Order Status": "Open" },
+		{ item: "Trouser", lot: "LOT-B", colour: "Red", part: "Back", input_date: "2026-10-06", "Input Date": "2026-10-06", "Order Qty": 200, "Line Stock": -34, "Ready for Checking": "Ready", "Work Order Status": "Open" },
+	] }
+	const sizes = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL"]
+	const daily = { date: "2026-10-08", status: "success", blocked: false, pending_fi: [], message: "", headers: ["Sewing Out", "Sewing In"], dpr_data: {
+		"Sewing Out": { "LOT-A": { item: "Shirt", primary_values: sizes, is_set_item: 0, pack_attr: "Colour", set_attr: null, details: { "Sewing Line 1": { Good: { Navy: { colour: "Navy", part: "Front", variant_colour: "Navy", set_combination: {}, values: { XS: 3, S: 7 }, total: 10 } } } } } },
+		"Sewing In": { "LOT-A": { item: "Shirt", primary_values: ["XS"], is_set_item: 0, pack_attr: "Colour", set_attr: null, details: { "Sewing Line 2": { Reject: { Red: { colour: "Red", part: "Back", variant_colour: "Red", set_combination: {}, values: { XS: 2 }, total: 2 } } } } } },
+	} }
+	const scr = { status: "success", item: "Shirt", primary_values: sizes, colours: ["Navy", "Red"], headers: ["Order Qty", "Delivered Qty", "Sewing Out Reject", "Sewing In"], is_set_item: 0, set_attr: null, derived_balances_omitted: true, data: {
+		Navy: { colour: "Navy", part: "Front", variant_colour: "Navy", set_combination: {}, lines: ["Sewing Line 1", "Sewing Line 3"], values: { XS: { "Order Qty": 100, "Delivered Qty": 90, "Sewing Out Reject": 5, "Sewing In": 80 } }, type_wise_total: { "Order Qty": 100, "Delivered Qty": 90, "Sewing Out Reject": 5, "Sewing In": 80 } },
+		Red: { colour: "Red", part: "Back", variant_colour: "Red", set_combination: {}, lines: [], values: { XS: { "Order Qty": 200 } }, type_wise_total: { "Order Qty": 200 } },
+	} }
+	const state = { error: "", blocked: false, hold: null }
+	await page.route("**/api/method/**", async route => {
+		const method = route.request().url().split("/api/method/")[1], args = JSON.parse(route.request().postData() || "{}")
+		requests.push({ method, args })
+		let value, error = ""
+		if (method.endsWith("get_capabilities")) value = capabilities
+		else if (method.endsWith("get_sp_status_summary")) { value = structuredClone(status); if (args.supplier === "UNIT-B") value.data = []; error = state.error; if (state.hold) { const hold = state.hold; state.hold = null; await hold } }
+		else if (method.endsWith("get_sewing_plan_dpr_data") || method.endsWith("get_sewing_plan_dpr_summary")) {
+			const report = state.blocked ? { ...daily, status: "pending_fi", blocked: true, message: "Set FI dates for the listed Lots, Colours and Parts to generate this report.", pending_fi: [{ lot: "LOT-BLOCKED", colour: "Olive", part: "Sleeve" }], dpr_data: {} } : daily
+			value = method.endsWith("summary") ? { reports: [report, { ...daily, date: "2026-10-09" }], status: report.status, blocked: report.blocked, message: report.message, pending_fi: report.pending_fi } : report
+		}
+		else if (method.endsWith("get_supplier_lots")) value = [["LOT-A", "Shirt"]]
+		else if (method.endsWith("get_scr_data")) value = scr
+		else if (method.endsWith("link_search")) value = [{ name: args.doctype === "YRP Work Station" ? "Sewing Line 1" : "Sewing Out", label: args.doctype === "YRP Work Station" ? "Sewing Line 1" : "Sewing Out" }]
+		else throw new Error(`Unexpected primary report request: ${method}`)
+		await route.fulfill({ status: error ? 417 : 200, contentType: "application/json", body: JSON.stringify(error ? { _server_messages: JSON.stringify([JSON.stringify({ message: error })]), exc: "ValidationError" } : { message: value }) })
+	})
+	const count = suffix => requests.filter(r => r.method.endsWith(suffix)).length
+	const last = suffix => requests.filter(r => r.method.endsWith(suffix)).at(-1)?.args
+	const tab = name => page.getByRole("tab", { name, exact: true }).click()
+	const generate = () => page.getByRole("button", { name: "Generate", exact: true }).click()
+	const pick = async (name, option) => { await page.getByRole("combobox", { name, exact: true }).focus(); await page.keyboard.press("Space"); await page.getByRole("option", { name: option, exact: true }).click(); await page.keyboard.press("Escape"); await page.locator('.p-multiselect-overlay').waitFor({ state: 'hidden' }) }
+	const date = async (label, value) => { await page.getByRole("dialog").waitFor({ state: "hidden" }); const input = page.getByRole("combobox", { name: label, exact: true }); await input.fill(value); await input.press("Tab"); assert(await input.inputValue() === value, `${label} date edit was discarded: ${await input.inputValue()} instead of ${value}`) }
+	const responsive = async name => {
+		await page.evaluate(async () => { await document.fonts.ready; await Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {}))) })
+		for (const width of [390, 900, 1280, 1600]) {
+			await page.setViewportSize({ width, height: width === 390 ? 500 : 900 })
+			await noOverflow(page, `${name} ${width}`)
+			const clipped = await page.locator(".report-shell__commands .p-button").evaluateAll(buttons => buttons.filter(button => { const label = button.querySelector('.p-button-label'); return label && (label.getBoundingClientRect().right > button.getBoundingClientRect().right + 1 || label.scrollWidth > label.clientWidth + 1) }).map(button => button.textContent))
+			assert(!clipped.length, `${name} ${width} clips report actions: ${clipped.join(', ')}`)
+			assert(await page.locator(`[data-sewing-report='${name}'] .sewing-report-matrix`).first().evaluate(el => getComputedStyle(el.querySelector('thead th')).position === 'sticky'), `${name} header is not sticky`)
+			if (process.env.ESSDEE_SEWING_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SEWING_SCREENSHOTS}/sewing-${name}-${width}.png`, fullPage: true, animations: "disabled" })
+		}
+		await page.setViewportSize({ width: 1280, height: 900 })
+	}
+	try {
+		await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/__reports`)
+		await page.locator("[data-sewing-destination='reports']").waitFor()
+		assert(await page.getByRole("tab").count() === 5, "Reports workspace is absent: expected five approved report tabs")
+		assert(JSON.stringify(await page.getByRole("tab").allTextContents()) === JSON.stringify(["Status Summary", "DPR", "SCR", "Monthly Summary", "Item Summary"]), "Reports has incorrect or excluded tabs")
+		await page.locator("[data-sewing-report='status-summary'] tbody tr").first().waitFor()
+		assert(count("get_sp_status_summary") === 1 && count("get_scr_data") === 0 && count("get_sewing_plan_dpr_data") === 0, "Inactive report endpoint fetched")
+		assert(last("get_sp_status_summary").supplier === "UNIT-A", "Status scope omitted")
+		const statusRows = page.locator("[data-sewing-report='status-summary'] tbody tr")
+		assert((await statusRows.first().innerText()).includes("-37"), "Status replaced server balance with a client calculation")
+		await responsive("status-summary")
+		for (const [label, option] of [["Lot", "LOT-A"], ["Item", "Shirt"], ["Colour", "Navy"], ["Part", "Front"]]) {
+			await pick(label, option)
+			assert(await statusRows.count() === 1 && (await statusRows.first().innerText()).includes("LOT-A"), `${label} filter not applied`)
+			assert((await page.locator("[data-sewing-report='status-summary'] tfoot").innerText()).includes("-37"), `${label} visible totals not recomputed`)
+			await page.getByRole("button", { name: "Reset", exact: true }).click()
+		}
+		await date("Input From Date", "01-10-2026"); await date("Input To Date", "03-10-2026")
+		assert(await statusRows.count() === 1, "Status input-date bounds ignored")
+		await pick("Lot", "LOT-A")
+		await tab("DPR")
+		assert(count("get_sewing_plan_dpr_data") === 0, "DPR fetched before Generate")
+		await generate(); await page.getByRole("dialog").getByText("Choose a DPR Date.", { exact: true }).waitFor()
+		assert(count("get_sewing_plan_dpr_data") === 0, "DPR sent an empty date")
+		await page.getByRole("button", { name: "OK", exact: true }).click()
+		await date("DPR Date", "08-10-2026")
+		for (const [label, value] of [["Work Station", "Sewing Line 1"], ["Input Type", "Sewing Out"]]) { await page.getByRole("combobox", { name: label, exact: true }).fill(value); await page.getByRole("option", { name: value, exact: true }).click() }
+		await generate()
+		await page.locator("[data-sewing-report='dpr'] tbody tr").first().waitFor()
+		assert(JSON.stringify(last("get_sewing_plan_dpr_data")) === JSON.stringify({ supplier: "UNIT-A", dpr_date: "2026-10-08", work_station: "Sewing Line 1", input_type: "Sewing Out" }), "Daily DPR must send one date and optional filters")
+		assert((await page.locator("[data-sewing-report='dpr'] table").first().innerText()).includes("10"), "DPR server total missing")
+		assert((await page.locator("[data-sewing-report='dpr'] h3").first().innerText()).startsWith("Sewing Out"), "DPR reordered server input stages")
+		await responsive("dpr")
+		await page.getByLabel("DPR Mode", { exact: true }).selectOption("range")
+		await date("From Date", "09-10-2026"); await date("To Date", "08-10-2026")
+		await generate(); await page.getByRole("dialog").getByText("From Date cannot be after To Date.", { exact: true }).waitFor()
+		assert(count("get_sewing_plan_dpr_summary") === 0, "DPR sent a reversed range")
+		await page.getByRole("button", { name: "OK", exact: true }).click()
+		await date("From Date", "08-10-2026"); await date("To Date", "09-10-2026")
+		await generate(); await page.getByRole("heading", { name: "2026-10-09", exact: true }).waitFor()
+		assert(JSON.stringify(last("get_sewing_plan_dpr_summary")) === JSON.stringify({ supplier: "UNIT-A", from_date: "2026-10-08", to_date: "2026-10-09", work_station: "Sewing Line 1", input_type: "Sewing Out" }), `Range DPR arguments incorrect: ${JSON.stringify(last("get_sewing_plan_dpr_summary"))}`)
+		state.blocked = true; await generate()
+		await page.getByText("LOT-BLOCKED", { exact: true }).waitFor()
+		assert((await page.locator("[data-sewing-report='dpr']").innerText()).includes("Olive") && (await page.locator("[data-sewing-report='dpr']").innerText()).includes("Sleeve"), "Pending FI blockers lack Colour/Part")
+		assert(await page.locator("[data-sewing-report='dpr'] table").count() === 1, "Blocked range must expose blockers rather than partial production data")
+		await tab("SCR"); await page.locator("[data-sewing-report='scr']").waitFor()
+		await generate(); await page.getByRole("dialog").waitFor()
+		assert(count("get_scr_data") === 0, "SCR fetched without required Lot")
+		await page.getByRole("button", { name: "OK", exact: true }).click()
+		await page.getByRole("combobox", { name: "Lot", exact: true }).fill("LOT-A"); await page.getByRole("option", { name: "LOT-A", exact: true }).click()
+		assert(last("get_supplier_lots").filters.supplier === "UNIT-A", "SCR Lot search missing Supplier")
+		await generate(); await page.getByRole("heading", { name: "Navy · Front", exact: true }).waitFor()
+		assert(JSON.stringify(last("get_scr_data")) === JSON.stringify({ supplier: "UNIT-A", lot: "LOT-A" }), "SCR request unscoped")
+		const matrix = page.locator("[data-sewing-report='scr'] table").first()
+		assert(JSON.stringify(await matrix.locator("thead th").allTextContents()) === JSON.stringify(["Size", ...scr.headers]), "SCR reordered server stage headers")
+		assert((await page.locator("[data-sewing-report='scr']").innerText()).includes("Sewing Line 3"), "SCR work-station lines omitted")
+		await pick("Colour", "Navy")
+		assert(await page.getByRole("heading", { name: "Red · Back", exact: true }).count() === 0, "SCR Colour filter ignored")
+		await responsive("scr")
+		await page.setViewportSize({ width: 390, height: 500 })
+		const scroll = await page.locator("[data-sewing-report='scr'] .sewing-report-matrix").first().evaluate(async el => {
+			el.scrollTop = 100; el.scrollLeft = 150; await new Promise(requestAnimationFrame)
+			return { width: el.clientWidth, scroll: el.scrollWidth, top: el.getBoundingClientRect().top, header: el.querySelector('thead th').getBoundingClientRect().top, y: el.scrollTop, x: el.scrollLeft }
+		})
+		assert(scroll.scroll > scroll.width && scroll.x > 0 && scroll.y > 0, "Narrow matrix does not own both scroll axes")
+		assert(Math.abs(scroll.header - scroll.top) <= 2, "Header scrolled out of the narrow matrix")
+		await page.setViewportSize({ width: 1280, height: 900 }); await tab("DPR")
+		assert(await page.getByLabel("DPR Mode", { exact: true }).inputValue() === "range" && await page.getByRole("combobox", { name: "From Date", exact: true }).inputValue() === "08-10-2026", "DPR filters lost across tab switch")
+		assert(await page.getByRole("combobox", { name: "Work Station", exact: true }).inputValue() === "Sewing Line 1" && await page.getByRole("combobox", { name: "Input Type", exact: true }).inputValue() === "Sewing Out", "DPR optional filters lost across tab switch")
+		await tab("SCR")
+		assert(await page.getByRole("combobox", { name: "Lot", exact: true }).inputValue() === "LOT-A", "SCR Lot lost across tab switch")
+		await generate(); await page.getByRole("heading", { name: "Navy · Front", exact: true }).waitFor()
+		assert(await page.getByRole("heading", { name: "Red · Back", exact: true }).count() === 0, "SCR colour lost across tab switch")
+		const dprCount = count("get_sewing_plan_dpr_summary"); await tab("Status Summary")
+		await statusRows.first().waitFor()
+		assert(await statusRows.count() === 1, "Status date filters lost across tab switch")
+		assert((await page.locator("[data-sewing-report='status-summary'] .p-multiselect").first().innerText()).includes("LOT-A"), "Status Lot lost across tab switch")
+		assert(count("get_sewing_plan_dpr_summary") === dprCount, "Inactive DPR refetched")
+		state.error = "Sewing report access has changed."; await generate(); await page.getByRole("dialog").getByText(state.error, { exact: true }).waitFor()
+		await page.getByRole("button", { name: "OK", exact: true }).click()
+		assert(await page.getByRole("combobox", { name: "Input From Date", exact: true }).inputValue() === "01-10-2026", "Report error discarded filters")
+		state.error = ""
+		let release; state.hold = new Promise(resolve => { release = resolve }); await generate()
+		await page.getByRole("status").getByText("Refreshing report. Previously generated values remain visible.", { exact: true }).waitFor()
+		assert(await statusRows.count() === 1, "Refreshing Status Summary blanks previously useful results")
+		assert(await page.getByRole("button", { name: "Reset", exact: true }).isDisabled() && await page.getByRole("button", { name: "Copy Report", exact: true }).isDisabled(), "Refreshing report leaves conflicting actions enabled")
+		await page.evaluate(() => window.router.replace({ query: { ...window.router.currentRoute.value.query, supplier: 'UNIT-B' } }))
+		await page.getByText("No matching records", { exact: true }).waitFor(); release(); await page.waitForTimeout(150)
+		assert(await statusRows.count() === 0, "Late Supplier A response overwrote Supplier B")
+		await page.evaluate(() => window.router.replace('/report-shell'))
+		await page.locator('.report-shell__loading').waitFor()
+		assert(await page.getByText('Prior report rows', { exact: true }).count() === 0, "Shared ReportShell changed its default loading behavior")
+		await page.evaluate(() => window.router.replace('/report-shell?keep=yes'))
+		await page.getByText('Prior report rows', { exact: true }).waitFor()
+		assert(await page.locator('.report-shell__loading').count() === 0, "Opt-in loading still hides prior rows behind skeletons")
+		assert(errors.length === 0 && warnings.length === 0, `Report browser errors/warnings: ${[...errors, ...warnings].join('\n')}`)
+		console.log("PASS primary-reports: five lazy tabs, Status identity/date filters and visible totals, authoritative balances, daily/range DPR contracts/validation and explicit FI blockers, Supplier-scoped SCR and colour filtering, all filter persistence, popup recovery, retained refresh results/action locks, stale Supplier rejection, 12 responsive matrix/action checks and actual narrow sticky-header scrolling")
+	} finally { await page.close(); await server.close() }
+}
+
+assert(["launcher", "plan-entry", "entries-consumption", "entries-consumption-settlement", "closed-grn", "primary-reports", "all"].includes(suite), `Unknown Sewing suite: ${suite}`)
 const browser = await chromium.launch({ headless: true })
 try {
 	if (suite === "launcher" || suite === "all") {
@@ -820,4 +995,5 @@ try {
 	if (suite === "entries-consumption" || suite === "all") await entriesConsumptionSuite(browser)
 	if (suite === "entries-consumption-settlement") await entriesConsumptionSuite(browser, process.argv[3] || "all")
 	if (suite === "closed-grn" || suite === "all") await closedGrnSuite(browser)
+	if (suite === "primary-reports" || suite === "all") await primaryReportsSuite(browser)
 } finally { await browser.close() }

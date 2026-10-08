@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-08
 
-**Status:** Approved in conversation; written-spec review pending
+**Status:** Approved for implementation
 
 ## Purpose
 

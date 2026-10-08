@@ -12,6 +12,8 @@
 				<TabPanel :value="active" :key="active">
 					<SewingDashboard v-if="active === 'dashboard'" />
 					<SewingDataEntry v-else-if="active === 'data-entry'" :filters="entryFilters" :actions="capabilities.plan_actions" />
+					<SewingEntries v-else-if="active === 'entries'" :state="entriesState" />
+					<SewingConsumption v-else-if="active === 'consumption'" :state="consumptionState" :actions="capabilities.plan_actions" />
 					<div v-else :data-sewing-plan-tab="active" class="erp-empty-state" role="status">{{ tabs.find(tab => tab.value === active).label }} is not loaded yet.</div>
 				</TabPanel>
 			</TabPanels>
@@ -31,6 +33,8 @@ import { useRoute, useRouter } from "vue-router"
 
 const SewingDashboard = defineAsyncComponent(() => import("./plan/SewingDashboard.vue"))
 const SewingDataEntry = defineAsyncComponent(() => import("./plan/SewingDataEntry.vue"))
+const SewingEntries = defineAsyncComponent(() => import("./plan/SewingEntries.vue"))
+const SewingConsumption = defineAsyncComponent(() => import("./plan/SewingConsumption.vue"))
 defineProps({ capabilities: { type: Object, default: () => ({}) } })
 const route = useRoute(), router = useRouter()
 const tabs = [
@@ -44,8 +48,12 @@ const active = computed({
 	get: () => tabs.some(tab => tab.value === route.query.tab) ? route.query.tab : "dashboard",
 	set: tab => router.replace({ query: { ...route.query, tab }, hash: route.hash }),
 })
-// Only filter values survive an inactive tab; business records belong to its view.
+// Data Entry retains its local filters; its records belong to the active view.
 const entryFilters = reactive({ lot: "", plan: "", inputType: "", workStation: "", receivedType: "", date: "", time: "", inspectionType: "pre_final" })
+// The Supplier-keyed shell retains local filters and consumption drafts without
+// mounting inactive tabs. Mutation locks and recovery survive a tab switch too.
+const entriesState = reactive({ filters: { workStation: "", inputType: "", lot: "" }, busy: false, refreshRequired: false })
+const consumptionState = reactive({ lot: "", data: null, busy: false, refreshRequired: false, loadError: "" })
 </script>
 
 <style scoped>

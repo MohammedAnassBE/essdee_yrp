@@ -22,3 +22,29 @@ export function submitSewingDataEntry(payload) {
 export function updateSewingInspection(payload) {
 	return callMethod(`${PLAN_METHOD}.update_sewing_plan_data`, { payload })
 }
+
+export function getSewingEntries(supplier, filters = {}) {
+	return callMethod(`${PLAN_METHOD}.get_sewing_plan_entries`, {
+		supplier, work_station: filters.workStation || "", input_type: filters.inputType || "", lot_name: filters.lot || "",
+	})
+}
+
+export function cancelSewingEntry(docId) {
+	return callMethod(`${PLAN_METHOD}.cancel_sewing_plan_entry`, { doc_id: docId })
+}
+
+export async function getSewingSupplierLots(supplier, text = "") {
+	if (!supplier) return []
+	const rows = await callMethod(`${PLAN_METHOD}.get_supplier_lots`, {
+		doctype: "SD YRP Lot", txt: text, searchfield: "name", start: 0, page_len: 20, filters: { supplier },
+	})
+	return (rows || []).map(([name, item]) => ({ name, label: name, item }))
+}
+
+export function getSewingConsumption(supplier, lot) {
+	return callMethod(`${PLAN_METHOD}.get_consumption_mapping_data`, { supplier, lot })
+}
+
+export function saveSewingConsumption(supplier, lot, sections, clothAccData) {
+	return callMethod(`${PLAN_METHOD}.save_consumption_data`, { supplier, lot, sections, cloth_acc_data: clothAccData })
+}

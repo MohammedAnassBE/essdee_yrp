@@ -26,16 +26,23 @@ def _invalid_response(phase, reason):
 
 
 def _fetch_hr_payload(url, headers, params, phase):
+	failure = None
 	try:
 		response = requests.get(url, headers=headers, params=params, timeout=30)
 		response.raise_for_status()
 	except requests.RequestException as error:
-		status = getattr(error.response, "status_code", None)
+		failure = (
+			type(error).__name__, getattr(error.response, "status_code", None), isinstance(error, requests.Timeout)
+		)
+	# Frappe logging captures sys.exc_info() for telemetry. Leave the upstream
+	# handler first and retain only safe classification values, never the exception.
+	if failure is not None:
+		category, status, timed_out = failure
 		frappe.log_error(
 			title=f"HR {phase} request failed",
-			message=f"Failure: {type(error).__name__}; HTTP status: {status or 'unavailable'}",
+			message=f"Failure: {category}; HTTP status: {status or 'unavailable'}",
 		)
-		if isinstance(error, requests.Timeout):
+		if timed_out:
 			frappe.throw("The HR connection timed out. Please try again.", title="HR connection timed out")
 		if status in (401, 403):
 			frappe.throw(
@@ -50,7 +57,8 @@ def _fetch_hr_payload(url, headers, params, phase):
 	try:
 		return response.json()
 	except ValueError:
-		_invalid_response(phase, "Response is not valid JSON")
+		pass
+	_invalid_response(phase, "Response is not valid JSON")
 
 
 @frappe.whitelist()

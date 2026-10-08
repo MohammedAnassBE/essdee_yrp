@@ -1,8 +1,12 @@
+import os
+import sys
 from unittest.mock import MagicMock, patch
 
 import frappe
 import requests
 from frappe.tests.utils import FrappeTestCase
+from frappe.utils import sentry
+from sentry_sdk.consts import DEFAULT_OPTIONS
 
 from essdee_yrp.sewing import strength
 
@@ -87,6 +91,63 @@ class TestSewingWorkerStrength(FrappeTestCase):
 		response = MagicMock()
 		response.json.return_value = {"message": {"columns": [], "result": [], "add_total_row": 0}}
 		return response
+
+	def test_sanitized_diagnostics_do_not_capture_raw_upstream_exceptions(self):
+		# Real log_error and capture_exception must see no active upstream exception,
+		# or Frappe sends its raw text to telemetry despite sanitized log arguments.
+		sentinel = "RAW-UPSTREAM-SECRET-SENTINEL"
+		for phase in ["report", "punch"]:
+			for failure in [
+				requests.Timeout(sentinel),
+				requests.HTTPError(sentinel, response=MagicMock(status_code=401)),
+				requests.HTTPError(sentinel, response=MagicMock(status_code=403)),
+				requests.ConnectionError(sentinel),
+				requests.HTTPError(sentinel, response=MagicMock(status_code=500)),
+				ValueError(sentinel),
+				requests.exceptions.JSONDecodeError(sentinel, "invalid JSON", 0),
+			]:
+				with self.subTest(phase=phase, failure=type(failure).__name__):
+					if isinstance(failure, ValueError):
+						response = MagicMock()
+						response.json.side_effect = failure
+					else:
+						response = failure
+					responses = [response] if phase == "report" else [self.report_response(), response]
+					hub = MagicMock()
+					hub.client.options = {
+						**DEFAULT_OPTIONS, "include_local_variables": False, "include_source_context": False,
+					}
+					captured = []
+					real_capture = sentry.capture_exception
+					real_system_settings = frappe.get_system_settings
+
+					def observe_capture(message):
+						captured.append((sys.exc_info(), message))
+						real_capture(message)
+
+					with (
+						patch.object(strength.frappe, "get_single", return_value=FakeHRSettings()),
+						patch.object(strength.requests, "get", side_effect=responses),
+						patch.object(frappe, "get_system_settings", side_effect=lambda key=None: (
+							1 if key == "enable_telemetry" else real_system_settings(key)
+						)),
+						patch.dict(os.environ, {
+							"ENABLE_SENTRY_DB_MONITORING": "1", "SENTRY_TRACING_SAMPLE_RATE": "0",
+							"SENTRY_PROFILING_SAMPLE_RATE": "0",
+						}),
+						patch.object(sentry, "Hub", MagicMock(current=hub)),
+						patch.object(sentry, "capture_exception", side_effect=observe_capture),
+						patch.object(sentry, "sentry_capture_message") as message_sink,
+					):
+						with self.assertRaises(frappe.ValidationError) as raised:
+							strength.get_worker_strength_report("2026-10-08", "08:00:00", "17:00:00")
+						self.assertIsNone(raised.exception.__context__)
+						self.assertNotIn(sentinel, str(hub.capture_event.call_args_list))
+						self.assertEqual(len(captured), 1)
+						self.assertEqual(captured[0][0], (None, None, None))
+						self.assertNotIn(sentinel, captured[0][1])
+						message_sink.assert_called_once()
+						hub.capture_event.assert_not_called()
 
 	def test_invalid_payloads_are_distinct_and_logged_including_decode_errors(self):
 		for phase, payloads, title in [

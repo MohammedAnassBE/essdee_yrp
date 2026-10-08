@@ -3,7 +3,8 @@
 		<header><div><h2>Closed Work Order GRN</h2><p>Create and submit a receipt for the selected Sewing Unit.</p></div><Button label="Refresh" aria-label="Refresh closed Work Orders" icon="pi pi-refresh" severity="secondary" :disabled="loading || state.busy" @click="refreshOrders" /></header>
 		<Message v-if="state.result" severity="success" :closable="false" role="status">{{ state.result.name }} · {{ state.result.docstatus === 1 ? 'Submitted' : `Status ${state.result.docstatus}` }}</Message>
 		<Message v-if="state.refreshRequired" severity="warn" :closable="false">Receipt acknowledged. Refresh closed Work Orders before creating another receipt.</Message>
-		<Message v-if="state.loadError" severity="warn" :closable="false">{{ state.loadError }}</Message>
+		<Message v-if="state.loadError" severity="warn" :closable="false">Closed Work Order data could not be refreshed. Your draft is retained. <Button label="Retry" text :disabled="loading || state.busy" @click="refreshOrders" /></Message>
+		<p v-if="loading && state.data" role="status">Refreshing closed Work Orders…</p>
 		<div class="sewing-closed-grn__picker"><LinkField v-model="state.workOrder" doctype="YRP Work Order" label="Closed Work Order" placeholder="Select a closed Work Order" :show-open-button="false" show-clear :disabled="loading || state.busy || state.refreshRequired" :search-handler="searchOrders" /></div>
 		<p v-if="!state.workOrder" class="erp-empty-state">Select a closed Work Order to enter a receipt.</p>
 		<p v-else-if="loading && !state.data" role="status">Loading closed Work Order quantities</p>
@@ -37,8 +38,11 @@ let mounted = true, searchSequence = 0
 async function searchOrders(text) {
 	if (!mounted || loading.value || props.state.busy || props.state.refreshRequired || !supplier.value) return []
 	const generation = requestGeneration.value, unit = supplier.value, sequence = ++searchSequence
-	const rows = await getClosedSewingWorkOrders(unit, text)
-	return mounted && supplier.value === unit && isCurrent(generation) && sequence === searchSequence && !props.state.busy && !props.state.refreshRequired ? rows : []
+	const current = () => mounted && supplier.value === unit && isCurrent(generation) && sequence === searchSequence && !props.state.busy && !props.state.refreshRequired
+	try {
+		const rows = await getClosedSewingWorkOrders(unit, text)
+		return current() ? rows : []
+	} catch (reason) { if (current()) error.value = reason.message || 'Unable to load closed Work Orders.'; return [] }
 }
 function initialValues() {
 	const now = new Date(), date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -54,7 +58,7 @@ async function loadDetails() {
 		props.state.namingField = field
 		props.state.data = JSON.parse(JSON.stringify(data))
 		props.state.values = initialValues()
-	} catch (reason) { if (mounted && isCurrent(generation)) props.state.loadError = reason.message || "Unable to load closed Work Order quantities." }
+	} catch (reason) { if (mounted && isCurrent(generation)) { props.state.loadError = reason.message || "Unable to load closed Work Order quantities."; error.value = props.state.loadError } }
 	finally { if (mounted && isCurrent(generation)) loading.value = false }
 }
 async function refreshOrders() {
@@ -65,9 +69,9 @@ async function refreshOrders() {
 		await getClosedSewingWorkOrders(unit)
 		if (!mounted || !isCurrent(generation)) return
 		props.state.refreshRequired = false
-	} catch (reason) { if (mounted && isCurrent(generation)) props.state.loadError = reason.message || "Unable to reload closed Work Orders." }
+	} catch (reason) { if (mounted && isCurrent(generation)) { props.state.loadError = reason.message || "Unable to reload closed Work Orders."; error.value = props.state.loadError } }
 	finally { if (mounted && isCurrent(generation)) loading.value = false }
-	if (mounted && isCurrent(generation) && props.state.workOrder && !props.state.data) await loadDetails()
+	if (mounted && isCurrent(generation) && !props.state.loadError && props.state.workOrder && !props.state.data) await loadDetails()
 }
 function submit() {
 	if (!canCreate.value || loading.value || props.state.busy || props.state.refreshRequired || !props.state.data?.has_pending_items) return

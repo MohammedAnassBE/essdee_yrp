@@ -4,9 +4,10 @@
 		<div class="sewing-consumption__filters"><LinkField v-model="state.lot" doctype="SD YRP Lot" label="Lot" placeholder="Select a Lot" help-text="Lots for the selected Sewing Unit only." :show-open-button="false" show-clear :disabled="loading || state.busy" :search-handler="searchLots" /></div>
 		<p v-if="!state.lot" class="erp-empty-state">Select a Lot to view consumption mappings.</p>
 		<div v-else-if="loading && !state.data" role="status"><p>Loading consumption mappings</p><Skeleton height="160px" /></div>
-		<WorkspaceLoadError v-else-if="state.loadError && !state.data" :message="state.loadError" @retry="load()" />
+		<WorkspaceLoadError v-else-if="state.loadError && !state.data" message="Retry to load consumption mappings." @retry="load()" />
 		<template v-else-if="state.data">
-			<Message v-if="state.loadError" severity="warn" :closable="false">{{ state.loadError }} <Button label="Retry" text :disabled="loading || state.busy" @click="load()" /></Message>
+			<Message v-if="state.loadError" severity="warn" :closable="false">Displayed consumption may be out of date. Your draft is retained. <Button label="Retry" text :disabled="loading || state.busy" @click="load()" /></Message>
+			<p v-if="loading" role="status">Refreshing consumption…</p>
 			<Message v-if="state.refreshRequired" severity="warn" :closable="false">Consumption was saved. Refresh the mapping before saving again.</Message>
 			<div class="sewing-consumption__context"><span>{{ supplier }}</span><span>{{ state.lot }}</span><strong>{{ state.data.ipd }}</strong></div>
 			<p class="sewing-consumption__help">BOM quantities, attributes and UOM are read-only. Edit consumption quantities and Consumption Weight.</p>
@@ -54,8 +55,11 @@ function edit(row, field, value) {
 async function searchLots(text) {
 	if (!mounted || loading.value || props.state.busy || !supplier.value) return []
 	const generation = requestGeneration.value, unit = supplier.value, sequence = ++searchSequence
-	const rows = await getSewingSupplierLots(unit, text)
-	return mounted && !loading.value && !props.state.busy && supplier.value === unit && isCurrent(generation) && sequence === searchSequence ? rows : []
+	const current = () => mounted && !loading.value && !props.state.busy && supplier.value === unit && isCurrent(generation) && sequence === searchSequence
+	try {
+		const rows = await getSewingSupplierLots(unit, text)
+		return current() ? rows : []
+	} catch (reason) { if (current()) error.value = reason.message || 'Unable to load consumption Lots.'; return [] }
 }
 async function load() {
 	if (!supplier.value || !props.state.lot) return false
@@ -70,7 +74,7 @@ async function load() {
 		props.state.refreshRequired = false
 		return true
 	} catch (reason) {
-		if (mounted && isCurrent(generation)) props.state.loadError = reason.message || "Unable to load consumption mappings."
+		if (mounted && isCurrent(generation)) { props.state.loadError = reason.message || "Unable to load consumption mappings."; error.value = props.state.loadError }
 		return false
 	} finally { if (mounted && isCurrent(generation)) loading.value = false }
 }

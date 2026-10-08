@@ -49,6 +49,71 @@ from essdee_yrp.sewing.read_models import (
 
 
 class TestSewingBusinessLogic(IntegrationTestCase):
+	def test_entry_writes_reject_missing_foreign_and_reassigned_scope(self):
+		self._assert_write_scope(submit_data_entry_log)
+
+	def test_inspection_writes_reject_missing_foreign_and_reassigned_scope(self):
+		self._assert_write_scope(update_sewing_plan_data)
+
+	def test_both_writes_validate_current_scope_after_supplier_first_lock(self):
+		plan = self._mutation_plan()
+		other = self._mutation_plan()
+		for write in (submit_data_entry_log, update_sewing_plan_data):
+			for field, replacement in (("supplier", other.supplier), ("lot", other.lot)):
+				with self.subTest(write=write.__name__, field=field):
+					frappe.db.set_value(plan.doctype, plan.name, {"supplier": plan.supplier, "lot": plan.lot})
+					original_sql, locks = frappe.db.sql, []
+					def move_at_plan_lock(query, *args, **kwargs):
+						if "for update" in str(query):
+							locks.append(str(query))
+							if "from `tabSD YRP Sewing Plan`" in str(query):
+								frappe.db.set_value(plan.doctype, plan.name, field, replacement)
+						return original_sql(query, *args, **kwargs)
+					before = frappe.get_all("SD YRP Sewing Plan Order Detail", filters={"parent": plan.name}, fields=["name", "quantity", "pre_final", "final_inspection"])
+					with patch.object(frappe.db, "sql", side_effect=move_at_plan_lock), self.assertRaisesRegex(frappe.ValidationError, "retry"):
+						write({"plan": plan.name, "supplier": plan.supplier, "lot": plan.lot})
+					self.assertIn("from `tabSupplier` where name =", locks[0])
+					self.assertIn("from `tabSD YRP Sewing Plan` where name =", locks[1])
+					self.assertFalse(frappe.db.exists("SD YRP Sewing Plan Entry Detail", {"sewing_plan": plan.name}))
+					self.assertEqual(frappe.get_all("SD YRP Sewing Plan Order Detail", filters={"parent": plan.name}, fields=["name", "quantity", "pre_final", "final_inspection"]), before)
+
+	def _assert_write_scope(self, write):
+		plan = self._mutation_plan()
+		foreign = self._mutation_plan()
+		_source, _response, matrix = self._data_entry_plan()
+		matrix = copy.deepcopy(matrix)
+		colour = next(iter(matrix["colours"].values()))
+		size, value = next((size, value) for size, value in colour["values"].items() if value["item_variant"] == plan.sewing_plan_order_details[0].item_variant)
+		value.update(data_entry=1, pre_final=1, order_detail=plan.sewing_plan_order_details[0].name)
+		colour["values"] = {size: value}
+		matrix["colours"] = {colour["colour"]: colour}
+		payload = {
+			"supplier": plan.supplier, "lot": plan.lot, "plan": plan.name,
+			"input_type": "Input Qty", "inspection_type": "pre_final", "action": "update",
+			"received_type": frappe.db.get_single_value("YRP Stock Settings", "default_received_type"),
+			"work_station": frappe.get_all("YRP Work Station", pluck="name", limit=1)[0],
+			"quantities": matrix,
+			"rows": [{"colour": colour["variant_colour"], "part": colour["part"],
+				"set_combination": colour["set_combination"], "qty": colour["values"]}],
+		}
+		for case, override, reassignment in [
+			("missing Supplier", {"supplier": ""}, {}),
+			("missing Lot", {"lot": ""}, {}),
+			("foreign Supplier", {"supplier": foreign.supplier}, {}),
+			("foreign Lot", {"lot": foreign.lot}, {}),
+			("readable foreign plan", {"plan": foreign.name}, {}),
+			("reassigned Supplier", {}, {"supplier": foreign.supplier}),
+			("reassigned Lot", {}, {"lot": foreign.lot}),
+		]:
+			with self.subTest(case=case):
+				frappe.db.set_value(plan.doctype, plan.name, {"supplier": plan.supplier, "lot": plan.lot, **reassignment})
+				before = frappe.get_all("SD YRP Sewing Plan Order Detail", filters={"parent": ["in", [plan.name, foreign.name]]}, fields=["name", "quantity", "pre_final", "final_inspection"], order_by="name")
+				entries = frappe.db.count("SD YRP Sewing Plan Entry Detail")
+				with self.assertRaisesRegex(frappe.ValidationError, "scope|Sewing Unit|Lot"):
+					write({**payload, **override})
+				self.assertEqual(frappe.db.count("SD YRP Sewing Plan Entry Detail"), entries)
+				self.assertEqual(frappe.get_all("SD YRP Sewing Plan Order Detail", filters={"parent": ["in", [plan.name, foreign.name]]}, fields=["name", "quantity", "pre_final", "final_inspection"], order_by="name"), before)
+
 	def _mutation_plan(self, *, supplier=None, lot=None):
 		"""Create isolated ownership and quantities using valid migrated Item links."""
 		savepoint = f"sewing_mutation_{frappe.generate_hash(length=10)}"
@@ -420,6 +485,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		selected = {"order_detail": row.name, "data_entry": 10}
 		payload = {
 			"plan": plan.name,
+			"supplier": plan.supplier, "lot": plan.lot,
 			"input_type": "Input Qty",
 			"received_type": frappe.db.get_single_value("YRP Stock Settings", "default_received_type"),
 			"work_station": frappe.get_all("YRP Work Station", pluck="name", limit=1)[0],
@@ -534,6 +600,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 				{
 					"plan": plan.name,
 					"input_type": "AQL Output",
+					"supplier": plan.supplier, "lot": plan.lot,
 					"received_type": received_type,
 					"work_station": work_station,
 					"date": nowdate(),
@@ -572,6 +639,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 				{
 					"plan": plan.name,
 					"input_type": "Line Output",
+					"supplier": plan.supplier, "lot": plan.lot,
 					"received_type": frappe.db.get_single_value(
 						"YRP Stock Settings", "default_received_type"
 					),
@@ -607,6 +675,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 				{
 					"plan": plan.name,
 					"input_type": "Input Qty",
+					"supplier": plan.supplier, "lot": plan.lot,
 					"received_type": frappe.db.get_single_value(
 						"YRP Stock Settings", "default_received_type"
 					),
@@ -935,6 +1004,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 					"plan": plan.name,
 					"input_type": "Input Qty",
 					"grn_item_type": received_type,
+					"supplier": plan.supplier, "lot": plan.lot,
 					"work_station": work_station,
 					"date": nowdate(),
 					"time": nowtime(),
@@ -1006,6 +1076,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 					"plan": plan.name,
 					"inspection_type": "pre_final",
 					"action": "update",
+					"supplier": plan.supplier,
 					"rows": [row_payload],
 				}
 			),
@@ -1022,6 +1093,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 					"plan": plan.name,
 					"inspection_type": "pre_final",
 					"action": "revert",
+					"supplier": plan.supplier,
 					"rows": [row_payload],
 				}
 			),
@@ -1139,7 +1211,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 
 		scr = get_scr_data(supplier, lot)
 		self.assertEqual(scr["status"], "success")
-		self.assertTrue(scr["derived_balances_omitted"])
+		self.assertIn("Delivered - Input", scr["balance_headers"])
 		scr_order_total = sum(
 			flt(group["type_wise_total"].get("Order Qty")) for group in scr["data"].values()
 		)

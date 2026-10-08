@@ -11,7 +11,7 @@
 			<TabPanels>
 				<TabPanel :value="active" :key="active">
 					<SewingDashboard v-if="active === 'dashboard'" />
-					<SewingDataEntry v-else-if="active === 'data-entry'" :filters="entryFilters" :actions="capabilities.plan_actions" />
+					<SewingDataEntry v-else-if="active === 'data-entry'" :state="entryState" :filters="entryFilters" :actions="capabilities.plan_actions" :mutate="saveDataEntry" />
 					<SewingEntries v-else-if="active === 'entries'" :state="entriesState" :mutate="cancelEntry" />
 					<SewingConsumption v-else-if="active === 'consumption'" :state="consumptionState" :actions="capabilities.plan_actions" :mutate="saveConsumption" />
 					<SewingClosedWorkOrderGrn v-else-if="active === 'closed-work-order-grn'" :state="closedGrnState" :actions="capabilities.plan_actions" :mutate="createClosedGrn" />
@@ -31,7 +31,7 @@ import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
 import { computed, defineAsyncComponent, reactive } from "vue"
 import { useRoute, useRouter } from "vue-router"
-import { cancelSewingEntry, createClosedWorkOrderGrn, saveSewingConsumption } from "../../api/sewing.js"
+import { cancelSewingEntry, createClosedWorkOrderGrn, saveSewingConsumption, submitSewingDataEntry, updateSewingInspection } from "../../api/sewing.js"
 import { useSewingContext } from "./useSewingContext.js"
 
 const SewingDashboard = defineAsyncComponent(() => import("./plan/SewingDashboard.vue"))
@@ -53,8 +53,8 @@ const active = computed({
 	get: () => tabs.some(tab => tab.value === route.query.tab) ? route.query.tab : "dashboard",
 	set: tab => router.replace({ query: { ...route.query, tab }, hash: route.hash }),
 })
-// Data Entry retains its local filters; its records belong to the active view.
 const entryFilters = reactive({ lot: "", plan: "", inputType: "", workStation: "", receivedType: "", date: "", time: "", inspectionType: "pre_final" })
+const entryState = reactive({ response: {}, loaded: false, entryDrafts: {}, inspectionDrafts: {}, attempted: false, success: "", error: "", loadError: "", busy: false, refreshRequired: false, operationVersion: 0, operation: null })
 // The Supplier-keyed shell retains local filters and consumption drafts without
 // mounting inactive tabs. Mutation locks and recovery survive a tab switch too.
 const entriesState = reactive({ filters: { workStation: "", inputType: "", lot: "" }, busy: false, refreshRequired: false, operationVersion: 0, operation: null })
@@ -78,8 +78,16 @@ async function mutate(state, identity, request, fallback) {
 	} catch (reason) {
 		if (state.operation?.version !== version) return
 		state.operation.error = reason.message || fallback
+		if (identity.recoverRejection) state.refreshRequired = true
 		state.operation.status = "rejected"
 	} finally { if (state.operation?.version === version) state.busy = false }
+}
+function saveDataEntry(payload, message, resetEntry = false) {
+	entryState.error = ""; entryState.success = ""
+	return mutate(entryState, { kind: resetEntry ? "entry" : "inspection", supplier: payload.supplier, plan: payload.plan, lot: payload.lot, message, recoverRejection: true }, async () => {
+		await (resetEntry ? submitSewingDataEntry(payload) : updateSewingInspection(payload))
+		if (resetEntry) entryState.entryDrafts[payload.plan] = {}
+	}, "Unable to save Sewing quantities.")
 }
 function cancelEntry(docId) {
 	return mutate(entriesState, { kind: "cancel", supplier: supplier.value, docId }, () => cancelSewingEntry(docId), "Unable to cancel this entry.")

@@ -34,7 +34,7 @@ const groups = computed(() => (data.value.colours || Object.keys(data.value.data
 	.filter(key => !props.filters.colours.length || props.filters.colours.includes(key))
 	.map(key => ({ ...data.value.data[key], key })))
 // Respect primary-value and stage order. All cell/received-type totals come
-// directly from the server, including any future authoritative balance columns.
+// directly from the server, including signed configured stage balances.
 function matrixRows(group) { return (data.value.primary_values || Object.keys(group.values || {})).map(size => ({ size, ...(group.values?.[size] || {}) })) }
 async function searchLots(text) {
 	const generation = requestGeneration.value, unit = supplier.value, sequence = ++searchSequence

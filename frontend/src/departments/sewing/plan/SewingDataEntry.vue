@@ -5,9 +5,10 @@
 			<Button label="Refresh" aria-label="Refresh data entry" icon="pi pi-refresh" severity="secondary" :disabled="loading || busy" @click="load()" />
 		</header>
 		<div v-if="loading && !loaded" role="status"><p>Loading Sewing Plans</p><Skeleton height="180px" /></div>
-		<WorkspaceLoadError v-else-if="loadError && !loaded" :message="loadError" @retry="load()" />
+		<WorkspaceLoadError v-else-if="loadError && !loaded" message="Retry to load Sewing Plans." @retry="load()" />
 		<template v-else>
-			<Message v-if="loadError" severity="warn" :closable="false">{{ loadError }} <Button label="Retry" text :disabled="loading || busy" @click="load()" /></Message>
+			<p v-if="loading && loaded" role="status">Refreshing Sewing Plans…</p>
+			<Message v-if="loadError" severity="warn" :closable="false">Displayed Sewing Plans may be out of date. <Button label="Retry" text :disabled="loading || busy" @click="load()" /></Message>
 			<form novalidate @submit.prevent="saveEntry">
 				<div class="sewing-data-entry__filters">
 					<div class="common-field"><label for="sewing-lot">Lot</label><Select input-id="sewing-lot" v-model="filters.lot" :options="lots" aria-label="Lot" placeholder="All Lots" show-clear :disabled="loading || busy" fluid /><small>Lots for {{ supplier }} only. Optional filter.</small></div>
@@ -31,14 +32,14 @@
 					<small v-else>Enter at least one positive quantity. Required fields are marked *.</small>
 				</div>
 			</form>
-			<Message v-if="success" severity="success" :closable="false" role="status">{{ success }}</Message>
+			<Message v-if="success" severity="success" :closable="false" role="status"><span>{{ success }}</span> <Button label="Dismiss save notice" text @click="dismissSuccess" /></Message>
 			<section v-if="currentPlan" class="sewing-data-entry__inspection" aria-label="Inspection update">
 				<div class="sewing-data-entry__inspection-heading"><div><h3>Inspection quantities</h3><p>Update saved totals. Revert clears the selected inspection for every row in this plan.</p></div><div class="common-field"><label for="sewing-inspection">Inspection Type</label><Select input-id="sewing-inspection" v-model="filters.inspectionType" :options="inspectionTypes" option-label="label" option-value="value" aria-label="Inspection Type" :disabled="busy || loading" fluid /></div></div>
 				<SewingQuantityMatrix v-model="inspectionQuantities" :colours="currentPlan.colours" :primary-values="currentPlan.details.primary_values" :context-columns="[{ key: 'order_qty', label: 'Ordered' }]" :label="`${filters.plan} inspection`" quantity-label="Inspection quantity" :disabled="busy || loading" :editable="canWrite" />
 				<div class="sewing-data-entry__actions"><Button label="Update inspection" severity="secondary" :disabled="busy || loading || refreshRequired || !canWrite" @click="saveInspection('update')" /><Button label="Revert inspection" severity="danger" outlined :disabled="busy || loading || refreshRequired || !canWrite" @click="saveInspection('revert')" /><small v-if="!canWrite">You do not have permission to update inspections.</small></div>
 			</section>
 		</template>
-		<DocumentErrorDialog :message="error" @dismiss="dismissError" />
+		<DocumentErrorDialog :message="error || mutationError" @dismiss="dismissError" />
 	</section>
 </template>
 
@@ -47,9 +48,9 @@ import Button from "primevue/button"
 import Message from "primevue/message"
 import Select from "primevue/select"
 import Skeleton from "primevue/skeleton"
-import { computed, onUnmounted, ref, watch } from "vue"
+import { computed, onMounted, onUnmounted, ref, toRefs, watch } from "vue"
 import { searchLink } from "../../../api/frappe.js"
-import { getSewingDataEntry, submitSewingDataEntry, updateSewingInspection } from "../../../api/sewing.js"
+import { getSewingDataEntry } from "../../../api/sewing.js"
 import DateField from "../../../components/common/DateField.vue"
 import TimeField from "../../../components/common/TimeField.vue"
 import LinkField from "../../../components/common/LinkField.vue"
@@ -58,13 +59,11 @@ import DocumentErrorDialog from "../../../components/documents/DocumentErrorDial
 import SewingQuantityMatrix from "../components/SewingQuantityMatrix.vue"
 import { useSewingContext } from "../useSewingContext.js"
 
-const props = defineProps({ filters: { type: Object, required: true }, actions: { type: Object, default: () => ({}) } })
+const props = defineProps({ state: { type: Object, required: true }, mutate: { type: Function, required: true }, filters: { type: Object, required: true }, actions: { type: Object, default: () => ({}) } })
 const { supplier, requestGeneration, beginRequest, isCurrent } = useSewingContext()
-const response = ref({}), loaded = ref(false), loading = ref(false), loadError = ref(""), busy = ref(false), error = ref(""), success = ref(""), attempted = ref(false)
-const entryDrafts = ref({}), inspectionDrafts = ref({})
-const refreshRequired = ref(false)
-let rejectedPlan = null
-let acknowledgedPlan = null
+const { response, loaded, loadError, busy, error, success, attempted, entryDrafts, inspectionDrafts, refreshRequired } = toRefs(props.state)
+const loading = ref(false)
+const mutationError = computed(() => props.state.operation?.status === 'rejected' && !props.state.operation.acknowledged ? props.state.operation.error : '')
 let mounted = true
 const searchSequences = new Map()
 const canCreate = computed(() => Boolean(props.actions?.entry?.can_create))
@@ -102,17 +101,23 @@ async function search(doctype, text) {
 	const selectedSupplier = supplier.value
 	const sequence = (searchSequences.get(doctype) || 0) + 1
 	searchSequences.set(doctype, sequence)
-	const rows = await searchLink(doctype, text)
-	return mounted && !busy.value && !loading.value && selectedSupplier === supplier.value
-		&& isCurrent(generation) && searchSequences.get(doctype) === sequence ? rows : []
+	const current = () => mounted && !busy.value && !loading.value && selectedSupplier === supplier.value && isCurrent(generation) && searchSequences.get(doctype) === sequence
+	try {
+		const rows = await searchLink(doctype, text)
+		return current() ? rows : []
+	} catch (reason) { if (current()) error.value = reason.message || 'Unable to load entry options.'; return [] }
 }
 
 async function load(savedPlan = "", savedLot = "", resetInspection = true) {
-	if (!supplier.value) return false
+	if (!supplier.value || loading.value || busy.value) return false
 	// Acknowledged writes remain tied to their plan until authoritative recovery
 	// succeeds, including when the operator retries with the Refresh button.
-	const targetPlan = savedPlan || acknowledgedPlan?.plan || ""
-	const targetLot = savedLot || acknowledgedPlan?.lot || ""
+	const operation = props.state.operation
+	if (operation?.status === 'rejected' && !operation.acknowledged) return false
+	const recovery = refreshRequired.value ? operation : null
+	const targetPlan = savedPlan || recovery?.plan || ""
+	const targetLot = savedLot || recovery?.lot || ""
+	resetInspection = recovery ? recovery.status === 'succeeded' : resetInspection
 	const generation = beginRequest()
 	loading.value = true; loadError.value = ""
 	try {
@@ -124,9 +129,8 @@ async function load(savedPlan = "", savedLot = "", resetInspection = true) {
 			response.value.data[targetLot][targetPlan] = authoritative
 			// Refresh only this plan's business records and inspection drafts.
 			if (resetInspection) for (const type of inspectionTypes) delete inspectionDrafts.value[`${targetPlan}:${type.value}`]
-			if (acknowledgedPlan?.plan === targetPlan && acknowledgedPlan.lot === targetLot) {
+			if (recovery?.status === 'succeeded') {
 				for (const type of inspectionTypes) inspectionDrafts.value[`${targetPlan}:${type.value}`] = Object.fromEntries(values(authoritative).map(value => [value.order_detail, value[type.value] || 0]))
-				acknowledgedPlan = null
 			}
 			initializeInspection()
 		} else {
@@ -139,18 +143,21 @@ async function load(savedPlan = "", savedLot = "", resetInspection = true) {
 		refreshRequired.value = false
 		return true
 	} catch (reason) {
-		if (mounted && isCurrent(generation)) loadError.value = reason.message || "Unable to load Sewing Plans."
+		if (mounted && isCurrent(generation)) { loadError.value = reason.message || "Unable to load Sewing Plans."; error.value = loadError.value }
 		return false
 	} finally { if (mounted && isCurrent(generation)) loading.value = false }
 }
 
 function dismissError() {
 	error.value = ""
-	const rejected = rejectedPlan
-	rejectedPlan = null
+	const rejected = props.state.operation
 	// Read current balances after acknowledgement without discarding either edit.
-	if (rejected && mounted) load(rejected.plan, rejected.lot, false)
+	if (rejected?.status === 'rejected' && !rejected.acknowledged) {
+		rejected.acknowledged = true
+		if (mounted) load(rejected.plan, rejected.lot, false)
+	}
 }
+function dismissSuccess() { success.value = ''; if (props.state.operation) props.state.operation.acknowledged = true }
 
 async function saveEntry() {
 	if (busy.value || loading.value || refreshRequired.value || !canCreate.value) return
@@ -160,7 +167,7 @@ async function saveEntry() {
 	if (!values().some(value => Number(entryQuantities.value[value.order_detail]) > 0)) { error.value = "Enter a quantity for at least one Sewing Plan item."; return }
 	const quantities = { colours: Object.fromEntries(Object.entries(currentPlan.value.colours).map(([key, colour]) => [key, { values: Object.fromEntries(Object.entries(colour.values).map(([size, value]) => [size, { order_detail: value.order_detail, data_entry: Number(entryQuantities.value[value.order_detail] || 0) }])) }])) }
 	const payload = { supplier: supplier.value, lot: currentPlan.value.details.lot, plan: props.filters.plan, input_type: props.filters.inputType, work_station: props.filters.workStation, received_type: props.filters.receivedType, date: props.filters.date, time: props.filters.time, quantities }
-	await mutate(() => submitSewingDataEntry(payload), payload.plan, payload.lot, "Entry saved.", true)
+	await props.mutate(payload, "Entry saved.", true)
 }
 
 async function saveInspection(action) {
@@ -170,32 +177,23 @@ async function saveInspection(action) {
 	const inspectionType = props.filters.inspectionType
 	const rows = Object.values(currentPlan.value.colours).map(colour => ({ colour: colour.variant_colour, part: colour.part, set_combination: colour.set_combination, qty: Object.fromEntries(Object.entries(colour.values).map(([size, value]) => [size, { order_detail: value.order_detail, [inspectionType]: action === "revert" ? 0 : Number(inspectionQuantities.value[value.order_detail] || 0) }])) }))
 	const payload = { supplier: supplier.value, lot: currentPlan.value.details.lot, plan: props.filters.plan, inspection_type: inspectionType, action, rows }
-	await mutate(() => updateSewingInspection(payload), payload.plan, payload.lot, action === "revert" ? "Inspection reverted." : "Inspection updated.")
+	await props.mutate(payload, action === "revert" ? "Inspection reverted." : "Inspection updated.")
 }
 
-async function mutate(request, plan, lot, message, resetEntry = false) {
-	const generation = beginRequest()
-	busy.value = true; error.value = ""; success.value = ""
-	try {
-		await request()
-		if (!mounted || !isCurrent(generation)) return
-		acknowledgedPlan = { plan, lot }
-		refreshRequired.value = true
-		if (resetEntry) entryDrafts.value[plan] = {}
-		const refreshed = await load(plan, lot)
-		if (mounted) success.value = refreshed ? message : `${message} Refresh the plan before recording more quantities.`
-	} catch (reason) {
-		if (mounted && isCurrent(generation)) {
-			rejectedPlan = { plan, lot }
-			error.value = reason.message || "Unable to save Sewing quantities."
-		}
-	} finally { if (mounted) busy.value = false }
+async function settle() {
+	if (busy.value || !mounted) return
+	const operation = props.state.operation
+	if (operation?.status === 'rejected' && !operation.acknowledged) return
+	if (operation?.status === 'succeeded' && refreshRequired.value) {
+		const refreshed = await load(operation.plan, operation.lot)
+		if (mounted && !operation.acknowledged) success.value = refreshed ? operation.message : `${operation.message} Refresh the plan before recording more quantities.`
+	} else if (!loaded.value) await load()
 }
 
 const now = new Date(), pad = value => String(value).padStart(2, "0")
 if (!props.filters.date) props.filters.date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
 if (!props.filters.time) props.filters.time = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
-watch(supplier, () => load(), { immediate: true })
+onMounted(() => watch(() => props.state.busy, settle, { immediate: true }))
 onUnmounted(() => { mounted = false; beginRequest() })
 </script>
 

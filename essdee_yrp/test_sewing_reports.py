@@ -75,6 +75,44 @@ class TestSewingReports(IntegrationTestCase):
 			.name
 		)
 
+	def test_scr_configured_balances_received_types_and_signed_totals(self):
+		# A non-default earlier-stage receipt joins the configured received-type
+		# total, matching the operational SCR contract, without changing Input Qty.
+		self._entry(self.plan, "Input Qty", "2090-01-01", 2, self.reject_type.name)
+		result = api.get_scr_data(self.supplier, self.plan.lot)
+		expected = ["Order Qty", "Delivered Qty", "Delivered - Input", "Input Qty", "Input Qty Balance",
+			"Line Output", "Line Output Balance", "Checking Output", self.reject_type.name,
+			f"Input Qty {self.reject_type.name}", "Checking Output Total", "Checking Output Balance",
+			"AQL Output", "AQL Output Balance", "Pre Final", "Final Inspection"]
+		self.assertEqual(result["headers"], expected)
+		self.assertFalse(result.get("derived_balances_omitted", False))
+		self.assertEqual(result["balance_headers"], ["Delivered - Input", "Input Qty Balance", "Line Output Balance", "Checking Output Balance", "AQL Output Balance"])
+		group = next(iter(result["data"].values()))
+		for header, quantity in {"Order Qty": 100, "Delivered Qty": 90, "Delivered - Input": 10,
+			"Input Qty Balance": -20, "Line Output Balance": -20, self.reject_type.name: 5,
+			"Checking Output Total": 47, "Checking Output Balance": -13, "AQL Output Balance": -10}.items():
+			self.assertEqual(group["type_wise_total"][header], quantity, header)
+			self.assertEqual(next(iter(group["values"].values()))[header], quantity, header)
+
+	def test_scr_missing_stages_have_zero_values_and_configured_order(self):
+		plan = self._plan(self.other_supplier)
+		result = api.get_scr_data(self.other_supplier, plan.lot)
+		group = next(iter(result["data"].values()))
+		self.assertEqual(group["type_wise_total"].get("Input Qty Balance"), -100)
+		self.assertEqual(group["type_wise_total"].get("Checking Output Total"), 0)
+		self.assertEqual(group["type_wise_total"].get("Checking Output Balance"), 0)
+		self.assertLess(result["headers"].index("Line Output"), result["headers"].index("Checking Output"))
+
+	def test_scr_received_only_total_and_positive_balances(self):
+		plan = self._plan(self.other_supplier)
+		self._entry(plan, "Checking Output", "2090-01-01", 7, self.reject_type.name)
+		result = api.get_scr_data(self.other_supplier, plan.lot)
+		group = next(iter(result["data"].values()))
+		self.assertEqual(group["type_wise_total"]["Checking Output"], 0)
+		self.assertEqual(group["type_wise_total"]["Checking Output Total"], 7)
+		self.assertEqual(group["type_wise_total"]["Checking Output Balance"], 7)
+		self.assertEqual(group["type_wise_total"]["Delivered - Input"], 90)
+
 	def _plan(self, supplier, *, status="Open", wo_supplier=None):
 		lot = frappe.get_doc(
 			{

@@ -234,18 +234,51 @@ def get_scr_data(supplier, lot):
 	for row in delivered_rows:
 		add(row, "Delivered Qty", row.delivered_quantity)
 	default_received_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
+	settings = frappe.get_single("SD YRP MRP Settings")
+	configuration = get_sewing_input_configuration()
+	total_stage = settings.type_wise_diff_summary
 	for row in detail_rows:
 		entry = entry_map[row.parent]
 		header = entry.input_type
 		if entry.received_type and entry.received_type != default_received_type:
-			header = f"{header} {entry.received_type}"
+			header = entry.received_type if header == total_stage else f"{header} {entry.received_type}"
 		add(row, header, row.quantity, entry.work_station)
 
-	preferred = ["Order Qty", "Delivered Qty", *_input_types(), "Pre Final", "Final Inspection"]
-	headers = [header for header in preferred if header in observed_headers]
-	headers.extend(header for header in observed_headers if header not in headers)
+	stages = [row.input_type for row in configuration]
+	# Legacy SCR includes every non-default receipt in the configured total,
+	# including receipts at another stage; inspection fields are not receipts.
+	received_headers = sorted(
+		(header for header in observed_headers
+		 if header not in {"Order Qty", "Delivered Qty", "Pre Final", "Final Inspection", *stages}),
+		key=lambda header: (any(header.startswith(f"{stage} ") for stage in stages), header),
+	)
+	headers = ["Order Qty", "Delivered Qty", "Delivered - Input"]
+	balance_headers = ["Delivered - Input"]
+	for stage in stages:
+		headers.append(stage)
+		if stage == total_stage:
+			headers.extend(received_headers)
+			headers.append(f"{stage} Total")
+		headers.append(f"{stage} Balance")
+		balance_headers.append(f"{stage} Balance")
+	if total_stage not in stages:
+		headers.extend(received_headers)
+	headers.extend(["Pre Final", "Final Inspection"])
 	for colour, group in data.items():
 		group["lines"] = sorted(lines[colour], key=_natural_name_key)
+		for values in group["values"].values():
+			values["Delivered - Input"] = flt(values.get("Delivered Qty")) - flt(
+				values.get(settings.sewing_input_qty_type)
+			)
+			if total_stage in stages:
+				values[f"{total_stage} Total"] = flt(values.get(total_stage)) + sum(
+					flt(values.get(header)) for header in received_headers
+				)
+			for row in configuration:
+				source = f"{row.input_type} Total" if row.input_type == total_stage else row.input_type
+				values[f"{row.input_type} Balance"] = flt(values.get(source)) - flt(values.get(row.difference_from))
+			for header in headers:
+				values.setdefault(header, 0)
 		for header in headers:
 			group["type_wise_total"][header] = sum(
 				flt(values.get(header)) for values in group["values"].values()
@@ -259,7 +292,7 @@ def get_scr_data(supplier, lot):
 		"is_set_item": ipd.is_set_item,
 		"set_attr": ipd.set_item_attribute,
 		"item": plan_map[next(iter(plan_map))].item,
-		"derived_balances_omitted": True,
+		"balance_headers": balance_headers,
 	}
 
 

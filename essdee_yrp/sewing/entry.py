@@ -202,11 +202,7 @@ def update_sewing_plan_data(payload) -> str:
 	"""
 
 	payload = _json_object(payload)
-	plan_name = cstr(payload.get("plan")).strip()
-	plan = frappe.get_doc("SD YRP Sewing Plan", plan_name)
-	plan.check_permission("write")
-	if cstr(payload.get("lot")).strip() != plan.lot:
-		frappe.throw(_("Sewing Plan and Lot do not match."))
+	plan = _locked_scoped_plan(payload, "write")
 
 	inspection_type = cstr(payload.get("inspection_type")).strip()
 	if inspection_type not in {"pre_final", "final_inspection"}:
@@ -271,20 +267,7 @@ def submit_data_entry_log(payload) -> str:
 	payload = _json_object(payload)
 	frappe.has_permission("SD YRP Sewing Plan Entry Detail", "create", throw=True)
 
-	plan_name = cstr(payload.get("plan")).strip()
-	plan = frappe.get_doc("SD YRP Sewing Plan", plan_name)
-	supplier = plan.supplier
-	_lock_mutation_supplier(supplier)
-	locked_plan = frappe.db.sql(
-		"select name, supplier from `tabSD YRP Sewing Plan` where name = %s for update",
-		plan.name,
-		as_dict=True,
-	)
-	if not locked_plan or locked_plan[0].supplier != supplier:
-		_mutation_scope_changed()
-	plan.flags.for_update = True
-	plan.reload()
-	plan.check_permission("read")
+	plan = _locked_scoped_plan(payload, "read")
 	input_type = _required_link(payload, "input_type", "SD YRP Sewing Plan Input Type")
 	configuration = {row.input_type: row for row in get_sewing_input_configuration()}
 	if input_type not in configuration:
@@ -324,6 +307,32 @@ def cancel_sewing_plan_entry(doc_id: str) -> None:
 	entry = frappe.get_doc("SD YRP Sewing Plan Entry Detail", doc_id)
 	_assert_entry_cancellable(entry)
 	entry.delete()
+
+
+def _locked_scoped_plan(payload, permission):
+	"""Resolve both writes under the shared Supplier -> Plan lock order."""
+	plan = frappe.get_doc("SD YRP Sewing Plan", cstr(payload.get("plan")).strip())
+	plan.check_permission(permission)
+	supplier = plan.supplier
+	_lock_mutation_supplier(supplier)
+	locked = frappe.db.sql(
+		"select name, supplier, lot from `tabSD YRP Sewing Plan` where name = %s for update",
+		plan.name,
+		as_dict=True,
+	)
+	if not locked or locked[0].supplier != supplier:
+		_mutation_scope_changed()
+	plan.flags.for_update = True
+	plan.reload()
+	plan.check_permission(permission)
+	if (
+		not payload.get("supplier")
+		or not payload.get("lot")
+		or cstr(payload.get("supplier")).strip() != plan.supplier
+		or cstr(payload.get("lot")).strip() != plan.lot
+	):
+		frappe.throw(_("Sewing Unit and Lot scope must match the current Sewing Plan. Refresh and retry."))
+	return plan
 
 
 def _mutation_scope_changed() -> None:

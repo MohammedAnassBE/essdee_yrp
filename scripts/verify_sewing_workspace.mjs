@@ -48,6 +48,14 @@ async function noOverflow(page, label) {
 	assert(geometry.page <= geometry.viewport + 1, `${label} page overflow: ${JSON.stringify(geometry)}`)
 }
 
+async function oneLoadPopup(page, message) {
+	await page.locator('.document-error-dialog').getByText(message, { exact: true }).waitFor()
+	assert(await page.locator('.document-error-dialog').count() === 1, 'Load failure opened duplicate dialogs')
+	assert(await page.getByText(message, { exact: true }).count() === 1, 'Load failure duplicated raw inline error')
+	await page.getByRole('button', { name: 'OK', exact: true }).click()
+	await page.locator('.document-error-dialog').waitFor({ state: 'hidden' })
+}
+
 // A dialog must keep both its message and acknowledgement reachable at every
 // supported width. A page-only overflow check misses clipped fixed overlays.
 async function dialogGeometry(page, label, selector = ".document-error-dialog") {
@@ -180,14 +188,14 @@ async function launcherSuite(page) {
 	state.payload = capabilities
 	state.error = "Capability service unavailable"
 	await navigate(page, "/web/sewing")
-	await page.getByText(state.error, { exact: true }).waitFor()
+	await oneLoadPopup(page, state.error)
 	state.error = ""
 	await page.getByRole("button", { name: "Retry", exact: true }).click()
 	await cards.nth(2).waitFor()
 	state.errorStatus = 403
 	state.error = "Sewing access was denied. Please retry."
 	await navigate(page, "/web/sewing")
-	await page.getByRole("alert").getByText(state.error, { exact: true }).waitFor()
+	await oneLoadPopup(page, state.error)
 	assert(await cards.count() === 0, "HTTP 403 leaves Sewing cards visible")
 	state.error = ""
 	await page.getByRole("button", { name: "Retry", exact: true }).click()
@@ -327,11 +335,12 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		else if (method.endsWith("get_sewing_plan_entries")) value = {}
 		else if (method.endsWith("submit_data_entry_log")) { await new Promise(r => setTimeout(r, state.submitDelay)); value = "ENTRY-SAVED"; error = state.submitError; if (!error) state.authoritativeQty += Number(args.payload.quantities.colours.Navy.values.XS.data_entry) }
 		else if (method.endsWith("update_sewing_plan_data")) {
+			await new Promise(r => setTimeout(r, state.submitDelay))
 			value = "Success"; error = state.inspectionError
 			const { lot, plan: planName, inspection_type: type, action, rows } = args.payload
 			if (!error) for (const row of rows) for (const [size, quantities] of Object.entries(row.qty)) entry.data[lot][planName].colours[row.colour].values[size][type] = action === "revert" ? 0 : quantities[type]
 		}
-		else if (method.endsWith("link_search")) value = [{ name: args.doctype === "YRP Work Station" ? "Sewing Line 1" : "Good", label: args.doctype === "YRP Work Station" ? "Sewing Line 1" : "Good" }]
+		else if (method.endsWith("link_search")) { error = state.linkError || ''; value = [{ name: args.doctype === "YRP Work Station" ? "Sewing Line 1" : "Good", label: args.doctype === "YRP Work Station" ? "Sewing Line 1" : "Good" }] }
 		else throw new Error(`Unexpected plan request: ${method}`)
 		await route.fulfill({ status: error ? 417 : 200, contentType: "application/json", body: JSON.stringify(error ? { _server_messages: JSON.stringify([JSON.stringify({ message: error })]), exc: "ValidationError" } : { message: value }) })
 	})
@@ -347,8 +356,17 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		assert(!requests.some(r => r.method.endsWith("get_data_entry_data")), "Inactive Data Entry fetched")
 		for (const width of [1600, 1280, 900, 390]) { await page.setViewportSize({ width, height: 900 }); await noOverflow(page, `Dashboard ${width}`); if (process.env.ESSDEE_SEWING_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SEWING_SCREENSHOTS}/sewing-dashboard-${width}.png`, fullPage: true, animations: "disabled" }) }
 		await page.setViewportSize({ width: 1280, height: 900 })
+		let releaseRefresh
+		state.dashboardHold = new Promise(resolve => { releaseRefresh = resolve })
+		state.dashboardError = "Retained dashboard unavailable"
+		await page.getByRole('button', { name: 'Refresh dashboard' }).click()
+		assert(await page.getByRole('row').filter({ hasText: 'Sewing In' }).isVisible(), 'Dashboard refresh blanked useful results')
+		assert(await page.getByRole('button', { name: 'Refresh dashboard' }).isDisabled(), 'Dashboard refresh allows duplicate requests')
+		releaseRefresh(); await oneLoadPopup(page, state.dashboardError)
+		assert(await page.getByRole('row').filter({ hasText: 'Sewing In' }).isVisible(), 'Dashboard failure lost useful results')
+		state.dashboardError = ''
 		state.dashboard = []; await page.getByRole("button", { name: "Refresh dashboard" }).click(); await page.getByText("No input quantities for open Work Orders.", { exact: true }).waitFor()
-		state.dashboardError = "Dashboard unavailable"; await page.getByRole("button", { name: "Refresh dashboard" }).click(); await page.getByText(state.dashboardError, { exact: true }).waitFor()
+		state.dashboardError = "Dashboard unavailable"; await page.getByRole("button", { name: "Refresh dashboard" }).click(); await oneLoadPopup(page, state.dashboardError)
 		state.dashboardError = ""; state.dashboard = [{ input_type: "Sewing In", qty: 41 }]; await page.getByRole("button", { name: "Retry", exact: true }).click(); await page.getByRole("cell", { name: "41", exact: true }).waitFor()
 		const before = requests.length
 		await page.getByRole("tab", { name: "Closed Work Order GRN", exact: true }).click(); await page.getByRole("combobox", { name: "Closed Work Order", exact: true }).waitFor()
@@ -356,7 +374,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		assert(requests.length === before, "Closed GRN fetched without Work Order selection")
 		state.entryError = "Entry data unavailable"
 		await page.getByRole("tab", { name: "Data Entry", exact: true }).click()
-		await page.getByText(state.entryError, { exact: true }).waitFor()
+		await oneLoadPopup(page, state.entryError)
 		state.entryError = ""; await page.getByRole("button", { name: "Retry", exact: true }).click()
 		await page.getByRole("combobox", { name: "Sewing Plan", exact: true }).waitFor()
 		assert(await page.locator("[data-sewing-plan-tab]").count() === 1, "Data Entry mounted alongside another tab")
@@ -368,11 +386,15 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		await select("Sewing Plan", "PLAN-OTHER"); await quantity.fill("11"); await select("Sewing Plan", "PLAN-A")
 		assert(await quantity.inputValue() === "7", "Changing plans lost the selected plan's edit")
 		await page.getByRole("tab", { name: "Entries", exact: true }).click(); await page.getByRole("tab", { name: "Data Entry", exact: true }).click(); await quantity.waitFor()
+		assert(await quantity.inputValue() === '7', 'Tab switch discarded unsaved entry draft')
 		assert(await page.getByRole("combobox", { name: "Sewing Plan", exact: true }).textContent() === "PLAN-A", "Inactive-tab remount lost plan filter")
 		await quantity.fill("7")
 		await page.getByRole("button", { name: "Save entry", exact: true }).click(); await closeError("Complete all required entry fields.")
 		assert(await quantity.inputValue() === "7", "Required-field validation lost quantity")
 		await select("Input Type", "Sewing In")
+		state.linkError = 'Work Station lookup unavailable'
+		await page.getByRole('button', { name: 'Show Work Station options', exact: true }).click(); await oneLoadPopup(page, state.linkError)
+		state.linkError = ''
 		for (const [name, value] of [["Work Station", "Sewing Line 1"], ["Received Type", "Good"]]) { await page.getByRole("combobox", { name, exact: true }).fill(value); await page.getByRole("option", { name: value, exact: true }).click() }
 		await page.getByRole("tab", { name: "Entries", exact: true }).click(); await page.getByRole("tab", { name: "Data Entry", exact: true }).click(); await quantity.waitFor()
 		assert(await page.getByRole("combobox", { name: "Work Station", exact: true }).inputValue() === "Sewing Line 1", "Inactive-tab remount lost entry filters")
@@ -410,6 +432,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		assert((await page.getByRole("region", { name: "PLAN-A quantity matrix", exact: true }).innerText()).includes("27"), "Authoritative stage values were not rendered after save")
 		state.entryError = "Saved plan refresh unavailable"
 		await quantity.fill("1"); await page.getByRole("button", { name: "Save entry", exact: true }).click(); await page.getByText("Entry saved. Refresh the plan before recording more quantities.", { exact: true }).waitFor()
+		await oneLoadPopup(page, state.entryError)
 		assert(await page.getByRole("button", { name: "Save entry", exact: true }).isDisabled(), "Reload failure must block further writes until authoritative refresh")
 		state.entryError = ""; await page.getByRole("button", { name: "Refresh data entry" }).click(); await page.getByRole("button", { name: "Save entry", exact: true }).waitFor({ state: "visible" }); await page.waitForFunction(() => !document.querySelector('button[aria-label="Save entry"]').disabled)
 		await select("Inspection Type", "Pre Final")
@@ -421,6 +444,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		assert(await inspection.inputValue() === "2", "Inspection recovery fixture needs the saved 2-unit total")
 		state.entryError = "Inspection recovery unavailable"
 		await page.getByRole("button", { name: "Revert inspection", exact: true }).click(); await page.getByText("Inspection reverted. Refresh the plan before recording more quantities.", { exact: true }).waitFor()
+		await oneLoadPopup(page, state.entryError)
 		assert(await page.getByRole("button", { name: "Update inspection", exact: true }).isDisabled(), "Failed inspection refresh re-enabled stale Update draft")
 		state.entryError = ""; await page.getByRole("button", { name: "Refresh data entry" }).click()
 		await page.waitForFunction(() => !document.querySelector('button[aria-label="Update inspection"]').disabled)
@@ -432,9 +456,61 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		await page.getByRole("button", { name: "Update inspection", exact: true }).click(); await closeError(state.inspectionError)
 		assert(await inspection.inputValue() === "5", "Rejected inspection acknowledgement discarded user edit")
 		state.inspectionError = ""; state.entryError = "Ordinary refresh unavailable"
-		await page.getByRole("button", { name: "Refresh data entry" }).click(); await page.locator(".p-message").filter({ hasText: state.entryError }).waitFor()
+		await page.getByRole("button", { name: "Refresh data entry" }).click(); await oneLoadPopup(page, state.entryError)
 		assert(await inspection.inputValue() === "5", "Ordinary load error discarded unsaved inspection edit")
 		state.entryError = ""
+		for (const scenario of ['entry-success', 'entry-rejection', 'inspection-success', 'inspection-rejection', 'revert-success', 'revert-rejection']) {
+			const rejected = scenario.endsWith('rejection'), isEntry = scenario.startsWith('entry'), revert = scenario.startsWith('revert')
+			state.submitError = isEntry && rejected ? 'Entry settlement rejected' : ''
+			state.inspectionError = !isEntry && rejected ? 'Inspection settlement rejected' : ''
+			state.submitDelay = 1200
+			await quantity.fill('3'); await inspection.fill('6')
+			await page.getByRole('tab', { name: 'Entries', exact: true }).click()
+			await page.getByRole('tab', { name: 'Data Entry', exact: true }).click(); await quantity.waitFor()
+			assert(await quantity.inputValue() === '3' && await inspection.inputValue() === '6', `${scenario}: unsaved drafts lost across tabs`)
+			const method = isEntry ? 'submit_data_entry_log' : 'update_sewing_plan_data', beforeWrites = requests.filter(r => r.method.endsWith(method)).length
+			const request = page.waitForRequest(r => r.url().endsWith(method))
+			await page.getByRole('button', { name: isEntry ? 'Save entry' : revert ? 'Revert inspection' : 'Update inspection', exact: true }).click(); await request
+			const beforeLoads = state.loads
+			await page.getByRole('tab', { name: 'Entries', exact: true }).click()
+			await page.getByRole('tab', { name: 'Data Entry', exact: true }).click(); await quantity.waitFor()
+			assert(await page.getByRole('button', { name: 'Save entry', exact: true }).isDisabled() && await page.getByRole('button', { name: 'Update inspection', exact: true }).isDisabled(), `${scenario}: remount unlocked pending write`)
+			await page.getByRole('button', { name: 'Save entry', exact: true }).evaluate(button => button.click())
+			assert(state.loads === beforeLoads, `${scenario}: remount fetched during mutation`)
+			const response = page.waitForResponse(r => r.url().endsWith(method))
+			await page.getByRole('tab', { name: 'Entries', exact: true }).click(); await response
+			assert(state.loads === beforeLoads, `${scenario}: inactive tab refreshed`)
+			await page.getByRole('tab', { name: 'Data Entry', exact: true }).click(); await quantity.waitFor()
+			if (rejected) {
+				await closeError(isEntry ? state.submitError : state.inspectionError)
+				await page.waitForFunction(() => document.querySelector('[data-sewing-plan-tab="data-entry"]').getAttribute('aria-busy') === 'false')
+				assert(await quantity.inputValue() === '3' && await inspection.inputValue() === '6', `${scenario}: rejection recovery erased edits`)
+			} else {
+				await page.getByText(isEntry ? 'Entry saved.' : revert ? 'Inspection reverted.' : 'Inspection updated.', { exact: true }).waitFor()
+				assert(await (isEntry ? quantity : inspection).inputValue() === (isEntry || revert ? '0' : '6'), `${scenario}: missing authoritative recovery`)
+				await page.getByRole('button', { name: 'Dismiss save notice', exact: true }).click()
+			}
+			assert(state.loads === beforeLoads + 1 && requests.filter(r => r.method.endsWith(method)).length === beforeWrites + 1, `${scenario}: duplicate refresh or mutation`)
+			await page.getByRole('tab', { name: 'Entries', exact: true }).click(); await page.getByRole('tab', { name: 'Data Entry', exact: true }).click(); await quantity.waitFor()
+			assert(await page.locator('.document-error-dialog').count() === 0 && await page.getByRole('button', { name: 'Dismiss save notice', exact: true }).count() === 0, `${scenario}: acknowledged outcome replayed`)
+			console.log(`PASS Data Entry settlement ${scenario}`)
+		}
+		state.submitDelay = 0; state.submitError = ''; state.inspectionError = ''
+		for (const rejected of [false, true]) {
+			state.submitDelay = 700; state.submitError = rejected ? 'Discarded Supplier rejected' : ''
+			await quantity.fill('4')
+			const pending = page.waitForRequest(r => r.url().endsWith('submit_data_entry_log'))
+			await page.getByRole('button', { name: 'Save entry', exact: true }).click(); await pending
+			const settled = page.waitForResponse(r => r.url().endsWith('submit_data_entry_log'))
+			await page.evaluate(() => window.router.replace('/sewing/plans?supplier=UNIT-B&tab=data-entry'))
+			await page.getByText('No Sewing Plans for this Sewing Unit.', { exact: true }).waitFor(); await settled
+			assert(await page.locator('.document-error-dialog').count() === 0 && await page.getByRole('button', { name: 'Dismiss save notice', exact: true }).count() === 0, 'Discarded Supplier delivered a late mutation outcome')
+			await page.evaluate(() => window.router.replace('/sewing/plans?supplier=UNIT-A&tab=data-entry'))
+			await select('Sewing Plan', 'PLAN-A'); await select('Input Type', 'Sewing In')
+			assert(await quantity.inputValue() === '0', 'Discarded Supplier draft leaked into new scope')
+			for (const [name, value] of [['Work Station', 'Sewing Line 1'], ['Received Type', 'Good']]) { await page.getByRole('combobox', { name, exact: true }).fill(value); await page.getByRole('option', { name: value, exact: true }).click() }
+		}
+		state.submitDelay = 0; state.submitError = ''
 		await page.evaluate(() => window.router.replace('/sewing/plans?supplier=UNIT-B&tab=data-entry'))
 		await page.getByText("No Sewing Plans for this Sewing Unit.", { exact: true }).waitFor()
 		await page.getByRole("combobox", { name: "Lot", exact: true }).click(); assert(await page.getByRole("option", { name: "LOT-A", exact: true }).count() === 0, "Old Supplier Lots leaked")
@@ -506,7 +582,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		if (method.endsWith("get_capabilities")) value = { ...capabilities, plan_actions: { entry: { ...flags, can_delete: false }, plan: { ...flags, can_write: !state.readOnly } } }
 		else if (method.endsWith("get_sewing_plan_entries")) { value = args.supplier === "UNIT-B" ? { "ENTRY-UNIT-B": record("2026-10-09", false) } : structuredClone(state.entries); error = state.entryError; if (state.entryHold) { const hold = state.entryHold; state.entryHold = null; await hold } }
 		else if (method.endsWith("cancel_sewing_plan_entry")) { if (state.cancelHold) { const hold = state.cancelHold; state.cancelHold = null; await hold } else await new Promise(r => setTimeout(r, state.cancelDelay)); error = state.cancelError; if (!error) delete state.entries[args.doc_id] }
-		else if (method.endsWith("get_supplier_lots")) { value = [[args.filters.supplier === "UNIT-B" ? "LOT-B" : "LOT-A", "T-Shirt"]]; if (state.lotHold) { const hold = state.lotHold; state.lotHold = null; await hold } }
+		else if (method.endsWith("get_supplier_lots")) { error = state.lotError || ''; value = [[args.filters.supplier === "UNIT-B" ? "LOT-B" : "LOT-A", "T-Shirt"]]; if (state.lotHold) { const hold = state.lotHold; state.lotHold = null; await hold } }
 		else if (method.endsWith("get_consumption_mapping_data")) { value = structuredClone(state.mapping); if (args.supplier === "UNIT-B") value.ipd = "IPD-B"; error = state.mappingError; if (state.mappingHold) { const hold = state.mappingHold; state.mappingHold = null; await hold } }
 		else if (method.endsWith("save_consumption_data")) { if (state.saveHold) { const hold = state.saveHold; state.saveHold = null; await hold } else await new Promise(r => setTimeout(r, state.saveDelay)); error = state.saveError; value = { status: "success", message: "Consumption data saved successfully" }; if (!error) { state.mapping.sections[0].rows[0].quantity = 6.75; state.mapping.cloth_acc_data[0].columns[0]["Consumption Weight"] = 1.75 } }
 		else if (method.endsWith("link_search")) value = [{ name: args.doctype === "YRP Work Station" ? "Line 1" : "Sewing In", label: args.doctype === "YRP Work Station" ? "Line 1" : "Sewing In" }]
@@ -522,7 +598,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 	// Removing shell-owned mutation settlement or observing only the departed
 	// instance must fail these navigation-before-response regressions.
 	async function settlementRegressions(only = "all") {
-		for (const scenario of ["cancel-success", "cancel-rejection", "save-rejection", "cancel-rejection-inactive", "save-rejection-inactive", "save-rejection-supplier"]) {
+		for (const scenario of ["cancel-success", "cancel-rejection", "cancel-rejection-recovery", "save-rejection", "cancel-rejection-inactive", "save-rejection-inactive", "save-rejection-supplier"]) {
 			if (only !== "all" && only !== scenario) continue
 			state.readOnly = false; state.cancelError = ""; state.saveError = ""; state.saveStatus = 417
 			state.entries["ENTRY-A"] = record("2026-10-08", true)
@@ -566,7 +642,13 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 			} else {
 				await tab(isSave ? "consumption" : "entries")
 				assert(await page.getByRole("button", { name: isSave ? "Save consumption" : "Refresh entries", exact: true }).isDisabled(), `${scenario}: mutation lock lost on remount`)
+				if (scenario === 'cancel-rejection-recovery') state.entryError = 'Cancellation recovery unavailable'
 				release(); await settled
+			}
+			if (scenario === 'cancel-rejection-recovery') {
+				await page.locator('.document-error-dialog').getByText(state.entryError, { exact: true }).waitFor()
+				await page.getByRole('button', { name: 'OK', exact: true }).click()
+				state.entryError = ''
 			}
 			if (scenario === "cancel-success") {
 				await page.getByText("ENTRY-B", { exact: true }).waitFor({ timeout: 2500 }).catch(() => { throw new Error("Remounted Entries ignored successful cancellation settlement and remained falsely empty") })
@@ -578,8 +660,9 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 				await page.locator(".document-error-dialog").getByText(message, { exact: false }).waitFor({ timeout: 2500 }).catch(() => { throw new Error(`${scenario}: late rejection disappeared after remount`) })
 				assert((await page.locator(".document-error-dialog").innerText()).includes(message), `${scenario}: shared rejection popup missing plain server message`)
 				if (isSave) { assert(await quantity().inputValue() === "5", "Late 403 discarded consumption draft"); assert(await page.getByRole("button", { name: "Save consumption", exact: true }).isEnabled(), "Rejected consumption stayed locked after settlement"); assert(count("get_consumption_mapping_data") === beforeSettlementReads, "Rejected save reloaded away the draft") }
-				else { await page.getByText("ENTRY-A", { exact: true }).waitFor(); assert(count("get_sewing_plan_entries") === beforeSettlementReads + 1, "Rejected remounted cancellation failed to load retained entries") }
+				else if (scenario !== 'cancel-rejection-recovery') { await page.getByText("ENTRY-A", { exact: true }).waitFor(); assert(count("get_sewing_plan_entries") === beforeSettlementReads + 1, "Rejected remounted cancellation failed to load retained entries") }
 				await closeError(message)
+				if (scenario === 'cancel-rejection-recovery') { await page.getByRole('button', { name: 'Retry', exact: true }).click(); await page.getByText('ENTRY-A', { exact: true }).waitFor() }
 				await tab(isSave ? "entries" : "consumption"); await tab(isSave ? "consumption" : "entries")
 				assert(await page.locator(".document-error-dialog").count() === 0, `${scenario}: acknowledged rejection repeated after another remount`)
 			}
@@ -589,15 +672,28 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 	}
 	try {
 		if (settlementCase) { await settlementRegressions(settlementCase); return }
+		state.entryError = 'Initial entries unavailable'
 		await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/__operations-test`)
 		await page.getByRole("heading", { name: "Entries", exact: true }).waitFor()
+		await oneLoadPopup(page, state.entryError)
+		state.entryError = ''; await page.getByRole('button', { name: 'Retry', exact: true }).click()
 		await page.getByRole("heading", { name: "2026-10-08", exact: true }).waitFor()
-		assert(count("get_sewing_plan_entries") === 1 && count("get_consumption_mapping_data") === 0, "Initial active-only load broken")
+		assert(count("get_sewing_plan_entries") === 2 && count("get_consumption_mapping_data") === 0, "Initial active-only load/retry broken")
 		assert(await page.locator("[data-entry-date]").first().getAttribute("data-entry-date") === "2026-10-08", "Newest entry date must appear first")
 		assert(await page.locator("[data-entry-date='2026-10-08'] [data-entry-id]").count() === 2 && await page.locator("[data-entry-date='2026-10-01'] [data-entry-id]").count() === 1, "Entries not grouped by date")
 		assert(await page.locator("[data-entry-id='ENTRY-A']").getByRole("spinbutton", { name: "Navy XS Quantity", exact: true }).inputValue() === "1", "Entry matrix lost numeric quantities")
 		assert(await page.locator("[data-entry-id='ENTRY-A']").getByRole("spinbutton", { name: "Navy XS Quantity", exact: true }).isDisabled(), "Saved entry matrix became editable")
 		assert(await page.getByRole("button", { name: /^Cancel ENTRY-/ }).count() === 1, "Cancel must depend only on returned is_cancellable")
+		state.lotError = 'Entry Lot lookup unavailable'
+		await page.getByRole('button', { name: 'Show Lot options', exact: true }).click(); await oneLoadPopup(page, state.lotError)
+		state.lotError = ''
+		state.entryError = 'Entries refresh unavailable'
+		await page.getByRole('button', { name: 'Refresh entries', exact: true }).click(); await oneLoadPopup(page, state.entryError)
+		assert(await page.locator('[data-entry-id="ENTRY-A"]').isVisible(), 'Entries refresh failure lost rows')
+		state.entryError = ''; const entryRetry = requests.length
+		await page.getByRole('button', { name: 'Retry', exact: true }).click()
+		await page.locator('[data-sewing-plan-tab="entries"][aria-busy="false"]').waitFor()
+		assert(requests.slice(entryRetry).every(r => r.method.endsWith('get_sewing_plan_entries')), 'Entries retry fetched inactive tab')
 		await selectLink("Work Station", "Line 1"); await selectLink("Input Type", "Sewing In"); await selectLink("Lot", "LOT-A")
 		await page.waitForFunction(() => document.querySelector('[data-sewing-plan-tab="entries"]').getAttribute('aria-busy') === 'false')
 		const filteredEntries = page.waitForResponse(r => r.url().endsWith("get_sewing_plan_entries") && r.request().postDataJSON().lot_name === "LOT-A")
@@ -625,13 +721,25 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		assert(requests.filter(r => r.method.endsWith("cancel_sewing_plan_entry")).at(-1).args.doc_id === "ENTRY-A", "Cancellation lost entry identity")
 		await tab("consumption")
 		assert(count("get_consumption_mapping_data") === 0, "Consumption fetched before Lot selection")
+		state.lotError = 'Consumption Lot lookup unavailable'
+		await page.getByRole('button', { name: 'Show Lot options', exact: true }).click(); await oneLoadPopup(page, state.lotError)
+		state.lotError = ''
+		state.mappingError = 'Initial consumption unavailable'
 		await selectLink("Lot", "LOT-A")
+		await oneLoadPopup(page, state.mappingError)
+		state.mappingError = ''; const mappingRetry = requests.length
+		await page.getByRole('button', { name: 'Retry', exact: true }).click()
 		await quantity().waitFor()
+		assert(requests.slice(mappingRetry).every(r => r.method.endsWith('get_consumption_mapping_data')), 'Consumption retry fetched inactive tab')
 		const lotArgs = requests.filter(r => r.method.endsWith("get_supplier_lots")).at(-1).args
 		assert(JSON.stringify(lotArgs) === JSON.stringify({ doctype: "SD YRP Lot", txt: "LOT-A", searchfield: "name", start: 0, page_len: 20, filters: { supplier: "UNIT-A" } }), `Lot query is not Supplier scoped: ${JSON.stringify(lotArgs)}`)
 		assert(JSON.stringify(requests.filter(r => r.method.endsWith("get_consumption_mapping_data")).at(-1).args) === JSON.stringify({ supplier: "UNIT-A", lot: "LOT-A" }), "Consumption read lost explicit scope")
 		assert((await page.locator("[data-sewing-plan-tab='consumption']").innerText()).includes("Kg") && (await page.locator("[data-sewing-plan-tab='consumption']").innerText()).includes("1.25"), "BOM/UOM context missing")
 		await quantity().fill("4.25"); await weight().fill("1.5")
+		state.mappingError = 'Consumption refresh unavailable'
+		await page.getByRole('button', { name: 'Refresh consumption', exact: true }).click(); await oneLoadPopup(page, state.mappingError)
+		assert(await quantity().inputValue() === '4.25' && await weight().inputValue() === '1.5', 'Consumption load failure lost drafts')
+		state.mappingError = ''
 		const beforeSwitch = count("get_consumption_mapping_data")
 		await tab("entries"); await page.getByRole("heading", { name: "2026-10-08", exact: true }).waitFor()
 		assert(await page.getByRole("combobox", { name: "Work Station", exact: true }).inputValue() === "Line 1" && await page.getByRole("combobox", { name: "Input Type", exact: true }).inputValue() === "Sewing In" && await page.getByRole("combobox", { name: "Lot", exact: true }).inputValue() === "LOT-A", "Entries filters lost across tabs")
@@ -658,7 +766,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		await quantity().fill("8")
 		state.mappingError = "Saved mapping unavailable"
 		await page.getByRole("button", { name: "Save consumption", exact: true }).click()
-		await page.getByText(state.mappingError, { exact: false }).waitFor()
+		await oneLoadPopup(page, state.mappingError)
 		assert(await page.getByRole("button", { name: "Save consumption", exact: true }).isDisabled(), "Acknowledged save can be resubmitted before refresh recovery")
 		assert(await quantity().inputValue() === "8", "Refresh failure lost visible draft")
 		await tab("entries"); await tab("consumption")
@@ -757,7 +865,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		if (method.endsWith("get_capabilities")) value = { ...capabilities, plan_actions: { goods_received_note: { ...flags, can_create: state.create, can_submit: state.submit } } }
 		else if (method.endsWith("getdoctype")) return route.fulfill({ contentType: "application/json", body: JSON.stringify({ docs: [{ name: "YRP Goods Received Note", fields: [{ fieldname: "naming_series", fieldtype: "Select", label: "Naming Series", options: "GRN-2627-\nGRN-TEST-", default: "GRN-2627-", reqd: 1 }] }] }) })
 		else if (method.endsWith("get_closed_sewing_work_orders")) { value = [[args.filters.supplier === "UNIT-A" ? "WO-A" : "WO-B", "LOT-A", "T-Shirt", "Sewing"]]; error = state.reloadError; if (state.searchHold) { const hold = state.searchHold; state.searchHold = null; await hold } }
-		else if (method.endsWith("get_closed_work_order_grn_details")) { value = { work_order: args.work_order, supplier: args.supplier, lot: args.supplier === "UNIT-A" ? "LOT-A" : "LOT-B", item: "T-Shirt", process: "Sewing", has_pending_items: true, item_details: structuredClone(groups) }; if (state.detailsHold) { const hold = state.detailsHold; state.detailsHold = null; await hold } }
+		else if (method.endsWith("get_closed_work_order_grn_details")) { error = state.detailsError || ''; value = { work_order: args.work_order, supplier: args.supplier, lot: args.supplier === "UNIT-A" ? "LOT-A" : "LOT-B", item: "T-Shirt", process: "Sewing", has_pending_items: true, item_details: structuredClone(groups) }; if (state.detailsHold) { const hold = state.detailsHold; state.detailsHold = null; await hold } }
 		else if (method.endsWith("create_closed_work_order_grn")) { if (state.hold) { const hold = state.hold; state.hold = null; await hold } error = state.error; if (!error) value = { name: `GRN-SAVED-${++state.saved}`, docstatus: 1 } }
 		else if (method.endsWith("get_sewing_plan_entries")) value = {}
 		else if (method.endsWith("link_search")) value = []
@@ -776,7 +884,20 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/__closed-grn`)
 		await picker().waitFor()
 		assert(count("get_closed_work_order_grn_details") === 0, "Closed GRN fetched without selected WO")
+		state.reloadError = 'Closed Work Order lookup unavailable'
+		await page.getByRole('button', { name: 'Show Closed Work Order options', exact: true }).click(); await oneLoadPopup(page, state.reloadError)
+		state.reloadError = ''
+		state.detailsError = 'Initial receipt details unavailable'
+		await picker().fill('WO-A'); await page.getByRole('option', { name: 'WO-A', exact: true }).click(); await oneLoadPopup(page, state.detailsError)
+		state.detailsError = ''; const detailRetry = requests.length
+		await page.getByRole('button', { name: 'Retry', exact: true }).click(); await qty().waitFor()
+		assert(requests.slice(detailRetry).every(r => /get_closed_sewing_work_orders|get_closed_work_order_grn_details|getdoctype/.test(r.method)), 'Closed GRN retry fetched inactive tab')
 		await fill()
+		state.reloadError = 'Receipt refresh unavailable'
+		await page.getByRole('button', { name: 'Refresh closed Work Orders', exact: true }).click(); await oneLoadPopup(page, state.reloadError)
+		assert(await qty().inputValue() === '2' && await page.getByRole('textbox', { name: 'Comments', exact: true }).inputValue() === 'Keep this receipt draft', 'Closed GRN refresh failure lost draft')
+		state.reloadError = ''; await page.getByRole('button', { name: 'Retry', exact: true }).click()
+		await page.locator('[data-sewing-plan-tab="closed-work-order-grn"][aria-busy="false"]').waitFor()
 		await qty().fill("-1"); await action().click(); await closeError("Enter a finite, non-negative quantity")
 		assert(count("create_closed_work_order_grn") === 0, "Invalid negative quantity reached the server")
 		await qty().fill("2")
@@ -803,7 +924,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		assert(await action().isDisabled() && count("create_closed_work_order_grn") === before + 1, "Double click created duplicate GRNs")
 		state.reloadError = "Eligibility unavailable"; release()
 		await page.getByText(/GRN-SAVED-1.*Submitted/).waitFor()
-		await page.getByText(state.reloadError, { exact: true }).waitFor()
+		await oneLoadPopup(page, state.reloadError)
 		assert(await qty().count() === 0 && await picker().inputValue() === "", "Acknowledged GRN did not reset editor")
 		assert(await picker().isDisabled(), "Acknowledged receipt reload failure invites duplicate creation")
 		state.reloadError = ""; await page.getByRole("button", { name: "Refresh closed Work Orders", exact: true }).click(); await fill()
@@ -880,8 +1001,8 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		"Sewing Out": { "LOT-A": { item: "Shirt", primary_values: sizes, is_set_item: 0, pack_attr: "Colour", set_attr: null, details: { "Sewing Line 1": { Good: { Navy: { colour: "Navy", part: "Front", variant_colour: "Navy", set_combination: {}, values: { XS: 3, S: 7 }, total: 10 } } } } } },
 		"Sewing In": { "LOT-A": { item: "Shirt", primary_values: ["XS"], is_set_item: 0, pack_attr: "Colour", set_attr: null, details: { "Sewing Line 2": { Reject: { Red: { colour: "Red", part: "Back", variant_colour: "Red", set_combination: {}, values: { XS: 2 }, total: 2 } } } } } },
 	} }
-	const scr = { status: "success", item: "Shirt", primary_values: sizes, colours: ["Navy", "Red"], headers: ["Order Qty", "Delivered Qty", "Sewing Out Reject", "Sewing In"], is_set_item: 0, set_attr: null, derived_balances_omitted: true, data: {
-		Navy: { colour: "Navy", part: "Front", variant_colour: "Navy", set_combination: {}, lines: ["Sewing Line 1", "Sewing Line 3"], values: { XS: { "Order Qty": 100, "Delivered Qty": 90, "Sewing Out Reject": 5, "Sewing In": 80 } }, type_wise_total: { "Order Qty": 100, "Delivered Qty": 90, "Sewing Out Reject": 5, "Sewing In": 80 } },
+	const scr = { status: "success", item: "Shirt", primary_values: sizes, colours: ["Navy", "Red"], headers: ["Order Qty", "Delivered Qty", "Delivered - Input", "Sewing In", "Sewing In Balance", "Sewing Out", "Reject", "Sewing Out Total", "Sewing Out Balance"], balance_headers: ["Delivered - Input", "Sewing In Balance", "Sewing Out Balance"], is_set_item: 0, set_attr: null, data: {
+		Navy: { colour: "Navy", part: "Front", variant_colour: "Navy", set_combination: {}, lines: ["Sewing Line 1", "Sewing Line 3"], values: { XS: { "Order Qty": 100, "Delivered Qty": 90, "Delivered - Input": 10, "Sewing In": 80, "Sewing In Balance": -20, "Sewing Out": 60, Reject: 5, "Sewing Out Total": 65, "Sewing Out Balance": -15 } }, type_wise_total: { "Order Qty": 100, "Delivered Qty": 90, "Delivered - Input": 10, "Sewing In": 80, "Sewing In Balance": -20, "Sewing Out": 60, Reject: 5, "Sewing Out Total": 65, "Sewing Out Balance": -15 } },
 		Red: { colour: "Red", part: "Back", variant_colour: "Red", set_combination: {}, lines: [], values: { XS: { "Order Qty": 200 } }, type_wise_total: { "Order Qty": 200 } },
 	} }
 	const state = { error: "", blocked: false, hold: null }
@@ -975,6 +1096,8 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		assert(JSON.stringify(last("get_scr_data")) === JSON.stringify({ supplier: "UNIT-A", lot: "LOT-A" }), "SCR request unscoped")
 		const matrix = page.locator("[data-sewing-report='scr'] table").first()
 		assert(JSON.stringify(await matrix.locator("thead th").allTextContents()) === JSON.stringify(["Size", ...scr.headers]), "SCR reordered server stage headers")
+		assert(JSON.stringify(await matrix.locator('tbody tr').first().locator('td').allTextContents()) === JSON.stringify(['XS', '100', '90', '10', '80', '-20', '60', '5', '65', '-15']), 'SCR dropped or recomputed signed stage values')
+		assert((await matrix.locator('tfoot').innerText()).includes('-15'), 'SCR lost authoritative balance totals')
 		assert((await page.locator("[data-sewing-report='scr']").innerText()).includes("Sewing Line 3"), "SCR work-station lines omitted")
 		await pick("Colour", "Navy")
 		assert(await page.getByRole("heading", { name: "Red · Back", exact: true }).count() === 0, "SCR Colour filter ignored")
@@ -1286,7 +1409,13 @@ async function integratedSuite(browser) {
 		assert(await page.locator(`[data-sewing-${kind === "plan" ? "plan-tab" : "report"}]`).count() === 1, `Integrated inactive ${kind} mounted`)
 	}
 	const setDate = async label => { const field = page.getByRole("combobox", { name: label, exact: true }); await field.fill("08-10-2026"); await field.press("Tab") }
-	const generate = async key => { const before = count(key), response = page.waitForResponse(response => response.url().endsWith(key)); await page.getByRole("button", { name: "Generate", exact: true }).click(); await response; assert(count(key) === before + 1, `Integrated Generate failed/duplicated: ${key}`) }
+	const generate = async key => {
+		const before = count(key), response = page.waitForResponse(response => response.url().endsWith(key))
+		await page.getByRole("button", { name: "Generate", exact: true }).click(); await response
+		assert(count(key) === before + 1, `Integrated Generate failed/duplicated: ${key}`)
+		await page.locator('.report-shell[aria-busy="false"]').waitFor()
+		if (key !== 'get_worker_strength_report' || !state.hrError) await page.getByText('No matching records', { exact: true }).waitFor()
+	}
 	const forbidden = async () => {
 		const labels = await page.locator(".sewing-workspace-shell [role='tab'], .sewing-workspace-shell label, .sewing-workspace-shell option").allTextContents()
 		for (const text of ["FI Updates", "Input/Output", "Input Pending", "Output Pending", "HR Department", "HR Location", "Designation", "Employee"]) assert(!labels.some(label => label.trim() === text), `Excluded Sewing control: ${text}`)
@@ -1397,7 +1526,11 @@ try {
 		const page = await browser.newPage()
 		page.setDefaultTimeout(20_000)
 		await login(page)
-		await launcherSuite(page)
+		const startupFailures = []
+		page.on('requestfailed', request => startupFailures.push({ path: new URL(request.url()).pathname, failure: request.failure()?.errorText }))
+		page.on('console', message => { if (message.type() === 'error') startupFailures.push({ console: message.text() }) })
+		try { await launcherSuite(page) }
+		catch (reason) { console.error('Launcher diagnostics:', JSON.stringify({ url: page.url(), failures: startupFailures.slice(-12), body: (await page.locator('body').innerText()).slice(0, 2000) })); throw reason }
 		await contextSuite(browser)
 	}
 	if (suite === "plan-entry" || suite === "all") await planEntrySuite(browser)

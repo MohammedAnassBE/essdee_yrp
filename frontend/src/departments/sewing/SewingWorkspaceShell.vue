@@ -20,7 +20,7 @@
 				<span class="sewing-workspace-shell__status">Loading Sewing workspace</span>
 				<Skeleton v-for="index in section ? 1 : 3" :key="index" height="124px" />
 			</div>
-			<WorkspaceLoadError v-else-if="error" :message="error" :loading="loading" @retry="load" />
+			<WorkspaceLoadError v-else-if="failed" message="Retry to load Sewing workspace access." :loading="loading" @retry="load" />
 			<Message v-else-if="section && !capability?.can_read" severity="warn" :closable="false">
 				You do not have permission to view {{ title }}.
 			</Message>
@@ -28,6 +28,7 @@
 				Select a Sewing Unit to view {{ title }}.
 			</Message>
 			<slot v-else :capabilities="capabilities" :capability="capability" :supplier="supplier" />
+			<DocumentErrorDialog :message="error" @dismiss="error = ''" />
 		</section>
 	</DepartmentPage>
 </template>
@@ -41,6 +42,7 @@ import { useRouter } from "vue-router"
 import { getSewingCapabilities } from "../../api/sewing.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
+import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import SewingUnitPicker from "./SewingUnitPicker.vue"
 import { useSewingContext } from "./useSewingContext.js"
 
@@ -57,6 +59,7 @@ const backTo = computed(() => props.section
 	: "/")
 const loading = ref(true)
 const error = ref("")
+const failed = ref(false)
 let capabilityGeneration = 0
 
 // Capabilities are session-wide, so a unit change must not discard this load.
@@ -67,11 +70,12 @@ async function load() {
 	error.value = ""
 	try {
 		const payload = await getSewingCapabilities() || {}
-		if (generation === capabilityGeneration) capabilities.value = payload
+		if (generation === capabilityGeneration) { capabilities.value = payload; failed.value = false }
 	} catch (reason) {
 		if (generation === capabilityGeneration) {
 			capabilities.value = {}
 			error.value = reason?.message || "Unable to load the Sewing workspace."
+			failed.value = true
 		}
 	} finally {
 		if (generation === capabilityGeneration) loading.value = false

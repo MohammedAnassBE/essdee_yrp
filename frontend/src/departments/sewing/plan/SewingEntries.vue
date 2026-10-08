@@ -7,9 +7,10 @@
 			<LinkField v-model="state.filters.lot" doctype="SD YRP Lot" label="Lot" placeholder="All Lots" :show-open-button="false" show-clear :disabled="loading || state.busy" :search-handler="text => search('SD YRP Lot', text)" />
 		</div>
 		<div v-if="!loaded && (loading || state.busy)" role="status"><p>{{ state.busy ? 'Cancelling entry' : 'Loading entries' }}</p><Skeleton height="160px" /></div>
-		<WorkspaceLoadError v-else-if="loadError && !loaded" :message="loadError" @retry="load()" />
+		<WorkspaceLoadError v-else-if="loadError && !loaded" message="Retry to load Sewing entries." @retry="load()" />
 		<template v-else>
-			<Message v-if="loadError" severity="warn" :closable="false">{{ loadError }} <Button label="Retry" text :disabled="loading || state.busy" @click="load()" /></Message>
+			<Message v-if="loadError" severity="warn" :closable="false">Displayed entries may be out of date. <Button label="Retry" text :disabled="loading || state.busy" @click="load()" /></Message>
+			<p v-if="loading && loaded" role="status">Refreshing entries…</p>
 			<Message v-if="state.refreshRequired" severity="warn" :closable="false">Refresh entries before cancelling another entry.</Message>
 			<p v-if="!groups.length" class="erp-empty-state">No entries match these filters.</p>
 			<section v-for="group in groups" :key="group.date" :data-entry-date="group.date" class="sewing-entries__date" :aria-label="`Entries on ${group.date}`">
@@ -22,7 +23,7 @@
 			<Message v-if="success" severity="success" :closable="false" role="status">{{ success }}</Message>
 		</template>
 		<DocumentConfirmationDialog :visible="Boolean(selected)" title="Cancel Sewing entry" :message="`Cancel ${selected}? Saved quantities for this entry will be removed.`" confirm-label="Cancel entry" cancel-label="Keep entry" :busy="state.busy" @update:visible="value => { if (!value && !state.busy) selected = '' }" @confirm="cancel" />
-		<DocumentErrorDialog :message="error" @dismiss="dismissError" />
+		<DocumentErrorDialog :message="loadPopup || error" @dismiss="dismissError" />
 	</section>
 </template>
 
@@ -43,6 +44,7 @@ import { useSewingContext } from "../useSewingContext.js"
 const props = defineProps({ state: { type: Object, required: true }, mutate: { type: Function, required: true } })
 const { supplier, requestGeneration, beginRequest, isCurrent } = useSewingContext()
 const records = ref({}), loading = ref(false), loaded = ref(false), loadError = ref(""), success = ref(""), selected = ref("")
+const loadPopup = ref("")
 const error = computed(() => props.state.operation?.status === "rejected" && !props.state.operation.acknowledged && props.state.operation.supplier === supplier.value ? props.state.operation.error : "")
 let mounted = true
 const searches = new Map()
@@ -67,8 +69,11 @@ async function search(doctype, text) {
 	if (!mounted || loading.value || props.state.busy || !supplier.value) return []
 	const generation = requestGeneration.value, unit = supplier.value, sequence = (searches.get(doctype) || 0) + 1
 	searches.set(doctype, sequence)
-	const rows = doctype === "SD YRP Lot" ? await getSewingSupplierLots(unit, text) : await searchLink(doctype, text)
-	return mounted && !loading.value && !props.state.busy && supplier.value === unit && isCurrent(generation) && searches.get(doctype) === sequence ? rows : []
+	const current = () => mounted && !loading.value && !props.state.busy && supplier.value === unit && isCurrent(generation) && searches.get(doctype) === sequence
+	try {
+		const rows = doctype === "SD YRP Lot" ? await getSewingSupplierLots(unit, text) : await searchLink(doctype, text)
+		return current() ? rows : []
+	} catch (reason) { if (current()) loadPopup.value = reason.message || 'Unable to load entry filters.'; return [] }
 }
 async function load() {
 	if (!supplier.value) return false
@@ -80,7 +85,7 @@ async function load() {
 		records.value = data || {}; loaded.value = true; props.state.refreshRequired = false
 		return true
 	} catch (reason) {
-		if (mounted && isCurrent(generation)) loadError.value = reason.message || "Unable to load Sewing entries."
+		if (mounted && isCurrent(generation)) { loadError.value = reason.message || "Unable to load Sewing entries."; loadPopup.value = loadError.value }
 		return false
 	} finally { if (mounted && isCurrent(generation)) loading.value = false }
 }
@@ -89,7 +94,11 @@ function cancel() {
 	success.value = ""
 	props.mutate(selected.value)
 }
-function dismissError() { if (props.state.operation?.status === "rejected") props.state.operation.acknowledged = true }
+function dismissError() {
+	// A read failure must not acknowledge a separate, still-unseen write error.
+	if (loadPopup.value) loadPopup.value = ''
+	else if (props.state.operation?.status === "rejected") props.state.operation.acknowledged = true
+}
 onMounted(() => watch(() => [supplier.value, props.state.filters.workStation, props.state.filters.inputType, props.state.filters.lot, props.state.busy], async () => {
 	if (props.state.busy) return
 	selected.value = ""

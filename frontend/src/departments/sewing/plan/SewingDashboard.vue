@@ -4,14 +4,16 @@
 			<div><h2>Open Work Order inputs</h2><p>Recorded quantities by input type for {{ supplier }}.</p></div>
 			<Button label="Refresh" aria-label="Refresh dashboard" icon="pi pi-refresh" severity="secondary" :disabled="loading" @click="load" />
 		</header>
-		<div v-if="loading" role="status"><p>Loading dashboard</p><Skeleton height="120px" /></div>
-		<WorkspaceLoadError v-else-if="error" :message="error" @retry="load" />
-		<p v-else-if="!rows.length" class="erp-empty-state">No input quantities for open Work Orders.</p>
+		<p v-if="loading && loaded" role="status">Refreshing dashboard…</p>
+		<p v-if="stale" role="status">Dashboard could not be refreshed. Displayed results may be out of date. <Button label="Retry" text :disabled="loading" @click="load" /></p>
+		<div v-if="loading && !loaded" role="status"><p>Loading dashboard</p><Skeleton height="120px" /></div>
+		<p v-else-if="!rows.length && !stale" class="erp-empty-state">No input quantities for open Work Orders.</p>
 		<table v-else class="sewing-dashboard__table">
 			<caption>{{ rows.length }} input types with recorded quantities</caption>
 			<thead><tr><th scope="col">Input Type</th><th scope="col">Recorded Quantity</th></tr></thead>
 			<tbody><tr v-for="row in rows" :key="row.input_type"><th scope="row">{{ row.input_type }}</th><td>{{ Number(row.qty).toLocaleString(undefined, { maximumFractionDigits: 3 }) }}</td></tr></tbody>
 		</table>
+		<DocumentErrorDialog :message="error" @dismiss="error = ''" />
 	</section>
 </template>
 
@@ -20,20 +22,20 @@ import Button from "primevue/button"
 import Skeleton from "primevue/skeleton"
 import { onUnmounted, ref, watch } from "vue"
 import { getSewingDashboard } from "../../../api/sewing.js"
-import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
+import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import { useSewingContext } from "../useSewingContext.js"
 const { supplier, beginRequest, isCurrent } = useSewingContext()
-const loading = ref(false), error = ref(""), rows = ref([])
+const loading = ref(false), loaded = ref(false), stale = ref(false), error = ref(""), rows = ref([])
 let mounted = true
 async function load() {
-	if (!supplier.value) return
+	if (!supplier.value || loading.value) return
 	const generation = beginRequest()
 	loading.value = true; error.value = ""
 	try {
 		const data = await getSewingDashboard(supplier.value)
-		if (mounted && isCurrent(generation)) rows.value = Array.isArray(data) ? data : []
+		if (mounted && isCurrent(generation)) { rows.value = Array.isArray(data) ? data : []; loaded.value = true; stale.value = false }
 	} catch (reason) {
-		if (mounted && isCurrent(generation)) error.value = reason.message || "Unable to load dashboard."
+		if (mounted && isCurrent(generation)) { error.value = reason.message || "Unable to load dashboard."; stale.value = true }
 	} finally { if (mounted && isCurrent(generation)) loading.value = false }
 }
 watch(supplier, load, { immediate: true })

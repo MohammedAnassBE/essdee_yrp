@@ -37,10 +37,43 @@
 				:editor="composerEditor"
 				:schema-loader="loadItemSchema"
 				:row-preparer="prepareItemPrice"
+				:entry-defaults="composerEntryDefaults"
+				:entry-fields="['stock_uom', 'conversion_factor', 'set_combination']"
 				:currency="form.currency"
 				natural-table-flow
 				@dirty="markDirty"
-			/>
+			>
+				<template #entry-fields="{ values, schema }">
+					<div class="purchase-order-editor__item-details">
+						<LinkField
+							:model-value="values.delivery_location"
+							label="Delivery location *"
+							doctype="Supplier"
+							:filters="deliveryLocationFilters"
+							:show-open-button="false"
+							required
+							@update:model-value="values.delivery_location = $event"
+						/>
+						<DateField :model-value="values.schedule_date" label="Required by" required @update:model-value="setItemRequiredBy(values, $event)" />
+						<label class="purchase-order-editor__item-check"><Checkbox :model-value="Boolean(values.fetch_delivery_date)" binary @update:model-value="values.fetch_delivery_date = $event ? 1 : 0" /><span>Use Item Price lead time</span></label>
+						<label class="purchase-order-editor__item-control"><span>Discount %</span><InputNumber :model-value="Number(values.discount_percentage || 0)" :min="0" :max="100" :max-fraction-digits="2" fluid @update:model-value="values.discount_percentage = Number($event || 0)" /></label>
+						<label class="purchase-order-editor__item-control purchase-order-editor__item-comments"><span>Comments</span><Textarea :model-value="values.comments || ''" rows="1" auto-resize fluid @update:model-value="values.comments = $event" /></label>
+						<LinkField
+							v-for="parameter in values.additional_parameters || []"
+							:key="parameter.additional_parameter_key"
+							:model-value="parameter.additional_parameter_value"
+							:label="`${parameter.additional_parameter_key} *`"
+							doctype="YRP Additional Parameter Value"
+							:filters="{ key: parameter.additional_parameter_key }"
+							:show-open-button="false"
+							:search-handler="(query) => searchAdditionalParameterValues(schema, parameter, query)"
+							required
+							@update:model-value="parameter.additional_parameter_value = $event"
+						/>
+						<span v-if="schema?.additional_parameters?.length" class="purchase-order-editor__item-hint">Item-specific procurement details</span>
+					</div>
+				</template>
+			</StockItemComposer>
 		</div>
 
 		<Dialog v-model:visible="discardVisible" class="erp-dialog--sm" header="Discard unsaved changes?" modal :closable="false">
@@ -55,18 +88,20 @@
 import Button from "primevue/button"
 import Checkbox from "primevue/checkbox"
 import Dialog from "primevue/dialog"
+import InputNumber from "primevue/inputnumber"
 import Skeleton from "primevue/skeleton"
 import Textarea from "primevue/textarea"
 import { useToast } from "primevue/usetoast"
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import { onBeforeRouteLeave } from "vue-router"
 
-import { getPurchaseOrderEditor, getPurchaseOrderItemPrice, getPurchaseOrderItemSchema, savePurchaseOrder } from "../../api/fabricStore.js"
+import { getPurchaseOrderEditor, getPurchaseOrderItemPrice, getPurchaseOrderItemSchema, savePurchaseOrder, searchPurchaseOrderAdditionalParameterValues } from "../../api/fabricStore.js"
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import StockItemComposer from "../../components/stock/StockItemComposer.vue"
+import { addDaysToIsoDate, validatePurchaseOrderItems } from "../../utils/purchaseOrder.js"
 
 const props = defineProps({ name: { type: String, default: "" }, source: { type: Object, default: () => ({}) } })
 const emit = defineEmits(["saved", "cancel"])
@@ -98,6 +133,15 @@ const composerEditor = computed(() => ({
 	default_dimensions: editor.value.default_dimensions || {},
 	item_filters: editor.value.item_filters || { has_variants: 1, disabled: 0 },
 }))
+const composerEntryDefaults = computed(() => ({
+	delivery_location: form.default_delivery_location || "",
+	schedule_date: form.schedule_date || "",
+	expected_delivery_date: form.schedule_date || "",
+	fetch_delivery_date: 0,
+	discount_percentage: 0,
+	comments: "",
+	additional_parameters: [],
+}))
 const logicalItemCount = computed(() => itemGroups.value.reduce((total, group) => total + (group.items?.length || 0), 0))
 const canDraft = computed(() => props.name ? Boolean(editor.value.permissions?.can_write) : Boolean(editor.value.permissions?.can_create))
 const canSave = computed(() => Boolean(form.supplier && form.transaction_date && form.schedule_date && form.set_warehouse && logicalItemCount.value))
@@ -122,9 +166,33 @@ async function load() {
 }
 
 function loadItemSchema(_operation, item) { return getPurchaseOrderItemSchema(item, props.name) }
+function searchAdditionalParameterValues(schema, parameter, query) {
+	return searchPurchaseOrderAdditionalParameterValues(
+		schema?.item || "",
+		parameter.additional_parameter_key,
+		query,
+		props.name,
+	)
+}
 async function prepareItemPrice(row) {
 	if (!form.supplier) throw new Error("Select Supplier before adding Purchase Order items.")
+	if (!row.delivery_location) throw new Error("Select Delivery Location for this item.")
 	const price = await getPurchaseOrderItemPrice(row, form.supplier, props.name)
+	if (row.fetch_delivery_date) {
+		if (price?.lead_time_days === undefined || price?.lead_time_days === null || Number(price.lead_time_days) < 0) {
+			throw new Error(`No Item Price lead time is configured for ${row.name}. Turn off Item Price lead time and select Required By manually.`)
+		}
+		row.schedule_date = addDaysToIsoDate(form.transaction_date, price.lead_time_days)
+	}
+	row.schedule_date ||= form.schedule_date
+	row.expected_delivery_date = row.schedule_date
+	const itemDateError = validatePurchaseOrderItems(form, [{ items: [row] }])
+	if (itemDateError) throw new Error(itemDateError)
+	const discount = Number(row.discount_percentage || 0)
+	if (!Number.isFinite(discount) || discount < 0 || discount > 100) throw new Error("Discount % must be between 0 and 100.")
+	for (const parameter of row.additional_parameters || []) {
+		if (!parameter.additional_parameter_value) throw new Error(`Select ${parameter.additional_parameter_key} for ${row.name}.`)
+	}
 	const taxRate = Number(price?.tax_rate || 0)
 	row.tax = price?.tax || ""
 	for (const [key, value] of Object.entries(row.values || {})) {
@@ -132,11 +200,15 @@ async function prepareItemPrice(row) {
 		const rate = price?.rates ? price.rates[key] : price?.rate
 		value.rate = Number(rate || 0)
 		value.amount = qty * value.rate
-		value.discount_amount = value.amount * Number(row.discount_percentage || 0) / 100
+		value.discount_amount = value.amount * discount / 100
 		value.tax_amount = (value.amount - value.discount_amount) * taxRate / 100
 		value.total_amount = value.amount - value.discount_amount + value.tax_amount
 	}
 	return row
+}
+function setItemRequiredBy(values, value) {
+	values.schedule_date = value || ""
+	values.expected_delivery_date = value || ""
 }
 function markDirty() { if (!loading.value) dirty.value = true }
 async function changeSupplier(value) {
@@ -213,8 +285,10 @@ function changeDeliveryLocation(value) {
 }
 
 async function save(submit) {
-	saving.value = submit ? "submit" : "draft"
 	error.value = ""
+	const itemError = validatePurchaseOrderItems(form, itemGroups.value)
+	if (itemError) { error.value = itemError; return }
+	saving.value = submit ? "submit" : "draft"
 	try {
 		const payload = await savePurchaseOrder({ ...form, item_details: clone(itemGroups.value) }, { name: props.name, submit, expectedModified: editor.value.modified })
 		const record = payload?.record || {}
@@ -276,9 +350,14 @@ watch(() => props.name, load)
 .purchase-order-editor__check { display: flex; min-height: var(--erp-control-height); align-items: center; gap: 8px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
 .purchase-order-editor__comments { display: grid; grid-column: span 2; gap: 6px; }
 .purchase-order-editor__comments > span { color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; text-transform: none; letter-spacing: normal; }
+.purchase-order-editor__item-details { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 10px; padding: 11px; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: color-mix(in srgb, var(--erp-surface-soft) 72%, white); }
+.purchase-order-editor__item-check { display: flex; min-height: var(--erp-control-height); align-items: center; gap: 8px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
+.purchase-order-editor__item-control { display: grid; gap: 6px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
+.purchase-order-editor__item-comments { grid-column: span 2; }
+.purchase-order-editor__item-hint { align-self: center; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .purchase-order-editor__discard-copy { margin: 0; color: var(--erp-text-muted); line-height: 1.5; }
 @media (max-width: 1100px) { .purchase-order-editor__fields { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 900px) { .purchase-order-editor__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .purchase-order-editor__fields, .purchase-order-editor__item-details { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .purchase-order-editor { padding: 0 var(--erp-space-3) var(--erp-space-3); } .purchase-order-editor__header { min-height: 55px; align-items: center; flex-direction: row; gap: 8px; margin: 0 calc(var(--erp-space-3) * -1); padding: 4px var(--erp-space-3); } .purchase-order-editor__header > div:first-child { min-width: 0; flex: 1 1 auto; } .purchase-order-editor__header > div:first-child > span { display: none; } .purchase-order-editor__header h1 { overflow: hidden; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; } .purchase-order-editor__section { padding: var(--erp-space-3); } .purchase-order-editor__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .purchase-order-editor__fields > :not(.purchase-order-editor__date) { grid-column: 1 / -1; } .purchase-order-editor__date :deep(.p-datepicker-input) { padding-inline: 8px; font-size: 13px; } .purchase-order-editor__date :deep(.p-datepicker-dropdown) { width: 44px; min-width: 44px; } .purchase-order-editor__comments { grid-column: auto; } .purchase-order-editor__actions { width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; } .purchase-order-editor__actions :deep(.p-button) { min-width: 0; min-height: 44px; flex: 0 1 auto; padding-inline: 8px; font-size: 12px; } }
 @media (max-width: 340px) { .purchase-order-editor__fields { grid-template-columns: 1fr; } .purchase-order-editor__date { grid-column: 1 / -1; } }
 </style>

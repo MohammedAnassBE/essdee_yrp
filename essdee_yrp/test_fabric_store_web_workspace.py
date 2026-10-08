@@ -660,16 +660,18 @@ class TestFabricStoreWebWorkspace(TestCase):
 
 	def test_purchase_order_item_price_uses_same_authoritative_resolver_as_desk(self):
 		item_detail = {"name": "ITEM", "values": {"S": {"qty": 4}}}
-		expected = {"rates": {"S": 125}, "tax": "GST 5", "tax_rate": 5}
+		expected_price = {"rates": {"S": 125}, "tax": "GST 5", "tax_rate": 5}
 		with (
 			patch("essdee_yrp.fabric_store.web_workspace.frappe.has_permission", return_value=True) as permission,
-			patch("essdee_yrp.fabric_store.web_workspace.get_item_price_for_ui", return_value=expected) as get_price,
+			patch("essdee_yrp.fabric_store.web_workspace.get_item_price_for_ui", return_value=expected_price) as get_price,
+			patch("essdee_yrp.fabric_store.web_workspace._get_purchase_order_item_lead_time", return_value=7) as get_lead_time,
 		):
 			payload = workspace.get_purchase_order_item_price(item_detail, "SUPPLIER-1")
 
 		permission.assert_any_call("Purchase Order", ptype="create", throw=True)
 		get_price.assert_called_once_with(item_detail, "SUPPLIER-1")
-		self.assertEqual(payload, expected)
+		get_lead_time.assert_called_once_with(item_detail, "SUPPLIER-1")
+		self.assertEqual(payload, {**expected_price, "lead_time_days": 7})
 
 	def test_purchase_order_item_price_allows_missing_price_for_disabled_policy(self):
 		item_detail = {"name": "ITEM", "values": {"S": {"qty": 4}}}
@@ -694,6 +696,92 @@ class TestFabricStoreWebWorkspace(TestCase):
 		permission.assert_any_call("Purchase Order", ptype="write", doc=doc, throw=True)
 		schema.assert_called_once_with("ITEM")
 		self.assertEqual(payload["item"], "ITEM")
+
+	def test_purchase_order_parameter_search_uses_po_permission_for_non_system_manager(self):
+		def permissions(doctype, ptype="read", **kwargs):
+			if doctype == "YRP Additional Parameter Value":
+				raise AssertionError("The editor must not require System Manager read access")
+			return True
+
+		with (
+			patch("essdee_yrp.fabric_store.web_workspace.frappe.has_permission", side_effect=permissions) as permission,
+			patch(
+				"essdee_yrp.cutting.web_workspace._get_stock_item_schema_data",
+				return_value={
+					"item": "ITEM",
+					"additional_parameters": [{"additional_parameter_key": "Shade Code"}],
+				},
+			),
+			patch(
+				"essdee_yrp.fabric_store.web_workspace.frappe.get_all",
+				return_value=[frappe._dict(name="SHADE-01", value="SHADE-01")],
+			) as get_all,
+		):
+			payload = workspace.search_purchase_order_additional_parameter_values(
+				"ITEM",
+				"Shade Code",
+				"shade",
+			)
+
+		permission.assert_any_call("Purchase Order", ptype="create", throw=True)
+		permission.assert_any_call("Item", ptype="read", throw=True)
+		get_all.assert_called_once_with(
+			"YRP Additional Parameter Value",
+			filters={"key": "Shade Code", "value": ["like", "%shade%"]},
+			fields=["name", "value"],
+			order_by="value asc",
+			limit_page_length=20,
+		)
+		self.assertEqual(payload, [{"name": "SHADE-01", "label": "SHADE-01"}])
+
+	def test_purchase_order_parameter_search_rejects_keys_not_configured_for_item(self):
+		with (
+			patch("essdee_yrp.fabric_store.web_workspace.frappe.has_permission", return_value=True),
+			patch(
+				"essdee_yrp.cutting.web_workspace._get_stock_item_schema_data",
+				return_value={"item": "ITEM", "additional_parameters": []},
+			),
+			patch("essdee_yrp.fabric_store.web_workspace.frappe.get_all") as get_all,
+			self.assertRaises(frappe.ValidationError),
+		):
+			workspace.search_purchase_order_additional_parameter_values("ITEM", "Private Key")
+
+		get_all.assert_not_called()
+
+	def test_purchase_order_parameter_search_allows_legacy_key_on_authorized_draft_row(self):
+		doc = frappe._dict(
+			doctype="Purchase Order",
+			name="PO-DRAFT-1",
+			docstatus=0,
+			items=[
+				frappe._dict(
+					item_code="ITEM-VARIANT",
+					additional_parameters='[{"additional_parameter_key":"Legacy Shade","additional_parameter_value":"OLD"}]',
+				)
+			],
+		)
+		with (
+			patch(
+				"essdee_yrp.fabric_store.web_workspace.get_purchase_order_item_schema",
+				return_value={"item": "ITEM", "additional_parameters": []},
+			),
+			patch("essdee_yrp.fabric_store.web_workspace._get_supported_document", return_value=doc) as get_supported,
+			patch("essdee_yrp.fabric_store.web_workspace.frappe.has_permission", return_value=True) as permission,
+			patch("essdee_yrp.fabric_store.web_workspace.frappe.get_cached_value", return_value="ITEM"),
+			patch(
+				"essdee_yrp.fabric_store.web_workspace.frappe.get_all",
+				return_value=[frappe._dict(name="NEW-SHADE", value="NEW-SHADE")],
+			),
+		):
+			payload = workspace.search_purchase_order_additional_parameter_values(
+				"ITEM",
+				"Legacy Shade",
+				purchase_order="PO-DRAFT-1",
+			)
+
+		get_supported.assert_called_once_with("Purchase Order", "PO-DRAFT-1")
+		permission.assert_called_once_with("Purchase Order", ptype="write", doc=doc, throw=True)
+		self.assertEqual(payload, [{"name": "NEW-SHADE", "label": "NEW-SHADE"}])
 
 	@patch("essdee_yrp.fabric_store.web_workspace.get_stock_dimensions_for_ui")
 	def test_context_free_stock_editors_expose_dynamic_unlocked_dimensions_and_options(self, dimensions):

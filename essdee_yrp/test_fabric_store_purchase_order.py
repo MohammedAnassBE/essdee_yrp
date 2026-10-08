@@ -271,6 +271,81 @@ class TestFabricStorePurchaseOrder(TestCase):
 		doc.insert.assert_not_called()
 		doc.submit.assert_not_called()
 
+	def test_save_defaults_item_procurement_details_from_visible_header(self):
+		rows = [
+			frappe._dict(
+				item_code="ITEM-S",
+				qty=4,
+				schedule_date=None,
+				expected_delivery_date=None,
+				delivery_location=None,
+			)
+		]
+		doc = MagicMock()
+		doc.doctype = "Purchase Order"
+		doc.name = "YRP-PO-NEW"
+		doc.docstatus = 0
+		doc.get.side_effect = lambda key, default=None: getattr(doc, key, default)
+		adapter = MagicMock()
+		adapter.frappe.has_permission.return_value = True
+		adapter.frappe.new_doc.return_value = doc
+		adapter.ungroup_items_from_ui.return_value = rows
+		adapter.get_purchase_order_workspace.return_value = {"record": {"name": doc.name}}
+
+		save_purchase_order_document(
+			{
+				"supplier": "SUPPLIER-1",
+				"transaction_date": "2026-10-05",
+				"schedule_date": "2026-10-14",
+				"default_delivery_location": "S-0005",
+				"set_warehouse": "S-0005",
+				"item_details": [{"items": [{"name": "ITEM", "values": {"default": {"qty": 4}}}]}],
+			},
+			_adapter=adapter,
+		)
+
+		self.assertEqual(rows[0].delivery_location, "S-0005")
+		self.assertEqual(rows[0].schedule_date, "2026-10-14")
+		self.assertEqual(rows[0].expected_delivery_date, "2026-10-14")
+
+	def test_save_explains_hidden_item_required_by_with_item_and_dates(self):
+		rows = [
+			frappe._dict(
+				item_code="Yarn 34's GL-Greige",
+				qty=60,
+				schedule_date="2026-09-10",
+				expected_delivery_date="2026-09-10",
+				delivery_location="S-0005",
+			)
+		]
+		doc = MagicMock()
+		doc.doctype = "Purchase Order"
+		doc.name = "PO-2627-1083"
+		doc.docstatus = 0
+		doc.get.side_effect = lambda key, default=None: getattr(doc, key, default)
+		adapter = MagicMock()
+		adapter.frappe.has_permission.return_value = True
+		adapter.frappe.new_doc.return_value = doc
+		adapter.ungroup_items_from_ui.return_value = rows
+
+		with self.assertRaisesRegex(
+			frappe.ValidationError,
+			"Yarn 34's GL-Greige.*10-09-2026.*05-10-2026.*Required By",
+		):
+			save_purchase_order_document(
+				{
+					"supplier": "SUPPLIER-1",
+					"transaction_date": "2026-10-05",
+					"schedule_date": "2026-10-14",
+					"default_delivery_location": "S-0005",
+					"set_warehouse": "S-0005",
+					"item_details": [{"items": [{"name": "Yarn 34's GL", "values": {"default": {"qty": 60}}}]}],
+				},
+				_adapter=adapter,
+			)
+
+		doc.insert.assert_not_called()
+
 	def test_forged_approve_is_rejected_by_authoritative_approval_service(self):
 		doc = self.make_document(docstatus=0, status="Pending Approval")
 		with (

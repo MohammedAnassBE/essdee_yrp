@@ -182,6 +182,15 @@ export function getPurchaseOrderItemSchema(item, purchaseOrder = "") {
 	})
 }
 
+export function searchPurchaseOrderAdditionalParameterValues(item, parameterKey, txt = "", purchaseOrder = "") {
+	return callMethod(`${WORKSPACE_METHOD}.search_purchase_order_additional_parameter_values`, {
+		item,
+		parameter_key: parameterKey,
+		txt,
+		purchase_order: purchaseOrder || undefined,
+	})
+}
+
 export function getPurchaseOrderItemPrice(itemDetail, supplier, purchaseOrder = "") {
 	return callMethod(`${WORKSPACE_METHOD}.get_purchase_order_item_price`, {
 		item_detail: itemDetail,

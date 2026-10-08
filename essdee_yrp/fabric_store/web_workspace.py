@@ -12,7 +12,7 @@ import sys
 import frappe
 from frappe import _
 from frappe.model import get_permitted_fields
-from frappe.utils import cint
+from frappe.utils import cint, flt
 from yrp.stock.api import get_stock_dimensions_for_ui
 from yrp.stock.save_stock_items import (
 	group_items_for_ui,
@@ -377,6 +377,94 @@ def get_purchase_order_item_schema(item: str, purchase_order: str | None = None)
 
 
 @frappe.whitelist()
+def search_purchase_order_additional_parameter_values(
+	item: str,
+	parameter_key: str,
+	txt: str = "",
+	purchase_order: str | None = None,
+	page_length: int = 20,
+) -> list[dict]:
+	"""Search an Item's configured PO parameter values under Purchase Order permission.
+
+	The value DocType is intentionally administrator-managed. Purchase users still
+	need to select its values, so this endpoint exposes only the key configured on
+	the selected Item instead of granting broad read access to the master.
+	"""
+
+	if not item:
+		frappe.throw(_("Item is required."))
+	parameter_key = str(parameter_key or "").strip()
+	if not parameter_key:
+		frappe.throw(_("Additional Parameter is required."))
+
+	schema = get_purchase_order_item_schema(item, purchase_order)
+	configured_keys = {
+		str(row.get("additional_parameter_key") or "").strip()
+		for row in schema.get("additional_parameters") or []
+	}
+	legacy_keys = (
+		_purchase_order_historical_parameter_keys(
+			purchase_order,
+			schema.get("item") or item,
+		)
+		if purchase_order and parameter_key not in configured_keys
+		else set()
+	)
+	if parameter_key not in configured_keys and parameter_key not in legacy_keys:
+		frappe.throw(
+			_("Additional Parameter {0} is not configured for Item {1}.").format(
+				frappe.bold(parameter_key),
+				frappe.bold(item),
+			)
+		)
+
+	filters = {"key": parameter_key}
+	txt = str(txt or "").strip()
+	if txt:
+		filters["value"] = ["like", f"%{txt}%"]
+	rows = frappe.get_all(
+		"YRP Additional Parameter Value",
+		filters=filters,
+		fields=["name", "value"],
+		order_by="value asc",
+		limit_page_length=min(max(cint(page_length), 1), 50),
+	)
+	return [
+		{"name": row.name, "label": row.value or row.name}
+		for row in rows
+	]
+
+
+def _purchase_order_historical_parameter_keys(purchase_order: str, item: str) -> set[str]:
+	"""Return legacy keys already stored for an Item on an authorized draft PO."""
+
+	doc = _get_supported_document("Purchase Order", purchase_order)
+	frappe.has_permission("Purchase Order", ptype="write", doc=doc, throw=True)
+	if cint(doc.docstatus) != 0:
+		frappe.throw(_("Only Draft Purchase Orders can be edited."))
+
+	keys = set()
+	for row in doc.get("items") or []:
+		item_code = row.get("item_code") or row.get("item_variant")
+		if not item_code:
+			continue
+		parent_item = frappe.get_cached_value("Item", item_code, "variant_of") or item_code
+		if item_code != item and parent_item != item:
+			continue
+		parameters = row.get("additional_parameters") or []
+		if isinstance(parameters, str):
+			try:
+				parameters = frappe.parse_json(parameters)
+			except (TypeError, ValueError):
+				parameters = []
+		for parameter in parameters or []:
+			key = str(parameter.get("additional_parameter_key") or "").strip()
+			if key:
+				keys.add(key)
+	return keys
+
+
+@frappe.whitelist()
 def get_purchase_order_item_price(item_detail, supplier: str, purchase_order: str | None = None) -> dict:
 	"""Resolve the same authoritative supplier Item Price used by the Desk PO editor."""
 
@@ -395,7 +483,53 @@ def get_purchase_order_item_price(item_detail, supplier: str, purchase_order: st
 		frappe.throw(_("Item is required."))
 
 	price = get_item_price_for_ui(item_detail, supplier)
-	return price or {}
+	if not price:
+		return {}
+	price = dict(price)
+	lead_time = _get_purchase_order_item_lead_time(item_detail, supplier)
+	if lead_time is not None:
+		price["lead_time_days"] = lead_time
+	return price
+
+
+def _get_purchase_order_item_lead_time(item_detail: dict, supplier: str):
+	"""Resolve MOQ/attribute lead time from the same active Item Price as the rate."""
+
+	from yrp.yrp.doctype.yrp_item_price.yrp_item_price import get_active_price
+
+	item_price = get_active_price(item_detail.get("name"), supplier, raise_error=False)
+	if not item_price:
+		return None
+	values = item_detail.get("values") or {}
+	attributes = item_detail.get("attributes") or {}
+	if not item_price.depends_on_attribute:
+		lead_time = item_price.validate_attribute_values(
+			qty=sum(flt(value.get("qty")) for value in values.values()),
+			get_lead_time=True,
+		)
+	elif item_price.attribute in attributes:
+		lead_time = item_price.validate_attribute_values(
+			qty=sum(flt(value.get("qty")) for value in values.values()),
+			attribute=item_price.attribute,
+			attribute_value=attributes[item_price.attribute],
+			get_lead_time=True,
+		)
+	elif item_price.attribute == item_detail.get("primary_attribute"):
+		lead_times = [
+			item_price.validate_attribute_values(
+				qty=flt(value.get("qty")),
+				attribute=item_price.attribute,
+				attribute_value=key,
+				get_lead_time=True,
+			)
+			for key, value in values.items()
+			if flt(value.get("qty")) > 0
+		]
+		lead_times = [lead_time for lead_time in lead_times if lead_time is not None and flt(lead_time) >= 0]
+		lead_time = max(lead_times, default=None)
+	else:
+		lead_time = None
+	return flt(lead_time) if lead_time is not None and flt(lead_time) >= 0 else None
 
 
 @frappe.whitelist()

@@ -69,6 +69,8 @@
 					/>
 				</div>
 
+				<slot name="entry-fields" :values="entryValues" :schema="itemSchema" :editing="Boolean(editing)" />
+
 				<div class="stock-composer__quantity-card">
 					<header>
 						<div><h4>{{ activePrimary ? `${activePrimary} quantities` : quantityLabel }}</h4><p>{{ quantityHelp }}</p></div>
@@ -113,8 +115,8 @@
 					<div class="stock-composer__table-title"><strong>{{ group.primary_attribute ? `${group.primary_attribute} matrix` : "Quantity" }}</strong><span>{{ group.items.length }} {{ group.items.length === 1 ? "row" : "rows" }}</span></div>
 					<div class="stock-composer__table-scroll" tabindex="0" role="region" :aria-label="`${group.name || group.item || 'Added items'} table`">
 						<table>
-							<thead><tr><th>#</th><th>Item</th><th v-for="dimension in dimensions" :key="dimension.fieldname">{{ dimension.label }}</th><th v-for="attribute in group.attributes" :key="attribute">{{ attribute }}</th><th v-for="value in group.primary_attribute_values" :key="value" class="stock-composer__number">{{ value }}</th><th v-if="!group.primary_attribute">{{ quantityLabel }}</th><th class="stock-composer__number">Total</th><th>UOM</th><th v-if="!readOnly"></th></tr></thead>
-								<tbody><tr v-for="(row, itemIndex) in group.items" :key="`${row.name}-${itemIndex}`"><td>{{ itemIndex + 1 }}</td><td><strong>{{ row.name }}</strong></td><td v-for="dimension in dimensions" :key="dimension.fieldname">{{ row.dimensions?.[dimension.fieldname] || "—" }}</td><td v-for="attribute in group.attributes" :key="attribute">{{ row.attributes?.[attribute] || "—" }}</td><td v-for="value in group.primary_attribute_values" :key="value" class="stock-composer__number stock-composer__metric"><strong>{{ formatQty(row.values?.[value]?.qty) }}</strong><template v-if="operation === 'purchase_order'"><span class="stock-composer__price">Rate {{ formatMoney(row.values?.[value]?.rate) }}</span><span class="stock-composer__price">Amount {{ formatMoney(cellAmount(row.values?.[value])) }}</span></template></td><td v-if="!group.primary_attribute" class="stock-composer__number stock-composer__metric"><strong>{{ formatQty(row.values?.default?.qty) }}</strong><template v-if="operation === 'purchase_order'"><span class="stock-composer__price">Rate {{ formatMoney(row.values?.default?.rate) }}</span><span class="stock-composer__price">Amount {{ formatMoney(cellAmount(row.values?.default)) }}</span></template></td><td class="stock-composer__number stock-composer__total stock-composer__metric"><strong>{{ formatQty(rowTotal(row)) }}</strong><span v-if="operation === 'purchase_order'" class="stock-composer__price">Amount {{ formatMoney(rowAmount(row)) }}</span></td><td>{{ row.default_uom || "—" }}</td><td v-if="!readOnly"><div class="stock-composer__actions"><button type="button" title="Edit item" :aria-label="`Edit ${row.name}`" @click="editItem(groupIndex, itemIndex)"><i class="pi pi-pencil" aria-hidden="true"></i></button><button type="button" title="Delete item" :aria-label="`Delete ${row.name}`" class="stock-composer__delete" @click="removeItem(groupIndex, itemIndex)"><i class="pi pi-trash" aria-hidden="true"></i></button></div></td></tr></tbody>
+							<thead><tr><th>#</th><th>Item</th><th v-for="dimension in dimensions" :key="dimension.fieldname">{{ dimension.label }}</th><th v-for="attribute in group.attributes" :key="attribute">{{ attribute }}</th><template v-if="operation === 'purchase_order'"><th>Delivery location</th><th>Required by</th><th class="stock-composer__number">Discount</th></template><th v-for="value in group.primary_attribute_values" :key="value" class="stock-composer__number">{{ value }}</th><th v-if="!group.primary_attribute">{{ quantityLabel }}</th><th class="stock-composer__number">Total</th><th>UOM</th><th v-if="!readOnly"></th></tr></thead>
+								<tbody><tr v-for="(row, itemIndex) in group.items" :key="`${row.name}-${itemIndex}`"><td>{{ itemIndex + 1 }}</td><td><strong>{{ row.name }}</strong><span v-if="operation === 'purchase_order' && row.comments" class="stock-composer__row-note">{{ row.comments }}</span></td><td v-for="dimension in dimensions" :key="dimension.fieldname">{{ row.dimensions?.[dimension.fieldname] || "—" }}</td><td v-for="attribute in group.attributes" :key="attribute">{{ row.attributes?.[attribute] || "—" }}</td><template v-if="operation === 'purchase_order'"><td>{{ row.delivery_location || "—" }}</td><td>{{ formatDate(row.schedule_date) }}</td><td class="stock-composer__number">{{ formatQty(row.discount_percentage) }}%</td></template><td v-for="value in group.primary_attribute_values" :key="value" class="stock-composer__number stock-composer__metric"><strong>{{ formatQty(row.values?.[value]?.qty) }}</strong><template v-if="operation === 'purchase_order'"><span class="stock-composer__price">Rate {{ formatMoney(row.values?.[value]?.rate) }}</span><span class="stock-composer__price">Amount {{ formatMoney(cellAmount(row.values?.[value])) }}</span></template></td><td v-if="!group.primary_attribute" class="stock-composer__number stock-composer__metric"><strong>{{ formatQty(row.values?.default?.qty) }}</strong><template v-if="operation === 'purchase_order'"><span class="stock-composer__price">Rate {{ formatMoney(row.values?.default?.rate) }}</span><span class="stock-composer__price">Amount {{ formatMoney(cellAmount(row.values?.default)) }}</span></template></td><td class="stock-composer__number stock-composer__total stock-composer__metric"><strong>{{ formatQty(rowTotal(row)) }}</strong><span v-if="operation === 'purchase_order'" class="stock-composer__price">Amount {{ formatMoney(rowAmount(row)) }}</span></td><td>{{ row.default_uom || "—" }}</td><td v-if="!readOnly"><div class="stock-composer__actions"><button type="button" title="Edit item" :aria-label="`Edit ${row.name}`" @click="editItem(groupIndex, itemIndex)"><i class="pi pi-pencil" aria-hidden="true"></i></button><button type="button" title="Delete item" :aria-label="`Delete ${row.name}`" class="stock-composer__delete" @click="removeItem(groupIndex, itemIndex)"><i class="pi pi-trash" aria-hidden="true"></i></button></div></td></tr></tbody>
 						</table>
 					</div>
 				</div>
@@ -142,6 +144,8 @@ const props = defineProps({
 	currency: { type: String, default: "" },
 	readOnly: { type: Boolean, default: false },
 	naturalTableFlow: { type: Boolean, default: false },
+	entryDefaults: { type: Object, default: () => ({}) },
+	entryFields: { type: Array, default: () => [] },
 })
 const emit = defineEmits(["update:modelValue", "dirty"])
 
@@ -152,6 +156,7 @@ const fetching = ref(false)
 const editorError = ref("")
 const dimensionValues = reactive({})
 const attributeValues = reactive({})
+const entryValues = reactive({})
 const quantities = reactive({ default: 0 })
 const quantityTouched = reactive({ default: false })
 const secondaryQuantities = reactive({ default: 0 })
@@ -191,6 +196,9 @@ const rowCount = computed(() => groups.value.reduce((total, group) => total + (g
 
 watch(() => props.modelValue, (value) => { if (JSON.stringify(value || []) !== JSON.stringify(groups.value)) groups.value = clone(value || []) }, { deep: true })
 watch(() => [props.editor, props.operation], resetAll, { immediate: true })
+watch(() => props.entryDefaults, (value) => {
+	if (!editing.value && !itemSchema.value) resetEntryValues(value)
+}, { deep: true })
 
 function resetAll() {
 	groups.value = clone(props.modelValue || [])
@@ -206,6 +214,7 @@ function resetDimensions() {
 
 function resetEditor() {
 	resetDimensions()
+	resetEntryValues()
 	itemName.value = ""
 	itemSchema.value = null
 	editing.value = null
@@ -234,6 +243,7 @@ async function fetchItem() {
 		itemSchema.value = await props.schemaLoader(props.operation, itemName.value)
 		itemName.value = itemSchema.value?.item || itemName.value
 		clearReactive(attributeValues)
+		mergeAdditionalParameters()
 		prepareQuantities()
 	} catch (error) {
 		editorError.value = error.message || "Unable to get the item attributes."
@@ -299,6 +309,7 @@ async function stageItem() {
 	if (props.operation !== "stock_reconciliation" && total <= 0) return fail("Enter a quantity greater than zero.")
 
 	const row = {
+		...clone(entryValues),
 		name: itemSchema.value.item,
 		dimensions: clone(dimensionValues),
 		attributes: Object.fromEntries(Object.entries(attributeValues).filter(([, value]) => value)),
@@ -355,6 +366,8 @@ async function editItem(groupIndex, itemIndex) {
 		itemSchema.value = await props.schemaLoader(props.operation, row.name)
 		clearReactive(attributeValues)
 		Object.assign(attributeValues, row.attributes || {})
+		resetEntryValues(row)
+		mergeAdditionalParameters()
 		allowZeroValuation.value = Boolean(row.allow_zero_valuation_rate)
 		prepareQuantities(row.values || {})
 	} catch (error) {
@@ -390,9 +403,40 @@ function cellAmount(value) { return Number(value?.total_amount ?? value?.amount 
 function rowAmount(row) { return Object.values(row.values || {}).reduce((sum, value) => sum + cellAmount(value), 0) }
 function formatQty(value) { return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 3 }) }
 function formatMoney(value) { return `${props.currency ? `${props.currency} ` : ""}${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}` }
+function formatDate(value) {
+	const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/)
+	return match ? `${match[3]}-${match[2]}-${match[1]}` : value || "—"
+}
+function resetEntryValues(source = props.entryDefaults) {
+	clearReactive(entryValues)
+	Object.assign(entryValues, clone(props.entryDefaults || {}))
+	if (!source || source === props.entryDefaults) return
+	for (const key of new Set([...Object.keys(props.entryDefaults || {}), ...(props.entryFields || [])])) {
+		if (Object.prototype.hasOwnProperty.call(source, key)) entryValues[key] = clone(source[key])
+	}
+}
+function mergeAdditionalParameters() {
+	if (!Object.prototype.hasOwnProperty.call(props.entryDefaults || {}, "additional_parameters")) return
+	let current = entryValues.additional_parameters || []
+	if (typeof current === "string") {
+		try { current = JSON.parse(current || "[]") } catch { current = [] }
+	}
+	const selected = new Map((current || []).map((row) => [row.additional_parameter_key, row.additional_parameter_value || ""]))
+	const configured = (itemSchema.value?.additional_parameters || []).map((row) => ({
+		additional_parameter_key: row.additional_parameter_key,
+		additional_parameter_value: selected.has(row.additional_parameter_key)
+			? selected.get(row.additional_parameter_key)
+			: row.additional_parameter_value || "",
+	}))
+	const configuredKeys = new Set(configured.map((row) => row.additional_parameter_key))
+	entryValues.additional_parameters = [
+		...configured,
+		...(current || []).filter((row) => row.additional_parameter_key && !configuredKeys.has(row.additional_parameter_key)),
+	]
+}
 function fail(message) { editorError.value = message; return false }
 function clearReactive(value) { for (const key of Object.keys(value)) delete value[key] }
-function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray(value) ? [] : {}))) }
+function clone(value) { return value === undefined ? {} : JSON.parse(JSON.stringify(value)) }
 </script>
 
 <style scoped>
@@ -740,6 +784,18 @@ function clone(value) { return JSON.parse(JSON.stringify(value || (Array.isArray
 	padding: 7px var(--erp-space-2);
 	border-top: 1px solid var(--erp-border-subtle);
 	color: var(--erp-text-secondary);
+	white-space: nowrap;
+}
+
+.stock-composer__row-note {
+	display: block;
+	max-width: 220px;
+	margin-top: 3px;
+	overflow: hidden;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 500;
+	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 

@@ -6,7 +6,7 @@ from collections.abc import Mapping
 
 import frappe
 from frappe import _
-from frappe.utils import cint
+from frappe.utils import cint, formatdate, getdate
 from yrp.stock.api import get_stock_dimensions_for_ui
 from yrp.stock.save_stock_items import group_items_for_ui, ungroup_items_from_ui
 from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
@@ -485,6 +485,7 @@ def save_purchase_order_document(
 	rows = ungroup_items(item_details, "Purchase Order")
 	if not rows:
 		frappe.throw(_("Enter a quantity greater than zero for at least one Item."))
+	_prepare_purchase_order_item_rows(rows, values)
 	doc.set("items", rows)
 	doc.set("item_details", None)
 	if submit:
@@ -499,6 +500,43 @@ def save_purchase_order_document(
 		doc.submit()
 	workspace_loader = _dependency(_adapter, "get_purchase_order_workspace", get_purchase_order_workspace)
 	return workspace_loader(doc.name)
+
+
+def _prepare_purchase_order_item_rows(rows, values) -> None:
+	"""Apply visible header defaults and explain invalid item delivery dates.
+
+	Legacy Purchase Orders can contain an item-level ``schedule_date`` which is
+	not represented by the standard header Required By field.  Validate that
+	value before the ERPNext controller raises its generic ``Row #`` message.
+	"""
+
+	order_date = values.get("transaction_date")
+	default_required_by = values.get("schedule_date") or order_date
+	default_delivery_location = values.get("default_delivery_location")
+	for index, row in enumerate(rows, start=1):
+		if not row.get("delivery_location") and default_delivery_location:
+			row.delivery_location = default_delivery_location
+		if not row.get("schedule_date") and default_required_by:
+			row.schedule_date = default_required_by
+		if not row.get("expected_delivery_date") and row.get("schedule_date"):
+			row.expected_delivery_date = row.schedule_date
+
+		if not order_date or not row.get("schedule_date"):
+			continue
+		if getdate(row.schedule_date) >= getdate(order_date):
+			continue
+
+		item_label = row.get("item_code") or row.get("item_name") or _("Item row {0}").format(index)
+		frappe.throw(
+			_(
+				"Item {0} has Required By {1}, which is before Order Date {2}. "
+				"Edit the item and choose a Required By date on or after the Order Date."
+			).format(
+				frappe.bold(item_label),
+				frappe.bold(formatdate(row.schedule_date, "dd-MM-yyyy")),
+				frappe.bold(formatdate(order_date, "dd-MM-yyyy")),
+			),
+		)
 
 
 def execute_purchase_order_command(

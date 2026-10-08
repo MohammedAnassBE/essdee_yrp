@@ -1060,11 +1060,18 @@ async function purchaseOrderSuite(page) {
 	let purchaseOrderEditorLoadFailures = 0
 	let linkedLots = ["LOT-001"]
 	let priceValidationEnabled = true
-	let resolvedPurchaseOrderPrice = { rates: { S: 125, M: 130 }, tax: "GST 5", tax_rate: 5 }
+	let resolvedPurchaseOrderPrice = { rates: { S: 125, M: 130 }, tax: "GST 5", tax_rate: 5, lead_time_days: 5 }
+	const additionalParameterSearches = []
+	await page.route("**/api/method/essdee_yrp.fabric_store.web_workspace.search_purchase_order_additional_parameter_values*", (route) => {
+		const body = requestBody(route)
+		additionalParameterSearches.push(body)
+		const value = body.parameter_key === "Legacy Shade" ? "NEW-SHADE" : "SHADE-01"
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: [{ name: value, label: value }] }) })
+	})
 	await page.route("**/api/method/essdee_yrp.api.link_search.link_search*", (route) => {
 		const body = requestBody(route)
 		const doctype = body.doctype
-		const value = doctype === "Item" ? "STYLE-001" : doctype === "Supplier" ? (body.txt || "TEST-VALUE") : "TEST-VALUE"
+		const value = doctype === "Item" ? "STYLE-001" : doctype === "Supplier" ? (body.txt || "TEST-VALUE") : doctype === "YRP Additional Parameter Value" ? "SHADE-01" : "TEST-VALUE"
 		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: [{ name: value, label: value }] }) })
 	})
 	const purchaseOrderCapabilities = () => {
@@ -1147,15 +1154,25 @@ async function purchaseOrderSuite(page) {
 		if (name === "PO-EDITOR-LOAD-ERROR" && purchaseOrderEditorLoadFailures++ === 0) {
 			return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ exc: "TemporaryError", message: "Purchase Order editor is temporarily unavailable." }) })
 		}
+		const staleItemGroups = name === "PO-HIDDEN-DATE" ? [{
+			attributes: [], primary_attribute: "", primary_attribute_values: [], dependent_attribute: "",
+			items: [{
+				name: "Yarn 34's GL-Greige", dimensions: {}, attributes: {}, primary_attribute: "",
+				values: { default: { qty: 60, rate: 330, amount: 19800, total_amount: 19800 } },
+				default_uom: "Kg", delivery_location: "S-0005", schedule_date: "2026-09-10",
+				expected_delivery_date: "2026-09-10", discount_percentage: 0, comments: "Migrated row",
+				additional_parameters: JSON.stringify([{ additional_parameter_key: "Legacy Shade", additional_parameter_value: "OLD-SHADE" }]),
+			}],
+		}] : []
 		return route.fulfill({
 		status: 200, contentType: "application/json", body: JSON.stringify({ message: {
 			doctype: "Purchase Order", name, modified: "2026-10-03 10:00:00",
 			values: {
 				supplier: "SUPPLIER-001", transaction_date: "2026-10-03", schedule_date: "2026-10-08",
-				set_warehouse: "FABRIC-WH", default_delivery_location: "", deliver_to_supplier: 0,
+				set_warehouse: "FABRIC-WH", default_delivery_location: "S-0005", deliver_to_supplier: 0,
 				currency: "INR", company: "Essdee", comments: "",
 			},
-			item_groups: [], dimensions: [], locked_dimensions: [], default_dimensions: {},
+			item_groups: staleItemGroups, dimensions: [], locked_dimensions: [], default_dimensions: {},
 			item_filters: { has_variants: 1, disabled: 0 }, price_validation_enabled: priceValidationEnabled,
 			permissions: { can_create: true, can_write: true, can_submit: true },
 		} }),
@@ -1163,6 +1180,7 @@ async function purchaseOrderSuite(page) {
 	await page.route("**/api/method/essdee_yrp.fabric_store.web_workspace.get_purchase_order_item_schema*", (route) => route.fulfill({
 		status: 200, contentType: "application/json", body: JSON.stringify({ message: {
 			item: "STYLE-001", attributes: [], primary_attribute: "Size", primary_attribute_values: ["S", "M"], default_uom: "Pieces", secondary_uom: "", attribute_values: {},
+			additional_parameters: [{ additional_parameter_key: "Shade Code", additional_parameter_value: "SHADE-01" }],
 		} }),
 	}))
 	const purchaseOrderPriceRequests = []
@@ -1356,6 +1374,17 @@ async function purchaseOrderSuite(page) {
 	const purchaseItem = purchaseOrderEditor.locator(".stock-composer__fields .common-field").filter({ hasText: "Item *" })
 	await selectAutocompleteOption(page, purchaseItem, "STYLE-001")
 	await purchaseOrderEditor.getByRole("button", { name: "Get Item", exact: true }).click()
+	const purchaseItemDetails = purchaseOrderEditor.locator(".purchase-order-editor__item-details")
+	await purchaseItemDetails.waitFor()
+	for (const label of ["Delivery location *", "Shade Code *"]) {
+		assert(await purchaseItemDetails.locator(".common-field__label").filter({ hasText: label }).count() === 1, `Purchase Order item editor is missing production_api field: ${label}`)
+	}
+	assert(await purchaseItemDetails.locator(".erp-date-time-field__label").filter({ hasText: "Required by" }).count() === 1, "Purchase Order item editor is missing production_api field: Required by")
+	assert(await purchaseItemDetails.getByText("Discount %", { exact: true }).count() === 1, "Purchase Order item editor is missing production_api field: Discount %")
+	assert(await purchaseItemDetails.getByText("Use Item Price lead time", { exact: true }).count() === 1, "Purchase Order item editor is missing Item Price lead-time control")
+	const shadeField = purchaseItemDetails.locator(".common-field").filter({ hasText: "Shade Code *" })
+	await selectAutocompleteOption(page, shadeField, "SHADE-01")
+	assert(additionalParameterSearches.at(-1)?.item === "STYLE-001" && additionalParameterSearches.at(-1)?.parameter_key === "Shade Code", `Purchase Order additional parameter search is wrong: ${JSON.stringify(additionalParameterSearches.at(-1))}`)
 	await purchaseOrderEditor.locator(".stock-composer__quantity-grid input").first().fill("2")
 	await purchaseOrderEditor.getByRole("button", { name: "OK · Add Item", exact: true }).click()
 	await purchaseOrderEditor.locator(".stock-composer__price").getByText("Rate INR 125", { exact: true }).waitFor()
@@ -1403,6 +1432,9 @@ async function purchaseOrderSuite(page) {
 	await page.waitForURL("**/web/fabric-store/purchase-orders/PO-FAB-NEW")
 	assert(purchaseOrderSave?.submit === false, `Purchase Order editor did not save a Draft first: ${JSON.stringify(purchaseOrderSave)}`)
 	assert(purchaseOrderSave?.values?.item_details?.[0]?.items?.[0]?.values?.S?.rate === 125, `Purchase Order did not post the authoritative Item Price: ${JSON.stringify(purchaseOrderSave)}`)
+	const savedPurchaseItem = purchaseOrderSave?.values?.item_details?.[0]?.items?.[0]
+	assert(savedPurchaseItem?.delivery_location === "S-0005" && savedPurchaseItem?.schedule_date === "2026-10-08", `Purchase Order omitted item delivery details: ${JSON.stringify(savedPurchaseItem)}`)
+	assert(savedPurchaseItem?.additional_parameters?.[0]?.additional_parameter_value === "SHADE-01", `Purchase Order omitted item additional parameters: ${JSON.stringify(savedPurchaseItem)}`)
 	await page.locator(".fabric-purchase-order-frame").waitFor()
 	await page.getByRole("button", { name: "Submit", exact: true }).click()
 	await page.getByText("To Receive", { exact: true }).waitFor()
@@ -1433,6 +1465,25 @@ async function purchaseOrderSuite(page) {
 	await strictPriceEditor.locator(".stock-composer__price").getByText("Rate INR 0", { exact: true }).first().waitFor()
 	assert(await strictPriceEditor.locator(".stock-composer__tables").count() === 1, "Missing Item Price blocked the Purchase Order while it was still being created")
 	assert(await strictPriceEditor.getByText(/No matching Item Price slab was found/).count() === 0, "Missing Item Price validation ran before Purchase Order submission")
+
+	const attemptsBeforeHiddenDate = purchaseOrderSaveAttempts
+	await page.goto(`${SITE}/web/fabric-store/purchase-orders/PO-HIDDEN-DATE/edit`, { waitUntil: "domcontentloaded" })
+	const hiddenDateEditor = page.locator(".purchase-order-editor")
+	await hiddenDateEditor.getByRole("button", { name: "Save", exact: true }).click()
+	const hiddenDateError = page.getByRole("dialog", { name: "Purchase Order could not be saved" })
+	await hiddenDateError.getByText(/Yarn 34's GL-Greige has Required By 10-09-2026.*Order Date 03-10-2026/).waitFor()
+	assert(purchaseOrderSaveAttempts === attemptsBeforeHiddenDate, "Purchase Order sent a known-invalid hidden item date to the server")
+	await hiddenDateError.getByRole("button", { name: "OK", exact: true }).click()
+	await hiddenDateEditor.getByRole("button", { name: "Edit Yarn 34's GL-Greige", exact: true }).click()
+	const restoredItemDate = hiddenDateEditor.locator(".purchase-order-editor__item-details .p-datepicker-input")
+	await restoredItemDate.waitFor()
+	assert(await restoredItemDate.inputValue() === "10-09-2026", "Purchase Order item edit did not restore its item-level Required By")
+	const restoredLegacyParameterField = hiddenDateEditor.locator(".purchase-order-editor__item-details .common-field").filter({ hasText: "Legacy Shade *" })
+	const restoredLegacyParameter = restoredLegacyParameterField.locator("input")
+	assert(await restoredLegacyParameter.inputValue() === "OLD-SHADE", "Purchase Order item edit discarded a migrated additional parameter missing from the current Item schema")
+	await selectAutocompleteOption(page, restoredLegacyParameterField, "NEW-SHADE")
+	assert(await restoredLegacyParameter.inputValue() === "NEW-SHADE", "Purchase Order could not change a migrated legacy additional parameter")
+	assert(additionalParameterSearches.at(-1)?.purchase_order === "PO-HIDDEN-DATE" && additionalParameterSearches.at(-1)?.parameter_key === "Legacy Shade", `Legacy Purchase Order parameter search was not scoped to its authorized draft: ${JSON.stringify(additionalParameterSearches.at(-1))}`)
 
 	await page.goto(`${SITE}/web/fabric-store/purchase-orders/PO-EDITOR-LOAD-ERROR/edit`, { waitUntil: "domcontentloaded" })
 	const failedEditor = page.locator(".purchase-order-editor")

@@ -11,7 +11,7 @@
 			<div class="list-title-block">
 				<span v-if="eyebrow" class="list-eyebrow">{{ eyebrow }}</span>
 				<div class="list-title-line">
-					<InlinePageNavigation :title-target="headingId" />
+					<InlinePageNavigation v-if="navigationEnabled" :title-target="headingId" />
 					<div>
 						<h1 :id="headingId">{{ title || doctype }}</h1>
 						<p v-if="subtitle">{{ subtitle }}</p>
@@ -464,6 +464,7 @@ const props = defineProps({
 	linkFilters: { type: Object, default: () => ({}) },
 	rowMark: { type: String, default: "DOC" },
 	filters: { type: [Array, Object], default: () => [] },
+	initialAdvancedFilters: { type: Array, default: () => [] },
 	defaultOrderBy: { type: String, default: "modified desc" },
 	defaultColumns: { type: Array, default: () => [] },
 	initialPageSize: { type: Number, default: 20 },
@@ -476,7 +477,7 @@ const props = defineProps({
 	navigationEnabled: { type: Boolean, default: true },
 })
 
-const emit = defineEmits(["row-click", "loaded"])
+const emit = defineEmits(["row-click", "loaded", "update:advancedFilters"])
 const route = useRoute()
 const headingId = computed(() => `${props.doctype.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-list-title`)
 
@@ -538,7 +539,7 @@ const metaDocuments = ref([])
 const doctypeMeta = ref(null)
 const metadataReady = ref(false)
 const userColumns = ref(null)
-const advancedFilters = ref([])
+const advancedFilters = ref(cloneFilters(props.initialAdvancedFilters))
 const quickFilters = ref({})
 const appliedQuickFilters = ref({})
 const mobileQuickFiltersOpen = ref(false)
@@ -819,6 +820,18 @@ watch(
 	{ immediate: true },
 )
 
+watch(
+	() => props.initialAdvancedFilters,
+	(filters) => {
+		const next = cloneFilters(filters)
+		if (JSON.stringify(next) === JSON.stringify(advancedFilters.value)) return
+		advancedFilters.value = next
+		first.value = 0
+		if (metadataReady.value) reload(true)
+	},
+	{ deep: true },
+)
+
 watch(bulkEditFieldKey, () => {
 	bulkEditValue.value = defaultBulkValue(bulkEditField.value)
 })
@@ -826,6 +839,12 @@ watch(bulkEditFieldKey, () => {
 function baseFilters() {
 	if (Array.isArray(props.filters)) return [...props.filters]
 	return Object.entries(props.filters || {}).map(([fieldname, value]) => [fieldname, "=", value])
+}
+
+function cloneFilters(filters) {
+	return Array.isArray(filters)
+		? filters.filter(Array.isArray).map((filter) => [...filter])
+		: []
 }
 
 function hasFilterValue(value) {
@@ -880,7 +899,7 @@ async function initialise() {
 	error.value = ""
 	metadataReady.value = false
 	first.value = 0
-	advancedFilters.value = []
+	advancedFilters.value = cloneFilters(props.initialAdvancedFilters)
 	quickFilters.value = {}
 	appliedQuickFilters.value = {}
 	activeStatus.value = ""
@@ -994,7 +1013,8 @@ function applySearch() {
 }
 
 function filtersApplied(filters) {
-	advancedFilters.value = filters
+	advancedFilters.value = cloneFilters(filters)
+	emit("update:advancedFilters", cloneFilters(advancedFilters.value))
 	first.value = 0
 	reload(true)
 }
@@ -1066,6 +1086,7 @@ function clearFilters() {
 	search.value = ""
 	appliedSearch.value = ""
 	advancedFilters.value = []
+	emit("update:advancedFilters", [])
 	quickFilters.value = {}
 	appliedQuickFilters.value = {}
 	activeStatus.value = ""

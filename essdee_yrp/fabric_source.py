@@ -1380,10 +1380,24 @@ def _project_receipt_buckets(
 					"prefill": prefill,
 				}
 			)
+			_label_actual_dia(
+				row,
+				(spec.get("attrs") or {}).get(get_dia_attribute()),
+				actual_attrs.get(get_dia_attribute()),
+			)
 			projected.append(row)
 
 	qty_rows[:] = projected
 	return unmatched
+
+
+def _label_actual_dia(row, planned_dia, actual_dia):
+	if not planned_dia or not actual_dia or planned_dia == actual_dia:
+		return
+	actual = _("{0} (actual, for {1})").format(actual_dia, planned_dia)
+	for field in ("label", "row_label"):
+		if row.get(field):
+			row[field] = row[field].replace(planned_dia, actual, 1)
 
 
 def _execution_key(bucket_key, matrix_key, reference):

@@ -615,6 +615,61 @@ class TestExactFabricSourceBuckets(TestCase):
 		self.assertEqual(rows[0]["prefill"], 93.457)
 		self.assertLessEqual(rows[0]["prefill"] * 1.07, 100)
 
+	@patch("essdee_yrp.fabric_substitution.resolve_process_conversion", side_effect=lambda _i, **k: k["projected_item"])
+	@patch("essdee_yrp.api.work_order._variant_attrs", return_value={"Dia": "14.5 Dia", "Colour": "White"})
+	@patch("essdee_yrp.api.work_order._resolve_variant", return_value="CLOTH-14.5-WHITE")
+	@patch("essdee_yrp.fabric_source._conversion_factor", return_value=1)
+	@patch("essdee_yrp.fabric_source.get_dia_attribute", return_value="Dia")
+	def test_actual_dia_row_is_labelled_with_its_actual_dia(
+		self, _dia, _factor, _resolve, _attrs, _conversion
+	):
+		rows = [{
+			"key": "ROUTE",
+			"matrix_key": "ROUTE",
+			"label": "14 Dia: Greige → White",
+			"row_label": "14 Dia",
+			"input_specs": [{
+				"item": "CLOTH",
+				"attrs": {"Dia": "14 Dia", "Colour": "Greige"},
+				"qty": 1,
+				"uom": "Kg",
+			}],
+			"output_item": "CLOTH",
+			"output_qty": 1,
+			"out_attrs": {"Dia": "14 Dia", "Colour": "White"},
+		}]
+		buckets = [
+			{
+				"key": key,
+				"source_grn": "GRN-1",
+				"source_grn_item": key,
+				"item_variant": variant,
+				"available_stock_qty": 10,
+				"received_stock_qty": 10,
+			}
+			for key, variant in (("ROW-1", "CLOTH-14-GREIGE"), ("ROW-2", "CLOTH-14.5-GREIGE"))
+		]
+
+		fabric_source._project_receipt_buckets(
+			rows,
+			buckets,
+			{
+				"CLOTH-14-GREIGE": {"item": "CLOTH", "attrs": {"Dia": "14 Dia", "Colour": "Greige"}},
+				"CLOTH-14.5-GREIGE": {"item": "CLOTH", "attrs": {"Dia": "14.5 Dia", "Colour": "Greige"}},
+			},
+		)
+
+		self.assertEqual(
+			[(row["label"], row["row_label"]) for row in rows],
+			[
+				("14 Dia: Greige → White", "14 Dia"),
+				(
+					"14.5 Dia (actual, for 14 Dia): Greige → White",
+					"14.5 Dia (actual, for 14 Dia)",
+				),
+			],
+		)
+
 	def test_source_pool_rejects_changed_item_or_dimension(self):
 		bucket = {
 			"source_grn": "GRN-1",

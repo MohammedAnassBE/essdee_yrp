@@ -18,6 +18,7 @@
 						<i v-if="!groupByItem" class="pi pi-th-large"></i>
 						<strong>{{ groupByItem ? group.itemIdentity : group.primary_attribute ? `${group.primary_attribute} matrix` : "Quantity" }}</strong>
 						<small v-if="groupByItem && group.itemLot && !showLotColumn">{{ group.itemLot }}</small>
+						<small v-if="isPurchaseOrder && groupByItem && group.itemComment" class="item-matrix__item-comment">{{ group.itemComment }}</small>
 					</div>
 					<span>{{ group.items?.length || 0 }} {{ group.items?.length === 1 ? "row" : "rows" }}</span>
 				</header>
@@ -28,8 +29,9 @@
 							<tr>
 								<th v-if="!groupByItem" class="item-matrix__index">#</th>
 								<th v-if="!groupByItem">Item</th>
-								<th v-for="column in contextColumns(group)" :key="column.key">{{ column.label }}</th>
+								<th v-for="column in leadingContextColumns(group)" :key="column.key">{{ column.label }}</th>
 								<th v-for="attribute in group.attributes || []" :key="attribute">{{ attribute }}</th>
+								<th v-for="column in trailingContextColumns(group)" :key="column.key">{{ column.label }}</th>
 								<th v-for="value in primaryValues(group)" :key="value" class="item-matrix__number">{{ primaryValueLabel(group, value) }}</th>
 								<th v-if="showTotalColumn(group)" class="item-matrix__number">Total</th>
 								<th>UOM</th>
@@ -38,9 +40,10 @@
 						<tbody>
 							<tr v-for="(row, rowIndex) in group.items || []" :key="`${row.name}-${rowIndex}`">
 								<td v-if="!groupByItem" class="item-matrix__index">{{ rowIndex + 1 }}</td>
-								<td v-if="!groupByItem" class="item-matrix__item"><strong>{{ row.name || "—" }}</strong><small v-if="row.primary_attribute">{{ row.primary_attribute }}</small></td>
-								<td v-for="column in contextColumns(group)" :key="column.key">{{ display(contextValue(row, column)) }}</td>
+								<td v-if="!groupByItem" class="item-matrix__item"><strong>{{ row.name || "—" }}</strong><small v-if="row.primary_attribute">{{ row.primary_attribute }}</small><small v-if="isPurchaseOrder && normalizedComment(row.comments)" class="item-matrix__item-comment">{{ normalizedComment(row.comments) }}</small></td>
+								<td v-for="column in leadingContextColumns(group)" :key="column.key">{{ contextDisplay(row, column) }}</td>
 								<td v-for="attribute in group.attributes || []" :key="attribute"><span class="item-matrix__attribute">{{ display(row.attributes?.[attribute]) }}</span></td>
+								<td v-for="column in trailingContextColumns(group)" :key="column.key">{{ contextDisplay(row, column) }}</td>
 								<td v-for="value in primaryValues(group)" :key="value" class="item-matrix__number item-matrix__qty">
 									<strong>{{ formatQty(row.values?.[value]?.qty) }}</strong>
 									<small v-if="secondaryQty(row.values?.[value])">{{ formatQty(row.values[value].secondary_qty) }} {{ row.values[value].secondary_uom || row.secondary_uom }}</small>
@@ -79,6 +82,7 @@ const props = defineProps({
 })
 
 const logicalRowCount = computed(() => props.groups.reduce((total, group) => total + (group.items?.length || 0), 0))
+const isPurchaseOrder = computed(() => props.doctype === "Purchase Order")
 const displayGroups = computed(() => {
 	if (!props.groupByItem) return props.groups
 	return props.groups.flatMap((group, groupIndex) => {
@@ -87,10 +91,13 @@ const displayGroups = computed(() => {
 			const itemIdentity = item.name || "Unspecified item"
 			const itemLot = item.dimensions?.lot || item.lot || ""
 			const key = `${groupIndex}-${itemIdentity}-${itemLot}`
-			if (!sections.has(key)) sections.set(key, { ...group, items: [], itemIdentity, itemLot, itemGroupKey: key })
-			sections.get(key).items.push(item)
+			if (!sections.has(key)) sections.set(key, { ...group, items: [], itemIdentity, itemLot, itemComments: [], itemGroupKey: key })
+			const section = sections.get(key)
+			section.items.push(item)
+			const comment = normalizedComment(item.comments)
+			if (comment && !section.itemComments.includes(comment)) section.itemComments.push(comment)
 		}
-		return Array.from(sections.values())
+		return Array.from(sections.values()).map((section) => ({ ...section, itemComment: section.itemComments.join(" · ") }))
 	})
 })
 
@@ -100,10 +107,14 @@ const fieldLabels = {
 	warehouse: "Warehouse",
 	from_lot: "From Lot",
 	to_lot: "To Lot",
+	delivery_location: "Delivery Location",
+	schedule_date: "Required By",
+	discount_percentage: "Discount",
 }
 
 const contextualFields = {
 	"SD YRP Lot Transfer": ["from_lot", "to_lot", "warehouse", "received_type"],
+	"Purchase Order": ["delivery_location", "schedule_date", "discount_percentage"],
 }
 
 function contextColumns(group) {
@@ -122,7 +133,15 @@ function contextColumns(group) {
 		.map((key) => ({ key, label: fieldLabels[key] || titleCase(key), dimension: dimensionKeys.includes(key) }))
 }
 
+function leadingContextColumns(group) { return contextColumns(group).filter((column) => !isPurchaseOrder.value || column.dimension) }
+function trailingContextColumns(group) { return contextColumns(group).filter((column) => isPurchaseOrder.value && !column.dimension) }
 function contextValue(row, column) { return column.dimension ? row.dimensions?.[column.key] : row[column.key] }
+function contextDisplay(row, column) {
+	const value = contextValue(row, column)
+	if (isPurchaseOrder.value && column.key === "schedule_date") return formatDate(value)
+	if (isPurchaseOrder.value && column.key === "discount_percentage") return value === null || value === undefined || value === "" ? "—" : `${formatQty(value)}%`
+	return display(value)
+}
 function primaryValues(group) { return group.primary_attribute ? (group.primary_attribute_values || []) : ["default"] }
 function primaryValueLabel(group, value) { return group.primary_attribute ? value : "Quantity" }
 function showTotalColumn(group) { return primaryValues(group).length > 1 }
@@ -138,8 +157,10 @@ function fulfillmentTotalLabel(row) { const quantity = rowMetricTotal(row, pendi
 function rowMetricTotal(row, getter) { return Object.values(row.values || {}).reduce((total, value) => total + getter(value), 0) }
 function secondaryQty(value) { return Number(value?.secondary_qty || 0) !== 0 }
 function display(value) { return value === null || value === undefined || value === "" ? "—" : String(value) }
+function formatDate(value) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/); return match ? `${match[3]}-${match[2]}-${match[1]}` : display(value) }
 function formatQty(value) { return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 3 }) }
 function formatMoney(value) { return `${props.currency ? `${props.currency} ` : ""}${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}` }
+function normalizedComment(value) { return String(value || "").trim() }
 function titleCase(value) { return String(value || "").replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase()) }
 function groupKey(group, index) { return group.itemGroupKey || `${group.primary_attribute || "quantity"}-${(group.attributes || []).join("-")}-${index}` }
 </script>
@@ -246,6 +267,18 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
 	font-weight: 700;
+}
+
+.item-matrix__item-comment {
+	color: var(--erp-text-secondary) !important;
+	font-weight: 500 !important;
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+	white-space: normal;
+}
+
+.item-matrix__group-header .item-matrix__item-comment {
+	max-width: 72ch;
 }
 
 .item-matrix__group-header i {

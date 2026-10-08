@@ -1041,6 +1041,10 @@ async function purchaseOrderSuite(page) {
 	const listRequests = []
 	const group = workOrderGroup()
 	for (const item of group.items) {
+		item.delivery_location = "S-0005"
+		item.schedule_date = "2026-10-13"
+		item.discount_percentage = 5
+		item.comments = "Deliver via mobile +91 98428 50613"
 		for (const value of Object.values(item.values || {})) {
 			value.rate = 125
 			value.amount = Number(value.qty || 0) * value.rate
@@ -1229,9 +1233,16 @@ async function purchaseOrderSuite(page) {
 	assert(await workspace.locator(".item-matrix__received").count() === 0, "Purchase Order item rows still show Received")
 	assert(await workspace.locator(".item-matrix__price").filter({ hasText: /^Amount / }).count() === 0, "Purchase Order item rows still show Amount")
 	assert(await workspace.locator(".item-matrix__pending").count() > 0, "Purchase Order item rows hide Pending")
-	assert(await workspace.locator(".item-matrix__group-header small").count() === 0, "Purchase Order repeats Lot below item titles")
+	assert(await workspace.locator(".item-matrix__group-header small").filter({ hasText: /^LOT-001$/ }).count() === 0, "Purchase Order repeats Lot below item titles")
 	assert(await workspace.locator(".item-matrix__scroll th").filter({ hasText: /^Lot$/ }).count() > 0, "Purchase Order does not show Lot as a table column")
 	assert(await workspace.locator(".item-matrix__scroll td").filter({ hasText: /^LOT-001$/ }).count() > 0, "Purchase Order Lot column has no values")
+	for (const label of ["Delivery Location", "Required By", "Discount"]) {
+		assert(await workspace.locator(".item-matrix__scroll th").filter({ hasText: new RegExp(`^${label}$`) }).count() > 0, `Purchase Order item field is missing: ${label}`)
+	}
+	assert(await workspace.locator(".item-matrix__scroll td").filter({ hasText: /^S-0005$/ }).count() > 0, "Purchase Order item Delivery Location has no values")
+	assert(await workspace.locator(".item-matrix__scroll td").filter({ hasText: /^13-10-2026$/ }).count() > 0, "Purchase Order item Required By is missing or not formatted")
+	assert(await workspace.locator(".item-matrix__scroll td").filter({ hasText: /^5%$/ }).count() > 0, "Purchase Order item Discount has no values")
+	assert(await workspace.locator(".item-matrix__group-header").getByText("Deliver via mobile +91 98428 50613", { exact: true }).count() > 0, "Purchase Order item Comments are not shown below the item name")
 	assert(await workspace.getByText(/Pending -/).count() === 0, "Purchase Order exposes a negative pending quantity")
 	assert(await workspace.getByText(/Over-received 1/).count() >= 1, "Purchase Order does not explain over-received quantities")
 	const purchaseMatrixScroller = workspace.locator(".item-matrix__scroll").first()
@@ -1241,7 +1252,7 @@ async function purchaseOrderSuite(page) {
 	assert(poQuantityLines[1]?.startsWith("Rate ") && poQuantityLines[2]?.startsWith("Pending "), `Purchase Order quantity details are not ordered Quantity, Rate, Pending: ${JSON.stringify(poQuantityLines)}`)
 	assert(await workspace.getByText("Supplier", { exact: true }).count() === 1, "Purchase Order repeats Supplier in the header and detail grid")
 	for (const label of ["Required By", "Warehouse", "Company", "Comments"]) {
-		assert(await workspace.getByText(label, { exact: true }).count() === 1, `Purchase Order field is missing: ${label}`)
+		assert(await workspace.locator(".purchase-order-page__details").getByText(label, { exact: true }).count() === 1, `Purchase Order field is missing: ${label}`)
 	}
 	assert(await workspace.getByText("Internal Notes", { exact: true }).count() === 0, "Purchase Order shows an empty read-only field")
 	assert(await workspace.locator(".purchase-order-page__total").count() === 5, "Purchase Order does not render the server total rail")
@@ -1640,10 +1651,12 @@ async function documentDialogSuite(page) {
 	assert(readFileSync(componentPath, "utf8").includes("closeConfirmationVisible"), "Editable dialogs have no dirty-close confirmation")
 	await mockWorkspace(page, [])
 	rows["YRP Stock Entry"].docstatus = 1
+	const stockEntryGroup = workOrderGroup()
+	stockEntryGroup.items[0].comments = "Stock Entry internal row note"
 	let documentPayload = {
 		record: { doctype: "YRP Stock Entry", name: "STE-FAB-001", docstatus: 1, status: "Submitted", modified: "2026-10-03 10:00:00" },
 		details: [{ fieldname: "purpose", label: "Purpose", fieldtype: "Select", value: "Material Issue" }],
-		item_groups: [workOrderGroup()], item_row_count: 2,
+		item_groups: [stockEntryGroup], item_row_count: 2, context: { work_order: "WO-FAB-001" },
 		permissions: { can_read: true, can_write: false, can_submit: false, can_cancel: true, can_amend: false, can_print: true },
 		print_formats: [{ label: "Standard Print", format: "Standard" }],
 	}
@@ -1668,6 +1681,7 @@ async function documentDialogSuite(page) {
 	assert(await dialog.locator(".p-dialog-content").evaluate((element) => ["auto", "scroll"].includes(getComputedStyle(element).overflowY)), "Document dialog does not have a single scroll-contained content owner")
 	assert(await dialog.locator(".document-transaction-dialog__content").evaluate((element) => getComputedStyle(element).overflowY === "visible"), "Document dialog content still creates a nested vertical scrollbar")
 	assert(await dialog.getByRole("button", { name: "Submit", exact: true }).count() === 0, "Submitted document exposes Submit")
+	assert(await dialog.getByText("Stock Entry internal row note", { exact: true }).count() === 0, "Non-Purchase Order grouped rows unexpectedly expose item comments")
 	assert(await dialog.getByRole("button", { name: "Cancel Document", exact: true }).count() === 1, "Submitted Cancel action is missing")
 	assert(await dialog.getByRole("button", { name: "Print", exact: true }).count() === 1, "Permitted Print action is missing")
 	await dialog.getByRole("button", { name: "Cancel Document", exact: true }).click()

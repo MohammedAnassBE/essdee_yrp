@@ -157,6 +157,8 @@ website_route_rules = [
 # CHECKLIST RULE (same as www/web.py WEB_DOCTYPES, which mirrors
 # frontend/src/config/doctypes.js GROUPS): all three lists change together.
 yrp_web_doctype_catalog = [
+	"SD YRP Sewing Plan",
+	"SD YRP Sewing Plan Entry Detail",
 	"SD YRP Lot",
 	"YRP Work Order",
 	"YRP Work Order Correction",

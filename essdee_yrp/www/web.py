@@ -42,6 +42,8 @@ ASSET_BASE = "/assets/essdee_yrp/frontend/"
 # frappe.has_permission() so every SPA gate hides what the user truly can't access.
 WEB_DOCTYPES = (
 	"SD YRP Cutting Plan",
+	"SD YRP Sewing Plan",
+	"SD YRP Sewing Plan Entry Detail",
 	"SD YRP Lot",
 	"YRP Work Order",
 	"YRP Work Order Correction",

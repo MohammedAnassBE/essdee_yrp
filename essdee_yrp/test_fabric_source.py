@@ -409,6 +409,36 @@ class TestExactFabricSourceBuckets(TestCase):
 		self.assertEqual([row["prefill"] for row in rows], [60, 40])
 		self.assertEqual(sum(row["prefill"] for row in rows), 100)
 
+	@patch(
+		"essdee_yrp.fabric_substitution.get_actual_dia_factors",
+		return_value=[{"actual_item": "CLOTH-19-GREY", "factor": 0.091463}],
+	)
+	@patch("essdee_yrp.api.work_order._resolve_variant", return_value="CLOTH-19-GREY")
+	@patch("essdee_yrp.fabric_source.frappe.get_doc")
+	def test_factor_targets_scale_the_route_program_used_by_the_factors(
+		self, get_doc, _resolve, _factors
+	):
+		get_doc.return_value = frappe._dict(
+			lot_fabric_programs=[
+				frappe._dict(cloth_item="CLOTH", reference_item_variant="ROUTE-19", weight=328),
+				frappe._dict(cloth_item="OTHER", reference_item_variant="ROUTE-19", weight=50),
+			]
+		)
+		rows = [
+			{
+				"matrix_key": "DYEING-19",
+				"reference_item_variant": "ROUTE-19",
+				"plan": 327.6,
+				"input_specs": [{"item": "CLOTH", "attrs": {"Dia": "19"}, "qty": 1}],
+			}
+		]
+
+		targets = fabric_source._knitting_factor_targets(
+			rows, "LOT-1", frappe._dict(name="IPD-1", item="CLOTH")
+		)
+
+		self.assertEqual(targets, {("DYEING-19", "CLOTH-19-GREY"): 30})
+
 	@patch("essdee_yrp.fabric_source._conversion_factor", return_value=1)
 	def test_fully_exhausted_historical_rows_are_hidden(self, _factor):
 		buckets = fabric_source._build_source_buckets(

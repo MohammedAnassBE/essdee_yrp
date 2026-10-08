@@ -1400,6 +1400,11 @@ def _knitting_factor_targets(qty_rows, lot, ipd):
 		get_actual_dia_factors,
 	)
 
+	lot_doc = frappe.get_doc("SD YRP Lot", lot)
+	route_programs = defaultdict(float)
+	for program in lot_doc.get("lot_fabric_programs") or []:
+		if program.get("cloth_item") == ipd.item:
+			route_programs[program.get("reference_item_variant")] += flt(program.get("weight"), 6)
 	targets = defaultdict(float)
 	for qty_row in qty_rows:
 		principal = next(
@@ -1415,9 +1420,13 @@ def _knitting_factor_targets(qty_rows, lot, ipd):
 		planned_item = _resolve_variant(
 			principal["item"], principal.get("attrs") or {}
 		)
-		factors = get_actual_dia_factors(lot, ipd.name, planned_item)
-		planned_route_qty = flt(
-			qty_row.get("plan") or qty_row.get("program") or qty_row.get("prefill")
+		factors = get_actual_dia_factors(lot_doc, ipd.name, planned_item)
+		reference = qty_row.get("reference_item_variant")
+		# Factors divide by the saved Cloth Program, so scale that same route program.
+		planned_route_qty = (
+			route_programs[reference]
+			if reference
+			else flt(qty_row.get("plan") or qty_row.get("program") or qty_row.get("prefill"))
 		)
 		matrix_key = qty_row.get("matrix_key") or qty_row.get("key")
 		for allocation in allocate_route_quantity(planned_route_qty, factors):

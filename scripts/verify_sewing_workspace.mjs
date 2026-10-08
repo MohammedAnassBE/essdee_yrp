@@ -433,7 +433,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 // These tests catch wrong filter/payload scope, client-invented cancellation
 // eligibility, optimistic deletion, metadata loss, duplicate writes, stale
 // Supplier results, lost drafts, and mapping overflow in the real Vue views.
-async function entriesConsumptionSuite(browser) {
+async function entriesConsumptionSuite(browser, settlementCase = "") {
 	const harness = `
 import { createApp } from 'vue';
 import { createRouter, createMemoryHistory, RouterView } from 'vue-router';
@@ -458,7 +458,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		{ item: "Thread", item_attributes: ["item_Colour", "bom_Size", "bom_Colour", "bom_Length", "bom_Twist"], rows: [{ index: 3, values: { item_Colour: "Navy", bom_Size: "Fine", bom_Colour: "Black", bom_Length: "Long", bom_Twist: "Soft" }, quantity: 2, item_bom_qty: 1.25, future_row: { ids: [7, 4], enabled: false } }, { index: 9, values: { item_Colour: "White" }, quantity: 0, item_bom_qty: 0, unknown: null }], attribute_in_item: ["Colour"], item_bom_uom: "Kg", future_section: ["preserve", { version: 2 }] },
 		{ item: "Elastic", item_attributes: ["Item"], rows: [{ index: 0, values: { Item: "Elastic" }, quantity: 0, item_bom_qty: 3 }], attribute_in_item: [], item_bom_uom: "Metre" },
 	], cloth_acc_data: [{ accessory_type: ["Tape"], attributes: ["Accessory", "Dia", "Weight", "Colour", "Size", "Length"], columns: [{ Accessory: "Tape", Dia: "20", Weight: 8, Colour: "Navy", Size: "M", Length: "Long", "Consumption Weight": 0.5, extra: { sequence: [3, 1], nullable: null } }, { Accessory: "Tape", Dia: "22", Weight: 9, Colour: "White", "Consumption Weight": 0 }], att_iv_check: ["Colour", "Size", "Length"], future_group: [false, "x"] }] }
-	const state = { entries: { "ENTRY-OLD": record("2026-10-01", false), "ENTRY-A": record("2026-10-08", true), "ENTRY-B": record("2026-10-08", false) }, entryError: "", cancelError: "", cancelDelay: 0, entryHold: null, mapping: structuredClone(mapping), mappingError: "", mappingHold: null, saveError: "", saveDelay: 0, saveHold: null, lotHold: null, readOnly: false }
+	const state = { entries: { "ENTRY-OLD": record("2026-10-01", false), "ENTRY-A": record("2026-10-08", true), "ENTRY-B": record("2026-10-08", false) }, entryError: "", cancelError: "", cancelDelay: 0, cancelHold: null, entryHold: null, mapping: structuredClone(mapping), mappingError: "", mappingHold: null, saveError: "", saveStatus: 417, saveDelay: 0, saveHold: null, lotHold: null, readOnly: false }
 	page.on("pageerror", e => errors.push(e.message))
 	page.on("console", m => { if (m.type() === "warning") warnings.push(m.text()) })
 	await page.route("**/api/method/**", async route => {
@@ -467,13 +467,13 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		let value = null, error = ""
 		if (method.endsWith("get_capabilities")) value = { ...capabilities, plan_actions: { entry: { ...flags, can_delete: false }, plan: { ...flags, can_write: !state.readOnly } } }
 		else if (method.endsWith("get_sewing_plan_entries")) { value = args.supplier === "UNIT-B" ? { "ENTRY-UNIT-B": record("2026-10-09", false) } : structuredClone(state.entries); error = state.entryError; if (state.entryHold) { const hold = state.entryHold; state.entryHold = null; await hold } }
-		else if (method.endsWith("cancel_sewing_plan_entry")) { await new Promise(r => setTimeout(r, state.cancelDelay)); error = state.cancelError; if (!error) delete state.entries[args.doc_id] }
+		else if (method.endsWith("cancel_sewing_plan_entry")) { if (state.cancelHold) { const hold = state.cancelHold; state.cancelHold = null; await hold } else await new Promise(r => setTimeout(r, state.cancelDelay)); error = state.cancelError; if (!error) delete state.entries[args.doc_id] }
 		else if (method.endsWith("get_supplier_lots")) { value = [[args.filters.supplier === "UNIT-B" ? "LOT-B" : "LOT-A", "T-Shirt"]]; if (state.lotHold) { const hold = state.lotHold; state.lotHold = null; await hold } }
 		else if (method.endsWith("get_consumption_mapping_data")) { value = structuredClone(state.mapping); if (args.supplier === "UNIT-B") value.ipd = "IPD-B"; error = state.mappingError; if (state.mappingHold) { const hold = state.mappingHold; state.mappingHold = null; await hold } }
 		else if (method.endsWith("save_consumption_data")) { if (state.saveHold) { const hold = state.saveHold; state.saveHold = null; await hold } else await new Promise(r => setTimeout(r, state.saveDelay)); error = state.saveError; value = { status: "success", message: "Consumption data saved successfully" }; if (!error) { state.mapping.sections[0].rows[0].quantity = 6.75; state.mapping.cloth_acc_data[0].columns[0]["Consumption Weight"] = 1.75 } }
 		else if (method.endsWith("link_search")) value = [{ name: args.doctype === "YRP Work Station" ? "Line 1" : "Sewing In", label: args.doctype === "YRP Work Station" ? "Line 1" : "Sewing In" }]
 		else throw new Error(`Unexpected operations request: ${method}`)
-		await route.fulfill({ status: error ? 417 : 200, contentType: "application/json", body: JSON.stringify(error ? { _server_messages: JSON.stringify([JSON.stringify({ message: error })]), exc: "ValidationError" } : { message: value }) })
+		await route.fulfill({ status: error ? method.endsWith("save_consumption_data") ? state.saveStatus : 417 : 200, contentType: "application/json", body: JSON.stringify(error ? { _server_messages: JSON.stringify([JSON.stringify({ message: error })]), exc: "ValidationError" } : { message: value }) })
 	})
 	const count = suffix => requests.filter(r => r.method.endsWith(suffix)).length
 	const selectLink = async (name, value) => { await page.getByRole("combobox", { name, exact: true }).fill(value); await page.getByRole("option", { name: value, exact: true }).click() }
@@ -481,7 +481,76 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 	const closeError = async text => { await page.locator(".document-error-dialog").getByText(text, { exact: false }).waitFor(); await page.getByRole("button", { name: "OK", exact: true }).click(); await page.locator(".document-error-dialog").waitFor({ state: "hidden" }) }
 	const quantity = () => page.getByRole("spinbutton", { name: "Thread row 3 quantity", exact: true })
 	const weight = () => page.getByRole("spinbutton", { name: "Cloth accessories 1 row 1 Consumption Weight", exact: true })
+	// Removing shell-owned mutation settlement or observing only the departed
+	// instance must fail these navigation-before-response regressions.
+	async function settlementRegressions(only = "all") {
+		for (const scenario of ["cancel-success", "cancel-rejection", "save-rejection", "cancel-rejection-inactive", "save-rejection-inactive", "save-rejection-supplier"]) {
+			if (only !== "all" && only !== scenario) continue
+			state.readOnly = false; state.cancelError = ""; state.saveError = ""; state.saveStatus = 417
+			state.entries["ENTRY-A"] = record("2026-10-08", true)
+			await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/__operations-test`)
+			await page.getByText("ENTRY-A", { exact: true }).waitFor()
+			const isSave = scenario.startsWith("save-"), method = isSave ? "save_consumption_data" : "cancel_sewing_plan_entry"
+			if (isSave) {
+				await tab("consumption"); await selectLink("Lot", "LOT-A"); await quantity().fill("5")
+				state.saveError = "You do not have permission to update consumption."; state.saveStatus = 403
+			} else if (scenario !== "cancel-success") state.cancelError = "This entry is no longer eligible for cancellation."
+			let release; const hold = new Promise(resolve => release = resolve)
+			if (isSave) state.saveHold = hold; else state.cancelHold = hold
+			const pendingRequest = page.waitForRequest(request => request.url().endsWith(method))
+			if (isSave) await page.getByRole("button", { name: "Save consumption", exact: true }).click()
+			else { await page.getByRole("button", { name: "Cancel ENTRY-A", exact: true }).click(); await page.getByRole("button", { name: "Cancel entry", exact: true }).click() }
+			await pendingRequest
+			await tab(isSave ? "entries" : "consumption")
+			if (isSave) await page.getByText("ENTRY-B", { exact: true }).waitFor()
+			const readsWhileInactive = count(isSave ? "get_consumption_mapping_data" : "get_sewing_plan_entries")
+			await page.waitForTimeout(50)
+			assert(count(isSave ? "get_consumption_mapping_data" : "get_sewing_plan_entries") === readsWhileInactive, `${scenario}: inactive view fetched before settlement`)
+			const beforeSettlementReads = count(isSave ? "get_consumption_mapping_data" : "get_sewing_plan_entries")
+			const settled = page.waitForResponse(response => response.url().endsWith(method))
+			if (scenario.endsWith("-supplier")) {
+				await page.evaluate(() => window.router.replace('/sewing/plans?supplier=UNIT-B&tab=consumption'))
+				await page.getByRole("combobox", { name: "Lot", exact: true }).waitFor()
+				release(); await settled
+				assert(await quantity().count() === 0 && await page.getByRole("combobox", { name: "Lot", exact: true }).inputValue() === "", "Late write rejection leaked foreign draft into Supplier B")
+				assert(await page.locator(".document-error-dialog").count() === 0, "Late write rejection leaked popup into Supplier B")
+				await page.evaluate(() => window.router.replace('/sewing/plans?supplier=UNIT-A&tab=consumption'))
+				await page.getByRole("combobox", { name: "Lot", exact: true }).waitFor()
+				assert(await page.locator(".document-error-dialog").count() === 0, "Old Supplier-keyed outcome leaked into a fresh Supplier A workspace")
+				console.log(`PASS settlement ${scenario}: discarded scope cannot leak a draft or late rejection`)
+				continue
+			}
+			if (scenario.endsWith("-inactive")) {
+				release(); await settled
+				assert(await page.locator(".document-error-dialog").count() === 0, `${scenario}: failure popup leaked into the other tab`)
+				assert(count(isSave ? "get_consumption_mapping_data" : "get_sewing_plan_entries") === beforeSettlementReads, `${scenario}: inactive settlement fetched records`)
+				await tab(isSave ? "consumption" : "entries")
+			} else {
+				await tab(isSave ? "consumption" : "entries")
+				assert(await page.getByRole("button", { name: isSave ? "Save consumption" : "Refresh entries", exact: true }).isDisabled(), `${scenario}: mutation lock lost on remount`)
+				release(); await settled
+			}
+			if (scenario === "cancel-success") {
+				await page.getByText("ENTRY-B", { exact: true }).waitFor({ timeout: 2500 }).catch(() => { throw new Error("Remounted Entries ignored successful cancellation settlement and remained falsely empty") })
+				await page.getByText("Entry cancelled.", { exact: true }).waitFor()
+				assert(await page.getByText("ENTRY-A", { exact: true }).count() === 0, "Remounted Entries retained cancelled record")
+				assert(count("get_sewing_plan_entries") === beforeSettlementReads + 1, "Successful remounted cancellation must refresh exactly once")
+			} else {
+				const message = isSave ? state.saveError : state.cancelError
+				await page.locator(".document-error-dialog").getByText(message, { exact: false }).waitFor({ timeout: 2500 }).catch(() => { throw new Error(`${scenario}: late rejection disappeared after remount`) })
+				assert((await page.locator(".document-error-dialog").innerText()).includes(message), `${scenario}: shared rejection popup missing plain server message`)
+				if (isSave) { assert(await quantity().inputValue() === "5", "Late 403 discarded consumption draft"); assert(await page.getByRole("button", { name: "Save consumption", exact: true }).isEnabled(), "Rejected consumption stayed locked after settlement"); assert(count("get_consumption_mapping_data") === beforeSettlementReads, "Rejected save reloaded away the draft") }
+				else { await page.getByText("ENTRY-A", { exact: true }).waitFor(); assert(count("get_sewing_plan_entries") === beforeSettlementReads + 1, "Rejected remounted cancellation failed to load retained entries") }
+				await closeError(message)
+				await tab(isSave ? "entries" : "consumption"); await tab(isSave ? "consumption" : "entries")
+				assert(await page.locator(".document-error-dialog").count() === 0, `${scenario}: acknowledged rejection repeated after another remount`)
+			}
+			console.log(`PASS settlement ${scenario}: navigation before response, active-only refresh, persistent outcome and acknowledgement`)
+		}
+		assert(errors.length === 0 && warnings.length === 0, `Settlement browser issues: ${[...errors, ...warnings].join("; ")}`)
+	}
 	try {
+		if (settlementCase) { await settlementRegressions(settlementCase); return }
 		await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/__operations-test`)
 		await page.getByRole("heading", { name: "Entries", exact: true }).waitFor()
 		await page.getByRole("heading", { name: "2026-10-08", exact: true }).waitFor()
@@ -615,6 +684,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		await page.evaluate(() => window.router.replace('/sewing/plans?tab=consumption'))
 		await page.getByText("Select a Sewing Unit to view Sewing Plan.", { exact: true }).waitFor()
 		const noScope = requests.length; await page.waitForTimeout(350); assert(requests.length === noScope, "Missing Supplier issued consumption requests")
+		await settlementRegressions()
 		assert(errors.length === 0 && warnings.length === 0, `Browser issues: ${[...errors, ...warnings].join("; ")}`)
 		console.log("PASS entries-consumption: exact filters, grouped dates/matrices, server-only cancellation eligibility, shared confirmation/rejection/locks/refresh, scoped Lot query and selection guards, complete metadata round-trip, retained drafts/errors, authoritative save/recovery, lookup isolation, read-only permissions, Supplier A/B stale rejection, eight contained viewports")
 	} catch (reason) {
@@ -623,7 +693,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 	} finally { await page.close(); await server.close() }
 }
 
-assert(["launcher", "plan-entry", "entries-consumption", "all"].includes(suite), `Unknown Sewing suite: ${suite}`)
+assert(["launcher", "plan-entry", "entries-consumption", "entries-consumption-settlement", "all"].includes(suite), `Unknown Sewing suite: ${suite}`)
 const browser = await chromium.launch({ headless: true })
 try {
 	if (suite === "launcher" || suite === "all") {
@@ -635,4 +705,5 @@ try {
 	}
 	if (suite === "plan-entry" || suite === "all") await planEntrySuite(browser)
 	if (suite === "entries-consumption" || suite === "all") await entriesConsumptionSuite(browser)
+	if (suite === "entries-consumption-settlement") await entriesConsumptionSuite(browser, process.argv[3] || "all")
 } finally { await browser.close() }

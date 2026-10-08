@@ -12,8 +12,8 @@
 				<TabPanel :value="active" :key="active">
 					<SewingDashboard v-if="active === 'dashboard'" />
 					<SewingDataEntry v-else-if="active === 'data-entry'" :filters="entryFilters" :actions="capabilities.plan_actions" />
-					<SewingEntries v-else-if="active === 'entries'" :state="entriesState" />
-					<SewingConsumption v-else-if="active === 'consumption'" :state="consumptionState" :actions="capabilities.plan_actions" />
+					<SewingEntries v-else-if="active === 'entries'" :state="entriesState" :mutate="cancelEntry" />
+					<SewingConsumption v-else-if="active === 'consumption'" :state="consumptionState" :actions="capabilities.plan_actions" :mutate="saveConsumption" />
 					<div v-else :data-sewing-plan-tab="active" class="erp-empty-state" role="status">{{ tabs.find(tab => tab.value === active).label }} is not loaded yet.</div>
 				</TabPanel>
 			</TabPanels>
@@ -30,6 +30,8 @@ import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
 import { computed, defineAsyncComponent, reactive } from "vue"
 import { useRoute, useRouter } from "vue-router"
+import { cancelSewingEntry, saveSewingConsumption } from "../../api/sewing.js"
+import { useSewingContext } from "./useSewingContext.js"
 
 const SewingDashboard = defineAsyncComponent(() => import("./plan/SewingDashboard.vue"))
 const SewingDataEntry = defineAsyncComponent(() => import("./plan/SewingDataEntry.vue"))
@@ -37,6 +39,7 @@ const SewingEntries = defineAsyncComponent(() => import("./plan/SewingEntries.vu
 const SewingConsumption = defineAsyncComponent(() => import("./plan/SewingConsumption.vue"))
 defineProps({ capabilities: { type: Object, default: () => ({}) } })
 const route = useRoute(), router = useRouter()
+const { supplier, beginRequest } = useSewingContext()
 const tabs = [
 	{ value: "dashboard", label: "Dashboard" },
 	{ value: "data-entry", label: "Data Entry" },
@@ -52,8 +55,35 @@ const active = computed({
 const entryFilters = reactive({ lot: "", plan: "", inputType: "", workStation: "", receivedType: "", date: "", time: "", inspectionType: "pre_final" })
 // The Supplier-keyed shell retains local filters and consumption drafts without
 // mounting inactive tabs. Mutation locks and recovery survive a tab switch too.
-const entriesState = reactive({ filters: { workStation: "", inputType: "", lot: "" }, busy: false, refreshRequired: false })
-const consumptionState = reactive({ lot: "", data: null, busy: false, refreshRequired: false, loadError: "" })
+const entriesState = reactive({ filters: { workStation: "", inputType: "", lot: "" }, busy: false, refreshRequired: false, operationVersion: 0, operation: null })
+const consumptionState = reactive({ lot: "", data: null, busy: false, refreshRequired: false, loadError: "", operationVersion: 0, operation: null })
+
+// The Supplier-keyed shell owns the entire write lifetime. Tab unmounts may
+// invalidate reads, but must not discard a write's acknowledgement or failure.
+// No read is performed here: only the mounted affected view may refresh.
+async function mutate(state, identity, request, fallback) {
+	if (state.busy || state.refreshRequired) return
+	const version = ++state.operationVersion
+	beginRequest()
+	state.busy = true
+	state.operation = { ...identity, version, status: "pending", error: "", acknowledged: false, noticeShown: false }
+	try {
+		await request()
+		if (state.operation?.version !== version) return
+		state.refreshRequired = true
+		state.operation.status = "succeeded"
+	} catch (reason) {
+		if (state.operation?.version !== version) return
+		state.operation.error = reason.message || fallback
+		state.operation.status = "rejected"
+	} finally { if (state.operation?.version === version) state.busy = false }
+}
+function cancelEntry(docId) {
+	return mutate(entriesState, { kind: "cancel", supplier: supplier.value, docId }, () => cancelSewingEntry(docId), "Unable to cancel this entry.")
+}
+function saveConsumption(payload) {
+	return mutate(consumptionState, { kind: "consumption", supplier: payload.supplier, lot: payload.lot }, () => saveSewingConsumption(payload.supplier, payload.lot, payload.sections, payload.cloth_acc_data), "Unable to save consumption.")
+}
 </script>
 
 <style scoped>

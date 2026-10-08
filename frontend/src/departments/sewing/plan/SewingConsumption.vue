@@ -18,7 +18,7 @@
 			<div class="sewing-consumption__actions"><Button label="Save consumption" icon="pi pi-check" :disabled="loading || state.busy || state.refreshRequired || !canWrite || !hasRows" @click="save" /><small v-if="!canWrite">You do not have permission to update consumption.</small></div>
 			<Message v-if="success" severity="success" :closable="false" role="status">{{ success }}</Message>
 		</template>
-		<DocumentErrorDialog :message="error" @dismiss="error = ''" />
+		<DocumentErrorDialog :message="error || mutationError" @dismiss="dismissError" />
 	</section>
 </template>
 
@@ -27,17 +27,19 @@ import Button from "primevue/button"
 import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
-import { getSewingConsumption, getSewingSupplierLots, saveSewingConsumption } from "../../../api/sewing.js"
+import { getSewingConsumption, getSewingSupplierLots } from "../../../api/sewing.js"
 import LinkField from "../../../components/common/LinkField.vue"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import SewingConsumptionTable from "../components/SewingConsumptionTable.vue"
 import { useSewingContext } from "../useSewingContext.js"
 
-const props = defineProps({ state: { type: Object, required: true }, actions: { type: Object, default: () => ({}) } })
+const props = defineProps({ state: { type: Object, required: true }, actions: { type: Object, default: () => ({}) }, mutate: { type: Function, required: true } })
 const { supplier, requestGeneration, beginRequest, isCurrent } = useSewingContext()
 const loading = ref(false), error = ref(""), success = ref("")
 const canWrite = computed(() => Boolean(props.actions?.plan?.can_write))
+const mutationError = computed(() => props.state.operation?.status === "rejected" && !props.state.operation.acknowledged && matchesOperation(props.state.operation) ? props.state.operation.error : "")
+function matchesOperation(operation) { return operation?.supplier === supplier.value && operation.lot === props.state.lot }
 let mounted = true, searchSequence = 0
 const editableRows = computed(() => [
 	...(props.state.data?.sections || []).flatMap(section => (section.rows || []).map(row => ({ row, field: "quantity" }))),
@@ -72,27 +74,33 @@ async function load() {
 		return false
 	} finally { if (mounted && isCurrent(generation)) loading.value = false }
 }
-async function save() {
+function save() {
 	if (!supplier.value || !props.state.lot || !props.state.data || !hasRows.value || !canWrite.value || loading.value || props.state.busy || props.state.refreshRequired) return
 	if (editableRows.value.some(({ row, field }) => row[field] === "" || !Number.isFinite(Number(row[field])) || Number(row[field]) < 0)) { error.value = "Consumption values must be finite and non-negative."; return }
-	const generation = beginRequest(), unit = supplier.value, lot = props.state.lot
 	const payload = JSON.parse(JSON.stringify(props.state.data))
-	props.state.busy = true; error.value = ""; success.value = ""
-	try {
-		await saveSewingConsumption(unit, lot, payload.sections, payload.cloth_acc_data)
-		props.state.refreshRequired = true
-		if (!mounted || !isCurrent(generation)) return
-		const refreshed = await load()
-		if (mounted) success.value = refreshed ? "Consumption saved." : "Consumption saved. Refresh the mapping to recover current values."
-	} catch (reason) {
-		if (mounted && isCurrent(generation)) error.value = reason.message || "Unable to save consumption."
-	} finally { props.state.busy = false }
+	error.value = ""; success.value = ""
+	props.mutate({ supplier: supplier.value, lot: props.state.lot, sections: payload.sections, cloth_acc_data: payload.cloth_acc_data })
+}
+function dismissError() {
+	error.value = ""
+	if (props.state.operation?.status === "rejected" && matchesOperation(props.state.operation)) props.state.operation.acknowledged = true
 }
 watch(() => props.state.lot, () => {
 	beginRequest(); props.state.data = null; props.state.loadError = ""; props.state.refreshRequired = false; success.value = ""; error.value = ""
 	if (props.state.lot && !props.state.busy) load()
 })
-onMounted(() => { if (props.state.lot && !props.state.data && !props.state.busy) load() })
+onMounted(() => {
+	if (props.state.lot && !props.state.data && !props.state.busy) load()
+	watch(() => props.state.busy, async (busy, wasBusy) => {
+		const operation = props.state.operation
+		if (busy || !wasBusy || operation?.status !== "succeeded" || !matchesOperation(operation)) return
+		const refreshed = await load()
+		if (mounted && operation.version === props.state.operation?.version && !operation.noticeShown) {
+			success.value = refreshed ? "Consumption saved." : "Consumption saved. Refresh the mapping to recover current values."
+			operation.noticeShown = true
+		}
+	})
+})
 onBeforeUnmount(() => { mounted = false; beginRequest() })
 </script>
 

@@ -6,7 +6,7 @@
 			<LinkField v-model="state.filters.inputType" doctype="SD YRP Sewing Plan Input Type" label="Input Type" placeholder="All Input Types" :show-open-button="false" show-clear :disabled="loading || state.busy" :search-handler="text => search('SD YRP Sewing Plan Input Type', text)" />
 			<LinkField v-model="state.filters.lot" doctype="SD YRP Lot" label="Lot" placeholder="All Lots" :show-open-button="false" show-clear :disabled="loading || state.busy" :search-handler="text => search('SD YRP Lot', text)" />
 		</div>
-		<div v-if="loading && !loaded" role="status"><p>Loading entries</p><Skeleton height="160px" /></div>
+		<div v-if="!loaded && (loading || state.busy)" role="status"><p>{{ state.busy ? 'Cancelling entry' : 'Loading entries' }}</p><Skeleton height="160px" /></div>
 		<WorkspaceLoadError v-else-if="loadError && !loaded" :message="loadError" @retry="load()" />
 		<template v-else>
 			<Message v-if="loadError" severity="warn" :closable="false">{{ loadError }} <Button label="Retry" text :disabled="loading || state.busy" @click="load()" /></Message>
@@ -22,7 +22,7 @@
 			<Message v-if="success" severity="success" :closable="false" role="status">{{ success }}</Message>
 		</template>
 		<DocumentConfirmationDialog :visible="Boolean(selected)" title="Cancel Sewing entry" :message="`Cancel ${selected}? Saved quantities for this entry will be removed.`" confirm-label="Cancel entry" cancel-label="Keep entry" :busy="state.busy" @update:visible="value => { if (!value && !state.busy) selected = '' }" @confirm="cancel" />
-		<DocumentErrorDialog :message="error" @dismiss="error = ''" />
+		<DocumentErrorDialog :message="error" @dismiss="dismissError" />
 	</section>
 </template>
 
@@ -32,7 +32,7 @@ import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { searchLink } from "../../../api/frappe.js"
-import { cancelSewingEntry, getSewingEntries, getSewingSupplierLots } from "../../../api/sewing.js"
+import { getSewingEntries, getSewingSupplierLots } from "../../../api/sewing.js"
 import LinkField from "../../../components/common/LinkField.vue"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
 import DocumentConfirmationDialog from "../../../components/documents/DocumentConfirmationDialog.vue"
@@ -40,9 +40,10 @@ import DocumentErrorDialog from "../../../components/documents/DocumentErrorDial
 import SewingQuantityMatrix from "../components/SewingQuantityMatrix.vue"
 import { useSewingContext } from "../useSewingContext.js"
 
-const props = defineProps({ state: { type: Object, required: true } })
+const props = defineProps({ state: { type: Object, required: true }, mutate: { type: Function, required: true } })
 const { supplier, requestGeneration, beginRequest, isCurrent } = useSewingContext()
-const records = ref({}), loading = ref(false), loaded = ref(false), loadError = ref(""), error = ref(""), success = ref(""), selected = ref("")
+const records = ref({}), loading = ref(false), loaded = ref(false), loadError = ref(""), success = ref(""), selected = ref("")
+const error = computed(() => props.state.operation?.status === "rejected" && !props.state.operation.acknowledged && props.state.operation.supplier === supplier.value ? props.state.operation.error : "")
 let mounted = true
 const searches = new Map()
 const groups = computed(() => {
@@ -83,24 +84,22 @@ async function load() {
 		return false
 	} finally { if (mounted && isCurrent(generation)) loading.value = false }
 }
-async function cancel() {
+function cancel() {
 	if (!selected.value || props.state.busy || loading.value || props.state.refreshRequired || !records.value[selected.value]?.is_cancellable) return
-	const id = selected.value, generation = beginRequest()
-	props.state.busy = true; error.value = ""; success.value = ""
-	try {
-		await cancelSewingEntry(id)
-		// Even if this tab unmounted during the write, prevent another mutation
-		// until the Supplier-keyed shell's next authoritative read succeeds.
-		props.state.refreshRequired = true
-		if (!mounted || !isCurrent(generation)) return
-		selected.value = ""
-		const refreshed = await load()
-		if (mounted) success.value = refreshed ? "Entry cancelled." : "Entry cancelled. Refresh entries to recover current records."
-	} catch (reason) {
-		if (mounted && isCurrent(generation)) { selected.value = ""; error.value = reason.message || "Unable to cancel this entry." }
-	} finally { props.state.busy = false }
+	success.value = ""
+	props.mutate(selected.value)
 }
-onMounted(() => watch(() => [supplier.value, props.state.filters.workStation, props.state.filters.inputType, props.state.filters.lot], () => { if (!props.state.busy) load() }, { immediate: true }))
+function dismissError() { if (props.state.operation?.status === "rejected") props.state.operation.acknowledged = true }
+onMounted(() => watch(() => [supplier.value, props.state.filters.workStation, props.state.filters.inputType, props.state.filters.lot, props.state.busy], async () => {
+	if (props.state.busy) return
+	selected.value = ""
+	const operation = props.state.operation
+	const refreshed = await load()
+	if (mounted && operation?.status === "succeeded" && operation.version === props.state.operation?.version && !operation.noticeShown) {
+		success.value = refreshed ? "Entry cancelled." : "Entry cancelled. Refresh entries to recover current records."
+		operation.noticeShown = true
+	}
+}, { immediate: true }))
 onBeforeUnmount(() => { mounted = false; beginRequest() })
 </script>
 

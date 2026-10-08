@@ -273,13 +273,13 @@ class TestFabricStorePurchaseOrder(TestCase):
 
 	def test_save_defaults_item_procurement_details_from_visible_header(self):
 		rows = [
-			frappe._dict(
-				item_code="ITEM-S",
-				qty=4,
-				schedule_date=None,
-				expected_delivery_date=None,
-				delivery_location=None,
-			)
+			{
+				"item_code": "ITEM-S",
+				"qty": 4,
+				"schedule_date": None,
+				"expected_delivery_date": None,
+				"delivery_location": None,
+			}
 		]
 		doc = MagicMock()
 		doc.doctype = "Purchase Order"
@@ -304,19 +304,19 @@ class TestFabricStorePurchaseOrder(TestCase):
 			_adapter=adapter,
 		)
 
-		self.assertEqual(rows[0].delivery_location, "S-0005")
-		self.assertEqual(rows[0].schedule_date, "2026-10-14")
-		self.assertEqual(rows[0].expected_delivery_date, "2026-10-14")
+		self.assertEqual(rows[0]["delivery_location"], "S-0005")
+		self.assertEqual(rows[0]["schedule_date"], "2026-10-14")
+		self.assertEqual(rows[0]["expected_delivery_date"], "2026-10-14")
 
 	def test_save_explains_hidden_item_required_by_with_item_and_dates(self):
 		rows = [
-			frappe._dict(
-				item_code="Yarn 34's GL-Greige",
-				qty=60,
-				schedule_date="2026-09-10",
-				expected_delivery_date="2026-09-10",
-				delivery_location="S-0005",
-			)
+			{
+				"item_code": "Yarn 34's GL-Greige",
+				"qty": 60,
+				"schedule_date": "2026-09-10",
+				"expected_delivery_date": "2026-09-10",
+				"delivery_location": "S-0005",
+			}
 		]
 		doc = MagicMock()
 		doc.doctype = "Purchase Order"

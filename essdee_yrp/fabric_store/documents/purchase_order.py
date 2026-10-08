@@ -515,15 +515,15 @@ def _prepare_purchase_order_item_rows(rows, values) -> None:
 	default_delivery_location = values.get("default_delivery_location")
 	for index, row in enumerate(rows, start=1):
 		if not row.get("delivery_location") and default_delivery_location:
-			row.delivery_location = default_delivery_location
+			row["delivery_location"] = default_delivery_location
 		if not row.get("schedule_date") and default_required_by:
-			row.schedule_date = default_required_by
+			row["schedule_date"] = default_required_by
 		if not row.get("expected_delivery_date") and row.get("schedule_date"):
-			row.expected_delivery_date = row.schedule_date
+			row["expected_delivery_date"] = row.get("schedule_date")
 
 		if not order_date or not row.get("schedule_date"):
 			continue
-		if getdate(row.schedule_date) >= getdate(order_date):
+		if getdate(row.get("schedule_date")) >= getdate(order_date):
 			continue
 
 		item_label = row.get("item_code") or row.get("item_name") or _("Item row {0}").format(index)
@@ -533,7 +533,7 @@ def _prepare_purchase_order_item_rows(rows, values) -> None:
 				"Edit the item and choose a Required By date on or after the Order Date."
 			).format(
 				frappe.bold(item_label),
-				frappe.bold(formatdate(row.schedule_date, "dd-MM-yyyy")),
+				frappe.bold(formatdate(row.get("schedule_date"), "dd-MM-yyyy")),
 				frappe.bold(formatdate(order_date, "dd-MM-yyyy")),
 			),
 		)

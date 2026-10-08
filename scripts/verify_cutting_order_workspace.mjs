@@ -206,6 +206,8 @@ try {
 
 await page.goto(`${SITE}/web/cutting/orders/CTO-WEB-00001`, { waitUntil: "domcontentloaded" })
 await page.getByRole("heading", { name: "Cutting Order", exact: true }).waitFor({ timeout: 20_000 })
+assert(await page.locator(".department-page__nav").count() === 0, "Saved Cutting Order retains the standalone Back row")
+assert(await page.locator(".order-record-header .inline-page-navigation__back[aria-label='Back to Cutting Orders']").count() === 1, "Saved Cutting Order has no inline Back control beside its title")
 assert(await page.locator(".cutting-order-layout").count() === 1, "Cutting Order 80/20 workspace is missing")
 const [mainBox, railBox] = await Promise.all([
 	page.locator(".cutting-order-main").boundingBox(),

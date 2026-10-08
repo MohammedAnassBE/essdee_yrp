@@ -7,6 +7,7 @@
 		:show-title="false"
 		flat
 		full-width
+		:inline-navigation="!checkingEditor && !showDraftEditor"
 	>
 		<div v-if="checkingEditor" class="cutting-plan-probe erp-workspace" aria-label="Loading Cutting Plan">
 			<Skeleton height="76px" />

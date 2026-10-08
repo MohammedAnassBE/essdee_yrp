@@ -136,8 +136,9 @@ async function shellSuite(page) {
 	await page.waitForURL("**/web/cutting")
 	await page.locator(".workspace-launcher").waitFor({ timeout: 20_000 })
 	assert(
-		(await page.locator(".department-page__nav .back-link").innerText()).trim() === "Workspaces",
-		"Root department launchers do not identify their Workspaces destination",
+		await page.locator(".department-page__nav").count() === 0
+			&& await page.locator(".workspace-launcher__header .inline-page-navigation__back[aria-label='Back to Workspaces']").count() === 1,
+		"Root department launchers do not place Back beside the visible heading",
 	)
 	assert(await page.evaluate(() => document.activeElement?.id) === "app-main", "Route navigation does not move focus to the new main content")
 	assert((await page.title()).includes("Cutting"), `Route navigation does not update the document title: ${await page.title()}`)
@@ -218,6 +219,8 @@ async function listSuite(page, context) {
 	await page.locator(".premium-list-table .p-datatable-tbody > tr").first().waitFor({ timeout: 20_000 })
 
 	assert(await page.locator(".list-page-head").count() === 1, "List command header is duplicated")
+	assert(await page.locator(".department-page__nav").count() === 0, "Cutting Plan list retains the standalone Back row")
+	assert(await page.locator(".list-title-block .inline-page-navigation__back[aria-label='Back to Cutting']").count() === 1, "Cutting Plan list has no inline Back control beside its title")
 	const listSurface = await page.locator(".cutting-list").boundingBox()
 	assert(listSurface?.width >= 1520, `Cutting list does not use the shared full-width shell: ${JSON.stringify(listSurface)}`)
 	const populatedFrameHeight = (await page.locator(".list-table-frame").boundingBox())?.height || 0
@@ -1800,7 +1803,9 @@ async function reportsSuite(page) {
 	assert(await tabs.count() === 5, `Expected five report tabs, found ${await tabs.count()}`)
 	assert(JSON.stringify(await tabs.allTextContents()) === JSON.stringify(expectedTabs), `Unexpected report tabs: ${await tabs.allTextContents()}`)
 	assert(await page.getByText("Manufacturing intelligence", { exact: true }).count() === 0, "Decorative reports introduction is visible")
-	assert(await page.locator(".report-shell h1, .report-shell h2").count() === 0, "Report title is duplicated inside the active tab")
+	assert(await page.locator(".department-page__nav").count() === 0, "Cutting Reports retain the standalone Back row")
+	assert(await page.locator(".report-shell:visible .report-shell__heading h1").count() === 1, "Active report has no visible shared title")
+	assert(await page.locator(".report-shell:visible .report-shell__heading .inline-page-navigation__back[aria-label='Back to Cutting']").count() === 1, "Active report has no inline Back control beside its title")
 	assert(await page.locator(".report-tabs__list").evaluate((element) => getComputedStyle(element).position) === "sticky", "Report tabs are not fixed")
 
 	for (const tabName of expectedTabs) {
@@ -2067,6 +2072,8 @@ async function listNavigationSuite(page) {
 		return { reference, state }
 	})
 	assert(desktop.reference?.currentName === "CP-NAV-001", `Desktop row activation omitted its navigation reference: ${JSON.stringify(desktop)}`)
+	assert(await page.locator(".department-page__nav").count() === 0, "Saved Cutting Plan retains the standalone Back row")
+	assert(await page.locator(".form-toolbar .inline-page-navigation__back[aria-label='Back to Cutting Plans']").count() === 1, "Saved Cutting Plan has no inline Back control beside its title")
 	assert(desktop.state?.sourceRouteName === "cutting-plans", `Desktop snapshot omitted its source route: ${JSON.stringify(desktop)}`)
 	assert(desktop.state?.sourceFullPath === "/cutting/plans", `Desktop snapshot omitted its router source path: ${JSON.stringify(desktop)}`)
 	assert(desktop.state?.doctype === "SD YRP Cutting Plan", `Desktop snapshot omitted its DocType: ${JSON.stringify(desktop)}`)
@@ -2093,6 +2100,10 @@ async function listNavigationSuite(page) {
 	restored.requestsAfterBack = requests.length
 	assert(restored.input === "APPLIED", `Returning to the list did not restore the applied search: ${JSON.stringify(restored)}`)
 	assert(await page.getByRole("button", { name: /^Draft\s/ }).getAttribute("aria-pressed") === "true", "Returning to the list did not restore status")
+
+	await page.goto(`${SITE}/web/cutting/plans/new`, { waitUntil: "domcontentloaded" })
+	await page.locator(".department-page__nav .back-link").waitFor({ timeout: 20_000 })
+	assert(await page.locator(".inline-page-navigation").count() === 0, "Cutting Plan creation unexpectedly uses saved-document navigation")
 
 	return { desktop, requestCount: requests.length }
 }

@@ -1,12 +1,13 @@
 <template>
-	<DepartmentPage title="Bulk LaySheets" accent="#059669" back-to="/cutting/bulk-lay-sheets" back-label="Bulk LaySheets" :show-title="false" flat full-width>
+	<DepartmentPage title="Bulk LaySheets" accent="#059669" back-to="/cutting/bulk-lay-sheets" back-label="Bulk LaySheets" :show-title="false" flat full-width inline-navigation>
 		<div class="bulk-workspace erp-workspace">
 			<div v-if="loading && !workspace.record" class="bulk-workspace__loading"><Skeleton height="76px" /><Skeleton height="560px" /></div>
 			<WorkspaceLoadError v-else-if="error && !record.name" title="Bulk LaySheets unavailable" :message="error" :loading="loading" @retry="loadWorkspace" />
 			<template v-else>
 				<header class="bulk-record-header erp-card">
+					<InlinePageNavigation title-target="bulk-laysheets-title" />
 					<div class="bulk-record-identity">
-						<div class="bulk-record-title"><h1>Bulk LaySheets</h1><span>{{ bulkName }}</span></div>
+						<div class="bulk-record-title"><h1 id="bulk-laysheets-title">Bulk LaySheets</h1><span>{{ bulkName }}</span></div>
 						<div class="bulk-record-meta">
 							<DocumentStatusBadge :docstatus="record.docstatus" :label="record.status || 'Setup'" />
 							<span class="bulk-header-fact bulk-header-fact--lot" :title="record.main_lot || 'No Main Lot'"><small>Main Lot</small><strong>{{ record.main_lot || "—" }}</strong></span>
@@ -70,6 +71,7 @@ import DateField from "../components/common/DateField.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import DocumentErrorDialog from "../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
+import InlinePageNavigation from "../components/navigation/InlinePageNavigation.vue"
 import { useActionConfirmation } from "../utils/useActionConfirmation.js"
 import BulkActions from "./cutting/bulk/BulkActions.vue"
 import BulkActiveLaySheet from "./cutting/bulk/BulkActiveLaySheet.vue"

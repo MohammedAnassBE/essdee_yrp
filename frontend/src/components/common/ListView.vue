@@ -10,8 +10,13 @@
 		<header class="list-page-head">
 			<div class="list-title-block">
 				<span v-if="eyebrow" class="list-eyebrow">{{ eyebrow }}</span>
-				<h1>{{ title || doctype }}</h1>
-				<p v-if="subtitle">{{ subtitle }}</p>
+				<div class="list-title-line">
+					<InlinePageNavigation :title-target="headingId" />
+					<div>
+						<h1 :id="headingId">{{ title || doctype }}</h1>
+						<p v-if="subtitle">{{ subtitle }}</p>
+					</div>
+				</div>
 			</div>
 			<div class="list-toolbar__actions">
 				<div class="list-toolbar__primary"><slot name="toolbar-actions"></slot></div>
@@ -440,6 +445,7 @@ import FormField from "./FormField.vue"
 import ListviewFilters from "./ListviewFilters.vue"
 import ListviewQuickFilters from "./ListviewQuickFilters.vue"
 import UserListviewColumns from "./UserListviewColumns.vue"
+import InlinePageNavigation from "../navigation/InlinePageNavigation.vue"
 import {
 	createListNavigationState,
 	deterministicOrder,
@@ -472,6 +478,7 @@ const props = defineProps({
 
 const emit = defineEmits(["row-click", "loaded"])
 const route = useRoute()
+const headingId = computed(() => `${props.doctype.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-list-title`)
 
 const excludedFieldtypes = new Set([
 	"Section Break",
@@ -1429,6 +1436,15 @@ defineExpose({ refresh: reload })
 	gap: 2px;
 	min-width: 160px;
 }
+
+.list-title-line {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	gap: 10px;
+}
+
+.list-title-line > div { min-width: 0; }
 
 .list-title-block::before { content: none; }
 

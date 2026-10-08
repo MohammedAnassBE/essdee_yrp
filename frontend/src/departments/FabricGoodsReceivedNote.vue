@@ -8,6 +8,7 @@
 		:show-title="false"
 		flat
 		full-width
+		:inline-navigation="Boolean(documentName)"
 		data-domain-root="goods-received-note-workspace"
 	>
 		<section class="fabric-goods-received-note-frame">

@@ -6,10 +6,11 @@
 	>
 		<div class="fabric-document-workspace__chrome">
 		<header class="fabric-document-workspace__header">
-			<slot name="header" :record="record" :workspace="workspace">
+			<InlinePageNavigation v-if="presentation === 'page'" :title-target="headingId" />
+			<slot name="header" :record="record" :workspace="workspace" :heading-id="headingId">
 				<div class="fabric-document-workspace__identity">
 					<div>
-						<h1>{{ title }}</h1>
+						<h1 :id="headingId">{{ title }}</h1>
 						<span>{{ record.name || "New document" }}</span>
 					</div>
 					<DocumentStatusBadge v-if="record.status" :docstatus="record.docstatus" :label="record.status" />
@@ -129,6 +130,7 @@ import { onBeforeRouteLeave } from "vue-router"
 import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
+import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
 
 const props = defineProps({
 	doctype: { type: String, required: true },
@@ -143,6 +145,7 @@ const props = defineProps({
 	compactMobileRail: { type: Boolean, default: false },
 })
 const emit = defineEmits(["reload", "action", "close"])
+const headingId = computed(() => `${props.doctype.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-workspace-title`)
 
 const discardVisible = ref(false)
 let pendingNavigation = null

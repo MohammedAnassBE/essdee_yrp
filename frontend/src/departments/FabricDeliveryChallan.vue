@@ -8,6 +8,7 @@
 		:show-title="false"
 		flat
 		full-width
+		:inline-navigation="Boolean(documentName)"
 		data-domain-root="delivery-challan-workspace"
 	>
 		<section class="fabric-delivery-challan-frame">

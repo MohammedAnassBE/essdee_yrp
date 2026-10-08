@@ -1,5 +1,9 @@
 <template>
 	<section ref="reportRoot" class="report-shell erp-card" :aria-label="title" :aria-busy="loading">
+		<header v-if="showInlineHeading" class="report-shell__heading">
+			<InlinePageNavigation :title-target="headingId" />
+			<h1 :id="headingId">{{ title }}</h1>
+		</header>
 		<form class="report-shell__filters" @submit.prevent="$emit('generate')">
 			<div class="report-filter-grid"><slot name="filters" /></div>
 			<div class="report-shell__commands erp-command-bar" :class="{ 'report-shell__commands--with-copy': copyable }">
@@ -76,14 +80,16 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, ref } from "vue"
+import { computed, onBeforeUnmount, ref } from "vue"
 import Button from "primevue/button"
 import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 
 import { copyElementAsImage } from "./copyElementAsImage.js"
+import InlinePageNavigation from "../navigation/InlinePageNavigation.vue"
+import { usePageNavigation } from "../navigation/pageNavigationContext.js"
 
-defineProps({
+const props = defineProps({
 	title: { type: String, required: true },
 	generated: { type: Boolean, default: false },
 	loading: { type: Boolean, default: false },
@@ -92,6 +98,10 @@ defineProps({
 	copyable: { type: Boolean, default: false },
 	keepResultsWhileLoading: { type: Boolean, default: false },
 })
+
+const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-report-title`)
+const pageNavigation = usePageNavigation()
+const showInlineHeading = computed(() => Boolean(pageNavigation?.inline?.value))
 
 defineEmits(["generate", "reset"])
 
@@ -129,6 +139,22 @@ onBeforeUnmount(() => window.clearTimeout(noticeTimer))
 .report-shell {
 	min-width: 0;
 	overflow: hidden;
+}
+
+.report-shell__heading {
+	display: flex;
+	min-height: 48px;
+	align-items: center;
+	gap: 10px;
+	padding: 5px var(--erp-space-4);
+	border-bottom: 1px solid var(--erp-border);
+}
+
+.report-shell__heading h1 {
+	margin: 0;
+	color: var(--erp-text);
+	font-size: 18px;
+	letter-spacing: -.018em;
 }
 
 .report-shell__filters {

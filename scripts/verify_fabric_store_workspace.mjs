@@ -170,6 +170,8 @@ async function shellSuite(page) {
 	await page.setViewportSize({ width: 1600, height: 1000 })
 	await page.goto(`${SITE}/web/fabric-store`, { waitUntil: "domcontentloaded" })
 	await page.locator(".workspace-launcher").waitFor({ timeout: 20_000 })
+	assert(await page.locator(".department-page__nav").count() === 0, "Fabric Store launcher retains the standalone Back row")
+	assert(await page.locator(".workspace-launcher__header .inline-page-navigation__back[aria-label='Back to Workspaces']").count() === 1, "Fabric Store launcher has no inline Back control")
 
 	const expectedCards = ["Work Orders", "Purchase Orders", "Stock Transfers", "Reports"]
 	const cards = page.locator(".workspace-launcher__card")
@@ -190,6 +192,8 @@ async function shellSuite(page) {
 	await page.waitForURL("**/web/fabric-store/work-orders")
 	await page.locator(".fabric-work-orders .common-list-view").waitFor({ timeout: 20_000 })
 	const workOrderListCount = await page.locator(".fabric-work-orders .common-list-view").count()
+	assert(await page.locator(".department-page__nav").count() === 0, "Work Order list retains the standalone Back row")
+	assert(await page.locator(".list-title-block .inline-page-navigation__back[aria-label='Back to Fabric Store']").count() === 1, "Work Order list has no inline Back control")
 	const focusedWorkspaceText = (await page.locator("main").innerText()).slice(0, 500)
 	assert(workOrderListCount === 1, `Work Orders do not use the common ListView. URL=${page.url()} content=${JSON.stringify(focusedWorkspaceText)}`)
 	const workOrderListGeometry = await page.locator(".fabric-work-orders .common-list-view").evaluate((list) => {
@@ -270,7 +274,10 @@ async function shellSuite(page) {
 
 	await page.locator(".fabric-work-orders .premium-list-table").getByText("WO-FAB-001", { exact: true }).click()
 	await page.waitForURL("**/web/fabric-store/work-orders/WO-FAB-001")
+	await page.locator(".fabric-document-workspace__header > .inline-page-navigation .inline-page-navigation__back[aria-label='Back to Work Orders']").waitFor({ timeout: 20_000 })
 	assert(page.url().endsWith("/web/fabric-store/work-orders/WO-FAB-001"), "Work Order did not navigate to its routed workspace")
+	assert(await page.locator(".department-page__nav").count() === 0, "Saved Work Order retains the standalone Back row")
+	assert(await page.locator(".fabric-document-workspace__header > .inline-page-navigation .inline-page-navigation__back[aria-label='Back to Work Orders']").count() === 1, "Saved Work Order has no inline Back control")
 
 	await page.goto(`${SITE}/web/fabric-store/purchase-orders`, { waitUntil: "domcontentloaded" })
 	await page.getByRole("button", { name: "Create Purchase Order", exact: true }).waitFor()
@@ -2206,6 +2213,7 @@ async function deliveryChallanSuite(page) {
 	await page.getByRole("button", { name: "Make DC", exact: true }).click()
 	const popup = page.locator(".related-document-workspace-dialog")
 	await popup.waitFor()
+	assert(await popup.locator(".inline-page-navigation").count() === 0, "Embedded Delivery Challan exposes page-level navigation")
 	assert(await popup.locator(".delivery-challan-workspace").count() === 1, "WO popup does not reuse the routed Delivery Challan root")
 	const loadsBeforeSave = parentLoads
 	await popup.getByRole("button", { name: "Save", exact: true }).click()

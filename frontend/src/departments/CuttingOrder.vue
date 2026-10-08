@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Cutting Order" accent="#059669" back-to="/cutting/orders" back-label="Cutting Orders" :show-title="false" flat full-width>
+	<DepartmentPage title="Cutting Order" accent="#059669" back-to="/cutting/orders" back-label="Cutting Orders" :show-title="false" flat full-width :inline-navigation="!checking && !showDraftEditor">
 		<div v-if="checking" class="order-probe erp-workspace" aria-label="Loading Cutting Order"><Skeleton height="76px" /><Skeleton height="420px" /></div>
 		<div v-else-if="showDraftEditor" class="order-editor-route erp-workspace">
 			<CuttingOrderEditor :name="cuttingOrderId" :initial-payload="editorProbe" @saved="editorSaved" @cancel="router.push('/cutting/orders')" />
@@ -10,8 +10,9 @@
 		<div v-else class="cutting-order-layout erp-workspace" :class="{ 'cutting-order-layout--without-sidebar': !showSidebar }">
 			<section class="cutting-order-main erp-card" aria-label="Cutting Order details">
 				<header class="order-record-header">
+					<InlinePageNavigation title-target="cutting-order-title" />
 					<div class="order-record-identity">
-						<div class="order-record-title"><h1>Cutting Order</h1><span>{{ cuttingOrderId }}</span></div>
+						<div class="order-record-title"><h1 id="cutting-order-title">Cutting Order</h1><span>{{ cuttingOrderId }}</span></div>
 						<div class="order-record-meta">
 							<DocumentStatusBadge :docstatus="record.docstatus" :label="record.status || 'Draft'" />
 							<span class="order-header-fact order-header-fact--detail" :title="record.cutting_order_detail || 'No Cutting Order Detail'">
@@ -59,6 +60,7 @@ import DepartmentPage from "../components/DepartmentPage.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import DocumentErrorDialog from "../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
+import InlinePageNavigation from "../components/navigation/InlinePageNavigation.vue"
 import { useActionConfirmation } from "../utils/useActionConfirmation.js"
 import CuttingOrderActions from "./cutting/order/CuttingOrderActions.vue"
 import CuttingOrderEditor from "./cutting/order/CuttingOrderEditor.vue"

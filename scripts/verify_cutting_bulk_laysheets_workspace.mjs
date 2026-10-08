@@ -160,6 +160,8 @@ assert(saveBody?.values?.lot_details?.length === 1, "Bulk setup did not save spl
 
 await page.goto(`${SITE}/web/cutting/bulk-lay-sheets/CBLS-WEB-00001`, { waitUntil: "domcontentloaded" })
 await page.getByRole("heading", { name: "Bulk LaySheets", exact: true }).waitFor({ timeout: 20_000 })
+assert(await page.locator(".department-page__nav").count() === 0, "Saved Bulk LaySheets retains the standalone Back row")
+assert(await page.locator(".bulk-record-header .inline-page-navigation__back[aria-label='Back to Bulk LaySheets']").count() === 1, "Saved Bulk LaySheets has no inline Back control beside its title")
 assert(await page.locator(".bulk-header-fact--lot").getByText("LOT-MAIN", { exact: true }).count() === 1, "Main Lot is not promoted to the Bulk header")
 assert(await page.locator(".bulk-header-fact--location").getByText("CUTTING", { exact: true }).count() === 1, "Location is not promoted to the Bulk header")
 assert(await page.locator(".bulk-command-bar").count() === 0, "Bulk LaySheets still renders a separate action strip")

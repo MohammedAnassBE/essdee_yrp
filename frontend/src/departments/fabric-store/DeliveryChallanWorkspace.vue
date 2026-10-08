@@ -15,9 +15,9 @@
 			@action="runWorkspaceAction"
 			@close="emit('closed')"
 		>
-			<template #header="{ record }">
+			<template #header="{ record, headingId }">
 				<div class="delivery-challan-header__identity" :class="{ 'delivery-challan-header__identity--embedded': presentation === 'embedded' }">
-					<div v-if="presentation !== 'embedded'" class="delivery-challan-header__title"><h1>Delivery Challan</h1><span>{{ record.name || duplicateLabel || (loading && name ? "Loading…" : error && name ? name : "New document") }}</span></div>
+					<div v-if="presentation !== 'embedded'" class="delivery-challan-header__title"><h1 :id="headingId">Delivery Challan</h1><span>{{ record.name || duplicateLabel || (loading && name ? "Loading…" : error && name ? name : "New document") }}</span></div>
 					<DocumentStatusBadge v-if="hasWorkspace && presentation !== 'embedded'" :docstatus="record.docstatus" :label="record.status || statusLabel(record.docstatus)" />
 					<div v-if="headerFacts.length" class="delivery-challan-header__facts" role="region" aria-label="Delivery Challan context" tabindex="0">
 						<div v-for="fact in headerFacts" :key="fact.label"><span>{{ fact.label }}</span><strong :title="String(fact.value)">{{ fact.value }}</strong></div>

@@ -15,9 +15,9 @@
 			@action="runWorkspaceAction"
 			@close="emit('closed')"
 		>
-			<template #header="{ record }">
+			<template #header="{ record, headingId }">
 				<div class="goods-received-note-header__identity" :class="{ 'goods-received-note-header__identity--embedded': presentation === 'embedded' }">
-					<div v-if="presentation !== 'embedded'" class="goods-received-note-header__title"><h1>Goods Received Note</h1><span>{{ record.name || duplicateLabel || (loading && name ? "Loading…" : error && name ? name : "New document") }}</span></div>
+					<div v-if="presentation !== 'embedded'" class="goods-received-note-header__title"><h1 :id="headingId">Goods Received Note</h1><span>{{ record.name || duplicateLabel || (loading && name ? "Loading…" : error && name ? name : "New document") }}</span></div>
 					<DocumentStatusBadge v-if="hasWorkspace && presentation !== 'embedded'" :docstatus="record.docstatus" :label="record.status || statusLabel(record.docstatus)" />
 					<div v-if="headerFacts.length" class="goods-received-note-header__facts" role="region" aria-label="Goods Received Note context" tabindex="0">
 						<div v-for="fact in headerFacts" :key="fact.label"><span>{{ fact.label }}</span><strong :title="String(fact.value)">{{ fact.value }}</strong></div>

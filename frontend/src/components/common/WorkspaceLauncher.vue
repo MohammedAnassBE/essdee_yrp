@@ -5,7 +5,8 @@
 		:aria-busy="loading"
 	>
 		<header class="erp-page-header workspace-launcher__header">
-			<div>
+			<InlinePageNavigation :title-target="headingId" />
+			<div class="workspace-launcher__title">
 				<p class="erp-page-header__eyebrow">Department workspace</p>
 				<h1 :id="headingId">{{ title }}</h1>
 			</div>
@@ -41,6 +42,7 @@
 import Skeleton from "primevue/skeleton"
 import { computed } from "vue"
 import { RouterLink } from "vue-router"
+import InlinePageNavigation from "../navigation/InlinePageNavigation.vue"
 
 const props = defineProps({
 	title: { type: String, required: true },
@@ -60,7 +62,8 @@ const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]
 	padding: clamp(24px, 4vw, 48px) 8px;
 }
 
-.workspace-launcher__header { margin-bottom: var(--erp-space-6); }
+.workspace-launcher__header { display: flex; align-items: center; gap: 10px; margin-bottom: var(--erp-space-6); }
+.workspace-launcher__title { min-width: 0; }
 
 .workspace-launcher__header h1 {
 	margin: 0;

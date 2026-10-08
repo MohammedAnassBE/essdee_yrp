@@ -1,8 +1,9 @@
 <template>
 	<section class="common-form-view" :class="{ 'common-form-view--compact': compact }" :aria-busy="loading">
 		<header class="form-toolbar">
+			<InlinePageNavigation :title-target="headingId" />
 			<div class="form-toolbar__identity">
-				<h2>{{ heading }}</h2>
+				<h2 :id="headingId">{{ heading }}</h2>
 				<div class="form-toolbar__meta">
 					<small>{{ documentName ? documentName : `New ${doctype}` }}</small>
 					<slot name="header-meta" :doc="form" :meta="meta" :loading="loading" />
@@ -219,6 +220,7 @@ import ChildTableField from "./ChildTableField.vue"
 import FormField from "./FormField.vue"
 import DocumentErrorDialog from "../documents/DocumentErrorDialog.vue"
 import { plainTextFromHtml } from "../../utils/documentValues.js"
+import InlinePageNavigation from "../navigation/InlinePageNavigation.vue"
 
 const props = defineProps({
 	doctype: { type: String, required: true },
@@ -239,6 +241,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(["saved", "loaded", "cancel", "change"])
+const headingId = computed(() => `${props.doctype.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-form-title`)
 
 const noValueFieldtypes = new Set([
 	"Section Break",

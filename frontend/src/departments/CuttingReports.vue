@@ -7,6 +7,7 @@
 		:show-title="false"
 		flat
 		full-width
+		inline-navigation
 	>
 		<section class="cutting-reports erp-workspace" aria-label="Cutting Reports">
 			<div v-if="loadingPermissions" class="report-permission-loading"><Skeleton height="3rem" /><Skeleton height="14rem" /></div>

@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Purchase Order" accent="#0a7f5a" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width>
+	<DepartmentPage title="Purchase Order" accent="#0a7f5a" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
 		<section class="fabric-purchase-order-frame">
 			<FabricDocumentWorkspace
 				doctype="Purchase Order"
@@ -12,9 +12,9 @@
 				@reload="loadWorkspace(true)"
 				@action="runWorkspaceAction"
 			>
-				<template #header="{ record }">
+				<template #header="{ record, headingId }">
 					<div class="purchase-order-page__identity">
-						<div><h1>Purchase Order</h1><span>{{ record.name }}</span></div>
+						<div><h1 :id="headingId">Purchase Order</h1><span>{{ record.name }}</span></div>
 						<DocumentStatusBadge :docstatus="record.docstatus" :label="record.status || statusLabel(record.docstatus)" />
 						<div class="purchase-order-page__facts" role="region" aria-label="Purchase Order context" tabindex="0">
 							<div><span>Supplier</span><strong :title="record.supplier_name || record.supplier || '—'">{{ record.supplier_name || record.supplier || "—" }}</strong></div>

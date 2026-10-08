@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage :title="definition.label" accent="#0a7f5a" :back-to="basePath" :back-label="storeName" :show-title="false" flat full-width>
+	<DepartmentPage :title="definition.label" accent="#0a7f5a" :back-to="basePath" :back-label="storeName" :show-title="false" flat full-width inline-navigation>
 		<section class="fabric-store-section erp-workspace" :aria-label="definition.label">
 			<div v-if="loading" class="fabric-store-section__loading">
 				<Skeleton height="76px" />

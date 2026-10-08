@@ -51,7 +51,7 @@ async function noOverflow(page, label) {
 // These browser tests catch missing/wrong cards, capability leaks, missing retry,
 // unfiltered Supplier searches, lost route context, eager data loads and overflow.
 async function launcherSuite(page) {
-	const state = { payload: capabilities, error: "", delay: 0 }
+	const state = { payload: capabilities, error: "", errorStatus: 500, delay: 0 }
 	const searchRequests = []
 	const dataRequests = []
 	const browserErrors = []
@@ -60,7 +60,10 @@ async function launcherSuite(page) {
 		const method = new URL(route.request().url()).pathname.split("/api/method/")[1]
 		if (method === "essdee_yrp.sewing.web_workspace.get_capabilities") {
 			if (state.delay) await new Promise((resolve) => setTimeout(resolve, state.delay))
-			return route.fulfill({ status: state.error ? 500 : 200, contentType: "application/json", body: JSON.stringify({ message: state.error || state.payload }) })
+			const payload = state.error && state.errorStatus === 403
+				? { exc_type: "PermissionError", exc: '["frappe.exceptions.PermissionError"]', _server_messages: JSON.stringify([JSON.stringify({ message: state.error, raise_exception: 1 })]) }
+				: { message: state.error || state.payload }
+			return route.fulfill({ status: state.error ? state.errorStatus : 200, contentType: "application/json", body: JSON.stringify(payload) })
 		}
 		if (method === "essdee_yrp.api.link_search.link_search") {
 			searchRequests.push(JSON.parse(route.request().postData() || "{}"))
@@ -105,15 +108,25 @@ async function launcherSuite(page) {
 	await page.waitForURL("**/web/sewing?supplier=UNIT-A")
 	await cards.nth(2).waitFor()
 	assert(await page.getByRole("combobox", { name: "Sewing Unit", exact: true }).inputValue() === "UNIT-A", "Back navigation loses Supplier selection")
+	await page.goForward()
+	await page.waitForURL("**/web/sewing/plans?supplier=UNIT-B")
+	await page.locator("[data-sewing-destination='plans']").waitFor()
+	assert(await page.getByRole("combobox", { name: "Sewing Unit", exact: true }).inputValue() === "UNIT-B", "Forward navigation loses Supplier selection")
+	await page.goBack()
+	await page.waitForURL("**/web/sewing?supplier=UNIT-A")
+	await cards.nth(2).waitFor()
 	await page.locator(".sewing-unit-picker .p-autocomplete-clear-icon").click()
 	await page.waitForURL((url) => !url.searchParams.has("supplier"))
 	assert(await page.getByRole("link", { name: /^Sewing Plan/ }).getAttribute("href") === "/web/sewing/plans", "Clearing the picker leaves stale Supplier in scoped links")
 	for (const key of ["plans", "reports"]) {
-		dataRequests.length = 0
-		await navigate(page, `/web/sewing/${key}`)
-		await page.getByText(`Select a Sewing Unit to view ${key === "plans" ? "Sewing Plan" : "Reports"}.`, { exact: true }).waitFor()
-		assert(await page.locator("[data-sewing-destination]").count() === 0, "Scoped content mounts without Supplier")
-		assert(dataRequests.length === 0, `Missing Supplier issued data requests: ${dataRequests}`)
+		for (const query of ["", "?supplier", "?supplier=", "?supplier=UNIT-A&supplier=UNIT-B"]) {
+			dataRequests.length = 0
+			await navigate(page, `/web/sewing/${key}${query}`)
+			await page.getByText(`Select a Sewing Unit to view ${key === "plans" ? "Sewing Plan" : "Reports"}.`, { exact: true }).waitFor()
+			assert(await page.getByRole("combobox", { name: "Sewing Unit", exact: true }).inputValue() === "", `Invalid Supplier query populated picker: ${query}`)
+			assert(await page.locator("[data-sewing-destination]").count() === 0, `Scoped content mounts with missing/malformed Supplier: ${query}`)
+			assert(dataRequests.length === 0, `Missing/malformed Supplier issued data requests: ${query}: ${dataRequests}`)
+		}
 	}
 	await navigate(page, "/web/sewing/attendance")
 	await page.locator("[data-sewing-destination='attendance']").waitFor()
@@ -140,6 +153,15 @@ async function launcherSuite(page) {
 	state.error = ""
 	await page.getByRole("button", { name: "Retry", exact: true }).click()
 	await cards.nth(2).waitFor()
+	state.errorStatus = 403
+	state.error = "Sewing access was denied. Please retry."
+	await navigate(page, "/web/sewing")
+	await page.getByRole("alert").getByText(state.error, { exact: true }).waitFor()
+	assert(await cards.count() === 0, "HTTP 403 leaves Sewing cards visible")
+	state.error = ""
+	await page.getByRole("button", { name: "Retry", exact: true }).click()
+	await cards.nth(2).waitFor()
+	assert(await page.getByRole("alert").count() === 0, "HTTP 403 error remains after successful Retry")
 	state.delay = 700
 	await navigate(page, "/web/sewing")
 	await page.getByRole("status").filter({ hasText: "Loading" }).waitFor()
@@ -162,7 +184,7 @@ async function launcherSuite(page) {
 		}
 	}
 	assert(browserErrors.length === 0, `Sewing browser errors: ${browserErrors.join("\n")}`)
-	console.log("PASS launcher: three cards, permissions, retry/loading, filtered Supplier search, query/reload/back, missing-selection guard, global attendance, active-only mount, 16 viewport checks")
+	console.log("PASS launcher: three cards, permissions, 500/403 Frappe retry/loading, filtered Supplier search, query/reload/back/forward, missing/blank/malformed Supplier guard, global attendance, active-only mount, 16 viewport checks")
 }
 
 // Execute the real composable and real Vue Router with deferred responses. This
@@ -172,9 +194,11 @@ async function contextSuite(browser) {
 	const harness = `
 import { createApp, h, ref, watch } from 'vue';
 import { createRouter, createMemoryHistory } from 'vue-router';
+import PrimeVue from 'primevue/config';
 import { useSewingContext } from '/src/departments/sewing/useSewingContext.js';
-const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/sewing', component: { render: () => null } }] });
-await router.push('/sewing?keep=yes');
+import SewingWorkspaceShell from '/src/departments/sewing/SewingWorkspaceShell.vue';
+const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/sewing/:section?', component: { render: () => null } }] });
+await router.push('/sewing/plans?keep=yes');
 window.pending = {};
 window.app = createApp({ setup() {
  const context = useSewingContext(); window.context = context; window.router = router;
@@ -185,8 +209,8 @@ window.app = createApp({ setup() {
   const value = await new Promise(resolve => window.pending[supplier] = resolve);
   if (context.isCurrent(generation)) result.value = value;
  }, { flush: 'sync' });
- return () => h('main', [h('button', { onClick: () => context.setSupplier('UNIT-A') }, 'A'), h('button', { onClick: () => context.setSupplier('UNIT-B') }, 'B'), h('output', result.value)]);
-}}).use(router); window.app.mount('#app');
+ return () => h('main', [h('button', { onClick: () => context.setSupplier('UNIT-A') }, 'A'), h('button', { onClick: () => context.setSupplier('UNIT-B') }, 'B'), h('output', result.value), h(SewingWorkspaceShell, { title: 'Sewing Plan', section: 'plans' }, () => h('p', 'Development shell content'))]);
+}}).use(router).use(PrimeVue); window.app.mount('#app');
 `
 	const html = '<!doctype html><html><body><div id="app"></div><script type="module" src="/__sewing-context-test.js"></script></body></html>'
 	const server = await createServer({
@@ -207,7 +231,10 @@ window.app = createApp({ setup() {
 	})
 	await server.listen()
 	const page = await browser.newPage()
+	const warnings = []
+	page.on("console", (message) => { if (message.type() === "warning") warnings.push(message.text()) })
 	try {
+		await page.route("**/api/method/essdee_yrp.sewing.web_workspace.get_capabilities", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ message: capabilities }) }))
 		await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/__sewing-context-test`)
 		await page.getByRole("button", { name: "A", exact: true }).click()
 		await page.waitForFunction(() => Boolean(window.pending["UNIT-A"]))
@@ -221,9 +248,13 @@ window.app = createApp({ setup() {
 		assert(await page.locator("output").textContent() === "Current B response", "Delayed A response overwrote B")
 		assert(await page.evaluate(() => window.router.currentRoute.value.query.keep) === "yes", "Supplier selection discarded unrelated query")
 		assert(await page.evaluate(() => window.context.isCurrent(window.context.beginRequest())) === true, "New request must be current")
+		await page.getByRole("button", { name: "Back to Sewing", exact: true }).click()
+		await page.waitForFunction(() => window.router.currentRoute.value.path === "/sewing")
+		assert(await page.evaluate(() => window.router.currentRoute.value.query.supplier) === "UNIT-B", "Development shell back navigation loses Supplier")
+		assert(warnings.length === 0, `Development Sewing shell emits Vue warnings: ${warnings.join("\n")}`)
 		assert(await page.evaluate(async () => { const generation = window.context.beginRequest(); await window.router.replace('/sewing?keep=yes'); return window.context.isCurrent(generation) }) === false, "Clearing Supplier did not reject stale response")
 		assert(await page.evaluate(() => { const generation = window.context.beginRequest(); window.app.unmount(); return window.context.isCurrent(generation) }) === false, "Unmounted context still accepts a response")
-		console.log("PASS context: real Vue/Router rapid A to B stale-response rejection, monotonic generation, query preservation, cleared selection and unmount invalidation")
+		console.log("PASS context: real Vue/Router rapid A to B stale-response rejection, monotonic generation, query preservation, warning-free development shell, cleared selection and unmount invalidation")
 	} finally { await page.close(); await server.close() }
 }
 

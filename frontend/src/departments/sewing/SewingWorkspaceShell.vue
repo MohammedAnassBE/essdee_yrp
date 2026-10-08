@@ -36,6 +36,7 @@
 import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 import { computed, onMounted, onUnmounted, ref } from "vue"
+import { useRouter } from "vue-router"
 
 import { getSewingCapabilities } from "../../api/sewing.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
@@ -48,9 +49,12 @@ const props = defineProps({
 	section: { type: String, default: "" },
 })
 const { supplier } = useSewingContext()
+const router = useRouter()
 const capabilities = ref({})
 const capability = computed(() => capabilities.value.sections?.[props.section])
-const backTo = computed(() => props.section ? { path: "/sewing", query: supplier.value ? { supplier: supplier.value } : {} } : "/")
+const backTo = computed(() => props.section
+	? router.resolve({ path: "/sewing", query: supplier.value ? { supplier: supplier.value } : {} }).fullPath
+	: "/")
 const loading = ref(true)
 const error = ref("")
 let capabilityGeneration = 0

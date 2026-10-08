@@ -200,6 +200,7 @@ def get_calculated_bom(lot_template, planned_qty):
 	if isinstance(planned_qty, string_types):
 		planned_qty = json.loads(planned_qty)
 	lot = frappe.get_doc("SD YRP Lot Template", lot_template)
+	lot.check_permission("read")
 	attributes = get_attribute_values(lot_template)
 	bom = []
 	errors = []

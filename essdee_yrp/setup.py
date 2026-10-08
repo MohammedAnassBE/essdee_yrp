@@ -12,6 +12,7 @@ import frappe
 from frappe.contacts.doctype.address_template.address_template import (
 	get_default_address_template,
 )
+from frappe.permissions import add_permission
 from yrp.attribute_links import value as _attribute_value
 
 from essdee_yrp.web_build import build_web_spa
@@ -57,6 +58,9 @@ DOCPERM_FIELDS = (
 	"email",
 )
 
+PRODUCTION_PLANNER_ROLE = "Production Planner"
+PRODUCTION_PLANNER_READ_DOCTYPES = ("Item",)
+
 ESSDEE_REQUIRED_STOCK_DIMENSIONS = (
 	{
 		"dimension_doctype": "SD YRP Lot",
@@ -87,6 +91,7 @@ def after_install():
 	ensure_default_address_template()
 	ensure_mrp_schema_roles()
 	ensure_mrp_cancel_permissions()
+	ensure_production_planner_read_permissions()
 	ensure_yrp_production_order_settings()
 	from essdee_yrp.patches import seed_default_dia_attribute, seed_role_settings
 
@@ -113,6 +118,7 @@ def after_migrate():
 	ensure_default_address_template()
 	ensure_mrp_schema_roles()
 	ensure_mrp_cancel_permissions()
+	ensure_production_planner_read_permissions()
 	ensure_sd_yrp_consumer_config()
 	ensure_yrp_production_order_settings()
 	ensure_lot_packing_boundary()
@@ -378,6 +384,18 @@ def ensure_mrp_cancel_permissions():
 						**values,
 					}
 				).insert(ignore_permissions=True)
+		frappe.clear_cache(doctype=doctype)
+
+
+def ensure_production_planner_read_permissions():
+	"""Grant planners read on doctypes their /web pages load; create and write stay with the owning roles."""
+	for doctype in PRODUCTION_PLANNER_READ_DOCTYPES:
+		filters = {"parent": doctype, "role": PRODUCTION_PLANNER_ROLE, "permlevel": 0, "if_owner": 0}
+		name = frappe.db.get_value("Custom DocPerm", filters, "name")
+		if name:
+			frappe.db.set_value("Custom DocPerm", name, "read", 1)
+		else:
+			add_permission(doctype, PRODUCTION_PLANNER_ROLE)
 		frappe.clear_cache(doctype=doctype)
 
 

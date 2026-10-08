@@ -2,8 +2,9 @@ import copy
 from unittest.mock import patch
 
 import frappe
+from frappe.share import add_docshare
 from frappe.tests import IntegrationTestCase
-from frappe.utils import flt, nowdate, nowtime
+from frappe.utils import flt, getdate, nowdate, nowtime
 
 from essdee_yrp.sewing.closed_work_order import (
 	_closed_work_order_receivable_rows,
@@ -14,6 +15,7 @@ from essdee_yrp.sewing.closed_work_order import (
 )
 from essdee_yrp.sewing.config import get_sewing_input_configuration
 from essdee_yrp.sewing.entry import (
+	_assert_entry_cancellable,
 	cancel_sewing_plan_entry,
 	get_data_entry_data,
 	submit_data_entry_log,
@@ -129,6 +131,127 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 			with self.assertRaises(frappe.ValidationError):
 				cancel_sewing_plan_entry(entry.name)
 			self.assertTrue(frappe.db.exists(entry.doctype, entry.name))
+
+	def test_entry_cancellation_reloads_locked_current_date(self):
+		plan = self._mutation_plan()
+		frappe.db.set_single_value("SD YRP MRP Settings", "previous_day_entries", 1)
+		entry = self._mutation_entry(plan, "2090-01-05")
+		self._mutation_entry(plan, "2090-01-05")
+		stale = frappe.get_doc(entry.doctype, entry.name)
+		frappe.db.set_value(entry.doctype, entry.name, "entry_date", "2090-01-01")
+
+		with self.assertRaises(frappe.ValidationError):
+			_assert_entry_cancellable(stale)
+		self.assertEqual(getdate(stale.entry_date), getdate("2090-01-01"))
+		with self.assertRaises(frappe.ValidationError):
+			cancel_sewing_plan_entry(entry.name)
+		self.assertTrue(frappe.db.exists(entry.doctype, entry.name))
+
+		frappe.db.set_value(entry.doctype, entry.name, "entry_date", "2090-01-07")
+		_assert_entry_cancellable(stale)
+		self.assertEqual(getdate(stale.entry_date), getdate("2090-01-07"))
+		cancel_sewing_plan_entry(entry.name)
+		self.assertFalse(frappe.db.exists(entry.doctype, entry.name))
+
+	def _consumption_writer(self, plan, *, roles=()):
+		user = f"sewing-consumption-{frappe.generate_hash(length=10)}@example.com"
+		user_doc = frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": user,
+				"first_name": "Sewing Consumption Writer",
+				"enabled": 1,
+				"user_type": "System User",
+				"send_welcome_email": 0,
+			}
+		).insert()
+		if roles:
+			user_doc.add_roles(*roles)
+		add_docshare(plan.doctype, plan.name, user=user, read=1, write=1)
+		self.addCleanup(frappe.clear_cache, user=user)
+		return user
+
+	def test_consumption_save_rejects_denied_ipd_read(self):
+		plan = self._mutation_plan()
+		user = self._consumption_writer(plan)
+		before = frappe.get_doc(plan.doctype, plan.name).as_dict()
+		previous_user = frappe.session.user
+		try:
+			frappe.set_user(user)
+			self.assertTrue(frappe.has_permission(plan.doctype, "write", doc=plan.name))
+			self.assertTrue(frappe.has_permission("SD YRP Lot", "read", doc=plan.lot))
+			self.assertFalse(frappe.has_permission("YRP Item Production Detail", "read"))
+			with self.assertRaises(frappe.PermissionError):
+				get_consumption_mapping_data(plan.lot, plan.supplier)
+			with self.assertRaises(frappe.PermissionError):
+				save_consumption_data(plan.supplier, plan.lot, [], [])
+		finally:
+			frappe.set_user(previous_user)
+		self.assertEqual(frappe.get_doc(plan.doctype, plan.name).as_dict(), before)
+
+	def test_consumption_save_rejects_denied_lot_read(self):
+		plan = self._mutation_plan()
+		other_plan = self._mutation_plan()
+		user = self._consumption_writer(plan, roles=("Production Planner",))
+		frappe.get_doc(
+			{
+				"doctype": "User Permission",
+				"user": user,
+				"allow": "SD YRP Lot",
+				"for_value": other_plan.lot,
+				"apply_to_all_doctypes": 0,
+				"applicable_for": "SD YRP Lot",
+			}
+		).insert()
+		before = frappe.get_doc(plan.doctype, plan.name).as_dict()
+		previous_user = frappe.session.user
+		try:
+			frappe.set_user(user)
+			self.assertTrue(frappe.has_permission(plan.doctype, "write", doc=plan.name))
+			self.assertTrue(frappe.has_permission("YRP Item Production Detail", "read"))
+			self.assertFalse(frappe.has_permission("SD YRP Lot", "read", doc=plan.lot))
+			with self.assertRaises(frappe.PermissionError):
+				get_consumption_mapping_data(plan.lot, plan.supplier)
+			with self.assertRaises(frappe.PermissionError):
+				save_consumption_data(plan.supplier, plan.lot, [], [])
+		finally:
+			frappe.set_user(previous_user)
+		self.assertEqual(frappe.get_doc(plan.doctype, plan.name).as_dict(), before)
+
+	def test_consumption_read_and_save_reject_denied_ipd_document(self):
+		plan = self._mutation_plan()
+		ipd = frappe.db.get_value("SD YRP Lot", plan.lot, "production_detail")
+		other_ipd = frappe.get_all(
+			"YRP Item Production Detail", filters={"name": ["!=", ipd]}, pluck="name", limit=1
+		)[0]
+		user = self._consumption_writer(plan, roles=("Production Planner",))
+		frappe.get_doc(
+			{
+				"doctype": "User Permission",
+				"user": user,
+				"allow": "YRP Item Production Detail",
+				"for_value": other_ipd,
+				"apply_to_all_doctypes": 0,
+				"applicable_for": "YRP Item Production Detail",
+			}
+		).insert()
+		before = frappe.get_doc(plan.doctype, plan.name).as_dict()
+		previous_user = frappe.session.user
+		try:
+			frappe.set_user(user)
+			self.assertTrue(frappe.has_permission(plan.doctype, "write", doc=plan.name))
+			self.assertTrue(frappe.has_permission("SD YRP Lot", "read", doc=plan.lot))
+			self.assertTrue(frappe.has_permission("YRP Item Production Detail", "read"))
+			self.assertFalse(frappe.has_permission("YRP Item Production Detail", "read", doc=ipd))
+			for label, operation in (
+				("read", lambda: get_consumption_mapping_data(plan.lot, plan.supplier)),
+				("save", lambda: save_consumption_data(plan.supplier, plan.lot, [], [])),
+			):
+				with self.subTest(operation=label), self.assertRaises(frappe.PermissionError):
+					operation()
+		finally:
+			frappe.set_user(previous_user)
+		self.assertEqual(frappe.get_doc(plan.doctype, plan.name).as_dict(), before)
 
 	def test_consumption_read_and_save_reject_unrelated_supplier(self):
 		plan = self._mutation_plan()

@@ -775,12 +775,9 @@ def get_supplier_lots(doctype, txt, searchfield, start, page_len, filters):
 @frappe.whitelist()
 def get_consumption_mapping_data(lot, supplier=None):
 	supplier, plans = _consumption_plans(lot, supplier)
-	frappe.has_permission("YRP Item Production Detail", "read", throw=True)
-	lot_doc = frappe.get_doc("SD YRP Lot", lot)
-	lot_doc.check_permission("read")
-	if not lot_doc.production_detail:
+	_lot_doc, ipd = _consumption_documents(lot)
+	if not ipd:
 		return {"ipd": "", "sections": [], "cloth_acc_data": []}
-	ipd = frappe.get_doc("YRP Item Production Detail", lot_doc.production_detail)
 	process = ipd.get("stiching_process")
 	if not process:
 		return {"ipd": ipd.name, "sections": [], "cloth_acc_data": []}
@@ -919,6 +916,18 @@ def _consumption_scope_error():
 	)
 
 
+def _consumption_documents(lot):
+	"""Apply the same Lot and production-detail read boundary to reads and writes."""
+	frappe.has_permission("YRP Item Production Detail", "read", throw=True)
+	lot_doc = frappe.get_doc("SD YRP Lot", lot)
+	lot_doc.check_permission("read")
+	ipd = None
+	if lot_doc.production_detail:
+		ipd = frappe.get_doc("YRP Item Production Detail", lot_doc.production_detail)
+		ipd.check_permission("read")
+	return lot_doc, ipd
+
+
 def _consumption_plans(lot, supplier=None):
 	"""Resolve a legacy omitted Supplier only from one readable owner of this exact Lot."""
 	if not cstr(lot).strip():
@@ -949,6 +958,7 @@ def save_consumption_data(supplier, lot, sections, cloth_acc_data=None):
 	if not cstr(supplier).strip():
 		_consumption_scope_error()
 	_supplier, plans = _consumption_plans(lot, supplier)
+	_consumption_documents(lot)
 	for plan_row in plans:
 		plan = frappe.get_doc("SD YRP Sewing Plan", plan_row.name)
 		plan.check_permission("write")

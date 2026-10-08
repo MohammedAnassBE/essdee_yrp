@@ -321,9 +321,16 @@ def cancel_sewing_plan_entry(doc_id: str) -> None:
 
 def _assert_entry_cancellable(entry) -> None:
 	"""Repeat the Supplier's distinct-date eligibility and effective permission checks."""
+	# Use the same parent-before-entry lock order as data entry submissions.
+	frappe.db.sql(
+		"select name from `tabSD YRP Sewing Plan` where name = %s for update",
+		entry.sewing_plan,
+	)
+	entry.flags.for_update = True
+	entry.reload()
 	entry.check_permission("delete")
 	previous_days = cint(frappe.db.get_single_value("SD YRP MRP Settings", "previous_day_entries"))
-	supplier = frappe.db.get_value("SD YRP Sewing Plan", entry.sewing_plan, "supplier")
+	supplier = frappe.db.get_value("SD YRP Sewing Plan", entry.sewing_plan, "supplier", for_update=True)
 	cancellable_dates = set()
 	if supplier and previous_days > 0:
 		cancellable_dates = {

@@ -395,12 +395,14 @@ async function mobileRecordDetailsSuite(page) {
 		{ fieldname: "comments", label: "Comments", fieldtype: "Small Text", value: "Keep the finished cartons away from the loading bay until collection." },
 		{ fieldname: "special_note", label: "Special Note", fieldtype: "Long Text", value: "UNINTERRUPTEDMOBILERECORDREFERENCETHATMUSTWRAPINSIDETHEDETAILGRIDWITHOUTCLIPPINGORHORIZONTALOVERFLOW" },
 	]
-	const measureFacts = (root, fieldSelector) => root.evaluate((element, selector) => {
+	const measureFacts = (root, fieldSelector, labelSelector = "span", valueSelector = "strong") => root.evaluate((element, selectors) => {
+		const { fieldSelector: selector, labelSelector: label, valueSelector: valueSelectorName } = selectors
 		const rows = [...element.querySelectorAll(selector)]
+		const columnElement = element.matches(".document-overview__facts, .work-order-overview__facts") ? element : element.querySelector(".document-overview__facts, .work-order-overview__facts")
 		const byLabel = (label) => {
-			const row = rows.find((candidate) => candidate.querySelector("span")?.textContent?.trim() === label)
+			const row = rows.find((candidate) => candidate.querySelector(selectors.labelSelector)?.textContent?.trim() === label)
 			if (!row) return null
-			const value = row.querySelector("strong")
+			const value = row.querySelector(valueSelectorName)
 			return {
 				...row.getBoundingClientRect().toJSON(),
 				valueClientWidth: value?.clientWidth || 0,
@@ -409,22 +411,22 @@ async function mobileRecordDetailsSuite(page) {
 			}
 		}
 		return {
-			columns: getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length,
+			columns: getComputedStyle(columnElement || element).gridTemplateColumns.split(" ").filter(Boolean).length,
 			packing: byLabel("Packing Instructions"),
 			handling: byLabel("Handling Instructions"),
 			address: byLabel("Supplier Address Details"),
 			comments: byLabel("Comments"),
 			note: byLabel("Special Note"),
 		}
-	}, fieldSelector)
-	const assertCompactFacts = (geometry, label) => assert(
+	}, { fieldSelector, labelSelector, valueSelector })
+	const assertCompactFacts = (geometry, label, requireComments = true) => assert(
 		geometry.columns === 2
 			&& geometry.packing
 			&& geometry.handling
 			&& Math.abs(geometry.packing.y - geometry.handling.y) < 2
 			&& geometry.address?.width > geometry.packing.width * 1.7
 			&& geometry.address.valueText === "Line one\nLine two"
-			&& geometry.comments?.width > geometry.packing.width * 1.7
+			&& (!requireComments || geometry.comments?.width > geometry.packing.width * 1.7)
 			&& geometry.note?.width > geometry.packing.width * 1.7
 			&& geometry.note.valueScrollWidth <= geometry.note.valueClientWidth + 1,
 		`${label} mobile facts do not retain paired compact fields with only long address/comment rows spanning: ${JSON.stringify(geometry)}`,
@@ -441,10 +443,13 @@ async function mobileRecordDetailsSuite(page) {
 		} }),
 	}))
 	await page.goto(`${SITE}/web/fabric-store/work-orders/WO-MOBILE-001`, { waitUntil: "domcontentloaded" })
-	const workOrderFacts = page.locator(".work-order-fields")
+	const workOrderFacts = page.locator(".work-order-overview__section--wide .work-order-overview__facts")
 	await workOrderFacts.waitFor({ timeout: 20_000 })
-	const workOrderGeometry = await measureFacts(workOrderFacts, ":scope > .work-order-field")
-	assertCompactFacts(workOrderGeometry, "Work Order")
+	const workOrderGeometry = await measureFacts(workOrderFacts, ":scope > div", "dt", "dd")
+	assertCompactFacts(workOrderGeometry, "Work Order", false)
+	const workOrderStatusFacts = page.locator(".work-order-overview__section").filter({ has: page.getByRole("heading", { name: "Status & notes", exact: true }) }).locator(".work-order-overview__facts")
+	const workOrderStatusGeometry = await measureFacts(workOrderStatusFacts, ":scope > div", "dt", "dd")
+	assert(workOrderStatusGeometry.comments?.valueScrollWidth <= workOrderStatusGeometry.comments?.valueClientWidth + 1, `Work Order Comments overflow their semantic section: ${JSON.stringify(workOrderStatusGeometry.comments)}`)
 	await assertNoPageOverflow(page, "Work Order record at 390px")
 
 	await page.unroute(purchaseOrderWorkspaceRoute)
@@ -458,9 +463,9 @@ async function mobileRecordDetailsSuite(page) {
 		} }),
 	}))
 	await page.goto(`${SITE}/web/fabric-store/purchase-orders/PO-MOBILE-001`, { waitUntil: "domcontentloaded" })
-	const purchaseOrderFacts = page.locator(".purchase-order-page__details")
+	const purchaseOrderFacts = page.locator(".document-overview")
 	await purchaseOrderFacts.waitFor({ timeout: 20_000 })
-	const purchaseOrderGeometry = await measureFacts(purchaseOrderFacts, ":scope > div")
+	const purchaseOrderGeometry = await measureFacts(purchaseOrderFacts, ".document-overview__facts > div", "dt", "dd")
 	assertCompactFacts(purchaseOrderGeometry, "Purchase Order")
 	await assertNoPageOverflow(page, "Purchase Order record at 390px")
 
@@ -509,6 +514,7 @@ async function workOrderSuite(page) {
 		details: [
 			{ fieldname: "wo_date", label: "WO Date", fieldtype: "Date", value: "2026-10-03" },
 			{ fieldname: "supplier", label: "Supplier", fieldtype: "Link", value: "FABRIC-STORE" },
+			{ fieldname: "supplier_name", label: "Supplier Name", fieldtype: "Data", value: "Fabric Store" },
 			{ fieldname: "process_name", label: "Process Name", fieldtype: "Link", value: "Knitting" },
 			{ fieldname: "item", label: "Item", fieldtype: "Link", value: "STYLE-001" },
 			{ fieldname: "lot", label: "Lot", fieldtype: "Link", value: "LOT-001" },
@@ -517,6 +523,7 @@ async function workOrderSuite(page) {
 		fields: [
 			{ fieldname: "wo_date", label: "WO Date", fieldtype: "Date", value: "2026-10-03" },
 			{ fieldname: "supplier", label: "Supplier", fieldtype: "Link", value: "FABRIC-STORE" },
+			{ fieldname: "supplier_name", label: "Supplier Name", fieldtype: "Data", value: "Fabric Store" },
 			{ fieldname: "process_name", label: "Process Name", fieldtype: "Link", value: "Knitting" },
 			{ fieldname: "item", label: "Item", fieldtype: "Link", value: "STYLE-001" },
 			{ fieldname: "lot", label: "Lot", fieldtype: "Link", value: "LOT-001" },
@@ -756,17 +763,15 @@ async function workOrderSuite(page) {
 	await commandbar.getByRole("button", { name: "More", exact: true }).click()
 	assert(await frame.locator(".fabric-document-workspace__footer").count() === 0, "Work Order still pushes lifecycle actions to a bottom footer")
 	assert(await frame.locator(".work-order-page__actions").count() === 0, "Work Order still pushes operations into a bottom panel")
-	assert(await page.getByText("Process", { exact: true }).count() === 1, "Work Order repeats Process outside its authoritative header fact")
-	assert(await page.getByText("Item", { exact: true }).count() === 1, "Work Order repeats Item outside its authoritative header fact")
-	assert(await page.getByText("Lot", { exact: true }).count() === 1, "Work Order repeats Lot outside its authoritative header fact")
-	assert(await page.getByRole("heading", { name: "Work Order", exact: true }).count() === 1, "Work Order title is missing")
-	assert(await page.getByText("WO-FAB-001", { exact: true }).count() === 1, "Work Order ID is missing")
+	const identity = frame.locator(".work-order-page__identity")
+	assert(await identity.getByRole("heading", { name: "LOT-001 · STYLE-001", exact: true }).count() === 1, "Work Order header does not lead with Lot and Item")
+	assert(await identity.getByText("WO date", { exact: true }).count() === 1, "Work Order header omits its date label")
+	assert(await identity.getByText("03-10-2026", { exact: true }).count() === 1, "Work Order header omits its formatted date")
+	for (const removedHeaderFact of ["Process", "Job worker", "Planned qty"]) {
+		assert(await identity.getByText(removedHeaderFact, { exact: true }).count() === 0, `Work Order header still exposes ${removedHeaderFact}`)
+	}
+	assert(await identity.getByText("Work order · WO-FAB-001", { exact: true }).count() === 1, "Work Order ID is missing")
 	assert(await page.getByText("Partially Delivered", { exact: true }).count() >= 1, "Work Order status is missing")
-	const headerFacts = page.locator(".work-order-header__facts")
-	assert(await headerFacts.getByText("Fabric Store", { exact: true }).count() === 1, "Work Order header does not expose Supplier")
-	assert(await headerFacts.getByText("Knitting", { exact: true }).count() === 1, "Work Order header does not expose Process")
-	assert(await headerFacts.getByText("STYLE-001", { exact: true }).count() === 1, "Work Order header does not expose Item")
-	assert(await headerFacts.getByText("LOT-001", { exact: true }).count() === 1, "Work Order header does not expose Lot")
 	const workspaceColumns = page.locator(".fabric-document-workspace__columns")
 	const columns = await workspaceColumns.evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").map(Number.parseFloat))
 	assert(columns.length === 2 && columns[0] / columns[1] > 3.4 && columns[0] / columns[1] < 4.6, `Work Order is not 80/20: ${columns}`)
@@ -774,31 +779,39 @@ async function workOrderSuite(page) {
 	assert(undersizedText.length === 0, `Work Order contains visible text below 11px: ${JSON.stringify(undersizedText)}`)
 
 	const tabs = page.locator(".work-order-tabs").getByRole("tab")
-	assert(JSON.stringify(await tabs.allTextContents()) === JSON.stringify(["Details", "Summary"]), `Unexpected Work Order tabs: ${await tabs.allTextContents()}`)
+	assert(JSON.stringify(await tabs.allTextContents()) === JSON.stringify(["Overview", "Deliverables 2", "Receivables 2", "Summary"]), `Unexpected Work Order tabs: ${await tabs.allTextContents()}`)
 	assert(await page.locator(".work-order-tablist").evaluate((element) => getComputedStyle(element).position) === "sticky", "Work Order tabs are not fixed")
-	assert(await page.getByText("WO Date", { exact: true }).isVisible(), "Work Order details are missing")
-	assert(await page.locator(".work-order-tabs .work-order-fields").count() === 1, "Work Order details sit outside the tab hierarchy")
-	assert(await page.locator(".work-order-fields").getByText("Supplier", { exact: true }).count() === 0, "Work Order detail grid repeats Supplier")
-	assert(await page.locator(".work-order-fields").getByText("Production Detail", { exact: true }).count() === 1, "Work Order detail grid hides Production Detail")
-	assert(await page.locator(".work-order-fields").getByText("Received Type", { exact: true }).count() === 1, "Work Order detail grid omits dynamic stock dimensions")
+	const overview = page.locator(".work-order-overview")
+	assert(await overview.getByRole("heading", { name: "Order identity", exact: true }).count() === 1, "Work Order Overview omits Order identity")
+	assert(await overview.getByRole("heading", { name: "Supplier & delivery", exact: true }).count() === 1, "Work Order Overview omits Supplier & delivery")
+	assert(await overview.getByRole("heading", { name: "Stock dimensions", exact: true }).count() === 1, "Work Order Overview omits Stock dimensions")
+	assert(await overview.getByText("Process", { exact: true }).count() === 1, "Work Order Overview omits Process")
+	assert(await overview.getByText("Job worker", { exact: true }).count() === 1, "Work Order Overview omits Job worker")
+	assert(await overview.getByText("Production Detail", { exact: true }).count() === 1, "Work Order Overview hides Production Detail")
+	assert(await overview.getByText("Received Type", { exact: true }).count() === 1, "Work Order Overview omits dynamic stock dimensions")
+	assert(await page.locator(".work-order-page__totals").getByText("Planned Quantity", { exact: true }).count() === 1, "Work Order rail omits Planned Quantity")
 	assert(await page.getByText("Internal Notes", { exact: true }).count() === 0, "Work Order shows an empty read-only field")
-	assert(await page.locator(".work-order-fields").getByText("Item", { exact: true }).count() === 0, "Work Order detail grid repeats Item")
-	const workOrderFactColumns = await page.locator(".work-order-fields").evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length)
-	assert(workOrderFactColumns === 4, `Work Order operational facts are not a compact four-column ledger: ${workOrderFactColumns}`)
-	assert(await page.locator(".work-order-item-matrix").count() >= 2, "Deliverable and receivable matrices are missing")
-	assert(await page.locator(".work-order-details .work-order-item-group").count() === 2, "Work Order rows are not consolidated by Item and Lot")
-	assert(await page.locator(".work-order-item-matrix").getByRole("columnheader", { name: "Item", exact: true }).count() === 0, "Work Order matrices repeat Item per row")
-	const deliverablesMatrix = page.locator(".work-order-details .work-order-section").filter({ has: page.getByRole("heading", { name: "Deliverables", exact: true }) }).locator(".work-order-item-matrix")
+
+	await page.getByRole("tab", { name: "Deliverables 2", exact: true }).click()
+	const deliverablesSection = page.locator(".work-order-details .work-order-section:visible").filter({ has: page.getByRole("heading", { name: "Deliverables", exact: true }) })
+	const deliverablesMatrix = deliverablesSection.locator(".work-order-item-matrix")
+	assert(await deliverablesMatrix.count() === 1, "Deliverables matrix is missing from its tab")
+	assert(await deliverablesSection.locator(".work-order-item-group").count() === 1, "Deliverable rows are not consolidated by Item and Lot")
+	assert(await deliverablesMatrix.getByRole("columnheader", { name: "Item", exact: true }).count() === 0, "Deliverables repeat Item per row")
 	assert(await deliverablesMatrix.locator("tbody > tr").count() === 4, "Deliverables do not render Quantity and Pending as stage rows per combination")
 	assert(JSON.stringify(await deliverablesMatrix.getByRole("columnheader").allTextContents()) === JSON.stringify(["Colour", "Details", "S", "M", "Total"]), `Deliverable primary-attribute headers repeat stage columns: ${await deliverablesMatrix.getByRole("columnheader").allTextContents()}`)
 	assert(await deliverablesMatrix.locator(".matrix-stage--planned").count() === 2, "Deliverables omit Quantity stage rows")
 	assert(await deliverablesMatrix.locator(".matrix-stage--pending").count() === 2, "Deliverables omit Pending stage rows")
 	assert(JSON.stringify((await deliverablesMatrix.locator(".matrix-stage--pending").first().locator("td").allTextContents()).map((value) => value.trim())) === JSON.stringify(["Pending", "2", "0", "2"]), "Deliverables do not keep zero Pending values visible in the stage row")
 	assert((await deliverablesMatrix.locator(".matrix-stage--pending").nth(1).locator("td").nth(1).textContent()).trim() === "-1", "Deliverables do not preserve negative Pending quantities")
-	const receivablesMatrix = page.locator(".work-order-details .work-order-section").filter({ has: page.getByRole("heading", { name: "Receivables", exact: true }) }).locator(".work-order-item-matrix")
+	await page.getByRole("tab", { name: "Receivables 2", exact: true }).click()
+	const receivablesSection = page.locator(".work-order-details .work-order-section:visible").filter({ has: page.getByRole("heading", { name: "Receivables", exact: true }) })
+	const receivablesMatrix = receivablesSection.locator(".work-order-item-matrix")
+	assert(await receivablesMatrix.count() === 1, "Receivables matrix is missing from its tab")
+	assert(await receivablesSection.locator(".work-order-item-group").count() === 1, "Receivable rows are not consolidated by Item and Lot")
 	assert(await receivablesMatrix.locator(".matrix-stage--cost").count() === 2, "Receivables hide their Unit cost stage rows")
 	assert(await receivablesMatrix.locator(".matrix-stage--total_cost").count() === 2, "Receivables hide their Total cost stage rows")
-	const matrixScrolls = await page.locator(".work-order-item-matrix__scroll").evaluateAll((elements) => elements.map((element) => ({ clientHeight: element.clientHeight, scrollHeight: element.scrollHeight })))
+	const matrixScrolls = await page.locator(".work-order-item-matrix__scroll:visible").evaluateAll((elements) => elements.map((element) => ({ clientHeight: element.clientHeight, scrollHeight: element.scrollHeight })))
 	assert(matrixScrolls.every(({ clientHeight, scrollHeight }) => scrollHeight <= clientHeight + 1), `Work Order matrices have nested vertical scrolling: ${JSON.stringify(matrixScrolls)}`)
 
 	const railSections = page.locator(".work-order-activity-section")
@@ -1287,6 +1300,16 @@ async function purchaseOrderSuite(page) {
 	await page.goto(`${SITE}/web/fabric-store/purchase-orders/PO-FAB-001`, { waitUntil: "domcontentloaded" })
 	const workspace = page.locator(".fabric-purchase-order-frame")
 	await workspace.waitFor()
+	await workspace.getByRole("tab", { name: "Overview", exact: true }).waitFor({ timeout: 20_000 })
+	assert(JSON.stringify(await workspace.getByRole("tab").allTextContents()) === JSON.stringify(["Overview", "Items 2"]), "Purchase Order does not expose only Overview and Items tabs")
+	for (const heading of ["Order identity", "Supplier & delivery", "Schedule", "Status & notes"]) {
+		assert(await workspace.getByRole("heading", { name: heading, exact: true }).count() === 1, `Purchase Order Overview is missing ${heading}`)
+	}
+	for (const label of ["Required By", "Warehouse", "Company", "Comments"]) {
+		assert(await workspace.locator(".document-overview").getByText(label, { exact: true }).count() === 1, `Purchase Order Overview field is missing: ${label}`)
+	}
+	assert(!await workspace.locator(".item-matrix").isVisible(), "Purchase Order item matrix is duplicated below Overview")
+	await workspace.getByRole("tab", { name: "Items 2", exact: true }).click()
 	await workspace.locator(".item-matrix").waitFor({ timeout: 20_000 })
 	assert(await workspace.locator(".item-matrix").count() === 1, "Purchase Order item matrix is missing")
 	assert(await workspace.locator(".item-matrix__price").filter({ hasText: /^Rate / }).count() > 0, "Purchase Order workspace hides item rates")
@@ -1310,10 +1333,6 @@ async function purchaseOrderSuite(page) {
 	assert(Boolean(await purchaseMatrixScroller.getAttribute("aria-label")), "Purchase Order attribute matrix has no accessible name")
 	const poQuantityLines = await workspace.locator(".item-matrix__qty").first().locator(":scope > strong, :scope > small").allTextContents()
 	assert(poQuantityLines[1]?.startsWith("Rate ") && poQuantityLines[2]?.startsWith("Pending "), `Purchase Order quantity details are not ordered Quantity, Rate, Pending: ${JSON.stringify(poQuantityLines)}`)
-	assert(await workspace.getByText("Supplier", { exact: true }).count() === 1, "Purchase Order repeats Supplier in the header and detail grid")
-	for (const label of ["Required By", "Warehouse", "Company", "Comments"]) {
-		assert(await workspace.locator(".purchase-order-page__details").getByText(label, { exact: true }).count() === 1, `Purchase Order field is missing: ${label}`)
-	}
 	assert(await workspace.getByText("Internal Notes", { exact: true }).count() === 0, "Purchase Order shows an empty read-only field")
 	assert(await workspace.locator(".purchase-order-page__total").count() === 5, "Purchase Order does not render the server total rail")
 	await page.setViewportSize({ width: 900, height: 760 })
@@ -1397,14 +1416,14 @@ async function purchaseOrderSuite(page) {
 	const cancelDialog = page.getByRole("dialog", { name: "Cancel Purchase Order?" })
 	await cancelDialog.waitFor()
 	await cancelDialog.getByRole("button", { name: "Cancel Purchase Order", exact: true }).click()
-	await workspace.getByText("Cancelled", { exact: true }).waitFor()
+	await workspace.locator(".document-status-badge").getByText("Cancelled", { exact: true }).waitFor()
 	assert(lifecycleAction === "cancel", "Purchase Order cancel action did not run")
 	await workspace.getByRole("button", { name: "Amend", exact: true }).click()
 	const amendDialog = page.getByRole("dialog", { name: "Amend Purchase Order?" })
 	await amendDialog.waitFor()
 	await amendDialog.getByRole("button", { name: "Create Amendment", exact: true }).click()
 	await page.waitForURL("**/web/fabric-store/purchase-orders/PO-FAB-002")
-	await workspace.getByText("Draft", { exact: true }).waitFor()
+	await workspace.locator(".document-status-badge").getByText("Draft", { exact: true }).waitFor()
 	assert(lifecycleAction === "amend", "Purchase Order amend action did not run")
 	await page.setViewportSize({ width: 390, height: 844 })
 	const mobilePurchaseOrderButtonState = await workspace.locator(".fabric-document-workspace__commandbar").evaluate((element) => ({
@@ -1508,7 +1527,7 @@ async function purchaseOrderSuite(page) {
 	assert(savedPurchaseItem?.additional_parameters?.[0]?.additional_parameter_value === "SHADE-01", `Purchase Order omitted item additional parameters: ${JSON.stringify(savedPurchaseItem)}`)
 	await page.locator(".fabric-purchase-order-frame").waitFor()
 	await page.getByRole("button", { name: "Submit", exact: true }).click()
-	await page.getByText("To Receive", { exact: true }).waitFor()
+	await page.locator(".fabric-purchase-order-frame .document-status-badge").getByText("To Receive", { exact: true }).waitFor()
 	assert(lifecycleAction === "submit", "Purchase Order saved Draft was not submitted from the form view")
 
 	priceValidationEnabled = false
@@ -2173,7 +2192,17 @@ async function deliveryChallanSuite(page) {
 	assert(await submittedRoot.getByText("Comments", { exact: true }).count() === 0, "Submitted Delivery Challan shows an empty read-only field")
 	assert(await submittedRoot.locator(".delivery-challan-fields input").count() === 0, "Submitted Delivery Challan still renders document facts as disabled form controls")
 	assert(await submittedRoot.getByRole("button", { name: "Complete Transfer", exact: true }).count() === 1, "Submitted internal-unit DC lacks Complete Transfer")
-	assert(await submittedRoot.locator(".delivery-challan-matrix--items .p-inputnumber-input").first().isDisabled(), "Submitted Delivery Challan matrix remains editable")
+	const submittedDcTabs = await submittedRoot.getByRole("tab").allTextContents()
+	assert(submittedDcTabs.length === 2 && submittedDcTabs[0] === "Overview" && submittedDcTabs[1].startsWith("Deliverables"), `Submitted Delivery Challan does not separate Overview and Deliverables: ${JSON.stringify(submittedDcTabs)}`)
+	for (const heading of ["Document identity", "Movement", "Logistics", "Status & notes"]) {
+		assert(await submittedRoot.getByRole("heading", { name: heading, exact: true }).count() === 1, `Delivery Challan Overview is missing ${heading}`)
+	}
+	assert(await submittedRoot.getByText("Receiver Address Details", { exact: true }).count() === 1, "Delivery Challan Overview omits an unclaimed source field")
+	assert(!await submittedRoot.locator(".item-matrix").first().isVisible(), "Submitted Delivery Challan duplicates delivered items below Overview")
+	await submittedRoot.getByRole("tab", { name: /^Deliverables/ }).click()
+	await submittedRoot.locator(".item-matrix").first().waitFor()
+	assert(await submittedRoot.locator(".item-matrix input").count() === 0, "Submitted Delivery Challan matrix remains editable")
+	assert(await submittedRoot.locator(".item-matrix__pending").filter({ hasText: "Pending 6" }).count() >= 1, "Submitted Delivery Challan matrix omits source pending quantity")
 	await submittedRoot.getByRole("button", { name: "Return", exact: true }).click()
 	const returnDialog = page.getByRole("dialog", { name: "Return Delivery Challan" })
 	await returnDialog.waitFor()
@@ -2544,23 +2573,9 @@ async function goodsReceivedNoteSuite(page) {
 		await draftRoot.getByRole("button", { name: "More", exact: true }).click()
 		return page.locator(".document-action-menu:visible").getByText(label, { exact: true }).click()
 	}
-	await clickGrnAction("Send SMS")
-	let notificationDialog = page.getByRole("dialog", { name: "Send supplier notification" })
-	await notificationDialog.waitFor()
-	let notificationPanel = notificationDialog.locator(".supplier-notification-panel")
-	await notificationPanel.waitFor()
-	await notificationPanel.getByRole("button", { name: "Send SMS", exact: true }).click()
-	await notificationPanel.waitFor({ state: "detached" })
-	assert(commandRequest?.command === "send_sms" && commandRequest?.payload?.template_name === "Receipt" && commandRequest?.payload?.mobile_no === "+919876543210" && commandRequest?.payload?.params?.name === "GRN-FAB-001", `SMS action mapping is incomplete: ${JSON.stringify(commandRequest)}`)
-	await clickGrnAction("Send WhatsApp")
-	notificationDialog = page.getByRole("dialog", { name: "Send supplier notification" })
-	await notificationDialog.waitFor()
-	notificationPanel = notificationDialog.locator(".supplier-notification-panel")
-	await notificationPanel.waitFor()
-	assert(await notificationPanel.getByText("Receipt GRN-FAB-001 is ready", { exact: true }).count() === 1, "WhatsApp template preview did not resolve its body variable")
-	await notificationPanel.getByRole("button", { name: "Send WhatsApp", exact: true }).click()
-	await notificationPanel.waitFor({ state: "detached" })
-	assert(commandRequest?.command === "send_whatsapp" && commandRequest?.payload?.template_name === "grn_receipt" && commandRequest?.payload?.language_code === "en" && commandRequest?.payload?.params?.["body:1"] === "GRN-FAB-001", `WhatsApp action mapping is incomplete: ${JSON.stringify(commandRequest)}`)
+	for (const removedAction of ["Send SMS", "Send WhatsApp"]) {
+		assert(await draftRoot.getByRole("button", { name: removedAction, exact: true }).count() === 0, `${removedAction} is still exposed after the supplier messaging UI was removed`)
+	}
 	await draftRoot.getByRole("button", { name: "Calculate", exact: true }).click()
 	const calculateDialog = page.getByRole("dialog", { name: "Calculate Goods Received Note" })
 	await calculateDialog.waitFor()
@@ -2648,6 +2663,18 @@ async function goodsReceivedNoteSuite(page) {
 	await submittedRoot.waitFor()
 	assert(await submittedRoot.getByText("Comments", { exact: true }).count() === 0, "Submitted GRN shows an empty read-only field")
 	assert(await submittedRoot.locator(".goods-received-note-fields input").count() === 0, "Submitted GRN still renders document facts as disabled form controls")
+	const submittedGrnTabs = await submittedRoot.getByRole("tab").allTextContents()
+	assert(submittedGrnTabs.length === 2 && submittedGrnTabs[0] === "Overview" && submittedGrnTabs[1].startsWith("Receivables"), `Submitted GRN does not separate Overview and Receivables: ${JSON.stringify(submittedGrnTabs)}`)
+	for (const heading of ["Receipt identity", "Movement", "Supplier reference", "Status & notes"]) {
+		assert(await submittedRoot.getByRole("heading", { name: heading, exact: true }).count() === 1, `GRN Overview is missing ${heading}`)
+	}
+	assert(await submittedRoot.getByText("Supplier Address Details", { exact: true }).count() === 1, "GRN Overview omits an unclaimed source field")
+	assert(!await submittedRoot.locator(".item-matrix").first().isVisible(), "Submitted GRN duplicates received items below Overview")
+	await submittedRoot.getByRole("tab", { name: /^Receivables/ }).click()
+	await submittedRoot.locator(".item-matrix").first().waitFor()
+	assert(await submittedRoot.locator(".item-matrix input").count() === 0, "Submitted GRN matrix remains editable")
+	assert(await submittedRoot.locator(".item-matrix__available").filter({ hasText: "Available 6" }).count() >= 1, "Submitted GRN matrix omits source availability")
+	assert(await submittedRoot.locator(".item-matrix__price").filter({ hasText: "Amount 40" }).count() >= 1, "Submitted GRN matrix omits received value")
 	await submittedRoot.getByRole("button", { name: "Create Inspection Entry", exact: true }).click()
 	inspectionDialog = page.getByRole("dialog", { name: "Create Inspection Entry" })
 	await inspectionDialog.waitFor()
@@ -2721,7 +2748,7 @@ async function paritySuite() {
 		"frontend/src/departments/fabric-store/DeliveryChallanWorkspace.vue",
 		"frontend/src/departments/fabric-store/GoodsReceivedNoteWorkspace.vue",
 	]) {
-		assert(readFileSync(path, "utf8").includes("SupplierNotificationPanel"), `${path} does not use the shared SMS/WhatsApp panel`)
+		assert(!readFileSync(path, "utf8").includes("SupplierNotificationPanel"), `${path} still exposes the removed SMS/WhatsApp panel`)
 	}
 
 	const inventory = readFileSync(inventoryPath, "utf8")
@@ -2734,7 +2761,7 @@ async function paritySuite() {
 	assert(inventory.includes("yrp.notification.send_flow_sms_notification"), "SMS send endpoint is not audited")
 	assert(inventory.includes("yrp.whatsapp_notification.send_whatsapp_notification"), "WhatsApp send endpoint is not audited")
 
-	return { obsoleteEditorsRemoved: true, auditedDocuments: 4, sharedNotificationPanel: true }
+	return { obsoleteEditorsRemoved: true, auditedDocuments: 4, supplierMessagingUiRemoved: true }
 }
 
 async function statesSuite(page) {

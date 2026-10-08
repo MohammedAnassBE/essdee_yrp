@@ -216,7 +216,7 @@ const [mainBox, railBox] = await Promise.all([
 assert(mainBox && railBox, "Cutting Order main or parent rail is missing")
 const widthRatio = mainBox.width / railBox.width
 assert(widthRatio >= 3.7 && widthRatio <= 4.3, `Cutting Order is not an 80/20 split: ${widthRatio}`)
-for (const tab of ["Details", "Summary", "Planned Detail"]) assert(await page.getByRole("tab", { name: tab, exact: true }).count() === 1, `${tab} tab is missing`)
+assert(JSON.stringify(await page.getByRole("tab").allTextContents()) === JSON.stringify(["Details", "Summary", "Planned Detail"]), "Cutting Order tabs were renamed or reordered")
 const tabContract = await page.locator(".cutting-order-tabs").evaluate((element) => {
 	const list = element.querySelector(".p-tablist")
 	const panels = element.querySelector(".p-tabpanels")
@@ -226,8 +226,10 @@ assert(tabContract.listTop < tabContract.panelsTop && tabContract.overflowY === 
 assert(await page.locator(".order-header-fact--detail").getByText("CO-STYLE-001-1", { exact: true }).count() === 1, "Cutting Order Detail is not promoted to the header")
 assert(await page.locator(".order-header-fact--item").getByText("STYLE-001", { exact: true }).count() === 1, "Cutting Order Item is not promoted to the header")
 assert(await page.locator(".order-command-bar").count() === 0, "Cutting Order still renders the separate action strip")
-assert(await page.locator(".order-detail-card").getByText("Cutting Order Detail", { exact: true }).count() === 0, "Cutting Order Detail is duplicated in the Details tab")
-assert(await page.locator(".order-detail-card").getByText("Item", { exact: true }).count() === 0, "Item is duplicated in the Details tab")
+for (const heading of ["Order identity", "Planning", "Schedule", "Status & notes"]) {
+	assert(await page.getByRole("heading", { name: heading, exact: true }).count() === 1, `Cutting Order Details is missing ${heading}`)
+}
+assert(await page.locator(".order-detail-card").count() === 0, "Cutting Order still renders the old flat detail card")
 const quantitySectionStyle = await page.locator(".data-section__header").first().evaluate((element) => ({ display: getComputedStyle(element).display, background: getComputedStyle(element).backgroundColor }))
 assert(quantitySectionStyle.display === "flex" && quantitySectionStyle.background !== "rgba(0, 0, 0, 0)", `Cutting Order quantity section lost its card hierarchy: ${JSON.stringify(quantitySectionStyle)}`)
 const quantityHeaderBackground = await page.locator(".data-table th").first().evaluate((element) => getComputedStyle(element).backgroundColor)
@@ -242,6 +244,7 @@ assert(await completedDialog.getByRole("button", { name: "Maximize dialog", exac
 await completedDialog.locator("button").filter({ hasText: "Close" }).click()
 assert(await page.getByRole("button", { name: "Filter markers" }).count() === 1, "Marker filters are missing")
 assert(await page.getByRole("button", { name: "Filter Lay Sheets" }).count() === 1, "Lay Sheet filters are missing")
+assert(await page.getByRole("button", { name: "Create New", exact: true }).count() === 2, "Cutting Order marker or Lay Sheet Create New action disappeared")
 const workspaceUrl = page.url()
 await page.locator(".marker-card").first().click()
 await page.locator(".marker-dialog").waitFor()

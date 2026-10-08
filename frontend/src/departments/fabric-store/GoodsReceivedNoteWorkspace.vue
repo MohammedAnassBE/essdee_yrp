@@ -30,7 +30,7 @@
 			</template>
 
 			<template #fields>
-				<section v-if="visibleFields.length" class="goods-received-note-fields" aria-label="Goods Received Note fields">
+				<section v-if="canEdit && visibleFields.length" class="goods-received-note-fields" aria-label="Goods Received Note fields">
 					<section v-for="group in primaryFieldGroups" :key="group.key" class="goods-received-note-field-group" :data-group="group.key">
 						<header><span>{{ group.eyebrow }}</span><h2>{{ group.label }}</h2></header>
 						<div class="goods-received-note-field-group__grid" :class="{ 'goods-received-note-field-group__grid--facts': !canEdit }">
@@ -55,10 +55,25 @@
 						</div>
 					</section>
 				</section>
+				<Tabs v-else-if="hasWorkspace" v-model:value="activeTab" class="goods-received-note-tabs erp-tabs">
+					<TabList><Tab value="overview">Overview</Tab><Tab value="receivables">Receivables <span v-if="logicalRowCount(itemGroups)">{{ logicalRowCount(itemGroups) }}</span></Tab></TabList>
+					<TabPanels>
+						<TabPanel value="overview"><DocumentOverview :fields="overviewFields" :definitions="overviewDefinitions" include-unclaimed :unclaimed-definition="overviewAdditionalDefinition" aria-label="Goods Received Note overview" id-prefix="goods-received-note-overview" /></TabPanel>
+						<TabPanel value="receivables">
+							<div class="goods-received-note-tab-matrices">
+								<section v-for="block in matrixBlocks" :key="`readonly-${block.key}`" class="goods-received-note-tab-matrix">
+									<header><div><span>{{ block.kind === 'items' ? 'Receivables' : 'Corrections' }}</span><h2>{{ block.title }}</h2></div><strong>{{ logicalRowCount(block.groups) }} rows</strong></header>
+									<StockItemMatrix :groups="block.groups" doctype="YRP Goods Received Note" group-by-item show-lot-column show-availability show-pricing show-amount :currency="workspace.record?.currency || ''" />
+								</section>
+								<div v-if="!matrixBlocks.length" class="goods-received-note-matrix__empty"><i class="pi pi-inbox" /><span>No Goods Received Note item rows are available.</span></div>
+							</div>
+						</TabPanel>
+					</TabPanels>
+				</Tabs>
 			</template>
 
 			<template #secondary-fields>
-				<section v-if="secondaryFieldGroups.length" class="goods-received-note-fields goods-received-note-fields--secondary" aria-label="Additional Goods Received Note fields">
+				<section v-if="canEdit && secondaryFieldGroups.length" class="goods-received-note-fields goods-received-note-fields--secondary" aria-label="Additional Goods Received Note fields">
 					<section v-for="group in secondaryFieldGroups" :key="group.key" class="goods-received-note-field-group" :data-group="group.key">
 						<header><span>{{ group.eyebrow }}</span><h2>{{ group.label }}</h2></header>
 						<div class="goods-received-note-field-group__grid" :class="{ 'goods-received-note-field-group__grid--facts': !canEdit }">
@@ -74,6 +89,7 @@
 			</template>
 
 			<template #matrix>
+				<template v-if="canEdit">
 				<section
 					v-for="block in matrixBlocks"
 					:key="block.key"
@@ -130,10 +146,11 @@
 					</div>
 				</section>
 					<div v-if="!matrixBlocks.length" class="goods-received-note-matrix__empty"><i class="pi pi-inbox" /><span>No Goods Received Note item rows are available.</span></div>
+				</template>
 			</template>
 
 			<template #after-matrix>
-				<div v-if="afterMatrixFields.length" class="goods-received-note-after-matrix" aria-label="Goods Received Note final details">
+				<div v-if="canEdit && afterMatrixFields.length" class="goods-received-note-after-matrix" aria-label="Goods Received Note final details">
 					<template v-if="canEdit">
 						<FormField v-for="field in afterMatrixFields" :key="`after-${fieldKey(field)}`" :class="{ 'goods-received-note-after-matrix__wide': field.fieldname === 'comments' }" :field="field" :model-value="form[field.fieldname]" :form="form" :required="Boolean(field.reqd || field.mandatory)" compact :search-handler="linkSearchHandler(field)" @update:model-value="setField(field.fieldname, $event)" />
 					</template>
@@ -179,9 +196,6 @@
 		<Dialog v-model:visible="inspectionOpen" modal header="Create Inspection Entry" class="fabric-action-dialog fabric-action-dialog--wide erp-dialog--lg" :closable="!acting">
 			<InspectionEntryPanel :context="workspace.inspection || {}" :acting="acting" :error="panelError" @save="saveInspection" @close="closeInspection" />
 		</Dialog>
-		<Dialog :visible="Boolean(notificationPreparation)" modal header="Send supplier notification" class="fabric-action-dialog erp-dialog--md" :closable="!acting" @update:visible="handleNotificationVisibility">
-			<SupplierNotificationPanel v-if="notificationPreparation" :preparation="notificationPreparation" :document-values="notificationValues" :acting="acting" :error="notificationError" @send="sendNotification" @close="closeNotification" />
-		</Dialog>
 		<FabricStockOperationDialog v-model:visible="completionEntryOpen" operation="stock_entry" :name="completionEntryName" @changed="completionEntryChanged" />
 		<DocumentConfirmationDialog v-model:visible="lifecycleConfirmVisible" :title="lifecycleConfirmTitle" :message="lifecycleConfirmMessage" :confirm-label="lifecycleConfirmLabel" :busy="Boolean(acting)" @confirm="confirmLifecycleAction" />
 	</div>
@@ -191,6 +205,11 @@
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
+import Tab from "primevue/tab"
+import TabList from "primevue/tablist"
+import TabPanel from "primevue/tabpanel"
+import TabPanels from "primevue/tabpanels"
+import Tabs from "primevue/tabs"
 import { useToast } from "primevue/usetoast"
 import { computed, onMounted, reactive, ref, watch } from "vue"
 import { useRouter } from "vue-router"
@@ -207,13 +226,14 @@ import { searchLinkedDocument } from "../../api/frappe.js"
 import FormField from "../../components/common/FormField.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
+import DocumentOverview from "../../components/documents/DocumentOverview.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
+import StockItemMatrix from "../../components/stock/StockItemMatrix.vue"
 import { hasDocumentDisplayValue, plainTextFromHtml } from "../../utils/documentValues.js"
 import FabricDocumentWorkspace from "./FabricDocumentWorkspace.vue"
 import FabricStockOperationDialog from "./FabricStockOperationDialog.vue"
 import GrnCalculatePanel from "./GrnCalculatePanel.vue"
 import InspectionEntryPanel from "./InspectionEntryPanel.vue"
-import SupplierNotificationPanel from "./SupplierNotificationPanel.vue"
 
 const props = defineProps({
 	presentation: { type: String, default: "page" },
@@ -237,8 +257,7 @@ const correctionGroups = ref([])
 const calculationOpen = ref(false)
 const calculationContext = ref({})
 const inspectionOpen = ref(false)
-const notificationPreparation = ref(null)
-const notificationError = ref("")
+const activeTab = ref("overview")
 const completionEntryOpen = ref(false)
 const completionEntryName = ref("")
 const lifecycleConfirmVisible = ref(false)
@@ -276,8 +295,6 @@ const goodsReceivedNoteActions = computed(() => {
 	if (currentName.value && workspace.value.permissions?.can_create && !workspace.value.special_source?.active) {
 		actions.push({ key: "duplicate", label: "Duplicate", icon: "pi pi-clone", command: duplicateGoodsReceivedNote, disabled: busy, loading: acting.value === "duplicate", menuOnly: true })
 	}
-	add("prepare_sms", "Send SMS", "pi pi-envelope", () => prepareNotification("prepare_sms"))
-	add("prepare_whatsapp", "Send WhatsApp", "pi pi-comments", () => prepareNotification("prepare_whatsapp"))
 	const primaryKey = capabilities.value.complete_transfer ? "complete_transfer" : actions.some((action) => action.key === "calculate") ? "calculate" : actions.some((action) => action.key === "submit") ? "submit" : actions.some((action) => action.key === "save") ? "save" : actions.some((action) => action.key === "amend") ? "amend" : ""
 	return actions.map((action) => ({ ...action, primary: action.key === primaryKey }))
 })
@@ -318,6 +335,28 @@ const fieldGroups = computed(() => {
 const primaryFieldGroups = computed(() => fieldGroups.value.filter((group) => ["posting", "movement"].includes(group.key)))
 const secondaryFieldGroups = computed(() => fieldGroups.value.filter((group) => !["posting", "movement"].includes(group.key)))
 const afterMatrixFields = computed(() => visibleFields.value.filter((field) => afterMatrixFieldnames.has(field.fieldname)))
+const overviewDefinitions = [
+	{ key: "identity", label: "Receipt identity", description: "Source and production references", icon: "pi pi-id-card", fields: ["naming_series", "against", "against_id", "delivery_challan", "production_detail", "is_return", "is_rework"] },
+	{ key: "movement", label: "Movement", description: "Supplier and stock destination", icon: "pi pi-truck", fields: ["supplier", "supplier_name", "delivery_location", "delivery_location_name", "from_warehouse", "to_warehouse", "billing_address", "delivery_address"] },
+	{ key: "schedule", label: "Supplier reference", description: "Posting and transport information", icon: "pi pi-calendar", fields: ["posting_date", "posting_time", "actual_date", "supplier_document_no", "supplier_document_date", "dc_no", "vehicle_no"] },
+	{ key: "status", label: "Status & notes", description: "Receipt controls, charges and comments", icon: "pi pi-clipboard", fields: ["status", "freight_charges", "purchase_invoice_name", "includes_packing", "is_internal_unit", "transfer_complete", "letter_head", "comments"] },
+]
+const overviewAdditionalDefinition = { key: "additional", label: "Additional details", description: "Other receipt information", icon: "pi pi-ellipsis-h", wide: true }
+const overviewFields = computed(() => {
+	const sources = workspace.value.fields || []
+	const fields = visibleFields.value.map((field) => ({ ...field, value: form[field.fieldname] ?? field.value }))
+	const existing = new Set(fields.map((field) => field.fieldname))
+	for (const fieldname of overviewDefinitions.flatMap((definition) => definition.fields)) {
+		if (existing.has(fieldname)) continue
+		const source = sources.find((field) => field.fieldname === fieldname)
+		const value = form[fieldname] ?? source?.value ?? workspace.value.record?.[fieldname]
+		if (!source || source.hidden || !hasDocumentDisplayValue(value)) continue
+		fields.push({ ...source, value })
+		existing.add(fieldname)
+	}
+	if (!existing.has("status")) fields.push({ fieldname: "status", label: "Status", fieldtype: "Data", value: workspace.value.record?.status || statusLabel(workspace.value.record?.docstatus) })
+	return fields
+})
 const matrixBlocks = computed(() => {
 	const blocks = []
 	if (itemGroups.value.length) blocks.push({ key: "items", kind: "items", title: "Received quantities", groups: itemGroups.value })
@@ -339,7 +378,6 @@ const headerFacts = computed(() => [
 ].filter(([, value]) => value).map(([label, value]) => ({ label, value })))
 const transferPercent = computed(() => Math.max(0, Math.min(100, Number(workspace.value.record?.ste_transferred_percent || (workspace.value.record?.transfer_complete ? 100 : 0)))))
 const inspectionEntries = computed(() => workspace.value.inspection?.entries || workspace.value.related?.inspection_entries || [])
-const notificationValues = computed(() => ({ ...(workspace.value.record || {}), ...form }))
 
 async function load(refresh = false) {
 	const sequence = ++loadSequence
@@ -391,8 +429,7 @@ function clearWorkspaceState(name = "") {
 	calculationOpen.value = false
 	calculationContext.value = {}
 	inspectionOpen.value = false
-	notificationPreparation.value = null
-	notificationError.value = ""
+	activeTab.value = "overview"
 	panelError.value = ""
 }
 
@@ -412,8 +449,7 @@ function applyWorkspace(nextWorkspace) {
 	for (const correction of correctionGroups.value) correction.item_details = normalizeGroups(correction.item_details || [])
 	if (!workspace.value.capabilities?.calculate) calculationOpen.value = false
 	if (!workspace.value.capabilities?.create_inspection) inspectionOpen.value = false
-	notificationPreparation.value = null
-	notificationError.value = ""
+	activeTab.value = "overview"
 	dirty.value = false
 	error.value = ""
 	panelError.value = ""
@@ -574,20 +610,6 @@ async function completionEntryChanged() {
 	await load(true)
 	emit("changed", workspace.value)
 }
-async function prepareNotification(command) {
-	const result = await runCommand(command)
-	if (result?.context) { notificationPreparation.value = result; notificationError.value = "" }
-}
-async function sendNotification({ channel, payload }) {
-	notificationError.value = ""
-	const result = await runCommand(`send_${channel}`, payload)
-	if (!result) return
-	if (result.result?.ok) notificationPreparation.value = null
-	else error.value = result.result?.error || `Unable to send ${channel === "sms" ? "SMS" : "WhatsApp"}.`
-}
-function closeNotification() { notificationPreparation.value = null; notificationError.value = "" }
-function handleNotificationVisibility(visible) { if (!visible) closeNotification() }
-
 function fieldKey(field) { return `${field.fieldname}-${field.idx || "value"}` }
 const grnFieldGroups = [
 	{ key: "source", eyebrow: "Source", label: "Receipt source" },
@@ -711,6 +733,16 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 
 <style scoped>
 .goods-received-note-workspace { width: 100%; min-width: 0; }
+.goods-received-note-tabs :deep(.p-tabpanels) { padding: 12px 0 0; background: transparent; }
+.goods-received-note-tabs :deep(.p-tablist-tab-list) { padding-inline: 2px; }
+.goods-received-note-tabs :deep(.p-tab span) { margin-left: 5px; padding: 2px 6px; color: var(--erp-text-muted); background: var(--erp-surface-muted); border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); }
+.goods-received-note-tab-matrices { display: grid; gap: var(--erp-space-3); }
+.goods-received-note-tab-matrix { display: grid; gap: 8px; min-width: 0; }
+.goods-received-note-tab-matrix > header { display: flex; align-items: end; justify-content: space-between; gap: 12px; padding: 0 2px; }
+.goods-received-note-tab-matrix > header div { display: grid; gap: 2px; }
+.goods-received-note-tab-matrix > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
+.goods-received-note-tab-matrix > header h2 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-section); }
+.goods-received-note-tab-matrix > header > strong { color: var(--erp-accent); font-size: var(--erp-font-size-min); }
 .goods-received-note-after-matrix { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 10px 14px; padding: 2px; }
 .goods-received-note-after-matrix__wide { grid-column: span 2; }
 .goods-received-note-after-matrix__fact { display: grid; min-width: 0; gap: 3px; padding: 8px 2px; border-bottom: 1px solid var(--erp-border); }

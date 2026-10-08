@@ -11,14 +11,7 @@
 		<TabPanels ref="tabPanels">
 			<TabPanel value="details">
 				<div class="tab-stack">
-					<section class="content-card detail-fields-card erp-card">
-						<div class="detail-read-grid" aria-label="Cutting Plan details">
-							<div v-for="fieldname in detailFieldnames" :key="fieldname" class="detail-read-field">
-								<span>{{ field(fieldname).label }}</span>
-								<strong :class="{ 'detail-read-field__boolean': field(fieldname).fieldtype === 'Check' }">{{ detailValue(fieldname) }}</strong>
-							</div>
-						</div>
-					</section>
+					<DocumentOverview :fields="overviewFields" :definitions="overviewDefinitions" include-empty aria-label="Cutting Plan overview" id-prefix="cutting-plan-overview" />
 
 					<LoadingState v-if="loading" />
 					<Message v-else-if="error" severity="error" :closable="false">{{ error }}</Message>
@@ -169,6 +162,7 @@ import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
 import { computed, defineComponent, h, nextTick, ref, watch } from "vue"
 
+import DocumentOverview from "../../components/documents/DocumentOverview.vue"
 import CuttingPlanCpm from "./CuttingPlanCpm.vue"
 import CuttingPlanStockTransfers from "./CuttingPlanStockTransfers.vue"
 import MaterialRequirementGroups from "./shared/MaterialRequirementGroups.vue"
@@ -189,14 +183,20 @@ const detailFieldnames = computed(() => [
 	"maximum_no_of_plys",
 	"maximum_allow_percent",
 	"piece_weight_tolerance",
-	...(hasValue(props.doc.cutting_start_date) ? ["cutting_start_date"] : []),
-	...(hasValue(props.doc.cutting_end_date) ? ["cutting_end_date"] : []),
+	"cutting_start_date",
+	"cutting_end_date",
 	"cutting_location",
 	"work_order",
 	"no_of_colours",
 	"no_of_colours_completed",
-	...(hasValue(props.doc.open_status) ? ["open_status"] : []),
+	"open_status",
 ])
+const overviewDefinitions = [
+	{ key: "identity", label: "Plan identity", description: "Plan source and entry mode", icon: "pi pi-id-card", fields: ["work_order", "is_manual_entry"] },
+	{ key: "planning", label: "Planning", description: "Lay limits and quantity controls", icon: "pi pi-sliders-h", fields: ["maximum_no_of_plys", "maximum_allow_percent", "piece_weight_tolerance", "no_of_colours", "no_of_colours_completed"] },
+	{ key: "schedule", label: "Schedule", description: "Planned cutting window", icon: "pi pi-calendar", fields: ["cutting_start_date", "cutting_end_date"] },
+	{ key: "status", label: "Status & notes", description: "Location and operating status", icon: "pi pi-clipboard", fields: ["cutting_location", "open_status"] },
+]
 const fallbackLabels = {
 	is_manual_entry: "Is Manual Entry", maximum_no_of_plys: "Maximum No of Plys",
 	no_of_colours: "No of Colours", maximum_allow_percent: "Maximum Allow Percent",
@@ -205,6 +205,7 @@ const fallbackLabels = {
 }
 
 const fieldsByName = computed(() => Object.fromEntries((props.meta?.fields || []).map((item) => [item.fieldname, item])))
+const overviewFields = computed(() => detailFieldnames.value.map((fieldname) => ({ ...field(fieldname), value: props.doc[fieldname] })))
 const itemGroups = computed(() => normaliseGroups(props.data.item_details))
 const completedGroups = computed(() => filterGroups(props.data.completed_items, (item) => Boolean(item.completed)))
 const incompleteGroups = computed(() => filterGroups(props.data.incomplete_items, hasExcess))
@@ -233,20 +234,6 @@ const availableTabs = computed(() => [
 
 function field(fieldname) {
 	return fieldsByName.value[fieldname] || { fieldname, label: fallbackLabels[fieldname] || fieldname, fieldtype: "Data" }
-}
-
-function detailValue(fieldname) {
-	const metadata = field(fieldname)
-	const value = props.doc[fieldname]
-	if (metadata.fieldtype === "Check") return Number(value) ? "Yes" : "No"
-	if (!hasValue(value)) return "—"
-	if (["Date", "Datetime"].includes(metadata.fieldtype)) {
-		const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/)
-		if (match) return `${match[3]}-${match[2]}-${match[1]}${match[4] ? ` · ${match[4]}:${match[5]}` : ""}`
-	}
-	if (metadata.fieldtype === "Percent") return `${Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}%`
-	if (["Int", "Float", "Currency"].includes(metadata.fieldtype) && Number.isFinite(Number(value))) return Number(value).toLocaleString(undefined, { maximumFractionDigits: 4 })
-	return String(value)
 }
 
 function hasValue(value) {
@@ -475,31 +462,6 @@ const RecutTable = defineComponent({
 	box-shadow: none;
 }
 
-.detail-fields-card {
-	overflow: hidden;
-	background: var(--erp-surface);
-}
-
-.detail-read-grid {
-	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
-	gap: 1px;
-	background: var(--erp-border);
-}
-
-.detail-read-field {
-	display: grid;
-	align-content: center;
-	gap: 5px;
-	min-width: 0;
-	min-height: 62px;
-	padding: 10px 13px;
-	background: var(--erp-surface);
-}
-
-.detail-read-field > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 760; letter-spacing: .045em; text-transform: uppercase; }
-.detail-read-field > strong { overflow: hidden; color: var(--erp-text); font-size: 13px; font-weight: 680; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
-.detail-read-field__boolean { width: max-content; padding: 2px 7px; color: var(--erp-accent-dark) !important; background: var(--erp-accent-soft); border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min) !important; }
 
 .cutting-tabs :deep(.section-heading) {
 	display: flex;
@@ -854,16 +816,9 @@ const RecutTable = defineComponent({
 		overflow: visible;
 	}
 
-	.detail-read-grid {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
 }
 
 @media (max-width: 780px) {
-	.detail-read-grid {
-		grid-template-columns: 1fr;
-	}
-
 	.requirement-group__header {
 		align-items: flex-start;
 		flex-direction: column;

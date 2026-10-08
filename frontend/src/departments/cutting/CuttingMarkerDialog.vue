@@ -50,12 +50,7 @@
 			</template>
 
 			<template v-else-if="record">
-				<section class="marker-section marker-read-view">
-					<h3>Marker Details</h3>
-					<div class="marker-read-grid">
-						<div v-for="item in readOnlyDetails" :key="item.label"><span>{{ item.label }}</span><strong>{{ item.value }}</strong></div>
-					</div>
-				</section>
+				<DocumentOverview class="marker-overview" :fields="markerOverviewFields" :definitions="markerOverviewDefinitions" include-empty aria-label="Cutting Marker overview" id-prefix="cutting-marker-overview" />
 				<section class="marker-section marker-read-view">
 					<div class="section-heading"><div><h3>Selected Panels</h3><small>{{ form.panels.length }} panels</small></div></div>
 					<div class="marker-chip-list"><span v-for="panel in form.panels" :key="panel">{{ panel }}</span></div>
@@ -78,6 +73,7 @@
 			<Button label="Close" severity="secondary" text :disabled="saving" @click="emit('update:visible', false)" />
 			<DocumentPrintButton v-if="record?.permissions?.can_print" doctype="SD YRP Cutting Marker" :name="record.name" :formats="record.print_formats || []" :disabled="saving" />
 			<Button v-if="record?.permissions?.can_cancel" label="Cancel Marker" icon="pi pi-ban" severity="danger" outlined :loading="saving" @click="cancelMarker" />
+			<Button v-if="canStartEdit" label="Edit Marker" icon="pi pi-pencil" severity="secondary" outlined :disabled="saving" @click="editingExisting = true" />
 			<DocumentSaveButton :show-save="canEdit" :show-submit="canSubmit" :loading="saving" @save="save(false)" @submit="save(true)" />
 		</template>
 	</Dialog>
@@ -100,6 +96,7 @@ import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
 import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import DocumentOverview from "../../components/documents/DocumentOverview.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 
 const props = defineProps({
@@ -119,24 +116,33 @@ const error = ref("")
 const actionError = ref("")
 const success = ref("")
 const record = ref(null)
+const editingExisting = ref(false)
 const context = ref({ panels: [], sizes: [] })
 const form = reactive(emptyForm())
 const resolvedParentName = computed(() => props.parentName || props.cuttingPlan)
 const resolvedParentField = computed(() => props.parentDoctype === "SD YRP Cutting Order" ? "cutting_order" : "cutting_plan")
 const parentArgs = computed(() => ({ [resolvedParentField.value]: resolvedParentName.value }))
 
-const canEdit = computed(() => record.value ? Boolean(record.value.permissions?.can_write) : Boolean(context.value.can_create))
+const canWrite = computed(() => record.value ? Boolean(record.value.permissions?.can_write) : Boolean(context.value.can_create))
+const canEdit = computed(() => canWrite.value && (!record.value || editingExisting.value))
+const canStartEdit = computed(() => Boolean(record.value) && Number(record.value.docstatus) === 0 && canWrite.value && !editingExisting.value)
 const canSubmit = computed(() => canEdit.value && Boolean(record.value ? record.value.permissions?.can_submit : context.value.can_submit))
 const statusLabel = computed(() => ["Draft", "Submitted", "Cancelled"][Number(record.value?.docstatus || 0)] || "Draft")
-const readOnlyDetails = computed(() => [
-	["Marker Name", form.marker_name],
-	["Select Type", form.selected_type],
-	["Length", `${formatNumber(form.length, 3)} m`],
-	["Width", `${formatNumber(form.width, 3)} in`],
-	["Total No Of Plys", display(form.total_no_of_plys)],
-	["Efficiency", form.efficiency === null ? "—" : `${formatNumber(form.efficiency, 2)}%`],
-	["Required Piece Weight", form.required_piece_weight === null ? "—" : `${formatNumber(form.required_piece_weight, 4)} kg`],
-].map(([label, value]) => ({ label, value })))
+const markerOverviewDefinitions = [
+	{ key: "identity", label: "Marker identity", description: "Marker type and panel coverage", icon: "pi pi-id-card", fields: ["marker_name", "selected_type", "panel_count", "group_count"] },
+	{ key: "measurements", label: "Measurements", description: "Marker dimensions and cutting limits", icon: "pi pi-arrows-alt", fields: ["length", "width", "total_no_of_plys", "efficiency", "required_piece_weight"] },
+]
+const markerOverviewFields = computed(() => [
+	{ fieldname: "marker_name", label: "Marker Name", fieldtype: "Data", value: form.marker_name },
+	{ fieldname: "selected_type", label: "Select Type", fieldtype: "Data", value: form.selected_type },
+	{ fieldname: "panel_count", label: "Selected Panels", fieldtype: "Int", value: form.panels.length },
+	{ fieldname: "group_count", label: "Panel Groups", fieldtype: "Int", value: form.group_items.length },
+	{ fieldname: "length", label: "Length (m)", fieldtype: "Float", value: form.length },
+	{ fieldname: "width", label: "Width (in)", fieldtype: "Float", value: form.width },
+	{ fieldname: "total_no_of_plys", label: "Total No Of Plys", fieldtype: "Int", value: form.total_no_of_plys },
+	{ fieldname: "efficiency", label: "Efficiency", fieldtype: "Percent", value: form.efficiency },
+	{ fieldname: "required_piece_weight", label: "Required Piece Weight (kg)", fieldtype: "Float", precision: 4, value: form.required_piece_weight },
+])
 
 watch(
 	() => [props.visible, props.markerName, resolvedParentName.value],
@@ -145,6 +151,7 @@ watch(
 
 async function load() {
 	loading.value = true
+	editingExisting.value = false
 	error.value = ""
 	actionError.value = ""
 	success.value = ""
@@ -213,6 +220,7 @@ async function save(submit) {
 		})
 		record.value = saved
 		replaceForm(recordForm(saved))
+		if (!submit) editingExisting.value = false
 		success.value = submit ? "Marker submitted." : "Draft marker saved."
 		emit("changed", saved)
 		if (submit) emit("update:visible", false)
@@ -305,8 +313,6 @@ function clone(value) {
 	return JSON.parse(JSON.stringify(value || []))
 }
 
-function display(value) { return value === null || value === undefined || value === "" ? "—" : value }
-function formatNumber(value, precision) { return value === null || value === undefined || value === "" ? "—" : Number(value).toLocaleString("en-IN", { minimumFractionDigits: precision, maximumFractionDigits: precision }) }
 function formatDate(value, includeTime = false) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/); if (!match) return value || "—"; const date = `${match[3]}-${match[2]}-${match[1]}`; return includeTime && match[4] ? `${date} · ${match[4]}:${match[5]}` : date }
 
 function markerMethod(name) {
@@ -340,10 +346,6 @@ function markerMethod(name) {
 .empty-note { display: grid; place-items: center; min-height: 64px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); background: var(--erp-surface-soft); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); }
 .group-list { display: grid; gap: 8px; }
 .group-row { display: grid; grid-template-columns: 72px minmax(0, 1fr) 38px; align-items: center; gap: 8px; color: var(--erp-text-secondary); font-size: var(--erp-font-size-caption); font-weight: 700; }
-.marker-read-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
-.marker-read-grid > div { display: grid; min-height: 58px; align-content: center; gap: 4px; padding: 10px 12px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
-.marker-read-grid span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; text-transform: uppercase; }
-.marker-read-grid strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); overflow-wrap: anywhere; }
 .marker-chip-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .marker-chip-list span { padding: 4px 9px; color: var(--erp-text); background: var(--erp-surface-soft); border: 1px solid var(--erp-border); border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); font-weight: 700; }
 .marker-group-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -355,8 +357,7 @@ function markerMethod(name) {
 
 @media (max-width: 700px) {
 	.marker-loading, .marker-fields { grid-template-columns: 1fr; }
-	.marker-read-grid, .marker-group-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-	.marker-read-grid > div { min-height: 50px; padding: 8px 9px; }
+	.marker-group-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.group-row { grid-template-columns: 1fr 38px; }
 	.group-row > span { grid-column: 1 / -1; }
 	.table-scroll { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); }

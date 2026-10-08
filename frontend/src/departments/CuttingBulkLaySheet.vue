@@ -31,10 +31,19 @@
 				<section class="bulk-setup-summary erp-card" aria-label="Bulk setup summary"><div v-for="item in setupSummary" :key="item.label"><span>{{ item.label }}</span><strong>{{ item.value || "—" }}</strong></div></section>
 				<div class="bulk-workspace-layout">
 					<section class="bulk-workspace-main" aria-label="Active bulk LaySheet">
-						<div class="bulk-workspace-main__scroll">
-							<BulkActiveLaySheet ref="activeEditor" :bulk-name="bulkName" :row="activeRow" :data="workspace.active_laysheet" :modified="workspace.active_laysheet?.context?.modified" :can-write="workspace.permissions?.laysheet?.can_write" :busy="Boolean(busy)" @saved="applyWorkspace" @dirty-change="activeEditorDirty = $event" />
-							<BulkBundleTable :rows="workspace.bundles || []" />
-						</div>
+						<Tabs v-model:value="activeTab" class="bulk-workspace-tabs erp-tabs">
+							<TabList><Tab value="laysheet">Active LaySheet</Tab><Tab value="bundles">Bundles <span v-if="workspace.bundles?.length">{{ workspace.bundles.length }}</span></Tab><Tab value="delivery">Delivery</Tab><Tab value="activity">Activity</Tab></TabList>
+							<TabPanels>
+								<TabPanel value="laysheet"><BulkActiveLaySheet ref="activeEditor" :bulk-name="bulkName" :row="activeRow" :data="workspace.active_laysheet" :modified="workspace.active_laysheet?.context?.modified" :can-write="workspace.permissions?.laysheet?.can_write" :busy="Boolean(busy)" @saved="applyWorkspace" @dirty-change="activeEditorDirty = $event" /></TabPanel>
+								<TabPanel value="bundles"><BulkBundleTable :rows="workspace.bundles || []" /></TabPanel>
+								<TabPanel value="delivery">
+									<section class="bulk-related-panel"><header><div><span>Movement</span><h2>Delivery documents</h2></div><strong>{{ deliveryRows.length }}</strong></header><div v-if="deliveryRows.length" class="bulk-related-list"><article v-for="row in deliveryRows" :key="row.name"><div><strong>{{ row.delivery_challan }}</strong><span>{{ row.lot }} · {{ row.cutting_laysheet || 'No LaySheet' }}</span></div><DocumentStatusBadge :label="row.status" /></article></div><div v-else class="bulk-related-empty"><i class="pi pi-truck" /><strong>No Delivery Challans</strong><span>Create them from the required split-lot card.</span></div></section>
+								</TabPanel>
+								<TabPanel value="activity">
+									<section class="bulk-related-panel"><header><div><span>Progress</span><h2>Lot activity</h2></div><strong>{{ workspace.rows?.length || 0 }}</strong></header><div v-if="workspace.rows?.length" class="bulk-related-list"><article v-for="row in workspace.rows" :key="`activity-${row.name}`"><div><strong>{{ row.lot }}</strong><span>{{ [row.cutting_laysheet, row.lot_transfer, row.delivery_challan].filter(Boolean).join(' · ') || 'Setup pending' }}</span></div><DocumentStatusBadge :label="row.status" /></article></div><div v-else class="bulk-related-empty"><i class="pi pi-history" /><strong>No activity yet</strong><span>Add split lots to begin the workflow.</span></div></section>
+								</TabPanel>
+							</TabPanels>
+						</Tabs>
 					</section>
 					<BulkWorkflowRail :rows="workspace.rows || []" :active-lay-sheet="record.active_cutting_laysheet" :busy="busy" @select="selectRow" @action="runRowAction" />
 				</div>
@@ -64,6 +73,11 @@ import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
 import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
+import Tab from "primevue/tab"
+import TabList from "primevue/tablist"
+import TabPanel from "primevue/tabpanel"
+import TabPanels from "primevue/tabpanels"
+import Tabs from "primevue/tabs"
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue"
 import { useRoute } from "vue-router"
 
@@ -98,6 +112,7 @@ const feedback = ref("")
 const busy = ref("")
 const activeEditor = ref(null)
 const activeEditorDirty = ref(false)
+const activeTab = ref("laysheet")
 const editSetupOpen = ref(false)
 const generateOpen = ref(false)
 const deliveryOpen = ref(false)
@@ -110,6 +125,7 @@ let actionSequence = 0
 let disposed = false
 const record = computed(() => workspace.value.record || {})
 const activeRow = computed(() => (workspace.value.rows || []).find((row) => row.cutting_laysheet === record.value.active_cutting_laysheet) || null)
+const deliveryRows = computed(() => (workspace.value.rows || []).filter((row) => row.delivery_challan))
 const setupSummary = computed(() => [
 	{ label: "Posting Date", value: formatDate(record.value.posting_date) }, { label: "Cutting Spreader", value: record.value.cutting_spreader }, { label: "Cutter", value: record.value.cutter },
 ])
@@ -268,6 +284,7 @@ watch(bulkName, () => {
 	generateOpen.value = false
 	deliveryOpen.value = false
 	printOpen.value = false
+	activeTab.value = "laysheet"
 	loadWorkspace()
 }, { immediate: true })
 onBeforeUnmount(() => { disposed = true; actionSequence += 1; loadSequence += 1 })
@@ -277,7 +294,9 @@ onBeforeUnmount(() => { disposed = true; actionSequence += 1; loadSequence += 1 
 .bulk-workspace { display: flex; width: 100%; max-width: 1900px; min-width: 0; min-height: calc(100dvh - var(--erp-shell-header-height) - 82px); margin: 0 auto; flex-direction: column; gap: 10px; }.bulk-workspace__loading { display: grid; gap: 10px; }
 .bulk-record-header { display: flex; min-height: 66px; padding: 11px 14px; align-items: center; justify-content: space-between; gap: var(--erp-space-3); }.bulk-record-identity, .bulk-record-header__actions, .bulk-record-meta { display: flex; align-items: center; gap: 10px; }.bulk-record-title { display: grid; gap: 3px; min-width: 0; }.bulk-record-identity h1 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-title); letter-spacing: -.025em; }.bulk-record-title > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); font-weight: 600; }.bulk-header-fact { display: grid; min-width: 106px; max-width: 220px; gap: 2px; padding-left: 11px; border-left: 1px solid var(--erp-border); }.bulk-header-fact small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .035em; line-height: 1; text-transform: uppercase; }.bulk-header-fact strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 730; text-overflow: ellipsis; white-space: nowrap; }
 .bulk-setup-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: hidden; }.bulk-setup-summary > div { display: grid; min-width: 0; padding: 9px 12px; gap: 2px; border-right: 1px solid var(--erp-border); }.bulk-setup-summary > div:last-child { border-right: 0; }.bulk-setup-summary span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 680; text-transform: uppercase; }.bulk-setup-summary strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
-.bulk-workspace-layout { display: grid; min-height: 0; height: calc(100dvh - var(--erp-shell-header-height) - 296px); grid-template-columns: minmax(0, 4fr) minmax(280px, 1fr); gap: 10px; }.bulk-workspace-main { min-width: 0; min-height: 0; overflow: hidden; }.bulk-workspace-main__scroll { display: grid; height: 100%; padding-right: 2px; overflow-y: auto; align-content: start; gap: 10px; }
+.bulk-workspace-layout { display: grid; min-height: 0; height: calc(100dvh - var(--erp-shell-header-height) - 296px); grid-template-columns: minmax(0, 4fr) minmax(280px, 1fr); gap: 10px; }.bulk-workspace-main { min-width: 0; min-height: 0; overflow: hidden; }
+.bulk-workspace-tabs { display: flex; height: 100%; min-height: 0; flex-direction: column; }.bulk-workspace-tabs :deep(.p-tablist-tab-list) { padding-inline: 2px; }.bulk-workspace-tabs :deep(.p-tabpanels) { min-height: 0; padding: 12px 2px 2px 0; overflow-y: auto; background: transparent; }.bulk-workspace-tabs :deep(.p-tab span) { margin-left: 5px; padding: 2px 6px; color: var(--erp-text-muted); background: var(--erp-surface-muted); border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); }
+.bulk-related-panel { overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); }.bulk-related-panel > header { display: flex; min-height: 54px; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 13px; border-bottom: 1px solid var(--erp-border); background: var(--erp-surface-soft); }.bulk-related-panel > header div { display: grid; gap: 2px; }.bulk-related-panel > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }.bulk-related-panel > header h2 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-section); }.bulk-related-panel > header > strong { display: inline-grid; min-width: 26px; height: 26px; place-items: center; color: var(--erp-accent); background: var(--erp-accent-soft); border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); }.bulk-related-list { display: grid; }.bulk-related-list article { display: flex; min-height: 58px; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 13px; border-bottom: 1px solid var(--erp-border); }.bulk-related-list article:last-child { border-bottom: 0; }.bulk-related-list article > div { display: grid; min-width: 0; gap: 2px; }.bulk-related-list article strong, .bulk-related-list article span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.bulk-related-list article strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }.bulk-related-list article span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }.bulk-related-empty { display: grid; min-height: 180px; place-content: center; justify-items: center; gap: 6px; color: var(--erp-text-muted); text-align: center; }.bulk-related-empty i { color: var(--erp-accent); font-size: 1.45rem; }.bulk-related-empty strong { color: var(--erp-text); }
 .generate-form { display: grid; width: min(640px, calc(100vw - 64px)); gap: 13px; }.generate-form__numbers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }.generate-form label { display: grid; gap: 6px; }.generate-form label span { color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }.generate-table-wrap { overflow-x: auto; overflow-y: visible; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }.generate-table-wrap:focus-visible { outline: 2px solid var(--erp-accent); outline-offset: -2px; }.generate-table-wrap table { width: 100%; border-collapse: collapse; }.generate-table-wrap th, .generate-table-wrap td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--erp-border); }.generate-table-wrap th { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); background: var(--erp-surface-muted); }.generate-table-wrap tr:last-child td { border-bottom: 0; }
 :deep(.bulk-setup-dialog) { width: min(1260px, calc(100vw - 32px)); }:deep(.bulk-setup-dialog .p-dialog-content) { padding: 0; }
 @media (max-width: 1100px) { .bulk-workspace-layout { height: auto; grid-template-columns: 1fr; } }

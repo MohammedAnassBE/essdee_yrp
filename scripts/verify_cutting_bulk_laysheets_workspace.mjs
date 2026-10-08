@@ -178,8 +178,16 @@ assert(mainBox && railBox, "Bulk 80/20 workspace is missing")
 const widthRatio = mainBox.width / railBox.width
 assert(widthRatio >= 3.6 && widthRatio <= 4.4, `Bulk workspace is not an 80/20 split: ${widthRatio}`)
 assert(await page.locator(".bulk-workflow-card").count() === 2, "Workflow cards are missing")
-assert(await page.getByText("Cloth Details", { exact: true }).count() === 1, "Active LaySheet editor is missing")
-assert(await page.getByText("Generated Bundles", { exact: true }).count() === 1, "Bundle table is missing")
+assert(JSON.stringify(await page.locator(".bulk-workspace-tabs").getByRole("tab").allTextContents()) === JSON.stringify(["Active LaySheet", "Bundles 1", "Delivery", "Activity"]), "Bulk LaySheet tabs are missing or reordered")
+assert(await page.getByText("Cloth Details", { exact: true }).isVisible(), "Active LaySheet editor is missing")
+assert(!await page.getByText("Generated Bundles", { exact: true }).isVisible(), "Bundle table is duplicated below the active LaySheet")
+await page.getByRole("tab", { name: "Bundles 1", exact: true }).click()
+assert(await page.getByText("Generated Bundles", { exact: true }).isVisible(), "Bundle table is not isolated in its tab")
+await page.getByRole("tab", { name: "Delivery", exact: true }).click()
+assert(await page.getByRole("heading", { name: "Delivery documents", exact: true }).count() === 1, "Bulk Delivery tab is missing")
+await page.getByRole("tab", { name: "Activity", exact: true }).click()
+assert(await page.getByRole("heading", { name: "Lot activity", exact: true }).count() === 1, "Bulk Activity tab is missing")
+await page.getByRole("tab", { name: "Active LaySheet", exact: true }).click()
 await page.getByRole("button", { name: "Delete cloth row 1", exact: true }).click()
 delayNextSave = true
 const autosaveResponse = page.waitForResponse((response) => response.url().includes("save_active_editor"))
@@ -199,7 +207,7 @@ assert(await refreshBulk.isDisabled(), "Bulk refresh remains active while a rail
 const busyCardTabs = await page.locator(".bulk-workflow-card").evaluateAll((cards) => cards.map((card) => card.tabIndex))
 assert(busyCardTabs.every((tabIndex) => tabIndex === -1), `Bulk rail cards remain keyboard-actionable while busy: ${JSON.stringify(busyCardTabs)}`)
 await activationResponse
-await page.getByText("CLS-002", { exact: true }).waitFor()
+await page.locator(".bulk-workflow-card--active").getByText("CLS-002", { exact: true }).waitFor()
 await page.waitForFunction(() => !document.querySelector('[aria-label="Refresh Bulk LaySheets"]')?.disabled)
 assert(!page.url().includes("/app/"), "Bulk workflow navigated to Desk")
 

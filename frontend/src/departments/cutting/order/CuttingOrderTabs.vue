@@ -4,9 +4,7 @@
 		<TabPanels>
 			<TabPanel value="details">
 				<div class="tab-stack">
-					<section class="order-detail-card erp-card">
-						<div v-for="row in visibleDetails" :key="row.fieldname" class="order-detail-field"><span>{{ row.label }}</span><strong>{{ display(row.value) }}</strong></div>
-					</section>
+					<DocumentOverview :fields="overviewFields" :definitions="overviewDefinitions" include-empty aria-label="Cutting Order overview" id-prefix="cutting-order-overview" />
 					<LoadingState v-if="loading" />
 					<Message v-else-if="error" severity="error" :closable="false">{{ error }}</Message>
 					<DataSection v-else title="Planned Quantities" :count="rowCount(orderGroups)">
@@ -69,19 +67,37 @@ import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
 import { computed, defineComponent, h, ref } from "vue"
 
+import DocumentOverview from "../../../components/documents/DocumentOverview.vue"
+
 const props = defineProps({ data: { type: Object, default: () => ({}) }, loading: Boolean, error: { type: String, default: "" } })
 const activeTab = ref("details")
 const orderGroups = computed(() => props.data.matrix?.groups || [])
 const completedGroups = computed(() => normaliseGroups(props.data.completed_items))
 const incompleteGroups = computed(() => normaliseGroups(props.data.incomplete_items))
 const plannedGroups = computed(() => Array.isArray(props.data.planned_detail) ? props.data.planned_detail : props.data.planned_detail?.item_detail || [])
-const visibleDetails = computed(() => (props.data.details || []).filter((row) => !["cutting_order_detail", "item"].includes(row.fieldname)))
+const overviewDefinitions = [
+	{ key: "identity", label: "Order identity", description: "Order detail and finished item", icon: "pi pi-id-card", fields: ["cutting_order_detail", "item", "is_set_item"] },
+	{ key: "planning", label: "Planning", description: "Lay and cutting limits", icon: "pi pi-sliders-h", fields: ["cutting_location", "lay_no", "maximum_no_of_plys", "maximum_allow_percent"] },
+	{ key: "schedule", label: "Schedule", description: "Planned cutting window", icon: "pi pi-calendar", fields: ["cutting_start_date", "cutting_end_date"] },
+	{ key: "status", label: "Status & notes", description: "Current order state", icon: "pi pi-clipboard", fields: ["status"] },
+]
+const overviewFields = computed(() => {
+	const fields = [...(props.data.details || [])]
+	const existing = new Set(fields.map((field) => field.fieldname))
+	const metadata = {
+		cutting_order_detail: ["Cutting Order Detail", "Link"], item: ["Item", "Link"], is_set_item: ["Set Item", "Check"],
+		cutting_start_date: ["Cutting Start Date", "Date"], cutting_end_date: ["Cutting End Date", "Date"], status: ["Status", "Data"],
+	}
+	for (const [fieldname, [label, fieldtype]] of Object.entries(metadata)) {
+		if (!existing.has(fieldname)) fields.push({ fieldname, label, fieldtype, value: props.data.record?.[fieldname] })
+	}
+	return fields
+})
 
 function normaliseGroups(value) { if (Array.isArray(value)) return value; if (value?.items) return [value]; if (value && typeof value === "object") return Object.values(value).filter((group) => group?.items); return [] }
 function sizes(group) { return group.primary_attribute_values || Object.keys(group.items?.[0]?.values || {}) }
 function groupAttributes(group) { if (group.attributes?.length) return group.attributes; const list = [group.pack_attr]; if (group.is_set_item && group.set_attr) list.push(group.set_attr); return list.filter(Boolean) }
 function rowCount(groups) { return groups.reduce((count, group) => count + (group.items?.length || 0), 0) }
-function display(value) { return value === null || value === undefined || value === "" ? "—" : value }
 function numeric(value) { const number = Number(value || 0); return Number.isFinite(number) ? number.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—" }
 function valueTotal(value) { if (value && typeof value === "object" && !("qty" in value)) return Object.values(value).reduce((total, entry) => total + Number(entry || 0), 0); return Number(value?.qty ?? value ?? 0) }
 function rowTotal(row, group) { return sizes(group).reduce((total, size) => total + valueTotal(row.values?.[size]), 0) }
@@ -115,12 +131,6 @@ const CompletionTable = defineComponent({
 .cutting-order-tabs :deep(.p-tablist-tab-list) { flex: 0 0 auto; padding-inline: 3px; }
 .cutting-order-tabs :deep(.p-tabpanels) { min-height: 0; padding: 12px 0 0; overflow-y: auto; }
 .tab-stack { display: grid; gap: 12px; min-width: 0; padding-right: 3px; }
-.order-detail-card { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 0; overflow: hidden; }
-.order-detail-field { display: grid; gap: 4px; min-width: 0; padding: 12px 14px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
-.order-detail-field:nth-child(3n) { border-right: 0; }
-.order-detail-field:nth-last-child(-n + 3) { border-bottom: 0; }
-.order-detail-field span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 730; letter-spacing: .025em; text-transform: uppercase; }
-.order-detail-field strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-body); text-overflow: ellipsis; white-space: nowrap; }
 .cutting-order-tabs :deep(.data-section) { min-width: 0; padding: 0; overflow: hidden; }
 .cutting-order-tabs :deep(.data-section__header) { display: flex; align-items: center; justify-content: space-between; min-height: 45px; padding: 9px 12px; background: var(--erp-surface-soft); border-bottom: 1px solid var(--erp-border); }
 .cutting-order-tabs :deep(.data-section__header > div) { display: flex; align-items: center; gap: 8px; }
@@ -148,6 +158,5 @@ const CompletionTable = defineComponent({
 .cutting-order-tabs :deep(.empty-state) { display: grid; min-height: 100px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); place-items: center; align-content: center; gap: 8px; }
 .cutting-order-tabs :deep(.empty-state i) { color: var(--erp-accent); font-size: 1.1rem; }
 .cutting-order-tabs :deep(.loading-state) { display: grid; gap: 10px; }
-@media (max-width: 780px) { .order-detail-card { grid-template-columns: repeat(2, minmax(0, 1fr)); } .order-detail-field, .order-detail-field:nth-child(3n), .order-detail-field:nth-last-child(-n + 3) { border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); } .order-detail-field:nth-child(2n) { border-right: 0; } .order-detail-field:last-child, .order-detail-field:nth-last-child(2):nth-child(odd) { border-bottom: 0; } .cutting-order-tabs :deep(.table-scroll) { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); } }
-@media (max-width: 420px) { .order-detail-field { padding: 9px 10px; } }
+@media (max-width: 780px) { .cutting-order-tabs :deep(.table-scroll) { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); } }
 </style>

@@ -29,14 +29,18 @@
 				</template>
 
 				<template #fields>
-					<section v-if="visibleFields.length" class="purchase-order-page__details" aria-label="Purchase Order details">
-						<div v-for="field in visibleFields" :key="field.fieldname" :class="{ 'purchase-order-page__detail--wide': isWide(field) }" :data-field="field.fieldname"><span>{{ field.label }}</span><strong :title="String(formatField(field))">{{ formatField(field) }}</strong></div>
-					</section>
-				</template>
-
-				<template #matrix>
-					<StockItemMatrix v-if="itemGroups.length" :groups="itemGroups" doctype="Purchase Order" :physical-row-count="workspace.item_row_count || 0" :currency="workspace.record?.currency || ''" group-by-item show-lot-column show-pricing show-fulfillment :show-received="false" :show-amount="false" pricing-before-fulfillment />
-					<div v-else-if="!loading" class="purchase-order-page__empty"><i class="pi pi-inbox" /><div><strong>No item details</strong><span>This Purchase Order has no grouped item quantities.</span></div></div>
+					<Tabs v-model:value="activeTab" class="purchase-order-tabs erp-tabs">
+						<TabList><Tab value="overview">Overview</Tab><Tab value="items">Items <span v-if="workspace.item_row_count">{{ workspace.item_row_count }}</span></Tab></TabList>
+						<TabPanels>
+							<TabPanel value="overview">
+								<DocumentOverview :fields="overviewFields" :definitions="overviewDefinitions" include-unclaimed :unclaimed-definition="overviewAdditionalDefinition" aria-label="Purchase Order overview" id-prefix="purchase-order-overview" />
+							</TabPanel>
+							<TabPanel value="items">
+								<StockItemMatrix v-if="itemGroups.length" :groups="itemGroups" doctype="Purchase Order" :physical-row-count="workspace.item_row_count || 0" :currency="workspace.record?.currency || ''" group-by-item show-lot-column show-pricing show-fulfillment :show-received="false" :show-amount="false" pricing-before-fulfillment />
+								<div v-else-if="!loading" class="purchase-order-page__empty"><i class="pi pi-inbox" /><div><strong>No item details</strong><span>This Purchase Order has no grouped item quantities.</span></div></div>
+							</TabPanel>
+						</TabPanels>
+					</Tabs>
 				</template>
 
 				<template #rail>
@@ -92,9 +96,6 @@
 			</div>
 			<template #footer><Button label="Keep Pending" severity="secondary" text :disabled="acting === 'reject'" @click="rejectVisible = false" /><Button label="Reject Purchase Order" icon="pi pi-times-circle" severity="danger" :disabled="!rejectReason.trim()" :loading="acting === 'reject'" @click="submitRejection" /></template>
 		</Dialog>
-		<Dialog :visible="Boolean(notificationPreparation)" modal header="Send supplier notification" class="fabric-action-dialog erp-dialog--md" :closable="!acting" @update:visible="handleNotificationVisibility">
-			<SupplierNotificationPanel v-if="notificationPreparation" :preparation="notificationPreparation" :document-values="notificationValues" :acting="acting" :error="notificationError" @send="sendNotification" @close="closeNotification" />
-		</Dialog>
 	</DepartmentPage>
 </template>
 
@@ -102,6 +103,11 @@
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import Message from "primevue/message"
+import Tab from "primevue/tab"
+import TabList from "primevue/tablist"
+import TabPanel from "primevue/tabpanel"
+import TabPanels from "primevue/tabpanels"
+import Tabs from "primevue/tabs"
 import Textarea from "primevue/textarea"
 import { computed, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
@@ -111,13 +117,12 @@ import DepartmentPage from "../components/DepartmentPage.vue"
 import LinkField from "../components/common/LinkField.vue"
 import DocumentActionStrip from "../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../components/documents/DocumentConfirmationDialog.vue"
+import DocumentOverview from "../components/documents/DocumentOverview.vue"
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
 import StockItemMatrix from "../components/stock/StockItemMatrix.vue"
-import { hasDocumentDisplayValue, plainTextFromHtml } from "../utils/documentValues.js"
 import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
 import FabricDocumentWorkspace from "./fabric-store/FabricDocumentWorkspace.vue"
 import RelatedDocumentWorkspaceDialog from "./fabric-store/RelatedDocumentWorkspaceDialog.vue"
-import SupplierNotificationPanel from "./fabric-store/SupplierNotificationPanel.vue"
 
 const props = defineProps({
 	backTo: { type: String, default: "/fabric-store/purchase-orders" },
@@ -149,14 +154,26 @@ const deliverySourceVisible = ref(false)
 const deliveryWorkOrder = ref("")
 const rejectVisible = ref(false)
 const rejectReason = ref("")
-const notificationPreparation = ref(null)
-const notificationError = ref("")
 const lifecycleConfirmVisible = ref(false)
 const pendingLifecycleCommand = ref("")
+const activeTab = ref("overview")
 let loadSequence = 0
 let actionSequence = 0
-const headerFieldnames = new Set(["supplier", "supplier_name", "transaction_date", "total", "grand_total", "currency"])
-const visibleFields = computed(() => (workspace.value.fields?.length ? workspace.value.fields : workspace.value.details || []).filter((field) => !field.hidden && !headerFieldnames.has(field.fieldname) && hasDocumentDisplayValue(field.value)))
+const overviewDefinitions = [
+	{ key: "identity", label: "Order identity", description: "Company and procurement references", icon: "pi pi-id-card", fields: ["company", "naming_series", "is_yrp_managed", "approved_by"] },
+	{ key: "delivery", label: "Supplier & delivery", description: "Supplier and material destination", icon: "pi pi-truck", fields: ["supplier", "supplier_name", "deliver_to_supplier", "default_delivery_location", "set_warehouse"] },
+	{ key: "schedule", label: "Schedule", description: "Ordering and required dates", icon: "pi pi-calendar", fields: ["transaction_date", "schedule_date"] },
+	{ key: "status", label: "Status & notes", description: "Fulfilment state and instructions", icon: "pi pi-clipboard", fields: ["status", "open_status", "yrp_fulfillment_status", "terms_and_condition", "comments"] },
+]
+const overviewAdditionalDefinition = { key: "additional", label: "Additional details", description: "Other order information", icon: "pi pi-ellipsis-h", wide: true }
+const overviewFields = computed(() => {
+	const fields = [...(workspace.value.fields?.length ? workspace.value.fields : workspace.value.details || [])]
+	const existing = new Set(fields.map((field) => field.fieldname))
+	for (const [fieldname, label, fieldtype] of [["status", "Status", "Data"], ["is_yrp_managed", "YRP Managed", "Check"]]) {
+		if (!existing.has(fieldname) && workspace.value.record?.[fieldname] !== undefined) fields.push({ fieldname, label, fieldtype, value: workspace.value.record[fieldname] })
+	}
+	return fields
+})
 const itemGroups = computed(() => workspace.value.matrices?.items || workspace.value.item_groups || [])
 const relatedDocuments = computed(() => [
 	...(workspace.value.related?.delivery_challans || []).map((row) => ({ ...row, doctype: "YRP Delivery Challan", label: "Delivery Challan" })),
@@ -188,8 +205,6 @@ const purchaseOrderActions = computed(() => {
 	add("reject", "Reject PO", "pi pi-times-circle", beginRejection, { menuOnly: true })
 	add("create_delivery_challan", "Create Delivery Challan", "pi pi-truck", beginDeliveryChallan, { menuOnly: true })
 	add("refresh_status", "Refresh Status", "pi pi-sync", () => runDomainCommand("refresh_status"), { menuOnly: true })
-	add("prepare_sms", "Send SMS", "pi pi-envelope", () => prepareNotification("sms"), { menuOnly: true })
-	add("prepare_whatsapp", "Send WhatsApp", "pi pi-comments", () => prepareNotification("whatsapp"), { menuOnly: true })
 	const primaryKey = capabilities.value.approve ? "approve"
 		: capabilities.value.send_approval_request ? "send_approval_request"
 			: capabilities.value.create_goods_received_note ? "create_goods_received_note"
@@ -197,11 +212,6 @@ const purchaseOrderActions = computed(() => {
 	return actions.map((action) => ({ ...action, primary: action.key === primaryKey }))
 })
 const lotChanged = computed(() => JSON.stringify([...lotOriginal.value].sort()) !== JSON.stringify([...lotDraft.value].sort()))
-const notificationValues = computed(() => ({
-	...(workspace.value.record || {}),
-	...Object.fromEntries((workspace.value.fields || []).map((field) => [field.fieldname, field.value])),
-}))
-
 async function loadWorkspace(isRefresh = false) {
 	const requestedId = String(route.params.purchaseOrderId || "")
 	const sequence = ++loadSequence
@@ -227,8 +237,7 @@ async function loadWorkspace(isRefresh = false) {
 		deliveryWorkOrder.value = ""
 		rejectVisible.value = false
 		rejectReason.value = ""
-		notificationPreparation.value = null
-		notificationError.value = ""
+		activeTab.value = "overview"
 		lifecycleConfirmVisible.value = false
 		pendingLifecycleCommand.value = ""
 	}
@@ -237,8 +246,6 @@ async function loadWorkspace(isRefresh = false) {
 		const data = await getPurchaseOrderWorkspace(requestedId) || {}
 		if (sequence === loadSequence && requestedId === String(route.params.purchaseOrderId || "")) {
 			workspace.value = data
-			notificationPreparation.value = null
-			notificationError.value = ""
 		}
 	}
 	catch (reason) {
@@ -269,45 +276,11 @@ async function runDomainCommand(command, payload = {}) {
 		const result = await executePurchaseOrderCommand(source.name, command, payload, source.modified) || {}
 		if (sequence !== actionSequence || requestedId !== String(route.params.purchaseOrderId || "")) return false
 		workspace.value = result
-		notificationPreparation.value = null
-		notificationError.value = ""
 		return true
 	}
 	catch (reason) { if (sequence === actionSequence && requestedId === String(route.params.purchaseOrderId || "")) actionError.value = reason?.message || `Unable to ${command.replaceAll("_", " ")} this Purchase Order.`; return false }
 	finally { if (sequence === actionSequence) acting.value = "" }
 }
-async function prepareNotification(channel) {
-	const requestedId = String(route.params.purchaseOrderId || "")
-	const source = workspace.value.record
-	const sequence = ++actionSequence
-	acting.value = `prepare_${channel}`
-	notificationError.value = ""
-	actionError.value = ""
-	try {
-		const result = await executePurchaseOrderCommand(source.name, `prepare_${channel}`, {}, source.modified)
-		if (sequence !== actionSequence || requestedId !== String(route.params.purchaseOrderId || "")) return
-		if (result?.context) notificationPreparation.value = result
-		else actionError.value = `No ${channel === "sms" ? "SMS" : "WhatsApp"} notification context is available.`
-	} catch (reason) { if (sequence === actionSequence && requestedId === String(route.params.purchaseOrderId || "")) actionError.value = reason?.message || `Unable to prepare ${channel === "sms" ? "SMS" : "WhatsApp"}.` }
-	finally { if (sequence === actionSequence) acting.value = "" }
-}
-async function sendNotification({ channel, payload }) {
-	const requestedId = String(route.params.purchaseOrderId || "")
-	const source = workspace.value.record
-	const sequence = ++actionSequence
-	acting.value = `send_${channel}`
-	notificationError.value = ""
-	actionError.value = ""
-	try {
-		const result = await executePurchaseOrderCommand(source.name, `send_${channel}`, payload, source.modified)
-		if (sequence !== actionSequence || requestedId !== String(route.params.purchaseOrderId || "")) return
-		if (result?.result?.ok) notificationPreparation.value = null
-		else actionError.value = result?.result?.error || `Unable to send ${channel === "sms" ? "SMS" : "WhatsApp"}.`
-	} catch (reason) { if (sequence === actionSequence && requestedId === String(route.params.purchaseOrderId || "")) actionError.value = reason?.message || `Unable to send ${channel === "sms" ? "SMS" : "WhatsApp"}.` }
-	finally { if (sequence === actionSequence) acting.value = "" }
-}
-function closeNotification() { notificationPreparation.value = null; notificationError.value = "" }
-function handleNotificationVisibility(visible) { if (!visible) closeNotification() }
 async function changeStatus(action) {
 	const requestedId = String(route.params.purchaseOrderId || "")
 	const source = workspace.value.record
@@ -328,7 +301,7 @@ const lifecycleConfirmLabel = computed(() => pendingLifecycleCommand.value === "
 const lifecycleConfirmMessage = computed(() => pendingLifecycleCommand.value === "cancel" ? `Cancel ${workspace.value.record?.name}? This keeps the document for audit but stops further processing.` : pendingLifecycleCommand.value === "close" ? `Close ${workspace.value.record?.name}? No further receipts can be created until it is reopened.` : `Create a new draft amendment from ${workspace.value.record?.name}?`)
 function requestLifecycleAction(command) { pendingLifecycleCommand.value = command; lifecycleConfirmVisible.value = true }
 async function confirmLifecycleAction() { const command = pendingLifecycleCommand.value; lifecycleConfirmVisible.value = false; pendingLifecycleCommand.value = ""; if (command === "close") await runDomainCommand(command); else if (command) await changeStatus(command) }
-function editPurchaseOrder() { router.push({ name: props.editRouteName, params: { purchaseOrderId: workspace.value.record.name } }) }
+function editPurchaseOrder() { router.push({ name: props.editRouteName, params: { purchaseOrderId: workspace.value.record.name }, state: preserveListNavigationState(workspace.value.record.name, workspace.value.record.modified) }) }
 function duplicatePurchaseOrder() { router.push({ name: props.newRouteName, query: { duplicate_from: workspace.value.record.name } }) }
 function openRelated(doctype, sourceContext = {}, name = "") {
 	relatedDoctype.value = doctype
@@ -375,14 +348,6 @@ async function submitRejection() {
 function statusLabel(docstatus) { return Number(docstatus) === 1 ? "Submitted" : Number(docstatus) === 2 ? "Cancelled" : "Draft" }
 function formatDate(value) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/); return match ? `${match[3]}-${match[2]}-${match[1]}` : value || "—" }
 function formatAmount(value, currency = "") { return `${currency ? `${currency} ` : ""}${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}` }
-const multilineFieldtypes = new Set(["Small Text", "Text", "Long Text", "Text Editor", "Code"])
-function isWide(field) { return multilineFieldtypes.has(field.fieldtype) && /address|comments?|notes?|remarks?|terms?/i.test(field.fieldname) }
-function formatField(field) {
-	if (["Date", "Datetime"].includes(field.fieldtype)) return formatDate(field.value)
-	if (["Currency", "Float", "Int", "Percent"].includes(field.fieldtype)) return Number(field.value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })
-	if (field.fieldtype === "Check") return Number(field.value) ? "Yes" : "No"
-	return field.value === null || field.value === undefined || field.value === "" ? "—" : plainTextFromHtml(field.value)
-}
 function formatTotal(total) {
 	if (total.fieldname === "total_qty") return Number(total.value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })
 	return formatAmount(total.value, workspace.value.record?.currency)
@@ -401,6 +366,9 @@ watch(() => route.params.purchaseOrderId, () => loadWorkspace(false), { immediat
 .purchase-order-page__facts > div { display: grid; min-width: 0; gap: 2px; }
 .purchase-order-page__facts span, .purchase-order-page__details span, .purchase-order-page__total span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .purchase-order-page__facts strong { overflow: hidden; max-width: 220px; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.purchase-order-tabs :deep(.p-tabpanels) { padding: 12px 0 0; background: transparent; }
+.purchase-order-tabs :deep(.p-tablist-tab-list) { padding-inline: 2px; }
+.purchase-order-tabs :deep(.p-tab span) { margin-left: 5px; padding: 2px 6px; color: var(--erp-text-muted); background: var(--erp-surface-muted); border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); }
 .purchase-order-page__details { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
 .purchase-order-page__details > div { display: grid; min-width: 0; min-height: 58px; align-content: center; gap: 4px; padding: 9px 12px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
 .purchase-order-page__detail--wide { grid-column: span 2; }

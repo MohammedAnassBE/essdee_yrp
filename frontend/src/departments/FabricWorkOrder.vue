@@ -4,10 +4,19 @@
 			<FabricDocumentWorkspace doctype="YRP Work Order" title="Work Order" :workspace="workspace" :loading="loading" :error="error || actionError" :acting="acting" :show-lifecycle-actions="false" @reload="loadWorkspace(true)" @action="runWorkspaceAction">
 				<template #header="{ record, headingId }">
 					<div class="work-order-page__identity">
-						<div><h1>Work Order</h1><span>{{ record.name }}</span></div>
-						<DocumentStatusBadge :docstatus="record.docstatus" :label="record.status || statusLabel(record.docstatus)" />
-						<div v-if="headerFacts.length" class="work-order-header__facts" role="region" aria-label="Work Order context" tabindex="0">
-							<div v-for="fact in headerFacts" :key="fact.label"><span>{{ fact.label }}</span><strong :title="String(fact.value)">{{ fact.value }}</strong></div>
+						<div class="work-order-page__title-row">
+							<div class="work-order-page__title">
+								<div class="work-order-page__meta">
+									<span>Work order · {{ record.name }}</span>
+									<span class="work-order-page__date"><span>WO date</span><strong>{{ woDate }}</strong></span>
+								</div>
+								<h1 :id="headingId" :aria-label="[record.lot, record.item || 'Work Order'].filter(Boolean).join(' · ')">
+									<span v-if="record.lot" class="work-order-page__lot">{{ record.lot }}</span>
+									<span v-if="record.lot && record.item" class="work-order-page__title-separator" aria-hidden="true">·</span>
+									<span>{{ record.item || "Work Order" }}</span>
+								</h1>
+							</div>
+							<DocumentStatusBadge :docstatus="record.docstatus" :label="record.status || statusLabel(record.docstatus)" />
 						</div>
 					</div>
 				</template>
@@ -18,16 +27,23 @@
 
 				<template #matrix>
 					<Tabs v-model:value="activeTab" class="work-order-tabs erp-tabs">
-						<TabList class="work-order-tablist"><Tab value="details">Details</Tab><Tab v-if="showSummary" value="summary">Summary</Tab></TabList>
+						<TabList class="work-order-tablist">
+							<Tab value="overview">Overview</Tab>
+							<Tab v-if="deliverables.length" value="deliverables">Deliverables {{ deliverableCount }}</Tab>
+							<Tab v-if="receivables.length" value="receivables">Receivables {{ receivableCount }}</Tab>
+							<Tab v-if="showSummary" value="summary">Summary</Tab>
+						</TabList>
 						<TabPanels class="work-order-panels">
-							<TabPanel value="details"><WorkOrderDetails :details="visibleFields" :deliverables="deliverables" :receivables="receivables" /></TabPanel>
+							<TabPanel value="overview"><WorkOrderOverview :details="visibleFields" /></TabPanel>
+							<TabPanel v-if="deliverables.length" value="deliverables"><WorkOrderDetails :deliverables="deliverables" matrices-only /></TabPanel>
+							<TabPanel v-if="receivables.length" value="receivables"><WorkOrderDetails :receivables="receivables" matrices-only /></TabPanel>
 							<TabPanel v-if="showSummary" value="summary"><WorkOrderSummary :summary="workspace.summary || {}" /></TabPanel>
 						</TabPanels>
 					</Tabs>
 				</template>
 
 				<template #rail>
-					<div v-if="workspace.totals?.length" class="work-order-page__totals"><div v-for="total in workspace.totals" :key="total.fieldname" class="work-order-page__total"><span>{{ total.label }}</span><strong>{{ formatNumber(total.value) }}</strong></div></div>
+					<div v-if="railTotals.length" class="work-order-page__totals"><div v-for="total in railTotals" :key="total.fieldname" class="work-order-page__total"><span>{{ total.label }}</span><strong>{{ formatNumber(total.value) }}</strong></div></div>
 					<WorkOrderActivityRail ref="activityRail" :work-order="workspace.record?.name || ''" :delivery-challans="deliveryChallans" :goods-received-notes="goodsReceivedNotes" :permissions="workspace.related_permissions || {}" @create="createRelated" @open="openRelatedRow" />
 				</template>
 
@@ -75,6 +91,7 @@ import RelatedDocumentWorkspaceDialog from "./fabric-store/RelatedDocumentWorksp
 import WorkOrderActionPanel from "./fabric-store/WorkOrderActionPanel.vue"
 import WorkOrderActivityRail from "./fabric-store/WorkOrderActivityRail.vue"
 import WorkOrderDetails from "./fabric-store/WorkOrderDetails.vue"
+import WorkOrderOverview from "./fabric-store/WorkOrderOverview.vue"
 import WorkOrderSummary from "./fabric-store/WorkOrderSummary.vue"
 
 const props = defineProps({
@@ -91,7 +108,7 @@ const loading = ref(true)
 const acting = ref("")
 const error = ref("")
 const actionError = ref("")
-const activeTab = ref("details")
+const activeTab = ref("overview")
 const workspace = ref({})
 const actionVisible = ref(false)
 const actionMode = ref("")
@@ -111,30 +128,32 @@ const lifecycleConfirmVisible = ref(false)
 const pendingLifecycleCommand = ref("")
 let loadSequence = 0
 let actionSequence = 0
-const headerFieldnames = new Set(["supplier", "supplier_name", "process_name", "item", "lot"])
+const headerFieldnames = new Set(["status", "wo_date", "item", "lot"])
 
 const capabilities = computed(() => workspace.value.capabilities || {})
+const overviewLabels = { process_name: "Process", supplier: "Job worker", supplier_name: "Job worker" }
 const visibleFields = computed(() => {
 	const fields = workspace.value.fields?.length ? workspace.value.fields : workspace.value.details || []
+	const hasSupplierName = fields.some((field) => field?.fieldname === "supplier_name" && hasDocumentDisplayValue(field.value))
 	const byFieldname = new Map()
 	for (const field of [...fields, ...(workspace.value.dimensions || [])]) {
 		if (!field?.fieldname || field.hidden || headerFieldnames.has(field.fieldname) || byFieldname.has(field.fieldname) || !hasDocumentDisplayValue(field.value)) continue
-		byFieldname.set(field.fieldname, field)
+		if (field.fieldname === "supplier" && hasSupplierName) continue
+		byFieldname.set(field.fieldname, overviewLabels[field.fieldname] ? { ...field, label: overviewLabels[field.fieldname] } : field)
 	}
 	return [...byFieldname.values()]
 })
-const headerFacts = computed(() => {
-	const record = workspace.value.record || {}
-	return [
-		["Supplier", record.supplier_name || record.supplier],
-		["Process", record.process_name],
-		["Item", record.item],
-		["Lot", record.lot],
-		["Expected", record.expected_delivery_date],
-	].filter(([, value]) => hasDocumentDisplayValue(value)).map(([label, value]) => ({ label, value }))
-})
+const fieldValues = computed(() => new Map(
+	[...(workspace.value.fields || workspace.value.details || []), ...(workspace.value.dimensions || [])]
+		.filter((field) => field?.fieldname)
+		.map((field) => [field.fieldname, field.value]),
+))
+const railTotals = computed(() => workspace.value.totals || [])
+const woDate = computed(() => formatDate(fieldValues.value.get("wo_date")))
 const deliverables = computed(() => workspace.value.matrices?.deliverables || workspace.value.deliverables || [])
 const receivables = computed(() => workspace.value.matrices?.receivables || workspace.value.receivables || [])
+const deliverableCount = computed(() => itemCount(deliverables.value))
+const receivableCount = computed(() => itemCount(receivables.value))
 const deliveryChallans = computed(() => workspace.value.related?.delivery_challans || workspace.value.delivery_challans || [])
 const goodsReceivedNotes = computed(() => workspace.value.related?.goods_received_notes || workspace.value.goods_received_notes || [])
 const showSummary = computed(() => Boolean(
@@ -234,7 +253,9 @@ async function loadWorkspace(refresh = false) {
 function capabilityLabel(name, fallback) { return capabilities.value[name]?.label || fallback }
 function statusLabel(docstatus) { return Number(docstatus) === 1 ? "Submitted" : Number(docstatus) === 2 ? "Cancelled" : "Draft" }
 function formatNumber(value) { return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 }) }
-function editWorkOrder() { router.push({ name: props.editRouteName, params: { workOrderId: workspace.value.record.name } }) }
+function formatDate(value) { if (!value) return "—"; const [year, month, day] = String(value).slice(0, 10).split("-"); return day ? `${day}-${month}-${year}` : value }
+function itemCount(groups) { return groups.reduce((count, group) => count + (group.items?.length || 0), 0) }
+function editWorkOrder() { router.push({ name: props.editRouteName, params: { workOrderId: workspace.value.record.name }, state: preserveListNavigationState(workspace.value.record.name, workspace.value.record.modified) }) }
 function duplicateWorkOrder() { router.push({ name: props.newRouteName, query: { duplicate_from: workspace.value.record.name } }) }
 const lifecycleConfirmTitle = computed(() => pendingLifecycleCommand.value === "cancel" ? "Cancel Work Order?" : "Amend Work Order?")
 const lifecycleConfirmLabel = computed(() => pendingLifecycleCommand.value === "cancel" ? "Cancel Work Order" : "Create Amendment")
@@ -318,14 +339,17 @@ watch(() => route.params.workOrderId, () => loadWorkspace(false), { immediate: t
 
 <style scoped>
 .fabric-work-order-frame { width: 100%; max-width: 1840px; min-width: 0; margin: 0 auto var(--erp-space-3); padding: 0 clamp(2px, .7vw, 10px); }
-.work-order-page__identity { display: flex; min-width: 0; align-items: center; gap: 12px; }
-.work-order-page__identity > div:first-child { display: grid; gap: 2px; }
-.work-order-page__identity h1 { margin: 0; color: var(--erp-text); font-size: 19px; line-height: 1.15; letter-spacing: -.018em; }
-.work-order-page__identity > div:first-child > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); font-weight: 700; }
-.work-order-header__facts { display: flex; min-width: 0; align-items: center; gap: 18px; padding-left: 14px; border-left: 1px solid var(--erp-border); }
-.work-order-header__facts > div { display: grid; min-width: 0; gap: 2px; }
-.work-order-header__facts span, .work-order-page__total span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
-.work-order-header__facts strong { overflow: hidden; max-width: 210px; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
+.work-order-page__identity { display: grid; width: 100%; min-width: 0; padding-block: 5px; }
+.work-order-page__title-row { display: flex; min-width: 0; align-items: center; gap: 12px; }
+.work-order-page__title { display: grid; min-width: 0; gap: 3px; }
+.work-order-page__meta { display: flex; min-width: 0; align-items: center; gap: 12px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .035em; text-transform: uppercase; }
+.work-order-page__date { display: inline-flex; align-items: center; gap: 5px; padding-left: 12px; border-left: 1px solid var(--erp-border); }
+.work-order-page__date strong { color: var(--erp-text); font-weight: 780; font-variant-numeric: tabular-nums; }
+.work-order-page__identity h1 { display: flex; max-width: min(1080px, 73vw); min-width: 0; align-items: baseline; gap: 7px; margin: 0; overflow: hidden; color: var(--erp-text); font-size: clamp(19px, 1.45vw, 24px); line-height: 1.12; letter-spacing: -.025em; white-space: nowrap; }
+.work-order-page__identity h1 > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.work-order-page__lot { flex: 0 0 auto; color: var(--erp-accent-hover); font-variant-numeric: tabular-nums; }
+.work-order-page__title-separator { flex: 0 0 auto; color: var(--erp-text-muted); font-weight: 500; }
+.work-order-page__total span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .work-order-tabs { min-width: 0; overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
 .work-order-tablist { position: sticky; z-index: var(--erp-layer-sticky); top: 0; background: var(--erp-surface); }
 .work-order-panels { padding: var(--erp-space-3); background: color-mix(in srgb, var(--erp-bg) 72%, white); }
@@ -334,7 +358,6 @@ watch(() => route.params.workOrderId, () => loadWorkspace(false), { immediate: t
 .work-order-page__total { display: grid; min-height: 66px; align-content: center; gap: 3px; padding: 9px 11px; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--erp-accent) 58%, white); }
 .work-order-page__total strong { color: var(--erp-accent-hover); font-size: 17px; font-weight: 780; }
 .work-order-grn-source { display: grid; gap: var(--erp-space-3); }
-@media (max-width: 1100px) { .work-order-page__identity { align-items: flex-start; flex-wrap: wrap; } }
 @media (max-width: 900px) { .work-order-page__totals, :deep(.work-order-activity-rail) { grid-column: 1 / -1; } }
-@media (max-width: 650px) { .fabric-work-order-frame { margin-bottom: 0; padding: 0; } .work-order-page__identity { width: 100%; } .work-order-header__facts { width: 100%; overflow-x: auto; padding: 8px 18px 0 0; border-top: 1px solid var(--erp-border); border-left: 0; flex-wrap: nowrap; scrollbar-width: thin; -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); } .work-order-header__facts:focus-visible { outline: 2px solid var(--erp-accent); outline-offset: 2px; } .work-order-header__facts > div { flex: 0 0 auto; } .work-order-page__totals { grid-template-columns: repeat(2, minmax(0, 1fr)); } .work-order-panels { padding: var(--erp-space-2); } }
+@media (max-width: 650px) { .fabric-work-order-frame { margin-bottom: 0; padding: 0; } .work-order-page__identity { width: 100%; } .work-order-page__meta { align-items: flex-start; flex-direction: column; gap: 2px; } .work-order-page__date { padding-left: 0; border-left: 0; } .work-order-page__identity h1 { max-width: calc(100vw - 132px); } .work-order-page__totals { grid-template-columns: repeat(2, minmax(0, 1fr)); } .work-order-panels { padding: var(--erp-space-2); } }
 </style>

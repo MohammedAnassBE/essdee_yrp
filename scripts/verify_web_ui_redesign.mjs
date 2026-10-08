@@ -711,6 +711,14 @@ async function planFrameSuite(page, context) {
 
 	const visibleTabs = page.locator(".cutting-tabs .p-tab:visible")
 	assert(await visibleTabs.count() === 5, "Expected five permission-visible Cutting Plan tabs")
+	assert(JSON.stringify(await visibleTabs.allTextContents()) === JSON.stringify(["Details", "Summary", "Planned Detail", "CPM", "Stock Transfers"]), "Cutting Plan tabs were renamed or reordered")
+	for (const heading of ["Plan identity", "Planning", "Schedule", "Status & notes"]) {
+		assert(await page.getByRole("heading", { name: heading, exact: true }).count() === 1, `Cutting Plan Details is missing ${heading}`)
+	}
+	assert(await page.locator(".detail-read-grid").count() === 0, "Cutting Plan still uses the old flat field grid")
+	assert(await sidebar.getByRole("button", { name: "Filter markers", exact: true }).count() === 1, "Cutting Plan marker filter disappeared")
+	assert(await sidebar.getByRole("button", { name: "Filter Lay Sheets", exact: true }).count() === 1, "Cutting Plan Lay Sheet filter disappeared")
+	assert(await sidebar.getByRole("button", { name: "Create New", exact: true }).count() === 2, "Cutting Plan marker or Lay Sheet Create New action disappeared")
 	const tabList = page.locator(".cutting-tabs .p-tablist")
 	const panels = page.locator(".cutting-tabs .p-tabpanels")
 	const tabTopBefore = (await tabList.boundingBox())?.y
@@ -757,7 +765,9 @@ async function planFrameSuite(page, context) {
 			body: JSON.stringify({ message: "Workspace unavailable" }),
 		}))
 		await errorPage.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(fixture.name)}`, { waitUntil: "domcontentloaded" })
-		await errorPage.locator(".p-tabpanel[data-p-active='true'] .p-message-error").waitFor({ timeout: 20_000 })
+		const loadError = errorPage.locator(".workspace-load-error")
+		await loadError.waitFor({ timeout: 20_000 })
+		assert(await loadError.getByRole("button", { name: "Retry", exact: true }).count() === 1, "Initial Cutting Plan workspace failure has no retry action")
 	} finally {
 		await errorPage.close()
 	}
@@ -1226,6 +1236,7 @@ async function entityDialogsSuite(page) {
 	const fixture = await openPlan(page, async (data, name) => {
 		if (!(
 			data.markers?.length
+			&& data.markers.some((marker) => Number(marker.docstatus) === 1)
 			&& data.laysheets?.length
 			&& data.permissions?.can_start_marker
 			&& data.permissions?.can_start_laysheet
@@ -1244,6 +1255,11 @@ async function entityDialogsSuite(page) {
 	await page.locator(".marker-section").getByRole("button", { name: "Create New", exact: true }).click()
 	const markerDialog = page.getByRole("dialog", { name: "Create New Marker" })
 	await markerDialog.waitFor()
+	await markerDialog.locator(".marker-fields").waitFor()
+	for (const label of ["Marker Name *", "Select Type *", "Length (Meters) *", "Width (Inches) *"]) {
+		assert(await markerDialog.getByText(label, { exact: true }).count() === 1, `Marker creation lost ${label}`)
+	}
+	assert(await markerDialog.getByRole("button", { name: "Build Ratios", exact: true }).count() === 1, "Marker creation lost Build Ratios")
 	const markerMaximize = markerDialog.getByRole("button", { name: "Maximize dialog", exact: true })
 	assert(await markerMaximize.count() === 1, "Marker dialog maximize control has no accessible name")
 	assert(await markerMaximize.getAttribute("title") === "Maximize dialog", "Marker dialog maximize control has no visible tooltip")
@@ -1258,6 +1274,10 @@ async function entityDialogsSuite(page) {
 	await page.locator(".laysheet-section").getByRole("button", { name: "Create New", exact: true }).click()
 	const createDialog = page.getByRole("dialog", { name: "Create Lay Sheet" })
 	await createDialog.waitFor()
+	await createDialog.locator(".create-fields").waitFor()
+	for (const label of ["Cutting Marker *", "Cutting Spreader *", "Cutter *"]) {
+		assert(await createDialog.getByText(label, { exact: true }).count() === 1, `Lay Sheet creation lost ${label}`)
+	}
 	const laySheetMaximize = createDialog.getByRole("button", { name: "Maximize dialog", exact: true })
 	assert(await laySheetMaximize.count() === 1, "Lay Sheet dialog maximize control has no accessible name")
 	assert(await laySheetMaximize.getAttribute("title") === "Maximize dialog", "Lay Sheet dialog maximize control has no visible tooltip")
@@ -1268,9 +1288,33 @@ async function entityDialogsSuite(page) {
 	assert(await createDialog.getByText(/Start Date|End Date|Started Date|Ended Date/i).count() === 0, "Lay Sheet creation exposes system date-time fields")
 	await createDialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
 
-	await page.locator(".marker-card").first().click()
+	const submittedMarker = fixture.data.markers.find((marker) => Number(marker.docstatus) === 1)
+	assert(submittedMarker, "The selected dialog fixture has no submitted Marker")
+	await page.locator(".marker-card").filter({ hasText: submittedMarker.name }).click()
 	const existingMarkerDialog = page.locator(".marker-dialog")
 	await existingMarkerDialog.waitFor()
+	const markerOverviewDiagnostics = {
+		title: await existingMarkerDialog.locator(".p-dialog-title").textContent(),
+		status: await existingMarkerDialog.locator(".marker-status-row").textContent(),
+		inputs: await existingMarkerDialog.locator("input").count(),
+		overviews: await existingMarkerDialog.locator(".marker-overview").count(),
+		headings: await existingMarkerDialog.getByRole("heading").allTextContents(),
+	}
+	for (const heading of ["Marker identity", "Measurements"]) {
+		assert(await existingMarkerDialog.getByRole("heading", { name: heading, exact: true }).count() === 1, `Submitted Marker overview is missing ${heading}: ${JSON.stringify(markerOverviewDiagnostics)}`)
+	}
+	for (const heading of ["Selected Panels", "Size Ratios", "Panel Groups"]) {
+		assert(await existingMarkerDialog.getByRole("heading", { name: heading, exact: true }).count() === 1, `Submitted Marker lost ${heading}`)
+	}
+	const markerWeightValue = submittedMarker.required_piece_weight
+	if (markerWeightValue !== null && markerWeightValue !== undefined && markerWeightValue !== "") {
+		const markerWeight = Number(markerWeightValue)
+		const renderedWeight = await existingMarkerDialog.locator(".marker-overview .document-overview__facts > div")
+			.filter({ hasText: "Required Piece Weight (kg)" })
+			.locator("dd")
+			.textContent()
+		assert(renderedWeight?.trim() === markerWeight.toLocaleString("en-IN", { minimumFractionDigits: 4, maximumFractionDigits: 4 }), `Marker piece weight lost four-decimal precision: ${renderedWeight}`)
+	}
 	const dialogScrollContract = await existingMarkerDialog.evaluate((dialog) => {
 		const content = dialog.querySelector(".p-dialog-content")
 		const footer = dialog.querySelector(".p-dialog-footer")
@@ -1293,11 +1337,30 @@ async function entityDialogsSuite(page) {
 		)
 	}
 	await page.setViewportSize({ width: 390, height: 844 })
-	const markerMobileColumns = await existingMarkerDialog.locator(".marker-read-grid").evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length)
-	assert(markerMobileColumns === 2, `Marker facts do not retain a compact two-column mobile grid: ${markerMobileColumns}`)
+	const markerMobileColumns = await existingMarkerDialog.locator(".marker-overview .document-overview__facts").evaluateAll((elements) => elements.map((element) => getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length))
+	assert(markerMobileColumns.length === 2 && markerMobileColumns.every((columns) => columns === 2), `Marker facts do not retain compact two-column mobile grids: ${markerMobileColumns}`)
 	assert(await existingMarkerDialog.getByRole("button", { name: "Maximize dialog", exact: true }).isHidden(), "Redundant dialog maximize control remains visible on mobile")
 	await page.setViewportSize({ width: 1600, height: 700 })
 	await existingMarkerDialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
+
+	const draftPage = await page.context().newPage()
+	try {
+		const draftFixture = await findCuttingPlan(draftPage.request, (data) =>
+			data.markers?.some((marker) => Number(marker.docstatus) === 0) && data.permissions?.can_read_marker,
+		)
+		const draftMarker = draftFixture.data.markers.find((marker) => Number(marker.docstatus) === 0)
+		await draftPage.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(draftFixture.name)}`, { waitUntil: "domcontentloaded" })
+		await draftPage.locator(".marker-card").filter({ hasText: draftMarker.name }).click()
+		const draftMarkerDialog = draftPage.locator(".marker-dialog")
+		await draftMarkerDialog.waitFor()
+		assert(await draftMarkerDialog.getByRole("heading", { name: "Marker identity", exact: true }).count() === 1, "Saved Draft Marker does not open in the readable overview")
+		assert(await draftMarkerDialog.locator(".marker-fields").count() === 0, "Saved Draft Marker opens directly in the editor")
+		await draftMarkerDialog.locator(".p-dialog-footer").getByRole("button", { name: "Edit Marker", exact: true }).click()
+		await draftMarkerDialog.locator(".marker-fields").waitFor()
+		assert(await draftMarkerDialog.getByRole("button", { name: "Build Ratios", exact: true }).count() === 1, "Draft Marker edit action does not restore the existing editor")
+	} finally {
+		await draftPage.close()
+	}
 
 	const sheet = editableLaySheet
 	assert(sheet, "The selected dialog fixture has no editable Lay Sheet")
@@ -1307,8 +1370,21 @@ async function entityDialogsSuite(page) {
 	const laySheetTabList = laySheetDialog.locator(".p-tablist")
 	assert(await laySheetTabList.evaluate((element) => getComputedStyle(element).position) === "sticky", "Lay Sheet tabs do not remain fixed while dialog data scrolls")
 	await laySheetDialog.getByRole("tab", { name: "Details", exact: true }).click()
+	for (const heading of ["Lay measurements", "Cutting team", "Material usage", "Production & approval"]) {
+		assert(await laySheetDialog.getByRole("heading", { name: heading, exact: true }).count() === 1, `Lay Sheet overview is missing ${heading}`)
+	}
 	for (const duplicateLabel of ["Cutting Marker", "Marker Name", "Lay No"]) {
-		assert(await laySheetDialog.locator(".detail-grid > div > span").filter({ hasText: new RegExp(`^${duplicateLabel}$`) }).count() === 0, `Lay Sheet Details repeats ${duplicateLabel} already shown in the identity header`)
+		assert(await laySheetDialog.locator(".laysheet-overview dt").filter({ hasText: new RegExp(`^${duplicateLabel}$`) }).count() === 0, `Lay Sheet Details repeats ${duplicateLabel} already shown in the identity header`)
+	}
+	for (const [label, value] of [["Piece Weight (kg)", sheet.piece_weight], ["Required Piece Weight (kg)", sheet.required_pcs_weight]]) {
+		if (value === null || value === undefined || value === "") continue
+		const numericValue = Number(value)
+		assert(Number.isFinite(numericValue), `Lay Sheet ${label} is not numeric: ${value}`)
+		const labelPattern = new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`)
+		const fieldLabel = laySheetDialog.locator(".laysheet-overview dt").filter({ hasText: labelPattern })
+		assert(await fieldLabel.count() === 1, `Lay Sheet ${label} is missing or duplicated`)
+		const renderedValue = await fieldLabel.locator("xpath=..").locator("dd").textContent()
+		assert(renderedValue?.trim() === numericValue.toLocaleString("en-IN", { minimumFractionDigits: 4, maximumFractionDigits: 4 }), `Lay Sheet ${label} lost four-decimal precision: ${renderedValue}`)
 	}
 	await laySheetDialog.getByRole("tab", { name: "Cloth Details", exact: true }).click()
 	assert(await laySheetDialog.getByRole("button", { name: "Add Cloth", exact: true }).count() === 1, "Permitted Add Cloth action is missing")
@@ -1373,8 +1449,8 @@ async function entityDialogsSuite(page) {
 	})
 	assert(mobileEntityDialog.width === 390 && mobileEntityDialog.height === 844 && mobileEntityDialog.x === 0 && mobileEntityDialog.y === 0 && mobileEntityDialog.borderRadius === "0px", `Cutting entity dialog does not use the shared mobile surface: ${JSON.stringify(mobileEntityDialog)}`)
 	await laySheetDialog.getByRole("tab", { name: "Details", exact: true }).click()
-	const laySheetMobileColumns = await laySheetDialog.locator(".detail-grid").evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length)
-	assert(laySheetMobileColumns === 2, `Lay Sheet facts do not retain a compact two-column mobile grid: ${laySheetMobileColumns}`)
+	const laySheetMobileColumns = await laySheetDialog.locator(".laysheet-overview .document-overview__facts").evaluateAll((elements) => elements.map((element) => getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length))
+	assert(laySheetMobileColumns.length === 4 && laySheetMobileColumns.every((columns) => columns === 2), `Lay Sheet facts do not retain compact two-column mobile grids: ${laySheetMobileColumns}`)
 
 	return { plan: fixture.name, sheet: sheet.name, dialogScrollContract, rowsBefore, rowsAfter, markerMobileColumns, laySheetMobileColumns }
 }
@@ -1940,8 +2016,8 @@ async function responsiveAuditSuite(page) {
 		for (const path of routes) {
 			await page.goto(`${SITE}/web${path}`, { waitUntil: "domcontentloaded" })
 			await page.locator(".app-shell").waitFor({ timeout: 20_000 })
-			if (path === "/cutting/plans") await page.locator(".premium-list-table, .list-empty").first().waitFor({ timeout: 20_000 })
-			if (path === "/cutting/reports") await page.locator(".report-tabs__list").waitFor({ timeout: 20_000 })
+			if (path === "/cutting/plans") await page.locator(".premium-list-table:visible, .mobile-list-records:visible, .mobile-list-empty:visible, .list-empty:visible").first().waitFor({ timeout: 20_000 })
+			if (path === "/cutting/reports") await page.locator(".report-tabs__list:visible, .report-tabs__mobile:visible").first().waitFor({ timeout: 20_000 })
 			if (path.includes("/cutting/plans/")) await page.locator(".cutting-plan-frame").waitFor({ timeout: 20_000 })
 
 			const bodyWidth = await page.locator("body").evaluate((element) => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }))
@@ -1954,9 +2030,14 @@ async function responsiveAuditSuite(page) {
 			const focusState = await page.evaluate(() => {
 				const active = document.activeElement
 				if (!active || active === document.body) return { visible: false, element: "body" }
+				const candidates = [active, active.parentElement, active.parentElement?.parentElement].filter(Boolean)
+				const visible = candidates.some((candidate) => {
+					const style = getComputedStyle(candidate)
+					return style.outlineStyle !== "none" || style.boxShadow !== "none"
+				})
 				const style = getComputedStyle(active)
 				return {
-					visible: style.outlineStyle !== "none" || style.boxShadow !== "none",
+					visible,
 					element: `${active.tagName.toLowerCase()}.${String(active.className || "").replaceAll(" ", ".")}`,
 					outlineStyle: style.outlineStyle,
 					boxShadow: style.boxShadow,

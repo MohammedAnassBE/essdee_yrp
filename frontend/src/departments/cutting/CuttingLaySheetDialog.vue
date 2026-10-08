@@ -25,7 +25,7 @@
 				<TabList><Tab value="details">Details</Tab><Tab value="cloth">Cloth Details</Tab><Tab value="ratios">Marker Ratios</Tab><Tab value="bundles">Bundles</Tab></TabList>
 				<TabPanels>
 					<TabPanel value="details">
-						<div class="detail-grid"><div v-for="item in detailRows" :key="item.label"><span>{{ item.label }}</span><strong>{{ display(item.value) }}</strong></div></div>
+						<DocumentOverview class="laysheet-overview" :fields="laysheetOverviewFields" :definitions="laysheetOverviewDefinitions" include-empty aria-label="Cutting Lay Sheet overview" id-prefix="cutting-laysheet-overview" />
 					</TabPanel>
 					<TabPanel value="cloth">
 						<Message v-if="detailError" severity="error" :closable="false">{{ detailError }}</Message>
@@ -177,6 +177,7 @@ import { getQzPrinters, printQzRaw } from "../../api/qzPrinter.js"
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import DocumentOverview from "../../components/documents/DocumentOverview.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
@@ -229,16 +230,35 @@ const resolvedParentField = computed(() => props.parentDoctype === "SD YRP Cutti
 const parentArgs = computed(() => ({ [resolvedParentField.value]: resolvedParentName.value }))
 const markerFilters = computed(() => ({ [resolvedParentField.value]: resolvedParentName.value, docstatus: 1 }))
 
-const detailRows = computed(() => {
+const laysheetOverviewDefinitions = [
+	{ key: "measurements", label: "Lay measurements", description: "Dimensions and cutting limits", icon: "pi pi-arrows-alt", fields: ["length", "width", "maximum_no_of_plys", "maximum_allow_percentage"] },
+	{ key: "team", label: "Cutting team", description: "People assigned to spreading and cutting", icon: "pi pi-users", fields: ["cutting_spreader", "cutter"] },
+	{ key: "material", label: "Material usage", description: "Roll, bit and weight consumption", icon: "pi pi-box", fields: ["no_of_rolls", "no_of_bits", "weight", "accessory_weight", "end_bit_weight", "total_used_weight"] },
+	{ key: "production", label: "Production & approval", description: "Output, printing and approval references", icon: "pi pi-check-circle", fields: ["bundle_generated_date", "printed_time", "total_no_of_pieces", "piece_weight", "required_pcs_weight", "approved_by", "goods_received_note"] },
+]
+const laysheetOverviewFields = computed(() => {
 	const row = sheet.value || {}
 	return [
-		["Length (Meters)", number(row.length, 3)], ["Width (Inches)", number(row.width, 3)],
-		["Cutting Spreader", row.cutting_spreader], ["Cutter", row.cutter], ["Maximum No of Plys", row.maximum_no_of_plys], ["Maximum Allow Percentage", percent(row.maximum_allow_percentage)],
-		["Bundle Generated Date", formatDisplayDate(row.bundle_generated_date)], ["Printed Time", formatDisplayDate(row.printed_time, true)],
-		["No of Rolls", row.no_of_rolls], ["No of Bits", row.no_of_bits], ["Weight", number(row.weight, 3)], ["Accessory Weight", number(row.accessory_weight, 3)],
-		["End Bit Weight", number(row.end_bit_weight, 3)], ["Total Used Weight", number(row.total_used_weight, 3)], ["Total No of Pieces", row.total_no_of_pieces], ["Piece Weight", number(row.piece_weight, 4)],
-		["Required Piece Weight", number(row.required_pcs_weight, 4)], ["Approved By", row.approved_by], ["Goods Received Note", row.goods_received_note],
-	].map(([label, value]) => ({ label, value }))
+		{ fieldname: "length", label: "Length (m)", fieldtype: "Float", value: row.length },
+		{ fieldname: "width", label: "Width (in)", fieldtype: "Float", value: row.width },
+		{ fieldname: "maximum_no_of_plys", label: "Maximum No Of Plys", fieldtype: "Int", value: row.maximum_no_of_plys },
+		{ fieldname: "maximum_allow_percentage", label: "Maximum Allow Percentage", fieldtype: "Percent", value: row.maximum_allow_percentage },
+		{ fieldname: "cutting_spreader", label: "Cutting Spreader", fieldtype: "Link", value: row.cutting_spreader },
+		{ fieldname: "cutter", label: "Cutter", fieldtype: "Link", value: row.cutter },
+		{ fieldname: "no_of_rolls", label: "No Of Rolls", fieldtype: "Int", value: row.no_of_rolls },
+		{ fieldname: "no_of_bits", label: "No Of Bits", fieldtype: "Int", value: row.no_of_bits },
+		{ fieldname: "weight", label: "Weight (kg)", fieldtype: "Float", value: row.weight },
+		{ fieldname: "accessory_weight", label: "Accessory Weight (kg)", fieldtype: "Float", value: row.accessory_weight },
+		{ fieldname: "end_bit_weight", label: "End Bit Weight (kg)", fieldtype: "Float", value: row.end_bit_weight },
+		{ fieldname: "total_used_weight", label: "Total Used Weight (kg)", fieldtype: "Float", value: row.total_used_weight },
+		{ fieldname: "bundle_generated_date", label: "Bundle Generated Date", fieldtype: "Date", value: row.bundle_generated_date },
+		{ fieldname: "printed_time", label: "Printed Time", fieldtype: "Datetime", value: row.printed_time },
+		{ fieldname: "total_no_of_pieces", label: "Total No Of Pieces", fieldtype: "Int", value: row.total_no_of_pieces },
+		{ fieldname: "piece_weight", label: "Piece Weight (kg)", fieldtype: "Float", precision: 4, value: row.piece_weight },
+		{ fieldname: "required_pcs_weight", label: "Required Piece Weight (kg)", fieldtype: "Float", precision: 4, value: row.required_pcs_weight },
+		{ fieldname: "approved_by", label: "Approved By", fieldtype: "Link", value: row.approved_by },
+		{ fieldname: "goods_received_note", label: "Goods Received Note", fieldtype: "Link", value: row.goods_received_note },
+	]
 })
 const canEditDetails = computed(() => Boolean(sheet.value?.permissions?.can_edit_details))
 const editorAttributes = computed(() => sheet.value?.editor?.attributes || { cloth_type: [], colour: [], dia: [], cloth_type_dia_map: {} })
@@ -643,11 +663,9 @@ async function reloadChanged() {
 
 function display(value) { return value === null || value === undefined || value === "" ? "—" : value }
 function number(value, precision) { return value === null || value === undefined || value === "" ? "—" : Number(value).toFixed(precision) }
-function percent(value) { return value === null || value === undefined || value === "" ? "—" : `${Number(value)}%` }
 function column(field, label, format = display, numeric = false) { return { field, label, format, numeric } }
 function parseDate(value) { if (!value) return null; const [year, month, day] = String(value).split("-").map(Number); return new Date(year, month - 1, day) }
 function formatDate(value) { const pad = (part) => String(part).padStart(2, "0"); return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}` }
-function formatDisplayDate(value, includeTime = false) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/); if (!match) return value || "—"; const date = `${match[3]}-${match[2]}-${match[1]}`; return includeTime && match[4] ? `${date} · ${match[4]}:${match[5]}` : date }
 function fieldOptions(field) {
 	if (Array.isArray(field?.options)) return field.options.filter((value) => value !== "")
 	return String(field?.options || "").split("\n").filter(Boolean)
@@ -737,10 +755,8 @@ const DataBlock = defineComponent({
 .laysheet-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); }
 .laysheet-summary > div { display: grid; gap: 4px; padding: 11px 13px; border-right: 1px solid var(--erp-border); }
 .laysheet-summary > div:last-child { border-right: 0; }
-.laysheet-summary span, .detail-grid span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 700; text-transform: uppercase; letter-spacing: 0.035em; }
-.laysheet-summary strong, .detail-grid strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
-.detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); overflow: hidden; }
-.detail-grid > div { display: grid; gap: 5px; min-height: 65px; padding: 11px 13px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
+.laysheet-summary span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 700; text-transform: uppercase; letter-spacing: 0.035em; }
+.laysheet-summary strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
 .data-block { display: grid; gap: 9px; margin-bottom: 14px; }
 .data-block header { display: flex; align-items: center; justify-content: space-between; }
 .data-block__title { display: flex; align-items: baseline; gap: 8px; }
@@ -801,8 +817,6 @@ const DataBlock = defineComponent({
 	.detail-editor__grid { grid-template-columns: 1fr; }
 	.detail-editor__wide { grid-column: auto; }
 	.laysheet-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-	.detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-	.detail-grid > div { min-height: 52px; padding: 8px 9px; }
 	.generation-numbers { grid-template-columns: 1fr; }
 	.laysheet-footer { align-items: stretch; flex-direction: column; }
 	.laysheet-footer__secondary { justify-content: flex-start; }

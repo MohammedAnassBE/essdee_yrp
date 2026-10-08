@@ -30,7 +30,7 @@
 			</template>
 
 			<template #fields>
-				<section v-if="visibleFields.length" class="delivery-challan-fields" aria-label="Delivery Challan fields">
+				<section v-if="canEdit && visibleFields.length" class="delivery-challan-fields" aria-label="Delivery Challan fields">
 					<section v-for="group in primaryFieldGroups" :key="group.key" class="delivery-challan-field-group" :data-group="group.key">
 						<header><span>{{ group.eyebrow }}</span><h2>{{ group.label }}</h2></header>
 						<div class="delivery-challan-field-group__grid" :class="{ 'delivery-challan-field-group__grid--facts': !canEdit }">
@@ -55,10 +55,25 @@
 						</div>
 					</section>
 				</section>
+				<Tabs v-else-if="hasWorkspace" v-model:value="activeTab" class="delivery-challan-tabs erp-tabs">
+					<TabList><Tab value="overview">Overview</Tab><Tab value="deliverables">Deliverables <span v-if="logicalRowCount(itemGroups)">{{ logicalRowCount(itemGroups) }}</span></Tab></TabList>
+					<TabPanels>
+						<TabPanel value="overview"><DocumentOverview :fields="overviewFields" :definitions="overviewDefinitions" include-unclaimed :unclaimed-definition="overviewAdditionalDefinition" aria-label="Delivery Challan overview" id-prefix="delivery-challan-overview" /></TabPanel>
+						<TabPanel value="deliverables">
+							<div class="delivery-challan-tab-matrices">
+								<section v-for="block in matrixBlocks" :key="`readonly-${block.key}`" class="delivery-challan-tab-matrix">
+									<header><div><span>{{ block.kind === 'items' ? 'Deliverables' : 'Corrections' }}</span><h2>{{ block.title }}</h2></div><strong>{{ logicalRowCount(block.groups) }} rows</strong></header>
+									<StockItemMatrix :groups="block.groups" doctype="YRP Delivery Challan" group-by-item show-lot-column show-fulfillment :show-received="false" />
+								</section>
+								<div v-if="!matrixBlocks.length" class="delivery-challan-matrix__empty"><i class="pi pi-inbox" /><span>No Delivery Challan item rows are available.</span></div>
+							</div>
+						</TabPanel>
+					</TabPanels>
+				</Tabs>
 			</template>
 
 			<template #secondary-fields>
-				<section v-if="secondaryFieldGroups.length" class="delivery-challan-fields delivery-challan-fields--secondary" aria-label="Additional Delivery Challan fields">
+				<section v-if="canEdit && secondaryFieldGroups.length" class="delivery-challan-fields delivery-challan-fields--secondary" aria-label="Additional Delivery Challan fields">
 					<section v-for="group in secondaryFieldGroups" :key="group.key" class="delivery-challan-field-group" :data-group="group.key">
 						<header><span>{{ group.eyebrow }}</span><h2>{{ group.label }}</h2></header>
 						<div class="delivery-challan-field-group__grid" :class="{ 'delivery-challan-field-group__grid--facts': !canEdit }">
@@ -74,6 +89,7 @@
 			</template>
 
 			<template #matrix>
+				<template v-if="canEdit">
 				<section
 					v-for="block in matrixBlocks"
 					:key="block.key"
@@ -122,10 +138,11 @@
 					</div>
 				</section>
 					<div v-if="!matrixBlocks.length" class="delivery-challan-matrix__empty"><i class="pi pi-inbox" /><span>No Delivery Challan item rows are available.</span></div>
+				</template>
 			</template>
 
 			<template #after-matrix>
-				<div v-if="afterMatrixFields.length" class="delivery-challan-after-matrix" aria-label="Delivery Challan final details">
+				<div v-if="canEdit && afterMatrixFields.length" class="delivery-challan-after-matrix" aria-label="Delivery Challan final details">
 					<template v-if="canEdit">
 						<FormField v-for="field in afterMatrixFields" :key="`after-${fieldKey(field)}`" :field="field" :model-value="form[field.fieldname]" :form="form" :required="Boolean(field.reqd || field.mandatory)" compact :search-handler="linkSearchHandler(field)" @update:model-value="setField(field.fieldname, $event)" />
 					</template>
@@ -164,9 +181,6 @@
 		<Dialog v-model:visible="returnOpen" modal header="Return Delivery Challan" class="fabric-action-dialog erp-dialog--lg" :closable="!acting">
 			<DeliveryChallanReturnPanel :context="workspace.return_context || {}" :acting="acting" :error="returnError" @create="createReturn" @close="closeReturn" />
 		</Dialog>
-		<Dialog :visible="Boolean(notificationPreparation)" modal header="Send supplier notification" class="fabric-action-dialog erp-dialog--md" :closable="!acting" @update:visible="handleNotificationVisibility">
-			<SupplierNotificationPanel v-if="notificationPreparation" :preparation="notificationPreparation" :document-values="notificationValues" :acting="acting" :error="notificationError" @send="sendNotification" @close="closeNotification" />
-		</Dialog>
 		<FabricStockOperationDialog v-model:visible="completionEntryOpen" operation="stock_entry" :name="completionEntryName" @changed="completionEntryChanged" />
 		<RelatedDocumentWorkspaceDialog v-model:visible="createdReturnOpen" doctype="YRP Goods Received Note" :name="createdReturnName" @changed="createdReturnChanged" @closed="createdReturnOpen = false" />
 		<DocumentConfirmationDialog v-model:visible="lifecycleConfirmVisible" :title="lifecycleConfirmTitle" :message="lifecycleConfirmMessage" :confirm-label="lifecycleConfirmLabel" :busy="Boolean(acting)" @confirm="confirmLifecycleAction" />
@@ -178,6 +192,11 @@
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
+import Tab from "primevue/tab"
+import TabList from "primevue/tablist"
+import TabPanel from "primevue/tabpanel"
+import TabPanels from "primevue/tabpanels"
+import Tabs from "primevue/tabs"
 import { useToast } from "primevue/usetoast"
 import { computed, onMounted, reactive, ref, watch } from "vue"
 import { useRouter } from "vue-router"
@@ -192,13 +211,14 @@ import { searchLinkedDocument } from "../../api/frappe.js"
 import FormField from "../../components/common/FormField.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
+import DocumentOverview from "../../components/documents/DocumentOverview.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
+import StockItemMatrix from "../../components/stock/StockItemMatrix.vue"
 import { hasDocumentDisplayValue, plainTextFromHtml } from "../../utils/documentValues.js"
 import DeliveryChallanReturnPanel from "./DeliveryChallanReturnPanel.vue"
 import FabricDocumentWorkspace from "./FabricDocumentWorkspace.vue"
 import FabricStockOperationDialog from "./FabricStockOperationDialog.vue"
 import RelatedDocumentWorkspaceDialog from "./RelatedDocumentWorkspaceDialog.vue"
-import SupplierNotificationPanel from "./SupplierNotificationPanel.vue"
 
 const props = defineProps({
 	presentation: { type: String, default: "page" },
@@ -220,8 +240,7 @@ const itemGroups = ref([])
 const correctionGroups = ref([])
 const returnOpen = ref(false)
 const returnError = ref("")
-const notificationPreparation = ref(null)
-const notificationError = ref("")
+const activeTab = ref("overview")
 const completionEntryOpen = ref(false)
 const completionEntryName = ref("")
 const createdReturnOpen = ref(false)
@@ -257,8 +276,6 @@ const deliveryChallanActions = computed(() => {
 	if (currentName.value && workspace.value.permissions?.can_create && !workspace.value.special_source?.active) {
 		actions.push({ key: "duplicate", label: "Duplicate", icon: "pi pi-clone", command: duplicateDeliveryChallan, disabled: busy, loading: acting.value === "duplicate", menuOnly: true })
 	}
-	add("prepare_sms", "Send SMS", "pi pi-envelope", () => prepareNotification("prepare_sms"), true)
-	add("prepare_whatsapp", "Send WhatsApp", "pi pi-comments", () => prepareNotification("prepare_whatsapp"), true)
 	const primaryKey = capabilities.value.complete_transfer ? "complete_transfer" : actions.some((action) => action.key === "submit") ? "submit" : actions.some((action) => action.key === "save") ? "save" : actions.some((action) => action.key === "amend") ? "amend" : ""
 	return actions.map((action) => ({ ...action, primary: action.key === primaryKey }))
 })
@@ -306,6 +323,28 @@ const fieldGroups = computed(() => {
 const primaryFieldGroups = computed(() => fieldGroups.value.filter((group) => ["document", "movement"].includes(group.key)))
 const secondaryFieldGroups = computed(() => fieldGroups.value.filter((group) => !["document", "movement"].includes(group.key)))
 const afterMatrixFields = computed(() => visibleFields.value.filter((field) => afterMatrixFieldnames.has(field.fieldname)))
+const overviewDefinitions = [
+	{ key: "identity", label: "Document identity", description: "Source and production references", icon: "pi pi-id-card", fields: ["naming_series", "work_order", "purchase_order", "production_detail", "is_rework"] },
+	{ key: "movement", label: "Movement", description: "Dispatch route and destination", icon: "pi pi-truck", fields: ["from_location", "from_location_name", "from_warehouse", "from_address", "supplier", "supplier_name", "to_warehouse", "supplier_address"] },
+	{ key: "schedule", label: "Logistics", description: "Posting and transport information", icon: "pi pi-calendar", fields: ["posting_date", "posting_time", "actual_date", "vehicle_no", "supplier_document_no"] },
+	{ key: "status", label: "Status & notes", description: "Dispatch controls and comments", icon: "pi pi-clipboard", fields: ["status", "includes_packing", "allow_non_bundle", "is_internal_unit", "transfer_complete", "letter_head", "comments"] },
+]
+const overviewAdditionalDefinition = { key: "additional", label: "Additional details", description: "Other dispatch information", icon: "pi pi-ellipsis-h", wide: true }
+const overviewFields = computed(() => {
+	const sources = [...(workspace.value.fields || []), ...(workspace.value.dimensions || [])]
+	const fields = visibleFields.value.map((field) => ({ ...field, value: form[field.fieldname] ?? field.value }))
+	const existing = new Set(fields.map((field) => field.fieldname))
+	for (const fieldname of overviewDefinitions.flatMap((definition) => definition.fields)) {
+		if (existing.has(fieldname)) continue
+		const source = sources.find((field) => field.fieldname === fieldname)
+		const value = form[fieldname] ?? source?.value ?? workspace.value.record?.[fieldname]
+		if (!source || source.hidden || !hasDocumentDisplayValue(value)) continue
+		fields.push({ ...source, value })
+		existing.add(fieldname)
+	}
+	if (!existing.has("status")) fields.push({ fieldname: "status", label: "Status", fieldtype: "Data", value: workspace.value.record?.status || statusLabel(workspace.value.record?.docstatus) })
+	return fields
+})
 const matrixBlocks = computed(() => {
 	const blocks = []
 	if (itemGroups.value.length) blocks.push({ key: "items", kind: "items", title: "Delivery quantities", groups: itemGroups.value })
@@ -326,7 +365,6 @@ const headerFacts = computed(() => [
 	["Lot", workspace.value.record?.lot || form.lot],
 ].filter(([, value]) => value).map(([label, value]) => ({ label, value })))
 const transferPercent = computed(() => Math.max(0, Math.min(100, Number(workspace.value.record?.ste_transferred_percent || (workspace.value.record?.transfer_complete ? 100 : 0)))))
-const notificationValues = computed(() => ({ ...(workspace.value.record || {}), ...form }))
 
 async function load(refresh = false) {
 	const sequence = ++loadSequence
@@ -377,8 +415,7 @@ function clearWorkspaceState(name = "") {
 	dirty.value = false
 	returnOpen.value = false
 	returnError.value = ""
-	notificationPreparation.value = null
-	notificationError.value = ""
+	activeTab.value = "overview"
 }
 
 function applyWorkspace(nextWorkspace) {
@@ -414,8 +451,7 @@ function applyWorkspace(nextWorkspace) {
 	error.value = ""
 	returnOpen.value = false
 	returnError.value = ""
-	notificationPreparation.value = null
-	notificationError.value = ""
+	activeTab.value = "overview"
 }
 
 async function setField(fieldname, value) {
@@ -607,20 +643,6 @@ async function createdReturnChanged() {
 	await load(true)
 	emit("changed", workspace.value)
 }
-async function prepareNotification(command) {
-	const result = await runCommand(command)
-	if (result?.context) { notificationPreparation.value = result; notificationError.value = "" }
-}
-async function sendNotification({ channel, payload }) {
-	notificationError.value = ""
-	const result = await runCommand(`send_${channel}`, payload)
-	if (!result) return
-	if (result.result?.ok) notificationPreparation.value = null
-	else error.value = result.result?.error || `Unable to send ${channel === "sms" ? "SMS" : "WhatsApp"}.`
-}
-function closeNotification() { notificationPreparation.value = null; notificationError.value = "" }
-function handleNotificationVisibility(visible) { if (!visible) closeNotification() }
-
 function fieldKey(field) { return `${field.fieldname}-${field.fieldname === "work_order" ? sourceFieldRevision.value : field.idx || "value"}` }
 const dcFieldGroups = [
 	{ key: "document", eyebrow: "Document", label: "Document & posting" },
@@ -751,6 +773,16 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 
 <style scoped>
 .delivery-challan-workspace { width: 100%; min-width: 0; }
+.delivery-challan-tabs :deep(.p-tabpanels) { padding: 12px 0 0; background: transparent; }
+.delivery-challan-tabs :deep(.p-tablist-tab-list) { padding-inline: 2px; }
+.delivery-challan-tabs :deep(.p-tab span) { margin-left: 5px; padding: 2px 6px; color: var(--erp-text-muted); background: var(--erp-surface-muted); border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); }
+.delivery-challan-tab-matrices { display: grid; gap: var(--erp-space-3); }
+.delivery-challan-tab-matrix { display: grid; gap: 8px; min-width: 0; }
+.delivery-challan-tab-matrix > header { display: flex; align-items: end; justify-content: space-between; gap: 12px; padding: 0 2px; }
+.delivery-challan-tab-matrix > header div { display: grid; gap: 2px; }
+.delivery-challan-tab-matrix > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
+.delivery-challan-tab-matrix > header h2 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-section); }
+.delivery-challan-tab-matrix > header > strong { color: var(--erp-accent); font-size: var(--erp-font-size-min); }
 .delivery-challan-after-matrix { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: end; gap: 10px 14px; padding: 2px; }
 .delivery-challan-after-matrix__fact { display: grid; min-width: 0; gap: 3px; padding: 8px 2px; border-bottom: 1px solid var(--erp-border); }
 .delivery-challan-after-matrix__fact span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }

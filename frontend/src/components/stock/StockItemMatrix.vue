@@ -48,6 +48,7 @@
 									<strong>{{ formatQty(row.values?.[value]?.qty) }}</strong>
 									<small v-if="secondaryQty(row.values?.[value])">{{ formatQty(row.values[value].secondary_qty) }} {{ row.values[value].secondary_uom || row.secondary_uom }}</small>
 									<small v-if="showFulfillment && showReceived && hasFulfillment(row.values?.[value])" class="item-matrix__received">Received {{ formatQty(receivedQty(row.values[value])) }}</small>
+									<small v-if="showAvailability && hasAvailability(row.values?.[value])" class="item-matrix__available">Available {{ formatQty(availabilityQty(row.values[value])) }}</small>
 									<small v-if="showFulfillment && !pricingBeforeFulfillment && hasFulfillment(row.values?.[value])" class="item-matrix__pending">{{ fulfillmentLabel(row.values[value]) }}</small>
 									<small v-if="showPricing" class="item-matrix__price">Rate {{ formatMoney(row.values?.[value]?.rate) }}</small>
 									<small v-if="showPricing && showAmount" class="item-matrix__price">Amount {{ formatMoney(cellAmount(row.values?.[value])) }}</small>
@@ -75,6 +76,7 @@ const props = defineProps({
 	showLotColumn: { type: Boolean, default: false },
 	showPricing: { type: Boolean, default: false },
 	showFulfillment: { type: Boolean, default: false },
+	showAvailability: { type: Boolean, default: false },
 	showReceived: { type: Boolean, default: true },
 	showAmount: { type: Boolean, default: true },
 	pricingBeforeFulfillment: { type: Boolean, default: false },
@@ -149,8 +151,10 @@ function rowTotal(row) { return Object.values(row.values || {}).reduce((total, v
 function cellAmount(value) { return Number(value?.total_amount ?? value?.amount ?? (Number(value?.qty || 0) * Number(value?.rate || 0))) }
 function rowAmount(row) { return Object.values(row.values || {}).reduce((total, value) => total + cellAmount(value), 0) }
 function hasFulfillment(value) { return value && ["received_qty", "received_quantity", "pending_qty", "pending_quantity"].some((key) => value[key] !== undefined && value[key] !== null) }
+function hasAvailability(value) { return value && ["max_receivable_quantity", "pending_qty", "pending_quantity"].some((key) => value[key] !== undefined && value[key] !== null) }
 function rowHasFulfillment(row) { return Object.values(row.values || {}).some(hasFulfillment) }
 function receivedQty(value) { return Number(value?.received_qty ?? value?.received_quantity ?? 0) }
+function availabilityQty(value) { return Number(value?.max_receivable_quantity ?? value?.pending_qty ?? value?.pending_quantity ?? 0) }
 function pendingQty(value) { return Number(value?.pending_qty ?? value?.pending_quantity ?? 0) }
 function fulfillmentLabel(value) { const quantity = pendingQty(value); return quantity < 0 ? `Over-received ${formatQty(Math.abs(quantity))}` : `Pending ${formatQty(quantity)}` }
 function fulfillmentTotalLabel(row) { const quantity = rowMetricTotal(row, pendingQty); return quantity < 0 ? `Over-received ${formatQty(Math.abs(quantity))}` : `Pending ${formatQty(quantity)}` }
@@ -227,6 +231,7 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 	font-weight: 650;
 }
 .item-matrix__received { color: var(--erp-accent-dark) !important; font-weight: 700; }
+.item-matrix__available { color: var(--erp-accent-dark) !important; font-weight: 700; }
 .item-matrix__pending { color: var(--erp-attention-text) !important; font-weight: 700; }
 
 .item-matrix__body {

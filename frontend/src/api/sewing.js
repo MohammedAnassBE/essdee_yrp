@@ -8,6 +8,12 @@ export function getSewingCapabilities() {
 	return callMethod(`${WORKSPACE_METHOD}.get_capabilities`)
 }
 
+export function getAttendanceStrength(reportDate, fromTime, toTime) {
+	return callMethod(`${PLAN_METHOD}.get_worker_strength_report`, {
+		report_date: reportDate, from_time: fromTime, to_time: toTime,
+	})
+}
+
 export function getSewingDashboard(supplier) {
 	return callMethod(`${PLAN_METHOD}.get_dashboard_data`, { supplier })
 }

@@ -1095,7 +1095,110 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 	} finally { await page.close(); await server.close() }
 }
 
-assert(["launcher", "plan-entry", "entries-consumption", "entries-consumption-settlement", "closed-grn", "primary-reports", "summary-reports", "all"].includes(suite), `Unknown Sewing suite: ${suite}`)
+// Mounts the real route and the reusable report in a separate workspace. Only the
+// external Frappe HTTP boundary is mocked; all fields, tables and dialogs are real.
+async function attendanceSuite(browser) {
+	const harness = `
+import { createApp } from 'vue'; import { createRouter, createMemoryHistory, RouterView } from 'vue-router';
+import PrimeVue from 'primevue/config'; import Aura from '@primeuix/themes/aura';
+import SewingAttendance from '/src/departments/sewing/SewingAttendance.vue';
+import '@fontsource-variable/inter'; import 'primeicons/primeicons.css'; import '/src/styles/main.css'; import '/src/styles/enterprise.css';
+const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/sewing/attendance', component: SewingAttendance }, { path: '/sewing', component: { render: () => null } }, { path: '/other-workspace', component: () => { const path = '/src/components/reports/AttendanceStrengthReport.vue'; return import(/* @vite-ignore */ path) } }] });
+await router.push('/sewing/attendance'); window.router = router;
+createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options: { darkModeSelector: false } } }).mount('#app');`
+	const server = await createServer({ root: fileURLToPath(new URL("../frontend", import.meta.url)), server: { host: "127.0.0.1", port: 0 }, plugins: [{
+		name: "attendance-verifier", resolveId(id) { if (id === "/__attendance.js") return "\0attendance" }, load(id) { if (id === "\0attendance") return harness },
+		configureServer(server) { server.middlewares.use((req, res, next) => { if (req.url !== "/__attendance") return next(); res.setHeader("Content-Type", "text/html"); res.end('<!doctype html><html><body><div id="app"></div><script type="module" src="/__attendance.js"></script></body></html>') }) },
+	}] })
+	await server.listen()
+	const page = await browser.newPage({ viewport: { width: 1280, height: 900 } }); page.setDefaultTimeout(10_000)
+	const requests = [], errors = [], warnings = []
+	page.on("pageerror", error => errors.push(error.message)); page.on("console", message => { if (message.type() === "warning") warnings.push(message.text()) })
+	const columns = [{ fieldname: "department", label: "Department", fieldtype: "Data" }, { fieldname: "strength", label: "Strength", fieldtype: "Int" }, { fieldname: "notes", label: "Returned notes", fieldtype: "Data" }, ...Array.from({ length: 6 }, (_, index) => ({ fieldname: `stage_${index}`, label: `Returned stage ${index}`, fieldtype: "Int" })), { fieldname: "internal", label: "Hidden upstream column", hidden: 1 }]
+	const data = { columns, rows: [{ department: '<img src=x onerror="window.attendanceUnsafe=true">', strength: 12, notes: '=HYPERLINK("unsafe")', internal: "hidden", stage_0: 3 }, ...Array.from({ length: 32 }, (_, index) => ({ department: `Group ${index}`, strength: 1 })), { department: "Total", strength: 901, notes: "Returned total" }], employee_punches: [{ employee: "EMP-001", employee_name: "Test Employee", department: "Sewing", designation: "Operator", manpower_agent: "Agent A", shift_type: "Shift B", first_punch: "08:05:00" }], shifts: ["Shift B", "Shift A"], add_total_row: 1 }
+	const state = { data, error: "", hold: null }
+	await page.route("**/api/method/**", async route => {
+		const method = route.request().url().split("/api/method/")[1], args = JSON.parse(route.request().postData() || "{}"); requests.push({ method, args })
+		if (method.endsWith("get_capabilities")) return route.fulfill({ contentType: "application/json", body: JSON.stringify({ message: capabilities }) })
+		assert(method.endsWith("get_worker_strength_report"), `Unexpected attendance request: ${method}`)
+		const value = structuredClone(state.data), error = state.error, hold = state.hold; state.hold = null
+		if (hold) await hold
+		await route.fulfill({ status: error ? 417 : 200, contentType: "application/json", body: JSON.stringify(error ? { _server_messages: JSON.stringify([JSON.stringify({ title: "HR connection timed out", message: error })]), exc: "ValidationError" } : { message: value }) })
+	})
+	const count = () => requests.filter(request => request.method.endsWith("get_worker_strength_report")).length
+	const generate = () => page.getByRole("button", { name: "Generate", exact: true }).click()
+	const date = page.getByRole("combobox", { name: "Date", exact: true })
+	const setDate = async () => { await date.fill("08-10-2026"); await date.press("Tab") }
+	const time = async label => {
+		const input = page.getByRole("combobox", { name: label, exact: true }); await input.click()
+		const panel = page.locator(`#${await input.getAttribute("aria-controls")}`)
+		await panel.getByRole("button", { name: "Next Hour", exact: true }).click()
+		await page.keyboard.press("Escape"); await panel.waitFor({ state: "hidden" })
+		assert(/\d{2}:\d{2}:\d{2}/.test(await input.inputValue()), `${label} did not produce a time`)
+	}
+	const dismiss = async (message, title) => {
+		const dialog = page.locator(".document-error-dialog"); await dialog.getByText(message, { exact: true }).waitFor()
+		assert(await dialog.count() === 1 && await page.locator(".report-shell__message").count() === 0, "One attendance failure must produce one popup only")
+		if (title) assert((await dialog.innerText()).includes(title), `Missing business error title ${title}`)
+		await dialog.getByRole("button", { name: "OK", exact: true }).click(); await dialog.waitFor({ state: "hidden" })
+		await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+		assert(await page.getByRole("button", { name: "Generate", exact: true }).isEnabled(), "Attendance failure locks the page")
+	}
+	try {
+		await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/__attendance`)
+		await page.locator('[data-attendance-strength]').waitFor()
+		assert(count() === 0, "Attendance fetched before Generate")
+		assert(JSON.stringify((await page.locator('.report-filter-grid label').allTextContents()).map(label => label.trim())) === JSON.stringify(["Date", "From Time", "To Time"]), "Attendance exposes extra filters")
+		for (const forbidden of ["Supplier", "Sewing Unit", "HR Department", "HR Location", "Designation", "Employee"]) assert(await page.getByRole("combobox", { name: forbidden, exact: true }).count() === 0, `Forbidden attendance selector: ${forbidden}`)
+		await page.getByRole("button", { name: "Reset", exact: true }).click()
+		await generate(); await dismiss("Choose a Date to generate the Strength Report.", "Date required"); assert(count() === 0, "Missing date requested HR")
+		await setDate(); await generate(); await dismiss("Choose From Time to generate the Strength Report.", "From Time required"); assert(count() === 0, "Missing from time requested HR")
+		await time("From Time"); await generate(); await dismiss("Choose To Time to generate the Strength Report.", "To Time required"); assert(count() === 0, "Missing to time requested HR")
+		await time("To Time"); const from = await page.getByRole("combobox", { name: "From Time", exact: true }).inputValue(), to = await page.getByRole("combobox", { name: "To Time", exact: true }).inputValue()
+		await generate(); await page.getByRole("region", { name: "Workers Strength Summary", exact: true }).waitFor()
+		assert(JSON.stringify(requests.at(-1).args) === JSON.stringify({ report_date: "2026-10-08", from_time: from, to_time: to }), "Attendance must send only date/from/to, without Supplier or HR mapping")
+		const summary = page.getByRole("region", { name: "Workers Strength Summary", exact: true })
+		assert(JSON.stringify(await summary.locator("thead th").allTextContents()) === JSON.stringify(columns.filter(column => !column.hidden).map(column => column.label)), "Dynamic columns lost server order or hidden flag")
+		assert((await summary.locator("tfoot").innerText()).includes("901"), "Attendance calculated its own total rather than using returned total")
+		assert(await summary.locator("tbody tr").count() === 33, "Returned total duplicated among data rows")
+		assert(await summary.locator("img").count() === 0 && !await page.evaluate(() => window.attendanceUnsafe), "Upstream HTML executed in a result cell")
+		await page.getByText("Shifts: Shift B, Shift A", { exact: true }).waitFor(); await page.getByRole("region", { name: "Employee First Punch", exact: true }).getByText("08:05:00", { exact: true }).waitFor()
+		assert(await page.getByRole("button", { name: "Copy Report", exact: true }).isEnabled(), "Attendance lacks shared report copy")
+		for (const name of ["Export Strength", "Export Punches"]) {
+			const pending = page.waitForEvent("download"); await page.getByRole("button", { name, exact: true }).click(); const download = await pending
+			const csv = readFileSync(await download.path(), "utf8")
+			assert(csv.includes(name === "Export Strength" ? "901" : "EMP-001"), `${name} does not export current returned rows`)
+			if (name === "Export Strength") assert(csv.includes("'=HYPERLINK") && !csv.includes("Hidden upstream column"), "Strength export leaks hidden columns or unsafe spreadsheet formulas")
+		}
+		let release; state.hold = new Promise(resolve => { release = resolve }); await generate()
+		await page.getByText("Refreshing report. Previously generated values remain visible.", { exact: true }).waitFor()
+		assert(await summary.count() === 1 && await page.getByRole("button", { name: "Reset", exact: true }).isDisabled() && await page.getByRole("button", { name: "Export Strength", exact: true }).isDisabled(), "Refresh lost useful results or allows stale actions")
+		release(); await page.locator('.report-shell[aria-busy="false"]').waitFor()
+		state.error = "HR timed out. Please try again."; const beforeError = count(); await generate(); await dismiss(state.error, "Unable to generate Strength Report")
+		assert(count() === beforeError + 1 && await summary.count() === 1 && await date.inputValue() === "08-10-2026" && await page.getByRole("combobox", { name: "From Time", exact: true }).inputValue() === from, "Endpoint failure duplicated request or discarded filters/results")
+		state.error = ""; await generate(); await page.locator('.report-shell[aria-busy="false"]').waitFor()
+		const beforeQuery = count(); await page.evaluate(() => window.router.replace('/sewing/attendance?supplier=IGNORED')); assert(count() === beforeQuery && await summary.count() === 1, "Global report is coupled to Supplier route state")
+		for (const width of [390, 900, 1280, 1600]) {
+			await page.setViewportSize({ width, height: 900 }); await noOverflow(page, `Attendance ${width}`)
+			assert(await page.locator('.report-shell__commands .p-button').evaluateAll(buttons => buttons.every(button => { const label = button.querySelector('.p-button-label'); return label.getBoundingClientRect().right <= button.getBoundingClientRect().right - 4 })), `Attendance action label clipped at ${width}px`)
+			if (width === 390) assert(await page.locator('.report-filter-grid input').evaluateAll(inputs => inputs.every(input => input.clientWidth >= 125)), "Narrow attendance date/time values are clipped")
+			assert(await summary.locator("thead th").first().evaluate(el => getComputedStyle(el).position === "sticky"), "Attendance result headers are not sticky")
+			if (width === 390) assert(await summary.evaluate(el => el.scrollWidth > el.clientWidth && getComputedStyle(el).overflowX === "auto"), "Attendance matrix lacks contained horizontal scrolling")
+			assert(await page.getByRole("combobox", { name: "From Time", exact: true }).inputValue() === from, "Resizing loses time filter")
+			if (process.env.ESSDEE_SEWING_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SEWING_SCREENSHOTS}/sewing-attendance-${width}.png`, fullPage: true, animations: "disabled" })
+		}
+		state.data = { columns: [], rows: [], employee_punches: [], shifts: ["Shift A"], add_total_row: 0 }; await generate(); await page.getByText("No matching records", { exact: true }).waitFor()
+		assert(await page.locator(".document-error-dialog").count() === 0, "Valid empty response is an error")
+		state.data = { columns: [{ fieldname: "name", label: "Name" }, { fieldname: "count", label: "Count", fieldtype: "Int" }], rows: [["Array row", 7]], employee_punches: [], shifts: ["Shift A"], add_total_row: 0 }; await generate(); await summary.getByText("Array row", { exact: true }).waitFor(); assert(await summary.locator("tfoot").count() === 0, "False total flag invents a total")
+		await page.getByRole("button", { name: "Reset", exact: true }).click(); await page.getByText("Set the report filters", { exact: true }).waitFor(); assert(await date.inputValue() === "" && await page.getByRole("combobox", { name: "To Time", exact: true }).inputValue() === "", "Reset retains stale filters")
+		const beforeStandalone = requests.length; await page.evaluate(() => window.router.push('/other-workspace')); await page.locator('[data-attendance-strength]').waitFor(); assert(await page.locator('.sewing-workspace-shell').count() === 0 && requests.length === beforeStandalone, "Reusable report requires Sewing context or eager fetch")
+		await setDate(); await time("From Time"); await time("To Time"); await generate(); await page.getByText("Array row", { exact: true }).waitFor()
+		assert(errors.length === 0 && warnings.length === 0, `Attendance browser errors/warnings: ${[...errors, ...warnings].join('\n')}`)
+		console.log("PASS attendance: global real route and reusable component, only date/time inputs, required-field popup/no-request guards, dynamic safe columns/array rows/server totals, punch/shift context, CSV exports/formula safety/copy, retained refresh/results/filter state, one-popup recovery, valid empty response, Supplier-query independence, four contained/sticky responsive viewports")
+	} finally { await page.close(); await server.close() }
+}
+
+assert(["launcher", "plan-entry", "entries-consumption", "entries-consumption-settlement", "closed-grn", "primary-reports", "summary-reports", "attendance", "all"].includes(suite), `Unknown Sewing suite: ${suite}`)
 const browser = await chromium.launch({ headless: true })
 try {
 	if (suite === "launcher" || suite === "all") {
@@ -1111,4 +1214,5 @@ try {
 	if (suite === "closed-grn" || suite === "all") await closedGrnSuite(browser)
 	if (suite === "primary-reports" || suite === "all") await primaryReportsSuite(browser)
 	if (suite === "summary-reports" || suite === "all") await summaryReportsSuite(browser)
+	if (suite === "attendance" || suite === "all") await attendanceSuite(browser)
 } finally { await browser.close() }

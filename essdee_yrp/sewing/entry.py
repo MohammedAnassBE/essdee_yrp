@@ -7,7 +7,7 @@ from collections import defaultdict
 
 import frappe
 from frappe import _
-from frappe.utils import cstr, flt, get_time, getdate, nowdate, nowtime
+from frappe.utils import cint, cstr, flt, get_time, getdate, nowdate, nowtime
 from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
 from yrp.utils import update_if_string_instance
@@ -315,8 +315,38 @@ def submit_data_entry_log(payload) -> str:
 @frappe.whitelist()
 def cancel_sewing_plan_entry(doc_id: str) -> None:
 	entry = frappe.get_doc("SD YRP Sewing Plan Entry Detail", doc_id)
-	entry.check_permission("delete")
+	_assert_entry_cancellable(entry)
 	entry.delete()
+
+
+def _assert_entry_cancellable(entry) -> None:
+	"""Repeat the Supplier's distinct-date eligibility and effective permission checks."""
+	entry.check_permission("delete")
+	previous_days = cint(frappe.db.get_single_value("SD YRP MRP Settings", "previous_day_entries"))
+	supplier = frappe.db.get_value("SD YRP Sewing Plan", entry.sewing_plan, "supplier")
+	cancellable_dates = set()
+	if supplier and previous_days > 0:
+		cancellable_dates = {
+			getdate(row.entry_date)
+			for row in frappe.db.sql(
+				"""
+					select distinct entry.entry_date
+					from `tabSD YRP Sewing Plan Entry Detail` entry
+					join `tabSD YRP Sewing Plan` plan on plan.name = entry.sewing_plan
+					where plan.supplier = %s and entry.entry_date is not null
+					order by entry.entry_date desc
+					limit %s
+					for update
+				""",
+				(supplier, previous_days),
+				as_dict=True,
+			)
+		}
+	if not entry.entry_date or getdate(entry.entry_date) not in cancellable_dates:
+		frappe.throw(
+			_("This entry is outside the configured cancellation dates for its Sewing Unit."),
+			title=_("Sewing Entry Cancellation Blocked"),
+		)
 
 
 def _trusted_entry_rows(plan, quantities) -> list[dict]:

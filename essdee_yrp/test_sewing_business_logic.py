@@ -45,6 +45,189 @@ from essdee_yrp.sewing.read_models import (
 
 
 class TestSewingBusinessLogic(IntegrationTestCase):
+	def _mutation_plan(self, *, supplier=None, lot=None):
+		"""Create isolated ownership and quantities using valid migrated Item links."""
+		savepoint = f"sewing_mutation_{frappe.generate_hash(length=10)}"
+		frappe.db.savepoint(savepoint)
+		self.addCleanup(frappe.db.rollback, save_point=savepoint)
+		source, _payload, _plan_data = self._data_entry_plan()
+		if not supplier:
+			supplier = frappe.get_doc(
+				{
+					"doctype": "Supplier",
+					"supplier_name": f"Sewing mutation {frappe.generate_hash(length=10)}",
+					"supplier_group": frappe.db.get_value("Supplier", source.supplier, "supplier_group"),
+					"supplier_type": "Company",
+				}
+			).insert().name
+		if not lot:
+			lot = frappe.get_doc(
+				{
+					"doctype": "SD YRP Lot",
+					"lot_name": f"SEWING-MUTATION-{frappe.generate_hash(length=10)}",
+					"item": source.item,
+					"production_detail": frappe.db.get_value("SD YRP Lot", source.lot, "production_detail"),
+				}
+			).insert().name
+		row = source.sewing_plan_order_details[0]
+		return frappe.get_doc(
+			{
+				"doctype": "SD YRP Sewing Plan",
+				"naming_series": source.naming_series,
+				"supplier": supplier,
+				"lot": lot,
+				"item": source.item,
+				"sewing_plan_order_details": [
+					{"item_variant": row.item_variant, "set_combination": row.set_combination, "quantity": 10}
+				],
+			}
+		).insert()
+
+	def _mutation_entry(self, plan, date):
+		return frappe.get_doc(
+			{
+				"doctype": "SD YRP Sewing Plan Entry Detail",
+				"sewing_plan": plan.name,
+				"input_type": "Input Qty",
+				"entry_date": date,
+			}
+		).insert()
+
+	def test_entry_cancellation_honours_previous_entry_days(self):
+		plan = self._mutation_plan()
+		other_plan = self._mutation_plan(supplier=plan.supplier)
+		other_supplier_plan = self._mutation_plan()
+		frappe.db.set_single_value("SD YRP MRP Settings", "previous_day_entries", 2)
+		old = self._mutation_entry(plan, "2090-01-01")
+		eligible = self._mutation_entry(plan, "2090-01-03")
+		self._mutation_entry(other_plan, "2090-01-05")
+		self._mutation_entry(other_plan, "2090-01-05")
+		self._mutation_entry(other_supplier_plan, "2099-01-01")
+		self.assertTrue(frappe.has_permission(old.doctype, "delete", doc=old))
+
+		with self.assertRaises(frappe.ValidationError):
+			cancel_sewing_plan_entry(old.name)
+		self.assertEqual(frappe.local.message_log[-1].title, "Sewing Entry Cancellation Blocked")
+		self.assertTrue(frappe.db.exists(old.doctype, old.name))
+		cancel_sewing_plan_entry(eligible.name)
+		self.assertFalse(frappe.db.exists(eligible.doctype, eligible.name))
+
+	def test_entry_cancellation_rechecks_permission_and_disabled_window(self):
+		plan = self._mutation_plan()
+		entry = self._mutation_entry(plan, "2090-01-01")
+		frappe.db.set_single_value("SD YRP MRP Settings", "previous_day_entries", 1)
+		previous_user = frappe.session.user
+		try:
+			frappe.set_user("Guest")
+			with self.assertRaises(frappe.PermissionError):
+				cancel_sewing_plan_entry(entry.name)
+		finally:
+			frappe.set_user(previous_user)
+		self.assertTrue(frappe.db.exists(entry.doctype, entry.name))
+		for days in (0, -1):
+			frappe.db.set_single_value("SD YRP MRP Settings", "previous_day_entries", days)
+			with self.assertRaises(frappe.ValidationError):
+				cancel_sewing_plan_entry(entry.name)
+			self.assertTrue(frappe.db.exists(entry.doctype, entry.name))
+
+	def test_consumption_read_and_save_reject_unrelated_supplier(self):
+		plan = self._mutation_plan()
+		unrelated = self._mutation_plan()
+		before = frappe.get_doc(plan.doctype, plan.name).as_dict()
+		with self.assertRaises(frappe.ValidationError):
+			get_consumption_mapping_data(plan.lot, unrelated.supplier)
+		with self.assertRaises(frappe.ValidationError):
+			save_consumption_data(unrelated.supplier, plan.lot, [], [])
+		self.assertEqual(frappe.get_doc(plan.doctype, plan.name).as_dict(), before)
+
+	def test_consumption_print_preserves_supplier(self):
+		first = self._mutation_plan()
+		selected = self._mutation_plan(lot=first.lot)
+		ipd = frappe.db.get_value("SD YRP Lot", first.lot, "production_detail")
+		self.assertTrue(frappe.db.get_value("YRP Item Production Detail", ipd, "stiching_process"))
+		frappe.db.set_value(
+			"YRP Item Production Detail",
+			ipd,
+			"cloth_accessory_json",
+			frappe.as_json({"attributes": ["Accessory"], "items": [{"Accessory": "Trim", "Weight": 1}]}),
+		)
+		for plan, quantity in ((first, 11), (selected, 22)):
+			plan.append(
+				"cloth_accessory_consumption",
+				{
+					"index": 1,
+					"attribute": "Accessory",
+					"attribute_value": "Trim",
+					"consumption_weight": quantity,
+				},
+			)
+			plan.save()
+
+		data = get_sewing_consumption_print_data(ipd, first.lot, selected.supplier)
+		self.assertEqual(data["supplier"], selected.supplier)
+		self.assertEqual(data["lot"], first.lot)
+		self.assertEqual(data["cloth_acc_data"][0]["columns"][0]["Consumption Weight"], 22)
+		data["cloth_acc_data"][0]["columns"][0]["Consumption Weight"] = 33
+		save_consumption_data(selected.supplier, selected.lot, data["sections"], data["cloth_acc_data"])
+		self.assertEqual(
+			frappe.get_doc(first.doctype, first.name).cloth_accessory_consumption[0].consumption_weight,
+			11,
+		)
+		updated = get_sewing_consumption_print_data(ipd, first.lot, selected.supplier)
+		self.assertEqual(updated["cloth_acc_data"][0]["columns"][0]["Consumption Weight"], 33)
+
+	def test_consumption_legacy_calls_require_unique_ownership(self):
+		plan = self._mutation_plan()
+		ipd = frappe.db.get_value("SD YRP Lot", plan.lot, "production_detail")
+		self.assertEqual(get_consumption_mapping_data(plan.lot)["ipd"], ipd)
+		self.assertEqual(get_sewing_consumption_print_data(ipd, plan.lot)["supplier"], plan.supplier)
+		self.assertEqual(get_sewing_consumption_print_data(ipd, supplier=plan.supplier)["lot"], plan.lot)
+		self._mutation_plan(lot=plan.lot)
+		with self.assertRaises(frappe.ValidationError):
+			get_consumption_mapping_data(plan.lot)
+		with self.assertRaises(frappe.ValidationError):
+			get_sewing_consumption_print_data(ipd, plan.lot)
+		self._mutation_plan(supplier=plan.supplier)
+		with self.assertRaises(frappe.ValidationError):
+			get_sewing_consumption_print_data(ipd, supplier=plan.supplier)
+
+	def test_consumption_print_rejects_mismatched_ipd_and_supplier(self):
+		plan = self._mutation_plan()
+		unrelated = self._mutation_plan()
+		ipd = frappe.db.get_value("SD YRP Lot", plan.lot, "production_detail")
+		with self.assertRaises(frappe.ValidationError):
+			get_sewing_consumption_print_data(ipd, plan.lot, unrelated.supplier)
+		with self.assertRaises(frappe.ValidationError):
+			get_sewing_consumption_print_data("UNRELATED-IPD", plan.lot, plan.supplier)
+
+	def test_current_state_entries_cannot_exceed_predecessor_balance(self):
+		plan = self._mutation_plan()
+		row = plan.sewing_plan_order_details[0]
+		selected = {"order_detail": row.name, "data_entry": 10}
+		payload = {
+			"plan": plan.name,
+			"input_type": "Input Qty",
+			"received_type": frappe.db.get_single_value("YRP Stock Settings", "default_received_type"),
+			"work_station": frappe.get_all("YRP Work Station", pluck="name", limit=1)[0],
+			"quantities": {"colours": {"test": {"values": {"test": selected}}}},
+		}
+		submit_data_entry_log(payload)
+		payload["input_type"] = "Line Output"
+		selected["data_entry"] = 8
+		first = submit_data_entry_log(copy.deepcopy(payload))
+		with self.assertRaisesRegex(frappe.ValidationError, "Only .*4.* remains"):
+			submit_data_entry_log(copy.deepcopy(payload))
+		self.assertEqual(
+			frappe.get_all(
+				"SD YRP Sewing Plan Entry Detail",
+				filters={"sewing_plan": plan.name, "input_type": "Line Output"},
+				pluck="name",
+			),
+			[first],
+		)
+		entry = frappe.get_doc("SD YRP Sewing Plan Entry Detail", first)
+		self.assertEqual(flt(entry.sewing_plan_details[0].quantity), 8)
+
 	def _data_entry_plan(self):
 		plans = frappe.get_all(
 			"SD YRP Sewing Plan",

@@ -774,6 +774,7 @@ def get_supplier_lots(doctype, txt, searchfield, start, page_len, filters):
 
 @frappe.whitelist()
 def get_consumption_mapping_data(lot, supplier=None):
+	supplier, plans = _consumption_plans(lot, supplier)
 	frappe.has_permission("YRP Item Production Detail", "read", throw=True)
 	lot_doc = frappe.get_doc("SD YRP Lot", lot)
 	lot_doc.check_permission("read")
@@ -786,13 +787,12 @@ def get_consumption_mapping_data(lot, supplier=None):
 
 	saved_qty = {}
 	saved_cloth = {}
-	if supplier:
-		for plan_row in _plans(supplier, lots=[lot]):
-			plan = frappe.get_doc("SD YRP Sewing Plan", plan_row.name)
-			for row in plan.consumption_details:
-				saved_qty[(row.item_name, cint(row.index))] = flt(row.consumption_qty)
-			for row in plan.cloth_accessory_consumption:
-				saved_cloth[cint(row.index)] = flt(row.consumption_weight)
+	for plan_row in plans:
+		plan = frappe.get_doc("SD YRP Sewing Plan", plan_row.name)
+		for row in plan.consumption_details:
+			saved_qty[(row.item_name, cint(row.index))] = flt(row.consumption_qty)
+		for row in plan.cloth_accessory_consumption:
+			saved_cloth[cint(row.index)] = flt(row.consumption_weight)
 
 	bom_rows = [
 		row for row in ipd.item_bom if row.process_name == process and row.uom not in ("Nos", "Pieces")
@@ -882,23 +882,73 @@ def get_consumption_mapping_data(lot, supplier=None):
 
 
 @frappe.whitelist()
-def get_sewing_consumption_print_data(ipd, lot=None):
-	lot = lot or attribute_db.get_value("SD YRP Lot", {"production_detail": ipd}, "name")
+def get_sewing_consumption_print_data(ipd, lot=None, supplier=None):
+	"""Print the selected Supplier's consumption; resolve legacy omissions only if unique."""
 	if not lot:
-		return {"ipd": ipd, "lot": "", "supplier": "", "sections": [], "cloth_acc_data": []}
-	supplier = frappe.db.get_value("SD YRP Sewing Plan", {"lot": lot}, "supplier")
+		frappe.has_permission("SD YRP Lot", "read", throw=True)
+		lots = frappe.get_list(
+			"SD YRP Lot", filters={"production_detail": ipd}, pluck="name", limit_page_length=0
+		)
+		if not lots:
+			_consumption_scope_error()
+		frappe.has_permission("SD YRP Sewing Plan", "read", throw=True)
+		filters = {"lot": ["in", lots]}
+		if supplier:
+			filters["supplier"] = supplier
+		plan_lots = set(
+			frappe.get_list("SD YRP Sewing Plan", filters=filters, pluck="lot", limit_page_length=0)
+		)
+		if len(plan_lots) != 1:
+			_consumption_scope_error()
+		lot = plan_lots.pop()
+	supplier, _plans_for_lot = _consumption_plans(lot, supplier)
 	data = get_consumption_mapping_data(lot, supplier)
+	if data["ipd"] != ipd:
+		frappe.throw(
+			_("The selected Lot does not belong to this Item Production Detail."),
+			title=_("Sewing Consumption Scope Required"),
+		)
 	data.update({"lot": lot, "supplier": supplier})
 	return data
+
+
+def _consumption_scope_error():
+	frappe.throw(
+		_("Select a Sewing Unit and Lot with a matching Sewing Plan. Ownership must be unambiguous."),
+		title=_("Sewing Consumption Scope Required"),
+	)
+
+
+def _consumption_plans(lot, supplier=None):
+	"""Resolve a legacy omitted Supplier only from one readable owner of this exact Lot."""
+	if not cstr(lot).strip():
+		_consumption_scope_error()
+	if not supplier:
+		frappe.has_permission("SD YRP Sewing Plan", "read", throw=True)
+		suppliers = set(
+			frappe.get_list(
+				"SD YRP Sewing Plan",
+				filters={"lot": lot, "supplier": ["is", "set"]},
+				pluck="supplier",
+				limit_page_length=0,
+			)
+		)
+		if len(suppliers) != 1:
+			_consumption_scope_error()
+		supplier = suppliers.pop()
+	plans = _plans(supplier, lots=[lot])
+	if not plans:
+		_consumption_scope_error()
+	return supplier, plans
 
 
 @frappe.whitelist()
 def save_consumption_data(supplier, lot, sections, cloth_acc_data=None):
 	sections = _json_list(sections)
 	cloth_acc_data = _json_list(cloth_acc_data)
-	plans = _plans(supplier, lots=[lot])
-	if not plans:
-		frappe.throw(_("No Sewing Plan found for this Sewing Unit and Lot."))
+	if not cstr(supplier).strip():
+		_consumption_scope_error()
+	_supplier, plans = _consumption_plans(lot, supplier)
 	for plan_row in plans:
 		plan = frappe.get_doc("SD YRP Sewing Plan", plan_row.name)
 		plan.check_permission("write")

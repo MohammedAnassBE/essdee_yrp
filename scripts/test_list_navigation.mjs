@@ -6,6 +6,7 @@ import {
 	createListNavigationState,
 	createNavigationReference,
 	deterministicOrder,
+	navigationContextMatches,
 	navigationStorageKey,
 	readNavigationState,
 	resolveAdjacentNames,
@@ -43,70 +44,118 @@ const state = createListNavigationState({
 	targetParamName: "cuttingPlanId",
 })
 
-assert.equal(state.version, 1)
+assert.equal(state.version, 2)
+assert.ok(state.snapshotId)
 assert.equal(state.globalIndex, 22)
 assert.deepEqual(state.filters, [["status", "=", "Open"]])
 
 const storage = new MemoryStorage()
-const expectedKey = navigationStorageKey("cutting-plans", "Cutting Plan")
+const expectedKey = navigationStorageKey("cutting-plans", "Cutting Plan", state.snapshotId)
 assert.equal(writeNavigationState(storage, state), expectedKey)
 assert.deepEqual(readNavigationState(storage, expectedKey), state)
+assert.deepEqual(readNavigationState(storage, navigationStorageKey("cutting-plans", "Cutting Plan")), state)
 
 storage.setItem(expectedKey, "{not-json")
 assert.equal(readNavigationState(storage, expectedKey), null)
 storage.setItem(expectedKey, JSON.stringify({ ...state, version: 99 }))
 assert.equal(readNavigationState(storage, expectedKey), null)
+writeNavigationState(storage, state)
 
 const startState = createListNavigationState({ ...state, globalIndex: 0, pageStart: 0 })
-const startReference = createNavigationReference(startState, 0, "CP-001")
+const startReference = createNavigationReference(startState, 0, "CP-001", "2026-10-08 09:00:01")
 assert.deepEqual(
 	resolveAdjacentNames({
 		state: startState,
 		reference: startReference,
-		rows: [{ name: "CP-001" }, { name: "CP-002" }, { name: "CP-003" }],
+		rows: [
+			{ name: "CP-001", modified: "2026-10-08 09:00:01" },
+			{ name: "CP-002", modified: "2026-10-08 09:00:02" },
+			{ name: "CP-003", modified: "2026-10-08 09:00:03" },
+		],
 	}),
-	{ previousName: null, nextName: "CP-002", changed: false, reason: "" },
+	{ previousName: null, previousModified: "", nextName: "CP-002", nextModified: "2026-10-08 09:00:02", changed: false, reason: "" },
 )
 
-const middleReference = createNavigationReference(state, 22, "CP-023")
+const middleReference = createNavigationReference(state, 22, "CP-023", "2026-10-08 09:00:23")
 assert.deepEqual(
 	resolveAdjacentNames({
 		state,
 		reference: middleReference,
-		rows: [{ name: "CP-022" }, { name: "CP-023" }, { name: "CP-024" }],
+		rows: [
+			{ name: "CP-022", modified: "2026-10-08 09:00:22" },
+			{ name: "CP-023", modified: "2026-10-08 09:00:23" },
+			{ name: "CP-024", modified: "2026-10-08 09:00:24" },
+		],
 	}),
-	{ previousName: "CP-022", nextName: "CP-024", changed: false, reason: "" },
+	{ previousName: "CP-022", previousModified: "2026-10-08 09:00:22", nextName: "CP-024", nextModified: "2026-10-08 09:00:24", changed: false, reason: "" },
 )
 
 const endState = createListNavigationState({ ...state, globalIndex: 62, total: 63, pageStart: 60 })
-const endReference = createNavigationReference(endState, 62, "CP-063")
+const endReference = createNavigationReference(endState, 62, "CP-063", "2026-10-08 09:01:03")
 assert.deepEqual(
 	resolveAdjacentNames({
 		state: endState,
 		reference: endReference,
-		rows: [{ name: "CP-062" }, { name: "CP-063" }],
+		rows: [
+			{ name: "CP-062", modified: "2026-10-08 09:01:02" },
+			{ name: "CP-063", modified: "2026-10-08 09:01:03" },
+		],
 	}),
-	{ previousName: "CP-062", nextName: null, changed: false, reason: "" },
+	{ previousName: "CP-062", previousModified: "2026-10-08 09:01:02", nextName: null, nextModified: "", changed: false, reason: "" },
 )
 
 assert.deepEqual(
 	resolveAdjacentNames({
 		state,
 		reference: middleReference,
-		rows: [{ name: "CP-021" }, { name: "CP-022" }, { name: "CP-023" }],
+		rows: [
+			{ name: "CP-021", modified: "2026-10-08 09:00:21" },
+			{ name: "CP-022", modified: "2026-10-08 09:00:22" },
+			{ name: "CP-023", modified: "2026-10-08 09:00:23" },
+		],
 	}),
 	{
 		previousName: null,
+		previousModified: "",
 		nextName: null,
+		nextModified: "",
 		changed: true,
 		reason: "List changed — return to list",
 	},
 )
 
+assert.deepEqual(
+	resolveAdjacentNames({
+		reference: middleReference,
+		rows: [
+			{ name: "CP-022", modified: "2026-10-08 09:00:22" },
+			{ name: "CP-023", modified: "2026-10-08 10:30:00" },
+			{ name: "CP-024", modified: "2026-10-08 09:00:24" },
+		],
+	}),
+	{
+		previousName: null,
+		previousModified: "",
+		nextName: null,
+		nextModified: "",
+		changed: true,
+		reason: "List changed — return to list",
+	},
+)
+
+const { snapshotId: _previousSnapshotId, ...stateWithoutSnapshot } = state
+const newerFilterState = createListNavigationState({ ...stateWithoutSnapshot, filters: [["status", "=", "Closed"]] })
+assert.notEqual(newerFilterState.snapshotId, state.snapshotId)
+assert.notEqual(writeNavigationState(storage, newerFilterState), expectedKey)
+assert.deepEqual(readNavigationState(storage, expectedKey), state)
+assert.equal(navigationContextMatches(middleReference, state, "cutting-plan", "CP-023"), true)
+assert.equal(navigationContextMatches(middleReference, newerFilterState, "cutting-plan", "CP-023"), false)
+assert.equal(navigationContextMatches({ ...middleReference, index: 21 }, state, "cutting-plan", "CP-023"), false)
+
 global.window = { history: { state: { essdeeListNavigation: middleReference, unrelated: "kept" } } }
 assert.deepEqual(
-	preserveListNavigationState("CP-023-RENAMED"),
-	{ essdeeListNavigation: { ...middleReference, currentName: "CP-023-RENAMED" } },
+	preserveListNavigationState("CP-023-RENAMED", "2026-10-08 11:00:00"),
+	{ essdeeListNavigation: { ...middleReference, currentName: "CP-023-RENAMED", currentModified: "2026-10-08 11:00:00" } },
 )
 global.window.history.state = { unrelated: "kept" }
 assert.equal(preserveListNavigationState("CP-023"), undefined)

@@ -29,10 +29,10 @@ const duplicateSource = computed(() => duplicateFrom.value ? { duplicate_from: d
 
 function saved(record) {
 	if (!record?.name) return
-	router.replace({ name: props.viewRouteName, params: { purchaseOrderId: record.name }, state: preserveListNavigationState(record.name) })
+	router.replace({ name: props.viewRouteName, params: { purchaseOrderId: record.name }, state: preserveListNavigationState(record.name, record.modified) })
 }
 function cancel() {
-	if (purchaseOrderId.value) router.push({ name: props.viewRouteName, params: { purchaseOrderId: purchaseOrderId.value } })
+	if (purchaseOrderId.value) router.push({ name: props.viewRouteName, params: { purchaseOrderId: purchaseOrderId.value }, state: preserveListNavigationState(purchaseOrderId.value) })
 	else if (duplicateFrom.value) router.push({ name: props.viewRouteName, params: { purchaseOrderId: duplicateFrom.value } })
 	else router.push({ name: props.listRouteName })
 }

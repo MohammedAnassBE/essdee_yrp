@@ -1,4 +1,4 @@
-export const LIST_NAVIGATION_VERSION = 1
+export const LIST_NAVIGATION_VERSION = 2
 
 function normalizedDirection(sortOrder) {
 	return String(sortOrder || "desc").toLowerCase() === "asc" ? "asc" : "desc"
@@ -10,10 +10,15 @@ export function deterministicOrder(sortField = "modified", sortOrder = "desc") {
 	return field === "name" ? `name ${direction}` : `${field} ${direction}, name ${direction}`
 }
 
-export function navigationStorageKey(sourceRouteName, doctype) {
-	return ["essdee-yrp", "list-navigation", LIST_NAVIGATION_VERSION, sourceRouteName, doctype]
+export function navigationStorageKey(sourceRouteName, doctype, snapshotId = "") {
+	return ["essdee-yrp", "list-navigation", LIST_NAVIGATION_VERSION, sourceRouteName, doctype, snapshotId]
 		.map((part) => encodeURIComponent(String(part || "")))
 		.join(":")
+}
+
+function newSnapshotId() {
+	if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
+	return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
 }
 
 function cloneJson(value, fallback) {
@@ -27,6 +32,7 @@ function cloneJson(value, fallback) {
 export function createListNavigationState(input = {}) {
 	return {
 		version: LIST_NAVIGATION_VERSION,
+		snapshotId: String(input.snapshotId || newSnapshotId()),
 		sourceRouteName: String(input.sourceRouteName || ""),
 		sourceFullPath: String(input.sourceFullPath || ""),
 		doctype: String(input.doctype || ""),
@@ -54,6 +60,7 @@ function isValidState(state) {
 	return Boolean(
 		state &&
 			state.version === LIST_NAVIGATION_VERSION &&
+			state.snapshotId &&
 			state.sourceRouteName &&
 			state.doctype &&
 			Array.isArray(state.filters) &&
@@ -64,9 +71,12 @@ function isValidState(state) {
 
 export function writeNavigationState(storage, state) {
 	const normalized = createListNavigationState(state)
-	const key = navigationStorageKey(normalized.sourceRouteName, normalized.doctype)
+	const key = navigationStorageKey(normalized.sourceRouteName, normalized.doctype, normalized.snapshotId)
+	const latestKey = navigationStorageKey(normalized.sourceRouteName, normalized.doctype)
 	try {
-		storage?.setItem(key, JSON.stringify(normalized))
+		const serialized = JSON.stringify(normalized)
+		storage?.setItem(key, serialized)
+		storage?.setItem(latestKey, serialized)
 		return key
 	} catch {
 		return ""
@@ -83,15 +93,35 @@ export function readNavigationState(storage, key) {
 	}
 }
 
-export function createNavigationReference(state, index, currentName) {
+export function createNavigationReference(state, index, currentName, currentModified = "") {
 	return {
 		version: LIST_NAVIGATION_VERSION,
-		stateKey: navigationStorageKey(state?.sourceRouteName, state?.doctype),
+		snapshotId: String(state?.snapshotId || ""),
+		stateKey: navigationStorageKey(state?.sourceRouteName, state?.doctype, state?.snapshotId),
 		index: Math.max(0, Number(index) || 0),
 		currentName: String(currentName || ""),
+		currentModified: String(currentModified || ""),
 		targetRouteName: String(state?.targetRouteName || ""),
 		doctype: String(state?.doctype || ""),
 	}
+}
+
+export function navigationContextMatches(reference, state, routeName, currentName) {
+	return Boolean(
+		reference?.stateKey
+			&& reference.version === LIST_NAVIGATION_VERSION
+			&& reference.snapshotId
+			&& reference.snapshotId === state?.snapshotId
+			&& reference.currentName === currentName
+			&& reference.currentModified
+			&& reference.doctype
+			&& reference.doctype === state?.doctype
+			&& reference.targetRouteName
+			&& reference.targetRouteName === state?.targetRouteName
+			&& String(routeName || "") === reference.targetRouteName
+			&& state?.targetParamName
+			&& state.globalIndex === reference.index,
+	)
 }
 
 export function adjacentWindowStart(index) {
@@ -102,10 +132,12 @@ export function resolveAdjacentNames({ reference, rows = [] } = {}) {
 	const index = Math.max(0, Number(reference?.index) || 0)
 	const expectedOffset = index - adjacentWindowStart(index)
 	const current = rows[expectedOffset]
-	if (!current || current.name !== reference?.currentName) {
+	if (!current || current.name !== reference?.currentName || String(current.modified || "") !== String(reference?.currentModified || "")) {
 		return {
 			previousName: null,
+			previousModified: "",
 			nextName: null,
+			nextModified: "",
 			changed: true,
 			reason: "List changed — return to list",
 		}
@@ -113,7 +145,9 @@ export function resolveAdjacentNames({ reference, rows = [] } = {}) {
 
 	return {
 		previousName: rows[expectedOffset - 1]?.name || null,
+		previousModified: String(rows[expectedOffset - 1]?.modified || ""),
 		nextName: rows[expectedOffset + 1]?.name || null,
+		nextModified: String(rows[expectedOffset + 1]?.modified || ""),
 		changed: false,
 		reason: "",
 	}

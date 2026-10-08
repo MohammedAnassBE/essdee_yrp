@@ -793,7 +793,8 @@ const fetchFields = computed(() => [
 		...activeColumns.value.map((column) => column.fieldname),
 		...activeCurrencyFields.value,
 		...(effectiveStatusField.value ? [effectiveStatusField.value] : []),
-		...(isSubmittable.value ? ["docstatus", "modified"] : []),
+		"modified",
+		...(isSubmittable.value ? ["docstatus"] : []),
 	]),
 ])
 

@@ -12,7 +12,7 @@
 				:show-document-navigation="Boolean(record.name)"
 				:current-name="record.name || ''"
 				:document-label="title"
-				:navigation-disabled="dirty || Boolean(acting) || Boolean(capabilities.save)"
+				:navigation-disabled="dirty || Boolean(acting)"
 			/>
 			<slot name="header" :record="record" :workspace="workspace" :heading-id="headingId">
 				<div class="fabric-document-workspace__identity">

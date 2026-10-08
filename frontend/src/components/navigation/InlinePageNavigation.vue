@@ -144,7 +144,7 @@ async function move(action) {
 
 @media (max-width: 620px), (pointer: coarse) {
 	.inline-page-navigation__back { width: 44px; height: 44px; }
-	.inline-page-navigation__document { width: 42px; height: 42px; }
-	.inline-page-navigation__status { display: none; }
+	.inline-page-navigation__document { width: 44px; height: 44px; }
+	.inline-page-navigation__status { position: absolute; overflow: hidden; width: 1px; height: 1px; padding: 0; white-space: nowrap; clip: rect(0, 0, 0, 0); clip-path: inset(50%); }
 }
 </style>

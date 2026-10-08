@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router"
 import { getList } from "../api/frappe.js"
 import {
 	adjacentWindowStart,
+	navigationContextMatches,
 	readNavigationState,
 	resolveAdjacentNames,
 	writeNavigationState,
@@ -15,24 +16,13 @@ function historyReference() {
 	return value && typeof value === "object" ? { ...value } : null
 }
 
-function validContext(reference, state, routeName, currentName) {
-	return Boolean(
-		reference?.stateKey
-			&& reference.currentName === currentName
-			&& reference.doctype
-			&& reference.doctype === state?.doctype
-			&& reference.targetRouteName
-			&& reference.targetRouteName === state?.targetRouteName
-			&& String(routeName || "") === reference.targetRouteName
-			&& state?.targetParamName,
-	)
-}
-
 export function useDocumentListNavigation({ currentName, disabled }) {
 	const route = useRoute()
 	const router = useRouter()
 	const previousName = ref(null)
+	const previousModified = ref("")
 	const nextName = ref(null)
+	const nextModified = ref("")
 	const loading = ref(false)
 	const changed = ref(false)
 	const error = ref("")
@@ -47,7 +37,9 @@ export function useDocumentListNavigation({ currentName, disabled }) {
 
 	function reset() {
 		previousName.value = null
+		previousModified.value = ""
 		nextName.value = null
+		nextModified.value = ""
 		loading.value = false
 		changed.value = false
 		error.value = ""
@@ -65,7 +57,7 @@ export function useDocumentListNavigation({ currentName, disabled }) {
 
 		const reference = historyReference()
 		const state = readNavigationState(window.sessionStorage, reference?.stateKey)
-		if (!validContext(reference, state, route.name, name)) return
+		if (!navigationContextMatches(reference, state, route.name, name)) return
 
 		hasContext.value = true
 		sourceFullPath.value = state.sourceFullPath || ""
@@ -74,7 +66,7 @@ export function useDocumentListNavigation({ currentName, disabled }) {
 		loading.value = true
 		try {
 			const rows = await getList(state.doctype, {
-				fields: ["name"],
+				fields: ["name", "modified"],
 				filters: state.filters,
 				orderBy: state.orderBy,
 				start: adjacentWindowStart(reference.index),
@@ -83,7 +75,9 @@ export function useDocumentListNavigation({ currentName, disabled }) {
 			if (disposed || sequence !== loadSequence) return
 			const adjacent = resolveAdjacentNames({ reference, rows })
 			previousName.value = adjacent.previousName
+			previousModified.value = adjacent.previousModified
 			nextName.value = adjacent.nextName
+			nextModified.value = adjacent.nextModified
 			changed.value = adjacent.changed
 		} catch (reason) {
 			if (disposed || sequence !== loadSequence) return
@@ -93,7 +87,7 @@ export function useDocumentListNavigation({ currentName, disabled }) {
 		}
 	}
 
-	async function go(name, offset) {
+	async function go(name, modified, offset) {
 		if (!name || navigationDisabled.value || !activeReference || !activeState || typeof window === "undefined") return false
 		const index = Math.max(0, Number(activeReference.index || 0) + offset)
 		const pageSize = Math.max(1, Number(activeState.pageSize) || 20)
@@ -108,6 +102,7 @@ export function useDocumentListNavigation({ currentName, disabled }) {
 			stateKey,
 			index,
 			currentName: name,
+			currentModified: modified,
 		}
 		await router.replace({
 			name: reference.targetRouteName,
@@ -139,7 +134,7 @@ export function useDocumentListNavigation({ currentName, disabled }) {
 		hasContext,
 		sourceFullPath,
 		navigationDisabled,
-		goPrevious: () => go(previousName.value, -1),
-		goNext: () => go(nextName.value, 1),
+		goPrevious: () => go(previousName.value, previousModified.value, -1),
+		goNext: () => go(nextName.value, nextModified.value, 1),
 	}
 }

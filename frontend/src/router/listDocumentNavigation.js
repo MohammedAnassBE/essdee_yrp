@@ -17,7 +17,7 @@ export function openListDocument(router, row, snapshot, { routeName, paramName }
 	})
 	const stateKey = writeNavigationState(window.sessionStorage, state)
 	const reference = {
-		...createNavigationReference(state, state.globalIndex, row.name),
+		...createNavigationReference(state, state.globalIndex, row.name, row.modified),
 		stateKey,
 	}
 
@@ -28,7 +28,7 @@ export function openListDocument(router, row, snapshot, { routeName, paramName }
 	})
 }
 
-export function preserveListNavigationState(currentName = "") {
+export function preserveListNavigationState(currentName = "", currentModified = "") {
 	if (typeof window === "undefined") return undefined
 	const reference = window.history.state?.essdeeListNavigation
 	if (!reference || typeof reference !== "object") return undefined
@@ -36,6 +36,7 @@ export function preserveListNavigationState(currentName = "") {
 		essdeeListNavigation: {
 			...reference,
 			currentName: String(currentName || reference.currentName || ""),
+			currentModified: String(currentModified || reference.currentModified || ""),
 		},
 	}
 }

@@ -37,6 +37,16 @@ class FakeProductionOrder:
 			raise AssertionError(f"Unexpected method: {method}")
 
 
+class FakeChildRow:
+	"""Match a Frappe child Document: serializable, but not iterable."""
+
+	def __init__(self, **values):
+		self._values = values
+
+	def as_dict(self):
+		return dict(self._values)
+
+
 class TestSalesWebWorkspace(TestCase):
 	def _workspace(self):
 		module = "essdee_yrp.sales.web_workspace"
@@ -109,8 +119,21 @@ class TestSalesWebWorkspace(TestCase):
 			production_ordered_details=[
 				frappe._dict(item="Premium Polo", item_variant="POLO-NAVY-S", size="S", lot="LOT-1", quantity=10),
 			],
-			date_change_history=[frappe._dict(date_field="Delivery Date", old_date="2026-10-18", new_date="2026-10-20", reason="Buyer request")],
-			quantity_transfer_history=[frappe._dict(source_production_order="PPO-OLD", target_production_order="PPO-0001", quantity=12)],
+			date_change_history=[FakeChildRow(date_field="Delivery Date", old_date="2026-10-18", new_date="2026-10-20", reason="Buyer request")],
+			quantity_transfer_history=[FakeChildRow(
+				approved_on="2026-10-09 14:35:00.000000",
+				movement="Added",
+				counterpart_production_order="PPO-OLD",
+				size="S",
+				quantity=12,
+				quantity_before=28,
+				quantity_after=40,
+				transfer_reference="PPO-TRANSFER-0001",
+				requested_by="sales@example.com",
+				requested_on="2026-10-09 14:00:00.000000",
+				approved_by="manager@example.com",
+				reason="Balance the size run",
+			)],
 			comment_log="Created by Sales",
 			__onload={
 				"can_manage_production_order": True,
@@ -136,6 +159,21 @@ class TestSalesWebWorkspace(TestCase):
 		self.assertEqual(payload["ordered"][0]["size"], "S")
 		self.assertEqual(payload["linked_lots"], ["LOT-1"])
 		self.assertEqual(set(payload["histories"]), {"dates", "transfers", "prices", "comments"})
+		self.assertEqual(payload["histories"]["dates"][0]["reason"], "Buyer request")
+		self.assertEqual(payload["histories"]["transfers"], [{
+			"approved_on": "2026-10-09 14:35:00.000000",
+			"movement": "Added",
+			"counterpart_production_order": "PPO-OLD",
+			"size": "S",
+			"quantity": 12,
+			"quantity_before": 28,
+			"quantity_after": 40,
+			"transfer_reference": "PPO-TRANSFER-0001",
+			"requested_by": "sales@example.com",
+			"requested_on": "2026-10-09 14:00:00.000000",
+			"approved_by": "manager@example.com",
+			"reason": "Balance the size run",
+		}])
 		self.assertFalse(payload["capabilities"]["update_quantity_ratio"]["allowed"])
 		self.assertTrue(payload["capabilities"]["update_quantity_ratio"]["reason"])
 		self.assertTrue(payload["capabilities"]["update_price"]["allowed"])

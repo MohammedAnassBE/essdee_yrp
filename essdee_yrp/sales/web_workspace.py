@@ -343,14 +343,21 @@ def get_production_order_workspace(production_order: str) -> dict:
 		"ordered": ordered,
 		"linked_lots": onload.get("linked_lots") or [],
 		"histories": {
-			"dates": [dict(row) for row in doc.get("date_change_history") or []],
-			"transfers": [dict(row) for row in doc.get("quantity_transfer_history") or []],
+			"dates": [_serialize_child_row(row) for row in doc.get("date_change_history") or []],
+			"transfers": [_serialize_child_row(row) for row in doc.get("quantity_transfer_history") or []],
 			"prices": onload.get("price_requests") or [],
 			"comments": doc.get("comment_log") or "",
 		},
 		"permissions": permissions,
 		"capabilities": _production_order_actions(doc, permissions, onload),
 	}
+
+
+def _serialize_child_row(row) -> dict:
+	"""Return child-table values without assuming the Document is iterable."""
+	if hasattr(row, "as_dict"):
+		return dict(row.as_dict())
+	return dict(row)
 
 
 def _editor_field(doc, fieldname: str) -> dict:

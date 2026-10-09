@@ -74,7 +74,13 @@ function productionOrderWorkspace(overrides = {}) {
 			{ item: "Premium Vest", item_variant: "Premium Vest-S", size: "S", lot: "LOT-26-0042", quantity: 12 },
 			{ item: "Premium Vest", item_variant: "Premium Vest-M", size: "M", lot: "LOT-26-0042", quantity: 18 },
 		], linked_lots: ["LOT-26-0042"],
-		histories: { dates: [{ date_field: "Delivery Date", previous_date: "2026-10-18", new_date: "2026-10-20", reason: "Customer revision" }], transfers: [] },
+		histories: {
+			dates: [{ date_field: "Delivery Date", previous_date: "2026-10-18", new_date: "2026-10-20", reason: "Customer revision" }],
+			transfers: [
+				{ approved_on: "2026-10-09 14:35:00.000000", movement: "Reduced", counterpart_production_order: "PPO-TEST-2", size: "S", quantity: 5, quantity_before: 40, quantity_after: 35, transfer_reference: "PPO-TRANSFER-1", requested_by: "sales@example.com", requested_on: "2026-10-09 14:00:00.000000", approved_by: "manager@example.com", reason: "Buyer split" },
+				{ approved_on: "2026-10-09 14:35:00.000000", movement: "Added", counterpart_production_order: "PPO-TEST-3", size: "M", quantity: 8, quantity_before: 72, quantity_after: 80, transfer_reference: "PPO-TRANSFER-2", requested_by: "sales@example.com", requested_on: "2026-10-09 14:00:00.000000", approved_by: "manager@example.com", reason: "Restore approved ratio" },
+			],
+		},
 		permissions: { can_read: true, can_write: true, can_print: false }, capabilities,
 		...overrides,
 		record: {
@@ -429,6 +435,14 @@ async function productionOrderSuite(page) {
 	assert(await lotMatrix.count() === 1 && (await lotMatrix.innerText()).includes("LOT-26-0042"), "Lotwise Ordered Detail is missing")
 	assert(JSON.stringify(await lotMatrix.locator("tbody td").allTextContents()) === JSON.stringify(["12", "18", "30"]), "Lotwise quantities are not aligned beneath their size columns")
 	assert((await page.locator(".ppo-page__metric").first().innerText()).includes("120"), "Total quantity metric is missing")
+	const transferHistory = page.locator(".ppo-transfer-history")
+	assert(await transferHistory.count() === 1, "Quantity Transfer History is missing from the Production Order")
+	assert(await transferHistory.locator("tbody tr").count() === 2, "Every migrated quantity transfer row must be visible")
+	const transferText = await transferHistory.innerText()
+	for (const value of ["Reduced", "Added", "PPO-TEST-2", "PPO-TEST-3", "S", "M", "5", "8", "40", "35", "72", "80", "sales@example.com", "manager@example.com", "09-10-2026 14:00", "09-10-2026 14:35", "Buyer split", "Restore approved ratio"]) {
+		assert(transferText.includes(value), `Quantity Transfer History omitted ${value}: ${transferText}`)
+	}
+	assert(await transferHistory.locator('a[href="/web/sales/production-orders/PPO-TEST-2"]').count() === 1, "Counterpart PPO is not linked")
 	const overviewText = await page.locator(".ppo-overview").innerText()
 	assert(overviewText.includes("25-10-2026") && !overviewText.includes("2026-10-25"), `Overview dates must use DD-MM-YYYY: ${overviewText}`)
 	assert(await page.getByRole("button", { name: "Delete", exact: true }).count() === 0, "Denied Delete capability leaked into the UI")

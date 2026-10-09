@@ -12,7 +12,8 @@
 				<template #fields><ProductionOrderOverview :fields="workspace.fields || []" /></template>
 				<template #matrix><ProductionOrderMatrix :rows="workspace.matrix || []" :ordered="workspace.ordered || []" /></template>
 				<template #after-matrix>
-					<section v-if="activity.length" class="ppo-activity erp-card"><header><span>ACTIVITY</span><h2>Recent changes</h2></header><div v-for="entry in activity" :key="entry.key"><strong>{{ entry.label }}</strong><span>{{ entry.value }}</span></div></section>
+					<ProductionOrderTransferHistory :rows="workspace.histories?.transfers || []" />
+					<section v-if="dateActivity.length" class="ppo-activity erp-card"><header><span>DATE CHANGES</span><h2>Schedule history</h2></header><div v-for="entry in dateActivity" :key="entry.key"><strong>{{ entry.label }}</strong><span>{{ entry.value }}</span></div></section>
 				</template>
 				<template #rail>
 					<div class="ppo-page__metric"><span>Total quantity</span><strong>{{ formatNumber(workspace.record?.total_quantity) }}</strong><small>pieces</small></div>
@@ -42,6 +43,7 @@ import FabricDocumentWorkspace from "../fabric-store/FabricDocumentWorkspace.vue
 import ProductionOrderActionDialog from "./ProductionOrderActionDialog.vue"
 import ProductionOrderMatrix from "./ProductionOrderMatrix.vue"
 import ProductionOrderOverview from "./ProductionOrderOverview.vue"
+import ProductionOrderTransferHistory from "./ProductionOrderTransferHistory.vue"
 
 const route = useRoute()
 const router = useRouter()
@@ -63,12 +65,11 @@ const actions = computed(() => priority.flatMap((key) => {
 	if (!capability?.allowed) return []
 	return [{ key, label: capability.label, icon: iconMap[key], primary: key === priority.find((candidate) => workspace.value.capabilities?.[candidate]?.allowed), menuOnly: ["cancel", "delete", "amend", "reopen", "create_lot", "link_lot"].includes(key), command: () => beginAction(key) }]
 }))
-const activity = computed(() => {
-	const rows = []
-	for (const [index, row] of (workspace.value.histories?.dates || []).entries()) rows.push({ key: `date-${index}`, label: row.date_field || "Date changed", value: `${formatDate(row.previous_date || row.old_date)} → ${formatDate(row.new_date)}${row.reason ? ` · ${row.reason}` : ""}` })
-	for (const [index, row] of (workspace.value.histories?.transfers || []).entries()) rows.push({ key: `transfer-${index}`, label: "Quantity transfer", value: `${row.source_production_order || "—"} → ${row.target_production_order || "—"} · ${formatNumber(row.quantity)}` })
-	return rows.slice(0, 8)
-})
+const dateActivity = computed(() => (workspace.value.histories?.dates || []).map((row, index) => ({
+	key: `date-${index}`,
+	label: row.date_field || "Date changed",
+	value: `${formatDate(row.previous_date || row.old_date)} → ${formatDate(row.new_date)}${row.reason ? ` · ${row.reason}` : ""}`,
+})))
 const confirmTitle = computed(() => ({ cancel: "Cancel Production Order?", delete: "Delete Production Order?", amend: "Create an amendment?", approve_ppo: "Approve this PPO?", approve_quantity_ratio: "Approve quantity & ratio?", approve_status: "Approve status change?", approve_transfer: "Approve quantity transfer?", reopen: "Reopen Production Order?", request_ppo_approval: "Send for PPO approval?" }[pendingConfirm.value] || "Confirm action"))
 const confirmLabel = computed(() => workspace.value.capabilities?.[pendingConfirm.value]?.label || "Continue")
 const confirmMessage = computed(() => `${confirmLabel.value} for ${workspace.value.record?.name || "this Production Order"}? Existing workflow validations will be applied.`)

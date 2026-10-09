@@ -7,7 +7,7 @@ from itertools import groupby
 import frappe
 from frappe.model.document import Document
 from frappe.model.naming import make_autoname
-from frappe.utils import flt, now_datetime
+from frappe.utils import cint, flt, now_datetime
 from six import string_types
 from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
@@ -1001,6 +1001,8 @@ def get_ironing_mistake_pf_items(lot):
 
 @frappe.whitelist()
 def get_ocr_details(lot):
+	lot_doc = frappe.get_doc("SD YRP Lot", lot)
+	lot_doc.check_permission("read")
 	lot_dict = {}
 	wo_list = frappe.get_all(
 		"YRP Work Order",
@@ -1012,35 +1014,27 @@ def get_ocr_details(lot):
 		order_by="creation",
 	)
 
-	if not wo_list:
-		# No Work Orders for this lot (e.g. synced lots on a master-data site — the
-		# transaction doctypes WO/GRN are not replicated). Return an empty, well-formed
-		# structure instead of computing over — and crashing on — absent transaction data.
-		lot_dict.update(
-			{
-				"sizes": [],
-				"processes": {},
-				"dispatch_detail": {},
-				"total_dispatch": 0,
-				"finishing_plan_list": [],
-			}
-		)
-		return lot_dict
-
 	ipd, _item = frappe.get_value("SD YRP Lot", lot, ["production_detail", "item"])
-	_sewing, primary, pcs_per_box = frappe.get_value(
-		"YRP Item Production Detail", ipd, ["stiching_process", "primary_item_attribute", "packing_combo"]
-	)
 	lot_dict["sizes"] = []
 	lot_dict["processes"] = {}
 	lot_dict["dispatch_detail"] = {}
 	lot_dict["total_dispatch"] = 0
 	lot_dict["finishing_plan_list"] = []
+	if not ipd:
+		return lot_dict
+	_sewing, primary, pcs_per_box = frappe.get_value(
+		"YRP Item Production Detail", ipd, ["stiching_process", "primary_item_attribute", "packing_combo"]
+	)
 	includes_packing_process = None
 	for wo in wo_list:
 		wo_doc = frappe.get_doc("YRP Work Order", wo)
 		if wo_doc.includes_packing:
 			includes_packing_process = wo_doc.process_name
+		cutting_plans = frappe.get_all(
+			"SD YRP Cutting Plan",
+			filters={"work_order": wo},
+			pluck="name",
+		)
 		lot_dict["processes"].setdefault(
 			wo_doc.process_name,
 			{
@@ -1051,6 +1045,7 @@ def get_ocr_details(lot):
 				"total_received": 0,
 			},
 		)
+		lot_dict["processes"][wo_doc.process_name]["cp_list"].extend(cutting_plans)
 		lot_dict["processes"][wo_doc.process_name]["wo_list"].append(wo)
 		for row in wo_doc.work_order_calculated_items:
 			attr_details = get_variant_attr_details(row.item_variant)
@@ -1070,37 +1065,72 @@ def get_ocr_details(lot):
 				lot_dict["processes"][wo_doc.process_name]["data"][size]["received"] += row.received_qty
 				lot_dict["processes"][wo_doc.process_name]["total_received"] += row.received_qty
 
-	grn_filters = {
-		"against": "YRP Work Order",
-		"docstatus": 1,
-		"process_name": includes_packing_process,
-		"lot": lot,
-	}
-	# The yrp/essdee GRN may not carry production_api's includes_packing / is_return
-	# columns — only add those filters when the field actually exists.
-	_grn_meta = frappe.get_meta("YRP Goods Received Note")
-	if _grn_meta.has_field("includes_packing"):
-		grn_filters["includes_packing"] = 1
-	if _grn_meta.has_field("is_return"):
-		grn_filters["is_return"] = 0
-	grn_list = frappe.get_all("YRP Goods Received Note", filters=grn_filters, pluck="name")
+	grn_list = []
+	if includes_packing_process:
+		grn_filters = {
+			"against": "YRP Work Order",
+			"docstatus": 1,
+			"process_name": includes_packing_process,
+			"lot": lot,
+		}
+		# The yrp/essdee GRN may not carry production_api's includes_packing / is_return
+		# columns — only add those filters when the field actually exists.
+		_grn_meta = frappe.get_meta("YRP Goods Received Note")
+		if _grn_meta.has_field("includes_packing"):
+			grn_filters["includes_packing"] = 1
+		if _grn_meta.has_field("is_return"):
+			grn_filters["is_return"] = 0
+		grn_list = frappe.get_all("YRP Goods Received Note", filters=grn_filters, pluck="name")
 
 	grn_item_dict = {}
 	for grn in grn_list:
 		grn_doc = frappe.get_doc("YRP Goods Received Note", grn)
+		dynamic_packing = cint(grn_doc.get("packing_calculation_version")) >= 2
 		for row in grn_doc.items:
 			grn_item_dict.setdefault(row.item_variant, 0)
-			grn_item_dict[row.item_variant] += row.quantity
+			grn_item_dict[row.item_variant] += (
+				flt(row.quantity) if dynamic_packing else flt(row.quantity) * flt(pcs_per_box)
+			)
 
 	for variant in grn_item_dict:
 		attr_details = get_variant_attr_details(variant)
 		size = attr_details[primary]
-		lot_dict["processes"][includes_packing_process]["total_received"] += (
-			grn_item_dict[variant] * pcs_per_box
+		lot_dict["processes"][includes_packing_process]["total_received"] += grn_item_dict[variant]
+		lot_dict["processes"][includes_packing_process]["data"][size]["received"] += grn_item_dict[
+			variant
+		]
+
+	finishing_plan_list = frappe.get_all(
+		"SD YRP Finishing Plan",
+		filters={"lot": lot},
+		pluck="name",
+	)
+	for finishing_plan in finishing_plan_list:
+		lot_dict["finishing_plan_list"].append(finishing_plan)
+		finishing_doc = frappe.get_doc("SD YRP Finishing Plan", finishing_plan)
+		batch_tracked_packing = bool(
+			finishing_doc.work_order
+			and frappe.db.exists(
+				"YRP Goods Received Note",
+				{
+					"against": "YRP Work Order",
+					"against_id": finishing_doc.work_order,
+					"docstatus": 1,
+					"is_return": 0,
+					"packing_calculation_version": [">=", 1],
+				},
+			)
 		)
-		lot_dict["processes"][includes_packing_process]["data"][size]["received"] += (
-			grn_item_dict[variant] * pcs_per_box
-		)
+		dispatch_multiplier = 1 if batch_tracked_packing else flt(finishing_doc.pieces_per_box)
+		for row in finishing_doc.finishing_plan_grn_details:
+			attr_details = get_variant_attr_details(row.item_variant)
+			size = attr_details[primary]
+			if size not in lot_dict["sizes"]:
+				lot_dict["sizes"].append(size)
+			dispatched = flt(row.dispatched) * dispatch_multiplier
+			lot_dict["dispatch_detail"].setdefault(size, 0)
+			lot_dict["dispatch_detail"][size] += dispatched
+			lot_dict["total_dispatch"] += dispatched
 
 	return lot_dict
 

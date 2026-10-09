@@ -10,6 +10,9 @@ from frappe.utils import cint, flt
 from yrp.utils import get_variant_attr_details
 
 from essdee_yrp import production_order_workflow as workflow
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import (
+	get_ocr_details as build_lot_ocr_details,
+)
 from essdee_yrp.sales import ppo_report
 
 
@@ -351,6 +354,28 @@ def get_production_order_workspace(production_order: str) -> dict:
 		"permissions": permissions,
 		"capabilities": _production_order_actions(doc, permissions, onload),
 	}
+
+
+@frappe.whitelist()
+def get_lot_ocr_details(production_order: str, lot: str) -> dict:
+	"""Return the migrated Lot OCR view after verifying its PPO relationship."""
+	production_order_doc = frappe.get_doc(DOCTYPE, production_order)
+	production_order_doc.check_permission("read")
+	lot_doc = frappe.get_doc("SD YRP Lot", lot)
+	lot_doc.check_permission("read")
+	if lot_doc.get("production_order") != production_order_doc.name:
+		frappe.throw(
+			_("Lot {0} is not linked to Production Order {1}.").format(lot, production_order),
+			frappe.PermissionError,
+		)
+
+	payload = dict(build_lot_ocr_details(lot) or {})
+	payload["context"] = {
+		"lot": lot_doc.name,
+		"production_order": production_order_doc.name,
+		"item": lot_doc.get("item") or production_order_doc.get("item"),
+	}
+	return payload
 
 
 def _serialize_child_row(row) -> dict:

@@ -19,7 +19,7 @@
 							<TabPanel value="details">
 								<div class="ppo-details">
 									<ProductionOrderOverview :fields="workspace.fields || []" />
-									<ProductionOrderMatrix :rows="workspace.matrix || []" :ordered="workspace.ordered || []" />
+									<ProductionOrderMatrix :rows="workspace.matrix || []" :ordered="workspace.ordered || []" lot-clickable @open-lot="openLotOcr" />
 									<section v-if="dateActivity.length" class="ppo-activity erp-card"><header><span>DATE CHANGES</span><h2>Schedule history</h2></header><div v-for="entry in dateActivity" :key="entry.key"><strong>{{ entry.label }}</strong><span>{{ entry.value }}</span></div></section>
 								</div>
 							</TabPanel>
@@ -37,6 +37,7 @@
 		</section>
 
 		<ProductionOrderActionDialog v-model:visible="actionVisible" :mode="actionMode" :matrix="workspace.matrix || []" :busy="Boolean(acting)" @submit="submitAction" />
+		<ProductionOrderLotOcrDialog v-model:visible="lotOcrVisible" :production-order="workspace.record?.name || ''" :lot="selectedLot" :item="workspace.record?.item || ''" />
 		<DocumentConfirmationDialog v-model:visible="confirmVisible" :title="confirmTitle" :message="confirmMessage" :confirm-label="confirmLabel" :busy="Boolean(acting)" @confirm="confirmAction" />
 	</DepartmentPage>
 </template>
@@ -58,6 +59,7 @@ import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.
 import { preserveListNavigationState } from "../../router/listDocumentNavigation.js"
 import FabricDocumentWorkspace from "../fabric-store/FabricDocumentWorkspace.vue"
 import ProductionOrderActionDialog from "./ProductionOrderActionDialog.vue"
+import ProductionOrderLotOcrDialog from "./ProductionOrderLotOcrDialog.vue"
 import ProductionOrderMatrix from "./ProductionOrderMatrix.vue"
 import ProductionOrderOverview from "./ProductionOrderOverview.vue"
 import ProductionOrderTransferHistory from "./ProductionOrderTransferHistory.vue"
@@ -71,6 +73,8 @@ const acting = ref("")
 const activeTab = ref("details")
 const actionVisible = ref(false)
 const actionMode = ref("")
+const lotOcrVisible = ref(false)
+const selectedLot = ref("")
 const confirmVisible = ref(false)
 const pendingConfirm = ref("")
 let loadSequence = 0
@@ -104,6 +108,7 @@ async function load(refresh = false) {
 	} catch (reason) { if (sequence === loadSequence) error.value = reason?.message || "Unable to load this Production Order." }
 	finally { if (sequence === loadSequence) { loading.value = false; acting.value = "" } }
 }
+function openLotOcr(lot) { selectedLot.value = lot; lotOcrVisible.value = true }
 function beginAction(command) {
 	if (command === "save") return router.push({ name: "sales-production-order-edit", params: { productionOrderId: workspace.value.record.name }, state: preserveListNavigationState(workspace.value.record.name, workspace.value.record.modified) })
 	if (dialogModes.has(command)) { actionMode.value = command; actionVisible.value = true; return }
@@ -126,7 +131,7 @@ async function runCommand(command, payload = {}) {
 function statusLabel(docstatus) { return Number(docstatus) === 1 ? "Submitted" : Number(docstatus) === 2 ? "Cancelled" : "Draft" }
 function formatNumber(value) { return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 }) }
 function formatDate(value) { if (!value) return "—"; const [year, month, day] = String(value).slice(0, 10).split("-"); return day ? `${day}-${month}-${year}` : value }
-watch(() => route.params.productionOrderId, () => load(false), { immediate: true })
+watch(() => route.params.productionOrderId, () => { lotOcrVisible.value = false; selectedLot.value = ""; load(false) }, { immediate: true })
 </script>
 
 <style scoped>

@@ -37,7 +37,13 @@
 			<header><span>ORDERED</span><h3>Lotwise Ordered Detail</h3></header>
 			<div class="ppo-matrix__lot-list">
 				<article v-for="lot in lotGroups" :key="lot.name" class="ppo-matrix__lot">
-					<header><span>Lot</span><strong>{{ lot.name }}</strong></header>
+					<header>
+						<span>Lot</span>
+						<button v-if="lotClickable" type="button" class="ppo-matrix__lot-link" :aria-label="`View OCR details for ${lot.name}`" @click="emit('open-lot', lot.name)">
+							<strong>{{ lot.name }}</strong><i class="pi pi-arrow-up-right" aria-hidden="true" />
+						</button>
+						<strong v-else>{{ lot.name }}</strong>
+					</header>
 					<div class="ppo-matrix__lot-table-wrap">
 						<table :style="tableStyle">
 							<thead><tr><th>Size</th><th v-for="row in rows" :key="`${lot.name}-${row.size}`">{{ row.size || "—" }}</th><th>Total</th></tr></thead>
@@ -58,8 +64,9 @@ const props = defineProps({
 	rows: { type: Array, default: () => [] },
 	ordered: { type: [Array, Object], default: () => [] },
 	editable: { type: Boolean, default: false },
+	lotClickable: { type: Boolean, default: false },
 })
-const emit = defineEmits(["update"])
+const emit = defineEmits(["update", "open-lot"])
 const priceRows = [
 	{ key: "wholesale_price", label: "Wholesale Price (Piece)" },
 	{ key: "retail_price", label: "Retail Price (Piece)" },
@@ -122,6 +129,11 @@ function update(row, field, value) { emit("update", { size: row.size, field, val
 .ppo-matrix__lot > header { display: flex; align-items: baseline; gap: 7px; padding: 7px 10px; border-bottom: 1px solid var(--erp-border); }
 .ppo-matrix__lot > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
 .ppo-matrix__lot > header strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
+.ppo-matrix__lot-link { display: inline-flex; align-items: center; gap: 6px; margin: -3px 0; padding: 3px 5px; color: var(--erp-accent-hover); background: transparent; border: 0; border-radius: 6px; cursor: pointer; }
+.ppo-matrix__lot-link strong { color: inherit !important; }
+.ppo-matrix__lot-link i { font-size: 10px; }
+.ppo-matrix__lot-link:hover { background: var(--erp-accent-soft); }
+.ppo-matrix__lot-link:focus-visible { outline: 2px solid var(--erp-accent); outline-offset: 2px; }
 .ppo-matrix__lot tbody tr:last-child > * { border-bottom: 0; }
 @media (max-width: 620px) { .ppo-matrix__header { align-items: flex-start; } .ppo-matrix__header > strong { font-size: 14px; } }
 </style>

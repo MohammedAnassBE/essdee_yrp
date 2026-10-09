@@ -4,7 +4,7 @@
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
@@ -132,20 +132,46 @@ class TestLot(FrappeTestCase):
 		self.assertEqual(lot.bom_summary_json["_Test Cloth Variant"][3], 0.25)
 		self.assertEqual(result["last_calculated_time"], "2026-08-14 12:00:00")
 
-	def test_ocr_details_does_not_require_f15_plan_doctypes(self):
+	def test_ocr_details_uses_migrated_cutting_and_finishing_plans(self):
 		def get_all(doctype, *args, **kwargs):
 			if doctype == "YRP Work Order":
 				return ["_Test OCR Work Order"]
+			if doctype == "SD YRP Cutting Plan":
+				return ["_Test OCR Cutting Plan"]
 			if doctype == "YRP Goods Received Note":
-				return []
+				return ["_Test OCR GRN"]
+			if doctype == "SD YRP Finishing Plan":
+				return ["_Test OCR Finishing Plan"]
 			self.fail(f"Unexpected DocType query: {doctype}")
 
 		work_order = frappe._dict(
-			includes_packing=0,
+			includes_packing=1,
 			process_name="_Test OCR Process",
-			work_order_calculated_items=[],
+			work_order_calculated_items=[
+				frappe._dict(item_variant="_Test OCR Variant", delivered_quantity=12, received_qty=10),
+			],
+		)
+		packing_grn = SimpleNamespace(
+			packing_calculation_version=2,
+			items=[frappe._dict(item_variant="_Test OCR Variant", quantity=10)],
+		)
+		packing_grn.get = lambda fieldname: getattr(packing_grn, fieldname, None)
+		lot = SimpleNamespace(name="_Test OCR Lot", checked_permissions=[])
+		lot.check_permission = lot.checked_permissions.append
+		finishing_plan = frappe._dict(
+			work_order="_Test OCR Packing Work Order",
+			pieces_per_box=10,
+			finishing_plan_grn_details=[
+				frappe._dict(item_variant="_Test OCR Variant", dispatched=3),
+			],
 		)
 		grn_meta = frappe._dict(has_field=lambda _fieldname: False)
+		documents = {
+			"_Test OCR Lot": lot,
+			"_Test OCR Work Order": work_order,
+			"_Test OCR GRN": packing_grn,
+			"_Test OCR Finishing Plan": finishing_plan,
+		}
 
 		with (
 			patch.object(frappe, "get_all", side_effect=get_all),
@@ -154,15 +180,76 @@ class TestLot(FrappeTestCase):
 				"get_value",
 				side_effect=[
 					("_Test OCR IPD", "_Test OCR Item"),
-					("_Test OCR Sewing", "Size", 1),
+					("_Test OCR Sewing", "Size", 10),
 				],
 			),
-			patch.object(frappe, "get_doc", return_value=work_order),
+			patch.object(frappe, "get_doc", side_effect=lambda _doctype, name: documents[name]),
 			patch.object(frappe, "get_meta", return_value=grn_meta),
+			patch.object(frappe.db, "exists", return_value=False),
+			patch(
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot.get_variant_attr_details",
+				return_value={"Size": "S"},
+			),
 		):
 			result = get_ocr_details("_Test OCR Lot")
 
-		self.assertEqual(
-			result["processes"]["_Test OCR Process"]["cp_list"],
-			[],
+		self.assertEqual(result["sizes"], ["S"])
+		self.assertEqual(lot.checked_permissions, ["read"])
+		self.assertEqual(result["processes"]["_Test OCR Process"]["cp_list"], ["_Test OCR Cutting Plan"])
+		self.assertEqual(result["processes"]["_Test OCR Process"]["total_received"], 10)
+		self.assertEqual(result["finishing_plan_list"], ["_Test OCR Finishing Plan"])
+		self.assertEqual(result["dispatch_detail"], {"S": 30})
+		self.assertEqual(result["total_dispatch"], 30)
+
+	def test_ocr_details_keeps_finishing_data_without_a_submitted_work_order(self):
+		lot = SimpleNamespace(name="_Test Finishing Only Lot", checked_permissions=[])
+		lot.check_permission = lot.checked_permissions.append
+		finishing_plan = frappe._dict(
+			work_order=None,
+			pieces_per_box=10,
+			finishing_plan_grn_details=[
+				frappe._dict(item_variant="_Test Finishing Variant", dispatched=2),
+			],
 		)
+
+		def get_all(doctype, *args, **kwargs):
+			if doctype == "YRP Work Order":
+				return []
+			if doctype == "SD YRP Finishing Plan":
+				return ["_Test Finishing Plan"]
+			self.fail(f"Unexpected DocType query: {doctype}")
+
+		def get_doc(_doctype, name):
+			return lot if name == lot.name else finishing_plan
+
+		with (
+			patch.object(frappe, "get_all", side_effect=get_all),
+			patch.object(
+				frappe,
+				"get_value",
+				side_effect=[
+					("_Test Finishing IPD", "_Test Finishing Item"),
+					("_Test Sewing", "Size", 10),
+				],
+			),
+			patch.object(frappe, "get_doc", side_effect=get_doc),
+			patch(
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot.get_variant_attr_details",
+				return_value={"Size": "M"},
+			),
+		):
+			result = get_ocr_details(lot.name)
+
+		self.assertEqual(lot.checked_permissions, ["read"])
+		self.assertEqual(result["processes"], {})
+		self.assertEqual(result["sizes"], ["M"])
+		self.assertEqual(result["finishing_plan_list"], ["_Test Finishing Plan"])
+		self.assertEqual(result["dispatch_detail"], {"M": 20})
+		self.assertEqual(result["total_dispatch"], 20)
+
+	def test_ocr_details_rejects_an_unreadable_lot(self):
+		lot = SimpleNamespace(check_permission=Mock(side_effect=frappe.PermissionError))
+		with patch.object(frappe, "get_doc", return_value=lot):
+			with self.assertRaises(frappe.PermissionError):
+				get_ocr_details("_Test Restricted Lot")
+		lot.check_permission.assert_called_once_with("read")

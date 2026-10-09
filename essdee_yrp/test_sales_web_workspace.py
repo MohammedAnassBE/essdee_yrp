@@ -2,7 +2,7 @@ from importlib import import_module
 from importlib.util import find_spec
 from types import SimpleNamespace
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import frappe
 
@@ -223,6 +223,65 @@ class TestSalesWebWorkspace(TestCase):
 			"quantity": 12,
 		}])
 
+	def test_lot_ocr_details_require_a_readable_lot_linked_to_the_production_order(self):
+		workspace = self._workspace()
+		self.assertTrue(hasattr(workspace, "get_lot_ocr_details"), "Sales must expose a permission-safe Lot OCR endpoint")
+		production_order = FakeProductionOrder(name="PPO-0001", item="Premium Polo")
+		lot = frappe._dict(name="LOT-1", production_order="PPO-0001", item="Premium Polo")
+		lot.checked_permissions = []
+		lot.check_permission = lot.checked_permissions.append
+		ocr = {
+			"sizes": ["S"],
+			"processes": {"Cutting": {"wo_list": ["WO-1"], "cp_list": ["CP-1"], "data": {"S": {"sent": 10, "received": 9}}, "total_sent": 10, "total_received": 9}},
+			"dispatch_detail": {"S": 8},
+			"total_dispatch": 8,
+			"finishing_plan_list": ["FP-1"],
+		}
+
+		def get_doc(doctype, name):
+			return production_order if doctype == "YRP Production Order" else lot
+
+		with (
+			patch.object(frappe, "get_doc", side_effect=get_doc),
+			patch.object(workspace, "build_lot_ocr_details", return_value=ocr) as build_ocr,
+		):
+			payload = workspace.get_lot_ocr_details("PPO-0001", "LOT-1")
+
+		self.assertEqual(production_order.checked_permissions, ["read"])
+		self.assertEqual(lot.checked_permissions, ["read"])
+		build_ocr.assert_called_once_with("LOT-1")
+		self.assertEqual(payload["context"], {"lot": "LOT-1", "production_order": "PPO-0001", "item": "Premium Polo"})
+		self.assertEqual(payload["processes"], ocr["processes"])
+
+		lot.production_order = "PPO-OTHER"
+		with patch.object(frappe, "get_doc", side_effect=get_doc):
+			with self.assertRaises(frappe.PermissionError):
+				workspace.get_lot_ocr_details("PPO-0001", "LOT-1")
+
+	def test_lot_ocr_details_reject_an_unreadable_production_order_or_lot(self):
+		workspace = self._workspace()
+		production_order = FakeProductionOrder(name="PPO-0001", item="Premium Polo")
+		lot = frappe._dict(name="LOT-1", production_order="PPO-0001", item="Premium Polo")
+		lot.check_permission = Mock()
+
+		def get_doc(doctype, _name):
+			return production_order if doctype == "YRP Production Order" else lot
+
+		with (
+			patch.object(frappe, "get_doc", side_effect=get_doc),
+			patch.object(workspace, "build_lot_ocr_details") as build_ocr,
+		):
+			production_order.check_permission = Mock(side_effect=frappe.PermissionError)
+			with self.assertRaises(frappe.PermissionError):
+				workspace.get_lot_ocr_details("PPO-0001", "LOT-1")
+			build_ocr.assert_not_called()
+
+			production_order.check_permission = Mock()
+			lot.check_permission = Mock(side_effect=frappe.PermissionError)
+			with self.assertRaises(frappe.PermissionError):
+				workspace.get_lot_ocr_details("PPO-0001", "LOT-1")
+			build_ocr.assert_not_called()
+
 	def test_read_only_user_gets_data_but_no_mutating_actions(self):
 		workspace = self._workspace()
 		doc = FakeProductionOrder(
@@ -286,7 +345,7 @@ class TestSalesWebWorkspace(TestCase):
 
 	def test_sales_endpoints_are_authenticated(self):
 		workspace = self._workspace()
-		for endpoint in (workspace.get_capabilities, workspace.get_production_order_workspace):
+		for endpoint in (workspace.get_capabilities, workspace.get_production_order_workspace, workspace.get_lot_ocr_details):
 			with self.subTest(endpoint=endpoint.__name__):
 				self.assertIn(endpoint, frappe.whitelisted)
 				self.assertNotIn(endpoint, frappe.guest_methods)

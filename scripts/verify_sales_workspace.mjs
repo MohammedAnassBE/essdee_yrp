@@ -25,7 +25,7 @@ async function noOverflow(page, label) {
 	const geometry = await page.evaluate(() => ({
 		viewport: innerWidth,
 		page: document.documentElement.scrollWidth,
-		containers: [".ppo-action-dialog", ".p-dialog-content", ".ppo-action-matrix", ".ppo-action-matrix table", ".fabric-document-workspace", ".fabric-document-workspace__content", ".fabric-document-workspace__columns", ".fabric-document-workspace__main", ".ppo-matrix__table-wrap", ".sales-reports", ".ppo-report", ".report-shell", ".report-shell__results", ".ppo-report__matrix-wrap", ".p-autocomplete-overlay", ".p-select-overlay"].map((selector) => {
+		containers: [".ppo-action-dialog", ".ppo-lot-ocr-dialog", ".ppo-lot-ocr__table-wrap", ".p-dialog-content", ".ppo-action-matrix", ".ppo-action-matrix table", ".fabric-document-workspace", ".fabric-document-workspace__content", ".fabric-document-workspace__columns", ".fabric-document-workspace__main", ".ppo-matrix__table-wrap", ".sales-reports", ".ppo-report", ".report-shell", ".report-shell__results", ".ppo-report__matrix-wrap", ".p-autocomplete-overlay", ".p-select-overlay"].map((selector) => {
 			const element = document.querySelector(selector)
 			if (!element) return { selector, missing: true }
 			const box = element.getBoundingClientRect(), style = getComputedStyle(element)
@@ -89,6 +89,18 @@ function productionOrderWorkspace(overrides = {}) {
 			delivery_date: "2026-10-20", dont_deliver_after: "2026-10-25", lead_time_given: 11,
 			modified: "2026-10-09 10:00:00", ...overrides.record,
 		},
+	}
+}
+
+function lotOcrFixture() {
+	return {
+		context: { lot: "LOT-26-0042", production_order: "PPO-TEST-1", item: "Premium Vest" },
+		sizes: ["S", "M"],
+		processes: {
+			Cutting: { wo_list: ["WO-TEST-1"], cp_list: ["CP-TEST-1"], data: { S: { sent: 40, received: 39 }, M: { sent: 80, received: 82 } }, total_sent: 120, total_received: 121 },
+			Stitching: { wo_list: ["WO-TEST-2"], cp_list: [], data: { S: { sent: 39, received: 38 }, M: { sent: 82, received: 74 } }, total_sent: 121, total_received: 112 },
+		},
+		dispatch_detail: { S: 38, M: 74 }, total_dispatch: 112, finishing_plan_list: ["FP-TEST-1"],
 	}
 }
 
@@ -416,6 +428,7 @@ async function launcherSuite(page) {
 async function productionOrderSuite(page) {
 	const commands = []
 	const saves = []
+	const lotOcrRequests = []
 	const pageErrors = []
 	page.on("pageerror", (reason) => pageErrors.push(reason.message))
 	let workspace = productionOrderWorkspace()
@@ -424,6 +437,7 @@ async function productionOrderSuite(page) {
 		const method = new URL(route.request().url()).pathname.split("/api/method/")[1]
 		const args = requestArgs(route)
 		if (method === "essdee_yrp.sales.web_workspace.get_production_order_workspace") return reply(route, workspace)
+		if (method === "essdee_yrp.sales.web_workspace.get_lot_ocr_details") { lotOcrRequests.push(args); return reply(route, lotOcrFixture()) }
 		if (method === "essdee_yrp.sales.web_workspace.get_production_order_editor") return reply(route, productionOrderEditor())
 		if (method === "essdee_yrp.sales.web_workspace.save_production_order") {
 			saves.push(args)
@@ -452,6 +466,46 @@ async function productionOrderSuite(page) {
 	const lotMatrix = matrix.locator(".ppo-matrix__lot")
 	assert(await lotMatrix.count() === 1 && (await lotMatrix.innerText()).includes("LOT-26-0042"), "Lotwise Ordered Detail is missing")
 	assert(JSON.stringify(await lotMatrix.locator("tbody td").allTextContents()) === JSON.stringify(["12", "18", "30"]), "Lotwise quantities are not aligned beneath their size columns")
+	await page.getByRole("button", { name: "View OCR details for LOT-26-0042", exact: true }).click()
+	const ocrDialog = page.locator(".ppo-lot-ocr-dialog:visible")
+	await ocrDialog.waitFor()
+	assert(JSON.stringify(lotOcrRequests) === JSON.stringify([{ production_order: "PPO-TEST-1", lot: "LOT-26-0042" }]), `Lot OCR request is incorrect: ${JSON.stringify(lotOcrRequests)}`)
+	const ocrText = await ocrDialog.innerText()
+	for (const value of ["LOT-26-0042", "PPO-TEST-1", "Premium Vest", "Cutting", "Stitching", "WO-TEST-1", "CP-TEST-1", "Sent", "Received", "Difference", "Dispatch", "FP-TEST-1", "112"]) assert(ocrText.includes(value), `Lot OCR dialog omitted ${value}: ${ocrText}`)
+	assert(JSON.stringify(await ocrDialog.locator("thead th").allTextContents()) === JSON.stringify(["S.No", "Process", "Documents", "Type", "S", "M", "Total"]), "Lot OCR columns do not match the Frappe-15 view")
+	assert(await ocrDialog.getByRole("button", { name: "Copy", exact: true }).isVisible(), "Lot OCR popup has no copy action")
+	for (const width of [390, 900, 1600]) {
+		await page.setViewportSize({ width, height: 900 })
+		await noOverflow(page, `Lot OCR dialog at ${width}`)
+		const bounds = await ocrDialog.evaluate((element) => {
+			const box = element.getBoundingClientRect()
+			return { left: box.left, right: box.right, top: box.top, bottom: box.bottom }
+		})
+		assert(bounds.left >= -1 && bounds.right <= width + 1 && bounds.top >= -1 && bounds.bottom <= 901, `Lot OCR dialog clips at ${width}: ${JSON.stringify(bounds)}`)
+	}
+	await page.setViewportSize({ width: 390, height: 900 })
+	await page.evaluate(() => {
+		window.__lotOcrClipboardWrites = 0
+		window.__lotOcrExportGeometry = null
+		window.ClipboardItem = class ClipboardItem { constructor(data) { this.data = data } }
+		Object.defineProperty(navigator, "clipboard", { configurable: true, value: { write: async () => { window.__lotOcrClipboardWrites += 1 } } })
+		const observer = new MutationObserver(() => {
+			const exportNode = document.querySelector("[data-ocr-export='true']")
+			if (!exportNode) return
+			const table = exportNode.querySelector("table")
+			window.__lotOcrExportGeometry = { width: exportNode.getBoundingClientRect().width, tableWidth: table?.scrollWidth || 0 }
+			observer.disconnect()
+		})
+		observer.observe(document.body, { childList: true, subtree: true })
+	})
+	await ocrDialog.getByRole("button", { name: "Copy", exact: true }).click()
+	await ocrDialog.getByText("Lot OCR details copied to clipboard.", { exact: true }).waitFor()
+	assert(await page.evaluate(() => window.__lotOcrClipboardWrites) === 1, "Lot OCR image was not written to the clipboard")
+	const exportGeometry = await page.evaluate(() => window.__lotOcrExportGeometry)
+	assert(exportGeometry?.width >= exportGeometry?.tableWidth && exportGeometry.tableWidth >= 820, `Lot OCR copy clipped off-screen sizes: ${JSON.stringify(exportGeometry)}`)
+	await page.setViewportSize({ width: 1280, height: 900 })
+	await ocrDialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
+	await ocrDialog.waitFor({ state: "hidden" })
 	assert((await page.locator(".ppo-page__metric").first().innerText()).includes("120"), "Total quantity metric is missing")
 	const detailsTab = page.getByRole("tab", { name: "Details", exact: true })
 	const transfersTab = page.getByRole("tab", { name: /^Quantity Transferred/ })

@@ -9,6 +9,7 @@ from frappe import _
 from frappe.utils import cint, flt
 
 from essdee_yrp import production_order_workflow as workflow
+from essdee_yrp.sales import ppo_report
 
 
 DOCTYPE = "YRP Production Order"
@@ -464,3 +465,18 @@ def execute_production_order_command(
 		function = getattr(workflow, function_name)
 		function(**_command_kwargs(name, command, payload, required_fields))
 	return get_production_order_workspace(name)
+
+
+@frappe.whitelist()
+def get_ppo_report(filters=None) -> dict:
+	return ppo_report.get_ppo_report(filters)
+
+
+@frappe.whitelist()
+def get_ppo_dispatch_summary(production_order: str) -> dict:
+	return ppo_report.get_ppo_dispatch_summary(production_order)
+
+
+@frappe.whitelist()
+def download_ppo_report(from_date=None, to_date=None, product_category=None, status=None):
+	return ppo_report.download_ppo_report(from_date, to_date, product_category, status)

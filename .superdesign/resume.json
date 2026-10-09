@@ -1,8 +1,246 @@
 {
-  "projectId": "501a2beb-6d2d-4255-b53f-cd09cca5f98b",
-  "projectUrl": "https://superdesign.dev/teams/91cbf80c-726b-46ce-a5fc-00fe7420f1fc/projects/501a2beb-6d2d-4255-b53f-cd09cca5f98b",
-  "baselineReferenceNodeId": "5650785c-45fc-402c-943f-41a84f61964e",
-  "status": "blocked-insufficient-credits",
-  "nextAction": "Create the faithful baseline draft, then branch two Bright Ledger variants when API credits are available.",
-  "designSystem": ".superdesign/design-system.md"
+  "schemaVersion": 1,
+  "targets": {
+    "/fabric-store/purchase-orders/:purchaseOrderId": {
+      "targetKind": "existing-ui",
+      "projectId": "501a2beb-6d2d-4255-b53f-cd09cca5f98b",
+      "activeDraftId": "c7125700-3821-4cda-9a37-33f8f705b13f",
+      "designSystemPath": ".superdesign/design-system.md",
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        "frontend/src/departments/fabric-store/FabricDocumentWorkspace.vue",
+        "frontend/src/components/stock/StockItemMatrix.vue",
+        "frontend/src/departments/FabricPurchaseOrder.vue:1:100",
+        "frontend/src/departments/FabricPurchaseOrder.vue:393:444"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "3689f7fc61fe261809ec588876e576a0040e34ca1ffd7d339156e4d1ea5d82c2",
+        "frontend/src/departments/fabric-store/FabricDocumentWorkspace.vue": "8827025424880fd16dc279fd57b4a9479ff72bd2fd92a2e42c096e9d7ae13d51",
+        "frontend/src/components/stock/StockItemMatrix.vue": "35e67b59d153e0508d4f161bbf0123703443a7fd083a21e5ccb1c5bca36a3e8b",
+        "frontend/src/departments/FabricPurchaseOrder.vue": "16ad567e6d148e62d50cf4fda792fe5ceff7ecc3b51534cf85763fb504c897bd"
+      },
+      "drafts": {
+        "c7125700-3821-4cda-9a37-33f8f705b13f": {
+          "title": "Purchase Order — Approved Form Family",
+          "visualDirection": "approved Work Order Bright Ledger family",
+          "currentVersion": 2
+        }
+      },
+      "updatedAt": "2026-10-08T12:41:51Z"
+    },
+    "/fabric-store/delivery-challans/:deliveryChallanId": {
+      "targetKind": "existing-ui",
+      "projectId": "501a2beb-6d2d-4255-b53f-cd09cca5f98b",
+      "activeDraftId": "4f427ca4-b8cc-4ad6-a68d-b108623098e5",
+      "designSystemPath": ".superdesign/design-system.md",
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        "frontend/src/departments/fabric-store/FabricDocumentWorkspace.vue",
+        "frontend/src/departments/fabric-store/DeliveryChallanWorkspace.vue:1:176",
+        "frontend/src/departments/fabric-store/DeliveryChallanWorkspace.vue:752:837"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "3689f7fc61fe261809ec588876e576a0040e34ca1ffd7d339156e4d1ea5d82c2",
+        "frontend/src/departments/fabric-store/FabricDocumentWorkspace.vue": "8827025424880fd16dc279fd57b4a9479ff72bd2fd92a2e42c096e9d7ae13d51",
+        "frontend/src/departments/fabric-store/DeliveryChallanWorkspace.vue": "584d59b2fc4aa6b092e6363b47ba4a5ec2cedbc60fd153d96eb14b87eb798057"
+      },
+      "drafts": {
+        "4f427ca4-b8cc-4ad6-a68d-b108623098e5": {
+          "title": "Delivery Challan — Approved Form Family",
+          "visualDirection": "approved Work Order Bright Ledger family",
+          "currentVersion": 2
+        }
+      },
+      "updatedAt": "2026-10-08T12:41:51Z"
+    },
+    "/fabric-store/goods-received-notes/:goodsReceivedNoteId": {
+      "targetKind": "existing-ui",
+      "projectId": "501a2beb-6d2d-4255-b53f-cd09cca5f98b",
+      "activeDraftId": "cc5e7c89-c3e6-4cad-a0ec-2997b9f47099",
+      "designSystemPath": ".superdesign/design-system.md",
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        "frontend/src/departments/fabric-store/FabricDocumentWorkspace.vue",
+        "frontend/src/departments/fabric-store/GoodsReceivedNoteWorkspace.vue:1:189",
+        "frontend/src/departments/fabric-store/GoodsReceivedNoteWorkspace.vue:712:800"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "3689f7fc61fe261809ec588876e576a0040e34ca1ffd7d339156e4d1ea5d82c2",
+        "frontend/src/departments/fabric-store/FabricDocumentWorkspace.vue": "8827025424880fd16dc279fd57b4a9479ff72bd2fd92a2e42c096e9d7ae13d51",
+        "frontend/src/departments/fabric-store/GoodsReceivedNoteWorkspace.vue": "6e639ac68cb3723dfe4e2e8d5aa79af628fdf27fa0a4b5635c0d469706473781"
+      },
+      "drafts": {
+        "cc5e7c89-c3e6-4cad-a0ec-2997b9f47099": {
+          "title": "Goods Received Note — Approved Form Family",
+          "visualDirection": "approved Work Order Bright Ledger family",
+          "currentVersion": 2
+        }
+      },
+      "updatedAt": "2026-10-08T12:41:51Z"
+    },
+    "/cutting/plans/:cuttingPlanId": {
+      "targetKind": "existing-ui",
+      "projectId": "501a2beb-6d2d-4255-b53f-cd09cca5f98b",
+      "activeDraftId": "b469d2d4-89f8-494e-bbe2-61e96a545eee",
+      "designSystemPath": ".superdesign/design-system.md",
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        "frontend/src/departments/CuttingPlan.vue:1:99",
+        "frontend/src/departments/CuttingPlan.vue:232:442",
+        "frontend/src/departments/cutting/CuttingPlanTabs.vue",
+        "frontend/src/departments/cutting/CuttingPlanSidebar.vue"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "3689f7fc61fe261809ec588876e576a0040e34ca1ffd7d339156e4d1ea5d82c2",
+        "frontend/src/departments/CuttingPlan.vue": "816ab2cb3f964f5a1dc18ff2b0d41e395cc7f1236fdd6e0797182d025ebaf971",
+        "frontend/src/departments/cutting/CuttingPlanTabs.vue": "b1ef82402e87d4c0f8ca76516f4aae0a3913a4ddcc053ce5f3443925f2fde887",
+        "frontend/src/departments/cutting/CuttingPlanSidebar.vue": "d253badf0d558f86608dcd17128cb74df213c0eb5a9ff81321603f92dee78739"
+      },
+      "drafts": {
+        "b469d2d4-89f8-494e-bbe2-61e96a545eee": {
+          "title": "Cutting Plan — Approved Form Family",
+          "visualDirection": "approved Work Order Bright Ledger family",
+          "currentVersion": 3
+        }
+      },
+      "updatedAt": "2026-10-08T12:49:44Z"
+    },
+    "/cutting/orders/:cuttingOrderId": {
+      "targetKind": "existing-ui",
+      "projectId": "501a2beb-6d2d-4255-b53f-cd09cca5f98b",
+      "activeDraftId": "d09baeb1-19c9-4a10-92ab-d24199d11378",
+      "designSystemPath": ".superdesign/design-system.md",
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        "frontend/src/departments/CuttingOrder.vue:1:49",
+        "frontend/src/departments/CuttingOrder.vue:172:192",
+        "frontend/src/departments/cutting/order/CuttingOrderTabs.vue",
+        "frontend/src/departments/cutting/shared/CuttingParentSidebar.vue"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "3689f7fc61fe261809ec588876e576a0040e34ca1ffd7d339156e4d1ea5d82c2",
+        "frontend/src/departments/CuttingOrder.vue": "cf5d2f7fd682d56fa5fc9fb714c50b4c833496b293105a02e6cc41e7bdc543a2",
+        "frontend/src/departments/cutting/order/CuttingOrderTabs.vue": "8807106930794db0d7845ba8d53fbc497cd643a03bf71d03252a19580d286ab8",
+        "frontend/src/departments/cutting/shared/CuttingParentSidebar.vue": "61976c74c30113f854b77814d94d1920bb6e0e913b166e976d8fe48c0ac35b26"
+      },
+      "drafts": {
+        "d09baeb1-19c9-4a10-92ab-d24199d11378": {
+          "title": "Cutting Order — Approved Form Family",
+          "visualDirection": "approved Work Order Bright Ledger family",
+          "currentVersion": 4
+        }
+      },
+      "updatedAt": "2026-10-09T04:28:08Z"
+    },
+    "/cutting/bulk-lay-sheets/:bulkLaySheetsId": {
+      "targetKind": "existing-ui",
+      "projectId": "501a2beb-6d2d-4255-b53f-cd09cca5f98b",
+      "activeDraftId": "b0082f71-260b-459d-b486-fd94e0a96a7e",
+      "designSystemPath": ".superdesign/design-system.md",
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        "frontend/src/departments/CuttingBulkLaySheet.vue:1:53",
+        "frontend/src/departments/CuttingBulkLaySheet.vue:266:276",
+        "frontend/src/departments/cutting/bulk/BulkActiveLaySheet.vue",
+        "frontend/src/departments/cutting/bulk/BulkWorkflowRail.vue"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "3689f7fc61fe261809ec588876e576a0040e34ca1ffd7d339156e4d1ea5d82c2",
+        "frontend/src/departments/CuttingBulkLaySheet.vue": "4597050f7259dbfed9d937a70e82a5f642c93cb67b7775425deeed1e0d0c0416",
+        "frontend/src/departments/cutting/bulk/BulkActiveLaySheet.vue": "a10c2fdf09f82be9de32dd5839e2869c6c1d366a180fe0bb99b61fc801fdb69f",
+        "frontend/src/departments/cutting/bulk/BulkWorkflowRail.vue": "12790f9dc40022fc1c2d758e73546809f421b00a1ad43338d685b456d0acf368"
+      },
+      "drafts": {
+        "b0082f71-260b-459d-b486-fd94e0a96a7e": {
+          "title": "Bulk Lay Sheet — Approved Form Family",
+          "visualDirection": "approved Work Order Bright Ledger family",
+          "currentVersion": 1
+        }
+      },
+      "updatedAt": "2026-10-08T12:31:23Z"
+    },
+    "/cutting/lay-sheet-planner/:plannerId": {
+      "targetKind": "existing-ui",
+      "projectId": "501a2beb-6d2d-4255-b53f-cd09cca5f98b",
+      "activeDraftId": "13656d78-0cf7-4d3b-8713-0da3cd212a37",
+      "designSystemPath": ".superdesign/design-system.md",
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        "frontend/src/departments/CuttingLaySheetPlanner.vue:1:42",
+        "frontend/src/departments/CuttingLaySheetPlanner.vue:184:192",
+        "frontend/src/departments/cutting/planner/PlannerInputs.vue",
+        "frontend/src/departments/cutting/planner/PlannerPlanWorkspace.vue"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "3689f7fc61fe261809ec588876e576a0040e34ca1ffd7d339156e4d1ea5d82c2",
+        "frontend/src/departments/CuttingLaySheetPlanner.vue": "0cdd3c8177f7c0b8bd66d9e746e674c080247922381921615ccb991d92ac0361",
+        "frontend/src/departments/cutting/planner/PlannerInputs.vue": "2db29ca38f5d8be88b58097e452ea809020eabb50138d0718022298c62c2729b",
+        "frontend/src/departments/cutting/planner/PlannerPlanWorkspace.vue": "4c9cbcacdaa4a4468319cc26c963a3d4be2847f49e08949836e46c73e9c8bc60"
+      },
+      "drafts": {
+        "13656d78-0cf7-4d3b-8713-0da3cd212a37": {
+          "title": "Lay Sheet Planner — Approved Form Family",
+          "visualDirection": "approved Work Order Bright Ledger family",
+          "currentVersion": 1
+        }
+      },
+      "updatedAt": "2026-10-08T12:31:23Z"
+    },
+    "/fabric-store/work-orders/new": {
+      "targetKind": "existing-ui",
+      "projectId": "501a2beb-6d2d-4255-b53f-cd09cca5f98b",
+      "baselineDraftId": "b9d04a9c-cc57-4d1d-ba38-a14615d0e269",
+      "activeDraftId": "b9d04a9c-cc57-4d1d-ba38-a14615d0e269",
+      "designSystemPath": ".superdesign/design-system.md",
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        "frontend/src/App.vue",
+        "frontend/src/departments/registry.js",
+        "frontend/src/components/DepartmentPage.vue",
+        "frontend/src/departments/FabricWorkOrderEditorPage.vue",
+        "frontend/src/departments/fabric-store/WorkOrderEditor.vue",
+        "frontend/src/departments/fabric-store/WorkOrderItemMatrix.vue",
+        "frontend/src/departments/fabric-store/WorkOrderActionPanel.vue",
+        "frontend/src/components/common/DateField.vue",
+        "frontend/src/components/common/TemporalFieldBase.vue",
+        "frontend/src/components/common/LinkField.vue",
+        "frontend/src/components/documents/DocumentConfirmationDialog.vue",
+        "frontend/src/components/documents/DocumentErrorDialog.vue",
+        "frontend/src/styles/enterprise.css:1:610",
+        "frontend/src/styles/enterprise.css:826:1122",
+        "frontend/src/styles/main.css"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "3689f7fc61fe261809ec588876e576a0040e34ca1ffd7d339156e4d1ea5d82c2",
+        "frontend/src/App.vue": "bebb5fd28ae4363b651c959023cace6ec08cd1ddb97439a6511a6f0b19dd3804",
+        "frontend/src/departments/registry.js": "c653fd16ec5eaada0df717ebbaeefbc895b882f71f0b6cd6e77f9a28c661fca7",
+        "frontend/src/components/DepartmentPage.vue": "cc446e06876f1eab288524ecb7dc9e9d61491bb58db377ec83b4262722cc6038",
+        "frontend/src/departments/FabricWorkOrderEditorPage.vue": "ddb9e73ef1ca89467f0df8c53c9b179e1edf2f58a5e0625bfec5198db12ad61f",
+        "frontend/src/departments/fabric-store/WorkOrderEditor.vue": "5693ccd13a87ac5227e2ac06a1a65f251ad60e39fcc129946a9c97e7c2c55ece",
+        "frontend/src/departments/fabric-store/WorkOrderItemMatrix.vue": "68c91ae121a77205bf8ccd063d341dfe771053be541a992b62b833300b84399e",
+        "frontend/src/departments/fabric-store/WorkOrderActionPanel.vue": "2c44afa8a125c83924138a1d37d2072bfcaba00199547325c4ae9fd782282316",
+        "frontend/src/components/common/DateField.vue": "00c315bf98139bbf274d2f82646442465a2e071ab7ebf3726298ee857f31b39a",
+        "frontend/src/components/common/TemporalFieldBase.vue": "6fe3f89cdf6982a68b55978550899df243b1018a7eadfb6b18d2ed6ef53546e8",
+        "frontend/src/components/common/LinkField.vue": "7a54777d4996fb1faf46f7324c0a5bd1ba124ff1b1cbfb09bd3cd8b971b4e4d4",
+        "frontend/src/components/documents/DocumentConfirmationDialog.vue": "fa1d1fb1894f6e542bd4d1e8d12a3014e38aa859d10fee82f210a1e1c200e7f9",
+        "frontend/src/components/documents/DocumentErrorDialog.vue": "f3e42666bc78c1992aa08929bafa9d7a71c1281677ef9797dd0a5b99eb2c53f3",
+        "frontend/src/styles/enterprise.css": "c83a046282ff4ba609fdd53cf74179c28716bbe95d057288eb65f9242b33b854",
+        "frontend/src/styles/main.css": "b9455097c3c3fc58703cf4b2449155437fc1e4b9dc7ffb8455a09dc2b00274b6"
+      },
+      "components": {
+        "AppShell": {
+          "componentId": "00bbc07a-0737-44cf-905f-f372fd669c6a",
+          "version": 1
+        }
+      },
+      "drafts": {
+        "b9d04a9c-cc57-4d1d-ba38-a14615d0e269": {
+          "title": "Work Order Entry — Sectioned Creation Sample",
+          "visualDirection": "sectioned editable cards in the approved Bright Ledger family",
+          "currentVersion": 3
+        }
+      },
+      "updatedAt": "2026-10-09T04:46:15Z"
+    }
+  }
 }

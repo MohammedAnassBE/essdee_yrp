@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Essdee YRP — Form View Samples</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --canvas: #f6f7f9;
+      --surface: #ffffff;
+      --surface-soft: #fbfcfd;
+      --surface-muted: #f1f3f6;
+      --border: #dfe3e8;
+      --border-subtle: #eceef2;
+      --text: #101828;
+      --secondary: #344054;
+      --muted: #667085;
+      --subtle: #98a2b3;
+      --emerald: #059669;
+      --emerald-dark: #047857;
+      --emerald-soft: #ecfdf5;
+      --emerald-border: #a7f3d0;
+      --saffron: #fc8019;
+      --saffron-soft: #fff4e8;
+      --danger: #d92d20;
+      --danger-soft: #fef3f2;
+      font-family: Inter, "SF Pro Text", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { min-width: 1280px; min-height: 900px; margin: 0; background: var(--canvas); color: var(--text); }
+    button { font: inherit; }
+    .app { min-height: 100vh; background: var(--canvas); }
+    .topbar { height: 64px; padding: 0 34px; display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,.96); border-bottom: 1px solid var(--border-subtle); }
+    .brand, .topnav, .brand-copy, .context-pill, .workspace-link { display: flex; align-items: center; }
+    .brand { gap: 11px; }
+    .brand-mark { width: 34px; height: 34px; display: grid; place-items: center; color: #fff; background: var(--emerald); border-radius: 10px; font-size: 12px; font-weight: 800; box-shadow: 0 4px 12px rgba(5,150,105,.18); }
+    .brand-copy { align-items: flex-start; flex-direction: column; line-height: 1.1; }
+    .brand-copy strong { font-size: 14px; }
+    .brand-copy small { margin-top: 3px; color: var(--subtle); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+    .topnav { gap: 10px; }
+    .context-pill { gap: 7px; min-height: 32px; padding: 0 11px; color: var(--emerald-dark); background: var(--emerald-soft); border: 1px solid var(--emerald-border); border-radius: 999px; font-size: 12px; font-weight: 650; }
+    .context-pill::before { width: 6px; height: 6px; content: ""; background: var(--emerald); border-radius: 50%; }
+    .workspace-link { gap: 7px; min-height: 36px; padding: 0 11px; color: var(--secondary); font-size: 12px; font-weight: 650; }
+    .page { width: calc(100% - 32px); margin: 0 auto; padding: 8px 0 16px; }
+    .back { height: 44px; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; font-weight: 650; }
+    .doc { height: calc(100vh - 132px); min-height: 720px; overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-radius: 17px; box-shadow: 0 12px 32px rgba(28,61,45,.06); }
+    .doc-header { min-height: 66px; padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 3px solid var(--emerald); border-bottom: 1px solid var(--border); background: linear-gradient(90deg, #fff, #fbfefc); }
+    .identity { min-width: 0; display: flex; align-items: center; gap: 13px; }
+    .title { min-width: 190px; }
+    .title h1 { margin: 0; font-size: 20px; line-height: 1.1; letter-spacing: -.025em; }
+    .title p { margin: 4px 0 0; color: var(--muted); font-size: 12px; font-weight: 680; font-variant-numeric: tabular-nums; }
+    .status { flex: 0 0 auto; padding: 4px 9px; color: var(--emerald-dark); background: var(--emerald-soft); border: 1px solid var(--emerald-border); border-radius: 999px; font-size: 11px; font-weight: 750; }
+    .status.attention { color: #9a4800; background: var(--saffron-soft); border-color: #fed7aa; }
+    .facts { min-width: 0; display: flex; align-items: center; gap: 22px; padding-left: 16px; border-left: 1px solid var(--border); }
+    .fact { min-width: 95px; max-width: 260px; }
+    .label { color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .055em; line-height: 1.2; text-transform: uppercase; }
+    .fact strong { display: block; margin-top: 4px; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+    .header-actions { display: flex; align-items: center; gap: 7px; }
+    .button { min-height: 36px; padding: 0 13px; color: var(--secondary); background: #fff; border: 1px solid var(--border); border-radius: 9px; font-size: 12px; font-weight: 700; }
+    .button.primary { color: #fff; background: var(--emerald); border-color: var(--emerald); box-shadow: 0 4px 12px rgba(5,150,105,.18); }
+    .button.icon { width: 36px; padding: 0; }
+    .commandbar { min-height: 51px; padding: 7px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--surface-soft); border-bottom: 1px solid var(--border); }
+    .command-left, .command-right { display: flex; align-items: center; gap: 6px; }
+    .tabs { height: 46px; padding: 0 16px; display: flex; align-items: flex-end; gap: 4px; border-bottom: 1px solid var(--border); background: #fff; }
+    .tab { height: 46px; padding: 0 14px; display: flex; align-items: center; color: var(--muted); background: transparent; border: 0; border-bottom: 2px solid transparent; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .tab.active { color: var(--emerald-dark); border-bottom-color: var(--emerald); }
+    .workspace { height: calc(100% - 117px); min-height: 0; display: grid; grid-template-columns: minmax(0,1fr) 292px; }
+    .workspace.no-command { height: calc(100% - 66px); }
+    .main { min-width: 0; min-height: 0; overflow-y: auto; padding: 14px 15px 24px; background: #f9fafb; }
+    .rail { min-width: 0; min-height: 0; overflow-y: auto; padding: 14px 13px 24px; background: #fbfcfc; border-left: 1px solid var(--border); }
+    .cards { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+    .card { overflow: hidden; background: #fff; border: 1px solid var(--border); border-radius: 13px; box-shadow: 0 1px 2px rgba(16,24,40,.035); }
+    .card-head { height: 40px; padding: 0 13px; display: flex; align-items: center; justify-content: space-between; background: var(--surface-soft); border-bottom: 1px solid var(--border); }
+    .card-head strong { font-size: 13px; letter-spacing: -.01em; }
+    .card-head small { color: var(--emerald-dark); font-size: 10px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+    .fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .field { min-height: 55px; padding: 9px 12px; border-right: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle); }
+    .field:nth-child(even) { border-right: 0; }
+    .field:nth-last-child(-n+2) { border-bottom: 0; }
+    .field .value { margin-top: 4px; overflow: hidden; color: var(--text); font-size: 12px; font-weight: 680; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+    .section { margin-top: 12px; overflow: hidden; background: #fff; border: 1px solid var(--border); border-radius: 13px; }
+    .section-head { min-height: 45px; padding: 0 13px; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface-soft); border-bottom: 1px solid var(--border); }
+    .section-title { display: flex; align-items: baseline; gap: 10px; }
+    .section-title small { color: var(--emerald-dark); font-size: 10px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+    .section-title strong { font-size: 14px; }
+    .count { padding: 3px 8px; color: var(--emerald-dark); background: var(--emerald-soft); border: 1px solid var(--emerald-border); border-radius: 999px; font-size: 10px; font-weight: 750; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { padding: 8px 10px; color: var(--muted); background: var(--surface-muted); border-bottom: 1px solid var(--border); font-size: 10px; font-weight: 800; letter-spacing: .035em; text-align: left; text-transform: uppercase; white-space: nowrap; }
+    td { padding: 9px 10px; color: var(--secondary); border-bottom: 1px solid var(--border-subtle); }
+    tr:last-child td { border-bottom: 0; }
+    th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    td.strong { color: var(--text); font-weight: 720; }
+    td.good { color: var(--emerald-dark); background: #f4fcf8; font-weight: 720; }
+    td.pending { color: #9a4800; background: #fffaf4; font-weight: 720; }
+    .metrics { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+    .metric { min-height: 68px; padding: 10px 11px; display: grid; align-content: center; gap: 4px; background: #fff; border: 1px solid var(--border); border-radius: 10px; box-shadow: inset 3px 0 0 #7bdcb8; }
+    .metric strong { color: var(--emerald-dark); font-size: 19px; line-height: 1; font-variant-numeric: tabular-nums; }
+    .rail-card { margin-top: 10px; overflow: hidden; background: #fff; border: 1px solid var(--border); border-radius: 11px; }
+    .rail-head { min-height: 39px; padding: 0 11px; display: flex; align-items: center; justify-content: space-between; background: var(--surface-soft); border-bottom: 1px solid var(--border); }
+    .rail-head strong { font-size: 12px; }
+    .rail-list { display: grid; }
+    .rail-row { min-height: 58px; padding: 9px 11px; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-subtle); }
+    .rail-row:last-child { border-bottom: 0; }
+    .rail-row strong { display: block; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+    .rail-row small { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; }
+    .mini-status { padding: 3px 7px; color: var(--emerald-dark); background: var(--emerald-soft); border-radius: 999px; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+    .mini-status.warn { color: #9a4800; background: var(--saffron-soft); }
+    .operations-rail { display: grid; gap: 10px; }
+    .operation-section { overflow: hidden; background: #fff; border: 1px solid var(--border); border-radius: 11px; }
+    .operation-head { min-height: 44px; padding: 7px 9px 7px 11px; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface-soft); border-bottom: 1px solid var(--border); }
+    .operation-title { display: flex; align-items: center; gap: 7px; min-width: 0; }
+    .operation-title strong { font-size: 12px; }
+    .operation-actions { display: flex; align-items: center; gap: 5px; }
+    .rail-filter-button, .rail-create-button { height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 7px; font-size: 10px; font-weight: 750; cursor: pointer; }
+    .rail-filter-button { width: 28px; padding: 0; color: var(--muted); background: #fff; border: 1px solid var(--border); }
+    .rail-filter-button.active { color: var(--emerald-dark); background: var(--emerald-soft); border-color: var(--emerald-border); }
+    .rail-create-button { padding: 0 9px; color: #fff; background: var(--emerald); border: 1px solid var(--emerald); }
+    .operation-list { display: grid; gap: 7px; padding: 8px; }
+    .operation-row { padding: 9px; background: #fff; border: 1px solid var(--border-subtle); border-radius: 8px; }
+    .operation-row-top, .operation-row-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .operation-row-top strong { min-width: 0; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+    .operation-id { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; font-weight: 650; }
+    .operation-row-meta { margin-top: 7px; color: var(--muted); font-size: 9px; }
+    .panel-chips { margin-top: 7px; display: flex; flex-wrap: wrap; gap: 4px; }
+    .panel-chip { padding: 2px 5px; color: var(--secondary); background: var(--surface-muted); border-radius: 5px; font-size: 8px; font-weight: 700; }
+    .progress { height: 6px; margin-top: 7px; overflow: hidden; background: var(--border); border-radius: 999px; }
+    .progress i { height: 100%; display: block; background: var(--emerald); border-radius: inherit; }
+    .setup-strip { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); overflow: hidden; background: #fff; border: 1px solid var(--border); border-radius: 12px; }
+    .setup-item { min-height: 58px; padding: 9px 12px; border-right: 1px solid var(--border); }
+    .setup-item:last-child { border-right: 0; }
+    .setup-item strong { display: block; margin-top: 5px; font-size: 13px; }
+    .split-work { margin-top: 12px; display: grid; grid-template-columns: minmax(0,1fr) 260px; gap: 12px; }
+    .plan-tabs { display: flex; gap: 6px; padding: 0 13px; background: #fff; border-bottom: 1px solid var(--border); }
+    .strategy-grid { padding: 12px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 9px; }
+    .strategy { padding: 11px; border: 1px solid var(--border); border-radius: 10px; }
+    .strategy.selected { border-color: var(--emerald-border); background: var(--emerald-soft); box-shadow: inset 3px 0 0 var(--emerald); }
+    .strategy strong { font-size: 12px; }
+    .strategy .score { margin-top: 8px; color: var(--emerald-dark); font-size: 21px; font-weight: 800; }
+    .strategy p { margin: 5px 0 0; color: var(--muted); font-size: 10px; }
+    .note { padding: 10px 12px; color: var(--muted); background: #fff; border: 1px dashed var(--border); border-radius: 10px; font-size: 11px; line-height: 1.45; }
+  </style>
+</head>
+<body>
+  <div id="app" class="app"></div>
+  <script>
+    const DEFAULT_VIEW = "purchase-order";
+
+    const commonTabs = ["Overview", "Items", "Linked documents", "Activity"];
+    const views = {
+      "purchase-order": {
+        area: "Fabric Store", back: "Purchase Orders", title: "Purchase Order", id: "PO-2026-00146", status: "To Receive and Bill",
+        statusTone: "attention",
+        facts: [["Supplier", "Sri Sabaree Yarns"], ["Order date", "18 Sep 2026"], ["Grand total", "₹ 25,62,862.68"]],
+        actions: ["Create GRN", "Manage Lots"], primary: "Create GRN", tabs: commonTabs, tableTab: "Items",
+        cards: [
+          ["Order Identity", "Procurement", [["Series", "PUR-ORD-.YYYY.-"], ["Company", "Essdee Knitting Mills"], ["Currency", "INR"], ["Buying price list", "Standard Buying"]]],
+          ["Supplier & Delivery", "Parties", [["Supplier", "Sri Sabaree Yarns"], ["Supplier address", "Sri Sabaree Yarns-Billing"], ["Deliver to", "Essdee Fabric Store · Tiruppur"], ["Warehouse", "S-0005"]]],
+          ["Schedule", "Dates", [["Order date", "18-09-2026"], ["Required by", "25-09-2026"], ["Expected delivery", "25-09-2026"], ["Lead time", "7 days"]]],
+          ["Status & Notes", "Control", [["Approval", "Approved"], ["Receiving", "Pending"], ["Billing", "Not billed"], ["Comments", "Regular yarn purchase"]]]
+        ],
+        section: "Ordered items", eyebrow: "Procurement", count: "4 physical rows",
+        columns: ["Item", "Lot", "Colour", "Dia", "Qty", "Rate", "Amount", "% Received"],
+        rows: [
+          ["34s GL Dyed Fabric", "F0926-49", "White", "19 Dia", "740.000", "₹ 278.00", "₹ 2,05,720", "0%"],
+          ["34s GL Dyed Fabric", "F0926-49", "Black", "19 Dia", "620.000", "₹ 282.00", "₹ 1,74,840", "0%"],
+          ["Cotton Poly Jersey", "F0926-52", "Navy", "14 Dia", "1,080.000", "₹ 264.50", "₹ 2,85,660", "0%"],
+          ["Cotton Poly Jersey", "F0926-52", "Grey", "14.5 Dia", "920.000", "₹ 261.00", "₹ 2,40,120", "0%"]
+        ],
+        metrics: [["Total quantity", "3,360"], ["Grand total", "₹ 9,06,340"], ["Received", "0"], ["Billed", "0%"]],
+        rail: [["Goods Received Notes", [["No GRN created", "Receiving is pending", "warn"]]], ["Linked lots", [["F0926-49", "2 item rows", ""], ["F0926-52", "2 item rows", ""]]]]
+      },
+      "delivery-challan": {
+        area: "Fabric Store", back: "Delivery Challans", title: "Delivery Challan", id: "YRP-DC-2026-00036", status: "Submitted",
+        facts: [["Lot", "F0926-49"], ["Item", "Cotton Poly 58/42 Jersey"], ["Posting date", "08 Oct 2026"]],
+        actions: ["Create GRN", "Return goods"], primary: "Create GRN", tabs: ["Overview", "Deliverables", "Linked documents", "Activity"], tableTab: "Deliverables",
+        cards: [
+          ["Document Identity", "Dispatch", [["Work Order", "YRP-WO-2026-00003"], ["Process", "Washing"], ["Series", "YRP-DC-.YYYY.-"], ["Is rework", "No"]]],
+          ["Movement", "Stock", [["From location", "Essdee Fabric Store · Tiruppur"], ["From warehouse", "S-0005"], ["To location", "Essdee Washing Unit"], ["Job worker", "Essdee Washing Unit"]]],
+          ["Logistics", "Transport", [["Vehicle no", "TN39 DF 2331"], ["Supplier document", "—"], ["E-waybill", "Not required"], ["Dispatch time", "10:49 AM"]]],
+          ["Status & Notes", "Control", [["Transfer", "Completed"], ["Packing", "No"], ["Stock entry", "STE-2026-00291"], ["Comments", "Regular washing issue"]]]
+        ],
+        section: "Delivered items", eyebrow: "Outward", count: "3 combinations",
+        columns: ["Item", "Colour", "Dia", "Received type", "Available", "Delivered", "UOM"],
+        rows: [
+          ["Cotton Poly 58/42 Jersey", "White", "19 Dia", "Accepted", "25.000", "25.000", "Kg"],
+          ["Cotton Poly 58/42 Jersey", "White", "14 Dia", "Accepted", "29.000", "29.000", "Kg"],
+          ["Cotton Poly 58/42 Jersey", "White", "14.5 Dia", "Accepted", "20.000", "20.000", "Kg"]
+        ],
+        metrics: [["Total quantity", "74"], ["Stock value", "₹ 8,37,158"], ["Pieces delivered", "0"], ["Transfer", "100%"]],
+        rail: [["Source", [["YRP-WO-2026-00003", "Work Order · Washing", ""]]], ["Goods Received Notes", [["YRP-GRN-2026-00005", "Submitted · 74 Kg", ""]]]]
+      },
+      "goods-received-note": {
+        area: "Fabric Store", back: "Goods Received Notes", title: "Goods Received Note", id: "YRP-GRN-2026-00005", status: "Submitted",
+        facts: [["Lot", "F0926-49"], ["Item", "Cotton Poly 58/42 Jersey"], ["Posting date", "08 Oct 2026"]],
+        actions: ["Create Inspection", "Calculate"], primary: "Create Inspection", tabs: ["Overview", "Receivables", "Inspection", "Activity"], tableTab: "Receivables",
+        cards: [
+          ["Receipt Identity", "Receipt", [["Work Order", "YRP-WO-2026-00003"], ["Delivery Challan", "YRP-DC-2026-00036"], ["Process", "Washing"], ["Series", "YRP-GRN-.YYYY.-"]]],
+          ["Source & Movement", "Stock", [["Supplier", "Essdee Washing Unit"], ["From location", "Essdee Washing Unit"], ["To warehouse", "S-0005"], ["Delivery location", "Essdee Fabric Store"]]],
+          ["Inspection & Valuation", "Quality", [["Inspection", "Completed"], ["Accepted quantity", "72.500 Kg"], ["Rejected quantity", "1.500 Kg"], ["Stock value", "₹ 8,31,604"]]],
+          ["Status & Notes", "Control", [["Receipt status", "Fully received"], ["Stock entry", "STE-2026-00302"], ["MRP stock entry", "Created"], ["Comments", "Minor shade rejection"]]]
+        ],
+        section: "Received items", eyebrow: "Inward", count: "3 combinations",
+        columns: ["Item", "Colour", "Actual dia", "Received type", "Available", "Received", "Value", "UOM"],
+        rows: [
+          ["Cotton Poly 58/42 Jersey", "White", "19 Dia", "Accepted", "25.000", "25.000", "₹ 2,81,475", "Kg"],
+          ["Cotton Poly 58/42 Jersey", "White", "14 Dia", "Accepted", "29.000", "27.500", "₹ 3,09,622", "Kg"],
+          ["Cotton Poly 58/42 Jersey", "White", "14 Dia", "Rejected", "1.500", "1.500", "₹ 16,888", "Kg"],
+          ["Cotton Poly 58/42 Jersey", "White", "14.5 Dia", "Accepted", "20.000", "20.000", "₹ 2,40,507", "Kg"]
+        ],
+        metrics: [["Received", "74"], ["Accepted", "72.5"], ["Rejected", "1.5"], ["Stock value", "₹ 8,31,604"]],
+        rail: [["Inspection entries", [["YRP-INS-2026-00008", "Completed · 4 rows", ""]]], ["Source chain", [["YRP-DC-2026-00036", "Delivery Challan", ""], ["YRP-WO-2026-00003", "Work Order", ""]]]]
+      },
+      "cutting-plan": {
+        area: "Cutting", back: "Cutting Plans", title: "Cutting Plan", id: "YRP-CP-2026-00018", status: "In Progress",
+        facts: [["Lot", "F0926-49"], ["Item", "34s GL Dyed Fabric"], ["Plan date", "08 Oct 2026"]],
+        actions: ["Create Marker", "Create LaySheet"], primary: "Create LaySheet", tabs: ["Details", "Summary", "Planned Detail", "CPM", "Stock Transfers"], detailsSummary: true, cuttingRail: true,
+        cards: [
+          ["Plan Identity", "Cutting", [["Cutting order", "YRP-CO-2026-00012"], ["Production detail", "34s GL Dyed Fabric-1"], ["Colour", "Navy"], ["Pattern", "Classic polo"]]],
+          ["Planning", "Targets", [["Planned quantity", "2,016 Pcs"], ["Order quantity", "2,080 Pcs"], ["Allowance", "3.17%"], ["Size ratio", "S:1 · M:2 · L:2 · XL:1"]]],
+          ["Schedule", "Dates", [["Plan date", "08-10-2026"], ["Cutting start", "09-10-2026"], ["Required by", "11-10-2026"], ["Shift", "Morning"]]],
+          ["Status & Notes", "Control", [["Plan status", "In Progress"], ["Marker status", "Ready"], ["LaySheet status", "2 Active"], ["Comments", "Navy lot · priority run"]]]
+        ],
+        section: "Size and panel quantities", eyebrow: "Execution", count: "12 combinations",
+        columns: ["Colour", "Panel", "S", "M", "L", "XL", "Total", "Cut"],
+        rows: [
+          ["Navy", "Front", "168", "336", "336", "168", "1,008", "504"],
+          ["Navy", "Back", "168", "336", "336", "168", "1,008", "504"],
+          ["Navy", "Sleeve", "336", "672", "672", "336", "2,016", "1,008"]
+        ],
+        metrics: [["Planned", "2,016"], ["Cut", "1,008"], ["Balance", "1,008"], ["Efficiency", "84.6%"]],
+        rail: [["Markers", [["YRP-MKR-2026-00031", "Open · 82.4%", ""], ["YRP-MKR-2026-00032", "Approved · 86.8%", ""]]], ["LaySheets", [["YRP-LS-2026-00118", "Active · 96 plys", ""], ["YRP-LS-2026-00119", "Draft · 84 plys", "warn"], ["YRP-LS-2026-00120", "Planned · 92 plys", "warn"]]]]
+      },
+      "cutting-order": {
+        area: "Cutting", back: "Cutting Orders", title: "Cutting Order", id: "YRP-CO-2026-00012", status: "Submitted",
+        facts: [["Order detail", "ORD-DET-2026-0048"], ["Item", "34s GL Dyed Fabric"], ["Required by", "11 Oct 2026"]],
+        actions: ["Create Cutting Plan", "Material Request"], primary: "Create Cutting Plan", tabs: ["Details", "Summary", "Planned Detail"], detailsSummary: true, cuttingRail: true,
+        cards: [
+          ["Order Identity", "Cutting", [["Order detail", "ORD-DET-2026-0048"], ["Lot", "F0926-49"], ["Item", "34s GL Dyed Fabric"], ["Colour", "Navy"]]],
+          ["Planning", "Scope", [["Production detail", "34s GL Dyed Fabric-1"], ["Pattern", "Classic polo"], ["Order quantity", "2,080 Pcs"], ["Planned quantity", "2,016 Pcs"]]],
+          ["Schedule", "Dates", [["Order date", "07-10-2026"], ["Planned start", "09-10-2026"], ["Planned end", "11-10-2026"], ["Priority", "High"]]],
+          ["Status & Notes", "Control", [["Order status", "Submitted"], ["Planning", "Partially planned"], ["Material", "Reserved"], ["Comments", "Start with dark shades"]]]
+        ],
+        section: "Order quantity matrix", eyebrow: "Demand", count: "4 sizes",
+        columns: ["Colour", "Panel", "S", "M", "L", "XL", "Total", "Planned"],
+        rows: [
+          ["Navy", "Garment", "350", "690", "690", "350", "2,080", "2,016"],
+          ["Navy", "Collar", "350", "690", "690", "350", "2,080", "2,016"],
+          ["Navy", "Cuff", "700", "1,380", "1,380", "700", "4,160", "4,032"]
+        ],
+        metrics: [["Order qty", "2,080"], ["Planned", "2,016"], ["Balance", "64"], ["Plans", "2"]],
+        rail: [["Markers", [["YRP-MKR-2026-00031", "Open · 82.4%", ""], ["YRP-MKR-2026-00032", "Approved · 86.8%", ""]]], ["LaySheets", [["YRP-LS-2026-00118", "Active · 96 plys", ""], ["YRP-LS-2026-00119", "Draft · 84 plys", "warn"], ["YRP-LS-2026-00120", "Planned · 92 plys", "warn"]]]]
+      },
+      "bulk-lay-sheet": {
+        area: "Cutting", back: "Bulk LaySheets", title: "Bulk LaySheets", id: "YRP-BLS-2026-00007", status: "Cutting",
+        facts: [["Main lot", "F0926-49"], ["Location", "Cutting Floor · Tiruppur"], ["Active LaySheet", "YRP-LS-2026-00118"]],
+        actions: ["Generate Bundles", "Complete LaySheet"], primary: "Generate Bundles", tabs: ["Active LaySheet", "Bundles", "Delivery", "Activity"],
+        cards: [],
+        setup: [["Production detail", "34s GL Dyed Fabric-1"], ["Item", "34s GL Dyed Fabric"], ["Maximum plys", "100"], ["Allowance", "3%"]],
+        section: "Active LaySheet · YRP-LS-2026-00118", eyebrow: "Execution", count: "96 plys",
+        columns: ["Layer", "Roll / Bundle", "Colour", "Dia", "Length", "Plys", "Status"],
+        rows: [
+          ["01", "ROLL-0926-184", "Navy", "19 Dia", "38.40 m", "32", "Laid"],
+          ["02", "ROLL-0926-191", "Navy", "19 Dia", "37.85 m", "32", "Laid"],
+          ["03", "ROLL-0926-204", "Navy", "19 Dia", "38.10 m", "32", "In progress"],
+          ["—", "Total", "", "", "114.35 m", "96", "84.6% yield"]
+        ],
+        metrics: [["Planned plys", "100"], ["Actual plys", "96"], ["Bundles", "48"], ["Delivered", "0"]],
+        rail: [["LaySheet workflow", [["YRP-LS-2026-00118", "Active · Cutting", ""], ["YRP-LS-2026-00119", "Ready · 84 plys", ""], ["YRP-LS-2026-00120", "Setup pending", "warn"], ["YRP-LS-2026-00121", "Queued", "warn"]]]]
+      },
+      "lay-sheet-planner": {
+        area: "Cutting", back: "LaySheet Planner", title: "LaySheet Planner", id: "YRP-LSP-2026-00009", status: "Optimized",
+        facts: [["Lot", "F0926-49"], ["Item", "34s GL Dyed Fabric"], ["Selected strategy", "Balanced Yield"]],
+        actions: ["Re-optimize", "Save Inputs"], primary: "Re-optimize", tabs: ["Inputs", "Plan", "Deviation", "Activity"],
+        cards: [
+          ["Planning Inputs", "Constraints", [["Required quantity", "2,016 Pcs"], ["Maximum plys", "100"], ["Tolerance", "3%"], ["Fabric width", "72 inches"]]],
+          ["Order Mix", "Demand", [["S", "336"], ["M", "672"], ["L", "672"], ["XL", "336"]]],
+          ["Material", "Availability", [["Available rolls", "14"], ["Available weight", "1,248.6 Kg"], ["Usable length", "1,774.8 m"], ["Shade groups", "2"]]],
+          ["Optimization", "Control", [["Status", "Completed"], ["Strategies", "3 evaluated"], ["Selected", "Balanced Yield"], ["Last run", "08 Oct · 11:42 AM"]]]
+        ],
+        strategies: [
+          ["Balanced Yield", "86.8%", "Selected · 3 LaySheets", true],
+          ["Minimum Waste", "88.1%", "4 LaySheets · +2.4 hrs", false],
+          ["Fastest Cut", "82.7%", "2 LaySheets · -1.6 hrs", false]
+        ],
+        section: "Selected lay plan", eyebrow: "Plan", count: "3 LaySheets",
+        columns: ["LaySheet", "Marker", "Ratio", "Plys", "Planned pcs", "Waste", "Deviation"],
+        rows: [
+          ["YRP-LS-2026-00118", "MKR-0031", "1:2:2:1", "96", "1,152", "13.2%", "0.8%"],
+          ["YRP-LS-2026-00119", "MKR-0032", "1:2:2:1", "54", "648", "12.6%", "1.1%"],
+          ["YRP-LS-2026-00120", "MKR-0034", "1:1:1:1", "54", "216", "14.3%", "0.6%"]
+        ],
+        metrics: [["Planned pcs", "2,016"], ["Efficiency", "86.8%"], ["Waste", "13.2%"], ["Deviation", "0.8%"]],
+        rail: [["Optimization summary", [["Balanced Yield", "Selected strategy", ""], ["3 LaySheets", "204 total plys", ""], ["Within tolerance", "All sizes", ""]]], ["Warnings", [["Shade split", "2 rolls require isolation", "warn"]]]]
+      }
+    };
+
+    const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[char]));
+    const metricHtml = (items) => `<div class="metrics">${items.map(([label,value]) => `<div class="metric"><span class="label">${esc(label)}</span><strong>${esc(value)}</strong></div>`).join("")}</div>`;
+    const railHtml = (groups) => groups.map(([title,rows]) => `<section class="rail-card"><div class="rail-head"><strong>${esc(title)}</strong><span class="count">${rows.length}</span></div><div class="rail-list">${rows.map(([name,meta,tone]) => `<div class="rail-row"><div><strong>${esc(name)}</strong><small>${esc(meta)}</small></div><span class="mini-status ${tone === "warn" ? "warn" : ""}">${tone === "warn" ? "Pending" : "Open"}</span></div>`).join("")}</div></section>`).join("");
+    const cuttingRailHtml = (groups) => `<div class="operations-rail">${groups.map(([title,rows], groupIndex) => `<section class="operation-section" data-operation-section="${esc(title)}"><div class="operation-head"><div class="operation-title"><strong>${esc(title)}</strong><span class="count">${rows.length}</span></div><div class="operation-actions"><button class="rail-filter-button" type="button" data-rail-filter="${esc(title)}" aria-label="Filter ${esc(title)}">▽</button><button class="rail-create-button" type="button">＋ New</button></div></div><div class="operation-list">${rows.map(([name,meta,tone], rowIndex) => { const status = meta.split(" · ")[0]; const detail = meta.split(" · ").slice(1).join(" · "); return `<article class="operation-row"><div class="operation-row-top"><strong>${groupIndex === 0 ? `Marker ${rowIndex + 1}` : `Lay ${rowIndex + 1}`}</strong><span class="mini-status ${tone === "warn" ? "warn" : ""}">${esc(status)}</span></div><span class="operation-id">${esc(name)}</span><div class="operation-row-meta"><span>${esc(detail || (groupIndex === 0 ? "Marker ready" : "LaySheet ready"))}</span><span>${groupIndex === 0 ? `${82 + rowIndex * 4}.4% yield` : `08-10-2026`}</span></div>${groupIndex === 0 ? `<div class="panel-chips"><span class="panel-chip">Front</span><span class="panel-chip">Back</span><span class="panel-chip">Sleeve</span></div>` : ""}</article>`; }).join("")}</div></section>`).join("")}</div>`;
+    const cardsHtml = (cards) => cards.length ? `<div class="cards">${cards.map(([title,eyebrow,fields]) => `<section class="card"><div class="card-head"><strong>${esc(title)}</strong><small>${esc(eyebrow)}</small></div><div class="fields">${fields.map(([label,value]) => `<div class="field"><div class="label">${esc(label)}</div><div class="value" title="${esc(value)}">${esc(value)}</div></div>`).join("")}</div></section>`).join("")}</div>` : "";
+    const setupHtml = (setup) => setup ? `<div class="setup-strip">${setup.map(([label,value]) => `<div class="setup-item"><div class="label">${esc(label)}</div><strong>${esc(value)}</strong></div>`).join("")}</div>` : "";
+    const strategiesHtml = (strategies) => strategies ? `<section class="section"><div class="section-head"><div class="section-title"><small>Optimization</small><strong>Strategy comparison</strong></div><span class="count">3 evaluated</span></div><div class="strategy-grid">${strategies.map(([name,score,meta,selected]) => `<article class="strategy ${selected ? "selected" : ""}"><strong>${esc(name)}</strong><div class="score">${esc(score)}</div><p>${esc(meta)}</p></article>`).join("")}</div></section>` : "";
+    const tableHtml = (view) => `<section class="section"><div class="section-head"><div class="section-title"><small>${esc(view.eyebrow)}</small><strong>${esc(view.section)}</strong></div><span class="count">${esc(view.count)}</span></div><div class="table-wrap"><table><thead><tr>${view.columns.map((column,index) => `<th class="${index >= Math.max(3, view.columns.length - 4) ? "num" : ""}">${esc(column)}</th>`).join("")}</tr></thead><tbody>${view.rows.map((row,rowIndex) => `<tr>${row.map((cell,index) => `<td class="${index === 0 || index === 1 ? "strong" : ""} ${index >= Math.max(3, row.length - 4) ? "num" : ""} ${view.title === "Goods Received Note" && row[3] === "Rejected" && index >= 3 ? "pending" : ""} ${rowIndex === view.rows.length - 1 && view.title === "Bulk LaySheets" ? "good" : ""}">${esc(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table></div></section>`;
+
+    function render(view, activeTab = view.tabs[0]) {
+      const statusClass = view.statusTone === "attention" ? "status attention" : "status";
+      const tabs = view.tabs.map((tab) => `<button class="tab ${tab === activeTab ? "active" : ""}" type="button" data-tab="${esc(tab)}">${esc(tab)}</button>`).join("");
+      const commands = view.actions.map((action) => `<button class="button ${action === view.primary ? "primary" : ""}">${esc(action)}</button>`).join("");
+      const overviewContent = `${setupHtml(view.setup)}${cardsHtml(view.cards)}${strategiesHtml(view.strategies)}`;
+      let bodyContent = `${overviewContent}${tableHtml(view)}`;
+      if (view.tableTab) {
+        if (activeTab === view.tabs[0]) bodyContent = overviewContent;
+        else if (activeTab === view.tableTab) bodyContent = tableHtml(view);
+        else bodyContent = `<div class="note">Existing ${esc(activeTab)} content remains unchanged.</div>`;
+      }
+      if (view.detailsSummary) {
+        bodyContent = activeTab === view.tabs[0]
+          ? `${overviewContent}${tableHtml(view)}`
+          : `<div class="note">Existing ${esc(activeTab)} content remains unchanged.</div>`;
+      }
+      return `<div>
+        <header class="topbar"><div class="brand"><span class="brand-mark">EY</span><span class="brand-copy"><strong>Essdee YRP</strong><small>Operations suite</small></span></div><div class="topnav"><span class="context-pill">${esc(view.area)}</span><span class="workspace-link">▦&nbsp; Workspaces</span></div></header>
+        <main class="page"><div class="back">← <span>${esc(view.back)}</span></div>
+          <section class="doc">
+            <header class="doc-header"><div class="identity"><div class="title"><h1>${esc(view.title)}</h1><p>${esc(view.id)}</p></div><span class="${statusClass}">${esc(view.status)}</span><div class="facts">${view.facts.map(([label,value]) => `<div class="fact"><span class="label">${esc(label)}</span><strong title="${esc(value)}">${esc(value)}</strong></div>`).join("")}</div></div><div class="header-actions"><button class="button">↻</button><button class="button">Print</button></div></header>
+            <div class="commandbar"><div class="command-left">${commands}</div><div class="command-right"><button class="button">More ···</button></div></div>
+            <div class="workspace"><main class="main"><div class="tabs">${tabs}</div><div style="padding-top:12px">${bodyContent}<div class="note" style="margin-top:12px">Sample layout only — existing document actions and transaction rules remain unchanged.</div></div></main><aside class="rail">${view.cuttingRail ? cuttingRailHtml(view.rail) : `${metricHtml(view.metrics)}${railHtml(view.rail)}`}</aside></div>
+          </section>
+        </main>
+      </div>`;
+    }
+
+    const requestedView = new URLSearchParams(window.location.search).get("view") || DEFAULT_VIEW;
+    const selectedView = views[requestedView] || views[DEFAULT_VIEW];
+    function mount(activeTab = selectedView.tabs[0]) {
+      document.getElementById("app").innerHTML = render(selectedView, activeTab);
+      document.querySelectorAll("[data-tab]").forEach((button) => button.addEventListener("click", () => mount(button.dataset.tab)));
+      document.querySelectorAll("[data-rail-filter]").forEach((button) => button.addEventListener("click", () => button.classList.toggle("active")));
+    }
+    mount();
+    document.title = `${selectedView.title || "Essdee YRP"} — Form View Sample`;
+  </script>
+</body>
+</html>

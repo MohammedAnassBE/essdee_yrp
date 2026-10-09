@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Essdee YRP — Form View Samples</title>
+  <style>
+    :root { font-family: Inter, "Segoe UI", system-ui, sans-serif; color: #101828; background: #f6f7f9; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header { position: sticky; z-index: 2; top: 0; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px clamp(18px, 4vw, 54px); background: rgba(255,255,255,.95); border-bottom: 1px solid #e3e6eb; backdrop-filter: blur(14px); }
+    h1 { margin: 0; font-size: clamp(20px, 3vw, 30px); letter-spacing: -.035em; }
+    header p { margin: 5px 0 0; color: #667085; font-size: 13px; }
+    .badge { padding: 7px 11px; color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+    main { width: min(1500px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 52px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+    article { overflow: hidden; background: #fff; border: 1px solid #dfe3e8; border-radius: 16px; box-shadow: 0 6px 20px rgba(16,24,40,.06); }
+    article > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid #eceef2; }
+    h2 { margin: 0; font-size: 15px; }
+    .links { display: flex; gap: 8px; }
+    a { padding: 7px 10px; color: #047857; background: #ecfdf5; border-radius: 8px; font-size: 11px; font-weight: 750; text-decoration: none; }
+    a:hover { background: #d1fae5; }
+    img { display: block; width: 100%; height: auto; background: #f6f7f9; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } header { align-items: flex-start; flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div><h1>Non-Sewing Form View Samples</h1><p>Temporary design review only — no production UI code changed.</p></div>
+    <span class="badge">7 desktop samples</span>
+  </header>
+  <main>
+    <section class="grid">
+      <article><div><h2>Purchase Order</h2><span class="links"><a href="purchase-order.png?v=2">Open PNG</a><a href="prototype.html?view=purchase-order&amp;v=2">Live sample</a></span></div><a href="purchase-order.png?v=2"><img src="purchase-order.png?v=2" alt="Purchase Order form view sample"></a></article>
+      <article><div><h2>Delivery Challan</h2><span class="links"><a href="delivery-challan.png?v=2">Open PNG</a><a href="prototype.html?view=delivery-challan&amp;v=2">Live sample</a></span></div><a href="delivery-challan.png?v=2"><img src="delivery-challan.png?v=2" alt="Delivery Challan form view sample"></a></article>
+      <article><div><h2>Goods Received Note</h2><span class="links"><a href="goods-received-note.png?v=2">Open PNG</a><a href="prototype.html?view=goods-received-note&amp;v=2">Live sample</a></span></div><a href="goods-received-note.png?v=2"><img src="goods-received-note.png?v=2" alt="Goods Received Note form view sample"></a></article>
+      <article><div><h2>Cutting Plan</h2><span class="links"><a href="cutting-plan.png?v=3">Open PNG</a><a href="prototype.html?view=cutting-plan&amp;v=3">Live sample</a></span></div><a href="cutting-plan.png?v=3"><img src="cutting-plan.png?v=3" alt="Cutting Plan form view sample"></a></article>
+      <article><div><h2>Cutting Order</h2><span class="links"><a href="cutting-order.png?v=3">Open PNG</a><a href="prototype.html?view=cutting-order&amp;v=3">Live sample</a></span></div><a href="cutting-order.png?v=3"><img src="cutting-order.png?v=3" alt="Cutting Order form view sample"></a></article>
+      <article><div><h2>Bulk Lay Sheet</h2><span class="links"><a href="bulk-lay-sheet.png">Open PNG</a><a href="prototype.html?view=bulk-lay-sheet">Live sample</a></span></div><a href="bulk-lay-sheet.png"><img src="bulk-lay-sheet.png" alt="Bulk Lay Sheet form view sample"></a></article>
+      <article><div><h2>Lay Sheet Planner</h2><span class="links"><a href="lay-sheet-planner.png">Open PNG</a><a href="prototype.html?view=lay-sheet-planner">Live sample</a></span></div><a href="lay-sheet-planner.png"><img src="lay-sheet-planner.png" alt="Lay Sheet Planner form view sample"></a></article>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,217 @@
+from importlib import import_module
+from importlib.util import find_spec
+from types import SimpleNamespace
+from unittest import TestCase
+from unittest.mock import patch
+
+import frappe
+
+from essdee_yrp import hooks
+from essdee_yrp.www.web import WEB_DOCTYPES, _apply_accurate_web_perms
+
+
+class FakeProductionOrder:
+	def __init__(self, **values):
+		self.doctype = "YRP Production Order"
+		self.name = values.pop("name", "PPO-0001")
+		self.docstatus = values.pop("docstatus", 0)
+		self.modified = values.pop("modified", "2026-10-09 10:30:00.000000")
+		self._values = values
+		self.checked_permissions = []
+		self.meta = SimpleNamespace(fields=[])
+
+	def get(self, key, default=None):
+		if key == "name":
+			return self.name
+		if key == "docstatus":
+			return self.docstatus
+		if key == "modified":
+			return self.modified
+		return self._values.get(key, default)
+
+	def check_permission(self, permission):
+		self.checked_permissions.append(permission)
+
+	def run_method(self, method):
+		if method != "onload":
+			raise AssertionError(f"Unexpected method: {method}")
+
+
+class TestSalesWebWorkspace(TestCase):
+	def _workspace(self):
+		module = "essdee_yrp.sales.web_workspace"
+		self.assertIsNotNone(find_spec(module), "The Sales web workspace must exist")
+		return import_module(module)
+
+	def _capabilities(self, allowed):
+		workspace = self._workspace()
+		with patch.object(
+			frappe,
+			"has_permission",
+			side_effect=lambda doctype, ptype="read", **_kwargs: (doctype, ptype) in allowed,
+		):
+			return workspace.get_capabilities()
+
+	def test_capabilities_expose_exactly_production_orders_and_reports(self):
+		permissions = {
+			("YRP Production Order", permission)
+			for permission in ("read", "create", "write", "delete", "submit", "cancel", "print", "report")
+		}
+		payload = self._capabilities(permissions)
+		self.assertEqual(set(payload), {"sections", "reports"})
+		self.assertEqual(
+			{key: value["label"] for key, value in payload["sections"].items()},
+			{"production_orders": "Production Orders", "reports": "Reports"},
+		)
+		self.assertEqual(
+			payload["reports"],
+			{
+				"ppo_report": {
+					"label": "PPO Report",
+					"can_read": True,
+					"can_export": True,
+				}
+			},
+		)
+
+	def test_report_permission_is_independent_from_document_write_permissions(self):
+		payload = self._capabilities({("YRP Production Order", "read"), ("YRP Production Order", "report")})
+		self.assertEqual(set(payload["sections"]), {"production_orders", "reports"})
+		self.assertFalse(payload["sections"]["production_orders"]["can_write"])
+		self.assertTrue(payload["reports"]["ppo_report"]["can_read"])
+
+		payload = self._capabilities({("YRP Production Order", "read")})
+		self.assertEqual(set(payload["sections"]), {"production_orders"})
+		self.assertEqual(payload["reports"], {})
+
+	def test_unreadable_production_orders_hide_both_sections(self):
+		payload = self._capabilities({("YRP Production Order", "report")})
+		self.assertEqual(payload, {"sections": {}, "reports": {}})
+
+	def test_workspace_projects_compact_data_matrices_and_histories(self):
+		workspace = self._workspace()
+		doc = FakeProductionOrder(
+			docstatus=1,
+			status="Open",
+			item="Premium Polo",
+			production_detail="IPD-0001",
+			production_term="Default Term",
+			posting_date="2026-10-09",
+			delivery_date="2026-10-20",
+			dont_deliver_after="2026-10-25",
+			lead_time_given=11,
+			comments="Priority order",
+			price_approval_status="Approved",
+			production_order_details=[
+				frappe._dict(item="Premium Polo", item_variant="POLO-NAVY-S", size="S", quantity=40, ratio=1, mrp=799, retail_price=699, wholesale_price=520, production_order_mrp=760),
+				frappe._dict(item="Premium Polo", item_variant="POLO-NAVY-M", size="M", quantity=80, ratio=2, mrp=799, retail_price=699, wholesale_price=520, production_order_mrp=760),
+			],
+			production_ordered_details=[
+				frappe._dict(item="Premium Polo", item_variant="POLO-NAVY-S", lot="LOT-1", quantity=10),
+			],
+			date_change_history=[frappe._dict(date_field="Delivery Date", old_date="2026-10-18", new_date="2026-10-20", reason="Buyer request")],
+			quantity_transfer_history=[frappe._dict(source_production_order="PPO-OLD", target_production_order="PPO-0001", quantity=12)],
+			comment_log="Created by Sales",
+			__onload={
+				"can_manage_production_order": True,
+				"linked_lots": ["LOT-1"],
+				"price_requests": [{"name": "PRICE-1", "status": "Approved"}],
+			},
+		)
+		allowed = {
+			("YRP Production Order", permission)
+			for permission in ("read", "write", "cancel", "print")
+		}
+		with (
+			patch.object(frappe, "get_doc", return_value=doc),
+			patch.object(frappe, "has_permission", side_effect=lambda doctype, ptype="read", **_kwargs: (doctype, ptype) in allowed),
+		):
+			payload = workspace.get_production_order_workspace(doc.name)
+
+		self.assertEqual(doc.checked_permissions, ["read"])
+		self.assertEqual(payload["record"]["name"], "PPO-0001")
+		self.assertEqual(payload["record"]["total_quantity"], 120)
+		self.assertEqual(payload["matrix"][0]["prices"], {"mrp": 799, "retail_price": 699, "wholesale_price": 520, "production_order_mrp": 760})
+		self.assertEqual(payload["ordered"][0]["lot"], "LOT-1")
+		self.assertEqual(payload["linked_lots"], ["LOT-1"])
+		self.assertEqual(set(payload["histories"]), {"dates", "transfers", "prices", "comments"})
+		self.assertFalse(payload["capabilities"]["update_quantity_ratio"]["allowed"])
+		self.assertTrue(payload["capabilities"]["update_quantity_ratio"]["reason"])
+		self.assertTrue(payload["capabilities"]["update_price"]["allowed"])
+
+	def test_read_only_user_gets_data_but_no_mutating_actions(self):
+		workspace = self._workspace()
+		doc = FakeProductionOrder(
+			docstatus=1,
+			status="Open",
+			production_order_details=[],
+			production_ordered_details=[],
+			__onload={"can_manage_production_order": False, "linked_lots": []},
+		)
+		with (
+			patch.object(frappe, "get_doc", return_value=doc),
+			patch.object(frappe, "has_permission", side_effect=lambda _doctype, ptype="read", **_kwargs: ptype in {"read", "print"}),
+		):
+			payload = workspace.get_production_order_workspace(doc.name)
+		self.assertTrue(payload["capabilities"]["print"]["allowed"])
+		self.assertFalse(any(
+			capability["allowed"]
+			for key, capability in payload["capabilities"].items()
+			if key != "print"
+		))
+
+	def test_pending_request_exposes_only_matching_approval(self):
+		workspace = self._workspace()
+		cases = (
+			("quantity_ratio", "approve_quantity_ratio"),
+			("status", "approve_status"),
+		)
+		for request_type, expected in cases:
+			with self.subTest(request_type=request_type):
+				doc = FakeProductionOrder(
+					docstatus=1,
+					status="Pending Request",
+					production_order_details=[],
+					production_ordered_details=[],
+					__onload={
+						"can_manage_production_order": True,
+						"can_approve_production_order_request": True,
+						"pending_production_order_request": {"request_type": request_type},
+						"linked_lots": [],
+					},
+				)
+				with (
+					patch.object(frappe, "get_doc", return_value=doc),
+					patch.object(frappe, "has_permission", return_value=True),
+				):
+					payload = workspace.get_production_order_workspace(doc.name)
+				self.assertTrue(payload["capabilities"][expected]["allowed"])
+				other = "approve_status" if expected == "approve_quantity_ratio" else "approve_quantity_ratio"
+				self.assertFalse(payload["capabilities"][other]["allowed"])
+
+	def test_production_order_is_registered_in_both_web_catalogs(self):
+		for catalog in (WEB_DOCTYPES, hooks.yrp_web_doctype_catalog):
+			self.assertIn("YRP Production Order", catalog)
+
+	def test_web_boot_corrects_production_order_permissions(self):
+		user = {f"can_{ptype}": ["YRP Production Order"] for ptype in ("read", "create", "write", "delete", "submit", "cancel")}
+		with patch.object(frappe, "has_permission", return_value=False):
+			_apply_accurate_web_perms(user)
+		for allowed in user.values():
+			self.assertNotIn("YRP Production Order", allowed)
+
+	def test_sales_endpoints_are_authenticated(self):
+		workspace = self._workspace()
+		for endpoint in (workspace.get_capabilities, workspace.get_production_order_workspace):
+			with self.subTest(endpoint=endpoint.__name__):
+				self.assertIn(endpoint, frappe.whitelisted)
+				self.assertNotIn(endpoint, frappe.guest_methods)
+				original_user = frappe.session.user
+				try:
+					frappe.set_user("Guest")
+					with self.assertRaises(frappe.PermissionError):
+						frappe.is_whitelisted(endpoint)
+					frappe.set_user("Administrator")
+					frappe.is_whitelisted(endpoint)
+				finally:
+					frappe.set_user(original_user)

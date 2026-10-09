@@ -169,6 +169,7 @@ yrp_web_doctype_catalog = [
 	"YRP Stock Entry",
 	"Item",
 	"YRP Item Production Detail",
+	"YRP Production Order",
 	"YRP Terms and Condition",
 ]
 

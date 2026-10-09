@@ -28,6 +28,7 @@ const CutPanelStoreSection = () => import("../departments/CutPanelStoreSection.v
 const SewingPlans = () => import("../departments/sewing/SewingPlans.vue")
 const SewingReports = () => import("../departments/sewing/SewingReports.vue")
 const SewingAttendance = () => import("../departments/sewing/SewingAttendance.vue")
+const SalesSection = () => import("../departments/sales/SalesSection.vue")
 
 const routes = [
 	{
@@ -89,6 +90,7 @@ const routes = [
 	},
 	{ path: "/sewing/reports", name: "sewing-reports", component: SewingReports },
 	{ path: "/sewing/attendance", name: "sewing-attendance", component: SewingAttendance },
+	{ path: "/sales/production-orders", name: "sales-production-orders", component: SalesSection },
 	{
 		path: "/cutting/plans",
 		name: "cutting-plans",

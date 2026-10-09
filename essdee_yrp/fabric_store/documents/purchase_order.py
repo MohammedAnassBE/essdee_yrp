@@ -24,6 +24,7 @@ from essdee_yrp.fabric_store.documents.common import (
 	assert_expected_modified,
 	filter_authorized_capabilities,
 	get_document_permissions,
+	get_effective_fields,
 	get_supplier_notification_capabilities,
 	get_workspace_base,
 	prepare_supplier_notification,
@@ -89,6 +90,7 @@ PURCHASE_ORDER_TOTALS = (
 )
 
 PURCHASE_ORDER_EDITOR_FIELDS = (
+	"naming_series",
 	"supplier",
 	"transaction_date",
 	"schedule_date",
@@ -427,6 +429,7 @@ def get_purchase_order_editor(name: str | None = None, source=None, *, _adapter=
 		"name": doc.get("name") or "",
 		"modified": doc.get("modified") or "",
 		"values": values,
+		"fields": get_effective_fields(doc, PURCHASE_ORDER_EDITOR_FIELDS),
 		"item_groups": group_items(doc.get("items") or [], "Purchase Order"),
 		"dimensions": dimensions,
 		"locked_dimensions": [],

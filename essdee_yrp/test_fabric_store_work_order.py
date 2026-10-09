@@ -84,6 +84,15 @@ class TestFabricStoreWorkOrder(TestCase):
 		doc.meta = MagicMock()
 		doc.meta.fields = [
 			frappe._dict(
+				fieldname="lot",
+				label="Lot",
+				fieldtype="Link",
+				options="SD YRP Lot",
+				hidden=0,
+				read_only=0,
+				reqd=1,
+			),
+			frappe._dict(
 				fieldname="process_name",
 				label="Process",
 				fieldtype="Link",
@@ -263,6 +272,53 @@ class TestFabricStoreWorkOrder(TestCase):
 		self.assertEqual(editor["condition_values"], {"edit_wo_date": None})
 		effective_fields.assert_called_once_with(doc, tuple(editor["values"]))
 
+	def test_editor_exposes_complete_sectioned_setup_without_hiding_source_owned_values(self):
+		doc = self.make_document()
+		doc.naming_series = "YRP-WO-.YYYY.-"
+		doc.edit_wo_date = 1
+		doc.parent_wo = "WO-PARENT-1"
+		doc.supplier_type = "Same Supplier"
+		doc.rework_type = "No Cost"
+		with (
+			patch("essdee_yrp.fabric_store.documents.work_order._get_work_order", return_value=doc),
+			patch("essdee_yrp.fabric_store.documents.work_order.frappe.has_permission", return_value=True),
+			patch("essdee_yrp.fabric_store.documents.work_order.group_items_for_ui", side_effect=[[], []]),
+			patch("essdee_yrp.fabric_store.documents.work_order.get_stock_dimensions_for_ui", return_value=[]),
+			patch("essdee_yrp.fabric_store.documents.work_order.get_work_order_selection_context", return_value={}),
+			patch("essdee_yrp.fabric_store.documents.work_order.get_garment_work_order_context", return_value={}),
+			patch("essdee_yrp.fabric_store.documents.work_order.get_effective_fields", return_value=[]) as effective_fields,
+		):
+			editor = get_work_order_editor(doc.name)
+
+		self.assertEqual(editor["values"]["naming_series"], "YRP-WO-.YYYY.-")
+		self.assertEqual(editor["values"]["edit_wo_date"], 1)
+		self.assertEqual(editor["values"]["planned_quantity"], 12)
+		self.assertEqual(editor["values"]["is_rework"], 0)
+		self.assertEqual(editor["values"]["parent_wo"], "WO-PARENT-1")
+		self.assertEqual(editor["values"]["supplier_type"], "Same Supplier")
+		self.assertEqual(editor["values"]["rework_type"], "No Cost")
+		effective_fields.assert_called_once_with(doc, tuple(editor["values"]))
+
+	def test_editor_exposes_only_applicable_work_order_header_dimensions(self):
+		doc = self.make_document()
+		with (
+			patch("essdee_yrp.fabric_store.documents.work_order._get_work_order", return_value=doc),
+			patch("essdee_yrp.fabric_store.documents.work_order.frappe.has_permission", return_value=True),
+			patch("essdee_yrp.fabric_store.documents.work_order.group_items_for_ui", side_effect=[[], []]),
+			patch(
+				"essdee_yrp.fabric_store.documents.work_order.get_stock_dimensions_for_ui",
+				return_value=[
+					{"fieldname": "lot", "is_production_group": 1, "mandatory": 1},
+					{"fieldname": "received_type", "is_production_group": 0, "mandatory": 1},
+				],
+			),
+			patch("essdee_yrp.fabric_store.documents.work_order.get_work_order_selection_context", return_value={}),
+			patch("essdee_yrp.fabric_store.documents.work_order.get_garment_work_order_context", return_value={}),
+		):
+			editor = get_work_order_editor(doc.name)
+
+		self.assertEqual([dimension["fieldname"] for dimension in editor["dimensions"]], ["lot"])
+
 	def test_editor_returns_authoritative_fabric_context_unchanged(self):
 		doc = self.make_document()
 		fabric_context = {"is_fabric_process": True, "kind": "dyeing", "rows": [{"fabric_row": "FAB-1"}]}
@@ -319,6 +375,39 @@ class TestFabricStoreWorkOrder(TestCase):
 		)
 		doc.save.assert_called_once_with()
 
+	def test_save_allows_date_control_but_rejects_source_owned_setup_values(self):
+		doc = MagicMock()
+		doc.doctype = "YRP Work Order"
+		doc.name = "WO-1"
+		doc.docstatus = 0
+		doc.modified = "2026-10-06 10:00:00"
+		doc.get.side_effect = lambda key, default=None: getattr(doc, key, default)
+		with (
+			patch("essdee_yrp.fabric_store.documents.work_order._get_work_order", return_value=doc),
+			patch("essdee_yrp.fabric_store.documents.work_order.frappe.has_permission", return_value=True),
+			patch(
+				"essdee_yrp.fabric_store.documents.work_order.get_work_order_workspace",
+				return_value={"record": {"name": doc.name}},
+			),
+		):
+			save_work_order_document(
+				{
+					"naming_series": "YRP-WO-.YYYY.-",
+					"edit_wo_date": 1,
+					"is_rework": 1,
+					"parent_wo": "FORGED-PARENT",
+					"supplier_type": "Different Supplier",
+					"rework_type": "Additional Cost",
+					"planned_quantity": 999,
+				},
+				name=doc.name,
+				expected_modified=doc.modified,
+			)
+
+		doc.update.assert_called_once_with(
+			{"naming_series": "YRP-WO-.YYYY.-", "edit_wo_date": 1}
+		)
+
 	def test_save_serializes_empty_groups_so_controller_can_clear_rows(self):
 		doc = MagicMock()
 		doc.doctype = "YRP Work Order"
@@ -352,12 +441,13 @@ class TestFabricStoreWorkOrder(TestCase):
 		doc.docstatus = 0
 		doc.modified = "2026-10-06 10:00:00"
 		doc.get.side_effect = lambda key, default=None: getattr(doc, key, default)
+		doc.meta.get_field.return_value = frappe._dict(fieldtype="Link")
 		with (
 			patch("essdee_yrp.fabric_store.documents.work_order._get_work_order", return_value=doc),
 			patch("essdee_yrp.fabric_store.documents.work_order.frappe.has_permission", return_value=True),
 			patch(
 				"essdee_yrp.fabric_store.documents.work_order.get_stock_dimensions_for_ui",
-				return_value=[{"fieldname": "received_type"}],
+				return_value=[{"fieldname": "production_batch", "is_production_group": 1}],
 			),
 			patch(
 				"essdee_yrp.fabric_store.documents.work_order.get_work_order_workspace",
@@ -365,14 +455,42 @@ class TestFabricStoreWorkOrder(TestCase):
 			),
 		):
 			save_work_order_document(
-				{"supplier": "SUPPLIER-2", "received_type": "Accepted", "internal_mode": 1},
+				{"supplier": "SUPPLIER-2", "production_batch": "BATCH-1", "internal_mode": 1},
 				name=doc.name,
 				expected_modified=doc.modified,
 			)
 
 		doc.update.assert_called_once_with(
-			{"supplier": "SUPPLIER-2", "received_type": "Accepted"}
+			{"supplier": "SUPPLIER-2", "production_batch": "BATCH-1"}
 		)
+
+	def test_save_dimension_collision_cannot_reopen_source_owned_fields(self):
+		doc = MagicMock()
+		doc.doctype = "YRP Work Order"
+		doc.name = "WO-1"
+		doc.docstatus = 0
+		doc.modified = "2026-10-06 10:00:00"
+		doc.get.side_effect = lambda key, default=None: getattr(doc, key, default)
+		doc.meta.get_field.return_value = frappe._dict(fieldtype="Link")
+		with (
+			patch("essdee_yrp.fabric_store.documents.work_order._get_work_order", return_value=doc),
+			patch("essdee_yrp.fabric_store.documents.work_order.frappe.has_permission", return_value=True),
+			patch(
+				"essdee_yrp.fabric_store.documents.work_order.get_stock_dimensions_for_ui",
+				return_value=[{"fieldname": "is_rework", "is_production_group": 1}],
+			),
+			patch(
+				"essdee_yrp.fabric_store.documents.work_order.get_work_order_workspace",
+				return_value={"record": {"name": doc.name}},
+			),
+		):
+			save_work_order_document(
+				{"supplier": "SUPPLIER-2", "is_rework": 1},
+				name=doc.name,
+				expected_modified=doc.modified,
+			)
+
+		doc.update.assert_called_once_with({"supplier": "SUPPLIER-2"})
 
 	def test_stale_calculation_is_rejected_before_domain_service_runs(self):
 		doc = self.make_document()

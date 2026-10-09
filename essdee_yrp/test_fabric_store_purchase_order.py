@@ -16,6 +16,7 @@ from essdee_yrp.fabric_store.documents.purchase_order import (
 class TestFabricStorePurchaseOrder(TestCase):
 	def test_editor_duplicate_returns_unsaved_copy_with_items(self):
 		source = self.make_document(docstatus=1)
+		source.naming_series = "PUR-ORD-.YYYY.-"
 		duplicate = self.make_document(docstatus=0)
 		duplicate.name = None
 		with (
@@ -24,11 +25,13 @@ class TestFabricStorePurchaseOrder(TestCase):
 			patch("essdee_yrp.fabric_store.documents.purchase_order.frappe.has_permission", return_value=True),
 			patch("essdee_yrp.fabric_store.documents.purchase_order.group_items_for_ui", return_value=[{"copy": "items"}]),
 			patch("essdee_yrp.fabric_store.documents.purchase_order.get_stock_dimensions_for_ui", return_value=[]),
+			patch("essdee_yrp.fabric_store.documents.purchase_order.get_effective_fields", return_value=[]),
 			patch("essdee_yrp.fabric_store.documents.purchase_order.frappe.db.get_single_value", return_value=0),
 		):
 			editor = get_purchase_order_editor(source={"duplicate_from": source.name})
 
 		self.assertEqual(editor["name"], "")
+		self.assertEqual(editor["values"]["naming_series"], source.naming_series)
 		self.assertEqual(editor["values"]["supplier"], source.supplier)
 		self.assertEqual(editor["item_groups"], [{"copy": "items"}])
 	def make_document(self, *, docstatus=1, status="To Receive", open_status="Open"):
@@ -294,6 +297,7 @@ class TestFabricStorePurchaseOrder(TestCase):
 
 		save_purchase_order_document(
 			{
+				"naming_series": "PUR-ORD-.YYYY.-",
 				"supplier": "SUPPLIER-1",
 				"transaction_date": "2026-10-05",
 				"schedule_date": "2026-10-14",
@@ -307,6 +311,7 @@ class TestFabricStorePurchaseOrder(TestCase):
 		self.assertEqual(rows[0]["delivery_location"], "S-0005")
 		self.assertEqual(rows[0]["schedule_date"], "2026-10-14")
 		self.assertEqual(rows[0]["expected_delivery_date"], "2026-10-14")
+		self.assertEqual(doc.update.call_args.args[0]["naming_series"], "PUR-ORD-.YYYY.-")
 
 	def test_save_explains_hidden_item_required_by_with_item_and_dates(self):
 		rows = [

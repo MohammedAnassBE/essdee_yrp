@@ -87,6 +87,7 @@ WORK_ORDER_FIELDS = (
 
 WORK_ORDER_EDITOR_FIELDS = (
 	"naming_series",
+	"edit_wo_date",
 	"wo_date",
 	"supplier",
 	"no_receivables",
@@ -102,6 +103,39 @@ WORK_ORDER_EDITOR_FIELDS = (
 	"delivery_address",
 	"terms_and_condition",
 	"comments",
+	"planned_quantity",
+	"is_rework",
+	"parent_wo",
+	"supplier_type",
+	"rework_type",
+)
+
+# Rework identity and planned quantity are shown so the sectioned editor is
+# complete, but their values belong to the rework/calculation services.  Keep
+# the browser write contract narrower than the display contract.
+WORK_ORDER_EDITOR_WRITABLE_FIELDS = (
+	"naming_series",
+	"edit_wo_date",
+	"wo_date",
+	"supplier",
+	"no_receivables",
+	"process_name",
+	"lot",
+	"item",
+	"production_detail",
+	"delivery_location",
+	"planned_start_date",
+	"planned_end_date",
+	"expected_delivery_date",
+	"supplier_address",
+	"delivery_address",
+	"terms_and_condition",
+	"comments",
+)
+
+WORK_ORDER_EDITOR_COPY_FIELDS = WORK_ORDER_EDITOR_WRITABLE_FIELDS
+WORK_ORDER_EDITOR_PROTECTED_FIELDS = frozenset(
+	set(WORK_ORDER_EDITOR_FIELDS) - set(WORK_ORDER_EDITOR_WRITABLE_FIELDS)
 )
 
 WORK_ORDER_RECORD_FIELDS = (
@@ -160,6 +194,25 @@ def _as_dict(row) -> dict:
 	if callable(as_dict):
 		return as_dict()
 	return dict(row)
+
+
+def _work_order_header_dimensions(doc, dimensions) -> list[dict]:
+	"""Return production-group Link fields that really exist on the WO header."""
+
+	get_field = getattr(getattr(doc, "meta", None), "get_field", None)
+	if not callable(get_field):
+		return []
+	applicable = []
+	for source in dimensions or []:
+		dimension = dict(source)
+		fieldname = dimension.get("fieldname")
+		if not fieldname or not dimension.get("is_production_group"):
+			continue
+		field = get_field(fieldname)
+		if not field or field.get("fieldtype") != "Link":
+			continue
+		applicable.append(dimension)
+	return applicable
 
 
 def _target_create_permission(doctype: str, adapter=None) -> bool:
@@ -544,7 +597,7 @@ def get_work_order_editor(name: str | None = None, source=None, *, _adapter=None
 		duplicate_from = source.get("duplicate_from")
 		if duplicate_from:
 			original = _get_work_order(duplicate_from)
-			doc.update({fieldname: original.get(fieldname) for fieldname in WORK_ORDER_EDITOR_FIELDS})
+			doc.update({fieldname: original.get(fieldname) for fieldname in WORK_ORDER_EDITOR_COPY_FIELDS})
 			# Deliverables, receivables, and calculated items are derived together
 			# from Lot + Process + IPD. A new copy keeps the editable setup and uses
 			# the normal Calculate action after its first Save to rebuild trusted
@@ -578,7 +631,10 @@ def get_work_order_editor(name: str | None = None, source=None, *, _adapter=None
 		"calculated_items": [_as_dict(row) for row in (doc.get("work_order_calculated_items") or [])],
 		"selection_context": selection,
 		"calculation_contexts": _calculation_contexts(doc, selection),
-		"dimensions": _dimension_projection(doc, dimension_loader()),
+		"dimensions": _dimension_projection(
+			doc,
+			_work_order_header_dimensions(doc, dimension_loader()),
+		),
 		"permissions": permissions,
 	}
 
@@ -616,10 +672,10 @@ def save_work_order_document(
 
 	dimension_fields = {
 		dimension.get("fieldname")
-		for dimension in (dimension_loader() or [])
+		for dimension in _work_order_header_dimensions(doc, dimension_loader())
 		if dimension.get("fieldname")
-	}
-	header_fields = set(WORK_ORDER_EDITOR_FIELDS) | dimension_fields
+	} - WORK_ORDER_EDITOR_PROTECTED_FIELDS
+	header_fields = set(WORK_ORDER_EDITOR_WRITABLE_FIELDS) | dimension_fields
 	header = {
 		fieldname: values.get(fieldname)
 		for fieldname in header_fields

@@ -29,6 +29,7 @@ from essdee_yrp.cutting.movement import _load_movement as _load_return_movement
 from essdee_yrp.delivery_challan_hooks import create_return_grn as create_essdee_return_grn
 from essdee_yrp.fabric_store.documents.common import (
 	assert_expected_modified,
+	get_allow_on_submit_fields,
 	get_effective_fields,
 	get_supplier_notification_capabilities,
 	get_workspace_base,
@@ -685,11 +686,37 @@ def save_delivery_challan(
 	"""Save a DC while trusting only controller/source-owned data and quantities."""
 
 	values = _as_mapping(values)
+	submitted_update = False
+	allow_on_submit_fields = set()
 	if name:
 		doc = _get_delivery_challan(name, "write")
 		frappe.has_permission("YRP Delivery Challan", ptype="write", doc=doc, throw=True)
 		assert_expected_modified(doc, expected_modified)
-		if cint(doc.docstatus) != 0:
+		docstatus = cint(doc.docstatus)
+		if docstatus == 1:
+			if cint(submit):
+				frappe.throw(_("A submitted Delivery Challan cannot be submitted again."))
+			submitted_update = True
+			allow_on_submit_fields = set(get_allow_on_submit_fields(doc))
+			allowed_payload_fields = {
+				fieldname
+				for fieldname in _editable_header_fieldnames()
+				if fieldname in allow_on_submit_fields
+			}
+			if "items" in allow_on_submit_fields:
+				allowed_payload_fields.update({"item_details", "item_groups"})
+			if "correction_items" in allow_on_submit_fields:
+				allowed_payload_fields.update(
+					{"correction_item_details", "correction_item_groups"}
+				)
+			denied = set(values) - allowed_payload_fields
+			if denied:
+				frappe.throw(
+					_("Only Allow on Submit fields can be changed after submission: {0}.").format(
+						", ".join(sorted(denied))
+					)
+				)
+		elif docstatus != 0:
 			frappe.throw(_("Only Draft Delivery Challans can be edited."))
 		authoritative_items = [_row_dict(row) for row in (doc.get("items") or [])]
 		authoritative_corrections = [
@@ -710,13 +737,19 @@ def save_delivery_challan(
 			_row_dict(row) for row in (defaults.get("correction_items") or [])
 		]
 
+	header_fieldnames = (
+		allow_on_submit_fields
+		if submitted_update
+		else set(_editable_header_fieldnames())
+	)
 	header = {
 		fieldname: values[fieldname]
-		for fieldname in _editable_header_fieldnames()
+		for fieldname in header_fieldnames
 		if fieldname in values
 	}
 	doc.update(header)
-	_validate_and_sync_party_dependencies(doc)
+	if not submitted_update:
+		_validate_and_sync_party_dependencies(doc)
 	if _special_source_context(doc)["active"]:
 		# Cutting, finishing, packing, and movement builders own these rows. A
 		# generic web matrix may display them, but it must never rewrite them.

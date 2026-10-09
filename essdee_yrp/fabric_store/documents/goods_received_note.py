@@ -31,6 +31,7 @@ from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
 
 from essdee_yrp.fabric_store.documents.common import (
 	assert_expected_modified,
+	get_allow_on_submit_fields,
 	get_effective_fields,
 	get_supplier_notification_capabilities,
 	get_workspace_base,
@@ -810,12 +811,38 @@ def save_goods_received_note(
 	"""Save a GRN while retaining controller/source-owned row metadata."""
 
 	values = _as_mapping(values)
+	submitted_update = False
+	allow_on_submit_fields = set()
 	if name:
 		doc = _get_grn(name, "write")
 		assert_expected_modified(doc, expected_modified)
-		if cint(doc.docstatus) != 0:
+		docstatus = cint(doc.docstatus)
+		if docstatus == 1:
+			if cint(submit):
+				frappe.throw(_("A submitted Goods Received Note cannot be submitted again."))
+			submitted_update = True
+			allow_on_submit_fields = set(get_allow_on_submit_fields(doc))
+			allowed_payload_fields = {
+				fieldname
+				for fieldname in GOODS_RECEIVED_NOTE_EDITOR_FIELDS
+				if fieldname in allow_on_submit_fields
+			}
+			if "items" in allow_on_submit_fields:
+				allowed_payload_fields.update({"item_details", "item_groups"})
+			if "correction_items" in allow_on_submit_fields:
+				allowed_payload_fields.update(
+					{"correction_item_details", "correction_item_groups"}
+				)
+			denied = set(values) - allowed_payload_fields
+			if denied:
+				frappe.throw(
+					_("Only Allow on Submit fields can be changed after submission: {0}.").format(
+						", ".join(sorted(denied))
+					)
+				)
+		elif docstatus != 0:
 			frappe.throw(_("Only Draft Goods Received Notes can be edited."))
-		if (
+		if not submitted_update and (
 			"delivery_challan" in values
 			and (values.get("delivery_challan") or "") != (doc.get("delivery_challan") or "")
 		):
@@ -841,7 +868,16 @@ def save_goods_received_note(
 			_row_dict(row) for row in (defaults.get("correction_items") or [])
 		]
 
-	doc.update(_editable_headers(doc, values))
+	if submitted_update:
+		doc.update(
+			{
+				fieldname: values[fieldname]
+				for fieldname in GOODS_RECEIVED_NOTE_EDITOR_FIELDS
+				if fieldname in allow_on_submit_fields and fieldname in values
+			}
+		)
+	else:
+		doc.update(_editable_headers(doc, values))
 	if _special_source_context(doc)["active"]:
 		# Prepared return/packing/cutting/additional rows belong to their native
 		# builders and must not be reconstructed from a generic browser matrix.

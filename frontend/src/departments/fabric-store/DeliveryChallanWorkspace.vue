@@ -30,31 +30,36 @@
 			</template>
 
 			<template #fields>
-				<section v-if="canEdit && visibleFields.length" class="delivery-challan-fields" aria-label="Delivery Challan fields">
-					<section v-for="group in primaryFieldGroups" :key="group.key" class="delivery-challan-field-group" :data-group="group.key">
-						<header><span>{{ group.eyebrow }}</span><h2>{{ group.label }}</h2></header>
-						<div class="delivery-challan-field-group__grid" :class="{ 'delivery-challan-field-group__grid--facts': !canEdit }">
-							<template v-if="canEdit">
-								<FormField
-									v-for="field in group.fields"
-									:key="fieldKey(field)"
-									:field="field"
-									:model-value="form[field.fieldname]"
-									:form="form"
-									:required="Boolean(field.reqd || field.mandatory)"
-									compact
-									:search-handler="linkSearchHandler(field)"
-									@update:model-value="setField(field.fieldname, $event)"
-								/>
-							</template>
-							<template v-else>
-								<div v-for="field in group.fields" :key="`fact-${field.fieldname}`" class="delivery-challan-field-fact">
-									<span>{{ field.label }}</span><strong :title="String(formatFieldValue(field))">{{ formatFieldValue(field) }}</strong>
-								</div>
-							</template>
-						</div>
-					</section>
-				</section>
+				<DocumentFieldGroupGrid
+					v-if="canEdit && visibleFields.length"
+					:groups="primaryFieldGroups"
+					:facts="!canEdit"
+					aria-label="Delivery Challan fields"
+					root-class="delivery-challan-fields"
+					card-class="delivery-challan-field-group"
+					content-class="delivery-challan-field-group__grid"
+				>
+					<template #default="{ group }">
+						<template v-if="canEdit">
+							<FormField
+								v-for="field in group.fields"
+								:key="fieldKey(field)"
+								:field="field"
+								:model-value="form[field.fieldname]"
+								:form="form"
+								:required="Boolean(field.reqd || field.mandatory)"
+								compact
+								:search-handler="linkSearchHandler(field)"
+								@update:model-value="setField(field.fieldname, $event)"
+							/>
+						</template>
+						<template v-else>
+							<div v-for="field in group.fields" :key="`fact-${field.fieldname}`" class="delivery-challan-field-fact">
+								<span>{{ field.label }}</span><strong :title="String(formatFieldValue(field))">{{ formatFieldValue(field) }}</strong>
+							</div>
+						</template>
+					</template>
+				</DocumentFieldGroupGrid>
 				<Tabs v-else-if="hasWorkspace" v-model:value="activeTab" class="delivery-challan-tabs erp-tabs">
 					<TabList><Tab value="overview">Overview</Tab><Tab value="deliverables">Deliverables <span v-if="logicalRowCount(itemGroups)">{{ logicalRowCount(itemGroups) }}</span></Tab></TabList>
 					<TabPanels>
@@ -73,19 +78,25 @@
 			</template>
 
 			<template #secondary-fields>
-				<section v-if="canEdit && secondaryFieldGroups.length" class="delivery-challan-fields delivery-challan-fields--secondary" aria-label="Additional Delivery Challan fields">
-					<section v-for="group in secondaryFieldGroups" :key="group.key" class="delivery-challan-field-group" :data-group="group.key">
-						<header><span>{{ group.eyebrow }}</span><h2>{{ group.label }}</h2></header>
-						<div class="delivery-challan-field-group__grid" :class="{ 'delivery-challan-field-group__grid--facts': !canEdit }">
-							<template v-if="canEdit">
-								<FormField v-for="field in group.fields" :key="fieldKey(field)" :field="field" :model-value="form[field.fieldname]" :form="form" :required="Boolean(field.reqd || field.mandatory)" compact :search-handler="linkSearchHandler(field)" @update:model-value="setField(field.fieldname, $event)" />
-							</template>
-							<template v-else>
-								<div v-for="field in group.fields" :key="`fact-${field.fieldname}`" class="delivery-challan-field-fact"><span>{{ field.label }}</span><strong :title="String(formatFieldValue(field))">{{ formatFieldValue(field) }}</strong></div>
-							</template>
-						</div>
-					</section>
-				</section>
+				<DocumentFieldGroupGrid
+					v-if="canEdit && secondaryFieldGroups.length"
+					:groups="secondaryFieldGroups"
+					:facts="!canEdit"
+					wide-last-odd
+					aria-label="Additional Delivery Challan fields"
+					root-class="delivery-challan-fields delivery-challan-fields--secondary"
+					card-class="delivery-challan-field-group"
+					content-class="delivery-challan-field-group__grid"
+				>
+					<template #default="{ group }">
+						<template v-if="canEdit">
+							<FormField v-for="field in group.fields" :key="fieldKey(field)" :field="field" :model-value="form[field.fieldname]" :form="form" :required="Boolean(field.reqd || field.mandatory)" compact :search-handler="linkSearchHandler(field)" @update:model-value="setField(field.fieldname, $event)" />
+						</template>
+						<template v-else>
+							<div v-for="field in group.fields" :key="`fact-${field.fieldname}`" class="delivery-challan-field-fact"><span>{{ field.label }}</span><strong :title="String(formatFieldValue(field))">{{ formatFieldValue(field) }}</strong></div>
+						</template>
+					</template>
+				</DocumentFieldGroupGrid>
 			</template>
 
 			<template #matrix>
@@ -116,16 +127,16 @@
 											<td v-for="column in identityColumns(section.group)" :key="column.key">{{ identityValue(row, column) }}</td>
 										<template v-if="hasPrimaryAttribute(section.group)">
 											<td v-for="value in primaryValues(section.group)" :key="value" class="erp-number delivery-challan-matrix__quantity delivery-challan-matrix__primary-cell">
-												<InputNumber v-model="row.values[value].qty" :aria-label="matrixInputLabel('Deliver', section, row, value)" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrix" fluid @update:model-value="markDirty" />
+												<InputNumber v-model="row.values[value].qty" :aria-label="matrixInputLabel('Deliver', section, row, value)" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" />
 												<small>Pending {{ formatQty(pendingQuantity(row.values[value])) }}</small>
-												<div v-if="secondaryUom(row, value)" class="delivery-challan-matrix__secondary-inline"><InputNumber v-model="row.values[value].secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, value, secondaryUom(row, value))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrix" fluid @update:model-value="markDirty" /><span>{{ secondaryUom(row, value) }}</span></div>
+												<div v-if="secondaryUom(row, value)" class="delivery-challan-matrix__secondary-inline"><InputNumber v-model="row.values[value].secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, value, secondaryUom(row, value))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" /><span>{{ secondaryUom(row, value) }}</span></div>
 											</td>
 										</template>
 										<template v-else>
 											<td class="erp-number delivery-challan-matrix__pending">{{ formatQty(pendingQuantity(row.values.default)) }}</td>
-											<td class="erp-number delivery-challan-matrix__quantity"><InputNumber v-model="row.values.default.qty" :aria-label="matrixInputLabel('Deliver', section, row, 'default')" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrix" fluid @update:model-value="markDirty" /></td>
+											<td class="erp-number delivery-challan-matrix__quantity"><InputNumber v-model="row.values.default.qty" :aria-label="matrixInputLabel('Deliver', section, row, 'default')" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" /></td>
 											<td v-if="hasSecondaryQuantity(section.group)" class="erp-number delivery-challan-matrix__secondary">
-												<InputNumber v-model="row.values.default.secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, 'default', secondaryUom(row, 'default'))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrix" fluid @update:model-value="markDirty" /><small>{{ secondaryUom(row, "default") }}</small>
+												<InputNumber v-model="row.values.default.secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, 'default', secondaryUom(row, 'default'))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" /><small>{{ secondaryUom(row, "default") }}</small>
 											</td>
 										</template>
 											<td class="erp-number delivery-challan-matrix__total">{{ formatQty(rowTotal(row)) }}</td>
@@ -211,6 +222,7 @@ import { searchLinkedDocument } from "../../api/frappe.js"
 import FormField from "../../components/common/FormField.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
+import DocumentFieldGroupGrid from "../../components/documents/DocumentFieldGroupGrid.vue"
 import DocumentOverview from "../../components/documents/DocumentOverview.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import StockItemMatrix from "../../components/stock/StockItemMatrix.vue"
@@ -234,6 +246,7 @@ const loading = ref(true)
 const acting = ref("")
 const error = ref("")
 const dirty = ref(false)
+const editingSubmitted = ref(false)
 const workspace = ref({})
 const currentName = ref("")
 const itemGroups = ref([])
@@ -267,8 +280,14 @@ const deliveryChallanActions = computed(() => {
 		if (!capabilities.value[key]) return
 		actions.push({ key, label: capabilityLabel(key, fallback), icon, command, disabled: busy, loading: acting.value === key, menuOnly })
 	}
+	if (editingSubmitted.value) {
+		actions.push({ key: "cancel_edit", label: "Cancel Edit", icon: "pi pi-times", command: cancelSubmittedEdit, disabled: busy })
+		if (dirty.value) actions.push({ key: "save", label: "Save", icon: "pi pi-save", command: () => save(false), disabled: busy, loading: acting.value === "save", primary: true })
+		return actions
+	}
 	add("complete_transfer", "Complete Transfer", "pi pi-check-circle", completeTransfer)
 	add("return", "Return", "pi pi-replay", () => { returnOpen.value = true })
+	if (canOfferSubmittedEdit.value) actions.push({ key: "edit", label: "Edit", icon: "pi pi-pencil", command: startSubmittedEdit, disabled: busy })
 	if (!currentName.value || dirty.value) add("save", "Save", "pi pi-save", () => runWorkspaceAction("save"))
 	if (currentName.value && !dirty.value) add("submit", "Submit", "pi pi-check", () => runWorkspaceAction("submit"))
 	add("cancel", "Cancel Document", "pi pi-ban", () => runWorkspaceAction("cancel"), true)
@@ -282,11 +301,23 @@ const deliveryChallanActions = computed(() => {
 const hasWorkspace = computed(() => Boolean(Object.keys(workspace.value || {}).length))
 const duplicateLabel = computed(() => props.sourceContext?.duplicate_from ? `Duplicate of ${props.sourceContext.duplicate_from}` : "")
 const visibleTotals = computed(() => (workspace.value.totals || []).filter((total) => primaryTotals.has(total.fieldname) || totalIsPositive(total)))
-const canEdit = computed(() => Boolean(
+const canEditDraft = computed(() => Boolean(
 	Number(workspace.value.record?.docstatus || 0) === 0
 	&& (currentName.value ? workspace.value.permissions?.can_write : workspace.value.permissions?.can_create),
 ))
-const canEditMatrix = computed(() => canEdit.value && !workspace.value.special_source?.read_only)
+const allowOnSubmitFields = computed(() => new Set(workspace.value.allow_on_submit_fields || []))
+const canOfferSubmittedEdit = computed(() => Boolean(
+	Number(workspace.value.record?.docstatus || 0) === 1
+	&& workspace.value.permissions?.can_update_after_submit
+	&& allowOnSubmitFields.value.size
+	&& !workspace.value.special_source?.read_only,
+))
+const canEdit = computed(() => canEditDraft.value || editingSubmitted.value)
+function canEditMatrixBlock(kind) {
+	if (!canEdit.value || workspace.value.special_source?.read_only) return false
+	if (!editingSubmitted.value) return true
+	return allowOnSubmitFields.value.has(kind === "items" ? "items" : "correction_items")
+}
 const visibleFields = computed(() => {
 	const result = new Map()
 	for (const source of [...(workspace.value.fields || []), ...(workspace.value.dimensions || [])]) {
@@ -307,7 +338,7 @@ const visibleFields = computed(() => {
 		field.read_only ||= field.dependency_locked
 		if (source.fieldname === "from_warehouse") field.link_filters = { disabled: 0, supplier: form.from_location || "__unselected__" }
 		if (source.fieldname === "to_warehouse") field.link_filters = { disabled: 0, supplier: form.supplier || "__unselected__" }
-		if ((!canEdit.value || (field.read_only && !field.dependency_locked)) && !hasDocumentDisplayValue(form[source.fieldname] ?? source.value)) continue
+		if (!canEdit.value && !hasDocumentDisplayValue(form[source.fieldname] ?? source.value)) continue
 		result.set(source.fieldname, field)
 	}
 	return [...result.values()].sort((left, right) => fieldOrder(left.fieldname) - fieldOrder(right.fieldname))
@@ -413,6 +444,7 @@ function clearWorkspaceState(name = "") {
 	itemGroups.value = []
 	correctionGroups.value = []
 	dirty.value = false
+	editingSubmitted.value = false
 	returnOpen.value = false
 	returnError.value = ""
 	activeTab.value = "overview"
@@ -448,6 +480,7 @@ function applyWorkspace(nextWorkspace) {
 	correctionGroups.value = clone(workspace.value.matrices?.correction_items || workspace.value.correction_item_groups || [])
 	for (const correction of correctionGroups.value) correction.item_details = normalizeGroups(correction.item_details || [])
 	dirty.value = false
+	editingSubmitted.value = false
 	error.value = ""
 	returnOpen.value = false
 	returnError.value = ""
@@ -455,6 +488,7 @@ function applyWorkspace(nextWorkspace) {
 }
 
 async function setField(fieldname, value) {
+	if (editingSubmitted.value && !allowOnSubmitFields.value.has(fieldname)) return
 	if (fieldname === "work_order" && !currentName.value && value !== form.work_order) {
 		if (dirty.value) {
 			pendingSourceWorkOrder.value = value
@@ -531,6 +565,27 @@ async function runWorkspaceAction(action) {
 	if (["cancel", "amend"].includes(action)) return requestLifecycleAction(action)
 }
 
+function startSubmittedEdit() {
+	if (!canOfferSubmittedEdit.value) return
+	editingSubmitted.value = true
+	dirty.value = false
+}
+
+function cancelSubmittedEdit() {
+	const snapshot = workspace.value
+	applyWorkspace(snapshot)
+}
+
+function submittedUpdateValues() {
+	const values = {}
+	for (const fieldname of allowOnSubmitFields.value) {
+		if (fieldname in form) values[fieldname] = clone(form[fieldname])
+	}
+	if (allowOnSubmitFields.value.has("items")) values.item_details = clone(itemGroups.value)
+	if (allowOnSubmitFields.value.has("correction_items")) values.correction_item_details = clone(correctionGroups.value)
+	return values
+}
+
 async function duplicateDeliveryChallan() {
 	if (!currentName.value || !workspace.value.permissions?.can_create) return
 	if (props.presentation === "page") {
@@ -563,11 +618,14 @@ async function save(submit) {
 	acting.value = submit ? "submit" : "save"
 	error.value = ""
 	try {
-		const saved = await saveDeliveryChallan({
-			...clone(form),
-			item_details: clone(itemGroups.value),
-			correction_item_details: clone(correctionGroups.value),
-		}, {
+		const values = editingSubmitted.value
+			? submittedUpdateValues()
+			: {
+				...clone(form),
+				item_details: clone(itemGroups.value),
+				correction_item_details: clone(correctionGroups.value),
+			}
+		const saved = await saveDeliveryChallan(values, {
 			name: requestedName,
 			submit,
 			expectedModified: workspace.value.record?.modified,
@@ -645,12 +703,12 @@ async function createdReturnChanged() {
 }
 function fieldKey(field) { return `${field.fieldname}-${field.fieldname === "work_order" ? sourceFieldRevision.value : field.idx || "value"}` }
 const dcFieldGroups = [
-	{ key: "document", eyebrow: "Document", label: "Document & posting" },
-	{ key: "movement", eyebrow: "Route", label: "Source & receiver" },
-	{ key: "logistics", eyebrow: "Dispatch", label: "Transport details" },
-	{ key: "controls", eyebrow: "Options", label: "Dispatch controls" },
-	{ key: "transfer", eyebrow: "Status", label: "Internal transfer" },
-	{ key: "additional", eyebrow: "Additional", label: "Additional details" },
+	{ key: "document", eyebrow: "Document", label: "Document & posting", description: "Series, source and posting controls." },
+	{ key: "movement", eyebrow: "Route", label: "Source & receiver", description: "Choose the dispatch source and receiving destination." },
+	{ key: "logistics", eyebrow: "Dispatch", label: "Transport details", description: "Capture vehicle and supplier references." },
+	{ key: "controls", eyebrow: "Options", label: "Dispatch controls", description: "Additional dispatch handling options." },
+	{ key: "transfer", eyebrow: "Status", label: "Internal transfer", description: "Internal transfer completion state." },
+	{ key: "additional", eyebrow: "Additional", label: "Additional details", description: "Other permitted Delivery Challan fields." },
 ]
 const dcGroupFields = {
 	document: ["naming_series", "work_order", "purchase_order", "posting_date", "posting_time", "edit_posting_date_and_time", "actual_date", "production_detail", "allow_non_bundle"],
@@ -801,15 +859,6 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 .delivery-challan-header__identity--embedded { width: 100%; overflow: hidden; }
 .delivery-challan-header__identity--embedded .delivery-challan-header__facts { overflow-x: auto; flex-wrap: nowrap; padding-left: 0; border-left: 0; scrollbar-width: thin; }
 .delivery-challan-header__identity--embedded .delivery-challan-header__facts > div { flex: 0 0 auto; }
-.delivery-challan-fields { display: grid; gap: 0; overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); }
-.delivery-challan-field-group { overflow: hidden; border: 0; border-bottom: 1px solid var(--erp-border); background: var(--erp-surface); box-shadow: none; }
-.delivery-challan-field-group:last-child { border-bottom: 0; }
-.delivery-challan-field-group > header { display: flex; min-height: 36px; align-items: center; gap: 10px; padding: 6px 10px; border-bottom: 1px solid var(--erp-border); background: var(--erp-surface-soft); }
-.delivery-challan-field-group > header span { color: var(--erp-accent-dark); font-size: var(--erp-font-size-min); font-weight: 800; letter-spacing: .055em; text-transform: uppercase; }
-.delivery-challan-field-group > header h2 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-section); }
-.delivery-challan-field-group__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 10px; padding: 8px 10px 10px; }
-.delivery-challan-field-group[data-group="movement"] .delivery-challan-field-group__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.delivery-challan-field-group__grid :deep(.form-field--wide) { grid-column: 1 / -1; }
 .delivery-challan-field-fact { display: grid; min-height: 50px; align-content: center; gap: 4px; padding: 7px 10px; border-bottom: 1px solid color-mix(in srgb, var(--erp-border) 76%, white); }
 .delivery-challan-field-fact span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .delivery-challan-field-fact strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
@@ -852,18 +901,9 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 .delivery-challan-special-context header strong { color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 .delivery-challan-special-context > div { display: flex; gap: 7px; padding: var(--erp-space-3); flex-wrap: wrap; }
 .delivery-challan-special-context > div span { padding: 5px 9px; color: var(--erp-accent); font-size: var(--erp-font-size-caption); font-weight: 750; border: 1px solid var(--erp-accent-border); border-radius: var(--erp-pill-radius); background: var(--erp-accent-soft); }
-@media (min-width: 1201px) {
-	.delivery-challan-fields--secondary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-	.delivery-challan-fields--secondary .delivery-challan-field-group:nth-child(odd) { border-right: 1px solid var(--erp-border); }
-	.delivery-challan-fields--secondary .delivery-challan-field-group:nth-last-child(-n + 2) { border-bottom: 0; }
-	.delivery-challan-fields--secondary .delivery-challan-field-group:last-child:nth-child(odd) { grid-column: 1 / -1; border-right: 0; }
-	.delivery-challan-fields--secondary .delivery-challan-field-group__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
 @media (max-width: 1100px) { .delivery-challan-header__facts { overflow-x: auto; padding-right: 18px; flex-wrap: nowrap; scrollbar-width: thin; -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); } .delivery-challan-header__facts:focus-visible { outline: 2px solid var(--erp-accent); outline-offset: 2px; } .delivery-challan-header__facts > div { flex: 0 0 auto; } }
 @media (max-width: 760px) { .delivery-challan-header__identity { align-items: flex-start; flex-wrap: wrap; } .delivery-challan-header__facts { width: 100%; flex: 1 0 100%; gap: 8px 14px; padding: 8px 18px 0 0; border-top: 1px solid var(--erp-border); border-left: 0; } .delivery-challan-header__identity--embedded { align-items: center; flex-wrap: nowrap; } .delivery-challan-header__identity--embedded .delivery-challan-header__facts { width: auto; padding-top: 0; border-top: 0; flex: 1 1 auto; } }
-@media (max-width: 1200px) { .delivery-challan-field-group__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 900px) { .delivery-challan-field-group__grid, .delivery-challan-field-group[data-group="movement"] .delivery-challan-field-group__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 620px) { .delivery-challan-workspace--page { padding-right: 0; padding-left: 0; } .delivery-challan-field-group__grid, .delivery-challan-field-group[data-group="movement"] .delivery-challan-field-group__grid { grid-template-columns: 1fr; gap: 4px; padding: 10px; } .delivery-challan-field-group__grid--facts, .delivery-challan-field-group[data-group="movement"] .delivery-challan-field-group__grid--facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } .delivery-challan-field-fact { min-height: 46px; padding: 6px 8px; } .delivery-challan-matrix__stack { padding: var(--erp-space-2); } }
+@media (max-width: 620px) { .delivery-challan-workspace--page { padding-right: 0; padding-left: 0; } .delivery-challan-field-fact { min-height: 46px; padding: 6px 8px; } .delivery-challan-matrix__stack { padding: var(--erp-space-2); } }
 :global(.fabric-action-dialog .p-dialog-content) { min-height: 0; }
 @media (max-width: 620px) { :global(.fabric-action-dialog) { width: 100vw !important; height: 100dvh !important; max-height: 100dvh !important; margin: 0; border-radius: 0; } :global(.fabric-action-dialog .p-dialog-content) { flex: 1; overflow-y: auto; } }
 </style>

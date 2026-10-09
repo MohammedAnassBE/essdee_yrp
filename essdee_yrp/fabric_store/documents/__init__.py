@@ -3,6 +3,7 @@
 from essdee_yrp.fabric_store.documents.common import (
 	assert_expected_modified,
 	filter_authorized_capabilities,
+	get_allow_on_submit_fields,
 	get_document_permissions,
 	get_effective_fields,
 	get_workspace_base,
@@ -25,6 +26,7 @@ __all__ = (
 	"execute_purchase_order_command",
 	"execute_work_order_command",
 	"filter_authorized_capabilities",
+	"get_allow_on_submit_fields",
 	"get_document_permissions",
 	"get_effective_fields",
 	"get_purchase_order_editor",

@@ -6,6 +6,7 @@ import frappe
 from essdee_yrp.fabric_store.documents.common import (
 	assert_expected_modified,
 	filter_authorized_capabilities,
+	get_allow_on_submit_fields,
 	get_document_permissions,
 	get_effective_fields,
 	get_supplier_notification_capabilities,
@@ -41,6 +42,7 @@ class TestFabricStoreDocumentContract(TestCase):
 				options="Supplier",
 				reqd=1,
 				read_only=0,
+				allow_on_submit=1,
 				hidden=0,
 				depends_on="eval:doc.is_yrp_managed",
 				mandatory_depends_on="",
@@ -53,6 +55,7 @@ class TestFabricStoreDocumentContract(TestCase):
 				options="",
 				reqd=0,
 				read_only=1,
+				allow_on_submit=1,
 				hidden=0,
 				depends_on="",
 				mandatory_depends_on="",
@@ -62,6 +65,7 @@ class TestFabricStoreDocumentContract(TestCase):
 				fieldname="internal_state",
 				label="Internal State",
 				fieldtype="Data",
+				allow_on_submit=1,
 				hidden=1,
 			),
 		]
@@ -88,6 +92,7 @@ class TestFabricStoreDocumentContract(TestCase):
 					"fieldtype": "Link",
 					"options": "Supplier",
 					"reqd": True,
+					"allow_on_submit": True,
 					"read_only": False,
 					"depends_on": "eval:doc.is_yrp_managed",
 					"mandatory_depends_on": "",
@@ -100,6 +105,7 @@ class TestFabricStoreDocumentContract(TestCase):
 					"fieldtype": "Small Text",
 					"options": "",
 					"reqd": False,
+					"allow_on_submit": True,
 					"read_only": True,
 					"depends_on": "",
 					"mandatory_depends_on": "",
@@ -108,6 +114,46 @@ class TestFabricStoreDocumentContract(TestCase):
 				},
 			],
 		)
+
+	def test_submitted_fields_enable_only_visible_writable_allow_on_submit_fields(self):
+		doc = self.make_document(docstatus=1)
+		with patch(
+			"essdee_yrp.fabric_store.documents.common.get_permitted_fields",
+			side_effect=lambda _doctype, permission_type=None: (
+				["supplier", "comments", "internal_state"]
+				if permission_type == "read"
+				else ["supplier", "comments", "internal_state"]
+			),
+		):
+			fields = get_effective_fields(doc, ("supplier", "comments", "internal_state"))
+
+		self.assertFalse(fields[0]["read_only"], "writable Allow on Submit field was disabled")
+		self.assertTrue(fields[1]["read_only"], "read-only field became editable after submit")
+		self.assertEqual([field["fieldname"] for field in fields], ["supplier", "comments"])
+
+	def test_allow_on_submit_tables_use_their_parent_permlevel(self):
+		doc = self.make_document(docstatus=1)
+		doc.meta.fields = [
+			frappe._dict(
+				fieldname="items",
+				fieldtype="Table",
+				allow_on_submit=1,
+				hidden=0,
+				read_only=0,
+				permlevel=0,
+			),
+		]
+		doc.meta.get_field.side_effect = lambda fieldname: next(
+			(field for field in doc.meta.fields if field.fieldname == fieldname),
+			None,
+		)
+		doc.meta.get_permlevel_access.return_value = [0]
+
+		with patch(
+			"essdee_yrp.fabric_store.documents.common.get_permitted_fields",
+			return_value=[],
+		):
+			self.assertEqual(get_allow_on_submit_fields(doc), ["items"])
 
 	def test_document_permissions_are_constrained_by_document_state(self):
 		doc = self.make_document(docstatus=1)
@@ -125,6 +171,7 @@ class TestFabricStoreDocumentContract(TestCase):
 				"can_read": True,
 				"can_create": True,
 				"can_write": False,
+				"can_update_after_submit": True,
 				"can_submit": False,
 				"can_cancel": True,
 				"can_amend": False,
@@ -172,7 +219,7 @@ class TestFabricStoreDocumentContract(TestCase):
 
 		self.assertEqual(
 			set(workspace),
-			{"record", "fields", "totals", "permissions", "capabilities", "print_formats"},
+			{"record", "fields", "allow_on_submit_fields", "totals", "permissions", "capabilities", "print_formats"},
 		)
 		self.assertEqual(workspace["capabilities"], {"cancel": {"label": "Cancel"}})
 		self.assertEqual(workspace["totals"], [{"fieldname": "grand_total", "label": "Grand Total", "value": 1250}])

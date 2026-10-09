@@ -30,6 +30,48 @@ EFFECTIVE_FIELD_TYPES = {
 }
 
 
+def _permitted_fields(doctype: str, permission_type: str) -> set[str]:
+	try:
+		return set(get_permitted_fields(doctype, permission_type=permission_type))
+	except TypeError:
+		return set(get_permitted_fields(doctype, permission_type))
+
+
+def _document_meta(doc):
+	"""Return controller metadata for real documents and lightweight test doubles."""
+
+	return getattr(doc, "meta", None) or frappe.get_meta(doc.doctype)
+
+
+def get_allow_on_submit_fields(doc, fieldnames: Iterable[str] | None = None) -> list[str]:
+	"""Return visible, writable fields that Frappe permits after submission."""
+
+	meta = _document_meta(doc)
+	permitted = _permitted_fields(doc.doctype, "write")
+	write_permlevels = set(meta.get_permlevel_access(permission_type="write"))
+	requested = list(fieldnames) if fieldnames is not None else [
+		field.fieldname for field in (meta.fields or []) if field.fieldname
+	]
+	allowed = []
+	for fieldname in requested:
+		field = meta.get_field(fieldname)
+		writable = fieldname in permitted or bool(
+			field
+			and field.get("fieldtype") in {"Table", "Table MultiSelect"}
+			and cint(field.get("permlevel")) in write_permlevels
+		)
+		if (
+			field is None
+			or not writable
+			or not bool(field.get("allow_on_submit"))
+			or bool(field.get("hidden"))
+			or bool(field.get("read_only"))
+		):
+			continue
+		allowed.append(fieldname)
+	return allowed
+
+
 def get_document_permissions(doctype: str, doc=None) -> dict[str, bool]:
 	"""Return effective permissions constrained by the document lifecycle."""
 
@@ -45,12 +87,17 @@ def get_document_permissions(doctype: str, doc=None) -> dict[str, bool]:
 		"can_read": allowed("read"),
 		"can_create": allowed("create", record_sensitive=False),
 		"can_write": allowed("write"),
+		"can_update_after_submit": False,
 		"can_submit": allowed("submit"),
 		"can_cancel": allowed("cancel"),
 		"can_amend": allowed("amend"),
 		"can_print": allowed("print"),
 	}
+	raw_write = permissions["can_write"]
 	if doc is not None:
+		permissions["can_update_after_submit"] = bool(
+			docstatus == 1 and raw_write and get_allow_on_submit_fields(doc)
+		)
 		permissions["can_write"] = bool(docstatus == 0 and permissions["can_write"])
 		permissions["can_submit"] = bool(docstatus == 0 and permissions["can_submit"])
 		permissions["can_cancel"] = bool(docstatus == 1 and permissions["can_cancel"])
@@ -61,10 +108,12 @@ def get_document_permissions(doctype: str, doc=None) -> dict[str, bool]:
 def get_effective_fields(doc, fieldnames: Iterable[str]) -> list[dict]:
 	"""Serialize readable allowlisted fields with their effective UI rules."""
 
-	permitted = set(get_permitted_fields(doc.doctype, permission_type="read"))
+	meta = _document_meta(doc)
+	permitted = _permitted_fields(doc.doctype, "read")
+	allow_on_submit = set(get_allow_on_submit_fields(doc, fieldnames))
 	fields = []
 	for fieldname in fieldnames:
-		field = doc.meta.get_field(fieldname)
+		field = meta.get_field(fieldname)
 		if (
 			field is None
 			or fieldname not in permitted
@@ -79,7 +128,11 @@ def get_effective_fields(doc, fieldnames: Iterable[str]) -> list[dict]:
 				"fieldtype": field.fieldtype,
 				"options": field.options or "",
 				"reqd": bool(field.reqd),
-				"read_only": bool(field.read_only or cint(doc.docstatus) != 0),
+				"allow_on_submit": bool(field.get("allow_on_submit")),
+				"read_only": bool(
+					field.read_only
+					or (cint(doc.docstatus) != 0 and fieldname not in allow_on_submit)
+				),
 				"depends_on": field.depends_on or "",
 				"mandatory_depends_on": field.mandatory_depends_on or "",
 				"read_only_depends_on": field.read_only_depends_on or "",
@@ -344,6 +397,7 @@ def get_workspace_base(
 	return {
 		"record": record,
 		"fields": get_effective_fields(doc, fieldnames),
+		"allow_on_submit_fields": get_allow_on_submit_fields(doc),
 		"totals": total_values,
 		"permissions": permissions,
 		"capabilities": filter_authorized_capabilities(capabilities, permissions),

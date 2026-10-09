@@ -15,21 +15,42 @@
 		<div v-if="loading" class="purchase-order-editor__loading" role="status" aria-live="polite" aria-label="Loading Purchase Order editor"><Skeleton height="160px" /><Skeleton height="420px" /></div>
 		<section v-else-if="loadFailed" class="purchase-order-editor__recovery" role="alert"><i class="pi pi-cloud-times" aria-hidden="true" /><div><strong>Purchase Order could not be loaded</strong><span>{{ error || "Try loading the Purchase Order again." }}</span></div><Button label="Retry" icon="pi pi-refresh" severity="secondary" outlined @click="load" /></section>
 		<div v-else class="purchase-order-editor__body">
-			<section class="purchase-order-editor__section">
-				<header><h2>Order details</h2></header>
-				<div class="purchase-order-editor__fields">
-					<LinkField input-id="field-supplier-value" :key="`supplier-${sourceRevision}`" :model-value="form.supplier" label="Supplier *" doctype="Supplier" required :filters="{ disabled: 0 }" :show-open-button="false" show-clear :disabled="busy" @update:model-value="changeSupplier" />
-					<DateField v-model="form.transaction_date" class="purchase-order-editor__date" label="Order date" required :disabled="busy" @update:model-value="markDirty" />
-					<DateField v-model="form.schedule_date" class="purchase-order-editor__date" label="Required by" required :disabled="busy" @update:model-value="markDirty" />
-					<LinkField v-model="form.company" label="Company" doctype="Company" :show-open-button="false" show-clear :disabled="busy" @update:model-value="markDirty" />
-					<label class="purchase-order-editor__check"><Checkbox v-model="deliverToSupplier" binary input-id="po-deliver-to-supplier" :disabled="busy" @change="deliveryModeChanged" /><span>Deliver to supplier</span></label>
-					<LinkField :model-value="form.default_delivery_location" label="Delivery location" doctype="Supplier" :filters="deliveryLocationFilters" :show-open-button="false" show-clear :disabled="busy" @update:model-value="changeDeliveryLocation" />
-					<LinkField v-model="form.set_warehouse" label="Delivery warehouse *" doctype="Warehouse" required :filters="deliveryWarehouseFilters" :show-open-button="false" show-clear :disabled="busy || !form.default_delivery_location" @update:model-value="markDirty" />
-					<LinkField v-model="form.currency" label="Currency" doctype="Currency" :show-open-button="false" show-clear :disabled="busy" @update:model-value="markDirty" />
-					<LinkField v-model="form.terms_and_condition" label="Terms and condition" doctype="YRP Terms and Condition" :show-open-button="false" show-clear :disabled="busy" @update:model-value="markDirty" />
-					<label class="purchase-order-editor__comments"><span>Comments</span><Textarea v-model="form.comments" rows="2" auto-resize fluid :disabled="busy" @input="markDirty" /></label>
+			<section class="purchase-order-editor__section purchase-order-editor__document-setup">
+				<header><div><span>Document setup</span><h2>Series & order date</h2></div><small>Set the document identity, company and transaction currency.</small></header>
+				<div class="purchase-order-editor__document-fields">
+					<label class="purchase-order-editor__control" for="po-naming-series"><span>{{ fieldLabel('naming_series', 'Naming Series', true, true) }}</span><Select v-model="form.naming_series" input-id="po-naming-series" :aria-label="fieldLabel('naming_series', 'Naming Series', true, true)" aria-required="true" :options="fieldOptions('naming_series')" :disabled="busy || isReadOnly('naming_series')" fluid @change="markDirty" /></label>
+					<DateField v-model="form.transaction_date" class="purchase-order-editor__date" :label="fieldLabel('transaction_date', 'Order date', false)" :required="isRequired('transaction_date', true)" :disabled="busy || isReadOnly('transaction_date')" @update:model-value="markDirty" />
+					<LinkField v-model="form.company" :label="fieldLabel('company', 'Company', false)" doctype="Company" :required="isRequired('company')" :show-open-button="false" show-clear :disabled="busy || isReadOnly('company')" @update:model-value="markDirty" />
+					<LinkField v-model="form.currency" :label="fieldLabel('currency', 'Currency', false)" doctype="Currency" :required="isRequired('currency')" :show-open-button="false" show-clear :disabled="busy || isReadOnly('currency')" @update:model-value="markDirty" />
 				</div>
 			</section>
+
+			<div class="purchase-order-editor__card-grid">
+				<section class="purchase-order-editor__section purchase-order-editor__entry-card">
+					<header><div><span>Procurement</span><h2>Supplier & schedule</h2></div><small>Choose the supplier and required delivery date.</small></header>
+					<div class="purchase-order-editor__fields">
+						<LinkField input-id="field-supplier-value" :key="`supplier-${sourceRevision}`" :model-value="form.supplier" :label="fieldLabel('supplier', 'Supplier', true, true)" doctype="Supplier" :required="isRequired('supplier', true)" :filters="{ disabled: 0 }" :show-open-button="false" show-clear :disabled="busy || isReadOnly('supplier')" @update:model-value="changeSupplier" />
+						<DateField v-model="form.schedule_date" class="purchase-order-editor__date" :label="fieldLabel('schedule_date', 'Required by', false)" :required="isRequired('schedule_date', true)" :disabled="busy || isReadOnly('schedule_date')" @update:model-value="markDirty" />
+					</div>
+				</section>
+
+				<section class="purchase-order-editor__section purchase-order-editor__entry-card">
+					<header><div><span>Destination</span><h2>Delivery destination</h2></div><small>Choose the receiving location and warehouse.</small></header>
+					<div class="purchase-order-editor__fields purchase-order-editor__delivery-fields">
+						<label class="purchase-order-editor__check"><Checkbox v-model="deliverToSupplier" binary input-id="po-deliver-to-supplier" :disabled="busy || isReadOnly('deliver_to_supplier')" @change="deliveryModeChanged" /><span>{{ fieldLabel('deliver_to_supplier', 'Deliver to supplier', false) }}</span></label>
+						<LinkField :model-value="form.default_delivery_location" :label="fieldLabel('default_delivery_location', 'Delivery location', false)" doctype="Supplier" :required="isRequired('default_delivery_location')" :filters="deliveryLocationFilters" :show-open-button="false" show-clear :disabled="busy || isReadOnly('default_delivery_location')" @update:model-value="changeDeliveryLocation" />
+						<LinkField v-model="form.set_warehouse" :label="fieldLabel('set_warehouse', 'Delivery warehouse', true, true)" doctype="Warehouse" :required="isRequired('set_warehouse', true)" :filters="deliveryWarehouseFilters" :show-open-button="false" show-clear :disabled="busy || isReadOnly('set_warehouse') || !form.default_delivery_location" @update:model-value="markDirty" />
+					</div>
+				</section>
+
+				<section class="purchase-order-editor__section purchase-order-editor__entry-card purchase-order-editor__notes-card">
+					<header><div><span>Commercial</span><h2>Terms & notes</h2></div><small>Capture the agreed terms and operator comments.</small></header>
+					<div class="purchase-order-editor__fields">
+						<LinkField v-model="form.terms_and_condition" :label="fieldLabel('terms_and_condition', 'Terms and condition', false)" doctype="YRP Terms and Condition" :required="isRequired('terms_and_condition')" :show-open-button="false" show-clear :disabled="busy || isReadOnly('terms_and_condition')" @update:model-value="markDirty" />
+						<label class="purchase-order-editor__comments"><span>{{ fieldLabel('comments', 'Comments', false) }}</span><Textarea v-model="form.comments" rows="3" auto-resize fluid :disabled="busy || isReadOnly('comments')" @input="markDirty" /></label>
+					</div>
+				</section>
+			</div>
 
 			<StockItemComposer
 				v-model="itemGroups"
@@ -89,6 +110,7 @@ import Button from "primevue/button"
 import Checkbox from "primevue/checkbox"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
+import Select from "primevue/select"
 import Skeleton from "primevue/skeleton"
 import Textarea from "primevue/textarea"
 import { useToast } from "primevue/usetoast"
@@ -111,7 +133,7 @@ const saving = ref("")
 const error = ref("")
 const loadFailed = ref(false)
 const editor = ref({})
-const form = reactive({ supplier: "", transaction_date: "", schedule_date: "", company: "", set_warehouse: "", default_delivery_location: "", deliver_to_supplier: 0, currency: "", terms_and_condition: "", comments: "" })
+const form = reactive({ naming_series: "", supplier: "", transaction_date: "", schedule_date: "", company: "", set_warehouse: "", default_delivery_location: "", deliver_to_supplier: 0, currency: "", terms_and_condition: "", comments: "" })
 const itemGroups = ref([])
 const dirty = ref(false)
 const sourceRevision = ref(0)
@@ -144,13 +166,26 @@ const composerEntryDefaults = computed(() => ({
 }))
 const logicalItemCount = computed(() => itemGroups.value.reduce((total, group) => total + (group.items?.length || 0), 0))
 const canDraft = computed(() => props.name ? Boolean(editor.value.permissions?.can_write) : Boolean(editor.value.permissions?.can_create))
-const canSave = computed(() => Boolean(form.supplier && form.transaction_date && form.schedule_date && form.set_warehouse && logicalItemCount.value))
+const fieldMetadata = computed(() => new Map((editor.value.fields || []).map((field) => [field.fieldname, field])))
+const canSave = computed(() => Boolean(form.naming_series && form.supplier && form.transaction_date && form.schedule_date && form.set_warehouse && logicalItemCount.value))
 const supplierChangeIsClear = computed(() => pendingSupplierValue.value === "")
 const supplierConfirmationTitle = computed(() => supplierChangeIsClear.value ? "Clear Supplier?" : "Change Supplier?")
 const supplierConfirmationMessage = computed(() => supplierChangeIsClear.value
 	? "Clearing Supplier will keep the entered quantities and reset their rates, discounts, taxes and totals. Select a Supplier again before saving."
 	: "Changing Supplier will recalculate every entered item rate, discount, tax and total using the new Supplier. Entered quantities remain unchanged.")
 const supplierConfirmationLabel = computed(() => supplierChangeIsClear.value ? "Clear Supplier" : "Change & Reprice")
+
+function isRequired(fieldname, fallback = false) { return Boolean(fieldMetadata.value.get(fieldname)?.reqd) || fallback }
+function isReadOnly(fieldname) { return Boolean(fieldMetadata.value.get(fieldname)?.read_only) }
+function fieldLabel(fieldname, fallback, showRequired = true, requiredFallback = false) {
+	const label = fieldMetadata.value.get(fieldname)?.label || fallback
+	return `${label}${showRequired && isRequired(fieldname, requiredFallback) ? " *" : ""}`
+}
+function fieldOptions(fieldname) {
+	const options = fieldMetadata.value.get(fieldname)?.options
+	const values = Array.isArray(options) ? options : String(options || "").split("\n").map((value) => value.trim()).filter(Boolean)
+	return values.length ? values : [form[fieldname]].filter(Boolean)
+}
 
 async function load() {
 	loading.value = true
@@ -338,15 +373,24 @@ watch(() => props.name, load)
 .purchase-order-editor { --purchase-order-editor-inline: clamp(14px, 1.5vw, 24px); display: flex; width: 100%; min-height: calc(100dvh - var(--erp-shell-header-height) - 78px); flex-direction: column; gap: var(--erp-space-3); padding: 0 var(--purchase-order-editor-inline) var(--erp-space-4); border-color: color-mix(in srgb, var(--erp-border) 84%, white); background: color-mix(in srgb, var(--erp-bg) 72%, white); }
 .purchase-order-editor__header { position: sticky; z-index: var(--erp-layer-sticky); top: var(--erp-shell-header-height); display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: var(--erp-space-4); margin: 0 calc(0px - var(--purchase-order-editor-inline)); padding: 7px var(--purchase-order-editor-inline); border-top: 3px solid var(--erp-accent); border-bottom: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface) 96%, var(--erp-accent-soft)); box-shadow: 0 5px 16px rgb(28 61 45 / 5%); }
 .purchase-order-editor__header > div:first-child { display: grid; gap: 2px; }
-.purchase-order-editor__header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }
+.purchase-order-editor__header span, .purchase-order-editor__section > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }
 .purchase-order-editor__header h1 { margin: 0; color: var(--erp-text); font-size: 19px; line-height: 1.15; letter-spacing: -.018em; }
 .purchase-order-editor__actions { display: flex; justify-content: flex-end; gap: var(--erp-space-2); flex-wrap: wrap; }
 .purchase-order-editor__loading, .purchase-order-editor__body { display: grid; min-width: 0; gap: var(--erp-space-3); }
 .purchase-order-editor__recovery { display: grid; min-height: 220px; place-content: center; justify-items: center; gap: 10px; padding: var(--erp-space-6); color: var(--erp-text-muted); text-align: center; border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-panel-radius); background: var(--erp-surface); }
 .purchase-order-editor__recovery > i { color: var(--erp-danger); font-size: 24px; }.purchase-order-editor__recovery > div { display: grid; gap: 4px; }.purchase-order-editor__recovery strong { color: var(--erp-text); }.purchase-order-editor__recovery span { max-width: 520px; font-size: var(--erp-font-size-caption); }
-.purchase-order-editor__section { padding: clamp(14px, 1.4vw, 22px); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 8px 24px rgb(28 61 45 / 4%); }
-.purchase-order-editor__section h2 { margin: 0 0 var(--erp-space-3); color: var(--erp-text); font-size: var(--erp-font-size-section); }
-.purchase-order-editor__fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 11px 14px; }
+.purchase-order-editor__section { display: grid; gap: var(--erp-space-3); padding: clamp(14px, 1.4vw, 22px); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 8px 24px rgb(28 61 45 / 4%); }
+.purchase-order-editor__section > header { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
+.purchase-order-editor__section h2 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-section); }
+.purchase-order-editor__section small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
+.purchase-order-editor__document-setup { border-top: 3px solid color-mix(in srgb, var(--erp-accent) 76%, white); }
+.purchase-order-editor__document-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 12px 16px; }
+.purchase-order-editor__card-grid { display: grid; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--erp-space-3); }
+.purchase-order-editor__entry-card { min-width: 0; align-content: start; box-shadow: 0 5px 18px rgb(28 61 45 / 3.5%); }
+.purchase-order-editor__notes-card { grid-column: 1 / -1; }
+.purchase-order-editor__fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: 11px 14px; }
+.purchase-order-editor__delivery-fields { grid-template-columns: minmax(150px, .8fr) minmax(200px, 1fr) minmax(200px, 1fr); }
+.purchase-order-editor__control { display: grid; min-width: 0; gap: 6px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
 .purchase-order-editor__check { display: flex; min-height: var(--erp-control-height); align-items: center; gap: 8px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
 .purchase-order-editor__comments { display: grid; grid-column: span 2; gap: 6px; }
 .purchase-order-editor__comments > span { color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; text-transform: none; letter-spacing: normal; }
@@ -356,8 +400,8 @@ watch(() => props.name, load)
 .purchase-order-editor__item-comments { grid-column: span 2; }
 .purchase-order-editor__item-hint { align-self: center; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .purchase-order-editor__discard-copy { margin: 0; color: var(--erp-text-muted); line-height: 1.5; }
-@media (max-width: 1100px) { .purchase-order-editor__fields { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 900px) { .purchase-order-editor__fields, .purchase-order-editor__item-details { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 600px) { .purchase-order-editor { padding: 0 var(--erp-space-3) var(--erp-space-3); } .purchase-order-editor__header { min-height: 55px; align-items: center; flex-direction: row; gap: 8px; margin: 0 calc(var(--erp-space-3) * -1); padding: 4px var(--erp-space-3); } .purchase-order-editor__header > div:first-child { min-width: 0; flex: 1 1 auto; } .purchase-order-editor__header > div:first-child > span { display: none; } .purchase-order-editor__header h1 { overflow: hidden; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; } .purchase-order-editor__section { padding: var(--erp-space-3); } .purchase-order-editor__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .purchase-order-editor__fields > :not(.purchase-order-editor__date) { grid-column: 1 / -1; } .purchase-order-editor__date :deep(.p-datepicker-input) { padding-inline: 8px; font-size: 13px; } .purchase-order-editor__date :deep(.p-datepicker-dropdown) { width: 44px; min-width: 44px; } .purchase-order-editor__comments { grid-column: auto; } .purchase-order-editor__actions { width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; } .purchase-order-editor__actions :deep(.p-button) { min-width: 0; min-height: 44px; flex: 0 1 auto; padding-inline: 8px; font-size: 12px; } }
-@media (max-width: 340px) { .purchase-order-editor__fields { grid-template-columns: 1fr; } .purchase-order-editor__date { grid-column: 1 / -1; } }
+@media (max-width: 1100px) { .purchase-order-editor__document-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .purchase-order-editor__card-grid { grid-template-columns: 1fr; } .purchase-order-editor__notes-card { grid-column: auto; } }
+@media (max-width: 900px) { .purchase-order-editor__delivery-fields, .purchase-order-editor__item-details { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .purchase-order-editor { padding: 0 var(--erp-space-3) var(--erp-space-3); } .purchase-order-editor__header { min-height: 55px; align-items: center; flex-direction: row; gap: 8px; margin: 0 calc(var(--erp-space-3) * -1); padding: 4px var(--erp-space-3); } .purchase-order-editor__header > div:first-child { min-width: 0; flex: 1 1 auto; } .purchase-order-editor__header > div:first-child > span { display: none; } .purchase-order-editor__header h1 { overflow: hidden; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; } .purchase-order-editor__section { padding: var(--erp-space-3); } .purchase-order-editor__section > header small { display: none; } .purchase-order-editor__document-fields, .purchase-order-editor__fields, .purchase-order-editor__delivery-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .purchase-order-editor__document-fields > *, .purchase-order-editor__fields > * { grid-column: 1 / -1; } .purchase-order-editor__date :deep(.p-datepicker-input) { padding-inline: 8px; font-size: 13px; } .purchase-order-editor__date :deep(.p-datepicker-dropdown) { width: 44px; min-width: 44px; } .purchase-order-editor__comments { grid-column: auto; } .purchase-order-editor__actions { width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; } .purchase-order-editor__actions :deep(.p-button) { min-width: 0; min-height: 44px; flex: 0 1 auto; padding-inline: 8px; font-size: 12px; } }
+@media (max-width: 340px) { .purchase-order-editor__document-fields, .purchase-order-editor__fields, .purchase-order-editor__delivery-fields { grid-template-columns: 1fr; } .purchase-order-editor__date { grid-column: 1 / -1; } }
 </style>

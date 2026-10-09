@@ -83,7 +83,13 @@ const capabilities = {
 				lot_transfer: { label: "Lot Transfer", doctype: "SD YRP Lot Transfer", can_read: true, can_create: true },
 			},
 		},
-		reports: { label: "Reports", reports: { stock_balance: { label: "Stock Balance", can_read: true } } },
+		reports: {
+			label: "Reports",
+			reports: {
+				stock_balance: { label: "Stock Balance", can_read: true },
+				purchase_order_itemwise: { label: "Purchase Order Itemwise", can_read: true },
+			},
+		},
 	},
 	related_documents: {},
 }
@@ -121,9 +127,9 @@ async function selectAutocompleteOption(page, field, value) {
 	await option.click()
 }
 
-async function mockWorkspace(page, listRequests) {
+async function mockWorkspace(page, listRequests, capabilityPayload = capabilities) {
 	await page.route("**/api/method/essdee_yrp.fabric_store.web_workspace.get_capabilities*", (route) => route.fulfill({
-		status: 200, contentType: "application/json", body: JSON.stringify({ message: capabilities }),
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: capabilityPayload }),
 	}))
 	await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => {
 		const doctype = new URL(route.request().url()).searchParams.get("doctype")
@@ -278,6 +284,12 @@ async function shellSuite(page) {
 	assert(page.url().endsWith("/web/fabric-store/work-orders/WO-FAB-001"), "Work Order did not navigate to its routed workspace")
 	assert(await page.locator(".department-page__nav").count() === 0, "Saved Work Order retains the standalone Back row")
 	assert(await page.locator(".fabric-document-workspace__header > .inline-page-navigation .inline-page-navigation__back[aria-label='Back to Work Orders']").count() === 1, "Saved Work Order has no inline Back control")
+	const [workOrderNavigationBox, workOrderHeadingBox] = await Promise.all([
+		page.locator(".fabric-document-workspace__header > .inline-page-navigation").boundingBox(),
+		page.locator(".fabric-document-workspace__header > .fabric-document-workspace__heading").boundingBox(),
+	])
+	const workOrderHeadingGap = workOrderNavigationBox && workOrderHeadingBox ? workOrderHeadingBox.x - (workOrderNavigationBox.x + workOrderNavigationBox.width) : Number.POSITIVE_INFINITY
+	assert(workOrderHeadingGap >= 0 && workOrderHeadingGap <= 20, `Work Order title is not left-aligned beside document navigation: ${JSON.stringify({ workOrderNavigationBox, workOrderHeadingBox, workOrderHeadingGap })}`)
 
 	await page.goto(`${SITE}/web/fabric-store/purchase-orders`, { waitUntil: "domcontentloaded" })
 	await page.getByRole("button", { name: "Create Purchase Order", exact: true }).waitFor()
@@ -381,6 +393,141 @@ async function accessoryStoreSuite(page) {
 	assert(listRequests.filter((request) => request.kind === "list").every((request) => Array.isArray(request.filters) && request.filters.length === 0), `Accessory Store adds store-specific data filters: ${JSON.stringify(listRequests)}`)
 
 	return { cards: expectedCards, sharedDoctypes: [...sharedDoctypes] }
+}
+
+async function mockBoxStickerCapability(page, sections) {
+	await page.route("**/api/method/essdee_yrp.cut_panel_store.web_workspace.get_capabilities*", (route) => route.fulfill({
+		status: 200, contentType: "application/json", body: JSON.stringify({ message: { sections } }),
+	}))
+}
+
+async function purchaseDepartmentSuite(page) {
+	const listRequests = []
+	let reportRequest = null
+	await mockWorkspace(page, listRequests)
+	await mockBoxStickerCapability(page, {
+		box_stickers: { label: "Box Sticker Print", doctype: "SD YRP Box Sticker Print", can_read: true, can_create: true },
+	})
+	await page.route("**/api/method/frappe.desk.query_report.run*", (route) => {
+		const body = requestBody(route)
+		reportRequest = body
+		return route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({ message: {
+				columns: [
+					{ fieldname: "name", label: "PO Number", fieldtype: "Link", options: "Purchase Order" },
+					{ fieldname: "supplier_name", label: "Supplier Name", fieldtype: "Data" },
+					{ fieldname: "item_variant", label: "Item Variant", fieldtype: "Link", options: "Item" },
+					{ fieldname: "qty", label: "Qty", fieldtype: "Float" },
+					{ fieldname: "delivered_qty", label: "Delivered Qty", fieldtype: "Float" },
+					{ fieldname: "pending_qty", label: "Pending Qty", fieldtype: "Float" },
+					{ fieldname: "delivery_date", label: "Delivery Date", fieldtype: "Date" },
+					{ fieldname: "status", label: "Status", fieldtype: "Data" },
+				],
+				result: [
+					{
+						name: "PO-FAB-001", supplier_name: "Fabric Supplier", item_variant: "STYLE-001-S",
+						qty: 12, delivered_qty: 7, pending_qty: 5, delivery_date: "2026-10-13", status: "Partially Delivered",
+					},
+					{
+						name: "PO-FAB-002", supplier_name: "Fabric Supplier", item_variant: "STYLE-001-M",
+						qty: 4, delivered_qty: 2, pending_qty: 2, delivery_date: "2026-10-01", status: "Overdue",
+					},
+				],
+			} }),
+		})
+	})
+	await page.setViewportSize({ width: 1600, height: 1000 })
+	await page.goto(`${SITE}/web/purchase`, { waitUntil: "domcontentloaded" })
+	const launcher = page.locator(".workspace-launcher")
+	await launcher.waitFor({ timeout: 20_000 })
+
+	const expectedCards = ["Purchase Orders", "Stock Transfers", "Box Sticker Print", "Reports"]
+	const cards = launcher.locator(".workspace-launcher__card")
+	await cards.nth(expectedCards.length - 1).waitFor()
+	assert(await cards.count() === expectedCards.length, `Unexpected Purchase card count: ${await cards.count()}`)
+	assert(JSON.stringify((await cards.locator("strong").allTextContents()).map((label) => label.trim())) === JSON.stringify(expectedCards), `Unexpected Purchase cards: ${JSON.stringify(await cards.locator("strong").allTextContents())}`)
+	assert(await launcher.getByText("Work Orders", { exact: true }).count() === 0, "Purchase workspace exposes Work Orders")
+	for (const [label, path] of [
+		["Purchase Orders", "/web/purchase/purchase-orders"],
+		["Stock Transfers", "/web/purchase/stock-transfers"],
+		["Box Sticker Print", "/web/purchase/box-sticker-prints"],
+		["Reports", "/web/purchase/reports"],
+	]) {
+		assert(await launcher.getByRole("link", { name: new RegExp(`^${label}`) }).getAttribute("href") === path, `${label} points outside Purchase`)
+	}
+
+	await launcher.getByRole("link", { name: /^Purchase Orders/ }).click()
+	await page.waitForURL("**/web/purchase/purchase-orders")
+	const purchaseOrders = page.locator(".fabric-purchase-orders .common-list-view")
+	await purchaseOrders.waitFor({ timeout: 20_000 })
+	await purchaseOrders.locator(".premium-list-table").getByText("PO-FAB-001", { exact: true }).click()
+	await page.waitForURL("**/web/purchase/purchase-orders/PO-FAB-001")
+	await page.locator(".fabric-purchase-order-frame").waitFor({ timeout: 20_000 })
+
+	await page.goto(`${SITE}/web/purchase/box-sticker-prints`, { waitUntil: "domcontentloaded" })
+	await page.locator(".box-sticker-prints .common-list-view").waitFor({ timeout: 20_000 })
+	assert(await page.getByRole("button", { name: "Create Box Sticker Print" }).count() === 1, "Purchase Box Sticker Print does not reuse the shared create action")
+	assert(await page.locator(".inline-page-navigation__back[aria-label='Back to Purchase']").count() === 1, "Purchase Box Sticker Print does not return to Purchase")
+	assert(listRequests.some((request) => request.kind === "list" && request.doctype === "SD YRP Box Sticker Print"), "Purchase Box Sticker Print did not load shared Box Sticker data")
+
+	await page.goto(`${SITE}/web/purchase/stock-transfers`, { waitUntil: "domcontentloaded" })
+	await page.locator(".fabric-stock-transfers .stock-operation-card").first().waitFor({ timeout: 20_000 })
+	assert(await page.locator(".fabric-stock-transfers .stock-operation-card").count() === 4, "Purchase does not reuse all Stock Transfer operations")
+
+	await page.goto(`${SITE}/web/purchase/reports`, { waitUntil: "domcontentloaded" })
+	const reports = page.locator(".fabric-reports")
+	await reports.waitFor({ timeout: 20_000 })
+	const reportTabs = reports.getByRole("tab")
+	await reportTabs.nth(1).waitFor({ timeout: 20_000 })
+	assert(JSON.stringify(await reportTabs.allTextContents()) === JSON.stringify(["Stock Balance", "Purchase Order Itemwise"]), `Unexpected Purchase report tabs: ${JSON.stringify(await reportTabs.allTextContents())}`)
+	assert(await reports.locator(".stock-advanced").count() === 1, "Purchase Stock Balance report is not the shared component")
+	await reportTabs.filter({ hasText: "Purchase Order Itemwise" }).click()
+	const itemwise = reports.locator(".purchase-order-itemwise-report")
+	await itemwise.waitFor()
+	await itemwise.getByRole("button", { name: "Generate", exact: true }).click()
+	await itemwise.getByText("PO-FAB-001", { exact: true }).waitFor()
+	assert(reportRequest?.report_name === "SD YRP Purchase Order Itemwise", `Purchase report used the wrong backend report: ${JSON.stringify(reportRequest)}`)
+	assert(JSON.parse(reportRequest?.filters || "{}").open_status === "Open", `Purchase report omitted the default Open status: ${JSON.stringify(reportRequest)}`)
+	assert(await itemwise.getByText("Partially Delivered", { exact: true }).count() === 1, "Purchase report does not render item-row status")
+	assert(await itemwise.locator("tbody").getByText("5.000", { exact: true }).count() === 1, "Purchase report does not render pending quantity")
+	const overdueStatus = itemwise.locator(".purchase-order-itemwise-report__status--overdue")
+	assert(await overdueStatus.getByText("Overdue", { exact: true }).count() === 1, "Purchase report does not preserve the Overdue status indicator")
+	assert(await overdueStatus.evaluate((element) => getComputedStyle(element).backgroundColor) === "rgb(255, 240, 241)", "Purchase report does not visually distinguish Overdue status")
+	assert(await itemwise.locator("tbody tr").filter({ hasText: "PO-FAB-002" }).locator(".purchase-order-itemwise-report__pending--overdue").count() === 1, "Purchase report does not identify overdue pending quantity")
+	await page.setViewportSize({ width: 390, height: 844 })
+	await assertNoPageOverflow(page, "Purchase reports at 390px")
+
+	const sharedDoctypes = new Set(listRequests.filter((request) => request.kind === "list").map((request) => request.doctype))
+	for (const doctype of ["Purchase Order", "YRP Stock Entry"]) {
+		assert(sharedDoctypes.has(doctype), `Purchase did not load shared ${doctype} data`)
+	}
+	assert(!sharedDoctypes.has("YRP Work Order"), `Purchase loaded Work Order data: ${JSON.stringify([...sharedDoctypes])}`)
+
+	const poOnlyCapabilities = structuredClone(capabilities)
+	poOnlyCapabilities.sections.reports.reports = {
+		purchase_order_itemwise: { label: "Purchase Order Itemwise", can_read: true },
+	}
+	const permissionPage = await page.context().newPage()
+	try {
+		await mockWorkspace(permissionPage, [], poOnlyCapabilities)
+		await mockBoxStickerCapability(permissionPage, {})
+		for (const workspace of ["fabric-store", "accessory-store"]) {
+			await permissionPage.goto(`${SITE}/web/${workspace}`, { waitUntil: "domcontentloaded" })
+			const storeLauncher = permissionPage.locator(".workspace-launcher")
+			await storeLauncher.waitFor({ timeout: 20_000 })
+			assert(await storeLauncher.getByText("Reports", { exact: true }).count() === 0, `${workspace} exposes a dead Reports card for PO-only report permission`)
+		}
+		await permissionPage.goto(`${SITE}/web/purchase`, { waitUntil: "domcontentloaded" })
+		const purchaseLauncher = permissionPage.locator(".workspace-launcher")
+		await purchaseLauncher.waitFor({ timeout: 20_000 })
+		assert(await purchaseLauncher.getByText("Reports", { exact: true }).count() === 1, "Purchase hides its permitted Itemwise report card")
+		assert(await purchaseLauncher.getByText("Box Sticker Print", { exact: true }).count() === 0, "Purchase exposes Box Sticker Print without permission")
+	} finally {
+		await permissionPage.close()
+	}
+	return { cards: expectedCards, report: reportRequest?.report_name, sharedDoctypes: [...sharedDoctypes] }
 }
 
 async function mobileRecordDetailsSuite(page) {
@@ -541,9 +688,11 @@ async function workOrderSuite(page) {
 		delivery_challans: [
 			{ name: "DC-002", docstatus: 1, status: "Submitted", posting_date: "2026-10-03", posting_time: "12:30:00", supplier: "FABRIC-STORE", total_delivered_qty: 12 },
 			{ name: "DC-001", docstatus: 0, status: "Draft", posting_date: "2026-10-02", posting_time: "10:00:00", supplier: "FABRIC-STORE" },
+			...Array.from({ length: 12 }, (_, index) => ({ name: `DC-SCROLL-${String(index + 1).padStart(2, "0")}`, docstatus: 0, status: "Draft", posting_date: "2026-10-01", posting_time: "09:00:00", supplier: "FABRIC-STORE" })),
 		],
 		goods_received_notes: [
 			{ name: "GRN-001", docstatus: 1, status: "Submitted", posting_date: "2026-10-03", posting_time: "14:15:00", supplier: "FABRIC-STORE" },
+			...Array.from({ length: 12 }, (_, index) => ({ name: `GRN-SCROLL-${String(index + 1).padStart(2, "0")}`, docstatus: 1, status: "Submitted", posting_date: "2026-10-01", posting_time: "15:00:00", supplier: "FABRIC-STORE" })),
 		],
 		permissions: { can_read: true, can_write: true, can_cancel: true, can_print: true },
 		capabilities: {
@@ -595,13 +744,17 @@ async function workOrderSuite(page) {
 			return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ exc: "TemporaryError", message: "Work Order editor is temporarily unavailable." }) })
 		}
 		const fabricCalculation = name === "WO-FAB-KNIT"
+		const isRework = name === "WO-REWORK-001"
+		const hasExtraHeaderDimension = name === "WO-DIMENSION-001"
 		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: {
 			doctype: "YRP Work Order", name, modified: "2026-10-03 10:00:00",
-			values: { supplier: "FABRIC-STORE", process_name: "Knitting", lot: "LOT-001", item: "STYLE-001", production_detail: "IPD-001", wo_date: "2026-10-03", no_receivables: 0, expected_delivery_date: "2026-10-10", planned_start_date: "2026-10-03", planned_end_date: "2026-10-08", supplier_address: "", delivery_address: "", edit_wo_date: 0 },
+			values: { naming_series: "YRP-WO-.YYYY.-", edit_wo_date: 0, wo_date: "2026-10-03", supplier: "FABRIC-STORE", process_name: "Knitting", lot: "LOT-001", item: "STYLE-001", production_detail: "IPD-001", no_receivables: 0, expected_delivery_date: "2026-10-10", planned_start_date: "2026-10-03", planned_end_date: "2026-10-08", supplier_address: "", delivery_address: "", planned_quantity: 24, is_rework: isRework ? 1 : 0, parent_wo: isRework ? "WO-PARENT-001" : "", supplier_type: isRework ? "Same Supplier" : "", rework_type: isRework ? "No Cost" : "" },
 			deliverable_details: name ? [group] : [], receivable_details: name ? [group] : [], calculated_items: name ? [{ name: "CALC-1", item_variant: "STYLE-001-S", quantity: 10, uom: "Pieces" }] : [],
 			selection_context: { process_is_cloth_process: false, options: [{ item: "STYLE-001", production_detail: "IPD-001" }], item_options: ["STYLE-001"] },
 			calculation_contexts: fabricCalculation ? { fabric: { rows: [{ fabric_row: "FABRIC-ROW-1", cloth_item: "CLOTH-001", production_detail: "IPD-001", kind: "knitting", has_colour: true, reference_routed: false, greige_colour: "Greige", colour_options: ["Greige", "Melange"], ratio: 1, yarns: [{ yarn_item: "YARN-001", ratio: 100 }], qty_rows: [{ key: "MATRIX-1:0", label: "30 Dia", out_attrs: { Dia: "30" }, prefill: 12 }] }] } } : name ? { garment: { process: "Knitting", rows: [{ source_row: "LOT-ROW-1", item_variant: "STYLE-001-S", attributes: { Colour: "Navy", Size: "S" }, available_qty: 10, qty: 10 }] } } : {},
 			fields: [
+				{ fieldname: "naming_series", label: "WO Series", fieldtype: "Select", options: "YRP-WO-.YYYY.-", reqd: true, read_only: false },
+				{ fieldname: "edit_wo_date", label: "Edit WO Date", fieldtype: "Check", reqd: false, read_only: false },
 				{ fieldname: "supplier", label: "Supplier", fieldtype: "Link", reqd: true, read_only: false },
 				{ fieldname: "process_name", label: "Process", fieldtype: "Link", reqd: true, read_only: false },
 				{ fieldname: "lot", label: "Lot", fieldtype: "Link", reqd: true, read_only: false },
@@ -613,9 +766,17 @@ async function workOrderSuite(page) {
 				{ fieldname: "expected_delivery_date", label: "Expected Delivery Date", fieldtype: "Date", reqd: true, read_only: false },
 				{ fieldname: "supplier_address", label: "Supplier Address", fieldtype: "Link", options: "Address", reqd: true, read_only: false },
 				{ fieldname: "delivery_address", label: "Delivery Address", fieldtype: "Link", options: "Address", reqd: true, read_only: false },
+				{ fieldname: "planned_quantity", label: "Planned Quantity", fieldtype: "Int", reqd: false, read_only: true },
+				{ fieldname: "is_rework", label: "Is Rework", fieldtype: "Check", reqd: false, read_only: true },
+				{ fieldname: "parent_wo", label: "Parent WO", fieldtype: "Link", reqd: isRework, read_only: true },
+				{ fieldname: "supplier_type", label: "Supplier Type", fieldtype: "Select", options: "Same Supplier\nDifferent Supplier", reqd: isRework, read_only: true },
+				{ fieldname: "rework_type", label: "Rework Type", fieldtype: "Select", options: "\nNo Cost\nNet Cost Nil\nAdditional Cost", reqd: isRework, read_only: true },
 			],
 			condition_values: { edit_wo_date: 0 },
-			dimensions: [{ fieldname: "lot", label: "Lot", fieldtype: "Link", options: "SD YRP Lot", mandatory: 1, value: "LOT-001" }], permissions: { can_create: true, can_write: true, can_submit: false },
+			dimensions: [
+				{ fieldname: "lot", label: "Lot", fieldtype: "Link", options: "SD YRP Lot", mandatory: 1, value: "LOT-001" },
+				...(hasExtraHeaderDimension ? [{ fieldname: "production_batch", label: "Production Batch", fieldtype: "Link", options: "YRP Production Batch", mandatory: 1, value: "BATCH-001" }] : []),
+			], permissions: { can_create: true, can_write: true, can_submit: false },
 		} }) })
 	})
 	await page.route("**/api/method/essdee_yrp.fabric_store.web_workspace.execute_work_order_command*", (route) => {
@@ -666,7 +827,12 @@ async function workOrderSuite(page) {
 					doctype, name, docstatus: 0, status: "Draft", modified: "2026-10-03 12:00:00",
 					work_order: "WO-FAB-001", process_name: "Knitting", item: "STYLE-001", lot: "LOT-001", supplier: "FABRIC-STORE",
 				},
-			fields: [{ fieldname: "posting_date", label: "Posting Date", fieldtype: "Date", value: "2026-10-03" }], totals: [], matrices: {}, related: {},
+			fields: [
+				{ fieldname: "naming_series", label: "Series", fieldtype: "Select", options: doctype === "YRP Goods Received Note" ? "YRP-GRN-.YYYY.-" : "DC-.YYYY.-", value: doctype === "YRP Goods Received Note" ? "YRP-GRN-.YYYY.-" : "DC-.YYYY.-", reqd: true },
+				{ fieldname: "posting_date", label: "Posting Date", fieldtype: "Date", value: "2026-10-03", reqd: true },
+				{ fieldname: "from_warehouse", label: "From Warehouse", fieldtype: "Link", options: "Warehouse", value: "SUPPLIER-WH" },
+				{ fieldname: "to_warehouse", label: "To Warehouse", fieldtype: "Link", options: "Warehouse", value: "FABRIC-WH", reqd: true },
+			], totals: [], matrices: {}, related: {},
 			permissions: { can_read: true, can_create: !name, can_write: Boolean(name), can_submit: false, can_print: false }, capabilities: {}, print_formats: [], root,
 		} }) })
 	})
@@ -819,6 +985,29 @@ async function workOrderSuite(page) {
 	const railHeights = await railSections.evaluateAll((elements) => elements.map((element) => Math.round(element.getBoundingClientRect().height)))
 	assert(Math.abs(railHeights[0] - railHeights[1]) <= 2, `DC and GRN rail sections are not 50/50: ${railHeights}`)
 	assert(await page.locator(".activity-list").evaluateAll((elements) => elements.every((element) => ["auto", "scroll"].includes(getComputedStyle(element).overflowY))), "Rail lists do not scroll independently")
+	const independentScrollGeometry = await frame.evaluate((root) => {
+		const content = root.querySelector(".fabric-document-workspace__content")
+		const columns = root.querySelector(".fabric-document-workspace__columns")
+		const main = root.querySelector(".fabric-document-workspace__main")
+		const rail = root.querySelector(".fabric-document-workspace__rail")
+		const lists = [...root.querySelectorAll(".activity-list")]
+		return {
+			contentOverflowY: getComputedStyle(content).overflowY,
+			columnsHeight: columns.getBoundingClientRect().height,
+			contentHeight: content.getBoundingClientRect().height,
+			mainOverflowY: getComputedStyle(main).overflowY,
+			railHeight: rail.getBoundingClientRect().height,
+			lists: lists.map((list) => ({ clientHeight: list.clientHeight, scrollHeight: list.scrollHeight })),
+		}
+	})
+	assert(
+		independentScrollGeometry.contentOverflowY === "hidden"
+			&& independentScrollGeometry.columnsHeight <= independentScrollGeometry.contentHeight + 1
+			&& ["auto", "scroll"].includes(independentScrollGeometry.mainOverflowY)
+			&& independentScrollGeometry.railHeight <= independentScrollGeometry.contentHeight + 1
+			&& independentScrollGeometry.lists.every(({ clientHeight, scrollHeight }) => scrollHeight > clientHeight),
+		`Work Order main content and related rail do not keep independent bounded scrolling: ${JSON.stringify(independentScrollGeometry)}`,
+	)
 	assert(await page.getByRole("button", { name: /Filter Delivery Challans/ }).count() === 1, "Delivery Challan filter is missing")
 	assert(await page.getByRole("button", { name: /Filter Goods Received Notes/ }).count() === 1, "Goods Received Note filter is missing")
 	for (const label of ["Delivery Challans", "Goods Received Notes"]) {
@@ -855,10 +1044,15 @@ async function workOrderSuite(page) {
 	await page.getByRole("button", { name: "Make DC", exact: true }).click()
 	let relatedDialog = page.getByRole("dialog", { name: /Delivery Challan.*New/ })
 	await relatedDialog.waitFor()
+	await relatedDialog.evaluate(async (element) => {
+		const transitions = element.getAnimations().filter((animation) => Number.isFinite(animation.effect?.getComputedTiming().endTime))
+		await Promise.allSettled(transitions.map((animation) => animation.finished))
+	})
 	assert(await relatedDialog.locator(".delivery-challan-workspace").count() === 1, "WO does not launch the shared Delivery Challan workspace")
 	assert(await relatedDialog.locator(".p-dialog-maximize-button").count() === 1, "WO Delivery Challan workspace is not maximizable")
 	assert(page.url() === parentUrl, "Opening a Work Order Delivery Challan navigated away from the parent")
 	assert(await relatedDialog.getByRole("button", { name: "Submit", exact: true }).count() === 0, "Embedded Delivery Challan exposes unauthorized Submit")
+	await page.evaluate(() => document.fonts.ready.then(() => true))
 	const embeddedFactsLayout = await relatedDialog.locator(".delivery-challan-header__facts").evaluate((element) => {
 		const items = [...element.children].map((child) => child.getBoundingClientRect())
 		const header = element.closest(".fabric-document-workspace__header")?.getBoundingClientRect()
@@ -916,6 +1110,15 @@ async function workOrderSuite(page) {
 	relatedDialog = page.getByRole("dialog", { name: /Goods Received Note.*New/ })
 	await relatedDialog.waitFor()
 	assert(await relatedDialog.locator(".goods-received-note-workspace").count() === 1, "WO does not launch the shared GRN workspace")
+	const woGrnSharedCards = relatedDialog.locator(".fabric-document-workspace__fields .document-field-group-grid__card[aria-labelledby]")
+	await woGrnSharedCards.first().waitFor({ timeout: 20_000 })
+	const woGrnSharedCardCount = await woGrnSharedCards.count()
+	assert(woGrnSharedCardCount === 2, `WO GRN does not render its primary entry sections through the shared field-group component (found ${woGrnSharedCardCount})`)
+	const woGrnCardBoxes = await woGrnSharedCards.evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().toJSON()))
+	assert(
+		Math.abs(woGrnCardBoxes[0].y - woGrnCardBoxes[1].y) <= 2 && woGrnCardBoxes[0].x < woGrnCardBoxes[1].x,
+		`WO GRN shared entry cards are not aligned in one row: ${JSON.stringify(woGrnCardBoxes)}`,
+	)
 	assert(page.url() === parentUrl, "Opening a Work Order GRN navigated away from the parent")
 	await relatedDialog.getByRole("button", { name: "Close workspace", exact: true }).click()
 
@@ -995,16 +1198,26 @@ async function workOrderSuite(page) {
 	const workOrderEditor = page.locator(".work-order-editor")
 	await workOrderEditor.waitFor()
 	assert(await workOrderEditor.getByRole("heading", { name: "Edit Work Order", exact: true }).count() === 1, "Work Order edit route does not render the editor")
+	for (const heading of ["Series & Work Order date", "Production source", "Supplier & delivery", "Planning dates & quantity", "Terms & notes"]) {
+		assert(await workOrderEditor.getByRole("heading", { name: heading, exact: true }).count() === 1, `Work Order editor is missing its ${heading} section`)
+	}
+	assert(await workOrderEditor.locator(".work-order-editor__document-setup").count() === 1, "Work Order document setup is not visually separated")
+	assert(await workOrderEditor.locator(".work-order-editor__card-grid").count() === 1, "Work Order setup cards are not grouped in the approved layout")
+	assert(await workOrderEditor.getByRole("heading", { name: "Stock dimensions", exact: true }).count() === 0, "Standard Work Order incorrectly asks for rework stock dimensions")
+	assert((await workOrderEditor.getByRole("combobox", { name: "WO Series *", exact: true }).textContent())?.includes("YRP-WO-.YYYY.-"), "Work Order editor does not expose Naming Series")
 	assert(await workOrderEditor.getByRole("button", { name: "Calculate Items", exact: true }).count() === 1, "Draft Work Order calculation does not follow the server calculation context")
 	assert(await workOrderEditor.getByRole("button", { name: "Save & Submit", exact: true }).count() === 0, "Work Order editor exposes Save & Submit without submit permission")
 	assert(await workOrderEditor.locator("label").filter({ hasText: /^Lot/ }).count() === 1, "Work Order editor renders Lot twice through its dynamic dimensions")
-	assert(await workOrderEditor.getByLabel(/WO Date/).isDisabled(), "Work Order date ignores its effective read-only dependency")
+	const workOrderDateInput = workOrderEditor.locator(".work-order-editor__date-field input")
+	assert(await workOrderDateInput.isDisabled(), "Work Order date ignores its effective read-only dependency")
+	await workOrderEditor.getByLabel("Edit WO Date", { exact: true }).click()
+	assert(!(await workOrderDateInput.isDisabled()), "Edit WO Date does not unlock the Work Order date")
 	assert(await workOrderEditor.getByText("Planned Start Date *", { exact: true }).count() === 1, "Work Order editor does not expose required planned-start metadata")
 	assert(await workOrderEditor.getByText("Supplier Address *", { exact: true }).count() === 1, "Work Order editor does not expose required supplier-address metadata")
-	for (const label of ["Process *", "Lot *", "Item *", "Supplier Address *", "Delivery Address *"]) {
+	for (const label of ["WO Series *", "Process *", "Lot *", "Item *", "Supplier Address *", "Delivery Address *"]) {
 		assert(await workOrderEditor.getByRole("combobox", { name: label, exact: true }).getAttribute("aria-required") === "true", `Work Order editor does not expose ${label} as required to assistive technology`)
 	}
-	assert(await workOrderEditor.getByRole("button", { name: "Save", exact: true }).isDisabled(), "Work Order editor allows save with missing effective mandatory addresses")
+	assert(await workOrderEditor.getByRole("button", { name: "Save Work Order", exact: true }).isDisabled(), "Work Order editor allows save with missing effective mandatory addresses")
 	const processField = workOrderEditor.locator(".common-field").filter({ hasText: "Process *" })
 	await selectAutocompleteOption(page, processField, "Dyeing")
 	const workOrderSourceDialog = page.getByRole("dialog", { name: "Change Process?" })
@@ -1044,15 +1257,31 @@ async function workOrderSuite(page) {
 	await page.goto(`${SITE}/web/fabric-store/work-orders/new`, { waitUntil: "domcontentloaded" })
 	await page.locator(".work-order-editor").waitFor()
 	assert(await page.getByRole("heading", { name: "New Work Order", exact: true }).count() === 1, "Work Order new route does not render the editor")
-	assert(await page.getByRole("button", { name: "Save", exact: true }).count() === 1, "Work Order new route does not expose the permission-controlled Save action")
+	assert(await page.getByRole("button", { name: "Save Work Order", exact: true }).count() === 1, "Work Order new route does not expose the permission-controlled Save action")
 	assert(await page.getByRole("button", { name: "Save & Submit", exact: true }).count() === 0, "New Work Order exposes Save & Submit without submit permission")
 	await page.setViewportSize({ width: 390, height: 844 })
 	const workOrderMobileHeader = await page.locator(".work-order-editor__header").evaluate((element) => ({ height: element.getBoundingClientRect().height, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }))
 	assert(workOrderMobileHeader.height <= 60 && workOrderMobileHeader.scrollWidth === workOrderMobileHeader.clientWidth, `Work Order mobile header is oversized or overflows: ${JSON.stringify(workOrderMobileHeader)}`)
 	assert(await page.locator(".work-order-editor__matrix-prompt").count() === 1 && await page.locator(".work-order-editor__matrix-section").count() === 0, "Blank Work Order still renders empty quantity matrices")
 	const workOrderScheduleBoxes = await page.locator(".work-order-editor__schedule-field").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().toJSON()))
-	assert(workOrderScheduleBoxes.length === 4 && Math.abs(workOrderScheduleBoxes[0].bottom - workOrderScheduleBoxes[1].bottom) < 2 && Math.abs(workOrderScheduleBoxes[2].bottom - workOrderScheduleBoxes[3].bottom) < 2, `Work Order planning dates do not use compact paired mobile rows: ${JSON.stringify(workOrderScheduleBoxes)}`)
+	assert(workOrderScheduleBoxes.length === 3 && Math.abs(workOrderScheduleBoxes[0].bottom - workOrderScheduleBoxes[1].bottom) < 2, `Work Order planning dates do not use compact paired mobile rows: ${JSON.stringify(workOrderScheduleBoxes)}`)
+	const workOrderEntryWidth = await page.locator(".work-order-editor").evaluate((element) => ({ clientWidth: element.clientWidth, scrollWidth: element.scrollWidth }))
+	assert(workOrderEntryWidth.clientWidth === workOrderEntryWidth.scrollWidth, `Sectioned Work Order entry overflows on mobile: ${JSON.stringify(workOrderEntryWidth)}`)
 	await page.setViewportSize({ width: 1600, height: 1000 })
+
+	await page.goto(`${SITE}/web/fabric-store/work-orders/WO-REWORK-001/edit`, { waitUntil: "domcontentloaded" })
+	const reworkEditor = page.locator(".work-order-editor")
+	await reworkEditor.waitFor()
+	assert(await reworkEditor.getByRole("heading", { name: "Rework details", exact: true }).count() === 1, "Rework Work Order does not expose its conditional source section")
+	assert(await reworkEditor.getByText("WO-PARENT-001", { exact: true }).count() === 1, "Rework Work Order hides its parent lineage")
+	assert(await reworkEditor.getByText("No Cost", { exact: true }).count() === 1, "Rework Work Order hides its rework type")
+	assert(await reworkEditor.getByRole("heading", { name: "Stock dimensions", exact: true }).count() === 0, "Rework Work Order duplicates Lot or exposes row-only stock dimensions")
+
+	await page.goto(`${SITE}/web/fabric-store/work-orders/WO-DIMENSION-001/edit`, { waitUntil: "domcontentloaded" })
+	const dimensionEditor = page.locator(".work-order-editor")
+	await dimensionEditor.waitFor()
+	assert(await dimensionEditor.getByRole("heading", { name: "Stock dimensions", exact: true }).count() === 1, "Standard Work Order hides an additional production-group header dimension")
+	assert(await dimensionEditor.getByRole("combobox", { name: "Production Batch *", exact: true }).inputValue() === "BATCH-001", "Standard Work Order does not initialise its header dimension")
 
 	await page.goto(`${SITE}/web/fabric-store/work-orders/WO-EDITOR-LOAD-ERROR/edit`, { waitUntil: "domcontentloaded" })
 	const failedEditor = page.locator(".work-order-editor")
@@ -1220,6 +1449,8 @@ async function purchaseOrderSuite(page) {
 			fields: [
 				{ fieldname: "posting_date", label: "Posting Date", fieldtype: "Date", value: "2026-10-03", reqd: true },
 				{ fieldname: "supplier", label: "Supplier", fieldtype: "Link", options: "Supplier", value: "SUPPLIER-001", read_only: true },
+				{ fieldname: "from_warehouse", label: "From Warehouse", fieldtype: "Link", options: "Warehouse", value: "SUPPLIER-WH" },
+				{ fieldname: "to_warehouse", label: "To Warehouse", fieldtype: "Link", options: "Warehouse", value: "FABRIC-WH", reqd: true },
 			],
 			totals: [{ fieldname: "total_received_quantity", label: "Total Received Quantity", value: 0 }],
 			permissions: { can_read: true, can_create: true, can_write: false, can_submit: false, can_print: false },
@@ -1245,10 +1476,18 @@ async function purchaseOrderSuite(page) {
 		status: 200, contentType: "application/json", body: JSON.stringify({ message: {
 			doctype: "Purchase Order", name, modified: "2026-10-03 10:00:00",
 			values: {
+				naming_series: "PUR-ORD-.YYYY.-",
 				supplier: "SUPPLIER-001", transaction_date: "2026-10-03", schedule_date: "2026-10-08",
 				set_warehouse: "FABRIC-WH", default_delivery_location: "S-0005", deliver_to_supplier: 0,
 				currency: "INR", company: "Essdee", comments: "",
 			},
+			fields: [
+				{ fieldname: "naming_series", label: "Naming Series", fieldtype: "Select", options: "PUR-ORD-.YYYY.-", reqd: true, read_only: false },
+				{ fieldname: "supplier", label: "Supplier", fieldtype: "Link", options: "Supplier", reqd: true, read_only: false },
+				{ fieldname: "transaction_date", label: "Order date", fieldtype: "Date", reqd: true, read_only: false },
+				{ fieldname: "schedule_date", label: "Required by", fieldtype: "Date", reqd: true, read_only: false },
+				{ fieldname: "set_warehouse", label: "Delivery warehouse", fieldtype: "Link", options: "Warehouse", reqd: true, read_only: false },
+			],
 			item_groups: staleItemGroups, dimensions: [], locked_dimensions: [], default_dimensions: {},
 			item_filters: { has_variants: 1, disabled: 0 }, price_validation_enabled: priceValidationEnabled,
 			permissions: { can_create: true, can_write: true, can_submit: true },
@@ -1377,6 +1616,16 @@ async function purchaseOrderSuite(page) {
 	await relatedDialog.waitFor()
 	assert(await relatedDialog.locator(".goods-received-note-workspace").count() === 1, "PO does not launch the reusable GRN workspace")
 	assert(await relatedDialog.locator(".p-dialog-maximize-button").count() === 1, "PO GRN workspace is not maximizable")
+	const poGrnSharedCards = relatedDialog.locator(".fabric-document-workspace__fields .document-field-group-grid__card[aria-labelledby]")
+	await poGrnSharedCards.first().waitFor({ timeout: 20_000 })
+	assert(await poGrnSharedCards.count() === 2, "PO GRN does not render its primary entry sections through the shared field-group component")
+	const poGrnCards = await relatedDialog.locator(".fabric-document-workspace__fields .goods-received-note-field-group").evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().toJSON()))
+	assert(
+		poGrnCards.length === 2
+			&& Math.abs(poGrnCards[0].y - poGrnCards[1].y) <= 2
+			&& poGrnCards[0].x < poGrnCards[1].x,
+		`Purchase Order GRN creation does not use the approved section-card row: ${JSON.stringify(poGrnCards)}`,
+	)
 	assert(page.url() === parentUrl, "Opening the PO GRN workspace navigated away from the Purchase Order")
 	await relatedDialog.getByRole("button", { name: "Close workspace", exact: true }).click()
 
@@ -1440,6 +1689,12 @@ async function purchaseOrderSuite(page) {
 	await page.waitForURL("**/web/fabric-store/purchase-orders/new")
 	const purchaseOrderEditor = page.locator(".purchase-order-editor")
 	await purchaseOrderEditor.waitFor()
+	for (const heading of ["Series & order date", "Supplier & schedule", "Delivery destination", "Terms & notes"]) {
+		assert(await purchaseOrderEditor.getByRole("heading", { name: heading, exact: true }).count() === 1, `Purchase Order editor is missing its ${heading} section`)
+	}
+	assert(await purchaseOrderEditor.locator(".purchase-order-editor__document-setup").count() === 1, "Purchase Order document setup is not visually separated")
+	assert(await purchaseOrderEditor.locator(".purchase-order-editor__card-grid").count() === 1, "Purchase Order setup cards are not grouped in the approved layout")
+	assert((await purchaseOrderEditor.getByRole("combobox", { name: "Naming Series *", exact: true }).textContent())?.includes("PUR-ORD-.YYYY.-"), "Purchase Order editor does not expose Naming Series")
 	await page.setViewportSize({ width: 390, height: 844 })
 	const purchaseOrderMobileHeader = await page.locator(".purchase-order-editor__header").evaluate((element) => ({ height: element.getBoundingClientRect().height, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }))
 	assert(purchaseOrderMobileHeader.height <= 60 && purchaseOrderMobileHeader.scrollWidth === purchaseOrderMobileHeader.clientWidth, `Purchase Order mobile header is oversized or overflows: ${JSON.stringify(purchaseOrderMobileHeader)}`)
@@ -1447,7 +1702,7 @@ async function purchaseOrderSuite(page) {
 	const companyValue = await companyInput.inputValue()
 	assert(!companyValue || await companyInput.getAttribute("title") === companyValue, "Committed Company LinkField value has no full-value title affordance")
 	const purchaseOrderDateBoxes = await page.locator(".purchase-order-editor__date").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().toJSON()))
-	assert(purchaseOrderDateBoxes.length === 2 && Math.abs(purchaseOrderDateBoxes[0].y - purchaseOrderDateBoxes[1].y) < 2, `Purchase Order dates do not use one compact mobile row: ${JSON.stringify(purchaseOrderDateBoxes)}`)
+	assert(purchaseOrderDateBoxes.length === 2 && purchaseOrderDateBoxes.every((box) => box.width >= 280), `Sectioned Purchase Order dates do not use their available mobile width: ${JSON.stringify(purchaseOrderDateBoxes)}`)
 	await page.setViewportSize({ width: 320, height: 568 })
 	const narrowPurchaseOrderDateBoxes = await page.locator(".purchase-order-editor__date").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().toJSON()))
 	assert(narrowPurchaseOrderDateBoxes.length === 2 && Math.abs(narrowPurchaseOrderDateBoxes[0].y - narrowPurchaseOrderDateBoxes[1].y) >= 40 && narrowPurchaseOrderDateBoxes.every((box) => box.width >= 220), `Purchase Order dates are truncated instead of stacking on narrow phones: ${JSON.stringify(narrowPurchaseOrderDateBoxes)}`)
@@ -1935,7 +2190,10 @@ async function deliveryChallanSuite(page) {
 			...draftPayload("DC-FAB-001").record, docstatus: 1, status: "Submitted", is_internal_unit: 1,
 			transfer_complete: transferComplete ? 1 : 0, ste_transferred_percent: transferComplete ? 100 : 45,
 		},
-		permissions: { can_read: true, can_write: false, can_submit: false, can_cancel: true, can_amend: false, can_print: true },
+		fields: structuredClone(fields).map((field) => ({ ...field, allow_on_submit: false, read_only: true })),
+		allow_on_submit_fields: ["items", "correction_items"],
+		dimensions: [{ fieldname: "received_type", label: "Received Type", fieldtype: "Link", options: "YRP Received Type", value: "Accepted", locked: true }],
+		permissions: { can_read: true, can_write: false, can_update_after_submit: true, can_submit: false, can_cancel: true, can_amend: false, can_print: true },
 		capabilities: {
 			cancel: { label: "Cancel" }, return: { label: "Return" },
 			...(transferComplete ? {} : { complete_transfer: { label: "Complete Transfer" } }),
@@ -1997,6 +2255,7 @@ async function deliveryChallanSuite(page) {
 	await page.route("**/api/method/essdee_yrp.fabric_store.web_workspace.save_delivery_challan*", (route) => {
 		saveCalls += 1
 		savePayload = requestBody(route)
+		if (savePayload.name === "DC-FAB-001") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: submittedPayload() }) })
 		if (saveCalls === 1) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ exc: "ValidationError", message: "Stock is no longer available." }) })
 		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: draftPayload("DC-NEW") }) })
 	})
@@ -2041,6 +2300,26 @@ async function deliveryChallanSuite(page) {
 	await draftRoot.locator('.delivery-challan-field-group[data-group="document"]').waitFor({ timeout: 20_000 })
 	assert(await draftRoot.locator('.delivery-challan-field-group[data-group="document"]').count() === 1, "Delivery Challan document fields are not grouped")
 	assert(await draftRoot.locator('.delivery-challan-field-group[data-group="movement"]').count() === 1, "Delivery Challan movement fields are not grouped")
+	const dcCreationCards = await draftRoot.locator(".fabric-document-workspace__fields .delivery-challan-field-group").evaluateAll((cards) => cards.map((card) => ({
+		x: card.getBoundingClientRect().x,
+		y: card.getBoundingClientRect().y,
+		borderRadius: getComputedStyle(card).borderRadius,
+		borderTopWidth: getComputedStyle(card).borderTopWidth,
+	})))
+	const dcCreationGrid = await draftRoot.locator(".fabric-document-workspace__fields .delivery-challan-fields").evaluate((element) => ({
+		columns: getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length,
+		gap: Number.parseFloat(getComputedStyle(element).gap),
+		borderTopWidth: getComputedStyle(element).borderTopWidth,
+	}))
+	assert(
+		dcCreationGrid.columns === 2
+			&& dcCreationGrid.gap >= 10
+			&& dcCreationGrid.borderTopWidth === "0px"
+			&& dcCreationCards.length === 2
+			&& Math.abs(dcCreationCards[0].y - dcCreationCards[1].y) <= 2
+			&& dcCreationCards.every((card) => card.borderTopWidth !== "0px" && card.borderRadius !== "0px"),
+		`Delivery Challan creation is not split into the approved two-card entry layout: ${JSON.stringify({ dcCreationGrid, dcCreationCards })}`,
+	)
 	assert(await draftRoot.locator('.delivery-challan-field-group[data-group="document"]').getByText("Allow Non Bundle", { exact: true }).count() === 1, "Allow Non Bundle is not kept in Document & posting")
 	const dcMovementLabels = (await draftRoot.locator('.delivery-challan-field-group[data-group="movement"] .form-field__label').allTextContents()).map((label) => label.replace("*", "").trim())
 	assert(JSON.stringify(dcMovementLabels.slice(0, 6)) === JSON.stringify(["From Location", "From Warehouse", "From Address", "Receiver", "To Warehouse", "Receiver Address"]), `Delivery Challan route fields do not follow their dependencies: ${JSON.stringify(dcMovementLabels)}`)
@@ -2203,6 +2482,16 @@ async function deliveryChallanSuite(page) {
 	await submittedRoot.locator(".item-matrix").first().waitFor()
 	assert(await submittedRoot.locator(".item-matrix input").count() === 0, "Submitted Delivery Challan matrix remains editable")
 	assert(await submittedRoot.locator(".item-matrix__pending").filter({ hasText: "Pending 6" }).count() >= 1, "Submitted Delivery Challan matrix omits source pending quantity")
+	await submittedRoot.getByRole("button", { name: "Edit", exact: true }).click()
+	await submittedRoot.locator('.delivery-challan-field-group[data-group="document"]').waitFor()
+	assert(await submittedRoot.locator("#field-vehicle_no-value").isDisabled(), "Submitted Delivery Challan enables a non-Allow-on-Submit header")
+	const submittedDeliveryQuantity = submittedRoot.locator(".delivery-challan-matrix--items .p-inputnumber-input").first()
+	assert(!(await submittedDeliveryQuantity.isDisabled()), "Submitted Delivery Challan disables its Allow on Submit item table")
+	await submittedDeliveryQuantity.fill("5")
+	await submittedDeliveryQuantity.press("Tab")
+	await submittedRoot.getByRole("button", { name: "Save", exact: true }).click()
+	await submittedRoot.getByRole("tab", { name: /^Overview/ }).waitFor()
+	assert(JSON.stringify(Object.keys(savePayload.values || {}).sort()) === JSON.stringify(["correction_item_details", "item_details"]), `Submitted Delivery Challan sent non-Allow-on-Submit values: ${JSON.stringify(savePayload)}`)
 	await submittedRoot.getByRole("button", { name: "Return", exact: true }).click()
 	const returnDialog = page.getByRole("dialog", { name: "Return Delivery Challan" })
 	await returnDialog.waitFor()
@@ -2330,7 +2619,13 @@ async function goodsReceivedNoteSuite(page) {
 			process_name: against === "YRP Work Order" ? "Stitching" : "Purchase", item: "GARMENT-001", production_detail: "IPD-001", supplier: "FABRIC-STORE", is_internal_unit: docstatus === 1 ? 1 : 0,
 			transfer_complete: transferComplete ? 1 : 0, ste_transferred_percent: transferComplete ? 100 : (docstatus === 1 ? 40 : 0),
 		},
-		fields: fields.map((field) => ({ ...field, value: field.fieldname === "against" ? against : field.fieldname === "against_id" ? (against === "Purchase Order" ? "PO-FAB-001" : "WO-FAB-001") : field.value })),
+		fields: fields.map((field) => ({
+			...field,
+			value: field.fieldname === "against" ? against : field.fieldname === "against_id" ? (against === "Purchase Order" ? "PO-FAB-001" : "WO-FAB-001") : field.value,
+			allow_on_submit: false,
+			read_only: docstatus === 1 ? true : field.read_only,
+		})),
+		allow_on_submit_fields: docstatus === 1 ? ["items", "correction_items"] : [],
 		values: Object.fromEntries(fields.map((field) => [field.fieldname, field.fieldname === "against" ? against : field.fieldname === "against_id" ? (against === "Purchase Order" ? "PO-FAB-001" : "WO-FAB-001") : field.value])),
 		totals: [
 			{ fieldname: "total_received_quantity", label: "Total Received Quantity", value: 8 },
@@ -2343,7 +2638,7 @@ async function goodsReceivedNoteSuite(page) {
 			correction_items: [{ work_order_correction: "WOC-001", title: "Correction WOC-001", item_details: [structuredClone(correctionGroup)] }],
 		},
 		dimensions: [{ fieldname: "received_type", label: "Received Type", fieldtype: "Link", options: "YRP Received Type", value: "Accepted", locked: true }],
-		permissions: { can_read: true, can_create: !name, can_write: Boolean(name && docstatus === 0), can_submit: docstatus === 0, can_cancel: docstatus === 1, can_amend: false, can_print: docstatus === 1 },
+		permissions: { can_read: true, can_create: !name, can_write: Boolean(name && docstatus === 0), can_update_after_submit: docstatus === 1, can_submit: docstatus === 0, can_cancel: docstatus === 1, can_amend: false, can_print: docstatus === 1 },
 		capabilities: capabilities || {
 			...(docstatus === 1
 				? { cancel: { label: "Cancel" }, create_inspection: { label: "Create Inspection Entry" }, view_inspections: { label: "View Inspection Entries" }, ...(transferComplete ? {} : { complete_transfer: { label: "Complete Transfer" } }) }
@@ -2426,6 +2721,7 @@ async function goodsReceivedNoteSuite(page) {
 	})
 	await page.route("**/api/method/essdee_yrp.fabric_store.web_workspace.save_goods_received_note*", (route) => {
 		saveRequest = requestBody(route)
+		if (saveRequest.name === "GRN-SUBMITTED" && !saveRequest.submit) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: workspacePayload({ name: "GRN-SUBMITTED", docstatus: 1 }) }) })
 		if (saveRequest.submit && ++submitAttempts === 1) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ exc: "ValidationError", message: mismatchMessage }) })
 		if (saveRequest.submit) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: workspacePayload({ name: saveRequest.name || "GRN-FAB-001", docstatus: 1 }) }) })
 		const payload = calculated ? calculatedPayload() : workspacePayload({ name: "GRN-NEW" })
@@ -2486,6 +2782,26 @@ async function goodsReceivedNoteSuite(page) {
 	for (const group of ["posting", "movement", "supplier-document", "addresses"]) {
 		assert(await newRoot.locator(`.goods-received-note-field-group[data-group="${group}"]`).count() === 1, `GRN fields are missing the ${group} group`)
 	}
+	const grnCreationCards = await newRoot.locator(".fabric-document-workspace__fields .goods-received-note-field-group").evaluateAll((cards) => cards.map((card) => ({
+		x: card.getBoundingClientRect().x,
+		y: card.getBoundingClientRect().y,
+		borderRadius: getComputedStyle(card).borderRadius,
+		borderTopWidth: getComputedStyle(card).borderTopWidth,
+	})))
+	const grnCreationGrid = await newRoot.locator(".fabric-document-workspace__fields .goods-received-note-fields").evaluate((element) => ({
+		columns: getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length,
+		gap: Number.parseFloat(getComputedStyle(element).gap),
+		borderTopWidth: getComputedStyle(element).borderTopWidth,
+	}))
+	assert(
+		grnCreationGrid.columns === 2
+			&& grnCreationGrid.gap >= 10
+			&& grnCreationGrid.borderTopWidth === "0px"
+			&& grnCreationCards.length === 2
+			&& Math.abs(grnCreationCards[0].y - grnCreationCards[1].y) <= 2
+			&& grnCreationCards.every((card) => card.borderTopWidth !== "0px" && card.borderRadius !== "0px"),
+		`GRN creation is not split into the approved two-card entry layout: ${JSON.stringify({ grnCreationGrid, grnCreationCards })}`,
+	)
 	assert(await newRoot.locator('.goods-received-note-field-group[data-group="source"]').count() === 0, "GRN still renders its redundant Receipt source section")
 	for (const label of ["Source Type", "Source Document", "Delivery Challan", "Production Detail"]) {
 		assert(await newRoot.locator(".form-field").filter({ hasText: label }).count() === 0, `GRN still renders redundant field: ${label}`)
@@ -2675,6 +2991,16 @@ async function goodsReceivedNoteSuite(page) {
 	assert(await submittedRoot.locator(".item-matrix input").count() === 0, "Submitted GRN matrix remains editable")
 	assert(await submittedRoot.locator(".item-matrix__available").filter({ hasText: "Available 6" }).count() >= 1, "Submitted GRN matrix omits source availability")
 	assert(await submittedRoot.locator(".item-matrix__price").filter({ hasText: "Amount 40" }).count() >= 1, "Submitted GRN matrix omits received value")
+	await submittedRoot.getByRole("button", { name: "Edit", exact: true }).click()
+	await submittedRoot.locator('.goods-received-note-field-group[data-group="posting"]').waitFor()
+	assert(await submittedRoot.locator("#field-posting_date-value").isDisabled(), "Submitted GRN enables a non-Allow-on-Submit header")
+	const submittedReceiptQuantity = submittedRoot.locator(".goods-received-note-matrix--items .p-inputnumber-input").first()
+	assert(!(await submittedReceiptQuantity.isDisabled()), "Submitted GRN disables its Allow on Submit item table")
+	await submittedReceiptQuantity.fill("5")
+	await submittedReceiptQuantity.press("Tab")
+	await submittedRoot.getByRole("button", { name: "Save", exact: true }).click()
+	await submittedRoot.getByRole("tab", { name: /^Overview/ }).waitFor()
+	assert(JSON.stringify(Object.keys(saveRequest.values || {}).sort()) === JSON.stringify(["correction_item_details", "item_details"]), `Submitted GRN sent non-Allow-on-Submit values: ${JSON.stringify(saveRequest)}`)
 	await submittedRoot.getByRole("button", { name: "Create Inspection Entry", exact: true }).click()
 	inspectionDialog = page.getByRole("dialog", { name: "Create Inspection Entry" })
 	await inspectionDialog.waitFor()
@@ -2943,7 +3269,7 @@ async function listNavigationSuite(page) {
 	return { captured, listRequestCount: listRequests.length }
 }
 
-const suites = { parity: paritySuite, shell: shellSuite, "accessory-store": accessoryStoreSuite, "mobile-record-details": mobileRecordDetailsSuite, documents: documentsSuite, "work-order": workOrderSuite, "purchase-order": purchaseOrderSuite, "delivery-challan": deliveryChallanSuite, "goods-received-note": goodsReceivedNoteSuite, "stock-transfers": stockTransfersSuite, "document-dialog": documentDialogSuite, states: statesSuite, "live-duplicate": liveDuplicateSuite, "live-completed-purchase-order": liveCompletedPurchaseOrderSuite, "list-navigation": listNavigationSuite }
+const suites = { parity: paritySuite, shell: shellSuite, "accessory-store": accessoryStoreSuite, "purchase-department": purchaseDepartmentSuite, "mobile-record-details": mobileRecordDetailsSuite, documents: documentsSuite, "work-order": workOrderSuite, "purchase-order": purchaseOrderSuite, "delivery-challan": deliveryChallanSuite, "goods-received-note": goodsReceivedNoteSuite, "stock-transfers": stockTransfersSuite, "document-dialog": documentDialogSuite, states: statesSuite, "live-duplicate": liveDuplicateSuite, "live-completed-purchase-order": liveCompletedPurchaseOrderSuite, "list-navigation": listNavigationSuite }
 const browser = await chromium.launch({ headless: true })
 const context = await browser.newContext()
 

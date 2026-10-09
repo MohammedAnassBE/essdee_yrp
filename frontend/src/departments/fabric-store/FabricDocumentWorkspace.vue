@@ -14,15 +14,17 @@
 				:document-label="title"
 				:navigation-disabled="dirty || Boolean(acting)"
 			/>
-			<slot name="header" :record="record" :workspace="workspace" :heading-id="headingId">
-				<div class="fabric-document-workspace__identity">
-					<div>
-						<h1 :id="headingId">{{ title }}</h1>
-						<span>{{ record.name || "New document" }}</span>
+			<div class="fabric-document-workspace__heading">
+				<slot name="header" :record="record" :workspace="workspace" :heading-id="headingId">
+					<div class="fabric-document-workspace__identity">
+						<div>
+							<h1 :id="headingId">{{ title }}</h1>
+							<span>{{ record.name || "New document" }}</span>
+						</div>
+						<DocumentStatusBadge v-if="record.status" :docstatus="record.docstatus" :label="record.status" />
 					</div>
-					<DocumentStatusBadge v-if="record.status" :docstatus="record.docstatus" :label="record.status" />
-				</div>
-			</slot>
+				</slot>
+			</div>
 
 			<div class="fabric-document-workspace__header-actions">
 				<Button
@@ -203,14 +205,16 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", beforeUnload))
 .fabric-document-workspace { display: flex; width: 100%; min-width: 0; min-height: 0; overflow: hidden; flex-direction: column; border-color: var(--erp-border); background: var(--erp-surface); box-shadow: var(--erp-shadow-sm); }
 .fabric-document-workspace--page { height: calc(100dvh - var(--erp-shell-header-height) - 97px); min-height: min(620px, calc(100dvh - var(--erp-shell-header-height) - 97px)); }
 .fabric-document-workspace--embedded { height: min(82dvh, 920px); border: 0; box-shadow: none; }
-.fabric-document-workspace--embedded .fabric-document-workspace__header { min-height: 48px; padding-block: 6px; }
+.fabric-document-workspace--embedded .fabric-document-workspace__header { min-height: 48px; padding-block: 5px; }
 .fabric-document-workspace__chrome { position: relative; z-index: var(--erp-layer-sticky); flex: 0 0 auto; background: var(--erp-surface); box-shadow: 0 3px 10px rgb(16 24 40 / 4%); }
-.fabric-document-workspace__header { display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: var(--erp-space-3); padding: 7px clamp(14px, 1.4vw, 22px); border-top: 3px solid var(--erp-accent); border-bottom: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface) 97%, var(--erp-accent-soft)); }
+.fabric-document-workspace__header { display: flex; min-height: 52px; align-items: center; justify-content: flex-start; gap: var(--erp-space-3); padding: 7px clamp(14px, 1.4vw, 22px); border-top: 3px solid var(--erp-accent); border-bottom: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface) 97%, var(--erp-accent-soft)); }
+.fabric-document-workspace__heading { min-width: 0; flex: 1 1 auto; }
 .fabric-document-workspace__identity { display: flex; min-width: 0; align-items: center; gap: 12px; }
 .fabric-document-workspace__identity > div { display: grid; min-width: 0; gap: 2px; }
 .fabric-document-workspace__identity h1 { margin: 0; color: var(--erp-text); font-size: 19px; line-height: 1.15; letter-spacing: -.018em; }
 .fabric-document-workspace__identity span { overflow: hidden; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .fabric-document-workspace__header-actions, .fabric-document-workspace__domain-actions, .fabric-document-workspace__lifecycle-actions { display: flex; align-items: center; gap: 6px; }
+.fabric-document-workspace__header-actions { flex: 0 0 auto; margin-left: auto; }
 .fabric-document-workspace__commandbar { display: flex; min-height: 42px; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 4px clamp(14px, 1.4vw, 22px); border-bottom: 1px solid var(--erp-border); background: var(--erp-surface); flex-wrap: nowrap; }
 .fabric-document-workspace__domain-actions, .fabric-document-workspace__lifecycle-actions { min-width: 0; flex-wrap: nowrap; }
 .fabric-document-workspace__lifecycle-actions { justify-content: flex-end; margin-left: auto; }
@@ -218,16 +222,16 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", beforeUnload))
 .fabric-document-workspace__commandbar :deep(.p-button:active:not(:disabled)) { transform: scale(.96); }
 .fabric-document-workspace__loading, .fabric-document-workspace__content { min-height: 0; flex: 1; padding: clamp(10px, 1.2vw, 18px); background: color-mix(in srgb, var(--erp-bg) 80%, white); }
 .fabric-document-workspace__loading { display: grid; align-content: start; gap: var(--erp-space-3); }
-.fabric-document-workspace__content { overflow-y: auto; scrollbar-gutter: stable; }
+.fabric-document-workspace__content { display: grid; grid-template-rows: minmax(0, 1fr) auto; overflow: hidden; }
 .fabric-document-workspace__error-recovery { display: grid; min-height: 230px; align-content: center; justify-items: center; gap: 9px; padding: var(--erp-space-5); color: var(--erp-text-muted); text-align: center; border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-panel-radius); background: var(--erp-surface); }
 .fabric-document-workspace__error-recovery > i { color: var(--erp-danger); font-size: 25px; }
 .fabric-document-workspace__error-recovery > div { display: grid; gap: 4px; }
 .fabric-document-workspace__error-recovery strong { color: var(--erp-text); }
 .fabric-document-workspace__error-recovery span { font-size: var(--erp-font-size-caption); }
-.fabric-document-workspace__columns { display: grid; grid-template-areas: "main rail"; grid-template-columns: minmax(0, 1fr) minmax(260px, 288px); align-items: start; gap: clamp(12px, 1.3vw, 20px); }
+.fabric-document-workspace__columns { display: grid; min-height: 0; grid-template-areas: "main rail"; grid-template-columns: minmax(0, 1fr) minmax(260px, 288px); align-items: stretch; gap: clamp(12px, 1.3vw, 20px); }
 .fabric-document-workspace__main, .fabric-document-workspace__fields, .fabric-document-workspace__matrix, .fabric-document-workspace__secondary-fields, .fabric-document-workspace__after-matrix, .fabric-document-workspace__rail, .fabric-document-workspace__panel { display: grid; min-width: 0; gap: var(--erp-space-3); }
-.fabric-document-workspace__main { grid-area: main; }
-.fabric-document-workspace__rail { position: sticky; top: 0; align-content: start; gap: 0; overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); }
+.fabric-document-workspace__main { min-height: 0; grid-area: main; align-content: start; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.fabric-document-workspace__rail { min-height: 0; height: 100%; align-content: start; gap: 0; overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); }
 .fabric-document-workspace__rail { grid-area: rail; }
 .fabric-document-workspace__metric { display: grid; min-height: 70px; align-content: center; gap: 4px; padding: 11px 13px; border: 1px solid color-mix(in srgb, var(--erp-accent) 20%, var(--erp-border)); border-radius: var(--erp-control-radius); background: color-mix(in srgb, var(--erp-accent-soft) 76%, white); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--erp-accent) 76%, white); }
 .fabric-document-workspace__metric span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
@@ -236,8 +240,10 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", beforeUnload))
 .fabric-document-workspace__discard-copy { margin: 0; color: var(--erp-text-muted); line-height: 1.55; }
 @media (min-width: 621px) { .fabric-document-workspace__content { --erp-control-height: 36px; } }
 @media (max-width: 900px) {
-	.fabric-document-workspace__columns { grid-template-areas: "main" "rail"; grid-template-columns: 1fr; }
-	.fabric-document-workspace__rail { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.fabric-document-workspace__content { display: block; overflow-y: auto; scrollbar-gutter: stable; }
+	.fabric-document-workspace__columns { min-height: auto; grid-template-areas: "main" "rail"; grid-template-columns: 1fr; align-items: start; }
+	.fabric-document-workspace__main { min-height: auto; overflow: visible; }
+	.fabric-document-workspace__rail { height: auto; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.fabric-document-workspace__rail > :nth-child(odd):not(:last-child) { border-right: 1px solid var(--erp-border); }
 	.fabric-document-workspace__rail :deep(.fabric-document-workspace__metric-group) { grid-column: 1 / -1; }
 	.fabric-document-workspace--compact-mobile-rail .fabric-document-workspace__columns { grid-template-areas: "rail" "main"; }

@@ -579,6 +579,60 @@ class TestFabricStoreDeliveryChallan(TestCase):
 		self.assertNotIn("forged_dimension", doc)
 		doc.save.assert_called_once_with()
 
+	def test_submitted_save_updates_allow_on_submit_item_tables_only(self):
+		doc = self.make_document(docstatus=1)
+		original_get_field = doc.meta.get_field.side_effect
+		doc.meta.fields = [
+			frappe._dict(fieldname="items", fieldtype="Table", allow_on_submit=1, hidden=0, read_only=0),
+			frappe._dict(fieldname="correction_items", fieldtype="Table", allow_on_submit=1, hidden=0, read_only=0),
+			frappe._dict(fieldname="vehicle_no", fieldtype="Data", allow_on_submit=0, hidden=0, read_only=0),
+		]
+		doc.meta.get_field.side_effect = lambda fieldname: next(
+			(field for field in doc.meta.fields if field.fieldname == fieldname),
+			original_get_field(fieldname),
+		)
+		browser_items = [dict(doc["items"][0], qty=4)]
+		browser_corrections = [dict(doc.correction_items[0], qty=1)]
+		with (
+			patch("essdee_yrp.fabric_store.documents.delivery_challan._get_delivery_challan", return_value=doc),
+			patch("essdee_yrp.fabric_store.documents.delivery_challan.assert_expected_modified"),
+			patch("essdee_yrp.fabric_store.documents.delivery_challan.frappe.has_permission", return_value=True),
+			patch("essdee_yrp.fabric_store.documents.common.get_permitted_fields", return_value=["items", "correction_items", "vehicle_no"]),
+			patch("essdee_yrp.fabric_store.documents.delivery_challan.ungroup_items_from_ui", return_value=browser_items),
+			patch("essdee_yrp.fabric_store.documents.delivery_challan.ungroup_correction_items_from_ui", return_value=browser_corrections),
+			patch("essdee_yrp.fabric_store.documents.delivery_challan.get_delivery_challan_workspace", return_value={"record": {"name": doc.name}}),
+		):
+			result = save_delivery_challan(
+				{"item_details": [{"browser": True}], "correction_item_details": [{"browser": True}]},
+				name=doc.name,
+				expected_modified=doc.modified,
+			)
+
+		self.assertEqual(result["record"]["name"], doc.name)
+		self.assertEqual(doc["items"][0].qty, 4)
+		self.assertEqual(doc.correction_items[0].qty, 1)
+		doc.save.assert_called_once_with()
+
+	def test_submitted_save_rejects_non_allow_on_submit_header(self):
+		doc = self.make_document(docstatus=1)
+		doc.meta.fields = [
+			frappe._dict(fieldname="items", fieldtype="Table", allow_on_submit=1, hidden=0, read_only=0),
+			frappe._dict(fieldname="vehicle_no", fieldtype="Data", allow_on_submit=0, hidden=0, read_only=0),
+		]
+		doc.meta.get_field.side_effect = lambda fieldname: next(
+			(field for field in doc.meta.fields if field.fieldname == fieldname),
+			None,
+		)
+		with (
+			patch("essdee_yrp.fabric_store.documents.delivery_challan._get_delivery_challan", return_value=doc),
+			patch("essdee_yrp.fabric_store.documents.delivery_challan.assert_expected_modified"),
+			patch("essdee_yrp.fabric_store.documents.delivery_challan.frappe.has_permission", return_value=True),
+			patch("essdee_yrp.fabric_store.documents.common.get_permitted_fields", return_value=["items", "vehicle_no"]),
+			self.assertRaisesRegex(frappe.ValidationError, "Allow on Submit"),
+		):
+			save_delivery_challan({"vehicle_no": "TN-FORGED"}, name=doc.name, expected_modified=doc.modified)
+		doc.save.assert_not_called()
+
 	def test_existing_special_source_ignores_browser_quantity_changes(self):
 		doc = self.make_document(cut_panel_movement="CPM-1")
 		doc.cutting_bulk_lay_sheet = "CBLS-1"

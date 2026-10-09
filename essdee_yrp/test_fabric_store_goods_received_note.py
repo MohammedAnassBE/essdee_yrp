@@ -388,8 +388,8 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 			patch("essdee_yrp.fabric_store.documents.goods_received_note.assert_expected_modified"),
 			patch("essdee_yrp.fabric_store.documents.goods_received_note.ungroup_items_from_ui", return_value=browser_rows),
 			patch("essdee_yrp.fabric_store.documents.goods_received_note.get_goods_received_note_workspace", return_value={}),
-		):
-			save_goods_received_note({"item_details": [{}]}, name=doc.name)
+			):
+				save_goods_received_note({"item_details": [{}]}, name=doc.name)
 		self.assertEqual(doc["items"][0].quantity, 4)
 		self.assertEqual(doc["items"][0].rate, 50)
 		self.assertEqual(doc["items"][0].lot, "LOT-1")
@@ -401,6 +401,60 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 			self.assertRaises(frappe.ValidationError),
 		):
 			save_goods_received_note({"item_details": [{}]}, name=doc.name)
+
+	def test_submitted_save_updates_allow_on_submit_item_tables_only(self):
+		doc = self.make_document(docstatus=1)
+		doc.meta.fields = [
+			frappe._dict(fieldname="items", fieldtype="Table", allow_on_submit=1, hidden=0, read_only=0),
+			frappe._dict(fieldname="correction_items", fieldtype="Table", allow_on_submit=1, hidden=0, read_only=0),
+			frappe._dict(fieldname="comments", fieldtype="Small Text", allow_on_submit=0, hidden=0, read_only=0),
+		]
+		doc.meta.get_field.side_effect = lambda fieldname: next(
+			(field for field in doc.meta.fields if field.fieldname == fieldname),
+			None,
+		)
+		browser_items = [dict(doc["items"][0], quantity=4), dict(doc["items"][1], quantity=2)]
+		browser_corrections = [dict(doc.correction_items[0], quantity=1)]
+		with (
+			patch("essdee_yrp.fabric_store.documents.goods_received_note._get_grn", return_value=doc),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.assert_expected_modified"),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.has_permission", return_value=True),
+			patch("essdee_yrp.fabric_store.documents.common.get_permitted_fields", return_value=["items", "correction_items", "comments"]),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.ungroup_items_from_ui", return_value=browser_items),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.ungroup_correction_items_from_ui", return_value=browser_corrections),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.get_goods_received_note_workspace", return_value={"record": {"name": doc.name}}),
+		):
+			result = save_goods_received_note(
+				{"item_details": [{"browser": True}], "correction_item_details": [{"browser": True}]},
+				name=doc.name,
+				expected_modified=doc.modified,
+			)
+
+		self.assertEqual(result["record"]["name"], doc.name)
+		self.assertEqual(doc["items"][0].quantity, 4)
+		self.assertEqual(doc["items"][1].quantity, 2)
+		self.assertEqual(doc.correction_items[0].quantity, 1)
+		doc.save.assert_called_once_with()
+
+	def test_submitted_save_rejects_non_allow_on_submit_header(self):
+		doc = self.make_document(docstatus=1)
+		doc.meta.fields = [
+			frappe._dict(fieldname="items", fieldtype="Table", allow_on_submit=1, hidden=0, read_only=0),
+			frappe._dict(fieldname="comments", fieldtype="Small Text", allow_on_submit=0, hidden=0, read_only=0),
+		]
+		doc.meta.get_field.side_effect = lambda fieldname: next(
+			(field for field in doc.meta.fields if field.fieldname == fieldname),
+			None,
+		)
+		with (
+			patch("essdee_yrp.fabric_store.documents.goods_received_note._get_grn", return_value=doc),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.assert_expected_modified"),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.has_permission", return_value=True),
+			patch("essdee_yrp.fabric_store.documents.common.get_permitted_fields", return_value=["items", "comments"]),
+			self.assertRaisesRegex(frappe.ValidationError, "Allow on Submit"),
+		):
+			save_goods_received_note({"comments": "FORGED"}, name=doc.name, expected_modified=doc.modified)
+		doc.save.assert_not_called()
 
 	def test_new_save_keeps_authoritative_source_and_delegates_freight_and_submit_to_controller(self):
 		doc = self.make_document()

@@ -233,6 +233,73 @@ class TestCuttingPlanWebEditor(TestCase):
 		permission.assert_any_call("SD YRP Cutting Plan", ptype="write", doc=doc, throw=True)
 		doc.save.assert_not_called()
 
+	def test_submitted_editor_exposes_and_saves_only_permitted_allow_on_submit_field(self):
+		doc = frappe._dict(
+			doctype="SD YRP Cutting Plan",
+			name="CP-001",
+			docstatus=1,
+			modified="same",
+			work_order="WO-OLD",
+			cp_status="Planned",
+		)
+		doc.meta = frappe._dict(fields=[
+			frappe._dict(fieldname="work_order", allow_on_submit=1, hidden=0, read_only=0),
+			frappe._dict(fieldname="maximum_no_of_plys", allow_on_submit=0, hidden=0, read_only=0),
+		])
+		doc.meta.get_field = lambda fieldname: next(
+			(field for field in doc.meta.fields if field.fieldname == fieldname),
+			None,
+		)
+		doc.update = MagicMock(side_effect=lambda values: dict.update(doc, values))
+		doc.save = MagicMock()
+
+		with (
+			patch("essdee_yrp.cutting.plan_editor.frappe.get_doc", return_value=doc),
+			patch("essdee_yrp.cutting.plan_editor.frappe.has_permission", return_value=True),
+			patch(
+				"essdee_yrp.cutting.plan_editor.get_permitted_fields",
+				side_effect=lambda _doctype, permission_type=None: ["work_order", "maximum_no_of_plys"],
+			),
+			patch(
+				"essdee_yrp.cutting.plan_editor.get_editor",
+				return_value={"record": {"name": doc.name, "docstatus": 1, "work_order": "WO-NEW"}},
+			),
+		):
+			editor = _serialize_editor(doc, [])
+			result = save({"work_order": "WO-NEW"}, name=doc.name, expected_modified="same")
+
+		self.assertTrue(editor["permissions"]["can_update_after_submit"])
+		self.assertEqual(editor["fields"]["allow_on_submit_fields"], ["work_order"])
+		self.assertEqual(doc.work_order, "WO-NEW")
+		doc.save.assert_called_once_with()
+		self.assertEqual(result["record"]["work_order"], "WO-NEW")
+
+	def test_submitted_editor_rejects_non_allow_on_submit_field(self):
+		doc = frappe._dict(
+			doctype="SD YRP Cutting Plan",
+			name="CP-001",
+			docstatus=1,
+			modified="same",
+			work_order="WO-OLD",
+		)
+		doc.meta = frappe._dict(fields=[
+			frappe._dict(fieldname="work_order", allow_on_submit=1, hidden=0, read_only=0),
+			frappe._dict(fieldname="maximum_no_of_plys", allow_on_submit=0, hidden=0, read_only=0),
+		])
+		doc.meta.get_field = lambda fieldname: next(
+			(field for field in doc.meta.fields if field.fieldname == fieldname),
+			None,
+		)
+		doc.save = MagicMock()
+		with (
+			patch("essdee_yrp.cutting.plan_editor.frappe.get_doc", return_value=doc),
+			patch("essdee_yrp.cutting.plan_editor.frappe.has_permission", return_value=True),
+			patch("essdee_yrp.cutting.plan_editor.get_permitted_fields", return_value=["work_order", "maximum_no_of_plys"]),
+			self.assertRaisesRegex(frappe.ValidationError, "Allow on Submit"),
+		):
+			save({"maximum_no_of_plys": 120}, name=doc.name, expected_modified="same")
+		doc.save.assert_not_called()
+
 	def test_direct_permission_denial_is_not_bypassed(self):
 		with patch("essdee_yrp.cutting.plan_editor.frappe.has_permission", side_effect=frappe.PermissionError):
 			with self.assertRaises(frappe.PermissionError):

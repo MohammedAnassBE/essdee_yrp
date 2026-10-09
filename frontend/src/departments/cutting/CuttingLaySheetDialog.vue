@@ -4,10 +4,18 @@
 		<div v-else-if="!sheet" class="laysheet-create">
 			<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 			<div class="create-intro"><i class="pi pi-list-check"></i><div><strong>Start a new Lay Sheet</strong><span>Select the submitted marker and cutting team. System dates are recorded automatically.</span></div></div>
-			<div class="create-fields">
-				<LinkField v-model="createForm.cutting_marker" label="Cutting Marker *" help-text="Search by marker name or ID." doctype="SD YRP Cutting Marker" :filters="markerFilters" :show-open-button="false" />
-				<LinkField v-model="createForm.cutting_spreader" label="Cutting Spreader *" doctype="SD YRP Cutting Spreader" :show-open-button="false" />
-				<LinkField v-model="createForm.cutter" label="Cutter *" doctype="SD YRP Cutter" :show-open-button="false" />
+			<div class="laysheet-create__sections">
+				<section class="laysheet-create__section">
+					<header><div><span>Source</span><h3>Marker source</h3></div><small>Select the submitted marker for this Lay Sheet.</small></header>
+					<div class="create-fields create-fields--single"><LinkField v-model="createForm.cutting_marker" label="Cutting Marker *" help-text="Search by marker name or ID." doctype="SD YRP Cutting Marker" :filters="markerFilters" :show-open-button="false" /></div>
+				</section>
+				<section class="laysheet-create__section">
+					<header><div><span>Team</span><h3>Cutting team</h3></div><small>Assign spreading and cutting responsibility.</small></header>
+					<div class="create-fields">
+						<LinkField v-model="createForm.cutting_spreader" label="Cutting Spreader *" doctype="SD YRP Cutting Spreader" :show-open-button="false" />
+						<LinkField v-model="createForm.cutter" label="Cutter *" doctype="SD YRP Cutter" :show-open-button="false" />
+					</div>
+				</section>
 			</div>
 		</div>
 		<div v-else-if="sheet" class="laysheet-content">
@@ -749,7 +757,15 @@ const DataBlock = defineComponent({
 .create-intro > div { display: grid; gap: 3px; }
 .create-intro strong { font-size: 0.86rem; }
 .create-intro span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
+.laysheet-create__sections { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 14px; }
+.laysheet-create__section { display: grid; align-content: start; gap: 13px; padding: 14px; background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); box-shadow: 0 5px 18px rgb(28 61 45 / 3.5%); }
+.laysheet-create__section > header { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
+.laysheet-create__section > header > div { display: grid; gap: 2px; }
+.laysheet-create__section > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }
+.laysheet-create__section h3 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-section); }
+.laysheet-create__section small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .create-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; }
+.create-fields--single { grid-template-columns: 1fr; }
 .create-fields > label { display: grid; gap: 6px; color: var(--erp-text-secondary); font-size: var(--erp-font-size-caption); font-weight: 650; }
 .laysheet-content { display: grid; gap: 14px; min-width: 0; max-width: 100%; }
 .laysheet-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); }
@@ -813,6 +829,8 @@ const DataBlock = defineComponent({
 .laysheet-content :deep(.p-tab) { padding: 9px 13px; font-size: var(--erp-font-size-caption); }
 
 @media (max-width: 760px) {
+	.laysheet-create__sections { grid-template-columns: 1fr; }
+	.laysheet-create__section > header small { display: none; }
 	.create-fields { grid-template-columns: 1fr; }
 	.detail-editor__grid { grid-template-columns: 1fr; }
 	.detail-editor__wide { grid-column: auto; }

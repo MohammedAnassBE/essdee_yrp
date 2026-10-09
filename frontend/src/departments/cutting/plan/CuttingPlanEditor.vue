@@ -7,7 +7,15 @@
 			</div>
 			<div class="cutting-plan-editor__actions erp-editor-actions">
 				<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="saving" @click="emit('cancel')" />
-				<DocumentSaveButton :show-submit="permissions.can_submit" :loading="Boolean(saving)" :disabled="busy || !canSave" @save="save(false)" @submit="save(true)" />
+				<DocumentSaveButton
+					:show-save="!name || dirty"
+					:show-submit="Boolean(name) && permissions.can_submit && !dirty"
+					submit-label="Submit"
+					:loading="Boolean(saving)"
+					:disabled="busy || !canSave"
+					@save="save(false)"
+					@submit="save(true)"
+				/>
 			</div>
 		</header>
 
@@ -20,42 +28,50 @@
 		<WorkspaceLoadError v-else-if="loadFailed" title="Cutting Plan editor unavailable" :message="error" @retry="load" />
 
 		<div v-else class="cutting-plan-editor__body">
-			<section class="cutting-plan-editor__section">
-				<header><h2>Plan Details</h2></header>
-				<div class="cutting-plan-editor__fields">
-					<label class="cutting-plan-editor__check">
-						<Checkbox v-model="form.is_manual_entry" binary :true-value="1" :false-value="0" input-id="cp-manual-entry" :disabled="busy" />
-						<span>Is Manual Entry</span>
-					</label>
-					<div class="cutting-plan-editor__field cutting-plan-editor__field--wide">
-						<label>Lot <span>*</span></label>
-						<LinkField v-model="form.lot" doctype="SD YRP Lot" :show-open-button="false" :disabled="busy" show-clear @select="loadLot" @clear="clearLot" />
+			<div class="cutting-plan-editor__card-grid">
+				<section class="cutting-plan-editor__section cutting-plan-editor__entry-card">
+					<header><div><span>Source</span><h2>Plan source</h2></div><small>Select the Lot and its production Work Order.</small></header>
+					<div class="cutting-plan-editor__fields">
+						<label class="cutting-plan-editor__check">
+							<Checkbox v-model="form.is_manual_entry" binary :true-value="1" :false-value="0" input-id="cp-manual-entry" :disabled="busy || !canEditField('is_manual_entry')" />
+							<span>Is Manual Entry</span>
+						</label>
+						<div class="cutting-plan-editor__field cutting-plan-editor__field--wide">
+							<label>Lot <span>*</span></label>
+							<LinkField v-model="form.lot" doctype="SD YRP Lot" :show-open-button="false" :disabled="busy || !canEditField('lot')" show-clear @select="loadLot" @clear="clearLot" />
+						</div>
+						<div class="cutting-plan-editor__field">
+							<label for="cp-item">Item</label>
+							<InputText id="cp-item" v-model="form.item" disabled fluid />
+						</div>
+						<div v-if="fields.show_work_order" class="cutting-plan-editor__field">
+							<label>Work Order</label>
+							<LinkField v-model="form.work_order" doctype="YRP Work Order" :filters="workOrderFilters" :show-open-button="false" :disabled="busy || !form.lot || !fields.can_edit_work_order || !canEditField('work_order')" show-clear />
+						</div>
 					</div>
-					<div class="cutting-plan-editor__field">
-						<label for="cp-item">Item</label>
-						<InputText id="cp-item" v-model="form.item" disabled fluid />
+				</section>
+
+				<section class="cutting-plan-editor__section cutting-plan-editor__entry-card">
+					<header><div><span>Controls</span><h2>Cutting setup</h2></div><small>Set the ply limit, allowance and cutting location.</small></header>
+					<div class="cutting-plan-editor__fields cutting-plan-editor__setup-fields">
+						<div class="cutting-plan-editor__field">
+							<label for="cp-max-plies">Maximum No of Plys <span>*</span></label>
+							<InputNumber v-model="form.maximum_no_of_plys" input-id="cp-max-plies" :min="1" :use-grouping="false" :disabled="busy || !canEditField('maximum_no_of_plys')" fluid />
+						</div>
+						<div class="cutting-plan-editor__field">
+							<label for="cp-allowance">Maximum Allow Percent</label>
+							<InputNumber v-model="form.maximum_allow_percent" input-id="cp-allowance" suffix="%" :min="0" :max="100" :max-fraction-digits="2" :use-grouping="false" :disabled="busy || !canEditField('maximum_allow_percent')" fluid />
+						</div>
+						<div class="cutting-plan-editor__field cutting-plan-editor__field--full">
+							<label for="cp-location">Cutting Location</label>
+							<Select v-model="form.cutting_location" input-id="cp-location" :options="options.cutting_locations || []" :disabled="busy || !canEditField('cutting_location')" show-clear fluid />
+						</div>
 					</div>
-					<div class="cutting-plan-editor__field">
-						<label for="cp-max-plies">Maximum No of Plys <span>*</span></label>
-						<InputNumber v-model="form.maximum_no_of_plys" input-id="cp-max-plies" :min="1" :use-grouping="false" :disabled="busy" fluid />
-					</div>
-					<div class="cutting-plan-editor__field">
-						<label for="cp-allowance">Maximum Allow Percent</label>
-						<InputNumber v-model="form.maximum_allow_percent" input-id="cp-allowance" suffix="%" :min="0" :max="100" :max-fraction-digits="2" :use-grouping="false" :disabled="busy" fluid />
-					</div>
-					<div class="cutting-plan-editor__field">
-						<label for="cp-location">Cutting Location</label>
-						<Select v-model="form.cutting_location" input-id="cp-location" :options="options.cutting_locations || []" :disabled="busy" show-clear fluid />
-					</div>
-					<div v-if="fields.show_work_order" class="cutting-plan-editor__field">
-						<label>Work Order</label>
-						<LinkField v-model="form.work_order" doctype="YRP Work Order" :filters="workOrderFilters" :show-open-button="false" :disabled="busy || !form.lot || !fields.can_edit_work_order" show-clear />
-					</div>
-				</div>
-			</section>
+				</section>
+			</div>
 
 			<section class="cutting-plan-editor__section cutting-plan-editor__section--matrix">
-				<CuttingQuantityMatrix :groups="groups" :disabled="busy" @update="updateQuantity" />
+				<CuttingQuantityMatrix :groups="groups" :disabled="busy || submittedEditor" @update="updateQuantity" />
 			</section>
 		</div>
 
@@ -95,8 +111,8 @@ const props = defineProps({
 const emit = defineEmits(["saved", "cancel", "loaded"])
 const form = reactive({ is_manual_entry: 0, lot: "", item: "", production_detail: "", maximum_no_of_plys: null, maximum_allow_percent: null, cutting_location: "", work_order: "" })
 const groups = ref([])
-const permissions = reactive({ can_create: false, can_write: false, can_submit: false })
-const fields = reactive({ show_work_order: false, can_edit_work_order: false })
+const permissions = reactive({ can_create: false, can_write: false, can_update_after_submit: false, can_submit: false })
+const fields = reactive({ show_work_order: false, can_edit_work_order: false, allow_on_submit_fields: [] })
 const options = reactive({ cutting_locations: [] })
 const modified = ref("")
 const loading = ref(true)
@@ -110,7 +126,11 @@ let pendingNavigation = null
 let allowNavigation = false
 
 const busy = computed(() => loading.value || loadingLot.value || Boolean(saving.value))
-const canSave = computed(() => Boolean(form.lot && groups.value.length && form.maximum_no_of_plys) && (props.name ? permissions.can_write : permissions.can_create))
+const submittedEditor = computed(() => Number(props.initialPayload?.record?.docstatus || 0) === 1)
+const allowOnSubmitFields = computed(() => new Set(fields.allow_on_submit_fields || []))
+const canSave = computed(() => submittedEditor.value
+	? Boolean(props.name && permissions.can_update_after_submit && dirty.value)
+	: Boolean(form.lot && groups.value.length && form.maximum_no_of_plys) && (props.name ? permissions.can_write : permissions.can_create))
 const workOrderFilters = computed(() => ({ lot: form.lot || "", docstatus: 1 }))
 const signature = computed(() => JSON.stringify({
 	form: {
@@ -125,6 +145,10 @@ const signature = computed(() => JSON.stringify({
 }))
 const dirty = computed(() => !loading.value && signature.value !== cleanSignature.value)
 const loadFailed = computed(() => Boolean(error.value && !hasLoaded.value))
+
+function canEditField(fieldname) {
+	return !submittedEditor.value || allowOnSubmitFields.value.has(fieldname)
+}
 
 function clone(value) {
 	return JSON.parse(JSON.stringify(value ?? null))
@@ -199,15 +223,21 @@ async function save(submit) {
 	saving.value = submit ? "submit" : "draft"
 	error.value = ""
 	try {
-		const values = {
-			is_manual_entry: form.is_manual_entry,
-			lot: form.lot,
-			maximum_no_of_plys: form.maximum_no_of_plys,
-			maximum_allow_percent: form.maximum_allow_percent,
-			cutting_location: form.cutting_location,
-			item_details: clone(groups.value),
-		}
-		if (fields.can_edit_work_order) values.work_order = form.work_order || null
+		const values = submittedEditor.value
+			? Object.fromEntries(
+				[...allowOnSubmitFields.value]
+					.filter((fieldname) => fieldname in form)
+					.map((fieldname) => [fieldname, form[fieldname] || null]),
+			)
+			: {
+				is_manual_entry: form.is_manual_entry,
+				lot: form.lot,
+				maximum_no_of_plys: form.maximum_no_of_plys,
+				maximum_allow_percent: form.maximum_allow_percent,
+				cutting_location: form.cutting_location,
+				item_details: clone(groups.value),
+			}
+		if (!submittedEditor.value && fields.can_edit_work_order) values.work_order = form.work_order || null
 		const payload = await saveCuttingPlan(
 			values,
 			{ name: props.name, submit, expectedModified: modified.value },
@@ -269,24 +299,31 @@ watch(() => props.name, () => load())
 .cutting-plan-editor__header h1 { margin: 3px 0 0; color: var(--erp-text); font-size: var(--erp-font-size-title); font-weight: 780; letter-spacing: -0.025em; }
 .cutting-plan-editor__body { display: grid; gap: var(--erp-space-3); min-width: 0; }
 .cutting-plan-editor__loading { display: grid; gap: var(--erp-space-3); }
-.cutting-plan-editor__section { padding: var(--erp-space-4); background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); }
-.cutting-plan-editor__section > header h2 { margin: 0 0 var(--erp-space-3); color: var(--erp-text); font-size: var(--erp-font-size-section); font-weight: 760; }
+.cutting-plan-editor__card-grid { display: grid; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--erp-space-3); }
+.cutting-plan-editor__section { display: grid; gap: var(--erp-space-3); padding: var(--erp-space-4); background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); }
+.cutting-plan-editor__section > header { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
+.cutting-plan-editor__section > header h2 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-section); font-weight: 760; }
+.cutting-plan-editor__section > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }
+.cutting-plan-editor__section > header small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
+.cutting-plan-editor__entry-card { min-width: 0; align-content: start; box-shadow: 0 5px 18px rgb(28 61 45 / 3.5%); }
 .cutting-plan-editor__section--matrix { min-width: 0; }
-.cutting-plan-editor__fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--erp-space-3) var(--erp-space-4); align-items: end; }
+.cutting-plan-editor__fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--erp-space-3) var(--erp-space-4); align-items: end; }
 .cutting-plan-editor__field { display: grid; min-width: 0; gap: 6px; }
 .cutting-plan-editor__field--wide { grid-column: span 2; }
+.cutting-plan-editor__field--full { grid-column: 1 / -1; }
 .cutting-plan-editor__field > label { color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
 .cutting-plan-editor__field > label span { color: #c24145; }
 .cutting-plan-editor__check { display: inline-flex; min-height: var(--erp-control-height); align-items: center; gap: 8px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
 .cutting-plan-editor__discard-copy { margin: 0; color: var(--erp-text-muted); line-height: 1.55; }
 
 @media (max-width: 900px) {
-	.cutting-plan-editor__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.cutting-plan-editor__card-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 600px) {
 	.cutting-plan-editor__section { padding: var(--erp-space-3); }
+	.cutting-plan-editor__section > header small { display: none; }
 	.cutting-plan-editor__fields { grid-template-columns: 1fr; }
-	.cutting-plan-editor__field--wide { grid-column: auto; }
+	.cutting-plan-editor__field--wide, .cutting-plan-editor__field--full { grid-column: auto; }
 }
 </style>

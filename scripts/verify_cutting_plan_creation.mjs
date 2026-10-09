@@ -16,7 +16,7 @@ function assert(condition, message) {
 	if (!condition) throw new Error(message)
 }
 
-function editorPayload({ name = null, docstatus = 0, canSubmit = true, groups = [] } = {}) {
+function editorPayload({ name = null, docstatus = 0, canSubmit = true, groups = [], workOrder = null } = {}) {
 	return {
 		record: {
 			name,
@@ -29,7 +29,7 @@ function editorPayload({ name = null, docstatus = 0, canSubmit = true, groups = 
 			maximum_no_of_plys: 100,
 			maximum_allow_percent: 10,
 			cutting_location: "Manual Cutting",
-			work_order: null,
+			work_order: workOrder,
 			status: docstatus === 1 ? "Planned" : "Draft",
 		},
 		matrix: { groups },
@@ -37,11 +37,12 @@ function editorPayload({ name = null, docstatus = 0, canSubmit = true, groups = 
 			can_read: true,
 			can_create: true,
 			can_write: docstatus === 0,
+			can_update_after_submit: docstatus === 1,
 			can_submit: docstatus === 0 && canSubmit,
 			can_cancel: docstatus === 1,
 			can_amend: false,
 		},
-		fields: { show_work_order: true, can_edit_work_order: true },
+		fields: { show_work_order: true, can_edit_work_order: true, allow_on_submit_fields: docstatus === 1 ? ["work_order"] : [] },
 		options: { cutting_locations: ["Machine Cutting", "Manual Cutting"] },
 	}
 }
@@ -113,11 +114,22 @@ await page.route("**/api/resource/SD%20YRP%20Cutting%20Plan*", (route) => route.
 }))
 await page.route("**/api/method/essdee_yrp.api.link_search.link_search*", async (route) => {
 	const body = JSON.parse(route.request().postData() || "{}")
-	const rows = body.doctype === "SD YRP Lot" ? [{ name: "LOT-001", label: "LOT-001" }] : []
+	const rows = body.doctype === "SD YRP Lot"
+		? [{ name: "LOT-001", label: "LOT-001" }]
+		: body.doctype === "YRP Work Order"
+			? [{ name: "WO-NEW", label: "WO-NEW" }]
+			: []
 	await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: rows }) })
 })
 await page.route(EDITOR, async (route) => {
 	const body = JSON.parse(route.request().postData() || "{}")
+	if (body.cutting_plan === "CP-SUBMITTED") {
+		return route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({ message: editorPayload({ name: "CP-SUBMITTED", docstatus: 1, groups }) }),
+		})
+	}
 	const existing = body.cutting_plan === "CP-WEB-NEW" || saved
 	await route.fulfill({
 		status: 200,
@@ -132,6 +144,13 @@ await page.route(LOAD_LOT, (route) => route.fulfill({
 }))
 await page.route(SAVE, async (route) => {
 	savedBody = JSON.parse(route.request().postData() || "{}")
+	if (savedBody.name === "CP-SUBMITTED") {
+		return route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({ message: editorPayload({ name: "CP-SUBMITTED", docstatus: 1, groups, workOrder: savedBody.values?.work_order || null }) }),
+		})
+	}
 	saved = true
 	await route.fulfill({
 		status: 200,
@@ -145,6 +164,10 @@ await page.getByRole("button", { name: "Create Cutting Plan", exact: true }).wai
 await page.getByRole("button", { name: "Create Cutting Plan", exact: true }).click()
 await page.waitForURL("**/web/cutting/plans/new")
 await page.getByRole("heading", { name: "New Cutting Plan", exact: true }).waitFor({ timeout: 20_000 })
+for (const heading of ["Plan source", "Cutting setup", "Planned Quantities"]) {
+	assert(await page.getByRole("heading", { name: heading, exact: true }).count() === 1, `Cutting Plan editor is missing its ${heading} section`)
+}
+assert(await page.locator(".cutting-plan-editor__card-grid").count() === 1, "Cutting Plan setup cards are not grouped in the approved layout")
 assert(await page.locator("input[type=date], input[type=time], input[type=datetime-local]").count() === 0, "Cutting Plan editor uses native temporal inputs")
 const disabledSave = page.getByRole("button", { name: "Save", exact: true })
 assert(await disabledSave.isDisabled(), "Incomplete Cutting Plan unexpectedly enables Save")
@@ -157,8 +180,8 @@ await lotField.locator(".p-autocomplete-input").fill("LOT")
 	await page.getByRole("columnheader", { name: "S", exact: true }).waitFor()
 	assert(await page.locator(".quantity-attribute").filter({ hasText: "Navy" }).count() >= 1, "Lot matrix did not render the authoritative colour row")
 	const enabledSave = page.getByRole("button", { name: "Save", exact: true })
-	const saveOptions = page.getByRole("button", { name: "Save options", exact: true })
-	assert(!(await enabledSave.isDisabled()) && !(await saveOptions.isDisabled()), "Complete Cutting Plan does not enable the Frappe-style save menu")
+	assert(!(await enabledSave.isDisabled()), "Complete Cutting Plan does not enable Save")
+	assert(await page.getByRole("button", { name: "Save options", exact: true }).count() === 0, "Unsaved Cutting Plan exposes Submit before its first save")
 	await page.waitForFunction(() => [...document.querySelectorAll("button")].some((button) => button.textContent?.trim() === "Save" && getComputedStyle(button).backgroundColor === "rgb(4, 120, 87)"))
 	const enabledSaveStyle = await enabledSave.evaluate((button) => ({ background: getComputedStyle(button).backgroundColor, color: getComputedStyle(button).color }))
 	assert(enabledSaveStyle.background === "rgb(4, 120, 87)" && enabledSaveStyle.color === "rgb(255, 255, 255)", `Enabled primary action lost its visual hierarchy: ${JSON.stringify(enabledSaveStyle)}`)
@@ -169,16 +192,24 @@ await page.getByRole("heading", { name: "Edit Cutting Plan", exact: true }).wait
 assert(savedBody?.submit === false, `Draft save sent an unexpected lifecycle action: ${JSON.stringify(savedBody)}`)
 assert(savedBody?.values?.item_details?.[0]?.items?.[0]?._row_key === "g0:r0", "Draft save lost the authoritative row key")
 assert(!page.url().includes("/app/"), "Cutting Plan creation redirected to Desk")
-assert(await page.getByRole("button", { name: "Save options", exact: true }).count() === 1, "Permitted Save & Submit menu is missing")
-await page.getByRole("button", { name: "Save options", exact: true }).click()
-assert(await page.getByRole("menuitem", { name: "Save & Submit", exact: true }).count() === 1, "Permitted Save & Submit action is missing")
-await page.keyboard.press("Escape")
+assert(await page.getByRole("button", { name: "Submit", exact: true }).count() === 1, "Saved Draft Cutting Plan does not expose Submit")
+assert(await page.getByRole("button", { name: "Save", exact: true }).count() === 0, "Clean saved Draft still exposes Save")
+assert(await page.getByRole("button", { name: "Save options", exact: true }).count() === 0, "Saved Draft hides Submit inside a save dropdown")
+
+const savedPlies = page.getByLabel("Maximum No of Plys")
+await savedPlies.fill("101")
+await savedPlies.press("Tab")
+await page.getByRole("button", { name: "Save", exact: true }).waitFor()
+assert(await page.getByRole("button", { name: "Submit", exact: true }).count() === 0, "Dirty saved Draft allows Submit before saving changes")
+await page.getByRole("button", { name: "Save", exact: true }).click()
+await page.getByRole("button", { name: "Submit", exact: true }).waitFor()
 
 canSubmit = false
 saved = false
 await page.goto(`${SITE}/web/cutting/plans/new`, { waitUntil: "domcontentloaded" })
 await page.getByRole("heading", { name: "New Cutting Plan", exact: true }).waitFor()
 assert(await page.getByRole("button", { name: "Save options", exact: true }).count() === 0, "Save & Submit ignores submit permission")
+assert(await page.getByRole("button", { name: "Submit", exact: true }).count() === 0, "New Cutting Plan exposes Submit without submit permission")
 
 const plies = page.getByLabel("Maximum No of Plys")
 await plies.fill("110")
@@ -190,6 +221,56 @@ assert(page.url().endsWith("/web/cutting/plans/new"), "Dirty editor navigated aw
 await page.getByRole("button", { name: "Back to Cutting Plans", exact: true }).click()
 await discardDialog.getByRole("button", { name: "Discard Changes", exact: true }).click()
 await page.waitForURL("**/web/cutting/plans")
+
+await page.route("**/api/resource/SD%20YRP%20Cutting%20Plan/CP-SUBMITTED*", (route) => route.fulfill({
+	status: 200,
+	contentType: "application/json",
+	body: JSON.stringify({ data: {
+		name: "CP-SUBMITTED",
+		docstatus: 1,
+		cp_status: "Planned",
+		lot: "LOT-001",
+		item: "STYLE-001",
+		maximum_no_of_plys: 100,
+		maximum_allow_percent: 10,
+		cutting_location: "Manual Cutting",
+	} }),
+}))
+await page.route("**/api/method/essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.get_web_view_data*", (route) => route.fulfill({
+	status: 200,
+	contentType: "application/json",
+	body: JSON.stringify({ message: {
+		item_details: groups,
+		cloth_details: [],
+		accessory_details: [],
+		grammage_change_logs: [],
+		completed_items: [],
+		incomplete_items: [],
+		recut_details: {},
+		print_panel_details: {},
+		planned_detail: {},
+		markers: [],
+		laysheets: [],
+		permissions: { can_write: true, can_print: false, can_read_marker: false, can_read_laysheet: false },
+		print_formats: [],
+	} }),
+}))
+await page.goto(`${SITE}/web/cutting/plans/CP-SUBMITTED`, { waitUntil: "domcontentloaded" })
+await page.getByRole("heading", { name: "Plan identity", exact: true }).waitFor({ timeout: 20_000 })
+const submittedEdit = page.getByRole("button", { name: "Edit", exact: true })
+assert(await submittedEdit.count() === 1, "Submitted Cutting Plan does not expose its safe Allow on Submit editor")
+await submittedEdit.click()
+await page.getByRole("heading", { name: "Edit Cutting Plan", exact: true }).waitFor()
+assert(await page.getByLabel("Maximum No of Plys").isDisabled(), "Submitted Cutting Plan enables a non-Allow-on-Submit field")
+assert(await page.locator(".cutting-quantity-matrix .p-inputnumber-input").first().isDisabled(), "Submitted Cutting Plan enables its non-Allow-on-Submit quantity matrix")
+const submittedWorkOrder = page.locator(".cutting-plan-editor__field").filter({ hasText: "Work Order" }).locator(".p-autocomplete-input")
+assert(!(await submittedWorkOrder.isDisabled()), "Submitted Cutting Plan disables its permitted Work Order field")
+await submittedWorkOrder.fill("WO")
+await page.locator(".p-autocomplete-option").filter({ hasText: "WO-NEW" }).click()
+await page.getByRole("button", { name: "Save", exact: true }).click()
+await page.getByRole("heading", { name: "Plan identity", exact: true }).waitFor()
+assert(JSON.stringify(Object.keys(savedBody.values || {}).sort()) === JSON.stringify(["work_order"]), `Submitted Cutting Plan sent non-Allow-on-Submit values: ${JSON.stringify(savedBody)}`)
+assert(savedBody.values.work_order === "WO-NEW", `Submitted Cutting Plan lost the permitted Work Order update: ${JSON.stringify(savedBody)}`)
 
 assert(errors.length === 0, `Browser errors: ${JSON.stringify(errors)}`)
 console.log(JSON.stringify({ passed: true, savedName: "CP-WEB-NEW", matrixRows: 1, dirtyConfirmation: true }, null, 2))

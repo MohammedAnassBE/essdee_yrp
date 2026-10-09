@@ -156,6 +156,32 @@ def _assert_field_permissions(values) -> None:
 		)
 
 
+def _allow_on_submit_fields(doc, write_fields=None) -> list[str]:
+	"""Return editable web fields that are genuinely writable after submit."""
+
+	if cint(_doc_value(doc, "docstatus", 0)) != 1:
+		return []
+	if write_fields is None:
+		try:
+			write_fields = set(get_permitted_fields(DOCTYPE, permission_type="write"))
+		except TypeError:
+			write_fields = set(get_permitted_fields(DOCTYPE, "write"))
+	meta = getattr(doc, "meta", None) or frappe.get_meta(DOCTYPE)
+	allowed = []
+	for fieldname in sorted(EDITABLE_FIELDS - {"item_details"}):
+		field = meta.get_field(fieldname)
+		if (
+			field is None
+			or fieldname not in write_fields
+			or not bool(field.get("allow_on_submit"))
+			or bool(field.get("hidden"))
+			or bool(field.get("read_only"))
+		):
+			continue
+		allowed.append(fieldname)
+	return allowed
+
+
 def _get_lot(lot: str):
 	if not lot:
 		frappe.throw(_("Lot is required."))
@@ -185,21 +211,27 @@ def _permission_flags(doc=None) -> dict[str, bool]:
 			kwargs["doc"] = doc
 		return bool(frappe.has_permission(DOCTYPE, **kwargs))
 
+	raw_write = allowed("write")
 	permissions = {
 		"can_read": allowed("read"),
 		"can_create": allowed("create", record_sensitive=False),
-		"can_write": allowed("write"),
+		"can_write": raw_write,
+		"can_update_after_submit": False,
 		"can_submit": allowed("submit"),
 		"can_cancel": allowed("cancel"),
 		"can_amend": allowed("amend"),
 	}
 	if doc is not None:
+		permissions["can_update_after_submit"] = bool(
+			docstatus == 1 and raw_write and _allow_on_submit_fields(doc)
+		)
 		permissions["can_write"] = bool(docstatus == 0 and permissions["can_write"])
 		permissions["can_submit"] = bool(docstatus == 0 and permissions["can_submit"])
 		permissions["can_cancel"] = bool(docstatus == 1 and permissions["can_cancel"])
 		permissions["can_amend"] = bool(docstatus == 2 and permissions["can_amend"])
 	else:
 		permissions["can_write"] = False
+		permissions["can_update_after_submit"] = False
 		permissions["can_cancel"] = False
 		permissions["can_amend"] = False
 	return permissions
@@ -240,6 +272,7 @@ def _serialize_editor(doc, groups) -> dict:
 		write_fields = set(get_permitted_fields(DOCTYPE, "write"))
 		read_fields = set(get_permitted_fields(DOCTYPE, "read"))
 	show_work_order = "work_order" in read_fields
+	allow_on_submit_fields = _allow_on_submit_fields(doc, write_fields)
 	return {
 		"record": _record_payload(doc, include_work_order=show_work_order),
 		"matrix": {"groups": _with_row_keys(groups)},
@@ -247,6 +280,7 @@ def _serialize_editor(doc, groups) -> dict:
 		"fields": {
 			"show_work_order": show_work_order,
 			"can_edit_work_order": "work_order" in write_fields,
+			"allow_on_submit_fields": allow_on_submit_fields,
 		},
 		"options": {
 			"cutting_locations": ["Machine Cutting", "Manual Cutting"],
@@ -292,6 +326,32 @@ def save(
 	expected_modified: str | None = None,
 ) -> dict:
 	values = _normalize_values(values)
+
+	if name:
+		doc = frappe.get_doc(DOCTYPE, name)
+		frappe.has_permission(DOCTYPE, ptype="write", doc=doc, throw=True)
+		_assert_not_stale(doc, expected_modified)
+		docstatus = cint(doc.docstatus)
+		if docstatus == 1:
+			if sbool(submit):
+				frappe.throw(_("A submitted Cutting Plan cannot be submitted again."))
+			allowed = set(_allow_on_submit_fields(doc))
+			denied = set(values) - allowed
+			if denied:
+				frappe.throw(
+					_("Only Allow on Submit fields can be changed after submission: {0}.").format(
+						", ".join(sorted(denied))
+					)
+				)
+			doc.update({fieldname: values[fieldname] for fieldname in allowed if fieldname in values})
+			doc.save()
+			return get_editor(doc.name)
+		if docstatus != 0:
+			frappe.throw(_("Only Draft Cutting Plans can be edited."))
+	else:
+		frappe.has_permission(DOCTYPE, ptype="create", throw=True)
+		doc = frappe.new_doc(DOCTYPE)
+
 	_assert_field_permissions(values)
 	lot = values.get("lot")
 	incoming_groups = values.get("item_details")
@@ -299,16 +359,6 @@ def save(
 		frappe.throw(_("Lot is required."))
 	if not isinstance(incoming_groups, list) or not incoming_groups:
 		frappe.throw(_("Load the Lot quantities before saving the Cutting Plan."))
-
-	if name:
-		doc = frappe.get_doc(DOCTYPE, name)
-		frappe.has_permission(DOCTYPE, ptype="write", doc=doc, throw=True)
-		_assert_not_stale(doc, expected_modified)
-		if cint(doc.docstatus) != 0:
-			frappe.throw(_("Only Draft Cutting Plans can be edited."))
-	else:
-		frappe.has_permission(DOCTYPE, ptype="create", throw=True)
-		doc = frappe.new_doc(DOCTYPE)
 
 	lot_doc = _get_lot(lot)
 	authoritative_groups = get_items(lot) or []

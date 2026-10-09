@@ -7,18 +7,18 @@
 		:show-title="false"
 		flat
 		full-width
-		:inline-navigation="!checkingEditor && !showDraftEditor"
+		:inline-navigation="!checkingEditor && !showEditor"
 	>
 		<div v-if="checkingEditor" class="cutting-plan-probe erp-workspace" aria-label="Loading Cutting Plan">
 			<Skeleton height="76px" />
 			<Skeleton height="420px" />
 		</div>
-		<div v-else-if="showDraftEditor" class="cutting-plan-editor-route erp-workspace">
+		<div v-else-if="showEditor" class="cutting-plan-editor-route erp-workspace">
 			<CuttingPlanEditor
 				:name="cuttingPlanId"
 				:initial-payload="editorProbe"
 				@saved="editorSaved"
-				@cancel="router.push('/cutting/plans')"
+				@cancel="cancelEditor"
 			/>
 		</div>
 		<div v-else-if="workspaceError && !workspaceReady" class="cutting-plan-probe erp-workspace">
@@ -31,7 +31,7 @@
 				:name="cuttingPlanId"
 				title="Cutting Plan"
 				initial-mode="view"
-				:readonly="!workspaceData.permissions?.can_write"
+				readonly
 				:include-fields="detailFields"
 				compact
 				@loaded="documentLoaded"
@@ -67,6 +67,14 @@
 						:doc="doc"
 						:data="workspaceData"
 						@refresh="refreshPage"
+					/>
+					<Button
+						v-if="canEditSubmitted"
+						label="Edit"
+						icon="pi pi-pencil"
+						severity="secondary"
+						outlined
+						@click="editingSubmitted = true"
 					/>
 				</template>
 				<template #view="{ doc, meta }">
@@ -122,10 +130,17 @@ const router = useRouter()
 const cuttingPlanId = computed(() => String(route.params.cuttingPlanId || ""))
 const checkingEditor = ref(true)
 const editorProbe = ref(null)
+const editingSubmitted = ref(false)
 const showDraftEditor = computed(() => Boolean(
 	editorProbe.value?.record?.docstatus === 0
 	&& editorProbe.value?.permissions?.can_write,
 ))
+const canEditSubmitted = computed(() => Boolean(
+	editorProbe.value?.record?.docstatus === 1
+	&& editorProbe.value?.permissions?.can_update_after_submit,
+))
+const showSubmittedEditor = computed(() => canEditSubmitted.value && editingSubmitted.value)
+const showEditor = computed(() => showDraftEditor.value || showSubmittedEditor.value)
 const workspaceData = ref({})
 const workspaceLoading = ref(true)
 const workspaceError = ref("")
@@ -202,6 +217,7 @@ async function probeEditor() {
 	const requestedId = cuttingPlanId.value
 	loadSequence += 1
 	checkingEditor.value = true
+	editingSubmitted.value = false
 	editorProbe.value = null
 	workspaceData.value = {}
 	workspaceError.value = ""
@@ -224,6 +240,15 @@ function editorSaved(record) {
 		...editorProbe.value,
 		record: { ...(editorProbe.value?.record || {}), ...record },
 	}
+	if (Number(record?.docstatus) === 1) editingSubmitted.value = false
+}
+
+function cancelEditor() {
+	if (showSubmittedEditor.value) {
+		editingSubmitted.value = false
+		return
+	}
+	router.push("/cutting/plans")
 }
 
 watch(cuttingPlanId, probeEditor, { immediate: true })

@@ -1,0 +1,293 @@
+from importlib import import_module
+from importlib.util import find_spec
+from unittest import TestCase
+from unittest.mock import patch
+
+import frappe
+
+from essdee_yrp import hooks
+from essdee_yrp.www.web import WEB_DOCTYPES
+
+DOCTYPE = "SD YRP Finishing Plan"
+MODULE = "essdee_yrp.finishing.web_workspace"
+
+
+class FakePlan(frappe._dict):
+	doctype = DOCTYPE
+
+	def check_permission(self, ptype="read"):
+		if ptype in self.get("denied", ()):
+			raise frappe.PermissionError(ptype)
+
+	def get(self, key, default=None):
+		return super().get(key, default)
+
+
+def make_plan(**values):
+	defaults = {
+		"name": "FP-0001",
+		"lot": "LOT-1",
+		"item": "TSHIRT",
+		"work_order": "WO-1",
+		"fp_status": "Planned",
+		"modified": "2026-10-09 10:00:00",
+		"production_detail": "IPD-1",
+		"finishing_process": "Finishing",
+		"finishing_plan_dispatch_logs": [],
+	}
+	defaults.update(values)
+	return FakePlan(defaults)
+
+
+class TestFinishingWebWorkspace(TestCase):
+	def _workspace(self):
+		self.assertIsNotNone(find_spec(MODULE), "The Finishing web workspace must exist")
+		return import_module(MODULE)
+
+	def _permissions(self, denied=(), allowed=None):
+		def has_permission(doctype, ptype="read", *args, **kwargs):
+			if allowed is not None:
+				return (doctype, ptype) in allowed
+			return (doctype, ptype) not in denied
+
+		return patch.object(frappe, "has_permission", side_effect=has_permission)
+
+	def _roles(self, *roles, accounts_role="Accounts User", merch_role="Merch User"):
+		settings = {"accounts_user_role": accounts_role, "merch_user_role": merch_role}
+		return (
+			patch.object(frappe, "get_roles", return_value=list(roles)),
+			patch.object(
+				frappe.db, "get_single_value", side_effect=lambda _doctype, field: settings.get(field)
+			),
+		)
+
+	def _actions(self, plan, *roles, denied=()):
+		workspace = self._workspace()
+		roles_patch, settings_patch = self._roles(*roles)
+		with self._permissions(denied=denied), roles_patch, settings_patch:
+			return workspace.get_plan_actions(plan)
+
+	def test_capabilities_expose_the_five_finishing_cards(self):
+		with self._permissions():
+			payload = self._workspace().get_capabilities()
+		self.assertEqual(
+			list(payload["sections"]), ["plans", "reports", "rework_details", "rework_groups", "dispatches"]
+		)
+		self.assertEqual(payload["sections"]["plans"]["doctype"], DOCTYPE)
+		self.assertEqual(payload["sections"]["dispatches"]["doctype"], "SD YRP Finishing Plan Dispatch")
+		self.assertEqual(
+			list(payload["sections"]["reports"]["reports"]),
+			[
+				"stock_balance",
+				"packing_dpr",
+				"dispatch_report",
+				"ironing_dpr",
+				"finishing_plan_report",
+				"rejection_details",
+				"rework_completion",
+			],
+		)
+
+	def test_capabilities_omit_unreadable_sections(self):
+		with self._permissions(allowed=set()):
+			payload = self._workspace().get_capabilities()
+		self.assertEqual(payload["sections"], {})
+
+	def test_each_report_follows_its_source_permission(self):
+		cases = {
+			("YRP Stock Ledger Entry", "report"): "stock_balance",
+			("YRP Goods Received Note", "read"): "packing_dpr",
+			("YRP Delivery Challan", "read"): "ironing_dpr",
+			(DOCTYPE, "report"): "finishing_plan_report",
+			("SD YRP GRN Rework Item", "read"): "rejection_details",
+		}
+		for denied, report in cases.items():
+			with self.subTest(denied=denied):
+				with self._permissions(denied={denied}):
+					reports = (
+						self._workspace().get_capabilities()["sections"].get("reports", {}).get("reports", {})
+					)
+				self.assertNotIn(report, reports)
+
+	def test_rework_cards_need_rework_read_and_expose_write(self):
+		with self._permissions(denied={("SD YRP GRN Rework Item", "write")}):
+			sections = self._workspace().get_capabilities()["sections"]
+		self.assertTrue(sections["rework_details"]["can_read"])
+		self.assertFalse(sections["rework_groups"]["can_write"])
+		with self._permissions(denied={("SD YRP GRN Rework Item", "read")}):
+			sections = self._workspace().get_capabilities()["sections"]
+		self.assertNotIn("rework_details", sections)
+		self.assertNotIn("rework_groups", sections)
+
+	def test_dispatch_card_flags_follow_doctype_permissions(self):
+		with self._permissions(denied={("SD YRP Finishing Plan Dispatch", "submit")}):
+			dispatches = self._workspace().get_capabilities()["sections"]["dispatches"]
+		self.assertTrue(dispatches["can_create"])
+		self.assertFalse(dispatches["can_submit"])
+
+	def test_finishing_doctypes_are_registered_in_both_web_catalogs(self):
+		for doctype in (DOCTYPE, "SD YRP Finishing Plan Dispatch"):
+			for catalog in (WEB_DOCTYPES, hooks.yrp_web_doctype_catalog):
+				with self.subTest(doctype=doctype, catalog=catalog):
+					self.assertIn(doctype, catalog)
+
+	def test_endpoints_are_whitelisted_for_authenticated_users_only(self):
+		workspace = self._workspace()
+		for endpoint in (
+			workspace.get_capabilities,
+			workspace.get_plan_workspace,
+			workspace.get_plan_tab,
+			workspace.execute_plan_command,
+			workspace.prepare_inward_print,
+		):
+			with self.subTest(endpoint=endpoint.__name__):
+				self.assertIn(endpoint, frappe.whitelisted)
+				self.assertNotIn(endpoint, frappe.guest_methods)
+
+	def test_audit_request_is_offered_only_for_dispatched_plans(self):
+		for status, expected in (("Planned", False), ("Dispatched", True), ("Fully Dispatched", True)):
+			with self.subTest(status=status):
+				actions = self._actions(make_plan(fp_status=status))
+				self.assertIs(actions["request_audit"], expected)
+
+	def test_audit_completion_needs_ready_status_and_accounts_role(self):
+		ready = make_plan(fp_status="Ready for Audit")
+		self.assertTrue(self._actions(ready, "Accounts User")["complete_audit"])
+		self.assertFalse(self._actions(ready, "Stock User")["complete_audit"])
+		self.assertFalse(self._actions(make_plan(fp_status="Dispatched"), "Accounts User")["complete_audit"])
+
+	def test_ocr_completion_needs_audited_status_and_system_manager(self):
+		for status in ("Audit Completed", "Auto Closed"):
+			with self.subTest(status=status):
+				self.assertTrue(self._actions(make_plan(fp_status=status), "System Manager")["complete_ocr"])
+				self.assertFalse(self._actions(make_plan(fp_status=status), "Stock User")["complete_ocr"])
+
+	def test_locked_plans_disable_entry_actions(self):
+		for status in ("Auto Closed", "OCR Completed", "P&L Submitted"):
+			with self.subTest(status=status):
+				actions = self._actions(make_plan(fp_status=status), "System Manager")
+				for key in (
+					"request_audit",
+					"complete_audit",
+					"fetch_rejected_quantity",
+					"cancel_linked_document",
+					"print_inward",
+				):
+					self.assertFalse(actions[key], key)
+
+	def test_write_permission_gates_plan_mutations(self):
+		actions = self._actions(make_plan(fp_status="Dispatched"), denied={(DOCTYPE, "write")})
+		self.assertFalse(actions["request_audit"])
+		self.assertFalse(actions["fetch_rejected_quantity"])
+		self.assertFalse(actions["cancel_linked_document"])
+
+	def test_p_and_l_is_visible_to_merch_role_and_managed_after_ocr(self):
+		self.assertFalse(self._actions(make_plan(), "Stock User")["view_p_and_l"])
+		self.assertTrue(self._actions(make_plan(), "Merch User")["view_p_and_l"])
+		self.assertFalse(self._actions(make_plan(), "Merch User")["manage_p_and_l"])
+		self.assertTrue(self._actions(make_plan(fp_status="OCR Completed"), "Merch User")["manage_p_and_l"])
+
+	def test_linked_documents_parse_plan_json_lists(self):
+		plan = make_plan(
+			dc_list='{"DC-1": "2026-10-01 10:00:00"}',
+			grn_list='{"GRN-1": "2026-10-02 10:00:00"}',
+			incomplete_transfer_dc_list='{"DC-9": true}',
+		)
+		groups = {group["key"]: group for group in self._workspace().get_linked_documents(plan)}
+		self.assertEqual(groups["dc_list"]["documents"], [{"name": "DC-1", "date": "2026-10-01 10:00:00"}])
+		self.assertEqual(groups["dc_list"]["doctype"], "YRP Delivery Challan")
+		self.assertTrue(groups["dc_list"]["cancellable"])
+		self.assertEqual(groups["incomplete_transfer_dc_list"]["documents"], [{"name": "DC-9", "date": ""}])
+		self.assertFalse(groups["incomplete_transfer_dc_list"]["cancellable"])
+		self.assertEqual(groups["stock_entry_list"]["documents"], [])
+
+	def _execute(self, plan, command, payload=None, expected_modified=None, roles=("Stock User",)):
+		workspace = self._workspace()
+		roles_patch, settings_patch = self._roles(*roles)
+		with (
+			self._permissions(),
+			roles_patch,
+			settings_patch,
+			patch.object(frappe, "get_doc", return_value=plan),
+			patch.object(workspace, "get_plan_workspace", return_value={"record": {"name": plan.name}}),
+		):
+			return workspace.execute_plan_command(
+				plan.name, command, payload, expected_modified or plan.modified
+			)
+
+	def test_unknown_command_is_rejected(self):
+		with self.assertRaises(frappe.ValidationError):
+			self._execute(make_plan(), "delete_everything")
+
+	def test_stale_command_is_rejected(self):
+		with self.assertRaises(frappe.TimestampMismatchError):
+			self._execute(
+				make_plan(fp_status="Dispatched"), "request_audit", expected_modified="2020-01-01 00:00:00"
+			)
+
+	def test_unavailable_command_is_rejected_on_the_server(self):
+		with self.assertRaises(frappe.ValidationError):
+			self._execute(make_plan(fp_status="Planned"), "request_audit")
+
+	def test_request_audit_delegates_to_the_closure_service(self):
+		with patch("essdee_yrp.finishing.closure.request_audit") as request_audit:
+			result = self._execute(make_plan(fp_status="Dispatched"), "request_audit")
+		request_audit.assert_called_once_with("FP-0001")
+		self.assertEqual(result["record"], {"name": "FP-0001"})
+
+	def test_cancel_linked_document_requires_plan_ownership(self):
+		plan = make_plan(dc_list='{"DC-1": "2026-10-01"}')
+		with patch("essdee_yrp.finishing.transactions.cancel_document") as cancel_document:
+			with self.assertRaises(frappe.ValidationError):
+				self._execute(
+					plan, "cancel_linked_document", {"doctype": "YRP Delivery Challan", "name": "DC-OTHER"}
+				)
+			self._execute(plan, "cancel_linked_document", {"doctype": "YRP Delivery Challan", "name": "DC-1"})
+		cancel_document.assert_called_once_with("YRP Delivery Challan", "DC-1")
+
+	def test_unknown_tab_is_rejected(self):
+		with (
+			self._permissions(),
+			patch.object(frappe, "get_doc", return_value=make_plan()),
+			self.assertRaises(frappe.ValidationError),
+		):
+			self._workspace().get_plan_tab("FP-0001", "unknown")
+
+	def test_tab_requires_plan_read_permission(self):
+		with (
+			patch.object(frappe, "get_doc", return_value=make_plan(denied=("read",))),
+			self.assertRaises(frappe.PermissionError),
+		):
+			self._workspace().get_plan_tab("FP-0001", "details")
+
+	def test_details_tab_returns_the_desk_view_model(self):
+		views = {
+			"primary_values": ["S", "M"],
+			"finishing_inward": {"data": {}, "total": {}, "over_all": {}},
+			"is_set_item": 0,
+			"set_attr": None,
+		}
+		with (
+			self._permissions(),
+			patch.object(frappe, "get_doc", return_value=make_plan()),
+			patch("essdee_yrp.finishing.views.build_plan_views", return_value=views),
+		):
+			payload = self._workspace().get_plan_tab("FP-0001", "details")
+		self.assertEqual(payload["primary_values"], ["S", "M"])
+		self.assertEqual(payload["data"], views["finishing_inward"])
+		self.assertEqual(payload["process"], "Finishing")
+
+	def test_old_lot_tab_skips_available_balances_for_closed_plans(self):
+		views = {"old_lot_given_matrix": {"groups": []}, "old_lot_received_matrix": {"groups": []}}
+		roles_patch, settings_patch = self._roles("Stock User")
+		with (
+			self._permissions(),
+			roles_patch,
+			settings_patch,
+			patch.object(frappe, "get_doc", return_value=make_plan(fp_status="OCR Completed")),
+			patch("essdee_yrp.finishing.views.build_plan_views", return_value=views),
+			patch("essdee_yrp.finishing.old_lot.fetch_from_old_lot") as fetch_from_old_lot,
+		):
+			payload = self._workspace().get_plan_tab("FP-0001", "old_lot")
+		fetch_from_old_lot.assert_not_called()
+		self.assertIsNone(payload["available"])

@@ -94,6 +94,37 @@ class TestSalesWebWorkspace(TestCase):
 		self.assertEqual(set(payload["sections"]), {"production_orders"})
 		self.assertEqual(payload["reports"], {})
 
+	def test_finishing_dispatch_report_uses_its_own_read_permissions(self):
+		payload = self._capabilities(
+			{
+				("YRP Production Order", "read"),
+				("SD YRP Finishing Plan", "read"),
+				("YRP Goods Received Note", "read"),
+			}
+		)
+		self.assertEqual(set(payload["sections"]), {"production_orders", "reports"})
+		self.assertEqual(
+			payload["reports"],
+			{
+				"finishing_dispatch": {
+					"label": "Finishing Plan Dispatch",
+					"can_read": True,
+					"can_export": False,
+				}
+			},
+		)
+
+		for missing in (("SD YRP Finishing Plan", "read"), ("YRP Goods Received Note", "read")):
+			with self.subTest(missing=missing):
+				allowed = {
+					("YRP Production Order", "read"),
+					("SD YRP Finishing Plan", "read"),
+					("YRP Goods Received Note", "read"),
+				} - {missing}
+				payload = self._capabilities(allowed)
+				self.assertNotIn("reports", payload["sections"])
+				self.assertEqual(payload["reports"], {})
+
 	def test_unreadable_production_orders_hide_both_sections(self):
 		payload = self._capabilities({("YRP Production Order", "report")})
 		self.assertEqual(payload, {"sections": {}, "reports": {}})

@@ -23,7 +23,7 @@ const capabilities = {
 		plan: { label: "Sewing Plan", doctype: "SD YRP Sewing Plan", ...flags },
 		goods_received_note: { label: "Goods Received Note", doctype: "YRP Goods Received Note", ...flags },
 	},
-	reports: Object.fromEntries(["status_summary", "dpr", "scr", "monthly_summary", "item_summary"].map((key) => [key, { ...flags }])),
+	reports: Object.fromEntries(["status_summary", "dpr", "scr", "monthly_summary", "item_summary", "finishing_dispatch"].map((key) => [key, { ...flags }])),
 }
 function assert(condition, message) { if (!condition) throw new Error(message) }
 async function login(page) {
@@ -205,19 +205,28 @@ async function launcherSuite(page) {
 	assert(JSON.stringify(await cards.locator("strong").allTextContents()) === JSON.stringify(["Sewing Plan", "Work Orders", "Reports", "Attendance Report"]), "Sewing launcher labels differ from the four approved destinations")
 	await page.setViewportSize({ width: 1600, height: 900 })
 	const launcherGeometry = await page.evaluate(() => {
-		const shell = document.querySelector(".sewing-workspace-shell").getBoundingClientRect()
+		const launcher = document.querySelector(".workspace-launcher").getBoundingClientRect()
+		const card = document.querySelector(".workspace-launcher__card").getBoundingClientRect()
 		const title = document.querySelector(".workspace-launcher__title h1").getBoundingClientRect()
 		const picker = document.querySelector(".sewing-unit-picker").getBoundingClientRect()
 		const grid = document.querySelector(".workspace-launcher__grid").getBoundingClientRect()
 		return {
-			shellLeft: shell.left,
-			shellRight: innerWidth - shell.right,
+			launcherWidth: launcher.width,
+			launcherLeft: launcher.left,
+			launcherRight: innerWidth - launcher.right,
+			cardWidth: card.width,
 			pickerRightOfTitle: picker.left > title.right,
 			aligned: Math.abs((picker.top + picker.height / 2) - (title.top + title.height / 2)) <= 28,
 			headerToCards: grid.top - Math.max(title.bottom, picker.bottom),
 		}
 	})
-	assert(launcherGeometry.shellLeft <= 32 && launcherGeometry.shellRight <= 32, `Sewing launcher wastes horizontal space: ${JSON.stringify(launcherGeometry)}`)
+	assert(
+		launcherGeometry.launcherWidth <= 1321
+			&& launcherGeometry.launcherLeft >= 100
+			&& Math.abs(launcherGeometry.launcherLeft - launcherGeometry.launcherRight) <= 2,
+		`Sewing launcher is not a centered, bounded department workspace: ${JSON.stringify(launcherGeometry)}`,
+	)
+	assert(launcherGeometry.cardWidth <= 450, `Sewing workspace cards stretch wider than the shared launcher pattern: ${JSON.stringify(launcherGeometry)}`)
 	assert(launcherGeometry.pickerRightOfTitle && launcherGeometry.aligned, `Sewing Unit must share the desktop title row: ${JSON.stringify(launcherGeometry)}`)
 	assert(launcherGeometry.headerToCards >= 0 && launcherGeometry.headerToCards <= 28, `Compact Sewing header leaves excessive space before cards: ${JSON.stringify(launcherGeometry)}`)
 	assert(await page.locator(".department-page__nav").count() === 0, "Sewing must not render a separate back-navigation row")
@@ -1207,6 +1216,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		Navy: { colour: "Navy", part: "Front", variant_colour: "Navy", set_combination: {}, lines: ["Sewing Line 1", "Sewing Line 3"], values: { XS: { "Order Qty": 100, "Delivered Qty": 90, "Delivered - Input": 10, "Sewing In": 80, "Sewing In Balance": -20, "Sewing Out": 60, Reject: 5, "Sewing Out Total": 65, "Sewing Out Balance": -15 } }, type_wise_total: { "Order Qty": 100, "Delivered Qty": 90, "Delivered - Input": 10, "Sewing In": 80, "Sewing In Balance": -20, "Sewing Out": 60, Reject: 5, "Sewing Out Total": 65, "Sewing Out Balance": -15 } },
 		Red: { colour: "Red", part: "Back", variant_colour: "Red", set_combination: {}, lines: [], values: { XS: { "Order Qty": 200 } }, type_wise_total: { "Order Qty": 200 } },
 	} }
+	const dispatch = { data: [{ lot: "LOT-DISPATCH", item: "Premium Vest", sizes: ["S", "M"], packed_qty: { S: 10, M: 5 }, dispatched_qty: { S: 8, M: 4 }, packed_total_boxes: 15, dispatched_total_boxes: 12, pieces_per_box: 5, packed_total_pieces: 75, dispatched_total_pieces: 60 }] }
 	const state = { error: "", blocked: false, hold: null }
 	await page.route("**/api/method/**", async route => {
 		const method = route.request().url().split("/api/method/")[1], args = JSON.parse(route.request().postData() || "{}")
@@ -1220,6 +1230,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		}
 		else if (method.endsWith("get_supplier_lots")) value = [["LOT-A", "Shirt"]]
 		else if (method.endsWith("get_scr_data")) value = scr
+		else if (method.endsWith("get_dispatch_report")) value = dispatch
 		else if (method.endsWith("link_search")) value = [{ name: args.doctype === "YRP Work Station" ? "Sewing Line 1" : "Sewing Out", label: args.doctype === "YRP Work Station" ? "Sewing Line 1" : "Sewing Out" }]
 		else throw new Error(`Unexpected primary report request: ${method}`)
 		await route.fulfill({ status: error ? 417 : 200, contentType: "application/json", body: JSON.stringify(error ? { _server_messages: JSON.stringify([JSON.stringify({ message: error })]), exc: "ValidationError" } : { message: value }) })
@@ -1246,8 +1257,8 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 	try {
 		await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/__reports`)
 		await page.locator("[data-sewing-destination='reports']").waitFor()
-		assert(await page.getByRole("tab").count() === 5, "Reports workspace is absent: expected five approved report tabs")
-		assert(JSON.stringify(await page.getByRole("tab").allTextContents()) === JSON.stringify(["Status Summary", "DPR", "SCR", "Monthly Summary", "Item Summary"]), "Reports has incorrect or excluded tabs")
+		assert(await page.getByRole("tab").count() === 6, "Reports workspace is absent: expected six approved report tabs")
+		assert(JSON.stringify(await page.getByRole("tab").allTextContents()) === JSON.stringify(["Status Summary", "DPR", "SCR", "Monthly Summary", "Item Summary", "Finishing Plan Dispatch"]), "Reports has incorrect or excluded tabs")
 		await page.locator("[data-sewing-report='status-summary'] tbody tr").first().waitFor()
 		assert(count("get_sp_status_summary") === 1 && count("get_scr_data") === 0 && count("get_sewing_plan_dpr_data") === 0, "Inactive report endpoint fetched")
 		assert(last("get_sp_status_summary").supplier === "UNIT-A", "Status scope omitted")
@@ -1318,6 +1329,13 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		assert(await page.getByRole("combobox", { name: "Lot", exact: true }).inputValue() === "LOT-A", "SCR Lot lost across tab switch")
 		await generate(); await page.getByRole("heading", { name: "Navy · Front", exact: true }).waitFor()
 		assert(await page.getByRole("heading", { name: "Red · Back", exact: true }).count() === 0, "SCR colour lost across tab switch")
+		await tab("Finishing Plan Dispatch")
+		assert(count("get_dispatch_report") === 0, "Finishing Plan Dispatch fetched before Generate")
+		await generate(); await page.getByText("LOT-DISPATCH", { exact: true }).waitFor()
+		const dispatchArgs = last("get_dispatch_report")
+		assert(dispatchArgs.from_date === "2026-10-01" && dispatchArgs.to_date === "2026-10-09" && JSON.stringify(dispatchArgs.lots) === "[]" && JSON.stringify(dispatchArgs.items) === "[]" && !("supplier" in dispatchArgs), `Finishing Plan Dispatch filters are wrong or Sewing-scoped: ${JSON.stringify(dispatchArgs)}`)
+		for (const width of [390, 900, 1600]) { await page.setViewportSize({ width, height: 900 }); await noOverflow(page, `Finishing Plan Dispatch ${width}`) }
+		await page.setViewportSize({ width: 1280, height: 900 })
 		const dprCount = count("get_sewing_plan_dpr_summary"); await tab("Status Summary")
 		await statusRows.first().waitFor()
 		assert(await statusRows.count() === 1, "Status date filters lost across tab switch")
@@ -1341,7 +1359,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		await page.getByText('Prior report rows', { exact: true }).waitFor()
 		assert(await page.locator('.report-shell__loading').count() === 0, "Opt-in loading still hides prior rows behind skeletons")
 		assert(errors.length === 0 && warnings.length === 0, `Report browser errors/warnings: ${[...errors, ...warnings].join('\n')}`)
-		console.log("PASS primary-reports: five lazy tabs, Status identity/date filters and visible totals, authoritative balances, daily/range DPR contracts/validation and explicit FI blockers, Supplier-scoped SCR and colour filtering, all filter persistence, popup recovery, retained refresh results/action locks, stale Supplier rejection, 12 responsive matrix/action checks and actual narrow sticky-header scrolling")
+		console.log("PASS primary-reports: six lazy tabs including global Finishing Plan Dispatch, Status identity/date filters and visible totals, authoritative balances, daily/range DPR contracts/validation and explicit FI blockers, Supplier-scoped SCR and colour filtering, all filter persistence, popup recovery, retained refresh results/action locks, stale Supplier rejection, responsive matrix/action checks and actual narrow sticky-header scrolling")
 	} finally { await page.close(); await server.close() }
 }
 
@@ -1411,7 +1429,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 	try {
 		await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/__summary`)
 		await page.locator("[data-sewing-destination='reports']").waitFor()
-		assert(await page.getByRole("tab").count() === 5, "Summary extension changed report tab count")
+		assert(await page.getByRole("tab").count() === 6, "Summary extension changed report tab count")
 		await page.locator("[data-sewing-report='monthly-summary']").waitFor()
 		assert(count("get_monthly_summary_data") === 0 && count("get_item_summary_options") === 0 && count("get_item_summary_data") === 0, "Summary reports fetched before activation/Generate")
 		await generate(); await dismiss("Choose From Date and To Date."); assert(count("get_monthly_summary_data") === 0, "Missing dates sent a monthly request")

@@ -44,6 +44,8 @@ WEB_DOCTYPES = (
 	"SD YRP Cutting Plan",
 	"SD YRP Sewing Plan",
 	"SD YRP Sewing Plan Entry Detail",
+	"SD YRP Finishing Plan",
+	"SD YRP Finishing Plan Dispatch",
 	"SD YRP Lot",
 	"YRP Work Order",
 	"YRP Work Order Correction",

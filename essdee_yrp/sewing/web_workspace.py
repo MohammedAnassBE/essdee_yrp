@@ -5,6 +5,8 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
+from essdee_yrp.finishing.web_reports import can_view_dispatch_report
+
 
 PLAN_RESOURCES = {
 	"entry": ("Sewing Plan Entry", "SD YRP Sewing Plan Entry Detail"),
@@ -79,5 +81,7 @@ def get_capabilities() -> dict:
 		sections["reports"] = _report_capability("Reports")
 		sections["attendance"] = _report_capability("Attendance Report")
 		reports = {key: _report_capability(label) for key, label in REPORT_LABELS.items()}
+		if can_view_dispatch_report():
+			reports["finishing_dispatch"] = _report_capability("Finishing Plan Dispatch")
 
 	return {"sections": sections, "plan_actions": plan_actions, "reports": reports}

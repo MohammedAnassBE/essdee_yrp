@@ -1,7 +1,8 @@
 """Finishing packing/dispatch read models used by Desk reports and DPR views."""
 
 import frappe
-from frappe.utils import cint, flt
+from frappe import _
+from frappe.utils import cint, flt, getdate
 from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
 from yrp.utils import get_variant_attr_details, update_if_string_instance
@@ -76,8 +77,29 @@ def get_packing_grn_report_values(grn_names, ipd_doc):
 	)
 
 
+def packed_date_filter(date=None, from_date=None, to_date=None, summary=0):
+	"""Return the GRN actual_date filter for the single-day or Summary report."""
+	if not cint(summary):
+		if not date:
+			frappe.throw(_("Date is required"))
+		return date
+	if not from_date or not to_date:
+		frappe.throw(_("From Date and To Date are required for Summary"))
+	if getdate(from_date) > getdate(to_date):
+		frappe.throw(_("From Date cannot be after To Date"))
+	return ["between", [from_date, to_date]]
+
+
 @frappe.whitelist()
-def get_finishing_packed_details(date, lot_list=None, item_list=None):
+def get_finishing_packed_details(
+	date=None,
+	lot_list=None,
+	item_list=None,
+	from_date=None,
+	to_date=None,
+	summary=0,
+):
+	"""Date-wise size pieces and physical box totals from packing GRNs."""
 	lot_list = _normalize_list(lot_list)
 	item_list = _normalize_list(item_list)
 	grns = frappe.get_list(
@@ -86,18 +108,18 @@ def get_finishing_packed_details(date, lot_list=None, item_list=None):
 			"against": "YRP Work Order",
 			"includes_packing": 1,
 			"docstatus": 1,
-			"actual_date": date,
+			"actual_date": packed_date_filter(date, from_date, to_date, summary),
 		},
-		fields=["name", "lot"],
+		fields=["name", "lot", "actual_date"],
 	)
-	lot_grns = {}
+	date_lot_grns = {}
 	for grn in grns:
-		lot_grns.setdefault(grn.lot, []).append(grn.name)
-	if lot_list:
-		lot_grns = {lot: names for lot, names in lot_grns.items() if lot in lot_list}
+		if lot_list and grn.lot not in lot_list:
+			continue
+		date_lot_grns.setdefault((str(grn.actual_date or date), grn.lot), []).append(grn.name)
 
 	result = []
-	for lot, grn_names in lot_grns.items():
+	for (report_date, lot), grn_names in sorted(date_lot_grns.items()):
 		lot_values = attribute_db.get_value("SD YRP Lot", lot, ["item", "production_detail"], as_dict=True)
 		if not lot_values or not lot_values.production_detail:
 			continue
@@ -111,6 +133,7 @@ def get_finishing_packed_details(date, lot_list=None, item_list=None):
 			continue
 		result.append(
 			{
+				"date": report_date,
 				"lot": lot,
 				"item": lot_values.item,
 				"sizes": packing.sizes,
@@ -124,7 +147,6 @@ def get_finishing_packed_details(date, lot_list=None, item_list=None):
 	return {"data": result, "sizes": _ordered_sizes(result)}
 
 
-@frappe.whitelist()
 def get_finishing_dispatch_report(from_date, to_date, lot_list=None, item_list=None):
 	lot_list = _normalize_list(lot_list)
 	item_list = _normalize_list(item_list)
@@ -169,7 +191,10 @@ def get_finishing_dispatch_report(from_date, to_date, lot_list=None, item_list=N
 			}
 		)
 
-	stock_entries = frappe.get_list(
+	# The public web endpoint already authorizes this narrowly scoped report
+	# using Finishing Plan + GRN read access. Stock Entry is an implementation
+	# source here, not an additional user-facing permission requirement.
+	stock_entries = frappe.get_all(
 		"YRP Stock Entry",
 		filters={
 			"against": ["in", ["SD YRP Finishing Plan", "SD YRP Finishing Plan Dispatch"]],

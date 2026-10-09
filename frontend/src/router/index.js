@@ -28,6 +28,13 @@ const CutPanelStoreSection = () => import("../departments/CutPanelStoreSection.v
 const SewingPlans = () => import("../departments/sewing/SewingPlans.vue")
 const SewingReports = () => import("../departments/sewing/SewingReports.vue")
 const SewingAttendance = () => import("../departments/sewing/SewingAttendance.vue")
+const FinishingPlans = () => import("../departments/finishing/FinishingPlans.vue")
+const FinishingPlan = () => import("../departments/finishing/FinishingPlan.vue")
+const FinishingReports = () => import("../departments/finishing/FinishingReports.vue")
+const FinishingReworkDetails = () => import("../departments/finishing/FinishingReworkDetails.vue")
+const FinishingReworkGroups = () => import("../departments/finishing/FinishingReworkGroups.vue")
+const FinishingDispatches = () => import("../departments/finishing/FinishingDispatches.vue")
+const FinishingDispatch = () => import("../departments/finishing/FinishingDispatch.vue")
 const SalesSection = () => import("../departments/sales/SalesSection.vue")
 const ProductionOrder = () => import("../departments/sales/ProductionOrder.vue")
 const ProductionOrderEditorPage = () => import("../departments/sales/ProductionOrderEditorPage.vue")
@@ -93,6 +100,14 @@ const routes = [
 	},
 	{ path: "/sewing/reports", name: "sewing-reports", component: SewingReports },
 	{ path: "/sewing/attendance", name: "sewing-attendance", component: SewingAttendance },
+	{ path: "/finishing/plans", name: "finishing-plans", component: FinishingPlans },
+	{ path: "/finishing/plans/:finishingPlanId", name: "finishing-plan", component: FinishingPlan },
+	{ path: "/finishing/reports", name: "finishing-reports", component: FinishingReports },
+	{ path: "/finishing/rework-details", name: "finishing-rework-details", component: FinishingReworkDetails },
+	{ path: "/finishing/rework-groups", name: "finishing-rework-groups", component: FinishingReworkGroups },
+	{ path: "/finishing/dispatches", name: "finishing-dispatches", component: FinishingDispatches },
+	{ path: "/finishing/dispatches/new", name: "finishing-dispatch-new", component: FinishingDispatch },
+	{ path: "/finishing/dispatches/:dispatchId", name: "finishing-dispatch", component: FinishingDispatch },
 	{ path: "/sales/production-orders", name: "sales-production-orders", component: SalesSection },
 	{ path: "/sales/production-orders/new", name: "sales-production-order-new", component: ProductionOrderEditorPage },
 	{ path: "/sales/production-orders/:productionOrderId/edit", name: "sales-production-order-edit", component: ProductionOrderEditorPage, props: true },

@@ -54,8 +54,25 @@ class TestSewingWebWorkspace(TestCase):
 				"scr": "SCR",
 				"monthly_summary": "Monthly Summary",
 				"item_summary": "Item Summary",
+				"finishing_dispatch": "Finishing Plan Dispatch",
 			},
 		)
+
+	def test_finishing_dispatch_report_requires_both_source_read_permissions(self):
+		base = {
+			("SD YRP Sewing Plan", "read"),
+			("SD YRP Sewing Plan", "report"),
+			("SD YRP Finishing Plan", "read"),
+			("YRP Goods Received Note", "read"),
+		}
+		payload = self._capabilities(allowed=base)
+		self.assertEqual(payload["reports"]["finishing_dispatch"]["label"], "Finishing Plan Dispatch")
+
+		for missing in (("SD YRP Finishing Plan", "read"), ("YRP Goods Received Note", "read")):
+			with self.subTest(missing=missing):
+				payload = self._capabilities(allowed=base - {missing})
+				self.assertNotIn("finishing_dispatch", payload["reports"])
+				self.assertIn("status_summary", payload["reports"])
 
 	def test_capabilities_omit_all_unreadable_sections(self):
 		payload = self._capabilities(allowed=set())

@@ -13,6 +13,7 @@ from essdee_yrp import production_order_workflow as workflow
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import (
 	get_ocr_details as build_lot_ocr_details,
 )
+from essdee_yrp.finishing.web_reports import can_view_dispatch_report
 from essdee_yrp.sales import ppo_report
 
 
@@ -165,15 +166,22 @@ def get_capabilities() -> dict:
 	}
 	reports = {}
 	if permissions["can_report"]:
-		sections["reports"] = {
-			"label": _("Reports"),
-			"can_read": True,
-			"can_report": True,
-		}
 		reports["ppo_report"] = {
 			"label": _("PPO Report"),
 			"can_read": True,
 			"can_export": bool(permissions["can_report"]),
+		}
+	if can_view_dispatch_report():
+		reports["finishing_dispatch"] = {
+			"label": _("Finishing Plan Dispatch"),
+			"can_read": True,
+			"can_export": False,
+		}
+	if reports:
+		sections["reports"] = {
+			"label": _("Reports"),
+			"can_read": True,
+			"can_report": True,
 		}
 	return {"sections": sections, "reports": reports}
 

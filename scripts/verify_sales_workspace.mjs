@@ -153,6 +153,17 @@ function ppoReportFixture() {
 	}
 }
 
+function finishingDispatchFixture() {
+	return {
+		data: [{
+			lot: "LOT-DISPATCH", item: "Premium Vest", sizes: ["S", "M"],
+			packed_qty: { S: 10, M: 5 }, dispatched_qty: { S: 8, M: 4 },
+			packed_total_boxes: 15, dispatched_total_boxes: 12, pieces_per_box: 5,
+			packed_total_pieces: 75, dispatched_total_pieces: 60,
+		}],
+	}
+}
+
 async function chooseSelect(dialog, index, label) {
 	await dialog.locator(".p-select").nth(index).click()
 	await dialog.page().getByRole("option", { name: label, exact: true }).click()
@@ -201,6 +212,7 @@ function sourceChecks() {
 
 async function reportSuite(page) {
 	const reportRequests = []
+	const finishingDispatchRequests = []
 	const dispatchRequests = []
 	const bulkDispatchRequests = []
 	const downloads = []
@@ -212,8 +224,15 @@ async function reportSuite(page) {
 		if (method === "essdee_yrp.sales.web_workspace.get_capabilities") {
 			return reply(route, {
 				sections: { reports: { label: "Reports", can_read: true, can_report: true } },
-				reports: { ppo_report: { label: "PPO Report", can_read: true, can_export: true } },
+				reports: {
+					ppo_report: { label: "PPO Report", can_read: true, can_export: true },
+					finishing_dispatch: { label: "Finishing Plan Dispatch", can_read: true, can_export: false },
+				},
 			})
+		}
+		if (method === "essdee_yrp.finishing.web_reports.get_dispatch_report") {
+			finishingDispatchRequests.push(args)
+			return reply(route, finishingDispatchFixture())
 		}
 		if (method === "essdee_yrp.sales.web_workspace.get_ppo_report") {
 			reportRequests.push(args)
@@ -254,7 +273,7 @@ async function reportSuite(page) {
 	await page.getByRole("heading", { name: "PPO Report", exact: true }).waitFor()
 	assert(await page.getByText("Set the report filters", { exact: true }).isVisible(), "Report must wait for an explicit Generate action")
 	assert(reportRequests.length === 0, "PPO Report fetched before Generate")
-	assert(await page.getByRole("tab").count() === 0, "A single Sales report must not add a redundant tab strip")
+	assert(JSON.stringify(await page.getByRole("tab").allTextContents()) === JSON.stringify(["PPO Report", "Finishing Plan Dispatch"]), "Sales report tabs are incomplete")
 
 	await page.getByLabel("Status").click()
 	const statusLabels = await page.getByRole("option").allTextContents()
@@ -343,7 +362,16 @@ async function reportSuite(page) {
 		assert(tableFlow.maxHeight !== "none" && tableFlow.overflowY === "auto", `PPO table must keep the bounded two-axis report viewport from the production_api reference: ${JSON.stringify(tableFlow)}`)
 		if (width === 1600 && process.env.ESSDEE_SALES_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SALES_SCREENSHOTS}/ppo-report.png`, fullPage: true, animations: "disabled" })
 	}
-	console.log("PASS reports: explicit filters, mixed size matrix, totals, dispatch, dates, Excel, empty/error states, responsive flow")
+	await page.getByRole("tab", { name: "Finishing Plan Dispatch", exact: true }).click()
+	await page.locator("[data-finishing-report='dispatch-report']").waitFor()
+	assert(finishingDispatchRequests.length === 0, "Finishing Plan Dispatch fetched before Generate")
+	await page.getByRole("button", { name: "Generate", exact: true }).click()
+	await page.getByText("LOT-DISPATCH", { exact: true }).waitFor()
+	assert(finishingDispatchRequests.length === 1, `Finishing Plan Dispatch fetched ${finishingDispatchRequests.length} times`)
+	const finishingFilters = finishingDispatchRequests[0]
+	assert(finishingFilters.from_date === "2026-10-01" && finishingFilters.to_date === "2026-10-09" && JSON.stringify(finishingFilters.lots) === "[]" && JSON.stringify(finishingFilters.items) === "[]", `Finishing Plan Dispatch filters are incomplete: ${JSON.stringify(finishingFilters)}`)
+	for (const width of [390, 900, 1600]) { await page.setViewportSize({ width, height: 900 }); await noOverflow(page, `Sales Finishing Plan Dispatch at ${width}`) }
+	console.log("PASS reports: PPO and Finishing Plan Dispatch tabs, explicit filters, mixed size matrix, totals, dispatch, dates, Excel, empty/error states, responsive flow")
 }
 
 async function launcherSuite(page) {

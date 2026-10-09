@@ -13,6 +13,7 @@
 				<SewingScr v-else-if="active === 'scr'" :filters="scrFilters" />
 				<SewingMonthlySummary v-else-if="active === 'monthly-summary'" :filters="monthlyFilters" />
 				<SewingItemSummary v-else-if="active === 'item-summary'" :filters="itemFilters" />
+				<FinishingDispatchReport v-else-if="active === 'finishing-dispatch'" />
 			</TabPanel></TabPanels>
 		</Tabs>
 	</section>
@@ -34,21 +35,24 @@ const SewingDpr = defineAsyncComponent(() => import("./reports/SewingDpr.vue"))
 const SewingScr = defineAsyncComponent(() => import("./reports/SewingScr.vue"))
 const SewingMonthlySummary = defineAsyncComponent(() => import("./reports/SewingMonthlySummary.vue"))
 const SewingItemSummary = defineAsyncComponent(() => import("./reports/SewingItemSummary.vue"))
+const FinishingDispatchReport = defineAsyncComponent(() => import("../finishing/reports/FinishingDispatchReport.vue"))
 const props = defineProps({ capabilities: { type: Object, required: true } })
 const route = useRoute(), router = useRouter()
-const tabs = [
+const REPORTS = [
 	{ value: "status-summary", key: "status_summary", label: "Status Summary" },
 	{ value: "dpr", key: "dpr", label: "DPR" },
 	{ value: "scr", key: "scr", label: "SCR" },
 	{ value: "monthly-summary", key: "monthly_summary", label: "Monthly Summary" },
 	{ value: "item-summary", key: "item_summary", label: "Item Summary" },
+	{ value: "finishing-dispatch", key: "finishing_dispatch", label: "Finishing Plan Dispatch" },
 ]
+const tabs = computed(() => REPORTS.filter(tab => props.capabilities.reports?.[tab.key]?.can_read))
 const active = computed({
-	get: () => tabs.some(tab => tab.value === route.query.tab) ? route.query.tab : "status-summary",
+	get: () => tabs.value.some(tab => tab.value === route.query.tab) ? route.query.tab : tabs.value[0]?.value,
 	set: tab => router.replace({ query: { ...route.query, tab }, hash: route.hash }),
 })
 const allowed = computed(() => {
-	const capability = props.capabilities.reports?.[tabs.find(tab => tab.value === active.value).key]
+	const capability = props.capabilities.reports?.[tabs.value.find(tab => tab.value === active.value)?.key]
 	return capability?.can_read && capability?.can_report
 })
 // Only filters survive tab switches. Business rows remain owned by the active

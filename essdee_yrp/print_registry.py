@@ -25,6 +25,7 @@ DOCUMENT_PRINT_FORMATS = {
 		("Cutting Movement Chart", "Essdee Cutting Movement Chart"),
 		("Cutting Movement Chart 2", "Essdee Cutting Movement Chart 2"),
 	),
+	"SD YRP Finishing Plan Dispatch": (("Finishing Plan Dispatch", "Essdee Finishing Plan Dispatch"),),
 	"SD YRP Cut Panel Movement": (
 		("Cut Panel Movement", "Essdee Cut Panel Movement Print"),
 	),
@@ -35,6 +36,11 @@ DOCUMENT_PRINT_FORMATS = {
 	"YRP Stock Reconciliation": (("Standard Print", "Standard"),),
 	"YRP Stock Update": (("Standard Print", "Standard"),),
 	"SD YRP Lot Transfer": (("Standard Print", "Standard"),),
+	"YRP Goods Received Note": (
+		("Standard Print", "Standard"),
+		("Rework Print", "Essdee Rework Print"),
+		("Reworked Print", "Essdee Reworked Print"),
+	),
 	"YRP Delivery Challan": (
 		("Delivery Challan", "Essdee Delivery Challan"),
 		("DC", "Essdee DC"),

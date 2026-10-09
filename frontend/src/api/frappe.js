@@ -256,3 +256,24 @@ export function resetUserListview(doctype) {
 		doctype_name: doctype,
 	})
 }
+
+export async function downloadMethodFile(method, args = {}, fallbackName = "download") {
+	const response = await fetch(`/api/method/${method}`, {
+		method: "POST",
+		credentials: "include",
+		headers: { "Content-Type": "application/json", "X-Frappe-CSRF-Token": csrfToken() },
+		body: JSON.stringify(args),
+	})
+	if (!response.ok) {
+		const payload = await response.json().catch(() => ({}))
+		throw new Error(extractServerMessage(payload, "The file could not be downloaded. Please try again."))
+	}
+	const disposition = response.headers.get("Content-Disposition") || ""
+	const filename = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition)?.[1] || fallbackName
+	const url = URL.createObjectURL(await response.blob())
+	const link = document.createElement("a")
+	link.href = url
+	link.download = decodeURIComponent(filename)
+	link.click()
+	window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}

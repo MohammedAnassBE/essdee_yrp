@@ -189,6 +189,8 @@ def get_rework_items(
 		"total_sum": 0,
 		"total_rejection": 0,
 		"total_rejection_detail": {},
+		"total_reworked": 0,
+		"total_reworked_detail": {},
 		"permissions": permissions,
 	}
 	for name in frappe.get_all(
@@ -221,6 +223,8 @@ def get_rework_items(
 			"total": 0,
 			"rejection_detail": {},
 			"total_rejection": 0,
+			"reworked_detail": {},
+			"total_reworked": 0,
 		}
 		for row in doc.get("grn_rework_item_details") or []:
 			if bool(row.completed) != bool(show_reworked):
@@ -264,6 +268,7 @@ def get_rework_items(
 			) + flt(row.rejection)
 			detail["total"] += qty
 			detail["total_rejection"] += flt(row.rejection)
+			add_reworked(data, detail, row)
 		for group in detail["rework_detail"].values():
 			group["items"].sort(key=lambda row: _size_sort_key(row.get(primary_attr)))
 		if detail["rework_detail"]:
@@ -272,6 +277,15 @@ def get_rework_items(
 	if grn_number:
 		return data, next(iter(data["report_detail"]), None)
 	return data
+
+
+def add_reworked(data, detail, row):
+	"""Track reworked pieces per Received Type, as the Frappe 15 Reworked Print reads them."""
+	qty = flt(row.reworked)
+	for totals in (data["total_reworked_detail"], detail["reworked_detail"]):
+		totals[row.received_type] = totals.get(row.received_type, 0) + qty
+	data["total_reworked"] += qty
+	detail["total_reworked"] += qty
 
 
 def _size_sort_key(value):

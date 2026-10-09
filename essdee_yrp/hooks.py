@@ -159,6 +159,8 @@ website_route_rules = [
 yrp_web_doctype_catalog = [
 	"SD YRP Sewing Plan",
 	"SD YRP Sewing Plan Entry Detail",
+	"SD YRP Finishing Plan",
+	"SD YRP Finishing Plan Dispatch",
 	"SD YRP Lot",
 	"YRP Work Order",
 	"YRP Work Order Correction",
@@ -315,6 +317,7 @@ jinja = {
 		"essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan_dispatch.sd_yrp_finishing_plan_dispatch.get_fpd_print_data",
 		"essdee_yrp.sewing.read_models.get_sewing_consumption_print_data",
 		"essdee_yrp.sewing.read_models.get_monthly_summary_print_data",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_grn_rework_item.sd_yrp_grn_rework_item.get_rework_items",
 	],
 }
 

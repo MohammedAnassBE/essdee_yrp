@@ -70,7 +70,10 @@ function productionOrderWorkspace(overrides = {}) {
 			{ size: "S", item_variant: "Premium Vest-S", quantity: 40, ratio: 1, prices: { mrp: 650, production_order_mrp: 640, wholesale_price: 410, retail_price: 720 } },
 			{ size: "M", item_variant: "Premium Vest-M", quantity: 80, ratio: 2, prices: { mrp: 680, production_order_mrp: 670, wholesale_price: 430, retail_price: 750 } },
 		],
-		ordered: { S: 12, M: 18 }, linked_lots: ["LOT-26-0042"],
+		ordered: [
+			{ item: "Premium Vest", item_variant: "Premium Vest-S", size: "S", lot: "LOT-26-0042", quantity: 12 },
+			{ item: "Premium Vest", item_variant: "Premium Vest-M", size: "M", lot: "LOT-26-0042", quantity: 18 },
+		], linked_lots: ["LOT-26-0042"],
 		histories: { dates: [{ date_field: "Delivery Date", previous_date: "2026-10-18", new_date: "2026-10-20", reason: "Customer revision" }], transfers: [] },
 		permissions: { can_read: true, can_write: true, can_print: false }, capabilities,
 		...overrides,
@@ -101,7 +104,7 @@ function productionOrderEditor() {
 			items: {
 				S: { qty: 40, ratio: 1, mrp: 650, wholesale: 410, retail: 720 },
 				M: { qty: 80, ratio: 2, mrp: 680, wholesale: 430, retail: 750 },
-			}, ordered: { S: 12, M: 18 },
+			}, ordered: { "LOT-26-0042": { S: { qty: 12 }, M: { qty: 18 } } },
 		},
 	}
 }
@@ -274,10 +277,21 @@ async function reportSuite(page) {
 	assert((await report.locator("tfoot").innerText()).includes("220"), "Report totals row is missing")
 
 	await report.getByRole("button", { name: "Summarize", exact: true }).first().click()
-	await report.getByText("LOT-26-0042", { exact: true }).waitFor()
+	await report.locator(".ppo-report__summary-row").filter({ hasText: "LOT-26-0042" }).waitFor()
 	assert(dispatchRequests.length === 1 && dispatchRequests[0]?.production_order === "PPO-TEST-1", `Dispatch summary request is wrong: ${JSON.stringify(dispatchRequests)}`)
-	const dispatchText = await report.locator(".ppo-report__dispatch").innerText()
-	assert(dispatchText.includes("18-10-2026") && dispatchText.includes("30"), `Dispatch summary is incomplete: ${dispatchText}`)
+	assert(await report.locator(".ppo-report__dispatch").count() === 0, "Dispatch must not open in a separate detail panel")
+	const dispatchRow = report.locator(".ppo-report__summary-row").first()
+	const dispatchText = await dispatchRow.innerText()
+	assert(dispatchText.includes("18-10-2026") && dispatchText.includes("LOT-26-0042") && dispatchText.includes("30"), `Inline dispatch row is incomplete: ${dispatchText}`)
+	assert(await dispatchRow.locator(".ppo-report__summary-quantity").count() === 3, "Dispatch quantities must align beneath the PPO size columns")
+	const orderQuantityBoxes = await report.locator(".ppo-report__matrix tbody tr").filter({ hasText: "PPO-TEST-1" }).first().locator(".ppo-report__quantity").evaluateAll((cells) => cells.map((cell) => ({ x: Math.round(cell.getBoundingClientRect().x), width: Math.round(cell.getBoundingClientRect().width) })))
+	const dispatchQuantityBoxes = await dispatchRow.locator(".ppo-report__summary-quantity").evaluateAll((cells) => cells.map((cell) => ({ x: Math.round(cell.getBoundingClientRect().x), width: Math.round(cell.getBoundingClientRect().width) })))
+	assert(JSON.stringify(dispatchQuantityBoxes) === JSON.stringify(orderQuantityBoxes), `Dispatch cells are not aligned under PPO size columns: ${JSON.stringify({ orderQuantityBoxes, dispatchQuantityBoxes })}`)
+	if (process.env.ESSDEE_SALES_SCREENSHOTS) {
+		await page.setViewportSize({ width: 1600, height: 900 })
+		await page.screenshot({ path: `${process.env.ESSDEE_SALES_SCREENSHOTS}/ppo-report-dispatch.png`, fullPage: true, animations: "disabled" })
+		await page.setViewportSize({ width: 1280, height: 900 })
+	}
 	await report.getByRole("checkbox", { name: "Summarized", exact: true }).check()
 	await report.getByText("No submitted dispatches for this Production Order.", { exact: true }).waitFor()
 	assert(bulkDispatchRequests.length === 1, `Summarized must use one bulk request: ${JSON.stringify(bulkDispatchRequests)}`)
@@ -408,8 +422,12 @@ async function productionOrderSuite(page) {
 	await page.getByRole("heading", { name: "Premium Vest", exact: true }).waitFor()
 	assert(await page.getByText("Production order · PPO-TEST-1", { exact: true }).isVisible(), "Item must be the primary identity and PPO the secondary identity")
 	const matrix = page.locator(".ppo-matrix")
-	assert((await matrix.innerText()).includes("120 pcs") && (await matrix.innerText()).includes("Premium Vest-S"), "Size matrix did not render quantities and variants")
-	assert((await matrix.locator("thead").innerText()).includes("PRODUCTION ORDER MRP"), "Size matrix did not expose Production Order MRP")
+	assert((await matrix.innerText()).includes("120 pcs"), "Size matrix did not render its total quantity")
+	assert(JSON.stringify(await matrix.locator(".ppo-matrix__main thead th").allTextContents()) === JSON.stringify(["Size", "S", "M", "Total"]), "Production Order sizes must be columns like the production_api reference")
+	assert(JSON.stringify(await matrix.locator(".ppo-matrix__main tbody th").allTextContents()) === JSON.stringify(["Quantity", "Ratio", "Wholesale Price (Piece)", "Retail Price (Piece)", "MRP (Piece)", "Production Order MRP (Piece)"]), "Production Order measures must be matrix rows")
+	const lotMatrix = matrix.locator(".ppo-matrix__lot")
+	assert(await lotMatrix.count() === 1 && (await lotMatrix.innerText()).includes("LOT-26-0042"), "Lotwise Ordered Detail is missing")
+	assert(JSON.stringify(await lotMatrix.locator("tbody td").allTextContents()) === JSON.stringify(["12", "18", "30"]), "Lotwise quantities are not aligned beneath their size columns")
 	assert((await page.locator(".ppo-page__metric").first().innerText()).includes("120"), "Total quantity metric is missing")
 	const overviewText = await page.locator(".ppo-overview").innerText()
 	assert(overviewText.includes("25-10-2026") && !overviewText.includes("2026-10-25"), `Overview dates must use DD-MM-YYYY: ${overviewText}`)
@@ -470,6 +488,7 @@ async function productionOrderSuite(page) {
 	const editorText = await page.locator(".ppo-editor").innerText()
 	const editorMatrixText = await page.locator(".ppo-matrix").innerText()
 	assert((await page.locator('.ppo-editor input[value="Premium Vest"]').count()) === 1 && editorMatrixText.includes("120 pcs"), `Editor did not load the existing fields and matrix: ${JSON.stringify({ editorText, editorMatrixText })}`)
+	assert(await page.locator(".ppo-matrix__row--quantity input").count() === 2 && await page.locator(".ppo-matrix__row--ratio input").count() === 2, "Editor must use the same transposed quantity and ratio matrix")
 	if (process.env.ESSDEE_SALES_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SALES_SCREENSHOTS}/production-order-editor.png`, fullPage: true, animations: "disabled" })
 	await Promise.all([
 		page.waitForRequest((request) => request.url().includes("essdee_yrp.sales.web_workspace.save_production_order")),

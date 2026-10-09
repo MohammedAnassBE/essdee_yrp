@@ -107,7 +107,7 @@ class TestSalesWebWorkspace(TestCase):
 				frappe._dict(item="Premium Polo", item_variant="POLO-NAVY-M", size="M", quantity=80, ratio=2, mrp=799, retail_price=699, wholesale_price=520, production_order_mrp=760),
 			],
 			production_ordered_details=[
-				frappe._dict(item="Premium Polo", item_variant="POLO-NAVY-S", lot="LOT-1", quantity=10),
+				frappe._dict(item="Premium Polo", item_variant="POLO-NAVY-S", size="S", lot="LOT-1", quantity=10),
 			],
 			date_change_history=[frappe._dict(date_field="Delivery Date", old_date="2026-10-18", new_date="2026-10-20", reason="Buyer request")],
 			quantity_transfer_history=[frappe._dict(source_production_order="PPO-OLD", target_production_order="PPO-0001", quantity=12)],
@@ -133,6 +133,7 @@ class TestSalesWebWorkspace(TestCase):
 		self.assertEqual(payload["record"]["total_quantity"], 120)
 		self.assertEqual(payload["matrix"][0]["prices"], {"mrp": 799, "retail_price": 699, "wholesale_price": 520, "production_order_mrp": 760})
 		self.assertEqual(payload["ordered"][0]["lot"], "LOT-1")
+		self.assertEqual(payload["ordered"][0]["size"], "S")
 		self.assertEqual(payload["linked_lots"], ["LOT-1"])
 		self.assertEqual(set(payload["histories"]), {"dates", "transfers", "prices", "comments"})
 		self.assertFalse(payload["capabilities"]["update_quantity_ratio"]["allowed"])
@@ -156,6 +157,33 @@ class TestSalesWebWorkspace(TestCase):
 			payload = workspace.get_production_order_workspace(doc.name)
 
 		self.assertEqual(payload["matrix"][0]["size"], "M")
+
+	def test_workspace_resolves_size_for_ordered_lot_rows(self):
+		workspace = self._workspace()
+		doc = FakeProductionOrder(
+			docstatus=1,
+			status="Open",
+			production_order_details=[],
+			production_ordered_details=[
+				frappe._dict(item="Premium Polo", item_variant="POLO-M", lot="LOT-1", quantity=12),
+			],
+			__onload={"can_manage_production_order": False, "linked_lots": ["LOT-1"]},
+		)
+		with (
+			patch.object(frappe, "get_doc", return_value=doc),
+			patch.object(frappe, "has_permission", return_value=True),
+			patch.object(workspace, "get_variant_attr_details", return_value={"Size": "M"}),
+		):
+			payload = workspace.get_production_order_workspace(doc.name)
+
+		self.assertEqual(payload["ordered"], [{
+			"name": None,
+			"item": "Premium Polo",
+			"item_variant": "POLO-M",
+			"size": "M",
+			"lot": "LOT-1",
+			"quantity": 12,
+		}])
 
 	def test_read_only_user_gets_data_but_no_mutating_actions(self):
 		workspace = self._workspace()

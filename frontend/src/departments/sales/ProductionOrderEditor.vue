@@ -15,7 +15,7 @@
 				<label class="ppo-editor__check"><Checkbox v-model="form.skip_box_sticker_print" binary input-id="skip-box-sticker" /><span>Skip Box Sticker Print</span></label>
 				<label class="ppo-editor__field ppo-editor__field--wide"><span>Comments</span><Textarea v-model="form.comments" rows="2" fluid /></label>
 			</div></section>
-			<ProductionOrderMatrix v-if="matrixRows.length" :rows="matrixRows" editable @update="updateMatrix" />
+			<ProductionOrderMatrix v-if="matrixRows.length" :rows="matrixRows" :ordered="matrix.ordered || {}" editable @update="updateMatrix" />
 			<Message v-else severity="secondary" :closable="false">Select an Item to load its size matrix.</Message>
 		</div>
 	</section>

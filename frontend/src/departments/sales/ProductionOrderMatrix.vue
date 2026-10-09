@@ -1,32 +1,52 @@
 <template>
 	<section class="ppo-matrix erp-card" aria-label="Production Order quantities">
 		<header class="ppo-matrix__header">
-			<div><span>SIZE MATRIX</span><h2>Quantity, ratio & price</h2></div>
+			<div><span>SIZE MATRIX</span><h2>Total Order Quantity</h2></div>
 			<strong>{{ formatNumber(totalQuantity) }} pcs</strong>
 		</header>
 		<div class="ppo-matrix__table-wrap" tabindex="0" role="region" aria-label="Production Order size matrix">
-			<table>
-				<thead><tr><th>Size</th><th>Quantity</th><th>Ratio</th><th>MRP</th><th>Production Order MRP</th><th>Wholesale</th><th>Retail</th></tr></thead>
+			<table class="ppo-matrix__main" :style="tableStyle">
+				<thead><tr><th>Size</th><th v-for="row in rows" :key="`size-${row.size}`">{{ row.size || "—" }}</th><th>Total</th></tr></thead>
 				<tbody>
-					<tr v-for="row in rows" :key="row.size || row.item_variant">
-						<th><strong>{{ row.size || "—" }}</strong><small v-if="row.item_variant">{{ row.item_variant }}</small></th>
-						<td>
-							<InputNumber v-if="editable" :model-value="number(row.quantity)" :min="0" :max-fraction-digits="0" :use-grouping="false" fluid @update:model-value="update(row, 'quantity', $event)" />
+					<tr class="ppo-matrix__row--quantity">
+						<th>Quantity</th>
+						<td v-for="row in rows" :key="`quantity-${row.size}`">
+							<InputNumber v-if="editable" :model-value="number(row.quantity)" :min="0" :max-fraction-digits="0" :use-grouping="false" :input-aria-label="`${row.size} quantity`" fluid @update:model-value="update(row, 'quantity', $event)" />
 							<strong v-else>{{ formatNumber(row.quantity) }}</strong>
 						</td>
-						<td>
-							<InputNumber v-if="editable" :model-value="number(row.ratio)" :min="0" :max-fraction-digits="3" :use-grouping="false" fluid @update:model-value="update(row, 'ratio', $event)" />
+						<td class="ppo-matrix__total">{{ formatNumber(totalQuantity) }}</td>
+					</tr>
+					<tr class="ppo-matrix__row--ratio">
+						<th>Ratio</th>
+						<td v-for="row in rows" :key="`ratio-${row.size}`">
+							<InputNumber v-if="editable" :model-value="number(row.ratio)" :min="0" :max-fraction-digits="3" :use-grouping="false" :input-aria-label="`${row.size} ratio`" fluid @update:model-value="update(row, 'ratio', $event)" />
 							<span v-else>{{ formatNumber(row.ratio) }}</span>
 						</td>
-						<td>{{ money(row.prices?.mrp ?? row.mrp) }}</td>
-						<td>{{ money(row.prices?.production_order_mrp ?? row.production_order_mrp) }}</td>
-						<td>{{ money(row.prices?.wholesale_price ?? row.wholesale) }}</td>
-						<td>{{ money(row.prices?.retail_price ?? row.retail) }}</td>
+						<td class="ppo-matrix__total">{{ formatNumber(totalRatio) }}</td>
+					</tr>
+					<tr v-for="price in priceRows" :key="price.key" :class="`ppo-matrix__row--${price.key}`">
+						<th>{{ price.label }}</th>
+						<td v-for="row in rows" :key="`${price.key}-${row.size}`">{{ formatNumber(priceValue(row, price.key)) }}</td>
+						<td class="ppo-matrix__empty">—</td>
 					</tr>
 				</tbody>
-				<tfoot><tr><th>Total</th><th>{{ formatNumber(totalQuantity) }}</th><th>{{ formatNumber(totalRatio) }}</th><td colspan="4"></td></tr></tfoot>
 			</table>
 		</div>
+
+		<section v-if="lotGroups.length" class="ppo-matrix__lots" aria-label="Lotwise Ordered Detail">
+			<header><span>ORDERED</span><h3>Lotwise Ordered Detail</h3></header>
+			<div class="ppo-matrix__lot-list">
+				<article v-for="lot in lotGroups" :key="lot.name" class="ppo-matrix__lot">
+					<header><span>Lot</span><strong>{{ lot.name }}</strong></header>
+					<div class="ppo-matrix__lot-table-wrap">
+						<table :style="tableStyle">
+							<thead><tr><th>Size</th><th v-for="row in rows" :key="`${lot.name}-${row.size}`">{{ row.size || "—" }}</th><th>Total</th></tr></thead>
+							<tbody><tr><th>Quantity</th><td v-for="row in rows" :key="`${lot.name}-quantity-${row.size}`">{{ formatNumber(lot.quantities[row.size]) }}</td><td class="ppo-matrix__total">{{ formatNumber(lotTotal(lot)) }}</td></tr></tbody>
+						</table>
+					</div>
+				</article>
+			</div>
+		</section>
 	</section>
 </template>
 
@@ -34,14 +54,45 @@
 import InputNumber from "primevue/inputnumber"
 import { computed } from "vue"
 
-const props = defineProps({ rows: { type: Array, default: () => [] }, editable: { type: Boolean, default: false } })
+const props = defineProps({
+	rows: { type: Array, default: () => [] },
+	ordered: { type: [Array, Object], default: () => [] },
+	editable: { type: Boolean, default: false },
+})
 const emit = defineEmits(["update"])
+const priceRows = [
+	{ key: "wholesale_price", label: "Wholesale Price (Piece)" },
+	{ key: "retail_price", label: "Retail Price (Piece)" },
+	{ key: "mrp", label: "MRP (Piece)" },
+	{ key: "production_order_mrp", label: "Production Order MRP (Piece)" },
+]
 const totalQuantity = computed(() => props.rows.reduce((total, row) => total + number(row.quantity), 0))
 const totalRatio = computed(() => props.rows.reduce((total, row) => total + number(row.ratio), 0))
+const tableStyle = computed(() => ({ minWidth: `${Math.max(680, 190 + props.rows.length * 104)}px` }))
+const lotGroups = computed(() => {
+	const groups = new Map()
+	if (Array.isArray(props.ordered)) {
+		for (const row of props.ordered) {
+			const lot = String(row?.lot || "").trim()
+			const size = String(row?.size || "").trim()
+			if (!lot || !size) continue
+			if (!groups.has(lot)) groups.set(lot, {})
+			groups.get(lot)[size] = number(groups.get(lot)[size]) + number(row.quantity)
+		}
+	} else {
+		for (const [lot, quantities] of Object.entries(props.ordered || {})) {
+			const values = {}
+			for (const [size, entry] of Object.entries(quantities || {})) values[size] = number(entry?.qty ?? entry?.quantity ?? entry)
+			groups.set(lot, values)
+		}
+	}
+	return [...groups].map(([name, quantities]) => ({ name, quantities }))
+})
 
 function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0 }
 function formatNumber(value) { return number(value).toLocaleString("en-IN", { maximumFractionDigits: 3 }) }
-function money(value) { return `INR ${number(value).toLocaleString("en-IN", { maximumFractionDigits: 2 })}` }
+function priceValue(row, key) { return row.prices?.[key] ?? row[key] }
+function lotTotal(lot) { return props.rows.reduce((total, row) => total + number(lot.quantities[row.size]), 0) }
 function update(row, field, value) { emit("update", { size: row.size, field, value: number(value) }) }
 </script>
 
@@ -49,22 +100,28 @@ function update(row, field, value) { emit("update", { size: row.size, field, val
 .ppo-matrix { min-width: 0; overflow: hidden; border-color: var(--erp-border); box-shadow: var(--erp-shadow-xs); }
 .ppo-matrix__header { display: flex; min-height: 54px; align-items: center; justify-content: space-between; gap: 14px; padding: 9px 13px; border-bottom: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface-soft) 80%, white); }
 .ppo-matrix__header > div { display: grid; gap: 2px; }
-.ppo-matrix__header span { color: var(--erp-accent-hover); font-size: var(--erp-font-size-min); font-weight: 760; letter-spacing: .06em; }
-.ppo-matrix__header h2 { margin: 0; color: var(--erp-text); font-size: 15px; letter-spacing: -.01em; }
+.ppo-matrix__header span, .ppo-matrix__lots > header span { color: var(--erp-accent-hover); font-size: var(--erp-font-size-min); font-weight: 760; letter-spacing: .06em; }
+.ppo-matrix__header h2, .ppo-matrix__lots h3 { margin: 0; color: var(--erp-text); font-size: 15px; letter-spacing: -.01em; }
 .ppo-matrix__header > strong { color: var(--erp-accent-hover); font-size: 16px; font-variant-numeric: tabular-nums; }
-.ppo-matrix__table-wrap { min-width: 0; overflow-x: auto; }
-.ppo-matrix table { width: 100%; min-width: 840px; border-collapse: collapse; }
-.ppo-matrix th, .ppo-matrix td { height: 48px; padding: 7px 12px; color: var(--erp-text-secondary); font-size: var(--erp-font-size-caption); text-align: right; border-bottom: 1px solid var(--erp-border); font-variant-numeric: tabular-nums; }
-.ppo-matrix thead th { height: 34px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 760; letter-spacing: .035em; text-transform: uppercase; background: var(--erp-surface-muted); }
-.ppo-matrix th:first-child, .ppo-matrix td:first-child { width: 30%; text-align: left; }
-.ppo-matrix tbody th { display: table-cell; color: var(--erp-text); }
-.ppo-matrix tbody th strong, .ppo-matrix tbody th small { display: block; }
-.ppo-matrix tbody th small { max-width: 260px; margin-top: 2px; overflow: hidden; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 520; text-overflow: ellipsis; white-space: nowrap; }
-.ppo-matrix tbody tr:hover { background: color-mix(in srgb, var(--erp-accent-soft) 34%, white); }
-.ppo-matrix tbody td:nth-child(2) strong { color: var(--erp-accent-hover); }
-.ppo-matrix tfoot th { color: var(--erp-text); border-bottom: 0; background: var(--erp-surface-soft); }
-.ppo-matrix tfoot th:nth-child(2) { color: var(--erp-accent-hover); text-align: right; }
-.ppo-matrix tfoot td { border-bottom: 0; background: var(--erp-surface-soft); }
-.ppo-matrix :deep(.p-inputnumber) { min-width: 96px; }
-.ppo-matrix :deep(.p-inputnumber-input) { height: 34px; text-align: right; }
+.ppo-matrix__table-wrap, .ppo-matrix__lot-table-wrap { min-width: 0; overflow-x: auto; }
+.ppo-matrix table { width: 100%; border-collapse: collapse; }
+.ppo-matrix th, .ppo-matrix td { height: 43px; padding: 6px 10px; color: var(--erp-text-secondary); font-size: var(--erp-font-size-caption); text-align: center; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); font-variant-numeric: tabular-nums; }
+.ppo-matrix th:last-child, .ppo-matrix td:last-child { border-right: 0; }
+.ppo-matrix thead th { height: 34px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 780; letter-spacing: .035em; text-transform: uppercase; background: var(--erp-surface-muted); }
+.ppo-matrix tbody th { width: 190px; color: var(--erp-text); font-weight: 720; text-align: left; background: color-mix(in srgb, var(--erp-surface-soft) 72%, white); }
+.ppo-matrix tbody tr:hover td { background: color-mix(in srgb, var(--erp-accent-soft) 34%, white); }
+.ppo-matrix__row--quantity td { color: var(--erp-accent-hover); font-weight: 760; }
+.ppo-matrix__total { color: var(--erp-text) !important; font-weight: 800 !important; background: var(--erp-surface-soft); }
+.ppo-matrix__empty { color: var(--erp-text-muted); }
+.ppo-matrix :deep(.p-inputnumber) { min-width: 82px; }
+.ppo-matrix :deep(.p-inputnumber-input) { height: 32px; padding-inline: 8px; text-align: center; }
+.ppo-matrix__lots { border-top: 1px solid var(--erp-border); background: var(--erp-surface-soft); }
+.ppo-matrix__lots > header { display: grid; gap: 2px; padding: 10px 13px; border-bottom: 1px solid var(--erp-border); }
+.ppo-matrix__lot-list { display: grid; gap: 9px; padding: 10px; }
+.ppo-matrix__lot { min-width: 0; overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); }
+.ppo-matrix__lot > header { display: flex; align-items: baseline; gap: 7px; padding: 7px 10px; border-bottom: 1px solid var(--erp-border); }
+.ppo-matrix__lot > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+.ppo-matrix__lot > header strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
+.ppo-matrix__lot tbody tr:last-child > * { border-bottom: 0; }
+@media (max-width: 620px) { .ppo-matrix__header { align-items: flex-start; } .ppo-matrix__header > strong { font-size: 14px; } }
 </style>

@@ -82,14 +82,20 @@
 								<td class="ppo-report__transfer">{{ order.transfer_summary || "—" }}</td>
 								<td class="ppo-report__comments">{{ order.comments || "—" }}</td>
 							</tr>
-							<tr v-if="isExpanded(order.name)" class="ppo-report__dispatch-row">
-								<td :colspan="columnCount">
-									<div class="ppo-report__dispatch">
-										<TransferSummary v-if="order.transfer_movements?.length" :movements="order.transfer_movements" />
-										<DispatchSummary :payload="dispatchByOrder[order.name]" />
-									</div>
-								</td>
-							</tr>
+							<tr v-if="isExpanded(order.name) && dispatchLoading === order.name" class="ppo-report__summary-status"><td :colspan="fixedBeforeGroup + 1">Loading dispatch quantities…</td><td v-for="position in maxColumns" :key="`loading-${order.name}-${position}`"></td><td></td><td></td><td></td></tr>
+							<tr v-else-if="isExpanded(order.name) && !dispatchRows(order.name).length" class="ppo-report__summary-status"><td :colspan="columnCount">No submitted dispatches for this Production Order.</td></tr>
+							<template v-else-if="isExpanded(order.name)">
+								<tr v-for="(row, rowIndex) in dispatchRows(order.name)" :key="`dispatch-${order.name}-${rowIndex}`" class="ppo-report__summary-row">
+									<td :colspan="fixedBeforeGroup + 1" class="ppo-report__summary-label">{{ formatDate(row.date) }} · {{ row.lot || "—" }}</td>
+									<td v-for="position in maxColumns" :key="`dispatch-${order.name}-${rowIndex}-${position}`" class="erp-number ppo-report__summary-quantity">{{ displayQuantity(row.sizes?.[order.group_sizes?.[position - 1]]) }}</td>
+									<td class="erp-number ppo-report__summary-total">{{ number(row.total) }}</td><td></td><td></td>
+								</tr>
+								<tr class="ppo-report__summary-footer">
+									<th :colspan="fixedBeforeGroup + 1">Dispatched Total</th>
+									<td v-for="position in maxColumns" :key="`dispatch-total-${order.name}-${position}`" class="erp-number">{{ displayQuantity(dispatchSizeTotal(order.name, order.group_sizes?.[position - 1])) }}</td>
+									<td class="erp-number">{{ number(dispatchTotal(order.name)) }}</td><td></td><td></td>
+								</tr>
+							</template>
 						</template>
 					</tbody>
 					<tfoot>
@@ -112,7 +118,7 @@ import Button from "primevue/button"
 import Checkbox from "primevue/checkbox"
 import Select from "primevue/select"
 import Tag from "primevue/tag"
-import { computed, defineComponent, h, reactive, ref } from "vue"
+import { computed, reactive, ref } from "vue"
 
 import { downloadPpoReport, getPpoDispatchSummary, getPpoDispatchSummaryBulk, getPpoReport } from "../../api/sales.js"
 import DateField from "../../components/common/DateField.vue"
@@ -179,6 +185,9 @@ function displayNumber(value) { return value === null || value === undefined || 
 function statusSeverity(status) { return ({ Open: "success", "PPO Request": "warn", "Pending Request": "warn", "Close Request": "warn", Closed: "secondary", "Item Changed": "danger" })[status] || "info" }
 function positionTotal(index) { return orders.value.reduce((total, order) => total + Number(order.qty_by_position?.[index] || 0), 0) }
 function isExpanded(name) { return expandedOrders.value.has(name) }
+function dispatchRows(name) { return dispatchByOrder[name]?.rows || [] }
+function dispatchSizeTotal(name, size) { return size ? dispatchRows(name).reduce((total, row) => total + Number(row.sizes?.[size] || 0), 0) : 0 }
+function dispatchTotal(name) { return dispatchRows(name).reduce((total, row) => total + Number(row.total || 0), 0) }
 function sortIcon(key) { return sortState.key !== key ? "pi pi-sort-alt" : sortState.direction === "asc" ? "pi pi-sort-amount-up-alt" : "pi pi-sort-amount-down" }
 function sortBy(key) {
 	if (sortState.key === key) sortState.direction = sortState.direction === "asc" ? "desc" : "asc"
@@ -254,35 +263,6 @@ function reset() {
 	Object.keys(dispatchByOrder).forEach((key) => delete dispatchByOrder[key])
 	error.value = ""
 }
-
-const TransferSummary = defineComponent({
-	props: { movements: { type: Array, default: () => [] } },
-	setup(props) {
-		return () => h("section", { class: "ppo-report__transfer-panel" }, [
-			h("strong", "Quantity transfer"),
-			...props.movements.map((movement) => h("div", { class: "ppo-report__transfer-movement" }, [
-				h("span", { class: ["ppo-report__movement", movement.movement === "Reduced" ? "is-reduced" : "is-added"] }, movement.movement),
-				h("b", number(movement.quantity)),
-				h("span", `${movement.movement === "Reduced" ? "to" : "from"} ${movement.counterpart_production_order || "—"}`),
-				h("small", Object.entries(movement.sizes || {}).map(([size, quantity]) => `${size}: ${number(quantity)}`).join(" · ")),
-			])),
-		])
-	},
-})
-
-const DispatchSummary = defineComponent({
-	props: { payload: { type: Object, default: () => ({ sizes: [], rows: [] }) } },
-	setup(props) {
-		return () => {
-			const sizes = props.payload?.sizes || [], rows = props.payload?.rows || []
-			if (!rows.length) return h("div", { class: "ppo-report__dispatch-empty" }, [h("i", { class: "pi pi-truck" }), h("span", "No submitted dispatches for this Production Order.")])
-			return h("section", { class: "ppo-report__dispatch-panel" }, [h("strong", { class: "ppo-report__dispatch-title" }, "Dispatch summary"), h("table", { class: "ppo-report__dispatch-table" }, [
-				h("thead", [h("tr", [h("th", "Posting date"), h("th", "Lot"), ...sizes.map((size) => h("th", { class: "erp-number" }, size)), h("th", { class: "erp-number" }, "Total")])]),
-				h("tbody", rows.map((row) => h("tr", [h("td", formatDate(row.date)), h("td", row.lot || "—"), ...sizes.map((size) => h("td", { class: "erp-number" }, displayQuantity(row.sizes?.[size]))), h("td", { class: "erp-number" }, number(row.total))]))),
-			])])
-		}
-	},
-})
 </script>
 
 <style scoped>
@@ -325,25 +305,17 @@ const DispatchSummary = defineComponent({
 .ppo-report__quantity { background: #f4fbf7; font-weight: 700; }
 .ppo-report__total { color: #087654; font-weight: 850; }
 .ppo-report__transfer, .ppo-report__comments { min-width: 190px !important; max-width: 280px; white-space: pre-line !important; }
-.ppo-report__dispatch-row > td { padding: 0 !important; background: #f8fbfa; }
-.ppo-report__dispatch { display: grid; grid-template-columns: minmax(260px, .7fr) minmax(440px, 1.3fr); gap: 18px; padding: 14px 16px 16px; }
-.ppo-report__transfer-panel, .ppo-report__dispatch-panel { min-width: 0; }
-.ppo-report__transfer-panel > strong, .ppo-report__dispatch-title { display: block; margin-bottom: 8px; color: #315147; font-size: 12px; text-transform: uppercase; letter-spacing: .035em; }
-.ppo-report__transfer-movement { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 5px 8px; padding: 7px 8px; border: 1px solid var(--erp-border); border-radius: 7px; background: white; }
-.ppo-report__transfer-movement + .ppo-report__transfer-movement { margin-top: 6px; }
-.ppo-report__transfer-movement small { grid-column: 2 / -1; margin: 0; }
-.ppo-report__movement { padding: 2px 6px; border-radius: 999px; font-size: 10px; font-weight: 800; text-transform: uppercase; }
-.ppo-report__movement.is-reduced { color: #a53a32; background: #fff0ee; }
-.ppo-report__movement.is-added { color: #087654; background: #e7f7ef; }
-.ppo-report__dispatch-table { width: 100%; border-collapse: collapse; background: var(--erp-surface); }
-.ppo-report__dispatch-table th, .ppo-report__dispatch-table td { min-width: 78px; padding: 7px 9px; border: 1px solid var(--erp-border); font-size: 12px; }
-.ppo-report__dispatch-table th { color: var(--erp-text-muted); background: #eef3f1; text-transform: uppercase; }
-.ppo-report__dispatch-empty { display: flex; align-items: center; gap: 8px; color: var(--erp-text-muted); font-size: 12px; }
+.ppo-report__summary-row > td { background: #f8fbfa; }
+.ppo-report__summary-label { color: var(--erp-text-secondary); font-weight: 700; text-align: right; }
+.ppo-report__summary-quantity { color: #087654; background: #edf9f3 !important; font-weight: 760; }
+.ppo-report__summary-total { color: #087654; font-weight: 820; }
+.ppo-report__summary-footer > th, .ppo-report__summary-footer > td { color: #315147; background: #e6f4ed; font-weight: 800; }
+.ppo-report__summary-footer > th { text-align: right !important; }
+.ppo-report__summary-status > td { padding: 11px 12px; color: var(--erp-text-muted); background: #f8fbfa; text-align: center; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
 @media (max-width: 800px) {
 	.ppo-report__toolbar { align-items: stretch; flex-direction: column; }
 	.ppo-report__controls { justify-content: flex-start; }
-	.ppo-report__dispatch { grid-template-columns: 1fr; }
 }
 </style>

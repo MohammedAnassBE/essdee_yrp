@@ -207,16 +207,27 @@ def _serialize_matrix(rows) -> list[dict]:
 
 
 def _serialize_ordered(rows) -> list[dict]:
-	return [
-		{
-			"name": _value(row, "name"),
-			"item": _value(row, "item"),
-			"item_variant": _value(row, "item_variant"),
-			"lot": _value(row, "lot"),
-			"quantity": flt(_value(row, "quantity")),
-		}
-		for row in rows or []
-	]
+	result = []
+	variant_attributes = {}
+	for row in rows or []:
+		variant = _value(row, "item_variant")
+		size = _value(row, "size") or _value(row, "size_type_value")
+		if not size and variant:
+			if variant not in variant_attributes:
+				variant_attributes[variant] = get_variant_attr_details(variant)
+			attributes = variant_attributes[variant]
+			size = attributes.get("Size") or next(iter(attributes.values()), "")
+		result.append(
+			{
+				"name": _value(row, "name"),
+				"item": _value(row, "item"),
+				"item_variant": variant,
+				"size": size,
+				"lot": _value(row, "lot"),
+				"quantity": flt(_value(row, "quantity")),
+			}
+		)
+	return result
 
 
 def _production_order_actions(doc, permissions: dict, onload: Mapping) -> dict:

@@ -10,7 +10,7 @@
 				</template>
 				<template #header-actions><DocumentActionStrip :actions="actions" /></template>
 				<template #fields><ProductionOrderOverview :fields="workspace.fields || []" /></template>
-				<template #matrix><ProductionOrderMatrix :rows="workspace.matrix || []" /></template>
+				<template #matrix><ProductionOrderMatrix :rows="workspace.matrix || []" :ordered="workspace.ordered || []" /></template>
 				<template #after-matrix>
 					<section v-if="activity.length" class="ppo-activity erp-card"><header><span>ACTIVITY</span><h2>Recent changes</h2></header><div v-for="entry in activity" :key="entry.key"><strong>{{ entry.label }}</strong><span>{{ entry.value }}</span></div></section>
 				</template>

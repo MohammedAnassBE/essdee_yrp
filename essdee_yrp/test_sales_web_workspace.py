@@ -139,6 +139,24 @@ class TestSalesWebWorkspace(TestCase):
 		self.assertTrue(payload["capabilities"]["update_quantity_ratio"]["reason"])
 		self.assertTrue(payload["capabilities"]["update_price"]["allowed"])
 
+	def test_workspace_resolves_size_for_migrated_rows_without_attribute_json(self):
+		workspace = self._workspace()
+		doc = FakeProductionOrder(
+			docstatus=1,
+			status="Open",
+			production_order_details=[frappe._dict(item="Premium Polo", item_variant="POLO-M", attributes_json=None, quantity=40)],
+			production_ordered_details=[],
+			__onload={"can_manage_production_order": False, "linked_lots": []},
+		)
+		with (
+			patch.object(frappe, "get_doc", return_value=doc),
+			patch.object(frappe, "has_permission", return_value=True),
+			patch.object(workspace, "get_variant_attr_details", return_value={"Size": "M"}),
+		):
+			payload = workspace.get_production_order_workspace(doc.name)
+
+		self.assertEqual(payload["matrix"][0]["size"], "M")
+
 	def test_read_only_user_gets_data_but_no_mutating_actions(self):
 		workspace = self._workspace()
 		doc = FakeProductionOrder(

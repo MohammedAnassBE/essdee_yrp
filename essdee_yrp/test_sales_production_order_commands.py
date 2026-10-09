@@ -202,6 +202,33 @@ class TestSalesProductionOrderCommands(TestCase):
 		self.assertEqual(doc.cancelled, 1)
 		self.assertEqual(result["record"]["docstatus"], 2)
 
+	def test_amend_creates_a_new_draft_and_delete_returns_without_refetching(self):
+		cancelled = FakeEditableProductionOrder(docstatus=2, status="Cancelled")
+		amended = FakeEditableProductionOrder(name="PPO-0002", docstatus=0, status="Draft")
+		with (
+			patch.object(frappe, "get_doc", return_value=cancelled),
+			patch.object(frappe, "copy_doc", return_value=amended),
+			patch.object(web_workspace, "_production_order_actions", return_value={"amend": {"allowed": True, "label": "Amend", "reason": ""}}),
+			patch.object(web_workspace, "get_production_order_workspace", return_value={"record": {"name": amended.name}}) as refresh,
+		):
+			result = web_workspace.execute_production_order_command(cancelled.name, "amend")
+		self.assertEqual(amended.get("amended_from"), cancelled.name)
+		self.assertEqual(amended.inserted, 1)
+		refresh.assert_called_once_with(amended.name)
+		self.assertEqual(result["record"]["name"], amended.name)
+
+		draft = FakeEditableProductionOrder()
+		with (
+			patch.object(frappe, "get_doc", return_value=draft),
+			patch.object(frappe, "delete_doc") as delete_doc,
+			patch.object(web_workspace, "_production_order_actions", return_value={"delete": {"allowed": True, "label": "Delete", "reason": ""}}),
+			patch.object(web_workspace, "get_production_order_workspace") as refresh,
+		):
+			result = web_workspace.execute_production_order_command(draft.name, "delete")
+		delete_doc.assert_called_once_with("YRP Production Order", draft.name)
+		refresh.assert_not_called()
+		self.assertEqual(result, {"deleted": True, "record": {"name": draft.name}})
+
 	def test_unknown_disallowed_and_stale_commands_never_delegate(self):
 		doc = FakeEditableProductionOrder(docstatus=1, status="Open")
 		with patch.object(frappe, "get_doc", return_value=doc):

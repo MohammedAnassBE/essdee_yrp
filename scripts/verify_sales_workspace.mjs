@@ -22,8 +22,116 @@ async function login(page) {
 }
 
 async function noOverflow(page, label) {
-	const geometry = await page.evaluate(() => ({ viewport: innerWidth, page: document.documentElement.scrollWidth }))
+	const geometry = await page.evaluate(() => ({
+		viewport: innerWidth,
+		page: document.documentElement.scrollWidth,
+		containers: [".ppo-action-dialog", ".p-dialog-content", ".ppo-action-matrix", ".ppo-action-matrix table", ".fabric-document-workspace", ".fabric-document-workspace__content", ".fabric-document-workspace__columns", ".fabric-document-workspace__main", ".ppo-matrix__table-wrap"].map((selector) => {
+			const element = document.querySelector(selector)
+			if (!element) return { selector, missing: true }
+			const box = element.getBoundingClientRect(), style = getComputedStyle(element)
+			return { selector, left: Math.round(box.left), right: Math.round(box.right), width: Math.round(box.width), scrollWidth: element.scrollWidth, clientWidth: element.clientWidth, overflowX: style.overflowX, minWidth: style.minWidth, maxWidth: style.maxWidth }
+		}),
+		offenders: [...document.querySelectorAll("body *")].map((element) => {
+			const box = element.getBoundingClientRect()
+			return { tag: element.tagName, className: element.className?.toString?.() || "", left: Math.round(box.left), right: Math.round(box.right), scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }
+		}).filter((item) => item.right > innerWidth + 1 || item.left < -1).sort((left, right) => right.right - left.right).slice(0, 16),
+	}))
 	assert(geometry.page <= geometry.viewport + 1, `${label} overflows: ${JSON.stringify(geometry)}`)
+}
+
+function requestArgs(route) {
+	try { return JSON.parse(route.request().postData() || "{}") } catch { return {} }
+}
+
+function reply(route, message, status = 200) {
+	return route.fulfill({ status, contentType: "application/json", body: JSON.stringify(status >= 400 ? message : { message }) })
+}
+
+function productionOrderWorkspace(overrides = {}) {
+	const capabilities = Object.fromEntries([
+		["save", "Edit"], ["request_ppo_approval", "Request PPO Approval"], ["approve_ppo", "Approve PPO"],
+		["request_changes", "Request Changes"], ["update_quantity_ratio", "Update Quantity & Ratio"],
+		["approve_quantity_ratio", "Approve Quantity & Ratio"], ["update_price", "Update Price"],
+		["change_dates", "Change Dates"], ["change_status", "Change Status"], ["approve_status", "Approve Status"],
+		["transfer_quantity", "Transfer Quantity"], ["approve_transfer", "Approve Transfer"],
+		["create_lot", "Create Lot"], ["link_lot", "Link Lot"], ["reopen", "Reopen"],
+		["cancel", "Cancel"], ["amend", "Amend"],
+	].map(([key, label]) => [key, { allowed: true, label, reason: "" }]))
+	capabilities.delete = { allowed: false, label: "Delete", reason: "Submitted Production Orders cannot be deleted." }
+	return {
+		fields: [
+			{ fieldname: "production_term", label: "Production Term", fieldtype: "Link", value: "5 Piece Pack" },
+			{ fieldname: "posting_date", label: "Posting Date", fieldtype: "Date", value: "2026-10-09" },
+			{ fieldname: "delivery_date", label: "Delivery Date", fieldtype: "Date", value: "2026-10-20" },
+			{ fieldname: "dont_deliver_after", label: "Don't Deliver After", fieldtype: "Date", value: "2026-10-25" },
+			{ fieldname: "comments", label: "Comments", fieldtype: "Small Text", value: "Priority retail order" },
+		],
+		matrix: [
+			{ size: "S", item_variant: "Premium Vest-S", quantity: 40, ratio: 1, prices: { mrp: 650, production_order_mrp: 640, wholesale_price: 410, retail_price: 720 } },
+			{ size: "M", item_variant: "Premium Vest-M", quantity: 80, ratio: 2, prices: { mrp: 680, production_order_mrp: 670, wholesale_price: 430, retail_price: 750 } },
+		],
+		ordered: { S: 12, M: 18 }, linked_lots: ["LOT-26-0042"],
+		histories: { dates: [{ date_field: "Delivery Date", previous_date: "2026-10-18", new_date: "2026-10-20", reason: "Customer revision" }], transfers: [] },
+		permissions: { can_read: true, can_write: true, can_print: false }, capabilities,
+		...overrides,
+		record: {
+			doctype: "YRP Production Order", name: "PPO-TEST-1", item: "Premium Vest",
+			status: "Open", docstatus: 1, total_quantity: 120, posting_date: "2026-10-09",
+			delivery_date: "2026-10-20", dont_deliver_after: "2026-10-25", lead_time_given: 11,
+			modified: "2026-10-09 10:00:00", ...overrides.record,
+		},
+	}
+}
+
+function productionOrderEditor() {
+	return {
+		modified: "2026-10-09 10:00:00",
+		fields: [
+			{ fieldname: "naming_series", label: "Series", fieldtype: "Select", options: "PPO-\nPPO-.YYYY.-", value: "PPO-" },
+			{ fieldname: "item", label: "Item", fieldtype: "Link", value: "Premium Vest" },
+			{ fieldname: "production_detail", label: "Production Detail", fieldtype: "Link", value: "Premium Vest-1" },
+			{ fieldname: "production_term", label: "Production Term", fieldtype: "Link", value: "5 Piece Pack" },
+			{ fieldname: "delivery_date", label: "Delivery Date", fieldtype: "Date", value: "2026-10-20" },
+			{ fieldname: "dont_deliver_after", label: "Don't Deliver After", fieldtype: "Date", value: "2026-10-25" },
+			{ fieldname: "comments", label: "Comments", fieldtype: "Small Text", value: "Priority retail order" },
+			{ fieldname: "skip_box_sticker_print", label: "Skip Box Sticker Print", fieldtype: "Check", value: 0 },
+		],
+		matrix: {
+			item: "Premium Vest", primary_attribute: "Size", primary_values: ["S", "M"],
+			items: {
+				S: { qty: 40, ratio: 1, mrp: 650, wholesale: 410, retail: 720 },
+				M: { qty: 80, ratio: 2, mrp: 680, wholesale: 430, retail: 750 },
+			}, ordered: { S: 12, M: 18 },
+		},
+	}
+}
+
+async function chooseSelect(dialog, index, label) {
+	await dialog.locator(".p-select").nth(index).click()
+	await dialog.page().getByRole("option", { name: label, exact: true }).click()
+}
+
+async function openAction(page, label) {
+	const direct = page.getByRole("button", { name: label, exact: true })
+	if (await direct.count() && await direct.first().isVisible()) return direct.first().click()
+	await page.getByRole("button", { name: "More", exact: true }).click()
+	return page.getByRole("menuitem", { name: label, exact: true }).click()
+}
+
+async function dialogGeometry(page, label) {
+	const dialog = page.locator(".ppo-action-dialog:visible")
+	for (const width of [390, 900, 1600]) {
+		await page.setViewportSize({ width, height: 900 })
+		await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+		await noOverflow(page, `${label} page at ${width}`)
+		const geometry = await dialog.evaluate((element) => {
+			const box = element.getBoundingClientRect()
+			const footer = element.querySelector(".p-dialog-footer")?.getBoundingClientRect()
+			return { left: box.left, right: box.right, top: box.top, bottom: box.bottom, footerBottom: footer?.bottom || 0 }
+		})
+		assert(geometry.left >= -1 && geometry.right <= width + 1 && geometry.top >= -1 && geometry.bottom <= 901 && geometry.footerBottom <= 901, `${label} clips at ${width}: ${JSON.stringify(geometry)}`)
+	}
+	await page.setViewportSize({ width: 1280, height: 900 })
 }
 
 function sourceChecks() {
@@ -103,13 +211,122 @@ async function launcherSuite(page) {
 	console.log("PASS launcher: exact cards, capability hiding, compact status list, create action, responsive flow")
 }
 
+async function productionOrderSuite(page) {
+	const commands = []
+	const saves = []
+	const pageErrors = []
+	page.on("pageerror", (reason) => pageErrors.push(reason.message))
+	let workspace = productionOrderWorkspace()
+	let failNextCommand = false
+	await page.route("**/api/method/**", async (route) => {
+		const method = new URL(route.request().url()).pathname.split("/api/method/")[1]
+		const args = requestArgs(route)
+		if (method === "essdee_yrp.sales.web_workspace.get_production_order_workspace") return reply(route, workspace)
+		if (method === "essdee_yrp.sales.web_workspace.get_production_order_editor") return reply(route, productionOrderEditor())
+		if (method === "essdee_yrp.sales.web_workspace.save_production_order") {
+			saves.push(args)
+			return reply(route, workspace)
+		}
+		if (method === "essdee_yrp.sales.web_workspace.execute_production_order_command") {
+			commands.push(args)
+			if (failNextCommand) {
+				failNextCommand = false
+				return reply(route, { _server_messages: JSON.stringify([JSON.stringify({ message: "This Production Order changed after you opened it. Reload and try again." })]) }, 409)
+			}
+			workspace = productionOrderWorkspace({ record: { modified: `2026-10-09 10:00:0${commands.length}` } })
+			return reply(route, workspace)
+		}
+		if (method === "essdee_yrp.api.link_search.link_search") return reply(route, [{ name: "PPO-TEST-2", label: "PPO-TEST-2" }])
+		return route.continue()
+	})
+
+	await page.goto(`${SITE}/web/sales/production-orders/PPO-TEST-1`, { waitUntil: "domcontentloaded" })
+	await page.getByRole("heading", { name: "Premium Vest", exact: true }).waitFor()
+	assert(await page.getByText("Production order · PPO-TEST-1", { exact: true }).isVisible(), "Item must be the primary identity and PPO the secondary identity")
+	const matrix = page.locator(".ppo-matrix")
+	assert((await matrix.innerText()).includes("120 pcs") && (await matrix.innerText()).includes("Premium Vest-S"), "Size matrix did not render quantities and variants")
+	assert((await matrix.locator("thead").innerText()).includes("PRODUCTION ORDER MRP"), "Size matrix did not expose Production Order MRP")
+	assert((await page.locator(".ppo-page__metric").first().innerText()).includes("120"), "Total quantity metric is missing")
+	const overviewText = await page.locator(".ppo-overview").innerText()
+	assert(overviewText.includes("25-10-2026") && !overviewText.includes("2026-10-25"), `Overview dates must use DD-MM-YYYY: ${overviewText}`)
+	assert(await page.getByRole("button", { name: "Delete", exact: true }).count() === 0, "Denied Delete capability leaked into the UI")
+
+	await page.getByRole("button", { name: "More", exact: true }).click()
+	const menuText = await page.locator(".document-action-menu:visible").innerText()
+	for (const label of ["Update Price", "Change Dates", "Change Status", "Transfer Quantity", "Create Lot", "Link Lot", "Reopen", "Cancel", "Amend"]) {
+		assert(menuText.includes(label), `Allowed action ${label} is missing from the action menu`)
+	}
+	assert(!menuText.includes("Delete"), "Denied Delete capability leaked into the action menu")
+	await page.keyboard.press("Escape")
+	await page.locator(".document-action-menu").waitFor({ state: "hidden" })
+
+	await page.getByRole("button", { name: "Request PPO Approval", exact: true }).click()
+	const confirmation = page.locator(".document-confirmation-shell:visible")
+	await confirmation.getByRole("button", { name: "Request PPO Approval", exact: true }).click()
+	await confirmation.waitFor({ state: "hidden" })
+	assert(commands.at(-1)?.command === "request_ppo_approval", `PPO request sent wrong command: ${JSON.stringify(commands.at(-1))}`)
+	assert(commands.at(-1)?.expected_modified === "2026-10-09 10:00:00", "PPO request omitted the original modified token")
+
+	await openAction(page, "Update Quantity & Ratio")
+	const quantityDialog = page.locator(".ppo-action-dialog:visible")
+	await quantityDialog.waitFor()
+	await page.locator(".document-action-menu").waitFor({ state: "hidden" })
+	await dialogGeometry(page, "Quantity and ratio dialog")
+	await chooseSelect(quantityDialog, 0, "Sales Team")
+	await quantityDialog.locator("textarea").fill("Rebalanced to the confirmed assortment")
+	await quantityDialog.locator("tbody tr").first().locator("input").first().fill("45")
+	await quantityDialog.getByRole("button", { name: "Send Request", exact: true }).click()
+	await quantityDialog.waitFor({ state: "hidden" })
+	const quantityCommand = commands.at(-1)
+	assert(quantityCommand.command === "update_quantity_ratio", `Quantity update sent wrong command: ${JSON.stringify(quantityCommand)}`)
+	assert(quantityCommand.expected_modified === "2026-10-09 10:00:01", "Quantity update omitted refreshed modified token")
+	assert(quantityCommand.payload?.size_quantities?.S === 45 && quantityCommand.payload?.size_ratios?.M === 2 && quantityCommand.payload?.requested_by === "Sales Team", `Quantity payload is incomplete: ${JSON.stringify(quantityCommand.payload)}`)
+
+	failNextCommand = true
+	await openAction(page, "Request Changes")
+	const changesDialog = page.locator(".ppo-action-dialog:visible")
+	await changesDialog.locator("textarea").fill("Confirm the customer delivery commitment")
+	await changesDialog.getByRole("button", { name: "Request Changes", exact: true }).click()
+	const errorDialog = page.locator(".document-error-dialog:visible")
+	await errorDialog.waitFor()
+	assert(await page.locator(".document-error-dialog:visible").count() === 1, "Command failure must open exactly one standard error dialog")
+	assert((await errorDialog.innerText()).includes("changed after you opened it"), "Stale-write error was not explained clearly")
+	await errorDialog.getByRole("button", { name: "OK", exact: true }).click()
+	await errorDialog.waitFor({ state: "hidden" })
+
+	for (const width of [390, 900, 1600]) {
+		await page.setViewportSize({ width, height: 900 })
+		await noOverflow(page, `Production Order view at ${width}`)
+		if (width === 1600 && process.env.ESSDEE_SALES_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SALES_SCREENSHOTS}/production-order-view.png`, fullPage: true, animations: "disabled" })
+	}
+	await page.setViewportSize({ width: 1280, height: 900 })
+
+	await page.goto(`${SITE}/web/sales/production-orders/PPO-TEST-1/edit`, { waitUntil: "domcontentloaded" })
+	await page.getByRole("heading", { name: "Edit Production Order", exact: true }).waitFor()
+	const editorText = await page.locator(".ppo-editor").innerText()
+	const editorMatrixText = await page.locator(".ppo-matrix").innerText()
+	assert((await page.locator('.ppo-editor input[value="Premium Vest"]').count()) === 1 && editorMatrixText.includes("120 pcs"), `Editor did not load the existing fields and matrix: ${JSON.stringify({ editorText, editorMatrixText })}`)
+	if (process.env.ESSDEE_SALES_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SALES_SCREENSHOTS}/production-order-editor.png`, fullPage: true, animations: "disabled" })
+	await Promise.all([
+		page.waitForRequest((request) => request.url().includes("essdee_yrp.sales.web_workspace.save_production_order")),
+		page.getByRole("button", { name: "Save", exact: true }).click(),
+	])
+	assert(saves.length === 1, `Draft editor saved ${saves.length} times`)
+	assert(saves[0].name === "PPO-TEST-1" && saves[0].expected_modified === "2026-10-09 10:00:00" && saves[0].submit === false, `Draft save coordination is incomplete: ${JSON.stringify(saves[0])}`)
+	assert(saves[0].values?.item_details?.[0]?.entries?.find((entry) => entry.attributes?.Size === "M")?.qty === 80, "Draft save did not preserve the complete variant matrix")
+	await page.waitForURL(/\/web\/sales\/production-orders\/PPO-TEST-1$/)
+	assert(pageErrors.length === 0, `Production Order page errors: ${pageErrors.join("\n")}`)
+	console.log("PASS production-orders: identity, matrix, capabilities, lifecycle, workflow payloads, stale popup, editor save, responsive flow")
+}
+
 sourceChecks()
 if (suite === "source") process.exit(0)
 const browser = await chromium.launch({ headless: true })
 try {
 	const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
 	await login(page)
-	await launcherSuite(page)
+	if (["launcher", "all"].includes(suite)) await launcherSuite(page)
+	if (["production-orders", "all"].includes(suite)) await productionOrderSuite(page)
 } finally {
 	await browser.close()
 }

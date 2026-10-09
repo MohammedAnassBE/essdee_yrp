@@ -7,6 +7,7 @@ from collections.abc import Mapping
 import frappe
 from frappe import _
 from frappe.utils import cint, flt
+from yrp.utils import get_variant_attr_details
 
 from essdee_yrp import production_order_workflow as workflow
 from essdee_yrp.sales import ppo_report
@@ -176,13 +177,21 @@ def get_capabilities() -> dict:
 
 def _serialize_matrix(rows) -> list[dict]:
 	result = []
+	variant_attributes = {}
 	for row in rows or []:
+		size = _value(row, "size") or _value(row, "size_type_value")
+		variant = _value(row, "item_variant")
+		if not size and variant:
+			if variant not in variant_attributes:
+				variant_attributes[variant] = get_variant_attr_details(variant)
+			attributes = variant_attributes[variant]
+			size = attributes.get("Size") or next(iter(attributes.values()), "")
 		result.append(
 			{
 				"name": _value(row, "name"),
 				"item": _value(row, "item"),
 				"item_variant": _value(row, "item_variant"),
-				"size": _value(row, "size") or _value(row, "size_type_value"),
+				"size": size,
 				"attributes_json": _value(row, "attributes_json"),
 				"quantity": flt(_value(row, "quantity")),
 				"ratio": flt(_value(row, "ratio")),
@@ -439,7 +448,7 @@ def execute_production_order_command(
 	payload=None,
 	expected_modified=None,
 ) -> dict:
-	if command not in {*WORKFLOW_COMMANDS, "cancel", "delete"}:
+	if command not in {*WORKFLOW_COMMANDS, "cancel", "delete", "amend"}:
 		frappe.throw(_("Unsupported Production Order action: {0}").format(command))
 	payload = _parse_mapping(payload or {}, _("Action values"))
 	doc = frappe.get_doc(DOCTYPE, name)
@@ -459,6 +468,15 @@ def execute_production_order_command(
 	elif command == "delete":
 		doc.check_permission("delete")
 		frappe.delete_doc(DOCTYPE, name)
+		return {"deleted": True, "record": {"name": name}}
+	elif command == "amend":
+		frappe.has_permission(DOCTYPE, ptype="create", throw=True)
+		amended = frappe.copy_doc(doc)
+		amended.docstatus = 0
+		amended.set("status", "Draft")
+		amended.set("amended_from", doc.name)
+		amended.insert()
+		return get_production_order_workspace(amended.name)
 	else:
 		doc.check_permission("read")
 		function_name, required_fields = WORKFLOW_COMMANDS[command]

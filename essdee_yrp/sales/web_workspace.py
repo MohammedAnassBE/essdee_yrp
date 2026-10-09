@@ -8,6 +8,8 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
+from essdee_yrp import production_order_workflow as workflow
+
 
 DOCTYPE = "YRP Production Order"
 PERMISSION_TYPES = ("read", "create", "write", "delete", "submit", "cancel", "print", "report")
@@ -65,6 +67,45 @@ ACTION_LABELS = {
 	"link_lot": _("Link Lot"),
 	"reopen": _("Reopen Production Order"),
 }
+EDITOR_FIELDS = (
+	"naming_series",
+	"item",
+	"production_detail",
+	"production_term",
+	"delivery_date",
+	"dont_deliver_after",
+	"comments",
+	"skip_box_sticker_print",
+)
+EDITOR_FIELD_SCHEMA = {
+	"naming_series": {"label": _("Series"), "fieldtype": "Select", "options": "\nPPO-", "reqd": True},
+	"item": {"label": _("Item"), "fieldtype": "Link", "options": "Item", "reqd": True},
+	"production_detail": {"label": _("Production Detail"), "fieldtype": "Link", "options": "YRP Item Production Detail", "reqd": False},
+	"production_term": {"label": _("Production Term"), "fieldtype": "Link", "options": "YRP Production Term", "reqd": True},
+	"delivery_date": {"label": _("Delivery Date"), "fieldtype": "Date", "options": "", "reqd": True},
+	"dont_deliver_after": {"label": _("Don't Deliver After"), "fieldtype": "Date", "options": "", "reqd": True},
+	"comments": {"label": _("Comments"), "fieldtype": "Small Text", "options": "", "reqd": False},
+	"skip_box_sticker_print": {"label": _("Skip Box Sticker Print"), "fieldtype": "Check", "options": "", "reqd": False},
+}
+WORKFLOW_COMMANDS = {
+	"request_ppo_approval": ("request_ppo_approval", ()),
+	"approve_ppo": ("approve_ppo", ()),
+	"request_changes": ("request_ppo_changes", ("reason",)),
+	"update_quantity_ratio": (
+		"update_quantity_and_ratio",
+		("size_quantities", "size_ratios", "requested_by", "reason"),
+	),
+	"approve_quantity_ratio": ("approve_quantity_and_ratio", ()),
+	"update_price": ("update_price", ("item_details",)),
+	"change_dates": ("update_production_order_date", ("date_field", "new_date", "reason")),
+	"change_status": ("change_status", ("new_status", "reason")),
+	"approve_status": ("approve_status_change", ()),
+	"transfer_quantity": ("transfer_quantity_to_ppo", ("target_production_order", "reason")),
+	"approve_transfer": ("approve_quantity_transfer", ()),
+	"create_lot": ("create_lot", ("lot_name",)),
+	"link_lot": ("link_lot", ("lot_name",)),
+	"reopen": ("reopen_production_order", ()),
+}
 
 
 def _permission_flags(doc=None) -> dict[str, bool]:
@@ -83,6 +124,25 @@ def _value(source, key, default=None):
 
 def _action(allowed: bool, label: str, reason: str = "") -> dict:
 	return {"allowed": bool(allowed), "label": label, "reason": "" if allowed else reason}
+
+
+def _parse_mapping(value, label: str) -> dict:
+	if isinstance(value, str):
+		try:
+			value = frappe.parse_json(value)
+		except (TypeError, ValueError):
+			frappe.throw(_("{0} is not valid JSON.").format(label))
+	if not isinstance(value, Mapping):
+		frappe.throw(_("{0} must be an object.").format(label))
+	return dict(value)
+
+
+def _assert_expected_modified(doc, expected_modified=None) -> None:
+	if expected_modified and str(doc.modified) != str(expected_modified):
+		frappe.throw(
+			_("{0} changed after you opened it. Refresh and try again.").format(doc.name),
+			frappe.TimestampMismatchError,
+		)
 
 
 @frappe.whitelist()
@@ -270,3 +330,137 @@ def get_production_order_workspace(production_order: str) -> dict:
 		"permissions": permissions,
 		"capabilities": _production_order_actions(doc, permissions, onload),
 	}
+
+
+def _editor_field(doc, fieldname: str) -> dict:
+	schema = dict(EDITOR_FIELD_SCHEMA[fieldname])
+	field = getattr(getattr(doc, "meta", None), "get_field", lambda _name: None)(fieldname)
+	if field:
+		schema.update(
+			{
+				"label": field.label or schema["label"],
+				"fieldtype": field.fieldtype or schema["fieldtype"],
+				"options": field.options or schema["options"],
+				"reqd": bool(field.reqd or schema["reqd"]),
+			}
+		)
+	value = doc.get(fieldname)
+	if fieldname == "naming_series" and not value:
+		value = "PPO-"
+	return {"fieldname": fieldname, **schema, "value": value}
+
+
+@frappe.whitelist()
+def get_production_order_editor(name: str | None = None, source=None) -> dict:
+	if name:
+		doc = frappe.get_doc(DOCTYPE, name)
+		doc.check_permission("write")
+		if cint(doc.docstatus) != 0:
+			frappe.throw(_("Only a draft Production Order can be edited."))
+	else:
+		frappe.has_permission(DOCTYPE, ptype="create", throw=True)
+		doc = frappe.new_doc(DOCTYPE)
+		for fieldname, value in _parse_mapping(source or {}, _("Source")).items():
+			if fieldname in EDITOR_FIELDS:
+				doc.set(fieldname, value)
+
+	item = doc.get("item")
+	matrix = {}
+	if item:
+		matrix = workflow.get_order_editor_context(
+			item=item,
+			production_order=doc.name if name else doc.get("amended_from"),
+		)
+	return {
+		"record": {"name": doc.name if name else "", "docstatus": cint(doc.docstatus)},
+		"fields": [_editor_field(doc, fieldname) for fieldname in EDITOR_FIELDS],
+		"matrix": matrix,
+		"modified": doc.get("modified") if name else None,
+	}
+
+
+def _parse_item_details(value) -> list:
+	if isinstance(value, str):
+		try:
+			value = frappe.parse_json(value)
+		except (TypeError, ValueError):
+			frappe.throw(_("Production Order item details are not valid JSON."))
+	if not isinstance(value, list) or not value:
+		frappe.throw(_("Add at least one Production Order item quantity."))
+	if any(not isinstance(group, Mapping) for group in value):
+		frappe.throw(_("Production Order item details are malformed."))
+	return value
+
+
+@frappe.whitelist()
+def save_production_order(values, name: str | None = None, submit: bool = False, expected_modified=None) -> dict:
+	values = _parse_mapping(values, _("Production Order values"))
+	item_details = _parse_item_details(values.get("item_details"))
+	if name:
+		doc = frappe.get_doc(DOCTYPE, name)
+		doc.check_permission("write")
+		if cint(doc.docstatus) != 0:
+			frappe.throw(_("Only a draft Production Order can be saved here."))
+		_assert_expected_modified(doc, expected_modified)
+	else:
+		frappe.has_permission(DOCTYPE, ptype="create", throw=True)
+		doc = frappe.new_doc(DOCTYPE)
+
+	for fieldname in EDITOR_FIELDS:
+		if fieldname in values:
+			doc.set(fieldname, values[fieldname])
+	doc.set("item_details", frappe.as_json(item_details))
+	if name:
+		doc.save()
+	else:
+		doc.insert()
+	if submit:
+		workflow.request_ppo_approval(production_order=doc.name)
+	return get_production_order_workspace(doc.name)
+
+
+def _command_kwargs(name: str, command: str, payload: Mapping, required_fields: tuple[str, ...]) -> dict:
+	missing = [fieldname for fieldname in required_fields if payload.get(fieldname) in (None, "")]
+	if missing:
+		frappe.throw(_("Missing values for {0}.").format(", ".join(missing)))
+	kwargs = {fieldname: payload.get(fieldname) for fieldname in required_fields}
+	if command == "transfer_quantity":
+		kwargs["source_production_order"] = name
+	else:
+		kwargs["production_order"] = name
+	return kwargs
+
+
+@frappe.whitelist()
+def execute_production_order_command(
+	name: str,
+	command: str,
+	payload=None,
+	expected_modified=None,
+) -> dict:
+	if command not in {*WORKFLOW_COMMANDS, "cancel", "delete"}:
+		frappe.throw(_("Unsupported Production Order action: {0}").format(command))
+	payload = _parse_mapping(payload or {}, _("Action values"))
+	doc = frappe.get_doc(DOCTYPE, name)
+	_assert_expected_modified(doc, expected_modified)
+	doc.run_method("onload")
+	actions = _production_order_actions(doc, _permission_flags(doc), doc.get("__onload") or {})
+	capability = actions.get(command) or {}
+	if not capability.get("allowed"):
+		frappe.throw(
+			capability.get("reason") or _("This Production Order action is not available."),
+			frappe.PermissionError,
+		)
+
+	if command == "cancel":
+		doc.check_permission("cancel")
+		doc.cancel()
+	elif command == "delete":
+		doc.check_permission("delete")
+		frappe.delete_doc(DOCTYPE, name)
+	else:
+		doc.check_permission("read")
+		function_name, required_fields = WORKFLOW_COMMANDS[command]
+		function = getattr(workflow, function_name)
+		function(**_command_kwargs(name, command, payload, required_fields))
+	return get_production_order_workspace(name)

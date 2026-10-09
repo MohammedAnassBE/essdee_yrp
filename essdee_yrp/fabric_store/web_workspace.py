@@ -1194,14 +1194,20 @@ def get_capabilities() -> dict:
 			"operations": operations,
 		}
 
-	can_read_stock_report = bool(
-		frappe.has_permission("YRP Stock Ledger Entry", ptype="read")
-		and frappe.has_permission("YRP Stock Ledger Entry", ptype="report")
-	)
-	if can_read_stock_report:
+	reports = {}
+	if _can_run_report("YRP Stock Balance"):
+		reports["stock_balance"] = {"label": _("Stock Balance"), "can_read": True}
+
+	if _can_run_report("SD YRP Purchase Order Itemwise"):
+		reports["purchase_order_itemwise"] = {
+			"label": _("Purchase Order Itemwise"),
+			"can_read": True,
+		}
+
+	if reports:
 		sections["reports"] = {
 			"label": SECTION_LABELS["reports"],
-			"reports": {"stock_balance": {"label": _("Stock Balance"), "can_read": True}},
+			"reports": reports,
 		}
 
 	return {
@@ -1211,3 +1217,17 @@ def get_capabilities() -> dict:
 			for key, doctype in RELATED_DOCUMENT_DOCTYPES.items()
 		},
 	}
+
+
+def _can_run_report(report_name: str) -> bool:
+	"""Mirror query-report access checks without queueing permission errors."""
+	try:
+		report = frappe.get_doc("Report", report_name)
+	except frappe.DoesNotExistError:
+		return False
+	return bool(
+		not report.disabled
+		and report.is_permitted()
+		and frappe.has_permission(report.ref_doctype, ptype="read")
+		and frappe.has_permission(report.ref_doctype, ptype="report")
+	)

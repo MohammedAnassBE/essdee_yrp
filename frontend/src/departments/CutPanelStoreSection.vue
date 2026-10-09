@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage :title="definition.label" accent="#0a7f5a" back-to="/cut-panel-store" back-label="Cut Panel Store" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage :title="definition.label" accent="#0a7f5a" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
 		<section class="cut-panel-store-section erp-workspace" :aria-label="definition.label">
 			<div v-if="loading" class="cut-panel-store-section__loading">
 				<Skeleton height="76px" />
@@ -32,7 +32,11 @@ import FabricWorkOrders from "./fabric-store/FabricWorkOrders.vue"
 import ExcelStickerPrints from "./cut-panel-store/ExcelStickerPrints.vue"
 import CutPanelStoreReports from "./cut-panel-store/CutPanelStoreReports.vue"
 
-const props = defineProps({ section: { type: String, required: true } })
+const props = defineProps({
+	section: { type: String, required: true },
+	backTo: { type: String, default: "/cut-panel-store" },
+	backLabel: { type: String, default: "Cut Panel Store" },
+})
 const definitions = {
 	movements: { label: "Cut Panel Movement", icon: "pi pi-arrow-right-arrow-left", component: CutPanelMovements },
 	work_orders: {

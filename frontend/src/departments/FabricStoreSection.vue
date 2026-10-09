@@ -33,6 +33,7 @@ const props = defineProps({
 	workOrderNewRouteName: { type: String, default: "fabric-work-order-new" },
 	purchaseOrderViewRouteName: { type: String, default: "fabric-purchase-order" },
 	purchaseOrderNewRouteName: { type: String, default: "fabric-purchase-order-new" },
+	reportKeys: { type: Array, default: () => ["stock_balance"] },
 })
 const definitions = {
 	work_orders: { label: "Work Orders", component: FabricWorkOrders },
@@ -52,6 +53,7 @@ const sectionProps = computed(() => ({
 		viewRouteName: props.purchaseOrderViewRouteName,
 		newRouteName: props.purchaseOrderNewRouteName,
 	} : {}),
+	...(props.section === "reports" ? { reportKeys: props.reportKeys } : {}),
 }))
 const loading = ref(true)
 const error = ref("")

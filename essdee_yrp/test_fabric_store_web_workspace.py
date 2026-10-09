@@ -78,6 +78,7 @@ class TestFabricStoreWebWorkspace(TestCase):
 				"can_read": True,
 				"can_create": True,
 				"can_write": False,
+				"can_update_after_submit": False,
 				"can_submit": False,
 				"can_cancel": True,
 				"can_amend": False,
@@ -144,6 +145,65 @@ class TestFabricStoreWebWorkspace(TestCase):
 		self.assertEqual(
 			payload["sections"]["work_orders"]["doctype"],
 			DOCUMENT_KEYS["work_orders"],
+		)
+
+	def test_capabilities_expose_each_permitted_shared_report(self):
+		def has_permission(doctype, ptype="read", **kwargs):
+			if doctype == "YRP Stock Ledger Entry":
+				return False
+			if doctype == "Purchase Order":
+				return ptype in {"read", "report"}
+			return ptype == "read"
+
+		def get_report(_doctype, name):
+			report = MagicMock(
+				name=name,
+				report_type="Script Report",
+				ref_doctype="YRP Stock Ledger Entry" if name == "YRP Stock Balance" else "Purchase Order",
+				disabled=0,
+			)
+			report.is_permitted.return_value = True
+			return report
+
+		with (
+			patch(
+				"essdee_yrp.fabric_store.web_workspace.frappe.has_permission",
+				side_effect=has_permission,
+			),
+			patch("essdee_yrp.fabric_store.web_workspace.frappe.get_doc", side_effect=get_report),
+		):
+			payload = get_capabilities()
+
+		self.assertEqual(
+			payload["sections"]["reports"]["reports"],
+			{
+				"purchase_order_itemwise": {
+					"label": "Purchase Order Itemwise",
+					"can_read": True,
+				}
+			},
+		)
+
+	def test_capabilities_omit_report_when_report_role_is_not_permitted(self):
+		def get_report(_doctype, name):
+			report = MagicMock(
+				name=name,
+				report_type="Script Report",
+				ref_doctype="YRP Stock Ledger Entry" if name == "YRP Stock Balance" else "Purchase Order",
+				disabled=0,
+			)
+			report.is_permitted.return_value = name == "YRP Stock Balance"
+			return report
+
+		with (
+			patch("essdee_yrp.fabric_store.web_workspace.frappe.has_permission", return_value=True),
+			patch("essdee_yrp.fabric_store.web_workspace.frappe.get_doc", side_effect=get_report),
+		):
+			payload = get_capabilities()
+
+		self.assertEqual(
+			payload["sections"]["reports"]["reports"],
+			{"stock_balance": {"label": "Stock Balance", "can_read": True}},
 		)
 
 	def test_unsupported_operations_and_doctypes_are_rejected(self):

@@ -1,10 +1,12 @@
 <template>
-	<DepartmentPage title="Purchase" accent="#059669" :show-title="false" flat full-width>
-		<WorkspacePlaceholder title="Purchase" icon="pi pi-shopping-cart" />
-	</DepartmentPage>
+	<FabricStore
+		store-name="Purchase"
+		base-path="/purchase"
+		:workspace-keys="['purchase_orders', 'stock_transfers', 'box_stickers', 'reports']"
+		:report-keys="['stock_balance', 'purchase_order_itemwise']"
+	/>
 </template>
 
 <script setup>
-import DepartmentPage from "../components/DepartmentPage.vue"
-import WorkspacePlaceholder from "../components/common/WorkspacePlaceholder.vue"
+import FabricStore from "./FabricStore.vue"
 </script>

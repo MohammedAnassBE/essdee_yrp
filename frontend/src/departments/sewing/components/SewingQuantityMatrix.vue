@@ -2,7 +2,7 @@
 	<div class="sewing-quantity-matrix">
 		<div class="sewing-quantity-matrix__scroll" role="region" :aria-label="`${label} quantity matrix`" tabindex="0">
 			<table>
-				<caption>{{ label }} · Quantities by colour and size</caption>
+				<caption v-if="showCaption">{{ label }} · Quantities by colour and size</caption>
 				<thead><tr><th scope="col">Colour / Part</th><th v-for="size in sizes" :key="size" scope="col">{{ size }}</th></tr></thead>
 				<tbody>
 					<tr v-for="(colour, key) in colours" :key="key">
@@ -29,7 +29,7 @@ const props = defineProps({
 	colours: { type: Object, default: () => ({}) }, primaryValues: { type: Array, default: () => [] },
 	modelValue: { type: Object, default: () => ({}) }, contextColumns: { type: Array, default: () => [] },
 	label: { type: String, default: "Sewing Plan" }, quantityLabel: { type: String, default: "Entry quantity" },
-	disabled: Boolean, editable: { type: Boolean, default: true },
+	disabled: Boolean, editable: { type: Boolean, default: true }, showCaption: { type: Boolean, default: true },
 })
 const emit = defineEmits(["update:modelValue"])
 const matrixId = useId()
@@ -42,13 +42,14 @@ function format(value) { return Number(value || 0).toLocaleString(undefined, { m
 <style scoped>
 .sewing-quantity-matrix { min-width: 0; max-width: 100%; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); }
 .sewing-quantity-matrix__scroll { max-width: 100%; overflow: auto; overscroll-behavior-x: contain; }
-table { min-width: 100%; width: max-content; border-collapse: separate; border-spacing: 0; font-size: var(--erp-font-size-caption); }
+table { min-width: 100%; width: max-content; border-collapse: separate; border-spacing: 0; font-size: 13px; }
 caption { padding: 10px; text-align: left; color: var(--erp-text-secondary); font-weight: 650; }
 th, td { min-width: 112px; padding: 9px 10px; border-top: 1px solid var(--erp-border); vertical-align: top; }
-th { text-align: left; background: var(--erp-surface-soft); color: var(--erp-text-secondary); }
+th { text-align: left; background: color-mix(in srgb, var(--erp-accent) 5%, var(--erp-surface-soft)); color: var(--erp-text-secondary); font-weight: 700; }
 thead th { position: sticky; top: 0; z-index: 1; }
 tbody th { min-width: 130px; max-width: 180px; overflow-wrap: anywhere; }
 td { border-left: 1px solid var(--erp-border-subtle); }
+tbody tr:nth-child(even) { background: color-mix(in srgb, var(--erp-accent) 2.5%, var(--erp-surface)); }
 small { display: block; font-size: 11px; color: var(--erp-text-muted); line-height: 1.7; }
 b { float: right; margin-left: 8px; font-variant-numeric: tabular-nums; color: var(--erp-text-secondary); }
 label { display: block; font-size: 11px; font-weight: 650; margin: 6px 0 4px; }

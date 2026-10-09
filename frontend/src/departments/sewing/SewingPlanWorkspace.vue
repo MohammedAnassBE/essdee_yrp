@@ -86,7 +86,7 @@ function saveDataEntry(payload, message, resetEntry = false) {
 	entryState.error = ""; entryState.success = ""
 	return mutate(entryState, { kind: resetEntry ? "entry" : "inspection", supplier: payload.supplier, plan: payload.plan, lot: payload.lot, message, recoverRejection: true }, async () => {
 		await (resetEntry ? submitSewingDataEntry(payload) : updateSewingInspection(payload))
-		if (resetEntry) entryState.entryDrafts[payload.plan] = {}
+		if (resetEntry) delete entryState.entryDrafts[`${payload.plan}:${String(payload.input_type || "").trim().toLowerCase().replaceAll(" ", "_")}`]
 	}, "Unable to save Sewing quantities.")
 }
 function cancelEntry(docId) {

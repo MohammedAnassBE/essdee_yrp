@@ -1,6 +1,5 @@
 <template>
 	<section data-sewing-plan-tab="data-entry" class="sewing-data-entry" :aria-busy="loading || busy" aria-label="Sewing data entry">
-		<div class="sewing-data-entry__commands"><Button label="Refresh" aria-label="Refresh data entry" icon="pi pi-refresh" severity="secondary" :disabled="loading || busy" @click="load()" /></div>
 		<div v-if="loading && !loaded" role="status"><p>Loading Sewing Plans</p><Skeleton height="180px" /></div>
 		<WorkspaceLoadError v-else-if="loadError && !loaded" message="Retry to load Sewing Plans." @retry="load()" />
 		<template v-else>
@@ -8,6 +7,7 @@
 			<Message v-if="loadError && !editor" severity="warn" :closable="false">Displayed Sewing Plans may be out of date. <Button label="Retry" text :disabled="loading || busy" @click="load()" /></Message>
 			<div class="sewing-data-entry__toolbar">
 				<div class="common-field"><label for="sewing-lot">Lot</label><Select input-id="sewing-lot" v-model="filters.lot" :options="lots" aria-label="Lot" placeholder="All Lots" show-clear :disabled="loading || busy" fluid /></div>
+				<Button label="Refresh" aria-label="Refresh data entry" icon="pi pi-refresh" severity="secondary" :disabled="loading || busy" @click="load()" />
 				<span v-if="plans.length" class="sewing-data-entry__count">{{ plans.length }} {{ plans.length === 1 ? 'plan' : 'plans' }}</span>
 			</div>
 			<p v-if="!Object.keys(response.data || {}).length" class="erp-empty-state">No Sewing Plans for this Sewing Unit.</p>
@@ -17,8 +17,7 @@
 					<header class="sewing-data-entry__lot-header"><h3 :id="group.headingId">{{ group.lot }}</h3><small>{{ group.plans.length }} {{ group.plans.length === 1 ? 'plan' : 'plans' }}</small></header>
 					<div class="sewing-data-entry__cards">
 						<article v-for="plan in group.plans" :key="plan.name" class="sewing-data-entry__plan-card erp-card" :data-sewing-plan-card="plan.name">
-							<header><div><h4>{{ plan.name }}</h4><p>{{ plan.data.details?.work_order || 'No Work Order' }} · {{ plan.data.details?.work_order_status || 'Status unavailable' }}</p></div><span class="erp-status erp-status--success">Ready</span></header>
-							<strong class="sewing-data-entry__item">{{ plan.data.details?.item || 'Item unavailable' }}</strong>
+							<header><div><h4 class="sewing-data-entry__work-order">{{ plan.data.details?.work_order || 'No Work Order' }}</h4><strong class="sewing-data-entry__item">{{ plan.data.details?.item || 'Item unavailable' }}</strong><p class="sewing-data-entry__plan-reference">{{ plan.name }} · {{ plan.data.details?.work_order_status || 'Status unavailable' }}</p></div><span class="erp-status erp-status--success">Ready</span></header>
 							<div class="sewing-data-entry__stats">
 								<span><small>Colours</small><strong>{{ Object.keys(plan.data.colours || {}).length }}</strong></span>
 								<span><small>Sizes</small><strong>{{ plan.data.details?.primary_values?.length || 0 }}</strong></span>
@@ -111,7 +110,11 @@ const contextColumns = computed(() => [
 ])
 const inputContext = computed(() => props.filters.inputType ? `${props.filters.inputType} · Allowance ${response.value.allowances?.[inputKey.value] ?? 0}%.` : "Choose an Input Type to see stage context.")
 const inspectionTypes = [{ value: "pre_final", label: "Pre Final" }, { value: "final_inspection", label: "Final Inspection" }]
-const entryQuantities = computed({ get: () => entryDrafts.value[props.filters.plan] || {}, set: value => { entryDrafts.value[props.filters.plan] = value } })
+const entryDraftKey = computed(() => inputKey.value ? `${props.filters.plan}:${inputKey.value}` : "")
+const entryQuantities = computed({
+	get: () => entryDraftKey.value ? entryDrafts.value[entryDraftKey.value] || {} : {},
+	set: value => { if (entryDraftKey.value) entryDrafts.value[entryDraftKey.value] = value },
+})
 const inspectionDraftKey = computed(() => `${props.filters.plan}:${props.filters.inspectionType}`)
 const inspectionQuantities = computed({ get: () => inspectionDrafts.value[inspectionDraftKey.value] || {}, set: value => { inspectionDrafts.value[inspectionDraftKey.value] = value } })
 const required = ["plan", "inputType", "workStation", "receivedType", "date", "time"]
@@ -125,9 +128,15 @@ function openEditor(plan, mode) {
 	editor.value = mode
 }
 function validQuantities(quantities) { return Object.values(quantities).every(value => Number.isFinite(Number(value)) && Number(value) >= 0) }
+function initializeEntry() {
+	if (!currentPlan.value || !entryDraftKey.value || entryDrafts.value[entryDraftKey.value]) return
+	const remainingKey = `${inputKey.value}_remaining`
+	entryDrafts.value[entryDraftKey.value] = Object.fromEntries(values().map(value => [value.order_detail, Number(value[remainingKey] ?? 0)]))
+}
 function initializeInspection() {
 	if (currentPlan.value && !inspectionDrafts.value[inspectionDraftKey.value]) inspectionDrafts.value[inspectionDraftKey.value] = Object.fromEntries(values().map(value => [value.order_detail, value[props.filters.inspectionType] || 0]))
 }
+watch([currentPlan, inputKey], initializeEntry)
 watch([currentPlan, () => props.filters.inspectionType], initializeInspection)
 watch(() => props.filters.lot, () => {
 	if (!plans.value.some(plan => plan.name === props.filters.plan)) { props.filters.plan = ""; editor.value = "" }
@@ -239,14 +248,14 @@ onUnmounted(() => { mounted = false; beginRequest() })
 
 <style scoped>
 .sewing-data-entry { min-width: 0; max-width: 100%; }
-.sewing-data-entry__commands { display: flex; justify-content: flex-end; margin-bottom: var(--erp-space-2); }
 .sewing-data-entry__inspection-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 h3 { margin: 0; color: var(--erp-text); font-size: 16px; }
 h4 { margin: 0; color: var(--erp-text); font-size: 15px; }
 p { margin: 5px 0 0; font-size: var(--erp-font-size-caption); color: var(--erp-text-muted); }
-.sewing-data-entry__toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--erp-space-4); margin-bottom: var(--erp-space-3); padding-bottom: var(--erp-space-3); border-bottom: 1px solid var(--erp-border-subtle); }
+.sewing-data-entry__toolbar { display: flex; align-items: flex-end; justify-content: flex-start; gap: var(--erp-space-3); margin-bottom: var(--erp-space-3); padding-bottom: var(--erp-space-3); border-bottom: 1px solid var(--erp-border-subtle); }
 .sewing-data-entry__toolbar .common-field { width: min(340px, 100%); }
-.sewing-data-entry__count { flex: 0 0 auto; padding: 4px 9px; color: var(--erp-accent-dark); font-size: 11px; font-weight: var(--erp-font-weight-bold); background: var(--erp-accent-soft); border: 1px solid var(--erp-accent-border); border-radius: var(--erp-pill-radius); }
+.sewing-data-entry__toolbar > .p-button { flex: 0 0 auto; }
+.sewing-data-entry__count { flex: 0 0 auto; margin-left: auto; padding: 4px 9px; color: var(--erp-accent-dark); font-size: 11px; font-weight: var(--erp-font-weight-bold); background: var(--erp-accent-soft); border: 1px solid var(--erp-accent-border); border-radius: var(--erp-pill-radius); }
 .sewing-data-entry__groups { display: grid; gap: var(--erp-space-4); }
 .sewing-data-entry__lot { min-width: 0; }
 .sewing-data-entry__lot-header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--erp-space-3); margin-bottom: 8px; padding-inline: 2px; }
@@ -255,8 +264,9 @@ p { margin: 5px 0 0; font-size: var(--erp-font-size-caption); color: var(--erp-t
 .sewing-data-entry__plan-card { display: grid; gap: 10px; min-width: 0; padding: 14px; box-shadow: var(--erp-shadow-xs); transition: border-color var(--erp-transition-base), box-shadow var(--erp-transition-base), transform var(--erp-transition-base); }
 .sewing-data-entry__plan-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--erp-space-3); }
 .sewing-data-entry__plan-card > header > div { min-width: 0; }
-.sewing-data-entry__plan-card > header p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sewing-data-entry__item { min-width: 0; overflow: hidden; color: var(--erp-text-secondary); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
+.sewing-data-entry__work-order { overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.sewing-data-entry__item { display: block; min-width: 0; margin-top: 3px; overflow: hidden; color: var(--erp-text-secondary); font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.sewing-data-entry__plan-reference { overflow: hidden; color: var(--erp-text-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .sewing-data-entry__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: hidden; background: var(--erp-surface-soft); border: 1px solid var(--erp-border-subtle); border-radius: var(--erp-control-radius); }
 .sewing-data-entry__stats > span { display: grid; gap: 2px; min-width: 0; padding: 9px 10px; border-right: 1px solid var(--erp-border-subtle); }
 .sewing-data-entry__stats > span:last-child { border-right: 0; }
@@ -282,5 +292,6 @@ small { color: var(--erp-text-muted); font-size: 11px; }
 @media (max-width: 1000px) { .sewing-data-entry__filters { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .sewing-data-entry__cards { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .sewing-data-entry__inspection-heading { align-items: flex-start; flex-direction: column; } .sewing-data-entry__filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sewing-data-entry__inspection-heading .common-field { width: 100%; } }
+@media (max-width: 540px) { .sewing-data-entry__toolbar { flex-wrap: wrap; } .sewing-data-entry__toolbar .common-field { width: 100%; } .sewing-data-entry__count { margin-left: 0; } }
 @media (max-width: 430px) { .sewing-data-entry__filters { grid-template-columns: minmax(0, 1fr); } }
 </style>

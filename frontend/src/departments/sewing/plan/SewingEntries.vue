@@ -15,16 +15,16 @@
 			<p v-if="loading && loaded" role="status">Refreshing entries…</p>
 			<Message v-if="state.refreshRequired" severity="warn" :closable="false">Refresh entries before cancelling another entry.</Message>
 			<p v-if="!groups.length" class="erp-empty-state">No entries match these filters.</p>
-			<section v-for="group in groups" :key="group.date" :data-entry-date="group.date" class="sewing-entries__date" :aria-label="`Entries on ${group.date}`">
-				<h3>{{ group.date }}</h3>
+			<section v-for="group in groups" :key="group.date" :data-entry-date="group.date" class="sewing-entries__date" :aria-label="`Entries on ${formatDate(group.date)}`">
+				<h3>{{ formatDate(group.date) }}</h3>
 				<article v-for="entry in group.entries" :key="entry.id" :data-entry-id="entry.id" class="sewing-entries__record">
-					<div class="sewing-entries__record-heading"><div class="sewing-entries__context"><strong>{{ entry.id }}</strong><span>{{ entry.entry_time }}</span><span>{{ entry.lot }} · {{ entry.item_name }}</span><span>{{ entry.work_station }}</span><span>{{ entry.input_type }} · {{ entry.received_type }}</span></div><Button v-if="entry.is_cancellable" :label="`Cancel ${entry.id}`" severity="danger" outlined :disabled="loading || state.busy || state.refreshRequired" @click="selected = entry.id" /></div>
-					<SewingQuantityMatrix :colours="matrix(entry).colours" :model-value="matrix(entry).quantities" :primary-values="entry.primary_values" :label="entry.id" quantity-label="Quantity" :editable="false" />
+					<div class="sewing-entries__record-heading"><div class="sewing-entries__context"><span>{{ entry.entry_time }}</span><span>{{ entry.lot }}</span><span>{{ entry.item_name }}</span><span class="sewing-entries__meta--strong">{{ entry.work_station }}</span><span class="sewing-entries__meta--strong">{{ entry.input_type }}</span><span class="sewing-entries__meta--strong">{{ entry.received_type }}</span></div><Button v-if="entry.is_cancellable" label="Cancel entry" :aria-label="`Cancel entry from ${formatDate(group.date)} ${entry.entry_time} for ${entry.lot} at ${entry.work_station}`" severity="danger" outlined :disabled="loading || state.busy || state.refreshRequired" @click="selected = entry.id" /></div>
+					<SewingQuantityMatrix :colours="matrix(entry).colours" :model-value="matrix(entry).quantities" :primary-values="entry.primary_values" label="Saved Sewing entry" :show-caption="false" quantity-label="Quantity" :editable="false" />
 				</article>
 			</section>
 			<Message v-if="success" severity="success" :closable="false" role="status">{{ success }}</Message>
 		</template>
-		<DocumentConfirmationDialog :visible="Boolean(selected)" title="Cancel Sewing entry" :message="`Cancel ${selected}? Saved quantities for this entry will be removed.`" confirm-label="Cancel entry" cancel-label="Keep entry" :busy="state.busy" @update:visible="value => { if (!value && !state.busy) selected = '' }" @confirm="cancel" />
+		<DocumentConfirmationDialog :visible="Boolean(selected)" title="Cancel Sewing entry" message="Cancel this entry? Its saved quantities will be removed." confirm-label="Cancel entry" cancel-label="Keep entry" :busy="state.busy" @update:visible="value => { if (!value && !state.busy) selected = '' }" @confirm="cancel" />
 		<DocumentErrorDialog :message="loadPopup || error" @dismiss="dismissError" />
 	</section>
 </template>
@@ -66,6 +66,10 @@ function matrix(entry) {
 		return [size, { order_detail: identity }]
 	})) }]))
 	return { colours, quantities }
+}
+function formatDate(value) {
+	const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/)
+	return match ? `${match[3]}-${match[2]}-${match[1]}` : value
 }
 async function search(doctype, text) {
 	if (!mounted || loading.value || props.state.busy || !supplier.value) return []
@@ -116,8 +120,8 @@ onBeforeUnmount(() => { mounted = false; beginRequest() })
 
 <style scoped>
 .sewing-entries { min-width: 0; max-width: 100%; }
-.sewing-entries__record-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
-h3 { margin: 0 0 8px; color: var(--erp-text); font-size: 15px; letter-spacing: -0.01em; }
+.sewing-entries__record-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 12px; border: 1px solid var(--erp-border); border-bottom: 0; border-radius: var(--erp-control-radius) var(--erp-control-radius) 0 0; background: color-mix(in srgb, var(--erp-accent) 4%, var(--erp-surface)); }
+h3 { margin: 0 0 8px; color: var(--erp-text); font-size: 15px; font-weight: 720; letter-spacing: -0.01em; }
 p { margin: 5px 0 0; font-size: var(--erp-font-size-caption); color: var(--erp-text-muted); }
 .sewing-entries__toolbar { display: flex; align-items: flex-end; gap: var(--erp-space-3); margin-bottom: var(--erp-space-3); }
 .sewing-entries__toolbar > .p-button { flex: 0 0 auto; }
@@ -126,6 +130,8 @@ p { margin: 5px 0 0; font-size: var(--erp-font-size-caption); color: var(--erp-t
 .sewing-entries__date { margin-top: var(--erp-space-4); }
 .sewing-entries__record { min-width: 0; margin-bottom: 16px; }
 .sewing-entries__context { display: flex; flex-wrap: wrap; gap: 6px 14px; min-width: 0; overflow-wrap: anywhere; color: var(--erp-text-secondary); font-size: var(--erp-font-size-caption); }
+.sewing-entries__meta--strong { color: var(--erp-text); font-weight: 700; }
+.sewing-entries__record :deep(.sewing-quantity-matrix) { border-top-left-radius: 0; border-top-right-radius: 0; }
 .sewing-entries__record-heading :deep(.p-button) { flex-shrink: 0; }
 @media (max-width: 700px) { .sewing-entries__toolbar { align-items: stretch; flex-direction: column; } .sewing-entries__toolbar > .p-button { align-self: flex-start; } .sewing-entries__filters { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); } .sewing-entries__record-heading { align-items: flex-start; flex-direction: column; } }
 </style>

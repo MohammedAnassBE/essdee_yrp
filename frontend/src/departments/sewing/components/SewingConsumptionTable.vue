@@ -24,11 +24,13 @@ function invalid(value) { return value === "" || !Number.isFinite(Number(value))
 <style scoped>
 .sewing-consumption-table { min-width: 0; max-width: 100%; margin-bottom: 14px; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); }
 .sewing-consumption-table__scroll { max-width: 100%; overflow: auto; overscroll-behavior-x: contain; }
-table { min-width: 100%; width: max-content; border-collapse: collapse; font-size: var(--erp-font-size-caption); }
+table { min-width: 100%; width: max-content; border-collapse: collapse; font-size: 13px; line-height: 1.45; }
 caption { text-align: left; padding: 10px; font-weight: 650; color: var(--erp-text-secondary); }
 th, td { min-width: 112px; max-width: 220px; padding: 9px 10px; border-top: 1px solid var(--erp-border); text-align: left; overflow-wrap: anywhere; }
-th { background: var(--erp-surface-soft); color: var(--erp-text-secondary); }
+th { background: color-mix(in srgb, var(--erp-accent) 6%, var(--erp-surface-soft)); color: var(--erp-text-secondary); font-weight: 700; }
 td { color: var(--erp-text); border-right: 1px solid var(--erp-border-subtle); }
+tbody tr:nth-child(odd) { background: var(--erp-surface); }
+tbody tr:nth-child(even) { background: color-mix(in srgb, var(--erp-accent) 3%, var(--erp-surface)); }
 .sewing-consumption-table__number { text-align: right; font-variant-numeric: tabular-nums; }
 input { width: 110px; min-height: 38px; padding: 7px 8px; border: 1px solid var(--erp-border-strong); border-radius: var(--erp-control-radius); background: var(--erp-surface); color: var(--erp-text); text-align: right; font: inherit; font-variant-numeric: tabular-nums; }
 input:focus-visible, .sewing-consumption-table__scroll:focus-visible { outline: 3px solid var(--erp-accent-soft); outline-offset: 1px; border-color: var(--erp-accent); }

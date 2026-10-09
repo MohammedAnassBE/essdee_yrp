@@ -31,7 +31,12 @@ class TestSewingWebWorkspace(TestCase):
 		self.assertEqual(set(payload), {"sections", "plan_actions", "reports"})
 		self.assertEqual(
 			{key: value["label"] for key, value in payload["sections"].items()},
-			{"plans": "Sewing Plan", "reports": "Reports", "attendance": "Attendance Report"},
+			{
+				"plans": "Sewing Plan",
+				"work_orders": "Work Orders",
+				"reports": "Reports",
+				"attendance": "Attendance Report",
+			},
 		)
 		self.assertEqual(
 			{key: (value["label"], value["doctype"]) for key, value in payload["plan_actions"].items()},
@@ -62,13 +67,30 @@ class TestSewingWebWorkspace(TestCase):
 
 	def test_report_and_attendance_sections_require_plan_read_and_report(self):
 		for denied_permission, expected_sections in (
-			("read", set()),
-			("report", {"plans"}),
+			("read", {"work_orders"}),
+			("report", {"plans", "work_orders"}),
 		):
 			with self.subTest(denied_permission=denied_permission):
 				payload = self._capabilities(denied={("SD YRP Sewing Plan", denied_permission)})
 				self.assertEqual(set(payload["sections"]), expected_sections)
 				self.assertEqual(payload["reports"], {})
+
+	def test_work_orders_require_independent_work_order_read_permission(self):
+		payload = self._capabilities(allowed={("YRP Work Order", "read")})
+		self.assertEqual(list(payload["sections"]), ["work_orders"])
+		self.assertEqual(
+			payload["sections"]["work_orders"],
+			{
+				"doctype": "YRP Work Order",
+				"label": "Work Orders",
+				"can_read": True,
+				"can_create": False,
+				"can_write": False,
+				"can_delete": False,
+				"can_submit": False,
+				"can_report": False,
+			},
+		)
 
 	def test_report_capabilities_never_grant_mutations(self):
 		payload = self._capabilities()

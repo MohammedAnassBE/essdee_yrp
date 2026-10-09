@@ -4,7 +4,7 @@
 			title="Sewing"
 			:items="workspaces(capabilities, supplier)"
 			empty-text="No permitted Sewing workspaces"
-			:skeleton-count="3"
+			:skeleton-count="4"
 			eyebrow=""
 			compact
 		>
@@ -22,6 +22,7 @@ import SewingUnitPicker from "./SewingUnitPicker.vue"
 
 const definitions = [
 	{ key: "plans", label: "Sewing Plan", description: "Review plans and production for a Sewing Unit.", icon: "pi pi-sitemap", path: "/sewing/plans" },
+	{ key: "work_orders", label: "Work Orders", description: "Review production requirements, deliveries and receipts.", icon: "pi pi-briefcase", path: "/sewing/work-orders" },
 	{ key: "reports", label: "Reports", description: "Review production reports for a Sewing Unit.", icon: "pi pi-chart-bar", path: "/sewing/reports" },
 	{ key: "attendance", label: "Attendance Report", description: "Review worker strength across all Sewing Units.", icon: "pi pi-users", path: "/sewing/attendance" },
 ]

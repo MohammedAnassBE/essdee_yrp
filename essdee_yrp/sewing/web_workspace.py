@@ -55,6 +55,11 @@ def get_capabilities() -> dict:
 	plan = plan_actions["plan"]
 	entry = plan_actions["entry"]
 	grn = plan_actions["goods_received_note"]
+	work_order = {
+		"doctype": "YRP Work Order",
+		"label": _("Work Orders"),
+		**_permission_flags("YRP Work Order"),
+	}
 	sections = {}
 	if plan["can_read"]:
 		sections["plans"] = {
@@ -66,6 +71,8 @@ def get_capabilities() -> dict:
 			"can_submit": grn["can_create"] and grn["can_submit"],
 			"can_report": plan["can_report"],
 		}
+	if work_order["can_read"]:
+		sections["work_orders"] = work_order
 
 	reports = {}
 	if plan["can_read"] and plan["can_report"]:

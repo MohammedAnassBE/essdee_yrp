@@ -16,7 +16,7 @@
 			</header>
 			<div v-if="loading" class="sewing-workspace-shell__loading" role="status">
 				<span class="sewing-workspace-shell__status">Loading Sewing workspace</span>
-				<Skeleton v-for="index in section ? 1 : 3" :key="index" height="124px" />
+				<Skeleton v-for="index in section ? 1 : 4" :key="index" height="124px" />
 			</div>
 			<WorkspaceLoadError v-else-if="failed" message="Retry to load Sewing workspace access." :loading="loading" @retry="load" />
 			<Message v-else-if="section && !capability?.can_read" severity="warn" :closable="false">

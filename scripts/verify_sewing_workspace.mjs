@@ -11,6 +11,7 @@ const SITE = process.env.ESSDEE_TEST_SITE || "http://erp-migration-test.site:800
 const suite = process.argv[2] || "launcher"
 const definitions = [
 	["plans", "Sewing Plan", "/web/sewing/plans"],
+	["work_orders", "Work Orders", "/web/sewing/work-orders"],
 	["reports", "Reports", "/web/sewing/reports"],
 	["attendance", "Attendance Report", "/web/sewing/attendance"],
 ]
@@ -131,8 +132,30 @@ async function launcherSuite(page) {
 	const state = { payload: capabilities, error: "", errorStatus: 500, delay: 0 }
 	const searchRequests = []
 	const dataRequests = []
+	const workOrderListRequests = []
 	const browserErrors = []
+	const routerSource = readFileSync("frontend/src/router/index.js", "utf8")
+	const listRouteStart = routerSource.indexOf('path: "/sewing/work-orders"')
+	const newRouteStart = routerSource.indexOf('path: "/sewing/work-orders/new"')
+	const editRouteStart = routerSource.indexOf('path: "/sewing/work-orders/:workOrderId/edit"')
+	const viewRouteStart = routerSource.indexOf('path: "/sewing/work-orders/:workOrderId"', editRouteStart + 1)
+	assert(listRouteStart >= 0 && newRouteStart > listRouteStart && editRouteStart > newRouteStart && viewRouteStart > editRouteStart, "Sewing Work Order routes are incomplete or ordered unsafely")
+	const listRouteSource = routerSource.slice(listRouteStart, newRouteStart)
+	assert(listRouteSource.includes("component: FabricStoreSection") && listRouteSource.includes('section: "work_orders"'), "Sewing Work Orders does not reuse FabricStoreSection")
+	assert(listRouteSource.includes('workOrderViewRouteName: "sewing-work-order"') && listRouteSource.includes('workOrderNewRouteName: "sewing-work-order-new"'), "Shared Work Orders received the wrong Sewing route names")
+	for (const [start, end, component, routeName] of [
+		[newRouteStart, editRouteStart, "FabricWorkOrderEditorPage", "sewing-work-order-new"],
+		[editRouteStart, viewRouteStart, "FabricWorkOrderEditorPage", "sewing-work-order-edit"],
+		[viewRouteStart, routerSource.indexOf('path: "/sewing/reports"', viewRouteStart), "FabricWorkOrder", "sewing-work-order"],
+	]) {
+		const source = routerSource.slice(start, end)
+		assert(source.includes(`component: ${component}`) && source.includes(`name: "${routeName}"`), `Sewing route ${routeName} does not reuse ${component}`)
+	}
 	page.on("pageerror", (error) => browserErrors.push(error.message))
+	await page.route("**/api/resource/YRP%20Work%20Order**", async (route) => {
+		workOrderListRequests.push(route.request().url())
+		return route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: [{ name: "WO-SEW-1", supplier: "UNIT-A", item: "T-Shirt", lot: "LOT-A", status: "Draft", modified: "2026-10-09 10:00:00", docstatus: 0 }] }) })
+	})
 	await page.route("**/api/method/**", async (route) => {
 		const method = new URL(route.request().url()).pathname.split("/api/method/")[1]
 		if (method === "essdee_yrp.sewing.web_workspace.get_capabilities") {
@@ -141,6 +164,26 @@ async function launcherSuite(page) {
 				? { exc_type: "PermissionError", exc: '["frappe.exceptions.PermissionError"]', _server_messages: JSON.stringify([JSON.stringify({ message: state.error, raise_exception: 1 })]) }
 				: { message: state.error || state.payload }
 			return route.fulfill({ status: state.error ? state.errorStatus : 200, contentType: "application/json", body: JSON.stringify(payload) })
+		}
+		if (method === "essdee_yrp.fabric_store.web_workspace.get_capabilities") {
+			return route.fulfill({ contentType: "application/json", body: JSON.stringify({ message: { sections: { work_orders: { doctype: "YRP Work Order", ...flags, can_create: true } } } }) })
+		}
+		if (method === "frappe.desk.form.load.getdoctype") {
+			return route.fulfill({ contentType: "application/json", body: JSON.stringify({ docs: [{ name: "YRP Work Order", is_submittable: 1, fields: [
+				{ fieldname: "supplier", label: "Supplier", fieldtype: "Link", options: "Supplier", in_list_view: 1 },
+				{ fieldname: "item", label: "Item", fieldtype: "Link", options: "Item", in_list_view: 1 },
+				{ fieldname: "lot", label: "Lot", fieldtype: "Link", options: "SD YRP Lot", in_list_view: 1 },
+				{ fieldname: "status", label: "Status", fieldtype: "Select", options: "Draft\nSubmitted", in_list_view: 1 },
+			] }] }) })
+		}
+		if (method.endsWith("yrp_user_listview.get_user_listview")) {
+			return route.fulfill({ contentType: "application/json", body: JSON.stringify({ message: [] }) })
+		}
+		if (method === "frappe.desk.reportview.get_count") {
+			return route.fulfill({ contentType: "application/json", body: JSON.stringify({ message: 1 }) })
+		}
+		if (method === "essdee_yrp.fabric_store.web_workspace.get_work_order_workspace") {
+			return route.fulfill({ contentType: "application/json", body: JSON.stringify({ message: { record: { name: "WO-SEW-1", status: "Draft", docstatus: 0 }, fields: [], dimensions: [], matrices: { deliverables: [], receivables: [] }, related: { delivery_challans: [], goods_received_notes: [] }, permissions: {}, capabilities: {} } }) })
 		}
 		if (method === "essdee_yrp.api.link_search.link_search") {
 			searchRequests.push(JSON.parse(route.request().postData() || "{}"))
@@ -157,9 +200,9 @@ async function launcherSuite(page) {
 	await page.waitForTimeout(500)
 	assert(await page.locator(".workspace-launcher").count() === 1, "Sewing launcher is absent; the department still renders its placeholder")
 	const cards = page.locator(".workspace-launcher__card")
-	await cards.nth(2).waitFor()
-	assert(await cards.count() === 3, "Sewing must have exactly three launcher cards")
-	assert(JSON.stringify(await cards.locator("strong").allTextContents()) === JSON.stringify(["Sewing Plan", "Reports", "Attendance Report"]), "Sewing launcher labels differ from the three approved destinations")
+	await cards.nth(3).waitFor()
+	assert(await cards.count() === 4, "Sewing must have exactly four launcher cards")
+	assert(JSON.stringify(await cards.locator("strong").allTextContents()) === JSON.stringify(["Sewing Plan", "Work Orders", "Reports", "Attendance Report"]), "Sewing launcher labels differ from the four approved destinations")
 	await page.setViewportSize({ width: 1600, height: 900 })
 	const launcherGeometry = await page.evaluate(() => {
 		const shell = document.querySelector(".sewing-workspace-shell").getBoundingClientRect()
@@ -191,9 +234,20 @@ async function launcherSuite(page) {
 	assert(await cards.first().evaluate((element) => getComputedStyle(element).outlineStyle !== "none"), "Launcher needs visible keyboard focus")
 	await selectUnit(page, "UNIT-A")
 	assert(searchRequests.some((request) => request.doctype === "Supplier" && request.filters?.is_company_location === 1), "Supplier search lacks company-location filter")
-	for (const [, label, href] of definitions.slice(0, 2)) {
+	for (const [, label, href] of definitions.slice(0, 3)) {
 		assert(await page.getByRole("link", { name: new RegExp(`^${label}`) }).getAttribute("href") === `${href}?supplier=UNIT-A`, `${label} loses Supplier query`)
 	}
+	await page.getByRole("link", { name: /^Work Orders/ }).click()
+	await page.waitForURL("**/web/sewing/work-orders?supplier=UNIT-A")
+	await page.getByRole("heading", { name: "Work Orders", exact: true }).waitFor()
+	const sharedWorkOrderRow = page.getByTitle("WO-SEW-1", { exact: true }).first()
+	await sharedWorkOrderRow.waitFor()
+	assert(workOrderListRequests.length === 1 && workOrderListRequests.every((url) => !decodeURIComponent(url).includes("UNIT-A")), "Shared Sewing Work Orders added an implicit Sewing Unit filter")
+	await sharedWorkOrderRow.click()
+	await page.waitForURL("**/web/sewing/work-orders/WO-SEW-1")
+	await page.getByText("Work order · WO-SEW-1", { exact: true }).waitFor()
+	await navigate(page, "/web/sewing?supplier=UNIT-A")
+	await cards.nth(3).waitFor()
 	await cards.first().click()
 	await page.waitForURL("**/web/sewing/plans?supplier=UNIT-A")
 	await page.locator("[data-sewing-destination='plans']").waitFor()
@@ -204,7 +258,7 @@ async function launcherSuite(page) {
 	await selectUnit(page, "UNIT-B")
 	await page.goBack()
 	await page.waitForURL("**/web/sewing?supplier=UNIT-A")
-	await cards.nth(2).waitFor()
+	await cards.nth(3).waitFor()
 	assert(await page.getByRole("combobox", { name: "Sewing Unit", exact: true }).inputValue() === "UNIT-A", "Back navigation loses Supplier selection")
 	await page.goForward()
 	await page.waitForURL("**/web/sewing/plans?supplier=UNIT-B")
@@ -212,7 +266,7 @@ async function launcherSuite(page) {
 	assert(await page.getByRole("combobox", { name: "Sewing Unit", exact: true }).inputValue() === "UNIT-B", "Forward navigation loses Supplier selection")
 	await page.goBack()
 	await page.waitForURL("**/web/sewing?supplier=UNIT-A")
-	await cards.nth(2).waitFor()
+	await cards.nth(3).waitFor()
 	await page.locator(".sewing-unit-picker .p-autocomplete-clear-icon").click()
 	await page.waitForURL((url) => !url.searchParams.has("supplier"))
 	assert(await page.getByRole("link", { name: /^Sewing Plan/ }).getAttribute("href") === "/web/sewing/plans", "Clearing the picker leaves stale Supplier in scoped links")
@@ -232,7 +286,7 @@ async function launcherSuite(page) {
 	state.payload = { ...capabilities, sections: { ...capabilities.sections, plans: { ...capabilities.sections.plans, can_read: false }, attendance: { ...capabilities.sections.attendance, can_read: false } } }
 	await navigate(page, "/web/sewing")
 	await cards.first().waitFor()
-	assert(JSON.stringify(await cards.locator("strong").allTextContents()) === JSON.stringify(["Reports"]), "Explicit denied capabilities leaked cards")
+	assert(JSON.stringify(await cards.locator("strong").allTextContents()) === JSON.stringify(["Work Orders", "Reports"]), "Explicit denied capabilities leaked cards")
 	state.payload = { ...capabilities, sections: { attendance: capabilities.sections.attendance } }
 	await navigate(page, "/web/sewing")
 	await cards.first().waitFor()
@@ -251,7 +305,7 @@ async function launcherSuite(page) {
 	assert(await page.getByRole("link", { name: "Back to Workspaces", exact: true }).isVisible(), "Capability failure must keep root navigation available")
 	state.error = ""
 	await page.getByRole("button", { name: "Retry", exact: true }).click()
-	await cards.nth(2).waitFor()
+	await cards.nth(3).waitFor()
 	state.errorStatus = 403
 	state.error = "Sewing access was denied. Please retry."
 	await navigate(page, "/web/sewing")
@@ -260,13 +314,13 @@ async function launcherSuite(page) {
 	assert(await cards.count() === 0, "HTTP 403 leaves Sewing cards visible")
 	state.error = ""
 	await page.getByRole("button", { name: "Retry", exact: true }).click()
-	await cards.nth(2).waitFor()
+	await cards.nth(3).waitFor()
 	assert(await page.getByRole("alert").count() === 0, "HTTP 403 error remains after successful Retry")
 	state.delay = 700
 	await navigate(page, "/web/sewing")
 	await page.getByRole("status").filter({ hasText: "Loading" }).waitFor()
 	assert(await page.getByRole("link", { name: "Back to Workspaces", exact: true }).isVisible(), "Capability loading must keep root navigation available")
-	await cards.nth(2).waitFor()
+	await cards.nth(3).waitFor()
 	state.delay = 0
 	for (const width of [390, 900, 1280, 1600]) {
 		await page.setViewportSize({ width, height: 900 })
@@ -285,7 +339,7 @@ async function launcherSuite(page) {
 		}
 	}
 	assert(browserErrors.length === 0, `Sewing browser errors: ${browserErrors.join("\n")}`)
-	console.log("PASS launcher: three cards, permissions, 500/403 Frappe retry/loading, filtered Supplier search, query/reload/back/forward, missing/blank/malformed Supplier guard, global attendance, active-only mount, 16 viewport checks")
+	console.log("PASS launcher: four cards, permissions, 500/403 Frappe retry/loading, filtered Supplier search, query/reload/back/forward, missing/blank/malformed Supplier guard, global attendance, active-only mount, 16 viewport checks")
 }
 
 // Execute the real composable and real Vue Router with deferred responses. This
@@ -1570,7 +1624,7 @@ async function integratedSuite(browser) {
 	}
 	try {
 		await navigate(page, "/web/sewing")
-		await page.locator(".workspace-launcher__card").nth(2).waitFor()
+		await page.locator(".workspace-launcher__card").nth(3).waitFor()
 		await selectUnit(page, "UNIT-A")
 		assert(requests.length === 0, "Launcher eagerly requested Sewing data")
 		await page.getByRole("link", { name: /^Sewing Plan/ }).click()
@@ -1622,12 +1676,12 @@ async function integratedSuite(browser) {
 		await page.getByRole("button", { name: "OK", exact: true }).click()
 		assert(await page.getByRole("combobox", { name: "Date", exact: true }).inputValue() === "08-10-2026", "HR error discarded filter")
 		state.hrError = false; await generate("get_worker_strength_report"); await page.getByText("No matching records", { exact: true }).waitFor(); await forbidden()
-		await page.goBack(); await page.locator(".workspace-launcher__card").nth(2).waitFor()
+		await page.goBack(); await page.locator(".workspace-launcher__card").nth(3).waitFor()
 		await navigate(page, direct); await page.locator('[data-sewing-report="item-summary"]').waitFor()
 		assert(await page.getByRole("combobox", { name: "Sewing Unit", exact: true }).inputValue() === "UNIT-A", "Direct reports URL loses Supplier")
 		for (const key of Object.keys(responses)) assert(count(key) > 0, `Integrated journey omitted endpoint: ${key}`)
 		assert(errors.length === 0, `Integrated browser errors: ${errors.join("; ")}`)
-		console.log("PASS integrated: built-app Unit selection and all three cards, all ten scoped tabs and global Attendance, active-only requests, refresh/reload/back/direct routes, retained filters, HR popup recovery, excluded controls absent, four-width HR/GRN dialog geometry")
+		console.log("PASS integrated: built-app Unit selection and all four cards, all ten scoped tabs and global Attendance, active-only requests, refresh/reload/back/direct routes, retained filters, HR popup recovery, excluded controls absent, four-width HR/GRN dialog geometry")
 	} catch (reason) { console.error("Integrated diagnostics:", JSON.stringify({ url: page.url(), errors, requests: requests.map(request => request.key), body: (await page.locator("body").innerText()).slice(0, 1400) })); throw reason }
 	finally { await page.close() }
 }

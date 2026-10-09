@@ -41,6 +41,52 @@ const routes = [
 		component: department.component,
 	})),
 	{ path: "/sewing/plans", name: "sewing-plans", component: SewingPlans },
+	{
+		path: "/sewing/work-orders",
+		name: "sewing-work-orders",
+		component: FabricStoreSection,
+		props: {
+			section: "work_orders",
+			storeName: "Sewing",
+			basePath: "/sewing",
+			workOrderViewRouteName: "sewing-work-order",
+			workOrderNewRouteName: "sewing-work-order-new",
+		},
+	},
+	{
+		path: "/sewing/work-orders/new",
+		name: "sewing-work-order-new",
+		component: FabricWorkOrderEditorPage,
+		props: {
+			backTo: "/sewing/work-orders",
+			backLabel: "Work Orders",
+			listRouteName: "sewing-work-orders",
+			viewRouteName: "sewing-work-order",
+		},
+	},
+	{
+		path: "/sewing/work-orders/:workOrderId/edit",
+		name: "sewing-work-order-edit",
+		component: FabricWorkOrderEditorPage,
+		props: {
+			backTo: "/sewing/work-orders",
+			backLabel: "Work Orders",
+			listRouteName: "sewing-work-orders",
+			viewRouteName: "sewing-work-order",
+		},
+	},
+	{
+		path: "/sewing/work-orders/:workOrderId",
+		name: "sewing-work-order",
+		component: FabricWorkOrder,
+		props: {
+			backTo: "/sewing/work-orders",
+			backLabel: "Work Orders",
+			viewRouteName: "sewing-work-order",
+			newRouteName: "sewing-work-order-new",
+			editRouteName: "sewing-work-order-edit",
+		},
+	},
 	{ path: "/sewing/reports", name: "sewing-reports", component: SewingReports },
 	{ path: "/sewing/attendance", name: "sewing-attendance", component: SewingAttendance },
 	{

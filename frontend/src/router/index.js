@@ -31,6 +31,7 @@ const SewingAttendance = () => import("../departments/sewing/SewingAttendance.vu
 const SalesSection = () => import("../departments/sales/SalesSection.vue")
 const ProductionOrder = () => import("../departments/sales/ProductionOrder.vue")
 const ProductionOrderEditorPage = () => import("../departments/sales/ProductionOrderEditorPage.vue")
+const SalesReports = () => import("../departments/sales/SalesReports.vue")
 
 const routes = [
 	{
@@ -96,6 +97,7 @@ const routes = [
 	{ path: "/sales/production-orders/new", name: "sales-production-order-new", component: ProductionOrderEditorPage },
 	{ path: "/sales/production-orders/:productionOrderId/edit", name: "sales-production-order-edit", component: ProductionOrderEditorPage, props: true },
 	{ path: "/sales/production-orders/:productionOrderId", name: "sales-production-order", component: ProductionOrder, props: true },
+	{ path: "/sales/reports", name: "sales-reports", component: SalesReports },
 	{
 		path: "/cutting/plans",
 		name: "cutting-plans",

@@ -106,6 +106,31 @@ function productionOrderEditor() {
 	}
 }
 
+function ppoReportFixture() {
+	return {
+		orders: [
+			{
+				name: "PPO-TEST-1", item: "Premium Vest", fabric: "Cotton Lycra", dia: "34 Dia", gsm: 180, production_detail: "Premium Vest-1",
+				production_term: "5 Piece Pack", posting_date: "2026-10-09", delivery_date: "2026-10-20",
+				dont_deliver_after: "2026-10-25", lead_time: 11, status: "Open", comments: "Priority retail order",
+				group_label: "Mens", group_sizes: ["S", "M", "L"], qty_by_position: [40, 80, 0], total: 120,
+			},
+			{
+				name: "PPO-TEST-2", item: "Junior Capri", fabric: "Single Jersey", dia: "30 Dia", gsm: 160, production_detail: "Junior Capri-2",
+				production_term: "10 Piece Pack", posting_date: "2026-10-10", delivery_date: "2026-10-22",
+				dont_deliver_after: "2026-10-28", lead_time: 12, status: "PPO Request", comments: "",
+				group_label: "Kids", group_sizes: ["28", "30"], qty_by_position: [60, 40, 0], total: 100,
+			},
+		],
+		size_groups: [
+			{ label: "Mens", sizes: ["S", "M", "L"] },
+			{ label: "Kids", sizes: ["28", "30"] },
+		],
+		max_columns: 3,
+		summary: { total_orders: 2, total_quantity: 220, size_groups: 2 },
+	}
+}
+
 async function chooseSelect(dialog, index, label) {
 	await dialog.locator(".p-select").nth(index).click()
 	await dialog.page().getByRole("option", { name: label, exact: true }).click()
@@ -140,14 +165,117 @@ function sourceChecks() {
 	const create = router.indexOf('path: "/sales/production-orders/new"')
 	const edit = router.indexOf('path: "/sales/production-orders/:productionOrderId/edit"')
 	const view = router.indexOf('path: "/sales/production-orders/:productionOrderId"', edit + 1)
+	const reports = router.indexOf('path: "/sales/reports"')
 	assert(list >= 0, "Sales Production Order list route is missing")
 	if (!["launcher", "source"].includes(suite)) {
 		assert(create > list && edit > create && view > edit, "Sales Production Order routes are missing or ordered unsafely")
 	}
+	if (["reports", "all"].includes(suite)) assert(reports >= 0, "Sales Reports route is missing")
 	const api = readFileSync("frontend/src/api/sales.js", "utf8")
 	for (const method of ["get_capabilities", "get_production_order_workspace", "get_production_order_editor", "save_production_order", "execute_production_order_command", "get_ppo_report", "get_ppo_dispatch_summary", "download_ppo_report"]) {
 		assert(api.includes(method), `Sales API is missing ${method}`)
 	}
+}
+
+async function reportSuite(page) {
+	const reportRequests = []
+	const dispatchRequests = []
+	const downloads = []
+	let reportResult = ppoReportFixture()
+	let failNextReport = false
+	await page.route("**/api/method/**", async (route) => {
+		const method = new URL(route.request().url()).pathname.split("/api/method/")[1]
+		const args = requestArgs(route)
+		if (method === "essdee_yrp.sales.web_workspace.get_capabilities") {
+			return reply(route, {
+				sections: { reports: { label: "Reports", can_read: true, can_report: true } },
+				reports: { ppo_report: { label: "PPO Report", can_read: true, can_export: true } },
+			})
+		}
+		if (method === "essdee_yrp.sales.web_workspace.get_ppo_report") {
+			reportRequests.push(args)
+			if (failNextReport) {
+				failNextReport = false
+				return reply(route, { _server_messages: JSON.stringify([JSON.stringify({ message: "The PPO Report could not be generated for this period." })]) }, 500)
+			}
+			return reply(route, reportResult)
+		}
+		if (method === "essdee_yrp.sales.web_workspace.get_ppo_dispatch_summary") {
+			dispatchRequests.push(args)
+			return reply(route, { sizes: ["S", "M"], rows: [{ date: "2026-10-18", lot: "LOT-26-0042", sizes: { S: 10, M: 20 }, total: 30 }] })
+		}
+		if (method === "essdee_yrp.sales.web_workspace.download_ppo_report") {
+			downloads.push(args)
+			return route.fulfill({
+				status: 200,
+				headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": 'attachment; filename="PPO_Report_09-10-2026.xlsx"' },
+				body: "sales-report",
+			})
+		}
+		if (method === "essdee_yrp.api.link_search.link_search") return reply(route, [{ name: "Menswear", label: "Menswear" }])
+		return route.continue()
+	})
+
+	await page.goto(`${SITE}/web/sales/reports`, { waitUntil: "domcontentloaded" })
+	await page.getByRole("heading", { name: "PPO Report", exact: true }).waitFor()
+	assert(await page.getByText("Set the report filters", { exact: true }).isVisible(), "Report must wait for an explicit Generate action")
+	assert(reportRequests.length === 0, "PPO Report fetched before Generate")
+	assert(await page.getByRole("tab").count() === 0, "A single Sales report must not add a redundant tab strip")
+
+	await page.getByLabel("Status").click()
+	await page.getByRole("option", { name: "Open", exact: true }).click()
+	await page.getByRole("combobox", { name: "Product Category", exact: true }).fill("Mens")
+	await page.getByRole("option", { name: "Menswear", exact: true }).click()
+	await page.getByLabel("From Date").fill("01-10-2026")
+	await page.getByLabel("From Date").press("Tab")
+	await page.getByLabel("To Date").fill("31-10-2026")
+	await page.getByLabel("To Date").press("Tab")
+	await page.getByRole("button", { name: "Generate", exact: true }).click()
+	await page.getByText("PPO-TEST-1", { exact: true }).waitFor()
+	assert(reportRequests.length === 1, `Generate fetched ${reportRequests.length} times`)
+	assert(JSON.stringify(reportRequests[0]?.filters) === JSON.stringify({ status: "Open", product_category: "Menswear", from_date: "2026-10-01", to_date: "2026-10-31" }), `Report filters are incomplete: ${JSON.stringify(reportRequests[0])}`)
+	const report = page.locator(".ppo-report")
+	const reportText = await report.innerText()
+	assert(reportText.includes("2") && reportText.includes("220") && reportText.includes("2 size groups"), `Report summary is incomplete: ${reportText}`)
+	const header = await report.locator(".ppo-report__matrix thead").innerText()
+	for (const value of ["MENS", "S", "M", "L", "KIDS", "28", "30"]) assert(header.includes(value), `Mixed size header ${value} is missing: ${header}`)
+	assert(reportText.includes("20-10-2026") && reportText.includes("25-10-2026") && !reportText.includes("2026-10-20"), "Report dates must use DD-MM-YYYY")
+	assert((await report.locator("tfoot").innerText()).includes("220"), "Report totals row is missing")
+
+	await report.getByRole("button", { name: "Show dispatch for PPO-TEST-1", exact: true }).click()
+	await report.getByText("LOT-26-0042", { exact: true }).waitFor()
+	assert(dispatchRequests.length === 1 && dispatchRequests[0]?.production_order === "PPO-TEST-1", `Dispatch summary request is wrong: ${JSON.stringify(dispatchRequests)}`)
+	const dispatchText = await report.locator(".ppo-report__dispatch").innerText()
+	assert(dispatchText.includes("18-10-2026") && dispatchText.includes("30"), `Dispatch summary is incomplete: ${dispatchText}`)
+
+	const downloadEvent = page.waitForEvent("download")
+	await page.getByRole("button", { name: "Download Excel", exact: true }).click()
+	const download = await downloadEvent
+	assert(download.suggestedFilename() === "PPO_Report_09-10-2026.xlsx", `Excel filename is wrong: ${download.suggestedFilename()}`)
+	assert(JSON.stringify(downloads[0]) === JSON.stringify({ status: "Open", product_category: "Menswear", from_date: "2026-10-01", to_date: "2026-10-31" }), `Excel filters differ from generated report: ${JSON.stringify(downloads[0])}`)
+
+	reportResult = { orders: [], size_groups: [], max_columns: 0, summary: { total_orders: 0, total_quantity: 0, size_groups: 0 } }
+	await page.getByRole("button", { name: "Generate", exact: true }).click()
+	await page.getByText("No matching records", { exact: true }).waitFor()
+	failNextReport = true
+	await page.getByRole("button", { name: "Generate", exact: true }).click()
+	const errorDialog = page.locator(".document-error-dialog:visible")
+	await errorDialog.waitFor()
+	assert((await errorDialog.innerText()).includes("could not be generated for this period"), "Report failure is not explained in the standard error popup")
+	await errorDialog.getByRole("button", { name: "OK", exact: true }).click()
+
+	reportResult = ppoReportFixture()
+	await page.getByRole("button", { name: "Generate", exact: true }).click()
+	await page.getByText("PPO-TEST-1", { exact: true }).waitFor()
+	for (const width of [390, 900, 1600]) {
+		await page.setViewportSize({ width, height: 900 })
+		await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+		await noOverflow(page, `PPO Report at ${width}`)
+		const geometry = await page.locator(".ppo-report__matrix-wrap").evaluate((element) => ({ overflowX: getComputedStyle(element).overflowX, clientWidth: element.clientWidth, scrollWidth: element.scrollWidth }))
+		assert(geometry.overflowX === "auto", `Wide PPO matrix lacks local horizontal flow at ${width}: ${JSON.stringify(geometry)}`)
+		if (width === 1600 && process.env.ESSDEE_SALES_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SALES_SCREENSHOTS}/ppo-report.png`, fullPage: true, animations: "disabled" })
+	}
+	console.log("PASS reports: explicit filters, mixed size matrix, totals, dispatch, dates, Excel, empty/error states, responsive flow")
 }
 
 async function launcherSuite(page) {
@@ -323,10 +451,12 @@ sourceChecks()
 if (suite === "source") process.exit(0)
 const browser = await chromium.launch({ headless: true })
 try {
-	const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
-	await login(page)
-	if (["launcher", "all"].includes(suite)) await launcherSuite(page)
-	if (["production-orders", "all"].includes(suite)) await productionOrderSuite(page)
+	for (const [name, run] of [["launcher", launcherSuite], ["production-orders", productionOrderSuite], ["reports", reportSuite]]) {
+		if (![name, "all"].includes(suite)) continue
+		const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+		await login(page)
+		try { await run(page) } finally { await page.close() }
+	}
 } finally {
 	await browser.close()
 }

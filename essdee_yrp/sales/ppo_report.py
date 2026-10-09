@@ -23,6 +23,9 @@ DOCTYPE = "YRP Production Order"
 ORDER_FIELDS = (
 	"name",
 	"item",
+	"fabric",
+	"dia",
+	"gsm",
 	"production_detail",
 	"production_term",
 	"posting_date",
@@ -216,6 +219,9 @@ def build_report(orders, details, size_types, item_attributes) -> dict:
 			{
 				"name": name,
 				"item": item,
+				"fabric": _value(source, "fabric") or "",
+				"dia": _value(source, "dia") or "",
+				"gsm": flt(_value(source, "gsm")),
 				"production_detail": _value(source, "production_detail") or "",
 				"production_term": _value(source, "production_term") or "",
 				"posting_date": _date(_value(source, "posting_date")),
@@ -428,12 +434,12 @@ def _xlsx_rows(report: Mapping) -> list[list]:
 	rows = []
 	for group in report.get("size_groups") or []:
 		rows.append(
-			["", "", "", "", "", "", "", "", "", group.get("label") or ""]
+			["", "", "", "", "", "", "", "", "", "", "", group.get("label") or ""]
 			+ [(group.get("sizes") or [])[index] if index < len(group.get("sizes") or []) else "" for index in range(max_columns)]
 			+ ["", ""]
 		)
 	rows.append(
-		["#", "PPO", "Item", "Production Detail", "Production Term", "Posting Date", "Delivery Date", "Don't Deliver After", "Status", "Size Group"]
+		["#", "PPO", "Item", "Fabric", "Dia", "GSM", "Posting Date", "Delivery Date", "Don't Deliver After", "Lead Time", "Status", "Size Group"]
 		+ [""] * max_columns
 		+ ["Total", "Comments"]
 	)
@@ -443,18 +449,20 @@ def _xlsx_rows(report: Mapping) -> list[list]:
 				index,
 				order.get("name"),
 				order.get("item"),
-				order.get("production_detail"),
-				order.get("production_term"),
+				order.get("fabric"),
+				order.get("dia"),
+				order.get("gsm"),
 				order.get("posting_date"),
 				order.get("delivery_date"),
 				order.get("dont_deliver_after"),
+				order.get("lead_time"),
 				order.get("status"),
 				order.get("group_label"),
 			]
 			+ [value or "" for value in order.get("qty_by_position") or []]
 			+ [order.get("total") or 0, order.get("comments") or ""]
 		)
-	footer = [""] * 9 + ["Total"]
+	footer = [""] * 11 + ["Total"]
 	footer.extend(
 		sum(flt(order.get("qty_by_position", [])[index]) for order in orders if index < len(order.get("qty_by_position") or [])) or ""
 		for index in range(max_columns)

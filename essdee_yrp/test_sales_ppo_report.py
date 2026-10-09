@@ -69,6 +69,9 @@ class TestSalesPpoReport(TestCase):
 			{
 				"name": "PPO-2",
 				"item": "One Size Sock",
+				"fabric": "Cotton Rib",
+				"dia": "18 Dia",
+				"gsm": 180,
 				"delivery_date": "2026-10-15",
 				"posting_date": "2026-10-02",
 				"docstatus": 1,
@@ -105,6 +108,10 @@ class TestSalesPpoReport(TestCase):
 		self.assertEqual(result["orders"][0]["total"], 30)
 		self.assertEqual(result["orders"][1]["qty_by_position"], [5, 0, 0])
 		self.assertEqual(result["orders"][1]["total"], 5)
+		self.assertEqual(
+			{key: result["orders"][1][key] for key in ("fabric", "dia", "gsm")},
+			{"fabric": "Cotton Rib", "dia": "18 Dia", "gsm": 180},
+		)
 		self.assertEqual(result["summary"], {"total_orders": 2, "total_quantity": 35, "size_groups": 2})
 
 	def test_current_rows_without_attribute_json_use_variant_primary_attribute(self):

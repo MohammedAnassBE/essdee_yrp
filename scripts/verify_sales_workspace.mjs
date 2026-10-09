@@ -261,8 +261,14 @@ async function reportSuite(page) {
 	assert(await report.locator(".ppo-report__size-group-row").count() === 2, "Size groups must stack as header rows like the production_api report")
 	assert(await report.locator(".ppo-report__matrix tbody tr").first().locator(".ppo-report__quantity").count() === 3, "Orders must use one positional size block instead of multiplying columns by every group")
 	assert(!(await report.locator(".ppo-report__matrix thead").innerText()).includes("FABRIC"), "Fabric must be hidden until requested")
-	await report.getByRole("button", { name: "Show Fabric", exact: true }).click()
+	for (const label of ["Show Fabric", "Show Dia", "Show GSM", "Summarized"]) {
+		assert(await report.getByRole("checkbox", { name: label, exact: true }).count() === 1, `${label} must be a clear checkbox control`)
+	}
+	await report.getByRole("checkbox", { name: "Show Fabric", exact: true }).check()
 	assert((await report.locator(".ppo-report__matrix thead").innerText()).includes("FABRIC"), "Fabric toggle did not reveal its column")
+	await report.getByRole("checkbox", { name: "Show Dia", exact: true }).check()
+	assert((await report.locator(".ppo-report__matrix thead").innerText()).includes("DIA"), "Dia toggle did not reveal its column")
+	assert((await report.locator(".ppo-report__matrix tbody").innerText()).includes("34 Dia"), "Dia must show its linked attribute value instead of a document ID")
 	assert(reportText.includes("Reduced 5 to PPO-TEST-2"), "Quantity transfer summary is missing")
 	assert(reportText.includes("20-10-2026") && reportText.includes("25-10-2026") && !reportText.includes("2026-10-20"), "Report dates must use DD-MM-YYYY")
 	assert((await report.locator("tfoot").innerText()).includes("220"), "Report totals row is missing")
@@ -272,7 +278,7 @@ async function reportSuite(page) {
 	assert(dispatchRequests.length === 1 && dispatchRequests[0]?.production_order === "PPO-TEST-1", `Dispatch summary request is wrong: ${JSON.stringify(dispatchRequests)}`)
 	const dispatchText = await report.locator(".ppo-report__dispatch").innerText()
 	assert(dispatchText.includes("18-10-2026") && dispatchText.includes("30"), `Dispatch summary is incomplete: ${dispatchText}`)
-	await report.getByRole("button", { name: "Summarized", exact: true }).click()
+	await report.getByRole("checkbox", { name: "Summarized", exact: true }).check()
 	await report.getByText("No submitted dispatches for this Production Order.", { exact: true }).waitFor()
 	assert(bulkDispatchRequests.length === 1, `Summarized must use one bulk request: ${JSON.stringify(bulkDispatchRequests)}`)
 

@@ -24,10 +24,10 @@
 					<span>{{ periodLabel }}</span>
 				</div>
 				<div class="ppo-report__controls" aria-label="Report display options">
-					<Button :label="showFabric ? 'Hide Fabric' : 'Show Fabric'" icon="pi pi-align-justify" severity="secondary" text size="small" @click="showFabric = !showFabric" />
-					<Button :label="showDia ? 'Hide Dia' : 'Show Dia'" icon="pi pi-circle" severity="secondary" text size="small" @click="showDia = !showDia" />
-					<Button :label="showGsm ? 'Hide GSM' : 'Show GSM'" icon="pi pi-chart-line" severity="secondary" text size="small" @click="showGsm = !showGsm" />
-					<Button label="Summarized" icon="pi pi-list" severity="secondary" outlined size="small" :loading="bulkLoading" @click="toggleAllSummaries" />
+					<label class="ppo-report__column-toggle" for="ppo-report-show-fabric"><Checkbox input-id="ppo-report-show-fabric" v-model="showFabric" binary /><span>Show Fabric</span></label>
+					<label class="ppo-report__column-toggle" for="ppo-report-show-dia"><Checkbox input-id="ppo-report-show-dia" v-model="showDia" binary /><span>Show Dia</span></label>
+					<label class="ppo-report__column-toggle" for="ppo-report-show-gsm"><Checkbox input-id="ppo-report-show-gsm" v-model="showGsm" binary /><span>Show GSM</span></label>
+					<label class="ppo-report__column-toggle" :class="{ 'is-disabled': bulkLoading }" for="ppo-report-summarized"><Checkbox input-id="ppo-report-summarized" :model-value="allSummarized" binary :disabled="bulkLoading" @update:model-value="toggleAllSummaries" /><span>Summarized</span></label>
 					<Button v-if="canExport" label="Download Excel" icon="pi pi-download" severity="secondary" outlined size="small" :loading="downloading" @click="download" />
 				</div>
 			</div>
@@ -109,6 +109,7 @@
 
 <script setup>
 import Button from "primevue/button"
+import Checkbox from "primevue/checkbox"
 import Select from "primevue/select"
 import Tag from "primevue/tag"
 import { computed, defineComponent, h, reactive, ref } from "vue"
@@ -147,6 +148,7 @@ const orders = computed(() => payload.value.orders || [])
 const sizeGroups = computed(() => payload.value.size_groups || [])
 const maxColumns = computed(() => Number(payload.value.max_columns || 0))
 const summary = computed(() => payload.value.summary || emptyPayload().summary)
+const allSummarized = computed(() => orders.value.length > 0 && expandedOrders.value.size === orders.value.length)
 const optionalColumnCount = computed(() => [showFabric.value, showDia.value, showGsm.value].filter(Boolean).length)
 const fixedBeforeGroup = computed(() => 9 + optionalColumnCount.value)
 const columnCount = computed(() => fixedBeforeGroup.value + 1 + maxColumns.value + 3)
@@ -218,8 +220,9 @@ async function toggleDispatch(name) {
 	}
 }
 
-async function toggleAllSummaries() {
-	if (expandedOrders.value.size === orders.value.length) { expandedOrders.value = new Set(); return }
+async function toggleAllSummaries(checked) {
+	if (!checked) { expandedOrders.value = new Set(); return }
+	if (!orders.value.length || bulkLoading.value) return
 	bulkLoading.value = true
 	error.value = ""
 	try {
@@ -288,7 +291,12 @@ const DispatchSummary = defineComponent({
 .ppo-report__heading { display: grid; gap: 2px; }
 .ppo-report__heading strong { color: var(--erp-text); font-size: 14px; }
 .ppo-report__heading span { color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
-.ppo-report__controls { display: flex; align-items: center; justify-content: flex-end; gap: 2px; flex-wrap: wrap; }
+.ppo-report__controls { display: flex; align-items: center; justify-content: flex-end; gap: 4px 14px; flex-wrap: wrap; }
+.ppo-report__column-toggle { display: inline-flex; align-items: center; gap: 7px; min-height: 32px; color: var(--erp-text-muted); font-size: 12px; font-weight: 650; cursor: pointer; user-select: none; }
+.ppo-report__column-toggle:hover { color: var(--erp-text); }
+.ppo-report__column-toggle.is-disabled { opacity: .6; cursor: wait; }
+.ppo-report__column-toggle :deep(.p-checkbox) { width: 16px; height: 16px; }
+.ppo-report__column-toggle :deep(.p-checkbox-box) { width: 16px; height: 16px; border-radius: 4px; }
 .ppo-report__matrix-wrap { contain: layout paint inline-size; width: 100%; max-width: 100%; min-width: 0; max-height: calc(100vh - 360px); overflow: auto; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); overscroll-behavior: contain; scrollbar-color: #8ca39a #edf2f0; scrollbar-width: auto; }
 .ppo-report__matrix-wrap::-webkit-scrollbar { width: 11px; height: 11px; }
 .ppo-report__matrix-wrap::-webkit-scrollbar-track { background: #edf2f0; border-radius: 6px; }

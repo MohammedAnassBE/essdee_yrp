@@ -165,6 +165,25 @@ def _order_filters(filters: Mapping) -> dict:
 	return result
 
 
+def load_attribute_value_labels(values) -> dict[str, str]:
+	"""Resolve linked attribute-value document names without per-row queries."""
+	linked_values = []
+	for value in values or []:
+		value = str(value or "").strip()
+		if value and value not in linked_values:
+			linked_values.append(value)
+	if not linked_values:
+		return {}
+	return {
+		_value(row, "name"): _value(row, "attribute_value") or _value(row, "name")
+		for row in frappe.get_all(
+			"YRP Item Attribute Value",
+			filters={"name": ["in", linked_values]},
+			fields=["name", "attribute_value"],
+		)
+	}
+
+
 def load_size_types() -> list[dict]:
 	parents = frappe.get_all(
 		"SD YRP FG Item Size Type",
@@ -180,15 +199,7 @@ def load_size_types() -> list[dict]:
 		fields=["parent", "size_type_value", "size", "idx"],
 		order_by="parent asc, idx asc",
 	)
-	linked_values = list(dict.fromkeys(_value(row, "size_type_value") for row in details if _value(row, "size_type_value")))
-	value_labels = {
-		_value(row, "name"): _value(row, "attribute_value")
-		for row in frappe.get_all(
-			"YRP Item Attribute Value",
-			filters={"name": ["in", linked_values]},
-			fields=["name", "attribute_value"],
-		)
-	} if linked_values else {}
+	value_labels = load_attribute_value_labels(_value(row, "size_type_value") for row in details)
 	by_parent = defaultdict(list)
 	for row in details:
 		by_parent[_value(row, "parent")].append(row)
@@ -266,10 +277,18 @@ def attach_variant_primary_values(details, primary_attribute_by_parent) -> list[
 	return result
 
 
-def build_report(orders, details, size_types, item_attributes, transfer_history_by_order=None) -> dict:
+def build_report(
+	orders,
+	details,
+	size_types,
+	item_attributes,
+	transfer_history_by_order=None,
+	attribute_value_labels=None,
+) -> dict:
 	if not orders:
 		return empty_report()
 	transfer_history_by_order = transfer_history_by_order or {}
+	attribute_value_labels = attribute_value_labels or {}
 
 	details_by_parent = defaultdict(list)
 	for row in details or []:
@@ -305,7 +324,7 @@ def build_report(orders, details, size_types, item_attributes, transfer_history_
 				"name": name,
 				"item": item,
 				"fabric": _value(source, "fabric") or "",
-				"dia": _value(source, "dia") or "",
+				"dia": attribute_value_labels.get(_value(source, "dia"), _value(source, "dia") or ""),
 				"gsm": flt(_value(source, "gsm")),
 				"production_detail": _value(source, "production_detail") or "",
 				"production_term": _value(source, "production_term") or "",
@@ -409,7 +428,15 @@ def get_ppo_report(filters=None) -> dict:
 		for name, item in item_by_order.items()
 	}
 	details = attach_variant_primary_values(details, primary_attribute_by_parent)
-	return build_report(orders, details, load_size_types(), item_attributes, transfer_history_by_order)
+	attribute_value_labels = load_attribute_value_labels(_value(row, "dia") for row in orders)
+	return build_report(
+		orders,
+		details,
+		load_size_types(),
+		item_attributes,
+		transfer_history_by_order,
+		attribute_value_labels=attribute_value_labels,
+	)
 
 
 def pivot_dispatch_rows(rows) -> dict:

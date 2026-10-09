@@ -31,6 +31,24 @@ class TestSalesPpoReport(TestCase):
 		with patch.object(frappe, "get_all", side_effect=fake_get_all):
 			self.assertEqual(ppo_report.load_size_types(), [{"label": "Apparel", "sizes": ["S", "M"]}])
 
+	def test_attribute_value_labels_are_loaded_in_one_query(self):
+		with patch.object(
+			frappe,
+			"get_all",
+			return_value=[
+				{"name": "IAV-30", "attribute_value": "30 Dia"},
+				{"name": "IAV-34", "attribute_value": "34 Dia"},
+			],
+		) as get_all:
+			result = ppo_report.load_attribute_value_labels(["IAV-34", "IAV-30", "IAV-34", ""])
+
+		self.assertEqual(result, {"IAV-30": "30 Dia", "IAV-34": "34 Dia"})
+		get_all.assert_called_once_with(
+			"YRP Item Attribute Value",
+			filters={"name": ["in", ["IAV-34", "IAV-30"]]},
+			fields=["name", "attribute_value"],
+		)
+
 	def test_report_requires_report_permission(self):
 		with patch.object(frappe, "has_permission", return_value=False):
 			with self.assertRaises(frappe.PermissionError):
@@ -118,7 +136,7 @@ class TestSalesPpoReport(TestCase):
 				"name": "PPO-2",
 				"item": "One Size Sock",
 				"fabric": "Cotton Rib",
-				"dia": "18 Dia",
+				"dia": "IAV-18",
 				"gsm": 180,
 				"delivery_date": "2026-10-15",
 				"posting_date": "2026-10-02",
@@ -159,6 +177,7 @@ class TestSalesPpoReport(TestCase):
 					"counterpart_production_order": "PPO-2", "size": "M", "quantity": 4,
 				}],
 			},
+			attribute_value_labels={"IAV-18": "18 Dia"},
 		)
 
 		self.assertEqual([row["name"] for row in result["orders"]], ["PPO-1", "PPO-2"])

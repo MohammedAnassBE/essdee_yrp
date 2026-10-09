@@ -25,7 +25,7 @@ async function noOverflow(page, label) {
 	const geometry = await page.evaluate(() => ({
 		viewport: innerWidth,
 		page: document.documentElement.scrollWidth,
-		containers: [".ppo-action-dialog", ".p-dialog-content", ".ppo-action-matrix", ".ppo-action-matrix table", ".fabric-document-workspace", ".fabric-document-workspace__content", ".fabric-document-workspace__columns", ".fabric-document-workspace__main", ".ppo-matrix__table-wrap"].map((selector) => {
+		containers: [".ppo-action-dialog", ".p-dialog-content", ".ppo-action-matrix", ".ppo-action-matrix table", ".fabric-document-workspace", ".fabric-document-workspace__content", ".fabric-document-workspace__columns", ".fabric-document-workspace__main", ".ppo-matrix__table-wrap", ".sales-reports", ".ppo-report", ".report-shell", ".report-shell__results", ".ppo-report__matrix-wrap", ".p-autocomplete-overlay", ".p-select-overlay"].map((selector) => {
 			const element = document.querySelector(selector)
 			if (!element) return { selector, missing: true }
 			const box = element.getBoundingClientRect(), style = getComputedStyle(element)
@@ -114,6 +114,7 @@ function ppoReportFixture() {
 				production_term: "5 Piece Pack", posting_date: "2026-10-09", delivery_date: "2026-10-20",
 				dont_deliver_after: "2026-10-25", lead_time: 11, status: "Open", comments: "Priority retail order",
 				group_label: "Mens", group_sizes: ["S", "M", "L"], qty_by_position: [40, 80, 0], total: 120,
+				transfer_summary: "Reduced 5 to PPO-TEST-2 (S: 5)", transfer_movements: [{ movement: "Reduced", counterpart_production_order: "PPO-TEST-2", quantity: 5, sizes: { S: 5 }, detail_summary: "Reduced 5 to PPO-TEST-2 (S: 5)" }],
 			},
 			{
 				name: "PPO-TEST-2", item: "Junior Capri", fabric: "Single Jersey", dia: "30 Dia", gsm: 160, production_detail: "Junior Capri-2",
@@ -172,7 +173,7 @@ function sourceChecks() {
 	}
 	if (["reports", "all"].includes(suite)) assert(reports >= 0, "Sales Reports route is missing")
 	const api = readFileSync("frontend/src/api/sales.js", "utf8")
-	for (const method of ["get_capabilities", "get_production_order_workspace", "get_production_order_editor", "save_production_order", "execute_production_order_command", "get_ppo_report", "get_ppo_dispatch_summary", "download_ppo_report"]) {
+	for (const method of ["get_capabilities", "get_production_order_workspace", "get_production_order_editor", "save_production_order", "execute_production_order_command", "get_ppo_report", "get_ppo_dispatch_summary", "get_ppo_dispatch_summary_bulk", "download_ppo_report"]) {
 		assert(api.includes(method), `Sales API is missing ${method}`)
 	}
 }
@@ -180,6 +181,7 @@ function sourceChecks() {
 async function reportSuite(page) {
 	const reportRequests = []
 	const dispatchRequests = []
+	const bulkDispatchRequests = []
 	const downloads = []
 	let reportResult = ppoReportFixture()
 	let failNextReport = false
@@ -204,6 +206,13 @@ async function reportSuite(page) {
 			dispatchRequests.push(args)
 			return reply(route, { sizes: ["S", "M"], rows: [{ date: "2026-10-18", lot: "LOT-26-0042", sizes: { S: 10, M: 20 }, total: 30 }] })
 		}
+		if (method === "essdee_yrp.sales.web_workspace.get_ppo_dispatch_summary_bulk") {
+			bulkDispatchRequests.push(args)
+			return reply(route, {
+				"PPO-TEST-1": { sizes: ["S", "M"], rows: [{ date: "2026-10-18", lot: "LOT-26-0042", sizes: { S: 10, M: 20 }, total: 30 }] },
+				"PPO-TEST-2": { sizes: [], rows: [] },
+			})
+		}
 		if (method === "essdee_yrp.sales.web_workspace.download_ppo_report") {
 			downloads.push(args)
 			return route.fulfill({
@@ -212,7 +221,11 @@ async function reportSuite(page) {
 				body: "sales-report",
 			})
 		}
-		if (method === "essdee_yrp.api.link_search.link_search") return reply(route, [{ name: "Menswear", label: "Menswear" }])
+		if (method === "essdee_yrp.api.link_search.link_search") {
+			return reply(route, args.doctype === "Item"
+				? [{ name: "Premium Vest", label: "Premium Vest" }]
+				: [{ name: "Menswear", label: "Menswear" }])
+		}
 		return route.continue()
 	})
 
@@ -223,9 +236,15 @@ async function reportSuite(page) {
 	assert(await page.getByRole("tab").count() === 0, "A single Sales report must not add a redundant tab strip")
 
 	await page.getByLabel("Status").click()
+	const statusLabels = await page.getByRole("option").allTextContents()
+	for (const status of ["Draft", "PPO Request", "Open", "Pending Request", "Item Changed", "Not Processed", "Close Request", "Closed"]) {
+		assert(statusLabels.includes(status), `PPO status ${status} is missing: ${JSON.stringify(statusLabels)}`)
+	}
 	await page.getByRole("option", { name: "Open", exact: true }).click()
 	await page.getByRole("combobox", { name: "Product Category", exact: true }).fill("Mens")
 	await page.getByRole("option", { name: "Menswear", exact: true }).click()
+	await page.getByRole("combobox", { name: "Item", exact: true }).fill("Premium")
+	await page.getByRole("option", { name: "Premium Vest", exact: true }).click()
 	await page.getByLabel("From Date").fill("01-10-2026")
 	await page.getByLabel("From Date").press("Tab")
 	await page.getByLabel("To Date").fill("31-10-2026")
@@ -233,26 +252,35 @@ async function reportSuite(page) {
 	await page.getByRole("button", { name: "Generate", exact: true }).click()
 	await page.getByText("PPO-TEST-1", { exact: true }).waitFor()
 	assert(reportRequests.length === 1, `Generate fetched ${reportRequests.length} times`)
-	assert(JSON.stringify(reportRequests[0]?.filters) === JSON.stringify({ status: "Open", product_category: "Menswear", from_date: "2026-10-01", to_date: "2026-10-31" }), `Report filters are incomplete: ${JSON.stringify(reportRequests[0])}`)
+	assert(JSON.stringify(reportRequests[0]?.filters) === JSON.stringify({ status: "Open", product_category: "Menswear", item: ["Premium Vest"], from_date: "2026-10-01", to_date: "2026-10-31" }), `Report filters are incomplete: ${JSON.stringify(reportRequests[0])}`)
 	const report = page.locator(".ppo-report")
 	const reportText = await report.innerText()
-	assert(reportText.includes("2") && reportText.includes("220") && reportText.includes("2 size groups"), `Report summary is incomplete: ${reportText}`)
+	assert(reportText.includes("TOTAL ORDERS") && reportText.includes("TOTAL QUANTITY") && reportText.includes("SIZE GROUPS") && reportText.includes("220"), `Report summary is incomplete: ${reportText}`)
 	const header = await report.locator(".ppo-report__matrix thead").innerText()
 	for (const value of ["MENS", "S", "M", "L", "KIDS", "28", "30"]) assert(header.includes(value), `Mixed size header ${value} is missing: ${header}`)
+	assert(await report.locator(".ppo-report__size-group-row").count() === 2, "Size groups must stack as header rows like the production_api report")
+	assert(await report.locator(".ppo-report__matrix tbody tr").first().locator(".ppo-report__quantity").count() === 3, "Orders must use one positional size block instead of multiplying columns by every group")
+	assert(!(await report.locator(".ppo-report__matrix thead").innerText()).includes("FABRIC"), "Fabric must be hidden until requested")
+	await report.getByRole("button", { name: "Show Fabric", exact: true }).click()
+	assert((await report.locator(".ppo-report__matrix thead").innerText()).includes("FABRIC"), "Fabric toggle did not reveal its column")
+	assert(reportText.includes("Reduced 5 to PPO-TEST-2"), "Quantity transfer summary is missing")
 	assert(reportText.includes("20-10-2026") && reportText.includes("25-10-2026") && !reportText.includes("2026-10-20"), "Report dates must use DD-MM-YYYY")
 	assert((await report.locator("tfoot").innerText()).includes("220"), "Report totals row is missing")
 
-	await report.getByRole("button", { name: "Show dispatch for PPO-TEST-1", exact: true }).click()
+	await report.getByRole("button", { name: "Summarize", exact: true }).first().click()
 	await report.getByText("LOT-26-0042", { exact: true }).waitFor()
 	assert(dispatchRequests.length === 1 && dispatchRequests[0]?.production_order === "PPO-TEST-1", `Dispatch summary request is wrong: ${JSON.stringify(dispatchRequests)}`)
 	const dispatchText = await report.locator(".ppo-report__dispatch").innerText()
 	assert(dispatchText.includes("18-10-2026") && dispatchText.includes("30"), `Dispatch summary is incomplete: ${dispatchText}`)
+	await report.getByRole("button", { name: "Summarized", exact: true }).click()
+	await report.getByText("No submitted dispatches for this Production Order.", { exact: true }).waitFor()
+	assert(bulkDispatchRequests.length === 1, `Summarized must use one bulk request: ${JSON.stringify(bulkDispatchRequests)}`)
 
 	const downloadEvent = page.waitForEvent("download")
 	await page.getByRole("button", { name: "Download Excel", exact: true }).click()
 	const download = await downloadEvent
 	assert(download.suggestedFilename() === "PPO_Report_09-10-2026.xlsx", `Excel filename is wrong: ${download.suggestedFilename()}`)
-	assert(JSON.stringify(downloads[0]) === JSON.stringify({ status: "Open", product_category: "Menswear", from_date: "2026-10-01", to_date: "2026-10-31" }), `Excel filters differ from generated report: ${JSON.stringify(downloads[0])}`)
+	assert(JSON.stringify(downloads[0]) === JSON.stringify({ status: "Open", product_category: "Menswear", item: ["Premium Vest"], from_date: "2026-10-01", to_date: "2026-10-31" }), `Excel filters differ from generated report: ${JSON.stringify(downloads[0])}`)
 
 	reportResult = { orders: [], size_groups: [], max_columns: 0, summary: { total_orders: 0, total_quantity: 0, size_groups: 0 } }
 	await page.getByRole("button", { name: "Generate", exact: true }).click()
@@ -273,6 +301,8 @@ async function reportSuite(page) {
 		await noOverflow(page, `PPO Report at ${width}`)
 		const geometry = await page.locator(".ppo-report__matrix-wrap").evaluate((element) => ({ overflowX: getComputedStyle(element).overflowX, clientWidth: element.clientWidth, scrollWidth: element.scrollWidth }))
 		assert(geometry.overflowX === "auto", `Wide PPO matrix lacks local horizontal flow at ${width}: ${JSON.stringify(geometry)}`)
+		const tableFlow = await page.locator(".ppo-report__matrix-wrap").evaluate((element) => ({ overflowY: getComputedStyle(element).overflowY, maxHeight: getComputedStyle(element).maxHeight }))
+		assert(tableFlow.maxHeight !== "none" && tableFlow.overflowY === "auto", `PPO table must keep the bounded two-axis report viewport from the production_api reference: ${JSON.stringify(tableFlow)}`)
 		if (width === 1600 && process.env.ESSDEE_SALES_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SALES_SCREENSHOTS}/ppo-report.png`, fullPage: true, animations: "disabled" })
 	}
 	console.log("PASS reports: explicit filters, mixed size matrix, totals, dispatch, dates, Excel, empty/error states, responsive flow")

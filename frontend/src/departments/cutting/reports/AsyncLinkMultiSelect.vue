@@ -3,6 +3,8 @@
 		<span class="erp-field-label">{{ label }}</span>
 		<AutoComplete
 			v-model="selected"
+			:input-id="inputId"
+			:aria-label="label"
 			:suggestions="suggestions"
 			option-label="label"
 			:placeholder="placeholder"
@@ -17,7 +19,7 @@
 
 <script setup>
 import AutoComplete from "primevue/autocomplete"
-import { ref, watch } from "vue"
+import { computed, ref, watch } from "vue"
 
 import { searchLink } from "../../../api/frappe.js"
 
@@ -30,6 +32,8 @@ const props = defineProps({
 	filters: { type: Object, default: () => ({}) },
 })
 const emit = defineEmits(["update:modelValue"])
+
+const inputId = computed(() => `async-multi-${props.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`)
 
 const selected = ref([])
 const suggestions = ref([])

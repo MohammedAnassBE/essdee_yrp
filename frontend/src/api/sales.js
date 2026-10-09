@@ -40,6 +40,10 @@ export function getPpoDispatchSummary(productionOrder) {
 	return callMethod(`${METHOD}.get_ppo_dispatch_summary`, { production_order: productionOrder })
 }
 
+export function getPpoDispatchSummaryBulk(productionOrders) {
+	return callMethod(`${METHOD}.get_ppo_dispatch_summary_bulk`, { production_orders: productionOrders })
+}
+
 export function downloadPpoReport(filters = {}) {
 	return downloadMethodFile(`${METHOD}.download_ppo_report`, filters, "PPO_Report.xlsx")
 }

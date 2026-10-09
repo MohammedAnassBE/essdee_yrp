@@ -496,5 +496,10 @@ def get_ppo_dispatch_summary(production_order: str) -> dict:
 
 
 @frappe.whitelist()
-def download_ppo_report(from_date=None, to_date=None, product_category=None, status=None):
-	return ppo_report.download_ppo_report(from_date, to_date, product_category, status)
+def get_ppo_dispatch_summary_bulk(production_orders) -> dict:
+	return ppo_report.get_ppo_dispatch_summary_bulk(production_orders)
+
+
+@frappe.whitelist()
+def download_ppo_report(from_date=None, to_date=None, product_category=None, status=None, item=None):
+	return ppo_report.download_ppo_report(from_date, to_date, product_category, status, item)

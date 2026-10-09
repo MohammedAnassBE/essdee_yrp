@@ -1,7 +1,6 @@
 <template>
 	<section data-sewing-plan-tab="consumption" class="sewing-consumption" :aria-busy="loading || state.busy" aria-label="Sewing consumption">
-		<header><div><h2>Consumption</h2><p>Record consumption for one Sewing Unit and Lot.</p></div><Button label="Refresh" aria-label="Refresh consumption" icon="pi pi-refresh" severity="secondary" :disabled="!state.lot || loading || state.busy" @click="load()" /></header>
-		<div class="sewing-consumption__filters"><LinkField v-model="state.lot" doctype="SD YRP Lot" label="Lot" placeholder="Select a Lot" help-text="Lots for the selected Sewing Unit only." :show-open-button="false" show-clear :disabled="loading || state.busy" :search-handler="searchLots" /></div>
+		<div class="sewing-consumption__toolbar"><div class="sewing-consumption__filters"><LinkField v-model="state.lot" doctype="SD YRP Lot" label="Lot" placeholder="Select a Lot" :show-open-button="false" show-clear :disabled="loading || state.busy" :search-handler="searchLots" /></div><Button label="Refresh" aria-label="Refresh consumption" icon="pi pi-refresh" severity="secondary" :disabled="!state.lot || loading || state.busy" @click="load()" /></div>
 		<p v-if="!state.lot" class="erp-empty-state">Select a Lot to view consumption mappings.</p>
 		<div v-else-if="loading && !state.data" role="status"><p>Loading consumption mappings</p><Skeleton height="160px" /></div>
 		<WorkspaceLoadError v-else-if="state.loadError && !state.data" message="Retry to load consumption mappings." @retry="load()" />
@@ -9,8 +8,7 @@
 			<Message v-if="state.loadError" severity="warn" :closable="false">Displayed consumption may be out of date. Your draft is retained. <Button label="Retry" text :disabled="loading || state.busy" @click="load()" /></Message>
 			<p v-if="loading" role="status">Refreshing consumption…</p>
 			<Message v-if="state.refreshRequired" severity="warn" :closable="false">Consumption was saved. Refresh the mapping before saving again.</Message>
-			<div class="sewing-consumption__context"><span>{{ supplier }}</span><span>{{ state.lot }}</span><strong>{{ state.data.ipd }}</strong></div>
-			<p class="sewing-consumption__help">BOM quantities, attributes and UOM are read-only. Edit consumption quantities and Consumption Weight.</p>
+			<div class="sewing-consumption__context"><strong>{{ state.data.ipd }}</strong></div>
 			<p v-if="!state.data.sections?.length && !state.data.cloth_acc_data?.length" class="erp-empty-state">No consumption mappings for this Lot.</p>
 			<SewingConsumptionTable v-for="(section, index) in state.data.sections || []" :key="index" :label="section.item" :uom="section.item_bom_uom" :columns="section.item_attributes" :rows="section.rows" show-bom values-in-row :disabled="loading || state.busy || state.refreshRequired || !canWrite" @edit="edit(section.rows[$event.index], 'quantity', $event.value)" />
 			<template v-for="(group, index) in state.data.cloth_acc_data || []" :key="index">
@@ -110,13 +108,12 @@ onBeforeUnmount(() => { mounted = false; beginRequest() })
 
 <style scoped>
 .sewing-consumption { min-width: 0; max-width: 100%; }
-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
-h2 { margin: 0; color: var(--erp-text); font-size: 16px; }
 p { margin: 5px 0 0; font-size: var(--erp-font-size-caption); color: var(--erp-text-muted); }
-.sewing-consumption__filters { display: grid; grid-template-columns: minmax(0, 320px); margin-bottom: 16px; }
+.sewing-consumption__toolbar { display: flex; align-items: flex-end; gap: var(--erp-space-3); margin-bottom: var(--erp-space-3); }
+.sewing-consumption__filters { display: grid; width: min(360px, 100%); grid-template-columns: minmax(0, 1fr); }
 .sewing-consumption__filters > * { min-width: 0; }
-.sewing-consumption__context { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-block: 14px 6px; font-size: var(--erp-font-size-caption); color: var(--erp-text-secondary); overflow-wrap: anywhere; }
-.sewing-consumption__help { margin: 0 0 12px; }
+.sewing-consumption__context { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-block: 10px 6px; color: var(--erp-text); font-size: 14px; overflow-wrap: anywhere; }
 .sewing-consumption__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-block: 8px 14px; }
 small { color: var(--erp-text-muted); font-size: 11px; }
+@media (max-width: 600px) { .sewing-consumption__toolbar { align-items: stretch; flex-direction: column; } .sewing-consumption__toolbar > .p-button { align-self: flex-start; } }
 </style>

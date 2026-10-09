@@ -5,8 +5,10 @@
 			:items="workspaces(capabilities, supplier)"
 			empty-text="No permitted Sewing workspaces"
 			:skeleton-count="3"
+			eyebrow=""
 			compact
 		>
+			<template #navigation><SewingBackLink to="/" label="Workspaces" /></template>
 			<template #context><SewingUnitPicker /></template>
 		</WorkspaceLauncher>
 	</SewingWorkspaceShell>
@@ -14,6 +16,7 @@
 
 <script setup>
 import WorkspaceLauncher from "../../components/common/WorkspaceLauncher.vue"
+import SewingBackLink from "./SewingBackLink.vue"
 import SewingWorkspaceShell from "./SewingWorkspaceShell.vue"
 import SewingUnitPicker from "./SewingUnitPicker.vue"
 

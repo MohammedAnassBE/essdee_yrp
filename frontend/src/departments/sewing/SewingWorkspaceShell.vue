@@ -7,14 +7,12 @@
 		:show-title="false"
 		flat
 		full-width
+		hide-navigation
 	>
 		<section class="sewing-workspace-shell erp-workspace" :aria-label="title" :aria-busy="loading">
-			<header v-if="section" class="erp-page-header">
-				<div class="sewing-workspace-shell__heading">
-					<p class="erp-page-header__eyebrow">Sewing workspace</p>
-					<h1>{{ title }}</h1>
-					<SewingUnitPicker v-if="section !== 'attendance'" />
-				</div>
+			<header v-if="section || loading || failed" class="sewing-workspace-shell__header">
+				<div class="sewing-workspace-shell__title"><SewingBackLink :to="backTo" :label="section ? 'Sewing' : 'Workspaces'" /><h1>{{ title }}</h1></div>
+				<SewingUnitPicker v-if="section !== 'attendance'" />
 			</header>
 			<div v-if="loading" class="sewing-workspace-shell__loading" role="status">
 				<span class="sewing-workspace-shell__status">Loading Sewing workspace</span>
@@ -43,6 +41,7 @@ import { getSewingCapabilities } from "../../api/sewing.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import SewingBackLink from "./SewingBackLink.vue"
 import SewingUnitPicker from "./SewingUnitPicker.vue"
 import { useSewingContext } from "./useSewingContext.js"
 
@@ -88,14 +87,17 @@ onUnmounted(() => { capabilityGeneration++ })
 
 <style scoped>
 .sewing-workspace-shell { width: 100%; max-width: none; min-width: 0; margin: 0; padding: 0 4px var(--erp-space-4); }
-.sewing-workspace-shell > .erp-page-header { margin-bottom: var(--erp-space-4); }
-.sewing-workspace-shell__heading { width: 100%; min-width: 0; }
-.sewing-workspace-shell__heading .sewing-unit-picker { margin-top: var(--erp-space-3); }
+.sewing-workspace-shell__header { display: flex; align-items: center; justify-content: space-between; gap: var(--erp-space-4); margin-bottom: var(--erp-space-3); }
+.sewing-workspace-shell__title { display: flex; min-width: 0; align-items: center; gap: var(--erp-space-3); }
+.sewing-workspace-shell__title h1 { margin: 0; color: var(--erp-text); font-size: clamp(1.45rem, 2vw, 1.8rem); font-weight: var(--erp-font-weight-bold); letter-spacing: -0.035em; line-height: 1.1; }
+.sewing-workspace-shell__header .sewing-unit-picker { flex: 0 1 380px; }
 .sewing-workspace-shell__loading { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--erp-space-4); padding-top: var(--erp-space-4); }
 .sewing-workspace-shell__status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 .sewing-workspace-shell :deep(.workspace-launcher) { padding-inline: 0; }
 @media (max-width: 760px) {
 	.sewing-workspace-shell { padding-inline: 2px; }
+	.sewing-workspace-shell__header { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--erp-space-2); }
+	.sewing-workspace-shell__header .sewing-unit-picker { width: 100%; max-width: none; }
 	.sewing-workspace-shell__loading { grid-template-columns: 1fr; }
 }
 </style>

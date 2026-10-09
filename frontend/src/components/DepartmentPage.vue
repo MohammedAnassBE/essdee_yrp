@@ -8,7 +8,7 @@
 		}"
 		:style="{ '--accent': accent }"
 	>
-		<nav v-if="!inlineNavigation" class="department-page__nav erp-page-nav" :aria-label="`Back to ${backLabel}`">
+		<nav v-if="!inlineNavigation && !hideNavigation" class="department-page__nav erp-page-nav" :aria-label="`Back to ${backLabel}`">
 			<RouterLink v-slot="{ navigate }" custom :to="backTo">
 				<Button
 					class="back-link"
@@ -73,6 +73,10 @@ const props = defineProps({
 		default: "Workspaces",
 	},
 	inlineNavigation: {
+		type: Boolean,
+		default: false,
+	},
+	hideNavigation: {
 		type: Boolean,
 		default: false,
 	},

@@ -6,14 +6,14 @@
 		:aria-busy="loading"
 	>
 		<header class="erp-page-header workspace-launcher__header">
-			<InlinePageNavigation :title-target="headingId" />
+			<slot name="navigation">
+				<InlinePageNavigation :title-target="headingId" />
+			</slot>
 			<div class="workspace-launcher__title">
-				<p class="erp-page-header__eyebrow">Department workspace</p>
+				<p v-if="eyebrow" class="erp-page-header__eyebrow">{{ eyebrow }}</p>
 				<h1 :id="headingId">{{ title }}</h1>
-				<div v-if="$slots.context" class="workspace-launcher__context">
-					<slot name="context" />
-				</div>
 			</div>
+			<div v-if="$slots.context" class="workspace-launcher__context"><slot name="context" /></div>
 		</header>
 
 		<div v-if="loading" class="workspace-launcher__grid" aria-label="Loading workspaces">
@@ -55,6 +55,7 @@ const props = defineProps({
 	emptyText: { type: String, default: "No permitted workspaces" },
 	skeletonCount: { type: Number, default: 4 },
 	compact: { type: Boolean, default: false },
+	eyebrow: { type: String, default: "Department workspace" },
 })
 
 const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-workspace-title`)
@@ -67,12 +68,11 @@ const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]
 	padding: clamp(24px, 4vw, 48px) 8px;
 }
 
-.workspace-launcher__header { display: flex; align-items: center; gap: 10px; margin-bottom: var(--erp-space-6); }
+.workspace-launcher__header { display: flex; align-items: center; justify-content: flex-start; flex-direction: row; gap: 10px; margin-bottom: var(--erp-space-6); }
 .workspace-launcher__title { min-width: 0; }
-.workspace-launcher__context { width: min(380px, 100%); margin-top: var(--erp-space-3); }
+.workspace-launcher__context { width: min(380px, 100%); margin-left: auto; }
 .workspace-launcher--compact { width: 100%; max-width: none; margin: 0; padding: 8px 0 var(--erp-space-5); }
-.workspace-launcher--compact .workspace-launcher__header { align-items: flex-start; margin-bottom: var(--erp-space-5); }
-.workspace-launcher--compact .workspace-launcher__title { width: 100%; }
+.workspace-launcher--compact .workspace-launcher__header { align-items: center; margin-bottom: var(--erp-space-4); }
 
 .workspace-launcher__header h1 {
 	margin: 0;
@@ -192,6 +192,9 @@ const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]
 @media (max-width: 760px) {
 	.workspace-launcher { padding: 24px 2px; }
 	.workspace-launcher--compact { padding: 6px 0 var(--erp-space-4); }
+	.workspace-launcher__header { align-items: center; flex-direction: row; }
+	.workspace-launcher--compact .workspace-launcher__header { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--erp-space-2) var(--erp-space-3); }
+	.workspace-launcher--compact .workspace-launcher__context { grid-column: 2; width: 100%; margin: 0; }
 	.workspace-launcher__grid { grid-template-columns: 1fr; }
 	.workspace-launcher__card { min-height: 108px; padding: 14px; }
 	.workspace-launcher__body small {

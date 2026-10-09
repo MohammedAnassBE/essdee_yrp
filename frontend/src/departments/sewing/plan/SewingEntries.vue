@@ -1,10 +1,12 @@
 <template>
 	<section data-sewing-plan-tab="entries" class="sewing-entries" :aria-busy="loading || state.busy" aria-label="Sewing entries">
-		<header><div><h2>Entries</h2><p>Saved inputs grouped by entry date.</p></div><Button label="Refresh" aria-label="Refresh entries" icon="pi pi-refresh" severity="secondary" :disabled="loading || state.busy" @click="load()" /></header>
-		<div class="sewing-entries__filters">
-			<LinkField v-model="state.filters.workStation" doctype="YRP Work Station" label="Work Station" placeholder="All Work Stations" :show-open-button="false" show-clear :disabled="loading || state.busy" :search-handler="text => search('YRP Work Station', text)" />
-			<LinkField v-model="state.filters.inputType" doctype="SD YRP Sewing Plan Input Type" label="Input Type" placeholder="All Input Types" :show-open-button="false" show-clear :disabled="loading || state.busy" :search-handler="text => search('SD YRP Sewing Plan Input Type', text)" />
-			<LinkField v-model="state.filters.lot" doctype="SD YRP Lot" label="Lot" placeholder="All Lots" :show-open-button="false" show-clear :disabled="loading || state.busy" :search-handler="text => search('SD YRP Lot', text)" />
+		<div class="sewing-entries__toolbar">
+			<div class="sewing-entries__filters">
+				<LinkField v-model="state.filters.workStation" doctype="YRP Work Station" label="Work Station" placeholder="All Work Stations" :show-open-button="false" show-clear :disabled="loading || state.busy" :search-handler="text => search('YRP Work Station', text)" />
+				<LinkField v-model="state.filters.inputType" doctype="SD YRP Sewing Plan Input Type" label="Input Type" placeholder="All Input Types" :show-open-button="false" show-clear :disabled="loading || state.busy" :search-handler="text => search('SD YRP Sewing Plan Input Type', text)" />
+				<LinkField v-model="state.filters.lot" doctype="SD YRP Lot" label="Lot" placeholder="All Lots" :show-open-button="false" show-clear :disabled="loading || state.busy" :search-handler="text => search('SD YRP Lot', text)" />
+			</div>
+			<Button label="Refresh" aria-label="Refresh entries" icon="pi pi-refresh" severity="secondary" :disabled="loading || state.busy" @click="load()" />
 		</div>
 		<div v-if="!loaded && (loading || state.busy)" role="status"><p>{{ state.busy ? 'Cancelling entry' : 'Loading entries' }}</p><Skeleton height="160px" /></div>
 		<WorkspaceLoadError v-else-if="loadError && !loaded" message="Retry to load Sewing entries." @retry="load()" />
@@ -114,15 +116,16 @@ onBeforeUnmount(() => { mounted = false; beginRequest() })
 
 <style scoped>
 .sewing-entries { min-width: 0; max-width: 100%; }
-header, .sewing-entries__record-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
-h2, h3 { margin: 0; color: var(--erp-text); font-size: 16px; }
-h3 { font-size: 14px; margin-bottom: 10px; }
+.sewing-entries__record-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
+h3 { margin: 0 0 8px; color: var(--erp-text); font-size: 15px; letter-spacing: -0.01em; }
 p { margin: 5px 0 0; font-size: var(--erp-font-size-caption); color: var(--erp-text-muted); }
-.sewing-entries__filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.sewing-entries__toolbar { display: flex; align-items: flex-end; gap: var(--erp-space-3); margin-bottom: var(--erp-space-3); }
+.sewing-entries__toolbar > .p-button { flex: 0 0 auto; }
+.sewing-entries__filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; min-width: 0; flex: 1; }
 .sewing-entries__filters > * { min-width: 0; }
-.sewing-entries__date { margin-top: 20px; }
+.sewing-entries__date { margin-top: var(--erp-space-4); }
 .sewing-entries__record { min-width: 0; margin-bottom: 16px; }
 .sewing-entries__context { display: flex; flex-wrap: wrap; gap: 6px 14px; min-width: 0; overflow-wrap: anywhere; color: var(--erp-text-secondary); font-size: var(--erp-font-size-caption); }
 .sewing-entries__record-heading :deep(.p-button) { flex-shrink: 0; }
-@media (max-width: 700px) { .sewing-entries__filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sewing-entries__record-heading { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 700px) { .sewing-entries__toolbar { align-items: stretch; flex-direction: column; } .sewing-entries__toolbar > .p-button { align-self: flex-start; } .sewing-entries__filters { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); } .sewing-entries__record-heading { align-items: flex-start; flex-direction: column; } }
 </style>

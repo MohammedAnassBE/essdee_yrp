@@ -1,23 +1,20 @@
 <template>
 	<section data-sewing-plan-tab="data-entry" class="sewing-data-entry" :aria-busy="loading || busy" aria-label="Sewing data entry">
-		<header class="sewing-data-entry__header">
-			<div><h2>Data Entry</h2><p>Choose a Sewing Plan and record its production without applying a filter first.</p></div>
-			<Button label="Refresh" aria-label="Refresh data entry" icon="pi pi-refresh" severity="secondary" :disabled="loading || busy" @click="load()" />
-		</header>
+		<div class="sewing-data-entry__commands"><Button label="Refresh" aria-label="Refresh data entry" icon="pi pi-refresh" severity="secondary" :disabled="loading || busy" @click="load()" /></div>
 		<div v-if="loading && !loaded" role="status"><p>Loading Sewing Plans</p><Skeleton height="180px" /></div>
 		<WorkspaceLoadError v-else-if="loadError && !loaded" message="Retry to load Sewing Plans." @retry="load()" />
 		<template v-else>
 			<p v-if="loading && loaded" role="status">Refreshing Sewing Plans…</p>
 			<Message v-if="loadError && !editor" severity="warn" :closable="false">Displayed Sewing Plans may be out of date. <Button label="Retry" text :disabled="loading || busy" @click="load()" /></Message>
 			<div class="sewing-data-entry__toolbar">
-				<div class="common-field"><label for="sewing-lot">Lot</label><Select input-id="sewing-lot" v-model="filters.lot" :options="lots" aria-label="Lot" placeholder="All Lots" show-clear :disabled="loading || busy" fluid /><small>Optional — all available plans are shown by default.</small></div>
+				<div class="common-field"><label for="sewing-lot">Lot</label><Select input-id="sewing-lot" v-model="filters.lot" :options="lots" aria-label="Lot" placeholder="All Lots" show-clear :disabled="loading || busy" fluid /></div>
 				<span v-if="plans.length" class="sewing-data-entry__count">{{ plans.length }} {{ plans.length === 1 ? 'plan' : 'plans' }}</span>
 			</div>
 			<p v-if="!Object.keys(response.data || {}).length" class="erp-empty-state">No Sewing Plans for this Sewing Unit.</p>
 			<p v-else-if="!plans.length" class="erp-empty-state">No Sewing Plans match this Lot.</p>
 			<div v-else class="sewing-data-entry__groups">
 				<section v-for="group in planGroups" :key="group.lot" class="sewing-data-entry__lot" :aria-labelledby="group.headingId">
-					<header class="sewing-data-entry__lot-header"><div><span>Lot</span><h3 :id="group.headingId">{{ group.lot }}</h3></div><small>{{ group.plans.length }} {{ group.plans.length === 1 ? 'plan' : 'plans' }}</small></header>
+					<header class="sewing-data-entry__lot-header"><h3 :id="group.headingId">{{ group.lot }}</h3><small>{{ group.plans.length }} {{ group.plans.length === 1 ? 'plan' : 'plans' }}</small></header>
 					<div class="sewing-data-entry__cards">
 						<article v-for="plan in group.plans" :key="plan.name" class="sewing-data-entry__plan-card erp-card" :data-sewing-plan-card="plan.name">
 							<header><div><h4>{{ plan.name }}</h4><p>{{ plan.data.details?.work_order || 'No Work Order' }} · {{ plan.data.details?.work_order_status || 'Status unavailable' }}</p></div><span class="erp-status erp-status--success">Ready</span></header>
@@ -242,20 +239,20 @@ onUnmounted(() => { mounted = false; beginRequest() })
 
 <style scoped>
 .sewing-data-entry { min-width: 0; max-width: 100%; }
-.sewing-data-entry__header, .sewing-data-entry__inspection-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
-h2, h3 { margin: 0; color: var(--erp-text); font-size: 16px; }
-h4 { margin: 0; color: var(--erp-text); font-size: 14px; }
+.sewing-data-entry__commands { display: flex; justify-content: flex-end; margin-bottom: var(--erp-space-2); }
+.sewing-data-entry__inspection-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+h3 { margin: 0; color: var(--erp-text); font-size: 16px; }
+h4 { margin: 0; color: var(--erp-text); font-size: 15px; }
 p { margin: 5px 0 0; font-size: var(--erp-font-size-caption); color: var(--erp-text-muted); }
-.sewing-data-entry__toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--erp-space-4); margin-bottom: var(--erp-space-4); padding-bottom: var(--erp-space-3); border-bottom: 1px solid var(--erp-border-subtle); }
+.sewing-data-entry__toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--erp-space-4); margin-bottom: var(--erp-space-3); padding-bottom: var(--erp-space-3); border-bottom: 1px solid var(--erp-border-subtle); }
 .sewing-data-entry__toolbar .common-field { width: min(340px, 100%); }
 .sewing-data-entry__count { flex: 0 0 auto; padding: 4px 9px; color: var(--erp-accent-dark); font-size: 11px; font-weight: var(--erp-font-weight-bold); background: var(--erp-accent-soft); border: 1px solid var(--erp-accent-border); border-radius: var(--erp-pill-radius); }
-.sewing-data-entry__groups { display: grid; gap: var(--erp-space-5); }
+.sewing-data-entry__groups { display: grid; gap: var(--erp-space-4); }
 .sewing-data-entry__lot { min-width: 0; }
-.sewing-data-entry__lot-header { display: flex; align-items: end; justify-content: space-between; gap: var(--erp-space-3); margin-bottom: 10px; padding-inline: 2px; }
-.sewing-data-entry__lot-header span { display: block; margin-bottom: 2px; color: var(--erp-accent-dark); font-size: 10px; font-weight: var(--erp-font-weight-bold); letter-spacing: 0.08em; text-transform: uppercase; }
-.sewing-data-entry__lot-header h3 { font-size: 15px; }
+.sewing-data-entry__lot-header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--erp-space-3); margin-bottom: 8px; padding-inline: 2px; }
+.sewing-data-entry__lot-header h3 { font-size: 17px; letter-spacing: -0.02em; }
 .sewing-data-entry__cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--erp-space-3); }
-.sewing-data-entry__plan-card { display: grid; gap: var(--erp-space-3); min-width: 0; padding: var(--erp-space-4); box-shadow: var(--erp-shadow-xs); transition: border-color var(--erp-transition-base), box-shadow var(--erp-transition-base), transform var(--erp-transition-base); }
+.sewing-data-entry__plan-card { display: grid; gap: 10px; min-width: 0; padding: 14px; box-shadow: var(--erp-shadow-xs); transition: border-color var(--erp-transition-base), box-shadow var(--erp-transition-base), transform var(--erp-transition-base); }
 .sewing-data-entry__plan-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--erp-space-3); }
 .sewing-data-entry__plan-card > header > div { min-width: 0; }
 .sewing-data-entry__plan-card > header p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -264,7 +261,7 @@ p { margin: 5px 0 0; font-size: var(--erp-font-size-caption); color: var(--erp-t
 .sewing-data-entry__stats > span { display: grid; gap: 2px; min-width: 0; padding: 9px 10px; border-right: 1px solid var(--erp-border-subtle); }
 .sewing-data-entry__stats > span:last-child { border-right: 0; }
 .sewing-data-entry__stats small { text-transform: uppercase; letter-spacing: 0.035em; }
-.sewing-data-entry__stats strong { overflow: hidden; color: var(--erp-text); font-size: 13px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.sewing-data-entry__stats strong { overflow: hidden; color: var(--erp-text); font-size: 14px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
 .sewing-data-entry__plan-card > footer { display: flex; align-items: center; justify-content: flex-end; gap: var(--erp-space-2); flex-wrap: wrap; padding-top: 2px; }
 .sewing-data-entry__filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: start; margin-bottom: 18px; }
 .common-field { min-width: 0; display: grid; gap: 6px; }
@@ -284,6 +281,6 @@ small { color: var(--erp-text-muted); font-size: 11px; }
 @media (hover: hover) { .sewing-data-entry__plan-card:hover { border-color: var(--erp-accent-border); box-shadow: var(--erp-shadow-sm); transform: translateY(-1px); } }
 @media (max-width: 1000px) { .sewing-data-entry__filters { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .sewing-data-entry__cards { grid-template-columns: 1fr; } }
-@media (max-width: 700px) { .sewing-data-entry__header, .sewing-data-entry__inspection-heading { align-items: flex-start; flex-direction: column; } .sewing-data-entry__header :deep(.p-button) { align-self: flex-start; } .sewing-data-entry__filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sewing-data-entry__inspection-heading .common-field { width: 100%; } }
+@media (max-width: 700px) { .sewing-data-entry__inspection-heading { align-items: flex-start; flex-direction: column; } .sewing-data-entry__filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sewing-data-entry__inspection-heading .common-field { width: 100%; } }
 @media (max-width: 430px) { .sewing-data-entry__filters { grid-template-columns: minmax(0, 1fr); } }
 </style>

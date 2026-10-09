@@ -169,14 +169,17 @@ async function launcherSuite(page) {
 		return {
 			shellLeft: shell.left,
 			shellRight: innerWidth - shell.right,
-			pickerAfterTitle: Boolean(document.querySelector(".workspace-launcher__title h1").compareDocumentPosition(document.querySelector(".sewing-unit-picker")) & Node.DOCUMENT_POSITION_FOLLOWING),
-			titleToPicker: picker.top - title.bottom,
-			pickerToCards: grid.top - picker.bottom,
+			pickerRightOfTitle: picker.left > title.right,
+			aligned: Math.abs((picker.top + picker.height / 2) - (title.top + title.height / 2)) <= 28,
+			headerToCards: grid.top - Math.max(title.bottom, picker.bottom),
 		}
 	})
 	assert(launcherGeometry.shellLeft <= 32 && launcherGeometry.shellRight <= 32, `Sewing launcher wastes horizontal space: ${JSON.stringify(launcherGeometry)}`)
-	assert(launcherGeometry.pickerAfterTitle && launcherGeometry.titleToPicker >= 0 && launcherGeometry.titleToPicker <= 16, `Sewing Unit must sit directly below the workspace title: ${JSON.stringify(launcherGeometry)}`)
-	assert(launcherGeometry.pickerToCards >= 0 && launcherGeometry.pickerToCards <= 28, `Sewing Unit leaves excessive space before cards: ${JSON.stringify(launcherGeometry)}`)
+	assert(launcherGeometry.pickerRightOfTitle && launcherGeometry.aligned, `Sewing Unit must share the desktop title row: ${JSON.stringify(launcherGeometry)}`)
+	assert(launcherGeometry.headerToCards >= 0 && launcherGeometry.headerToCards <= 28, `Compact Sewing header leaves excessive space before cards: ${JSON.stringify(launcherGeometry)}`)
+	assert(await page.locator(".department-page__nav").count() === 0, "Sewing must not render a separate back-navigation row")
+	assert(await page.locator(".workspace-launcher__header").getByRole("link", { name: "Back to Workspaces", exact: true }).isVisible(), "Sewing title must own the compact back arrow")
+	assert(!(await page.locator(".workspace-launcher__header").innerText()).includes("Department workspace"), "Sewing launcher retains the redundant workspace eyebrow")
 	await page.setViewportSize({ width: 1280, height: 900 })
 	for (const [, label, href] of definitions) {
 		assert(await page.getByRole("link", { name: new RegExp(`^${label}`) }).getAttribute("href") === href, `${label} has wrong href`)
@@ -245,6 +248,7 @@ async function launcherSuite(page) {
 	state.error = "Capability service unavailable"
 	await navigate(page, "/web/sewing")
 	await oneLoadPopup(page, state.error)
+	assert(await page.getByRole("link", { name: "Back to Workspaces", exact: true }).isVisible(), "Capability failure must keep root navigation available")
 	state.error = ""
 	await page.getByRole("button", { name: "Retry", exact: true }).click()
 	await cards.nth(2).waitFor()
@@ -252,6 +256,7 @@ async function launcherSuite(page) {
 	state.error = "Sewing access was denied. Please retry."
 	await navigate(page, "/web/sewing")
 	await oneLoadPopup(page, state.error)
+	assert(await page.getByRole("link", { name: "Back to Workspaces", exact: true }).isVisible(), "HTTP 403 must keep root navigation available")
 	assert(await cards.count() === 0, "HTTP 403 leaves Sewing cards visible")
 	state.error = ""
 	await page.getByRole("button", { name: "Retry", exact: true }).click()
@@ -260,6 +265,7 @@ async function launcherSuite(page) {
 	state.delay = 700
 	await navigate(page, "/web/sewing")
 	await page.getByRole("status").filter({ hasText: "Loading" }).waitFor()
+	assert(await page.getByRole("link", { name: "Back to Workspaces", exact: true }).isVisible(), "Capability loading must keep root navigation available")
 	await cards.nth(2).waitFor()
 	state.delay = 0
 	for (const width of [390, 900, 1280, 1600]) {
@@ -343,7 +349,7 @@ window.app = createApp({ setup() {
 		assert(await page.locator("output").textContent() === "Current B response", "Delayed A response overwrote B")
 		assert(await page.evaluate(() => window.router.currentRoute.value.query.keep) === "yes", "Supplier selection discarded unrelated query")
 		assert(await page.evaluate(() => window.context.isCurrent(window.context.beginRequest())) === true, "New request must be current")
-		await page.getByRole("button", { name: "Back to Sewing", exact: true }).click()
+		await page.getByRole("link", { name: "Back to Sewing", exact: true }).click()
 		await page.waitForFunction(() => window.router.currentRoute.value.path === "/sewing")
 		assert(await page.evaluate(() => window.router.currentRoute.value.query.supplier) === "UNIT-B", "Development shell back navigation loses Supplier")
 		assert(warnings.length === 0, `Development Sewing shell emits Vue warnings: ${warnings.join("\n")}`)
@@ -411,11 +417,19 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/__plan-test`)
 		await page.getByRole("tab", { name: "Dashboard", exact: true }).waitFor()
 		assert(JSON.stringify(await page.getByRole("tab").allTextContents()) === JSON.stringify(["Dashboard", "Data Entry", "Entries", "Consumption", "Closed Work Order GRN"]), "Plan workspace must expose exactly the five approved tabs")
+		const planHeader = await page.locator(".sewing-workspace-shell__header").evaluate(element => {
+			const title = element.querySelector("h1").getBoundingClientRect(), picker = element.querySelector(".sewing-unit-picker").getBoundingClientRect()
+			return { pickerRightOfTitle: picker.left > title.right, aligned: Math.abs((picker.top + picker.height / 2) - (title.top + title.height / 2)) <= 28 }
+		})
+		assert(planHeader.pickerRightOfTitle && planHeader.aligned, `Plan Sewing Unit must share the desktop title row: ${JSON.stringify(planHeader)}`)
+		assert(await page.locator(".department-page__nav").count() === 0 && await page.locator(".sewing-workspace-shell__header").getByRole("link", { name: "Back to Sewing", exact: true }).isVisible(), "Plan header must use an inline back arrow")
+		assert(!(await page.locator(".sewing-workspace-shell__header").innerText()).includes("Sewing workspace"), "Plan header retains the redundant workspace eyebrow")
 		await page.getByRole("status").filter({ hasText: "Loading dashboard" }).waitFor()
 		const dashboardCards = page.locator("[data-sewing-dashboard-card]")
 		await dashboardCards.filter({ hasText: "Sewing In" }).waitFor()
 		assert((await dashboardCards.filter({ hasText: "Sewing In" }).innerText()).includes("40"), "Dashboard lost configured stage quantities")
 		assert(await dashboardCards.count() === 2 && await page.locator(".sewing-dashboard__table").count() === 0, "Open Work Order inputs must render as cards, not a table")
+		assert(await page.locator("[data-sewing-plan-tab='dashboard'] h2").count() === 0 && !(await page.locator("[data-sewing-plan-tab='dashboard']").innerText()).includes("Recorded quantities by input type"), "Dashboard duplicates its tab title or selected Sewing Unit context")
 		assert(!requests.some(r => r.method.endsWith("get_data_entry_data")), "Inactive Data Entry fetched")
 		for (const width of [1600, 1280, 900, 390]) { await page.setViewportSize({ width, height: 900 }); await noOverflow(page, `Dashboard ${width}`); if (process.env.ESSDEE_SEWING_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SEWING_SCREENSHOTS}/sewing-dashboard-${width}.png`, fullPage: true, animations: "disabled" }) }
 		await page.setViewportSize({ width: 1280, height: 900 })
@@ -434,24 +448,24 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		const before = requests.length
 		await page.getByRole("tab", { name: "Closed Work Order GRN", exact: true }).click(); await page.getByRole("combobox", { name: "Closed Work Order", exact: true }).waitFor()
 		assert(await page.locator("[data-sewing-plan-tab]").count() === 1, "Inactive tab still mounted")
+		assert(await page.locator("[data-sewing-plan-tab='closed-work-order-grn'] h2").count() === 0 && !(await page.locator("[data-sewing-plan-tab='closed-work-order-grn']").innerText()).includes("Create and submit a receipt for the selected Sewing Unit"), "Closed GRN duplicates its tab title or selected-unit explanation")
 		assert(requests.length === before, "Closed GRN fetched without Work Order selection")
 		state.entryError = "Entry data unavailable"
 		await page.getByRole("tab", { name: "Data Entry", exact: true }).click()
 		await oneLoadPopup(page, state.entryError)
 		state.entryError = ""; await page.getByRole("button", { name: "Retry", exact: true }).click()
 		await page.locator("[data-sewing-plan-card='PLAN-A']").waitFor()
+		assert(await page.locator("[data-sewing-plan-tab='data-entry'] h2").count() === 0 && !(await page.locator("[data-sewing-plan-tab='data-entry']").innerText()).includes("Choose a Sewing Plan and record its production"), "Data Entry duplicates its tab title or instructional copy")
 		assert(await page.locator("[data-sewing-plan-card]").count() === 3, "Data Entry must show available plan cards without requiring a filter")
 		assert(await page.locator(".sewing-data-entry__lot").count() === 2, "Data Entry must group plans from different Lots")
 		assert(await page.locator(".sewing-data-entry__lot").evaluateAll(groups => new Set(groups.map(group => group.getAttribute("aria-labelledby"))).size === groups.length), "Lot groups must use collision-safe heading IDs")
+		assert(await page.locator(".sewing-data-entry__lot-header > div > span").count() === 0, "Lot groups waste space on a redundant Lot eyebrow")
 		for (const width of [1600, 1280, 900, 390]) {
 			await page.setViewportSize({ width, height: 900 }); await noOverflow(page, `Data Entry cards ${width}`)
 			const columns = await page.locator(".sewing-data-entry__cards").evaluateAll(elements => elements.map(element => getComputedStyle(element).gridTemplateColumns.split(" ").length))
 			assert(columns.every(count => count === (width <= 760 ? 1 : 2)), `Data Entry card grid has ${columns.join(",")} columns at ${width}px`)
-			const headerLayout = await page.locator(".sewing-data-entry__header").evaluate(element => {
-				const copy = element.firstElementChild.getBoundingClientRect(), action = element.querySelector("button").getBoundingClientRect()
-				return { separated: copy.bottom <= action.top || action.bottom <= copy.top || copy.right <= action.left || action.right <= copy.left, actionLeft: action.left, actionRight: action.right, width: innerWidth }
-			})
-			assert(headerLayout.separated && headerLayout.actionLeft >= 0 && headerLayout.actionRight <= width + 1, `Data Entry Refresh overlaps or clips at ${width}px: ${JSON.stringify(headerLayout)}`)
+			const refreshBox = await page.getByRole("button", { name: "Refresh data entry", exact: true }).boundingBox()
+			assert(refreshBox && refreshBox.x >= 0 && refreshBox.x + refreshBox.width <= width + 1, `Data Entry Refresh clips at ${width}px: ${JSON.stringify(refreshBox)}`)
 			if (process.env.ESSDEE_SEWING_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SEWING_SCREENSHOTS}/sewing-entry-cards-${width}.png`, fullPage: true, animations: "disabled" })
 		}
 		await page.setViewportSize({ width: 1280, height: 900 })
@@ -770,7 +784,8 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		if (settlementCase) { await settlementRegressions(settlementCase); return }
 		state.entryError = 'Initial entries unavailable'
 		await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/__operations-test`)
-		await page.getByRole("heading", { name: "Entries", exact: true }).waitFor()
+		await page.locator("[data-sewing-plan-tab='entries']").waitFor()
+		assert(await page.locator("[data-sewing-plan-tab='entries'] h2").count() === 0 && !(await page.locator("[data-sewing-plan-tab='entries']").innerText()).includes("Saved inputs grouped by entry date"), "Entries duplicates its tab title or explanatory copy")
 		await oneLoadPopup(page, state.entryError)
 		state.entryError = ''; await page.getByRole('button', { name: 'Retry', exact: true }).click()
 		await page.getByRole("heading", { name: "2026-10-08", exact: true }).waitFor()
@@ -816,6 +831,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		assert(await page.locator("[data-entry-id='ENTRY-A']").count() === 0, "Successful cancellation did not reload entries")
 		assert(requests.filter(r => r.method.endsWith("cancel_sewing_plan_entry")).at(-1).args.doc_id === "ENTRY-A", "Cancellation lost entry identity")
 		await tab("consumption")
+		assert(await page.locator("[data-sewing-plan-tab='consumption'] h2").count() === 0 && !(await page.locator("[data-sewing-plan-tab='consumption']").innerText()).includes("Record consumption for one Sewing Unit and Lot"), "Consumption duplicates its tab title or selected-unit explanation")
 		assert(count("get_consumption_mapping_data") === 0, "Consumption fetched before Lot selection")
 		state.lotError = 'Consumption Lot lookup unavailable'
 		await page.getByRole('button', { name: 'Show Lot options', exact: true }).click(); await oneLoadPopup(page, state.lotError)
@@ -1545,7 +1561,7 @@ async function integratedSuite(browser) {
 		await page.getByRole("option", { name: "WO-INTEGRATION", exact: true }).click()
 		await page.getByText("No pending receivable quantities for this Work Order.", { exact: true }).waitFor()
 		await forbidden()
-		await page.getByRole("button", { name: "Back to Sewing", exact: true }).click()
+		await page.getByRole("link", { name: "Back to Sewing", exact: true }).click()
 		await page.getByRole("link", { name: /^Reports/ }).click()
 		await page.locator('[data-sewing-report="status-summary"]').waitFor()
 		await page.locator('.report-shell[aria-busy="false"]').waitFor()
@@ -1561,7 +1577,7 @@ async function integratedSuite(browser) {
 		const direct = new URL(page.url()).pathname + new URL(page.url()).search
 		await page.reload({ waitUntil: "domcontentloaded" }); await page.locator('[data-sewing-report="item-summary"]').waitFor()
 		assert(new URL(page.url()).pathname + new URL(page.url()).search === direct && await page.getByRole("combobox", { name: "Sewing Unit", exact: true }).inputValue() === "UNIT-A", "Report reload loses unit/tab")
-		await page.getByRole("button", { name: "Back to Sewing", exact: true }).click()
+		await page.getByRole("link", { name: "Back to Sewing", exact: true }).click()
 		await page.getByRole("link", { name: /^Attendance Report/ }).click(); await page.locator('[data-attendance-strength]').waitFor()
 		assert(count("get_worker_strength_report") === 0 && await page.getByRole("combobox", { name: "Sewing Unit", exact: true }).count() === 0, "Attendance eagerly fetched or inherited Supplier")
 		await setDate("Date")

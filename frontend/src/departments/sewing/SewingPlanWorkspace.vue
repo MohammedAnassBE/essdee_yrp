@@ -109,8 +109,8 @@ function createClosedGrn(payload) {
 
 <style scoped>
 .sewing-plan-workspace { min-width: 0; max-width: 100%; }
-.sewing-plan-workspace :deep(.p-tabpanels) { background: transparent; padding: 14px 0 0; }
-.sewing-plan-workspace :deep(.p-tab) { min-height: 44px; padding: 10px 14px; font-size: var(--erp-font-size-caption); white-space: nowrap; }
+.sewing-plan-workspace :deep(.p-tabpanels) { background: transparent; padding: 8px 0 0; }
+.sewing-plan-workspace :deep(.p-tab) { min-height: 42px; padding: 9px 14px; font-size: 0.86rem; white-space: nowrap; }
 .sewing-plan-workspace__mobile { display: none; }
 @media (max-width: 700px) {
 	.sewing-plan-workspace__desktop { display: none; }

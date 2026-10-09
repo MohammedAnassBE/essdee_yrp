@@ -1,11 +1,10 @@
 <template>
 	<section data-sewing-plan-tab="closed-work-order-grn" class="sewing-closed-grn" :aria-busy="loading || state.busy" aria-label="Closed Work Order receipts">
-		<header><div><h2>Closed Work Order GRN</h2><p>Create and submit a receipt for the selected Sewing Unit.</p></div><Button label="Refresh" aria-label="Refresh closed Work Orders" icon="pi pi-refresh" severity="secondary" :disabled="loading || state.busy" @click="refreshOrders" /></header>
+		<div class="sewing-closed-grn__toolbar"><div class="sewing-closed-grn__picker"><LinkField v-model="state.workOrder" doctype="YRP Work Order" label="Closed Work Order" placeholder="Select a closed Work Order" :show-open-button="false" show-clear :disabled="loading || state.busy || state.refreshRequired" :search-handler="searchOrders" /></div><Button label="Refresh" aria-label="Refresh closed Work Orders" icon="pi pi-refresh" severity="secondary" :disabled="loading || state.busy" @click="refreshOrders" /></div>
 		<Message v-if="state.result" severity="success" :closable="false" role="status">{{ state.result.name }} · {{ state.result.docstatus === 1 ? 'Submitted' : `Status ${state.result.docstatus}` }}</Message>
 		<Message v-if="state.refreshRequired" severity="warn" :closable="false">Receipt acknowledged. Refresh closed Work Orders before creating another receipt.</Message>
 		<Message v-if="state.loadError" severity="warn" :closable="false">Closed Work Order data could not be refreshed. Your draft is retained. <Button label="Retry" text :disabled="loading || state.busy" @click="refreshOrders" /></Message>
 		<p v-if="loading && state.data" role="status">Refreshing closed Work Orders…</p>
-		<div class="sewing-closed-grn__picker"><LinkField v-model="state.workOrder" doctype="YRP Work Order" label="Closed Work Order" placeholder="Select a closed Work Order" :show-open-button="false" show-clear :disabled="loading || state.busy || state.refreshRequired" :search-handler="searchOrders" /></div>
 		<p v-if="!state.workOrder" class="erp-empty-state">Select a closed Work Order to enter a receipt.</p>
 		<p v-else-if="loading && !state.data" role="status">Loading closed Work Order quantities</p>
 		<template v-else-if="state.data && state.namingField">
@@ -103,12 +102,12 @@ onBeforeUnmount(() => { mounted = false; beginRequest() })
 
 <style scoped>
 .sewing-closed-grn { min-width: 0; max-width: 100%; }
-header { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 14px; align-items: center; }
-h2 { margin: 0; font-size: 16px; color: var(--erp-text); }
+.sewing-closed-grn__toolbar { display: flex; align-items: flex-end; gap: var(--erp-space-3); margin-bottom: var(--erp-space-3); }
 p, small { color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 p { margin: 5px 0 0; }
-.sewing-closed-grn__picker { max-width: 380px; margin-top: 14px; }
+.sewing-closed-grn__picker { width: min(420px, 100%); }
 .sewing-closed-grn__context { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-block: 16px 6px; font-size: var(--erp-font-size-caption); overflow-wrap: anywhere; }
 .sewing-closed-grn__actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding-block: 6px 14px; }
 .p-message { margin-bottom: 12px; }
+@media (max-width: 600px) { .sewing-closed-grn__toolbar { align-items: stretch; flex-direction: column; } .sewing-closed-grn__toolbar > .p-button { align-self: flex-start; } }
 </style>

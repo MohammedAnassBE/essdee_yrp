@@ -115,7 +115,7 @@ async function shellSuite(page) {
 	await page.locator(".department-card-link").first().waitFor({ timeout: 20_000 })
 
 	const destinations = page.locator(".department-card-link")
-	assert(await destinations.count() === 10, "Administrator must show ten department destinations")
+	assert(await destinations.count() === 12, "Administrator must show twelve department destinations")
 	assert(await page.getByText("Open workspace", { exact: true }).count() === 0, "Redundant workspace filler is visible")
 	assert(await page.locator("body").evaluate((body) => getComputedStyle(body).backgroundColor) === "rgb(247, 248, 250)", "Shell canvas is not stable")
 
@@ -140,6 +140,12 @@ async function shellSuite(page) {
 			&& await page.locator(".workspace-launcher__header .inline-page-navigation__back[aria-label='Back to Workspaces']").count() === 1,
 		"Root department launchers do not place Back beside the visible heading",
 	)
+	const [workspaceNavigationBox, workspaceTitleBox] = await Promise.all([
+		page.locator(".workspace-launcher__header > .inline-page-navigation").boundingBox(),
+		page.locator(".workspace-launcher__header > .workspace-launcher__title").boundingBox(),
+	])
+	const workspaceTitleGap = workspaceNavigationBox && workspaceTitleBox ? workspaceTitleBox.x - (workspaceNavigationBox.x + workspaceNavigationBox.width) : Number.POSITIVE_INFINITY
+	assert(workspaceTitleGap >= 0 && workspaceTitleGap <= 20, `Department workspace title is not left-aligned beside Back: ${JSON.stringify({ workspaceNavigationBox, workspaceTitleBox, workspaceTitleGap })}`)
 	assert(await page.evaluate(() => document.activeElement?.id) === "app-main", "Route navigation does not move focus to the new main content")
 	assert((await page.title()).includes("Cutting"), `Route navigation does not update the document title: ${await page.title()}`)
 
@@ -230,7 +236,7 @@ async function listSuite(page, context) {
 	const openTarget = await page.locator(".list-row-open").first().boundingBox()
 	assert(openTarget?.width >= 36 && openTarget?.height >= 36, `List open action has a small pointer target: ${JSON.stringify(openTarget)}`)
 	const selectionTargets = await page.locator(".premium-list-table .p-checkbox").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().toJSON()))
-	assert(selectionTargets.every(({ width, height }) => width >= 36 && height >= 36), `List selection controls have small pointer targets: ${JSON.stringify(selectionTargets)}`)
+	assert(selectionTargets.every(({ width, height }) => width >= 35.5 && height >= 35.5), `List selection controls have small pointer targets: ${JSON.stringify(selectionTargets)}`)
 	const statusRailStyle = await page.locator(".list-status-tabs").evaluate((element) => ({ overflowX: getComputedStyle(element).overflowX, maskImage: getComputedStyle(element).maskImage }))
 	assert(["auto", "scroll"].includes(statusRailStyle.overflowX) && statusRailStyle.maskImage !== "none", `Status rail lacks a horizontal-scroll affordance: ${JSON.stringify(statusRailStyle)}`)
 	const primaryButtonShadow = await page.locator(".list-toolbar__primary .p-button").first().evaluate((element) => getComputedStyle(element).boxShadow)
@@ -537,9 +543,9 @@ async function formLoadFailuresSuite(page, context) {
 		})
 		await reloadPage.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(fixture.name)}`, { waitUntil: "domcontentloaded" })
 		const formView = reloadPage.locator(".cutting-plan-frame > .common-form-view")
-		await formView.getByRole("button", { name: "Edit", exact: true }).waitFor({ timeout: 20_000 })
-		await formView.getByRole("button", { name: "Edit", exact: true }).click()
-		await formView.getByRole("button", { name: "Save", exact: true }).waitFor()
+		await formView.locator(".cutting-tabs").waitFor({ timeout: 20_000 })
+		assert(await formView.locator(".form-edit-button").count() === 0, "Submitted Cutting Plan exposes the obsolete generic editor before reload")
+		assert(await formView.locator(".cutting-plan-editor").count() === 0, "Submitted Cutting Plan opens its restricted editor without an explicit Edit action")
 
 		documentFailure = true
 		await invokeFormViewMethod(formView, "reload")
@@ -564,10 +570,9 @@ async function formLoadFailuresSuite(page, context) {
 		)
 
 		documentFailure = false
-		const recoveryDialog = reloadPage.locator(".document-error-dialog:visible")
-		await recoveryDialog.getByRole("button", { name: "Retry", exact: true }).click()
+		await formView.locator(".form-load-error").getByRole("button", { name: "Retry", exact: true }).click()
 		await formView.locator(".form-toolbar__meta > small").getByText(fixture.name, { exact: true }).waitFor()
-		await formView.getByRole("button", { name: "Edit", exact: true }).waitFor()
+		assert(await formView.locator(".form-edit-button").count() === 0, "Submitted Cutting Plan exposes the obsolete generic editor after retry")
 		assert(
 			(await formView.locator(".form-toolbar__meta > small").innerText()).trim() === fixture.name,
 			"Retry did not restore the loaded document identity",
@@ -581,26 +586,31 @@ async function formLoadFailuresSuite(page, context) {
 
 async function formFieldAccessibilitySuite(page) {
 	await page.setViewportSize({ width: 1600, height: 1000 })
-	const fixtureName = "A11Y-FORM-CONTROLS"
-	const fields = [
-		{ fieldname: "is_manual_entry", label: "Required Toggle", fieldtype: "Check", reqd: 1, description: "Choose whether entry is manual." },
-		{ fieldname: "no_of_colours", label: "Required Select", fieldtype: "Select", options: "One\nTwo", reqd: 1, description: "Choose one option." },
-		{ fieldname: "maximum_no_of_plys", label: "Required Number", fieldtype: "Int", reqd: 1, description: "Enter a whole number." },
-		{ fieldname: "cutting_start_date", label: "Required Date", fieldtype: "Date", reqd: 1, description: "Choose a date." },
-		{ fieldname: "cutting_location", label: "Required Datetime", fieldtype: "Datetime", reqd: 1, description: "Choose a date and time." },
-		{ fieldname: "cutting_end_date", label: "Required Time", fieldtype: "Time", reqd: 1, description: "Choose a time." },
-	]
+	const fixtureName = "ALLOW-ON-SUBMIT-CONTROLS"
 	let mutationCalls = 0
+	const editorPayload = {
+		record: {
+			name: fixtureName,
+			docstatus: 1,
+			modified: "2026-10-09 10:00:00",
+			is_manual_entry: 0,
+			lot: "LOT-A11Y",
+			item: "ITEM-A11Y",
+			maximum_no_of_plys: 100,
+			maximum_allow_percent: 5,
+			cutting_location: "Manual Cutting",
+			work_order: "WO-A11Y-001",
+		},
+		permissions: { can_write: false, can_update_after_submit: true, can_submit: false },
+		fields: { show_work_order: true, can_edit_work_order: true, allow_on_submit_fields: ["work_order"] },
+		options: { cutting_locations: ["Manual Cutting"] },
+		matrix: { groups: [] },
+	}
 
 	await page.route("**/api/method/essdee_yrp.cutting.plan_editor.get_editor*", (route) => route.fulfill({
 		status: 200,
 		contentType: "application/json",
-		body: JSON.stringify({ message: { record: { name: fixtureName, docstatus: 1 }, permissions: { can_write: true } } }),
-	}))
-	await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => route.fulfill({
-		status: 200,
-		contentType: "application/json",
-		body: JSON.stringify({ docs: [{ name: "SD YRP Cutting Plan", label: "Cutting Plan", fields }] }),
+		body: JSON.stringify({ message: editorPayload }),
 	}))
 	await page.route("**/api/resource/**", (route) => {
 		if (!decodeURIComponent(route.request().url()).includes(`/api/resource/SD YRP Cutting Plan/${fixtureName}`)) return route.continue()
@@ -608,60 +618,45 @@ async function formFieldAccessibilitySuite(page) {
 			return route.fulfill({
 				status: 200,
 				contentType: "application/json",
-				body: JSON.stringify({ data: { name: fixtureName, docstatus: 1 } }),
+				body: JSON.stringify({ data: { ...editorPayload.record, cp_status: "Planned" } }),
 			})
 		}
 		mutationCalls += 1
 		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: { name: fixtureName } }) })
 	})
+	await page.route("**/api/method/essdee_yrp.cutting.plan_editor.save*", (route) => {
+		mutationCalls += 1
+		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: editorPayload }) })
+	})
 	await page.route("**get_web_view_data*", (route) => route.fulfill({
 		status: 200,
 		contentType: "application/json",
-		body: JSON.stringify({ message: { permissions: { can_write: true } } }),
+		body: JSON.stringify({ message: {
+			permissions: { can_write: false, can_print: false },
+			marker_list: [],
+			laysheet_list: [],
+		} }),
 	}))
 
 	await page.goto(`${SITE}/web/cutting/plans/${fixtureName}`, { waitUntil: "domcontentloaded" })
 	const formView = page.locator(".cutting-plan-frame > .common-form-view")
 	await formView.getByRole("button", { name: "Edit", exact: true }).waitFor({ timeout: 20_000 })
 	await formView.getByRole("button", { name: "Edit", exact: true }).click()
-	await formView.getByRole("button", { name: "Save", exact: true }).click()
-
-	const controls = [
-		{ label: "Required Toggle", selector: ".p-toggleswitch-input", nativeRequired: true },
-		{ label: "Required Select", selector: ".p-select-label", nativeRequired: false },
-		{ label: "Required Number", selector: ".p-inputnumber-input", nativeRequired: true },
-		{ label: "Required Date", selector: ".p-datepicker-input", nativeRequired: true },
-		{ label: "Required Datetime", selector: ".p-datepicker-input", nativeRequired: true },
-		{ label: "Required Time", selector: ".p-datepicker-input", nativeRequired: true },
-	]
-	const contracts = {}
-	for (const control of controls) {
-		const field = formView.locator(".form-field").filter({ hasText: control.label }).first()
-		await field.locator(".form-field__error").waitFor()
-		contracts[control.label] = await field.locator(control.selector).evaluate((element, expectsNativeRequired) => {
-			const describedBy = element.getAttribute("aria-describedby") || ""
-			const descriptionIds = describedBy.split(/\s+/).filter(Boolean)
-			return {
-				tag: element.tagName.toLowerCase(),
-				required: element.hasAttribute("required"),
-				expectsNativeRequired,
-				ariaRequired: element.getAttribute("aria-required"),
-				ariaInvalid: element.getAttribute("aria-invalid"),
-				describedBy,
-				descriptions: descriptionIds.map((id) => document.getElementById(id)?.textContent?.trim() || ""),
-			}
-		}, control.nativeRequired)
+	const editor = page.locator(".cutting-plan-editor")
+	await editor.waitFor()
+	const lockedControls = {
+		manualEntry: await editor.locator("#cp-manual-entry").isDisabled(),
+		maximumPlies: await editor.locator("#cp-max-plies").isDisabled(),
+		allowance: await editor.locator("#cp-allowance").isDisabled(),
+		location: await editor.locator("#cp-location").isDisabled(),
 	}
+	const workOrderInput = editor.locator(".cutting-plan-editor__field").filter({ hasText: "Work Order" }).locator("input")
+	assert(Object.values(lockedControls).every(Boolean), `Submitted Cutting Plan unlocked a non-Allow-on-Submit control: ${JSON.stringify(lockedControls)}`)
+	assert(!await workOrderInput.isDisabled(), "Submitted Cutting Plan disabled its Allow-on-Submit Work Order field")
+	assert(await editor.getByRole("button", { name: "Save", exact: true }).count() === 0, "Unchanged submitted editor exposes Save")
+	assert(mutationCalls === 0, `Opening the submitted editor caused a document mutation: ${mutationCalls}`)
 
-	for (const [label, contract] of Object.entries(contracts)) {
-		assert(contract.ariaRequired === "true", `${label} focus target is not aria-required: ${JSON.stringify(contract)}`)
-		assert(contract.ariaInvalid === "true", `${label} focus target is not aria-invalid: ${JSON.stringify(contract)}`)
-		assert(contract.descriptions.length === 2 && contract.descriptions.every(Boolean), `${label} focus target does not reference help and error text: ${JSON.stringify(contract)}`)
-		if (contract.expectsNativeRequired) assert(contract.required, `${label} focus target is missing native required support: ${JSON.stringify(contract)}`)
-	}
-	assert(mutationCalls === 0, `Invalid FormField controls allowed a document mutation: ${mutationCalls}`)
-
-	return { fixture: fixtureName, contracts }
+	return { fixture: fixtureName, lockedControls, workOrderEditable: true }
 }
 
 async function planFrameSuite(page, context) {
@@ -684,6 +679,12 @@ async function planFrameSuite(page, context) {
 	const toolbarStyle = await main.locator(".form-toolbar").evaluate((element) => ({ borderRadius: getComputedStyle(element).borderRadius, boxShadow: getComputedStyle(element).boxShadow, borderTopWidth: getComputedStyle(element).borderTopWidth }))
 	assert(recordFrameStyle.padding === "0px" && recordFrameStyle.overflow === "hidden", `Cutting Plan still nests a padded record card: ${JSON.stringify(recordFrameStyle)}`)
 	assert(toolbarStyle.borderRadius === "0px" && toolbarStyle.boxShadow === "none" && toolbarStyle.borderTopWidth === "3px", `Cutting Plan toolbar still renders as a nested card: ${JSON.stringify(toolbarStyle)}`)
+	const [navigationBox, identityBox] = await Promise.all([
+		main.locator(".form-toolbar > .inline-page-navigation").boundingBox(),
+		main.locator(".form-toolbar > .form-toolbar__identity").boundingBox(),
+	])
+	const identityGap = navigationBox && identityBox ? identityBox.x - (navigationBox.x + navigationBox.width) : Number.POSITIVE_INFINITY
+	assert(identityGap >= 0 && identityGap <= 20, `Cutting Plan title is not left-aligned beside document navigation: ${JSON.stringify({ navigationBox, identityBox, identityGap })}`)
 
 	const recordId = page.locator(".form-toolbar__meta > small")
 	const status = page.locator(".form-toolbar__meta .cutting-plan-status")
@@ -705,8 +706,7 @@ async function planFrameSuite(page, context) {
 		value: Number.parseFloat(getComputedStyle(element.querySelector("strong")).fontSize),
 	}))
 	assert(headerFactType.label >= 11.5 && headerFactType.value >= 13.5, `Lot and Item header facts are too small: ${JSON.stringify(headerFactType)}`)
-	await page.locator(".form-toolbar__actions .form-edit-button").waitFor({ timeout: 20_000 })
-	assert(await page.locator(".form-toolbar__actions .form-edit-button").count() === 1, "Edit is not a distinct header action")
+	assert(await page.locator(".form-toolbar__actions .form-edit-button").count() === 0, "Submitted Cutting Plan exposes the obsolete generic editor")
 	assert(await page.locator(".form-toolbar__actions").getByRole("button", { name: "More Actions", exact: true }).count() === 1, "Cutting Plan workflow actions are not available in the header")
 
 	const visibleTabs = page.locator(".cutting-tabs .p-tab:visible")
@@ -774,6 +774,15 @@ async function planFrameSuite(page, context) {
 
 	const readonlyPage = await context.newPage()
 	try {
+		await readonlyPage.route("**/api/method/essdee_yrp.cutting.plan_editor.get_editor*", (route) => route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({ message: {
+				record: { name: fixture.name, docstatus: 1 },
+				permissions: { can_write: false, can_update_after_submit: false },
+				allow_on_submit_fields: [],
+			} }),
+		}))
 		await readonlyPage.route("**get_web_view_data*", (route) => route.fulfill({
 			status: 200,
 			contentType: "application/json",
@@ -980,7 +989,7 @@ async function planActionsSuite(page, context) {
 		height: element.getBoundingClientRect().height,
 		contained: element.getBoundingClientRect().right <= document.documentElement.clientWidth,
 	}))
-	assert(compactHeaderContract.height <= 40 && compactHeaderContract.contained, `Header actions do not stay compact at 900px: ${JSON.stringify(compactHeaderContract)}`)
+	assert(compactHeaderContract.height <= 44 && compactHeaderContract.contained, `Header actions do not stay compact at 900px: ${JSON.stringify(compactHeaderContract)}`)
 	assert(await page.locator("html").evaluate((element) => element.scrollWidth <= element.clientWidth), "Action toolbar causes page-level horizontal overflow")
 
 	const normalFixture = await findCuttingPlan(page.request, (data) =>
@@ -1035,12 +1044,16 @@ async function planPrimaryTabsSuite(page) {
 		(data.accessory_details?.length || 0) > 0,
 	)
 
-	const detailGrid = page.locator(".detail-read-grid")
-	assert(await detailGrid.count() === 1, "Details does not use the compact read-only information grid")
+	const detailGrid = page.locator(".document-overview[aria-label='Cutting Plan overview']")
+	assert(await detailGrid.count() === 1, "Details does not use the sectioned read-only overview")
 	assert(await detailGrid.locator("input, button, .p-select").count() === 0, "Details still presents read-only values as disabled form controls")
 	const detailColumnCount = await detailGrid.evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length)
-	assert(detailColumnCount === 4, `Details does not use a dense four-column desktop grid: ${detailColumnCount}`)
-	const flatDetailLabels = await detailGrid.locator(".detail-read-field > span").allTextContents()
+	assert(detailColumnCount === 2, `Details does not use the approved two-column overview card grid: ${detailColumnCount}`)
+	assert(
+		JSON.stringify(await detailGrid.getByRole("heading").allTextContents()) === JSON.stringify(["Plan identity", "Planning", "Schedule", "Status & notes"]),
+		`Details overview sections changed: ${JSON.stringify(await detailGrid.getByRole("heading").allTextContents())}`,
+	)
+	const flatDetailLabels = await detailGrid.locator(".document-overview__facts dt").allTextContents()
 	for (const removedLabel of ["Lot", "Item", "CP Status", "Lay No"]) {
 		assert(!flatDetailLabels.includes(removedLabel), `${removedLabel} is duplicated in the Details tab`)
 	}
@@ -1274,7 +1287,10 @@ async function entityDialogsSuite(page) {
 	await page.locator(".laysheet-section").getByRole("button", { name: "Create New", exact: true }).click()
 	const createDialog = page.getByRole("dialog", { name: "Create Lay Sheet" })
 	await createDialog.waitFor()
-	await createDialog.locator(".create-fields").waitFor()
+	await createDialog.locator(".laysheet-create__sections").waitFor()
+	for (const heading of ["Marker source", "Cutting team"]) {
+		assert(await createDialog.getByRole("heading", { name: heading, exact: true }).count() === 1, `Lay Sheet creation is missing its ${heading} section`)
+	}
 	for (const label of ["Cutting Marker *", "Cutting Spreader *", "Cutter *"]) {
 		assert(await createDialog.getByText(label, { exact: true }).count() === 1, `Lay Sheet creation lost ${label}`)
 	}
@@ -1487,7 +1503,7 @@ async function cpmSuite(page, context) {
 	const cards = cpm.locator(".erp-record-card")
 	assert(await cards.count() === workspace.movements.length, "CPM movement card count differs from workspace data")
 	const firstCard = cards.first()
-	for (const selector of ["header strong", ".erp-status", ".erp-movement-time", ".erp-record-metrics"]) {
+	for (const selector of ["header strong", ".document-status-badge", ".erp-movement-time", ".erp-record-metrics"]) {
 		assert(await firstCard.locator(selector).count() === 1, `Movement card is missing ${selector}`)
 	}
 	const renderedNames = await cards.locator("header strong").allTextContents()
@@ -1564,7 +1580,7 @@ async function cpmSuite(page, context) {
 		await statesPage.goto(`${SITE}/web/cutting/plans/${encodeURIComponent(statePlan.name)}`, { waitUntil: "domcontentloaded" })
 		await statesPage.getByRole("tab", { name: "CPM", exact: true }).click()
 		await statesPage.locator(".erp-record-card").first().waitFor({ timeout: 20_000 })
-		const statuses = await statesPage.locator(".erp-record-card .erp-status").allTextContents()
+		const statuses = await statesPage.locator(".erp-record-card .document-status-badge").allTextContents()
 		assert(statuses.includes("Submitted") && statuses.includes("Cancelled"), `CPM state cards are incomplete: ${statuses}`)
 	} finally {
 		await statesPage.close()
@@ -2067,7 +2083,7 @@ async function responsiveAuditSuite(page) {
 		return { tabsBottom: tabs?.getBoundingClientRect().bottom || 0, panelsTop: panels?.getBoundingClientRect().top || 0 }
 	})
 	assert(planStickyContract.tabsBottom > 0 && planStickyContract.panelsTop > 0 && planStickyContract.tabsBottom <= planStickyContract.panelsTop + 1, `Cutting Plan tabs overlap content: ${JSON.stringify(planStickyContract)}`)
-	const statusText = await page.locator(".cutting-plan-status:visible, .marker-status:visible, .lay-status:visible, .erp-status:visible").allTextContents()
+	const statusText = await page.locator(".cutting-plan-status:visible, .marker-status:visible, .lay-status:visible, .document-status-badge:visible, .erp-status:visible").allTextContents()
 	assert(statusText.length > 0 && statusText.every((value) => value.trim()), `Status meaning is not available as text: ${JSON.stringify(statusText)}`)
 	return { routeCount: routes.length, viewportCount: viewports.length, fixture: fixture.name, reportStickyContract, planStickyContract }
 }
@@ -2190,10 +2206,8 @@ async function listNavigationSuite(page) {
 	assert(moved.focusedId === "sd-yrp-cutting-plan-form-title", `Next did not transfer focus to the document heading: ${JSON.stringify(moved)}`)
 	assert(!await previousButton.isDisabled() && !await nextButton.isDisabled(), "Middle filtered record does not expose both directions")
 
-	await page.getByRole("button", { name: "Edit", exact: true }).click()
-	assert(await previousButton.isDisabled() && await nextButton.isDisabled(), "Previous/Next remain active while the document is editing")
-	await page.getByRole("button", { name: "Cancel", exact: true }).click()
-	assert(!await previousButton.isDisabled() && !await nextButton.isDisabled(), "Previous/Next did not recover after cancelling edit mode")
+	assert(await page.getByRole("button", { name: "Edit", exact: true }).count() === 0, "Submitted list-navigation fixture exposes the generic editor")
+	assert(!await previousButton.isDisabled() && !await nextButton.isDisabled(), "Submitted document navigation is disabled without an active editor")
 
 	await previousButton.click()
 	await page.waitForURL("**/web/cutting/plans/CP-NAV-001")

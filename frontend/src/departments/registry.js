@@ -79,4 +79,20 @@ export const departments = [
 		accent: "#5257a6",
 		component: () => import("./Planning.vue"),
 	},
+	{
+		key: "pd",
+		label: "PD",
+		shortLabel: "PD",
+		path: "/pd",
+		accent: "#a3378f",
+		component: () => import("./PD.vue"),
+	},
+	{
+		key: "accounts",
+		label: "Accounts",
+		shortLabel: "AC",
+		path: "/accounts",
+		accent: "#475569",
+		component: () => import("./Accounts.vue"),
+	},
 ]

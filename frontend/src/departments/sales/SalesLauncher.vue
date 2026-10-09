@@ -8,7 +8,6 @@
 			:loading="loading"
 			:skeleton-count="2"
 			empty-text="No permitted Sales workspaces"
-			compact
 		/>
 	</div>
 </template>
@@ -56,19 +55,3 @@ async function load() {
 
 onMounted(load)
 </script>
-
-<style scoped>
-.sales-launcher {
-	width: 100%;
-	max-width: 1800px;
-	margin: 0 auto;
-}
-
-.sales-launcher :deep(.workspace-launcher__grid) {
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-@media (max-width: 600px) {
-	.sales-launcher :deep(.workspace-launcher__grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-</style>

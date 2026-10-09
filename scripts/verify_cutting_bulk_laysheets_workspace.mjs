@@ -162,6 +162,12 @@ await page.goto(`${SITE}/web/cutting/bulk-lay-sheets/CBLS-WEB-00001`, { waitUnti
 await page.getByRole("heading", { name: "Bulk LaySheets", exact: true }).waitFor({ timeout: 20_000 })
 assert(await page.locator(".department-page__nav").count() === 0, "Saved Bulk LaySheets retains the standalone Back row")
 assert(await page.locator(".bulk-record-header .inline-page-navigation__back[aria-label='Back to Bulk LaySheets']").count() === 1, "Saved Bulk LaySheets has no inline Back control beside its title")
+const [bulkNavigationBox, bulkIdentityBox] = await Promise.all([
+	page.locator(".bulk-record-header > .inline-page-navigation").boundingBox(),
+	page.locator(".bulk-record-header > .bulk-record-identity").boundingBox(),
+])
+const bulkIdentityGap = bulkNavigationBox && bulkIdentityBox ? bulkIdentityBox.x - (bulkNavigationBox.x + bulkNavigationBox.width) : Number.POSITIVE_INFINITY
+assert(bulkIdentityGap >= 0 && bulkIdentityGap <= 20, `Bulk LaySheets title is not left-aligned beside document navigation: ${JSON.stringify({ bulkNavigationBox, bulkIdentityBox, bulkIdentityGap })}`)
 assert(await page.locator(".bulk-header-fact--lot").getByText("LOT-MAIN", { exact: true }).count() === 1, "Main Lot is not promoted to the Bulk header")
 assert(await page.locator(".bulk-header-fact--location").getByText("CUTTING", { exact: true }).count() === 1, "Location is not promoted to the Bulk header")
 assert(await page.locator(".bulk-command-bar").count() === 0, "Bulk LaySheets still renders a separate action strip")

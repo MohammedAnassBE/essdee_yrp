@@ -184,8 +184,8 @@ onBeforeUnmount(() => { disposed = true; lifecycleSequence += 1; loadSequence +=
 .cutting-order-layout { display: grid; grid-template-columns: minmax(0, 4fr) minmax(286px, 1fr); align-items: stretch; gap: var(--erp-space-3); height: calc(100dvh - var(--erp-shell-header-height) - 97px); min-height: 0; overflow: hidden; }
 .cutting-order-layout--without-sidebar { grid-template-columns: minmax(0, 1fr); }
 .cutting-order-main { display: flex; min-width: 0; min-height: 0; padding: 14px; flex-direction: column; gap: 8px; overflow: hidden; }
-.order-record-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 52px; padding-bottom: 12px; border-bottom: 1px solid var(--erp-border); }
-.order-record-identity { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.order-record-header { display: flex; align-items: center; justify-content: flex-start; gap: 14px; min-height: 52px; padding-bottom: 12px; border-bottom: 1px solid var(--erp-border); }
+.order-record-identity { display: flex; min-width: 0; flex: 1 1 auto; align-items: center; gap: 14px; }
 .order-record-title { display: grid; gap: 3px; min-width: 0; }
 .order-record-identity h1 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-title); font-weight: 760; letter-spacing: -0.025em; line-height: 1.05; white-space: nowrap; }
 .order-record-title > span { overflow: hidden; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
@@ -194,8 +194,8 @@ onBeforeUnmount(() => { disposed = true; lifecycleSequence += 1; loadSequence +=
 .order-header-fact small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .035em; line-height: 1; text-transform: uppercase; }
 .order-header-fact strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 730; text-overflow: ellipsis; white-space: nowrap; }
 .order-header-fact--item { max-width: 280px; }
-.order-record-actions { display: flex; align-items: center; gap: 7px; }
-@media (max-width: 1050px) { .cutting-order-layout { grid-template-columns: 1fr; height: auto; overflow: visible; } .cutting-order-main { min-height: 0; overflow: visible; } .order-record-header { align-items: stretch; flex-direction: column; } }
+.order-record-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 7px; margin-left: auto; }
+@media (max-width: 1050px) { .cutting-order-layout { grid-template-columns: 1fr; height: auto; overflow: visible; } .cutting-order-main { min-height: 0; overflow: visible; } .order-record-header { align-items: stretch; flex-direction: column; } .order-record-actions { margin-left: 0; } }
 @media (max-width: 850px) { .order-record-actions { flex-wrap: wrap; } }
 @media (max-width: 650px) { .order-record-identity { align-items: flex-start; flex-direction: column; } .order-record-meta { flex-wrap: wrap; } .order-header-fact:first-of-type { padding-left: 0; border-left: 0; } }
 </style>

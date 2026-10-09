@@ -634,6 +634,7 @@ defineExpose({ save, reload: load, doc: form, mode })
 .form-toolbar {
 	min-height: 58px;
 	padding: 10px 12px 10px 16px;
+	justify-content: flex-start;
 	background: var(--erp-surface);
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-panel-radius);
@@ -650,6 +651,8 @@ defineExpose({ save, reload: load, doc: form, mode })
 
 .form-toolbar__identity {
 	display: grid;
+	min-width: 0;
+	flex: 1 1 auto;
 	gap: 2px;
 }
 
@@ -667,7 +670,9 @@ defineExpose({ save, reload: load, doc: form, mode })
 }
 
 .form-toolbar__actions {
+	flex: 0 0 auto;
 	flex-wrap: nowrap;
+	margin-left: auto;
 }
 
 .form-toolbar__actions :deep(.p-button) {
@@ -875,6 +880,7 @@ defineExpose({ save, reload: load, doc: form, mode })
 		width: 100%;
 		justify-content: flex-start;
 		flex-wrap: wrap;
+		margin-left: 0;
 	}
 
 	.form-toolbar__actions :deep(.p-button) {

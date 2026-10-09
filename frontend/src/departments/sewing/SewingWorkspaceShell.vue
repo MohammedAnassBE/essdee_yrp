@@ -93,7 +93,12 @@ onUnmounted(() => { capabilityGeneration++ })
 .sewing-workspace-shell__header .sewing-unit-picker { flex: 0 1 380px; }
 .sewing-workspace-shell__loading { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--erp-space-4); padding-top: var(--erp-space-4); }
 .sewing-workspace-shell__status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
-.sewing-workspace-shell :deep(.workspace-launcher) { padding-inline: 0; }
+.sewing-workspace-shell :deep(.workspace-launcher) {
+	width: 100%;
+	max-width: 1320px;
+	margin-inline: auto;
+	padding-inline: 8px;
+}
 @media (max-width: 760px) {
 	.sewing-workspace-shell { padding-inline: 2px; }
 	.sewing-workspace-shell__header { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--erp-space-2); }

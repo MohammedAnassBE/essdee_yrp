@@ -1,10 +1,10 @@
 <template>
-	<section v-if="rows.length" class="ppo-transfer-history erp-card" aria-labelledby="ppo-transfer-history-title">
+	<section class="ppo-transfer-history erp-card" aria-labelledby="ppo-transfer-history-title">
 		<header class="ppo-transfer-history__header">
 			<div><span>QUANTITY TRANSFERS</span><h2 id="ppo-transfer-history-title">Transfer history</h2></div>
 			<small>{{ rows.length }} {{ rows.length === 1 ? "movement" : "movements" }}</small>
 		</header>
-		<div class="ppo-transfer-history__table-wrap">
+		<div v-if="rows.length" class="ppo-transfer-history__table-wrap">
 			<table>
 				<thead><tr><th>Movement</th><th>Production Order</th><th>Size</th><th class="is-number">Quantity</th><th>Requested</th><th>Approved</th><th>Reason</th></tr></thead>
 				<tbody>
@@ -24,6 +24,7 @@
 				</tbody>
 			</table>
 		</div>
+		<div v-else class="ppo-transfer-history__empty"><i class="pi pi-arrow-right-arrow-left" aria-hidden="true" /><div><strong>No quantity transfers</strong><span>This Production Order has no transfer history.</span></div></div>
 	</section>
 </template>
 
@@ -68,6 +69,11 @@ td small { display: block; margin-top: 3px; color: var(--erp-text-muted); font-s
 .ppo-transfer-history__movement { display: inline-flex; padding: 4px 7px; border-radius: 999px; font-weight: 760; letter-spacing: 0; }
 .ppo-transfer-history__movement.is-added { color: var(--erp-success); background: var(--erp-success-soft); }
 .ppo-transfer-history__movement.is-reduced { color: var(--erp-danger); background: var(--erp-danger-soft); }
+.ppo-transfer-history__empty { display: flex; min-height: 150px; align-items: center; justify-content: center; gap: 10px; padding: 24px; color: var(--erp-text-muted); text-align: left; }
+.ppo-transfer-history__empty i { color: var(--erp-accent); font-size: 20px; }
+.ppo-transfer-history__empty div { display: grid; gap: 3px; }
+.ppo-transfer-history__empty strong { color: var(--erp-text); font-size: var(--erp-font-size-body); }
+.ppo-transfer-history__empty span { font-size: var(--erp-font-size-caption); }
 @media (max-width: 820px) {
 	.ppo-transfer-history__table-wrap { padding: 8px; }
 	table, tbody, tr, td { display: block; }

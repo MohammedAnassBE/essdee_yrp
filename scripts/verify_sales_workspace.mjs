@@ -369,6 +369,7 @@ async function launcherSuite(page) {
 		return route.continue()
 	})
 
+	await page.setViewportSize({ width: 1600, height: 900 })
 	await page.goto(`${SITE}/web/sales`, { waitUntil: "domcontentloaded" })
 	const cards = page.locator(".workspace-launcher__card")
 	await cards.nth(1).waitFor()
@@ -376,6 +377,23 @@ async function launcherSuite(page) {
 	assert(JSON.stringify(await cards.locator("strong").allTextContents()) === JSON.stringify(["Production Orders", "Reports"]), "Sales launcher labels are incorrect")
 	assert(await cards.nth(0).getAttribute("href") === "/web/sales/production-orders", "Production Orders card has wrong route")
 	assert(await cards.nth(1).getAttribute("href") === "/web/sales/reports", "Reports card has wrong route")
+	const launcherGeometry = await page.evaluate(() => {
+		const launcher = document.querySelector(".workspace-launcher").getBoundingClientRect()
+		const card = document.querySelector(".workspace-launcher__card").getBoundingClientRect()
+		return {
+			launcherWidth: launcher.width,
+			launcherLeft: launcher.left,
+			launcherRight: innerWidth - launcher.right,
+			cardWidth: card.width,
+		}
+	})
+	assert(
+		launcherGeometry.launcherWidth <= 1321
+			&& launcherGeometry.launcherLeft >= 100
+			&& Math.abs(launcherGeometry.launcherLeft - launcherGeometry.launcherRight) <= 2,
+		`Sales launcher is not a centered, bounded department workspace: ${JSON.stringify(launcherGeometry)}`,
+	)
+	assert(launcherGeometry.cardWidth <= 450, `Sales workspace cards stretch wider than the shared launcher pattern: ${JSON.stringify(launcherGeometry)}`)
 
 	capabilities = { sections: { production_orders: capabilities.sections.production_orders }, reports: {} }
 	await page.reload({ waitUntil: "domcontentloaded" })
@@ -435,14 +453,21 @@ async function productionOrderSuite(page) {
 	assert(await lotMatrix.count() === 1 && (await lotMatrix.innerText()).includes("LOT-26-0042"), "Lotwise Ordered Detail is missing")
 	assert(JSON.stringify(await lotMatrix.locator("tbody td").allTextContents()) === JSON.stringify(["12", "18", "30"]), "Lotwise quantities are not aligned beneath their size columns")
 	assert((await page.locator(".ppo-page__metric").first().innerText()).includes("120"), "Total quantity metric is missing")
+	const detailsTab = page.getByRole("tab", { name: "Details", exact: true })
+	const transfersTab = page.getByRole("tab", { name: /^Quantity Transferred/ })
 	const transferHistory = page.locator(".ppo-transfer-history")
-	assert(await transferHistory.count() === 1, "Quantity Transfer History is missing from the Production Order")
+	assert(await detailsTab.count() === 1 && await transfersTab.count() === 1, "Production Order must split Details and Quantity Transferred into tabs")
+	assert(!await transferHistory.isVisible(), "Quantity transfers must not be visible inside the Details tab")
+	await transfersTab.click()
+	assert(await transferHistory.isVisible(), "Quantity Transfer History is missing from the Production Order")
 	assert(await transferHistory.locator("tbody tr").count() === 2, "Every migrated quantity transfer row must be visible")
 	const transferText = await transferHistory.innerText()
 	for (const value of ["Reduced", "Added", "PPO-TEST-2", "PPO-TEST-3", "S", "M", "5", "8", "40", "35", "72", "80", "sales@example.com", "manager@example.com", "09-10-2026 14:00", "09-10-2026 14:35", "Buyer split", "Restore approved ratio"]) {
 		assert(transferText.includes(value), `Quantity Transfer History omitted ${value}: ${transferText}`)
 	}
 	assert(await transferHistory.locator('a[href="/web/sales/production-orders/PPO-TEST-2"]').count() === 1, "Counterpart PPO is not linked")
+	await detailsTab.click()
+	assert(await page.locator(".ppo-matrix").isVisible() && !await transferHistory.isVisible(), "Returning to Details must restore the order data without visible transfer rows")
 	const overviewText = await page.locator(".ppo-overview").innerText()
 	assert(overviewText.includes("25-10-2026") && !overviewText.includes("2026-10-25"), `Overview dates must use DD-MM-YYYY: ${overviewText}`)
 	assert(await page.getByRole("button", { name: "Delete", exact: true }).count() === 0, "Denied Delete capability leaked into the UI")

@@ -9,11 +9,23 @@
 					</div>
 				</template>
 				<template #header-actions><DocumentActionStrip :actions="actions" /></template>
-				<template #fields><ProductionOrderOverview :fields="workspace.fields || []" /></template>
-				<template #matrix><ProductionOrderMatrix :rows="workspace.matrix || []" :ordered="workspace.ordered || []" /></template>
-				<template #after-matrix>
-					<ProductionOrderTransferHistory :rows="workspace.histories?.transfers || []" />
-					<section v-if="dateActivity.length" class="ppo-activity erp-card"><header><span>DATE CHANGES</span><h2>Schedule history</h2></header><div v-for="entry in dateActivity" :key="entry.key"><strong>{{ entry.label }}</strong><span>{{ entry.value }}</span></div></section>
+				<template #fields>
+					<Tabs v-model:value="activeTab" class="ppo-tabs erp-tabs">
+						<TabList>
+							<Tab value="details">Details</Tab>
+							<Tab value="transfers">Quantity Transferred <span>{{ workspace.histories?.transfers?.length || 0 }}</span></Tab>
+						</TabList>
+						<TabPanels>
+							<TabPanel value="details">
+								<div class="ppo-details">
+									<ProductionOrderOverview :fields="workspace.fields || []" />
+									<ProductionOrderMatrix :rows="workspace.matrix || []" :ordered="workspace.ordered || []" />
+									<section v-if="dateActivity.length" class="ppo-activity erp-card"><header><span>DATE CHANGES</span><h2>Schedule history</h2></header><div v-for="entry in dateActivity" :key="entry.key"><strong>{{ entry.label }}</strong><span>{{ entry.value }}</span></div></section>
+								</div>
+							</TabPanel>
+							<TabPanel value="transfers"><ProductionOrderTransferHistory :rows="workspace.histories?.transfers || []" /></TabPanel>
+						</TabPanels>
+					</Tabs>
 				</template>
 				<template #rail>
 					<div class="ppo-page__metric"><span>Total quantity</span><strong>{{ formatNumber(workspace.record?.total_quantity) }}</strong><small>pieces</small></div>
@@ -30,6 +42,11 @@
 </template>
 
 <script setup>
+import Tab from "primevue/tab"
+import TabList from "primevue/tablist"
+import TabPanel from "primevue/tabpanel"
+import TabPanels from "primevue/tabpanels"
+import Tabs from "primevue/tabs"
 import { computed, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
@@ -51,6 +68,7 @@ const workspace = ref({})
 const loading = ref(true)
 const error = ref("")
 const acting = ref("")
+const activeTab = ref("details")
 const actionVisible = ref(false)
 const actionMode = ref("")
 const confirmVisible = ref(false)
@@ -122,6 +140,10 @@ watch(() => route.params.productionOrderId, () => load(false), { immediate: true
 .ppo-page__metric strong { color: var(--erp-accent-hover); font-size: 19px; font-variant-numeric: tabular-nums; }
 .ppo-page__lots { display: grid; gap: 5px; padding: 12px 13px; }
 .ppo-page__lots strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
+.ppo-tabs :deep(.p-tablist-tab-list) { padding-inline: 2px; }
+.ppo-tabs :deep(.p-tab span) { margin-left: 5px; padding: 2px 6px; color: var(--erp-text-muted); background: var(--erp-surface-muted); border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); }
+.ppo-tabs :deep(.p-tabpanels) { padding: 12px 0 0; background: transparent; }
+.ppo-details { display: grid; min-width: 0; gap: 12px; }
 .ppo-activity { overflow: hidden; border-color: var(--erp-border); }
 .ppo-activity > header { padding: 9px 13px; border-bottom: 1px solid var(--erp-border); background: var(--erp-surface-soft); }
 .ppo-activity > header span { color: var(--erp-accent-hover); font-size: var(--erp-font-size-min); font-weight: 740; letter-spacing: .05em; }

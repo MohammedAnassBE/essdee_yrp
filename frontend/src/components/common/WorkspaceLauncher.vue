@@ -1,6 +1,7 @@
 <template>
 	<section
 		class="workspace-launcher erp-workspace erp-workspace-entry"
+		:class="{ 'workspace-launcher--compact': compact }"
 		:aria-labelledby="headingId"
 		:aria-busy="loading"
 	>
@@ -9,6 +10,9 @@
 			<div class="workspace-launcher__title">
 				<p class="erp-page-header__eyebrow">Department workspace</p>
 				<h1 :id="headingId">{{ title }}</h1>
+				<div v-if="$slots.context" class="workspace-launcher__context">
+					<slot name="context" />
+				</div>
 			</div>
 		</header>
 
@@ -50,6 +54,7 @@ const props = defineProps({
 	loading: { type: Boolean, default: false },
 	emptyText: { type: String, default: "No permitted workspaces" },
 	skeletonCount: { type: Number, default: 4 },
+	compact: { type: Boolean, default: false },
 })
 
 const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-workspace-title`)
@@ -64,6 +69,10 @@ const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]
 
 .workspace-launcher__header { display: flex; align-items: center; gap: 10px; margin-bottom: var(--erp-space-6); }
 .workspace-launcher__title { min-width: 0; }
+.workspace-launcher__context { width: min(380px, 100%); margin-top: var(--erp-space-3); }
+.workspace-launcher--compact { width: 100%; max-width: none; margin: 0; padding: 8px 0 var(--erp-space-5); }
+.workspace-launcher--compact .workspace-launcher__header { align-items: flex-start; margin-bottom: var(--erp-space-5); }
+.workspace-launcher--compact .workspace-launcher__title { width: 100%; }
 
 .workspace-launcher__header h1 {
 	margin: 0;
@@ -182,6 +191,7 @@ const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]
 
 @media (max-width: 760px) {
 	.workspace-launcher { padding: 24px 2px; }
+	.workspace-launcher--compact { padding: 6px 0 var(--erp-space-4); }
 	.workspace-launcher__grid { grid-template-columns: 1fr; }
 	.workspace-launcher__card { min-height: 108px; padding: 14px; }
 	.workspace-launcher__body small {

@@ -44,7 +44,14 @@ async function selectUnit(page, value) {
 	await page.waitForURL((url) => url.searchParams.get("supplier") === value)
 }
 async function noOverflow(page, label) {
-	const geometry = await page.evaluate(() => ({ viewport: innerWidth, page: document.documentElement.scrollWidth }))
+	const geometry = await page.evaluate(() => ({
+		viewport: innerWidth,
+		page: document.documentElement.scrollWidth,
+		offenders: [...document.querySelectorAll("body *")].flatMap(element => {
+			const box = element.getBoundingClientRect()
+			return box.right > innerWidth + 1 || box.left < -1 ? [{ tag: element.tagName, className: String(element.className || "").slice(0, 120), left: Math.round(box.left), right: Math.round(box.right), width: Math.round(box.width) }] : []
+		}).slice(0, 8),
+	}))
 	assert(geometry.page <= geometry.viewport + 1, `${label} page overflow: ${JSON.stringify(geometry)}`)
 }
 
@@ -74,6 +81,37 @@ async function dialogGeometry(page, label, selector = ".document-error-dialog") 
 		if (process.env.ESSDEE_SEWING_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SEWING_SCREENSHOTS}/sewing-${label}-dialog-${width}.png`, fullPage: true, animations: "disabled" })
 	}
 	await page.setViewportSize({ width: 1280, height: 900 })
+}
+
+async function sewingDialogGeometry(page, label, actionNames) {
+	const dialog = page.locator(".sewing-plan-dialog:visible")
+	await dialog.waitFor()
+	const originalViewport = page.viewportSize()
+	for (const width of [1600, 1280, 900, 390]) {
+		await page.setViewportSize({ width, height: 900 })
+		await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+		await noOverflow(page, `${label} ${width}`)
+		const geometry = await dialog.evaluate(element => {
+			const box = element.getBoundingClientRect()
+			const footer = element.querySelector(".p-dialog-footer")?.getBoundingClientRect()
+			const content = element.querySelector(".p-dialog-content")
+			return {
+				dialog: { left: box.left, right: box.right, top: box.top, bottom: box.bottom },
+				footer: footer && { left: footer.left, right: footer.right, top: footer.top, bottom: footer.bottom },
+				contentOwnsScroll: Boolean(content && content.scrollHeight > content.clientHeight ? getComputedStyle(content).overflowY !== "visible" : true),
+			}
+		})
+		assert(geometry.dialog.left >= -1 && geometry.dialog.right <= width + 1 && geometry.dialog.top >= -1 && geometry.dialog.bottom <= 901, `${label} dialog clips at ${width}px: ${JSON.stringify(geometry)}`)
+		assert(geometry.footer && geometry.footer.left >= -1 && geometry.footer.right <= width + 1 && geometry.footer.bottom <= 901, `${label} footer clips at ${width}px: ${JSON.stringify(geometry)}`)
+		assert(geometry.contentOwnsScroll, `${label} content does not own vertical overflow at ${width}px`)
+		for (const name of actionNames) {
+			const action = dialog.getByRole("button", { name, exact: true })
+			assert(await action.isVisible(), `${label} action ${name} is not reachable at ${width}px`)
+			const box = await action.boundingBox()
+			assert(box && box.x >= -1 && box.x + box.width <= width + 1 && box.y >= -1 && box.y + box.height <= 901, `${label} action ${name} clips at ${width}px: ${JSON.stringify(box)}`)
+		}
+	}
+	if (originalViewport) await page.setViewportSize(originalViewport)
 }
 
 async function readableReportDates(page, label) {
@@ -122,6 +160,24 @@ async function launcherSuite(page) {
 	await cards.nth(2).waitFor()
 	assert(await cards.count() === 3, "Sewing must have exactly three launcher cards")
 	assert(JSON.stringify(await cards.locator("strong").allTextContents()) === JSON.stringify(["Sewing Plan", "Reports", "Attendance Report"]), "Sewing launcher labels differ from the three approved destinations")
+	await page.setViewportSize({ width: 1600, height: 900 })
+	const launcherGeometry = await page.evaluate(() => {
+		const shell = document.querySelector(".sewing-workspace-shell").getBoundingClientRect()
+		const title = document.querySelector(".workspace-launcher__title h1").getBoundingClientRect()
+		const picker = document.querySelector(".sewing-unit-picker").getBoundingClientRect()
+		const grid = document.querySelector(".workspace-launcher__grid").getBoundingClientRect()
+		return {
+			shellLeft: shell.left,
+			shellRight: innerWidth - shell.right,
+			pickerAfterTitle: Boolean(document.querySelector(".workspace-launcher__title h1").compareDocumentPosition(document.querySelector(".sewing-unit-picker")) & Node.DOCUMENT_POSITION_FOLLOWING),
+			titleToPicker: picker.top - title.bottom,
+			pickerToCards: grid.top - picker.bottom,
+		}
+	})
+	assert(launcherGeometry.shellLeft <= 32 && launcherGeometry.shellRight <= 32, `Sewing launcher wastes horizontal space: ${JSON.stringify(launcherGeometry)}`)
+	assert(launcherGeometry.pickerAfterTitle && launcherGeometry.titleToPicker >= 0 && launcherGeometry.titleToPicker <= 16, `Sewing Unit must sit directly below the workspace title: ${JSON.stringify(launcherGeometry)}`)
+	assert(launcherGeometry.pickerToCards >= 0 && launcherGeometry.pickerToCards <= 28, `Sewing Unit leaves excessive space before cards: ${JSON.stringify(launcherGeometry)}`)
+	await page.setViewportSize({ width: 1280, height: 900 })
 	for (const [, label, href] of definitions) {
 		assert(await page.getByRole("link", { name: new RegExp(`^${label}`) }).getAttribute("href") === href, `${label} has wrong href`)
 	}
@@ -321,8 +377,8 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 	page.setDefaultTimeout(10_000)
 	const requests = [], errors = []
 	const sizes = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL"]
-	function plan(name = "PLAN-A") { return { details: { item: "T-Shirt", lot: "LOT-A", supplier: "UNIT-A", work_order: "WO-A", work_order_status: "Open", primary_values: sizes }, colours: { Navy: { colour: "Navy", variant_colour: "Navy", part: null, set_combination: { major_colour: "Navy" }, values: Object.fromEntries(sizes.map((size, i) => [size, { order_detail: `${name}-ROW-${i}`, item_variant: `UNTRUSTED-${size}`, order_qty: 100, sewing_in: 20, sewing_in_remaining: 80, data_entry: 0, pre_final: 2, final_inspection: 2 }])) } } } }
-	const entry = { data: { "LOT-A": { "PLAN-A": plan(), "PLAN-OTHER": plan("PLAN-OTHER") } }, input_types: ["Sewing In", "Sewing Out"], diff: { sewing_in: "order_qty", sewing_out: "sewing_in" }, allowances: { sewing_in: 5, sewing_out: 0 }, default_received_type: "" }
+	function plan(name = "PLAN-A", lot = "LOT-A") { return { details: { item: "T-Shirt", lot, supplier: "UNIT-A", work_order: "WO-A", work_order_status: "Open", primary_values: sizes }, colours: { Navy: { colour: "Navy", variant_colour: "Navy", part: null, set_combination: { major_colour: "Navy" }, values: Object.fromEntries(sizes.map((size, i) => [size, { order_detail: `${name}-ROW-${i}`, item_variant: `UNTRUSTED-${size}`, order_qty: 100, sewing_in: 20, sewing_in_remaining: 80, data_entry: 0, pre_final: 2, final_inspection: 2 }])) } } } }
+	const entry = { data: { "LOT-A": { "PLAN-A": plan(), "PLAN-OTHER": plan("PLAN-OTHER") }, "LOT-B": { "PLAN-B": plan("PLAN-B", "LOT-B") } }, input_types: ["Sewing In", "Sewing Out"], diff: { sewing_in: "order_qty", sewing_out: "sewing_in" }, allowances: { sewing_in: 5, sewing_out: 0 }, default_received_type: "" }
 	const state = { dashboard: [{ input_type: "Sewing In", qty: 40 }, { input_type: "Sewing Out", qty: 15 }], dashboardError: "", dashboardDelay: 250, dashboardHold: null, entryError: "", entryHold: null, submitError: "", inspectionError: "", submitDelay: 0, loads: 0, authoritativeQty: 20 }
 	page.on("pageerror", e => errors.push(e.message))
 	await page.route("**/api/method/**", async route => {
@@ -346,13 +402,20 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 	})
 	const select = async (name, option) => { await page.getByRole("combobox", { name, exact: true }).click(); await page.getByRole("option", { name: option, exact: true }).click() }
 	const closeError = async (text) => { await page.locator(".document-error-dialog").getByText(text, { exact: false }).waitFor(); await page.getByRole("button", { name: "OK", exact: true }).click(); await page.locator(".document-error-dialog").waitFor({ state: "hidden" }) }
+	const planCard = name => page.locator(`[data-sewing-plan-card='${name}']`)
+	const openEntry = async name => { await planCard(name).getByRole("button", { name: `Record entry for ${name}`, exact: true }).click(); await page.locator(".sewing-plan-dialog").waitFor() }
+	const closeEntry = async () => { await page.getByRole("button", { name: "Close entry", exact: true }).click(); await page.locator(".sewing-plan-dialog").waitFor({ state: "hidden" }) }
+	const openInspection = async name => { await planCard(name).getByRole("button", { name: `Update inspection for ${name}`, exact: true }).click(); await page.locator(".sewing-plan-dialog").waitFor() }
+	const closeInspection = async () => { await page.getByRole("button", { name: "Close inspection", exact: true }).click(); await page.locator(".sewing-plan-dialog").waitFor({ state: "hidden" }) }
 	try {
 		await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/__plan-test`)
 		await page.getByRole("tab", { name: "Dashboard", exact: true }).waitFor()
 		assert(JSON.stringify(await page.getByRole("tab").allTextContents()) === JSON.stringify(["Dashboard", "Data Entry", "Entries", "Consumption", "Closed Work Order GRN"]), "Plan workspace must expose exactly the five approved tabs")
 		await page.getByRole("status").filter({ hasText: "Loading dashboard" }).waitFor()
-		await page.getByRole("row").filter({ hasText: "Sewing In" }).waitFor()
-		assert((await page.getByRole("row").filter({ hasText: "Sewing In" }).innerText()).includes("40"), "Dashboard lost configured stage quantities")
+		const dashboardCards = page.locator("[data-sewing-dashboard-card]")
+		await dashboardCards.filter({ hasText: "Sewing In" }).waitFor()
+		assert((await dashboardCards.filter({ hasText: "Sewing In" }).innerText()).includes("40"), "Dashboard lost configured stage quantities")
+		assert(await dashboardCards.count() === 2 && await page.locator(".sewing-dashboard__table").count() === 0, "Open Work Order inputs must render as cards, not a table")
 		assert(!requests.some(r => r.method.endsWith("get_data_entry_data")), "Inactive Data Entry fetched")
 		for (const width of [1600, 1280, 900, 390]) { await page.setViewportSize({ width, height: 900 }); await noOverflow(page, `Dashboard ${width}`); if (process.env.ESSDEE_SEWING_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SEWING_SCREENSHOTS}/sewing-dashboard-${width}.png`, fullPage: true, animations: "disabled" }) }
 		await page.setViewportSize({ width: 1280, height: 900 })
@@ -360,14 +423,14 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		state.dashboardHold = new Promise(resolve => { releaseRefresh = resolve })
 		state.dashboardError = "Retained dashboard unavailable"
 		await page.getByRole('button', { name: 'Refresh dashboard' }).click()
-		assert(await page.getByRole('row').filter({ hasText: 'Sewing In' }).isVisible(), 'Dashboard refresh blanked useful results')
+		assert(await dashboardCards.filter({ hasText: 'Sewing In' }).isVisible(), 'Dashboard refresh blanked useful results')
 		assert(await page.getByRole('button', { name: 'Refresh dashboard' }).isDisabled(), 'Dashboard refresh allows duplicate requests')
 		releaseRefresh(); await oneLoadPopup(page, state.dashboardError)
-		assert(await page.getByRole('row').filter({ hasText: 'Sewing In' }).isVisible(), 'Dashboard failure lost useful results')
+		assert(await dashboardCards.filter({ hasText: 'Sewing In' }).isVisible(), 'Dashboard failure lost useful results')
 		state.dashboardError = ''
 		state.dashboard = []; await page.getByRole("button", { name: "Refresh dashboard" }).click(); await page.getByText("No input quantities for open Work Orders.", { exact: true }).waitFor()
 		state.dashboardError = "Dashboard unavailable"; await page.getByRole("button", { name: "Refresh dashboard" }).click(); await oneLoadPopup(page, state.dashboardError)
-		state.dashboardError = ""; state.dashboard = [{ input_type: "Sewing In", qty: 41 }]; await page.getByRole("button", { name: "Retry", exact: true }).click(); await page.getByRole("cell", { name: "41", exact: true }).waitFor()
+		state.dashboardError = ""; state.dashboard = [{ input_type: "Sewing In", qty: 41 }]; await page.getByRole("button", { name: "Retry", exact: true }).click(); await dashboardCards.filter({ hasText: "41" }).waitFor()
 		const before = requests.length
 		await page.getByRole("tab", { name: "Closed Work Order GRN", exact: true }).click(); await page.getByRole("combobox", { name: "Closed Work Order", exact: true }).waitFor()
 		assert(await page.locator("[data-sewing-plan-tab]").count() === 1, "Inactive tab still mounted")
@@ -376,18 +439,37 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		await page.getByRole("tab", { name: "Data Entry", exact: true }).click()
 		await oneLoadPopup(page, state.entryError)
 		state.entryError = ""; await page.getByRole("button", { name: "Retry", exact: true }).click()
-		await page.getByRole("combobox", { name: "Sewing Plan", exact: true }).waitFor()
+		await page.locator("[data-sewing-plan-card='PLAN-A']").waitFor()
+		assert(await page.locator("[data-sewing-plan-card]").count() === 3, "Data Entry must show available plan cards without requiring a filter")
+		assert(await page.locator(".sewing-data-entry__lot").count() === 2, "Data Entry must group plans from different Lots")
+		assert(await page.locator(".sewing-data-entry__lot").evaluateAll(groups => new Set(groups.map(group => group.getAttribute("aria-labelledby"))).size === groups.length), "Lot groups must use collision-safe heading IDs")
+		for (const width of [1600, 1280, 900, 390]) {
+			await page.setViewportSize({ width, height: 900 }); await noOverflow(page, `Data Entry cards ${width}`)
+			const columns = await page.locator(".sewing-data-entry__cards").evaluateAll(elements => elements.map(element => getComputedStyle(element).gridTemplateColumns.split(" ").length))
+			assert(columns.every(count => count === (width <= 760 ? 1 : 2)), `Data Entry card grid has ${columns.join(",")} columns at ${width}px`)
+			const headerLayout = await page.locator(".sewing-data-entry__header").evaluate(element => {
+				const copy = element.firstElementChild.getBoundingClientRect(), action = element.querySelector("button").getBoundingClientRect()
+				return { separated: copy.bottom <= action.top || action.bottom <= copy.top || copy.right <= action.left || action.right <= copy.left, actionLeft: action.left, actionRight: action.right, width: innerWidth }
+			})
+			assert(headerLayout.separated && headerLayout.actionLeft >= 0 && headerLayout.actionRight <= width + 1, `Data Entry Refresh overlaps or clips at ${width}px: ${JSON.stringify(headerLayout)}`)
+			if (process.env.ESSDEE_SEWING_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SEWING_SCREENSHOTS}/sewing-entry-cards-${width}.png`, fullPage: true, animations: "disabled" })
+		}
+		await page.setViewportSize({ width: 1280, height: 900 })
 		assert(await page.locator("[data-sewing-plan-tab]").count() === 1, "Data Entry mounted alongside another tab")
 		assert(requests.some(r => r.method.endsWith("get_data_entry_data") && r.args.supplier === "UNIT-A"), "Data Entry is not Supplier scoped")
-		await page.getByRole("combobox", { name: "Lot", exact: true }).click(); assert(JSON.stringify(await page.getByRole("option").allTextContents()) === JSON.stringify(["LOT-A"]), "Lot choices must come from current Supplier data"); await page.getByRole("option", { name: "LOT-A", exact: true }).click()
-		await select("Sewing Plan", "PLAN-A")
+		await page.getByRole("combobox", { name: "Lot", exact: true }).click(); assert(JSON.stringify(await page.getByRole("option").allTextContents()) === JSON.stringify(["LOT-A", "LOT-B"]), "Lot choices must come from current Supplier data"); await page.getByRole("option", { name: "LOT-B", exact: true }).click()
+		assert(await page.locator("[data-sewing-plan-card='PLAN-B']").isVisible() && await page.locator("[data-sewing-plan-card='PLAN-A']").count() === 0, "Lot filter did not isolate the selected Lot")
+		await page.locator(".p-select-clear-icon").click()
+		assert(await page.locator("[data-sewing-plan-card]").count() === 3, "Clearing the Lot filter did not restore all plans")
+		await page.getByRole("combobox", { name: "Lot", exact: true }).click(); await page.getByRole("option", { name: "LOT-A", exact: true }).click()
+		await openEntry("PLAN-A")
 		const quantity = page.getByRole("spinbutton", { name: "Navy XS Entry quantity", exact: true })
 		await quantity.fill("7")
-		await select("Sewing Plan", "PLAN-OTHER"); await quantity.fill("11"); await select("Sewing Plan", "PLAN-A")
+		await closeEntry(); await openEntry("PLAN-OTHER"); await quantity.fill("11"); await closeEntry(); await openEntry("PLAN-A")
 		assert(await quantity.inputValue() === "7", "Changing plans lost the selected plan's edit")
-		await page.getByRole("tab", { name: "Entries", exact: true }).click(); await page.getByRole("tab", { name: "Data Entry", exact: true }).click(); await quantity.waitFor()
+		await closeEntry(); await page.getByRole("tab", { name: "Entries", exact: true }).click(); await page.getByRole("tab", { name: "Data Entry", exact: true }).click(); await planCard("PLAN-A").waitFor(); await openEntry("PLAN-A")
 		assert(await quantity.inputValue() === '7', 'Tab switch discarded unsaved entry draft')
-		assert(await page.getByRole("combobox", { name: "Sewing Plan", exact: true }).textContent() === "PLAN-A", "Inactive-tab remount lost plan filter")
+		assert(await page.locator(".sewing-plan-dialog").getByText("PLAN-A", { exact: false }).count() > 0, "Inactive-tab remount lost plan selection")
 		await quantity.fill("7")
 		await page.getByRole("button", { name: "Save entry", exact: true }).click(); await closeError("Complete all required entry fields.")
 		assert(await quantity.inputValue() === "7", "Required-field validation lost quantity")
@@ -396,7 +478,7 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		await page.getByRole('button', { name: 'Show Work Station options', exact: true }).click(); await oneLoadPopup(page, state.linkError)
 		state.linkError = ''
 		for (const [name, value] of [["Work Station", "Sewing Line 1"], ["Received Type", "Good"]]) { await page.getByRole("combobox", { name, exact: true }).fill(value); await page.getByRole("option", { name: value, exact: true }).click() }
-		await page.getByRole("tab", { name: "Entries", exact: true }).click(); await page.getByRole("tab", { name: "Data Entry", exact: true }).click(); await quantity.waitFor()
+		await closeEntry(); await page.getByRole("tab", { name: "Entries", exact: true }).click(); await page.getByRole("tab", { name: "Data Entry", exact: true }).click(); await planCard("PLAN-A").waitFor(); await openEntry("PLAN-A")
 		assert(await page.getByRole("combobox", { name: "Work Station", exact: true }).inputValue() === "Sewing Line 1", "Inactive-tab remount lost entry filters")
 		assert(await page.getByRole("combobox", { name: "Date", exact: true }).inputValue(), "Date control is missing")
 		assert(await page.getByRole("combobox", { name: "Time", exact: true }).inputValue(), "Time control is missing")
@@ -410,11 +492,16 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		assert(!JSON.stringify(rejected).includes("item_variant") && !JSON.stringify(rejected).includes("UNTRUSTED"), "Browser-authored variant identity sent")
 		assert(["plan", "input_type", "work_station", "received_type", "date", "time", "supplier"].every(k => rejected[k]), "Required controls absent from payload")
 		await quantity.fill("7")
-		for (const width of [390, 900, 1600, 1280]) { await page.setViewportSize({ width, height: 900 }); await noOverflow(page, `Data Entry ${width}`); assert(await quantity.inputValue() === "7", "Resize lost quantity"); if (width === 390) assert(await page.getByRole("region", { name: "PLAN-A quantity matrix", exact: true }).evaluate(el => el.scrollWidth > el.clientWidth), "Matrix must own narrow overflow"); if (process.env.ESSDEE_SEWING_SCREENSHOTS) await page.screenshot({ path: `${process.env.ESSDEE_SEWING_SCREENSHOTS}/sewing-entry-${width}.png`, fullPage: true }) }
+		await sewingDialogGeometry(page, "Entry editor", ["Close entry", "Save entry"])
+		assert(await quantity.inputValue() === "7", "Resize lost quantity")
+		assert(await page.getByRole("region", { name: "PLAN-A quantity matrix", exact: true }).evaluate(el => el.scrollWidth > el.clientWidth), "Matrix must own narrow overflow")
+		await closeEntry(); await openInspection("PLAN-A")
+		await sewingDialogGeometry(page, "Inspection editor", ["Close inspection", "Update inspection", "Revert inspection"])
+		await closeInspection(); await openEntry("PLAN-A")
 		const unsavedRequests = requests.filter(request => /submit_data_entry_log|update_sewing_plan_data/.test(request.method)).length
-		await select("Inspection Type", "Final Inspection")
+		await closeEntry(); await openInspection("PLAN-A"); await select("Inspection Type", "Final Inspection")
+		await select("Inspection Type", "Pre Final"); await closeInspection(); await openEntry("PLAN-A")
 		assert(await quantity.inputValue() === "7", "Changing inspection view discarded unsaved entry quantity")
-		await select("Inspection Type", "Pre Final")
 		assert(await quantity.inputValue() === "7" && requests.filter(request => /submit_data_entry_log|update_sewing_plan_data/.test(request.method)).length === unsavedRequests, "Non-destructive view switch saved or discarded entry draft")
 		state.submitError = ""; state.submitDelay = 800
 		const count = requests.filter(r => r.method.endsWith("submit_data_entry_log")).length, loads = state.loads
@@ -431,11 +518,12 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		assert(await quantity.inputValue() === "0", "Successful save did not reset entry quantities")
 		assert((await page.getByRole("region", { name: "PLAN-A quantity matrix", exact: true }).innerText()).includes("27"), "Authoritative stage values were not rendered after save")
 		state.entryError = "Saved plan refresh unavailable"
-		await quantity.fill("1"); await page.getByRole("button", { name: "Save entry", exact: true }).click(); await page.getByText("Entry saved. Refresh the plan before recording more quantities.", { exact: true }).waitFor()
+		await quantity.fill("1"); await page.getByRole("button", { name: "Save entry", exact: true }).click(); await page.locator(".sewing-plan-dialog").getByText("Entry saved. Refresh the plan before recording more quantities.", { exact: true }).waitFor()
 		await oneLoadPopup(page, state.entryError)
 		assert(await page.getByRole("button", { name: "Save entry", exact: true }).isDisabled(), "Reload failure must block further writes until authoritative refresh")
-		state.entryError = ""; await page.getByRole("button", { name: "Refresh data entry" }).click(); await page.getByRole("button", { name: "Save entry", exact: true }).waitFor({ state: "visible" }); await page.waitForFunction(() => !document.querySelector('button[aria-label="Save entry"]').disabled)
-		await select("Inspection Type", "Pre Final")
+		assert(await page.locator(".sewing-plan-dialog").getByText("Saved values could not be refreshed. Refresh this plan before recording more quantities.", { exact: true }).isVisible(), "Entry recovery reason is hidden behind the modal")
+		state.entryError = ""; await page.locator(".sewing-plan-dialog").getByRole("button", { name: "Refresh plan", exact: true }).click(); await page.waitForFunction(() => !document.querySelector('button[aria-label="Save entry"]').disabled)
+		await closeEntry(); await openInspection("PLAN-A"); await select("Inspection Type", "Pre Final")
 		await page.getByRole("spinbutton", { name: "Navy XS Inspection quantity", exact: true }).fill("9")
 		await page.getByRole("button", { name: "Update inspection", exact: true }).click(); await page.getByText("Inspection updated.", { exact: true }).waitFor()
 		assert(await page.getByRole("spinbutton", { name: "Navy XS Inspection quantity", exact: true }).inputValue() === "9", "Inspection update did not render authoritative total")
@@ -443,10 +531,11 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		const inspection = page.getByRole("spinbutton", { name: "Navy XS Inspection quantity", exact: true })
 		assert(await inspection.inputValue() === "2", "Inspection recovery fixture needs the saved 2-unit total")
 		state.entryError = "Inspection recovery unavailable"
-		await page.getByRole("button", { name: "Revert inspection", exact: true }).click(); await page.getByText("Inspection reverted. Refresh the plan before recording more quantities.", { exact: true }).waitFor()
+		await page.getByRole("button", { name: "Revert inspection", exact: true }).click(); await page.locator(".sewing-plan-dialog").getByText("Inspection reverted. Refresh the plan before recording more quantities.", { exact: true }).waitFor()
 		await oneLoadPopup(page, state.entryError)
 		assert(await page.getByRole("button", { name: "Update inspection", exact: true }).isDisabled(), "Failed inspection refresh re-enabled stale Update draft")
-		state.entryError = ""; await page.getByRole("button", { name: "Refresh data entry" }).click()
+		assert(await page.locator(".sewing-plan-dialog").getByText("Saved values could not be refreshed. Refresh this plan before recording more quantities.", { exact: true }).isVisible(), "Inspection recovery reason is hidden behind the modal")
+		state.entryError = ""; await page.locator(".sewing-plan-dialog").getByRole("button", { name: "Refresh plan", exact: true }).click()
 		await page.waitForFunction(() => !document.querySelector('button[aria-label="Update inspection"]').disabled)
 		assert(await inspection.inputValue() === "0", "Acknowledged inspection revert recovery retained stale 2-unit draft instead of server zero")
 		assert(requests.filter(r => r.method.endsWith("get_data_entry_data")).at(-1).args.lot === "LOT-A", "Inspection recovery lost acknowledged Supplier/Lot scope")
@@ -456,49 +545,55 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		await page.getByRole("button", { name: "Update inspection", exact: true }).click(); await closeError(state.inspectionError)
 		assert(await inspection.inputValue() === "5", "Rejected inspection acknowledgement discarded user edit")
 		state.inspectionError = ""; state.entryError = "Ordinary refresh unavailable"
-		await page.getByRole("button", { name: "Refresh data entry" }).click(); await oneLoadPopup(page, state.entryError)
+		await closeInspection(); await page.getByRole("button", { name: "Refresh data entry" }).click(); await oneLoadPopup(page, state.entryError); await openInspection("PLAN-A")
 		assert(await inspection.inputValue() === "5", "Ordinary load error discarded unsaved inspection edit")
-		state.entryError = ""
+		state.entryError = ""; await closeInspection()
 		for (const scenario of ['entry-success', 'entry-rejection', 'inspection-success', 'inspection-rejection', 'revert-success', 'revert-rejection']) {
 			const rejected = scenario.endsWith('rejection'), isEntry = scenario.startsWith('entry'), revert = scenario.startsWith('revert')
 			state.submitError = isEntry && rejected ? 'Entry settlement rejected' : ''
 			state.inspectionError = !isEntry && rejected ? 'Inspection settlement rejected' : ''
 			state.submitDelay = 1200
-			await quantity.fill('3'); await inspection.fill('6')
+			await openEntry('PLAN-A'); await quantity.fill('3'); await closeEntry()
+			await openInspection('PLAN-A'); await inspection.fill('6'); await closeInspection()
 			await page.getByRole('tab', { name: 'Entries', exact: true }).click()
-			await page.getByRole('tab', { name: 'Data Entry', exact: true }).click(); await quantity.waitFor()
-			assert(await quantity.inputValue() === '3' && await inspection.inputValue() === '6', `${scenario}: unsaved drafts lost across tabs`)
+			await page.getByRole('tab', { name: 'Data Entry', exact: true }).click(); await planCard('PLAN-A').waitFor()
+			await openEntry('PLAN-A'); assert(await quantity.inputValue() === '3', `${scenario}: entry draft lost across tabs`); await closeEntry()
+			await openInspection('PLAN-A'); assert(await inspection.inputValue() === '6', `${scenario}: inspection draft lost across tabs`)
+			if (isEntry) { await closeInspection(); await openEntry('PLAN-A') }
 			const method = isEntry ? 'submit_data_entry_log' : 'update_sewing_plan_data', beforeWrites = requests.filter(r => r.method.endsWith(method)).length
 			const request = page.waitForRequest(r => r.url().endsWith(method))
 			await page.getByRole('button', { name: isEntry ? 'Save entry' : revert ? 'Revert inspection' : 'Update inspection', exact: true }).click(); await request
 			const beforeLoads = state.loads
-			await page.getByRole('tab', { name: 'Entries', exact: true }).click()
-			await page.getByRole('tab', { name: 'Data Entry', exact: true }).click(); await quantity.waitFor()
-			assert(await page.getByRole('button', { name: 'Save entry', exact: true }).isDisabled() && await page.getByRole('button', { name: 'Update inspection', exact: true }).isDisabled(), `${scenario}: remount unlocked pending write`)
-			await page.getByRole('button', { name: 'Save entry', exact: true }).evaluate(button => button.click())
+			await page.evaluate(() => window.router.replace({ query: { ...window.router.currentRoute.value.query, tab: 'entries' } }))
+			await page.locator("[data-sewing-plan-tab='entries']").waitFor()
+			await page.evaluate(() => window.router.replace({ query: { ...window.router.currentRoute.value.query, tab: 'data-entry' } }))
+			await planCard('PLAN-A').waitFor()
+			assert(await planCard('PLAN-A').getByRole('button').evaluateAll(buttons => buttons.every(button => button.disabled)), `${scenario}: remount unlocked pending write`)
 			assert(state.loads === beforeLoads, `${scenario}: remount fetched during mutation`)
 			const response = page.waitForResponse(r => r.url().endsWith(method))
-			await page.getByRole('tab', { name: 'Entries', exact: true }).click(); await response
+			await page.evaluate(() => window.router.replace({ query: { ...window.router.currentRoute.value.query, tab: 'entries' } })); await response
 			assert(state.loads === beforeLoads, `${scenario}: inactive tab refreshed`)
-			await page.getByRole('tab', { name: 'Data Entry', exact: true }).click(); await quantity.waitFor()
+			await page.evaluate(() => window.router.replace({ query: { ...window.router.currentRoute.value.query, tab: 'data-entry' } })); await planCard('PLAN-A').waitFor()
 			if (rejected) {
 				await closeError(isEntry ? state.submitError : state.inspectionError)
 				await page.waitForFunction(() => document.querySelector('[data-sewing-plan-tab="data-entry"]').getAttribute('aria-busy') === 'false')
-				assert(await quantity.inputValue() === '3' && await inspection.inputValue() === '6', `${scenario}: rejection recovery erased edits`)
+				await openEntry('PLAN-A'); assert(await quantity.inputValue() === '3', `${scenario}: rejection recovery erased entry edit`); await closeEntry()
+				await openInspection('PLAN-A'); assert(await inspection.inputValue() === '6', `${scenario}: rejection recovery erased inspection edit`); await closeInspection()
 			} else {
 				await page.getByText(isEntry ? 'Entry saved.' : revert ? 'Inspection reverted.' : 'Inspection updated.', { exact: true }).waitFor()
-				assert(await (isEntry ? quantity : inspection).inputValue() === (isEntry || revert ? '0' : '6'), `${scenario}: missing authoritative recovery`)
+				if (isEntry) { await openEntry('PLAN-A'); assert(await quantity.inputValue() === '0', `${scenario}: missing authoritative recovery`); await closeEntry() }
+				else { await openInspection('PLAN-A'); assert(await inspection.inputValue() === (revert ? '0' : '6'), `${scenario}: missing authoritative recovery`); await closeInspection() }
 				await page.getByRole('button', { name: 'Dismiss save notice', exact: true }).click()
 			}
 			assert(state.loads === beforeLoads + 1 && requests.filter(r => r.method.endsWith(method)).length === beforeWrites + 1, `${scenario}: duplicate refresh or mutation`)
-			await page.getByRole('tab', { name: 'Entries', exact: true }).click(); await page.getByRole('tab', { name: 'Data Entry', exact: true }).click(); await quantity.waitFor()
+			await page.getByRole('tab', { name: 'Entries', exact: true }).click(); await page.getByRole('tab', { name: 'Data Entry', exact: true }).click(); await planCard('PLAN-A').waitFor()
 			assert(await page.locator('.document-error-dialog').count() === 0 && await page.getByRole('button', { name: 'Dismiss save notice', exact: true }).count() === 0, `${scenario}: acknowledged outcome replayed`)
 			console.log(`PASS Data Entry settlement ${scenario}`)
 		}
 		state.submitDelay = 0; state.submitError = ''; state.inspectionError = ''
 		for (const rejected of [false, true]) {
 			state.submitDelay = 700; state.submitError = rejected ? 'Discarded Supplier rejected' : ''
-			await quantity.fill('4')
+			await openEntry('PLAN-A'); await quantity.fill('4')
 			const pending = page.waitForRequest(r => r.url().endsWith('submit_data_entry_log'))
 			await page.getByRole('button', { name: 'Save entry', exact: true }).click(); await pending
 			const settled = page.waitForResponse(r => r.url().endsWith('submit_data_entry_log'))
@@ -506,9 +601,10 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 			await page.getByText('No Sewing Plans for this Sewing Unit.', { exact: true }).waitFor(); await settled
 			assert(await page.locator('.document-error-dialog').count() === 0 && await page.getByRole('button', { name: 'Dismiss save notice', exact: true }).count() === 0, 'Discarded Supplier delivered a late mutation outcome')
 			await page.evaluate(() => window.router.replace('/sewing/plans?supplier=UNIT-A&tab=data-entry'))
-			await select('Sewing Plan', 'PLAN-A'); await select('Input Type', 'Sewing In')
+			await planCard('PLAN-A').waitFor(); await openEntry('PLAN-A'); await select('Input Type', 'Sewing In')
 			assert(await quantity.inputValue() === '0', 'Discarded Supplier draft leaked into new scope')
 			for (const [name, value] of [['Work Station', 'Sewing Line 1'], ['Received Type', 'Good']]) { await page.getByRole('combobox', { name, exact: true }).fill(value); await page.getByRole('option', { name: value, exact: true }).click() }
+			await closeEntry()
 		}
 		state.submitDelay = 0; state.submitError = ''
 		await page.evaluate(() => window.router.replace('/sewing/plans?supplier=UNIT-B&tab=data-entry'))
@@ -532,10 +628,10 @@ createApp(RouterView).use(router).use(PrimeVue, { theme: { preset: Aura, options
 		while (requests.filter(r => r.method.endsWith("get_dashboard_data")).length === dashboardCount) await page.waitForTimeout(10)
 		state.dashboard = [{ input_type: "Current B stage", qty: 99 }]
 		await page.evaluate(() => window.router.replace('/sewing/plans?supplier=UNIT-B&tab=dashboard'))
-		await page.getByRole("row").filter({ hasText: "Current B stage" }).waitFor()
+		await page.locator("[data-sewing-dashboard-card]").filter({ hasText: "Current B stage" }).waitFor()
 		const oldDashboard = page.waitForResponse(response => response.url().endsWith("get_dashboard_data") && response.request().postDataJSON().supplier === "UNIT-A")
 		releaseDashboard(); await oldDashboard
-		assert(await page.getByRole("row").filter({ hasText: "Old A stage" }).count() === 0, "Delayed old Supplier dashboard overwrote current Supplier")
+		assert(await page.locator("[data-sewing-dashboard-card]").filter({ hasText: "Old A stage" }).count() === 0, "Delayed old Supplier dashboard overwrote current Supplier")
 		assert(errors.length === 0, `Browser errors: ${errors.join("; ")}`)
 		console.log("PASS plan-entry: five active-only tabs, dashboard states/retry/refresh, Supplier Lots, required controls, trusted-row payload, preserved validation/server rejection, delayed Link/save isolation, submit lock, authoritative reload/recovery, inspection revert recovery and rejected-edit retention, restricted inspection actions, stale Supplier rejection, tab-filter retention, four contained viewports with resize retention")
 	} catch (reason) {
@@ -1426,7 +1522,7 @@ async function integratedSuite(browser) {
 		await selectUnit(page, "UNIT-A")
 		assert(requests.length === 0, "Launcher eagerly requested Sewing data")
 		await page.getByRole("link", { name: /^Sewing Plan/ }).click()
-		await page.getByRole("cell", { name: "42", exact: true }).waitFor()
+		await page.locator("[data-sewing-dashboard-card]").filter({ hasText: "42" }).waitFor()
 		assert(requests.length === 1 && count("get_dashboard_data") === 1, "Plan card fetched inactive views")
 		await page.getByRole("button", { name: "Refresh dashboard", exact: true }).click()
 		await page.waitForFunction(() => document.querySelector('[data-sewing-plan-tab="dashboard"][aria-busy="false"]'))
@@ -1504,7 +1600,6 @@ async function liveSuite(browser) {
 			["attendance", "/web/sewing/attendance", "[data-attendance-strength]"],
 		]) {
 			await navigate(page, path); await page.locator(ready).first().waitFor()
-			if (name === "entry") { const plans = page.getByRole("combobox", { name: "Sewing Plan", exact: true }); if (await plans.count()) { await plans.click(); await page.getByRole("option").first().click() } }
 			for (const width of [1600, 1280, 900, 390]) {
 				await page.setViewportSize({ width, height: 900 }); await noOverflow(page, `Migrated ${name} ${width}`)
 				assert(!/Traceback \(most recent call last\)/.test(await page.locator(".sewing-workspace-shell").innerText()), `Raw error on migrated ${name}`)

@@ -6,16 +6,16 @@
 		:back-label="section ? 'Sewing' : 'Workspaces'"
 		:show-title="false"
 		flat
+		full-width
 	>
 		<section class="sewing-workspace-shell erp-workspace" :aria-label="title" :aria-busy="loading">
 			<header v-if="section" class="erp-page-header">
-				<div>
+				<div class="sewing-workspace-shell__heading">
 					<p class="erp-page-header__eyebrow">Sewing workspace</p>
 					<h1>{{ title }}</h1>
+					<SewingUnitPicker v-if="section !== 'attendance'" />
 				</div>
-				<SewingUnitPicker v-if="section !== 'attendance'" />
 			</header>
-			<div v-else class="sewing-workspace-shell__unit"><SewingUnitPicker /></div>
 			<div v-if="loading" class="sewing-workspace-shell__loading" role="status">
 				<span class="sewing-workspace-shell__status">Loading Sewing workspace</span>
 				<Skeleton v-for="index in section ? 1 : 3" :key="index" height="124px" />
@@ -87,14 +87,15 @@ onUnmounted(() => { capabilityGeneration++ })
 </script>
 
 <style scoped>
-.sewing-workspace-shell { width: 100%; max-width: 1320px; min-width: 0; margin: 0 auto; padding: 2px 8px var(--erp-space-5); }
-.sewing-workspace-shell__unit { display: flex; justify-content: flex-end; padding-top: var(--erp-space-3); }
-.sewing-workspace-shell__loading { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--erp-space-4); padding-top: var(--erp-space-5); }
+.sewing-workspace-shell { width: 100%; max-width: none; min-width: 0; margin: 0; padding: 0 4px var(--erp-space-4); }
+.sewing-workspace-shell > .erp-page-header { margin-bottom: var(--erp-space-4); }
+.sewing-workspace-shell__heading { width: 100%; min-width: 0; }
+.sewing-workspace-shell__heading .sewing-unit-picker { margin-top: var(--erp-space-3); }
+.sewing-workspace-shell__loading { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--erp-space-4); padding-top: var(--erp-space-4); }
 .sewing-workspace-shell__status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 .sewing-workspace-shell :deep(.workspace-launcher) { padding-inline: 0; }
 @media (max-width: 760px) {
 	.sewing-workspace-shell { padding-inline: 2px; }
-	.sewing-workspace-shell__unit { justify-content: flex-start; }
 	.sewing-workspace-shell__loading { grid-template-columns: 1fr; }
 }
 </style>

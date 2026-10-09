@@ -8,7 +8,6 @@
 			:filters="{ is_company_location: 1 }"
 			:show-open-button="false"
 			show-clear
-			help-text="Applies to Sewing Plan and Reports."
 			@update:model-value="setSupplier"
 		/>
 	</div>
@@ -22,5 +21,5 @@ const { supplier, setSupplier } = useSewingContext()
 </script>
 
 <style scoped>
-.sewing-unit-picker { width: 100%; max-width: 340px; min-width: 0; }
+.sewing-unit-picker { width: 100%; max-width: 380px; min-width: 0; }
 </style>

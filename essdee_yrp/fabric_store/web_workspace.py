@@ -38,6 +38,7 @@ from essdee_yrp.fabric_store.documents.common import (
 	assert_expected_modified,
 	filter_authorized_capabilities,
 	get_document_permissions,
+	get_draft_completion_stock_entry,
 	get_effective_fields,
 	get_workspace_base,
 )
@@ -593,7 +594,10 @@ def get_stock_operation_editor(operation: str, name: str | None = None, source_c
 			frappe.throw(_("Only Draft documents can be edited."))
 		defaults = {key: doc.get(key) for key in STOCK_OPERATION_FIELDS[operation]}
 		item_groups, _row_count = _document_item_groups(doc)
-		permissions = _permission_flags(doctype, doc)
+		permissions = {
+			**_permission_flags(doctype, doc),
+			"can_delete": bool(frappe.has_permission(doctype, ptype="delete", doc=doc)),
+		}
 	else:
 		frappe.has_permission(doctype, ptype="create", throw=True)
 		defaults = {
@@ -1077,11 +1081,24 @@ def complete_work_order_document_transfer(doctype: str, name: str) -> dict:
 	if doctype not in {"YRP Delivery Challan", "YRP Goods Received Note"}:
 		frappe.throw(_("Complete Transfer is not supported for {0}.").format(doctype))
 	_get_supported_document(doctype, name)
-	if doctype == "YRP Delivery Challan":
+	stock_entry = get_draft_completion_stock_entry(doctype, name)
+	if not stock_entry and doctype == "YRP Delivery Challan":
 		stock_entry = make_dc_completion(name)
-	else:
+	elif not stock_entry:
 		stock_entry = make_grn_completion(name)
 	return get_document("YRP Stock Entry", stock_entry)
+
+
+@frappe.whitelist()
+def discard_completion_draft(name: str, expected_modified: str | None = None) -> dict:
+	"""Delete a draft DC or GRN completion Stock Entry so a fresh one can be prepared."""
+
+	doc = _get_supported_document("YRP Stock Entry", name, "delete")
+	if cint(doc.docstatus) != 0 or doc.get("purpose") not in FABRIC_STOCK_COMPLETION_PURPOSES:
+		frappe.throw(_("Only draft completion Stock Entries can be discarded."))
+	_assert_not_stale(doc, expected_modified)
+	frappe.delete_doc("YRP Stock Entry", doc.name)
+	return {"deleted": doc.name}
 
 
 @frappe.whitelist()

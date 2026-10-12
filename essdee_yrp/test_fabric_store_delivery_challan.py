@@ -871,6 +871,21 @@ class TestFabricStoreDeliveryChallan(TestCase):
 		complete.assert_called_once_with(doc.name)
 		self.assertEqual(result["created"], {"doctype": "YRP Stock Entry", "name": "STE-1"})
 
+	def test_complete_transfer_reopens_existing_draft_completion(self):
+		doc = self.make_document(docstatus=1, is_internal_unit=1)
+		with (
+			patch("essdee_yrp.fabric_store.documents.delivery_challan._get_delivery_challan", return_value=doc),
+			patch("essdee_yrp.fabric_store.documents.delivery_challan._target_create_permission", return_value=True),
+			patch("essdee_yrp.fabric_store.documents.delivery_challan.get_draft_completion_stock_entry", return_value="STE-DRAFT") as find_draft,
+			patch("essdee_yrp.fabric_store.documents.delivery_challan.make_dc_completion") as complete,
+			patch("essdee_yrp.fabric_store.documents.delivery_challan.get_delivery_challan_workspace", return_value={}),
+		):
+			result = execute_delivery_challan_command(doc.name, "complete_transfer")
+
+		find_draft.assert_called_once_with("YRP Delivery Challan", doc.name)
+		complete.assert_not_called()
+		self.assertEqual(result["created"], {"doctype": "YRP Stock Entry", "name": "STE-DRAFT"})
+
 	def test_lifecycle_and_notification_commands_are_server_authorized(self):
 		doc = self.make_document(docstatus=0)
 		refreshed = {"record": {"name": doc.name}}

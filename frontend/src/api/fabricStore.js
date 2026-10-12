@@ -234,3 +234,7 @@ export function saveFabricStockOperation(operation, values, options = {}) {
 		expected_modified: options.expectedModified || undefined,
 	})
 }
+
+export function discardCompletionDraft(name, expectedModified = "") {
+	return callMethod(`${WORKSPACE_METHOD}.discard_completion_draft`, { name, expected_modified: expectedModified || undefined })
+}

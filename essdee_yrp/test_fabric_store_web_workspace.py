@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, call, patch
 import frappe
 
 import essdee_yrp.fabric_store.web_workspace as workspace
+from essdee_yrp.fabric_store.documents.common import get_draft_completion_stock_entry
 from essdee_yrp.fabric_store.web_workspace import (
 	DOCUMENT_KEYS,
 	STOCK_OPERATION_DOCTYPES,
@@ -550,6 +551,59 @@ class TestFabricStoreWebWorkspace(TestCase):
 		self.assertEqual(payload, expected)
 		complete.assert_called_once_with("DC-1")
 
+	def test_complete_transfer_endpoint_reopens_existing_draft_completion(self):
+		for doctype, maker in (
+			("YRP Delivery Challan", "make_dc_completion"),
+			("YRP Goods Received Note", "make_grn_completion"),
+		):
+			with self.subTest(doctype=doctype):
+				source = frappe._dict(doctype=doctype, name="SRC-1", docstatus=1)
+				expected = {"record": {"doctype": "YRP Stock Entry", "name": "STE-DRAFT", "docstatus": 0}}
+				with (
+					patch("essdee_yrp.fabric_store.web_workspace._get_supported_document", return_value=source),
+					patch("essdee_yrp.fabric_store.web_workspace.get_draft_completion_stock_entry", return_value="STE-DRAFT") as find_draft,
+					patch(f"essdee_yrp.fabric_store.web_workspace.{maker}") as complete,
+					patch("essdee_yrp.fabric_store.web_workspace.get_document", return_value=expected) as get_payload,
+				):
+					payload = workspace.complete_work_order_document_transfer(doctype, source.name)
+
+				self.assertEqual(payload, expected)
+				find_draft.assert_called_once_with(doctype, "SRC-1")
+				complete.assert_not_called()
+				get_payload.assert_called_once_with("YRP Stock Entry", "STE-DRAFT")
+
+	def test_draft_completion_lookup_returns_the_newest_open_draft(self):
+		with patch("essdee_yrp.fabric_store.documents.common.frappe.get_all", return_value=["STE-NEWEST"]) as get_all:
+			self.assertEqual(get_draft_completion_stock_entry("YRP Goods Received Note", "GRN-1"), "STE-NEWEST")
+		self.assertEqual(
+			get_all.call_args.kwargs["filters"],
+			{"against": "YRP Goods Received Note", "against_id": "GRN-1", "purpose": "GRN Completion", "docstatus": 0},
+		)
+		self.assertEqual(get_all.call_args.kwargs["order_by"], "creation desc")
+		with patch("essdee_yrp.fabric_store.documents.common.frappe.get_all", return_value=[]):
+			self.assertIsNone(get_draft_completion_stock_entry("YRP Delivery Challan", "DC-1"))
+
+	@patch("essdee_yrp.fabric_store.web_workspace._get_supported_document")
+	def test_discard_completion_draft_deletes_only_draft_completion_entries(self, get_supported):
+		draft = frappe._dict(doctype="YRP Stock Entry", name="STE-DRAFT", docstatus=0, purpose="DC Completion", modified="2026-10-06 12:00:00")
+		get_supported.return_value = draft
+		with patch("essdee_yrp.fabric_store.web_workspace.frappe.delete_doc") as delete_doc:
+			self.assertEqual(workspace.discard_completion_draft("STE-DRAFT", draft.modified), {"deleted": "STE-DRAFT"})
+		get_supported.assert_called_with("YRP Stock Entry", "STE-DRAFT", "delete")
+		delete_doc.assert_called_once_with("YRP Stock Entry", "STE-DRAFT")
+
+		for invalid in (
+			frappe._dict(draft, docstatus=1),
+			frappe._dict(draft, purpose="Send to Warehouse"),
+		):
+			get_supported.return_value = invalid
+			with (
+				patch("essdee_yrp.fabric_store.web_workspace.frappe.delete_doc") as delete_doc,
+				self.assertRaises(frappe.ValidationError),
+			):
+				workspace.discard_completion_draft("STE-DRAFT")
+			delete_doc.assert_not_called()
+
 	@patch("essdee_yrp.fabric_store.web_workspace.get_purchase_order_defaults")
 	@patch("essdee_yrp.fabric_store.web_workspace._get_supported_document")
 	def test_purchase_order_workspace_opens_readable_non_yrp_orders_without_grn(self, get_supported, defaults):
@@ -910,6 +964,7 @@ class TestFabricStoreWebWorkspace(TestCase):
 		self.assertEqual(payload["purpose_options"][0], "DC Completion")
 		self.assertTrue(payload["purpose_locked"])
 		self.assertTrue(payload["protected_completion"])
+		self.assertTrue(payload["permissions"]["can_delete"])
 
 	@patch("essdee_yrp.fabric_store.web_workspace.get_document", return_value={"record": {"name": "STE-COMPLETE-1"}})
 	@patch("essdee_yrp.fabric_store.web_workspace._get_supported_document")

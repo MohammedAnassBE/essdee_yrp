@@ -32,6 +32,7 @@ from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
 from essdee_yrp.fabric_store.documents.common import (
 	assert_expected_modified,
 	get_allow_on_submit_fields,
+	get_draft_completion_stock_entry,
 	get_effective_fields,
 	get_supplier_notification_capabilities,
 	get_workspace_base,
@@ -1102,7 +1103,7 @@ def execute_goods_received_note_command(
 			frappe.throw(_("Goods Received Note is not an internal unit transfer."))
 		if doc.get("transfer_complete"):
 			frappe.throw(_("Transfer is already complete for this Goods Received Note."))
-		created = make_grn_completion(doc.name)
+		created = get_draft_completion_stock_entry("YRP Goods Received Note", doc.name) or make_grn_completion(doc.name)
 		return {
 			"workspace": get_goods_received_note_workspace(doc.name),
 			"created": {"doctype": "YRP Stock Entry", "name": created},

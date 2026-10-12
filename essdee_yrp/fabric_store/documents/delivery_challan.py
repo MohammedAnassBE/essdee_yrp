@@ -30,6 +30,7 @@ from essdee_yrp.delivery_challan_hooks import create_return_grn as create_essdee
 from essdee_yrp.fabric_store.documents.common import (
 	assert_expected_modified,
 	get_allow_on_submit_fields,
+	get_draft_completion_stock_entry,
 	get_effective_fields,
 	get_supplier_notification_capabilities,
 	get_workspace_base,
@@ -863,7 +864,7 @@ def execute_delivery_challan_command(
 			frappe.throw(_("Delivery Challan is not an internal unit transfer."))
 		if doc.get("transfer_complete"):
 			frappe.throw(_("Transfer is already complete for this Delivery Challan."))
-		created = make_dc_completion(doc.name)
+		created = get_draft_completion_stock_entry("YRP Delivery Challan", doc.name) or make_dc_completion(doc.name)
 		return {
 			"workspace": get_delivery_challan_workspace(doc.name),
 			"created": {"doctype": "YRP Stock Entry", "name": created},

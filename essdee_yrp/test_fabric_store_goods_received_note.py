@@ -642,6 +642,22 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 			execute_goods_received_note_command(draft.name, "submit")
 		draft.submit.assert_called_once()
 
+	def test_complete_transfer_reopens_existing_draft_completion(self):
+		grn = self.make_document(docstatus=1, is_internal_unit=1)
+		with (
+			patch("essdee_yrp.fabric_store.documents.goods_received_note._get_grn", return_value=grn),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.assert_expected_modified"),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note._target_permission", return_value=True),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.get_draft_completion_stock_entry", return_value="STE-DRAFT") as find_draft,
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.make_grn_completion") as complete,
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.get_goods_received_note_workspace", return_value={}),
+		):
+			result = execute_goods_received_note_command(grn.name, "complete_transfer")
+
+		find_draft.assert_called_once_with("YRP Goods Received Note", grn.name)
+		complete.assert_not_called()
+		self.assertEqual(result["created"], {"doctype": "YRP Stock Entry", "name": "STE-DRAFT"})
+
 	def test_forged_or_wrong_state_command_is_rejected(self):
 		grn = self.make_document(docstatus=1)
 		with (

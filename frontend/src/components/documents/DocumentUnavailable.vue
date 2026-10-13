@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Page unavailable" accent="#0a7f5a" back-to="/" back-label="Workspaces" :show-title="false" flat full-width>
+	<DepartmentPage title="Page unavailable" back-to="/" back-label="Workspaces" :show-title="false" flat full-width>
 		<section class="document-unavailable erp-card" role="status">
 			<span class="document-unavailable__mark"><i class="pi pi-file-excel" /></span>
 			<div>

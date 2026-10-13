@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Work Order" accent="#0a7f5a" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width>
+	<DepartmentPage title="Work Order" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width>
 		<div class="fabric-work-order-editor-page erp-workspace">
 			<WorkOrderEditor :key="`${workOrderId || 'new'}-${duplicateFrom}`" :name="workOrderId" :source="duplicateSource" @saved="saved" @cancel="cancel" />
 		</div>

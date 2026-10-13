@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage :title="definition.label" accent="#0a7f5a" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage :title="definition.label" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
 		<section class="cut-panel-store-section erp-workspace" :aria-label="definition.label">
 			<div v-if="loading" class="cut-panel-store-section__loading">
 				<Skeleton height="76px" />

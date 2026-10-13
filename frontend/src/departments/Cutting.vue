@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Cutting" accent="#059669" :show-title="false" flat inline-navigation>
+	<DepartmentPage title="Cutting" :show-title="false" flat inline-navigation>
 		<WorkspaceLoadError v-if="loadError" :message="loadError" :loading="loadingPermissions" @retry="load" />
 		<WorkspaceLauncher v-else title="Cutting" :items="visibleWorkspaces" :loading="loadingPermissions" empty-text="No permitted Cutting workspaces" :skeleton-count="5" />
 	</DepartmentPage>

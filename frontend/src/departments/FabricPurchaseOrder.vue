@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Purchase Order" accent="#0a7f5a" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Purchase Order" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
 		<section class="fabric-purchase-order-frame">
 			<FabricDocumentWorkspace
 				doctype="Purchase Order"

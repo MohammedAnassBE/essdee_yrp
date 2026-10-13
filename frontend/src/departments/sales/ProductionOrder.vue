@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Production Order" accent="#b7493f" back-to="/sales/production-orders" back-label="Production Orders" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Production Order" back-to="/sales/production-orders" back-label="Production Orders" :show-title="false" flat full-width inline-navigation>
 		<section class="ppo-page-frame">
 			<FabricDocumentWorkspace doctype="YRP Production Order" title="Production Order" :workspace="workspace" :loading="loading" :error="error" :acting="acting" :show-lifecycle-actions="false" compact-mobile-rail @reload="load(true)">
 				<template #header="{ record, headingId }">

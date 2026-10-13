@@ -541,7 +541,7 @@ function markerStatus(marker) {
 .marker-subline { display: flex !important; align-items: center; gap: 6px !important; min-width: 0; }
 .marker-subline small { flex: 1; min-width: 0; }
 .marker-status { flex: 0 0 auto; padding: 2px 6px; color: var(--erp-warning); background: var(--erp-warning-soft); border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); font-weight: 740; }
-.marker-status--submitted { color: var(--erp-accent-dark); background: var(--erp-success-soft); }
+.marker-status--submitted { color: var(--erp-success-text); background: var(--erp-success-soft); }
 .marker-status--cancelled { color: var(--erp-danger); background: var(--erp-danger-soft); }
 .marker-metrics { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 5px; }
 .marker-metrics > span { display: grid; gap: 2px; min-width: 0; padding: 6px 7px; background: var(--erp-surface-soft); border: 1px solid var(--erp-border-subtle); border-radius: 7px; }
@@ -566,7 +566,7 @@ function markerStatus(marker) {
 .lay-status { padding: 3px 7px; color: var(--erp-text-secondary); background: var(--erp-surface-muted); border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); font-weight: 750; white-space: nowrap; }
 .lay-status--prominent { min-height: 25px; padding: 5px 8px; border: 1px solid transparent; font-size: 12px; font-weight: 800; line-height: 1; }
 .lay-status--started, .lay-status--bundles-generated { color: var(--erp-info); background: var(--erp-info-soft); }
-.lay-status--completed, .lay-status--label-printed { color: var(--erp-accent-dark); background: var(--erp-success-soft); border-color: color-mix(in srgb, var(--erp-success) 25%, var(--erp-border)); }
+.lay-status--completed, .lay-status--label-printed { color: var(--erp-success-text); background: var(--erp-success-soft); border-color: color-mix(in srgb, var(--erp-success) 25%, var(--erp-border)); }
 .lay-status--cancelled { color: var(--erp-danger); background: var(--erp-danger-soft); border-color: color-mix(in srgb, var(--erp-danger) 25%, var(--erp-border)); }
 .lay-status--approval-pending { color: var(--erp-warning); background: var(--erp-warning-soft); border-color: var(--erp-attention-border); }
 .rail-empty { display: grid; place-items: center; align-content: center; gap: 8px; min-height: 0; padding: 18px; color: var(--erp-text-muted); text-align: center; font-size: 0.77rem; }

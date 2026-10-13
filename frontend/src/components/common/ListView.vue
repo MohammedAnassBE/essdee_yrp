@@ -45,7 +45,8 @@
 						label="Columns"
 						severity="secondary"
 						outlined
-						@click="showColumns = true"
+						:disabled="!allowedFieldsReady"
+						@click="openColumnsDialog"
 					/>
 					<Button
 						icon="pi pi-refresh"
@@ -106,6 +107,7 @@
 				class="list-status-tab"
 				:class="{ 'list-status-tab--active': activeStatus === tab.value }"
 				:aria-pressed="activeStatus === tab.value"
+				:disabled="!metadataReady"
 				@click="selectStatus(tab.value)"
 			>
 				<span v-if="tab.value !== ''" class="list-status-tab__dot" :class="statusTone(tab.label)"></span>
@@ -126,6 +128,7 @@
 				:placeholder="statusSelectOptions[0]?.label || 'All statuses'"
 				aria-label="Status filter"
 				fluid
+				:disabled="!metadataReady"
 				@update:model-value="selectStatus"
 			/>
 		</label>
@@ -241,6 +244,18 @@
 							<div v-if="column.fieldname === 'name'" class="list-document-cell">
 								<strong :title="displayValue(data[column.fieldname], column, data)">{{ displayValue(data[column.fieldname], column, data) }}</strong>
 							</div>
+							<img
+								v-else-if="isImageColumn(column) && hasFilterValue(data[column.fieldname])"
+								class="list-image-value"
+								:src="String(data[column.fieldname])"
+								:alt="columnLabel(column)"
+								loading="lazy"
+							/>
+							<DocumentStatusBadge
+								v-else-if="isStatusColumn(column) && hasFilterValue(data[column.fieldname])"
+								:docstatus="column.fieldname === 'docstatus' ? data[column.fieldname] : null"
+								:label="column.fieldname === 'docstatus' ? '' : String(data[column.fieldname])"
+							/>
 							<span
 								v-else-if="column.fieldtype === 'Link'"
 								class="list-link-value"
@@ -306,7 +321,19 @@
 						<div v-for="column in mobileColumns.slice(1)" :key="column.fieldname">
 							<span>{{ columnLabel(column) }}</span>
 							<slot :name="`cell-${column.fieldname}`" :row="row" :value="row[column.fieldname]">
-								<strong>{{ displayValue(row[column.fieldname], column, row) }}</strong>
+								<img
+									v-if="isImageColumn(column) && hasFilterValue(row[column.fieldname])"
+									class="list-image-value"
+									:src="String(row[column.fieldname])"
+									:alt="columnLabel(column)"
+									loading="lazy"
+								/>
+								<DocumentStatusBadge
+									v-else-if="isStatusColumn(column) && hasFilterValue(row[column.fieldname])"
+									:docstatus="column.fieldname === 'docstatus' ? row[column.fieldname] : null"
+									:label="column.fieldname === 'docstatus' ? '' : String(row[column.fieldname])"
+								/>
+								<strong v-else>{{ displayValue(row[column.fieldname], column, row) }}</strong>
 							</slot>
 						</div>
 					</div>
@@ -335,6 +362,8 @@
 			v-model:visible="showColumns"
 			:doctype="doctype"
 			:columns="columnOptions"
+			:settings-ready="allowedFieldsReady"
+			:view-fields="viewFields"
 			@saved="columnsSaved"
 		/>
 		<ListviewFilters
@@ -441,11 +470,19 @@ import {
 	getUserListview,
 	submitDoc,
 } from "../../api/frappe.js"
+import DocumentStatusBadge from "../documents/DocumentStatusBadge.vue"
+import InlinePageNavigation from "../navigation/InlinePageNavigation.vue"
 import FormField from "./FormField.vue"
+import {
+	activeCurrencyReferences,
+	buildColumnOptions,
+	createListInitialisationGuard,
+	currencyReferenceField,
+	frappeStandardFilterFields,
+} from "./listColumns.js"
 import ListviewFilters from "./ListviewFilters.vue"
 import ListviewQuickFilters from "./ListviewQuickFilters.vue"
 import UserListviewColumns from "./UserListviewColumns.vue"
-import InlinePageNavigation from "../navigation/InlinePageNavigation.vue"
 import {
 	createListNavigationState,
 	deterministicOrder,
@@ -474,27 +511,13 @@ const props = defineProps({
 	statusOptions: { type: Array, default: () => [] },
 	viewportBounded: { type: Boolean, default: false },
 	allowBulkActions: { type: Boolean, default: true },
+	selectable: { type: Boolean, default: false },
 	navigationEnabled: { type: Boolean, default: true },
 })
 
-const emit = defineEmits(["row-click", "loaded", "update:advancedFilters"])
+const emit = defineEmits(["row-click", "loaded", "selection-change", "update:advancedFilters"])
 const route = useRoute()
 const headingId = computed(() => `${props.doctype.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-list-title`)
-
-const excludedFieldtypes = new Set([
-	"Section Break",
-	"Column Break",
-	"Tab Break",
-	"HTML",
-	"Button",
-	"Heading",
-	"Fold",
-	"Table",
-	"Table MultiSelect",
-	"Image",
-	"Attach Image",
-	"Signature",
-])
 
 const filterExcludedFieldtypes = new Set([
 	"Section Break",
@@ -510,20 +533,6 @@ const filterExcludedFieldtypes = new Set([
 	"Image",
 ])
 
-const frappeStandardFilterFields = [
-	{ fieldname: "name", fieldtype: "Link", label: "ID" },
-	{ fieldname: "owner", fieldtype: "Link", label: "Created By", options: "User" },
-	{ fieldname: "idx", fieldtype: "Int", label: "Index" },
-	{ fieldname: "creation", fieldtype: "Datetime", label: "Created On" },
-	{ fieldname: "modified", fieldtype: "Datetime", label: "Last Updated On" },
-	{ fieldname: "modified_by", fieldtype: "Link", label: "Last Updated By", options: "User" },
-	{ fieldname: "_user_tags", fieldtype: "Data", label: "Tags" },
-	{ fieldname: "_liked_by", fieldtype: "Data", label: "Liked By" },
-	{ fieldname: "_comments", fieldtype: "Text", label: "Comments" },
-	{ fieldname: "_assign", fieldtype: "Text", label: "Assigned To" },
-	{ fieldname: "docstatus", fieldtype: "Int", label: "Document Status" },
-]
-
 const rows = ref([])
 const total = ref(0)
 const loading = ref(false)
@@ -537,6 +546,9 @@ const sortOrder = ref(props.defaultOrderBy.toLowerCase().endsWith(" asc") ? 1 : 
 const metaFields = ref([])
 const metaDocuments = ref([])
 const doctypeMeta = ref(null)
+const allowedFields = ref([])
+const currencyFields = ref({})
+const allowedFieldsReady = ref(false)
 const metadataReady = ref(false)
 const userColumns = ref(null)
 const advancedFilters = ref(cloneFilters(props.initialAdvancedFilters))
@@ -566,26 +578,20 @@ let searchTimer = null
 let quickFilterTimer = null
 const quickFilterDelay = 1000
 let restoredNavigationKey = ""
+const initialisationGuard = createListInitialisationGuard()
 
-const eligibleFields = computed(() => [
-	...metaFields.value
-		.filter((field) => field.fieldname && !field.hidden && !excludedFieldtypes.has(field.fieldtype))
-		.map((field) => ({
-			fieldname: field.fieldname,
-			fieldtype: field.fieldtype || "Data",
-			label: field.label || field.fieldname,
-			options: field.options || "",
-			precision: field.precision,
-			doctype: props.doctype,
-			link_filters: props.linkFilters[field.fieldname] ?? field.link_filters ?? "",
-			inListView: Boolean(field.in_list_view),
-			inStandardFilter: Boolean(field.in_standard_filter),
-		})),
-	...(Number(doctypeMeta.value?.is_submittable) ? [{
-		fieldname: "docstatus", fieldtype: "Int", label: "Document Status", options: "", doctype: props.doctype,
-		inListView: false, inStandardFilter: false,
-	}] : []),
-])
+const eligibleFields = computed(() => allowedFields.value.map((field) => ({
+	fieldname: field.fieldname,
+	fieldtype: field.fieldtype || "Data",
+	label: field.label || field.fieldname,
+	options: field.options || "",
+	precision: field.precision,
+	hidden: Boolean(field.hidden),
+	doctype: props.doctype,
+	link_filters: props.linkFilters[field.fieldname] ?? field.link_filters ?? "",
+	inListView: Boolean(field.in_list_view),
+	inStandardFilter: Boolean(field.in_standard_filter),
+})))
 
 function isFilterableField(field) {
 	return Boolean(
@@ -618,7 +624,7 @@ function sortFilterFields(fields) {
 }
 
 const standardFilterFields = computed(() =>
-	eligibleFields.value.filter((field) => field.inStandardFilter),
+	eligibleFields.value.filter((field) => field.inStandardFilter && !field.hidden),
 )
 
 const hasActiveQuery = computed(
@@ -633,13 +639,19 @@ const activeQuickFilterCount = computed(() =>
 	standardFilterFields.value.filter((field) => hasFilterValue(quickFilters.value[field.fieldname])).length,
 )
 const isSubmittable = computed(() => Boolean(Number(doctypeMeta.value?.is_submittable)))
-const effectiveStatusField = computed(() => {
+const detectedStatusField = computed(() => {
 	if (props.statusField) return props.statusField
 	const selectableStatus = ["status", "workflow_state"]
 		.map((fieldname) => metaFields.value.find((field) => field.fieldname === fieldname))
 		.find((field) => field?.fieldtype === "Select" && selectFieldOptions(field).length)
 	if (selectableStatus) return selectableStatus.fieldname
 	return isSubmittable.value ? "docstatus" : ""
+})
+const effectiveStatusField = computed(() => {
+	if (!allowedFieldsReady.value) return detectedStatusField.value
+	return allowedFields.value.some((field) => field.fieldname === detectedStatusField.value)
+		? detectedStatusField.value
+		: ""
 })
 const effectiveStatusOptions = computed(() => {
 	if (props.statusOptions.length) return props.statusOptions
@@ -653,6 +665,9 @@ const effectiveStatusOptions = computed(() => {
 	const field = metaFields.value.find((candidate) => candidate.fieldname === effectiveStatusField.value)
 	return selectFieldOptions(field)
 })
+const viewFields = computed(() => [
+	...new Set([...props.defaultColumns, detectedStatusField.value].filter(Boolean)),
+])
 const activeFilterCount = computed(() => {
 	const statusIsSeparate = Boolean(
 		hasFilterValue(activeStatus.value) &&
@@ -668,9 +683,10 @@ const canBulkEdit = computed(() => hasDoctypePermission("write"))
 const canBulkSubmit = computed(() => hasDoctypePermission("submit"))
 const canBulkCancel = computed(() => hasDoctypePermission("cancel"))
 const showBulkSelection = computed(
-	() => props.allowBulkActions && (canBulkEdit.value || (isSubmittable.value && (canBulkSubmit.value || canBulkCancel.value))),
+	() => props.selectable || (props.allowBulkActions
+		&& (canBulkEdit.value || (isSubmittable.value && (canBulkSubmit.value || canBulkCancel.value)))),
 )
-const showBulkBar = computed(() => showBulkSelection.value && selectedRows.value.length > 0)
+const showBulkBar = computed(() => props.allowBulkActions && showBulkSelection.value && selectedRows.value.length > 0)
 const selectedDraftRows = computed(() =>
 	selectedRows.value.filter((row) => Number(row.docstatus) === 0),
 )
@@ -696,36 +712,10 @@ const bulkConfirmMessage = computed(() => {
 	return `${action} ${count} selected ${titleForMessage()} document${count === 1 ? "" : "s"}? ${effect}`
 })
 
-const columnOptions = computed(() => {
-	const fields = eligibleFields.value
-	const byName = new Map(fields.map((field) => [field.fieldname, field]))
-	if (Array.isArray(userColumns.value) && userColumns.value.length) {
-		const ordered = []
-		const seen = new Set()
-		for (const saved of userColumns.value) {
-			const field = byName.get(saved.fieldname)
-			if (!field) continue
-			ordered.push({ ...field, enabled: Boolean(saved.enabled) })
-			seen.add(field.fieldname)
-		}
-		for (const field of fields) {
-			if (!seen.has(field.fieldname)) ordered.push({ ...field, enabled: false })
-		}
-		return ordered
-	}
-
-	const defaults = new Set(props.defaultColumns)
-	const configured = fields.map((field) => ({
-		...field,
-		enabled: defaults.size ? defaults.has(field.fieldname) : field.inListView,
-	}))
-	if (!configured.some((field) => field.enabled)) {
-		configured.slice(0, 5).forEach((field) => {
-			field.enabled = true
-		})
-	}
-	return configured
-})
+const columnOptions = computed(() =>
+	buildColumnOptions(eligibleFields.value, userColumns.value, props.defaultColumns)
+		.map((column) => ({ ...column, label: columnLabel(column) })),
+)
 
 const activeColumns = computed(() => [
 	{ fieldname: "name", fieldtype: "Data", label: "Name" },
@@ -741,15 +731,9 @@ const mobileColumns = computed(() => {
 	return [primary, ...facts, ...(status ? [status] : [])].filter(Boolean)
 })
 
-const activeCurrencyFields = computed(() => {
-	const availableFields = new Set(metaFields.value.map((field) => field.fieldname).filter(Boolean))
-	return activeColumns.value.flatMap((column) => {
-		if (column.fieldtype !== "Currency") return []
-		const reference = String(column.options || "").trim()
-		if (reference && availableFields.has(reference)) return [reference]
-		return availableFields.has("currency") ? ["currency"] : []
-	})
-})
+const activeCurrencyFields = computed(() =>
+	activeCurrencyReferences(activeColumns.value, currencyFields.value),
+)
 
 const filterFields = computed(() => {
 	const metaByName = new Map(metaDocuments.value.map((meta) => [meta.name, meta]))
@@ -788,15 +772,19 @@ const filterFields = computed(() => {
 	})
 })
 
-const fetchFields = computed(() => [
-	...new Set([
+const fetchFields = computed(() => {
+	const allowed = new Set([
+		...eligibleFields.value.map((field) => field.fieldname),
+		...activeCurrencyFields.value,
+	])
+	return [...new Set([
 		...activeColumns.value.map((column) => column.fieldname),
 		...activeCurrencyFields.value,
 		...(effectiveStatusField.value ? [effectiveStatusField.value] : []),
 		"modified",
 		...(isSubmittable.value ? ["docstatus"] : []),
-	]),
-])
+	])].filter((fieldname) => allowed.has(fieldname))
+})
 
 const statusTabs = computed(() => {
 	if (!effectiveStatusField.value || !effectiveStatusOptions.value.length) return []
@@ -836,6 +824,8 @@ watch(
 watch(bulkEditFieldKey, () => {
 	bulkEditValue.value = defaultBulkValue(bulkEditField.value)
 })
+
+watch(selectedRows, (selection) => emit("selection-change", [...selection]))
 
 function baseFilters() {
 	if (Array.isArray(props.filters)) return [...props.filters]
@@ -895,6 +885,8 @@ async function initialise() {
 		clearTimeout(quickFilterTimer)
 		quickFilterTimer = null
 	}
+	const doctype = props.doctype
+	const request = initialisationGuard.begin(doctype)
 	const sequence = ++loadSequence
 	loading.value = true
 	error.value = ""
@@ -908,23 +900,32 @@ async function initialise() {
 	clearSelection()
 	bulkNotice.value = ""
 	bulkError.value = null
+	allowedFields.value = []
+	currencyFields.value = {}
+	allowedFieldsReady.value = false
+	userColumns.value = null
 	try {
-		const [metas, savedColumns] = await Promise.all([
-			getMeta(props.doctype),
-			getUserListview(props.doctype),
-		])
-		if (sequence !== loadSequence) return
-		const meta = metas.find((row) => row.name === props.doctype) || metas[0]
+		const metas = await getMeta(doctype)
+		if (!initialisationGuard.isCurrent(request, props.doctype)) return
+		const meta = metas.find((row) => row.name === doctype) || metas[0]
 		doctypeMeta.value = meta || null
 		metaDocuments.value = metas
 		metaFields.value = meta?.fields || []
-		userColumns.value = savedColumns
+		const listview = await getUserListview(doctype, viewFields.value)
+		if (!initialisationGuard.isCurrent(request, props.doctype)) return
+		allowedFields.value = Array.isArray(listview?.fields) ? listview.fields : []
+		currencyFields.value = listview.currency_fields || {}
+		allowedFieldsReady.value = true
+		userColumns.value = Array.isArray(listview?.columns) ? listview.columns : null
 		metadataReady.value = true
 		await Promise.all([loadRows(sequence), loadStatusCounts(sequence)])
 	} catch (reason) {
-		if (sequence !== loadSequence) return
-		error.value = reason.message || `Unable to load ${props.doctype}.`
+		if (!initialisationGuard.isCurrent(request, props.doctype)) return
+		error.value = reason.message || `Unable to load ${doctype}.`
 		metaDocuments.value = []
+		allowedFields.value = []
+		currencyFields.value = {}
+		allowedFieldsReady.value = false
 		rows.value = []
 		total.value = 0
 	} finally {
@@ -996,6 +997,7 @@ async function loadRows(existingSequence = null) {
 }
 
 function reload(includeCounts = false) {
+	if (!metadataReady.value) return Promise.resolve([])
 	const sequence = ++loadSequence
 	const tasks = [loadRows(sequence)]
 	if (includeCounts) tasks.push(loadStatusCounts(sequence))
@@ -1021,9 +1023,21 @@ function filtersApplied(filters) {
 }
 
 async function columnsSaved() {
-	userColumns.value = await getUserListview(props.doctype)
-	first.value = 0
-	reload()
+	const doctype = props.doctype
+	const request = initialisationGuard.snapshot(doctype)
+	try {
+		const listview = await getUserListview(doctype, viewFields.value)
+		if (!initialisationGuard.isCurrent(request, props.doctype)) return
+		allowedFields.value = listview.fields
+		currencyFields.value = listview.currency_fields || {}
+		allowedFieldsReady.value = true
+		userColumns.value = listview.columns
+		first.value = 0
+		await reload()
+	} catch (reason) {
+		if (!initialisationGuard.isCurrent(request, props.doctype)) return
+		error.value = reason.message || `Unable to load ${doctype}.`
+	}
 }
 
 function pageChanged(event) {
@@ -1040,6 +1054,7 @@ function sortChanged(event) {
 }
 
 function selectStatus(value) {
+	if (!metadataReady.value) return
 	if (activeStatus.value === value) return
 	activeStatus.value = value
 	const values = { ...quickFilters.value }
@@ -1052,6 +1067,11 @@ function selectStatus(value) {
 	appliedQuickFilters.value = appliedValues
 	first.value = 0
 	reload()
+}
+
+function openColumnsDialog() {
+	if (!allowedFieldsReady.value) return
+	showColumns.value = true
 }
 
 function quickFiltersChanged({ values, field }) {
@@ -1325,6 +1345,16 @@ function rowClass(row) {
 	return classes.join(" ")
 }
 
+function isStatusColumn(column) {
+	return [effectiveStatusField.value, "docstatus", "status", "workflow_state"]
+		.filter(Boolean)
+		.includes(column?.fieldname)
+}
+
+function isImageColumn(column) {
+	return ["Attach Image", "Signature"].includes(column?.fieldtype)
+}
+
 function statusTone(status) {
 	const value = String(status || "").toLowerCase()
 	if (["completed", "fully", "closed"].some((token) => value.includes(token)) && !value.includes("partially")) return "success"
@@ -1346,7 +1376,8 @@ function displayValue(value, column, row = {}) {
 		}
 	}
 	if (column.fieldtype === "Currency") {
-		const currency = row?.[column.options] || row?.currency || ""
+		const reference = currencyReferenceField(column, currencyFields.value)
+		const currency = reference ? row?.[reference] : ""
 		const amount = Number(value).toLocaleString("en-IN", { maximumFractionDigits: 2 })
 		return currency ? `${currency} ${amount}` : amount
 	}
@@ -1973,6 +2004,16 @@ defineExpose({ refresh: reload })
 
 .list-plain-value {
 	color: var(--erp-text-secondary);
+}
+
+.list-image-value {
+	display: block;
+	width: 48px;
+	height: 36px;
+	object-fit: contain;
+	background: var(--erp-surface-muted);
+	border: 1px solid var(--list-line);
+	border-radius: 4px;
 }
 
 :deep(.list-number-column) {

@@ -223,7 +223,7 @@ function money(value) {
 .matrix-stage-label span { display: inline-flex; min-width: 68px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; }
 .matrix-stage--pending td { background: #fffaf0; }
 .matrix-stage--received .matrix-stage-label span,
-.matrix-stage--delivered .matrix-stage-label span { color: var(--erp-accent); }
+.matrix-stage--delivered .matrix-stage-label span { color: var(--erp-success-text); }
 .matrix-total { color: var(--erp-text); font-weight: 800; }
 .work-order-matrix-empty { min-height: 130px; }
 .work-order-matrix-empty div { display: grid; justify-items: center; gap: 6px; }

@@ -1,7 +1,6 @@
 <template>
 	<DepartmentPage
 		title="Cutting Reports"
-		accent="#059669"
 		back-to="/cutting"
 		back-label="Cutting"
 		:show-title="false"

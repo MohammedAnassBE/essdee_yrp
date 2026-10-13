@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router"
 
 import { departments } from "../departments/registry.js"
+import { PD_ROUTES } from "../departments/pd/pdViews.js"
 
 const AdministratorPage = () => import("../components/AdministratorPage.vue")
 const DocumentUnavailable = () => import("../components/documents/DocumentUnavailable.vue")
@@ -39,6 +40,18 @@ const SalesSection = () => import("../departments/sales/SalesSection.vue")
 const ProductionOrder = () => import("../departments/sales/ProductionOrder.vue")
 const ProductionOrderEditorPage = () => import("../departments/sales/ProductionOrderEditorPage.vue")
 const SalesReports = () => import("../departments/sales/SalesReports.vue")
+const PdSection = () => import("../departments/pd/PdSection.vue")
+const ProductPage = () => import("../departments/pd/ProductPage.vue")
+const ProductReleasePage = () => import("../departments/pd/ProductReleasePage.vue")
+const LotwiseItemProfitPage = () => import("../departments/pd/LotwiseItemProfitPage.vue")
+const PurchaseInvoices = () => import("../departments/accounts/PurchaseInvoices.vue")
+const PurchaseInvoice = () => import("../departments/accounts/PurchaseInvoice.vue")
+const PurchaseInvoiceEditorPage = () => import("../departments/accounts/PurchaseInvoiceEditorPage.vue")
+const AccountsReports = () => import("../departments/accounts/AccountsReports.vue")
+const BillTrackings = () => import("../departments/hr/BillTrackings.vue")
+const BillTracking = () => import("../departments/hr/BillTracking.vue")
+const BillTrackingEditorPage = () => import("../departments/hr/BillTrackingEditorPage.vue")
+const HrReports = () => import("../departments/hr/HrReports.vue")
 
 const routes = [
 	{
@@ -113,6 +126,39 @@ const routes = [
 	{ path: "/sales/production-orders/:productionOrderId/edit", name: "sales-production-order-edit", component: ProductionOrderEditorPage, props: true },
 	{ path: "/sales/production-orders/:productionOrderId", name: "sales-production-order", component: ProductionOrder, props: true },
 	{ path: "/sales/reports", name: "sales-reports", component: SalesReports },
+	{ path: "/pd/products", name: PD_ROUTES.products, component: PdSection, props: { section: "products" } },
+	{ path: "/pd/products/new", name: PD_ROUTES.productNew, component: ProductPage },
+	{ path: "/pd/products/:productId/edit", name: PD_ROUTES.productEdit, component: ProductPage, props: true },
+	{ path: "/pd/products/:productId", name: PD_ROUTES.product, component: ProductPage, props: true },
+	{
+		path: "/pd/product-releases",
+		name: PD_ROUTES.releases,
+		component: PdSection,
+		props: { section: "product_releases" },
+	},
+	{
+		path: "/pd/product-releases/:releaseId",
+		name: PD_ROUTES.release,
+		component: ProductReleasePage,
+		props: true,
+	},
+	{
+		path: "/pd/lotwise-item-profits",
+		name: PD_ROUTES.lotwiseList,
+		component: PdSection,
+		props: { section: "lotwise_item_profits" },
+	},
+	{
+		path: "/pd/lotwise-item-profits/new",
+		name: PD_ROUTES.lotwiseNew,
+		component: LotwiseItemProfitPage,
+	},
+	{
+		path: "/pd/lotwise-item-profits/:profitId",
+		name: PD_ROUTES.lotwise,
+		component: LotwiseItemProfitPage,
+		props: true,
+	},
 	{
 		path: "/cutting/plans",
 		name: "cutting-plans",
@@ -511,7 +557,7 @@ const routes = [
 			section: "reports",
 			storeName: "Purchase",
 			basePath: "/purchase",
-			reportKeys: ["stock_balance", "purchase_order_itemwise"],
+			reportKeys: ["stock_balance", "purchase_order_itemwise", "lot_cut_quantity"],
 		},
 	},
 	{
@@ -552,6 +598,60 @@ const routes = [
 		path: "/document-unavailable",
 		name: "document-unavailable",
 		component: DocumentUnavailable,
+	},
+	{
+		path: "/accounts/purchase-invoices",
+		name: "accounts-purchase-invoices",
+		component: PurchaseInvoices,
+	},
+	{
+		path: "/accounts/purchase-invoices/new",
+		name: "accounts-purchase-invoice-new",
+		component: PurchaseInvoiceEditorPage,
+	},
+	{
+		path: "/accounts/purchase-invoices/:purchaseInvoiceId/edit",
+		name: "accounts-purchase-invoice-edit",
+		component: PurchaseInvoiceEditorPage,
+		props: true,
+	},
+	{
+		path: "/accounts/purchase-invoices/:purchaseInvoiceId",
+		name: "accounts-purchase-invoice",
+		component: PurchaseInvoice,
+		props: true,
+	},
+	{
+		path: "/accounts/reports",
+		name: "accounts-reports",
+		component: AccountsReports,
+	},
+	{
+		path: "/hr/bill-tracking",
+		name: "hr-bill-trackings",
+		component: BillTrackings,
+	},
+	{
+		path: "/hr/bill-tracking/new",
+		name: "hr-bill-tracking-new",
+		component: BillTrackingEditorPage,
+	},
+	{
+		path: "/hr/bill-tracking/:billTrackingId/edit",
+		name: "hr-bill-tracking-edit",
+		component: BillTrackingEditorPage,
+		props: true,
+	},
+	{
+		path: "/hr/bill-tracking/:billTrackingId",
+		name: "hr-bill-tracking",
+		component: BillTracking,
+		props: true,
+	},
+	{
+		path: "/hr/reports",
+		name: "hr-reports",
+		component: HrReports,
 	},
 	{
 		path: "/:pathMatch(.*)*",

@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Purchase Order" accent="#0a7f5a" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width>
+	<DepartmentPage title="Purchase Order" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width>
 		<div class="fabric-purchase-order-editor-page erp-workspace">
 			<PurchaseOrderEditor :key="`${purchaseOrderId || 'new'}-${duplicateFrom}`" :name="purchaseOrderId" :source="duplicateSource" @saved="saved" @cancel="cancel" />
 		</div>

@@ -2,6 +2,7 @@
 
 import { createRequire } from "node:module"
 import { existsSync, readFileSync } from "node:fs"
+import { USER_LISTVIEW_ROUTE, fulfillUserListview } from "./listview_mock.mjs"
 
 const require = createRequire("/home/anas/.claude/playwright/package.json")
 const { chromium } = require("playwright")
@@ -115,7 +116,7 @@ async function shellSuite(page) {
 	await page.locator(".department-card-link").first().waitFor({ timeout: 20_000 })
 
 	const destinations = page.locator(".department-card-link")
-	assert(await destinations.count() === 12, "Administrator must show twelve department destinations")
+	assert(await destinations.count() === 13, "Administrator must show thirteen department destinations")
 	assert(await page.getByText("Open workspace", { exact: true }).count() === 0, "Redundant workspace filler is visible")
 	assert(await page.locator("body").evaluate((body) => getComputedStyle(body).backgroundColor) === "rgb(247, 248, 250)", "Shell canvas is not stable")
 
@@ -2096,23 +2097,22 @@ async function listNavigationSuite(page) {
 		contentType: "application/json",
 		body: JSON.stringify({ message: { "cutting-plans": { can_read: true, can_create: false } } }),
 	}))
+	const cuttingPlanMetaFields = [
+		{ fieldname: "lot", label: "Lot", fieldtype: "Link", in_list_view: 1, in_standard_filter: 1 },
+		{ fieldname: "item", label: "Item", fieldtype: "Link", in_list_view: 1 },
+		{ fieldname: "cp_status", label: "Status", fieldtype: "Select", options: "Draft\nPlanned", in_list_view: 1 },
+		{ fieldname: "modified", label: "Modified", fieldtype: "Datetime" },
+	]
 	await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => route.fulfill({
 		status: 200,
 		contentType: "application/json",
 		body: JSON.stringify({ docs: [{
 			name: "SD YRP Cutting Plan",
 			is_submittable: 0,
-			fields: [
-				{ fieldname: "lot", label: "Lot", fieldtype: "Link", in_list_view: 1, in_standard_filter: 1 },
-				{ fieldname: "item", label: "Item", fieldtype: "Link", in_list_view: 1 },
-				{ fieldname: "cp_status", label: "Status", fieldtype: "Select", options: "Draft\nPlanned", in_list_view: 1 },
-				{ fieldname: "modified", label: "Modified", fieldtype: "Datetime" },
-			],
+			fields: cuttingPlanMetaFields,
 		}] }),
 	}))
-	await page.route("**/api/method/yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.get_user_listview*", (route) => route.fulfill({
-		status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }),
-	}))
+	await page.route(USER_LISTVIEW_ROUTE, (route) => fulfillUserListview(route, cuttingPlanMetaFields))
 	await page.route("**/api/method/frappe.desk.reportview.get_count*", (route) => route.fulfill({
 		status: 200, contentType: "application/json", body: JSON.stringify({ message: 41 }),
 	}))

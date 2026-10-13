@@ -270,7 +270,7 @@ function signed(value) {
 }
 
 .production-total.variance--positive strong {
-	color: var(--erp-accent);
+	color: var(--erp-success-text);
 }
 
 .production-card__legend {
@@ -425,7 +425,7 @@ function signed(value) {
 
 .production-table__today {
 	background: var(--erp-success-soft) !important;
-	color: var(--erp-accent) !important;
+	color: var(--erp-success-text) !important;
 }
 
 .production-table__strong {
@@ -472,7 +472,7 @@ function signed(value) {
 
 .variance--positive {
 	background: var(--erp-success-soft);
-	color: var(--erp-accent);
+	color: var(--erp-success-text);
 }
 
 .variance--neutral {

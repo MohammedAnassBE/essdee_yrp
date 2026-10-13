@@ -198,7 +198,7 @@ watch(() => [props.visible, props.productionOrder, props.lot], ([visible]) => {
 .ppo-lot-ocr__difference > * { background: color-mix(in srgb, var(--erp-surface-muted) 56%, white); }
 .ppo-lot-ocr__total { color: var(--erp-text) !important; font-weight: 800; background: var(--erp-surface-soft); }
 .ppo-lot-ocr__negative { color: var(--erp-danger) !important; font-weight: 780; }
-.ppo-lot-ocr__positive { color: var(--erp-accent-hover) !important; font-weight: 780; }
+.ppo-lot-ocr__positive { color: var(--erp-success-text) !important; font-weight: 780; }
 .ppo-lot-ocr__dispatch > * { color: var(--erp-accent-hover); font-weight: 780; background: color-mix(in srgb, var(--erp-accent-soft) 54%, white); border-top: 2px solid var(--erp-accent-border); }
 .ppo-lot-ocr__dispatch > th { text-align: left; }
 .ppo-lot-ocr__empty td { height: 90px; color: var(--erp-text-muted); text-align: center; }

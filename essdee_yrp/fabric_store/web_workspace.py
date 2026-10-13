@@ -43,6 +43,7 @@ from essdee_yrp.fabric_store.documents.common import (
 	get_workspace_base,
 )
 from essdee_yrp.print_registry import get_document_print_formats
+from essdee_yrp.purchase.lot_cut_quantity import can_view_lot_cut_quantity
 
 DOCUMENT_KEYS = {
 	"work_orders": "YRP Work Order",
@@ -1212,13 +1213,22 @@ def get_capabilities() -> dict:
 		}
 
 	reports = {}
-	if _can_run_report("YRP Stock Balance"):
+	if can_run_report("YRP Stock Balance"):
 		reports["stock_balance"] = {"label": _("Stock Balance"), "can_read": True}
 
-	if _can_run_report("SD YRP Purchase Order Itemwise"):
+	if can_run_report("SD YRP Purchase Order Itemwise"):
 		reports["purchase_order_itemwise"] = {
 			"label": _("Purchase Order Itemwise"),
 			"can_read": True,
+		}
+
+	if can_view_lot_cut_quantity():
+		reports["lot_cut_quantity"] = {
+			"label": _("Lot Cut Quantity"),
+			"can_read": True,
+			"can_read_cutting_plan": bool(
+				frappe.has_permission("SD YRP Cutting Plan", ptype="read")
+			),
 		}
 
 	if reports:
@@ -1236,7 +1246,7 @@ def get_capabilities() -> dict:
 	}
 
 
-def _can_run_report(report_name: str) -> bool:
+def can_run_report(report_name: str) -> bool:
 	"""Mirror query-report access checks without queueing permission errors."""
 	try:
 		report = frappe.get_doc("Report", report_name)

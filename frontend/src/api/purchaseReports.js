@@ -8,3 +8,7 @@ export function getPurchaseOrderItemwiseReport(filters) {
 		are_default_filters: true,
 	})
 }
+
+export function getLotCutQuantity(lots) {
+	return callMethod("essdee_yrp.purchase.lot_cut_quantity.get_lot_cut_quantity", { lots })
+}

@@ -4,7 +4,6 @@ export const departments = [
 		label: "Cutting",
 		shortLabel: "CT",
 		path: "/cutting",
-		accent: "#059669",
 		component: () => import("./Cutting.vue"),
 	},
 	{
@@ -12,7 +11,6 @@ export const departments = [
 		label: "Fabric Store",
 		shortLabel: "FS",
 		path: "/fabric-store",
-		accent: "#2f7d68",
 		component: () => import("./FabricStore.vue"),
 	},
 	{
@@ -20,7 +18,6 @@ export const departments = [
 		label: "Cut Panel Store",
 		shortLabel: "CP",
 		path: "/cut-panel-store",
-		accent: "#315da8",
 		component: () => import("./CutPanelStore.vue"),
 	},
 	{
@@ -28,7 +25,6 @@ export const departments = [
 		label: "Accessory Store",
 		shortLabel: "AS",
 		path: "/accessory-store",
-		accent: "#8b5fbf",
 		component: () => import("./AccessoryStore.vue"),
 	},
 	{
@@ -36,7 +32,6 @@ export const departments = [
 		label: "Sewing",
 		shortLabel: "SW",
 		path: "/sewing",
-		accent: "#c64b73",
 		component: () => import("./Sewing.vue"),
 	},
 	{
@@ -44,7 +39,6 @@ export const departments = [
 		label: "Finishing",
 		shortLabel: "FN",
 		path: "/finishing",
-		accent: "#087c91",
 		component: () => import("./Finishing.vue"),
 	},
 	{
@@ -52,7 +46,6 @@ export const departments = [
 		label: "Merch",
 		shortLabel: "MR",
 		path: "/merch",
-		accent: "#a26a13",
 		component: () => import("./Merch.vue"),
 	},
 	{
@@ -60,7 +53,6 @@ export const departments = [
 		label: "Purchase",
 		shortLabel: "PU",
 		path: "/purchase",
-		accent: "#536f2d",
 		component: () => import("./Purchase.vue"),
 	},
 	{
@@ -68,7 +60,6 @@ export const departments = [
 		label: "Sales",
 		shortLabel: "SA",
 		path: "/sales",
-		accent: "#b7493f",
 		component: () => import("./Sales.vue"),
 	},
 	{
@@ -76,7 +67,6 @@ export const departments = [
 		label: "Planning",
 		shortLabel: "PL",
 		path: "/planning",
-		accent: "#5257a6",
 		component: () => import("./Planning.vue"),
 	},
 	{
@@ -84,7 +74,6 @@ export const departments = [
 		label: "PD",
 		shortLabel: "PD",
 		path: "/pd",
-		accent: "#a3378f",
 		component: () => import("./PD.vue"),
 	},
 	{
@@ -92,7 +81,13 @@ export const departments = [
 		label: "Accounts",
 		shortLabel: "AC",
 		path: "/accounts",
-		accent: "#475569",
 		component: () => import("./Accounts.vue"),
+	},
+	{
+		key: "hr",
+		label: "HR",
+		shortLabel: "HR",
+		path: "/hr",
+		component: () => import("./HR.vue"),
 	},
 ]

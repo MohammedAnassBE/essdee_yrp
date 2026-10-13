@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage :title="storeName" accent="#0a7f5a" :show-title="false" flat inline-navigation>
+	<DepartmentPage :title="storeName" :show-title="false" flat inline-navigation>
 		<WorkspaceLoadError v-if="error" :message="error" :loading="loading" @retry="load" />
 		<WorkspaceLauncher
 			v-else
@@ -41,7 +41,7 @@ const workspaces = computed(() => [
 		key: "reports",
 		label: "Reports",
 		description: props.reportKeys.includes("purchase_order_itemwise")
-			? "Review stock balance and Purchase Order item details."
+			? "Review stock, Purchase Order items and Lot cut quantities."
 			: "Generate the current stock balance for store locations.",
 		icon: "pi pi-chart-bar",
 		to: `${props.basePath}/reports`,

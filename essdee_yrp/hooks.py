@@ -173,6 +173,11 @@ yrp_web_doctype_catalog = [
 	"YRP Item Production Detail",
 	"YRP Production Order",
 	"YRP Terms and Condition",
+	"SD YRP Product",
+	"SD YRP Product Release",
+	"SD YRP Lotwise Item Profit",
+	"YRP Purchase Invoice",
+	"YRP Bill Tracking",
 ]
 
 # Post-login landing: ordinary users land on the custom /web work hub;
@@ -621,6 +626,12 @@ override_whitelisted_methods = {
 	# The generic popup already subtracts inspection and prior Work Order
 	# consumption. Also subtract Essdee's direct Rework Details conversions.
 	"yrp.yrp.doctype.yrp_work_order.yrp_work_order.get_rework_source_rows": "essdee_yrp.rework_work_order.get_rework_source_rows",
+	"yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice.approve_invoice": "essdee_yrp.overrides.purchase_invoice_api.approve_invoice",
+	"yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice.check_all_wo_closed": "essdee_yrp.overrides.purchase_invoice_api.check_all_wo_closed",
+	"yrp.yrp.doctype.yrp_bill_tracking.yrp_bill_tracking.assign_vendor_bill": "essdee_yrp.overrides.bill_tracking.assign_vendor_bill",
+	"yrp.yrp.doctype.yrp_bill_tracking.yrp_bill_tracking.bulk_assign_bills": "essdee_yrp.overrides.bill_tracking.bulk_assign_bills",
+	"yrp.yrp.doctype.yrp_bill_tracking.yrp_bill_tracking.make_bill_received_acknowledgement": "essdee_yrp.overrides.bill_tracking.make_bill_received_acknowledgement",
+	"yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice.get_eligible_grns": "essdee_yrp.purchase_invoice.get_eligible_grns",
 }
 #
 # each overriding function accepts a `data` argument;

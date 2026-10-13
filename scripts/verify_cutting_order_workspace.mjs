@@ -2,6 +2,7 @@
 
 import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
+import { USER_LISTVIEW_ROUTE, fulfillUserListview } from "./listview_mock.mjs"
 
 const require = createRequire("/home/anas/.claude/playwright/package.json")
 const { chromium } = require("playwright")
@@ -9,6 +10,11 @@ const { chromium } = require("playwright")
 const SITE = process.env.ESSDEE_TEST_SITE || "http://erp-migration-test.site:8001"
 const [username, password] = readFileSync("/home/anas/.frappe-debug-creds-mrp3", "utf8").trim().split("\n")
 const ORDER = "**/api/method/essdee_yrp.cutting.order_workspace.*"
+const CUTTING_ORDER_META_FIELDS = [
+	{ fieldname: "cutting_order_detail", label: "Cutting Order Detail", fieldtype: "Link", options: "SD YRP Cutting Order Detail", in_list_view: 1 },
+	{ fieldname: "item", label: "Item", fieldtype: "Data", in_list_view: 1 },
+	{ fieldname: "co_status", label: "Status", fieldtype: "Select", in_list_view: 1 },
+]
 const DETAIL = "**/api/method/essdee_yrp.cutting.order_detail_editor.*"
 
 function assert(condition, message) {
@@ -127,13 +133,9 @@ await page.route("**/api/method/essdee_yrp.cutting.web_capabilities.get_capabili
 	} }),
 }))
 await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => route.fulfill({
-	status: 200, contentType: "application/json", body: JSON.stringify({ docs: [{ name: "SD YRP Cutting Order", is_submittable: 1, fields: [
-		{ fieldname: "cutting_order_detail", label: "Cutting Order Detail", fieldtype: "Link", options: "SD YRP Cutting Order Detail", in_list_view: 1 },
-		{ fieldname: "item", label: "Item", fieldtype: "Data", in_list_view: 1 },
-		{ fieldname: "co_status", label: "Status", fieldtype: "Select", in_list_view: 1 },
-	] }] }),
+	status: 200, contentType: "application/json", body: JSON.stringify({ docs: [{ name: "SD YRP Cutting Order", is_submittable: 1, fields: CUTTING_ORDER_META_FIELDS }] }),
 }))
-await page.route("**/api/method/yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.get_user_listview*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }) }))
+await page.route(USER_LISTVIEW_ROUTE, (route) => fulfillUserListview(route, CUTTING_ORDER_META_FIELDS, { isSubmittable: true }))
 await page.route("**/api/method/frappe.desk.reportview.get_count*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: 1 }) }))
 await page.route("**/api/resource/SD%20YRP%20Cutting%20Order*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: [{ name: "CTO-WEB-00001", cutting_order_detail: "CO-STYLE-001-1", item: "STYLE-001", co_status: "Submitted", modified: "2026-10-03 12:00:00" }] }) }))
 await page.route("**/api/method/essdee_yrp.api.link_search.link_search*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: [{ name: "CO-STYLE-001-1", label: "CO-STYLE-001-1 · STYLE-001" }] }) }))

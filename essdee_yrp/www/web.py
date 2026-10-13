@@ -58,6 +58,11 @@ WEB_DOCTYPES = (
 	"YRP Item Production Detail",
 	"YRP Production Order",
 	"YRP Terms and Condition",
+	"SD YRP Product",
+	"SD YRP Product Release",
+	"SD YRP Lotwise Item Profit",
+	"YRP Purchase Invoice",
+	"YRP Bill Tracking",
 )
 
 # boot.user key -> has_permission ptype used by the SPA's usePermissions composable.

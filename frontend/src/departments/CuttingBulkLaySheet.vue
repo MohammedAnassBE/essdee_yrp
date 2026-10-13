@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Bulk LaySheets" accent="#059669" back-to="/cutting/bulk-lay-sheets" back-label="Bulk LaySheets" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Bulk LaySheets" back-to="/cutting/bulk-lay-sheets" back-label="Bulk LaySheets" :show-title="false" flat full-width inline-navigation>
 		<div class="bulk-workspace erp-workspace">
 			<div v-if="loading && !workspace.record" class="bulk-workspace__loading"><Skeleton height="76px" /><Skeleton height="560px" /></div>
 			<WorkspaceLoadError v-else-if="error && !record.name" title="Bulk LaySheets unavailable" :message="error" :loading="loading" @retry="loadWorkspace" />

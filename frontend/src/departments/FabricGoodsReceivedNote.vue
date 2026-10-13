@@ -2,7 +2,6 @@
 	<DepartmentPage
 		v-if="presentation === 'page'"
 		title="Goods Received Note"
-		accent="#0a7f5a"
 		:back-to="backTo"
 		:back-label="backLabel"
 		:show-title="false"

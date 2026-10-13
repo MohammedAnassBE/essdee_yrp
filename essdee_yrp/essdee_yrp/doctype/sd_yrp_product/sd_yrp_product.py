@@ -474,7 +474,6 @@ def _copy_release_attachment(file_name: str | None, release_name: str):
 @frappe.whitelist()
 def release_tech_pack(doc_name: str):
 	product = _get_writable_doc("SD YRP Product", doc_name)
-	frappe.has_permission("SD YRP Product Release", "create", throw=True)
 	if product.is_set_item:
 		for row in product.product_trim_combination:
 			if not row.selected_colours:
@@ -506,6 +505,8 @@ def release_tech_pack(doc_name: str):
 		"category",
 		"sub_brand",
 		"dia",
+		"front_image",
+		"back_image",
 		"product_image",
 		"top_image",
 		"bottom_image",
@@ -531,7 +532,7 @@ def release_tech_pack(doc_name: str):
 		"product_box_details",
 	):
 		release.set(table_name, _child_rows(product, table_name))
-	release.insert()
+	release.insert(ignore_permissions=True)
 
 	for table_name in PRODUCT_GRAPHIC_TABLES:
 		for row in release.get(table_name):
@@ -549,7 +550,9 @@ def _validated_pdf(file_url: str, doctype: str, docname: str, fieldname: str):
 	if (guess_type(file_doc.file_name or file_doc.file_url)[0] or "") != "application/pdf":
 		frappe.throw(_("Please upload a PDF file."))
 	try:
-		pdf = fitz.open(stream=file_doc.get_content(), filetype="pdf")
+		with open(file_doc.get_full_path(), "rb") as source:
+			content = source.read()
+		pdf = fitz.open(stream=content, filetype="pdf")
 	except Exception as exc:
 		frappe.throw(_("Unable to read the PDF: {0}").format(cstr(exc)))
 	if len(pdf) > 100:

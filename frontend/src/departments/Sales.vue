@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Sales" accent="#b7493f" :show-title="false" flat inline-navigation>
+	<DepartmentPage title="Sales" :show-title="false" flat inline-navigation>
 		<SalesLauncher />
 	</DepartmentPage>
 </template>

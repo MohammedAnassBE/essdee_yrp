@@ -6,6 +6,11 @@ const recordRoutes = {
 	"SD YRP Cutting Plan": (name) => `/web/cutting/plans/${encodeURIComponent(name)}`,
 	"SD YRP Finishing Plan": (name) => `/web/finishing/plans/${encodeURIComponent(name)}`,
 	"SD YRP Finishing Plan Dispatch": (name) => `/web/finishing/dispatches/${encodeURIComponent(name)}`,
+	"SD YRP Product": (name) => `/web/pd/products/${encodeURIComponent(name)}`,
+	"SD YRP Product Release": (name) => `/web/pd/product-releases/${encodeURIComponent(name)}`,
+	"SD YRP Lotwise Item Profit": (name) => `/web/pd/lotwise-item-profits/${encodeURIComponent(name)}`,
+	"YRP Purchase Invoice": (name) => `/web/accounts/purchase-invoices/${encodeURIComponent(name)}`,
+	"YRP Bill Tracking": (name) => `/web/hr/bill-tracking/${encodeURIComponent(name)}`,
 }
 
 export function webDocumentPath(doctype, name) {

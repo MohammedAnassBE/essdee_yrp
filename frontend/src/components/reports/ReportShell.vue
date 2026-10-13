@@ -13,6 +13,7 @@
 					icon="pi pi-play"
 					class="erp-action-button erp-action-button--primary"
 					:loading="loading"
+					:disabled="generateDisabled"
 				/>
 				<Button
 					type="button"
@@ -97,6 +98,7 @@ const props = defineProps({
 	hasResults: { type: Boolean, default: false },
 	copyable: { type: Boolean, default: false },
 	keepResultsWhileLoading: { type: Boolean, default: false },
+	generateDisabled: { type: Boolean, default: false },
 })
 
 const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-report-title`)

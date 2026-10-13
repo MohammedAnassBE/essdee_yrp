@@ -2,6 +2,7 @@
 
 import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
+import { USER_LISTVIEW_ROUTE, fulfillUserListview } from "./listview_mock.mjs"
 
 const require = createRequire("/home/anas/.claude/playwright/package.json")
 const { chromium } = require("playwright")
@@ -94,18 +95,17 @@ await page.route("**/api/method/essdee_yrp.cutting.web_capabilities.get_capabili
 		reports: { can_read: false, can_create: false },
 	} }),
 }))
+const cuttingPlanMetaFields = [
+	{ fieldname: "lot", label: "Lot", fieldtype: "Link", options: "SD YRP Lot", in_list_view: 1 },
+	{ fieldname: "item", label: "Item", fieldtype: "Link", options: "Item", in_list_view: 1 },
+	{ fieldname: "cp_status", label: "Status", fieldtype: "Select", in_list_view: 1 },
+]
 await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => route.fulfill({
 	status: 200,
 	contentType: "application/json",
-	body: JSON.stringify({ docs: [{ name: "SD YRP Cutting Plan", is_submittable: 1, fields: [
-		{ fieldname: "lot", label: "Lot", fieldtype: "Link", options: "SD YRP Lot", in_list_view: 1 },
-		{ fieldname: "item", label: "Item", fieldtype: "Link", options: "Item", in_list_view: 1 },
-		{ fieldname: "cp_status", label: "Status", fieldtype: "Select", in_list_view: 1 },
-	] }] }),
+	body: JSON.stringify({ docs: [{ name: "SD YRP Cutting Plan", is_submittable: 1, fields: cuttingPlanMetaFields }] }),
 }))
-await page.route("**/api/method/yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.get_user_listview*", (route) => route.fulfill({
-	status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }),
-}))
+await page.route(USER_LISTVIEW_ROUTE, (route) => fulfillUserListview(route, cuttingPlanMetaFields, { isSubmittable: true }))
 await page.route("**/api/method/frappe.desk.reportview.get_count*", (route) => route.fulfill({
 	status: 200, contentType: "application/json", body: JSON.stringify({ message: 0 }),
 }))

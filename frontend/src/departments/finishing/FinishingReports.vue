@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Finishing Reports" accent="#087c91" back-to="/finishing" back-label="Finishing" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Finishing Reports" back-to="/finishing" back-label="Finishing" :show-title="false" flat full-width inline-navigation>
 		<div class="finishing-reports erp-workspace">
 			<div v-if="loading" class="finishing-reports__loading" aria-label="Loading Finishing reports"><Skeleton height="56px" /><Skeleton height="320px" /></div>
 			<WorkspaceLoadError v-else-if="loadError" :message="loadError" :loading="loading" @retry="load" />

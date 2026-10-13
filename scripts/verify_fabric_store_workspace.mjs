@@ -2,6 +2,7 @@
 
 import { createRequire } from "node:module"
 import { existsSync, readFileSync } from "node:fs"
+import { USER_LISTVIEW_ROUTE, fulfillUserListview } from "./listview_mock.mjs"
 
 const require = createRequire("/home/anas/.claude/playwright/package.json")
 const { chromium } = require("playwright")
@@ -88,6 +89,7 @@ const capabilities = {
 			reports: {
 				stock_balance: { label: "Stock Balance", can_read: true },
 				purchase_order_itemwise: { label: "Purchase Order Itemwise", can_read: true },
+				lot_cut_quantity: { label: "Lot Cut Quantity", can_read: true, can_read_cutting_plan: true },
 			},
 		},
 	},
@@ -135,9 +137,7 @@ async function mockWorkspace(page, listRequests, capabilityPayload = capabilitie
 		const doctype = new URL(route.request().url()).searchParams.get("doctype")
 		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ docs: [{ name: doctype, is_submittable: 1, fields }] }) })
 	})
-	await page.route("**/api/method/yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.get_user_listview*", (route) => route.fulfill({
-		status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }),
-	}))
+	await page.route(USER_LISTVIEW_ROUTE, (route) => fulfillUserListview(route, fields, { isSubmittable: true, currencyFields: { grand_total: "currency" } }))
 	await page.route("**/api/method/essdee_yrp.fabric_store.web_workspace.get_purchase_order_workspace*", (route) => route.fulfill({
 		status: 200, contentType: "application/json", body: JSON.stringify({ message: {
 			record: { doctype: "Purchase Order", ...rows["Purchase Order"], permissions: { can_read: true, can_print: false } },
@@ -481,7 +481,7 @@ async function purchaseDepartmentSuite(page) {
 	await reports.waitFor({ timeout: 20_000 })
 	const reportTabs = reports.getByRole("tab")
 	await reportTabs.nth(1).waitFor({ timeout: 20_000 })
-	assert(JSON.stringify(await reportTabs.allTextContents()) === JSON.stringify(["Stock Balance", "Purchase Order Itemwise"]), `Unexpected Purchase report tabs: ${JSON.stringify(await reportTabs.allTextContents())}`)
+	assert(JSON.stringify(await reportTabs.allTextContents()) === JSON.stringify(["Stock Balance", "Purchase Order Itemwise", "Lot Cut Quantity"]), `Unexpected Purchase report tabs: ${JSON.stringify(await reportTabs.allTextContents())}`)
 	assert(await reports.locator(".stock-advanced").count() === 1, "Purchase Stock Balance report is not the shared component")
 	await reportTabs.filter({ hasText: "Purchase Order Itemwise" }).click()
 	const itemwise = reports.locator(".purchase-order-itemwise-report")

@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="LaySheet Planner" accent="#059669" back-to="/cutting/lay-sheet-planner" back-label="LaySheet Planner" :show-title="false" flat full-width>
+	<DepartmentPage title="LaySheet Planner" back-to="/cutting/lay-sheet-planner" back-label="LaySheet Planner" :show-title="false" flat full-width>
 		<section class="planner-new erp-workspace erp-card erp-editor-shell">
 			<header class="erp-editor-header"><div><span>New document</span><h1>New LaySheet Plan</h1></div><div class="planner-new__actions erp-editor-actions"><Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="saving" @click="router.push('/cutting/lay-sheet-planner')" /><Button v-if="payload.actions?.can_edit_inputs" label="Save" icon="pi pi-save" :loading="saving" :disabled="saving || !plannerInputs?.canSave" @click="plannerInputs?.save()" /></div></header>
 			<WorkspaceLoadError v-if="loadFailed" title="LaySheet Planner unavailable" :message="error" :loading="loading" @retry="load" />

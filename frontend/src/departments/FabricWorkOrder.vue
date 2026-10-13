@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Work Order" accent="#0a7f5a" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Work Order" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
 		<section class="fabric-work-order-frame">
 			<FabricDocumentWorkspace doctype="YRP Work Order" title="Work Order" :workspace="workspace" :loading="loading" :error="error || actionError" :acting="acting" :show-lifecycle-actions="false" @reload="loadWorkspace(true)" @action="runWorkspaceAction">
 				<template #header="{ record, headingId }">

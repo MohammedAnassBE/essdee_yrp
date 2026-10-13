@@ -4,6 +4,14 @@ import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { createServer } from "../frontend/node_modules/vite/dist/node/index.js"
+import { fulfillUserListview } from "./listview_mock.mjs"
+
+const WORK_ORDER_META_FIELDS = [
+	{ fieldname: "supplier", label: "Supplier", fieldtype: "Link", options: "Supplier", in_list_view: 1 },
+	{ fieldname: "item", label: "Item", fieldtype: "Link", options: "Item", in_list_view: 1 },
+	{ fieldname: "lot", label: "Lot", fieldtype: "Link", options: "SD YRP Lot", in_list_view: 1 },
+	{ fieldname: "status", label: "Status", fieldtype: "Select", options: "Draft\nSubmitted", in_list_view: 1 },
+]
 
 const require = createRequire("/home/anas/.claude/playwright/package.json")
 const { chromium } = require("playwright")
@@ -169,15 +177,10 @@ async function launcherSuite(page) {
 			return route.fulfill({ contentType: "application/json", body: JSON.stringify({ message: { sections: { work_orders: { doctype: "YRP Work Order", ...flags, can_create: true } } } }) })
 		}
 		if (method === "frappe.desk.form.load.getdoctype") {
-			return route.fulfill({ contentType: "application/json", body: JSON.stringify({ docs: [{ name: "YRP Work Order", is_submittable: 1, fields: [
-				{ fieldname: "supplier", label: "Supplier", fieldtype: "Link", options: "Supplier", in_list_view: 1 },
-				{ fieldname: "item", label: "Item", fieldtype: "Link", options: "Item", in_list_view: 1 },
-				{ fieldname: "lot", label: "Lot", fieldtype: "Link", options: "SD YRP Lot", in_list_view: 1 },
-				{ fieldname: "status", label: "Status", fieldtype: "Select", options: "Draft\nSubmitted", in_list_view: 1 },
-			] }] }) })
+			return route.fulfill({ contentType: "application/json", body: JSON.stringify({ docs: [{ name: "YRP Work Order", is_submittable: 1, fields: WORK_ORDER_META_FIELDS }] }) })
 		}
-		if (method.endsWith("yrp_user_listview.get_user_listview")) {
-			return route.fulfill({ contentType: "application/json", body: JSON.stringify({ message: [] }) })
+		if (method === "essdee_yrp.api.list_columns.get_user_listview") {
+			return fulfillUserListview(route, WORK_ORDER_META_FIELDS, { isSubmittable: true })
 		}
 		if (method === "frappe.desk.reportview.get_count") {
 			return route.fulfill({ contentType: "application/json", body: JSON.stringify({ message: 1 }) })

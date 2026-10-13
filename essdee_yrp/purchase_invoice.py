@@ -8,7 +8,6 @@ for both Purchase Order and Work Order invoices, including the historical
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections import defaultdict
 
@@ -25,7 +24,6 @@ from yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice import (
 	_get_po_material_rate,
 	_get_tax_rate,
 	_normal_json,
-	_validate_selected_grn,
 )
 from yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice import (
 	fetch_grn_details as base_fetch_grn_details,
@@ -34,6 +32,15 @@ from yrp.yrp.doctype.yrp_work_order.yrp_work_order import get_variant_attributes
 
 from essdee_yrp.erp_purchase_invoice import fetch_expense_accounts
 from essdee_yrp.overrides.work_order import _combination_key, _matches_garment_demand
+from essdee_yrp.web_common import is_masked_value
+from essdee_yrp.work_order_billing import (
+	_active_invoice_links_for_grns,
+	_active_purchase_invoice_names,
+	_is_active_purchase_invoice,
+	_validate_selected_grn,
+	build_work_order_invoice_payload,
+	commercial_group_key,
+)
 
 RATE_PRECISION = 6
 QUANTITY_TOLERANCE = 0.01
@@ -41,19 +48,6 @@ VALUE_TOLERANCE = 0.01
 MODERN_RATE_SOURCE = "yrp_grn_v1"
 MIGRATED_RATE_SOURCE = "migrated_v1"
 MAX_SELECTED_GRNS = 200
-
-
-def commercial_group_key(item, lot, uom, source_rate, tax=None):
-	"""Return a stable identity that deliberately excludes the editable rate."""
-	payload = [
-		item or "",
-		lot or "",
-		uom or "",
-		round(flt(source_rate), RATE_PRECISION),
-		tax or "",
-	]
-	encoded = json.dumps(payload, separators=(",", ":"), ensure_ascii=True)
-	return hashlib.sha256(encoded.encode()).hexdigest()
 
 
 def project_purchase_order_items(items, *, final_rates=None, expense_heads=None):
@@ -407,22 +401,106 @@ def _calculate_verification_grand_total(data):
 	}
 
 
+def _resolve_grn_supplier(supplier=None, purchase_invoice=None, bill_tracking=None):
+	if supplier and not is_masked_value(supplier):
+		return supplier
+	if purchase_invoice and frappe.db.exists("YRP Purchase Invoice", purchase_invoice):
+		invoice = frappe.get_doc("YRP Purchase Invoice", purchase_invoice)
+		invoice.check_permission("write")
+		resolved_supplier = invoice.get("supplier")
+	elif bill_tracking:
+		bill = frappe.get_doc("YRP Bill Tracking", bill_tracking)
+		bill.check_permission("read")
+		resolved_supplier = bill.get("supplier")
+	else:
+		frappe.throw(_("Supplier is required."))
+	if not resolved_supplier or is_masked_value(resolved_supplier):
+		frappe.throw(_("Supplier is required."))
+	return resolved_supplier
+
+
 @frappe.whitelist()
-def fetch_grn_details(grns, against, supplier, purchase_invoice=None):
+def get_eligible_grns(
+	supplier=None,
+	against=None,
+	search_text=None,
+	purchase_invoice=None,
+	limit=100,
+	bill_tracking=None,
+):
+	"""Resolve protected supplier values before querying eligible GRNs."""
+	resolved_supplier = _resolve_grn_supplier(supplier, purchase_invoice, bill_tracking)
+	_check_invoice_fetch_permission(purchase_invoice)
+	frappe.has_permission("YRP Goods Received Note", "read", throw=True)
+	if against not in {"Purchase Order", "YRP Work Order"}:
+		frappe.throw(_("Against must be Purchase Order or Work Order."))
+
+	purchase_invoice = purchase_invoice if _is_active_purchase_invoice(purchase_invoice) else None
+	limit = max(1, min(int(limit or 100), MAX_SELECTED_GRNS))
+	filters = {"docstatus": 1, "supplier": resolved_supplier, "against": against}
+	search_text = (search_text or "").strip()
+	or_filters = None
+	if search_text:
+		like = f"%{search_text}%"
+		or_filters = [
+			["YRP Goods Received Note", "name", "like", like],
+			["YRP Goods Received Note", "against_id", "like", like],
+			["YRP Goods Received Note", "supplier_document_no", "like", like],
+		]
+	eligible = []
+	page_length = min(limit * 3, 600)
+	limit_start = 0
+	while len(eligible) < limit:
+		rows = frappe.get_list(
+			"YRP Goods Received Note",
+			filters=filters,
+			or_filters=or_filters,
+			fields=[
+				"name",
+				"against_id",
+				"posting_date",
+				"supplier_document_no",
+				"total_received_quantity",
+				"total",
+				"purchase_invoice_name",
+			],
+			order_by="posting_date desc, modified desc, name desc",
+			limit_start=limit_start,
+			limit_page_length=page_length,
+		)
+		if not rows:
+			break
+		direct_owners = _active_purchase_invoice_names(row.purchase_invoice_name for row in rows)
+		child_owners = _active_invoice_links_for_grns(row.name for row in rows)
+		for row in rows:
+			owners = set(child_owners.get(row.name, set()))
+			if row.purchase_invoice_name in direct_owners:
+				owners.add(row.purchase_invoice_name)
+			if owners - ({purchase_invoice} if purchase_invoice else set()):
+				continue
+			row["selected"] = bool(purchase_invoice and purchase_invoice in owners)
+			eligible.append(row)
+			if len(eligible) >= limit:
+				break
+		limit_start += len(rows)
+		if len(rows) < page_length:
+			break
+	return eligible
+
+
+@frappe.whitelist()
+def fetch_grn_details(grns, against, supplier=None, purchase_invoice=None, bill_tracking=None):
 	"""Build Essdee's grouped and direct Purchase Invoice projections."""
 	if against == "Purchase Order":
 		_check_invoice_fetch_permission(purchase_invoice)
 		frappe.has_permission("YRP Goods Received Note", "read", throw=True)
-		if purchase_invoice and frappe.db.exists("YRP Purchase Invoice", purchase_invoice):
-			supplier = frappe.db.get_value("YRP Purchase Invoice", purchase_invoice, "supplier")
+		supplier = _resolve_grn_supplier(supplier, purchase_invoice, bill_tracking)
 		grns = frappe.parse_json(grns) if isinstance(grns, str) else grns
 		if not isinstance(grns, list):
 			frappe.throw(_("Selected GRNs must be a list."))
 		grns = list(dict.fromkeys(grns or []))
 		if len(grns) > MAX_SELECTED_GRNS:
 			frappe.throw(_("A maximum of {0} GRNs can be fetched at once.").format(MAX_SELECTED_GRNS))
-		if supplier and not str(supplier).strip("Xx*"):
-			supplier = None
 		payload = build_purchase_order_invoice_payload(
 			grns,
 			supplier=supplier,
@@ -452,11 +530,7 @@ def fetch_grn_details(grns, against, supplier, purchase_invoice=None):
 
 	_check_invoice_fetch_permission(purchase_invoice)
 	frappe.has_permission("YRP Goods Received Note", "read", throw=True)
-	if purchase_invoice and frappe.db.exists("YRP Purchase Invoice", purchase_invoice):
-		# Link values can be masked in Desk for restricted users. The permission-
-		# checked saved document is authoritative; never compare a masked client
-		# placeholder such as XXXXXXXX with the GRN's real supplier.
-		supplier = frappe.db.get_value("YRP Purchase Invoice", purchase_invoice, "supplier")
+	supplier = _resolve_grn_supplier(supplier, purchase_invoice, bill_tracking)
 	grns = frappe.parse_json(grns) if isinstance(grns, str) else grns
 	if not isinstance(grns, list):
 		frappe.throw(_("Selected GRNs must be a list."))
@@ -465,15 +539,12 @@ def fetch_grn_details(grns, against, supplier, purchase_invoice=None):
 		frappe.throw(_("Please select at least one GRN."))
 	if len(grns) > MAX_SELECTED_GRNS:
 		frappe.throw(_("A maximum of {0} GRNs can be fetched at once.").format(MAX_SELECTED_GRNS))
-	if supplier and not str(supplier).strip("Xx*"):
-		supplier = None
 	validated_grns = [
 		_validate_selected_grn(grn, supplier, "YRP Work Order", purchase_invoice) for grn in grns
 	]
 	selected_suppliers = {grn.supplier for grn in validated_grns}
 	if len(selected_suppliers) != 1:
 		frappe.throw(_("All selected GRNs must belong to one Supplier."))
-	supplier = supplier or next(iter(selected_suppliers))
 
 	payload = build_work_order_invoice_payload(
 		grns,
@@ -491,164 +562,6 @@ def fetch_grn_details(grns, against, supplier, purchase_invoice=None):
 	payload.pop("pre_tax_total")
 	payload.pop("tax_total")
 	return payload
-
-
-def build_work_order_invoice_payload(
-	grns,
-	*,
-	supplier=None,
-	purchase_invoice=None,
-	final_rates=None,
-	expense_heads=None,
-):
-	"""Build commercial, verification, and physical valuation rows together."""
-	grn_docs = []
-	for grn_name in list(dict.fromkeys(grns or [])):
-		_validate_selected_grn(grn_name, supplier, "YRP Work Order", purchase_invoice)
-		grn_docs.append(frappe.get_doc("YRP Goods Received Note", grn_name))
-	if not grn_docs:
-		frappe.throw(_("Please select at least one GRN."))
-
-	by_work_order = defaultdict(list)
-	for grn in grn_docs:
-		if not grn.against_id:
-			frappe.throw(_("Goods Received Note {0} has no Work Order.").format(grn.name))
-		by_work_order[grn.against_id].append(grn)
-
-	final_rates = {key: flt(value) for key, value in (final_rates or {}).items()}
-	expense_heads = expense_heads or {}
-	commercial = {}
-	hidden = {}
-	billed_rows = []
-
-	for work_order_name, selected_grns in by_work_order.items():
-		work_order = frappe.get_doc("YRP Work Order", work_order_name)
-		context = _build_work_order_context(work_order, selected_grns)
-
-		for demand in context["demands"]:
-			selected_qty = flt(demand["selected_qty"])
-			if selected_qty <= QUANTITY_TOLERANCE:
-				continue
-			group_key = demand["group_key"]
-			final_rate = final_rates.get(group_key, demand["source_rate"])
-			if final_rate < 0:
-				frappe.throw(_("Final process rate cannot be negative."))
-			row = commercial.setdefault(
-				group_key,
-				{
-					"item": context["billing_variant"],
-					"lot": context["lot"],
-					"item_group": context["item_group"],
-					"expense_head": expense_heads.get(group_key),
-					"qty": 0,
-					"uom": context["billing_uom"],
-					"source_rate": demand["source_rate"],
-					"rate": final_rate,
-					"amount": 0,
-					"tax": context["tax"],
-					"group_key": group_key,
-				},
-			)
-			if abs(flt(row["rate"]) - final_rate) > 0.000001:
-				frappe.throw(_("Conflicting final rates were supplied for one process item group."))
-			row["qty"] += selected_qty
-
-			calculated = demand["row"]
-			billed_rows.append(
-				{
-					"work_order": work_order.name,
-					"item_variant": calculated.item_variant,
-					"quantity": selected_qty,
-					"total_delivered": flt(calculated.delivered_quantity),
-					"total_received": flt(calculated.received_qty),
-					"billed": flt(calculated.billed_qty),
-					"set_combination": _json_value(calculated.get("set_combination")),
-					"essdee_group_key": group_key,
-				}
-			)
-
-		_validate_selected_physical_quantities(context, selected_grns)
-		for grn in selected_grns:
-			for grn_item in grn.get("items") or []:
-				receivable = _receivable_for_grn_item(context, grn, grn_item)
-				demand = context["demand_by_receivable"][receivable.name]
-				group_key = demand["group_key"]
-				final_rate = final_rates.get(group_key, demand["source_rate"])
-				quantity = flt(grn_item.quantity)
-				if quantity <= 0:
-					continue
-				conversion_factor = (
-					flt(grn_item.stock_qty) / quantity if flt(grn_item.stock_qty) and quantity else 1
-				)
-				physical_source_rate = flt(receivable.cost) * conversion_factor
-				rate_weight = demand["weights"][receivable.name] * conversion_factor
-				final_physical_rate = final_rate * rate_weight
-				set_combination = _normal_json(grn_item.get("set_combination"))
-				key = (
-					grn_item.item_variant,
-					grn_item.uom,
-					round(physical_source_rate, RATE_PRECISION),
-					round(rate_weight, 9),
-					context["tax"] or "",
-					_combination_key(set_combination),
-					group_key,
-				)
-				row = hidden.setdefault(
-					key,
-					{
-						"item": grn_item.item_variant,
-						"lot": context["lot"],
-						"item_group": _get_item_group(grn_item.item_variant),
-						"qty": 0,
-						"uom": grn_item.uom,
-						"rate": final_physical_rate,
-						"source_rate": physical_source_rate,
-						"amount": 0,
-						"tax": context["tax"],
-						"actual_rate": 0,
-						"actual_qty": 0,
-						"set_combination": _json_value(set_combination),
-						"essdee_group_key": group_key,
-						"essdee_rate_weight": rate_weight,
-						"_actual_amount": 0,
-					},
-				)
-				row["qty"] += quantity
-				row["actual_qty"] += quantity
-				row["_actual_amount"] += quantity * flt(grn_item.rate)
-
-	commercial_rows = list(commercial.values())
-	for row in commercial_rows:
-		row["amount"] = flt(row["qty"]) * flt(row["rate"])
-
-	hidden_rows = list(hidden.values())
-	for row in hidden_rows:
-		row["amount"] = flt(row["qty"]) * flt(row["rate"])
-		row["actual_rate"] = (
-			flt(row.pop("_actual_amount")) / flt(row["actual_qty"]) if flt(row["actual_qty"]) else 0
-		)
-
-	commercial_total = sum(flt(row["amount"]) for row in commercial_rows)
-	hidden_total = sum(flt(row["amount"]) for row in hidden_rows)
-	if abs(commercial_total - hidden_total) > VALUE_TOLERANCE:
-		frappe.throw(
-			_("The commercial process value {0} does not reconcile with the physical GRN value {1}.").format(
-				flt(commercial_total, 2), flt(hidden_total, 2)
-			)
-		)
-
-	grand_total = sum(flt(row["amount"]) * (1 + _get_tax_rate(row.get("tax")) / 100) for row in hidden_rows)
-	return {
-		"items": hidden_rows,
-		"commercial_items": commercial_rows,
-		"total": grand_total,
-		"pre_tax_total": hidden_total,
-		"tax_total": grand_total - hidden_total,
-		"total_quantity": sum(flt(row["qty"]) for row in commercial_rows),
-		"wo_items": billed_rows,
-		"tax_rates": {row.get("tax"): _get_tax_rate(row.get("tax")) for row in hidden_rows if row.get("tax")},
-		"allow_to_change_rate": 1,
-	}
 
 
 def build_legacy_work_order_invoice_payload(invoice):
@@ -1503,7 +1416,9 @@ def _build_work_order_context(
 	tax = process_cost.tax_slab if process_cost else None
 	lots = {grn.get("lot") or work_order.get("lot") for grn in selected_grns}
 	if len(lots) != 1:
-		frappe.throw(_("Selected GRNs for Work Order {0} do not have one Lot.").format(work_order.name))
+		frappe.throw(
+			_("Selected GRNs for Work Order {0} do not have one Lot.").format(work_order.name)
+		)
 	lot = next(iter(lots))
 
 	demands = []
@@ -1522,7 +1437,9 @@ def _build_work_order_context(
 			}
 		)
 	if not demands:
-		frappe.throw(_("Work Order {0} has no calculated garment items.").format(work_order.name))
+		frappe.throw(
+			_("Work Order {0} has no calculated garment items.").format(work_order.name)
+		)
 
 	ipd = (
 		frappe.get_cached_doc("YRP Item Production Detail", work_order.production_detail)
@@ -1532,7 +1449,7 @@ def _build_work_order_context(
 	demand_by_receivable = {}
 	receivables_by_name = {}
 	for receivable in work_order.get("receivables") or []:
-		if allow_legacy_references and _inactive_legacy_receivable(receivable, selected_grns):
+		if _inactive_zero_receivable(receivable, selected_grns):
 			continue
 		if _unreceived_non_garment_return(work_order, receivable, selected_grns):
 			continue
@@ -1555,7 +1472,7 @@ def _build_work_order_context(
 			valid_against.add("Goods Received Note")
 		if tracking.against not in valid_against or tracking.against_id not in selected_names:
 			continue
-		if allow_legacy_references and flt(tracking.received_qty) == 0:
+		if flt(tracking.received_qty) == 0:
 			continue
 		demand = _demand_for_tracking(demands, tracking, work_order.name)
 		demand["selected_qty"] += flt(tracking.received_qty)
@@ -1611,19 +1528,18 @@ def _unreceived_non_garment_return(work_order, receivable, selected_grns):
 	return (template or receivable.item_variant) != work_order.item
 
 
-def _inactive_legacy_receivable(receivable, selected_grns):
+def _inactive_zero_receivable(receivable, selected_grns):
 	"""Zero planned rows carry no invoice allocation unless a receipt uses them."""
 	if flt(receivable.qty) != 0:
 		return False
 	combination = _combination_key(receivable.get("set_combination"))
 	for grn in selected_grns:
 		for row in grn.get("items") or []:
-			if flt(row.quantity) == 0:
-				continue
-			if row.get("ref_docname") == receivable.name or (
+			matches = row.get("ref_docname") == receivable.name or (
 				row.item_variant == receivable.item_variant
 				and _combination_key(row.get("set_combination")) == combination
-			):
+			)
+			if matches and any(flt(row.get(fieldname)) for fieldname in ("quantity", "stock_qty", "amount")):
 				return False
 	return True
 

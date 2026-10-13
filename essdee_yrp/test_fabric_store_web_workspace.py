@@ -172,6 +172,7 @@ class TestFabricStoreWebWorkspace(TestCase):
 				side_effect=has_permission,
 			),
 			patch("essdee_yrp.fabric_store.web_workspace.frappe.get_doc", side_effect=get_report),
+			patch("essdee_yrp.fabric_store.web_workspace.can_view_lot_cut_quantity", return_value=True),
 		):
 			payload = get_capabilities()
 
@@ -181,7 +182,12 @@ class TestFabricStoreWebWorkspace(TestCase):
 				"purchase_order_itemwise": {
 					"label": "Purchase Order Itemwise",
 					"can_read": True,
-				}
+				},
+				"lot_cut_quantity": {
+					"label": "Lot Cut Quantity",
+					"can_read": True,
+					"can_read_cutting_plan": True,
+				},
 			},
 		)
 
@@ -199,6 +205,7 @@ class TestFabricStoreWebWorkspace(TestCase):
 		with (
 			patch("essdee_yrp.fabric_store.web_workspace.frappe.has_permission", return_value=True),
 			patch("essdee_yrp.fabric_store.web_workspace.frappe.get_doc", side_effect=get_report),
+			patch("essdee_yrp.fabric_store.web_workspace.can_view_lot_cut_quantity", return_value=False),
 		):
 			payload = get_capabilities()
 

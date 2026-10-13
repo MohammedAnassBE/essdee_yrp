@@ -1,7 +1,6 @@
 <template>
 	<DepartmentPage
 		title="Cutting Plan"
-		accent="#059669"
 		back-to="/cutting/plans"
 		back-label="Cutting Plans"
 		:show-title="false"

@@ -523,9 +523,9 @@ function toggleMoreActions(event) {
 	gap: 7px;
 	margin-top: 10px;
 	padding: 8px 10px;
-	color: var(--erp-accent-dark);
+	color: var(--erp-success-text);
 	background: var(--erp-success-soft);
-	border: 1px solid var(--erp-accent-border);
+	border: 1px solid color-mix(in srgb, var(--erp-success) 25%, var(--erp-border));
 	border-radius: var(--erp-control-radius);
 	font-size: var(--erp-font-size-caption);
 	font-weight: 650;

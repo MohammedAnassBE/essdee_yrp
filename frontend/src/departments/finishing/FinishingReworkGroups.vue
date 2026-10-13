@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Rework Grouped Details" accent="#087c91" back-to="/finishing" back-label="Finishing" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Rework Grouped Details" back-to="/finishing" back-label="Finishing" :show-title="false" flat full-width inline-navigation>
 		<div class="finishing-rework erp-workspace" data-finishing-page="rework-groups">
 			<ReportShell title="Rework Grouped Details" :generated="generated" :loading="loading" :has-results="groups.length > 0" copyable keep-results-while-loading @generate="generate" @reset="reset">
 				<template #filters>

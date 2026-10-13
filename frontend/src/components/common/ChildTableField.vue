@@ -64,8 +64,8 @@
 			<template #empty>
 				<div class="child-table-field__empty">
 					<i class="pi pi-table" aria-hidden="true"></i>
-					<strong>No rows added</strong>
-					<span>Use Add Row to create the first line.</span>
+					<strong>{{ isDisabled ? "No rows." : "No rows added" }}</strong>
+					<span v-if="!isDisabled">Use Add Row to create the first line.</span>
 				</div>
 			</template>
 		</DataTable>

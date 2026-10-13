@@ -2,6 +2,7 @@
 
 import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
+import { fulfillUserListview } from "./listview_mock.mjs"
 
 const require = createRequire("/home/anas/.claude/playwright/package.json")
 const { chromium } = require("playwright")
@@ -383,6 +384,12 @@ async function launcherSuite(page) {
 		reports: { ppo_report: { label: "PPO Report", can_read: true, can_export: true } },
 	}
 	const listRequests = []
+	const productionOrderMetaFields = [
+		{ fieldname: "item", label: "Item", fieldtype: "Link", options: "Item", in_list_view: 1 },
+		{ fieldname: "production_term", label: "Production Term", fieldtype: "Link", options: "YRP Production Term", in_list_view: 1 },
+		{ fieldname: "delivery_date", label: "Delivery Date", fieldtype: "Date", in_list_view: 1 },
+		{ fieldname: "status", label: "Status", fieldtype: "Select", options: "Draft\nPPO Request\nOpen\nPending Request\nClosed", in_list_view: 1 },
+	]
 	await page.route("**/api/resource/YRP%20Production%20Order**", async (route) => {
 		listRequests.push(route.request().url())
 		return route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: [{ name: "PPO-TEST-1", item: "Premium Vest", production_term: "5 Piece Pack", delivery_date: "2026-10-20", status: "Open", modified: "2026-10-09 10:00:00", docstatus: 1 }] }) })
@@ -393,15 +400,10 @@ async function launcherSuite(page) {
 			return route.fulfill({ contentType: "application/json", body: JSON.stringify({ message: capabilities }) })
 		}
 		if (method === "frappe.desk.form.load.getdoctype") {
-			return route.fulfill({ contentType: "application/json", body: JSON.stringify({ docs: [{ name: "YRP Production Order", is_submittable: 1, fields: [
-				{ fieldname: "item", label: "Item", fieldtype: "Link", options: "Item", in_list_view: 1 },
-				{ fieldname: "production_term", label: "Production Term", fieldtype: "Link", options: "YRP Production Term", in_list_view: 1 },
-				{ fieldname: "delivery_date", label: "Delivery Date", fieldtype: "Date", in_list_view: 1 },
-				{ fieldname: "status", label: "Status", fieldtype: "Select", options: "Draft\nPPO Request\nOpen\nPending Request\nClosed", in_list_view: 1 },
-			] }] }) })
+			return route.fulfill({ contentType: "application/json", body: JSON.stringify({ docs: [{ name: "YRP Production Order", is_submittable: 1, fields: productionOrderMetaFields }] }) })
 		}
-		if (method.endsWith("yrp_user_listview.get_user_listview")) {
-			return route.fulfill({ contentType: "application/json", body: JSON.stringify({ message: [] }) })
+		if (method === "essdee_yrp.api.list_columns.get_user_listview") {
+			return fulfillUserListview(route, productionOrderMetaFields, { isSubmittable: true })
 		}
 		if (method === "frappe.desk.reportview.get_count") {
 			return route.fulfill({ contentType: "application/json", body: JSON.stringify({ message: 1 }) })

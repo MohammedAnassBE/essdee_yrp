@@ -7,7 +7,14 @@ from yrp.attribute_links import value as _attribute_value
 
 
 class SDYRPLotwiseItemProfit(Document):
-	pass
+	def validate(self):
+		from essdee_yrp.product_development.lotwise_costing import (
+			calculate_all,
+			validate_template_types,
+		)
+
+		validate_template_types(self)
+		calculate_all(self)
 
 
 @frappe.whitelist()

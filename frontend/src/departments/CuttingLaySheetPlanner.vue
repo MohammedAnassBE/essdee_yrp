@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="LaySheet Planner" accent="#059669" back-to="/cutting/lay-sheet-planner" back-label="LaySheet Planner" :show-title="false" flat full-width>
+	<DepartmentPage title="LaySheet Planner" back-to="/cutting/lay-sheet-planner" back-label="LaySheet Planner" :show-title="false" flat full-width>
 		<div class="planner-workspace erp-workspace">
 			<div v-if="loading && !payload.record" class="planner-workspace__loading"><Skeleton height="76px" /><Skeleton height="520px" /></div>
 			<WorkspaceLoadError v-else-if="error && !record.name" title="LaySheet Planner unavailable" :message="error" :loading="loading" @retry="load" />

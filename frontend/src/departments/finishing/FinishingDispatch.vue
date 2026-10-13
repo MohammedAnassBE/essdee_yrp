@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Finishing Plan Dispatch" accent="#087c91" back-to="/finishing/dispatches" back-label="Finishing Plan Dispatches" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Finishing Plan Dispatch" back-to="/finishing/dispatches" back-label="Finishing Plan Dispatches" :show-title="false" flat full-width inline-navigation>
 		<div v-if="loading && !ready" class="finishing-plan__probe erp-workspace" aria-label="Loading Finishing Plan Dispatch"><Skeleton height="64px" /><Skeleton height="360px" /></div>
 		<div v-else-if="loadError && !ready" class="finishing-plan__probe erp-workspace">
 			<WorkspaceLoadError title="Finishing Plan Dispatch unavailable" :message="loadError" :loading="loading" @retry="load" />

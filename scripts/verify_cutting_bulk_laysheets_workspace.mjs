@@ -2,11 +2,18 @@
 
 import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
+import { USER_LISTVIEW_ROUTE, fulfillUserListview } from "./listview_mock.mjs"
 
 const require = createRequire("/home/anas/.claude/playwright/package.json")
 const { chromium } = require("playwright")
 
 const SITE = "http://erp-migration-test.site:8001"
+const BULK_LAY_SHEETS_META_FIELDS = [
+	{ fieldname: "main_lot", label: "Main Lot", fieldtype: "Link", in_list_view: 1 },
+	{ fieldname: "from_location", label: "From Location", fieldtype: "Link", in_list_view: 1 },
+	{ fieldname: "posting_date", label: "Posting Date", fieldtype: "Date", in_list_view: 1 },
+	{ fieldname: "status", label: "Status", fieldtype: "Select", options: "Setup\nIn Progress", in_list_view: 1 },
+]
 const [username, password] = readFileSync("/home/anas/.frappe-debug-creds-mrp3", "utf8").trim().split("\n")
 const API = "**/api/method/essdee_yrp.cutting.bulk_laysheets_workspace.*"
 
@@ -102,14 +109,9 @@ await page.route("**/api/method/essdee_yrp.cutting.web_capabilities.get_capabili
 await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => route.fulfill({
 	status: 200,
 	contentType: "application/json",
-	body: JSON.stringify({ docs: [{ name: "SD YRP Cutting Bulk Lay Sheets", fields: [
-		{ fieldname: "main_lot", label: "Main Lot", fieldtype: "Link", in_list_view: 1 },
-		{ fieldname: "from_location", label: "From Location", fieldtype: "Link", in_list_view: 1 },
-		{ fieldname: "posting_date", label: "Posting Date", fieldtype: "Date", in_list_view: 1 },
-		{ fieldname: "status", label: "Status", fieldtype: "Select", options: "Setup\nIn Progress", in_list_view: 1 },
-	] }] }),
+	body: JSON.stringify({ docs: [{ name: "SD YRP Cutting Bulk Lay Sheets", fields: BULK_LAY_SHEETS_META_FIELDS }] }),
 }))
-await page.route("**/api/method/yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.get_user_listview*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }) }))
+await page.route(USER_LISTVIEW_ROUTE, (route) => fulfillUserListview(route, BULK_LAY_SHEETS_META_FIELDS))
 await page.route("**/api/method/frappe.desk.reportview.get_count*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: 1 }) }))
 await page.route("**/api/resource/SD%20YRP%20Cutting%20Bulk%20Lay%20Sheets?*", (route) => route.fulfill({
 	status: 200,

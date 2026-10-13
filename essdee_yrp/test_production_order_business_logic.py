@@ -163,6 +163,30 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 		self.assertIn("ordered_details", context)
 		self.assertIn("linked_lots", context)
 
+	def test_onload_lists_price_requests_newest_first(self):
+		production_order = frappe.db.get_value(
+			"SD YRP PPO Price Request",
+			{"production_order": ["is", "set"]},
+			"production_order",
+		)
+		if not production_order:
+			self.skipTest("Price request history runs after data migration")
+		doc = frappe.get_doc("YRP Production Order", production_order)
+		onload(doc)
+		requests = doc.get("__onload").price_requests
+		expected = frappe.get_all(
+			"SD YRP PPO Price Request",
+			filters={"production_order": production_order},
+			pluck="name",
+			order_by="creation desc",
+			limit=20,
+		)
+		self.assertEqual([request.name for request in requests], expected)
+		self.assertEqual(
+			set(requests[0]),
+			{"name", "status", "requested_by", "requested_at", "approved_by", "approved_at"},
+		)
+
 	def test_price_context_matches_current_order_sizes(self):
 		doc = self._submitted_order()
 		context = get_price_update_context(doc.name)

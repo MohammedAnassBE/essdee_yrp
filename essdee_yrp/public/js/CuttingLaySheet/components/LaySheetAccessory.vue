@@ -19,12 +19,12 @@
                     <td>{{idx + 1}}</td>
                     <td>{{item.accessory}}</td>
                     <td>{{item.cloth_type}}</td>
-                    <td>{{item.colour}}</td>
-                    <td>{{item.dia}}</td>
+                    <td>{{frappe.yrp.attribute_value(item.colour)}}</td>
+                    <td>{{frappe.yrp.attribute_value(item.dia)}}</td>
                     <td>{{item.shade}}</td>
                     <td>{{item.weight}}</td>
                     <td>{{item.no_of_rolls}}</td>
-                    <td>{{item.actual_dia}}</td>
+                    <td>{{frappe.yrp.attribute_value(item.actual_dia)}}</td>
 					<td v-if="!locked_status">
                         <div class="pull-right cursor-pointer" @click="add_cloth_item(idx)"
                             v-html="frappe.utils.icon('edit', 'md', 'mr-1')"></div>
@@ -171,6 +171,8 @@ async function add_cloth_item(index){
             actual_dia.df.options = dia_options
             actual_dia.refresh()
         }
+        cloth_colour.set_value(frappe.yrp.attribute_value(items.value[index]['colour']))
+        cloth_colour.refresh()
         cloth_dia.set_value(frappe.yrp.attribute_value(items.value[index]['dia']))
         cloth_dia.refresh()
         if(frappe.yrp.attribute_value(items.value[index]['actual_dia'])){

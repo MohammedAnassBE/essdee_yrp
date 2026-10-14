@@ -1,3 +1,4 @@
+from unittest import TestCase
 from unittest.mock import patch
 
 import frappe
@@ -11,6 +12,7 @@ from essdee_yrp.finishing.grn import (
 	apply_goods_received_note,
 )
 from essdee_yrp.finishing.insights import fetch_rejected_quantity
+from essdee_yrp.finishing.ocr import _empty_part, _empty_size, get_ocr_details, get_unaccountable_balance
 from essdee_yrp.finishing.old_lot import (
 	_apply_lot_transfer_to_finishing,
 	_record_split_history,
@@ -507,26 +509,99 @@ class TestFinishingServices(IntegrationTestCase):
 		self.assertEqual(totals.total_dispatched_pieces, 200)
 		self.assertEqual(totals.dispatch_percentage, 100)
 
-	def test_ocr_balance_accounts_for_rework_and_old_lot_transfers(self):
-		doc = _doc(
-			finishing_plan_details=[
-				_row(
-					delivered_quantity=100,
-					lot_transferred=10,
-					ironing_excess=2,
-					transferred_qty=5,
-					rejected_qty=2,
-					return_qty=3,
-					pack_return_qty=4,
-				)
-			],
-			finishing_plan_reworked_details=[_row(quantity=7, reworked_quantity=4, rejected_qty=1)],
-			finishing_old_lot_given_items=[_row(loose_piece_given=2, loose_piece_set_given=1)],
-			finishing_old_lot_received_items=[_row(loose_piece_taken=1, loose_piece_set_taken=1)],
+	@patch("essdee_yrp.finishing.status.get_ocr_details")
+	@patch("essdee_yrp.finishing.status.get_finishing_dispatch_totals")
+	@patch("essdee_yrp.finishing.status.get_finishing_plan_total_cutting", return_value=100)
+	@patch("essdee_yrp.finishing.status.frappe.get_cached_doc")
+	def test_ocr_size_balances_cannot_cancel_for_fully_dispatched_status(
+		self, get_settings, _total_cutting, dispatch_totals, ocr_details
+	):
+		part = _empty_part()
+		for size, dispatched in (("S", 110), ("M", 90)):
+			part["total"][size] = _empty_size()
+			part["total"][size].update(sewing_received=100, dispatched_piece=dispatched)
+		ocr_details.return_value = {"Item": part}
+		get_settings.return_value = _row(
+			partial_received_percentage=50,
+			partially_dispatched_percentage=90,
 		)
+		dispatch_totals.return_value = _row(total_dispatched_pieces=98)
+		doc = _doc(finishing_plan_details=[])
 
-		# Given loose pieces remain accounted for as an explicit transfer bucket.
-		self.assertEqual(get_unaccountable_quantity(doc, dispatched_pieces=90), 3)
+		self.assertEqual(sum(get_unaccountable_balance(values) for values in part["total"].values()), 0)
+		self.assertEqual(get_unaccountable_quantity(doc), 20)
+		self.assertEqual(compute_received_status(doc), "Dispatched")
+
+	@patch("essdee_yrp.finishing.status.get_ocr_details")
+	@patch("essdee_yrp.finishing.status.get_finishing_dispatch_totals")
+	@patch("essdee_yrp.finishing.status.get_finishing_plan_total_cutting", return_value=100)
+	@patch("essdee_yrp.finishing.status.frappe.get_cached_doc")
+	def test_balanced_ocr_sizes_allow_fully_dispatched_status(
+		self, get_settings, _total_cutting, dispatch_totals, ocr_details
+	):
+		part = _empty_part()
+		for size in ("S", "M"):
+			part["total"][size] = _empty_size()
+			part["total"][size].update(
+				sewing_received=100,
+				old_lot=10,
+				ironing_excess=2,
+				dispatched_piece=98,
+				rejected=3,
+				loose_piece_set=1,
+				loose_piece=4,
+				pending=3,
+				transferred=1,
+				transferred_as_loose_piece=2,
+			)
+		ocr_details.return_value = {"Item": part}
+		get_settings.return_value = _row(
+			partial_received_percentage=50,
+			partially_dispatched_percentage=90,
+		)
+		dispatch_totals.return_value = _row(total_dispatched_pieces=98)
+		doc = _doc(finishing_plan_details=[])
+
+		self.assertEqual(get_unaccountable_quantity(doc), 0)
+		self.assertEqual(compute_received_status(doc), "Fully Dispatched")
+
+	def test_unaccountable_balance_field_signs_match_production_api(self):
+		fields = (
+			("sewing_received", 1),
+			("old_lot", 1),
+			("ironing_excess", 1),
+			("transferred", -1),
+			("transferred_as_loose_piece", -1),
+			("dispatched_piece", -1),
+			("rejected", -1),
+			("loose_piece_set", -1),
+			("loose_piece", -1),
+			("pending", -1),
+		)
+		for empty_values in (_empty_part, _empty_size):
+			for field, expected in fields:
+				with self.subTest(values=empty_values.__name__, field=field):
+					values = empty_values()
+					values[field] = 1
+					self.assertEqual(get_unaccountable_balance(values), expected)
+
+	@patch("essdee_yrp.finishing.status.get_ocr_details", side_effect=frappe.DoesNotExistError)
+	@patch("essdee_yrp.finishing.status.get_finishing_dispatch_totals")
+	@patch("essdee_yrp.finishing.status.get_finishing_plan_total_cutting", return_value=100)
+	@patch("essdee_yrp.finishing.status.frappe.get_cached_doc")
+	def test_fully_dispatched_status_propagates_ocr_errors(
+		self, get_settings, _total_cutting, dispatch_totals, ocr_details
+	):
+		get_settings.return_value = _row(
+			partial_received_percentage=50,
+			partially_dispatched_percentage=90,
+		)
+		dispatch_totals.return_value = _row(total_dispatched_pieces=98)
+		doc = _doc(finishing_plan_details=[])
+
+		with self.assertRaises(frappe.DoesNotExistError):
+			compute_received_status(doc)
+		ocr_details.assert_called_once_with(doc)
 
 	@patch("essdee_yrp.finishing.status.get_unaccountable_quantity", return_value=0)
 	@patch("essdee_yrp.finishing.status.get_finishing_dispatch_totals")
@@ -544,6 +619,33 @@ class TestFinishingServices(IntegrationTestCase):
 
 		self.assertEqual(compute_received_status(doc), "Fully Dispatched")
 
+	@patch("essdee_yrp.finishing.status.get_unaccountable_quantity")
+	@patch("essdee_yrp.finishing.status.get_finishing_dispatch_totals")
+	@patch("essdee_yrp.finishing.status.get_finishing_plan_total_cutting", return_value=100)
+	@patch("essdee_yrp.finishing.status.frappe.get_cached_doc")
+	def test_dispatch_status_thresholds_match_production_api(
+		self, get_settings, _total_cutting, dispatch_totals, unaccountable
+	):
+		doc = _doc(finishing_plan_details=[])
+		cases = [
+			(89.99, 90, 0, "Partially Dispatched"),
+			(90, 90, 0, "Dispatched"),
+			(97, 90, 0, "Dispatched"),
+			(97.01, 90, 0, "Fully Dispatched"),
+			(98, 90, 5, "Dispatched"),
+			(10, None, 0, "Dispatched"),
+		]
+		for dispatched, threshold, balance, expected in cases:
+			with self.subTest(dispatched=dispatched, threshold=threshold, unaccountable=balance):
+				get_settings.return_value = _row(
+					partial_received_percentage=50,
+					partially_dispatched_percentage=threshold,
+				)
+				dispatch_totals.return_value = _row(total_dispatched_pieces=dispatched)
+				unaccountable.return_value = balance
+
+				self.assertEqual(compute_received_status(doc), expected)
+
 	@patch("essdee_yrp.finishing.status.get_finishing_dispatch_totals")
 	@patch("essdee_yrp.finishing.status.get_finishing_plan_total_cutting", return_value=100)
 	@patch("essdee_yrp.finishing.status.frappe.get_cached_doc")
@@ -560,6 +662,152 @@ class TestFinishingServices(IntegrationTestCase):
 		dispatch_totals.return_value = _row(total_dispatched_pieces=0)
 		doc = _doc(finishing_plan_details=[_row(delivered_quantity=1)])
 		self.assertEqual(compute_received_status(doc), "Ready to Pack")
+
+
+class TestFinishingOCRParity(TestCase):
+	def setUp(self):
+		self.attributes = {part: {"Part": part, "Colour": "Blue", "Size": "S"} for part in ("Top", "Bottom")}
+		self.ipd = _doc(
+			is_set_item=1,
+			major_attribute_value="Top",
+			item_attributes=[_row(attribute="Part", mapping="PARTS")],
+			set_item_combination_details=[_row(set_item_attribute_value=part) for part in self.attributes],
+		)
+		self.packing = _row(dynamic_ratio_packing=False, sizes={})
+		cached_docs = {
+			"YRP Item Production Detail": self.ipd,
+			"SD YRP Lot": _doc(lot_order_details=[]),
+			"SD YRP MRP Settings": _row(partially_dispatched_percentage=90),
+		}
+		for target, kwargs in (
+			("ocr.get_variant_attr_details", {"side_effect": self.attributes.__getitem__}),
+			("ocr.attribute_db.get_value", {"return_value": (1, "Colour", "Size", "Part")}),
+			("inward.get_mapping_values", {"return_value": ["Top", "Bottom"]}),
+			("ocr.get_finishing_packing_summary", {"return_value": self.packing}),
+			("status.get_finishing_packing_summary", {"return_value": self.packing}),
+			("ocr.frappe.get_cached_doc", {"side_effect": lambda doctype, *args: cached_docs[doctype]}),
+			("old_lot_history.frappe.get_all", {"return_value": []}),
+		):
+			patcher = patch(f"essdee_yrp.finishing.{target}", **kwargs)
+			patcher.start()
+			self.addCleanup(patcher.stop)
+		self.doc = _doc(
+			name="FP-1",
+			production_detail="IPD-1",
+			lot="LOT-1",
+			pieces_per_box=1,
+			finishing_plan_details=[
+				_row(
+					item_variant=part,
+					set_combination='{"major_colour":"Blue"}',
+					cutting_qty=100,
+					delivered_quantity=100,
+					return_qty=2,
+				)
+				for part in self.attributes
+			],
+			finishing_plan_grn_details=[_row(item_variant="Top", quantity=98, dispatched=98)],
+		)
+
+	def test_set_old_lot_given_loose_pieces_allow_fully_dispatched_status(self):
+		self.doc.finishing_old_lot_given_items = [
+			_row(item_variant="Top", set_combination='{"major_colour":"Blue"}', loose_piece_given=2)
+		]
+		self.assertEqual(get_unaccountable_quantity(self.doc), 0)
+		self.assertEqual(compute_received_status(self.doc), "Fully Dispatched")
+
+	def test_set_old_lot_receipts_update_each_part_and_loose_bucket(self):
+		self.doc.name = None
+		self.doc.finishing_old_lot_received_items = [
+			_row(
+				item_variant=part,
+				set_combination='{"major_colour":"Blue"}',
+				loose_piece_taken=1,
+				loose_piece_set_taken=2,
+			)
+			for part in self.attributes
+		]
+		self.assertEqual(get_unaccountable_quantity(self.doc), 6)
+		for part, values in get_ocr_details(self.doc).items():
+			colour = values["data"][f"Blue (Blue) @ {part}"]
+			for target in (values, values["total"]["S"], colour["colour_total"], colour["values"]["S"]):
+				self.assertEqual((target["loose_piece"], target["loose_piece_set"]), (3, 2))
+
+	def test_rework_negative_pending_is_preserved(self):
+		self.doc.finishing_plan_reworked_details = [
+			_row(
+				item_variant="Top",
+				set_combination='{"major_colour":"Blue"}',
+				quantity=10,
+				reworked_quantity=5,
+				rejected_qty=8,
+			)
+		]
+		self.assertEqual(get_unaccountable_quantity(self.doc), 5)
+		values = get_ocr_details(self.doc)["Top"]
+		colour = values["data"]["Blue (Blue) @ Top"]
+		for target in (values, values["total"]["S"], colour["colour_total"], colour["values"]["S"]):
+			self.assertEqual(target["pending"], -3)
+
+	def test_rework_missing_grid_colour_or_part_raises(self):
+		for part, colour in (("Top", "Red"), ("Sleeve", "Blue")):
+			with self.subTest(part=part, colour=colour):
+				self.attributes["Rework"] = {"Part": part, "Colour": colour, "Size": "S"}
+				self.doc.finishing_plan_reworked_details = [
+					_row(item_variant="Rework", set_combination='{"major_colour":"Blue"}')
+				]
+				with self.assertRaises(KeyError):
+					get_unaccountable_quantity(self.doc)
+
+	def test_packing_missing_ipd_part_raises(self):
+		self.doc.finishing_plan_details = self.doc.finishing_plan_details[:1]
+		for dynamic in (False, True):
+			with self.subTest(dynamic=dynamic):
+				self.packing.dynamic_ratio_packing = dynamic
+				with self.assertRaises(KeyError):
+					get_unaccountable_quantity(self.doc)
+
+	def test_dynamic_packing_totals_missing_ipd_part_raise_without_grn(self):
+		self.doc.finishing_plan_details = self.doc.finishing_plan_details[:1]
+		self.doc.finishing_plan_grn_details = []
+		self.packing.update(dynamic_ratio_packing=True, total_packed_boxes=98, total_dispatched_boxes=98)
+		with self.assertRaises(KeyError):
+			get_unaccountable_quantity(self.doc)
+
+	def test_packing_missing_size_cell_raises(self):
+		self.attributes["Packed"] = {"Size": "M"}
+		self.doc.finishing_plan_grn_details[0].item_variant = "Packed"
+		with self.assertRaises(KeyError):
+			get_unaccountable_quantity(self.doc)
+
+	def test_set_packing_missing_mapping_raises(self):
+		self.ipd.item_attributes = []
+		with self.assertRaises(TypeError):
+			get_unaccountable_quantity(self.doc)
+
+	def test_destination_derived_receipts_exclude_unrelated_legacy_rows(self):
+		self.doc.finishing_old_lot_received_items = [_row(item_variant="Bottom", loose_piece_taken=9)]
+		given = _row(source_fp="FP-SOURCE", item_variant="Top", loose_piece_given=2)
+		with patch(
+			"essdee_yrp.finishing.old_lot_history.frappe.get_all",
+			side_effect=[[given], [_row(name="FP-SOURCE", lot="LOT-SOURCE")]],
+		):
+			received = get_old_lot_received_rows(self.doc)
+		self.assertEqual([(row.item_variant, row.loose_piece_taken) for row in received], [("Top", 2)])
+
+	def test_cancelled_source_receipts_do_not_fall_back_to_legacy_rows(self):
+		self.doc.finishing_old_lot_received_items = [_row(item_variant="Bottom", loose_piece_taken=9)]
+		given = _row(source_fp="FP-SOURCE", item_variant="Top", lot_transfer="LT-CANCELLED")
+		with patch(
+			"essdee_yrp.finishing.old_lot_history.frappe.get_all",
+			side_effect=[[given], [_row(name="FP-SOURCE", lot="LOT-SOURCE")], ["LT-CANCELLED"]],
+		):
+			self.assertEqual(get_old_lot_received_rows(self.doc), [])
+
+	def test_destination_legacy_receipts_used_without_source_history(self):
+		legacy = _row(item_variant="Bottom", loose_piece_taken=9)
+		self.doc.finishing_old_lot_received_items = [legacy]
+		self.assertEqual(get_old_lot_received_rows(self.doc), [legacy])
 
 
 def _row(**values):

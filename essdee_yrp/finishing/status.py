@@ -5,10 +5,7 @@ from frappe.utils import flt
 from yrp.attribute_links import value as _attribute_value
 from yrp.utils import get_variant_attr_details
 
-from essdee_yrp.finishing.old_lot_history import (
-	active_old_lot_transfer_rows,
-	get_old_lot_received_rows,
-)
+from essdee_yrp.finishing.ocr import get_ocr_details, get_unaccountable_balance
 from essdee_yrp.finishing.packing import get_finishing_packing_summary
 
 AUTO_FP_STATUSES = (
@@ -175,8 +172,8 @@ def compute_received_status(finishing_doc):
 		if dispatch_percentage < dispatch_threshold:
 			return "Partially Dispatched"
 		if dispatch_percentage > FULLY_DISPATCHED_PCT:
-			unaccountable = get_unaccountable_quantity(finishing_doc, total_dispatched)
-			if abs(unaccountable) < 1e-6:
+			unaccountable = get_unaccountable_quantity(finishing_doc)
+			if unaccountable == 0:
 				return "Fully Dispatched"
 		return "Dispatched"
 
@@ -194,46 +191,11 @@ def apply_auto_fp_status(finishing_doc):
 		finishing_doc.fp_status = new_status
 
 
-def get_unaccountable_quantity(finishing_doc, dispatched_pieces=None):
-	"""Compute the aggregate OCR balance without coupling Stock Entry to its UI.
-
-	This is the sum-equivalent of the F15 part/colour/size OCR matrix.  The UI can
-	build the detailed matrix separately; automatic status needs only this total.
-	"""
-	rows = finishing_doc.get("finishing_plan_details") or []
-	inward = sum(
-		flt(row.delivered_quantity) + flt(row.lot_transferred) + flt(row.ironing_excess) for row in rows
-	)
-	transferred = sum(flt(row.transferred_qty) for row in rows)
-	rejected = sum(flt(row.rejected_qty) for row in rows)
-	loose_piece = sum(flt(row.return_qty) for row in rows)
-	loose_piece_set = sum(flt(row.pack_return_qty) for row in rows)
-	transferred_as_loose_piece = 0
-
-	for row in finishing_doc.get("finishing_plan_reworked_details") or []:
-		rejected += flt(row.rejected_qty)
-		# Rework still outstanding is part of the OCR pending quantity.
-		transferred += max(
-			flt(row.quantity) - flt(row.reworked_quantity) - flt(row.rejected_qty),
-			0,
-		)
-
-	for row in active_old_lot_transfer_rows(finishing_doc.get("finishing_old_lot_given_items")):
-		loose_piece -= flt(row.loose_piece_given)
-		loose_piece_set -= flt(row.loose_piece_set_given)
-		transferred_as_loose_piece += flt(row.loose_piece_given) + flt(row.loose_piece_set_given)
-	for row in get_old_lot_received_rows(finishing_doc):
-		loose_piece += flt(row.loose_piece_taken)
-		loose_piece_set += flt(row.loose_piece_set_taken)
-
-	if dispatched_pieces is None:
-		dispatched_pieces = get_finishing_dispatch_totals(finishing_doc).total_dispatched_pieces
-	return (
-		inward
-		- flt(dispatched_pieces)
-		- rejected
-		- loose_piece
-		- loose_piece_set
-		- transferred
-		- transferred_as_loose_piece
+def get_unaccountable_quantity(finishing_doc):
+	"""Return the sum of absolute per part/size OCR balances."""
+	ocr_data = get_ocr_details(finishing_doc)
+	return sum(
+		abs(get_unaccountable_balance(size_values))
+		for part in ocr_data.values()
+		for size_values in part["total"].values()
 	)

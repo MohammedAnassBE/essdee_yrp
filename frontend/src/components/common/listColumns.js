@@ -1,3 +1,5 @@
+import { syncOrderedDraft } from "./orderedDraft.js"
+
 export const frappeStandardFilterFields = [
 	{ fieldname: "name", fieldtype: "Link", label: "ID" },
 	{ fieldname: "owner", fieldtype: "Link", label: "Created By", options: "User" },
@@ -65,13 +67,16 @@ export function matchesColumnSearch(column, search) {
 }
 
 export function syncColumnDraft(currentColumns, incomingColumns, { visible, edited }) {
-	if (!visible || edited || !Array.isArray(incomingColumns)) return currentColumns
-	return incomingColumns.map((column) => ({
-		fieldname: column.fieldname,
-		fieldtype: column.fieldtype,
-		label: column.label,
-		enabled: Boolean(column.enabled),
-	}))
+	return syncOrderedDraft(currentColumns, incomingColumns, {
+		visible,
+		edited,
+		clone: (column) => ({
+			fieldname: column.fieldname,
+			fieldtype: column.fieldtype,
+			label: column.label,
+			enabled: Boolean(column.enabled),
+		}),
+	})
 }
 
 export function canSaveColumnDraft(settingsReady, columns) {

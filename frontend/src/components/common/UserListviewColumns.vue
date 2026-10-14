@@ -156,6 +156,7 @@ import {
 	matchesColumnSearch,
 	syncColumnDraft,
 } from "./listColumns.js"
+import { moveDraftItem, reorderDraftItem } from "./orderedDraft.js"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
@@ -243,23 +244,19 @@ function dropColumn() {
 		endDrag()
 		return
 	}
-	const ordered = [...visibleColumns.value]
-	const [moved] = ordered.splice(dragIndex.value, 1)
-	let destination = dropIndex.value
-	if (destination > dragIndex.value) destination -= 1
-	destination = Math.max(0, Math.min(destination, ordered.length))
-	ordered.splice(destination, 0, moved)
+	const moved = visibleColumns.value[dragIndex.value]
+	const ordered = reorderDraftItem(visibleColumns.value, dragIndex.value, dropIndex.value)
+	const destination = ordered.indexOf(moved)
 	applyVisibleOrder(ordered)
 	reorderAnnouncement.value = `${moved.label} moved to position ${destination + 1}.`
 	endDrag(false)
 }
 
 function moveColumn(index, direction) {
-	const ordered = [...visibleColumns.value]
-	const destination = Math.max(0, Math.min(index + direction, ordered.length - 1))
-	if (destination === index) return
-	const [moved] = ordered.splice(index, 1)
-	ordered.splice(destination, 0, moved)
+	const moved = visibleColumns.value[index]
+	const ordered = moveDraftItem(visibleColumns.value, index, direction)
+	if (ordered === visibleColumns.value) return
+	const destination = ordered.indexOf(moved)
 	applyVisibleOrder(ordered)
 	reorderAnnouncement.value = `${moved.label} moved to position ${destination + 1}.`
 }

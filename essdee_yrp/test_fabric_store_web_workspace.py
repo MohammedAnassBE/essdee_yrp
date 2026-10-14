@@ -693,8 +693,14 @@ class TestFabricStoreWebWorkspace(TestCase):
 			comments=None,
 			items=[],
 		)
+		def permissions(doctype, **_kwargs):
+			return doctype != "YRP Item Price"
+
 		with (
-			patch("essdee_yrp.fabric_store.web_workspace.frappe.has_permission", return_value=True),
+			patch(
+				"essdee_yrp.fabric_store.web_workspace.frappe.has_permission",
+				side_effect=permissions,
+			),
 			patch("essdee_yrp.fabric_store.web_workspace.frappe.new_doc", return_value=doc),
 			patch("essdee_yrp.fabric_store.web_workspace.frappe.db.get_single_value", return_value=1),
 			patch("essdee_yrp.fabric_store.web_workspace.get_stock_dimensions_for_ui", return_value=[
@@ -711,6 +717,7 @@ class TestFabricStoreWebWorkspace(TestCase):
 		self.assertTrue(payload["price_validation_enabled"])
 		self.assertTrue(payload["permissions"]["can_create"])
 		self.assertTrue(payload["permissions"]["can_submit"])
+		self.assertFalse(payload["permissions"]["can_create_item_price"])
 
 	@patch("essdee_yrp.fabric_store.web_workspace.get_purchase_order_workspace", return_value={"record": {"name": "YRP-PO-2026-00001"}})
 	@patch("essdee_yrp.fabric_store.web_workspace.ungroup_items_from_ui")
@@ -781,28 +788,87 @@ class TestFabricStoreWebWorkspace(TestCase):
 
 	def test_purchase_order_item_price_uses_same_authoritative_resolver_as_desk(self):
 		item_detail = {"name": "ITEM", "values": {"S": {"qty": 4}}}
-		expected_price = {"rates": {"S": 125}, "tax": "GST 5", "tax_rate": 5}
+		application = {
+			"warnings": [],
+			"rows": [{
+				"status": "ok",
+				"rate": 125,
+				"tax": "5",
+				"tax_rate": 5,
+				"lead_time_days": 7,
+				"tier": {"moq": 0, "rate": 125, "lead_time_days": 7},
+			}],
+		}
 		with (
 			patch("essdee_yrp.fabric_store.web_workspace.frappe.has_permission", return_value=True) as permission,
-			patch("essdee_yrp.fabric_store.web_workspace.get_item_price_for_ui", return_value=expected_price) as get_price,
-			patch("essdee_yrp.fabric_store.web_workspace._get_purchase_order_item_lead_time", return_value=7) as get_lead_time,
+			patch("essdee_yrp.fabric_store.web_workspace.apply_price_details", return_value=application) as apply_prices,
 		):
 			payload = workspace.get_purchase_order_item_price(item_detail, "SUPPLIER-1")
 
 		permission.assert_any_call("Purchase Order", ptype="create", throw=True)
-		get_price.assert_called_once_with(item_detail, "SUPPLIER-1")
-		get_lead_time.assert_called_once_with(item_detail, "SUPPLIER-1")
-		self.assertEqual(payload, {**expected_price, "lead_time_days": 7})
+		apply_prices.assert_called_once()
+		self.assertEqual(payload["status"], "ok")
+		self.assertEqual(payload["rates"], {"S": 125})
+		self.assertEqual(payload["tiers"]["S"]["moq"], 0)
+		self.assertEqual(payload["lead_time_days"], 7)
 
-	def test_purchase_order_item_price_allows_missing_price_for_disabled_policy(self):
+	def test_purchase_order_item_price_returns_explicit_unavailable_statuses(self):
 		item_detail = {"name": "ITEM", "values": {"S": {"qty": 4}}}
+		for status in ("missing", "ambiguous", "no_slab"):
+			application = {
+				"warnings": [status],
+				"rows": [{
+					"status": status,
+					"rate": None,
+					"tax": "5" if status == "no_slab" else None,
+					"tax_rate": 5 if status == "no_slab" else 0,
+					"lead_time_days": None,
+					"tier": None,
+				}],
+			}
+			with (
+				self.subTest(status=status),
+				patch("essdee_yrp.fabric_store.web_workspace.frappe.has_permission", return_value=True),
+				patch("essdee_yrp.fabric_store.web_workspace.apply_price_details", return_value=application),
+			):
+				payload = workspace.get_purchase_order_item_price(item_detail, "SUPPLIER-1")
+
+			self.assertEqual(payload["status"], status)
+			self.assertEqual(payload["rates"], {"S": None})
+
+	def test_purchase_order_price_preview_returns_every_logical_row(self):
+		items = [{
+			"primary_attribute": "Size",
+			"items": [
+				{"name": "ITEM", "primary_attribute": "Size", "values": {"S": {"qty": 6}}},
+				{"name": "ITEM", "primary_attribute": "Size", "values": {"M": {"qty": 6}}},
+			],
+		}]
+		application = {
+			"warnings": [],
+			"rows": [
+				{"status": "ok", "rate": 80, "tax": "5", "tax_rate": 5, "lead_time_days": 7, "tier": {"moq": 10}},
+				{"status": "ok", "rate": 80, "tax": "5", "tax_rate": 5, "lead_time_days": 7, "tier": {"moq": 10}},
+			],
+		}
 		with (
 			patch("essdee_yrp.fabric_store.web_workspace.frappe.has_permission", return_value=True),
-			patch("essdee_yrp.fabric_store.web_workspace.get_item_price_for_ui", return_value=None),
+			patch("essdee_yrp.fabric_store.web_workspace.apply_price_details", return_value=application) as apply_prices,
 		):
-			payload = workspace.get_purchase_order_item_price(item_detail, "SUPPLIER-1")
+			payload = workspace.preview_purchase_order_prices(items, "SUPPLIER-1")
 
-		self.assertEqual(payload, {})
+		rows = apply_prices.call_args.args[0]
+		self.assertEqual([row.qty for row in rows], [6, 6])
+		self.assertEqual([row.item_code for row in rows], ["ITEM", "ITEM"])
+		self.assertEqual(
+			apply_prices.call_args.kwargs["preview_context"],
+			[
+				{"parent_item": "ITEM", "attributes": {"Size": "S"}},
+				{"parent_item": "ITEM", "attributes": {"Size": "M"}},
+			],
+		)
+		self.assertEqual(payload["rows"][0]["values"]["S"]["rate"], 80)
+		self.assertEqual(payload["rows"][1]["values"]["M"]["tier"]["moq"], 10)
 
 	def test_purchase_order_item_schema_uses_write_permission_for_existing_draft(self):
 		doc = frappe._dict(doctype="Purchase Order", name="PO-DRAFT-1", docstatus=0)
@@ -817,6 +883,40 @@ class TestFabricStoreWebWorkspace(TestCase):
 		permission.assert_any_call("Purchase Order", ptype="write", doc=doc, throw=True)
 		schema.assert_called_once_with("ITEM")
 		self.assertEqual(payload["item"], "ITEM")
+
+	def test_shared_stock_schema_accepts_a_plain_purchase_item(self):
+		from essdee_yrp.cutting.web_workspace import _get_stock_item_schema_data
+
+		plain = MagicMock()
+		plain.name = "PLAIN-ITEM"
+		plain.is_stock_item = 1
+		plain.is_purchase_item = 1
+		plain.docstatus = 0
+		plain.disabled = 0
+		plain.attributes = []
+		plain.get.side_effect = lambda key, default=None: getattr(plain, key, default)
+		with (
+			patch("essdee_yrp.cutting.web_workspace.frappe.get_doc", return_value=plain),
+			patch("yrp.yrp.doctype.yrp_item.yrp_item.validate_is_stock_item") as validate_stock,
+			patch("yrp.yrp.doctype.yrp_item.yrp_item.validate_cancelled_item"),
+			patch("yrp.yrp.doctype.yrp_item.yrp_item.validate_disabled"),
+			patch(
+				"yrp.yrp.doctype.yrp_item.yrp_item.get_attribute_details",
+				return_value={
+					"item": "PLAIN-ITEM",
+					"attributes": [],
+					"primary_attribute": "",
+					"primary_attribute_values": [],
+				},
+			),
+			patch("yrp.yrp.doctype.yrp_item.yrp_item.get_attribute_values", return_value={}),
+		):
+			payload = _get_stock_item_schema_data("PLAIN-ITEM")
+
+		self.assertEqual(payload["item"], "PLAIN-ITEM")
+		self.assertEqual(payload["attribute_values"], {})
+		self.assertEqual(validate_stock.call_count, 2)
+		plain.check_permission.assert_has_calls([call("read"), call("read")])
 
 	def test_purchase_order_parameter_search_uses_po_permission_for_non_system_manager(self):
 		def permissions(doctype, ptype="read", **kwargs):

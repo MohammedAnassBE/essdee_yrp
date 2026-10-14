@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router"
 
 import { departments } from "../departments/registry.js"
 import { PD_ROUTES } from "../departments/pd/pdViews.js"
+import { PURCHASE_ROUTES } from "../departments/purchase/purchaseViews.js"
 
 const AdministratorPage = () => import("../components/AdministratorPage.vue")
 const DocumentUnavailable = () => import("../components/documents/DocumentUnavailable.vue")
@@ -52,6 +53,12 @@ const BillTrackings = () => import("../departments/hr/BillTrackings.vue")
 const BillTracking = () => import("../departments/hr/BillTracking.vue")
 const BillTrackingEditorPage = () => import("../departments/hr/BillTrackingEditorPage.vue")
 const HrReports = () => import("../departments/hr/HrReports.vue")
+const ItemsList = () => import("../departments/purchase/ItemsList.vue")
+const ItemPage = () => import("../departments/purchase/ItemPage.vue")
+const ItemEditorPage = () => import("../departments/purchase/ItemEditorPage.vue")
+const ItemPricesList = () => import("../departments/purchase/ItemPricesList.vue")
+const ItemPricePage = () => import("../departments/purchase/ItemPricePage.vue")
+const ItemPriceEditor = () => import("../departments/purchase/ItemPriceEditor.vue")
 
 const routes = [
 	{
@@ -536,6 +543,50 @@ const routes = [
 			purchaseOrderViewRouteName: "purchase-purchase-order",
 			purchaseOrderNewRouteName: "purchase-purchase-order-new",
 		},
+	},
+	{
+		path: "/purchase/items",
+		name: PURCHASE_ROUTES.items,
+		component: ItemsList,
+	},
+	{
+		path: "/purchase/items/new",
+		name: PURCHASE_ROUTES.itemNew,
+		component: ItemEditorPage,
+	},
+	{
+		path: "/purchase/items/:itemId/edit",
+		name: PURCHASE_ROUTES.itemEdit,
+		component: ItemEditorPage,
+		props: true,
+	},
+	{
+		path: "/purchase/items/:itemId",
+		name: PURCHASE_ROUTES.item,
+		component: ItemPage,
+		props: true,
+	},
+	{
+		path: "/purchase/item-prices",
+		name: PURCHASE_ROUTES.itemPrices,
+		component: ItemPricesList,
+	},
+	{
+		path: "/purchase/item-prices/new",
+		name: PURCHASE_ROUTES.itemPriceNew,
+		component: ItemPriceEditor,
+	},
+	{
+		path: "/purchase/item-prices/:priceId/edit",
+		name: PURCHASE_ROUTES.itemPriceEdit,
+		component: ItemPriceEditor,
+		props: true,
+	},
+	{
+		path: "/purchase/item-prices/:priceId",
+		name: PURCHASE_ROUTES.itemPrice,
+		component: ItemPricePage,
+		props: true,
 	},
 	{
 		path: "/purchase/stock-transfers",

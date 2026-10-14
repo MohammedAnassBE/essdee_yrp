@@ -28,22 +28,30 @@ async function request(url, options = {}) {
 
 	if (response.status === 401) {
 		window.location.assign(`/login?redirect-to=${encodeURIComponent(window.location.pathname)}`)
-		throw new Error("Your session has expired.")
+		throw requestError("Your session has expired.", response.status)
 	}
 
 	const payload = response.status === 204 ? {} : await response.json().catch(() => ({}))
 	if (!response.ok || payload.exc) {
-		throw new Error(extractServerMessage(payload, "The server could not complete this action. Please try again. If the problem continues, contact your administrator."))
+		throw requestError(
+			extractServerMessage(payload, "The server could not complete this action. Please try again. If the problem continues, contact your administrator."),
+			response.status,
+		)
 	}
 	return payload
 }
 
-export async function callMethod(method, args = {}) {
+export async function callMethod(method, args = {}, requestOptions = {}) {
 	const payload = await request(`/api/method/${method}`, {
+		...requestOptions,
 		method: "POST",
 		body: JSON.stringify(args),
 	})
 	return payload.message
+}
+
+function requestError(message, status) {
+	return Object.assign(new Error(message), { status })
 }
 
 export function uploadFile(file, options = {}) {

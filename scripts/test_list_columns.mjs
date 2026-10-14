@@ -11,6 +11,7 @@ import {
 	matchesColumnSearch,
 	syncColumnDraft,
 } from "../frontend/src/components/common/listColumns.js"
+import { moveDraftItem, reorderDraftItem } from "../frontend/src/components/common/orderedDraft.js"
 
 const fields = [
 	{ fieldname: "name", fieldtype: "Data", label: "ID" },
@@ -113,6 +114,12 @@ const editedDraft = syncColumnDraft(columnDraft, [{ fieldname: "replacement" }],
 })
 assert.equal(editedDraft, columnDraft)
 assert.equal(canSaveColumnDraft(true, []), false)
+
+const orderedDraft = [{ key: "a" }, { key: "b" }, { key: "c" }]
+assert.deepEqual(moveDraftItem(orderedDraft, 1, -1).map((item) => item.key), ["b", "a", "c"])
+assert.equal(moveDraftItem(orderedDraft, 0, -1), orderedDraft)
+assert.deepEqual(reorderDraftItem(orderedDraft, 0, 3).map((item) => item.key), ["b", "c", "a"])
+assert.deepEqual(orderedDraft.map((item) => item.key), ["a", "b", "c"])
 
 const currencyColumn = {
 	fieldname: "advance_paid",

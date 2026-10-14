@@ -34,6 +34,58 @@ class TestFabricStorePurchaseOrder(TestCase):
 		self.assertEqual(editor["values"]["naming_series"], source.naming_series)
 		self.assertEqual(editor["values"]["supplier"], source.supplier)
 		self.assertEqual(editor["item_groups"], [{"copy": "items"}])
+		self.assertEqual(
+			editor["item_filters"],
+			{
+				"disabled": 0,
+				"variant_of": ["is", "not set"],
+				"is_purchase_item": 1,
+				"is_stock_item": 1,
+			},
+		)
+		self.assertTrue(editor["permissions"]["can_create_item_price"])
+
+	def test_plain_item_round_trips_through_shared_purchase_order_grouping(self):
+		from yrp.stock.save_stock_items import group_items_for_ui, ungroup_items_from_ui
+
+		meta = MagicMock()
+		meta.get_field.side_effect = lambda fieldname: frappe._dict(
+			fieldname=fieldname,
+			fieldtype="Float" if fieldname not in {"uom", "tax"} else "Data",
+		)
+		plain_doc = frappe._dict(name="PLAIN-ITEM", attributes=[])
+		attribute_details = {
+			"item": "PLAIN-ITEM",
+			"attributes": [],
+			"primary_attribute": "",
+			"primary_attribute_values": [],
+			"dependent_attribute": "",
+			"default_uom": "Nos",
+		}
+		with (
+			patch("yrp.stock.save_stock_items.get_dimension_fieldnames", return_value=[]),
+			patch("yrp.stock.save_stock_items.frappe.get_meta", return_value=meta),
+			patch("yrp.stock.save_stock_items.frappe.get_doc", return_value=plain_doc),
+			patch("yrp.yrp.doctype.yrp_item.yrp_item.get_parent_item", return_value="PLAIN-ITEM"),
+			patch("yrp.yrp.doctype.yrp_item.yrp_item.get_attribute_details", return_value=attribute_details),
+		):
+			grouped = group_items_for_ui(
+				[{"item_code": "PLAIN-ITEM", "qty": 3, "uom": "Nos", "row_index": 0}],
+				"Purchase Order",
+			)
+
+		self.assertEqual(grouped[0]["primary_attribute"], "")
+		self.assertEqual(grouped[0]["items"][0]["name"], "PLAIN-ITEM")
+		self.assertEqual(grouped[0]["items"][0]["values"]["default"]["qty"], 3)
+		with (
+			patch("yrp.stock.save_stock_items.get_dimension_fieldnames", return_value=[]),
+			patch("yrp.stock.save_stock_items.frappe.get_meta", return_value=meta),
+			patch("yrp.stock.save_stock_items._resolve_or_create_variant", return_value="PLAIN-ITEM"),
+		):
+			rows = ungroup_items_from_ui(grouped, "Purchase Order")
+
+		self.assertEqual(rows[0]["item_code"], "PLAIN-ITEM")
+		self.assertEqual(rows[0]["qty"], 3)
 	def make_document(self, *, docstatus=1, status="To Receive", open_status="Open"):
 		doc = frappe._dict(
 			doctype="Purchase Order",

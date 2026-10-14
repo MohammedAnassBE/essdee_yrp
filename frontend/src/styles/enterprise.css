@@ -345,7 +345,29 @@
 
 .erp-number {
 	font-variant-numeric: tabular-nums;
-	text-align: right !important;
+	text-align: right;
+}
+
+table th.erp-number,
+table td.erp-number {
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+.erp-data-table .report-align-left,
+.finishing-table .report-align-left {
+	text-align: left;
+}
+
+.erp-data-table .report-align-center,
+.finishing-table .report-align-center {
+	text-align: center;
+}
+
+.erp-data-table .report-align-right,
+.finishing-table .report-align-right {
+	font-variant-numeric: tabular-nums;
+	text-align: right;
 }
 
 .erp-status {

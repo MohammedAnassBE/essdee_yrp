@@ -6,6 +6,8 @@ app_email = "anas@essdee.fit"
 app_license = "mit"
 required_apps = ["erpnext", "yrp"]
 
+yrp_web_reports = ["essdee_yrp.web_reports.get_reports"]
+
 # Sidebar conditions run before the asynchronous toolbar defaults request.
 boot_session = "essdee_yrp.boot.boot_session"
 
@@ -154,9 +156,9 @@ website_route_rules = [
 # /web DocType catalog for base yrp's UI-config validation (USE_CASE §4 item
 # 17): ui_config.validate_config reads this hook to warn at save/lint time on
 # nav / quickCreate / newCta / listViews doctypes the SPA cannot route.
-# CHECKLIST RULE (same as www/web.py WEB_DOCTYPES, which mirrors
-# frontend/src/config/doctypes.js GROUPS): all three lists change together.
+# CHECKLIST RULE: keep this list in the same order as www/web.py WEB_DOCTYPES.
 yrp_web_doctype_catalog = [
+	"SD YRP Cutting Plan",
 	"SD YRP Sewing Plan",
 	"SD YRP Sewing Plan Entry Detail",
 	"SD YRP Finishing Plan",
@@ -170,6 +172,7 @@ yrp_web_doctype_catalog = [
 	"SD YRP Lot Transfer",
 	"YRP Stock Entry",
 	"Item",
+	"YRP Item Price",
 	"YRP Item Production Detail",
 	"YRP Production Order",
 	"YRP Terms and Condition",
@@ -224,10 +227,10 @@ doctype_js = {
 	],
 	"YRP Work Order": "public/js/work_order.js",
 	"Purchase Order": "public/js/purchase_order.js",
+	"Supplier": "public/js/supplier.js",
 	"YRP Delivery Challan": "public/js/delivery_challan.js",
 	"YRP Goods Received Note": "public/js/goods_received_note.js",
 	"YRP Purchase Invoice": "public/js/purchase_invoice.js",
-	"Supplier": "public/js/supplier.js",
 	"YRP Bill Tracking": "public/js/bill_tracking.js",
 	"YRP Item BOM Attribute Mapping": "public/js/item_bom_attribute_mapping.js",
 	"YRP Process Cost": "public/js/process_cost.js",

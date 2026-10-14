@@ -10,8 +10,9 @@ import { readFileSync, mkdirSync } from 'node:fs'
 const require = createRequire('/home/anas/.claude/playwright/package.json')
 export const { chromium } = require('playwright')
 
-export const SITE = 'http://essdee_yrp.site:8003'
-const creds = readFileSync('/home/anas/.frappe-debug-creds-mrp3', 'utf8').trim().split('\n')
+export const SITE = process.env.E2E_SITE || 'http://essdee_yrp.site:8003'
+const credentialsFile = process.env.E2E_CREDS_FILE || '/home/anas/.frappe-debug-creds-mrp3'
+const creds = readFileSync(credentialsFile, 'utf8').trim().split('\n')
 export const ADMIN = { usr: creds[0].trim(), pwd: creds[1].trim() }
 export const WEBUSER = { usr: 'webuser@essdee.fit', pwd: 'webuser@1234' }
 

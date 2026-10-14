@@ -5,6 +5,17 @@ const number = (value) => Number(value) || 0
 export const FROZEN_COLUMNS = ["item", "description", "lot", "pieces_per_box"]
 const TONED_COLUMNS = new Set(["sewing_diff", "cut_to_finishing_diff", "unaccountable", "cut_to_dispatch_diff", "finishing_inward_to_dispatch_diff"])
 
+export function frozenColumnOffsets(columns, widths) {
+	const offsets = {}
+	let left = 0
+	for (const [index, column] of (columns || []).entries()) {
+		if (column.kind !== "base" || !FROZEN_COLUMNS.includes(column.fieldname)) continue
+		offsets[column.key] = left
+		left += Number(widths[index]) || 0
+	}
+	return offsets
+}
+
 export function sumBy(rows, field) {
 	return (rows || []).reduce((sum, row) => sum + number(row[field]), 0)
 }
@@ -47,11 +58,18 @@ function scrub(label) {
 
 export function normalizeReportColumn(column) {
 	if (typeof column === "string") {
-		const [label = "", type = "Data"] = column.split(":")
+		const [label = "", type = "Data", width] = column.split(":")
 		const [fieldtype = "Data", options = ""] = type.split("/")
-		return { label, fieldname: scrub(label), fieldtype: fieldtype || "Data", options }
+		return { label, fieldname: scrub(label), fieldtype: fieldtype || "Data", options, width: Number(width) || 120, align: "auto" }
 	}
-	return { label: column.label || "", fieldname: column.fieldname || scrub(column.label), fieldtype: column.fieldtype || "Data", options: column.options || "" }
+	return {
+		label: column.label || "",
+		fieldname: column.fieldname || scrub(column.label),
+		fieldtype: column.fieldtype || "Data",
+		options: column.options || "",
+		width: Number(column.width) || 120,
+		align: column.align || "auto",
+	}
 }
 
 export function formatReportCell(column, row) {

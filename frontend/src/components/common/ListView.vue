@@ -502,6 +502,7 @@ const props = defineProps({
 	rowMark: { type: String, default: "DOC" },
 	filters: { type: [Array, Object], default: () => [] },
 	initialAdvancedFilters: { type: Array, default: () => [] },
+	excludedFilterFields: { type: Array, default: () => [] },
 	defaultOrderBy: { type: String, default: "modified desc" },
 	defaultColumns: { type: Array, default: () => [] },
 	initialPageSize: { type: Number, default: 20 },
@@ -509,6 +510,7 @@ const props = defineProps({
 	clickable: { type: Boolean, default: true },
 	statusField: { type: String, default: "" },
 	statusOptions: { type: Array, default: () => [] },
+	initialStatus: { type: [String, Number], default: "" },
 	viewportBounded: { type: Boolean, default: false },
 	allowBulkActions: { type: Boolean, default: true },
 	selectable: { type: Boolean, default: false },
@@ -736,6 +738,7 @@ const activeCurrencyFields = computed(() =>
 )
 
 const filterFields = computed(() => {
+	const excluded = new Set(props.excludedFilterFields)
 	const metaByName = new Map(metaDocuments.value.map((meta) => [meta.name, meta]))
 	const parentFields = [
 		...frappeStandardFilterFields
@@ -765,6 +768,7 @@ const filterFields = computed(() => {
 
 	const seen = new Set()
 	return [...sortFilterFields(parentFields), ...sortFilterFields(childFields)].filter((field) => {
+		if (field.doctype === props.doctype && excluded.has(field.fieldname)) return false
 		const key = `${field.doctype}::${field.fieldname}`
 		if (seen.has(key)) return false
 		seen.add(key)
@@ -895,7 +899,7 @@ async function initialise() {
 	advancedFilters.value = cloneFilters(props.initialAdvancedFilters)
 	quickFilters.value = {}
 	appliedQuickFilters.value = {}
-	activeStatus.value = ""
+	activeStatus.value = props.initialStatus
 	restoreNavigationState()
 	clearSelection()
 	bulkNotice.value = ""

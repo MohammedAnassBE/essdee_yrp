@@ -28,11 +28,14 @@ const props = defineProps({
 		default: () => ["work_orders", "purchase_orders", "stock_transfers", "reports"],
 	},
 	reportKeys: { type: Array, default: () => ["stock_balance"] },
+	extraWorkspaces: { type: Array, default: () => [] },
+	extraCapabilitiesLoader: { type: Function, default: null },
 })
 const loading = ref(true)
 const error = ref("")
 const sections = ref({})
 const workspaces = computed(() => [
+	...props.extraWorkspaces,
 	{ key: "work_orders", label: "Work Orders", description: "Review production requirements, deliveries and receipts.", icon: "pi pi-briefcase", to: `${props.basePath}/work-orders` },
 	{ key: "purchase_orders", label: "Purchase Orders", description: "Review purchase quantities and create Goods Received Notes.", icon: "pi pi-shopping-cart", to: `${props.basePath}/purchase-orders` },
 	{ key: "stock_transfers", label: "Stock Transfers", description: "Create and review store stock movements and reconciliations.", icon: "pi pi-arrow-right-arrow-left", to: `${props.basePath}/stock-transfers` },
@@ -47,8 +50,12 @@ const workspaces = computed(() => [
 		to: `${props.basePath}/reports`,
 	},
 ])
+const visibleWorkspaceKeys = computed(() => new Set([
+	...props.extraWorkspaces.map((workspace) => workspace.key),
+	...props.workspaceKeys,
+]))
 const visibleWorkspaces = computed(() => workspaces.value.filter((workspace) => (
-	props.workspaceKeys.includes(workspace.key)
+	visibleWorkspaceKeys.value.has(workspace.key)
 		&& sections.value[workspace.key]
 		&& (workspace.key !== "reports" || props.reportKeys.some((key) => sections.value.reports?.reports?.[key]?.can_read))
 )))
@@ -58,11 +65,12 @@ async function load() {
 	error.value = ""
 	try {
 		const includesBoxStickers = props.workspaceKeys.includes("box_stickers")
-		const [payload, cutPanelPayload] = await Promise.all([
+		const [payload, cutPanelPayload, extraPayload] = await Promise.all([
 			getFabricStoreCapabilities(),
 			includesBoxStickers ? getCutPanelStoreCapabilities() : null,
+			props.extraCapabilitiesLoader ? props.extraCapabilitiesLoader() : null,
 		])
-		sections.value = { ...payload?.sections }
+		sections.value = { ...payload?.sections, ...extraPayload?.sections }
 		if (cutPanelPayload?.sections?.box_stickers) sections.value.box_stickers = cutPanelPayload.sections.box_stickers
 	} catch (reason) {
 		error.value = reason?.message || `Unable to load the ${props.storeName} workspace.`

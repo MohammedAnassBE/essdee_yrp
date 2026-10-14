@@ -199,6 +199,14 @@ export function getPurchaseOrderItemPrice(itemDetail, supplier, purchaseOrder = 
 	})
 }
 
+export function previewPurchaseOrderPrices(items, supplier, purchaseOrder = "") {
+	return callMethod(`${WORKSPACE_METHOD}.preview_purchase_order_prices`, {
+		items,
+		supplier,
+		purchase_order: purchaseOrder || undefined,
+	})
+}
+
 export function savePurchaseOrder(values, options = {}) {
 	return callMethod(`${WORKSPACE_METHOD}.save_purchase_order`, {
 		values,

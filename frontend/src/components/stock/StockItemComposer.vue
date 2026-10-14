@@ -21,7 +21,7 @@
 					:label="`${dimension.label}${dimension.mandatory ? ' *' : ''}`"
 					:doctype="dimension.options"
 					:filters="dimension.filters || {}"
-					:disabled="lockedDimensions.includes(dimension.fieldname)"
+					:disabled="disabled || lockedDimensions.includes(dimension.fieldname)"
 					:show-clear="!lockedDimensions.includes(dimension.fieldname)"
 					:show-open-button="false"
 				/>
@@ -31,10 +31,11 @@
 					doctype="Item"
 					:filters="editor.item_filters || { is_stock_item: 1, disabled: 0 }"
 					:show-open-button="false"
+					:disabled="disabled"
 					@update:model-value="setItem"
 				/>
 				<div class="stock-composer__fetch">
-					<Button label="Get Item" icon="pi pi-search" :loading="fetching" :disabled="!itemName" @click="fetchItem" />
+					<Button label="Get Item" icon="pi pi-search" :loading="fetching" :disabled="disabled || !itemName" @click="fetchItem" />
 				</div>
 			</div>
 
@@ -55,6 +56,7 @@
 						doctype="Item Attribute Value"
 						:search-handler="(text) => searchAttribute(dependentAttribute, text)"
 						:show-open-button="false"
+						:disabled="disabled"
 						@update:model-value="setAttribute(dependentAttribute, $event)"
 					/>
 					<LinkField
@@ -65,6 +67,7 @@
 						doctype="Item Attribute Value"
 						:search-handler="(text) => searchAttribute(attribute, text)"
 						:show-open-button="false"
+						:disabled="disabled"
 						@update:model-value="setAttribute(attribute, $event)"
 					/>
 				</div>
@@ -80,16 +83,16 @@
 						<label v-for="value in activePrimaryValues" :key="value" class="stock-composer__quantity-cell">
 							<strong>{{ value }}</strong>
 							<span>{{ quantityLabel }}</span>
-							<input v-model.number="quantities[value]" type="number" min="0" step="0.001" @input="quantityTouched[value] = true" />
+							<input v-model.number="quantities[value]" type="number" min="0" step="0.001" :disabled="disabled" @input="quantityTouched[value] = true" />
 							<template v-if="itemSchema.secondary_uom && operation === 'stock_entry'">
 								<span>{{ itemSchema.secondary_uom }}</span>
-								<input v-model.number="secondaryQuantities[value]" type="number" min="0" step="0.001" />
+								<input v-model.number="secondaryQuantities[value]" type="number" min="0" step="0.001" :disabled="disabled" />
 							</template>
 						</label>
 					</div>
 					<div v-else class="stock-composer__single-quantity">
-						<label><span>{{ quantityLabel }} *</span><input v-model.number="quantities.default" type="number" min="0" step="0.001" @input="quantityTouched.default = true" /></label>
-						<label v-if="itemSchema.secondary_uom && operation === 'stock_entry'"><span>Secondary Qty · {{ itemSchema.secondary_uom }}</span><input v-model.number="secondaryQuantities.default" type="number" min="0" step="0.001" /></label>
+						<label><span>{{ quantityLabel }} *</span><input v-model.number="quantities.default" type="number" min="0" step="0.001" :disabled="disabled" @input="quantityTouched.default = true" /></label>
+						<label v-if="itemSchema.secondary_uom && operation === 'stock_entry'"><span>Secondary Qty · {{ itemSchema.secondary_uom }}</span><input v-model.number="secondaryQuantities.default" type="number" min="0" step="0.001" :disabled="disabled" /></label>
 					</div>
 				</div>
 
@@ -97,8 +100,8 @@
 					<label v-if="operation === 'stock_reconciliation'" class="stock-composer__check"><input v-model="allowZeroValuation" type="checkbox" /><span>Allow zero valuation when no prior rate exists</span></label>
 					<span v-else></span>
 					<div>
-						<Button v-if="editing" label="Cancel Edit" severity="secondary" text size="small" @click="resetEditor" />
-						<Button :label="editing ? 'Update Item' : 'OK · Add Item'" :icon="editing ? 'pi pi-check' : 'pi pi-plus'" size="small" :loading="preparing" :disabled="preparing" @click="stageItem" />
+						<Button v-if="editing" label="Cancel Edit" severity="secondary" text size="small" :disabled="disabled" @click="resetEditor" />
+						<Button :label="editing ? 'Update Item' : 'OK · Add Item'" :icon="editing ? 'pi pi-check' : 'pi pi-plus'" size="small" :loading="preparing" :disabled="disabled || preparing" @click="stageItem" />
 					</div>
 				</div>
 			</div>
@@ -116,7 +119,7 @@
 					<div class="stock-composer__table-scroll" tabindex="0" role="region" :aria-label="`${group.name || group.item || 'Added items'} table`">
 						<table>
 							<thead><tr><th>#</th><th>Item</th><th v-for="dimension in dimensions" :key="dimension.fieldname">{{ dimension.label }}</th><th v-for="attribute in group.attributes" :key="attribute">{{ attribute }}</th><template v-if="operation === 'purchase_order'"><th>Delivery location</th><th>Required by</th><th class="stock-composer__number">Discount</th></template><th v-for="value in group.primary_attribute_values" :key="value" class="stock-composer__number">{{ value }}</th><th v-if="!group.primary_attribute">{{ quantityLabel }}</th><th class="stock-composer__number">Total</th><th>UOM</th><th v-if="!readOnly"></th></tr></thead>
-								<tbody><tr v-for="(row, itemIndex) in group.items" :key="`${row.name}-${itemIndex}`"><td>{{ itemIndex + 1 }}</td><td><strong>{{ row.name }}</strong><span v-if="operation === 'purchase_order' && row.comments" class="stock-composer__row-note">{{ row.comments }}</span></td><td v-for="dimension in dimensions" :key="dimension.fieldname">{{ row.dimensions?.[dimension.fieldname] || "—" }}</td><td v-for="attribute in group.attributes" :key="attribute">{{ row.attributes?.[attribute] || "—" }}</td><template v-if="operation === 'purchase_order'"><td>{{ row.delivery_location || "—" }}</td><td>{{ formatDate(row.schedule_date) }}</td><td class="stock-composer__number">{{ formatQty(row.discount_percentage) }}%</td></template><td v-for="value in group.primary_attribute_values" :key="value" class="stock-composer__number stock-composer__metric"><strong>{{ formatQty(row.values?.[value]?.qty) }}</strong><template v-if="operation === 'purchase_order'"><span class="stock-composer__price">Rate {{ formatMoney(row.values?.[value]?.rate) }}</span><span class="stock-composer__price">Amount {{ formatMoney(cellAmount(row.values?.[value])) }}</span></template></td><td v-if="!group.primary_attribute" class="stock-composer__number stock-composer__metric"><strong>{{ formatQty(row.values?.default?.qty) }}</strong><template v-if="operation === 'purchase_order'"><span class="stock-composer__price">Rate {{ formatMoney(row.values?.default?.rate) }}</span><span class="stock-composer__price">Amount {{ formatMoney(cellAmount(row.values?.default)) }}</span></template></td><td class="stock-composer__number stock-composer__total stock-composer__metric"><strong>{{ formatQty(rowTotal(row)) }}</strong><span v-if="operation === 'purchase_order'" class="stock-composer__price">Amount {{ formatMoney(rowAmount(row)) }}</span></td><td>{{ row.default_uom || "—" }}</td><td v-if="!readOnly"><div class="stock-composer__actions"><button type="button" title="Edit item" :aria-label="`Edit ${row.name}`" @click="editItem(groupIndex, itemIndex)"><i class="pi pi-pencil" aria-hidden="true"></i></button><button type="button" title="Delete item" :aria-label="`Delete ${row.name}`" class="stock-composer__delete" @click="removeItem(groupIndex, itemIndex)"><i class="pi pi-trash" aria-hidden="true"></i></button></div></td></tr></tbody>
+								<tbody><tr v-for="(row, itemIndex) in group.items" :key="`${row.name}-${itemIndex}`"><td>{{ itemIndex + 1 }}</td><td><strong>{{ row.name }}</strong><span v-if="operation === 'purchase_order' && row.comments" class="stock-composer__row-note">{{ row.comments }}</span><slot name="row-warning" :row="row" :group="group" :group-index="groupIndex" :item-index="itemIndex" /></td><td v-for="dimension in dimensions" :key="dimension.fieldname">{{ row.dimensions?.[dimension.fieldname] || "—" }}</td><td v-for="attribute in group.attributes" :key="attribute">{{ row.attributes?.[attribute] || "—" }}</td><template v-if="operation === 'purchase_order'"><td>{{ row.delivery_location || "—" }}</td><td>{{ formatDate(row.schedule_date) }}</td><td class="stock-composer__number">{{ formatQty(row.discount_percentage) }}%</td></template><td v-for="value in group.primary_attribute_values" :key="value" class="stock-composer__number stock-composer__metric"><strong>{{ formatQty(row.values?.[value]?.qty) }}</strong><template v-if="operation === 'purchase_order'"><span class="stock-composer__price">Rate {{ formatMoney(row.values?.[value]?.rate) }}</span><span class="stock-composer__price">Amount {{ formatMoney(cellAmount(row.values?.[value])) }}</span></template></td><td v-if="!group.primary_attribute" class="stock-composer__number stock-composer__metric"><strong>{{ formatQty(row.values?.default?.qty) }}</strong><template v-if="operation === 'purchase_order'"><span class="stock-composer__price">Rate {{ formatMoney(row.values?.default?.rate) }}</span><span class="stock-composer__price">Amount {{ formatMoney(cellAmount(row.values?.default)) }}</span></template></td><td class="stock-composer__number stock-composer__total stock-composer__metric"><strong>{{ formatQty(rowTotal(row)) }}</strong><span v-if="operation === 'purchase_order'" class="stock-composer__price">Amount {{ formatMoney(rowAmount(row)) }}</span></td><td>{{ row.default_uom || "—" }}</td><td v-if="!readOnly"><div class="stock-composer__actions"><button type="button" title="Edit item" :aria-label="`Edit ${row.name}`" :disabled="disabled || preparing" @click="editItem(groupIndex, itemIndex)"><i class="pi pi-pencil" aria-hidden="true"></i></button><button type="button" title="Delete item" :aria-label="`Delete ${row.name}`" class="stock-composer__delete" :disabled="disabled || preparing" @click="removeItem(groupIndex, itemIndex)"><i class="pi pi-trash" aria-hidden="true"></i></button></div></td></tr></tbody>
 						</table>
 					</div>
 				</div>
@@ -132,6 +135,7 @@ import Message from "primevue/message"
 import { computed, reactive, ref, watch } from "vue"
 
 import LinkField from "../../components/common/LinkField.vue"
+import { mergeStockItemDraft } from "../../utils/stockItemComposer.js"
 
 const props = defineProps({
 	modelValue: { type: Array, default: () => [] },
@@ -141,13 +145,15 @@ const props = defineProps({
 	editor: { type: Object, required: true },
 	schemaLoader: { type: Function, required: true },
 	rowPreparer: { type: Function, default: null },
+	groupsPreparer: { type: Function, default: null },
 	currency: { type: String, default: "" },
 	readOnly: { type: Boolean, default: false },
 	naturalTableFlow: { type: Boolean, default: false },
+	disabled: { type: Boolean, default: false },
 	entryDefaults: { type: Object, default: () => ({}) },
 	entryFields: { type: Array, default: () => [] },
 })
-const emit = defineEmits(["update:modelValue", "dirty"])
+const emit = defineEmits(["update:modelValue", "dirty", "preparing-change"])
 
 const groups = ref(clone(props.modelValue))
 const itemName = ref("")
@@ -236,6 +242,7 @@ function setItem(value) {
 }
 
 async function fetchItem() {
+	if (props.disabled) return
 	if (!itemName.value) return
 	fetching.value = true
 	editorError.value = ""
@@ -283,6 +290,7 @@ function searchAttribute(attribute, text) {
 }
 
 async function stageItem() {
+	if (props.disabled) return
 	editorError.value = ""
 	for (const dimension of dimensions.value) {
 		if (dimension.mandatory && !dimensionValues[dimension.fieldname]) return fail(`${dimension.label} is required.`)
@@ -299,7 +307,8 @@ async function stageItem() {
 		const qty = Number(quantities[value] || 0)
 		if (qty < 0) return fail("Quantity cannot be negative.")
 		total += qty
-		values[value] = { qty, rate: 0 }
+		values[value] = { qty }
+		if (!editing.value?.row?.values?.[value]) values[value].rate = 0
 		if (itemSchema.value.secondary_uom && props.operation === "stock_entry") {
 			values[value].secondary_qty = Number(secondaryQuantities[value] || 0)
 			values[value].secondary_uom = itemSchema.value.secondary_uom
@@ -308,7 +317,7 @@ async function stageItem() {
 	if (props.operation === "stock_reconciliation" && !Object.keys(values).length) return fail("Enter at least one counted quantity. Zero is valid.")
 	if (props.operation !== "stock_reconciliation" && total <= 0) return fail("Enter a quantity greater than zero.")
 
-	const row = {
+	const row = mergeStockItemDraft(editing.value?.row, {
 		...clone(entryValues),
 		name: itemSchema.value.item,
 		dimensions: clone(dimensionValues),
@@ -318,46 +327,53 @@ async function stageItem() {
 		default_uom: activeUom.value,
 		secondary_uom: itemSchema.value.secondary_uom || "",
 		allow_zero_valuation_rate: props.operation === "stock_reconciliation" ? allowZeroValuation.value : false,
-	}
+	})
 	if (props.operation === "lot_transfer") Object.assign(row, clone(dimensionValues))
-	if (props.rowPreparer) {
-		preparing.value = true
-		try {
+	const previousGroups = clone(groups.value)
+	setPreparing(true)
+	try {
+		if (props.rowPreparer) {
 			const prepared = await props.rowPreparer(clone(row))
 			if (prepared) Object.assign(row, prepared)
-		} catch (error) {
-			return fail(error?.message || "Unable to prepare this item.")
-		} finally {
-			preparing.value = false
 		}
-	}
-	const groupShape = {
-		attributes: [...new Set([dependentAttribute.value, ...nonPrimaryAttributes.value].filter(Boolean))],
-		primary_attribute: activePrimary.value,
-		dependent_attribute: dependentAttribute.value,
-		dependent_attribute_details: clone(itemSchema.value.dependent_attribute_details || {}),
-		primary_attribute_values: clone(activePrimaryValues.value),
-	}
+		const groupShape = {
+			attributes: [...new Set([dependentAttribute.value, ...nonPrimaryAttributes.value].filter(Boolean))],
+			primary_attribute: activePrimary.value,
+			dependent_attribute: dependentAttribute.value,
+			dependent_attribute_details: clone(itemSchema.value.dependent_attribute_details || {}),
+			primary_attribute_values: clone(activePrimaryValues.value),
+		}
 
-	if (editing.value) {
-		const old = editing.value
-		groups.value[old.groupIndex].items.splice(old.itemIndex, 1)
-		if (!groups.value[old.groupIndex].items.length) groups.value.splice(old.groupIndex, 1)
+		if (editing.value) {
+			const old = editing.value
+			groups.value[old.groupIndex].items.splice(old.itemIndex, 1)
+			if (!groups.value[old.groupIndex].items.length) groups.value.splice(old.groupIndex, 1)
+		}
+		let group = groups.value.find((candidate) => sameGroup(candidate, groupShape))
+		if (!group) {
+			group = { ...groupShape, items: [] }
+			groups.value.push(group)
+		}
+		group.items.push(row)
+		if (props.groupsPreparer) {
+			const prepared = await props.groupsPreparer(clone(groups.value))
+			if (prepared) groups.value = clone(prepared)
+		}
+	} catch (error) {
+		groups.value = previousGroups
+		return fail(error?.message || "Unable to prepare this item.")
+	} finally {
+		setPreparing(false)
 	}
-	let group = groups.value.find((candidate) => sameGroup(candidate, groupShape))
-	if (!group) {
-		group = { ...groupShape, items: [] }
-		groups.value.push(group)
-	}
-	group.items.push(row)
 	commit()
 	resetEditor()
 }
 
 async function editItem(groupIndex, itemIndex) {
+	if (props.disabled) return
 	const group = groups.value[groupIndex]
 	const row = clone(group.items[itemIndex])
-	editing.value = { groupIndex, itemIndex }
+	editing.value = { groupIndex, itemIndex, row }
 	Object.assign(dimensionValues, row.dimensions || {})
 	itemName.value = row.name
 	editorError.value = ""
@@ -377,11 +393,26 @@ async function editItem(groupIndex, itemIndex) {
 	}
 }
 
-function removeItem(groupIndex, itemIndex) {
-	groups.value[groupIndex].items.splice(itemIndex, 1)
-	if (!groups.value[groupIndex].items.length) groups.value.splice(groupIndex, 1)
-	commit()
-	if (editing.value?.groupIndex === groupIndex && editing.value?.itemIndex === itemIndex) resetEditor()
+async function removeItem(groupIndex, itemIndex) {
+	if (props.disabled) return
+	const previousGroups = clone(groups.value)
+	setPreparing(true)
+	editorError.value = ""
+	try {
+		groups.value[groupIndex].items.splice(itemIndex, 1)
+		if (!groups.value[groupIndex].items.length) groups.value.splice(groupIndex, 1)
+		if (props.groupsPreparer) {
+			const prepared = await props.groupsPreparer(clone(groups.value))
+			if (prepared) groups.value = clone(prepared)
+		}
+		commit()
+		if (editing.value?.groupIndex === groupIndex && editing.value?.itemIndex === itemIndex) resetEditor()
+	} catch (error) {
+		groups.value = previousGroups
+		fail(error?.message || "Unable to refresh item prices after removing this item.")
+	} finally {
+		setPreparing(false)
+	}
 }
 
 function commit() {
@@ -435,6 +466,7 @@ function mergeAdditionalParameters() {
 	]
 }
 function fail(message) { editorError.value = message; return false }
+function setPreparing(value) { preparing.value = value; emit("preparing-change", value) }
 function clearReactive(value) { for (const key of Object.keys(value)) delete value[key] }
 function clone(value) { return value === undefined ? {} : JSON.parse(JSON.stringify(value)) }
 </script>

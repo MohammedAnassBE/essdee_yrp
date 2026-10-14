@@ -11,6 +11,7 @@ const recordRoutes = {
 	"SD YRP Lotwise Item Profit": (name) => `/web/pd/lotwise-item-profits/${encodeURIComponent(name)}`,
 	"YRP Purchase Invoice": (name) => `/web/accounts/purchase-invoices/${encodeURIComponent(name)}`,
 	"YRP Bill Tracking": (name) => `/web/hr/bill-tracking/${encodeURIComponent(name)}`,
+	"YRP Item Price": (name) => `/web/purchase/item-prices/${encodeURIComponent(name)}`,
 }
 
 export function webDocumentPath(doctype, name) {

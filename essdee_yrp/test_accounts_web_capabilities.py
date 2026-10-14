@@ -28,7 +28,8 @@ CUSTOM_PERMISSION_FIELDS = (
 
 class TestAccountsHrCapabilities(TestCase):
 	def test_doctypes_registered_for_web(self):
-		for doctype in ("YRP Purchase Invoice", "YRP Bill Tracking"):
+		self.assertEqual(tuple(hooks.yrp_web_doctype_catalog), WEB_DOCTYPES)
+		for doctype in ("YRP Purchase Invoice", "YRP Bill Tracking", "YRP Item Price"):
 			self.assertIn(doctype, WEB_DOCTYPES)
 			self.assertIn(doctype, hooks.yrp_web_doctype_catalog)
 

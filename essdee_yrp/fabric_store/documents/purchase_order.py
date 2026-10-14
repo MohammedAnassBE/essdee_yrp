@@ -434,11 +434,21 @@ def get_purchase_order_editor(name: str | None = None, source=None, *, _adapter=
 		"dimensions": dimensions,
 		"locked_dimensions": [],
 		"default_dimensions": {},
-		"item_filters": {"has_variants": 1, "disabled": 0},
+		"item_filters": {
+			"disabled": 0,
+			"variant_of": ["is", "not set"],
+			"is_purchase_item": 1,
+			"is_stock_item": 1,
+		},
 		"price_validation_enabled": bool(
 			cint(frappe_api.db.get_single_value("YRP Settings", "enable_price_validation"))
 		),
-		"permissions": permissions,
+		"permissions": {
+			**permissions,
+			"can_create_item_price": bool(
+				frappe_api.has_permission("YRP Item Price", ptype="create")
+			),
+		},
 	}
 
 

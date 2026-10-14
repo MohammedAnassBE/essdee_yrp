@@ -4,8 +4,10 @@
 		title="Purchase Order Itemwise"
 		:generated="generated"
 		:loading="loading"
-		:error="error"
+		:error="filterError || layoutError"
 		:has-results="rows.length > 0"
+		:generate-disabled="isBusy"
+		:status-only="statusOnly"
 		@generate="generate"
 		@reset="reset"
 	>
@@ -27,9 +29,16 @@
 				</div>
 			</details>
 		</template>
+		<template #actions>
+			<Button label="Pick Columns" icon="pi pi-table" severity="secondary" outlined class="erp-action-button" :disabled="!generated || !allColumns.length" @click="pickerVisible = true" />
+			<Button v-if="isBackgroundResult" label="Download" icon="pi pi-download" severity="secondary" outlined class="erp-action-button" @click="download" />
+		</template>
+		<template #status>
+			<ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="isBackgroundResult || reused" :has-linked-columns="hasLinkedColumns" :error="reportError" @rebuild="rebuild" />
+		</template>
 
 		<template #metrics>
-			<div class="report-metric"><i class="pi pi-list" /><div><span>Item rows</span><strong>{{ number(rows.length) }}</strong></div></div>
+			<div class="report-metric"><i class="pi pi-list" /><div><span>Item rows</span><strong>{{ number(dataRows.length) }}</strong></div></div>
 			<div class="report-metric"><i class="pi pi-shopping-cart" /><div><span>Ordered quantity</span><strong>{{ number(totals.ordered, 3) }}</strong></div></div>
 			<div class="report-metric"><i class="pi pi-check-circle" /><div><span>Delivered quantity</span><strong>{{ number(totals.delivered, 3) }}</strong></div></div>
 			<div class="report-metric"><i class="pi pi-clock" /><div><span>Pending quantity</span><strong>{{ number(totals.pending, 3) }}</strong></div></div>
@@ -37,36 +46,40 @@
 
 		<div class="erp-table-wrap purchase-order-itemwise-report__table-wrap" role="region" aria-label="Purchase Order Itemwise results" tabindex="0">
 			<table class="erp-data-table purchase-order-itemwise-report__table">
-				<thead><tr><th v-for="column in columns" :key="column.fieldname" :class="numericColumn(column) ? 'erp-number' : ''">{{ column.label || column.fieldname }}</th></tr></thead>
+				<colgroup><col v-for="column in columns" :key="column.key" :style="{ width: `${column.width}px` }" /></colgroup>
+				<thead><tr><th v-for="column in columns" :key="column.key" :class="cellAlign(column)">{{ column.label || column.fieldname }}</th></tr></thead>
 				<tbody>
-					<tr v-for="(row, rowIndex) in rows" :key="`${row.name || 'row'}-${rowIndex}`">
-						<td v-for="column in columns" :key="column.fieldname" :class="cellClass(column, row)">
-							<RouterLink v-if="column.fieldname === 'name' && row.name" :to="{ name: 'purchase-purchase-order', params: { purchaseOrderId: row.name } }">{{ row.name }}</RouterLink>
-							<span v-else-if="column.fieldname === 'status'" class="purchase-order-itemwise-report__status" :class="statusClass(row.status)">{{ cellValue(row[column.fieldname], column) }}</span>
-							<span v-else>{{ cellValue(row[column.fieldname], column) }}</span>
+					<tr v-for="(row, rowIndex) in rows" :key="`${row.name || 'row'}-${rowIndex}`" :class="{ 'report-total-row': row.is_total_row }">
+						<td v-for="column in columns" :key="column.key" :class="cellClass(column, row)">
+							<RouterLink v-if="!row.is_total_row && column.kind === 'base' && column.fieldname === 'name' && row.name" :to="{ name: 'purchase-purchase-order', params: { purchaseOrderId: row.name } }">{{ row.name }}</RouterLink>
+							<span v-else-if="column.kind === 'base' && column.fieldname === 'status'" class="purchase-order-itemwise-report__status" :class="statusClass(row.status)">{{ formattedCell(row, column) }}</span>
+							<span v-else>{{ formattedCell(row, column) }}</span>
 						</td>
 					</tr>
 				</tbody>
 			</table>
 		</div>
 	</ReportShell>
+	<ReportColumnPicker v-model:visible="pickerVisible" :columns="allColumns" :link-sources="linkSources" :fields-by-source="fieldsBySource" :load-field-options="loadFieldOptions" :apply-layout="applyLayout" :save-layout="saveLayout" :reset-layout="resetLayout" :error="layoutError" />
 </template>
 
 <script setup>
+import Button from "primevue/button"
 import Select from "primevue/select"
-import { computed, reactive, ref } from "vue"
+import { computed, onMounted, reactive, ref, watch } from "vue"
 
-import { getPurchaseOrderItemwiseReport } from "../../api/purchaseReports.js"
+import { useReportColumns } from "../../composables/useReportColumns.js"
+import { useWebReport } from "../../composables/useWebReport.js"
 import DateField from "../common/DateField.vue"
 import LinkField from "../common/LinkField.vue"
+import ReportColumnPicker from "./ReportColumnPicker.vue"
+import { purchaseOrderFormFilters } from "./reportFilterState.js"
+import ReportRunStatus from "./ReportRunStatus.vue"
 import ReportShell from "./ReportShell.vue"
-import { errorMessage, number, stockCellValue, todayIso } from "./reportUtils.js"
+import { number, stockCellValue, todayIso } from "./reportUtils.js"
 
-const rows = ref([])
-const columns = ref([])
-const loading = ref(false)
-const generated = ref(false)
-const error = ref("")
+const filterError = ref("")
+const pickerVisible = ref(false)
 const advancedOpen = ref(typeof window === "undefined" || !window.matchMedia("(max-width: 430px)").matches)
 const filters = reactive(defaultFilters())
 const today = todayIso()
@@ -78,7 +91,18 @@ const docstatuses = [
 	{ label: "Cancelled", value: "2" },
 ]
 const dateBases = ["Posting Date", "Delivery Date"]
-const totals = computed(() => rows.value.reduce((result, row) => {
+const {
+	state, sourceColumns, sourceRows, job, generatedAt, reused, error: reportError, activeFilters,
+	trackingStartedAt, loading, isBusy, generated, isBackgroundResult, statusOnly,
+	generate: generateReport, filtersChanged, clear, download,
+} = useWebReport({ reportKey: "purchase-order-itemwise" })
+const {
+	columns: allColumns, displayColumns: columns, rows, linkSources, fieldsBySource,
+	hasLinkedColumns, layoutError, loadLayout, loadFieldOptions, applyLayout,
+	saveLayout, resetLayout, cellAlign, cellValue,
+} = useReportColumns({ reportKey: "purchase-order-itemwise", sourceColumns, sourceRows })
+const dataRows = computed(() => rows.value.filter((row) => !row.is_total_row))
+const totals = computed(() => dataRows.value.reduce((result, row) => {
 	result.ordered += Number(row.qty || 0)
 	result.delivered += Number(row.delivered_qty || 0)
 	result.pending += Number(row.pending_qty || 0)
@@ -94,11 +118,10 @@ function defaultFilters() {
 		status: "", openStatus: "Open", docstatus: "", dateBasedOn: "", fromDate: "", toDate: "",
 	}
 }
-function numericColumn(column) { return ["Float", "Currency", "Int"].includes(column?.fieldtype) }
-function cellValue(value, column) { return stockCellValue(value, column) }
+function formattedCell(row, column) { return stockCellValue(cellValue(row, column), column) }
 function cellClass(column, row) {
 	return [
-		numericColumn(column) ? "erp-number" : "",
+		cellAlign(column),
 		column.fieldname === "pending_qty" ? pendingClass(row) : "",
 	]
 }
@@ -113,45 +136,42 @@ function pendingClass(row) {
 function statusClass(status) {
 	return `purchase-order-itemwise-report__status--${String(status || "unknown").toLowerCase().replace(/[^a-z0-9]+/g, "-")}`
 }
+function requestFilters() {
+	return {
+		item: filters.item,
+		supplier: filters.supplier,
+		purchase_order: filters.purchaseOrder,
+		delivery_location: filters.deliveryLocation,
+		lot: filters.lot,
+		status: filters.status,
+		open_status: filters.openStatus,
+		docstatus: filters.docstatus,
+		date_based_on: filters.dateBasedOn,
+		from_date: filters.dateBasedOn ? filters.fromDate : "",
+		to_date: filters.dateBasedOn ? filters.toDate : "",
+	}
+}
 async function generate() {
 	if (filters.dateBasedOn && filters.fromDate && filters.toDate && filters.fromDate > filters.toDate) {
-		error.value = "From Date cannot be after To Date."
+		filterError.value = "From Date cannot be after To Date."
 		return
 	}
-	error.value = ""
-	loading.value = true
-	try {
-		const response = await getPurchaseOrderItemwiseReport({
-			item: filters.item,
-			supplier: filters.supplier,
-			purchase_order: filters.purchaseOrder,
-			delivery_location: filters.deliveryLocation,
-			lot: filters.lot,
-			status: filters.status,
-			open_status: filters.openStatus,
-			docstatus: filters.docstatus,
-			date_based_on: filters.dateBasedOn,
-			from_date: filters.dateBasedOn ? filters.fromDate : "",
-			to_date: filters.dateBasedOn ? filters.toDate : "",
-		}) || {}
-		rows.value = response.result || []
-		columns.value = (response.columns || []).map((column, index) => (
-			typeof column === "string" ? { fieldname: `column_${index}`, label: column } : column
-		))
-		generated.value = true
-	} catch (exception) {
-		error.value = errorMessage(exception, "Unable to generate the Purchase Order Itemwise report.")
-	} finally {
-		loading.value = false
-	}
+	filterError.value = ""
+	await generateReport(requestFilters())
 }
+function rebuild() { return generateReport(requestFilters(), { refresh: true }) }
 function reset() {
 	Object.assign(filters, defaultFilters())
-	rows.value = []
-	columns.value = []
-	generated.value = false
-	error.value = ""
+	filterError.value = ""
+	clear()
 }
+function restoreFilters(request) {
+	if (request) Object.assign(filters, purchaseOrderFormFilters(request))
+}
+
+watch(filters, () => filtersChanged(requestFilters()), { deep: true })
+watch(activeFilters, restoreFilters, { flush: "sync" })
+onMounted(loadLayout)
 </script>
 
 <style scoped>

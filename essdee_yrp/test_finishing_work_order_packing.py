@@ -20,6 +20,7 @@ from essdee_yrp.finishing.work_order import (
 )
 from essdee_yrp.finishing.work_order_packing import _packing_receivables, build_packing_work_order_rows
 from essdee_yrp.garment_work_order import _packing_rows
+from essdee_yrp.overrides.work_order import EssdeeWorkOrder
 
 
 class TestFinishingWorkOrderPacking(FrappeTestCase):
@@ -300,6 +301,103 @@ class TestFinishingWorkOrderPacking(FrappeTestCase):
 		self.assertTrue(
 			all(frappe.db.get_value("SD YRP Box Sticker Print", name, "docstatus") == 2 for name in stickers)
 		)
+
+
+class TestPackingWorkOrderSubmitRestriction(FrappeTestCase):
+	packing_issue = "Already Work Order was Created for Packing"
+
+	def setUp(self):
+		super().setUp()
+		point = f"packing_submit_{frappe.generate_hash(length=12)}"
+		frappe.db.savepoint(point)
+		self.addCleanup(frappe.db.rollback, save_point=point)
+		self.lot = f"TEST-PACKING-LOT-{frappe.generate_hash(length=12)}"
+
+	def _packing_work_order(self, *, docstatus=0, is_rework=0):
+		doc = frappe.get_doc(
+			{
+				"doctype": "YRP Work Order",
+				"name": frappe.generate_hash(length=12),
+				"lot": self.lot,
+				"includes_packing": 1,
+				"docstatus": docstatus,
+				"is_rework": is_rework,
+			}
+		)
+		doc.db_insert()
+		return doc
+
+	@patch("essdee_yrp.overrides.work_order.WorkOrder.get_submit_readiness_issues", return_value=[])
+	@patch("essdee_yrp.finishing.box_sticker.get_missing_box_sticker_prices", return_value=[])
+	def test_second_packing_work_order_is_blocked(self, missing_prices, base_issues):
+		self._packing_work_order(docstatus=1)
+		doc = self._packing_work_order()
+
+		issues = doc.get_submit_readiness_issues()
+
+		self.assertIn(self.packing_issue, issues)
+		self.assertEqual(issues.count(self.packing_issue), 1)
+		with self.assertRaisesRegex(frappe.ValidationError, self.packing_issue):
+			doc.run_method("before_submit")
+
+	def test_submitted_packing_work_order_does_not_count_itself(self):
+		doc = self._packing_work_order(docstatus=1)
+
+		self.assertIs(doc.has_submitted_packing_work_order, False)
+
+	@patch("essdee_yrp.overrides.work_order.WorkOrder.get_submit_readiness_issues", return_value=[])
+	@patch("essdee_yrp.finishing.box_sticker.get_missing_box_sticker_prices", return_value=[])
+	def test_cancelled_packing_work_orders_do_not_block(self, missing_prices, base_issues):
+		self._packing_work_order(docstatus=2)
+		doc = self._packing_work_order()
+
+		self.assertIs(doc.has_submitted_packing_work_order, False)
+		self.assertNotIn(self.packing_issue, doc.get_submit_readiness_issues())
+
+	@patch("essdee_yrp.overrides.work_order.WorkOrder.get_submit_readiness_issues", return_value=[])
+	@patch("essdee_yrp.finishing.box_sticker.get_missing_box_sticker_prices", return_value=[])
+	def test_draft_packing_work_orders_do_not_block(self, missing_prices, base_issues):
+		self._packing_work_order(docstatus=0)
+		doc = self._packing_work_order()
+
+		self.assertIs(doc.has_submitted_packing_work_order, False)
+		self.assertNotIn(self.packing_issue, doc.get_submit_readiness_issues())
+
+	@patch("essdee_yrp.overrides.work_order.WorkOrder.get_submit_readiness_issues", return_value=[])
+	def test_non_packing_work_order_does_not_query_or_lock(self, base_issues):
+		doc = EssdeeWorkOrder(
+			{"doctype": "YRP Work Order", "lot": self.lot, "includes_packing": 0}
+		)
+
+		with (
+			patch("essdee_yrp.overrides.work_order.frappe.db.sql") as sql,
+			patch("essdee_yrp.overrides.work_order.frappe.db.get_value") as get_value,
+		):
+			self.assertEqual(doc.get_submit_readiness_issues(), [])
+			get_value.assert_not_called()
+			sql.assert_not_called()
+
+	@patch("essdee_yrp.overrides.work_order.WorkOrder.get_submit_readiness_issues", return_value=[])
+	@patch("essdee_yrp.finishing.box_sticker.get_missing_box_sticker_prices", return_value=["M"])
+	def test_rework_packing_work_order_is_blocked(self, missing_prices, base_issues):
+		self._packing_work_order(docstatus=1)
+		doc = self._packing_work_order(is_rework=1)
+
+		issues = doc.get_submit_readiness_issues()
+
+		self.assertEqual(issues[0], self.packing_issue)
+		self.assertIn("Lot-wise price is not set", issues[1])
+
+	def test_packing_work_order_without_lot_does_not_query_or_lock(self):
+		doc = EssdeeWorkOrder({"doctype": "YRP Work Order", "includes_packing": 1})
+
+		with (
+			patch("essdee_yrp.overrides.work_order.frappe.db.sql") as sql,
+			patch("essdee_yrp.overrides.work_order.frappe.db.get_value") as get_value,
+		):
+			self.assertIs(doc.has_submitted_packing_work_order, False)
+			get_value.assert_not_called()
+			sql.assert_not_called()
 
 
 def _rows_by_identity(rows):
